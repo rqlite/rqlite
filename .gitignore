@@ -27,3 +27,4 @@ src/github.com/gorilla/
 src/github.com/mattn/
 src/github.com/otoolep/raft/
 src/github.com/otoolep/rqlite/main
+src/github.com/otoolep/rqlite/rqlite
