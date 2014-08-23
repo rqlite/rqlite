@@ -112,8 +112,8 @@ func (s *Server) ListenAndServe(leader string) error {
 		Handler: s.router,
 	}
 
-	s.router.HandleFunc("/db/{key}", s.readHandler).Methods("GET")
-	s.router.HandleFunc("/db/{key}", s.writeHandler).Methods("POST")
+	s.router.HandleFunc("/db", s.readHandler).Methods("GET")
+	s.router.HandleFunc("/db", s.writeHandler).Methods("POST")
 	s.router.HandleFunc("/join", s.joinHandler).Methods("POST")
 
 	log.Println("Listening at:", s.connectionString())
@@ -159,7 +159,12 @@ func (s *Server) joinHandler(w http.ResponseWriter, req *http.Request) {
 }
 
 func (s *Server) readHandler(w http.ResponseWriter, req *http.Request) {
-	value := s.db.Query("query")
+	b, err := ioutil.ReadAll(req.Body)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	value := s.db.Query(string(b))
 	w.Write([]byte(value))
 }
 
