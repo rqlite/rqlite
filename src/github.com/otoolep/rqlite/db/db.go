@@ -19,6 +19,9 @@ type DB struct {
 	dbConn *sql.DB
 }
 
+type RowResult map[string]string
+type RowResults []map[string]string
+
 // Creates a new database.
 func New(dir string) *DB {
 	path := path.Join(dir, dbName)
@@ -35,16 +38,17 @@ func New(dir string) *DB {
 }
 
 // Executes the query.
-func (db *DB) Query(query string) string {
+func (db *DB) Query(query string) RowResults {
 	rows, err := db.dbConn.Query(query)
 	if err != nil {
 		fmt.Println(err.Error())
 	}
 	defer rows.Close()
 
+	results := make(RowResults, 0)
+
 	columns, _ := rows.Columns()
 	rawResult := make([][]byte, len(columns))
-	result := make([]string, len(columns))
 	dest := make([]interface{}, len(columns)) // A temporary interface{} slice
 	for i, _ := range rawResult {
 		dest[i] = &rawResult[i] // Put pointers to each string in the interface slice
@@ -53,20 +57,20 @@ func (db *DB) Query(query string) string {
 	for rows.Next() {
 		err = rows.Scan(dest...)
 		if err != nil {
-			fmt.Println("Failed to scan row", err)
+			log.Fatal("Failed to scan row", err)
 		}
 
+		r := make(RowResult)
 		for i, raw := range rawResult {
 			if raw == nil {
-				result[i] = "null"
+				r[columns[i]] = "null"
 			} else {
-				result[i] = string(raw)
+				r[columns[i]] = string(raw)
 			}
 		}
-
-		fmt.Printf("%#v\n", result)
+		results = append(results, r)
 	}
-	return "query complete response" // Inefficient?
+	return results
 }
 
 // Sets the value for a given key.
