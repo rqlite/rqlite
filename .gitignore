@@ -21,3 +21,9 @@ _testmain.go
 
 *.exe
 *.test
+
+src/code.google.com/
+src/github.com/gorilla/
+src/github.com/mattn/
+src/github.com/otoolep/raft/
+src/github.com/otoolep/rqlite/main
