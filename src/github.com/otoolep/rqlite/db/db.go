@@ -41,5 +41,6 @@ func (db *DB) Query(query string) string {
 
 // Sets the value for a given key.
 func (db *DB) Exec(stmt string) {
+	_, _ = db.dbConn.Exec(stmt)
 	return
 }
