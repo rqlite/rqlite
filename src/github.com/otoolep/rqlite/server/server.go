@@ -164,7 +164,12 @@ func (s *Server) readHandler(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	b, err = json.Marshal(s.db.Query(string(b)))
+
+	r, err := s.db.Query(string(b))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+	b, err = json.Marshal(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

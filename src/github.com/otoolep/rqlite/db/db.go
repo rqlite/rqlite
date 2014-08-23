@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -14,15 +15,20 @@ const (
 	dbName = "db.sqlite"
 )
 
+// Errors
+var RowScanError = errors.New("Row scan failure")
+var QueryExecuteError = errors.New("Query execute error")
+
 // The SQL database.
 type DB struct {
 	dbConn *sql.DB
 }
 
+// Query result types
 type RowResult map[string]string
 type RowResults []map[string]string
 
-// Creates a new database.
+// New creates a new database.
 func New(dir string) *DB {
 	path := path.Join(dir, dbName)
 	os.Remove(path)
@@ -37,11 +43,13 @@ func New(dir string) *DB {
 	}
 }
 
-// Executes the query.
-func (db *DB) Query(query string) RowResults {
+// Query runs the supplied query against the sqlite database. It returns a slice of
+// RowResults.
+func (db *DB) Query(query string) (RowResults, error) {
 	rows, err := db.dbConn.Query(query)
 	if err != nil {
-		fmt.Println(err.Error())
+		log.Fatal("failed to execute query", err.Error())
+		return nil, QueryExecuteError
 	}
 	defer rows.Close()
 
@@ -49,15 +57,16 @@ func (db *DB) Query(query string) RowResults {
 
 	columns, _ := rows.Columns()
 	rawResult := make([][]byte, len(columns))
-	dest := make([]interface{}, len(columns)) // A temporary interface{} slice
+	dest := make([]interface{}, len(columns))
 	for i, _ := range rawResult {
-		dest[i] = &rawResult[i] // Put pointers to each string in the interface slice
+		dest[i] = &rawResult[i] // Pointers to each string in the interface slice
 	}
 
 	for rows.Next() {
 		err = rows.Scan(dest...)
 		if err != nil {
-			log.Fatal("Failed to scan row", err)
+			log.Fatal("failed to scan row", err)
+			return nil, RowScanError
 		}
 
 		r := make(RowResult)
@@ -70,11 +79,11 @@ func (db *DB) Query(query string) RowResults {
 		}
 		results = append(results, r)
 	}
-	return results
+	return results, nil
 }
 
-// Sets the value for a given key.
-func (db *DB) Exec(stmt string) {
-	_, _ = db.dbConn.Exec(stmt)
-	return
+// Execute executes the given sqlite statement, of a type that doesn't return rows.
+func (db *DB) Execute(stmt string) error {
+	_, err := db.dbConn.Exec(stmt)
+	return err
 }

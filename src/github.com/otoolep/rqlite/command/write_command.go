@@ -25,6 +25,5 @@ func (c *WriteCommand) CommandName() string {
 // Executes an sqlite statement.
 func (c *WriteCommand) Apply(server raft.Server) (interface{}, error) {
 	db := server.Context().(*db.DB)
-	db.Exec(c.Stmt)
-	return nil, nil
+	return nil, db.Execute(c.Stmt)
 }
