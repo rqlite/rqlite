@@ -164,20 +164,16 @@ func (s *Server) readHandler(w http.ResponseWriter, req *http.Request) {
 }
 
 func (s *Server) writeHandler(w http.ResponseWriter, req *http.Request) {
-	vars := mux.Vars(req)
-	var _ = vars
-
 	// Read the value from the POST body.
 	b, err := ioutil.ReadAll(req.Body)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	value := string(b)
-	var _ = value
+	stmt := string(b)
 
 	// Execute the command against the Raft server.
-	_, err = s.raftServer.Do(command.NewWriteCommand("exec"))
+	_, err = s.raftServer.Do(command.NewWriteCommand(stmt))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	}
