@@ -19,6 +19,18 @@ import (
 	"github.com/otoolep/rqlite/db"
 )
 
+// isPretty returns whether the HTTP response body should be pretty-printed.
+func isPretty(req *http.Request) (bool, error) {
+	err := req.ParseForm()
+	if err != nil {
+		return false, err
+	}
+	if _, ok := req.Form["pretty"]; ok {
+		return true, nil
+	}
+	return false, nil
+}
+
 // The raftd server is a combination of the Raft server and an HTTP
 // server which acts as the transport.
 type Server struct {
@@ -170,7 +182,13 @@ func (s *Server) readHandler(w http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
-	b, err = json.Marshal(r)
+
+	pretty, _ := isPretty(req)
+	if pretty {
+		b, err = json.MarshalIndent(r, "", "    ")
+	} else {
+		b, err = json.Marshal(r)
+	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
