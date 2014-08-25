@@ -84,3 +84,22 @@ func (db *DB) Execute(stmt string) error {
 	_, err := db.dbConn.Exec(stmt)
 	return err
 }
+
+// StartTransaction starts an explicit transaction.
+func (db *DB) StartTransaction() error {
+	_, err := db.dbConn.Exec("BEGIN")
+	return err
+}
+
+// CommitTransaction commits all changes made since StartTraction was called.
+func (db *DB) CommitTransaction() error {
+	_, err := db.dbConn.Exec("END")
+	return err
+}
+
+// RollbackTransaction aborts the transaction. No statement issued since
+// StartTransaction was called will take effect.
+func (db *DB) RollbackTransaction() error {
+	_, err := db.dbConn.Exec("ROLLBACK")
+	return err
+}
