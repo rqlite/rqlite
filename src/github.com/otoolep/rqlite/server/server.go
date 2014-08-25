@@ -19,16 +19,27 @@ import (
 	"github.com/otoolep/rqlite/db"
 )
 
-// isPretty returns whether the HTTP response body should be pretty-printed.
-func isPretty(req *http.Request) (bool, error) {
+// queryParam returns whether the given query param is set to true.
+func queryParam(req *http.Request, param string) (bool, error) {
 	err := req.ParseForm()
 	if err != nil {
 		return false, err
 	}
-	if _, ok := req.Form["pretty"]; ok {
+	if _, ok := req.Form[param]; ok {
 		return true, nil
 	}
 	return false, nil
+}
+
+// isPretty returns whether the HTTP response body should be pretty-printed.
+func isPretty(req *http.Request) (bool, error) {
+	return queryParam(req, "pretty")
+}
+
+// transactionRequested returns whether the client requested an explicit
+// transaction for the request.
+func transactionRequested(req *http.Request) (bool, error) {
+	return queryParam(req, "transaction")
 }
 
 // The raftd server is a combination of the Raft server and an HTTP
