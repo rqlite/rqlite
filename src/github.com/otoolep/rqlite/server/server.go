@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"path"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -36,9 +37,9 @@ func isPretty(req *http.Request) (bool, error) {
 	return queryParam(req, "pretty")
 }
 
-// transactionRequested returns whether the client requested an explicit
+// isTransaction returns whether the client requested an explicit
 // transaction for the request.
-func transactionRequested(req *http.Request) (bool, error) {
+func isTransaction(req *http.Request) (bool, error) {
 	return queryParam(req, "transaction")
 }
 
@@ -214,10 +215,23 @@ func (s *Server) writeHandler(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	stmt := string(b)
+	stmts := strings.Split(string(b), "\n")
 
 	// Execute the command against the Raft server.
-	_, err = s.raftServer.Do(command.NewWriteCommand(stmt))
+	switch {
+	case len(stmts) == 0:
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	case len(stmts) == 1:
+		_, err = s.raftServer.Do(command.NewWriteCommand(stmts[0]))
+	case len(stmts) > 1:
+		transaction, _ := isTransaction(req)
+		if transaction {
+			_, err = s.raftServer.Do(command.NewTransactionWriteCommandSet(stmts))
+		} else {
+			// Do each individually, returning JSON respoonse
+		}
+	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	}
