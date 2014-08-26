@@ -238,8 +238,10 @@ func (s *Server) writeHandler(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	case len(stmts) == 1:
+		log.Debug("Single statment, implicit transaction")
 		_, err = s.raftServer.Do(command.NewWriteCommand(stmts[0]))
 	case len(stmts) > 1:
+		log.Debug("Multistatement, transaction possible")
 		transaction, _ := isTransaction(req)
 		if transaction {
 			log.Debug("Transaction requested")
