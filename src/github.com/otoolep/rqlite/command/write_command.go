@@ -52,7 +52,7 @@ func (c *TransactionWriteCommandSet) CommandName() string {
 // Executes a set of sqlite statements, within a transaction. All statements
 // will take effect, or none.
 func (c *TransactionWriteCommandSet) Apply(server raft.Server) (interface{}, error) {
-	log.Debug("Applying TransactionWriteCommandSet: %v", c.Stmts)
+	log.Debug("Applying TransactionWriteCommandSet of size %d", len(c.Stmts))
 	db := server.Context().(*db.DB)
 
 	err := db.StartTransaction()
