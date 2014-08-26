@@ -106,7 +106,7 @@ func (s *Server) ListenAndServe(leader string) error {
 	if leader != "" {
 		// Join to leader if specified.
 
-		log.Info("Attempting to join leader:", leader)
+		log.Info("Attempting to join leader at %s", leader)
 
 		if !s.raftServer.IsLogEmpty() {
 			log.Error("Cannot join with an existing log")
