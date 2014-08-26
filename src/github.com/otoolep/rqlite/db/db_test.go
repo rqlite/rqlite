@@ -186,3 +186,26 @@ func (s *DbSuite) Test_TransactionsConstraintViolation(c *C) {
 	r, err := db.Query("SELECT * FROM foo")
 	c.Assert(len(r), Equals, 0)
 }
+
+func (s *DbSuite) Test_TransactionsHardFail(c *C) {
+	dir, err := ioutil.TempDir("", "rqlite-test-")
+	defer os.RemoveAll(dir)
+	db := New(path.Join(dir, "test_db"))
+
+	err = db.Execute("create table foo (id integer not null primary key, name text)")
+	c.Assert(err, IsNil)
+	err = db.Execute("INSERT INTO foo(id, name) VALUES(1, \"fiona\")")
+	c.Assert(err, IsNil)
+
+	err = db.StartTransaction()
+	c.Assert(err, IsNil)
+	err = db.Execute("INSERT INTO foo(id, name) VALUES(2, \"dana\")")
+	c.Assert(err, IsNil)
+	db.Close()
+
+	db = New(path.Join(dir, "test_db"))
+	c.Assert(db, NotNil)
+	r, err := db.Query("SELECT * FROM foo")
+	c.Assert(len(r), Equals, 1)
+	db.Close()
+}

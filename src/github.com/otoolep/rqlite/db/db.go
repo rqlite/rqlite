@@ -3,7 +3,6 @@ package db
 import (
 	"database/sql"
 	"errors"
-	"os"
 
 	_ "github.com/mattn/go-sqlite3"
 
@@ -29,8 +28,6 @@ type RowResults []map[string]string
 
 // New creates a new database.
 func New(dbPath string) *DB {
-	os.Remove(dbPath)
-
 	log.Trace("SQLite database path is %s", dbPath)
 	dbc, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
