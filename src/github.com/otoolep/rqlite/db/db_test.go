@@ -126,3 +126,41 @@ func (s *DbSuite) Test_FailingSimpleStatements(c *C) {
 	c.Assert(err, NotNil)
 	c.Assert(err.Error(), Equals, "near \"utter\": syntax error")
 }
+
+func (s *DbSuite) Test_SimpleTransactions(c *C) {
+	dir, err := ioutil.TempDir("", "rqlite-test-")
+	defer os.RemoveAll(dir)
+	db := New(path.Join(dir, "test_db"))
+	defer db.Close()
+
+	err = db.Execute("create table foo (id integer not null primary key, name text)")
+	c.Assert(err, IsNil)
+
+	err = db.StartTransaction()
+	c.Assert(err, IsNil)
+	for i := 0; i < 10; i++ {
+		_ = db.Execute("INSERT INTO foo(name) VALUES(\"philip\")")
+	}
+	err = db.CommitTransaction()
+	c.Assert(err, IsNil)
+
+	r, err := db.Query("SELECT name FROM foo")
+	c.Assert(len(r), Equals, 10)
+	for i := range r {
+		c.Assert(r[i]["name"], Equals, "philip")
+	}
+
+	err = db.StartTransaction()
+	c.Assert(err, IsNil)
+	for i := 0; i < 10; i++ {
+		_ = db.Execute("INSERT INTO foo(name) VALUES(\"philip\")")
+	}
+	err = db.RollbackTransaction()
+	c.Assert(err, IsNil)
+
+	r, err = db.Query("SELECT name FROM foo")
+	c.Assert(len(r), Equals, 10)
+	for i := range r {
+		c.Assert(r[i]["name"], Equals, "philip")
+	}
+}
