@@ -203,7 +203,7 @@ func (s *DbSuite) Test_TransactionsHardFail(c *C) {
 	c.Assert(err, IsNil)
 	db.Close()
 
-	db = New(path.Join(dir, "test_db"))
+	db = Open(path.Join(dir, "test_db"))
 	c.Assert(db, NotNil)
 	r, err := db.Query("SELECT * FROM foo")
 	c.Assert(len(r), Equals, 1)
