@@ -42,6 +42,11 @@ func New(dbPath string) *DB {
 	}
 }
 
+// Close closes the underlying database connection.
+func (db *DB) Close() error {
+	return db.dbConn.Close()
+}
+
 // Query runs the supplied query against the sqlite database. It returns a slice of
 // RowResults.
 func (db *DB) Query(query string) (RowResults, error) {
