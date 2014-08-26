@@ -32,7 +32,7 @@ func (s *DbSuite) Test_DbFileCreation(c *C) {
 	c.Assert(err, IsNil)
 }
 
-func (s *DbSuite) Test_DbTableCreation(c *C) {
+func (s *DbSuite) Test_TableCreation(c *C) {
 	dir, err := ioutil.TempDir("", "rqlite-test-")
 	defer os.RemoveAll(dir)
 	db := New(path.Join(dir, "test_db"))
@@ -46,7 +46,7 @@ func (s *DbSuite) Test_DbTableCreation(c *C) {
 	c.Assert(len(r), Equals, 0)
 }
 
-func (s *DbSuite) Test_DbTableSimpleStatements(c *C) {
+func (s *DbSuite) Test_SimpleStatements(c *C) {
 	dir, err := ioutil.TempDir("", "rqlite-test-")
 	defer os.RemoveAll(dir)
 	db := New(path.Join(dir, "test_db"))
@@ -96,7 +96,7 @@ func (s *DbSuite) Test_DbTableSimpleStatements(c *C) {
 	}
 }
 
-func (s *DbSuite) Test_DbTableFailingSimpleStatements(c *C) {
+func (s *DbSuite) Test_FailingSimpleStatements(c *C) {
 	dir, err := ioutil.TempDir("", "rqlite-test-")
 	defer os.RemoveAll(dir)
 	db := New(path.Join(dir, "test_db"))
