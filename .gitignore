@@ -35,3 +35,4 @@ src/github.com/otoolep/raft/
 src/github.com/otoolep/rqlite/main
 src/github.com/otoolep/rqlite/rqlite
 src/github.com/stretchr/
+src/gopkg.in/
