@@ -86,11 +86,11 @@ func (s *DbSuite) Test_DbTableSimpleStatements(c *C) {
 	err = db.Execute("DELETE FROM foo WHERE Id=1")
 	c.Assert(err, IsNil)
 
-	_ = db.Execute("INSERT INTO foo(name) VALUES(\"philip\")")
-	_ = db.Execute("INSERT INTO foo(name) VALUES(\"philip\")")
-	_ = db.Execute("INSERT INTO foo(name) VALUES(\"philip\")")
+	for i := 0; i < 10; i++ {
+		_ = db.Execute("INSERT INTO foo(name) VALUES(\"philip\")")
+	}
 	r, err = db.Query("select name from foo")
-	c.Assert(len(r), Equals, 3)
+	c.Assert(len(r), Equals, 10)
 	for i := range r {
 		c.Assert(r[i]["name"], Equals, "philip")
 	}
