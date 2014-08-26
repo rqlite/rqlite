@@ -78,6 +78,7 @@ func (db *DB) Query(query string) (RowResults, error) {
 		}
 		results = append(results, r)
 	}
+	log.Trace(func() string { return "Executed query successfully: " + query })
 	return results, nil
 }
 
