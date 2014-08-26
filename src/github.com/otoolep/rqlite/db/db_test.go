@@ -164,3 +164,25 @@ func (s *DbSuite) Test_SimpleTransactions(c *C) {
 		c.Assert(r[i]["name"], Equals, "philip")
 	}
 }
+
+func (s *DbSuite) Test_TransactionsConstraintViolation(c *C) {
+	dir, err := ioutil.TempDir("", "rqlite-test-")
+	defer os.RemoveAll(dir)
+	db := New(path.Join(dir, "test_db"))
+	defer db.Close()
+
+	err = db.Execute("create table foo (id integer not null primary key, name text)")
+	c.Assert(err, IsNil)
+
+	err = db.StartTransaction()
+	c.Assert(err, IsNil)
+	err = db.Execute("INSERT INTO foo(id, name) VALUES(1, \"fiona\")")
+	c.Assert(err, IsNil)
+	err = db.Execute("INSERT INTO foo(id, name) VALUES(1, \"fiona\")")
+	c.Assert(err, NotNil)
+	err = db.RollbackTransaction()
+	c.Assert(err, IsNil)
+
+	r, err := db.Query("SELECT * FROM foo")
+	c.Assert(len(r), Equals, 0)
+}
