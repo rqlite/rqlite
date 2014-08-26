@@ -84,18 +84,36 @@ func (db *DB) Query(query string) (RowResults, error) {
 // Execute executes the given sqlite statement, of a type that doesn't return rows.
 func (db *DB) Execute(stmt string) error {
 	_, err := db.dbConn.Exec(stmt)
+	log.Trace(func() string {
+		if err != nil {
+			return "Error executing " + stmt
+		}
+		return "Successfully executed " + stmt
+	})
 	return err
 }
 
 // StartTransaction starts an explicit transaction.
 func (db *DB) StartTransaction() error {
 	_, err := db.dbConn.Exec("BEGIN")
+	log.Trace(func() string {
+		if err != nil {
+			return "Error starting transaction"
+		}
+		return "Successfully started transaction"
+	})
 	return err
 }
 
 // CommitTransaction commits all changes made since StartTraction was called.
 func (db *DB) CommitTransaction() error {
 	_, err := db.dbConn.Exec("END")
+	log.Trace(func() string {
+		if err != nil {
+			return "Error ending transaction"
+		}
+		return "Successfully ended transaction"
+	})
 	return err
 }
 
@@ -103,5 +121,11 @@ func (db *DB) CommitTransaction() error {
 // StartTransaction was called will take effect.
 func (db *DB) RollbackTransaction() error {
 	_, err := db.dbConn.Exec("ROLLBACK")
+	log.Trace(func() string {
+		if err != nil {
+			return "Error rolling back transaction"
+		}
+		return "Successfully rolled back transaction"
+	})
 	return err
 }

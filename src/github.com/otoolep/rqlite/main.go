@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"runtime/pprof"
 	"time"
 
@@ -21,6 +22,8 @@ var port int
 var join string
 var dbfile string
 var cpuprofile string
+var logFile string
+var logLevel string
 
 func init() {
 	flag.StringVar(&host, "h", "localhost", "hostname")
@@ -28,10 +31,50 @@ func init() {
 	flag.StringVar(&join, "join", "", "host:port of leader to join")
 	flag.StringVar(&dbfile, "dbfile", "db.sqlite", "sqlite filename")
 	flag.StringVar(&cpuprofile, "cpuprofile", "", "write CPU profile to file")
+	flag.StringVar(&logFile, "logfile", "stdout", "log file path")
+	flag.StringVar(&logLevel, "loglevel", "INFO", "log level (ERROR|WARN|INFO|DEBUG|TRACE)")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [arguments] <data-path> \n", os.Args[0])
 		flag.PrintDefaults()
 	}
+}
+
+func setupLogging(loggingLevel, logFile string) {
+	level := log.DEBUG
+	switch loggingLevel {
+	case "TRACE":
+		level = log.TRACE
+	case "DEBUG":
+		level = log.DEBUG
+	case "INFO":
+		level = log.INFO
+	case "WARN":
+		level = log.WARNING
+	case "ERROR":
+		level = log.ERROR
+	}
+
+	log.Global = make(map[string]*log.Filter)
+
+	if logFile == "stdout" {
+		flw := log.NewConsoleLogWriter()
+		log.AddFilter("stdout", level, flw)
+
+	} else {
+		logFileDir := filepath.Dir(logFile)
+		os.MkdirAll(logFileDir, 0744)
+
+		flw := log.NewFileLogWriter(logFile, false)
+		log.AddFilter("file", level, flw)
+
+		flw.SetFormat("[%D %T] [%L] (%S) %M")
+		flw.SetRotate(true)
+		flw.SetRotateSize(0)
+		flw.SetRotateLines(0)
+		flw.SetRotateDaily(true)
+	}
+
+	log.Info("Redirectoring logging to %s", logFile)
 }
 
 func main() {
@@ -49,6 +92,8 @@ func main() {
 		pprof.StartCPUProfile(f)
 		defer pprof.StopCPUProfile()
 	}
+
+	setupLogging(logLevel, logFile)
 
 	// Raft requires randomness.
 	rand.Seed(time.Now().UnixNano())
