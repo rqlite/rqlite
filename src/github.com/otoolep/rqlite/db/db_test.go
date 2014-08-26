@@ -207,5 +207,6 @@ func (s *DbSuite) Test_TransactionsHardFail(c *C) {
 	c.Assert(db, NotNil)
 	r, err := db.Query("SELECT * FROM foo")
 	c.Assert(len(r), Equals, 1)
+	c.Assert(r[0]["name"], Equals, "fiona")
 	db.Close()
 }
