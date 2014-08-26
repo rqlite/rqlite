@@ -227,6 +227,9 @@ func (s *Server) writeHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	stmts := strings.Split(string(b), "\n")
+	if stmts[len(stmts)-1] == "" {
+		stmts = stmts[:len(stmts)-1]
+	}
 
 	// Execute the command against the Raft server.
 	switch {
