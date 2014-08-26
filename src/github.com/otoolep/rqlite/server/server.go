@@ -189,17 +189,17 @@ func (s *Server) joinHandler(w http.ResponseWriter, req *http.Request) {
 }
 
 func (s *Server) readHandler(w http.ResponseWriter, req *http.Request) {
-	log.Debug("readHandler for URL: %s", req.URL)
+	log.Trace("readHandler for URL: %s", req.URL)
 	b, err := ioutil.ReadAll(req.Body)
 	if err != nil {
-		log.Debug("Bad HTTP request", err.Error())
+		log.Trace("Bad HTTP request", err.Error())
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
 	r, err := s.db.Query(string(b))
 	if err != nil {
-		log.Debug("Bad HTTP request", err.Error())
+		log.Trace("Bad HTTP request", err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 
@@ -210,7 +210,7 @@ func (s *Server) readHandler(w http.ResponseWriter, req *http.Request) {
 		b, err = json.Marshal(r)
 	}
 	if err != nil {
-		log.Debug("Failed to marshal JSON data", err.Error())
+		log.Trace("Failed to marshal JSON data", err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -218,11 +218,11 @@ func (s *Server) readHandler(w http.ResponseWriter, req *http.Request) {
 }
 
 func (s *Server) writeHandler(w http.ResponseWriter, req *http.Request) {
-	log.Debug("writeHandler for URL: %s", req.URL)
+	log.Trace("writeHandler for URL: %s", req.URL)
 	// Read the value from the POST body.
 	b, err := ioutil.ReadAll(req.Body)
 	if err != nil {
-		log.Debug("Bad HTTP request", err.Error())
+		log.Trace("Bad HTTP request", err.Error())
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -234,20 +234,20 @@ func (s *Server) writeHandler(w http.ResponseWriter, req *http.Request) {
 	// Execute the command against the Raft server.
 	switch {
 	case len(stmts) == 0:
-		log.Debug("No database execute commands supplied")
+		log.Trace("No database execute commands supplied")
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	case len(stmts) == 1:
-		log.Debug("Single statment, implicit transaction")
+		log.Trace("Single statment, implicit transaction")
 		_, err = s.raftServer.Do(command.NewWriteCommand(stmts[0]))
 	case len(stmts) > 1:
-		log.Debug("Multistatement, transaction possible")
+		log.Trace("Multistatement, transaction possible")
 		transaction, _ := isTransaction(req)
 		if transaction {
-			log.Debug("Transaction requested")
+			log.Trace("Transaction requested")
 			_, err = s.raftServer.Do(command.NewTransactionWriteCommandSet(stmts))
 		} else {
-			log.Debug("No transaction requested")
+			log.Trace("No transaction requested")
 			// Do each individually, returning JSON respoonse
 		}
 	}

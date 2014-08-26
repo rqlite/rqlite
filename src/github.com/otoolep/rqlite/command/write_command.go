@@ -26,7 +26,7 @@ func (c *WriteCommand) CommandName() string {
 
 // Executes an sqlite statement.
 func (c *WriteCommand) Apply(server raft.Server) (interface{}, error) {
-	log.Debug("Applying WriteCommand: '%s'", c.Stmt)
+	log.Trace("Applying WriteCommand: '%s'", c.Stmt)
 	db := server.Context().(*db.DB)
 	return nil, db.Execute(c.Stmt)
 }
@@ -52,7 +52,7 @@ func (c *TransactionWriteCommandSet) CommandName() string {
 // Executes a set of sqlite statements, within a transaction. All statements
 // will take effect, or none.
 func (c *TransactionWriteCommandSet) Apply(server raft.Server) (interface{}, error) {
-	log.Debug("Applying TransactionWriteCommandSet of size %d", len(c.Stmts))
+	log.Trace("Applying TransactionWriteCommandSet of size %d", len(c.Stmts))
 	db := server.Context().(*db.DB)
 
 	err := db.StartTransaction()

@@ -31,7 +31,7 @@ type RowResults []map[string]string
 func New(dbPath string) *DB {
 	os.Remove(dbPath)
 
-	log.Debug("SQLite database path is %s", dbPath)
+	log.Trace("SQLite database path is %s", dbPath)
 	dbc, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		log.Error(err)
@@ -78,14 +78,14 @@ func (db *DB) Query(query string) (RowResults, error) {
 		}
 		results = append(results, r)
 	}
-	log.Trace(func() string { return "Executed query successfully: " + query })
+	log.Debug(func() string { return "Executed query successfully: " + query })
 	return results, nil
 }
 
 // Execute executes the given sqlite statement, of a type that doesn't return rows.
 func (db *DB) Execute(stmt string) error {
 	_, err := db.dbConn.Exec(stmt)
-	log.Trace(func() string {
+	log.Debug(func() string {
 		if err != nil {
 			return "Error executing " + stmt
 		}
@@ -97,7 +97,7 @@ func (db *DB) Execute(stmt string) error {
 // StartTransaction starts an explicit transaction.
 func (db *DB) StartTransaction() error {
 	_, err := db.dbConn.Exec("BEGIN")
-	log.Trace(func() string {
+	log.Debug(func() string {
 		if err != nil {
 			return "Error starting transaction"
 		}
@@ -109,7 +109,7 @@ func (db *DB) StartTransaction() error {
 // CommitTransaction commits all changes made since StartTraction was called.
 func (db *DB) CommitTransaction() error {
 	_, err := db.dbConn.Exec("END")
-	log.Trace(func() string {
+	log.Debug(func() string {
 		if err != nil {
 			return "Error ending transaction"
 		}
@@ -122,7 +122,7 @@ func (db *DB) CommitTransaction() error {
 // StartTransaction was called will take effect.
 func (db *DB) RollbackTransaction() error {
 	_, err := db.dbConn.Exec("ROLLBACK")
-	log.Trace(func() string {
+	log.Debug(func() string {
 		if err != nil {
 			return "Error rolling back transaction"
 		}
