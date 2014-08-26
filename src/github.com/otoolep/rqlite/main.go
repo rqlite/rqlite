@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
 	"math/rand"
 	"os"
 	"os/signal"
@@ -13,6 +12,8 @@ import (
 	"github.com/otoolep/raft"
 	"github.com/otoolep/rqlite/command"
 	"github.com/otoolep/rqlite/server"
+
+	log "code.google.com/p/log4go"
 )
 
 var host string
@@ -38,10 +39,10 @@ func main() {
 
 	// Set up profiling, if requested.
 	if cpuprofile != "" {
-		log.Printf("Profiling enabled")
+		log.Info("Profiling enabled")
 		f, err := os.Create(cpuprofile)
 		if err != nil {
-			log.Fatal("Unable to create path: %w", err)
+			log.Error("Unable to create path: %w", err)
 		}
 		defer f.Close()
 
@@ -54,24 +55,25 @@ func main() {
 
 	// Setup commands.
 	raft.RegisterCommand(&command.WriteCommand{})
+	raft.RegisterCommand(&command.TransactionWriteCommandSet{})
 
 	// Set the data directory.
 	if flag.NArg() == 0 {
 		flag.Usage()
-		log.Fatal("Data path argument required")
+		log.Error("Data path argument required")
 	}
 	path := flag.Arg(0)
 	if err := os.MkdirAll(path, 0744); err != nil {
-		log.Fatalf("Unable to create path: %v", err)
+		log.Error("Unable to create path: %v", err)
 	}
 
 	s := server.New(path, dbfile, host, port)
 	go func() {
-		log.Fatal(s.ListenAndServe(join))
+		log.Error(s.ListenAndServe(join))
 	}()
 
 	terminate := make(chan os.Signal, 1)
 	signal.Notify(terminate, os.Interrupt)
 	<-terminate
-	log.Printf("rqlite server stopped")
+	log.Info("rqlite server stopped")
 }

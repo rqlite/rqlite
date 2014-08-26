@@ -3,10 +3,11 @@ package db
 import (
 	"database/sql"
 	"errors"
-	"log"
 	"os"
 
 	_ "github.com/mattn/go-sqlite3"
+
+	log "code.google.com/p/log4go"
 )
 
 const (
@@ -30,10 +31,11 @@ type RowResults []map[string]string
 func New(dbPath string) *DB {
 	os.Remove(dbPath)
 
-	log.Printf("database path is %s", dbPath)
+	log.Debug("SQLite database path is %s", dbPath)
 	dbc, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
-		log.Fatal(err)
+		log.Error(err)
+		return nil
 	}
 	return &DB{
 		dbConn: dbc,
@@ -45,7 +47,7 @@ func New(dbPath string) *DB {
 func (db *DB) Query(query string) (RowResults, error) {
 	rows, err := db.dbConn.Query(query)
 	if err != nil {
-		log.Fatal("failed to execute query", err.Error())
+		log.Error("failed to execute SQLite query", err.Error())
 		return nil, QueryExecuteError
 	}
 	defer rows.Close()
@@ -62,7 +64,7 @@ func (db *DB) Query(query string) (RowResults, error) {
 	for rows.Next() {
 		err = rows.Scan(dest...)
 		if err != nil {
-			log.Fatal("failed to scan row", err)
+			log.Error("failed to scan SQLite row", err.Error())
 			return nil, RowScanError
 		}
 
