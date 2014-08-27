@@ -1,11 +1,14 @@
 package command
 
 import (
-	"github.com/otoolep/raft"
 	"github.com/otoolep/rqlite/db"
 
 	log "code.google.com/p/log4go"
 )
+
+type ContextServer interface {
+	Context() interface{}
+}
 
 // This command encapsulates a sqlite statement.
 type WriteCommand struct {
@@ -25,7 +28,7 @@ func (c *WriteCommand) CommandName() string {
 }
 
 // Executes an sqlite statement.
-func (c *WriteCommand) Apply(server raft.Server) (interface{}, error) {
+func (c *WriteCommand) Apply(server ContextServer) (interface{}, error) {
 	log.Trace("Applying WriteCommand: '%s'", c.Stmt)
 	db := server.Context().(*db.DB)
 	return nil, db.Execute(c.Stmt)
@@ -51,7 +54,7 @@ func (c *TransactionWriteCommandSet) CommandName() string {
 
 // Executes a set of sqlite statements, within a transaction. All statements
 // will take effect, or none.
-func (c *TransactionWriteCommandSet) Apply(server raft.Server) (interface{}, error) {
+func (c *TransactionWriteCommandSet) Apply(server ContextServer) (interface{}, error) {
 	log.Trace("Applying TransactionWriteCommandSet of size %d", len(c.Stmts))
 	db := server.Context().(*db.DB)
 
