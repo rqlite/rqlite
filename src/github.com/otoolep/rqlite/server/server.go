@@ -41,6 +41,8 @@ type QueryResponse struct {
 
 type ServerMetrics struct {
 	registry          metrics.Registry
+	joinSuccess       metrics.Counter
+	joinFail          metrics.Counter
 	queryReceived     metrics.Counter
 	querySuccess      metrics.Counter
 	queryFail         metrics.Counter
@@ -92,6 +94,8 @@ func isTransaction(req *http.Request) (bool, error) {
 func NewServerMetrics() *ServerMetrics {
 	m := &ServerMetrics{
 		registry:          metrics.NewRegistry(),
+		joinSuccess:       metrics.NewCounter(),
+		joinFail:          metrics.NewCounter(),
 		queryReceived:     metrics.NewCounter(),
 		querySuccess:      metrics.NewCounter(),
 		queryFail:         metrics.NewCounter(),
@@ -101,6 +105,8 @@ func NewServerMetrics() *ServerMetrics {
 		executeFail:       metrics.NewCounter(),
 	}
 
+	m.registry.Register("join.succes", m.joinSuccess)
+	m.registry.Register("join.fail", m.joinFail)
 	m.registry.Register("query.Received", m.queryReceived)
 	m.registry.Register("query.success", m.querySuccess)
 	m.registry.Register("query.fail", m.queryFail)
@@ -240,12 +246,15 @@ func (s *Server) joinHandler(w http.ResponseWriter, req *http.Request) {
 
 	if err := json.NewDecoder(req.Body).Decode(&command); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		s.metrics.joinFail.Inc(1)
 		return
 	}
 	if _, err := s.raftServer.Do(command); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		s.metrics.joinFail.Inc(1)
 		return
 	}
+	s.metrics.joinSuccess.Inc(1)
 }
 
 func (s *Server) readHandler(w http.ResponseWriter, req *http.Request) {
