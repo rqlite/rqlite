@@ -27,9 +27,15 @@ type FailedSqlStmt struct {
 	Error string `json:"error"`
 }
 
-type WriteResponse struct {
+type StmtResponse struct {
 	Time     string          `json:"time"`
 	Failures []FailedSqlStmt `json:"failures"`
+}
+
+type QueryResponse struct {
+	Time     string          `json:"time"`
+	Failures []FailedSqlStmt `json:"failures"`
+	Rows     db.RowResults   `json:"rows"`
 }
 
 // The raftd server is a combination of the Raft server and an HTTP
@@ -200,6 +206,8 @@ func (s *Server) joinHandler(w http.ResponseWriter, req *http.Request) {
 
 func (s *Server) readHandler(w http.ResponseWriter, req *http.Request) {
 	log.Trace("readHandler for URL: %s", req.URL)
+	var failures = make([]FailedSqlStmt, 0)
+
 	b, err := ioutil.ReadAll(req.Body)
 	if err != nil {
 		log.Trace("Bad HTTP request", err.Error())
@@ -207,24 +215,28 @@ func (s *Server) readHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	r, err := s.db.Query(string(b))
+	stmt := string(b)
+	startTime := time.Now()
+	r, err := s.db.Query(stmt)
 	if err != nil {
-		log.Trace("Bad HTTP request", err.Error())
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Trace("Bad SQL statement", err.Error())
+		failures = append(failures, FailedSqlStmt{stmt, err.Error()})
 	}
+	duration := time.Since(startTime)
 
+	rr := QueryResponse{Time: duration.String(), Failures: failures, Rows: r}
 	pretty, _ := isPretty(req)
 	if pretty {
-		b, err = json.MarshalIndent(r, "", "    ")
+		b, err = json.MarshalIndent(rr, "", "    ")
 	} else {
-		b, err = json.Marshal(r)
+		b, err = json.Marshal(rr)
 	}
 	if err != nil {
 		log.Trace("Failed to marshal JSON data", err.Error())
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		http.Error(w, err.Error(), http.StatusBadRequest) // Internal error actually
+	} else {
+		w.Write([]byte(b))
 	}
-	w.Write([]byte(b))
 }
 
 func (s *Server) writeHandler(w http.ResponseWriter, req *http.Request) {
@@ -273,7 +285,7 @@ func (s *Server) writeHandler(w http.ResponseWriter, req *http.Request) {
 	}
 	duration := time.Since(startTime)
 
-	wr := WriteResponse{Time: duration.String(), Failures: failures}
+	wr := StmtResponse{Time: duration.String(), Failures: failures}
 	pretty, _ := isPretty(req)
 	if pretty {
 		b, err = json.MarshalIndent(wr, "", "    ")
