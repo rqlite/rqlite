@@ -8,7 +8,6 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"net/http"
-	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -48,7 +47,7 @@ type Server struct {
 	router     *mux.Router
 	raftServer raft.Server
 	httpServer *http.Server
-	db         *db.DB
+	database   *db.DB
 	mutex      sync.RWMutex
 }
 
@@ -76,13 +75,13 @@ func isTransaction(req *http.Request) (bool, error) {
 }
 
 // Creates a new server.
-func New(dataDir string, dbfile string, host string, port int) *Server {
+func New(dataDir string, database *db.DB, host string, port int) *Server {
 	s := &Server{
-		host:   host,
-		port:   port,
-		path:   dataDir,
-		db:     db.New(path.Join(dataDir, dbfile)),
-		router: mux.NewRouter(),
+		host:     host,
+		port:     port,
+		path:     dataDir,
+		database: database,
+		router:   mux.NewRouter(),
 	}
 
 	// Read existing name or generate a new one.
@@ -111,7 +110,7 @@ func (s *Server) ListenAndServe(leader string) error {
 
 	// Initialize and start Raft server.
 	transporter := raft.NewHTTPTransporter("/raft", 200*time.Millisecond)
-	s.raftServer, err = raft.NewServer(s.name, s.path, transporter, nil, s.db, "")
+	s.raftServer, err = raft.NewServer(s.name, s.path, transporter, nil, s.database, "")
 	if err != nil {
 		log.Error("Failed to create new Raft server", err.Error())
 		return err
@@ -217,7 +216,7 @@ func (s *Server) readHandler(w http.ResponseWriter, req *http.Request) {
 
 	stmt := string(b)
 	startTime := time.Now()
-	r, err := s.db.Query(stmt)
+	r, err := s.database.Query(stmt)
 	if err != nil {
 		log.Trace("Bad SQL statement", err.Error())
 		failures = append(failures, FailedSqlStmt{stmt, err.Error()})
