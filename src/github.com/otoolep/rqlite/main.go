@@ -12,7 +12,6 @@ import (
 
 	"github.com/otoolep/raft"
 	"github.com/otoolep/rqlite/command"
-	"github.com/otoolep/rqlite/db"
 	"github.com/otoolep/rqlite/server"
 
 	log "code.google.com/p/log4go"
@@ -111,16 +110,9 @@ func main() {
 	path := flag.Arg(0)
 	if err := os.MkdirAll(path, 0744); err != nil {
 		log.Error("Unable to create path: %v", err)
-		os.Exit(1)
 	}
 
-	database := db.New(filepath.Join(path, dbfile))
-	if database == nil {
-		log.Error("Unable to create database connection")
-		os.Exit(1)
-	}
-
-	s := server.New(path, database, host, port)
+	s := server.New(path, dbfile, host, port)
 	go func() {
 		log.Error(s.ListenAndServe(join))
 	}()
