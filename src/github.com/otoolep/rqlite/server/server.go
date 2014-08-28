@@ -67,6 +67,7 @@ type Server struct {
 	router      *mux.Router
 	raftServer  raft.Server
 	httpServer  *http.Server
+	dbFile      string
 	db          *db.DB
 	metrics     *ServerMetrics
 	diagnostics *ServerDiagnostics
@@ -136,6 +137,7 @@ func New(dataDir string, dbfile string, host string, port int) *Server {
 		host:        host,
 		port:        port,
 		path:        dataDir,
+		dbFile:      dbfile,
 		db:          db.New(path.Join(dataDir, dbfile)),
 		metrics:     NewServerMetrics(),
 		diagnostics: NewServerDiagnostics(),
@@ -420,6 +422,9 @@ func (s *Server) serveDiagnostics(w http.ResponseWriter, req *http.Request) {
 	diagnostics := make(map[string]string)
 	diagnostics["started"] = s.diagnostics.startTime.String()
 	diagnostics["uptime"] = time.Since(s.diagnostics.startTime).String()
+	diagnostics["data"] = s.path
+	diagnostics["database"] = s.dbFile
+	diagnostics["connection"] = s.connectionString()
 	var b []byte
 	pretty, _ := isPretty(req)
 	if pretty {
