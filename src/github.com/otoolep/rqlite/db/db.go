@@ -2,7 +2,6 @@ package db
 
 import (
 	"database/sql"
-	"errors"
 	"os"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -13,9 +12,6 @@ import (
 const (
 	dbName = "db.sqlite"
 )
-
-// Errors
-var RowScanError = errors.New("Row scan failure")
 
 // The SQL database.
 type DB struct {
@@ -73,7 +69,7 @@ func (db *DB) Query(query string) (RowResults, error) {
 		err = rows.Scan(dest...)
 		if err != nil {
 			log.Error("failed to scan SQLite row", err.Error())
-			return nil, RowScanError
+			return nil, err
 		}
 
 		r := make(RowResult)
