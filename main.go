@@ -105,7 +105,9 @@ func main() {
 	// Set the data directory.
 	if flag.NArg() == 0 {
 		flag.Usage()
-		log.Error("Data path argument required")
+		println("Data path argument required")
+		log.Error("No data path supplied -- aborting")
+		os.Exit(1)
 	}
 	path := flag.Arg(0)
 	if err := os.MkdirAll(path, 0744); err != nil {
