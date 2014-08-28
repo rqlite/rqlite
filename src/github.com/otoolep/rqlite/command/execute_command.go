@@ -53,7 +53,17 @@ func (c *TransactionExecuteCommandSet) CommandName() string {
 // will take effect, or none.
 func (c *TransactionExecuteCommandSet) Apply(server raft.Server) (interface{}, error) {
 	log.Trace("Applying TransactionExecuteCommandSet of size %d", len(c.Stmts))
+
+	commitSuccess := false
 	db := server.Context().(*db.DB)
+	defer func() {
+		if !commitSuccess {
+			err := db.RollbackTransaction()
+			if err != nil {
+				log.Error("Failed to rollback transaction: %s", err.Error)
+			}
+		}
+	}()
 
 	err := db.StartTransaction()
 	if err != nil {
@@ -64,10 +74,6 @@ func (c *TransactionExecuteCommandSet) Apply(server raft.Server) (interface{}, e
 		err = db.Execute(c.Stmts[i])
 		if err != nil {
 			log.Error("Failed to execute statement within transaction", err.Error())
-			err2 := db.RollbackTransaction()
-			if err2 != nil {
-				log.Error("Failed to rollback transaction:", err2.Error())
-			}
 			return nil, err
 		}
 	}
@@ -75,6 +81,8 @@ func (c *TransactionExecuteCommandSet) Apply(server raft.Server) (interface{}, e
 	if err != nil {
 		log.Error("Failed to commit transaction:", err.Error())
 		return nil, err
+	} else {
+		commitSuccess = true
 	}
 	return nil, nil
 }
