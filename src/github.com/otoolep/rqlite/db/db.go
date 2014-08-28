@@ -16,7 +16,6 @@ const (
 
 // Errors
 var RowScanError = errors.New("Row scan failure")
-var QueryExecuteError = errors.New("Query execute error")
 
 // The SQL database.
 type DB struct {
@@ -57,7 +56,7 @@ func (db *DB) Query(query string) (RowResults, error) {
 	rows, err := db.dbConn.Query(query)
 	if err != nil {
 		log.Error("failed to execute SQLite query", err.Error())
-		return nil, QueryExecuteError
+		return nil, err
 	}
 	defer rows.Close()
 
