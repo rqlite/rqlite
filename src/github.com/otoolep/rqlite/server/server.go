@@ -52,19 +52,24 @@ type ServerMetrics struct {
 	executeFail       metrics.Counter
 }
 
+type ServerDiagnostics struct {
+	startTime time.Time
+}
+
 // The raftd server is a combination of the Raft server and an HTTP
 // server which acts as the transport.
 type Server struct {
-	name       string
-	host       string
-	port       int
-	path       string
-	router     *mux.Router
-	raftServer raft.Server
-	httpServer *http.Server
-	database   *db.DB
-	metrics    *ServerMetrics
-	mutex      sync.RWMutex
+	name        string
+	host        string
+	port        int
+	path        string
+	router      *mux.Router
+	raftServer  raft.Server
+	httpServer  *http.Server
+	database    *db.DB
+	metrics     *ServerMetrics
+	diagnostics *ServerDiagnostics
+	mutex       sync.RWMutex
 }
 
 // queryParam returns whether the given query param is set to true.
@@ -117,15 +122,23 @@ func NewServerMetrics() *ServerMetrics {
 	return m
 }
 
+func NewServerDiagnostics() *ServerDiagnostics {
+	d := &ServerDiagnostics{
+		startTime: time.Now(),
+	}
+	return d
+}
+
 // Creates a new server.
 func New(dataDir string, database *db.DB, host string, port int) *Server {
 	s := &Server{
-		host:     host,
-		port:     port,
-		path:     dataDir,
-		database: database,
-		metrics:  NewServerMetrics(),
-		router:   mux.NewRouter(),
+		host:        host,
+		port:        port,
+		path:        dataDir,
+		database:    database,
+		metrics:     NewServerMetrics(),
+		diagnostics: NewServerDiagnostics(),
+		router:      mux.NewRouter(),
 	}
 
 	// Read existing name or generate a new one.
@@ -208,6 +221,7 @@ func (s *Server) ListenAndServe(leader string) error {
 	}
 
 	s.router.HandleFunc("/statistics", s.serveStatistics).Methods("GET")
+	s.router.HandleFunc("/diagnostics", s.serveDiagnostics).Methods("GET")
 	s.router.HandleFunc("/db", s.readHandler).Methods("GET")
 	s.router.HandleFunc("/db", s.writeHandler).Methods("POST")
 	s.router.HandleFunc("/join", s.joinHandler).Methods("POST")
@@ -396,6 +410,21 @@ func (s *Server) serveStatistics(w http.ResponseWriter, req *http.Request) {
 		log.Error("failed to JSON marshal statistics map")
 		http.Error(w, "failed to JSON marshal statistics map", http.StatusInternalServerError)
 		return
+	}
+	w.Write(b)
+}
+
+// serveDiagnostics returns basic server diagnostics
+func (s *Server) serveDiagnostics(w http.ResponseWriter, req *http.Request) {
+	diagnostics := make(map[string]string)
+	diagnostics["started"] = s.diagnostics.startTime.String()
+	diagnostics["uptime"] = time.Since(s.diagnostics.startTime).String()
+	var b []byte
+	pretty, _ := isPretty(req)
+	if pretty {
+		b, _ = json.MarshalIndent(diagnostics, "", "    ")
+	} else {
+		b, _ = json.Marshal(diagnostics)
 	}
 	w.Write(b)
 }
