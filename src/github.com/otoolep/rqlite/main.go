@@ -99,8 +99,8 @@ func main() {
 	rand.Seed(time.Now().UnixNano())
 
 	// Setup commands.
-	raft.RegisterCommand(&command.WriteCommand{})
-	raft.RegisterCommand(&command.TransactionWriteCommandSet{})
+	raft.RegisterCommand(&command.ExecuteCommand{})
+	raft.RegisterCommand(&command.TransactionExecuteCommandSet{})
 
 	// Set the data directory.
 	if flag.NArg() == 0 {

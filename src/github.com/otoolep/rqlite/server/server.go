@@ -268,7 +268,7 @@ func (s *Server) writeHandler(w http.ResponseWriter, req *http.Request) {
 	transaction, _ := isTransaction(req)
 	if transaction {
 		log.Trace("Transaction requested")
-		_, err = s.raftServer.Do(command.NewTransactionWriteCommandSet(stmts))
+		_, err = s.raftServer.Do(command.NewTransactionExecuteCommandSet(stmts))
 		if err != nil {
 			failures = append(failures, FailedSqlStmt{stmts[0], err.Error()})
 			log.Trace("Transaction failed: %s", err.Error())
@@ -276,7 +276,7 @@ func (s *Server) writeHandler(w http.ResponseWriter, req *http.Request) {
 	} else {
 		log.Trace("No transaction requested")
 		for i := range stmts {
-			_, err = s.raftServer.Do(command.NewWriteCommand(stmts[i]))
+			_, err = s.raftServer.Do(command.NewExecuteCommand(stmts[i]))
 			if err != nil {
 				log.Trace("Execute statement %s failed: %s", stmts[i], err.Error())
 				failures = append(failures, FailedSqlStmt{stmts[i], err.Error()})

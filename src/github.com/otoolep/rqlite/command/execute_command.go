@@ -8,51 +8,51 @@ import (
 )
 
 // This command encapsulates a sqlite statement.
-type WriteCommand struct {
+type ExecuteCommand struct {
 	Stmt string `json:"stmt"`
 }
 
 // Creates a new write command.
-func NewWriteCommand(stmt string) *WriteCommand {
-	return &WriteCommand{
+func NewExecuteCommand(stmt string) *ExecuteCommand {
+	return &ExecuteCommand{
 		Stmt: stmt,
 	}
 }
 
 // The name of the command in the log.
-func (c *WriteCommand) CommandName() string {
+func (c *ExecuteCommand) CommandName() string {
 	return "write"
 }
 
 // Executes an sqlite statement.
-func (c *WriteCommand) Apply(server raft.Server) (interface{}, error) {
-	log.Trace("Applying WriteCommand: '%s'", c.Stmt)
+func (c *ExecuteCommand) Apply(server raft.Server) (interface{}, error) {
+	log.Trace("Applying ExecuteCommand: '%s'", c.Stmt)
 	db := server.Context().(*db.DB)
 	return nil, db.Execute(c.Stmt)
 }
 
 // This command encapsulates a set of sqlite statement, which are executed
 // within a transaction.
-type TransactionWriteCommandSet struct {
+type TransactionExecuteCommandSet struct {
 	Stmts []string `json:"stmts"`
 }
 
 // Creates a new set of sqlite commands, which execute within a transaction.
-func NewTransactionWriteCommandSet(stmts []string) *TransactionWriteCommandSet {
-	return &TransactionWriteCommandSet{
+func NewTransactionExecuteCommandSet(stmts []string) *TransactionExecuteCommandSet {
+	return &TransactionExecuteCommandSet{
 		Stmts: stmts,
 	}
 }
 
 // The name of the command in the log.
-func (c *TransactionWriteCommandSet) CommandName() string {
-	return "transaction_write"
+func (c *TransactionExecuteCommandSet) CommandName() string {
+	return "transaction_execute"
 }
 
 // Executes a set of sqlite statements, within a transaction. All statements
 // will take effect, or none.
-func (c *TransactionWriteCommandSet) Apply(server raft.Server) (interface{}, error) {
-	log.Trace("Applying TransactionWriteCommandSet of size %d", len(c.Stmts))
+func (c *TransactionExecuteCommandSet) Apply(server raft.Server) (interface{}, error) {
+	log.Trace("Applying TransactionExecuteCommandSet of size %d", len(c.Stmts))
 	db := server.Context().(*db.DB)
 
 	err := db.StartTransaction()
