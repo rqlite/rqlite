@@ -292,7 +292,7 @@ func (s *Server) writeHandler(w http.ResponseWriter, req *http.Request) {
 		b, err = json.Marshal(wr)
 	}
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest) // Internal error actually
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 	} else {
 		w.Write([]byte(b))
 	}
