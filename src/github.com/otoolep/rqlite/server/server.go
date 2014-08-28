@@ -71,7 +71,7 @@ type Server struct {
 	db          *db.DB
 	metrics     *ServerMetrics
 	diagnostics *ServerDiagnostics
-	mutex       sync.RWMutex
+	mutex       sync.Mutex
 }
 
 // queryParam returns whether the given query param is set to true.
@@ -315,11 +315,46 @@ func (s *Server) readHandler(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
+func (s *Server) lockedExecute(tx bool, stmts []string) ([]FailedSqlStmt, error) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	var failures = make([]FailedSqlStmt, 0)
+
+	if tx {
+		log.Trace("Transaction requested")
+		s.metrics.executeTxReceived.Inc(1)
+
+		_, err := s.raftServer.Do(command.NewTransactionExecuteCommandSet(stmts))
+		if err != nil {
+			log.Trace("Transaction failed: %s", err.Error())
+			s.metrics.executeFail.Inc(1)
+			failures = append(failures, FailedSqlStmt{stmts[0], err.Error()})
+		} else {
+			s.metrics.executeSuccess.Inc(1)
+		}
+	} else {
+		log.Trace("No transaction requested")
+		for i := range stmts {
+			_, err := s.raftServer.Do(command.NewExecuteCommand(stmts[i]))
+			if err != nil {
+				log.Trace("Execute statement %s failed: %s", stmts[i], err.Error())
+				s.metrics.executeFail.Inc(1)
+				failures = append(failures, FailedSqlStmt{stmts[i], err.Error()})
+			} else {
+				s.metrics.executeSuccess.Inc(1)
+			}
+
+		}
+	}
+
+	return failures, nil
+}
+
 func (s *Server) writeHandler(w http.ResponseWriter, req *http.Request) {
 	log.Trace("writeHandler for URL: %s", req.URL)
 	s.metrics.executeReceived.Inc(1)
 
-	var failures = make([]FailedSqlStmt, 0)
 	var startTime time.Time
 
 	// Read the value from the POST body.
@@ -343,33 +378,13 @@ func (s *Server) writeHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	startTime = time.Now()
 	transaction, _ := isTransaction(req)
-	if transaction {
-		log.Trace("Transaction requested")
-		s.metrics.executeTxReceived.Inc(1)
-
-		_, err = s.raftServer.Do(command.NewTransactionExecuteCommandSet(stmts))
-		if err != nil {
-			log.Trace("Transaction failed: %s", err.Error())
-			s.metrics.executeFail.Inc(1)
-			failures = append(failures, FailedSqlStmt{stmts[0], err.Error()})
-		} else {
-			s.metrics.executeSuccess.Inc(1)
-		}
-	} else {
-		log.Trace("No transaction requested")
-		for i := range stmts {
-			_, err = s.raftServer.Do(command.NewExecuteCommand(stmts[i]))
-			if err != nil {
-				log.Trace("Execute statement %s failed: %s", stmts[i], err.Error())
-				s.metrics.executeFail.Inc(1)
-				failures = append(failures, FailedSqlStmt{stmts[i], err.Error()})
-			} else {
-				s.metrics.executeSuccess.Inc(1)
-			}
-
-		}
+	startTime = time.Now()
+	failures, err := s.lockedExecute(transaction, stmts)
+	if err != nil {
+		log.Error("Database mutation failed: %s", err.Error())
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 	duration := time.Since(startTime)
 
