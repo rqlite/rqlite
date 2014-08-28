@@ -45,6 +45,12 @@ func isTransaction(req *http.Request) (bool, error) {
 	return queryParam(req, "transaction")
 }
 
+type WriteResponse struct {
+	Time    string
+	Success int
+	Fail    int
+}
+
 // The raftd server is a combination of the Raft server and an HTTP
 // server which acts as the transport.
 type Server struct {
@@ -219,6 +225,11 @@ func (s *Server) readHandler(w http.ResponseWriter, req *http.Request) {
 
 func (s *Server) writeHandler(w http.ResponseWriter, req *http.Request) {
 	log.Trace("writeHandler for URL: %s", req.URL)
+
+	var nSuccess int
+	var nFail int
+	var startTime time.Time
+
 	// Read the value from the POST body.
 	b, err := ioutil.ReadAll(req.Body)
 	if err != nil {
@@ -232,6 +243,7 @@ func (s *Server) writeHandler(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Execute the command against the Raft server.
+	startTime = time.Now()
 	switch {
 	case len(stmts) == 0:
 		log.Trace("No database execute commands supplied")
@@ -240,18 +252,39 @@ func (s *Server) writeHandler(w http.ResponseWriter, req *http.Request) {
 	case len(stmts) == 1:
 		log.Trace("Single statment, implicit transaction")
 		_, err = s.raftServer.Do(command.NewWriteCommand(stmts[0]))
+		if err != nil {
+			nFail++
+		} else {
+			nSuccess++
+		}
 	case len(stmts) > 1:
 		log.Trace("Multistatement, transaction possible")
 		transaction, _ := isTransaction(req)
 		if transaction {
 			log.Trace("Transaction requested")
 			_, err = s.raftServer.Do(command.NewTransactionWriteCommandSet(stmts))
+			if err != nil {
+				nFail++
+			} else {
+				nSuccess++
+			}
 		} else {
 			log.Trace("No transaction requested")
 			// Do each individually, returning JSON respoonse
 		}
 	}
+	duration := time.Since(startTime)
+
+	wr := WriteResponse{Time: duration.String(), Success: nSuccess, Fail: nFail}
+	pretty, _ := isPretty(req)
+	if pretty {
+		b, err = json.MarshalIndent(wr, "", "    ")
+	} else {
+		b, err = json.Marshal(wr)
+	}
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusBadRequest) // Internal error actually
+	} else {
+		w.Write([]byte(b))
 	}
 }
