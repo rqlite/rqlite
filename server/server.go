@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -57,8 +58,18 @@ type ServerDiagnostics struct {
 	startTime time.Time
 }
 
+type SnapshotConf struct {
+	// The index when the last snapshot happened
+	lastIndex uint64
+
+	// If the incremental number of index entries since the last
+	// snapshot exceeds snapshotAfter rqlite will do a snapshot
+	snapshotAfter uint64
+}
+
 // The raftd server is a combination of the Raft server and an HTTP
 // server which acts as the transport.
+
 type Server struct {
 	name        string
 	host        string
@@ -69,6 +80,7 @@ type Server struct {
 	httpServer  *http.Server
 	dbFile      string
 	db          *db.DB
+	snapConf    *SnapshotConf
 	metrics     *ServerMetrics
 	diagnostics *ServerDiagnostics
 	mutex       sync.Mutex
@@ -132,7 +144,7 @@ func NewServerDiagnostics() *ServerDiagnostics {
 }
 
 // Creates a new server.
-func New(dataDir string, dbfile string, host string, port int) *Server {
+func New(dataDir string, dbfile string, snapAfter int, host string, port int) *Server {
 	s := &Server{
 		host:        host,
 		port:        port,
@@ -166,6 +178,16 @@ func (s *Server) GetStatistics() (metrics.Registry, error) {
 // Returns the connection string.
 func (s *Server) connectionString() string {
 	return fmt.Sprintf("http://%s:%d", s.host, s.port)
+}
+
+// logSnapshot logs about the snapshot that was taken.
+func (s *Server) logSnapshot(err error, currentIndex, count uint64) {
+	info := fmt.Sprintf("%s: snapshot of %d events at index %d", s.connectionString, count, currentIndex)
+	if err != nil {
+		log.Info("%s attempted and failed: %v", info, err)
+	} else {
+		log.Info("%s completed", info)
+	}
 }
 
 // Starts the server.
@@ -355,6 +377,14 @@ func (s *Server) writeHandler(w http.ResponseWriter, req *http.Request) {
 	log.Trace("writeHandler for URL: %s", req.URL)
 	s.metrics.executeReceived.Inc(1)
 
+	currentIndex := s.raftServer.CommitIndex()
+	count := currentIndex - s.snapConf.lastIndex
+	if uint64(count) > s.snapConf.snapshotAfter {
+		err := s.raftServer.TakeSnapshot()
+		s.logSnapshot(err, currentIndex, count)
+		s.snapConf.lastIndex = currentIndex
+	}
+
 	var startTime time.Time
 
 	// Read the value from the POST body.
@@ -440,6 +470,8 @@ func (s *Server) serveDiagnostics(w http.ResponseWriter, req *http.Request) {
 	diagnostics["data"] = s.path
 	diagnostics["database"] = s.dbFile
 	diagnostics["connection"] = s.connectionString()
+	diagnostics["snapafter"] = strconv.FormatUint(s.snapConf.snapshotAfter, 10)
+	diagnostics["snapindex"] = strconv.FormatUint(s.snapConf.lastIndex, 10)
 	var b []byte
 	pretty, _ := isPretty(req)
 	if pretty {
