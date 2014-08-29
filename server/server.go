@@ -78,7 +78,7 @@ type Server struct {
 	router      *mux.Router
 	raftServer  raft.Server
 	httpServer  *http.Server
-	dbFile      string
+	dbPath      string
 	db          *db.DB
 	snapConf    *SnapshotConf
 	metrics     *ServerMetrics
@@ -145,12 +145,14 @@ func NewServerDiagnostics() *ServerDiagnostics {
 
 // Creates a new server.
 func New(dataDir string, dbfile string, snapAfter int, host string, port int) *Server {
+	dbPath := path.Join(dataDir, dbfile)
+
 	s := &Server{
 		host:        host,
 		port:        port,
 		path:        dataDir,
-		dbFile:      dbfile,
-		db:          db.New(path.Join(dataDir, dbfile)),
+		dbPath:      dbPath,
+		db:          db.New(dbPath),
 		metrics:     NewServerMetrics(),
 		diagnostics: NewServerDiagnostics(),
 		router:      mux.NewRouter(),
@@ -198,7 +200,8 @@ func (s *Server) ListenAndServe(leader string) error {
 
 	// Initialize and start Raft server.
 	transporter := raft.NewHTTPTransporter("/raft", 200*time.Millisecond)
-	s.raftServer, err = raft.NewServer(s.name, s.path, transporter, nil, s.db, "")
+	stateMachine := NewDbStateMachine(s.dbPath)
+	s.raftServer, err = raft.NewServer(s.name, s.path, transporter, stateMachine, s.db, "")
 	if err != nil {
 		log.Error("Failed to create new Raft server", err.Error())
 		return err
@@ -337,10 +340,7 @@ func (s *Server) readHandler(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (s *Server) lockedExecute(tx bool, stmts []string) ([]FailedSqlStmt, error) {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
+func (s *Server) execute(tx bool, stmts []string) ([]FailedSqlStmt, error) {
 	var failures = make([]FailedSqlStmt, 0)
 
 	if tx {
@@ -374,6 +374,9 @@ func (s *Server) lockedExecute(tx bool, stmts []string) ([]FailedSqlStmt, error)
 }
 
 func (s *Server) writeHandler(w http.ResponseWriter, req *http.Request) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
 	log.Trace("writeHandler for URL: %s", req.URL)
 	s.metrics.executeReceived.Inc(1)
 
@@ -410,7 +413,7 @@ func (s *Server) writeHandler(w http.ResponseWriter, req *http.Request) {
 
 	transaction, _ := isTransaction(req)
 	startTime = time.Now()
-	failures, err := s.lockedExecute(transaction, stmts)
+	failures, err := s.execute(transaction, stmts)
 	if err != nil {
 		log.Error("Database mutation failed: %s", err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -468,7 +471,7 @@ func (s *Server) serveDiagnostics(w http.ResponseWriter, req *http.Request) {
 	diagnostics["started"] = s.diagnostics.startTime.String()
 	diagnostics["uptime"] = time.Since(s.diagnostics.startTime).String()
 	diagnostics["data"] = s.path
-	diagnostics["database"] = s.dbFile
+	diagnostics["database"] = s.dbPath
 	diagnostics["connection"] = s.connectionString()
 	diagnostics["snapafter"] = strconv.FormatUint(s.snapConf.snapshotAfter, 10)
 	diagnostics["snapindex"] = strconv.FormatUint(s.snapConf.lastIndex, 10)
