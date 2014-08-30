@@ -384,6 +384,7 @@ func (s *Server) writeHandler(w http.ResponseWriter, req *http.Request) {
 	currentIndex := s.raftServer.CommitIndex()
 	count := currentIndex - s.snapConf.lastIndex
 	if uint64(count) > s.snapConf.snapshotAfter {
+		log.Info("Committed log entries snapshot threshold reached, starting snapshot")
 		err := s.raftServer.TakeSnapshot()
 		s.logSnapshot(err, currentIndex, count)
 		s.snapConf.lastIndex = currentIndex
