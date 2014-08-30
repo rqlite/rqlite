@@ -207,6 +207,13 @@ func (s *Server) ListenAndServe(leader string) error {
 		log.Error("Failed to create new Raft server", err.Error())
 		return err
 	}
+
+	log.Info("Loading latest snapshot, if any, from disk")
+	err = s.raftServer.LoadSnapshot()
+	if err != nil {
+		log.Error("Error loading snapshot: %s", err.Error())
+	}
+
 	transporter.Install(s.raftServer, s)
 	s.raftServer.Start()
 
