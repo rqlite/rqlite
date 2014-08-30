@@ -116,7 +116,7 @@ func main() {
 		log.Error("Unable to create path: %v", err)
 	}
 
-	s := server.New(path, dbfile, snapAfter, host, port)
+	s := server.NewServer(path, dbfile, snapAfter, host, port)
 	go func() {
 		log.Error(s.ListenAndServe(join))
 	}()

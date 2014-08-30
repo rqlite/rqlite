@@ -144,7 +144,7 @@ func NewServerDiagnostics() *ServerDiagnostics {
 }
 
 // Creates a new server.
-func New(dataDir string, dbfile string, snapAfter int, host string, port int) *Server {
+func NewServer(dataDir string, dbfile string, snapAfter int, host string, port int) *Server {
 	dbPath := path.Join(dataDir, dbfile)
 
 	s := &Server{
