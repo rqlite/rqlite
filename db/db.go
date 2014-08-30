@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"fmt"
 	"os"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -91,9 +92,9 @@ func (db *DB) Execute(stmt string) error {
 	_, err := db.dbConn.Exec(stmt)
 	log.Debug(func() string {
 		if err != nil {
-			return "Error executing " + stmt
+			return fmt.Sprintf("Error executing \"%s\", error: %s", stmt, err.Error())
 		}
-		return "Successfully executed " + stmt
+		return fmt.Sprintf("Successfully executed \"%s\"", stmt)
 	})
 	return err
 }
