@@ -153,6 +153,7 @@ func New(dataDir string, dbfile string, snapAfter int, host string, port int) *S
 		path:        dataDir,
 		dbPath:      dbPath,
 		db:          db.New(dbPath),
+		snapConf:    &SnapshotConf{snapshotAfter: uint64(snapAfter)},
 		metrics:     NewServerMetrics(),
 		diagnostics: NewServerDiagnostics(),
 		router:      mux.NewRouter(),
