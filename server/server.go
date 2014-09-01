@@ -126,7 +126,7 @@ func NewServerMetrics() *ServerMetrics {
 		snapshotCreated:   metrics.NewCounter(),
 	}
 
-	m.registry.Register("join.succes", m.joinSuccess)
+	m.registry.Register("join.success", m.joinSuccess)
 	m.registry.Register("join.fail", m.joinFail)
 	m.registry.Register("query.Received", m.queryReceived)
 	m.registry.Register("query.success", m.querySuccess)
