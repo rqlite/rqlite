@@ -110,7 +110,7 @@ func isTransaction(req *http.Request) (bool, error) {
 	return queryParam(req, "transaction")
 }
 
-// Creates a new ServerMetrics object.
+// NewServerMetrics creates a new ServerMetrics object.
 func NewServerMetrics() *ServerMetrics {
 	m := &ServerMetrics{
 		registry:          metrics.NewRegistry(),
@@ -139,6 +139,7 @@ func NewServerMetrics() *ServerMetrics {
 	return m
 }
 
+// NewServerDiagnostics creates a new NewServerDiagnostics object.
 func NewServerDiagnostics() *ServerDiagnostics {
 	d := &ServerDiagnostics{
 		startTime: time.Now(),
@@ -146,7 +147,7 @@ func NewServerDiagnostics() *ServerDiagnostics {
 	return d
 }
 
-// Creates a new server.
+// NewServer creates a new server.
 func NewServer(dataDir string, dbfile string, snapAfter int, host string, port int) *Server {
 	dbPath := path.Join(dataDir, dbfile)
 
@@ -181,7 +182,7 @@ func (s *Server) GetStatistics() (metrics.Registry, error) {
 	return s.metrics.registry, nil
 }
 
-// Returns the connection string.
+// connectionString returns the string used to connect to this server.
 func (s *Server) connectionString() string {
 	return fmt.Sprintf("http://%s:%d", s.host, s.port)
 }
@@ -196,7 +197,7 @@ func (s *Server) logSnapshot(err error, currentIndex, count uint64) {
 	}
 }
 
-// Starts the server.
+// ListenAndServe starts the server.
 func (s *Server) ListenAndServe(leader string) error {
 	var err error
 

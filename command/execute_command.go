@@ -12,19 +12,19 @@ type ExecuteCommand struct {
 	Stmt string `json:"stmt"`
 }
 
-// Creates a new write command.
+// NewExecuteCommand creates a new Execute command.
 func NewExecuteCommand(stmt string) *ExecuteCommand {
 	return &ExecuteCommand{
 		Stmt: stmt,
 	}
 }
 
-// The name of the command in the log.
+// The name of the ExecuteCommand in the log.
 func (c *ExecuteCommand) CommandName() string {
 	return "write"
 }
 
-// Executes an sqlite statement.
+// Apply executes an sqlite statement.
 func (c *ExecuteCommand) Apply(server raft.Server) (interface{}, error) {
 	log.Trace("Applying ExecuteCommand: '%s'", c.Stmt)
 	db := server.Context().(*db.DB)
@@ -37,19 +37,20 @@ type TransactionExecuteCommandSet struct {
 	Stmts []string `json:"stmts"`
 }
 
-// Creates a new set of sqlite commands, which execute within a transaction.
+// NewTransactionExecuteCommandSet Creates a new set of sqlite commands, which
+// execute within a transaction.
 func NewTransactionExecuteCommandSet(stmts []string) *TransactionExecuteCommandSet {
 	return &TransactionExecuteCommandSet{
 		Stmts: stmts,
 	}
 }
 
-// The name of the command in the log.
+// The name of the TransactionExecute command in the log.
 func (c *TransactionExecuteCommandSet) CommandName() string {
 	return "transaction_execute"
 }
 
-// Executes a set of sqlite statements, within a transaction. All statements
+// Apply executes a set of sqlite statements, within a transaction. All statements
 // will take effect, or none.
 func (c *TransactionExecuteCommandSet) Apply(server raft.Server) (interface{}, error) {
 	log.Trace("Applying TransactionExecuteCommandSet of size %d", len(c.Stmts))
