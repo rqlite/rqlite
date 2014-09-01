@@ -52,6 +52,7 @@ type ServerMetrics struct {
 	executeTxReceived metrics.Counter
 	executeSuccess    metrics.Counter
 	executeFail       metrics.Counter
+	snapshotCreated   metrics.Counter
 }
 
 type ServerDiagnostics struct {
@@ -122,6 +123,7 @@ func NewServerMetrics() *ServerMetrics {
 		executeTxReceived: metrics.NewCounter(),
 		executeSuccess:    metrics.NewCounter(),
 		executeFail:       metrics.NewCounter(),
+		snapshotCreated:   metrics.NewCounter(),
 	}
 
 	m.registry.Register("join.succes", m.joinSuccess)
@@ -133,6 +135,7 @@ func NewServerMetrics() *ServerMetrics {
 	m.registry.Register("execute.tx.received", m.executeTxReceived)
 	m.registry.Register("execute.success", m.executeSuccess)
 	m.registry.Register("execute.fail", m.executeFail)
+	m.registry.Register("snapshot.created", m.snapshotCreated)
 	return m
 }
 
@@ -395,6 +398,7 @@ func (s *Server) writeHandler(w http.ResponseWriter, req *http.Request) {
 		err := s.raftServer.TakeSnapshot()
 		s.logSnapshot(err, currentIndex, count)
 		s.snapConf.lastIndex = currentIndex
+		s.metrics.snapshotCreated.Inc(1)
 	}
 
 	var startTime time.Time
