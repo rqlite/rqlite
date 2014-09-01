@@ -484,6 +484,8 @@ func (s *Server) serveDiagnostics(w http.ResponseWriter, req *http.Request) {
 	diagnostics := make(map[string]string)
 	diagnostics["started"] = s.diagnostics.startTime.String()
 	diagnostics["uptime"] = time.Since(s.diagnostics.startTime).String()
+	diagnostics["host"] = s.host
+	diagnostics["port"] = strconv.Itoa(s.port)
 	diagnostics["data"] = s.path
 	diagnostics["database"] = s.dbPath
 	diagnostics["connection"] = s.connectionString()
