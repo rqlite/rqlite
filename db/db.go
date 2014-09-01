@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
 
@@ -50,6 +51,9 @@ func (db *DB) Close() error {
 // Query runs the supplied query against the sqlite database. It returns a slice of
 // RowResults.
 func (db *DB) Query(query string) (RowResults, error) {
+	if !strings.HasPrefix(strings.ToUpper(query), "SELECT ") {
+		log.Warn("Query \"%s\" may modify the database", query)
+	}
 	rows, err := db.dbConn.Query(query)
 	if err != nil {
 		log.Error("failed to execute SQLite query", err.Error())

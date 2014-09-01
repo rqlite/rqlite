@@ -158,7 +158,7 @@ func (s *DbSuite) Test_SimpleTransactions(c *C) {
 	err = db.RollbackTransaction()
 	c.Assert(err, IsNil)
 
-	r, err = db.Query("SELECT name FROM foo")
+	r, err = db.Query("select name from foo") // Test lowercase
 	c.Assert(len(r), Equals, 10)
 	for i := range r {
 		c.Assert(r[i]["name"], Equals, "philip")
