@@ -17,7 +17,7 @@ func NewDbStateMachine(path string) *DbStateMachine {
 	d := &DbStateMachine{
 		dbpath: path,
 	}
-	log.Trace("New DB state machine created for path: %s", path)
+	log.Trace("New DB state machine created with path: %s", path)
 	return d
 }
 
@@ -33,6 +33,7 @@ func (d *DbStateMachine) Save() ([]byte, error) {
 		log.Error("Failed to save state: ", err.Error())
 		return nil, err
 	}
+	log.Trace("Database state successfully saved to %s", d.dbpath)
 	return b, nil
 }
 
@@ -42,6 +43,8 @@ func (d *DbStateMachine) Recovery(b []byte) error {
 	err := ioutil.WriteFile(d.dbpath, b, os.ModePerm)
 	if err != nil {
 		log.Error("Failed to recover state: ", err.Error())
+		return err
 	}
-	return err
+	log.Trace("Database restored successfully to %s", d.dbpath)
+	return nil
 }
