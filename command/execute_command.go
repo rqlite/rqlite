@@ -21,7 +21,7 @@ func NewExecuteCommand(stmt string) *ExecuteCommand {
 
 // The name of the ExecuteCommand in the log.
 func (c *ExecuteCommand) CommandName() string {
-	return "write"
+	return "execute"
 }
 
 // Apply executes an sqlite statement.
