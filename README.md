@@ -73,4 +73,6 @@ The use of the URL param `pretty` is optional, and results in pretty-printed JSO
 This project uses the [go-raft](https://github.com/goraft/raft) implementation of the Raft consensus protocol, and was inspired by the raftd reference implementation. I also borrowed some ideas from [etcd](https://github.com/coreos/etcd).
 
 ## Limitations
-SQLite commands such as `.schema` are not handled. Using `PRAGMA` directives has not been tested either.
+ * SQLite commands such as `.schema` are not handled.
+ * Using `PRAGMA` directives has not been tested either.
+ * The supported types are those supported by [go-sqlite3](http://godoc.org/github.com/mattn/go-sqlite3).
