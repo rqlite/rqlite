@@ -4,7 +4,7 @@ rqlite
 *rqlite* is a distributed system that provides a replicated SQLite database. rqlite is written in [Go](http://golang.org/) and uses [Raft](http://raftconsensus.github.io/) to achieve consensus across all the instances of the SQLite databases. rqlite ensures that every change made to the database is made to a majority of databases, or none-at-all.
 
 ## Why replicate SQLite?
-SQLite is a "self-contained, serverless, zero-configuration, transactional SQL database engine". The entire database is contained within a single file on disk, making working with it very straightforward. Many people have experience with it, and it's been a natural choice for adding relational-database functionality to many systems. However, SQLite isn't replicated, which means it can become a single point of failure if used to store metadata about cluster of manchines. While it is possible to continually copy the SQLite file to a backup server, this copy must not take place while the database is being accessed.
+[SQLite](http://www.sqlite.org/) is a "self-contained, serverless, zero-configuration, transactional SQL database engine". The entire database is contained within a single file on disk, making working with it very straightforward. Many people have experience with it, and it's been a natural choice for adding relational-database functionality to many systems. However, SQLite isn't replicated, which means it can become a single point of failure if used to store metadata about cluster of manchines. While it is possible to continually copy the SQLite file to a backup server everytime it is changed, this file-copy must not take place while the database is being accessed.
 
 rqlite combines the ease-of-use of SQLite with straightfoward replication. And it was fun. :-)
 
@@ -17,7 +17,7 @@ Download and run rqlite like so (tested on 64-bit Kubuntu 14.04):
     go get github.com/otoolep/rqlite
     bin/rqlite ~/node.1
 
-This starts a rqlite server listening on localhost, port 4001. This single node is automatically becomes the leader. For all available command-line options, execute:
+This starts a rqlite server listening on localhost, port 4001. This single node is automatically becomes the leader. To see all available command-line options, execute:
 
     bin/rqlite -h
 
@@ -27,7 +27,9 @@ Start a second and third node (so a majority can still form in the event of a si
     bin/rqlite -join localhost:4001 -p 4002 ~/node.2
     bin/rqlite -join localhost:4001 -p 4003 ~/node.3
 
-## Data API
+Under each node will be an SQLite file, which should remain in consensus.
+
+## Data AI
 rqlite exposes an HTTP API allowing the database to modified and queried. Modifications go through the Raft log, ensuring only changes committed by a quorom of Raft servers are actually executed against the SQLite database. Queries do not go through the Raft log, since they do not change the state of the database, and therefore do not need to be captured in the log.
 
 ### Writing Data
@@ -49,7 +51,7 @@ INSERT INTO foo(name) VALUES("fiona")
 INSERT INTO foo(name) VALUES("fiona")
 '
 
-Either both statements will succeed, or neither.
+When a transaction is in place either both statements will succeed, or neither.
 
 ### Querying Data
 Qeurying data is easy.
