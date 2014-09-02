@@ -29,7 +29,7 @@ Start a second and third node (so a majority can still form in the event of a si
 
 Under each node will be an SQLite file, which should remain in consensus.
 
-## Data AI
+## Data API
 rqlite exposes an HTTP API allowing the database to modified and queried. Modifications go through the Raft log, ensuring only changes committed by a quorom of Raft servers are actually executed against the SQLite database. Queries do not go through the Raft log, since they do not change the state of the database, and therefore do not need to be captured in the log.
 
 ### Writing Data
