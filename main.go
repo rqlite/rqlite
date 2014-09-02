@@ -1,3 +1,8 @@
+// rqlite -- a replicated SQLite database.
+//
+// Copyright (c) 2014 Philip O'Toole
+// http://www.philipotoole.com
+
 package main
 
 import (
