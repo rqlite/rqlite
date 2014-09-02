@@ -68,7 +68,7 @@ Transactions are supported. To execute statements within a transaction, add `tra
                  INSERT INTO foo(name) VALUES("fiona")
                  INSERT INTO foo(name) VALUES("fiona")'
 
-When a transaction takes place either both statements will succeed, or neither.
+When a transaction takes place either both statements will succeed, or neither. Performance is *much, much* better if multiple statements are inserted via a transaction.
 
 ### Querying Data
 Qeurying data is easy.
