@@ -34,6 +34,8 @@ Under each node will be an SQLite file, which should remain in consensus.
 ## Data API
 rqlite exposes an HTTP API allowing the database to modified and queried. Modifications go through the Raft log, ensuring only changes committed by a quorom of Raft servers are actually executed against the SQLite database. Queries do not go through the Raft log, since they do not change the state of the database, and therefore do not need to be captured in the log.
 
+All responses from rqlite are in the form of JSON.
+
 ### Writing Data
 To write data to the database, you must create at least 1 table.
 
