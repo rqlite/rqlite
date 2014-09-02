@@ -22,6 +22,8 @@ This starts a rqlite server listening on localhost, port 4001. This single node 
     bin/rqlite -h
 
 ### Forming a Cluster
+While not strictly necessary to run rqlite, running multiple nodes means the SQLite database is replicated.
+
 Start a second and third node (so a majority can still form in the event of a single node failure) like so:
 
     bin/rqlite -join localhost:4001 -p 4002 ~/node.2
@@ -58,7 +60,9 @@ Qeurying data is easy.
     curl -XGET localhost:4002/db -d 'SELECT * from foo'
 
 ### Performance
-Depending on your machine, individual INSERT performance could be anything from 1 operation per second to more than 10 operations per second. However, by using transactions, throughput will increase significantly, often by 2 orders or magnitude. This speed-up is due to the way SQLite works.
+rqlite replicates SQLite for fault-tolerance. It does not replicate it for performance. In fact performance is reduced somewhat due to the network round-trips.
+
+Depending on your machine, individual INSERT performance could be anything from 1 operation per second to more than 10 operations per second. However, by using transactions, throughput will increase significantly, often by 2 orders or magnitude. This speed-up is due to the way SQLite works. So for high throughput, execute as many commands as possible within a single transaction.
 
 ## Admin API
 An Admin API exists, which dumps some basic diagnostic and statistical information. Assuming rqlite is started with default settings, the endpoints are available like so:
