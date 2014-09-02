@@ -82,7 +82,7 @@ An Admin API exists, which dumps some basic diagnostic and statistical informati
 The use of the URL param `pretty` is optional, and results in pretty-printed JSON responses.
 
 ## Credits
-This project uses the [go-raft](https://github.com/goraft/raft) implementation of the Raft consensus protocol, and was inspired by the raftd reference implementation. I also borrowed some ideas from [etcd](https://github.com/coreos/etcd).
+This project uses the [go-raft](https://github.com/goraft/raft) implementation of the Raft consensus protocol, and was inspired by the [raftd](https://github.com/goraft/raftd) reference implementation. rqlite also borrows some ideas from [etcd](https://github.com/coreos/etcd).
 
 ## Limitations
  * SQLite commands such as `.schema` are not handled.
