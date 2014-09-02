@@ -97,5 +97,5 @@ rqlite does perform log compaction. After a specified number of changes to log, 
  * The supported types are those supported by [go-sqlite3](http://godoc.org/github.com/mattn/go-sqlite3).
  * This is new software, so it goes without saying it has bugs.
 
- ## Credits
+## Credits
 This project uses the [go-raft](https://github.com/goraft/raft) implementation of the Raft consensus protocol, and was inspired by the [raftd](https://github.com/goraft/raftd) reference implementation. rqlite also borrows some ideas from [etcd](https://github.com/coreos/etcd).
