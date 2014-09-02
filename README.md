@@ -43,16 +43,23 @@ To insert an entry into the database, execute a second command:
 
     curl -XPOST localhost:4001/db?pretty -d 'INSERT INTO foo(name) VALUES("fiona")'
 
-The use of the URL param `pretty` is optional, and results in pretty-printed JSON responses.
+The use of the URL param `pretty` is optional, and results in pretty-printed JSON responses. You can confirm that the data has been write to the database by accessing the SQLite database directly.
+
+     $ sqlite3 ~/node.3/db.sqlite
+    SQLite version 3.7.15.2 2013-01-09 11:53:05
+    Enter ".help" for instructions
+    Enter SQL statements terminated with a ";"
+    sqlite> select * from foo;
+    1|fiona
 
 #### Transactions
-Transactions are supported. For example, to execute two statements within a transaction, separate them with a newline and add `transaction` to the URL like so:
+Transactions are supported. To execute two statements within a transaction, separate them with a newline and add `transaction` to the URL. An example is shown below:
 
     curl -XPOST 'localhost:4001/db?pretty&transaction' -d '
                  INSERT INTO foo(name) VALUES("fiona")
                  INSERT INTO foo(name) VALUES("fiona")'
 
-When a transaction is in place either both statements will succeed, or neither.
+When a transaction takes place either both statements will succeed, or neither.
 
 ### Querying Data
 Qeurying data is easy.
