@@ -89,7 +89,7 @@ An Admin API exists, which dumps some basic diagnostic and statistical informati
 The use of the URL param `pretty` is optional, and results in pretty-printed JSON responses.
 
 ## Log Compaction
-rqlite does perform log compaction. After a specified number of changes to log, it snapshots the SQLite database. And at start-up rqlite loads any existing snapshot.
+rqlite does perform log compaction. After a specified number of changes to the log, rqlite snapshots the SQLite database. And at start-up rqlite loads any existing snapshot.
 
 ## Limitations
  * SQLite commands such as `.schema` are not handled.
