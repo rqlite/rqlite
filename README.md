@@ -73,7 +73,7 @@ When a transaction takes place either both statements will succeed, or neither.
 ### Querying Data
 Qeurying data is easy.
 
-    curl -XGET localhost:4002/db -d 'SELECT * from foo'
+    curl -XGET localhost:4001/db -d 'SELECT * from foo'
 
 ### Performance
 rqlite replicates SQLite for fault-tolerance. It does not replicate it for performance. In fact performance is reduced somewhat due to the network round-trips.
