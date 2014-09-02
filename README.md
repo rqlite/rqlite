@@ -88,11 +88,14 @@ An Admin API exists, which dumps some basic diagnostic and statistical informati
 
 The use of the URL param `pretty` is optional, and results in pretty-printed JSON responses.
 
-## Credits
-This project uses the [go-raft](https://github.com/goraft/raft) implementation of the Raft consensus protocol, and was inspired by the [raftd](https://github.com/goraft/raftd) reference implementation. rqlite also borrows some ideas from [etcd](https://github.com/coreos/etcd).
+## Log Compaction
+rqlite does perform log compaction. After a specified number of changes to log, it snapshots the SQLite database. And at start-up rqlite loads any existing snapshot.
 
 ## Limitations
  * SQLite commands such as `.schema` are not handled.
  * Using `PRAGMA` directives has not been tested either.
  * The supported types are those supported by [go-sqlite3](http://godoc.org/github.com/mattn/go-sqlite3).
  * This is new software, so it goes without saying it has bugs.
+
+ ## Credits
+This project uses the [go-raft](https://github.com/goraft/raft) implementation of the Raft consensus protocol, and was inspired by the [raftd](https://github.com/goraft/raftd) reference implementation. rqlite also borrows some ideas from [etcd](https://github.com/coreos/etcd).
