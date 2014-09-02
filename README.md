@@ -4,9 +4,9 @@ rqlite
 *rqlite* is a distributed system that provides a replicated SQLite database. rqlite is written in [Go](http://golang.org/) and uses [Raft](http://raftconsensus.github.io/) to achieve consensus across all the instances of the SQLite databases. rqlite ensures that every change made to the database is made to a majority of databases, or none-at-all.
 
 ### Why replicate SQLite?
-[SQLite](http://www.sqlite.org/) is a "self-contained, serverless, zero-configuration, transactional SQL database engine". The entire database is contained within a single file on disk, making working with it very straightforward. Many people have experience with it, and it's been a natural choice for adding relational-database functionality to many systems. However, SQLite isn't replicated, which means it can become a single point of failure if used to store metadata about a cluster of manchines. While it is possible to continually copy the SQLite file to a backup server everytime it is changed, this file-copy must not take place while the database is being accessed.
+[SQLite](http://www.sqlite.org/) is a "self-contained, serverless, zero-configuration, transactional SQL database engine". The entire database is contained within a single file on disk, making working with it very straightforward. Many people have experience with it, and it's been a natural choice for adding relational-database functionality to many systems. However, SQLite isn't replicated, which means it can become a single point of failure if used to store, for example, metadata about a cluster of machines. While it is possible to continually copy the SQLite file to a backup server everytime it is changed, this file-copy must not take place while the database is being accessed.
 
-rqlite combines the ease-of-use of SQLite with straightfoward replication. And it was fun. :-)
+rqlite combines the ease-of-use of SQLite with straightfoward replication.
 
 ## Building and Running
 Download and run rqlite like so (tested on 64-bit Kubuntu 14.04):
@@ -32,7 +32,7 @@ Start a second and third node (so a majority can still form in the event of a si
 Under each node will be an SQLite file, which should remain in consensus.
 
 ## Data API
-rqlite exposes an HTTP API allowing the database to modified and queried. Modifications go through the Raft log, ensuring only changes committed by a quorom of Raft servers are actually executed against the SQLite database. Queries do not go through the Raft log, since they do not change the state of the database, and therefore do not need to be captured in the log.
+rqlite exposes an HTTP API allowing the database to be modified and queried. Modifications go through the Raft log, ensuring only changes committed by a quorom of Raft servers are actually executed against the SQLite database. Queries do not go through the Raft log, however, since they do not change the state of the database, and therefore do not need to be captured in the log.
 
 All responses from rqlite are in the form of JSON.
 
@@ -45,7 +45,7 @@ To insert an entry into the database, execute a second command:
 
     curl -XPOST localhost:4001/db?pretty -d 'INSERT INTO foo(name) VALUES("fiona")'
 
-The use of the URL param `pretty` is optional, and results in pretty-printed JSON responses. You can confirm that the data has been write to the database by accessing the SQLite database directly.
+The use of the URL param `pretty` is optional, and results in pretty-printed JSON responses. You can confirm that the data has been writen to the database by accessing the SQLite database directly.
 
      $ sqlite3 ~/node.3/db.sqlite
     SQLite version 3.7.15.2 2013-01-09 11:53:05
@@ -53,9 +53,16 @@ The use of the URL param `pretty` is optional, and results in pretty-printed JSO
     Enter SQL statements terminated with a ";"
     sqlite> select * from foo;
     1|fiona
+Note that this is the SQLite file that is under `node 3`, which is not the node that accepted the `INSERT` operation.
 
+### Bulk Updates
+Bulk updates are supported. To execute multipe statements in one HTTP call, separate each statement with a newline. An example of inserting two records is shown below:
+
+    curl -XPOST 'localhost:4001/db?pretty' -d '
+                 INSERT INTO foo(name) VALUES("fiona")
+                 INSERT INTO foo(name) VALUES("fiona")'
 #### Transactions
-Transactions are supported. To execute two statements within a transaction, separate them with a newline and add `transaction` to the URL. An example is shown below:
+Transactions are supported. To execute statements within a transaction, add `transaction` to the URL. An example of the above operation executed within a transaction is shown below.
 
     curl -XPOST 'localhost:4001/db?pretty&transaction' -d '
                  INSERT INTO foo(name) VALUES("fiona")
@@ -71,7 +78,7 @@ Qeurying data is easy.
 ### Performance
 rqlite replicates SQLite for fault-tolerance. It does not replicate it for performance. In fact performance is reduced somewhat due to the network round-trips.
 
-Depending on your machine, individual INSERT performance could be anything from 1 operation per second to more than 10 operations per second. However, by using transactions, throughput will increase significantly, often by 2 orders or magnitude. This speed-up is due to the way SQLite works. So for high throughput, execute as many commands as possible within a single transaction.
+Depending on your machine, individual INSERT performance could be anything from 1 operation per second to more than 10 operations per second. However, by using transactions, throughput will increase significantly, often by 2 orders of magnitude. This speed-up is due to the way SQLite works. So for high throughput, execute as many commands as possible within a single transaction.
 
 ## Admin API
 An Admin API exists, which dumps some basic diagnostic and statistical information. Assuming rqlite is started with default settings, the endpoints are available like so:
@@ -88,3 +95,4 @@ This project uses the [go-raft](https://github.com/goraft/raft) implementation o
  * SQLite commands such as `.schema` are not handled.
  * Using `PRAGMA` directives has not been tested either.
  * The supported types are those supported by [go-sqlite3](http://godoc.org/github.com/mattn/go-sqlite3).
+ * This is new software, so it goes without saying it has bugs.
