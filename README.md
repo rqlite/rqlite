@@ -47,9 +47,8 @@ The use of the URL param `pretty` is optional, and results in pretty-printed JSO
 Transactions are supported. For example, to execute two statements within a transaction, separate them with a newline and add `transaction` to the URL like so:
 
     curl -XPOST 'localhost:4001/db?pretty&transaction' -d '
-INSERT INTO foo(name) VALUES("fiona")
-INSERT INTO foo(name) VALUES("fiona")
-'
+                 INSERT INTO foo(name) VALUES("fiona")
+                 INSERT INTO foo(name) VALUES("fiona")'
 
 When a transaction is in place either both statements will succeed, or neither.
 
