@@ -173,6 +173,15 @@ func NewServer(dataDir string, dbfile string, snapAfter int, host string, port i
 		}
 	}
 
+	// Raft requires randomness.
+	rand.Seed(time.Now().UnixNano())
+	log.Info("Raft random seed initialized")
+
+	// Setup commands.
+	raft.RegisterCommand(&command.ExecuteCommand{})
+	raft.RegisterCommand(&command.TransactionExecuteCommandSet{})
+	log.Info("Raft commands registered")
+
 	return s
 }
 

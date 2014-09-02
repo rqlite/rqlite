@@ -3,15 +3,11 @@ package main
 import (
 	"flag"
 	"fmt"
-	"math/rand"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"runtime/pprof"
-	"time"
 
-	"github.com/otoolep/raft"
-	"github.com/otoolep/rqlite/command"
 	"github.com/otoolep/rqlite/server"
 
 	log "code.google.com/p/log4go"
@@ -96,13 +92,6 @@ func main() {
 	}
 
 	setupLogging(logLevel, logFile)
-
-	// Raft requires randomness.
-	rand.Seed(time.Now().UnixNano())
-
-	// Setup commands.
-	raft.RegisterCommand(&command.ExecuteCommand{})
-	raft.RegisterCommand(&command.TransactionExecuteCommandSet{})
 
 	// Set the data directory.
 	if flag.NArg() == 0 {
