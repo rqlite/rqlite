@@ -32,12 +32,12 @@ Start a second and third node (so a majority can still form in the event of a si
 Under each node will be an SQLite file, which should remain in consensus.
 
 ## Data API
-rqlite exposes an HTTP API allowing the database to be modified and queried. Modifications go through the Raft log, ensuring only changes committed by a quorom of Raft servers are actually executed against the SQLite database. Queries do not go through the Raft log, however, since they do not change the state of the database, and therefore do not need to be captured in the log.
+rqlite exposes an HTTP API allowing the database to be modified such that the changes are replicated. Queries are also executed using the HTTP API,though the SQLite database could be queried directly. Modifications go through the Raft log, ensuring only changes committed by a quorum of Raft servers are actually executed against the SQLite database. Queries do not go through the Raft log, however, since they do not change the state of the database, and therefore do not need to be captured in the log.
 
 All responses from rqlite are in the form of JSON.
 
 ### Writing Data
-To write data to the database, you must create at least 1 table. To this, perform a HTTP POST, with a CREATE TABLE SQL command in the body of the request. For example:
+To write data successfully to the database, you must create at least 1 table. To this, perform a HTTP POST, with a CREATE TABLE SQL command in the body of the request. For example:
 
     curl -XPOST localhost:4001/db -d 'CREATE TABLE foo (id integer not null primary key, name text)'
 
@@ -68,7 +68,7 @@ Transactions are supported. To execute statements within a transaction, add `tra
                  INSERT INTO foo(name) VALUES("fiona")
                  INSERT INTO foo(name) VALUES("fiona")'
 
-When a transaction takes place either both statements will succeed, or neither. Performance is *much, much* better if multiple statements are inserted via a transaction.
+When a transaction takes place either both statements will succeed, or neither. Performance is *much, much* better if multiple SQL INSERTs or UPDATEs are executed via a transaction.
 
 ### Querying Data
 Qeurying data is easy. Simply perform a HTTP GET with the SQL query in the body of the request.
@@ -78,10 +78,10 @@ Qeurying data is easy. Simply perform a HTTP GET with the SQL query in the body 
 ### Performance
 rqlite replicates SQLite for fault-tolerance. It does not replicate it for performance. In fact performance is reduced somewhat due to the network round-trips.
 
-Depending on your machine, individual INSERT performance could be anything from 1 operation per second to more than 10 operations per second. However, by using transactions, throughput will increase significantly, often by 2 orders of magnitude. This speed-up is due to the way SQLite works. So for high throughput, execute as many commands as possible within a single transaction.
+Depending on your machine, individual INSERT performance could be anything from 1 operation per second to more than 10 operations per second. However, by using transactions, throughput will increase significantly, often by 2 orders of magnitude. This speed-up is due to the way SQLite works. So for high throughput, execute as many operations as possible within a single transaction.
 
-## Admin API
-An Admin API exists, which dumps some basic diagnostic and statistical information. Assuming rqlite is started with default settings, the endpoints are available like so:
+## Administration API
+An Administration API exists, which dumps some basic diagnostic and statistical information. Assuming rqlite is started with default settings, the endpoints are available like so:
 
     curl localhost:4001/diagnostics?pretty
     curl localhost:4001/statistics?pretty
@@ -89,7 +89,7 @@ An Admin API exists, which dumps some basic diagnostic and statistical informati
 The use of the URL param `pretty` is optional, and results in pretty-printed JSON responses.
 
 ## Log Compaction
-rqlite does perform log compaction. After a specified number of changes to the log, rqlite snapshots the SQLite database. And at start-up rqlite loads any existing snapshot.
+rqlite does perform log compaction. After a configurable number of changes to the log, rqlite snapshots the SQLite database. And at start-up rqlite loads any existing snapshot.
 
 ## Limitations
  * SQLite commands such as `.schema` are not handled.
