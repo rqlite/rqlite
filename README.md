@@ -37,11 +37,11 @@ rqlite exposes an HTTP API allowing the database to be modified and queried. Mod
 All responses from rqlite are in the form of JSON.
 
 ### Writing Data
-To write data to the database, you must create at least 1 table.
+To write data to the database, you must create at least 1 table. To this, perform a HTTP POST, with a CREATE TABLE SQL command in the body of the request. For example:"
 
     curl -XPOST localhost:4001/db -d 'CREATE TABLE foo (id integer not null primary key, name text)'
 
-To insert an entry into the database, execute a second command:
+To insert an entry into the database, execute a second SQL command:
 
     curl -XPOST localhost:4001/db?pretty -d 'INSERT INTO foo(name) VALUES("fiona")'
 
@@ -71,7 +71,7 @@ Transactions are supported. To execute statements within a transaction, add `tra
 When a transaction takes place either both statements will succeed, or neither. Performance is *much, much* better if multiple statements are inserted via a transaction.
 
 ### Querying Data
-Qeurying data is easy.
+Qeurying data is easy. Simply perform a HTTP GET with the SQL query in the body of the request.
 
     curl -XGET localhost:4001/db -d 'SELECT * from foo'
 
