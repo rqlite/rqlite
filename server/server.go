@@ -86,7 +86,7 @@ type Server struct {
 	mutex       sync.Mutex
 }
 
-// ensurePrettyPrint returns a JSON representation of the the object o. It
+// ensurePrettyPrint returns a JSON representation of the object o. If
 // the HTTP request requested pretty-printing, it ensures that happens.
 func ensurePrettyPrint(req *http.Request, o map[string]interface{}) []byte {
 	var b []byte
