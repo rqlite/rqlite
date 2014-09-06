@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"path"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -85,6 +84,19 @@ type Server struct {
 	metrics     *ServerMetrics
 	diagnostics *ServerDiagnostics
 	mutex       sync.Mutex
+}
+
+// ensurePrettyPrint returns a JSON representation of the the object o. It
+// the HTTP request requested pretty-printing, it ensures that happens.
+func ensurePrettyPrint(req *http.Request, o map[string]interface{}) []byte {
+	var b []byte
+	pretty, _ := isPretty(req)
+	if pretty {
+		b, _ = json.MarshalIndent(o, "", "    ")
+	} else {
+		b, _ = json.Marshal(o)
+	}
+	return b
 }
 
 // queryParam returns whether the given query param is set to true.
@@ -473,42 +485,22 @@ func (s *Server) serveStatistics(w http.ResponseWriter, req *http.Request) {
 		statistics[k] = s
 	}
 
-	var b []byte
-	var err error
-	pretty, _ := isPretty(req)
-	if pretty {
-		b, err = json.MarshalIndent(statistics, "", "    ")
-	} else {
-		b, err = json.Marshal(statistics)
-	}
-	if err != nil {
-		log.Error("failed to JSON marshal statistics map")
-		http.Error(w, "failed to JSON marshal statistics map", http.StatusInternalServerError)
-		return
-	}
-	w.Write(b)
+	w.Write(ensurePrettyPrint(req, statistics))
 }
 
 // serveDiagnostics returns basic server diagnostics
 func (s *Server) serveDiagnostics(w http.ResponseWriter, req *http.Request) {
-	diagnostics := make(map[string]string)
+	diagnostics := make(map[string]interface{})
 	diagnostics["started"] = s.diagnostics.startTime.String()
 	diagnostics["uptime"] = time.Since(s.diagnostics.startTime).String()
 	diagnostics["host"] = s.host
-	diagnostics["port"] = strconv.Itoa(s.port)
+	diagnostics["port"] = s.port
 	diagnostics["data"] = s.path
 	diagnostics["database"] = s.dbPath
 	diagnostics["connection"] = s.connectionString()
-	diagnostics["snapafter"] = strconv.FormatUint(s.snapConf.snapshotAfter, 10)
-	diagnostics["snapindex"] = strconv.FormatUint(s.snapConf.lastIndex, 10)
-	var b []byte
-	pretty, _ := isPretty(req)
-	if pretty {
-		b, _ = json.MarshalIndent(diagnostics, "", "    ")
-	} else {
-		b, _ = json.Marshal(diagnostics)
-	}
-	w.Write(b)
+	diagnostics["snapafter"] = s.snapConf.snapshotAfter
+	diagnostics["snapindex"] = s.snapConf.lastIndex
+	w.Write(ensurePrettyPrint(req, diagnostics))
 }
 
 // serveRaftInfo returns information about the underlying Raft server
@@ -520,12 +512,5 @@ func (s *Server) serveRaftInfo(w http.ResponseWriter, req *http.Request) {
 	info["leader"] = s.raftServer.Leader()
 	info["state"] = s.raftServer.State()
 	info["peers"] = peers
-	var b []byte
-	pretty, _ := isPretty(req)
-	if pretty {
-		b, _ = json.MarshalIndent(info, "", "    ")
-	} else {
-		b, _ = json.Marshal(info)
-	}
-	w.Write(b)
+	w.Write(ensurePrettyPrint(req, info))
 }
