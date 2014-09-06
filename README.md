@@ -82,8 +82,9 @@ rqlite replicates SQLite for fault-tolerance. It does not replicate it for perfo
 Depending on your machine, individual INSERT performance could be anything from 1 operation per second to more than 10 operations per second. However, by using transactions, throughput will increase significantly, often by 2 orders of magnitude. This speed-up is due to the way SQLite works. So for high throughput, execute as many operations as possible within a single transaction.
 
 ## Administration API
-An Administration API exists, which dumps some basic diagnostic and statistical information. Assuming rqlite is started with default settings, the endpoints are available like so:
+An Administration API exists, which dumps some basic diagnostic and statistical information, as well as basic information about the underlying Raft node. Assuming rqlite is started with default settings, the endpoints are available like so:
 
+    curl localhost:4001/raft?pretty
     curl localhost:4001/diagnostics?pretty
     curl localhost:4001/statistics?pretty
 

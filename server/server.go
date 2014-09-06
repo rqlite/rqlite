@@ -271,6 +271,7 @@ func (s *Server) ListenAndServe(leader string) error {
 
 	s.router.HandleFunc("/statistics", s.serveStatistics).Methods("GET")
 	s.router.HandleFunc("/diagnostics", s.serveDiagnostics).Methods("GET")
+	s.router.HandleFunc("/raft", s.serveRaftInfo).Methods("GET")
 	s.router.HandleFunc("/db", s.readHandler).Methods("GET")
 	s.router.HandleFunc("/db", s.writeHandler).Methods("POST")
 	s.router.HandleFunc("/join", s.joinHandler).Methods("POST")
@@ -506,6 +507,25 @@ func (s *Server) serveDiagnostics(w http.ResponseWriter, req *http.Request) {
 		b, _ = json.MarshalIndent(diagnostics, "", "    ")
 	} else {
 		b, _ = json.Marshal(diagnostics)
+	}
+	w.Write(b)
+}
+
+// serveRaftInfo returns information about the underlying Raft server
+func (s *Server) serveRaftInfo(w http.ResponseWriter, req *http.Request) {
+	peers := s.raftServer.Peers()
+	info := make(map[string]interface{})
+	info["name"] = s.raftServer.Name()
+	info["state"] = s.raftServer.State()
+	info["leader"] = s.raftServer.Leader()
+	info["state"] = s.raftServer.State()
+	info["peers"] = peers
+	var b []byte
+	pretty, _ := isPretty(req)
+	if pretty {
+		b, _ = json.MarshalIndent(info, "", "    ")
+	} else {
+		b, _ = json.Marshal(info)
 	}
 	w.Write(b)
 }
