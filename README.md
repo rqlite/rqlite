@@ -74,7 +74,7 @@ Qeurying data is easy. Simply perform a HTTP GET with the SQL query in the body 
 
     curl -XGET localhost:4001/db -d 'SELECT * from foo'
     
-An alternative approach is to read the database is via `sqlite3`, the command-line tool that comes with SQLite. As long as you can be sure the file you access is under the leader, the records returned will be accurate and up-to-date.
+An alternative approach is to read the database via `sqlite3`, the command-line tool that comes with SQLite. As long as you can be sure the file you access is under the leader, the records returned will be accurate and up-to-date.
 
 ### Performance
 rqlite replicates SQLite for fault-tolerance. It does not replicate it for performance. In fact performance is reduced somewhat due to the network round-trips.
