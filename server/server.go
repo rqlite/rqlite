@@ -510,7 +510,6 @@ func (s *Server) serveRaftInfo(w http.ResponseWriter, req *http.Request) {
 	info["name"] = s.raftServer.Name()
 	info["state"] = s.raftServer.State()
 	info["leader"] = s.raftServer.Leader()
-	info["state"] = s.raftServer.State()
 	info["peers"] = peers
 	w.Write(ensurePrettyPrint(req, info))
 }
