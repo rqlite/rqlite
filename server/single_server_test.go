@@ -84,7 +84,7 @@ func (s *SingleServerSuite) Test_SingleServer(c *C) {
 	c.Assert(isJsonBody(res), Equals, true)
 
 	// Create a database.
-	res, err = postEndpoint("/db", "'CREATE TABLE foo (id integer not null primary key, name text)'")
+	res, err = postEndpoint("/db", "CREATE TABLE foo (id integer not null primary key, name text)")
 	c.Assert(err, IsNil)
 	c.Assert(res.StatusCode, Equals, 200)
 
