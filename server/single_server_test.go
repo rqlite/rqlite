@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -22,9 +23,22 @@ type SingleServerSuite struct{}
 
 var _ = Suite(&SingleServerSuite{})
 
-func getEndpoint(endpoint string) (res *http.Response, err error) {
+func getEndpoint(endpoint string) (*http.Response, error) {
 	url := fmt.Sprintf("http://%s:%d%s", host, port, endpoint)
 	return http.Get(url)
+}
+
+func postEndpoint(endpoint string, body string) (*http.Response, error) {
+	var jsonStr = []byte(body)
+	url := fmt.Sprintf("http://%s:%d%s", host, port, endpoint)
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonStr))
+	if err != nil {
+		panic(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	return client.Do(req)
 }
 
 func isJsonBody(res *http.Response) bool {
@@ -68,4 +82,14 @@ func (s *SingleServerSuite) Test_SingleServer(c *C) {
 	res, err = getEndpoint("/raft")
 	c.Assert(err, IsNil)
 	c.Assert(isJsonBody(res), Equals, true)
+
+	// Create a database.
+	res, err = postEndpoint("/db", "'CREATE TABLE foo (id integer not null primary key, name text)'")
+	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 200)
+
+	// Data write.
+	res, err = postEndpoint("/db", "INSERT INTO foo(name) VALUES(\"fiona\")")
+	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 200)
 }
