@@ -28,6 +28,19 @@ func getEndpoint(endpoint string) (*http.Response, error) {
 	return http.Get(url)
 }
 
+func getEndpointBody(endpoint string, body string) (*http.Response, error) {
+	var jsonStr = []byte(body)
+	url := fmt.Sprintf("http://%s:%d%s", host, port, endpoint)
+	req, err := http.NewRequest("GET", url, bytes.NewBuffer(jsonStr))
+	if err != nil {
+		panic(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	return client.Do(req)
+}
+
 func postEndpoint(endpoint string, body string) (*http.Response, error) {
 	var jsonStr = []byte(body)
 	url := fmt.Sprintf("http://%s:%d%s", host, port, endpoint)
@@ -73,14 +86,17 @@ func (s *SingleServerSuite) Test_SingleServer(c *C) {
 	var res *http.Response
 	res, err = getEndpoint("/statistics")
 	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 200)
 	c.Assert(isJsonBody(res), Equals, true)
 
 	res, err = getEndpoint("/diagnostics")
 	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 200)
 	c.Assert(isJsonBody(res), Equals, true)
 
 	res, err = getEndpoint("/raft")
 	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 200)
 	c.Assert(isJsonBody(res), Equals, true)
 
 	// Create a database.
@@ -92,4 +108,10 @@ func (s *SingleServerSuite) Test_SingleServer(c *C) {
 	res, err = postEndpoint("/db", "INSERT INTO foo(name) VALUES(\"fiona\")")
 	c.Assert(err, IsNil)
 	c.Assert(res.StatusCode, Equals, 200)
+
+	// Data read
+	res, err = getEndpointBody("/db", "SELECT * from foo")
+	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 200)
+	c.Assert(isJsonBody(res), Equals, true)
 }
