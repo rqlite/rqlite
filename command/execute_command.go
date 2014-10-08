@@ -1,7 +1,7 @@
 package command
 
 import (
-	"github.com/otoolep/raft"
+	"github.com/goraft/raft"
 	"github.com/otoolep/rqlite/db"
 
 	log "code.google.com/p/log4go"
