@@ -34,7 +34,7 @@ rqlite exposes an HTTP API allowing the database to be modified such that the ch
 All responses from rqlite are in the form of JSON.
 
 ### Writing Data
-To write data successfully to the database, you must create at least 1 table. To this, perform a HTTP POST, with a CREATE TABLE SQL command in the body of the request. For example:
+To write data successfully to the database, you must create at least 1 table. To do this, perform a HTTP POST, with a CREATE TABLE SQL command in the body of the request. For example:
 
     curl -XPOST localhost:4001/db -d 'CREATE TABLE foo (id integer not null primary key, name text)'
 
