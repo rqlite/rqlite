@@ -151,7 +151,7 @@ func NewServerMetrics() *ServerMetrics {
 	return m
 }
 
-// NewServerDiagnostics creates a new NewServerDiagnostics object.
+// NewServerDiagnostics creates a new ServerDiagnostics object.
 func NewServerDiagnostics() *ServerDiagnostics {
 	d := &ServerDiagnostics{
 		startTime: time.Now(),
