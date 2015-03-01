@@ -29,6 +29,13 @@ Start a second and third node (so a majority can still form in the event of a si
 
 Under each node will be an SQLite file, which should remain in consensus.
 
+### Restarting a node
+If a node needs to be restarted, perhaps because of failure, don't pass the `-join` option. Using the example nodes above, if node 2 needed to be restarted, do so as follows:
+
+    bin/rqlite -p 4002 ~/node.2
+
+On restart it will rejoin the cluster and apply any changes to its local sqlite database that took place while it was down.
+
 ## Data API
 rqlite exposes an HTTP API allowing the database to be modified such that the changes are replicated. Queries are also executed using the HTTP API,though the SQLite database could be queried directly. Modifications go through the Raft log, ensuring only changes committed by a quorum of Raft servers are actually executed against the SQLite database. Queries do not go through the Raft log, however, since they do not change the state of the database, and therefore do not need to be captured in the log.
 
