@@ -13,26 +13,26 @@ Download, test (optional), and run rqlite like so (tested on 64-bit Kubuntu 14.0
     export GOPATH=$PWD
     go get github.com/otoolep/rqlite
     go get gopkg.in/check.v1; go test github.com/otoolep/rqlite/... # Optional testing
-    bin/rqlite ~/node.1
+    $GOPATH/bin/rqlite ~/node.1
 
 This starts a rqlite server listening on localhost, port 4001. This single node automatically becomes the leader. To see all available command-line options, execute:
 
-    bin/rqlite -h
+    $GOPATH/bin/bin/rqlite -h
 
 ### Forming a Cluster
 While not strictly necessary to run rqlite, running multiple nodes means the SQLite database is replicated.
 
 Start a second and third node (so a majority can still form in the event of a single node failure) like so:
 
-    bin/rqlite -join localhost:4001 -p 4002 ~/node.2
-    bin/rqlite -join localhost:4001 -p 4003 ~/node.3
+    $GOPATH/bin/bin/rqlite -join localhost:4001 -p 4002 ~/node.2
+    $GOPATH/bin/bin/rqlite -join localhost:4001 -p 4003 ~/node.3
 
 Under each node will be an SQLite file, which should remain in consensus.
 
 ### Restarting a node
 If a node needs to be restarted, perhaps because of failure, don't pass the `-join` option. Using the example nodes above, if node 2 needed to be restarted, do so as follows:
 
-    bin/rqlite -p 4002 ~/node.2
+    $GOPATH/bin/bin/rqlite -p 4002 ~/node.2
 
 On restart it will rejoin the cluster and apply any changes to its local sqlite database that took place while it was down.
 
@@ -106,7 +106,7 @@ rqlite does perform log compaction. After a configurable number of changes to th
  * Using `PRAGMA` directives has not been tested either.
  * The supported types are those supported by [go-sqlite3](http://godoc.org/github.com/mattn/go-sqlite3).
 
-This is new software, so it goes without saying it has bugs. It's by no means finished -- issues are now being tracked, and I plan to develop this project further.
+This is new software, so it goes without saying it has bugs. It's by no means finished -- issues are now being tracked, and I plan to develop this project further. Pull requests are also welcome.
 
 ## Credits
 This project uses the [go-raft](https://github.com/goraft/raft) implementation of the Raft consensus protocol, and was inspired by the [raftd](https://github.com/goraft/raftd) reference implementation. rqlite also borrows some ideas from [etcd](https://github.com/coreos/etcd), and uses [go-sqlite3](http://godoc.org/github.com/mattn/go-sqlite3) to talk to the SQLite database.
