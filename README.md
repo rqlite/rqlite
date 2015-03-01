@@ -17,22 +17,22 @@ Download, test (optional), and run rqlite like so (tested on 64-bit Kubuntu 14.0
 
 This starts a rqlite server listening on localhost, port 4001. This single node automatically becomes the leader. To see all available command-line options, execute:
 
-    $GOPATH/bin/bin/rqlite -h
+    $GOPATH/bin/rqlite -h
 
 ### Forming a Cluster
 While not strictly necessary to run rqlite, running multiple nodes means the SQLite database is replicated.
 
 Start a second and third node (so a majority can still form in the event of a single node failure) like so:
 
-    $GOPATH/bin/bin/rqlite -join localhost:4001 -p 4002 ~/node.2
-    $GOPATH/bin/bin/rqlite -join localhost:4001 -p 4003 ~/node.3
+    $GOPATH/bin/rqlite -join localhost:4001 -p 4002 ~/node.2
+    $GOPATH/bin/rqlite -join localhost:4001 -p 4003 ~/node.3
 
 Under each node will be an SQLite file, which should remain in consensus.
 
 ### Restarting a node
 If a node needs to be restarted, perhaps because of failure, don't pass the `-join` option. Using the example nodes above, if node 2 needed to be restarted, do so as follows:
 
-    $GOPATH/bin/bin/rqlite -p 4002 ~/node.2
+    $GOPATH/bin/rqlite -p 4002 ~/node.2
 
 On restart it will rejoin the cluster and apply any changes to its local sqlite database that took place while it was down.
 
