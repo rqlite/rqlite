@@ -44,13 +44,13 @@ All responses from rqlite are in the form of JSON.
 ### Writing Data
 To write data successfully to the database, you must create at least 1 table. To do this, perform a HTTP POST, with a CREATE TABLE SQL command in the body of the request. For example:
 
-    curl -XPOST localhost:4001/db -d 'CREATE TABLE foo (id integer not null primary key, name text)'
+    curl -L -XPOST localhost:4001/db -d 'CREATE TABLE foo (id integer not null primary key, name text)'
 
-where `curl` is the [well known command-line tool](http://curl.haxx.se/).
+where `curl` is the [well known command-line tool](http://curl.haxx.se/). Passing `-L` to `curl` ensures the command will follow any redirect (HTTP status code 307) to the leader, if the node running on port 4001 is not the leader.
 
 To insert an entry into the database, execute a second SQL command:
 
-    curl -XPOST localhost:4001/db?pretty -d 'INSERT INTO foo(name) VALUES("fiona")'
+    curl -L -XPOST localhost:4001/db?pretty -d 'INSERT INTO foo(name) VALUES("fiona")'
 
 The use of the URL param `pretty` is optional, and results in pretty-printed JSON responses. You can confirm that the data has been writen to the database by accessing the SQLite database directly.
 
@@ -65,13 +65,13 @@ Note that this is the SQLite file that is under `node 3`, which is not the node 
 ### Bulk Updates
 Bulk updates are supported. To execute multipe statements in one HTTP call, separate each statement with a newline. An example of inserting two records is shown below:
 
-    curl -XPOST 'localhost:4001/db?pretty' -d '
+    curl -L -XPOST 'localhost:4001/db?pretty' -d '
                  INSERT INTO foo(name) VALUES("fiona")
                  INSERT INTO foo(name) VALUES("fiona")'
 #### Transactions
 Transactions are supported. To execute statements within a transaction, add `transaction` to the URL. An example of the above operation executed within a transaction is shown below.
 
-    curl -XPOST 'localhost:4001/db?pretty&transaction' -d '
+    curl -L -XPOST 'localhost:4001/db?pretty&transaction' -d '
                  INSERT INTO foo(name) VALUES("fiona")
                  INSERT INTO foo(name) VALUES("fiona")'
 
@@ -80,7 +80,7 @@ When a transaction takes place either both statements will succeed, or neither. 
 ### Querying Data
 Qeurying data is easy. Simply perform a HTTP GET with the SQL query in the body of the request.
 
-    curl -XGET localhost:4001/db -d 'SELECT * from foo'
+    curl -L -XGET localhost:4001/db -d 'SELECT * from foo'
     
 An alternative approach is to read the database via `sqlite3`, the command-line tool that comes with SQLite. As long as you can be sure the file you access is under the leader, the records returned will be accurate and up-to-date.
 
