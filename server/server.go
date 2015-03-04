@@ -411,6 +411,11 @@ func (s *Server) writeHandler(w http.ResponseWriter, req *http.Request) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
+	if s.raftServer.State() != "leader" {
+		s.leaderRedirect(w, req)
+		return
+	}
+
 	log.Trace("writeHandler for URL: %s", req.URL)
 	s.metrics.executeReceived.Inc(1)
 
@@ -512,4 +517,20 @@ func (s *Server) serveRaftInfo(w http.ResponseWriter, req *http.Request) {
 	info["leader"] = s.raftServer.Leader()
 	info["peers"] = peers
 	w.Write(ensurePrettyPrint(req, info))
+}
+
+// leaderRedirect returns a 307 Temporary Redirect, with the full path
+// to the leader.
+func (s *Server) leaderRedirect(w http.ResponseWriter, r *http.Request) {
+	peers := s.raftServer.Peers()
+	leader := peers[s.raftServer.Leader()]
+
+	var u string
+	for _, p := range peers {
+		if p.Name == leader.Name {
+			u = p.ConnectionString
+			break
+		}
+	}
+	http.Redirect(w, r, u+r.URL.Path, http.StatusTemporaryRedirect)
 }
