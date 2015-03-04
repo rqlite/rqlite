@@ -313,6 +313,7 @@ func (s *Server) Join(leader string) error {
 	if err != nil {
 		return err
 	}
+	defer resp.Body.Close()
 
 	// Look for redirect.
 	if resp.StatusCode == http.StatusTemporaryRedirect {
@@ -327,7 +328,6 @@ func (s *Server) Join(leader string) error {
 		log.Info("Redirecting to leader at %s", u.Host)
 		return s.Join(u.Host)
 	}
-	resp.Body.Close()
 
 	return nil
 }
