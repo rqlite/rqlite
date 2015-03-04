@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"net/http"
+	"net/url"
 	"path"
 	"path/filepath"
 	"strings"
@@ -312,12 +313,34 @@ func (s *Server) Join(leader string) error {
 	if err != nil {
 		return err
 	}
+
+	// Look for redirect.
+	if resp.StatusCode == http.StatusTemporaryRedirect {
+		leader := resp.Header.Get("Location")
+		if leader == "" {
+			return errors.New("Redirect requested, but no location header supplied")
+		}
+		u, err := url.Parse(leader)
+		if err != nil {
+			return errors.New("Failed to parse redirect location")
+		}
+		log.Info("Redirecting to leader at %s", u.Host)
+		return s.Join(u.Host)
+	}
 	resp.Body.Close()
 
 	return nil
 }
 
 func (s *Server) joinHandler(w http.ResponseWriter, req *http.Request) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	if s.raftServer.State() != "leader" {
+		s.leaderRedirect(w, req)
+		return
+	}
+
 	command := &raft.DefaultJoinCommand{}
 
 	if err := json.NewDecoder(req.Body).Decode(&command); err != nil {
