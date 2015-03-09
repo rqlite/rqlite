@@ -1,7 +1,11 @@
-// rqlite -- a replicated SQLite database.
-//
-// Copyright (c) 2014 Philip O'Toole
-// http://www.philipotoole.com
+/*
+rqlite -- a replicated SQLite database.
+
+rqlite is a distributed system that provides a replicated SQLite database.
+rqlite is written in Go and uses Raft to achieve consensus across all the
+instances of the SQLite databases. rqlite ensures that every change made to
+the database is made to a majority of underlying SQLite files, or none-at-all.
+*/
 
 package main
 
