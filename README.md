@@ -101,6 +101,8 @@ The use of the URL param `pretty` is optional, and results in pretty-printed JSO
 ## Log Compaction
 rqlite does perform log compaction. After a configurable number of changes to the log, rqlite snapshots the SQLite database. And at start-up rqlite loads any existing snapshot.
 
+Review [issue #14](https://github.com/otoolep/rqlite/issues/14) to learn more about how snapshots affect node restart time.
+
 ## Limitations
  * SQLite commands such as `.schema` are not handled.
  * Using `PRAGMA` directives has not been tested either.
