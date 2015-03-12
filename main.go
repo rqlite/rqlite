@@ -39,7 +39,7 @@ func init() {
 	flag.StringVar(&cpuprofile, "cpuprofile", "", "write CPU profile to file")
 	flag.StringVar(&logFile, "logfile", "stdout", "log file path")
 	flag.StringVar(&logLevel, "loglevel", "INFO", "log level (ERROR|WARN|INFO|DEBUG|TRACE)")
-	flag.IntVar(&snapAfter, "s", 1000, "Snapshot and compact after this number of new log entries")
+	flag.IntVar(&snapAfter, "s", 100, "Snapshot and compact after this number of new log entries")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [arguments] <data-path> \n", os.Args[0])
 		flag.PrintDefaults()
