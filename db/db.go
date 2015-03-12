@@ -26,13 +26,14 @@ type RowResults []map[string]string
 
 // New creates a new database. Deletes any existing database.
 func New(dbPath string) *DB {
+	log.Trace("Removing any existing SQLite database at %s", dbPath)
 	os.Remove(dbPath)
 	return Open(dbPath)
 }
 
 // Open an existing database, creating it if it does not exist.
 func Open(dbPath string) *DB {
-	log.Trace("SQLite database path is %s", dbPath)
+	log.Trace("Opening SQLite database path at %s", dbPath)
 	dbc, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		log.Error(err)
