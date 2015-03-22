@@ -105,10 +105,6 @@ func main() {
 		pprof.StartCPUProfile(f)
 		defer pprof.StopCPUProfile()
 	}
-	if !disableReporting {
-		reportLaunch()
-	}
-
 	setupLogging(logLevel, logFile)
 
 	// Set the data directory.
@@ -128,6 +124,10 @@ func main() {
 		log.Error(s.ListenAndServe(join))
 	}()
 
+	if !disableReporting {
+		reportLaunch()
+	}
+
 	terminate := make(chan os.Signal, 1)
 	signal.Notify(terminate, os.Interrupt)
 	<-terminate
@@ -135,9 +135,9 @@ func main() {
 }
 
 func reportLaunch() {
-	json := fmt.Sprintf(`{"os": "%s", "arch": "%s"}`, runtime.GOOS, runtime.GOARCH)
+	json := fmt.Sprintf(`{"os": "%s", "arch": "%s", "app": "rqlite"}`, runtime.GOOS, runtime.GOARCH)
 	data := bytes.NewBufferString(json)
 	client := http.Client{Timeout: time.Duration(5 * time.Second)}
-	go client.Post("https://logs-01.loggly.com/inputs/8a0edd84-92ba-46e4-ada8-c529d0f105af/tag/rqlite/",
+	go client.Post("https://logs-01.loggly.com/inputs/8a0edd84-92ba-46e4-ada8-c529d0f105af/tag/reporting/",
 		"application/json", data)
 }
