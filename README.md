@@ -81,7 +81,7 @@ When a transaction takes place either both statements will succeed, or neither. 
 Qeurying data is easy. Simply perform a HTTP GET with the SQL query in the body of the request.
 
     curl -L -XGET localhost:4001/db -d 'SELECT * from foo'
-    
+
 An alternative approach is to read the database via `sqlite3`, the command-line tool that comes with SQLite. As long as you can be sure the file you access is under the leader, the records returned will be accurate and up-to-date.
 
 ### Performance
@@ -109,6 +109,9 @@ Review [issue #14](https://github.com/otoolep/rqlite/issues/14) to learn more ab
  * The supported types are those supported by [go-sqlite3](http://godoc.org/github.com/mattn/go-sqlite3).
 
 This is new software, so it goes without saying it has bugs. It's by no means finished -- issues are now being tracked, and I plan to develop this project further. Pull requests are also welcome.
+
+## Reporting
+rqlite reports a small amount anonymous data to Loggly, each time it is launched. This data is just the host operating system and system architecture. This is only used to track the number of rqlite deployments. Reporting can be disabled by passing `-noreport=true` to rqlite at launch time.
 
 ## Credits
 This project uses the [go-raft](https://github.com/goraft/raft) implementation of the Raft consensus protocol, and was inspired by the [raftd](https://github.com/goraft/raftd) reference implementation. rqlite also borrows some ideas from [etcd](https://github.com/coreos/etcd), and uses [go-sqlite3](http://godoc.org/github.com/mattn/go-sqlite3) to talk to the SQLite database.

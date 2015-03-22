@@ -10,12 +10,16 @@ the database is made to a majority of underlying SQLite files, or none-at-all.
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"runtime/pprof"
+	"time"
 
 	"github.com/otoolep/rqlite/server"
 
@@ -30,6 +34,7 @@ var cpuprofile string
 var logFile string
 var logLevel string
 var snapAfter int
+var disableReporting bool
 
 func init() {
 	flag.StringVar(&host, "h", "localhost", "hostname")
@@ -40,6 +45,7 @@ func init() {
 	flag.StringVar(&logFile, "logfile", "stdout", "log file path")
 	flag.StringVar(&logLevel, "loglevel", "INFO", "log level (ERROR|WARN|INFO|DEBUG|TRACE)")
 	flag.IntVar(&snapAfter, "s", 100, "Snapshot and compact after this number of new log entries")
+	flag.BoolVar(&disableReporting, "noreport", false, "Disable anonymised launch reporting")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [arguments] <data-path> \n", os.Args[0])
 		flag.PrintDefaults()
@@ -99,6 +105,9 @@ func main() {
 		pprof.StartCPUProfile(f)
 		defer pprof.StopCPUProfile()
 	}
+	if !disableReporting {
+		reportLaunch()
+	}
 
 	setupLogging(logLevel, logFile)
 
@@ -123,4 +132,12 @@ func main() {
 	signal.Notify(terminate, os.Interrupt)
 	<-terminate
 	log.Info("rqlite server stopped")
+}
+
+func reportLaunch() {
+	json := fmt.Sprintf(`{"os": "%s", "arch": "%s"}`, runtime.GOOS, runtime.GOARCH)
+	data := bytes.NewBufferString(json)
+	client := http.Client{Timeout: time.Duration(5 * time.Second)}
+	go client.Post("https://logs-01.loggly.com/inputs/8a0edd84-92ba-46e4-ada8-c529d0f105af/tag/rqlite/",
+		"application/json", data)
 }
