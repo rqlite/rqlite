@@ -111,7 +111,7 @@ Review [issue #14](https://github.com/otoolep/rqlite/issues/14) to learn more ab
 This is new software, so it goes without saying it has bugs. It's by no means finished -- issues are now being tracked, and I plan to develop this project further. Pull requests are also welcome.
 
 ## Reporting
-rqlite reports a small amount anonymous data to (Loggly)[http://www.loggly.com], each time it is launched. This data is just the host operating system and system architecture and is only used to track the number of rqlite deployments. Reporting can be disabled by passing `-noreport=true` to rqlite at launch time.
+rqlite reports a small amount anonymous data to [Loggly](http://www.loggly.com), each time it is launched. This data is just the host operating system and system architecture and is only used to track the number of rqlite deployments. Reporting can be disabled by passing `-noreport=true` to rqlite at launch time.
 
 ## Credits
 This project uses the [go-raft](https://github.com/goraft/raft) implementation of the Raft consensus protocol, and was inspired by the [raftd](https://github.com/goraft/raftd) reference implementation. rqlite also borrows some ideas from [etcd](https://github.com/coreos/etcd), and uses [go-sqlite3](http://godoc.org/github.com/mattn/go-sqlite3) to talk to the SQLite database.
