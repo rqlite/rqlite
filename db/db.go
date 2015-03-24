@@ -6,28 +6,25 @@ import (
 	"os"
 	"strings"
 
-	_ "github.com/mattn/go-sqlite3"
-
+	_ "github.com/mattn/go-sqlite3" // required blank import
 	"github.com/otoolep/rqlite/log"
 )
 
-const (
-	dbName = "db.sqlite"
-)
-
-// The SQL database.
+// DB is the SQL database.
 type DB struct {
 	dbConn *sql.DB
 }
 
-// Query result types
+// RowResult is the result type.
 type RowResult map[string]string
+
+// RowResults is the list of results.
 type RowResults []map[string]string
 
 // New creates a new database. Deletes any existing database.
 func New(dbPath string) *DB {
 	log.Tracef("Removing any existing SQLite database at %s", dbPath)
-	os.Remove(dbPath)
+	_ = os.Remove(dbPath)
 	return Open(dbPath)
 }
 
@@ -60,14 +57,19 @@ func (db *DB) Query(query string) (RowResults, error) {
 		log.Errorf("failed to execute SQLite query: %s", err.Error())
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		err = rows.Close()
+		if err != nil {
+			log.Errorf("failed to close rows: %s", err.Error())
+		}
+	}()
 
 	results := make(RowResults, 0)
 
 	columns, _ := rows.Columns()
 	rawResult := make([][]byte, len(columns))
 	dest := make([]interface{}, len(columns))
-	for i, _ := range rawResult {
+	for i := range rawResult {
 		dest[i] = &rawResult[i] // Pointers to each string in the interface slice
 	}
 
