@@ -86,12 +86,11 @@ func main() {
 		log.Error("No data path supplied -- aborting")
 		os.Exit(1)
 	}
-	path := flag.Arg(0)
-	if err := os.MkdirAll(path, 0744); err != nil {
-		log.Errorf("Unable to create path: %s", err.Error())
-	}
 
-	s := server.NewServer(path, dbfile, snapAfter, host, port)
+	dataPath := flag.Arg(0)
+	createFile(dataPath)
+
+	s := server.NewServer(dataPath, dbfile, snapAfter, host, port)
 	go func() {
 		log.Error(s.ListenAndServe(join).Error())
 	}()
@@ -128,7 +127,7 @@ func createFile(path string) *os.File {
 	}
 
 	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "is a directory") {
 		log.Errorf("Unable to open file: %s", err.Error())
 		os.Exit(1)
 	}
