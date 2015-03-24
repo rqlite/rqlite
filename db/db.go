@@ -8,7 +8,7 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 
-	log "code.google.com/p/log4go"
+	"github.com/otoolep/rqlite/log"
 )
 
 const (
@@ -26,17 +26,17 @@ type RowResults []map[string]string
 
 // New creates a new database. Deletes any existing database.
 func New(dbPath string) *DB {
-	log.Trace("Removing any existing SQLite database at %s", dbPath)
+	log.Tracef("Removing any existing SQLite database at %s", dbPath)
 	os.Remove(dbPath)
 	return Open(dbPath)
 }
 
 // Open an existing database, creating it if it does not exist.
 func Open(dbPath string) *DB {
-	log.Trace("Opening SQLite database path at %s", dbPath)
+	log.Tracef("Opening SQLite database path at %s", dbPath)
 	dbc, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
-		log.Error(err)
+		log.Error(err.Error())
 		return nil
 	}
 	return &DB{
@@ -53,11 +53,11 @@ func (db *DB) Close() error {
 // RowResults.
 func (db *DB) Query(query string) (RowResults, error) {
 	if !strings.HasPrefix(strings.ToUpper(query), "SELECT ") {
-		log.Warn("Query \"%s\" may modify the database", query)
+		log.Warnf("Query \"%s\" may modify the database", query)
 	}
 	rows, err := db.dbConn.Query(query)
 	if err != nil {
-		log.Error("failed to execute SQLite query", err.Error())
+		log.Errorf("failed to execute SQLite query: %s", err.Error())
 		return nil, err
 	}
 	defer rows.Close()
@@ -74,7 +74,7 @@ func (db *DB) Query(query string) (RowResults, error) {
 	for rows.Next() {
 		err = rows.Scan(dest...)
 		if err != nil {
-			log.Error("failed to scan SQLite row", err.Error())
+			log.Errorf("failed to scan SQLite row: %s", err.Error())
 			return nil, err
 		}
 
@@ -88,7 +88,7 @@ func (db *DB) Query(query string) (RowResults, error) {
 		}
 		results = append(results, r)
 	}
-	log.Debug(func() string { return "Executed query successfully: " + query })
+	log.Debugf("Executed query successfully: %s", query)
 	return results, nil
 }
 
@@ -100,7 +100,8 @@ func (db *DB) Execute(stmt string) error {
 			return fmt.Sprintf("Error executing \"%s\", error: %s", stmt, err.Error())
 		}
 		return fmt.Sprintf("Successfully executed \"%s\"", stmt)
-	})
+	}())
+
 	return err
 }
 
@@ -112,7 +113,7 @@ func (db *DB) StartTransaction() error {
 			return "Error starting transaction"
 		}
 		return "Successfully started transaction"
-	})
+	}())
 	return err
 }
 
@@ -124,7 +125,7 @@ func (db *DB) CommitTransaction() error {
 			return "Error ending transaction"
 		}
 		return "Successfully ended transaction"
-	})
+	}())
 	return err
 }
 
@@ -137,6 +138,6 @@ func (db *DB) RollbackTransaction() error {
 			return "Error rolling back transaction"
 		}
 		return "Successfully rolled back transaction"
-	})
+	}())
 	return err
 }

@@ -16,14 +16,15 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"os/user"
 	"path/filepath"
 	"runtime"
 	"runtime/pprof"
+	"strings"
 	"time"
 
+	"github.com/otoolep/rqlite/log"
 	"github.com/otoolep/rqlite/server"
-
-	log "code.google.com/p/log4go"
 )
 
 var host string
@@ -52,44 +53,6 @@ func init() {
 	}
 }
 
-func setupLogging(loggingLevel, logFile string) {
-	level := log.DEBUG
-	switch loggingLevel {
-	case "TRACE":
-		level = log.TRACE
-	case "DEBUG":
-		level = log.DEBUG
-	case "INFO":
-		level = log.INFO
-	case "WARN":
-		level = log.WARNING
-	case "ERROR":
-		level = log.ERROR
-	}
-
-	log.Global = make(map[string]*log.Filter)
-
-	if logFile == "stdout" {
-		flw := log.NewConsoleLogWriter()
-		log.AddFilter("stdout", level, flw)
-
-	} else {
-		logFileDir := filepath.Dir(logFile)
-		os.MkdirAll(logFileDir, 0744)
-
-		flw := log.NewFileLogWriter(logFile, false)
-		log.AddFilter("file", level, flw)
-
-		flw.SetFormat("[%D %T] [%L] (%S) %M")
-		flw.SetRotate(true)
-		flw.SetRotateSize(0)
-		flw.SetRotateLines(0)
-		flw.SetRotateDaily(true)
-	}
-
-	log.Info("Redirectoring logging to %s", logFile)
-}
-
 func main() {
 	flag.Parse()
 
@@ -98,14 +61,23 @@ func main() {
 		log.Info("Profiling enabled")
 		f, err := os.Create(cpuprofile)
 		if err != nil {
-			log.Error("Unable to create path: %s", err.Error())
+			log.Errorf("Unable to create path: %s", err.Error())
 		}
-		defer f.Close()
+		defer closeFile(f)
 
 		pprof.StartCPUProfile(f)
 		defer pprof.StopCPUProfile()
 	}
-	setupLogging(logLevel, logFile)
+
+	// Set logging
+	log.SetLevel(logLevel)
+	if logFile != "stdout" {
+		f := createFile(logFile)
+		defer closeFile(f)
+
+		log.Infof("Redirecting logging to %s", logFile)
+		log.SetOutput(f)
+	}
 
 	// Set the data directory.
 	if flag.NArg() == 0 {
@@ -116,12 +88,12 @@ func main() {
 	}
 	path := flag.Arg(0)
 	if err := os.MkdirAll(path, 0744); err != nil {
-		log.Error("Unable to create path: %s", err.Error())
+		log.Errorf("Unable to create path: %s", err.Error())
 	}
 
 	s := server.NewServer(path, dbfile, snapAfter, host, port)
 	go func() {
-		log.Error(s.ListenAndServe(join))
+		log.Error(s.ListenAndServe(join).Error())
 	}()
 
 	if !disableReporting {
@@ -132,6 +104,36 @@ func main() {
 	signal.Notify(terminate, os.Interrupt)
 	<-terminate
 	log.Info("rqlite server stopped")
+}
+
+func closeFile(f *os.File) {
+	if err := f.Close(); err != nil {
+		log.Errorf("Unable to close file: %s", err.Error())
+		os.Exit(1)
+	}
+}
+
+func createFile(path string) *os.File {
+	usr, _ := user.Current()
+	dir := usr.HomeDir
+
+	// Check in case of paths like "/something/~/something/"
+	if path[:2] == "~/" {
+		path = strings.Replace(path, "~/", dir+"/", 1)
+	}
+
+	if err := os.MkdirAll(filepath.Dir(path), 0744); err != nil {
+		log.Errorf("Unable to create path: %s", err.Error())
+		os.Exit(1)
+	}
+
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		log.Errorf("Unable to open file: %s", err.Error())
+		os.Exit(1)
+	}
+
+	return f
 }
 
 func reportLaunch() {

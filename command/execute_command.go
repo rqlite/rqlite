@@ -4,7 +4,7 @@ import (
 	"github.com/goraft/raft"
 	"github.com/otoolep/rqlite/db"
 
-	log "code.google.com/p/log4go"
+	"github.com/otoolep/rqlite/log"
 )
 
 // This command encapsulates a sqlite statement.
@@ -26,7 +26,7 @@ func (c *ExecuteCommand) CommandName() string {
 
 // Apply executes an sqlite statement.
 func (c *ExecuteCommand) Apply(server raft.Server) (interface{}, error) {
-	log.Trace("Applying ExecuteCommand: '%s'", c.Stmt)
+	log.Tracef("Applying ExecuteCommand: '%s'", c.Stmt)
 	db := server.Context().(*db.DB)
 	return nil, db.Execute(c.Stmt)
 }
@@ -53,7 +53,7 @@ func (c *TransactionExecuteCommandSet) CommandName() string {
 // Apply executes a set of sqlite statements, within a transaction. All statements
 // will take effect, or none.
 func (c *TransactionExecuteCommandSet) Apply(server raft.Server) (interface{}, error) {
-	log.Trace("Applying TransactionExecuteCommandSet of size %d", len(c.Stmts))
+	log.Tracef("Applying TransactionExecuteCommandSet of size %d", len(c.Stmts))
 
 	commitSuccess := false
 	db := server.Context().(*db.DB)
@@ -61,26 +61,26 @@ func (c *TransactionExecuteCommandSet) Apply(server raft.Server) (interface{}, e
 		if !commitSuccess {
 			err := db.RollbackTransaction()
 			if err != nil {
-				log.Error("Failed to rollback transaction: %s", err.Error)
+				log.Errorf("Failed to rollback transaction: %s", err.Error())
 			}
 		}
 	}()
 
 	err := db.StartTransaction()
 	if err != nil {
-		log.Error("Failed to start transaction:", err.Error())
+		log.Errorf("Failed to start transaction: %s", err.Error())
 		return nil, err
 	}
 	for i := range c.Stmts {
 		err = db.Execute(c.Stmts[i])
 		if err != nil {
-			log.Error("Failed to execute statement within transaction", err.Error())
+			log.Errorf("Failed to execute statement within transaction: %s", err.Error())
 			return nil, err
 		}
 	}
 	err = db.CommitTransaction()
 	if err != nil {
-		log.Error("Failed to commit transaction:", err.Error())
+		log.Errorf("Failed to commit transaction: %s", err.Error())
 		return nil, err
 	} else {
 		commitSuccess = true

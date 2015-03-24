@@ -20,9 +20,8 @@ import (
 	"github.com/otoolep/rqlite/command"
 	"github.com/otoolep/rqlite/db"
 	"github.com/otoolep/rqlite/interfaces"
+	"github.com/otoolep/rqlite/log"
 	"github.com/rcrowley/go-metrics"
-
-	log "code.google.com/p/log4go"
 )
 
 type FailedSqlStmt struct {
@@ -213,9 +212,9 @@ func (s *Server) connectionString() string {
 func (s *Server) logSnapshot(err error, currentIndex, count uint64) {
 	info := fmt.Sprintf("%s: snapshot of %d events at index %d", s.connectionString, count, currentIndex)
 	if err != nil {
-		log.Info("%s attempted and failed: %v", info, err)
+		log.Infof("%s attempted and failed: %v", info, err)
 	} else {
-		log.Info("%s completed", info)
+		log.Infof("%s completed", info)
 	}
 }
 
@@ -223,21 +222,21 @@ func (s *Server) logSnapshot(err error, currentIndex, count uint64) {
 func (s *Server) ListenAndServe(leader string) error {
 	var err error
 
-	log.Info("Initializing Raft Server: %s", s.path)
+	log.Infof("Initializing Raft Server: %s", s.path)
 
 	// Initialize and start Raft server.
 	transporter := raft.NewHTTPTransporter("/raft", 200*time.Millisecond)
 	stateMachine := NewDbStateMachine(s.dbPath)
 	s.raftServer, err = raft.NewServer(s.name, s.path, transporter, stateMachine, s.db, "")
 	if err != nil {
-		log.Error("Failed to create new Raft server", err.Error())
+		log.Errorf("Failed to create new Raft server: %s", err.Error())
 		return err
 	}
 
 	log.Info("Loading latest snapshot, if any, from disk")
 	err = s.raftServer.LoadSnapshot()
 	if err != nil {
-		log.Error("Error loading snapshot: %s", err.Error())
+		log.Errorf("Error loading snapshot: %s", err.Error())
 	}
 
 	transporter.Install(s.raftServer, s)
@@ -246,14 +245,14 @@ func (s *Server) ListenAndServe(leader string) error {
 	if leader != "" {
 		// Join to leader if specified.
 
-		log.Info("Attempting to join leader at %s", leader)
+		log.Infof("Attempting to join leader at %s", leader)
 
 		if !s.raftServer.IsLogEmpty() {
 			log.Error("Cannot join with an existing log")
 			return errors.New("Cannot join with an existing log")
 		}
 		if err := s.Join(leader); err != nil {
-			log.Error("Failed to join leader", err.Error())
+			log.Errorf("Failed to join leader: %s", err.Error())
 			return err
 		}
 
@@ -267,7 +266,7 @@ func (s *Server) ListenAndServe(leader string) error {
 			ConnectionString: s.connectionString(),
 		})
 		if err != nil {
-			log.Error("Failed to join to self", err.Error())
+			log.Errorf("Failed to join to self: %", err.Error())
 		}
 
 	} else {
@@ -289,7 +288,7 @@ func (s *Server) ListenAndServe(leader string) error {
 	s.router.HandleFunc("/db", s.writeHandler).Methods("POST")
 	s.router.HandleFunc("/join", s.joinHandler).Methods("POST")
 
-	log.Info("Listening at %s", s.connectionString())
+	log.Infof("Listening at %s", s.connectionString())
 
 	return s.httpServer.ListenAndServe()
 }
@@ -325,7 +324,7 @@ func (s *Server) Join(leader string) error {
 		if err != nil {
 			return errors.New("Failed to parse redirect location")
 		}
-		log.Info("Redirecting to leader at %s", u.Host)
+		log.Infof("Redirecting to leader at %s", u.Host)
 		return s.Join(u.Host)
 	}
 
@@ -357,14 +356,14 @@ func (s *Server) joinHandler(w http.ResponseWriter, req *http.Request) {
 }
 
 func (s *Server) readHandler(w http.ResponseWriter, req *http.Request) {
-	log.Trace("readHandler for URL: %s", req.URL)
+	log.Tracef("readHandler for URL: %s", req.URL)
 	s.metrics.queryReceived.Inc(1)
 
 	var failures = make([]FailedSqlStmt, 0)
 
 	b, err := ioutil.ReadAll(req.Body)
 	if err != nil {
-		log.Trace("Bad HTTP request", err.Error())
+		log.Tracef("Bad HTTP request: %s", err.Error())
 		w.WriteHeader(http.StatusBadRequest)
 		s.metrics.queryFail.Inc(1)
 		return
@@ -374,7 +373,7 @@ func (s *Server) readHandler(w http.ResponseWriter, req *http.Request) {
 	startTime := time.Now()
 	r, err := s.db.Query(stmt)
 	if err != nil {
-		log.Trace("Bad SQL statement", err.Error())
+		log.Tracef("Bad SQL statement: %s", err.Error())
 		s.metrics.queryFail.Inc(1)
 		failures = append(failures, FailedSqlStmt{stmt, err.Error()})
 	} else {
@@ -390,7 +389,7 @@ func (s *Server) readHandler(w http.ResponseWriter, req *http.Request) {
 		b, err = json.Marshal(rr)
 	}
 	if err != nil {
-		log.Trace("Failed to marshal JSON data", err.Error())
+		log.Tracef("Failed to marshal JSON data: %s", err.Error())
 		http.Error(w, err.Error(), http.StatusBadRequest) // Internal error actually
 	} else {
 		w.Write([]byte(b))
@@ -406,7 +405,7 @@ func (s *Server) execute(tx bool, stmts []string) ([]FailedSqlStmt, error) {
 
 		_, err := s.raftServer.Do(command.NewTransactionExecuteCommandSet(stmts))
 		if err != nil {
-			log.Trace("Transaction failed: %s", err.Error())
+			log.Tracef("Transaction failed: %s", err.Error())
 			s.metrics.executeFail.Inc(1)
 			failures = append(failures, FailedSqlStmt{stmts[0], err.Error()})
 		} else {
@@ -417,7 +416,7 @@ func (s *Server) execute(tx bool, stmts []string) ([]FailedSqlStmt, error) {
 		for i := range stmts {
 			_, err := s.raftServer.Do(command.NewExecuteCommand(stmts[i]))
 			if err != nil {
-				log.Trace("Execute statement %s failed: %s", stmts[i], err.Error())
+				log.Tracef("Execute statement %s failed: %s", stmts[i], err.Error())
 				s.metrics.executeFail.Inc(1)
 				failures = append(failures, FailedSqlStmt{stmts[i], err.Error()})
 			} else {
@@ -439,7 +438,7 @@ func (s *Server) writeHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	log.Trace("writeHandler for URL: %s", req.URL)
+	log.Tracef("writeHandler for URL: %s", req.URL)
 	s.metrics.executeReceived.Inc(1)
 
 	currentIndex := s.raftServer.CommitIndex()
@@ -457,7 +456,7 @@ func (s *Server) writeHandler(w http.ResponseWriter, req *http.Request) {
 	// Read the value from the POST body.
 	b, err := ioutil.ReadAll(req.Body)
 	if err != nil {
-		log.Trace("Bad HTTP request", err.Error())
+		log.Tracef("Bad HTTP request: %s", err.Error())
 		s.metrics.executeFail.Inc(1)
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -467,7 +466,7 @@ func (s *Server) writeHandler(w http.ResponseWriter, req *http.Request) {
 		stmts = stmts[:len(stmts)-1]
 	}
 
-	log.Trace("Execute statement contains %d commands", len(stmts))
+	log.Tracef("Execute statement contains %d commands", len(stmts))
 	if len(stmts) == 0 {
 		log.Trace("No database execute commands supplied")
 		s.metrics.executeFail.Inc(1)
@@ -479,7 +478,7 @@ func (s *Server) writeHandler(w http.ResponseWriter, req *http.Request) {
 	startTime = time.Now()
 	failures, err := s.execute(transaction, stmts)
 	if err != nil {
-		log.Error("Database mutation failed: %s", err.Error())
+		log.Errorf("Database mutation failed: %s", err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
