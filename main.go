@@ -65,7 +65,11 @@ func main() {
 		}
 		defer closeFile(f)
 
-		pprof.StartCPUProfile(f)
+		err = pprof.StartCPUProfile(f)
+		if err != nil {
+			log.Errorf("Unable to start CPU Profile: %s", err.Error())
+		}
+
 		defer pprof.StopCPUProfile()
 	}
 
@@ -139,6 +143,11 @@ func reportLaunch() {
 	json := fmt.Sprintf(`{"os": "%s", "arch": "%s", "app": "rqlite"}`, runtime.GOOS, runtime.GOARCH)
 	data := bytes.NewBufferString(json)
 	client := http.Client{Timeout: time.Duration(5 * time.Second)}
-	go client.Post("https://logs-01.loggly.com/inputs/8a0edd84-92ba-46e4-ada8-c529d0f105af/tag/reporting/",
-		"application/json", data)
+	go func() {
+		_, err := client.Post("https://logs-01.loggly.com/inputs/8a0edd84-92ba-46e4-ada8-c529d0f105af/tag/reporting/",
+			"application/json", data)
+		if err != nil {
+			log.Errorf("Report launch failed: %s", err.Error())
+		}
+	}()
 }
