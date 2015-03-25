@@ -7,6 +7,7 @@ import (
 	"github.com/otoolep/rqlite/log"
 )
 
+// DbStateMachine contains the DB path.
 type DbStateMachine struct {
 	dbpath string
 }
