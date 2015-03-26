@@ -7,7 +7,7 @@ import (
 	"github.com/otoolep/rqlite/log"
 )
 
-// This command encapsulates a sqlite statement.
+// ExecuteCommand encapsulates a sqlite statement.
 type ExecuteCommand struct {
 	Stmt string `json:"stmt"`
 }
@@ -19,7 +19,7 @@ func NewExecuteCommand(stmt string) *ExecuteCommand {
 	}
 }
 
-// The name of the ExecuteCommand in the log.
+// CommandName of the ExecuteCommand in the log.
 func (c *ExecuteCommand) CommandName() string {
 	return "execute"
 }
@@ -31,7 +31,7 @@ func (c *ExecuteCommand) Apply(server raft.Server) (interface{}, error) {
 	return nil, db.Execute(c.Stmt)
 }
 
-// This command encapsulates a set of sqlite statement, which are executed
+// TransactionExecuteCommandSet encapsulates a set of sqlite statement, which are executed
 // within a transaction.
 type TransactionExecuteCommandSet struct {
 	Stmts []string `json:"stmts"`
@@ -45,7 +45,7 @@ func NewTransactionExecuteCommandSet(stmts []string) *TransactionExecuteCommandS
 	}
 }
 
-// The name of the TransactionExecute command in the log.
+// CommandName of the TransactionExecute command in the log.
 func (c *TransactionExecuteCommandSet) CommandName() string {
 	return "transaction_execute"
 }
@@ -71,6 +71,7 @@ func (c *TransactionExecuteCommandSet) Apply(server raft.Server) (interface{}, e
 		log.Errorf("Failed to start transaction: %s", err.Error())
 		return nil, err
 	}
+
 	for i := range c.Stmts {
 		err = db.Execute(c.Stmts[i])
 		if err != nil {
@@ -78,12 +79,12 @@ func (c *TransactionExecuteCommandSet) Apply(server raft.Server) (interface{}, e
 			return nil, err
 		}
 	}
-	err = db.CommitTransaction()
-	if err != nil {
+
+	if err = db.CommitTransaction(); err != nil {
 		log.Errorf("Failed to commit transaction: %s", err.Error())
 		return nil, err
-	} else {
-		commitSuccess = true
 	}
+
+	commitSuccess = true
 	return nil, nil
 }
