@@ -6,6 +6,10 @@
 # Folders
 _obj
 _test
+.vagrant
+
+# Logs
+*.log
 
 # Temporary vim files
 *.swp
