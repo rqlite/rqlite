@@ -20,28 +20,32 @@ import (
 	"github.com/otoolep/rqlite/command"
 	"github.com/otoolep/rqlite/db"
 	"github.com/otoolep/rqlite/interfaces"
+	"github.com/otoolep/rqlite/log"
 	"github.com/rcrowley/go-metrics"
-
-	log "code.google.com/p/log4go"
 )
 
+// FailedSqlStmt contains a SQL query and an error.
 type FailedSqlStmt struct {
 	Sql   string `json:"sql"`
 	Error string `json:"error"`
 }
 
+// StmtResponse contains a date and a list of failed
+// SQL statements.
 type StmtResponse struct {
 	Time     string          `json:"time"`
 	Failures []FailedSqlStmt `json:"failures"`
 }
 
+// QueryResponse contains the response to a query.
 type QueryResponse struct {
 	Time     string          `json:"time"`
 	Failures []FailedSqlStmt `json:"failures"`
 	Rows     db.RowResults   `json:"rows"`
 }
 
-type ServerMetrics struct {
+// Metrics  are the server metrics user for statistics.
+type Metrics struct {
 	registry          metrics.Registry
 	joinSuccess       metrics.Counter
 	joinFail          metrics.Counter
@@ -55,10 +59,13 @@ type ServerMetrics struct {
 	snapshotCreated   metrics.Counter
 }
 
-type ServerDiagnostics struct {
+// Diagnostics contains a start time of the server.
+type Diagnostics struct {
 	startTime time.Time
 }
 
+// SnapshotConf contains the index when the last snapshot happened
+// and a threshold for index entries since the last snapshot.
 type SnapshotConf struct {
 	// The index when the last snapshot happened
 	lastIndex uint64
@@ -68,9 +75,8 @@ type SnapshotConf struct {
 	snapshotAfter uint64
 }
 
-// The raftd server is a combination of the Raft server and an HTTP
+// Server is is a combination of the Raft server and an HTTP
 // server which acts as the transport.
-
 type Server struct {
 	name        string
 	host        string
@@ -82,8 +88,8 @@ type Server struct {
 	dbPath      string
 	db          *db.DB
 	snapConf    *SnapshotConf
-	metrics     *ServerMetrics
-	diagnostics *ServerDiagnostics
+	metrics     *Metrics
+	diagnostics *Diagnostics
 	mutex       sync.Mutex
 }
 
@@ -123,9 +129,9 @@ func isTransaction(req *http.Request) (bool, error) {
 	return queryParam(req, "transaction")
 }
 
-// NewServerMetrics creates a new ServerMetrics object.
-func NewServerMetrics() *ServerMetrics {
-	m := &ServerMetrics{
+// NewMetrics creates a new Metrics object.
+func NewMetrics() *Metrics {
+	m := &Metrics{
 		registry:          metrics.NewRegistry(),
 		joinSuccess:       metrics.NewCounter(),
 		joinFail:          metrics.NewCounter(),
@@ -139,22 +145,22 @@ func NewServerMetrics() *ServerMetrics {
 		snapshotCreated:   metrics.NewCounter(),
 	}
 
-	m.registry.Register("join.success", m.joinSuccess)
-	m.registry.Register("join.fail", m.joinFail)
-	m.registry.Register("query.Received", m.queryReceived)
-	m.registry.Register("query.success", m.querySuccess)
-	m.registry.Register("query.fail", m.queryFail)
-	m.registry.Register("execute.Received", m.executeReceived)
-	m.registry.Register("execute.tx.received", m.executeTxReceived)
-	m.registry.Register("execute.success", m.executeSuccess)
-	m.registry.Register("execute.fail", m.executeFail)
-	m.registry.Register("snapshot.created", m.snapshotCreated)
+	_ = m.registry.Register("join.success", m.joinSuccess)
+	_ = m.registry.Register("join.fail", m.joinFail)
+	_ = m.registry.Register("query.Received", m.queryReceived)
+	_ = m.registry.Register("query.success", m.querySuccess)
+	_ = m.registry.Register("query.fail", m.queryFail)
+	_ = m.registry.Register("execute.Received", m.executeReceived)
+	_ = m.registry.Register("execute.tx.received", m.executeTxReceived)
+	_ = m.registry.Register("execute.success", m.executeSuccess)
+	_ = m.registry.Register("execute.fail", m.executeFail)
+	_ = m.registry.Register("snapshot.created", m.snapshotCreated)
 	return m
 }
 
-// NewServerDiagnostics creates a new ServerDiagnostics object.
-func NewServerDiagnostics() *ServerDiagnostics {
-	d := &ServerDiagnostics{
+// NewDiagnostics creates a new Diagnostics object.
+func NewDiagnostics() *Diagnostics {
+	d := &Diagnostics{
 		startTime: time.Now(),
 	}
 	return d
@@ -180,8 +186,8 @@ func NewServer(dataDir string, dbfile string, snapAfter int, host string, port i
 		dbPath:      dbPath,
 		db:          db.New(dbPath),
 		snapConf:    &SnapshotConf{snapshotAfter: uint64(snapAfter)},
-		metrics:     NewServerMetrics(),
-		diagnostics: NewServerDiagnostics(),
+		metrics:     NewMetrics(),
+		diagnostics: NewDiagnostics(),
 		router:      mux.NewRouter(),
 	}
 
@@ -211,11 +217,11 @@ func (s *Server) connectionString() string {
 
 // logSnapshot logs about the snapshot that was taken.
 func (s *Server) logSnapshot(err error, currentIndex, count uint64) {
-	info := fmt.Sprintf("%s: snapshot of %d events at index %d", s.connectionString, count, currentIndex)
+	info := fmt.Sprintf("%s: snapshot of %d events at index %d", s.connectionString(), count, currentIndex)
 	if err != nil {
-		log.Info("%s attempted and failed: %v", info, err)
+		log.Infof("%s attempted and failed: %v", info, err)
 	} else {
-		log.Info("%s completed", info)
+		log.Infof("%s completed", info)
 	}
 }
 
@@ -223,37 +229,38 @@ func (s *Server) logSnapshot(err error, currentIndex, count uint64) {
 func (s *Server) ListenAndServe(leader string) error {
 	var err error
 
-	log.Info("Initializing Raft Server: %s", s.path)
+	log.Infof("Initializing Raft Server: %s", s.path)
 
 	// Initialize and start Raft server.
 	transporter := raft.NewHTTPTransporter("/raft", 200*time.Millisecond)
 	stateMachine := NewDbStateMachine(s.dbPath)
 	s.raftServer, err = raft.NewServer(s.name, s.path, transporter, stateMachine, s.db, "")
 	if err != nil {
-		log.Error("Failed to create new Raft server", err.Error())
+		log.Errorf("Failed to create new Raft server: %s", err.Error())
 		return err
 	}
 
 	log.Info("Loading latest snapshot, if any, from disk")
-	err = s.raftServer.LoadSnapshot()
-	if err != nil {
-		log.Error("Error loading snapshot: %s", err.Error())
+	if err := s.raftServer.LoadSnapshot(); err != nil {
+		log.Errorf("Error loading snapshot: %s", err.Error())
 	}
 
 	transporter.Install(s.raftServer, s)
-	s.raftServer.Start()
+	if err := s.raftServer.Start(); err != nil {
+		log.Errorf("Error starting raft server: %s", err.Error())
+	}
 
 	if leader != "" {
 		// Join to leader if specified.
 
-		log.Info("Attempting to join leader at %s", leader)
+		log.Infof("Attempting to join leader at %s", leader)
 
 		if !s.raftServer.IsLogEmpty() {
 			log.Error("Cannot join with an existing log")
 			return errors.New("Cannot join with an existing log")
 		}
 		if err := s.Join(leader); err != nil {
-			log.Error("Failed to join leader", err.Error())
+			log.Errorf("Failed to join leader: %s", err.Error())
 			return err
 		}
 
@@ -267,7 +274,7 @@ func (s *Server) ListenAndServe(leader string) error {
 			ConnectionString: s.connectionString(),
 		})
 		if err != nil {
-			log.Error("Failed to join to self", err.Error())
+			log.Errorf("Failed to join to self: %s", err.Error())
 		}
 
 	} else {
@@ -289,18 +296,18 @@ func (s *Server) ListenAndServe(leader string) error {
 	s.router.HandleFunc("/db", s.writeHandler).Methods("POST")
 	s.router.HandleFunc("/join", s.joinHandler).Methods("POST")
 
-	log.Info("Listening at %s", s.connectionString())
+	log.Infof("Listening at %s", s.connectionString())
 
 	return s.httpServer.ListenAndServe()
 }
 
-// This is a hack around Gorilla mux not providing the correct net/http
+// HandleFunc is a hack around Gorilla mux not providing the correct net/http
 // HandleFunc() interface.
 func (s *Server) HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request)) {
 	s.router.HandleFunc(pattern, handler)
 }
 
-// Joins to the leader of an existing cluster.
+// Join joins to the leader of an existing cluster.
 func (s *Server) Join(leader string) error {
 	command := &raft.DefaultJoinCommand{
 		Name:             s.raftServer.Name(),
@@ -308,12 +315,17 @@ func (s *Server) Join(leader string) error {
 	}
 
 	var b bytes.Buffer
-	json.NewEncoder(&b).Encode(command)
+	if err := json.NewEncoder(&b).Encode(command); err != nil {
+		return nil
+	}
+
 	resp, err := http.Post(fmt.Sprintf("http://%s/join", leader), "application/json", &b)
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	// Look for redirect.
 	if resp.StatusCode == http.StatusTemporaryRedirect {
@@ -325,7 +337,7 @@ func (s *Server) Join(leader string) error {
 		if err != nil {
 			return errors.New("Failed to parse redirect location")
 		}
-		log.Info("Redirecting to leader at %s", u.Host)
+		log.Infof("Redirecting to leader at %s", u.Host)
 		return s.Join(u.Host)
 	}
 
@@ -357,14 +369,14 @@ func (s *Server) joinHandler(w http.ResponseWriter, req *http.Request) {
 }
 
 func (s *Server) readHandler(w http.ResponseWriter, req *http.Request) {
-	log.Trace("readHandler for URL: %s", req.URL)
+	log.Tracef("readHandler for URL: %s", req.URL)
 	s.metrics.queryReceived.Inc(1)
 
 	var failures = make([]FailedSqlStmt, 0)
 
 	b, err := ioutil.ReadAll(req.Body)
 	if err != nil {
-		log.Trace("Bad HTTP request", err.Error())
+		log.Tracef("Bad HTTP request: %s", err.Error())
 		w.WriteHeader(http.StatusBadRequest)
 		s.metrics.queryFail.Inc(1)
 		return
@@ -374,7 +386,7 @@ func (s *Server) readHandler(w http.ResponseWriter, req *http.Request) {
 	startTime := time.Now()
 	r, err := s.db.Query(stmt)
 	if err != nil {
-		log.Trace("Bad SQL statement", err.Error())
+		log.Tracef("Bad SQL statement: %s", err.Error())
 		s.metrics.queryFail.Inc(1)
 		failures = append(failures, FailedSqlStmt{stmt, err.Error()})
 	} else {
@@ -390,10 +402,13 @@ func (s *Server) readHandler(w http.ResponseWriter, req *http.Request) {
 		b, err = json.Marshal(rr)
 	}
 	if err != nil {
-		log.Trace("Failed to marshal JSON data", err.Error())
+		log.Tracef("Failed to marshal JSON data: %s", err.Error())
 		http.Error(w, err.Error(), http.StatusBadRequest) // Internal error actually
 	} else {
-		w.Write([]byte(b))
+		_, err = w.Write([]byte(b))
+		if err != nil {
+			log.Errorf("Error writting JSON data: %s", err.Error())
+		}
 	}
 }
 
@@ -406,7 +421,7 @@ func (s *Server) execute(tx bool, stmts []string) ([]FailedSqlStmt, error) {
 
 		_, err := s.raftServer.Do(command.NewTransactionExecuteCommandSet(stmts))
 		if err != nil {
-			log.Trace("Transaction failed: %s", err.Error())
+			log.Tracef("Transaction failed: %s", err.Error())
 			s.metrics.executeFail.Inc(1)
 			failures = append(failures, FailedSqlStmt{stmts[0], err.Error()})
 		} else {
@@ -417,7 +432,7 @@ func (s *Server) execute(tx bool, stmts []string) ([]FailedSqlStmt, error) {
 		for i := range stmts {
 			_, err := s.raftServer.Do(command.NewExecuteCommand(stmts[i]))
 			if err != nil {
-				log.Trace("Execute statement %s failed: %s", stmts[i], err.Error())
+				log.Tracef("Execute statement %s failed: %s", stmts[i], err.Error())
 				s.metrics.executeFail.Inc(1)
 				failures = append(failures, FailedSqlStmt{stmts[i], err.Error()})
 			} else {
@@ -439,7 +454,7 @@ func (s *Server) writeHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	log.Trace("writeHandler for URL: %s", req.URL)
+	log.Tracef("writeHandler for URL: %s", req.URL)
 	s.metrics.executeReceived.Inc(1)
 
 	currentIndex := s.raftServer.CommitIndex()
@@ -457,7 +472,7 @@ func (s *Server) writeHandler(w http.ResponseWriter, req *http.Request) {
 	// Read the value from the POST body.
 	b, err := ioutil.ReadAll(req.Body)
 	if err != nil {
-		log.Trace("Bad HTTP request", err.Error())
+		log.Tracef("Bad HTTP request: %s", err.Error())
 		s.metrics.executeFail.Inc(1)
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -467,7 +482,7 @@ func (s *Server) writeHandler(w http.ResponseWriter, req *http.Request) {
 		stmts = stmts[:len(stmts)-1]
 	}
 
-	log.Trace("Execute statement contains %d commands", len(stmts))
+	log.Tracef("Execute statement contains %d commands", len(stmts))
 	if len(stmts) == 0 {
 		log.Trace("No database execute commands supplied")
 		s.metrics.executeFail.Inc(1)
@@ -479,7 +494,7 @@ func (s *Server) writeHandler(w http.ResponseWriter, req *http.Request) {
 	startTime = time.Now()
 	failures, err := s.execute(transaction, stmts)
 	if err != nil {
-		log.Error("Database mutation failed: %s", err.Error())
+		log.Errorf("Database mutation failed: %s", err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -495,7 +510,10 @@ func (s *Server) writeHandler(w http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	} else {
-		w.Write([]byte(b))
+		_, err = w.Write([]byte(b))
+		if err != nil {
+			log.Errorf("Error writting JSON data: %s", err.Error())
+		}
 	}
 }
 
@@ -513,7 +531,12 @@ func (s *Server) serveStatistics(w http.ResponseWriter, req *http.Request) {
 		statistics[k] = s
 	}
 
-	w.Write(ensurePrettyPrint(req, statistics))
+	_, err := w.Write(ensurePrettyPrint(req, statistics))
+	if err != nil {
+		log.Error("failed to serve stats")
+		http.Error(w, "failed to serve stats", http.StatusInternalServerError)
+		return
+	}
 }
 
 // serveDiagnostics returns basic server diagnostics
@@ -528,7 +551,13 @@ func (s *Server) serveDiagnostics(w http.ResponseWriter, req *http.Request) {
 	diagnostics["connection"] = s.connectionString()
 	diagnostics["snapafter"] = s.snapConf.snapshotAfter
 	diagnostics["snapindex"] = s.snapConf.lastIndex
-	w.Write(ensurePrettyPrint(req, diagnostics))
+
+	_, err := w.Write(ensurePrettyPrint(req, diagnostics))
+	if err != nil {
+		log.Error("failed to serve diagnostics")
+		http.Error(w, "failed to serve diagnostics", http.StatusInternalServerError)
+		return
+	}
 }
 
 // serveRaftInfo returns information about the underlying Raft server
@@ -539,7 +568,13 @@ func (s *Server) serveRaftInfo(w http.ResponseWriter, req *http.Request) {
 	info["state"] = s.raftServer.State()
 	info["leader"] = s.raftServer.Leader()
 	info["peers"] = peers
-	w.Write(ensurePrettyPrint(req, info))
+
+	_, err := w.Write(ensurePrettyPrint(req, info))
+	if err != nil {
+		log.Error("failed to serve raft info")
+		http.Error(w, "failed to serve raft info", http.StatusInternalServerError)
+		return
+	}
 }
 
 // leaderRedirect returns a 307 Temporary Redirect, with the full path
