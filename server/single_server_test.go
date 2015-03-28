@@ -54,7 +54,7 @@ func postEndpoint(endpoint string, body string) (*http.Response, error) {
 	return client.Do(req)
 }
 
-func isJSONBody(res *http.Response) bool {
+func isJsonBody(res *http.Response) bool {
 	b, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		return false
@@ -87,17 +87,17 @@ func (s *SingleServerSuite) Test_SingleServer(c *C) {
 	res, err = getEndpoint("/statistics")
 	c.Assert(err, IsNil)
 	c.Assert(res.StatusCode, Equals, 200)
-	c.Assert(isJSONBody(res), Equals, true)
+	c.Assert(isJsonBody(res), Equals, true)
 
 	res, err = getEndpoint("/diagnostics")
 	c.Assert(err, IsNil)
 	c.Assert(res.StatusCode, Equals, 200)
-	c.Assert(isJSONBody(res), Equals, true)
+	c.Assert(isJsonBody(res), Equals, true)
 
 	res, err = getEndpoint("/raft")
 	c.Assert(err, IsNil)
 	c.Assert(res.StatusCode, Equals, 200)
-	c.Assert(isJSONBody(res), Equals, true)
+	c.Assert(isJsonBody(res), Equals, true)
 
 	// Create a database.
 	res, err = postEndpoint("/db", "CREATE TABLE foo (id integer not null primary key, name text)")
@@ -113,5 +113,5 @@ func (s *SingleServerSuite) Test_SingleServer(c *C) {
 	res, err = getEndpointBody("/db", "SELECT * from foo")
 	c.Assert(err, IsNil)
 	c.Assert(res.StatusCode, Equals, 200)
-	c.Assert(isJSONBody(res), Equals, true)
+	c.Assert(isJsonBody(res), Equals, true)
 }

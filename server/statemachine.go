@@ -4,10 +4,9 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/otoolep/rqlite/log"
+	log "code.google.com/p/log4go"
 )
 
-// DbStateMachine contains the DB path.
 type DbStateMachine struct {
 	dbpath string
 }
@@ -18,7 +17,7 @@ func NewDbStateMachine(path string) *DbStateMachine {
 	d := &DbStateMachine{
 		dbpath: path,
 	}
-	log.Tracef("New DB state machine created with path: %s", path)
+	log.Trace("New DB state machine created with path: %s", path)
 	return d
 }
 
@@ -28,24 +27,24 @@ func NewDbStateMachine(path string) *DbStateMachine {
 // http://sqlite.org/howtocorrupt.html states it is safe to do this
 // as long as no transaction is in progress.
 func (d *DbStateMachine) Save() ([]byte, error) {
-	log.Tracef("Capturing database state from path: %s", d.dbpath)
+	log.Trace("Capturing database state from path: %s", d.dbpath)
 	b, err := ioutil.ReadFile(d.dbpath)
 	if err != nil {
-		log.Errorf("Failed to save state: %s", err.Error())
+		log.Error("Failed to save state: ", err.Error())
 		return nil, err
 	}
-	log.Tracef("Database state successfully saved to %s", d.dbpath)
+	log.Trace("Database state successfully saved to %s", d.dbpath)
 	return b, nil
 }
 
 // Recovery restores the state of the database using the given data.
 func (d *DbStateMachine) Recovery(b []byte) error {
-	log.Tracef("Restoring database state to path: %s", d.dbpath)
+	log.Trace("Restoring database state to path: %s", d.dbpath)
 	err := ioutil.WriteFile(d.dbpath, b, os.ModePerm)
 	if err != nil {
-		log.Errorf("Failed to recover state: %s", err.Error())
+		log.Error("Failed to recover state: ", err.Error())
 		return err
 	}
-	log.Tracef("Database restored successfully to %s", d.dbpath)
+	log.Trace("Database restored successfully to %s", d.dbpath)
 	return nil
 }
