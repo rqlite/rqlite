@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"os"
 	"time"
 
@@ -28,17 +29,16 @@ func getEndpoint(endpoint string) (*http.Response, error) {
 	return http.Get(url)
 }
 
-func getEndpointBody(endpoint string, body string) (*http.Response, error) {
-	var jsonStr = []byte(body)
-	url := fmt.Sprintf("http://%s:%d%s", host, port, endpoint)
-	req, err := http.NewRequest("GET", url, bytes.NewBuffer(jsonStr))
+func getEndpointQuery(endpoint string, query string) (*http.Response, error) {
+	q := url.Values{"q": []string{query}}
+	v, _ := url.Parse(fmt.Sprintf("http://%s:%d%s", host, port, endpoint))
+	v.RawQuery = q.Encode()
+
+	req, err := http.Get(v.String())
 	if err != nil {
 		panic(err)
 	}
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{}
-	return client.Do(req)
+	return req, nil
 }
 
 func postEndpoint(endpoint string, body string) (*http.Response, error) {
@@ -110,7 +110,7 @@ func (s *SingleServerSuite) Test_SingleServer(c *C) {
 	c.Assert(res.StatusCode, Equals, 200)
 
 	// Data read
-	res, err = getEndpointBody("/db", "SELECT * from foo")
+	res, err = getEndpointQuery("/db", "SELECT * from foo")
 	c.Assert(err, IsNil)
 	c.Assert(res.StatusCode, Equals, 200)
 	c.Assert(isJsonBody(res), Equals, true)

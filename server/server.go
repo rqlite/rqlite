@@ -112,6 +112,16 @@ func queryParam(req *http.Request, param string) (bool, error) {
 	return false, nil
 }
 
+// stmtParam returns the value for URL param 'q', if present.
+func stmtParam(req *http.Request) (string, error) {
+	q := req.URL.Query()
+	stmt := strings.TrimSpace(q.Get("q"))
+	if stmt == "" {
+		return "", fmt.Errorf(`required parameter 'q' is missing`)
+	}
+	return stmt, nil
+}
+
 // isPretty returns whether the HTTP response body should be pretty-printed.
 func isPretty(req *http.Request) (bool, error) {
 	return queryParam(req, "pretty")
@@ -362,15 +372,15 @@ func (s *Server) readHandler(w http.ResponseWriter, req *http.Request) {
 
 	var failures = make([]FailedSqlStmt, 0)
 
-	b, err := ioutil.ReadAll(req.Body)
+	// Get the query statement
+	stmt, err := stmtParam(req)
 	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		log.Trace("Bad HTTP request", err.Error())
-		w.WriteHeader(http.StatusBadRequest)
 		s.metrics.queryFail.Inc(1)
 		return
 	}
 
-	stmt := string(b)
 	startTime := time.Now()
 	r, err := s.db.Query(stmt)
 	if err != nil {
@@ -384,6 +394,7 @@ func (s *Server) readHandler(w http.ResponseWriter, req *http.Request) {
 
 	rr := QueryResponse{Time: duration.String(), Failures: failures, Rows: r}
 	pretty, _ := isPretty(req)
+	var b []byte
 	if pretty {
 		b, err = json.MarshalIndent(rr, "", "    ")
 	} else {
@@ -462,7 +473,7 @@ func (s *Server) writeHandler(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	stmts := strings.Split(string(b), "\n")
+	stmts := strings.Split(string(b), ";")
 	if stmts[len(stmts)-1] == "" {
 		stmts = stmts[:len(stmts)-1]
 	}
