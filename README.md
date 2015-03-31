@@ -54,11 +54,13 @@ where `curl` is the [well known command-line tool](http://curl.haxx.se/). Passin
 
 To insert an entry into the database, execute a second SQL command:
 
-    curl -L -XPOST localhost:4001/db?pretty -d '
+    curl -L -XPOST 'localhost:4001/db?pretty&explain' -d '
     INSERT INTO foo(name) VALUES("fiona")
     '
 
 The use of the URL param `pretty` is optional, and results in pretty-printed JSON responses. You can confirm that the data has been writen to the database by accessing the SQLite database directly.
+
+`explain` is also optional. If included, the response will include some basic information about the processing that took place -- how long it took, for example.
 
      $ sqlite3 ~/node.3/db.sqlite
     SQLite version 3.7.15.2 2013-01-09 11:53:05
