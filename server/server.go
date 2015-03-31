@@ -31,12 +31,12 @@ type FailedSqlStmt struct {
 }
 
 type StmtResponse struct {
-	Time     string          `json:"time"`
+	Time     string          `json:"time,omitempty"`
 	Failures []FailedSqlStmt `json:"failures"`
 }
 
 type QueryResponse struct {
-	Time     string          `json:"time"`
+	Time     string          `json:"time,omitempty"`
 	Failures []FailedSqlStmt `json:"failures"`
 	Rows     db.RowResults   `json:"rows"`
 }
@@ -125,6 +125,12 @@ func stmtParam(req *http.Request) (string, error) {
 // isPretty returns whether the HTTP response body should be pretty-printed.
 func isPretty(req *http.Request) (bool, error) {
 	return queryParam(req, "pretty")
+}
+
+// isExplain returns whether the HTTP response body should contain metainformation
+// how request processing.
+func isExplain(req *http.Request) (bool, error) {
+	return queryParam(req, "explain")
 }
 
 // isTransaction returns whether the client requested an explicit
@@ -392,7 +398,11 @@ func (s *Server) readHandler(w http.ResponseWriter, req *http.Request) {
 	}
 	duration := time.Since(startTime)
 
-	rr := QueryResponse{Time: duration.String(), Failures: failures, Rows: r}
+	rr := QueryResponse{Failures: failures, Rows: r}
+	if e, _ := isExplain(req); e {
+		rr.Time = duration.String()
+	}
+
 	pretty, _ := isPretty(req)
 	var b []byte
 	if pretty {
@@ -463,8 +473,6 @@ func (s *Server) writeHandler(w http.ResponseWriter, req *http.Request) {
 		s.metrics.snapshotCreated.Inc(1)
 	}
 
-	var startTime time.Time
-
 	// Read the value from the POST body.
 	b, err := ioutil.ReadAll(req.Body)
 	if err != nil {
@@ -487,7 +495,7 @@ func (s *Server) writeHandler(w http.ResponseWriter, req *http.Request) {
 	}
 
 	transaction, _ := isTransaction(req)
-	startTime = time.Now()
+	startTime := time.Now()
 	failures, err := s.execute(transaction, stmts)
 	if err != nil {
 		log.Logf(log.ERROR, "Database mutation failed: %s", err.Error())
@@ -496,7 +504,11 @@ func (s *Server) writeHandler(w http.ResponseWriter, req *http.Request) {
 	}
 	duration := time.Since(startTime)
 
-	wr := StmtResponse{Time: duration.String(), Failures: failures}
+	wr := StmtResponse{Failures: failures}
+	if e, _ := isExplain(req); e {
+		wr.Time = duration.String()
+	}
+
 	pretty, _ := isPretty(req)
 	if pretty {
 		b, err = json.MarshalIndent(wr, "", "    ")
