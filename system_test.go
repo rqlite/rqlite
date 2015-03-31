@@ -111,7 +111,7 @@ func TestSystem_EndToEnd(t *testing.T) {
 
 // tempfile returns a temporary path.
 func tempfile() string {
-	f, _ := ioutil.TempFile("", "influxdb-")
+	f, _ := ioutil.TempFile("", "rqlite-")
 	path := f.Name()
 	f.Close()
 	os.Remove(path)
