@@ -98,7 +98,7 @@ func main() {
 		log.Info("Profiling enabled")
 		f, err := os.Create(cpuprofile)
 		if err != nil {
-			log.Error("Unable to create path: %s", err.Error())
+			log.Logf(log.ERROR, "Unable to create path: %s", err.Error())
 		}
 		defer f.Close()
 
@@ -116,7 +116,7 @@ func main() {
 	}
 	path := flag.Arg(0)
 	if err := os.MkdirAll(path, 0744); err != nil {
-		log.Error("Unable to create path: %s", err.Error())
+		log.Logf(log.ERROR, "Unable to create path: %s", err.Error())
 	}
 
 	s := server.NewServer(path, dbfile, snapAfter, host, port)

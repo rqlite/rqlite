@@ -61,7 +61,7 @@ func (c *TransactionExecuteCommandSet) Apply(server raft.Server) (interface{}, e
 		if !commitSuccess {
 			err := db.RollbackTransaction()
 			if err != nil {
-				log.Error("Failed to rollback transaction: %s", err.Error)
+				log.Logf(log.ERROR, "Failed to rollback transaction: %s", err.Error())
 			}
 		}
 	}()

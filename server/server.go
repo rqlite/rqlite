@@ -221,7 +221,7 @@ func (s *Server) connectionString() string {
 
 // logSnapshot logs about the snapshot that was taken.
 func (s *Server) logSnapshot(err error, currentIndex, count uint64) {
-	info := fmt.Sprintf("%s: snapshot of %d events at index %d", s.connectionString, count, currentIndex)
+	info := fmt.Sprintf("%s: snapshot of %d events at index %d", s.connectionString(), count, currentIndex)
 	if err != nil {
 		log.Info("%s attempted and failed: %v", info, err)
 	} else {
@@ -247,7 +247,7 @@ func (s *Server) ListenAndServe(leader string) error {
 	log.Info("Loading latest snapshot, if any, from disk")
 	err = s.raftServer.LoadSnapshot()
 	if err != nil {
-		log.Error("Error loading snapshot: %s", err.Error())
+		log.Logf(log.ERROR, "Error loading snapshot: %s", err.Error())
 	}
 
 	transporter.Install(s.raftServer, s)
@@ -490,7 +490,7 @@ func (s *Server) writeHandler(w http.ResponseWriter, req *http.Request) {
 	startTime = time.Now()
 	failures, err := s.execute(transaction, stmts)
 	if err != nil {
-		log.Error("Database mutation failed: %s", err.Error())
+		log.Logf(log.ERROR, "Database mutation failed: %s", err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
