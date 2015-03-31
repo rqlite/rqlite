@@ -15,7 +15,7 @@ import (
 	"github.com/otoolep/rqlite/server"
 )
 
-var spinUpDelay = time.Duration(1 * time.Second)
+var spinUpDelay = time.Duration(2 * time.Second)
 
 type testServer struct {
 	host   string
