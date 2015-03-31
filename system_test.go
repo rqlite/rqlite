@@ -150,6 +150,17 @@ func TestOneNode_Test(t *testing.T) {
 	runTests(t, nodes)
 }
 
+func TestThreeNode_Test(t *testing.T) {
+	t.Skip()
+	path := tempfile()
+	defer os.RemoveAll(path)
+
+	nodes := createCluster(t, 3, "localhost", 8100, path)
+	t.Logf("3 node cluster created in %s", path)
+
+	runTests(t, nodes)
+}
+
 // tempfile returns a temporary path.
 func tempfile() string {
 	f, _ := ioutil.TempFile("", "rqlite_")
