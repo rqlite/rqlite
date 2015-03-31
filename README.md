@@ -58,9 +58,9 @@ To insert an entry into the database, execute a second SQL command:
     INSERT INTO foo(name) VALUES("fiona")
     '
 
-The use of the URL param `pretty` is optional, and results in pretty-printed JSON responses. You can confirm that the data has been writen to the database by accessing the SQLite database directly.
+The use of the URL param `pretty` is optional, and results in pretty-printed JSON responses. `explain` is also optional. If included, the response will include some basic information about the processing that took place -- how long it took, for example.
 
-`explain` is also optional. If included, the response will include some basic information about the processing that took place -- how long it took, for example.
+You can confirm that the data has been writen to the database by accessing the SQLite database directly.
 
      $ sqlite3 ~/node.3/db.sqlite
     SQLite version 3.7.15.2 2013-01-09 11:53:05
@@ -68,6 +68,7 @@ The use of the URL param `pretty` is optional, and results in pretty-printed JSO
     Enter SQL statements terminated with a ";"
     sqlite> select * from foo;
     1|fiona
+    
 Note that this is the SQLite file that is under `node 3`, which is not the node that accepted the `INSERT` operation.
 
 ### Bulk Updates
