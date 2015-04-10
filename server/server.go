@@ -556,7 +556,11 @@ func (s *Server) serveDiagnostics(w http.ResponseWriter, req *http.Request) {
 
 // serveRaftInfo returns information about the underlying Raft server
 func (s *Server) serveRaftInfo(w http.ResponseWriter, req *http.Request) {
-	peers := s.raftServer.Peers()
+	var peers []interface{}
+	for _, v := range s.raftServer.Peers() {
+		peers = append(peers, v)
+	}
+
 	info := make(map[string]interface{})
 	info["name"] = s.raftServer.Name()
 	info["state"] = s.raftServer.State()
