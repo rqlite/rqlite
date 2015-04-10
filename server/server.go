@@ -155,16 +155,16 @@ func NewServerMetrics() *ServerMetrics {
 		snapshotCreated:   metrics.NewCounter(),
 	}
 
-	m.registry.Register("join.success", m.joinSuccess)
-	m.registry.Register("join.fail", m.joinFail)
-	m.registry.Register("query.Received", m.queryReceived)
-	m.registry.Register("query.success", m.querySuccess)
-	m.registry.Register("query.fail", m.queryFail)
-	m.registry.Register("execute.Received", m.executeReceived)
-	m.registry.Register("execute.tx.received", m.executeTxReceived)
-	m.registry.Register("execute.success", m.executeSuccess)
-	m.registry.Register("execute.fail", m.executeFail)
-	m.registry.Register("snapshot.created", m.snapshotCreated)
+	m.registry.Register("join_success", m.joinSuccess)
+	m.registry.Register("join_fail", m.joinFail)
+	m.registry.Register("query_received", m.queryReceived)
+	m.registry.Register("query_success", m.querySuccess)
+	m.registry.Register("query_fail", m.queryFail)
+	m.registry.Register("execute_received", m.executeReceived)
+	m.registry.Register("execute_tx_received", m.executeTxReceived)
+	m.registry.Register("execute_success", m.executeSuccess)
+	m.registry.Register("execute_fail", m.executeFail)
+	m.registry.Register("snapshot_created", m.snapshotCreated)
 	return m
 }
 
