@@ -92,7 +92,7 @@ func main() {
 	}
 
 	dataPath := flag.Arg(0)
-	createFile(dataPath)
+	createDir(dataPath)
 
 	s := server.NewServer(dataPath, dbfile, snapAfter, host, port)
 	go func() {
@@ -137,6 +137,13 @@ func createFile(path string) *os.File {
 	}
 
 	return f
+}
+
+func createDir(path string) {
+	if err := os.MkdirAll(path, 0744); err != nil {
+		log.Errorf("Unable to create path: %s", err.Error())
+		os.Exit(1)
+	}
 }
 
 func reportLaunch() {
