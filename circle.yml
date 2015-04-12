@@ -1,9 +1,16 @@
 dependencies:
     pre:
-        - go get -u golang.org/x/tools/cmd/vet;
+        - go get -u github.com/alecthomas/gometalinter
+        - gometalinter --install
 
 test:
     override:
-        - go tool vet .
+        - gometalinter .
+        - gometalinter ./cmd/rqlite-cli
+        - gometalinter ./command
+        - gometalinter ./db
+        - gometalinter ./interfaces
+        - gometalinter ./log
+        - gometalinter ./server
         - go test -timeout 60s -v ./...
         - GORACE="halt_on_error=1" go test -race -timeout 120s -v ./...
