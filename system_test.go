@@ -96,9 +96,26 @@ func writeCluster(t *testing.T, nodes []*testServer, body string) {
 
 // queryCluster performs the given query against each node in the given cluster.
 // Testing fails if the response returned from any node does not match the expected
-// string.
+// string after 10 attempts, waiting 200 milliseconds between each fetch. These
+// delays ensure consensus is reached.
 func queryCluster(t *testing.T, nodes []*testServer, query, expected string) {
+	for _, n := range nodes {
+		numAttempts := 0
 
+		for {
+			numAttempts++
+			e := doGet(t, n.URL(), query)
+			if expected != "" && e != expected {
+				if numAttempts > 10 {
+					t.Errorf("'%s' failed.\ngot: %s\nexp:%s\n", query, e, expected)
+				} else {
+					time.Sleep(200 * time.Millisecond)
+				}
+			} else {
+				break
+			}
+		}
+	}
 }
 
 func runTests(t *testing.T, nodes []*testServer) {
@@ -116,16 +133,18 @@ func runTests(t *testing.T, nodes []*testServer) {
 			write: "CREATE TABLE foo (id integer not null primary key, name text)",
 		},
 		{
-			name:  "select from empty table",
-			query: "SELECT * FROM foo",
+			name:     "select from empty table",
+			query:    "SELECT * FROM foo",
+			expected: `{"failures":[],"rows":[]}`,
 		},
 		{
 			name:  "insert one record",
 			query: `INSERT INTO foo(name) VALUES("fiona")`,
 		},
 		{
-			name:  "select after 1 record inserted",
-			query: "SELECT * FROM foo",
+			name:     "select after 1 record inserted",
+			query:    "SELECT * FROM foo",
+			expected: `{"failures":[],"rows":[{"id":"1","name":"fiona"}]}`,
 		},
 	}
 
