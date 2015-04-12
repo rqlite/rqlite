@@ -72,10 +72,10 @@ func createCluster(t *testing.T, numNodes int, host string, basePort int, path s
 	// Create remaining nodes in cluster.
 	for i := 1; i < numNodes; i++ {
 		port := basePort + i
-		nodePath := filepath.Join(path, strconv.Itoa(i))
+		nodePath = filepath.Join(path, strconv.Itoa(i))
 		mustMkDirAll(nodePath)
 
-		s := server.NewServer(nodePath, "db.sqlite", 100000, host, port)
+		s = server.NewServer(nodePath, "db.sqlite", 100000, host, port)
 		go func() {
 			t.Fatal(s.ListenAndServe(host + ":" + strconv.Itoa(basePort)))
 		}()
