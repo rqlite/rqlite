@@ -161,16 +161,17 @@ func NewMetrics() *Metrics {
 		snapshotCreated:   metrics.NewCounter(),
 	}
 
-	_ = m.registry.Register("join.success", m.joinSuccess)
-	_ = m.registry.Register("join.fail", m.joinFail)
-	_ = m.registry.Register("query.Received", m.queryReceived)
-	_ = m.registry.Register("query.success", m.querySuccess)
-	_ = m.registry.Register("query.fail", m.queryFail)
-	_ = m.registry.Register("execute.Received", m.executeReceived)
-	_ = m.registry.Register("execute.tx.received", m.executeTxReceived)
-	_ = m.registry.Register("execute.success", m.executeSuccess)
-	_ = m.registry.Register("execute.fail", m.executeFail)
-	_ = m.registry.Register("snapshot.created", m.snapshotCreated)
+	_ = m.registry.Register("join_success", m.joinSuccess)
+	_ = m.registry.Register("join_fail", m.joinFail)
+	_ = m.registry.Register("query_received", m.queryReceived)
+	_ = m.registry.Register("query_success", m.querySuccess)
+	_ = m.registry.Register("query_fail", m.queryFail)
+	_ = m.registry.Register("execute_received", m.executeReceived)
+	_ = m.registry.Register("execute_tx_received", m.executeTxReceived)
+	_ = m.registry.Register("execute_success", m.executeSuccess)
+	_ = m.registry.Register("execute_fail", m.executeFail)
+	_ = m.registry.Register("snapshot_created", m.snapshotCreated)
+
 	return m
 }
 
