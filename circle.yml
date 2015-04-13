@@ -1,6 +1,6 @@
 dependencies:
     pre:
-        - go get -u github.com/alecthomas/gometalinter
+        - go get github.com/alecthomas/gometalinter
         - gometalinter --install
 
 test:
