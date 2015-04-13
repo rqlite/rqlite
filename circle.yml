@@ -4,7 +4,7 @@ dependencies:
         - gometalinter --install
 
 test:
-    override:
+    pre:
         - gometalinter .
         - gometalinter ./cmd/rqlite-cli
         - gometalinter ./command
@@ -12,5 +12,6 @@ test:
         - gometalinter ./interfaces
         - gometalinter ./log
         - gometalinter ./server
+    override:
         - go test -timeout 60s -v ./...
         - GORACE="halt_on_error=1" go test -race -timeout 120s -v ./...
