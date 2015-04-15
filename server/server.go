@@ -614,6 +614,14 @@ func (s *Server) leaderRedirect(w http.ResponseWriter, r *http.Request) {
 	peers := s.raftServer.Peers()
 	leader := peers[s.raftServer.Leader()]
 
+	if leader == nil {
+		// No leader available, give up.
+		log.Error("attempted leader redirection, but no leader available")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		w.Write([]byte("no leader available"))
+		return
+	}
+
 	var u string
 	for _, p := range peers {
 		if p.Name == leader.Name {
