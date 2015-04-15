@@ -9,6 +9,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
+	"os"
 	"path"
 	"path/filepath"
 	"strings"
@@ -258,7 +259,9 @@ func (s *Server) ListenAndServe(leader string) error {
 	}
 
 	log.Info("Loading latest snapshot, if any, from disk")
-	if err := s.raftServer.LoadSnapshot(); err != nil {
+	if err := s.raftServer.LoadSnapshot(); err != nil && os.IsNotExist(err) {
+		log.Info("no snapshot found")
+	} else if err != nil {
 		log.Errorf("Error loading snapshot: %s", err.Error())
 	}
 
