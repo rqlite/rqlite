@@ -484,13 +484,7 @@ func (s *Server) writeHandler(w http.ResponseWriter, req *http.Request) {
 
 	currentIndex := s.raftServer.CommitIndex()
 	count := currentIndex - s.snapConf.lastIndex
-	if uint64(count) > s.snapConf.snapshotAfter {
-		log.Info("Committed log entries snapshot threshold reached, starting snapshot")
-		err := s.raftServer.TakeSnapshot()
-		s.logSnapshot(err, currentIndex, count)
-		s.snapConf.lastIndex = currentIndex
-		s.metrics.snapshotCreated.Inc(1)
-	}
+	s.handleSnapshotThreshold(count, currentIndex)
 
 	// Read the value from the POST body.
 	b, err := ioutil.ReadAll(req.Body)
@@ -630,4 +624,14 @@ func (s *Server) leaderRedirect(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	http.Redirect(w, r, u+r.URL.Path, http.StatusTemporaryRedirect)
+}
+
+func (s *Server) handleSnapshotThreshold(count, index uint64) {
+	if count > s.snapConf.snapshotAfter {
+		log.Info("Committed log entries snapshot threshold reached, starting snapshot")
+		err := s.raftServer.TakeSnapshot()
+		s.logSnapshot(err, index, count)
+		s.snapConf.lastIndex = index
+		s.metrics.snapshotCreated.Inc(1)
+	}
 }
