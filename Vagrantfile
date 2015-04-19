@@ -8,7 +8,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
 
   config.vm.define "rqlite" do |rqlite|
     config.vm.network "private_network", ip: "192.168.200.10"
-    config.vm.provision :shell, :path => "setup.sh"
+    config.vm.provision :shell, :path => "vagrant_setup.sh"
     config.vm.provision :shell, :inline => "rqlite -logfile /vagrant/rqlite1.log ~/node.1 &"
 
     if not ENV['CLUSTER_SIZE'].nil?
