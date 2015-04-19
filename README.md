@@ -21,17 +21,19 @@ This starts a rqlite server listening on localhost, port 4001. This single node 
 
     $GOPATH/bin/rqlite -h
 
-Alternatively you can use [Vagrant](https://www.vagrantup.com/) environment. To do so, simply [install Vagrant](https://docs.vagrantup.com/v2/installation/index.html) on your machine and execute being inside rqlite repository:
+### Vagrant
+Alternatively you can use a [Vagrant](https://www.vagrantup.com/) environment. To do so, simply [install Vagrant](https://docs.vagrantup.com/v2/installation/index.html) on your machine, a virtualization system such as VirtualBox, and execute the following commands:
 
 ~~~bash
-$ CLUSTER_SIZE=7 vagrant up rqlite
+$ cd $GOPATH/src/github.com/otoolep/rqlite
+$ CLUSTER_SIZE=3 vagrant up rqlite
 ~~~
 
-This will start Vagrant box and install rqlite with all required dependencies. After this is done, there will be formed a cluster with number of nodes specifed by `CLUSTER_SIZE` variable.
+This will start  a Vagrant box and install rqlite with all required dependencies. This will form a cluster with of `CLUSTER_SIZE` nodes.
 
-To execute queries against started cluster you can either ssh directly to the Vagrant box via `vagrant ssh rqlite` or execute them from you local box accessing cluster at `192.168.200.10` IP and any port within a range `[4001, 4001 + CLUSTER_SIZE -1]`.
+To execute queries against the cluster you can either ssh directly to the Vagrant box via `vagrant ssh rqlite` or execute the commands directly from your local box, accessing the cluster at `192.168.200.10` IP and any port within a range `[4001, 4001 + CLUSTER_SIZE -1]`.
 
-To terminate Vagrant box simply execute:
+To terminate the Vagrant box simply execute:
 
 ~~~bash
 $ vagrant destroy rqlite
