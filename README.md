@@ -29,7 +29,7 @@ $ cd $GOPATH/src/github.com/otoolep/rqlite
 $ CLUSTER_SIZE=3 vagrant up rqlite
 ~~~
 
-This will start  a Vagrant box and install rqlite with all required dependencies. This will form a cluster with of `CLUSTER_SIZE` nodes.
+This will start a Vagrant box and install rqlite with all required dependencies. This will form a cluster with `CLUSTER_SIZE` nodes.
 
 To execute queries against the cluster you can either ssh directly to the Vagrant box via `vagrant ssh rqlite` or execute the commands directly from your local box, accessing the cluster at `192.168.200.10` IP and any port within a range `[4001, 4001 + CLUSTER_SIZE -1]`.
 
