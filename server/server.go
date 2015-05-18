@@ -16,8 +16,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/goraft/raft"
 	"github.com/gorilla/mux"
+	"github.com/otoolep/raft"
 	"github.com/otoolep/rqlite/command"
 	"github.com/otoolep/rqlite/db"
 	"github.com/otoolep/rqlite/interfaces"
