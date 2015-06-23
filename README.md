@@ -1,4 +1,4 @@
-rqlite [![Circle CI](https://circleci.com/gh/otoolep/rqlite/tree/master.svg?style=svg)](https://circleci.com/gh/otoolep/rqlite/tree/master)
+rqlite [![Circle CI](https://circleci.com/gh/otoolep/rqlite/tree/master.svg?style=svg)](https://circleci.com/gh/otoolep/rqlite/tree/master) [![GoDoc](https://godoc.org/github.com/otoolep/rqlite?status.png)](https://godoc.org/github.com/otoolep/rqlite)
 ======
 
 *Detailed background on rqlite can be found on [this blog post](http://www.philipotoole.com/replicating-sqlite-using-raft-consensus).*
