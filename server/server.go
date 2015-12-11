@@ -313,6 +313,7 @@ func (s *Server) ListenAndServe(leader string) error {
 	s.router.HandleFunc("/diagnostics", s.serveDiagnostics).Methods("GET")
 	s.router.HandleFunc("/raft", s.serveRaftInfo).Methods("GET")
 	s.router.HandleFunc("/db", s.readHandler).Methods("GET")
+	s.router.HandleFunc("/db/{tablename}", s.TableReadHandler).Methods("GET")
 	s.router.HandleFunc("/db", s.writeHandler).Methods("POST")
 	s.router.HandleFunc("/join", s.joinHandler).Methods("POST")
 
@@ -389,7 +390,7 @@ func (s *Server) joinHandler(w http.ResponseWriter, req *http.Request) {
 }
 
 func (s *Server) readHandler(w http.ResponseWriter, req *http.Request) {
-	log.Tracef("readHandler for URL: %s", req.URL)
+	log.Infof("readHandler for URL: %s", req.URL)
 	s.metrics.queryReceived.Inc(1)
 
 	var failures = make([]FailedSqlStmt, 0)
@@ -436,7 +437,47 @@ func (s *Server) readHandler(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 }
+func (s *Server) TableReadHandler(w http.ResponseWriter, req *http.Request) {
+	log.Infof("TableReadHandler for URL: %s", req.URL)
+	s.metrics.queryReceived.Inc(1)
 
+	var failures = make([]FailedSqlStmt, 0)
+	vars := mux.Vars(req)
+	tablename := vars["tablename"]
+	log.Infof("Getting data from table %s", tablename)
+	startTime := time.Now()
+	r, err := s.db.Query('Select * from '+tablename)
+	if err != nil {
+		log.Tracef("Bad SQL statement: %s", err.Error())
+		s.metrics.queryFail.Inc(1)
+		failures = append(failures, FailedSqlStmt{stmt, err.Error()})
+	} else {
+		s.metrics.querySuccess.Inc(1)
+	}
+	duration := time.Since(startTime)
+
+	rr := QueryResponse{Failures: failures, Rows: r}
+	if e, _ := isExplain(req); e {
+		rr.Time = duration.String()
+	}
+
+	pretty, _ := isPretty(req)
+	var b []byte
+	if pretty {
+		b, err = json.MarshalIndent(rr, "", "    ")
+	} else {
+		b, err = json.Marshal(rr)
+	}
+	if err != nil {
+		log.Tracef("Failed to marshal JSON data: %s", err.Error())
+		http.Error(w, err.Error(), http.StatusBadRequest) // Internal error actually
+	} else {
+		_, err = w.Write([]byte(b))
+		if err != nil {
+			log.Errorf("Error writting JSON data: %s", err.Error())
+		}
+	}
+}
 func (s *Server) execute(tx bool, stmts []string) ([]FailedSqlStmt, error) {
 	var failures = make([]FailedSqlStmt, 0)
 
