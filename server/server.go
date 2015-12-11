@@ -313,7 +313,7 @@ func (s *Server) ListenAndServe(leader string) error {
 	s.router.HandleFunc("/diagnostics", s.serveDiagnostics).Methods("GET")
 	s.router.HandleFunc("/raft", s.serveRaftInfo).Methods("GET")
 	s.router.HandleFunc("/db", s.readHandler).Methods("GET")
-	s.router.HandleFunc("/db/{tablename}", s.TableReadHandler).Methods("GET")
+	s.router.HandleFunc("/db/{tablename}/", s.tableReadHandler).Methods("GET")
 	s.router.HandleFunc("/db", s.writeHandler).Methods("POST")
 	s.router.HandleFunc("/join", s.joinHandler).Methods("POST")
 
@@ -437,12 +437,12 @@ func (s *Server) readHandler(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 }
-func (s *Server) TableReadHandler(w http.ResponseWriter, req *http.Request) {
-	log.Infof("TableReadHandler for URL: %s", req.URL)
+func (s *Server) tableReadHandler(w http.ResponseWriter, req *http.Request) {
+	log.Infof("tableReadHandler for URL: %s", req.URL)
 	s.metrics.queryReceived.Inc(1)
 
 	var failures = make([]FailedSqlStmt, 0)
-	vars := mux.Vars(req)
+	vars := s.Vars(req)
 	tablename := vars["tablename"]
 	log.Infof("Getting data from table %s", tablename)
 	startTime := time.Now()
