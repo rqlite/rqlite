@@ -313,7 +313,7 @@ func (s *Server) ListenAndServe(leader string) error {
 	s.router.HandleFunc("/diagnostics", s.serveDiagnostics).Methods("GET")
 	s.router.HandleFunc("/raft", s.serveRaftInfo).Methods("GET")
 	s.router.HandleFunc("/db", s.readHandler).Methods("GET")
-	s.router.HandleFunc("/db/{tablename}/", s.tableReadHandler).Methods("GET")
+	s.router.HandleFunc("/db/{tablename}", s.tableReadHandler).Methods("GET")
 	s.router.HandleFunc("/db", s.writeHandler).Methods("POST")
 	s.router.HandleFunc("/join", s.joinHandler).Methods("POST")
 
@@ -442,11 +442,12 @@ func (s *Server) tableReadHandler(w http.ResponseWriter, req *http.Request) {
 	s.metrics.queryReceived.Inc(1)
 
 	var failures = make([]FailedSqlStmt, 0)
-	vars := s.Vars(req)
+	vars := mux.Vars(req)
 	tablename := vars["tablename"]
 	log.Infof("Getting data from table %s", tablename)
 	startTime := time.Now()
-	r, err := s.db.Query('Select * from '+tablename)
+	stmt :="Select * from "+tablename
+	r, err := s.db.Query(stmt)
 	if err != nil {
 		log.Tracef("Bad SQL statement: %s", err.Error())
 		s.metrics.queryFail.Inc(1)
