@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	_ "github.com/mattn/go-sqlite3" // required blank import
-	"github.com/otoolep/rqlite/log"
+	"github.com/jsrCorp/rqlite/log"
 )
 
 // DB is the SQL database.

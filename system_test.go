@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/otoolep/rqlite/server"
+	"github.com/jsrCorp/rqlite/server"
 )
 
 var spinUpDelay = time.Duration(2 * time.Second)

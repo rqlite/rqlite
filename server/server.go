@@ -18,10 +18,10 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/otoolep/raft"
-	"github.com/otoolep/rqlite/command"
-	"github.com/otoolep/rqlite/db"
-	"github.com/otoolep/rqlite/interfaces"
-	"github.com/otoolep/rqlite/log"
+	"github.com/jsrCorp/rqlite/command"
+	"github.com/jsrCorp/rqlite/db"
+	"github.com/jsrCorp/rqlite/interfaces"
+	"github.com/jsrCorp/rqlite/log"
 	"github.com/rcrowley/go-metrics"
 )
 

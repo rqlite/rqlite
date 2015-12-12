@@ -23,8 +23,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/otoolep/rqlite/log"
-	"github.com/otoolep/rqlite/server"
+	"github.com/jsrCorp/rqlite/log"
+	"github.com/jsrCorp/rqlite/server"
 )
 
 var host string
