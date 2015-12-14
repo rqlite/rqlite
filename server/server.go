@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"reflect"
 
 	"github.com/gorilla/mux"
 	"github.com/otoolep/raft"
@@ -315,6 +316,7 @@ func (s *Server) ListenAndServe(leader string) error {
 	s.router.HandleFunc("/db", s.readHandler).Methods("GET")
 	s.router.HandleFunc("/db/{tablename}", s.tableReadHandler).Methods("GET")
 	s.router.HandleFunc("/db", s.writeHandler).Methods("POST")
+	s.router.HandleFunc("/db/ingest", s.tableWriteHandler).Methods("POST")
 	s.router.HandleFunc("/join", s.joinHandler).Methods("POST")
 
 	log.Infof("Listening at %s", s.connectionString())
@@ -586,6 +588,127 @@ func (s *Server) writeHandler(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
+type Anchors struct {
+	DataPoints []interface{} `json:"data"`
+}
+
+type Stringer interface {
+    String() string
+}
+
+func (s *Server) tableWriteHandler(w http.ResponseWriter, req *http.Request) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	if s.raftServer.State() != "leader" {
+		s.leaderRedirect(w, req)
+		return
+	}
+
+	log.Infof("tableWriteHandler for URL: %s", req.URL)
+	s.metrics.executeReceived.Inc(1)
+
+	currentIndex := s.raftServer.CommitIndex()
+	count := currentIndex - s.snapConf.lastIndex
+	if uint64(count) > s.snapConf.snapshotAfter {
+		log.Info("Committed log entries snapshot threshold reached, starting snapshot")
+		err := s.raftServer.TakeSnapshot()
+		s.logSnapshot(err, currentIndex, count)
+		s.snapConf.lastIndex = currentIndex
+		s.metrics.snapshotCreated.Inc(1)
+	}
+
+	// Read the value from the POST body.
+	b, err := ioutil.ReadAll(req.Body)
+	if err != nil {
+		log.Infof("Bad HTTP request: %s", err.Error())
+		s.metrics.executeFail.Inc(1)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	anchors := Anchors{}
+	if err := json.Unmarshal(b, &anchors); err != nil {
+		log.Infof("Parsing error : %s", err.Error())
+		s.metrics.executeFail.Inc(1)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	log.Infof("Parsed data is %s", anchors)
+	
+	var stmts []string
+	i :=0
+	for _, dataPoint := range anchors.DataPoints {
+      log.Infof("Datapoint is %s" , dataPoint)
+      table := dataPoint.(map[string]interface{})["table"]
+      payload := dataPoint.(map[string]interface{})["payload"]
+      log.Infof("Table Name is %s" , table)
+      log.Infof("Payload is %s" , payload)
+      log.Infof("Payload type is %s",reflect.TypeOf(payload))
+      log.Infof("Table type is %s",reflect.TypeOf(table))
+      dataRows := payload.([]interface{})
+      for _, rowVal := range dataRows {
+      	log.Infof("Row value is %s",rowVal.(map[string]interface{}))
+      	keys := make([]string, len(rowVal.(map[string]interface{})))
+      	values := make([]string, len(rowVal.(map[string]interface{})))
+		keyCount := 0
+		for k,v := range rowVal.(map[string]interface{}) {
+			keys[keyCount] = k
+			var strVal = v.(string)
+			values[keyCount] = strVal
+			log.Infof("Adding Key %s and %s value to query", k,v)
+    		keyCount++
+    	}
+    	columns := strings.Join(keys,",")
+    	rows := strings.Join(values,",")
+    	log.Infof("Columns are %s", columns)
+    	log.Infof("Row Values are %s", rows)
+    	stmts[i] = "INSERT INTO "+table.(string)+"("+columns+") VALUES("+rows+")"
+    	i++
+      }
+  	}
+	// stmts := strings.Split(string(b), ";")
+	// if stmts[len(stmts)-1] == "" {
+	// 	stmts = stmts[:len(stmts)-1]
+	// }
+
+	log.Tracef("Execute statement contains %d commands", len(stmts))
+	if len(stmts) == 0 {
+		log.Trace("No database execute commands supplied")
+		s.metrics.executeFail.Inc(1)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	transaction, _ := isTransaction(req)
+	startTime := time.Now()
+	failures, err := s.execute(transaction, stmts)
+	if err != nil {
+		log.Errorf("Database mutation failed: %s", err.Error())
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	duration := time.Since(startTime)
+
+	wr := StmtResponse{Failures: failures}
+	if e, _ := isExplain(req); e {
+		wr.Time = duration.String()
+	}
+
+	pretty, _ := isPretty(req)
+	if pretty {
+		b, err = json.MarshalIndent(wr, "", "    ")
+	} else {
+		b, err = json.Marshal(wr)
+	}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	} else {
+		_, err = w.Write([]byte(b))
+		if err != nil {
+			log.Errorf("Error writting JSON data: %s", err.Error())
+		}
+	}
+}
 // serveStatistics returns the statistics for the program
 func (s *Server) serveStatistics(w http.ResponseWriter, req *http.Request) {
 	statistics := make(map[string]interface{})
