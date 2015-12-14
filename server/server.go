@@ -635,35 +635,7 @@ func (s *Server) tableWriteHandler(w http.ResponseWriter, req *http.Request) {
 	}
 	log.Debugf("Parsed data is %s", anchors)
 	
-	var stmts []string
-	for _, dataPoint := range anchors.DataPoints {
-      log.Debugf("Datapoint is %s" , dataPoint)
-      table := dataPoint.(map[string]interface{})["table"].(string)
-      payload := dataPoint.(map[string]interface{})["payload"]
-      log.Debugf("Table Name is %s" , table)
-      log.Debugf("Payload is %s" , payload)
-      log.Debugf("Payload type is %s",reflect.TypeOf(payload))
-      log.Debugf("Table type is %s",reflect.TypeOf(table))
-      dataRows := payload.([]interface{})
-      for _, rowVal := range dataRows {
-      	log.Debugf("Row value is %s",rowVal.(map[string]interface{}))
-      	keys := make([]string, len(rowVal.(map[string]interface{})))
-      	values := make([]string, len(rowVal.(map[string]interface{})))
-		keyCount := 0
-		for k,v := range rowVal.(map[string]interface{}) {
-			keys[keyCount] = "\""+k+"\""
-			var strVal = "\""+v.(string)+"\""
-			values[keyCount] = strVal
-			log.Debugf("Adding Key %s and %s value to query", k,v)
-    		keyCount++
-    	}
-    	columns := strings.Join(keys,",")
-    	rows := strings.Join(values,",")
-    	log.Debugf("Columns are %s", columns)
-    	log.Debugf("Row Values are %s", rows)
-    	stmts = append(stmts,"INSERT INTO "+table+"("+columns+") VALUES("+rows+")")
-      }
-  	}
+	var stmts []string = convertToQueries(&anchors)
 
 	log.Tracef("Execute statement contains %d commands", len(stmts))
 	if len(stmts) == 0 {
@@ -789,4 +761,37 @@ func (s *Server) leaderRedirect(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	http.Redirect(w, r, u+r.URL.Path, http.StatusTemporaryRedirect)
+}
+
+func convertToQueries(anchors *Anchors) [] string {
+	var stmts []string
+	for _, dataPoint := range anchors.DataPoints {
+      log.Debugf("Datapoint is %s" , dataPoint)
+      table := dataPoint.(map[string]interface{})["table"].(string)
+      payload := dataPoint.(map[string]interface{})["payload"]
+      log.Debugf("Table Name is %s" , table)
+      log.Debugf("Payload is %s" , payload)
+      log.Debugf("Payload type is %s",reflect.TypeOf(payload))
+      log.Debugf("Table type is %s",reflect.TypeOf(table))
+      dataRows := payload.([]interface{})
+      for _, rowVal := range dataRows {
+      	log.Debugf("Row value is %s",rowVal.(map[string]interface{}))
+      	keys := make([]string, len(rowVal.(map[string]interface{})))
+      	values := make([]string, len(rowVal.(map[string]interface{})))
+		keyCount := 0
+		for k,v := range rowVal.(map[string]interface{}) {
+			keys[keyCount] = "\""+k+"\""
+			var strVal = "\""+v.(string)+"\""
+			values[keyCount] = strVal
+			log.Debugf("Adding Key %s and %s value to query", k,v)
+    		keyCount++
+    	}
+    	columns := strings.Join(keys,",")
+    	rows := strings.Join(values,",")
+    	log.Debugf("Columns are %s", columns)
+    	log.Debugf("Row Values are %s", rows)
+    	stmts = append(stmts,"INSERT INTO "+table+"("+columns+") VALUES("+rows+")")
+      }
+  	}
+  	return stmts
 }
