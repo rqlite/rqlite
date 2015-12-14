@@ -628,7 +628,7 @@ func (s *Server) tableWriteHandler(w http.ResponseWriter, req *http.Request) {
 	}
 	anchors := Anchors{}
 	if err := json.Unmarshal(b, &anchors); err != nil {
-		log.Infof("Parsing error : %s", err.Error())
+		log.Errorf("Parsing error : %s", err.Error())
 		s.metrics.executeFail.Inc(1)
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -636,15 +636,14 @@ func (s *Server) tableWriteHandler(w http.ResponseWriter, req *http.Request) {
 	log.Infof("Parsed data is %s", anchors)
 	
 	var stmts []string
-	i :=0
 	for _, dataPoint := range anchors.DataPoints {
-      log.Infof("Datapoint is %s" , dataPoint)
-      table := dataPoint.(map[string]interface{})["table"]
+      log.Debugf("Datapoint is %s" , dataPoint)
+      table := dataPoint.(map[string]interface{})["table"].(string)
       payload := dataPoint.(map[string]interface{})["payload"]
-      log.Infof("Table Name is %s" , table)
-      log.Infof("Payload is %s" , payload)
-      log.Infof("Payload type is %s",reflect.TypeOf(payload))
-      log.Infof("Table type is %s",reflect.TypeOf(table))
+      log.Debugf("Table Name is %s" , table)
+      log.Debugf("Payload is %s" , payload)
+      log.Debugf("Payload type is %s",reflect.TypeOf(payload))
+      log.Debugf("Table type is %s",reflect.TypeOf(table))
       dataRows := payload.([]interface{})
       for _, rowVal := range dataRows {
       	log.Infof("Row value is %s",rowVal.(map[string]interface{}))
@@ -652,24 +651,19 @@ func (s *Server) tableWriteHandler(w http.ResponseWriter, req *http.Request) {
       	values := make([]string, len(rowVal.(map[string]interface{})))
 		keyCount := 0
 		for k,v := range rowVal.(map[string]interface{}) {
-			keys[keyCount] = k
-			var strVal = v.(string)
+			keys[keyCount] = "\""+k+"\""
+			var strVal = "\""+v.(string)+"\""
 			values[keyCount] = strVal
-			log.Infof("Adding Key %s and %s value to query", k,v)
+			log.Debugf("Adding Key %s and %s value to query", k,v)
     		keyCount++
     	}
     	columns := strings.Join(keys,",")
     	rows := strings.Join(values,",")
-    	log.Infof("Columns are %s", columns)
-    	log.Infof("Row Values are %s", rows)
-    	stmts[i] = "INSERT INTO "+table.(string)+"("+columns+") VALUES("+rows+")"
-    	i++
+    	log.Debugf("Columns are %s", columns)
+    	log.Debugf("Row Values are %s", rows)
+    	stmts = append(stmts,"INSERT INTO "+table+"("+columns+") VALUES("+rows+")")
       }
   	}
-	// stmts := strings.Split(string(b), ";")
-	// if stmts[len(stmts)-1] == "" {
-	// 	stmts = stmts[:len(stmts)-1]
-	// }
 
 	log.Tracef("Execute statement contains %d commands", len(stmts))
 	if len(stmts) == 0 {
