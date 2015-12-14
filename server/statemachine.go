@@ -4,7 +4,7 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/jsrCorp/rqlite/log"
+	"github.com/otoolep/rqlite/log"
 )
 
 // DbStateMachine contains the DB path.

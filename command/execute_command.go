@@ -2,9 +2,9 @@ package command
 
 import (
 	"github.com/otoolep/raft"
-	"github.com/jsrCorp/rqlite/db"
+	"github.com/otoolep/rqlite/db"
 
-	"github.com/jsrCorp/rqlite/log"
+	"github.com/otoolep/rqlite/log"
 )
 
 // ExecuteCommand encapsulates a sqlite statement.

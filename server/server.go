@@ -19,10 +19,10 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/otoolep/raft"
-	"github.com/jsrCorp/rqlite/command"
-	"github.com/jsrCorp/rqlite/db"
-	"github.com/jsrCorp/rqlite/interfaces"
-	"github.com/jsrCorp/rqlite/log"
+	"github.com/otoolep/rqlite/command"
+	"github.com/otoolep/rqlite/db"
+	"github.com/otoolep/rqlite/interfaces"
+	"github.com/otoolep/rqlite/log"
 	"github.com/rcrowley/go-metrics"
 )
 
@@ -633,7 +633,7 @@ func (s *Server) tableWriteHandler(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	log.Infof("Parsed data is %s", anchors)
+	log.Debugf("Parsed data is %s", anchors)
 	
 	var stmts []string
 	for _, dataPoint := range anchors.DataPoints {
@@ -646,7 +646,7 @@ func (s *Server) tableWriteHandler(w http.ResponseWriter, req *http.Request) {
       log.Debugf("Table type is %s",reflect.TypeOf(table))
       dataRows := payload.([]interface{})
       for _, rowVal := range dataRows {
-      	log.Infof("Row value is %s",rowVal.(map[string]interface{}))
+      	log.Debugf("Row value is %s",rowVal.(map[string]interface{}))
       	keys := make([]string, len(rowVal.(map[string]interface{})))
       	values := make([]string, len(rowVal.(map[string]interface{})))
 		keyCount := 0

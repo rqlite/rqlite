@@ -23,7 +23,7 @@ import (
 	"strings"
 	"time"
 	
-	"github.com/jsrCorp/rqlite/log"
+	"github.com/otoolep/rqlite/log"
 	"github.com/jsrCorp/rqlite/server"
 )
 
