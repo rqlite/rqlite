@@ -316,7 +316,7 @@ func (s *Server) ListenAndServe(leader string) error {
 	s.router.HandleFunc("/db", s.readHandler).Methods("GET")
 	s.router.HandleFunc("/db/{tablename}", s.tableReadHandler).Methods("GET")
 	s.router.HandleFunc("/db", s.writeHandler).Methods("POST")
-	s.router.HandleFunc("/db/ingest", s.tableWriteHandler).Methods("POST")
+	s.router.HandleFunc("/db/bulk", s.tableWriteHandler).Methods("POST")
 	s.router.HandleFunc("/join", s.joinHandler).Methods("POST")
 
 	log.Infof("Listening at %s", s.connectionString())
@@ -392,7 +392,7 @@ func (s *Server) joinHandler(w http.ResponseWriter, req *http.Request) {
 }
 
 func (s *Server) readHandler(w http.ResponseWriter, req *http.Request) {
-	log.Infof("readHandler for URL: %s", req.URL)
+	log.Tracef("readHandler for URL: %s", req.URL)
 	s.metrics.queryReceived.Inc(1)
 
 	var failures = make([]FailedSqlStmt, 0)
@@ -439,14 +439,14 @@ func (s *Server) readHandler(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 }
-func (s *Server) tableReadHandler(w http.ResponseWriter, req *http.Request) {
-	log.Infof("tableReadHandler for URL: %s", req.URL)
+func (s *Tracef) tableReadHandler(w http.ResponseWriter, req *http.Request) {
+	log.Tracef("tableReadHandler for URL: %s", req.URL)
 	s.metrics.queryReceived.Inc(1)
 
 	var failures = make([]FailedSqlStmt, 0)
 	vars := mux.Vars(req)
 	tablename := vars["tablename"]
-	log.Infof("Getting data from table %s", tablename)
+	log.Tracef("Getting data from table %s", tablename)
 	startTime := time.Now()
 	stmt :="Select * from "+tablename
 	r, err := s.db.Query(stmt)
@@ -472,7 +472,7 @@ func (s *Server) tableReadHandler(w http.ResponseWriter, req *http.Request) {
 		b, err = json.Marshal(rr)
 	}
 	if err != nil {
-		log.Tracef("Failed to marshal JSON data: %s", err.Error())
+		log.Errorf("Failed to marshal JSON data: %s", err.Error())
 		http.Error(w, err.Error(), http.StatusBadRequest) // Internal error actually
 	} else {
 		_, err = w.Write([]byte(b))
@@ -605,7 +605,7 @@ func (s *Server) tableWriteHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	log.Infof("tableWriteHandler for URL: %s", req.URL)
+	log.Tracef("tableWriteHandler for URL: %s", req.URL)
 	s.metrics.executeReceived.Inc(1)
 
 	currentIndex := s.raftServer.CommitIndex()
@@ -621,7 +621,7 @@ func (s *Server) tableWriteHandler(w http.ResponseWriter, req *http.Request) {
 	// Read the value from the POST body.
 	b, err := ioutil.ReadAll(req.Body)
 	if err != nil {
-		log.Infof("Bad HTTP request: %s", err.Error())
+		log.Tracef("Bad HTTP request: %s", err.Error())
 		s.metrics.executeFail.Inc(1)
 		w.WriteHeader(http.StatusBadRequest)
 		return
