@@ -439,7 +439,7 @@ func (s *Server) readHandler(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 }
-func (s *Tracef) tableReadHandler(w http.ResponseWriter, req *http.Request) {
+func (s *Server) tableReadHandler(w http.ResponseWriter, req *http.Request) {
 	log.Tracef("tableReadHandler for URL: %s", req.URL)
 	s.metrics.queryReceived.Inc(1)
 
