@@ -110,7 +110,7 @@ func (s *SingleServerSuite) Test_SingleServer(c *C) {
 	c.Assert(res.StatusCode, Equals, 200)
 
 	// Data write New API
-	res, err = postEndpoint("/db/ingest", "{\"data\":[{\"table\":\"foo\",\"payload\":[{\"name\":\"testdata5\",\"id\":\"1501\"},{\"name\":\"testdata5\",\"id\":\"1601\"},{\"name\":\"testdata5\",\"id\":\"1701\"}]}]}")
+	res, err = postEndpoint("/db/bulk", "{\"data\":[{\"table\":\"foo\",\"payload\":[{\"name\":\"testdata5\",\"id\":\"1501\"},{\"name\":\"testdata5\",\"id\":\"1601\"},{\"name\":\"testdata5\",\"id\":\"1701\"}]}]}")
 	c.Assert(err, IsNil)
 	c.Assert(res.StatusCode, Equals, 200)
 
