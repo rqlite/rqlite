@@ -125,4 +125,10 @@ func (s *SingleServerSuite) Test_SingleServer(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(res.StatusCode, Equals, 200)
 	c.Assert(isJSONBody(res), Equals, true)
+
+	// Test filtering
+	res, err = getEndpoint("/db/foo?name=fiona")
+	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 200)
+	c.Assert(isJSONBody(res), Equals, true)
 }

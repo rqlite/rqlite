@@ -449,6 +449,30 @@ func (s *Server) tableReadHandler(w http.ResponseWriter, req *http.Request) {
 	log.Tracef("Getting data from table %s", tablename)
 	startTime := time.Now()
 	stmt :="Select * from "+tablename
+// Extract any filters barring sort
+	q := req.URL.Query()
+	if q != nil {
+		var first bool = false
+		for k,v := range q {
+			if k != "sort" {
+				if !first {
+					stmt += " where "
+					first = true
+				} else {
+					stmt += " and "
+				}
+				var vals string = ""
+				for _, val := range v {
+					vals += fmt.Sprintf("'%s',", val)
+				}
+				if strings.HasSuffix(vals, ",") {
+					vals = vals[:len(vals) - 1]
+				}
+				stmt += fmt.Sprintf("%s in (%s)", k, vals)
+			}
+		}
+		log.Info(stmt)
+	}
 	r, err := s.db.Query(stmt)
 	if err != nil {
 		log.Tracef("Bad SQL statement: %s", err.Error())
