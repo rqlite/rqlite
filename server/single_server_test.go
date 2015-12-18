@@ -109,8 +109,19 @@ func (s *SingleServerSuite) Test_SingleServer(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(res.StatusCode, Equals, 200)
 
+	// Data write New API
+	res, err = postEndpoint("/db/bulk", "{\"data\":[{\"table\":\"foo\",\"payload\":[{\"name\":\"testdata5\",\"id\":\"1501\"},{\"name\":\"testdata5\",\"id\":\"1601\"},{\"name\":\"testdata5\",\"id\":\"1701\"}]}]}")
+	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 200)
+
 	// Data read
 	res, err = getEndpointQuery("/db", "SELECT * from foo")
+	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 200)
+	c.Assert(isJSONBody(res), Equals, true)
+
+	// Data read New API
+	res, err = getEndpoint("/db/foo")
 	c.Assert(err, IsNil)
 	c.Assert(res.StatusCode, Equals, 200)
 	c.Assert(isJSONBody(res), Equals, true)

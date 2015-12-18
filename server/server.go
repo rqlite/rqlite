@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"reflect"
 
 	"github.com/gorilla/mux"
 	"github.com/otoolep/raft"
@@ -313,7 +314,9 @@ func (s *Server) ListenAndServe(leader string) error {
 	s.router.HandleFunc("/diagnostics", s.serveDiagnostics).Methods("GET")
 	s.router.HandleFunc("/raft", s.serveRaftInfo).Methods("GET")
 	s.router.HandleFunc("/db", s.readHandler).Methods("GET")
+	s.router.HandleFunc("/db/{tablename}", s.tableReadHandler).Methods("GET")
 	s.router.HandleFunc("/db", s.writeHandler).Methods("POST")
+	s.router.HandleFunc("/db/bulk", s.tableWriteHandler).Methods("POST")
 	s.router.HandleFunc("/join", s.joinHandler).Methods("POST")
 
 	log.Infof("Listening at %s", s.connectionString())
@@ -436,7 +439,48 @@ func (s *Server) readHandler(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 }
+func (s *Server) tableReadHandler(w http.ResponseWriter, req *http.Request) {
+	log.Tracef("tableReadHandler for URL: %s", req.URL)
+	s.metrics.queryReceived.Inc(1)
 
+	var failures = make([]FailedSqlStmt, 0)
+	vars := mux.Vars(req)
+	tablename := vars["tablename"]
+	log.Tracef("Getting data from table %s", tablename)
+	startTime := time.Now()
+	stmt :="Select * from "+tablename
+	r, err := s.db.Query(stmt)
+	if err != nil {
+		log.Tracef("Bad SQL statement: %s", err.Error())
+		s.metrics.queryFail.Inc(1)
+		failures = append(failures, FailedSqlStmt{stmt, err.Error()})
+	} else {
+		s.metrics.querySuccess.Inc(1)
+	}
+	duration := time.Since(startTime)
+
+	rr := QueryResponse{Failures: failures, Rows: r}
+	if e, _ := isExplain(req); e {
+		rr.Time = duration.String()
+	}
+
+	pretty, _ := isPretty(req)
+	var b []byte
+	if pretty {
+		b, err = json.MarshalIndent(rr, "", "    ")
+	} else {
+		b, err = json.Marshal(rr)
+	}
+	if err != nil {
+		log.Errorf("Failed to marshal JSON data: %s", err.Error())
+		http.Error(w, err.Error(), http.StatusBadRequest) // Internal error actually
+	} else {
+		_, err = w.Write([]byte(b))
+		if err != nil {
+			log.Errorf("Error writting JSON data: %s", err.Error())
+		}
+	}
+}
 func (s *Server) execute(tx bool, stmts []string) ([]FailedSqlStmt, error) {
 	var failures = make([]FailedSqlStmt, 0)
 
@@ -544,6 +588,93 @@ func (s *Server) writeHandler(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
+type Anchors struct {
+	DataPoints []interface{} `json:"data"`
+}
+
+type Stringer interface {
+    String() string
+}
+
+func (s *Server) tableWriteHandler(w http.ResponseWriter, req *http.Request) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	if s.raftServer.State() != "leader" {
+		s.leaderRedirect(w, req)
+		return
+	}
+
+	log.Tracef("tableWriteHandler for URL: %s", req.URL)
+	s.metrics.executeReceived.Inc(1)
+
+	currentIndex := s.raftServer.CommitIndex()
+	count := currentIndex - s.snapConf.lastIndex
+	if uint64(count) > s.snapConf.snapshotAfter {
+		log.Info("Committed log entries snapshot threshold reached, starting snapshot")
+		err := s.raftServer.TakeSnapshot()
+		s.logSnapshot(err, currentIndex, count)
+		s.snapConf.lastIndex = currentIndex
+		s.metrics.snapshotCreated.Inc(1)
+	}
+
+	// Read the value from the POST body.
+	b, err := ioutil.ReadAll(req.Body)
+	if err != nil {
+		log.Tracef("Bad HTTP request: %s", err.Error())
+		s.metrics.executeFail.Inc(1)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	anchors := Anchors{}
+	if err := json.Unmarshal(b, &anchors); err != nil {
+		log.Errorf("Parsing error : %s", err.Error())
+		s.metrics.executeFail.Inc(1)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	log.Debugf("Parsed data is %s", anchors)
+	
+	var stmts []string = convertToQueries(&anchors)
+
+	log.Tracef("Execute statement contains %d commands", len(stmts))
+	if len(stmts) == 0 {
+		log.Trace("No database execute commands supplied")
+		s.metrics.executeFail.Inc(1)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	transaction, _ := isTransaction(req)
+	startTime := time.Now()
+	failures, err := s.execute(transaction, stmts)
+	if err != nil {
+		log.Errorf("Database mutation failed: %s", err.Error())
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	duration := time.Since(startTime)
+
+	wr := StmtResponse{Failures: failures}
+	if e, _ := isExplain(req); e {
+		wr.Time = duration.String()
+	}
+
+	pretty, _ := isPretty(req)
+	if pretty {
+		b, err = json.MarshalIndent(wr, "", "    ")
+	} else {
+		b, err = json.Marshal(wr)
+	}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	} else {
+		_, err = w.Write([]byte(b))
+		if err != nil {
+			log.Errorf("Error writting JSON data: %s", err.Error())
+		}
+	}
+}
 // serveStatistics returns the statistics for the program
 func (s *Server) serveStatistics(w http.ResponseWriter, req *http.Request) {
 	statistics := make(map[string]interface{})
@@ -630,4 +761,37 @@ func (s *Server) leaderRedirect(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	http.Redirect(w, r, u+r.URL.Path, http.StatusTemporaryRedirect)
+}
+
+func convertToQueries(anchors *Anchors) [] string {
+	var stmts []string
+	for _, dataPoint := range anchors.DataPoints {
+      log.Debugf("Datapoint is %s" , dataPoint)
+      table := dataPoint.(map[string]interface{})["table"].(string)
+      payload := dataPoint.(map[string]interface{})["payload"]
+      log.Debugf("Table Name is %s" , table)
+      log.Debugf("Payload is %s" , payload)
+      log.Debugf("Payload type is %s",reflect.TypeOf(payload))
+      log.Debugf("Table type is %s",reflect.TypeOf(table))
+      dataRows := payload.([]interface{})
+      for _, rowVal := range dataRows {
+      	log.Debugf("Row value is %s",rowVal.(map[string]interface{}))
+      	keys := make([]string, len(rowVal.(map[string]interface{})))
+      	values := make([]string, len(rowVal.(map[string]interface{})))
+		keyCount := 0
+		for k,v := range rowVal.(map[string]interface{}) {
+			keys[keyCount] = "\""+k+"\""
+			var strVal = "\""+v.(string)+"\""
+			values[keyCount] = strVal
+			log.Debugf("Adding Key %s and %s value to query", k,v)
+    		keyCount++
+    	}
+    	columns := strings.Join(keys,",")
+    	rows := strings.Join(values,",")
+    	log.Debugf("Columns are %s", columns)
+    	log.Debugf("Row Values are %s", rows)
+    	stmts = append(stmts,"INSERT INTO "+table+"("+columns+") VALUES("+rows+")")
+      }
+  	}
+  	return stmts
 }
