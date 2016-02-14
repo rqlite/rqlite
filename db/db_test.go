@@ -26,7 +26,7 @@ func (s *DbSuite) Test_DbFileCreation(c *C) {
 	dir, err := ioutil.TempDir("", "rqlite-test-")
 	defer os.RemoveAll(dir)
 
-	db := New(path.Join(dir, "test_db"))
+	db, err := New(path.Join(dir, "test_db"))
 	c.Assert(db, NotNil)
 	err = db.Close()
 	c.Assert(err, IsNil)

@@ -19,20 +19,20 @@ type RowResult map[string]string
 type RowResults []map[string]string
 
 // New creates a new database. Deletes any existing database.
-func New(dbPath string) *DB {
+func New(dbPath string) (*DB, error) {
 	_ = os.Remove(dbPath)
 	return Open(dbPath)
 }
 
 // Open an existing database, creating it if it does not exist.
-func Open(dbPath string) *DB {
+func Open(dbPath string) (*DB, error) {
 	dbc, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	return &DB{
 		dbConn: dbc,
-	}
+	}, nil
 }
 
 // Close closes the underlying database connection.

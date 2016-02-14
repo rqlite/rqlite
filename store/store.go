@@ -18,7 +18,7 @@ import (
 
 	"github.com/hashicorp/raft"
 	"github.com/hashicorp/raft-boltdb"
-	"github.com/otoolep/rqlite/db"
+	sql "github.com/otoolep/rqlite/db"
 )
 
 const (
@@ -34,6 +34,7 @@ type Store struct {
 	mu sync.Mutex
 
 	raft *raft.Raft // The consensus mechanism
+	db   *sql.DB    // The underlying SQLite store
 
 	logger *log.Logger
 }
@@ -100,7 +101,12 @@ func (s *Store) Open(enableSingle bool) error {
 	s.raft = ra
 
 	// Setup the SQLite database.
-	_ = db.Open(filepath.Join(s.raftDir, "db.sqlite"))
+	db, err := sql.Open(filepath.Join(s.raftDir, "db.sqlite"))
+	if err != nil {
+		return err
+	}
+	s.db = db
+
 	return nil
 }
 
