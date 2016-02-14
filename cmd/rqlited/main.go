@@ -101,7 +101,7 @@ func reportLaunch() {
 		_, err := client.Post("https://logs-01.loggly.com/inputs/8a0edd84-92ba-46e4-ada8-c529d0f105af/tag/reporting/",
 			"application/json", data)
 		if err != nil {
-			log.Printf("Report launch failed: %s", err.Error())
+			log.Printf("report launch failed: %s", err.Error())
 		}
 	}()
 }
