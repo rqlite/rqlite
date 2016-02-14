@@ -18,6 +18,7 @@ import (
 
 	"github.com/hashicorp/raft"
 	"github.com/hashicorp/raft-boltdb"
+	"github.com/otoolep/rqlite/db"
 )
 
 const (
@@ -97,6 +98,9 @@ func (s *Store) Open(enableSingle bool) error {
 		return fmt.Errorf("new raft: %s", err)
 	}
 	s.raft = ra
+
+	// Setup the SQLite database.
+	_ = db.Open(filepath.Join(s.raftDir, "db.sqlite"))
 	return nil
 }
 
