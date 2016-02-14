@@ -5,24 +5,13 @@ import (
 	"os"
 	"path"
 	"testing"
-
-	. "gopkg.in/check.v1"
 )
-
-// Hook up gocheck into the "go test" runner.
-func Test(t *testing.T) {
-	TestingT(t)
-}
-
-type DbSuite struct{}
-
-var _ = Suite(&DbSuite{})
 
 /*
  * Lowest-layer database tests
  */
 
-func (s *DbSuite) Test_DbFileCreation(c *C) {
+func Test_DbFileCreation(t *testing.T) {
 	dir, err := ioutil.TempDir("", "rqlite-test-")
 	defer os.RemoveAll(dir)
 
@@ -32,7 +21,7 @@ func (s *DbSuite) Test_DbFileCreation(c *C) {
 	c.Assert(err, IsNil)
 }
 
-func (s *DbSuite) Test_TableCreation(c *C) {
+func Test_TableCreation(t *testing.T) {
 	dir, err := ioutil.TempDir("", "rqlite-test-")
 	defer os.RemoveAll(dir)
 	db := New(path.Join(dir, "test_db"))
@@ -46,7 +35,7 @@ func (s *DbSuite) Test_TableCreation(c *C) {
 	c.Assert(len(r), Equals, 0)
 }
 
-func (s *DbSuite) Test_SimpleStatements(c *C) {
+func Test_SimpleStatements(t *testing.T) {
 	dir, err := ioutil.TempDir("", "rqlite-test-")
 	defer os.RemoveAll(dir)
 	db := New(path.Join(dir, "test_db"))
@@ -96,7 +85,7 @@ func (s *DbSuite) Test_SimpleStatements(c *C) {
 	}
 }
 
-func (s *DbSuite) Test_FailingSimpleStatements(c *C) {
+func Test_FailingSimpleStatements(t *testing.T) {
 	dir, err := ioutil.TempDir("", "rqlite-test-")
 	defer os.RemoveAll(dir)
 	db := New(path.Join(dir, "test_db"))
@@ -127,7 +116,7 @@ func (s *DbSuite) Test_FailingSimpleStatements(c *C) {
 	c.Assert(err.Error(), Equals, "near \"utter\": syntax error")
 }
 
-func (s *DbSuite) Test_SimpleTransactions(c *C) {
+func Test_SimpleTransactions(t *testing.T) {
 	dir, err := ioutil.TempDir("", "rqlite-test-")
 	defer os.RemoveAll(dir)
 	db := New(path.Join(dir, "test_db"))
@@ -165,7 +154,7 @@ func (s *DbSuite) Test_SimpleTransactions(c *C) {
 	}
 }
 
-func (s *DbSuite) Test_TransactionsConstraintViolation(c *C) {
+func Test_TransactionsConstraintViolation(t *testing.T) {
 	dir, err := ioutil.TempDir("", "rqlite-test-")
 	defer os.RemoveAll(dir)
 	db := New(path.Join(dir, "test_db"))
@@ -187,7 +176,7 @@ func (s *DbSuite) Test_TransactionsConstraintViolation(c *C) {
 	c.Assert(len(r), Equals, 0)
 }
 
-func (s *DbSuite) Test_TransactionsHardFail(c *C) {
+func Test_TransactionsHardFail(t *testing.T) {
 	dir, err := ioutil.TempDir("", "rqlite-test-")
 	defer os.RemoveAll(dir)
 	db := New(path.Join(dir, "test_db"))
