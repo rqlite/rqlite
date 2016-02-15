@@ -150,43 +150,51 @@ func Test_FailingSimpleStatements(t *testing.T) {
 	}
 }
 
-// func Test_SimpleTransactions(t *testing.T) {
-// 	dir, err := ioutil.TempDir("", "rqlite-test-")
-// 	defer os.RemoveAll(dir)
-// 	db := New(path.Join(dir, "test_db"))
-// 	defer db.Close()
+func Test_SimpleTransactions(t *testing.T) {
+	db, path := mustOpenDatabase()
+	defer db.Close()
+	defer os.Remove(path)
 
-// 	err = db.Execute("create table foo (id integer not null primary key, name text)")
-// 	c.Assert(err, IsNil)
+	if err := db.Execute("create table foo (id integer not null primary key, name text)"); err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
 
-// 	err = db.StartTransaction()
-// 	c.Assert(err, IsNil)
-// 	for i := 0; i < 10; i++ {
-// 		_ = db.Execute("INSERT INTO foo(name) VALUES(\"philip\")")
-// 	}
-// 	err = db.CommitTransaction()
-// 	c.Assert(err, IsNil)
+	if err := db.StartTransaction(); err != nil {
+		t.Fatalf("failed to start transaction: %s", err.Error())
+	}
+	for i := 0; i < 10; i++ {
+		_ = db.Execute(`INSERT INTO foo(name) VALUES("philip")`)
+	}
+	if err := db.CommitTransaction(); err != nil {
+		t.Fatalf("failed to commit transaction: %s", err.Error())
+	}
 
-// 	r, err := db.Query("SELECT name FROM foo")
-// 	c.Assert(len(r), Equals, 10)
-// 	for i := range r {
-// 		c.Assert(r[i]["name"], Equals, "philip")
-// 	}
+	r, err := db.Query("SELECT name FROM foo")
+	if err != nil {
+		t.Fatalf("failed to query after commited transaction: %s", err.Error())
+	}
+	if len(r) != 10 {
+		t.Fatalf("incorrect number of results returned: %d", len(r))
+	}
 
-// 	err = db.StartTransaction()
-// 	c.Assert(err, IsNil)
-// 	for i := 0; i < 10; i++ {
-// 		_ = db.Execute("INSERT INTO foo(name) VALUES(\"philip\")")
-// 	}
-// 	err = db.RollbackTransaction()
-// 	c.Assert(err, IsNil)
+	if err := db.StartTransaction(); err != nil {
+		t.Fatalf("failed to start transaction: %s", err.Error())
+	}
+	for i := 0; i < 10; i++ {
+		_ = db.Execute(`INSERT INTO foo(name) VALUES("philip")`)
+	}
+	if err := db.RollbackTransaction(); err != nil {
+		t.Fatalf("failed to rollback transaction: %s", err.Error())
+	}
 
-// 	r, err = db.Query("select name from foo") // Test lowercase
-// 	c.Assert(len(r), Equals, 10)
-// 	for i := range r {
-// 		c.Assert(r[i]["name"], Equals, "philip")
-// 	}
-// }
+	r, err = db.Query("SELECT name FROM foo")
+	if err != nil {
+		t.Fatalf("failed to query after commited transaction: %s", err.Error())
+	}
+	if len(r) != 10 {
+		t.Fatalf("incorrect number of results returned: %d", len(r))
+	}
+}
 
 // func Test_TransactionsConstraintViolation(t *testing.T) {
 // 	dir, err := ioutil.TempDir("", "rqlite-test-")
