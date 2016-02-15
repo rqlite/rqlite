@@ -230,29 +230,41 @@ func Test_TransactionsConstraintViolation(t *testing.T) {
 	}
 }
 
-// func Test_TransactionsHardFail(t *testing.T) {
-// 	dir, err := ioutil.TempDir("", "rqlite-test-")
-// 	defer os.RemoveAll(dir)
-// 	db := New(path.Join(dir, "test_db"))
+func Test_TransactionsHardFail(t *testing.T) {
+	db, path := mustOpenDatabase()
+	defer db.Close()
+	defer os.Remove(path)
+	var err error
 
-// 	err = db.Execute("create table foo (id integer not null primary key, name text)")
-// 	c.Assert(err, IsNil)
-// 	err = db.Execute("INSERT INTO foo(id, name) VALUES(1, \"fiona\")")
-// 	c.Assert(err, IsNil)
+	if err = db.Execute("create table foo (id integer not null primary key, name text)"); err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if err = db.Execute(`INSERT INTO foo(id, name) VALUES(1, "fiona")`); err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
 
-// 	err = db.StartTransaction()
-// 	c.Assert(err, IsNil)
-// 	err = db.Execute("INSERT INTO foo(id, name) VALUES(2, \"dana\")")
-// 	c.Assert(err, IsNil)
-// 	db.Close()
+	if err = db.StartTransaction(); err != nil {
+		t.Fatalf("failed to start transaction: %s", err.Error())
+	}
+	if err = db.Execute(`INSERT INTO foo(id, name) VALUES(2, "fiona")`); err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+	if err = db.Close(); err != nil {
+		t.Fatalf("failed to close database: %s", err.Error())
+	}
 
-// 	db = Open(path.Join(dir, "test_db"))
-// 	c.Assert(db, NotNil)
-// 	r, err := db.Query("SELECT * FROM foo")
-// 	c.Assert(len(r), Equals, 1)
-// 	c.Assert(r[0]["name"], Equals, "fiona")
-// 	db.Close()
-// }
+	db, err = Open(path)
+	if err != nil {
+		t.Fatalf("failed to re-open database: %s", err.Error())
+	}
+	r, err := db.Query("SELECT * FROM foo")
+	if err != nil {
+		t.Fatalf("failed to query after hard close: %s", err.Error())
+	}
+	if len(r) != 1 {
+		t.Fatalf("incorrect number of results returned: %d", len(r))
+	}
+}
 
 func mustOpenDatabase() (*DB, string) {
 	var err error
