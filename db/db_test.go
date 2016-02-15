@@ -102,36 +102,53 @@ func Test_SimpleStatements(t *testing.T) {
 	}
 }
 
-// func Test_FailingSimpleStatements(t *testing.T) {
-// 	dir, err := ioutil.TempDir("", "rqlite-test-")
-// 	defer os.RemoveAll(dir)
-// 	db := New(path.Join(dir, "test_db"))
-// 	defer db.Close()
+func Test_FailingSimpleStatements(t *testing.T) {
+	db, path := mustOpenDatabase()
+	defer db.Close()
+	defer os.Remove(path)
 
-// 	err = db.Execute("INSERT INTO foo(name) VALUES(\"fiona\")")
-// 	c.Assert(err, NotNil)
-// 	c.Assert(err.Error(), Equals, "no such table: foo")
+	err := db.Execute(`INSERT INTO foo(name) VALUES("fiona")`)
+	if err == nil {
+		t.Fatal("inserted record into empty table OK")
+	}
+	if err.Error() != "no such table: foo" {
+		t.Fatal("unexpected error returned")
+	}
 
-// 	err = db.Execute("create table foo (id integer not null primary key, name text)")
-// 	c.Assert(err, IsNil)
-// 	err = db.Execute("create table foo (id integer not null primary key, name text)")
-// 	c.Assert(err, NotNil)
-// 	c.Assert(err.Error(), Equals, "table foo already exists")
+	if err = db.Execute("create table foo (id integer not null primary key, name text)"); err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if err = db.Execute("create table foo (id integer not null primary key, name text)"); err == nil {
+		t.Fatal("duplicate table created OK")
+	}
+	if err.Error() != "table foo already exists" {
+		t.Fatalf("unexpected error returned: %s", err.Error())
+	}
 
-// 	err = db.Execute("INSERT INTO foo(id, name) VALUES(11, \"fiona\")")
-// 	c.Assert(err, IsNil)
-// 	err = db.Execute("INSERT INTO foo(id, name) VALUES(11, \"fiona\")")
-// 	c.Assert(err, NotNil)
-// 	c.Assert(err.Error(), Equals, "UNIQUE constraint failed: foo.id")
+	if err = db.Execute(`INSERT INTO foo(id, name) VALUES(11, "fiona")`); err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+	if err = db.Execute(`INSERT INTO foo(id, name) VALUES(11, "fiona")`); err == nil {
+		t.Fatal("duplicated record inserted OK")
+	}
+	if err.Error() != "UNIQUE constraint failed: foo.id" {
+		t.Fatal("unexpected error returned")
+	}
 
-// 	err = db.Execute("SELECT * FROM bar")
-// 	c.Assert(err, NotNil)
-// 	c.Assert(err.Error(), Equals, "no such table: bar")
+	if err = db.Execute("SELECT * FROM bar"); err == nil {
+		t.Fatal("no error when querying non-existant table")
+	}
+	if err.Error() != "no such table: bar" {
+		t.Fatal("unexpected error returned")
+	}
 
-// 	err = db.Execute("utter nonsense")
-// 	c.Assert(err, NotNil)
-// 	c.Assert(err.Error(), Equals, "near \"utter\": syntax error")
-// }
+	if err = db.Execute("utter nonsense"); err == nil {
+		t.Fatal("no error when issuing nonsense query")
+	}
+	if err.Error() != `near "utter": syntax error` {
+		t.Fatal("unexpected error returned")
+	}
+}
 
 // func Test_SimpleTransactions(t *testing.T) {
 // 	dir, err := ioutil.TempDir("", "rqlite-test-")
