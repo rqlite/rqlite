@@ -30,7 +30,7 @@ func Test_DbFileCreation(t *testing.T) {
 }
 
 func Test_TableCreation(t *testing.T) {
-	db, path := mustOpenDatabase()
+	db, path := mustCreateDatabase()
 	defer db.Close()
 	defer os.Remove(path)
 
@@ -49,7 +49,7 @@ func Test_TableCreation(t *testing.T) {
 }
 
 func Test_SimpleStatements(t *testing.T) {
-	db, path := mustOpenDatabase()
+	db, path := mustCreateDatabase()
 	defer db.Close()
 	defer os.Remove(path)
 
@@ -103,7 +103,7 @@ func Test_SimpleStatements(t *testing.T) {
 }
 
 func Test_FailingSimpleStatements(t *testing.T) {
-	db, path := mustOpenDatabase()
+	db, path := mustCreateDatabase()
 	defer db.Close()
 	defer os.Remove(path)
 
@@ -151,7 +151,7 @@ func Test_FailingSimpleStatements(t *testing.T) {
 }
 
 func Test_SimpleTransactions(t *testing.T) {
-	db, path := mustOpenDatabase()
+	db, path := mustCreateDatabase()
 	defer db.Close()
 	defer os.Remove(path)
 
@@ -197,7 +197,7 @@ func Test_SimpleTransactions(t *testing.T) {
 }
 
 func Test_TransactionsConstraintViolation(t *testing.T) {
-	db, path := mustOpenDatabase()
+	db, path := mustCreateDatabase()
 	defer db.Close()
 	defer os.Remove(path)
 	var err error
@@ -231,7 +231,7 @@ func Test_TransactionsConstraintViolation(t *testing.T) {
 }
 
 func Test_TransactionsHardFail(t *testing.T) {
-	db, path := mustOpenDatabase()
+	db, path := mustCreateDatabase()
 	defer db.Close()
 	defer os.Remove(path)
 	var err error
@@ -266,7 +266,7 @@ func Test_TransactionsHardFail(t *testing.T) {
 	}
 }
 
-func mustOpenDatabase() (*DB, string) {
+func mustCreateDatabase() (*DB, string) {
 	var err error
 	f, err := ioutil.TempFile("", "rqlilte-test-")
 	if err != nil {
