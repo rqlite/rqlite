@@ -1,6 +1,7 @@
 package db
 
 import (
+	"encoding/json"
 	"io/ioutil"
 	"os"
 	"path"
@@ -47,55 +48,59 @@ func Test_TableCreation(t *testing.T) {
 	}
 }
 
-// func Test_SimpleStatements(t *testing.T) {
-// 	dir, err := ioutil.TempDir("", "rqlite-test-")
-// 	defer os.RemoveAll(dir)
-// 	db := New(path.Join(dir, "test_db"))
-// 	defer db.Close()
+func Test_SimpleStatements(t *testing.T) {
+	db, path := mustOpenDatabase()
+	defer db.Close()
+	defer os.Remove(path)
 
-// 	err = db.Execute("create table foo (id integer not null primary key, name text)")
-// 	c.Assert(err, IsNil)
+	if err := db.Execute("create table foo (id integer not null primary key, name text)"); err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
 
-// 	err = db.Execute("INSERT INTO foo(name) VALUES(\"fiona\")")
-// 	c.Assert(err, IsNil)
-// 	r, err := db.Query("SELECT * FROM foo")
-// 	c.Assert(len(r), Equals, 1)
-// 	c.Assert(r[0]["id"], Equals, "1")
-// 	c.Assert(r[0]["name"], Equals, "fiona")
+	if err := db.Execute(`INSERT INTO foo(name) VALUES("fiona")`); err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+	r, err := db.Query("SELECT * FROM foo")
+	if err != nil {
+		t.Fatalf("failed to query empty table: %s", err.Error())
+	}
+	if exp, got := `[{"id":"1","name":"fiona"}]`, asJson(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
 
-// 	err = db.Execute("INSERT INTO foo(name) VALUES(\"dana\")")
-// 	c.Assert(err, IsNil)
-// 	r, err = db.Query("SELECT * FROM foo")
-// 	c.Assert(len(r), Equals, 2)
-// 	c.Assert(r[1]["id"], Equals, "2")
-// 	c.Assert(r[1]["name"], Equals, "dana")
+	if err := db.Execute(`INSERT INTO foo(name) VALUES("aoife")`); err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+	r, err = db.Query("SELECT * FROM foo")
+	if err != nil {
+		t.Fatalf("failed to query table: %s", err.Error())
+	}
+	if exp, got := `[{"id":"1","name":"fiona"},{"id":"2","name":"aoife"}]`, asJson(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
 
-// 	err = db.Execute("UPDATE foo SET Name='Who knows?' WHERE Id=1")
-// 	c.Assert(err, IsNil)
-// 	r, err = db.Query("SELECT * FROM foo")
-// 	c.Assert(len(r), Equals, 2)
-// 	c.Assert(r[0]["id"], Equals, "1")
-// 	c.Assert(r[0]["name"], Equals, "Who knows?")
+	if err := db.Execute("UPDATE foo SET Name='Who knows?' WHERE Id=1"); err != nil {
+		t.Fatalf("failed to update record: %s", err.Error())
+	}
+	r, err = db.Query("SELECT * FROM foo")
+	if err != nil {
+		t.Fatalf("failed to query table: %s", err.Error())
+	}
+	if exp, got := `[{"id":"1","name":"Who knows?"},{"id":"2","name":"aoife"}]`, asJson(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
 
-// 	err = db.Execute("DELETE FROM foo WHERE Id=2")
-// 	c.Assert(err, IsNil)
-// 	r, err = db.Query("SELECT * FROM foo")
-// 	c.Assert(len(r), Equals, 1)
-// 	c.Assert(r[0]["id"], Equals, "1")
-// 	c.Assert(r[0]["name"], Equals, "Who knows?")
-
-// 	err = db.Execute("DELETE FROM foo WHERE Id=1")
-// 	c.Assert(err, IsNil)
-
-// 	for i := 0; i < 10; i++ {
-// 		_ = db.Execute("INSERT INTO foo(name) VALUES(\"philip\")")
-// 	}
-// 	r, err = db.Query("SELECT name FROM foo")
-// 	c.Assert(len(r), Equals, 10)
-// 	for i := range r {
-// 		c.Assert(r[i]["name"], Equals, "philip")
-// 	}
-// }
+	if err := db.Execute("DELETE FROM foo WHERE Id=2"); err != nil {
+		t.Fatalf("failed to delete record: %s", err.Error())
+	}
+	r, err = db.Query("SELECT * FROM foo")
+	if err != nil {
+		t.Fatalf("failed to query table: %s", err.Error())
+	}
+	if exp, got := `[{"id":"1","name":"Who knows?"}]`, asJson(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+}
 
 // func Test_FailingSimpleStatements(t *testing.T) {
 // 	dir, err := ioutil.TempDir("", "rqlite-test-")
@@ -226,4 +231,12 @@ func mustOpenDatabase() (*DB, string) {
 	}
 
 	return db, f.Name()
+}
+
+func asJson(v interface{}) string {
+	b, err := json.Marshal(v)
+	if err != nil {
+		panic("failed to JSON marshal value")
+	}
+	return string(b)
 }
