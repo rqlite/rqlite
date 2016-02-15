@@ -196,27 +196,39 @@ func Test_SimpleTransactions(t *testing.T) {
 	}
 }
 
-// func Test_TransactionsConstraintViolation(t *testing.T) {
-// 	dir, err := ioutil.TempDir("", "rqlite-test-")
-// 	defer os.RemoveAll(dir)
-// 	db := New(path.Join(dir, "test_db"))
-// 	defer db.Close()
+func Test_TransactionsConstraintViolation(t *testing.T) {
+	db, path := mustOpenDatabase()
+	defer db.Close()
+	defer os.Remove(path)
+	var err error
 
-// 	err = db.Execute("create table foo (id integer not null primary key, name text)")
-// 	c.Assert(err, IsNil)
+	if err = db.Execute("create table foo (id integer not null primary key, name text)"); err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
 
-// 	err = db.StartTransaction()
-// 	c.Assert(err, IsNil)
-// 	err = db.Execute("INSERT INTO foo(id, name) VALUES(1, \"fiona\")")
-// 	c.Assert(err, IsNil)
-// 	err = db.Execute("INSERT INTO foo(id, name) VALUES(1, \"fiona\")")
-// 	c.Assert(err, NotNil)
-// 	err = db.RollbackTransaction()
-// 	c.Assert(err, IsNil)
-
-// 	r, err := db.Query("SELECT * FROM foo")
-// 	c.Assert(len(r), Equals, 0)
-// }
+	if err = db.StartTransaction(); err != nil {
+		t.Fatalf("failed to start transaction: %s", err.Error())
+	}
+	if err = db.Execute(`INSERT INTO foo(id, name) VALUES(11, "fiona")`); err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+	if err = db.Execute(`INSERT INTO foo(id, name) VALUES(11, "fiona")`); err == nil {
+		t.Fatal("duplicated record inserted OK")
+	}
+	if err.Error() != "UNIQUE constraint failed: foo.id" {
+		t.Fatal("unexpected error returned")
+	}
+	if err := db.RollbackTransaction(); err != nil {
+		t.Fatalf("failed to rollback transaction: %s", err.Error())
+	}
+	r, err := db.Query("SELECT name FROM foo")
+	if err != nil {
+		t.Fatalf("failed to query after commited transaction: %s", err.Error())
+	}
+	if len(r) != 0 {
+		t.Fatalf("incorrect number of results returned: %d", len(r))
+	}
+}
 
 // func Test_TransactionsHardFail(t *testing.T) {
 // 	dir, err := ioutil.TempDir("", "rqlite-test-")
