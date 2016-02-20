@@ -107,11 +107,15 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "GET" {
-		w.WriteHeader(http.StatusMethodNotAllowed)
+	if r.Method == "GET" {
+		// handle SELECT
+		return
+	} else if r.Method == "POST" {
+		// handle INSERT or UPDATE
 		return
 	}
 
+	w.WriteHeader(http.StatusMethodNotAllowed)
 	return
 }
 

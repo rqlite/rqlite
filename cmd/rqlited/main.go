@@ -11,6 +11,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -26,21 +27,19 @@ import (
 )
 
 var httpAddr string
-var tcpAddr string
 var raftAddr string
 var joinAddr string
 var cpuprofile string
 var disableReporting bool
 
 func init() {
-	flag.StringVar(&httpAddr, "http", "localhost:4001", "HTTP query server bind address")
-	flag.StringVar(&tcpAddr, "tcp", "localhost:4002", "TCP query server bind address")
-	flag.StringVar(&raftAddr, "raft", "localhost:4003", "Raft communication bind address")
+	flag.StringVar(&raftAddr, "raft", "localhost:4001", "Raft communication bind address")
+	flag.StringVar(&httpAddr, "http", "localhost:4002", "HTTP query server bind address")
 	flag.StringVar(&joinAddr, "join", "", "host:port of leader to join")
 	flag.StringVar(&cpuprofile, "cpuprofile", "", "write CPU profile to file")
 	flag.BoolVar(&disableReporting, "noreport", false, "Disable anonymised launch reporting")
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s [arguments] <data-path> \n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s [arguments] <data-path>\n", os.Args[0])
 		flag.PrintDefaults()
 	}
 }
@@ -73,13 +72,23 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
-	// Create the store.
+	// Create and open the store.
 	store := store.New(dataPath, raftAddr)
+	if err := store.Open(joinAddr == ""); err != nil {
+		log.Fatalf("failed to open store: %s", err.Error())
+	}
+
+	// If join was specified, make the join request.
+	if joinAddr != "" {
+		if err := join(joinAddr, raftAddr); err != nil {
+			log.Fatalf("failed to join node at %s: %s", joinAddr, err.Error())
+		}
+	}
 
 	// Create the HTTP query server.
 	s := httpd.New(httpAddr, store)
 	if err := s.Start(); err != nil {
-		log.Printf("failed to start HTTP server: %s", err.Error())
+		log.Fatalf("failed to start HTTP server: %s", err.Error())
 
 	}
 
@@ -91,6 +100,20 @@ func main() {
 	signal.Notify(terminate, os.Interrupt)
 	<-terminate
 	log.Println("rqlite server stopped")
+}
+
+func join(joinAddr, raftAddr string) error {
+	b, err := json.Marshal(map[string]string{"addr": raftAddr})
+	if err != nil {
+		return err
+	}
+	resp, err := http.Post(fmt.Sprintf("http://%s/join", joinAddr), "application-type/json", bytes.NewReader(b))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	return nil
 }
 
 func reportLaunch() {
