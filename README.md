@@ -14,11 +14,11 @@ Download, test (optional), and run rqlite like so (tested on 64-bit Kubuntu 14.0
     cd rqlite/
     export GOPATH=$PWD
     go get -t github.com/otoolep/rqlite
-    $GOPATH/bin/rqlite ~/node.1
+    $GOPATH/bin/rqlited ~/node.1
 
 This starts a rqlite server listening on localhost, port 4001. This single node automatically becomes the leader. To see all available command-line options, execute:
 
-    $GOPATH/bin/rqlite -h
+    $GOPATH/bin/rqlited -h
 
 ### Vagrant
 Alternatively you can use a [Vagrant](https://www.vagrantup.com/) environment. To do so, simply [install Vagrant](https://docs.vagrantup.com/v2/installation/index.html) on your machine, a virtualization system such as VirtualBox, and execute the following commands:
@@ -43,15 +43,15 @@ While not strictly necessary to run rqlite, running multiple nodes means the SQL
 
 Start a second and third node (so a majority can still form in the event of a single node failure) like so:
 
-    $GOPATH/bin/rqlite -join localhost:4001 -p 4002 ~/node.2
-    $GOPATH/bin/rqlite -join localhost:4001 -p 4003 ~/node.3
+    $GOPATH/bin/rqlited -http localhost:4003  -raft :4004 -join :4002 ~/node.2
+    $GOPATH/bin/rqlited -http localhost:4005  -raft :4006 -join :4002 ~/node.3
 
 Under each node will be an SQLite file, which should remain in consensus.
 
 ### Restarting a node
 If a node needs to be restarted, perhaps because of failure, don't pass the `-join` option. Using the example nodes above, if node 2 needed to be restarted, do so as follows:
 
-    $GOPATH/bin/rqlite -p 4002 ~/node.2
+    $GOPATH/bin/rqlited -raft :4006 ~/node.3
 
 On restart it will rejoin the cluster and apply any changes to its local sqlite database that took place while it was down. Depending on your snapshot threshold, restarts may take a little time. Check out the section below on _Log Compaction_.
 
@@ -85,7 +85,7 @@ You can confirm that the data has been writen to the database by accessing the S
     Enter SQL statements terminated with a ";"
     sqlite> select * from foo;
     1|fiona
-    
+
 Note that this is the SQLite file that is under `node 3`, which is not the node that accepted the `INSERT` operation.
 
 ### Bulk Updates
