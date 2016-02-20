@@ -5,6 +5,7 @@ package store
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -18,13 +19,19 @@ import (
 
 	"github.com/hashicorp/raft"
 	"github.com/hashicorp/raft-boltdb"
-	sql "github.com/otoolep/rqlite/db"
+
+	_ "github.com/mattn/go-sqlite3" // required blank import
 )
 
 const (
 	retainSnapshotCount = 2
 	raftTimeout         = 10 * time.Second
 )
+
+type command struct {
+	Tx      bool     `json:"tx,omitempty"`
+	Queries []string `json:"queries,omitempty"`
+}
 
 // Store is a SQLite database, where all changes are made via Raft consensus.
 type Store struct {
@@ -101,7 +108,7 @@ func (s *Store) Open(enableSingle bool) error {
 	s.raft = ra
 
 	// Setup the SQLite database.
-	db, err := sql.Open(filepath.Join(s.raftDir, "db.sqlite"))
+	db, err := sql.Open("sqlite3", filepath.Join(s.raftDir, "db.sqlite"))
 	if err != nil {
 		return err
 	}
@@ -110,8 +117,31 @@ func (s *Store) Open(enableSingle bool) error {
 	return nil
 }
 
-func (s *Store) Execute(stmts []string, tx bool) error {
-	return nil
+func (s *Store) Exec(queries []string, tx bool) (sql.Result, error) {
+	if s.raft.State() != raft.Leader {
+		return nil, fmt.Errorf("not leader")
+	}
+
+	c := &command{
+		Tx:      tx,
+		Queries: queries,
+	}
+	b, err := json.Marshal(c)
+	if err != nil {
+		return nil, err
+	}
+
+	f := s.raft.Apply(b, raftTimeout)
+	if err, ok := f.(error); ok {
+		return nil, err
+	}
+
+	return nil, nil
+}
+
+func (s *Store) Query(queries []string, tx bool) (*sql.Rows, error) {
+	// Go straight to the local database. Optionally check if leader. Hard way?
+	return nil, nil
 }
 
 // Join joins a node, located at addr, to this store. The node must be ready to
@@ -131,7 +161,43 @@ type fsm Store
 
 // Apply applies a Raft log entry to the database.
 func (f *fsm) Apply(l *raft.Log) interface{} {
-	return nil
+	var c command
+	if err := json.Unmarshal(l.Data, &c); err != nil {
+		panic(fmt.Sprintf("failed to unmarshal command: %s", err.Error()))
+	}
+
+	type Execer interface {
+		Exec(query string, args ...interface{}) (sql.Result, error)
+	}
+
+	err := func() (err error) {
+		var execer Execer
+		defer func() {
+			if t, ok := execer.(*sql.Tx); ok {
+				if err != nil {
+					t.Rollback()
+					return
+				}
+				t.Commit()
+			}
+		}()
+
+		if c.Tx {
+			execer, _ = f.db.Begin()
+		} else {
+			execer = f.db
+		}
+
+		for _, q := range c.Queries {
+			_, err = execer.Exec(q)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}()
+
+	return err
 }
 
 // Snapshot returns a snapshot of the database.
@@ -148,35 +214,9 @@ func (f *fsm) Restore(rc io.ReadCloser) error {
 }
 
 type fsmSnapshot struct {
-	store map[string]string
 }
 
 func (f *fsmSnapshot) Persist(sink raft.SnapshotSink) error {
-	err := func() error {
-		// Encode data.
-		b, err := json.Marshal(f.store)
-		if err != nil {
-			return err
-		}
-
-		// Write data to sink.
-		if _, err := sink.Write(b); err != nil {
-			return err
-		}
-
-		// Close the sink.
-		if err := sink.Close(); err != nil {
-			return err
-		}
-
-		return nil
-	}()
-
-	if err != nil {
-		sink.Cancel()
-		return err
-	}
-
 	return nil
 }
 

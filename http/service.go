@@ -3,7 +3,9 @@
 package http
 
 import (
+	"database/sql"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net"
@@ -13,8 +15,9 @@ import (
 
 // Store is the interface the Raft-driven database must implement.
 type Store interface {
-	// Execute executes the set of statements, possibly within a transaction.
-	Execute(stmts []string, tx bool) error
+	Exec(queries []string, tx bool) (sql.Result, error)
+
+	Query(queries []string, tx bool) (*sql.Rows, error)
 
 	// Join joins the node, reachable at addr, to the cluster.
 	Join(addr string) error
@@ -107,19 +110,64 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
-	if r.Method == "GET" {
-		// handle SELECT
-		return
-	} else if r.Method == "POST" {
-		// handle INSERT or UPDATE
+	// Get the query statement
+	query, err := stmtParam(r)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	w.WriteHeader(http.StatusMethodNotAllowed)
-	return
+	rows, err := s.store.Query([]string{query}, false)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	pretty, _ := isPretty(r)
+	var b []byte
+	if pretty {
+		b, err = json.MarshalIndent(*rows, "", "    ")
+	} else {
+		b, err = json.Marshal(*rows)
+	}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest) // Internal error actually
+	} else {
+		_, err = w.Write([]byte(b))
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+	}
 }
 
 // Addr returns the address on which the Service is listening
 func (s *Service) Addr() net.Addr {
 	return s.ln.Addr()
+}
+
+// queryParam returns whether the given query param is set to true.
+func queryParam(req *http.Request, param string) (bool, error) {
+	err := req.ParseForm()
+	if err != nil {
+		return false, err
+	}
+	if _, ok := req.Form[param]; ok {
+		return true, nil
+	}
+	return false, nil
+}
+
+// stmtParam returns the value for URL param 'q', if present.
+func stmtParam(req *http.Request) (string, error) {
+	q := req.URL.Query()
+	stmt := strings.TrimSpace(q.Get("q"))
+	if stmt == "" {
+		return "", fmt.Errorf(`required parameter 'q' is missing`)
+	}
+	return stmt, nil
+}
+
+// isPretty returns whether the HTTP response body should be pretty-printed.
+func isPretty(req *http.Request) (bool, error) {
+	return queryParam(req, "pretty")
 }
