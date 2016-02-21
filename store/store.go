@@ -114,10 +114,14 @@ func (s *Store) Open(enableSingle bool) error {
 	}
 	s.db = db
 
+	if err != nil {
+		panic(fmt.Sprintf("failed to CREATE TABLE: %s", err.Error()))
+	}
+
 	return nil
 }
 
-func (s *Store) Exec(queries []string, tx bool) (sql.Result, error) {
+func (s *Store) Execute(queries []string, tx bool) (sql.Result, error) {
 	if s.raft.State() != raft.Leader {
 		return nil, fmt.Errorf("not leader")
 	}

@@ -61,10 +61,12 @@ rqlite exposes an HTTP API allowing the database to be modified such that the ch
 All responses from rqlite are in the form of JSON.
 
 ### Writing Data
-To write data successfully to the database, you must create at least 1 table. To do this, perform a HTTP POST, with a CREATE TABLE SQL command in the body of the request. For example:
+To write data successfully to the database, you must create at least 1 table. To do this, perform a HTTP POST, with a CREATE TABLE SQL command encapsulated in a JSON array, in the body of the request. For example:
 
     curl -L -XPOST localhost:4001/db?pretty -d '
-    CREATE TABLE foo (id integer not null primary key, name text)
+    [
+        "CREATE TABLE foo (id integer not null primary key, name text)"
+    ]
     '
 
 where `curl` is the [well known command-line tool](http://curl.haxx.se/). Passing `-L` to `curl` ensures the command will follow any redirect (HTTP status code 307) to the leader, if the node running on port 4001 is not the leader.
@@ -72,7 +74,9 @@ where `curl` is the [well known command-line tool](http://curl.haxx.se/). Passin
 To insert an entry into the database, execute a second SQL command:
 
     curl -L -XPOST 'localhost:4001/db?pretty&explain' -d '
-    INSERT INTO foo(name) VALUES("fiona")
+    [
+        "INSERT INTO foo(name) VALUES('fiona')"
+    ]
     '
 
 The use of the URL param `pretty` is optional, and results in pretty-printed JSON responses. `explain` is also optional. If included, the response will include some basic information about the processing that took place -- how long it took, for example.
@@ -89,27 +93,44 @@ You can confirm that the data has been writen to the database by accessing the S
 Note that this is the SQLite file that is under `node 3`, which is not the node that accepted the `INSERT` operation.
 
 ### Bulk Updates
-Bulk updates are supported. To execute multipe statements in one HTTP call, separate each statement with a semicolon. An example of inserting two records is shown below:
+Bulk updates are supported. To execute multipe statements in one HTTP call, simply include the statements in the JSON array:
 
     curl -L -XPOST 'localhost:4001/db?pretty' -d '
-    INSERT INTO foo(name) VALUES("fiona");INSERT INTO foo(name) VALUES("sinead")
+    [
+        "INSERT INTO foo(name) VALUES('fiona')",
+        "INSERT INTO foo(name) VALUES('sinead')"
+    ]
     '
 
 #### Transactions
 Transactions are supported. To execute statements within a transaction, add `transaction` to the URL. An example of the above operation executed within a transaction is shown below.
 
     curl -L -XPOST 'localhost:4001/db?pretty&transaction' -d '
-    INSERT INTO foo(name) VALUES("fiona");INSERT INTO foo(name) VALUES("sinead")
+    [
+        "INSERT INTO foo(name) VALUES('fiona')",
+        "INSERT INTO foo(name) VALUES('sinead')""
+    ]
     '
 
 When a transaction takes place either both statements will succeed, or neither. Performance is *much, much* better if multiple SQL INSERTs or UPDATEs are executed via a transaction.
 
 ### Querying Data
-Qeurying data is easy. Simply perform a HTTP GET, setting the query statement as the query parameter `q`:
+Qeurying data is easy. 
 
-    curl -L -G localhost:4001/db?pretty --data-urlencode 'q=SELECT * from foo'
+For a single query simply perform a HTTP GET, setting the query statement as the query parameter `q`:
 
-An alternative approach is to read the database via `sqlite3`, the command-line tool that comes with SQLite. As long as you can be sure the file you access is under the leader, the records returned will be accurate and up-to-date.
+    curl -L -G localhost:4001/db?pretty --data-urlencode 'q=SELECT * FROM foo'
+
+The behaviour of rqlite when more than 1 query is passed via `q` is undefined. If you want to execute more than one query per HTTP request, place the queries in the body of the request, as a JSON array. For example:
+
+    curl -L -G 'localhost:4001/db?pretty' -d '
+    [
+        "SELECT * FROM foo",
+        "SELECT * FROM bar"
+    ]
+    '
+
+Another approach is to read the database file directly via `sqlite3`, the command-line tool that comes with SQLite. As long as you can be sure the file you access is under the leader, the records returned will be accurate and up-to-date.
 
 ### Performance
 rqlite replicates SQLite for fault-tolerance. It does not replicate it for performance. In fact performance is reduced somewhat due to the network round-trips.

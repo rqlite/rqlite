@@ -15,9 +15,15 @@ import (
 
 // Store is the interface the Raft-driven database must implement.
 type Store interface {
-	Exec(queries []string, tx bool) (sql.Result, error)
+	// Execute executes a slice of queries, each of which doesn't
+	// return rows. It tx is true, then all queries will be executed
+	// successfully or none will be.
+	Execute(queries []string, tx bool) ([]sql.Result, error)
 
-	Query(queries []string, tx bool) (*sql.Rows, error)
+	// Query executes a slice of queries, each of which returns rows.
+	// If tx is true, then the query will take place while a read
+	// transaction is held on the database.
+	Query(queries []string, tx bool) ([]*sql.Rows, error)
 
 	// Join joins the node, reachable at addr, to the cluster.
 	Join(addr string) error
