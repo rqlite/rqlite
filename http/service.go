@@ -3,7 +3,6 @@
 package http
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -11,6 +10,8 @@ import (
 	"net"
 	"net/http"
 	"strings"
+
+	sql "github.com/otoolep/rqlite/db"
 )
 
 // Store is the interface the Raft-driven database must implement.

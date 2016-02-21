@@ -137,7 +137,7 @@ func (s *Store) Execute(queries []string, tx bool) ([]sql.Result, error) {
 	return nil, nil
 }
 
-func (s *Store) Query(queries []string, tx bool) (*sql.Rows, error) {
+func (s *Store) Query(queries []string, tx bool) ([]*sql.Rows, error) {
 	// Go straight to the local database. Optionally check if leader. Hard way?
 	return nil, nil
 }

@@ -16,14 +16,14 @@ type Row sql.Row
 type Rows sql.Rows
 
 // Open an existing database, creating it if it does not exist.
-func Open(dbPath string) *DB {
+func Open(dbPath string) (*DB, error) {
 	dbc, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	return &DB{
 		conn: dbc,
-	}
+	}, nil
 }
 
 // Close closes the underlying database connection.
@@ -64,5 +64,41 @@ func (db *DB) Execute(queries []string, tx bool) ([]sql.Result, error) {
 	}()
 
 	return nil, err
+}
 
+func (db *DB) Query(queries []string, tx bool) ([]*sql.Rows, error) {
+	type Queryer interface {
+		Query(query string, args ...interface{}) (*sql.Rows, error)
+	}
+
+	var allRows []*sql.Rows
+	err := func() (err error) {
+		var queryer Queryer
+		defer func() {
+			if t, ok := queryer.(*sql.Tx); ok {
+				if err != nil {
+					t.Rollback()
+					return
+				}
+				t.Commit()
+			}
+		}()
+
+		if tx {
+			queryer, _ = db.conn.Begin()
+		} else {
+			queryer = db.conn
+		}
+
+		for _, q := range queries {
+			rows, err := queryer.Query(q)
+			if err != nil {
+				return err
+			}
+			allRows = append(allRows, rows)
+		}
+		return nil
+	}()
+
+	return allRows, err
 }
