@@ -141,6 +141,20 @@ func Test_SimpleMultiStatements(t *testing.T) {
 	}
 }
 
+func Test_SimpleFailingStatements(t *testing.T) {
+	db, path := mustCreateDatabase()
+	defer db.Close()
+	defer os.Remove(path)
+
+	_, err := db.Execute([]string{`INSERT INTO foo(name) VALUES("fiona")`}, false)
+	if err == nil {
+		t.Fatalf("inserted record into non-existent table")
+	}
+	if err.Error() != "no such table: foo" {
+		t.Fatal("unexpected error returned")
+	}
+}
+
 // func Test_FailingSimpleStatements(t *testing.T) {
 // 	db, path := mustCreateDatabase()
 // 	defer db.Close()
