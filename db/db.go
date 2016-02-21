@@ -13,8 +13,8 @@ type DB struct {
 
 type Result sql.Result
 type Rows struct {
-	Columns []string
-	Values  [][]interface{}
+	Columns []string        `json:"columns"`
+	Values  [][]interface{} `json:"values,omitempty"`
 }
 
 // Open an existing database, creating it if it does not exist.
@@ -106,20 +106,26 @@ func (db *DB) Query(queries []string, tx bool) ([]Rows, error) {
 			var rows Rows
 			rows.Columns = columns
 			for rs.Next() {
+				// Make a slice of interface{}, and the pointers to each item in the slice.
 				values := make([]interface{}, len(rows.Columns))
-				rawResult := make([]interface{}, len(columns))
-				for i := range rawResult {
-					values[i] = &rawResult[i]
+				ptrs := make([]interface{}, len(rows.Columns))
+				for i := range values {
+					ptrs[i] = &values[i]
 				}
 
-				err = rs.Scan(values...)
+				// Read all the values out.
+				err = rs.Scan(ptrs...)
 				if err != nil {
 					return err
 				}
-				rows.Values = append(rows.Values, values)
 
-				// I think there is way to fix all this. The Values are *interface{}, but I want interface{} to go up,
-				// with the right types inside. http://stackoverflow.com/questions/23507531/is-golangs-sql-package-incapable-of-ad-hoc-exploratory-queries
+				// Special case -- convert []uint8 to string. Perhaps this should be a config option.
+				for i, v := range values {
+					if w, ok := v.([]uint8); ok {
+						values[i] = string(w)
+					}
+				}
+				rows.Values = append(rows.Values, values)
 			}
 
 			allRows = append(allRows, rows)
