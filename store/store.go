@@ -5,7 +5,6 @@ package store
 
 import (
 	"bytes"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -19,8 +18,7 @@ import (
 
 	"github.com/hashicorp/raft"
 	"github.com/hashicorp/raft-boltdb"
-
-	_ "github.com/mattn/go-sqlite3" // required blank import
+	sql "github.com/otoolep/rqlite/db"
 )
 
 const (
@@ -108,20 +106,16 @@ func (s *Store) Open(enableSingle bool) error {
 	s.raft = ra
 
 	// Setup the SQLite database.
-	db, err := sql.Open("sqlite3", filepath.Join(s.raftDir, "db.sqlite"))
+	db, err := sql.Open(filepath.Join(s.raftDir, "db.sqlite"))
 	if err != nil {
 		return err
 	}
 	s.db = db
 
-	if err != nil {
-		panic(fmt.Sprintf("failed to CREATE TABLE: %s", err.Error()))
-	}
-
 	return nil
 }
 
-func (s *Store) Execute(queries []string, tx bool) (sql.Result, error) {
+func (s *Store) Execute(queries []string, tx bool) ([]sql.Result, error) {
 	if s.raft.State() != raft.Leader {
 		return nil, fmt.Errorf("not leader")
 	}
@@ -170,36 +164,7 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 		panic(fmt.Sprintf("failed to unmarshal command: %s", err.Error()))
 	}
 
-	type Execer interface {
-		Exec(query string, args ...interface{}) (sql.Result, error)
-	}
-
-	err := func() (err error) {
-		var execer Execer
-		defer func() {
-			if t, ok := execer.(*sql.Tx); ok {
-				if err != nil {
-					t.Rollback()
-					return
-				}
-				t.Commit()
-			}
-		}()
-
-		if c.Tx {
-			execer, _ = f.db.Begin()
-		} else {
-			execer = f.db
-		}
-
-		for _, q := range c.Queries {
-			_, err = execer.Exec(q)
-			if err != nil {
-				return err
-			}
-		}
-		return nil
-	}()
+	_, err := f.db.Execute(c.Queries, c.Tx)
 
 	return err
 }

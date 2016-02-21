@@ -132,9 +132,9 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 	pretty, _ := isPretty(r)
 	var b []byte
 	if pretty {
-		b, err = json.MarshalIndent(*rows, "", "    ")
+		b, err = json.MarshalIndent(rows, "", "    ")
 	} else {
-		b, err = json.Marshal(*rows)
+		b, err = json.Marshal(rows)
 	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest) // Internal error actually
