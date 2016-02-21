@@ -12,8 +12,10 @@ type DB struct {
 }
 
 type Result sql.Result
-type Row sql.Row
-type Rows sql.Rows
+type Rows struct {
+	Columns []string
+	Values  [][]interface{}
+}
 
 // Open an existing database, creating it if it does not exist.
 func Open(dbPath string) (*DB, error) {
@@ -66,12 +68,12 @@ func (db *DB) Execute(queries []string, tx bool) ([]sql.Result, error) {
 	return nil, err
 }
 
-func (db *DB) Query(queries []string, tx bool) ([]*sql.Rows, error) {
+func (db *DB) Query(queries []string, tx bool) ([]Rows, error) {
 	type Queryer interface {
 		Query(query string, args ...interface{}) (*sql.Rows, error)
 	}
 
-	var allRows []*sql.Rows
+	var allRows []Rows
 	err := func() (err error) {
 		var queryer Queryer
 		defer func() {
@@ -91,12 +93,38 @@ func (db *DB) Query(queries []string, tx bool) ([]*sql.Rows, error) {
 		}
 
 		for _, q := range queries {
-			rows, err := queryer.Query(q)
+			rs, err := queryer.Query(q)
 			if err != nil {
 				return err
 			}
+			defer rs.Close() // This adds to all defers, right? Nothing leaks? XXX Could consume memory. Perhaps anon would be best.
+			columns, err := rs.Columns()
+			if err != nil {
+				return err
+			}
+
+			var rows Rows
+			rows.Columns = columns
+			for rs.Next() {
+				values := make([]interface{}, len(rows.Columns))
+				rawResult := make([]interface{}, len(columns))
+				for i := range rawResult {
+					values[i] = &rawResult[i]
+				}
+
+				err = rs.Scan(values...)
+				if err != nil {
+					return err
+				}
+				rows.Values = append(rows.Values, values)
+
+				// I think there is way to fix all this. The Values are *interface{}, but I want interface{} to go up,
+				// with the right types inside. http://stackoverflow.com/questions/23507531/is-golangs-sql-package-incapable-of-ad-hoc-exploratory-queries
+			}
+
 			allRows = append(allRows, rows)
 		}
+
 		return nil
 	}()
 
