@@ -28,6 +28,8 @@ import (
 	"github.com/otoolep/rqlite/store"
 )
 
+const sqliteDSN = "db.sqlite"
+
 var httpAddr string
 var raftAddr string
 var joinAddr string
@@ -39,7 +41,7 @@ func init() {
 	flag.StringVar(&raftAddr, "raft", "localhost:4001", "Raft communication bind address")
 	flag.StringVar(&httpAddr, "http", "localhost:4002", "HTTP query server bind address")
 	flag.StringVar(&joinAddr, "join", "", "host:port of leader to join")
-	flag.StringVar(&sqlDB, "dsn", "", "Overide SQLite datasource name")
+	flag.StringVar(&sqlDB, "dsn", "", fmt.Sprintf("Override SQLite datasource name (default is <data-path>/%s)", sqliteDSN))
 	flag.StringVar(&cpuprofile, "cpuprofile", "", "write CPU profile to file")
 	flag.BoolVar(&disableReporting, "noreport", false, "Disable anonymised launch reporting")
 	flag.Usage = func() {
@@ -79,7 +81,7 @@ func main() {
 	// Setup the SQLite database.
 	var dsn string
 	if sqlDB == "" {
-		dsn = filepath.Join(dataPath, "db.sqlite")
+		dsn = filepath.Join(dataPath, sqliteDSN)
 	} else {
 		dsn = sqlDB
 	}
