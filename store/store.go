@@ -125,7 +125,7 @@ func (s *Store) Execute(queries []string, tx bool) ([]*sql.Result, error) {
 		return nil, err
 	}
 
-	r := s.raft.Apply(b, raftTimeout).(*fsmResponse)
+	r := s.raft.Apply(b, raftTimeout)
 	return r.Response().([]*sql.Result), r.Error()
 }
 
@@ -152,19 +152,6 @@ type fsm Store
 type fsmResponse struct {
 	results []*sql.Result
 	error error
-	index uint64
-}
-
-func (f *fsmResponse) Response() interface{} {
-	return f.results
-}
-
-func (f *fsmResponse) Index() uint64 {
-	return f.index
-}
-
-func (f *fsmResponse) Error() error {
-	return f.error
 }
 
 // Apply applies a Raft log entry to the database.
@@ -175,11 +162,7 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 	}
 
 	r, err := f.db.Execute(c.Queries, c.Tx)
-	return &fsmResponse{
-		results: r,
-		error: err,
-		index: 1,
-	}
+	return &fsmResponse{results: r,error: err}
 }
 
 // Snapshot returns a snapshot of the database.
