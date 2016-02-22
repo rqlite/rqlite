@@ -24,7 +24,6 @@ import (
 const (
 	retainSnapshotCount = 2
 	raftTimeout         = 10 * time.Second
-	SQLiteDB            = "db.sqlite"
 )
 
 type command struct {
@@ -48,12 +47,12 @@ type Store struct {
 }
 
 // New returns a new Store.
-func New(dir, bind string) *Store {
+func New(db *sql.DB, dir, bind string) *Store {
 	return &Store{
 		raftDir:  dir,
 		raftBind: bind,
+		db:       db,
 		logger:   log.New(os.Stderr, "[store] ", log.LstdFlags),
-		SQLiteDB: SQLiteDB,
 	}
 }
 
@@ -108,13 +107,6 @@ func (s *Store) Open(enableSingle bool) error {
 		return fmt.Errorf("new raft: %s", err)
 	}
 	s.raft = ra
-
-	// Setup the SQLite database.
-	db, err := sql.Open(filepath.Join(s.raftDir, s.SQLiteDB))
-	if err != nil {
-		return err
-	}
-	s.db = db
 
 	return nil
 }
