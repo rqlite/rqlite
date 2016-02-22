@@ -211,121 +211,101 @@ func Test_SimpleFailingStatements(t *testing.T) {
 	}
 }
 
-// func Test_SimpleTransactions(t *testing.T) {
-// 	db, path := mustCreateDatabase()
-// 	defer db.Close()
-// 	defer os.Remove(path)
+func Test_PartialFail(t *testing.T) {
+	db, path := mustCreateDatabase()
+	defer db.Close()
+	defer os.Remove(path)
 
-// 	if err := db.Execute("create table foo (id integer not null primary key, name text)"); err != nil {
-// 		t.Fatalf("failed to create table: %s", err.Error())
-// 	}
+	_, err := db.Execute([]string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"}, false)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
 
-// 	if err := db.StartTransaction(); err != nil {
-// 		t.Fatalf("failed to start transaction: %s", err.Error())
-// 	}
-// 	for i := 0; i < 10; i++ {
-// 		_ = db.Execute(`INSERT INTO foo(name) VALUES("philip")`)
-// 	}
-// 	if err := db.CommitTransaction(); err != nil {
-// 		t.Fatalf("failed to commit transaction: %s", err.Error())
-// 	}
+	stmts := []string{
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+		`INSERT INTO foo(id, name) VALUES(2, "fiona")`,
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+		`INSERT INTO foo(id, name) VALUES(4, "fiona")`,
+	}
+	r, err := db.Execute(stmts, false)
+	if err != nil {
+		t.Fatalf("failed to insert records: %s", err.Error())
+	}
+	if exp, got := `[{"last_insert_id":1,"rows_affected":1},{"last_insert_id":2,"rows_affected":1},{"error":"UNIQUE constraint failed: foo.id"},{"last_insert_id":4,"rows_affected":1}]`, asJson(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	ro, err := db.Query([]string{`SELECT * FROM foo`}, false)
+	if err != nil {
+		t.Fatalf("failed to query table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"values":[[1,"fiona"],[2,"fiona"],[4,"fiona"]]}]`, asJson(ro); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
 
-// 	r, err := db.Query("SELECT name FROM foo")
-// 	if err != nil {
-// 		t.Fatalf("failed to query after commited transaction: %s", err.Error())
-// 	}
-// 	if len(r) != 10 {
-// 		t.Fatalf("incorrect number of results returned: %d", len(r))
-// 	}
+func Test_SimpleTransaction(t *testing.T) {
+	db, path := mustCreateDatabase()
+	defer db.Close()
+	defer os.Remove(path)
 
-// 	if err := db.StartTransaction(); err != nil {
-// 		t.Fatalf("failed to start transaction: %s", err.Error())
-// 	}
-// 	for i := 0; i < 10; i++ {
-// 		_ = db.Execute(`INSERT INTO foo(name) VALUES("philip")`)
-// 	}
-// 	if err := db.RollbackTransaction(); err != nil {
-// 		t.Fatalf("failed to rollback transaction: %s", err.Error())
-// 	}
+	_, err := db.Execute([]string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"}, false)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
 
-// 	r, err = db.Query("SELECT name FROM foo")
-// 	if err != nil {
-// 		t.Fatalf("failed to query after commited transaction: %s", err.Error())
-// 	}
-// 	if len(r) != 10 {
-// 		t.Fatalf("incorrect number of results returned: %d", len(r))
-// 	}
-// }
+	stmts := []string{
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+		`INSERT INTO foo(id, name) VALUES(2, "fiona")`,
+		`INSERT INTO foo(id, name) VALUES(3, "fiona")`,
+		`INSERT INTO foo(id, name) VALUES(4, "fiona")`,
+	}
+	r, err := db.Execute(stmts, true)
+	if err != nil {
+		t.Fatalf("failed to insert records: %s", err.Error())
+	}
+	if exp, got := `[{"last_insert_id":1,"rows_affected":1},{"last_insert_id":2,"rows_affected":1},{"last_insert_id":3,"rows_affected":1},{"last_insert_id":4,"rows_affected":1}]`, asJson(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	ro, err := db.Query([]string{`SELECT * FROM foo`}, false)
+	if err != nil {
+		t.Fatalf("failed to query table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"values":[[1,"fiona"],[2,"fiona"],[3,"fiona"],[4,"fiona"]]}]`, asJson(ro); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
 
-// func Test_TransactionsConstraintViolation(t *testing.T) {
-// 	db, path := mustCreateDatabase()
-// 	defer db.Close()
-// 	defer os.Remove(path)
-// 	var err error
+func Test_PartialFailTransaction(t *testing.T) {
+	db, path := mustCreateDatabase()
+	defer db.Close()
+	defer os.Remove(path)
 
-// 	if err = db.Execute("create table foo (id integer not null primary key, name text)"); err != nil {
-// 		t.Fatalf("failed to create table: %s", err.Error())
-// 	}
+	_, err := db.Execute([]string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"}, false)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
 
-// 	if err = db.StartTransaction(); err != nil {
-// 		t.Fatalf("failed to start transaction: %s", err.Error())
-// 	}
-// 	if err = db.Execute(`INSERT INTO foo(id, name) VALUES(11, "fiona")`); err != nil {
-// 		t.Fatalf("failed to insert record: %s", err.Error())
-// 	}
-// 	if err = db.Execute(`INSERT INTO foo(id, name) VALUES(11, "fiona")`); err == nil {
-// 		t.Fatal("duplicated record inserted OK")
-// 	}
-// 	if err.Error() != "UNIQUE constraint failed: foo.id" {
-// 		t.Fatal("unexpected error returned")
-// 	}
-// 	if err := db.RollbackTransaction(); err != nil {
-// 		t.Fatalf("failed to rollback transaction: %s", err.Error())
-// 	}
-// 	r, err := db.Query("SELECT name FROM foo")
-// 	if err != nil {
-// 		t.Fatalf("failed to query after commited transaction: %s", err.Error())
-// 	}
-// 	if len(r) != 0 {
-// 		t.Fatalf("incorrect number of results returned: %d", len(r))
-// 	}
-// }
-
-// func Test_TransactionsHardFail(t *testing.T) {
-// 	db, path := mustCreateDatabase()
-// 	defer db.Close()
-// 	defer os.Remove(path)
-// 	var err error
-
-// 	if err = db.Execute("create table foo (id integer not null primary key, name text)"); err != nil {
-// 		t.Fatalf("failed to create table: %s", err.Error())
-// 	}
-// 	if err = db.Execute(`INSERT INTO foo(id, name) VALUES(1, "fiona")`); err != nil {
-// 		t.Fatalf("failed to insert record: %s", err.Error())
-// 	}
-
-// 	if err = db.StartTransaction(); err != nil {
-// 		t.Fatalf("failed to start transaction: %s", err.Error())
-// 	}
-// 	if err = db.Execute(`INSERT INTO foo(id, name) VALUES(2, "fiona")`); err != nil {
-// 		t.Fatalf("failed to insert record: %s", err.Error())
-// 	}
-// 	if err = db.Close(); err != nil {
-// 		t.Fatalf("failed to close database: %s", err.Error())
-// 	}
-
-// 	db, err = Open(path)
-// 	if err != nil {
-// 		t.Fatalf("failed to re-open database: %s", err.Error())
-// 	}
-// 	r, err := db.Query("SELECT * FROM foo")
-// 	if err != nil {
-// 		t.Fatalf("failed to query after hard close: %s", err.Error())
-// 	}
-// 	if len(r) != 1 {
-// 		t.Fatalf("incorrect number of results returned: %d", len(r))
-// 	}
-// }
+	stmts := []string{
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+		`INSERT INTO foo(id, name) VALUES(2, "fiona")`,
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+		`INSERT INTO foo(id, name) VALUES(4, "fiona")`,
+	}
+	r, err := db.Execute(stmts, true)
+	if err != nil {
+		t.Fatalf("failed to insert records: %s", err.Error())
+	}
+	if exp, got := `[{"last_insert_id":1,"rows_affected":1},{"last_insert_id":2,"rows_affected":1},{"error":"UNIQUE constraint failed: foo.id"}]`, asJson(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	ro, err := db.Query([]string{`SELECT * FROM foo`}, false)
+	if err != nil {
+		t.Fatalf("failed to query table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"]}]`, asJson(ro); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
 
 func mustCreateDatabase() (*DB, string) {
 	var err error

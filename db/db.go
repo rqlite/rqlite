@@ -45,11 +45,14 @@ func (db *DB) Execute(queries []string, tx bool) ([]*Result, error) {
 	}
 
 	var allResults []*Result
-	err := func() (err error) {
+	err := func() error {
 		var execer Execer
+		var rollback bool
+
+		// Check for the err, if set rollback.
 		defer func() {
 			if t, ok := execer.(*sql.Tx); ok {
-				if err != nil {
+				if rollback {
 					t.Rollback()
 					return
 				}
@@ -57,39 +60,58 @@ func (db *DB) Execute(queries []string, tx bool) ([]*Result, error) {
 			}
 		}()
 
+		// handleError sets the error field on the given result. It returns
+		// whether the caller should continue processing or break.
+		handleError := func(result *Result, err error) bool {
+			result.Error = err.Error()
+			allResults = append(allResults, result)
+			if tx {
+				rollback = true // Will trigger the rollback.
+				return false
+			}
+			return true
+		}
+
+		// Create the correct execution object, depending on whether a
+		// transaction was requested.
 		if tx {
 			execer, _ = db.conn.Begin()
 		} else {
 			execer = db.conn
 		}
 
+		// Execute each query.
 		for _, q := range queries {
 			result := &Result{}
 
 			r, err := execer.Exec(q)
 			if err != nil {
-				result.Error = err.Error()
-				allResults = append(allResults, result)
-				continue
+				if handleError(result, err) {
+					continue
+				}
+				break
 			}
 
 			lid, err := r.LastInsertId()
 			if err != nil {
-				result.Error = err.Error()
-				allResults = append(allResults, result)
-				continue
+				if handleError(result, err) {
+					continue
+				}
+				break
 			}
 			result.LastInsertID = lid
 
 			ra, err := r.RowsAffected()
 			if err != nil {
-				result.Error = err.Error()
-				allResults = append(allResults, result)
-				continue
+				if handleError(result, err) {
+					continue
+				}
+				break
 			}
 			result.RowsAffected = ra
 			allResults = append(allResults, result)
 		}
+
 		return nil
 	}()
 
@@ -105,6 +127,7 @@ func (db *DB) Query(queries []string, tx bool) ([]*Rows, error) {
 	err := func() (err error) {
 		var queryer Queryer
 		defer func() {
+			// XXX THIS DOESN'T ACTUALLY WORK! Might as WELL JUST COMMIT?
 			if t, ok := queryer.(*sql.Tx); ok {
 				if err != nil {
 					t.Rollback()
@@ -114,6 +137,8 @@ func (db *DB) Query(queries []string, tx bool) ([]*Rows, error) {
 			}
 		}()
 
+		// Create the correct query object, depending on whether a
+		// transaction was requested.
 		if tx {
 			queryer, _ = db.conn.Begin()
 		} else {
