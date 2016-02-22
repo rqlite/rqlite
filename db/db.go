@@ -11,10 +11,16 @@ type DB struct {
 	conn *sql.DB
 }
 
-type Result sql.Result
+type Result struct {
+	LastInsertID int64  `json:"last_insert_id,omitempty"`
+	RowsAffected int64  `json:"rows_affected,omitempty"`
+	Error        string `json:"error,omitempty"`
+}
+
 type Rows struct {
-	Columns []string        `json:"columns"`
+	Columns []string        `json:"columns,omitempty"`
 	Values  [][]interface{} `json:"values,omitempty"`
+	Error   string          `json:"error,omitempty"`
 }
 
 // Open an existing database, creating it if it does not exist.
@@ -33,11 +39,12 @@ func (db *DB) Close() error {
 	return db.conn.Close()
 }
 
-func (db *DB) Execute(queries []string, tx bool) ([]sql.Result, error) {
+func (db *DB) Execute(queries []string, tx bool) ([]*Result, error) {
 	type Execer interface {
 		Exec(query string, args ...interface{}) (sql.Result, error)
 	}
 
+	var allResults []*Result
 	err := func() (err error) {
 		var execer Execer
 		defer func() {
@@ -57,23 +64,44 @@ func (db *DB) Execute(queries []string, tx bool) ([]sql.Result, error) {
 		}
 
 		for _, q := range queries {
-			_, err = execer.Exec(q)
+			result := &Result{}
+
+			r, err := execer.Exec(q)
 			if err != nil {
-				return err
+				result.Error = err.Error()
+				allResults = append(allResults, result)
+				continue
 			}
+
+			lid, err := r.LastInsertId()
+			if err != nil {
+				result.Error = err.Error()
+				allResults = append(allResults, result)
+				continue
+			}
+			result.LastInsertID = lid
+
+			ra, err := r.RowsAffected()
+			if err != nil {
+				result.Error = err.Error()
+				allResults = append(allResults, result)
+				continue
+			}
+			result.RowsAffected = ra
+			allResults = append(allResults, result)
 		}
 		return nil
 	}()
 
-	return nil, err
+	return allResults, err
 }
 
-func (db *DB) Query(queries []string, tx bool) ([]Rows, error) {
+func (db *DB) Query(queries []string, tx bool) ([]*Rows, error) {
 	type Queryer interface {
 		Query(query string, args ...interface{}) (*sql.Rows, error)
 	}
 
-	var allRows []Rows
+	var allRows []*Rows
 	err := func() (err error) {
 		var queryer Queryer
 		defer func() {
@@ -92,18 +120,24 @@ func (db *DB) Query(queries []string, tx bool) ([]Rows, error) {
 			queryer = db.conn
 		}
 
+	QueryLoop:
 		for _, q := range queries {
+			rows := &Rows{}
+
 			rs, err := queryer.Query(q)
 			if err != nil {
-				return err
+				rows.Error = err.Error()
+				allRows = append(allRows, rows)
+				continue
 			}
 			defer rs.Close() // This adds to all defers, right? Nothing leaks? XXX Could consume memory. Perhaps anon would be best.
 			columns, err := rs.Columns()
 			if err != nil {
-				return err
+				rows.Error = err.Error()
+				allRows = append(allRows, rows)
+				continue
 			}
 
-			var rows Rows
 			rows.Columns = columns
 			for rs.Next() {
 				// Make a slice of interface{}, and the pointers to each item in the slice.
@@ -116,7 +150,9 @@ func (db *DB) Query(queries []string, tx bool) ([]Rows, error) {
 				// Read all the values out.
 				err = rs.Scan(ptrs...)
 				if err != nil {
-					return err
+					rows.Error = err.Error()
+					allRows = append(allRows, rows)
+					continue QueryLoop
 				}
 
 				// Special case -- convert []uint8 to string. Perhaps this should be a config option.
@@ -127,7 +163,6 @@ func (db *DB) Query(queries []string, tx bool) ([]Rows, error) {
 				}
 				rows.Values = append(rows.Values, values)
 			}
-
 			allRows = append(allRows, rows)
 		}
 
