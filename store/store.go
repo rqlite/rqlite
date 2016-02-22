@@ -125,12 +125,8 @@ func (s *Store) Execute(queries []string, tx bool) ([]*sql.Result, error) {
 		return nil, err
 	}
 
-	f := s.raft.Apply(b, raftTimeout)
-	if err, ok := f.(error); ok {
-		return nil, err
-	}
-
-	return nil, nil
+	r := s.raft.Apply(b, raftTimeout).(*fsmResponse)
+	return r.Response().([]*sql.Result), r.Error()
 }
 
 func (s *Store) Query(queries []string, tx bool) ([]*sql.Rows, error) {
@@ -153,6 +149,24 @@ func (s *Store) Join(addr string) error {
 
 type fsm Store
 
+type fsmResponse struct {
+	results []*sql.Result
+	error error
+	index uint64
+}
+
+func (f *fsmResponse) Response() interface{} {
+	return f.results
+}
+
+func (f *fsmResponse) Index() uint64 {
+	return f.index
+}
+
+func (f *fsmResponse) Error() error {
+	return f.error
+}
+
 // Apply applies a Raft log entry to the database.
 func (f *fsm) Apply(l *raft.Log) interface{} {
 	var c command
@@ -161,10 +175,11 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 	}
 
 	r, err := f.db.Execute(c.Queries, c.Tx)
-	if err != nil {
-		return err
+	return &fsmResponse{
+		results: r,
+		error: err,
+		index: 1,
 	}
-	return r
 }
 
 // Snapshot returns a snapshot of the database.
