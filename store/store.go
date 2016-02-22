@@ -115,7 +115,7 @@ func (s *Store) Open(enableSingle bool) error {
 	return nil
 }
 
-func (s *Store) Execute(queries []string, tx bool) ([]sql.Result, error) {
+func (s *Store) Execute(queries []string, tx bool) ([]*sql.Result, error) {
 	if s.raft.State() != raft.Leader {
 		return nil, fmt.Errorf("not leader")
 	}
@@ -134,7 +134,7 @@ func (s *Store) Execute(queries []string, tx bool) ([]sql.Result, error) {
 		return nil, err
 	}
 
-	return nil, nil
+	return f, nil
 }
 
 func (s *Store) Query(queries []string, tx bool) ([]*sql.Rows, error) {
@@ -164,9 +164,11 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 		panic(fmt.Sprintf("failed to unmarshal command: %s", err.Error()))
 	}
 
-	_, err := f.db.Execute(c.Queries, c.Tx)
-
-	return err
+	r, err := f.db.Execute(c.Queries, c.Tx)
+	if err != nil {
+		return err
+	}
+	return r
 }
 
 // Snapshot returns a snapshot of the database.
