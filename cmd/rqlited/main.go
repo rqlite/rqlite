@@ -29,6 +29,7 @@ import (
 var httpAddr string
 var raftAddr string
 var joinAddr string
+var sqlDB string
 var cpuprofile string
 var disableReporting bool
 
@@ -36,6 +37,7 @@ func init() {
 	flag.StringVar(&raftAddr, "raft", "localhost:4001", "Raft communication bind address")
 	flag.StringVar(&httpAddr, "http", "localhost:4002", "HTTP query server bind address")
 	flag.StringVar(&joinAddr, "join", "", "host:port of leader to join")
+	flag.StringVar(&sqlDB, store.SQLiteDB, "", "Path to SQLite file")
 	flag.StringVar(&cpuprofile, "cpuprofile", "", "write CPU profile to file")
 	flag.BoolVar(&disableReporting, "noreport", false, "Disable anonymised launch reporting")
 	flag.Usage = func() {
@@ -74,6 +76,7 @@ func main() {
 
 	// Create and open the store.
 	store := store.New(dataPath, raftAddr)
+	store.SQLiteDB = sqlDB
 	if err := store.Open(joinAddr == ""); err != nil {
 		log.Fatalf("failed to open store: %s", err.Error())
 	}
