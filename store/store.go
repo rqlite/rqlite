@@ -138,7 +138,7 @@ func (s *Store) Execute(queries []string, tx bool) ([]*sql.Result, error) {
 		return nil, err
 	}
 
-	return f, nil
+	return nil, nil
 }
 
 func (s *Store) Query(queries []string, tx bool) ([]*sql.Rows, error) {

@@ -19,7 +19,7 @@ type Store interface {
 	// Execute executes a slice of queries, each of which doesn't
 	// return rows. It tx is true, then all queries will be executed
 	// successfully or none will be.
-	Execute(queries []string, tx bool) ([]sql.Result, error)
+	Execute(queries []string, tx bool) ([]*sql.Result, error)
 
 	// Query executes a slice of queries, each of which returns rows.
 	// If tx is true, then the query will take place while a read
