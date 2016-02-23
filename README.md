@@ -57,7 +57,7 @@ To insert an entry into the database, execute a second SQL command:
         "INSERT INTO foo(name) VALUES(\"fiona\")"
     ]'
     
-The response is:
+The response is of the form:
 
     [{"last_insert_id":1,"rows_affected":1}]
 
@@ -82,7 +82,7 @@ Bulk updates are supported. To execute multipe statements in one HTTP call, simp
         "INSERT INTO foo(name) VALUES(\"sinead\")"
     ]'
 
-The response is:
+The response is of the form:
 
     [{"last_insert_id":2,"rows_affected":1},{"last_insert_id":3,"rows_affected":1}]
 
