@@ -127,7 +127,7 @@ func join(joinAddr, raftAddr string) error {
 }
 
 func reportLaunch() {
-	json := fmt.Sprintf(`{"os": "%s", "arch": "%s", "app": "rqlite"}`, runtime.GOOS, runtime.GOARCH)
+	json := fmt.Sprintf(`{"os": "%s", "arch": "%s", "app": "rqlite", "raft": "hashicorp"}`, runtime.GOOS, runtime.GOARCH)
 	data := bytes.NewBufferString(json)
 	client := http.Client{Timeout: time.Duration(5 * time.Second)}
 	go func() {
