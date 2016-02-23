@@ -64,7 +64,7 @@ func New(dbConf *sql.Config, dir, bind string) *Store {
 func (s *Store) Open(enableSingle bool) error {
 	// Create the database. It must be deleted as it will be rebuilt from
 	// (possibly) a snapshot and committed log entries.
-	if err := os.Remove(s.dbPath); !os.IsNotExist(err) {
+	if err := os.Remove(s.dbPath); err != nil && !os.IsNotExist(err) {
 		return err
 	}
 
