@@ -52,7 +52,7 @@ func init() {
 func main() {
 	flag.Parse()
 
-	// Ensure the data path was set.
+	// Ensure the data path is set.
 	if flag.NArg() == 0 {
 		flag.Usage()
 		os.Exit(1)
