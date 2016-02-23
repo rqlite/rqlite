@@ -142,7 +142,7 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, err := s.store.Execute(queries, false)
+	results, err := s.store.Execute(queries, false)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -150,9 +150,9 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 
 	pretty, _ := isPretty(r)
 	if pretty {
-		b, err = json.MarshalIndent(rows, "", "    ")
+		b, err = json.MarshalIndent(results, "", "    ")
 	} else {
-		b, err = json.Marshal(rows)
+		b, err = json.Marshal(results)
 	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError) // Internal error actually
@@ -165,7 +165,19 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
-	// Get the query statement
+	// isLeader, err := isLeader(r)
+	// if err != nil {
+	// 	w.WriteHeader(http.StatusInternalServerError)
+	// 	return
+	// }
+
+	// isTx, err := isTx(r)
+	// if err != nil {
+	// 	w.WriteHeader(http.StatusInternalServerError)
+	// 	return
+	// }
+
+	// Get the query statement, check leader and do tx if necessary.
 	query, err := stmtParam(r)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -235,4 +247,9 @@ func isTx(req *http.Request) (bool, error) {
 // isExplain returns whether the HTTP request is requesting a explanation.
 func isExplain(req *http.Request) (bool, error) {
 	return queryParam(req, "explain")
+}
+
+// isLeader returns whether the HTTP request is requesting a leader check.
+func isLeader(req *http.Request) (bool, error) {
+	return queryParam(req, "leader")
 }

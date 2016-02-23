@@ -135,8 +135,8 @@ func (s *Store) Execute(queries []string, tx bool) ([]*sql.Result, error) {
 }
 
 func (s *Store) Query(queries []string, tx bool) ([]*sql.Rows, error) {
-	// Go straight to the local database. Optionally check if leader. Hard way?
-	return nil, nil
+	r, err := s.db.Query(queries, tx)
+	return r, err
 }
 
 // Join joins a node, located at addr, to this store. The node must be ready to
