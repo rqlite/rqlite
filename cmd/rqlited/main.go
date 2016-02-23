@@ -106,6 +106,9 @@ func main() {
 	terminate := make(chan os.Signal, 1)
 	signal.Notify(terminate, os.Interrupt)
 	<-terminate
+	if err := store.Close(); err != nil {
+		log.Printf("failed to close store: %s", err.Error())
+	}
 	log.Println("rqlite server stopped")
 }
 

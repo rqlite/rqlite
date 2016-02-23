@@ -126,6 +126,10 @@ func (s *Store) Open(enableSingle bool) error {
 	return nil
 }
 
+func (s *Store) Close() error {
+	return s.db.Close()
+}
+
 // Execute executes queries that return no rows.
 func (s *Store) Execute(queries []string, tx bool) ([]*sql.Result, error) {
 	if s.raft.State() != raft.Leader {
