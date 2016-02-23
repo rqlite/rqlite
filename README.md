@@ -3,7 +3,7 @@ rqlite [![Circle CI](https://circleci.com/gh/otoolep/rqlite/tree/master.svg?styl
 
 *Detailed background on rqlite can be found on [this blog post](http://www.philipotoole.com/replicating-sqlite-using-raft-consensus). Note that master represents 2.0 development (which is still in progress), with a new API. If you want to work with 1.0 rqlite, you can find it [here](https://github.com/otoolep/rqlite/releases/tag/v1.0).*
 
-*rqlite* is a distributed system that provides a replicated SQLite database. rqlite is written in [Go](http://golang.org/) and uses [Raft](http://raftconsensus.github.io/) to achieve consensus across all the instances of the SQLite databases. rqlite ensures that every change made to the database is made to a majority of underlying SQLite files, or none-at-all.
+*rqlite* is a distributed system that provides a replicated SQLite database. rqlite is written in [Go](http://golang.org/) and uses [Raft](http://raftconsensus.github.io/) to achieve consensus across all the instances of the SQLite databases. rqlite ensures that every change made to the database is made to a majority of underlying SQLite files, or none at all.
 
 ## Building and Running
 *Building rqlite requires Go 1.3 or later. [gvm](https://github.com/moovweb/gvm) is a great tool for managing your version of Go.*
