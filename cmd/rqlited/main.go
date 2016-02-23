@@ -85,7 +85,7 @@ func main() {
 	} else {
 		dsn = sqlDB
 	}
-	db, err := sql.Open(dsn)
+	db, err := sql.Open(dsn) // REALLY NEED TO BLOW AWAY DATABASE AND LET LOG RECOVER IT! BUT IT'S A DSN, NOT PATH! PARSE IT?
 	if err != nil {
 		log.Fatalf("failed to open database: %s", err.Error())
 	}

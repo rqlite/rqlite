@@ -125,8 +125,13 @@ func (s *Store) Execute(queries []string, tx bool) ([]*sql.Result, error) {
 		return nil, err
 	}
 
-	r := s.raft.Apply(b, raftTimeout)
-	return r.Response().([]*sql.Result), r.Error()
+	f := s.raft.Apply(b, raftTimeout)
+	if e := f.(raft.Future); e.Error() != nil {
+		return nil, e.Error()
+	}
+
+	r := f.Response().(*fsmResponse)
+	return r.results, r.error
 }
 
 func (s *Store) Query(queries []string, tx bool) ([]*sql.Rows, error) {
@@ -162,6 +167,7 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 	}
 
 	r, err := f.db.Execute(c.Queries, c.Tx)
+
 	return &fsmResponse{results: r, error: err}
 }
 

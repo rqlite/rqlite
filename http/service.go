@@ -123,26 +123,26 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
-	isTx, err := isTx(r)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
+	// isTx, err := isTx(r)
+	// if err != nil {
+	// 	w.WriteHeader(http.StatusInternalServerError)
+	// 	return
+	// }
 
 	b, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		fmt.Println(err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+	r.Body.Close()
+
 	queries := []string{}
 	if err := json.Unmarshal(b, &queries); err != nil {
-		fmt.Println(err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	rows, err := s.store.Execute(queries, isTx)
+	rows, err := s.store.Execute(queries, false)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
