@@ -38,8 +38,10 @@ type Store struct {
 
 	mu sync.Mutex
 
-	raft *raft.Raft // The consensus mechanism
-	db   *sql.DB    // The underlying SQLite store
+	raft   *raft.Raft // The consensus mechanism
+	dbConf *sql.Config
+	dbPath string
+	db     *sql.DB // The underlying SQLite store
 
 	logger *log.Logger
 
@@ -47,11 +49,12 @@ type Store struct {
 }
 
 // New returns a new Store.
-func New(db *sql.DB, dir, bind string) *Store {
+func New(dbConf *sql.Config, dir, bind string) *Store {
 	return &Store{
 		raftDir:  dir,
 		raftBind: bind,
-		db:       db,
+		dbConf:   dbConf,
+		dbPath:   filepath.Join(dir, "db.sqlite3"),
 		logger:   log.New(os.Stderr, "[store] ", log.LstdFlags),
 	}
 }
@@ -59,6 +62,18 @@ func New(db *sql.DB, dir, bind string) *Store {
 // Open opens the store. If enableSingle is set, and there are no existing peers,
 // then this node becomesthe first node, and therefore leader, of the cluster.
 func (s *Store) Open(enableSingle bool) error {
+	// Create the database. It must be deleted as it will be rebuilt from
+	// (possibly) a snapshot and committed log entries.
+	if err := os.Remove(s.dbPath); !os.IsNotExist(err) {
+		return err
+	}
+
+	db, err := sql.OpenWithConfiguration(s.dbPath, s.dbConf)
+	if err != nil {
+		return err
+	}
+	s.db = db
+
 	// Setup Raft configuration.
 	config := raft.DefaultConfig()
 
@@ -111,6 +126,7 @@ func (s *Store) Open(enableSingle bool) error {
 	return nil
 }
 
+// Execute executes queries that return no rows.
 func (s *Store) Execute(queries []string, tx bool) ([]*sql.Result, error) {
 	if s.raft.State() != raft.Leader {
 		return nil, fmt.Errorf("not leader")
@@ -134,6 +150,7 @@ func (s *Store) Execute(queries []string, tx bool) ([]*sql.Result, error) {
 	return r.results, r.error
 }
 
+// Query execute queries that return rows.
 func (s *Store) Query(queries []string, tx bool) ([]*sql.Rows, error) {
 	r, err := s.db.Query(queries, tx)
 	return r, err
@@ -177,12 +194,12 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 // http://sqlite.org/howtocorrupt.html states it is safe to do this
 // as long as no transaction is in progress.
 func (f *fsm) Snapshot() (raft.FSMSnapshot, error) {
-    b, err := ioutil.ReadFile(f.db.Path()) /// XXX Could Snapshot be used? File copy might be faster.
-    if err != nil {
-        log.Printf("Failed to generate snapshot: %s", err.Error())
-        return nil, err
-    }
-    return &fsmSnapshot{data: b}, nil
+	b, err := ioutil.ReadFile(f.dbPath)
+	if err != nil {
+		log.Printf("Failed to generate snapshot: %s", err.Error())
+		return nil, err
+	}
+	return &fsmSnapshot{data: b}, nil
 }
 
 // Restore restores the database to a previous state.

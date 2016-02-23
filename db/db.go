@@ -2,9 +2,28 @@ package db
 
 import (
 	"database/sql"
+	"fmt"
 
 	_ "github.com/mattn/go-sqlite3" // required blank import
 )
+
+// Config represents the configuration of the SQLite database.
+type Config struct {
+	DSN string
+}
+
+// NewConfig returns an instance of Config for the database at path.
+func NewConfig() *Config {
+	return &Config{}
+}
+
+// DSN returns the fully-qualified datasource name.
+func (c *Config) FQDSN(path string) string {
+	if c.DSN != "" {
+		return fmt.Sprintf("file:%s?%s", path, c.DSN)
+	}
+	return path
+}
 
 // DB is the SQL database.
 type DB struct {
@@ -34,9 +53,15 @@ func Open(dbPath string) (*DB, error) {
 	}, nil
 }
 
-// Path returns the path to SQLite database file.
-func (db *DB) Path() string {
-	return ""
+// OpenWithConfiguration an existing database, creating it if it does not exist.
+func OpenWithConfiguration(dbPath string, conf *Config) (*DB, error) {
+	dbc, err := sql.Open("sqlite3", conf.FQDSN(dbPath))
+	if err != nil {
+		return nil, err
+	}
+	return &DB{
+		conn: dbc,
+	}, nil
 }
 
 // Close closes the underlying database connection.

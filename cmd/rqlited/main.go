@@ -18,7 +18,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"runtime"
 	"runtime/pprof"
 	"time"
@@ -33,7 +32,7 @@ const sqliteDSN = "db.sqlite"
 var httpAddr string
 var raftAddr string
 var joinAddr string
-var sqlDB string
+var dsn string
 var cpuprofile string
 var disableReporting bool
 
@@ -41,8 +40,8 @@ func init() {
 	flag.StringVar(&raftAddr, "raft", "localhost:4001", "Raft communication bind address")
 	flag.StringVar(&httpAddr, "http", "localhost:4002", "HTTP query server bind address")
 	flag.StringVar(&joinAddr, "join", "", "host:port of leader to join")
-	flag.StringVar(&sqlDB, "dsn", "", fmt.Sprintf(`Override SQLite datasource name (default is "<data-path>/%s")`, sqliteDSN))
-	flag.StringVar(&cpuprofile, "cpuprofile", "", "write CPU profile to file")
+	flag.StringVar(&dsn, "dsn", "", "SQLite DSN parameters")
+	flag.StringVar(&cpuprofile, "cpuprofile", "", "Write CPU profile to file")
 	flag.BoolVar(&disableReporting, "noreport", false, "Disable anonymised launch reporting")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [arguments] <data-path>\n", os.Args[0])
@@ -78,21 +77,10 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
-	// Setup the SQLite database. XXX IS THIS GOING TO WORK? WHAT IF IT'S A RESTORE?
-	// I DON'T THINK IT WILL. CONFIG NEEDS TO BE PASSED TO RAFT. IMPLICATIONS FOR DSN?
-	var dsn string
-	if sqlDB == "" {
-		dsn = filepath.Join(dataPath, sqliteDSN)
-	} else {
-		dsn = sqlDB
-	}
-	db, err := sql.Open(dsn) // REALLY NEED TO BLOW AWAY DATABASE AND LET LOG RECOVER IT! BUT IT'S A DSN, NOT PATH! PARSE IT?
-	if err != nil {
-		log.Fatalf("failed to open database: %s", err.Error())
-	}
-
 	// Create and open the store.
-	store := store.New(db, dataPath, raftAddr)
+	dbConf := sql.NewConfig()    // XXX CONSIDER SUPPORTING IN-MEMORY DATABASE! That way is fast, but log is persistence.
+	dbConf.DSN = dsn
+	store := store.New(dbConf, dataPath, raftAddr)
 	if err := store.Open(joinAddr == ""); err != nil {
 		log.Fatalf("failed to open store: %s", err.Error())
 	}
