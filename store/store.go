@@ -36,7 +36,7 @@ type Store struct {
 	raftDir  string
 	raftBind string
 
-	mu sync.Mutex
+	mu sync.RWMutex// Sync access between queries and snapshots.
 
 	raft   *raft.Raft // The consensus mechanism
 	dbConf *sql.Config
@@ -156,6 +156,10 @@ func (s *Store) Execute(queries []string, tx bool) ([]*sql.Result, error) {
 
 // Query execute queries that return rows.
 func (s *Store) Query(queries []string, tx bool) ([]*sql.Rows, error) {
+	// Allow concurrent queries.
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	r, err := s.db.Query(queries, tx)
 	return r, err
 }
@@ -193,11 +197,16 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 }
 
 // Snapshot returns a snapshot of the database. The caller must ensure that
-// no transaction is taking place during this call.
+// no transaction is taking place during this call. Hashsicorp Raft guarantees
+// that this function will not be called concurrently with Apply.
 //
 // http://sqlite.org/howtocorrupt.html states it is safe to do this
 // as long as no transaction is in progress.
 func (f *fsm) Snapshot() (raft.FSMSnapshot, error) {
+	// Ensure only one snapshot can take place at once, and block all queries.
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
 	b, err := ioutil.ReadFile(f.dbPath)
 	if err != nil {
 		log.Printf("Failed to generate snapshot: %s", err.Error())
@@ -208,10 +217,25 @@ func (f *fsm) Snapshot() (raft.FSMSnapshot, error) {
 
 // Restore restores the database to a previous state.
 func (f *fsm) Restore(rc io.ReadCloser) error {
-	// Need to write bytes to SQLite file.
-	// Open it with desired DSN params.
-	// Implies the Open call above, should always blow away existing database, since
-	// it will be restored completely from log, or from log and remaining log entries.
+	if err := os.Remove(f.dbPath); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+
+	b, err := ioutil.ReadAll(rc)
+	if err != nil {
+		return err
+	}
+
+	if err := ioutil.WriteFile(f.dbPath, b, 0660); err != nil {
+		return err
+	}
+
+	db, err := sql.OpenWithConfiguration(f.dbPath, f.dbConf)
+	if err != nil {
+		return err
+	}
+	f.db = db
+
 	return nil
 }
 
