@@ -37,8 +37,8 @@ var cpuprofile string
 var disableReporting bool
 
 func init() {
-	flag.StringVar(&raftAddr, "raft", "localhost:4001", "Raft communication bind address")
-	flag.StringVar(&httpAddr, "http", "localhost:4002", "HTTP query server bind address")
+	flag.StringVar(&httpAddr, "http", "localhost:4001", "HTTP query server bind address")
+	flag.StringVar(&raftAddr, "raft", "localhost:4002", "Raft communication bind address")
 	flag.StringVar(&joinAddr, "join", "", "host:port of leader to join")
 	flag.StringVar(&dsn, "dsn", "", "SQLite DSN parameters")
 	flag.StringVar(&cpuprofile, "cpuprofile", "", "Write CPU profile to file")
