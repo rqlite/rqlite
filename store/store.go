@@ -175,11 +175,8 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 // no transaction is taking place during this call.
 //
 // http://sqlite.org/howtocorrupt.html states it is safe to do this
-// as long as no transaction is in progress. XXX HOW DO TO DO? RWLock?
+// as long as no transaction is in progress.
 func (f *fsm) Snapshot() (raft.FSMSnapshot, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
     b, err := ioutil.ReadFile(f.db.Path()) /// XXX Could Snapshot be used? File copy might be faster.
     if err != nil {
         log.Printf("Failed to generate snapshot: %s", err.Error())
