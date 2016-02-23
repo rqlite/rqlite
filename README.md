@@ -25,14 +25,13 @@ While not strictly necessary to run rqlite, running multiple nodes means the SQL
 
 Start a second and third node (so a majority can still form in the event of a single node failure) like so:
 
-    $GOPATH/bin/rqlited -http localhost:4003  -raft :4004 -join :4002 ~/node.2
-    $GOPATH/bin/rqlited -http localhost:4005  -raft :4006 -join :4002 ~/node.3
+    $GOPATH/bin/rqlited -http localhost:4003  -raft :4004 -join :4001 ~/node.2
+    $GOPATH/bin/rqlited -http localhost:4005  -raft :4006 -join :4001 ~/node.3
 
 Under each node will be an SQLite file, which should remain in consensus.
 
 ### Restarting a node
 If a node needs to be restarted, perhaps because of failure, don't pass the `-join` option. Using the example nodes above, if node 2 needed to be restarted, do so as follows:
-
 
     $GOPATH/bin/rqlited -http localhost:4005 -raft :4006 ~/node.3
 
@@ -49,6 +48,10 @@ To write data successfully to the database, you must create at least 1 table. To
     curl -L -XPOST localhost:4001/db?pretty -d '[
         "CREATE TABLE foo (id integer not null primary key, name text)"
     ]'
+    
+The response is:
+
+    [{}]
 
 where `curl` is the [well known command-line tool](http://curl.haxx.se/). Passing `-L` to `curl` ensures the command will follow any redirect (HTTP status code 307) to the leader, if the node running on port 4001 is not the leader.
 
@@ -57,6 +60,10 @@ To insert an entry into the database, execute a second SQL command:
     curl -L -XPOST 'localhost:4001/db?pretty&explain' -d '[
         "INSERT INTO foo(name) VALUES(\"fiona\")"
     ]'
+    
+The response is:
+
+    [{"last_insert_id":1,"rows_affected":1}]
 
 The use of the URL param `pretty` is optional, and results in pretty-printed JSON responses. `explain` is also optional. If included, the response will include some basic information about the processing that took place -- how long it took, for example.
 
@@ -79,6 +86,10 @@ Bulk updates are supported. To execute multipe statements in one HTTP call, simp
         "INSERT INTO foo(name) VALUES(\"sinead\")"
     ]'
 
+The response is:
+
+    [{"last_insert_id":2,"rows_affected":1},{"last_insert_id":3,"rows_affected":1}]
+
 #### Transactions
 Transactions are supported. To execute statements within a transaction, add `transaction` to the URL. An example of the above operation executed within a transaction is shown below.
 
@@ -95,6 +106,27 @@ Querying data is easy.
 For a single query simply perform a HTTP GET, setting the query statement as the query parameter `q`:
 
     curl -L -G localhost:4001/db?pretty --data-urlencode 'q=SELECT * FROM foo'
+
+The response is of the form:
+
+    [
+        {
+            "columns": [
+                "id",
+                "name"
+            ],
+            "values": [
+                [
+                    1,
+                    "fiona"
+                ],
+                [
+                    2,
+                    "sinead"
+                ]
+            ]
+        }
+    ]
 
 The behaviour of rqlite when more than 1 query is passed via `q` is undefined. If you want to execute more than one query per HTTP request, place the queries in the body of the request, as a JSON array. For example:
 
