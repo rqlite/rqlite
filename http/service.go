@@ -93,6 +93,7 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// handleJoin handles cluster-join requests from other nodes.
 func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 	b, err := ioutil.ReadAll(r.Body)
 	if err != nil {
@@ -122,6 +123,7 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// handleExecute handles queries that modify the database.
 func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 	// isTx, err := isTx(r)
 	// if err != nil {
@@ -164,6 +166,7 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// handleQuery handles queries that do not modify the database.
 func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 	// isLeader, err := isLeader(r)
 	// if err != nil {

@@ -126,11 +126,12 @@ func (s *Store) Open(enableSingle bool) error {
 	return nil
 }
 
+// Close closes the store.
 func (s *Store) Close() error {
 	return s.db.Close()
 }
 
-// Execute executes queries that return no rows.
+// Execute executes queries that return no rows, but do modify the database.
 func (s *Store) Execute(queries []string, tx bool) ([]*sql.Result, error) {
 	if s.raft.State() != raft.Leader {
 		return nil, fmt.Errorf("not leader")
@@ -154,7 +155,7 @@ func (s *Store) Execute(queries []string, tx bool) ([]*sql.Result, error) {
 	return r.results, r.error
 }
 
-// Query execute queries that return rows.
+// Query executes queries that return rows, and do not modify the database.
 func (s *Store) Query(queries []string, tx bool) ([]*sql.Rows, error) {
 	// Allow concurrent queries.
 	s.mu.RLock()
@@ -243,6 +244,7 @@ type fsmSnapshot struct {
 	data []byte
 }
 
+// Persist writes the snapshot to the give sink.
 func (f *fsmSnapshot) Persist(sink raft.SnapshotSink) error {
 	err := func() error {
 		// Write data to sink.
@@ -266,8 +268,10 @@ func (f *fsmSnapshot) Persist(sink raft.SnapshotSink) error {
 	return nil
 }
 
+// Release is a no-op.
 func (f *fsmSnapshot) Release() {}
 
+// readPeersJSON reads the peers from the path.
 func readPeersJSON(path string) ([]string, error) {
 	b, err := ioutil.ReadFile(path)
 	if err != nil && !os.IsNotExist(err) {

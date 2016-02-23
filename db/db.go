@@ -69,6 +69,7 @@ func (db *DB) Close() error {
 	return db.conn.Close()
 }
 
+// Execute executes queries that modify the database.
 func (db *DB) Execute(queries []string, tx bool) ([]*Result, error) {
 	type Execer interface {
 		Exec(query string, args ...interface{}) (sql.Result, error)
@@ -148,6 +149,7 @@ func (db *DB) Execute(queries []string, tx bool) ([]*Result, error) {
 	return allResults, err
 }
 
+// Query executes queries that return rows, but don't modify the database.
 func (db *DB) Query(queries []string, tx bool) ([]*Rows, error) {
 	type Queryer interface {
 		Query(query string, args ...interface{}) (*sql.Rows, error)
