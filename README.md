@@ -38,7 +38,7 @@ If a node needs to be restarted, perhaps because of failure, don't pass the `-jo
 On restart it will rejoin the cluster and apply any changes to its local sqlite database that took place while it was down. Depending on your snapshot threshold, restarts may take a little time. Check out the section below on _Log Compaction_.
 
 ## Data API
-rqlite exposes an HTTP API allowing the database to be modified such that the changes are replicated. Queries are also executed using the HTTP API,though the SQLite database could be queried directly. Modifications go through the Raft log, ensuring only changes committed by a quorum of Raft servers are actually executed against the SQLite database. Queries do not go through the Raft log, however, since they do not change the state of the database, and therefore do not need to be captured in the log.
+rqlite exposes an HTTP API allowing the database to be modified such that the changes are replicated. Queries are also executed using the HTTP API, though the SQLite database could be queried directly. Modifications go through the Raft log, ensuring only changes committed by a quorum of Raft servers are actually executed against the SQLite database. Queries do not go through the Raft log, however, since they do not change the state of the database, and therefore do not need to be captured in the log.
 
 All responses from rqlite are in the form of JSON.
 
