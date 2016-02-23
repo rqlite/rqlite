@@ -48,10 +48,6 @@ To write data successfully to the database, you must create at least 1 table. To
     curl -L -XPOST localhost:4001/db?pretty -d '[
         "CREATE TABLE foo (id integer not null primary key, name text)"
     ]'
-    
-The response is:
-
-    [{}]
 
 where `curl` is the [well known command-line tool](http://curl.haxx.se/). Passing `-L` to `curl` ensures the command will follow any redirect (HTTP status code 307) to the leader, if the node running on port 4001 is not the leader.
 
