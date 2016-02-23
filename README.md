@@ -87,6 +87,8 @@ The response is of the form:
     [{"last_insert_id":2,"rows_affected":1},{"last_insert_id":3,"rows_affected":1}]
 
 #### Transactions
+*Being refactored for v2.0, and are non-functional.*
+
 Transactions are supported. To execute statements within a transaction, add `transaction` to the URL. An example of the above operation executed within a transaction is shown below.
 
     curl -L -XPOST 'localhost:4001/db?pretty&transaction' -d '[
@@ -139,6 +141,8 @@ rqlite replicates SQLite for fault-tolerance. It does not replicate it for perfo
 Depending on your machine, individual INSERT performance could be anything from 1 operation per second to more than 10 operations per second. However, by using transactions, throughput will increase significantly, often by 2 orders of magnitude. This speed-up is due to the way SQLite works. So for high throughput, execute as many operations as possible within a single transaction.
 
 ## Administration API
+*Being refactored for v2.0, and is currently non-functional.*
+
 An Administration API exists, which dumps some basic diagnostic and statistical information, as well as basic information about the underlying Raft node. Assuming rqlite is started with default settings, the endpoints are available like so:
 
     curl localhost:4001/raft?pretty
