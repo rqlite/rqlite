@@ -78,8 +78,14 @@ func (s *Service) Close() {
 
 // ServeHTTP allows Service to serve HTTP requests.
 func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if strings.HasPrefix(r.URL.Path, "/query") {
-		s.handleQuery(w, r)
+	if strings.HasPrefix(r.URL.Path, "/db") {
+		if r.Method == "POST" {
+			s.handleExecute(w, r)
+		} else if r.Method == "GET" {
+			s.handleQuery(w, r)
+		} else {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
 	} else if r.URL.Path == "/join" {
 		s.handleJoin(w, r)
 	} else {
@@ -113,6 +119,48 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 	if err := s.store.Join(remoteAddr); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
+	}
+}
+
+func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
+	isTx, err := isTx(r)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	b, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		fmt.Println(err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	queries := []string{}
+	if err := json.Unmarshal(b, &queries); err != nil {
+		fmt.Println(err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	rows, err := s.store.Execute(queries, isTx)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	pretty, _ := isPretty(r)
+	if pretty {
+		b, err = json.MarshalIndent(rows, "", "    ")
+	} else {
+		b, err = json.Marshal(rows)
+	}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError) // Internal error actually
+	} else {
+		_, err = w.Write([]byte(b))
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+		}
 	}
 }
 
@@ -177,4 +225,14 @@ func stmtParam(req *http.Request) (string, error) {
 // isPretty returns whether the HTTP response body should be pretty-printed.
 func isPretty(req *http.Request) (bool, error) {
 	return queryParam(req, "pretty")
+}
+
+// isTx returns whether the HTTP request is requesting a transaction.
+func isTx(req *http.Request) (bool, error) {
+	return queryParam(req, "tx")
+}
+
+// isExplain returns whether the HTTP request is requesting a explanation.
+func isExplain(req *http.Request) (bool, error) {
+	return queryParam(req, "explain")
 }

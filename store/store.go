@@ -151,7 +151,7 @@ type fsm Store
 
 type fsmResponse struct {
 	results []*sql.Result
-	error error
+	error   error
 }
 
 // Apply applies a Raft log entry to the database.
@@ -162,7 +162,7 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 	}
 
 	r, err := f.db.Execute(c.Queries, c.Tx)
-	return &fsmResponse{results: r,error: err}
+	return &fsmResponse{results: r, error: err}
 }
 
 // Snapshot returns a snapshot of the database.
