@@ -78,7 +78,8 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
-	// Setup the SQLite database.
+	// Setup the SQLite database. XXX IS THIS GOING TO WORK? WHAT IF IT'S A RESTORE?
+	// I DON'T THINK IT WILL. CONFIG NEEDS TO BE PASSED TO RAFT. IMPLICATIONS FOR DSN?
 	var dsn string
 	if sqlDB == "" {
 		dsn = filepath.Join(dataPath, sqliteDSN)

@@ -171,23 +171,56 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 	return &fsmResponse{results: r, error: err}
 }
 
-// Snapshot returns a snapshot of the database.
+// Snapshot returns a snapshot of the database. The caller must ensure that
+// no transaction is taking place during this call.
+//
+// http://sqlite.org/howtocorrupt.html states it is safe to do this
+// as long as no transaction is in progress. XXX HOW DO TO DO? RWLock?
 func (f *fsm) Snapshot() (raft.FSMSnapshot, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	return nil, nil
+    b, err := ioutil.ReadFile(f.db.Path()) /// XXX Could Snapshot be used? File copy might be faster.
+    if err != nil {
+        log.Printf("Failed to generate snapshot: %s", err.Error())
+        return nil, err
+    }
+    return &fsmSnapshot{data: b}, nil
 }
 
 // Restore restores the database to a previous state.
 func (f *fsm) Restore(rc io.ReadCloser) error {
+	// Need to write bytes to SQLite file.
+	// Open it with desired DSN params.
+	// Implies the Open call above, should always blow away existing database, since
+	// it will be restored completely from log, or from log and remaining log entries.
 	return nil
 }
 
 type fsmSnapshot struct {
+	data []byte
 }
 
 func (f *fsmSnapshot) Persist(sink raft.SnapshotSink) error {
+	err := func() error {
+		// Write data to sink.
+		if _, err := sink.Write(f.data); err != nil {
+			return err
+		}
+
+		// Close the sink.
+		if err := sink.Close(); err != nil {
+			return err
+		}
+
+		return nil
+	}()
+
+	if err != nil {
+		sink.Cancel()
+		return err
+	}
+
 	return nil
 }
 

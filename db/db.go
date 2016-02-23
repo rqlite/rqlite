@@ -34,6 +34,11 @@ func Open(dbPath string) (*DB, error) {
 	}, nil
 }
 
+// Path returns the path to SQLite database file.
+func (db *DB) Path() string {
+	return ""
+}
+
 // Close closes the underlying database connection.
 func (db *DB) Close() error {
 	return db.conn.Close()
