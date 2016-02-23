@@ -167,4 +167,4 @@ This is new software, so it goes without saying it has bugs. It's by no means fi
 rqlite reports a small amount anonymous data to [Loggly](http://www.loggly.com), each time it is launched. This data is just the host operating system and system architecture and is only used to track the number of rqlite deployments. Reporting can be disabled by passing `-noreport=true` to rqlite at launch time.
 
 ## Credits
-This project uses the [Hashicorp](https://github.com/hashicorp/raft) implementation of the Raft consensus protocol, and was inspired by the [raftd](https://github.com/goraft/raftd) reference implementation. rqlite also borrows some ideas from [etcd](https://github.com/coreos/etcd), and uses [go-sqlite3](http://godoc.org/github.com/mattn/go-sqlite3) to talk to the SQLite database.
+This project uses the [Hashicorp](https://github.com/hashicorp/raft) implementation of the Raft consensus protocol, and was inspired by the [raftd](https://github.com/goraft/raftd) reference implementation. rqlite also uses [go-sqlite3](http://godoc.org/github.com/mattn/go-sqlite3) to talk to the SQLite database.
