@@ -1,7 +1,7 @@
 rqlite [![Circle CI](https://circleci.com/gh/otoolep/rqlite/tree/master.svg?style=svg)](https://circleci.com/gh/otoolep/rqlite/tree/master) [![GoDoc](https://godoc.org/github.com/otoolep/rqlite?status.png)](https://godoc.org/github.com/otoolep/rqlite)
 ======
 
-*Detailed background on rqlite can be found on [this blog post](http://www.philipotoole.com/replicating-sqlite-using-raft-consensus).*
+*Detailed background on rqlite can be found on [this blog post](http://www.philipotoole.com/replicating-sqlite-using-raft-consensus). Note that master represents 2.0 development, with a new API. If you want to work with 1.0 rqlite, you can find it [here](https://github.com/otoolep/rqlite/releases/tag/v1.0).*
 
 *rqlite* is a distributed system that provides a replicated SQLite database. rqlite is written in [Go](http://golang.org/) and uses [Raft](http://raftconsensus.github.io/) to achieve consensus across all the instances of the SQLite databases. rqlite ensures that every change made to the database is made to a majority of underlying SQLite files, or none-at-all.
 
@@ -14,44 +14,26 @@ Download, test (optional), and run rqlite like so (tested on 64-bit Kubuntu 14.0
     cd rqlite/
     export GOPATH=$PWD
     go get -t github.com/otoolep/rqlite
-    $GOPATH/bin/rqlite ~/node.1
+    $GOPATH/bin/rqlited ~/node.1
 
 This starts a rqlite server listening on localhost, port 4001. This single node automatically becomes the leader. To see all available command-line options, execute:
 
-    $GOPATH/bin/rqlite -h
-
-### Vagrant
-Alternatively you can use a [Vagrant](https://www.vagrantup.com/) environment. To do so, simply [install Vagrant](https://docs.vagrantup.com/v2/installation/index.html) on your machine, a virtualization system such as VirtualBox, and execute the following commands:
-
-~~~bash
-$ cd $GOPATH/src/github.com/otoolep/rqlite
-$ CLUSTER_SIZE=3 vagrant up rqlite
-~~~
-
-This will start a Vagrant box and install rqlite with all required dependencies. This will form a cluster with `CLUSTER_SIZE` nodes.
-
-To execute queries against the cluster you can either ssh directly to the Vagrant box via `vagrant ssh rqlite` or execute the commands directly from your local box, accessing the cluster at `192.168.200.10` IP and any port within a range `[4001, 4001 + CLUSTER_SIZE -1]`.
-
-To terminate the Vagrant box simply execute:
-
-~~~bash
-$ vagrant destroy rqlite
-~~~
+    $GOPATH/bin/rqlited -h
 
 ### Forming a Cluster
 While not strictly necessary to run rqlite, running multiple nodes means the SQLite database is replicated.
 
 Start a second and third node (so a majority can still form in the event of a single node failure) like so:
 
-    $GOPATH/bin/rqlite -join localhost:4001 -p 4002 ~/node.2
-    $GOPATH/bin/rqlite -join localhost:4001 -p 4003 ~/node.3
+    $GOPATH/bin/rqlited -http localhost:4003  -raft :4004 -join :4001 ~/node.2
+    $GOPATH/bin/rqlited -http localhost:4005  -raft :4006 -join :4001 ~/node.3
 
 Under each node will be an SQLite file, which should remain in consensus.
 
 ### Restarting a node
 If a node needs to be restarted, perhaps because of failure, don't pass the `-join` option. Using the example nodes above, if node 2 needed to be restarted, do so as follows:
 
-    $GOPATH/bin/rqlite -p 4002 ~/node.2
+    $GOPATH/bin/rqlited -http localhost:4005 -raft :4006 ~/node.3
 
 On restart it will rejoin the cluster and apply any changes to its local sqlite database that took place while it was down. Depending on your snapshot threshold, restarts may take a little time. Check out the section below on _Log Compaction_.
 
@@ -61,19 +43,27 @@ rqlite exposes an HTTP API allowing the database to be modified such that the ch
 All responses from rqlite are in the form of JSON.
 
 ### Writing Data
-To write data successfully to the database, you must create at least 1 table. To do this, perform a HTTP POST, with a CREATE TABLE SQL command in the body of the request. For example:
+To write data successfully to the database, you must create at least 1 table. To do this, perform a HTTP POST, with a CREATE TABLE SQL command encapsulated in a JSON array, in the body of the request. For example:
 
-    curl -L -XPOST localhost:4001/db?pretty -d '
-    CREATE TABLE foo (id integer not null primary key, name text)
-    '
+    curl -L -XPOST localhost:4001/db?pretty -d '[
+        "CREATE TABLE foo (id integer not null primary key, name text)"
+    ]'
+    
+The response is:
+
+    [{}]
 
 where `curl` is the [well known command-line tool](http://curl.haxx.se/). Passing `-L` to `curl` ensures the command will follow any redirect (HTTP status code 307) to the leader, if the node running on port 4001 is not the leader.
 
 To insert an entry into the database, execute a second SQL command:
 
-    curl -L -XPOST 'localhost:4001/db?pretty&explain' -d '
-    INSERT INTO foo(name) VALUES("fiona")
-    '
+    curl -L -XPOST 'localhost:4001/db?pretty&explain' -d '[
+        "INSERT INTO foo(name) VALUES(\"fiona\")"
+    ]'
+    
+The response is:
+
+    [{"last_insert_id":1,"rows_affected":1}]
 
 The use of the URL param `pretty` is optional, and results in pretty-printed JSON responses. `explain` is also optional. If included, the response will include some basic information about the processing that took place -- how long it took, for example.
 
@@ -85,31 +75,67 @@ You can confirm that the data has been writen to the database by accessing the S
     Enter SQL statements terminated with a ";"
     sqlite> select * from foo;
     1|fiona
-    
+
 Note that this is the SQLite file that is under `node 3`, which is not the node that accepted the `INSERT` operation.
 
 ### Bulk Updates
-Bulk updates are supported. To execute multipe statements in one HTTP call, separate each statement with a semicolon. An example of inserting two records is shown below:
+Bulk updates are supported. To execute multipe statements in one HTTP call, simply include the statements in the JSON array:
 
-    curl -L -XPOST 'localhost:4001/db?pretty' -d '
-    INSERT INTO foo(name) VALUES("fiona");INSERT INTO foo(name) VALUES("sinead")
-    '
+    curl -L -XPOST 'localhost:4001/db?pretty' -d '[
+        "INSERT INTO foo(name) VALUES(\"fiona\")",
+        "INSERT INTO foo(name) VALUES(\"sinead\")"
+    ]'
+
+The response is:
+
+    [{"last_insert_id":2,"rows_affected":1},{"last_insert_id":3,"rows_affected":1}]
 
 #### Transactions
 Transactions are supported. To execute statements within a transaction, add `transaction` to the URL. An example of the above operation executed within a transaction is shown below.
 
-    curl -L -XPOST 'localhost:4001/db?pretty&transaction' -d '
-    INSERT INTO foo(name) VALUES("fiona");INSERT INTO foo(name) VALUES("sinead")
-    '
+    curl -L -XPOST 'localhost:4001/db?pretty&transaction' -d '[
+        "INSERT INTO foo(name) VALUES(\"fiona\")",
+        "INSERT INTO foo(name) VALUES(\"sinead\")""
+    ]'
 
 When a transaction takes place either both statements will succeed, or neither. Performance is *much, much* better if multiple SQL INSERTs or UPDATEs are executed via a transaction.
 
 ### Querying Data
-Qeurying data is easy. Simply perform a HTTP GET, setting the query statement as the query parameter `q`:
+Querying data is easy.
 
-    curl -L -G localhost:4001/db?pretty --data-urlencode 'q=SELECT * from foo'
+For a single query simply perform a HTTP GET, setting the query statement as the query parameter `q`:
 
-An alternative approach is to read the database via `sqlite3`, the command-line tool that comes with SQLite. As long as you can be sure the file you access is under the leader, the records returned will be accurate and up-to-date.
+    curl -L -G localhost:4001/db?pretty --data-urlencode 'q=SELECT * FROM foo'
+
+The response is of the form:
+
+    [
+        {
+            "columns": [
+                "id",
+                "name"
+            ],
+            "values": [
+                [
+                    1,
+                    "fiona"
+                ],
+                [
+                    2,
+                    "sinead"
+                ]
+            ]
+        }
+    ]
+
+The behaviour of rqlite when more than 1 query is passed via `q` is undefined. If you want to execute more than one query per HTTP request, place the queries in the body of the request, as a JSON array. For example:
+
+    curl -L -G 'localhost:4001/db?pretty' -d '[
+        "SELECT * FROM foo",
+        "SELECT * FROM bar"
+    ]'
+
+Another approach is to read the database file directly via `sqlite3`, the command-line tool that comes with SQLite. As long as you can be sure the file you access is under the leader, the records returned will be accurate and up-to-date.
 
 ### Performance
 rqlite replicates SQLite for fault-tolerance. It does not replicate it for performance. In fact performance is reduced somewhat due to the network round-trips.
@@ -141,4 +167,4 @@ This is new software, so it goes without saying it has bugs. It's by no means fi
 rqlite reports a small amount anonymous data to [Loggly](http://www.loggly.com), each time it is launched. This data is just the host operating system and system architecture and is only used to track the number of rqlite deployments. Reporting can be disabled by passing `-noreport=true` to rqlite at launch time.
 
 ## Credits
-This project uses the [go-raft](https://github.com/goraft/raft) implementation of the Raft consensus protocol, and was inspired by the [raftd](https://github.com/goraft/raftd) reference implementation. rqlite also borrows some ideas from [etcd](https://github.com/coreos/etcd), and uses [go-sqlite3](http://godoc.org/github.com/mattn/go-sqlite3) to talk to the SQLite database.
+This project uses the [Hashicorp](https://github.com/hashicorp/raft) implementation of the Raft consensus protocol, and was inspired by the [raftd](https://github.com/goraft/raftd) reference implementation. rqlite also borrows some ideas from [etcd](https://github.com/coreos/etcd), and uses [go-sqlite3](http://godoc.org/github.com/mattn/go-sqlite3) to talk to the SQLite database.
