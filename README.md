@@ -59,7 +59,10 @@ To insert an entry into the database, execute a second SQL command:
 
 The response is of the form:
 
-    [{"last_insert_id":1,"rows_affected":1}]
+    [{
+        "last_insert_id": 1,
+        "rows_affected": 1
+    }]
 
 The use of the URL param `pretty` is optional, and results in pretty-printed JSON responses. `explain` is also optional. If included, the response will include some basic information about the processing that took place -- how long it took, for example.
 
@@ -84,11 +87,15 @@ Bulk updates are supported. To execute multipe statements in one HTTP call, simp
 
 The response is of the form:
 
-    [{"last_insert_id":2,"rows_affected":1},{"last_insert_id":3,"rows_affected":1}]
+    [{
+        "last_insert_id": 2,
+        "rows_affected": 1
+    }, {
+        "last_insert_id": 3,
+        "rows_affected": 1
+    }]
 
 #### Transactions
-*Being refactored for v2.0, and are non-functional.*
-
 Transactions are supported. To execute statements within a transaction, add `transaction` to the URL. An example of the above operation executed within a transaction is shown below.
 
     curl -L -XPOST 'localhost:4001/db?pretty&transaction' -H "Content-Type: application/json" -d '[
