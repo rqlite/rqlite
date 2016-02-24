@@ -113,6 +113,10 @@ func (db *DB) Execute(queries []string, tx bool) ([]*Result, error) {
 
 		// Execute each query.
 		for _, q := range queries {
+			if q == "" {
+				continue
+			}
+
 			result := &Result{}
 
 			r, err := execer.Exec(q)
@@ -179,6 +183,10 @@ func (db *DB) Query(queries []string, tx bool) ([]*Rows, error) {
 
 	QueryLoop:
 		for _, q := range queries {
+			if q == "" {
+				continue
+			}
+
 			rows := &Rows{}
 
 			rs, err := queryer.Query(q)
@@ -226,5 +234,6 @@ func (db *DB) Query(queries []string, tx bool) ([]*Rows, error) {
 		return nil
 	}()
 
+	panic("####3")
 	return allRows, err
 }

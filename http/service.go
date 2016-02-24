@@ -4,7 +4,6 @@ package http
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"net"
@@ -208,14 +207,29 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get the query statement, check leader and do tx if necessary.
+	// Get the query statement(s), and do tx if necessary.
+	queries := []string{}
 	query, err := stmtParam(r)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+	if query == "" {
+		b, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		r.Body.Close()
+		if err := json.Unmarshal(b, &queries); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+	} else {
+		queries = []string{query}
+	}
 
-	rows, err := s.store.Query([]string{query}, isTx)
+	rows, err := s.store.Query(queries, isTx)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -259,9 +273,6 @@ func queryParam(req *http.Request, param string) (bool, error) {
 func stmtParam(req *http.Request) (string, error) {
 	q := req.URL.Query()
 	stmt := strings.TrimSpace(q.Get("q"))
-	if stmt == "" {
-		return "", fmt.Errorf(`required parameter 'q' is missing`)
-	}
 	return stmt, nil
 }
 
