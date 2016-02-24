@@ -3,7 +3,7 @@ rqlite [![Circle CI](https://circleci.com/gh/otoolep/rqlite/tree/master.svg?styl
 
 *Detailed background on rqlite can be found on [this blog post](http://www.philipotoole.com/replicating-sqlite-using-raft-consensus). Note that master represents 2.0 development (which is still in progress), with a new API. If you want to work with 1.0 rqlite, you can find it [here](https://github.com/otoolep/rqlite/releases/tag/v1.0).*
 
-*rqlite* is a distributed system that provides a replicated SQLite database. rqlite is written in [Go](http://golang.org/) and uses [Raft](http://raftconsensus.github.io/) to achieve consensus across all the instances of the SQLite databases. rqlite ensures that every change made to the database is made to a majority of underlying SQLite files, or none at all.
+*rqlite* is a distributed system that provides a replicated SQLite database. rqlite is written in [Go](http://golang.org/) and uses [Raft](http://raftconsensus.github.io/) to achieve consensus across all the instances of the SQLite databases. rqlite ensures that every change made to the database is made to a quorum of SQLite files, or none at all.
 
 ## Building and Running
 *Building rqlite requires Go 1.3 or later. [gvm](https://github.com/moovweb/gvm) is a great tool for managing your version of Go.*
@@ -38,18 +38,18 @@ If a node needs to be restarted, perhaps because of failure, don't pass the `-jo
 On restart it will rejoin the cluster and apply any changes to the local sqlite database that took place while it was down. Depending on the number of changes in the Raft log, restarts may take a little while.
 
 ## Data API
-rqlite exposes an HTTP API allowing the database to be modified such that the changes are replicated. Queries are also executed using the HTTP API, though the SQLite database could be queried directly. Modifications go through the Raft log, ensuring only changes committed by a quorum of Raft servers are actually executed against the SQLite database. Queries do not go through the Raft log, however, since they do not change the state of the database, and therefore do not need to be captured in the log.
+rqlite exposes an HTTP API allowing the database to be modified such that the changes are replicated. Queries are also executed using the HTTP API, though the SQLite database could be queried directly. Modifications go through the Raft log, ensuring only changes committed by a quorum of rqlite nodes are actually executed against the SQLite database. Queries do not go through the Raft log, however, since they do not change the state of the database, and therefore do not need to be captured in the log.
 
 All responses from rqlite are in the form of JSON.
 
 ### Writing Data
-To write data successfully to the database, you must create at least 1 table. To do this, perform a HTTP POST, with a CREATE TABLE SQL command encapsulated in a JSON array, in the body of the request. For example:
+To write data successfully to the database, you must create at least 1 table. To do this, perform a HTTP POST, with a `CREATE TABLE` SQL command encapsulated in a JSON array, in the body of the request. For example:
 
     curl -L -XPOST localhost:4001/db?pretty -H "Content-Type: application/json"  -d '[
         "CREATE TABLE foo (id integer not null primary key, name text)"
     ]'
 
-where `curl` is the [well known command-line tool](http://curl.haxx.se/). Passing `-L` to `curl` ensures the command will follow any redirect (HTTP status code 307) to the leader, if the node running on port 4001 is not the leader. It is *very important* to set the `Content-Type` header as shown.
+where `curl` is the [well known command-line tool](http://curl.haxx.se/). It is *very important* to set the `Content-Type` header as shown.
 
 To insert an entry into the database, execute a second SQL command:
 
@@ -95,16 +95,6 @@ The response is of the form:
         "rows_affected": 1
     }]
 
-#### Transactions
-Transactions are supported. To execute statements within a transaction, add `transaction` to the URL. An example of the above operation executed within a transaction is shown below.
-
-    curl -L -XPOST 'localhost:4001/db?pretty&transaction' -H "Content-Type: application/json" -d '[
-        "INSERT INTO foo(name) VALUES(\"fiona\")",
-        "INSERT INTO foo(name) VALUES(\"sinead\")""
-    ]'
-
-When a transaction takes place either both statements will succeed, or neither. Performance is *much, much* better if multiple SQL INSERTs or UPDATEs are executed via a transaction. Note the execution ceases the moment any single query results in an error.
-
 ### Querying Data
 Querying data is easy.
 
@@ -143,6 +133,16 @@ The behaviour of rqlite when more than 1 query is passed via `q` is undefined. I
 Another approach is to read the database file directly via `sqlite3`, the command-line tool that comes with SQLite. As long as you can be sure the file you access is under the leader, the records returned will be accurate and up-to-date.
 
 *If you use the query API to execute a command that modifies the database, those changes will not be replicated*. Always use the write API for inserts and updates.
+
+### Transactions
+Transactions are supported. To execute statements within a transaction, add `transaction` to the URL. An example of the above operation executed within a transaction is shown below.
+
+    curl -L -XPOST 'localhost:4001/db?pretty&transaction' -H "Content-Type: application/json" -d '[
+        "INSERT INTO foo(name) VALUES(\"fiona\")",
+        "INSERT INTO foo(name) VALUES(\"sinead\")""
+    ]'
+
+When a transaction takes place either both statements will succeed, or neither. Performance is *much, much* better if multiple SQL INSERTs or UPDATEs are executed via a transaction. Note the execution ceases the moment any single query results in an error.
 
 ### Performance
 rqlite replicates SQLite for fault-tolerance. It does not replicate it for performance. In fact performance is reduced somewhat due to the network round-trips.
