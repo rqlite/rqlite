@@ -234,6 +234,5 @@ func (db *DB) Query(queries []string, tx bool) ([]*Rows, error) {
 		return nil
 	}()
 
-	panic("####3")
 	return allRows, err
 }
