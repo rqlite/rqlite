@@ -45,7 +45,7 @@ All responses from rqlite are in the form of JSON.
 ### Writing Data
 To write data successfully to the database, you must create at least 1 table. To do this, perform a HTTP POST, with a CREATE TABLE SQL command encapsulated in a JSON array, in the body of the request. For example:
 
-    curl -L -XPOST localhost:4001/db?pretty-H "Content-Type: application/json"  -d '[
+    curl -L -XPOST localhost:4001/db?pretty -H "Content-Type: application/json"  -d '[
         "CREATE TABLE foo (id integer not null primary key, name text)"
     ]'
 
