@@ -73,7 +73,7 @@ func (db *DB) Close() error {
 }
 
 // Execute executes queries that modify the database.
-func (db *DB) Execute(queries []string, tx bool) ([]*Result, error) {
+func (db *DB) Execute(queries []string, tx, xTime bool) ([]*Result, error) {
 	type Execer interface {
 		Exec(query string, args ...interface{}) (sql.Result, error)
 	}
@@ -148,7 +148,9 @@ func (db *DB) Execute(queries []string, tx bool) ([]*Result, error) {
 				break
 			}
 			result.RowsAffected = ra
-			result.Time = time.Now().Sub(start).String()
+			if xTime {
+				result.Time = time.Now().Sub(start).String()
+			}
 			allResults = append(allResults, result)
 		}
 
@@ -159,7 +161,7 @@ func (db *DB) Execute(queries []string, tx bool) ([]*Result, error) {
 }
 
 // Query executes queries that return rows, but don't modify the database.
-func (db *DB) Query(queries []string, tx bool) ([]*Rows, error) {
+func (db *DB) Query(queries []string, tx, xTime bool) ([]*Rows, error) {
 	type Queryer interface {
 		Query(query string, args ...interface{}) (*sql.Rows, error)
 	}
@@ -234,7 +236,9 @@ func (db *DB) Query(queries []string, tx bool) ([]*Rows, error) {
 				}
 				rows.Values = append(rows.Values, values)
 			}
-			rows.Time = time.Now().Sub(start).String()
+			if xTime {
+				rows.Time = time.Now().Sub(start).String()
+			}
 			allRows = append(allRows, rows)
 		}
 

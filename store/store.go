@@ -166,7 +166,7 @@ func (s *Store) Query(queries []string, tx bool) ([]*sql.Rows, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	r, err := s.db.Query(queries, tx)
+	r, err := s.db.Query(queries, tx, true)
 	return r, err
 }
 
@@ -197,7 +197,7 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 		panic(fmt.Sprintf("failed to unmarshal command: %s", err.Error()))
 	}
 
-	r, err := f.db.Execute(c.Queries, c.Tx)
+	r, err := f.db.Execute(c.Queries, c.Tx, true)
 
 	return &fsmResponse{results: r, error: err}
 }
