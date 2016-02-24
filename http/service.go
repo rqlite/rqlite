@@ -32,6 +32,13 @@ type Store interface {
 	Stats() (map[string]interface{}, error)
 }
 
+// Response represents a response from the HTTP service.
+type Response struct {
+	Results interface{} `json:"results,omitempty"`
+	Error   string      `json:"error,omitempty"`
+	Time time.Time `json:"time,omitempty"`
+}
+
 // Service provides HTTP service.
 type Service struct {
 	addr string
@@ -166,36 +173,22 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 
 	b, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	r.Body.Close()
 
 	queries := []string{}
 	if err := json.Unmarshal(b, &queries); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	results, err := s.store.Execute(queries, isTx)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	pretty, _ := isPretty(r)
-	if pretty {
-		b, err = json.MarshalIndent(results, "", "    ")
+		writeResponse(w, r, &Response{Results: results, Error: err.Error()})
 	} else {
-		b, err = json.Marshal(results)
-	}
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	} else {
-		_, err = w.Write([]byte(b))
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
+		writeResponse(w, r, &Response{Results: results})
 	}
 }
 
@@ -231,30 +224,35 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := s.store.Query(queries, isTx)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	pretty, _ := isPretty(r)
-	var b []byte
-	if pretty {
-		b, err = json.MarshalIndent(rows, "", "    ")
+		writeResponse(w, r, &Response{Results: rows, Error: err.Error()})
 	} else {
-		b, err = json.Marshal(rows)
-	}
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	} else {
-		_, err = w.Write([]byte(b))
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
+		writeResponse(w, r, &Response{Results: rows})
 	}
 }
 
 // Addr returns the address on which the Service is listening
 func (s *Service) Addr() net.Addr {
 	return s.ln.Addr()
+}
+
+func writeResponse(w http.ResponseWriter, r *http.Request, j *Response) {
+	var b []byte
+	var err error
+	pretty, _ := isPretty(r)
+
+	if pretty {
+		b, err = json.MarshalIndent(j, "", "    ")
+	} else {
+		b, err = json.Marshal(j)
+	}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	_, err = w.Write(b)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }
 
 // queryParam returns whether the given query param is set to true.
