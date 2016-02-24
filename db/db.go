@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"time"
 
 	_ "github.com/mattn/go-sqlite3" // required blank import
 )
@@ -34,12 +35,14 @@ type Result struct {
 	LastInsertID int64  `json:"last_insert_id,omitempty"`
 	RowsAffected int64  `json:"rows_affected,omitempty"`
 	Error        string `json:"error,omitempty"`
+	Time         string `json:"time,omitempty"`
 }
 
 type Rows struct {
 	Columns []string        `json:"columns,omitempty"`
 	Values  [][]interface{} `json:"values,omitempty"`
 	Error   string          `json:"error,omitempty"`
+	Time    string          `json:"time,omitempty"`
 }
 
 // Open an existing database, creating it if it does not exist.
@@ -118,6 +121,7 @@ func (db *DB) Execute(queries []string, tx bool) ([]*Result, error) {
 			}
 
 			result := &Result{}
+			start := time.Now()
 
 			r, err := execer.Exec(q)
 			if err != nil {
@@ -144,6 +148,7 @@ func (db *DB) Execute(queries []string, tx bool) ([]*Result, error) {
 				break
 			}
 			result.RowsAffected = ra
+			result.Time = time.Now().Sub(start).String()
 			allResults = append(allResults, result)
 		}
 
@@ -188,6 +193,7 @@ func (db *DB) Query(queries []string, tx bool) ([]*Rows, error) {
 			}
 
 			rows := &Rows{}
+			start := time.Now()
 
 			rs, err := queryer.Query(q)
 			if err != nil {
@@ -228,6 +234,7 @@ func (db *DB) Query(queries []string, tx bool) ([]*Rows, error) {
 				}
 				rows.Values = append(rows.Values, values)
 			}
+			rows.Time = time.Now().Sub(start).String()
 			allRows = append(allRows, rows)
 		}
 

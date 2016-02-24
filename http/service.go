@@ -239,7 +239,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 		queries = []string{query}
 	}
 
-	results, err := s.store.Execute(queries, isTx)
+	results, err := s.store.Query(queries, isTx)
 	if err != nil {
 		resp.Error = err.Error()
 
