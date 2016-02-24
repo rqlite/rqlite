@@ -160,7 +160,7 @@ func (s *Service) handleStoreStats(w http.ResponseWriter, r *http.Request) {
 func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 	isTx, err := isTx(r)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -179,7 +179,7 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 
 	results, err := s.store.Execute(queries, isTx)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -190,11 +190,11 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 		b, err = json.Marshal(results)
 	}
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError) // Internal error actually
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 	} else {
 		_, err = w.Write([]byte(b))
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	}
 }
@@ -203,7 +203,7 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 	isTx, err := isTx(r)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -231,7 +231,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := s.store.Query(queries, isTx)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -243,11 +243,11 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 		b, err = json.Marshal(rows)
 	}
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest) // Internal error actually
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 	} else {
 		_, err = w.Write([]byte(b))
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	}
 }
