@@ -125,11 +125,11 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 
 // handleExecute handles queries that modify the database.
 func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
-	// isTx, err := isTx(r)
-	// if err != nil {
-	// 	w.WriteHeader(http.StatusInternalServerError)
-	// 	return
-	// }
+	isTx, err := isTx(r)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
 	b, err := ioutil.ReadAll(r.Body)
 	if err != nil {
@@ -144,7 +144,7 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	results, err := s.store.Execute(queries, false)
+	results, err := s.store.Execute(queries, isTx)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -168,17 +168,11 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 
 // handleQuery handles queries that do not modify the database.
 func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
-	// isLeader, err := isLeader(r)
-	// if err != nil {
-	// 	w.WriteHeader(http.StatusInternalServerError)
-	// 	return
-	// }
-
-	// isTx, err := isTx(r)
-	// if err != nil {
-	// 	w.WriteHeader(http.StatusInternalServerError)
-	// 	return
-	// }
+	isTx, err := isTx(r)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
 	// Get the query statement, check leader and do tx if necessary.
 	query, err := stmtParam(r)
@@ -187,7 +181,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, err := s.store.Query([]string{query}, false)
+	rows, err := s.store.Query([]string{query}, isTx)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
