@@ -95,11 +95,13 @@ The response is of the form:
         "results": [
             {
                 "last_insert_id": 1,
-                "rows_affected": 1
+                "rows_affected": 1,
+                "time": "1.759015ms"
             },
             {
                 "last_insert_id": 2,
-                "rows_affected": 1
+                "rows_affected": 1,
+                "time": "1.000015ms"
             }
         ],
         "time": "2.759015ms"
@@ -130,7 +132,8 @@ The response is of the form:
                         2,
                         "sinead"
                     ]
-                ]
+                ],
+                "time": "150.043µs"
             }
         ],
         "time": "182.033µs"
@@ -168,7 +171,8 @@ If an error occurs while processing a statement, it will be marked as such in th
         "results": [
             {
                 "last_insert_id": 3,
-                "rows_affected": 1
+                "rows_affected": 1,
+                "time": "182.033µs"
             },
             {
                 "error": "near \"nonsense\": syntax error"
