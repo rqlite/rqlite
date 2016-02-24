@@ -24,6 +24,7 @@ import (
 const (
 	retainSnapshotCount = 2
 	raftTimeout         = 10 * time.Second
+	sqliteFile          = "db.sqlite"
 )
 
 type command struct {
@@ -54,7 +55,7 @@ func New(dbConf *sql.Config, dir, bind string) *Store {
 		raftDir:  dir,
 		raftBind: bind,
 		dbConf:   dbConf,
-		dbPath:   filepath.Join(dir, "db.sqlite3"),
+		dbPath:   filepath.Join(dir, sqliteFile),
 		logger:   log.New(os.Stderr, "[store] ", log.LstdFlags),
 	}
 }
