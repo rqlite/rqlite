@@ -157,7 +157,27 @@ Transactions are supported. To execute statements within a transaction, add `tra
 
 When a transaction takes place either both statements will succeed, or neither. Performance is *much, much* better if multiple SQL INSERTs or UPDATEs are executed via a transaction. Note the execution ceases the moment any single query results in an error.
 
-### Performance
+### Handling Errors
+If an error occurs while processing a statement, it will be marked as such in the response. For example.
+
+    curl -L -XPOST 'localhost:4001/db?pretty' -H "Content-Type: application/json" -d '[
+        "INSERT INTO foo(name) VALUES(\"fiona\")",
+        "INSERT INTO nonsense"
+    ]'
+    {
+        "results": [
+            {
+                "last_insert_id": 3,
+                "rows_affected": 1
+            },
+            {
+                "error": "near \"nonsense\": syntax error"
+            }
+        ],
+        "time": "2.478862ms"
+    }
+
+## Performance
 rqlite replicates SQLite for fault-tolerance. It does not replicate it for performance. In fact performance is reduced somewhat due to the network round-trips.
 
 Depending on your machine, individual INSERT performance could be anything from 1 operation per second to more than 10 operations per second. However, by using transactions, throughput will increase significantly, often by 2 orders of magnitude. This speed-up is due to the way SQLite works. So for high throughput, execute as many operations as possible within a single transaction.
