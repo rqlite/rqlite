@@ -283,7 +283,7 @@ func isPretty(req *http.Request) (bool, error) {
 
 // isTx returns whether the HTTP request is requesting a transaction.
 func isTx(req *http.Request) (bool, error) {
-	return queryParam(req, "tx")
+	return queryParam(req, "transaction")
 }
 
 // isExplain returns whether the HTTP request is requesting a explanation.
