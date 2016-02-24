@@ -61,10 +61,12 @@ To insert an entry into the database, execute a second SQL command:
 
 The response is of the form:
 
-    [{
-        "last_insert_id": 1,
-        "rows_affected": 1
-    }]
+    {
+        "results": [
+            {}
+        ],
+        "time": "3.122164ms"
+    }
 
 The use of the URL param `pretty` is optional, and results in pretty-printed JSON responses. `explain` is also optional. If included, the response will include some basic information about the processing that took place -- how long it took, for example.
 
@@ -89,13 +91,19 @@ Bulk updates are supported. To execute multipe statements in one HTTP call, simp
 
 The response is of the form:
 
-    [{
-        "last_insert_id": 2,
-        "rows_affected": 1
-    }, {
-        "last_insert_id": 3,
-        "rows_affected": 1
-    }]
+    {
+        "results": [
+            {
+                "last_insert_id": 1,
+                "rows_affected": 1
+            },
+            {
+                "last_insert_id": 2,
+                "rows_affected": 1
+            }
+        ],
+        "time": "2.759015ms"
+    }
 
 ### Querying Data
 Querying data is easy.
@@ -106,24 +114,27 @@ For a single query simply perform a HTTP GET, setting the query statement as the
 
 The response is of the form:
 
-    [
-        {
-            "columns": [
-                "id",
-                "name"
-            ],
-            "values": [
-                [
-                    1,
-                    "fiona"
+    {
+        "results": [
+            {
+                "columns": [
+                    "id",
+                    "name"
                 ],
-                [
-                    2,
-                    "sinead"
+                "values": [
+                    [
+                        1,
+                        "fiona"
+                    ],
+                    [
+                        2,
+                        "sinead"
+                    ]
                 ]
-            ]
-        }
-    ]
+            }
+        ],
+        "time": "182.033µs"
+    }
 
 The behaviour of rqlite when more than 1 query is passed via `q` is undefined. If you want to execute more than one query per HTTP request, place the queries in the body of the request, as a JSON array. For example:
 
