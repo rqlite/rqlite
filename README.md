@@ -63,9 +63,13 @@ The response is of the form:
 
     {
         "results": [
-            {}
+            {
+                "last_insert_id": 1,
+                "rows_affected": 1,
+                "time": "554.886µs"
+            }
         ],
-        "time": "3.122164ms"
+        "time": "2.520152ms"
     }
 
 The use of the URL param `pretty` is optional, and results in pretty-printed JSON responses. `explain` is also optional. If included, the response will include some basic information about the processing that took place -- how long it took, for example.
