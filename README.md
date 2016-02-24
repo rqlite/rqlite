@@ -35,7 +35,7 @@ If a node needs to be restarted, perhaps because of failure, don't pass the `-jo
 
     $GOPATH/bin/rqlited -http localhost:4005 -raft :4006 ~/node.3
 
-On restart it will rejoin the cluster and apply any changes to its local sqlite database that took place while it was down. Depending on your snapshot threshold, restarts may take a little time. Check out the section below on _Log Compaction_.
+On restart it will rejoin the cluster and apply any changes to the local sqlite database that took place while it was down. Depending on the number of changes in the Raft log, restarts may take a little while.
 
 ## Data API
 rqlite exposes an HTTP API allowing the database to be modified such that the changes are replicated. Queries are also executed using the HTTP API, though the SQLite database could be queried directly. Modifications go through the Raft log, ensuring only changes committed by a quorum of Raft servers are actually executed against the SQLite database. Queries do not go through the Raft log, however, since they do not change the state of the database, and therefore do not need to be captured in the log.
@@ -142,6 +142,8 @@ The behaviour of rqlite when more than 1 query is passed via `q` is undefined. I
 
 Another approach is to read the database file directly via `sqlite3`, the command-line tool that comes with SQLite. As long as you can be sure the file you access is under the leader, the records returned will be accurate and up-to-date.
 
+*If you use the query API to execute a command that modifies the database, those changes will not be replicated*. Always use the write API for inserts and updates.
+
 ### Performance
 rqlite replicates SQLite for fault-tolerance. It does not replicate it for performance. In fact performance is reduced somewhat due to the network round-trips.
 
@@ -159,9 +161,7 @@ An Administration API exists, which dumps some basic diagnostic and statistical 
 The use of the URL param `pretty` is optional, and results in pretty-printed JSON responses.
 
 ## Log Compaction
-rqlite does perform log compaction. After a configurable number of changes to the log, rqlite snapshots the SQLite database. And at start-up rqlite loads any existing snapshot.
-
-Review [issue #14](https://github.com/otoolep/rqlite/issues/14) to learn more about how snapshots affect node restart time.
+rqlite does perform log compaction. After a fixed number of changes rqlite snapshots the SQLite database, and truncates the Raft log.
 
 ## Limitations
  * SQLite commands such as `.schema` are not handled.
