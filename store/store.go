@@ -36,7 +36,7 @@ type Store struct {
 	raftDir  string
 	raftBind string
 
-	mu sync.RWMutex// Sync access between queries and snapshots.
+	mu sync.RWMutex // Sync access between queries and snapshots.
 
 	raft   *raft.Raft // The consensus mechanism
 	dbConf *sql.Config
@@ -129,6 +129,10 @@ func (s *Store) Open(enableSingle bool) error {
 // Close closes the store.
 func (s *Store) Close() error {
 	return s.db.Close()
+}
+
+func (s *Store) Stats() (map[string]interface{}, error) {
+	return map[string]interface{}{"raft": s.raft.Stats()}, nil
 }
 
 // Execute executes queries that return no rows, but do modify the database.

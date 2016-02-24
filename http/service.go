@@ -28,6 +28,9 @@ type Store interface {
 
 	// Join joins the node, reachable at addr, to the cluster.
 	Join(addr string) error
+
+	// Stats returns stats on the Store.
+	Stats() (map[string]interface{}, error)
 }
 
 // Service provides HTTP service.
@@ -88,6 +91,12 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	} else if r.URL.Path == "/join" {
 		s.handleJoin(w, r)
+	} else if r.URL.Path == "/statistics" {
+		if r.Method != "GET" {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		} else {
+			s.handleStoreStats(w, r)
+		}
 	} else {
 		w.WriteHeader(http.StatusNotFound)
 	}
@@ -120,6 +129,31 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 	if err := s.store.Join(remoteAddr); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
+	}
+}
+
+// handleStoreStats returns stats on the Raft module.
+func (s *Service) handleStoreStats(w http.ResponseWriter, r *http.Request) {
+	results, err := s.store.Stats()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	pretty, _ := isPretty(r)
+	var b []byte
+	if pretty {
+		b, err = json.MarshalIndent(results, "", "    ")
+	} else {
+		b, err = json.Marshal(results)
+	}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError) // Internal error actually
+	} else {
+		_, err = w.Write([]byte(b))
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+		}
 	}
 }
 
