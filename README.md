@@ -150,6 +150,8 @@ The behaviour of rqlite when more than 1 query is passed via `q` is undefined. I
         "SELECT * FROM bar"
     ]'
 
+If queries are present in both the URL and the body of the request, the URL query takes precedence.
+
 Another approach is to read the database file directly via `sqlite3`, the command-line tool that comes with SQLite. As long as you can be sure the file you access is under the leader, the records returned will be accurate and up-to-date.
 
 *If you use the query API to execute a command that modifies the database, those changes will not be replicated*. Always use the write API for inserts and updates.
