@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"time"
 
 	sql "github.com/otoolep/rqlite/db"
 )
@@ -36,7 +37,16 @@ type Store interface {
 type Response struct {
 	Results interface{} `json:"results,omitempty"`
 	Error   string      `json:"error,omitempty"`
-	Time time.Time `json:"time,omitempty"`
+	Time    string      `json:"time,omitempty"`
+
+	start time.Time
+}
+
+// NewResponse returns a new instance of response.
+func NewResponse() *Response {
+	return &Response{
+		start: time.Now(),
+	}
 }
 
 // Service provides HTTP service.
@@ -165,6 +175,8 @@ func (s *Service) handleStoreStats(w http.ResponseWriter, r *http.Request) {
 
 // handleExecute handles queries that modify the database.
 func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
+	resp := NewResponse()
+
 	isTx, err := isTx(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -186,14 +198,19 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 
 	results, err := s.store.Execute(queries, isTx)
 	if err != nil {
-		writeResponse(w, r, &Response{Results: results, Error: err.Error()})
+		resp.Error = err.Error()
+
 	} else {
-		writeResponse(w, r, &Response{Results: results})
+		resp.Results = results
 	}
+	resp.Time = time.Now().Sub(resp.start).String()
+	writeResponse(w, r, resp)
 }
 
 // handleQuery handles queries that do not modify the database.
 func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
+	resp := NewResponse()
+
 	isTx, err := isTx(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -222,12 +239,15 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 		queries = []string{query}
 	}
 
-	rows, err := s.store.Query(queries, isTx)
+	results, err := s.store.Execute(queries, isTx)
 	if err != nil {
-		writeResponse(w, r, &Response{Results: rows, Error: err.Error()})
+		resp.Error = err.Error()
+
 	} else {
-		writeResponse(w, r, &Response{Results: rows})
+		resp.Results = results
 	}
+	resp.Time = time.Now().Sub(resp.start).String()
+	writeResponse(w, r, resp)
 }
 
 // Addr returns the address on which the Service is listening
