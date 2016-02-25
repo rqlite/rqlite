@@ -192,7 +192,10 @@ If an error occurs while processing a statement, it will be marked as such in th
 ## Performance
 rqlite replicates SQLite for fault-tolerance. It does not replicate it for performance. In fact performance is reduced somewhat due to the network round-trips.
 
-Depending on your machine, individual INSERT performance could be anything from 1 operation per second to more than 10 operations per second. However, by using transactions, throughput will increase significantly, often by 2 orders of magnitude. This speed-up is due to the way SQLite works. So for high throughput, execute as many operations as possible within a single transaction.
+Depending on your machine, individual INSERT performance could be anything from 1 operation per second to more than 100 operations per second. However, by using transactions, throughput will increase significantly, often by 2 orders of magnitude. This speed-up is due to the way SQLite works. So for high throughput, execute as many operations as possible within a single transaction.
+
+### In-memory databases
+You can also try using an [in-memory database](https://www.sqlite.org/inmemorydb.html). In this mode no actual SQLite file is created and the entire database is stored in memory. Using an in-memory *will not put your data at risk*. Since the Raft log is the authoritave store for all data, and is written to disk, an in-memory database can be fully recreated on start-up.
 
 ## Administration API
 *Being refactored for v2.0, and is currently non-functional.*
