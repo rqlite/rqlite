@@ -140,6 +140,7 @@ func (s *Store) Close() error {
 	return s.db.Close()
 }
 
+// Stats returns stats for the store.
 func (s *Store) Stats() (map[string]interface{}, error) {
 	return map[string]interface{}{"raft": s.raft.Stats()}, nil
 }

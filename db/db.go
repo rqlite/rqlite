@@ -10,7 +10,7 @@ import (
 
 // Config represents the configuration of the SQLite database.
 type Config struct {
-	DSN string
+	DSN    string
 	Memory bool
 }
 
@@ -19,7 +19,7 @@ func NewConfig() *Config {
 	return &Config{}
 }
 
-// DSN returns the fully-qualified datasource name.
+// FQDSN returns the fully-qualified datasource name.
 func (c *Config) FQDSN(path string) string {
 	if c.DSN != "" {
 		return fmt.Sprintf("file:%s?%s", path, c.DSN)
@@ -32,6 +32,7 @@ type DB struct {
 	conn *sql.DB
 }
 
+// Result represents the result of a execution operation.
 type Result struct {
 	LastInsertID int64  `json:"last_insert_id,omitempty"`
 	RowsAffected int64  `json:"rows_affected,omitempty"`
@@ -39,6 +40,7 @@ type Result struct {
 	Time         string `json:"time,omitempty"`
 }
 
+// Rows represents the result of a query operation.
 type Rows struct {
 	Columns []string        `json:"columns,omitempty"`
 	Values  [][]interface{} `json:"values,omitempty"`
