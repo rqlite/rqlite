@@ -111,6 +111,8 @@ The response is of the form:
         "time": "2.759015ms"
     }
 
+A bulk update is contained within a single Raft log entry, so the network round-trips between nodes in the cluster are amortized over the bulk update. This should result in better throughput, if it is possible to use this kind of update.
+
 ### Querying Data
 Querying data is easy.
 
