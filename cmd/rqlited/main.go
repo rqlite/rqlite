@@ -41,7 +41,7 @@ func init() {
 	flag.StringVar(&httpAddr, "http", "localhost:4001", "HTTP query server bind address")
 	flag.StringVar(&raftAddr, "raft", "localhost:4002", "Raft communication bind address")
 	flag.StringVar(&joinAddr, "join", "", "host:port of leader to join")
-	flag.StringVar(&dsn, "dsn", "", "SQLite DSN parameters")
+	flag.StringVar(&dsn, "dsn", "", `SQLite DSN parameters. E.g. "cache=shared&mode=memory"`)
 	flag.BoolVar(&inMem, "mem", false, "Use an in-memory database")
 	flag.StringVar(&cpuprofile, "cpuprofile", "", "Write CPU profile to file")
 	flag.BoolVar(&disableReporting, "noreport", false, "Disable anonymised launch reporting")

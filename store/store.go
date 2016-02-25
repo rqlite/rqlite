@@ -81,7 +81,7 @@ func (s *Store) Open(enableSingle bool) error {
 		return err
 	}
 	s.db = db
-	s.logger.Println("SQLite database opened at", s.dbPath)
+	s.logger.Println("SQLite database opened at", s.dbConf.FQDSN(s.dbPath))
 
 	// Setup Raft configuration.
 	config := raft.DefaultConfig()
