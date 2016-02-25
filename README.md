@@ -56,7 +56,7 @@ where `curl` is the [well known command-line tool](http://curl.haxx.se/). It is 
 To insert an entry into the database, execute a second SQL command:
 
     curl -L -XPOST 'localhost:4001/db?pretty' -H "Content-Type: application/json" -d '[
-        "INSERT INTO foo(name) VALUES(\"fiona\")"
+        \"INSERT INTO foo(name) VALUES('fiona')\"
     ]'
 
 The response is of the form:
@@ -89,8 +89,8 @@ Note that this is the SQLite file that is under `node 3`, which is not the node 
 Bulk updates are supported. To execute multipe statements in one HTTP call, simply include the statements in the JSON array:
 
     curl -L -XPOST 'localhost:4001/db?pretty' -H "Content-Type: application/json" -d '[
-        "INSERT INTO foo(name) VALUES(\"fiona\")",
-        "INSERT INTO foo(name) VALUES(\"sinead\")"
+        \"INSERT INTO foo(name) VALUES('fiona')\",
+        \"INSERT INTO foo(name) VALUES('sinead')\"
     ]'
 
 The response is of the form:
@@ -162,8 +162,8 @@ Another approach is to read the database file directly via `sqlite3`, the comman
 Transactions are supported. To execute statements within a transaction, add `transaction` to the URL. An example of the above operation executed within a transaction is shown below.
 
     curl -L -XPOST 'localhost:4001/db?pretty&transaction' -H "Content-Type: application/json" -d '[
-        "INSERT INTO foo(name) VALUES(\"fiona\")",
-        "INSERT INTO foo(name) VALUES(\"sinead\")""
+        \"INSERT INTO foo(name) VALUES('fiona')\",
+        \"INSERT INTO foo(name) VALUES('sinead')\"
     ]'
 
 When a transaction takes place either both statements will succeed, or neither. Performance is *much, much* better if multiple SQL INSERTs or UPDATEs are executed via a transaction. Note the execution ceases the moment any single query results in an error.
@@ -174,8 +174,8 @@ The behaviour of rqlite when using `BEGIN`, `COMMIT`, or `ROLLBACK` to control t
 If an error occurs while processing a statement, it will be marked as such in the response. For example.
 
     curl -L -XPOST 'localhost:4001/db?pretty' -H "Content-Type: application/json" -d '[
-        "INSERT INTO foo(name) VALUES(\"fiona\")",
-        "INSERT INTO nonsense"
+        \"INSERT INTO foo(name) VALUES('fiona')\",
+        \"INSERT INTO nonsense"
     ]'
     {
         "results": [
