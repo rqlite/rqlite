@@ -55,7 +55,7 @@ where `curl` is the [well known command-line tool](http://curl.haxx.se/). It is 
 
 To insert an entry into the database, execute a second SQL command:
 
-    curl -L -XPOST 'localhost:4001/db?pretty&explain' -H "Content-Type: application/json" -d '[
+    curl -L -XPOST 'localhost:4001/db?pretty' -H "Content-Type: application/json" -d '[
         "INSERT INTO foo(name) VALUES(\"fiona\")"
     ]'
 
@@ -72,7 +72,7 @@ The response is of the form:
         "time": "2.520152ms"
     }
 
-The use of the URL param `pretty` is optional, and results in pretty-printed JSON responses. `explain` is also optional. If included, the response will include some basic information about the processing that took place -- how long it took, for example.
+The use of the URL param `pretty` is optional, and results in pretty-printed JSON responses.
 
 You can confirm that the data has been writen to the database by accessing the SQLite database directly.
 
