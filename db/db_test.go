@@ -1,11 +1,13 @@
 package db
 
 import (
+	"bytes"
 	"encoding/json"
 	"io/ioutil"
 	"os"
 	"path"
 	"testing"
+	"fmt"
 )
 
 /*
@@ -312,6 +314,43 @@ func Test_PartialFailTransaction(t *testing.T) {
 	}
 	if exp, got := `[{"columns":["id","name"]}]`, asJSON(ro); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
+func Test_Backup(t *testing.T) {
+	db, path := mustCreateDatabase()
+	fmt.Println(path)
+	defer db.Close()
+	//defer os.Remove(path)
+
+	_, err := db.Execute([]string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"}, false, false)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	stmts := []string{
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+		`INSERT INTO foo(id, name) VALUES(2, "fiona")`,
+		`INSERT INTO foo(id, name) VALUES(3, "fiona")`,
+		`INSERT INTO foo(id, name) VALUES(4, "fiona")`,
+	}
+	_, err = db.Execute(stmts, true, false)
+	if err != nil {
+		t.Fatalf("failed to insert records: %s", err.Error())
+	}
+
+	bk, err := db.Backup()
+	if err != nil {
+		t.Fatalf("failed to backup database: %s", err.Error())
+	}
+
+	src, err := ioutil.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read database file: %s", err.Error())
+	}
+
+	if !bytes.Equal(bk, src) {
+		t.Fatalf("backup is not the same as source")
 	}
 }
 

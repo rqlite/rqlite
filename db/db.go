@@ -3,10 +3,34 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"io/ioutil"
+	//"os"
+	"sync"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3" // required blank import
+	"github.com/mattn/go-sqlite3"
 )
+
+// Hook into the SQLite3 connection.
+//
+// This connection, mutex, and init() allows each Open() call to get access
+// to the driver's internal conn object. The mutex ensures only 1 Open() call
+// can run concurrently, and when it has returned, sqlite3conn will be set to
+// the connection. This connection can be used for backups.
+var sqlite3conn *sqlite3.SQLiteConn
+var openMu sync.Mutex
+
+const bkDelay = 250
+
+func init() {
+	sql.Register("sqlite3_with_hook",
+		&sqlite3.SQLiteDriver{
+			ConnectHook: func(conn *sqlite3.SQLiteConn) error {
+				sqlite3conn = conn
+				return nil
+			},
+		})
+}
 
 // Config represents the configuration of the SQLite database.
 type Config struct {
@@ -29,10 +53,12 @@ func (c *Config) FQDSN(path string) string {
 
 // DB is the SQL database.
 type DB struct {
-	conn *sql.DB
+	conn        *sql.DB
+	sqlite3conn *sqlite3.SQLiteConn
+	path        string
 }
 
-// Result represents the result of a execution operation.
+// Result represents the outcome of an operation that changes rows.
 type Result struct {
 	LastInsertID int64   `json:"last_insert_id,omitempty"`
 	RowsAffected int64   `json:"rows_affected,omitempty"`
@@ -40,7 +66,7 @@ type Result struct {
 	Time         float64 `json:"time,omitempty"`
 }
 
-// Rows represents the result of a query operation.
+// Rows represents the outcome of an operation that returns query data.
 type Rows struct {
 	Columns []string        `json:"columns,omitempty"`
 	Values  [][]interface{} `json:"values,omitempty"`
@@ -50,23 +76,45 @@ type Rows struct {
 
 // Open an existing database, creating it if it does not exist.
 func Open(dbPath string) (*DB, error) {
-	dbc, err := sql.Open("sqlite3", dbPath)
+	openMu.Lock()
+	defer openMu.Unlock()
+
+	dbc, err := sql.Open("sqlite3_with_hook", dbPath)
 	if err != nil {
 		return nil, err
 	}
+
+	// Ensure a connection is established before going further.
+	if err := dbc.Ping(); err != nil {
+		return nil, err
+	}
+
 	return &DB{
-		conn: dbc,
+		conn:        dbc,
+		sqlite3conn: sqlite3conn,
+		path:        dbPath,
 	}, nil
 }
 
 // OpenWithConfiguration an existing database, creating it if it does not exist.
 func OpenWithConfiguration(dbPath string, conf *Config) (*DB, error) {
-	dbc, err := sql.Open("sqlite3", conf.FQDSN(dbPath))
+	openMu.Lock()
+	defer openMu.Unlock()
+
+	dbc, err := sql.Open("sqlite3_with_hook", conf.FQDSN(dbPath))
 	if err != nil {
 		return nil, err
 	}
+
+	// Ensure a connection is established before going further.
+	if err := dbc.Ping(); err != nil {
+		return nil, err
+	}
+
 	return &DB{
-		conn: dbc,
+		conn:        dbc,
+		sqlite3conn: sqlite3conn,
+		path:        conf.FQDSN(dbPath),
 	}, nil
 }
 
@@ -249,4 +297,44 @@ func (db *DB) Query(queries []string, tx, xTime bool) ([]*Rows, error) {
 	}()
 
 	return allRows, err
+}
+
+// Backup returns a consistent snapshot of the database.
+func (db *DB) Backup() ([]byte, error) {
+	f, err := ioutil.TempFile("", "rqlilte-bak-")
+	if err != nil {
+		return nil, err
+	}
+	f.Close()
+	fmt.Println(f.Name())
+	//defer os.Remove(f.Name())
+
+	dstDB, err := Open(f.Name())
+	if err != nil {
+		return nil, err
+	}
+
+	bk, err := dstDB.sqlite3conn.Backup("main", db.sqlite3conn, "main")
+	if err != nil {
+		return nil, err
+	}
+
+	for {
+		done, err := bk.Step(-1)
+		if err != nil {
+			bk.Finish()
+			return nil, err
+		}
+		if done {
+			break
+		}
+		time.Sleep(bkDelay * time.Millisecond)
+	}
+	bk.Finish()
+
+	b, err := ioutil.ReadFile(f.Name())
+	if err != nil {
+		return nil, err
+	}
+	return b, nil
 }
