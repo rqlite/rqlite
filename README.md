@@ -197,7 +197,12 @@ rqlite replicates SQLite for fault-tolerance. It does not replicate it for perfo
 Depending on your machine, individual INSERT performance could be anything from 1 operation per second to more than 100 operations per second. However, by using transactions, throughput will increase significantly, often by 2 orders of magnitude. This speed-up is due to the way SQLite works. So for high throughput, execute as many operations as possible within a single transaction.
 
 ### In-memory databases
-You can also try using an [in-memory database](https://www.sqlite.org/inmemorydb.html). In this mode no actual SQLite file is created and the entire database is stored in memory. Using an in-memory **will not put your data at risk**. Since the Raft log is the authoritave store for all data, and is written to disk, an in-memory database can be fully recreated on start-up.
+You can also try using an [in-memory database](https://www.sqlite.org/inmemorydb.html). In this mode no actual SQLite file is created and the entire database is stored in memory.
+
+#### Will this put my data at risk?
+No.
+
+Using an in-memory does not put your data at risk. Since the Raft log is the authoritave store for all data, and it is written to disk, an in-memory database can be fully recreated on start-up.
 
 Pass `-mem` to `rqlited` at start-up to enable an in-memory database.
 
