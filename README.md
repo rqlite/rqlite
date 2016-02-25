@@ -156,7 +156,7 @@ If queries are present in both the URL and the body of the request, the URL quer
 
 Another approach is to read the database file directly via `sqlite3`, the command-line tool that comes with SQLite. As long as you can be sure the file you access is under the leader, the records returned will be accurate and up-to-date.
 
-*If you use the query API to execute a command that modifies the database, those changes will not be replicated*. Always use the write API for inserts and updates.
+**If you use the query API to execute a command that modifies the database, those changes will not be replicated**. Always use the write API for inserts and updates.
 
 ### Transactions
 Transactions are supported. To execute statements within a transaction, add `transaction` to the URL. An example of the above operation executed within a transaction is shown below.
@@ -168,7 +168,7 @@ Transactions are supported. To execute statements within a transaction, add `tra
 
 When a transaction takes place either both statements will succeed, or neither. Performance is *much, much* better if multiple SQL INSERTs or UPDATEs are executed via a transaction. Note the execution ceases the moment any single query results in an error.
 
-The behaviour of rqlite when using `BEGIN`, `COMMIT`, or `ROLLBACK` to control transactions is *not defined*. Control transactions only through the query parameters shown above.
+The behaviour of rqlite when using `BEGIN`, `COMMIT`, or `ROLLBACK` to control transactions is **not defined**. Control transactions only through the query parameters shown above.
 
 ### Handling Errors
 If an error occurs while processing a statement, it will be marked as such in the response. For example.
@@ -197,7 +197,7 @@ rqlite replicates SQLite for fault-tolerance. It does not replicate it for perfo
 Depending on your machine, individual INSERT performance could be anything from 1 operation per second to more than 100 operations per second. However, by using transactions, throughput will increase significantly, often by 2 orders of magnitude. This speed-up is due to the way SQLite works. So for high throughput, execute as many operations as possible within a single transaction.
 
 ### In-memory databases
-You can also try using an [in-memory database](https://www.sqlite.org/inmemorydb.html). In this mode no actual SQLite file is created and the entire database is stored in memory. Using an in-memory *will not put your data at risk*. Since the Raft log is the authoritave store for all data, and is written to disk, an in-memory database can be fully recreated on start-up.
+You can also try using an [in-memory database](https://www.sqlite.org/inmemorydb.html). In this mode no actual SQLite file is created and the entire database is stored in memory. Using an in-memory **will not put your data at risk**. Since the Raft log is the authoritave store for all data, and is written to disk, an in-memory database can be fully recreated on start-up.
 
 Pass `-mem` to `rqlited` at start-up to enable an in-memory database.
 
