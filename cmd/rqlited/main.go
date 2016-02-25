@@ -33,6 +33,7 @@ var httpAddr string
 var raftAddr string
 var joinAddr string
 var dsn string
+var inMem bool
 var cpuprofile string
 var disableReporting bool
 
@@ -41,6 +42,7 @@ func init() {
 	flag.StringVar(&raftAddr, "raft", "localhost:4002", "Raft communication bind address")
 	flag.StringVar(&joinAddr, "join", "", "host:port of leader to join")
 	flag.StringVar(&dsn, "dsn", "", "SQLite DSN parameters")
+	flag.BoolVar(&inMem, "mem", false, "Use an in-memory database")
 	flag.StringVar(&cpuprofile, "cpuprofile", "", "Write CPU profile to file")
 	flag.BoolVar(&disableReporting, "noreport", false, "Disable anonymised launch reporting")
 	flag.Usage = func() {
@@ -80,6 +82,7 @@ func main() {
 	// Create and open the store.
 	dbConf := sql.NewConfig() // XXX CONSIDER SUPPORTING IN-MEMORY DATABASE! That way is fast, but log is persistence.
 	dbConf.DSN = dsn
+	dbConf.Memory = inMem
 	store := store.New(dbConf, dataPath, raftAddr)
 	if err := store.Open(joinAddr == ""); err != nil {
 		log.Fatalf("failed to open store: %s", err.Error())

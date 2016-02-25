@@ -51,11 +51,16 @@ type Store struct {
 
 // New returns a new Store.
 func New(dbConf *sql.Config, dir, bind string) *Store {
+	dbPath := filepath.Join(dir, sqliteFile)
+	if dbConf.Memory {
+		dbPath = ":memory:"
+	}
+
 	return &Store{
 		raftDir:  dir,
 		raftBind: bind,
 		dbConf:   dbConf,
-		dbPath:   filepath.Join(dir, sqliteFile),
+		dbPath:   dbPath,
 		logger:   log.New(os.Stderr, "[store] ", log.LstdFlags),
 	}
 }
@@ -63,10 +68,12 @@ func New(dbConf *sql.Config, dir, bind string) *Store {
 // Open opens the store. If enableSingle is set, and there are no existing peers,
 // then this node becomes the first node, and therefore leader, of the cluster.
 func (s *Store) Open(enableSingle bool) error {
-	// Create the database. It must be deleted as it will be rebuilt from
-	// (possibly) a snapshot and committed log entries.
-	if err := os.Remove(s.dbPath); err != nil && !os.IsNotExist(err) {
-		return err
+	// Create the database. Unless it's a memory-based database, tt must be deleted
+	if !s.dbConf.Memory {
+		// as it will be rebuilt from (possibly) a snapshot and committed log entries.
+		if err := os.Remove(s.dbPath); err != nil && !os.IsNotExist(err) {
+			return err
+		}
 	}
 
 	db, err := sql.OpenWithConfiguration(s.dbPath, s.dbConf)
@@ -74,6 +81,7 @@ func (s *Store) Open(enableSingle bool) error {
 		return err
 	}
 	s.db = db
+	s.logger.Println("SQLite database opened at", s.dbPath)
 
 	// Setup Raft configuration.
 	config := raft.DefaultConfig()

@@ -11,6 +11,7 @@ import (
 // Config represents the configuration of the SQLite database.
 type Config struct {
 	DSN string
+	Memory bool
 }
 
 // NewConfig returns an instance of Config for the database at path.
