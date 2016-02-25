@@ -168,6 +168,8 @@ Transactions are supported. To execute statements within a transaction, add `tra
 
 When a transaction takes place either both statements will succeed, or neither. Performance is *much, much* better if multiple SQL INSERTs or UPDATEs are executed via a transaction. Note the execution ceases the moment any single query results in an error.
 
+The behaviour of rqlite when using `BEGIN`, `COMMIT`, or `ROLLBACK` to control transactions is *not defined*. Control transactions only through the query parameters shown above.
+
 ### Handling Errors
 If an error occurs while processing a statement, it will be marked as such in the response. For example.
 
