@@ -147,7 +147,7 @@ The response is of the form:
 
 The behaviour of rqlite when more than 1 query is passed via `q` is undefined. If you want to execute more than one query per HTTP request, place the queries in the body of the request, as a JSON array. For example:
 
-    curl -L -G 'localhost:4001/db?pretty' -H "Content-Type: application/json" -d '[
+    curl -XGET 'localhost:4001/db?pretty' -H "Content-Type: application/json" -d '[
         "SELECT * FROM foo",
         "SELECT * FROM bar"
     ]'
