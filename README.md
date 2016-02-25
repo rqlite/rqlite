@@ -215,7 +215,6 @@ rqlite does perform log compaction. After a fixed number of changes rqlite snaps
 
 ## Limitations
  * SQLite commands such as `.schema` are not handled.
- * Using `PRAGMA` directives has not been tested either.
  * The supported types are those supported by [go-sqlite3](http://godoc.org/github.com/mattn/go-sqlite3).
 
 This is new software, so it goes without saying it has bugs. It's by no means finished -- issues are now being tracked, and I plan to develop this project further. Pull requests are also welcome.
