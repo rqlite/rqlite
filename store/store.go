@@ -41,15 +41,13 @@ type Store struct {
 
 	mu sync.RWMutex // Sync access between queries and snapshots.
 
-	ln     *networkLayer
-	raft   *raft.Raft // The consensus mechanism
-	dbConf *sql.Config
-	dbPath string
-	db     *sql.DB // The underlying SQLite store
+	ln     *networkLayer // Raft network between nodes.
+	raft   *raft.Raft    // The consensus mechanism.
+	dbConf *sql.Config   // SQLite database config.
+	dbPath string        // Path to database file.
+	db     *sql.DB       // The underlying SQLite store.
 
 	logger *log.Logger
-
-	SQLiteDB string
 }
 
 // New returns a new Store.

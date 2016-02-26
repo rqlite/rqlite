@@ -53,10 +53,10 @@ func NewResponse() *Response {
 
 // Service provides HTTP service.
 type Service struct {
-	addr string
-	ln   net.Listener
+	addr string       // Bind address of the HTTP service.
+	ln   net.Listener // Service listener
 
-	store Store
+	store Store // The Raft-backed database store.
 }
 
 // New returns an uninitialized HTTP service.
@@ -354,5 +354,5 @@ func isExplain(req *http.Request) (bool, error) {
 
 // noLeader returns whether processing should skip the leader check.
 func noLeader(req *http.Request) (bool, error) {
-	return queryParam(req, "noLeader")
+	return queryParam(req, "noleader")
 }

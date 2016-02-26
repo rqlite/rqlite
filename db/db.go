@@ -34,8 +34,8 @@ func init() {
 
 // Config represents the configuration of the SQLite database.
 type Config struct {
-	DSN    string
-	Memory bool
+	DSN    string // Datasource name
+	Memory bool   // In-memory database enabled?
 }
 
 // NewConfig returns an instance of Config for the database at path.
@@ -53,9 +53,9 @@ func (c *Config) FQDSN(path string) string {
 
 // DB is the SQL database.
 type DB struct {
-	conn        *sql.DB
-	sqlite3conn *sqlite3.SQLiteConn
-	path        string
+	conn        *sql.DB             // Abstract Connection to database.
+	sqlite3conn *sqlite3.SQLiteConn // Driver connection to database.
+	path        string              // Path to database file.
 }
 
 // Result represents the outcome of an operation that changes rows.
