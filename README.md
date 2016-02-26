@@ -247,6 +247,15 @@ An Administration API exists, which dumps some basic diagnostic and statistical 
 
 The use of the URL param `pretty` is optional, and results in pretty-printed JSON responses.
 
+## Backups
+rqlite supports hot-backing up a node as follows. Retrieve and write a consistent snapshot of the underlying SQLite database to a file like so:
+
+    curl -localhost:4001/db/backup -o bak.sqlite3
+
+The node can then be restored by loading this database file via `sqlite3` and executing `.dump`. You can then use the output of the dump to replay the entire database back into brand new node (or cluster), *with the exception* of `BEGIN TRANSACTION` and `COMMIT` commands. You should ignore those commands in the `.dump` output.
+
+By default a backup can only be retrieved from the leader, though this check can be disabled by adding `noleader` to the URL as a query param.
+
 ## Log Compaction
 rqlite does perform log compaction. After a fixed number of changes rqlite snapshots the SQLite database, and truncates the Raft log.
 
