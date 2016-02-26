@@ -315,6 +315,44 @@ func Test_PartialFailTransaction(t *testing.T) {
 	}
 }
 
+func Test_Backup(t *testing.T) {
+	db, path := mustCreateDatabase()
+	defer db.Close()
+	defer os.Remove(path)
+
+	_, err := db.Execute([]string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"}, false, false)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	stmts := []string{
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+		`INSERT INTO foo(id, name) VALUES(2, "fiona")`,
+		`INSERT INTO foo(id, name) VALUES(3, "fiona")`,
+		`INSERT INTO foo(id, name) VALUES(4, "fiona")`,
+	}
+	_, err = db.Execute(stmts, true, false)
+	if err != nil {
+		t.Fatalf("failed to insert records: %s", err.Error())
+	}
+
+	bk, err := db.Backup()
+	if err != nil {
+		t.Fatalf("failed to backup database: %s", err.Error())
+	}
+
+	newDB, newPath := mustWriteAndOpenDatabase(bk)
+	defer newDB.Close()
+	defer os.Remove(newPath)
+	ro, err := newDB.Query([]string{`SELECT * FROM foo`}, false, false)
+	if err != nil {
+		t.Fatalf("failed to query table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"values":[[1,"fiona"],[2,"fiona"],[3,"fiona"],[4,"fiona"]]}]`, asJSON(ro); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
 func mustCreateDatabase() (*DB, string) {
 	var err error
 	f, err := ioutil.TempFile("", "rqlilte-test-")
@@ -328,6 +366,26 @@ func mustCreateDatabase() (*DB, string) {
 		panic("failed to open database")
 	}
 
+	return db, f.Name()
+}
+
+func mustWriteAndOpenDatabase(b []byte) (*DB, string) {
+	var err error
+	f, err := ioutil.TempFile("", "rqlilte-test-write-")
+	if err != nil {
+		panic("failed to create temp file")
+	}
+	f.Close()
+
+	err = ioutil.WriteFile(f.Name(), b, 0660)
+	if err != nil {
+		panic("failed to write file")
+	}
+
+	db, err := Open(f.Name())
+	if err != nil {
+		panic("failed to open database")
+	}
 	return db, f.Name()
 }
 
