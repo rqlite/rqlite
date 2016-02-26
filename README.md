@@ -66,13 +66,13 @@ The response is of the form:
             {
                 "last_insert_id": 1,
                 "rows_affected": 1,
-                "time": "554.886µs"
+                "time": 0.00886
             }
         ],
-        "time": "2.520152ms"
+        "time": 0.0152
     }
 
-The use of the URL param `pretty` is optional, and results in pretty-printed JSON responses.
+The use of the URL param `pretty` is optional, and results in pretty-printed JSON responses. Time is measured in seconds.
 
 You can confirm that the data has been writen to the database by accessing the SQLite database directly.
 
@@ -100,15 +100,15 @@ The response is of the form:
             {
                 "last_insert_id": 1,
                 "rows_affected": 1,
-                "time": "1.759015ms"
+                "time": 0.00759015
             },
             {
                 "last_insert_id": 2,
                 "rows_affected": 1,
-                "time": "1.000015ms"
+                "time": 0.00669015
             }
         ],
-        "time": "2.759015ms"
+        "time": 0.869015
     }
 
 A bulk update is contained within a single Raft log entry, so the network round-trips between nodes in the cluster are amortized over the bulk update. This should result in better throughput, if it is possible to use this kind of update.
@@ -139,10 +139,10 @@ The response is of the form:
                         "sinead"
                     ]
                 ],
-                "time": "150.043µs"
+                "time": 0.0150043
             }
         ],
-        "time": "182.033µs"
+        "time": 0.0220043
     }
 
 The behaviour of rqlite when more than 1 query is passed via `q` is undefined. If you want to execute more than one query per HTTP request, place the queries in the body of the request, as a JSON array. For example:
@@ -182,13 +182,13 @@ If an error occurs while processing a statement, it will be marked as such in th
             {
                 "last_insert_id": 3,
                 "rows_affected": 1,
-                "time": "182.033µs"
+                "time": 182.033
             },
             {
                 "error": "near \"nonsense\": syntax error"
             }
         ],
-        "time": "2.478862ms"
+        "time": 2.478862
     }
 
 ## Performance
