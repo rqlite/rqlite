@@ -39,6 +39,24 @@ If a node needs to be restarted, perhaps because of failure, don't pass the `-jo
 
 On restart it will rejoin the cluster and apply any changes to the local sqlite database that took place while it was down. Depending on the number of changes in the Raft log, restarts may take a little while.
 
+### Vagrant
+Alternatively you can use a [Vagrant](https://www.vagrantup.com/) environment. To do so, simply [install Vagrant](https://docs.vagrantup.com/v2/installation/index.html) on your machine, a               virtualization system such as VirtualBox, and execute the following commands:
+
+~~~bash
+$ cd $GOPATH/src/github.com/otoolep/rqlite
+$ CLUSTER_SIZE=3 vagrant up rqlite
+~~~
+
+This will start a Vagrant box and install rqlite with all required dependencies. This will form a cluster with `CLUSTER_SIZE` nodes.
+
+To execute queries against the cluster you can either ssh directly to the Vagrant box via `vagrant ssh rqlite` or execute the commands directly from your local box, accessing the cluster at `192.168.   200.10` IP and any port within a range `[4001, 4001 + CLUSTER_SIZE -1]`.
+
+To terminate the Vagrant box simply execute:
+
+~~~bash
+$ vagrant destroy rqlite
+~~~
+
 ## Data API
 rqlite exposes an HTTP API allowing the database to be modified such that the changes are replicated. Queries are also executed using the HTTP API, though the SQLite database could be queried directly. Modifications go through the Raft log, ensuring only changes committed by a quorum of rqlite nodes are actually executed against the SQLite database. Queries do not go through the Raft log, however, since they do not change the state of the database, and therefore do not need to be captured in the log.
 
