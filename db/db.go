@@ -34,10 +34,10 @@ type DB struct {
 
 // Result represents the result of a execution operation.
 type Result struct {
-	LastInsertID int64  `json:"last_insert_id,omitempty"`
-	RowsAffected int64  `json:"rows_affected,omitempty"`
-	Error        string `json:"error,omitempty"`
-	Time         string `json:"time,omitempty"`
+	LastInsertID int64   `json:"last_insert_id,omitempty"`
+	RowsAffected int64   `json:"rows_affected,omitempty"`
+	Error        string  `json:"error,omitempty"`
+	Time         float64 `json:"time,omitempty"`
 }
 
 // Rows represents the result of a query operation.
@@ -45,7 +45,7 @@ type Rows struct {
 	Columns []string        `json:"columns,omitempty"`
 	Values  [][]interface{} `json:"values,omitempty"`
 	Error   string          `json:"error,omitempty"`
-	Time    string          `json:"time,omitempty"`
+	Time    float64         `json:"time,omitempty"`
 }
 
 // Open an existing database, creating it if it does not exist.
@@ -152,7 +152,7 @@ func (db *DB) Execute(queries []string, tx, xTime bool) ([]*Result, error) {
 			}
 			result.RowsAffected = ra
 			if xTime {
-				result.Time = time.Now().Sub(start).String()
+				result.Time = time.Now().Sub(start).Seconds()
 			}
 			allResults = append(allResults, result)
 		}
@@ -240,7 +240,7 @@ func (db *DB) Query(queries []string, tx, xTime bool) ([]*Rows, error) {
 				rows.Values = append(rows.Values, values)
 			}
 			if xTime {
-				rows.Time = time.Now().Sub(start).String()
+				rows.Time = time.Now().Sub(start).Seconds()
 			}
 			allRows = append(allRows, rows)
 		}

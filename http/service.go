@@ -37,7 +37,7 @@ type Store interface {
 type Response struct {
 	Results interface{} `json:"results,omitempty"`
 	Error   string      `json:"error,omitempty"`
-	Time    string      `json:"time,omitempty"`
+	Time    float64     `json:"time,omitempty"`
 
 	start time.Time
 }
@@ -203,7 +203,7 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 	} else {
 		resp.Results = results
 	}
-	resp.Time = time.Now().Sub(resp.start).String()
+	resp.Time = time.Now().Sub(resp.start).Seconds()
 	writeResponse(w, r, resp)
 }
 
@@ -246,7 +246,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 	} else {
 		resp.Results = results
 	}
-	resp.Time = time.Now().Sub(resp.start).String()
+	resp.Time = time.Now().Sub(resp.start).Seconds()
 	writeResponse(w, r, resp)
 }
 
