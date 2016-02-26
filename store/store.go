@@ -26,6 +26,7 @@ const (
 	raftTimeout         = 10 * time.Second
 	sqliteFile          = "db.sqlite"
 	leaderWaitDelay     = 100 * time.Millisecond
+	appliedWaitDelay    = 100 * time.Millisecond
 )
 
 type command struct {
@@ -182,6 +183,26 @@ func (s *Store) WaitForLeader(timeout time.Duration) (string, error) {
 	}
 }
 
+// WaitForAppliedIndex blocks until a given log index has been applied,
+// or the timeout expires.
+func (s *Store) WaitForAppliedIndex(idx uint64, timeout time.Duration) error {
+	tck := time.NewTicker(appliedWaitDelay)
+	defer tck.Stop()
+	tmr := time.NewTimer(timeout)
+	defer tmr.Stop()
+
+	for {
+		select {
+		case <-tck.C:
+			if s.raft.AppliedIndex() >= idx {
+				return nil
+			}
+		case <-tmr.C:
+			return fmt.Errorf("timeout expired")
+		}
+	}
+}
+
 // Stats returns stats for the store.
 func (s *Store) Stats() (map[string]interface{}, error) {
 	return map[string]interface{}{"raft": s.raft.Stats()}, nil
@@ -233,7 +254,7 @@ func (s *Store) Query(queries []string, tx, leader bool) ([]*sql.Rows, error) {
 // Join joins a node, located at addr, to this store. The node must be ready to
 // respond to Raft communications at that address.
 func (s *Store) Join(addr string) error {
-	s.logger.Printf("received join request for remote node as %s", addr)
+	s.logger.Printf("received request to join node at %s", addr)
 
 	f := s.raft.AddPeer(addr)
 	if f.Error() != nil {
