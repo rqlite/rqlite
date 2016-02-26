@@ -114,7 +114,7 @@ The response is of the form:
 A bulk update is contained within a single Raft log entry, so the network round-trips between nodes in the cluster are amortized over the bulk update. This should result in better throughput, if it is possible to use this kind of update.
 
 ### Querying Data
-Querying data is easy.
+Querying data is easy. The most important thing to know is that, by default, queries must go through the leader node. More on this later.
 
 For a single query simply perform a HTTP GET, setting the query statement as the query parameter `q`:
 
@@ -145,7 +145,7 @@ The response is of the form:
         "time": 0.0220043
     }
 
-The behaviour of rqlite when more than 1 query is passed via `q` is undefined. If you want to execute more than one query per HTTP request, perform a `POST`, and place the queries in the body of the request as a JSON array. For example:
+The behaviour of rqlite when more than 1 query is passed via `q` is undefined. If you want to execute more than one query per HTTP request, perform a POST, and place the queries in the body of the request as a JSON array. For example:
 
     curl -XPOST 'localhost:4001/db/query?pretty' -H "Content-Type: application/json" -d '[
         "SELECT * FROM foo",
@@ -157,6 +157,18 @@ If queries are present in both the URL and the body of the request, the URL quer
 Another approach is to read the database file directly via `sqlite3`, the command-line tool that comes with SQLite. As long as you can be sure the file you access is under the leader, the records returned will be accurate and up-to-date.
 
 **If you use the query API to execute a command that modifies the database, those changes will not be replicated**. Always use the write API for inserts and updates.
+
+#### Why must queries go through the leader?
+Since queries do not involve consensus, why must they served by the leader? This is because without this check queries on a node could return out-of-date results.  This could happen for one of two reasons:
+
+ * The node, which still part of the cluster, has fallen behind the leader.
+ * The node is no longer part of the cluster, and has stopped receiving Raft log updates.
+
+This is why, even though queries do not involve consensus, they must be processed by the leader. If you wish to disable the leader check, and let queries be served regardless of leader state, add `noleader` to the URL. For example:
+
+    curl -G localhost:4001/db/query?pretty&noleader --data-urlencode 'q=SELECT * FROM foo'
+
+Due to the nature of Raft, there is a very small window (milliseconds) where a node has been disposed as leader, but has not yet changed its internal state. Therefore, even with the leader check in place, there is a very small window of time where out-of-date results could be returned.
 
 ### Transactions
 Transactions are supported. To execute statements within a transaction, add `transaction` to the URL. An example of the above operation executed within a transaction is shown below.

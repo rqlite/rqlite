@@ -253,7 +253,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	isLeader, err := isLeader(r)
+	noLeader, err := noLeader(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -282,7 +282,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	results, err := s.store.Query(queries, isTx, isLeader)
+	results, err := s.store.Query(queries, isTx, !noLeader)
 	if err != nil {
 		resp.Error = err.Error()
 
@@ -352,7 +352,7 @@ func isExplain(req *http.Request) (bool, error) {
 	return queryParam(req, "explain")
 }
 
-// isLeader returns whether the HTTP request is requesting a leader check.
-func isLeader(req *http.Request) (bool, error) {
+// noLeader returns whether processing should skip the leader check.
+func noLeader(req *http.Request) (bool, error) {
 	return queryParam(req, "leader")
 }
