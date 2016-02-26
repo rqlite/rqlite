@@ -15,6 +15,8 @@ Download, test (optional), and run rqlite like so (tested on 64-bit Kubuntu 14.0
     mkdir rqlite # Or any directory of your choice.
     cd rqlite/
     export GOPATH=$PWD
+    go get github.com/mattn/go-sqlite3     # This, and the next command, are not strictly necessary,
+    go install github.com/mattn/go-sqlite3 # but will make repeated builds much quicker.
     go get -t github.com/otoolep/rqlite/...
     $GOPATH/bin/rqlited ~/node.1
 
@@ -152,8 +154,6 @@ The behaviour of rqlite when more than 1 query is passed via `q` is undefined. I
         "SELECT * FROM bar"
     ]'
 
-If queries are present in both the URL and the body of the request, the URL query takes precedence.
-
 Another approach is to read the database file directly via `sqlite3`, the command-line tool that comes with SQLite. As long as you can be sure the file you access is under the leader, the records returned will be accurate and up-to-date.
 
 **If you use the query API to execute a command that modifies the database, those changes will not be replicated**. Always use the write API for inserts and updates.
@@ -202,7 +202,7 @@ You can also try using an [in-memory database](https://www.sqlite.org/inmemorydb
 #### Will this put my data at risk?
 No.
 
-Using an in-memory does not put your data at risk. Since the Raft log is the authoritave store for all data, and it is written to disk, an in-memory database can be fully recreated on start-up.
+Using an in-memory does not put your data at risk. Since the Raft log is the authoritative store for all data, and it is written to disk, an in-memory database can be fully recreated on start-up.
 
 Pass `-mem` to `rqlited` at start-up to enable an in-memory database.
 
