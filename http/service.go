@@ -156,16 +156,10 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h := http.Header{}
-	h.Add("Content-Type", "application/octet-stream")
-	if err := h.Write(w); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
 	_, err = w.Write(b)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 }
 
