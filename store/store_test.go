@@ -1,6 +1,7 @@
 package store
 
 import (
+	"encoding/json"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -48,6 +49,16 @@ func Test_SingleNodeExecuteQuery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
+	r, err := s.Query([]string{`SELECT * FROM foo`}, false, true)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
 }
 
 func mustNewStore() *Store {
@@ -74,4 +85,12 @@ func newInMemoryConfig() *sql.Config {
 	c := sql.NewConfig()
 	c.Memory = true
 	return c
+}
+
+func asJSON(v interface{}) string {
+	b, err := json.Marshal(v)
+	if err != nil {
+		panic("failed to JSON marshal value")
+	}
+	return string(b)
 }

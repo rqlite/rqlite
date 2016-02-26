@@ -166,7 +166,6 @@ func (s *Store) WaitForLeader(timeout time.Duration) (string, error) {
 	tmr := time.NewTimer(timeout)
 	defer tmr.Stop()
 
-
 	for {
 		select {
 		case <-tck.C:
