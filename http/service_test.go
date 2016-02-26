@@ -27,7 +27,7 @@ func Test_404Routes(t *testing.T) {
 
 	client := &http.Client{}
 
-	resp, err := client.Get(host+"/db/xxx")
+	resp, err := client.Get(host + "/db/xxx")
 	if err != nil {
 		t.Fatalf("failed to make request")
 	}
@@ -55,7 +55,7 @@ func Test_405Routes(t *testing.T) {
 
 	client := &http.Client{}
 
-	resp, err := client.Get(host+"/db/execute")
+	resp, err := client.Get(host + "/db/execute")
 	if err != nil {
 		t.Fatalf("failed to make request")
 	}
@@ -87,7 +87,7 @@ func (m *MockStore) Execute(queries []string, tx bool) ([]*sql.Result, error) {
 	return nil, nil
 }
 
-func (m *MockStore) Query(queries []string, tx bool) ([]*sql.Rows, error) {
+func (m *MockStore) Query(queries []string, tx, leader bool) ([]*sql.Rows, error) {
 	return nil, nil
 }
 

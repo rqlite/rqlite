@@ -5,7 +5,6 @@ package http
 import (
 	"encoding/json"
 	"io/ioutil"
-	"log"
 	"net"
 	"net/http"
 	"strings"
@@ -24,7 +23,7 @@ type Store interface {
 	// Query executes a slice of queries, each of which returns rows.
 	// If tx is true, then the query will take place while a read
 	// transaction is held on the database.
-	Query(queries []string, tx bool) ([]*sql.Rows, error)
+	Query(queries []string, tx, leader bool) ([]*sql.Rows, error)
 
 	// Join joins the node, reachable at addr, to the cluster.
 	Join(addr string) error
@@ -83,7 +82,7 @@ func (s *Service) Start() error {
 	go func() {
 		err := server.Serve(s.ln)
 		if err != nil {
-			log.Fatalf("HTTP serve: %s", err)
+			return
 		}
 	}()
 
@@ -254,6 +253,12 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	isLeader, err := isLeader(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	// Get the query statement(s), and do tx if necessary.
 	queries := []string{}
 
@@ -277,7 +282,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	results, err := s.store.Query(queries, isTx)
+	results, err := s.store.Query(queries, isTx, isLeader)
 	if err != nil {
 		resp.Error = err.Error()
 
