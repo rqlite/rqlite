@@ -47,7 +47,7 @@ All responses from rqlite are in the form of JSON.
 ### Writing Data
 To write data successfully to the database, you must create at least 1 table. To do this, perform a HTTP POST, with a `CREATE TABLE` SQL command encapsulated in a JSON array, in the body of the request. For example:
 
-    curl -XPOST localhost:4001/db?pretty -d '[
+    curl -XPOST localhost:4001/db?pretty -H "Content-Type: application/json" -d '[
         "CREATE TABLE foo (id integer not null primary key, name text)"
     ]'
 
@@ -55,7 +55,7 @@ where `curl` is the [well known command-line tool](http://curl.haxx.se/).
 
 To insert an entry into the database, execute a second SQL command:
 
-    curl -L -XPOST 'localhost:4001/db?pretty' -d '[
+    curl -XPOST 'localhost:4001/db?pretty' -H "Content-Type: application/json" -d '[
         "INSERT INTO foo(name) VALUES(\"fiona\")"
     ]'
 
@@ -88,7 +88,7 @@ Note that this is the SQLite file that is under `node 3`, which is not the node 
 ### Bulk Updates
 Bulk updates are supported. To execute multipe statements in one HTTP call, simply include the statements in the JSON array:
 
-    curl -L -XPOST 'localhost:4001/db?pretty' -d "[
+    curl -XPOST 'localhost:4001/db?pretty' -H "Content-Type: application/json" -d "[
         \"INSERT INTO foo(name) VALUES('fiona')\",
         \"INSERT INTO foo(name) VALUES('sinead')\"
     ]"
@@ -147,7 +147,7 @@ The response is of the form:
 
 The behaviour of rqlite when more than 1 query is passed via `q` is undefined. If you want to execute more than one query per HTTP request, place the queries in the body of the request, as a JSON array. For example:
 
-    curl -XPOST 'localhost:4001/db?pretty' -d '[
+    curl -XPOST 'localhost:4001/db?pretty' -H "Content-Type: application/json" -d '[
         "SELECT * FROM foo",
         "SELECT * FROM bar"
     ]'
@@ -161,7 +161,7 @@ Another approach is to read the database file directly via `sqlite3`, the comman
 ### Transactions
 Transactions are supported. To execute statements within a transaction, add `transaction` to the URL. An example of the above operation executed within a transaction is shown below.
 
-    curl -L -XPOST 'localhost:4001/db?pretty&transaction' -H "Content-Type: application/json" -d "[
+    curl -XPOST 'localhost:4001/db?pretty&transaction' -H "Content-Type: application/json" -d "[
         \"INSERT INTO foo(name) VALUES('fiona')\",
         \"INSERT INTO foo(name) VALUES('sinead')\"
     ]"
@@ -173,7 +173,7 @@ The behaviour of rqlite when using `BEGIN`, `COMMIT`, or `ROLLBACK` to control t
 ### Handling Errors
 If an error occurs while processing a statement, it will be marked as such in the response. For example.
 
-    curl -L -XPOST 'localhost:4001/db?pretty' -H "Content-Type: application/json" -d "[
+    curl -XPOST 'localhost:4001/db?pretty' -H "Content-Type: application/json" -d "[
         \"INSERT INTO foo(name) VALUES('fiona')\",
         \"INSERT INTO nonsense\"
     ]"
