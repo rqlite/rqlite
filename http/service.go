@@ -32,7 +32,7 @@ type Store interface {
 	Stats() (map[string]interface{}, error)
 
 	// Backup returns the byte stream of the backup file.
-	Backup() ([]byte, error)
+	Backup(leader bool) ([]byte, error)
 }
 
 // Response represents a response from the HTTP service.
@@ -150,7 +150,13 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	b, err := s.store.Backup()
+	noLeader, err := noLeader(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	b, err := s.store.Backup(!noLeader)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return

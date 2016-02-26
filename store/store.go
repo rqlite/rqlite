@@ -233,7 +233,10 @@ func (s *Store) Execute(queries []string, tx bool) ([]*sql.Result, error) {
 }
 
 // Backup return a consistent snapshot of the underlying database.
-func (s *Store) Backup() ([]byte, error) {
+func (s *Store) Backup(leader bool) ([]byte, error) {
+	if leader && s.raft.State() != raft.Leader {
+		return nil, fmt.Errorf("not leader")
+	}
 	return s.db.Backup()
 }
 
