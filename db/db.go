@@ -3,8 +3,8 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"os"
 	"io/ioutil"
-	//"os"
 	"sync"
 	"time"
 
@@ -306,8 +306,7 @@ func (db *DB) Backup() ([]byte, error) {
 		return nil, err
 	}
 	f.Close()
-	fmt.Println(f.Name())
-	//defer os.Remove(f.Name())
+	defer os.Remove(f.Name())
 
 	dstDB, err := Open(f.Name())
 	if err != nil {
@@ -330,7 +329,13 @@ func (db *DB) Backup() ([]byte, error) {
 		}
 		time.Sleep(bkDelay * time.Millisecond)
 	}
-	bk.Finish()
+
+	if err := bk.Finish(); err != nil {
+		return nil, err
+	}
+	if err := dstDB.Close(); err != nil {
+		return nil, err
+	}
 
 	b, err := ioutil.ReadFile(f.Name())
 	if err != nil {

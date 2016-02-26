@@ -1,13 +1,11 @@
 package db
 
 import (
-	"bytes"
 	"encoding/json"
 	"io/ioutil"
 	"os"
 	"path"
 	"testing"
-	"fmt"
 )
 
 /*
@@ -319,9 +317,8 @@ func Test_PartialFailTransaction(t *testing.T) {
 
 func Test_Backup(t *testing.T) {
 	db, path := mustCreateDatabase()
-	fmt.Println(path)
 	defer db.Close()
-	//defer os.Remove(path)
+	defer os.Remove(path)
 
 	_, err := db.Execute([]string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"}, false, false)
 	if err != nil {
@@ -344,13 +341,15 @@ func Test_Backup(t *testing.T) {
 		t.Fatalf("failed to backup database: %s", err.Error())
 	}
 
-	src, err := ioutil.ReadFile(path)
+	newDB, newPath := mustWriteAndOpenDatabase(bk)
+	defer newDB.Close()
+	defer os.Remove(newPath)
+	ro, err := newDB.Query([]string{`SELECT * FROM foo`}, false, false)
 	if err != nil {
-		t.Fatalf("failed to read database file: %s", err.Error())
+		t.Fatalf("failed to query table: %s", err.Error())
 	}
-
-	if !bytes.Equal(bk, src) {
-		t.Fatalf("backup is not the same as source")
+	if exp, got := `[{"columns":["id","name"],"values":[[1,"fiona"],[2,"fiona"],[3,"fiona"],[4,"fiona"]]}]`, asJSON(ro); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 }
 
@@ -367,6 +366,26 @@ func mustCreateDatabase() (*DB, string) {
 		panic("failed to open database")
 	}
 
+	return db, f.Name()
+}
+
+func mustWriteAndOpenDatabase(b []byte) (*DB, string) {
+	var err error
+	f, err := ioutil.TempFile("", "rqlilte-test-write-")
+	if err != nil {
+		panic("failed to create temp file")
+	}
+	f.Close()
+
+	err = ioutil.WriteFile(f.Name(), b, 0660)
+	if err != nil {
+		panic("failed to write file")
+	}
+
+	db, err := Open(f.Name())
+	if err != nil {
+		panic("failed to open database")
+	}
 	return db, f.Name()
 }
 
