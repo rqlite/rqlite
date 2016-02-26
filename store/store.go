@@ -25,6 +25,7 @@ const (
 	retainSnapshotCount = 2
 	raftTimeout         = 10 * time.Second
 	sqliteFile          = "db.sqlite"
+	leaderWaitDelay     = 100 * time.Millisecond
 )
 
 type command struct {
@@ -137,7 +138,46 @@ func (s *Store) Open(enableSingle bool) error {
 
 // Close closes the store.
 func (s *Store) Close() error {
-	return s.db.Close()
+	if err := s.db.Close(); err != nil {
+		return err
+	}
+	f := s.raft.Shutdown()
+	if e := f.(raft.Future); e.Error() != nil {
+		return e.Error()
+	}
+	return nil
+}
+
+// Path returns the path to the store's storage directory.
+func (s *Store) Path() string {
+	return s.raftDir
+}
+
+// Leader returns the current leader. Returns a blank string if there is
+// no leader.
+func (s *Store) Leader() string {
+	return s.raft.Leader()
+}
+
+// WaitForLeader blocks until a leader is detected, or the timeout expires.
+func (s *Store) WaitForLeader(timeout time.Duration) (string, error) {
+	tck := time.NewTicker(leaderWaitDelay)
+	defer tck.Stop()
+	tmr := time.NewTimer(timeout)
+	defer tmr.Stop()
+
+
+	for {
+		select {
+		case <-tck.C:
+			l := s.Leader()
+			if l != "" {
+				return l, nil
+			}
+		case <-tmr.C:
+			return "", fmt.Errorf("timeout expired")
+		}
+	}
 }
 
 // Stats returns stats for the store.
