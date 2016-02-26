@@ -80,8 +80,6 @@ func (s *Service) Start() error {
 	}
 	s.ln = ln
 
-	http.Handle("/", s)
-
 	go func() {
 		err := server.Serve(s.ln)
 		if err != nil {
@@ -100,33 +98,18 @@ func (s *Service) Close() {
 
 // ServeHTTP allows Service to serve HTTP requests.
 func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if strings.HasPrefix(r.URL.Path, "/db/execute") {
-		if r.Method == "POST" {
-			s.handleExecute(w, r)
-		} else {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-		}
-	} else if strings.HasPrefix(r.URL.Path, "/db/query") {
-		if r.Method == "GET" || r.Method == "POST" {
-			s.handleQuery(w, r)
-		} else {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-		}
-	} else if strings.HasPrefix(r.URL.Path, "/join") {
+	switch {
+	case strings.HasPrefix(r.URL.Path, "/db/execute"):
+		s.handleExecute(w, r)
+	case strings.HasPrefix(r.URL.Path, "/db/query"):
+		s.handleQuery(w, r)
+	case strings.HasPrefix(r.URL.Path, "/db/backup"):
+		s.handleBackup(w, r)
+	case strings.HasPrefix(r.URL.Path, "/join"):
 		s.handleJoin(w, r)
-	} else if strings.HasPrefix(r.URL.Path, "/statistics") {
-		if r.Method != "GET" {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-		} else {
-			s.handleStoreStats(w, r)
-		}
-	} else if strings.HasPrefix(r.URL.Path, "/db/backup") {
-		if r.Method != "GET" {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-		} else {
-			s.handleBackup(w, r)
-		}
-	} else {
+	case strings.HasPrefix(r.URL.Path, "/statistics"):
+		s.handleStoreStats(w, r)
+	default:
 		w.WriteHeader(http.StatusNotFound)
 	}
 }
@@ -163,6 +146,11 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 
 // handleStoreStats returns stats on the Raft module.
 func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
 	b, err := s.store.Backup()
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -184,6 +172,11 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
 
 // handleStoreStats returns stats on the Raft module.
 func (s *Service) handleStoreStats(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
 	results, err := s.store.Stats()
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -209,6 +202,11 @@ func (s *Service) handleStoreStats(w http.ResponseWriter, r *http.Request) {
 
 // handleExecute handles queries that modify the database.
 func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
 	resp := NewResponse()
 
 	isTx, err := isTx(r)
@@ -243,6 +241,11 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 
 // handleQuery handles queries that do not modify the database.
 func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" && r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
 	resp := NewResponse()
 
 	isTx, err := isTx(r)
