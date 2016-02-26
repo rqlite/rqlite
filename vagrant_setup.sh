@@ -16,5 +16,5 @@ gvm use go1.4
 mkdir -p rqlite
 cd rqlite
 export GOPATH=$PWD
-go get github.com/otoolep/rqlite
-ln -s $GOPATH/bin/rqlite /usr/local/bin/rqlite
+go get github.com/otoolep/rqlite/...
+ln -s $GOPATH/bin/rqlited /usr/local/bin/rqlited
