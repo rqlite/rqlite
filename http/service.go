@@ -31,6 +31,9 @@ type Store interface {
 
 	// Stats returns stats on the Store.
 	Stats() (map[string]interface{}, error)
+
+	// Backup returns the byte stream of the backup file.
+	Backup() ([]byte, error)
 }
 
 // Response represents a response from the HTTP service.
@@ -97,21 +100,31 @@ func (s *Service) Close() {
 
 // ServeHTTP allows Service to serve HTTP requests.
 func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if strings.HasPrefix(r.URL.Path, "/db") {
+	if strings.HasPrefix(r.URL.Path, "/db/execute") {
 		if r.Method == "POST" {
 			s.handleExecute(w, r)
-		} else if r.Method == "GET" {
+		} else {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	} else if strings.HasPrefix(r.URL.Path, "/db/query") {
+		if r.Method == "GET" || r.Method == "POST" {
 			s.handleQuery(w, r)
 		} else {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
-	} else if r.URL.Path == "/join" {
+	} else if strings.HasPrefix(r.URL.Path, "/join") {
 		s.handleJoin(w, r)
-	} else if r.URL.Path == "/statistics" {
+	} else if strings.HasPrefix(r.URL.Path, "/statistics") {
 		if r.Method != "GET" {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		} else {
 			s.handleStoreStats(w, r)
+		}
+	} else if strings.HasPrefix(r.URL.Path, "/db/backup") {
+		if r.Method != "GET" {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		} else {
+			s.handleBackup(w, r)
 		}
 	} else {
 		w.WriteHeader(http.StatusNotFound)
@@ -145,6 +158,27 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 	if err := s.store.Join(remoteAddr); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
+	}
+}
+
+// handleStoreStats returns stats on the Raft module.
+func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
+	b, err := s.store.Backup()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	h := http.Header{}
+	h.Add("Content-Type", "application/octet-stream")
+	if err := h.Write(w); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	_, err = w.Write(b)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
 
@@ -219,12 +253,15 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 
 	// Get the query statement(s), and do tx if necessary.
 	queries := []string{}
-	query, err := stmtParam(r)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	if query == "" {
+
+	if r.Method == "GET" {
+		query, err := stmtParam(r)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		queries = []string{query}
+	} else {
 		b, err := ioutil.ReadAll(r.Body)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
@@ -235,8 +272,6 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-	} else {
-		queries = []string{query}
 	}
 
 	results, err := s.store.Query(queries, isTx)

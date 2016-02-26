@@ -3,8 +3,8 @@ package db
 import (
 	"database/sql"
 	"fmt"
-	"os"
 	"io/ioutil"
+	"os"
 	"sync"
 	"time"
 
@@ -84,10 +84,9 @@ func Open(dbPath string) (*DB, error) {
 		return nil, err
 	}
 
-	// Ensure a connection is established before going further.
-	if err := dbc.Ping(); err != nil {
-		return nil, err
-	}
+	// Ensure a connection is established before going further. Ignore error
+	// because database may not exist yet.
+	_ = dbc.Ping()
 
 	return &DB{
 		conn:        dbc,
@@ -106,10 +105,9 @@ func OpenWithConfiguration(dbPath string, conf *Config) (*DB, error) {
 		return nil, err
 	}
 
-	// Ensure a connection is established before going further.
-	if err := dbc.Ping(); err != nil {
-		return nil, err
-	}
+	// Ensure a connection is established before going further. Ignore error
+	// because database may not exist yet.
+	_ = dbc.Ping()
 
 	return &DB{
 		conn:        dbc,

@@ -169,6 +169,11 @@ func (s *Store) Execute(queries []string, tx bool) ([]*sql.Result, error) {
 	return r.results, r.error
 }
 
+// Backup return a consistent snapshot of the underlying database.
+func (s *Store) Backup() ([]byte, error) {
+	return s.db.Backup()
+}
+
 // Query executes queries that return rows, and do not modify the database.
 func (s *Store) Query(queries []string, tx bool) ([]*sql.Rows, error) {
 	// Allow concurrent queries.
