@@ -40,6 +40,7 @@ type Store struct {
 
 	mu sync.RWMutex // Sync access between queries and snapshots.
 
+	ln     *networkLayer
 	raft   *raft.Raft // The consensus mechanism
 	dbConf *sql.Config
 	dbPath string
@@ -102,14 +103,12 @@ func (s *Store) Open(enableSingle bool) error {
 	}
 
 	// Setup Raft communication.
-	addr, err := net.ResolveTCPAddr("tcp", s.raftBind)
+	ln, err := net.Listen("tcp", s.raftBind)
 	if err != nil {
 		return err
 	}
-	transport, err := raft.NewTCPTransport(s.raftBind, addr, 3, 10*time.Second, os.Stderr)
-	if err != nil {
-		return err
-	}
+	s.ln = newnetworkLayer(ln)
+	transport := raft.NewNetworkTransport(s.ln, 3, 10*time.Second, os.Stderr)
 
 	// Create peer storage.
 	peerStore := raft.NewJSONPeers(s.raftDir, transport)
@@ -151,6 +150,10 @@ func (s *Store) Close() error {
 // Path returns the path to the store's storage directory.
 func (s *Store) Path() string {
 	return s.raftDir
+}
+
+func (s *Store) Addr() net.Addr {
+	return s.ln.Addr()
 }
 
 // Leader returns the current leader. Returns a blank string if there is

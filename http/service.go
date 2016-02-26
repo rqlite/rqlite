@@ -25,7 +25,7 @@ type Store interface {
 	// transaction is held on the database.
 	Query(queries []string, tx, leader bool) ([]*sql.Rows, error)
 
-	// Join joins the node, reachable at addr, to the cluster.
+	// Join joins the node, reachable at addr, to this node.
 	Join(addr string) error
 
 	// Stats returns stats on the Store.
