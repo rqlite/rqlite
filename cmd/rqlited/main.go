@@ -80,7 +80,7 @@ func main() {
 	}
 
 	// Create and open the store.
-	dbConf := sql.NewConfig() // XXX CONSIDER SUPPORTING IN-MEMORY DATABASE! That way is fast, but log is persistence.
+	dbConf := sql.NewConfig()
 	dbConf.DSN = dsn
 	dbConf.Memory = inMem
 	store := store.New(dbConf, dataPath, raftAddr)
