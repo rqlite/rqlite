@@ -47,15 +47,15 @@ All responses from rqlite are in the form of JSON.
 ### Writing Data
 To write data successfully to the database, you must create at least 1 table. To do this, perform a HTTP POST, with a `CREATE TABLE` SQL command encapsulated in a JSON array, in the body of the request. For example:
 
-    curl -L -XPOST localhost:4001/db?pretty -H "Content-Type: application/json"  -d '[
+    curl -XPOST localhost:4001/db?pretty -d '[
         "CREATE TABLE foo (id integer not null primary key, name text)"
     ]'
 
-where `curl` is the [well known command-line tool](http://curl.haxx.se/). It is *very important* to set the `Content-Type` header as shown.
+where `curl` is the [well known command-line tool](http://curl.haxx.se/).
 
 To insert an entry into the database, execute a second SQL command:
 
-    curl -L -XPOST 'localhost:4001/db?pretty' -H "Content-Type: application/json" -d '[
+    curl -L -XPOST 'localhost:4001/db?pretty' -d '[
         "INSERT INTO foo(name) VALUES(\"fiona\")"
     ]'
 
@@ -88,7 +88,7 @@ Note that this is the SQLite file that is under `node 3`, which is not the node 
 ### Bulk Updates
 Bulk updates are supported. To execute multipe statements in one HTTP call, simply include the statements in the JSON array:
 
-    curl -L -XPOST 'localhost:4001/db?pretty' -H "Content-Type: application/json" -d "[
+    curl -L -XPOST 'localhost:4001/db?pretty' -d "[
         \"INSERT INTO foo(name) VALUES('fiona')\",
         \"INSERT INTO foo(name) VALUES('sinead')\"
     ]"
@@ -118,7 +118,7 @@ Querying data is easy.
 
 For a single query simply perform a HTTP GET, setting the query statement as the query parameter `q`:
 
-    curl -L -G localhost:4001/db?pretty --data-urlencode 'q=SELECT * FROM foo'
+    curl -XGET localhost:4001/db?pretty --data-urlencode 'q=SELECT * FROM foo'
 
 The response is of the form:
 
@@ -147,7 +147,7 @@ The response is of the form:
 
 The behaviour of rqlite when more than 1 query is passed via `q` is undefined. If you want to execute more than one query per HTTP request, place the queries in the body of the request, as a JSON array. For example:
 
-    curl -XGET 'localhost:4001/db?pretty' -H "Content-Type: application/json" -d '[
+    curl -XPOST 'localhost:4001/db?pretty' -d '[
         "SELECT * FROM foo",
         "SELECT * FROM bar"
     ]'
