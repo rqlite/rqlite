@@ -37,6 +37,8 @@ var inMem bool
 var cpuprofile string
 var disableReporting bool
 
+const desc = `rqlite is a distributed system that provides a replicated SQLite database.`
+
 func init() {
 	flag.StringVar(&httpAddr, "http", "localhost:4001", "HTTP query server bind address")
 	flag.StringVar(&raftAddr, "raft", "localhost:4002", "Raft communication bind address")
@@ -46,7 +48,8 @@ func init() {
 	flag.StringVar(&cpuprofile, "cpuprofile", "", "Write CPU profile to file")
 	flag.BoolVar(&disableReporting, "noreport", false, "Disable anonymised launch reporting")
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s [arguments] <data-path>\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "\n%s\n\n", desc)
+		fmt.Fprintf(os.Stderr, "Usage: %s [arguments] <data directory>\n", os.Args[0])
 		flag.PrintDefaults()
 	}
 }

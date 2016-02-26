@@ -112,7 +112,7 @@ func (s *Store) Open(enableSingle bool) error {
 	// Create peer storage.
 	peerStore := raft.NewJSONPeers(s.raftDir, transport)
 
-	// Create the snapshot store. This allows the Raft to truncate the log.
+	// Create the snapshot store. This allows Raft to truncate the log.
 	snapshots, err := raft.NewFileSnapshotStore(s.raftDir, retainSnapshotCount, os.Stderr)
 	if err != nil {
 		return fmt.Errorf("file snapshot store: %s", err)
@@ -124,7 +124,7 @@ func (s *Store) Open(enableSingle bool) error {
 		return fmt.Errorf("new bolt store: %s", err)
 	}
 
-	// Instantiate the Raft systems.
+	// Instantiate the Raft system.
 	ra, err := raft.NewRaft(config, (*fsm)(s), logStore, logStore, snapshots, peerStore, transport)
 	if err != nil {
 		return fmt.Errorf("new raft: %s", err)
