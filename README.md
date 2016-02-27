@@ -10,14 +10,15 @@ rqlite gives you the functionality of a fault-tolerant, replicated relational da
 ## Building and Running
 *Building rqlite requires Go 1.3 or later. [gvm](https://github.com/moovweb/gvm) is a great tool for managing your version of Go.*
 
-Download, test (optional), and run rqlite like so (tested on 64-bit Kubuntu 14.04):
+Download and run rqlite like so (tested on 64-bit Kubuntu 14.04 and OSX):
 
     mkdir rqlite # Or any directory of your choice.
     cd rqlite/
     export GOPATH=$PWD
-    go get github.com/mattn/go-sqlite3     # This, and the next command, are not strictly necessary,
-    go install github.com/mattn/go-sqlite3 # but will make repeated builds much quicker.
-    go get -t github.com/otoolep/rqlite/...
+    go get github.com/mattn/go-sqlite3           # This, and the next command, are not strictly necessary,
+    go install github.com/mattn/go-sqlite3       # but will make repeated builds much quicker.
+    go get -t github.com/otoolep/rqlite/
+    go install github.com/otoolep/rqlite/...     # This actually builds the binary
     $GOPATH/bin/rqlited ~/node.1
 
 This starts a rqlite server listening on localhost, port 4001. This single node automatically becomes the leader. To see all available command-line options, execute:
