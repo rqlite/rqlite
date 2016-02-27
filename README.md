@@ -178,6 +178,8 @@ Another approach is to read the database file directly via `sqlite3`, the comman
 **If you use the query API to execute a command that modifies the database, those changes will not be replicated**. Always use the write API for inserts and updates.
 
 #### Why must queries go through the leader?
+*See [issue 5](https://github.com/otoolep/rqlite/issues/5) for more discussion of this.*
+
 Since queries do not involve consensus, why must they served by the leader? This is because without this check queries on a node could return out-of-date results.  This could happen for one of two reasons:
 
  * The node, which still part of the cluster, has fallen behind the leader.
@@ -187,11 +189,7 @@ This is why, even though queries do not involve consensus, they must be processe
 
     curl -G 'localhost:4001/db/query?pretty&noleader' --data-urlencode 'q=SELECT * FROM foo'
 
-Due to the nature of Raft, there is a very small window (milliseconds) where a node has been disposed as leader, but has not yet changed its internal state. Therefore, even with the leader check in place, there is a very small window of time where out-of-date results could be returned. If you want to avoid even this possibility, add `verify` to the URL. This will force the node to perform an actual leadership check across the cluster, but will impact query performance. An example query follows.
-
-    curl -G 'localhost:4001/db/query?pretty&verify' --data-urlencode 'q=SELECT * FROM foo'
-    
-*See [issue 5](https://github.com/otoolep/rqlite/issues/5) for more discussion of this.*
+Due to the nature of Raft, there is a very small window (milliseconds) where a node has been disposed as leader, but has not yet changed its internal state. Therefore, even with the leader check in place, there is a very small window of time where out-of-date results could be returned.
 
 ### Transactions
 Transactions are supported. To execute statements within a transaction, add `transaction` to the URL. An example of the above operation executed within a transaction is shown below.
