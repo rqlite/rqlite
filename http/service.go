@@ -189,10 +189,13 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 		"addr": s.Addr().String(),
 	}
 
+	// Build the status response.
 	status := map[string]interface{}{
-		"store":       results,
-		"http":        httpStatus,
-		"last_backup": s.lastBackup,
+		"store": results,
+		"http":  httpStatus,
+	}
+	if !s.lastBackup.IsZero() {
+		status["last_backup"] = s.lastBackup
 	}
 
 	pretty, _ := isPretty(r)
