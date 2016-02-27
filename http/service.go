@@ -106,8 +106,8 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.handleBackup(w, r)
 	case strings.HasPrefix(r.URL.Path, "/join"):
 		s.handleJoin(w, r)
-	case strings.HasPrefix(r.URL.Path, "/statistics"):
-		s.handleStoreStats(w, r)
+	case strings.HasPrefix(r.URL.Path, "/status"):
+		s.handleStoreStatus(w, r)
 	default:
 		w.WriteHeader(http.StatusNotFound)
 	}
@@ -143,7 +143,7 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleStoreStats returns stats on the Raft module.
+// handleStoreStatus returns stats on the Raft module.
 func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -169,8 +169,8 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleStoreStats returns stats on the Raft module.
-func (s *Service) handleStoreStats(w http.ResponseWriter, r *http.Request) {
+// handleStoreStatus returns stats on the Raft module.
+func (s *Service) handleStoreStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
