@@ -87,7 +87,7 @@ func (m *MockStore) Execute(queries []string, tx bool) ([]*sql.Result, error) {
 	return nil, nil
 }
 
-func (m *MockStore) Query(queries []string, tx, leader bool) ([]*sql.Rows, error) {
+func (m *MockStore) Query(queries []string, tx, leader, verify bool) ([]*sql.Rows, error) {
 	return nil, nil
 }
 

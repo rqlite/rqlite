@@ -23,7 +23,7 @@ type Store interface {
 	// Query executes a slice of queries, each of which returns rows.
 	// If tx is true, then the query will take place while a read
 	// transaction is held on the database.
-	Query(queries []string, tx, leader bool) ([]*sql.Rows, error)
+	Query(queries []string, tx, leader, verify bool) ([]*sql.Rows, error)
 
 	// Join joins the node, reachable at addr, to this node.
 	Join(addr string) error
@@ -275,6 +275,12 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	verify, err := verify(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	// Get the query statement(s), and do tx if necessary.
 	queries := []string{}
 
@@ -298,7 +304,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	results, err := s.store.Query(queries, isTx, !noLeader)
+	results, err := s.store.Query(queries, isTx, !noLeader, verify)
 	if err != nil {
 		resp.Error = err.Error()
 
@@ -371,4 +377,9 @@ func isExplain(req *http.Request) (bool, error) {
 // noLeader returns whether processing should skip the leader check.
 func noLeader(req *http.Request) (bool, error) {
 	return queryParam(req, "noleader")
+}
+
+// verify returns whether processing should perform a leader check on the cluster
+func verify(req *http.Request) (bool, error) {
+	return queryParam(req, "verify")
 }

@@ -239,13 +239,20 @@ func (s *Store) Backup(leader bool) ([]byte, error) {
 }
 
 // Query executes queries that return rows, and do not modify the database.
-func (s *Store) Query(queries []string, tx, leader bool) ([]*sql.Rows, error) {
+func (s *Store) Query(queries []string, tx, leader, verify bool) ([]*sql.Rows, error) {
 	// Allow concurrent queries.
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	if leader && s.raft.State() != raft.Leader {
 		return nil, fmt.Errorf("not leader")
+	}
+
+	if verify {
+		f := s.raft.VerifyLeader()
+		if e := f.(raft.Future); e.Error() != nil {
+			return nil, e.Error()
+		}
 	}
 
 	r, err := s.db.Query(queries, tx, true)
