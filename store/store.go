@@ -203,7 +203,16 @@ func (s *Store) WaitForAppliedIndex(idx uint64, timeout time.Duration) error {
 
 // Stats returns stats for the store.
 func (s *Store) Stats() (map[string]interface{}, error) {
-	return map[string]interface{}{"raft": s.raft.Stats()}, nil
+	dbStatus := map[string]interface{}{
+		"path": s.dbPath,
+		"dns":  s.dbConf.FQDSN(s.dbPath),
+	}
+	status := map[string]interface{}{
+		"raft":    s.raft.Stats(),
+		"addr":    s.Addr(),
+		"sqlite3": dbStatus,
+	}
+	return status, nil
 }
 
 // Execute executes queries that return no rows, but do modify the database.

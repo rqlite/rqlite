@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"runtime/pprof"
 	"time"
@@ -83,6 +84,10 @@ func main() {
 	}
 
 	// Create and open the store.
+	dataPath, err := filepath.Abs(dataPath)
+	if err != nil {
+		log.Fatalf("failed to determine absolute data path: %s", err.Error())
+	}
 	dbConf := sql.NewConfig()
 	dbConf.DSN = dsn
 	dbConf.Memory = inMem
