@@ -33,7 +33,7 @@ Start a second and third node (so a majority can still form in the event of a si
     $GOPATH/bin/rqlited -http localhost:4003  -raft :4004 -join :4001 ~/node.2
     $GOPATH/bin/rqlited -http localhost:4005  -raft :4006 -join :4001 ~/node.3
 
-Under each node will be an SQLite file, which should remain in consensus.
+Under each node will be an SQLite file, which should remain in consensus. You can create clusters of any size, but clusters of 3, 5, and 7 nodes are most practical.
 
 ### Restarting a node
 If a node needs to be restarted, perhaps because of failure, don't pass the `-join` option. Using the example nodes above, if node 2 needed to be restarted, do so as follows:
