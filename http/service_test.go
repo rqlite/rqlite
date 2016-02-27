@@ -32,7 +32,7 @@ func Test_404Routes(t *testing.T) {
 		t.Fatalf("failed to make request")
 	}
 	if resp.StatusCode != 404 {
-		t.Fatalf("failed to get expecteed 404, got %d", resp.StatusCode)
+		t.Fatalf("failed to get expected 404, got %d", resp.StatusCode)
 	}
 
 	resp, err = client.Post(host+"/xxx", "", nil)
@@ -40,7 +40,7 @@ func Test_404Routes(t *testing.T) {
 		t.Fatalf("failed to make request")
 	}
 	if resp.StatusCode != 404 {
-		t.Fatalf("failed to get expecteed 404, got %d", resp.StatusCode)
+		t.Fatalf("failed to get expected 404, got %d", resp.StatusCode)
 	}
 }
 
@@ -60,7 +60,7 @@ func Test_405Routes(t *testing.T) {
 		t.Fatalf("failed to make request")
 	}
 	if resp.StatusCode != 405 {
-		t.Fatalf("failed to get expecteed 405, got %d", resp.StatusCode)
+		t.Fatalf("failed to get expected 405, got %d", resp.StatusCode)
 	}
 
 	resp, err = client.Post(host+"/db/backup", "", nil)
@@ -68,15 +68,15 @@ func Test_405Routes(t *testing.T) {
 		t.Fatalf("failed to make request")
 	}
 	if resp.StatusCode != 405 {
-		t.Fatalf("failed to get expecteed 405, got %d", resp.StatusCode)
+		t.Fatalf("failed to get expected 405, got %d", resp.StatusCode)
 	}
 
-	resp, err = client.Post(host+"/statistics", "", nil)
+	resp, err = client.Post(host+"/status", "", nil)
 	if err != nil {
 		t.Fatalf("failed to make request")
 	}
 	if resp.StatusCode != 405 {
-		t.Fatalf("failed to get expecteed 405, got %d", resp.StatusCode)
+		t.Fatalf("failed to get expected 405, got %d", resp.StatusCode)
 	}
 }
 
