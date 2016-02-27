@@ -19,9 +19,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"runtime"
 	"runtime/pprof"
-	"time"
 
 	sql "github.com/otoolep/rqlite/db"
 	httpd "github.com/otoolep/rqlite/http"
@@ -36,7 +34,6 @@ var joinAddr string
 var dsn string
 var inMem bool
 var cpuprofile string
-var disableReporting bool
 
 const desc = `rqlite is a distributed system that provides a replicated SQLite database.`
 
@@ -47,7 +44,6 @@ func init() {
 	flag.StringVar(&dsn, "dsn", "", `SQLite DSN parameters. E.g. "cache=shared&mode=memory"`)
 	flag.BoolVar(&inMem, "mem", false, "Use an in-memory database")
 	flag.StringVar(&cpuprofile, "cpuprofile", "", "Write CPU profile to file")
-	flag.BoolVar(&disableReporting, "noreport", false, "Disable anonymised launch reporting")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "\n%s\n\n", desc)
 		fmt.Fprintf(os.Stderr, "Usage: %s [arguments] <data directory>\n", os.Args[0])
@@ -110,10 +106,6 @@ func main() {
 
 	}
 
-	if !disableReporting {
-		reportLaunch()
-	}
-
 	terminate := make(chan os.Signal, 1)
 	signal.Notify(terminate, os.Interrupt)
 	<-terminate
@@ -135,17 +127,4 @@ func join(joinAddr, raftAddr string) error {
 	defer resp.Body.Close()
 
 	return nil
-}
-
-func reportLaunch() {
-	json := fmt.Sprintf(`{"os": "%s", "arch": "%s", "app": "rqlite", "raft": "hashicorp"}`, runtime.GOOS, runtime.GOARCH)
-	data := bytes.NewBufferString(json)
-	client := http.Client{Timeout: time.Duration(5 * time.Second)}
-	go func() {
-		_, err := client.Post("https://logs-01.loggly.com/inputs/8a0edd84-92ba-46e4-ada8-c529d0f105af/tag/reporting/",
-			"application/json", data)
-		if err != nil {
-			log.Printf("report launch failed: %s", err.Error())
-		}
-	}()
 }
