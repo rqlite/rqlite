@@ -185,7 +185,7 @@ Since queries do not involve consensus, why must they served by the leader? This
 
 This is why, even though queries do not involve consensus, they must be processed by the leader. If you wish to disable the leader check, and let queries be served regardless of leader state, add `noleader` to the URL. For example:
 
-    curl -G localhost:4001/db/query?pretty&noleader --data-urlencode 'q=SELECT * FROM foo'
+    curl -G 'localhost:4001/db/query?pretty&noleader' --data-urlencode 'q=SELECT * FROM foo'
 
 Due to the nature of Raft, there is a very small window (milliseconds) where a node has been disposed as leader, but has not yet changed its internal state. Therefore, even with the leader check in place, there is a very small window of time where out-of-date results could be returned.
 
