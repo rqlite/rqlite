@@ -62,7 +62,7 @@ func Test_SingleNodeExecuteQuery(t *testing.T) {
 }
 
 func Test_MultiNodeExecuteQuery(t *testing.T) {
-    t.Skip("non functional on CircleCI")
+	t.Skip("non functional on CircleCI")
 	s0 := mustNewStore()
 	defer os.RemoveAll(s0.Path())
 	if err := s0.Open(true); err != nil {
