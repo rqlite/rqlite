@@ -57,6 +57,8 @@ type Service struct {
 	ln   net.Listener // Service listener
 
 	store Store // The Raft-backed database store.
+
+	lastBackup time.Time // Time of last successful backup.
 }
 
 // New returns an uninitialized HTTP service.
@@ -107,7 +109,7 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case strings.HasPrefix(r.URL.Path, "/join"):
 		s.handleJoin(w, r)
 	case strings.HasPrefix(r.URL.Path, "/status"):
-		s.handleStoreStatus(w, r)
+		s.handleStatus(w, r)
 	default:
 		w.WriteHeader(http.StatusNotFound)
 	}
@@ -143,7 +145,7 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleStoreStatus returns stats on the Raft module.
+// handleSBackup returns stats on the Raft module.
 func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -167,10 +169,11 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	s.lastBackup = time.Now()
 }
 
-// handleStoreStatus returns stats on the Raft module.
-func (s *Service) handleStoreStatus(w http.ResponseWriter, r *http.Request) {
+// handleStatus returns status on the system.
+func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
@@ -182,12 +185,22 @@ func (s *Service) handleStoreStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	httpStatus := map[string]interface{}{
+		"addr": s.Addr().String(),
+	}
+
+	status := map[string]interface{}{
+		"store":       results,
+		"http":        httpStatus,
+		"last_backup": s.lastBackup,
+	}
+
 	pretty, _ := isPretty(r)
 	var b []byte
 	if pretty {
-		b, err = json.MarshalIndent(results, "", "    ")
+		b, err = json.MarshalIndent(status, "", "    ")
 	} else {
-		b, err = json.Marshal(results)
+		b, err = json.Marshal(status)
 	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError) // Internal error actually

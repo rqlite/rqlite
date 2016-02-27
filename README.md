@@ -237,14 +237,10 @@ Using an in-memory does not put your data at risk. Since the Raft log is the aut
 
 Pass `-mem` to `rqlited` at start-up to enable an in-memory database.
 
-## Administration API
-*Being refactored for v2.0, and is currently non-functional.*
+## Status API
+An Status API exists, which dumps some basic diagnostic and statistical information, as well as basic information about the underlying Raft node. Assuming rqlite is started with default settings, the endpoints are available like so:
 
-An Administration API exists, which dumps some basic diagnostic and statistical information, as well as basic information about the underlying Raft node. Assuming rqlite is started with default settings, the endpoints are available like so:
-
-    curl localhost:4001/raft?pretty
-    curl localhost:4001/diagnostics?pretty
-    curl localhost:4001/statistics?pretty
+    curl localhost:4001/status?pretty
 
 The use of the URL param `pretty` is optional, and results in pretty-printed JSON responses.
 
