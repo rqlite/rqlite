@@ -17,6 +17,10 @@ Download and run rqlite like so (tested on 64-bit Kubuntu 14.04 and OSX):
     export GOPATH=$PWD
     go get github.com/mattn/go-sqlite3           # This, and the next command, are not strictly necessary,
     go install github.com/mattn/go-sqlite3       # but will make repeated builds much quicker.
+    go get -t github.com/hashicorp/raft
+    go install github.com/hashicorp/raft
+    go get -t github.com/hashicorp/raft-boltdb
+    go install github.com/hashicorp/raft-boltdb
     go get -t github.com/otoolep/rqlite/
     go install github.com/otoolep/rqlite/...     # This actually builds the binary
     $GOPATH/bin/rqlited ~/node.1
