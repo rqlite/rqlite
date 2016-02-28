@@ -189,7 +189,7 @@ This is why, even though queries do not involve consensus, they must be processe
 
     curl -G 'localhost:4001/db/query?pretty&noleader' --data-urlencode 'q=SELECT * FROM foo'
 
-Due to the nature of Raft, there is a very small window (milliseconds) where a node has been disposed as leader, but has not yet changed its internal state. Therefore, even with the leader check in place, there is a very small window of time where out-of-date results could be returned.
+Due to the way rqlite works, there is a very small window (milliseconds) where a node has been disposed as leader, but has not yet changed its internal state. Therefore, even with the leader check in place, there is a very small window of time where out-of-date results could be returned.
 
 ### Transactions
 Transactions are supported. To execute statements within a transaction, add `transaction` to the URL. An example of the above operation executed within a transaction is shown below.
