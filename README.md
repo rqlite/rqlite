@@ -16,7 +16,6 @@ Download and run rqlite like so (tested on 64-bit Kubuntu 14.04 and OSX):
     cd rqlite/
     export GOPATH=$PWD
     go get -t github.com/otoolep/rqlite/...
-    go install github.com/otoolep/rqlite/...     # This actually builds the binary
     $GOPATH/bin/rqlited ~/node.1
 
 This starts a rqlite server listening on localhost, port 4001. This single node automatically becomes the leader. To see all available command-line options, execute:
