@@ -336,14 +336,24 @@ func Test_Backup(t *testing.T) {
 		t.Fatalf("failed to insert records: %s", err.Error())
 	}
 
-	bk, err := db.Backup()
+	dstDB, err := ioutil.TempFile("", "rqlilte-bak-")
+	if err != nil {
+		t.Fatalf("failed to create temp file: %s", err.Error())
+	}
+	dstDB.Close()
+	defer os.Remove(dstDB.Name())
+
+	err = db.Backup(dstDB.Name())
 	if err != nil {
 		t.Fatalf("failed to backup database: %s", err.Error())
 	}
 
-	newDB, newPath := mustWriteAndOpenDatabase(bk)
+	newDB, err := Open(dstDB.Name())
+	if err != nil {
+		t.Fatalf("failed to open backup database: %s", err.Error())
+	}
 	defer newDB.Close()
-	defer os.Remove(newPath)
+	defer os.Remove(dstDB.Name())
 	ro, err := newDB.Query([]string{`SELECT * FROM foo`}, false, false)
 	if err != nil {
 		t.Fatalf("failed to query table: %s", err.Error())

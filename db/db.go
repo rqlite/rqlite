@@ -3,8 +3,6 @@ package db
 import (
 	"database/sql"
 	"fmt"
-	"io/ioutil"
-	"os"
 	"sync"
 	"time"
 
@@ -297,30 +295,23 @@ func (db *DB) Query(queries []string, tx, xTime bool) ([]*Rows, error) {
 	return allRows, err
 }
 
-// Backup returns a consistent snapshot of the database.
-func (db *DB) Backup() ([]byte, error) {
-	f, err := ioutil.TempFile("", "rqlilte-bak-")
+// Backup writes a consistent snapshot of the database to the given file.
+func (db *DB) Backup(path string) error {
+	dstDB, err := Open(path)
 	if err != nil {
-		return nil, err
-	}
-	f.Close()
-	defer os.Remove(f.Name())
-
-	dstDB, err := Open(f.Name())
-	if err != nil {
-		return nil, err
+		return err
 	}
 
 	bk, err := dstDB.sqlite3conn.Backup("main", db.sqlite3conn, "main")
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	for {
 		done, err := bk.Step(-1)
 		if err != nil {
 			bk.Finish()
-			return nil, err
+			return err
 		}
 		if done {
 			break
@@ -329,15 +320,11 @@ func (db *DB) Backup() ([]byte, error) {
 	}
 
 	if err := bk.Finish(); err != nil {
-		return nil, err
+		return err
 	}
 	if err := dstDB.Close(); err != nil {
-		return nil, err
+		return err
 	}
 
-	b, err := ioutil.ReadFile(f.Name())
-	if err != nil {
-		return nil, err
-	}
-	return b, nil
+	return nil
 }

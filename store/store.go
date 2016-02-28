@@ -125,7 +125,7 @@ func (s *Store) Open(enableSingle bool) error {
 	}
 
 	// Instantiate the Raft system.
-	ra, err := raft.NewRaft(config, (*fsm)(s), logStore, logStore, snapshots, peerStore, transport)
+	ra, err := raft.NewRaft(config, s, logStore, logStore, snapshots, peerStore, transport)
 	if err != nil {
 		return fmt.Errorf("new raft: %s", err)
 	}
@@ -244,7 +244,23 @@ func (s *Store) Backup(leader bool) ([]byte, error) {
 	if leader && s.raft.State() != raft.Leader {
 		return nil, fmt.Errorf("not leader")
 	}
-	return s.db.Backup()
+
+	f, err := ioutil.TempFile("", "rqlilte-bak-")
+	if err != nil {
+		return nil, err
+	}
+	f.Close()
+	defer os.Remove(f.Name())
+
+	if err := s.db.Backup(f.Name()); err != nil {
+		return nil, err
+	}
+
+	b, err := ioutil.ReadFile(f.Name())
+	if err != nil {
+		return nil, err
+	}
+	return b, nil
 }
 
 // Query executes queries that return rows, and do not modify the database.
@@ -281,21 +297,19 @@ func (s *Store) Join(addr string) error {
 	return nil
 }
 
-type fsm Store
-
 type fsmResponse struct {
 	results []*sql.Result
 	error   error
 }
 
 // Apply applies a Raft log entry to the database.
-func (f *fsm) Apply(l *raft.Log) interface{} {
+func (s *Store) Apply(l *raft.Log) interface{} {
 	var c command
 	if err := json.Unmarshal(l.Data, &c); err != nil {
 		panic(fmt.Sprintf("failed to unmarshal command: %s", err.Error()))
 	}
 
-	r, err := f.db.Execute(c.Queries, c.Tx, true)
+	r, err := s.db.Execute(c.Queries, c.Tx, true)
 
 	return &fsmResponse{results: r, error: err}
 }
@@ -306,12 +320,23 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 //
 // http://sqlite.org/howtocorrupt.html states it is safe to do this
 // as long as no transaction is in progress.
-func (f *fsm) Snapshot() (raft.FSMSnapshot, error) {
+func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 	// Ensure only one snapshot can take place at once, and block all queries.
-	f.mu.Lock()
-	defer f.mu.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	b, err := ioutil.ReadFile(f.dbPath)
+	f, err := ioutil.TempFile("", "rqlilte-snap-")
+	if err != nil {
+		return nil, err
+	}
+	f.Close()
+	defer os.Remove(f.Name())
+
+	if err := s.db.Backup(f.Name()); err != nil {
+		return nil, err
+	}
+
+	b, err := ioutil.ReadFile(f.Name())
 	if err != nil {
 		log.Printf("Failed to generate snapshot: %s", err.Error())
 		return nil, err
@@ -320,8 +345,8 @@ func (f *fsm) Snapshot() (raft.FSMSnapshot, error) {
 }
 
 // Restore restores the database to a previous state.
-func (f *fsm) Restore(rc io.ReadCloser) error {
-	if err := os.Remove(f.dbPath); err != nil && !os.IsNotExist(err) {
+func (s *Store) Restore(rc io.ReadCloser) error {
+	if err := os.Remove(s.dbPath); err != nil && !os.IsNotExist(err) {
 		return err
 	}
 
@@ -330,15 +355,15 @@ func (f *fsm) Restore(rc io.ReadCloser) error {
 		return err
 	}
 
-	if err := ioutil.WriteFile(f.dbPath, b, 0660); err != nil {
+	if err := ioutil.WriteFile(s.dbPath, b, 0660); err != nil {
 		return err
 	}
 
-	db, err := sql.OpenWithConfiguration(f.dbPath, f.dbConf)
+	db, err := sql.OpenWithConfiguration(s.dbPath, s.dbConf)
 	if err != nil {
 		return err
 	}
-	f.db = db
+	s.db = db
 
 	return nil
 }
