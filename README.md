@@ -8,7 +8,7 @@ rqlite [![Circle CI](https://circleci.com/gh/otoolep/rqlite/tree/master.svg?styl
 rqlite gives you the functionality of a fault-tolerant, replicated relational database, but with very easy installation, deployment, and operation.
 
 ## Building and Running
-*Building rqlite requires Go 1.3 or later. [gvm](https://github.com/moovweb/gvm) is a great tool for managing your version of Go.*
+*Building rqlite requires Go 1.4 or later. [gvm](https://github.com/moovweb/gvm) is a great tool for managing your version of Go.*
 
 Download and run rqlite like so (tested on 64-bit Kubuntu 14.04 and OSX):
 
