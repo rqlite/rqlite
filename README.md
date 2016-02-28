@@ -29,6 +29,8 @@ Start a second and third node (so a majority can still form in the event of a si
 
     $GOPATH/bin/rqlited -http localhost:4003  -raft :4004 -join :4001 ~/node.2
     $GOPATH/bin/rqlited -http localhost:4005  -raft :4006 -join :4001 ~/node.3
+    
+*(This assumes you've set `GOPATH` as in the above section.)*
 
 Under each node will be an SQLite file, which should remain in consensus. You can create clusters of any size, but clusters of 3, 5, and 7 nodes are most practical.
 
