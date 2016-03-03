@@ -145,7 +145,7 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleSBackup returns stats on the Raft module.
+// handleBackup returns the consistent database snapshot.
 func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
