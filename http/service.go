@@ -28,6 +28,9 @@ type Store interface {
 	// Join joins the node, reachable at addr, to this node.
 	Join(addr string) error
 
+	// Leader returns the current leader on the cluster.
+	Leader() string
+
 	// Stats returns stats on the Store.
 	Stats() (map[string]interface{}, error)
 
@@ -318,6 +321,21 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 // Addr returns the address on which the Service is listening
 func (s *Service) Addr() net.Addr {
 	return s.ln.Addr()
+}
+
+
+// leaderRedirect returns a 307 Temporary Redirect, with the full path
+// to the leader.
+func (s *Service) leaderRedirect(w http.ResponseWriter, r *http.Request) {
+	leader := s.store.Leader()
+
+	if leader == "" {
+		// No leader available, give up.
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+
+	http.Redirect(w, r, leader, http.StatusTemporaryRedirect)
 }
 
 func writeResponse(w http.ResponseWriter, r *http.Request, j *Response) {

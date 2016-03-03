@@ -6,6 +6,7 @@ package store
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -27,6 +28,12 @@ const (
 	sqliteFile          = "db.sqlite"
 	leaderWaitDelay     = 100 * time.Millisecond
 	appliedWaitDelay    = 100 * time.Millisecond
+)
+
+var (
+    // ErrFieldsRequired is returned when a node attempts to execute a leader-only
+    // operation.
+    ErrNotLeader = errors.New("not leader")
 )
 
 type command struct {
@@ -218,7 +225,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 // Execute executes queries that return no rows, but do modify the database.
 func (s *Store) Execute(queries []string, tx bool) ([]*sql.Result, error) {
 	if s.raft.State() != raft.Leader {
-		return nil, fmt.Errorf("not leader")
+		return nil, ErrNotLeader
 	}
 
 	c := &command{
@@ -242,7 +249,7 @@ func (s *Store) Execute(queries []string, tx bool) ([]*sql.Result, error) {
 // Backup return a consistent snapshot of the underlying database.
 func (s *Store) Backup(leader bool) ([]byte, error) {
 	if leader && s.raft.State() != raft.Leader {
-		return nil, fmt.Errorf("not leader")
+		return nil, ErrNotLeader
 	}
 
 	f, err := ioutil.TempFile("", "rqlilte-bak-")
@@ -270,7 +277,7 @@ func (s *Store) Query(queries []string, tx, leader, verify bool) ([]*sql.Rows, e
 	defer s.mu.RUnlock()
 
 	if leader && s.raft.State() != raft.Leader {
-		return nil, fmt.Errorf("not leader")
+		return nil, ErrNotLeader
 	}
 
 	if verify {
@@ -295,6 +302,11 @@ func (s *Store) Join(addr string) error {
 	}
 	s.logger.Printf("node at %s joined successfully", addr)
 	return nil
+}
+
+// Leader returns the current leader of the cluster.
+func (S *Store) Leader() string {
+	return s.raft.Leader()
 }
 
 type fsmResponse struct {
