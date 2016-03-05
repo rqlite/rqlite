@@ -82,7 +82,7 @@ func Test_405Routes(t *testing.T) {
 
 type MockStore struct {
 	executeFn func(queries []string, tx bool) ([]*sql.Result, error)
-	queryFn func(queries []string, tx, leader, verify bool) ([]*sql.Rows, error)
+	queryFn   func(queries []string, tx, leader, verify bool) ([]*sql.Rows, error)
 }
 
 func (m *MockStore) Execute(queries []string, tx bool) ([]*sql.Result, error) {
@@ -103,7 +103,7 @@ func (m *MockStore) Join(addr string) error {
 	return nil
 }
 
-func (m * MockStore) Leader() string {
+func (m *MockStore) Leader() string {
 	return ""
 }
 
