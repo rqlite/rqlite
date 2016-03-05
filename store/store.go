@@ -29,6 +29,12 @@ const (
 	appliedWaitDelay    = 100 * time.Millisecond
 )
 
+var (
+	// ErrFieldsRequired is returned when a node attempts to execute a leader-only
+	// operation.
+	ErrNotLeader = errors.New("not leader")
+)
+
 type command struct {
 	Tx      bool     `json:"tx,omitempty"`
 	Queries []string `json:"queries,omitempty"`
