@@ -33,6 +33,7 @@ var raftAddr string
 var joinAddr string
 var dsn string
 var inMem bool
+var disRedirect bool
 var cpuprofile string
 
 const desc = `rqlite is a distributed system that provides a replicated SQLite database.`
@@ -43,6 +44,7 @@ func init() {
 	flag.StringVar(&joinAddr, "join", "", "host:port of leader to join")
 	flag.StringVar(&dsn, "dsn", "", `SQLite DSN parameters. E.g. "cache=shared&mode=memory"`)
 	flag.BoolVar(&inMem, "mem", false, "Use an in-memory database")
+	flag.BoolVar(&disRedirect, "noredir", false, "Disable leader-redirect")
 	flag.StringVar(&cpuprofile, "cpuprofile", "", "Write CPU profile to file")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "\n%s\n\n", desc)
@@ -101,6 +103,7 @@ func main() {
 
 	// Create the HTTP query server.
 	s := httpd.New(httpAddr, store)
+	s.DisableRedirect = disRedirect
 	if err := s.Start(); err != nil {
 		log.Fatalf("failed to start HTTP server: %s", err.Error())
 

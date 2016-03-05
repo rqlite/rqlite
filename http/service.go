@@ -11,6 +11,7 @@ import (
 	"time"
 
 	sql "github.com/otoolep/rqlite/db"
+	"github.com/otoolep/rqlite/store"
 )
 
 // Store is the interface the Raft-driven database must implement.
@@ -62,6 +63,8 @@ type Service struct {
 	store Store // The Raft-backed database store.
 
 	lastBackup time.Time // Time of last successful backup.
+
+	DisableRedirect bool // Disable leader-redirection.
 }
 
 // New returns an uninitialized HTTP service.
@@ -248,8 +251,11 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 
 	results, err := s.store.Execute(queries, isTx)
 	if err != nil {
+		if err == store.ErrNotLeader && !s.DisableRedirect {
+			http.Redirect(w, r, s.store.Leader(), http.StatusTemporaryRedirect)
+			return
+		}
 		resp.Error = err.Error()
-
 	} else {
 		resp.Results = results
 	}
@@ -309,8 +315,11 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 
 	results, err := s.store.Query(queries, isTx, !noLeader, verify)
 	if err != nil {
+		if err == store.ErrNotLeader && !s.DisableRedirect {
+			http.Redirect(w, r, s.store.Leader(), http.StatusTemporaryRedirect)
+			return
+		}
 		resp.Error = err.Error()
-
 	} else {
 		resp.Results = results
 	}

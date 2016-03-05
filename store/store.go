@@ -6,6 +6,7 @@ package store
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -224,7 +225,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 // Execute executes queries that return no rows, but do modify the database.
 func (s *Store) Execute(queries []string, tx bool) ([]*sql.Result, error) {
 	if s.raft.State() != raft.Leader {
-		return nil, fmt.Errorf("not leader")
+		return nil, ErrNotLeader
 	}
 
 	c := &command{
@@ -276,7 +277,7 @@ func (s *Store) Query(queries []string, tx, leader, verify bool) ([]*sql.Rows, e
 	defer s.mu.RUnlock()
 
 	if leader && s.raft.State() != raft.Leader {
-		return nil, fmt.Errorf("not leader")
+		return nil, ErrNotLeader
 	}
 
 	if verify {
