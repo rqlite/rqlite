@@ -95,6 +95,10 @@ func (m *MockStore) Join(addr string) error {
 	return nil
 }
 
+func (m * MockStore) Leader() string {
+	return ""
+}
+
 func (m *MockStore) Stats() (map[string]interface{}, error) {
 	return nil, nil
 }

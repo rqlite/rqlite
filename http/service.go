@@ -28,6 +28,9 @@ type Store interface {
 	// Join joins the node, reachable at addr, to this node.
 	Join(addr string) error
 
+	// Leader returns the leader of the cluster.
+	Leader() string
+
 	// Stats returns stats on the Store.
 	Stats() (map[string]interface{}, error)
 
