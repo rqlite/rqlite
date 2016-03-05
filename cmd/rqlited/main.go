@@ -44,7 +44,7 @@ func init() {
 	flag.StringVar(&joinAddr, "join", "", "host:port of leader to join")
 	flag.StringVar(&dsn, "dsn", "", `SQLite DSN parameters. E.g. "cache=shared&mode=memory"`)
 	flag.BoolVar(&inMem, "mem", false, "Use an in-memory database")
-	flag.BoolVar(&disRedirect, "noredir", false, "Disable leader-redirect")
+	flag.BoolVar(&disRedirect, "noredir", true, "Disable leader-redirect")
 	flag.StringVar(&cpuprofile, "cpuprofile", "", "Write CPU profile to file")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "\n%s\n\n", desc)
