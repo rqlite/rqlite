@@ -172,6 +172,10 @@ The response is of the form:
                 "id",
                 "name"
             ],
+            "types": [
+                "integer",
+                "text"
+            ],
             "values": [
                 [
                     1,
