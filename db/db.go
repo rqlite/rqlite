@@ -2,7 +2,9 @@ package db
 
 import (
 	"database/sql"
+	"database/sql/driver"
 	"fmt"
+	"io"
 	"sync"
 	"time"
 
@@ -67,6 +69,7 @@ type Result struct {
 // Rows represents the outcome of an operation that returns query data.
 type Rows struct {
 	Columns []string        `json:"columns,omitempty"`
+	Types   []string        `json:"types,omitempty"`
 	Values  [][]interface{} `json:"values,omitempty"`
 	Error   string          `json:"error,omitempty"`
 	Time    float64         `json:"time,omitempty"`
@@ -210,15 +213,16 @@ func (db *DB) Execute(queries []string, tx, xTime bool) ([]*Result, error) {
 // Query executes queries that return rows, but don't modify the database.
 func (db *DB) Query(queries []string, tx, xTime bool) ([]*Rows, error) {
 	type Queryer interface {
-		Query(query string, args ...interface{}) (*sql.Rows, error)
+		Query(query string, args []driver.Value) (driver.Rows, error)
 	}
 
 	var allRows []*Rows
 	err := func() (err error) {
 		var queryer Queryer
+		var t driver.Tx
 		defer func() {
 			// XXX THIS DOESN'T ACTUALLY WORK! Might as WELL JUST COMMIT?
-			if t, ok := queryer.(*sql.Tx); ok {
+			if t != nil {
 				if err != nil {
 					t.Rollback()
 					return
@@ -227,15 +231,21 @@ func (db *DB) Query(queries []string, tx, xTime bool) ([]*Rows, error) {
 			}
 		}()
 
+		if db.sqlite3conn == nil {
+			// handle race for issue #72
+			db.sqlite3conn = sqlite3conn
+		}
+		queryer = db.sqlite3conn
+
 		// Create the correct query object, depending on whether a
 		// transaction was requested.
 		if tx {
-			queryer, _ = db.conn.Begin()
-		} else {
-			queryer = db.conn
+			t, err = db.sqlite3conn.Begin()
+			if err != nil {
+				return err
+			}
 		}
 
-	QueryLoop:
 		for _, q := range queries {
 			if q == "" {
 				continue
@@ -244,41 +254,37 @@ func (db *DB) Query(queries []string, tx, xTime bool) ([]*Rows, error) {
 			rows := &Rows{}
 			start := time.Now()
 
-			rs, err := queryer.Query(q)
+			rs, err := queryer.Query(q, nil)
 			if err != nil {
 				rows.Error = err.Error()
 				allRows = append(allRows, rows)
 				continue
 			}
 			defer rs.Close() // This adds to all defers, right? Nothing leaks? XXX Could consume memory. Perhaps anon would be best.
-			columns, err := rs.Columns()
-			if err != nil {
-				rows.Error = err.Error()
-				allRows = append(allRows, rows)
-				continue
-			}
+			columns := rs.Columns()
 
 			rows.Columns = columns
-			for rs.Next() {
-				// Make a slice of interface{}, and the pointers to each item in the slice.
-				values := make([]interface{}, len(rows.Columns))
-				ptrs := make([]interface{}, len(rows.Columns))
-				for i := range values {
-					ptrs[i] = &values[i]
+			rows.Types = rs.(*sqlite3.SQLiteRows).DeclTypes()
+			dest := make([]driver.Value, len(rows.Columns))
+			for {
+				err := rs.Next(dest)
+
+				if err != nil {
+					if err != io.EOF {
+						rows.Error = err.Error()
+					}
+					break
 				}
 
-				// Read all the values out.
-				err = rs.Scan(ptrs...)
-				if err != nil {
-					rows.Error = err.Error()
-					allRows = append(allRows, rows)
-					continue QueryLoop
-				}
+				values := make([]interface{}, len(rows.Columns))
 
 				// Special case -- convert []uint8 to string. Perhaps this should be a config option.
-				for i, v := range values {
-					if w, ok := v.([]uint8); ok {
-						values[i] = string(w)
+				for i, v := range dest {
+					switch u := v.(type) {
+						case []uint8:
+							values[i] = string(u)
+						default:
+							values[i] = u
 					}
 				}
 				rows.Values = append(rows.Values, values)
