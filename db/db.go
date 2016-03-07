@@ -69,6 +69,7 @@ type Result struct {
 // Rows represents the outcome of an operation that returns query data.
 type Rows struct {
 	Columns []string        `json:"columns,omitempty"`
+	Types   []string        `json:"types,omitempty"`
 	Values  [][]interface{} `json:"values,omitempty"`
 	Error   string          `json:"error,omitempty"`
 	Time    float64         `json:"time,omitempty"`
@@ -263,6 +264,7 @@ func (db *DB) Query(queries []string, tx, xTime bool) ([]*Rows, error) {
 			columns := rs.Columns()
 
 			rows.Columns = columns
+			rows.Types = rs.(*sqlite3.SQLiteRows).DeclTypes()
 			dest := make([]driver.Value, len(rows.Columns))
 			for {
 				err := rs.Next(dest)

@@ -51,7 +51,7 @@ func Test_TableCreation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query empty table: %s", err.Error())
 	}
-	if exp, got := `[{"columns":["id","name"]}]`, asJSON(r); exp != got {
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"]}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
 }
@@ -75,7 +75,7 @@ func Test_SimpleSingleStatements(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query empty table: %s", err.Error())
 	}
-	if exp, got := `[{"columns":["id","name"],"values":[[1,"fiona"]]}]`, asJSON(r); exp != got {
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
 
@@ -88,7 +88,7 @@ func Test_SimpleSingleStatements(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query empty table: %s", err.Error())
 	}
-	if exp, got := `[{"columns":["id","name"],"values":[[1,"fiona"],[2,"aoife"]]}]`, asJSON(r); exp != got {
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"],[2,"aoife"]]}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
@@ -96,7 +96,7 @@ func Test_SimpleSingleStatements(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query empty table: %s", err.Error())
 	}
-	if exp, got := `[{"columns":["id","name"],"values":[[2,"aoife"]]}]`, asJSON(r); exp != got {
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[2,"aoife"]]}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
@@ -104,7 +104,7 @@ func Test_SimpleSingleStatements(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query empty table: %s", err.Error())
 	}
-	if exp, got := `[{"columns":["id","name"]}]`, asJSON(r); exp != got {
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"]}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
@@ -112,7 +112,7 @@ func Test_SimpleSingleStatements(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query empty table: %s", err.Error())
 	}
-	if exp, got := `[{"columns":["id","name"],"values":[[2,"aoife"],[1,"fiona"]]}]`, asJSON(r); exp != got {
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[2,"aoife"],[1,"fiona"]]}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
@@ -120,7 +120,7 @@ func Test_SimpleSingleStatements(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query empty table: %s", err.Error())
 	}
-	if exp, got := `[{"columns":["id","name","name"],"values":[[1,"fiona","fiona"],[2,"aoife","aoife"]]}]`, asJSON(r); exp != got {
+	if exp, got := `[{"columns":["id","name","name"],"types":["integer","text","text"],"values":[[1,"fiona","fiona"],[2,"aoife","aoife"]]}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 }
@@ -147,7 +147,7 @@ func Test_SimpleMultiStatements(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query empty table: %s", err.Error())
 	}
-	if exp, got := `[{"columns":["id","name"],"values":[[1,"fiona"],[2,"dana"]]},{"columns":["id","name"],"values":[[1,"fiona"],[2,"dana"]]}]`, asJSON(ro); exp != got {
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"],[2,"dana"]]},{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"],[2,"dana"]]}]`, asJSON(ro); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 }
@@ -246,7 +246,7 @@ func Test_PartialFail(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query table: %s", err.Error())
 	}
-	if exp, got := `[{"columns":["id","name"],"values":[[1,"fiona"],[2,"fiona"],[4,"fiona"]]}]`, asJSON(ro); exp != got {
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"],[2,"fiona"],[4,"fiona"]]}]`, asJSON(ro); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 }
@@ -278,7 +278,7 @@ func Test_SimpleTransaction(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query table: %s", err.Error())
 	}
-	if exp, got := `[{"columns":["id","name"],"values":[[1,"fiona"],[2,"fiona"],[3,"fiona"],[4,"fiona"]]}]`, asJSON(ro); exp != got {
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"],[2,"fiona"],[3,"fiona"],[4,"fiona"]]}]`, asJSON(ro); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 }
@@ -310,7 +310,7 @@ func Test_PartialFailTransaction(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query table: %s", err.Error())
 	}
-	if exp, got := `[{"columns":["id","name"]}]`, asJSON(ro); exp != got {
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"]}]`, asJSON(ro); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 }
@@ -358,7 +358,7 @@ func Test_Backup(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query table: %s", err.Error())
 	}
-	if exp, got := `[{"columns":["id","name"],"values":[[1,"fiona"],[2,"fiona"],[3,"fiona"],[4,"fiona"]]}]`, asJSON(ro); exp != got {
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"],[2,"fiona"],[3,"fiona"],[4,"fiona"]]}]`, asJSON(ro); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 }
