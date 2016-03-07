@@ -1,4 +1,4 @@
-rqlite [![Circle CI](https://circleci.com/gh/otoolep/rqlite/tree/master.svg?style=svg)](https://circleci.com/gh/otoolep/rqlite/tree/master) [![GoDoc](https://godoc.org/github.com/otoolep/rqlite?status.svg)](https://godoc.org/github.com/otoolep/rqlite)
+rqlite [![GoDoc](https://godoc.org/github.com/otoolep/rqlite?status.svg)](https://godoc.org/github.com/otoolep/rqlite)
 ======
 
 *Detailed background on rqlite can be found on [these blog posts](http://www.philipotoole.com/tag/rqlite/). Note that master represents 2.0 development (which is still in progress), with a new API and Raft consensus module. If you want to work with 1.0 rqlite, you can find it [here](https://github.com/otoolep/rqlite/releases/tag/v1.0).*
