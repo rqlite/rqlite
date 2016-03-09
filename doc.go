@@ -21,6 +21,6 @@
 // SOFTWARE.
 
 /*
-Package rqlite is a distributed system that provides a replicated SQLite database. rqlite uses Raft to achieve consensus across all the cluster of the SQLite databases. It ensures that every change made to the database is made to a majority of underlying SQLite files, or none at all.
+Package rqlite is a distributed system that provides a replicated SQLite database. rqlite uses Raft to achieve consensus across the cluster of SQLite databases. It ensures that every change made to the database is made to a majority of underlying SQLite files, or none at all.
 */
 package rqlite
