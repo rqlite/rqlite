@@ -1,36 +1,15 @@
 package db
 
 import (
-	"database/sql"
 	"database/sql/driver"
 	"fmt"
 	"io"
-	"sync"
 	"time"
 
 	"github.com/mattn/go-sqlite3"
 )
 
-// Hook into the SQLite3 connection.
-//
-// This connection, mutex, and init() allows each Open() call to get access
-// to the driver's internal conn object. The mutex ensures only 1 Open() call
-// can run concurrently, and when it has returned, sqlite3conn will be set to
-// the connection. This connection can be used for backups.
-var sqlite3conn *sqlite3.SQLiteConn
-var openMu sync.Mutex
-
 const bkDelay = 250
-
-func init() {
-	sql.Register("sqlite3_with_hook",
-		&sqlite3.SQLiteDriver{
-			ConnectHook: func(conn *sqlite3.SQLiteConn) error {
-				sqlite3conn = conn
-				return nil
-			},
-		})
-}
 
 // Config represents the configuration of the SQLite database.
 type Config struct {
@@ -53,7 +32,6 @@ func (c *Config) FQDSN(path string) string {
 
 // DB is the SQL database.
 type DB struct {
-	conn        *sql.DB             // Abstract Connection to database.
 	sqlite3conn *sqlite3.SQLiteConn // Driver connection to database.
 	path        string              // Path to database file.
 }
@@ -77,65 +55,44 @@ type Rows struct {
 
 // Open an existing database, creating it if it does not exist.
 func Open(dbPath string) (*DB, error) {
-	openMu.Lock()
-	defer openMu.Unlock()
-
-	dbc, err := sql.Open("sqlite3_with_hook", dbPath)
+	d := sqlite3.SQLiteDriver{}
+	dbc, err := d.Open(dbPath)
 	if err != nil {
 		return nil, err
 	}
 
-	// Ensure a connection is established before going further. Ignore error
-	// because database may not exist yet.
-	_ = dbc.Ping()
-
 	return &DB{
-		conn:        dbc,
-		sqlite3conn: sqlite3conn,
+		sqlite3conn: dbc.(*sqlite3.SQLiteConn),
 		path:        dbPath,
 	}, nil
 }
 
 // OpenWithConfiguration an existing database, creating it if it does not exist.
 func OpenWithConfiguration(dbPath string, conf *Config) (*DB, error) {
-	openMu.Lock()
-	defer openMu.Unlock()
-
-	dbc, err := sql.Open("sqlite3_with_hook", conf.FQDSN(dbPath))
-	if err != nil {
-		return nil, err
-	}
-
-	// Ensure a connection is established before going further. Ignore error
-	// because database may not exist yet.
-	_ = dbc.Ping()
-
-	return &DB{
-		conn:        dbc,
-		sqlite3conn: sqlite3conn,
-		path:        conf.FQDSN(dbPath),
-	}, nil
+	return Open(conf.FQDSN(dbPath))
 }
 
 // Close closes the underlying database connection.
 func (db *DB) Close() error {
-	return db.conn.Close()
+	return db.sqlite3conn.Close()
 }
 
 // Execute executes queries that modify the database.
 func (db *DB) Execute(queries []string, tx, xTime bool) ([]*Result, error) {
 	type Execer interface {
-		Exec(query string, args ...interface{}) (sql.Result, error)
+		Exec(query string, args []driver.Value) (driver.Result, error)
 	}
 
 	var allResults []*Result
-	err := func() error {
+	err := func() (error) {
 		var execer Execer
 		var rollback bool
+		var t driver.Tx
+		var err error
 
 		// Check for the err, if set rollback.
 		defer func() {
-			if t, ok := execer.(*sql.Tx); ok {
+			if t != nil {
 				if rollback {
 					t.Rollback()
 					return
@@ -156,12 +113,15 @@ func (db *DB) Execute(queries []string, tx, xTime bool) ([]*Result, error) {
 			return true
 		}
 
+		execer = db.sqlite3conn
+
 		// Create the correct execution object, depending on whether a
 		// transaction was requested.
 		if tx {
-			execer, _ = db.conn.Begin()
-		} else {
-			execer = db.conn
+			t, err = db.sqlite3conn.Begin()
+			if err != nil {
+				return err
+			}
 		}
 
 		// Execute each query.
@@ -173,7 +133,7 @@ func (db *DB) Execute(queries []string, tx, xTime bool) ([]*Result, error) {
 			result := &Result{}
 			start := time.Now()
 
-			r, err := execer.Exec(q)
+			r, err := execer.Exec(q, nil)
 			if err != nil {
 				if handleError(result, err) {
 					continue
@@ -231,10 +191,6 @@ func (db *DB) Query(queries []string, tx, xTime bool) ([]*Rows, error) {
 			}
 		}()
 
-		if db.sqlite3conn == nil {
-			// handle race for issue #72
-			db.sqlite3conn = sqlite3conn
-		}
 		queryer = db.sqlite3conn
 
 		// Create the correct query object, depending on whether a
