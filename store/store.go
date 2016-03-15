@@ -76,6 +76,10 @@ func New(dbConf *sql.Config, dir, bind string) *Store {
 // Open opens the store. If enableSingle is set, and there are no existing peers,
 // then this node becomes the first node, and therefore leader, of the cluster.
 func (s *Store) Open(enableSingle bool) error {
+	if err := os.MkdirAll(s.raftDir, 0755); err != nil {
+		return err
+	}
+
 	// Create the database. Unless it's a memory-based database, tt must be deleted
 	if !s.dbConf.Memory {
 		// as it will be rebuilt from (possibly) a snapshot and committed log entries.
