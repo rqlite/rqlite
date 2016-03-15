@@ -84,7 +84,7 @@ func (db *DB) Execute(queries []string, tx, xTime bool) ([]*Result, error) {
 	}
 
 	var allResults []*Result
-	err := func() (error) {
+	err := func() error {
 		var execer Execer
 		var rollback bool
 		var t driver.Tx
