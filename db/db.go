@@ -281,10 +281,10 @@ func (db *DB) Query(queries []string, tx, xTime bool) ([]*Rows, error) {
 				// Special case -- convert []uint8 to string. Perhaps this should be a config option.
 				for i, v := range dest {
 					switch u := v.(type) {
-						case []uint8:
-							values[i] = string(u)
-						default:
-							values[i] = u
+					case []uint8:
+						values[i] = string(u)
+					default:
+						values[i] = u
 					}
 				}
 				rows.Values = append(rows.Values, values)
