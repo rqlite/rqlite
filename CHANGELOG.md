@@ -1,8 +1,8 @@
 ## 2.0 (unreleased)
 
 - Update operations returns last-inserted ID.
-- Column-oriented API.
-- Types in API response.
+- Column-oriented API responses.
+- Types in API response body.
 - Query times in addition to sum of query times.
 - New Raft consensus module, built on Hashsicorp's implementation.
 - Hot backup support.
