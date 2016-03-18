@@ -221,6 +221,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 	status := map[string]interface{}{
 		"raft":    s.raft.Stats(),
 		"addr":    s.Addr().String(),
+		"leader":  s.Leader(),
 		"sqlite3": dbStatus,
 	}
 	return status, nil

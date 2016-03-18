@@ -69,6 +69,7 @@ type Service struct {
 
 	store Store // The Raft-backed database store.
 
+	start      time.Time // Start up time.
 	lastBackup time.Time // Time of last successful backup.
 
 	DisableRedirect bool // Disable leader-redirection.
@@ -79,6 +80,7 @@ func New(addr string, store Store) *Service {
 	return &Service{
 		addr:  addr,
 		store: store,
+		start: time.Now(),
 	}
 }
 
@@ -202,10 +204,16 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 		"addr": s.Addr().String(),
 	}
 
+	nodeStatus := map[string]interface{}{
+		"start_time": s.start,
+		"uptime":     time.Since(s.start).String(),
+	}
+
 	// Build the status response.
 	status := map[string]interface{}{
 		"store": results,
 		"http":  httpStatus,
+		"node":  nodeStatus,
 	}
 	if !s.lastBackup.IsZero() {
 		status["last_backup"] = s.lastBackup
