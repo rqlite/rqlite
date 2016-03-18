@@ -11,6 +11,12 @@ import (
 
 const bkDelay = 250
 
+var DBVersion string
+
+func init() {
+	DBVersion, _, _ = sqlite3.Version()
+}
+
 // Config represents the configuration of the SQLite database.
 type Config struct {
 	DSN    string // Datasource name

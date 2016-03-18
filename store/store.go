@@ -215,8 +215,9 @@ func (s *Store) WaitForAppliedIndex(idx uint64, timeout time.Duration) error {
 // Stats returns stats for the store.
 func (s *Store) Stats() (map[string]interface{}, error) {
 	dbStatus := map[string]interface{}{
-		"path": s.dbPath,
-		"dns":  s.dbConf.FQDSN(s.dbPath),
+		"path":    s.dbPath,
+		"dns":     s.dbConf.FQDSN(s.dbPath),
+		"version": sql.DBVersion,
 	}
 	status := map[string]interface{}{
 		"raft":    s.raft.Stats(),
