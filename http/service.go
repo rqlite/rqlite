@@ -351,9 +351,9 @@ func writeResponse(w http.ResponseWriter, r *http.Request, j *Response) {
 	var b []byte
 	var err error
 	pretty, _ := isPretty(r)
-	verbose, _ := isVerbose(r)
+	timings, _ := timings(r)
 
-	if verbose {
+	if timings {
 		j.SetTime()
 	}
 
@@ -417,7 +417,7 @@ func verify(req *http.Request) (bool, error) {
 	return queryParam(req, "verify")
 }
 
-// isVerbose returns whether reponse should be verbose
-func isVerbose(req *http.Request) (bool, error) {
-	return queryParam(req, "verbose")
+// timings returns whether reponse should include timings
+func timings(req *http.Request) (bool, error) {
+	return queryParam(req, "timing")
 }
