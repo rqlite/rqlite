@@ -1,5 +1,6 @@
 ## 2.0 (unreleased)
 
+- `verbose` URL param to control presence of timing information in response.
 - [PR #74](https://github.com/otoolep/rqlite/pull/74): Use SQLite connection directly. Thanks @zmedico.
 - Update operations return last-inserted ID.
 - Column-oriented API responses.
