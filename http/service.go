@@ -46,6 +46,13 @@ type Response struct {
 	Time    float64     `json:"time,omitempty"`
 
 	start time.Time
+	end   time.Time
+}
+
+// SetTime sets the Time attribute of the response. This way it will be present
+// in the serialized JSON version.
+func (r *Response) SetTime() {
+	r.Time = r.end.Sub(r.start).Seconds()
 }
 
 // NewResponse returns a new instance of response.
@@ -259,7 +266,7 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 	} else {
 		resp.Results = results
 	}
-	resp.Time = time.Now().Sub(resp.start).Seconds()
+	resp.end = time.Now()
 	writeResponse(w, r, resp)
 }
 
@@ -323,7 +330,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 	} else {
 		resp.Results = results
 	}
-	resp.Time = time.Now().Sub(resp.start).Seconds()
+	resp.end = time.Now()
 	writeResponse(w, r, resp)
 }
 
@@ -336,12 +343,18 @@ func writeResponse(w http.ResponseWriter, r *http.Request, j *Response) {
 	var b []byte
 	var err error
 	pretty, _ := isPretty(r)
+	verbose, _ := isVerbose(r)
+
+	if verbose {
+		j.SetTime()
+	}
 
 	if pretty {
 		b, err = json.MarshalIndent(j, "", "    ")
 	} else {
 		b, err = json.Marshal(j)
 	}
+
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -394,4 +407,9 @@ func noLeader(req *http.Request) (bool, error) {
 // verify returns whether processing should perform a leader check on the cluster
 func verify(req *http.Request) (bool, error) {
 	return queryParam(req, "verify")
+}
+
+// isVerbose returns whether reponse should be verbose
+func isVerbose(req *http.Request) (bool, error) {
+	return queryParam(req, "verbose")
 }
