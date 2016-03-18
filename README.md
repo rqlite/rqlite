@@ -76,7 +76,7 @@ All responses from rqlite are in the form of JSON.
 To write data successfully to the database, you must create at least 1 table. To do this, perform a HTTP POST, with a `CREATE TABLE` SQL command encapsulated in a JSON array, in the body of the request. For example:
 
 ```bash
-curl -XPOST localhost:4001/db/execute?pretty -H "Content-Type: application/json" -d '[
+curl -XPOST 'localhost:4001/db/execute?pretty&verbose' -H "Content-Type: application/json" -d '[
     "CREATE TABLE foo (id integer not null primary key, name text)"
 ]'
 ```
@@ -86,7 +86,7 @@ where `curl` is the [well known command-line tool](http://curl.haxx.se/).
 To insert an entry into the database, execute a second SQL command:
 
 ```bash
-curl -XPOST 'localhost:4001/db/execute?pretty' -H "Content-Type: application/json" -d '[
+curl -XPOST 'localhost:4001/db/execute?pretty&verbose' -H "Content-Type: application/json" -d '[
     "INSERT INTO foo(name) VALUES(\"fiona\")"
 ]'
 ```
@@ -106,7 +106,7 @@ The response is of the form:
 }
 ```
 
-The use of the URL param `pretty` is optional, and results in pretty-printed JSON responses. Time is measured in seconds.
+The use of the URL param `pretty` is optional, and results in pretty-printed JSON responses. Time is measured in seconds. If you do not want timings, do not pass `verbose` as a URL parameter.
 
 You can confirm that the data has been writen to the database by accessing the SQLite database directly.
 
@@ -125,7 +125,7 @@ Note that this is the SQLite file that is under `node 3`, which is not the node 
 Bulk updates are supported. To execute multipe statements in one HTTP call, simply include the statements in the JSON array:
 
 ```bash
-curl -XPOST 'localhost:4001/db/execute?pretty' -H "Content-Type: application/json" -d "[
+curl -XPOST 'localhost:4001/db/execute?pretty&verbose' -H "Content-Type: application/json" -d "[
     \"INSERT INTO foo(name) VALUES('fiona')\",
     \"INSERT INTO foo(name) VALUES('sinead')\"
 ]"
@@ -159,7 +159,7 @@ Querying data is easy. The most important thing to know is that, by default, que
 For a single query simply perform a HTTP GET, setting the query statement as the query parameter `q`:
 
 ```bash
-curl -G localhost:4001/db/query?pretty --data-urlencode 'q=SELECT * FROM foo'
+curl -G 'localhost:4001/db/query?pretty&verbose' --data-urlencode 'q=SELECT * FROM foo'
 ```
 
 The response is of the form:
@@ -240,7 +240,7 @@ The behaviour of rqlite when using `BEGIN`, `COMMIT`, or `ROLLBACK` to control t
 If an error occurs while processing a statement, it will be marked as such in the response. For example.
 
 ```bash
-curl -XPOST 'localhost:4001/db/execute?pretty' -H "Content-Type: application/json" -d "[
+curl -XPOST 'localhost:4001/db/execute?pretty&verbose' -H "Content-Type: application/json" -d "[
     \"INSERT INTO foo(name) VALUES('fiona')\",
     \"INSERT INTO nonsense\"
 ]"
