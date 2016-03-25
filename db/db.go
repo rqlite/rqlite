@@ -1,5 +1,5 @@
 // Package db exposes a lightweight abstraction over the SQLite code.
-// If performs some basic mapping of lower-level types to rqlite types.
+// It performs some basic mapping of lower-level types to rqlite types.
 package db
 
 import (
