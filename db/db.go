@@ -1,3 +1,4 @@
+// Package db exposes a lightweight abstraction over the SQLite code.
 package db
 
 import (
