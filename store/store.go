@@ -36,9 +36,18 @@ var (
 	ErrNotLeader = errors.New("not leader")
 )
 
+type commandType int
+
+const (
+	execute = iota
+	query
+)
+
 type command struct {
-	Tx      bool     `json:"tx,omitempty"`
-	Queries []string `json:"queries,omitempty"`
+	typ     commandType `json:"typ,omitempty"`
+	Tx      bool        `json:"tx,omitempty"`
+	Queries []string    `json:"queries,omitempty"`
+	Timings bool        `json:"timings",omitempty"`
 }
 
 // Store is a SQLite database, where all changes are made via Raft consensus.
@@ -235,6 +244,7 @@ func (s *Store) Execute(queries []string, tx bool) ([]*sql.Result, error) {
 	}
 
 	c := &command{
+		typ:     execute,
 		Tx:      tx,
 		Queries: queries,
 	}
@@ -248,7 +258,7 @@ func (s *Store) Execute(queries []string, tx bool) ([]*sql.Result, error) {
 		return nil, e.Error()
 	}
 
-	r := f.Response().(*fsmResponse)
+	r := f.Response().(*fsmExecuteResponse)
 	return r.results, r.error
 }
 
@@ -310,9 +320,14 @@ func (s *Store) Join(addr string) error {
 	return nil
 }
 
-type fsmResponse struct {
+type fsmExecuteResponse struct {
 	results []*sql.Result
 	error   error
+}
+
+type fsmQueryResponse struct {
+	rows  []*sql.Rows
+	error error
 }
 
 // Apply applies a Raft log entry to the database.
@@ -322,9 +337,12 @@ func (s *Store) Apply(l *raft.Log) interface{} {
 		panic(fmt.Sprintf("failed to unmarshal command: %s", err.Error()))
 	}
 
-	r, err := s.db.Execute(c.Queries, c.Tx, true)
-
-	return &fsmResponse{results: r, error: err}
+	if c.typ == execute {
+		r, err := s.db.Execute(c.Queries, c.Tx, c.Timings)
+		return &fsmExecuteResponse{results: r, error: err}
+	}
+	r, err := s.db.Query(c.Queries, c.Tx, c.Timings)
+	return &fsmQueryResponse{rows: r, error: err}
 }
 
 // Snapshot returns a snapshot of the database. The caller must ensure that
