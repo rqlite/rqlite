@@ -24,7 +24,7 @@ type Store interface {
 	// Query executes a slice of queries, each of which returns rows.
 	// If tx is true, then the query will take place while a read
 	// transaction is held on the database.
-	Query(queries []string, tx, leader, verify bool) ([]*sql.Rows, error)
+	Query(queries []string, tx bool, lvl store.ConsistencyLevel) ([]*sql.Rows, error)
 
 	// Join joins the node, reachable at addr, to this node.
 	Join(addr string) error
@@ -293,13 +293,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	noLeader, err := noLeader(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	verify, err := verify(r)
+	lvl, err := level(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -328,7 +322,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	results, err := s.store.Query(queries, isTx, !noLeader, verify)
+	results, err := s.store.Query(queries, isTx, lvl)
 	if err != nil {
 		if err == store.ErrNotLeader && !s.DisableRedirect {
 			http.Redirect(w, r, s.store.Leader(), http.StatusTemporaryRedirect)
@@ -412,9 +406,21 @@ func noLeader(req *http.Request) (bool, error) {
 	return queryParam(req, "noleader")
 }
 
-// verify returns whether processing should perform a leader check on the cluster
-func verify(req *http.Request) (bool, error) {
-	return queryParam(req, "verify")
+// level returns the requested consistency level for a query
+func level(req *http.Request) (store.ConsistencyLevel, error) {
+	q := req.URL.Query()
+	lvl := strings.TrimSpace(q.Get("level"))
+
+	switch lvl {
+	case "none":
+		return store.None, nil
+	case "soft":
+		return store.Soft, nil
+	case "hard":
+		return store.Hard, nil
+	default:
+		return store.Soft, nil
+	}
 }
 
 // timings returns whether reponse should include timings

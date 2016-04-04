@@ -36,6 +36,14 @@ var (
 	ErrNotLeader = errors.New("not leader")
 )
 
+type ConsistencyLevel int
+
+const (
+	None = iota
+	Soft
+	Hard
+)
+
 type commandType int
 
 const (
@@ -287,20 +295,33 @@ func (s *Store) Backup(leader bool) ([]byte, error) {
 }
 
 // Query executes queries that return rows, and do not modify the database.
-func (s *Store) Query(queries []string, tx, leader, verify bool) ([]*sql.Rows, error) {
+func (s *Store) Query(queries []string, tx bool, lvl ConsistencyLevel) ([]*sql.Rows, error) {
 	// Allow concurrent queries.
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	if leader && s.raft.State() != raft.Leader {
-		return nil, ErrNotLeader
-	}
+	if lvl == Hard {
+		c := &command{
+			typ:     query,
+			Tx:      tx,
+			Queries: queries,
+		}
+		b, err := json.Marshal(c)
+		if err != nil {
+			return nil, err
+		}
 
-	if verify {
-		f := s.raft.VerifyLeader()
+		f := s.raft.Apply(b, raftTimeout)
 		if e := f.(raft.Future); e.Error() != nil {
 			return nil, e.Error()
 		}
+
+		r := f.Response().(*fsmQueryResponse)
+		return r.rows, r.error
+	}
+
+	if lvl == Soft && s.raft.State() != raft.Leader {
+		return nil, ErrNotLeader
 	}
 
 	r, err := s.db.Query(queries, tx, true)

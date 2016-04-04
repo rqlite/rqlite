@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	sql "github.com/otoolep/rqlite/db"
+	"github.com/otoolep/rqlite/store"
 )
 
 func Test_NewService(t *testing.T) {
@@ -92,7 +93,7 @@ func (m *MockStore) Execute(queries []string, tx bool) ([]*sql.Result, error) {
 	return nil, nil
 }
 
-func (m *MockStore) Query(queries []string, tx, leader, verify bool) ([]*sql.Rows, error) {
+func (m *MockStore) Query(queries []string, tx bool, lvl store.ConsistencyLevel) ([]*sql.Rows, error) {
 	if m.queryFn == nil {
 		return nil, nil
 	}
