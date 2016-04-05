@@ -1,6 +1,6 @@
 ## 2.0 (unreleased)
 
-- `verbose` URL param to control presence of timing information in response.
+- `timings` URL param to control presence of timing information in response.
 - [PR #74](https://github.com/otoolep/rqlite/pull/74): Use SQLite connection directly. Thanks @zmedico.
 - Update operations return last-inserted ID.
 - Column-oriented API responses.
@@ -8,6 +8,7 @@
 - Query times in addition to sum of query times.
 - New Raft consensus module, built on Hashsicorp's implementation.
 - Hot backup support.
+- Selectable read-consistency levels, of none, weak, and strong.
 
 ## 1.0 (June 23rd 2015)
 
