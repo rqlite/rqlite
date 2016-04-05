@@ -68,7 +68,7 @@ $ vagrant destroy rqlite
 ```
 
 ## Data API
-rqlite exposes an HTTP API allowing the database to be modified such that the changes are replicated. Queries are also executed using the HTTP API, though the SQLite database could be queried directly. Modifications go through the Raft log, ensuring only changes committed by a quorum of rqlite nodes are actually executed against the SQLite database. Queries do not go through the Raft log, however, since they do not change the state of the database, and therefore do not need to be captured in the log.
+rqlite exposes an HTTP API allowing the database to be modified such that the changes are replicated. Queries are also executed using the HTTP API, though the SQLite database could be queried directly. Modifications go through the Raft log, ensuring only changes committed by a quorum of rqlite nodes are actually executed against the SQLite database. Queries do not __necessarily__ go through the Raft log, however, since they do not change the state of the database, and therefore do not need to be captured in the log. More on this later.
 
 All responses from rqlite are in the form of JSON.
 
@@ -216,7 +216,7 @@ Even though serving queries does not require consensus (because the database is 
 
 This is why rqlite offers read consistency levels of _none_, _soft_, and _hard_. Each is explained below.
 
-With _none_, the node simply queries its local SQLite file, and does not even check if it is leader. This offers the fastest query response, but suffers from the problems listed above. _Soft_ instructs the node to check that it is the leader, before querying the local SQLite file. Checking leader state only involves checking local state, so is still very fast. There is, however, still a very small window (milliseconds) that the node may return stale data. This is because after the leader check, but before the local SQLite file is read, another node could be elected leader. As result the node may not be up-to-date with the rest of cluster. To avoid even this possibility, rqlite also offers _hard_. In this mode, rqlite sends the query through Raft consensus system, ensuring that the node remains the leader throughout query processing. However, this will involve the leader contacting at least a quorum of nodes, and will therefore increase query response times.
+With _none_, the node simply queries its local SQLite file, and does not even check if it is leader. This offers the fastest query response, but suffers from the problems listed above. _Soft_ instructs the node to check that it is the leader, before querying the local SQLite file. Checking leader state only involves checking local state, so is still very fast. There is, however, a very small window of time (milliseconds by default) during which the node may return stale data. This is because after the leader check, but before the local SQLite file is read, another node could be elected leader. As result the node may not be up-to-date with the rest of cluster. To avoid even this possibility, rqlite also offers _hard_. In this mode, rqlite sends the query through Raft consensus system, ensuring that the node remains the leader throughout query processing. However, this will involve the leader contacting at least a quorum of nodes, and will therefore increase query response times.
 
 _Soft_ is probably sufficient for most applications, and is the default read consistency level. To explicitly select consistency, set the query param `level`. An example of enabling  _hard_ read consistency for a simple query is shown below.
 
@@ -234,9 +234,9 @@ curl -XPOST 'localhost:4001/db/execute?pretty&transaction' -H "Content-Type: app
 ]"
 ```
 
-When a transaction takes place either both statements will succeed, or neither. Performance is *much, much* better if multiple SQL INSERTs or UPDATEs are executed via a transaction. Note the execution ceases the moment any single query results in an error.
+When a transaction takes place either both statements will succeed, or neither. Performance is *much, much* better if multiple SQL INSERTs or UPDATEs are executed via a transaction. Note that processing of the request ceases the moment any single query results in an error.
 
-The behaviour of rqlite when using `BEGIN`, `COMMIT`, or `ROLLBACK` to control transactions is **not defined**. Control transactions only through the query parameters shown above.
+The behaviour of rqlite when using `BEGIN`, `COMMIT`, or `ROLLBACK` to control transactions is **not defined**. It is important to control transactions only through the query parameters shown above.
 
 ### Handling Errors
 If an error occurs while processing a statement, it will be marked as such in the response. For example.
@@ -286,6 +286,13 @@ curl localhost:4001/status?pretty
 ```
 
 The use of the URL param `pretty` is optional, and results in pretty-printed JSON responses.
+
+### expvar
+rqlite also exports [expvar]() information. This can be retrieved like so:
+
+```bash
+curl -v localhost:4001/debug/vars
+```
 
 ## Backups
 rqlite supports hot-backing up a node as follows. Retrieve and write a consistent snapshot of the underlying SQLite database to a file like so:
