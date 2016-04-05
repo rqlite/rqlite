@@ -86,14 +86,14 @@ type MockStore struct {
 	queryFn   func(queries []string, tx, leader, verify bool) ([]*sql.Rows, error)
 }
 
-func (m *MockStore) Execute(queries []string, tx bool) ([]*sql.Result, error) {
+func (m *MockStore) Execute(queries []string, timings, tx bool) ([]*sql.Result, error) {
 	if m.executeFn == nil {
 		return nil, nil
 	}
 	return nil, nil
 }
 
-func (m *MockStore) Query(queries []string, tx bool, lvl store.ConsistencyLevel) ([]*sql.Rows, error) {
+func (m *MockStore) Query(queries []string, timings, tx bool, lvl store.ConsistencyLevel) ([]*sql.Rows, error) {
 	if m.queryFn == nil {
 		return nil, nil
 	}
