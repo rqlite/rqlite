@@ -1,4 +1,4 @@
-## 2.0 (unreleased)
+## 2.0 (April 5th 2016)
 
 - `timings` URL param to control presence of timing information in response.
 - [PR #74](https://github.com/otoolep/rqlite/pull/74): Use SQLite connection directly. Thanks @zmedico.
