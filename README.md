@@ -206,21 +206,23 @@ Another approach is to read the database file directly via `sqlite3`, the comman
 
 **If you use the query API to execute a command that modifies the database, those changes will not be replicated**. Always use the write API for inserts and updates.
 
-#### Why must queries go through the leader?
-*See [issue 5](https://github.com/otoolep/rqlite/issues/5) for more discussion of this.*
+#### Read Consistency
+*See [issue 5](https://github.com/otoolep/rqlite/issues/5) for more discussion of this issue.*
 
-Since queries do not involve consensus, why must they served by the leader? This is because without this check queries on a node could return out-of-date results.  This could happen for one of two reasons:
+Even though serving queries does not require consensus (because the database is not changed), queries should generally be served by the leader. Why is this? Because without this check queries on a node could return out-of-date results.  This could happen for one of two reasons:
 
  * The node, which still part of the cluster, has fallen behind the leader.
  * The node is no longer part of the cluster, and has stopped receiving Raft log updates.
 
-This is why, even though queries do not involve consensus, they must be processed by the leader. If you wish to disable the leader check, and let queries be served regardless of leader state, add `noleader` to the URL. For example:
+This is why rqlite offers read consistency levels of _none_, _soft_, and _hard_. Each is explained below.
+
+With _none_, the node simply queries its local SQLite file, and does not even check if it is leader. This offers the fastest query response, but suffers from the problems listed above. _Soft_ instructs the node to check that it is the leader, before querying the local SQLite file. Checking leader state only involves checking local state, so is still very fast. There is, however, still a very small window (milliseconds) that the node may return stale data. This is because after the leader check, but before the local SQLite file is read, another node could be elected leader. As result the node may not be up-to-date with the rest of cluster. To avoid even this possibility, rqlite also offers _hard_. In this mode, rqlite sends the query through Raft consensus system, ensuring that the node remains the leader throughout query processing. However, this will involve the leader contacting at least a quorum of nodes, and will therefore increase query response times.
+
+_Soft_ is probably sufficient for most applications, and is the default read consistency level. To explicitly select consistency, set the query param `level`. An example of enabling  _hard_ read consistency for a simple query is shown below.
 
 ```bash
-curl -G 'localhost:4001/db/query?pretty&noleader' --data-urlencode 'q=SELECT * FROM foo'
+curl -G 'localhost:4001/db/query?level=hard' --data-urlencode 'q=SELECT * FROM foo'
 ```
-
-Due to the way rqlite works, there is a very small window (milliseconds) where a node has been disposed as leader, but has not yet changed its internal state. Therefore, even with the leader check in place, there is a very small window of time where out-of-date results could be returned.
 
 ### Transactions
 Transactions are supported. To execute statements within a transaction, add `transaction` to the URL. An example of the above operation executed within a transaction is shown below.
