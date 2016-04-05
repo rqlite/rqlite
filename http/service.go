@@ -51,6 +51,22 @@ type Response struct {
 	end   time.Time
 }
 
+// stats captures stats for the HTTP service.
+var stats *expvar.Map
+
+const (
+	numExecutions = "executions"
+	numQueries    = "queries"
+	numBackups    = "backups"
+)
+
+func init() {
+	stats = expvar.NewMap("http")
+	stats.Add(numExecutions, 0)
+	stats.Add(numQueries, 0)
+	stats.Add(numBackups, 0)
+}
+
 // SetTime sets the Time attribute of the response. This way it will be present
 // in the serialized JSON version.
 func (r *Response) SetTime() {
@@ -119,10 +135,13 @@ func (s *Service) Close() {
 func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case strings.HasPrefix(r.URL.Path, "/db/execute"):
+		stats.Add(numExecutions, 1)
 		s.handleExecute(w, r)
 	case strings.HasPrefix(r.URL.Path, "/db/query"):
+		stats.Add(numQueries, 1)
 		s.handleQuery(w, r)
 	case strings.HasPrefix(r.URL.Path, "/db/backup"):
+		stats.Add(numBackups, 1)
 		s.handleBackup(w, r)
 	case strings.HasPrefix(r.URL.Path, "/join"):
 		s.handleJoin(w, r)
