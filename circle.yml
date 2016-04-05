@@ -4,7 +4,7 @@ dependencies:
 
 test:
     override:
-        - go build -v ./...; cp $GOPATH/bin/rqlited $CIRCLE_ARTIFACTS
+        - go install -v ./...; cp $GOPATH/bin/rqlited $CIRCLE_ARTIFACTS
         - bash gofmt.sh
         - go tool vet .
         - go test -timeout 60s -v ./...
