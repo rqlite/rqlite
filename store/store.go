@@ -40,8 +40,8 @@ type ConsistencyLevel int
 
 const (
 	None ConsistencyLevel = iota
-	Soft
-	Hard
+	Weak
+	Strong
 )
 
 type commandType int
@@ -309,7 +309,7 @@ func (s *Store) Query(queries []string, timings, tx bool, lvl ConsistencyLevel) 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	if lvl == Hard {
+	if lvl == Strong {
 		c := &command{
 			Typ:     query,
 			Tx:      tx,
@@ -330,7 +330,7 @@ func (s *Store) Query(queries []string, timings, tx bool, lvl ConsistencyLevel) 
 		return r.rows, r.error
 	}
 
-	if lvl == Soft && s.raft.State() != raft.Leader {
+	if lvl == Weak && s.raft.State() != raft.Leader {
 		return nil, ErrNotLeader
 	}
 

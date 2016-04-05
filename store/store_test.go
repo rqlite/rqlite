@@ -91,11 +91,11 @@ func Test_SingleNodeExecuteQueryTx(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
-	r, err = s.Query([]string{`SELECT * FROM foo`}, false, true, Soft)
+	r, err = s.Query([]string{`SELECT * FROM foo`}, false, true, Weak)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
-	r, err = s.Query([]string{`SELECT * FROM foo`}, false, true, Hard)
+	r, err = s.Query([]string{`SELECT * FROM foo`}, false, true, Strong)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -160,11 +160,11 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 	if err := s1.WaitForAppliedIndex(3, 5*time.Second); err != nil {
 		t.Fatalf("error waiting for follower to apply index: %s:", err.Error())
 	}
-	r, err = s1.Query([]string{`SELECT * FROM foo`}, false, false, Soft)
+	r, err = s1.Query([]string{`SELECT * FROM foo`}, false, false, Weak)
 	if err == nil {
 		t.Fatalf("successfully queried non-leader node")
 	}
-	r, err = s1.Query([]string{`SELECT * FROM foo`}, false, false, Hard)
+	r, err = s1.Query([]string{`SELECT * FROM foo`}, false, false, Strong)
 	if err == nil {
 		t.Fatalf("successfully queried non-leader node")
 	}

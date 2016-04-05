@@ -465,11 +465,11 @@ func level(req *http.Request) (store.ConsistencyLevel, error) {
 	switch lvl {
 	case "none":
 		return store.None, nil
-	case "soft":
-		return store.Soft, nil
-	case "hard":
-		return store.Hard, nil
+	case "weak":
+		return store.Weak, nil
+	case "strong":
+		return store.Strong, nil
 	default:
-		return store.Soft, nil
+		return store.Weak, nil
 	}
 }
