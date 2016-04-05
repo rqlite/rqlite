@@ -236,6 +236,14 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		"dns":     s.dbConf.FQDSN(s.dbPath),
 		"version": sql.DBVersion,
 	}
+	if !s.dbConf.Memory {
+		stat, err := os.Stat(s.dbPath)
+		if err != nil {
+			return nil, err
+		}
+		dbStatus["size"] = stat.Size()
+	}
+
 	status := map[string]interface{}{
 		"raft":    s.raft.Stats(),
 		"addr":    s.Addr().String(),
