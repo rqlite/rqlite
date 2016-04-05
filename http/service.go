@@ -4,6 +4,8 @@ package http
 
 import (
 	"encoding/json"
+	"expvar"
+	"fmt"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -72,6 +74,7 @@ type Service struct {
 	start      time.Time // Start up time.
 	lastBackup time.Time // Time of last successful backup.
 
+	Expvar          bool
 	DisableRedirect bool // Disable leader-redirection.
 }
 
@@ -125,6 +128,8 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.handleJoin(w, r)
 	case strings.HasPrefix(r.URL.Path, "/status"):
 		s.handleStatus(w, r)
+	case r.URL.Path == "/debug/vars" && s.Expvar:
+		serveExpvar(w, r)
 	default:
 		w.WriteHeader(http.StatusNotFound)
 	}
@@ -351,6 +356,21 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 // Addr returns the address on which the Service is listening
 func (s *Service) Addr() net.Addr {
 	return s.ln.Addr()
+}
+
+// serveExpvar serves registered expvar information over HTTP.
+func serveExpvar(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	fmt.Fprintf(w, "{\n")
+	first := true
+	expvar.Do(func(kv expvar.KeyValue) {
+		if !first {
+			fmt.Fprintf(w, ",\n")
+		}
+		first = false
+		fmt.Fprintf(w, "%q: %s", kv.Key, kv.Value)
+	})
+	fmt.Fprintf(w, "\n}\n")
 }
 
 func writeResponse(w http.ResponseWriter, r *http.Request, j *Response) {

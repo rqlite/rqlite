@@ -31,6 +31,7 @@ const sqliteDSN = "db.sqlite"
 var httpAddr string
 var raftAddr string
 var joinAddr string
+var expvar bool
 var dsn string
 var inMem bool
 var disRedirect bool
@@ -42,6 +43,7 @@ func init() {
 	flag.StringVar(&httpAddr, "http", "localhost:4001", "HTTP query server bind address")
 	flag.StringVar(&raftAddr, "raft", "localhost:4002", "Raft communication bind address")
 	flag.StringVar(&joinAddr, "join", "", "host:port of leader to join")
+	flag.BoolVar(&expvar, "expvar", true, "Serve expvar data on HTTP server")
 	flag.StringVar(&dsn, "dsn", "", `SQLite DSN parameters. E.g. "cache=shared&mode=memory"`)
 	flag.BoolVar(&inMem, "mem", false, "Use an in-memory database")
 	flag.BoolVar(&disRedirect, "noredir", true, "Disable leader-redirect")
@@ -104,6 +106,7 @@ func main() {
 	// Create the HTTP query server.
 	s := httpd.New(httpAddr, store)
 	s.DisableRedirect = disRedirect
+	s.Expvar = expvar
 	if err := s.Start(); err != nil {
 		log.Fatalf("failed to start HTTP server: %s", err.Error())
 
