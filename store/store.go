@@ -255,6 +255,7 @@ func (s *Store) Execute(queries []string, tx bool) ([]*sql.Result, error) {
 		Typ:     execute,
 		Tx:      tx,
 		Queries: queries,
+		Timings: true,
 	}
 	b, err := json.Marshal(c)
 	if err != nil {
@@ -305,6 +306,7 @@ func (s *Store) Query(queries []string, tx bool, lvl ConsistencyLevel) ([]*sql.R
 			Typ:     query,
 			Tx:      tx,
 			Queries: queries,
+			Timings: true,
 		}
 		b, err := json.Marshal(c)
 		if err != nil {
