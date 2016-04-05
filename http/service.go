@@ -19,12 +19,12 @@ type Store interface {
 	// Execute executes a slice of queries, each of which doesn't
 	// return rows. It tx is true, then all queries will be executed
 	// successfully or none will be.
-	Execute(queries []string, tx bool) ([]*sql.Result, error)
+	Execute(queries []string, timings, tx bool) ([]*sql.Result, error)
 
 	// Query executes a slice of queries, each of which returns rows.
 	// If tx is true, then the query will take place while a read
 	// transaction is held on the database.
-	Query(queries []string, tx bool, lvl store.ConsistencyLevel) ([]*sql.Rows, error)
+	Query(queries []string, timgins, tx bool, lvl store.ConsistencyLevel) ([]*sql.Rows, error)
 
 	// Join joins the node, reachable at addr, to this node.
 	Join(addr string) error
@@ -251,6 +251,12 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	timings, err := timings(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	b, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -264,7 +270,7 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	results, err := s.store.Execute(queries, isTx)
+	results, err := s.store.Execute(queries, timings, isTx)
 	if err != nil {
 		if err == store.ErrNotLeader && !s.DisableRedirect {
 			http.Redirect(w, r, s.store.Leader(), http.StatusTemporaryRedirect)
@@ -288,6 +294,12 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 	resp := NewResponse()
 
 	isTx, err := isTx(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	timings, err := timings(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -322,7 +334,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	results, err := s.store.Query(queries, isTx, lvl)
+	results, err := s.store.Query(queries, timings, isTx, lvl)
 	if err != nil {
 		if err == store.ErrNotLeader && !s.DisableRedirect {
 			http.Redirect(w, r, s.store.Leader(), http.StatusTemporaryRedirect)
@@ -406,6 +418,11 @@ func noLeader(req *http.Request) (bool, error) {
 	return queryParam(req, "noleader")
 }
 
+// timings returns whether timings are requested.
+func timings(req *http.Request) (bool, error) {
+	return queryParam(req, "timings")
+}
+
 // level returns the requested consistency level for a query
 func level(req *http.Request) (store.ConsistencyLevel, error) {
 	q := req.URL.Query()
@@ -421,9 +438,4 @@ func level(req *http.Request) (store.ConsistencyLevel, error) {
 	default:
 		return store.Soft, nil
 	}
-}
-
-// timings returns whether reponse should include timings
-func timings(req *http.Request) (bool, error) {
-	return queryParam(req, "timing")
 }

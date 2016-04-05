@@ -45,19 +45,19 @@ func Test_SingleNodeExecuteQuery(t *testing.T) {
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 	}
-	_, err := s.Execute(queries, false)
+	_, err := s.Execute(queries, false, false)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
-	r, err := s.Query([]string{`SELECT * FROM foo`}, false, None)
+	r, err := s.Query([]string{`SELECT * FROM foo`}, false, false, None)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
-	r, err = s.Query([]string{`SELECT * FROM foo`}, false, None)
+	r, err = s.Query([]string{`SELECT * FROM foo`}, false, false, None)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
-	r, err = s.Query([]string{`SELECT * FROM foo`}, false, None)
+	r, err = s.Query([]string{`SELECT * FROM foo`}, false, false, None)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -83,19 +83,19 @@ func Test_SingleNodeExecuteQueryTx(t *testing.T) {
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 	}
-	_, err := s.Execute(queries, true)
+	_, err := s.Execute(queries, false, true)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
-	r, err := s.Query([]string{`SELECT * FROM foo`}, true, None)
+	r, err := s.Query([]string{`SELECT * FROM foo`}, false, true, None)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
-	r, err = s.Query([]string{`SELECT * FROM foo`}, true, Soft)
+	r, err = s.Query([]string{`SELECT * FROM foo`}, false, true, Soft)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
-	r, err = s.Query([]string{`SELECT * FROM foo`}, true, Hard)
+	r, err = s.Query([]string{`SELECT * FROM foo`}, false, true, Hard)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -105,7 +105,7 @@ func Test_SingleNodeExecuteQueryTx(t *testing.T) {
 	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
-	_, err = s.Execute(queries, true)
+	_, err = s.Execute(queries, false, true)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
@@ -140,11 +140,11 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 	}
-	_, err := s0.Execute(queries, false)
+	_, err := s0.Execute(queries, false, false)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
-	r, err := s0.Query([]string{`SELECT * FROM foo`}, false, None)
+	r, err := s0.Query([]string{`SELECT * FROM foo`}, false, false, None)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -160,15 +160,15 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 	if err := s1.WaitForAppliedIndex(3, 5*time.Second); err != nil {
 		t.Fatalf("error waiting for follower to apply index: %s:", err.Error())
 	}
-	r, err = s1.Query([]string{`SELECT * FROM foo`}, false, Soft)
+	r, err = s1.Query([]string{`SELECT * FROM foo`}, false, false, Soft)
 	if err == nil {
 		t.Fatalf("successfully queried non-leader node")
 	}
-	r, err = s1.Query([]string{`SELECT * FROM foo`}, false, Hard)
+	r, err = s1.Query([]string{`SELECT * FROM foo`}, false, false, Hard)
 	if err == nil {
 		t.Fatalf("successfully queried non-leader node")
 	}
-	r, err = s1.Query([]string{`SELECT * FROM foo`}, false, None)
+	r, err = s1.Query([]string{`SELECT * FROM foo`}, false, false, None)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}

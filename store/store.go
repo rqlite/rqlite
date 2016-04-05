@@ -246,7 +246,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 }
 
 // Execute executes queries that return no rows, but do modify the database.
-func (s *Store) Execute(queries []string, tx bool) ([]*sql.Result, error) {
+func (s *Store) Execute(queries []string, timings, tx bool) ([]*sql.Result, error) {
 	if s.raft.State() != raft.Leader {
 		return nil, ErrNotLeader
 	}
@@ -296,7 +296,7 @@ func (s *Store) Backup(leader bool) ([]byte, error) {
 }
 
 // Query executes queries that return rows, and do not modify the database.
-func (s *Store) Query(queries []string, tx bool, lvl ConsistencyLevel) ([]*sql.Rows, error) {
+func (s *Store) Query(queries []string, timings, tx bool, lvl ConsistencyLevel) ([]*sql.Rows, error) {
 	// Allow concurrent queries.
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -306,7 +306,7 @@ func (s *Store) Query(queries []string, tx bool, lvl ConsistencyLevel) ([]*sql.R
 			Typ:     query,
 			Tx:      tx,
 			Queries: queries,
-			Timings: true,
+			Timings: timings,
 		}
 		b, err := json.Marshal(c)
 		if err != nil {
