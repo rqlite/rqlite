@@ -408,11 +408,6 @@ func isTx(req *http.Request) (bool, error) {
 	return queryParam(req, "transaction")
 }
 
-// isExplain returns whether the HTTP request is requesting a explanation.
-func isExplain(req *http.Request) (bool, error) {
-	return queryParam(req, "explain")
-}
-
 // noLeader returns whether processing should skip the leader check.
 func noLeader(req *http.Request) (bool, error) {
 	return queryParam(req, "noleader")
