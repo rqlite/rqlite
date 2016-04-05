@@ -91,11 +91,11 @@ func Test_SingleNodeExecuteQueryTx(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
-	r, err = s.Query([]string{`SELECT * FROM foo`}, true, None)
+	r, err = s.Query([]string{`SELECT * FROM foo`}, true, Soft)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
-	r, err = s.Query([]string{`SELECT * FROM foo`}, true, None)
+	r, err = s.Query([]string{`SELECT * FROM foo`}, true, Hard)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}

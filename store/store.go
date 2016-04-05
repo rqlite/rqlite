@@ -39,7 +39,7 @@ var (
 type ConsistencyLevel int
 
 const (
-	None = iota
+	None ConsistencyLevel = iota
 	Soft
 	Hard
 )
@@ -47,12 +47,12 @@ const (
 type commandType int
 
 const (
-	execute = iota
+	execute commandType = iota
 	query
 )
 
 type command struct {
-	typ     commandType `json:"typ,omitempty"`
+	Typ     commandType `json:"typ,omitempty"`
 	Tx      bool        `json:"tx,omitempty"`
 	Queries []string    `json:"queries,omitempty"`
 	Timings bool        `json:"timings",omitempty"`
@@ -252,7 +252,7 @@ func (s *Store) Execute(queries []string, tx bool) ([]*sql.Result, error) {
 	}
 
 	c := &command{
-		typ:     execute,
+		Typ:     execute,
 		Tx:      tx,
 		Queries: queries,
 	}
@@ -302,7 +302,7 @@ func (s *Store) Query(queries []string, tx bool, lvl ConsistencyLevel) ([]*sql.R
 
 	if lvl == Hard {
 		c := &command{
-			typ:     query,
+			Typ:     query,
 			Tx:      tx,
 			Queries: queries,
 		}
@@ -358,7 +358,7 @@ func (s *Store) Apply(l *raft.Log) interface{} {
 		panic(fmt.Sprintf("failed to unmarshal command: %s", err.Error()))
 	}
 
-	if c.typ == execute {
+	if c.Typ == execute {
 		r, err := s.db.Execute(c.Queries, c.Tx, c.Timings)
 		return &fsmExecuteResponse{results: r, error: err}
 	}
