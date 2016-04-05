@@ -1,7 +1,7 @@
 rqlite [![Circle CI](https://circleci.com/gh/otoolep/rqlite/tree/master.svg?style=svg)](https://circleci.com/gh/otoolep/rqlite/tree/master) [![GoDoc](https://godoc.org/github.com/otoolep/rqlite?status.svg)](https://godoc.org/github.com/otoolep/rqlite)
 ======
 
-*Detailed background on rqlite can be found on [these blog posts](http://www.philipotoole.com/tag/rqlite/). Note that master represents 2.0 development (which is still in progress), with a new API and Raft consensus module. If you want to work with 1.0 rqlite, you can find it [here](https://github.com/otoolep/rqlite/releases/tag/v1.0).*
+*Detailed background on rqlite can be found on [these blog posts](http://www.philipotoole.com/tag/rqlite/)*.
 
 *rqlite* is a distributed system that provides a replicated SQLite database. rqlite is written in [Go](http://golang.org/) and uses [Raft](http://raftconsensus.github.io/) to achieve consensus across all the instances of the SQLite databases. rqlite ensures that every change made to the database is made to a quorum of SQLite files, or none at all.
 
@@ -287,7 +287,7 @@ curl localhost:4001/status?pretty
 
 The use of the URL param `pretty` is optional, and results in pretty-printed JSON responses.
 
-### expvar
+### expvar support
 rqlite also exports [expvar](http://godoc.org/pkg/expvar/) information. Both standard and custom information is exposed. This data can be retrieved like so:
 
 ```bash
@@ -306,7 +306,7 @@ The node can then be restored by loading this database file via `sqlite3` and ex
 By default a backup can only be retrieved from the leader, though this check can be disabled by adding `noleader` to the URL as a query param.
 
 ## Log Compaction
-rqlite does perform log compaction. After a fixed number of changes rqlite snapshots the SQLite database, and truncates the Raft log.
+rqlite automatically performs log compaction. After a fixed number of changes rqlite snapshots the SQLite database, and truncates the Raft log. This is a technical feature of the Raft consensus system, and most users of rqlite need not be concerned with this.
 
 ## Limitations
  * SQLite commands such as `.schema` are not handled.
