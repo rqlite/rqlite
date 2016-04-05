@@ -55,7 +55,7 @@ type command struct {
 	Typ     commandType `json:"typ,omitempty"`
 	Tx      bool        `json:"tx,omitempty"`
 	Queries []string    `json:"queries,omitempty"`
-	Timings bool        `json:"timings",omitempty"`
+	Timings bool        `json:"timings,omitempty"`
 }
 
 // Store is a SQLite database, where all changes are made via Raft consensus.
