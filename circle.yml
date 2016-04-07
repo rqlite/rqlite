@@ -1,6 +1,4 @@
 dependencies:
-    pre:
-        - go get -u golang.org/x/tools/cmd/vet;
     post:
         - ./gen_artifacts.sh
 
