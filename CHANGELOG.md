@@ -1,5 +1,7 @@
-## 2.0 (April 5th 2016)
+## 2.1 (unreleased)
+- [PR #76](https://github.com/otoolep/rqlite/pull/76): Obey timing information display at database level.
 
+## 2.0 (April 5th 2016)
 - `timings` URL param to control presence of timing information in response.
 - [PR #74](https://github.com/otoolep/rqlite/pull/74): Use SQLite connection directly. Thanks @zmedico.
 - Update operations return last-inserted ID.
@@ -13,6 +15,5 @@
 - expvar support added to HTTP server.
 
 ## 1.0 (June 23rd 2015)
-
 Check out [this tag](https://github.com/otoolep/rqlite/releases/tag/v1.0) for full details.
 
