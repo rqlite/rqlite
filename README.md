@@ -5,7 +5,8 @@ rqlite [![Circle CI](https://circleci.com/gh/otoolep/rqlite/tree/master.svg?styl
 
 *rqlite* is a distributed system that provides a replicated [SQLite](https://www.sqlite.org/) database. rqlite is written in [Go](http://golang.org/) and uses [Raft](http://raftconsensus.github.io/) to achieve consensus across all the instances of the SQLite databases. rqlite ensures that every change made to the database is made to a quorum of SQLite files, or none at all.
 
-rqlite gives you the functionality of a fault-tolerant, replicated relational database, but with very easy installation, deployment, and operation.
+### Why?
+rqlite gives you the functionality of a [rock solid](http://www.sqlite.org/testing.html), fault-tolerant, replicated relational database, but with very easy installation, deployment, and operation.
 
 ## Building and Running
 *Building rqlite requires Go 1.4 or later. [gvm](https://github.com/moovweb/gvm) is a great tool for managing your version of Go.*
