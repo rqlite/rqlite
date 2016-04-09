@@ -128,6 +128,9 @@ func main() {
 	s := httpd.New(httpAddr, store)
 	s.DisableRedirect = disRedirect
 	s.Expvar = expvar
+	s.Version = version
+	s.Commit = commit
+	s.Branch = branch
 	if err := s.Start(); err != nil {
 		log.Fatalf("failed to start HTTP server: %s", err.Error())
 
