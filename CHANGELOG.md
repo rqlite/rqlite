@@ -1,5 +1,6 @@
 ## 2.1 (unreleased)
 - [PR #76](https://github.com/otoolep/rqlite/pull/76): Obey timing information display at database level.
+- [PR #77](https://github.com/otoolep/rqlite/pull/77): Add version information to binary.
 
 ## 2.0 (April 5th 2016)
 - `timings` URL param to control presence of timing information in response.
