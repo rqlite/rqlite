@@ -92,6 +92,9 @@ type Service struct {
 
 	Expvar          bool
 	DisableRedirect bool // Disable leader-redirection.
+	Version         string
+	Commit          string
+	Branch          string
 }
 
 // New returns an uninitialized HTTP service.
@@ -224,6 +227,12 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	buildStatus := map[string]interface{}{
+		"version": s.Version,
+		"commit":  s.Commit,
+		"branch":  s.Branch,
+	}
+
 	httpStatus := map[string]interface{}{
 		"addr": s.Addr().String(),
 	}
@@ -236,6 +245,7 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 	// Build the status response.
 	status := map[string]interface{}{
 		"store": results,
+		"build": buildStatus,
 		"http":  httpStatus,
 		"node":  nodeStatus,
 	}

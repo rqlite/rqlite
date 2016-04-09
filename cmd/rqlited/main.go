@@ -28,6 +28,13 @@ import (
 
 const sqliteDSN = "db.sqlite"
 
+// These variables are populated via the Go linker.
+var (
+	version = "2.1"
+	commit  string
+	branch  string
+)
+
 var httpAddr string
 var raftAddr string
 var joinAddr string
@@ -53,6 +60,15 @@ func init() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [arguments] <data directory>\n", os.Args[0])
 		flag.PrintDefaults()
 	}
+
+	// If commit, branch, or build time are not set, make that clear.
+	if commit == "" {
+		commit = "unknown"
+	}
+	if branch == "" {
+		branch = "unknown"
+	}
+
 }
 
 func main() {
@@ -65,6 +81,11 @@ func main() {
 	}
 
 	dataPath := flag.Arg(0)
+
+	// Configure logging and pump out initial message.
+	log.SetFlags(log.LstdFlags)
+	log.SetPrefix("[rqlited] ")
+	log.Printf("rqlited starting, version %s, commit %s, branch %s", version, commit, branch)
 
 	// Set up profiling, if requested.
 	if cpuprofile != "" {
@@ -107,6 +128,9 @@ func main() {
 	s := httpd.New(httpAddr, store)
 	s.DisableRedirect = disRedirect
 	s.Expvar = expvar
+	s.Version = version
+	s.Commit = commit
+	s.Branch = branch
 	if err := s.Start(); err != nil {
 		log.Fatalf("failed to start HTTP server: %s", err.Error())
 
