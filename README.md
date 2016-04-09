@@ -207,9 +207,7 @@ Another approach is to read the database file directly via `sqlite3`, the comman
 **If you use the query API to execute a command that modifies the database, those changes will not be replicated**. Always use the write API for inserts and updates.
 
 #### Read Consistency
-*See [issue 5](https://github.com/otoolep/rqlite/issues/5) for more discussion of this issue.*
-
-Even though serving queries does not require consensus (because the database is not changed), queries should generally be served by the leader. Why is this? Because without this check queries on a node could return out-of-date results.  This could happen for one of two reasons:
+Even though serving queries does not require consensus (because the database is not changed), [queries should generally be served by the leader](https://github.com/otoolep/rqlite/issues/5). Why is this? Because without this check queries on a node could return out-of-date results.  This could happen for one of two reasons:
 
  * The node, which still part of the cluster, has fallen behind the leader.
  * The node is no longer part of the cluster, and has stopped receiving Raft log updates.
