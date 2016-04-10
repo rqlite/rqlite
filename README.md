@@ -11,7 +11,7 @@ rqlite gives you the functionality of a [rock solid](http://www.sqlite.org/testi
 ## Getting started
 The quickest way to get running on OSX and Linux is to download a pre-built release binary. You can find these binaries on the [Github releases page](https://github.com/otoolep/rqlite/releases).
 
-If you want to build rqlited, either because you want the latest code or a pre-built binary for platform is not available, take a look at CONTRIBUTING.md.
+If you want to build rqlite, either because you want the latest code or a pre-built binary for platform is not available, take a look at CONTRIBUTING.md.
 
 ### Forming a Cluster
 While not strictly necessary to run rqlite, running multiple nodes means the SQLite database is replicated.
