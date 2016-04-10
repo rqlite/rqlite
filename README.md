@@ -9,7 +9,11 @@ rqlite [![Circle CI](https://circleci.com/gh/otoolep/rqlite/tree/master.svg?styl
 rqlite gives you the functionality of a [rock solid](http://www.sqlite.org/testing.html), fault-tolerant, replicated relational database, but with very easy installation, deployment, and operation. With it you can build a lightweight and reliable central store for relational data.
 
 ## Getting started
-The quickest way to get running on OSX and Linux is to download a pre-built release binary. You can find these binaries on the [Github releases page](https://github.com/otoolep/rqlite/releases).
+The quickest way to get running on OSX and Linux is to download a pre-built release binary. You can find these binaries on the [Github releases page](https://github.com/otoolep/rqlite/releases). Once installed, you can start a single rqlite node like so:
+```bash
+rqlited ~/node.1
+```
+This single node automatically becomes the leader.
 
 If you want to build rqlite, either because you want the latest code or a pre-built binary for platform is not available, take a look at CONTRIBUTING.md.
 
@@ -23,7 +27,7 @@ rqlited -http localhost:4003  -raft :4004 -join :4001 ~/node.2
 rqlited -http localhost:4005  -raft :4006 -join :4001 ~/node.3
 ```
 
-*(This assumes you've set `GOPATH` as in the above section.)*
+*(This assumes you've started the first node as instructed in the Getting Started section*
 
 Under each node will be an SQLite file, which should remain in consensus. You can create clusters of any size, but clusters of 3, 5, and 7 nodes are most practical.
 
@@ -35,24 +39,6 @@ rqlited -http localhost:4005 -raft :4006 ~/node.3
 ```
 
 On restart it will rejoin the cluster and apply any changes to the local sqlite database that took place while it was down. Depending on the number of changes in the Raft log, restarts may take a little while.
-
-### Vagrant
-Alternatively you can use a [Vagrant](https://www.vagrantup.com/) environment. To do so, simply [install Vagrant](https://docs.vagrantup.com/v2/installation/index.html) on your machine, a               virtualization system such as VirtualBox, and execute the following commands:
-
-```bash
-$ cd $GOPATH/src/github.com/otoolep/rqlite
-$ CLUSTER_SIZE=3 vagrant up rqlite
-```
-
-This will start a Vagrant box and install rqlite with all required dependencies. This will form a cluster with `CLUSTER_SIZE` nodes.
-
-To execute queries against the cluster you can either ssh directly to the Vagrant box via `vagrant ssh rqlite` or execute the commands directly from your local box, accessing the cluster at `192.168.   200.10` IP and any port within a range `[4001, 4001 + CLUSTER_SIZE -1]`.
-
-To terminate the Vagrant box simply execute:
-
-```bash
-$ vagrant destroy rqlite
-```
 
 ## Data API
 rqlite exposes an HTTP API allowing the database to be modified such that the changes are replicated. Queries are also executed using the HTTP API, though the SQLite database could be queried directly. Modifications go through the Raft log, ensuring only changes committed by a quorum of rqlite nodes are actually executed against the SQLite database. Queries do not __necessarily__ go through the Raft log, however, since they do not change the state of the database, and therefore do not need to be captured in the log. More on this later.
