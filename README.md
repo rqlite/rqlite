@@ -8,24 +8,10 @@ rqlite [![Circle CI](https://circleci.com/gh/otoolep/rqlite/tree/master.svg?styl
 ### Why?
 rqlite gives you the functionality of a [rock solid](http://www.sqlite.org/testing.html), fault-tolerant, replicated relational database, but with very easy installation, deployment, and operation. With it you can build a lightweight and reliable central store for relational data.
 
-## Building and Running
-*Building rqlite requires Go 1.4 or later. [gvm](https://github.com/moovweb/gvm) is a great tool for managing your version of Go.*
+## Getting started
+The quickest way to get running on OSX and Linux is to download a pre-built release binary. You can find these binaries on the [Github releases page](https://github.com/otoolep/rqlite/releases).
 
-Download and run rqlite like so (tested on 64-bit Kubuntu 14.04 and OSX):
-
-```bash
-mkdir rqlite # Or any directory of your choice.
-cd rqlite/
-export GOPATH=$PWD
-go get -t github.com/otoolep/rqlite/...
-$GOPATH/bin/rqlited ~/node.1
-```
-
-This starts a rqlite server listening on localhost, port 4001. This single node automatically becomes the leader. To see all available command-line options, execute:
-
-```bash
-$GOPATH/bin/rqlited -h
-```
+If you want to build rqlited, either because you want the latest code or a pre-built binary for platform is not available, take a look at CONTRIBUTING.md.
 
 ### Forming a Cluster
 While not strictly necessary to run rqlite, running multiple nodes means the SQLite database is replicated.
@@ -33,8 +19,8 @@ While not strictly necessary to run rqlite, running multiple nodes means the SQL
 Start a second and third node (so a majority can still form in the event of a single node failure) like so:
 
 ```bash
-$GOPATH/bin/rqlited -http localhost:4003  -raft :4004 -join :4001 ~/node.2
-$GOPATH/bin/rqlited -http localhost:4005  -raft :4006 -join :4001 ~/node.3
+rqlited -http localhost:4003  -raft :4004 -join :4001 ~/node.2
+rqlited -http localhost:4005  -raft :4006 -join :4001 ~/node.3
 ```
 
 *(This assumes you've set `GOPATH` as in the above section.)*
@@ -45,7 +31,7 @@ Under each node will be an SQLite file, which should remain in consensus. You ca
 If a node needs to be restarted, perhaps because of failure, don't pass the `-join` option. Using the example nodes above, if node 2 needed to be restarted, do so as follows:
 
 ```bash
-$GOPATH/bin/rqlited -http localhost:4005 -raft :4006 ~/node.3
+rqlited -http localhost:4005 -raft :4006 ~/node.3
 ```
 
 On restart it will rejoin the cluster and apply any changes to the local sqlite database that took place while it was down. Depending on the number of changes in the Raft log, restarts may take a little while.
