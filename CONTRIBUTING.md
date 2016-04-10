@@ -1,4 +1,4 @@
-# Contribuing to rqlite
+# Contributing to rqlite
 rqlite is software, and it goes without say it can always be improved. It's by no means finished -- issues are tracked, and I plan to develop this project further. Pull requests are very welcome.
 
 ## Building rqlite
