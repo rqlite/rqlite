@@ -134,7 +134,7 @@ func (s *Store) Open(enableSingle bool) error {
 	if err != nil {
 		return err
 	}
-	s.ln = newnetworkLayer(ln)
+	s.ln = newNetworkLayer(ln)
 	transport := raft.NewNetworkTransport(s.ln, 3, 10*time.Second, os.Stderr)
 
 	// Create peer storage.

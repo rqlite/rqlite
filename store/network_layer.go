@@ -11,8 +11,8 @@ type networkLayer struct {
 	addr net.Addr
 }
 
-// newnetworkLayer returns a new instance of networkLayer.
-func newnetworkLayer(ln net.Listener) *networkLayer {
+// newNetworkLayer returns a new instance of networkLayer.
+func newNetworkLayer(ln net.Listener) *networkLayer {
 	return &networkLayer{
 		ln:   ln,
 		addr: ln.Addr(),
