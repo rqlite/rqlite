@@ -15,7 +15,7 @@ rqlited ~/node.1
 ```
 This single node automatically becomes the leader.
 
-If you want to build rqlite, either because you want the latest code or a pre-built binary for platform is not available, take a look at [CONTRIBUTING.md](https://github.com/otoolep/rqlite/blob/master/CONTRIBUTING.md).
+__If you want to build rqlite__, either because you want the latest code or a pre-built binary for platform is not available, take a look at [CONTRIBUTING.md](https://github.com/otoolep/rqlite/blob/master/CONTRIBUTING.md).
 
 ### Forming a Cluster
 While not strictly necessary to run rqlite, running multiple nodes means the SQLite database is replicated.
