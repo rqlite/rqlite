@@ -1,3 +1,5 @@
+rqlite is software, and it goes without say it can always be improved. It's by no means finished -- issues are tracked, and I plan to develop this project further. Pull requests are very welcome.
+
 # Building rqlite
 *Building rqlite requires Go 1.4 or later. [gvm](https://github.com/moovweb/gvm) is a great tool for managing your version of Go.*
 
