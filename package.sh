@@ -8,7 +8,6 @@ if [ $# -lt 1 ]; then
 fi
 
 REPO_URL="https://github.com/otoolep/rqlite"
-RELEASE_ID=2987529
 
 VERSION=$1
 API_TOKEN=$2
