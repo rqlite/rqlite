@@ -1,4 +1,4 @@
-## 2.1 (unreleased)
+## 2.1 (April 9th 2016)
 - [PR #76](https://github.com/otoolep/rqlite/pull/76): Obey timing information display at database level.
 - [PR #77](https://github.com/otoolep/rqlite/pull/77): Add version information to binary.
 
