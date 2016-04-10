@@ -1,4 +1,4 @@
-rqlite [![Circle CI](https://circleci.com/gh/otoolep/rqlite/tree/master.svg?style=svg)](https://circleci.com/gh/otoolep/rqlite/tree/master) [![GoDoc](https://godoc.org/github.com/otoolep/rqlite?status.svg)](https://godoc.org/github.com/otoolep/rqlite)
+rqlite [![Circle CI](https://circleci.com/gh/otoolep/rqlite/tree/master.svg?style=svg)](https://circleci.com/gh/otoolep/rqlite/tree/master) [![GoDoc](https://godoc.org/github.com/otoolep/rqlite?status.svg)](https://godoc.org/github.com/otoolep/rqlite) [![Release](https://img.shields.io/github/release/otoolep/rqlite.svg)](https://github.com/otoolep/rqlite/releases)
 ======
 
 *Detailed background on rqlite can be found on [these blog posts](http://www.philipotoole.com/tag/rqlite/)*.
