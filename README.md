@@ -282,10 +282,12 @@ By default a backup can only be retrieved from the leader, though this check can
 rqlite automatically performs log compaction. After a fixed number of changes rqlite snapshots the SQLite database, and truncates the Raft log. This is a technical feature of the Raft consensus system, and most users of rqlite need not be concerned with this.
 
 ## Limitations
+ * Only SQL statements that are __deterministic__ are safe to use with rqlite, because statements are committed to the Raft log before they are sent to each node. For example, the following statement could result in different SQLite databases under each node:
+```
+INSERT INTO foo (n) VALUES(random());
+```
  * SQLite commands such as `.schema` are not handled.
  * The supported types are those supported by [go-sqlite3](http://godoc.org/github.com/mattn/go-sqlite3).
-
-This is new software, so it goes without saying it has bugs. It's by no means finished -- issues are now being tracked, and I plan to develop this project further. Pull requests are also welcome.
 
 ## Pronunciation?
 How do I pronounce rqlite? For what it's worth I pronounce it "ree-qwell-lite".
