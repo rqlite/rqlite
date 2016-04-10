@@ -46,4 +46,4 @@ if [ -z "$API_TOKEN" ]; then
 fi
 
 upload_url="https://uploads.github.com/repos/otoolep/rqlite/releases/$RELEASE_ID/assets"
-curl -v -H "Context-type: application/octet-stream" -H "Authorization: token $API_TOKEN" -XPOST $upload_url?name=$release_pkg --data-binary @$release_pkg
+curl -v -H "Content-type: application/octet-stream" -H "Authorization: token $API_TOKEN" -XPOST $upload_url?name=$release_pkg --data-binary @$release_pkg
