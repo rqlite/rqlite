@@ -42,6 +42,7 @@ var expvar bool
 var dsn string
 var inMem bool
 var disRedirect bool
+var showVersion bool
 var cpuprofile string
 
 const desc = `rqlite is a distributed system that provides a replicated SQLite database.`
@@ -54,6 +55,7 @@ func init() {
 	flag.StringVar(&dsn, "dsn", "", `SQLite DSN parameters. E.g. "cache=shared&mode=memory"`)
 	flag.BoolVar(&inMem, "mem", false, "Use an in-memory database")
 	flag.BoolVar(&disRedirect, "noredir", true, "Disable leader-redirect")
+	flag.BoolVar(&showVersion, "version", false, "Show version information and exit")
 	flag.StringVar(&cpuprofile, "cpuprofile", "", "Write CPU profile to file")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "\n%s\n\n", desc)
@@ -73,6 +75,11 @@ func init() {
 
 func main() {
 	flag.Parse()
+
+	if showVersion {
+		fmt.Printf("rqlited version %s\n", version)
+		os.Exit(0)
+	}
 
 	// Ensure the data path is set.
 	if flag.NArg() == 0 {
