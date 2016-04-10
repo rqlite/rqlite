@@ -1,6 +1,7 @@
+# Contribuing to rqlite
 rqlite is software, and it goes without say it can always be improved. It's by no means finished -- issues are tracked, and I plan to develop this project further. Pull requests are very welcome.
 
-# Building rqlite
+## Building rqlite
 *Building rqlite requires Go 1.4 or later. [gvm](https://github.com/moovweb/gvm) is a great tool for managing your version of Go.*
 
 Download and run rqlite like so (tested on 64-bit Kubuntu 14.04 and OSX):
@@ -15,7 +16,7 @@ $GOPATH/bin/rqlited ~/node.1
 
 This starts a rqlite server listening on localhost, port 4001. This single node automatically becomes the leader.
 
-# Cloning a fork
+## Cloning a fork
 If you wish to work with fork of rqlite, your own fork for example, you must still follow the directory structure above. But instead of cloning the main repo, instead clone your fork. You must fork the project if you want to contribute upstream.
 
 Follow the steps below to work with a fork:
