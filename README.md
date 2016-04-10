@@ -29,7 +29,7 @@ rqlited -http localhost:4005  -raft :4006 -join :4001 ~/node.3
 
 *(This assumes you've started the first node as instructed in the Getting Started section.)*
 
-Under each node will be an SQLite file, which should remain in consensus. You can create clusters of any size, but clusters of 3, 5, and 7 nodes are most practical.
+Under each node will be an SQLite file, which should remain in consensus. You can create clusters of any size, but clusters of 3, 5, and 7 nodes are most practical. Clusters larger than this become impractical, due to the number of nodes that must be contacted before a change can take place.
 
 ### Restarting a node
 If a node needs to be restarted, perhaps because of failure, don't pass the `-join` option. Using the example nodes above, if node 2 needed to be restarted, do so as follows:
