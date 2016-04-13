@@ -16,6 +16,13 @@ $GOPATH/bin/rqlited ~/node.1
 
 This starts a rqlite server listening on localhost, port 4001. This single node automatically becomes the leader.
 
+### Speeding up the build process
+It can be rather slow to rebuild rqlite, due to the repeated compilation of SQLite support. You can compile and install this library once, so subsequent builds are much faster. To do so, execute the following commands:
+```bash
+cd $GOPATH
+go install github.com/mattn/go-sqlite3
+```
+
 ## Cloning a fork
 If you wish to work with fork of rqlite, your own fork for example, you must still follow the directory structure above. But instead of cloning the main repo, instead clone your fork. You must fork the project if you want to contribute upstream.
 
