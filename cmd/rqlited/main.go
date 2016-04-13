@@ -20,6 +20,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime/pprof"
+	"strings"
 
 	sql "github.com/otoolep/rqlite/db"
 	httpd "github.com/otoolep/rqlite/http"
@@ -157,7 +158,14 @@ func join(joinAddr, raftAddr string) error {
 	if err != nil {
 		return err
 	}
-	resp, err := http.Post(fmt.Sprintf("http://%s/join", joinAddr), "application-type/json", bytes.NewReader(b))
+
+	// Check for protocol scheme, and insert default if necessary.
+	fullAddr := fmt.Sprintf("%s/join", joinAddr)
+	if !strings.HasPrefix(joinAddr, "http://") && !strings.HasPrefix(joinAddr, "https://") {
+		fullAddr = fmt.Sprintf("http://%s", joinAddr)
+	}
+
+	resp, err := http.Post(fullAddr, "application-type/json", bytes.NewReader(b))
 	if err != nil {
 		return err
 	}
