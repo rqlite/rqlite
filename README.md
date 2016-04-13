@@ -288,6 +288,7 @@ rqlite automatically performs log compaction. After a fixed number of changes rq
 ```
 INSERT INTO foo (n) VALUES(random());
 ```
+ * In case it isn't obvious, rqlite does not replicate any changes made directly to the underlying SQLite files. If you do change these files directly, you will cause rqlite to fail. Only modify the database via the HTTP API.
  * SQLite commands such as `.schema` are not handled.
  * The supported types are those supported by [go-sqlite3](http://godoc.org/github.com/mattn/go-sqlite3).
 
