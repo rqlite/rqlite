@@ -71,7 +71,6 @@ func init() {
 	if branch == "" {
 		branch = "unknown"
 	}
-
 }
 
 func main() {
