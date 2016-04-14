@@ -22,5 +22,8 @@
 
 /*
 Package rqlite is a distributed system that provides a replicated SQLite database. rqlite uses Raft to achieve consensus across the cluster of SQLite databases. It ensures that every change made to the database is made to a majority of underlying SQLite files, or none at all.
+
+
+rqlite gives you the functionality of a rock solid, fault-tolerant, replicated relational database, but with very easy installation, deployment, and operation. With it you've got a lightweight and reliable distributed store for relational data. You could use rqlite as part of a larger system, as a central store for some critical relational data, without having to run a heavier solution like MySQL. rqlite might also be an effective way to provide a small number of SQLite read-replicas.
 */
 package rqlite
