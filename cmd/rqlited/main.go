@@ -31,7 +31,7 @@ const sqliteDSN = "db.sqlite"
 
 // These variables are populated via the Go linker.
 var (
-	version = "2.1"
+	version = "2"
 	commit  string
 	branch  string
 )
