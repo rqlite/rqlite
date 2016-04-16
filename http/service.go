@@ -3,12 +3,15 @@
 package http
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"expvar"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -92,19 +95,25 @@ type Service struct {
 	start      time.Time // Start up time.
 	lastBackup time.Time // Time of last successful backup.
 
+	CertFile string // Path to SSL certificate.
+	KeyFile  string // Path to SSL private key.
+
 	Expvar          bool
 	DisableRedirect bool // Disable leader-redirection.
 	Version         string
 	Commit          string
 	Branch          string
+
+	logger *log.Logger
 }
 
 // New returns an uninitialized HTTP service.
 func New(addr string, store Store) *Service {
 	return &Service{
-		addr:  addr,
-		store: store,
-		start: time.Now(),
+		addr:   addr,
+		store:  store,
+		start:  time.Now(),
+		logger: log.New(os.Stderr, "[http] ", log.LstdFlags),
 	}
 }
 
@@ -114,9 +123,23 @@ func (s *Service) Start() error {
 		Handler: s,
 	}
 
-	ln, err := net.Listen("tcp", s.addr)
-	if err != nil {
-		return err
+	var ln net.Listener
+	var err error
+	if s.CertFile == "" || s.KeyFile == "" {
+		ln, err = net.Listen("tcp", s.addr)
+		if err != nil {
+			return err
+		}
+	} else {
+		config, err := createTLSConfig(s.CertFile, s.KeyFile)
+		if err != nil {
+			return err
+		}
+		ln, err = tls.Listen("tcp", s.addr, config)
+		if err != nil {
+			return err
+		}
+		s.logger.Printf("secure HTTPS server enabled with cert %s, key %s", s.CertFile, s.KeyFile)
 	}
 	s.ln = ln
 
@@ -126,6 +149,7 @@ func (s *Service) Start() error {
 			return
 		}
 	}()
+	s.logger.Println("service listening on", s.addr)
 
 	return nil
 }
@@ -428,6 +452,18 @@ func writeResponse(w http.ResponseWriter, r *http.Request, j *Response) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+// createTLSConfig returns a TLS config from the given cert and key.
+func createTLSConfig(certFile, keyFile string) (*tls.Config, error) {
+	var err error
+	config := &tls.Config{}
+	config.Certificates = make([]tls.Certificate, 1)
+	config.Certificates[0], err = tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return nil, err
+	}
+	return config, nil
 }
 
 // queryParam returns whether the given query param is set to true.

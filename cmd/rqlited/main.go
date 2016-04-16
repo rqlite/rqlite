@@ -37,6 +37,8 @@ var (
 )
 
 var httpAddr string
+var x509Cert string
+var x509Key string
 var raftAddr string
 var joinAddr string
 var expvar bool
@@ -49,7 +51,9 @@ var cpuprofile string
 const desc = `rqlite is a distributed system that provides a replicated SQLite database.`
 
 func init() {
-	flag.StringVar(&httpAddr, "http", "localhost:4001", "HTTP query server bind address")
+	flag.StringVar(&httpAddr, "http", "localhost:4001", "HTTP query server address. Set X.509 cert and key for HTTPS.")
+	flag.StringVar(&x509Cert, "x509cert", "", "Path to X.509 certificate")
+	flag.StringVar(&x509Key, "x509key", "", "Path to X.509 private key for certificate")
 	flag.StringVar(&raftAddr, "raft", "localhost:4002", "Raft communication bind address")
 	flag.StringVar(&joinAddr, "join", "", "protocol://host:port of leader to join")
 	flag.BoolVar(&expvar, "expvar", true, "Serve expvar data on HTTP server")
@@ -133,6 +137,8 @@ func main() {
 
 	// Create the HTTP query server.
 	s := httpd.New(httpAddr, store)
+	s.CertFile = x509Cert
+	s.KeyFile = x509Key
 	s.DisableRedirect = disRedirect
 	s.Expvar = expvar
 	s.Version = version
