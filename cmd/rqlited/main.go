@@ -51,7 +51,7 @@ const desc = `rqlite is a distributed system that provides a replicated SQLite d
 func init() {
 	flag.StringVar(&httpAddr, "http", "localhost:4001", "HTTP query server bind address")
 	flag.StringVar(&raftAddr, "raft", "localhost:4002", "Raft communication bind address")
-	flag.StringVar(&joinAddr, "join", "", "host:port of leader to join")
+	flag.StringVar(&joinAddr, "join", "", "protocol://host:port of leader to join")
 	flag.BoolVar(&expvar, "expvar", true, "Serve expvar data on HTTP server")
 	flag.StringVar(&dsn, "dsn", "", `SQLite DSN parameters. E.g. "cache=shared&mode=memory"`)
 	flag.BoolVar(&inMem, "mem", false, "Use an in-memory database")
