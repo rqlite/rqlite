@@ -19,14 +19,16 @@ import (
 // Store is the interface the Raft-driven database must implement.
 type Store interface {
 	// Execute executes a slice of queries, each of which doesn't
-	// return rows. It tx is true, then all queries will be executed
+	// return rows. If timings is true, then timing information will
+	// be return It tx is true, then all queries will be executed
 	// successfully or none will be.
 	Execute(queries []string, timings, tx bool) ([]*sql.Result, error)
 
-	// Query executes a slice of queries, each of which returns rows.
-	// If tx is true, then the query will take place while a read
-	// transaction is held on the database.
-	Query(queries []string, timgins, tx bool, lvl store.ConsistencyLevel) ([]*sql.Rows, error)
+	// Query executes a slice of queries, each of which returns rows. If
+	// timings is true, then timing information will be returned. If tx
+	// is true, then all queries will take place while a read transaction
+	// is held on the database.
+	Query(queries []string, timings, tx bool, lvl store.ConsistencyLevel) ([]*sql.Rows, error)
 
 	// Join joins the node, reachable at addr, to this node.
 	Join(addr string) error
@@ -37,7 +39,7 @@ type Store interface {
 	// Stats returns stats on the Store.
 	Stats() (map[string]interface{}, error)
 
-	// Backup returns the byte stream of the backup file.
+	// Backup returns a byte slice representing a backup of the database file.
 	Backup(leader bool) ([]byte, error)
 }
 
