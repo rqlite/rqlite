@@ -5,6 +5,10 @@ import (
 	"io"
 )
 
+type BasicAuther interface {
+	BasicAuth() (string, string, bool)
+}
+
 type Credential struct {
 	Username string `json:"username,omitempty"`
 	Password string `json:"password,omitempty"`
@@ -49,4 +53,12 @@ func (c *CredentialsStore) Load(r io.Reader) error {
 func (c *CredentialsStore) Check(username, password string) bool {
 	pw, ok := c.store[username]
 	return ok && password == pw
+}
+
+func (c *CredentialsStore) CheckRequest(b BasicAuther) bool {
+	username, password, ok := b.BasicAuth()
+	if !ok || !c.Check(username, password) {
+		return false
+	}
+	return true
 }
