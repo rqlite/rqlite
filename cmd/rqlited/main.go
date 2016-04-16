@@ -11,6 +11,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -41,6 +42,7 @@ var x509Cert string
 var x509Key string
 var raftAddr string
 var joinAddr string
+var noVerify bool
 var expvar bool
 var dsn string
 var inMem bool
@@ -56,6 +58,7 @@ func init() {
 	flag.StringVar(&x509Key, "x509key", "", "Path to X.509 private key for certificate")
 	flag.StringVar(&raftAddr, "raft", "localhost:4002", "Raft communication bind address")
 	flag.StringVar(&joinAddr, "join", "", "protocol://host:port of leader to join")
+	flag.BoolVar(&noVerify, "noverify", false, "Skip verification of any HTTPS cert when joining")
 	flag.BoolVar(&expvar, "expvar", true, "Serve expvar data on HTTP server")
 	flag.StringVar(&dsn, "dsn", "", `SQLite DSN parameters. E.g. "cache=shared&mode=memory"`)
 	flag.BoolVar(&inMem, "mem", false, "Use an in-memory database")
@@ -130,9 +133,10 @@ func main() {
 
 	// If join was specified, make the join request.
 	if joinAddr != "" {
-		if err := join(joinAddr, raftAddr); err != nil {
+		if err := join(joinAddr, noVerify, raftAddr); err != nil {
 			log.Fatalf("failed to join node at %s: %s", joinAddr, err.Error())
 		}
+		log.Println("successfully joined node at", joinAddr)
 	}
 
 	// Create the HTTP query server.
@@ -158,7 +162,7 @@ func main() {
 	log.Println("rqlite server stopped")
 }
 
-func join(joinAddr, raftAddr string) error {
+func join(joinAddr string, skipVerify bool, raftAddr string) error {
 	b, err := json.Marshal(map[string]string{"addr": raftAddr})
 	if err != nil {
 		return err
@@ -170,7 +174,14 @@ func join(joinAddr, raftAddr string) error {
 		fullAddr = fmt.Sprintf("http://%s", joinAddr)
 	}
 
-	resp, err := http.Post(fullAddr, "application-type/json", bytes.NewReader(b))
+	// Enable skipVerify as requested.
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: skipVerify},
+	}
+	client := &http.Client{Transport: tr}
+
+	// Attempt to join.
+	resp, err := client.Post(fullAddr, "application-type/json", bytes.NewReader(b))
 	if err != nil {
 		return err
 	}
