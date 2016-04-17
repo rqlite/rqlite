@@ -6,7 +6,7 @@ import (
 )
 
 type testBasicAuther struct {
-	ok bool
+	ok       bool
 	username string
 	password string
 }
@@ -95,12 +95,12 @@ func Test_AuthLoadSingleRequest(t *testing.T) {
 	b1 := &testBasicAuther{
 		username: "username1",
 		password: "password1",
-		ok: true,
+		ok:       true,
 	}
 	b2 := &testBasicAuther{
 		username: "username1",
 		password: "wrong",
-		ok: true,
+		ok:       true,
 	}
 	b3 := &testBasicAuther{}
 

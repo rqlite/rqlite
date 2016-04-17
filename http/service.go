@@ -98,6 +98,9 @@ type Service struct {
 	CertFile string // Path to SSL certificate.
 	KeyFile  string // Path to SSL private key.
 
+	BasicAuthFile   string // Path to basic auth credentials
+	credentialStore *CredentialsStore
+
 	Expvar          bool
 	DisableRedirect bool // Disable leader-redirection.
 	Version         string
@@ -121,6 +124,18 @@ func New(addr string, store Store) *Service {
 func (s *Service) Start() error {
 	server := http.Server{
 		Handler: s,
+	}
+
+	// Enable basic auth if requested.
+	if s.BasicAuthFile != "" {
+		f, err := os.Open(s.BasicAuthFile)
+		if err != nil {
+			return err
+		}
+		s.credentialStore = NewCredentialsStore()
+		if err := s.credentialStore.Load(f); err != nil {
+			return err
+		}
 	}
 
 	var ln net.Listener
@@ -162,6 +177,12 @@ func (s *Service) Close() {
 
 // ServeHTTP allows Service to serve HTTP requests.
 func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if s.credentialStore != nil {
+		if ok := s.credentialStore.CheckRequest(r); !ok {
+			w.WriteHeader(http.StatusUnauthorized)
+		}
+	}
+
 	switch {
 	case strings.HasPrefix(r.URL.Path, "/db/execute"):
 		stats.Add(numExecutions, 1)
