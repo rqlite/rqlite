@@ -5,7 +5,7 @@ import (
 	"io"
 )
 
-// BasciAuther is the interface a system must support to return basic auth information.
+// BasicAuther is the interface an object must support to return basic auth information.
 type BasicAuther interface {
 	BasicAuth() (string, string, bool)
 }
@@ -31,7 +31,7 @@ func NewCredentialsStore() *CredentialsStore {
 	}
 }
 
-// Load loods credentials information from a reader.
+// Load loads credential information from a reader.
 func (c *CredentialsStore) Load(r io.Reader) error {
 	dec := json.NewDecoder(r)
 	// Read open bracket
