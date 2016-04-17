@@ -190,7 +190,7 @@ func Test_AuthPermsRequestLoadSingle(t *testing.T) {
 	if perm := store.HasPermRequest(b1, "foo"); !perm {
 		t.Fatalf("username1 does not has perm foo via request")
 	}
-	b2:= &testBasicAuther{
+	b2 := &testBasicAuther{
 		username: "username2",
 		password: "password1",
 		ok:       true,
