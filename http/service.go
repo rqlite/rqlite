@@ -105,7 +105,7 @@ type Service struct {
 	CertFile string // Path to SSL certificate.
 	KeyFile  string // Path to SSL private key.
 
-	AuthFile   string // Path to basic auth credentials
+	AuthFile        string // Path to basic auth credentials
 	credentialStore *CredentialsStore
 
 	Expvar          bool
