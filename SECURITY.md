@@ -33,12 +33,12 @@ An example configuration file is shown below.
 [
   {
     "username": "bob",
-    "password": "a_big_secret",
+    "password": "secret1",
     "perms": ["all"]
   },
   {
     "username": "mary",
-    "password": "another_big_secret",
+    "password": "secret2",
     "perms": ["query"]
   }
 ]
@@ -46,3 +46,20 @@ An example configuration file is shown below.
 This configuration file sets authentication for two usernames, _bob_ and _mary_, and it sets a password for each. No other users will be able to access the cluster.
 
 This configuration also sets permissions for both users. _bob_ has permission to perform all operations, and _mary_ can only query the cluster.
+
+## Secure cluster example
+Starting a node with HTTPS enabled and with the above configuration file.
+```bash
+rqlited -auth config.json -x509cert server.crt -x509key key.pem ~/node.1
+```
+Bringing up a second node, joining it to the first node.
+```bash
+rqlited -auth config.json -http localhost:4003 -x509cert server.crt \
+-x509key key.pem -raft :4004 -join http://bob:secret1@localhost:4001 \
+~/node.2
+```
+Querying the node, as user _mary_.
+```bash
+curl -G 'https://mary:secret2@localhost:4001/db/query?pretty&timings' \
+--data-urlencode 'q=SELECT * FROM foo'
+```
