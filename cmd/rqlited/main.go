@@ -30,6 +30,17 @@ import (
 
 const sqliteDSN = "db.sqlite"
 
+const logo = `
+            _ _ _           _
+           | (_) |         | |
+  _ __ __ _| |_| |_ ___  __| |
+ | '__/ _  | | | __/ _ \/ _  |
+ | | | (_| | | | ||  __/ (_| |
+ |_|  \__, |_|_|\__\___|\__,_|
+         | |
+         |_|
+`
+
 // These variables are populated via the Go linker.
 var (
 	version = "2"
@@ -98,6 +109,9 @@ func main() {
 
 	dataPath := flag.Arg(0)
 
+	// Display logo.
+	fmt.Println(logo)
+
 	// Configure logging and pump out initial message.
 	log.SetFlags(log.LstdFlags)
 	log.SetPrefix("[rqlited] ")
@@ -114,7 +128,7 @@ func main() {
 
 		err = pprof.StartCPUProfile(f)
 		if err != nil {
-			log.Printf("unable to start CPU Profile: %s", err.Error())
+			log.Fatalf("unable to start CPU Profile: %s", err.Error())
 		}
 
 		defer pprof.StopCPUProfile()
