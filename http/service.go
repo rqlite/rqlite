@@ -46,6 +46,12 @@ type Store interface {
 	Backup(leader bool) ([]byte, error)
 }
 
+type CredentialStore interface {
+	Check(username, password string) bool
+
+	HasPerm(username string, perm string) bool
+}
+
 // Response represents a response from the HTTP service.
 type Response struct {
 	Results interface{} `json:"results,omitempty"`
@@ -105,8 +111,7 @@ type Service struct {
 	CertFile string // Path to SSL certificate.
 	KeyFile  string // Path to SSL private key.
 
-	AuthFile        string // Path to basic auth credentials
-	credentialStore *CredentialsStore
+	credentialStore CredentialStore
 
 	Expvar          bool
 	DisableRedirect bool // Disable leader-redirection.
@@ -118,12 +123,13 @@ type Service struct {
 }
 
 // New returns an uninitialized HTTP service.
-func New(addr string, store Store) *Service {
+func New(addr string, store Store, credentials CredentialStore) *Service {
 	return &Service{
-		addr:   addr,
-		store:  store,
-		start:  time.Now(),
-		logger: log.New(os.Stderr, "[http] ", log.LstdFlags),
+		addr:            addr,
+		store:           store,
+		start:           time.Now(),
+		credentialStore: credentials,
+		logger:          log.New(os.Stderr, "[http] ", log.LstdFlags),
 	}
 }
 
@@ -131,19 +137,6 @@ func New(addr string, store Store) *Service {
 func (s *Service) Start() error {
 	server := http.Server{
 		Handler: s,
-	}
-
-	// Enable auth if requested.
-	if s.AuthFile != "" {
-		f, err := os.Open(s.AuthFile)
-		if err != nil {
-			return err
-		}
-		s.credentialStore = NewCredentialsStore()
-		if err := s.credentialStore.Load(f); err != nil {
-			return err
-		}
-		s.logger.Println("authentication configuration loaded from", s.AuthFile)
 	}
 
 	var ln net.Listener
@@ -186,7 +179,8 @@ func (s *Service) Close() {
 // ServeHTTP allows Service to serve HTTP requests.
 func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if s.credentialStore != nil {
-		if ok := s.credentialStore.CheckRequest(r); !ok {
+		username, password, ok := r.BasicAuth()
+		if !ok || !s.credentialStore.Check(username, password) {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
@@ -476,7 +470,11 @@ func (s *Service) CheckRequestPerm(r *http.Request, perm string) bool {
 		return true
 	}
 
-	return s.credentialStore.HasPermRequest(r, PermAll) || s.credentialStore.HasPermRequest(r, perm)
+	username, _, ok := r.BasicAuth()
+	if !ok {
+		return false
+	}
+	return s.credentialStore.HasPerm(username, PermAll) || s.credentialStore.HasPerm(username, perm)
 }
 
 // serveExpvar serves registered expvar information over HTTP.
