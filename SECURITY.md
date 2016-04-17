@@ -51,14 +51,14 @@ This configuration file sets authentication for two usernames, _bob_ and _mary_,
 This configuration also sets permissions for both users. _bob_ has permission to perform all operations, and _mary_ can only query the cluster.
 
 ## Secure cluster example
-Starting a node with HTTPS enabled and with the above configuration file.
+Starting a node with HTTPS enabled and with the above configuration file. It is assumed the X.509 certificate and key are at the paths `server.crt` and `key.pem` respectively.
 ```bash
 rqlited -auth config.json -x509cert server.crt -x509key key.pem ~/node.1
 ```
 Bringing up a second node, joining it to the first node.
 ```bash
 rqlited -auth config.json -http localhost:4003 -x509cert server.crt \
--x509key key.pem -raft :4004 -join http://bob:secret1@localhost:4001 \
+-x509key key.pem -raft :4004 -join https://bob:secret1@localhost:4001 \
 ~/node.2
 ```
 Querying the node, as user _mary_.
