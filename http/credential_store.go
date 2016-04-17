@@ -14,7 +14,7 @@ type BasicAuther interface {
 type Credential struct {
 	Username string   `json:"username,omitempty"`
 	Password string   `json:"password,omitempty"`
-	Perms    []string `json:"perms",omitempty"`
+	Perms    []string `json:"perms,omitempty"`
 }
 
 // CredentialStore stores authentication and authorization information for all users.
