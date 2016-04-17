@@ -188,6 +188,7 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if s.credentialStore != nil {
 		if ok := s.credentialStore.CheckRequest(r); !ok {
 			w.WriteHeader(http.StatusUnauthorized)
+			return
 		}
 	}
 
