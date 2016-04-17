@@ -17,10 +17,17 @@ import (
 
 // Node represents a node under test.
 type Node struct {
-	Addr    string
 	Dir     string
 	Store   *store.Store
 	Service *httpd.Service
+}
+
+func (n *Node) APIAddr() string {
+	return n.Service.Addr().String()
+}
+
+func (n *Node) RaftAddr() string {
+	return n.Store.Addr().String()
 }
 
 // Deprovisions removes all resources associated with the node.
@@ -52,7 +59,7 @@ func (n *Node) ExecuteMulti(stmts []string) (string, error) {
 
 // Query runs a single query against the node.
 func (n *Node) Query(stmt string) (string, error) {
-	v, _ := url.Parse("http://" + n.Addr + "/db/query")
+	v, _ := url.Parse("http://" + n.APIAddr() + "/db/query")
 	v.RawQuery = url.Values{"q": []string{stmt}}.Encode()
 
 	resp, err := http.Get(v.String())
@@ -68,7 +75,7 @@ func (n *Node) Query(stmt string) (string, error) {
 }
 
 func (n *Node) postExecute(stmt string) (string, error) {
-	resp, err := http.Post("http://"+n.Addr+"/db/execute", "application/json", strings.NewReader(stmt))
+	resp, err := http.Post("http://"+n.APIAddr()+"/db/execute", "application/json", strings.NewReader(stmt))
 	if err != nil {
 		return "", err
 	}
@@ -97,7 +104,6 @@ func mustNewNode(joinAddr string) *Node {
 		node.Deprovision()
 		panic(fmt.Sprintf("failed to start HTTP server: %s", err.Error()))
 	}
-	node.Addr = node.Service.Addr().String()
 
 	return node
 }
