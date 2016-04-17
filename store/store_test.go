@@ -180,7 +180,7 @@ func mustNewStore() *Store {
 	path := mustTempDir()
 	defer os.RemoveAll(path)
 
-	s := New(newInMemoryConfig(), path, ":0")
+	s := New(newInMemoryConfig(), path, "localhost:0")
 	if s == nil {
 		panic("failed to create new store")
 	}
