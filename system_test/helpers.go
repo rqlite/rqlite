@@ -1,6 +1,7 @@
 package system
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -74,6 +75,25 @@ func (n *Node) Query(stmt string) (string, error) {
 	return string(body), nil
 }
 
+// Join instructs this node to join the leader.
+func (n *Node) Join(leader *Node) error {
+	b, err := json.Marshal(map[string]string{"addr": n.RaftAddr()})
+	if err != nil {
+		return err
+	}
+
+	// Attempt to join leader
+	resp, err := http.Post("http://"+leader.APIAddr()+"/join", "application-type/json", bytes.NewReader(b))
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("failed to join, leader returned: %s", resp.Status)
+	}
+	defer resp.Body.Close()
+	return nil
+}
+
 func (n *Node) postExecute(stmt string) (string, error) {
 	resp, err := http.Post("http://"+n.APIAddr()+"/db/execute", "application/json", strings.NewReader(stmt))
 	if err != nil {
@@ -87,14 +107,14 @@ func (n *Node) postExecute(stmt string) (string, error) {
 	return string(body), nil
 }
 
-func mustNewNode(joinAddr string) *Node {
+func mustNewNode(enableSingle bool) *Node {
 	node := &Node{
 		Dir: mustTempDir(),
 	}
 
 	dbConf := sql.NewConfig()
 	node.Store = store.New(dbConf, node.Dir, "localhost:0")
-	if err := node.Store.Open(joinAddr == ""); err != nil {
+	if err := node.Store.Open(enableSingle); err != nil {
 		node.Deprovision()
 		panic(fmt.Sprintf("failed to open store: %s", err.Error()))
 	}
@@ -109,7 +129,7 @@ func mustNewNode(joinAddr string) *Node {
 }
 
 func mustNewLeaderNode() *Node {
-	node := mustNewNode("")
+	node := mustNewNode(true)
 	if err := node.WaitForLeader(); err != nil {
 		node.Deprovision()
 		panic("node never became leader")
