@@ -112,10 +112,6 @@ func Test_SingleNodeExecuteQueryTx(t *testing.T) {
 }
 
 func Test_MultiNodeExecuteQuery(t *testing.T) {
-	if os.Getenv("CIRCLECI") != "" {
-		t.Skip("non functional on CircleCI")
-	}
-
 	s0 := mustNewStore()
 	defer os.RemoveAll(s0.Path())
 	if err := s0.Open(true); err != nil {
