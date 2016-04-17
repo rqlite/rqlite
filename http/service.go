@@ -306,6 +306,7 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 
 	httpStatus := map[string]interface{}{
 		"addr": s.Addr().String(),
+		"auth": prettyEnabled(s.credentialStore == nil),
 	}
 
 	nodeStatus := map[string]interface{}{
@@ -585,4 +586,11 @@ func level(req *http.Request) (store.ConsistencyLevel, error) {
 	default:
 		return store.Weak, nil
 	}
+}
+
+func prettyEnabled(e bool) string {
+	if e {
+		return "enabled"
+	}
+	return "disabled"
 }
