@@ -105,7 +105,7 @@ type Service struct {
 	CertFile string // Path to SSL certificate.
 	KeyFile  string // Path to SSL private key.
 
-	BasicAuthFile   string // Path to basic auth credentials
+	AuthFile   string // Path to basic auth credentials
 	credentialStore *CredentialsStore
 
 	Expvar          bool
@@ -133,9 +133,9 @@ func (s *Service) Start() error {
 		Handler: s,
 	}
 
-	// Enable basic auth if requested.
-	if s.BasicAuthFile != "" {
-		f, err := os.Open(s.BasicAuthFile)
+	// Enable auth if requested.
+	if s.AuthFile != "" {
+		f, err := os.Open(s.AuthFile)
 		if err != nil {
 			return err
 		}
@@ -143,6 +143,7 @@ func (s *Service) Start() error {
 		if err := s.credentialStore.Load(f); err != nil {
 			return err
 		}
+		s.logger.Println("authentication configuration loaded from", s.AuthFile)
 	}
 
 	var ln net.Listener
