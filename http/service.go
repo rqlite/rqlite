@@ -63,6 +63,13 @@ const (
 	numExecutions = "executions"
 	numQueries    = "queries"
 	numBackups    = "backups"
+
+	PermAll     = "all"
+	PermJoin    = "join"
+	PermExecute = "execute"
+	PermQuery   = "query"
+	PermStatus  = "status"
+	PermBackup  = "backup"
 )
 
 func init() {
@@ -98,6 +105,9 @@ type Service struct {
 	CertFile string // Path to SSL certificate.
 	KeyFile  string // Path to SSL private key.
 
+	AuthFile        string // Path to basic auth credentials
+	credentialStore *CredentialsStore
+
 	Expvar          bool
 	DisableRedirect bool // Disable leader-redirection.
 	Version         string
@@ -121,6 +131,19 @@ func New(addr string, store Store) *Service {
 func (s *Service) Start() error {
 	server := http.Server{
 		Handler: s,
+	}
+
+	// Enable auth if requested.
+	if s.AuthFile != "" {
+		f, err := os.Open(s.AuthFile)
+		if err != nil {
+			return err
+		}
+		s.credentialStore = NewCredentialsStore()
+		if err := s.credentialStore.Load(f); err != nil {
+			return err
+		}
+		s.logger.Println("authentication configuration loaded from", s.AuthFile)
 	}
 
 	var ln net.Listener
@@ -162,6 +185,13 @@ func (s *Service) Close() {
 
 // ServeHTTP allows Service to serve HTTP requests.
 func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if s.credentialStore != nil {
+		if ok := s.credentialStore.CheckRequest(r); !ok {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+	}
+
 	switch {
 	case strings.HasPrefix(r.URL.Path, "/db/execute"):
 		stats.Add(numExecutions, 1)
@@ -185,6 +215,11 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // handleJoin handles cluster-join requests from other nodes.
 func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
+	if !s.CheckRequestPerm(r, PermJoin) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
 	b, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -215,6 +250,11 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 
 // handleBackup returns the consistent database snapshot.
 func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
+	if !s.CheckRequestPerm(r, PermBackup) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
 	if r.Method != "GET" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
@@ -242,6 +282,11 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
 
 // handleStatus returns status on the system.
 func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
+	if !s.CheckRequestPerm(r, PermStatus) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
 	if r.Method != "GET" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
@@ -261,6 +306,7 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 
 	httpStatus := map[string]interface{}{
 		"addr": s.Addr().String(),
+		"auth": prettyEnabled(s.credentialStore != nil),
 	}
 
 	nodeStatus := map[string]interface{}{
@@ -298,6 +344,11 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 
 // handleExecute handles queries that modify the database.
 func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
+	if !s.CheckRequestPerm(r, PermExecute) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
 	if r.Method != "POST" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
@@ -346,6 +397,11 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 
 // handleQuery handles queries that do not modify the database.
 func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
+	if !s.CheckRequestPerm(r, PermQuery) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
 	if r.Method != "GET" && r.Method != "POST" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
@@ -411,6 +467,16 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 // Addr returns the address on which the Service is listening
 func (s *Service) Addr() net.Addr {
 	return s.ln.Addr()
+}
+
+// CheckRequestPerm returns true if authentication is enabled and the user contained
+// in the BasicAuth request has either PermAll, or the given perm.
+func (s *Service) CheckRequestPerm(r *http.Request, perm string) bool {
+	if s.credentialStore == nil {
+		return true
+	}
+
+	return s.credentialStore.HasPermRequest(r, PermAll) || s.credentialStore.HasPermRequest(r, perm)
 }
 
 // serveExpvar serves registered expvar information over HTTP.
@@ -520,4 +586,11 @@ func level(req *http.Request) (store.ConsistencyLevel, error) {
 	default:
 		return store.Weak, nil
 	}
+}
+
+func prettyEnabled(e bool) string {
+	if e {
+		return "enabled"
+	}
+	return "disabled"
 }

@@ -38,6 +38,7 @@ var (
 )
 
 var httpAddr string
+var authFile string
 var x509Cert string
 var x509Key string
 var raftAddr string
@@ -56,6 +57,7 @@ func init() {
 	flag.StringVar(&httpAddr, "http", "localhost:4001", "HTTP query server address. Set X.509 cert and key for HTTPS.")
 	flag.StringVar(&x509Cert, "x509cert", "", "Path to X.509 certificate")
 	flag.StringVar(&x509Key, "x509key", "", "Path to X.509 private key for certificate")
+	flag.StringVar(&authFile, "auth", "", "Path to authentication and authorization file. If not set, not enabled.")
 	flag.StringVar(&raftAddr, "raft", "localhost:4002", "Raft communication bind address")
 	flag.StringVar(&joinAddr, "join", "", "protocol://host:port of leader to join")
 	flag.BoolVar(&noVerify, "noverify", false, "Skip verification of any HTTPS cert when joining")
@@ -143,6 +145,7 @@ func main() {
 	s := httpd.New(httpAddr, store)
 	s.CertFile = x509Cert
 	s.KeyFile = x509Key
+	s.AuthFile = authFile
 	s.DisableRedirect = disRedirect
 	s.Expvar = expvar
 	s.Version = version
@@ -184,6 +187,9 @@ func join(joinAddr string, skipVerify bool, raftAddr string) error {
 	resp, err := client.Post(fullAddr, "application-type/json", bytes.NewReader(b))
 	if err != nil {
 		return err
+	}
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("failed to join, node returned: %s", resp.Status)
 	}
 	defer resp.Body.Close()
 

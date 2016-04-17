@@ -1,5 +1,7 @@
 ## 2.2 (unreleased)
 - [PR #84](https://github.com/otoolep/rqlite/pull/84): Encrypted API (HTTPS) now supported.
+- [PR #85](https://github.com/otoolep/rqlite/pull/85): BasicAuth support.
+- [PR #85](https://github.com/otoolep/rqlite/pull/85): User-level permissions support.
 
 ## 2.1 (April 9th 2016)
 - [PR #76](https://github.com/otoolep/rqlite/pull/76): Obey timing information display at database level.
