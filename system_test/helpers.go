@@ -15,6 +15,7 @@ import (
 	"github.com/otoolep/rqlite/store"
 )
 
+// Node represents a node under test.
 type Node struct {
 	Addr    string
 	Dir     string
@@ -22,17 +23,20 @@ type Node struct {
 	Service *httpd.Service
 }
 
+// Deprovisions removes all resources associated with the node.
 func (n *Node) Deprovision() {
 	n.Store.Close()
 	n.Service.Close()
 	os.RemoveAll(n.Dir)
 }
 
+// WaitForLeader blocks for up to 10 seconds until the node detects a leader.
 func (n *Node) WaitForLeader() error {
 	_, err := n.Store.WaitForLeader(10 * time.Second)
 	return err
 }
 
+// Execute executes a single statement against the node.
 func (n *Node) Execute(stmt string) (string, error) {
 	j, err := json.Marshal([]string{stmt})
 	if err != nil {
@@ -52,6 +56,7 @@ func (n *Node) Execute(stmt string) (string, error) {
 	return string(body), nil
 }
 
+// Query runs a single query against the node.
 func (n *Node) Query(stmt string) (string, error) {
 	v, _ := url.Parse("http://" + n.Addr + "/db/query")
 	v.RawQuery = url.Values{"q": []string{stmt}}.Encode()
