@@ -2,7 +2,7 @@
 rqlite can be secured in various way, and at different levels of control.
 
 ## File system security
-You are responsible for securing access to the SQLite databases. There is no reason for any user to directly access the file, for rqlite to work correctly.
+You are responsible for securing access to the SQLite databases. There is no reason for any user to directly access the SQLite file, for rqlite to work correctly.
 
 ## Network security
 Each rqlite node listens on 2 TCP ports -- one for the HTTP API, and the other for intra-cluster communications. Only the API port need be reachable from outside the cluster.
