@@ -5,21 +5,25 @@ import (
 	"io"
 )
 
+// BasciAuther is the interface a system must support to return basic auth information.
 type BasicAuther interface {
 	BasicAuth() (string, string, bool)
 }
 
+// Credential represents authentication and authorization configuration for a single user.
 type Credential struct {
 	Username string   `json:"username,omitempty"`
 	Password string   `json:"password,omitempty"`
 	Perms    []string `json:"perms",omitempty"`
 }
 
+// CredentialStore stores authentication and authorization information for all users.
 type CredentialsStore struct {
 	store map[string]string
 	perms map[string]map[string]bool
 }
 
+// NewCredentialsStore returns a new instance of a CredentialStore.
 func NewCredentialsStore() *CredentialsStore {
 	return &CredentialsStore{
 		store: make(map[string]string),
@@ -27,6 +31,7 @@ func NewCredentialsStore() *CredentialsStore {
 	}
 }
 
+// Load loods credentials information from a reader.
 func (c *CredentialsStore) Load(r io.Reader) error {
 	dec := json.NewDecoder(r)
 	// Read open bracket
@@ -57,11 +62,13 @@ func (c *CredentialsStore) Load(r io.Reader) error {
 	return nil
 }
 
+// Check returns true if the password is correct for the given username.
 func (c *CredentialsStore) Check(username, password string) bool {
 	pw, ok := c.store[username]
 	return ok && password == pw
 }
 
+// CheckRequest returns true if b contains a valid username and password.
 func (c *CredentialsStore) CheckRequest(b BasicAuther) bool {
 	username, password, ok := b.BasicAuth()
 	if !ok || !c.Check(username, password) {
@@ -70,6 +77,8 @@ func (c *CredentialsStore) CheckRequest(b BasicAuther) bool {
 	return true
 }
 
+// HasPerm returns true if username has the given perm. It does not
+// perform any password checking.
 func (c *CredentialsStore) HasPerm(username string, perm string) bool {
 	m, ok := c.perms[username]
 	if !ok {
