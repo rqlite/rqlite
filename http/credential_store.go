@@ -90,3 +90,13 @@ func (c *CredentialsStore) HasPerm(username string, perm string) bool {
 	}
 	return true
 }
+
+// HasPermRequest returns true if username returned by b has the givem perm.
+// It does not perform any password checking.
+func (c *CredentialsStore) HasPermRequest(b BasicAuther, perm string) bool {
+	username, _, ok := b.BasicAuth()
+	if !ok {
+		return false
+	}
+	return c.HasPerm(username, perm)
+}

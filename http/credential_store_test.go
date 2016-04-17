@@ -162,6 +162,45 @@ func Test_AuthPermsLoadSingle(t *testing.T) {
 	}
 }
 
+func Test_AuthPermsRequestLoadSingle(t *testing.T) {
+	const jsonStream = `
+		[
+			{
+				"username": "username1",
+				"password": "password1",
+				"perms": ["foo", "bar"]
+			}
+		]
+	`
+
+	store := NewCredentialsStore()
+	if err := store.Load(strings.NewReader(jsonStream)); err != nil {
+		t.Fatalf("failed to load single credential: %s", err.Error())
+	}
+
+	if check := store.Check("username1", "password1"); !check {
+		t.Fatalf("single credential not loaded correctly")
+	}
+
+	b1 := &testBasicAuther{
+		username: "username1",
+		password: "password1",
+		ok:       true,
+	}
+	if perm := store.HasPermRequest(b1, "foo"); !perm {
+		t.Fatalf("username1 does not has perm foo via request")
+	}
+	b2:= &testBasicAuther{
+		username: "username2",
+		password: "password1",
+		ok:       true,
+	}
+	if perm := store.HasPermRequest(b2, "foo"); perm {
+		t.Fatalf("username1 does have perm foo via request")
+	}
+
+}
+
 func Test_AuthPermsEmptyLoadSingle(t *testing.T) {
 	const jsonStream = `
 		[
