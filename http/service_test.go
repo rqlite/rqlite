@@ -11,7 +11,7 @@ import (
 
 func Test_NewService(t *testing.T) {
 	m := &MockStore{}
-	s := New("127.0.0.1:0", m)
+	s := New("127.0.0.1:0", m, nil)
 	if s == nil {
 		t.Fatalf("failed to create new service")
 	}
@@ -19,7 +19,7 @@ func Test_NewService(t *testing.T) {
 
 func Test_404Routes(t *testing.T) {
 	m := &MockStore{}
-	s := New("127.0.0.1:0", m)
+	s := New("127.0.0.1:0", m, nil)
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
@@ -47,7 +47,7 @@ func Test_404Routes(t *testing.T) {
 
 func Test_405Routes(t *testing.T) {
 	m := &MockStore{}
-	s := New("127.0.0.1:0", m)
+	s := New("127.0.0.1:0", m, nil)
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}

@@ -23,6 +23,7 @@ import (
 	"runtime/pprof"
 	"strings"
 
+	"github.com/otoolep/rqlite/auth"
 	sql "github.com/otoolep/rqlite/db"
 	httpd "github.com/otoolep/rqlite/http"
 	"github.com/otoolep/rqlite/store"
@@ -155,11 +156,23 @@ func main() {
 		log.Println("successfully joined node at", joinAddr)
 	}
 
+	// Load authentication information, if supplied.
+	var credentialStore *auth.CredentialsStore
+	if authFile != "" {
+		f, err := os.Open(authFile)
+		if err != nil {
+			log.Fatalf("failed to open authentication file %s: %s", authFile, err.Error())
+		}
+		credentialStore = auth.NewCredentialsStore()
+		if err := credentialStore.Load(f); err != nil {
+			log.Fatalf("failed to load authentication file: %s", err.Error())
+		}
+	}
+
 	// Create the HTTP query server.
-	s := httpd.New(httpAddr, store)
+	s := httpd.New(httpAddr, store, credentialStore)
 	s.CertFile = x509Cert
 	s.KeyFile = x509Key
-	s.AuthFile = authFile
 	s.DisableRedirect = disRedirect
 	s.Expvar = expvar
 	s.Version = version

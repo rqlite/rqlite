@@ -1,4 +1,4 @@
-package http
+package auth
 
 import (
 	"strings"
