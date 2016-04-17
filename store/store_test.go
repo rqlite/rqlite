@@ -112,10 +112,6 @@ func Test_SingleNodeExecuteQueryTx(t *testing.T) {
 }
 
 func Test_MultiNodeExecuteQuery(t *testing.T) {
-	if os.Getenv("CIRCLECI") != "" {
-		t.Skip("non functional on CircleCI")
-	}
-
 	s0 := mustNewStore()
 	defer os.RemoveAll(s0.Path())
 	if err := s0.Open(true); err != nil {
@@ -184,7 +180,7 @@ func mustNewStore() *Store {
 	path := mustTempDir()
 	defer os.RemoveAll(path)
 
-	s := New(newInMemoryConfig(), path, ":0")
+	s := New(newInMemoryConfig(), path, "localhost:0")
 	if s == nil {
 		panic("failed to create new store")
 	}
