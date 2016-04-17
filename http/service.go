@@ -46,9 +46,12 @@ type Store interface {
 	Backup(leader bool) ([]byte, error)
 }
 
+// CredentialStore is the interface credential stores must support.
 type CredentialStore interface {
+	// Check returns whether username and password are a valid combination.
 	Check(username, password string) bool
 
+	// HasPerm returns whether username has the given perm.
 	HasPerm(username string, perm string) bool
 }
 
