@@ -125,7 +125,8 @@ type Service struct {
 	logger *log.Logger
 }
 
-// New returns an uninitialized HTTP service.
+// New returns an uninitialized HTTP service. If credentials is nil, then
+// the service performs no authentication and authorization checks.
 func New(addr string, store Store, credentials CredentialStore) *Service {
 	return &Service{
 		addr:            addr,
