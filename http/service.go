@@ -63,6 +63,13 @@ const (
 	numExecutions = "executions"
 	numQueries    = "queries"
 	numBackups    = "backups"
+
+	PermAll     = "all"
+	PermJoin    = "join"
+	PermExecute = "execute"
+	PermQuery   = "query"
+	PermStatus  = "status"
+	PermBackup  = "backup"
 )
 
 func init() {
@@ -206,6 +213,11 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // handleJoin handles cluster-join requests from other nodes.
 func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
+	if !s.CheckRequestPerm(r, PermJoin) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
 	b, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -236,6 +248,11 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 
 // handleBackup returns the consistent database snapshot.
 func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
+	if !s.CheckRequestPerm(r, PermBackup) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
 	if r.Method != "GET" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
@@ -263,6 +280,11 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
 
 // handleStatus returns status on the system.
 func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
+	if !s.CheckRequestPerm(r, PermStatus) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
 	if r.Method != "GET" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
@@ -319,6 +341,11 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 
 // handleExecute handles queries that modify the database.
 func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
+	if !s.CheckRequestPerm(r, PermExecute) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
 	if r.Method != "POST" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
@@ -367,6 +394,11 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 
 // handleQuery handles queries that do not modify the database.
 func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
+	if !s.CheckRequestPerm(r, PermQuery) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
 	if r.Method != "GET" && r.Method != "POST" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
@@ -432,6 +464,16 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 // Addr returns the address on which the Service is listening
 func (s *Service) Addr() net.Addr {
 	return s.ln.Addr()
+}
+
+// CheckRequestPerm returns true if authentication is enabled and the user contained
+// in the BasicAuth request has either PermAll, or the given perm.
+func (s *Service) CheckRequestPerm(r *http.Request, perm string) bool {
+	if s.credentialStore == nil {
+		return true
+	}
+
+	return s.credentialStore.HasPermRequest(r, PermAll) || s.credentialStore.HasPermRequest(r, perm)
 }
 
 // serveExpvar serves registered expvar information over HTTP.
