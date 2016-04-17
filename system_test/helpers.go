@@ -38,13 +38,24 @@ func (n *Node) WaitForLeader() error {
 
 // Execute executes a single statement against the node.
 func (n *Node) Execute(stmt string) (string, error) {
-	j, err := json.Marshal([]string{stmt})
+	return n.ExecuteMulti([]string{stmt})
+}
+
+// ExecuteMulti executes multiple statements against the node.
+func (n *Node) ExecuteMulti(stmts []string) (string, error) {
+	j, err := json.Marshal(stmts)
 	if err != nil {
 		return "", err
 	}
-	stmt = string(j)
+	return n.postExecute(string(j))
+}
 
-	resp, err := http.Post("http://"+n.Addr+"/db/execute", "application/json", strings.NewReader(stmt))
+// Query runs a single query against the node.
+func (n *Node) Query(stmt string) (string, error) {
+	v, _ := url.Parse("http://" + n.Addr + "/db/query")
+	v.RawQuery = url.Values{"q": []string{stmt}}.Encode()
+
+	resp, err := http.Get(v.String())
 	if err != nil {
 		return "", err
 	}
@@ -56,12 +67,8 @@ func (n *Node) Execute(stmt string) (string, error) {
 	return string(body), nil
 }
 
-// Query runs a single query against the node.
-func (n *Node) Query(stmt string) (string, error) {
-	v, _ := url.Parse("http://" + n.Addr + "/db/query")
-	v.RawQuery = url.Values{"q": []string{stmt}}.Encode()
-
-	resp, err := http.Get(v.String())
+func (n *Node) postExecute(stmt string) (string, error) {
+	resp, err := http.Post("http://"+n.Addr+"/db/execute", "application/json", strings.NewReader(stmt))
 	if err != nil {
 		return "", err
 	}
