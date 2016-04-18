@@ -39,3 +39,19 @@ Follow the steps below to work with a fork:
 ```
 
 Retaining the directory structure `$GOPATH/src/github.com/otoolep` is necessary so that Go imports work correctly.
+
+## Testing
+Be sure to run the unit test suite before opening a pull request. An example test run is shown below.
+```bash
+$ cd $GOPATH/src/github.com/otoolep/rqlite
+$ go test ./...
+?       github.com/otoolep/rqlite       [no test files]
+ok      github.com/otoolep/rqlite/auth  0.001s
+?       github.com/otoolep/rqlite/cmd/rqlite    [no test files]
+?       github.com/otoolep/rqlite/cmd/rqlited   [no test files]
+ok      github.com/otoolep/rqlite/db    0.769s
+ok      github.com/otoolep/rqlite/http  0.006s
+ok      github.com/otoolep/rqlite/store 6.117s
+ok      github.com/otoolep/rqlite/system_test   7.853s
+```
+
