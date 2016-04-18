@@ -25,11 +25,12 @@ type Node struct {
 	Service  *httpd.Service
 }
 
+// SameAs returns true if this node is the same as o node.
 func (n *Node) SameAs(o *Node) bool {
 	return n.RaftAddr == o.RaftAddr
 }
 
-// Deprovisions shuts down and removes all resources associated with the node.
+// Deprovision shuts down and removes all resources associated with the node.
 func (n *Node) Deprovision() {
 	n.Store.Close(false)
 	n.Service.Close()
@@ -116,7 +117,7 @@ func (c Cluster) Leader() (*Node, error) {
 	return c.FindNodeByRaftAddr(l)
 }
 
-// WaitForNewLeader returns the leader of the cluster as long as it's not "old".
+// WaitForNewLeader waits for the leader to change from the node passed in.
 func (c Cluster) WaitForNewLeader(old *Node) (*Node, error) {
 	timer := time.NewTimer(30 * time.Second)
 	defer timer.Stop()
@@ -139,7 +140,7 @@ func (c Cluster) WaitForNewLeader(old *Node) (*Node, error) {
 	}
 }
 
-// RemoveNode removes the given node from the cluster
+// RemoveNode removes the given node from the cluster.
 func (c Cluster) RemoveNode(node *Node) {
 	for i, n := range c {
 		if n.RaftAddr == node.RaftAddr {
@@ -159,6 +160,7 @@ func (c Cluster) FindNodeByRaftAddr(addr string) (*Node, error) {
 	return nil, fmt.Errorf("node not found")
 }
 
+// Deprovision deprovisions every node in the cluster.
 func (c Cluster) Deprovision() {
 	for _, n := range c {
 		n.Deprovision()
