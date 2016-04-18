@@ -1,6 +1,7 @@
 package system
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -15,45 +16,50 @@ import (
 	"github.com/otoolep/rqlite/store"
 )
 
+// Node represents a node under test.
 type Node struct {
-	Addr    string
 	Dir     string
 	Store   *store.Store
 	Service *httpd.Service
 }
 
+func (n *Node) APIAddr() string {
+	return n.Service.Addr().String()
+}
+
+func (n *Node) RaftAddr() string {
+	return n.Store.Addr().String()
+}
+
+// Deprovisions removes all resources associated with the node.
 func (n *Node) Deprovision() {
 	n.Store.Close()
 	n.Service.Close()
 	os.RemoveAll(n.Dir)
 }
 
-func (n *Node) WaitForLeader() error {
-	_, err := n.Store.WaitForLeader(10 * time.Second)
-	return err
+// WaitForLeader blocks for up to 10 seconds until the node detects a leader.
+func (n *Node) WaitForLeader() (string, error) {
+	return n.Store.WaitForLeader(10 * time.Second)
 }
 
+// Execute executes a single statement against the node.
 func (n *Node) Execute(stmt string) (string, error) {
-	j, err := json.Marshal([]string{stmt})
-	if err != nil {
-		return "", err
-	}
-	stmt = string(j)
-
-	resp, err := http.Post("http://"+n.Addr+"/db/execute", "application/json", strings.NewReader(stmt))
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-	return string(body), nil
+	return n.ExecuteMulti([]string{stmt})
 }
 
+// ExecuteMulti executes multiple statements against the node.
+func (n *Node) ExecuteMulti(stmts []string) (string, error) {
+	j, err := json.Marshal(stmts)
+	if err != nil {
+		return "", err
+	}
+	return n.postExecute(string(j))
+}
+
+// Query runs a single query against the node.
 func (n *Node) Query(stmt string) (string, error) {
-	v, _ := url.Parse("http://" + n.Addr + "/db/query")
+	v, _ := url.Parse("http://" + n.APIAddr() + "/db/query")
 	v.RawQuery = url.Values{"q": []string{stmt}}.Encode()
 
 	resp, err := http.Get(v.String())
@@ -68,14 +74,68 @@ func (n *Node) Query(stmt string) (string, error) {
 	return string(body), nil
 }
 
-func mustNewNode(joinAddr string) *Node {
+// Join instructs this node to join the leader.
+func (n *Node) Join(leader *Node) error {
+	b, err := json.Marshal(map[string]string{"addr": n.RaftAddr()})
+	if err != nil {
+		return err
+	}
+
+	// Attempt to join leader
+	resp, err := http.Post("http://"+leader.APIAddr()+"/join", "application-type/json", bytes.NewReader(b))
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("failed to join, leader returned: %s", resp.Status)
+	}
+	defer resp.Body.Close()
+	return nil
+}
+
+func (n *Node) postExecute(stmt string) (string, error) {
+	resp, err := http.Post("http://"+n.APIAddr()+"/db/execute", "application/json", strings.NewReader(stmt))
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	return string(body), nil
+}
+
+// Cluster represents a cluster of nodes.
+type Cluster []*Node
+
+// Leader returns the leader node of a cluster.
+func (c Cluster) Leader() (*Node, error) {
+	l, err := c[0].WaitForLeader()
+	if err != nil {
+		return nil, err
+	}
+	return c.FindNodeByRaftAddr(l)
+}
+
+// FindNodeByRaftAddr returns the node with the given Raft address.
+func (c Cluster) FindNodeByRaftAddr(addr string) (*Node, error) {
+	for _, n := range c {
+		if n.RaftAddr() == addr {
+			return n, nil
+		}
+	}
+	return nil, fmt.Errorf("node not found")
+}
+
+func mustNewNode(enableSingle bool) *Node {
 	node := &Node{
 		Dir: mustTempDir(),
 	}
 
 	dbConf := sql.NewConfig()
 	node.Store = store.New(dbConf, node.Dir, "localhost:0")
-	if err := node.Store.Open(joinAddr == ""); err != nil {
+	if err := node.Store.Open(enableSingle); err != nil {
 		node.Deprovision()
 		panic(fmt.Sprintf("failed to open store: %s", err.Error()))
 	}
@@ -85,14 +145,13 @@ func mustNewNode(joinAddr string) *Node {
 		node.Deprovision()
 		panic(fmt.Sprintf("failed to start HTTP server: %s", err.Error()))
 	}
-	node.Addr = node.Service.Addr().String()
 
 	return node
 }
 
 func mustNewLeaderNode() *Node {
-	node := mustNewNode("")
-	if err := node.WaitForLeader(); err != nil {
+	node := mustNewNode(true)
+	if _, err := node.WaitForLeader(); err != nil {
 		node.Deprovision()
 		panic("node never became leader")
 	}
