@@ -26,7 +26,7 @@ func Test_OpenStoreCloseSingleNode(t *testing.T) {
 	if err := s.Open(true); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
-	if err := s.Close(); err != nil {
+	if err := s.Close(true); err != nil {
 		t.Fatalf("failed to close single-node store: %s", err.Error())
 	}
 }
@@ -38,7 +38,7 @@ func Test_SingleNodeExecuteQuery(t *testing.T) {
 	if err := s.Open(true); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
-	defer s.Close()
+	defer s.Close(true)
 	s.WaitForLeader(10 * time.Second)
 
 	queries := []string{
@@ -76,7 +76,7 @@ func Test_SingleNodeExecuteQueryTx(t *testing.T) {
 	if err := s.Open(true); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
-	defer s.Close()
+	defer s.Close(true)
 	s.WaitForLeader(10 * time.Second)
 
 	queries := []string{
@@ -117,7 +117,7 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 	if err := s0.Open(true); err != nil {
 		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
 	}
-	defer s0.Close()
+	defer s0.Close(true)
 	s0.WaitForLeader(10 * time.Second)
 
 	s1 := mustNewStore()
@@ -125,7 +125,7 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 	if err := s1.Open(false); err != nil {
 		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
 	}
-	defer s1.Close()
+	defer s1.Close(true)
 
 	// Join the second node to the first.
 	if err := s0.Join(s1.Addr().String()); err != nil {

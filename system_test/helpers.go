@@ -18,22 +18,20 @@ import (
 
 // Node represents a node under test.
 type Node struct {
-	Dir     string
-	Store   *store.Store
-	Service *httpd.Service
+	APIAddr  string
+	RaftAddr string
+	Dir      string
+	Store    *store.Store
+	Service  *httpd.Service
 }
 
-func (n *Node) APIAddr() string {
-	return n.Service.Addr().String()
+func (n *Node) SameAs(o *Node) bool {
+	return n.RaftAddr == o.RaftAddr
 }
 
-func (n *Node) RaftAddr() string {
-	return n.Store.Addr().String()
-}
-
-// Deprovisions removes all resources associated with the node.
+// Deprovisions shuts down and removes all resources associated with the node.
 func (n *Node) Deprovision() {
-	n.Store.Close()
+	n.Store.Close(false)
 	n.Service.Close()
 	os.RemoveAll(n.Dir)
 }
@@ -59,7 +57,7 @@ func (n *Node) ExecuteMulti(stmts []string) (string, error) {
 
 // Query runs a single query against the node.
 func (n *Node) Query(stmt string) (string, error) {
-	v, _ := url.Parse("http://" + n.APIAddr() + "/db/query")
+	v, _ := url.Parse("http://" + n.APIAddr + "/db/query")
 	v.RawQuery = url.Values{"q": []string{stmt}}.Encode()
 
 	resp, err := http.Get(v.String())
@@ -76,13 +74,13 @@ func (n *Node) Query(stmt string) (string, error) {
 
 // Join instructs this node to join the leader.
 func (n *Node) Join(leader *Node) error {
-	b, err := json.Marshal(map[string]string{"addr": n.RaftAddr()})
+	b, err := json.Marshal(map[string]string{"addr": n.RaftAddr})
 	if err != nil {
 		return err
 	}
 
 	// Attempt to join leader
-	resp, err := http.Post("http://"+leader.APIAddr()+"/join", "application-type/json", bytes.NewReader(b))
+	resp, err := http.Post("http://"+leader.APIAddr+"/join", "application-type/json", bytes.NewReader(b))
 	if err != nil {
 		return err
 	}
@@ -94,7 +92,7 @@ func (n *Node) Join(leader *Node) error {
 }
 
 func (n *Node) postExecute(stmt string) (string, error) {
-	resp, err := http.Post("http://"+n.APIAddr()+"/db/execute", "application/json", strings.NewReader(stmt))
+	resp, err := http.Post("http://"+n.APIAddr+"/db/execute", "application/json", strings.NewReader(stmt))
 	if err != nil {
 		return "", err
 	}
@@ -118,14 +116,53 @@ func (c Cluster) Leader() (*Node, error) {
 	return c.FindNodeByRaftAddr(l)
 }
 
+// WaitForNewLeader returns the leader of the cluster as long as it's not "old".
+func (c Cluster) WaitForNewLeader(old *Node) (*Node, error) {
+	timer := time.NewTimer(30 * time.Second)
+	defer timer.Stop()
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-timer.C:
+			return nil, fmt.Errorf("timed out waiting for new leader")
+		case <-ticker.C:
+			l, err := c.Leader()
+			if err != nil {
+				continue
+			}
+			if !l.SameAs(old) {
+				return l, nil
+			}
+		}
+	}
+}
+
+// RemoveNode removes the given node from the cluster
+func (c Cluster) RemoveNode(node *Node) {
+	for i, n := range c {
+		if n.RaftAddr == node.RaftAddr {
+			c = append(c[:i], c[i+1:]...)
+			return
+		}
+	}
+}
+
 // FindNodeByRaftAddr returns the node with the given Raft address.
 func (c Cluster) FindNodeByRaftAddr(addr string) (*Node, error) {
 	for _, n := range c {
-		if n.RaftAddr() == addr {
+		if n.RaftAddr == addr {
 			return n, nil
 		}
 	}
 	return nil, fmt.Errorf("node not found")
+}
+
+func (c Cluster) Deprovision() {
+	for _, n := range c {
+		n.Deprovision()
+	}
 }
 
 func mustNewNode(enableSingle bool) *Node {
@@ -139,12 +176,14 @@ func mustNewNode(enableSingle bool) *Node {
 		node.Deprovision()
 		panic(fmt.Sprintf("failed to open store: %s", err.Error()))
 	}
+	node.RaftAddr = node.Store.Addr().String()
 
 	node.Service = httpd.New("localhost:0", node.Store, nil)
 	if err := node.Service.Start(); err != nil {
 		node.Deprovision()
 		panic(fmt.Sprintf("failed to start HTTP server: %s", err.Error()))
 	}
+	node.APIAddr = node.Service.Addr().String()
 
 	return node
 }
