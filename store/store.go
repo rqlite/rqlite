@@ -162,14 +162,16 @@ func (s *Store) Open(enableSingle bool) error {
 	return nil
 }
 
-// Close closes the store.
-func (s *Store) Close() error {
+// Close closes the store. If wait is true, waits for a graceful shutdown.
+func (s *Store) Close(wait bool) error {
 	if err := s.db.Close(); err != nil {
 		return err
 	}
 	f := s.raft.Shutdown()
-	if e := f.(raft.Future); e.Error() != nil {
-		return e.Error()
+	if wait {
+		if e := f.(raft.Future); e.Error() != nil {
+			return e.Error()
+		}
 	}
 	return nil
 }

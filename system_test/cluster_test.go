@@ -98,4 +98,51 @@ func Test_MultiNodeCluster(t *testing.T) {
 			t.Fatalf(`test %d received wrong result "%s" got: %s exp: %s`, i, tt.stmt, r, tt.expected)
 		}
 	}
+
+	// Kill the leader and wait for the new leader.
+	leader.Deprovision()
+	c.RemoveNode(leader)
+	leader, err = c.WaitForNewLeader(leader)
+	if err != nil {
+		t.Fatalf("failed to find new cluster leader after killing leader: %s", err.Error())
+	}
+
+	// Run queries against 2-node cluster.
+	tests = []struct {
+		stmt     string
+		expected string
+		execute  bool
+	}{
+		{
+			stmt:     `CREATE TABLE foo (id integer not null primary key, name text)`,
+			expected: `{"results":[{"error":"table foo already exists"}]}`,
+			execute:  true,
+		},
+		{
+			stmt:     `INSERT INTO foo(name) VALUES("sinead")`,
+			expected: `{"results":[{"last_insert_id":2,"rows_affected":1}]}`,
+			execute:  true,
+		},
+		{
+			stmt:     `SELECT * FROM foo`,
+			expected: `{"results":[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"],[2,"sinead"]]}]}`,
+			execute:  false,
+		},
+	}
+
+	for i, tt := range tests {
+		var r string
+		var err error
+		if tt.execute {
+			r, err = leader.Execute(tt.stmt)
+		} else {
+			r, err = leader.Query(tt.stmt)
+		}
+		if err != nil {
+			t.Fatalf(`test %d failed "%s": %s`, i, tt.stmt, err.Error())
+		}
+		if r != tt.expected {
+			t.Fatalf(`test %d received wrong result "%s" got: %s exp: %s`, i, tt.stmt, r, tt.expected)
+		}
+	}
 }
