@@ -39,9 +39,8 @@ func (n *Node) Deprovision() {
 }
 
 // WaitForLeader blocks for up to 10 seconds until the node detects a leader.
-func (n *Node) WaitForLeader() error {
-	_, err := n.Store.WaitForLeader(10 * time.Second)
-	return err
+func (n *Node) WaitForLeader() (string, error) {
+	return n.Store.WaitForLeader(10 * time.Second)
 }
 
 // Execute executes a single statement against the node.
@@ -107,6 +106,28 @@ func (n *Node) postExecute(stmt string) (string, error) {
 	return string(body), nil
 }
 
+// Cluster represents a cluster of nodes.
+type Cluster []*Node
+
+// Leader returns the leader node of a cluster.
+func (c Cluster) Leader() (*Node, error) {
+	l, err := c[0].WaitForLeader()
+	if err != nil {
+		return nil, err
+	}
+	return c.FindNodeByRaftAddr(l)
+}
+
+// FindNodeByRaftAddr returns the node with the given Raft address.
+func (c Cluster) FindNodeByRaftAddr(addr string) (*Node, error) {
+	for _, n := range c {
+		if n.RaftAddr() == addr {
+			return n, nil
+		}
+	}
+	return nil, fmt.Errorf("node not found")
+}
+
 func mustNewNode(enableSingle bool) *Node {
 	node := &Node{
 		Dir: mustTempDir(),
@@ -130,7 +151,7 @@ func mustNewNode(enableSingle bool) *Node {
 
 func mustNewLeaderNode() *Node {
 	node := mustNewNode(true)
-	if err := node.WaitForLeader(); err != nil {
+	if _, err := node.WaitForLeader(); err != nil {
 		node.Deprovision()
 		panic("node never became leader")
 	}
