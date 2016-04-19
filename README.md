@@ -25,8 +25,8 @@ While not strictly necessary to run rqlite, running multiple nodes means the SQL
 Start a second and third node (so a majority can still form in the event of a single node failure) like so:
 
 ```bash
-rqlited -http localhost:4003  -raft :4004 -join http://localhost:4001 ~/node.2
-rqlited -http localhost:4005  -raft :4006 -join http://localhost:4001 ~/node.3
+rqlited -http localhost:4003 -raft :4004 -join http://localhost:4001 ~/node.2
+rqlited -http localhost:4005 -raft :4006 -join http://localhost:4001 ~/node.3
 ```
 
 *(This assumes you've started the first node as instructed in the Getting Started section.)*
