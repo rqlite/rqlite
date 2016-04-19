@@ -1,6 +1,11 @@
 #!/bin/bash
 #
 # Simple script for creating releases.
+#
+# To determine the release ID, execute this command:
+#
+#   curl https://api.github.com/repos/otoolep/rqlite/releases
+#
 
 if [ $# -lt 1 ]; then
     echo "$0 <version> [api_token release_id]"
