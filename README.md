@@ -40,7 +40,7 @@ If a node needs to be restarted, perhaps because of failure, don't pass the `-jo
 rqlited -http localhost:4005 -raft :4006 ~/node.3
 ```
 
-On restart it will rejoin the cluster and apply any changes to the local sqlite database that took place while it was down. Depending on the number of changes in the Raft log, restarts may take a little while.
+On restart it will rejoin the cluster and apply any changes to the local SQLite database that took place while it was down. Depending on the number of changes in the Raft log, restarts may take a little while.
 
 ## Data API
 rqlite exposes an HTTP API allowing the database to be modified such that the changes are replicated. Queries are also executed using the HTTP API, though the SQLite database could be queried directly. Modifications go through the Raft log, ensuring only changes committed by a quorum of rqlite nodes are actually executed against the SQLite database. Queries do not __necessarily__ go through the Raft log, however, since they do not change the state of the database, and therefore do not need to be captured in the log. More on this later.
@@ -297,6 +297,3 @@ INSERT INTO foo (n) VALUES(random());
 
 ## Pronunciation?
 How do I pronounce rqlite? For what it's worth I pronounce it "ree-qwell-lite".
-
-## Credits
-This project uses the [Hashicorp](https://github.com/hashicorp/raft) implementation of the Raft consensus protocol, and was inspired by the [raftd](https://github.com/goraft/raftd) reference implementation. rqlite also uses [go-sqlite3](http://godoc.org/github.com/mattn/go-sqlite3) to talk to the SQLite database.
