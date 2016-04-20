@@ -156,21 +156,22 @@ func main() {
 		log.Println("successfully joined node at", joinAddr)
 	}
 
-	// Load authentication information, if supplied.
-	var credentialStore *auth.CredentialsStore
+	// Create HTTP server and load authentication information, if supplied.
+	var s *httpd.Service
 	if authFile != "" {
 		f, err := os.Open(authFile)
 		if err != nil {
 			log.Fatalf("failed to open authentication file %s: %s", authFile, err.Error())
 		}
-		credentialStore = auth.NewCredentialsStore()
+		credentialStore := auth.NewCredentialsStore()
 		if err := credentialStore.Load(f); err != nil {
 			log.Fatalf("failed to load authentication file: %s", err.Error())
 		}
+		s = httpd.New(httpAddr, store, credentialStore)
+	} else {
+		s = httpd.New(httpAddr, store, nil)
 	}
 
-	// Create the HTTP query server.
-	s := httpd.New(httpAddr, store, credentialStore)
 	s.CertFile = x509Cert
 	s.KeyFile = x509Key
 	s.DisableRedirect = disRedirect

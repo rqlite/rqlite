@@ -1,3 +1,6 @@
+## 2.2.1 (April 19th 2016)
+- [PR #95](https://github.com/otoolep/rqlite/pull/95): Correctly enable HTTP authentication.
+
 ## 2.2.0 (April 18th 2016)
 - [PR #84](https://github.com/otoolep/rqlite/pull/84): Encrypted API (HTTPS) now supported.
 - [PR #85](https://github.com/otoolep/rqlite/pull/85): BasicAuth support.
