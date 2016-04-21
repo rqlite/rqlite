@@ -29,6 +29,7 @@ fi
 branch=`git rev-parse --abbrev-ref HEAD`
 commit=`git rev-parse HEAD`
 kernel=`uname -s`
+buildtime=`date +%Y-%m-%dT%T%z`
 
 mkdir -p $tmp_build/src/github.com/otoolep
 export GOPATH=$tmp_build
@@ -36,7 +37,7 @@ cd $tmp_build/src/github.com/otoolep
 git clone $REPO_URL
 cd rqlite
 go get -d ./...
-go install -ldflags="-X main.version=$VERSION -X main.branch=$branch -X main.commit=$commit" ./...
+go install -ldflags="-X main.version=$VERSION -X main.branch=$branch -X main.commit=$commit -X main.buildtime=$buildtime" ./...
 
 release=`echo rqlited-$VERSION-$kernel-$machine | tr '[:upper:]' '[:lower:]'`
 release_pkg=${release}.tar.gz
