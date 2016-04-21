@@ -1,3 +1,6 @@
+## 2.2.2 (unreleased)
+- [PR #96](https://github.com/otoolep/rqlite/pull/96): Add build time to status output.
+
 ## 2.2.1 (April 19th 2016)
 - [PR #95](https://github.com/otoolep/rqlite/pull/95): Correctly set HTTP authentication.
 

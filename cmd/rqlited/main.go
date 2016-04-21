@@ -44,9 +44,10 @@ const logo = `
 
 // These variables are populated via the Go linker.
 var (
-	version = "2"
-	commit  string
-	branch  string
+	version   = "2"
+	commit    string
+	branch    string
+	buildtime string
 )
 
 var httpAddr string
@@ -91,6 +92,9 @@ func init() {
 	}
 	if branch == "" {
 		branch = "unknown"
+	}
+	if buildtime == "" {
+		buildtime = "unknown"
 	}
 }
 
@@ -176,12 +180,14 @@ func main() {
 	s.KeyFile = x509Key
 	s.DisableRedirect = disRedirect
 	s.Expvar = expvar
-	s.Version = version
-	s.Commit = commit
-	s.Branch = branch
+	s.BuildInfo = map[string]interface{}{
+		"commit":     commit,
+		"branch":     branch,
+		"version":    version,
+		"build_time": buildtime,
+	}
 	if err := s.Start(); err != nil {
 		log.Fatalf("failed to start HTTP server: %s", err.Error())
-
 	}
 
 	terminate := make(chan os.Signal, 1)
