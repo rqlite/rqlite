@@ -11,10 +11,11 @@ rqlite gives you the functionality of a [rock solid](http://www.sqlite.org/testi
 You could use rqlite as part of a larger system, as a central store for some critical relational data, without having to run a heavier solution like MySQL. rqlite might also be an effective way to provide a small number of SQLite read-replicas. 
 
 ### Key features
-- An easy-to-use HTTP API, including bulk-update support.
+- Fully replicated production-grade SQL database.
+- An easy-to-use HTTP(S) API, including bulk-update support.
 - Read consistency levels.
-- Hot backups.
 - Transaction support.
+- Hot backups.
 
 ## Getting started
 The quickest way to get running on OSX and Linux is to download a pre-built release binary. You can find these binaries on the [Github releases page](https://github.com/otoolep/rqlite/releases). Once installed, you can start a single rqlite node like so:
