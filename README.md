@@ -281,7 +281,7 @@ The node can then be restored by loading this database file via `sqlite3` and ex
 By default a backup can only be retrieved from the leader, though this check can be disabled by adding `noleader` to the URL as a query param.
 
 ## Security
-You can learn about securing access to rqlite [here](https://github.com/otoolep/rqlite/blob/master/SECURITY.md).
+You can learn about securing access, and restricting users' access, to rqlite [here](https://github.com/otoolep/rqlite/blob/master/SECURITY.md).
 
 ## Log Compaction
 rqlite automatically performs log compaction. After a fixed number of changes rqlite snapshots the SQLite database, and truncates the Raft log. This is a technical feature of the Raft consensus system, and most users of rqlite need not be concerned with this.
