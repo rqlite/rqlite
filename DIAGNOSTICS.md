@@ -1,4 +1,4 @@
-# Status and Diagnotics API
+# Status and Diagnostics API
 A status API exists, which dumps some basic diagnostic and statistical information, as well as basic information about the underlying Raft node. Assuming rqlite is started with default settings, rqlite status is available like so:
 
 ```bash
