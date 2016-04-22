@@ -8,7 +8,13 @@ rqlite [![Circle CI](https://circleci.com/gh/otoolep/rqlite/tree/master.svg?styl
 ### Why?
 rqlite gives you the functionality of a [rock solid](http://www.sqlite.org/testing.html), fault-tolerant, replicated relational database, but with very easy installation, deployment, and operation. With it you've got a lightweight and reliable distributed store for relational data.
 
-You could use rqlite as part of a larger system, as a central store for some critical relational data, without having to run a heavier solution like MySQL. rqlite might also be an effective way to provide a small number of SQLite read-replicas.
+You could use rqlite as part of a larger system, as a central store for some critical relational data, without having to run a heavier solution like MySQL. rqlite might also be an effective way to provide a small number of SQLite read-replicas. 
+
+### Key features
+- An easy-to-use HTTP API, including bulk-update support.
+- Read consistency levels.
+- Hot backups.
+- Transaction support.
 
 ## Getting started
 The quickest way to get running on OSX and Linux is to download a pre-built release binary. You can find these binaries on the [Github releases page](https://github.com/otoolep/rqlite/releases). Once installed, you can start a single rqlite node like so:
