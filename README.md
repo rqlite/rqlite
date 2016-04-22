@@ -270,7 +270,7 @@ INSERT INTO foo (n) VALUES(random());
  * The supported types are those supported by [go-sqlite3](http://godoc.org/github.com/mattn/go-sqlite3).
 
 ## Status API
-You can learn how check status and diagnotics [here](https://github.com/otoolep/rqlite/blob/master/DIAGNOSTICS.md).
+You can learn how check status and diagnostics [here](https://github.com/otoolep/rqlite/blob/master/DIAGNOSTICS.md).
 
 ## Backups
 Learn how to backup your rqlite cluster [here](https://github.com/otoolep/rqlite/blob/master/BACKUPS.md).
