@@ -259,21 +259,17 @@ Using an in-memory does not put your data at risk. Since the Raft log is the aut
 
 Pass `-mem` to `rqlited` at start-up to enable an in-memory database.
 
+## Limitations
+ * Only SQL statements that are __deterministic__ are safe to use with rqlite, because statements are committed to the Raft log before they are sent to each node. For example, the following statement could result in different SQLite databases under each node:
+```
+INSERT INTO foo (n) VALUES(random());
+```
+ * In case it isn't obvious, rqlite does not replicate any changes made directly to the underlying SQLite files. If you do change these files directly, you will cause rqlite to fail. Only modify the database via the HTTP API.
+ * SQLite commands such as `.schema` are not handled.
+ * The supported types are those supported by [go-sqlite3](http://godoc.org/github.com/mattn/go-sqlite3).
+
 ## Status API
-A status API exists, which dumps some basic diagnostic and statistical information, as well as basic information about the underlying Raft node. Assuming rqlite is started with default settings, rqlite status is available like so:
-
-```bash
-curl localhost:4001/status?pretty
-```
-
-The use of the URL param `pretty` is optional, and results in pretty-printed JSON responses.
-
-### expvar support
-rqlite also exports [expvar](http://godoc.org/pkg/expvar/) information. The standard, and some custom information, is exposed. This data can be retrieved like so:
-
-```bash
-curl localhost:4001/debug/vars
-```
+You can learn how check status and diagnotics [here](https://github.com/otoolep/rqlite/blob/master/DIAGNOSTICS.md).
 
 ## Backups
 Learn how to backup your rqlite cluster [here](https://github.com/otoolep/rqlite/blob/master/BACKUPS.md).
@@ -283,15 +279,6 @@ You can learn about securing access, and restricting users' access, to rqlite [h
 
 ## Log Compaction
 rqlite automatically performs log compaction. After a fixed number of changes rqlite snapshots the SQLite database, and truncates the Raft log. This is a technical feature of the Raft consensus system, and most users of rqlite need not be concerned with this.
-
-## Limitations
- * Only SQL statements that are __deterministic__ are safe to use with rqlite, because statements are committed to the Raft log before they are sent to each node. For example, the following statement could result in different SQLite databases under each node:
-```
-INSERT INTO foo (n) VALUES(random());
-```
- * In case it isn't obvious, rqlite does not replicate any changes made directly to the underlying SQLite files. If you do change these files directly, you will cause rqlite to fail. Only modify the database via the HTTP API.
- * SQLite commands such as `.schema` are not handled.
- * The supported types are those supported by [go-sqlite3](http://godoc.org/github.com/mattn/go-sqlite3).
 
 ## Pronunciation?
 How do I pronounce rqlite? For what it's worth I pronounce it "ree-qwell-lite".
