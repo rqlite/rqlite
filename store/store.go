@@ -5,6 +5,7 @@ package store
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -21,6 +22,12 @@ import (
 	"github.com/hashicorp/raft-boltdb"
 	sql "github.com/otoolep/rqlite/db"
 	mux "github.com/otoolep/rqlite/tcp"
+)
+
+var (
+	// ErrFieldsRequired is returned when a node attempts to execute a leader-only
+	// operation.
+	ErrNotLeader = errors.New("not leader")
 )
 
 const (
@@ -81,11 +88,16 @@ const (
 	Strong
 )
 
-var (
-	// ErrFieldsRequired is returned when a node attempts to execute a leader-only
-	// operation.
-	ErrNotLeader = errors.New("not leader")
-)
+// clusterMeta represents cluster meta which must be kept in consensus.
+type clusterMeta struct {
+	APIPeers map[string]string // Map from Raft address to API address
+}
+
+func newClusterMeta() *clusterMeta {
+	return &clusterMeta{
+		APIPeers: make(map[string]string),
+	}
+}
 
 // DBConfig represents the configuration of the underlying SQLite database.
 type DBConfig struct {
@@ -112,8 +124,8 @@ type Store struct {
 	dbPath string        // Path to underlying SQLite file, if not in-memory.
 	db     *sql.DB       // The underlying SQLite store.
 
-	peersMu sync.RWMutex      // Sync access between queries and snapshots.
-	peers   map[string]string // Mapping from Raft addresses to API addresses
+	metaMu sync.RWMutex
+	meta   *clusterMeta
 
 	logger *log.Logger
 }
@@ -126,6 +138,7 @@ func New(dbConf *DBConfig, dir, bind string) *Store {
 		mux:      mux.NewMux(),
 		dbConf:   dbConf,
 		dbPath:   filepath.Join(dir, sqliteFile),
+		meta:     newClusterMeta(),
 		logger:   log.New(os.Stderr, "[store] ", log.LstdFlags),
 	}
 }
@@ -450,10 +463,10 @@ func (s *Store) Apply(l *raft.Log) interface{} {
 			return &fsmGenericResponse{error: err}
 		}
 		func() {
-			s.peersMu.Lock()
-			defer s.peersMu.Unlock()
+			s.metaMu.Lock()
+			defer s.metaMu.Unlock()
 			for k, v := range d {
-				s.peers[k] = v
+				s.meta.APIPeers[k] = v
 			}
 		}()
 		return &fsmGenericResponse{}
@@ -484,29 +497,45 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 		return nil, err
 	}
 
-	b, err := ioutil.ReadFile(f.Name())
+	fsm := &fsmSnapshot{}
+	fsm.database, err = ioutil.ReadFile(f.Name())
 	if err != nil {
-		log.Printf("Failed to generate snapshot: %s", err.Error())
+		log.Printf("Failed to read database for snapshot: %s", err.Error())
 		return nil, err
 	}
-	return &fsmSnapshot{data: b}, nil
+
+	fsm.meta, err = json.Marshal(s.meta)
+	if err != nil {
+		log.Printf("Failed to encode meta for snapshot: %s", err.Error())
+		return nil, err
+	}
+
+	return fsm, nil
 }
 
-// Restore restores the database to a previous state.
+// Restore restores the node to a previous state.
 func (s *Store) Restore(rc io.ReadCloser) error {
 	if err := s.db.Close(); err != nil {
 		return err
 	}
 
-	b, err := ioutil.ReadAll(rc)
-	if err != nil {
+	// Get size of database.
+	var sz uint64
+	if err := binary.Read(rc, binary.LittleEndian, &sz); err != nil {
+		return err
+	}
+
+	// Now read in the database file data and restore.
+	database := make([]byte, sz)
+	if _, err := io.ReadFull(rc, database); err != nil {
 		return err
 	}
 
 	var db *sql.DB
+	var err error
 	if !s.dbConf.Memory {
 		// Write snapshot over any existing database file.
-		if err := ioutil.WriteFile(s.dbPath, b, 0660); err != nil {
+		if err := ioutil.WriteFile(s.dbPath, database, 0660); err != nil {
 			return err
 		}
 
@@ -524,7 +553,7 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 		f.Close()
 		defer os.Remove(f.Name())
 
-		if err := ioutil.WriteFile(f.Name(), b, 0660); err != nil {
+		if err := ioutil.WriteFile(f.Name(), database, 0660); err != nil {
 			return err
 		}
 
@@ -536,18 +565,45 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 	}
 	s.db = db
 
-	return nil
+	// Read remaining bytes, and set to cluster meta.
+	b, err := ioutil.ReadAll(rc)
+	if err != nil {
+		return err
+	}
+
+	return func() error {
+		s.metaMu.Lock()
+		defer s.metaMu.Unlock()
+		return json.Unmarshal(b, &s.meta)
+	}()
 }
 
 type fsmSnapshot struct {
-	data []byte
+	database []byte
+	meta     []byte
 }
 
-// Persist writes the snapshot to the give sink.
+// Persist writes the snapshot to the given sink.
 func (f *fsmSnapshot) Persist(sink raft.SnapshotSink) error {
 	err := func() error {
-		// Write data to sink.
-		if _, err := sink.Write(f.data); err != nil {
+		// Start by writing size of database.
+		b := new(bytes.Buffer)
+		sz := uint64(len(f.database))
+		err := binary.Write(b, binary.LittleEndian, sz)
+		if err != nil {
+			return err
+		}
+		if _, err := sink.Write(b.Bytes()); err != nil {
+			return err
+		}
+
+		// Next write database to sink.
+		if _, err := sink.Write(f.database); err != nil {
+			return err
+		}
+
+		// Finally write the meta.
+		if _, err := sink.Write(f.meta); err != nil {
 			return err
 		}
 
