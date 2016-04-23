@@ -32,10 +32,10 @@ If you wish to work with fork of rqlite, your own fork for example, you must sti
 Follow the steps below to work with a fork:
 
 ```bash
-    export GOPATH=$HOME/rqlite
-    mkdir -p $GOPATH/src/github.com/otoolep
-    cd $GOPATH/src/github.com/otoolep
-    git clone git@github.com:<your Github username>/rqlite
+export GOPATH=$HOME/rqlite
+mkdir -p $GOPATH/src/github.com/otoolep
+cd $GOPATH/src/github.com/otoolep
+git clone git@github.com:<your Github username>/rqlite
 ```
 
 Retaining the directory structure `$GOPATH/src/github.com/otoolep` is necessary so that Go imports work correctly.
