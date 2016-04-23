@@ -52,7 +52,7 @@ func (mux *Mux) Serve(ln net.Listener) error {
 			continue
 		}
 		if err != nil {
-			// Wait for all connections to be demux
+			// Wait for all connections to be demuxed
 			mux.wg.Wait()
 			for _, ln := range mux.m {
 				close(ln.c)

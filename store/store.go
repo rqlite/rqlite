@@ -20,6 +20,7 @@ import (
 	"github.com/hashicorp/raft"
 	"github.com/hashicorp/raft-boltdb"
 	sql "github.com/otoolep/rqlite/db"
+	mux "github.com/otoolep/rqlite/tcp"
 )
 
 const (
@@ -28,6 +29,11 @@ const (
 	sqliteFile          = "db.sqlite"
 	leaderWaitDelay     = 100 * time.Millisecond
 	appliedWaitDelay    = 100 * time.Millisecond
+)
+
+const (
+	muxRaftHeader    = 1 // Raft consensus communications
+	muxClusterHeader = 2 // Cluster communications
 )
 
 var (
@@ -73,6 +79,7 @@ func NewDBConfig(dsn string, memory bool) *DBConfig {
 type Store struct {
 	raftDir  string
 	raftBind string
+	mux      *mux.Mux
 
 	mu sync.RWMutex // Sync access between queries and snapshots.
 
@@ -90,6 +97,7 @@ func New(dbConf *DBConfig, dir, bind string) *Store {
 	return &Store{
 		raftDir:  dir,
 		raftBind: bind,
+		mux:      mux.NewMux(),
 		dbConf:   dbConf,
 		dbPath:   filepath.Join(dir, sqliteFile),
 		logger:   log.New(os.Stderr, "[store] ", log.LstdFlags),
@@ -142,12 +150,15 @@ func (s *Store) Open(enableSingle bool) error {
 		config.DisableBootstrapAfterElect = false
 	}
 
-	// Setup Raft communication.
+	// Set up TCP communication between nodes.
 	ln, err := net.Listen("tcp", s.raftBind)
 	if err != nil {
 		return err
 	}
-	s.ln = newNetworkLayer(ln)
+	go s.mux.Serve(ln)
+
+	// Setup Raft communication.
+	s.ln = newNetworkLayer(s.mux.Listen(muxRaftHeader), ln.Addr())
 	transport := raft.NewNetworkTransport(s.ln, 3, 10*time.Second, os.Stderr)
 
 	// Create peer storage.
