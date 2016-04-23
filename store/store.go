@@ -36,12 +36,40 @@ const (
 	muxClusterHeader = 2 // Cluster communications
 )
 
-var (
-	// ErrFieldsRequired is returned when a node attempts to execute a leader-only
-	// operation.
-	ErrNotLeader = errors.New("not leader")
+// commandType are commands that affect the state of the cluster, and must go through Raft.
+type commandType int
+
+const (
+	execute commandType = iota // Commands which modify the database.
+	query                      // Commands which query the database.
+	meta                       // Commands that affect cluster meta state.
 )
 
+type command struct {
+	Typ commandType     `json:"typ,omitempty"`
+	Sub json.RawMessage `json:"sub,omitempty"`
+}
+
+func newCommand(t commandType, d interface{}) (*command, error) {
+	b, err := json.Marshal(d)
+	if err != nil {
+		return nil, err
+	}
+	return &command{
+		Typ: t,
+		Sub: b,
+	}, nil
+
+}
+
+// databaseSub is a command sub which involves interaction with the database.
+type databaseSub struct {
+	Tx      bool     `json:"tx,omitempty"`
+	Queries []string `json:"queries,omitempty"`
+	Timings bool     `json:"timings,omitempty"`
+}
+
+// ConsistencyLevel represents the available read consistency levels.
 type ConsistencyLevel int
 
 const (
@@ -50,19 +78,11 @@ const (
 	Strong
 )
 
-type commandType int
-
-const (
-	execute commandType = iota
-	query
+var (
+	// ErrFieldsRequired is returned when a node attempts to execute a leader-only
+	// operation.
+	ErrNotLeader = errors.New("not leader")
 )
-
-type command struct {
-	Typ     commandType `json:"typ,omitempty"`
-	Tx      bool        `json:"tx,omitempty"`
-	Queries []string    `json:"queries,omitempty"`
-	Timings bool        `json:"timings,omitempty"`
-}
 
 // DBConfig represents the configuration of the underlying SQLite database.
 type DBConfig struct {
@@ -287,11 +307,14 @@ func (s *Store) Execute(queries []string, timings, tx bool) ([]*sql.Result, erro
 		return nil, ErrNotLeader
 	}
 
-	c := &command{
-		Typ:     execute,
+	d := &databaseSub{
 		Tx:      tx,
 		Queries: queries,
 		Timings: timings,
+	}
+	c, err := newCommand(execute, d)
+	if err != nil {
+		return nil, err
 	}
 	b, err := json.Marshal(c)
 	if err != nil {
@@ -338,11 +361,14 @@ func (s *Store) Query(queries []string, timings, tx bool, lvl ConsistencyLevel) 
 	defer s.mu.RUnlock()
 
 	if lvl == Strong {
-		c := &command{
-			Typ:     query,
+		d := &databaseSub{
 			Tx:      tx,
 			Queries: queries,
 			Timings: timings,
+		}
+		c, err := newCommand(query, d)
+		if err != nil {
+			return nil, err
 		}
 		b, err := json.Marshal(c)
 		if err != nil {
@@ -393,15 +419,26 @@ type fsmQueryResponse struct {
 func (s *Store) Apply(l *raft.Log) interface{} {
 	var c command
 	if err := json.Unmarshal(l.Data, &c); err != nil {
-		panic(fmt.Sprintf("failed to unmarshal command: %s", err.Error()))
+		panic(fmt.Sprintf("failed to unmarshal cluster command: %s", err.Error()))
 	}
 
-	if c.Typ == execute {
-		r, err := s.db.Execute(c.Queries, c.Tx, c.Timings)
-		return &fsmExecuteResponse{results: r, error: err}
+	switch c.Typ {
+	case execute, query:
+		var d databaseSub
+		if err := json.Unmarshal(c.Sub, &d); err != nil {
+			panic(fmt.Sprintf("failed to unmarshal cluster command: %s", err.Error()))
+		}
+		if c.Typ == execute {
+			r, err := s.db.Execute(d.Queries, d.Tx, d.Timings)
+			return &fsmExecuteResponse{results: r, error: err}
+		}
+		r, err := s.db.Query(d.Queries, d.Tx, d.Timings)
+		return &fsmQueryResponse{rows: r, error: err}
+	case meta:
+		fallthrough
+	default:
+		panic("unsupported!")
 	}
-	r, err := s.db.Query(c.Queries, c.Tx, c.Timings)
-	return &fsmQueryResponse{rows: r, error: err}
 }
 
 // Snapshot returns a snapshot of the database. The caller must ensure that
