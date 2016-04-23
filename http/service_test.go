@@ -9,6 +9,44 @@ import (
 	"github.com/otoolep/rqlite/store"
 )
 
+func Test_NormalizeAddr(t *testing.T) {
+	tests := []struct {
+		orig string
+		norm string
+	}{
+		{
+			orig: "http://localhost:4001",
+			norm: "http://localhost:4001",
+		},
+		{
+			orig: "https://localhost:4001",
+			norm: "https://localhost:4001",
+		},
+		{
+			orig: "https://localhost:4001/foo",
+			norm: "https://localhost:4001/foo",
+		},
+		{
+			orig: "localhost:4001",
+			norm: "http://localhost:4001",
+		},
+		{
+			orig: "localhost",
+			norm: "http://localhost",
+		},
+		{
+			orig: ":4001",
+			norm: "http://:4001",
+		},
+	}
+
+	for _, tt := range tests {
+		if NormalizeAddr(tt.orig) != tt.norm {
+			t.Fatalf("%s not normalized correctly, got: %s", tt.orig, tt.norm)
+		}
+	}
+}
+
 func Test_NewService(t *testing.T) {
 	m := &MockStore{}
 	s := New("127.0.0.1:0", m, nil)

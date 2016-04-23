@@ -21,7 +21,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime/pprof"
-	"strings"
 
 	"github.com/otoolep/rqlite/auth"
 	sql "github.com/otoolep/rqlite/db"
@@ -206,10 +205,7 @@ func join(joinAddr string, skipVerify bool, raftAddr string) error {
 	}
 
 	// Check for protocol scheme, and insert default if necessary.
-	fullAddr := fmt.Sprintf("%s/join", joinAddr)
-	if !strings.HasPrefix(joinAddr, "http://") && !strings.HasPrefix(joinAddr, "https://") {
-		fullAddr = fmt.Sprintf("http://%s", joinAddr)
-	}
+	fullAddr := httpd.NormalizeAddr(fmt.Sprintf("%s/join", joinAddr))
 
 	// Enable skipVerify as requested.
 	tr := &http.Transport{
