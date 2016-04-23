@@ -42,7 +42,7 @@ type commandType int
 const (
 	execute commandType = iota // Commands which modify the database.
 	query                      // Commands which query the database.
-	meta                       // Commands that affect cluster meta state.
+	peer                       // Commands that modify peers map.
 )
 
 type command struct {
@@ -68,6 +68,9 @@ type databaseSub struct {
 	Queries []string `json:"queries,omitempty"`
 	Timings bool     `json:"timings,omitempty"`
 }
+
+// peersSub is a command which sets the API address for a Raft address.
+type peersSub map[string]string
 
 // ConsistencyLevel represents the available read consistency levels.
 type ConsistencyLevel int
@@ -108,6 +111,9 @@ type Store struct {
 	dbConf *DBConfig     // SQLite database config.
 	dbPath string        // Path to underlying SQLite file, if not in-memory.
 	db     *sql.DB       // The underlying SQLite store.
+
+	peersMu sync.RWMutex      // Sync access between queries and snapshots.
+	peers   map[string]string // Mapping from Raft addresses to API addresses
 
 	logger *log.Logger
 }
@@ -415,6 +421,10 @@ type fsmQueryResponse struct {
 	error error
 }
 
+type fsmGenericResponse struct {
+	error error
+}
+
 // Apply applies a Raft log entry to the database.
 func (s *Store) Apply(l *raft.Log) interface{} {
 	var c command
@@ -426,7 +436,7 @@ func (s *Store) Apply(l *raft.Log) interface{} {
 	case execute, query:
 		var d databaseSub
 		if err := json.Unmarshal(c.Sub, &d); err != nil {
-			panic(fmt.Sprintf("failed to unmarshal cluster command: %s", err.Error()))
+			return &fsmGenericResponse{error: err}
 		}
 		if c.Typ == execute {
 			r, err := s.db.Execute(d.Queries, d.Tx, d.Timings)
@@ -434,10 +444,21 @@ func (s *Store) Apply(l *raft.Log) interface{} {
 		}
 		r, err := s.db.Query(d.Queries, d.Tx, d.Timings)
 		return &fsmQueryResponse{rows: r, error: err}
-	case meta:
-		fallthrough
+	case peer:
+		var d peersSub
+		if err := json.Unmarshal(c.Sub, &d); err != nil {
+			return &fsmGenericResponse{error: err}
+		}
+		func() {
+			s.peersMu.Lock()
+			defer s.peersMu.Unlock()
+			for k, v := range d {
+				s.peers[k] = v
+			}
+		}()
+		return &fsmGenericResponse{}
 	default:
-		panic("unsupported!")
+		return &fsmGenericResponse{error: fmt.Errorf("unknown command: %v", c.Typ)}
 	}
 }
 
