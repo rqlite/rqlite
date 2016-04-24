@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -347,6 +348,36 @@ func Test_SingleNodeSnapshotInMem(t *testing.T) {
 	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
+}
+
+func Test_APIPeers(t *testing.T) {
+	s := mustNewStore(false)
+	defer os.RemoveAll(s.Path())
+
+	if err := s.Open(true); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	s.WaitForLeader(10 * time.Second)
+
+	peers := map[string]string{
+		"localhost:4002": "localhost:4001",
+		"localhost:4004": "localhost:4003",
+	}
+	if err := s.UpdateAPIPeers(peers); err != nil {
+		t.Fatalf("failed to update API peers: %s", err.Error())
+	}
+
+	// Retrieve peers and verify them.
+	apiPeers, err := s.APIPeers()
+	if err != nil {
+		t.Fatalf("failed to retrieve API peers: %s", err.Error())
+	}
+	if !reflect.DeepEqual(peers, apiPeers) {
+		t.Fatalf("set and retrieved API peers not identical, got %v, exp %v",
+			apiPeers, peers)
+	}
+
 }
 
 func mustNewStore(inmem bool) *Store {

@@ -259,6 +259,18 @@ func (s *Store) Leader() string {
 	return s.raft.Leader()
 }
 
+// APIPeers return the map of Raft addresses to API addresses.
+func (s *Store) APIPeers() (map[string]string, error) {
+	s.metaMu.RLock()
+	defer s.metaMu.RUnlock()
+
+	peers := make(map[string]string, len(s.meta.APIPeers))
+	for k, v := range s.meta.APIPeers {
+		peers[k] = v
+	}
+	return peers, nil
+}
+
 // WaitForLeader blocks until a leader is detected, or the timeout expires.
 func (s *Store) WaitForLeader(timeout time.Duration) (string, error) {
 	tck := time.NewTicker(leaderWaitDelay)
@@ -414,6 +426,24 @@ func (s *Store) Query(queries []string, timings, tx bool, lvl ConsistencyLevel) 
 
 	r, err := s.db.Query(queries, tx, timings)
 	return r, err
+}
+
+// UpdateAPIPeers updates the cluster-wide peer information.
+func (s *Store) UpdateAPIPeers(peers map[string]string) error {
+	c, err := newCommand(peer, peers)
+	if err != nil {
+		return err
+	}
+	b, err := json.Marshal(c)
+	if err != nil {
+		return err
+	}
+
+	f := s.raft.Apply(b, raftTimeout)
+	if e := f.(raft.Future); e.Error() != nil {
+		return e.Error()
+	}
+	return nil
 }
 
 // Join joins a node, located at addr, to this store. The node must be ready to
