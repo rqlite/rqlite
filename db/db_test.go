@@ -12,14 +12,6 @@ import (
  * Lowest-layer database tests
  */
 
-func Test_Config(t *testing.T) {
-	c := NewConfig()
-	c.DSN = "cache=shared&mode=memory"
-	if c.FQDSN("/foo/bar/db.sqlite") != "file:/foo/bar/db.sqlite?cache=shared&mode=memory" {
-		t.Fatalf("Fully qualified DSN not correct, got: %s", c.FQDSN("/foo/bar/db.sqlite"))
-	}
-}
-
 func Test_DbFileCreation(t *testing.T) {
 	dir, err := ioutil.TempDir("", "rqlite-test-")
 	defer os.RemoveAll(dir)
@@ -48,6 +40,39 @@ func Test_TableCreation(t *testing.T) {
 	}
 
 	r, err := db.Query([]string{"SELECT * FROM foo"}, false, false)
+	if err != nil {
+		t.Fatalf("failed to query empty table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+}
+
+func Test_LoadInMemory(t *testing.T) {
+	db, path := mustCreateDatabase()
+	defer db.Close()
+	defer os.Remove(path)
+
+	_, err := db.Execute([]string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"}, false, false)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	r, err := db.Query([]string{"SELECT * FROM foo"}, false, false)
+	if err != nil {
+		t.Fatalf("failed to query empty table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+
+	inmem, err := LoadInMemoryWithDSN(path, "")
+	if err != nil {
+		t.Fatalf("failed to create loaded in-memory database: %s", err.Error())
+	}
+
+	// Ensure it has been loaded correctly into the database
+	r, err = inmem.Query([]string{"SELECT * FROM foo"}, false, false)
 	if err != nil {
 		t.Fatalf("failed to query empty table: %s", err.Error())
 	}

@@ -19,29 +19,12 @@ func init() {
 	DBVersion, _, _ = sqlite3.Version()
 }
 
-// Config represents the configuration of the SQLite database.
-type Config struct {
-	DSN    string // Datasource name
-	Memory bool   // In-memory database enabled?
-}
-
-// NewConfig returns an instance of Config for the database at path.
-func NewConfig() *Config {
-	return &Config{}
-}
-
-// FQDSN returns the fully-qualified datasource name.
-func (c *Config) FQDSN(path string) string {
-	if c.DSN != "" {
-		return fmt.Sprintf("file:%s?%s", path, c.DSN)
-	}
-	return path
-}
-
 // DB is the SQL database.
 type DB struct {
 	sqlite3conn *sqlite3.SQLiteConn // Driver connection to database.
 	path        string              // Path to database file.
+	dsn         string              // DSN, if any.
+	memory      bool                // In-memory only.
 }
 
 // Result represents the outcome of an operation that changes rows.
@@ -61,8 +44,72 @@ type Rows struct {
 	Time    float64         `json:"time,omitempty"`
 }
 
-// Open an existing database, creating it if it does not exist.
+// Open opens a file-based database, creating it if it does not exist.
 func Open(dbPath string) (*DB, error) {
+	return open(fqdsn(dbPath, ""))
+}
+
+// OpenwithDSN opens a file-based database, creating it if it does not exist.
+func OpenWithDSN(dbPath, dsn string) (*DB, error) {
+	return open(fqdsn(dbPath, dsn))
+}
+
+// OpenInMemory opens an in-memory database.
+func OpenInMemory() (*DB, error) {
+	return open(fqdsn(":memory:", ""))
+}
+
+// OpenInMemoryWithDSN opens an in-memory database with a specific DSN.
+func OpenInMemoryWithDSN(dsn string) (*DB, error) {
+	return open(fqdsn(":memory:", dsn))
+}
+
+// LoadInMemoryWithDSN loads an in-memory database with that at the path,
+// with the specified DSN
+func LoadInMemoryWithDSN(dbPath, dsn string) (*DB, error) {
+	db, err := OpenInMemoryWithDSN(dsn)
+	if err != nil {
+		return nil, err
+	}
+
+	srcDB, err := Open(dbPath)
+	if err != nil {
+		return nil, err
+	}
+
+	bk, err := db.sqlite3conn.Backup("main", srcDB.sqlite3conn, "main")
+	if err != nil {
+		return nil, err
+	}
+
+	for {
+		done, err := bk.Step(-1)
+		if err != nil {
+			bk.Finish()
+			return nil, err
+		}
+		if done {
+			break
+		}
+		time.Sleep(bkDelay * time.Millisecond)
+	}
+
+	if err := bk.Finish(); err != nil {
+		return nil, err
+	}
+	if err := srcDB.Close(); err != nil {
+		return nil, err
+	}
+
+	return db, nil
+}
+
+// Close closes the underlying database connection.
+func (db *DB) Close() error {
+	return db.sqlite3conn.Close()
+}
+
+func open(dbPath string) (*DB, error) {
 	d := sqlite3.SQLiteDriver{}
 	dbc, err := d.Open(dbPath)
 	if err != nil {
@@ -73,16 +120,6 @@ func Open(dbPath string) (*DB, error) {
 		sqlite3conn: dbc.(*sqlite3.SQLiteConn),
 		path:        dbPath,
 	}, nil
-}
-
-// OpenWithConfiguration an existing database, creating it if it does not exist.
-func OpenWithConfiguration(dbPath string, conf *Config) (*DB, error) {
-	return Open(conf.FQDSN(dbPath))
-}
-
-// Close closes the underlying database connection.
-func (db *DB) Close() error {
-	return db.sqlite3conn.Close()
 }
 
 // Execute executes queries that modify the database.
@@ -297,4 +334,12 @@ func (db *DB) Backup(path string) error {
 	}
 
 	return nil
+}
+
+// fqdsn returns the fully-qualified datasource name.
+func fqdsn(path, dsn string) string {
+	if dsn != "" {
+		return fmt.Sprintf("file:%s?%s", path, dsn)
+	}
+	return path
 }

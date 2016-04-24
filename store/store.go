@@ -58,6 +58,17 @@ type command struct {
 	Timings bool        `json:"timings,omitempty"`
 }
 
+// DBConfig represents the configuration of the underlying SQLite database.
+type DBConfig struct {
+	DSN    string // Any custom DSN
+	Memory bool   // Whether the database is in-memory only.
+}
+
+// NewDBConfig returns a new DB config instance.
+func NewDBConfig(dsn string, memory bool) *DBConfig {
+	return &DBConfig{DSN: dsn, Memory: memory}
+}
+
 // Store is a SQLite database, where all changes are made via Raft consensus.
 type Store struct {
 	raftDir  string
@@ -67,25 +78,20 @@ type Store struct {
 
 	ln     *networkLayer // Raft network between nodes.
 	raft   *raft.Raft    // The consensus mechanism.
-	dbConf *sql.Config   // SQLite database config.
-	dbPath string        // Path to database file.
+	dbConf *DBConfig     // SQLite database config.
+	dbPath string        // Path to underlying SQLite file, if not in-memory.
 	db     *sql.DB       // The underlying SQLite store.
 
 	logger *log.Logger
 }
 
 // New returns a new Store.
-func New(dbConf *sql.Config, dir, bind string) *Store {
-	dbPath := filepath.Join(dir, sqliteFile)
-	if dbConf.Memory {
-		dbPath = ":memory:"
-	}
-
+func New(dbConf *DBConfig, dir, bind string) *Store {
 	return &Store{
 		raftDir:  dir,
 		raftBind: bind,
 		dbConf:   dbConf,
-		dbPath:   dbPath,
+		dbPath:   filepath.Join(dir, sqliteFile),
 		logger:   log.New(os.Stderr, "[store] ", log.LstdFlags),
 	}
 }
@@ -98,19 +104,26 @@ func (s *Store) Open(enableSingle bool) error {
 	}
 
 	// Create the database. Unless it's a memory-based database, it must be deleted
+	var db *sql.DB
+	var err error
 	if !s.dbConf.Memory {
 		// as it will be rebuilt from (possibly) a snapshot and committed log entries.
 		if err := os.Remove(s.dbPath); err != nil && !os.IsNotExist(err) {
 			return err
 		}
-	}
-
-	db, err := sql.OpenWithConfiguration(s.dbPath, s.dbConf)
-	if err != nil {
-		return err
+		db, err = sql.OpenWithDSN(s.dbPath, s.dbConf.DSN)
+		if err != nil {
+			return err
+		}
+		s.logger.Println("SQLite database opened at", s.dbPath)
+	} else {
+		db, err = sql.OpenInMemoryWithDSN(s.dbConf.DSN)
+		if err != nil {
+			return err
+		}
+		s.logger.Println("SQLite in-memory database opened")
 	}
 	s.db = db
-	s.logger.Println("SQLite database opened at", s.dbConf.FQDSN(s.dbPath))
 
 	// Setup Raft configuration.
 	config := raft.DefaultConfig()
@@ -234,16 +247,18 @@ func (s *Store) WaitForAppliedIndex(idx uint64, timeout time.Duration) error {
 // Stats returns stats for the store.
 func (s *Store) Stats() (map[string]interface{}, error) {
 	dbStatus := map[string]interface{}{
-		"path":    s.dbPath,
-		"dns":     s.dbConf.FQDSN(s.dbPath),
+		"dns":     s.dbConf.DSN,
 		"version": sql.DBVersion,
 	}
 	if !s.dbConf.Memory {
+		dbStatus["path"] = s.dbPath
 		stat, err := os.Stat(s.dbPath)
 		if err != nil {
 			return nil, err
 		}
 		dbStatus["size"] = stat.Size()
+	} else {
+		dbStatus["path"] = ":memory:"
 	}
 
 	status := map[string]interface{}{
@@ -410,7 +425,7 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 
 // Restore restores the database to a previous state.
 func (s *Store) Restore(rc io.ReadCloser) error {
-	if err := os.Remove(s.dbPath); err != nil && !os.IsNotExist(err) {
+	if err := s.db.Close(); err != nil {
 		return err
 	}
 
@@ -419,13 +434,36 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 		return err
 	}
 
-	if err := ioutil.WriteFile(s.dbPath, b, 0660); err != nil {
-		return err
-	}
+	var db *sql.DB
+	if !s.dbConf.Memory {
+		// Write snapshot over any existing database file.
+		if err := ioutil.WriteFile(s.dbPath, b, 0660); err != nil {
+			return err
+		}
 
-	db, err := sql.OpenWithConfiguration(s.dbPath, s.dbConf)
-	if err != nil {
-		return err
+		// Re-open it.
+		db, err = sql.OpenWithDSN(s.dbPath, s.dbConf.DSN)
+		if err != nil {
+			return err
+		}
+	} else {
+		// In memory. Copy to temporary file, and then load memory from file.
+		f, err := ioutil.TempFile("", "rqlilte-snap-")
+		if err != nil {
+			return err
+		}
+		f.Close()
+		defer os.Remove(f.Name())
+
+		if err := ioutil.WriteFile(f.Name(), b, 0660); err != nil {
+			return err
+		}
+
+		// Load an in-memory database from the snapshot now on disk.
+		db, err = sql.LoadInMemoryWithDSN(f.Name(), s.dbConf.DSN)
+		if err != nil {
+			return err
+		}
 	}
 	s.db = db
 
