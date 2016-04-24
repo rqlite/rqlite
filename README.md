@@ -55,15 +55,13 @@ rqlite exposes an HTTP API allowing the database to be modified such that the ch
 All responses from rqlite are in the form of JSON.
 
 ### Writing Data
-To write data successfully to the database, you must create at least 1 table. To do this, perform a HTTP POST, with a `CREATE TABLE` SQL command encapsulated in a JSON array, in the body of the request. For example:
+To write data successfully to the database, you must create at least 1 table. To do this, perform a HTTP POST, with a `CREATE TABLE` SQL command encapsulated in a JSON array, in the body of the request. An example via [curl](http://curl.haxx.se/):
 
 ```bash
 curl -XPOST 'localhost:4001/db/execute?pretty&timings' -H "Content-Type: application/json" -d '[
     "CREATE TABLE foo (id integer not null primary key, name text)"
 ]'
 ```
-
-where `curl` is the [well known command-line tool](http://curl.haxx.se/).
 
 To insert an entry into the database, execute a second SQL command:
 
@@ -277,9 +275,6 @@ Learn how to backup your rqlite cluster [here](https://github.com/otoolep/rqlite
 
 ## Security
 You can learn about securing access, and restricting users' access, to rqlite [here](https://github.com/otoolep/rqlite/blob/master/SECURITY.md).
-
-## Log Compaction
-rqlite automatically performs log compaction. After a fixed number of changes rqlite snapshots the SQLite database, and truncates the Raft log. This is a technical feature of the Raft consensus system, and most users of rqlite need not be concerned with this.
 
 ## Pronunciation?
 How do I pronounce rqlite? For what it's worth I pronounce it "ree-qwell-lite".
