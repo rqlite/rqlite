@@ -48,6 +48,39 @@ func Test_TableCreation(t *testing.T) {
 	}
 }
 
+func Test_LoadInMemory(t *testing.T) {
+	db, path := mustCreateDatabase()
+	defer db.Close()
+	defer os.Remove(path)
+
+	_, err := db.Execute([]string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"}, false, false)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	r, err := db.Query([]string{"SELECT * FROM foo"}, false, false)
+	if err != nil {
+		t.Fatalf("failed to query empty table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+
+	inmem, err := LoadInMemoryWithDSN(path, "")
+	if err != nil {
+		t.Fatalf("failed to create loaded in-memory database: %s", err.Error())
+	}
+
+	// Ensure it has been loaded correctly.database
+	r, err = inmem.Query([]string{"SELECT * FROM foo"}, false, false)
+	if err != nil {
+		t.Fatalf("failed to query empty table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+}
+
 func Test_SimpleSingleStatements(t *testing.T) {
 	db, path := mustCreateDatabase()
 	defer db.Close()

@@ -64,6 +64,46 @@ func OpenInMemoryWithDSN(dsn string) (*DB, error) {
 	return open(fqdsn(":memory:", dsn))
 }
 
+// LoadInMemoryWithDSN loads an in-memory database with that at the path,
+// with the specified DSN
+func LoadInMemoryWithDSN(dbPath, dsn string) (*DB, error) {
+	db, err := OpenInMemoryWithDSN(dsn)
+	if err != nil {
+		return nil, err
+	}
+
+	srcDB, err := Open(dbPath)
+	if err != nil {
+		return nil, err
+	}
+
+	bk, err := db.sqlite3conn.Backup("main", srcDB.sqlite3conn, "main")
+	if err != nil {
+		return nil, err
+	}
+
+	for {
+		done, err := bk.Step(-1)
+		if err != nil {
+			bk.Finish()
+			return nil, err
+		}
+		if done {
+			break
+		}
+		time.Sleep(bkDelay * time.Millisecond)
+	}
+
+	if err := bk.Finish(); err != nil {
+		return nil, err
+	}
+	if err := srcDB.Close(); err != nil {
+		return nil, err
+	}
+
+	return db, nil
+}
+
 // Close closes the underlying database connection.
 func (db *DB) Close() error {
 	return db.sqlite3conn.Close()
