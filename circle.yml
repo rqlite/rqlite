@@ -6,5 +6,5 @@ test:
     override:
         - bash gofmt.sh
         - go tool vet .
-        - go test -timeout 60s -v ./...
-        - GORACE="halt_on_error=1" go test -race -timeout 120s -v ./...
+        - case $CIRCLE_NODE_INDEX in 0) go test -timeout 60s -v ./... ;; 1) GORACE="halt_on_error=1" go test -race -timeout 120s -v ./...;; esac:
+            parallel: true
