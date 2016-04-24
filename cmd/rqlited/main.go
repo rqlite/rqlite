@@ -23,7 +23,6 @@ import (
 	"runtime/pprof"
 
 	"github.com/otoolep/rqlite/auth"
-	sql "github.com/otoolep/rqlite/db"
 	httpd "github.com/otoolep/rqlite/http"
 	"github.com/otoolep/rqlite/store"
 )
@@ -143,9 +142,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to determine absolute data path: %s", err.Error())
 	}
-	dbConf := sql.NewConfig()
-	dbConf.DSN = dsn
-	dbConf.Memory = inMem
+	dbConf := store.NewDBConfig(dsn, inMem)
 	store := store.New(dbConf, dataPath, raftAddr)
 	if err := store.Open(joinAddr == ""); err != nil {
 		log.Fatalf("failed to open store: %s", err.Error())

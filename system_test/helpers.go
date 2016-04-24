@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	sql "github.com/otoolep/rqlite/db"
 	httpd "github.com/otoolep/rqlite/http"
 	"github.com/otoolep/rqlite/store"
 )
@@ -172,7 +171,7 @@ func mustNewNode(enableSingle bool) *Node {
 		Dir: mustTempDir(),
 	}
 
-	dbConf := sql.NewConfig()
+	dbConf := store.NewDBConfig("", false)
 	node.Store = store.New(dbConf, node.Dir, "localhost:0")
 	if err := node.Store.Open(enableSingle); err != nil {
 		node.Deprovision()
