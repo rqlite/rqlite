@@ -71,7 +71,7 @@ func Test_LoadInMemory(t *testing.T) {
 		t.Fatalf("failed to create loaded in-memory database: %s", err.Error())
 	}
 
-	// Ensure it has been loaded correctly.database
+	// Ensure it has been loaded correctly into the database
 	r, err = inmem.Query([]string{"SELECT * FROM foo"}, false, false)
 	if err != nil {
 		t.Fatalf("failed to query empty table: %s", err.Error())
