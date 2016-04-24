@@ -97,7 +97,7 @@ func (s *Store) Open(enableSingle bool) error {
 		return err
 	}
 
-	// Create the database. Unless it's a memory-based database, tt must be deleted
+	// Create the database. Unless it's a memory-based database, it must be deleted
 	if !s.dbConf.Memory {
 		// as it will be rebuilt from (possibly) a snapshot and committed log entries.
 		if err := os.Remove(s.dbPath); err != nil && !os.IsNotExist(err) {
