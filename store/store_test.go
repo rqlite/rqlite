@@ -7,8 +7,6 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
-
-	sql "github.com/otoolep/rqlite/db"
 )
 
 type mockSnapshotSink struct {
@@ -293,8 +291,7 @@ func mustNewStore(inmem bool) *Store {
 	path := mustTempDir()
 	defer os.RemoveAll(path)
 
-	cfg := sql.NewConfig()
-	cfg.Memory = inmem
+	cfg := NewDBConfig("", inmem)
 	s := New(cfg, path, "localhost:0")
 	if s == nil {
 		panic("failed to create new store")

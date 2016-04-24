@@ -58,6 +58,17 @@ type command struct {
 	Timings bool        `json:"timings,omitempty"`
 }
 
+// DBConfig represents the configuration of the underlying SQLite database.
+type DBConfig struct {
+	DSN string  // Any custom DSN
+	Memory bool // Whether the database is in-memory only.
+}
+
+// NewDBConfig returns a new DB config instance.
+func NewDBConfig(dsn string, memory bool) *DBConfig {
+	return &DBConfig{DSN: dsn, Memory: memory}
+}
+
 // Store is a SQLite database, where all changes are made via Raft consensus.
 type Store struct {
 	raftDir  string
@@ -67,25 +78,20 @@ type Store struct {
 
 	ln     *networkLayer // Raft network between nodes.
 	raft   *raft.Raft    // The consensus mechanism.
-	dbConf *sql.Config   // SQLite database config.
-	dbPath string        // Path to database file.
+	dbConf *DBConfig     // SQLite database config.
+	dbPath string        // Path to underlying SQLite file, if not in-memory.
 	db     *sql.DB       // The underlying SQLite store.
 
 	logger *log.Logger
 }
 
 // New returns a new Store.
-func New(dbConf *sql.Config, dir, bind string) *Store {
-	dbPath := filepath.Join(dir, sqliteFile)
-	if dbConf.Memory {
-		dbPath = ":memory:"
-	}
-
+func New(dbConf *DBConfig, dir, bind string) *Store {
 	return &Store{
 		raftDir:  dir,
 		raftBind: bind,
 		dbConf:   dbConf,
-		dbPath:   dbPath,
+		dbPath:   filepath.Join(dir, sqliteFile),
 		logger:   log.New(os.Stderr, "[store] ", log.LstdFlags),
 	}
 }
@@ -98,19 +104,26 @@ func (s *Store) Open(enableSingle bool) error {
 	}
 
 	// Create the database. Unless it's a memory-based database, it must be deleted
+	var db *sql.DB
+	var err error
 	if !s.dbConf.Memory {
 		// as it will be rebuilt from (possibly) a snapshot and committed log entries.
 		if err := os.Remove(s.dbPath); err != nil && !os.IsNotExist(err) {
 			return err
 		}
-	}
-
-	db, err := sql.OpenWithConfiguration(s.dbPath, s.dbConf)
-	if err != nil {
-		return err
+		db, err = sql.OpenWithDSN(s.dbPath, s.dbConf.DSN)
+		if err != nil {
+			return err
+		}
+		s.logger.Println("SQLite database opened at", s.dbPath)
+	} else {
+		db, err = sql.OpenInMemoryWithDSN(s.dbConf.DSN)
+		if err != nil {
+			return err
+		}
+		s.logger.Println("SQLite in-memory database opened")
 	}
 	s.db = db
-	s.logger.Println("SQLite database opened at", s.dbConf.FQDSN(s.dbPath))
 
 	// Setup Raft configuration.
 	config := raft.DefaultConfig()
@@ -235,7 +248,7 @@ func (s *Store) WaitForAppliedIndex(idx uint64, timeout time.Duration) error {
 func (s *Store) Stats() (map[string]interface{}, error) {
 	dbStatus := map[string]interface{}{
 		"path":    s.dbPath,
-		"dns":     s.dbConf.FQDSN(s.dbPath),
+		"dns":     s.dbConf.DSN,
 		"version": sql.DBVersion,
 	}
 	if !s.dbConf.Memory {
@@ -423,7 +436,7 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 		return err
 	}
 
-	db, err := sql.OpenWithConfiguration(s.dbPath, s.dbConf)
+	db, err := sql.OpenWithDSN(s.dbPath, s.dbConf.DSN)
 	if err != nil {
 		return err
 	}
