@@ -39,8 +39,8 @@ const (
 )
 
 const (
-	muxRaftHeader    = 1 // Raft consensus communications
-	muxClusterHeader = 2 // Cluster communications
+	muxRaftHeader = 1 // Raft consensus communications
+	muxMetaHeader = 2 // Cluster meta communications
 )
 
 // commandType are commands that affect the state of the cluster, and must go through Raft.
@@ -126,6 +126,7 @@ type Store struct {
 
 	metaMu sync.RWMutex
 	meta   *clusterMeta
+	metaLn net.Listener
 
 	logger *log.Logger
 }
@@ -195,6 +196,10 @@ func (s *Store) Open(enableSingle bool) error {
 		return err
 	}
 	go s.mux.Serve(ln)
+
+	// Setup meta updates communication
+	s.metaLn = s.mux.Listen(muxMetaHeader)
+	go s.serveMeta()
 
 	// Setup Raft communication.
 	s.ln = newNetworkLayer(s.mux.Listen(muxRaftHeader), ln.Addr())
@@ -421,6 +426,21 @@ func (s *Store) Join(addr string) error {
 		return f.Error()
 	}
 	s.logger.Printf("node at %s joined successfully", addr)
+	return nil
+}
+
+func (s *Store) serveMeta() error {
+	for {
+		conn, err := s.metaLn.Accept()
+		if err != nil {
+			return err
+		}
+
+		go s.handleMetaConn(conn)
+	}
+}
+
+func (s *Store) handleMetaConn(conn net.Conn) error {
 	return nil
 }
 
