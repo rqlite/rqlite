@@ -19,8 +19,6 @@ func init() {
 	DBVersion, _, _ = sqlite3.Version()
 }
 
-
-
 // DB is the SQL database.
 type DB struct {
 	sqlite3conn *sqlite3.SQLiteConn // Driver connection to database.
