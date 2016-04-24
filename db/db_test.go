@@ -12,14 +12,6 @@ import (
  * Lowest-layer database tests
  */
 
-func Test_Config(t *testing.T) {
-	c := NewConfig()
-	c.DSN = "cache=shared&mode=memory"
-	if c.FQDSN("/foo/bar/db.sqlite") != "file:/foo/bar/db.sqlite?cache=shared&mode=memory" {
-		t.Fatalf("Fully qualified DSN not correct, got: %s", c.FQDSN("/foo/bar/db.sqlite"))
-	}
-}
-
 func Test_DbFileCreation(t *testing.T) {
 	dir, err := ioutil.TempDir("", "rqlite-test-")
 	defer os.RemoveAll(dir)
