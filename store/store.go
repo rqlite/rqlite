@@ -423,7 +423,7 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 
 // Restore restores the database to a previous state.
 func (s *Store) Restore(rc io.ReadCloser) error {
-	if err := os.Remove(s.dbPath); err != nil && !os.IsNotExist(err) {
+	if err := s.db.Close(); err != nil {
 		return err
 	}
 
@@ -432,13 +432,36 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 		return err
 	}
 
-	if err := ioutil.WriteFile(s.dbPath, b, 0660); err != nil {
-		return err
-	}
+	var db *sql.DB
+	if !s.dbConf.Memory {
+		// Write snapshot over any existing database file.
+		if err := ioutil.WriteFile(s.dbPath, b, 0660); err != nil {
+			return err
+		}
 
-	db, err := sql.OpenWithDSN(s.dbPath, s.dbConf.DSN)
-	if err != nil {
-		return err
+		// Re-open it.
+		db, err = sql.OpenWithDSN(s.dbPath, s.dbConf.DSN)
+		if err != nil {
+			return err
+		}
+	} else {
+		// In memory. Copy to temporary file, and then load memory from file.
+		f, err := ioutil.TempFile("", "rqlilte-snap-")
+		if err != nil {
+			return err
+		}
+		f.Close()
+		defer os.Remove(f.Name())
+
+		if err := ioutil.WriteFile(f.Name(), b, 0660); err != nil {
+			return err
+		}
+
+		// Load an in-memory database from the snapshot now on disk.
+		db, err = sql.LoadInMemoryWithDSN(f.Name(), s.dbConf.DSN)
+		if err != nil {
+			return err
+		}
 	}
 	s.db = db
 
