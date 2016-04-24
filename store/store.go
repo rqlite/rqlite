@@ -93,6 +93,7 @@ type clusterMeta struct {
 	APIPeers map[string]string // Map from Raft address to API address
 }
 
+// newClusterMeta returns an initialized cluster meta store.
 func newClusterMeta() *clusterMeta {
 	return &clusterMeta{
 		APIPeers: make(map[string]string),
@@ -459,6 +460,7 @@ func (s *Store) Join(addr string) error {
 	return nil
 }
 
+// serveMeta accepts new connections to the meta server.
 func (s *Store) serveMeta() error {
 	for {
 		conn, err := s.metaLn.Accept()
@@ -470,8 +472,23 @@ func (s *Store) serveMeta() error {
 	}
 }
 
+// handleMetaConn processes individual connections to the meta server.
 func (s *Store) handleMetaConn(conn net.Conn) error {
-	return nil
+	fmt.Println("handling meta connection")
+	defer conn.Close()
+
+	// Only handles peers updates for now.
+	peers := make(map[string]string)
+	d := json.NewDecoder(conn)
+
+	err := d.Decode(&peers)
+	if err != nil {
+		return err
+	}
+
+	// Update the peers.
+	fmt.Printf("%v", peers)
+	return s.UpdateAPIPeers(peers)
 }
 
 type fsmExecuteResponse struct {
