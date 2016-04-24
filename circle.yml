@@ -1,7 +1,3 @@
-dependencies:
-    post:
-        - ./gen_artifacts.sh
-
 test:
     override:
         - bash gofmt.sh
