@@ -474,7 +474,6 @@ func (s *Store) serveMeta() error {
 
 // handleMetaConn processes individual connections to the meta server.
 func (s *Store) handleMetaConn(conn net.Conn) error {
-	fmt.Println("handling meta connection")
 	defer conn.Close()
 
 	// Only handles peers updates for now.
@@ -487,7 +486,6 @@ func (s *Store) handleMetaConn(conn net.Conn) error {
 	}
 
 	// Update the peers.
-	fmt.Printf("%v", peers)
 	return s.UpdateAPIPeers(peers)
 }
 
