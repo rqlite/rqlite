@@ -12,10 +12,10 @@ type networkLayer struct {
 }
 
 // newNetworkLayer returns a new instance of networkLayer.
-func newNetworkLayer(ln net.Listener) *networkLayer {
+func newNetworkLayer(ln net.Listener, addr net.Addr) *networkLayer {
 	return &networkLayer{
 		ln:   ln,
-		addr: ln.Addr(),
+		addr: addr,
 	}
 }
 
@@ -26,7 +26,18 @@ func (l *networkLayer) Addr() net.Addr {
 
 // Dial creates a new network connection.
 func (l *networkLayer) Dial(addr string, timeout time.Duration) (net.Conn, error) {
-	return net.DialTimeout("tcp", addr, timeout)
+	conn, err := net.DialTimeout("tcp", addr, timeout)
+	if err != nil {
+		return nil, err
+	}
+
+	// Write a marker byte for raft messages.
+	_, err = conn.Write([]byte{muxRaftHeader})
+	if err != nil {
+		conn.Close()
+		return nil, err
+	}
+	return conn, err
 }
 
 // Accept waits for the next connection.

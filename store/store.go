@@ -5,6 +5,7 @@ package store
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,6 +21,13 @@ import (
 	"github.com/hashicorp/raft"
 	"github.com/hashicorp/raft-boltdb"
 	sql "github.com/otoolep/rqlite/db"
+	mux "github.com/otoolep/rqlite/tcp"
+)
+
+var (
+	// ErrFieldsRequired is returned when a node attempts to execute a leader-only
+	// operation.
+	ErrNotLeader = errors.New("not leader")
 )
 
 const (
@@ -30,12 +38,48 @@ const (
 	appliedWaitDelay    = 100 * time.Millisecond
 )
 
-var (
-	// ErrFieldsRequired is returned when a node attempts to execute a leader-only
-	// operation.
-	ErrNotLeader = errors.New("not leader")
+const (
+	muxRaftHeader = 1 // Raft consensus communications
+	muxMetaHeader = 2 // Cluster meta communications
 )
 
+// commandType are commands that affect the state of the cluster, and must go through Raft.
+type commandType int
+
+const (
+	execute commandType = iota // Commands which modify the database.
+	query                      // Commands which query the database.
+	peer                       // Commands that modify peers map.
+)
+
+type command struct {
+	Typ commandType     `json:"typ,omitempty"`
+	Sub json.RawMessage `json:"sub,omitempty"`
+}
+
+func newCommand(t commandType, d interface{}) (*command, error) {
+	b, err := json.Marshal(d)
+	if err != nil {
+		return nil, err
+	}
+	return &command{
+		Typ: t,
+		Sub: b,
+	}, nil
+
+}
+
+// databaseSub is a command sub which involves interaction with the database.
+type databaseSub struct {
+	Tx      bool     `json:"tx,omitempty"`
+	Queries []string `json:"queries,omitempty"`
+	Timings bool     `json:"timings,omitempty"`
+}
+
+// peersSub is a command which sets the API address for a Raft address.
+type peersSub map[string]string
+
+// ConsistencyLevel represents the available read consistency levels.
 type ConsistencyLevel int
 
 const (
@@ -44,18 +88,16 @@ const (
 	Strong
 )
 
-type commandType int
+// clusterMeta represents cluster meta which must be kept in consensus.
+type clusterMeta struct {
+	APIPeers map[string]string // Map from Raft address to API address
+}
 
-const (
-	execute commandType = iota
-	query
-)
-
-type command struct {
-	Typ     commandType `json:"typ,omitempty"`
-	Tx      bool        `json:"tx,omitempty"`
-	Queries []string    `json:"queries,omitempty"`
-	Timings bool        `json:"timings,omitempty"`
+// newClusterMeta returns an initialized cluster meta store.
+func newClusterMeta() *clusterMeta {
+	return &clusterMeta{
+		APIPeers: make(map[string]string),
+	}
 }
 
 // DBConfig represents the configuration of the underlying SQLite database.
@@ -73,6 +115,7 @@ func NewDBConfig(dsn string, memory bool) *DBConfig {
 type Store struct {
 	raftDir  string
 	raftBind string
+	mux      *mux.Mux
 
 	mu sync.RWMutex // Sync access between queries and snapshots.
 
@@ -82,6 +125,10 @@ type Store struct {
 	dbPath string        // Path to underlying SQLite file, if not in-memory.
 	db     *sql.DB       // The underlying SQLite store.
 
+	metaMu sync.RWMutex
+	meta   *clusterMeta
+	metaLn net.Listener
+
 	logger *log.Logger
 }
 
@@ -90,8 +137,10 @@ func New(dbConf *DBConfig, dir, bind string) *Store {
 	return &Store{
 		raftDir:  dir,
 		raftBind: bind,
+		mux:      mux.NewMux(),
 		dbConf:   dbConf,
 		dbPath:   filepath.Join(dir, sqliteFile),
+		meta:     newClusterMeta(),
 		logger:   log.New(os.Stderr, "[store] ", log.LstdFlags),
 	}
 }
@@ -142,12 +191,19 @@ func (s *Store) Open(enableSingle bool) error {
 		config.DisableBootstrapAfterElect = false
 	}
 
-	// Setup Raft communication.
+	// Set up TCP communication between nodes.
 	ln, err := net.Listen("tcp", s.raftBind)
 	if err != nil {
 		return err
 	}
-	s.ln = newNetworkLayer(ln)
+	go s.mux.Serve(ln)
+
+	// Setup meta updates communication
+	s.metaLn = s.mux.Listen(muxMetaHeader)
+	go s.serveMeta()
+
+	// Setup Raft communication.
+	s.ln = newNetworkLayer(s.mux.Listen(muxRaftHeader), ln.Addr())
 	transport := raft.NewNetworkTransport(s.ln, 3, 10*time.Second, os.Stderr)
 
 	// Create peer storage.
@@ -202,6 +258,18 @@ func (s *Store) Addr() net.Addr {
 // no leader.
 func (s *Store) Leader() string {
 	return s.raft.Leader()
+}
+
+// APIPeers return the map of Raft addresses to API addresses.
+func (s *Store) APIPeers() (map[string]string, error) {
+	s.metaMu.RLock()
+	defer s.metaMu.RUnlock()
+
+	peers := make(map[string]string, len(s.meta.APIPeers))
+	for k, v := range s.meta.APIPeers {
+		peers[k] = v
+	}
+	return peers, nil
 }
 
 // WaitForLeader blocks until a leader is detected, or the timeout expires.
@@ -276,11 +344,14 @@ func (s *Store) Execute(queries []string, timings, tx bool) ([]*sql.Result, erro
 		return nil, ErrNotLeader
 	}
 
-	c := &command{
-		Typ:     execute,
+	d := &databaseSub{
 		Tx:      tx,
 		Queries: queries,
 		Timings: timings,
+	}
+	c, err := newCommand(execute, d)
+	if err != nil {
+		return nil, err
 	}
 	b, err := json.Marshal(c)
 	if err != nil {
@@ -327,11 +398,14 @@ func (s *Store) Query(queries []string, timings, tx bool, lvl ConsistencyLevel) 
 	defer s.mu.RUnlock()
 
 	if lvl == Strong {
-		c := &command{
-			Typ:     query,
+		d := &databaseSub{
 			Tx:      tx,
 			Queries: queries,
 			Timings: timings,
+		}
+		c, err := newCommand(query, d)
+		if err != nil {
+			return nil, err
 		}
 		b, err := json.Marshal(c)
 		if err != nil {
@@ -355,6 +429,24 @@ func (s *Store) Query(queries []string, timings, tx bool, lvl ConsistencyLevel) 
 	return r, err
 }
 
+// UpdateAPIPeers updates the cluster-wide peer information.
+func (s *Store) UpdateAPIPeers(peers map[string]string) error {
+	c, err := newCommand(peer, peers)
+	if err != nil {
+		return err
+	}
+	b, err := json.Marshal(c)
+	if err != nil {
+		return err
+	}
+
+	f := s.raft.Apply(b, raftTimeout)
+	if e := f.(raft.Future); e.Error() != nil {
+		return e.Error()
+	}
+	return nil
+}
+
 // Join joins a node, located at addr, to this store. The node must be ready to
 // respond to Raft communications at that address.
 func (s *Store) Join(addr string) error {
@@ -368,6 +460,35 @@ func (s *Store) Join(addr string) error {
 	return nil
 }
 
+// serveMeta accepts new connections to the meta server.
+func (s *Store) serveMeta() error {
+	for {
+		conn, err := s.metaLn.Accept()
+		if err != nil {
+			return err
+		}
+
+		go s.handleMetaConn(conn)
+	}
+}
+
+// handleMetaConn processes individual connections to the meta server.
+func (s *Store) handleMetaConn(conn net.Conn) error {
+	defer conn.Close()
+
+	// Only handles peers updates for now.
+	peers := make(map[string]string)
+	d := json.NewDecoder(conn)
+
+	err := d.Decode(&peers)
+	if err != nil {
+		return err
+	}
+
+	// Update the peers.
+	return s.UpdateAPIPeers(peers)
+}
+
 type fsmExecuteResponse struct {
 	results []*sql.Result
 	error   error
@@ -378,19 +499,45 @@ type fsmQueryResponse struct {
 	error error
 }
 
+type fsmGenericResponse struct {
+	error error
+}
+
 // Apply applies a Raft log entry to the database.
 func (s *Store) Apply(l *raft.Log) interface{} {
 	var c command
 	if err := json.Unmarshal(l.Data, &c); err != nil {
-		panic(fmt.Sprintf("failed to unmarshal command: %s", err.Error()))
+		panic(fmt.Sprintf("failed to unmarshal cluster command: %s", err.Error()))
 	}
 
-	if c.Typ == execute {
-		r, err := s.db.Execute(c.Queries, c.Tx, c.Timings)
-		return &fsmExecuteResponse{results: r, error: err}
+	switch c.Typ {
+	case execute, query:
+		var d databaseSub
+		if err := json.Unmarshal(c.Sub, &d); err != nil {
+			return &fsmGenericResponse{error: err}
+		}
+		if c.Typ == execute {
+			r, err := s.db.Execute(d.Queries, d.Tx, d.Timings)
+			return &fsmExecuteResponse{results: r, error: err}
+		}
+		r, err := s.db.Query(d.Queries, d.Tx, d.Timings)
+		return &fsmQueryResponse{rows: r, error: err}
+	case peer:
+		var d peersSub
+		if err := json.Unmarshal(c.Sub, &d); err != nil {
+			return &fsmGenericResponse{error: err}
+		}
+		func() {
+			s.metaMu.Lock()
+			defer s.metaMu.Unlock()
+			for k, v := range d {
+				s.meta.APIPeers[k] = v
+			}
+		}()
+		return &fsmGenericResponse{}
+	default:
+		return &fsmGenericResponse{error: fmt.Errorf("unknown command: %v", c.Typ)}
 	}
-	r, err := s.db.Query(c.Queries, c.Tx, c.Timings)
-	return &fsmQueryResponse{rows: r, error: err}
 }
 
 // Snapshot returns a snapshot of the database. The caller must ensure that
@@ -415,29 +562,45 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 		return nil, err
 	}
 
-	b, err := ioutil.ReadFile(f.Name())
+	fsm := &fsmSnapshot{}
+	fsm.database, err = ioutil.ReadFile(f.Name())
 	if err != nil {
-		log.Printf("Failed to generate snapshot: %s", err.Error())
+		log.Printf("Failed to read database for snapshot: %s", err.Error())
 		return nil, err
 	}
-	return &fsmSnapshot{data: b}, nil
+
+	fsm.meta, err = json.Marshal(s.meta)
+	if err != nil {
+		log.Printf("Failed to encode meta for snapshot: %s", err.Error())
+		return nil, err
+	}
+
+	return fsm, nil
 }
 
-// Restore restores the database to a previous state.
+// Restore restores the node to a previous state.
 func (s *Store) Restore(rc io.ReadCloser) error {
 	if err := s.db.Close(); err != nil {
 		return err
 	}
 
-	b, err := ioutil.ReadAll(rc)
-	if err != nil {
+	// Get size of database.
+	var sz uint64
+	if err := binary.Read(rc, binary.LittleEndian, &sz); err != nil {
+		return err
+	}
+
+	// Now read in the database file data and restore.
+	database := make([]byte, sz)
+	if _, err := io.ReadFull(rc, database); err != nil {
 		return err
 	}
 
 	var db *sql.DB
+	var err error
 	if !s.dbConf.Memory {
 		// Write snapshot over any existing database file.
-		if err := ioutil.WriteFile(s.dbPath, b, 0660); err != nil {
+		if err := ioutil.WriteFile(s.dbPath, database, 0660); err != nil {
 			return err
 		}
 
@@ -455,7 +618,7 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 		f.Close()
 		defer os.Remove(f.Name())
 
-		if err := ioutil.WriteFile(f.Name(), b, 0660); err != nil {
+		if err := ioutil.WriteFile(f.Name(), database, 0660); err != nil {
 			return err
 		}
 
@@ -467,18 +630,45 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 	}
 	s.db = db
 
-	return nil
+	// Read remaining bytes, and set to cluster meta.
+	b, err := ioutil.ReadAll(rc)
+	if err != nil {
+		return err
+	}
+
+	return func() error {
+		s.metaMu.Lock()
+		defer s.metaMu.Unlock()
+		return json.Unmarshal(b, &s.meta)
+	}()
 }
 
 type fsmSnapshot struct {
-	data []byte
+	database []byte
+	meta     []byte
 }
 
-// Persist writes the snapshot to the give sink.
+// Persist writes the snapshot to the given sink.
 func (f *fsmSnapshot) Persist(sink raft.SnapshotSink) error {
 	err := func() error {
-		// Write data to sink.
-		if _, err := sink.Write(f.data); err != nil {
+		// Start by writing size of database.
+		b := new(bytes.Buffer)
+		sz := uint64(len(f.database))
+		err := binary.Write(b, binary.LittleEndian, sz)
+		if err != nil {
+			return err
+		}
+		if _, err := sink.Write(b.Bytes()); err != nil {
+			return err
+		}
+
+		// Next write database to sink.
+		if _, err := sink.Write(f.database); err != nil {
+			return err
+		}
+
+		// Finally write the meta.
+		if _, err := sink.Write(f.meta); err != nil {
 			return err
 		}
 
