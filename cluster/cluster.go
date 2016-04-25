@@ -20,7 +20,7 @@ func init() {
 	var err error
 	respOKMarshalled, err = json.Marshal(response{})
 	if err != nil {
-		panic(fmt.Sprintf("unable to JSON marshall OK response: %s", err.Error()))
+		panic(fmt.Sprintf("unable to JSON marshal OK response: %s", err.Error()))
 	}
 }
 
