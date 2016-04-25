@@ -6,14 +6,20 @@ import (
 	"time"
 )
 
-func Test_NewService(t *testing.T) {
-	ml := &mockListener{}
+func Test_NewServiceOpenClose(t *testing.T) {
+	ml := mustNewMockListener()
 	ms := &mockStore{}
 	s := NewService(ml, ms)
 	if s == nil {
 		t.Fatalf("failed to create cluster service")
 	}
-	return
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open cluster service")
+	}
+	if err := s.Close(); err != nil {
+		t.Fatalf("failed to close cluster service")
+	}
 }
 
 type mockListener struct {
@@ -31,11 +37,11 @@ func mustNewMockListener() *mockListener {
 }
 
 func (ml *mockListener) Accept() (c net.Conn, err error) {
-	return nil, nil
+	return ml.ln.Accept()
 }
 
 func (ml *mockListener) Addr() net.Addr {
-	return nil
+	return ml.ln.Addr()
 }
 
 func (ml *mockListener) Close() (err error) {

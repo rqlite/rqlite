@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"os"
+	"sync"
 	"time"
 )
 
@@ -51,27 +53,33 @@ type Service struct {
 	store Store
 	addr  net.Addr
 
+	wg sync.WaitGroup
+
 	logger *log.Logger
 }
 
 // NewService returns a new instance of the cluster service
 func NewService(ln Listener, store Store) *Service {
 	return &Service{
-		ln:    ln,
-		store: store,
-		addr:  ln.Addr(),
+		ln:     ln,
+		store:  store,
+		addr:   ln.Addr(),
+		logger: log.New(os.Stderr, "[cluster] ", log.LstdFlags),
 	}
 }
 
 // Open opens the Service.
 func (s *Service) Open() error {
+	s.wg.Add(1)
 	go s.serve()
+	s.logger.Println("service listening on", s.ln.Addr())
 	return nil
 }
 
 // Close closes the service.
 func (s *Service) Close() error {
 	s.ln.Close()
+	s.wg.Wait()
 	return nil
 }
 
@@ -124,6 +132,8 @@ func (s *Service) SetPeers(raftAddr, apiAddr string) error {
 }
 
 func (s *Service) serve() error {
+	defer s.wg.Done()
+
 	for {
 		conn, err := s.ln.Accept()
 		if err != nil {
