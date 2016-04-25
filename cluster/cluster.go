@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net"
 	"time"
@@ -10,6 +11,21 @@ import (
 const (
 	ConnectionTimeout = 10 * time.Second
 )
+
+var respOKMarshalled []byte
+
+func init() {
+	var err error
+	respOKMarshalled, err = json.Marshal(response{})
+	if err != nil {
+		panic(fmt.Sprintf("unable to JSON marshall OK response: %s", err.Error()))
+	}
+}
+
+type response struct {
+	Code    int    `json:"code,omitempty"`
+	Message string `json:"message,omitempty"`
+}
 
 // Listener is the interface the network service must provide.
 type Listener interface {
@@ -86,7 +102,17 @@ func (s *Service) SetPeers(raftAddr, apiAddr string) error {
 		return err
 	}
 
-	// XXXX Wait for response and check for error.
+	// Wait for the response and verify the operation went through.
+	resp := response{}
+	d := json.NewDecoder(conn)
+	err = d.Decode(&resp)
+	if err != nil {
+		return err
+	}
+
+	if resp.Code != 0 {
+		return fmt.Errorf(resp.Message)
+	}
 	return nil
 }
 
@@ -105,7 +131,6 @@ func (s *Service) handleConn(conn net.Conn) {
 	// Only handles peers updates for now.
 	peers := make(map[string]string)
 	d := json.NewDecoder(conn)
-
 	err := d.Decode(&peers)
 	if err != nil {
 		return
@@ -113,8 +138,21 @@ func (s *Service) handleConn(conn net.Conn) {
 
 	// Update the peers.
 	if err := s.store.UpdateAPIPeers(peers); err != nil {
-		// Write error back down conn
+		resp := response{1, err.Error()}
+		b, err := json.Marshal(resp)
+		if err != nil {
+			conn.Close() // Only way left to signal.
+		} else {
+			if _, err := conn.Write(b); err != nil {
+				conn.Close() // Only way left to signal.
+			}
+		}
 		return
 	}
-	// write OK back down conn
+
+	// Let the remote node know everything went OK.
+	if _, err := conn.Write(respOKMarshalled); err != nil {
+		conn.Close() // Only way left to signal.
+	}
+	return
 }
