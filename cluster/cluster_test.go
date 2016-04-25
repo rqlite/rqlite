@@ -38,7 +38,7 @@ func Test_SetAPIPeer(t *testing.T) {
 }
 
 func Test_SerAPIPeerNetwork(t *testing.T) {
-	t.Skip("service not responding correctly")
+	t.Skip("remote service not responding correctly")
 
 	raftAddr, apiAddr := "localhost:4002", "localhost:4001"
 
@@ -54,7 +54,7 @@ func Test_SerAPIPeerNetwork(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to connect to remote cluster service: %s", err.Error())
 	}
-	conn.Write([]byte(fmt.Sprintf(`{"%s": "%d"}`, raftAddr, apiAddr)))
+	conn.Write([]byte(fmt.Sprintf(`{"%s": "%s"}`, raftAddr, apiAddr)))
 	if err != nil {
 		t.Fatalf("failed to write to remote cluster service: %s", err.Error())
 	}
