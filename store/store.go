@@ -127,7 +127,6 @@ type Store struct {
 
 	metaMu sync.RWMutex
 	meta   *clusterMeta
-	metaLn net.Listener
 
 	logger *log.Logger
 }
@@ -197,10 +196,6 @@ func (s *Store) Open(enableSingle bool) error {
 		return err
 	}
 	go s.mux.Serve(ln)
-
-	// Setup meta updates communication
-	s.metaLn = s.mux.Listen(muxMetaHeader)
-	go s.serveMeta()
 
 	// Setup Raft communication.
 	s.ln = newNetworkLayer(s.mux.Listen(muxRaftHeader), ln.Addr())
@@ -458,35 +453,6 @@ func (s *Store) Join(addr string) error {
 	}
 	s.logger.Printf("node at %s joined successfully", addr)
 	return nil
-}
-
-// serveMeta accepts new connections to the meta server.
-func (s *Store) serveMeta() error {
-	for {
-		conn, err := s.metaLn.Accept()
-		if err != nil {
-			return err
-		}
-
-		go s.handleMetaConn(conn)
-	}
-}
-
-// handleMetaConn processes individual connections to the meta server.
-func (s *Store) handleMetaConn(conn net.Conn) error {
-	defer conn.Close()
-
-	// Only handles peers updates for now.
-	peers := make(map[string]string)
-	d := json.NewDecoder(conn)
-
-	err := d.Decode(&peers)
-	if err != nil {
-		return err
-	}
-
-	// Update the peers.
-	return s.UpdateAPIPeers(peers)
 }
 
 type fsmExecuteResponse struct {
