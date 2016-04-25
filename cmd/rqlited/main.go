@@ -215,10 +215,10 @@ func join(joinAddr string, skipVerify bool, raftAddr string) error {
 	if err != nil {
 		return err
 	}
+
 	if resp.StatusCode != 200 {
 		return fmt.Errorf("failed to join, node returned: %s", resp.Status)
 	}
-	defer resp.Body.Close()
 
 	return nil
 }
