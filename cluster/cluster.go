@@ -49,6 +49,7 @@ type Store interface {
 type Service struct {
 	ln    Listener
 	store Store
+	addr  net.Addr
 
 	logger *log.Logger
 }
@@ -58,6 +59,7 @@ func NewService(ln Listener, store Store) *Service {
 	return &Service{
 		ln:    ln,
 		store: store,
+		addr:  ln.Addr(),
 	}
 }
 
@@ -71,6 +73,11 @@ func (s *Service) Open() error {
 func (s *Service) Close() error {
 	s.ln.Close()
 	return nil
+}
+
+// Addr returns the address the service is listening on.
+func (s *Service) Addr() string {
+	return s.addr.String()
 }
 
 // SetPeers will set the mapping between raftAddr and apiAddr for the entire cluster.
