@@ -88,8 +88,8 @@ func (s *Service) Addr() string {
 	return s.addr.String()
 }
 
-// SetPeers will set the mapping between raftAddr and apiAddr for the entire cluster.
-func (s *Service) SetPeers(raftAddr, apiAddr string) error {
+// SetPeer will set the mapping between raftAddr and apiAddr for the entire cluster.
+func (s *Service) SetPeer(raftAddr, apiAddr string) error {
 	peer := map[string]string{
 		raftAddr: apiAddr,
 	}
