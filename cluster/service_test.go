@@ -9,7 +9,7 @@ import (
 )
 
 func Test_NewServiceOpenClose(t *testing.T) {
-	ml := mustNewMockListener()
+	ml := mustNewMockTransport()
 	ms := &mockStore{}
 	s := NewService(ml, ms)
 	if s == nil {
@@ -86,15 +86,15 @@ func Test_SetAPIPeerFailUpdate(t *testing.T) {
 	}
 
 	// Start a network server.
-	ln, err := net.Listen("tcp", "localhost:0")
+	tn, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("failed to open test server: %s", err.Error())
 	}
-	ms.leader = ln.Addr().String()
+	ms.leader = tn.Addr().String()
 
 	c := make(chan map[string]string, 1)
 	go func() {
-		conn, err := ln.Accept()
+		conn, err := tn.Accept()
 		if err != nil {
 			t.Fatalf("failed to accept connection from cluster: %s", err.Error())
 		}
@@ -126,8 +126,8 @@ func Test_SetAPIPeerFailUpdate(t *testing.T) {
 	}
 }
 
-func mustNewOpenService() (*Service, *mockListener, *mockStore) {
-	ml := mustNewMockListener()
+func mustNewOpenService() (*Service, *mockTransport, *mockStore) {
+	ml := mustNewMockTransport()
 	ms := newMockStore()
 	s := NewService(ml, ms)
 	if err := s.Open(); err != nil {
@@ -136,33 +136,33 @@ func mustNewOpenService() (*Service, *mockListener, *mockStore) {
 	return s, ml, ms
 }
 
-type mockListener struct {
-	ln net.Listener
+type mockTransport struct {
+	tn net.Listener
 }
 
-func mustNewMockListener() *mockListener {
-	ln, err := net.Listen("tcp", "localhost:0")
+func mustNewMockTransport() *mockTransport {
+	tn, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		panic("failed to create mock listener")
 	}
-	return &mockListener{
-		ln: ln,
+	return &mockTransport{
+		tn: tn,
 	}
 }
 
-func (ml *mockListener) Accept() (c net.Conn, err error) {
-	return ml.ln.Accept()
+func (ml *mockTransport) Accept() (c net.Conn, err error) {
+	return ml.tn.Accept()
 }
 
-func (ml *mockListener) Addr() net.Addr {
-	return ml.ln.Addr()
+func (ml *mockTransport) Addr() net.Addr {
+	return ml.tn.Addr()
 }
 
-func (ml *mockListener) Close() (err error) {
-	return ml.ln.Close()
+func (ml *mockTransport) Close() (err error) {
+	return ml.tn.Close()
 }
 
-func (ml *mockListener) Dial(addr string, t time.Duration) (net.Conn, error) {
+func (ml *mockTransport) Dial(addr string, t time.Duration) (net.Conn, error) {
 	return net.DialTimeout("tcp", addr, 5*time.Second)
 }
 
