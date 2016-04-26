@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"testing"
@@ -37,9 +38,7 @@ func Test_SetAPIPeer(t *testing.T) {
 	}
 }
 
-func Test_SerAPIPeerNetwork(t *testing.T) {
-	t.Skip("remote service not responding correctly")
-
+func Test_SetAPIPeerNetwork(t *testing.T) {
 	raftAddr, apiAddr := "localhost:4002", "localhost:4001"
 
 	s, _, ms := mustNewOpenService()
@@ -54,11 +53,20 @@ func Test_SerAPIPeerNetwork(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to connect to remote cluster service: %s", err.Error())
 	}
-	conn.Write([]byte(fmt.Sprintf(`{"%s": "%s"}`, raftAddr, apiAddr)))
-	if err != nil {
+	if _, err := conn.Write([]byte(fmt.Sprintf(`{"%s": "%s"}`, raftAddr, apiAddr))); err != nil {
 		t.Fatalf("failed to write to remote cluster service: %s", err.Error())
 	}
-	// XXX Check response
+
+	resp := response{}
+	d := json.NewDecoder(conn)
+	err = d.Decode(&resp)
+	if err != nil {
+		t.Fatalf("failed to decode response: %s", err.Error())
+	}
+
+	if resp.Code != 0 {
+		t.Fatalf("response code was non-zero")
+	}
 
 	if ms.peers[raftAddr] != apiAddr {
 		t.Fatalf("peer not set correctly, exp %s, got %s", apiAddr, ms.peers[raftAddr])
