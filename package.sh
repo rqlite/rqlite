@@ -4,7 +4,7 @@
 #
 # To determine the release ID, execute this command:
 #
-#   curl https://api.github.com/repos/otoolep/rqlite/releases
+#   curl https://api.github.com/repos/rqlite/rqlite/releases
 #
 
 if [ $# -lt 1 ]; then
@@ -12,7 +12,7 @@ if [ $# -lt 1 ]; then
     exit 1
 fi
 
-REPO_URL="https://github.com/otoolep/rqlite"
+REPO_URL="https://github.com/rqlite/rqlite"
 
 VERSION=$1
 API_TOKEN=$2
@@ -31,9 +31,9 @@ commit=`git rev-parse HEAD`
 kernel=`uname -s`
 buildtime=`date +%Y-%m-%dT%T%z`
 
-mkdir -p $tmp_build/src/github.com/otoolep
+mkdir -p $tmp_build/src/github.com/rqlite
 export GOPATH=$tmp_build
-cd $tmp_build/src/github.com/otoolep
+cd $tmp_build/src/github.com/rqlite
 git clone $REPO_URL
 cd rqlite
 go get -d ./...
@@ -51,5 +51,5 @@ if [ -z "$API_TOKEN" ]; then
     exit 0
 fi
 
-upload_url="https://uploads.github.com/repos/otoolep/rqlite/releases/$RELEASE_ID/assets"
+upload_url="https://uploads.github.com/repos/rqlite/rqlite/releases/$RELEASE_ID/assets"
 curl -v -H "Content-type: application/octet-stream" -H "Authorization: token $API_TOKEN" -XPOST $upload_url?name=$release_pkg --data-binary @$release_pkg

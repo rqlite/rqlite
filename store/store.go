@@ -20,8 +20,8 @@ import (
 
 	"github.com/hashicorp/raft"
 	"github.com/hashicorp/raft-boltdb"
-	sql "github.com/otoolep/rqlite/db"
-	mux "github.com/otoolep/rqlite/tcp"
+	sql "github.com/rqlite/rqlite/db"
+	mux "github.com/rqlite/rqlite/tcp"
 )
 
 var (

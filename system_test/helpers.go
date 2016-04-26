@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	httpd "github.com/otoolep/rqlite/http"
-	"github.com/otoolep/rqlite/store"
+	httpd "github.com/rqlite/rqlite/http"
+	"github.com/rqlite/rqlite/store"
 )
 
 // Node represents a node under test.
