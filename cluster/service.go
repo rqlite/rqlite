@@ -29,8 +29,8 @@ type response struct {
 	Message string `json:"message,omitempty"`
 }
 
-// Listener is the interface the network service must provide.
-type Listener interface {
+// Transport is the interface the network service must provide.
+type Transport interface {
 	net.Listener
 
 	// Dial is used to create a new outgoing connection
@@ -49,7 +49,7 @@ type Store interface {
 // Service allows access to the cluster and associated meta data,
 // via consensus.
 type Service struct {
-	ln    Listener
+	tn    Transport
 	store Store
 	addr  net.Addr
 
@@ -59,11 +59,11 @@ type Service struct {
 }
 
 // NewService returns a new instance of the cluster service
-func NewService(ln Listener, store Store) *Service {
+func NewService(tn Transport, store Store) *Service {
 	return &Service{
-		ln:     ln,
+		tn:     tn,
 		store:  store,
-		addr:   ln.Addr(),
+		addr:   tn.Addr(),
 		logger: log.New(os.Stderr, "[cluster] ", log.LstdFlags),
 	}
 }
@@ -72,13 +72,13 @@ func NewService(ln Listener, store Store) *Service {
 func (s *Service) Open() error {
 	s.wg.Add(1)
 	go s.serve()
-	s.logger.Println("service listening on", s.ln.Addr())
+	s.logger.Println("service listening on", s.tn.Addr())
 	return nil
 }
 
 // Close closes the service.
 func (s *Service) Close() error {
-	s.ln.Close()
+	s.tn.Close()
 	s.wg.Wait()
 	return nil
 }
@@ -105,7 +105,7 @@ func (s *Service) SetPeer(raftAddr, apiAddr string) error {
 	if leader := s.store.Leader(); leader == "" {
 		return fmt.Errorf("no leader available")
 	}
-	conn, err := s.ln.Dial(s.store.Leader(), ConnectionTimeout)
+	conn, err := s.tn.Dial(s.store.Leader(), ConnectionTimeout)
 	if err != nil {
 		return err
 	}
@@ -138,7 +138,7 @@ func (s *Service) serve() error {
 	defer s.wg.Done()
 
 	for {
-		conn, err := s.ln.Accept()
+		conn, err := s.tn.Accept()
 		if err != nil {
 			return err
 		}
