@@ -102,6 +102,9 @@ func (s *Service) SetPeer(raftAddr, apiAddr string) error {
 	}
 
 	// Try talking to the leader over the network.
+	if leader := s.store.Leader(); leader == "" {
+		return fmt.Errorf("no leader available")
+	}
 	conn, err := s.ln.Dial(s.store.Leader(), ConnectionTimeout)
 	if err != nil {
 		return err

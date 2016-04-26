@@ -73,6 +73,59 @@ func Test_SetAPIPeerNetwork(t *testing.T) {
 	}
 }
 
+func Test_SetAPIPeerFailUpdate(t *testing.T) {
+	raftAddr, apiAddr := "localhost:4002", "localhost:4001"
+
+	s, _, ms := mustNewOpenService()
+	defer s.Close()
+	ms.failUpdateAPIPeers = true
+
+	// Attempt to set peer without a leader
+	if err := s.SetPeer(raftAddr, apiAddr); err == nil {
+		t.Fatalf("no error returned by set peer when no leader")
+	}
+
+	// Start a network server.
+	ln, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("failed to open test server: %s", err.Error())
+	}
+	ms.leader = ln.Addr().String()
+
+	c := make(chan map[string]string, 1)
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			t.Fatalf("failed to accept connection from cluster: %s", err.Error())
+		}
+		t.Logf("test server received connection from: %s", conn.RemoteAddr())
+
+		peers := make(map[string]string)
+		d := json.NewDecoder(conn)
+		err = d.Decode(&peers)
+		if err != nil {
+			t.Fatalf("failed to decode message from cluster: %s", err.Error())
+		}
+
+		// Response OK.
+		// Let the remote node know everything went OK.
+		if _, err := conn.Write(respOKMarshalled); err != nil {
+			t.Fatalf("failed to respond to cluster: %s", err.Error())
+		}
+
+		c <- peers
+	}()
+
+	if err := s.SetPeer(raftAddr, apiAddr); err != nil {
+		t.Fatalf("failed to set peer on cluster: %s", err.Error())
+	}
+
+	peers := <-c
+	if peers[raftAddr] != apiAddr {
+		t.Fatalf("peer not set correctly, exp %s, got %s", apiAddr, ms.peers[raftAddr])
+	}
+}
+
 func mustNewOpenService() (*Service, *mockListener, *mockStore) {
 	ml := mustNewMockListener()
 	ms := newMockStore()
@@ -110,12 +163,13 @@ func (ml *mockListener) Close() (err error) {
 }
 
 func (ml *mockListener) Dial(addr string, t time.Duration) (net.Conn, error) {
-	return nil, nil
+	return net.DialTimeout("tcp", addr, 5*time.Second)
 }
 
 type mockStore struct {
-	leader string
-	peers  map[string]string
+	leader             string
+	peers              map[string]string
+	failUpdateAPIPeers bool
 }
 
 func newMockStore() *mockStore {
@@ -129,6 +183,10 @@ func (ms *mockStore) Leader() string {
 }
 
 func (ms *mockStore) UpdateAPIPeers(peers map[string]string) error {
+	if ms.failUpdateAPIPeers {
+		return fmt.Errorf("forced fail")
+	}
+
 	for k, v := range peers {
 		ms.peers[k] = v
 	}
