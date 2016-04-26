@@ -13,7 +13,7 @@ Download and run rqlite like so (tested on 64-bit Kubuntu 14.04 and OSX):
 mkdir rqlite # Or any directory of your choice.
 cd rqlite/
 export GOPATH=$PWD
-go get -t github.com/otoolep/rqlite/...
+go get -t github.com/rqlite/rqlite/...
 $GOPATH/bin/rqlited ~/node.1
 ```
 
@@ -33,25 +33,25 @@ Follow the steps below to work with a fork:
 
 ```bash
 export GOPATH=$HOME/rqlite
-mkdir -p $GOPATH/src/github.com/otoolep
-cd $GOPATH/src/github.com/otoolep
+mkdir -p $GOPATH/src/github.com/rqlite
+cd $GOPATH/src/github.com/rqlite
 git clone git@github.com:<your Github username>/rqlite
 ```
 
-Retaining the directory structure `$GOPATH/src/github.com/otoolep` is necessary so that Go imports work correctly.
+Retaining the directory structure `$GOPATH/src/github.com/rqlite` is necessary so that Go imports work correctly.
 
 ## Testing
 Be sure to run the unit test suite before opening a pull request. An example test run is shown below.
 ```bash
-$ cd $GOPATH/src/github.com/otoolep/rqlite
+$ cd $GOPATH/src/github.com/rqlite/rqlite
 $ go test ./...
-?       github.com/otoolep/rqlite       [no test files]
-ok      github.com/otoolep/rqlite/auth  0.001s
-?       github.com/otoolep/rqlite/cmd/rqlite    [no test files]
-?       github.com/otoolep/rqlite/cmd/rqlited   [no test files]
-ok      github.com/otoolep/rqlite/db    0.769s
-ok      github.com/otoolep/rqlite/http  0.006s
-ok      github.com/otoolep/rqlite/store 6.117s
-ok      github.com/otoolep/rqlite/system_test   7.853s
+?       github.com/rqlite/rqlite       [no test files]
+ok      github.com/rqlite/rqlite/auth  0.001s
+?       github.com/rqlite/rqlite/cmd/rqlite    [no test files]
+?       github.com/rqlite/rqlite/cmd/rqlited   [no test files]
+ok      github.com/rqlite/rqlite/db    0.769s
+ok      github.com/rqlite/rqlite/http  0.006s
+ok      github.com/rqlite/rqlite/store 6.117s
+ok      github.com/rqlite/rqlite/system_test   7.853s
 ```
 

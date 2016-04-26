@@ -1,4 +1,4 @@
-rqlite [![Circle CI](https://circleci.com/gh/otoolep/rqlite/tree/master.svg?style=svg)](https://circleci.com/gh/otoolep/rqlite/tree/master) [![GoDoc](https://godoc.org/github.com/otoolep/rqlite?status.svg)](https://godoc.org/github.com/otoolep/rqlite) [![Release](https://img.shields.io/github/release/otoolep/rqlite.svg)](https://github.com/otoolep/rqlite/releases)
+rqlite [![Circle CI](https://circleci.com/gh/rqlite/rqlite/tree/master.svg?style=svg)](https://circleci.com/gh/rqlite/rqlite/tree/master) [![GoDoc](https://godoc.org/github.com/rqlite/rqlite?status.svg)](https://godoc.org/github.com/rqlite/rqlite) [![Release](https://img.shields.io/github/release/rqlite/rqlite.svg)](https://github.com/rqlite/rqlite/releases)
 ======
 
 *Detailed background on rqlite can be found on [these blog posts](http://www.philipotoole.com/tag/rqlite/)*.
@@ -19,13 +19,13 @@ You could use rqlite as part of a larger system, as a central store for some cri
 - Hot backups.
 
 ## Getting started
-The quickest way to get running on OSX and Linux is to download a pre-built release binary. You can find these binaries on the [Github releases page](https://github.com/otoolep/rqlite/releases). Once installed, you can start a single rqlite node like so:
+The quickest way to get running on OSX and Linux is to download a pre-built release binary. You can find these binaries on the [Github releases page](https://github.com/rqlite/rqlite/releases). Once installed, you can start a single rqlite node like so:
 ```bash
 rqlited ~/node.1
 ```
 This single node automatically becomes the leader. You can pass `-h` to `rqlited` to list all configuration options.
 
-__If you want to build rqlite__, either because you want the latest code or a pre-built binary for platform is not available, take a look at the [contributing guidelines](https://github.com/otoolep/rqlite/blob/master/CONTRIBUTING.md).
+__If you want to build rqlite__, either because you want the latest code or a pre-built binary for platform is not available, take a look at the [contributing guidelines](https://github.com/rqlite/rqlite/blob/master/CONTRIBUTING.md).
 
 ### Forming a cluster
 While not strictly necessary to run rqlite, running multiple nodes means the SQLite database is replicated.
@@ -177,7 +177,7 @@ Another approach is to read the database file directly via `sqlite3`, the comman
 **If you use the query API to execute a command that modifies the database, those changes will not be replicated**. Always use the write API for inserts and updates.
 
 #### Read Consistency
-Even though serving queries does not require consensus (because the database is not changed), [queries should generally be served by the leader](https://github.com/otoolep/rqlite/issues/5). Why is this? Because without this check queries on a node could return out-of-date results.  This could happen for one of two reasons:
+Even though serving queries does not require consensus (because the database is not changed), [queries should generally be served by the leader](https://github.com/rqlite/rqlite/issues/5). Why is this? Because without this check queries on a node could return out-of-date results.  This could happen for one of two reasons:
 
  * The node, while still part of the cluster, has fallen behind the leader.
  * The node is no longer part of the cluster, and has stopped receiving Raft log updates.
@@ -258,13 +258,13 @@ INSERT INTO foo (n) VALUES(random());
  * The supported types are those supported by [go-sqlite3](http://godoc.org/github.com/mattn/go-sqlite3).
 
 ## Status API
-You can learn how check status and diagnostics [here](https://github.com/otoolep/rqlite/blob/master/DIAGNOSTICS.md).
+You can learn how check status and diagnostics [here](https://github.com/rqlite/rqlite/blob/master/DIAGNOSTICS.md).
 
 ## Backups
-Learn how to backup your rqlite cluster [here](https://github.com/otoolep/rqlite/blob/master/BACKUPS.md).
+Learn how to backup your rqlite cluster [here](https://github.com/rqlite/rqlite/blob/master/BACKUPS.md).
 
 ## Security
-You can learn about securing access, and restricting users' access, to rqlite [here](https://github.com/otoolep/rqlite/blob/master/SECURITY.md).
+You can learn about securing access, and restricting users' access, to rqlite [here](https://github.com/rqlite/rqlite/blob/master/SECURITY.md).
 
 ## Pronunciation?
 How do I pronounce rqlite? For what it's worth I pronounce it "ree-qwell-lite".
