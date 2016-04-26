@@ -11,6 +11,7 @@ rqlite gives you the functionality of a [rock solid](http://www.sqlite.org/testi
 You could use rqlite as part of a larger system, as a central store for some critical relational data, without having to run a heavier solution like MySQL. rqlite might also be an effective way to provide a small number of SQLite read-replicas. 
 
 ### Key features
+- Very easy deployment.
 - Fully replicated production-grade SQL database.
 - An easy-to-use HTTP(S) API, including bulk-update support.
 - Read consistency levels.
@@ -36,8 +37,6 @@ rqlited -http localhost:4003 -raft :4004 -join http://localhost:4001 ~/node.2
 rqlited -http localhost:4005 -raft :4006 -join http://localhost:4001 ~/node.3
 ```
 
-*(This assumes you've started the first node as instructed in the Getting Started section.)*
-
 Under each node will be an SQLite file, which should remain in consensus. You can create clusters of any size, but clusters of 3, 5, and 7 nodes are most practical. Clusters larger than this become impractical, due to the number of nodes that must be contacted before a change can take place.
 
 ### Restarting a node
@@ -51,8 +50,6 @@ On restart it will rejoin the cluster and apply any changes to the local SQLite 
 
 ## Data API
 rqlite exposes an HTTP API allowing the database to be modified such that the changes are replicated. Queries are also executed using the HTTP API, though the SQLite database could be queried directly. Modifications go through the Raft log, ensuring only changes committed by a quorum of rqlite nodes are actually executed against the SQLite database. Queries do not __necessarily__ go through the Raft log, however, since they do not change the state of the database, and therefore do not need to be captured in the log. More on this later.
-
-All responses from rqlite are in the form of JSON.
 
 ### Writing Data
 To write data successfully to the database, you must create at least 1 table. To do this, perform a HTTP POST, with a `CREATE TABLE` SQL command encapsulated in a JSON array, in the body of the request. An example via [curl](http://curl.haxx.se/):
