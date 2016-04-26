@@ -39,14 +39,7 @@ rqlited -http localhost:4005 -raft :4006 -join http://localhost:4001 ~/node.3
 
 Under each node will be an SQLite file, which should remain in consensus. You can create clusters of any size, but clusters of 3, 5, and 7 nodes are most practical. Clusters larger than this become impractical, due to the number of nodes that must be contacted before a change can take place.
 
-### Restarting a node
-If a node needs to be restarted, perhaps because of failure, don't pass the `-join` option. Using the example nodes above, if node 2 needed to be restarted, do so as follows:
-
-```bash
-rqlited -http localhost:4005 -raft :4006 ~/node.3
-```
-
-On restart it will rejoin the cluster and apply any changes to the local SQLite database that took place while it was down. Depending on the number of changes in the Raft log, restarts may take a little while.
+When restarting a node, there is no further need to pass `-join`. It will be ignored if a node is already a member of a cluster.
 
 ## Data API
 rqlite exposes an HTTP API allowing the database to be modified such that the changes are replicated. Queries are also executed using the HTTP API, though the SQLite database could be queried directly. Modifications go through the Raft log, ensuring only changes committed by a quorum of rqlite nodes are actually executed against the SQLite database. Queries do not __necessarily__ go through the Raft log, however, since they do not change the state of the database, and therefore do not need to be captured in the log. More on this later.

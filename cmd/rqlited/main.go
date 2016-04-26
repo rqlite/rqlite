@@ -150,10 +150,14 @@ func main() {
 
 	// If join was specified, make the join request.
 	if joinAddr != "" {
-		if err := join(joinAddr, noVerify, raftAddr); err != nil {
-			log.Fatalf("failed to join node at %s: %s", joinAddr, err.Error())
+		if !store.JoinRequired() {
+			log.Println("node is already member of cluster, ignoring join request")
+		} else {
+			if err := join(joinAddr, noVerify, raftAddr); err != nil {
+				log.Fatalf("failed to join node at %s: %s", joinAddr, err.Error())
+			}
+			log.Println("successfully joined node at", joinAddr)
 		}
-		log.Println("successfully joined node at", joinAddr)
 	}
 
 	// Create HTTP server and load authentication information, if supplied.

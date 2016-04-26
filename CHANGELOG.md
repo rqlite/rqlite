@@ -1,3 +1,6 @@
+## 2.2.3 (unreleased)
+- [PR #104](https://github.com/otoolep/rqlite/pull/104): Handle the `-join` option sensibly when already member of cluster.
+
 ## 2.2.2 (April 24th 2016)
 - [PR #96](https://github.com/otoolep/rqlite/pull/96): Add build time to status output.
 - [PR #101](https://github.com/otoolep/rqlite/pull/101): Fix restore to in-memory databases.

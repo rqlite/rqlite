@@ -119,11 +119,12 @@ type Store struct {
 
 	mu sync.RWMutex // Sync access between queries and snapshots.
 
-	ln     *networkLayer // Raft network between nodes.
-	raft   *raft.Raft    // The consensus mechanism.
-	dbConf *DBConfig     // SQLite database config.
-	dbPath string        // Path to underlying SQLite file, if not in-memory.
-	db     *sql.DB       // The underlying SQLite store.
+	ln           *networkLayer // Raft network between nodes.
+	raft         *raft.Raft    // The consensus mechanism.
+	dbConf       *DBConfig     // SQLite database config.
+	dbPath       string        // Path to underlying SQLite file, if not in-memory.
+	db           *sql.DB       // The underlying SQLite store.
+	joinRequired bool          // Whether an explicit join is required.
 
 	metaMu sync.RWMutex
 	meta   *clusterMeta
@@ -181,6 +182,7 @@ func (s *Store) Open(enableSingle bool) error {
 	if err != nil {
 		return err
 	}
+	s.joinRequired = len(peers) <= 1
 
 	// Allow the node to entry single-mode, potentially electing itself, if
 	// explicitly enabled and there is only 1 node in the cluster already.
@@ -238,6 +240,11 @@ func (s *Store) Close(wait bool) error {
 		}
 	}
 	return nil
+}
+
+// JoinRequired returns whether the node needs to join a cluster after being opened.
+func (s *Store) JoinRequired() bool {
+	return s.joinRequired
 }
 
 // Path returns the path to the store's storage directory.
