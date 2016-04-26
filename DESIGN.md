@@ -1,4 +1,7 @@
-# rqlite node
+# rqlite
+You can find details on the design and implementation of rqlite from [these blog posts](http://www.philipotoole.com/tag/rqlite/).
+
+## Node design
 The diagram below shows a high-level view of a rqlite node.
 
                  ┌ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┐    ┌ ─ ─ ─ ─ ┐
