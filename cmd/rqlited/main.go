@@ -23,6 +23,7 @@ import (
 	"runtime/pprof"
 
 	"github.com/rqlite/rqlite/auth"
+	"github.com/rqlite/rqlite/cluster"
 	httpd "github.com/rqlite/rqlite/http"
 	"github.com/rqlite/rqlite/store"
 )
@@ -137,6 +138,14 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
+	// Set up TCP communication between nodes.
+	ln, err := net.Listen("tcp", s.raftBind)
+	if err != nil {
+		return err
+	}
+	mux := tcp.NewMux()
+	go mux.Serve(ln)
+
 	// Create and open the store.
 	dataPath, err := filepath.Abs(dataPath)
 	if err != nil {
@@ -158,6 +167,13 @@ func main() {
 			}
 			log.Println("successfully joined node at", joinAddr)
 		}
+	}
+
+	// Create and configure cluster service. XXXX setting bytes here seems wrong
+	tn := mux.Listen(1)
+	cs := cluster.NewService(tn, store)
+	if err := cs.Open(); err != nil {
+		log.Fatafl("failed to open cluster service: %s", err.Error())
 	}
 
 	// Create HTTP server and load authentication information, if supplied.
