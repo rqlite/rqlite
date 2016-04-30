@@ -148,7 +148,7 @@ func (s *Service) serve() error {
 }
 
 func (s *Service) handleConn(conn net.Conn) {
-	s.logger.Println("received connection from %s", conn.RemoteAddr())
+	s.logger.Println("received connection from %s", conn.RemoteAddr().String())
 
 	// Only handles peers updates for now.
 	peers := make(map[string]string)
