@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -172,7 +173,7 @@ func mustNewNode(enableSingle bool) *Node {
 	}
 
 	dbConf := store.NewDBConfig("", false)
-	node.Store = store.New(dbConf, node.Dir, "localhost:0")
+	node.Store = store.New(dbConf, node.Dir, mustMockTransport("localhost:0"))
 	if err := node.Store.Open(enableSingle); err != nil {
 		node.Deprovision()
 		panic(fmt.Sprintf("failed to open store: %s", err.Error()))
@@ -197,6 +198,28 @@ func mustNewLeaderNode() *Node {
 	}
 	return node
 }
+
+type mockTransport struct {
+	ln net.Listener
+}
+
+func mustMockTransport(addr string) *mockTransport {
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		panic("failed to create new transport")
+	}
+	return &mockTransport{ln}
+}
+
+func (m *mockTransport) Dial(addr string, timeout time.Duration) (net.Conn, error) {
+	return net.DialTimeout("tcp", addr, timeout)
+}
+
+func (m *mockTransport) Accept() (net.Conn, error) { return m.ln.Accept() }
+
+func (m *mockTransport) Close() error { return m.ln.Close() }
+
+func (m *mockTransport) Addr() net.Addr { return m.ln.Addr() }
 
 func mustTempDir() string {
 	var err error

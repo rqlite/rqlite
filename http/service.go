@@ -36,8 +36,11 @@ type Store interface {
 	// Join joins the node, reachable at addr, to this node.
 	Join(addr string) error
 
-	// Leader returns the leader of the cluster.
+	// Leader returns the Raft leader of the cluster.
 	Leader() string
+
+	// Peer returns the API peer for the given address
+	Peer(addr string) string
 
 	// Stats returns stats on the Store.
 	Stats() (map[string]interface{}, error)
@@ -377,7 +380,7 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 	results, err := s.store.Execute(queries, timings, isTx)
 	if err != nil {
 		if err == store.ErrNotLeader && !s.DisableRedirect {
-			http.Redirect(w, r, s.store.Leader(), http.StatusTemporaryRedirect)
+			http.Redirect(w, r, s.store.Peer(s.store.Leader()), http.StatusTemporaryRedirect)
 			return
 		}
 		resp.Error = err.Error()
@@ -446,7 +449,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 	results, err := s.store.Query(queries, timings, isTx, lvl)
 	if err != nil {
 		if err == store.ErrNotLeader && !s.DisableRedirect {
-			http.Redirect(w, r, s.store.Leader(), http.StatusTemporaryRedirect)
+			http.Redirect(w, r, s.store.Peer(s.store.Leader()), http.StatusTemporaryRedirect)
 			return
 		}
 		resp.Error = err.Error()

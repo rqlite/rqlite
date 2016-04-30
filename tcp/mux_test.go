@@ -34,7 +34,7 @@ func TestMux(t *testing.T) {
 		defer tcpListener.Close()
 
 		// Setup muxer & listeners.
-		mux := NewMux()
+		mux := NewMux(tcpListener)
 		mux.Timeout = 200 * time.Millisecond
 		if !testing.Verbose() {
 			mux.Logger = log.New(ioutil.Discard, "", 0)
@@ -78,7 +78,7 @@ func TestMux(t *testing.T) {
 		}
 
 		// Begin serving from the listener.
-		go mux.Serve(tcpListener)
+		go mux.Serve()
 
 		// Write message to TCP listener and read OK response.
 		conn, err := net.Dial("tcp", tcpListener.Addr().String())
@@ -129,7 +129,11 @@ func TestMux_Listen_ErrAlreadyRegistered(t *testing.T) {
 	}()
 
 	// Register two listeners with the same header byte.
-	mux := NewMux()
+	tcpListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mux := NewMux(tcpListener)
 	mux.Listen(5)
 	mux.Listen(5)
 }

@@ -16,15 +16,19 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"runtime/pprof"
+	"time"
 
 	"github.com/rqlite/rqlite/auth"
+	"github.com/rqlite/rqlite/cluster"
 	httpd "github.com/rqlite/rqlite/http"
 	"github.com/rqlite/rqlite/store"
+	"github.com/rqlite/rqlite/tcp"
 )
 
 const sqliteDSN = "db.sqlite"
@@ -46,6 +50,16 @@ var (
 	commit    string
 	branch    string
 	buildtime string
+)
+
+const (
+	muxRaftHeader = 1 // Raft consensus communications
+	muxMetaHeader = 2 // Cluster meta communications
+)
+
+const (
+	publishPeerDelay   = 1 * time.Second
+	publishPeerTimeout = 30 * time.Second
 )
 
 var httpAddr string
@@ -137,15 +151,32 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
+	// Set up TCP communication between nodes.
+	ln, err := net.Listen("tcp", raftAddr)
+	if err != nil {
+		log.Fatalf("failed to listen on %s: %s", raftAddr, err.Error())
+	}
+	mux := tcp.NewMux(ln)
+
+	// Start up mux and get transports for cluster.
+	raftTn := mux.Listen(muxRaftHeader)
+
 	// Create and open the store.
-	dataPath, err := filepath.Abs(dataPath)
+	dataPath, err = filepath.Abs(dataPath)
 	if err != nil {
 		log.Fatalf("failed to determine absolute data path: %s", err.Error())
 	}
 	dbConf := store.NewDBConfig(dsn, inMem)
-	store := store.New(dbConf, dataPath, raftAddr)
+	store := store.New(dbConf, dataPath, raftTn)
 	if err := store.Open(joinAddr == ""); err != nil {
 		log.Fatalf("failed to open store: %s", err.Error())
+	}
+
+	// Create and configure cluster service.
+	tn := mux.Listen(muxMetaHeader)
+	cs := cluster.NewService(tn, store)
+	if err := cs.Open(); err != nil {
+		log.Fatalf("failed to open cluster service: %s", err.Error())
 	}
 
 	// If join was specified, make the join request.
@@ -175,6 +206,12 @@ func main() {
 	} else {
 		s = httpd.New(httpAddr, store, nil)
 	}
+
+	// Publish to the cluster the mapping between this Raft address and API address.
+	if err := publishAPIAddr(cs, raftAddr, httpAddr, publishPeerTimeout); err != nil {
+		log.Fatalf("failed to set peer for %s to %s: %s", raftAddr, httpAddr, err.Error())
+	}
+	log.Printf("set peer for %s to %s", raftAddr, httpAddr)
 
 	s.CertFile = x509Cert
 	s.KeyFile = x509Key
@@ -226,4 +263,25 @@ func join(joinAddr string, skipVerify bool, raftAddr string) error {
 	}
 
 	return nil
+}
+
+func publishAPIAddr(c *cluster.Service, raftAddr, apiAddr string, t time.Duration) error {
+	tck := time.NewTicker(publishPeerDelay)
+	defer tck.Stop()
+	tmr := time.NewTimer(t)
+	defer tmr.Stop()
+
+	for {
+		select {
+		case <-tck.C:
+			if err := c.SetPeer(raftAddr, apiAddr); err != nil {
+				log.Printf("failed to set peer for %s to %s: %s (retrying)",
+					raftAddr, apiAddr, err.Error())
+				continue
+			}
+			return nil
+		case <-tmr.C:
+			return fmt.Errorf("set peer timeout expired")
+		}
+	}
 }
