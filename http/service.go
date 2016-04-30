@@ -380,7 +380,8 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 	results, err := s.store.Execute(queries, timings, isTx)
 	if err != nil {
 		if err == store.ErrNotLeader {
-			http.Redirect(w, r, s.store.Peer(s.store.Leader()), http.StatusMovedPermanently)
+			redirect := s.FormRedirect(r, s.store.Peer(s.store.Leader()))
+			http.Redirect(w, r, redirect, http.StatusMovedPermanently)
 			return
 		}
 		resp.Error = err.Error()
@@ -449,7 +450,8 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 	results, err := s.store.Query(queries, timings, isTx, lvl)
 	if err != nil {
 		if err == store.ErrNotLeader {
-			http.Redirect(w, r, s.store.Peer(s.store.Leader()), http.StatusMovedPermanently)
+			redirect := s.FormRedirect(r, s.store.Peer(s.store.Leader()))
+			http.Redirect(w, r, redirect, http.StatusMovedPermanently)
 			return
 		}
 		resp.Error = err.Error()
@@ -463,6 +465,14 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 // Addr returns the address on which the Service is listening
 func (s *Service) Addr() net.Addr {
 	return s.ln.Addr()
+}
+
+func (s *Service) FormRedirect(r *http.Request, host string) string {
+	protocol := "http"
+	if s.credentialStore != nil {
+		protocol = "https"
+	}
+	return fmt.Sprintf("%s://%s%s", protocol, host, r.URL.Path)
 }
 
 // CheckRequestPerm returns true if authentication is enabled and the user contained
