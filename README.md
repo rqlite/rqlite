@@ -40,7 +40,7 @@ Under each node will be an SQLite database, which should remain in consensus. Yo
 When restarting a node, there is no further need to pass `-join`. It will be ignored if a node is already a member of a cluster.
 
 ## Data API
-rqlite exposes an HTTP API allowing the database to be modified such that the changes are replicated. Queries are also executed using the HTTP API, though the SQLite database could be queried directly. Modifications go through the Raft log, ensuring only changes committed by a quorum of rqlite nodes are actually executed against the SQLite database. Queries do not __necessarily__ go through the Raft log, however, since they do not change the state of the database, and therefore do not need to be captured in the log. More on this later.
+rqlite exposes an HTTP API allowing the database to be modified such that the changes are replicated. Queries are also executed using the HTTP API. Modifications go through the Raft log, ensuring only changes committed by a quorum of rqlite nodes are actually executed against the SQLite database. Queries do not __necessarily__ go through the Raft log, however, since they do not change the state of the database, and therefore do not need to be captured in the log. More on this later.
 
 ### Writing Data
 To write data successfully to the database, you must create at least 1 table. To do this, perform a HTTP POST, with a `CREATE TABLE` SQL command encapsulated in a JSON array, in the body of the request. An example via [curl](http://curl.haxx.se/):
@@ -156,8 +156,6 @@ curl -XPOST 'localhost:4001/db/query?pretty' -H "Content-Type: application/json"
     "SELECT * FROM bar"
 ]'
 ```
-
-Another approach is to read the database file directly via `sqlite3`, the command-line tool that comes with SQLite. As long as you can be sure the file you access is under the leader, the records returned will be accurate and up-to-date.
 
 **If you use the query API to execute a command that modifies the database, those changes will not be replicated**. Always use the write API for inserts and updates.
 
