@@ -46,7 +46,7 @@ const logo = `
 
 // These variables are populated via the Go linker.
 var (
-	version   = "2"
+	version   = "3"
 	commit    string
 	branch    string
 	buildtime string
@@ -189,7 +189,7 @@ func main() {
 			log.Println("successfully joined node at", joinAddr)
 		}
 	}
-	
+
 	// Publish to the cluster the mapping between this Raft address and API address.
 	if err := publishAPIAddr(cs, raftAddr, httpAddr, publishPeerTimeout); err != nil {
 		log.Fatalf("failed to set peer for %s to %s: %s", raftAddr, httpAddr, err.Error())
