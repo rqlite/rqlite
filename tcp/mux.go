@@ -78,6 +78,8 @@ func NewMux(ln net.Listener) *Mux {
 
 // Serve handles connections from ln and multiplexes then across registered listener.
 func (mux *Mux) Serve() error {
+	mux.Logger.Println("mux serving on", mux.addr)
+
 	for {
 		// Wait for the next connection.
 		// If it returns a temporary error then simply retry.

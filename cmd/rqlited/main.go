@@ -157,6 +157,7 @@ func main() {
 		log.Fatalf("failed to listen on %s: %s", raftAddr, err.Error())
 	}
 	mux := tcp.NewMux(ln)
+	go mux.Serve()
 
 	// Start up mux and get transports for cluster.
 	raftTn := mux.Listen(muxRaftHeader)
