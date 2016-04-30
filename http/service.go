@@ -298,8 +298,9 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpStatus := map[string]interface{}{
-		"addr": s.Addr().String(),
-		"auth": prettyEnabled(s.credentialStore != nil),
+		"addr":     s.Addr().String(),
+		"auth":     prettyEnabled(s.credentialStore != nil),
+		"redirect": s.store.Peer(s.store.Leader()),
 	}
 
 	nodeStatus := map[string]interface{}{
