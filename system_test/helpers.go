@@ -92,6 +92,26 @@ func (n *Node) Join(leader *Node) error {
 	return nil
 }
 
+// ConfirmRedirect confirms that the node responds with a redirect to the given host.
+func (n *Node) ConfirmRedirect(host string) bool {
+	v, _ := url.Parse("http://" + n.APIAddr + "/db/query")
+	v.RawQuery = url.Values{"q": []string{`SELECT * FROM foo`}}.Encode()
+
+	resp, err := http.Get(v.String())
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	fmt.Println(resp.StatusCode)
+	if resp.StatusCode != http.StatusMovedPermanently {
+		return false
+	}
+	if resp.Header.Get("location") != host {
+		return false
+	}
+	return true
+}
+
 func (n *Node) postExecute(stmt string) (string, error) {
 	resp, err := http.Post("http://"+n.APIAddr+"/db/execute", "application/json", strings.NewReader(stmt))
 	if err != nil {
@@ -138,6 +158,26 @@ func (c Cluster) WaitForNewLeader(old *Node) (*Node, error) {
 			}
 		}
 	}
+}
+
+// Followers returns the slide of nodes in the cluster that are followers.
+func (c Cluster) Followers() ([]*Node, error) {
+	n, err := c[0].WaitForLeader()
+	if err != nil {
+		return nil, err
+	}
+	leader, err := c.FindNodeByRaftAddr(n)
+	if err != nil {
+		return nil, err
+	}
+
+	var followers []*Node
+	for _, n := range c {
+		if n != leader {
+			followers = append(followers, n)
+		}
+	}
+	return followers, nil
 }
 
 // RemoveNode removes the given node from the cluster.
