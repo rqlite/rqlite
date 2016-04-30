@@ -381,6 +381,9 @@ func (s *Store) Execute(queries []string, timings, tx bool) ([]*sql.Result, erro
 
 	f := s.raft.Apply(b, raftTimeout)
 	if e := f.(raft.Future); e.Error() != nil {
+		if e.Error() == raft.ErrNotLeader {
+			return nil, ErrNotLeader
+		}
 		return nil, e.Error()
 	}
 
@@ -435,6 +438,9 @@ func (s *Store) Query(queries []string, timings, tx bool, lvl ConsistencyLevel) 
 
 		f := s.raft.Apply(b, raftTimeout)
 		if e := f.(raft.Future); e.Error() != nil {
+			if e.Error() == raft.ErrNotLeader {
+				return nil, ErrNotLeader
+			}
 			return nil, e.Error()
 		}
 
