@@ -189,6 +189,12 @@ func main() {
 			log.Println("successfully joined node at", joinAddr)
 		}
 	}
+	
+	// Publish to the cluster the mapping between this Raft address and API address.
+	if err := publishAPIAddr(cs, raftAddr, httpAddr, publishPeerTimeout); err != nil {
+		log.Fatalf("failed to set peer for %s to %s: %s", raftAddr, httpAddr, err.Error())
+	}
+	log.Printf("set peer for %s to %s", raftAddr, httpAddr)
 
 	// Create HTTP server and load authentication information, if supplied.
 	var s *httpd.Service
@@ -205,12 +211,6 @@ func main() {
 	} else {
 		s = httpd.New(httpAddr, store, nil)
 	}
-
-	// Publish to the cluster the mapping between this Raft address and API address.
-	if err := publishAPIAddr(cs, raftAddr, httpAddr, publishPeerTimeout); err != nil {
-		log.Fatalf("failed to set peer for %s to %s: %s", raftAddr, httpAddr, err.Error())
-	}
-	log.Printf("set peer for %s to %s", raftAddr, httpAddr)
 
 	s.CertFile = x509Cert
 	s.KeyFile = x509Key
