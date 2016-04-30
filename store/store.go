@@ -21,7 +21,6 @@ import (
 	"github.com/hashicorp/raft"
 	"github.com/hashicorp/raft-boltdb"
 	sql "github.com/rqlite/rqlite/db"
-	mux "github.com/rqlite/rqlite/tcp"
 )
 
 var (
@@ -38,10 +37,13 @@ const (
 	appliedWaitDelay    = 100 * time.Millisecond
 )
 
-const (
-	muxRaftHeader = 1 // Raft consensus communications
-	muxMetaHeader = 2 // Cluster meta communications
-)
+// Transport is the interface the network service must provide.
+type Transport interface {
+	net.Listener
+
+	// Dial is used to create a new outgoing connection
+	Dial(address string, timeout time.Duration) (net.Conn, error)
+}
 
 // commandType are commands that affect the state of the cluster, and must go through Raft.
 type commandType int
@@ -113,18 +115,16 @@ func NewDBConfig(dsn string, memory bool) *DBConfig {
 
 // Store is a SQLite database, where all changes are made via Raft consensus.
 type Store struct {
-	raftDir  string
-	raftBind string
-	mux      *mux.Mux
+	raftDir string
 
 	mu sync.RWMutex // Sync access between queries and snapshots.
 
-	ln           *networkLayer // Raft network between nodes.
-	raft         *raft.Raft    // The consensus mechanism.
-	dbConf       *DBConfig     // SQLite database config.
-	dbPath       string        // Path to underlying SQLite file, if not in-memory.
-	db           *sql.DB       // The underlying SQLite store.
-	joinRequired bool          // Whether an explicit join is required.
+	raft          *raft.Raft // The consensus mechanism.
+	raftTransport Transport
+	dbConf        *DBConfig // SQLite database config.
+	dbPath        string    // Path to underlying SQLite file, if not in-memory.
+	db            *sql.DB   // The underlying SQLite store.
+	joinRequired  bool      // Whether an explicit join is required.
 
 	metaMu sync.RWMutex
 	meta   *clusterMeta
@@ -133,15 +133,14 @@ type Store struct {
 }
 
 // New returns a new Store.
-func New(dbConf *DBConfig, dir, bind string) *Store {
+func New(dbConf *DBConfig, dir string, tn Transport) *Store {
 	return &Store{
-		raftDir:  dir,
-		raftBind: bind,
-		mux:      mux.NewMux(),
-		dbConf:   dbConf,
-		dbPath:   filepath.Join(dir, sqliteFile),
-		meta:     newClusterMeta(),
-		logger:   log.New(os.Stderr, "[store] ", log.LstdFlags),
+		raftDir:       dir,
+		raftTransport: tn,
+		dbConf:        dbConf,
+		dbPath:        filepath.Join(dir, sqliteFile),
+		meta:          newClusterMeta(),
+		logger:        log.New(os.Stderr, "[store] ", log.LstdFlags),
 	}
 }
 
@@ -192,16 +191,8 @@ func (s *Store) Open(enableSingle bool) error {
 		config.DisableBootstrapAfterElect = false
 	}
 
-	// Set up TCP communication between nodes.
-	ln, err := net.Listen("tcp", s.raftBind)
-	if err != nil {
-		return err
-	}
-	go s.mux.Serve(ln)
-
 	// Setup Raft communication.
-	s.ln = newNetworkLayer(s.mux.Listen(muxRaftHeader), ln.Addr())
-	transport := raft.NewNetworkTransport(s.ln, 3, 10*time.Second, os.Stderr)
+	transport := raft.NewNetworkTransport(s.raftTransport, 3, 10*time.Second, os.Stderr)
 
 	// Create peer storage.
 	peerStore := raft.NewJSONPeers(s.raftDir, transport)
@@ -253,7 +244,7 @@ func (s *Store) Path() string {
 }
 
 func (s *Store) Addr() net.Addr {
-	return s.ln.Addr()
+	return s.raftTransport.Addr()
 }
 
 // Leader returns the current leader. Returns a blank string if there is

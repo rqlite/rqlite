@@ -16,6 +16,39 @@ const (
 	DefaultTimeout = 30 * time.Second
 )
 
+// Layer represents the connection between nodes.
+type Layer struct {
+	ln     net.Listener
+	header byte
+}
+
+// Addr returns the local address for the layer.
+func (l *Layer) Addr() net.Addr {
+	return l.ln.Addr()
+}
+
+// Dial creates a new network connection.
+func (l *Layer) Dial(addr string, timeout time.Duration) (net.Conn, error) {
+	conn, err := net.DialTimeout("tcp", addr, timeout)
+	if err != nil {
+		return nil, err
+	}
+
+	// Write a marker byte for raft messages.
+	_, err = conn.Write([]byte{l.header})
+	if err != nil {
+		conn.Close()
+		return nil, err
+	}
+	return conn, err
+}
+
+// Accept waits for the next connection.
+func (l *Layer) Accept() (net.Conn, error) { return l.ln.Accept() }
+
+// Close closes the layer.
+func (l *Layer) Close() error { return l.ln.Close() }
+
 // Mux multiplexes a network connection.
 type Mux struct {
 	ln net.Listener
@@ -104,7 +137,7 @@ func (mux *Mux) handleConn(conn net.Conn) {
 
 // Listen returns a listener identified by header.
 // Any connection accepted by mux is multiplexed based on the initial header byte.
-func (mux *Mux) Listen(header byte) net.Listener {
+func (mux *Mux) Listen(header byte) *Layer {
 	// Ensure two listeners are not created for the same header byte.
 	if _, ok := mux.m[header]; ok {
 		panic(fmt.Sprintf("listener already registered under header byte: %d", header))
@@ -116,7 +149,12 @@ func (mux *Mux) Listen(header byte) net.Listener {
 	}
 	mux.m[header] = ln
 
-	return ln
+	layer := &Layer{
+		ln:     ln,
+		header: header,
+	}
+
+	return layer
 }
 
 // listener is a receiver for connections received by Mux.

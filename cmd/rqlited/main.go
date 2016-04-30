@@ -16,6 +16,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -26,6 +27,7 @@ import (
 	"github.com/rqlite/rqlite/cluster"
 	httpd "github.com/rqlite/rqlite/http"
 	"github.com/rqlite/rqlite/store"
+	"github.com/rqlite/rqlite/tcp"
 )
 
 const sqliteDSN = "db.sqlite"
@@ -47,6 +49,11 @@ var (
 	commit    string
 	branch    string
 	buildtime string
+)
+
+const (
+	muxRaftHeader = 1 // Raft consensus communications
+	muxMetaHeader = 2 // Cluster meta communications
 )
 
 var httpAddr string
@@ -139,20 +146,23 @@ func main() {
 	}
 
 	// Set up TCP communication between nodes.
-	ln, err := net.Listen("tcp", s.raftBind)
+	ln, err := net.Listen("tcp", raftAddr)
 	if err != nil {
-		return err
+		log.Fatalf("failed to listen on %s: %s", raftAddr, err.Error())
 	}
 	mux := tcp.NewMux()
+
+	// Start up mux and get transports for cluster.
 	go mux.Serve(ln)
+	raftTn := mux.Listen(muxRaftHeader)
 
 	// Create and open the store.
-	dataPath, err := filepath.Abs(dataPath)
+	dataPath, err = filepath.Abs(dataPath)
 	if err != nil {
 		log.Fatalf("failed to determine absolute data path: %s", err.Error())
 	}
 	dbConf := store.NewDBConfig(dsn, inMem)
-	store := store.New(dbConf, dataPath, raftAddr)
+	store := store.New(dbConf, dataPath, raftTn)
 	if err := store.Open(joinAddr == ""); err != nil {
 		log.Fatalf("failed to open store: %s", err.Error())
 	}
@@ -169,11 +179,11 @@ func main() {
 		}
 	}
 
-	// Create and configure cluster service. XXXX setting bytes here seems wrong
-	tn := mux.Listen(1)
+	// Create and configure cluster service.
+	tn := mux.Listen(muxMetaHeader)
 	cs := cluster.NewService(tn, store)
 	if err := cs.Open(); err != nil {
-		log.Fatafl("failed to open cluster service: %s", err.Error())
+		log.Fatalf("failed to open cluster service: %s", err.Error())
 	}
 
 	// Create HTTP server and load authentication information, if supplied.

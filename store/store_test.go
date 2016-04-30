@@ -3,6 +3,7 @@ package store
 import (
 	"encoding/json"
 	"io/ioutil"
+	"net"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -384,7 +385,7 @@ func mustNewStore(inmem bool) *Store {
 	defer os.RemoveAll(path)
 
 	cfg := NewDBConfig("", inmem)
-	s := New(cfg, path, "localhost:0")
+	s := New(cfg, path, mustNewTransport("localhost:0"))
 	if s == nil {
 		panic("failed to create new store")
 	}
@@ -399,6 +400,28 @@ func mustTempDir() string {
 	}
 	return path
 }
+
+type mockTransport struct {
+	ln net.Listener
+}
+
+func mustNewTransport(addr string) Transport {
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		panic("failed to create new transport")
+	}
+	return &mockTransport{ln}
+}
+
+func (m *mockTransport) Dial(addr string, timeout time.Duration) (net.Conn, error) {
+	return net.DialTimeout("tcp", addr, timeout)
+}
+
+func (m *mockTransport) Accept() (net.Conn, error) { return m.ln.Accept() }
+
+func (m *mockTransport) Close() error { return m.ln.Close() }
+
+func (m *mockTransport) Addr() net.Addr { return m.ln.Addr() }
 
 func asJSON(v interface{}) string {
 	b, err := json.Marshal(v)
