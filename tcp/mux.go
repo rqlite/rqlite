@@ -34,7 +34,7 @@ func (l *Layer) Dial(addr string, timeout time.Duration) (net.Conn, error) {
 		return nil, err
 	}
 
-	// Write a marker byte for raft messages.
+	// Write a marker byte to indicate message type.
 	_, err = conn.Write([]byte{l.header})
 	if err != nil {
 		conn.Close()
