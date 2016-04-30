@@ -354,6 +354,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		"addr":    s.Addr().String(),
 		"leader":  s.Leader(),
 		"meta":    s.meta,
+		"dir":     s.raftDir,
 		"sqlite3": dbStatus,
 	}
 	return status, nil
