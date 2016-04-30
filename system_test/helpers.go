@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -202,7 +203,7 @@ type mockTransport struct {
 	ln net.Listener
 }
 
-func mustMockTransport(addr string) Transport {
+func mustMockTransport(addr string) *mockTransport {
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		panic("failed to create new transport")
