@@ -119,8 +119,7 @@ type Service struct {
 
 	credentialStore CredentialStore
 
-	Expvar          bool
-	DisableRedirect bool // Disable leader-redirection.
+	Expvar bool
 
 	BuildInfo map[string]interface{}
 
@@ -379,7 +378,7 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 
 	results, err := s.store.Execute(queries, timings, isTx)
 	if err != nil {
-		if err == store.ErrNotLeader && !s.DisableRedirect {
+		if err == store.ErrNotLeader {
 			http.Redirect(w, r, s.store.Peer(s.store.Leader()), http.StatusTemporaryRedirect)
 			return
 		}
@@ -448,7 +447,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 
 	results, err := s.store.Query(queries, timings, isTx, lvl)
 	if err != nil {
-		if err == store.ErrNotLeader && !s.DisableRedirect {
+		if err == store.ErrNotLeader {
 			http.Redirect(w, r, s.store.Peer(s.store.Leader()), http.StatusTemporaryRedirect)
 			return
 		}
