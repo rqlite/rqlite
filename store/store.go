@@ -95,11 +95,30 @@ type clusterMeta struct {
 	APIPeers map[string]string // Map from Raft address to API address
 }
 
-// newClusterMeta returns an initialized cluster meta store.
-func newClusterMeta() *clusterMeta {
+// NewClusterMeta returns an initialized cluster meta store.
+func NewClusterMeta() *clusterMeta {
 	return &clusterMeta{
 		APIPeers: make(map[string]string),
 	}
+}
+
+func (c *clusterMeta) AddrForPeer(addr string) string {
+	if api, ok := c.APIPeers[addr]; ok && api != "" {
+		return api
+	}
+
+	// Go through each entry, and see if any key resolves to addr.
+	for k, v := range c.APIPeers {
+		resv, err := net.ResolveTCPAddr("tcp", k)
+		if err != nil {
+			continue
+		}
+		if resv.String() == addr {
+			return v
+		}
+	}
+
+	return ""
 }
 
 // DBConfig represents the configuration of the underlying SQLite database.
@@ -139,7 +158,7 @@ func New(dbConf *DBConfig, dir string, tn Transport) *Store {
 		raftTransport: tn,
 		dbConf:        dbConf,
 		dbPath:        filepath.Join(dir, sqliteFile),
-		meta:          newClusterMeta(),
+		meta:          NewClusterMeta(),
 		logger:        log.New(os.Stderr, "[store] ", log.LstdFlags),
 	}
 }
@@ -256,7 +275,7 @@ func (s *Store) Leader() string {
 // Peer returns the API address for the given addr. If there is no peer
 // for the address, it returns the empty string.
 func (s *Store) Peer(addr string) string {
-	return s.meta.APIPeers[addr]
+	return s.meta.AddrForPeer(addr)
 }
 
 // APIPeers return the map of Raft addresses to API addresses.
