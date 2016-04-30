@@ -35,7 +35,7 @@ rqlited -http localhost:4003 -raft localhost:4004 -join http://localhost:4001 ~/
 rqlited -http localhost:4005 -raft localhost:4006 -join http://localhost:4001 ~/node.3
 ```
 
-Under each node will be an SQLite file, which should remain in consensus. You can create clusters of any size, but clusters of 3, 5, and 7 nodes are most practical. Clusters larger than this become impractical, due to the number of nodes that must be contacted before a change can take place.
+Under each node will be an SQLite database, which should remain in consensus. You can create clusters of any size, but clusters of 3, 5, and 7 nodes are most practical. Clusters larger than this become impractical, due to the number of nodes that must be contacted before a change can take place.
 
 When restarting a node, there is no further need to pass `-join`. It will be ignored if a node is already a member of a cluster.
 
