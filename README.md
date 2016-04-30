@@ -31,8 +31,8 @@ While not strictly necessary to run rqlite, running multiple nodes means the SQL
 Start a second and third node (so a majority can still form in the event of a single node failure) like so:
 
 ```bash
-rqlited -http localhost:4003 -raft :4004 -join http://localhost:4001 ~/node.2
-rqlited -http localhost:4005 -raft :4006 -join http://localhost:4001 ~/node.3
+rqlited -http localhost:4003 -raft localhost:4004 -join http://localhost:4001 ~/node.2
+rqlited -http localhost:4005 -raft localhost:4006 -join http://localhost:4001 ~/node.3
 ```
 
 Under each node will be an SQLite file, which should remain in consensus. You can create clusters of any size, but clusters of 3, 5, and 7 nodes are most practical. Clusters larger than this become impractical, due to the number of nodes that must be contacted before a change can take place.
