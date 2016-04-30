@@ -1,11 +1,11 @@
 rqlite [![Circle CI](https://circleci.com/gh/rqlite/rqlite/tree/master.svg?style=svg)](https://circleci.com/gh/rqlite/rqlite/tree/master) [![GoDoc](https://godoc.org/github.com/rqlite/rqlite?status.svg)](https://godoc.org/github.com/rqlite/rqlite) [![Release](https://img.shields.io/github/release/rqlite/rqlite.svg)](https://github.com/rqlite/rqlite/releases)
 ======
-*rqlite* is a distributed relational database, which uses [SQLite](https://www.sqlite.org/) as its storage engine. rqlite is written in [Go](http://golang.org/) and uses [Raft](http://raftconsensus.github.io/) to achieve consensus across all the instances of the SQLite databases. rqlite ensures that every change made to the database is made to a quorum of SQLite files, or none at all.
+*rqlite* is a distributed relational database, which uses [SQLite](https://www.sqlite.org/) as its storage engine. rqlite is written in [Go](http://golang.org/) and uses [Raft](http://raftconsensus.github.io/) to achieve consensus across all the instances of the SQLite databases. rqlite ensures that every change made to the database is made to a quorum of SQLite databases, or none at all.
 
 ### Why?
 rqlite gives you the functionality of a [rock solid](http://www.sqlite.org/testing.html), fault-tolerant, replicated relational database, but with very easy installation, deployment, and operation. With it you've got a lightweight and reliable distributed store for relational data.
 
-You could use rqlite as part of a larger system, as a central store for some critical relational data, without having to run a heavier solution like MySQL. rqlite might also be an effective way to provide a small number of SQLite read-replicas. 
+You could use rqlite as part of a larger system, as a central store for some critical relational data, without having to run a heavier solution like MySQL.
 
 ### Key features
 - Very easy deployment.
@@ -75,19 +75,6 @@ The response is of the form:
 ```
 
 The use of the URL param `pretty` is optional, and results in pretty-printed JSON responses. Time is measured in seconds. If you do not want timings, do not pass `timings` as a URL parameter.
-
-You can confirm that the data has been writen to the database by accessing the SQLite database directly.
-
-```bash
-$ sqlite3 ~/node.3/db.sqlite
-SQLite version 3.7.15.2 2013-01-09 11:53:05
-Enter ".help" for instructions
-Enter SQL statements terminated with a ";"
-sqlite> select * from foo;
-1|fiona
-```
-
-Note that this is the SQLite file that is under `node 3`, which is not the node that accepted the `INSERT` operation.
 
 ### Bulk Updates
 Bulk updates are supported. To execute multipe statements in one HTTP call, simply include the statements in the JSON array:
@@ -237,21 +224,19 @@ rqlite replicates SQLite for fault-tolerance. It does not replicate it for perfo
 Depending on your machine, individual INSERT performance could be anything from 1 operation per second to more than 100 operations per second. However, by using transactions, throughput will increase significantly, often by 2 orders of magnitude. This speed-up is due to the way SQLite works. So for high throughput, execute as many operations as possible within a single transaction.
 
 ### In-memory databases
-You can also try using an [in-memory database](https://www.sqlite.org/inmemorydb.html) to increase performance. In this mode no actual SQLite file is created and the entire database is stored in memory. With in-memory databases, and very low-latency connections between the nodes, throughput has been reported to increase by a factor of 5.
+By default rqlite uses an [in-memory SQLite database](https://www.sqlite.org/inmemorydb.html) to maximise performance. In this mode no actual SQLite file is created and the entire database is stored in memory. If you wish rqlite to use an actual file-based SQLite database, pass `-ondisk` to rqlite on start-up.
 
-#### Will this put my data at risk?
+#### Does using an in-memory database put my data at risk?
 No.
 
-Using an in-memory does not put your data at risk. Since the Raft log is the authoritative store for all data, and it is written to disk, an in-memory database can be fully recreated on start-up.
-
-Pass `-mem` to `rqlited` at start-up to enable an in-memory database.
+Since the Raft log is the authoritative store for all data, and it is written to disk, an in-memory database can be fully recreated on start-up. Using an in-memory database does not put your data at risk.
 
 ## Limitations
  * Only SQL statements that are __deterministic__ are safe to use with rqlite, because statements are committed to the Raft log before they are sent to each node. For example, the following statement could result in different SQLite databases under each node:
 ```
 INSERT INTO foo (n) VALUES(random());
 ```
- * In case it isn't obvious, rqlite does not replicate any changes made directly to the underlying SQLite files. If you do change these files directly, you will cause rqlite to fail. Only modify the database via the HTTP API.
+ * In case it isn't obvious, rqlite does not replicate any changes made directly to any underlying SQLite files, when run in "on disk" mode. If you do change these files directly, you will cause rqlite to fail. Only modify the database via the HTTP API.
  * SQLite commands such as `.schema` are not handled.
  * The supported types are those supported by [go-sqlite3](http://godoc.org/github.com/mattn/go-sqlite3).
 
