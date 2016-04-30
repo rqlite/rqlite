@@ -385,7 +385,7 @@ func mustNewStore(inmem bool) *Store {
 	defer os.RemoveAll(path)
 
 	cfg := NewDBConfig("", inmem)
-	s := New(cfg, path, mustNewTransport("localhost:0"))
+	s := New(cfg, path, mustMockTransport("localhost:0"))
 	if s == nil {
 		panic("failed to create new store")
 	}
@@ -405,7 +405,7 @@ type mockTransport struct {
 	ln net.Listener
 }
 
-func mustNewTransport(addr string) Transport {
+func mustMockTransport(addr string) Transport {
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		panic("failed to create new transport")

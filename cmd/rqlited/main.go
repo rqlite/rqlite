@@ -22,6 +22,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime/pprof"
+	"time"
 
 	"github.com/rqlite/rqlite/auth"
 	"github.com/rqlite/rqlite/cluster"
@@ -54,6 +55,11 @@ var (
 const (
 	muxRaftHeader = 1 // Raft consensus communications
 	muxMetaHeader = 2 // Cluster meta communications
+)
+
+const (
+	publishPeerDelay   = 1 * time.Second
+	publishPeerTimeout = 30 * time.Second
 )
 
 var httpAddr string
@@ -252,4 +258,25 @@ func join(joinAddr string, skipVerify bool, raftAddr string) error {
 	}
 
 	return nil
+}
+
+func publishAPIAddr(c *cluster.Service, raftAddr, apiAddr string, t time.Duration) error {
+	tck := time.NewTicker(publishPeerDelay)
+	defer tck.Stop()
+	tmr := time.NewTimer(t)
+	defer tmr.Stop()
+
+	for {
+		select {
+		case <-tck.C:
+			if err := c.SetPeer(raftAddr, apiAddr); err != nil {
+				log.Println("failed to set peer for %s to %s: %s", raftAddr, apiAddr, err.Error())
+				continue
+			}
+			log.Println("set peer for %s to %s", raftAddr, apiAddr)
+			return nil
+		case <-tmr.C:
+			return fmt.Errorf("set peer timeout expired")
+		}
+	}
 }
