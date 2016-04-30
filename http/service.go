@@ -379,7 +379,7 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 	results, err := s.store.Execute(queries, timings, isTx)
 	if err != nil {
 		if err == store.ErrNotLeader {
-			http.Redirect(w, r, s.store.Peer(s.store.Leader()), http.StatusTemporaryRedirect)
+			http.Redirect(w, r, s.store.Peer(s.store.Leader()), http.StatusMovedPermanently)
 			return
 		}
 		resp.Error = err.Error()
@@ -448,7 +448,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 	results, err := s.store.Query(queries, timings, isTx, lvl)
 	if err != nil {
 		if err == store.ErrNotLeader {
-			http.Redirect(w, r, s.store.Peer(s.store.Leader()), http.StatusTemporaryRedirect)
+			http.Redirect(w, r, s.store.Peer(s.store.Leader()), http.StatusMovedPermanently)
 			return
 		}
 		resp.Error = err.Error()
