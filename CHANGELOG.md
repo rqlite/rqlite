@@ -1,4 +1,5 @@
-## 2.2.3 (unreleased)
+## 3.0.0 (unreleased)
+- [PR #109](https://github.com/rqlite/rqlite/pull/109): Nodes broadcast meta to cluster via Raft
 - [PR #104](https://github.com/rqlite/rqlite/pull/104): Handle the `-join` option sensibly when already member of cluster.
 
 ## 2.2.2 (April 24th 2016)
