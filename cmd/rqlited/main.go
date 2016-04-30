@@ -71,7 +71,7 @@ var joinAddr string
 var noVerify bool
 var expvar bool
 var dsn string
-var inMem bool
+var onDisk bool
 var showVersion bool
 var cpuprofile string
 
@@ -87,7 +87,7 @@ func init() {
 	flag.BoolVar(&noVerify, "noverify", false, "Skip verification of any HTTPS cert when joining")
 	flag.BoolVar(&expvar, "expvar", true, "Serve expvar data on HTTP server")
 	flag.StringVar(&dsn, "dsn", "", `SQLite DSN parameters. E.g. "cache=shared&mode=memory"`)
-	flag.BoolVar(&inMem, "mem", false, "Use an in-memory database")
+	flag.BoolVar(&onDisk, "ondisk", false, "Use an on-disk SQLite database")
 	flag.BoolVar(&showVersion, "version", false, "Show version information and exit")
 	flag.StringVar(&cpuprofile, "cpuprofile", "", "Write CPU profile to file")
 	flag.Usage = func() {
@@ -165,7 +165,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to determine absolute data path: %s", err.Error())
 	}
-	dbConf := store.NewDBConfig(dsn, inMem)
+	dbConf := store.NewDBConfig(dsn, !onDisk)
 	store := store.New(dbConf, dataPath, raftTn)
 	if err := store.Open(joinAddr == ""); err != nil {
 		log.Fatalf("failed to open store: %s", err.Error())
