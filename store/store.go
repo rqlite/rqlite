@@ -322,10 +322,13 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		dbStatus["path"] = ":memory:"
 	}
 
+	s.metaMu.RLock()
+	defer s.metaMu.RUnlock()
 	status := map[string]interface{}{
 		"raft":    s.raft.Stats(),
 		"addr":    s.Addr().String(),
 		"leader":  s.Leader(),
+		"meta":    s.meta,
 		"sqlite3": dbStatus,
 	}
 	return status, nil
