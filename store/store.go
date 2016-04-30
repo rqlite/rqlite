@@ -253,6 +253,12 @@ func (s *Store) Leader() string {
 	return s.raft.Leader()
 }
 
+// Peer returns the API address for the given addr. If there is no peer
+// for the address, it returns the empty string.
+func (s *Store) Peer(addr string) string {
+	return s.meta.APIPeers[addr]
+}
+
 // APIPeers return the map of Raft addresses to API addresses.
 func (s *Store) APIPeers() (map[string]string, error) {
 	s.metaMu.RLock()

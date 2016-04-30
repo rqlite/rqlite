@@ -378,6 +378,12 @@ func Test_APIPeers(t *testing.T) {
 		t.Fatalf("set and retrieved API peers not identical, got %v, exp %v",
 			apiPeers, peers)
 	}
+
+	if s.Peer("localhost:4002") != "localhost:4001" ||
+		s.Peer("localhost:4004") != "localhost:4003" ||
+		s.Peer("not exist") != "" {
+		t.Fatalf("failed to retrieve correct single API peer")
+	}
 }
 
 func mustNewStore(inmem bool) *Store {
