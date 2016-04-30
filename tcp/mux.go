@@ -20,11 +20,12 @@ const (
 type Layer struct {
 	ln     net.Listener
 	header byte
+	addr   net.Addr
 }
 
 // Addr returns the local address for the layer.
 func (l *Layer) Addr() net.Addr {
-	return l.ln.Addr()
+	return l.addr
 }
 
 // Dial creates a new network connection.
@@ -51,8 +52,9 @@ func (l *Layer) Close() error { return l.ln.Close() }
 
 // Mux multiplexes a network connection.
 type Mux struct {
-	ln net.Listener
-	m  map[byte]*listener
+	ln   net.Listener
+	addr net.Addr
+	m    map[byte]*listener
 
 	wg sync.WaitGroup
 
@@ -64,8 +66,10 @@ type Mux struct {
 }
 
 // NewMux returns a new instance of Mux for ln.
-func NewMux() *Mux {
+func NewMux(ln net.Listener) *Mux {
 	return &Mux{
+		ln:      ln,
+		addr:    ln.Addr(),
 		m:       make(map[byte]*listener),
 		Timeout: DefaultTimeout,
 		Logger:  log.New(os.Stderr, "[tcp] ", log.LstdFlags),
@@ -73,12 +77,12 @@ func NewMux() *Mux {
 }
 
 // Serve handles connections from ln and multiplexes then across registered listener.
-func (mux *Mux) Serve(ln net.Listener) error {
+func (mux *Mux) Serve() error {
 	for {
 		// Wait for the next connection.
 		// If it returns a temporary error then simply retry.
 		// If it returns any other error then exit immediately.
-		conn, err := ln.Accept()
+		conn, err := mux.ln.Accept()
 		if err, ok := err.(interface {
 			Temporary() bool
 		}); ok && err.Temporary() {
@@ -152,6 +156,7 @@ func (mux *Mux) Listen(header byte) *Layer {
 	layer := &Layer{
 		ln:     ln,
 		header: header,
+		addr:   mux.addr,
 	}
 
 	return layer
@@ -174,7 +179,7 @@ func (ln *listener) Accept() (c net.Conn, err error) {
 // Close is a no-op. The mux's listener should be closed instead.
 func (ln *listener) Close() error { return nil }
 
-// Addr always returns nil.
+// Addr always returns nil
 func (ln *listener) Addr() net.Addr { return nil }
 
 // Dial connects to a remote mux listener with a given header byte.

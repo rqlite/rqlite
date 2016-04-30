@@ -156,10 +156,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to listen on %s: %s", raftAddr, err.Error())
 	}
-	mux := tcp.NewMux()
+	mux := tcp.NewMux(ln)
 
 	// Start up mux and get transports for cluster.
-	go mux.Serve(ln)
 	raftTn := mux.Listen(muxRaftHeader)
 
 	// Create and open the store.
@@ -207,6 +206,12 @@ func main() {
 	} else {
 		s = httpd.New(httpAddr, store, nil)
 	}
+
+	// Publish to the cluster the mapping between this Raft address and API address.
+	if err := publishAPIAddr(cs, raftAddr, httpAddr, publishPeerTimeout); err != nil {
+		log.Fatalf("failed to set peer for %s to %s: %s", raftAddr, httpAddr, err.Error())
+	}
+	log.Printf("set peer for %s to %s", raftAddr, httpAddr)
 
 	s.CertFile = x509Cert
 	s.KeyFile = x509Key
@@ -270,10 +275,10 @@ func publishAPIAddr(c *cluster.Service, raftAddr, apiAddr string, t time.Duratio
 		select {
 		case <-tck.C:
 			if err := c.SetPeer(raftAddr, apiAddr); err != nil {
-				log.Printf("failed to set peer for %s to %s: %s", raftAddr, apiAddr, err.Error())
+				log.Printf("failed to set peer for %s to %s: %s (retrying)",
+					raftAddr, apiAddr, err.Error())
 				continue
 			}
-			log.Printf("set peer for %s to %s", raftAddr, apiAddr)
 			return nil
 		case <-tmr.C:
 			return fmt.Errorf("set peer timeout expired")
