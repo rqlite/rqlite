@@ -10,7 +10,7 @@ You could use rqlite as part of a larger system, as a central store for some cri
 ### Key features
 - Very easy deployment.
 - Fully replicated production-grade SQL database.
-- An easy-to-use HTTP(S) API, including bulk-update support.
+- An easy-to-use HTTP(S) API, including leader-redirection and bulk-update support.
 - Basic auth security and user-level permissions.
 - Read consistency levels.
 - Transaction support.
