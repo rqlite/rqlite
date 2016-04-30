@@ -167,6 +167,13 @@ func main() {
 		log.Fatalf("failed to open store: %s", err.Error())
 	}
 
+	// Create and configure cluster service.
+	tn := mux.Listen(muxMetaHeader)
+	cs := cluster.NewService(tn, store)
+	if err := cs.Open(); err != nil {
+		log.Fatalf("failed to open cluster service: %s", err.Error())
+	}
+
 	// If join was specified, make the join request.
 	if joinAddr != "" {
 		if !store.JoinRequired() {
@@ -177,13 +184,6 @@ func main() {
 			}
 			log.Println("successfully joined node at", joinAddr)
 		}
-	}
-
-	// Create and configure cluster service.
-	tn := mux.Listen(muxMetaHeader)
-	cs := cluster.NewService(tn, store)
-	if err := cs.Open(); err != nil {
-		log.Fatalf("failed to open cluster service: %s", err.Error())
 	}
 
 	// Create HTTP server and load authentication information, if supplied.
