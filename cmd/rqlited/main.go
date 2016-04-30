@@ -270,10 +270,10 @@ func publishAPIAddr(c *cluster.Service, raftAddr, apiAddr string, t time.Duratio
 		select {
 		case <-tck.C:
 			if err := c.SetPeer(raftAddr, apiAddr); err != nil {
-				log.Println("failed to set peer for %s to %s: %s", raftAddr, apiAddr, err.Error())
+				log.Printf("failed to set peer for %s to %s: %s", raftAddr, apiAddr, err.Error())
 				continue
 			}
-			log.Println("set peer for %s to %s", raftAddr, apiAddr)
+			log.Printf("set peer for %s to %s", raftAddr, apiAddr)
 			return nil
 		case <-tmr.C:
 			return fmt.Errorf("set peer timeout expired")
