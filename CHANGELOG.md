@@ -1,4 +1,4 @@
-## 3.0.0 (unreleased)
+## 3.0.0 (May 1st 2016)
 - [PR #116](https://github.com/rqlite/rqlite/pull/116): Allow HTTP advertise address to be set.
 - [PR #115](https://github.com/rqlite/rqlite/pull/115): Support advertising address different than Raft bind address.
 - [PR #113](https://github.com/rqlite/rqlite/pull/113): Switch to in-memory SQLite databases by default.
