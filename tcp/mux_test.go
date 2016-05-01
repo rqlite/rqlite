@@ -34,7 +34,7 @@ func TestMux(t *testing.T) {
 		defer tcpListener.Close()
 
 		// Setup muxer & listeners.
-		mux := NewMux(tcpListener)
+		mux := NewMux(tcpListener, nil)
 		mux.Timeout = 200 * time.Millisecond
 		if !testing.Verbose() {
 			mux.Logger = log.New(ioutil.Discard, "", 0)
@@ -133,7 +133,7 @@ func TestMux_Listen_ErrAlreadyRegistered(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	mux := NewMux(tcpListener)
+	mux := NewMux(tcpListener, nil)
 	mux.Listen(5)
 	mux.Listen(5)
 }

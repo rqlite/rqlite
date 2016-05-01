@@ -154,7 +154,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to listen on %s: %s", raftAddr, err.Error())
 	}
-	mux := tcp.NewMux(ln)
+	mux := tcp.NewMux(ln, nil)
 	go mux.Serve()
 
 	// Start up mux and get transports for cluster.
@@ -191,7 +191,8 @@ func main() {
 	}
 
 	// Publish to the cluster the mapping between this Raft address and API address.
-	if err := publishAPIAddr(cs, raftAddr, httpAddr, publishPeerTimeout); err != nil {
+	// The Raft layer broadcasts the resolved address, so use that as the key.
+	if err := publishAPIAddr(cs, raftTn.Addr().String(), httpAddr, publishPeerTimeout); err != nil {
 		log.Fatalf("failed to set peer for %s to %s: %s", raftAddr, httpAddr, err.Error())
 	}
 	log.Printf("set peer for %s to %s", raftAddr, httpAddr)

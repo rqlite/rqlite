@@ -65,11 +65,17 @@ type Mux struct {
 	Logger *log.Logger
 }
 
-// NewMux returns a new instance of Mux for ln.
-func NewMux(ln net.Listener) *Mux {
+// NewMux returns a new instance of Mux for ln. If adv is nil,
+// then the addr of ln is used.
+func NewMux(ln net.Listener, adv net.Addr) *Mux {
+	addr := adv
+	if addr == nil {
+		addr = ln.Addr()
+	}
+
 	return &Mux{
 		ln:      ln,
-		addr:    ln.Addr(),
+		addr:    addr,
 		m:       make(map[byte]*listener),
 		Timeout: DefaultTimeout,
 		Logger:  log.New(os.Stderr, "[tcp] ", log.LstdFlags),
