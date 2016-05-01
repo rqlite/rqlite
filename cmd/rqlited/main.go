@@ -63,6 +63,7 @@ const (
 )
 
 var httpAddr string
+var httpAdv string
 var authFile string
 var x509Cert string
 var x509Key string
@@ -80,6 +81,7 @@ const desc = `rqlite is a distributed system that provides a replicated SQLite d
 
 func init() {
 	flag.StringVar(&httpAddr, "http", "localhost:4001", "HTTP query server address. Set X.509 cert and key for HTTPS.")
+	flag.StringVar(&httpAdv, "httpadv", "", "HTTP redirection advertise address. If not set, same as query server.")
 	flag.StringVar(&x509Cert, "x509cert", "", "Path to X.509 certificate")
 	flag.StringVar(&x509Key, "x509key", "", "Path to X.509 private key for certificate")
 	flag.StringVar(&authFile, "auth", "", "Path to authentication and authorization file. If not set, not enabled.")
@@ -200,11 +202,17 @@ func main() {
 	}
 
 	// Publish to the cluster the mapping between this Raft address and API address.
-	// The Raft layer broadcasts the resolved address, so use that as the key.
-	if err := publishAPIAddr(cs, raftTn.Addr().String(), httpAddr, publishPeerTimeout); err != nil {
+	// The Raft layer broadcasts the resolved address, so use that as the key. But
+	// only set different HTTP advertise address if set.
+	apiAdv := httpAddr
+	if httpAdv != "" {
+		apiAdv = httpAdv
+	}
+
+	if err := publishAPIAddr(cs, raftTn.Addr().String(), apiAdv, publishPeerTimeout); err != nil {
 		log.Fatalf("failed to set peer for %s to %s: %s", raftAddr, httpAddr, err.Error())
 	}
-	log.Printf("set peer for %s to %s", raftAddr, httpAddr)
+	log.Printf("set peer for %s to %s", raftTn.Addr().String(), apiAdv)
 
 	// Create HTTP server and load authentication information, if supplied.
 	var s *httpd.Service
