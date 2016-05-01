@@ -34,7 +34,7 @@ func TestMux(t *testing.T) {
 		defer tcpListener.Close()
 
 		// Setup muxer & listeners.
-		mux := NewMux(tcpListener)
+		mux := NewMux(tcpListener, nil)
 		mux.Timeout = 200 * time.Millisecond
 		if !testing.Verbose() {
 			mux.Logger = log.New(ioutil.Discard, "", 0)
@@ -120,6 +120,32 @@ func TestMux(t *testing.T) {
 	}
 }
 
+func TestMux_Advertise(t *testing.T) {
+	// Setup muxer.
+	tcpListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tcpListener.Close()
+
+	addr := &mockAddr{
+		Nwk:  "tcp",
+		Addr: "rqlite.com:8081",
+	}
+
+	mux := NewMux(tcpListener, addr)
+	mux.Timeout = 200 * time.Millisecond
+	if !testing.Verbose() {
+		mux.Logger = log.New(ioutil.Discard, "", 0)
+	}
+
+	layer := mux.Listen(1)
+	if layer.Addr().String() != addr.Addr {
+		t.Fatalf("layer advertise address not correct, exp %s, got %s",
+			layer.Addr().String(), addr.Addr)
+	}
+}
+
 // Ensure two handlers cannot be registered for the same header byte.
 func TestMux_Listen_ErrAlreadyRegistered(t *testing.T) {
 	defer func() {
@@ -133,7 +159,20 @@ func TestMux_Listen_ErrAlreadyRegistered(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	mux := NewMux(tcpListener)
+	mux := NewMux(tcpListener, nil)
 	mux.Listen(5)
 	mux.Listen(5)
+}
+
+type mockAddr struct {
+	Nwk  string
+	Addr string
+}
+
+func (m *mockAddr) Network() string {
+	return m.Nwk
+}
+
+func (m *mockAddr) String() string {
+	return m.Addr
 }

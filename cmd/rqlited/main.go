@@ -67,6 +67,7 @@ var authFile string
 var x509Cert string
 var x509Key string
 var raftAddr string
+var raftAdv string
 var joinAddr string
 var noVerify bool
 var expvar bool
@@ -83,6 +84,7 @@ func init() {
 	flag.StringVar(&x509Key, "x509key", "", "Path to X.509 private key for certificate")
 	flag.StringVar(&authFile, "auth", "", "Path to authentication and authorization file. If not set, not enabled.")
 	flag.StringVar(&raftAddr, "raft", "localhost:4002", "Raft communication bind address")
+	flag.StringVar(&raftAdv, "raftadv", "", "Raft advertise address. If not set, same as bind")
 	flag.StringVar(&joinAddr, "join", "", "protocol://host:port of leader to join")
 	flag.BoolVar(&noVerify, "noverify", false, "Skip verification of any HTTPS cert when joining")
 	flag.BoolVar(&expvar, "expvar", true, "Serve expvar data on HTTP server")
@@ -154,7 +156,14 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to listen on %s: %s", raftAddr, err.Error())
 	}
-	mux := tcp.NewMux(ln)
+	var adv net.Addr
+	if raftAdv != "" {
+		adv, err = net.ResolveTCPAddr("tcp", raftAdv)
+		if err != nil {
+			log.Fatalf("failed to resolve advertise address %s: %s", raftAdv, err.Error())
+		}
+	}
+	mux := tcp.NewMux(ln, adv)
 	go mux.Serve()
 
 	// Start up mux and get transports for cluster.
@@ -191,7 +200,8 @@ func main() {
 	}
 
 	// Publish to the cluster the mapping between this Raft address and API address.
-	if err := publishAPIAddr(cs, raftAddr, httpAddr, publishPeerTimeout); err != nil {
+	// The Raft layer broadcasts the resolved address, so use that as the key.
+	if err := publishAPIAddr(cs, raftTn.Addr().String(), httpAddr, publishPeerTimeout); err != nil {
 		log.Fatalf("failed to set peer for %s to %s: %s", raftAddr, httpAddr, err.Error())
 	}
 	log.Printf("set peer for %s to %s", raftAddr, httpAddr)
