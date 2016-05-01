@@ -1,4 +1,5 @@
 ## 3.0.0 (unreleased)
+- [PR #116](https://github.com/rqlite/rqlite/pull/116): Allow HTTP advertise address to be set.
 - [PR #115](https://github.com/rqlite/rqlite/pull/115): Support advertising address different than Raft bind address.
 - [PR #113](https://github.com/rqlite/rqlite/pull/113): Switch to in-memory SQLite databases by default.
 - [PR #109](https://github.com/rqlite/rqlite/pull/109): Nodes broadcast meta to cluster via Raft.
