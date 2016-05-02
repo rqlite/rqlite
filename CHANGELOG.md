@@ -1,3 +1,6 @@
+## 3.0.1 (May 1st 2016)
+- [PR #117](https://github.com/rqlite/rqlite/pull/117): Use Raft advertise address, if exists, during join.
+
 ## 3.0.0 (May 1st 2016)
 - [PR #116](https://github.com/rqlite/rqlite/pull/116): Allow HTTP advertise address to be set.
 - [PR #115](https://github.com/rqlite/rqlite/pull/115): Support advertising address different than Raft bind address.

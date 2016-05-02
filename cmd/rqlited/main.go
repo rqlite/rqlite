@@ -194,7 +194,7 @@ func main() {
 		if !store.JoinRequired() {
 			log.Println("node is already member of cluster, ignoring join request")
 		} else {
-			if err := join(joinAddr, noVerify, raftAddr); err != nil {
+			if err := join(joinAddr, noVerify, raftAddr, raftAdv); err != nil {
 				log.Fatalf("failed to join node at %s: %s", joinAddr, err.Error())
 			}
 			log.Println("successfully joined node at", joinAddr)
@@ -252,8 +252,12 @@ func main() {
 	log.Println("rqlite server stopped")
 }
 
-func join(joinAddr string, skipVerify bool, raftAddr string) error {
-	b, err := json.Marshal(map[string]string{"addr": raftAddr})
+func join(joinAddr string, skipVerify bool, raftAddr, raftAdv string) error {
+	addr := raftAddr
+	if raftAdv != "" {
+		addr = raftAdv
+	}
+	b, err := json.Marshal(map[string]string{"addr": addr})
 	if err != nil {
 		return err
 	}
