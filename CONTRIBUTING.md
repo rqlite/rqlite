@@ -5,7 +5,7 @@ rqlite is software, and it goes without saying it can always be improved. It's b
 If you open a pull request, please ensure the commit history is clean. Squash the commits into logical blocks, perhaps a single commit if that makes sense. What you want to avoid is commits such as "WIP" and "fix test" in the history. This is so we keep history on master clean and straightforward.
 
 ## Building rqlite
-*Building rqlite requires Go 1.4 or later. [gvm](https://github.com/moovweb/gvm) is a great tool for managing your version of Go.*
+*Building rqlite requires Go 1.5 or later. [gvm](https://github.com/moovweb/gvm) is a great tool for managing your version of Go.*
 
 Download and run rqlite like so (tested on 64-bit Kubuntu 14.04 and OSX):
 
