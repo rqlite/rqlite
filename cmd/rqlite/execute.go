@@ -35,6 +35,10 @@ func execute(ctx *cli.Context, cmd, line string, argv *argT) error {
 	}
 
 	result := ret.Results[0]
-	ctx.JSONIndentln(result, "", "    ")
+	rowString := "row"
+	if result.RowsAffected > 1 {
+		rowString = "rows"
+	}
+	ctx.String("%d %s affected (%f sec)\n", result.RowsAffected, rowString, result.Time)
 	return nil
 }
