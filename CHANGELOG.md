@@ -1,3 +1,6 @@
+## 3.1.0 (Unreleased)
+- [PR #118](https://github.com/rqlite/rqlite/pull/118): New rqlite CLI. Thanks @mkideal
+
 ## 3.0.1 (May 1st 2016)
 - [PR #117](https://github.com/rqlite/rqlite/pull/117): Use Raft advertise address, if exists, during join.
 
