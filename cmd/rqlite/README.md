@@ -37,17 +37,9 @@ $> rqlited ~/node.1
 $> ./rqlite
 # now, we have entered the rqlite terminal
 127.0.0.1:4001> CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)
-{
-    "last_insert_id": 2,
-    "rows_affected": 1,
-    "time": 0.00019249700000000002
-}
+1 row affected (0.015 sec)
 127.0.0.1:4001> INSERT INTO foo(name) VALUES("fiona")
-{
-    "last_insert_id": 1,
-    "rows_affected": 1,
-    "time": 0.000155756
-}
+1 row affected (0.055 sec)
 127.0.0.1:4001> SELECT * FROM foo
 +----+-------+
 | id | name  |
