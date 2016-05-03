@@ -35,6 +35,11 @@ func execute(ctx *cli.Context, cmd, line string, argv *argT) error {
 	}
 
 	result := ret.Results[0]
+	if result.Error != "" {
+		ctx.String("Error: %s\n", result.Error)
+		return nil
+	}
+
 	rowString := "row"
 	if result.RowsAffected > 1 {
 		rowString = "rows"
