@@ -75,7 +75,7 @@ type queryResponse struct {
 }
 
 func query(ctx *cli.Context, cmd, line string, argv *argT) error {
-	urlStr := fmt.Sprintf("%s://%s:%d/db/query?pretty&timings", argv.Protocol, argv.Host, argv.Port)
+	urlStr := fmt.Sprintf("%s://%s:%d/db/query?timings", argv.Protocol, argv.Host, argv.Port)
 	ret := &queryResponse{}
 	if err := sendRequest(ctx, urlStr, line, ret); err != nil {
 		return err
