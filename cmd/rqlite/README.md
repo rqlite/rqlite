@@ -1,17 +1,17 @@
-# rqlite-cli
+# rqlite
 
-`rqlite-cli` is a command line tool for connecting rqlited.
+`rqlite` is a command line tool for connecting to a rqlited node.
 
 ## Build
 
 ```sh
-go build -o rqlite-cli
+go build -o rqlite
 ```
 
 ## Usage
 
 ```sh
-$> ./rqlite-cli -h
+$> ./rqlite -h
 Options:
 
   -h, --help
@@ -33,22 +33,22 @@ Options:
 # start rqlited
 $> rqlited ~/node.1
 
-# start rqlite-cli terminal
-$> ./rqlite-cli
-# now, we have enter the rqlite-cli terminal
-127.0.0.1:4001> create table foo (id integer not null primary key, name text)
+# start rqlite CLI
+$> ./rqlite
+# now, we have entered the rqlite terminal
+127.0.0.1:4001> CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)
 {
     "last_insert_id": 2,
     "rows_affected": 1,
     "time": 0.00019249700000000002
 }
-127.0.0.1:4001> insert into foo(name) values("fiona")
+127.0.0.1:4001> INSERT INTO foo(name) VALUES("fiona")
 {
     "last_insert_id": 1,
     "rows_affected": 1,
     "time": 0.000155756
 }
-127.0.0.1:4001> select * from foo
+127.0.0.1:4001> SELECT * FROM foo
 +----+-------+
 | id | name  |
 +----+-------+
