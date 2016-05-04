@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -297,6 +298,15 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	rt := map[string]interface{}{
+		"GOARCH":       runtime.GOARCH,
+		"GOOS":         runtime.GOOS,
+		"GOMAXPROCS":   runtime.GOMAXPROCS(0),
+		"numCPU":       runtime.NumCPU(),
+		"numGoroutine": runtime.NumGoroutine(),
+		"version":      runtime.Version(),
+	}
+
 	httpStatus := map[string]interface{}{
 		"addr":     s.Addr().String(),
 		"auth":     prettyEnabled(s.credentialStore != nil),
@@ -310,9 +320,10 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 
 	// Build the status response.
 	status := map[string]interface{}{
-		"store": results,
-		"http":  httpStatus,
-		"node":  nodeStatus,
+		"runtime": rt,
+		"store":   results,
+		"http":    httpStatus,
+		"node":    nodeStatus,
 	}
 	if !s.lastBackup.IsZero() {
 		status["last_backup"] = s.lastBackup
