@@ -1,4 +1,4 @@
-## 3.1.0 (Unreleased)
+## 3.1.0 (May 4th 2016)
 - [PR #118](https://github.com/rqlite/rqlite/pull/118): New rqlite CLI. Thanks @mkideal
 - [PR #125](https://github.com/rqlite/rqlite/pull/125): Add Go runtime details to status endpoint.
 
