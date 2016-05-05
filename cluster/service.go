@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	ConnectionTimeout = 10 * time.Second
+	connectionTimeout = 10 * time.Second
 )
 
 var respOKMarshalled []byte
@@ -105,7 +105,7 @@ func (s *Service) SetPeer(raftAddr, apiAddr string) error {
 	if leader := s.store.Leader(); leader == "" {
 		return fmt.Errorf("no leader available")
 	}
-	conn, err := s.tn.Dial(s.store.Leader(), ConnectionTimeout)
+	conn, err := s.tn.Dial(s.store.Leader(), connectionTimeout)
 	if err != nil {
 		return err
 	}

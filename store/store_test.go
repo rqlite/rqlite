@@ -24,7 +24,7 @@ func (m *mockSnapshotSink) Cancel() error {
 }
 
 func Test_ClusterMeta(t *testing.T) {
-	c := NewClusterMeta()
+	c := newClusterMeta()
 	c.APIPeers["localhost:4002"] = "localhost:4001"
 
 	if c.AddrForPeer("localhost:4002") != "localhost:4001" {
