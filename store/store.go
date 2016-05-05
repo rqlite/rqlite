@@ -24,7 +24,7 @@ import (
 )
 
 var (
-	// ErrFieldsRequired is returned when a node attempts to execute a leader-only
+	// ErrNotLeader is returned when a node attempts to execute a leader-only
 	// operation.
 	ErrNotLeader = errors.New("not leader")
 )
@@ -84,6 +84,7 @@ type peersSub map[string]string
 // ConsistencyLevel represents the available read consistency levels.
 type ConsistencyLevel int
 
+// Represents the available consistency levels.
 const (
 	None ConsistencyLevel = iota
 	Weak
@@ -96,7 +97,7 @@ type clusterMeta struct {
 }
 
 // NewClusterMeta returns an initialized cluster meta store.
-func NewClusterMeta() *clusterMeta {
+func newClusterMeta() *clusterMeta {
 	return &clusterMeta{
 		APIPeers: make(map[string]string),
 	}
@@ -158,7 +159,7 @@ func New(dbConf *DBConfig, dir string, tn Transport) *Store {
 		raftTransport: tn,
 		dbConf:        dbConf,
 		dbPath:        filepath.Join(dir, sqliteFile),
-		meta:          NewClusterMeta(),
+		meta:          newClusterMeta(),
 		logger:        log.New(os.Stderr, "[store] ", log.LstdFlags),
 	}
 }
@@ -262,6 +263,7 @@ func (s *Store) Path() string {
 	return s.raftDir
 }
 
+// Addr returns the address of the store.
 func (s *Store) Addr() net.Addr {
 	return s.raftTransport.Addr()
 }

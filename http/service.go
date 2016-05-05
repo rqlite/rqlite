@@ -77,6 +77,7 @@ const (
 	numQueries    = "queries"
 	numBackups    = "backups"
 
+	// Permissions available to users.
 	PermAll     = "all"
 	PermJoin    = "join"
 	PermExecute = "execute"
@@ -490,6 +491,7 @@ func (s *Service) Addr() net.Addr {
 	return s.ln.Addr()
 }
 
+// FormRedirect returns the value for the "Location" header for a 301 response.
 func (s *Service) FormRedirect(r *http.Request, host string) string {
 	protocol := "http"
 	if s.credentialStore != nil {

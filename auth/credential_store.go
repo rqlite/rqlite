@@ -17,7 +17,7 @@ type Credential struct {
 	Perms    []string `json:"perms,omitempty"`
 }
 
-// CredentialStore stores authentication and authorization information for all users.
+// CredentialsStore stores authentication and authorization information for all users.
 type CredentialsStore struct {
 	store map[string]string
 	perms map[string]map[string]bool

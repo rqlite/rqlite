@@ -13,6 +13,7 @@ import (
 
 const bkDelay = 250
 
+// DBVersion is the SQLite version.
 var DBVersion string
 
 func init() {
@@ -49,7 +50,7 @@ func Open(dbPath string) (*DB, error) {
 	return open(fqdsn(dbPath, ""))
 }
 
-// OpenwithDSN opens a file-based database, creating it if it does not exist.
+// OpenWithDSN opens a file-based database, creating it if it does not exist.
 func OpenWithDSN(dbPath, dsn string) (*DB, error) {
 	return open(fqdsn(dbPath, dsn))
 }
