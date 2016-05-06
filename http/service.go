@@ -119,6 +119,8 @@ type Service struct {
 	CertFile string // Path to SSL certificate.
 	KeyFile  string // Path to SSL private key.
 
+	NoVerifySelect bool // Don't check query statements for leading SELECT
+
 	credentialStore CredentialStore
 
 	Expvar bool
@@ -447,7 +449,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method == "GET" {
 		query, err := stmtParam(r)
-		if err != nil {
+		if err != nil || query == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -462,6 +464,21 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 		if err := json.Unmarshal(b, &queries); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			return
+		}
+		if len(queries) == 0 {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+	}
+
+	// Validate queries, unless disabled.
+	if !s.NoVerifySelect {
+		for _, q := range queries {
+			u := strings.ToUpper(strings.TrimSpace(q))
+			if !strings.HasPrefix(u, "SELECT ") {
+				w.WriteHeader(http.StatusForbidden)
+				return
+			}
 		}
 	}
 

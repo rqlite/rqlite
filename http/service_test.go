@@ -119,6 +119,46 @@ func Test_405Routes(t *testing.T) {
 	}
 }
 
+func Test_403Routes(t *testing.T) {
+	m := &MockStore{}
+	s := New("127.0.0.1:0", m, nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+
+	client := &http.Client{}
+
+	resp, err := client.Get(host + "/db/query?q=INSERT")
+	if err != nil {
+		t.Fatalf("failed to make request")
+	}
+	if resp.StatusCode != 403 {
+		t.Fatalf("failed to get expected 403, got %d", resp.StatusCode)
+	}
+}
+
+func Test_400Routes(t *testing.T) {
+	m := &MockStore{}
+	s := New("127.0.0.1:0", m, nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+
+	client := &http.Client{}
+
+	resp, err := client.Get(host + "/db/query?q=")
+	if err != nil {
+		t.Fatalf("failed to make request")
+	}
+	if resp.StatusCode != 400 {
+		t.Fatalf("failed to get expected 400, got %d", resp.StatusCode)
+	}
+}
+
 func Test_401Routes_NoBasicAuth(t *testing.T) {
 	c := &mockCredentialStore{CheckOK: false, HasPermOK: false}
 
