@@ -74,6 +74,7 @@ var noVerify bool
 var expvar bool
 var dsn string
 var onDisk bool
+var noVerifySelect bool
 var showVersion bool
 var cpuprofile string
 
@@ -92,6 +93,7 @@ func init() {
 	flag.BoolVar(&expvar, "expvar", true, "Serve expvar data on HTTP server")
 	flag.StringVar(&dsn, "dsn", "", `SQLite DSN parameters. E.g. "cache=shared&mode=memory"`)
 	flag.BoolVar(&onDisk, "ondisk", false, "Use an on-disk SQLite database")
+	flag.BoolVar(&noVerifySelect, "nosel", false, "Don't verify that all queries begin with SELECT")
 	flag.BoolVar(&showVersion, "version", false, "Show version information and exit")
 	flag.StringVar(&cpuprofile, "cpuprofile", "", "Write CPU profile to file")
 	flag.Usage = func() {
@@ -232,6 +234,7 @@ func main() {
 
 	s.CertFile = x509Cert
 	s.KeyFile = x509Key
+	s.NoVerifySelect = noVerifySelect
 	s.Expvar = expvar
 	s.BuildInfo = map[string]interface{}{
 		"commit":     commit,
