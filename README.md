@@ -157,8 +157,6 @@ curl -XPOST 'localhost:4001/db/query?pretty' -H "Content-Type: application/json"
 ]'
 ```
 
-**If you use the query API to execute a command that modifies the database, those changes will not be replicated**. Always use the write API for inserts and updates.
-
 #### Read Consistency
 Even though serving queries does not require consensus (because the database is not changed), [queries should generally be served by the leader](https://github.com/rqlite/rqlite/issues/5). Why is this? Because without this check queries on a node could return out-of-date results.  This could happen for one of two reasons:
 
