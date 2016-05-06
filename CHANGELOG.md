@@ -1,3 +1,6 @@
+## 3.1.1 (Unreleased)
+- [PR #129](https://github.com/rqlite/rqlite/pull/129): Verify all statements sent to query endpoint begin with "SELECT".
+
 ## 3.1.0 (May 4th 2016)
 - [PR #118](https://github.com/rqlite/rqlite/pull/118): New rqlite CLI. Thanks @mkideal
 - [PR #125](https://github.com/rqlite/rqlite/pull/125): Add Go runtime details to status endpoint.
