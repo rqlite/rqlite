@@ -194,18 +194,12 @@ If an error occurs while processing a statement, it will be marked as such in th
 
 ```bash
 curl -XPOST 'localhost:4001/db/execute?pretty&timings' -H "Content-Type: application/json" -d "[
-    \"INSERT INTO foo(name) VALUES('fiona')\",
     \"INSERT INTO nonsense\"
 ]"
 ```
 ```json
 {
     "results": [
-        {
-            "last_insert_id": 3,
-            "rows_affected": 1,
-            "time": 182.033
-        },
         {
             "error": "near \"nonsense\": syntax error"
         }
@@ -234,7 +228,6 @@ INSERT INTO foo (n) VALUES(random());
 ```
  * In case it isn't obvious, rqlite does not replicate any changes made directly to any underlying SQLite files, when run in "on disk" mode. If you do change these files directly, you will cause rqlite to fail. Only modify the database via the HTTP API.
  * SQLite commands such as `.schema` are not handled.
- * The supported types are those supported by [go-sqlite3](http://godoc.org/github.com/mattn/go-sqlite3).
 
 ## Status API
 You can learn how check status and diagnostics [here](https://github.com/rqlite/rqlite/blob/master/DIAGNOSTICS.md).
