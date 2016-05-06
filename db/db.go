@@ -277,16 +277,20 @@ func (db *DB) Query(queries []string, tx, xTime bool) ([]*Rows, error) {
 					}
 					break
 				}
-
 				values := make([]interface{}, len(rows.Columns))
-
-				// Special case -- convert []uint8 to string. Perhaps this should be a config option.
+				// Text values come over (from sqlite-go) as []byte instead of strings
+				// for some reason, so we have explicitly convert (but only when type
+				// is "text" so we don't affect BLOB types)
 				for i, v := range dest {
-					switch u := v.(type) {
-					case []uint8:
-						values[i] = string(u)
-					default:
-						values[i] = u
+					if rows.Types[i] == "text" {
+						switch val := v.(type) {
+						case []byte:
+							values[i] = string(val)
+						default:
+							values[i] = val
+						}
+					} else {
+						values[i] = v
 					}
 				}
 				rows.Values = append(rows.Values, values)
