@@ -29,6 +29,7 @@ rqlite, via the configuration file, also supports user-level permissions. Each u
 - _backup_: user may perform backups.
 - _status_: user can retrieve status information from the node.
 - _join_: user can join a cluster. In practice only a node joins a cluster.
+- _remove_: user can remove a node from a cluster.
 
 ### Example configuration file
 An example configuration file is shown below.
