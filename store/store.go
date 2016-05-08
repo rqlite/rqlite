@@ -357,11 +357,16 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 
 	s.metaMu.RLock()
 	defer s.metaMu.RUnlock()
+	peers, err := s.peerStore.Peers()
+	if err != nil {
+		return nil, err
+	}
 	status := map[string]interface{}{
 		"raft":    s.raft.Stats(),
 		"addr":    s.Addr().String(),
 		"leader":  s.Leader(),
 		"meta":    s.meta,
+		"peers":   peers,
 		"dir":     s.raftDir,
 		"sqlite3": dbStatus,
 	}
