@@ -217,6 +217,22 @@ func Test_MultiNodeJoinRemove(t *testing.T) {
 	if storeNodes[0] != nodes[0] && storeNodes[1] != nodes[1] {
 		t.Fatalf("cluster does not have correct nodes")
 	}
+
+	// Remove a node.
+	if err := s0.Remove(s1.Addr().String()); err != nil {
+		t.Fatalf("failed to remove %s from cluster: %s", s1.Addr().String(), err.Error())
+	}
+
+	nodes, err = s0.Nodes()
+	if err != nil {
+		t.Fatalf("failed to get nodes post remove: %s", err.Error())
+	}
+	if len(nodes) != 1 {
+		t.Fatalf("size of cluster is not correct post remove")
+	}
+	if s0.Addr().String() != nodes[0] {
+		t.Fatalf("cluster does not have correct nodes post remove")
+	}
 }
 
 func Test_MultiNodeExecuteQuery(t *testing.T) {

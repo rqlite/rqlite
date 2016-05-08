@@ -496,6 +496,18 @@ func (s *Store) Join(addr string) error {
 	return nil
 }
 
+// Remove removes a node from the store, specifed by addr.
+func (s *Store) Remove(addr string) error {
+	s.logger.Printf("received request to remove node %s", addr)
+
+	f := s.raft.RemovePeer(addr)
+	if f.Error() != nil {
+		return f.Error()
+	}
+	s.logger.Printf("node %s removed successfully", addr)
+	return nil
+}
+
 type fsmExecuteResponse struct {
 	results []*sql.Result
 	error   error
