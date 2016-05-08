@@ -180,7 +180,8 @@ func (c Cluster) Followers() ([]*Node, error) {
 	return followers, nil
 }
 
-// RemoveNode removes the given node from the cluster.
+// RemoveNode removes the given node from the list of nodes representing
+// a cluster.
 func (c Cluster) RemoveNode(node *Node) {
 	for i, n := range c {
 		if n.RaftAddr == node.RaftAddr {
@@ -205,6 +206,25 @@ func (c Cluster) Deprovision() {
 	for _, n := range c {
 		n.Deprovision()
 	}
+}
+
+// Remove tells the cluster at n to remove the node at addr. Assumes n is the leader.
+func Remove(n *Node, addr string) error {
+	b, err := json.Marshal(map[string]string{"addr": addr})
+	if err != nil {
+		return err
+	}
+
+	// Attempt to remove node from leader.
+	resp, err := http.Post("http://"+n.APIAddr+"/remove", "application-type/json", bytes.NewReader(b))
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("failed to remove node, leader returned: %s", resp.Status)
+	}
+	defer resp.Body.Close()
+	return nil
 }
 
 func mustNewNode(enableSingle bool) *Node {
