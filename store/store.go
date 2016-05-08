@@ -141,6 +141,7 @@ type Store struct {
 
 	raft          *raft.Raft // The consensus mechanism.
 	raftTransport Transport
+	peerStore     raft.PeerStore
 	dbConf        *DBConfig // SQLite database config.
 	dbPath        string    // Path to underlying SQLite file, if not in-memory.
 	db            *sql.DB   // The underlying SQLite store.
@@ -215,7 +216,7 @@ func (s *Store) Open(enableSingle bool) error {
 	transport := raft.NewNetworkTransport(s.raftTransport, 3, 10*time.Second, os.Stderr)
 
 	// Create peer storage.
-	peerStore := raft.NewJSONPeers(s.raftDir, transport)
+	s.peerStore = raft.NewJSONPeers(s.raftDir, transport)
 
 	// Create the snapshot store. This allows Raft to truncate the log.
 	snapshots, err := raft.NewFileSnapshotStore(s.raftDir, retainSnapshotCount, os.Stderr)
@@ -230,7 +231,7 @@ func (s *Store) Open(enableSingle bool) error {
 	}
 
 	// Instantiate the Raft system.
-	ra, err := raft.NewRaft(config, s, logStore, logStore, snapshots, peerStore, transport)
+	ra, err := raft.NewRaft(config, s, logStore, logStore, snapshots, s.peerStore, transport)
 	if err != nil {
 		return fmt.Errorf("new raft: %s", err)
 	}
@@ -290,6 +291,11 @@ func (s *Store) APIPeers() (map[string]string, error) {
 		peers[k] = v
 	}
 	return peers, nil
+}
+
+// Nodes returns the list of current peers.
+func (s *Store) Nodes() ([]string, error) {
+	return s.peerStore.Peers()
 }
 
 // WaitForLeader blocks until a leader is detected, or the timeout expires.
