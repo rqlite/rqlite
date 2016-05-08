@@ -37,6 +37,9 @@ type Store interface {
 	// Join joins the node, reachable at addr, to this node.
 	Join(addr string) error
 
+	// Remove removes the node specified by addr from the cluster.
+	Remove(addr string) error
+
 	// Leader returns the Raft leader of the cluster.
 	Leader() string
 
@@ -79,6 +82,7 @@ const (
 
 	PermAll     = "all"     // PermAll means all actions permitted.
 	PermJoin    = "join"    // PermJoin means user is permitted to join cluster.
+	PermRemove  = "remove"  // PermRemove means user is permitted to remove a node.
 	PermExecute = "execute" // PermJoin means user can access execute endpoint.
 	PermQuery   = "query"   // PermQuery means user can access query endpoint.
 	PermStatus  = "status"  // PermStatus means user can retrieve node status.
@@ -206,6 +210,8 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.handleBackup(w, r)
 	case strings.HasPrefix(r.URL.Path, "/join"):
 		s.handleJoin(w, r)
+	case strings.HasPrefix(r.URL.Path, "/remove"):
+		s.handleRemove(w, r)
 	case strings.HasPrefix(r.URL.Path, "/status"):
 		s.handleStatus(w, r)
 	case r.URL.Path == "/debug/vars" && s.Expvar:
@@ -245,6 +251,41 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.store.Join(remoteAddr); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+}
+
+// handleRemove handles cluster-remove requests.
+func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request) {
+	if !s.CheckRequestPerm(r, PermRemove) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	b, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	m := map[string]string{}
+	if err := json.Unmarshal(b, &m); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	if len(m) != 1 {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	remoteAddr, ok := m["addr"]
+	if !ok {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	if err := s.store.Remove(remoteAddr); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}

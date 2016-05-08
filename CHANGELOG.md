@@ -1,4 +1,5 @@
 ## 3.1.1 (Unreleased)
+- [PR #132](https://github.com/rqlite/rqlite/pull/132): Support removing a node from a cluster.
 - [PR #131](https://github.com/rqlite/rqlite/pull/131): Only convert []byte from database to string if "text". Thanks @bkeroackdsc
 - [PR #129](https://github.com/rqlite/rqlite/pull/129): Verify all statements sent to query endpoint begin with "SELECT".
 

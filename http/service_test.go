@@ -284,6 +284,10 @@ func (m *MockStore) Join(addr string) error {
 	return nil
 }
 
+func (m *MockStore) Remove(addr string) error {
+	return nil
+}
+
 func (m *MockStore) Leader() string {
 	return ""
 }

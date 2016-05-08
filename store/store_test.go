@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"testing"
 	"time"
 )
@@ -176,6 +177,61 @@ func Test_SingleNodeExecuteQueryTx(t *testing.T) {
 	_, err = s.Execute(queries, false, true)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+}
+
+func Test_MultiNodeJoinRemove(t *testing.T) {
+	s0 := mustNewStore(true)
+	defer os.RemoveAll(s0.Path())
+	if err := s0.Open(true); err != nil {
+		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
+	}
+	defer s0.Close(true)
+	s0.WaitForLeader(10 * time.Second)
+
+	s1 := mustNewStore(true)
+	defer os.RemoveAll(s1.Path())
+	if err := s1.Open(false); err != nil {
+		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
+	}
+	defer s1.Close(true)
+
+	// Get sorted list of cluster nodes.
+	storeNodes := []string{s0.Addr().String(), s1.Addr().String()}
+	sort.StringSlice(storeNodes).Sort()
+
+	// Join the second node to the first.
+	if err := s0.Join(s1.Addr().String()); err != nil {
+		t.Fatalf("failed to join to node at %s: %s", s0.Addr().String(), err.Error())
+	}
+
+	nodes, err := s0.Nodes()
+	if err != nil {
+		t.Fatalf("failed to get nodes: %s", err.Error())
+	}
+	sort.StringSlice(nodes).Sort()
+
+	if len(nodes) != len(storeNodes) {
+		t.Fatalf("size of cluster is not correct")
+	}
+	if storeNodes[0] != nodes[0] && storeNodes[1] != nodes[1] {
+		t.Fatalf("cluster does not have correct nodes")
+	}
+
+	// Remove a node.
+	if err := s0.Remove(s1.Addr().String()); err != nil {
+		t.Fatalf("failed to remove %s from cluster: %s", s1.Addr().String(), err.Error())
+	}
+
+	nodes, err = s0.Nodes()
+	if err != nil {
+		t.Fatalf("failed to get nodes post remove: %s", err.Error())
+	}
+	if len(nodes) != 1 {
+		t.Fatalf("size of cluster is not correct post remove")
+	}
+	if s0.Addr().String() != nodes[0] {
+		t.Fatalf("cluster does not have correct nodes post remove")
 	}
 }
 
