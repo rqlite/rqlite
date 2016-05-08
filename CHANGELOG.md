@@ -1,4 +1,4 @@
-## 3.1.1 (Unreleased)
+## 3.2.0 (Unreleased)
 - [PR #133](https://github.com/rqlite/rqlite/pull/133): Add Peers to status output.
 - [PR #132](https://github.com/rqlite/rqlite/pull/132): Support removing a node from a cluster.
 - [PR #131](https://github.com/rqlite/rqlite/pull/131): Only convert []byte from database to string if "text". Thanks @bkeroackdsc
