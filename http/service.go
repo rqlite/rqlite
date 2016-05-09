@@ -3,6 +3,7 @@
 package http
 
 import (
+	"bytes"
 	"crypto/tls"
 	"encoding/json"
 	"expvar"
@@ -251,7 +252,9 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.store.Join(remoteAddr); err != nil {
+		b := bytes.NewBufferString(err.Error())
 		w.WriteHeader(http.StatusInternalServerError)
+		w.Write(b.Bytes())
 		return
 	}
 }

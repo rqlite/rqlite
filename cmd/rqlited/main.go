@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -281,8 +282,12 @@ func join(joinAddr string, skipVerify bool, raftAddr, raftAdv string) error {
 	}
 	defer resp.Body.Close()
 
+	b, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
 	if resp.StatusCode != 200 {
-		return fmt.Errorf("failed to join, node returned: %s", resp.Status)
+		return fmt.Errorf("failed to join, node returned: %s: (%s)", resp.Status, string(b))
 	}
 
 	return nil
