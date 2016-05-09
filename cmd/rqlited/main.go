@@ -261,7 +261,14 @@ func join(joinAddr string, skipVerify bool, raftAddr, raftAdv string) error {
 	if raftAdv != "" {
 		addr = raftAdv
 	}
-	b, err := json.Marshal(map[string]string{"addr": addr})
+
+	// Join using IP address, as that is what Hashicorp Raft works in.
+	resv, err := net.ResolveTCPAddr("tcp", addr)
+	if err != nil {
+		return err
+	}
+
+	b, err := json.Marshal(map[string]string{"addr": resv.String()})
 	if err != nil {
 		return err
 	}
