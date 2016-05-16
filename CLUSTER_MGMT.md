@@ -10,6 +10,21 @@ There is no point running clusters with even numbers of nodes. To see why this i
 So a 4-node cluster is  no more fault-tolerant than a 3-node cluster, so running a 4-node cluster provides no advantage over a 3-node cluster. Only a 5-node cluster can tolerate the failure of 2 nodes. An analogous argument applies to 5-node vs. 6-node clusters, and so on.
 
 # Creating a cluster
+To create a cluster you must launch a node that can act as leader. Do this as follows:
+```bash
+rqlited -http localhost:4001 -raft localhost:4002 ~/node.1
+```
+With this command a single node is started, listening for API requests on port 4001 and listening on port 4002 for intra-cluster communication. This node stores its state at `~/node.1`.
+
+To join a second node to this leader, execute the following command:
+```bash
+rqlited -http localhost:4003 -raft localhost:4004 -join http://localhost:4001 ~/node.2
+```
+Once executed you now have a cluster of two nodes. Of course, for fault-tolerance you need a 3-node cluster, so launch a third node like so:
+```bash
+rqlited -http localhost:4005 -raft localhost:4006 -join http://localhost:4001 ~/node.3
+```
+This entire example assumes, for the sake of clarity, that all nodes are running on the same host.
 
 # Dealing with failure
 
