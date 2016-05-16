@@ -27,6 +27,9 @@ rqlited -http localhost:4005 -raft localhost:4006 -join http://localhost:4001 ~/
 This entire example assumes, for the sake of clarity, that all nodes are running on the same host.
 
 # Dealing with failure
+It is the nature of clustered systems, nodes can fail at anytime. Depending on the size of your cluster, it will tolerate various amounts of failure. With a 3-node cluster, it can tolerate the failure of a single node, including the leader.
+
+If an rqlite process crashes, it is safe to simply to restart it. The node will pick up any changes that happened on the cluster while it was down.
 
 # Growing a cluster
 
