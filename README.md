@@ -35,7 +35,7 @@ _This demonstration shows all 3 nodes running on the same host. In reality you w
 
 Under each node will be an SQLite database, which should remain in consensus. You can create clusters of any size, but clusters of 3, 5, and 7 nodes are most practical. Clusters larger than this become impractical, due to the number of nodes that must be contacted before a change can take place.
 
-When restarting a node, there is no further need to pass `-join`. It will be ignored if a node is already a member of a cluster.
+When restarting a node, there is no further need to pass `-join`. It will be ignored if a node is already a member of a cluster. For more information on managing clusters check [this documentation](https://github.com/rqlite/rqlite/blob/master/CLUSTER_MGMT.md).
 
 ## Data API
 rqlite exposes an HTTP API allowing the database to be modified such that the changes are replicated. Queries are also executed using the HTTP API. Modifications go through the Raft log, ensuring only changes committed by a quorum of rqlite nodes are actually executed against the SQLite database. Queries do not __necessarily__ go through the Raft log, however, since they do not change the state of the database, and therefore do not need to be captured in the log. More on this later.
