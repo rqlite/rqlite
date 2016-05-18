@@ -91,6 +91,18 @@ const (
 	Strong
 )
 
+// ClusterState defines the possible Raft states the current node can be in
+type ClusterState int
+
+// Represents the Raft cluster states
+const (
+	Leader ClusterState = iota
+	Follower
+	Candidate
+	Shutdown
+	Unknown
+)
+
 // clusterMeta represents cluster meta which must be kept in consensus.
 type clusterMeta struct {
 	APIPeers map[string]string // Map from Raft address to API address
@@ -252,6 +264,28 @@ func (s *Store) Close(wait bool) error {
 		}
 	}
 	return nil
+}
+
+// IsLeader is used to determine if the current node is cluster leader
+func (s *Store) IsLeader() bool {
+	return s.raft.State() == raft.Leader
+}
+
+// State returns the current node's Raft state
+func (s *Store) State() ClusterState {
+	state := s.raft.State()
+	switch state {
+	case raft.Leader:
+		return Leader
+	case raft.Candidate:
+		return Candidate
+	case raft.Follower:
+		return Follower
+	case raft.Shutdown:
+		return Shutdown
+	default:
+		return Unknown
+	}
 }
 
 // JoinRequired returns whether the node needs to join a cluster after being opened.

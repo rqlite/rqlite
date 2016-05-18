@@ -459,6 +459,37 @@ func Test_APIPeers(t *testing.T) {
 	}
 }
 
+func Test_IsLeader(t *testing.T) {
+	s := mustNewStore(true)
+	defer os.RemoveAll(s.Path())
+
+	if err := s.Open(true); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	s.WaitForLeader(10 * time.Second)
+
+	if !s.IsLeader() {
+		t.Fatalf("single node is not leader!")
+	}
+}
+
+func Test_State(t *testing.T) {
+	s := mustNewStore(true)
+	defer os.RemoveAll(s.Path())
+
+	if err := s.Open(true); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	s.WaitForLeader(10 * time.Second)
+
+	state := s.State()
+	if state != Leader {
+		t.Fatalf("single node returned incorrect state (not Leader): %v", s)
+	}
+}
+
 func mustNewStore(inmem bool) *Store {
 	path := mustTempDir()
 	defer os.RemoveAll(path)
