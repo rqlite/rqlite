@@ -8,7 +8,7 @@ rqlite gives you the functionality of a [rock solid](http://www.sqlite.org/testi
 You could use rqlite as part of a larger system, as a central store for some critical relational data, without having to run a heavier solution like MySQL.
 
 ### Key features
-- Very easy deployment.
+- Very easy deployment, with no need to separately install SQLite.
 - Fully replicated production-grade SQL database.
 - An easy-to-use HTTP(S) API, including leader-redirection and bulk-update support.
 - Basic auth security and user-level permissions.
