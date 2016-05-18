@@ -5,6 +5,7 @@
 - [PR #132](https://github.com/rqlite/rqlite/pull/132): Support removing a node from a cluster.
 - [PR #131](https://github.com/rqlite/rqlite/pull/131): Only convert []byte from database to string if "text". Thanks @bkeroackdsc
 - [PR #129](https://github.com/rqlite/rqlite/pull/129): Verify all statements sent to query endpoint begin with "SELECT".
+- [PR #141](https://github.com/rqlite/rqlite/pull/141): Store methods to expose node Raft state. Thanks @bkeroack
 
 ## 3.1.0 (May 4th 2016)
 - [PR #118](https://github.com/rqlite/rqlite/pull/118): New rqlite CLI. Thanks @mkideal
