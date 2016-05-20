@@ -34,3 +34,8 @@ If an rqlite process crashes, it is safe to simply to restart it. The node will 
 # Growing a cluster
 
 # Replacing a node
+If a node fails completely and is not coming back -- a complete loss -- then it must be first removed from the cluster. To remove a node from a cluster, execute the following command:
+```
+curl -XDELETE http://localhost:4001/remove -d '{"addr": "<node raft address>"}'
+```
+assuming `localhost` is the address of the cluster leader.
