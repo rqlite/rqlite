@@ -229,6 +229,11 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
 	b, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -263,6 +268,11 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request) {
 	if !s.CheckRequestPerm(r, PermRemove) {
 		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
 
