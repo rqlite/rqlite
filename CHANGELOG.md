@@ -1,4 +1,4 @@
-## 3.2.0 (Unreleased)
+## 3.2.0 (May 21st 2016)
 - [PR #142](https://github.com/rqlite/rqlite/pull/142): Use correct HTTP methods on all endpoints.
 - [PR #137](https://github.com/rqlite/rqlite/pull/137): Use resolved version of joining node's address.
 - [PR #136](https://github.com/rqlite/rqlite/pull/136): Better errors on join failures.
