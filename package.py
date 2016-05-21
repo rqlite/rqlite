@@ -100,18 +100,14 @@ def get_go_version():
 def build(version=None,
           platform=None,
           arch=None,
-          nightly=False,
           clean=False,
-          outdir=".",
-          tags=[]):
+          outdir="."):
     """Build each target for the specified architecture and platform.
     """
     logging.info("Starting build for {}/{}...".format(platform, arch))
     logging.info("Using Go version: {}".format(get_go_version()))
     logging.info("Using git branch: {}".format(get_current_branch()))
     logging.info("Using git commit: {}".format(get_current_commit()))
-    if len(tags) > 0:
-        logging.info("Using build tags: {}".format(','.join(tags)))
 
     logging.info("Sending build output to: {}".format(outdir))
     if not os.path.exists(outdir):
@@ -123,7 +119,6 @@ def build(version=None,
 
     logging.info("Using version '{}' for build.".format(version))
 
-    tmp_build_dir = create_temp_dir()
     for target, path in targets.items():
         logging.info("Building target: {}".format(target))
         build_command = ""
@@ -131,47 +126,11 @@ def build(version=None,
         # Handle variations in architecture output
         if arch == "i386" or arch == "i686":
             arch = "386"
-        elif "arm" in arch:
-            arch = "arm"
         build_command += "GOOS={} GOARCH={} ".format(platform, arch)
-
-        if "arm" in arch:
-            if arch == "armel":
-                build_command += "GOARM=5 "
-            elif arch == "armhf" or arch == "arm":
-                build_command += "GOARM=6 "
-            elif arch == "arm64":
-                # TODO(rossmcdonald) - Verify this is the correct setting for arm64
-                build_command += "GOARM=7 "
-            else:
-                logging.error("Invalid ARM architecture specified: {}".format(arch))
-                logging.error("Please specify either 'armel', 'armhf', or 'arm64'.")
-                return False
         build_command += "go build -o {} ".format(os.path.join(outdir, target))
-        if race:
-            build_command += "-race "
-        if len(tags) > 0:
-            build_command += "-tags {} ".format(','.join(tags))
-        if "1.4" in get_go_version():
-            if static:
-                build_command += "-ldflags=\"-s -X main.version {} -X main.branch {} -X main.commit {}\" ".format(version,
-                                                                                                                  get_current_branch(),
-                                                                                                                  get_current_commit())
-            else:
-                build_command += "-ldflags=\"-X main.version {} -X main.branch {} -X main.commit {}\" ".format(version,
-                                                                                                               get_current_branch(),
-                                                                                                               get_current_commit())
-
-        else:
-            # Starting with Go 1.5, the linker flag arguments changed to 'name=value' from 'name value'
-            if static:
-                build_command += "-ldflags=\"-s -X main.version={} -X main.branch={} -X main.commit={}\" ".format(version,
-                                                                                                                  get_current_branch(),
-                                                                                                                  get_current_commit())
-            else:
-                build_command += "-ldflags=\"-X main.version={} -X main.branch={} -X main.commit={}\" ".format(version,
-                                                                                                               get_current_branch(),
-                                                                                                               get_current_commit())
+        build_command += '-ldflags="-X main.version={} -X main.branch={} -X main.commit={}" '.format(version,
+                                                                                                     get_current_branch(),
+                                                                                                     get_current_commit())
         build_command += path
         start_time = datetime.utcnow()
         run(build_command, shell=True)
