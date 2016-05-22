@@ -35,7 +35,7 @@ _This demonstration shows all 3 nodes running on the same host. In reality you w
 
 Under each node will be an SQLite database, which should remain in consensus. You can create clusters of any size, but clusters of 3, 5, and 7 nodes are most practical. Clusters larger than this become impractical, due to the number of nodes that must be contacted before a change can take place.
 
-When restarting a node, there is no further need to pass `-join`. It will be ignored if a node is already a member of a cluster. For more information on managing clusters check [this documentation](https://github.com/rqlite/rqlite/blob/master/CLUSTER_MGMT.md).
+When restarting a node, there is no further need to pass `-join`. It will be ignored if a node is already a member of a cluster. For more information on managing clusters check [this documentation](https://github.com/rqlite/rqlite/blob/master/doc/CLUSTER_MGMT.md).
 
 ## Data API
 rqlite exposes an HTTP API allowing the database to be modified such that the changes are replicated. Queries are also executed using the HTTP API. Modifications go through the Raft log, ensuring only changes committed by a quorum of rqlite nodes are actually executed against the SQLite database. Queries do not __necessarily__ go through the Raft log, however, since they do not change the state of the database, and therefore do not need to be captured in the log. More on this later.
@@ -228,13 +228,13 @@ INSERT INTO foo (n) VALUES(random());
  * SQLite commands such as `.schema` are not handled.
 
 ## Status API
-You can learn how check status and diagnostics [here](https://github.com/rqlite/rqlite/blob/master/DIAGNOSTICS.md).
+You can learn how check status and diagnostics [here](https://github.com/rqlite/rqlite/blob/master/doc/DIAGNOSTICS.md).
 
 ## Backups
-Learn how to backup your rqlite cluster [here](https://github.com/rqlite/rqlite/blob/master/BACKUPS.md).
+Learn how to backup your rqlite cluster [here](https://github.com/rqlite/rqlite/blob/master/doc/BACKUPS.md).
 
 ## Security
-You can learn about securing access, and restricting users' access, to rqlite [here](https://github.com/rqlite/rqlite/blob/master/SECURITY.md).
+You can learn about securing access, and restricting users' access, to rqlite [here](https://github.com/rqlite/rqlite/blob/master/doc/SECURITY.md).
 
 ## Pronunciation?
 How do I pronounce rqlite? For what it's worth I pronounce it "ree-qwell-lite".
