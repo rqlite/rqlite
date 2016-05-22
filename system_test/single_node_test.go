@@ -27,6 +27,21 @@ func Test_SingleNode(t *testing.T) {
 			execute:  true,
 		},
 		{
+			stmt:     `INSERT INTO bar(name) VALUES("fiona")`,
+			expected: `{"results":[{"error":"no such table: bar"}]}`,
+			execute:  true,
+		},
+		{
+			stmt:     `INSERT blah blah`,
+			expected: `{"results":[{"error":"near \"blah\": syntax error"}]}`,
+			execute:  true,
+		},
+		{
+			stmt:     `INSERT INTO foo(name) VALUES("fiona")`,
+			expected: ``,
+			execute:  false,
+		},
+		{
 			stmt:     `SELECT * FROM foo`,
 			expected: `{"results":[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]}`,
 			execute:  false,
