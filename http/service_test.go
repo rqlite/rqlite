@@ -110,6 +110,14 @@ func Test_405Routes(t *testing.T) {
 		t.Fatalf("failed to get expected 405, got %d", resp.StatusCode)
 	}
 
+	resp, err = client.Post(host+"/remove", "", nil)
+	if err != nil {
+		t.Fatalf("failed to make request")
+	}
+	if resp.StatusCode != 405 {
+		t.Fatalf("failed to get expected 405, got %d", resp.StatusCode)
+	}
+
 	resp, err = client.Get(host + "/join")
 	if err != nil {
 		t.Fatalf("failed to make request")
