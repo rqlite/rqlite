@@ -1,3 +1,6 @@
+## 3.2.1 (May 22nd 2016)
+- [PR #](https://github.com/rqlite/rqlite/pull/143): Use DELETE as HTTP method to remove nodes.
+
 ## 3.2.0 (May 21st 2016)
 - [PR #142](https://github.com/rqlite/rqlite/pull/142): Use correct HTTP methods on all endpoints.
 - [PR #137](https://github.com/rqlite/rqlite/pull/137): Use resolved version of joining node's address.
