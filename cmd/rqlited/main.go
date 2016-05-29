@@ -73,6 +73,7 @@ var raftAdv string
 var joinAddr string
 var noVerify bool
 var expvar bool
+var pprofEnabled bool
 var dsn string
 var onDisk bool
 var noVerifySelect bool
@@ -92,6 +93,7 @@ func init() {
 	flag.StringVar(&joinAddr, "join", "", "protocol://host:port of leader to join")
 	flag.BoolVar(&noVerify, "noverify", false, "Skip verification of any HTTPS cert when joining")
 	flag.BoolVar(&expvar, "expvar", true, "Serve expvar data on HTTP server")
+	flag.BoolVar(&pprofEnabled, "pprof", true, "Serve pprof data on HTTP server")
 	flag.StringVar(&dsn, "dsn", "", `SQLite DSN parameters. E.g. "cache=shared&mode=memory"`)
 	flag.BoolVar(&onDisk, "ondisk", false, "Use an on-disk SQLite database")
 	flag.BoolVar(&noVerifySelect, "nosel", false, "Don't verify that all queries begin with SELECT")
@@ -237,6 +239,7 @@ func main() {
 	s.KeyFile = x509Key
 	s.NoVerifySelect = noVerifySelect
 	s.Expvar = expvar
+	s.Pprof = pprofEnabled
 	s.BuildInfo = map[string]interface{}{
 		"commit":     commit,
 		"branch":     branch,

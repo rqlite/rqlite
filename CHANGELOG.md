@@ -1,3 +1,6 @@
+## 3.3.0 (unreleased)
+- [PR #148](https://github.com/rqlite/rqlite/pull/148): Support pprof information over HTTP.
+
 ## 3.2.1 (May 22nd 2016)
 - [PR #143](https://github.com/rqlite/rqlite/pull/143): Use DELETE as HTTP method to remove nodes.
 
