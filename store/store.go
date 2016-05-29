@@ -165,6 +165,7 @@ type Store struct {
 	logger *log.Logger
 
 	SnapshotThreshold uint64
+	HeartbeatTimeout  time.Duration
 }
 
 // New returns a new Store.
@@ -212,6 +213,9 @@ func (s *Store) Open(enableSingle bool) error {
 	config := raft.DefaultConfig()
 	if s.SnapshotThreshold != 0 {
 		config.SnapshotThreshold = s.SnapshotThreshold
+	}
+	if s.HeartbeatTimeout != 0 {
+		config.HeartbeatTimeout = s.HeartbeatTimeout
 	}
 
 	// Check for any existing peers.

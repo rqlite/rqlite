@@ -1,4 +1,5 @@
 ## 3.3.0 (unreleased)
+- [PR #151](https://github.com/rqlite/rqlite/pull/151): Support configurable Raft heartbeat timeout.
 - [PR #149](https://github.com/rqlite/rqlite/pull/149): Support configurable Raft snapshot thresholds.
 - [PR #148](https://github.com/rqlite/rqlite/pull/148): Support pprof information over HTTP.
 
