@@ -1,4 +1,5 @@
 ## 3.3.0 (unreleased)
+- [PR #149](https://github.com/rqlite/rqlite/pull/149): Support configurable Raft snapshot thresholds.
 - [PR #148](https://github.com/rqlite/rqlite/pull/148): Support pprof information over HTTP.
 
 ## 3.2.1 (May 22nd 2016)
