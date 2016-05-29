@@ -12,6 +12,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/http/pprof"
 	"os"
 	"runtime"
 	"strings"
@@ -128,6 +129,7 @@ type Service struct {
 	credentialStore CredentialStore
 
 	Expvar bool
+	Pprof  bool
 
 	BuildInfo map[string]interface{}
 
@@ -217,6 +219,8 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.handleStatus(w, r)
 	case r.URL.Path == "/debug/vars" && s.Expvar:
 		serveExpvar(w, r)
+	case strings.HasPrefix(r.URL.Path, "/debug/pprof") && s.Pprof:
+		servePprof(w, r)
 	default:
 		w.WriteHeader(http.StatusNotFound)
 	}
@@ -597,6 +601,20 @@ func serveExpvar(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "%q: %s", kv.Key, kv.Value)
 	})
 	fmt.Fprintf(w, "\n}\n")
+}
+
+// servePprof serves pprof information over HTTP.
+func servePprof(w http.ResponseWriter, r *http.Request) {
+	switch r.URL.Path {
+	case "/debug/pprof/cmdline":
+		pprof.Cmdline(w, r)
+	case "/debug/pprof/profile":
+		pprof.Profile(w, r)
+	case "/debug/pprof/symbol":
+		pprof.Symbol(w, r)
+	default:
+		pprof.Index(w, r)
+	}
 }
 
 func writeResponse(w http.ResponseWriter, r *http.Request, j *Response) {
