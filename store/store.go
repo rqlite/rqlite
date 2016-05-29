@@ -163,6 +163,8 @@ type Store struct {
 	meta   *clusterMeta
 
 	logger *log.Logger
+
+	SnapshotThreshold uint64
 }
 
 // New returns a new Store.
@@ -208,6 +210,9 @@ func (s *Store) Open(enableSingle bool) error {
 
 	// Setup Raft configuration.
 	config := raft.DefaultConfig()
+	if s.SnapshotThreshold != 0 {
+		config.SnapshotThreshold = s.SnapshotThreshold
+	}
 
 	// Check for any existing peers.
 	peers, err := readPeersJSON(filepath.Join(s.raftDir, "peers.json"))
