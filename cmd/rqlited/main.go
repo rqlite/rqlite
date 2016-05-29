@@ -78,6 +78,7 @@ var dsn string
 var onDisk bool
 var noVerifySelect bool
 var raftSnapThreshold uint64
+var raftHeartbeatTimeout string
 var showVersion bool
 var cpuprofile string
 
@@ -99,6 +100,7 @@ func init() {
 	flag.BoolVar(&onDisk, "ondisk", false, "Use an on-disk SQLite database")
 	flag.BoolVar(&noVerifySelect, "nosel", false, "Don't verify that all queries begin with SELECT")
 	flag.BoolVar(&showVersion, "version", false, "Show version information and exit")
+	flag.StringVar(&raftHeartbeatTimeout, "rafttimeout", "1s", "Raft heartbeat timeout")
 	flag.Uint64Var(&raftSnapThreshold, "raftsnap", 8192, "Number of outstanding log entries to trigger snapshot")
 	flag.StringVar(&cpuprofile, "cpuprofile", "", "Write CPU profile to file")
 	flag.Usage = func() {
@@ -189,6 +191,10 @@ func main() {
 		log.Fatalf("failed to open store: %s", err.Error())
 	}
 	store.SnapshotThreshold = raftSnapThreshold
+	store.HeartbeatTimeout, err = time.ParseDuration(raftHeartbeatTimeout)
+	if err != nil {
+		log.Fatalf("failed to parse Raft heartbeat timeout %s: %s", raftHeartbeatTimeout, err.Error())
+	}
 
 	// Create and configure cluster service.
 	tn := mux.Listen(muxMetaHeader)
