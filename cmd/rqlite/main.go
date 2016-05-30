@@ -11,6 +11,8 @@ import (
 	"github.com/mkideal/cli"
 )
 
+const maxRedirect = 21
+
 type argT struct {
 	cli.Helper
 	Protocol string `cli:"s,scheme" usage:"protocol scheme(http or https)" dft:"http"`
@@ -73,17 +75,34 @@ func makeJSONBody(line string) string {
 
 func sendRequest(ctx *cli.Context, urlStr string, line string, ret interface{}) error {
 	data := makeJSONBody(line)
-	resp, err := http.Post(urlStr, "application/json", strings.NewReader(data))
-	if err != nil {
-		return err
+	url := urlStr
+
+	nRedirect := 0
+	for {
+		resp, err := http.Post(url, "application/json", strings.NewReader(data))
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+
+		// Check for redirect.
+		if resp.StatusCode == http.StatusMovedPermanently {
+			nRedirect++
+			if nRedirect > maxRedirect {
+				return fmt.Errorf("maximum leader redirect limit exceeded")
+			}
+			url = resp.Header["Location"][0]
+			continue
+		}
+
+		body, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return err
+		}
+
+		if err := json.Unmarshal(body, ret); err != nil {
+			return err
+		}
+		return nil
 	}
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-	if err := json.Unmarshal(body, ret); err != nil {
-		return fmt.Errorf(string(body))
-	}
-	return nil
 }

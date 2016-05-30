@@ -2,6 +2,7 @@
 - [PR #151](https://github.com/rqlite/rqlite/pull/151): Support configurable Raft heartbeat timeout.
 - [PR #149](https://github.com/rqlite/rqlite/pull/149): Support configurable Raft snapshot thresholds.
 - [PR #148](https://github.com/rqlite/rqlite/pull/148): Support pprof information over HTTP.
+- [PR #154](https://github.com/rqlite/rqlite/pull/154): CLI now redirects to leader if necessary.
 
 ## 3.2.1 (May 22nd 2016)
 - [PR #143](https://github.com/rqlite/rqlite/pull/143): Use DELETE as HTTP method to remove nodes.
