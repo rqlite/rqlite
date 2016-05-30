@@ -270,13 +270,13 @@ func (db *DB) Query(queries []string, tx, xTime bool) ([]*Rows, error) {
 			dest := make([]driver.Value, len(rows.Columns))
 			for {
 				err := rs.Next(dest)
-
 				if err != nil {
 					if err != io.EOF {
 						rows.Error = err.Error()
 					}
 					break
 				}
+
 				values := make([]interface{}, len(rows.Columns))
 				// Text values come over (from sqlite-go) as []byte instead of strings
 				// for some reason, so we have explicitly convert (but only when type

@@ -34,6 +34,11 @@ func (r *Rows) Get(i, j int) string {
 		}
 		return r.Columns[j]
 	}
+
+	if r.Values == nil {
+		return "NULL"
+	}
+
 	if i-1 >= len(r.Values) {
 		return "NULL"
 	}
@@ -47,7 +52,7 @@ func (r *Rows) validate() error {
 	if r.Error != "" {
 		return fmt.Errorf(r.Error)
 	}
-	if r.Columns == nil || r.Types == nil || r.Values == nil {
+	if r.Columns == nil || r.Types == nil {
 		return fmt.Errorf("unexpected result")
 	}
 	return nil
