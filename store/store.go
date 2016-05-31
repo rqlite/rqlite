@@ -544,7 +544,7 @@ func (s *Store) Join(addr string) error {
 	return nil
 }
 
-// Remove removes a node from the store, specifed by addr.
+// Remove removes a node from the store, specified by addr.
 func (s *Store) Remove(addr string) error {
 	s.logger.Printf("received request to remove node %s", addr)
 
