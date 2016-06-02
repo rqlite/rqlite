@@ -1,5 +1,5 @@
 # Command Line Interface
-rqlite comes with a CLI, which can make it easier to interact with cluster. It is installed in the same directory as the cluster binary `rqlited`.
+rqlite comes with a CLI, which can make it easier to interact with cluster. It is installed in the same directory as the cluster binary `rqlited`. 
 
 An example session is shown below.
 ```bash
@@ -15,4 +15,4 @@ $ rqlite
 | 1  | fiona |
 +----+-------+
 ```
-Pass `-h` to `rqlite` to learn more.
+You can connect the CLI to any node in the cluster, and it will automatically forward its requests to the leader. Pass `-h` to `rqlite` to learn more.
