@@ -65,16 +65,36 @@ func Test_HasVersionHeader(t *testing.T) {
 	s.BuildInfo = map[string]interface{}{
 		"version": "the version",
 	}
-	host := fmt.Sprintf("http://%s", s.Addr().String())
+	url := fmt.Sprintf("http://%s", s.Addr().String())
 
 	client := &http.Client{}
-	resp, err := client.Get(host + "/db/xxx")
+	resp, err := client.Get(url)
 	if err != nil {
 		t.Fatalf("failed to make request")
 	}
 
 	if resp.Header.Get("X-RQLITE-VERSION") != "the version" {
-		t.Fatalf("build version not present in HTTP resspone header")
+		t.Fatalf("incorrect build version present in HTTP response header")
+	}
+}
+
+func Test_HasVersionHeaderUnknown(t *testing.T) {
+	m := &MockStore{}
+	s := New("127.0.0.1:0", m, nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+	url := fmt.Sprintf("http://%s", s.Addr().String())
+
+	client := &http.Client{}
+	resp, err := client.Get(url)
+	if err != nil {
+		t.Fatalf("failed to make request")
+	}
+
+	if resp.Header.Get("X-RQLITE-VERSION") != "unknown" {
+		t.Fatalf("incorrect build version present in HTTP response header")
 	}
 }
 
