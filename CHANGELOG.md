@@ -1,4 +1,4 @@
-## 3.3.1 (unreleased)
+## 3.4.0 (unreleased)
 - [PR #159](https://github.com/rqlite/rqlite/pull/159): All HTTP responses set X-RQLITE-VERSION.
 
 ## 3.3.0 (June 1st 2016)
