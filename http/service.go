@@ -193,6 +193,13 @@ func (s *Service) Close() {
 
 // ServeHTTP allows Service to serve HTTP requests.
 func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Add version header to every response, if available.
+	if v, ok := s.BuildInfo["version"].(string); ok {
+		w.Header().Add("X-RQLITE-VERSION", v)
+	} else {
+		w.Header().Add("X-RQLITE-VERSION", "unknown")
+	}
+
 	if s.credentialStore != nil {
 		username, password, ok := r.BasicAuth()
 		if !ok || !s.credentialStore.Check(username, password) {
