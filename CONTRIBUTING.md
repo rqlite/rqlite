@@ -16,7 +16,7 @@ Download and run rqlite like so (tested on 64-bit Kubuntu 14.04 and OSX):
 mkdir rqlite # Or any directory of your choice.
 cd rqlite/
 export GOPATH=$PWD
-go get -t github.com/rqlite/rqlite/...
+go get -u -t github.com/rqlite/rqlite/...
 $GOPATH/bin/rqlited ~/node.1
 ```
 
