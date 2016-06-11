@@ -53,7 +53,7 @@ func (c *CredentialsStore) Load(r io.Reader) error {
 		}
 	}
 
-	// Read closing bracket
+	// Read closing bracket.
 	_, err = dec.Token()
 	if err != nil {
 		return err
@@ -91,7 +91,7 @@ func (c *CredentialsStore) HasPerm(username string, perm string) bool {
 	return true
 }
 
-// HasPermRequest returns true if username returned by b has the givem perm.
+// HasPermRequest returns true if the username returned by b has the givem perm.
 // It does not perform any password checking, but if there is no username
 // in the request, it returns false.
 func (c *CredentialsStore) HasPermRequest(b BasicAuther, perm string) bool {
