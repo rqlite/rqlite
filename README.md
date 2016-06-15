@@ -160,6 +160,9 @@ curl -XPOST 'localhost:4001/db/query?pretty' -H "Content-Type: application/json"
 #### Read Consistency
 You can learn all about the read consistency guarantees supported by rqlite [here](https://github.com/rqlite/rqlite/blob/master/doc/CONSISTENCY.md).
 
+#### Querying the SQLite file directly
+Technically this is not supported, but you can directly read the SQLite under any node at anytime, assuming you run in "on-disk" mode. However there is no guarantee that the SQLite file reflects all the changes that have taken place on the cluster unless you are sure host node itself has received and applied all changes.
+
 ### Transactions
 Transactions are supported. To execute statements within a transaction, add `transaction` to the URL. An example of the above operation executed within a transaction is shown below.
 
