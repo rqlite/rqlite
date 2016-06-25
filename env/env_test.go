@@ -58,3 +58,11 @@ func Test_OverrideBool(t *testing.T) {
 		t.Fatalf("BOOL overridden, exp %v, got %v", false, b)
 	}
 }
+
+func Test_OverrideUnsupported(t *testing.T) {
+	i := 0
+	os.Setenv("FOO", "BAR")
+	if err := Override(i, "FOO"); err == nil {
+		t.Fatal("expected error for unsupported type")
+	}
+}

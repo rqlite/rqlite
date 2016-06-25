@@ -1,6 +1,7 @@
 package env
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 )
@@ -29,6 +30,8 @@ func Override(v interface{}, env string) error {
 			return nil
 		}
 		*t = b
+	default:
+		return fmt.Errorf("unsupported type: %T", t)
 	}
 
 	return nil
