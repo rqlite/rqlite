@@ -22,12 +22,12 @@ import (
 	"github.com/rqlite/rqlite/store"
 )
 
-// Store is the interface the Raft-driven database must implement.
+// Store is the interface the Raft-based database must implement.
 type Store interface {
-	// Execute executes a slice of queries, each of which doesn't
-	// return rows. If timings is true, then timing information will
-	// be return It tx is true, then all queries will be executed
-	// successfully or none will be.
+	// Execute executes a slice of queries, each of which is not expected
+	// to return rows. If timings is true, then timing information will
+	// be return. If tx is true, then either all queries will be executed
+	// successfully or it will as though none executed.
 	Execute(queries []string, timings, tx bool) ([]*sql.Result, error)
 
 	// Query executes a slice of queries, each of which returns rows. If
@@ -39,7 +39,7 @@ type Store interface {
 	// Join joins the node, reachable at addr, to this node.
 	Join(addr string) error
 
-	// Remove removes the node specified by addr from the cluster.
+	// Remove removes the node, specified by addr, from the cluster.
 	Remove(addr string) error
 
 	// Leader returns the Raft leader of the cluster.
@@ -51,7 +51,7 @@ type Store interface {
 	// Stats returns stats on the Store.
 	Stats() (map[string]interface{}, error)
 
-	// Backup returns a byte slice representing a backup of the database file.
+	// Backup returns a byte slice representing a backup of the node state.
 	Backup(leader bool) ([]byte, error)
 }
 
