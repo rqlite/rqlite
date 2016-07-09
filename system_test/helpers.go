@@ -25,7 +25,7 @@ type Node struct {
 	Service  *httpd.Service
 }
 
-// SameAs returns true if this node is the same as o node.
+// SameAs returns true if this node is the same as node o.
 func (n *Node) SameAs(o *Node) bool {
 	return n.RaftAddr == o.RaftAddr
 }
