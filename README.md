@@ -226,5 +226,9 @@ Learn how to backup your rqlite cluster [here](https://github.com/rqlite/rqlite/
 ## Security
 You can learn about securing access, and restricting users' access, to rqlite [here](https://github.com/rqlite/rqlite/blob/master/doc/SECURITY.md).
 
+## Projects using rqlite
+If you are using rqlite in a project, please generate a pull request to add it to this list.
+* [OpenMarket](https://github.com/openmarket/openmarket) - A free, decentralized bitcoin-based marketplace.
+
 ## Pronunciation?
 How do I pronounce rqlite? For what it's worth I pronounce it "ree-qwell-lite".
