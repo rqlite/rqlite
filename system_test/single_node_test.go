@@ -46,6 +46,16 @@ func Test_SingleNode(t *testing.T) {
 			expected: `{"results":[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]}`,
 			execute:  false,
 		},
+		{
+			stmt:     `DROP TABLE bar`,
+			expected: `{"results":[{"error":"no such table: bar"}]}`,
+			execute:  true,
+		},
+		{
+			stmt:     `DROP TABLE foo`,
+			expected: `{"results":[{"last_insert_id":1,"rows_affected":1}]}`,
+			execute:  true,
+		},
 	}
 
 	for i, tt := range tests {
