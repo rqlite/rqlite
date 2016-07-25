@@ -1,145 +1,350 @@
+// Package db exposes a lightweight abstraction over the SQLite code.
+// It performs some basic mapping of lower-level types to rqlite types.
 package db
 
 import (
-	"database/sql"
+	"database/sql/driver"
 	"fmt"
-	"os"
-	"strings"
+	"io"
+	"time"
 
-	_ "github.com/mattn/go-sqlite3" // required blank import
-	"github.com/otoolep/rqlite/log"
+	"github.com/mattn/go-sqlite3"
 )
+
+const bkDelay = 250
+
+// DBVersion is the SQLite version.
+var DBVersion string
+
+func init() {
+	DBVersion, _, _ = sqlite3.Version()
+}
 
 // DB is the SQL database.
 type DB struct {
-	dbConn *sql.DB
+	sqlite3conn *sqlite3.SQLiteConn // Driver connection to database.
+	path        string              // Path to database file.
+	dsn         string              // DSN, if any.
+	memory      bool                // In-memory only.
 }
 
-// RowResult is the result type.
-type RowResult map[string]string
-
-// RowResults is the list of results.
-type RowResults []map[string]string
-
-// New creates a new database. Deletes any existing database.
-func New(dbPath string) *DB {
-	log.Tracef("Removing any existing SQLite database at %s", dbPath)
-	_ = os.Remove(dbPath)
-	return Open(dbPath)
+// Result represents the outcome of an operation that changes rows.
+type Result struct {
+	LastInsertID int64   `json:"last_insert_id,omitempty"`
+	RowsAffected int64   `json:"rows_affected,omitempty"`
+	Error        string  `json:"error,omitempty"`
+	Time         float64 `json:"time,omitempty"`
 }
 
-// Open an existing database, creating it if it does not exist.
-func Open(dbPath string) *DB {
-	log.Tracef("Opening SQLite database path at %s", dbPath)
-	dbc, err := sql.Open("sqlite3", dbPath)
+// Rows represents the outcome of an operation that returns query data.
+type Rows struct {
+	Columns []string        `json:"columns,omitempty"`
+	Types   []string        `json:"types,omitempty"`
+	Values  [][]interface{} `json:"values,omitempty"`
+	Error   string          `json:"error,omitempty"`
+	Time    float64         `json:"time,omitempty"`
+}
+
+// Open opens a file-based database, creating it if it does not exist.
+func Open(dbPath string) (*DB, error) {
+	return open(fqdsn(dbPath, ""))
+}
+
+// OpenWithDSN opens a file-based database, creating it if it does not exist.
+func OpenWithDSN(dbPath, dsn string) (*DB, error) {
+	return open(fqdsn(dbPath, dsn))
+}
+
+// OpenInMemory opens an in-memory database.
+func OpenInMemory() (*DB, error) {
+	return open(fqdsn(":memory:", ""))
+}
+
+// OpenInMemoryWithDSN opens an in-memory database with a specific DSN.
+func OpenInMemoryWithDSN(dsn string) (*DB, error) {
+	return open(fqdsn(":memory:", dsn))
+}
+
+// LoadInMemoryWithDSN loads an in-memory database with that at the path,
+// with the specified DSN
+func LoadInMemoryWithDSN(dbPath, dsn string) (*DB, error) {
+	db, err := OpenInMemoryWithDSN(dsn)
 	if err != nil {
-		log.Error(err.Error())
-		return nil
+		return nil, err
 	}
-	return &DB{
-		dbConn: dbc,
+
+	srcDB, err := Open(dbPath)
+	if err != nil {
+		return nil, err
 	}
+
+	bk, err := db.sqlite3conn.Backup("main", srcDB.sqlite3conn, "main")
+	if err != nil {
+		return nil, err
+	}
+
+	for {
+		done, err := bk.Step(-1)
+		if err != nil {
+			bk.Finish()
+			return nil, err
+		}
+		if done {
+			break
+		}
+		time.Sleep(bkDelay * time.Millisecond)
+	}
+
+	if err := bk.Finish(); err != nil {
+		return nil, err
+	}
+	if err := srcDB.Close(); err != nil {
+		return nil, err
+	}
+
+	return db, nil
 }
 
 // Close closes the underlying database connection.
 func (db *DB) Close() error {
-	return db.dbConn.Close()
+	return db.sqlite3conn.Close()
 }
 
-// Query runs the supplied query against the sqlite database. It returns a slice of
-// RowResults.
-func (db *DB) Query(query string) (RowResults, error) {
-	if !strings.HasPrefix(strings.ToUpper(query), "SELECT ") {
-		log.Warnf("Query \"%s\" may modify the database", query)
-	}
-	rows, err := db.dbConn.Query(query)
+func open(dbPath string) (*DB, error) {
+	d := sqlite3.SQLiteDriver{}
+	dbc, err := d.Open(dbPath)
 	if err != nil {
-		log.Errorf("failed to execute SQLite query: %s", err.Error())
 		return nil, err
 	}
-	defer func() {
-		err = rows.Close()
-		if err != nil {
-			log.Errorf("failed to close rows: %s", err.Error())
-		}
-	}()
 
-	results := make(RowResults, 0)
+	return &DB{
+		sqlite3conn: dbc.(*sqlite3.SQLiteConn),
+		path:        dbPath,
+	}, nil
+}
 
-	columns, _ := rows.Columns()
-	rawResult := make([][]byte, len(columns))
-	dest := make([]interface{}, len(columns))
-	for i := range rawResult {
-		dest[i] = &rawResult[i] // Pointers to each string in the interface slice
+// Execute executes queries that modify the database.
+func (db *DB) Execute(queries []string, tx, xTime bool) ([]*Result, error) {
+	type Execer interface {
+		Exec(query string, args []driver.Value) (driver.Result, error)
 	}
 
-	for rows.Next() {
-		err = rows.Scan(dest...)
-		if err != nil {
-			log.Errorf("failed to scan SQLite row: %s", err.Error())
-			return nil, err
+	var allResults []*Result
+	err := func() error {
+		var execer Execer
+		var rollback bool
+		var t driver.Tx
+		var err error
+
+		// Check for the err, if set rollback.
+		defer func() {
+			if t != nil {
+				if rollback {
+					t.Rollback()
+					return
+				}
+				t.Commit()
+			}
+		}()
+
+		// handleError sets the error field on the given result. It returns
+		// whether the caller should continue processing or break.
+		handleError := func(result *Result, err error) bool {
+			result.Error = err.Error()
+			allResults = append(allResults, result)
+			if tx {
+				rollback = true // Will trigger the rollback.
+				return false
+			}
+			return true
 		}
 
-		r := make(RowResult)
-		for i, raw := range rawResult {
-			if raw == nil {
-				r[columns[i]] = "null"
-			} else {
-				r[columns[i]] = string(raw)
+		execer = db.sqlite3conn
+
+		// Create the correct execution object, depending on whether a
+		// transaction was requested.
+		if tx {
+			t, err = db.sqlite3conn.Begin()
+			if err != nil {
+				return err
 			}
 		}
-		results = append(results, r)
+
+		// Execute each query.
+		for _, q := range queries {
+			if q == "" {
+				continue
+			}
+
+			result := &Result{}
+			start := time.Now()
+
+			r, err := execer.Exec(q, nil)
+			if err != nil {
+				if handleError(result, err) {
+					continue
+				}
+				break
+			}
+
+			lid, err := r.LastInsertId()
+			if err != nil {
+				if handleError(result, err) {
+					continue
+				}
+				break
+			}
+			result.LastInsertID = lid
+
+			ra, err := r.RowsAffected()
+			if err != nil {
+				if handleError(result, err) {
+					continue
+				}
+				break
+			}
+			result.RowsAffected = ra
+			if xTime {
+				result.Time = time.Now().Sub(start).Seconds()
+			}
+			allResults = append(allResults, result)
+		}
+
+		return nil
+	}()
+
+	return allResults, err
+}
+
+// Query executes queries that return rows, but don't modify the database.
+func (db *DB) Query(queries []string, tx, xTime bool) ([]*Rows, error) {
+	type Queryer interface {
+		Query(query string, args []driver.Value) (driver.Rows, error)
 	}
-	log.Debugf("Executed query successfully: %s", query)
-	return results, nil
+
+	var allRows []*Rows
+	err := func() (err error) {
+		var queryer Queryer
+		var t driver.Tx
+		defer func() {
+			// XXX THIS DOESN'T ACTUALLY WORK! Might as WELL JUST COMMIT?
+			if t != nil {
+				if err != nil {
+					t.Rollback()
+					return
+				}
+				t.Commit()
+			}
+		}()
+
+		queryer = db.sqlite3conn
+
+		// Create the correct query object, depending on whether a
+		// transaction was requested.
+		if tx {
+			t, err = db.sqlite3conn.Begin()
+			if err != nil {
+				return err
+			}
+		}
+
+		for _, q := range queries {
+			if q == "" {
+				continue
+			}
+
+			rows := &Rows{}
+			start := time.Now()
+
+			rs, err := queryer.Query(q, nil)
+			if err != nil {
+				rows.Error = err.Error()
+				allRows = append(allRows, rows)
+				continue
+			}
+			defer rs.Close() // This adds to all defers, right? Nothing leaks? XXX Could consume memory. Perhaps anon would be best.
+			columns := rs.Columns()
+
+			rows.Columns = columns
+			rows.Types = rs.(*sqlite3.SQLiteRows).DeclTypes()
+			dest := make([]driver.Value, len(rows.Columns))
+			for {
+				err := rs.Next(dest)
+				if err != nil {
+					if err != io.EOF {
+						rows.Error = err.Error()
+					}
+					break
+				}
+
+				values := make([]interface{}, len(rows.Columns))
+				// Text values come over (from sqlite-go) as []byte instead of strings
+				// for some reason, so we have explicitly convert (but only when type
+				// is "text" so we don't affect BLOB types)
+				for i, v := range dest {
+					if rows.Types[i] == "text" {
+						switch val := v.(type) {
+						case []byte:
+							values[i] = string(val)
+						default:
+							values[i] = val
+						}
+					} else {
+						values[i] = v
+					}
+				}
+				rows.Values = append(rows.Values, values)
+			}
+			if xTime {
+				rows.Time = time.Now().Sub(start).Seconds()
+			}
+			allRows = append(allRows, rows)
+		}
+
+		return nil
+	}()
+
+	return allRows, err
 }
 
-// Execute executes the given sqlite statement, of a type that doesn't return rows.
-func (db *DB) Execute(stmt string) error {
-	_, err := db.dbConn.Exec(stmt)
-	log.Debug(func() string {
-		if err != nil {
-			return fmt.Sprintf("Error executing \"%s\", error: %s", stmt, err.Error())
-		}
-		return fmt.Sprintf("Successfully executed \"%s\"", stmt)
-	}())
+// Backup writes a consistent snapshot of the database to the given file.
+func (db *DB) Backup(path string) error {
+	dstDB, err := Open(path)
+	if err != nil {
+		return err
+	}
 
-	return err
+	bk, err := dstDB.sqlite3conn.Backup("main", db.sqlite3conn, "main")
+	if err != nil {
+		return err
+	}
+
+	for {
+		done, err := bk.Step(-1)
+		if err != nil {
+			bk.Finish()
+			return err
+		}
+		if done {
+			break
+		}
+		time.Sleep(bkDelay * time.Millisecond)
+	}
+
+	if err := bk.Finish(); err != nil {
+		return err
+	}
+	if err := dstDB.Close(); err != nil {
+		return err
+	}
+
+	return nil
 }
 
-// StartTransaction starts an explicit transaction.
-func (db *DB) StartTransaction() error {
-	_, err := db.dbConn.Exec("BEGIN")
-	log.Debug(func() string {
-		if err != nil {
-			return "Error starting transaction"
-		}
-		return "Successfully started transaction"
-	}())
-	return err
-}
-
-// CommitTransaction commits all changes made since StartTraction was called.
-func (db *DB) CommitTransaction() error {
-	_, err := db.dbConn.Exec("END")
-	log.Debug(func() string {
-		if err != nil {
-			return "Error ending transaction"
-		}
-		return "Successfully ended transaction"
-	}())
-	return err
-}
-
-// RollbackTransaction aborts the transaction. No statement issued since
-// StartTransaction was called will take effect.
-func (db *DB) RollbackTransaction() error {
-	_, err := db.dbConn.Exec("ROLLBACK")
-	log.Debug(func() string {
-		if err != nil {
-			return "Error rolling back transaction"
-		}
-		return "Successfully rolled back transaction"
-	}())
-	return err
+// fqdsn returns the fully-qualified datasource name.
+func fqdsn(path, dsn string) string {
+	if dsn != "" {
+		return fmt.Sprintf("file:%s?%s", path, dsn)
+	}
+	return path
 }

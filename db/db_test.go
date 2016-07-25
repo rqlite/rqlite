@@ -1,212 +1,433 @@
 package db
 
 import (
+	"encoding/json"
 	"io/ioutil"
 	"os"
 	"path"
 	"testing"
-
-	. "gopkg.in/check.v1"
 )
-
-// Hook up gocheck into the "go test" runner.
-func Test(t *testing.T) {
-	TestingT(t)
-}
-
-type DbSuite struct{}
-
-var _ = Suite(&DbSuite{})
 
 /*
  * Lowest-layer database tests
  */
 
-func (s *DbSuite) Test_DbFileCreation(c *C) {
+func Test_DbFileCreation(t *testing.T) {
 	dir, err := ioutil.TempDir("", "rqlite-test-")
 	defer os.RemoveAll(dir)
 
-	db := New(path.Join(dir, "test_db"))
-	c.Assert(db, NotNil)
+	db, err := Open(path.Join(dir, "test_db"))
+	if err != nil {
+		t.Fatalf("failed to open new database: %s", err.Error())
+	}
+	if db == nil {
+		t.Fatal("database is nil")
+	}
 	err = db.Close()
-	c.Assert(err, IsNil)
+	if err != nil {
+		t.Fatalf("failed to close database: %s", err.Error())
+	}
 }
 
-func (s *DbSuite) Test_TableCreation(c *C) {
-	dir, err := ioutil.TempDir("", "rqlite-test-")
-	defer os.RemoveAll(dir)
-	db := New(path.Join(dir, "test_db"))
+func Test_TableCreation(t *testing.T) {
+	db, path := mustCreateDatabase()
 	defer db.Close()
+	defer os.Remove(path)
 
-	err = db.Execute("create table foo (id integer not null primary key, name text)")
-	c.Assert(err, IsNil)
+	_, err := db.Execute([]string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"}, false, false)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
 
-	r, err := db.Query("SELECT * FROM foo")
-	c.Assert(err, IsNil)
-	c.Assert(len(r), Equals, 0)
+	r, err := db.Query([]string{"SELECT * FROM foo"}, false, false)
+	if err != nil {
+		t.Fatalf("failed to query empty table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
 }
 
-func (s *DbSuite) Test_SimpleStatements(c *C) {
-	dir, err := ioutil.TempDir("", "rqlite-test-")
-	defer os.RemoveAll(dir)
-	db := New(path.Join(dir, "test_db"))
+func Test_LoadInMemory(t *testing.T) {
+	db, path := mustCreateDatabase()
 	defer db.Close()
+	defer os.Remove(path)
 
-	err = db.Execute("create table foo (id integer not null primary key, name text)")
-	c.Assert(err, IsNil)
-
-	err = db.Execute("INSERT INTO foo(name) VALUES(\"fiona\")")
-	c.Assert(err, IsNil)
-	r, err := db.Query("SELECT * FROM foo")
-	c.Assert(len(r), Equals, 1)
-	c.Assert(r[0]["id"], Equals, "1")
-	c.Assert(r[0]["name"], Equals, "fiona")
-
-	err = db.Execute("INSERT INTO foo(name) VALUES(\"dana\")")
-	c.Assert(err, IsNil)
-	r, err = db.Query("SELECT * FROM foo")
-	c.Assert(len(r), Equals, 2)
-	c.Assert(r[1]["id"], Equals, "2")
-	c.Assert(r[1]["name"], Equals, "dana")
-
-	err = db.Execute("UPDATE foo SET Name='Who knows?' WHERE Id=1")
-	c.Assert(err, IsNil)
-	r, err = db.Query("SELECT * FROM foo")
-	c.Assert(len(r), Equals, 2)
-	c.Assert(r[0]["id"], Equals, "1")
-	c.Assert(r[0]["name"], Equals, "Who knows?")
-
-	err = db.Execute("DELETE FROM foo WHERE Id=2")
-	c.Assert(err, IsNil)
-	r, err = db.Query("SELECT * FROM foo")
-	c.Assert(len(r), Equals, 1)
-	c.Assert(r[0]["id"], Equals, "1")
-	c.Assert(r[0]["name"], Equals, "Who knows?")
-
-	err = db.Execute("DELETE FROM foo WHERE Id=1")
-	c.Assert(err, IsNil)
-
-	for i := 0; i < 10; i++ {
-		_ = db.Execute("INSERT INTO foo(name) VALUES(\"philip\")")
+	_, err := db.Execute([]string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"}, false, false)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
 	}
-	r, err = db.Query("SELECT name FROM foo")
-	c.Assert(len(r), Equals, 10)
-	for i := range r {
-		c.Assert(r[i]["name"], Equals, "philip")
+
+	r, err := db.Query([]string{"SELECT * FROM foo"}, false, false)
+	if err != nil {
+		t.Fatalf("failed to query empty table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+
+	inmem, err := LoadInMemoryWithDSN(path, "")
+	if err != nil {
+		t.Fatalf("failed to create loaded in-memory database: %s", err.Error())
+	}
+
+	// Ensure it has been loaded correctly into the database
+	r, err = inmem.Query([]string{"SELECT * FROM foo"}, false, false)
+	if err != nil {
+		t.Fatalf("failed to query empty table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
 }
 
-func (s *DbSuite) Test_FailingSimpleStatements(c *C) {
-	dir, err := ioutil.TempDir("", "rqlite-test-")
-	defer os.RemoveAll(dir)
-	db := New(path.Join(dir, "test_db"))
+func Test_SimpleSingleStatements(t *testing.T) {
+	db, path := mustCreateDatabase()
 	defer db.Close()
+	defer os.Remove(path)
 
-	err = db.Execute("INSERT INTO foo(name) VALUES(\"fiona\")")
-	c.Assert(err, NotNil)
-	c.Assert(err.Error(), Equals, "no such table: foo")
+	_, err := db.Execute([]string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"}, false, false)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
 
-	err = db.Execute("create table foo (id integer not null primary key, name text)")
-	c.Assert(err, IsNil)
-	err = db.Execute("create table foo (id integer not null primary key, name text)")
-	c.Assert(err, NotNil)
-	c.Assert(err.Error(), Equals, "table foo already exists")
+	_, err = db.Execute([]string{`INSERT INTO foo(name) VALUES("fiona")`}, false, false)
+	if err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
 
-	err = db.Execute("INSERT INTO foo(id, name) VALUES(11, \"fiona\")")
-	c.Assert(err, IsNil)
-	err = db.Execute("INSERT INTO foo(id, name) VALUES(11, \"fiona\")")
-	c.Assert(err, NotNil)
-	c.Assert(err.Error(), Equals, "UNIQUE constraint failed: foo.id")
+	r, err := db.Query([]string{`SELECT * FROM foo`}, false, false)
+	if err != nil {
+		t.Fatalf("failed to query empty table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
 
-	err = db.Execute("SELECT * FROM bar")
-	c.Assert(err, NotNil)
-	c.Assert(err.Error(), Equals, "no such table: bar")
+	_, err = db.Execute([]string{`INSERT INTO foo(name) VALUES("aoife")`}, false, false)
+	if err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
 
-	err = db.Execute("utter nonsense")
-	c.Assert(err, NotNil)
-	c.Assert(err.Error(), Equals, "near \"utter\": syntax error")
+	r, err = db.Query([]string{`SELECT * FROM foo`}, false, false)
+	if err != nil {
+		t.Fatalf("failed to query empty table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"],[2,"aoife"]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	r, err = db.Query([]string{`SELECT * FROM foo WHERE name="aoife"`}, false, false)
+	if err != nil {
+		t.Fatalf("failed to query empty table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[2,"aoife"]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	r, err = db.Query([]string{`SELECT * FROM foo WHERE name="dana"`}, false, false)
+	if err != nil {
+		t.Fatalf("failed to query empty table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	r, err = db.Query([]string{`SELECT * FROM foo ORDER BY name`}, false, false)
+	if err != nil {
+		t.Fatalf("failed to query empty table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[2,"aoife"],[1,"fiona"]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	r, err = db.Query([]string{`SELECT *,name FROM foo`}, false, false)
+	if err != nil {
+		t.Fatalf("failed to query empty table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name","name"],"types":["integer","text","text"],"values":[[1,"fiona","fiona"],[2,"aoife","aoife"]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
 }
 
-func (s *DbSuite) Test_SimpleTransactions(c *C) {
-	dir, err := ioutil.TempDir("", "rqlite-test-")
-	defer os.RemoveAll(dir)
-	db := New(path.Join(dir, "test_db"))
+func Test_SimpleMultiStatements(t *testing.T) {
+	db, path := mustCreateDatabase()
 	defer db.Close()
+	defer os.Remove(path)
 
-	err = db.Execute("create table foo (id integer not null primary key, name text)")
-	c.Assert(err, IsNil)
-
-	err = db.StartTransaction()
-	c.Assert(err, IsNil)
-	for i := 0; i < 10; i++ {
-		_ = db.Execute("INSERT INTO foo(name) VALUES(\"philip\")")
-	}
-	err = db.CommitTransaction()
-	c.Assert(err, IsNil)
-
-	r, err := db.Query("SELECT name FROM foo")
-	c.Assert(len(r), Equals, 10)
-	for i := range r {
-		c.Assert(r[i]["name"], Equals, "philip")
+	_, err := db.Execute([]string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"}, false, false)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
 	}
 
-	err = db.StartTransaction()
-	c.Assert(err, IsNil)
-	for i := 0; i < 10; i++ {
-		_ = db.Execute("INSERT INTO foo(name) VALUES(\"philip\")")
+	re, err := db.Execute([]string{`INSERT INTO foo(name) VALUES("fiona")`, `INSERT INTO foo(name) VALUES("dana")`}, false, false)
+	if err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
 	}
-	err = db.RollbackTransaction()
-	c.Assert(err, IsNil)
+	if exp, got := `[{"last_insert_id":1,"rows_affected":1},{"last_insert_id":2,"rows_affected":1}]`, asJSON(re); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
 
-	r, err = db.Query("select name from foo") // Test lowercase
-	c.Assert(len(r), Equals, 10)
-	for i := range r {
-		c.Assert(r[i]["name"], Equals, "philip")
+	ro, err := db.Query([]string{`SELECT * FROM foo`, `SELECT * FROM foo`}, false, false)
+	if err != nil {
+		t.Fatalf("failed to query empty table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"],[2,"dana"]]},{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"],[2,"dana"]]}]`, asJSON(ro); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 }
 
-func (s *DbSuite) Test_TransactionsConstraintViolation(c *C) {
-	dir, err := ioutil.TempDir("", "rqlite-test-")
-	defer os.RemoveAll(dir)
-	db := New(path.Join(dir, "test_db"))
+func Test_SimpleFailingStatements(t *testing.T) {
+	db, path := mustCreateDatabase()
 	defer db.Close()
+	defer os.Remove(path)
 
-	err = db.Execute("create table foo (id integer not null primary key, name text)")
-	c.Assert(err, IsNil)
+	r, err := db.Execute([]string{`INSERT INTO foo(name) VALUES("fiona")`}, false, false)
+	if err != nil {
+		t.Fatalf("error executing insertion into non-existent table: %s", err.Error())
+	}
+	if exp, got := `[{"error":"no such table: foo"}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
 
-	err = db.StartTransaction()
-	c.Assert(err, IsNil)
-	err = db.Execute("INSERT INTO foo(id, name) VALUES(1, \"fiona\")")
-	c.Assert(err, IsNil)
-	err = db.Execute("INSERT INTO foo(id, name) VALUES(1, \"fiona\")")
-	c.Assert(err, NotNil)
-	err = db.RollbackTransaction()
-	c.Assert(err, IsNil)
+	r, err = db.Execute([]string{`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`}, false, false)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if exp, got := `[{}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	r, err = db.Execute([]string{`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`}, false, false)
+	if err != nil {
+		t.Fatalf("failed to attempt creation of duplicate table: %s", err.Error())
+	}
+	if exp, got := `[{"error":"table foo already exists"}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
 
-	r, err := db.Query("SELECT * FROM foo")
-	c.Assert(len(r), Equals, 0)
+	r, err = db.Execute([]string{`INSERT INTO foo(id, name) VALUES(11, "fiona")`}, false, false)
+	if err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+	if exp, got := `[{"last_insert_id":11,"rows_affected":1}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	r, err = db.Execute([]string{`INSERT INTO foo(id, name) VALUES(11, "fiona")`}, false, false)
+	if err != nil {
+		t.Fatalf("failed to attempt duplicate record insertion: %s", err.Error())
+	}
+	if exp, got := `[{"error":"UNIQUE constraint failed: foo.id"}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	ro, err := db.Query([]string{`SELECT * FROM bar`}, false, false)
+	if err != nil {
+		t.Fatalf("failed to attempt query of non-existant table: %s", err.Error())
+	}
+	if exp, got := `[{"error":"no such table: bar"}]`, asJSON(ro); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	ro, err = db.Query([]string{`SELECTxx * FROM foo`}, false, false)
+	if err != nil {
+		t.Fatalf("failed to attempt nonsense query: %s", err.Error())
+	}
+	if exp, got := `[{"error":"near \"SELECTxx\": syntax error"}]`, asJSON(ro); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	r, err = db.Execute([]string{`utter nonsense`}, false, false)
+	if err != nil {
+		t.Fatalf("failed to attempt nonsense execution: %s", err.Error())
+	}
+	if exp, got := `[{"error":"near \"utter\": syntax error"}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
 }
 
-func (s *DbSuite) Test_TransactionsHardFail(c *C) {
-	dir, err := ioutil.TempDir("", "rqlite-test-")
-	defer os.RemoveAll(dir)
-	db := New(path.Join(dir, "test_db"))
+func Test_PartialFail(t *testing.T) {
+	db, path := mustCreateDatabase()
+	defer db.Close()
+	defer os.Remove(path)
 
-	err = db.Execute("create table foo (id integer not null primary key, name text)")
-	c.Assert(err, IsNil)
-	err = db.Execute("INSERT INTO foo(id, name) VALUES(1, \"fiona\")")
-	c.Assert(err, IsNil)
+	_, err := db.Execute([]string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"}, false, false)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
 
-	err = db.StartTransaction()
-	c.Assert(err, IsNil)
-	err = db.Execute("INSERT INTO foo(id, name) VALUES(2, \"dana\")")
-	c.Assert(err, IsNil)
-	db.Close()
+	stmts := []string{
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+		`INSERT INTO foo(id, name) VALUES(2, "fiona")`,
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+		`INSERT INTO foo(id, name) VALUES(4, "fiona")`,
+	}
+	r, err := db.Execute(stmts, false, false)
+	if err != nil {
+		t.Fatalf("failed to insert records: %s", err.Error())
+	}
+	if exp, got := `[{"last_insert_id":1,"rows_affected":1},{"last_insert_id":2,"rows_affected":1},{"error":"UNIQUE constraint failed: foo.id"},{"last_insert_id":4,"rows_affected":1}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	ro, err := db.Query([]string{`SELECT * FROM foo`}, false, false)
+	if err != nil {
+		t.Fatalf("failed to query table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"],[2,"fiona"],[4,"fiona"]]}]`, asJSON(ro); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
 
-	db = Open(path.Join(dir, "test_db"))
-	c.Assert(db, NotNil)
-	r, err := db.Query("SELECT * FROM foo")
-	c.Assert(len(r), Equals, 1)
-	c.Assert(r[0]["name"], Equals, "fiona")
-	db.Close()
+func Test_SimpleTransaction(t *testing.T) {
+	db, path := mustCreateDatabase()
+	defer db.Close()
+	defer os.Remove(path)
+
+	_, err := db.Execute([]string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"}, false, false)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	stmts := []string{
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+		`INSERT INTO foo(id, name) VALUES(2, "fiona")`,
+		`INSERT INTO foo(id, name) VALUES(3, "fiona")`,
+		`INSERT INTO foo(id, name) VALUES(4, "fiona")`,
+	}
+	r, err := db.Execute(stmts, true, false)
+	if err != nil {
+		t.Fatalf("failed to insert records: %s", err.Error())
+	}
+	if exp, got := `[{"last_insert_id":1,"rows_affected":1},{"last_insert_id":2,"rows_affected":1},{"last_insert_id":3,"rows_affected":1},{"last_insert_id":4,"rows_affected":1}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	ro, err := db.Query([]string{`SELECT * FROM foo`}, false, false)
+	if err != nil {
+		t.Fatalf("failed to query table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"],[2,"fiona"],[3,"fiona"],[4,"fiona"]]}]`, asJSON(ro); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
+func Test_PartialFailTransaction(t *testing.T) {
+	db, path := mustCreateDatabase()
+	defer db.Close()
+	defer os.Remove(path)
+
+	_, err := db.Execute([]string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"}, false, false)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	stmts := []string{
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+		`INSERT INTO foo(id, name) VALUES(2, "fiona")`,
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+		`INSERT INTO foo(id, name) VALUES(4, "fiona")`,
+	}
+	r, err := db.Execute(stmts, true, false)
+	if err != nil {
+		t.Fatalf("failed to insert records: %s", err.Error())
+	}
+	if exp, got := `[{"last_insert_id":1,"rows_affected":1},{"last_insert_id":2,"rows_affected":1},{"error":"UNIQUE constraint failed: foo.id"}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	ro, err := db.Query([]string{`SELECT * FROM foo`}, false, false)
+	if err != nil {
+		t.Fatalf("failed to query table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"]}]`, asJSON(ro); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
+func Test_Backup(t *testing.T) {
+	db, path := mustCreateDatabase()
+	defer db.Close()
+	defer os.Remove(path)
+
+	_, err := db.Execute([]string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"}, false, false)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	stmts := []string{
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+		`INSERT INTO foo(id, name) VALUES(2, "fiona")`,
+		`INSERT INTO foo(id, name) VALUES(3, "fiona")`,
+		`INSERT INTO foo(id, name) VALUES(4, "fiona")`,
+	}
+	_, err = db.Execute(stmts, true, false)
+	if err != nil {
+		t.Fatalf("failed to insert records: %s", err.Error())
+	}
+
+	dstDB, err := ioutil.TempFile("", "rqlilte-bak-")
+	if err != nil {
+		t.Fatalf("failed to create temp file: %s", err.Error())
+	}
+	dstDB.Close()
+	defer os.Remove(dstDB.Name())
+
+	err = db.Backup(dstDB.Name())
+	if err != nil {
+		t.Fatalf("failed to backup database: %s", err.Error())
+	}
+
+	newDB, err := Open(dstDB.Name())
+	if err != nil {
+		t.Fatalf("failed to open backup database: %s", err.Error())
+	}
+	defer newDB.Close()
+	defer os.Remove(dstDB.Name())
+	ro, err := newDB.Query([]string{`SELECT * FROM foo`}, false, false)
+	if err != nil {
+		t.Fatalf("failed to query table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"],[2,"fiona"],[3,"fiona"],[4,"fiona"]]}]`, asJSON(ro); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
+func mustCreateDatabase() (*DB, string) {
+	var err error
+	f, err := ioutil.TempFile("", "rqlilte-test-")
+	if err != nil {
+		panic("failed to create temp file")
+	}
+	f.Close()
+
+	db, err := Open(f.Name())
+	if err != nil {
+		panic("failed to open database")
+	}
+
+	return db, f.Name()
+}
+
+func mustWriteAndOpenDatabase(b []byte) (*DB, string) {
+	var err error
+	f, err := ioutil.TempFile("", "rqlilte-test-write-")
+	if err != nil {
+		panic("failed to create temp file")
+	}
+	f.Close()
+
+	err = ioutil.WriteFile(f.Name(), b, 0660)
+	if err != nil {
+		panic("failed to write file")
+	}
+
+	db, err := Open(f.Name())
+	if err != nil {
+		panic("failed to open database")
+	}
+	return db, f.Name()
+}
+
+func asJSON(v interface{}) string {
+	b, err := json.Marshal(v)
+	if err != nil {
+		panic("failed to JSON marshal value")
+	}
+	return string(b)
 }
