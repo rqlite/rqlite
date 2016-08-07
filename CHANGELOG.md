@@ -1,3 +1,6 @@
+## 3.4.1 (unreleased)
+- [PR #170](https://github.com/rqlite/rqlite/pull/170): Log any failure to call Serve() on HTTP service.
+
 ## 3.4.0 (July 7th 2016)
 - [PR #159](https://github.com/rqlite/rqlite/pull/159): All HTTP responses set X-RQLITE-VERSION.
 
