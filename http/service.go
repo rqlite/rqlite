@@ -177,7 +177,7 @@ func (s *Service) Start() error {
 	go func() {
 		err := server.Serve(s.ln)
 		if err != nil {
-			return
+			s.logger.Println("HTTP service Serve() returned:", err.Error())
 		}
 	}()
 	s.logger.Println("service listening on", s.addr)
