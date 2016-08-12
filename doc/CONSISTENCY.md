@@ -19,5 +19,6 @@ Examples of enabling each read consistency level for a simple query is shown bel
 ```bash
 curl -G 'localhost:4001/db/query?level=none' --data-urlencode 'q=SELECT * FROM foo'
 curl -G 'localhost:4001/db/query?level=weak' --data-urlencode 'q=SELECT * FROM foo'
+curl -G 'localhost:4001/db/query' --data-urlencode 'q=SELECT * FROM foo' # Same as weak
 curl -G 'localhost:4001/db/query?level=strong' --data-urlencode 'q=SELECT * FROM foo'
 ```
