@@ -222,7 +222,7 @@ func Test_SimpleFailingStatements(t *testing.T) {
 
 	ro, err := db.Query([]string{`SELECT * FROM bar`}, false, false)
 	if err != nil {
-		t.Fatalf("failed to attempt query of non-existant table: %s", err.Error())
+		t.Fatalf("failed to attempt query of non-existent table: %s", err.Error())
 	}
 	if exp, got := `[{"error":"no such table: bar"}]`, asJSON(ro); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
