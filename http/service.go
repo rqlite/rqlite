@@ -82,13 +82,20 @@ const (
 	numQueries    = "queries"
 	numBackups    = "backups"
 
-	PermAll     = "all"     // PermAll means all actions permitted.
-	PermJoin    = "join"    // PermJoin means user is permitted to join cluster.
-	PermRemove  = "remove"  // PermRemove means user is permitted to remove a node.
-	PermExecute = "execute" // PermJoin means user can access execute endpoint.
-	PermQuery   = "query"   // PermQuery means user can access query endpoint.
-	PermStatus  = "status"  // PermStatus means user can retrieve node status.
-	PermBackup  = "backup"  // PermBackup means user can backup node.
+	// PermAll means all actions permitted.
+	PermAll = "all"
+	// PermJoin means user is permitted to join cluster.
+	PermJoin = "join"
+	// PermRemove means user is permitted to remove a node.
+	PermRemove = "remove"
+	// PermExecute means user can access execute endpoint.
+	PermExecute = "execute"
+	// PermQuery means user can access query endpoint
+	PermQuery = "query"
+	// PermStatus means user can retrieve node status.
+	PermStatus = "status"
+	// PermBackup means user can backup node.
+	PermBackup = "backup"
 )
 
 func init() {
