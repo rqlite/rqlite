@@ -407,7 +407,7 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 		b, err = json.Marshal(status)
 	}
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError) // Internal error actually
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 	} else {
 		_, err = w.Write([]byte(b))
 		if err != nil {
