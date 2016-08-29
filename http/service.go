@@ -543,14 +543,9 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate queries, unless disabled.
-	if !s.NoVerifySelect {
-		for _, q := range queries {
-			u := strings.ToUpper(strings.TrimSpace(q))
-			if !strings.HasPrefix(u, "SELECT ") {
-				w.WriteHeader(http.StatusForbidden)
-				return
-			}
-		}
+	if !s.NoVerifySelect && !queriesValid(queries) {
+		w.WriteHeader(http.StatusForbidden)
+		return
 	}
 
 	results, err := s.store.Query(queries, timings, isTx, lvl)
@@ -600,6 +595,17 @@ func (s *Service) CheckRequestPerm(r *http.Request, perm string) bool {
 		return false
 	}
 	return s.credentialStore.HasPerm(username, PermAll) || s.credentialStore.HasPerm(username, perm)
+}
+
+// queriesValid returns whether the slice of queries is valid.
+func queriesValid(queries []string) bool {
+	for _, q := range queries {
+		u := strings.ToUpper(strings.TrimSpace(q))
+		if !strings.HasPrefix(u, "SELECT ") {
+			return false
+		}
+	}
+	return true
 }
 
 // serveExpvar serves registered expvar information over HTTP.
