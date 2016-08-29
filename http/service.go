@@ -200,12 +200,7 @@ func (s *Service) Close() {
 
 // ServeHTTP allows Service to serve HTTP requests.
 func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Add version header to every response, if available.
-	if v, ok := s.BuildInfo["version"].(string); ok {
-		w.Header().Add("X-RQLITE-VERSION", v)
-	} else {
-		w.Header().Add("X-RQLITE-VERSION", "unknown")
-	}
+	s.addBuildVersion(w)
 
 	if s.credentialStore != nil {
 		username, password, ok := r.BasicAuth()
@@ -595,6 +590,16 @@ func (s *Service) CheckRequestPerm(r *http.Request, perm string) bool {
 		return false
 	}
 	return s.credentialStore.HasPerm(username, PermAll) || s.credentialStore.HasPerm(username, perm)
+}
+
+// addBuildVersion adds the build version to the HTTP response.
+func (s *Service) addBuildVersion(w http.ResponseWriter) {
+	// Add version header to every response, if available.
+	version := "unknown"
+	if v, ok := s.BuildInfo["version"].(string); ok {
+		version = v
+	}
+	w.Header().Add("X-RQLITE-VERSION", version)
 }
 
 // queriesValid returns whether the slice of queries is valid.
