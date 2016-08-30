@@ -27,6 +27,7 @@ import (
 
 	"github.com/rqlite/rqlite/auth"
 	"github.com/rqlite/rqlite/cluster"
+	"github.com/rqlite/rqlite/env"
 	httpd "github.com/rqlite/rqlite/http"
 	"github.com/rqlite/rqlite/store"
 	"github.com/rqlite/rqlite/tcp"
@@ -123,6 +124,10 @@ func init() {
 
 func main() {
 	flag.Parse()
+	if err := envOverride(); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to override config with environment: %s", err.Error())
+		os.Exit(1)
+	}
 
 	if showVersion {
 		fmt.Printf("rqlited version %s (commit %s)\n", version, commit)
@@ -136,6 +141,10 @@ func main() {
 	}
 
 	dataPath := flag.Arg(0)
+	if err := env.Override(&dataPath, RQLITE_DATA_DIR); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to override data directory with environment: %s", err.Error())
+		os.Exit(1)
+	}
 
 	// Display logo.
 	fmt.Println(logo)
@@ -331,4 +340,35 @@ func publishAPIAddr(c *cluster.Service, raftAddr, apiAddr string, t time.Duratio
 			return fmt.Errorf("set peer timeout expired")
 		}
 	}
+}
+
+// envOverride overrides config passed in via the command line with anything in
+// the environment variables.
+func envOverride() error {
+	configs := map[string]interface{}{
+		RQLITE_HTTP_ADDR:                &httpAddr,
+		RQLITE_HTTP_ADV:                 &httpAdv,
+		RQLITE_AUTH_FILE:                &authFile,
+		RQLITE_X509_CERT:                &x509Cert,
+		RQLITE_X509_KEY:                 &x509Key,
+		RQLITE_RAFT_ADDR:                &raftAddr,
+		RQLITE_RAFT_ADV:                 &raftAdv,
+		RQLITE_JOIN_ADDR:                &joinAddr,
+		RQLITE_NO_VERIFY:                &noVerify,
+		RQLITE_EXPVAR:                   &expvar,
+		RQLITE_PPROF_ENABLED:            &pprofEnabled,
+		RQLITE_DSN:                      &dsn,
+		RQLITE_ON_DISK:                  &onDisk,
+		RQLITE_NO_VERIFY_SELECT:         &noVerifySelect,
+		RQLITE_RAFT_SNAP_THRESHOLD:      &raftSnapThreshold,
+		RQLITE_RAFT_HEARTBEAT_THRESHOLD: &raftHeartbeatTimeout,
+		RQLITE_CPU_PROFILE:              &cpuprofile,
+	}
+
+	for k, v := range configs {
+		if err := env.Override(v, k); err != nil {
+			return err
+		}
+	}
+	return nil
 }
