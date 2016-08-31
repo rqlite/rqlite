@@ -525,10 +525,7 @@ func (s *Store) UpdateAPIPeers(peers map[string]string) error {
 	}
 
 	f := s.raft.Apply(b, raftTimeout)
-	if e := f.(raft.Future); e.Error() != nil {
-		return e.Error()
-	}
-	return nil
+	return f.Error()
 }
 
 // Join joins a node, located at addr, to this store. The node must be ready to
