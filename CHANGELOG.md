@@ -1,4 +1,5 @@
 ## 3.4.1 (unreleased)
+- [PR #175](https://github.com/rqlite/rqlite/pull/175): Simplify error handling of Update Peers API.
 - [PR #170](https://github.com/rqlite/rqlite/pull/170): Log any failure to call `Serve()` on HTTP service.
 - Go lint fixes.
 - Go cyclo complexity changes.
