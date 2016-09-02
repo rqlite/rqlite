@@ -162,7 +162,7 @@ curl -XPOST 'localhost:4001/db/query?pretty' -H "Content-Type: application/json"
 You can learn all about the read consistency guarantees supported by rqlite [here](https://github.com/rqlite/rqlite/blob/master/doc/CONSISTENCY.md).
 
 #### Querying the SQLite file directly
-Technically this is not supported, but you can directly read the SQLite under any node at anytime, assuming you run in "on-disk" mode. However there is no guarantee that the SQLite file reflects all the changes that have taken place on the cluster unless you are sure host node itself has received and applied all changes.
+Technically this is not supported, but you can directly read the SQLite under any node at anytime, assuming you run in "on-disk" mode. However there is no guarantee that the SQLite file reflects all the changes that have taken place on the cluster unless you are sure the host node itself has received and applied all changes.
 
 ### Transactions
 Transactions are supported. To execute statements within a transaction, add `transaction` to the URL. An example of the above operation executed within a transaction is shown below.
@@ -211,7 +211,7 @@ No.
 Since the Raft log is the authoritative store for all data, and it is written to disk, an in-memory database can be fully recreated on start-up. Using an in-memory database does not put your data at risk.
 
 ## Limitations
- * Only SQL statements that are __deterministic__ are safe to use with rqlite, because statements are committed to the Raft log before they are sent to each node. For example, the following statement could result in different SQLite databases under each node:
+ * Only SQL statements that are __deterministic__ are safe to use with rqlite, because statements are committed to the Raft log before they are sent to each node. For example, the following statement could result in different a SQLite database under each node:
 ```
 INSERT INTO foo (n) VALUES(random());
 ```
