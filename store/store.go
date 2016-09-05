@@ -138,6 +138,7 @@ func (c *clusterMeta) AddrForPeer(addr string) string {
 type DBConfig struct {
 	DSN    string // Any custom DSN
 	Memory bool   // Whether the database is in-memory only.
+	NoFK   bool   // Disable foreign key constraints
 }
 
 // NewDBConfig returns a new DB config instance.
@@ -207,6 +208,10 @@ func (s *Store) Open(enableSingle bool) error {
 		}
 		s.logger.Println("SQLite in-memory database opened")
 	}
+	if err := db.EnableFKConstraints(!s.dbConf.NoFK); err != nil {
+		return err
+	}
+	s.logger.Printf("SQLite foreign key constraints %s", enabledFromBool(!s.dbConf.NoFK))
 	s.db = db
 
 	// Setup Raft configuration.
@@ -384,8 +389,9 @@ func (s *Store) WaitForAppliedIndex(idx uint64, timeout time.Duration) error {
 // Stats returns stats for the store.
 func (s *Store) Stats() (map[string]interface{}, error) {
 	dbStatus := map[string]interface{}{
-		"dns":     s.dbConf.DSN,
-		"version": sql.DBVersion,
+		"dns":            s.dbConf.DSN,
+		"fk_constraints": enabledFromBool(!s.dbConf.NoFK),
+		"version":        sql.DBVersion,
 	}
 	if !s.dbConf.Memory {
 		dbStatus["path"] = s.dbPath
@@ -773,4 +779,12 @@ func readPeersJSON(path string) ([]string, error) {
 	}
 
 	return peers, nil
+}
+
+// enabledFromBool converts bool to "enabled" or "disabled".
+func enabledFromBool(b bool) string {
+	if b {
+		return "enabled"
+	}
+	return "disabled"
 }

@@ -1,3 +1,6 @@
+## 3.5.0 (September 5th 2016)
+- [PR #185](https://github.com/rqlite/rqlite/pull/185): Enable foreign key constraints by default.
+
 ## 3.4.1 (September 1st 2016)
 - [PR #175](https://github.com/rqlite/rqlite/pull/175): Simplify error handling of Update Peers API.
 - [PR #170](https://github.com/rqlite/rqlite/pull/170): Log any failure to call `Serve()` on HTTP service.
