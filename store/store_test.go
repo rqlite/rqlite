@@ -100,6 +100,29 @@ func Test_SingleNodeInMemExecuteQuery(t *testing.T) {
 	}
 }
 
+// Test_SingleNodeInMemExecuteQueryFail ensures database level errors are presented by the store.
+func Test_SingleNodeInMemExecuteQueryFail(t *testing.T) {
+	s := mustNewStore(true)
+	defer os.RemoveAll(s.Path())
+
+	if err := s.Open(true); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	s.WaitForLeader(10 * time.Second)
+
+	queries := []string{
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+	}
+	r, err := s.Execute(queries, false, false)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	if exp, got := "no such table: foo", r[0].Error; exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
 func Test_SingleNodeFileExecuteQuery(t *testing.T) {
 	s := mustNewStore(false)
 	defer os.RemoveAll(s.Path())
