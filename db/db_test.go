@@ -244,6 +244,47 @@ func Test_SimpleFailingStatements(t *testing.T) {
 	}
 }
 
+func Test_ForeignKeyConstraints(t *testing.T) {
+	db, path := mustCreateDatabase()
+	defer db.Close()
+	defer os.Remove(path)
+
+	_, err := db.Execute([]string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, ref INTEGER REFERENCES foo(id))"}, false, false)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	// Explicitly disable constraints.
+	if err := db.EnableFKConstraints(false); err != nil {
+		t.Fatalf("failed to enable foreign key constraints: %s", err.Error())
+	}
+	stmts := []string{
+		`INSERT INTO foo(id, ref) VALUES(1, 2)`,
+	}
+	r, err := db.Execute(stmts, false, false)
+	if err != nil {
+		t.Fatalf("failed to execute FK test statement: %s", err.Error())
+	}
+	if exp, got := `[{"last_insert_id":1,"rows_affected":1}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	// Explicitly enable constraints.
+	if err := db.EnableFKConstraints(true); err != nil {
+		t.Fatalf("failed to enable foreign key constraints: %s", err.Error())
+	}
+	stmts = []string{
+		`INSERT INTO foo(id, ref) VALUES(1, 3)`,
+	}
+	r, err = db.Execute(stmts, false, false)
+	if err != nil {
+		t.Fatalf("failed to execute FK test statement: %s", err.Error())
+	}
+	if exp, got := `[{"error":"UNIQUE constraint failed: foo.id"}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
 func Test_PartialFail(t *testing.T) {
 	db, path := mustCreateDatabase()
 	defer db.Close()
