@@ -285,6 +285,34 @@ func Test_ForeignKeyConstraints(t *testing.T) {
 	}
 }
 
+func Test_UniqueConstraints(t *testing.T) {
+	db, path := mustCreateDatabase()
+	defer db.Close()
+	defer os.Remove(path)
+
+	_, err := db.Execute([]string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT, CONSTRAINT name_unique UNIQUE (name))"}, false, false)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	r, err := db.Execute([]string{`INSERT INTO foo(name) VALUES("fiona")`}, false, false)
+	if err != nil {
+		t.Fatalf("error executing insertion into table: %s", err.Error())
+	}
+	if exp, got := `[{"last_insert_id":1,"rows_affected":1}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for INSERT\nexp: %s\ngot: %s", exp, got)
+	}
+
+	// UNIQUE constraint should fire.
+	r, err = db.Execute([]string{`INSERT INTO foo(name) VALUES("fiona")`}, false, false)
+	if err != nil {
+		t.Fatalf("error executing insertion into table: %s", err.Error())
+	}
+	if exp, got := `[{"error":"UNIQUE constraint failed: foo.name"}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for INSERT\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
 func Test_PartialFail(t *testing.T) {
 	db, path := mustCreateDatabase()
 	defer db.Close()

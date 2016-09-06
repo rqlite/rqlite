@@ -130,13 +130,10 @@ func open(dbPath string) (*DB, error) {
 
 // EnableFKConstraints allows control of foreign key constraint checks.
 func (db *DB) EnableFKConstraints(e bool) error {
-	var q string
-	if e {
-		q = fkChecksEnabled
-	} else {
+	q := fkChecksEnabled
+	if !e {
 		q = fkChecksDisabled
 	}
-
 	_, err := db.sqlite3conn.Exec(q, nil)
 	return err
 }
