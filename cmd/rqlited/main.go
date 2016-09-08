@@ -1,7 +1,9 @@
 /*
-rqlite -- a replicated SQLite database.
+rqlite -- replicating SQLite via the Raft consensus protocol..
 
-rqlite is a distributed system that provides a replicated SQLite database.
+rqlite is a distributed system that provides a replicated relational database,
+using SQLite as the storage engine.
+
 rqlite is written in Go and uses Raft to achieve consensus across all the
 instances of the SQLite databases. rqlite ensures that every change made to
 the database is made to a majority of underlying SQLite files, or none-at-all.
@@ -22,6 +24,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"runtime/pprof"
 	"time"
 
@@ -81,9 +84,10 @@ var noFKCheck bool
 var raftSnapThreshold uint64
 var raftHeartbeatTimeout string
 var showVersion bool
-var cpuprofile string
+var cpuProfile string
+var memProfile string
 
-const desc = `rqlite is a distributed system that provides a replicated SQLite database.`
+const desc = `rqlite is a distributed system that provides a replicated relational database.`
 
 func init() {
 	flag.StringVar(&httpAddr, "http", "localhost:4001", "HTTP query server address. Set X.509 cert and key for HTTPS.")
@@ -104,7 +108,8 @@ func init() {
 	flag.BoolVar(&showVersion, "version", false, "Show version information and exit")
 	flag.StringVar(&raftHeartbeatTimeout, "rafttimeout", "1s", "Raft heartbeat timeout")
 	flag.Uint64Var(&raftSnapThreshold, "raftsnap", 8192, "Number of outstanding log entries to trigger snapshot")
-	flag.StringVar(&cpuprofile, "cpuprofile", "", "Write CPU profile to file")
+	flag.StringVar(&cpuProfile, "cpuprofile", "", "Write CPU profile to a file")
+	flag.StringVar(&memProfile, "memprofile", "", "Write memory profile to a file")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "\n%s\n\n", desc)
 		fmt.Fprintf(os.Stderr, "Usage: %s [arguments] <data directory>\n", os.Args[0])
@@ -147,22 +152,8 @@ func main() {
 	log.SetPrefix("[rqlited] ")
 	log.Printf("rqlited starting, version %s, commit %s, branch %s", version, commit, branch)
 
-	// Set up profiling, if requested.
-	if cpuprofile != "" {
-		log.Println("profiling enabled")
-		f, err := os.Create(cpuprofile)
-		if err != nil {
-			log.Printf("unable to create path: %s", err.Error())
-		}
-		defer f.Close()
-
-		err = pprof.StartCPUProfile(f)
-		if err != nil {
-			log.Fatalf("unable to start CPU Profile: %s", err.Error())
-		}
-
-		defer pprof.StopCPUProfile()
-	}
+	// Start requested profiling.
+	startProfile(cpuProfile, memProfile)
 
 	// Set up TCP communication between nodes.
 	ln, err := net.Listen("tcp", raftAddr)
@@ -269,6 +260,7 @@ func main() {
 	if err := store.Close(true); err != nil {
 		log.Printf("failed to close store: %s", err.Error())
 	}
+	stopProfile()
 	log.Println("rqlite server stopped")
 }
 
@@ -334,5 +326,48 @@ func publishAPIAddr(c *cluster.Service, raftAddr, apiAddr string, t time.Duratio
 		case <-tmr.C:
 			return fmt.Errorf("set peer timeout expired")
 		}
+	}
+}
+
+// prof stores the file locations of active profiles.
+var prof struct {
+	cpu *os.File
+	mem *os.File
+}
+
+// startProfile initializes the CPU and memory profile, if specified.
+func startProfile(cpuprofile, memprofile string) {
+	if cpuprofile != "" {
+		f, err := os.Create(cpuprofile)
+		if err != nil {
+			log.Fatalf("failed to create CPU profile file at %s: %s", cpuprofile, err.Error())
+		}
+		log.Printf("writing CPU profile to: %s\n", cpuprofile)
+		prof.cpu = f
+		pprof.StartCPUProfile(prof.cpu)
+	}
+
+	if memprofile != "" {
+		f, err := os.Create(memprofile)
+		if err != nil {
+			log.Fatalf("failed to create memory profile file at %s: %s", cpuprofile, err.Error())
+		}
+		log.Printf("writing memory profile to: %s\n", memprofile)
+		prof.mem = f
+		runtime.MemProfileRate = 4096
+	}
+}
+
+// stopProfile closes the CPU and memory profiles if they are running.
+func stopProfile() {
+	if prof.cpu != nil {
+		pprof.StopCPUProfile()
+		prof.cpu.Close()
+		log.Println("CPU profiling stopped")
+	}
+	if prof.mem != nil {
+		pprof.Lookup("heap").WriteTo(prof.mem, 0)
+		prof.mem.Close()
+		log.Println("memory profiling stopped")
 	}
 }
