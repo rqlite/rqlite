@@ -277,7 +277,7 @@ func (db *DB) Query(queries []string, tx, xTime bool) ([]*Rows, error) {
 				allRows = append(allRows, rows)
 				continue
 			}
-			defer rs.Close() // This adds to all defers, right? Nothing leaks? XXX Could consume memory. Perhaps anon would be best.
+			defer rs.Close()
 			columns := rs.Columns()
 
 			rows.Columns = columns
@@ -292,22 +292,7 @@ func (db *DB) Query(queries []string, tx, xTime bool) ([]*Rows, error) {
 					break
 				}
 
-				values := make([]interface{}, len(rows.Columns))
-				// Text values come over (from sqlite-go) as []byte instead of strings
-				// for some reason, so we have explicitly convert (but only when type
-				// is "text" so we don't affect BLOB types)
-				for i, v := range dest {
-					if rows.Types[i] == "text" {
-						switch val := v.(type) {
-						case []byte:
-							values[i] = string(val)
-						default:
-							values[i] = val
-						}
-					} else {
-						values[i] = v
-					}
-				}
+				values := normalizeRowValues(dest, rows.Types)
 				rows.Values = append(rows.Values, values)
 			}
 			if xTime {
@@ -354,6 +339,27 @@ func (db *DB) Backup(path string) error {
 	}
 
 	return nil
+}
+
+// normalizeRowValues performs some normalization of values in the returned rows.
+// Text values come over (from sqlite-go) as []byte instead of strings
+// for some reason, so we have explicitly convert (but only when type
+// is "text" so we don't affect BLOB types)
+func normalizeRowValues(row []driver.Value, types []string) []interface{} {
+	values := make([]interface{}, len(types))
+	for i, v := range row {
+		if types[i] == "text" {
+			switch val := v.(type) {
+			case []byte:
+				values[i] = string(val)
+			default:
+				values[i] = val
+			}
+		} else {
+			values[i] = v
+		}
+	}
+	return values
 }
 
 // fqdsn returns the fully-qualified datasource name.
