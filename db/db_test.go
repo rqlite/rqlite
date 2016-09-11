@@ -2,6 +2,7 @@ package db
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
@@ -503,6 +504,24 @@ func mustWriteAndOpenDatabase(b []byte) (*DB, string) {
 		panic("failed to open database")
 	}
 	return db, f.Name()
+}
+
+// mustExecute executes a statement, and panics on failure. Used for statements
+// that should never fail, even taking into account test setup.
+func mustExecute(db *DB, stmt string) {
+	_, err := db.Execute([]string{stmt}, false, false)
+	if err != nil {
+		panic(fmt.Sprintf("failed to execute statement: %s", err.Error()))
+	}
+}
+
+// mustQuery executes a statement, and panics on failure. Used for statements
+// that should never fail, even taking into account test setup.
+func mustQuery(db *DB, stmt string) {
+	_, err := db.Execute([]string{stmt}, false, false)
+	if err != nil {
+		panic(fmt.Sprintf("failed to query: %s", err.Error()))
+	}
 }
 
 func asJSON(v interface{}) string {
