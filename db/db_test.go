@@ -177,7 +177,7 @@ func Test_SimpleMultiStatements(t *testing.T) {
 	}
 }
 
-func Test_SimpleFailingStatements(t *testing.T) {
+func Test_SimpleFailingStatements_Execute(t *testing.T) {
 	db, path := mustCreateDatabase()
 	defer db.Close()
 	defer os.Remove(path)
@@ -220,6 +220,19 @@ func Test_SimpleFailingStatements(t *testing.T) {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
+	r, err = db.Execute([]string{`utter nonsense`}, false, false)
+	if err != nil {
+		if exp, got := `[{"error":"near \"utter\": syntax error"}]`, asJSON(r); exp != got {
+			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+		}
+	}
+}
+
+func Test_SimpleFailingStatements_Query(t *testing.T) {
+	db, path := mustCreateDatabase()
+	defer db.Close()
+	defer os.Remove(path)
+
 	ro, err := db.Query([]string{`SELECT * FROM bar`}, false, false)
 	if err != nil {
 		t.Fatalf("failed to attempt query of non-existent table: %s", err.Error())
@@ -235,12 +248,11 @@ func Test_SimpleFailingStatements(t *testing.T) {
 	if exp, got := `[{"error":"near \"SELECTxx\": syntax error"}]`, asJSON(ro); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
-	r, err = db.Execute([]string{`utter nonsense`}, false, false)
+	r, err := db.Query([]string{`utter nonsense`}, false, false)
 	if err != nil {
-		t.Fatalf("failed to attempt nonsense execution: %s", err.Error())
-	}
-	if exp, got := `[{"error":"near \"utter\": syntax error"}]`, asJSON(r); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+		if exp, got := `[{"error":"near \"utter\": syntax error"}]`, asJSON(r); exp != got {
+			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+		}
 	}
 }
 
