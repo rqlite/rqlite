@@ -1,5 +1,6 @@
 ## 3.6.0 (unreleased)
 - [PR #187](https://github.com/rqlite/rqlite/pull/187): Support memory profiling.
+- Go cyclo complexity changes.
 
 ## 3.5.0 (September 5th 2016)
 - [PR #185](https://github.com/rqlite/rqlite/pull/185): Enable foreign key constraints by default.
