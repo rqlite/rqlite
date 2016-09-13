@@ -188,31 +188,17 @@ func (s *Store) Open(enableSingle bool) error {
 		return err
 	}
 
-	// Create the database. Unless it's a memory-based database, it must be deleted
-	var db *sql.DB
-	var err error
-	if !s.dbConf.Memory {
-		// as it will be rebuilt from (possibly) a snapshot and committed log entries.
-		if err := os.Remove(s.dbPath); err != nil && !os.IsNotExist(err) {
-			return err
-		}
-		db, err = sql.OpenWithDSN(s.dbPath, s.dbConf.DSN)
-		if err != nil {
-			return err
-		}
-		s.logger.Println("SQLite database opened at", s.dbPath)
-	} else {
-		db, err = sql.OpenInMemoryWithDSN(s.dbConf.DSN)
-		if err != nil {
-			return err
-		}
-		s.logger.Println("SQLite in-memory database opened")
+	db, err := s.open()
+	if err != nil {
+		return err
 	}
-	if err := db.EnableFKConstraints(!s.dbConf.NoFK); err != nil {
+	s.db = db
+
+	// Configure foreign key constraints.
+	if err := s.db.EnableFKConstraints(!s.dbConf.NoFK); err != nil {
 		return err
 	}
 	s.logger.Printf("SQLite foreign key constraints %s", enabledFromBool(!s.dbConf.NoFK))
-	s.db = db
 
 	// Setup Raft configuration.
 	config := raft.DefaultConfig()
@@ -557,6 +543,30 @@ func (s *Store) Remove(addr string) error {
 	}
 	s.logger.Printf("node %s removed successfully", addr)
 	return nil
+}
+
+// open opens the the in-memory or file-based database.
+func (s *Store) open() (*sql.DB, error) {
+	var db *sql.DB
+	var err error
+	if !s.dbConf.Memory {
+		// as it will be rebuilt from (possibly) a snapshot and committed log entries.
+		if err := os.Remove(s.dbPath); err != nil && !os.IsNotExist(err) {
+			return nil, err
+		}
+		db, err = sql.OpenWithDSN(s.dbPath, s.dbConf.DSN)
+		if err != nil {
+			return nil, err
+		}
+		s.logger.Println("SQLite database opened at", s.dbPath)
+	} else {
+		db, err = sql.OpenInMemoryWithDSN(s.dbConf.DSN)
+		if err != nil {
+			return nil, err
+		}
+		s.logger.Println("SQLite in-memory database opened")
+	}
+	return db, nil
 }
 
 type fsmExecuteResponse struct {
