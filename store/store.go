@@ -200,14 +200,8 @@ func (s *Store) Open(enableSingle bool) error {
 	}
 	s.logger.Printf("SQLite foreign key constraints %s", enabledFromBool(!s.dbConf.NoFK))
 
-	// Setup Raft configuration.
-	config := raft.DefaultConfig()
-	if s.SnapshotThreshold != 0 {
-		config.SnapshotThreshold = s.SnapshotThreshold
-	}
-	if s.HeartbeatTimeout != 0 {
-		config.HeartbeatTimeout = s.HeartbeatTimeout
-	}
+	// Get the Raft configuration for this store.
+	config := s.raftConfig()
 
 	// Check for any existing peers.
 	peers, err := readPeersJSON(filepath.Join(s.raftDir, "peers.json"))
@@ -567,6 +561,18 @@ func (s *Store) open() (*sql.DB, error) {
 		s.logger.Println("SQLite in-memory database opened")
 	}
 	return db, nil
+}
+
+// raftConfig returns a new Raft config for the store.
+func (s *Store) raftConfig() *raft.Config {
+	config := raft.DefaultConfig()
+	if s.SnapshotThreshold != 0 {
+		config.SnapshotThreshold = s.SnapshotThreshold
+	}
+	if s.HeartbeatTimeout != 0 {
+		config.HeartbeatTimeout = s.HeartbeatTimeout
+	}
+	return config
 }
 
 type fsmExecuteResponse struct {
