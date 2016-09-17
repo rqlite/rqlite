@@ -1,4 +1,5 @@
 ## 3.6.0 (unreleased)
+- [PR #193](https://github.com/rqlite/rqlite/pull/193): Allow joining a cluster through any node, not just leader.
 - [PR #187](https://github.com/rqlite/rqlite/pull/187): Support memory profiling.
 - Go cyclo complexity changes.
 
