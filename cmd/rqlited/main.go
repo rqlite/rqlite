@@ -204,9 +204,9 @@ func main() {
 			log.Println("node is already member of cluster, ignoring join request")
 		} else {
 			if err := join(joinAddr, noVerify, raftAddr, raftAdv); err != nil {
-				log.Fatalf("failed to join node at %s: %s", joinAddr, err.Error())
+				log.Fatalf("failed to join cluster at %s: %s", joinAddr, err.Error())
 			}
-			log.Println("successfully joined node at", joinAddr)
+			log.Println("successfully joined cluster at", joinAddr)
 		}
 	}
 
@@ -276,11 +276,6 @@ func join(joinAddr string, skipVerify bool, raftAddr, raftAdv string) error {
 		return err
 	}
 
-	b, err := json.Marshal(map[string]string{"addr": resv.String()})
-	if err != nil {
-		return err
-	}
-
 	// Check for protocol scheme, and insert default if necessary.
 	fullAddr := httpd.NormalizeAddr(fmt.Sprintf("%s/join", joinAddr))
 
@@ -290,19 +285,39 @@ func join(joinAddr string, skipVerify bool, raftAddr, raftAdv string) error {
 	}
 	client := &http.Client{Transport: tr}
 
-	// Attempt to join.
-	resp, err := client.Post(fullAddr, "application-type/json", bytes.NewReader(b))
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
+	for {
+		b, err := json.Marshal(map[string]string{"addr": resv.String()})
+		if err != nil {
+			return err
+		}
 
-	b, err = ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("failed to join, node returned: %s: (%s)", resp.Status, string(b))
+		// Attempt to join.
+		resp, err := client.Post(fullAddr, "application-type/json", bytes.NewReader(b))
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+
+		b, err = ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return err
+		}
+
+		switch resp.StatusCode {
+		case 200:
+			return nil
+		case 301:
+			if resp.StatusCode == 301 {
+				fullAddr = resp.Header.Get("location")
+				if fullAddr == "" {
+					return fmt.Errorf("failed to join, invalid redirect received")
+				}
+				log.Println("join request redirecting to", fullAddr)
+				continue
+			}
+		default:
+			return fmt.Errorf("failed to join, node returned: %s: (%s)", resp.Status, string(b))
+		}
 	}
 
 	return nil
