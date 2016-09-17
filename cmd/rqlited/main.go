@@ -317,8 +317,6 @@ func join(joinAddr string, skipVerify bool, raftAddr, raftAdv string) error {
 			return fmt.Errorf("failed to join, node returned: %s: (%s)", resp.Status, string(b))
 		}
 	}
-
-	return nil
 }
 
 func publishAPIAddr(c *cluster.Service, raftAddr, apiAddr string, t time.Duration) error {
