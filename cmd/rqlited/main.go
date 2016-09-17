@@ -304,17 +304,15 @@ func join(joinAddr string, skipVerify bool, raftAddr, raftAdv string) error {
 		}
 
 		switch resp.StatusCode {
-		case 200:
+		case http.StatusOK:
 			return nil
-		case 301:
-			if resp.StatusCode == 301 {
-				fullAddr = resp.Header.Get("location")
-				if fullAddr == "" {
-					return fmt.Errorf("failed to join, invalid redirect received")
-				}
-				log.Println("join request redirecting to", fullAddr)
-				continue
+		case http.StatusMovedPermanently:
+			fullAddr = resp.Header.Get("location")
+			if fullAddr == "" {
+				return fmt.Errorf("failed to join, invalid redirect received")
 			}
+			log.Println("join request redirecting to", fullAddr)
+			continue
 		default:
 			return fmt.Errorf("failed to join, node returned: %s: (%s)", resp.Status, string(b))
 		}
