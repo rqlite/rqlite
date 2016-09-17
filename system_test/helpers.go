@@ -160,7 +160,7 @@ func (c Cluster) WaitForNewLeader(old *Node) (*Node, error) {
 	}
 }
 
-// Followers returns the slide of nodes in the cluster that are followers.
+// Followers returns the slice of nodes in the cluster that are followers.
 func (c Cluster) Followers() ([]*Node, error) {
 	n, err := c[0].WaitForLeader()
 	if err != nil {
