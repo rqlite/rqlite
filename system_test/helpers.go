@@ -75,13 +75,7 @@ func (n *Node) Query(stmt string) (string, error) {
 
 // Join instructs this node to join the leader.
 func (n *Node) Join(leader *Node) error {
-	b, err := json.Marshal(map[string]string{"addr": n.RaftAddr})
-	if err != nil {
-		return err
-	}
-
-	// Attempt to join leader
-	resp, err := http.Post("http://"+leader.APIAddr+"/join", "application-type/json", bytes.NewReader(b))
+	resp, err := DoJoinRequest(leader.APIAddr, n.RaftAddr)
 	if err != nil {
 		return err
 	}
@@ -225,6 +219,21 @@ func Remove(n *Node, addr string) error {
 	}
 	defer resp.Body.Close()
 	return nil
+}
+
+// DoJoinRequest sends a join request to nodeAddr, for raftAddr.
+func DoJoinRequest(nodeAddr, raftAddr string) (*http.Response, error) {
+	b, err := json.Marshal(map[string]string{"addr": raftAddr})
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := http.Post("http://"+nodeAddr+"/join", "application-type/json", bytes.NewReader(b))
+	if err != nil {
+		return nil, err
+	}
+
+	return resp, nil
 }
 
 func mustNewNode(enableSingle bool) *Node {
