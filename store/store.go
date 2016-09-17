@@ -518,10 +518,16 @@ func (s *Store) UpdateAPIPeers(peers map[string]string) error {
 // respond to Raft communications at that address.
 func (s *Store) Join(addr string) error {
 	s.logger.Printf("received request to join node at %s", addr)
+	if s.raft.State() != raft.Leader {
+		return ErrNotLeader
+	}
 
 	f := s.raft.AddPeer(addr)
-	if f.Error() != nil {
-		return f.Error()
+	if e := f.(raft.Future); e.Error() != nil {
+		if e.Error() == raft.ErrNotLeader {
+			return ErrNotLeader
+		}
+		e.Error()
 	}
 	s.logger.Printf("node at %s joined successfully", addr)
 	return nil

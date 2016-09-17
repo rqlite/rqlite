@@ -270,6 +270,18 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.store.Join(remoteAddr); err != nil {
+		if err == store.ErrNotLeader {
+			leader := s.store.Peer(s.store.Leader())
+			if leader == "" {
+				http.Error(w, err.Error(), http.StatusServiceUnavailable)
+				return
+			}
+
+			redirect := s.FormRedirect(r, leader)
+			http.Redirect(w, r, redirect, http.StatusMovedPermanently)
+			return
+		}
+
 		b := bytes.NewBufferString(err.Error())
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write(b.Bytes())
