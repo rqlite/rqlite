@@ -24,6 +24,8 @@ To join a second node to this leader, execute the following command on _host2_:
 ```bash
 host2:$ rqlited -join http://host1:4001 ~/node
 ```
+_If a node receives a join request, and that node is not actually the leader of the cluster, the receiving node will automatically redirect the requesting node to the leader node._
+
 Once executed you now have a cluster of two nodes. Of course, for fault-tolerance you need a 3-node cluster, so launch a third node like so on _host3_:
 ```bash
 host3:$ rqlited -join http://host1:4001 ~/node
