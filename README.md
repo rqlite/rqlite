@@ -77,38 +77,6 @@ The response is of the form:
 
 The use of the URL param `pretty` is optional, and results in pretty-printed JSON responses. Time is measured in seconds. If you do not want timings, do not pass `timings` as a URL parameter.
 
-### Bulk Updates
-Bulk updates are supported. To execute multipe statements in one HTTP call, simply include the statements in the JSON array:
-
-```bash
-curl -XPOST 'localhost:4001/db/execute?pretty&timings' -H "Content-Type: application/json" -d "[
-    \"INSERT INTO foo(name) VALUES('fiona')\",
-    \"INSERT INTO foo(name) VALUES('sinead')\"
-]"
-```
-
-The response is of the form:
-
-```json
-{
-    "results": [
-        {
-            "last_insert_id": 1,
-            "rows_affected": 1,
-            "time": 0.00759015
-        },
-        {
-            "last_insert_id": 2,
-            "rows_affected": 1,
-            "time": 0.00669015
-        }
-    ],
-    "time": 0.869015
-}
-```
-
-A bulk update is contained within a single Raft log entry, so the network round-trips between nodes in the cluster are amortized over the bulk update. This should result in better throughput, if it is possible to use this kind of update.
-
 ### Querying Data
 Querying data is easy. The most important thing to know is that, by default, queries must go through the leader node. More on this later.
 
@@ -149,14 +117,7 @@ The response is of the form:
 }
 ```
 
-The behaviour of rqlite when more than 1 query is passed via `q` is undefined. If you want to execute more than one query per HTTP request, perform a POST, and place the queries in the body of the request as a JSON array. For example:
-
-```bash
-curl -XPOST 'localhost:4001/db/query?pretty' -H "Content-Type: application/json" -d '[
-    "SELECT * FROM foo",
-    "SELECT * FROM bar"
-]'
-```
+The behaviour of rqlite when more than 1 query is passed via `q` is undefined. 
 
 #### Read Consistency
 You can learn all about the read consistency guarantees supported by rqlite [here](https://github.com/rqlite/rqlite/blob/master/doc/CONSISTENCY.md).
@@ -196,6 +157,8 @@ curl -XPOST 'localhost:4001/db/execute?pretty&timings' -H "Content-Type: applica
     "time": 2.478862
 }
 ```
+### Bulk API
+You can learn about the bulk API [here](https://github.com/rqlite/rqlite/blob/master/doc/BULK.md).
 
 ## Performance
 rqlite replicates SQLite for fault-tolerance. It does not replicate it for performance. In fact performance is reduced somewhat due to the network round-trips.
