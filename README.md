@@ -117,8 +117,6 @@ The response is of the form:
 }
 ```
 
-The behaviour of rqlite when more than 1 query is passed via `q` is undefined. 
-
 #### Read Consistency
 You can learn all about the read consistency guarantees supported by rqlite [here](https://github.com/rqlite/rqlite/blob/master/doc/CONSISTENCY.md).
 
