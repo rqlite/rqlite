@@ -41,7 +41,7 @@ When restarting a node, there is no further need to pass `-join`. It will be ign
 ## Data API
 rqlite exposes an HTTP API allowing the database to be modified such that the changes are replicated. Queries are also executed using the HTTP API. Modifications go through the Raft log, ensuring only changes committed by a quorum of rqlite nodes are actually executed against the SQLite database. Queries do not __necessarily__ go through the Raft log, however, since they do not change the state of the database, and therefore do not need to be captured in the log. More on this later.
 
-[rqlite comes with a CLI](https://github.com/rqlite/rqlite/blob/master/doc/CLI.md) but the following examples use the HTTP API directly.
+[rqlite comes with a command-line interface](https://github.com/rqlite/rqlite/blob/master/doc/CLI.md) but the following examples use the HTTP API directly.
 
 ### Writing Data
 To write data successfully to the database, you must create at least 1 table. To do this perform a HTTP POST, with a `CREATE TABLE` SQL command encapsulated in a JSON array, in the body of the request. An example via [curl](http://curl.haxx.se/):
