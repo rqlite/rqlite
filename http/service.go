@@ -200,6 +200,7 @@ func (s *Service) Close() {
 
 // ServeHTTP allows Service to serve HTTP requests.
 func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	s.addBuildVersion(w)
 
 	if s.credentialStore != nil {
@@ -627,7 +628,6 @@ func queriesValid(queries []string) bool {
 
 // serveExpvar serves registered expvar information over HTTP.
 func serveExpvar(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	fmt.Fprintf(w, "{\n")
 	first := true
 	expvar.Do(func(kv expvar.KeyValue) {
