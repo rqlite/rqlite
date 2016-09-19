@@ -104,10 +104,6 @@ The response is of the form:
                 [
                     1,
                     "fiona"
-                ],
-                [
-                    2,
-                    "sinead"
                 ]
             ],
             "time": 0.0150043
