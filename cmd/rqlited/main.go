@@ -51,9 +51,9 @@ const logo = `
 // These variables are populated via the Go linker.
 var (
 	version   = "3"
-	commit    string
-	branch    string
-	buildtime string
+	commit    = "unknown"
+	branch    = "unknown"
+	buildtime = "unknown"
 )
 
 const (
@@ -97,7 +97,7 @@ func init() {
 	flag.StringVar(&authFile, "auth", "", "Path to authentication and authorization file. If not set, not enabled.")
 	flag.StringVar(&raftAddr, "raft", "localhost:4002", "Raft communication bind address")
 	flag.StringVar(&raftAdv, "raftadv", "", "Raft advertise address. If not set, same as bind")
-	flag.StringVar(&joinAddr, "join", "", "protocol://host:port of leader to join")
+	flag.StringVar(&joinAddr, "join", "", "Join a cluster via node at protocol://host:port")
 	flag.BoolVar(&noVerify, "noverify", false, "Skip verification of any HTTPS cert when joining")
 	flag.BoolVar(&expvar, "expvar", true, "Serve expvar data on HTTP server")
 	flag.BoolVar(&pprofEnabled, "pprof", true, "Serve pprof data on HTTP server")
@@ -114,17 +114,6 @@ func init() {
 		fmt.Fprintf(os.Stderr, "\n%s\n\n", desc)
 		fmt.Fprintf(os.Stderr, "Usage: %s [arguments] <data directory>\n", os.Args[0])
 		flag.PrintDefaults()
-	}
-
-	// If commit, branch, or build time are not set, make that clear.
-	if commit == "" {
-		commit = "unknown"
-	}
-	if branch == "" {
-		branch = "unknown"
-	}
-	if buildtime == "" {
-		buildtime = "unknown"
 	}
 }
 
