@@ -2,7 +2,7 @@
 This document describes, in detail, how to create and manage a rqlite cluster.
 
 ## Practical cluster size
-Clusters of 3, 5, 7, or 9, nodes are most practical. Clusters with a greater number start to become unweildy.
+Clusters of 3, 5, 7, or 9, nodes are most practical. Clusters with a greater number start to become unweildy, due to the number of nodes that must be contacted before a database change can take place.
 
 ## Clusters with an even-number of nodes
 There is little point running clusters with even numbers of nodes. To see why this is imagine you have one cluster of 3 nodes, and a second cluter of 4 nodes. As usual a majority of nodes are required for each cluster to reach consensus on any change.
@@ -30,6 +30,8 @@ Once executed you now have a cluster of two nodes. Of course, for fault-toleranc
 ```bash
 host3:$ rqlited -join http://host1:4001 ~/node
 ```
+_When restarting a node, there is no further need to pass `-join`. It will be ignored if a node is already a member of a cluster._
+
 You've now got a fault-tolerant, distributed, relational database. It can tolerate the failure of any node, even the leader, and remain operational.
 
 # Dealing with failure
