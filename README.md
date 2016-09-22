@@ -24,8 +24,6 @@ rqlited ~/node.1
 ```
 This single node automatically becomes the leader. You can pass `-h` to `rqlited` to list all configuration options.
 
-__If you want to build rqlite__, either because you want the latest code or a pre-built binary for platform is not available, take a look at the [contributing guidelines](https://github.com/rqlite/rqlite/blob/master/CONTRIBUTING.md).
-
 ### Forming a cluster
 While not strictly necessary to run rqlite, running multiple nodes means the SQLite database is replicated. Start a second and third node (so a majority can still form in the event of a single node failure) like so:
 ```bash
