@@ -17,7 +17,7 @@ You could use rqlite as part of a larger system, as a central store for some cri
 - Transaction support.
 - Hot backups.
 
-## Getting started
+## Quick Start
 The quickest way to get running on OSX and Linux is to download a pre-built release binary. You can find these binaries on the [Github releases page](https://github.com/rqlite/rqlite/releases). Once installed, you can start a single rqlite node like so:
 ```bash
 rqlited ~/node.1
@@ -34,14 +34,28 @@ rqlited -http localhost:4005 -raft localhost:4006 -join http://localhost:4001 ~/
 ```
 _This demonstration shows all 3 nodes running on the same host. In reality you wouldn't do this, and then you wouldn't need to set `-http` and `-raft`_.
 
-Under each node will be an SQLite database, which should remain in consensus. You can create clusters of any size, but clusters of 3, 5, and 7 nodes are most practical. Clusters larger than this become impractical, due to the number of nodes that must be contacted before a change can take place.
+With just these few steps you've now got a fault-tolerant, distributed relational database.
 
-When restarting a node, there is no further need to pass `-join`. It will be ignored if a node is already a member of a cluster. For more information on managing clusters check [this documentation](https://github.com/rqlite/rqlite/blob/master/doc/CLUSTER_MGMT.md).
+### Inserting records
+Let's insert some records via the [rqlite CLI](https://github.com/rqlite/rqlite/blob/master/doc/CLI.md), using standard SQLite commands. Once inserted, these records will be replicated across the cluster, in a durable and fault-tolerant manner.
+```
+$ rqlite
+127.0.0.1:4001> CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)
+0 row affected (0.000668 sec)
+127.0.0.1:4001> INSERT INTO foo(name) VALUES("fiona")
+1 row affected (0.000080 sec)
+127.0.0.1:4001> SELECT * FROM foo
++----+-------+
+| id | name  |
++----+-------+
+| 1  | fiona |
++----+-------+
+```
 
 ## Data API
 rqlite exposes an HTTP API allowing the database to be modified such that the changes are replicated. Queries are also executed using the HTTP API. Modifications go through the Raft log, ensuring only changes committed by a quorum of rqlite nodes are actually executed against the SQLite database. Queries do not __necessarily__ go through the Raft log, however, since they do not change the state of the database, and therefore do not need to be captured in the log. More on this later.
 
-[rqlite comes with a command-line interface](https://github.com/rqlite/rqlite/blob/master/doc/CLI.md) but the following examples use the HTTP API directly. There are also [client libraries available](https://github.com/rqlite).
+There are also [client libraries available](https://github.com/rqlite).
 
 ### Writing Data
 To write data successfully to the database, you must create at least 1 table. To do this perform a HTTP POST, with a `CREATE TABLE` SQL command encapsulated in a JSON array, in the body of the request. An example via [curl](http://curl.haxx.se/):
