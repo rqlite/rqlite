@@ -47,7 +47,6 @@ func Test_MultiNodeCluster(t *testing.T) {
 	if err := node3.Join(leader); err != nil {
 		t.Fatalf("node failed to join leader: %s", err.Error())
 	}
-	node3.WaitForLeader()
 	_, err = node3.WaitForLeader()
 	if err != nil {
 		t.Fatalf("failed waiting for leader: %s", err.Error())
