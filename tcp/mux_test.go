@@ -27,10 +27,7 @@ func TestMux(t *testing.T) {
 		var wg sync.WaitGroup
 
 		// Open single listener on random port.
-		tcpListener, err := net.Listen("tcp", "127.0.0.1:0")
-		if err != nil {
-			t.Fatal(err)
-		}
+		tcpListener := mustTCPListener("127.0.0.1:0")
 		defer tcpListener.Close()
 
 		// Setup muxer & listeners.
@@ -122,10 +119,7 @@ func TestMux(t *testing.T) {
 
 func TestMux_Advertise(t *testing.T) {
 	// Setup muxer.
-	tcpListener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
+	tcpListener := mustTCPListener("127.0.0.1:0")
 	defer tcpListener.Close()
 
 	addr := &mockAddr{
@@ -155,10 +149,7 @@ func TestMux_Listen_ErrAlreadyRegistered(t *testing.T) {
 	}()
 
 	// Register two listeners with the same header byte.
-	tcpListener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
+	tcpListener := mustTCPListener("127.0.0.1:0")
 	mux := NewMux(tcpListener, nil)
 	mux.Listen(5)
 	mux.Listen(5)
@@ -175,4 +166,13 @@ func (m *mockAddr) Network() string {
 
 func (m *mockAddr) String() string {
 	return m.Addr
+}
+
+// mustTCPListener returns a listener on bind, or panics.
+func mustTCPListener(bind string) net.Listener {
+	l, err := net.Listen("tcp", bind)
+	if err != nil {
+		panic(err)
+	}
+	return l
 }
