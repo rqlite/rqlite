@@ -1,6 +1,8 @@
 # Contributing to rqlite
 rqlite is software, and it goes without saying it can always be improved. It's by no means finished -- issues are tracked, and I plan to develop this project further. Pull requests are very welcome.
 
+rqlite can be compiled and executed on Linux, OSX, and Microsoft Windows.
+
 ## Clean commit histories
 If you open a pull request, please ensure the commit history is clean. Squash the commits into logical blocks, perhaps a single commit if that makes sense. What you want to avoid is commits such as "WIP" and "fix test" in the history. This is so we keep history on master clean and straightforward.
 
