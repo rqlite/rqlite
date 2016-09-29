@@ -1,0 +1,29 @@
+version: 1.0.0.{build}
+
+platform: x64
+
+clone_folder: c:\gopath\src\github.com\rqlite\rqlite
+
+environment:
+  GOPATH: c:\gopath
+
+install:
+  - set BUILD_ENV=gnu
+  - if %BUILD_ENV%==gnu  set PATH=C:\msys64\mingw64\bin;C:\msys64\usr\bin\;%PATH%
+  - if %BUILD_ENV%==gnu  set MSYSTEM=MINGW64
+  - if %BUILD_ENV%==gnu  set MSYS=winsymlinks=lnk
+  - if %BUILD_ENV%==gnu  bash -lc "echo $MSYSTEM; pacman --needed --noconfirm -Sy pacman-mirrors"
+  - if %BUILD_ENV%==gnu  bash -lc "pacman --noconfirm -Sy"
+  - if %BUILD_ENV%==gnu  bash -lc "pacman -Sy --needed --noconfirm git mingw-w64-x86_64-toolchain mingw-w64-x86_64-freetype mingw-w64-x86_64-icu mingw-w64-x86_64-nspr mingw-w64-x86_64-ca-certificates mingw-w64-x86_64-expat mingw-w64-x86_64-cmake tar diffutils patch patchutils make python2-setuptools mingw-w64-x86_64-ffmpeg"
+  - if %BUILD_ENV%==gnu  bash -lc "easy_install-2.7 pip virtualenv"
+  - if %BUILD_ENV%==gnu  bash -lc "mv /mingw64/bin/python2.exe /mingw64/bin/python2-mingw64.exe"
+  - if %BUILD_ENV%==gnu  bash -lc "mv /mingw64/bin/python2.7.exe /mingw64/bin/python2.7-mingw64.exe"
+  # Downgrade msys2 build GCC to 5.4.0-1 - https://github.com/servo/servo/issues/12512
+  - if %BUILD_ENV%==gnu  set GCC_URL=http://repo.msys2.org/mingw/x86_64/mingw-w64-x86_64-gcc
+  - if %BUILD_ENV%==gnu  set GCC_EXT=5.4.0-1-any.pkg.tar.xz
+  - if %BUILD_ENV%==gnu  bash -lc "pacman -U --noconfirm $GCC_URL-$GCC_EXT $GCC_URL-ada-$GCC_EXT $GCC_URL-fortran-$GCC_EXT $GCC_URL-libgfortran-$GCC_EXT $GCC_URL-libs-$GCC_EXT $GCC_URL-objc-$GCC_EXT"
+
+build_script:
+  - go get ./...
+  - go build -o buildOutput\rqlite -i ./...
+  - go test -v ./...
