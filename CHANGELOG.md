@@ -3,6 +3,7 @@
 - [PR #193](https://github.com/rqlite/rqlite/pull/193): Allow joining a cluster through any node, not just the leader.
 - [PR #187](https://github.com/rqlite/rqlite/pull/187): Support memory profiling.
 - Go cyclo complexity changes.
+- With this release Windows compatibility is checked with every build.
 
 ## 3.5.0 (September 5th 2016)
 - [PR #185](https://github.com/rqlite/rqlite/pull/185): Enable foreign key constraints by default.
