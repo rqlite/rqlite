@@ -1,4 +1,4 @@
-## 3.6.0 (unreleased)
+## 3.6.0 (October 1st 2016)
 - [PR #195](https://github.com/rqlite/rqlite/pull/195): Set Content-type "application/json" on all HTTP responses.
 - [PR #193](https://github.com/rqlite/rqlite/pull/193): Allow joining a cluster through any node, not just the leader.
 - [PR #187](https://github.com/rqlite/rqlite/pull/187): Support memory profiling.
