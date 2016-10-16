@@ -97,22 +97,14 @@ func Test_SimpleSingleStatements(t *testing.T) {
 		t.Fatalf("failed to insert record: %s", err.Error())
 	}
 
-	r, err := db.Query([]string{`SELECT * FROM foo`}, false, false)
-	if err != nil {
-		t.Fatalf("failed to query empty table: %s", err.Error())
-	}
-	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(r); exp != got {
-		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
-	}
-
 	_, err = db.Execute([]string{`INSERT INTO foo(name) VALUES("aoife")`}, false, false)
 	if err != nil {
 		t.Fatalf("failed to insert record: %s", err.Error())
 	}
 
-	r, err = db.Query([]string{`SELECT * FROM foo`}, false, false)
+	r, err := db.Query([]string{`SELECT * FROM foo`}, false, false)
 	if err != nil {
-		t.Fatalf("failed to query empty table: %s", err.Error())
+		t.Fatalf("failed to query table: %s", err.Error())
 	}
 	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"],[2,"aoife"]]}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
@@ -120,7 +112,7 @@ func Test_SimpleSingleStatements(t *testing.T) {
 
 	r, err = db.Query([]string{`SELECT * FROM foo WHERE name="aoife"`}, false, false)
 	if err != nil {
-		t.Fatalf("failed to query empty table: %s", err.Error())
+		t.Fatalf("failed to query table: %s", err.Error())
 	}
 	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[2,"aoife"]]}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
@@ -128,7 +120,7 @@ func Test_SimpleSingleStatements(t *testing.T) {
 
 	r, err = db.Query([]string{`SELECT * FROM foo WHERE name="dana"`}, false, false)
 	if err != nil {
-		t.Fatalf("failed to query empty table: %s", err.Error())
+		t.Fatalf("failed to query table: %s", err.Error())
 	}
 	if exp, got := `[{"columns":["id","name"],"types":["integer","text"]}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
@@ -136,7 +128,7 @@ func Test_SimpleSingleStatements(t *testing.T) {
 
 	r, err = db.Query([]string{`SELECT * FROM foo ORDER BY name`}, false, false)
 	if err != nil {
-		t.Fatalf("failed to query empty table: %s", err.Error())
+		t.Fatalf("failed to query table: %s", err.Error())
 	}
 	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[2,"aoife"],[1,"fiona"]]}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
@@ -144,7 +136,7 @@ func Test_SimpleSingleStatements(t *testing.T) {
 
 	r, err = db.Query([]string{`SELECT *,name FROM foo`}, false, false)
 	if err != nil {
-		t.Fatalf("failed to query empty table: %s", err.Error())
+		t.Fatalf("failed to query table: %s", err.Error())
 	}
 	if exp, got := `[{"columns":["id","name","name"],"types":["integer","text","text"],"values":[[1,"fiona","fiona"],[2,"aoife","aoife"]]}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
