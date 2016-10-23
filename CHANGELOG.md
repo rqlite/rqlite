@@ -1,3 +1,6 @@
+## 3.7.0 (unreleased)
+- With this release rqlite is moving to Go 1.7
+
 ## 3.6.0 (October 1st 2016)
 - [PR #195](https://github.com/rqlite/rqlite/pull/195): Set Content-type "application/json" on all HTTP responses.
 - [PR #193](https://github.com/rqlite/rqlite/pull/193): Allow joining a cluster through any node, not just the leader.
