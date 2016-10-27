@@ -457,6 +457,10 @@ func (s *Store) Load(r io.Reader) (int64, error) {
 			continue
 		}
 
+		if cmd == "" && err == io.EOF {
+			break
+		}
+
 		queries := []string{cmd}
 		_, err = s.Execute(queries, false, false)
 		if err != nil {
