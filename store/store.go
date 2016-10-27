@@ -448,7 +448,7 @@ func (s *Store) Load(r io.Reader) (int64, error) {
 	for {
 		cmd, err := buf.ReadString('\n')
 		if err != nil && err != io.EOF {
-			return 0, nil
+			return 0, err
 		}
 		cmd = strings.TrimRight(cmd, "\n;")
 		if cmd == "PRAGMA foreign_keys=OFF" ||
