@@ -2,6 +2,7 @@ package http
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"testing"
 
@@ -390,6 +391,10 @@ func (m *MockStore) Stats() (map[string]interface{}, error) {
 
 func (m *MockStore) Backup(leader bool) ([]byte, error) {
 	return nil, nil
+}
+
+func (m *MockStore) Load(r io.Reader, sz int) (int64, error) {
+	return 0, nil
 }
 
 type mockCredentialStore struct {

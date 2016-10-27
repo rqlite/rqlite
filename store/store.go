@@ -4,6 +4,7 @@
 package store
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
@@ -15,6 +16,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -432,6 +434,68 @@ func (s *Store) Execute(queries []string, timings, tx bool) ([]*sql.Result, erro
 
 	r := f.Response().(*fsmExecuteResponse)
 	return r.results, r.error
+}
+
+// Load loads a SQLite .dump state from a reader.
+func (s *Store) Load(r io.Reader, sz int) (int64, error) {
+	if s.raft.State() != raft.Leader {
+		return 0, ErrNotLeader
+	}
+
+	// Disable FK constraints for loading.
+	currFK, err := s.db.FKConstraints()
+	if err != nil {
+		return 0, err
+	}
+	if err := s.db.EnableFKConstraints(false); err != nil {
+		return 0, err
+	}
+
+	// Read the dump, executing the commands.
+	var queries []string
+	var n int64
+	buf := bufio.NewReader(r)
+	for {
+		cmd, err := buf.ReadString('\n')
+		if err != nil && err != io.EOF {
+			return 0, err
+		}
+		cmd = strings.TrimRight(cmd, "\n;")
+		if cmd == "PRAGMA foreign_keys=OFF" ||
+			cmd == "BEGIN TRANSACTION" ||
+			cmd == "COMMIT" {
+			continue
+		}
+
+		if cmd == "" && err == io.EOF {
+			break
+		}
+
+		queries = append(queries, cmd)
+		if len(queries) == sz {
+			_, err = s.Execute(queries, false, false)
+			if err != nil {
+				return n, err
+			}
+			n += int64(len(queries))
+			queries = nil
+		}
+	}
+
+	// Flush residual
+	if len(queries) > 0 {
+		_, err = s.Execute(queries, false, false)
+		if err != nil {
+			return n, err
+		}
+		n += int64(len(queries))
+	}
+
+	// Restore FK constraints to starting state.
+	if err := s.db.EnableFKConstraints(currFK); err != nil {
+		return n, err
+	}
+	return n, nil
 }
 
 // Backup return a consistent snapshot of the underlying database.
