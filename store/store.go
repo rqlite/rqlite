@@ -442,6 +442,15 @@ func (s *Store) Load(r io.Reader) (int64, error) {
 		return 0, ErrNotLeader
 	}
 
+	// Disable FK constraints for loading.
+	currFK, err := s.db.FKConstraints()
+	if err != nil {
+		return 0, err
+	}
+	if err := s.db.EnableFKConstraints(false); err != nil {
+		return 0, err
+	}
+
 	// Read the dump, executing the commands.
 	var n int64
 	buf := bufio.NewReader(r)
@@ -469,6 +478,10 @@ func (s *Store) Load(r io.Reader) (int64, error) {
 		n += int64(len(queries))
 	}
 
+	// Restore FK constraints to starting state.
+	if err := s.db.EnableFKConstraints(currFK); err != nil {
+		return n, err
+	}
 	return n, nil
 }
 
