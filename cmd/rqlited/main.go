@@ -90,7 +90,7 @@ var memProfile string
 const desc = `rqlite is a distributed system that provides a replicated relational database.`
 
 func init() {
-	flag.StringVar(&httpAddr, "http", "localhost:4001", "HTTP query server address. Set X.509 cert and key for HTTPS.")
+	flag.StringVar(&httpAddr, "http", "localhost:4001", "HTTP query server address. For HTTPS, set X.509 cert and key.")
 	flag.StringVar(&httpAdv, "httpadv", "", "HTTP redirection advertise address. If not set, same as query server.")
 	flag.StringVar(&x509Cert, "x509cert", "", "Path to X.509 certificate")
 	flag.StringVar(&x509Key, "x509key", "", "Path to X.509 private key for certificate")
@@ -98,7 +98,7 @@ func init() {
 	flag.StringVar(&raftAddr, "raft", "localhost:4002", "Raft communication bind address")
 	flag.StringVar(&raftAdv, "raftadv", "", "Raft advertise address. If not set, same as bind")
 	flag.StringVar(&joinAddr, "join", "", "Join a cluster via node at protocol://host:port")
-	flag.BoolVar(&noVerify, "noverify", false, "Skip verification of any HTTPS cert when joining")
+	flag.BoolVar(&noVerify, "noverify", false, "Skip verification of remote HTTPS cert when joining cluster")
 	flag.BoolVar(&expvar, "expvar", true, "Serve expvar data on HTTP server")
 	flag.BoolVar(&pprofEnabled, "pprof", true, "Serve pprof data on HTTP server")
 	flag.StringVar(&dsn, "dsn", "", `SQLite DSN parameters. E.g. "cache=shared&mode=memory"`)
@@ -107,9 +107,9 @@ func init() {
 	flag.BoolVar(&noFKCheck, "nofk", false, "Don't enforce foreign key constraints")
 	flag.BoolVar(&showVersion, "version", false, "Show version information and exit")
 	flag.StringVar(&raftHeartbeatTimeout, "rafttimeout", "1s", "Raft heartbeat timeout")
-	flag.Uint64Var(&raftSnapThreshold, "raftsnap", 8192, "Number of outstanding log entries to trigger snapshot")
-	flag.StringVar(&cpuProfile, "cpuprofile", "", "Write CPU profile to a file")
-	flag.StringVar(&memProfile, "memprofile", "", "Write memory profile to a file")
+	flag.Uint64Var(&raftSnapThreshold, "raftsnap", 8192, "Number of outstanding log entries that trigger snapshot")
+	flag.StringVar(&cpuProfile, "cpuprofile", "", "Path to file for CPU profiling information")
+	flag.StringVar(&memProfile, "memprofile", "", "Path to file for memory profiling information")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "\n%s\n\n", desc)
 		fmt.Fprintf(os.Stderr, "Usage: %s [arguments] <data directory>\n", os.Args[0])
