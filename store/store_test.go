@@ -242,6 +242,26 @@ COMMIT;
 	}
 }
 
+func Test_SingleNodeLoadEmpty(t *testing.T) {
+	s := mustNewStore(true)
+	defer os.RemoveAll(s.Path())
+
+	if err := s.Open(true); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	s.WaitForLeader(10 * time.Second)
+
+	buf := bytes.NewBufferString("")
+	n, err := s.Load(buf)
+	if err != nil {
+		t.Fatalf("failed to load dump: %s", err.Error())
+	}
+	if n != 0 {
+		t.Fatal("wrong number of statements loaded")
+	}
+}
+
 func Test_MultiNodeJoinRemove(t *testing.T) {
 	s0 := mustNewStore(true)
 	defer os.RemoveAll(s0.Path())
