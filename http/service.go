@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"expvar"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"net"
@@ -53,6 +54,9 @@ type Store interface {
 
 	// Backup returns a byte slice representing a backup of the node state.
 	Backup(leader bool) ([]byte, error)
+
+	// Load loads a SQLite .dump state from a reader
+	Load(r io.Reader) (int64, error)
 }
 
 // CredentialStore is the interface credential stores must support.
@@ -81,6 +85,7 @@ const (
 	numExecutions = "executions"
 	numQueries    = "queries"
 	numBackups    = "backups"
+	numLoad       = "loads"
 
 	// PermAll means all actions permitted.
 	PermAll = "all"
@@ -221,6 +226,9 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case strings.HasPrefix(r.URL.Path, "/db/backup"):
 		stats.Add(numBackups, 1)
 		s.handleBackup(w, r)
+	case strings.HasPrefix(r.URL.Path, "/db/load"):
+		stats.Add(numLoad, 1)
+		s.handleLoad(w, r)
 	case strings.HasPrefix(r.URL.Path, "/join"):
 		s.handleJoin(w, r)
 	case strings.HasPrefix(r.URL.Path, "/remove"):
@@ -360,6 +368,25 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.lastBackup = time.Now()
+}
+
+// handleLoad loads the state contained in a .dump output.
+func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
+	if !s.CheckRequestPerm(r, PermBackup) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	_, err := s.store.Load(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
 // handleStatus returns status on the system.
