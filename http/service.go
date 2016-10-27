@@ -56,7 +56,7 @@ type Store interface {
 	Backup(leader bool) ([]byte, error)
 
 	// Load loads a SQLite .dump state from a reader
-	Load(r io.Reader) (int64, error)
+	Load(r io.Reader, sz int) (int64, error)
 }
 
 // CredentialStore is the interface credential stores must support.
@@ -382,7 +382,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err := s.store.Load(r.Body)
+	_, err := s.store.Load(r.Body, 100)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
