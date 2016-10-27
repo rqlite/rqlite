@@ -101,6 +101,9 @@ const (
 	PermStatus = "status"
 	// PermBackup means user can backup node.
 	PermBackup = "backup"
+
+	// LoadBatchSz is the batch size for loading a dump file.
+	LoadBatchSze = 100
 )
 
 func init() {
@@ -382,11 +385,12 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err := s.store.Load(r.Body, 100)
+	n, err := s.store.Load(r.Body, LoadBatchSze)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	s.logger.Printf(`.dump data with %d commands loaded OK`, n)
 }
 
 // handleStatus returns status on the system.
