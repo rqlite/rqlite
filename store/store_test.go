@@ -221,7 +221,83 @@ INSERT INTO "foo" VALUES(1,'fiona');
 COMMIT;
 `
 	buf := bytes.NewBufferString(dump)
-	n, err := s.Load(buf)
+	n, err := s.Load(buf, 0)
+	if err != nil {
+		t.Fatalf("failed to load dump: %s", err.Error())
+	}
+	if n != 2 {
+		t.Fatal("wrong number of statements loaded")
+	}
+
+	// Check that data were loaded correctly.
+	r, err := s.Query([]string{`SELECT * FROM foo`}, false, true, Strong)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
+func Test_SingleNodeLoadBatch1(t *testing.T) {
+	s := mustNewStore(true)
+	defer os.RemoveAll(s.Path())
+
+	if err := s.Open(true); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	s.WaitForLeader(10 * time.Second)
+
+	dump := `PRAGMA foreign_keys=OFF;
+BEGIN TRANSACTION;
+CREATE TABLE foo (id integer not null primary key, name text);
+INSERT INTO "foo" VALUES(1,'fiona');
+COMMIT;
+`
+	buf := bytes.NewBufferString(dump)
+	n, err := s.Load(buf, 1)
+	if err != nil {
+		t.Fatalf("failed to load dump: %s", err.Error())
+	}
+	if n != 2 {
+		t.Fatal("wrong number of statements loaded")
+	}
+
+	// Check that data were loaded correctly.
+	r, err := s.Query([]string{`SELECT * FROM foo`}, false, true, Strong)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
+func Test_SingleNodeLoadBatchLarge(t *testing.T) {
+	s := mustNewStore(true)
+	defer os.RemoveAll(s.Path())
+
+	if err := s.Open(true); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	s.WaitForLeader(10 * time.Second)
+
+	dump := `PRAGMA foreign_keys=OFF;
+BEGIN TRANSACTION;
+CREATE TABLE foo (id integer not null primary key, name text);
+INSERT INTO "foo" VALUES(1,'fiona');
+COMMIT;
+`
+	buf := bytes.NewBufferString(dump)
+	n, err := s.Load(buf, 100)
 	if err != nil {
 		t.Fatalf("failed to load dump: %s", err.Error())
 	}
@@ -257,7 +333,7 @@ BEGIN TRANSACTION;
 COMMIT;
 `
 	buf := bytes.NewBufferString(dump)
-	n, err := s.Load(buf)
+	n, err := s.Load(buf, 0)
 	if err != nil {
 		t.Fatalf("failed to load dump: %s", err.Error())
 	}
@@ -277,7 +353,7 @@ func Test_SingleNodeLoadEmpty(t *testing.T) {
 	s.WaitForLeader(10 * time.Second)
 
 	buf := bytes.NewBufferString("")
-	n, err := s.Load(buf)
+	n, err := s.Load(buf, 0)
 	if err != nil {
 		t.Fatalf("failed to load dump: %s", err.Error())
 	}

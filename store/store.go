@@ -437,7 +437,7 @@ func (s *Store) Execute(queries []string, timings, tx bool) ([]*sql.Result, erro
 }
 
 // Load loads a SQLite .dump state from a reader.
-func (s *Store) Load(r io.Reader) (int64, error) {
+func (s *Store) Load(r io.Reader, sz int) (int64, error) {
 	if s.raft.State() != raft.Leader {
 		return 0, ErrNotLeader
 	}
@@ -452,6 +452,7 @@ func (s *Store) Load(r io.Reader) (int64, error) {
 	}
 
 	// Read the dump, executing the commands.
+	var queries []string
 	var n int64
 	buf := bufio.NewReader(r)
 	for {
@@ -470,7 +471,19 @@ func (s *Store) Load(r io.Reader) (int64, error) {
 			break
 		}
 
-		queries := []string{cmd}
+		queries = append(queries, cmd)
+		if len(queries) == sz {
+			_, err = s.Execute(queries, false, false)
+			if err != nil {
+				return n, err
+			}
+			n += int64(len(queries))
+			queries = nil
+		}
+	}
+
+	// Flush residual
+	if len(queries) > 0 {
 		_, err = s.Execute(queries, false, false)
 		if err != nil {
 			return n, err
