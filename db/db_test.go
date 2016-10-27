@@ -263,6 +263,16 @@ func Test_ForeignKeyConstraints(t *testing.T) {
 	if err := db.EnableFKConstraints(false); err != nil {
 		t.Fatalf("failed to enable foreign key constraints: %s", err.Error())
 	}
+
+	// Check constraints
+	fk, err := db.FKConstraints()
+	if err != nil {
+		t.Fatalf("failed to check FK constraints: %s", err.Error())
+	}
+	if fk != false {
+		t.Fatal("FK constraints are not disabled")
+	}
+
 	stmts := []string{
 		`INSERT INTO foo(id, ref) VALUES(1, 2)`,
 	}
@@ -278,6 +288,16 @@ func Test_ForeignKeyConstraints(t *testing.T) {
 	if err := db.EnableFKConstraints(true); err != nil {
 		t.Fatalf("failed to enable foreign key constraints: %s", err.Error())
 	}
+
+	// Check constraints
+	fk, err = db.FKConstraints()
+	if err != nil {
+		t.Fatalf("failed to check FK constraints: %s", err.Error())
+	}
+	if fk != true {
+		t.Fatal("FK constraints are not enabled")
+	}
+
 	stmts = []string{
 		`INSERT INTO foo(id, ref) VALUES(1, 3)`,
 	}

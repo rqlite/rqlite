@@ -1,5 +1,6 @@
 ## 3.7.0 (unreleased)
 - With this release rqlite is moving to Go 1.7
+- [PR #207](https://github.com/rqlite/rqlite/pull/207): Database supports returning foreign key constraint status.
 
 ## 3.6.0 (October 1st 2016)
 - [PR #195](https://github.com/rqlite/rqlite/pull/195): Set Content-type "application/json" on all HTTP responses.

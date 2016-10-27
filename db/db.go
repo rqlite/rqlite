@@ -14,6 +14,7 @@ import (
 const bkDelay = 250
 
 const (
+	fkChecks         = "PRAGMA foreign_keys"
 	fkChecksEnabled  = "PRAGMA foreign_keys=ON"
 	fkChecksDisabled = "PRAGMA foreign_keys=OFF"
 )
@@ -136,6 +137,26 @@ func (db *DB) EnableFKConstraints(e bool) error {
 	}
 	_, err := db.sqlite3conn.Exec(q, nil)
 	return err
+}
+
+// FKConstraints returns whether FK constraints are set or not.
+func (db *DB) FKConstraints() (bool, error) {
+	r, err := db.sqlite3conn.Query(fkChecks, nil)
+	if err != nil {
+		return false, err
+	}
+
+	dest := make([]driver.Value, len(r.Columns()))
+	types := r.(*sqlite3.SQLiteRows).DeclTypes()
+	if err := r.Next(dest); err != nil {
+		return false, err
+	}
+
+	values := normalizeRowValues(dest, types)
+	if values[0] == int64(1) {
+		return true, nil
+	}
+	return false, nil
 }
 
 // Execute executes queries that modify the database.
