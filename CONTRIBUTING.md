@@ -12,7 +12,7 @@ Please avoid using libaries other than those available in the standard library, 
 ## Building rqlite
 *Building rqlite requires Go 1.5 or later. [gvm](https://github.com/moovweb/gvm) is a great tool for managing your version of Go.*
 
-Download and run rqlite like so (tested on 64-bit Kubuntu 14.04 and OSX):
+Download, build, and run rqlite like so (tested on 64-bit Kubuntu 14.04 and OSX):
 
 ```bash
 mkdir rqlite # Or any directory of your choice.
@@ -21,8 +21,14 @@ export GOPATH=$PWD
 go get -u -t github.com/rqlite/rqlite/...
 $GOPATH/bin/rqlited ~/node.1
 ```
-
 This starts a rqlite server listening on localhost, port 4001. This single node automatically becomes the leader.
+
+To rebuild, perhaps after making some changes to the source, do something like the following:
+```bash
+cd $GOPATH/bin/rqlited
+go build
+./rqlited ~/node.1
+```
 
 ### Speeding up the build process
 It can be rather slow to rebuild rqlite, due to the repeated compilation of SQLite support. You can compile and install this library once, so subsequent builds are much faster. To do so, execute the following commands:
