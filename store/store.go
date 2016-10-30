@@ -405,6 +405,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		"peers":   peers,
 		"dir":     s.raftDir,
 		"sqlite3": dbStatus,
+		"db_conf": s.dbConf,
 	}
 	return status, nil
 }
