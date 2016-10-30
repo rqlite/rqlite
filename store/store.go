@@ -370,9 +370,14 @@ func (s *Store) WaitForAppliedIndex(idx uint64, timeout time.Duration) error {
 
 // Stats returns stats for the store.
 func (s *Store) Stats() (map[string]interface{}, error) {
+	fkEnabled, err := s.db.FKConstraints()
+	if err != nil {
+		return nil, err
+	}
+
 	dbStatus := map[string]interface{}{
 		"dns":            s.dbConf.DSN,
-		"fk_constraints": enabledFromBool(!s.dbConf.NoFK),
+		"fk_constraints": enabledFromBool(fkEnabled),
 		"version":        sql.DBVersion,
 	}
 	if !s.dbConf.Memory {
