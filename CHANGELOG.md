@@ -4,6 +4,7 @@
 - [PR #207](https://github.com/rqlite/rqlite/pull/207): Database supports returning foreign key constraint status.
 - [PR #206](https://github.com/rqlite/rqlite/pull/206): Support loading from SQLite dump files (experimental).
 - [PR #211](https://github.com/rqlite/rqlite/pull/211): Diagnostics show actual foreign key constraint state.
+- [PR #212](https://github.com/rqlite/rqlite/pull/212): Add database configuration to diagnostics output.
 
 ## 3.6.0 (October 1st 2016)
 - [PR #195](https://github.com/rqlite/rqlite/pull/195): Set Content-type "application/json" on all HTTP responses.
