@@ -66,7 +66,7 @@ func (s *Scanner) read() rune {
 }
 
 // Scan returns the next SQL statement.
-func (s *Scanner) Scan() string {
+func (s *Scanner) Scan() (string, error) {
 	var buf bytes.Buffer
 	seekSemi := true
 
@@ -74,7 +74,7 @@ func (s *Scanner) Scan() string {
 		ch := s.read()
 
 		if ch == eof {
-			break
+			return "", io.EOF
 		}
 
 		// Store the character.
@@ -82,7 +82,7 @@ func (s *Scanner) Scan() string {
 
 		if ch == '\'' || ch == '"' {
 			if s.c.empty() {
-				// add to stack
+				s.c.push(ch)
 				seekSemi = false
 			} else if s.c.peek() != ch {
 				s.c.push(ch)
@@ -98,7 +98,7 @@ func (s *Scanner) Scan() string {
 		}
 	}
 
-	return buf.String()
+	return buf.String(), nil
 }
 
 // eof represents a marker rune for the end of the reader.
