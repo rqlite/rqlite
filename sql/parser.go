@@ -2,20 +2,56 @@ package sql
 
 import (
 	"bufio"
+	"bytes"
 	"io"
 )
+
+type stack struct {
+	c []rune
+}
+
+func newStack() *stack {
+	return &stack{
+		c: make([]rune, 0),
+	}
+}
+
+func (s *stack) push(r rune) {
+	s.c = append(s.c, r)
+}
+
+func (s *stack) pop() rune {
+	if len(s.c) == 0 {
+		return rune(0)
+	}
+	c := s.c[len(s.c)-1]
+	s.c = s.c[:len(s.c)]
+	return c
+}
+
+func (s *stack) peek() rune {
+	if len(s.c) == 0 {
+		return rune(0)
+	}
+	c := s.c[len(s.c)-1]
+	return c
+}
+
+func (s *stack) empty() bool {
+	return len(s.c) == 0
+}
 
 // Scanner represents a SQL statement scanner.
 type Scanner struct {
 	r *bufio.Reader
-	c []rune
+	c *stack
 }
 
 // NewScanner returns a new instance of Scanner.
 func NewScanner(r io.Reader) *Scanner {
 	return &Scanner{
 		r: bufio.NewReader(r),
-		c: make([]rune, 0),
+		c: newStack(),
 	}
 }
 
@@ -31,28 +67,39 @@ func (s *Scanner) read() rune {
 
 // Scan returns the next SQL statement.
 func (s *Scanner) Scan() string {
+	var buf bytes.Buffer
+	seekSemi := true
+
 	for {
-		if ch := s.read(); ch == eof {
+		ch := s.read()
+
+		if ch == eof {
 			break
-		} else if ch == '\'' {
-			// Check for ' in c
-		} else if !isLetter(ch) && !isDigit(ch) && ch != '_' {
-			s.unread()
+		}
+
+		// Store the character.
+		_, _ = buf.WriteRune(ch)
+
+		if ch == '\'' || ch == '"' {
+			if s.c.empty() {
+				// add to stack
+				seekSemi = false
+			} else if s.c.peek() != ch {
+				s.c.push(ch)
+				seekSemi = false
+			} else {
+				s.c.pop()
+				if s.c.empty() {
+					seekSemi = true
+				}
+			}
+		} else if ch == ';' && seekSemi {
 			break
-		} else {
-			_, _ = buf.WriteRune(ch)
 		}
 	}
+
+	return buf.String()
 }
-
-// isWhitespace returns true if the rune is a space, tab, or newline.
-func isWhitespace(ch rune) bool { return ch == ' ' || ch == '\t' || ch == '\n' }
-
-// isLetter returns true if the rune is a letter.
-func isLetter(ch rune) bool { return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') }
-
-// isDigit returns true if the rune is a digit.
-func isDigit(ch rune) bool { return (ch >= '0' && ch <= '9') }
 
 // eof represents a marker rune for the end of the reader.
 var eof = rune(0)
