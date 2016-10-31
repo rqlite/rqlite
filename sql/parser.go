@@ -25,7 +25,7 @@ func (s *stack) pop() rune {
 		return rune(0)
 	}
 	c := s.c[len(s.c)-1]
-	s.c = s.c[:len(s.c)]
+	s.c = s.c[:len(s.c)-1]
 	return c
 }
 
