@@ -35,7 +35,7 @@ rqlited -http localhost:4005 -raft localhost:4006 -join http://localhost:4001 ~/
 ```
 _This demonstration shows all 3 nodes running on the same host. In reality you wouldn't do this, and then you wouldn't need to set `-http` and `-raft`_.
 
-With just these few steps you've now got a fault-tolerant, distributed relational database.
+With just these few steps you've now got a fault-tolerant, distributed relational database. For full details on creating and managing real clusters check out [this documentation](https://github.com/rqlite/rqlite/blob/master/doc/CLUSTER_MGMT.md).
 
 ### Inserting records
 Let's insert some records via the [rqlite CLI](https://github.com/rqlite/rqlite/blob/master/doc/CLI.md), using standard SQLite commands. Once inserted, these records will be replicated across the cluster, in a durable and fault-tolerant manner.
