@@ -33,7 +33,7 @@ While not strictly necessary to run rqlite, running multiple nodes means the SQL
 rqlited -http localhost:4003 -raft localhost:4004 -join http://localhost:4001 ~/node.2
 rqlited -http localhost:4005 -raft localhost:4006 -join http://localhost:4001 ~/node.3
 ```
-_This demonstration shows all 3 nodes running on the same host. In reality you wouldn't do this, and then you wouldn't need to set `-http` and `-raft`_.
+_This demonstration shows all 3 nodes running on the same host. In reality you probably wouldn't do this, and then you wouldn't need to select different -http and -raft ports for each rqlite node._
 
 With just these few steps you've now got a fault-tolerant, distributed relational database. For full details on creating and managing real clusters check out [this documentation](https://github.com/rqlite/rqlite/blob/master/doc/CLUSTER_MGMT.md).
 
