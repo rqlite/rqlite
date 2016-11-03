@@ -6,20 +6,24 @@ import (
 	"io"
 )
 
+// stack represents a stack.
 type stack struct {
 	c []rune
 }
 
+// newStack returns an instance of a stack.
 func newStack() *stack {
 	return &stack{
 		c: make([]rune, 0),
 	}
 }
 
+// push pushes a rune onto the stack.
 func (s *stack) push(r rune) {
 	s.c = append(s.c, r)
 }
 
+// pop pops a rune off the stack.
 func (s *stack) pop() rune {
 	if len(s.c) == 0 {
 		return rune(0)
@@ -29,6 +33,7 @@ func (s *stack) pop() rune {
 	return c
 }
 
+// peek returns what is on the stack, without changing the stack.
 func (s *stack) peek() rune {
 	if len(s.c) == 0 {
 		return rune(0)
@@ -37,6 +42,7 @@ func (s *stack) peek() rune {
 	return c
 }
 
+// empty returns whether the stack is empty.
 func (s *stack) empty() bool {
 	return len(s.c) == 0
 }
