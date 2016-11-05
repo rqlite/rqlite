@@ -25,11 +25,11 @@ func Test_stackSingle(t *testing.T) {
 	}
 
 	if s.peek() != 'x' {
-		t.Fatal("peek of single stack does not return correct value")
+		t.Fatal("peek of stack with single entry does not return correct value")
 	}
 
 	if s.pop() != 'x' {
-		t.Fatal("pop of single stack does not return correct value")
+		t.Fatal("pop of stack with single entry does not return correct value")
 	}
 
 	if !s.empty() {
