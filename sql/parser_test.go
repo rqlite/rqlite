@@ -3,6 +3,7 @@ package sql
 import (
 	"bytes"
 	"io"
+	"strings"
 	"testing"
 )
 
@@ -144,44 +145,36 @@ func Test_ScannerSingleStatementQuotesEmbedded(t *testing.T) {
 }
 
 func Test_ScannerMultiStatement(t *testing.T) {
-	r := bytes.NewBufferString("SELECT * FROM foo;SELECT * FROM bar;")
+	e := []string{`SELECT * FROM foo;`, `SELECT * FROM bar;`}
+	r := bytes.NewBufferString(strings.Join(e, ""))
 	s := NewScanner(r)
 
-	l, err := s.Scan()
-	if err != nil {
-		t.Fatal("Scan of multi statement failed")
-	}
-	if l != "SELECT * FROM foo;" {
-		t.Fatal("Scan of first of multi statement returned incorrect value")
-	}
+	for i := range e {
+		l, err := s.Scan()
+		if err != nil {
+			t.Fatal("Scan of multi statement failed")
+		}
 
-	l, err = s.Scan()
-	if err != nil {
-		t.Fatal("Scan of multi statement failed")
-	}
-	if l != "SELECT * FROM bar;" {
-		t.Fatal("Scan of second of multi statement returned incorrect value")
+		if l != e[i] {
+			t.Fatalf("Scan of multi statement returned incorrect value, exp %s, got %s", e[i], l)
+		}
 	}
 }
 
 func Test_ScannerMultiStatementQuotesEmbedded(t *testing.T) {
-	r := bytes.NewBufferString(`SELECT * FROM "foo;barx";SELECT * FROM bar;`)
+	e := []string{`SELECT * FROM "foo;barx";`, `SELECT * FROM bar;`}
+	r := bytes.NewBufferString(strings.Join(e, ""))
 	s := NewScanner(r)
 
-	l, err := s.Scan()
-	if err != nil {
-		t.Fatal("Scan of multi statement failed")
-	}
-	if l != `SELECT * FROM "foo;barx";` {
-		t.Fatal("Scan of first of multi statement returned incorrect value")
-	}
+	for i := range e {
+		l, err := s.Scan()
+		if err != nil {
+			t.Fatal("Scan of multi statement failed")
+		}
 
-	l, err = s.Scan()
-	if err != nil {
-		t.Fatal("Scan of multi statement failed")
-	}
-	if l != "SELECT * FROM bar;" {
-		t.Fatal("Scan of second of multi statement returned incorrect value")
+		if l != e[i] {
+			t.Fatalf("Scan of multi statement returned incorrect value, exp %s, got %s", e[i], l)
+		}
 	}
 }
 
