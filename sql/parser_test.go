@@ -179,3 +179,38 @@ func Test_ScannerMultiStatementQuotesEmbedded(t *testing.T) {
 }
 
 // XX I am missing this case: '"' ????
+
+func Test_ScannerMultiLine(t *testing.T) {
+	stmt := `CREATE TABLE [Customer]
+(
+    [CustomerId] INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    [FirstName] NVARCHAR(40)  NOT NULL,
+    [LastName] NVARCHAR(20)  NOT NULL,
+    [Company] NVARCHAR(80),
+    [Address] NVARCHAR(70),
+    [City] NVARCHAR(40),
+    [State] NVARCHAR(40),
+    [Country] NVARCHAR(40),
+    [PostalCode] NVARCHAR(10),
+    [Phone] NVARCHAR(24),
+    [Fax] NVARCHAR(24),
+    [Email] NVARCHAR(60)  NOT NULL,
+    [SupportRepId] INTEGER,
+    FOREIGN KEY ([SupportRepId]) REFERENCES [Employee] ([EmployeeId])
+                ON DELETE NO ACTION ON UPDATE NO ACTION
+);`
+	r := bytes.NewBufferString(stmt)
+	s := NewScanner(r)
+
+	l, err := s.Scan()
+	if err != nil {
+		t.Fatal("Scan of multiline statement failed")
+	}
+	if l != stmt {
+		t.Fatal("Scan of multiline statement returned incorrect value")
+	}
+	_, err = s.Scan()
+	if err != io.EOF {
+		t.Fatal("Scan of empty string after statement did not return EOF")
+	}
+}
