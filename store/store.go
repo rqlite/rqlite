@@ -462,11 +462,17 @@ func (s *Store) Load(r io.Reader, sz int) (int64, error) {
 	scanner := parser.NewScanner(r)
 	for {
 		cmd, err := scanner.Scan()
-		if err != nil {
-			if cmd == "" && err == io.EOF {
-				break
-			}
+		if err != nil && err != io.EOF {
 			return n, err
+		}
+		cmd = strings.TrimRight(cmd, "\n;")
+		if cmd == "PRAGMA foreign_keys=OFF" ||
+			cmd == "BEGIN TRANSACTION" ||
+			cmd == "COMMIT" {
+			continue
+		}
+		if cmd == "" && err == io.EOF {
+			break
 		}
 
 		queries = append(queries, cmd)

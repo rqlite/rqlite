@@ -84,7 +84,7 @@ func Test_ScannerSemi(t *testing.T) {
 	if err != nil {
 		t.Fatal("Scan of single semicolon failed")
 	}
-	if l != ";" {
+	if l != "" {
 		t.Fatal("Scan of single semicolon returned incorrect value")
 	}
 	_, err = s.Scan()
@@ -101,7 +101,7 @@ func Test_ScannerSingleStatement(t *testing.T) {
 	if err != nil {
 		t.Fatal("Scan of single statement failed")
 	}
-	if l != "SELECT * FROM foo;" {
+	if l != "SELECT * FROM foo" {
 		t.Fatal("Scan of single statement returned incorrect value")
 	}
 	_, err = s.Scan()
@@ -118,7 +118,7 @@ func Test_ScannerSingleStatementQuotes(t *testing.T) {
 	if err != nil {
 		t.Fatal("Scan of single statement failed")
 	}
-	if l != `SELECT * FROM "foo";` {
+	if l != `SELECT * FROM "foo"` {
 		t.Fatal("Scan of single statement returned incorrect value")
 	}
 	_, err = s.Scan()
@@ -135,7 +135,7 @@ func Test_ScannerSingleStatementQuotesEmbedded(t *testing.T) {
 	if err != nil {
 		t.Fatal("Scan of single statement failed")
 	}
-	if l != `SELECT * FROM ";SELECT * FROM '"foo"'";` {
+	if l != `SELECT * FROM ";SELECT * FROM '"foo"'"` {
 		t.Fatal("Scan of single statement returned incorrect value")
 	}
 	_, err = s.Scan()
@@ -155,7 +155,7 @@ func Test_ScannerMultiStatement(t *testing.T) {
 			t.Fatal("Scan of multi statement failed")
 		}
 
-		if l != e[i] {
+		if l != strings.Trim(e[i], "\n;") {
 			t.Fatalf("Scan of multi statement returned incorrect value, exp %s, got %s", e[i], l)
 		}
 	}
@@ -172,7 +172,7 @@ func Test_ScannerMultiStatementQuotesEmbedded(t *testing.T) {
 			t.Fatal("Scan of multi statement failed")
 		}
 
-		if l != e[i] {
+		if l != strings.Trim(e[i], "\n;") {
 			t.Fatalf("Scan of multi statement returned incorrect value, exp %s, got %s", e[i], l)
 		}
 	}
@@ -206,7 +206,7 @@ func Test_ScannerMultiLine(t *testing.T) {
 	if err != nil {
 		t.Fatal("Scan of multiline statement failed")
 	}
-	if l != stmt {
+	if l != strings.Trim(stmt, "\n;") {
 		t.Fatal("Scan of multiline statement returned incorrect value")
 	}
 	_, err = s.Scan()
