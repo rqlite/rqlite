@@ -4,7 +4,6 @@
 package store
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
@@ -16,13 +15,13 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/hashicorp/raft"
 	"github.com/hashicorp/raft-boltdb"
 	sql "github.com/rqlite/rqlite/db"
+	parser "github.com/rqlite/rqlite/sql"
 )
 
 var (
@@ -460,21 +459,14 @@ func (s *Store) Load(r io.Reader, sz int) (int64, error) {
 	// Read the dump, executing the commands.
 	var queries []string
 	var n int64
-	buf := bufio.NewReader(r)
+	scanner := parser.NewScanner(r)
 	for {
-		cmd, err := buf.ReadString('\n')
-		if err != nil && err != io.EOF {
-			return 0, err
-		}
-		cmd = strings.TrimRight(cmd, "\n;")
-		if cmd == "PRAGMA foreign_keys=OFF" ||
-			cmd == "BEGIN TRANSACTION" ||
-			cmd == "COMMIT" {
-			continue
-		}
-
-		if cmd == "" && err == io.EOF {
-			break
+		cmd, err := scanner.Scan()
+		if err != nil {
+			if cmd == "" && err == io.EOF {
+				break
+			}
+			return n, err
 		}
 
 		queries = append(queries, cmd)

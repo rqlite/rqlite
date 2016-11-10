@@ -264,7 +264,7 @@ COMMIT;
 		t.Fatalf("failed to load dump: %s", err.Error())
 	}
 	if n != 2 {
-		t.Fatal("wrong number of statements loaded")
+		t.Fatalf("wrong number of statements loaded, exp %d, got %d", 2, n)
 	}
 
 	// Check that data were loaded correctly.
