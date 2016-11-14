@@ -105,7 +105,7 @@ func (s *Scanner) Scan() (string, error) {
 		}
 	}
 
-	return strings.TrimRight(buf.String(), "\n;"), nil
+	return strings.Trim(strings.TrimRight(buf.String(), ";"), "\n"), nil
 }
 
 // eof represents a marker rune for the end of the reader.
