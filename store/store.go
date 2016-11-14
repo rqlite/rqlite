@@ -15,7 +15,6 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -466,7 +465,6 @@ func (s *Store) Load(r io.Reader, sz int) (int64, error) {
 		if err != nil && err != io.EOF {
 			return n, err
 		}
-		cmd = strings.Trim(strings.TrimRight(cmd, ";"), "\n")
 		if cmd == "PRAGMA foreign_keys=OFF" ||
 			cmd == "BEGIN TRANSACTION" ||
 			cmd == "COMMIT" {
