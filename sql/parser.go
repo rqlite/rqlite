@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"io"
+	"strings"
 )
 
 // stack represents a stack.
@@ -104,7 +105,7 @@ func (s *Scanner) Scan() (string, error) {
 		}
 	}
 
-	return buf.String(), nil
+	return strings.Trim(strings.TrimRight(buf.String(), ";"), "\n"), nil
 }
 
 // eof represents a marker rune for the end of the reader.
