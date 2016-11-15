@@ -470,8 +470,11 @@ func (s *Store) Load(r io.Reader, sz int) (int64, error) {
 			cmd == "COMMIT" {
 			continue
 		}
-		if cmd == "" && err == io.EOF {
-			break
+		if cmd == "" {
+			if err == io.EOF {
+				break
+			}
+			continue
 		}
 
 		queries = append(queries, cmd)
