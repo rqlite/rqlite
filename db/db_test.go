@@ -170,6 +170,29 @@ func Test_SimpleMultiStatements(t *testing.T) {
 	}
 }
 
+func Test_SimpleSingleMultiLineStatements(t *testing.T) {
+	db, path := mustCreateDatabase()
+	defer db.Close()
+	defer os.Remove(path)
+
+	_, err := db.Execute([]string{`
+CREATE TABLE foo (
+    id INTEGER NOT NULL PRIMARY KEY,
+    name TEXT
+)`}, false, false)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	re, err := db.Execute([]string{`INSERT INTO foo(name) VALUES("fiona")`, `INSERT INTO foo(name) VALUES("dana")`}, false, false)
+	if err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+	if exp, got := `[{"last_insert_id":1,"rows_affected":1},{"last_insert_id":2,"rows_affected":1}]`, asJSON(re); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
 func Test_SimpleFailingStatements_Execute(t *testing.T) {
 	db, path := mustCreateDatabase()
 	defer db.Close()
