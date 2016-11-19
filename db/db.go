@@ -7,6 +7,7 @@ import (
 	"expvar"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/mattn/go-sqlite3"
@@ -398,7 +399,7 @@ func (db *DB) Backup(path string) error {
 func normalizeRowValues(row []driver.Value, types []string) []interface{} {
 	values := make([]interface{}, len(types))
 	for i, v := range row {
-		if types[i] == "text" {
+		if isTextType(types[i]) {
 			switch val := v.(type) {
 			case []byte:
 				values[i] = string(val)
@@ -410,6 +411,18 @@ func normalizeRowValues(row []driver.Value, types []string) []interface{} {
 		}
 	}
 	return values
+}
+
+// isTextType returns whether the given type has a SQLite text affinity.
+// http://www.sqlite.org/datatype3.html
+func isTextType(t string) bool {
+	return t == "text" ||
+		strings.HasPrefix(t, "varchar") ||
+		strings.HasPrefix(t, "varying character") ||
+		strings.HasPrefix(t, "nchar") ||
+		strings.HasPrefix(t, "native character") ||
+		strings.HasPrefix(t, "nvarchar") ||
+		strings.HasPrefix(t, "clob")
 }
 
 // fqdsn returns the fully-qualified datasource name.
