@@ -479,7 +479,7 @@ func (s *Store) Load(r io.Reader, sz int) (int64, error) {
 
 		queries = append(queries, cmd)
 		if len(queries) == sz {
-			_, err = s.Execute(queries, false, false)
+			_, err = s.Execute(queries, false, true)
 			if err != nil {
 				return n, err
 			}
@@ -490,7 +490,7 @@ func (s *Store) Load(r io.Reader, sz int) (int64, error) {
 
 	// Flush residual
 	if len(queries) > 0 {
-		_, err = s.Execute(queries, false, false)
+		_, err = s.Execute(queries, false, true)
 		if err != nil {
 			return n, err
 		}

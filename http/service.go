@@ -103,7 +103,7 @@ const (
 	PermBackup = "backup"
 
 	// LoadBatchSz is the batch size for loading a dump file.
-	LoadBatchSz = 100
+	LoadBatchSz = 1000
 )
 
 func init() {
