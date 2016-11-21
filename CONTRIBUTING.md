@@ -10,7 +10,7 @@ If you open a pull request, please ensure the commit history is clean. Squash th
 Please avoid using libaries other than those available in the standard library, unless absolutely necessary. This requirement is relaxed somewhat for software other than rqlite node software itself. To understand why this requirement is in place, check out this [post](https://blog.gopheracademy.com/advent-2014/case-against-3pl/). 
 
 ## Building rqlite
-*Building rqlite requires Go 1.5 or later. [gvm](https://github.com/moovweb/gvm) is a great tool for managing your version of Go.*
+*Building rqlite requires Go 1.7 or later. [gvm](https://github.com/moovweb/gvm) is a great tool for managing your version of Go.*
 
 Download, build, and run rqlite like so (tested on 64-bit Kubuntu 14.04 and OSX):
 
