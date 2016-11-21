@@ -4,6 +4,7 @@ package db
 
 import (
 	"database/sql/driver"
+	"expvar"
 	"fmt"
 	"io"
 	"time"
@@ -17,13 +18,24 @@ const (
 	fkChecks         = "PRAGMA foreign_keys"
 	fkChecksEnabled  = "PRAGMA foreign_keys=ON"
 	fkChecksDisabled = "PRAGMA foreign_keys=OFF"
+
+	numExecutions   = "executions"
+	numQueries      = "queries"
+	numTransactions = "transactions"
 )
 
 // DBVersion is the SQLite version.
 var DBVersion string
 
+// stats captures stats for the DB layer.
+var stats *expvar.Map
+
 func init() {
 	DBVersion, _, _ = sqlite3.Version()
+	stats = expvar.NewMap("db")
+	stats.Add(numExecutions, 0)
+	stats.Add(numQueries, 0)
+	stats.Add(numTransactions, 0)
 }
 
 // DB is the SQL database.
@@ -161,6 +173,9 @@ func (db *DB) FKConstraints() (bool, error) {
 
 // Execute executes queries that modify the database.
 func (db *DB) Execute(queries []string, tx, xTime bool) ([]*Result, error) {
+	stats.Add(numQueries, 1)
+	stats.Add(numExecutions, int64(len(queries)))
+
 	type Execer interface {
 		Exec(query string, args []driver.Value) (driver.Result, error)
 	}
@@ -254,6 +269,8 @@ func (db *DB) Execute(queries []string, tx, xTime bool) ([]*Result, error) {
 
 // Query executes queries that return rows, but don't modify the database.
 func (db *DB) Query(queries []string, tx, xTime bool) ([]*Rows, error) {
+	stats.Add(numQueries, int64(len(queries)))
+
 	type Queryer interface {
 		Query(query string, args []driver.Value) (driver.Rows, error)
 	}
