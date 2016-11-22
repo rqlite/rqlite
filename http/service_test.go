@@ -393,7 +393,7 @@ func (m *MockStore) Backup(leader bool) ([]byte, error) {
 	return nil, nil
 }
 
-func (m *MockStore) Load(r io.Reader, sz int) (int64, error) {
+func (m *MockStore) Load(r io.Reader) (int, error) {
 	return 0, nil
 }
 

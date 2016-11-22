@@ -56,7 +56,7 @@ type Store interface {
 	Backup(leader bool) ([]byte, error)
 
 	// Load loads a SQLite .dump state from a reader
-	Load(r io.Reader, sz int) (int64, error)
+	Load(r io.Reader) (int, error)
 }
 
 // CredentialStore is the interface credential stores must support.
@@ -101,9 +101,6 @@ const (
 	PermStatus = "status"
 	// PermBackup means user can backup node.
 	PermBackup = "backup"
-
-	// LoadBatchSz is the batch size for loading a dump file.
-	LoadBatchSz = 1000
 )
 
 func init() {
