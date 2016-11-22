@@ -17,18 +17,6 @@ An example backup and dump session is shown below.
   % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
                                  Dload  Upload   Total   Spent    Left  Speed
 100  2048  100  2048    0     0  35932      0 --:--:-- --:--:-- --:--:-- 36571
-~ $ sqlite
-sqlite   sqlite3  
-~ $ sqlite3 bak.sqlite3 
-SQLite version 3.8.7.4 2014-12-09 01:34:36
-Enter ".help" for usage hints.
-sqlite> .dump
-PRAGMA foreign_keys=OFF;
-BEGIN TRANSACTION;
-CREATE TABLE foo (id integer not null primary key, name text);
-INSERT INTO "foo" VALUES(1,'fiona');
-COMMIT;
-sqlite> 
 ~ $ sqlite3 bak.sqlite3 .dump >dump.sql
 ~ $ cat dump.sql 
 PRAGMA foreign_keys=OFF;
