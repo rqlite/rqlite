@@ -19,9 +19,11 @@ const (
 	fkChecksEnabled  = "PRAGMA foreign_keys=ON"
 	fkChecksDisabled = "PRAGMA foreign_keys=OFF"
 
-	numExecutions   = "executions"
-	numQueries      = "queries"
-	numTransactions = "transactions"
+	numExecutions      = "executions"
+	numExecutionErrors = "execution_errors"
+	numQueries         = "queries"
+	numETx             = "execute_transactions"
+	numQTx             = "query_transactions"
 )
 
 // DBVersion is the SQLite version.
@@ -34,8 +36,11 @@ func init() {
 	DBVersion, _, _ = sqlite3.Version()
 	stats = expvar.NewMap("db")
 	stats.Add(numExecutions, 0)
+	stats.Add(numExecutionErrors, 0)
 	stats.Add(numQueries, 0)
-	stats.Add(numTransactions, 0)
+	stats.Add(numETx, 0)
+	stats.Add(numQTx, 0)
+
 }
 
 // DB is the SQL database.
@@ -173,8 +178,10 @@ func (db *DB) FKConstraints() (bool, error) {
 
 // Execute executes queries that modify the database.
 func (db *DB) Execute(queries []string, tx, xTime bool) ([]*Result, error) {
-	stats.Add(numQueries, 1)
 	stats.Add(numExecutions, int64(len(queries)))
+	if tx {
+		stats.Add(numETx, 1)
+	}
 
 	type Execer interface {
 		Exec(query string, args []driver.Value) (driver.Result, error)
@@ -201,6 +208,8 @@ func (db *DB) Execute(queries []string, tx, xTime bool) ([]*Result, error) {
 		// handleError sets the error field on the given result. It returns
 		// whether the caller should continue processing or break.
 		handleError := func(result *Result, err error) bool {
+			stats.Add(numExecutionErrors, 1)
+
 			result.Error = err.Error()
 			allResults = append(allResults, result)
 			if tx {
@@ -270,6 +279,9 @@ func (db *DB) Execute(queries []string, tx, xTime bool) ([]*Result, error) {
 // Query executes queries that return rows, but don't modify the database.
 func (db *DB) Query(queries []string, tx, xTime bool) ([]*Rows, error) {
 	stats.Add(numQueries, int64(len(queries)))
+	if tx {
+		stats.Add(numQTx, 1)
+	}
 
 	type Queryer interface {
 		Query(query string, args []driver.Value) (driver.Rows, error)
