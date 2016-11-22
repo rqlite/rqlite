@@ -5,7 +5,7 @@
 - [PR #206](https://github.com/rqlite/rqlite/pull/206), [#217](https://github.com/rqlite/rqlite/pull/217): Support loading from SQLite dump files (experimental).
 - [PR #211](https://github.com/rqlite/rqlite/pull/211): Diagnostics show actual foreign key constraint state.
 - [PR #212](https://github.com/rqlite/rqlite/pull/212): Add database configuration to diagnostics output.
-- [PR #224](https://github.com/rqlite/rqlite/pull/224): Add low-level database layer expvar stats.
+- [PR #224](https://github.com/rqlite/rqlite/pull/224), [PR #225](https://github.com/rqlite/rqlite/pull/225): Add low-level database layer expvar stats.
 
 ## 3.6.0 (October 1st 2016)
 - [PR #195](https://github.com/rqlite/rqlite/pull/195): Set Content-type "application/json" on all HTTP responses.
