@@ -382,7 +382,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	n, err := s.store.Load(r.Body, LoadBatchSz)
+	n, err := s.store.Load(r.Body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
