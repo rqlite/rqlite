@@ -225,7 +225,7 @@ COMMIT;
 	if err != nil {
 		t.Fatalf("failed to load dump: %s", err.Error())
 	}
-	if n != 2 {
+	if n != 3 {
 		t.Fatal("wrong number of statements loaded")
 	}
 
@@ -265,8 +265,8 @@ COMMIT;
 	if err != nil {
 		t.Fatalf("failed to load dump: %s", err.Error())
 	}
-	if n != 2 {
-		t.Fatal("wrong number of statements loaded")
+	if n != 3 {
+		t.Fatal("wrong number of statements loaded, exp: 2, got: ", n)
 	}
 
 	// Check that data were loaded correctly.
@@ -301,8 +301,8 @@ COMMIT;
 	if err != nil {
 		t.Fatalf("failed to load dump: %s", err.Error())
 	}
-	if n != 0 {
-		t.Fatal("wrong number of statements loaded")
+	if n != 1 {
+		t.Fatal("wrong number of statements loaded, exp: 1, got: ", n)
 	}
 }
 
