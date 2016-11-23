@@ -442,7 +442,7 @@ func (s *Store) Execute(queries []string, timings, tx bool) ([]*sql.Result, erro
 }
 
 // Load loads a SQLite .dump state from a reader.
-func (s *Store) Load(r io.Reader, sz int) (int64, error) {
+func (s *Store) Load(r io.Reader) (int, error) {
 	if s.raft.State() != raft.Leader {
 		return 0, ErrNotLeader
 	}
@@ -458,15 +458,13 @@ func (s *Store) Load(r io.Reader, sz int) (int64, error) {
 
 	// Read the dump, executing the commands.
 	var queries []string
-	var n int64
 	scanner := parser.NewScanner(r)
 	for {
 		cmd, err := scanner.Scan()
 		if err != nil && err != io.EOF {
-			return n, err
+			return len(queries), err
 		}
-		if cmd == "PRAGMA foreign_keys=OFF" ||
-			cmd == "BEGIN TRANSACTION" ||
+		if cmd == "BEGIN TRANSACTION" ||
 			cmd == "COMMIT" {
 			continue
 		}
@@ -478,30 +476,20 @@ func (s *Store) Load(r io.Reader, sz int) (int64, error) {
 		}
 
 		queries = append(queries, cmd)
-		if len(queries) == sz {
-			_, err = s.Execute(queries, false, true)
-			if err != nil {
-				return n, err
-			}
-			n += int64(len(queries))
-			queries = nil
-		}
 	}
 
-	// Flush residual
 	if len(queries) > 0 {
 		_, err = s.Execute(queries, false, true)
 		if err != nil {
-			return n, err
+			return len(queries), err
 		}
-		n += int64(len(queries))
 	}
 
 	// Restore FK constraints to starting state.
 	if err := s.db.EnableFKConstraints(currFK); err != nil {
-		return n, err
+		return len(queries), err
 	}
-	return n, nil
+	return len(queries), nil
 }
 
 // Backup return a consistent snapshot of the underlying database.
