@@ -447,15 +447,6 @@ func (s *Store) Load(r io.Reader) (int, error) {
 		return 0, ErrNotLeader
 	}
 
-	// Disable FK constraints for loading.
-	currFK, err := s.db.FKConstraints()
-	if err != nil {
-		return 0, err
-	}
-	if err := s.db.EnableFKConstraints(false); err != nil {
-		return 0, err
-	}
-
 	// Read the dump, executing the commands.
 	var queries []string
 	scanner := parser.NewScanner(r)
@@ -479,16 +470,12 @@ func (s *Store) Load(r io.Reader) (int, error) {
 	}
 
 	if len(queries) > 0 {
-		_, err = s.Execute(queries, false, true)
+		_, err := s.Execute(queries, false, true)
 		if err != nil {
 			return len(queries), err
 		}
 	}
 
-	// Restore FK constraints to starting state.
-	if err := s.db.EnableFKConstraints(currFK); err != nil {
-		return len(queries), err
-	}
 	return len(queries), nil
 }
 
