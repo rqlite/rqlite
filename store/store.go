@@ -478,7 +478,6 @@ func (s *Store) Load(r io.Reader) (int, error) {
 		queries = append(queries, cmd)
 	}
 
-	// Flush residual
 	if len(queries) > 0 {
 		_, err = s.Execute(queries, false, true)
 		if err != nil {
