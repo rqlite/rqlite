@@ -18,12 +18,12 @@ An example backup and dump session is shown below.
                                  Dload  Upload   Total   Spent    Left  Speed
 100  2048  100  2048    0     0  35932      0 --:--:-- --:--:-- --:--:-- 36571
 ~ $ sqlite3 bak.sqlite3 .dump >dump.sql
-~ $ cat dump.sql 
+~ $ cat dump.sql
 PRAGMA foreign_keys=OFF;
 BEGIN TRANSACTION;
 CREATE TABLE foo (id integer not null primary key, name text);
 INSERT INTO "foo" VALUES(1,'fiona');
 COMMIT;
-~ $ 
+~ $
 ```
-To restore an rqlite system from the dump, issue each command between `BEGIN TRANSACTION` and `COMMIT` to rqlite, using the HTTP API.
+To restore an rqlite system from the dump, issue each command between `BEGIN TRANSACTION` and `COMMIT` to rqlite, using the HTTP API. You can also try loading the entire file in a single operation using the experimental [restore-from-dump API](https://github.com/rqlite/rqlite/blob/master/doc/RESTORE_FROM_SQLITE.md).
