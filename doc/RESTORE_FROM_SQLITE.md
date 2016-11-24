@@ -26,4 +26,4 @@ $ rqlite
 +----+-------+
 ```
 
-The behavior of the restore operation when data already exists on the node is undefined.
+The behavior of the restore operation when data already exists on the node is undefined. Also, please note that SQLite dump files normally contain a command to disable Foreign Key constraints. If you wish to re-enable Foreign Key constraints after the load operation completes, check out [this documentation](https://github.com/rqlite/rqlite/blob/master/doc/FOREIGN_KEY_CONSTRAINTS.md).
