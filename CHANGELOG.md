@@ -1,4 +1,4 @@
-## 3.7.0 (unreleased)
+## 3.7.0 (November 24th 2016)
 - With this release rqlite is moving to Go 1.7.
 - [PR #206](https://github.com/rqlite/rqlite/pull/206), [#217](https://github.com/rqlite/rqlite/pull/217): Support loading data directly from SQLite dump files.
 - [PR #209](https://github.com/rqlite/rqlite/pull/209): Tweak help output.
