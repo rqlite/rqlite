@@ -11,6 +11,8 @@ import (
 	"sort"
 	"testing"
 	"time"
+
+	"github.com/rqlite/rqlite/chinook"
 )
 
 type mockSnapshotSink struct {
@@ -225,7 +227,7 @@ COMMIT;
 	if err != nil {
 		t.Fatalf("failed to load dump: %s", err.Error())
 	}
-	if n != 3 {
+	if n != 5 {
 		t.Fatal("wrong number of statements loaded")
 	}
 
@@ -265,7 +267,7 @@ COMMIT;
 	if err != nil {
 		t.Fatalf("failed to load dump: %s", err.Error())
 	}
-	if n != 3 {
+	if n != 5 {
 		t.Fatal("wrong number of statements loaded, exp: 2, got: ", n)
 	}
 
@@ -301,7 +303,7 @@ COMMIT;
 	if err != nil {
 		t.Fatalf("failed to load dump: %s", err.Error())
 	}
-	if n != 1 {
+	if n != 3 {
 		t.Fatal("wrong number of statements loaded, exp: 1, got: ", n)
 	}
 }
@@ -324,6 +326,59 @@ func Test_SingleNodeLoadEmpty(t *testing.T) {
 	if n != 0 {
 		t.Fatal("wrong number of statements loaded")
 	}
+}
+
+func Test_SingleNodeLoadChinook(t *testing.T) {
+	s := mustNewStore(true)
+	defer os.RemoveAll(s.Path())
+
+	if err := s.Open(true); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	s.WaitForLeader(10 * time.Second)
+
+	buf := bytes.NewBufferString(chinook.DB)
+	_, err := s.Load(buf)
+	if err != nil {
+		t.Fatalf("failed to load dump: %s", err.Error())
+	}
+
+	// Check that data were loaded correctly.
+
+	r, err := s.Query([]string{`SELECT count(*) FROM track`}, false, true, Strong)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `["count(*)"]`, asJSON(r[0].Columns); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[3503]]`, asJSON(r[0].Values); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	r, err = s.Query([]string{`SELECT count(*) FROM album`}, false, true, Strong)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `["count(*)"]`, asJSON(r[0].Columns); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[347]]`, asJSON(r[0].Values); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	r, err = s.Query([]string{`SELECT count(*) FROM artist`}, false, true, Strong)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `["count(*)"]`, asJSON(r[0].Columns); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[275]]`, asJSON(r[0].Values); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
 }
 
 func Test_MultiNodeJoinRemove(t *testing.T) {

@@ -1,6 +1,7 @@
 ## 3.7.0 (unreleased)
 - With this release rqlite is moving to Go 1.7.
 - [PR #209](https://github.com/rqlite/rqlite/pull/209): Tweak help output.
+- [PR #229](https://github.com/rqlite/rqlite/pull/229): Remove explicit control of foreign key constraints.
 - [PR #207](https://github.com/rqlite/rqlite/pull/207): Database supports returning foreign key constraint status.
 - [PR #206](https://github.com/rqlite/rqlite/pull/206), [#217](https://github.com/rqlite/rqlite/pull/217): Support loading from SQLite dump files (experimental).
 - [PR #211](https://github.com/rqlite/rqlite/pull/211): Diagnostics show actual foreign key constraint state.

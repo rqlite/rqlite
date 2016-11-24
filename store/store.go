@@ -139,7 +139,6 @@ func (c *clusterMeta) AddrForPeer(addr string) string {
 type DBConfig struct {
 	DSN    string // Any custom DSN
 	Memory bool   // Whether the database is in-memory only.
-	NoFK   bool   // Disable foreign key constraints
 }
 
 // NewDBConfig returns a new DB config instance.
@@ -194,12 +193,6 @@ func (s *Store) Open(enableSingle bool) error {
 		return err
 	}
 	s.db = db
-
-	// Configure foreign key constraints.
-	if err := s.db.EnableFKConstraints(!s.dbConf.NoFK); err != nil {
-		return err
-	}
-	s.logger.Printf("SQLite foreign key constraints %s", enabledFromBool(!s.dbConf.NoFK))
 
 	// Get the Raft configuration for this store.
 	config := s.raftConfig()
@@ -447,15 +440,6 @@ func (s *Store) Load(r io.Reader) (int, error) {
 		return 0, ErrNotLeader
 	}
 
-	// Disable FK constraints for loading.
-	currFK, err := s.db.FKConstraints()
-	if err != nil {
-		return 0, err
-	}
-	if err := s.db.EnableFKConstraints(false); err != nil {
-		return 0, err
-	}
-
 	// Read the dump, executing the commands.
 	var queries []string
 	scanner := parser.NewScanner(r)
@@ -463,10 +447,6 @@ func (s *Store) Load(r io.Reader) (int, error) {
 		cmd, err := scanner.Scan()
 		if err != nil && err != io.EOF {
 			return len(queries), err
-		}
-		if cmd == "BEGIN TRANSACTION" ||
-			cmd == "COMMIT" {
-			continue
 		}
 		if cmd == "" {
 			if err == io.EOF {
@@ -479,16 +459,12 @@ func (s *Store) Load(r io.Reader) (int, error) {
 	}
 
 	if len(queries) > 0 {
-		_, err = s.Execute(queries, false, true)
+		_, err := s.Execute(queries, false, false)
 		if err != nil {
 			return len(queries), err
 		}
 	}
 
-	// Restore FK constraints to starting state.
-	if err := s.db.EnableFKConstraints(currFK); err != nil {
-		return len(queries), err
-	}
 	return len(queries), nil
 }
 
