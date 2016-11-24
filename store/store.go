@@ -448,10 +448,6 @@ func (s *Store) Load(r io.Reader) (int, error) {
 		if err != nil && err != io.EOF {
 			return len(queries), err
 		}
-		if cmd == "BEGIN TRANSACTION" ||
-			cmd == "COMMIT" {
-			continue
-		}
 		if cmd == "" {
 			if err == io.EOF {
 				break
@@ -463,7 +459,7 @@ func (s *Store) Load(r io.Reader) (int, error) {
 	}
 
 	if len(queries) > 0 {
-		_, err := s.Execute(queries, false, true)
+		_, err := s.Execute(queries, false, false)
 		if err != nil {
 			return len(queries), err
 		}
