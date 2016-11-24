@@ -192,7 +192,7 @@ INSERT INTO foo (n) VALUES(random());
 You can learn how check status and diagnostics [here](https://github.com/rqlite/rqlite/blob/master/doc/DIAGNOSTICS.md).
 
 ## Backup and restore
-Learn how to hot backup your rqlite cluster [here](https://github.com/rqlite/rqlite/blob/master/doc/BACKUPS.md). You call load data [directly from a SQLite dump file](https://github.com/rqlite/rqlite/blob/master/doc/RESTORE_FROM_SQLITE.md).
+Learn how to hot backup your rqlite cluster [here](https://github.com/rqlite/rqlite/blob/master/doc/BACKUPS.md). You can also load data [directly from a SQLite dump file](https://github.com/rqlite/rqlite/blob/master/doc/RESTORE_FROM_SQLITE.md).
 
 ## Security
 You can learn about securing access, and restricting users' access, to rqlite [here](https://github.com/rqlite/rqlite/blob/master/doc/SECURITY.md).
