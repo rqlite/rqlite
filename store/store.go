@@ -139,7 +139,6 @@ func (c *clusterMeta) AddrForPeer(addr string) string {
 type DBConfig struct {
 	DSN    string // Any custom DSN
 	Memory bool   // Whether the database is in-memory only.
-	NoFK   bool   // Disable foreign key constraints
 }
 
 // NewDBConfig returns a new DB config instance.
@@ -194,12 +193,6 @@ func (s *Store) Open(enableSingle bool) error {
 		return err
 	}
 	s.db = db
-
-	// Configure foreign key constraints.
-	if err := s.db.EnableFKConstraints(!s.dbConf.NoFK); err != nil {
-		return err
-	}
-	s.logger.Printf("SQLite foreign key constraints %s", enabledFromBool(!s.dbConf.NoFK))
 
 	// Get the Raft configuration for this store.
 	config := s.raftConfig()

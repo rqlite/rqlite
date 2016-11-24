@@ -80,7 +80,6 @@ var pprofEnabled bool
 var dsn string
 var onDisk bool
 var noVerifySelect bool
-var noFKCheck bool
 var raftSnapThreshold uint64
 var raftHeartbeatTimeout string
 var showVersion bool
@@ -104,7 +103,6 @@ func init() {
 	flag.StringVar(&dsn, "dsn", "", `SQLite DSN parameters. E.g. "cache=shared&mode=memory"`)
 	flag.BoolVar(&onDisk, "ondisk", false, "Use an on-disk SQLite database")
 	flag.BoolVar(&noVerifySelect, "nosel", false, "Don't verify that all queries begin with SELECT")
-	flag.BoolVar(&noFKCheck, "nofk", false, "Don't enforce foreign key constraints")
 	flag.BoolVar(&showVersion, "version", false, "Show version information and exit")
 	flag.StringVar(&raftHeartbeatTimeout, "rafttimeout", "1s", "Raft heartbeat timeout")
 	flag.Uint64Var(&raftSnapThreshold, "raftsnap", 8192, "Number of outstanding log entries that trigger snapshot")
@@ -168,7 +166,6 @@ func main() {
 		log.Fatalf("failed to determine absolute data path: %s", err.Error())
 	}
 	dbConf := store.NewDBConfig(dsn, !onDisk)
-	dbConf.NoFK = noFKCheck
 
 	store := store.New(dbConf, dataPath, raftTn)
 	if err := store.Open(joinAddr == ""); err != nil {
