@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rqlite/rqlite/chinook"
+	"github.com/rqlite/rqlite/testdata/chinook"
 )
 
 type mockSnapshotSink struct {
