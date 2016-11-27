@@ -1,3 +1,6 @@
+## 3.7.1 (unreleased)
+- [PR #230](https://github.com/rqlite/rqlite/pull/230): Move Chinook test data to idiomatic testdata directory.
+
 ## 3.7.0 (November 24th 2016)
 - With this release rqlite is moving to Go 1.7.
 - [PR #206](https://github.com/rqlite/rqlite/pull/206), [#217](https://github.com/rqlite/rqlite/pull/217): Support loading data directly from SQLite dump files.
