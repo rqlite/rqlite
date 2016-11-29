@@ -178,7 +178,22 @@ func Test_ScannerMultiStatementQuotesEmbedded(t *testing.T) {
 	}
 }
 
-// XX I am missing this case: '"' ????
+func Test_ScannerMultiStatementQuotesEmbeddedSingle(t *testing.T) {
+	e := []string{`SELECT * FROM "foo;'barx";`, `SELECT * FROM bar;`}
+	r := bytes.NewBufferString(strings.Join(e, ""))
+	s := NewScanner(r)
+
+	for i := range e {
+		l, err := s.Scan()
+		if err != nil {
+			t.Fatal("Scan of multi statement failed")
+		}
+
+		if l != strings.Trim(e[i], "\n;") {
+			t.Fatalf("Scan of multi statement returned incorrect value, exp %s, got %s", e[i], l)
+		}
+	}
+}
 
 func Test_ScannerMultiLine(t *testing.T) {
 	stmt := `CREATE TABLE [Customer]
