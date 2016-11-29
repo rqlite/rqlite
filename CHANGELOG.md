@@ -1,4 +1,4 @@
-## 3.7.1 (unreleased)
+## 3.8.0 (unreleased)
 - [PR #230](https://github.com/rqlite/rqlite/pull/230): Move Chinook test data to idiomatic testdata directory.
 - [PR #232](https://github.com/rqlite/rqlite/pull/232): rqlite CLI now supports accessing secured rqlited nodes. Thanks @tych0
 
