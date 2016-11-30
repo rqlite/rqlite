@@ -471,7 +471,7 @@ func (s *Store) Load(r io.Reader) (int, error) {
 // Backup return a consistent snapshot of the underlying database.
 func (s *Store) Backup(leader bool) ([]byte, error) {
 	if leader && s.raft.State() != raft.Leader {
-		return nil, fmt.Errorf("not leader")
+		return nil, ErrNotLeader
 	}
 
 	f, err := ioutil.TempFile("", "rqlilte-bak-")
