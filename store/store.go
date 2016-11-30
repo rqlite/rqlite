@@ -667,7 +667,7 @@ func (s *Store) Apply(l *raft.Log) interface{} {
 }
 
 // Snapshot returns a snapshot of the database. The caller must ensure that
-// no transaction is taking place during this call. Hashsicorp Raft guarantees
+// no transaction is taking place during this call. Hashicorp Raft guarantees
 // that this function will not be called concurrently with Apply.
 //
 // http://sqlite.org/howtocorrupt.html states it is safe to do this
