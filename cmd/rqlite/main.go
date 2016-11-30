@@ -19,8 +19,8 @@ type argT struct {
 	Protocol string `cli:"s,scheme" usage:"protocol scheme (http or https)" dft:"http"`
 	Host     string `cli:"H,host" usage:"rqlited host address" dft:"127.0.0.1"`
 	Port     uint16 `cli:"p,port" usage:"rqlited host port" dft:"4001"`
-	Prefix   string `cli:"P,prefix" usage:"rqlited HTTP prefix" dft:"/"`
-	Insecure bool   `cli:"insecure" usage:"allow invalid https certs" dft:"false"`
+	Prefix   string `cli:"P,prefix" usage:"rqlited HTTP URL prefix" dft:"/"`
+	Insecure bool   `cli:"insecure" usage:"do not verify rqlited HTTPS certificate" dft:"false"`
 }
 
 func main() {
