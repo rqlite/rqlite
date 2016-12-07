@@ -1,5 +1,5 @@
 # Foreign Key Constraints
 
-Since SQLite does not enforce foreign key constraints by default, neither does rqlite. However you can enable foreign key constraints on rqlite simply by sending `PRAGMA foreign_keys=ON` via the standard [write API](https://github.com/rqlite/rqlite/blob/master/README.md#writing-data). Constraints will then remain enabled, even across restarts, unless the statement `PRAGMA foreign_keys=OFF` is issued.
+Since SQLite does not enforce foreign key constraints by default, neither does rqlite. However you can enable foreign key constraints on rqlite simply by sending `PRAGMA foreign_keys=ON` via the [CLI](https://github.com/rqlite/rqlite/tree/master/cmd/rqlite) or the [write API](https://github.com/rqlite/rqlite/blob/master/README.md#writing-data). Constraints will then remain enabled, even across restarts, unless the statement `PRAGMA foreign_keys=OFF` is issued.
 
 You can check the current state of foreign key constraints at anytime via the [status API](https://github.com/rqlite/rqlite/blob/master/doc/DIAGNOSTICS.md).
