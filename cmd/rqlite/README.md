@@ -11,7 +11,7 @@ go build -o rqlite
 ## Usage
 
 ```sh
-$> ./rqlite -h
+$> rqlite -h
 Options:
 
   -h, --help
