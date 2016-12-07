@@ -40,7 +40,7 @@ Options:
 $> rqlited ~/node.1
 
 # start rqlite CLI
-$> ./rqlite
+$> rqlite
 # now, we have entered the rqlite terminal
 127.0.0.1:4001> CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)
 1 row affected (0.015 sec)
