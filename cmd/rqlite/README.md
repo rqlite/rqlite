@@ -17,14 +17,20 @@ Options:
   -h, --help
       display help
 
-  -P, --scheme[=http]
-      protocol scheme(http or https)
+  -s, --scheme[=http]
+      protocol scheme (http or https)
 
   -H, --host[=127.0.0.1]
       rqlited host address
 
   -p, --port[=4001]
-      rqlited listening http(s) port
+      rqlited host port
+
+  -P, --prefix[=/]
+      rqlited HTTP URL prefix
+
+  --insecure[=false]
+      do not verify rqlited HTTPS certificate
 ```
 
 ## Example
