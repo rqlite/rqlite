@@ -769,6 +769,10 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 	}()
 }
 
+func (s *Store) RegisterObserver(o *raft.Observer) {
+	s.raft.RegisterObserver(o)
+}
+
 type fsmSnapshot struct {
 	database []byte
 	meta     []byte
