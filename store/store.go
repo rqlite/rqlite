@@ -769,8 +769,14 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 	}()
 }
 
+// RegisterObserver registers an observer of Raft events
 func (s *Store) RegisterObserver(o *raft.Observer) {
 	s.raft.RegisterObserver(o)
+}
+
+// DeregisterObserver deregisters an observer of Raft events
+func (s *Store) DeregisterObserver(o *raft.Observer) {
+	s.raft.DeregisterObserver(o)
 }
 
 type fsmSnapshot struct {
