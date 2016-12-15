@@ -169,15 +169,30 @@ type Store struct {
 	HeartbeatTimeout  time.Duration
 }
 
+// StoreConfig represents the configuration of the underlying Store.
+type StoreConfig struct {
+	DBConf    *DBConfig      // The DBConfig object for this Store.
+	Dir       string         // The working directory for raft.
+	Tn        Transport      // The underlying Transport for raft.
+	Logger    *log.Logger    // The logger to use to log stuff.
+	PeerStore raft.PeerStore // The PeerStore to use for raft.
+}
+
 // New returns a new Store.
-func New(dbConf *DBConfig, dir string, tn Transport) *Store {
+func New(c *StoreConfig) *Store {
+	logger := c.Logger
+	if logger == nil {
+		logger = log.New(os.Stderr, "[store] ", log.LstdFlags)
+	}
+
 	return &Store{
-		raftDir:       dir,
-		raftTransport: tn,
-		dbConf:        dbConf,
-		dbPath:        filepath.Join(dir, sqliteFile),
+		raftDir:       c.Dir,
+		raftTransport: c.Tn,
+		dbConf:        c.DBConf,
+		dbPath:        filepath.Join(c.Dir, sqliteFile),
 		meta:          newClusterMeta(),
-		logger:        log.New(os.Stderr, "[store] ", log.LstdFlags),
+		logger:        logger,
+		peerStore:     c.PeerStore,
 	}
 }
 
@@ -215,8 +230,10 @@ func (s *Store) Open(enableSingle bool) error {
 	// Setup Raft communication.
 	transport := raft.NewNetworkTransport(s.raftTransport, 3, 10*time.Second, os.Stderr)
 
-	// Create peer storage.
-	s.peerStore = raft.NewJSONPeers(s.raftDir, transport)
+	// Create peer storage if necesssary.
+	if s.peerStore == nil {
+		s.peerStore = raft.NewJSONPeers(s.raftDir, transport)
+	}
 
 	// Create the snapshot store. This allows Raft to truncate the log.
 	snapshots, err := raft.NewFileSnapshotStore(s.raftDir, retainSnapshotCount, os.Stderr)
