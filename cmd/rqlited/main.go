@@ -167,7 +167,11 @@ func main() {
 	}
 	dbConf := store.NewDBConfig(dsn, !onDisk)
 
-	store := store.New(dbConf, dataPath, raftTn)
+	store := store.New(&store.StoreConfig{
+		DBConf: dbConf,
+		Dir:    dataPath,
+		Tn:     raftTn,
+	})
 	if err := store.Open(joinAddr == ""); err != nil {
 		log.Fatalf("failed to open store: %s", err.Error())
 	}

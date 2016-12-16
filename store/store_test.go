@@ -696,7 +696,11 @@ func mustNewStore(inmem bool) *Store {
 	defer os.RemoveAll(path)
 
 	cfg := NewDBConfig("", inmem)
-	s := New(cfg, path, mustMockTransport("localhost:0"))
+	s := New(&StoreConfig{
+		DBConf: cfg,
+		Dir:    path,
+		Tn:     mustMockTransport("localhost:0"),
+	})
 	if s == nil {
 		panic("failed to create new store")
 	}

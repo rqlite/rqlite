@@ -242,7 +242,11 @@ func mustNewNode(enableSingle bool) *Node {
 	}
 
 	dbConf := store.NewDBConfig("", false)
-	node.Store = store.New(dbConf, node.Dir, mustMockTransport("localhost:0"))
+	node.Store = store.New(&store.StoreConfig{
+		DBConf: dbConf,
+		Dir:    node.Dir,
+		Tn:     mustMockTransport("localhost:0"),
+	})
 	if err := node.Store.Open(enableSingle); err != nil {
 		node.Deprovision()
 		panic(fmt.Sprintf("failed to open store: %s", err.Error()))
