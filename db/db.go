@@ -417,6 +417,7 @@ func normalizeRowValues(row []driver.Value, types []string) []interface{} {
 // http://www.sqlite.org/datatype3.html
 func isTextType(t string) bool {
 	return t == "text" ||
+		t == "" ||
 		strings.HasPrefix(t, "varchar") ||
 		strings.HasPrefix(t, "varying character") ||
 		strings.HasPrefix(t, "nchar") ||
