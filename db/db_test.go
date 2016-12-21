@@ -143,6 +143,30 @@ func Test_SimpleSingleStatements(t *testing.T) {
 	}
 }
 
+func Test_SimpleSingleConcatStatements(t *testing.T) {
+	db, path := mustCreateDatabase()
+	defer db.Close()
+	defer os.Remove(path)
+
+	_, err := db.Execute([]string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"}, false, false)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	_, err = db.Execute([]string{`INSERT INTO foo(name) VALUES("fiona")`}, false, false)
+	if err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+
+	r, err := db.Query([]string{`SELECT id || "_bar", name FROM foo`}, false, false)
+	if err != nil {
+		t.Fatalf("failed to query table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id || \"_bar\"","name"],"types":["","text"],"values":[["1_bar","fiona"]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
 func Test_SimpleMultiStatements(t *testing.T) {
 	db, path := mustCreateDatabase()
 	defer db.Close()
