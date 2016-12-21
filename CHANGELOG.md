@@ -1,6 +1,6 @@
 ## 3.9.0 (unreleased)
 - [PR #239](https://github.com/rqlite/rqlite/pull/239): Add an API to the `Store` layer for custom peers storage and logging. Thanks @tych0
-- [PR #221](https://github.com/rqlite/rqlite/pull/221): Start full support for various SQLite text types.
+- [PR #221](https://github.com/rqlite/rqlite/pull/221): Start full support for various SQLite text types. Fix [issue #240](https://github.com/rqlite/rqlite/issues/240).
 
 ## 3.8.0 (December 15th 2016)
 - [PR #230](https://github.com/rqlite/rqlite/pull/230): Move Chinook test data to idiomatic testdata directory.
