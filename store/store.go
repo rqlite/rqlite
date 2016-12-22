@@ -683,13 +683,17 @@ func (s *Store) Apply(l *raft.Log) interface{} {
 	}
 }
 
-// Snapshot returns a snapshot of the database. The caller must ensure that
-// no transaction is taking place during this call. Hashicorp Raft guarantees
-// that this function will not be called concurrently with Apply.
+// Database() returns a copy of the underlying database. The caller should
+// ensure that no transaction is taking place during this call, or an error may
+// be returned.
 //
 // http://sqlite.org/howtocorrupt.html states it is safe to do this
 // as long as no transaction is in progress.
-func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
+func (s *Store) Database(leader bool) ([]byte, error) {
+	if leader && s.raft.State() != raft.Leader {
+		return nil, ErrNotLeader
+	}
+
 	// Ensure only one snapshot can take place at once, and block all queries.
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -705,8 +709,19 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 		return nil, err
 	}
 
+	return ioutil.ReadFile(f.Name())
+}
+
+// Snapshot returns a snapshot of the database. The caller must ensure that
+// no transaction is taking place during this call. Hashicorp Raft guarantees
+// that this function will not be called concurrently with Apply.
+//
+// http://sqlite.org/howtocorrupt.html states it is safe to do this
+// as long as no transaction is in progress.
+func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 	fsm := &fsmSnapshot{}
-	fsm.database, err = ioutil.ReadFile(f.Name())
+	var err error
+	fsm.database, err = s.Database(false)
 	if err != nil {
 		log.Printf("Failed to read database for snapshot: %s", err.Error())
 		return nil, err
