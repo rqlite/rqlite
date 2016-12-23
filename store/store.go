@@ -75,6 +75,7 @@ func newCommand(t commandType, d interface{}) (*command, error) {
 // databaseSub is a command sub which involves interaction with the database.
 type databaseSub struct {
 	Tx      bool     `json:"tx,omitempty"`
+	Conv    bool     `json:"conv,omitempty"`
 	Queries []string `json:"queries,omitempty"`
 	Timings bool     `json:"timings,omitempty"`
 }
@@ -509,8 +510,20 @@ func (s *Store) Backup(leader bool) ([]byte, error) {
 	return b, nil
 }
 
-// Query executes queries that return rows, and do not modify the database.
+// Query executes queries that return rows, and do not modify the database. Any values with TEXT
+// affinity are automatically converted to strings.
 func (s *Store) Query(queries []string, timings, tx bool, lvl ConsistencyLevel) ([]*sql.Rows, error) {
+	return s.query(queries, timings, tx, true, lvl)
+}
+
+// QueryRaw executes queries that return rows, and do not modify the database.
+// No conversion of TEXT affinity values to string takes place
+func (s *Store) QueryRaw(queries []string, timings, tx bool, lvl ConsistencyLevel) ([]*sql.Rows, error) {
+	return s.query(queries, timings, tx, false, lvl)
+}
+
+// query executes queries that return rows, and do not modify the database.
+func (s *Store) query(queries []string, timings, tx, conv bool, lvl ConsistencyLevel) ([]*sql.Rows, error) {
 	// Allow concurrent queries.
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -518,6 +531,7 @@ func (s *Store) Query(queries []string, timings, tx bool, lvl ConsistencyLevel) 
 	if lvl == Strong {
 		d := &databaseSub{
 			Tx:      tx,
+			Conv:    conv,
 			Queries: queries,
 			Timings: timings,
 		}
@@ -546,7 +560,7 @@ func (s *Store) Query(queries []string, timings, tx bool, lvl ConsistencyLevel) 
 		return nil, ErrNotLeader
 	}
 
-	r, err := s.db.Query(queries, tx, timings)
+	r, err := s.db.Query(queries, tx, conv, timings)
 	return r, err
 }
 
@@ -663,7 +677,7 @@ func (s *Store) Apply(l *raft.Log) interface{} {
 			r, err := s.db.Execute(d.Queries, d.Tx, d.Timings)
 			return &fsmExecuteResponse{results: r, error: err}
 		}
-		r, err := s.db.Query(d.Queries, d.Tx, d.Timings)
+		r, err := s.db.Query(d.Queries, d.Tx, d.Conv, d.Timings)
 		return &fsmQueryResponse{rows: r, error: err}
 	case peer:
 		var d peersSub
