@@ -723,13 +723,13 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 	var err error
 	fsm.database, err = s.Database(false)
 	if err != nil {
-		log.Printf("Failed to read database for snapshot: %s", err.Error())
+		s.logger.Printf("failed to read database for snapshot: %s", err.Error())
 		return nil, err
 	}
 
 	fsm.meta, err = json.Marshal(s.meta)
 	if err != nil {
-		log.Printf("Failed to encode meta for snapshot: %s", err.Error())
+		s.logger.Printf("failed to encode meta for snapshot: %s", err.Error())
 		return nil, err
 	}
 
