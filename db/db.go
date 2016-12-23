@@ -50,8 +50,6 @@ type DB struct {
 	path        string              // Path to database file.
 	dsn         string              // DSN, if any.
 	memory      bool                // In-memory only.
-
-	TextDisable bool // Set to disable TEXT affinity []byte to string
 }
 
 // Result represents the outcome of an operation that changes rows.
@@ -280,7 +278,7 @@ func (db *DB) Execute(queries []string, tx, xTime bool) ([]*Result, error) {
 }
 
 // Query executes queries that return rows, but don't modify the database.
-func (db *DB) Query(queries []string, tx, xTime bool) ([]*Rows, error) {
+func (db *DB) Query(queries []string, tx, conv, xTime bool) ([]*Rows, error) {
 	stats.Add(numQueries, int64(len(queries)))
 	if tx {
 		stats.Add(numQTx, 1)
@@ -346,7 +344,7 @@ func (db *DB) Query(queries []string, tx, xTime bool) ([]*Rows, error) {
 				}
 
 				values := normalizeDriverValues(dest)
-				if !db.TextDisable {
+				if conv {
 					values = normalizeRowValues(dest, rows.Types)
 				}
 				rows.Values = append(rows.Values, values)
