@@ -50,6 +50,8 @@ type DB struct {
 	path        string              // Path to database file.
 	dsn         string              // DSN, if any.
 	memory      bool                // In-memory only.
+
+	TextDisable bool // Set to disable TEXT affinity []byte to string
 }
 
 // Result represents the outcome of an operation that changes rows.
@@ -343,7 +345,10 @@ func (db *DB) Query(queries []string, tx, xTime bool) ([]*Rows, error) {
 					break
 				}
 
-				values := normalizeRowValues(dest, rows.Types)
+				values := normalizeDriverValues(dest)
+				if !db.TextDisable {
+					values = normalizeRowValues(dest, rows.Types)
+				}
 				rows.Values = append(rows.Values, values)
 			}
 			if xTime {
@@ -392,25 +397,33 @@ func (db *DB) Backup(path string) error {
 	return nil
 }
 
+func normalizeDriverValues(in []driver.Value) []interface{} {
+	out := make([]interface{}, len(in))
+	for i := range in {
+		out[i] = in[i]
+	}
+	return out
+}
+
 // normalizeRowValues performs some normalization of values in the returned rows.
 // Text values come over (from sqlite-go) as []byte instead of strings
 // for some reason, so we have explicitly convert (but only when type
 // is "text" so we don't affect BLOB types)
-func normalizeRowValues(row []driver.Value, types []string) []interface{} {
-	values := make([]interface{}, len(types))
-	for i, v := range row {
+func normalizeRowValues(in []driver.Value, types []string) []interface{} {
+	out := make([]interface{}, len(types))
+	for i, v := range in {
 		if isTextType(types[i]) {
 			switch val := v.(type) {
 			case []byte:
-				values[i] = string(val)
+				out[i] = string(val)
 			default:
-				values[i] = val
+				out[i] = val
 			}
 		} else {
-			values[i] = v
+			out[i] = v
 		}
 	}
-	return values
+	return out
 }
 
 // isTextType returns whether the given type has a SQLite text affinity.

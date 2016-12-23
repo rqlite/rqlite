@@ -82,6 +82,31 @@ func Test_LoadInMemory(t *testing.T) {
 	}
 }
 
+func Test_SimpleSingleStatementsNoTextConvert(t *testing.T) {
+    db, path := mustCreateDatabase()
+    db.TextDisable = true
+    defer db.Close()
+    defer os.Remove(path)
+
+    _, err := db.Execute([]string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"}, false, false)
+    if err != nil {
+        t.Fatalf("failed to create table: %s", err.Error())
+    }
+
+    _, err = db.Execute([]string{`INSERT INTO foo(name) VALUES("fiona")`}, false, false)
+    if err != nil {
+        t.Fatalf("failed to insert record: %s", err.Error())
+    }
+
+    r, err := db.Query([]string{`SELECT * FROM foo`}, false, false)
+    if err != nil {
+        t.Fatalf("failed to query table: %s", err.Error())
+    }
+    if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"ZmlvbmE="]]}]`, asJSON(r); exp != got {
+        t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+    }
+}
+
 func Test_SimpleSingleStatements(t *testing.T) {
 	db, path := mustCreateDatabase()
 	defer db.Close()
