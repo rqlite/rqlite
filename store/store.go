@@ -485,7 +485,11 @@ func (s *Store) Load(r io.Reader) (int, error) {
 	return len(queries), nil
 }
 
-// Backup return a consistent snapshot of the underlying database.
+// Backup return a snapshot of the underlying database.
+//
+// If leader is true, this operation is performed with a read consistency
+// level equivalent to "weak". Otherwise no guarantees are made about the
+// read consistentcy level.
 func (s *Store) Backup(leader bool) ([]byte, error) {
 	if leader && s.raft.State() != raft.Leader {
 		return nil, ErrNotLeader
@@ -683,9 +687,11 @@ func (s *Store) Apply(l *raft.Log) interface{} {
 	}
 }
 
-// Database() returns a copy of the underlying database. The caller should
+// Database returns a copy of the underlying database. The caller should
 // ensure that no transaction is taking place during this call, or an error may
-// be returned.
+// be returned. If leader is true, this operation is performed with a read
+// consistency level equivalent to "weak". Otherwise no guarantees are made
+// about the read consistentcy level.
 //
 // http://sqlite.org/howtocorrupt.html states it is safe to do this
 // as long as no transaction is in progress.
