@@ -683,7 +683,7 @@ func (s *Store) Apply(l *raft.Log) interface{} {
 	}
 }
 
-// Database() returns a copy of the underlying database. The caller should
+// Database returns a copy of the underlying database. The caller should
 // ensure that no transaction is taking place during this call, or an error may
 // be returned.
 //
