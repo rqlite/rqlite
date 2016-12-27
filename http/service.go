@@ -97,6 +97,8 @@ const (
 	PermStatus = "status"
 	// PermBackup means user can backup node.
 	PermBackup = "backup"
+	// PermLoad means user can load a SQLite dump into a node.
+	PermLoad = "load"
 )
 
 func init() {
@@ -368,7 +370,7 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
 
 // handleLoad loads the state contained in a .dump output.
 func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
-	if !s.CheckRequestPerm(r, PermBackup) {
+	if !s.CheckRequestPerm(r, PermLoad) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
