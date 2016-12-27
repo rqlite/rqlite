@@ -263,6 +263,7 @@ func Test_401Routes_NoBasicAuth(t *testing.T) {
 		"/db/execute",
 		"/db/query",
 		"/db/backup",
+		"/db/load",
 		"/join",
 		"/delete",
 		"/status",
@@ -294,6 +295,7 @@ func Test_401Routes_BasicAuthBadPassword(t *testing.T) {
 		"/db/execute",
 		"/db/query",
 		"/db/backup",
+		"/db/load",
 		"/join",
 		"/status",
 	} {
@@ -330,6 +332,7 @@ func Test_401Routes_BasicAuthBadPerm(t *testing.T) {
 		"/db/execute",
 		"/db/query",
 		"/db/backup",
+		"/db/load",
 		"/join",
 		"/status",
 	} {

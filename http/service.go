@@ -380,6 +380,8 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	resp := NewResponse()
+
 	timings, err := timings(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -388,15 +390,31 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 
 	b, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-
-	n, err := s.store.Execute([]string{string(b)}, timings, false)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	s.logger.Printf(`.dump data with %d commands loaded OK`, n)
+	r.Body.Close()
+
+	queries := []string{string(b)}
+	results, err := s.store.Execute(queries, timings, false)
+	if err != nil {
+		if err == store.ErrNotLeader {
+			leader := s.store.Peer(s.store.Leader())
+			if leader == "" {
+				http.Error(w, err.Error(), http.StatusServiceUnavailable)
+				return
+			}
+
+			redirect := s.FormRedirect(r, leader)
+			http.Redirect(w, r, redirect, http.StatusMovedPermanently)
+			return
+		}
+		resp.Error = err.Error()
+	} else {
+		resp.Results = results
+	}
+	resp.end = time.Now()
+	writeResponse(w, r, resp)
 }
 
 // handleStatus returns status on the system.
