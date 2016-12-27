@@ -21,7 +21,6 @@ import (
 	"github.com/hashicorp/raft"
 	"github.com/hashicorp/raft-boltdb"
 	sql "github.com/rqlite/rqlite/db"
-	parser "github.com/rqlite/rqlite/sql"
 )
 
 var (
@@ -457,32 +456,17 @@ func (s *Store) Load(r io.Reader) (int, error) {
 		return 0, ErrNotLeader
 	}
 
-	// Read the dump, executing the commands.
-	var queries []string
-	scanner := parser.NewScanner(r)
-	for {
-		cmd, err := scanner.Scan()
-		if err != nil && err != io.EOF {
-			return len(queries), err
-		}
-		if cmd == "" {
-			if err == io.EOF {
-				break
-			}
-			continue
-		}
-
-		queries = append(queries, cmd)
+	b, err := ioutil.ReadAll(r)
+	if err != nil {
+		return 0, err
 	}
 
-	if len(queries) > 0 {
-		_, err := s.Execute(queries, false, false)
-		if err != nil {
-			return len(queries), err
-		}
+	_, err = s.Execute([]string{string(b)}, false, false)
+	if err != nil {
+		return 0, err
 	}
 
-	return len(queries), nil
+	return 0, nil
 }
 
 // Backup return a snapshot of the underlying database.

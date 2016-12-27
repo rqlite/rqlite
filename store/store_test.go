@@ -244,7 +244,7 @@ COMMIT;
 	}
 }
 
-func Test_SingleNodeLoadBatchLargeBlank(t *testing.T) {
+func Test_SingleNodeTrigger(t *testing.T) {
 	s := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
 
@@ -256,10 +256,16 @@ func Test_SingleNodeLoadBatchLargeBlank(t *testing.T) {
 
 	dump := `PRAGMA foreign_keys=OFF;
 BEGIN TRANSACTION;
-
-CREATE TABLE foo (id integer not null primary key, name text);
-INSERT INTO "foo" VALUES(1,'fiona');
-
+CREATE TABLE foo (id integer primary key asc, name text);
+INSERT INTO "foo" VALUES(1,'bob');
+INSERT INTO "foo" VALUES(2,'alice');
+INSERT INTO "foo" VALUES(3,'eve');
+CREATE TABLE bar (nameid integer, age integer);
+INSERT INTO "bar" VALUES(1,44);
+INSERT INTO "bar" VALUES(2,46);
+INSERT INTO "bar" VALUES(3,8);
+CREATE VIEW foobar as select name as Person, Age as age from foo inner join bar on foo.id == bar.nameid;
+CREATE TRIGGER new_foobar instead of insert on foobar begin insert into foo (name) values (new.Person); insert into bar (nameid, age) values ((select id from foo where name == new.Person), new.Age); end;
 COMMIT;
 `
 	buf := bytes.NewBufferString(dump)
@@ -267,20 +273,17 @@ COMMIT;
 	if err != nil {
 		t.Fatalf("failed to load dump: %s", err.Error())
 	}
-	if n != 5 {
-		t.Fatal("wrong number of statements loaded, exp: 2, got: ", n)
+	if n == 5 {
+		t.Fatal("wrong number of statements loaded")
 	}
 
-	// Check that data were loaded correctly.
-	r, err := s.Query([]string{`SELECT * FROM foo`}, false, true, Strong)
+	// Check that the VIEW and TRIGGER are OK by using both.
+	r, err := s.Execute([]string{`INSERT INTO foobar VALUES('jason', 16)`}, false, true)
 	if err != nil {
-		t.Fatalf("failed to query single node: %s", err.Error())
+		t.Fatalf("failed to insert into view on single node: %s", err.Error())
 	}
-	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-	}
-	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	if exp, got := int64(3), r[0].LastInsertID; exp != got {
+		t.Fatalf("unexpected results for query\nexp: %d\ngot: %d", exp, got)
 	}
 }
 
