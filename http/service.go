@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"expvar"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"log"
 	"net"
@@ -54,9 +53,6 @@ type Store interface {
 
 	// Backup returns a byte slice representing a backup of the node state.
 	Backup(leader bool) ([]byte, error)
-
-	// Load loads a SQLite .dump state from a reader
-	Load(r io.Reader) (int, error)
 }
 
 // CredentialStore is the interface credential stores must support.
@@ -382,7 +378,18 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	n, err := s.store.Load(r.Body)
+	timings, err := timings(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	b, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+
+	n, err := s.store.Execute([]string{string(b)}, timings, false)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

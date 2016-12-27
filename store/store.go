@@ -450,25 +450,6 @@ func (s *Store) Execute(queries []string, timings, tx bool) ([]*sql.Result, erro
 	return r.results, r.error
 }
 
-// Load loads a SQLite .dump state from a reader.
-func (s *Store) Load(r io.Reader) (int, error) {
-	if s.raft.State() != raft.Leader {
-		return 0, ErrNotLeader
-	}
-
-	b, err := ioutil.ReadAll(r)
-	if err != nil {
-		return 0, err
-	}
-
-	_, err = s.Execute([]string{string(b)}, false, false)
-	if err != nil {
-		return 0, err
-	}
-
-	return 0, nil
-}
-
 // Backup return a snapshot of the underlying database.
 //
 // If leader is true, this operation is performed with a read consistency

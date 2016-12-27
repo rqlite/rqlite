@@ -1,7 +1,6 @@
 package store
 
 import (
-	"bytes"
 	"encoding/json"
 	"io/ioutil"
 	"net"
@@ -222,13 +221,9 @@ CREATE TABLE foo (id integer not null primary key, name text);
 INSERT INTO "foo" VALUES(1,'fiona');
 COMMIT;
 `
-	buf := bytes.NewBufferString(dump)
-	n, err := s.Load(buf)
+	_, err := s.Execute([]string{dump}, false, false)
 	if err != nil {
-		t.Fatalf("failed to load dump: %s", err.Error())
-	}
-	if n != 5 {
-		t.Fatal("wrong number of statements loaded")
+		t.Fatalf("failed to load simple dump: %s", err.Error())
 	}
 
 	// Check that data were loaded correctly.
@@ -244,7 +239,7 @@ COMMIT;
 	}
 }
 
-func Test_SingleNodeTrigger(t *testing.T) {
+func Test_SingleNodeSingleCommandTrigger(t *testing.T) {
 	s := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
 
@@ -268,13 +263,9 @@ CREATE VIEW foobar as select name as Person, Age as age from foo inner join bar 
 CREATE TRIGGER new_foobar instead of insert on foobar begin insert into foo (name) values (new.Person); insert into bar (nameid, age) values ((select id from foo where name == new.Person), new.Age); end;
 COMMIT;
 `
-	buf := bytes.NewBufferString(dump)
-	n, err := s.Load(buf)
+	_, err := s.Execute([]string{dump}, false, false)
 	if err != nil {
-		t.Fatalf("failed to load dump: %s", err.Error())
-	}
-	if n == 5 {
-		t.Fatal("wrong number of statements loaded")
+		t.Fatalf("failed to load dump with trigger: %s", err.Error())
 	}
 
 	// Check that the VIEW and TRIGGER are OK by using both.
@@ -301,13 +292,9 @@ func Test_SingleNodeLoadNoStatements(t *testing.T) {
 BEGIN TRANSACTION;
 COMMIT;
 `
-	buf := bytes.NewBufferString(dump)
-	n, err := s.Load(buf)
+	_, err := s.Execute([]string{dump}, false, false)
 	if err != nil {
-		t.Fatalf("failed to load dump: %s", err.Error())
-	}
-	if n != 3 {
-		t.Fatal("wrong number of statements loaded, exp: 1, got: ", n)
+		t.Fatalf("failed to load dump with no commands: %s", err.Error())
 	}
 }
 
@@ -321,13 +308,10 @@ func Test_SingleNodeLoadEmpty(t *testing.T) {
 	defer s.Close(true)
 	s.WaitForLeader(10 * time.Second)
 
-	buf := bytes.NewBufferString("")
-	n, err := s.Load(buf)
+	dump := ``
+	_, err := s.Execute([]string{dump}, false, false)
 	if err != nil {
-		t.Fatalf("failed to load dump: %s", err.Error())
-	}
-	if n != 0 {
-		t.Fatal("wrong number of statements loaded")
+		t.Fatalf("failed to load empty dump: %s", err.Error())
 	}
 }
 
@@ -341,10 +325,9 @@ func Test_SingleNodeLoadChinook(t *testing.T) {
 	defer s.Close(true)
 	s.WaitForLeader(10 * time.Second)
 
-	buf := bytes.NewBufferString(chinook.DB)
-	_, err := s.Load(buf)
+	_, err := s.Execute([]string{chinook.DB}, false, false)
 	if err != nil {
-		t.Fatalf("failed to load dump: %s", err.Error())
+		t.Fatalf("failed to load chinook dump: %s", err.Error())
 	}
 
 	// Check that data were loaded correctly.
