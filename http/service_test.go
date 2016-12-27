@@ -2,7 +2,6 @@ package http
 
 import (
 	"fmt"
-	"io"
 	"net/http"
 	"testing"
 
@@ -264,6 +263,7 @@ func Test_401Routes_NoBasicAuth(t *testing.T) {
 		"/db/execute",
 		"/db/query",
 		"/db/backup",
+		"/db/load",
 		"/join",
 		"/delete",
 		"/status",
@@ -295,6 +295,7 @@ func Test_401Routes_BasicAuthBadPassword(t *testing.T) {
 		"/db/execute",
 		"/db/query",
 		"/db/backup",
+		"/db/load",
 		"/join",
 		"/status",
 	} {
@@ -331,6 +332,7 @@ func Test_401Routes_BasicAuthBadPerm(t *testing.T) {
 		"/db/execute",
 		"/db/query",
 		"/db/backup",
+		"/db/load",
 		"/join",
 		"/status",
 	} {
@@ -391,10 +393,6 @@ func (m *MockStore) Stats() (map[string]interface{}, error) {
 
 func (m *MockStore) Backup(leader bool) ([]byte, error) {
 	return nil, nil
-}
-
-func (m *MockStore) Load(r io.Reader) (int, error) {
-	return 0, nil
 }
 
 type mockCredentialStore struct {

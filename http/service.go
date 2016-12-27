@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"expvar"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"log"
 	"net"
@@ -54,9 +53,6 @@ type Store interface {
 
 	// Backup returns a byte slice representing a backup of the node state.
 	Backup(leader bool) ([]byte, error)
-
-	// Load loads a SQLite .dump state from a reader
-	Load(r io.Reader) (int, error)
 }
 
 // CredentialStore is the interface credential stores must support.
@@ -101,6 +97,8 @@ const (
 	PermStatus = "status"
 	// PermBackup means user can backup node.
 	PermBackup = "backup"
+	// PermLoad means user can load a SQLite dump into a node.
+	PermLoad = "load"
 )
 
 func init() {
@@ -372,7 +370,7 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
 
 // handleLoad loads the state contained in a .dump output.
 func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
-	if !s.CheckRequestPerm(r, PermBackup) {
+	if !s.CheckRequestPerm(r, PermLoad) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
@@ -382,12 +380,41 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	n, err := s.store.Load(r.Body)
+	resp := NewResponse()
+
+	timings, err := timings(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	s.logger.Printf(`.dump data with %d commands loaded OK`, n)
+
+	b, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	r.Body.Close()
+
+	queries := []string{string(b)}
+	results, err := s.store.Execute(queries, timings, false)
+	if err != nil {
+		if err == store.ErrNotLeader {
+			leader := s.store.Peer(s.store.Leader())
+			if leader == "" {
+				http.Error(w, err.Error(), http.StatusServiceUnavailable)
+				return
+			}
+
+			redirect := s.FormRedirect(r, leader)
+			http.Redirect(w, r, redirect, http.StatusMovedPermanently)
+			return
+		}
+		resp.Error = err.Error()
+	} else {
+		resp.Results = results
+	}
+	resp.end = time.Now()
+	writeResponse(w, r, resp)
 }
 
 // handleStatus returns status on the system.

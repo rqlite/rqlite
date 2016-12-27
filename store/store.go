@@ -21,7 +21,6 @@ import (
 	"github.com/hashicorp/raft"
 	"github.com/hashicorp/raft-boltdb"
 	sql "github.com/rqlite/rqlite/db"
-	parser "github.com/rqlite/rqlite/sql"
 )
 
 var (
@@ -449,40 +448,6 @@ func (s *Store) Execute(queries []string, timings, tx bool) ([]*sql.Result, erro
 
 	r := f.Response().(*fsmExecuteResponse)
 	return r.results, r.error
-}
-
-// Load loads a SQLite .dump state from a reader.
-func (s *Store) Load(r io.Reader) (int, error) {
-	if s.raft.State() != raft.Leader {
-		return 0, ErrNotLeader
-	}
-
-	// Read the dump, executing the commands.
-	var queries []string
-	scanner := parser.NewScanner(r)
-	for {
-		cmd, err := scanner.Scan()
-		if err != nil && err != io.EOF {
-			return len(queries), err
-		}
-		if cmd == "" {
-			if err == io.EOF {
-				break
-			}
-			continue
-		}
-
-		queries = append(queries, cmd)
-	}
-
-	if len(queries) > 0 {
-		_, err := s.Execute(queries, false, false)
-		if err != nil {
-			return len(queries), err
-		}
-	}
-
-	return len(queries), nil
 }
 
 // Backup return a snapshot of the underlying database.
