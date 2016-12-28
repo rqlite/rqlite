@@ -26,6 +26,7 @@ rqlite, via the configuration file, also supports user-level permissions. Each u
 - _all_: user can perform all operations on a node.
 - _execute_: user may access the execute endpoint.
 - _query_: user may access the query endpoint.
+- _load_: user may load an SQLite dump file into a node.
 - _backup_: user may perform backups.
 - _status_: user can retrieve status information from the node.
 - _join_: user can join a cluster. In practice only a node joins a cluster.
