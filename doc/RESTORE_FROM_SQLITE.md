@@ -12,8 +12,9 @@ sqlite> CREATE TABLE foo (id integer not null primary key, name text);
 sqlite> INSERT INTO "foo" VALUES(1,'fiona');
 sqlite>
 ~ $ echo '.dump' | sqlite3 restore.sqlite > restore.dump
-~ $ curl -XPOST localhost:4001/db/load --data-binary @restore.dump
+~ $ curl -XPOST localhost:4001/db/load -H "Content-type: text/plain" --data-binary @restore.dump
 ```
+_Be sure to set the Content-type header as shown._
 
 Let's connect to the node, and check that the data has been loaded correctly.
 ```bash
