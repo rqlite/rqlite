@@ -44,13 +44,13 @@ An example configuration file is shown below.
   {
     "username": "mary",
     "password": "secret2",
-    "perms": ["query"]
+    "perms": ["query", "status"]
   }
 ]
 ```
 This configuration file sets authentication for two usernames, _bob_ and _mary_, and it sets a password for each. No other users will be able to access the cluster.
 
-This configuration also sets permissions for both users. _bob_ has permission to perform all operations, and _mary_ can only query the cluster.
+This configuration also sets permissions for both users. _bob_ has permission to perform all operations, but _mary_ can only query the cluster, as well as check the cluster status.
 
 ## Secure cluster example
 Starting a node with HTTPS enabled and with the above configuration file. It is assumed the X.509 certificate and key are at the paths `server.crt` and `key.pem` respectively.
