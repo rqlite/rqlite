@@ -1,4 +1,4 @@
-## 3.10.0 (unreleased)
+## 3.9.1 (unreleased)
 - [PR #247](https://github.com/rqlite/rqlite/pull/247): Simplify loading of SQLite dump files via single command execution. Fixes [issue #246](https://github.com/rqlite/rqlite/issues/246).
 - [PR #247](https://github.com/rqlite/rqlite/pull/247): Correct SQLite dump load authentication check.
 
