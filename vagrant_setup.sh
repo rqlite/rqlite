@@ -6,13 +6,13 @@ echo "Updating..."
 apt-get update
 apt-get install -y curl git bison make mercurial
 
-# Golang
+# Go
 bash < <(curl -s -S -L https://raw.githubusercontent.com/moovweb/gvm/master/binscripts/gvm-installer)
 source ~/.gvm/scripts/gvm
-gvm install go1.7
-gvm use go1.7
+gvm install go1.7.1
+gvm use go1.7.1
 
-# Rqlite
+# rqlite
 mkdir -p rqlite
 cd rqlite
 export GOPATH=$PWD
