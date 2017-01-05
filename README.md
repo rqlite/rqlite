@@ -30,7 +30,7 @@ rqlited ~/node.1
 This single node automatically becomes the leader. You can pass `-h` to `rqlited` to list all configuration options.
 
 ### Forming a cluster
-While not strictly necessary to run rqlite, running multiple nodes means the SQLite database is replicated. Start a second and third node (so a majority can still form in the event of a single node failure) like so:
+While not strictly necessary to run rqlite, running multiple nodes means you'll have a fault-tolerant cluster. Start two more nodes, allowing the cluster to tolerate failure of a single node, like so:
 ```bash
 rqlited -http localhost:4003 -raft localhost:4004 -join http://localhost:4001 ~/node.2
 rqlited -http localhost:4005 -raft localhost:4006 -join http://localhost:4001 ~/node.3
@@ -40,7 +40,7 @@ _This demonstration shows all 3 nodes running on the same host. In reality you p
 With just these few steps you've now got a fault-tolerant, distributed relational database. For full details on creating and managing real clusters check out [this documentation](https://github.com/rqlite/rqlite/blob/master/doc/CLUSTER_MGMT.md).
 
 ### Inserting records
-Let's insert some records via the [rqlite CLI](https://github.com/rqlite/rqlite/blob/master/doc/CLI.md), using standard SQLite commands. Once inserted, these records will be replicated across the cluster, in a durable and fault-tolerant manner.
+Let's insert some records via the [rqlite CLI](https://github.com/rqlite/rqlite/blob/master/doc/CLI.md), using standard SQLite commands. Once inserted, these records will be replicated across the cluster, in a durable and fault-tolerant manner. Your 3-node cluster can suffer the failure of a single node without any loss of functionality.
 ```
 $ rqlite
 127.0.0.1:4001> CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)
