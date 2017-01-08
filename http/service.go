@@ -99,6 +99,9 @@ const (
 	PermBackup = "backup"
 	// PermLoad means user can load a SQLite dump into a node.
 	PermLoad = "load"
+
+	// VersionHTTPHeader is the HTTP header key for the version.
+	VersionHTTPHeader = "X-RQLITE-VERSION"
 )
 
 func init() {
@@ -667,7 +670,7 @@ func (s *Service) addBuildVersion(w http.ResponseWriter) {
 	if v, ok := s.BuildInfo["version"].(string); ok {
 		version = v
 	}
-	w.Header().Add("X-RQLITE-VERSION", version)
+	w.Header().Add(VersionHTTPHeader, version)
 }
 
 // queriesValid returns whether the slice of queries is valid.
