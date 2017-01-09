@@ -145,7 +145,7 @@ curl -XPOST 'localhost:4001/db/execute?pretty&transaction' -H "Content-Type: app
 
 When a transaction takes place either both statements will succeed, or neither. Performance is *much, much* better if multiple SQL INSERTs or UPDATEs are executed via a transaction. Note that processing of the request ceases the moment any single query results in an error.
 
-The behaviour of rqlite when using `BEGIN`, `COMMIT`, or `ROLLBACK` to control transactions is **not defined**. It is important to control transactions only through the query parameters shown above.
+The behaviour of rqlite when using `BEGIN`, `COMMIT`, `ROLLBACK`, `SAVEPOINT`, and `RELEASE` to control transactions is **not defined**. It is important to control transactions only through the query parameters shown above.
 
 ### Handling Errors
 If an error occurs while processing a statement, it will be marked as such in the response. For example.
