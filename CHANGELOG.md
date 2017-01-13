@@ -1,3 +1,6 @@
+## 3.9.2 (unreleased)
+- [PR #253](https://github.com/rqlite/rqlite/pull/254): Handle nil row returned by SQL execer. Fixes [issue #253](https://github.com/rqlite/rqlite/issues/253).
+
 ## 3.9.1 (December 29th 2016)
 - [PR #247](https://github.com/rqlite/rqlite/pull/247): Simplify loading of SQLite dump files via single command execution. Fixes [issue #246](https://github.com/rqlite/rqlite/issues/246).
 - [PR #247](https://github.com/rqlite/rqlite/pull/247): Correct SQLite dump load authentication check.
