@@ -247,6 +247,9 @@ func (db *DB) Execute(queries []string, tx, xTime bool) ([]*Result, error) {
 				}
 				break
 			}
+			if r == nil {
+				continue
+			}
 
 			lid, err := r.LastInsertId()
 			if err != nil {

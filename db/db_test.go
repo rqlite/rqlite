@@ -82,6 +82,21 @@ func Test_LoadInMemory(t *testing.T) {
 	}
 }
 
+func Test_EmptyStatements(t *testing.T) {
+	db, path := mustCreateDatabase()
+	defer db.Close()
+	defer os.Remove(path)
+
+	_, err := db.Execute([]string{""}, false, false)
+	if err != nil {
+		t.Fatalf("failed to execute empty statement: %s", err.Error())
+	}
+	_, err = db.Execute([]string{";"}, false, false)
+	if err != nil {
+		t.Fatalf("failed to execute empty statement with semicolon: %s", err.Error())
+	}
+}
+
 func Test_SimpleSingleStatements(t *testing.T) {
 	db, path := mustCreateDatabase()
 	defer db.Close()
