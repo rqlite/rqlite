@@ -311,6 +311,38 @@ func Test_SimpleFailingStatements_Query(t *testing.T) {
 	}
 }
 
+func Test_CommonTableExpressions(t *testing.T) {
+	db, path := mustCreateDatabase()
+	defer db.Close()
+	defer os.Remove(path)
+
+	_, err := db.Execute([]string{"CREATE TABLE test(x foo)"}, false, false)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	_, err = db.Execute([]string{`INSERT INTO test VALUES(1)`}, false, false)
+	if err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+
+	r, err := db.Query([]string{`WITH bar AS (SELECT * FROM test) SELECT * FROM test WHERE x = 1`}, false, false)
+	if err != nil {
+		t.Fatalf("failed to query a common table expression: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["x"],"types":["foo"],"values":[[1]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	r, err = db.Query([]string{`WITH bar AS (SELECT * FROM test) SELECT * FROM test WHERE x = 2`}, false, false)
+	if err != nil {
+		t.Fatalf("failed to query a common table expression: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["x"],"types":["foo"]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
 func Test_ForeignKeyConstraints(t *testing.T) {
 	db, path := mustCreateDatabase()
 	defer db.Close()
