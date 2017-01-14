@@ -37,11 +37,6 @@ func Test_SingleNode(t *testing.T) {
 			execute:  true,
 		},
 		{
-			stmt:     `INSERT INTO foo(name) VALUES("fiona")`,
-			expected: ``,
-			execute:  false,
-		},
-		{
 			stmt:     `SELECT * FROM foo`,
 			expected: `{"results":[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]}`,
 			execute:  false,

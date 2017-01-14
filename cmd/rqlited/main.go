@@ -79,7 +79,6 @@ var expvar bool
 var pprofEnabled bool
 var dsn string
 var onDisk bool
-var noVerifySelect bool
 var raftSnapThreshold uint64
 var raftHeartbeatTimeout string
 var showVersion bool
@@ -102,7 +101,6 @@ func init() {
 	flag.BoolVar(&pprofEnabled, "pprof", true, "Serve pprof data on HTTP server")
 	flag.StringVar(&dsn, "dsn", "", `SQLite DSN parameters. E.g. "cache=shared&mode=memory"`)
 	flag.BoolVar(&onDisk, "ondisk", false, "Use an on-disk SQLite database")
-	flag.BoolVar(&noVerifySelect, "nosel", false, "Don't verify that all queries begin with SELECT")
 	flag.BoolVar(&showVersion, "version", false, "Show version information and exit")
 	flag.StringVar(&raftHeartbeatTimeout, "rafttimeout", "1s", "Raft heartbeat timeout")
 	flag.Uint64Var(&raftSnapThreshold, "raftsnap", 8192, "Number of outstanding log entries that trigger snapshot")
@@ -231,7 +229,6 @@ func main() {
 
 	s.CertFile = x509Cert
 	s.KeyFile = x509Key
-	s.NoVerifySelect = noVerifySelect
 	s.Expvar = expvar
 	s.Pprof = pprofEnabled
 	s.BuildInfo = map[string]interface{}{

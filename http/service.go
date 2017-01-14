@@ -137,8 +137,6 @@ type Service struct {
 	CertFile string // Path to SSL certificate.
 	KeyFile  string // Path to SSL private key.
 
-	NoVerifySelect bool // Don't check query statements for leading SELECT
-
 	credentialStore CredentialStore
 
 	Expvar bool
@@ -608,12 +606,6 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Validate queries, unless disabled.
-	if !s.NoVerifySelect && !queriesValid(queries) {
-		w.WriteHeader(http.StatusForbidden)
-		return
-	}
-
 	results, err := s.store.Query(queries, timings, isTx, lvl)
 	if err != nil {
 		if err == store.ErrNotLeader {
@@ -671,17 +663,6 @@ func (s *Service) addBuildVersion(w http.ResponseWriter) {
 		version = v
 	}
 	w.Header().Add(VersionHTTPHeader, version)
-}
-
-// queriesValid returns whether the slice of queries is valid.
-func queriesValid(queries []string) bool {
-	for _, q := range queries {
-		u := strings.ToUpper(strings.TrimSpace(q))
-		if !strings.HasPrefix(u, "SELECT ") {
-			return false
-		}
-	}
-	return true
 }
 
 // serveExpvar serves registered expvar information over HTTP.
