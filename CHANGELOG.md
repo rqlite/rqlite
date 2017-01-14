@@ -1,6 +1,6 @@
 ## 3.9.2 (January 14th 2017)
 - [PR #253](https://github.com/rqlite/rqlite/pull/254): Handle nil row returned by SQL execer. Fixes [issue #253](https://github.com/rqlite/rqlite/issues/253).
-- [PR #258](https://github.com/rqlite/rqlite/pull/258): Pull check that all queries begin with SELECT. Fixes [issue #255](https://github.com/rqlite/rqlite/issues/255).
+- [PR #258](https://github.com/rqlite/rqlite/pull/258): Remove check that all queries begin with SELECT. Fixes [issue #255](https://github.com/rqlite/rqlite/issues/255).
 
 ## 3.9.1 (December 29th 2016)
 - [PR #247](https://github.com/rqlite/rqlite/pull/247): Simplify loading of SQLite dump files via single command execution. Fixes [issue #246](https://github.com/rqlite/rqlite/issues/246).
