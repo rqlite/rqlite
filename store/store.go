@@ -31,7 +31,7 @@ var (
 
 const (
 	retainSnapshotCount = 2
-	raftTimeout         = 10 * time.Second
+	applyTimeout        = 10 * time.Second
 	sqliteFile          = "db.sqlite"
 	leaderWaitDelay     = 100 * time.Millisecond
 	appliedWaitDelay    = 100 * time.Millisecond
@@ -166,6 +166,7 @@ type Store struct {
 
 	SnapshotThreshold uint64
 	HeartbeatTimeout  time.Duration
+	ApplyTimeout      time.Duration
 }
 
 // StoreConfig represents the configuration of the underlying Store.
@@ -192,6 +193,7 @@ func New(c *StoreConfig) *Store {
 		meta:          newClusterMeta(),
 		logger:        logger,
 		peerStore:     c.PeerStore,
+		ApplyTimeout:  applyTimeout,
 	}
 }
 
@@ -406,14 +408,15 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		return nil, err
 	}
 	status := map[string]interface{}{
-		"raft":    s.raft.Stats(),
-		"addr":    s.Addr().String(),
-		"leader":  s.Leader(),
-		"meta":    s.meta,
-		"peers":   peers,
-		"dir":     s.raftDir,
-		"sqlite3": dbStatus,
-		"db_conf": s.dbConf,
+		"raft":          s.raft.Stats(),
+		"addr":          s.Addr().String(),
+		"leader":        s.Leader(),
+		"apply_timeout": s.ApplyTimeout.String(),
+		"meta":          s.meta,
+		"peers":         peers,
+		"dir":           s.raftDir,
+		"sqlite3":       dbStatus,
+		"db_conf":       s.dbConf,
 	}
 	return status, nil
 }
@@ -438,7 +441,7 @@ func (s *Store) Execute(queries []string, timings, tx bool) ([]*sql.Result, erro
 		return nil, err
 	}
 
-	f := s.raft.Apply(b, raftTimeout)
+	f := s.raft.Apply(b, s.ApplyTimeout)
 	if e := f.(raft.Future); e.Error() != nil {
 		if e.Error() == raft.ErrNotLeader {
 			return nil, ErrNotLeader
@@ -499,7 +502,7 @@ func (s *Store) Query(queries []string, timings, tx bool, lvl ConsistencyLevel) 
 			return nil, err
 		}
 
-		f := s.raft.Apply(b, raftTimeout)
+		f := s.raft.Apply(b, s.ApplyTimeout)
 		if e := f.(raft.Future); e.Error() != nil {
 			if e.Error() == raft.ErrNotLeader {
 				return nil, ErrNotLeader
@@ -530,7 +533,7 @@ func (s *Store) UpdateAPIPeers(peers map[string]string) error {
 		return err
 	}
 
-	f := s.raft.Apply(b, raftTimeout)
+	f := s.raft.Apply(b, s.ApplyTimeout)
 	return f.Error()
 }
 
