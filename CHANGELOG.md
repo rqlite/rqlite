@@ -1,5 +1,6 @@
 ## 3.10.0 (unreleased)
 - [PR #261](https://github.com/rqlite/rqlite/pull/261): Allow Raft Apply timeout to be configurable.
+- [PR #262](https://github.com/rqlite/rqlite/pull/262): Log GOOS and GOARCH at startup.
 
 ## 3.9.2 (January 14th 2017)
 - [PR #253](https://github.com/rqlite/rqlite/pull/254): Handle nil row returned by SQL execer. Fixes [issue #253](https://github.com/rqlite/rqlite/issues/253).
