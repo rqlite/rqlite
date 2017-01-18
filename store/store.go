@@ -457,7 +457,7 @@ func (s *Store) Execute(queries []string, timings, tx bool) ([]*sql.Result, erro
 //
 // If leader is true, this operation is performed with a read consistency
 // level equivalent to "weak". Otherwise no guarantees are made about the
-// read consistentcy level.
+// read consistency level.
 func (s *Store) Backup(leader bool) ([]byte, error) {
 	if leader && s.raft.State() != raft.Leader {
 		return nil, ErrNotLeader
@@ -659,7 +659,7 @@ func (s *Store) Apply(l *raft.Log) interface{} {
 // ensure that no transaction is taking place during this call, or an error may
 // be returned. If leader is true, this operation is performed with a read
 // consistency level equivalent to "weak". Otherwise no guarantees are made
-// about the read consistentcy level.
+// about the read consistency level.
 //
 // http://sqlite.org/howtocorrupt.html states it is safe to do this
 // as long as no transaction is in progress.
