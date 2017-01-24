@@ -5,6 +5,7 @@ package store
 
 import (
 	"bytes"
+	stdsql "database/sql"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -20,6 +21,7 @@ import (
 
 	"github.com/hashicorp/raft"
 	"github.com/hashicorp/raft-boltdb"
+	"github.com/pborman/uuid"
 	sql "github.com/rqlite/rqlite/db"
 )
 
@@ -134,6 +136,56 @@ func (c *clusterMeta) AddrForPeer(addr string) string {
 	return ""
 }
 
+// Transaction represents a more traditional database transaction.
+type Transaction struct {
+	id    string
+	tx    *stdsql.Tx
+	stmts []string
+	store *Store
+}
+
+func (t *Transaction) ID() string {
+	return t.id
+}
+
+func (t *Transaction) Execute(q string) (stdsql.Result, error) {
+	result, err := t.tx.Exec(q)
+	if err != nil {
+		return nil, err
+	}
+
+	t.stmts = append(t.stmts, q)
+	return result, nil
+}
+
+func (t *Transaction) Query(q string) (*stdsql.Rows, error) {
+	return t.tx.Query(q)
+}
+
+func (t *Transaction) Commit() error {
+	t.store.txMu.Lock()
+	defer t.store.txMu.Unlock()
+
+	err := t.tx.Commit()
+	if err != nil {
+		return err
+	}
+
+	_, err = t.store.Execute(t.stmts, false, true)
+	if err != nil {
+		/* uh oh, now we're in an inconsistent state, because the
+		 * database has a tx that the raft log doesn't
+		 */
+		return err
+	}
+
+	return nil
+}
+
+func (t *Transaction) Rollback() error {
+	return t.tx.Rollback()
+}
+
 // DBConfig represents the configuration of the underlying SQLite database.
 type DBConfig struct {
 	DSN    string // Any custom DSN
@@ -167,6 +219,8 @@ type Store struct {
 	SnapshotThreshold uint64
 	HeartbeatTimeout  time.Duration
 	ApplyTimeout      time.Duration
+
+	txMu sync.Mutex // Only allow one transaction commit at a time
 }
 
 // StoreConfig represents the configuration of the underlying Store.
@@ -693,6 +747,9 @@ func (s *Store) Database(leader bool) ([]byte, error) {
 // http://sqlite.org/howtocorrupt.html states it is safe to do this
 // as long as no transaction is in progress.
 func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
+	s.txMu.Lock()
+	defer s.txMu.Unlock()
+
 	fsm := &fsmSnapshot{}
 	var err error
 	fsm.database, err = s.Database(false)
@@ -783,6 +840,20 @@ func (s *Store) RegisterObserver(o *raft.Observer) {
 // DeregisterObserver deregisters an observer of Raft events
 func (s *Store) DeregisterObserver(o *raft.Observer) {
 	s.raft.DeregisterObserver(o)
+}
+
+func (s *Store) Begin() (*Transaction, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+
+	return &Transaction{
+		id:    uuid.New(),
+		tx:    tx,
+		stmts: []string{},
+		store: s,
+	}, nil
 }
 
 type fsmSnapshot struct {
