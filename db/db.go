@@ -445,6 +445,10 @@ func (db *DB) Backup(path string) error {
 	return nil
 }
 
+func (db *DB) Begin() (driver.Tx, error) {
+	return db.sqlite3conn.Begin()
+}
+
 // normalizeRowValues performs some normalization of values in the returned rows.
 // Text values come over (from sqlite-go) as []byte instead of strings
 // for some reason, so we have explicitly convert (but only when type
