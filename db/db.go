@@ -81,7 +81,7 @@ func OpenWithDSN(dbPath, dsn string) (*DB, error) {
 
 // OpenInMemory opens an in-memory database.
 func OpenInMemory() (*DB, error) {
-	return OpenInMemoryWithDSN("")
+	return OpenInMemoryWithDSN("mode=memory&cache=shared")
 }
 
 // OpenInMemoryWithDSN opens an in-memory database with a specific DSN.
