@@ -67,7 +67,7 @@ func Test_LoadInMemory(t *testing.T) {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
 
-	inmem, err := LoadInMemoryWithDSN(path, "")
+	inmem, err := LoadInMemoryWithDSN(path, "mode=memory&cache=shared")
 	if err != nil {
 		t.Fatalf("failed to create loaded in-memory database: %s", err.Error())
 	}

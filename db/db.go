@@ -82,13 +82,26 @@ func OpenWithDSN(dbPath, dsn string) (*DB, error) {
 
 // OpenInMemory opens an in-memory database.
 func OpenInMemory() (*DB, error) {
-	return OpenInMemoryWithDSN("")
+	return OpenInMemoryWithDSN("mode=memory&cache=shared")
 }
 
 // OpenInMemoryWithDSN opens an in-memory database with a specific DSN.
 func OpenInMemoryWithDSN(dsn string) (*DB, error) {
 	db, err := open(fqdsn(":memory:", dsn))
 	if err != nil {
+		return nil, err
+	}
+
+	/* Here, we Ping() to activate the in-memory database. If we don't do
+	 * this, and e.g. we do an Execute() first, we'll get a raw connection
+	 * to the in memory database, insert the data, close it, which will
+	 * cause the data to be lost forever when sqlite3 purges the in-memory
+	 * database because there aren't any more connections. So, let's just
+	 * open one at the beginning.
+	 */
+	err = db.db.Ping()
+	if err != nil {
+		db.Close()
 		return nil, err
 	}
 
@@ -160,6 +173,30 @@ func (db *DB) rawConn() (*sqlite3.SQLiteConn, error) {
 
 // Close closes the underlying database connection.
 func (db *DB) Close() error {
+	if db.memory {
+		/* Since we use the same in memory database (i.e. cache=shared)
+		 * to avoid oddities with how the stdlib's sqlite driver works,
+		 * we need to clean up after ourselves, since things will
+		 * persist.
+		 */
+		rows, err := db.db.Query("SELECT name FROM sqlite_master WHERE type='table'")
+		if err != nil {
+			return db.db.Close()
+		}
+
+		tables := []string{}
+		for rows.Next() {
+			n := ""
+			rows.Scan(&n)
+			tables = append(tables, n)
+		}
+		rows.Close()
+
+		for _, t := range tables {
+			db.db.Exec(fmt.Sprintf("DROP TABLE %s", t))
+		}
+	}
+
 	return db.db.Close()
 }
 
