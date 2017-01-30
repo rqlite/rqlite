@@ -1,4 +1,4 @@
-## 3.10.0 (January 29th, 2017)
+## 3.10.0 (January 29th 2017)
 - [PR #261](https://github.com/rqlite/rqlite/pull/261): Allow Raft Apply timeout to be configurable.
 - [PR #262](https://github.com/rqlite/rqlite/pull/262): Log GOOS and GOARCH at startup.
 
