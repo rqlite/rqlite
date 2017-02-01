@@ -265,12 +265,18 @@ CREATE TRIGGER new_foobar instead of insert on foobar begin insert into foo (nam
 	}
 
 	// Check that the VIEW and TRIGGER are OK by using both.
-	r, err := s.Execute([]string{`INSERT INTO foobar VALUES('jason', 16)`}, false, true)
+	_, err = s.Execute([]string{`INSERT INTO foobar VALUES('jason', 16)`}, false, true)
 	if err != nil {
 		t.Fatalf("failed to insert into view on single node: %s", err.Error())
 	}
-	if exp, got := int64(3), r[0].LastInsertID; exp != got {
-		t.Fatalf("unexpected results for query\nexp: %d\ngot: %d", exp, got)
+
+	rows, err := s.Query([]string{`SELECT * FROM foo WHERE name='jason'`}, false, false, None)
+	if err != nil {
+		t.Fatalf("failed to query foo: %s", err.Error())
+	}
+
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[4,"jason"]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 }
 
