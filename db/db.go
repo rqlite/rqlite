@@ -3,6 +3,7 @@
 package db
 
 import (
+	"database/sql"
 	"database/sql/driver"
 	"expvar"
 	"fmt"
@@ -46,7 +47,7 @@ func init() {
 
 // DB is the SQL database.
 type DB struct {
-	sqlite3conn *sqlite3.SQLiteConn // Driver connection to database.
+	db *sql.DB                      // Actual stdlib sql database.
 	path        string              // Path to database file.
 	dsn         string              // DSN, if any.
 	memory      bool                // In-memory only.
@@ -81,12 +82,31 @@ func OpenWithDSN(dbPath, dsn string) (*DB, error) {
 
 // OpenInMemory opens an in-memory database.
 func OpenInMemory() (*DB, error) {
-	return open(fqdsn(":memory:", ""))
+	return OpenInMemoryWithDSN("mode=memory&cache=shared")
 }
 
 // OpenInMemoryWithDSN opens an in-memory database with a specific DSN.
 func OpenInMemoryWithDSN(dsn string) (*DB, error) {
-	return open(fqdsn(":memory:", dsn))
+	db, err := open(fqdsn(":memory:", dsn))
+	if err != nil {
+		return nil, err
+	}
+
+	/* Here, we Ping() to activate the in-memory database. If we don't do
+	 * this, and e.g. we do an Execute() first, we'll get a raw connection
+	 * to the in memory database, insert the data, close it, which will
+	 * cause the data to be lost forever when sqlite3 purges the in-memory
+	 * database because there aren't any more connections. So, let's just
+	 * open one at the beginning.
+	 */
+	err = db.db.Ping()
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
+
+	db.memory = true
+	return db, nil
 }
 
 // LoadInMemoryWithDSN loads an in-memory database with that at the path,
@@ -101,8 +121,21 @@ func LoadInMemoryWithDSN(dbPath, dsn string) (*DB, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer srcDB.Close()
 
-	bk, err := db.sqlite3conn.Backup("main", srcDB.sqlite3conn, "main")
+	dstConn, err := db.rawConn()
+	if err != nil {
+		return nil, err
+	}
+	defer dstConn.Close()
+
+	srcConn, err := srcDB.rawConn()
+	if err != nil {
+		return nil, err
+	}
+	defer srcConn.Close()
+
+	bk, err := dstConn.Backup("main", srcConn, "main")
 	if err != nil {
 		return nil, err
 	}
@@ -129,21 +162,53 @@ func LoadInMemoryWithDSN(dbPath, dsn string) (*DB, error) {
 	return db, nil
 }
 
+func (db *DB) rawConn() (*sqlite3.SQLiteConn, error) {
+	conn, err := db.db.Driver().Open(db.path)
+	if err != nil {
+		return nil, err
+	}
+
+	return conn.(*sqlite3.SQLiteConn), nil
+}
+
 // Close closes the underlying database connection.
 func (db *DB) Close() error {
-	return db.sqlite3conn.Close()
+	if db.memory {
+		/* Since we use the same in memory database (i.e. cache=shared)
+		 * to avoid oddities with how the stdlib's sqlite driver works,
+		 * we need to clean up after ourselves, since things will
+		 * persist.
+		 */
+		rows, err := db.db.Query("SELECT name FROM sqlite_master WHERE type='table'")
+		if err != nil {
+			return db.db.Close()
+		}
+
+		tables := []string{}
+		for rows.Next() {
+			n := ""
+			rows.Scan(&n)
+			tables = append(tables, n)
+		}
+		rows.Close()
+
+		for _, t := range tables {
+			db.db.Exec(fmt.Sprintf("DROP TABLE %s", t))
+		}
+	}
+
+	return db.db.Close()
 }
 
 func open(dbPath string) (*DB, error) {
-	d := sqlite3.SQLiteDriver{}
-	dbc, err := d.Open(dbPath)
+	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		return nil, err
 	}
 
 	return &DB{
-		sqlite3conn: dbc.(*sqlite3.SQLiteConn),
-		path:        dbPath,
+		db:   db,
+		path: dbPath,
 	}, nil
 }
 
@@ -153,27 +218,28 @@ func (db *DB) EnableFKConstraints(e bool) error {
 	if !e {
 		q = fkChecksDisabled
 	}
-	_, err := db.sqlite3conn.Exec(q, nil)
+	_, err := db.db.Exec(q)
 	return err
 }
 
 // FKConstraints returns whether FK constraints are set or not.
 func (db *DB) FKConstraints() (bool, error) {
-	r, err := db.sqlite3conn.Query(fkChecks, nil)
+	r, err := db.db.Query(fkChecks)
 	if err != nil {
 		return false, err
 	}
+	defer r.Close()
 
-	dest := make([]driver.Value, len(r.Columns()))
-	types := r.(*sqlite3.SQLiteRows).DeclTypes()
-	if err := r.Next(dest); err != nil {
-		return false, err
+	for r.Next() {
+		i := 0
+		r.Scan(&i)
+		if i > 0 {
+			return true, nil
+		} else {
+			return false, nil
+		}
 	}
 
-	values := normalizeRowValues(dest, types)
-	if values[0] == int64(1) {
-		return true, nil
-	}
 	return false, nil
 }
 
@@ -194,6 +260,12 @@ func (db *DB) Execute(queries []string, tx, xTime bool) ([]*Result, error) {
 		var rollback bool
 		var t driver.Tx
 		var err error
+
+		raw, err := db.rawConn()
+		if err != nil {
+			return err
+		}
+		defer raw.Close()
 
 		// Check for the err, if set rollback.
 		defer func() {
@@ -220,12 +292,12 @@ func (db *DB) Execute(queries []string, tx, xTime bool) ([]*Result, error) {
 			return true
 		}
 
-		execer = db.sqlite3conn
+		execer = raw
 
 		// Create the correct execution object, depending on whether a
 		// transaction was requested.
 		if tx {
-			t, err = db.sqlite3conn.Begin()
+			t, err = raw.Begin()
 			if err != nil {
 				return err
 			}
@@ -295,6 +367,13 @@ func (db *DB) Query(queries []string, tx, xTime bool) ([]*Rows, error) {
 	err := func() (err error) {
 		var queryer Queryer
 		var t driver.Tx
+
+		raw, err := db.rawConn()
+		if err != nil {
+			return err
+		}
+		defer raw.Close()
+
 		defer func() {
 			// XXX THIS DOESN'T ACTUALLY WORK! Might as WELL JUST COMMIT?
 			if t != nil {
@@ -306,12 +385,12 @@ func (db *DB) Query(queries []string, tx, xTime bool) ([]*Rows, error) {
 			}
 		}()
 
-		queryer = db.sqlite3conn
+		queryer = raw
 
 		// Create the correct query object, depending on whether a
 		// transaction was requested.
 		if tx {
-			t, err = db.sqlite3conn.Begin()
+			t, err = raw.Begin()
 			if err != nil {
 				return err
 			}
@@ -368,7 +447,19 @@ func (db *DB) Backup(path string) error {
 		return err
 	}
 
-	bk, err := dstDB.sqlite3conn.Backup("main", db.sqlite3conn, "main")
+	dstConn, err := dstDB.rawConn()
+	if err != nil {
+		return err
+	}
+	defer dstConn.Close()
+
+	srcConn, err := db.rawConn()
+	if err != nil {
+		return err
+	}
+	defer srcConn.Close()
+
+	bk, err := dstConn.Backup("main", srcConn, "main")
 	if err != nil {
 		return err
 	}
@@ -393,6 +484,10 @@ func (db *DB) Backup(path string) error {
 	}
 
 	return nil
+}
+
+func (db *DB) Begin() (*sql.Tx, error) {
+	return db.db.Begin()
 }
 
 // normalizeRowValues performs some normalization of values in the returned rows.

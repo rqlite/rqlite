@@ -216,10 +216,8 @@ func Test_SingleNodeLoad(t *testing.T) {
 	s.WaitForLeader(10 * time.Second)
 
 	dump := `PRAGMA foreign_keys=OFF;
-BEGIN TRANSACTION;
 CREATE TABLE foo (id integer not null primary key, name text);
 INSERT INTO "foo" VALUES(1,'fiona');
-COMMIT;
 `
 	_, err := s.Execute([]string{dump}, false, false)
 	if err != nil {
@@ -250,7 +248,6 @@ func Test_SingleNodeSingleCommandTrigger(t *testing.T) {
 	s.WaitForLeader(10 * time.Second)
 
 	dump := `PRAGMA foreign_keys=OFF;
-BEGIN TRANSACTION;
 CREATE TABLE foo (id integer primary key asc, name text);
 INSERT INTO "foo" VALUES(1,'bob');
 INSERT INTO "foo" VALUES(2,'alice');
@@ -261,7 +258,6 @@ INSERT INTO "bar" VALUES(2,46);
 INSERT INTO "bar" VALUES(3,8);
 CREATE VIEW foobar as select name as Person, Age as age from foo inner join bar on foo.id == bar.nameid;
 CREATE TRIGGER new_foobar instead of insert on foobar begin insert into foo (name) values (new.Person); insert into bar (nameid, age) values ((select id from foo where name == new.Person), new.Age); end;
-COMMIT;
 `
 	_, err := s.Execute([]string{dump}, false, false)
 	if err != nil {
@@ -269,12 +265,18 @@ COMMIT;
 	}
 
 	// Check that the VIEW and TRIGGER are OK by using both.
-	r, err := s.Execute([]string{`INSERT INTO foobar VALUES('jason', 16)`}, false, true)
+	_, err = s.Execute([]string{`INSERT INTO foobar VALUES('jason', 16)`}, false, true)
 	if err != nil {
 		t.Fatalf("failed to insert into view on single node: %s", err.Error())
 	}
-	if exp, got := int64(3), r[0].LastInsertID; exp != got {
-		t.Fatalf("unexpected results for query\nexp: %d\ngot: %d", exp, got)
+
+	rows, err := s.Query([]string{`SELECT * FROM foo WHERE name='jason'`}, false, false, None)
+	if err != nil {
+		t.Fatalf("failed to query foo: %s", err.Error())
+	}
+
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[4,"jason"]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 }
 
@@ -289,8 +291,6 @@ func Test_SingleNodeLoadNoStatements(t *testing.T) {
 	s.WaitForLeader(10 * time.Second)
 
 	dump := `PRAGMA foreign_keys=OFF;
-BEGIN TRANSACTION;
-COMMIT;
 `
 	_, err := s.Execute([]string{dump}, false, false)
 	if err != nil {
@@ -681,7 +681,12 @@ func mustNewStore(inmem bool) *Store {
 	path := mustTempDir()
 	defer os.RemoveAll(path)
 
-	cfg := NewDBConfig("", inmem)
+	dsn := ""
+	if inmem {
+		dsn = "mode=memory&cache=shared"
+	}
+
+	cfg := NewDBConfig(dsn, inmem)
 	s := New(&StoreConfig{
 		DBConf: cfg,
 		Dir:    path,
