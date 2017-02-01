@@ -48,7 +48,7 @@ func Test_SingleNode(t *testing.T) {
 		},
 		{
 			stmt:     `DROP TABLE foo`,
-			expected: `{"results":[{"last_insert_id":1,"rows_affected":1}]}`,
+			expected: `{"results":[{}]}`,
 			execute:  true,
 		},
 	}
