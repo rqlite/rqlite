@@ -576,6 +576,61 @@ func Test_Backup(t *testing.T) {
 	}
 }
 
+func Test_Transactions(t *testing.T) {
+	db, path := mustCreateDatabase()
+	defer db.Close()
+	defer os.Remove(path)
+
+	_, err := db.Execute([]string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"}, false, false)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	tx1, err := db.Begin()
+	if err != nil {
+		t.Fatalf("failed to create transaction %s", err.Error())
+	}
+
+	tx2, err := db.Begin()
+	if err != nil {
+		t.Fatalf("failed to create transaction %s", err.Error())
+	}
+
+	_, err = tx1.Exec(`INSERT INTO foo (name) VALUES ("fiona")`)
+	if err != nil {
+		t.Fatalf("insert fiona failed %s", err)
+	}
+
+	_, err = tx2.Exec(`INSERT INTO foo (name) VALUES ("steve")`)
+	if err != nil && err.Error() != "database is locked" {
+		t.Fatalf("insert steve failed %v", err)
+	}
+
+	err = tx1.Commit()
+	if err != nil {
+		t.Fatalf("failed to commit tx1 %s", err)
+	}
+
+	_, err = tx2.Exec(`INSERT INTO foo (name) VALUES ("steve")`)
+	if err != nil && err.Error() != "database is locked" {
+		t.Fatalf("insert steve failed %v", err)
+	}
+
+	err = tx2.Commit()
+	if err != nil {
+		t.Fatalf("failed to commit tx2 %s", err)
+	}
+
+	rows, err := db.Query([]string{"SELECT * FROM foo ORDER BY id"}, false, false)
+	if err != nil {
+		t.Fatalf("failed to query %s", err)
+	}
+
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"],[2,"steve"]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
 func mustCreateDatabase() (*DB, string) {
 	var err error
 	f, err := ioutil.TempFile("", "rqlilte-test-")
