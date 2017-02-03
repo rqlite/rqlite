@@ -259,9 +259,14 @@ func (s *Store) Open(enableSingle bool) error {
 	}
 	s.raft = ra
 
-	// Wait until the initial logs are applied.
-	if err := s.WaitForAppliedIndex(s.raft.LastIndex(), s.OpenTimeout); err != nil {
-		return ErrOpenTimeout
+	if s.OpenTimeout != 0 {
+		// Wait until the initial logs are applied.
+		s.logger.Printf("waiting for up to %s for application of initial logs", s.OpenTimeout)
+		if err := s.WaitForAppliedIndex(s.raft.LastIndex(), s.OpenTimeout); err != nil {
+			return ErrOpenTimeout
+		}
+	} else {
+		s.logger.Println("not waiting for application of initial logs")
 	}
 
 	return nil
