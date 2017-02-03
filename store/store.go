@@ -26,7 +26,10 @@ import (
 var (
 	// ErrNotLeader is returned when a node attempts to execute a leader-only
 	// operation.
-	ErrNotLeader   = errors.New("not leader")
+	ErrNotLeader = errors.New("not leader")
+
+	// ErrOpenTimeout is returned when the Store does not apply its initial
+	// logs within the specified time.
 	ErrOpenTimeout = errors.New("timeout waiting for initial logs application")
 )
 
