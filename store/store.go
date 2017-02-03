@@ -26,12 +26,14 @@ import (
 var (
 	// ErrNotLeader is returned when a node attempts to execute a leader-only
 	// operation.
-	ErrNotLeader = errors.New("not leader")
+	ErrNotLeader   = errors.New("not leader")
+	ErrOpenTimeout = errors.New("timeout waiting for initial logs application")
 )
 
 const (
 	retainSnapshotCount = 2
 	applyTimeout        = 10 * time.Second
+	openTimeout         = 120 * time.Second
 	sqliteFile          = "db.sqlite"
 	leaderWaitDelay     = 100 * time.Millisecond
 	appliedWaitDelay    = 100 * time.Millisecond
@@ -167,6 +169,7 @@ type Store struct {
 	SnapshotThreshold uint64
 	HeartbeatTimeout  time.Duration
 	ApplyTimeout      time.Duration
+	OpenTimeout       time.Duration
 }
 
 // StoreConfig represents the configuration of the underlying Store.
@@ -194,6 +197,7 @@ func New(c *StoreConfig) *Store {
 		logger:        logger,
 		peerStore:     c.PeerStore,
 		ApplyTimeout:  applyTimeout,
+		OpenTimeout:   openTimeout,
 	}
 }
 
@@ -254,6 +258,11 @@ func (s *Store) Open(enableSingle bool) error {
 		return fmt.Errorf("new raft: %s", err)
 	}
 	s.raft = ra
+
+	// Wait until the initial logs are applied.
+	if err := s.WaitForAppliedIndex(s.raft.LastIndex(), s.OpenTimeout); err != nil {
+		return ErrOpenTimeout
+	}
 
 	return nil
 }
