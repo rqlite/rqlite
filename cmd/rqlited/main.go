@@ -82,6 +82,7 @@ var onDisk bool
 var raftSnapThreshold uint64
 var raftHeartbeatTimeout string
 var raftApplyTimeout string
+var raftOpenTimeout string
 var showVersion bool
 var cpuProfile string
 var memProfile string
@@ -105,6 +106,7 @@ func init() {
 	flag.BoolVar(&showVersion, "version", false, "Show version information and exit")
 	flag.StringVar(&raftHeartbeatTimeout, "rafttimeout", "1s", "Raft heartbeat timeout")
 	flag.StringVar(&raftApplyTimeout, "raftapplytimeout", "10s", "Raft apply timeout")
+	flag.StringVar(&raftOpenTimeout, "raftopentimeout", "120s", "Time for initial Raft logs to be applied. Use 0s duration to skip wait.")
 	flag.Uint64Var(&raftSnapThreshold, "raftsnap", 8192, "Number of outstanding log entries that trigger snapshot")
 	flag.StringVar(&cpuProfile, "cpuprofile", "", "Path to file for CPU profiling information")
 	flag.StringVar(&memProfile, "memprofile", "", "Path to file for memory profiling information")
@@ -173,9 +175,8 @@ func main() {
 		Dir:    dataPath,
 		Tn:     raftTn,
 	})
-	if err := store.Open(joinAddr == ""); err != nil {
-		log.Fatalf("failed to open store: %s", err.Error())
-	}
+
+	// Set optional parameters on store.
 	store.SnapshotThreshold = raftSnapThreshold
 	store.HeartbeatTimeout, err = time.ParseDuration(raftHeartbeatTimeout)
 	if err != nil {
@@ -184,6 +185,15 @@ func main() {
 	store.ApplyTimeout, err = time.ParseDuration(raftApplyTimeout)
 	if err != nil {
 		log.Fatalf("failed to parse Raft apply timeout %s: %s", raftApplyTimeout, err.Error())
+	}
+	store.OpenTimeout, err = time.ParseDuration(raftOpenTimeout)
+	if err != nil {
+		log.Fatalf("failed to parse Raft open timeout %s: %s", raftOpenTimeout, err.Error())
+	}
+
+	// Now, open it.
+	if err := store.Open(joinAddr == ""); err != nil {
+		log.Fatalf("failed to open store: %s", err.Error())
 	}
 
 	// Create and configure cluster service.
