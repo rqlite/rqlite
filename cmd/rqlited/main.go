@@ -175,9 +175,8 @@ func main() {
 		Dir:    dataPath,
 		Tn:     raftTn,
 	})
-	if err := store.Open(joinAddr == ""); err != nil {
-		log.Fatalf("failed to open store: %s", err.Error())
-	}
+
+	// Set optional parameters on store.
 	store.SnapshotThreshold = raftSnapThreshold
 	store.HeartbeatTimeout, err = time.ParseDuration(raftHeartbeatTimeout)
 	if err != nil {
@@ -190,6 +189,11 @@ func main() {
 	store.OpenTimeout, err = time.ParseDuration(raftOpenTimeout)
 	if err != nil {
 		log.Fatalf("failed to parse Raft open timeout %s: %s", raftOpenTimeout, err.Error())
+	}
+
+	// Now, open it.
+	if err := store.Open(joinAddr == ""); err != nil {
+		log.Fatalf("failed to open store: %s", err.Error())
 	}
 
 	// Create and configure cluster service.
