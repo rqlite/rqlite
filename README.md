@@ -94,4 +94,4 @@ If you are using rqlite in a project, please generate a pull request to add it t
 * [OpenMarket](https://github.com/openmarket/openmarket) - A free, decentralized bitcoin-based marketplace.
 
 ## Pronunciation?
-How do I pronounce rqlite? For what it's worth I pronounce it "ree-qwell-lite".
+How do I pronounce rqlite? For what it's worth I try to pronounce it "ree-qwell-lite". But it seems most people, including me, often pronouce it "R Q lite".
