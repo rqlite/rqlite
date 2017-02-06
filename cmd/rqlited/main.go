@@ -121,7 +121,7 @@ func main() {
 	flag.Parse()
 
 	if showVersion {
-		fmt.Printf("rqlited version %s (commit %s)\n", version, commit)
+		fmt.Printf("rqlited version %s (commit %s, branch %s)\n", version, commit, branch)
 		os.Exit(0)
 	}
 
