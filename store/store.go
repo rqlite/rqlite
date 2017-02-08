@@ -158,6 +158,7 @@ type Store struct {
 
 	raft          *raft.Raft // The consensus mechanism.
 	raftTransport Transport
+	netTransport  *raft.NetworkTransport
 	peerStore     raft.PeerStore
 	dbConf        *DBConfig // SQLite database config.
 	dbPath        string    // Path to underlying SQLite file, if not in-memory.
@@ -218,15 +219,12 @@ func (s *Store) Open(enableSingle bool) error {
 	s.db = db
 
 	// Setup Raft communication.
-	transport := raft.NewNetworkTransport(s.raftTransport, 3, 10*time.Second, os.Stderr)
+	s.netTransport = raft.NewNetworkTransport(s.raftTransport, 3, 10*time.Second, os.Stderr)
 
 	// Create peer storage if necesssary.
 	if s.peerStore == nil {
-		s.peerStore = raft.NewJSONPeers(s.raftDir, transport)
+		s.peerStore = raft.NewJSONPeers(s.raftDir, s.netTransport)
 	}
-
-	// Get the Raft configuration for this store.
-	config := s.raftConfig()
 
 	// Check for any existing peers.
 	peers, err := s.peerStore.Peers()
@@ -237,7 +235,20 @@ func (s *Store) Open(enableSingle bool) error {
 
 	// Allow the node to entry single-mode, potentially electing itself, if
 	// explicitly enabled and there is only 1 node in the cluster already.
-	if enableSingle && len(peers) <= 1 {
+	return s.createRaft(enableSingle && len(peers) <= 1)
+}
+
+func (s *Store) createRaft(enableSingle bool) error {
+	db, err := s.open()
+	if err != nil {
+		return err
+	}
+	s.db = db
+
+	// Get the Raft configuration for this store.
+	config := s.raftConfig()
+
+	if enableSingle {
 		s.logger.Println("enabling single-node mode")
 		config.EnableSingleNode = true
 		config.DisableBootstrapAfterElect = false
@@ -256,7 +267,7 @@ func (s *Store) Open(enableSingle bool) error {
 	}
 
 	// Instantiate the Raft system.
-	ra, err := raft.NewRaft(config, s, logStore, logStore, snapshots, s.peerStore, transport)
+	ra, err := raft.NewRaft(config, s, logStore, logStore, snapshots, s.peerStore, s.netTransport)
 	if err != nil {
 		return fmt.Errorf("new raft: %s", err)
 	}
