@@ -217,11 +217,19 @@ func (s *Store) Open(enableSingle bool) error {
 	}
 	s.db = db
 
+	// Setup Raft communication.
+	transport := raft.NewNetworkTransport(s.raftTransport, 3, 10*time.Second, os.Stderr)
+
+	// Create peer storage if necesssary.
+	if s.peerStore == nil {
+		s.peerStore = raft.NewJSONPeers(s.raftDir, transport)
+	}
+
 	// Get the Raft configuration for this store.
 	config := s.raftConfig()
 
 	// Check for any existing peers.
-	peers, err := readPeersJSON(filepath.Join(s.raftDir, "peers.json"))
+	peers, err := s.peerStore.Peers()
 	if err != nil {
 		return err
 	}
@@ -233,14 +241,6 @@ func (s *Store) Open(enableSingle bool) error {
 		s.logger.Println("enabling single-node mode")
 		config.EnableSingleNode = true
 		config.DisableBootstrapAfterElect = false
-	}
-
-	// Setup Raft communication.
-	transport := raft.NewNetworkTransport(s.raftTransport, 3, 10*time.Second, os.Stderr)
-
-	// Create peer storage if necesssary.
-	if s.peerStore == nil {
-		s.peerStore = raft.NewJSONPeers(s.raftDir, transport)
 	}
 
 	// Create the snapshot store. This allows Raft to truncate the log.
@@ -849,26 +849,6 @@ func (f *fsmSnapshot) Persist(sink raft.SnapshotSink) error {
 
 // Release is a no-op.
 func (f *fsmSnapshot) Release() {}
-
-// readPeersJSON reads the peers from the path.
-func readPeersJSON(path string) ([]string, error) {
-	b, err := ioutil.ReadFile(path)
-	if err != nil && !os.IsNotExist(err) {
-		return nil, err
-	}
-
-	if len(b) == 0 {
-		return nil, nil
-	}
-
-	var peers []string
-	dec := json.NewDecoder(bytes.NewReader(b))
-	if err := dec.Decode(&peers); err != nil {
-		return nil, err
-	}
-
-	return peers, nil
-}
 
 // enabledFromBool converts bool to "enabled" or "disabled".
 func enabledFromBool(b bool) string {
