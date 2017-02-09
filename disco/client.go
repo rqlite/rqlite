@@ -10,6 +10,7 @@ import (
 	"runtime"
 )
 
+// Nodes represents a set of nodes currently registered at the configured Discovery URL.
 type Nodes []string
 
 // Client provides a Discovery Service client.
