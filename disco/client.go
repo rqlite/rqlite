@@ -18,7 +18,7 @@ type Client struct {
 	url string
 }
 
-// New returns an uninitialized Discovery Service client.
+// New returns an initialized Discovery Service client.
 func New(url string) *Client {
 	return &Client{
 		url: url,
