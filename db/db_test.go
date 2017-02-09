@@ -595,6 +595,46 @@ func Test_Backup(t *testing.T) {
 	}
 }
 
+func Test_Transaction(t *testing.T) {
+	db, path := mustCreateDatabase()
+	defer db.Close()
+	defer os.Remove(path)
+
+	_, err := db.Execute([]string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"}, false, false)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		t.Fatalf("failed to start transaction: %s", err.Error())
+	}
+
+	_, err = db.Execute([]string{`INSERT INTO foo (id, name) VALUES (1, "fiona")`}, false, false)
+	if err != nil {
+		t.Fatalf("failed to insert: %s", err.Error())
+	}
+
+	err = tx.Rollback()
+	if err != nil {
+		t.Fatalf("rollback failed: %s", err.Error())
+	}
+
+	_, err = db.Execute([]string{`INSERT INTO foo (id, name) VALUES (2, "aoife")`}, false, true)
+	if err != nil {
+		t.Fatalf("insert aoife failed: %s", err.Error())
+	}
+
+	r, err := db.Query([]string{`SELECT * FROM foo`}, false, false)
+	if err != nil {
+		t.Fatalf("query failed: %s", err.Error())
+	}
+
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[2,"aoife"]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
 func mustCreateDatabase() (*DB, string) {
 	var err error
 	f, err := ioutil.TempFile("", "rqlilte-test-")
