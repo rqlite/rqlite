@@ -4,7 +4,7 @@ To form a rqlite cluster, the joining node must be supplied with the IP address 
 
  * First start one node and determine its IP address.
  * Let it become the leader.
- * Start the next node, passing the IP address of the first node to it.
+ * Start the next node, passing the IP address of the first node to the second.
  * Repeat this previous step, until you have a cluster of the desired size.
 
 To make all this easier, rqlite also supports _discovery_ mode. In this mode each node registers its IP address with an external service, and learns the _join_ addresses of other nodes from the same service.
@@ -14,6 +14,9 @@ To make all this easier, rqlite also supports _discovery_ mode. In this mode eac
 To form a new cluster via discovery, you must first generate a unique Discovery URL (DU) for your cluster. This URL is then passed to each node on start-up, allowing the rqlite nodes to automatically connect to each other. To generate a DU using the free rqlite discovery service, hosted at `discovery.rqlite.com`, execute the following command:
 ```
 curl -XPOST -w "\n" 'https://discovery.rqlite.com?size=3'
+```
+The output of this command will be something like so:
+```
 https://discovery.rqlite.com/204191ca-a8b4-4f03-b6b9-3f7a3a7546f8
 ```
 The `size` paramters will be explained shortly. In the example above `https://discovery.rqlite.com/204191ca-a8b4-4f03-b6b9-3f7a3a7546f8` was returned by the service.
@@ -27,22 +30,22 @@ When each node accesses the DU, the current list of nodes that have registered u
 ### Restricting the cluster size
 The `size` param allows you to restrict the number of nodes that can use the DU to join a cluster. In the example, if a fourth node attempts to register using the DU, it will be receive an error from the service.
 
-### Controlling the registered IP address
+### Controlling the registered join address
 By default each node registers the address passed in via the `--http` option. However if you instead set `--httpadv` when starting a node, the node will instead register that address.
 
 ## Limitations
-If a node that is already part of a cluster, even a cluster of one, it will ignore any DU that is passed to it at startup.
+If a node that is already part of a cluster, it will ignore any DU that is passed to it at startup.
 
 ## Example
 Create a DU:
 ```
-curl -XPOST -w "\n" 'https://discovery.rqlite.com/'
+$ curl -XPOST -w "\n" 'https://discovery.rqlite.com/'
 https://discovery.rqlite.com/b3da7185-725f-461c-b7a4-13f185bd5007
 ```
-Pass the URL to 3 nodes, all of which can be started simultaneously:
+Pass the URL to 3 nodes, all of which can be started simultaneously via the following commands:
 ```
-rqlited --disco https://discovery.rqlite.com/b3da7185-725f-461c-b7a4-13f185bd5007 ~/node.1
-rqlited -http localhost:4003 -raft localhost:4004 --disco https://discovery.rqlite.com/b3da7185-725f-461c-b7a4-13f185bd5007 ~/node.2
-rqlited -http localhost:4005 -raft localhost:4006 --disco https://discovery.rqlite.com/b3da7185-725f-461c-b7a4-13f185bd5007 ~/node.3
+$ rqlited --disco https://discovery.rqlite.com/b3da7185-725f-461c-b7a4-13f185bd5007 ~/node.1
+$ rqlited -http localhost:4003 -raft localhost:4004 --disco https://discovery.rqlite.com/b3da7185-725f-461c-b7a4-13f185bd5007 ~/node.2
+$ rqlited -http localhost:4005 -raft localhost:4006 --disco https://discovery.rqlite.com/b3da7185-725f-461c-b7a4-13f185bd5007 ~/node.3
 ```
 _This demonstration shows all 3 nodes running on the same host. In reality you probably wouldn't do this, and then you wouldn't need to select different -http and -raft ports for each rqlite node._
