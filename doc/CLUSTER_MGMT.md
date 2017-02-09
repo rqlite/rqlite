@@ -46,7 +46,7 @@ If an rqlite process crashes, it is safe to simply to restart it. The node will 
 You can grow a cluster simply by joining a new node to an existing cluster, via requests to the leader, at anytime. The new node will pick up changes that have occurred on the cluster since the cluster first started.
 
 # Replacing a node
-If a node fails completely and is not coming back -- a complete loss -- then it must be first removed from the cluster. To remove a node from a cluster, execute the following command:
+If a node fails completely and is not coming back -- a complete loss -- it should be removed from the cluster. To remove a node from a cluster, execute the following command:
 ```
 curl -XDELETE http://localhost:4001/remove -d '{"addr": "<node raft address>"}'
 ```
