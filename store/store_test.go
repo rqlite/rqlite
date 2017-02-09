@@ -72,6 +72,7 @@ func Test_SingleNodeInMemExecuteQuery(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
+	defer s.db.Destroy()
 	s.WaitForLeader(10 * time.Second)
 
 	queries := []string{
@@ -111,6 +112,7 @@ func Test_SingleNodeInMemExecuteQueryFail(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
+	defer s.db.Destroy()
 	s.WaitForLeader(10 * time.Second)
 
 	queries := []string{
@@ -133,6 +135,7 @@ func Test_SingleNodeFileExecuteQuery(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
+	defer s.db.Destroy()
 	s.WaitForLeader(10 * time.Second)
 
 	queries := []string{
@@ -171,6 +174,7 @@ func Test_SingleNodeExecuteQueryTx(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
+	defer s.db.Destroy()
 	s.WaitForLeader(10 * time.Second)
 
 	queries := []string{
@@ -213,6 +217,7 @@ func Test_SingleNodeLoad(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
+	defer s.db.Destroy()
 	s.WaitForLeader(10 * time.Second)
 
 	dump := `PRAGMA foreign_keys=OFF;
@@ -245,6 +250,7 @@ func Test_SingleNodeSingleCommandTrigger(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
+	defer s.db.Destroy()
 	s.WaitForLeader(10 * time.Second)
 
 	dump := `PRAGMA foreign_keys=OFF;
@@ -282,6 +288,7 @@ func Test_SingleNodeLoadNoStatements(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
+	defer s.db.Destroy()
 	s.WaitForLeader(10 * time.Second)
 
 	dump := `PRAGMA foreign_keys=OFF;
@@ -300,6 +307,7 @@ func Test_SingleNodeLoadEmpty(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
+	defer s.db.Destroy()
 	s.WaitForLeader(10 * time.Second)
 
 	dump := ``
@@ -317,6 +325,7 @@ func Test_SingleNodeLoadChinook(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
+	defer s.db.Destroy()
 	s.WaitForLeader(10 * time.Second)
 
 	_, err := s.Execute([]string{chinook.DB}, false, false)
@@ -368,6 +377,7 @@ func Test_MultiNodeJoinRemove(t *testing.T) {
 		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
 	}
 	defer s0.Close(true)
+	defer s0.db.Destroy()
 	s0.WaitForLeader(10 * time.Second)
 
 	s1 := mustNewStore(true)
@@ -376,6 +386,7 @@ func Test_MultiNodeJoinRemove(t *testing.T) {
 		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
 	}
 	defer s1.Close(true)
+	defer s1.db.Destroy()
 
 	// Get sorted list of cluster nodes.
 	storeNodes := []string{s0.Addr().String(), s1.Addr().String()}
@@ -423,6 +434,7 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
 	}
 	defer s0.Close(true)
+	defer s0.db.Destroy()
 	s0.WaitForLeader(10 * time.Second)
 
 	s1 := mustNewStore(true)
@@ -431,6 +443,7 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
 	}
 	defer s1.Close(true)
+	defer s0.db.Destroy()
 
 	// Join the second node to the first.
 	if err := s0.Join(s1.Addr().String()); err != nil {
@@ -489,6 +502,7 @@ func Test_SingleNodeSnapshotOnDisk(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
+	defer s.db.Destroy()
 	s.WaitForLeader(10 * time.Second)
 
 	queries := []string{
@@ -551,6 +565,7 @@ func Test_SingleNodeSnapshotInMem(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
+	defer s.db.Destroy()
 	s.WaitForLeader(10 * time.Second)
 
 	queries := []string{
@@ -613,6 +628,7 @@ func Test_APIPeers(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
+	defer s.db.Destroy()
 	s.WaitForLeader(10 * time.Second)
 
 	peers := map[string]string{
@@ -648,6 +664,7 @@ func Test_IsLeader(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
+	defer s.db.Destroy()
 	s.WaitForLeader(10 * time.Second)
 
 	if !s.IsLeader() {
@@ -663,6 +680,7 @@ func Test_State(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
+	defer s.db.Destroy()
 	s.WaitForLeader(10 * time.Second)
 
 	state := s.State()
