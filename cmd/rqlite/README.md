@@ -36,16 +36,23 @@ Options:
 ## Example
 
 ```sh
-# start rqlited
-$> rqlited ~/node.1
-
-# start rqlite CLI
-$> rqlite
-# now, we have entered the rqlite terminal
+$ ./rqlite 
 127.0.0.1:4001> CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)
-1 row affected (0.015 sec)
+0 row affected (0.000362 sec)
+127.0.0.1:4001> .tables
++------+
+| name |
++------+
+| foo  |
++------+
+127.0.0.1:4001> .schema
++---------------------------------------------------------------+
+| sql                                                           |
++---------------------------------------------------------------+
+| CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT) |
++---------------------------------------------------------------+
 127.0.0.1:4001> INSERT INTO foo(name) VALUES("fiona")
-1 row affected (0.055 sec)
+1 row affected (0.000117 sec)
 127.0.0.1:4001> SELECT * FROM foo
 +----+-------+
 | id | name  |
@@ -54,5 +61,4 @@ $> rqlite
 +----+-------+
 127.0.0.1:4001> quit
 bye~
-$>
 ```
