@@ -480,7 +480,7 @@ func (s *Store) Backup(leader bool) ([]byte, error) {
 		return nil, ErrNotLeader
 	}
 
-	f, err := ioutil.TempFile("", "rqlilte-bak-")
+	f, err := ioutil.TempFile("", "rqlite-bak-")
 	if err != nil {
 		return nil, err
 	}

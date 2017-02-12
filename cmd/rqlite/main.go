@@ -52,7 +52,13 @@ func main() {
 			}
 			cmd = strings.ToUpper(cmd)
 			switch cmd {
-			case "QUIT", "EXIT":
+			case ".TABLES":
+				err = query(ctx, cmd, `SELECT name FROM sqlite_master WHERE type="table"`, argv)
+			case ".INDEXES":
+				err = query(ctx, cmd, `SELECT sql FROM sqlite_master WHERE type="index"`, argv)
+			case ".SCHEMA":
+				err = query(ctx, cmd, "SELECT sql FROM sqlite_master", argv)
+			case ".QUIT", "QUIT", "EXIT":
 				break FOR_READ
 			case "SELECT":
 				err = query(ctx, cmd, line, argv)
