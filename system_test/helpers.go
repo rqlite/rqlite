@@ -248,7 +248,7 @@ func mustNewNode(enableSingle bool) *Node {
 		Tn:     mustMockTransport("localhost:0"),
 	})
 	if err := node.Store.Open(enableSingle); err != nil {
-		node.Deprovision()
+		os.RemoveAll(node.Dir)
 		panic(fmt.Sprintf("failed to open store: %s", err.Error()))
 	}
 	node.RaftAddr = node.Store.Addr().String()
