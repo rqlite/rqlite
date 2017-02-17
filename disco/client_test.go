@@ -31,7 +31,7 @@ func Test_ClientRegisterBadRequest(t *testing.T) {
 	defer ts.Close()
 
 	c := New(ts.URL)
-	_, err := c.Register("http://127.0.0.1")
+	_, err := c.Register("1234", "http://127.0.0.1")
 	if err == nil {
 		t.Fatalf("failed to receive error on 400 from server")
 	}
@@ -47,7 +47,7 @@ func Test_ClientRegisterNotFound(t *testing.T) {
 	defer ts.Close()
 
 	c := New(ts.URL)
-	_, err := c.Register("http://127.0.0.1")
+	_, err := c.Register("1234", "http://127.0.0.1")
 	if err == nil {
 		t.Fatalf("failed to receive error on 404 from server")
 	}
@@ -63,7 +63,7 @@ func Test_ClientRegisterForbidden(t *testing.T) {
 	defer ts.Close()
 
 	c := New(ts.URL)
-	_, err := c.Register("http://127.0.0.1")
+	_, err := c.Register("1234", "http://127.0.0.1")
 	if err == nil {
 		t.Fatalf("failed to receive error on 403 from server")
 	}
@@ -73,6 +73,10 @@ func Test_ClientRegisterRequestOK(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
 			t.Fatalf("Client did not use POST")
+		}
+
+		if r.URL.String() != "/1234" {
+			t.Fatalf("Request URL is wrong, got: %s", r.URL.String())
 		}
 
 		b, err := ioutil.ReadAll(r.Body)
@@ -95,36 +99,17 @@ func Test_ClientRegisterRequestOK(t *testing.T) {
 			t.Fatalf("incorrect GOOS supplied by client: %s", m["GOARCH"])
 		}
 
-		fmt.Fprintln(w, `[]`)
+		fmt.Fprintln(w, `{"created_at": "2017-02-17 04:49:05.079125", "disco_id": "68d6c7cc-f4cc-11e6-a170-2e79ea0be7b1", "nodes": ["http://127.0.0.1"]}`)
 	}))
 	defer ts.Close()
 
 	c := New(ts.URL)
-	nodes, err := c.Register("http://127.0.0.1")
+	disco, err := c.Register("1234", "http://127.0.0.1")
 	if err != nil {
 		t.Fatalf("failed to register: %s", err.Error())
 	}
-	if len(nodes) != 0 {
-		t.Fatalf("failed to receive empty list of nodes, got %v", nodes)
-	}
-}
-
-func Test_ClientRegisterLeaderOK(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" {
-			t.Fatalf("Client did not use POST")
-		}
-		fmt.Fprintln(w, `[]`)
-	}))
-	defer ts.Close()
-
-	c := New(ts.URL)
-	nodes, err := c.Register("http://127.0.0.1")
-	if err != nil {
-		t.Fatalf("failed to register: %s", err.Error())
-	}
-	if len(nodes) != 0 {
-		t.Fatalf("failed to receive empty list of nodes, got %v", nodes)
+	if len(disco.Nodes) != 1 {
+		t.Fatalf("failed to receive correct list of nodes, got %v", disco.Nodes)
 	}
 }
 
@@ -133,20 +118,20 @@ func Test_ClientRegisterFollowerOK(t *testing.T) {
 		if r.Method != "POST" {
 			t.Fatalf("Client did not use POST")
 		}
-		fmt.Fprintln(w, `["http://1.1.1.1"]`)
+		fmt.Fprintln(w, `{"created_at": "2017-02-17 04:49:05.079125", "disco_id": "68d6c7cc-f4cc-11e6-a170-2e79ea0be7b1", "nodes": ["http://1.1.1.1", "http://2.2.2.2"]}`)
 	}))
 	defer ts.Close()
 
 	c := New(ts.URL)
-	nodes, err := c.Register("http://2.2.2.2")
+	disco, err := c.Register("1234", "http://2.2.2.2")
 	if err != nil {
 		t.Fatalf("failed to register: %s", err.Error())
 	}
-	if len(nodes) != 1 {
+	if len(disco.Nodes) != 2 {
 		t.Fatalf("failed to receive non-empty list of nodes")
 	}
-	if nodes[0] != `http://1.1.1.1` {
-		t.Fatalf("got incorrect node, got %v", nodes[0])
+	if disco.Nodes[0] != `http://1.1.1.1` {
+		t.Fatalf("got incorrect node, got %v", disco.Nodes[0])
 	}
 }
 
@@ -155,22 +140,25 @@ func Test_ClientRegisterFollowerMultiOK(t *testing.T) {
 		if r.Method != "POST" {
 			t.Fatalf("Client did not use POST")
 		}
-		fmt.Fprintln(w, `["http://1.1.1.1", "http://2.2.2.2"]`)
+		fmt.Fprintln(w, `{"created_at": "2017-02-17 04:49:05.079125", "disco_id": "68d6c7cc-f4cc-11e6-a170-2e79ea0be7b1", "nodes": ["http://1.1.1.1", "http://2.2.2.2", "http://3.3.3.3"]}`)
 	}))
 	defer ts.Close()
 
 	c := New(ts.URL)
-	nodes, err := c.Register("http://3.3.3.3")
+	disco, err := c.Register("1234", "http://3.3.3.3")
 	if err != nil {
 		t.Fatalf("failed to register: %s", err.Error())
 	}
-	if len(nodes) != 2 {
+	if len(disco.Nodes) != 3 {
 		t.Fatalf("failed to receive non-empty list of nodes")
 	}
-	if nodes[0] != `http://1.1.1.1` {
-		t.Fatalf("got incorrect first node, got %v", nodes[0])
+	if disco.Nodes[0] != `http://1.1.1.1` {
+		t.Fatalf("got incorrect first node, got %v", disco.Nodes[0])
 	}
-	if nodes[1] != `http://2.2.2.2` {
-		t.Fatalf("got incorrect second node, got %v", nodes[1])
+	if disco.Nodes[1] != `http://2.2.2.2` {
+		t.Fatalf("got incorrect second node, got %v", disco.Nodes[1])
+	}
+	if disco.Nodes[2] != `http://3.3.3.3` {
+		t.Fatalf("got incorrect third node, got %v", disco.Nodes[1])
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"runtime"
@@ -12,6 +13,12 @@ import (
 
 // Nodes represents a set of nodes currently registered at the configured Discovery URL.
 type Nodes []string
+
+type DiscoResponse struct {
+	CreatedAt string   `json:"created_at"`
+	DiscoID   string   `json:"disco_id"`
+	Nodes     []string `json:"nodes"`
+}
 
 // Client provides a Discovery Service client.
 type Client struct {
@@ -32,7 +39,7 @@ func (c *Client) URL() string {
 
 // Register attempts to register with the Discovery Service, using the given
 // address.
-func (c *Client) Register(addr string) (Nodes, error) {
+func (c *Client) Register(id, addr string) (*DiscoResponse, error) {
 	m := map[string]string{
 		"addr":   addr,
 		"GOOS":   runtime.GOOS,
@@ -43,7 +50,8 @@ func (c *Client) Register(addr string) (Nodes, error) {
 		return nil, err
 	}
 
-	resp, err := http.Post(c.url, "application-type/json", bytes.NewReader(b))
+	url := fmt.Sprintf("%s/%s", c.url, id)
+	resp, err := http.Post(url, "application-type/json", bytes.NewReader(b))
 	if err != nil {
 		return nil, err
 	}
@@ -58,10 +66,10 @@ func (c *Client) Register(addr string) (Nodes, error) {
 		return nil, errors.New(resp.Status)
 	}
 
-	nodes := Nodes{}
-	if err := json.Unmarshal(b, &nodes); err != nil {
+	disco := &DiscoResponse{}
+	if err := json.Unmarshal(b, disco); err != nil {
 		return nil, err
 	}
 
-	return nodes, nil
+	return disco, nil
 }
