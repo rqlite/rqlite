@@ -10,8 +10,8 @@ import (
 	"net/http"
 )
 
-// DiscoResponse represents the response returned by a Discovery Service.
-type DiscoResponse struct {
+// Response represents the response returned by a Discovery Service.
+type Response struct {
 	CreatedAt string   `json:"created_at"`
 	DiscoID   string   `json:"disco_id"`
 	Nodes     []string `json:"nodes"`
@@ -36,7 +36,7 @@ func (c *Client) URL() string {
 
 // Register attempts to register with the Discovery Service, using the given
 // address.
-func (c *Client) Register(id, addr string) (*DiscoResponse, error) {
+func (c *Client) Register(id, addr string) (*Response, error) {
 	m := map[string]string{
 		"addr": addr,
 	}
@@ -45,7 +45,7 @@ func (c *Client) Register(id, addr string) (*DiscoResponse, error) {
 		return nil, err
 	}
 
-	url := fmt.Sprintf("%s/%s", c.url, id)
+	url := c.registrationURL(id)
 	resp, err := http.Post(url, "application-type/json", bytes.NewReader(b))
 	if err != nil {
 		return nil, err
@@ -61,10 +61,14 @@ func (c *Client) Register(id, addr string) (*DiscoResponse, error) {
 		return nil, errors.New(resp.Status)
 	}
 
-	disco := &DiscoResponse{}
-	if err := json.Unmarshal(b, disco); err != nil {
+	r := &Response{}
+	if err := json.Unmarshal(b, r); err != nil {
 		return nil, err
 	}
 
-	return disco, nil
+	return r, nil
+}
+
+func (c *Client) registrationURL(id string) string {
+	return fmt.Sprintf("%s/%s", c.url, id)
 }

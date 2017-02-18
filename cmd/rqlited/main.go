@@ -30,6 +30,7 @@ import (
 
 	"github.com/rqlite/rqlite/auth"
 	"github.com/rqlite/rqlite/cluster"
+	"github.com/rqlite/rqlite/disco"
 	httpd "github.com/rqlite/rqlite/http"
 	"github.com/rqlite/rqlite/store"
 	"github.com/rqlite/rqlite/tcp"
@@ -75,6 +76,8 @@ var raftAddr string
 var raftAdv string
 var joinAddr string
 var noVerify bool
+var discoURL string
+var discoID string
 var expvar bool
 var pprofEnabled bool
 var dsn string
@@ -99,6 +102,8 @@ func init() {
 	flag.StringVar(&raftAdv, "raftadv", "", "Raft advertise address. If not set, same as bind")
 	flag.StringVar(&joinAddr, "join", "", "Join a cluster via node at protocol://host:port")
 	flag.BoolVar(&noVerify, "noverify", false, "Skip verification of remote HTTPS cert when joining cluster")
+	flag.StringVar(&discoURL, "disco", "http://discovery.rqlite.com", "Set Discovery Service URL")
+	flag.StringVar(&discoID, "discoid", "", "Set Discovery ID. If not set, Discovery Service not used")
 	flag.BoolVar(&expvar, "expvar", true, "Serve expvar data on HTTP server")
 	flag.BoolVar(&pprofEnabled, "pprof", true, "Serve pprof data on HTTP server")
 	flag.StringVar(&dsn, "dsn", "", `SQLite DSN parameters. E.g. "cache=shared&mode=memory"`)
@@ -204,6 +209,11 @@ func main() {
 		log.Fatalf("failed to open cluster service: %s", err.Error())
 	}
 
+	// It doesn't make sense to specify both a disco ID and join URL.
+	if joinAddr != "" && discoID != "" {
+		log.Fatalf("specifiying both join addrress and diso ID is not valid")
+	}
+
 	// If join was specified, make the join request.
 	if joinAddr != "" {
 		if !store.JoinRequired() {
@@ -267,6 +277,10 @@ func main() {
 	}
 	stopProfile()
 	log.Println("rqlite server stopped")
+}
+
+func determineJoinAddr(d *disco.Response) string {
+	return ""
 }
 
 func join(joinAddr string, skipVerify bool, raftAddr, raftAdv string) error {
