@@ -8,12 +8,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"runtime"
 )
 
-// Nodes represents a set of nodes currently registered at the configured Discovery URL.
-type Nodes []string
-
+// DiscoResponse represents the response returned by a Discovery Service.
 type DiscoResponse struct {
 	CreatedAt string   `json:"created_at"`
 	DiscoID   string   `json:"disco_id"`
@@ -41,9 +38,7 @@ func (c *Client) URL() string {
 // address.
 func (c *Client) Register(id, addr string) (*DiscoResponse, error) {
 	m := map[string]string{
-		"addr":   addr,
-		"GOOS":   runtime.GOOS,
-		"GOARCH": runtime.GOARCH,
+		"addr": addr,
 	}
 	b, err := json.Marshal(m)
 	if err != nil {

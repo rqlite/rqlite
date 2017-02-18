@@ -6,7 +6,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
-	"runtime"
 	"testing"
 )
 
@@ -91,12 +90,6 @@ func Test_ClientRegisterRequestOK(t *testing.T) {
 
 		if m["addr"] != "http://127.0.0.1" {
 			t.Fatalf("incorrect join address supplied by client: %s", m["addr"])
-		}
-		if m["GOOS"] != runtime.GOOS {
-			t.Fatalf("incorrect GOOS supplied by client: %s", m["GOOS"])
-		}
-		if m["GOARCH"] != runtime.GOARCH {
-			t.Fatalf("incorrect GOOS supplied by client: %s", m["GOARCH"])
 		}
 
 		fmt.Fprintln(w, `{"created_at": "2017-02-17 04:49:05.079125", "disco_id": "68d6c7cc-f4cc-11e6-a170-2e79ea0be7b1", "nodes": ["http://127.0.0.1"]}`)
