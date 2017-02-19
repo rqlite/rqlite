@@ -209,11 +209,6 @@ func main() {
 		log.Fatalf("failed to open cluster service: %s", err.Error())
 	}
 
-	// It doesn't make sense to specify both a disco ID and join URL.
-	if joinAddr != "" && discoID != "" {
-		log.Fatalf("specifiying both join addrress and diso ID is not valid")
-	}
-
 	// If join was specified, make the join request.
 	if joinAddr != "" {
 		if !store.JoinRequired() {
