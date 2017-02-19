@@ -13,7 +13,7 @@ import (
 
 // Join attempts to join the cluster at one of the addresses given in joinAddr.
 // It walks through joinAddr in order, and sets the Raft address of the joining
-// node as advAddr. It returns the address successfully used to join the cluster.
+// node as advAddr. It returns the endpoint successfully used to join the cluster.
 func Join(joinAddr []string, advAddr string, skipVerify bool) (string, error) {
 	var err error
 	var j string
