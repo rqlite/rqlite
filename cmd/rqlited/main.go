@@ -280,24 +280,31 @@ func main() {
 }
 
 func determineJoinAddresses() ([]string, error) {
-	advAddr := raftAddr
-	if raftAdv != "" {
-		advAddr = raftAdv
+	apiAdv := httpAddr
+	if httpAdv != "" {
+		apiAdv = httpAdv
 	}
 
-	addrs := []string{}
+	var addrs []string
+	if joinAddr != "" {
+		// An explicit join address is first priority.
+		addrs = append(addrs, joinAddr)
+	}
+
 	if discoID != "" {
 		c := disco.New(discoURL)
-		r, err := c.Register(discoID, advAddr)
+		r, err := c.Register(discoID, apiAdv)
 		if err != nil {
 			return nil, err
 		}
-		addrs = append(addrs, r.Nodes...)
+		for _, a := range r.Nodes {
+			if a != apiAdv {
+				// Only other nodes can be joined.
+				addrs = append(addrs, a)
+			}
+		}
 	}
 
-	if joinAddr != "" {
-		addrs = append([]string{joinAddr}, addrs...)
-	}
 	return addrs, nil
 }
 
