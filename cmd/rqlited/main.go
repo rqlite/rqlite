@@ -192,8 +192,19 @@ func main() {
 		log.Fatalf("failed to parse Raft open timeout %s: %s", raftOpenTimeout, err.Error())
 	}
 
+	// Determine join addresses, in case this node has been instructed to join an existing cluster.
+	var joins []string
+	if store.JoinRequired() {
+		joins, err = determineJoinAddresses()
+		if err != nil {
+			log.Fatalf("unable to determine join addresses: %s", err.Error())
+		}
+	} else {
+		log.Println("node is already member of cluster, ignoring any join requests")
+	}
+
 	// Now, open it.
-	if err := store.Open(joinAddr == ""); err != nil {
+	if err := store.Open(len(joins) == 0); err != nil {
 		log.Fatalf("failed to open store: %s", err.Error())
 	}
 
@@ -204,25 +215,19 @@ func main() {
 		log.Fatalf("failed to open cluster service: %s", err.Error())
 	}
 
-	// If a join operation was specified, make the join request.
-	joins, err := determineJoinAddresses()
-	if err != nil {
-		log.Fatalf("unable to determine join addresses: %s", err.Error())
-	}
+	// Execute any requested join operation.
 	if len(joins) > 0 {
+		log.Println("join addresses are:", joins)
+
 		advAddr := raftAddr
 		if raftAdv != "" {
 			advAddr = raftAdv
 		}
 
-		if !store.JoinRequired() {
-			log.Println("node is already member of cluster, ignoring join requests")
+		if j, err := cluster.Join(joins, advAddr, noVerify); err != nil {
+			log.Fatalf("failed to join cluster at %s: %s", joinAddr, err.Error())
 		} else {
-			if j, err := cluster.Join(joins, advAddr, noVerify); err != nil {
-				log.Fatalf("failed to join cluster at %s: %s", joinAddr, err.Error())
-			} else {
-				log.Println("successfully joined cluster at", j)
-			}
+			log.Println("successfully joined cluster at", j)
 		}
 	}
 
@@ -292,11 +297,13 @@ func determineJoinAddresses() ([]string, error) {
 	}
 
 	if discoID != "" {
+		log.Printf("registering with Discovery Service at %s with ID %s", discoURL, discoID)
 		c := disco.New(discoURL)
 		r, err := c.Register(discoID, apiAdv)
 		if err != nil {
 			return nil, err
 		}
+		log.Println("Discovery service responded with nodes:", r.Nodes)
 		for _, a := range r.Nodes {
 			if a != apiAdv {
 				// Only other nodes can be joined.
