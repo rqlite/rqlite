@@ -12,15 +12,10 @@ the database is made to a majority of underlying SQLite files, or none-at-all.
 package main
 
 import (
-	"bytes"
-	"crypto/tls"
-	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net"
-	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -209,15 +204,25 @@ func main() {
 		log.Fatalf("failed to open cluster service: %s", err.Error())
 	}
 
-	// If join was specified, make the join request.
-	if joinAddr != "" {
+	// If a join operation was specified, make the join request.
+	joins, err := determineJoinAddresses()
+	if err != nil {
+		log.Fatalf("unable to determine join addresses: %s", err.Error())
+	}
+	if len(joins) > 0 {
+		advAddr := raftAddr
+		if raftAdv != "" {
+			advAddr = raftAdv
+		}
+
 		if !store.JoinRequired() {
-			log.Println("node is already member of cluster, ignoring join request")
+			log.Println("node is already member of cluster, ignoring join requests")
 		} else {
-			if err := join(joinAddr, noVerify, raftAddr, raftAdv); err != nil {
+			if j, err := cluster.Join(joins, advAddr, noVerify); err != nil {
 				log.Fatalf("failed to join cluster at %s: %s", joinAddr, err.Error())
+			} else {
+				log.Println("successfully joined cluster at", j)
 			}
-			log.Println("successfully joined cluster at", joinAddr)
 		}
 	}
 
@@ -274,63 +279,26 @@ func main() {
 	log.Println("rqlite server stopped")
 }
 
-func determineJoinAddr(d *disco.Response) string {
-	return ""
-}
-
-func join(joinAddr string, skipVerify bool, raftAddr, raftAdv string) error {
-	addr := raftAddr
+func determineJoinAddresses() ([]string, error) {
+	advAddr := raftAddr
 	if raftAdv != "" {
-		addr = raftAdv
+		advAddr = raftAdv
 	}
 
-	// Join using IP address, as that is what Hashicorp Raft works in.
-	resv, err := net.ResolveTCPAddr("tcp", addr)
-	if err != nil {
-		return err
-	}
-
-	// Check for protocol scheme, and insert default if necessary.
-	fullAddr := httpd.NormalizeAddr(fmt.Sprintf("%s/join", joinAddr))
-
-	// Enable skipVerify as requested.
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: skipVerify},
-	}
-	client := &http.Client{Transport: tr}
-
-	for {
-		b, err := json.Marshal(map[string]string{"addr": resv.String()})
+	addrs := []string{}
+	if discoID != "" {
+		c := disco.New(discoURL)
+		r, err := c.Register(discoID, advAddr)
 		if err != nil {
-			return err
+			return nil, err
 		}
-
-		// Attempt to join.
-		resp, err := client.Post(fullAddr, "application-type/json", bytes.NewReader(b))
-		if err != nil {
-			return err
-		}
-		defer resp.Body.Close()
-
-		b, err = ioutil.ReadAll(resp.Body)
-		if err != nil {
-			return err
-		}
-
-		switch resp.StatusCode {
-		case http.StatusOK:
-			return nil
-		case http.StatusMovedPermanently:
-			fullAddr = resp.Header.Get("location")
-			if fullAddr == "" {
-				return fmt.Errorf("failed to join, invalid redirect received")
-			}
-			log.Println("join request redirecting to", fullAddr)
-			continue
-		default:
-			return fmt.Errorf("failed to join, node returned: %s: (%s)", resp.Status, string(b))
-		}
+		addrs = append(addrs, r.Nodes...)
 	}
+
+	if joinAddr != "" {
+		addrs = append([]string{joinAddr}, addrs...)
+	}
+	return addrs, nil
 }
 
 func publishAPIAddr(c *cluster.Service, raftAddr, apiAddr string, t time.Duration) error {
