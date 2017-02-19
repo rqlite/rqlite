@@ -1,6 +1,9 @@
-!#/bin/bash
+#!/bin/bash
 
 TMP_DATA=`mktemp`
+
+rm $GOPATH/bin/*
+go install ./...
 
 $GOPATH/bin/rqlited ${TMP_DATA}_1 &
 sleep 5
