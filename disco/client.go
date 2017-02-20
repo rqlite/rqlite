@@ -53,7 +53,7 @@ func (c *Client) Register(id, addr string) (*Response, error) {
 			return nil, err
 		}
 
-		c.logger.Println("discovery client attempting registration at", url)
+		c.logger.Printf("discovery client attempting registration of %s at %s", addr, url)
 		resp, err := http.Post(url, "application-type/json", bytes.NewReader(b))
 		if err != nil {
 			return nil, err
@@ -71,6 +71,7 @@ func (c *Client) Register(id, addr string) (*Response, error) {
 			if err := json.Unmarshal(b, r); err != nil {
 				return nil, err
 			}
+			c.logger.Printf("discovery client successfully registered %s at %s", addr, url)
 			return r, nil
 		case http.StatusMovedPermanently:
 			url = c.registrationURL(resp.Header.Get("location"), id)
