@@ -12,15 +12,10 @@ the database is made to a majority of underlying SQLite files, or none-at-all.
 package main
 
 import (
-	"bytes"
-	"crypto/tls"
-	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net"
-	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -30,6 +25,7 @@ import (
 
 	"github.com/rqlite/rqlite/auth"
 	"github.com/rqlite/rqlite/cluster"
+	"github.com/rqlite/rqlite/disco"
 	httpd "github.com/rqlite/rqlite/http"
 	"github.com/rqlite/rqlite/store"
 	"github.com/rqlite/rqlite/tcp"
@@ -75,6 +71,8 @@ var raftAddr string
 var raftAdv string
 var joinAddr string
 var noVerify bool
+var discoURL string
+var discoID string
 var expvar bool
 var pprofEnabled bool
 var dsn string
@@ -99,6 +97,8 @@ func init() {
 	flag.StringVar(&raftAdv, "raftadv", "", "Raft advertise address. If not set, same as bind")
 	flag.StringVar(&joinAddr, "join", "", "Join a cluster via node at protocol://host:port")
 	flag.BoolVar(&noVerify, "noverify", false, "Skip verification of remote HTTPS cert when joining cluster")
+	flag.StringVar(&discoURL, "disco", "http://discovery.rqlite.com", "Set Discovery Service URL")
+	flag.StringVar(&discoID, "discoid", "", "Set Discovery ID. If not set, Discovery Service not used")
 	flag.BoolVar(&expvar, "expvar", true, "Serve expvar data on HTTP server")
 	flag.BoolVar(&pprofEnabled, "pprof", true, "Serve pprof data on HTTP server")
 	flag.StringVar(&dsn, "dsn", "", `SQLite DSN parameters. E.g. "cache=shared&mode=memory"`)
@@ -192,8 +192,19 @@ func main() {
 		log.Fatalf("failed to parse Raft open timeout %s: %s", raftOpenTimeout, err.Error())
 	}
 
+	// Determine join addresses, in case this node has been instructed to join an existing cluster.
+	var joins []string
+	if store.JoinRequired() {
+		joins, err = determineJoinAddresses()
+		if err != nil {
+			log.Fatalf("unable to determine join addresses: %s", err.Error())
+		}
+	} else {
+		log.Println("node is already member of cluster, ignoring any join requests")
+	}
+
 	// Now, open it.
-	if err := store.Open(joinAddr == ""); err != nil {
+	if err := store.Open(len(joins) == 0); err != nil {
 		log.Fatalf("failed to open store: %s", err.Error())
 	}
 
@@ -204,15 +215,19 @@ func main() {
 		log.Fatalf("failed to open cluster service: %s", err.Error())
 	}
 
-	// If join was specified, make the join request.
-	if joinAddr != "" {
-		if !store.JoinRequired() {
-			log.Println("node is already member of cluster, ignoring join request")
+	// Execute any requested join operation.
+	if len(joins) > 0 {
+		log.Println("join addresses are:", joins)
+
+		advAddr := raftAddr
+		if raftAdv != "" {
+			advAddr = raftAdv
+		}
+
+		if j, err := cluster.Join(joins, advAddr, noVerify); err != nil {
+			log.Fatalf("failed to join cluster at %s: %s", joinAddr, err.Error())
 		} else {
-			if err := join(joinAddr, noVerify, raftAddr, raftAdv); err != nil {
-				log.Fatalf("failed to join cluster at %s: %s", joinAddr, err.Error())
-			}
-			log.Println("successfully joined cluster at", joinAddr)
+			log.Println("successfully joined cluster at", j)
 		}
 	}
 
@@ -269,59 +284,35 @@ func main() {
 	log.Println("rqlite server stopped")
 }
 
-func join(joinAddr string, skipVerify bool, raftAddr, raftAdv string) error {
-	addr := raftAddr
-	if raftAdv != "" {
-		addr = raftAdv
+func determineJoinAddresses() ([]string, error) {
+	apiAdv := httpAddr
+	if httpAdv != "" {
+		apiAdv = httpAdv
 	}
 
-	// Join using IP address, as that is what Hashicorp Raft works in.
-	resv, err := net.ResolveTCPAddr("tcp", addr)
-	if err != nil {
-		return err
+	var addrs []string
+	if joinAddr != "" {
+		// An explicit join address is first priority.
+		addrs = append(addrs, joinAddr)
 	}
 
-	// Check for protocol scheme, and insert default if necessary.
-	fullAddr := httpd.NormalizeAddr(fmt.Sprintf("%s/join", joinAddr))
-
-	// Enable skipVerify as requested.
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: skipVerify},
-	}
-	client := &http.Client{Transport: tr}
-
-	for {
-		b, err := json.Marshal(map[string]string{"addr": resv.String()})
+	if discoID != "" {
+		log.Printf("registering with Discovery Service at %s with ID %s", discoURL, discoID)
+		c := disco.New(discoURL)
+		r, err := c.Register(discoID, apiAdv)
 		if err != nil {
-			return err
+			return nil, err
 		}
-
-		// Attempt to join.
-		resp, err := client.Post(fullAddr, "application-type/json", bytes.NewReader(b))
-		if err != nil {
-			return err
-		}
-		defer resp.Body.Close()
-
-		b, err = ioutil.ReadAll(resp.Body)
-		if err != nil {
-			return err
-		}
-
-		switch resp.StatusCode {
-		case http.StatusOK:
-			return nil
-		case http.StatusMovedPermanently:
-			fullAddr = resp.Header.Get("location")
-			if fullAddr == "" {
-				return fmt.Errorf("failed to join, invalid redirect received")
+		log.Println("Discovery service responded with nodes:", r.Nodes)
+		for _, a := range r.Nodes {
+			if a != apiAdv {
+				// Only other nodes can be joined.
+				addrs = append(addrs, a)
 			}
-			log.Println("join request redirecting to", fullAddr)
-			continue
-		default:
-			return fmt.Errorf("failed to join, node returned: %s: (%s)", resp.Status, string(b))
 		}
 	}
+
+	return addrs, nil
 }
 
 func publishAPIAddr(c *cluster.Service, raftAddr, apiAddr string, t time.Duration) error {

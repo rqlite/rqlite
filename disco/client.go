@@ -5,23 +5,31 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
-	"runtime"
+	"os"
 )
 
-// Nodes represents a set of nodes currently registered at the configured Discovery URL.
-type Nodes []string
+// Response represents the response returned by a Discovery Service.
+type Response struct {
+	CreatedAt string   `json:"created_at"`
+	DiscoID   string   `json:"disco_id"`
+	Nodes     []string `json:"nodes"`
+}
 
 // Client provides a Discovery Service client.
 type Client struct {
-	url string
+	url    string
+	logger *log.Logger
 }
 
 // New returns an initialized Discovery Service client.
 func New(url string) *Client {
 	return &Client{
-		url: url,
+		url:    url,
+		logger: log.New(os.Stderr, "[discovery] ", log.LstdFlags),
 	}
 }
 
@@ -32,36 +40,49 @@ func (c *Client) URL() string {
 
 // Register attempts to register with the Discovery Service, using the given
 // address.
-func (c *Client) Register(addr string) (Nodes, error) {
+func (c *Client) Register(id, addr string) (*Response, error) {
 	m := map[string]string{
-		"addr":   addr,
-		"GOOS":   runtime.GOOS,
-		"GOARCH": runtime.GOARCH,
-	}
-	b, err := json.Marshal(m)
-	if err != nil {
-		return nil, err
+		"addr": addr,
 	}
 
-	resp, err := http.Post(c.url, "application-type/json", bytes.NewReader(b))
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
+	url := c.registrationURL(c.url, id)
 
-	b, err = ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
+	for {
+		b, err := json.Marshal(m)
+		if err != nil {
+			return nil, err
+		}
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, errors.New(resp.Status)
-	}
+		c.logger.Printf("discovery client attempting registration of %s at %s", addr, url)
+		resp, err := http.Post(url, "application-type/json", bytes.NewReader(b))
+		if err != nil {
+			return nil, err
+		}
+		defer resp.Body.Close()
 
-	nodes := Nodes{}
-	if err := json.Unmarshal(b, &nodes); err != nil {
-		return nil, err
-	}
+		b, err = ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return nil, err
+		}
 
-	return nodes, nil
+		switch resp.StatusCode {
+		case http.StatusOK:
+			r := &Response{}
+			if err := json.Unmarshal(b, r); err != nil {
+				return nil, err
+			}
+			c.logger.Printf("discovery client successfully registered %s at %s", addr, url)
+			return r, nil
+		case http.StatusMovedPermanently:
+			url = c.registrationURL(resp.Header.Get("location"), id)
+			c.logger.Println("discovery client redirecting to", url)
+			continue
+		default:
+			return nil, errors.New(resp.Status)
+		}
+	}
+}
+
+func (c *Client) registrationURL(url, id string) string {
+	return fmt.Sprintf("%s/%s", url, id)
 }
