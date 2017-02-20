@@ -106,6 +106,47 @@ func Test_ClientRegisterRequestOK(t *testing.T) {
 	}
 }
 
+func Test_ClientRegisterRequestRedirectOK(t *testing.T) {
+	ts1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			t.Fatalf("Client did not use POST")
+		}
+
+		if r.URL.String() != "/1234" {
+			t.Fatalf("Request URL is wrong, got: %s", r.URL.String())
+		}
+
+		b, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("failed to read request from client: %s", err.Error())
+		}
+
+		m := map[string]string{}
+		if err := json.Unmarshal(b, &m); err != nil {
+			t.Fatalf("failed to unmarshal request from client: %s", err.Error())
+		}
+
+		if m["addr"] != "http://127.0.0.1" {
+			t.Fatalf("incorrect join address supplied by client: %s", m["addr"])
+		}
+
+		fmt.Fprintln(w, `{"created_at": "2017-02-17 04:49:05.079125", "disco_id": "68d6c7cc-f4cc-11e6-a170-2e79ea0be7b1", "nodes": ["http://127.0.0.1"]}`)
+	}))
+	defer ts1.Close()
+	ts2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, ts1.URL, http.StatusMovedPermanently)
+	}))
+
+	c := New(ts2.URL)
+	disco, err := c.Register("1234", "http://127.0.0.1")
+	if err != nil {
+		t.Fatalf("failed to register: %s", err.Error())
+	}
+	if len(disco.Nodes) != 1 {
+		t.Fatalf("failed to receive correct list of nodes, got %v", disco.Nodes)
+	}
+}
+
 func Test_ClientRegisterFollowerOK(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {

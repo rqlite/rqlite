@@ -7,7 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
+	"os"
 )
 
 // Response represents the response returned by a Discovery Service.
@@ -19,13 +21,15 @@ type Response struct {
 
 // Client provides a Discovery Service client.
 type Client struct {
-	url string
+	url    string
+	logger *log.Logger
 }
 
 // New returns an initialized Discovery Service client.
 func New(url string) *Client {
 	return &Client{
-		url: url,
+		url:    url,
+		logger: log.New(os.Stderr, "[discovery] ", log.LstdFlags),
 	}
 }
 
@@ -40,35 +44,44 @@ func (c *Client) Register(id, addr string) (*Response, error) {
 	m := map[string]string{
 		"addr": addr,
 	}
-	b, err := json.Marshal(m)
-	if err != nil {
-		return nil, err
-	}
 
-	url := c.registrationURL(id)
-	resp, err := http.Post(url, "application-type/json", bytes.NewReader(b))
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
+	url := c.registrationURL(c.url, id)
 
-	b, err = ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
+	for {
+		b, err := json.Marshal(m)
+		if err != nil {
+			return nil, err
+		}
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, errors.New(resp.Status)
-	}
+		c.logger.Println("discovery client attempting registration at", url)
+		resp, err := http.Post(url, "application-type/json", bytes.NewReader(b))
+		if err != nil {
+			return nil, err
+		}
+		defer resp.Body.Close()
 
-	r := &Response{}
-	if err := json.Unmarshal(b, r); err != nil {
-		return nil, err
-	}
+		b, err = ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return nil, err
+		}
 
-	return r, nil
+		switch resp.StatusCode {
+		case http.StatusOK:
+			r := &Response{}
+			if err := json.Unmarshal(b, r); err != nil {
+				return nil, err
+			}
+			return r, nil
+		case http.StatusMovedPermanently:
+			url = c.registrationURL(resp.Header.Get("location"), id)
+			c.logger.Println("discovery client redirecting to", url)
+			continue
+		default:
+			return nil, errors.New(resp.Status)
+		}
+	}
 }
 
-func (c *Client) registrationURL(id string) string {
-	return fmt.Sprintf("%s/%s", c.url, id)
+func (c *Client) registrationURL(url, id string) string {
+	return fmt.Sprintf("%s/%s", url, id)
 }
