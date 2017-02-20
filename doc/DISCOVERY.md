@@ -9,43 +9,40 @@ To form a rqlite cluster, the joining node must be supplied with the IP address 
 
 To make all this easier, rqlite also supports _discovery_ mode. In this mode each node registers its IP address with an external service, and learns the _join_ addresses of other nodes from the same service.
 
-## Creating a Discovery URL
+## Creating a Discovery Service ID
 
-To form a new cluster via discovery, you must first generate a unique Discovery URL (DU) for your cluster. This URL is then passed to each node on start-up, allowing the rqlite nodes to automatically connect to each other. To generate a DU using the free rqlite discovery service, hosted at `discovery.rqlite.com`, execute the following command:
+To form a new cluster via discovery, you must first generate a unique Discovery ID for your cluster. This ID is then passed to each node on start-up, allowing the rqlite nodes to automatically connect to each other. To generate an ID using the free rqlite discovery service, hosted at `discovery.rqlite.com`, execute the following command:
 ```
-curl -XPOST -w "\n" 'https://discovery.rqlite.com?size=3'
+curl -XPOST -w "\n" 'https://discovery.rqlite.com'
 ```
 The output of this command will be something like so:
+```json
+{"created_at": "2017-02-20 01:25:45.589277", "disco_id": "809d9ba6-f70b-11e6-9a5a-92819c00729a", "nodes": []}
 ```
-https://discovery.rqlite.com/204191ca-a8b4-4f03-b6b9-3f7a3a7546f8
-```
-The `size` paramters will be explained shortly. In the example above `https://discovery.rqlite.com/204191ca-a8b4-4f03-b6b9-3f7a3a7546f8` was returned by the service.
+In the example above `809d9ba6-f70b-11e6-9a5a-92819c00729a` was returned by the service.
 
-This DU is then provided to each node on start-up.
+This ID is then provided to each node on start-up.
 ```
-rqlited --disco https://discovery.rqlite.com/204191ca-a8b4-4f03-b6b9-3f7a3a7546f8
+rqlited --discoid 809d9ba6-f70b-11e6-9a5a-92819c00729a
 ```
-When each node accesses the DU, the current list of nodes that have registered using that DU. If the nodes is the first node to access the DU, it will receive an empty list and will elect itself leader. The discovery service will also add its _join_ address to the list of nodes it maintains. Subsequent nodes will then receive a non-empty list -- a list of join addresses of existing cluster nodes. These nodes will use one of the join addresses in the list to join the cluster.
-
-### Restricting the cluster size
-The `size` param allows you to restrict the number of nodes that can use the DU to join a cluster. In the example, if a fourth node attempts to register using the DU, it will be receive an error from the service.
+When any node registers using the ID, it is returned the current list of nodes that have registered using that ID. If the nodes is the first node to access the service using the ID, it will receive a list that contains just itself -- and will subsequently elect itself leader. Subsequent nodes will then receive a list with more than 1 entry. These nodes will use one of the join addresses in the list to join the cluster.
 
 ### Controlling the registered join address
 By default each node registers the address passed in via the `--http` option. However if you instead set `--httpadv` when starting a node, the node will instead register that address.
 
-## Limitations
-If a node that is already part of a cluster, it will ignore any DU that is passed to it at startup.
+## Caveats
+If a node is already part of a cluster, it will ignore any ID that is passed to it at startup.
 
 ## Example
-Create a DU:
+Create a Discovery Service ID:
 ```
 $ curl -XPOST -w "\n" 'https://discovery.rqlite.com/'
-https://discovery.rqlite.com/b3da7185-725f-461c-b7a4-13f185bd5007
+{"created_at": "2017-02-20 01:25:45.589277", "disco_id": "b3da7185-725f-461c-b7a4-13f185bd5007", "nodes": []}
 ```
-Pass the URL to 3 nodes, all of which can be started simultaneously via the following commands:
+Pass the ID to 3 nodes, all of which can be started simultaneously via the following commands:
 ```
-$ rqlited --disco https://discovery.rqlite.com/b3da7185-725f-461c-b7a4-13f185bd5007 ~/node.1
-$ rqlited -http localhost:4003 -raft localhost:4004 --disco https://discovery.rqlite.com/b3da7185-725f-461c-b7a4-13f185bd5007 ~/node.2
-$ rqlited -http localhost:4005 -raft localhost:4006 --disco https://discovery.rqlite.com/b3da7185-725f-461c-b7a4-13f185bd5007 ~/node.3
+$ rqlited --discoid b3da7185-725f-461c-b7a4-13f185bd5007 ~/node.1
+$ rqlited -http localhost:4003 -raft localhost:4004 --discoid b3da7185-725f-461c-b7a4-13f185bd5007 ~/node.2
+$ rqlited -http localhost:4005 -raft localhost:4006 --discoid b3da7185-725f-461c-b7a4-13f185bd5007 ~/node.3
 ```
 _This demonstration shows all 3 nodes running on the same host. In reality you probably wouldn't do this, and then you wouldn't need to select different -http and -raft ports for each rqlite node._
