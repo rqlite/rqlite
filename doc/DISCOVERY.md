@@ -13,7 +13,7 @@ To make all this easier, rqlite also supports _discovery_ mode. In this mode eac
 
 To form a new cluster via discovery, you must first generate a unique Discovery ID for your cluster. This ID is then passed to each node on start-up, allowing the rqlite nodes to automatically connect to each other. To generate an ID using the free rqlite discovery service, hosted at `discovery.rqlite.com`, execute the following command:
 ```
-curl -XPOST -w "\n" 'https://discovery.rqlite.com'
+curl -XPOST -L -w "\n" 'http://discovery.rqlite.com'
 ```
 The output of this command will be something like so:
 ```json
@@ -36,7 +36,7 @@ If a node is already part of a cluster, it will ignore any ID that is passed to 
 ## Example
 Create a Discovery Service ID:
 ```
-$ curl -XPOST -w "\n" 'https://discovery.rqlite.com/'
+$ curl -XPOST -L -w "\n" 'http://discovery.rqlite.com/'
 {"created_at": "2017-02-20 01:25:45.589277", "disco_id": "b3da7185-725f-461c-b7a4-13f185bd5007", "nodes": []}
 ```
 Pass the ID to 3 nodes, all of which can be started simultaneously via the following commands:
