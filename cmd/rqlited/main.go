@@ -192,15 +192,10 @@ func main() {
 		log.Fatalf("failed to parse Raft open timeout %s: %s", raftOpenTimeout, err.Error())
 	}
 
-	// Determine join addresses, in case this node has been instructed to join an existing cluster.
-	var joins []string
-	if store.JoinRequired() {
-		joins, err = determineJoinAddresses()
-		if err != nil {
-			log.Fatalf("unable to determine join addresses: %s", err.Error())
-		}
-	} else {
-		log.Println("node is already member of cluster, ignoring any join requests")
+	// Determine join addresses.
+	joins, err := determineJoinAddresses()
+	if err != nil {
+		log.Fatalf("unable to determine join addresses: %s", err.Error())
 	}
 
 	// Now, open it.
@@ -218,16 +213,18 @@ func main() {
 	// Execute any requested join operation.
 	if len(joins) > 0 {
 		log.Println("join addresses are:", joins)
-
-		advAddr := raftAddr
-		if raftAdv != "" {
-			advAddr = raftAdv
-		}
-
-		if j, err := cluster.Join(joins, advAddr, noVerify); err != nil {
-			log.Fatalf("failed to join cluster at %s: %s", joinAddr, err.Error())
+		if store.JoinRequired() {
+			advAddr := raftAddr
+			if raftAdv != "" {
+				advAddr = raftAdv
+			}
+			if j, err := cluster.Join(joins, advAddr, noVerify); err != nil {
+				log.Fatalf("failed to join cluster at %s: %s", joinAddr, err.Error())
+			} else {
+				log.Println("successfully joined cluster at", j)
+			}
 		} else {
-			log.Println("successfully joined cluster at", j)
+			log.Println("node is already member of cluster, ignoring any join requests")
 		}
 	}
 
