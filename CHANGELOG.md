@@ -1,5 +1,5 @@
 ## 3.12.0 (unreleased)
-- [PR #280](https://github.com/rqlite/rqlite/pull/280): Integrate with new Discovery Service.
+- [PR #280](https://github.com/rqlite/rqlite/pull/280), [PR #281](https://github.com/rqlite/rqlite/pull/281): Integrate with new Discovery Service.
 
 ## 3.11.0 (February 12th 2017)
 - [PR #268](https://github.com/rqlite/rqlite/pull/268): Allow Store to wait for application of initial logs. Fixes [issue #260](https://github.com/rqlite/rqlite/issues/260).
