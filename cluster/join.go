@@ -7,8 +7,10 @@ import (
 	"fmt"
 	httpd "github.com/rqlite/rqlite/http"
 	"io/ioutil"
+	"log"
 	"net"
 	"net/http"
+	"os"
 	"time"
 )
 
@@ -21,6 +23,7 @@ const attemptInterval time.Duration = 5 * time.Second
 func Join(joinAddr []string, advAddr string, skipVerify bool) (string, error) {
 	var err error
 	var j string
+	logger := log.New(os.Stderr, "[cluster-join] ", log.LstdFlags)
 
 	for i := 0; i < numAttempts; i++ {
 		for _, a := range joinAddr {
@@ -30,6 +33,7 @@ func Join(joinAddr []string, advAddr string, skipVerify bool) (string, error) {
 				return j, nil
 			}
 		}
+		logger.Printf("failed to join cluster at %s, sleeping %s before retry", joinAddr, attemptInterval)
 		time.Sleep(attemptInterval)
 	}
 	return "", err
