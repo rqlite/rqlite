@@ -134,7 +134,7 @@ func Test_ClientRegisterRequestRedirectOK(t *testing.T) {
 	}))
 	defer ts1.Close()
 	ts2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, ts1.URL + "/1234", http.StatusMovedPermanently)
+		http.Redirect(w, r, ts1.URL+"/1234", http.StatusMovedPermanently)
 	}))
 
 	c := New(ts2.URL)
