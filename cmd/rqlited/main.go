@@ -139,6 +139,7 @@ func main() {
 
 	// Configure logging and pump out initial message.
 	log.SetFlags(log.LstdFlags)
+	log.SetOutput(os.Stderr)
 	log.SetPrefix("[rqlited] ")
 	log.Printf("rqlited starting, version %s, commit %s, branch %s", version, commit, branch)
 	log.Printf("architecture target is %s, operating system target is %s", runtime.GOARCH, runtime.GOOS)
