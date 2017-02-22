@@ -1,5 +1,5 @@
 ## 3.12.0 (unreleased)
-- [PR #283](https://github.com/rqlite/rqlite/pull/283): Main code should log to stderr
+- [PR #283](https://github.com/rqlite/rqlite/pull/283): Main code should log to stderr.
 - [PR #280](https://github.com/rqlite/rqlite/pull/280), [PR #281](https://github.com/rqlite/rqlite/pull/281): Integrate with new Discovery Service.
 
 ## 3.11.0 (February 12th 2017)
