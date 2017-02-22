@@ -1,5 +1,6 @@
 ## 3.12.0 (unreleased)
 - [PR #280](https://github.com/rqlite/rqlite/pull/280), [PR #281](https://github.com/rqlite/rqlite/pull/281): Integrate with new Discovery Service.
+- [PR #282](https://github.com/rqlite/rqlite/pull/282): Retry cluster-join attempts on failure
 
 ## 3.11.0 (February 12th 2017)
 - [PR #268](https://github.com/rqlite/rqlite/pull/268): Allow Store to wait for application of initial logs. Fixes [issue #260](https://github.com/rqlite/rqlite/issues/260).
