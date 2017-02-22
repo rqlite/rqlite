@@ -1,13 +1,13 @@
 # rqlite Cluster Discovery Service
 
-To form a rqlite cluster, the joining node must be supplied with the IP address of some other node in the cluster. This requirement -- that one must know the IP address of other nodes to join a cluster -- can be inconvenient in various environments. For example, if you do not know which IP addresses will be assigned ahead of time, creating a cluster for the first time requires the following steps:
+To form a rqlite cluster, the joining node must be supplied with the network address of some other node in the cluster. This requirement -- that one must know the network address of other nodes to join a cluster -- can be inconvenient in various environments. For example, if you do not know which network addresses will be assigned ahead of time, creating a cluster for the first time requires the following steps:
 
- * First start one node and determine its IP address.
+ * First start one node and specify its network address.
  * Let it become the leader.
- * Start the next node, passing the IP address of the first node to the second.
+ * Start the next node, passing the network address of the first node to the second.
  * Repeat this previous step, until you have a cluster of the desired size.
 
-To make all this easier, rqlite also supports _discovery_ mode. In this mode each node registers its IP address with an external service, and learns the _join_ addresses of other nodes from the same service.
+To make all this easier, rqlite also supports _discovery_ mode. In this mode each node registers its network address with an external service, and learns the _join_ addresses of other nodes from the same service.
 
 ## Creating a Discovery Service ID
 
