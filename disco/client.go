@@ -74,7 +74,7 @@ func (c *Client) Register(id, addr string) (*Response, error) {
 			c.logger.Printf("discovery client successfully registered %s at %s", addr, url)
 			return r, nil
 		case http.StatusMovedPermanently:
-			url = c.registrationURL(resp.Header.Get("location"), id)
+			url = resp.Header.Get("location")
 			c.logger.Println("discovery client redirecting to", url)
 			continue
 		default:
