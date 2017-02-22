@@ -7,9 +7,15 @@ import (
 	"fmt"
 	httpd "github.com/rqlite/rqlite/http"
 	"io/ioutil"
+	"log"
 	"net"
 	"net/http"
+	"os"
+	"time"
 )
+
+const numAttempts int = 3
+const attemptInterval time.Duration = 5 * time.Second
 
 // Join attempts to join the cluster at one of the addresses given in joinAddr.
 // It walks through joinAddr in order, and sets the Raft address of the joining
@@ -17,12 +23,18 @@ import (
 func Join(joinAddr []string, advAddr string, skipVerify bool) (string, error) {
 	var err error
 	var j string
-	for _, a := range joinAddr {
-		j, err = join(a, advAddr, skipVerify)
-		if err == nil {
-			// Success!
-			return j, nil
+	logger := log.New(os.Stderr, "[cluster-join] ", log.LstdFlags)
+
+	for i := 0; i < numAttempts; i++ {
+		for _, a := range joinAddr {
+			j, err = join(a, advAddr, skipVerify)
+			if err == nil {
+				// Success!
+				return j, nil
+			}
 		}
+		logger.Printf("failed to join cluster at %s, sleeping %s before retry", joinAddr, attemptInterval)
+		time.Sleep(attemptInterval)
 	}
 	return "", err
 }

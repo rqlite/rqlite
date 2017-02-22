@@ -219,7 +219,7 @@ func main() {
 				advAddr = raftAdv
 			}
 			if j, err := cluster.Join(joins, advAddr, noVerify); err != nil {
-				log.Fatalf("failed to join cluster at %s: %s", joinAddr, err.Error())
+				log.Fatalf("failed to join cluster at %s: %s", joins, err.Error())
 			} else {
 				log.Println("successfully joined cluster at", j)
 			}
