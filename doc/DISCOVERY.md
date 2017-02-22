@@ -31,7 +31,7 @@ When any node registers using the ID, it is returned the current list of nodes t
 By default each node registers the address passed in via the `--http` option. However if you instead set `--httpadv` when starting a node, the node will instead register that address.
 
 ## Caveats
-If a node is already part of a cluster, it will ignore any ID that is passed to it at startup.
+If a node is already part of a cluster, addresses returned by the Discovery Service are ignored.
 
 ## Example
 Create a Discovery Service ID:
