@@ -36,6 +36,7 @@ func Join(joinAddr []string, advAddr string, skipVerify bool) (string, error) {
 		logger.Printf("failed to join cluster at %s, sleeping %s before retry", joinAddr, attemptInterval)
 		time.Sleep(attemptInterval)
 	}
+	logger.Printf("failed to join cluster at %s, after %d attempts", joinAddr, numAttempts)
 	return "", err
 }
 
