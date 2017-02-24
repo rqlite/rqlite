@@ -88,13 +88,13 @@ var memProfile string
 const desc = `rqlite is a distributed system that provides a replicated relational database.`
 
 func init() {
-	flag.StringVar(&httpAddr, "http", "localhost:4001", "HTTP query server address. For HTTPS, set X.509 cert and key.")
-	flag.StringVar(&httpAdv, "httpadv", "", "HTTP redirection advertise address. If not set, same as query server.")
+	flag.StringVar(&httpAddr, "http", "localhost:4001", "HTTP server bind address. For HTTPS, set X.509 cert and key")
+	flag.StringVar(&httpAdv, "httpadv", "", "Advertised HTTP address. If not set, same as HTTP server")
 	flag.StringVar(&x509Cert, "x509cert", "", "Path to X.509 certificate")
 	flag.StringVar(&x509Key, "x509key", "", "Path to X.509 private key for certificate")
-	flag.StringVar(&authFile, "auth", "", "Path to authentication and authorization file. If not set, not enabled.")
+	flag.StringVar(&authFile, "auth", "", "Path to authentication and authorization file. If not set, not enabled")
 	flag.StringVar(&raftAddr, "raft", "localhost:4002", "Raft communication bind address")
-	flag.StringVar(&raftAdv, "raftadv", "", "Raft advertise address. If not set, same as bind")
+	flag.StringVar(&raftAdv, "raftadv", "", "Advertised Raft communication address. If not set, same as Raft bind")
 	flag.StringVar(&joinAddr, "join", "", "Join a cluster via node at protocol://host:port")
 	flag.BoolVar(&noVerify, "noverify", false, "Skip verification of remote HTTPS cert when joining cluster")
 	flag.StringVar(&discoURL, "disco", "http://discovery.rqlite.com", "Set Discovery Service URL")
@@ -106,7 +106,7 @@ func init() {
 	flag.BoolVar(&showVersion, "version", false, "Show version information and exit")
 	flag.StringVar(&raftHeartbeatTimeout, "rafttimeout", "1s", "Raft heartbeat timeout")
 	flag.StringVar(&raftApplyTimeout, "raftapplytimeout", "10s", "Raft apply timeout")
-	flag.StringVar(&raftOpenTimeout, "raftopentimeout", "120s", "Time for initial Raft logs to be applied. Use 0s duration to skip wait.")
+	flag.StringVar(&raftOpenTimeout, "raftopentimeout", "120s", "Time for initial Raft logs to be applied. Use 0s duration to skip wait")
 	flag.Uint64Var(&raftSnapThreshold, "raftsnap", 8192, "Number of outstanding log entries that trigger snapshot")
 	flag.StringVar(&cpuProfile, "cpuprofile", "", "Path to file for CPU profiling information")
 	flag.StringVar(&memProfile, "memprofile", "", "Path to file for memory profiling information")
