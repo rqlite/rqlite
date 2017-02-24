@@ -81,7 +81,7 @@ func Test_DoubleJoinOKSecondNodeRedirect(t *testing.T) {
 	}))
 	defer ts2.Close()
 
-	j, err := Join([]string{ts2.URL, ts1.URL}, "127.0.0.1:9090", true)
+	j, err := Join([]string{ts2.URL}, "127.0.0.1:9090", true)
 	if err != nil {
 		t.Fatalf("failed to join a single node: %s", err.Error())
 	}
