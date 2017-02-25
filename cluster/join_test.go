@@ -74,11 +74,13 @@ func Test_DoubleJoinOKSecondNode(t *testing.T) {
 
 func Test_DoubleJoinOKSecondNodeRedirect(t *testing.T) {
 	ts1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Log(">>> ts1 handling a call")
 	}))
 	defer ts1.Close()
 	joinAddr := fmt.Sprintf("%s%s", ts1.URL, "/join")
 
 	ts2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Logf(">>> setting addr to %s, code to %d", joinAddr, http.StatusMovedPermanently)
 		http.Redirect(w, r, joinAddr, http.StatusMovedPermanently)
 	}))
 	defer ts2.Close()

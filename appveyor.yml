@@ -14,6 +14,7 @@ install:
   - if %BUILD_ENV%==gnu  set MSYS=winsymlinks=lnk
 
 build_script:
+  - go version
   - go get ./...
   - go build -i ./...
   - cd cluster
