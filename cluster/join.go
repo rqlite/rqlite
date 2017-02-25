@@ -76,6 +76,7 @@ func join(joinAddr string, advAddr string, skipVerify bool) (string, error) {
 
 		switch resp.StatusCode {
 		case http.StatusOK:
+			panic("got 200")
 			return fullAddr, nil
 		case http.StatusMovedPermanently:
 			fullAddr = resp.Header.Get("location")
