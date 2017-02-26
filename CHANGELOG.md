@@ -1,4 +1,5 @@
 ## 3.12.0 (unreleased)
+- [PR #286](https://github.com/rqlite/rqlite/pull/286): Tweak help output.
 - [PR #283](https://github.com/rqlite/rqlite/pull/283): Main code should log to stderr.
 - [PR #280](https://github.com/rqlite/rqlite/pull/280), [PR #281](https://github.com/rqlite/rqlite/pull/281): Integrate with new Discovery Service.
 - [PR #282](https://github.com/rqlite/rqlite/pull/282): Retry cluster-join attempts on failure.
