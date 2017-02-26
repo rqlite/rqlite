@@ -76,9 +76,11 @@ func join(joinAddr string, advAddr string, skipVerify bool) (string, error) {
 
 		switch resp.StatusCode {
 		case http.StatusOK:
+			fmt.Println("got 200, with address", fullAddr)
 			return fullAddr, nil
 		case http.StatusMovedPermanently:
 			fullAddr = resp.Header.Get("location")
+			fmt.Println("got 301, with address", fullAddr)
 			if fullAddr == "" {
 				return "", fmt.Errorf("failed to join, invalid redirect received")
 			}

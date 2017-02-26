@@ -74,18 +74,22 @@ func Test_DoubleJoinOKSecondNode(t *testing.T) {
 
 func Test_DoubleJoinOKSecondNodeRedirect(t *testing.T) {
 	ts1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Log(">>> ts1 handling a call")
 	}))
 	defer ts1.Close()
+	joinAddr := fmt.Sprintf("%s%s", ts1.URL, "/join")
+
 	ts2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, fmt.Sprintf("%s%s", ts1.URL, "/join"), http.StatusMovedPermanently)
+		t.Logf(">>> setting addr to %s, code to %d", joinAddr, http.StatusMovedPermanently)
+		http.Redirect(w, r, joinAddr, http.StatusMovedPermanently)
 	}))
 	defer ts2.Close()
 
-	j, err := Join([]string{ts2.URL, ts1.URL}, "127.0.0.1:9090", true)
+	j, err := Join([]string{ts2.URL}, "127.0.0.1:9090", true)
 	if err != nil {
 		t.Fatalf("failed to join a single node: %s", err.Error())
 	}
-	if j != ts1.URL+"/join" {
-		t.Fatalf("node joined using wrong endpoint, exp: %s, got: %s", j, ts2.URL)
+	if j != joinAddr {
+		t.Fatalf("node joined using wrong endpoint, exp: %s, got: %s", joinAddr, j)
 	}
 }
