@@ -2,6 +2,7 @@
 - [PR #283](https://github.com/rqlite/rqlite/pull/283): Main code should log to stderr.
 - [PR #280](https://github.com/rqlite/rqlite/pull/280), [PR #281](https://github.com/rqlite/rqlite/pull/281): Integrate with new Discovery Service.
 - [PR #282](https://github.com/rqlite/rqlite/pull/282): Retry cluster-join attempts on failure.
+- [PR #289](https://github.com/rqlite/rqlite/pull/289): rqlite HTTP clients should not automatically follow redirects.
 
 ## 3.11.0 (February 12th 2017)
 - [PR #268](https://github.com/rqlite/rqlite/pull/268): Allow Store to wait for application of initial logs. Fixes [issue #260](https://github.com/rqlite/rqlite/issues/260).
