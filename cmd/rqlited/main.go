@@ -227,6 +227,8 @@ func main() {
 		} else {
 			log.Println("node is already member of cluster, ignoring any join requests")
 		}
+	} else {
+		log.Println("no join addresses available")
 	}
 
 	// Publish to the cluster the mapping between this Raft address and API address.
