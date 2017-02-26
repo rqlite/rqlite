@@ -46,6 +46,10 @@ func (c *Client) Register(id, addr string) (*Response, error) {
 	}
 
 	url := c.registrationURL(c.url, id)
+	client := &http.Client{}
+	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
 
 	for {
 		b, err := json.Marshal(m)
@@ -54,7 +58,7 @@ func (c *Client) Register(id, addr string) (*Response, error) {
 		}
 
 		c.logger.Printf("discovery client attempting registration of %s at %s", addr, url)
-		resp, err := http.Post(url, "application-type/json", bytes.NewReader(b))
+		resp, err := client.Post(url, "application-type/json", bytes.NewReader(b))
 		if err != nil {
 			return nil, err
 		}
