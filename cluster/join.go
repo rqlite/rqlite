@@ -5,13 +5,14 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	httpd "github.com/rqlite/rqlite/http"
 	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
 	"os"
 	"time"
+
+	httpd "github.com/rqlite/rqlite/http"
 )
 
 const numAttempts int = 3
@@ -55,6 +56,9 @@ func join(joinAddr string, advAddr string, skipVerify bool) (string, error) {
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: skipVerify},
 	}
 	client := &http.Client{Transport: tr}
+	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
 
 	for {
 		b, err := json.Marshal(map[string]string{"addr": resv.String()})
