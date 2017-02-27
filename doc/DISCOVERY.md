@@ -8,7 +8,7 @@ To form a rqlite cluster, the joining node must be supplied with the network add
 
 To make all this easier, rqlite also supports _discovery_ mode. In this mode each node registers its network address with an external service, and learns the _join_ addresses of other nodes from the same service.
 
-As a convenience, a free Discovery Service for rqlite is hosted at `discovery.rqlite.com`. Note that this service is provided on an _as-is_ basis, with no guarantees it will always be available. If you wish to run your own copy of the service, you can deploy the Discovery Service source code yourself.
+As a convenience, a free Discovery Service for rqlite is hosted at `discovery.rqlite.com`. Note that this service is provided on an _as-is_ basis, with no guarantees it will always be available (though it has been built in a highly-reliable manner). If you wish to run your own copy of the service, you can deploy the Discovery Service source code yourself.
 
 ## Creating a Discovery Service ID
 To form a new cluster via discovery, you must first generate a unique Discovery ID for your cluster. This ID is then passed to each node on start-up, allowing the rqlite nodes to automatically connect to each other. To generate an ID using the rqlite discovery service, hosted at `discovery.rqlite.com`, execute the following command:
