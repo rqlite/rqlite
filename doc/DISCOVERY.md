@@ -17,12 +17,16 @@ curl -XPOST -L -w "\n" 'http://discovery.rqlite.com'
 ```
 The output of this command will be something like so:
 ```json
-{"created_at": "2017-02-20 01:25:45.589277", "disco_id": "809d9ba6-f70b-11e6-9a5a-92819c00729a", "nodes": []}
+{
+    "created_at": "2017-02-20 01:25:45.589277",
+    "disco_id": "809d9ba6-f70b-11e6-9a5a-92819c00729a",
+    "nodes": []
+}
 ```
 In the example above `809d9ba6-f70b-11e6-9a5a-92819c00729a` was returned by the service.
 
 This ID is then provided to each node on start-up.
-```
+```shell
 rqlited --discoid 809d9ba6-f70b-11e6-9a5a-92819c00729a
 ```
 When any node registers using the ID, it is returned the current list of nodes that have registered using that ID. If the nodes is the first node to access the service using the ID, it will receive a list that contains just itself -- and will subsequently elect itself leader. Subsequent nodes will then receive a list with more than 1 entry. These nodes will use one of the join addresses in the list to join the cluster.
@@ -35,14 +39,28 @@ If a node is already part of a cluster, addresses returned by the Discovery Serv
 
 ## Example
 Create a Discovery Service ID:
-```
+```shell
 $ curl -XPOST -L -w "\n" 'http://discovery.rqlite.com/'
-{"created_at": "2017-02-20 01:25:45.589277", "disco_id": "b3da7185-725f-461c-b7a4-13f185bd5007", "nodes": []}
+{
+    "created_at":
+    "2017-02-20 01:25:45.589277",
+    "disco_id": "b3da7185-725f-461c-b7a4-13f185bd5007",
+    "nodes": []
+}
 ```
 Pass the ID to 3 nodes, all of which can be started simultaneously via the following commands:
-```
+```shell
 $ rqlited --discoid b3da7185-725f-461c-b7a4-13f185bd5007 ~/node.1
 $ rqlited -http localhost:4003 -raft localhost:4004 --discoid b3da7185-725f-461c-b7a4-13f185bd5007 ~/node.2
 $ rqlited -http localhost:4005 -raft localhost:4006 --discoid b3da7185-725f-461c-b7a4-13f185bd5007 ~/node.3
 ```
 _This demonstration shows all 3 nodes running on the same host. In reality you probably wouldn't do this, and then you wouldn't need to select different -http and -raft ports for each rqlite node._
+
+## Removing registered addresses
+If you need to remove an address from the list of registered addresses, perhaps because a node has permanently left a cluster, you can do this via the following command:
+```
+$ curl -XDELETE http://discovery.rqlite.com/<disco ID> -H "Content-Type: application/json" -d '{"addr": "<node address>"}'
+```shell
+For example:
+`curl -XDELETE http://discovery.rqlite.com/be0dd310-fe41-11e6-bb97-92e4c2da9b50 -H "Content-Type: application/json" -d '{"addr": "http://192.168.0.1:4001"}'
+```
