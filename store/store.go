@@ -150,6 +150,23 @@ func NewDBConfig(dsn string, memory bool) *DBConfig {
 	return &DBConfig{DSN: dsn, Memory: memory}
 }
 
+type PeerStore struct {
+	*raft.JSONPeers
+}
+
+func NewPeerStore(raftDir string, tn Transport) *PeerStore {
+	raftTn := raft.NewNetworkTransport(tn, 3, 10*time.Second, os.Stderr)
+	return &PeerStore{raft.NewJSONPeers(raftDir, raftTn)}
+}
+
+func (p *PeerStore) JoinRequired() (bool, error) {
+	peers, err := p.Peers()
+	if err != nil {
+		return false, err
+	}
+	return len(peers) <= 1, nil
+}
+
 // Store is a SQLite database, where all changes are made via Raft consensus.
 type Store struct {
 	raftDir string
