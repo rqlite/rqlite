@@ -303,7 +303,7 @@ func determineJoinAddresses() ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		log.Println("Discovery service responded with nodes:", r.Nodes)
+		log.Println("Discovery Service responded with nodes:", r.Nodes)
 		for _, a := range r.Nodes {
 			if a != apiAdv {
 				// Only other nodes can be joined.
