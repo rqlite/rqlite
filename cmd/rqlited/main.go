@@ -165,13 +165,21 @@ func main() {
 	// Start up mux and get transports for cluster.
 	raftTn := mux.Listen(muxRaftHeader)
 
-	// Create and open the store.
+	// Create configuration for store.
 	dataPath, err = filepath.Abs(dataPath)
 	if err != nil {
 		log.Fatalf("failed to determine absolute data path: %s", err.Error())
 	}
 	dbConf := store.NewDBConfig(dsn, !onDisk)
 
+	// Open the peer store separately to check for join constraints.
+	ps := store.NewPeerStore(dataPath, raftTn)
+	joinReq, err := ps.JoinRequired()
+	if err != nil {
+		log.Fatalf("failed to check join required state: %s", err.Error())
+	}
+
+	// Open the store.
 	store := store.New(&store.StoreConfig{
 		DBConf: dbConf,
 		Dir:    dataPath,
@@ -194,9 +202,14 @@ func main() {
 	}
 
 	// Determine join addresses.
-	joins, err := determineJoinAddresses()
-	if err != nil {
-		log.Fatalf("unable to determine join addresses: %s", err.Error())
+	var joins []string
+	if joinReq {
+		joins, err = determineJoinAddresses()
+		if err != nil {
+			log.Fatalf("unable to determine join addresses: %s", err.Error())
+		}
+	} else {
+		log.Println("node is already member of cluster, ignoring any join requests")
 	}
 
 	// Now, open it.
@@ -214,18 +227,14 @@ func main() {
 	// Execute any requested join operation.
 	if len(joins) > 0 {
 		log.Println("join addresses are:", joins)
-		if store.JoinRequired() {
-			advAddr := raftAddr
-			if raftAdv != "" {
-				advAddr = raftAdv
-			}
-			if j, err := cluster.Join(joins, advAddr, noVerify); err != nil {
-				log.Fatalf("failed to join cluster at %s: %s", joins, err.Error())
-			} else {
-				log.Println("successfully joined cluster at", j)
-			}
+		advAddr := raftAddr
+		if raftAdv != "" {
+			advAddr = raftAdv
+		}
+		if j, err := cluster.Join(joins, advAddr, noVerify); err != nil {
+			log.Fatalf("failed to join cluster at %s: %s", joins, err.Error())
 		} else {
-			log.Println("node is already member of cluster, ignoring any join requests")
+			log.Println("successfully joined cluster at", j)
 		}
 	} else {
 		log.Println("no join addresses available")
