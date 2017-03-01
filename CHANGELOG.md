@@ -1,4 +1,4 @@
-## 3.12.0 (unreleased)
+## 3.12.0 (March 1st 2017)
 - [PR #286](https://github.com/rqlite/rqlite/pull/286): Tweak help output.
 - [PR #283](https://github.com/rqlite/rqlite/pull/283): Main code should log to stderr.
 - [PR #280](https://github.com/rqlite/rqlite/pull/280), [PR #281](https://github.com/rqlite/rqlite/pull/281): Integrate with new Discovery Service.
