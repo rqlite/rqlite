@@ -15,6 +15,7 @@ You could use rqlite as part of a larger system, as a central store for some cri
 - Fully replicated production-grade SQL database.
 - [Production-grade] (https://github.com/hashicorp/raft) distributed consensus system.
 - An easy-to-use HTTP(S) API, including leader-redirection and bulk-update support. A CLI is also available.
+- Discovery Service support, allowing clusters to be dynamically created.
 - Basic auth security and user-level permissions.
 - Read consistency levels.
 - Transaction support.
