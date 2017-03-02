@@ -172,41 +172,51 @@ func main() {
 	}
 	dbConf := store.NewDBConfig(dsn, !onDisk)
 
-	store := store.New(&store.StoreConfig{
+	str := store.New(&store.StoreConfig{
 		DBConf: dbConf,
 		Dir:    dataPath,
 		Tn:     raftTn,
 	})
 
 	// Set optional parameters on store.
-	store.SnapshotThreshold = raftSnapThreshold
-	store.HeartbeatTimeout, err = time.ParseDuration(raftHeartbeatTimeout)
+	str.SnapshotThreshold = raftSnapThreshold
+	str.HeartbeatTimeout, err = time.ParseDuration(raftHeartbeatTimeout)
 	if err != nil {
 		log.Fatalf("failed to parse Raft heartbeat timeout %s: %s", raftHeartbeatTimeout, err.Error())
 	}
-	store.ApplyTimeout, err = time.ParseDuration(raftApplyTimeout)
+	str.ApplyTimeout, err = time.ParseDuration(raftApplyTimeout)
 	if err != nil {
 		log.Fatalf("failed to parse Raft apply timeout %s: %s", raftApplyTimeout, err.Error())
 	}
-	store.OpenTimeout, err = time.ParseDuration(raftOpenTimeout)
+	str.OpenTimeout, err = time.ParseDuration(raftOpenTimeout)
 	if err != nil {
 		log.Fatalf("failed to parse Raft open timeout %s: %s", raftOpenTimeout, err.Error())
 	}
 
-	// Determine join addresses.
-	joins, err := determineJoinAddresses()
+	// Determine join addresses, if necessary.
+	ja, err := store.JoinAllowed(dataPath)
 	if err != nil {
-		log.Fatalf("unable to determine join addresses: %s", err.Error())
+		log.Fatalf("unable to determine if join permitted: %s", err.Error())
+	}
+
+	var joins []string
+	if ja {
+		joins, err = determineJoinAddresses()
+		if err != nil {
+			log.Fatalf("unable to determine join addresses: %s", err.Error())
+		}
+	} else {
+		log.Println("node is already member of cluster, skip determining join addresses")
 	}
 
 	// Now, open it.
-	if err := store.Open(len(joins) == 0); err != nil {
+	if err := str.Open(len(joins) == 0); err != nil {
 		log.Fatalf("failed to open store: %s", err.Error())
 	}
 
 	// Create and configure cluster service.
 	tn := mux.Listen(muxMetaHeader)
-	cs := cluster.NewService(tn, store)
+	cs := cluster.NewService(tn, str)
 	if err := cs.Open(); err != nil {
 		log.Fatalf("failed to open cluster service: %s", err.Error())
 	}
@@ -214,21 +224,18 @@ func main() {
 	// Execute any requested join operation.
 	if len(joins) > 0 {
 		log.Println("join addresses are:", joins)
-		if store.JoinRequired() {
-			advAddr := raftAddr
-			if raftAdv != "" {
-				advAddr = raftAdv
-			}
-			if j, err := cluster.Join(joins, advAddr, noVerify); err != nil {
-				log.Fatalf("failed to join cluster at %s: %s", joins, err.Error())
-			} else {
-				log.Println("successfully joined cluster at", j)
-			}
-		} else {
-			log.Println("node is already member of cluster, ignoring any join requests")
+		advAddr := raftAddr
+		if raftAdv != "" {
+			advAddr = raftAdv
 		}
+		if j, err := cluster.Join(joins, advAddr, noVerify); err != nil {
+			log.Fatalf("failed to join cluster at %s: %s", joins, err.Error())
+		} else {
+			log.Println("successfully joined cluster at", j)
+		}
+
 	} else {
-		log.Println("no join addresses available")
+		log.Println("no join addresses set")
 	}
 
 	// Publish to the cluster the mapping between this Raft address and API address.
@@ -255,9 +262,9 @@ func main() {
 		if err := credentialStore.Load(f); err != nil {
 			log.Fatalf("failed to load authentication file: %s", err.Error())
 		}
-		s = httpd.New(httpAddr, store, credentialStore)
+		s = httpd.New(httpAddr, str, credentialStore)
 	} else {
-		s = httpd.New(httpAddr, store, nil)
+		s = httpd.New(httpAddr, str, nil)
 	}
 
 	s.CertFile = x509Cert
@@ -277,7 +284,7 @@ func main() {
 	terminate := make(chan os.Signal, 1)
 	signal.Notify(terminate, os.Interrupt)
 	<-terminate
-	if err := store.Close(true); err != nil {
+	if err := str.Close(true); err != nil {
 		log.Printf("failed to close store: %s", err.Error())
 	}
 	stopProfile()

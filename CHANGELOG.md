@@ -1,3 +1,6 @@
+## 3.12.1 (unreleased)
+- [PR #291](https://github.com/rqlite/rqlite/pull/291): Don't access Discovery Service if node already part of cluster.
+
 ## 3.12.0 (March 1st 2017)
 - [PR #286](https://github.com/rqlite/rqlite/pull/286): Tweak help output.
 - [PR #283](https://github.com/rqlite/rqlite/pull/283): Main code should log to stderr.
