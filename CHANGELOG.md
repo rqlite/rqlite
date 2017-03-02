@@ -1,4 +1,4 @@
-## 3.12.1 (unreleased)
+## 3.12.1 (March 2nd 2017)
 - [PR #291](https://github.com/rqlite/rqlite/pull/291): Don't access Discovery Service if node already part of cluster.
 
 ## 3.12.0 (March 1st 2017)
