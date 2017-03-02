@@ -206,7 +206,7 @@ func main() {
 			log.Fatalf("unable to determine join addresses: %s", err.Error())
 		}
 	} else {
-		log.Println("node is already member of cluster, skipping determining join addresses")
+		log.Println("node is already member of cluster, skip determining join addresses")
 	}
 
 	// Now, open it.
@@ -235,7 +235,7 @@ func main() {
 		}
 
 	} else {
-		log.Println("no join addresses available")
+		log.Println("no join addresses set")
 	}
 
 	// Publish to the cluster the mapping between this Raft address and API address.
