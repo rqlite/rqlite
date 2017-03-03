@@ -40,6 +40,7 @@ _This demonstration shows all 3 nodes running on the same host. In reality you p
 
 With just these few steps you've now got a fault-tolerant, distributed relational database. For full details on creating and managing real clusters check out [this documentation](https://github.com/rqlite/rqlite/blob/master/doc/CLUSTER_MGMT.md).
 
+#### Cluster Discovery
 There is also a rqlite _Discovery Service_, allowing nodes to automatically connect and form a cluster. This can be much more convenient, allowing clusters to be dynamically created. Check out [the documentation](https://github.com/rqlite/rqlite/blob/master/doc/DISCOVERY.md) for more details.
 
 ### Inserting records
