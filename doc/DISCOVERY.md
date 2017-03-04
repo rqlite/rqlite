@@ -50,7 +50,7 @@ $ curl -XPOST -L -w "\n" 'http://discovery.rqlite.com/'
     "nodes": []
 }
 ```
-Pass the ID to 3 nodes, all of which can be started simultaneously via the following commands:
+To automatically form a 3-node cluster simply pass the ID to 3 nodes, all of which can be started simultaneously via the following commands:
 ```shell
 $ rqlited --discoid b3da7185-725f-461c-b7a4-13f185bd5007 ~/node.1
 $ rqlited -http localhost:4003 -raft localhost:4004 --discoid b3da7185-725f-461c-b7a4-13f185bd5007 ~/node.2
