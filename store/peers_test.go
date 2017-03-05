@@ -7,6 +7,8 @@ import (
 	"time"
 )
 
+// Test_NumPeersEnableSingle tests that a single node reports
+// itself as capable of joining a cluster.
 func Test_NumPeersEnableSingle(t *testing.T) {
 	s0 := mustNewStore(true)
 	defer os.RemoveAll(s0.Path())
@@ -25,6 +27,9 @@ func Test_NumPeersEnableSingle(t *testing.T) {
 	}
 }
 
+// Test_NumPeersDisableSingle tests that a single node reports
+// itself as capable of joining a cluster, when explicitly configured
+// as not capable of self-electing.
 func Test_NumPeersDisableSingle(t *testing.T) {
 	s0 := mustNewStore(true)
 	defer os.RemoveAll(s0.Path())
@@ -42,6 +47,8 @@ func Test_NumPeersDisableSingle(t *testing.T) {
 	}
 }
 
+// Test_NumPeersJoin tests that the correct number of nodes are recorded by
+// nodes in a cluster.
 func Test_NumPeersJoin(t *testing.T) {
 	s0 := mustNewStore(true)
 	defer os.RemoveAll(s0.Path())
