@@ -85,6 +85,7 @@ var showVersion bool
 var cpuProfile string
 var memProfile string
 
+const name = `rqlited`
 const desc = `rqlite is a distributed system that provides a replicated relational database.`
 
 func init() {
@@ -112,7 +113,7 @@ func init() {
 	flag.StringVar(&memProfile, "memprofile", "", "Path to file for memory profiling information")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "\n%s\n\n", desc)
-		fmt.Fprintf(os.Stderr, "Usage: %s [arguments] <data directory>\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s [arguments] <data directory>\n", name)
 		flag.PrintDefaults()
 	}
 }
@@ -121,8 +122,8 @@ func main() {
 	flag.Parse()
 
 	if showVersion {
-		fmt.Printf("rqlited %s %s %s (commit %s, branch %s)\n",
-			version, runtime.GOOS, runtime.GOARCH, commit, branch)
+		fmt.Printf("%s %s %s %s (commit %s, branch %s)\n",
+			name, version, runtime.GOOS, runtime.GOARCH, commit, branch)
 		os.Exit(0)
 	}
 
@@ -140,8 +141,8 @@ func main() {
 	// Configure logging and pump out initial message.
 	log.SetFlags(log.LstdFlags)
 	log.SetOutput(os.Stderr)
-	log.SetPrefix("[rqlited] ")
-	log.Printf("rqlited starting, version %s, commit %s, branch %s", version, commit, branch)
+	log.SetPrefix(fmt.Sprintf("[%s] ", name))
+	log.Printf("%s starting, version %s, commit %s, branch %s", name, version, commit, branch)
 	log.Printf("target architecture is %s, operating system target is %s", runtime.GOARCH, runtime.GOOS)
 
 	// Start requested profiling.
