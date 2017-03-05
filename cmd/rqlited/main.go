@@ -86,7 +86,8 @@ var cpuProfile string
 var memProfile string
 
 const name = `rqlited`
-const desc = `rqlite is a distributed system that provides a replicated relational database.`
+const desc = `rqlite is a lightweight, distributed relational database, which uses SQLite as its
+storage engine. It provides an easy-to-use, fault-tolerant store for relational data.`
 
 func init() {
 	flag.StringVar(&httpAddr, "http", "localhost:4001", "HTTP server bind address. For HTTPS, set X.509 cert and key")
