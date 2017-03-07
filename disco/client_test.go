@@ -9,6 +9,7 @@ import (
 	"testing"
 )
 
+// Test_NewClient tests that a new disco client can be instantied. Nothing more.
 func Test_NewClient(t *testing.T) {
 	c := New("https://discovery.rqlite.com")
 	if c == nil {
