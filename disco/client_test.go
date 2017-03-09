@@ -55,6 +55,7 @@ func Test_ClientRegisterNotFound(t *testing.T) {
 	}
 }
 
+// Test_ClientRegisterForbidden tests how the client responds to a 403 from the Discovery Service.
 func Test_ClientRegisterForbidden(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
