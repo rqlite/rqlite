@@ -111,6 +111,7 @@ func Test_ClientRegisterRequestOK(t *testing.T) {
 	}
 }
 
+// Test_ClientRegisterRequestOK tests how the client responds to a redirect from the Discovery Service.
 func Test_ClientRegisterRequestRedirectOK(t *testing.T) {
 	ts1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
