@@ -24,7 +24,7 @@ To join a second node to this leader, execute the following command on _host2_:
 ```bash
 host2:$ rqlited -http host2:4001 -raft host2:4002 -join http://host1:4001 ~/node
 ```
-_If a node receives a join request, and that node is not actually the leader of the cluster, the receiving node will automatically redirect the requesting node to the leader node. As a result a node can actually join a cluster by contacting any node in the cluster._
+_If a node receives a join request, and that node is not actually the leader of the cluster, the receiving node will automatically redirect the requesting node to the leader node. As a result a node can actually join a cluster by contacting any node in the cluster. You can also specify multiple join addresses, and the node will try each address until joining is successful._
 
 Once executed you now have a cluster of two nodes. Of course, for fault-tolerance you need a 3-node cluster, so launch a third node like so on _host3_:
 ```bash
@@ -33,6 +33,9 @@ host3:$ rqlited -http host3:4001 -raft host3:4002  -join http://host1:4001 ~/nod
 _When restarting a node, there is no further need to pass `-join`. It will be ignored if a node is already a member of a cluster._
 
 You've now got a fault-tolerant, distributed, relational database. It can tolerate the failure of any node, even the leader, and remain operational.
+
+## Discovery Service
+There is also a rqlite _Discovery Service_, allowing nodes to automatically connect and form a cluster. This can be much more convenient, allowing clusters to be dynamically created. Check out [the documentation](https://github.com/rqlite/rqlite/blob/master/doc/DISCOVERY.md) for more details.
 
 ## Through the firewall
 On some networks, like AWS EC2 cloud, nodes may have an IP address that is not routable from outside the firewall. Instead these nodes are addressed using a different IP address. You can still form a rqlite cluster however -- check out [this tutorial](http://www.philipotoole.com/rqlite-v3-0-1-globally-replicating-sqlite/) for more details.
