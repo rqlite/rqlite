@@ -1,3 +1,6 @@
+## 3.13.0 (unreleased)
+- [PR #294](https://github.com/rqlite/rqlite/pull/294): Support multiple explicit join addresses.
+
 ## 3.12.1 (March 2nd 2017)
 - [PR #291](https://github.com/rqlite/rqlite/pull/291): Don't access Discovery Service if node already part of cluster.
 
