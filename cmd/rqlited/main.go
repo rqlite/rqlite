@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/pprof"
+	"strings"
 	"time"
 
 	"github.com/rqlite/rqlite/auth"
@@ -97,7 +98,7 @@ func init() {
 	flag.StringVar(&authFile, "auth", "", "Path to authentication and authorization file. If not set, not enabled")
 	flag.StringVar(&raftAddr, "raft", "localhost:4002", "Raft communication bind address")
 	flag.StringVar(&raftAdv, "raftadv", "", "Advertised Raft communication address. If not set, same as Raft bind")
-	flag.StringVar(&joinAddr, "join", "", "Join a cluster via node at protocol://host:port")
+	flag.StringVar(&joinAddr, "join", "", "Comma-delimited list of nodes, through which a cluster can be joined (proto://host:port)")
 	flag.BoolVar(&noVerify, "noverify", false, "Skip verification of remote HTTPS cert when joining cluster")
 	flag.StringVar(&discoURL, "disco", "http://discovery.rqlite.com", "Set Discovery Service URL")
 	flag.StringVar(&discoID, "discoid", "", "Set Discovery ID. If not set, Discovery Service not used")
@@ -301,8 +302,8 @@ func determineJoinAddresses() ([]string, error) {
 
 	var addrs []string
 	if joinAddr != "" {
-		// An explicit join address is first priority.
-		addrs = append(addrs, joinAddr)
+		// Explicit join addresses are first priority.
+		addrs = strings.Split(joinAddr, ",")
 	}
 
 	if discoID != "" {
