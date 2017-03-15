@@ -176,6 +176,7 @@ func Test_ClientRegisterFollowerOK(t *testing.T) {
 	}
 }
 
+// Test_ClientRegisterFollowerMultiOK tests how the client responds to getting a list of nodes it can join.
 func Test_ClientRegisterFollowerMultiOK(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
