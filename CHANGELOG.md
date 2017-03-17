@@ -1,6 +1,7 @@
 ## 3.13.0 (unreleased)
 - [PR #296](https://github.com/rqlite/rqlite/pull/296): Log Go version at startup.
 - [PR #294](https://github.com/rqlite/rqlite/pull/294): Support multiple explicit join addresses.
+- [PR #297](https://github.com/rqlite/rqlite/pull/297): CLI should explicitly handle redirects due to Go1.8. Fixes [issue #295](https://github.com/rqlite/rqlite/issues/295).
 
 ## 3.12.1 (March 2nd 2017)
 - [PR #291](https://github.com/rqlite/rqlite/pull/291): Don't access Discovery Service if node already part of cluster.

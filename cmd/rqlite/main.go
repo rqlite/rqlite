@@ -90,6 +90,11 @@ func sendRequest(ctx *cli.Context, urlStr string, line string, argv *argT, ret i
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: argv.Insecure},
 	}}
 
+	// Explicitly handle redirects.
+	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+
 	nRedirect := 0
 	for {
 		resp, err := client.Post(url, "application/json", strings.NewReader(data))
