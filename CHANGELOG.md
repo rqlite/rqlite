@@ -1,4 +1,5 @@
 ## 3.13.0 (unreleased)
+- [PR #296](https://github.com/rqlite/rqlite/pull/296): Log Go version at startup.
 - [PR #294](https://github.com/rqlite/rqlite/pull/294): Support multiple explicit join addresses.
 
 ## 3.12.1 (March 2nd 2017)
