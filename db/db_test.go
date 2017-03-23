@@ -330,6 +330,29 @@ func Test_SimpleFailingStatements_Query(t *testing.T) {
 	}
 }
 
+func Test_SimplePragmaTableInfo(t *testing.T) {
+	db, path := mustCreateDatabase()
+	defer db.Close()
+	defer os.Remove(path)
+
+	r, err := db.Execute([]string{`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`}, false, false)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if exp, got := `[{}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	res, err := db.Query([]string{`PRAGMA table_info("foo")`}, false, false)
+	if err != nil {
+		t.Fatalf("failed to query a common table expression: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["cid","name","type","notnull","dflt_value","pk"],"types":["","","","","",""],"values":[[0,"id","INTEGER",1,null,1],[1,"name","TEXT",0,null,0]]}]`, asJSON(res); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+}
+
 func Test_CommonTableExpressions(t *testing.T) {
 	db, path := mustCreateDatabase()
 	defer db.Close()
