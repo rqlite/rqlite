@@ -1,1 +1,2 @@
-// Package system_test supports running end-to-end type testing of rqlite
+// Package system supports running end-to-end type testing of rqlite
+package system
