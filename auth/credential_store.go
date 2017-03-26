@@ -1,3 +1,5 @@
+// Package auth is a lightweight credential store.
+// It provides functionality for loading credentials, as well as validating credentials.
 package auth
 
 import (
