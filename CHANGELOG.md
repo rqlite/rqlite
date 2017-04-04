@@ -1,4 +1,4 @@
-## 3.13.0 (unreleased)
+## 3.13.0 (April 3rd 2017)
 - [PR #296](https://github.com/rqlite/rqlite/pull/296): Log Go version at startup.
 - [PR #294](https://github.com/rqlite/rqlite/pull/294): Support multiple explicit join addresses.
 - [PR #297](https://github.com/rqlite/rqlite/pull/297): CLI should explicitly handle redirects due to Go1.8. Fixes [issue #295](https://github.com/rqlite/rqlite/issues/295).
