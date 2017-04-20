@@ -34,6 +34,9 @@ _When restarting a node, there is no further need to pass `-join`. It will be ig
 
 You've now got a fault-tolerant, distributed, relational database. It can tolerate the failure of any node, even the leader, and remain operational.
 
+## Listening on all interfaces
+You can pass `0.0.0.0` to both `-http` and `-raft` if you wish a node to listen on all interfaces. You must still pass an explicit network address to `-join` however.
+
 ## Discovery Service
 There is also a rqlite _Discovery Service_, allowing nodes to automatically connect and form a cluster. This can be much more convenient, allowing clusters to be dynamically created. Check out [the documentation](https://github.com/rqlite/rqlite/blob/master/doc/DISCOVERY.md) for more details.
 
