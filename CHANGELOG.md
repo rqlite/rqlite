@@ -1,3 +1,6 @@
+## 3.14.0 (unreleased)
+- [PR #304](https://github.com/rqlite/rqlite/pull/304): Switch to Go 1.8.1.
+
 ## 3.13.0 (April 3rd 2017)
 - [PR #296](https://github.com/rqlite/rqlite/pull/296): Log Go version at startup.
 - [PR #294](https://github.com/rqlite/rqlite/pull/294): Support multiple explicit join addresses.
