@@ -25,7 +25,7 @@ func (m *MetadataClient) LocalIPv4() (string, error) {
 	return m.get("/latest/meta-data/local-ipv4")
 }
 
-// LocalIPv4 returns the public IPv4 address of the instance.
+// PublicIPv4 returns the public IPv4 address of the instance.
 func (m *MetadataClient) PublicIPv4() (string, error) {
 	return m.get("/latest/meta-data/public-ipv4")
 }
