@@ -12,7 +12,7 @@ You could use rqlite as part of a larger system, as a central store for some cri
 ### Key features
 - Very easy deployment, with no need to separately install SQLite.
 - Fully replicated production-grade SQL database.
-- [Production-grade] (https://github.com/hashicorp/raft) distributed consensus system.
+- [Production-grade](https://github.com/hashicorp/raft) distributed consensus system.
 - An easy-to-use HTTP(S) API, including leader-redirection and bulk-update support. A CLI is also available.
 - [Discovery Service support](https://github.com/rqlite/rqlite/blob/master/doc/DISCOVERY.md), allowing clusters to be dynamically created.
 - Basic auth security and user-level permissions.
