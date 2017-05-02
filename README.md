@@ -30,7 +30,7 @@ rqlited ~/node.1
 This single node automatically becomes the leader. You can pass `-h` to `rqlited` to list all configuration options.
 
 ### Docker
-Alternatively you can pull the latest release via `docker pull rqlite/rqlite`. Docker support is still very early.
+Alternatively you can pull the latest release via `docker pull rqlite/rqlite`. [Docker support](https://github.com/rqlite/rqlite-docker) is still very early.
 
 ### Forming a cluster
 While not strictly necessary to run rqlite, running multiple nodes means you'll have a fault-tolerant cluster. Start two more nodes, allowing the cluster to tolerate failure of a single node, like so:
