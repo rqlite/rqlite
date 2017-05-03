@@ -81,12 +81,18 @@ func OpenWithDSN(dbPath, dsn string) (*DB, error) {
 
 // OpenInMemory opens an in-memory database.
 func OpenInMemory() (*DB, error) {
-	return open(fqdsn(":memory:", ""))
+	return OpenInMemoryWithDSN("mode=memory&cache=shared")
 }
 
 // OpenInMemoryWithDSN opens an in-memory database with a specific DSN.
 func OpenInMemoryWithDSN(dsn string) (*DB, error) {
-	return open(fqdsn(":memory:", dsn))
+	db, err := open(fqdsn(":memory:", dsn))
+	if err != nil {
+		return nil, err
+	}
+
+	db.memory = true
+	return db, nil
 }
 
 // LoadInMemoryWithDSN loads an in-memory database with that at the path,
@@ -132,6 +138,50 @@ func LoadInMemoryWithDSN(dbPath, dsn string) (*DB, error) {
 // Close closes the underlying database connection.
 func (db *DB) Close() error {
 	return db.sqlite3conn.Close()
+}
+
+// Destroy drops all the tables from the database. This is useful for resetting
+// an in-memory database when necessary.
+func (db *DB) Destroy() error {
+	if !db.memory {
+		return fmt.Errorf("destroy not supported on non-memory databases")
+	}
+
+	/* Since we use the same in memory database (i.e. cache=shared)
+	 * to avoid oddities with how the stdlib's sqlite driver works,
+	 * we need to clean up after ourselves, since things will
+	 * persist.
+	 */
+	rows, err := db.sqlite3conn.Query("SELECT name FROM sqlite_master WHERE type='table'", nil)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	tables := []string{}
+	for {
+		vs := make([]driver.Value, 1)
+		err := rows.Next(vs)
+		if err != nil {
+			if err != io.EOF {
+				return err
+			}
+			break
+		}
+
+		switch val := vs[0].(type) {
+		case []byte:
+			tables = append(tables, string(val))
+		default:
+			return fmt.Errorf("unexpected type: %v", vs[0])
+		}
+	}
+
+	for _, t := range tables {
+		db.sqlite3conn.Exec(fmt.Sprintf("DROP TABLE %s", t), nil)
+	}
+
+	return nil
 }
 
 func open(dbPath string) (*DB, error) {
@@ -393,6 +443,10 @@ func (db *DB) Backup(path string) error {
 	}
 
 	return nil
+}
+
+func (db *DB) Begin() (driver.Tx, error) {
+	return db.sqlite3conn.Begin()
 }
 
 // normalizeRowValues performs some normalization of values in the returned rows.

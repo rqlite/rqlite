@@ -72,6 +72,7 @@ func Test_SingleNodeInMemExecuteQuery(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
+	defer s.db.Destroy()
 	s.WaitForLeader(10 * time.Second)
 
 	queries := []string{
@@ -111,6 +112,7 @@ func Test_SingleNodeInMemExecuteQueryFail(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
+	defer s.db.Destroy()
 	s.WaitForLeader(10 * time.Second)
 
 	queries := []string{
@@ -133,6 +135,7 @@ func Test_SingleNodeFileExecuteQuery(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
+	defer s.db.Destroy()
 	s.WaitForLeader(10 * time.Second)
 
 	queries := []string{
@@ -171,6 +174,7 @@ func Test_SingleNodeExecuteQueryTx(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
+	defer s.db.Destroy()
 	s.WaitForLeader(10 * time.Second)
 
 	queries := []string{
@@ -213,13 +217,12 @@ func Test_SingleNodeLoad(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
+	defer s.db.Destroy()
 	s.WaitForLeader(10 * time.Second)
 
 	dump := `PRAGMA foreign_keys=OFF;
-BEGIN TRANSACTION;
 CREATE TABLE foo (id integer not null primary key, name text);
 INSERT INTO "foo" VALUES(1,'fiona');
-COMMIT;
 `
 	_, err := s.Execute([]string{dump}, false, false)
 	if err != nil {
@@ -247,10 +250,10 @@ func Test_SingleNodeSingleCommandTrigger(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
+	defer s.db.Destroy()
 	s.WaitForLeader(10 * time.Second)
 
 	dump := `PRAGMA foreign_keys=OFF;
-BEGIN TRANSACTION;
 CREATE TABLE foo (id integer primary key asc, name text);
 INSERT INTO "foo" VALUES(1,'bob');
 INSERT INTO "foo" VALUES(2,'alice');
@@ -261,7 +264,6 @@ INSERT INTO "bar" VALUES(2,46);
 INSERT INTO "bar" VALUES(3,8);
 CREATE VIEW foobar as select name as Person, Age as age from foo inner join bar on foo.id == bar.nameid;
 CREATE TRIGGER new_foobar instead of insert on foobar begin insert into foo (name) values (new.Person); insert into bar (nameid, age) values ((select id from foo where name == new.Person), new.Age); end;
-COMMIT;
 `
 	_, err := s.Execute([]string{dump}, false, false)
 	if err != nil {
@@ -286,11 +288,10 @@ func Test_SingleNodeLoadNoStatements(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
+	defer s.db.Destroy()
 	s.WaitForLeader(10 * time.Second)
 
 	dump := `PRAGMA foreign_keys=OFF;
-BEGIN TRANSACTION;
-COMMIT;
 `
 	_, err := s.Execute([]string{dump}, false, false)
 	if err != nil {
@@ -306,6 +307,7 @@ func Test_SingleNodeLoadEmpty(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
+	defer s.db.Destroy()
 	s.WaitForLeader(10 * time.Second)
 
 	dump := ``
@@ -323,6 +325,7 @@ func Test_SingleNodeLoadChinook(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
+	defer s.db.Destroy()
 	s.WaitForLeader(10 * time.Second)
 
 	_, err := s.Execute([]string{chinook.DB}, false, false)
@@ -374,6 +377,7 @@ func Test_MultiNodeJoinRemove(t *testing.T) {
 		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
 	}
 	defer s0.Close(true)
+	defer s0.db.Destroy()
 	s0.WaitForLeader(10 * time.Second)
 
 	s1 := mustNewStore(true)
@@ -382,6 +386,7 @@ func Test_MultiNodeJoinRemove(t *testing.T) {
 		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
 	}
 	defer s1.Close(true)
+	defer s1.db.Destroy()
 
 	// Get sorted list of cluster nodes.
 	storeNodes := []string{s0.Addr().String(), s1.Addr().String()}
@@ -429,6 +434,7 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
 	}
 	defer s0.Close(true)
+	defer s0.db.Destroy()
 	s0.WaitForLeader(10 * time.Second)
 
 	s1 := mustNewStore(true)
@@ -437,6 +443,7 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
 	}
 	defer s1.Close(true)
+	defer s0.db.Destroy()
 
 	// Join the second node to the first.
 	if err := s0.Join(s1.Addr().String()); err != nil {
@@ -495,6 +502,7 @@ func Test_SingleNodeSnapshotOnDisk(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
+	defer s.db.Destroy()
 	s.WaitForLeader(10 * time.Second)
 
 	queries := []string{
@@ -557,6 +565,7 @@ func Test_SingleNodeSnapshotInMem(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
+	defer s.db.Destroy()
 	s.WaitForLeader(10 * time.Second)
 
 	queries := []string{
@@ -619,6 +628,7 @@ func Test_APIPeers(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
+	defer s.db.Destroy()
 	s.WaitForLeader(10 * time.Second)
 
 	peers := map[string]string{
@@ -654,6 +664,7 @@ func Test_IsLeader(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
+	defer s.db.Destroy()
 	s.WaitForLeader(10 * time.Second)
 
 	if !s.IsLeader() {
@@ -669,6 +680,7 @@ func Test_State(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
+	defer s.db.Destroy()
 	s.WaitForLeader(10 * time.Second)
 
 	state := s.State()
@@ -681,7 +693,12 @@ func mustNewStore(inmem bool) *Store {
 	path := mustTempDir()
 	defer os.RemoveAll(path)
 
-	cfg := NewDBConfig("", inmem)
+	dsn := ""
+	if inmem {
+		dsn = "mode=memory&cache=shared"
+	}
+
+	cfg := NewDBConfig(dsn, inmem)
 	s := New(&StoreConfig{
 		DBConf: cfg,
 		Dir:    path,

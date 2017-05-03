@@ -5,6 +5,7 @@ package store
 
 import (
 	"bytes"
+	"database/sql/driver"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -139,6 +140,82 @@ func (c *clusterMeta) AddrForPeer(addr string) string {
 	return ""
 }
 
+// Transaction represents a more traditional database transaction.
+type Transaction struct {
+	tx      driver.Tx
+	stmts   []string
+	store   *Store
+	prevErr error
+}
+
+func (t *Transaction) Commit() error {
+	t.store.txMu.Lock()
+	defer t.store.txMu.Unlock()
+
+	if t.prevErr != nil {
+		return fmt.Errorf("Transaction has previously failed commit: %s", t.prevErr)
+	}
+
+	err := t.tx.Commit()
+	if err != nil {
+		return err
+	}
+
+	_, err = t.store.Execute(t.stmts, false, true)
+	if err != nil {
+		/* Uh oh, now we're in an inconsistent state, because the
+		 * database has a tx that the raft log doesn't. This is kind of
+		 * a big hammer, but I don't see a better way to do it: we
+		 * restart this raft, so it rebuilds its picture of what the DB
+		 * should look like. This is safe for the tx, since the tx
+		 * hasn't actually hit the raft logs yet.
+		 *
+		 * There is some performance impact here, since this node was
+		 * the leader given that it was performing transactions.
+		 * However, if the raft log failed to apply, that probably
+		 * means that there's some network disruption happening anyway,
+		 * so hopefully this is okay.
+		 */
+		t.prevErr = err
+		t.store.raft.Shutdown()
+
+		err := t.store.db.Destroy()
+		if err != nil {
+			t.store.logger.Printf("couldn't destroy db: %s", err)
+		}
+		t.store.db.Close()
+
+		peers, err := t.store.peerStore.Peers()
+		if err != nil {
+			t.store.logger.Printf("couldn't get the peers from the peer store %s, starting in non-leader mode", err)
+		}
+
+		var leader bool
+		if len(peers) == 0 && err == nil {
+			leader = true
+		}
+
+		newRaftErr := t.store.createRaft(leader)
+		if newRaftErr == nil {
+			return t.prevErr
+		}
+
+		return fmt.Errorf("commit error: %s, also got an error restarting raft: %s", t.prevErr, newRaftErr)
+	}
+
+	return nil
+}
+
+func (t *Transaction) Rollback() error {
+	t.store.txMu.Lock()
+	defer func() {
+		t.store.tx = nil
+		t.store.txMu.Unlock()
+	}()
+
+	return t.tx.Rollback()
+}
+
 // DBConfig represents the configuration of the underlying SQLite database.
 type DBConfig struct {
 	DSN    string // Any custom DSN
@@ -158,6 +235,7 @@ type Store struct {
 
 	raft          *raft.Raft // The consensus mechanism.
 	raftTransport Transport
+	netTransport  *raft.NetworkTransport
 	peerStore     raft.PeerStore
 	dbConf        *DBConfig // SQLite database config.
 	dbPath        string    // Path to underlying SQLite file, if not in-memory.
@@ -173,6 +251,9 @@ type Store struct {
 	HeartbeatTimeout  time.Duration
 	ApplyTimeout      time.Duration
 	OpenTimeout       time.Duration
+
+	txMu sync.Mutex   // Lock for the current transaction
+	tx   *Transaction // The current transaction
 }
 
 // StoreConfig represents the configuration of the underlying Store.
@@ -218,15 +299,12 @@ func (s *Store) Open(enableSingle bool) error {
 	s.db = db
 
 	// Setup Raft communication.
-	transport := raft.NewNetworkTransport(s.raftTransport, 3, 10*time.Second, os.Stderr)
+	s.netTransport = raft.NewNetworkTransport(s.raftTransport, 3, 10*time.Second, os.Stderr)
 
 	// Create peer storage if necesssary.
 	if s.peerStore == nil {
-		s.peerStore = raft.NewJSONPeers(s.raftDir, transport)
+		s.peerStore = raft.NewJSONPeers(s.raftDir, s.netTransport)
 	}
-
-	// Get the Raft configuration for this store.
-	config := s.raftConfig()
 
 	// Check for any existing peers.
 	peers, err := s.peerStore.Peers()
@@ -237,7 +315,20 @@ func (s *Store) Open(enableSingle bool) error {
 
 	// Allow the node to entry single-mode, potentially electing itself, if
 	// explicitly enabled and there is only 1 node in the cluster already.
-	if enableSingle && len(peers) <= 1 {
+	return s.createRaft(enableSingle && len(peers) <= 1)
+}
+
+func (s *Store) createRaft(enableSingle bool) error {
+	db, err := s.open()
+	if err != nil {
+		return err
+	}
+	s.db = db
+
+	// Get the Raft configuration for this store.
+	config := s.raftConfig()
+
+	if enableSingle {
 		s.logger.Println("enabling single-node mode")
 		config.EnableSingleNode = true
 		config.DisableBootstrapAfterElect = false
@@ -256,7 +347,7 @@ func (s *Store) Open(enableSingle bool) error {
 	}
 
 	// Instantiate the Raft system.
-	ra, err := raft.NewRaft(config, s, logStore, logStore, snapshots, s.peerStore, transport)
+	ra, err := raft.NewRaft(config, s, logStore, logStore, snapshots, s.peerStore, s.netTransport)
 	if err != nil {
 		return fmt.Errorf("new raft: %s", err)
 	}
@@ -444,6 +535,21 @@ func (s *Store) Execute(queries []string, timings, tx bool) ([]*sql.Result, erro
 		return nil, ErrNotLeader
 	}
 
+	s.txMu.Lock()
+	defer s.txMu.Unlock()
+
+	/* if we're in a transaction, just queue the statements, don't apply
+	 * this tx to raft yet
+	 */
+	if s.tx != nil {
+		results, err := s.db.Execute(queries, tx, timings)
+		if err != nil {
+			return results, err
+		}
+		s.tx.stmts = append(s.tx.stmts, queries...)
+		return results, nil
+	}
+
 	d := &databaseSub{
 		Tx:      tx,
 		Queries: queries,
@@ -505,6 +611,17 @@ func (s *Store) Query(queries []string, timings, tx bool, lvl ConsistencyLevel) 
 	defer s.mu.RUnlock()
 
 	if lvl == Strong {
+		s.txMu.Lock()
+		defer s.txMu.Unlock()
+
+		if s.tx != nil {
+			/* we can't do this because there may be stuff in the
+			 * local db that's uncommitted to raft, so we might
+			 * give a wrong answer
+			 */
+			return nil, fmt.Errorf("can't do a Strong query with an open transaction")
+		}
+
 		d := &databaseSub{
 			Tx:      tx,
 			Queries: queries,
@@ -710,6 +827,13 @@ func (s *Store) Database(leader bool) ([]byte, error) {
 // http://sqlite.org/howtocorrupt.html states it is safe to do this
 // as long as no transaction is in progress.
 func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
+	s.txMu.Lock()
+	defer s.txMu.Unlock()
+
+	if s.tx != nil {
+		return nil, fmt.Errorf("transaction in progress, snapshotting would corrupt the db")
+	}
+
 	fsm := &fsmSnapshot{}
 	var err error
 	fsm.database, err = s.Database(false)
@@ -800,6 +924,24 @@ func (s *Store) RegisterObserver(o *raft.Observer) {
 // DeregisterObserver deregisters an observer of Raft events
 func (s *Store) DeregisterObserver(o *raft.Observer) {
 	s.raft.DeregisterObserver(o)
+}
+
+func (s *Store) Begin() (*Transaction, error) {
+	s.txMu.Lock()
+	defer s.txMu.Unlock()
+
+	dbTx, err := s.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+
+	tx := &Transaction{
+		tx:    dbTx,
+		stmts: []string{},
+		store: s,
+	}
+	s.tx = tx
+	return tx, nil
 }
 
 type fsmSnapshot struct {
