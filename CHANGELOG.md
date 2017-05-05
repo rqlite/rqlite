@@ -1,4 +1,4 @@
-## 3.14.0 (unreleased)
+## 3.14.0 (May 4th 2017)
 - [PR #304](https://github.com/rqlite/rqlite/pull/304): Switch to Go 1.8.1.
 
 ## 3.13.0 (April 3rd 2017)
