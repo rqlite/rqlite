@@ -168,10 +168,19 @@ func main() {
 			log.Fatalf("failed to resolve advertise address %s: %s", raftAdv, err.Error())
 		}
 	}
-	mux := tcp.NewMux(ln, adv)
-	go mux.Serve()
+
+	// Encypt TCP connection if requested.
+	if nodeX509Cert != "" && nodeX509Key != "" {
+		ln, err = tcp.NewTLSListener(ln, nodeX509Cert, nodeX509Key)
+		if err != nil {
+			log.Fatalf("failed to create encrypted inter-node communication: %s", err.Error())
+		}
+		log.Printf("encrypting inter-node connection with cert %s, key %s", nodeX509Cert, nodeX509Key)
+	}
 
 	// Start up mux and get transports for cluster.
+	mux := tcp.NewMux(ln, adv)
+	go mux.Serve()
 	raftTn := mux.Listen(muxRaftHeader)
 
 	// Create and open the store.

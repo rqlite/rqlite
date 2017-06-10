@@ -1,6 +1,7 @@
 package tcp
 
 import (
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -202,4 +203,26 @@ func Dial(network, address string, header byte) (net.Conn, error) {
 	}
 
 	return conn, nil
+}
+
+// NewTLSListener returns a net listener which encrypts the traffic using TLS.
+func NewTLSListener(ln net.Listener, certFile, keyFile string) (net.Listener, error) {
+	config, err := createTLSConfig(certFile, keyFile)
+	if err != nil {
+		return nil, err
+	}
+
+	return tls.NewListener(ln, config), nil
+}
+
+// createTLSConfig returns a TLS config from the given cert and key.
+func createTLSConfig(certFile, keyFile string) (*tls.Config, error) {
+	var err error
+	config := &tls.Config{}
+	config.Certificates = make([]tls.Certificate, 1)
+	config.Certificates[0], err = tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return nil, err
+	}
+	return config, nil
 }
