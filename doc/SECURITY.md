@@ -57,7 +57,7 @@ Starting a node with HTTPS enabled and with the above configuration file. It is 
 ```bash
 rqlited -auth config.json -x509cert server.crt -x509key key.pem ~/node.1
 ```
-Bringing up a second node, joining it to the first node.
+Bringing up a second node, joining it to the first node. This allows you to block nodes from joining a cluster, unless those nodes supply a password.
 ```bash
 rqlited -auth config.json -http localhost:4003 -x509cert server.crt \
 -x509key key.pem -raft :4004 -join https://bob:secret1@localhost:4001 \
