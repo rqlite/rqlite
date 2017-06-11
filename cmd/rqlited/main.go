@@ -156,7 +156,7 @@ func main() {
 	// Start requested profiling.
 	startProfile(cpuProfile, memProfile)
 
-	// Set up TCP communication between nodes.
+	// Set up internode TCP communication.
 	ln, err := net.Listen("tcp", raftAddr)
 	if err != nil {
 		log.Fatalf("failed to listen on %s: %s", raftAddr, err.Error())
@@ -169,7 +169,7 @@ func main() {
 		}
 	}
 
-	// Encypt TCP connection if requested.
+	// Encypt internode TCP connection if requested.
 	if nodeX509Cert != "" && nodeX509Key != "" {
 		ln, err = tcp.NewTLSListener(ln, nodeX509Cert, nodeX509Key)
 		if err != nil {
