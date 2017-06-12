@@ -33,7 +33,7 @@ func TestMux(t *testing.T) {
 		// Setup muxer & listeners.
 		mux, err := NewMux(tcpListener, nil)
 		if err != nil {
-			t.Fatalf("failed to create mux: %s", err.Error)
+			t.Fatalf("failed to create mux: %s", err.Error())
 		}
 		mux.Timeout = 200 * time.Millisecond
 		if !testing.Verbose() {
@@ -132,7 +132,7 @@ func TestMux_Advertise(t *testing.T) {
 
 	mux, err := NewMux(tcpListener, addr)
 	if err != nil {
-		t.Fatalf("failed to create mux: %s", err.Error)
+		t.Fatalf("failed to create mux: %s", err.Error())
 	}
 	mux.Timeout = 200 * time.Millisecond
 	if !testing.Verbose() {
@@ -158,7 +158,7 @@ func TestMux_Listen_ErrAlreadyRegistered(t *testing.T) {
 	tcpListener := mustTCPListener("127.0.0.1:0")
 	mux, err := NewMux(tcpListener, nil)
 	if err != nil {
-		t.Fatalf("failed to create mux: %s", err.Error)
+		t.Fatalf("failed to create mux: %s", err.Error())
 	}
 	mux.Listen(5)
 	mux.Listen(5)
