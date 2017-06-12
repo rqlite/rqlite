@@ -1,7 +1,7 @@
 ## 4.0.0 (unreleased)
 The 4.0 codebase is currently compatible with the 3.x series and nodes can be upgraded without any special steps. However, this will not be the case when 4.0 is actually released, and upgrade instructions will be provided at that time.
 
-- [PR #307](https://github.com/rqlite/rqlite/pull/307): Support node-to-node encryption.
+- [PR #307](https://github.com/rqlite/rqlite/pull/307): Support node-to-node encryption. Fixes [issue #93](https://github.com/rqlite/rqlite/issues/93).
 
 ## 3.14.0 (May 4th 2017)
 - [PR #304](https://github.com/rqlite/rqlite/pull/304): Switch to Go 1.8.1.
