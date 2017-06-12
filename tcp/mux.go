@@ -111,27 +111,20 @@ func NewMux(ln net.Listener, adv net.Addr) (*Mux, error) {
 // NewTLSMux returns a new instance of Mux for ln, and encrypts all traffic
 // using TLS. If adv is nil, then the addr of ln is used.
 func NewTLSMux(ln net.Listener, adv net.Addr, cert, key string) (*Mux, error) {
-	addr := adv
-	if addr == nil {
-		addr = ln.Addr()
-	}
-
-	var err error
-	ln, err = newTLSListener(ln, cert, key)
+	mux, err := NewMux(ln, adv)
 	if err != nil {
 		return nil, err
 	}
 
-	return &Mux{
-		ln:              ln,
-		addr:            addr,
-		m:               make(map[byte]*listener),
-		remoteEncrypted: true,
-		Timeout:         DefaultTimeout,
-		Logger:          log.New(os.Stderr, "[tcp] ", log.LstdFlags),
-		nodeX509Cert:    cert,
-		nodeX509Key:     key,
-	}, nil
+	mux.ln, err = newTLSListener(mux.ln, cert, key)
+	if err != nil {
+		return nil, err
+	}
+	mux.remoteEncrypted = true
+	mux.nodeX509Cert = cert
+	mux.nodeX509Key = key
+
+	return mux, nil
 }
 
 // Serve handles connections from ln and multiplexes then across registered listener.
