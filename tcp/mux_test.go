@@ -31,7 +31,10 @@ func TestMux(t *testing.T) {
 		defer tcpListener.Close()
 
 		// Setup muxer & listeners.
-		mux := NewMux(tcpListener, nil)
+		mux, err := NewMux(tcpListener, nil)
+		if err != nil {
+			t.Fatalf("failed to create mux: %s", err.Error)
+		}
 		mux.Timeout = 200 * time.Millisecond
 		if !testing.Verbose() {
 			mux.Logger = log.New(ioutil.Discard, "", 0)
@@ -127,7 +130,10 @@ func TestMux_Advertise(t *testing.T) {
 		Addr: "rqlite.com:8081",
 	}
 
-	mux := NewMux(tcpListener, addr)
+	mux, err := NewMux(tcpListener, addr)
+	if err != nil {
+		t.Fatalf("failed to create mux: %s", err.Error)
+	}
 	mux.Timeout = 200 * time.Millisecond
 	if !testing.Verbose() {
 		mux.Logger = log.New(ioutil.Discard, "", 0)
@@ -150,7 +156,10 @@ func TestMux_Listen_ErrAlreadyRegistered(t *testing.T) {
 
 	// Register two listeners with the same header byte.
 	tcpListener := mustTCPListener("127.0.0.1:0")
-	mux := NewMux(tcpListener, nil)
+	mux, err := NewMux(tcpListener, nil)
+	if err != nil {
+		t.Fatalf("failed to create mux: %s", err.Error)
+	}
 	mux.Listen(5)
 	mux.Listen(5)
 }
