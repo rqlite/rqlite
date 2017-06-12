@@ -2,6 +2,7 @@ package tcp
 
 import (
 	"bytes"
+	"crypto/tls"
 	"io"
 	"io/ioutil"
 	"log"
@@ -176,9 +177,23 @@ func TestTLSMux(t *testing.T) {
 	key := x509.KeyFile()
 	defer os.Remove(key)
 
-	_, err := NewTLSMux(tcpListener, nil, cert, key)
+	mux, err := NewTLSMux(tcpListener, nil, cert, key)
 	if err != nil {
 		t.Fatalf("failed to create mux: %s", err.Error())
+	}
+	go mux.Serve()
+
+	// Verify that the listener is secured.
+	conn, err := tls.Dial("tcp", tcpListener.Addr().String(), &tls.Config{
+		InsecureSkipVerify: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	state := conn.ConnectionState()
+	if !state.HandshakeComplete {
+		t.Fatal("connection handshake failed to complete")
 	}
 }
 
