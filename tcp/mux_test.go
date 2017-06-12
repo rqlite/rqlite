@@ -6,11 +6,14 @@ import (
 	"io/ioutil"
 	"log"
 	"net"
+	"os"
 	"strings"
 	"sync"
 	"testing"
 	"testing/quick"
 	"time"
+
+	"github.com/rqlite/rqlite/testdata/x509"
 )
 
 // Ensure the muxer can split a listener's connections across multiple listeners.
@@ -162,6 +165,36 @@ func TestMux_Listen_ErrAlreadyRegistered(t *testing.T) {
 	}
 	mux.Listen(5)
 	mux.Listen(5)
+}
+
+func TestTLSMux(t *testing.T) {
+	tcpListener := mustTCPListener("127.0.0.1:0")
+	defer tcpListener.Close()
+
+	cert := x509.CertFile()
+	defer os.Remove(cert)
+	key := x509.KeyFile()
+	defer os.Remove(key)
+
+	_, err := NewTLSMux(tcpListener, nil, cert, key)
+	if err != nil {
+		t.Fatalf("failed to create mux: %s", err.Error())
+	}
+}
+
+func TestTLSMux_Fail(t *testing.T) {
+	tcpListener := mustTCPListener("127.0.0.1:0")
+	defer tcpListener.Close()
+
+	cert := x509.CertFile()
+	defer os.Remove(cert)
+	key := x509.KeyFile()
+	defer os.Remove(key)
+
+	_, err := NewTLSMux(tcpListener, nil, "xxxx", "yyyy")
+	if err == nil {
+		t.Fatalf("created mux unexpectedly with bad resources")
+	}
 }
 
 type mockAddr struct {
