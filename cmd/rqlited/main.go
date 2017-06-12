@@ -47,7 +47,7 @@ const logo = `
 
 // These variables are populated via the Go linker.
 var (
-	version   = "3"
+	version   = "4"
 	commit    = "unknown"
 	branch    = "unknown"
 	buildtime = "unknown"
@@ -68,10 +68,14 @@ var httpAdv string
 var authFile string
 var x509Cert string
 var x509Key string
+var nodeEncrypt bool
+var nodeX509Cert string
+var nodeX509Key string
 var raftAddr string
 var raftAdv string
 var joinAddr string
 var noVerify bool
+var noNodeVerify bool
 var discoURL string
 var discoID string
 var expvar bool
@@ -93,13 +97,17 @@ storage engine. It provides an easy-to-use, fault-tolerant store for relational 
 func init() {
 	flag.StringVar(&httpAddr, "http", "localhost:4001", "HTTP server bind address. For HTTPS, set X.509 cert and key")
 	flag.StringVar(&httpAdv, "httpadv", "", "Advertised HTTP address. If not set, same as HTTP server")
-	flag.StringVar(&x509Cert, "x509cert", "", "Path to X.509 certificate")
-	flag.StringVar(&x509Key, "x509key", "", "Path to X.509 private key for certificate")
+	flag.StringVar(&x509Cert, "x509cert", "", "Path to X.509 certificate for HTTP endpoint")
+	flag.StringVar(&x509Key, "x509key", "", "Path to X.509 private key for certificate HTTP endpoint")
+	flag.BoolVar(&noVerify, "noverify", false, "Skip verification of remote HTTPS cert when joining cluster")
+	flag.BoolVar(&nodeEncrypt, "encrypt", false, "Enable node-to-node encryption")
+	flag.StringVar(&nodeX509Cert, "nodex509cert", "cert.pem", "Path to X.509 certificate for node-to-node encryption")
+	flag.StringVar(&nodeX509Key, "nodex509key", "key.pem", "Path to X.509 private key for node-to-node encryption")
+	flag.BoolVar(&noNodeVerify, "nonodeverify", false, "Skip verification of a remote node cert")
 	flag.StringVar(&authFile, "auth", "", "Path to authentication and authorization file. If not set, not enabled")
 	flag.StringVar(&raftAddr, "raft", "localhost:4002", "Raft communication bind address")
 	flag.StringVar(&raftAdv, "raftadv", "", "Advertised Raft communication address. If not set, same as Raft bind")
 	flag.StringVar(&joinAddr, "join", "", "Comma-delimited list of nodes, through which a cluster can be joined (proto://host:port)")
-	flag.BoolVar(&noVerify, "noverify", false, "Skip verification of remote HTTPS cert when joining cluster")
 	flag.StringVar(&discoURL, "disco", "http://discovery.rqlite.com", "Set Discovery Service URL")
 	flag.StringVar(&discoID, "discoid", "", "Set Discovery ID. If not set, Discovery Service not used")
 	flag.BoolVar(&expvar, "expvar", true, "Serve expvar data on HTTP server")
@@ -150,7 +158,7 @@ func main() {
 	// Start requested profiling.
 	startProfile(cpuProfile, memProfile)
 
-	// Set up TCP communication between nodes.
+	// Set up node-to-node TCP communication.
 	ln, err := net.Listen("tcp", raftAddr)
 	if err != nil {
 		log.Fatalf("failed to listen on %s: %s", raftAddr, err.Error())
@@ -162,10 +170,22 @@ func main() {
 			log.Fatalf("failed to resolve advertise address %s: %s", raftAdv, err.Error())
 		}
 	}
-	mux := tcp.NewMux(ln, adv)
+
+	// Start up node-to-node network mux.
+	var mux *tcp.Mux
+	if nodeEncrypt {
+		log.Printf("enabling node-to-node encryption with cert: %s, key: %s", nodeX509Cert, nodeX509Key)
+		mux, err = tcp.NewTLSMux(ln, adv, nodeX509Cert, nodeX509Key)
+	} else {
+		mux, err = tcp.NewMux(ln, adv)
+	}
+	if err != nil {
+		log.Fatalf("failed to create node-to-node mux: %s", err.Error())
+	}
+	mux.InsecureSkipVerify = noNodeVerify
 	go mux.Serve()
 
-	// Start up mux and get transports for cluster.
+	// Get transport for Raft communications.
 	raftTn := mux.Listen(muxRaftHeader)
 
 	// Create and open the store.

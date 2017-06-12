@@ -1,4 +1,5 @@
 ## 4.0.0 (unreleased)
+- [PR #307](https://github.com/rqlite/rqlite/pull/307): Support node-to-node encryption.
 
 ## 3.14.0 (May 4th 2017)
 - [PR #304](https://github.com/rqlite/rqlite/pull/304): Switch to Go 1.8.1.

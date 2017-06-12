@@ -2,15 +2,19 @@ package tcp
 
 import (
 	"bytes"
+	"crypto/tls"
 	"io"
 	"io/ioutil"
 	"log"
 	"net"
+	"os"
 	"strings"
 	"sync"
 	"testing"
 	"testing/quick"
 	"time"
+
+	"github.com/rqlite/rqlite/testdata/x509"
 )
 
 // Ensure the muxer can split a listener's connections across multiple listeners.
@@ -31,7 +35,10 @@ func TestMux(t *testing.T) {
 		defer tcpListener.Close()
 
 		// Setup muxer & listeners.
-		mux := NewMux(tcpListener, nil)
+		mux, err := NewMux(tcpListener, nil)
+		if err != nil {
+			t.Fatalf("failed to create mux: %s", err.Error())
+		}
 		mux.Timeout = 200 * time.Millisecond
 		if !testing.Verbose() {
 			mux.Logger = log.New(ioutil.Discard, "", 0)
@@ -127,7 +134,10 @@ func TestMux_Advertise(t *testing.T) {
 		Addr: "rqlite.com:8081",
 	}
 
-	mux := NewMux(tcpListener, addr)
+	mux, err := NewMux(tcpListener, addr)
+	if err != nil {
+		t.Fatalf("failed to create mux: %s", err.Error())
+	}
 	mux.Timeout = 200 * time.Millisecond
 	if !testing.Verbose() {
 		mux.Logger = log.New(ioutil.Discard, "", 0)
@@ -150,9 +160,56 @@ func TestMux_Listen_ErrAlreadyRegistered(t *testing.T) {
 
 	// Register two listeners with the same header byte.
 	tcpListener := mustTCPListener("127.0.0.1:0")
-	mux := NewMux(tcpListener, nil)
+	mux, err := NewMux(tcpListener, nil)
+	if err != nil {
+		t.Fatalf("failed to create mux: %s", err.Error())
+	}
 	mux.Listen(5)
 	mux.Listen(5)
+}
+
+func TestTLSMux(t *testing.T) {
+	tcpListener := mustTCPListener("127.0.0.1:0")
+	defer tcpListener.Close()
+
+	cert := x509.CertFile()
+	defer os.Remove(cert)
+	key := x509.KeyFile()
+	defer os.Remove(key)
+
+	mux, err := NewTLSMux(tcpListener, nil, cert, key)
+	if err != nil {
+		t.Fatalf("failed to create mux: %s", err.Error())
+	}
+	go mux.Serve()
+
+	// Verify that the listener is secured.
+	conn, err := tls.Dial("tcp", tcpListener.Addr().String(), &tls.Config{
+		InsecureSkipVerify: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	state := conn.ConnectionState()
+	if !state.HandshakeComplete {
+		t.Fatal("connection handshake failed to complete")
+	}
+}
+
+func TestTLSMux_Fail(t *testing.T) {
+	tcpListener := mustTCPListener("127.0.0.1:0")
+	defer tcpListener.Close()
+
+	cert := x509.CertFile()
+	defer os.Remove(cert)
+	key := x509.KeyFile()
+	defer os.Remove(key)
+
+	_, err := NewTLSMux(tcpListener, nil, "xxxx", "yyyy")
+	if err == nil {
+		t.Fatalf("created mux unexpectedly with bad resources")
+	}
 }
 
 type mockAddr struct {

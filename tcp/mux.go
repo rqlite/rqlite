@@ -1,6 +1,7 @@
 package tcp
 
 import (
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -21,6 +22,9 @@ type Layer struct {
 	ln     net.Listener
 	header byte
 	addr   net.Addr
+
+	remoteEncrypted bool
+	skipVerify      bool
 }
 
 // Addr returns the local address for the layer.
@@ -30,7 +34,18 @@ func (l *Layer) Addr() net.Addr {
 
 // Dial creates a new network connection.
 func (l *Layer) Dial(addr string, timeout time.Duration) (net.Conn, error) {
-	conn, err := net.DialTimeout("tcp", addr, timeout)
+	dialer := &net.Dialer{Timeout: timeout}
+
+	var err error
+	var conn net.Conn
+	if l.remoteEncrypted {
+		conf := &tls.Config{
+			InsecureSkipVerify: l.skipVerify,
+		}
+		conn, err = tls.DialWithDialer(dialer, "tcp", addr, conf)
+	} else {
+		conn, err = dialer.Dial("tcp", addr)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -58,16 +73,27 @@ type Mux struct {
 
 	wg sync.WaitGroup
 
+	remoteEncrypted bool
+
 	// The amount of time to wait for the first header byte.
 	Timeout time.Duration
 
 	// Out-of-band error logger
 	Logger *log.Logger
+
+	// Path to X509 certificate
+	nodeX509Cert string
+
+	// Path to X509 key.
+	nodeX509Key string
+
+	// Whether to skip verification of other nodes' certificates.
+	InsecureSkipVerify bool
 }
 
 // NewMux returns a new instance of Mux for ln. If adv is nil,
 // then the addr of ln is used.
-func NewMux(ln net.Listener, adv net.Addr) *Mux {
+func NewMux(ln net.Listener, adv net.Addr) (*Mux, error) {
 	addr := adv
 	if addr == nil {
 		addr = ln.Addr()
@@ -79,7 +105,26 @@ func NewMux(ln net.Listener, adv net.Addr) *Mux {
 		m:       make(map[byte]*listener),
 		Timeout: DefaultTimeout,
 		Logger:  log.New(os.Stderr, "[tcp] ", log.LstdFlags),
+	}, nil
+}
+
+// NewTLSMux returns a new instance of Mux for ln, and encrypts all traffic
+// using TLS. If adv is nil, then the addr of ln is used.
+func NewTLSMux(ln net.Listener, adv net.Addr, cert, key string) (*Mux, error) {
+	mux, err := NewMux(ln, adv)
+	if err != nil {
+		return nil, err
 	}
+
+	mux.ln, err = newTLSListener(mux.ln, cert, key)
+	if err != nil {
+		return nil, err
+	}
+	mux.remoteEncrypted = true
+	mux.nodeX509Cert = cert
+	mux.nodeX509Key = key
+
+	return mux, nil
 }
 
 // Serve handles connections from ln and multiplexes then across registered listener.
@@ -162,9 +207,11 @@ func (mux *Mux) Listen(header byte) *Layer {
 	mux.m[header] = ln
 
 	layer := &Layer{
-		ln:     ln,
-		header: header,
-		addr:   mux.addr,
+		ln:              ln,
+		header:          header,
+		addr:            mux.addr,
+		remoteEncrypted: mux.remoteEncrypted,
+		skipVerify:      mux.InsecureSkipVerify,
 	}
 
 	return layer
@@ -190,16 +237,24 @@ func (ln *listener) Close() error { return nil }
 // Addr always returns nil
 func (ln *listener) Addr() net.Addr { return nil }
 
-// Dial connects to a remote mux listener with a given header byte.
-func Dial(network, address string, header byte) (net.Conn, error) {
-	conn, err := net.Dial(network, address)
+// newTLSListener returns a net listener which encrypts the traffic using TLS.
+func newTLSListener(ln net.Listener, certFile, keyFile string) (net.Listener, error) {
+	config, err := createTLSConfig(certFile, keyFile)
 	if err != nil {
 		return nil, err
 	}
 
-	if _, err := conn.Write([]byte{header}); err != nil {
-		return nil, fmt.Errorf("write mux header: %s", err)
-	}
+	return tls.NewListener(ln, config), nil
+}
 
-	return conn, nil
+// createTLSConfig returns a TLS config from the given cert and key.
+func createTLSConfig(certFile, keyFile string) (*tls.Config, error) {
+	var err error
+	config := &tls.Config{}
+	config.Certificates = make([]tls.Certificate, 1)
+	config.Certificates[0], err = tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return nil, err
+	}
+	return config, nil
 }
