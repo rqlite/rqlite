@@ -174,7 +174,7 @@ func main() {
 	// Start up node-to-node network mux.
 	var mux *tcp.Mux
 	if nodeEncrypt {
-		log.Printf("encrypting inter-node connection with cert %s, key %s", nodeX509Cert, nodeX509Key)
+		log.Printf("enabling node-to-node encryption with cert: %s, key: %s", nodeX509Cert, nodeX509Key)
 		mux, err = tcp.NewTLSMux(ln, adv, nodeX509Cert, nodeX509Key)
 	} else {
 		mux, err = tcp.NewMux(ln, adv)
