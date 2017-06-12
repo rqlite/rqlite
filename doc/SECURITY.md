@@ -16,6 +16,14 @@ AWS EC2 [Security Groups](http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/usi
 ## HTTPS API
 rqlite supports HTTPS access, ensuring that all communication between clients and a cluster is encrypted.
 
+## Node-to-node encryption
+rqlite supports encryption of all inter-node traffic. To enable this, pass `-encrypt` to `rqlited`. Each node must also be supplied with the relevant SSL certificate and corresponding private key, in X.509 format. Note that every node in a cluster must operate with encryption enabled, or none at all.
+
+One way to generate the necessary (possibly self-signed) resources is via [openssl](https://www.openssl.org/):
+```
+openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365
+```
+
 ## Basic Auth
 The HTTP API supports [Basic Auth](https://tools.ietf.org/html/rfc2617). Each rqlite node can be passed a JSON-formatted configuration file, which configures valid usernames and associated passwords for that node.
 
@@ -53,14 +61,17 @@ This configuration file sets authentication for two usernames, _bob_ and _mary_,
 This configuration also sets permissions for both users. _bob_ has permission to perform all operations, but _mary_ can only query the cluster, as well as check the cluster status.
 
 ## Secure cluster example
-Starting a node with HTTPS enabled and with the above configuration file. It is assumed the X.509 certificate and key are at the paths `server.crt` and `key.pem` respectively.
+Starting a node with HTTPS enabled, node-to-node encryption, and with the above configuration file. It is assumed the HTTPS X.509 certificate and key are at the paths `server.crt` and `key.pem` respectively, and the node-to-node certificate and key are at `node.crt` and `node-key.pem`
 ```bash
-rqlited -auth config.json -x509cert server.crt -x509key key.pem ~/node.1
+rqlited -auth config.json -x509cert server.crt -x509key key.pem \
+-encrypt -nodex509cert node.crt -nodex509key node-key.pem -nonodeverify \
+~/node.1
 ```
 Bringing up a second node, joining it to the first node. This allows you to block nodes from joining a cluster, unless those nodes supply a password.
 ```bash
 rqlited -auth config.json -http localhost:4003 -x509cert server.crt \
 -x509key key.pem -raft :4004 -join https://bob:secret1@localhost:4001 \
+-encrypt -nodex509cert node.crt -nodex509key node-key.pem -nonodeverify \
 ~/node.2
 ```
 Querying the node, as user _mary_.
