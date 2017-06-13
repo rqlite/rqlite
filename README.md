@@ -35,10 +35,10 @@ Alternatively you can pull the latest release via `docker pull rqlite/rqlite`. [
 ### Forming a cluster
 While not strictly necessary to run rqlite, running multiple nodes means you'll have a fault-tolerant cluster. Start two more nodes, allowing the cluster to tolerate failure of a single node, like so:
 ```bash
-rqlited -http localhost:4003 -raft localhost:4004 -join http://localhost:4001 ~/node.2
-rqlited -http localhost:4005 -raft localhost:4006 -join http://localhost:4001 ~/node.3
+rqlited -http-addr localhost:4003 -raft-addr localhost:4004 -join http://localhost:4001 ~/node.2
+rqlited -http-addr localhost:4005 -raft-addr localhost:4006 -join http://localhost:4001 ~/node.3
 ```
-_This demonstration shows all 3 nodes running on the same host. In reality you probably wouldn't do this, and then you wouldn't need to select different -http and -raft ports for each rqlite node._
+_This demonstration shows all 3 nodes running on the same host. In reality you probably wouldn't do this, and then you wouldn't need to select different -http-addr and -raft-addr ports for each rqlite node._
 
 With just these few steps you've now got a fault-tolerant, distributed relational database. For full details on creating and managing real clusters check out [this documentation](https://github.com/rqlite/rqlite/blob/master/doc/CLUSTER_MGMT.md).
 
@@ -76,7 +76,7 @@ rqlite replicates SQLite for fault-tolerance. It does not replicate it for perfo
 Depending on your machine and network, individual INSERT performance could be anything from 1 operation per second to more than 100 operations per second. However, by using transactions, throughput will increase significantly, often by 2 orders of magnitude. This speed-up is due to the way SQLite works. So for high throughput, execute as many operations as possible within a single transaction.
 
 ### In-memory databases
-By default rqlite uses an [in-memory SQLite database](https://www.sqlite.org/inmemorydb.html) to maximise performance. In this mode no actual SQLite file is created and the entire database is stored in memory. If you wish rqlite to use an actual file-based SQLite database, pass `-ondisk` to rqlite on start-up.
+By default rqlite uses an [in-memory SQLite database](https://www.sqlite.org/inmemorydb.html) to maximise performance. In this mode no actual SQLite file is created and the entire database is stored in memory. If you wish rqlite to use an actual file-based SQLite database, pass `-on-disk` to rqlite on start-up.
 
 #### Does using an in-memory database put my data at risk?
 No.

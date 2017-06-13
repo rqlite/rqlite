@@ -15,7 +15,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
       port = 4001
       (2..ENV['CLUSTER_SIZE'].to_i).each do |i|
         port = port + 1
-        config.vm.provision :shell, :inline => "rqlited -join localhost:4001 -raft localhost:#{port} ~/node.#{i} &"
+        config.vm.provision :shell, :inline => "rqlited -join localhost:4001 -raft-addr localhost:#{port} ~/node.#{i} &"
       end
     end
 

@@ -19,7 +19,7 @@ AWS EC2 [Security Groups](http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/usi
 rqlite supports HTTPS access, ensuring that all communication between clients and a cluster is encrypted.
 
 ## Node-to-node encryption
-rqlite supports encryption of all inter-node traffic. To enable this, pass `-encrypt` to `rqlited`. Each node must also be supplied with the relevant SSL certificate and corresponding private key, in X.509 format. Note that every node in a cluster must operate with encryption enabled, or none at all.
+rqlite supports encryption of all inter-node traffic. To enable this, pass `-node-encrypt` to `rqlited`. Each node must also be supplied with the relevant SSL certificate and corresponding private key, in X.509 format. Note that every node in a cluster must operate with encryption enabled, or none at all.
 
 One way to generate the necessary (possibly self-signed) resources is via [openssl](https://www.openssl.org/):
 ```
@@ -65,15 +65,15 @@ This configuration also sets permissions for both users. _bob_ has permission to
 ## Secure cluster example
 Starting a node with HTTPS enabled, node-to-node encryption, and with the above configuration file. It is assumed the HTTPS X.509 certificate and key are at the paths `server.crt` and `key.pem` respectively, and the node-to-node certificate and key are at `node.crt` and `node-key.pem`
 ```bash
-rqlited -auth config.json -x509cert server.crt -x509key key.pem \
--encrypt -nodex509cert node.crt -nodex509key node-key.pem -nonodeverify \
+rqlited -auth config.json -http-cert server.crt -http-key key.pem \
+-node-encrypt -node-cert node.crt -node-key node-key.pem -node-no-verify \
 ~/node.1
 ```
-Bringing up a second node, joining it to the first node. This allows you to block nodes from joining a cluster, unless those nodes supply a password.
+Bringing up a second node on the same host, joining it to the first node. This allows you to block nodes from joining a cluster, unless those nodes supply a password.
 ```bash
-rqlited -auth config.json -http localhost:4003 -x509cert server.crt \
--x509key key.pem -raft :4004 -join https://bob:secret1@localhost:4001 \
--encrypt -nodex509cert node.crt -nodex509key node-key.pem -nonodeverify \
+rqlited -auth config.json -http-addr localhost:4003 -http-cert server.crt \
+-http-key key.pem -raft-addr :4004 -join https://bob:secret1@localhost:4001 \
+-node-encrypt -node-cert node.crt -node-key node-key.pem -no-node-verify \
 ~/node.2
 ```
 Querying the node, as user _mary_.
