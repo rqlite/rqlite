@@ -35,12 +35,12 @@ import (
 const sqliteDSN = "db.sqlite"
 
 const logo = `
-            _ _ _           _
-           | (_) |         | |
-  _ __ __ _| |_| |_ ___  __| |
- | '__/ _  | | | __/ _ \/ _  |  The lightweight, distributed
- | | | (_| | | | ||  __/ (_| |  relational database.
- |_|  \__, |_|_|\__\___|\__,_|
+            _ _ _
+           | (_) |
+  _ __ __ _| |_| |_ ___
+ | '__/ _  | | | __/ _ \   The lightweight, distributed
+ | | | (_| | | | ||  __/   relational database.
+ |_|  \__, |_|_|\__\___|
          | |
          |_|
 `
