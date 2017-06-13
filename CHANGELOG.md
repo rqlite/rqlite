@@ -1,6 +1,7 @@
 ## 4.0.0 (unreleased)
 **The 4.0 release has renamed command-line options relative to earlier releases.** This means that previous commands used to launch rqlited will not work. However the command-line changes are cosmetic, and each previous option maps 1-to-1 to a renamed option.
 
+- [PR #309](https://github.com/rqlite/rqlite/pull/309): Tweak start-up logo.
 - [PR #308](https://github.com/rqlite/rqlite/pull/308): Move to clearer command-line options.
 - [PR #307](https://github.com/rqlite/rqlite/pull/307): Support node-to-node encryption. Fixes [issue #93](https://github.com/rqlite/rqlite/issues/93).
 
