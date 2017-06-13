@@ -1,6 +1,7 @@
 ## 4.0.0 (unreleased)
-The 4.0 codebase is currently compatible with the 3.x series and nodes can be upgraded without any special steps. However, this will not be the case when 4.0 is actually released, and upgrade instructions will be provided at that time.
+**The 4.0 release has renamed command-line options relative to earlier releases.** This means that previous commands used to launch rqlited will not work. However the command-line changes are cosmetic, and each previous option maps 1-to-1 to a renamed option.
 
+- [PR #308](https://github.com/rqlite/rqlite/pull/308): Move to clearer command-line options.
 - [PR #307](https://github.com/rqlite/rqlite/pull/307): Support node-to-node encryption. Fixes [issue #93](https://github.com/rqlite/rqlite/issues/93).
 
 ## 3.14.0 (May 4th 2017)

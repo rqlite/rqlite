@@ -29,12 +29,12 @@ In the example above `809d9ba6-f70b-11e6-9a5a-92819c00729a` was returned by the 
 
 This ID is then provided to each node on start-up.
 ```shell
-rqlited --discoid 809d9ba6-f70b-11e6-9a5a-92819c00729a
+rqlited -disco-id 809d9ba6-f70b-11e6-9a5a-92819c00729a
 ```
 When any node registers using the ID, it is returned the current list of nodes that have registered using that ID. If the nodes is the first node to access the service using the ID, it will receive a list that contains just itself -- and will subsequently elect itself leader. Subsequent nodes will then receive a list with more than 1 entry. These nodes will use one of the join addresses in the list to join the cluster.
 
 ### Controlling the registered join address
-By default each node registers the address passed in via the `--http` option. However if you instead set `--httpadv` when starting a node, the node will instead register that address.
+By default each node registers the address passed in via the `-http-addr` option. However if you instead set `-http-adv-addr` when starting a node, the node will instead register that address.
 
 ## Caveats
 If a node is already part of a cluster, addresses returned by the Discovery Service are ignored.
@@ -52,11 +52,11 @@ $ curl -XPOST -L -w "\n" 'http://discovery.rqlite.com/'
 ```
 To automatically form a 3-node cluster simply pass the ID to 3 nodes, all of which can be started simultaneously via the following commands:
 ```shell
-$ rqlited --discoid b3da7185-725f-461c-b7a4-13f185bd5007 ~/node.1
-$ rqlited -http localhost:4003 -raft localhost:4004 --discoid b3da7185-725f-461c-b7a4-13f185bd5007 ~/node.2
-$ rqlited -http localhost:4005 -raft localhost:4006 --discoid b3da7185-725f-461c-b7a4-13f185bd5007 ~/node.3
+$ rqlited -disco-id b3da7185-725f-461c-b7a4-13f185bd5007 ~/node.1
+$ rqlited -http-addr localhost:4003 -raft-addr localhost:4004 -disco-id b3da7185-725f-461c-b7a4-13f185bd5007 ~/node.2
+$ rqlited -http-addr localhost:4005 -raft-addr localhost:4006 -disco-id b3da7185-725f-461c-b7a4-13f185bd5007 ~/node.3
 ```
-_This demonstration shows all 3 nodes running on the same host. In reality you probably wouldn't do this, and then you wouldn't need to select different -http and -raft ports for each rqlite node._
+_This demonstration shows all 3 nodes running on the same host. In reality you probably wouldn't do this, and then you wouldn't need to select different -http-addr and -raft-addr ports for each rqlite node._
 
 ## Removing registered addresses
 If you need to remove an address from the list of registered addresses, perhaps because a node has permanently left a cluster, you can do this via the following command:
