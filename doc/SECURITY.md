@@ -23,7 +23,7 @@ rqlite supports encryption of all inter-node traffic. To enable this, pass `-nod
 
 One way to generate the necessary (possibly self-signed) resources is via [openssl](https://www.openssl.org/):
 ```
-openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365
+openssl req -x509 -nodes -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365
 ```
 
 ## Basic Auth
