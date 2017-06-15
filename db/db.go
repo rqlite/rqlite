@@ -4,16 +4,20 @@ package db
 
 import (
 	"database/sql/driver"
+	"errors"
 	"expvar"
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/mattn/go-sqlite3"
 )
 
 const bkDelay = 250
+
+var ErrNoDatabaseConnection = errors.New("no database connection")
 
 const (
 	fkChecks         = "PRAGMA foreign_keys"
@@ -50,6 +54,7 @@ type DB struct {
 	path        string              // Path to database file.
 	dsn         string              // DSN, if any.
 	memory      bool                // In-memory only.
+	mu          sync.RWMutex        // Sync open and close with statement processing.
 }
 
 // Result represents the outcome of an operation that changes rows.
@@ -129,9 +134,16 @@ func LoadInMemoryWithDSN(dbPath, dsn string) (*DB, error) {
 	return db, nil
 }
 
-// Close closes the underlying database connection.
+// Close closes the underlying database connection. Once closed, it cannot be
+// reopened.
 func (db *DB) Close() error {
-	return db.sqlite3conn.Close()
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	if err := db.sqlite3conn.Close(); err != nil {
+		return err
+	}
+	db.sqlite3conn = nil
+	return nil
 }
 
 func open(dbPath string) (*DB, error) {
@@ -149,6 +161,12 @@ func open(dbPath string) (*DB, error) {
 
 // EnableFKConstraints allows control of foreign key constraint checks.
 func (db *DB) EnableFKConstraints(e bool) error {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	if db.sqlite3conn == nil {
+		return ErrNoDatabaseConnection
+	}
+
 	q := fkChecksEnabled
 	if !e {
 		q = fkChecksDisabled
@@ -159,6 +177,12 @@ func (db *DB) EnableFKConstraints(e bool) error {
 
 // FKConstraints returns whether FK constraints are set or not.
 func (db *DB) FKConstraints() (bool, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	if db.sqlite3conn == nil {
+		return false, ErrNoDatabaseConnection
+	}
+
 	r, err := db.sqlite3conn.Query(fkChecks, nil)
 	if err != nil {
 		return false, err
@@ -182,6 +206,12 @@ func (db *DB) Execute(queries []string, tx, xTime bool) ([]*Result, error) {
 	stats.Add(numExecutions, int64(len(queries)))
 	if tx {
 		stats.Add(numETx, 1)
+	}
+
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	if db.sqlite3conn == nil {
+		return nil, ErrNoDatabaseConnection
 	}
 
 	type Execer interface {
@@ -287,6 +317,12 @@ func (db *DB) Query(queries []string, tx, xTime bool) ([]*Rows, error) {
 		stats.Add(numQTx, 1)
 	}
 
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	if db.sqlite3conn == nil {
+		return nil, ErrNoDatabaseConnection
+	}
+
 	type Queryer interface {
 		Query(query string, args []driver.Value) (driver.Rows, error)
 	}
@@ -363,6 +399,12 @@ func (db *DB) Query(queries []string, tx, xTime bool) ([]*Rows, error) {
 
 // Backup writes a consistent snapshot of the database to the given file.
 func (db *DB) Backup(path string) error {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	if db.sqlite3conn == nil {
+		return ErrNoDatabaseConnection
+	}
+
 	dstDB, err := Open(path)
 	if err != nil {
 		return err
