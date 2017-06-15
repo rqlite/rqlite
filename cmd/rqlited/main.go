@@ -98,7 +98,7 @@ func init() {
 	flag.StringVar(&httpAddr, "http-addr", "localhost:4001", "HTTP server bind address. For HTTPS, set X.509 cert and key")
 	flag.StringVar(&httpAdv, "http-adv-addr", "", "Advertised HTTP address. If not set, same as HTTP server")
 	flag.StringVar(&x509Cert, "http-cert", "", "Path to X.509 certificate for HTTP endpoint")
-	flag.StringVar(&x509Key, "http-key", "", "Path to X.509 private key for certificate HTTP endpoint")
+	flag.StringVar(&x509Key, "http-key", "", "Path to X.509 private key for HTTP endpoint")
 	flag.BoolVar(&noVerify, "http-no-verify", false, "Skip verification of remote HTTPS cert when joining cluster")
 	flag.BoolVar(&nodeEncrypt, "node-encrypt", false, "Enable node-to-node encryption")
 	flag.StringVar(&nodeX509Cert, "node-cert", "cert.pem", "Path to X.509 certificate for node-to-node encryption")
