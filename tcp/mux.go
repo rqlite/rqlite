@@ -8,6 +8,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -104,7 +105,7 @@ func NewMux(ln net.Listener, adv net.Addr) (*Mux, error) {
 		addr:    addr,
 		m:       make(map[byte]*listener),
 		Timeout: DefaultTimeout,
-		Logger:  log.New(os.Stderr, "[tcp] ", log.LstdFlags),
+		Logger:  log.New(os.Stderr, "[mux] ", log.LstdFlags),
 	}, nil
 }
 
@@ -154,6 +155,23 @@ func (mux *Mux) Serve() error {
 		mux.wg.Add(1)
 		go mux.handleConn(conn)
 	}
+}
+
+// Stats returns status of the mux.
+func (mux *Mux) Stats() (interface{}, error) {
+	s := map[string]string{
+		"addr":      mux.addr.String(),
+		"timeout":   mux.Timeout.String(),
+		"encrypted": strconv.FormatBool(mux.remoteEncrypted),
+	}
+
+	if mux.remoteEncrypted {
+		s["certificate"] = mux.nodeX509Cert
+		s["key"] = mux.nodeX509Key
+		s["skip_verify"] = strconv.FormatBool(mux.InsecureSkipVerify)
+	}
+
+	return s, nil
 }
 
 func (mux *Mux) handleConn(conn net.Conn) {

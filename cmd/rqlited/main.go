@@ -304,6 +304,12 @@ func main() {
 		log.Fatalf("failed to start HTTP server: %s", err.Error())
 	}
 
+	// Register cross-component statuses.
+	if err := s.RegisterStatus("mux", mux); err != nil {
+		log.Fatalf("failed to register mux status: %s", err.Error())
+	}
+
+	// Block until signalled.
 	terminate := make(chan os.Signal, 1)
 	signal.Notify(terminate, os.Interrupt)
 	<-terminate

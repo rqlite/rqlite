@@ -332,6 +332,20 @@ func Test_401Routes_BasicAuthBadPerm(t *testing.T) {
 	}
 }
 
+func Test_RegisterStatus(t *testing.T) {
+	var stats *mockStatuser
+	m := &MockStore{}
+	s := New("127.0.0.1:0", m, nil)
+
+	if err := s.RegisterStatus("foo", stats); err != nil {
+		t.Fatalf("failed to register statuser: %s", err.Error())
+	}
+
+	if err := s.RegisterStatus("foo", stats); err == nil {
+		t.Fatal("successfully re-registered statuser")
+	}
+}
+
 type MockStore struct {
 	executeFn func(queries []string, tx bool) ([]*sql.Result, error)
 	queryFn   func(queries []string, tx, leader, verify bool) ([]*sql.Rows, error)
@@ -386,4 +400,11 @@ func (m *mockCredentialStore) Check(username, password string) bool {
 
 func (m *mockCredentialStore) HasPerm(username, perm string) bool {
 	return m.HasPermOK
+}
+
+type mockStatuser struct {
+}
+
+func (m *mockStatuser) Stats() (interface{}, error) {
+	return nil, nil
 }
