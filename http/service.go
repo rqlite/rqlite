@@ -16,6 +16,7 @@ import (
 	"os"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	sql "github.com/rqlite/rqlite/db"
@@ -62,6 +63,11 @@ type CredentialStore interface {
 
 	// HasPerm returns whether username has the given perm.
 	HasPerm(username string, perm string) bool
+}
+
+// Statuser is the interface status providers must implement.
+type Statuser interface {
+	Stats() (interface{}, error)
 }
 
 // Response represents a response from the HTTP service.
@@ -134,6 +140,9 @@ type Service struct {
 	start      time.Time // Start up time.
 	lastBackup time.Time // Time of last successful backup.
 
+	statusMu sync.RWMutex
+	statuses map[string]Statuser
+
 	CertFile string // Path to SSL certificate.
 	KeyFile  string // Path to SSL private key.
 
@@ -154,6 +163,7 @@ func New(addr string, store Store, credentials CredentialStore) *Service {
 		addr:            addr,
 		store:           store,
 		start:           time.Now(),
+		statuses:        make(map[string]Statuser),
 		credentialStore: credentials,
 		logger:          log.New(os.Stderr, "[http] ", log.LstdFlags),
 	}
@@ -241,6 +251,19 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	default:
 		w.WriteHeader(http.StatusNotFound)
 	}
+}
+
+// RegisterStatus allows other modules to register status for serving over HTTP.
+func (s *Service) RegisterStatus(key string, stat Statuser) error {
+	s.statusMu.Lock()
+	defer s.statusMu.Unlock()
+
+	if _, ok := s.statuses[key]; ok {
+		return fmt.Errorf("status already registered with key %s", key)
+	}
+	s.statuses[key] = stat
+
+	return nil
 }
 
 // handleJoin handles cluster-join requests from other nodes.
@@ -469,6 +492,20 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 	if s.BuildInfo != nil {
 		status["build"] = s.BuildInfo
 	}
+
+	// Add any registered statusers.
+	func() {
+		s.statusMu.RLock()
+		defer s.statusMu.RUnlock()
+		for k, v := range s.statuses {
+			stat, err := v.Stats()
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			status[k] = stat
+		}
+	}()
 
 	pretty, _ := isPretty(r)
 	var b []byte
