@@ -5,6 +5,7 @@
 - [PR #308](https://github.com/rqlite/rqlite/pull/308): Move to clearer command-line options.
 - [PR #307](https://github.com/rqlite/rqlite/pull/307): Support node-to-node encryption. Fixes [issue #93](https://github.com/rqlite/rqlite/issues/93).
 - [PR #310](https://github.com/rqlite/rqlite/pull/310): HTTP service supports registration of Status providers; Mux is first client.
+- [PR #312](https://github.com/rqlite/rqlite/pull/312): Synchronize database close with statements. Fixes [issue #311](https://github.com/rqlite/rqlite/issues/311).
 
 ## 3.14.0 (May 4th 2017)
 - [PR #304](https://github.com/rqlite/rqlite/pull/304): Switch to Go 1.8.1.
