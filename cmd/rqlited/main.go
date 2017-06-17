@@ -132,8 +132,8 @@ func main() {
 	flag.Parse()
 
 	if showVersion {
-		fmt.Printf("%s %s %s %s (commit %s, branch %s)\n",
-			name, version, runtime.GOOS, runtime.GOARCH, commit, branch)
+		fmt.Printf("%s %s %s %s %s (commit %s, branch %s)\n",
+			name, version, runtime.GOOS, runtime.GOARCH, runtime.Version(), commit, branch)
 		os.Exit(0)
 	}
 
