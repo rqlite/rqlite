@@ -16,7 +16,7 @@ You could use rqlite as part of a larger system, as a central store for some cri
 - An easy-to-use HTTP(S) API, including leader-redirection and bulk-update support. A CLI is also available.
 - [Discovery Service support](https://github.com/rqlite/rqlite/blob/master/doc/DISCOVERY.md), allowing clusters to be dynamically created.
 - [Extensive security and encryption support](https://github.com/rqlite/rqlite/blob/master/doc/SECURITY.md), including node-to-node encryption.
-- Read consistency levels.
+- Choice of read consistency levels.
 - Transaction support.
 - Hot backups.
 
