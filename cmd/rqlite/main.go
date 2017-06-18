@@ -85,20 +85,14 @@ func makeJSONBody(line string) string {
 }
 
 func status(ctx *cli.Context, cmd, line string, argv *argT) error {
-	client := http.Client{Transport: &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: argv.Insecure},
-	}}
-
-	// Explicitly handle redirects.
-	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-		return http.ErrUseLastResponse
-	}
-
 	// Recursive JSON printer.
 	var pprint func(indent int, m map[string]interface{})
 	pprint = func(indent int, m map[string]interface{}) {
 		indentation := "  "
 		for k, v := range m {
+			if v == nil {
+				continue
+			}
 			switch v.(type) {
 			case map[string]interface{}:
 				for i := 0; i < indent; i++ {
@@ -115,40 +109,34 @@ func status(ctx *cli.Context, cmd, line string, argv *argT) error {
 		}
 	}
 
-	nRedirect := 0
-	url := `http://localhost:4001/status`
-	for {
-		resp, err := client.Get(url)
-		if err != nil {
-			return err
-		}
-		defer resp.Body.Close()
-
-		// Check for redirect.
-		if resp.StatusCode == http.StatusMovedPermanently {
-			nRedirect++
-			if nRedirect > maxRedirect {
-				return fmt.Errorf("maximum leader redirect limit exceeded")
-			}
-			url = resp.Header["Location"][0]
-			continue
-		}
-
-		body, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			return err
-		}
-
-		ret := make(map[string]interface{})
-		if err := json.Unmarshal(body, &ret); err != nil {
-			return err
-		}
-		fmt.Println()
-		pprint(0, ret)
-		fmt.Println()
-
-		return nil
+	url := fmt.Sprintf("%s://%s:%d/status", argv.Protocol, argv.Host, argv.Port)
+	client := http.Client{Transport: &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: argv.Insecure},
+	}}
+	resp, err := client.Get(url)
+	if err != nil {
+		return err
 	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+
+	ret := make(map[string]interface{})
+	if err := json.Unmarshal(body, &ret); err != nil {
+		return err
+	}
+
+	// Specific key requested?
+	parts := strings.Split(line, " ")
+	if len(parts) >= 2 {
+		ret = map[string]interface{}{parts[1]: ret[parts[1]]}
+	}
+	pprint(0, ret)
+
+	return nil
 }
 
 func sendRequest(ctx *cli.Context, urlStr string, line string, argv *argT, ret interface{}) error {
