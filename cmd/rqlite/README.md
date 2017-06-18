@@ -29,14 +29,14 @@ Options:
   -P, --prefix[=/]
       rqlited HTTP URL prefix
 
-  --insecure[=false]
+  i,  --insecure[=false]
       do not verify rqlited HTTPS certificate
 ```
 
 ## Example
 
 ```sh
-$ ./rqlite 
+$ ./rqlite
 127.0.0.1:4001> CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)
 0 row affected (0.000362 sec)
 127.0.0.1:4001> .tables
