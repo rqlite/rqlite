@@ -23,6 +23,13 @@ type argT struct {
 	Insecure bool   `cli:"i,insecure" usage:"do not verify rqlited HTTPS certificate" dft:"false"`
 }
 
+const cliHelp = `.help				Show this message
+.indexes			Show names of all indexes
+.schema				Show CREATE statements for all tables
+.status				Show status and diagnostic information for connected node
+.tables				List names of tables
+`
+
 func main() {
 	cli.SetUsageStyle(cli.ManualStyle)
 	cli.Run(new(argT), func(ctx *cli.Context) error {
@@ -60,6 +67,8 @@ func main() {
 				err = query(ctx, cmd, "SELECT sql FROM sqlite_master", argv)
 			case ".STATUS":
 				err = status(ctx, cmd, line, argv)
+			case ".HELP":
+				err = help(ctx, cmd, line, argv)
 			case ".QUIT", "QUIT", "EXIT":
 				break FOR_READ
 			case "SELECT":
@@ -82,6 +91,11 @@ func makeJSONBody(line string) string {
 		return ""
 	}
 	return string(data)
+}
+
+func help(ctx *cli.Context, cmd, line string, argv *argT) error {
+	fmt.Printf(cliHelp)
+	return nil
 }
 
 func status(ctx *cli.Context, cmd, line string, argv *argT) error {
