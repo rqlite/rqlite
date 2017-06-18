@@ -16,15 +16,16 @@ If the IP addresses (or subnets) of rqlite clients is also known, it may also be
 AWS EC2 [Security Groups](http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-network-security.html), for example, support all this functionality. So if running rqlite in the AWS EC2 cloud you can implement this level of security at the network level.
 
 ## HTTPS API
-rqlite supports HTTPS access, ensuring that all communication between clients and a cluster is encrypted.
+rqlite supports HTTPS access, ensuring that all communication between clients and a cluster is encrypted. One way to generate the necessary resources is via [openssl](https://www.openssl.org/):
+```
+openssl req -x509 -nodes -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365
+```
+Note that unless you sign the certificate using a trusted authority, you will need to pass `-http-no-verify` to `rqlited`.
 
 ## Node-to-node encryption
 rqlite supports encryption of all inter-node traffic. To enable this, pass `-node-encrypt` to `rqlited`. Each node must also be supplied with the relevant SSL certificate and corresponding private key, in X.509 format. Note that every node in a cluster must operate with encryption enabled, or none at all.
 
-One way to generate the necessary (possibly self-signed) resources is via [openssl](https://www.openssl.org/):
-```
-openssl req -x509 -nodes -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365
-```
+You can generate private keys and associated certificates in a similar manner as described in the _HTTP API_ section.
 
 ## Basic Auth
 The HTTP API supports [Basic Auth](https://tools.ietf.org/html/rfc2617). Each rqlite node can be passed a JSON-formatted configuration file, which configures valid usernames and associated passwords for that node.
