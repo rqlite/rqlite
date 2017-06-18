@@ -58,6 +58,8 @@ func main() {
 				err = query(ctx, cmd, `SELECT sql FROM sqlite_master WHERE type="index"`, argv)
 			case ".SCHEMA":
 				err = query(ctx, cmd, "SELECT sql FROM sqlite_master", argv)
+			case ".STATUS":
+				err = status(ctx, cmd, line, argv)
 			case ".QUIT", "QUIT", "EXIT":
 				break FOR_READ
 			case "SELECT":
@@ -80,6 +82,73 @@ func makeJSONBody(line string) string {
 		return ""
 	}
 	return string(data)
+}
+
+func status(ctx *cli.Context, cmd, line string, argv *argT) error {
+	client := http.Client{Transport: &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: argv.Insecure},
+	}}
+
+	// Explicitly handle redirects.
+	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+
+	// Recursive JSON printer.
+	var pprint func(indent int, m map[string]interface{})
+	pprint = func(indent int, m map[string]interface{}) {
+		indentation := "  "
+		for k, v := range m {
+			switch v.(type) {
+			case map[string]interface{}:
+				for i := 0; i < indent; i++ {
+					fmt.Print(indentation)
+				}
+				fmt.Printf("%s:\n", k)
+				pprint(indent+1, v.(map[string]interface{}))
+			default:
+				for i := 0; i < indent; i++ {
+					fmt.Print(indentation)
+				}
+				fmt.Printf("%s: %v\n", k, v)
+			}
+		}
+	}
+
+	nRedirect := 0
+	url := `http://localhost:4001/status`
+	for {
+		resp, err := client.Get(url)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+
+		// Check for redirect.
+		if resp.StatusCode == http.StatusMovedPermanently {
+			nRedirect++
+			if nRedirect > maxRedirect {
+				return fmt.Errorf("maximum leader redirect limit exceeded")
+			}
+			url = resp.Header["Location"][0]
+			continue
+		}
+
+		body, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return err
+		}
+
+		ret := make(map[string]interface{})
+		if err := json.Unmarshal(body, &ret); err != nil {
+			return err
+		}
+		fmt.Println()
+		pprint(0, ret)
+		fmt.Println()
+
+		return nil
+	}
 }
 
 func sendRequest(ctx *cli.Context, urlStr string, line string, argv *argT, ret interface{}) error {
