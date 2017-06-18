@@ -101,6 +101,21 @@ func Test_LoadInMemory(t *testing.T) {
 	}
 }
 
+func Test_StatementsOnClosed(t *testing.T) {
+	db, path := mustCreateDatabase()
+	db.Close()
+	defer os.Remove(path)
+
+	_, err := db.Execute([]string{""}, false, false)
+	if err != ErrNoDatabaseConnection {
+		t.Fatalf("failed to received correct error for closed database")
+	}
+	_, err = db.Query([]string{`SELECT * FROM foo`}, false, false)
+	if err != ErrNoDatabaseConnection {
+		t.Fatalf("failed to received correct error for closed database")
+	}
+}
+
 func Test_EmptyStatements(t *testing.T) {
 	db, path := mustCreateDatabase()
 	defer db.Close()
