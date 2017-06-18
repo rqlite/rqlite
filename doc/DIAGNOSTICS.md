@@ -9,7 +9,7 @@ The use of the URL param `pretty` is optional, and results in pretty-printed JSO
 
 You can also request the same status information via the CLI:
 ```
-$ ./rqlite
+$ rqlite
 127.0.0.1:4001> .status
 runtime:
   GOARCH: amd64
