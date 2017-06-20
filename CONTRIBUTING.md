@@ -7,7 +7,7 @@ rqlite can be compiled and executed on Linux, OSX, and Microsoft Windows.
 If you open a pull request, please ensure the commit history is clean. Squash the commits into logical blocks, perhaps a single commit if that makes sense. What you want to avoid is commits such as "WIP" and "fix test" in the history. This is so we keep history on master clean and straightforward.
 
 ## Third-party libraries
-Please avoid using libaries other than those available in the standard library, unless absolutely necessary. This requirement is relaxed somewhat for software other than rqlite node software itself. To understand why this requirement is in place, check out this [post](https://blog.gopheracademy.com/advent-2014/case-against-3pl/)i.
+Please avoid using libaries other than those available in the standard library, unless absolutely necessary. This requirement is relaxed somewhat for software other than rqlite node software itself. To understand why this approach is taken, check out this [post](https://blog.gopheracademy.com/advent-2014/case-against-3pl/).
 
 ## Building rqlite
 *Building rqlite requires Go 1.8 or later. [gvm](https://github.com/moovweb/gvm) is a great tool for installing and managing your versions of Go.*
