@@ -21,7 +21,7 @@ type executeResponse struct {
 }
 
 func execute(ctx *cli.Context, cmd, line string, argv *argT) error {
-	urlStr := fmt.Sprintf("%s://%s:%d%sdb/execute?pretty&timings", argv.Protocol, argv.Host, argv.Port, argv.Prefix)
+	urlStr := fmt.Sprintf("%s://%s:%d%sdb/execute", argv.Protocol, argv.Host, argv.Port, argv.Prefix)
 	ret := &executeResponse{}
 	if err := sendRequest(ctx, urlStr, line, argv, ret); err != nil {
 		return err
