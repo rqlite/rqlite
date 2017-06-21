@@ -34,7 +34,11 @@ rqlited -disco-id 809d9ba6-f70b-11e6-9a5a-92819c00729a
 When any node registers using the ID, it is returned the current list of nodes that have registered using that ID. If the nodes is the first node to access the service using the ID, it will receive a list that contains just itself -- and will subsequently elect itself leader. Subsequent nodes will then receive a list with more than 1 entry. These nodes will use one of the join addresses in the list to join the cluster.
 
 ### Controlling the registered join address
-By default each node registers the address passed in via the `-http-addr` option. However if you instead set `-http-adv-addr` when starting a node, the node will instead register that address.
+By default each node registers the address passed in via the `-http-addr` option. However if you instead set `-http-adv-addr` when starting a node, the node will instead register that address. This can be useful when telling a node to listen on all interfaces, but that is should be contacted at a specific address. For example:
+```shell
+rqlited -disco-id 809d9ba6-f70b-11e6-9a5a-92819c00729a -http-addr 0.0.0.0:4001 -http-adv host1:4001
+```
+In this example, other nodes will contact this node at `host1:4001`.
 
 ## Caveats
 If a node is already part of a cluster, addresses returned by the Discovery Service are ignored.
