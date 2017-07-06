@@ -1,3 +1,4 @@
+// Command rqlite is the command-line interface for rqlite.
 package main
 
 import (
