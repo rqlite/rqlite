@@ -274,20 +274,18 @@ func main() {
 	log.Printf("set peer for %s to %s", raftTn.Addr().String(), apiAdv)
 
 	// Create HTTP server and load authentication information, if supplied.
-	var s *httpd.Service
+	var credStore *auth.CredentialsStore
 	if authFile != "" {
 		f, err := os.Open(authFile)
 		if err != nil {
 			log.Fatalf("failed to open authentication file %s: %s", authFile, err.Error())
 		}
-		credentialStore := auth.NewCredentialsStore()
-		if err := credentialStore.Load(f); err != nil {
+		credStore = auth.NewCredentialsStore()
+		if err := credStore.Load(f); err != nil {
 			log.Fatalf("failed to load authentication file: %s", err.Error())
 		}
-		s = httpd.New(httpAddr, str, credentialStore)
-	} else {
-		s = httpd.New(httpAddr, str, nil)
 	}
+	s := httpd.New(httpAddr, str, credStore)
 
 	s.CertFile = x509Cert
 	s.KeyFile = x509Key
