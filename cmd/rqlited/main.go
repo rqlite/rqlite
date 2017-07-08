@@ -194,23 +194,23 @@ func main() {
 	}
 	dbConf := store.NewDBConfig(dsn, !onDisk)
 
-	str := store.New(&store.StoreConfig{
+	stor := store.New(&store.StoreConfig{
 		DBConf: dbConf,
 		Dir:    dataPath,
 		Tn:     raftTn,
 	})
 
 	// Set optional parameters on store.
-	str.SnapshotThreshold = raftSnapThreshold
-	str.HeartbeatTimeout, err = time.ParseDuration(raftHeartbeatTimeout)
+	stor.SnapshotThreshold = raftSnapThreshold
+	stor.HeartbeatTimeout, err = time.ParseDuration(raftHeartbeatTimeout)
 	if err != nil {
 		log.Fatalf("failed to parse Raft heartbeat timeout %s: %s", raftHeartbeatTimeout, err.Error())
 	}
-	str.ApplyTimeout, err = time.ParseDuration(raftApplyTimeout)
+	stor.ApplyTimeout, err = time.ParseDuration(raftApplyTimeout)
 	if err != nil {
 		log.Fatalf("failed to parse Raft apply timeout %s: %s", raftApplyTimeout, err.Error())
 	}
-	str.OpenTimeout, err = time.ParseDuration(raftOpenTimeout)
+	stor.OpenTimeout, err = time.ParseDuration(raftOpenTimeout)
 	if err != nil {
 		log.Fatalf("failed to parse Raft open timeout %s: %s", raftOpenTimeout, err.Error())
 	}
@@ -232,13 +232,13 @@ func main() {
 	}
 
 	// Now, open it.
-	if err := str.Open(len(joins) == 0); err != nil {
+	if err := stor.Open(len(joins) == 0); err != nil {
 		log.Fatalf("failed to open store: %s", err.Error())
 	}
 
 	// Create and configure cluster service.
 	tn := mux.Listen(muxMetaHeader)
-	cs := cluster.NewService(tn, str)
+	cs := cluster.NewService(tn, stor)
 	if err := cs.Open(); err != nil {
 		log.Fatalf("failed to open cluster service: %s", err.Error())
 	}
@@ -274,20 +274,18 @@ func main() {
 	log.Printf("set peer for %s to %s", raftTn.Addr().String(), apiAdv)
 
 	// Create HTTP server and load authentication information, if supplied.
-	var s *httpd.Service
+	var credStore *auth.CredentialsStore
 	if authFile != "" {
 		f, err := os.Open(authFile)
 		if err != nil {
 			log.Fatalf("failed to open authentication file %s: %s", authFile, err.Error())
 		}
-		credentialStore := auth.NewCredentialsStore()
-		if err := credentialStore.Load(f); err != nil {
+		credStore = auth.NewCredentialsStore()
+		if err := credStore.Load(f); err != nil {
 			log.Fatalf("failed to load authentication file: %s", err.Error())
 		}
-		s = httpd.New(httpAddr, str, credentialStore)
-	} else {
-		s = httpd.New(httpAddr, str, nil)
 	}
+	s := httpd.New(httpAddr, stor, credStore)
 
 	s.CertFile = x509Cert
 	s.KeyFile = x509Key
@@ -312,7 +310,7 @@ func main() {
 	terminate := make(chan os.Signal, 1)
 	signal.Notify(terminate, os.Interrupt)
 	<-terminate
-	if err := str.Close(true); err != nil {
+	if err := stor.Close(true); err != nil {
 		log.Printf("failed to close store: %s", err.Error())
 	}
 	stopProfile()
