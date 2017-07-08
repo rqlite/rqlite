@@ -44,7 +44,7 @@ There is also a rqlite _Discovery Service_, allowing nodes to automatically conn
 On some networks, like AWS EC2 cloud, nodes may have an IP address that is not routable from outside the firewall. Instead these nodes are addressed using a different IP address. You can still form a rqlite cluster however -- check out [this tutorial](http://www.philipotoole.com/rqlite-v3-0-1-globally-replicating-sqlite/) for more details.
 
 # Dealing with failure
-It is the nature of clustered systems, nodes can fail at anytime. Depending on the size of your cluster, it will tolerate various amounts of failure. With a 3-node cluster, it can tolerate the failure of a single node, including the leader.
+It is the nature of clustered systems that nodes can fail at anytime. Depending on the size of your cluster, it will tolerate various amounts of failure. With a 3-node cluster, it can tolerate the failure of a single node, including the leader.
 
 If an rqlite process crashes, it is safe to simply to restart it. The node will pick up any changes that happened on the cluster while it was down.
 
@@ -56,4 +56,4 @@ If a node fails completely and is not coming back -- a complete loss -- it shoul
 ```
 curl -XDELETE http://localhost:4001/remove -d '{"addr": "<node raft address>"}'
 ```
-assuming `localhost` is the address of the cluster leader. Removing a node does not change the number of nodes required to reach quorum, so you must add a new node to cluster. To do so, simply follow the instructions for _Growing a cluster_.
+assuming `localhost` is the address of the cluster leader. Removing a node does not change the number of nodes required to reach quorum, so you must add a new node to cluster as a replacement. To do so, simply follow the instructions for _Growing a cluster_.
