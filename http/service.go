@@ -300,9 +300,14 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	fmt.Println(">>>here1")
+
 	if err := s.store.Join(remoteAddr); err != nil {
+		fmt.Println(">>>here 2")
 		if err == store.ErrNotLeader {
+			fmt.Println(">>>>> here 2.5")
 			leader := s.store.Peer(s.store.Leader())
+			fmt.Println(">>>>> here 3", leader)
 			if leader == "" {
 				http.Error(w, err.Error(), http.StatusServiceUnavailable)
 				return

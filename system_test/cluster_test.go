@@ -1,6 +1,8 @@
 package system
 
 import (
+	"fmt"
+	"net/http"
 	"testing"
 )
 
@@ -18,6 +20,46 @@ func Test_JoinLeaderNode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed waiting for leader: %s", err.Error())
 	}
+}
+
+// Test_JoinLeaderNodeRedirect tests that joining through a non-leader node works.
+func Test_JoinLeaderNodeRedirect(t *testing.T) {
+	node1 := mustNewLeaderNode()
+	defer node1.Deprovision()
+
+	node2 := mustNewNode(false)
+	defer node2.Deprovision()
+	if err := node2.Join(node1); err != nil {
+		t.Fatalf("node failed to join leader: %s", err.Error())
+	}
+	_, err := node2.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for leader: %s", err.Error())
+	}
+
+	// Get a follower in the cluster.
+	c := Cluster{node1, node2}
+	followers, err := c.Followers()
+	if err != nil {
+		t.Fatalf("failed to find any follower in cluster: %s", err.Error())
+	}
+	fmt.Println(">>>>", *followers[0])
+
+	node3 := mustNewNode(false)
+	defer node3.Deprovision()
+	resp, err := DoJoinRequest(followers[0].APIAddr, node3.RaftAddr)
+	if err != nil {
+		t.Fatalf("failed to join cluster via follower: %s", err.Error())
+	}
+	if resp.StatusCode != http.StatusMovedPermanently {
+		t.Fatalf("follower node returned %s", resp.Status)
+	}
+
+	_, err = node3.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for leader: %s", err.Error())
+	}
+
 }
 
 // Test_MultiNodeCluster tests formation of a 3-node cluster, and its operation.
