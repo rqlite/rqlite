@@ -105,5 +105,8 @@ You can learn about securing access, and restricting users' access, to rqlite [h
 If you are using rqlite in a project, please generate a pull request to add it to this list.
 * [OpenMarket](https://github.com/openmarket/openmarket) - A free, decentralized bitcoin-based marketplace.
 
+## Learning more
+There is a [Google Group](https://groups.google.com/forum/#!forum/rqlite) dedicated to discussions about rqlite.
+
 ## Pronunciation?
 How do I pronounce rqlite? For what it's worth I try to pronounce it "ree-qwell-lite". But it seems most people, including me, often pronouce it "R Q lite".
