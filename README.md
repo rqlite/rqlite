@@ -105,7 +105,7 @@ You can learn about securing access, and restricting users' access, to rqlite [h
 If you are using rqlite in a project, please generate a pull request to add it to this list.
 * [OpenMarket](https://github.com/openmarket/openmarket) - A free, decentralized bitcoin-based marketplace.
 
-## Learning more
+## Google Group
 There is a [Google Group](https://groups.google.com/forum/#!forum/rqlite) dedicated to discussions about rqlite.
 
 ## Pronunciation?
