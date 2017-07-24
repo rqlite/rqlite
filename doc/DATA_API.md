@@ -92,7 +92,7 @@ When a transaction takes place either both statements will succeed, or neither. 
 The behaviour of rqlite when using `BEGIN`, `COMMIT`, `ROLLBACK`, `SAVEPOINT`, and `RELEASE` to control transactions is **not defined**. It is important to control transactions only through the query parameters shown above.
 
 ## Handling Errors
-If an error occurs while processing a statement, it will be marked as such in the response. For example.
+If an error occurs while processing a statement, it will be marked as such in the response. For example:
 
 ```bash
 curl -XPOST 'localhost:4001/db/execute?pretty&timings' -H "Content-Type: application/json" -d "[
@@ -111,7 +111,30 @@ curl -XPOST 'localhost:4001/db/execute?pretty&timings' -H "Content-Type: applica
 ```
 
 ## Sending requests to followers
-If you send a HTTP request to a node that is not the leader of the cluster, the node will respond with [HTTP 301 Moved Permanently](https://en.wikipedia.org/wiki/HTTP_301) and include the address of the leader as the `Location` header in the response. It is up the clients to re-issue the command to the leader.
+If you send a HTTP request to a node that is not the leader of the cluster, the node will respond with [HTTP 301 Moved Permanently](https://en.wikipedia.org/wiki/HTTP_301) and include the address of the leader as the `Location` header in the response. For example:
+```
+$ curl -v -G 'localhost:4003/db/query?pretty&timings' --data-urlencode 'q=SELECT * FROM foo'
+*   Trying ::1...
+* connect to ::1 port 4003 failed: Connection refused
+*   Trying 127.0.0.1...
+* Connected to localhost (127.0.0.1) port 4003 (#0)
+> GET /db/query?pretty&timings&q=SELECT%20%2A%20FROM%20foo HTTP/1.1
+> Host: localhost:4003
+> User-Agent: curl/7.43.0
+> Accept: */*
+> 
+< HTTP/1.1 301 Moved Permanently
+< Content-Type: application/json; charset=utf-8
+< Location: http://localhost:4001/db/query
+< X-Rqlite-Version: 4
+< Date: Mon, 24 Jul 2017 10:16:24 GMT
+< Content-Length: 65
+< 
+<a href="http://localhost:4001/db/query">Moved Permanently</a>.
+
+* Connection #0 to host localhost left intact
+```
+It is up the clients to re-issue the command to the leader.
 
 This choice was made, as it provides maximum visibility to the clients. For example, if a follower transparently forward the request to the leader, and one of the nodes then crashed during processing, it may be much harder for the client to determine where in the chain of nodes the processing failed.
 
