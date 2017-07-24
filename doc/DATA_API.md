@@ -109,6 +109,10 @@ curl -XPOST 'localhost:4001/db/execute?pretty&timings' -H "Content-Type: applica
     "time": 2.478862
 }
 ```
+
+## Sending requests to followers
+If you send a HTTP request to a node that is not the leader of the cluster, the node will respond with [HTTP 301 Moved Permanently](https://en.wikipedia.org/wiki/HTTP_301) and include the address of the leader in the response as the `Location` header in the response. It is up the clients to re-issue the command to the leader.
+
 ## Bulk API
 You can learn about the bulk API [here](https://github.com/rqlite/rqlite/blob/master/doc/BULK.md).
 
