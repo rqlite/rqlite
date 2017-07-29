@@ -362,7 +362,7 @@ func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request) {
 // handleBackup returns the consistent database snapshot.
 func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/octet-stream")
-	
+
 	if !s.CheckRequestPerm(r, PermBackup) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
