@@ -214,7 +214,6 @@ func (s *Service) Close() {
 
 // ServeHTTP allows Service to serve HTTP requests.
 func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	s.addBuildVersion(w)
 
 	if s.credentialStore != nil {
@@ -443,6 +442,8 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 
 // handleStatus returns status on the system.
 func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	
 	if !s.CheckRequestPerm(r, PermStatus) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
@@ -526,6 +527,8 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 
 // handleExecute handles queries that modify the database.
 func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	
 	if !s.CheckRequestPerm(r, PermExecute) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
@@ -586,6 +589,8 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 
 // handleQuery handles queries that do not modify the database.
 func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
 	if !s.CheckRequestPerm(r, PermQuery) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
@@ -704,6 +709,8 @@ func (s *Service) addBuildVersion(w http.ResponseWriter) {
 
 // serveExpvar serves registered expvar information over HTTP.
 func serveExpvar(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
 	fmt.Fprintf(w, "{\n")
 	first := true
 	expvar.Do(func(kv expvar.KeyValue) {
