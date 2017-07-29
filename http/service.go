@@ -361,9 +361,7 @@ func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request) {
 
 // handleBackup returns the consistent database snapshot.
 func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
-        w.Header().Set("Content-Type", "application/octet-stream")
-	
-        if !s.CheckRequestPerm(r, PermBackup) {
+	if !s.CheckRequestPerm(r, PermBackup) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
@@ -445,7 +443,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 // handleStatus returns status on the system.
 func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	
+
 	if !s.CheckRequestPerm(r, PermStatus) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
@@ -530,7 +528,7 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 // handleExecute handles queries that modify the database.
 func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	
+
 	if !s.CheckRequestPerm(r, PermExecute) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
