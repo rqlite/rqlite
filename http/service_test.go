@@ -99,23 +99,23 @@ func Test_HasContentTypeJSON(t *testing.T) {
 }
 
 func Test_HasContentTypeOctetStream(t *testing.T) {
-        m := &MockStore{}
-        s := New("127.0.0.1:0", m, nil)
-        if err := s.Start(); err != nil {
-                t.Fatalf("failed to start service")
-        }
-        defer s.Close()
+	m := &MockStore{}
+	s := New("127.0.0.1:0", m, nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
 
-        client := &http.Client{}
-        resp, err := client.Get(fmt.Sprintf("http://%s/db/backup", s.Addr().String()))
-        if err != nil {
-                t.Fatalf("failed to make request")
-        }
+	client := &http.Client{}
+	resp, err := client.Get(fmt.Sprintf("http://%s/db/backup", s.Addr().String()))
+	if err != nil {
+		t.Fatalf("failed to make request")
+	}
 
-        h := resp.Header.Get("Content-Type")
-        if h != "application/octet-stream; charset=utf-8" {
-                t.Fatalf("incorrect Content-type in HTTP response: %s", h)
-        }
+	h := resp.Header.Get("Content-Type")
+	if h != "application/octet-stream" {
+		t.Fatalf("incorrect Content-type in HTTP response: %s", h)
+	}
 }
 
 func Test_HasVersionHeaderUnknown(t *testing.T) {
