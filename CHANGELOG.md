@@ -1,4 +1,4 @@
-## 4.0.1 (unreleased)
+## 4.0.1 (August 4th 2017)
 - [PR #316](https://github.com/rqlite/rqlite/pull/316): CLI doesn't need pretty nor timed responses from node.
 - [PR #334](https://github.com/rqlite/rqlite/pull/334): Set Content-Type to "application/octet-stream" for backup endpoint. Fixes [issue #333](https://github.com/rqlite/rqlite/issues/333).
 
