@@ -682,7 +682,11 @@ func (s *Service) FormRedirect(r *http.Request, host string) string {
 	if s.credentialStore != nil {
 		protocol = "https"
 	}
-	return fmt.Sprintf("%s://%s%s", protocol, host, r.URL.Path)
+	rq := r.URL.RawQuery
+	if rq != "" {
+		rq = fmt.Sprintf("?%s", rq)
+	}
+	return fmt.Sprintf("%s://%s%s%s", protocol, host, r.URL.Path, rq)
 }
 
 // CheckRequestPerm returns true if authentication is enabled and the user contained
