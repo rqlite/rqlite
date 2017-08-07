@@ -125,12 +125,12 @@ $ curl -v -G 'localhost:4003/db/query?pretty&timings' --data-urlencode 'q=SELECT
 > 
 < HTTP/1.1 301 Moved Permanently
 < Content-Type: application/json; charset=utf-8
-< Location: http://localhost:4001/db/query
+< Location: http://localhost:4001/db/query?pretty&timings&q=SELECT%20%2A%20FROM%20foo
 < X-Rqlite-Version: 4
-< Date: Mon, 24 Jul 2017 10:16:24 GMT
-< Content-Length: 65
+< Date: Mon, 07 Aug 2017 21:10:59 GMT
+< Content-Length: 116
 < 
-<a href="http://localhost:4001/db/query">Moved Permanently</a>.
+<a href="http://localhost:4001/db/query?pretty&amp;timings&amp;q=SELECT%20%2A%20FROM%20foo">Moved Permanently</a>.
 
 * Connection #0 to host localhost left intact
 ```
