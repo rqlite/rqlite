@@ -555,17 +555,26 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	b, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	r.Body.Close()
-
+	// Prep storage for queries.
 	queries := []string{}
-	if err := json.Unmarshal(b, &queries); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+
+	if query, err := stmtParam(r); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	} else if query != "" {
+		queries = append(queries, query)
+	} else {
+		b, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		r.Body.Close()
+
+		if err := json.Unmarshal(b, &queries); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 	}
 
 	results, err := s.store.Execute(queries, timings, isTx)
