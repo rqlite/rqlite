@@ -366,6 +366,32 @@ func Test_RegisterStatus(t *testing.T) {
 	}
 }
 
+func Test_FormRedirect(t *testing.T) {
+	m := &MockStore{}
+	s := New("127.0.0.1:0", m, nil)
+	req := mustNewHTTPRequest("http://foo:4001")
+
+	if rd := s.FormRedirect(req, "foo:4001"); rd != "http://foo:4001" {
+		t.Fatal("failed to form redirect for simple URL")
+	}
+	if rd := s.FormRedirect(req, "bar:4002"); rd != "http://bar:4002" {
+		t.Fatal("failed to form redirect for simple URL with new host")
+	}
+}
+
+func Test_FormRedirectParam(t *testing.T) {
+	m := &MockStore{}
+	s := New("127.0.0.1:0", m, nil)
+	req := mustNewHTTPRequest("http://foo:4001/db/query?x=y")
+
+	if rd := s.FormRedirect(req, "foo:4001"); rd != "http://foo:4001/db/query?x=y" {
+		t.Fatal("failed to form redirect for URL")
+	}
+	if rd := s.FormRedirect(req, "bar:4003"); rd != "http://bar:4003/db/query?x=y" {
+		t.Fatal("failed to form redirect for URL with new host")
+	}
+}
+
 type MockStore struct {
 	executeFn func(queries []string, tx bool) ([]*sql.Result, error)
 	queryFn   func(queries []string, tx, leader, verify bool) ([]*sql.Rows, error)
@@ -427,4 +453,12 @@ type mockStatuser struct {
 
 func (m *mockStatuser) Stats() (interface{}, error) {
 	return nil, nil
+}
+
+func mustNewHTTPRequest(url string) *http.Request {
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		panic("failed to create HTTP request for testing")
+	}
+	return req
 }
