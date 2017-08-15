@@ -28,9 +28,9 @@ This starts a rqlite server listening on localhost, port 4001. This single node 
 
 To rebuild, perhaps after making some changes to the source, do something like the following:
 ```bash
-cd $GOPATH/bin/rqlited
-go build
-./rqlited ~/node.1
+cd $GOPATH/src/github.com/rqlite/rqlite
+go install ./...
+$GOPATH/bin/rqlited ~/node.1
 ```
 
 ### Speeding up the build process
