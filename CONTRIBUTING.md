@@ -33,6 +33,9 @@ go install ./...
 $GOPATH/bin/rqlited ~/node.1
 ```
 
+### Raspberry Pi
+The process outlined above will work for Linux, OSX, and Windows. For Raspberry Pi, check out [this issue](https://github.com/rqlite/rqlite/issues/340).
+
 ### Speeding up the build process
 It can be rather slow to rebuild rqlite, due to the repeated compilation of SQLite support. You can compile and install this library once, so subsequent builds are much faster. To do so, execute the following commands:
 ```bash
