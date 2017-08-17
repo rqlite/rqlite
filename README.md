@@ -89,7 +89,7 @@ Since the Raft log is the authoritative store for all data, and it is written to
 INSERT INTO foo (n) VALUES(random());
 ```
  * Technically this is not supported, but you can directly read the SQLite under any node at anytime, assuming you run in "on-disk" mode. However there is no guarantee that the SQLite file reflects all the changes that have taken place on the cluster unless you are sure the host node itself has received and applied all changes.
- * In case it isn't obvious, rqlite does not replicate any changes made directly to any underlying SQLite files, when run in "on disk" mode. If you do change these files directly, you will cause rqlite to fail. Only modify the database via the HTTP API.
+ * In case it isn't obvious, rqlite does not replicate any changes made directly to any underlying SQLite file, when run in "on disk" mode. *If you do change the SQLite file directly, you will cause rqlite to fail*. Only modify the database via the HTTP API.
  * SQLite dot-commands such as `.schema` or `.tables` are not directly supported by the API, but the rqlite CLI supports some very similar functionality. This is because those commands are features of the `sqlite3` command, not SQLite itself.
 
 ## Status API
