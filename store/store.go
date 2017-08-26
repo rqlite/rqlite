@@ -425,15 +425,18 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		return nil, err
 	}
 	status := map[string]interface{}{
-		"raft":          s.raft.Stats(),
-		"addr":          s.Addr().String(),
-		"leader":        s.Leader(),
-		"apply_timeout": s.ApplyTimeout.String(),
-		"meta":          s.meta,
-		"peers":         peers,
-		"dir":           s.raftDir,
-		"sqlite3":       dbStatus,
-		"db_conf":       s.dbConf,
+		"raft":               s.raft.Stats(),
+		"addr":               s.Addr().String(),
+		"leader":             s.Leader(),
+		"apply_timeout":      s.ApplyTimeout.String(),
+		"open_timeout":       s.OpenTimeout.String(),
+		"heartbeat_timeout":  s.HeartbeatTimeout.String(),
+		"snapshot_threshold": s.SnapshotThreshold,
+		"meta":               s.meta,
+		"peers":              peers,
+		"dir":                s.raftDir,
+		"sqlite3":            dbStatus,
+		"db_conf":            s.dbConf,
 	}
 	return status, nil
 }
