@@ -68,6 +68,8 @@ func main() {
 				err = query(ctx, cmd, "SELECT sql FROM sqlite_master", argv)
 			case ".STATUS":
 				err = status(ctx, cmd, line, argv)
+			case ".EXPVAR":
+				err = expvar(ctx, cmd, line, argv)
 			case ".HELP":
 				err = help(ctx, cmd, line, argv)
 			case ".QUIT", "QUIT", "EXIT":
@@ -100,58 +102,13 @@ func help(ctx *cli.Context, cmd, line string, argv *argT) error {
 }
 
 func status(ctx *cli.Context, cmd, line string, argv *argT) error {
-	// Recursive JSON printer.
-	var pprint func(indent int, m map[string]interface{})
-	pprint = func(indent int, m map[string]interface{}) {
-		indentation := "  "
-		for k, v := range m {
-			if v == nil {
-				continue
-			}
-			switch v.(type) {
-			case map[string]interface{}:
-				for i := 0; i < indent; i++ {
-					fmt.Print(indentation)
-				}
-				fmt.Printf("%s:\n", k)
-				pprint(indent+1, v.(map[string]interface{}))
-			default:
-				for i := 0; i < indent; i++ {
-					fmt.Print(indentation)
-				}
-				fmt.Printf("%s: %v\n", k, v)
-			}
-		}
-	}
-
 	url := fmt.Sprintf("%s://%s:%d/status", argv.Protocol, argv.Host, argv.Port)
-	client := http.Client{Transport: &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: argv.Insecure},
-	}}
-	resp, err := client.Get(url)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
+	return cliJSON(ctx, cmd, line, url, argv)
+}
 
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-
-	ret := make(map[string]interface{})
-	if err := json.Unmarshal(body, &ret); err != nil {
-		return err
-	}
-
-	// Specific key requested?
-	parts := strings.Split(line, " ")
-	if len(parts) >= 2 {
-		ret = map[string]interface{}{parts[1]: ret[parts[1]]}
-	}
-	pprint(0, ret)
-
-	return nil
+func expvar(ctx *cli.Context, cmd, line string, argv *argT) error {
+	url := fmt.Sprintf("%s://%s:%d/debug/vars", argv.Protocol, argv.Host, argv.Port)
+	return cliJSON(ctx, cmd, line, url, argv)
 }
 
 func sendRequest(ctx *cli.Context, urlStr string, line string, argv *argT, ret interface{}) error {
@@ -195,4 +152,59 @@ func sendRequest(ctx *cli.Context, urlStr string, line string, argv *argT, ret i
 		}
 		return nil
 	}
+}
+
+// cliJSON fetches JSON from a URL, and displays it at the CLI.
+func cliJSON(ctx *cli.Context, cmd, line, url string, argv *argT) error {
+	// Recursive JSON printer.
+	var pprint func(indent int, m map[string]interface{})
+	pprint = func(indent int, m map[string]interface{}) {
+		indentation := "  "
+		for k, v := range m {
+			if v == nil {
+				continue
+			}
+			switch v.(type) {
+			case map[string]interface{}:
+				for i := 0; i < indent; i++ {
+					fmt.Print(indentation)
+				}
+				fmt.Printf("%s:\n", k)
+				pprint(indent+1, v.(map[string]interface{}))
+			default:
+				for i := 0; i < indent; i++ {
+					fmt.Print(indentation)
+				}
+				fmt.Printf("%s: %v\n", k, v)
+			}
+		}
+	}
+
+	client := http.Client{Transport: &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: argv.Insecure},
+	}}
+	resp, err := client.Get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+
+	ret := make(map[string]interface{})
+	if err := json.Unmarshal(body, &ret); err != nil {
+		return err
+	}
+
+	// Specific key requested?
+	parts := strings.Split(line, " ")
+	if len(parts) >= 2 {
+		ret = map[string]interface{}{parts[1]: ret[parts[1]]}
+	}
+	pprint(0, ret)
+
+	return nil
 }
