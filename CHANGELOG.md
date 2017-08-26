@@ -1,3 +1,6 @@
+## 4.0.3 (unreleased)
+- [PR #](https://github.com/rqlite/rqlite/pull/342): Add missing Store parameters to diagnostic output.
+
 ## 4.0.2 (August 8th 2017)
 - [PR #337](https://github.com/rqlite/rqlite/pull/337): Include any query params with 301 redirect URL.
 
