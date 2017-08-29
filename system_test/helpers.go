@@ -86,6 +86,38 @@ func (n *Node) Join(leader *Node) error {
 	return nil
 }
 
+// Status returns the status and diagnostic output for node.
+func (n *Node) Status() (string, error) {
+	v, _ := url.Parse("http://" + n.APIAddr + "/status")
+
+	resp, err := http.Get(v.String())
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	return string(body), nil
+}
+
+// Expvar returns the expvar output for node.
+func (n *Node) Expvar() (string, error) {
+	v, _ := url.Parse("http://" + n.APIAddr + "/debug/vars")
+
+	resp, err := http.Get(v.String())
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	return string(body), nil
+}
+
 // ConfirmRedirect confirms that the node responds with a redirect to the given host.
 func (n *Node) ConfirmRedirect(host string) bool {
 	v, _ := url.Parse("http://" + n.APIAddr + "/db/query")
