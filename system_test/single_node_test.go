@@ -76,13 +76,21 @@ func Test_SingleNodeCoverage(t *testing.T) {
 
 	// Access endpoints to ensure the code is covered.
 	var err error
+    var str string
 
-	_, err = node.Status()
+	str, err = node.Status()
 	if err != nil {
 		t.Fatalf("failed to access status endpoint: %s", err.Error())
 	}
-	_, err = node.Expvar()
+    if !isJSON(str) {
+        t.Fatalf("output from status endpoint is not valid JSON: %s", str)
+    }
+
+	str, err = node.Expvar()
 	if err != nil {
 		t.Fatalf("failed to access expvar endpoint: %s", err.Error())
 	}
+    if !isJSON(str) {
+        t.Fatalf("output from expvar endpoint is not valid JSON: %s", str)
+    }
 }
