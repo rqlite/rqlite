@@ -825,7 +825,7 @@ func level(req *http.Request) (store.ConsistencyLevel, error) {
 	q := req.URL.Query()
 	lvl := strings.TrimSpace(q.Get("level"))
 
-	switch lvl {
+	switch strings.ToLower(lvl) {
 	case "none":
 		return store.None, nil
 	case "weak":
