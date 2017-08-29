@@ -94,6 +94,9 @@ func (n *Node) Status() (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if resp.StatusCode != 200 {
+		return "", fmt.Errorf("status endpoint returned: %s", resp.Status)
+	}
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
@@ -109,6 +112,9 @@ func (n *Node) Expvar() (string, error) {
 	resp, err := http.Get(v.String())
 	if err != nil {
 		return "", err
+	}
+	if resp.StatusCode != 200 {
+		return "", fmt.Errorf("expvar endpoint returned: %s", resp.Status)
 	}
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
@@ -286,6 +292,7 @@ func mustNewNode(enableSingle bool) *Node {
 	node.RaftAddr = node.Store.Addr().String()
 
 	node.Service = httpd.New("localhost:0", node.Store, nil)
+	node.Service.Expvar = true
 	if err := node.Service.Start(); err != nil {
 		node.Deprovision()
 		panic(fmt.Sprintf("failed to start HTTP server: %s", err.Error()))
