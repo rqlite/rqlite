@@ -73,6 +73,15 @@ func (n *Node) Query(stmt string) (string, error) {
 	return string(body), nil
 }
 
+// Query runs multiple queries against the node.
+func (n *Node) QueryMulti(stmts []string) (string, error) {
+	j, err := json.Marshal(stmts)
+	if err != nil {
+		return "", err
+	}
+	return n.postQuery(string(j))
+}
+
 // Join instructs this node to join the leader.
 func (n *Node) Join(leader *Node) error {
 	resp, err := DoJoinRequest(leader.APIAddr, n.RaftAddr)
@@ -146,6 +155,19 @@ func (n *Node) ConfirmRedirect(host string) bool {
 
 func (n *Node) postExecute(stmt string) (string, error) {
 	resp, err := http.Post("http://"+n.APIAddr+"/db/execute", "application/json", strings.NewReader(stmt))
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	return string(body), nil
+}
+
+func (n *Node) postQuery(stmt string) (string, error) {
+	resp, err := http.Post("http://"+n.APIAddr+"/db/query", "application/json", strings.NewReader(stmt))
 	if err != nil {
 		return "", err
 	}
