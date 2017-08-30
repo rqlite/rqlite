@@ -36,7 +36,7 @@ When any node registers using the ID, it is returned the current list of nodes t
 ### Controlling the registered join address
 By default each node registers the address passed in via the `-http-addr` option. However if you instead set `-http-adv-addr` when starting a node, the node will instead register that address. This can be useful when telling a node to listen on all interfaces, but that is should be contacted at a specific address. For example:
 ```shell
-rqlited -disco-id 809d9ba6-f70b-11e6-9a5a-92819c00729a -http-addr 0.0.0.0:4001 -http-adv host1:4001
+rqlited -disco-id 809d9ba6-f70b-11e6-9a5a-92819c00729a -http-addr 0.0.0.0:4001 -http-adv-addr host1:4001
 ```
 In this example, other nodes will contact this node at `host1:4001`.
 
