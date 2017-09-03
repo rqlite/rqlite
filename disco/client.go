@@ -10,7 +10,11 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 )
+
+const discoDir = "discovery"
+const discoResponse = "response.json"
 
 // Response represents the response returned by a Discovery Service.
 type Response struct {
@@ -21,15 +25,17 @@ type Response struct {
 
 // Client provides a Discovery Service client.
 type Client struct {
-	url    string
-	logger *log.Logger
+	url          string
+	responsePath string
+	logger       *log.Logger
 }
 
 // New returns an initialized Discovery Service client.
-func New(url string) *Client {
+func New(url, dir string) *Client {
 	return &Client{
-		url:    url,
-		logger: log.New(os.Stderr, "[discovery] ", log.LstdFlags),
+		url:          url,
+		responsePath: filepath.Join(dir, discoDir, discoResponse),
+		logger:       log.New(os.Stderr, "[discovery] ", log.LstdFlags),
 	}
 }
 
