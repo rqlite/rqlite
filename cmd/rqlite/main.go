@@ -28,7 +28,7 @@ const cliHelp = `.help				Show this message
 .indexes			Show names of all indexes
 .schema				Show CREATE statements for all tables
 .status				Show status and diagnostic information for connected node
-.expvar				Show expvar (Go runtime) information for connect node
+.expvar				Show expvar (Go runtime) information for connected node
 .tables				List names of tables
 `
 
