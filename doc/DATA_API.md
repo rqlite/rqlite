@@ -117,7 +117,7 @@ You must always send write-requests (requests will change the database) to the l
 
 The situation for queries -- requests which just read data -- is somewhat different. If you send the request to a node that is not the leader of the cluster, and specify `strong` or `weak` as the [read-consistency level](https://github.com/rqlite/rqlite/blob/master/doc/CONSISTENCY.md), the node will also respond with [HTTP 301 Moved Permanently](https://en.wikipedia.org/wiki/HTTP_301) and include the address of the leader as the `Location` header in the response.
 
-However, if you specify `none` for read-consistency the node will query its local node SQLite database. No redirect will be returned.
+However, if you specify `none` for read-consistency the node will query its local SQLite database. No redirect will be returned.
 
 ## Example of redirect on query
 ```
