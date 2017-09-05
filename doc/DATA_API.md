@@ -111,7 +111,7 @@ curl -XPOST 'localhost:4001/db/execute?pretty&timings' -H "Content-Type: applica
 ```
 
 ## Sending requests to followers
-If you send a HTTP request to a node that is not the leader of the cluster, the node will respond with [HTTP 301 Moved Permanently](https://en.wikipedia.org/wiki/HTTP_301) and include the address of the leader as the `Location` header in the response. For example:
+If you send a HTTP request to a node that is not the leader of the cluster, and do not specify `none` as the [read-consistency level](https://github.com/rqlite/rqlite/blob/master/doc/CONSISTENCY.md), the node will respond with [HTTP 301 Moved Permanently](https://en.wikipedia.org/wiki/HTTP_301) and include the address of the leader as the `Location` header in the response. For example:
 ```
 $ curl -v -G 'localhost:4003/db/query?pretty&timings' --data-urlencode 'q=SELECT * FROM foo'
 *   Trying ::1...
@@ -137,6 +137,8 @@ $ curl -v -G 'localhost:4003/db/query?pretty&timings' --data-urlencode 'q=SELECT
 It is up the clients to re-issue the command to the leader.
 
 This choice was made, as it provides maximum visibility to the clients. For example, if a follower transparently forwarded the request to the leader, and one of the nodes then crashed during processing, it may be much harder for the client to determine where in the chain of nodes the processing failed.
+
+If you do specify `none` for read-consistency however, the node will request its local node SQLite database. No redirect will be returned.
 
 ## Bulk API
 You can learn about the bulk API [here](https://github.com/rqlite/rqlite/blob/master/doc/BULK.md).
