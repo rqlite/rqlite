@@ -49,7 +49,7 @@ It is the nature of clustered systems that nodes can fail at anytime. Depending 
 If an rqlite process crashes, it is safe to simply to restart it. The node will pick up any changes that happened on the cluster while it was down.
 
 # Growing a cluster
-You can grow a cluster simply by joining a new node to an existing cluster, via requests to the leader, at anytime. The new node will pick up changes that have occurred on the cluster since the cluster first started.
+You can grow a cluster simply by joining a new node to an existing cluster, via requests to the leader or via the Discovery Service, at anytime. The new node will pick up changes that have occurred on the cluster since the cluster first started.
 
 # Replacing a node
 If a node fails completely and is not coming back -- a complete loss -- it should be removed from the cluster. To remove a node from a cluster, execute the following command:
