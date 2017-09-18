@@ -6,7 +6,7 @@ import (
 	"os"
 )
 
-const name = `discoctl`
+const name = `rqlite-disco`
 const desc = `Command-line tool for rqlite Discovery Service control.`
 const commands = `
         create            create a new Discovery Service ID
