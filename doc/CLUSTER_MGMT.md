@@ -56,4 +56,6 @@ If a node fails completely and is not coming back, or if you shut down a node be
 ```
 curl -XDELETE http://localhost:4001/remove -d '{"addr": "<node raft address>"}'
 ```
-assuming `localhost` is the address of the cluster leader. Removing a node does not change the number of nodes required to reach quorum, so you must add a new node to cluster as a replacement. To do so, simply follow the instructions for _Growing a cluster_.
+assuming `localhost` is the address of the cluster leader. If you do not do this the leader will continually attempt to communicate with that node.
+
+Removing a node does not change the number of nodes required to reach quorum, so you must add a new node to cluster as a replacement. To do so, simply follow the instructions for _Growing a cluster_.
