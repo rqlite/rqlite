@@ -6,12 +6,15 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 )
 
 // Test_NewClient tests that a new disco client can be instantiated. Nothing more.
 func Test_NewClient(t *testing.T) {
-	c := New("https://discovery.rqlite.com")
+	ds := mustTempDir()
+	defer os.RemoveAll(ds)
+	c := New("https://discovery.rqlite.com", ds)
 	if c == nil {
 		t.Fatal("failed to create new disco client")
 	}
@@ -31,7 +34,9 @@ func Test_ClientRegisterBadRequest(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	c := New(ts.URL)
+	ds := mustTempDir()
+	defer os.RemoveAll(ds)
+	c := New(ts.URL, ds)
 	_, err := c.Register("1234", "http://127.0.0.1")
 	if err == nil {
 		t.Fatalf("failed to receive error on 400 from server")
@@ -48,7 +53,9 @@ func Test_ClientRegisterNotFound(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	c := New(ts.URL)
+	ds := mustTempDir()
+	defer os.RemoveAll(ds)
+	c := New(ts.URL, ds)
 	_, err := c.Register("1234", "http://127.0.0.1")
 	if err == nil {
 		t.Fatalf("failed to receive error on 404 from server")
@@ -65,7 +72,9 @@ func Test_ClientRegisterForbidden(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	c := New(ts.URL)
+	ds := mustTempDir()
+	defer os.RemoveAll(ds)
+	c := New(ts.URL, ds)
 	_, err := c.Register("1234", "http://127.0.0.1")
 	if err == nil {
 		t.Fatalf("failed to receive error on 403 from server")
@@ -101,7 +110,9 @@ func Test_ClientRegisterRequestOK(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	c := New(ts.URL)
+	ds := mustTempDir()
+	defer os.RemoveAll(ds)
+	c := New(ts.URL, ds)
 	disco, err := c.Register("1234", "http://127.0.0.1")
 	if err != nil {
 		t.Fatalf("failed to register: %s", err.Error())
@@ -143,7 +154,9 @@ func Test_ClientRegisterRequestRedirectOK(t *testing.T) {
 		http.Redirect(w, r, ts1.URL+"/1234", http.StatusMovedPermanently)
 	}))
 
-	c := New(ts2.URL)
+	ds := mustTempDir()
+	defer os.RemoveAll(ds)
+	c := New(ts2.URL, ds)
 	disco, err := c.Register("1234", "http://127.0.0.1")
 	if err != nil {
 		t.Fatalf("failed to register: %s", err.Error())
@@ -163,7 +176,9 @@ func Test_ClientRegisterFollowerOK(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	c := New(ts.URL)
+	ds := mustTempDir()
+	defer os.RemoveAll(ds)
+	c := New(ts.URL, ds)
 	disco, err := c.Register("1234", "http://2.2.2.2")
 	if err != nil {
 		t.Fatalf("failed to register: %s", err.Error())
@@ -186,7 +201,9 @@ func Test_ClientRegisterFollowerMultiOK(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	c := New(ts.URL)
+	ds := mustTempDir()
+	defer os.RemoveAll(ds)
+	c := New(ts.URL, ds)
 	disco, err := c.Register("1234", "http://3.3.3.3")
 	if err != nil {
 		t.Fatalf("failed to register: %s", err.Error())
@@ -203,4 +220,13 @@ func Test_ClientRegisterFollowerMultiOK(t *testing.T) {
 	if disco.Nodes[2] != `http://3.3.3.3` {
 		t.Fatalf("got incorrect third node, got %v", disco.Nodes[1])
 	}
+}
+
+func mustTempDir() string {
+	var err error
+	path, err := ioutil.TempDir("", "rqlilte-test-")
+	if err != nil {
+		panic("failed to create temp dir")
+	}
+	return path
 }
