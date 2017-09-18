@@ -44,6 +44,7 @@ release_pkg=${release}.tar.gz
 mkdir $tmp_pkg/$release
 cp $GOPATH/bin/rqlited $tmp_pkg/$release
 cp $GOPATH/bin/rqlite $tmp_pkg/$release
+cp $GOPATH/bin/discoctl $tmp_pkg/$release
 cd $tmp_pkg
 tar cvfz $release_pkg $release
 
