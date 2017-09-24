@@ -15,6 +15,9 @@ const commands = `
 `
 
 var discoURL string
+var createFlags *flag.FlagSet
+var listFlags *flag.FlagSet
+var removeFlags *flag.FlagSet
 
 func init() {
 	flag.StringVar(&discoURL, "disco-url", "http://discovery.rqlite.com", "Set Discovery Service URL")
@@ -24,8 +27,33 @@ func init() {
 		fmt.Fprintf(os.Stderr, "Available commands:\n%s\n", commands)
 		flag.PrintDefaults()
 	}
+
+	createFlags = flag.NewFlagSet("create", flag.ExitOnError)
+	createFlags.Usage = func() {
+		fmt.Fprintf(os.Stderr, "\nUsage: %s \n", name)
+		fmt.Fprintf(os.Stderr, "Create a new Discovery Service ID")
+	}
 }
 
 func main() {
 	flag.Parse()
+	if flag.NArg() < 1 {
+		flag.Usage()
+		os.Exit(1)
+	}
+
+	switch flag.Arg(0) {
+	case "create":
+		createFlags.Parse(flag.Args()[2:])
+		os.Exit(0)
+	case "list":
+		fmt.Println("list")
+		os.Exit(0)
+	case "remove":
+		fmt.Println("remove")
+		os.Exit(0)
+	default:
+		flag.Usage()
+		os.Exit(1)
+	}
 }
