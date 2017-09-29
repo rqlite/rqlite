@@ -1,9 +1,14 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
+	"io/ioutil"
+	"net/http"
 	"os"
+
+	"github.com/rqlite/rqlite/disco"
 )
 
 const name = `rqlite-disco`
@@ -45,7 +50,14 @@ func main() {
 	switch flag.Arg(0) {
 	case "create":
 		createFlags.Parse(flag.Args()[2:])
+		id, err := create()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to create discovery ID: %s", err.Error())
+			os.Exit(1)
+		}
+		fmt.Println(id)
 		os.Exit(0)
+
 	case "list":
 		fmt.Println("list")
 		os.Exit(0)
@@ -56,4 +68,27 @@ func main() {
 		flag.Usage()
 		os.Exit(1)
 	}
+}
+
+func create() (string, error) {
+	url := discoURL
+
+	resp, err := http.Post(discoURL, "", nil)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	fmt.Println(string(b))
+
+	r := &disco.Response{}
+	if err := json.Unmarshal(b, r); err != nil {
+		return "", err
+	}
+
+	return r.DiscoID, nil
 }
