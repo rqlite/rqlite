@@ -63,11 +63,11 @@ $ rqlited -http-addr localhost:4005 -raft-addr localhost:4006 -disco-id b3da7185
 _This demonstration shows all 3 nodes running on the same host. In reality you probably wouldn't do this, and then you wouldn't need to select different -http-addr and -raft-addr ports for each rqlite node._
 
 ## Removing registered addresses
-If you need to remove an address from the list of registered addresses, perhaps because a node has permanently left a cluster, you can do this via the following command:
+If you need to remove an address from the list of registered addresses, perhaps because a node has permanently left a cluster, you can do this via the following command (be sure to pass all the options shown to `curl`):
 ```shell
-$ curl -XDELETE http://discovery.rqlite.com/<disco ID> -H "Content-Type: application/json" -d '{"addr": "<node address>"}'
+$ curl -XDELETE -L --post301 http://discovery.rqlite.com/<disco ID> -H "Content-Type: application/json" -d '{"addr": "<node address>"}'
 ```
 For example:
 ```shell
-$ curl -XDELETE http://discovery.rqlite.com/be0dd310-fe41-11e6-bb97-92e4c2da9b50 -H "Content-Type: application/json" -d '{"addr": "http://192.168.0.1:4001"}'
+$ curl -XDELETE -L --post301 http://discovery.rqlite.com/be0dd310-fe41-11e6-bb97-92e4c2da9b50 -H "Content-Type: application/json" -d '{"addr": "http://192.168.0.1:4001"}'
 ```
