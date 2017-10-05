@@ -1,6 +1,6 @@
 machine:
     environment:
-      GODIST: "go1.8.1.linux-amd64.tar.gz"
+      GODIST: "go1.9.1.linux-amd64.tar.gz"
 
     post:
       - mkdir -p download
