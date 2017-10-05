@@ -1,3 +1,7 @@
+## 4.2.0 (unreleased)
+- [PR #354](https://github.com/rqlite/rqlite/pull/354): Vendor Raft.
+- [PR #354](https://github.com/rqlite/rqlite/pull/354): Move to Go 1.9.1.
+
 ## 4.1.0 (September 3rd 2017)
 - [PR #342](https://github.com/rqlite/rqlite/pull/342): Add missing Store parameters to diagnostic output.
 - [PR #343](https://github.com/rqlite/rqlite/pull/343): Support fetching [expvar](https://golang.org/pkg/expvar/) information via CLI.
