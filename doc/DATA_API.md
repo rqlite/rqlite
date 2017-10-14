@@ -1,8 +1,13 @@
 # Data API
 
-rqlite exposes an HTTP API allowing the database to be modified such that the changes are replicated. Queries are also executed using the HTTP API. Modifications go through the Raft log, ensuring only changes committed by a quorum of rqlite nodes are actually executed against the SQLite database. Queries do not __necessarily__ go through the Raft log, however, since they do not change the state of the database, and therefore do not need to be captured in the log. More on this later.
+rqlite exposes an HTTP API allowing the database to be modified such that the changes are replicated. Queries are also executed using the HTTP API.
 
-There are also [client libraries available](https://github.com/rqlite).
+All write-requests must be sent to the leader of the cluster. Queries, however, may be sent to any node, depending on the [read-consistency](https://github.com/rqlite/rqlite/blob/master/doc/CONSISTENCY.md) requirements. But, by default, queries must also be sent to the leader.
+
+There are [client libraries available](https://github.com/rqlite).
+
+## Data and the Raft log
+Any modifications to the SQLite database go through the Raft log, ensuring only changes committed by a quorum of rqlite nodes are actually executed against the SQLite database. Queries do not __necessarily__ go through the Raft log, however, since they do not change the state of the database, and therefore do not need to be captured in the log. More on this later.
 
 ## Writing Data
 To write data successfully to the database, you must create at least 1 table. To do this perform a HTTP POST, with a `CREATE TABLE` SQL command encapsulated in a JSON array, in the body of the request. An example via [curl](http://curl.haxx.se/):
@@ -39,7 +44,7 @@ The response is of the form:
 The use of the URL param `pretty` is optional, and results in pretty-printed JSON responses. Time is measured in seconds. If you do not want timings, do not pass `timings` as a URL parameter.
 
 ## Querying Data
-Querying data is easy. The most important thing to know is that, by default, queries must go through the leader node. More on this later.
+Querying data is easy. The most important thing to know is that, by default, queries must go through the leader node. 
 
 For a single query simply perform a HTTP GET, setting the query statement as the query parameter `q`:
 
