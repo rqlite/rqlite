@@ -75,7 +75,7 @@ The response is of the form:
 ```
 
 ### Read Consistency
-You can learn all about the read consistency guarantees supported by rqlite [here](https://github.com/rqlite/rqlite/blob/master/doc/CONSISTENCY.md).
+You can learn all about the read consistency guarantees supported by rqlite [here](https://github.com/rqlite/rqlite/blob/master/DOC/CONSISTENCY.md).
 
 ## Transactions
 Transactions are supported. To execute statements within a transaction, add `transaction` to the URL. An example of the above operation executed within a transaction is shown below.
@@ -115,7 +115,7 @@ What happens when you send a request to a follower depends on the nature of the 
 
 You must always send write-requests (requests will change the database) to the leader. If you send a write-request to a follower, the follower will respond with [HTTP 301 Moved Permanently](https://en.wikipedia.org/wiki/HTTP_301) and include the address of the leader as the `Location` header in the response.
 
-The situation for queries -- requests which just read data -- is somewhat different. If you send the request to a node that is not the leader of the cluster, and specify `strong` or `weak` as the [read-consistency level](https://github.com/rqlite/rqlite/blob/master/doc/CONSISTENCY.md), the node will also respond with [HTTP 301 Moved Permanently](https://en.wikipedia.org/wiki/HTTP_301) and include the address of the leader as the `Location` header in the response.
+The situation for queries -- requests which just read data -- is somewhat different. If you send the request to a node that is not the leader of the cluster, and specify `strong` or `weak` as the [read-consistency level](https://github.com/rqlite/rqlite/blob/master/DOC/CONSISTENCY.md), the node will also respond with [HTTP 301 Moved Permanently](https://en.wikipedia.org/wiki/HTTP_301) and include the address of the leader as the `Location` header in the response.
 
 However, if you specify `none` for read-consistency the node will query its local SQLite database. No redirect will be returned.
 
@@ -147,6 +147,6 @@ It is up the clients to re-issue the command to the leader.
 This choice was made, as it provides maximum visibility to the clients. For example, if a follower transparently forwarded a request to the leader, and one of the nodes then crashed during processing, it may be much harder for the client to determine where in the chain of nodes the processing failed.
 
 ## Bulk API
-You can learn about the bulk API [here](https://github.com/rqlite/rqlite/blob/master/doc/BULK.md).
+You can learn about the bulk API [here](https://github.com/rqlite/rqlite/blob/master/DOC/BULK.md).
 
 

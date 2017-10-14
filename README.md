@@ -1,4 +1,4 @@
-<img src="doc/logo-text.png" height=100></img>
+<img src="DOC/logo-text.png" height=100></img>
 
 [![Circle CI](https://circleci.com/gh/rqlite/rqlite/tree/master.svg?style=svg)](https://circleci.com/gh/rqlite/rqlite/tree/master) [![appveyor](https://ci.appveyor.com/api/projects/status/github/rqlite/rqlite?branch=master&svg=true)](https://ci.appveyor.com/project/otoolep/rqlite) [![GoDoc](https://godoc.org/github.com/rqlite/rqlite?status.svg)](https://godoc.org/github.com/rqlite/rqlite) [![Go Report Card](https://goreportcard.com/badge/github.com/rqlite/rqlite)](https://goreportcard.com/report/github.com/rqlite/rqlite) [![Release](https://img.shields.io/github/release/rqlite/rqlite.svg)](https://github.com/rqlite/rqlite/releases) [![Google Group](https://img.shields.io/badge/Google%20Group--blue.svg)](https://groups.google.com/group/rqlite)
 
@@ -14,8 +14,8 @@ You could use rqlite as part of a larger system, as a central store for some cri
 - Fully replicated production-grade SQL database.
 - [Production-grade](https://github.com/hashicorp/raft) distributed consensus system.
 - An easy-to-use HTTP(S) API, including leader-redirection and bulk-update support. A CLI is also available.
-- [Discovery Service support](https://github.com/rqlite/rqlite/blob/master/doc/DISCOVERY.md), allowing clusters to be dynamically created.
-- [Extensive security and encryption support](https://github.com/rqlite/rqlite/blob/master/doc/SECURITY.md), including node-to-node encryption.
+- [Discovery Service support](https://github.com/rqlite/rqlite/blob/master/DOC/DISCOVERY.md), allowing clusters to be dynamically created.
+- [Extensive security and encryption support](https://github.com/rqlite/rqlite/blob/master/DOC/SECURITY.md), including node-to-node encryption.
 - Choice of read consistency levels.
 - Transaction support.
 - Hot backups.
@@ -40,13 +40,13 @@ rqlited -http-addr localhost:4005 -raft-addr localhost:4006 -join http://localho
 ```
 _This demonstration shows all 3 nodes running on the same host. In reality you probably wouldn't do this, and then you wouldn't need to select different -http-addr and -raft-addr ports for each rqlite node._
 
-With just these few steps you've now got a fault-tolerant, distributed relational database. For full details on creating and managing real clusters check out [this documentation](https://github.com/rqlite/rqlite/blob/master/doc/CLUSTER_MGMT.md).
+With just these few steps you've now got a fault-tolerant, distributed relational database. For full details on creating and managing real clusters check out [this documentation](https://github.com/rqlite/rqlite/blob/master/DOC/CLUSTER_MGMT.md).
 
 #### Cluster Discovery
-There is also a rqlite _Discovery Service_, allowing nodes to automatically connect and form a cluster. This can be much more convenient, allowing clusters to be dynamically created. Check out [the documentation](https://github.com/rqlite/rqlite/blob/master/doc/DISCOVERY.md) for more details.
+There is also a rqlite _Discovery Service_, allowing nodes to automatically connect and form a cluster. This can be much more convenient, allowing clusters to be dynamically created. Check out [the documentation](https://github.com/rqlite/rqlite/blob/master/DOC/DISCOVERY.md) for more details.
 
 ### Inserting records
-Let's insert some records via the [rqlite CLI](https://github.com/rqlite/rqlite/blob/master/doc/CLI.md), using standard SQLite commands. Once inserted, these records will be replicated across the cluster, in a durable and fault-tolerant manner. Your 3-node cluster can suffer the failure of a single node without any loss of functionality.
+Let's insert some records via the [rqlite CLI](https://github.com/rqlite/rqlite/blob/master/DOC/CLI.md), using standard SQLite commands. Once inserted, these records will be replicated across the cluster, in a durable and fault-tolerant manner. Your 3-node cluster can suffer the failure of a single node without any loss of functionality.
 ```
 $ rqlite
 127.0.0.1:4001> CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)
@@ -68,7 +68,7 @@ $ rqlite
 ```
 
 ## Data API
-rqlite has a rich HTTP API, allowing full control over writing to, and querying from, rqlite. Check out [the documentation](https://github.com/rqlite/rqlite/blob/master/doc/DATA_API.md) for full details. There are also [client libraries available](https://github.com/rqlite).
+rqlite has a rich HTTP API, allowing full control over writing to, and querying from, rqlite. Check out [the documentation](https://github.com/rqlite/rqlite/blob/master/DOC/DATA_API.md) for full details. There are also [client libraries available](https://github.com/rqlite).
 
 ## Performance
 rqlite replicates SQLite for fault-tolerance. It does not replicate it for performance. In fact performance is reduced somewhat due to the network round-trips.
@@ -93,13 +93,13 @@ INSERT INTO foo (n) VALUES(random());
  * SQLite dot-commands such as `.schema` or `.tables` are not directly supported by the API, but the rqlite CLI supports some very similar functionality. This is because those commands are features of the `sqlite3` command, not SQLite itself.
 
 ## Status API
-You can learn how check status and diagnostics [here](https://github.com/rqlite/rqlite/blob/master/doc/DIAGNOSTICS.md).
+You can learn how check status and diagnostics [here](https://github.com/rqlite/rqlite/blob/master/DOC/DIAGNOSTICS.md).
 
 ## Backup and restore
-Learn how to hot backup your rqlite cluster [here](https://github.com/rqlite/rqlite/blob/master/doc/BACKUPS.md). You can also load data [directly from a SQLite dump file](https://github.com/rqlite/rqlite/blob/master/doc/RESTORE_FROM_SQLITE.md).
+Learn how to hot backup your rqlite cluster [here](https://github.com/rqlite/rqlite/blob/master/DOC/BACKUPS.md). You can also load data [directly from a SQLite dump file](https://github.com/rqlite/rqlite/blob/master/DOC/RESTORE_FROM_SQLITE.md).
 
 ## Security
-You can learn about securing access, and restricting users' access, to rqlite [here](https://github.com/rqlite/rqlite/blob/master/doc/SECURITY.md).
+You can learn about securing access, and restricting users' access, to rqlite [here](https://github.com/rqlite/rqlite/blob/master/DOC/SECURITY.md).
 
 ## Projects using rqlite
 If you are using rqlite in a project, please generate a pull request to add it to this list.
