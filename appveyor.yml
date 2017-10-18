@@ -17,3 +17,10 @@ build_script:
   - go get ./...
   - go build -i ./...
   - go test -v ./...
+
+after_build:
+  - 7z a rqlited-nightly-win64.zip %GOPATH%\bin\rq*.exe
+
+artifacts:
+  - path: rqlited-nightly-win64.zip
+    name: rqlite for Windows x64
