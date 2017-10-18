@@ -23,7 +23,7 @@ You could use rqlite as part of a larger system, as a central store for some cri
 ## Quick Start
 _Full documentation available [here](https://github.com/rqlite/rqlite/tree/master/DOC). You may also wish to check out the [rqlite Google Group](https://groups.google.com/forum/#!forum/rqlite)._
 
-The quickest way to get running on OSX and Linux is to download a pre-built release binary. You can find these binaries on the [Github releases page](https://github.com/rqlite/rqlite/releases). Once installed, you can start a single rqlite node like so:
+The quickest way to get running on OSX and Linux is to download a pre-built release binary. You can find these binaries on the [Github releases page](https://github.com/rqlite/rqlite/releases). If you prefer Windows you can download the latest build [here](https://ci.appveyor.com/api/projects/otoolep/rqlite/artifacts/rqlite-latest-win64.zip?branch=master). Once installed, you can start a single rqlite node like so:
 ```bash
 rqlited ~/node.1
 ```
