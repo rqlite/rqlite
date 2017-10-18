@@ -39,7 +39,7 @@ cd rqlite
 go get -d ./...
 go install -ldflags="-X main.version=$VERSION -X main.branch=$branch -X main.commit=$commit -X main.buildtime=$buildtime" ./...
 
-release=`echo rqlited-$VERSION-$kernel-$machine | tr '[:upper:]' '[:lower:]'`
+release=`echo rqlite-$VERSION-$kernel-$machine | tr '[:upper:]' '[:lower:]'`
 release_pkg=${release}.tar.gz
 mkdir $tmp_pkg/$release
 cp $GOPATH/bin/rqlited $tmp_pkg/$release
