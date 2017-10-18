@@ -17,3 +17,10 @@ build_script:
   - go get ./...
   - go build -i ./...
   - go test -v ./...
+
+after_build:
+  - 7z a rqlited-4.{build}-ci-win64.zip
+
+artifacts:
+  - path: rqlited-4.{build}-ci-win64.zip
+    name: rqlite 4.{build} for Windows (64bit)
