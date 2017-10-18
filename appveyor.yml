@@ -19,7 +19,7 @@ build_script:
   - go test -v ./...
 
 after_build:
-  - 7z a rqlited-4.{build}-ci-win64.zip
+  - 7z a rqlited-4.{build}-ci-win64.zip %GOPATH%\bin\rq*.exe
 
 artifacts:
   - path: rqlited-4.{build}-ci-win64.zip
