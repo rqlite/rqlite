@@ -6,7 +6,6 @@ clone_folder: c:\gopath\src\github.com\rqlite\rqlite
 
 environment:
   GOPATH: c:\gopath
-  CIVERS: rqlited-4.%APPVEYOR_BUILD_VERSION%-ci-%APPVEYOR_BUILD_ID%-win64
 
 install:
   - set BUILD_ENV=gnu
@@ -20,8 +19,8 @@ build_script:
   - go test -v ./...
 
 after_build:
-  - 7z a %CIVERS%.zip %GOPATH%\bin\rq*.exe
+  - 7z a rqlited-$(build)-nightly-win64.zip %GOPATH%\bin\rq*.exe
 
 artifacts:
-  - path: %CIVERS%.zip
+  - path: rqlited-$(build)-nightly-win64.zip
     name: rqlite 4.{build} for Windows (64bit)
