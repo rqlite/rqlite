@@ -9,7 +9,7 @@ rqlite gives you the functionality of a [rock solid](http://www.sqlite.org/testi
 
 You could use rqlite as part of a larger system, as a central store for some critical relational data, without having to run a heavier solution like MySQL.
 
-## How?
+### How?
 rqlite uses [Raft](https://raft.github.io/) to achieve consensus across all the instances of the SQLite databases, ensuring that every change made to the system is made to a quorum of SQLite databases, or none at all. You can learn more about the design [here](https://github.com/rqlite/rqlite/blob/master/DOC/DESIGN.md).
 
 ### Key features
