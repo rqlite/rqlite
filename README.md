@@ -16,7 +16,7 @@ rqlite uses [Raft](https://raft.github.io/) to achieve consensus across all the 
 - Very easy deployment, with no need to separately install SQLite.
 - Fully replicated production-grade SQL database.
 - [Production-grade](https://github.com/hashicorp/raft) distributed consensus system.
-- An easy-to-use HTTP(S) API, including leader-redirection and bulk-update support. A CLI is also available.
+- An easy-to-use HTTP(S) API, including leader-redirection and bulk-update support. A CLI is also available, as are various [client libraries](https://github.com/rqlite).
 - [Discovery Service support](https://github.com/rqlite/rqlite/blob/master/DOC/DISCOVERY.md), allowing clusters to be dynamically created.
 - [Extensive security and encryption support](https://github.com/rqlite/rqlite/blob/master/DOC/SECURITY.md), including node-to-node encryption.
 - Choice of read consistency levels.
