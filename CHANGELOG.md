@@ -1,4 +1,4 @@
-## 4.2.0 (unreleased)
+## 4.2.0 (October 19th 2017)
 - [PR #354](https://github.com/rqlite/rqlite/pull/354): Vendor Raft.
 - [PR #354](https://github.com/rqlite/rqlite/pull/354): Move to Go 1.9.1.
 
