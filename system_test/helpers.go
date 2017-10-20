@@ -73,7 +73,7 @@ func (n *Node) Query(stmt string) (string, error) {
 	return string(body), nil
 }
 
-// Query runs multiple queries against the node.
+// QueryMulti runs multiple queries against the node.
 func (n *Node) QueryMulti(stmts []string) (string, error) {
 	j, err := json.Marshal(stmts)
 	if err != nil {
