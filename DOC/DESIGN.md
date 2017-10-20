@@ -31,4 +31,4 @@ The diagram below shows a high-level view of a rqlite node.
                  └───────────────────────────────────────────────┘
 
 ## Log Compaction
-rqlite automatically performs log compaction. After a configurable number of changes rqlite snapshots the SQLite database, and truncates the Raft log. This is a technical feature of the Raft consensus system, and most users of rqlite need not be concerned with this.
+rqlite automatically performs log compaction, so that disk usage due to the log remains bounded. After a configurable number of changes rqlite snapshots the SQLite database, and truncates the Raft log. This is a technical feature of the Raft consensus system, and most users of rqlite need not be concerned with this.
