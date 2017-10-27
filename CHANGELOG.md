@@ -1,3 +1,6 @@
+## 4.2.1 (unreleased)
+- [PR #367](https://github.com/rqlite/rqlite/pull/367): Remove superflous leading space at CLI prompt.
+
 ## 4.2.0 (October 19th 2017)
 - [PR #354](https://github.com/rqlite/rqlite/pull/354): Vendor Raft.
 - [PR #354](https://github.com/rqlite/rqlite/pull/354): Move to Go 1.9.1.
