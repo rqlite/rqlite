@@ -13,6 +13,15 @@ service RqliteService {
 }
 
 
+// Leader lookup
+message LeaderLookup {
+}
+
+// Leader lookup response
+message LeaderLookupResponse {
+  string leader = 1;
+}
+
 // Credentials
 message Credentials {
   string username = 1;
@@ -51,7 +60,6 @@ message QueryResponse {
   repeated QueryResult results = 1;
   float time = 2;
   string error = 3;
-  string leader = 4;
 }
 
 // The exec statement
@@ -74,5 +82,4 @@ message ExecResponse {
   repeated ExecResult results = 1;
   float time = 2;
   string error = 3;
-  string leader = 4;
 }
