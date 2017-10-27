@@ -10,16 +10,9 @@ service RqliteService {
 
   // Exec executes a statement that writes data.
   rpc Exec (ExecRequest) returns (ExecResponse) {}
-}
 
-
-// Leader lookup
-message LeaderLookup {
-}
-
-// Leader lookup response
-message LeaderLookupResponse {
-  string leader = 1;
+  // Leader returns the current leader.
+  rpc Leader() returns (string) {}
 }
 
 // Credentials
