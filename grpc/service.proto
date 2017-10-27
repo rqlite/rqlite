@@ -1,0 +1,70 @@
+syntax = "proto3";
+
+
+package proto;
+
+// The rqlite service definition
+service RqliteService {
+  // Query executes a statement that reads data.
+  rpc Query (QueryRequest) returns (QueryResponse) {}
+
+  // Exec executes a statement that writes data.
+  rpc Exec (ExecRequest) returns (ExecResponse) {}
+}
+
+
+// The query statement
+message QueryRequest {
+  repeated string stmt = 1;
+  bool tx = 2;
+  enum ReadConsistency {
+    NONE = 0;
+    WEAK = 1;
+    STRONG = 2;
+  }
+  ReadConsistency read_consistency = 3;
+}
+
+// The query row
+message QueryRow {
+  repeated bytes values = 1;
+}
+
+// The query result
+message QueryResult {
+  repeated string columns = 1;
+  repeated string types = 2;
+  repeated QueryRow rows = 3;
+  float time = 4;
+  string error = 5;
+}
+
+// The query response
+message QueryResponse {
+  repeated QueryResult results = 1;
+  float time = 2;
+  string error = 3;
+  string leader = 4;
+}
+
+// The exec statement
+message ExecRequest {
+  repeated string stmt = 1;
+  bool tx = 2;
+}
+
+// The exec result
+message ExecResult {
+  int64 last_insert_id = 1;
+  int64 rows_affected = 2;
+  float time = 3;
+  string error = 4;
+}
+
+// The exec response
+message ExecResponse {
+  repeated ExecResult results = 1;
+  float time = 2;
+  string error = 3;
+  string leader = 4;
+}
