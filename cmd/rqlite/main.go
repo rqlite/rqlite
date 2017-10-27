@@ -41,7 +41,7 @@ func main() {
 			return nil
 		}
 
-		prefix := fmt.Sprintf("%s:%d> ", argv.Host, argv.Port)
+		prefix := fmt.Sprintf("%s:%d>", argv.Host, argv.Port)
 	FOR_READ:
 		for {
 			line, err := prompt.Basic(prefix, false)
