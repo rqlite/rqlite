@@ -273,18 +273,16 @@ func main() {
 	}
 	log.Printf("set peer for %s to %s", raftTn.Addr().String(), apiAdv)
 
-	// Create HTTP server and load authentication information, if supplied.
+	// Get the credential store.
+	credStr, err := credentialStore()
+	if err != nil {
+		log.Fatalf("failed to get credential store: %s", err.Error())
+	}
+
+	// Create HTTP server and load authentication information if required.
 	var s *httpd.Service
-	if authFile != "" {
-		f, err := os.Open(authFile)
-		if err != nil {
-			log.Fatalf("failed to open authentication file %s: %s", authFile, err.Error())
-		}
-		credentialStore := auth.NewCredentialsStore()
-		if err := credentialStore.Load(f); err != nil {
-			log.Fatalf("failed to load authentication file: %s", err.Error())
-		}
-		s = httpd.New(httpAddr, str, credentialStore)
+	if credStr != nil {
+		s = httpd.New(httpAddr, str, credStr)
 	} else {
 		s = httpd.New(httpAddr, str, nil)
 	}
@@ -369,6 +367,23 @@ func publishAPIAddr(c *cluster.Service, raftAddr, apiAddr string, t time.Duratio
 			return fmt.Errorf("set peer timeout expired")
 		}
 	}
+}
+
+func credentialStore() (*auth.CredentialsStore, error) {
+	if authFile == "" {
+		return nil, nil
+	}
+
+	f, err := os.Open(authFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open authentication file %s: %s", authFile, err.Error())
+	}
+
+	cs := auth.NewCredentialsStore()
+	if cs.Load(f); err != nil {
+		return nil, err
+	}
+	return cs, nil
 }
 
 // prof stores the file locations of active profiles.
