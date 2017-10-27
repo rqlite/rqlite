@@ -13,6 +13,12 @@ service RqliteService {
 }
 
 
+// Credentials
+message Credentials {
+  string username = 1;
+  string password = 2;
+}
+
 // The query statement
 message QueryRequest {
   repeated string stmt = 1;
@@ -23,6 +29,7 @@ message QueryRequest {
     STRONG = 2;
   }
   ReadConsistency read_consistency = 3;
+  Credentials credentials = 4;
 }
 
 // The query row
@@ -51,6 +58,7 @@ message QueryResponse {
 message ExecRequest {
   repeated string stmt = 1;
   bool tx = 2;
+  Credentials credentials = 3;
 }
 
 // The exec result
