@@ -1,5 +1,6 @@
 ## 4.2.1 (unreleased)
 - [PR #367](https://github.com/rqlite/rqlite/pull/367): Remove superflous leading space at CLI prompt.
+- [PR #368](https://github.com/rqlite/rqlite/pull/368): CLI displays clear error message when not authorized.
 
 ## 4.2.0 (October 19th 2017)
 - [PR #354](https://github.com/rqlite/rqlite/pull/354): Vendor Raft.
