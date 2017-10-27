@@ -133,6 +133,10 @@ func sendRequest(ctx *cli.Context, urlStr string, line string, argv *argT, ret i
 		}
 		defer resp.Body.Close()
 
+		if resp.StatusCode == http.StatusUnauthorized {
+			return fmt.Errorf("unauthorized")
+		}
+
 		// Check for redirect.
 		if resp.StatusCode == http.StatusMovedPermanently {
 			nRedirect++
@@ -189,6 +193,10 @@ func cliJSON(ctx *cli.Context, cmd, line, url string, argv *argT) error {
 		return err
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusUnauthorized {
+		return fmt.Errorf("unauthorized")
+	}
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
