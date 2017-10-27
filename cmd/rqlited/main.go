@@ -26,6 +26,7 @@ import (
 	"github.com/rqlite/rqlite/auth"
 	"github.com/rqlite/rqlite/cluster"
 	"github.com/rqlite/rqlite/disco"
+	"github.com/rqlite/rqlite/grpc"
 	httpd "github.com/rqlite/rqlite/http"
 	"github.com/rqlite/rqlite/store"
 	"github.com/rqlite/rqlite/tcp"
@@ -62,6 +63,7 @@ const (
 	publishPeerTimeout = 30 * time.Second
 )
 
+var grpcAddr string
 var httpAddr string
 var httpAdv string
 var authFile string
@@ -94,6 +96,7 @@ const desc = `rqlite is a lightweight, distributed relational database, which us
 storage engine. It provides an easy-to-use, fault-tolerant store for relational data.`
 
 func init() {
+	flag.StringVar(&grpcAddr, "grpc-addr", "", "gRPC-based query server bind address. If not set, not enabled")
 	flag.StringVar(&httpAddr, "http-addr", "localhost:4001", "HTTP server bind address. For HTTPS, set X.509 cert and key")
 	flag.StringVar(&httpAdv, "http-adv-addr", "", "Advertised HTTP address. If not set, same as HTTP server")
 	flag.StringVar(&x509Cert, "http-cert", "", "Path to X.509 certificate for HTTP endpoint")
@@ -299,6 +302,14 @@ func main() {
 	}
 	if err := s.Start(); err != nil {
 		log.Fatalf("failed to start HTTP server: %s", err.Error())
+	}
+
+	// Start gRPC-based query service, if requested.
+	if grpcAddr != "" {
+		g := grpc.New(grpcAddr, str, credentialStore)
+		if err := g.Open(); err != nil {
+			log.Fatalf("failed to start gRPC service: %s", err.Error())
+		}
 	}
 
 	// Register cross-component statuses.

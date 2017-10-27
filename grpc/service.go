@@ -52,7 +52,7 @@ type Service struct {
 	logger *log.Logger
 }
 
-// New returns an instantiated service.
+// New returns an instantiated grpc service.
 func New(addr string, store Store, credentials CredentialStore) *Service {
 	s := Service{
 		grpc:            grpc.NewServer(),
