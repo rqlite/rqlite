@@ -4,6 +4,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"time"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -115,7 +116,27 @@ func (g *gprcService) Query(c context.Context, q *pb.QueryRequest) (*pb.QueryRes
 
 // Exec implements the Exec call on the gRPC service.
 func (g *gprcService) Exec(c context.Context, e *pb.ExecRequest) (*pb.ExecResponse, error) {
-	return nil, nil
+	start := time.Now()
+	dbResults, err := g.store.Execute(e.GetStmt(), true, e.GetTx())
+	if err != nil {
+		return nil, err
+	}
+
+	execResults := make([]*pb.ExecResult, len(dbResults))
+	for _, dr := range dbResults {
+		execResults = append(execResults,
+			&pb.ExecResult{
+				LastInsertId: dr.LastInsertID,
+				RowsAffected: dr.RowsAffected,
+				Error:        dr.Error,
+				Time:         dr.Time,
+			})
+	}
+
+	return &pb.ExecResponse{
+		Results: execResults,
+		Time:    time.Now().Sub(start).Seconds(),
+	}, nil
 }
 
 // Leader implements the Leader call on the gRPC service.
