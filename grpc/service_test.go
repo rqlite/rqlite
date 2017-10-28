@@ -63,7 +63,7 @@ func Test_Exec(t *testing.T) {
 	defer s.Close()
 	g := mustGrpcClient(s.Addr())
 
-	m.setSingleResult(34, 7, 389.38)
+	m.setSingleResult(34, 7, 389.38, "")
 	r, err := g.Exec(context.Background(),
 		&pb.ExecRequest{
 			Stmt: []string{"CREATE TABLE foo(id INTEGER PRIMARY KEY, name TEXT"},
@@ -78,8 +78,8 @@ func Test_Exec(t *testing.T) {
 		t.Fatal("incorrect result for exec single request")
 	}
 
-	m.setSingleResult(99, 1, 100.1)
-	m.setSingleResult(100, 1, 90.3)
+	m.setSingleResult(99, 1, 100.1, "")
+	m.setSingleResult(100, 1, 90.3, "no error")
 	r, err = g.Exec(context.Background(),
 		&pb.ExecRequest{
 			Stmt: []string{
@@ -94,9 +94,11 @@ func Test_Exec(t *testing.T) {
 		r.GetResults()[0].LastInsertId != 99 ||
 		r.GetResults()[0].RowsAffected != 1 ||
 		r.GetResults()[0].Time != 100.1 ||
+		r.GetResults()[0].Error != "" ||
 		r.GetResults()[1].LastInsertId != 100 ||
 		r.GetResults()[1].RowsAffected != 1 ||
-		r.GetResults()[1].Time != 90.3 {
+		r.GetResults()[1].Time != 90.3 ||
+		r.GetResults()[1].Error != "no error" {
 		t.Fatal("incorrect result for exec multi request")
 	}
 }
@@ -125,11 +127,12 @@ func (m *MockStore) Peer(addr string) string {
 	return ""
 }
 
-func (m *MockStore) setSingleResult(lastInsertId, rowsAffected int64, time float64) {
+func (m *MockStore) setSingleResult(lastInsertId, rowsAffected int64, time float64, err string) {
 	r := &db.Result{
 		LastInsertID: lastInsertId,
 		RowsAffected: rowsAffected,
 		Time:         time,
+		Error:        err,
 	}
 	m.results = append(m.results, r)
 }
