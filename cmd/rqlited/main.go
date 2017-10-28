@@ -305,8 +305,8 @@ func main() {
 	}
 
 	// Start gRPC-based query service, if requested.
+	var g *grpc.Service
 	if grpcAddr != "" {
-		var g *grpc.Service
 		if credStr != nil {
 			g = grpc.New(grpcAddr, str, credStr)
 		} else {
@@ -320,6 +320,9 @@ func main() {
 	// Register cross-component statuses.
 	if err := s.RegisterStatus("mux", mux); err != nil {
 		log.Fatalf("failed to register mux status: %s", err.Error())
+	}
+	if err := s.RegisterStatus("grpc", g); err != nil {
+		log.Fatalf("failed to register grpc status: %s", err.Error())
 	}
 
 	// Block until signalled.

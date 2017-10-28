@@ -1,6 +1,7 @@
 package grpc
 
 import (
+	"expvar"
 	"log"
 	"net"
 	"os"
@@ -12,6 +13,15 @@ import (
 	"github.com/rqlite/rqlite/db"
 	pb "github.com/rqlite/rqlite/grpc/proto"
 	"github.com/rqlite/rqlite/store"
+)
+
+// stats captures stats for the gRPC service.
+var stats *expvar.Map
+
+const (
+	numExecutions     = "executions"
+	numQueries        = "queries"
+	numLeaderRequests = "leaderRequests"
 )
 
 // Store is the interface the Raft-based database must implement.
@@ -56,6 +66,13 @@ type Service struct {
 	logger *log.Logger
 }
 
+func init() {
+	stats = expvar.NewMap("grpc")
+	stats.Add(numExecutions, 0)
+	stats.Add(numQueries, 0)
+	stats.Add(numLeaderRequests, 0)
+}
+
 // New returns an instantiated grpc service.
 func New(addr string, store Store, credentials CredentialStore) *Service {
 	s := Service{
@@ -82,7 +99,7 @@ func (s *Service) Open() error {
 		return err
 	}
 	s.ln = ln
-	s.logger.Println("listening on", s.ln.Addr().String())
+	s.logger.Println("service listening on", s.ln.Addr().String())
 
 	go func() {
 		err := s.grpc.Serve(s.ln)
@@ -102,6 +119,25 @@ func (s *Service) Close() error {
 	return nil
 }
 
+// Stats returns status of the gRPC server
+func (s *Service) Stats() (interface{}, error) {
+	var m map[string]string
+	if s != nil {
+		m = map[string]string{
+			"state": "enabled",
+			"addr":  s.addr,
+			"auth":  prettyEnabled(s.credentialStore != nil),
+		}
+	} else {
+		m = map[string]string{
+			"state": "disabled",
+		}
+	}
+
+	return m, nil
+
+}
+
 // gprcService is an unexported type, that is the same type as Service.
 //
 // Having the methods that the gRPC service requires on this type means that even though
@@ -111,11 +147,15 @@ type gprcService Service
 
 // Query implements the Query call on the gRPC service.
 func (g *gprcService) Query(c context.Context, q *pb.QueryRequest) (*pb.QueryResponse, error) {
+	stats.Add(numQueries, 1)
+
 	return nil, nil
 }
 
 // Exec implements the Exec call on the gRPC service.
 func (g *gprcService) Exec(c context.Context, e *pb.ExecRequest) (*pb.ExecResponse, error) {
+	stats.Add(numExecutions, 1)
+
 	start := time.Now()
 	dbResults, err := g.store.Execute(e.GetStmt(), true, e.GetTx())
 	if err != nil {
@@ -141,5 +181,14 @@ func (g *gprcService) Exec(c context.Context, e *pb.ExecRequest) (*pb.ExecRespon
 
 // Leader implements the Leader call on the gRPC service.
 func (g *gprcService) Leader(c context.Context, r *pb.LeaderRequest) (*pb.LeaderResponse, error) {
+	stats.Add(numLeaderRequests, 1)
+
 	return &pb.LeaderResponse{Leader: g.store.Leader()}, nil
+}
+
+func prettyEnabled(e bool) string {
+	if e {
+		return "enabled"
+	}
+	return "disabled"
 }
