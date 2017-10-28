@@ -120,5 +120,5 @@ func (g *gprcService) Exec(c context.Context, e *pb.ExecRequest) (*pb.ExecRespon
 
 // Leader implements the Leader call on the gRPC service.
 func (g *gprcService) Leader(c context.Context, r *pb.LeaderRequest) (*pb.LeaderResponse, error) {
-	return nil, nil
+	return &pb.LeaderResponse{Leader: g.store.Leader()}, nil
 }
