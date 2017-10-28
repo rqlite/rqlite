@@ -1,7 +1,6 @@
-package service
+package grpc
 
 import (
-	"database/sql"
 	"log"
 	"net"
 	"os"
@@ -9,6 +8,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
+	"github.com/rqlite/rqlite/db"
 	pb "github.com/rqlite/rqlite/grpc/proto"
 	"github.com/rqlite/rqlite/store"
 )
@@ -19,13 +19,13 @@ type Store interface {
 	// to return rows. If timings is true, then timing information will
 	// be return. If tx is true, then either all queries will be executed
 	// successfully or it will as though none executed.
-	Execute(queries []string, timings, tx bool) ([]*sql.Result, error)
+	Execute(queries []string, timings, tx bool) ([]*db.Result, error)
 
 	// Query executes a slice of queries, each of which returns rows. If
 	// timings is true, then timing information will be returned. If tx
 	// is true, then all queries will take place while a read transaction
 	// is held on the database.
-	Query(queries []string, timings, tx bool, lvl store.ConsistencyLevel) ([]*sql.Rows, error)
+	Query(queries []string, timings, tx bool, lvl store.ConsistencyLevel) ([]*db.Rows, error)
 
 	// Leader returns the Raft leader of the cluster.
 	Leader() string

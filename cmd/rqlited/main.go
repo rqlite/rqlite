@@ -26,6 +26,7 @@ import (
 	"github.com/rqlite/rqlite/auth"
 	"github.com/rqlite/rqlite/cluster"
 	"github.com/rqlite/rqlite/disco"
+	"github.com/rqlite/rqlite/grpc"
 	httpd "github.com/rqlite/rqlite/http"
 	"github.com/rqlite/rqlite/store"
 	"github.com/rqlite/rqlite/tcp"
@@ -307,7 +308,7 @@ func main() {
 	if grpcAddr != "" {
 		var g *grpc.Service
 		if credStr != nil {
-			g = grpc.New(grpcAddr, str, credentialStore)
+			g = grpc.New(grpcAddr, str, credStr)
 		} else {
 			g = grpc.New(grpcAddr, str, nil)
 		}
