@@ -7,6 +7,7 @@ import (
 	"github.com/rqlite/rqlite/db"
 	pb "github.com/rqlite/rqlite/grpc/proto"
 	"github.com/rqlite/rqlite/store"
+	"golang.org/x/net/context"
 	grpc "google.golang.org/grpc"
 )
 
@@ -40,7 +41,12 @@ func Test_ServiceLeader(t *testing.T) {
 	s.Open()
 	defer s.Close()
 
-	_ = mustGrpcClient(s.Addr())
+	g := mustGrpcClient(s.Addr())
+	_, err := g.Leader(context.Background(), &pb.LeaderRequest{})
+	if err != nil {
+		t.Fatal("failed to retrieve leader: %s", err.Error())
+	}
+
 }
 
 type MockStore struct {
@@ -85,7 +91,7 @@ func (m *mockCredentialStore) HasPerm(username, perm string) bool {
 }
 
 func mustGrpcClient(addr string) pb.RqliteClient {
-	conn, err := grpc.Dial(addr)
+	conn, err := grpc.Dial(addr, grpc.WithInsecure())
 	if err != nil {
 		panic(fmt.Sprintf("failed to dial grpc connection: %s", err.Error()))
 	}
