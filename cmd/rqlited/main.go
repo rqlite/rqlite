@@ -26,7 +26,6 @@ import (
 	"github.com/rqlite/rqlite/auth"
 	"github.com/rqlite/rqlite/cluster"
 	"github.com/rqlite/rqlite/disco"
-	"github.com/rqlite/rqlite/grpc"
 	httpd "github.com/rqlite/rqlite/http"
 	"github.com/rqlite/rqlite/store"
 	"github.com/rqlite/rqlite/tcp"
@@ -306,7 +305,12 @@ func main() {
 
 	// Start gRPC-based query service, if requested.
 	if grpcAddr != "" {
-		g := grpc.New(grpcAddr, str, credentialStore)
+		var g *grpc.Service
+		if credStr != nil {
+			g = grpc.New(grpcAddr, str, credentialStore)
+		} else {
+			g = grpc.New(grpcAddr, str, nil)
+		}
 		if err := g.Open(); err != nil {
 			log.Fatalf("failed to start gRPC service: %s", err.Error())
 		}

@@ -4,9 +4,12 @@ import (
 	"database/sql"
 	"log"
 	"net"
+	"os"
 
+	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
+	pb "github.com/rqlite/rqlite/grpc/proto"
 	"github.com/rqlite/rqlite/store"
 )
 
@@ -56,13 +59,13 @@ type Service struct {
 func New(addr string, store Store, credentials CredentialStore) *Service {
 	s := Service{
 		grpc:            grpc.NewServer(),
-		store:           Store,
-		credentialStore: CredentialStore,
+		store:           store,
+		credentialStore: credentials,
 		addr:            addr,
 		logger:          log.New(os.Stderr, "[grpc] ", log.LstdFlags),
 	}
 
-	pb.RegisterRqliteServiceServer(s.grpc, (*gprcService)(&s))
+	pb.RegisterRqliteServer(s.grpc, (*gprcService)(&s))
 	return &s
 }
 
@@ -112,10 +115,10 @@ func (g *gprcService) Query(c context.Context, q *pb.QueryRequest) (*pb.QueryRes
 
 // Exec implements the Exec call on the gRPC service.
 func (g *gprcService) Exec(c context.Context, e *pb.ExecRequest) (*pb.ExecResponse, error) {
-	return nil
+	return nil, nil
 }
 
 // Leader implements the Leader call on the gRPC service.
-func (g *gprcService) Leader(c context.Context) (string, error) {
-	return nil
+func (g *gprcService) Leader(c context.Context, r *pb.LeaderRequest) (*pb.LeaderResponse, error) {
+	return nil, nil
 }

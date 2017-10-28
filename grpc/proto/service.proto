@@ -4,7 +4,7 @@ syntax = "proto3";
 package proto;
 
 // The rqlite service definition
-service RqliteService {
+service Rqlite {
   // Query executes a statement that reads data.
   rpc Query (QueryRequest) returns (QueryResponse) {}
 
