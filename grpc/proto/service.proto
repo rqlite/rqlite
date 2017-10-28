@@ -12,13 +12,21 @@ service RqliteService {
   rpc Exec (ExecRequest) returns (ExecResponse) {}
 
   // Leader returns the current leader.
-  rpc Leader() returns (string) {}
+  rpc Leader (LeaderRequest) returns (LeaderResponse) {}
 }
 
 // Credentials
 message Credentials {
   string username = 1;
   string password = 2;
+}
+
+message LeaderRequest {
+}
+
+// The leader request response
+message LeaderResponse {
+  string leader = 1;
 }
 
 // The query statement
