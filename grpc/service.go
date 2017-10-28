@@ -21,7 +21,7 @@ var stats *expvar.Map
 const (
 	numExecutions     = "executions"
 	numQueries        = "queries"
-	numLeaderRequests = "leaderRequests"
+	numLeaderRequests = "leader_requests"
 )
 
 // Store is the interface the Raft-based database must implement.
