@@ -15,7 +15,7 @@ func Test_NewService(t *testing.T) {
 	m := &MockStore{}
 	s := New("127.0.0.1:0", m, nil)
 	if s == nil {
-		t.Fatalf("failed to create new service")
+		t.Fatal("failed to create new service")
 	}
 }
 
@@ -23,30 +23,53 @@ func Test_OpenCloseService(t *testing.T) {
 	m := &MockStore{}
 	s := New("127.0.0.1:0", m, nil)
 	if s == nil {
-		t.Fatalf("failed to create new service")
+		t.Fatal("failed to create new service")
 	}
 	if err := s.Open(); err != nil {
-		t.Fatalf("failed to open new service")
+		t.Fatal("failed to open new service")
 	}
 	if err := s.Close(); err != nil {
-		t.Fatalf("failed to close new service")
+		t.Fatal("failed to close new service")
 	}
 }
 
 func Test_ServiceLeader(t *testing.T) {
+	exp := "http://foo:1234"
 	m := &MockStore{
-		leader: "http://foo:1234",
+		leader: exp,
 	}
 	s := New("127.0.0.1:0", m, nil)
-	s.Open()
+	if err := s.Open(); err != nil {
+		t.Fatal("failed to open new service")
+	}
 	defer s.Close()
 
 	g := mustGrpcClient(s.Addr())
-	_, err := g.Leader(context.Background(), &pb.LeaderRequest{})
+	r, err := g.Leader(context.Background(), &pb.LeaderRequest{})
 	if err != nil {
-		t.Fatal("failed to retrieve leader: %s", err.Error())
+		t.Fatalf("failed to retrieve leader: %s", err.Error())
 	}
+	if got := r.GetLeader(); got != exp {
+		t.Fatalf("incorrect leader received: %s, expected: %s", got, exp)
+	}
+}
 
+func Test_ExecSingle(t *testing.T) {
+	m := &MockStore{}
+	s := New("127.0.0.1:0", m, nil)
+	if err := s.Open(); err != nil {
+		t.Fatal("failed to open new service")
+	}
+	defer s.Close()
+
+	g := mustGrpcClient(s.Addr())
+	_, err := g.Exec(context.Background(),
+		&pb.ExecRequest{
+			Stmt: []string{"CREATE TABLE foo(id INTEGER PRIMARY KEY, name TEXT"},
+		})
+	if err != nil {
+		t.Fatalf("failed to exec single request: %s", err.Error())
+	}
 }
 
 type MockStore struct {

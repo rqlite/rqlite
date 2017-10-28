@@ -114,7 +114,6 @@ func (s *Service) Open() error {
 // Close closes the service.
 func (s *Service) Close() error {
 	s.grpc.GracefulStop()
-	s.ln = nil
 	s.logger.Println("gRPC server stopped")
 	return nil
 }
