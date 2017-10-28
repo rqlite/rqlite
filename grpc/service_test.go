@@ -62,34 +62,37 @@ func Test_ExecSingle(t *testing.T) {
 	}
 	defer s.Close()
 
+	m.setSingleResult(34, 7, 389.38)
 	g := mustGrpcClient(s.Addr())
-	_, err := g.Exec(context.Background(),
+	r, err := g.Exec(context.Background(),
 		&pb.ExecRequest{
 			Stmt: []string{"CREATE TABLE foo(id INTEGER PRIMARY KEY, name TEXT"},
 		})
 	if err != nil {
 		t.Fatalf("failed to exec single request: %s", err.Error())
 	}
+	if len(r.GetResults()) != 1 &&
+		r.GetResults()[0].LastInsertId != 34 &&
+		r.GetResults()[0].RowsAffected != 7 &&
+		r.GetResults()[0].Time != 389.38 {
+		t.Fatal("incorrect result for exec single request")
+	}
 }
 
 type MockStore struct {
-	leader    string
-	executeFn func(queries []string, tx bool) ([]*db.Result, error)
-	queryFn   func(queries []string, tx, leader, verify bool) ([]*db.Rows, error)
+	leader  string
+	results []*db.Result
+	rows    []*db.Rows
 }
 
 func (m *MockStore) Execute(queries []string, timings, tx bool) ([]*db.Result, error) {
-	if m.executeFn == nil {
-		return nil, nil
-	}
-	return nil, nil
+	r := m.results
+	m.results = nil
+	return r, nil
 }
 
 func (m *MockStore) Query(queries []string, timings, tx bool, lvl store.ConsistencyLevel) ([]*db.Rows, error) {
-	if m.queryFn == nil {
-		return nil, nil
-	}
-	return nil, nil
+	return m.rows, nil
 }
 
 func (m *MockStore) Leader() string {
@@ -98,6 +101,15 @@ func (m *MockStore) Leader() string {
 
 func (m *MockStore) Peer(addr string) string {
 	return ""
+}
+
+func (m *MockStore) setSingleResult(lastInsertId, rowsAffected int64, time float64) {
+	r := &db.Result{
+		LastInsertID: lastInsertId,
+		RowsAffected: rowsAffected,
+		Time:         time,
+	}
+	m.results = []*db.Result{r}
 }
 
 type mockCredentialStore struct {

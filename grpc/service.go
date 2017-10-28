@@ -162,14 +162,14 @@ func (g *gprcService) Exec(c context.Context, e *pb.ExecRequest) (*pb.ExecRespon
 	}
 
 	execResults := make([]*pb.ExecResult, len(dbResults))
-	for _, dr := range dbResults {
-		execResults = append(execResults,
+	for i, dr := range dbResults {
+		execResults[i] =
 			&pb.ExecResult{
 				LastInsertId: dr.LastInsertID,
 				RowsAffected: dr.RowsAffected,
 				Error:        dr.Error,
 				Time:         dr.Time,
-			})
+			}
 	}
 
 	return &pb.ExecResponse{
