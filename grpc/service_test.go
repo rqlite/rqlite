@@ -84,7 +84,7 @@ func Test_Exec(t *testing.T) {
 		&pb.ExecRequest{
 			Stmt: []string{
 				`INSERT INTO foo(id, name) VALUES(1, "fiona"`,
-				`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+				`INSERT INTO foo(id, name) VALUES(2, "declan")`,
 			},
 		})
 	if err != nil {
