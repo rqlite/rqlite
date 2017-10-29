@@ -8,7 +8,7 @@ import (
 	pb "github.com/rqlite/rqlite/grpc/proto"
 	"github.com/rqlite/rqlite/store"
 	"golang.org/x/net/context"
-	grpc "google.golang.org/grpc"
+	"google.golang.org/grpc"
 )
 
 func Test_NewService(t *testing.T) {
