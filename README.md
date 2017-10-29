@@ -104,10 +104,6 @@ Learn how to hot backup your rqlite cluster [here](https://github.com/rqlite/rql
 ## Security
 You can learn about securing access, and restricting users' access, to rqlite [here](https://github.com/rqlite/rqlite/blob/master/DOC/SECURITY.md).
 
-## Projects using rqlite
-If you are using rqlite in a project, please generate a pull request to add it to this list.
-* [OpenMarket](https://github.com/openmarket/openmarket) - A free, decentralized bitcoin-based marketplace.
-
 ## Google Group
 There is a [Google Group](https://groups.google.com/forum/#!forum/rqlite) dedicated to discussion of rqlite.
 
