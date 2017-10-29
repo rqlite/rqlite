@@ -1,7 +1,6 @@
 machine:
     environment:
       GODIST: "go1.9.1.linux-amd64.tar.gz"
-      GOBIN: $HOME/rqlite_binaries
 
     post:
       - mkdir $GOBIN
@@ -17,7 +16,9 @@ test:
         - go tool vet .
 
     post:
+        - export GOBIN=$(mktemp -d)
         - echo $GOBIN
         - ls $GOBIN
         - go install ./...
-        - echo $GOBIN
+        - ls $GOBIN
+        - cp $GOBIN/* $CIRCLE_ARTIFACTS
