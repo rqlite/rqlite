@@ -18,4 +18,4 @@ test:
 
     post:
         - go install -ldflags="-X main.branch=$CIRCLE_BRANCH -X main.commit=$CIRCLE_SHA1" ./...
-        - tar -C $GOBIN -cvfz $CIRCLE_ARTIFACTS/rqlite.tar.gz *
+        - cd $GOBIN && tar cvfz $CIRCLE_ARTIFACTS/rqlite.tar.gz *
