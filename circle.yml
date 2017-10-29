@@ -17,8 +17,5 @@ test:
         - go tool vet .
 
     post:
-        - echo $GOBIN
-        - ls $GOBIN
         - go install ./...
-        - ls $GOBIN
-        - cp $GOBIN/* $CIRCLE_ARTIFACTS
+        - tar cvfz $CIRCLE_ARTIFACTS/rqlite.tar.gz $GOBIN/*
