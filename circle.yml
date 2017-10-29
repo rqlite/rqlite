@@ -1,7 +1,7 @@
 machine:
     environment:
       GODIST: "go1.9.1.linux-amd64.tar.gz"
-      GOBIN: $HOME/rqlite
+      GOBIN: $HOME/rqlite_binaries
 
     post:
       - mkdir $GOBIN
