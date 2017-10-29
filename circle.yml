@@ -17,5 +17,5 @@ test:
         - go tool vet .
 
     post:
-        - go install -ldflags="-X -X main.branch=$CIRCLE_BRANCH -X main.commit=$CIRCLE_SHA1" ./...
+        - go install -ldflags="-X main.branch=$CIRCLE_BRANCH -X main.commit=$CIRCLE_SHA1" ./...
         - tar cvfz -C $GOBIN $CIRCLE_ARTIFACTS/rqlite.tar.gz *
