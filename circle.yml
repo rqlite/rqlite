@@ -1,8 +1,10 @@
 machine:
     environment:
       GODIST: "go1.9.1.linux-amd64.tar.gz"
+      GOBIN: $HOME/rqlite
 
     post:
+      - mkdir $GOBIN
       - mkdir -p download
       - test -e download/$GODIST || curl -o download/$GODIST https://storage.googleapis.com/golang/$GODIST
       - sudo rm -rf /usr/local/go
@@ -15,6 +17,7 @@ test:
         - go tool vet .
 
     post:
-        - ls /home/ubuntu/.go_workspace
+        - echo $GOBIN
+        - ls $GOBIN
         - go install ./...
-        - ls /home/ubuntu/.go_workspace
+        - echo $GOBIN
