@@ -90,7 +90,7 @@ func main() {
 }
 
 func makeJSONBody(line string) string {
-	data, err := json.MarshalIndent([]string{line}, "", "    ")
+	data, err := json.Marshal([]string{line})
 	if err != nil {
 		return ""
 	}
