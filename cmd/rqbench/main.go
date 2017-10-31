@@ -15,6 +15,7 @@ import (
 var addr string
 var numReqs int
 var batchSz int
+var modPrint int
 var tx bool
 var tp string
 
@@ -25,6 +26,7 @@ func init() {
 	flag.StringVar(&addr, "a", "localhost:4001", "Node address")
 	flag.IntVar(&numReqs, "n", 100, "Number of requests")
 	flag.IntVar(&batchSz, "b", 1, "Statements per request")
+	flag.IntVar(&modPrint, "m", 0, "Print progress every m requests")
 	flag.BoolVar(&tx, "x", false, "Use explicit transaction per request")
 	flag.StringVar(&tp, "t", "http", "Transport to use")
 	flag.Usage = func() {
@@ -73,10 +75,15 @@ func run(t Tester, n int) (time.Duration, error) {
 	var dur time.Duration
 
 	for i := 0; i < n; i++ {
-		if d, err := t.Once(); err != nil {
+		d, err := t.Once()
+		if err != nil {
 			return 0, err
 		} else {
 			dur += d
+		}
+
+		if modPrint != 0 && i != 0 && i%modPrint == 0 {
+			fmt.Printf("%d requests completed in %s\n", i, d)
 		}
 	}
 	return dur, nil
