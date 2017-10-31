@@ -31,6 +31,10 @@ var (
 	// ErrOpenTimeout is returned when the Store does not apply its initial
 	// logs within the specified time.
 	ErrOpenTimeout = errors.New("timeout waiting for initial logs application")
+
+	// ErrTooStale is returned when stale read consistency is requested, but
+	// the last contact time exceeds the maximum time allowed.
+	ErrTooStale = errors.New("stale read")
 )
 
 const (
@@ -40,6 +44,7 @@ const (
 	sqliteFile          = "db.sqlite"
 	leaderWaitDelay     = 100 * time.Millisecond
 	appliedWaitDelay    = 100 * time.Millisecond
+	maxStaleTime        = 1000 * time.Millisecond
 )
 
 // Transport is the interface the network service must provide.
@@ -92,6 +97,7 @@ type ConsistencyLevel int
 // Represents the available consistency levels.
 const (
 	None ConsistencyLevel = iota
+	Stale
 	Weak
 	Strong
 )
@@ -536,6 +542,8 @@ func (s *Store) Query(queries []string, timings, tx bool, lvl ConsistencyLevel) 
 
 	if lvl == Weak && s.raft.State() != raft.Leader {
 		return nil, ErrNotLeader
+	} else if lvl == Stale && time.Now().Sub(s.raft.LastContact()) > s.maxStaleTime {
+		return nil, ErrTooStale
 	}
 
 	r, err := s.db.Query(queries, tx, timings)
