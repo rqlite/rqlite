@@ -84,7 +84,7 @@ func (n *Node) QueryMulti(stmts []string) (string, error) {
 
 // Join instructs this node to join the leader.
 func (n *Node) Join(leader *Node) error {
-	resp, err := DoJoinRequest(leader.APIAddr, n.RaftAddr)
+	resp, err := DoJoinRequest(leader.APIAddr, n.Store.ID(), n.RaftAddr)
 	if err != nil {
 		return err
 	}
@@ -281,9 +281,9 @@ func Remove(n *Node, addr string) error {
 	return nil
 }
 
-// DoJoinRequest sends a join request to nodeAddr, for raftAddr.
-func DoJoinRequest(nodeAddr, raftAddr string) (*http.Response, error) {
-	b, err := json.Marshal(map[string]string{"addr": raftAddr})
+// DoJoinRequest sends a join request to nodeAddr, for raftID, reachable at raftAddr.
+func DoJoinRequest(nodeAddr, raftID, raftAddr string) (*http.Response, error) {
+	b, err := json.Marshal(map[string]string{"id": raftID, "addr": raftAddr})
 	if err != nil {
 		return nil, err
 	}
@@ -302,10 +302,12 @@ func mustNewNode(enableSingle bool) *Node {
 	}
 
 	dbConf := store.NewDBConfig("", false)
+	tn := mustMockTransport("localhost:0")
 	node.Store = store.New(&store.StoreConfig{
 		DBConf: dbConf,
 		Dir:    node.Dir,
-		Tn:     mustMockTransport("localhost:0"),
+		Tn:     tn,
+		ID:     tn.Addr().String(),
 	})
 	if err := node.Store.Open(enableSingle); err != nil {
 		node.Deprovision()

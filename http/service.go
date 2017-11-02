@@ -38,8 +38,8 @@ type Store interface {
 	// is held on the database.
 	Query(qr *store.QueryRequest) ([]*sql.Rows, error)
 
-	// Join joins the node, reachable at addr, to this node.
-	Join(addr string) error
+	// Join joins the node with the given ID, reachable at addr, to this node.
+	Join(id, addr string) error
 
 	// Remove removes the node, specified by addr, from the cluster.
 	Remove(addr string) error
@@ -289,18 +289,18 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(m) != 1 {
+	remoteID, ok := m["id"]
+	if !ok {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-
 	remoteAddr, ok := m["addr"]
 	if !ok {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	if err := s.store.Join(remoteAddr); err != nil {
+	if err := s.store.Join(remoteID, remoteAddr); err != nil {
 		if err == store.ErrNotLeader {
 			leader := s.store.Peer(s.store.Leader())
 			if leader == "" {

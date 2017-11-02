@@ -457,7 +457,7 @@ func (m *MockStore) Query(qr *store.QueryRequest) ([]*sql.Rows, error) {
 	return nil, nil
 }
 
-func (m *MockStore) Join(addr string) error {
+func (m *MockStore) Join(id, addr string) error {
 	return nil
 }
 

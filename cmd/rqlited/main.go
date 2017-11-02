@@ -37,7 +37,7 @@ const logo = `
 
 // These variables are populated via the Go linker.
 var (
-	version   = "4"
+	version   = "5"
 	commit    = "unknown"
 	branch    = "unknown"
 	buildtime = "unknown"
@@ -61,6 +61,7 @@ var x509Key string
 var nodeEncrypt bool
 var nodeX509Cert string
 var nodeX509Key string
+var nodeID string
 var raftAddr string
 var raftAdv string
 var joinAddr string
@@ -85,6 +86,7 @@ const desc = `rqlite is a lightweight, distributed relational database, which us
 storage engine. It provides an easy-to-use, fault-tolerant store for relational data.`
 
 func init() {
+	flag.StringVar(&nodeID, "node-id", "", "Unique name for node. If not set, set to hostname")
 	flag.StringVar(&httpAddr, "http-addr", "localhost:4001", "HTTP server bind address. For HTTPS, set X.509 cert and key")
 	flag.StringVar(&httpAdv, "http-adv-addr", "", "Advertised HTTP address. If not set, same as HTTP server")
 	flag.StringVar(&x509Cert, "http-cert", "", "Path to X.509 certificate for HTTP endpoint")
@@ -185,10 +187,15 @@ func main() {
 	}
 	dbConf := store.NewDBConfig(dsn, !onDisk)
 
+	nid, err := idOrHostname()
+	if err != nil {
+		log.Fatalf("failed to determine node ID: %s", err.Error())
+	}
 	str := store.New(&store.StoreConfig{
 		DBConf: dbConf,
 		Dir:    dataPath,
 		Tn:     raftTn,
+		ID:     nid,
 	})
 
 	// Set optional parameters on store.
@@ -241,7 +248,7 @@ func main() {
 		if raftAdv != "" {
 			advAddr = raftAdv
 		}
-		if j, err := cluster.Join(joins, advAddr, noVerify); err != nil {
+		if j, err := cluster.Join(joins, nid, advAddr, noVerify); err != nil {
 			log.Fatalf("failed to join cluster at %s: %s", joins, err.Error())
 		} else {
 			log.Println("successfully joined cluster at", j)
@@ -375,6 +382,13 @@ func credentialStore() (*auth.CredentialsStore, error) {
 		return nil, err
 	}
 	return cs, nil
+}
+
+func idOrHostname() (string, error) {
+	if nodeID != "" {
+		return nodeID, nil
+	}
+	return os.Hostname()
 }
 
 // prof stores the file locations of active profiles.
