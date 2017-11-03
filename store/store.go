@@ -31,6 +31,10 @@ var (
 	// ErrOpenTimeout is returned when the Store does not apply its initial
 	// logs within the specified time.
 	ErrOpenTimeout = errors.New("timeout waiting for initial logs application")
+
+	// ErrTooStale is returned when stale read consistency is requested, but
+	// the last contact time exceeds the maximum time allowed.
+	ErrTooStale = errors.New("stale read")
 )
 
 const (
@@ -45,10 +49,11 @@ const (
 // QueryRequest represents a query that returns rows, and does not modify
 // the database.
 type QueryRequest struct {
-	Queries []string
-	Timings bool
-	Tx      bool
-	Lvl     ConsistencyLevel
+	Queries      []string
+	Timings      bool
+	Tx           bool
+	Lvl          ConsistencyLevel
+	MaxStaleTime time.Duration
 }
 
 // ExecuteRequest represents a query that returns now rows, but does modify
@@ -109,6 +114,7 @@ type ConsistencyLevel int
 // Represents the available consistency levels.
 const (
 	None ConsistencyLevel = iota
+	Stale
 	Weak
 	Strong
 )
@@ -190,6 +196,8 @@ type Store struct {
 	HeartbeatTimeout  time.Duration
 	ApplyTimeout      time.Duration
 	OpenTimeout       time.Duration
+
+	MaxStaleTime time.Duration
 }
 
 // StoreConfig represents the configuration of the underlying Store.
@@ -554,6 +562,10 @@ func (s *Store) Query(qr *QueryRequest) ([]*sql.Rows, error) {
 
 	if qr.Lvl == Weak && s.raft.State() != raft.Leader {
 		return nil, ErrNotLeader
+	}
+
+	if qr.Lvl == Stale && time.Now().Sub(s.raft.LastContact()) > qr.MaxStaleTime {
+		return nil, ErrTooStale
 	}
 
 	r, err := s.db.Query(qr.Queries, qr.Tx, qr.Timings)
