@@ -42,6 +42,23 @@ const (
 	appliedWaitDelay    = 100 * time.Millisecond
 )
 
+// QueryRequest represents a query that returns rows, and does not modify
+// the database.
+type QueryRequest struct {
+	Queries []string
+	Timings bool
+	Tx      bool
+	Lvl     ConsistencyLevel
+}
+
+// ExecuteRequest represents a query that returns now rows, but does modify
+// the database.
+type ExecuteRequest struct {
+	Queries []string
+	Timings bool
+	Tx      bool
+}
+
 // Transport is the interface the network service must provide.
 type Transport interface {
 	net.Listener
@@ -442,15 +459,15 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 }
 
 // Execute executes queries that return no rows, but do modify the database.
-func (s *Store) Execute(queries []string, timings, tx bool) ([]*sql.Result, error) {
+func (s *Store) Execute(ex *ExecuteRequest) ([]*sql.Result, error) {
 	if s.raft.State() != raft.Leader {
 		return nil, ErrNotLeader
 	}
 
 	d := &databaseSub{
-		Tx:      tx,
-		Queries: queries,
-		Timings: timings,
+		Tx:      ex.Tx,
+		Queries: ex.Queries,
+		Timings: ex.Timings,
 	}
 	c, err := newCommand(execute, d)
 	if err != nil {
@@ -502,16 +519,16 @@ func (s *Store) Backup(leader bool) ([]byte, error) {
 }
 
 // Query executes queries that return rows, and do not modify the database.
-func (s *Store) Query(queries []string, timings, tx bool, lvl ConsistencyLevel) ([]*sql.Rows, error) {
+func (s *Store) Query(qr *QueryRequest) ([]*sql.Rows, error) {
 	// Allow concurrent queries.
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	if lvl == Strong {
+	if qr.Lvl == Strong {
 		d := &databaseSub{
-			Tx:      tx,
-			Queries: queries,
-			Timings: timings,
+			Tx:      qr.Tx,
+			Queries: qr.Queries,
+			Timings: qr.Timings,
 		}
 		c, err := newCommand(query, d)
 		if err != nil {
@@ -534,11 +551,11 @@ func (s *Store) Query(queries []string, timings, tx bool, lvl ConsistencyLevel) 
 		return r.rows, r.error
 	}
 
-	if lvl == Weak && s.raft.State() != raft.Leader {
+	if qr.Lvl == Weak && s.raft.State() != raft.Leader {
 		return nil, ErrNotLeader
 	}
 
-	r, err := s.db.Query(queries, tx, timings)
+	r, err := s.db.Query(qr.Queries, qr.Tx, qr.Timings)
 	return r, err
 }
 
