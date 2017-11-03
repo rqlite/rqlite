@@ -29,13 +29,13 @@ type Store interface {
 	// to return rows. If timings is true, then timing information will
 	// be return. If tx is true, then either all queries will be executed
 	// successfully or it will as though none executed.
-	Execute(queries []string, timings, tx bool) ([]*sql.Result, error)
+	Execute(er *store.ExecuteRequest) ([]*sql.Result, error)
 
 	// Query executes a slice of queries, each of which returns rows. If
 	// timings is true, then timing information will be returned. If tx
 	// is true, then all queries will take place while a read transaction
 	// is held on the database.
-	Query(queries []string, timings, tx bool, lvl store.ConsistencyLevel) ([]*sql.Rows, error)
+	Query(qr *store.QueryRequest) ([]*sql.Rows, error)
 
 	// Join joins the node, reachable at addr, to this node.
 	Join(addr string) error
@@ -421,7 +421,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 	r.Body.Close()
 
 	queries := []string{string(b)}
-	results, err := s.store.Execute(queries, timings, false)
+	results, err := s.store.Execute(&store.ExecuteRequest{queries, timings, false})
 	if err != nil {
 		if err == store.ErrNotLeader {
 			leader := s.store.Peer(s.store.Leader())
@@ -568,7 +568,7 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	results, err := s.store.Execute(queries, timings, isTx)
+	results, err := s.store.Execute(&store.ExecuteRequest{queries, timings, isTx})
 	if err != nil {
 		if err == store.ErrNotLeader {
 			leader := s.store.Peer(s.store.Leader())
@@ -650,7 +650,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	results, err := s.store.Query(queries, timings, isTx, lvl)
+	results, err := s.store.Query(&store.QueryRequest{queries, timings, isTx, lvl})
 	if err != nil {
 		if err == store.ErrNotLeader {
 			leader := s.store.Peer(s.store.Leader())
