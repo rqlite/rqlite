@@ -108,16 +108,21 @@ type databaseSub struct {
 // peersSub is a command which sets the API address for a Raft address.
 type peersSub map[string]string
 
-// ConsistencyLevel represents the available read consistency levels.
-type ConsistencyLevel int
-
 // Represents the available consistency levels.
+type Level int
+
 const (
-	None ConsistencyLevel = iota
+	None Level = iota
 	Stale
 	Weak
 	Strong
 )
+
+// ReadConsistency represents the available read consistency levels.
+type ReadConsistency struct {
+	lvl     Level
+	timeout time.Duration
+}
 
 // ClusterState defines the possible Raft states the current node can be in
 type ClusterState int
@@ -528,12 +533,17 @@ func (s *Store) Backup(leader bool) ([]byte, error) {
 }
 
 // Query executes queries that return rows, and do not modify the database.
-func (s *Store) Query(qr *QueryRequest) ([]*sql.Rows, error) {
+func (s *Store) Query(qr *QueryRequest, ReadConsistency *l) ([]*sql.Rows, error) {
 	// Allow concurrent queries.
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	if qr.Lvl == Strong {
+	// Set default read consistency if not set.
+	if l == nil {
+		l = &ReadConsistency{Weak}
+	}
+
+	if l.lvl == Strong {
 		d := &databaseSub{
 			Tx:      qr.Tx,
 			Queries: qr.Queries,
@@ -560,11 +570,11 @@ func (s *Store) Query(qr *QueryRequest) ([]*sql.Rows, error) {
 		return r.rows, r.error
 	}
 
-	if qr.Lvl == Weak && s.raft.State() != raft.Leader {
+	if l.lvl == Weak && s.raft.State() != raft.Leader {
 		return nil, ErrNotLeader
 	}
 
-	if qr.Lvl == Stale && time.Now().Sub(s.raft.LastContact()) > qr.MaxStaleTime {
+	if l.lvl == Stale && time.Now().Sub(s.raft.LastContact()) > qr.MaxStaleTime {
 		return nil, ErrTooStale
 	}
 

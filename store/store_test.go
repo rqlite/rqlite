@@ -82,15 +82,15 @@ func Test_SingleNodeInMemExecuteQuery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
-	r, err := s.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, None})
+	r, err := s.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, nil})
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
-	r, err = s.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, None})
+	r, err = s.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, nil})
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
-	r, err = s.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, None})
+	r, err = s.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, nil})
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -143,15 +143,15 @@ func Test_SingleNodeFileExecuteQuery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
-	r, err := s.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, None})
+	r, err := s.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, nil})
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
-	r, err = s.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, None})
+	r, err = s.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, nil})
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
-	r, err = s.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, None})
+	r, err = s.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, nil})
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -181,15 +181,19 @@ func Test_SingleNodeExecuteQueryTx(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
-	r, err := s.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, true, None})
+	r, err := s.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, true, &ReadConsistency{None}})
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
-	r, err = s.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, true, Weak})
+	r, err = s.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, true, &ReadConsistency{Weak}})
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
-	r, err = s.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, true, Strong})
+	r, err = s.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, true, &ReadConsistency{Strong}})
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	r, err = s.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, true, &ReadConsistency{Stale}})
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
