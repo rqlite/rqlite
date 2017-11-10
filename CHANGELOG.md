@@ -1,4 +1,4 @@
-## 4.2.1 (unreleased)
+## 4.2.1 (November 10th 2017)
 - [PR #367](https://github.com/rqlite/rqlite/pull/367): Remove superflous leading space at CLI prompt.
 - [PR #368](https://github.com/rqlite/rqlite/pull/368): CLI displays clear error message when not authorized.
 - [PR #370](https://github.com/rqlite/rqlite/pull/370): CLI does not need to indent JSON when making requests.
