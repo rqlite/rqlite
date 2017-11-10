@@ -46,14 +46,29 @@ const (
 	appliedWaitDelay    = 100 * time.Millisecond
 )
 
+// Represents the available consistency levels.
+type Level int
+
+const (
+	Weak Level = iota
+	None
+	Stale
+	Strong
+)
+
+// ReadConsistency represents the available read consistency levels.
+type ReadConsistency struct {
+	lvl     Level
+	timeout time.Duration
+}
+
 // QueryRequest represents a query that returns rows, and does not modify
 // the database.
 type QueryRequest struct {
-	Queries      []string
-	Timings      bool
-	Tx           bool
-	Lvl          ConsistencyLevel
-	MaxStaleTime time.Duration
+	Queries []string
+	Timings bool
+	Tx      bool
+	Lvl     ReadConsistency
 }
 
 // ExecuteRequest represents a query that returns now rows, but does modify
@@ -107,22 +122,6 @@ type databaseSub struct {
 
 // peersSub is a command which sets the API address for a Raft address.
 type peersSub map[string]string
-
-// Represents the available consistency levels.
-type Level int
-
-const (
-	None Level = iota
-	Stale
-	Weak
-	Strong
-)
-
-// ReadConsistency represents the available read consistency levels.
-type ReadConsistency struct {
-	lvl     Level
-	timeout time.Duration
-}
 
 // ClusterState defines the possible Raft states the current node can be in
 type ClusterState int
@@ -533,15 +532,10 @@ func (s *Store) Backup(leader bool) ([]byte, error) {
 }
 
 // Query executes queries that return rows, and do not modify the database.
-func (s *Store) Query(qr *QueryRequest, ReadConsistency *l) ([]*sql.Rows, error) {
+func (s *Store) Query(qr *QueryRequest) ([]*sql.Rows, error) {
 	// Allow concurrent queries.
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-
-	// Set default read consistency if not set.
-	if l == nil {
-		l = &ReadConsistency{Weak}
-	}
 
 	if l.lvl == Strong {
 		d := &databaseSub{
@@ -574,7 +568,7 @@ func (s *Store) Query(qr *QueryRequest, ReadConsistency *l) ([]*sql.Rows, error)
 		return nil, ErrNotLeader
 	}
 
-	if l.lvl == Stale && time.Now().Sub(s.raft.LastContact()) > qr.MaxStaleTime {
+	if l.lvl == Stale && time.Now().Sub(s.raft.LastContact()) > l.Timeout {
 		return nil, ErrTooStale
 	}
 
