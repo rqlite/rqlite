@@ -66,6 +66,7 @@ func main() {
 	fmt.Printf("Statements/sec: %.2f\n", float64((numReqs*batchSz))/d.Seconds())
 }
 
+// Tester is the interface test executors must implement.
 type Tester interface {
 	Prepare(stmt string, bSz int, tx bool) error
 	Once() (time.Duration, error)
