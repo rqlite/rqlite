@@ -78,9 +78,8 @@ func run(t Tester, n int) (time.Duration, error) {
 		d, err := t.Once()
 		if err != nil {
 			return 0, err
-		} else {
-			dur += d
 		}
+		dur += d
 
 		if modPrint != 0 && i != 0 && i%modPrint == 0 {
 			fmt.Printf("%d requests completed in %s\n", i, d)
