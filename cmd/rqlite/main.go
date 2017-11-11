@@ -152,10 +152,7 @@ func sendRequest(ctx *cli.Context, urlStr string, line string, argv *argT, ret i
 			return err
 		}
 
-		if err := json.Unmarshal(body, ret); err != nil {
-			return err
-		}
-		return nil
+		return json.Unmarshal(body, ret)
 	}
 }
 

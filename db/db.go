@@ -388,11 +388,8 @@ func (db *DB) Backup(path string) error {
 	if err := bk.Finish(); err != nil {
 		return err
 	}
-	if err := dstDB.Close(); err != nil {
-		return err
-	}
 
-	return nil
+	return dstDB.Close()
 }
 
 // normalizeRowValues performs some normalization of values in the returned rows.

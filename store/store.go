@@ -852,11 +852,7 @@ func (f *fsmSnapshot) Persist(sink raft.SnapshotSink) error {
 		}
 
 		// Close the sink.
-		if err := sink.Close(); err != nil {
-			return err
-		}
-
-		return nil
+		return sink.Close()
 	}()
 
 	if err != nil {

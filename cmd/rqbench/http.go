@@ -9,12 +9,14 @@ import (
 	"time"
 )
 
+// HTTPTester represents a HTTP transport tester.
 type HTTPTester struct {
 	client http.Client
 	url    string
 	br     *bytes.Reader
 }
 
+// NewHTTPTester returns an instantiated HTTP tester.
 func NewHTTPTester(addr string) *HTTPTester {
 	return &HTTPTester{
 		client: http.Client{},
@@ -22,6 +24,7 @@ func NewHTTPTester(addr string) *HTTPTester {
 	}
 }
 
+// Prepare prepares the tester for execution.
 func (h *HTTPTester) Prepare(stmt string, bSz int, tx bool) error {
 	s := make([]string, bSz)
 	for i := 0; i < len(s); i++ {
@@ -41,6 +44,7 @@ func (h *HTTPTester) Prepare(stmt string, bSz int, tx bool) error {
 	return nil
 }
 
+// Once executes a single test request.
 func (h *HTTPTester) Once() (time.Duration, error) {
 	h.br.Seek(0, io.SeekStart)
 
