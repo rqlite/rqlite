@@ -251,6 +251,8 @@ func Test_401Routes_NoBasicAuth(t *testing.T) {
 
 	m := &MockStore{}
 	s := New("127.0.0.1:0", m, c)
+	s.Expvar = true
+	s.Pprof = true
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
@@ -267,6 +269,10 @@ func Test_401Routes_NoBasicAuth(t *testing.T) {
 		"/join",
 		"/delete",
 		"/status",
+		"/debug/vars",
+		"/debug/pprof/cmdline",
+		"/debug/pprof/profile",
+		"/debug/pprof/symbol",
 	} {
 		resp, err := client.Get(host + path)
 		if err != nil {
@@ -283,6 +289,8 @@ func Test_401Routes_BasicAuthBadPassword(t *testing.T) {
 
 	m := &MockStore{}
 	s := New("127.0.0.1:0", m, c)
+	s.Expvar = true
+	s.Pprof = true
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
@@ -298,6 +306,10 @@ func Test_401Routes_BasicAuthBadPassword(t *testing.T) {
 		"/db/load",
 		"/join",
 		"/status",
+		"/debug/vars",
+		"/debug/pprof/cmdline",
+		"/debug/pprof/profile",
+		"/debug/pprof/symbol",
 	} {
 		req, err := http.NewRequest("GET", host+path, nil)
 		if err != nil {
@@ -320,6 +332,8 @@ func Test_401Routes_BasicAuthBadPerm(t *testing.T) {
 
 	m := &MockStore{}
 	s := New("127.0.0.1:0", m, c)
+	s.Expvar = true
+	s.Pprof = true
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
@@ -335,6 +349,10 @@ func Test_401Routes_BasicAuthBadPerm(t *testing.T) {
 		"/db/load",
 		"/join",
 		"/status",
+		"/debug/vars",
+		"/debug/pprof/cmdline",
+		"/debug/pprof/profile",
+		"/debug/pprof/symbol",
 	} {
 		req, err := http.NewRequest("GET", host+path, nil)
 		if err != nil {

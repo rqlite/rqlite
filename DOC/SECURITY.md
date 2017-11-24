@@ -39,7 +39,7 @@ rqlite, via the configuration file, also supports user-level permissions. Each u
 - _query_: user may access the query endpoint.
 - _load_: user may load an SQLite dump file into a node.
 - _backup_: user may perform backups.
-- _status_: user can retrieve status information from the node.
+- _status_: user can retrieve status and Go runtime information.
 - _join_: user can join a cluster. In practice only a node joins a cluster.
 - _remove_: user can remove a node from a cluster.
 
