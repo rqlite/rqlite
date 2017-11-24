@@ -166,6 +166,34 @@ func Test_404Routes(t *testing.T) {
 	}
 }
 
+func Test_404Routes_ExpvarPprofDisabled(t *testing.T) {
+	m := &MockStore{}
+	s := New("127.0.0.1:0", m, nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+
+	client := &http.Client{}
+
+	for _, path := range []string{
+		"/debug/vars",
+		"/debug/pprof/cmdline",
+		"/debug/pprof/profile",
+		"/debug/pprof/symbol",
+	} {
+		req, err := http.NewRequest("GET", host+path, nil)
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatalf("failed to make request: %s", err.Error())
+		}
+		if resp.StatusCode != 404 {
+			t.Fatalf("failed to get expected 404 for path %s, got %d", path, resp.StatusCode)
+		}
+	}
+}
+
 func Test_405Routes(t *testing.T) {
 	m := &MockStore{}
 	s := New("127.0.0.1:0", m, nil)
