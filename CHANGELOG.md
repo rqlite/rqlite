@@ -1,3 +1,6 @@
+## 4.2.2 (unreleased)
+- [PR #383](https://github.com/rqlite/rqlite/pull/383): Fix unit tests after underlying SQLite master table changes.
+
 ## 4.2.1 (November 10th 2017)
 - [PR #367](https://github.com/rqlite/rqlite/pull/367): Remove superflous leading space at CLI prompt.
 - [PR #368](https://github.com/rqlite/rqlite/pull/368): CLI displays clear error message when not authorized.
