@@ -1,4 +1,4 @@
-## 4.2.2 (unreleased)
+## 4.2.2 (December 7th 2017)
 - [PR #383](https://github.com/rqlite/rqlite/pull/383): Fix unit tests after underlying SQLite master table changes.
 - [PR #384](https://github.com/rqlite/rqlite/pull/384): "status" perm required to access Go runtime information.
 
