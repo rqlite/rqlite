@@ -1,13 +1,4 @@
-/*
-Command rqlited is the rqlite server.
-
-rqlite is a lightweight, distributed system that provides a replicated
-relational database, using SQLite as the storage engine. rqlite is written
-in Go and uses Raft to achieve consensus across all the instances of the
-SQLite databases. rqlite ensures that every change made to the database is
-made to a majority of underlying SQLite files, or none-at-all.
-*/
-
+// Command rqlited is the rqlite server.
 package main
 
 import (
