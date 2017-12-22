@@ -2,7 +2,7 @@
 #
 # Simple script for creating releases.
 #
-# To determine the release ID, execute this command:
+# To determine the GitHub release ID, execute this command:
 #
 #   curl https://api.github.com/repos/rqlite/rqlite/releases
 #
