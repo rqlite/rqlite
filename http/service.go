@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"expvar"
 	"fmt"
 	"io/ioutil"
@@ -624,30 +625,10 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get the query statement(s), and do tx if necessary.
-	queries := []string{}
-
-	if r.Method == "GET" {
-		query, err := stmtParam(r)
-		if err != nil || query == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-		queries = []string{query}
-	} else {
-		b, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-		r.Body.Close()
-		if err := json.Unmarshal(b, &queries); err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-		if len(queries) == 0 {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
+	queries, err := requestQueries(r)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
 	}
 
 	results, err := s.store.Query(&store.QueryRequest{queries, timings, isTx, lvl})
@@ -750,6 +731,31 @@ func (s *Service) addBuildVersion(w http.ResponseWriter) {
 		version = v
 	}
 	w.Header().Add(VersionHTTPHeader, version)
+}
+
+func requestQueries(r *http.Request) ([]string, error) {
+	if r.Method == "GET" {
+		query, err := stmtParam(r)
+		if err != nil || query == "" {
+			return nil, errors.New("bad query GET request")
+		}
+		return []string{query}, nil
+	}
+
+	qs := []string{}
+	b, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		return nil, errors.New("bad query POST request")
+	}
+	r.Body.Close()
+	if err := json.Unmarshal(b, &qs); err != nil {
+		return nil, errors.New("bad query POST request")
+	}
+	if len(qs) == 0 {
+		return nil, errors.New("bad query POST request")
+	}
+
+	return qs, nil
 }
 
 func writeResponse(w http.ResponseWriter, r *http.Request, j *Response) {
