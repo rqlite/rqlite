@@ -1,5 +1,6 @@
 ## 4.2.3 (unreleased)
 - [PR #389](https://github.com/rqlite/rqlite/pull/389): Log Store directory path on startup.
+- [PR #392](https://github.com/rqlite/rqlite/pull/392): Return redirect if node removal attempted on follower. Fixes [issue #391](https://github.com/rqlite/rqlite/issues/391).
 
 ## 4.2.2 (December 7th 2017)
 - [PR #383](https://github.com/rqlite/rqlite/pull/383): Fix unit tests after underlying SQLite master table changes.
