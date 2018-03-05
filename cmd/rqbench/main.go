@@ -28,7 +28,7 @@ func init() {
 	flag.IntVar(&batchSz, "b", 1, "Statements per request")
 	flag.IntVar(&modPrint, "m", 0, "Print progress every m requests")
 	flag.BoolVar(&tx, "x", false, "Use explicit transaction per request")
-	flag.StringVar(&tp, "t", "http", "Transport to use")
+	flag.StringVar(&tp, "t", "http", "Transport to use (http or grpc)")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "\n%s\n\n", desc)
 		fmt.Fprintf(os.Stderr, "Usage: %s [arguments] <SQL statement>\n", name)
@@ -46,11 +46,16 @@ func main() {
 	}
 	stmt := flag.Args()[0]
 
-	if tp != "http" {
+	var tester Tester
+	if tp == "http" {
+		tester = NewHTTPTester(addr)
+	} else if tp == "grpc" {
+		tester = NewGRPCTester(addr)
+	} else {
 		fmt.Fprintf(os.Stderr, "not a valid transport: %s\n", tp)
+		os.Exit(1)
 	}
 
-	tester := NewHTTPTester(addr)
 	if err := tester.Prepare(stmt, batchSz, tx); err != nil {
 		fmt.Println("failed to prepare test:", err.Error())
 		os.Exit(1)
