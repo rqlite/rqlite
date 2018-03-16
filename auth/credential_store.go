@@ -5,6 +5,8 @@ package auth
 import (
 	"encoding/json"
 	"io"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 // BasicAuther is the interface an object must support to return basic auth information.
@@ -16,20 +18,23 @@ type BasicAuther interface {
 type Credential struct {
 	Username string   `json:"username,omitempty"`
 	Password string   `json:"password,omitempty"`
+	Hashed   *bool    `json:"hashed,omitempty"`
 	Perms    []string `json:"perms,omitempty"`
 }
 
 // CredentialsStore stores authentication and authorization information for all users.
 type CredentialsStore struct {
-	store map[string]string
-	perms map[string]map[string]bool
+	store      map[string]string
+	perms      map[string]map[string]bool
+	isbcrypted map[string]bool
 }
 
 // NewCredentialsStore returns a new instance of a CredentialStore.
 func NewCredentialsStore() *CredentialsStore {
 	return &CredentialsStore{
-		store: make(map[string]string),
-		perms: make(map[string]map[string]bool),
+		store:      make(map[string]string),
+		perms:      make(map[string]map[string]bool),
+		isbcrypted: make(map[string]bool),
 	}
 }
 
@@ -53,6 +58,9 @@ func (c *CredentialsStore) Load(r io.Reader) error {
 		for _, p := range cred.Perms {
 			c.perms[cred.Username][p] = true
 		}
+		if cred.Hashed != nil && *cred.Hashed {
+			c.isbcrypted[cred.Username] = true
+		}
 	}
 
 	// Read closing bracket.
@@ -67,7 +75,15 @@ func (c *CredentialsStore) Load(r io.Reader) error {
 // Check returns true if the password is correct for the given username.
 func (c *CredentialsStore) Check(username, password string) bool {
 	pw, ok := c.store[username]
-	return ok && password == pw
+	if !ok {
+		return false
+	}
+	if _, ok = c.isbcrypted[username]; ok {
+		err := bcrypt.CompareHashAndPassword([]byte(pw), []byte(password))
+		return err == nil
+	} else {
+		return password == pw
+	}
 }
 
 // CheckRequest returns true if b contains a valid username and password.
