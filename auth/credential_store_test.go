@@ -167,10 +167,12 @@ func Test_AuthLoadHashedSingleRequest(t *testing.T) {
 		[
 			{
 				"username": "username1",
-				"password": "$2a$10$fKRHxrEuyDTP6tXIiDycr.nyC8Q7UMIfc31YMyXHDLgRDyhLK3VFS",
-				"hashed": true
+				"password": "$2a$10$fKRHxrEuyDTP6tXIiDycr.nyC8Q7UMIfc31YMyXHDLgRDyhLK3VFS"
 			},
-			{"username": "username2", "password": "password2", "hashed":false}
+			{
+				"username": "username2",
+				"password": "password2"
+			}
 		]
 	`
 
