@@ -18,23 +18,20 @@ type BasicAuther interface {
 type Credential struct {
 	Username string   `json:"username,omitempty"`
 	Password string   `json:"password,omitempty"`
-	Hashed   *bool    `json:"hashed,omitempty"`
 	Perms    []string `json:"perms,omitempty"`
 }
 
 // CredentialsStore stores authentication and authorization information for all users.
 type CredentialsStore struct {
-	store      map[string]string
-	perms      map[string]map[string]bool
-	isbcrypted map[string]bool
+	store map[string]string
+	perms map[string]map[string]bool
 }
 
 // NewCredentialsStore returns a new instance of a CredentialStore.
 func NewCredentialsStore() *CredentialsStore {
 	return &CredentialsStore{
-		store:      make(map[string]string),
-		perms:      make(map[string]map[string]bool),
-		isbcrypted: make(map[string]bool),
+		store: make(map[string]string),
+		perms: make(map[string]map[string]bool),
 	}
 }
 
@@ -58,9 +55,6 @@ func (c *CredentialsStore) Load(r io.Reader) error {
 		for _, p := range cred.Perms {
 			c.perms[cred.Username][p] = true
 		}
-		if cred.Hashed != nil && *cred.Hashed {
-			c.isbcrypted[cred.Username] = true
-		}
 	}
 
 	// Read closing bracket.
@@ -78,12 +72,9 @@ func (c *CredentialsStore) Check(username, password string) bool {
 	if !ok {
 		return false
 	}
-	if _, ok = c.isbcrypted[username]; ok {
-		err := bcrypt.CompareHashAndPassword([]byte(pw), []byte(password))
-		return err == nil
-	} else {
-		return password == pw
-	}
+
+	return password == pw ||
+		bcrypt.CompareHashAndPassword([]byte(pw), []byte(password)) == nil
 }
 
 // CheckRequest returns true if b contains a valid username and password.
