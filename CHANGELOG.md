@@ -1,3 +1,6 @@
+## 4.3.0 (unreleased)
+- [PR #397](https://github.com/rqlite/rqlite/pull/397): Support hashed passwords. Thanks @sum12.
+
 ## 4.2.3 (February 21st 2018)
 - [PR #389](https://github.com/rqlite/rqlite/pull/389): Log Store directory path on startup.
 - [PR #392](https://github.com/rqlite/rqlite/pull/392): Return redirect if node removal attempted on follower. Fixes [issue #391](https://github.com/rqlite/rqlite/issues/391).
