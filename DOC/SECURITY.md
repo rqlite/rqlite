@@ -28,7 +28,7 @@ rqlite supports encryption of all inter-node traffic. To enable this, pass `-nod
 You can generate private keys and associated certificates in a similar manner as described in the _HTTP API_ section.
 
 ## Basic Auth
-The HTTP API supports [Basic Auth](https://tools.ietf.org/html/rfc2617). Each rqlite node can be passed a JSON-formatted configuration file, which configures valid usernames and associated passwords for that node.
+The HTTP API supports [Basic Auth](https://tools.ietf.org/html/rfc2617). Each rqlite node can be passed a JSON-formatted configuration file, which configures valid usernames and associated passwords for that node. The password string can be in cleartext or [bcrypt hashed](https://en.wikipedia.org/wiki/Bcrypt).
 
 Since the configuration file only controls the node local to it, it's important to ensure the configuration is correct on each node.
 
@@ -54,7 +54,7 @@ An example configuration file is shown below.
   },
   {
     "username": "mary",
-    "password": "secret2",
+    "password": "$2a$10$fKRHxrEuyDTP6tXIiDycr.nyC8Q7UMIfc31YMyXHDLgRDyhLK3VFS",
     "perms": ["query", "status"]
   }
 ]
