@@ -162,6 +162,59 @@ func Test_AuthPermsLoadSingle(t *testing.T) {
 	}
 }
 
+func Test_AuthLoadHashedSingleRequest(t *testing.T) {
+	const jsonStream = `
+		[
+			{
+				"username": "username1",
+				"password": "$2a$10$fKRHxrEuyDTP6tXIiDycr.nyC8Q7UMIfc31YMyXHDLgRDyhLK3VFS",
+				"hashed": true
+			},
+			{"username": "username2", "password": "password2", "hashed":false}
+		]
+	`
+
+	store := NewCredentialsStore()
+	if err := store.Load(strings.NewReader(jsonStream)); err != nil {
+		t.Fatalf("failed to load multiple credentials: %s", err.Error())
+	}
+
+	b1 := &testBasicAuther{
+		username: "username1",
+		password: "password1",
+		ok:       true,
+	}
+	b2 := &testBasicAuther{
+		username: "username2",
+		password: "password2",
+		ok:       true,
+	}
+
+	b3 := &testBasicAuther{
+		username: "username1",
+		password: "wrong",
+		ok:       true,
+	}
+	b4 := &testBasicAuther{
+		username: "username2",
+		password: "wrong",
+		ok:       true,
+	}
+
+	if check := store.CheckRequest(b1); !check {
+		t.Fatalf("username1 (b1) credential not checked correctly via request")
+	}
+	if check := store.CheckRequest(b2); !check {
+		t.Fatalf("username2 (b2) credential not checked correctly via request")
+	}
+	if check := store.CheckRequest(b3); check {
+		t.Fatalf("username1 (b3) credential not checked correctly via request")
+	}
+	if check := store.CheckRequest(b4); check {
+		t.Fatalf("username2 (b4) credential not checked correctly via request")
+	}
+}
+
 func Test_AuthPermsRequestLoadSingle(t *testing.T) {
 	const jsonStream = `
 		[
