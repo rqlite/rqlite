@@ -1,4 +1,4 @@
-## 4.3.0 (unreleased)
+## 4.3.0 (March 18th 2018)
 - [PR #397](https://github.com/rqlite/rqlite/pull/397), [PR #399](https://github.com/rqlite/rqlite/pull/399): Support hashed passwords. Fixes [issue #395](https://github.com/rqlite/rqlite/issues/395). Thanks @sum12.
 
 ## 4.2.3 (February 21st 2018)
