@@ -367,7 +367,6 @@ func (db *DB) Backup(path string) error {
 	if err != nil {
 		return err
 	}
-
 	defer func(db *DB, err *error) {
 		cerr := db.Close()
 		if *err == nil {
