@@ -368,6 +368,13 @@ func (db *DB) Backup(path string) error {
 		return err
 	}
 
+	defer func(db *DB, err *error) {
+		cerr := db.Close()
+		if *err == nil {
+			*err = cerr
+		}
+	}(dstDB, &err)
+
 	bk, err := dstDB.sqlite3conn.Backup("main", db.sqlite3conn, "main")
 	if err != nil {
 		return err
@@ -389,7 +396,7 @@ func (db *DB) Backup(path string) error {
 		return err
 	}
 
-	return dstDB.Close()
+	return err
 }
 
 // normalizeRowValues performs some normalization of values in the returned rows.
