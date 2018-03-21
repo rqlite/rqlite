@@ -1,5 +1,7 @@
-## 4.3.0 (March 18th 2018)
+## 4.3.1 (unreleased)
 - [PR #401](https://github.com/rqlite/rqlite/pull/401): Always try to close temporary database file after backup. Fixes [issue #400](https://github.com/rqlite/rqlite/issues/400). Thanks @sum12.
+
+## 4.3.0 (March 18th 2018)
 - [PR #397](https://github.com/rqlite/rqlite/pull/397), [PR #399](https://github.com/rqlite/rqlite/pull/399): Support hashed passwords. Fixes [issue #395](https://github.com/rqlite/rqlite/issues/395). Thanks @sum12.
 
 ## 4.2.3 (February 21st 2018)
