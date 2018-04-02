@@ -20,7 +20,7 @@ rqlite uses [Raft](https://raft.github.io/) to achieve consensus across all the 
 - [Discovery Service support](https://github.com/rqlite/rqlite/blob/master/DOC/DISCOVERY.md), allowing clusters to be dynamically created.
 - [Extensive security and encryption support](https://github.com/rqlite/rqlite/blob/master/DOC/SECURITY.md), including node-to-node encryption.
 - Choice of read consistency levels.
-- Transaction support.
+- A flavour of transaction support.
 - Hot backups.
 
 ## Quick Start
