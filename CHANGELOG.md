@@ -1,4 +1,5 @@
-## 4.3.1 (unreleased)
+## 5.0.0 (unreleased)
+- [PR #377](https://github.com/rqlite/rqlite/pull/377): Port consensus system to Hashicorp Raft v1.0.
 - [PR #401](https://github.com/rqlite/rqlite/pull/401): Always try to close temporary database file after backup. Fixes [issue #400](https://github.com/rqlite/rqlite/issues/400). Thanks @sum12.
 
 ## 4.3.0 (March 18th 2018)
