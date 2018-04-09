@@ -1,4 +1,4 @@
-version: 4.{build}
+version: 5.{build}
 
 platform: x64
 
