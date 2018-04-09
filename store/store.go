@@ -130,6 +130,7 @@ type Server struct {
 	Addr string `json:"addr,omitempty"`
 }
 
+// Servers is a set of Servers.
 type Servers []*Server
 
 func (s Servers) Less(i, j int) bool { return s[i].ID < s[j].ID }
@@ -238,7 +239,7 @@ func (s *Store) Open(enableSingle bool) error {
 		s.logger.Printf("bootstrap needed")
 		configuration := raft.Configuration{
 			Servers: []raft.Server{
-				raft.Server{
+				{
 					ID:      config.LocalID,
 					Address: transport.LocalAddr(),
 				},
