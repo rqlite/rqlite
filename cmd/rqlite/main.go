@@ -22,7 +22,7 @@ type argT struct {
 	Port        uint16 `cli:"p,port" usage:"rqlited host port" dft:"4001"`
 	Prefix      string `cli:"P,prefix" usage:"rqlited HTTP URL prefix" dft:"/"`
 	Insecure    bool   `cli:"i,insecure" usage:"do not verify rqlited HTTPS certificate" dft:"false"`
-	Credentials string `cli:"u,user" usage:"Basic Auth credentials (username:password)"`
+	Credentials string `cli:"u,user" usage:"set basic auth credentials in form username:password"`
 }
 
 const cliHelp = `.help				Show this message
