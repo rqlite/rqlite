@@ -31,6 +31,9 @@ Options:
 
   i,  --insecure[=false]
       do not verify rqlited HTTPS certificate
+
+  -u, --user
+      Basic Auth credentials (username:password)
 ```
 
 ## Example
