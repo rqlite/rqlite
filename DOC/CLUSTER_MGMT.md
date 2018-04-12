@@ -35,7 +35,7 @@ _When restarting a node, there is no further need to pass `-join`. It will be ig
 You've now got a fault-tolerant, distributed, relational database. It can tolerate the failure of any node, even the leader, and remain operational.
 
 ## Node IDs
-You can set the Node ID (`-node-id`) to anything you wish, as long as it's unique for each node.
+You can optionally set the Node ID (`-node-id`) to anything you wish, as long as it's unique for each node. If you do not set it, it will be set to the hostname of the node.
 
 ## Listening on all interfaces
 You can pass `0.0.0.0` to both `-http-addr` and `-raft-addr` if you wish a node to listen on all interfaces. You must still pass an explicit network address to `-join` however. In this case you'll also want to set `-http-adv-addr` to the actual interface address, so other nodes learn the correct network address to use to reach the node listening on `0.0.0.0`.
