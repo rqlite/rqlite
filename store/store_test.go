@@ -484,6 +484,23 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
+
+	// Kill the leader and check that query can still be satisfied via None consistency.
+	s0.Close(true)
+	r, err = s1.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, Strong})
+	if err == nil {
+		t.Fatalf("successfully queried non-leader node: %s", err.Error())
+	}
+	r, err = s1.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, None})
+	if err != nil {
+		t.Fatalf("failed to query node with None consistency: %s", err.Error())
+	}
+	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
 }
 
 func Test_SingleNodeSnapshotOnDisk(t *testing.T) {
