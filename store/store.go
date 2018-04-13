@@ -570,6 +570,31 @@ func (s *Store) Join(id, addr string) error {
 		return ErrNotLeader
 	}
 
+	configFuture := s.raft.GetConfiguration()
+	if err := configFuture.Error(); err != nil {
+		s.logger.Printf("failed to get raft configuration: %v", err)
+		return err
+	}
+
+	for _, srv := range configFuture.Configuration().Servers {
+		// If a node already exists with either the joining node's ID or address,
+		// that node may need to be removed from the config first.
+		if srv.ID == raft.ServerID(id) || srv.Address == raft.ServerAddress(addr) {
+			// However if *both* the ID and the address are the same, the no
+			// join is actually needed.
+			if srv.Address == raft.ServerAddress(addr) && srv.ID == raft.ServerID(id) {
+				s.logger.Printf("node %s at %s already member of cluster, ignoring join request", id, addr)
+				return nil
+			}
+
+			future := s.raft.RemoveServer(srv.ID, 0, 0)
+			if err := future.Error(); err != nil {
+				s.logger.Printf("failed to remove node: %v", err)
+				return err
+			}
+		}
+	}
+
 	f := s.raft.AddVoter(raft.ServerID(id), raft.ServerAddress(addr), 0, 0)
 	if e := f.(raft.Future); e.Error() != nil {
 		if e.Error() == raft.ErrNotLeader {
