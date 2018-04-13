@@ -158,7 +158,6 @@ type Store struct {
 	SnapshotThreshold uint64
 	HeartbeatTimeout  time.Duration
 	ApplyTimeout      time.Duration
-	OpenTimeout       time.Duration
 }
 
 // StoreConfig represents the configuration of the underlying Store.
@@ -186,7 +185,6 @@ func New(c *StoreConfig) *Store {
 		meta:         newClusterMeta(),
 		logger:       logger,
 		ApplyTimeout: applyTimeout,
-		OpenTimeout:  openTimeout,
 	}
 }
 
@@ -252,16 +250,6 @@ func (s *Store) Open(enableSingle bool) error {
 
 	s.raft = ra
 
-	if s.OpenTimeout != 0 {
-		// Wait until the initial logs are applied.
-		s.logger.Printf("waiting for up to %s for application of initial logs", s.OpenTimeout)
-		if err := s.WaitForAppliedIndex(s.raft.LastIndex(), s.OpenTimeout); err != nil {
-			return ErrOpenTimeout
-		}
-	} else {
-		s.logger.Println("not waiting for application of initial logs")
-	}
-
 	return nil
 }
 
@@ -275,6 +263,19 @@ func (s *Store) Close(wait bool) error {
 		if e := f.(raft.Future); e.Error() != nil {
 			return e.Error()
 		}
+	}
+	return nil
+}
+
+// WaitForApplied waits for all Raft log entries to to be applied to the
+// underlying database.
+func (s *Store) WaitForApplied(timeout time.Duration) error {
+	if timeout == 0 {
+		return nil
+	}
+	s.logger.Printf("waiting for up to %s for application of initial logs", timeout)
+	if err := s.WaitForAppliedIndex(s.raft.LastIndex(), timeout); err != nil {
+		return ErrOpenTimeout
 	}
 	return nil
 }
@@ -434,7 +435,6 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		"addr":               s.Addr().String(),
 		"leader":             s.Leader(),
 		"apply_timeout":      s.ApplyTimeout.String(),
-		"open_timeout":       s.OpenTimeout.String(),
 		"heartbeat_timeout":  s.HeartbeatTimeout.String(),
 		"snapshot_threshold": s.SnapshotThreshold,
 		"meta":               s.meta,

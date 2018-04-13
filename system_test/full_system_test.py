@@ -216,11 +216,12 @@ def test_leader_redirect(cluster):
 @log_test('test_node_restart_different_ip')
 def test_node_restart_different_ip(cluster):
   l = cluster.wait_for_leader()
-  fs = cluster.followers()[0]
+  f = cluster.followers()[0]
   f.stop()
   cluster.wait_for_leader(node_exc=f)
-  f.api_addr='localhost:4007'
+  f.raft_addr='localhost:4007'
   f.start()
+  f.wait_for_leader()
 
 @log_test('setup_cluster')
 def setup_cluster(path):
@@ -242,6 +243,7 @@ def run_test(cluster):
   test_election(cluster)
   test_execute_fail_rejoin(cluster)
   test_leader_redirect(cluster)
+  test_node_restart_different_ip(cluster)
 
   cluster.deprovision()
 
