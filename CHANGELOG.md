@@ -2,6 +2,7 @@
 - [PR #377](https://github.com/rqlite/rqlite/pull/377): Port consensus system to Hashicorp Raft v1.0.
 - [PR #401](https://github.com/rqlite/rqlite/pull/401): Always try to close temporary database file after backup. Fixes [issue #400](https://github.com/rqlite/rqlite/issues/400). Thanks @sum12.
 - [PR #406](https://github.com/rqlite/rqlite/pull/406), [PR #408](https://github.com/rqlite/rqlite/pull/408): CLI supports Basic Auth credentials. Fixes [issue #369](https://github.com/rqlite/rqlite/issues/369). Thanks @joaodrp.
+- [PR #411](https://github.com/rqlite/rqlite/pull/411): Remove any pre-existing node with a given ID, if that node returns with a new IP address. Fixes [issue #409](https://github.com/rqlite/rqlite/issues/409).
 
 ## 4.3.0 (March 18th 2018)
 - [PR #397](https://github.com/rqlite/rqlite/pull/397), [PR #399](https://github.com/rqlite/rqlite/pull/399): Support hashed passwords. Fixes [issue #395](https://github.com/rqlite/rqlite/issues/395). Thanks @sum12.
