@@ -9,6 +9,7 @@ import json
 import os
 import shutil
 import time
+import socket
 import sys
 from urlparse import urlparse
 
@@ -18,7 +19,14 @@ and killing nodes.
 '''
 
 class Node(object):
-  def __init__(self, path, node_id, api_addr, raft_addr, dir):
+  def __init__(self, path, node_id, api_addr=None, raft_addr=None, dir=None):
+    if api_addr is None:
+      api_addr = self._random_addr()
+    if raft_addr is None:
+      raft_addr = self._random_addr()
+    if dir is None:
+      dir = tempfile.mkdtemp()
+
     self.path = path
     self.node_id = node_id
     self.api_addr = api_addr
@@ -29,6 +37,10 @@ class Node(object):
     self.stdout_fd = open(self.stdout_file, 'w')
     self.stderr_file = os.path.join(dir, 'rqlited.err')
     self.stderr_fd = open(self.stderr_file, 'w')
+
+  def scramble_network(self):
+    self.api_addr = self._random_addr()
+    self.raft_addr = self._random_addr()
 
   def start(self, join=None, wait=True, timeout=30):
     if self.process is not None:
@@ -122,6 +134,10 @@ class Node(object):
     return 'http://' + self.api_addr + '/db/query'
   def _execute_url(self):
     return 'http://' + self.api_addr + '/db/execute'
+  def _random_addr(self):
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.bind(('localhost', 0))
+    return ':'.join([s.getsockname()[0], str(s.getsockname()[1])])
 
   def __eq__(self, other):
     return self.node_id == other.node_id
@@ -215,13 +231,21 @@ def test_leader_redirect(cluster):
 
 @log_test('test_node_restart_different_ip')
 def test_node_restart_different_ip(cluster):
-  l = cluster.wait_for_leader()
+  cluster.wait_for_leader()
   f = cluster.followers()[0]
   f.stop()
-  cluster.wait_for_leader(node_exc=f)
-  f.raft_addr='localhost:4007'
-  f.start()
+  l = cluster.wait_for_leader()
+  j = l.execute('CREATE TABLE test_node_restart_different_ip (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
+  assert(str(j)=="{u'results': [{}]}")
+  j = l.execute('INSERT INTO test_node_restart_different_ip(name) VALUES("fiona")')
+  assert(str(j)=="{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
+
+  f.scramble_network()
+  f.start(join=l.api_addr)
   f.wait_for_leader()
+  f.wait_for_applied_index(l.applied_index())
+  j = f.query('SELECT * FROM test_node_restart_different_ip', level='none')
+  assert(str(j)=="{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
 
 @log_test('setup_cluster')
 def setup_cluster(path):
