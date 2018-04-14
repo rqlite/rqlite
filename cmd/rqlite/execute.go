@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"net/url"
 
 	"github.com/mkideal/cli"
 )
@@ -20,10 +21,19 @@ type executeResponse struct {
 	Time    float64   `json:"time,omitempty"`
 }
 
-func execute(ctx *cli.Context, cmd, line string, argv *argT) error {
-	urlStr := fmt.Sprintf("%s://%s:%d%sdb/execute", argv.Protocol, argv.Host, argv.Port, argv.Prefix)
+func execute(ctx *cli.Context, cmd, line string, timer bool, argv *argT) error {
+	queryStr := url.Values{}
+	if timer {
+		queryStr.Set("timings", "")
+	}
+	u := url.URL{
+		Scheme:   argv.Protocol,
+		Host:     fmt.Sprintf("%s:%d", argv.Host, argv.Port),
+		Path:     fmt.Sprintf("%sdb/query", argv.Prefix),
+		RawQuery: queryStr.Encode(),
+	}
 	ret := &executeResponse{}
-	if err := sendRequest(ctx, urlStr, line, argv, ret); err != nil {
+	if err := sendRequest(ctx, u.String(), line, argv, ret); err != nil {
 		return err
 	}
 	if ret.Error != "" {
