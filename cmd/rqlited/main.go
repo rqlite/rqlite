@@ -208,10 +208,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to parse Raft apply timeout %s: %s", raftApplyTimeout, err.Error())
 	}
-	str.OpenTimeout, err = time.ParseDuration(raftOpenTimeout)
-	if err != nil {
-		log.Fatalf("failed to parse Raft open timeout %s: %s", raftOpenTimeout, err.Error())
-	}
 
 	// Determine join addresses, if necessary.
 	ja, err := store.JoinAllowed(dataPath)
@@ -257,6 +253,13 @@ func main() {
 	} else {
 		log.Println("no join addresses set")
 	}
+
+	// Wait until database is updated.
+	openTimeout, err := time.ParseDuration(raftOpenTimeout)
+	if err != nil {
+		log.Fatalf("failed to parse Raft open timeout: %s", err.Error())
+	}
+	str.WaitForApplied(openTimeout)
 
 	// Publish to the cluster the mapping between this Raft address and API address.
 	// The Raft layer broadcasts the resolved address, so use that as the key. But
