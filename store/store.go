@@ -586,7 +586,7 @@ func (s *Store) Join(id, addr string) error {
 				s.logger.Printf("node %s at %s already member of cluster, ignoring join request", id, addr)
 				return nil
 			}
-			if s.remove(id); err != nil {
+			if err := s.remove(id); err != nil {
 				s.logger.Printf("failed to remove node: %v", err)
 				return err
 			}
