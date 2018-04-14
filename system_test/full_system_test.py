@@ -12,11 +12,9 @@ import time
 import socket
 import sys
 from urlparse import urlparse
+import unittest
 
-DESCRIPTION = '''
-Runs a full system test, bringing up a full cluster, issuing commands,
-and killing nodes.
-'''
+RQLITED_PATH = os.environ['RQLITED_PATH']
 
 class Node(object):
   def __init__(self, path, node_id, api_addr=None, raft_addr=None, dir=None):
@@ -173,111 +171,90 @@ class Cluster(object):
     for n in self.nodes:
       deprovision_node(n)
 
-def log_test(test_name):
-  def log_test_decorator(func):
-    def func_wrapper(cluster):
-      print('%s......' % test_name, end='')
-      sys.stdout.flush()
-      r = func(cluster)
-      print('OK')
-      return r
-    return func_wrapper
-  return log_test_decorator
+class TestEndToEnd(unittest.TestCase):
+  def setUp(self):
+    n0 = Node(RQLITED_PATH, '0')
+    n0.start()
+    n0.wait_for_leader()
 
-@log_test('test_election')
-def test_election(cluster):
-  n = cluster.wait_for_leader().stop()
-  cluster.wait_for_leader(node_exc=n)
-  n.start()
-  n.wait_for_leader()
+    n1 = Node(RQLITED_PATH, '1')
+    n1.start(join=n0.api_addr)
+    n1.wait_for_leader()
 
-@log_test('test_execute_fail_rejoin')
-def test_execute_fail_rejoin(cluster):
-  n = cluster.wait_for_leader()
-  j = n.execute('CREATE TABLE test_execute_then_fail (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
-  assert(str(j)=="{u'results': [{}]}")
-  j = n.execute('INSERT INTO test_execute_then_fail(name) VALUES("fiona")')
-  assert(str(j)=="{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
-  j = n.query('SELECT * FROM test_execute_then_fail')
-  assert(str(j)=="{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
+    n2 = Node(RQLITED_PATH, '2')
+    n2.start(join=n0.api_addr)
+    n2.wait_for_leader()
 
-  n0 = cluster.wait_for_leader().stop()
-  n1 = cluster.wait_for_leader(node_exc=n0)
-  j = n1.query('SELECT * FROM test_execute_then_fail')
-  assert(str(j)=="{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
-  j = n1.execute('INSERT INTO test_execute_then_fail(name) VALUES("declan")')
-  assert(str(j)=="{u'results': [{u'last_insert_id': 2, u'rows_affected': 1}]}")
+    self.cluster = Cluster([n0, n1, n2])
 
-  n0.start()
-  n0.wait_for_leader()
-  n0.wait_for_applied_index(n1.applied_index())
-  j = n0.query('SELECT * FROM test_execute_then_fail', level='none')
-  assert(str(j)=="{u'results': [{u'values': [[1, u'fiona'], [2, u'declan']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
+  def tearDown(self):
+    self.cluster.deprovision()
 
-@log_test('test_leader_redirect')
-def test_leader_redirect(cluster):
-  l = cluster.wait_for_leader()
-  fs = cluster.followers()
-  assert(len(fs)==2)
-  for n in fs:
-    assert(l.api_addr==n.redirect_addr())
+  def test_election(self):
+    '''Test basic leader election'''
 
-  l.stop()
-  n = cluster.wait_for_leader(node_exc=l)
-  f = cluster.followers()[0]
-  assert(n.api_addr==f.redirect_addr())
-  l.start()
-  l.wait_for_leader()
+    n = self.cluster.wait_for_leader().stop()
+    self.cluster.wait_for_leader(node_exc=n)
+    n.start()
+    n.wait_for_leader()
 
-@log_test('test_node_restart_different_ip')
-def test_node_restart_different_ip(cluster):
-  cluster.wait_for_leader()
-  f = cluster.followers()[0]
-  f.stop()
-  l = cluster.wait_for_leader()
-  j = l.execute('CREATE TABLE test_node_restart_different_ip (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
-  assert(str(j)=="{u'results': [{}]}")
-  j = l.execute('INSERT INTO test_node_restart_different_ip(name) VALUES("fiona")')
-  assert(str(j)=="{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
+  def test_execute_fail_rejoin(self):
+    '''Test that a node that fails can rejoin the cluster, and picks up changes'''
 
-  f.scramble_network()
-  f.start(join=l.api_addr)
-  f.wait_for_leader()
-  f.wait_for_applied_index(l.applied_index())
-  j = f.query('SELECT * FROM test_node_restart_different_ip', level='none')
-  assert(str(j)=="{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
+    n = self.cluster.wait_for_leader()
+    j = n.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
+    self.assertEqual(str(j), "{u'results': [{}]}")
+    j = n.execute('INSERT INTO foo(name) VALUES("fiona")')
+    self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
+    j = n.query('SELECT * FROM foo')
+    self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
 
-@log_test('setup_cluster')
-def setup_cluster(path):
-  node0 = Node(path, 'node0', 'localhost:4001', 'localhost:4002', tempfile.mkdtemp())
-  node0.start()
-  node0.wait_for_leader()
+    n0 = self.cluster.wait_for_leader().stop()
+    n1 = self.cluster.wait_for_leader(node_exc=n0)
+    j = n1.query('SELECT * FROM foo')
+    self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
+    j = n1.execute('INSERT INTO foo(name) VALUES("declan")')
+    self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 2, u'rows_affected': 1}]}")
 
-  node1 = Node(path, 'node1', 'localhost:4003', 'localhost:4004', tempfile.mkdtemp())
-  node1.start(join='localhost:4001')
-  node1.wait_for_leader()
+    n0.start()
+    n0.wait_for_leader()
+    n0.wait_for_applied_index(n1.applied_index())
+    j = n0.query('SELECT * FROM foo', level='none')
+    self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona'], [2, u'declan']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
 
-  node2 = Node(path, 'node2', 'localhost:4005', 'localhost:4006', tempfile.mkdtemp())
-  node2.start(join='localhost:4001')
-  node2.wait_for_leader()
+  def test_leader_redirect(self):
+    '''Test that followers supply the correct leader redirects (HTTP 301)'''
 
-  return Cluster([node0, node1, node2])
+    l = self.cluster.wait_for_leader()
+    fs = self.cluster.followers()
+    self.assertEqual(len(fs), 2)
+    for n in fs:
+      self.assertEqual(l.api_addr, n.redirect_addr())
 
-def run_test(cluster):
-  test_election(cluster)
-  test_execute_fail_rejoin(cluster)
-  test_leader_redirect(cluster)
-  test_node_restart_different_ip(cluster)
+    l.stop()
+    n = self.cluster.wait_for_leader(node_exc=l)
+    for f in self.cluster.followers():
+      self.assertEqual(n.api_addr, f.redirect_addr())
 
-  cluster.deprovision()
+  def test_node_restart_different_ip(self):
+    ''' Test that a node restarting with different IP addresses successfully rejoins the cluster'''
+
+    self.cluster.wait_for_leader()
+    f = self.cluster.followers()[0]
+    f.stop()
+    l = self.cluster.wait_for_leader()
+    j = l.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
+
+    self.assertEqual(str(j), "{u'results': [{}]}")
+    j = l.execute('INSERT INTO foo (name) VALUES("fiona")')
+    self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
+
+    f.scramble_network()
+    f.start(join=l.api_addr)
+    f.wait_for_leader()
+    f.wait_for_applied_index(l.applied_index())
+    j = f.query('SELECT * FROM foo', level='none')
+    self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
 
 if __name__ == "__main__":
-  parser = argparse.ArgumentParser(prog='full_system_test.py',
-    description=DESCRIPTION)
-  parser.add_argument('path', help='Path to rqlited binary')
-  args = parser.parse_args()
-
-  if not os.path.isfile(args.path):
-    raise Exception('binary does not exist')
-
-  run_test(setup_cluster(args.path))
+  unittest.main(verbosity=2)
