@@ -2,6 +2,7 @@ machine:
     environment:
       GODIST: "go1.9.1.linux-amd64.tar.gz"
       GOBIN: $HOME/binaries_$CIRCLE_SHA1
+      RQLITED_PATH: $GOBIN/rqlited
 
     post:
       - mkdir $GOBIN
@@ -15,7 +16,7 @@ test:
         - go version
         - bash gofmt.sh
         - go tool vet .
-        - case $CIRCLE_NODE_INDEX in 0) go test -timeout 60s -v ./... ;; 1) GORACE="halt_on_error=1" go test -race -timeout 120s -v ./...;; 2) go install ./...; system_test/full_system_test.py $GOBIN/rqlited;; esac:
+        - case $CIRCLE_NODE_INDEX in 0) go test -timeout 60s -v ./... ;; 1) GORACE="halt_on_error=1" go test -race -timeout 120s -v ./...;; 2) go install ./...; system_test/full_system_test.py;; esac:
             parallel: true
 
     post:
