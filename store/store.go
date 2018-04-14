@@ -586,9 +586,7 @@ func (s *Store) Join(id, addr string) error {
 				s.logger.Printf("node %s at %s already member of cluster, ignoring join request", id, addr)
 				return nil
 			}
-
-			future := s.raft.RemoveServer(srv.ID, 0, 0)
-			if err := future.Error(); err != nil {
+			if s.remove(srv.ID); err != nil {
 				s.logger.Printf("failed to remove node: %v", err)
 				return err
 			}
@@ -609,16 +607,9 @@ func (s *Store) Join(id, addr string) error {
 // Remove removes a node from the store, specified by ID.
 func (s *Store) Remove(id string) error {
 	s.logger.Printf("received request to remove node %s", id)
-	if s.raft.State() != raft.Leader {
-		return ErrNotLeader
-	}
-
-	f := s.raft.RemoveServer(raft.ServerID(id), 0, 0)
-	if f.Error() != nil {
-		if f.Error() == raft.ErrNotLeader {
-			return ErrNotLeader
-		}
-		return f.Error()
+	if err := s.remove(id); err != nil {
+		s.logger.Printf("failed to remove node %s: %s", id, err.Error())
+		return err
 	}
 	s.logger.Printf("node %s removed successfully", id)
 	return nil
@@ -646,6 +637,22 @@ func (s *Store) open() (*sql.DB, error) {
 		s.logger.Println("SQLite in-memory database opened")
 	}
 	return db, nil
+}
+
+// remove removes the node, with the given ID, from the cluster.
+func (s *Store) remove(id string) error {
+	if s.raft.State() != raft.Leader {
+		return ErrNotLeader
+	}
+
+	f := s.raft.RemoveServer(raft.ServerID(id), 0, 0)
+	if f.Error() != nil {
+		if f.Error() == raft.ErrNotLeader {
+			return ErrNotLeader
+		}
+		return f.Error()
+	}
+	return nil
 }
 
 // raftConfig returns a new Raft config for the store.
