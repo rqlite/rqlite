@@ -265,6 +265,9 @@ func (s *Store) Close(wait bool) error {
 			return e.Error()
 		}
 	}
+	if err := s.raftTn.Close(); err != nil {
+		return err
+	}
 	return s.log.Close()
 }
 
