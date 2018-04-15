@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"net/url"
 
 	"github.com/mkideal/cli"
 	"github.com/mkideal/pkg/textutil"
@@ -79,10 +80,19 @@ type queryResponse struct {
 	Time    float64 `json:"time"`
 }
 
-func query(ctx *cli.Context, cmd, line string, argv *argT) error {
-	urlStr := fmt.Sprintf("%s://%s:%d%sdb/query", argv.Protocol, argv.Host, argv.Port, argv.Prefix)
+func query(ctx *cli.Context, cmd, line string, timer bool, argv *argT) error {
+	queryStr := url.Values{}
+	if timer {
+		queryStr.Set("timings", "")
+	}
+	u := url.URL{
+		Scheme:   argv.Protocol,
+		Host:     fmt.Sprintf("%s:%d", argv.Host, argv.Port),
+		Path:     fmt.Sprintf("%sdb/query", argv.Prefix),
+		RawQuery: queryStr.Encode(),
+	}
 	ret := &queryResponse{}
-	if err := sendRequest(ctx, urlStr, line, argv, ret); err != nil {
+	if err := sendRequest(ctx, u.String(), line, argv, ret); err != nil {
 		return err
 	}
 	if ret.Error != "" {
@@ -98,5 +108,13 @@ func query(ctx *cli.Context, cmd, line string, argv *argT) error {
 		return err
 	}
 	textutil.WriteTable(ctx, result, headerRender)
+
+	if timer {
+		str, err := fmt.Printf("Run Time: %f", result.Time)
+		if err != nil {
+			return err
+		}
+		fmt.Println(str)
+	}
 	return nil
 }
