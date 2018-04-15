@@ -29,7 +29,7 @@ func execute(ctx *cli.Context, cmd, line string, timer bool, argv *argT) error {
 	u := url.URL{
 		Scheme:   argv.Protocol,
 		Host:     fmt.Sprintf("%s:%d", argv.Host, argv.Port),
-		Path:     fmt.Sprintf("%sdb/query", argv.Prefix),
+		Path:     fmt.Sprintf("%sdb/execute", argv.Prefix),
 		RawQuery: queryStr.Encode(),
 	}
 	ret := &executeResponse{}
