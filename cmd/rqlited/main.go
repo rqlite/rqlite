@@ -261,19 +261,6 @@ func main() {
 	}
 	str.WaitForApplied(openTimeout)
 
-	// Publish to the cluster the mapping between this Raft address and API address.
-	// The Raft layer broadcasts the resolved address, so use that as the key. But
-	// only set different HTTP advertise address if set.
-	apiAdv := httpAddr
-	if httpAdv != "" {
-		apiAdv = httpAdv
-	}
-
-	if err := publishAPIAddr(cs, raftTn.Addr().String(), apiAdv, publishPeerTimeout); err != nil {
-		log.Fatalf("failed to set peer for %s to %s: %s", raftAddr, httpAddr, err.Error())
-	}
-	log.Printf("set peer for %s to %s", raftTn.Addr().String(), apiAdv)
-
 	// Get the credential store.
 	credStr, err := credentialStore()
 	if err != nil {
@@ -347,27 +334,6 @@ func determineJoinAddresses() ([]string, error) {
 	}
 
 	return addrs, nil
-}
-
-func publishAPIAddr(c *cluster.Service, raftAddr, apiAddr string, t time.Duration) error {
-	tck := time.NewTicker(publishPeerDelay)
-	defer tck.Stop()
-	tmr := time.NewTimer(t)
-	defer tmr.Stop()
-
-	for {
-		select {
-		case <-tck.C:
-			if err := c.SetPeer(raftAddr, apiAddr); err != nil {
-				log.Printf("failed to set peer for %s to %s: %s (retrying)",
-					raftAddr, apiAddr, err.Error())
-				continue
-			}
-			return nil
-		case <-tmr.C:
-			return fmt.Errorf("set peer timeout expired")
-		}
-	}
 }
 
 func credentialStore() (*auth.CredentialsStore, error) {
