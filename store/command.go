@@ -37,5 +37,5 @@ type databaseSub struct {
 	Timings bool     `json:"timings,omitempty"`
 }
 
-// peersSub is a command which sets the API address for a Raft address.
-type peersSub map[string]string
+// peerSub is a command which sets the API address for a Raft node ID.
+type peerSub map[string]string

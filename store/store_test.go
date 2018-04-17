@@ -28,18 +28,14 @@ func (m *mockSnapshotSink) Cancel() error {
 
 func Test_ClusterMeta(t *testing.T) {
 	c := newClusterMeta()
-	c.APIPeers["localhost:4002"] = "localhost:4001"
+	c.APIPeers["node2"] = "localhost:4001"
 
-	if c.AddrForPeer("localhost:4002") != "localhost:4001" {
-		t.Fatalf("wrong address returned for localhost:4002")
+	if c.AddrForPeer("node2") != "localhost:4001" {
+		t.Fatalf("wrong address returned for node2")
 	}
 
-	if c.AddrForPeer("127.0.0.1:4002") != "localhost:4001" {
-		t.Fatalf("wrong address returned for 127.0.0.1:4002")
-	}
-
-	if c.AddrForPeer("127.0.0.1:4004") != "" {
-		t.Fatalf("wrong address returned for 127.0.0.1:4003")
+	if c.AddrForPeer("node4") != "" {
+		t.Fatalf("wrong address returned for node4")
 	}
 }
 
@@ -637,11 +633,7 @@ func Test_APIPeers(t *testing.T) {
 	defer s.Close(true)
 	s.WaitForLeader(10 * time.Second)
 
-	peers := map[string]string{
-		"localhost:4002": "localhost:4001",
-		"localhost:4004": "localhost:4003",
-	}
-	if err := s.UpdateAPIPeers(peers); err != nil {
+	if err := s.SetPeer("localhost:4001"); err != nil {
 		t.Fatalf("failed to update API peers: %s", err.Error())
 	}
 
