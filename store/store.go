@@ -84,7 +84,7 @@ const (
 
 // clusterMeta represents cluster meta which must be kept in consensus.
 type clusterMeta struct {
-	APIPeers map[string]string // Map from Raft address to API address
+	APIPeers map[string]string // Map from Raft ID to API address
 }
 
 // NewClusterMeta returns an initialized cluster meta store.
@@ -94,22 +94,10 @@ func newClusterMeta() *clusterMeta {
 	}
 }
 
-func (c *clusterMeta) AddrForPeer(addr string) string {
-	if api, ok := c.APIPeers[addr]; ok && api != "" {
-		return api
+func (c *clusterMeta) AddrForPeer(id string) string {
+	if addr, ok := c.APIPeers[id]; ok {
+		return addr
 	}
-
-	// Go through each entry, and see if any key resolves to addr.
-	for k, v := range c.APIPeers {
-		resv, err := net.ResolveTCPAddr("tcp", k)
-		if err != nil {
-			continue
-		}
-		if resv.String() == addr {
-			return v
-		}
-	}
-
 	return ""
 }
 
@@ -318,15 +306,17 @@ func (s *Store) ID() string {
 }
 
 // Leader returns the current leader. Returns a blank string if there is
-// no leader.
+// no leader. XXX THIS SHOULD BE ID FOR CONSISTENCY?
 func (s *Store) Leader() string {
 	return string(s.raft.Leader())
 }
 
-// Peer returns the API address for the given addr. If there is no peer
-// for the address, it returns the empty string.
-func (s *Store) Peer(addr string) string {
-	return s.meta.AddrForPeer(addr)
+// Peer returns the API address for the given node ID. If there is no
+// peer for the ID, it returns the empty string.
+func (s *Store) Peer(id string) string {
+	s.metaMu.RLock()
+	defer s.metaMu.RUnlock()
+	return s.meta.AddrForPeer(id)
 }
 
 // APIPeers return the map of Raft addresses to API addresses.
@@ -359,6 +349,10 @@ func (s *Store) Nodes() ([]*Server, error) {
 
 	sort.Sort(Servers(servers))
 	return servers, nil
+}
+
+func (s *Store) SetPeer(addr) error {
+	return nil
 }
 
 // WaitForLeader blocks until a leader is detected, or the timeout expires.
@@ -547,9 +541,9 @@ func (s *Store) Query(qr *QueryRequest) ([]*sql.Rows, error) {
 	return r, err
 }
 
-// UpdateAPIPeers updates the cluster-wide peer information.
-func (s *Store) UpdateAPIPeers(peers map[string]string) error {
-	c, err := newCommand(peer, peers)
+// SetPeer sets the API address for this node.
+func (s *Store) SetPeer(addr string) error {
+	c, err := newCommand(peer, map[string]string{s.raftID: addr})
 	if err != nil {
 		return err
 	}
@@ -570,23 +564,23 @@ func (s *Store) Join(id, addr string) error {
 		return ErrNotLeader
 	}
 
-	configFuture := s.raft.GetConfiguration()
-	if err := configFuture.Error(); err != nil {
-		s.logger.Printf("failed to get raft configuration: %v", err)
+	nodes, err := s.Nodes()
+	if err != nil {
+		s.logger.Printf("failed to get raft nodes: %v", err)
 		return err
 	}
 
-	for _, srv := range configFuture.Configuration().Servers {
+	for n := range nodes {
 		// If a node already exists with either the joining node's ID or address,
 		// that node may need to be removed from the config first.
-		if srv.ID == raft.ServerID(id) || srv.Address == raft.ServerAddress(addr) {
+		if n.ID == id || n.Addr == addr {
 			// However if *both* the ID and the address are the same, the no
 			// join is actually needed.
-			if srv.Address == raft.ServerAddress(addr) && srv.ID == raft.ServerID(id) {
+			if n.ID == id && n.Addr == addr && srv.ID == id {
 				s.logger.Printf("node %s at %s already member of cluster, ignoring join request", id, addr)
 				return nil
 			}
-			if err := s.remove(id); err != nil {
+			if err := s.remove(raft.ServerID(id)); err != nil {
 				s.logger.Printf("failed to remove node: %v", err)
 				return err
 			}
