@@ -44,11 +44,14 @@ type Store interface {
 	// Remove removes the node, specified by addr, from the cluster.
 	Remove(addr string) error
 
-	// Leader returns the Raft leader of the cluster.
+	// Leader returns the ID of leader of the cluster.
 	Leader() string
 
-	// Peer returns the API peer for the given address
-	Peer(addr string) string
+	// SetPeer sets the API address for this node.
+	SetPeer(addr string) error
+
+	// Peer returns the API address for the given node ID.
+	Peer(id string) string
 
 	// Stats returns stats on the Store.
 	Stats() (map[string]interface{}, error)
@@ -196,6 +199,12 @@ func (s *Service) Start() error {
 	}
 	s.ln = ln
 
+	// Update the node ID to API address mapping.
+	if err := s.store.SetPeer(s.addr); err != nil {
+		return err
+	}
+
+	// Start up the HTTP server.
 	go func() {
 		err := server.Serve(s.ln)
 		if err != nil {
