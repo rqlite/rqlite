@@ -12,6 +12,8 @@ A majority is defined as `N/2 + 1` where `N` is the number of nodes in the clust
 So a 4-node cluster is no more fault-tolerant than a 3-node cluster, so running a 4-node cluster provides no advantage over a 3-node cluster. Only a 5-node cluster can tolerate the failure of 2 nodes. An analogous argument applies to 5-node vs. 6-node clusters, and so on.
 
 # Creating a cluster
+_Do not pass `-node-id` to release v4 and earlier, as it is not supported by those versions._
+
 Let's say you have 3 host machines, _host1_, _host2_, and _host3_, and that each of these hostnames resolves to an IP address reachable from the other hosts. Instead of hostnames you can use the IP address directly if you wish.
 
 To create a cluster you must first launch a node that can act as the initial leader. Do this as follows on _host1_:
