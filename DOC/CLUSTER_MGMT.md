@@ -35,10 +35,10 @@ _When restarting a node, there is no further need to pass `-join`. It will be ig
 You've now got a fault-tolerant, distributed, relational database. It can tolerate the failure of any node, even the leader, and remain operational.
 
 ## Node IDs
-You can optionally set the Node ID (`-node-id`) to anything you wish, as long as it's unique for each node. If you do not set it, it will be set to the hostname of the node.
+Setting the Node ID (`-node-id`) is optional, and can be set to anything you wish, as long as it's unique for each node. If you do not set it, it will be set to the advertised Raft network address.
 
 ## Node network addresses
-A node ID is what uniquely identifies a node. In contrast a node's network addresses can change between restarts, and an rqlite cluster will automatically update its configuration if a node rejoins a cluster with changed network addresses.
+A node ID is what uniquely identifies a node. In contrast a node's network addresses can change between restarts, and an rqlite cluster will automatically update its configuration if a node rejoins a cluster with changed network addresses. If the nodes that comprise your cluster might change network addresses between restarts, explicitly setting node IDs is strongly recommended.
 
 ## Listening on all interfaces
 You can pass `0.0.0.0` to both `-http-addr` and `-raft-addr` if you wish a node to listen on all interfaces. You must still pass an explicit network address to `-join` however. In this case you'll also want to set `-http-adv-addr` to the actual interface address, so other nodes learn the correct network address to use to reach the node listening on `0.0.0.0`.

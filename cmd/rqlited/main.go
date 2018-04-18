@@ -187,15 +187,11 @@ func main() {
 	}
 	dbConf := store.NewDBConfig(dsn, !onDisk)
 
-	nid, err := idOrHostname()
-	if err != nil {
-		log.Fatalf("failed to determine node ID: %s", err.Error())
-	}
 	str := store.New(&store.StoreConfig{
 		DBConf: dbConf,
 		Dir:    dataPath,
 		Tn:     raftTn,
-		ID:     nid,
+		ID:     idOrRaftAddr(),
 	})
 
 	// Set optional parameters on store.
@@ -244,7 +240,7 @@ func main() {
 		if raftAdv != "" {
 			advAddr = raftAdv
 		}
-		if j, err := cluster.Join(joins, nid, advAddr, noVerify); err != nil {
+		if j, err := cluster.Join(joins, str.ID(), advAddr, noVerify); err != nil {
 			log.Fatalf("failed to join cluster at %s: %s", joins, err.Error())
 		} else {
 			log.Println("successfully joined cluster at", j)
@@ -387,11 +383,14 @@ func credentialStore() (*auth.CredentialsStore, error) {
 	return cs, nil
 }
 
-func idOrHostname() (string, error) {
+func idOrRaftAddr() string {
 	if nodeID != "" {
-		return nodeID, nil
+		return nodeID
 	}
-	return os.Hostname()
+	if raftAdv == "" {
+		return raftAddr
+	}
+	return raftAdv
 }
 
 // prof stores the file locations of active profiles.
