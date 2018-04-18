@@ -119,8 +119,8 @@ type Store struct {
 	dbPath string    // Path to underlying SQLite file, if not in-memory.
 	db     *sql.DB   // The underlying SQLite store.
 
-	metaMu   sync.RWMutex
-	metadata map[string]map[string]string
+	metaMu sync.RWMutex
+	meta   map[string]map[string]string
 
 	logger *log.Logger
 
@@ -151,7 +151,7 @@ func New(c *StoreConfig) *Store {
 		raftID:       c.ID,
 		dbConf:       c.DBConf,
 		dbPath:       filepath.Join(c.Dir, sqliteFile),
-		metadata:     make(map[string]map[string]string),
+		meta:         make(map[string]map[string]string),
 		logger:       logger,
 		ApplyTimeout: applyTimeout,
 	}
@@ -308,8 +308,14 @@ func (s *Store) Leader() string {
 // SetMetadata sets a key-value pair on this Store. It's scoped
 // to the Raft ID of this node.
 func (s *Store) SetMetadata(k, v string) error {
-	if s.raft.State() != raft.Leader {
-		return ErrNotLeader
+	// Check if state is already as desired. If so, don't
+	// send a command through the Raft log.
+	if func() bool {
+		s.metaMu.RLock()
+		defer s.metaMu.RUnlock()
+		return s.metadata(k) == v
+	}() {
+		return nil
 	}
 
 	m := &metadataSetSub{
@@ -342,25 +348,29 @@ func (s *Store) SetMetadata(k, v string) error {
 func (s *Store) Metadata(k string) string {
 	s.metaMu.RLock()
 	defer s.metaMu.RUnlock()
-	if _, ok := s.metadata[s.raftID]; !ok {
+	return s.metadata(k)
+}
+
+func (s *Store) metadata(k string) string {
+	if _, ok := s.meta[s.raftID]; !ok {
 		return ""
 	}
-	if _, ok := s.metadata[s.raftID][k]; !ok {
+	if _, ok := s.meta[s.raftID][k]; !ok {
 		return ""
 	}
-	return s.metadata[s.raftID][k]
+	return s.meta[s.raftID][k]
 }
 
 // MetadataForNode returns a copy of the metadata for the given node.
 func (s *Store) MetadataForNode(id string) map[string]string {
 	s.metaMu.RLock()
 	defer s.metaMu.RUnlock()
-	if _, ok := s.metadata[s.raftID]; !ok {
+	if _, ok := s.meta[s.raftID]; !ok {
 		return nil
 	}
 
-	m := make(map[string]string, len(s.metadata[s.raftID]))
-	for k, v := range s.metadata[s.raftID] {
+	m := make(map[string]string, len(s.meta[s.raftID]))
+	for k, v := range s.meta[s.raftID] {
 		m[k] = v
 	}
 	return m
@@ -462,7 +472,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		"apply_timeout":      s.ApplyTimeout.String(),
 		"heartbeat_timeout":  s.HeartbeatTimeout.String(),
 		"snapshot_threshold": s.SnapshotThreshold,
-		"metadata":           s.metadata,
+		"meta":               s.meta,
 		"peers":              nodes,
 		"dir":                s.raftDir,
 		"sqlite3":            dbStatus,
@@ -718,11 +728,11 @@ func (s *Store) Apply(l *raft.Log) interface{} {
 		func() {
 			s.metaMu.Lock()
 			defer s.metaMu.Unlock()
-			_, ok := s.metadata[m.NodeID]
+			_, ok := s.meta[m.NodeID]
 			if !ok {
-				s.metadata[m.NodeID] = make(map[string]string)
+				s.meta[m.NodeID] = make(map[string]string)
 			}
-			s.metadata[m.NodeID][m.Key] = m.Value
+			s.meta[m.NodeID][m.Key] = m.Value
 		}()
 		return &fsmGenericResponse{}
 	default:
@@ -776,7 +786,7 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 		return nil, err
 	}
 
-	fsm.metadata, err = json.Marshal(s.metadata)
+	fsm.meta, err = json.Marshal(s.meta)
 	if err != nil {
 		s.logger.Printf("failed to encode metadata for snapshot: %s", err.Error())
 		return nil, err
@@ -846,7 +856,7 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 	return func() error {
 		s.metaMu.Lock()
 		defer s.metaMu.Unlock()
-		return json.Unmarshal(b, &s.metadata)
+		return json.Unmarshal(b, &s.meta)
 	}()
 }
 
@@ -862,7 +872,7 @@ func (s *Store) DeregisterObserver(o *raft.Observer) {
 
 type fsmSnapshot struct {
 	database []byte
-	metadata []byte
+	meta     []byte
 }
 
 // Persist writes the snapshot to the given sink.
@@ -885,7 +895,7 @@ func (f *fsmSnapshot) Persist(sink raft.SnapshotSink) error {
 		}
 
 		// Finally write the meta.
-		if _, err := sink.Write(f.metadata); err != nil {
+		if _, err := sink.Write(f.meta); err != nil {
 			return err
 		}
 
