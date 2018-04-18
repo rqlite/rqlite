@@ -47,8 +47,11 @@ type Store interface {
 	// Leader returns the Raft leader of the cluster.
 	Leader() string
 
-	// Peer returns the API peer for the given address
-	Peer(addr string) string
+	// SetMetadata sets key-value metadata on the store for this node.
+	SetMetadata(k, v string) error
+
+	// MetadataForNode retreives key-value metadata for a given node.
+	MetadataForNode(id string) map[string]string
 
 	// Stats returns stats on the Store.
 	Stats() (map[string]interface{}, error)
@@ -144,6 +147,8 @@ type Service struct {
 	statusMu sync.RWMutex
 	statuses map[string]Statuser
 
+	APIAdv string // API address to broadcast, if any.
+
 	CertFile string // Path to SSL certificate.
 	KeyFile  string // Path to SSL private key.
 
@@ -174,6 +179,10 @@ func New(addr string, store Store, credentials CredentialStore) *Service {
 func (s *Service) Start() error {
 	server := http.Server{
 		Handler: s,
+	}
+
+	if err := s.store.SetMetadata("api_addr", s.APIAdv); err != nil {
+		return err
 	}
 
 	var ln net.Listener
@@ -302,7 +311,8 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.store.Join(remoteID, remoteAddr); err != nil {
 		if err == store.ErrNotLeader {
-			leader := s.store.Peer(s.store.Leader())
+			//leader := s.store.Peer(s.store.Leader())
+			leader := ""
 			if leader == "" {
 				http.Error(w, err.Error(), http.StatusServiceUnavailable)
 				return
@@ -356,7 +366,8 @@ func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.store.Remove(remoteAddr); err != nil {
 		if err == store.ErrNotLeader {
-			leader := s.store.Peer(s.store.Leader())
+			//leader := s.store.Peer(s.store.Leader())
+			leader := ""
 			if leader == "" {
 				http.Error(w, err.Error(), http.StatusServiceUnavailable)
 				return
@@ -437,7 +448,8 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 	results, err := s.store.Execute(&store.ExecuteRequest{queries, timings, false})
 	if err != nil {
 		if err == store.ErrNotLeader {
-			leader := s.store.Peer(s.store.Leader())
+			//leader := s.store.Peer(s.store.Leader())
+			leader := ""
 			if leader == "" {
 				http.Error(w, err.Error(), http.StatusServiceUnavailable)
 				return
@@ -485,9 +497,9 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpStatus := map[string]interface{}{
-		"addr":     s.Addr().String(),
-		"auth":     prettyEnabled(s.credentialStore != nil),
-		"redirect": s.store.Peer(s.store.Leader()),
+		"addr": s.Addr().String(),
+		"auth": prettyEnabled(s.credentialStore != nil),
+		//"redirect": s.store.Peer(s.store.Leader()),
 	}
 
 	nodeStatus := map[string]interface{}{
@@ -584,7 +596,8 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 	results, err := s.store.Execute(&store.ExecuteRequest{queries, timings, isTx})
 	if err != nil {
 		if err == store.ErrNotLeader {
-			leader := s.store.Peer(s.store.Leader())
+			//leader := s.store.Peer(s.store.Leader())
+			leader := ""
 			if leader == "" {
 				http.Error(w, err.Error(), http.StatusServiceUnavailable)
 				return
@@ -646,7 +659,8 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 	results, err := s.store.Query(&store.QueryRequest{queries, timings, isTx, lvl})
 	if err != nil {
 		if err == store.ErrNotLeader {
-			leader := s.store.Peer(s.store.Leader())
+			//leader := s.store.Peer(s.store.Leader())
+			leader := ""
 			if leader == "" {
 				http.Error(w, err.Error(), http.StatusServiceUnavailable)
 				return

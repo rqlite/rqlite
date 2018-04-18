@@ -226,13 +226,6 @@ func main() {
 		log.Fatalf("failed to open store: %s", err.Error())
 	}
 
-	// Create and configure cluster service.
-	tn := mux.Listen(muxMetaHeader)
-	cs := cluster.NewService(tn, str)
-	if err := cs.Open(); err != nil {
-		log.Fatalf("failed to open cluster service: %s", err.Error())
-	}
-
 	// Execute any requested join operation.
 	if len(joins) > 0 {
 		log.Println("join addresses are:", joins)
@@ -250,25 +243,13 @@ func main() {
 		log.Println("no join addresses set")
 	}
 
-	// Wait until database is updated.
+	// Wait until database is updated and node has found a leader.
 	openTimeout, err := time.ParseDuration(raftOpenTimeout)
 	if err != nil {
 		log.Fatalf("failed to parse Raft open timeout: %s", err.Error())
 	}
 	str.WaitForApplied(openTimeout)
-
-	// Publish to the cluster the mapping between this Raft address and API address.
-	// The Raft layer broadcasts the resolved address, so use that as the key. But
-	// only set different HTTP advertise address if set.
-	apiAdv := httpAddr
-	if httpAdv != "" {
-		apiAdv = httpAdv
-	}
-
-	if err := publishAPIAddr(cs, raftTn.Addr().String(), apiAdv, publishPeerTimeout); err != nil {
-		log.Fatalf("failed to set peer for %s to %s: %s", raftAddr, httpAddr, err.Error())
-	}
-	log.Printf("set peer for %s to %s", raftTn.Addr().String(), apiAdv)
+	str.WaitForLeader(openTimeout)
 
 	// Get the credential store.
 	credStr, err := credentialStore()
@@ -294,6 +275,14 @@ func main() {
 		"version":    version,
 		"build_time": buildtime,
 	}
+
+	// Set the advertised HTTP address if different from API address.
+	apiAdv := httpAddr
+	if httpAdv != "" {
+		apiAdv = httpAdv
+	}
+	s.APIAdv = apiAdv
+
 	if err := s.Start(); err != nil {
 		log.Fatalf("failed to start HTTP server: %s", err.Error())
 	}
@@ -343,27 +332,6 @@ func determineJoinAddresses() ([]string, error) {
 	}
 
 	return addrs, nil
-}
-
-func publishAPIAddr(c *cluster.Service, raftAddr, apiAddr string, t time.Duration) error {
-	tck := time.NewTicker(publishPeerDelay)
-	defer tck.Stop()
-	tmr := time.NewTimer(t)
-	defer tmr.Stop()
-
-	for {
-		select {
-		case <-tck.C:
-			if err := c.SetPeer(raftAddr, apiAddr); err != nil {
-				log.Printf("failed to set peer for %s to %s: %s (retrying)",
-					raftAddr, apiAddr, err.Error())
-				continue
-			}
-			return nil
-		case <-tmr.C:
-			return fmt.Errorf("set peer timeout expired")
-		}
-	}
 }
 
 func credentialStore() (*auth.CredentialsStore, error) {
