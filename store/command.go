@@ -4,13 +4,15 @@ import (
 	"encoding/json"
 )
 
-// commandType are commands that affect the state of the cluster, and must go through Raft.
+// commandType are commands that affect the state of the cluster,
+// and must go through Raft.
 type commandType int
 
 const (
-	execute commandType = iota // Commands which modify the database.
-	query                      // Commands which query the database.
-	peer                       // Commands that modify peers map.
+	execute     commandType = iota // Commands which modify the database.
+	query                          // Commands which query the database.
+	metadataSet                    // Commands that set Store metadata.
+	metadataGet                    // Commands that get store metadata.
 )
 
 type command struct {
@@ -37,5 +39,9 @@ type databaseSub struct {
 	Timings bool     `json:"timings,omitempty"`
 }
 
-// peersSub is a command which sets the API address for a Raft address.
-type peersSub map[string]string
+// metadataSetSub is a command that sets a key-value pair.
+type metadataSetSub struct {
+	NodeID string
+	Key    string
+	Value  string
+}

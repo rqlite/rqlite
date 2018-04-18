@@ -82,37 +82,6 @@ const (
 	Unknown
 )
 
-// clusterMeta represents cluster meta which must be kept in consensus.
-type clusterMeta struct {
-	APIPeers map[string]string // Map from Raft address to API address
-}
-
-// NewClusterMeta returns an initialized cluster meta store.
-func newClusterMeta() *clusterMeta {
-	return &clusterMeta{
-		APIPeers: make(map[string]string),
-	}
-}
-
-func (c *clusterMeta) AddrForPeer(addr string) string {
-	if api, ok := c.APIPeers[addr]; ok && api != "" {
-		return api
-	}
-
-	// Go through each entry, and see if any key resolves to addr.
-	for k, v := range c.APIPeers {
-		resv, err := net.ResolveTCPAddr("tcp", k)
-		if err != nil {
-			continue
-		}
-		if resv.String() == addr {
-			return v
-		}
-	}
-
-	return ""
-}
-
 // DBConfig represents the configuration of the underlying SQLite database.
 type DBConfig struct {
 	DSN    string // Any custom DSN
@@ -150,8 +119,8 @@ type Store struct {
 	dbPath string    // Path to underlying SQLite file, if not in-memory.
 	db     *sql.DB   // The underlying SQLite store.
 
-	metaMu sync.RWMutex
-	meta   *clusterMeta
+	metaMu   sync.RWMutex
+	metadata map[string]map[string]string
 
 	logger *log.Logger
 
@@ -182,7 +151,7 @@ func New(c *StoreConfig) *Store {
 		raftID:       c.ID,
 		dbConf:       c.DBConf,
 		dbPath:       filepath.Join(c.Dir, sqliteFile),
-		meta:         newClusterMeta(),
+		metadata:     make(map[string]map[string]string),
 		logger:       logger,
 		ApplyTimeout: applyTimeout,
 	}
@@ -326,19 +295,81 @@ func (s *Store) Leader() string {
 // Peer returns the API address for the given addr. If there is no peer
 // for the address, it returns the empty string.
 func (s *Store) Peer(addr string) string {
-	return s.meta.AddrForPeer(addr)
+	return s.Metadata(addr)
 }
 
 // APIPeers return the map of Raft addresses to API addresses.
 func (s *Store) APIPeers() (map[string]string, error) {
+	return s.MetadataForNode(s.raftID), nil
+}
+
+// UpdateAPIPeers updates the cluster-wide peer information.
+func (s *Store) UpdateAPIPeers(peers map[string]string) error {
+	for k, v := range peers {
+		s.SetMetadata(k, v)
+	}
+	return nil
+}
+
+// SetMetadata sets a key-value pair on this Store. It's scoped
+// to the Raft ID of this node.
+func (s *Store) SetMetadata(k, v string) error {
+	if s.raft.State() != raft.Leader {
+		return ErrNotLeader
+	}
+
+	m := &metadataSetSub{
+		NodeID: s.raftID,
+		Key:    k,
+		Value:  v,
+	}
+	c, err := newCommand(metadataSet, m)
+	if err != nil {
+		return err
+	}
+	b, err := json.Marshal(c)
+	if err != nil {
+		return err
+	}
+
+	f := s.raft.Apply(b, s.ApplyTimeout)
+	if e := f.(raft.Future); e.Error() != nil {
+		if e.Error() == raft.ErrNotLeader {
+			return ErrNotLeader
+		}
+		return e.Error()
+	}
+
+	r := f.Response().(*fsmGenericResponse)
+	return r.error
+}
+
+// Metadata returns the metadata value, for a given k, for this node. XXX CONSISTENCY?
+func (s *Store) Metadata(k string) string {
 	s.metaMu.RLock()
 	defer s.metaMu.RUnlock()
-
-	peers := make(map[string]string, len(s.meta.APIPeers))
-	for k, v := range s.meta.APIPeers {
-		peers[k] = v
+	if _, ok := s.metadata[s.raftID]; !ok {
+		return ""
 	}
-	return peers, nil
+	if _, ok := s.metadata[s.raftID][k]; !ok {
+		return ""
+	}
+	return s.metadata[s.raftID][k]
+}
+
+// MetadataForNode returns a copy of the metadata for the given node.
+func (s *Store) MetadataForNode(id string) map[string]string {
+	s.metaMu.RLock()
+	defer s.metaMu.RUnlock()
+	if _, ok := s.metadata[s.raftID]; !ok {
+		return nil
+	}
+
+	m := make(map[string]string, len(s.metadata[s.raftID]))
+	for k, v := range s.metadata[s.raftID] {
+		m[k] = v
+	}
+	return m
 }
 
 // Nodes returns the slice of nodes in the cluster, sorted by ID ascending.
@@ -437,7 +468,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		"apply_timeout":      s.ApplyTimeout.String(),
 		"heartbeat_timeout":  s.HeartbeatTimeout.String(),
 		"snapshot_threshold": s.SnapshotThreshold,
-		"meta":               s.meta,
+		"metadata":           s.metadata,
 		"peers":              nodes,
 		"dir":                s.raftDir,
 		"sqlite3":            dbStatus,
@@ -545,21 +576,6 @@ func (s *Store) Query(qr *QueryRequest) ([]*sql.Rows, error) {
 
 	r, err := s.db.Query(qr.Queries, qr.Tx, qr.Timings)
 	return r, err
-}
-
-// UpdateAPIPeers updates the cluster-wide peer information.
-func (s *Store) UpdateAPIPeers(peers map[string]string) error {
-	c, err := newCommand(peer, peers)
-	if err != nil {
-		return err
-	}
-	b, err := json.Marshal(c)
-	if err != nil {
-		return err
-	}
-
-	f := s.raft.Apply(b, s.ApplyTimeout)
-	return f.Error()
 }
 
 // Join joins a node, identified by id and located at addr, to this store.
@@ -700,17 +716,19 @@ func (s *Store) Apply(l *raft.Log) interface{} {
 		}
 		r, err := s.db.Query(d.Queries, d.Tx, d.Timings)
 		return &fsmQueryResponse{rows: r, error: err}
-	case peer:
-		var d peersSub
-		if err := json.Unmarshal(c.Sub, &d); err != nil {
+	case metadataSet:
+		var m metadataSetSub
+		if err := json.Unmarshal(c.Sub, &m); err != nil {
 			return &fsmGenericResponse{error: err}
 		}
 		func() {
 			s.metaMu.Lock()
 			defer s.metaMu.Unlock()
-			for k, v := range d {
-				s.meta.APIPeers[k] = v
+			_, ok := s.metadata[m.NodeID]
+			if !ok {
+				s.metadata[m.NodeID] = make(map[string]string)
 			}
+			s.metadata[m.NodeID][m.Key] = m.Value
 		}()
 		return &fsmGenericResponse{}
 	default:
@@ -764,9 +782,9 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 		return nil, err
 	}
 
-	fsm.meta, err = json.Marshal(s.meta)
+	fsm.metadata, err = json.Marshal(s.metadata)
 	if err != nil {
-		s.logger.Printf("failed to encode meta for snapshot: %s", err.Error())
+		s.logger.Printf("failed to encode metadata for snapshot: %s", err.Error())
 		return nil, err
 	}
 
@@ -834,7 +852,7 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 	return func() error {
 		s.metaMu.Lock()
 		defer s.metaMu.Unlock()
-		return json.Unmarshal(b, &s.meta)
+		return json.Unmarshal(b, &s.metadata)
 	}()
 }
 
@@ -850,7 +868,7 @@ func (s *Store) DeregisterObserver(o *raft.Observer) {
 
 type fsmSnapshot struct {
 	database []byte
-	meta     []byte
+	metadata []byte
 }
 
 // Persist writes the snapshot to the given sink.
@@ -873,7 +891,7 @@ func (f *fsmSnapshot) Persist(sink raft.SnapshotSink) error {
 		}
 
 		// Finally write the meta.
-		if _, err := sink.Write(f.meta); err != nil {
+		if _, err := sink.Write(f.metadata); err != nil {
 			return err
 		}
 

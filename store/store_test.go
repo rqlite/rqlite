@@ -26,23 +26,6 @@ func (m *mockSnapshotSink) Cancel() error {
 	return nil
 }
 
-func Test_ClusterMeta(t *testing.T) {
-	c := newClusterMeta()
-	c.APIPeers["localhost:4002"] = "localhost:4001"
-
-	if c.AddrForPeer("localhost:4002") != "localhost:4001" {
-		t.Fatalf("wrong address returned for localhost:4002")
-	}
-
-	if c.AddrForPeer("127.0.0.1:4002") != "localhost:4001" {
-		t.Fatalf("wrong address returned for 127.0.0.1:4002")
-	}
-
-	if c.AddrForPeer("127.0.0.1:4004") != "" {
-		t.Fatalf("wrong address returned for 127.0.0.1:4003")
-	}
-}
-
 func Test_OpenStoreSingleNode(t *testing.T) {
 	s := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
@@ -624,6 +607,37 @@ func Test_SingleNodeSnapshotInMem(t *testing.T) {
 	}
 	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
+func Test_Metadata(t *testing.T) {
+	s := mustNewStore(false)
+	defer os.RemoveAll(s.Path())
+
+	if err := s.Open(true); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	s.WaitForLeader(10 * time.Second)
+
+	if err := s.SetMetadata("foo", "bar"); err != nil {
+		t.Fatalf("failed to set single key-value metadata: %s", err.Error())
+	}
+	if s.Metadata("foo") != "bar" {
+		t.Fatal("Metadata retrieval returned wrong value")
+	}
+	if s.Metadata("qux") != "" {
+		t.Fatal("Metadata retrieval returned wrong value")
+	}
+	m := s.MetadataForNode(s.raftID)
+	if len(m) != 1 || m["foo"] != "bar" {
+		t.Fatal("wrong metadata returned for node")
+	}
+
+	// Prove it's a copy.
+	m["foo"] = "qaz"
+	if s.Metadata("foo") != "bar" {
+		t.Fatal("Metadata retrieval returned wrong value after setting copy")
 	}
 }
 
