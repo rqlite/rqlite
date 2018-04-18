@@ -6,7 +6,6 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"reflect"
 	"sort"
 	"testing"
 	"time"
@@ -638,41 +637,6 @@ func Test_Metadata(t *testing.T) {
 	m["foo"] = "qaz"
 	if s.Metadata("foo") != "bar" {
 		t.Fatal("Metadata retrieval returned wrong value after setting copy")
-	}
-}
-
-func Test_APIPeers(t *testing.T) {
-	s := mustNewStore(false)
-	defer os.RemoveAll(s.Path())
-
-	if err := s.Open(true); err != nil {
-		t.Fatalf("failed to open single-node store: %s", err.Error())
-	}
-	defer s.Close(true)
-	s.WaitForLeader(10 * time.Second)
-
-	peers := map[string]string{
-		"localhost:4002": "localhost:4001",
-		"localhost:4004": "localhost:4003",
-	}
-	if err := s.UpdateAPIPeers(peers); err != nil {
-		t.Fatalf("failed to update API peers: %s", err.Error())
-	}
-
-	// Retrieve peers and verify them.
-	apiPeers, err := s.APIPeers()
-	if err != nil {
-		t.Fatalf("failed to retrieve API peers: %s", err.Error())
-	}
-	if !reflect.DeepEqual(peers, apiPeers) {
-		t.Fatalf("set and retrieved API peers not identical, got %v, exp %v",
-			apiPeers, peers)
-	}
-
-	if s.Peer("localhost:4002") != "localhost:4001" ||
-		s.Peer("localhost:4004") != "localhost:4003" ||
-		s.Peer("not exist") != "" {
-		t.Fatalf("failed to retrieve correct single API peer")
 	}
 }
 

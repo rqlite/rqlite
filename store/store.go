@@ -292,25 +292,6 @@ func (s *Store) Leader() string {
 	return string(s.raft.Leader())
 }
 
-// Peer returns the API address for the given addr. If there is no peer
-// for the address, it returns the empty string.
-func (s *Store) Peer(addr string) string {
-	return s.Metadata(addr)
-}
-
-// APIPeers return the map of Raft addresses to API addresses.
-func (s *Store) APIPeers() (map[string]string, error) {
-	return s.MetadataForNode(s.raftID), nil
-}
-
-// UpdateAPIPeers updates the cluster-wide peer information.
-func (s *Store) UpdateAPIPeers(peers map[string]string) error {
-	for k, v := range peers {
-		s.SetMetadata(k, v)
-	}
-	return nil
-}
-
 // SetMetadata sets a key-value pair on this Store. It's scoped
 // to the Raft ID of this node.
 func (s *Store) SetMetadata(k, v string) error {

@@ -178,7 +178,10 @@ func main() {
 	go mux.Serve()
 
 	// Get transport for Raft communications.
-	raftTn := mux.Listen(muxRaftHeader)
+	//raftTn := mux.Listen(muxRaftHeader)
+	// XXX GET THIS TO WORK.
+	// DELETE TCP MODULE.
+	// OR ACTUALLY, JUST GO STRAIGHT TO PASSING IN ADDRESS AS STRING TO STORE (makes testing easier)
 
 	// Create and open the store.
 	dataPath, err = filepath.Abs(dataPath)
@@ -190,7 +193,7 @@ func main() {
 	str := store.New(&store.StoreConfig{
 		DBConf: dbConf,
 		Dir:    dataPath,
-		Tn:     raftTn,
+		Tn:     nil,
 		ID:     idOrRaftAddr(),
 	})
 
