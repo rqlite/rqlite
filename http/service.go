@@ -720,6 +720,7 @@ func (s *Service) Addr() net.Addr {
 	return s.ln.Addr()
 }
 
+// LeaderAddr does not return the right thing!!!!! Not walking map correctly.
 func (s *Service) LeaderAddr() string {
 	leader := s.store.Leader()
 	if leader == "" {
