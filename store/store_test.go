@@ -32,6 +32,11 @@ func Test_OpenStoreSingleNode(t *testing.T) {
 	if err := s.Open(true); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
+	s.WaitForLeader(10 * time.Second)
+
+	if s.ID() != s.Leader() {
+		t.Fatal("Single node leader is not correct")
+	}
 }
 
 func Test_OpenStoreCloseSingleNode(t *testing.T) {

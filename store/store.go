@@ -286,10 +286,23 @@ func (s *Store) ID() string {
 	return s.raftID
 }
 
-// Leader returns the current leader. Returns a blank string if there is
-// no leader.
+// Leader returns the ID of the current leader. Returns a blank
+// string if there is no leader.
 func (s *Store) Leader() string {
-	return string(s.raft.Leader())
+	addr := s.raft.Leader()
+	if addr == "" {
+		return ""
+	}
+	nodes, err := s.Nodes()
+	if err != nil {
+		return ""
+	}
+	for _, n := range nodes {
+		if raft.ServerAddress(n.Addr) == addr {
+			return n.ID
+		}
+	}
+	return ""
 }
 
 // SetMetadata sets a key-value pair on this Store. It's scoped

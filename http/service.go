@@ -112,6 +112,9 @@ const (
 
 	// VersionHTTPHeader is the HTTP header key for the version.
 	VersionHTTPHeader = "X-RQLITE-VERSION"
+
+	// Metadata key for API address.
+	APIAddr = "api_addr"
 )
 
 func init() {
@@ -181,7 +184,7 @@ func (s *Service) Start() error {
 		Handler: s,
 	}
 
-	if err := s.store.SetMetadata("api_addr", s.APIAdv); err != nil {
+	if err := s.store.SetMetadata(APIAddr, s.APIAdv); err != nil {
 		return err
 	}
 
@@ -311,7 +314,7 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.store.Join(remoteID, remoteAddr); err != nil {
 		if err == store.ErrNotLeader {
-			leader := ""
+			leader := s.LeaderAddr()
 			if leader == "" {
 				http.Error(w, err.Error(), http.StatusServiceUnavailable)
 				return
@@ -365,7 +368,7 @@ func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.store.Remove(remoteAddr); err != nil {
 		if err == store.ErrNotLeader {
-			leader := ""
+			leader := s.LeaderAddr()
 			if leader == "" {
 				http.Error(w, err.Error(), http.StatusServiceUnavailable)
 				return
@@ -446,7 +449,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 	results, err := s.store.Execute(&store.ExecuteRequest{queries, timings, false})
 	if err != nil {
 		if err == store.ErrNotLeader {
-			leader := ""
+			leader := s.LeaderAddr()
 			if leader == "" {
 				http.Error(w, err.Error(), http.StatusServiceUnavailable)
 				return
@@ -494,9 +497,9 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpStatus := map[string]interface{}{
-		"addr": s.Addr().String(),
-		"auth": prettyEnabled(s.credentialStore != nil),
-		//"redirect": s.store.Peer(s.store.Leader()),
+		"addr":     s.Addr().String(),
+		"auth":     prettyEnabled(s.credentialStore != nil),
+		"redirect": s.LeaderAddr(),
 	}
 
 	nodeStatus := map[string]interface{}{
@@ -593,7 +596,7 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 	results, err := s.store.Execute(&store.ExecuteRequest{queries, timings, isTx})
 	if err != nil {
 		if err == store.ErrNotLeader {
-			leader := ""
+			leader := s.LeaderAddr()
 			if leader == "" {
 				http.Error(w, err.Error(), http.StatusServiceUnavailable)
 				return
@@ -655,7 +658,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 	results, err := s.store.Query(&store.QueryRequest{queries, timings, isTx, lvl})
 	if err != nil {
 		if err == store.ErrNotLeader {
-			leader := ""
+			leader := s.LeaderAddr()
 			if leader == "" {
 				http.Error(w, err.Error(), http.StatusServiceUnavailable)
 				return
@@ -715,6 +718,21 @@ func (s *Service) handlePprof(w http.ResponseWriter, r *http.Request) {
 // Addr returns the address on which the Service is listening
 func (s *Service) Addr() net.Addr {
 	return s.ln.Addr()
+}
+
+func (s *Service) LeaderAddr() string {
+	leader := s.store.Leader()
+	if leader == "" {
+		return ""
+	}
+	mm := s.store.MetadataForNode(leader)
+	if md == nil {
+		return ""
+	}
+	if _, ok = md[APIAddr]; !ok {
+		return ""
+	}
+	return md[APIAddr]
 }
 
 // FormRedirect returns the value for the "Location" header for a 301 response.
