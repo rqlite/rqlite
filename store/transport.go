@@ -1,38 +1,59 @@
 package store
 
 import (
+	"crypto/tls"
 	"net"
 	"time"
 
 	"github.com/hashicorp/raft"
 )
 
-// Transport is the interface the network service must provide.
-type Transport interface {
-	net.Listener
+// Transport is the network service provided to Raft
+type Transport struct {
+	ln net.Listener
 
-	// Dial is used to create a new outgoing connection
-	Dial(address string, timeout time.Duration) (net.Conn, error)
+	remoteEncrypted bool
+	skipVerify      bool
 }
 
-// raftTransport takes a Transport and makes it suitable for use by the Raft
-// networking system.
-type raftTransport struct {
-	tn Transport
+func NewTransport() *Transport {
+	return &Transport{}
 }
 
-func (r *raftTransport) Dial(address raft.ServerAddress, timeout time.Duration) (net.Conn, error) {
-	return r.tn.Dial(string(address), timeout)
+func (t *Transport) Open(addr string) error {
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return err
+	}
+	t.ln = ln
+	return nil
 }
 
-func (r *raftTransport) Accept() (net.Conn, error) {
-	return r.tn.Accept()
+func (t *Transport) Dial(addr raft.ServerAddress, timeout time.Duration) (net.Conn, error) {
+	dialer := &net.Dialer{Timeout: timeout}
+
+	var err error
+	var conn net.Conn
+	if t.remoteEncrypted {
+		conf := &tls.Config{
+			InsecureSkipVerify: t.skipVerify,
+		}
+		conn, err = tls.DialWithDialer(dialer, "tcp", string(addr), conf)
+	} else {
+		conn, err = dialer.Dial("tcp", string(addr))
+	}
+
+	return conn, err
 }
 
-func (r *raftTransport) Addr() net.Addr {
-	return r.tn.Addr()
+func (t *Transport) Accept() (net.Conn, error) {
+	return t.ln.Accept()
 }
 
-func (r *raftTransport) Close() error {
-	return r.tn.Close()
+func (t *Transport) Addr() net.Addr {
+	return t.ln.Addr()
+}
+
+func (t *Transport) Close() error {
+	return t.ln.Close()
 }

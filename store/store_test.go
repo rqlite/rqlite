@@ -3,7 +3,6 @@ package store
 import (
 	"encoding/json"
 	"io/ioutil"
-	"net"
 	"os"
 	"path/filepath"
 	"sort"
@@ -409,7 +408,6 @@ func Test_MultiNodeJoinRemove(t *testing.T) {
 }
 
 func Test_MultiNodeExecuteQuery(t *testing.T) {
-	return
 	s0 := mustNewStore(true)
 	defer os.RemoveAll(s0.Path())
 	if err := s0.Open(true); err != nil {
@@ -703,27 +701,27 @@ func mustTempDir() string {
 	return path
 }
 
-type mockTransport struct {
-	ln net.Listener
-}
+// type mockTransport struct {
+// 	ln net.Listener
+// }
 
-func mustMockTransport(addr string) Transport {
-	ln, err := net.Listen("tcp", addr)
-	if err != nil {
-		panic("failed to create new transport")
-	}
-	return &mockTransport{ln}
-}
+// func mustMockTransport(addr string) Transport {
+// 	ln, err := net.Listen("tcp", addr)
+// 	if err != nil {
+// 		panic("failed to create new transport")
+// 	}
+// 	return &mockTransport{ln}
+// }
 
-func (m *mockTransport) Dial(addr string, timeout time.Duration) (net.Conn, error) {
-	return net.DialTimeout("tcp", addr, timeout)
-}
+// func (m *mockTransport) Dial(addr string, timeout time.Duration) (net.Conn, error) {
+// 	return net.DialTimeout("tcp", addr, timeout)
+// }
 
-func (m *mockTransport) Accept() (net.Conn, error) { return m.ln.Accept() }
+// func (m *mockTransport) Accept() (net.Conn, error) { return m.ln.Accept() }
 
-func (m *mockTransport) Close() error { return m.ln.Close() }
+// func (m *mockTransport) Close() error { return m.ln.Close() }
 
-func (m *mockTransport) Addr() net.Addr { return m.ln.Addr() }
+// func (m *mockTransport) Addr() net.Addr { return m.ln.Addr() }
 
 func asJSON(v interface{}) string {
 	b, err := json.Marshal(v)

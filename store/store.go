@@ -12,7 +12,6 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
-	"net"
 	"os"
 	"path/filepath"
 	"sort"
@@ -112,9 +111,9 @@ type Store struct {
 
 	mu sync.RWMutex // Sync access between queries and snapshots.
 
-	raft     *raft.Raft            // The consensus mechanism.
-	raftAddr string                // The raft network address.
-	raftAdv  string                // The raft adverised network address.
+	raft     *raft.Raft // The consensus mechanism.
+	raftAddr string     // The raft network address.
+	raftTn   *raft.NetworkTransport
 	raftID   string                // Node ID.
 	logStore *raftboltdb.BoltStore // Raft log store.
 
@@ -156,7 +155,6 @@ func New(c *StoreConfig) *Store {
 	return &Store{
 		raftDir:      c.Dir,
 		raftAddr:     c.Addr,
-		raftAdv:      c.AdvAddr,
 		raftID:       c.ID,
 		dbConf:       c.DBConf,
 		dbPath:       filepath.Join(c.Dir, sqliteFile),
@@ -176,25 +174,22 @@ func (s *Store) Open(enableSingle bool) error {
 		return err
 	}
 
+	// Open underlying database.
 	db, err := s.open()
 	if err != nil {
 		return err
 	}
 	s.db = db
 
-	// Is this a brand new node?
-	newNode := !pathExists(filepath.Join(s.raftDir, "raft.db"))
-
-	// Setup Raft communication.
-	// Setup Raft communication.
-	advAddr, err := net.ResolveTCPAddr("tcp", s.raftAdv)
-	if err != nil {
+	// Create network layer.
+	tn := NewTransport()
+	if err := tn.Open(s.raftAddr); err != nil {
 		return err
 	}
-	transport, err := raft.NewTCPTransport(s.raftAddr, advAddr, 3, 10*time.Second, os.Stderr)
-	if err != nil {
-		return nil
-	}
+	s.raftTn = raft.NewNetworkTransport(tn, 10, 10*time.Second, nil) // XXX CONFIG NO MAGIC.
+
+	// Is this a brand new node?
+	newNode := !pathExists(filepath.Join(s.raftDir, "raft.db"))
 
 	// Get the Raft configuration for this store.
 	config := s.raftConfig()
@@ -214,7 +209,7 @@ func (s *Store) Open(enableSingle bool) error {
 	}
 
 	// Instantiate the Raft system.
-	ra, err := raft.NewRaft(config, s, s.logStore, s.logStore, snapshots, transport)
+	ra, err := raft.NewRaft(config, s, s.logStore, s.logStore, snapshots, s.raftTn)
 	if err != nil {
 		return fmt.Errorf("new raft: %s", err)
 	}
@@ -225,7 +220,7 @@ func (s *Store) Open(enableSingle bool) error {
 			Servers: []raft.Server{
 				{
 					ID:      config.LocalID,
-					Address: transport.LocalAddr(),
+					Address: s.raftTn.LocalAddr(),
 				},
 			},
 		}
@@ -295,7 +290,7 @@ func (s *Store) Path() string {
 
 // Addr returns the address of the store.
 func (s *Store) Addr() string {
-	return s.raftAddr
+	return string(s.raftTn.LocalAddr())
 }
 
 // ID returns the Raft ID of the store.
