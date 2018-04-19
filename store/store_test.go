@@ -3,6 +3,7 @@ package store
 import (
 	"encoding/json"
 	"io/ioutil"
+	"net"
 	"os"
 	"path/filepath"
 	"sort"
@@ -683,10 +684,9 @@ func mustNewStore(inmem bool) *Store {
 	defer os.RemoveAll(path)
 
 	cfg := NewDBConfig("", inmem)
-	s := New(&StoreConfig{
+	s := New(mustMockLister("localhost:0"), &StoreConfig{
 		DBConf: cfg,
 		Dir:    path,
-		Addr:   "localhost:0",
 		ID:     path, // Could be any unique string.
 	})
 	if s == nil {
@@ -703,6 +703,28 @@ func mustTempDir() string {
 	}
 	return path
 }
+
+type mockListener struct {
+	ln net.Listener
+}
+
+func mustMockLister(addr string) Listener {
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		panic("failed to create new listner")
+	}
+	return &mockListener{ln}
+}
+
+func (m *mockListener) Dial(addr string, timeout time.Duration) (net.Conn, error) {
+	return net.DialTimeout("tcp", addr, timeout)
+}
+
+func (m *mockListener) Accept() (net.Conn, error) { return m.ln.Accept() }
+
+func (m *mockListener) Close() error { return m.ln.Close() }
+
+func (m *mockListener) Addr() net.Addr { return m.ln.Addr() }
 
 func asJSON(v interface{}) string {
 	b, err := json.Marshal(v)

@@ -18,6 +18,7 @@ import (
 	"github.com/rqlite/rqlite/disco"
 	httpd "github.com/rqlite/rqlite/http"
 	"github.com/rqlite/rqlite/store"
+	"github.com/rqlite/rqlite/tcp"
 )
 
 const sqliteDSN = "db.sqlite"
@@ -148,6 +149,17 @@ func main() {
 	// Start requested profiling.
 	startProfile(cpuProfile, memProfile)
 
+	// Create internode network layer.
+	var tn *tcp.Transport
+	if nodeEncrypt {
+		tn = tcp.NewTLSTransport(x509Cert, x509Key, noVerify)
+	} else {
+		tn = tcp.NewTransport()
+	}
+	if err := tn.Open(raftAddr); err != nil {
+		log.Fatalf("failed to open internode network layer: %s", err.Error())
+	}
+
 	// Create and open the store.
 	dataPath, err := filepath.Abs(dataPath)
 	if err != nil {
@@ -155,10 +167,9 @@ func main() {
 	}
 	dbConf := store.NewDBConfig(dsn, !onDisk)
 
-	str := store.New(&store.StoreConfig{
+	str := store.New(tn, &store.StoreConfig{
 		DBConf: dbConf,
 		Dir:    dataPath,
-		Addr:   raftAddr,
 		ID:     idOrRaftAddr(),
 	})
 
@@ -189,7 +200,7 @@ func main() {
 		log.Println("node is already member of cluster, skip determining join addresses")
 	}
 
-	// Now, open it.
+	// Now, open store.
 	if err := str.Open(len(joins) == 0); err != nil {
 		log.Fatalf("failed to open store: %s", err.Error())
 	}

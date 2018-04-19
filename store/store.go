@@ -111,11 +111,11 @@ type Store struct {
 
 	mu sync.RWMutex // Sync access between queries and snapshots.
 
-	raft     *raft.Raft // The consensus mechanism.
-	raftAddr string     // The raft network address.
-	raftTn   *raft.NetworkTransport
-	raftID   string                // Node ID.
-	logStore *raftboltdb.BoltStore // Raft log store.
+	raft     *raft.Raft             // The consensus mechanism.
+	ln       Listener               // Inter-store (node) network layer.
+	raftTn   *raft.NetworkTransport // Raft-enabled network layer.
+	raftID   string                 // Node ID.
+	logStore *raftboltdb.BoltStore  // Raft log store.
 
 	dbConf *DBConfig // SQLite database config.
 	dbPath string    // Path to underlying SQLite file, if not in-memory.
@@ -135,21 +135,20 @@ type Store struct {
 type StoreConfig struct {
 	DBConf *DBConfig   // The DBConfig object for this Store.
 	Dir    string      // The working directory for raft.
-	Addr   string      // The network address for raft.
 	ID     string      // Node ID.
 	Logger *log.Logger // The logger to use to log stuff.
 }
 
 // New returns a new Store.
-func New(c *StoreConfig) *Store {
+func New(ln Listener, c *StoreConfig) *Store {
 	logger := c.Logger
 	if logger == nil {
 		logger = log.New(os.Stderr, "[store] ", log.LstdFlags)
 	}
 
 	return &Store{
+		ln:           ln,
 		raftDir:      c.Dir,
-		raftAddr:     c.Addr,
 		raftID:       c.ID,
 		dbConf:       c.DBConf,
 		dbPath:       filepath.Join(c.Dir, sqliteFile),
@@ -176,12 +175,8 @@ func (s *Store) Open(enableSingle bool) error {
 	}
 	s.db = db
 
-	// Create network layer.
-	tn := NewTransport()
-	if err := tn.Open(s.raftAddr); err != nil {
-		return err
-	}
-	s.raftTn = raft.NewNetworkTransport(tn, 10, 10*time.Second, nil) // XXX CONFIG NO MAGIC.
+	// Create Raft-compatible network layer.
+	s.raftTn = raft.NewNetworkTransport(NewTransport(s.ln), 10, 10*time.Second, nil) // XXX CONFIG NO MAGIC.
 
 	// Is this a brand new node?
 	newNode := !pathExists(filepath.Join(s.raftDir, "raft.db"))
