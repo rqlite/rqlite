@@ -704,28 +704,6 @@ func mustTempDir() string {
 	return path
 }
 
-// type mockTransport struct {
-// 	ln net.Listener
-// }
-
-// func mustMockTransport(addr string) Transport {
-// 	ln, err := net.Listen("tcp", addr)
-// 	if err != nil {
-// 		panic("failed to create new transport")
-// 	}
-// 	return &mockTransport{ln}
-// }
-
-// func (m *mockTransport) Dial(addr string, timeout time.Duration) (net.Conn, error) {
-// 	return net.DialTimeout("tcp", addr, timeout)
-// }
-
-// func (m *mockTransport) Accept() (net.Conn, error) { return m.ln.Accept() }
-
-// func (m *mockTransport) Close() error { return m.ln.Close() }
-
-// func (m *mockTransport) Addr() net.Addr { return m.ln.Addr() }
-
 func asJSON(v interface{}) string {
 	b, err := json.Marshal(v)
 	if err != nil {
