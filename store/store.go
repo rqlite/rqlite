@@ -81,30 +81,6 @@ const (
 	Unknown
 )
 
-// DBConfig represents the configuration of the underlying SQLite database.
-type DBConfig struct {
-	DSN    string // Any custom DSN
-	Memory bool   // Whether the database is in-memory only.
-}
-
-// NewDBConfig returns a new DB config instance.
-func NewDBConfig(dsn string, memory bool) *DBConfig {
-	return &DBConfig{DSN: dsn, Memory: memory}
-}
-
-// Server represents another node in the cluster.
-type Server struct {
-	ID   string `json:"id,omitempty"`
-	Addr string `json:"addr,omitempty"`
-}
-
-// Servers is a set of Servers.
-type Servers []*Server
-
-func (s Servers) Less(i, j int) bool { return s[i].ID < s[j].ID }
-func (s Servers) Len() int           { return len(s) }
-func (s Servers) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
-
 // Store is a SQLite database, where all changes are made via Raft consensus.
 type Store struct {
 	raftDir string
