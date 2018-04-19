@@ -469,8 +469,12 @@ func (m *MockStore) Leader() string {
 	return ""
 }
 
-func (m *MockStore) Peer(addr string) string {
-	return ""
+func (m *MockStore) SetMetadata(k, v string) error {
+	return nil
+}
+
+func (m *MockStore) MetadataForNode(id string) map[string]string {
+	return nil
 }
 
 func (m *MockStore) Stats() (map[string]interface{}, error) {
