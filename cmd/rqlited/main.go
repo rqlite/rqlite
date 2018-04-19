@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"net"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -153,7 +152,7 @@ func main() {
 	// IMPLEMENT SECURE NODE-TO_NODE. UNIT TEST? FULL SYSTEM TEST.
 
 	// Create and open the store.
-	dataPath, err = filepath.Abs(dataPath)
+	dataPath, err := filepath.Abs(dataPath)
 	if err != nil {
 		log.Fatalf("failed to determine absolute data path: %s", err.Error())
 	}
@@ -162,7 +161,7 @@ func main() {
 	str := store.New(&store.StoreConfig{
 		DBConf: dbConf,
 		Dir:    dataPath,
-		Tn:     nil,
+		Addr:   raftAddr,
 		ID:     idOrRaftAddr(),
 	})
 
@@ -257,11 +256,6 @@ func main() {
 
 	if err := s.Start(); err != nil {
 		log.Fatalf("failed to start HTTP server: %s", err.Error())
-	}
-
-	// Register cross-component statuses.
-	if err := s.RegisterStatus("mux", mux); err != nil {
-		log.Fatalf("failed to register mux status: %s", err.Error())
 	}
 
 	// Block until signalled.

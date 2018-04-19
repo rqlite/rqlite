@@ -133,12 +133,11 @@ type Store struct {
 
 // StoreConfig represents the configuration of the underlying Store.
 type StoreConfig struct {
-	DBConf  *DBConfig   // The DBConfig object for this Store.
-	Dir     string      // The working directory for raft.
-	Addr    string      // The network address for raft.
-	AdvAddr string      // Advertised network address for Raft
-	ID      string      // Node ID.
-	Logger  *log.Logger // The logger to use to log stuff.
+	DBConf *DBConfig   // The DBConfig object for this Store.
+	Dir    string      // The working directory for raft.
+	Addr   string      // The network address for raft.
+	ID     string      // Node ID.
+	Logger *log.Logger // The logger to use to log stuff.
 }
 
 // New returns a new Store.
@@ -146,10 +145,6 @@ func New(c *StoreConfig) *Store {
 	logger := c.Logger
 	if logger == nil {
 		logger = log.New(os.Stderr, "[store] ", log.LstdFlags)
-	}
-
-	if c.AdvAddr == "" {
-		c.AdvAddr = c.Addr
 	}
 
 	return &Store{

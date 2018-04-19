@@ -726,11 +726,11 @@ func (s *Service) LeaderAddr() string {
 	if leader == "" {
 		return ""
 	}
-	mm := s.store.MetadataForNode(leader)
+	md := s.store.MetadataForNode(leader)
 	if md == nil {
 		return ""
 	}
-	if _, ok = md[APIAddr]; !ok {
+	if _, ok := md[APIAddr]; !ok {
 		return ""
 	}
 	return md[APIAddr]
