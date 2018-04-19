@@ -13,6 +13,7 @@ import (
 
 	httpd "github.com/rqlite/rqlite/http"
 	"github.com/rqlite/rqlite/store"
+	"github.com/rqlite/rqlite/tcp"
 )
 
 // Node represents a node under test.
@@ -301,12 +302,16 @@ func mustNewNode(enableSingle bool) *Node {
 	}
 
 	dbConf := store.NewDBConfig("", false)
-	node.Store = store.New(&store.StoreConfig{
+	tn := tcp.NewTransport()
+	if err := tn.Open("localhost:0"); err != nil {
+		panic(err.Error())
+	}
+	node.Store = store.New(tn, &store.StoreConfig{
 		DBConf: dbConf,
 		Dir:    node.Dir,
-		Addr:   "localhost:0",
 		ID:     node.Dir, // Any unique string will do.
 	})
+
 	if err := node.Store.Open(enableSingle); err != nil {
 		node.Deprovision()
 		panic(fmt.Sprintf("failed to open store: %s", err.Error()))
