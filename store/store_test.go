@@ -6,7 +6,6 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"reflect"
 	"sort"
 	"testing"
 	"time"
@@ -26,29 +25,17 @@ func (m *mockSnapshotSink) Cancel() error {
 	return nil
 }
 
-func Test_ClusterMeta(t *testing.T) {
-	c := newClusterMeta()
-	c.APIPeers["localhost:4002"] = "localhost:4001"
-
-	if c.AddrForPeer("localhost:4002") != "localhost:4001" {
-		t.Fatalf("wrong address returned for localhost:4002")
-	}
-
-	if c.AddrForPeer("127.0.0.1:4002") != "localhost:4001" {
-		t.Fatalf("wrong address returned for 127.0.0.1:4002")
-	}
-
-	if c.AddrForPeer("127.0.0.1:4004") != "" {
-		t.Fatalf("wrong address returned for 127.0.0.1:4003")
-	}
-}
-
 func Test_OpenStoreSingleNode(t *testing.T) {
 	s := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
 
 	if err := s.Open(true); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	s.WaitForLeader(10 * time.Second)
+
+	if s.ID() != s.Leader() {
+		t.Fatal("Single node leader is not correct")
 	}
 }
 
@@ -388,8 +375,8 @@ func Test_MultiNodeJoinRemove(t *testing.T) {
 	sort.StringSlice(storeNodes).Sort()
 
 	// Join the second node to the first.
-	if err := s0.Join(s1.ID(), s1.Addr().String()); err != nil {
-		t.Fatalf("failed to join to node at %s: %s", s0.Addr().String(), err.Error())
+	if err := s0.Join(s1.ID(), s1.Addr()); err != nil {
+		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
 	}
 
 	nodes, err := s0.Nodes()
@@ -438,8 +425,8 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 	defer s1.Close(true)
 
 	// Join the second node to the first.
-	if err := s0.Join(s1.ID(), s1.Addr().String()); err != nil {
-		t.Fatalf("failed to join to node at %s: %s", s0.Addr().String(), err.Error())
+	if err := s0.Join(s1.ID(), s1.Addr()); err != nil {
+		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
 	}
 
 	queries := []string{
@@ -627,7 +614,7 @@ func Test_SingleNodeSnapshotInMem(t *testing.T) {
 	}
 }
 
-func Test_APIPeers(t *testing.T) {
+func Test_Metadata(t *testing.T) {
 	s := mustNewStore(false)
 	defer os.RemoveAll(s.Path())
 
@@ -637,28 +624,27 @@ func Test_APIPeers(t *testing.T) {
 	defer s.Close(true)
 	s.WaitForLeader(10 * time.Second)
 
-	peers := map[string]string{
-		"localhost:4002": "localhost:4001",
-		"localhost:4004": "localhost:4003",
+	if err := s.SetMetadata("foo", "bar"); err != nil {
+		t.Fatalf("failed to set single key-value metadata: %s", err.Error())
 	}
-	if err := s.UpdateAPIPeers(peers); err != nil {
-		t.Fatalf("failed to update API peers: %s", err.Error())
+	if s.MetadataValue("foo") != "bar" {
+		t.Fatal("Metadata retrieval returned wrong value")
+	}
+	if s.MetadataValueForNode(s.raftID, "foo") != "bar" {
+		t.Fatal("Metadata retrieval returned wrong value")
+	}
+	if s.MetadataValue("qux") != "" {
+		t.Fatal("Metadata retrieval returned wrong value")
+	}
+	m := s.MetadataForNode(s.raftID)
+	if len(m) != 1 || m["foo"] != "bar" {
+		t.Fatal("wrong metadata returned for node")
 	}
 
-	// Retrieve peers and verify them.
-	apiPeers, err := s.APIPeers()
-	if err != nil {
-		t.Fatalf("failed to retrieve API peers: %s", err.Error())
-	}
-	if !reflect.DeepEqual(peers, apiPeers) {
-		t.Fatalf("set and retrieved API peers not identical, got %v, exp %v",
-			apiPeers, peers)
-	}
-
-	if s.Peer("localhost:4002") != "localhost:4001" ||
-		s.Peer("localhost:4004") != "localhost:4003" ||
-		s.Peer("not exist") != "" {
-		t.Fatalf("failed to retrieve correct single API peer")
+	// Prove it's a copy.
+	m["foo"] = "qaz"
+	if s.MetadataValue("foo") != "bar" {
+		t.Fatal("Metadata retrieval returned wrong value after setting copy")
 	}
 }
 
@@ -697,13 +683,11 @@ func mustNewStore(inmem bool) *Store {
 	path := mustTempDir()
 	defer os.RemoveAll(path)
 
-	tn := mustMockTransport("localhost:0")
 	cfg := NewDBConfig("", inmem)
-	s := New(&StoreConfig{
+	s := New(mustMockLister("localhost:0"), &StoreConfig{
 		DBConf: cfg,
 		Dir:    path,
-		Tn:     tn,
-		ID:     tn.Addr().String(), // Could be any unique string.
+		ID:     path, // Could be any unique string.
 	})
 	if s == nil {
 		panic("failed to create new store")
@@ -720,27 +704,27 @@ func mustTempDir() string {
 	return path
 }
 
-type mockTransport struct {
+type mockListener struct {
 	ln net.Listener
 }
 
-func mustMockTransport(addr string) Transport {
+func mustMockLister(addr string) Listener {
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
-		panic("failed to create new transport")
+		panic("failed to create new listner")
 	}
-	return &mockTransport{ln}
+	return &mockListener{ln}
 }
 
-func (m *mockTransport) Dial(addr string, timeout time.Duration) (net.Conn, error) {
+func (m *mockListener) Dial(addr string, timeout time.Duration) (net.Conn, error) {
 	return net.DialTimeout("tcp", addr, timeout)
 }
 
-func (m *mockTransport) Accept() (net.Conn, error) { return m.ln.Accept() }
+func (m *mockListener) Accept() (net.Conn, error) { return m.ln.Accept() }
 
-func (m *mockTransport) Close() error { return m.ln.Close() }
+func (m *mockListener) Close() error { return m.ln.Close() }
 
-func (m *mockTransport) Addr() net.Addr { return m.ln.Addr() }
+func (m *mockListener) Addr() net.Addr { return m.ln.Addr() }
 
 func asJSON(v interface{}) string {
 	b, err := json.Marshal(v)

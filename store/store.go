@@ -12,7 +12,6 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
-	"net"
 	"os"
 	"path/filepath"
 	"sort"
@@ -82,76 +81,24 @@ const (
 	Unknown
 )
 
-// clusterMeta represents cluster meta which must be kept in consensus.
-type clusterMeta struct {
-	APIPeers map[string]string // Map from Raft address to API address
-}
-
-// NewClusterMeta returns an initialized cluster meta store.
-func newClusterMeta() *clusterMeta {
-	return &clusterMeta{
-		APIPeers: make(map[string]string),
-	}
-}
-
-func (c *clusterMeta) AddrForPeer(addr string) string {
-	if api, ok := c.APIPeers[addr]; ok && api != "" {
-		return api
-	}
-
-	// Go through each entry, and see if any key resolves to addr.
-	for k, v := range c.APIPeers {
-		resv, err := net.ResolveTCPAddr("tcp", k)
-		if err != nil {
-			continue
-		}
-		if resv.String() == addr {
-			return v
-		}
-	}
-
-	return ""
-}
-
-// DBConfig represents the configuration of the underlying SQLite database.
-type DBConfig struct {
-	DSN    string // Any custom DSN
-	Memory bool   // Whether the database is in-memory only.
-}
-
-// NewDBConfig returns a new DB config instance.
-func NewDBConfig(dsn string, memory bool) *DBConfig {
-	return &DBConfig{DSN: dsn, Memory: memory}
-}
-
-// Server represents another node in the cluster.
-type Server struct {
-	ID   string `json:"id,omitempty"`
-	Addr string `json:"addr,omitempty"`
-}
-
-// Servers is a set of Servers.
-type Servers []*Server
-
-func (s Servers) Less(i, j int) bool { return s[i].ID < s[j].ID }
-func (s Servers) Len() int           { return len(s) }
-func (s Servers) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
-
 // Store is a SQLite database, where all changes are made via Raft consensus.
 type Store struct {
 	raftDir string
 
 	mu sync.RWMutex // Sync access between queries and snapshots.
 
-	raft   *raft.Raft // The consensus mechanism.
-	raftTn *raftTransport
-	raftID string    // Node ID.
+	raft     *raft.Raft             // The consensus mechanism.
+	ln       Listener               // Inter-store (node) network layer.
+	raftTn   *raft.NetworkTransport // Raft-enabled network layer.
+	raftID   string                 // Node ID.
+	logStore *raftboltdb.BoltStore  // Raft log store.
+
 	dbConf *DBConfig // SQLite database config.
 	dbPath string    // Path to underlying SQLite file, if not in-memory.
 	db     *sql.DB   // The underlying SQLite store.
 
 	metaMu sync.RWMutex
-	meta   *clusterMeta
+	meta   map[string]map[string]string
 
 	logger *log.Logger
 
@@ -164,25 +111,24 @@ type Store struct {
 type StoreConfig struct {
 	DBConf *DBConfig   // The DBConfig object for this Store.
 	Dir    string      // The working directory for raft.
-	Tn     Transport   // The underlying Transport for raft.
 	ID     string      // Node ID.
 	Logger *log.Logger // The logger to use to log stuff.
 }
 
 // New returns a new Store.
-func New(c *StoreConfig) *Store {
+func New(ln Listener, c *StoreConfig) *Store {
 	logger := c.Logger
 	if logger == nil {
 		logger = log.New(os.Stderr, "[store] ", log.LstdFlags)
 	}
 
 	return &Store{
+		ln:           ln,
 		raftDir:      c.Dir,
-		raftTn:       &raftTransport{c.Tn},
 		raftID:       c.ID,
 		dbConf:       c.DBConf,
 		dbPath:       filepath.Join(c.Dir, sqliteFile),
-		meta:         newClusterMeta(),
+		meta:         make(map[string]map[string]string),
 		logger:       logger,
 		ApplyTimeout: applyTimeout,
 	}
@@ -198,17 +144,18 @@ func (s *Store) Open(enableSingle bool) error {
 		return err
 	}
 
+	// Open underlying database.
 	db, err := s.open()
 	if err != nil {
 		return err
 	}
 	s.db = db
 
+	// Create Raft-compatible network layer.
+	s.raftTn = raft.NewNetworkTransport(NewTransport(s.ln), 10, 10*time.Second, nil) // XXX CONFIG NO MAGIC.
+
 	// Is this a brand new node?
 	newNode := !pathExists(filepath.Join(s.raftDir, "raft.db"))
-
-	// Setup Raft communication.
-	transport := raft.NewNetworkTransport(s.raftTn, 3, 10*time.Second, os.Stderr)
 
 	// Get the Raft configuration for this store.
 	config := s.raftConfig()
@@ -222,13 +169,13 @@ func (s *Store) Open(enableSingle bool) error {
 	}
 
 	// Create the log store and stable store.
-	logStore, err := raftboltdb.NewBoltStore(filepath.Join(s.raftDir, "raft.db"))
+	s.logStore, err = raftboltdb.NewBoltStore(filepath.Join(s.raftDir, "raft.db"))
 	if err != nil {
 		return fmt.Errorf("new bolt store: %s", err)
 	}
 
 	// Instantiate the Raft system.
-	ra, err := raft.NewRaft(config, s, logStore, logStore, snapshots, transport)
+	ra, err := raft.NewRaft(config, s, s.logStore, s.logStore, snapshots, s.raftTn)
 	if err != nil {
 		return fmt.Errorf("new raft: %s", err)
 	}
@@ -239,7 +186,7 @@ func (s *Store) Open(enableSingle bool) error {
 			Servers: []raft.Server{
 				{
 					ID:      config.LocalID,
-					Address: transport.LocalAddr(),
+					Address: s.raftTn.LocalAddr(),
 				},
 			},
 		}
@@ -264,7 +211,7 @@ func (s *Store) Close(wait bool) error {
 			return e.Error()
 		}
 	}
-	return nil
+	return s.logStore.Close()
 }
 
 // WaitForApplied waits for all Raft log entries to to be applied to the
@@ -308,8 +255,8 @@ func (s *Store) Path() string {
 }
 
 // Addr returns the address of the store.
-func (s *Store) Addr() net.Addr {
-	return s.raftTn.Addr()
+func (s *Store) Addr() string {
+	return string(s.raftTn.LocalAddr())
 }
 
 // ID returns the Raft ID of the store.
@@ -317,28 +264,95 @@ func (s *Store) ID() string {
 	return s.raftID
 }
 
-// Leader returns the current leader. Returns a blank string if there is
-// no leader.
+// Leader returns the ID of the current leader. Returns a blank
+// string if there is no leader.
 func (s *Store) Leader() string {
-	return string(s.raft.Leader())
+	addr := s.raft.Leader()
+	if addr == "" {
+		return ""
+	}
+	nodes, err := s.Nodes()
+	if err != nil {
+		return ""
+	}
+	for _, n := range nodes {
+		if raft.ServerAddress(n.Addr) == addr {
+			return n.ID
+		}
+	}
+	return ""
 }
 
-// Peer returns the API address for the given addr. If there is no peer
-// for the address, it returns the empty string.
-func (s *Store) Peer(addr string) string {
-	return s.meta.AddrForPeer(addr)
+// SetMetadata sets a key-value pair on this Store. It's scoped
+// to the Raft ID of this node.
+func (s *Store) SetMetadata(k, v string) error {
+	// Check if state is already as desired. If so, don't
+	// send a command through the Raft log.
+	if func() bool {
+		return s.MetadataValue(k) == v
+	}() {
+		return nil
+	}
+
+	m := &metadataSetSub{
+		NodeID: s.raftID,
+		Key:    k,
+		Value:  v,
+	}
+	c, err := newCommand(metadataSet, m)
+	if err != nil {
+		return err
+	}
+	b, err := json.Marshal(c)
+	if err != nil {
+		return err
+	}
+
+	f := s.raft.Apply(b, s.ApplyTimeout)
+	if e := f.(raft.Future); e.Error() != nil {
+		if e.Error() == raft.ErrNotLeader {
+			return ErrNotLeader
+		}
+		return e.Error()
+	}
+
+	r := f.Response().(*fsmGenericResponse)
+	return r.error
 }
 
-// APIPeers return the map of Raft addresses to API addresses.
-func (s *Store) APIPeers() (map[string]string, error) {
+// MetadataForNode returns a copy of the metadata for the given node.
+func (s *Store) MetadataForNode(id string) map[string]string {
 	s.metaMu.RLock()
 	defer s.metaMu.RUnlock()
-
-	peers := make(map[string]string, len(s.meta.APIPeers))
-	for k, v := range s.meta.APIPeers {
-		peers[k] = v
+	if _, ok := s.meta[s.raftID]; !ok {
+		return nil
 	}
-	return peers, nil
+
+	m := make(map[string]string, len(s.meta[s.raftID]))
+	for k, v := range s.meta[s.raftID] {
+		m[k] = v
+	}
+	return m
+}
+
+// MetadataValue returns the metadata value, for a given k, for this node. XXX CONSISTENCY?
+func (s *Store) MetadataValue(k string) string {
+	return s.MetadataValueForNode(s.raftID, k)
+}
+
+// MetadataValueForNode returns the value for a key, for a given
+// Node ID.
+func (s *Store) MetadataValueForNode(id, k string) string {
+	s.metaMu.RLock()
+	defer s.metaMu.RUnlock()
+	if md, ok := s.meta[s.raftID]; !ok {
+		return ""
+	} else {
+		if v, ok := md[k]; ok {
+			return v
+		}
+		return ""
+	}
 }
 
 // Nodes returns the slice of nodes in the cluster, sorted by ID ascending.
@@ -432,7 +446,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 	status := map[string]interface{}{
 		"node_id":            s.raftID,
 		"raft":               s.raft.Stats(),
-		"addr":               s.Addr().String(),
+		"addr":               s.Addr(),
 		"leader":             s.Leader(),
 		"apply_timeout":      s.ApplyTimeout.String(),
 		"heartbeat_timeout":  s.HeartbeatTimeout.String(),
@@ -545,21 +559,6 @@ func (s *Store) Query(qr *QueryRequest) ([]*sql.Rows, error) {
 
 	r, err := s.db.Query(qr.Queries, qr.Tx, qr.Timings)
 	return r, err
-}
-
-// UpdateAPIPeers updates the cluster-wide peer information.
-func (s *Store) UpdateAPIPeers(peers map[string]string) error {
-	c, err := newCommand(peer, peers)
-	if err != nil {
-		return err
-	}
-	b, err := json.Marshal(c)
-	if err != nil {
-		return err
-	}
-
-	f := s.raft.Apply(b, s.ApplyTimeout)
-	return f.Error()
 }
 
 // Join joins a node, identified by id and located at addr, to this store.
@@ -700,17 +699,19 @@ func (s *Store) Apply(l *raft.Log) interface{} {
 		}
 		r, err := s.db.Query(d.Queries, d.Tx, d.Timings)
 		return &fsmQueryResponse{rows: r, error: err}
-	case peer:
-		var d peersSub
-		if err := json.Unmarshal(c.Sub, &d); err != nil {
+	case metadataSet:
+		var m metadataSetSub
+		if err := json.Unmarshal(c.Sub, &m); err != nil {
 			return &fsmGenericResponse{error: err}
 		}
 		func() {
 			s.metaMu.Lock()
 			defer s.metaMu.Unlock()
-			for k, v := range d {
-				s.meta.APIPeers[k] = v
+			_, ok := s.meta[m.NodeID]
+			if !ok {
+				s.meta[m.NodeID] = make(map[string]string)
 			}
+			s.meta[m.NodeID][m.Key] = m.Value
 		}()
 		return &fsmGenericResponse{}
 	default:
@@ -766,7 +767,7 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 
 	fsm.meta, err = json.Marshal(s.meta)
 	if err != nil {
-		s.logger.Printf("failed to encode meta for snapshot: %s", err.Error())
+		s.logger.Printf("failed to encode metadata for snapshot: %s", err.Error())
 		return nil, err
 	}
 
