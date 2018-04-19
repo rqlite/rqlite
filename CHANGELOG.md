@@ -5,6 +5,7 @@
 - [PR #411](https://github.com/rqlite/rqlite/pull/411), [PR #412](https://github.com/rqlite/rqlite/pull/412): Remove any pre-existing node with a given ID, if that node rejoins with a new IP address. Fixes [issue #409](https://github.com/rqlite/rqlite/issues/409).
 - [PR #414](https://github.com/rqlite/rqlite/pull/414), [PR #416](https://github.com/rqlite/rqlite/pull/416): Support timings in CLI. Fixes [issue #317](https://github.com/rqlite/rqlite/issues/317). Thanks @joaodrp.
 - [PR #425](https://github.com/rqlite/rqlite/pull/425): By default use Raft network address as node ID. Fixes [issue #422](https://github.com/rqlite/rqlite/issues/422).
+- [PR #](https://github.com/rqlite/rqlite/pull/430): Close Raft log on Store close. Fixes [issue #429](https://github.com/rqlite/rqlite/issues/429).
 
 ## 4.3.0 (March 18th 2018)
 - [PR #397](https://github.com/rqlite/rqlite/pull/397), [PR #399](https://github.com/rqlite/rqlite/pull/399): Support hashed passwords. Fixes [issue #395](https://github.com/rqlite/rqlite/issues/395). Thanks @sum12.
