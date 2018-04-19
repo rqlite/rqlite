@@ -50,8 +50,8 @@ type Store interface {
 	// SetMetadata sets key-value metadata on the store for this node.
 	SetMetadata(k, v string) error
 
-	// MetadataForNode retrieves key-value metadata for a given node.
-	MetadataForNode(id string) map[string]string
+	// MetadataValueForNode retrieves a value for a given node ID
+	MetadataValueForNode(id, k string) string
 
 	// Stats returns stats on the Store.
 	Stats() (map[string]interface{}, error)
@@ -720,20 +720,9 @@ func (s *Service) Addr() net.Addr {
 	return s.ln.Addr()
 }
 
-// LeaderAddr does not return the right thing!!!!! Not walking map correctly.
+// LeaderAddr returns the API address of the leader.
 func (s *Service) LeaderAddr() string {
-	leader := s.store.Leader()
-	if leader == "" {
-		return ""
-	}
-	md := s.store.MetadataForNode(leader)
-	if md == nil {
-		return ""
-	}
-	if _, ok := md[APIAddr]; !ok {
-		return ""
-	}
-	return md[APIAddr]
+	return s.store.MetadataValueForNode(s.store.Leader(), APIAddr)
 }
 
 // FormRedirect returns the value for the "Location" header for a 301 response.

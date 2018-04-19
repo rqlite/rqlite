@@ -626,10 +626,13 @@ func Test_Metadata(t *testing.T) {
 	if err := s.SetMetadata("foo", "bar"); err != nil {
 		t.Fatalf("failed to set single key-value metadata: %s", err.Error())
 	}
-	if s.Metadata("foo") != "bar" {
+	if s.MetadataValue("foo") != "bar" {
 		t.Fatal("Metadata retrieval returned wrong value")
 	}
-	if s.Metadata("qux") != "" {
+	if s.MetadataValueForNode(s.raftID, "foo") != "bar" {
+		t.Fatal("Metadata retrieval returned wrong value")
+	}
+	if s.MetadataValue("qux") != "" {
 		t.Fatal("Metadata retrieval returned wrong value")
 	}
 	m := s.MetadataForNode(s.raftID)
@@ -639,7 +642,7 @@ func Test_Metadata(t *testing.T) {
 
 	// Prove it's a copy.
 	m["foo"] = "qaz"
-	if s.Metadata("foo") != "bar" {
+	if s.MetadataValue("foo") != "bar" {
 		t.Fatal("Metadata retrieval returned wrong value after setting copy")
 	}
 }

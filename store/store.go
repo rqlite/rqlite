@@ -318,9 +318,7 @@ func (s *Store) SetMetadata(k, v string) error {
 	// Check if state is already as desired. If so, don't
 	// send a command through the Raft log.
 	if func() bool {
-		s.metaMu.RLock()
-		defer s.metaMu.RUnlock()
-		return s.metadata(k) == v
+		return s.MetadataValue(k) == v
 	}() {
 		return nil
 	}
@@ -351,23 +349,6 @@ func (s *Store) SetMetadata(k, v string) error {
 	return r.error
 }
 
-// Metadata returns the metadata value, for a given k, for this node. XXX CONSISTENCY?
-func (s *Store) Metadata(k string) string {
-	s.metaMu.RLock()
-	defer s.metaMu.RUnlock()
-	return s.metadata(k)
-}
-
-func (s *Store) metadata(k string) string {
-	if _, ok := s.meta[s.raftID]; !ok {
-		return ""
-	}
-	if _, ok := s.meta[s.raftID][k]; !ok {
-		return ""
-	}
-	return s.meta[s.raftID][k]
-}
-
 // MetadataForNode returns a copy of the metadata for the given node.
 func (s *Store) MetadataForNode(id string) map[string]string {
 	s.metaMu.RLock()
@@ -381,6 +362,26 @@ func (s *Store) MetadataForNode(id string) map[string]string {
 		m[k] = v
 	}
 	return m
+}
+
+// MetadataValue returns the metadata value, for a given k, for this node. XXX CONSISTENCY?
+func (s *Store) MetadataValue(k string) string {
+	return s.MetadataValueForNode(s.raftID, k)
+}
+
+// MetadataValueForNode returns the value for a key, for a given
+// Node ID.
+func (s *Store) MetadataValueForNode(id, k string) string {
+	s.metaMu.RLock()
+	defer s.metaMu.RUnlock()
+	if md, ok := s.meta[s.raftID]; !ok {
+		return ""
+	} else {
+		if v, ok := md[k]; ok {
+			return v
+		}
+		return ""
+	}
 }
 
 // Nodes returns the slice of nodes in the cluster, sorted by ID ascending.
