@@ -148,9 +148,6 @@ func main() {
 	// Start requested profiling.
 	startProfile(cpuProfile, memProfile)
 
-	// BROADCAST ADVERTISE -- IMPLEMENT
-	// IMPLEMENT SECURE NODE-TO_NODE. UNIT TEST? FULL SYSTEM TEST.
-
 	// Create and open the store.
 	dataPath, err := filepath.Abs(dataPath)
 	if err != nil {
