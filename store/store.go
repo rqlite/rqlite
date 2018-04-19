@@ -112,9 +112,12 @@ type Store struct {
 
 	mu sync.RWMutex // Sync access between queries and snapshots.
 
-	raft   *raft.Raft // The consensus mechanism.
-	raftTn *raftTransport
-	raftID string    // Node ID.
+	raft     *raft.Raft            // The consensus mechanism.
+	raftAddr string                // The raft network address.
+	raftAdv  string                // The raft adverised network address.
+	raftID   string                // Node ID.
+	logStore *raftboltdb.BoltStore // Raft log store.
+
 	dbConf *DBConfig // SQLite database config.
 	dbPath string    // Path to underlying SQLite file, if not in-memory.
 	db     *sql.DB   // The underlying SQLite store.
@@ -131,11 +134,12 @@ type Store struct {
 
 // StoreConfig represents the configuration of the underlying Store.
 type StoreConfig struct {
-	DBConf *DBConfig   // The DBConfig object for this Store.
-	Dir    string      // The working directory for raft.
-	Tn     Transport   // The underlying Transport for raft.
-	ID     string      // Node ID.
-	Logger *log.Logger // The logger to use to log stuff.
+	DBConf  *DBConfig   // The DBConfig object for this Store.
+	Dir     string      // The working directory for raft.
+	Addr    string      // The network address for raft.
+	AdvAddr string      // Advertised network address for Raft
+	ID      string      // Node ID.
+	Logger  *log.Logger // The logger to use to log stuff.
 }
 
 // New returns a new Store.
@@ -145,9 +149,14 @@ func New(c *StoreConfig) *Store {
 		logger = log.New(os.Stderr, "[store] ", log.LstdFlags)
 	}
 
+	if c.AdvAddr == "" {
+		c.AdvAddr = c.Addr
+	}
+
 	return &Store{
 		raftDir:      c.Dir,
-		raftTn:       &raftTransport{c.Tn},
+		raftAddr:     c.Addr,
+		raftAdv:      c.AdvAddr,
 		raftID:       c.ID,
 		dbConf:       c.DBConf,
 		dbPath:       filepath.Join(c.Dir, sqliteFile),
@@ -177,7 +186,15 @@ func (s *Store) Open(enableSingle bool) error {
 	newNode := !pathExists(filepath.Join(s.raftDir, "raft.db"))
 
 	// Setup Raft communication.
-	transport := raft.NewNetworkTransport(s.raftTn, 3, 10*time.Second, os.Stderr)
+	// Setup Raft communication.
+	advAddr, err := net.ResolveTCPAddr("tcp", s.raftAdv)
+	if err != nil {
+		return err
+	}
+	transport, err := raft.NewTCPTransport(s.raftAddr, advAddr, 3, 10*time.Second, os.Stderr)
+	if err != nil {
+		return nil
+	}
 
 	// Get the Raft configuration for this store.
 	config := s.raftConfig()
@@ -191,13 +208,13 @@ func (s *Store) Open(enableSingle bool) error {
 	}
 
 	// Create the log store and stable store.
-	logStore, err := raftboltdb.NewBoltStore(filepath.Join(s.raftDir, "raft.db"))
+	s.logStore, err = raftboltdb.NewBoltStore(filepath.Join(s.raftDir, "raft.db"))
 	if err != nil {
 		return fmt.Errorf("new bolt store: %s", err)
 	}
 
 	// Instantiate the Raft system.
-	ra, err := raft.NewRaft(config, s, logStore, logStore, snapshots, transport)
+	ra, err := raft.NewRaft(config, s, s.logStore, s.logStore, snapshots, transport)
 	if err != nil {
 		return fmt.Errorf("new raft: %s", err)
 	}
@@ -233,7 +250,7 @@ func (s *Store) Close(wait bool) error {
 			return e.Error()
 		}
 	}
-	return nil
+	return s.logStore.Close()
 }
 
 // WaitForApplied waits for all Raft log entries to to be applied to the
@@ -277,8 +294,8 @@ func (s *Store) Path() string {
 }
 
 // Addr returns the address of the store.
-func (s *Store) Addr() net.Addr {
-	return s.raftTn.Addr()
+func (s *Store) Addr() string {
+	return s.raftAddr
 }
 
 // ID returns the Raft ID of the store.
@@ -467,7 +484,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 	status := map[string]interface{}{
 		"node_id":            s.raftID,
 		"raft":               s.raft.Stats(),
-		"addr":               s.Addr().String(),
+		"addr":               s.Addr(),
 		"leader":             s.Leader(),
 		"apply_timeout":      s.ApplyTimeout.String(),
 		"heartbeat_timeout":  s.HeartbeatTimeout.String(),
