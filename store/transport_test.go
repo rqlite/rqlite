@@ -19,7 +19,7 @@ func Test_TransportOpenClose(t *testing.T) {
 		t.Fatalf("failed to open transport: %s", err.Error())
 	}
 	if tn.Addr().String() == "localhost:0" {
-		t.Fatal("transport address set incorrectly, got: %s", tn.Addr().String())
+		t.Fatalf("transport address set incorrectly, got: %s", tn.Addr().String())
 	}
 	if err := tn.Close(); err != nil {
 		t.Fatalf("failed to close transport: %s", err.Error())
