@@ -19,7 +19,6 @@ import (
 	"github.com/rqlite/rqlite/disco"
 	httpd "github.com/rqlite/rqlite/http"
 	"github.com/rqlite/rqlite/store"
-	"github.com/rqlite/rqlite/tcp"
 )
 
 const sqliteDSN = "db.sqlite"
@@ -150,38 +149,8 @@ func main() {
 	// Start requested profiling.
 	startProfile(cpuProfile, memProfile)
 
-	// Set up node-to-node TCP communication.
-	ln, err := net.Listen("tcp", raftAddr)
-	if err != nil {
-		log.Fatalf("failed to listen on %s: %s", raftAddr, err.Error())
-	}
-	var adv net.Addr
-	if raftAdv != "" {
-		adv, err = net.ResolveTCPAddr("tcp", raftAdv)
-		if err != nil {
-			log.Fatalf("failed to resolve advertise address %s: %s", raftAdv, err.Error())
-		}
-	}
-
-	// Start up node-to-node network mux.
-	var mux *tcp.Mux
-	if nodeEncrypt {
-		log.Printf("enabling node-to-node encryption with cert: %s, key: %s", nodeX509Cert, nodeX509Key)
-		mux, err = tcp.NewTLSMux(ln, adv, nodeX509Cert, nodeX509Key)
-	} else {
-		mux, err = tcp.NewMux(ln, adv)
-	}
-	if err != nil {
-		log.Fatalf("failed to create node-to-node mux: %s", err.Error())
-	}
-	mux.InsecureSkipVerify = noNodeVerify
-	go mux.Serve()
-
-	// Get transport for Raft communications.
-	//raftTn := mux.Listen(muxRaftHeader)
-	// XXX GET THIS TO WORK.
-	// DELETE TCP MODULE.
-	// OR ACTUALLY, JUST GO STRAIGHT TO PASSING IN ADDRESS AS STRING TO STORE (makes testing easier)
+	// BROADCAST ADVERTISE -- IMPLEMENT
+	// IMPLEMENT SECURE NODE-TO_NODE. UNIT TEST? FULL SYSTEM TEST.
 
 	// Create and open the store.
 	dataPath, err = filepath.Abs(dataPath)
