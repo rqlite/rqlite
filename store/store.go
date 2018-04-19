@@ -143,12 +143,13 @@ type Store struct {
 
 	mu sync.RWMutex // Sync access between queries and snapshots.
 
-	raft   *raft.Raft // The consensus mechanism.
-	raftTn *raftTransport
-	raftID string    // Node ID.
-	dbConf *DBConfig // SQLite database config.
-	dbPath string    // Path to underlying SQLite file, if not in-memory.
-	db     *sql.DB   // The underlying SQLite store.
+	raft    *raft.Raft // The consensus mechanism.
+	raftTn  *raftTransport
+	raftID  string // Node ID.
+	raftLog *raftboltdb.BoltStore
+	dbConf  *DBConfig // SQLite database config.
+	dbPath  string    // Path to underlying SQLite file, if not in-memory.
+	db      *sql.DB   // The underlying SQLite store.
 
 	metaMu sync.RWMutex
 	meta   *clusterMeta
@@ -222,13 +223,13 @@ func (s *Store) Open(enableSingle bool) error {
 	}
 
 	// Create the log store and stable store.
-	logStore, err := raftboltdb.NewBoltStore(filepath.Join(s.raftDir, "raft.db"))
+	s.raftLog, err = raftboltdb.NewBoltStore(filepath.Join(s.raftDir, "raft.db"))
 	if err != nil {
 		return fmt.Errorf("new bolt store: %s", err)
 	}
 
 	// Instantiate the Raft system.
-	ra, err := raft.NewRaft(config, s, logStore, logStore, snapshots, transport)
+	ra, err := raft.NewRaft(config, s, s.raftLog, s.raftLog, snapshots, transport)
 	if err != nil {
 		return fmt.Errorf("new raft: %s", err)
 	}
@@ -264,7 +265,7 @@ func (s *Store) Close(wait bool) error {
 			return e.Error()
 		}
 	}
-	return nil
+	return s.raftLog.Close()
 }
 
 // WaitForApplied waits for all Raft log entries to to be applied to the
