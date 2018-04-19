@@ -473,8 +473,8 @@ func (m *MockStore) SetMetadata(k, v string) error {
 	return nil
 }
 
-func (m *MockStore) MetadataForNode(id string) map[string]string {
-	return nil
+func (m *MockStore) MetadataValueForNode(id, k string) string {
+	return ""
 }
 
 func (m *MockStore) Stats() (map[string]interface{}, error) {
