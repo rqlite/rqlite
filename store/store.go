@@ -318,9 +318,9 @@ func (s *Store) ID() string {
 	return s.raftID
 }
 
-// Leader returns the current leader. Returns a blank string if there is
-// no leader.
-func (s *Store) Leader() string {
+// LeaderAddr returns the Raft address of the current leader. Returns a
+// blank string if there is no leader.
+func (s *Store) LeaderAddr() string {
 	return string(s.raft.Leader())
 }
 
@@ -372,7 +372,7 @@ func (s *Store) WaitForLeader(timeout time.Duration) (string, error) {
 	for {
 		select {
 		case <-tck.C:
-			l := s.Leader()
+			l := s.LeaderAddr()
 			if l != "" {
 				return l, nil
 			}
@@ -434,7 +434,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		"node_id":            s.raftID,
 		"raft":               s.raft.Stats(),
 		"addr":               s.Addr().String(),
-		"leader":             s.Leader(),
+		"leader":             s.LeaderAddr(),
 		"apply_timeout":      s.ApplyTimeout.String(),
 		"heartbeat_timeout":  s.HeartbeatTimeout.String(),
 		"snapshot_threshold": s.SnapshotThreshold,
