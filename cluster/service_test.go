@@ -178,7 +178,7 @@ func newMockStore() *mockStore {
 	}
 }
 
-func (ms *mockStore) Leader() string {
+func (ms *mockStore) LeaderAddr() string {
 	return ms.leader
 }
 

@@ -465,7 +465,7 @@ func (m *MockStore) Remove(addr string) error {
 	return nil
 }
 
-func (m *MockStore) Leader() string {
+func (m *MockStore) LeaderAddr() string {
 	return ""
 }
 

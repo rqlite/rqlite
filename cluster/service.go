@@ -39,8 +39,8 @@ type Transport interface {
 
 // Store represents a store of information, managed via consensus.
 type Store interface {
-	// Leader returns the leader of the consensus system.
-	Leader() string
+	// Leader returns the address of the leader of the consensus system.
+	LeaderAddr() string
 
 	// UpdateAPIPeers updates the API peers on the store.
 	UpdateAPIPeers(peers map[string]string) error
@@ -102,10 +102,10 @@ func (s *Service) SetPeer(raftAddr, apiAddr string) error {
 	}
 
 	// Try talking to the leader over the network.
-	if leader := s.store.Leader(); leader == "" {
+	if leader := s.store.LeaderAddr(); leader == "" {
 		return fmt.Errorf("no leader available")
 	}
-	conn, err := s.tn.Dial(s.store.Leader(), connectionTimeout)
+	conn, err := s.tn.Dial(s.store.LeaderAddr(), connectionTimeout)
 	if err != nil {
 		return err
 	}

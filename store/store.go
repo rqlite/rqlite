@@ -318,10 +318,28 @@ func (s *Store) ID() string {
 	return s.raftID
 }
 
-// Leader returns the current leader. Returns a blank string if there is
-// no leader.
-func (s *Store) Leader() string {
+// LeaderAddr returns the Raft address of the current leader. Returns a
+// blank string if there is no leader.
+func (s *Store) LeaderAddr() string {
 	return string(s.raft.Leader())
+}
+
+// LeaderID returns the node ID of the Raft leader. Returns a
+// blank string if there is no leader, or an error.
+func (s *Store) LeaderID() (string, error) {
+	addr := s.LeaderAddr()
+	configFuture := s.raft.GetConfiguration()
+	if err := configFuture.Error(); err != nil {
+		s.logger.Printf("failed to get raft configuration: %v", err)
+		return "", err
+	}
+
+	for _, srv := range configFuture.Configuration().Servers {
+		if srv.Address == raft.ServerAddress(addr) {
+			return string(srv.ID), nil
+		}
+	}
+	return "", nil
 }
 
 // Peer returns the API address for the given addr. If there is no peer
@@ -372,7 +390,7 @@ func (s *Store) WaitForLeader(timeout time.Duration) (string, error) {
 	for {
 		select {
 		case <-tck.C:
-			l := s.Leader()
+			l := s.LeaderAddr()
 			if l != "" {
 				return l, nil
 			}
@@ -434,7 +452,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		"node_id":            s.raftID,
 		"raft":               s.raft.Stats(),
 		"addr":               s.Addr().String(),
-		"leader":             s.Leader(),
+		"leader":             s.LeaderAddr(),
 		"apply_timeout":      s.ApplyTimeout.String(),
 		"heartbeat_timeout":  s.HeartbeatTimeout.String(),
 		"snapshot_threshold": s.SnapshotThreshold,
