@@ -324,6 +324,24 @@ func (s *Store) LeaderAddr() string {
 	return string(s.raft.Leader())
 }
 
+// LeaderID returns the node ID of the Raft leader. Returns a
+// blank string if there is no leader, or an error.
+func (s *Store) LeaderID() (string, error) {
+	addr := s.LeaderAddr()
+	configFuture := s.raft.GetConfiguration()
+	if err := configFuture.Error(); err != nil {
+		s.logger.Printf("failed to get raft configuration: %v", err)
+		return "", err
+	}
+
+	for _, srv := range configFuture.Configuration().Servers {
+		if srv.Address == raft.ServerAddress(addr) {
+			return string(srv.ID), nil
+		}
+	}
+	return "", nil
+}
+
 // Peer returns the API address for the given addr. If there is no peer
 // for the address, it returns the empty string.
 func (s *Store) Peer(addr string) string {
