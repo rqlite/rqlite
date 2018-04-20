@@ -6,6 +6,7 @@
 - [PR #414](https://github.com/rqlite/rqlite/pull/414), [PR #416](https://github.com/rqlite/rqlite/pull/416): Support timings in CLI. Fixes [issue #317](https://github.com/rqlite/rqlite/issues/317). Thanks @joaodrp.
 - [PR #425](https://github.com/rqlite/rqlite/pull/425): By default use Raft network address as node ID. Fixes [issue #422](https://github.com/rqlite/rqlite/issues/422).
 - [PR #430](https://github.com/rqlite/rqlite/pull/430): Close Raft log on Store close. Fixes [issue #429](https://github.com/rqlite/rqlite/issues/429).
+- [PR #431](https://github.com/rqlite/rqlite/pull/431): Add function to Store that returns Raft leader ID.
 
 ## 4.3.0 (March 18th 2018)
 - [PR #397](https://github.com/rqlite/rqlite/pull/397), [PR #399](https://github.com/rqlite/rqlite/pull/399): Support hashed passwords. Fixes [issue #395](https://github.com/rqlite/rqlite/issues/395). Thanks @sum12.
