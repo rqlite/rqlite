@@ -39,16 +39,16 @@ type Store interface {
 	Query(qr *store.QueryRequest) ([]*sql.Rows, error)
 
 	// Join joins the node with the given ID, reachable at addr, to this node.
-	Join(id, addr string) error
+	Join(id, addr string, metadata map[string]string) error
 
-	// Remove removes the node, specified by addr, from the cluster.
-	Remove(addr string) error
+	// Remove removes the node, specified by id, from the cluster.
+	Remove(id string) error
+
+	// Metadata returns the value for the given node ID, for the given key.
+	Metadata(id, key string) string
 
 	// Leader returns the Raft address of the leader of the cluster.
-	LeaderAddr() string
-
-	// Peer returns the API peer for the given address
-	Peer(addr string) string
+	LeaderID() (string, error)
 
 	// Stats returns stats on the Store.
 	Stats() (map[string]interface{}, error)
@@ -283,26 +283,33 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	m := map[string]string{}
-	if err := json.Unmarshal(b, &m); err != nil {
+	md := map[string]interface{}{}
+	if err := json.Unmarshal(b, &md); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	remoteID, ok := m["id"]
+	remoteID, ok := md["id"]
 	if !ok {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	remoteAddr, ok := m["addr"]
+	remoteAddr, ok := md["addr"]
 	if !ok {
 		w.WriteHeader(http.StatusBadRequest)
 		return
+	}
+	var m map[string]string
+	if _, ok := md["meta"].(map[string]interface{}); ok {
+		m = make(map[string]string)
+		for k, v := range md["meta"].(map[string]interface{}) {
+			m[k] = v.(string)
+		}
 	}
 
-	if err := s.store.Join(remoteID, remoteAddr); err != nil {
+	if err := s.store.Join(remoteID.(string), remoteAddr.(string), m); err != nil {
 		if err == store.ErrNotLeader {
-			leader := s.store.Peer(s.store.LeaderAddr())
+			leader := s.leaderAPIAddr()
 			if leader == "" {
 				http.Error(w, err.Error(), http.StatusServiceUnavailable)
 				return
@@ -348,15 +355,15 @@ func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	remoteAddr, ok := m["addr"]
+	remoteID, ok := m["id"]
 	if !ok {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	if err := s.store.Remove(remoteAddr); err != nil {
+	if err := s.store.Remove(remoteID); err != nil {
 		if err == store.ErrNotLeader {
-			leader := s.store.Peer(s.store.LeaderAddr())
+			leader := s.leaderAPIAddr()
 			if leader == "" {
 				http.Error(w, err.Error(), http.StatusServiceUnavailable)
 				return
@@ -437,7 +444,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 	results, err := s.store.Execute(&store.ExecuteRequest{queries, timings, false})
 	if err != nil {
 		if err == store.ErrNotLeader {
-			leader := s.store.Peer(s.store.LeaderAddr())
+			leader := s.leaderAPIAddr()
 			if leader == "" {
 				http.Error(w, err.Error(), http.StatusServiceUnavailable)
 				return
@@ -487,7 +494,7 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 	httpStatus := map[string]interface{}{
 		"addr":     s.Addr().String(),
 		"auth":     prettyEnabled(s.credentialStore != nil),
-		"redirect": s.store.Peer(s.store.LeaderAddr()),
+		"redirect": s.leaderAPIAddr(),
 	}
 
 	nodeStatus := map[string]interface{}{
@@ -584,7 +591,7 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 	results, err := s.store.Execute(&store.ExecuteRequest{queries, timings, isTx})
 	if err != nil {
 		if err == store.ErrNotLeader {
-			leader := s.store.Peer(s.store.LeaderAddr())
+			leader := s.leaderAPIAddr()
 			if leader == "" {
 				http.Error(w, err.Error(), http.StatusServiceUnavailable)
 				return
@@ -646,7 +653,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 	results, err := s.store.Query(&store.QueryRequest{queries, timings, isTx, lvl})
 	if err != nil {
 		if err == store.ErrNotLeader {
-			leader := s.store.Peer(s.store.LeaderAddr())
+			leader := s.leaderAPIAddr()
 			if leader == "" {
 				http.Error(w, err.Error(), http.StatusServiceUnavailable)
 				return
@@ -733,6 +740,14 @@ func (s *Service) CheckRequestPerm(r *http.Request, perm string) bool {
 		return false
 	}
 	return s.credentialStore.HasPerm(username, PermAll) || s.credentialStore.HasPerm(username, perm)
+}
+
+func (s *Service) leaderAPIAddr() string {
+	id, err := s.store.LeaderID()
+	if err != nil {
+		return ""
+	}
+	return s.store.Metadata(id, "api_addr")
 }
 
 // addBuildVersion adds the build version to the HTTP response.

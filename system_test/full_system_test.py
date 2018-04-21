@@ -15,6 +15,7 @@ from urlparse import urlparse
 import unittest
 
 RQLITED_PATH = os.environ['RQLITED_PATH']
+TIMEOUT=10
 
 class Node(object):
   def __init__(self, path, node_id, api_addr=None, raft_addr=None, dir=None):
@@ -40,7 +41,7 @@ class Node(object):
     self.api_addr = self._random_addr()
     self.raft_addr = self._random_addr()
 
-  def start(self, join=None, wait=True, timeout=30):
+  def start(self, join=None, wait=True, timeout=TIMEOUT):
     if self.process is not None:
       return
     command = [self.path,
@@ -89,13 +90,13 @@ class Node(object):
     except requests.exceptions.ConnectionError:
       return False
 
-  def wait_for_leader(self, timeout=30):
+  def wait_for_leader(self, timeout=TIMEOUT):
     l = None
     t = 0
     while l == None or l is '':
       if t > timeout:
         raise Exception('timeout')
-      l = self.status()['store']['leader']
+      l = self.status()['store']['leader']['node_id']
       time.sleep(1)
       t+=1
     return l
@@ -103,7 +104,7 @@ class Node(object):
   def applied_index(self):
     return self.status()['store']['raft']['applied_index']
 
-  def wait_for_applied_index(self, index, timeout=30):
+  def wait_for_applied_index(self, index, timeout=TIMEOUT):
     t = 0
     while self.status()['store']['raft']['applied_index'] != index:
       if t > timeout:
@@ -153,7 +154,7 @@ def deprovision_node(node):
 class Cluster(object):
   def __init__(self, nodes):
     self.nodes = nodes
-  def wait_for_leader(self, node_exc=None, timeout=30):
+  def wait_for_leader(self, node_exc=None, timeout=TIMEOUT):
     t = 0
     while True:
       if t > timeout:

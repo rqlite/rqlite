@@ -457,19 +457,19 @@ func (m *MockStore) Query(qr *store.QueryRequest) ([]*sql.Rows, error) {
 	return nil, nil
 }
 
-func (m *MockStore) Join(id, addr string) error {
+func (m *MockStore) Join(id, addr string, metadata map[string]string) error {
 	return nil
 }
 
-func (m *MockStore) Remove(addr string) error {
+func (m *MockStore) Remove(id string) error {
 	return nil
 }
 
-func (m *MockStore) LeaderAddr() string {
-	return ""
+func (m *MockStore) LeaderID() (string, error) {
+	return "", nil
 }
 
-func (m *MockStore) Peer(addr string) string {
+func (m *MockStore) Metadata(id, key string) string {
 	return ""
 }
 

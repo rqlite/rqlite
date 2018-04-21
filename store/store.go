@@ -82,37 +82,6 @@ const (
 	Unknown
 )
 
-// clusterMeta represents cluster meta which must be kept in consensus.
-type clusterMeta struct {
-	APIPeers map[string]string // Map from Raft address to API address
-}
-
-// NewClusterMeta returns an initialized cluster meta store.
-func newClusterMeta() *clusterMeta {
-	return &clusterMeta{
-		APIPeers: make(map[string]string),
-	}
-}
-
-func (c *clusterMeta) AddrForPeer(addr string) string {
-	if api, ok := c.APIPeers[addr]; ok && api != "" {
-		return api
-	}
-
-	// Go through each entry, and see if any key resolves to addr.
-	for k, v := range c.APIPeers {
-		resv, err := net.ResolveTCPAddr("tcp", k)
-		if err != nil {
-			continue
-		}
-		if resv.String() == addr {
-			return v
-		}
-	}
-
-	return ""
-}
-
 // DBConfig represents the configuration of the underlying SQLite database.
 type DBConfig struct {
 	DSN    string // Any custom DSN
@@ -152,7 +121,7 @@ type Store struct {
 	db      *sql.DB   // The underlying SQLite store.
 
 	metaMu sync.RWMutex
-	meta   *clusterMeta
+	meta   map[string]map[string]string
 
 	logger *log.Logger
 
@@ -183,7 +152,7 @@ func New(c *StoreConfig) *Store {
 		raftID:       c.ID,
 		dbConf:       c.DBConf,
 		dbPath:       filepath.Join(c.Dir, sqliteFile),
-		meta:         newClusterMeta(),
+		meta:         make(map[string]map[string]string),
 		logger:       logger,
 		ApplyTimeout: applyTimeout,
 	}
@@ -342,24 +311,6 @@ func (s *Store) LeaderID() (string, error) {
 	return "", nil
 }
 
-// Peer returns the API address for the given addr. If there is no peer
-// for the address, it returns the empty string.
-func (s *Store) Peer(addr string) string {
-	return s.meta.AddrForPeer(addr)
-}
-
-// APIPeers return the map of Raft addresses to API addresses.
-func (s *Store) APIPeers() (map[string]string, error) {
-	s.metaMu.RLock()
-	defer s.metaMu.RUnlock()
-
-	peers := make(map[string]string, len(s.meta.APIPeers))
-	for k, v := range s.meta.APIPeers {
-		peers[k] = v
-	}
-	return peers, nil
-}
-
 // Nodes returns the slice of nodes in the cluster, sorted by ID ascending.
 func (s *Store) Nodes() ([]*Server, error) {
 	f := s.raft.GetConfiguration()
@@ -447,16 +398,23 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
+	leaderID, err := s.LeaderID()
+	if err != nil {
+		return nil, err
+	}
 
 	status := map[string]interface{}{
-		"node_id":            s.raftID,
-		"raft":               s.raft.Stats(),
-		"addr":               s.Addr().String(),
-		"leader":             s.LeaderAddr(),
+		"node_id": s.raftID,
+		"raft":    s.raft.Stats(),
+		"addr":    s.Addr().String(),
+		"leader": map[string]string{
+			"node_id": leaderID,
+			"addr":    s.LeaderAddr(),
+		},
 		"apply_timeout":      s.ApplyTimeout.String(),
 		"heartbeat_timeout":  s.HeartbeatTimeout.String(),
 		"snapshot_threshold": s.SnapshotThreshold,
-		"meta":               s.meta,
+		"metadata":           s.meta,
 		"peers":              nodes,
 		"dir":                s.raftDir,
 		"sqlite3":            dbStatus,
@@ -566,24 +524,9 @@ func (s *Store) Query(qr *QueryRequest) ([]*sql.Rows, error) {
 	return r, err
 }
 
-// UpdateAPIPeers updates the cluster-wide peer information.
-func (s *Store) UpdateAPIPeers(peers map[string]string) error {
-	c, err := newCommand(peer, peers)
-	if err != nil {
-		return err
-	}
-	b, err := json.Marshal(c)
-	if err != nil {
-		return err
-	}
-
-	f := s.raft.Apply(b, s.ApplyTimeout)
-	return f.Error()
-}
-
 // Join joins a node, identified by id and located at addr, to this store.
 // The node must be ready to respond to Raft communications at that address.
-func (s *Store) Join(id, addr string) error {
+func (s *Store) Join(id, addr string, metadata map[string]string) error {
 	s.logger.Printf("received request to join node at %s", addr)
 	if s.raft.State() != raft.Leader {
 		return ErrNotLeader
@@ -619,6 +562,11 @@ func (s *Store) Join(id, addr string) error {
 		}
 		e.Error()
 	}
+
+	if err := s.setMetadata(id, metadata); err != nil {
+		return err
+	}
+
 	s.logger.Printf("node at %s joined successfully", addr)
 	return nil
 }
@@ -630,7 +578,70 @@ func (s *Store) Remove(id string) error {
 		s.logger.Printf("failed to remove node %s: %s", id, err.Error())
 		return err
 	}
+
 	s.logger.Printf("node %s removed successfully", id)
+	return nil
+}
+
+// Metadata returns the value for a given key, for a given node ID.
+func (s *Store) Metadata(id, key string) string {
+	s.metaMu.RLock()
+	defer s.metaMu.RUnlock()
+
+	if _, ok := s.meta[id]; !ok {
+		return ""
+	}
+	v, ok := s.meta[id][key]
+	if ok {
+		return v
+	}
+	return ""
+}
+
+// SetMetadata adds the metadata md to any existing metadata for
+// this node.
+func (s *Store) SetMetadata(md map[string]string) error {
+	return s.setMetadata(s.raftID, md)
+}
+
+// setMetadata adds the metadata md to any existing metadata for
+// the given node ID.
+func (s *Store) setMetadata(id string, md map[string]string) error {
+	// Check local data first.
+	if func() bool {
+		s.metaMu.RLock()
+		defer s.metaMu.RUnlock()
+		if _, ok := s.meta[id]; ok {
+			for k, v := range md {
+				if s.meta[id][k] != v {
+					return false
+				}
+			}
+			return true
+		}
+		return false
+	}() {
+		// Local data is same as data being pushed in,
+		// nothing to do.
+		return nil
+	}
+
+	c, err := newMetadataSetCommand(id, md)
+	if err != nil {
+		return err
+	}
+	b, err := json.Marshal(c)
+	if err != nil {
+		return err
+	}
+	f := s.raft.Apply(b, s.ApplyTimeout)
+	if e := f.(raft.Future); e.Error() != nil {
+		if e.Error() == raft.ErrNotLeader {
+			return ErrNotLeader
+		}
+		e.Error()
+	}
+
 	return nil
 }
 
@@ -671,6 +682,20 @@ func (s *Store) remove(id string) error {
 		}
 		return f.Error()
 	}
+
+	c, err := newCommand(metadataDelete, id)
+	b, err := json.Marshal(c)
+	if err != nil {
+		return err
+	}
+	f = s.raft.Apply(b, s.ApplyTimeout)
+	if e := f.(raft.Future); e.Error() != nil {
+		if e.Error() == raft.ErrNotLeader {
+			return ErrNotLeader
+		}
+		e.Error()
+	}
+
 	return nil
 }
 
@@ -719,17 +744,31 @@ func (s *Store) Apply(l *raft.Log) interface{} {
 		}
 		r, err := s.db.Query(d.Queries, d.Tx, d.Timings)
 		return &fsmQueryResponse{rows: r, error: err}
-	case peer:
-		var d peersSub
+	case metadataSet:
+		var d metadataSetSub
 		if err := json.Unmarshal(c.Sub, &d); err != nil {
 			return &fsmGenericResponse{error: err}
 		}
 		func() {
 			s.metaMu.Lock()
 			defer s.metaMu.Unlock()
-			for k, v := range d {
-				s.meta.APIPeers[k] = v
+			if _, ok := s.meta[d.RaftID]; !ok {
+				s.meta[d.RaftID] = make(map[string]string)
 			}
+			for k, v := range d.Data {
+				s.meta[d.RaftID][k] = v
+			}
+		}()
+		return &fsmGenericResponse{}
+	case metadataDelete:
+		var d string
+		if err := json.Unmarshal(c.Sub, &d); err != nil {
+			return &fsmGenericResponse{error: err}
+		}
+		func() {
+			s.metaMu.Lock()
+			defer s.metaMu.Unlock()
+			delete(s.meta, d)
 		}()
 		return &fsmGenericResponse{}
 	default:
