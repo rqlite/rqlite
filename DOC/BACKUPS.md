@@ -1,6 +1,8 @@
 # Backups
 
-rqlite supports hot backing up a node. You can retrieve and write a consistent snapshot of the underlying SQLite database to a file via a HTTP `GET` request to the endpoint `/db/backup`. For example, using `curl` you could retrieve a backup as follows:
+rqlite supports hot backing up a node. You can retrieve and write a consistent snapshot of the underlying SQLite database to a file via a HTTP `GET` request to the endpoint `/db/backup`.
+
+For example, using `curl`, you could retrieve a backup as follows:
 
 ```bash
 curl localhost:4001/db/backup -o bak.sqlite3
