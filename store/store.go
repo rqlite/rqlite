@@ -12,7 +12,6 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
-	"net"
 	"os"
 	"path/filepath"
 	"sort"
@@ -89,7 +88,8 @@ type Store struct {
 	mu sync.RWMutex // Sync access between queries and snapshots.
 
 	raft    *raft.Raft // The consensus mechanism.
-	raftTn  *raftTransport
+	ln      Listener
+	raftTn  *raft.NetworkTransport
 	raftID  string // Node ID.
 	raftLog *raftboltdb.BoltStore
 	dbConf  *DBConfig // SQLite database config.
@@ -116,15 +116,15 @@ type StoreConfig struct {
 }
 
 // New returns a new Store.
-func New(c *StoreConfig) *Store {
+func New(ln Listener, c *StoreConfig) *Store {
 	logger := c.Logger
 	if logger == nil {
 		logger = log.New(os.Stderr, "[store] ", log.LstdFlags)
 	}
 
 	return &Store{
+		ln:           ln,
 		raftDir:      c.Dir,
-		raftTn:       &raftTransport{c.Tn},
 		raftID:       c.ID,
 		dbConf:       c.DBConf,
 		dbPath:       filepath.Join(c.Dir, sqliteFile),
@@ -144,6 +144,7 @@ func (s *Store) Open(enableSingle bool) error {
 		return err
 	}
 
+	// Open underlying database.
 	db, err := s.open()
 	if err != nil {
 		return err
@@ -154,7 +155,8 @@ func (s *Store) Open(enableSingle bool) error {
 	newNode := !pathExists(filepath.Join(s.raftDir, "raft.db"))
 
 	// Setup Raft communication.
-	transport := raft.NewNetworkTransport(s.raftTn, 3, 10*time.Second, os.Stderr)
+	// Create Raft-compatible network layer.
+	s.raftTn = raft.NewNetworkTransport(NewTransport(s.ln), 10, 10*time.Second, nil) // XXX CONFIG NO MAGIC.
 
 	// Get the Raft configuration for this store.
 	config := s.raftConfig()
@@ -174,7 +176,7 @@ func (s *Store) Open(enableSingle bool) error {
 	}
 
 	// Instantiate the Raft system.
-	ra, err := raft.NewRaft(config, s, s.raftLog, s.raftLog, snapshots, transport)
+	ra, err := raft.NewRaft(config, s, s.raftLog, s.raftLog, snapshots, s.raftTn)
 	if err != nil {
 		return fmt.Errorf("new raft: %s", err)
 	}
@@ -185,7 +187,7 @@ func (s *Store) Open(enableSingle bool) error {
 			Servers: []raft.Server{
 				{
 					ID:      config.LocalID,
-					Address: transport.LocalAddr(),
+					Address: s.raftTn.LocalAddr(),
 				},
 			},
 		}
@@ -254,8 +256,8 @@ func (s *Store) Path() string {
 }
 
 // Addr returns the address of the store.
-func (s *Store) Addr() net.Addr {
-	return s.raftTn.Addr()
+func (s *Store) Addr() string {
+	return string(s.raftTn.LocalAddr())
 }
 
 // ID returns the Raft ID of the store.
@@ -382,7 +384,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 	status := map[string]interface{}{
 		"node_id": s.raftID,
 		"raft":    s.raft.Stats(),
-		"addr":    s.Addr().String(),
+		"addr":    s.Addr(),
 		"leader": map[string]string{
 			"node_id": leaderID,
 			"addr":    s.LeaderAddr(),

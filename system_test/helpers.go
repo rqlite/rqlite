@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -14,12 +13,14 @@ import (
 
 	httpd "github.com/rqlite/rqlite/http"
 	"github.com/rqlite/rqlite/store"
+	"github.com/rqlite/rqlite/tcp"
 )
 
 // Node represents a node under test.
 type Node struct {
 	APIAddr  string
 	RaftAddr string
+	ID       string
 	Dir      string
 	Store    *store.Store
 	Service  *httpd.Service
@@ -302,18 +303,21 @@ func mustNewNode(enableSingle bool) *Node {
 	}
 
 	dbConf := store.NewDBConfig("", false)
-	tn := mustMockTransport("localhost:0")
-	node.Store = store.New(&store.StoreConfig{
+	tn := tcp.NewTransport()
+	if err := tn.Open("localhost:0"); err != nil {
+		panic(err.Error())
+	}
+	node.Store = store.New(tn, &store.StoreConfig{
 		DBConf: dbConf,
 		Dir:    node.Dir,
-		Tn:     tn,
 		ID:     tn.Addr().String(),
 	})
 	if err := node.Store.Open(enableSingle); err != nil {
 		node.Deprovision()
 		panic(fmt.Sprintf("failed to open store: %s", err.Error()))
 	}
-	node.RaftAddr = node.Store.Addr().String()
+	node.RaftAddr = node.Store.Addr()
+	node.ID = node.Store.ID()
 
 	node.Service = httpd.New("localhost:0", node.Store, nil)
 	node.Service.Expvar = true
@@ -334,28 +338,6 @@ func mustNewLeaderNode() *Node {
 	}
 	return node
 }
-
-type mockTransport struct {
-	ln net.Listener
-}
-
-func mustMockTransport(addr string) *mockTransport {
-	ln, err := net.Listen("tcp", addr)
-	if err != nil {
-		panic("failed to create new transport")
-	}
-	return &mockTransport{ln}
-}
-
-func (m *mockTransport) Dial(addr string, timeout time.Duration) (net.Conn, error) {
-	return net.DialTimeout("tcp", addr, timeout)
-}
-
-func (m *mockTransport) Accept() (net.Conn, error) { return m.ln.Accept() }
-
-func (m *mockTransport) Close() error { return m.ln.Close() }
-
-func (m *mockTransport) Addr() net.Addr { return m.ln.Addr() }
 
 func mustTempDir() string {
 	var err error

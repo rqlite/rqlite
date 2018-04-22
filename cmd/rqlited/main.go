@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"net"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -150,47 +149,28 @@ func main() {
 	// Start requested profiling.
 	startProfile(cpuProfile, memProfile)
 
-	// Set up node-to-node TCP communication.
-	ln, err := net.Listen("tcp", raftAddr)
-	if err != nil {
-		log.Fatalf("failed to listen on %s: %s", raftAddr, err.Error())
-	}
-	var adv net.Addr
-	if raftAdv != "" {
-		adv, err = net.ResolveTCPAddr("tcp", raftAdv)
-		if err != nil {
-			log.Fatalf("failed to resolve advertise address %s: %s", raftAdv, err.Error())
-		}
-	}
-
-	// Start up node-to-node network mux.
-	var mux *tcp.Mux
+	// Create internode network layer.
+	var tn *tcp.Transport
 	if nodeEncrypt {
 		log.Printf("enabling node-to-node encryption with cert: %s, key: %s", nodeX509Cert, nodeX509Key)
-		mux, err = tcp.NewTLSMux(ln, adv, nodeX509Cert, nodeX509Key)
+		tn = tcp.NewTLSTransport(nodeX509Cert, nodeX509Key, noVerify)
 	} else {
-		mux, err = tcp.NewMux(ln, adv)
+		tn = tcp.NewTransport()
 	}
-	if err != nil {
-		log.Fatalf("failed to create node-to-node mux: %s", err.Error())
+	if err := tn.Open(raftAddr); err != nil {
+		log.Fatalf("failed to open internode network layer: %s", err.Error())
 	}
-	mux.InsecureSkipVerify = noNodeVerify
-	go mux.Serve()
-
-	// Get transport for Raft communications.
-	raftTn := mux.Listen(muxRaftHeader)
 
 	// Create and open the store.
-	dataPath, err = filepath.Abs(dataPath)
+	dataPath, err := filepath.Abs(dataPath)
 	if err != nil {
 		log.Fatalf("failed to determine absolute data path: %s", err.Error())
 	}
 	dbConf := store.NewDBConfig(dsn, !onDisk)
 
-	str := store.New(&store.StoreConfig{
+	str := store.New(tn, &store.StoreConfig{
 		DBConf: dbConf,
 		Dir:    dataPath,
-		Tn:     raftTn,
 		ID:     idOrRaftAddr(),
 	})
 
@@ -221,7 +201,7 @@ func main() {
 		log.Println("node is already member of cluster, skip determining join addresses")
 	}
 
-	// Now, open it.
+	// Now, open store.
 	if err := str.Open(len(joins) == 0); err != nil {
 		log.Fatalf("failed to open store: %s", err.Error())
 	}
