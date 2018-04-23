@@ -483,12 +483,12 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rt := map[string]interface{}{
-		"GOARCH":       runtime.GOARCH,
-		"GOOS":         runtime.GOOS,
-		"GOMAXPROCS":   runtime.GOMAXPROCS(0),
-		"numCPU":       runtime.NumCPU(),
-		"numGoroutine": runtime.NumGoroutine(),
-		"version":      runtime.Version(),
+		"GOARCH":        runtime.GOARCH,
+		"GOOS":          runtime.GOOS,
+		"GOMAXPROCS":    runtime.GOMAXPROCS(0),
+		"num_cpu":       runtime.NumCPU(),
+		"num_goroutine": runtime.NumGoroutine(),
+		"version":       runtime.Version(),
 	}
 
 	httpStatus := map[string]interface{}{
@@ -510,7 +510,7 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 		"node":    nodeStatus,
 	}
 	if !s.lastBackup.IsZero() {
-		status["last_backup"] = s.lastBackup
+		status["last_backup_time"] = s.lastBackup
 	}
 	if s.BuildInfo != nil {
 		status["build"] = s.BuildInfo
