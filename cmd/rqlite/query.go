@@ -91,8 +91,12 @@ func query(ctx *cli.Context, cmd, line string, timer bool, argv *argT) error {
 		Path:     fmt.Sprintf("%sdb/query", argv.Prefix),
 		RawQuery: queryStr.Encode(),
 	}
+	response, err := sendRequest(ctx, "POST", u.String(), line, argv)
+	if err != nil {
+		return err
+	}
 	ret := &queryResponse{}
-	if err := sendRequest(ctx, u.String(), line, argv, ret); err != nil {
+	if err := parseResponse(response, &ret); err != nil {
 		return err
 	}
 	if ret.Error != "" {
