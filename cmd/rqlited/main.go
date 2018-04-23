@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"net"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -150,47 +149,28 @@ func main() {
 	// Start requested profiling.
 	startProfile(cpuProfile, memProfile)
 
-	// Set up node-to-node TCP communication.
-	ln, err := net.Listen("tcp", raftAddr)
-	if err != nil {
-		log.Fatalf("failed to listen on %s: %s", raftAddr, err.Error())
-	}
-	var adv net.Addr
-	if raftAdv != "" {
-		adv, err = net.ResolveTCPAddr("tcp", raftAdv)
-		if err != nil {
-			log.Fatalf("failed to resolve advertise address %s: %s", raftAdv, err.Error())
-		}
-	}
-
-	// Start up node-to-node network mux.
-	var mux *tcp.Mux
+	// Create internode network layer.
+	var tn *tcp.Transport
 	if nodeEncrypt {
 		log.Printf("enabling node-to-node encryption with cert: %s, key: %s", nodeX509Cert, nodeX509Key)
-		mux, err = tcp.NewTLSMux(ln, adv, nodeX509Cert, nodeX509Key)
+		tn = tcp.NewTLSTransport(nodeX509Cert, nodeX509Key, noVerify)
 	} else {
-		mux, err = tcp.NewMux(ln, adv)
+		tn = tcp.NewTransport()
 	}
-	if err != nil {
-		log.Fatalf("failed to create node-to-node mux: %s", err.Error())
+	if err := tn.Open(raftAddr); err != nil {
+		log.Fatalf("failed to open internode network layer: %s", err.Error())
 	}
-	mux.InsecureSkipVerify = noNodeVerify
-	go mux.Serve()
-
-	// Get transport for Raft communications.
-	raftTn := mux.Listen(muxRaftHeader)
 
 	// Create and open the store.
-	dataPath, err = filepath.Abs(dataPath)
+	dataPath, err := filepath.Abs(dataPath)
 	if err != nil {
 		log.Fatalf("failed to determine absolute data path: %s", err.Error())
 	}
 	dbConf := store.NewDBConfig(dsn, !onDisk)
 
-	str := store.New(&store.StoreConfig{
+	str := store.New(tn, &store.StoreConfig{
 		DBConf: dbConf,
 		Dir:    dataPath,
-		Tn:     raftTn,
 		ID:     idOrRaftAddr(),
 	})
 
@@ -221,16 +201,18 @@ func main() {
 		log.Println("node is already member of cluster, skip determining join addresses")
 	}
 
-	// Now, open it.
+	// Now, open store.
 	if err := str.Open(len(joins) == 0); err != nil {
 		log.Fatalf("failed to open store: %s", err.Error())
 	}
 
-	// Create and configure cluster service.
-	tn := mux.Listen(muxMetaHeader)
-	cs := cluster.NewService(tn, str)
-	if err := cs.Open(); err != nil {
-		log.Fatalf("failed to open cluster service: %s", err.Error())
+	// Prepare metadata for join command.
+	apiAdv := httpAddr
+	if httpAdv != "" {
+		apiAdv = httpAdv
+	}
+	meta := map[string]string{
+		"api_addr": apiAdv,
 	}
 
 	// Execute any requested join operation.
@@ -240,7 +222,7 @@ func main() {
 		if raftAdv != "" {
 			advAddr = raftAdv
 		}
-		if j, err := cluster.Join(joins, str.ID(), advAddr, noVerify); err != nil {
+		if j, err := cluster.Join(joins, str.ID(), advAddr, meta, noVerify); err != nil {
 			log.Fatalf("failed to join cluster at %s: %s", joins, err.Error())
 		} else {
 			log.Println("successfully joined cluster at", j)
@@ -250,57 +232,24 @@ func main() {
 		log.Println("no join addresses set")
 	}
 
-	// Wait until database is updated.
+	// Wait until the store is in full consensus.
 	openTimeout, err := time.ParseDuration(raftOpenTimeout)
 	if err != nil {
 		log.Fatalf("failed to parse Raft open timeout: %s", err.Error())
 	}
+	str.WaitForLeader(openTimeout)
 	str.WaitForApplied(openTimeout)
 
-	// Publish to the cluster the mapping between this Raft address and API address.
-	// The Raft layer broadcasts the resolved address, so use that as the key. But
-	// only set different HTTP advertise address if set.
-	apiAdv := httpAddr
-	if httpAdv != "" {
-		apiAdv = httpAdv
+	// This may be a standalone server. In that case set its own metadata.
+	if err := str.SetMetadata(meta); err != nil && err != store.ErrNotLeader {
+		// Non-leader errors are OK, since metadata will then be set through
+		// consensus as a result of a join. All other errors indicate a problem.
+		log.Fatalf("failed to set store metadata: %s", err.Error())
 	}
 
-	if err := publishAPIAddr(cs, raftTn.Addr().String(), apiAdv, publishPeerTimeout); err != nil {
-		log.Fatalf("failed to set peer for %s to %s: %s", raftAddr, httpAddr, err.Error())
-	}
-	log.Printf("set peer for %s to %s", raftTn.Addr().String(), apiAdv)
-
-	// Get the credential store.
-	credStr, err := credentialStore()
-	if err != nil {
-		log.Fatalf("failed to get credential store: %s", err.Error())
-	}
-
-	// Create HTTP server and load authentication information if required.
-	var s *httpd.Service
-	if credStr != nil {
-		s = httpd.New(httpAddr, str, credStr)
-	} else {
-		s = httpd.New(httpAddr, str, nil)
-	}
-
-	s.CertFile = x509Cert
-	s.KeyFile = x509Key
-	s.Expvar = expvar
-	s.Pprof = pprofEnabled
-	s.BuildInfo = map[string]interface{}{
-		"commit":     commit,
-		"branch":     branch,
-		"version":    version,
-		"build_time": buildtime,
-	}
-	if err := s.Start(); err != nil {
+	// Start the HTTP API server.
+	if err := startHTTPService(str); err != nil {
 		log.Fatalf("failed to start HTTP server: %s", err.Error())
-	}
-
-	// Register cross-component statuses.
-	if err := s.RegisterStatus("mux", mux); err != nil {
-		log.Fatalf("failed to register mux status: %s", err.Error())
 	}
 
 	// Block until signalled.
@@ -345,25 +294,32 @@ func determineJoinAddresses() ([]string, error) {
 	return addrs, nil
 }
 
-func publishAPIAddr(c *cluster.Service, raftAddr, apiAddr string, t time.Duration) error {
-	tck := time.NewTicker(publishPeerDelay)
-	defer tck.Stop()
-	tmr := time.NewTimer(t)
-	defer tmr.Stop()
-
-	for {
-		select {
-		case <-tck.C:
-			if err := c.SetPeer(raftAddr, apiAddr); err != nil {
-				log.Printf("failed to set peer for %s to %s: %s (retrying)",
-					raftAddr, apiAddr, err.Error())
-				continue
-			}
-			return nil
-		case <-tmr.C:
-			return fmt.Errorf("set peer timeout expired")
-		}
+func startHTTPService(str *store.Store) error {
+	// Get the credential store.
+	credStr, err := credentialStore()
+	if err != nil {
+		return err
 	}
+
+	// Create HTTP server and load authentication information if required.
+	var s *httpd.Service
+	if credStr != nil {
+		s = httpd.New(httpAddr, str, credStr)
+	} else {
+		s = httpd.New(httpAddr, str, nil)
+	}
+
+	s.CertFile = x509Cert
+	s.KeyFile = x509Key
+	s.Expvar = expvar
+	s.Pprof = pprofEnabled
+	s.BuildInfo = map[string]interface{}{
+		"commit":     commit,
+		"branch":     branch,
+		"version":    version,
+		"build_time": buildtime,
+	}
+	return s.Start()
 }
 
 func credentialStore() (*auth.CredentialsStore, error) {

@@ -7,32 +7,39 @@ import (
 	"github.com/hashicorp/raft"
 )
 
-// Transport is the interface the network service must provide.
-type Transport interface {
+type Listener interface {
 	net.Listener
-
-	// Dial is used to create a new outgoing connection
 	Dial(address string, timeout time.Duration) (net.Conn, error)
 }
 
-// raftTransport takes a Transport and makes it suitable for use by the Raft
-// networking system.
-type raftTransport struct {
-	tn Transport
+// Transport is the network service provided to Raft, and wraps a Listener.
+type Transport struct {
+	ln Listener
 }
 
-func (r *raftTransport) Dial(address raft.ServerAddress, timeout time.Duration) (net.Conn, error) {
-	return r.tn.Dial(string(address), timeout)
+// NewTransport returns an initialized Transport.
+func NewTransport(ln Listener) *Transport {
+	return &Transport{
+		ln: ln,
+	}
 }
 
-func (r *raftTransport) Accept() (net.Conn, error) {
-	return r.tn.Accept()
+// Dial creates a new network connection.
+func (t *Transport) Dial(addr raft.ServerAddress, timeout time.Duration) (net.Conn, error) {
+	return t.ln.Dial(string(addr), timeout)
 }
 
-func (r *raftTransport) Addr() net.Addr {
-	return r.tn.Addr()
+// Accept waits for the next connection.
+func (t *Transport) Accept() (net.Conn, error) {
+	return t.ln.Accept()
 }
 
-func (r *raftTransport) Close() error {
-	return r.tn.Close()
+// Close closes the transport
+func (t *Transport) Close() error {
+	return t.ln.Close()
+}
+
+// Addr returns the binding address of the transport.
+func (t *Transport) Addr() net.Addr {
+	return t.ln.Addr()
 }
