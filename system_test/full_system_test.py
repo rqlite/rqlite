@@ -18,18 +18,25 @@ RQLITED_PATH = os.environ['RQLITED_PATH']
 TIMEOUT=10
 
 class Node(object):
-  def __init__(self, path, node_id, api_addr=None, raft_addr=None, dir=None):
+  def __init__(self, path, node_id,
+               api_addr=None, api_adv=None,
+               raft_addr=None, raft_adv=None,
+               dir=None):
     if api_addr is None:
-      api_addr = self._random_addr()
+      api_addr = random_addr()
     if raft_addr is None:
-      raft_addr = self._random_addr()
+      raft_addr = random_addr()
     if dir is None:
       dir = tempfile.mkdtemp()
+    if api_adv is None:
+      api_adv = api_addr
 
     self.path = path
     self.node_id = node_id
     self.api_addr = api_addr
+    self.api_adv = api_adv
     self.raft_addr = raft_addr
+    self.raft_adv = raft_adv
     self.dir = dir
     self.process = None
     self.stdout_file = os.path.join(dir, 'rqlited.log')
@@ -38,19 +45,34 @@ class Node(object):
     self.stderr_fd = open(self.stderr_file, 'w')
 
   def scramble_network(self):
-    self.api_addr = self._random_addr()
-    self.raft_addr = self._random_addr()
+    if self.api_adv == self.api_addr:
+      self.api_adv = None
+    self.api_addr = random_addr()
+    if self.api_adv is None:
+      self.api_adv = self.api_addr
+
+    if self.raft_adv == self.raft_addr:
+      self.raft_adv = None
+    self.raft_addr = random_addr()
+    if self.raft_adv is None:
+      self.raft_adv = self.raft_addr
 
   def start(self, join=None, wait=True, timeout=TIMEOUT):
     if self.process is not None:
       return
+
     command = [self.path,
                '-node-id', self.node_id,
                '-http-addr', self.api_addr,
                '-raft-addr', self.raft_addr]
+    if self.api_adv is not None:
+      command += ['-http-adv-addr', self.api_adv]
+    if self.raft_adv is not None:
+      command += ['-raft-adv-addr', self.raft_adv]
     if join is not None:
       command += ['-join', 'http://' + join]
     command.append(self.dir)
+
     self.process = subprocess.Popen(command, stdout=self.stdout_fd, stderr=self.stderr_fd)
     t = 0
     while wait:
@@ -128,23 +150,23 @@ class Node(object):
       return urlparse(r.headers['Location']).netloc
 
   def _status_url(self):
-    return 'http://' + self.api_addr + '/status'
+    return 'http://' + self.api_adv + '/status'
   def _query_url(self):
-    return 'http://' + self.api_addr + '/db/query'
+    return 'http://' + self.api_adv + '/db/query'
   def _execute_url(self):
-    return 'http://' + self.api_addr + '/db/execute'
-  def _random_addr(self):
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.bind(('localhost', 0))
-    return ':'.join([s.getsockname()[0], str(s.getsockname()[1])])
-
+    return 'http://' + self.api_adv + '/db/execute'
   def __eq__(self, other):
     return self.node_id == other.node_id
   def __str__(self):
-    return '%s:[%s]:[%s]:[%s]' % (self.node_id, self.api_addr, self.raft_addr, self.dir)
+    return '%s:[%s]:[%s]:[%s]' % (self.node_id, self.api_adv, self.raft_addr, self.dir)
   def __del__(self):
     self.stdout_fd.close()
     self.stderr_fd.close()
+
+def random_addr():
+  s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+  s.bind(('localhost', 0))
+  return ':'.join([s.getsockname()[0], str(s.getsockname()[1])])
 
 def deprovision_node(node):
   node.stop()
@@ -179,11 +201,11 @@ class TestEndToEnd(unittest.TestCase):
     n0.wait_for_leader()
 
     n1 = Node(RQLITED_PATH, '1')
-    n1.start(join=n0.api_addr)
+    n1.start(join=n0.api_adv)
     n1.wait_for_leader()
 
     n2 = Node(RQLITED_PATH, '2')
-    n2.start(join=n0.api_addr)
+    n2.start(join=n0.api_adv)
     n2.wait_for_leader()
 
     self.cluster = Cluster([n0, n1, n2])
@@ -230,12 +252,12 @@ class TestEndToEnd(unittest.TestCase):
     fs = self.cluster.followers()
     self.assertEqual(len(fs), 2)
     for n in fs:
-      self.assertEqual(l.api_addr, n.redirect_addr())
+      self.assertEqual(l.api_adv, n.redirect_addr())
 
     l.stop()
     n = self.cluster.wait_for_leader(node_exc=l)
     for f in self.cluster.followers():
-      self.assertEqual(n.api_addr, f.redirect_addr())
+      self.assertEqual(n.api_adv, f.redirect_addr())
 
   def test_node_restart_different_ip(self):
     ''' Test that a node restarting with different IP addresses successfully rejoins the cluster'''
@@ -251,11 +273,29 @@ class TestEndToEnd(unittest.TestCase):
     self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
 
     f.scramble_network()
-    f.start(join=l.api_addr)
+    f.start(join=l.api_adv)
     f.wait_for_leader()
     f.wait_for_applied_index(l.applied_index())
     j = f.query('SELECT * FROM foo', level='none')
     self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
+
+class TestEndToEndAdvAddr(TestEndToEnd):
+  def setUp(self):
+    n0 = Node(RQLITED_PATH, '0',
+              api_addr="0.0.0.0:4001", api_adv="localhost:4001",
+              raft_addr="0.0.0.0:4002", raft_adv="localhost:4002")
+    n0.start()
+    n0.wait_for_leader()
+
+    n1 = Node(RQLITED_PATH, '1')
+    n1.start(join=n0.api_adv)
+    n1.wait_for_leader()
+
+    n2 = Node(RQLITED_PATH, '2')
+    n2.start(join=n0.api_adv)
+    n2.wait_for_leader()
+
+    self.cluster = Cluster([n0, n1, n2])
 
 if __name__ == "__main__":
   unittest.main(verbosity=2)
