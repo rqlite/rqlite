@@ -483,12 +483,12 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rt := map[string]interface{}{
-		"GOARCH":       runtime.GOARCH,
-		"GOOS":         runtime.GOOS,
-		"GOMAXPROCS":   runtime.GOMAXPROCS(0),
+		"GOARCH":        runtime.GOARCH,
+		"GOOS":          runtime.GOOS,
+		"GOMAXPROCS":    runtime.GOMAXPROCS(0),
 		"num_cpu":       runtime.NumCPU(),
 		"num_goroutine": runtime.NumGoroutine(),
-		"version":      runtime.Version(),
+		"version":       runtime.Version(),
 	}
 
 	httpStatus := map[string]interface{}{
