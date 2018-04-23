@@ -7,6 +7,8 @@ import (
 	"github.com/hashicorp/raft"
 )
 
+// Listener is the interface Raft-compatible network layers
+// should implement.
 type Listener interface {
 	net.Listener
 	Dial(address string, timeout time.Duration) (net.Conn, error)
