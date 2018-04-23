@@ -32,8 +32,12 @@ func execute(ctx *cli.Context, cmd, line string, timer bool, argv *argT) error {
 		Path:     fmt.Sprintf("%sdb/execute", argv.Prefix),
 		RawQuery: queryStr.Encode(),
 	}
+	response, err := sendRequest(ctx, "POST", u.String(), line, argv)
+	if err != nil {
+		return err
+	}
 	ret := &executeResponse{}
-	if err := sendRequest(ctx, u.String(), line, argv, ret); err != nil {
+	if err := parseResponse(response, &ret); err != nil {
 		return err
 	}
 	if ret.Error != "" {
