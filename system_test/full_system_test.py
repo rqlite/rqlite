@@ -44,6 +44,11 @@ class Node(object):
     self.stderr_file = os.path.join(dir, 'rqlited.err')
     self.stderr_fd = open(self.stderr_file, 'w')
 
+  def APIAddr(self):
+      if self.api_adv is not None:
+          return self.api_adv
+      return self.api_addr
+
   def scramble_network(self):
     if self.api_adv == self.api_addr:
       self.api_adv = None
@@ -150,15 +155,15 @@ class Node(object):
       return urlparse(r.headers['Location']).netloc
 
   def _status_url(self):
-    return 'http://' + self.api_adv + '/status'
+    return 'http://' + self.APIAddr() + '/status'
   def _query_url(self):
-    return 'http://' + self.api_adv + '/db/query'
+    return 'http://' + self.APIAddr() + '/db/query'
   def _execute_url(self):
-    return 'http://' + self.api_adv + '/db/execute'
+    return 'http://' + self.APIAddr() + '/db/execute'
   def __eq__(self, other):
     return self.node_id == other.node_id
   def __str__(self):
-    return '%s:[%s]:[%s]:[%s]' % (self.node_id, self.api_adv, self.raft_addr, self.dir)
+    return '%s:[%s]:[%s]:[%s]' % (self.node_id, self.APIAddr(), self.raft_addr, self.dir)
   def __del__(self):
     self.stdout_fd.close()
     self.stderr_fd.close()
@@ -201,11 +206,11 @@ class TestEndToEnd(unittest.TestCase):
     n0.wait_for_leader()
 
     n1 = Node(RQLITED_PATH, '1')
-    n1.start(join=n0.api_adv)
+    n1.start(join=n0.APIAddr())
     n1.wait_for_leader()
 
     n2 = Node(RQLITED_PATH, '2')
-    n2.start(join=n0.api_adv)
+    n2.start(join=n0.APIAddr())
     n2.wait_for_leader()
 
     self.cluster = Cluster([n0, n1, n2])
@@ -252,12 +257,12 @@ class TestEndToEnd(unittest.TestCase):
     fs = self.cluster.followers()
     self.assertEqual(len(fs), 2)
     for n in fs:
-      self.assertEqual(l.api_adv, n.redirect_addr())
+      self.assertEqual(l.APIAddr(), n.redirect_addr())
 
     l.stop()
     n = self.cluster.wait_for_leader(node_exc=l)
     for f in self.cluster.followers():
-      self.assertEqual(n.api_adv, f.redirect_addr())
+      self.assertEqual(n.APIAddr(), f.redirect_addr())
 
   def test_node_restart_different_ip(self):
     ''' Test that a node restarting with different IP addresses successfully rejoins the cluster'''
@@ -273,7 +278,7 @@ class TestEndToEnd(unittest.TestCase):
     self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
 
     f.scramble_network()
-    f.start(join=l.api_adv)
+    f.start(join=l.APIAddr())
     f.wait_for_leader()
     f.wait_for_applied_index(l.applied_index())
     j = f.query('SELECT * FROM foo', level='none')
@@ -288,11 +293,11 @@ class TestEndToEndAdvAddr(TestEndToEnd):
     n0.wait_for_leader()
 
     n1 = Node(RQLITED_PATH, '1')
-    n1.start(join=n0.api_adv)
+    n1.start(join=n0.APIAddr())
     n1.wait_for_leader()
 
     n2 = Node(RQLITED_PATH, '2')
-    n2.start(join=n0.api_adv)
+    n2.start(join=n0.APIAddr())
     n2.wait_for_leader()
 
     self.cluster = Cluster([n0, n1, n2])
