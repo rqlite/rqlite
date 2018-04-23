@@ -393,7 +393,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		"heartbeat_timeout":  s.HeartbeatTimeout.String(),
 		"snapshot_threshold": s.SnapshotThreshold,
 		"metadata":           s.meta,
-		"peers":              nodes,
+		"nodes":              nodes,
 		"dir":                s.raftDir,
 		"sqlite3":            dbStatus,
 		"db_conf":            s.dbConf,
