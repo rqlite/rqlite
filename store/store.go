@@ -376,7 +376,6 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	
 	leaderID, err := s.LeaderID()
 	if err != nil {
 		return nil, err
