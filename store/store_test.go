@@ -446,6 +446,75 @@ func Test_MultiNodeJoinRemove(t *testing.T) {
 	}
 }
 
+func Test_MultiNodeReJoinNewIP(t *testing.T) {
+	s0 := mustNewStore(true)
+	defer os.RemoveAll(s0.Path())
+	if err := s0.Open(true); err != nil {
+		t.Fatalf("failed to open node for multi-node rejoin IP test: %s", err.Error())
+	}
+	defer s0.Close(true)
+	s0.WaitForLeader(10 * time.Second)
+
+	s1 := mustNewStore(true)
+	defer os.RemoveAll(s1.Path())
+	if err := s1.Open(false); err != nil {
+		t.Fatalf("failed to open node for multi-node rejoin IP test: %s", err.Error())
+	}
+	defer s1.Close(true)
+
+	s2 := mustNewStore(true)
+	defer os.RemoveAll(s2.Path())
+	if err := s2.Open(false); err != nil {
+		t.Fatalf("failed to open node for multi-node rejoin IP test: %s", err.Error())
+	}
+	defer s2.Close(true)
+
+	// Get sorted list of cluster nodes.
+	storeNodes := []string{s0.ID(), s1.ID(), s2.ID()}
+	sort.StringSlice(storeNodes).Sort()
+
+	// Join the second and third nodes to the first.
+	if err := s0.Join(s1.ID(), s1.Addr().String()); err != nil {
+		t.Fatalf("failed to join to node at %s: %s", s0.Addr().String(), err.Error())
+	}
+	if err := s0.Join(s2.ID(), s2.Addr().String()); err != nil {
+		t.Fatalf("failed to join to node at %s: %s", s0.Addr().String(), err.Error())
+	}
+
+	// Wait for all nodes ot settle
+	s0.WaitForLeader(10 * time.Second)
+	s1.WaitForLeader(10 * time.Second)
+	s2.WaitForLeader(10 * time.Second)
+
+	nodes, err := s0.Nodes()
+	if err != nil {
+		t.Fatalf("failed to get nodes: %s", err.Error())
+	}
+
+	if len(nodes) != len(storeNodes) {
+		t.Fatalf("size of cluster is not correct")
+	}
+	if storeNodes[0] != nodes[0].ID ||
+		storeNodes[1] != nodes[1].ID ||
+		storeNodes[2] != nodes[2].ID {
+		t.Fatalf("cluster does not have correct nodes")
+	}
+
+	t.Log("going to shut down s2 in 10 seconds.....")
+	time.Sleep(10)
+
+	// Shutdown a node, change its Raft address, and join it to the cluster again.
+	s2.Close(true)
+	s2 = mustNewStoreWithIDAndPath(true, s2.ID(), s2.Path())
+	if err := s2.Open(false); err != nil {
+		t.Fatalf("failed to open node for multi-node rejoin IP test: %s", err.Error())
+	}
+	if err := s0.Join(s2.ID(), s2.Addr().String()); err != nil {
+		t.Fatalf("failed to rejoin to node at %s: %s", s0.Addr().String(), err.Error())
+	}
+	s2.WaitForLeader(10 * time.Second)
+}
+
 func Test_MultiNodeExecuteQuery(t *testing.T) {
 	s0 := mustNewStore(true)
 	defer os.RemoveAll(s0.Path())
@@ -729,6 +798,21 @@ func mustNewStore(inmem bool) *Store {
 		Dir:    path,
 		Tn:     tn,
 		ID:     path, // Could be any unique string.
+	})
+	if s == nil {
+		panic("failed to create new store")
+	}
+	return s
+}
+
+func mustNewStoreWithIDAndPath(inmem bool, id, path string) *Store {
+	tn := mustMockTransport("localhost:0")
+	cfg := NewDBConfig("", inmem)
+	s := New(&StoreConfig{
+		DBConf: cfg,
+		Dir:    path,
+		Tn:     tn,
+		ID:     id,
 	})
 	if s == nil {
 		panic("failed to create new store")
