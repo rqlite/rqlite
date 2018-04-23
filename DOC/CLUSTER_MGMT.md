@@ -42,7 +42,7 @@ Setting the Node ID (`-node-id`) is optional, and can be set to anything you wis
 ## Node network addresses
 A node ID is what uniquely identifies a node. In contrast a node's network addresses can change between restarts, and an rqlite cluster will automatically update its configuration if a node rejoins a cluster with changed network addresses. If the nodes that comprise your cluster might change network addresses between restarts, explicitly setting node IDs is strongly recommended.
 
-Note that if a node's network addresses change on a restart, that node **must explicitly rejoin the cluster** when it starts. Rejoining the cluster is how a node correctly informs the cluster that it has new network addresses.
+Note that if a node's network addresses change on a restart, that node **must explicitly rejoin the cluster** when it starts. Rejoining the cluster is how a node correctly informs the cluster that it has new network addresses. This is not difficult to do in practise -- simply tell a node to join the cluster *every time* it restarts by setting `-join`. A node can safely join a cluster of which it is already a member, even if its network adddresses have not changed.
 
 ## Listening on all interfaces
 You can pass `0.0.0.0` to both `-http-addr` and `-raft-addr` if you wish a node to listen on all interfaces. You must still pass an explicit network address to `-join` however. In this case you'll also want to set `-http-adv-addr` to the actual interface address, so other nodes learn the correct network address to use to reach the node listening on `0.0.0.0`.
