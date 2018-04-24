@@ -40,6 +40,8 @@ const (
 	sqliteFile          = "db.sqlite"
 	leaderWaitDelay     = 100 * time.Millisecond
 	appliedWaitDelay    = 100 * time.Millisecond
+	connectionPoolCount = 5
+	connectionTimeout   = 10 * time.Second
 )
 
 // QueryRequest represents a query that returns rows, and does not modify
@@ -90,11 +92,11 @@ type Store struct {
 	raft    *raft.Raft // The consensus mechanism.
 	ln      Listener
 	raftTn  *raft.NetworkTransport
-	raftID  string // Node ID.
-	raftLog *raftboltdb.BoltStore
-	dbConf  *DBConfig // SQLite database config.
-	dbPath  string    // Path to underlying SQLite file, if not in-memory.
-	db      *sql.DB   // The underlying SQLite store.
+	raftID  string                // Node ID.
+	raftLog *raftboltdb.BoltStore // Persisent log store.
+	dbConf  *DBConfig             // SQLite database config.
+	dbPath  string                // Path to underlying SQLite file, if not in-memory.
+	db      *sql.DB               // The underlying SQLite store.
 
 	metaMu sync.RWMutex
 	meta   map[string]map[string]string
@@ -154,9 +156,9 @@ func (s *Store) Open(enableSingle bool) error {
 	// Is this a brand new node?
 	newNode := !pathExists(filepath.Join(s.raftDir, "raft.db"))
 
-	// Setup Raft communication.
 	// Create Raft-compatible network layer.
-	s.raftTn = raft.NewNetworkTransport(NewTransport(s.ln), 10, 10*time.Second, nil) // XXX CONFIG NO MAGIC.
+	s.raftTn = raft.NewNetworkTransport(NewTransport(s.ln),
+		connectionPoolCount, connectionTimeout, nil)
 
 	// Get the Raft configuration for this store.
 	config := s.raftConfig()
@@ -523,7 +525,8 @@ func (s *Store) Join(id, addr string, metadata map[string]string) error {
 			// However if *both* the ID and the address are the same, the no
 			// join is actually needed.
 			if srv.Address == raft.ServerAddress(addr) && srv.ID == raft.ServerID(id) {
-				s.logger.Printf("node %s at %s already member of cluster, ignoring join request", id, addr)
+				s.logger.Printf("node %s at %s already member of cluster, ignoring join request",
+					id, addr)
 				return nil
 			}
 			if err := s.remove(id); err != nil {
