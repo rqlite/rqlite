@@ -10,6 +10,7 @@ import os
 import shutil
 import time
 import socket
+import sqlite3
 import sys
 from urlparse import urlparse
 import unittest
@@ -149,6 +150,18 @@ class Node(object):
     r.raise_for_status()
     return r.json()
 
+  def backup(self, file):
+    with open(file, 'w') as fd:
+      r = requests.get(self._backup_url())
+      r.raise_for_status()
+      fd.write(r.content)
+
+  def restore(self, file):
+    conn = sqlite3.connect(file)
+    r = requests.post(self._load_url(), data='\n'.join(conn.iterdump()))
+    r.raise_for_status()
+    conn.close()
+
   def redirect_addr(self):
     r = requests.post(self._execute_url(), data=json.dumps(['nonsense']), allow_redirects=False)
     if r.status_code == 301:
@@ -160,6 +173,10 @@ class Node(object):
     return 'http://' + self.APIAddr() + '/db/query'
   def _execute_url(self):
     return 'http://' + self.APIAddr() + '/db/execute'
+  def _backup_url(self):
+    return 'http://' + self.APIAddr() + '/db/backup'
+  def _load_url(self):
+    return 'http://' + self.APIAddr() + '/db/load'
   def __eq__(self, other):
     return self.node_id == other.node_id
   def __str__(self):
@@ -301,6 +318,36 @@ class TestEndToEndAdvAddr(TestEndToEnd):
     n2.wait_for_leader()
 
     self.cluster = Cluster([n0, n1, n2])
+
+class TestEndToEndBackupRestore(unittest.TestCase):
+  def test_backup_restore(self):
+    fd, self.db_file = tempfile.mkstemp()
+    os.close(fd)
+
+    self.node0 = Node(RQLITED_PATH, '0')
+    self.node0.start()
+    self.node0.wait_for_leader()
+    self.node0.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
+    self.node0.execute('INSERT INTO foo(name) VALUES("fiona")')
+
+    self.node0.backup(self.db_file)
+    conn = sqlite3.connect(self.db_file)
+    rows = conn.execute('SELECT * FROM foo').fetchall()
+    self.assertEqual(len(rows), 1)
+    self.assertEqual(rows[0], (1, u'fiona'))
+    conn.close()
+
+    self.node1 = Node(RQLITED_PATH, '1')
+    self.node1.start()
+    self.node1.wait_for_leader()
+    self.node1.restore(self.db_file)
+    j = self.node1.query('SELECT * FROM foo')
+    self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
+
+  def tearDown(self):
+    deprovision_node(self.node0)
+    deprovision_node(self.node1)
+    os.remove(self.db_file)
 
 if __name__ == "__main__":
   unittest.main(verbosity=2)
