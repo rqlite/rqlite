@@ -121,6 +121,7 @@ type Store struct {
 	logger *log.Logger
 
 	SnapshotThreshold uint64
+	SnapshotInterval  time.Duration
 	HeartbeatTimeout  time.Duration
 	ApplyTimeout      time.Duration
 }
@@ -703,6 +704,9 @@ func (s *Store) raftConfig() *raft.Config {
 	config := raft.DefaultConfig()
 	if s.SnapshotThreshold != 0 {
 		config.SnapshotThreshold = s.SnapshotThreshold
+	}
+	if s.SnapshotInterval != 0 {
+		config.SnapshotInterval = s.SnapshotInterval
 	}
 	if s.HeartbeatTimeout != 0 {
 		config.HeartbeatTimeout = s.HeartbeatTimeout
