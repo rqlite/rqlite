@@ -14,6 +14,8 @@ import (
  */
 
 func Test_DbFileCreation(t *testing.T) {
+	t.Parallel()
+
 	dir, err := ioutil.TempDir("", "rqlite-test-")
 	defer os.RemoveAll(dir)
 
@@ -31,6 +33,8 @@ func Test_DbFileCreation(t *testing.T) {
 }
 
 func Test_TableCreation(t *testing.T) {
+	t.Parallel()
+
 	db, path := mustCreateDatabase()
 	defer db.Close()
 	defer os.Remove(path)
@@ -50,6 +54,8 @@ func Test_TableCreation(t *testing.T) {
 }
 
 func Test_SQLiteMasterTable(t *testing.T) {
+	t.Parallel()
+
 	db, path := mustCreateDatabase()
 	defer db.Close()
 	defer os.Remove(path)
@@ -69,6 +75,8 @@ func Test_SQLiteMasterTable(t *testing.T) {
 }
 
 func Test_LoadInMemory(t *testing.T) {
+	t.Parallel()
+
 	db, path := mustCreateDatabase()
 	defer db.Close()
 	defer os.Remove(path)
@@ -102,6 +110,8 @@ func Test_LoadInMemory(t *testing.T) {
 }
 
 func Test_EmptyStatements(t *testing.T) {
+	t.Parallel()
+
 	db, path := mustCreateDatabase()
 	defer db.Close()
 	defer os.Remove(path)
@@ -117,6 +127,8 @@ func Test_EmptyStatements(t *testing.T) {
 }
 
 func Test_SimpleSingleStatements(t *testing.T) {
+	t.Parallel()
+
 	db, path := mustCreateDatabase()
 	defer db.Close()
 	defer os.Remove(path)
@@ -178,6 +190,8 @@ func Test_SimpleSingleStatements(t *testing.T) {
 }
 
 func Test_SimpleJoinStatements(t *testing.T) {
+	t.Parallel()
+
 	db, path := mustCreateDatabase()
 	defer db.Close()
 	defer os.Remove(path)
@@ -216,6 +230,8 @@ func Test_SimpleJoinStatements(t *testing.T) {
 }
 
 func Test_SimpleSingleConcatStatements(t *testing.T) {
+	t.Parallel()
+
 	db, path := mustCreateDatabase()
 	defer db.Close()
 	defer os.Remove(path)
@@ -240,6 +256,8 @@ func Test_SimpleSingleConcatStatements(t *testing.T) {
 }
 
 func Test_SimpleMultiStatements(t *testing.T) {
+	t.Parallel()
+
 	db, path := mustCreateDatabase()
 	defer db.Close()
 	defer os.Remove(path)
@@ -267,6 +285,8 @@ func Test_SimpleMultiStatements(t *testing.T) {
 }
 
 func Test_SimpleSingleMultiLineStatements(t *testing.T) {
+	t.Parallel()
+
 	db, path := mustCreateDatabase()
 	defer db.Close()
 	defer os.Remove(path)
@@ -290,6 +310,8 @@ CREATE TABLE foo (
 }
 
 func Test_SimpleFailingStatements_Execute(t *testing.T) {
+	t.Parallel()
+
 	db, path := mustCreateDatabase()
 	defer db.Close()
 	defer os.Remove(path)
@@ -341,6 +363,8 @@ func Test_SimpleFailingStatements_Execute(t *testing.T) {
 }
 
 func Test_SimpleFailingStatements_Query(t *testing.T) {
+	t.Parallel()
+
 	db, path := mustCreateDatabase()
 	defer db.Close()
 	defer os.Remove(path)
@@ -369,6 +393,8 @@ func Test_SimpleFailingStatements_Query(t *testing.T) {
 }
 
 func Test_SimplePragmaTableInfo(t *testing.T) {
+	t.Parallel()
+
 	db, path := mustCreateDatabase()
 	defer db.Close()
 	defer os.Remove(path)
@@ -392,6 +418,8 @@ func Test_SimplePragmaTableInfo(t *testing.T) {
 }
 
 func Test_CommonTableExpressions(t *testing.T) {
+	t.Parallel()
+
 	db, path := mustCreateDatabase()
 	defer db.Close()
 	defer os.Remove(path)
@@ -424,6 +452,8 @@ func Test_CommonTableExpressions(t *testing.T) {
 }
 
 func Test_ForeignKeyConstraints(t *testing.T) {
+	t.Parallel()
+
 	db, path := mustCreateDatabase()
 	defer db.Close()
 	defer os.Remove(path)
@@ -485,6 +515,8 @@ func Test_ForeignKeyConstraints(t *testing.T) {
 }
 
 func Test_UniqueConstraints(t *testing.T) {
+	t.Parallel()
+
 	db, path := mustCreateDatabase()
 	defer db.Close()
 	defer os.Remove(path)
@@ -513,6 +545,8 @@ func Test_UniqueConstraints(t *testing.T) {
 }
 
 func Test_PartialFail(t *testing.T) {
+	t.Parallel()
+
 	db, path := mustCreateDatabase()
 	defer db.Close()
 	defer os.Remove(path)
@@ -545,6 +579,8 @@ func Test_PartialFail(t *testing.T) {
 }
 
 func Test_SimpleTransaction(t *testing.T) {
+	t.Parallel()
+
 	db, path := mustCreateDatabase()
 	defer db.Close()
 	defer os.Remove(path)
@@ -577,6 +613,8 @@ func Test_SimpleTransaction(t *testing.T) {
 }
 
 func Test_PartialFailTransaction(t *testing.T) {
+	t.Parallel()
+
 	db, path := mustCreateDatabase()
 	defer db.Close()
 	defer os.Remove(path)
@@ -609,6 +647,8 @@ func Test_PartialFailTransaction(t *testing.T) {
 }
 
 func Test_Backup(t *testing.T) {
+	t.Parallel()
+
 	db, path := mustCreateDatabase()
 	defer db.Close()
 	defer os.Remove(path)

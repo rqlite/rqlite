@@ -14,6 +14,8 @@ import (
 )
 
 func Test_OpenStoreSingleNode(t *testing.T) {
+	t.Parallel()
+
 	s := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
 
@@ -35,6 +37,8 @@ func Test_OpenStoreSingleNode(t *testing.T) {
 }
 
 func Test_OpenStoreCloseSingleNode(t *testing.T) {
+	t.Parallel()
+
 	s := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
 
@@ -48,6 +52,8 @@ func Test_OpenStoreCloseSingleNode(t *testing.T) {
 }
 
 func Test_SingleNodeInMemExecuteQuery(t *testing.T) {
+	t.Parallel()
+
 	s := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
 
@@ -87,6 +93,8 @@ func Test_SingleNodeInMemExecuteQuery(t *testing.T) {
 
 // Test_SingleNodeInMemExecuteQueryFail ensures database level errors are presented by the store.
 func Test_SingleNodeInMemExecuteQueryFail(t *testing.T) {
+	t.Parallel()
+
 	s := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
 
@@ -109,6 +117,8 @@ func Test_SingleNodeInMemExecuteQueryFail(t *testing.T) {
 }
 
 func Test_SingleNodeFileExecuteQuery(t *testing.T) {
+	t.Parallel()
+
 	s := mustNewStore(false)
 	defer os.RemoveAll(s.Path())
 
@@ -147,6 +157,8 @@ func Test_SingleNodeFileExecuteQuery(t *testing.T) {
 }
 
 func Test_SingleNodeExecuteQueryTx(t *testing.T) {
+	t.Parallel()
+
 	s := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
 
@@ -189,6 +201,8 @@ func Test_SingleNodeExecuteQueryTx(t *testing.T) {
 }
 
 func Test_SingleNodeLoad(t *testing.T) {
+	t.Parallel()
+
 	s := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
 
@@ -223,6 +237,8 @@ COMMIT;
 }
 
 func Test_SingleNodeSingleCommandTrigger(t *testing.T) {
+	t.Parallel()
+
 	s := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
 
@@ -262,6 +278,8 @@ COMMIT;
 }
 
 func Test_SingleNodeLoadNoStatements(t *testing.T) {
+	t.Parallel()
+
 	s := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
 
@@ -282,6 +300,8 @@ COMMIT;
 }
 
 func Test_SingleNodeLoadEmpty(t *testing.T) {
+	t.Parallel()
+
 	s := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
 
@@ -299,6 +319,8 @@ func Test_SingleNodeLoadEmpty(t *testing.T) {
 }
 
 func Test_SingleNodeLoadChinook(t *testing.T) {
+	t.Parallel()
+
 	s := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
 
@@ -351,6 +373,8 @@ func Test_SingleNodeLoadChinook(t *testing.T) {
 }
 
 func Test_MultiNodeJoinRemove(t *testing.T) {
+	t.Parallel()
+
 	s0 := mustNewStore(true)
 	defer os.RemoveAll(s0.Path())
 	if err := s0.Open(true); err != nil {
@@ -418,6 +442,8 @@ func Test_MultiNodeJoinRemove(t *testing.T) {
 }
 
 func Test_MultiNodeExecuteQuery(t *testing.T) {
+	t.Parallel()
+
 	s0 := mustNewStore(true)
 	defer os.RemoveAll(s0.Path())
 	if err := s0.Open(true); err != nil {
@@ -500,6 +526,8 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 }
 
 func Test_SingleNodeSnapshotOnDisk(t *testing.T) {
+	t.Parallel()
+
 	s := mustNewStore(false)
 	defer os.RemoveAll(s.Path())
 
@@ -562,6 +590,8 @@ func Test_SingleNodeSnapshotOnDisk(t *testing.T) {
 }
 
 func Test_SingleNodeSnapshotInMem(t *testing.T) {
+	t.Parallel()
+
 	s := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
 
@@ -624,6 +654,8 @@ func Test_SingleNodeSnapshotInMem(t *testing.T) {
 }
 
 func Test_StoreLogTruncationMultinode(t *testing.T) {
+	// Test is explicitly not parallel because it accesses global Store stats.
+
 	s0 := mustNewStore(true)
 	defer os.RemoveAll(s0.Path())
 	s0.SnapshotThreshold = 4
@@ -692,6 +724,8 @@ func Test_StoreLogTruncationMultinode(t *testing.T) {
 }
 
 func Test_MetadataMultinode(t *testing.T) {
+	t.Parallel()
+
 	s0 := mustNewStore(true)
 	if err := s0.Open(true); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
@@ -754,6 +788,8 @@ func Test_MetadataMultinode(t *testing.T) {
 }
 
 func Test_IsLeader(t *testing.T) {
+	t.Parallel()
+
 	s := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
 
@@ -769,6 +805,8 @@ func Test_IsLeader(t *testing.T) {
 }
 
 func Test_State(t *testing.T) {
+	t.Parallel()
+
 	s := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
 

@@ -8,6 +8,8 @@ import (
 )
 
 func Test_SingleNode(t *testing.T) {
+	t.Parallel()
+
 	node := mustNewLeaderNode()
 	defer node.Deprovision()
 
@@ -71,6 +73,8 @@ func Test_SingleNode(t *testing.T) {
 }
 
 func Test_SingleNodeMulti(t *testing.T) {
+	t.Parallel()
+
 	node := mustNewLeaderNode()
 	defer node.Deprovision()
 
@@ -132,6 +136,8 @@ func Test_SingleNodeMulti(t *testing.T) {
 }
 
 func Test_SingleNodeCoverage(t *testing.T) {
+	t.Parallel()
+
 	node := mustNewLeaderNode()
 	defer node.Deprovision()
 

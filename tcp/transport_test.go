@@ -15,6 +15,8 @@ func Test_NewTransport(t *testing.T) {
 }
 
 func Test_TransportOpenClose(t *testing.T) {
+	t.Parallel()
+
 	tn := NewTransport()
 	if err := tn.Open("localhost:0"); err != nil {
 		t.Fatalf("failed to open transport: %s", err.Error())
@@ -28,6 +30,8 @@ func Test_TransportOpenClose(t *testing.T) {
 }
 
 func Test_TransportDial(t *testing.T) {
+	t.Parallel()
+
 	tn1 := NewTransport()
 	tn1.Open("localhost:0")
 	go tn1.Accept()
@@ -41,6 +45,8 @@ func Test_TransportDial(t *testing.T) {
 }
 
 func Test_NewTLSTransport(t *testing.T) {
+	t.Parallel()
+
 	c := x509.CertFile()
 	defer os.Remove(c)
 	k := x509.KeyFile()
@@ -52,6 +58,8 @@ func Test_NewTLSTransport(t *testing.T) {
 }
 
 func Test_TLSTransportOpenClose(t *testing.T) {
+	t.Parallel()
+
 	c := x509.CertFile()
 	defer os.Remove(c)
 	k := x509.KeyFile()

@@ -11,6 +11,8 @@ import (
 
 // Test_NewClient tests that a new disco client can be instantiated. Nothing more.
 func Test_NewClient(t *testing.T) {
+	t.Parallel()
+
 	c := New("https://discovery.rqlite.com")
 	if c == nil {
 		t.Fatal("failed to create new disco client")
@@ -23,6 +25,8 @@ func Test_NewClient(t *testing.T) {
 
 // Test_ClientRegisterBadRequest tests how the client responds to a 400 from the Discovery Service.
 func Test_ClientRegisterBadRequest(t *testing.T) {
+	t.Parallel()
+
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
 			t.Fatalf("Client did not use POST")
@@ -40,6 +44,8 @@ func Test_ClientRegisterBadRequest(t *testing.T) {
 
 // Test_ClientRegisterNotFound tests how the client responds to a 404 from the Discovery Service.
 func Test_ClientRegisterNotFound(t *testing.T) {
+	t.Parallel()
+
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
 			t.Fatalf("Client did not use POST")
@@ -57,6 +63,8 @@ func Test_ClientRegisterNotFound(t *testing.T) {
 
 // Test_ClientRegisterForbidden tests how the client responds to a 403 from the Discovery Service.
 func Test_ClientRegisterForbidden(t *testing.T) {
+	t.Parallel()
+
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
 			t.Fatalf("Client did not use POST")
@@ -74,6 +82,8 @@ func Test_ClientRegisterForbidden(t *testing.T) {
 
 // Test_ClientRegisterRequestOK tests how the client responds to a 200 from the Discovery Service.
 func Test_ClientRegisterRequestOK(t *testing.T) {
+	t.Parallel()
+
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
 			t.Fatalf("Client did not use POST")
@@ -113,6 +123,8 @@ func Test_ClientRegisterRequestOK(t *testing.T) {
 
 // Test_ClientRegisterRequestOK tests how the client responds to a redirect from the Discovery Service.
 func Test_ClientRegisterRequestRedirectOK(t *testing.T) {
+	t.Parallel()
+
 	ts1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
 			t.Fatalf("Client did not use POST")
@@ -155,6 +167,8 @@ func Test_ClientRegisterRequestRedirectOK(t *testing.T) {
 
 // Test_ClientRegisterFollowerOK tests how the client responds to getting a list of nodes it can join.
 func Test_ClientRegisterFollowerOK(t *testing.T) {
+	t.Parallel()
+
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
 			t.Fatalf("Client did not use POST")
@@ -178,6 +192,8 @@ func Test_ClientRegisterFollowerOK(t *testing.T) {
 
 // Test_ClientRegisterFollowerMultiOK tests how the client responds to getting a list of nodes it can join.
 func Test_ClientRegisterFollowerMultiOK(t *testing.T) {
+	t.Parallel()
+
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
 			t.Fatalf("Client did not use POST")

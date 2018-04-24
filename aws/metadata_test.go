@@ -8,6 +8,8 @@ import (
 )
 
 func Test_NewMetadataClient(t *testing.T) {
+	t.Parallel()
+
 	c := NewMetadataClient()
 	if c == nil {
 		t.Fatalf("failed to create new Metadata client")
@@ -15,6 +17,8 @@ func Test_NewMetadataClient(t *testing.T) {
 }
 
 func Test_MetadataClient_LocalIPv4(t *testing.T) {
+	t.Parallel()
+
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "GET" {
 			t.Fatalf("Client did not use GET")
@@ -38,6 +42,8 @@ func Test_MetadataClient_LocalIPv4(t *testing.T) {
 }
 
 func Test_MetadataClient_LocalIPv4Fail(t *testing.T) {
+	t.Parallel()
+
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 	}))
@@ -52,6 +58,8 @@ func Test_MetadataClient_LocalIPv4Fail(t *testing.T) {
 }
 
 func Test_MetadataClient_PublicIPv4(t *testing.T) {
+	t.Parallel()
+
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "GET" {
 			t.Fatalf("Client did not use GET")
@@ -75,6 +83,8 @@ func Test_MetadataClient_PublicIPv4(t *testing.T) {
 }
 
 func Test_MetadataClient_PublicIPv4Fail(t *testing.T) {
+	t.Parallel()
+
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 	}))
