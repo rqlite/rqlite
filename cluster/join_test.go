@@ -8,6 +8,8 @@ import (
 )
 
 func Test_SingleJoinOK(t *testing.T) {
+	t.Parallel()
+
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
 			t.Fatalf("Client did not use POST")
@@ -26,6 +28,8 @@ func Test_SingleJoinOK(t *testing.T) {
 }
 
 func Test_SingleJoinMetaOK(t *testing.T) {
+	t.Parallel()
+
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
 			t.Fatalf("Client did not use POST")
@@ -45,6 +49,8 @@ func Test_SingleJoinMetaOK(t *testing.T) {
 }
 
 func Test_SingleJoinFail(t *testing.T) {
+	t.Parallel()
+
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 	}))
@@ -57,6 +63,8 @@ func Test_SingleJoinFail(t *testing.T) {
 }
 
 func Test_DoubleJoinOK(t *testing.T) {
+	t.Parallel()
+
 	ts1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 	}))
 	defer ts1.Close()
@@ -74,6 +82,8 @@ func Test_DoubleJoinOK(t *testing.T) {
 }
 
 func Test_DoubleJoinOKSecondNode(t *testing.T) {
+	t.Parallel()
+
 	ts1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 	}))
@@ -92,6 +102,8 @@ func Test_DoubleJoinOKSecondNode(t *testing.T) {
 }
 
 func Test_DoubleJoinOKSecondNodeRedirect(t *testing.T) {
+	t.Parallel()
+
 	ts1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 	}))
 	defer ts1.Close()
