@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"expvar"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -43,6 +44,22 @@ const (
 	connectionPoolCount = 5
 	connectionTimeout   = 10 * time.Second
 )
+
+const (
+	numSnaphots = "num_snapshots"
+	numBackups  = "num_backups"
+	numRestores = "num_restores"
+)
+
+// stats captures stats for the Store.
+var stats *expvar.Map
+
+func init() {
+	stats = expvar.NewMap("store")
+	stats.Add(numSnaphots, 0)
+	stats.Add(numBackups, 0)
+	stats.Add(numRestores, 0)
+}
 
 // QueryRequest represents a query that returns rows, and does not modify
 // the database.
@@ -460,6 +477,7 @@ func (s *Store) Backup(leader bool) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	stats.Add(numBackups, 1)
 	return b, nil
 }
 
@@ -808,6 +826,7 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 		s.logger.Printf("failed to encode meta for snapshot: %s", err.Error())
 		return nil, err
 	}
+	stats.Add(numSnaphots, 1)
 
 	return fsm, nil
 }
@@ -870,11 +889,16 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 		return err
 	}
 
-	return func() error {
+	err = func() error {
 		s.metaMu.Lock()
 		defer s.metaMu.Unlock()
 		return json.Unmarshal(b, &s.meta)
 	}()
+	if err != nil {
+		return err
+	}
+	stats.Add(numRestores, 1)
+	return nil
 }
 
 // RegisterObserver registers an observer of Raft events
