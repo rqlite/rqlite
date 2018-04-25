@@ -14,6 +14,7 @@ _To upgrade from an earlier version to this release you should backup the databa
 - [PR #436](https://github.com/rqlite/rqlite/pull/436): Add backup command to CLI. Fixes [issue #432](https://github.com/rqlite/rqlite/issues/432). Thanks @eariassoto.
 - [PR #437](https://github.com/rqlite/rqlite/pull/437), [PR #438](https://github.com/rqlite/rqlite/pull/438): Make keys in diagnostic status output more consistent.
 - [PR #444](https://github.com/rqlite/rqlite/pull/444): Add basic expvar stats to the Store.
+- [PR #448](https://github.com/rqlite/rqlite/pull/448): Support Store aborting transaction on any Execute error. Fixes [issue #385](https://github.com/rqlite/rqlite/issues/385).
 
 ## 4.3.0 (March 18th 2018)
 - [PR #397](https://github.com/rqlite/rqlite/pull/397), [PR #399](https://github.com/rqlite/rqlite/pull/399): Support hashed passwords. Fixes [issue #395](https://github.com/rqlite/rqlite/issues/395). Thanks @sum12.
