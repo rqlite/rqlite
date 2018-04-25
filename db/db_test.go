@@ -544,6 +544,54 @@ func Test_UniqueConstraints(t *testing.T) {
 	}
 }
 
+func Test_ActiveTransaction(t *testing.T) {
+	var err error
+	db, path := mustCreateDatabase()
+	defer db.Close()
+	defer os.Remove(path)
+
+	if db.TransactionActive() {
+		t.Fatal("transaction incorrectly marked as active")
+	}
+
+	_, err = db.Execute([]string{`BEGIN`}, false, false)
+	if err != nil {
+		t.Fatalf("error starting transaction: %s", err.Error())
+	}
+
+	if !db.TransactionActive() {
+		t.Fatal("transaction incorrectly marked as inactive")
+	}
+
+	_, err = db.Execute([]string{`COMMIT`}, false, false)
+	if err != nil {
+		t.Fatalf("error starting transaction: %s", err.Error())
+	}
+
+	if db.TransactionActive() {
+		t.Fatal("transaction incorrectly marked as active")
+	}
+
+	_, err = db.Execute([]string{`BEGIN`}, false, false)
+	if err != nil {
+		t.Fatalf("error starting transaction: %s", err.Error())
+	}
+
+	if !db.TransactionActive() {
+		t.Fatal("transaction incorrectly marked as inactive")
+	}
+
+	_, err = db.Execute([]string{`ROLLBACK`}, false, false)
+	if err != nil {
+		t.Fatalf("error starting transaction: %s", err.Error())
+	}
+
+	if db.TransactionActive() {
+		t.Fatal("transaction incorrectly marked as active")
+	}
+
+}
+
 func Test_PartialFail(t *testing.T) {
 	t.Parallel()
 

@@ -177,6 +177,12 @@ func (db *DB) FKConstraints() (bool, error) {
 	return false, nil
 }
 
+// TransactionActive returns whether a transaction is currently active
+// i.e. if the database is NOT in autocommit mode.
+func (db *DB) TransactionActive() bool {
+	return !db.sqlite3conn.AutoCommit()
+}
+
 // Execute executes queries that modify the database.
 func (db *DB) Execute(queries []string, tx, xTime bool) ([]*Result, error) {
 	stats.Add(numExecutions, int64(len(queries)))
