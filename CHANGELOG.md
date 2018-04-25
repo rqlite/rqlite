@@ -1,5 +1,5 @@
 ## 5.0.0 (unreleased)
-_To upgrade from an earlier version to this release you should backup the leader node, and replay the resultant database dump into a new 5.0 leader node. Check out [BACKUP.md](https://github.com/rqlite/rqlite/blob/master/DOC/BACKUPS.md) for more details._
+_To upgrade from an earlier version to this release you should backup the leader node, and load the resultant database dump into a new 5.0 leader node. Check out [BACKUP.md](https://github.com/rqlite/rqlite/blob/master/DOC/BACKUPS.md) for more details._
 
 - End-to-end integration test added. Written in Python, it is automatically run by CircleCI as the committed source changes.
 - [PR #377](https://github.com/rqlite/rqlite/pull/377): Port consensus system to Hashicorp Raft v1.0.
