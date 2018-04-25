@@ -482,6 +482,10 @@ func (m *MockStore) Execute(er *store.ExecuteRequest) ([]*sql.Result, error) {
 	return nil, nil
 }
 
+func (m *MockStore) ExecuteOrAbort(er *store.ExecuteRequest) ([]*sql.Result, error) {
+	return nil, nil
+}
+
 func (m *MockStore) Query(qr *store.QueryRequest) ([]*sql.Rows, error) {
 	if m.queryFn == nil {
 		return nil, nil
