@@ -2,7 +2,7 @@
 _To upgrade from an earlier version to this release you should backup the leader node, and load the resultant database dump into a new 5.0 leader node. Check out [BACKUP.md](https://github.com/rqlite/rqlite/blob/master/DOC/BACKUPS.md) for more details._
 
 - End-to-end integration test added. Written in Python, it is automatically run by CircleCI as the committed source changes.
-- [PR #377](https://github.com/rqlite/rqlite/pull/377): Port consensus system to Hashicorp Raft v1.0.
+- [PR #377](https://github.com/rqlite/rqlite/pull/377): Upgrade consensus system to Hashicorp Raft v1.0.
 - [PR #401](https://github.com/rqlite/rqlite/pull/401): Always try to close temporary database file after backup. Fixes [issue #400](https://github.com/rqlite/rqlite/issues/400). Thanks @sum12.
 - [PR #406](https://github.com/rqlite/rqlite/pull/406), [PR #408](https://github.com/rqlite/rqlite/pull/408): CLI supports Basic Auth credentials. Fixes [issue #369](https://github.com/rqlite/rqlite/issues/369). Thanks @joaodrp.
 - [PR #411](https://github.com/rqlite/rqlite/pull/411), [PR #412](https://github.com/rqlite/rqlite/pull/412): Remove any pre-existing node with a given ID, if that node rejoins with a new IP address. Fixes [issue #409](https://github.com/rqlite/rqlite/issues/409).
