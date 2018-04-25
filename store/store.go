@@ -438,7 +438,9 @@ func (s *Store) ExecuteOrAbort(ex *ExecuteRequest) (results []*sql.Result, ret_e
 			}
 		}
 		if ret_err != nil || errored {
-			s.db.AbortTransaction()
+			if err := s.db.AbortTransaction(); err != nil {
+				s.logger.Printf("WARNING: failed to abort transaction: %s", err.Error())
+			}
 		}
 	}()
 	return s.execute(ex)
