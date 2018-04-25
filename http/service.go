@@ -32,6 +32,10 @@ type Store interface {
 	// successfully or it will as though none executed.
 	Execute(er *store.ExecuteRequest) ([]*sql.Result, error)
 
+	// ExecuteOrAbort performs the same function as Execute(), but ensures
+	// any transactions are aborted in case of any error.
+	ExecuteOrAbort(er *store.ExecuteRequest) ([]*sql.Result, error)
+
 	// Query executes a slice of queries, each of which returns rows. If
 	// timings is true, then timing information will be returned. If tx
 	// is true, then all queries will take place while a read transaction
@@ -441,7 +445,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 	r.Body.Close()
 
 	queries := []string{string(b)}
-	results, err := s.store.Execute(&store.ExecuteRequest{queries, timings, false})
+	results, err := s.store.ExecuteOrAbort(&store.ExecuteRequest{queries, timings, false})
 	if err != nil {
 		if err == store.ErrNotLeader {
 			leader := s.leaderAPIAddr()
