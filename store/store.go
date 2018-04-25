@@ -423,10 +423,28 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 
 // Execute executes queries that return no rows, but do modify the database.
 func (s *Store) Execute(ex *ExecuteRequest) ([]*sql.Result, error) {
-	if s.raft.State() != raft.Leader {
-		return nil, ErrNotLeader
-	}
+	return s.execute(ex)
+}
 
+// ExecuteOrAbort executes the requests, but aborts any active transaction
+// on the underlying database in the case of any error.
+func (s *Store) ExecuteOrAbort(ex *ExecuteRequest) (results []*sql.Result, ret_err error) {
+	defer func() {
+		var errored bool
+		for i := range results {
+			if results[i].Error != "" {
+				errored = true
+				break
+			}
+		}
+		if ret_err != nil || errored {
+			s.db.AbortTransaction()
+		}
+	}()
+	return s.execute(ex)
+}
+
+func (s *Store) execute(ex *ExecuteRequest) ([]*sql.Result, error) {
 	d := &databaseSub{
 		Tx:      ex.Tx,
 		Queries: ex.Queries,
