@@ -2,7 +2,9 @@ package main
 
 import (
 	"fmt"
+	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/mkideal/cli"
 )
@@ -21,6 +23,17 @@ type executeResponse struct {
 	Time    float64   `json:"time,omitempty"`
 }
 
+func makeExecuteRequest(line string) func(string) (*http.Request, error) {
+	requestData := strings.NewReader(makeJSONBody(line))
+	return func(urlStr string) (*http.Request, error) {
+		req, err := http.NewRequest("POST", urlStr, requestData)
+		if err != nil {
+			return nil, err
+		}
+		return req, nil
+	}
+}
+
 func execute(ctx *cli.Context, cmd, line string, timer bool, argv *argT) error {
 	queryStr := url.Values{}
 	if timer {
@@ -32,7 +45,7 @@ func execute(ctx *cli.Context, cmd, line string, timer bool, argv *argT) error {
 		Path:     fmt.Sprintf("%sdb/execute", argv.Prefix),
 		RawQuery: queryStr.Encode(),
 	}
-	response, err := sendRequest(ctx, "POST", u.String(), line, argv)
+	response, err := sendRequest(ctx, makeExecuteRequest(line), u.String(), argv)
 	if err != nil {
 		return err
 	}
