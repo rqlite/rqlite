@@ -22,6 +22,9 @@ class Node(object):
   def __init__(self, path, node_id,
                api_addr=None, api_adv=None,
                raft_addr=None, raft_adv=None,
+               http_cert=None, http_key=None,
+               node_cert=None, node_key=None,
+               skip_verify=True,
                dir=None):
     if api_addr is None:
       api_addr = random_addr()
@@ -38,12 +41,23 @@ class Node(object):
     self.api_adv = api_adv
     self.raft_addr = raft_addr
     self.raft_adv = raft_adv
+    self.http_proto = 'http'
+
+    self.http_cert=http_cert
+    self.http_key=http_key
+    self.node_cert=node_cert
+    self.node_key=node_key
+    self.skip_verify = skip_verify
+
     self.dir = dir
     self.process = None
     self.stdout_file = os.path.join(dir, 'rqlited.log')
     self.stdout_fd = open(self.stdout_file, 'w')
     self.stderr_file = os.path.join(dir, 'rqlited.err')
     self.stderr_fd = open(self.stderr_file, 'w')
+
+    if self.http_cert is not None:
+      self.http_proto = 'https'
 
   def APIAddr(self):
       if self.api_adv is not None:
@@ -75,6 +89,10 @@ class Node(object):
       command += ['-http-adv-addr', self.api_adv]
     if self.raft_adv is not None:
       command += ['-raft-adv-addr', self.raft_adv]
+    if self.http_cert is not None:
+      command += ['-http-cert', self.http_cert, '-http-key', self.http_key]
+    if self.node_cert is not None:
+      command += ['-node-cert', self.node_cert, '-http-key', self.node_key, '-node-encrypt']
     if join is not None:
       command += ['-join', 'http://' + join]
     command.append(self.dir)
@@ -102,7 +120,7 @@ class Node(object):
     return self
 
   def status(self):
-    r = requests.get(self._status_url())
+    r = requests.get(self._status_url(), verify=not self.skip_verify)
     r.raise_for_status()
     return r.json()
 
@@ -141,12 +159,12 @@ class Node(object):
       t+=1
 
   def query(self, statement, level='weak'):
-    r = requests.get(self._query_url(), params={'q': statement, 'level': level})
+    r = requests.get(self._query_url(), params={'q': statement, 'level': level}, verify=not self.skip_verify)
     r.raise_for_status()
     return r.json()
 
   def execute(self, statement):
-    r = requests.post(self._execute_url(), data=json.dumps([statement]))
+    r = requests.post(self._execute_url(), data=json.dumps([statement]), verify=not self.skip_verify)
     r.raise_for_status()
     return r.json()
 
@@ -158,25 +176,25 @@ class Node(object):
 
   def restore(self, file):
     conn = sqlite3.connect(file)
-    r = requests.post(self._load_url(), data='\n'.join(conn.iterdump()))
+    r = requests.post(self._load_url(), data='\n'.join(conn.iterdump()), verify=not self.skip_verify)
     r.raise_for_status()
     conn.close()
 
   def redirect_addr(self):
-    r = requests.post(self._execute_url(), data=json.dumps(['nonsense']), allow_redirects=False)
+    r = requests.post(self._execute_url(), data=json.dumps(['nonsense']), allow_redirects=False, verify=not self.skip_verify)
     if r.status_code == 301:
       return urlparse(r.headers['Location']).netloc
 
   def _status_url(self):
-    return 'http://' + self.APIAddr() + '/status'
+    return '%s://%s/status' % (self.http_proto, self.APIAddr())
   def _query_url(self):
-    return 'http://' + self.APIAddr() + '/db/query'
+    return '%s://%s/db/query' % (self.http_proto, self.APIAddr())
   def _execute_url(self):
-    return 'http://' + self.APIAddr() + '/db/execute'
+    return '%s://%s/db/execute' % (self.http_proto, self.APIAddr())
   def _backup_url(self):
-    return 'http://' + self.APIAddr() + '/db/backup'
+    return '%s://%s/db/backup' % (self.http_proto, self.APIAddr())
   def _load_url(self):
-    return 'http://' + self.APIAddr() + '/db/load'
+    return '%s://%s/db/load' % (self.http_proto, self.APIAddr())
   def __eq__(self, other):
     return self.node_id == other.node_id
   def __str__(self):
@@ -314,6 +332,22 @@ class TestEndToEndAdvAddr(TestEndToEnd):
     n1.wait_for_leader()
 
     n2 = Node(RQLITED_PATH, '2')
+    n2.start(join=n0.APIAddr())
+    n2.wait_for_leader()
+
+    self.cluster = Cluster([n0, n1, n2])
+
+class TestEndToEndEncrypted(TestEndToEnd):
+  def setUp(self):
+    n0 = Node(RQLITED_PATH, '0', http_cert=cert_path, http_key=key_path, node_cert=cert_path, node_key=key_path)
+    n0.start()
+    n0.wait_for_leader()
+
+    n1 = Node(RQLITED_PATH, '1', http_cert=cert_path, http_key=key_path, node_cert=cert_path, node_key=key_path)
+    n1.start(join=n0.APIAddr())
+    n1.wait_for_leader()
+
+    n2 = Node(RQLITED_PATH, '2', http_cert=cert_path, http_key=key_path, node_cert=cert_path, node_key=key_path)
     n2.start(join=n0.APIAddr())
     n2.wait_for_leader()
 
