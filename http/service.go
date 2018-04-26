@@ -842,8 +842,13 @@ func queryParam(req *http.Request, param string) (bool, error) {
 // stmtParam returns the value for URL param 'q', if present.
 func stmtParam(req *http.Request) (string, error) {
 	q := req.URL.Query()
-	stmt := strings.TrimSpace(q.Get("q"))
-	return stmt, nil
+	return strings.TrimSpace(q.Get("q")), nil
+}
+
+// fmtParam returns the value for URL param 'fmt', if present.
+func fmtParam(req *http.Request) (string, error) {
+	q := req.URL.Query()
+	return strings.TrimSpace(q.Get("fmt")), nil
 }
 
 // isPretty returns whether the HTTP response body should be pretty-printed.

@@ -764,6 +764,40 @@ func Test_Backup(t *testing.T) {
 	}
 }
 
+func Test_Dump(t *testing.T) {
+	t.Parallel()
+
+	db, path := mustCreateDatabase()
+	defer db.Close()
+	defer os.Remove(path)
+
+	dumpFile, err := ioutil.TempFile("", "rqlilte-dump-")
+	if err != nil {
+		t.Fatalf("failed to create temp file: %s", err.Error())
+	}
+	dumpFile.Close()
+	defer os.Remove(dumpFile.Name())
+
+	_, err = db.Execute([]string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT CONSTRAINT name_unique UNIQUE (name))"}, false, false)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	stmts := []string{
+		`INSERT INTO foo(id, name) VALUES(1, "anne")`,
+		`INSERT INTO foo(id, name) VALUES(2, "bob")`,
+		`INSERT INTO foo(id, name) VALUES(1, "charlie")`,
+		`INSERT INTO foo(id, name) VALUES(4, "david")`,
+	}
+	_, err = db.Execute(stmts, false, false)
+	if err != nil {
+		t.Fatalf("failed to insert records: %s", err.Error())
+	}
+
+	if err := db.Dump(dumpFile.Name()); err != nil {
+		t.Fatalf("failed to dump database %s", err.Error())
+	}
+}
+
 func mustCreateDatabase() (*DB, string) {
 	var err error
 	f, err := ioutil.TempFile("", "rqlilte-test-")

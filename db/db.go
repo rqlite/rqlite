@@ -7,6 +7,7 @@ import (
 	"expvar"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"time"
 
@@ -411,6 +412,52 @@ func (db *DB) Backup(path string) error {
 	}
 
 	return err
+}
+
+func (db *DB) Dump(path string) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	if _, err := f.WriteString("PRAGMA foreign_keys=OFF;\nBEGIN TRANSACTION;\n"); err != nil {
+		return err
+	}
+
+	// Dump schema.
+	query := `SELECT "name", "type", "sql" FROM "sqlite_master"
+              WHERE "sql" NOT NULL AND "type" == 'table' ORDER BY "name"`
+	rows, err := db.Query([]string{query}, false, false)
+	if err != nil {
+		return err
+	}
+	row := rows[0]
+	for _, v := range row.Values {
+		if _, err := f.WriteString(fmt.Sprintf("%s;\n", v[2])); err != nil {
+			return err
+		}
+	}
+
+	// Do indexes, triggers, and views.
+	query = `SELECT "name", "type", "sql" FROM "sqlite_master"
+			  WHERE "sql" NOT NULL AND "type" IN ('index', 'trigger', 'view')`
+	rows, err = db.Query([]string{query}, false, false)
+	if err != nil {
+		return err
+	}
+	row = rows[0]
+	for _, v := range row.Values {
+		if _, err := f.WriteString(fmt.Sprintf("%s;\n", v[2])); err != nil {
+			return err
+		}
+	}
+
+	if _, err := f.WriteString("COMMIT;\n"); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // normalizeRowValues performs some normalization of values in the returned rows.
