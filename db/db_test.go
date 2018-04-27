@@ -6,7 +6,10 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"strings"
 	"testing"
+
+	"github.com/rqlite/rqlite/testdata/chinook"
 )
 
 /*
@@ -761,6 +764,28 @@ func Test_Backup(t *testing.T) {
 	}
 	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"],[2,"fiona"],[3,"fiona"],[4,"fiona"]]}]`, asJSON(ro); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
+func Test_Dump(t *testing.T) {
+	t.Parallel()
+
+	db, path := mustCreateDatabase()
+	defer db.Close()
+	defer os.Remove(path)
+
+	_, err := db.Execute([]string{chinook.DB}, false, false)
+	if err != nil {
+		t.Fatalf("failed to load chinook dump: %s", err.Error())
+	}
+
+	var b strings.Builder
+	if err := db.Dump(&b); err != nil {
+		t.Fatalf("failed to dump database: %s", err.Error())
+	}
+
+	if b.String() != chinook.DB {
+		t.Fatal("dumped database does not equal entered database")
 	}
 }
 
