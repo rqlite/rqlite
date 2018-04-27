@@ -32,6 +32,10 @@ var (
 	// ErrOpenTimeout is returned when the Store does not apply its initial
 	// logs within the specified time.
 	ErrOpenTimeout = errors.New("timeout waiting for initial logs application")
+
+	// ErrInvalidBackupFormat is returned when the requested backup format
+	// is not valid.
+	ErrInvalidBackupFormat = errors.New("invalid backup format")
 )
 
 const (
@@ -49,6 +53,13 @@ const (
 	numSnaphots = "num_snapshots"
 	numBackups  = "num_backups"
 	numRestores = "num_restores"
+)
+
+type BackupFormat int
+
+const (
+	SQL BackupFormat = iota
+	Binary
 )
 
 // stats captures stats for the Store.
@@ -478,25 +489,36 @@ func (s *Store) execute(ex *ExecuteRequest) ([]*sql.Result, error) {
 // If leader is true, this operation is performed with a read consistency
 // level equivalent to "weak". Otherwise no guarantees are made about the
 // read consistency level.
-func (s *Store) Backup(leader bool) ([]byte, error) {
+func (s *Store) Backup(leader bool, fmt BackupFormat) ([]byte, error) {
 	if leader && s.raft.State() != raft.Leader {
 		return nil, ErrNotLeader
 	}
 
-	f, err := ioutil.TempFile("", "rqlite-bak-")
-	if err != nil {
-		return nil, err
-	}
-	f.Close()
-	defer os.Remove(f.Name())
+	var b []byte
+	if fmt == Binary {
+		f, err := ioutil.TempFile("", "rqlite-bak-")
+		if err != nil {
+			return nil, err
+		}
+		f.Close()
+		defer os.Remove(f.Name())
 
-	if err := s.db.Backup(f.Name()); err != nil {
-		return nil, err
-	}
+		if err := s.db.Backup(f.Name()); err != nil {
+			return nil, err
+		}
 
-	b, err := ioutil.ReadFile(f.Name())
-	if err != nil {
-		return nil, err
+		b, err = ioutil.ReadFile(f.Name())
+		if err != nil {
+			return nil, err
+		}
+	} else if fmt == SQL {
+		buf := bytes.NewBuffer(nil)
+		if err := s.db.Dump(buf); err != nil {
+			return nil, err
+		}
+		b = buf.Bytes()
+	} else {
+		return nil, ErrInvalidBackupFormat
 	}
 	stats.Add(numBackups, 1)
 	return b, nil
