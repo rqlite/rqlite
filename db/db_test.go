@@ -6,7 +6,10 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"strings"
 	"testing"
+
+	"github.com/rqlite/rqlite/testdata/chinook"
 )
 
 /*
@@ -771,31 +774,16 @@ func Test_Dump(t *testing.T) {
 	defer db.Close()
 	defer os.Remove(path)
 
-	dumpFile, err := ioutil.TempFile("", "rqlilte-dump-")
+	_, err := db.Execute([]string{chinook.DB}, false, false)
 	if err != nil {
-		t.Fatalf("failed to create temp file: %s", err.Error())
-	}
-	dumpFile.Close()
-	defer os.Remove(dumpFile.Name())
-
-	_, err = db.Execute([]string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT CONSTRAINT name_unique UNIQUE (name))"}, false, false)
-	if err != nil {
-		t.Fatalf("failed to create table: %s", err.Error())
-	}
-	stmts := []string{
-		`INSERT INTO foo(id, name) VALUES(1, "anne")`,
-		`INSERT INTO foo(id, name) VALUES(2, "bob")`,
-		`INSERT INTO foo(id, name) VALUES(1, "charlie")`,
-		`INSERT INTO foo(id, name) VALUES(4, "david")`,
-	}
-	_, err = db.Execute(stmts, false, false)
-	if err != nil {
-		t.Fatalf("failed to insert records: %s", err.Error())
+		t.Fatalf("failed to load chinook dump: %s", err.Error())
 	}
 
-	if err := db.Dump(dumpFile.Name()); err != nil {
-		t.Fatalf("failed to dump database %s", err.Error())
+	var b strings.Builder
+	if err := db.Dump(&b); err != nil {
+		t.Fatalf("failed to dump database: %s", err.Error())
 	}
+
 }
 
 func mustCreateDatabase() (*DB, string) {

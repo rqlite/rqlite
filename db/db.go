@@ -7,7 +7,6 @@ import (
 	"expvar"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 	"time"
 
@@ -414,14 +413,8 @@ func (db *DB) Backup(path string) error {
 	return err
 }
 
-func (db *DB) Dump(path string) error {
-	f, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	if _, err := f.WriteString("PRAGMA foreign_keys=OFF;\nBEGIN TRANSACTION;\n"); err != nil {
+func (db *DB) Dump(w io.Writer) error {
+	if _, err := w.Write([]byte("PRAGMA foreign_keys=OFF;\nBEGIN TRANSACTION;\n")); err != nil {
 		return err
 	}
 
@@ -434,7 +427,7 @@ func (db *DB) Dump(path string) error {
 	}
 	row := rows[0]
 	for _, v := range row.Values {
-		if _, err := f.WriteString(fmt.Sprintf("%s;\n", v[2])); err != nil {
+		if _, err := w.Write([]byte(fmt.Sprintf("%s;\n", v[2]))); err != nil {
 			return err
 		}
 	}
@@ -448,12 +441,12 @@ func (db *DB) Dump(path string) error {
 	}
 	row = rows[0]
 	for _, v := range row.Values {
-		if _, err := f.WriteString(fmt.Sprintf("%s;\n", v[2])); err != nil {
+		if _, err := w.Write([]byte(fmt.Sprintf("%s;\n", v[2]))); err != nil {
 			return err
 		}
 	}
 
-	if _, err := f.WriteString("COMMIT;\n"); err != nil {
+	if _, err := w.Write([]byte("COMMIT;\n")); err != nil {
 		return err
 	}
 
