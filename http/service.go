@@ -58,7 +58,7 @@ type Store interface {
 	Stats() (map[string]interface{}, error)
 
 	// Backup returns a byte slice representing a backup of the node state.
-	Backup(leader bool) ([]byte, error)
+	Backup(leader bool, f store.BackupFormat) ([]byte, error)
 }
 
 // CredentialStore is the interface credential stores must support.
@@ -403,7 +403,7 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	b, err := s.store.Backup(!noLeader)
+	b, err := s.store.Backup(!noLeader, store.Binary)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
