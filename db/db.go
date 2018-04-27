@@ -435,9 +435,19 @@ func (db *DB) Dump(w io.Writer) error {
 	row := rows[0]
 	for _, v := range row.Values {
 		table := v[0].(string)
-		sql := v[2].(string)
 
-		if _, err := w.Write([]byte(fmt.Sprintf("%s;\n", sql))); err != nil {
+		stmt := sql
+		if table == "sqlite_sequence" {
+			stmt = `DELETE FROM "sqlite_sequence";`
+		} else if table == "sqlite_stat1" {
+			stmt = `ANALYZE "sqlite_master";`
+		} else if strings.HasPrefix(table, "sqlite_") {
+			continue
+		} else {
+			stmt = v[2].(string)
+		}
+
+		if _, err := w.Write([]byte(fmt.Sprintf("%s;\n", stmt))); err != nil {
 			return err
 		}
 
