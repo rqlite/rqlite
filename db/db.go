@@ -413,7 +413,7 @@ func (db *DB) Backup(path string) error {
 	return err
 }
 
-// Dump writes a consistent snapshot of the database in a SQL text format.
+// Dump writes a consistent snapshot of the database in SQL text format.
 func (db *DB) Dump(w io.Writer) error {
 	if _, err := w.Write([]byte("PRAGMA foreign_keys=OFF;\nBEGIN TRANSACTION;\n")); err != nil {
 		return err
