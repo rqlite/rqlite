@@ -385,9 +385,6 @@ func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request) {
 
 // handleBackup returns the consistent database snapshot.
 func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
-	// XXX THIS IS NOW DEPEANDT ON fmt FLAG
-	w.Header().Set("Content-Type", "application/octet-stream")
-
 	if !s.CheckRequestPerm(r, PermBackup) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
@@ -895,20 +892,20 @@ func level(req *http.Request) (store.ConsistencyLevel, error) {
 	}
 }
 
-func backupFormat(req *http.Request) (store.BackupFormat, error) {
-	m := map[string]store.BackupFormat{
-		"binary": store.BackupBinary,
-		"sql":    store.BackupSQL,
-	}
-	fmt, err := fmtParam(req)
+// backuFormat returns the request backup format, setting the response header
+// accordingly.
+func backupFormat(w http.ResponseWriter, r *http.Request) (store.BackupFormat, error) {
+	fmt, err := fmtParam(r)
 	if err != nil {
 		return store.BackupBinary, err
 	}
 	f, ok := m[fmt]
-	if !ok {
+	if f == "binary" || !ok {
+		w.Header().Set("Content-Type", "application/octet-stream")
 		return store.BackupBinary, nil
 	}
-	return f, nil
+	w.Header().Set("Content-Type", "application/sql")
+	return store.BackupSQL
 }
 
 func prettyEnabled(e bool) string {
