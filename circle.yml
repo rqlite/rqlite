@@ -1,6 +1,6 @@
 machine:
     environment:
-      GODIST: "go1.9.1.linux-amd64.tar.gz"
+      GODIST: "go1.10.1.linux-amd64.tar.gz"
       GOBIN: $HOME/binaries_$CIRCLE_SHA1
       RQLITED_PATH: $GOBIN/rqlited
 
