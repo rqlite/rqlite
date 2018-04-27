@@ -385,6 +385,7 @@ func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request) {
 
 // handleBackup returns the consistent database snapshot.
 func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
+	// XXX THIS IS NOW DEPEANDT ON fmt FLAG
 	w.Header().Set("Content-Type", "application/octet-stream")
 
 	if !s.CheckRequestPerm(r, PermBackup) {
@@ -403,9 +404,15 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	b, err := s.store.Backup(!noLeader, store.BackupBinary)
+	bf, err := backupFormat(r)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	b, err := s.store.Backup(!noLeader, bf)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -886,6 +893,22 @@ func level(req *http.Request) (store.ConsistencyLevel, error) {
 	default:
 		return store.Weak, nil
 	}
+}
+
+func backupFormat(req *http.Request) (store.BackupFormat, error) {
+	m := map[string]store.BackupFormat{
+		"binary": store.BackupBinary,
+		"sql":    store.BackupSQL,
+	}
+	fmt, err := fmtParam(req)
+	if err != nil {
+		return store.BackupBinary, err
+	}
+	f, ok := m[fmt]
+	if !ok {
+		return store.BackupBinary, nil
+	}
+	return f, nil
 }
 
 func prettyEnabled(e bool) string {
