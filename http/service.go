@@ -403,7 +403,7 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	b, err := s.store.Backup(!noLeader, store.Binary)
+	b, err := s.store.Backup(!noLeader, store.BackupBinary)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return

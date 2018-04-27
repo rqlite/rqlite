@@ -58,8 +58,8 @@ const (
 type BackupFormat int
 
 const (
-	SQL BackupFormat = iota
-	Binary
+	BackupSQL BackupFormat = iota
+	BackupBinary
 )
 
 // stats captures stats for the Store.
@@ -495,7 +495,7 @@ func (s *Store) Backup(leader bool, fmt BackupFormat) ([]byte, error) {
 	}
 
 	var b []byte
-	if fmt == Binary {
+	if fmt == BackupBinary {
 		f, err := ioutil.TempFile("", "rqlite-bak-")
 		if err != nil {
 			return nil, err
@@ -511,7 +511,7 @@ func (s *Store) Backup(leader bool, fmt BackupFormat) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-	} else if fmt == SQL {
+	} else if fmt == BackupSQL {
 		buf := bytes.NewBuffer(nil)
 		if err := s.db.Dump(buf); err != nil {
 			return nil, err
