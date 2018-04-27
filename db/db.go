@@ -413,17 +413,22 @@ func (db *DB) Backup(path string) error {
 	return err
 }
 
+// Dump writes a consistent snapshot of the database in a SQL text format.
 func (db *DB) Dump(w io.Writer) error {
 	if _, err := w.Write([]byte("PRAGMA foreign_keys=OFF;\nBEGIN TRANSACTION;\n")); err != nil {
 		return err
 	}
 
-	// XXX CLONE THE CONNECTION FOR CONSISTENT BACKUP?
+	// Get a new connection, so the dump creation is isolated from other activity.
+	conn, err := open(fqdsn(db.path, db.dsn))
+	if err != nil {
+		return nil
+	}
 
 	// Get the schema.
 	query := `SELECT "name", "type", "sql" FROM "sqlite_master"
               WHERE "sql" NOT NULL AND "type" == 'table' ORDER BY "name"`
-	rows, err := db.Query([]string{query}, false, false)
+	rows, err := conn.Query([]string{query}, false, false)
 	if err != nil {
 		return err
 	}
@@ -437,7 +442,7 @@ func (db *DB) Dump(w io.Writer) error {
 		}
 
 		tableIndent := strings.Replace(table, `"`, `""`, -1)
-		r, err := db.Query([]string{fmt.Sprintf(`PRAGMA table_info("%s")`, tableIndent)}, false, false)
+		r, err := conn.Query([]string{fmt.Sprintf(`PRAGMA table_info("%s")`, tableIndent)}, false, false)
 		if err != nil {
 			return err
 		}
@@ -450,12 +455,12 @@ func (db *DB) Dump(w io.Writer) error {
 			tableIndent,
 			strings.Join(columnNames, ","),
 			tableIndent)
-		r, err = db.Query([]string{query}, false, false)
+		r, err = conn.Query([]string{query}, false, false)
 		if err != nil {
 			return err
 		}
 		for _, x := range r[0].Values {
-			y := fmt.Sprintln(x[0].(string))
+			y := fmt.Sprintf("%s;\n", x[0].(string))
 			if _, err := w.Write([]byte(y)); err != nil {
 				return err
 			}
@@ -465,7 +470,7 @@ func (db *DB) Dump(w io.Writer) error {
 	// Do indexes, triggers, and views.
 	query = `SELECT "name", "type", "sql" FROM "sqlite_master"
 			  WHERE "sql" NOT NULL AND "type" IN ('index', 'trigger', 'view')`
-	rows, err = db.Query([]string{query}, false, false)
+	rows, err = conn.Query([]string{query}, false, false)
 	if err != nil {
 		return err
 	}
