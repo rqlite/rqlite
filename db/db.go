@@ -418,7 +418,9 @@ func (db *DB) Dump(w io.Writer) error {
 		return err
 	}
 
-	// Dump schema.
+	// XXX CLONE THE CONNECTION FOR CONSISTENT BACKUP?
+
+	// Get the schema.
 	query := `SELECT "name", "type", "sql" FROM "sqlite_master"
               WHERE "sql" NOT NULL AND "type" == 'table' ORDER BY "name"`
 	rows, err := db.Query([]string{query}, false, false)
@@ -427,8 +429,36 @@ func (db *DB) Dump(w io.Writer) error {
 	}
 	row := rows[0]
 	for _, v := range row.Values {
-		if _, err := w.Write([]byte(fmt.Sprintf("%s;\n", v[2]))); err != nil {
+		table := v[0].(string)
+		sql := v[2].(string)
+
+		if _, err := w.Write([]byte(fmt.Sprintf("%s;\n", sql))); err != nil {
 			return err
+		}
+
+		tableIndent := strings.Replace(table, `"`, `""`, -1)
+		r, err := db.Query([]string{fmt.Sprintf(`PRAGMA table_info("%s")`, tableIndent)}, false, false)
+		if err != nil {
+			return err
+		}
+		var columnNames []string
+		for _, w := range r[0].Values {
+			columnNames = append(columnNames, fmt.Sprintf(`'||quote("%s")||'`, w[1].(string)))
+		}
+
+		query = fmt.Sprintf(`SELECT 'INSERT INTO "%s" VALUES(%s)' FROM "%s";`,
+			tableIndent,
+			strings.Join(columnNames, ","),
+			tableIndent)
+		r, err = db.Query([]string{query}, false, false)
+		if err != nil {
+			return err
+		}
+		for _, x := range r[0].Values {
+			y := fmt.Sprintln(x[0].(string))
+			if _, err := w.Write([]byte(y)); err != nil {
+				return err
+			}
 		}
 	}
 

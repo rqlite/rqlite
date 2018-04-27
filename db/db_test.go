@@ -784,6 +784,9 @@ func Test_Dump(t *testing.T) {
 		t.Fatalf("failed to dump database: %s", err.Error())
 	}
 
+	if b.String() != chinook.DB {
+		t.Fatal("dumped database does not equal entered database")
+	}
 }
 
 func mustCreateDatabase() (*DB, string) {
