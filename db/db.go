@@ -435,8 +435,8 @@ func (db *DB) Dump(w io.Writer) error {
 	row := rows[0]
 	for _, v := range row.Values {
 		table := v[0].(string)
+		var stmt string
 
-		stmt := sql
 		if table == "sqlite_sequence" {
 			stmt = `DELETE FROM "sqlite_sequence";`
 		} else if table == "sqlite_stat1" {
