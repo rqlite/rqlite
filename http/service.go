@@ -401,7 +401,7 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bf, err := backupFormat(r)
+	bf, err := backupFormat(w, r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -899,13 +899,12 @@ func backupFormat(w http.ResponseWriter, r *http.Request) (store.BackupFormat, e
 	if err != nil {
 		return store.BackupBinary, err
 	}
-	f, ok := m[fmt]
-	if f == "binary" || !ok {
-		w.Header().Set("Content-Type", "application/octet-stream")
-		return store.BackupBinary, nil
+	if fmt == "sql" {
+		w.Header().Set("Content-Type", "application/sql")
+		return store.BackupSQL, nil
 	}
-	w.Header().Set("Content-Type", "application/sql")
-	return store.BackupSQL
+	w.Header().Set("Content-Type", "application/octet-stream")
+	return store.BackupBinary, nil
 }
 
 func prettyEnabled(e bool) string {
