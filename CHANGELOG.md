@@ -17,6 +17,7 @@ _To upgrade from an earlier version to this release you should backup the leader
 - [PR #448](https://github.com/rqlite/rqlite/pull/448): Support Store aborting transaction on any Execute error. Fixes [issue #385](https://github.com/rqlite/rqlite/issues/385).
 - [PR #450](https://github.com/rqlite/rqlite/pull/450): Add restore command to CLI. Fixes [issue #439](https://github.com/rqlite/rqlite/issues/439). Thanks @eariassoto.
 - [PR #452](https://github.com/rqlite/rqlite/pull/452): Move to Go 1.10.
+- [PR #451](https://github.com/rqlite/rqlite/pull/451), [PR #453](https://github.com/rqlite/rqlite/pull/453): Support dumping database in SQL text format. Fixes [issue #393](https://github.com/rqlite/rqlite/issues/369).
 
 ## 4.3.0 (March 18th 2018)
 - [PR #397](https://github.com/rqlite/rqlite/pull/397), [PR #399](https://github.com/rqlite/rqlite/pull/399): Support hashed passwords. Fixes [issue #395](https://github.com/rqlite/rqlite/issues/395). Thanks @sum12.
