@@ -32,8 +32,9 @@ const cliHelp = `.help				Show this message
 .expvar				Show expvar (Go runtime) information for connected node
 .tables				List names of tables
 .timer on|off			Turn SQL timer on or off
-.backup <file>			Create a backup file for the database
+.backup <file>			Create a backup file of the database
 .restore <file>			Restore the database from a SQLite dump file
+.dump <file>                    Dump the database in SQL text format to a file
 `
 
 func main() {
@@ -89,6 +90,12 @@ func main() {
 					break
 				}
 				err = restore(ctx, line[index+1:], argv)
+			case ".DUMP":
+				if index == -1 || index == len(line)-1 {
+					err = fmt.Errorf("Please specify an output file for the SQL text")
+					break
+				}
+				err = dump(ctx, line[index+1:], argv)
 			case ".HELP":
 				err = help(ctx, cmd, line, argv)
 			case ".QUIT", "QUIT", "EXIT":
