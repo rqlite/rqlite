@@ -62,6 +62,29 @@ func backup(ctx *cli.Context, filename string, argv *argT) error {
 	return nil
 }
 
+func dump(ctx *cli.Context, filename string, argv *argT) error {
+	queryStr := url.Values{}
+	queryStr.Set("fmt", "sql")
+	u := url.URL{
+		Scheme:   argv.Protocol,
+		Host:     fmt.Sprintf("%s:%d", argv.Host, argv.Port),
+		Path:     fmt.Sprintf("%sdb/backup", argv.Prefix),
+		RawQuery: queryStr.Encode(),
+	}
+	response, err := sendRequest(ctx, makeBackupRequest, u.String(), argv)
+	if err != nil {
+		return err
+	}
+
+	err = ioutil.WriteFile(filename, *response, 0644)
+	if err != nil {
+		return err
+	}
+
+	ctx.String("SQL text file written successfully\n")
+	return nil
+}
+
 func makeRestoreRequest(restoreFile io.Reader) func(string) (*http.Request, error) {
 	return func(urlStr string) (*http.Request, error) {
 		req, err := http.NewRequest("POST", urlStr, restoreFile)
