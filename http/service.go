@@ -58,7 +58,7 @@ type Store interface {
 	Stats() (map[string]interface{}, error)
 
 	// Backup returns a byte slice representing a backup of the node state.
-	Backup(leader bool) ([]byte, error)
+	Backup(leader bool, f store.BackupFormat) ([]byte, error)
 }
 
 // CredentialStore is the interface credential stores must support.
@@ -385,8 +385,6 @@ func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request) {
 
 // handleBackup returns the consistent database snapshot.
 func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/octet-stream")
-
 	if !s.CheckRequestPerm(r, PermBackup) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
@@ -403,9 +401,15 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	b, err := s.store.Backup(!noLeader)
+	bf, err := backupFormat(w, r)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	b, err := s.store.Backup(!noLeader, bf)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -886,6 +890,21 @@ func level(req *http.Request) (store.ConsistencyLevel, error) {
 	default:
 		return store.Weak, nil
 	}
+}
+
+// backuFormat returns the request backup format, setting the response header
+// accordingly.
+func backupFormat(w http.ResponseWriter, r *http.Request) (store.BackupFormat, error) {
+	fmt, err := fmtParam(r)
+	if err != nil {
+		return store.BackupBinary, err
+	}
+	if fmt == "sql" {
+		w.Header().Set("Content-Type", "application/sql")
+		return store.BackupSQL, nil
+	}
+	w.Header().Set("Content-Type", "application/octet-stream")
+	return store.BackupBinary, nil
 }
 
 func prettyEnabled(e bool) string {

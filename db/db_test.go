@@ -789,6 +789,33 @@ func Test_Dump(t *testing.T) {
 	}
 }
 
+func Test_DumpMemory(t *testing.T) {
+	t.Parallel()
+
+	db, path := mustCreateDatabase()
+	defer db.Close()
+	defer os.Remove(path)
+
+	inmem, err := LoadInMemoryWithDSN(path, "")
+	if err != nil {
+		t.Fatalf("failed to create loaded in-memory database: %s", err.Error())
+	}
+
+	_, err = inmem.Execute([]string{chinook.DB}, false, false)
+	if err != nil {
+		t.Fatalf("failed to load chinook dump: %s", err.Error())
+	}
+
+	var b strings.Builder
+	if err := inmem.Dump(&b); err != nil {
+		t.Fatalf("failed to dump database: %s", err.Error())
+	}
+
+	if b.String() != chinook.DB {
+		t.Fatal("dumped database does not equal entered database")
+	}
+}
+
 func mustCreateDatabase() (*DB, string) {
 	var err error
 	f, err := ioutil.TempFile("", "rqlilte-test-")
