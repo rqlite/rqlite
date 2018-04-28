@@ -21,8 +21,6 @@ import (
 	"github.com/rqlite/rqlite/tcp"
 )
 
-const sqliteDSN = "db.sqlite"
-
 const logo = `
             _ _ _
            | (_) |
@@ -103,7 +101,7 @@ func init() {
 	flag.StringVar(&discoID, "disco-id", "", "Set Discovery ID. If not set, Discovery Service not used")
 	flag.BoolVar(&expvar, "expvar", true, "Serve expvar data on HTTP server")
 	flag.BoolVar(&pprofEnabled, "pprof", true, "Serve pprof data on HTTP server")
-	flag.StringVar(&dsn, "dsn", "", `SQLite DSN parameters. E.g. "cache=shared&mode=memory"`)
+	flag.StringVar(&dsn, "dsn-query", "", `SQLite DSN query string. Do not set unless you know what you are doing`)
 	flag.BoolVar(&onDisk, "on-disk", false, "Use an on-disk SQLite database")
 	flag.BoolVar(&showVersion, "version", false, "Show version information and exit")
 	flag.StringVar(&raftHeartbeatTimeout, "raft-timeout", "1s", "Raft heartbeat timeout")

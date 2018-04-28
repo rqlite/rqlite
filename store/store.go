@@ -175,8 +175,7 @@ func (s *Store) Open(enableSingle bool) error {
 		return err
 	}
 
-	// Open underlying database.
-	db, err := s.open()
+	db, err := s.openDatabase()
 	if err != nil {
 		return err
 	}
@@ -687,8 +686,8 @@ func (s *Store) setMetadata(id string, md map[string]string) error {
 	return nil
 }
 
-// open opens the the in-memory or file-based database.
-func (s *Store) open() (*sql.DB, error) {
+// openDatabase opens the the in-memory or file-based database.
+func (s *Store) openDatabase() (*sql.DB, error) {
 	var db *sql.DB
 	var err error
 	if !s.dbConf.Memory {

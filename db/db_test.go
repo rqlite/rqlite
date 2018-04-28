@@ -16,7 +16,7 @@ import (
  * Lowest-layer database tests
  */
 
-func Test_DbFileCreation(t *testing.T) {
+func Test_DBFileCreation(t *testing.T) {
 	t.Parallel()
 
 	dir, err := ioutil.TempDir("", "rqlite-test-")
@@ -28,6 +28,47 @@ func Test_DbFileCreation(t *testing.T) {
 	}
 	if db == nil {
 		t.Fatal("database is nil")
+	}
+	if db.InMemory() {
+		t.Fatal("database marked as in-memory")
+	}
+	err = db.Close()
+	if err != nil {
+		t.Fatalf("failed to close database: %s", err.Error())
+	}
+}
+
+func Test_DBMemoryCreation(t *testing.T) {
+	t.Parallel()
+
+	db, err := Open("file::memory:")
+	if err != nil {
+		t.Fatalf("failed to open new database: %s", err.Error())
+	}
+	if db == nil {
+		t.Fatal("database is nil")
+	}
+	if !db.InMemory() {
+		t.Fatal("database not marked as in-memory")
+	}
+	err = db.Close()
+	if err != nil {
+		t.Fatalf("failed to close database: %s", err.Error())
+	}
+}
+
+func Test_DBOpenMemory(t *testing.T) {
+	t.Parallel()
+
+	db, err := OpenInMemory()
+	if err != nil {
+		t.Fatalf("failed to open new database: %s", err.Error())
+	}
+	if db == nil {
+		t.Fatal("database is nil")
+	}
+	if !db.InMemory() {
+		t.Fatal("database not marked as in-memory")
 	}
 	err = db.Close()
 	if err != nil {
@@ -78,8 +119,6 @@ func Test_SQLiteMasterTable(t *testing.T) {
 }
 
 func Test_LoadInMemory(t *testing.T) {
-	t.Parallel()
-
 	db, path := mustCreateDatabase()
 	defer db.Close()
 	defer os.Remove(path)
@@ -740,24 +779,61 @@ func Test_Backup(t *testing.T) {
 		t.Fatalf("failed to insert records: %s", err.Error())
 	}
 
-	dstDB, err := ioutil.TempFile("", "rqlilte-bak-")
-	if err != nil {
-		t.Fatalf("failed to create temp file: %s", err.Error())
-	}
-	dstDB.Close()
-	defer os.Remove(dstDB.Name())
+	dstDB := mustTempFilename()
+	defer os.Remove(dstDB)
 
-	err = db.Backup(dstDB.Name())
+	err = db.Backup(dstDB)
 	if err != nil {
 		t.Fatalf("failed to backup database: %s", err.Error())
 	}
 
-	newDB, err := Open(dstDB.Name())
+	newDB, err := Open(dstDB)
 	if err != nil {
 		t.Fatalf("failed to open backup database: %s", err.Error())
 	}
 	defer newDB.Close()
-	defer os.Remove(dstDB.Name())
+	defer os.Remove(dstDB)
+	ro, err := newDB.Query([]string{`SELECT * FROM foo`}, false, false)
+	if err != nil {
+		t.Fatalf("failed to query table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"],[2,"fiona"],[3,"fiona"],[4,"fiona"]]}]`, asJSON(ro); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
+func Test_BackupMemory(t *testing.T) {
+	db := mustCreateInMemoryDatabase()
+	defer db.Close()
+
+	_, err := db.Execute([]string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"}, false, false)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	stmts := []string{
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+		`INSERT INTO foo(id, name) VALUES(2, "fiona")`,
+		`INSERT INTO foo(id, name) VALUES(3, "fiona")`,
+		`INSERT INTO foo(id, name) VALUES(4, "fiona")`,
+	}
+	_, err = db.Execute(stmts, true, false)
+	if err != nil {
+		t.Fatalf("failed to insert records: %s", err.Error())
+	}
+
+	dstDB := mustTempFilename()
+	err = db.Backup(dstDB)
+	if err != nil {
+		t.Fatalf("failed to backup database: %s", err.Error())
+	}
+
+	newDB, err := Open(dstDB)
+	if err != nil {
+		t.Fatalf("failed to open backup database: %s", err.Error())
+	}
+	defer newDB.Close()
+	defer os.Remove(dstDB)
 	ro, err := newDB.Query([]string{`SELECT * FROM foo`}, false, false)
 	if err != nil {
 		t.Fatalf("failed to query table: %s", err.Error())
@@ -790,24 +866,15 @@ func Test_Dump(t *testing.T) {
 }
 
 func Test_DumpMemory(t *testing.T) {
-	t.Parallel()
+	db := mustCreateInMemoryDatabase()
 
-	db, path := mustCreateDatabase()
-	defer db.Close()
-	defer os.Remove(path)
-
-	inmem, err := LoadInMemoryWithDSN(path, "")
-	if err != nil {
-		t.Fatalf("failed to create loaded in-memory database: %s", err.Error())
-	}
-
-	_, err = inmem.Execute([]string{chinook.DB}, false, false)
+	_, err := db.Execute([]string{chinook.DB}, false, false)
 	if err != nil {
 		t.Fatalf("failed to load chinook dump: %s", err.Error())
 	}
 
 	var b strings.Builder
-	if err := inmem.Dump(&b); err != nil {
+	if err := db.Dump(&b); err != nil {
 		t.Fatalf("failed to dump database: %s", err.Error())
 	}
 
@@ -817,42 +884,36 @@ func Test_DumpMemory(t *testing.T) {
 }
 
 func mustCreateDatabase() (*DB, string) {
-	var err error
-	f, err := ioutil.TempFile("", "rqlilte-test-")
-	if err != nil {
-		panic("failed to create temp file")
-	}
-	f.Close()
+	path := mustTempFilename()
 
-	db, err := Open(f.Name())
+	db, err := Open(path)
 	if err != nil {
 		panic("failed to open database")
 	}
 
-	return db, f.Name()
+	return db, path
+}
+
+func mustCreateInMemoryDatabase() *DB {
+	db, err := OpenWithDSN("file::memory:", "cache=shared")
+	if err != nil {
+		panic("failed to open in-memory database")
+	}
+
+	return db
 }
 
 func mustWriteAndOpenDatabase(b []byte) (*DB, string) {
-	var err error
-	f, err := ioutil.TempFile("", "rqlilte-test-write-")
-	if err != nil {
-		panic("failed to create temp file")
-	}
-	f.Close()
+	path := mustTempFilename()
 
-	err = ioutil.WriteFile(f.Name(), b, 0660)
-	if err != nil {
-		panic("failed to write file")
-	}
-
-	db, err := Open(f.Name())
+	db, err := Open(path)
 	if err != nil {
 		panic("failed to open database")
 	}
-	return db, f.Name()
+	return db, path
 }
 
-// mustExecute executes a statement, and panics on failure. Used for statements
+// mustExecute executes a spath, and panics on failure. Used for statements
 // that should never fail, even taking into account test setup.
 func mustExecute(db *DB, stmt string) {
 	_, err := db.Execute([]string{stmt}, false, false)
@@ -868,6 +929,20 @@ func mustQuery(db *DB, stmt string) {
 	if err != nil {
 		panic(fmt.Sprintf("failed to query: %s", err.Error()))
 	}
+}
+
+func mustTempFilename() string {
+	fd, err := ioutil.TempFile("", "rqlilte-tmp-test-")
+	if err != nil {
+		panic(err.Error())
+	}
+	if err := fd.Close(); err != nil {
+		panic(err.Error())
+	}
+	if err := os.Remove(fd.Name()); err != nil {
+		panic(err.Error())
+	}
+	return fd.Name()
 }
 
 func asJSON(v interface{}) string {
