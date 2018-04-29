@@ -7,6 +7,7 @@ import (
 	"expvar"
 	"fmt"
 	"io"
+	"net/url"
 	"strings"
 	"time"
 
@@ -44,14 +45,6 @@ func init() {
 
 }
 
-// DB is the SQL database.
-type DB struct {
-	sqlite3conn *sqlite3.SQLiteConn // Driver connection to database.
-	path        string              // Path to database file.
-	dsn         string              // DSN, if any.
-	memory      bool                // In-memory only.
-}
-
 // Result represents the outcome of an operation that changes rows.
 type Result struct {
 	LastInsertID int64   `json:"last_insert_id,omitempty"`
@@ -69,48 +62,56 @@ type Rows struct {
 	Time    float64         `json:"time,omitempty"`
 }
 
-// Open opens a file-based database, creating it if it does not exist.
-func Open(dbPath string) (*DB, error) {
-	return open(fqdsn(dbPath, ""))
+// DB is the SQL database.
+type DB struct {
+	sqlite3conn *sqlite3.SQLiteConn // Driver connection to database.
+	path        string              // Path to database.
+	dsnQuery    string              // Any optional DSN query params.
+	memory      bool                // Whether database is in-memory only.
+	fqdsn       string
 }
 
-// OpenWithDSN opens a file-based database, creating it if it does not exist.
-func OpenWithDSN(dbPath, dsn string) (*DB, error) {
-	return open(fqdsn(dbPath, dsn))
-}
-
-// OpenInMemory opens an in-memory database.
-func OpenInMemory() (*DB, error) {
-	return open(fqdsn(":memory:", ""))
-}
-
-// OpenInMemoryWithDSN opens an in-memory database with a specific DSN.
-func OpenInMemoryWithDSN(dsn string) (*DB, error) {
-	return open(fqdsn(":memory:", dsn))
-}
-
-// LoadInMemoryWithDSN loads an in-memory database with that at the path,
-// with the specified DSN
-func LoadInMemoryWithDSN(dbPath, dsn string) (*DB, error) {
-	db, err := OpenInMemoryWithDSN(dsn)
+// NewDB returns an instance of the database at path. If the database
+// has already been created and opened, this database will share
+// the data of that database when opened.
+func NewDB(path, dsnQuery string, memory bool) (*DB, error) {
+	q, err := url.ParseQuery(dsnQuery)
 	if err != nil {
 		return nil, err
 	}
+	if memory {
+		q.Set("mode", "memory")
+		q.Set("cache", "shared")
+	}
 
-	srcDB, err := Open(dbPath)
+	if !strings.HasPrefix(path, "file::") {
+		path = fmt.Sprintf("file::%s", path)
+	}
+
+	var fqdsn string
+	if len(q) > 0 {
+		fqdsn = fmt.Sprintf("%s?%s", path, q.Encode())
+	} else {
+		fqdsn = path
+	}
+
+	return &DB{
+		path:     path,
+		dsnQuery: dsnQuery,
+		memory:   memory,
+		fqdsn:    fqdsn,
+	}, nil
+}
+
+func (d *DB) Open() error {
+	drv := sqlite3.SQLiteDriver{}
+	dbc, err := drv.Open(d.fqdsn)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	if err := copyDatabase(db.sqlite3conn, srcDB.sqlite3conn); err != nil {
-		return nil, err
-	}
-
-	if err := srcDB.Close(); err != nil {
-		return nil, err
-	}
-
-	return db, nil
+	d.sqlite3conn = dbc.(*sqlite3.SQLiteConn)
+	return nil
 }
 
 // Close closes the underlying database connection.
@@ -118,17 +119,14 @@ func (db *DB) Close() error {
 	return db.sqlite3conn.Close()
 }
 
-func open(dbPath string) (*DB, error) {
-	d := sqlite3.SQLiteDriver{}
-	dbc, err := d.Open(dbPath)
-	if err != nil {
-		return nil, err
-	}
+// InMemory returns whether this is an in-memory database.
+func (db *DB) InMemory() bool {
+	return db.memory
+}
 
-	return &DB{
-		sqlite3conn: dbc.(*sqlite3.SQLiteConn),
-		path:        dbPath,
-	}, nil
+// FQDSN returns the full DSN used to open the database.
+func (db *DB) FQDSN() string {
+	return db.fqdsn
 }
 
 // EnableFKConstraints allows control of foreign key constraint checks.
@@ -362,8 +360,12 @@ func (db *DB) Query(queries []string, tx, xTime bool) ([]*Rows, error) {
 
 // Backup writes a consistent snapshot of the database to the given file.
 func (db *DB) Backup(path string) error {
-	dstDB, err := Open(path)
+	dstDB, err := NewDB(path, "", false)
 	if err != nil {
+		return err
+	}
+
+	if err := dstDB.Open(); err != nil {
 		return err
 	}
 	defer func(db *DB, err *error) {
@@ -380,13 +382,15 @@ func (db *DB) Backup(path string) error {
 	return err
 }
 
-// Dump writes a consistent snapshot of the database in SQL text format.
+// Dump writes a snapshot of the database in SQL text format.
 func (db *DB) Dump(w io.Writer) error {
 	if _, err := w.Write([]byte("PRAGMA foreign_keys=OFF;\nBEGIN TRANSACTION;\n")); err != nil {
 		return err
 	}
 
-	dstDB, err := OpenInMemory()
+	// Make a consistent copy of the database to a temporary
+	// in-memory database
+	dstDB, err := NewDB(":memory:", "", true)
 	if err != nil {
 		return err
 	}
@@ -396,7 +400,6 @@ func (db *DB) Dump(w io.Writer) error {
 			*err = cerr
 		}
 	}(dstDB, &err)
-
 	if err := copyDatabase(dstDB.sqlite3conn, db.sqlite3conn); err != nil {
 		return err
 	}
@@ -535,8 +538,11 @@ func isTextType(t string) bool {
 
 // fqdsn returns the fully-qualified datasource name.
 func fqdsn(path, dsn string) string {
+	if !strings.HasPrefix(path, "file:") {
+		path = fmt.Sprintf("file:%s", path)
+	}
 	if dsn != "" {
-		return fmt.Sprintf("file:%s?%s", path, dsn)
+		return fmt.Sprintf("%s?%s", path, dsn)
 	}
 	return path
 }
