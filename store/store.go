@@ -21,7 +21,7 @@ import (
 
 	"github.com/hashicorp/raft"
 	"github.com/hashicorp/raft-boltdb"
-	sql "github.com/rqlite/rqlite/db"
+	sdb "github.com/rqlite/rqlite/db"
 )
 
 var (
@@ -115,8 +115,6 @@ const (
 type Store struct {
 	raftDir string
 
-	mu sync.RWMutex // Sync access between queries and snapshots.
-
 	raft    *raft.Raft // The consensus mechanism.
 	ln      Listener
 	raftTn  *raft.NetworkTransport
@@ -124,7 +122,8 @@ type Store struct {
 	raftLog *raftboltdb.BoltStore // Persisent log store.
 	dbConf  *DBConfig             // SQLite database config.
 	dbPath  string                // Path to underlying SQLite file, if not in-memory.
-	db      *sql.DB               // The underlying SQLite store.
+	db      *sdb.DB               // The underlying SQLite database.
+	dbConn  *sdb.Conn             // Default connection to underlying SQLite database.
 
 	metaMu sync.RWMutex
 	meta   map[string]map[string]string
@@ -175,12 +174,17 @@ func (s *Store) Open(enableSingle bool) error {
 		return err
 	}
 
-	// Open underlying database.
-	db, err := s.open()
+	// Create underlying database.
+	if err := s.createDatabase(); err != nil {
+		return err
+	}
+
+	// Get default connection to database.
+	conn, err := s.db.Connect()
 	if err != nil {
 		return err
 	}
-	s.db = db
+	s.dbConn = conn
 
 	// Is this a brand new node?
 	newNode := !pathExists(filepath.Join(s.raftDir, "raft.db"))
@@ -234,7 +238,7 @@ func (s *Store) Open(enableSingle bool) error {
 
 // Close closes the store. If wait is true, waits for a graceful shutdown.
 func (s *Store) Close(wait bool) error {
-	if err := s.db.Close(); err != nil {
+	if err := s.dbConn.Close(); err != nil {
 		return err
 	}
 	f := s.raft.Shutdown()
@@ -382,7 +386,7 @@ func (s *Store) WaitForAppliedIndex(idx uint64, timeout time.Duration) error {
 
 // Stats returns stats for the store.
 func (s *Store) Stats() (map[string]interface{}, error) {
-	fkEnabled, err := s.db.FKConstraints()
+	fkEnabled, err := s.dbConn.FKConstraints()
 	if err != nil {
 		return nil, err
 	}
@@ -390,7 +394,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 	dbStatus := map[string]interface{}{
 		"dns":            s.dbConf.DSN,
 		"fk_constraints": enabledFromBool(fkEnabled),
-		"version":        sql.DBVersion,
+		"version":        sdb.DBVersion,
 	}
 	if !s.dbConf.Memory {
 		dbStatus["path"] = s.dbPath
@@ -433,13 +437,13 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 }
 
 // Execute executes queries that return no rows, but do modify the database.
-func (s *Store) Execute(ex *ExecuteRequest) ([]*sql.Result, error) {
+func (s *Store) Execute(ex *ExecuteRequest) ([]*sdb.Result, error) {
 	return s.execute(ex)
 }
 
 // ExecuteOrAbort executes the requests, but aborts any active transaction
 // on the underlying database in the case of any error.
-func (s *Store) ExecuteOrAbort(ex *ExecuteRequest) (results []*sql.Result, retErr error) {
+func (s *Store) ExecuteOrAbort(ex *ExecuteRequest) (results []*sdb.Result, retErr error) {
 	defer func() {
 		var errored bool
 		for i := range results {
@@ -449,7 +453,7 @@ func (s *Store) ExecuteOrAbort(ex *ExecuteRequest) (results []*sql.Result, retEr
 			}
 		}
 		if retErr != nil || errored {
-			if err := s.db.AbortTransaction(); err != nil {
+			if err := s.dbConn.AbortTransaction(); err != nil {
 				s.logger.Printf("WARNING: failed to abort transaction: %s", err.Error())
 			}
 		}
@@ -457,7 +461,7 @@ func (s *Store) ExecuteOrAbort(ex *ExecuteRequest) (results []*sql.Result, retEr
 	return s.execute(ex)
 }
 
-func (s *Store) execute(ex *ExecuteRequest) ([]*sql.Result, error) {
+func (s *Store) execute(ex *ExecuteRequest) ([]*sdb.Result, error) {
 	d := &databaseSub{
 		Tx:      ex.Tx,
 		Queries: ex.Queries,
@@ -494,26 +498,22 @@ func (s *Store) Backup(leader bool, fmt BackupFormat) ([]byte, error) {
 		return nil, ErrNotLeader
 	}
 
+	// Get a new connection so we get a consistent snapshot.
+	conn, err := s.db.Connect()
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
 	var b []byte
 	if fmt == BackupBinary {
-		f, err := ioutil.TempFile("", "rqlite-bak-")
-		if err != nil {
-			return nil, err
-		}
-		f.Close()
-		defer os.Remove(f.Name())
-
-		if err := s.db.Backup(f.Name()); err != nil {
-			return nil, err
-		}
-
-		b, err = ioutil.ReadFile(f.Name())
+		b, err = s.Database(leader)
 		if err != nil {
 			return nil, err
 		}
 	} else if fmt == BackupSQL {
 		buf := bytes.NewBuffer(nil)
-		if err := s.db.Dump(buf); err != nil {
+		if err := conn.Dump(buf); err != nil {
 			return nil, err
 		}
 		b = buf.Bytes()
@@ -525,11 +525,7 @@ func (s *Store) Backup(leader bool, fmt BackupFormat) ([]byte, error) {
 }
 
 // Query executes queries that return rows, and do not modify the database.
-func (s *Store) Query(qr *QueryRequest) ([]*sql.Rows, error) {
-	// Allow concurrent queries.
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
+func (s *Store) Query(qr *QueryRequest) ([]*sdb.Rows, error) {
 	if qr.Lvl == Strong {
 		d := &databaseSub{
 			Tx:      qr.Tx,
@@ -561,7 +557,7 @@ func (s *Store) Query(qr *QueryRequest) ([]*sql.Rows, error) {
 		return nil, ErrNotLeader
 	}
 
-	r, err := s.db.Query(qr.Queries, qr.Tx, qr.Timings)
+	r, err := s.dbConn.Query(qr.Queries, qr.Tx, qr.Timings)
 	return r, err
 }
 
@@ -687,28 +683,29 @@ func (s *Store) setMetadata(id string, md map[string]string) error {
 	return nil
 }
 
-// open opens the the in-memory or file-based database.
-func (s *Store) open() (*sql.DB, error) {
-	var db *sql.DB
+// createDatabase creates the the in-memory or file-based database.
+func (s *Store) createDatabase() error {
+	var db *sdb.DB
 	var err error
 	if !s.dbConf.Memory {
 		// as it will be rebuilt from (possibly) a snapshot and committed log entries.
 		if err := os.Remove(s.dbPath); err != nil && !os.IsNotExist(err) {
-			return nil, err
+			return err
 		}
-		db, err = sql.OpenWithDSN(s.dbPath, s.dbConf.DSN)
+		db, err = sdb.New(s.dbPath, s.dbConf.DSN, false)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		s.logger.Println("SQLite database opened at", s.dbPath)
 	} else {
-		db, err = sql.OpenInMemoryWithDSN(s.dbConf.DSN)
+		db, err = sdb.New(s.dbPath, s.dbConf.DSN, true)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		s.logger.Println("SQLite in-memory database opened")
 	}
-	return db, nil
+	s.db = db
+	return nil
 }
 
 // remove removes the node, with the given ID, from the cluster.
@@ -757,12 +754,12 @@ func (s *Store) raftConfig() *raft.Config {
 }
 
 type fsmExecuteResponse struct {
-	results []*sql.Result
+	results []*sdb.Result
 	error   error
 }
 
 type fsmQueryResponse struct {
-	rows  []*sql.Rows
+	rows  []*sdb.Rows
 	error error
 }
 
@@ -784,10 +781,10 @@ func (s *Store) Apply(l *raft.Log) interface{} {
 			return &fsmGenericResponse{error: err}
 		}
 		if c.Typ == execute {
-			r, err := s.db.Execute(d.Queries, d.Tx, d.Timings)
+			r, err := s.dbConn.Execute(d.Queries, d.Tx, d.Timings)
 			return &fsmExecuteResponse{results: r, error: err}
 		}
-		r, err := s.db.Query(d.Queries, d.Tx, d.Timings)
+		r, err := s.dbConn.Query(d.Queries, d.Tx, d.Timings)
 		return &fsmQueryResponse{rows: r, error: err}
 	case metadataSet:
 		var d metadataSetSub
@@ -821,22 +818,11 @@ func (s *Store) Apply(l *raft.Log) interface{} {
 	}
 }
 
-// Database returns a copy of the underlying database. The caller should
-// ensure that no transaction is taking place during this call, or an error may
-// be returned. If leader is true, this operation is performed with a read
-// consistency level equivalent to "weak". Otherwise no guarantees are made
-// about the read consistency level.
-//
-// http://sqlite.org/howtocorrupt.html states it is safe to do this
-// as long as no transaction is in progress.
+// Database returns a copy of the underlying database.
 func (s *Store) Database(leader bool) ([]byte, error) {
 	if leader && s.raft.State() != raft.Leader {
 		return nil, ErrNotLeader
 	}
-
-	// Ensure only one snapshot can take place at once, and block all queries.
-	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	f, err := ioutil.TempFile("", "rqlilte-snap-")
 	if err != nil {
@@ -845,9 +831,19 @@ func (s *Store) Database(leader bool) ([]byte, error) {
 	f.Close()
 	defer os.Remove(f.Name())
 
-	if err := s.db.Backup(f.Name()); err != nil {
+	db, err := sdb.New(f.Name(), "", false)
+	if err != nil {
 		return nil, err
 	}
+	conn, err := db.Connect()
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.dbConn.Backup(conn); err != nil {
+		return nil, err
+	}
+	defer conn.Close()
 
 	return ioutil.ReadFile(f.Name())
 }
@@ -879,7 +875,7 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 
 // Restore restores the node to a previous state.
 func (s *Store) Restore(rc io.ReadCloser) error {
-	if err := s.db.Close(); err != nil {
+	if err := s.dbConn.Close(); err != nil {
 		return err
 	}
 
@@ -895,7 +891,7 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 		return err
 	}
 
-	var db *sql.DB
+	var db *sdb.DB
 	var err error
 	if !s.dbConf.Memory {
 		// Write snapshot over any existing database file.
@@ -904,7 +900,7 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 		}
 
 		// Re-open it.
-		db, err = sql.OpenWithDSN(s.dbPath, s.dbConf.DSN)
+		db, err = sdb.New(s.dbPath, s.dbConf.DSN, false)
 		if err != nil {
 			return err
 		}
@@ -921,8 +917,8 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 			return err
 		}
 
-		// Load an in-memory database from the snapshot now on disk.
-		db, err = sql.LoadInMemoryWithDSN(f.Name(), s.dbConf.DSN)
+		// Re-open it.
+		db, err = sdb.New(s.dbPath, s.dbConf.DSN, false)
 		if err != nil {
 			return err
 		}
