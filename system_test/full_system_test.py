@@ -132,9 +132,28 @@ class Node(object):
   def applied_index(self):
     return self.status()['store']['raft']['applied_index']
 
+  def commit_index(self):
+    return self.status()['store']['raft']['commit_index']
+
   def wait_for_applied_index(self, index, timeout=TIMEOUT):
     t = 0
-    while self.status()['store']['raft']['applied_index'] != index:
+    while self.applied_index() != index:
+      if t > timeout:
+        raise Exception('timeout')
+      time.sleep(1)
+      t+=1
+
+  def wait_for_commit_index(self, index, timeout=TIMEOUT):
+    t = 0
+    while self.commit_index() != index:
+      if t > timeout:
+        raise Exception('timeout')
+      time.sleep(1)
+      t+=1
+
+  def wait_for_all_applied(self, timeout=TIMEOUT):
+    t = 0
+    while self.commit_index() != self.applied_index():
       if t > timeout:
         raise Exception('timeout')
       time.sleep(1)
@@ -250,12 +269,14 @@ class TestEndToEnd(unittest.TestCase):
     j = n.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
     self.assertEqual(str(j), "{u'results': [{}]}")
     j = n.execute('INSERT INTO foo(name) VALUES("fiona")')
+    n.wait_for_all_applied()
     self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
     j = n.query('SELECT * FROM foo')
     self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
 
     n0 = self.cluster.wait_for_leader().stop()
     n1 = self.cluster.wait_for_leader(node_exc=n0)
+    n1.wait_for_all_applied()
     j = n1.query('SELECT * FROM foo')
     self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
     j = n1.execute('INSERT INTO foo(name) VALUES("declan")')
@@ -329,6 +350,7 @@ class TestEndToEndBackupRestore(unittest.TestCase):
     self.node0.wait_for_leader()
     self.node0.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
     self.node0.execute('INSERT INTO foo(name) VALUES("fiona")')
+    self.node0.wait_for_all_applied()
 
     self.node0.backup(self.db_file)
     conn = sqlite3.connect(self.db_file)
