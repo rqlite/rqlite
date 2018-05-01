@@ -128,6 +128,8 @@ type Store struct {
 	metaMu sync.RWMutex
 	meta   map[string]map[string]string
 
+	restoreMu sync.RWMutex // Restore needs exclusive access to database.
+
 	logger *log.Logger
 
 	SnapshotThreshold uint64
@@ -438,12 +440,16 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 
 // Execute executes queries that return no rows, but do modify the database.
 func (s *Store) Execute(ex *ExecuteRequest) ([]*sdb.Result, error) {
+	s.restoreMu.RLock()
+	defer s.restoreMu.RUnlock()
 	return s.execute(ex)
 }
 
 // ExecuteOrAbort executes the requests, but aborts any active transaction
 // on the underlying database in the case of any error.
 func (s *Store) ExecuteOrAbort(ex *ExecuteRequest) (results []*sdb.Result, retErr error) {
+	s.restoreMu.RLock()
+	defer s.restoreMu.RUnlock()
 	defer func() {
 		var errored bool
 		for i := range results {
@@ -494,6 +500,9 @@ func (s *Store) execute(ex *ExecuteRequest) ([]*sdb.Result, error) {
 // level equivalent to "weak". Otherwise no guarantees are made about the
 // read consistency level.
 func (s *Store) Backup(leader bool, fmt BackupFormat) ([]byte, error) {
+	s.restoreMu.RLock()
+	defer s.restoreMu.RUnlock()
+
 	if leader && s.raft.State() != raft.Leader {
 		return nil, ErrNotLeader
 	}
@@ -507,7 +516,7 @@ func (s *Store) Backup(leader bool, fmt BackupFormat) ([]byte, error) {
 
 	var b []byte
 	if fmt == BackupBinary {
-		b, err = s.Database(leader)
+		b, err = s.database(leader)
 		if err != nil {
 			return nil, err
 		}
@@ -526,6 +535,9 @@ func (s *Store) Backup(leader bool, fmt BackupFormat) ([]byte, error) {
 
 // Query executes queries that return rows, and do not modify the database.
 func (s *Store) Query(qr *QueryRequest) ([]*sdb.Rows, error) {
+	s.restoreMu.RLock()
+	defer s.restoreMu.RUnlock()
+
 	if qr.Lvl == Strong {
 		d := &databaseSub{
 			Tx:      qr.Tx,
@@ -769,6 +781,9 @@ type fsmGenericResponse struct {
 
 // Apply applies a Raft log entry to the database.
 func (s *Store) Apply(l *raft.Log) interface{} {
+	s.restoreMu.RLock()
+	defer s.restoreMu.RUnlock()
+
 	var c command
 	if err := json.Unmarshal(l.Data, &c); err != nil {
 		panic(fmt.Sprintf("failed to unmarshal cluster command: %s", err.Error()))
@@ -818,8 +833,9 @@ func (s *Store) Apply(l *raft.Log) interface{} {
 	}
 }
 
-// Database returns a copy of the underlying database.
-func (s *Store) Database(leader bool) ([]byte, error) {
+// Database returns a byte slice containing a copy of contents of the
+// underlying SQLite file.
+func (s *Store) database(leader bool) ([]byte, error) {
 	if leader && s.raft.State() != raft.Leader {
 		return nil, ErrNotLeader
 	}
@@ -828,9 +844,10 @@ func (s *Store) Database(leader bool) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	f.Close()
-	defer os.Remove(f.Name())
-
+	if err := f.Close(); err != nil {
+		return nil, err
+	}
+	os.Remove(f.Name())
 	db, err := sdb.New(f.Name(), "", false)
 	if err != nil {
 		return nil, err
@@ -843,21 +860,23 @@ func (s *Store) Database(leader bool) ([]byte, error) {
 	if err := s.dbConn.Backup(conn); err != nil {
 		return nil, err
 	}
-	defer conn.Close()
+	if err := conn.Close(); err != nil {
+		return nil, err
+	}
 
 	return ioutil.ReadFile(f.Name())
 }
 
-// Snapshot returns a snapshot of the database. The caller must ensure that
-// no transaction is taking place during this call. Hashicorp Raft guarantees
-// that this function will not be called concurrently with Apply.
-//
-// http://sqlite.org/howtocorrupt.html states it is safe to do this
-// as long as no transaction is in progress.
+// Snapshot returns a snapshot of the store. The caller must ensure that
+// no Raft transaction is taking place during this call. Hashicorp Raft
+// guarantees that this function will not be called concurrently with Apply.
 func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
+	s.restoreMu.RLock()
+	defer s.restoreMu.RUnlock()
+
 	fsm := &fsmSnapshot{}
 	var err error
-	fsm.database, err = s.Database(false)
+	fsm.database, err = s.database(false)
 	if err != nil {
 		s.logger.Printf("failed to read database for snapshot: %s", err.Error())
 		return nil, err
@@ -875,9 +894,8 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 
 // Restore restores the node to a previous state.
 func (s *Store) Restore(rc io.ReadCloser) error {
-	if err := s.dbConn.Close(); err != nil {
-		return err
-	}
+	s.restoreMu.Lock()
+	defer s.restoreMu.Unlock()
 
 	// Get size of database.
 	var sz uint64
@@ -891,39 +909,32 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 		return err
 	}
 
-	var db *sdb.DB
-	var err error
-	if !s.dbConf.Memory {
-		// Write snapshot over any existing database file.
-		if err := ioutil.WriteFile(s.dbPath, database, 0660); err != nil {
-			return err
-		}
-
-		// Re-open it.
-		db, err = sdb.New(s.dbPath, s.dbConf.DSN, false)
-		if err != nil {
-			return err
-		}
-	} else {
-		// In memory. Copy to temporary file, and then load memory from file.
-		f, err := ioutil.TempFile("", "rqlilte-snap-")
-		if err != nil {
-			return err
-		}
-		f.Close()
-		defer os.Remove(f.Name())
-
-		if err := ioutil.WriteFile(f.Name(), database, 0660); err != nil {
-			return err
-		}
-
-		// Re-open it.
-		db, err = sdb.New(s.dbPath, s.dbConf.DSN, false)
-		if err != nil {
-			return err
-		}
+	// Create temp file and write incoming database to there.
+	temp, err := tempfile()
+	if err != nil {
+		return err
 	}
-	s.db = db
+	defer os.Remove(temp.Name())
+	defer temp.Close()
+
+	if _, err := temp.Write(database); err != nil {
+		return err
+	}
+
+	// Create new database from file, connect, and load
+	// existing database from that.
+	db, err := sdb.New(temp.Name(), "", false)
+	if err != nil {
+		return err
+	}
+	conn, err := db.Connect()
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	if err := s.dbConn.Load(conn); err != nil {
+		return err
+	}
 
 	// Read remaining bytes, and set to cluster meta.
 	b, err := ioutil.ReadAll(rc)
@@ -939,6 +950,7 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 	if err != nil {
 		return err
 	}
+
 	stats.Add(numRestores, 1)
 	return nil
 }
@@ -1011,4 +1023,13 @@ func pathExists(p string) bool {
 		return false
 	}
 	return true
+}
+
+// tempfile returns a temporary file for use
+func tempfile() (*os.File, error) {
+	f, err := ioutil.TempFile("", "rqlilte-snap-")
+	if err != nil {
+		return nil, err
+	}
+	return f, nil
 }

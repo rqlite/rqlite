@@ -349,13 +349,27 @@ func (c *Conn) FKConstraints() (bool, error) {
 	return false, nil
 }
 
-// Backup writes a consistent snapshot of the database over the given
-// database connection.
+// Load loads the connected database from the database connected to src.
+// It overwrites the data contained in this database. It is the caller's
+// responsibility to ensure that no other connections to this database
+// are accessed while this operation is in progress.
+func (c *Conn) Load(src *Conn) error {
+	return copyDatabase(c.sqlite, src.sqlite)
+}
+
+// Backup writes a snapshot of the database over the given database
+// connection, erasing all the contents of the destination database.
+// The consistency of the snapshot is READ_COMMITTED relative to any
+// other connections currently open to this database. The caller must
+// ensure that all connections to the destination database are not
+// accessed during this operation.
 func (c *Conn) Backup(dst *Conn) error {
 	return copyDatabase(dst.sqlite, c.sqlite)
 }
 
-// Dump writes a snapshot of the database in SQL text format.
+// Dump writes a snapshot of the database in SQL text format. The consistency
+// of the snapshot is READ_COMMITTED relative to any other connections
+// currently open to this database.
 func (c *Conn) Dump(w io.Writer) error {
 	if _, err := w.Write([]byte("PRAGMA foreign_keys=OFF;\nBEGIN TRANSACTION;\n")); err != nil {
 		return err
