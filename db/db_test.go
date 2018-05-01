@@ -99,9 +99,9 @@ func Test_Database(t *testing.T) {
 		test_SimpleTransaction,
 		test_PartialFailTransaction,
 		test_Backup,
+		test_Load,
 	} {
 		dbDisk, path := mustCreateDatabase()
-		defer os.Remove(path)
 		connDisk, err := dbDisk.Connect()
 		if err != nil {
 			t.Fatalf("failed to create connection to on-disk database: %s", err.Error())
@@ -115,6 +115,10 @@ func Test_Database(t *testing.T) {
 
 		f(t, connDisk)
 		f(t, connInMem)
+
+		connDisk.Close()
+		connInMem.Close()
+		os.Remove(path)
 	}
 }
 
@@ -685,6 +689,53 @@ func test_Backup(t *testing.T, c *Conn) {
 	}
 
 	ro, err := dstConn.Query([]string{`SELECT * FROM foo`}, false, false)
+	if err != nil {
+		t.Fatalf("failed to query table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"],[2,"fiona"],[3,"fiona"],[4,"fiona"]]}]`, asJSON(ro); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
+func test_Load(t *testing.T, c *Conn) {
+	dstDB, path := mustCreateDatabase()
+	defer os.Remove(path)
+	dstConn, err := dstDB.Connect()
+	if err != nil {
+		t.Fatalf("failed to connect to destination database: %s", err.Error())
+	}
+	defer dstConn.Close()
+
+	_, err = dstConn.Execute([]string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"}, false, false)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	stmts := []string{
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+		`INSERT INTO foo(id, name) VALUES(2, "fiona")`,
+		`INSERT INTO foo(id, name) VALUES(3, "fiona")`,
+		`INSERT INTO foo(id, name) VALUES(4, "fiona")`,
+	}
+	_, err = dstConn.Execute(stmts, true, false)
+	if err != nil {
+		t.Fatalf("failed to insert records: %s", err.Error())
+	}
+
+	ro, err := dstConn.Query([]string{`SELECT * FROM foo`}, false, false)
+	if err != nil {
+		t.Fatalf("failed to query table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"],[2,"fiona"],[3,"fiona"],[4,"fiona"]]}]`, asJSON(ro); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	err = c.Load(dstConn)
+	if err != nil {
+		t.Fatalf("failed to load database: %s", err.Error())
+	}
+
+	ro, err = c.Query([]string{`SELECT * FROM foo`}, false, false)
 	if err != nil {
 		t.Fatalf("failed to query table: %s", err.Error())
 	}
