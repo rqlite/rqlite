@@ -15,7 +15,7 @@ import (
  * Lowest-layer database tests
  */
 
-func Test_NewDBOnDisk(t *testing.T) {
+func TestNewDBOnDisk(t *testing.T) {
 	t.Parallel()
 
 	db, err := New(mustTempFilename(), "", false)
@@ -27,7 +27,7 @@ func Test_NewDBOnDisk(t *testing.T) {
 	}
 }
 
-func Test_NewDBInMemory(t *testing.T) {
+func TestNewDBInMemory(t *testing.T) {
 	t.Parallel()
 
 	db, err := New(mustTempFilename(), "", true)
@@ -39,7 +39,7 @@ func Test_NewDBInMemory(t *testing.T) {
 	}
 }
 
-func Test_DBCreateOnDiskConnection(t *testing.T) {
+func TestDBCreateOnDiskConnection(t *testing.T) {
 	t.Parallel()
 
 	db, path := mustCreateDatabase()
@@ -57,7 +57,7 @@ func Test_DBCreateOnDiskConnection(t *testing.T) {
 	}
 }
 
-func Test_DBCreateInMemoryConnection(t *testing.T) {
+func TestDBCreateInMemoryConnection(t *testing.T) {
 	t.Parallel()
 
 	db := mustCreateInMemoryDatabase()
@@ -74,55 +74,117 @@ func Test_DBCreateInMemoryConnection(t *testing.T) {
 	}
 }
 
-func Test_Database(t *testing.T) {
+func TestDumpOnDisk(t *testing.T) {
+	t.Parallel()
+
+	db, path := mustCreateDatabase()
+	defer os.Remove(path)
+	c, err := db.Connect()
+	if err != nil {
+		t.Fatalf("failed to create connection to on-disk database: %s", err.Error())
+	}
+
+	_, err = c.Execute([]string{chinook.DB}, false, false)
+	if err != nil {
+		t.Fatalf("failed to load chinook dump: %s", err.Error())
+	}
+
+	var b strings.Builder
+	if err := c.Dump(&b); err != nil {
+		t.Fatalf("failed to dump database: %s", err.Error())
+	}
+
+	if b.String() != chinook.DB {
+		t.Fatal("dumped database does not equal entered database")
+	}
+}
+
+func TestDumpInMemory(t *testing.T) {
+	t.Parallel()
+
+	db := mustCreateInMemoryDatabase()
+	c, err := db.Connect()
+	if err != nil {
+		t.Fatalf("failed to create connection to on-disk database: %s", err.Error())
+	}
+
+	_, err = c.Execute([]string{chinook.DB}, false, false)
+	if err != nil {
+		t.Fatalf("failed to load chinook dump: %s", err.Error())
+	}
+
+	var b strings.Builder
+	if err := c.Dump(&b); err != nil {
+		t.Fatalf("failed to dump database: %s", err.Error())
+	}
+
+	if b.String() != chinook.DB {
+		t.Fatal("dumped database does not equal entered database")
+	}
+}
+
+type testF func(test *testing.T, c *Conn)
+
+var dbTestfunctions []testF = []testF{
+	testTableCreation,
+	testSQLiteMasterTable,
+	testEmptyStatements,
+	testSimpleSingleStatements,
+	testSimpleJoinStatements,
+	testSimpleSingleConcatStatements,
+	testSimpleMultiStatements,
+	testSimpleSingleMultiLineStatements,
+	testSimpleFailingStatements_Execute,
+	testSimpleFailingStatements_Query,
+	testSimplePragmaTableInfo,
+	testCommonTableExpressions,
+	testForeignKeyConstraints,
+	testUniqueConstraints,
+	testActiveTransaction,
+	testAbortTransaction,
+	testPartialFail,
+	testSimpleTransaction,
+	testPartialFailTransaction,
+	testBackup,
+	testLoad,
+}
+
+func TestDatabaseInMemory(t *testing.T) {
 	t.Parallel()
 
 	type testF func(test *testing.T, c *Conn)
-	for _, f := range []testF{
-		test_TableCreation,
-		test_SQLiteMasterTable,
-		test_EmptyStatements,
-		test_SimpleSingleStatements,
-		test_SimpleJoinStatements,
-		test_SimpleSingleConcatStatements,
-		test_SimpleMultiStatements,
-		test_SimpleSingleMultiLineStatements,
-		test_SimpleFailingStatements_Execute,
-		test_SimpleFailingStatements_Query,
-		test_SimplePragmaTableInfo,
-		test_CommonTableExpressions,
-		test_ForeignKeyConstraints,
-		test_UniqueConstraints,
-		test_ActiveTransaction,
-		test_AbortTransaction,
-		test_PartialFail,
-		test_SimpleTransaction,
-		test_PartialFailTransaction,
-		test_Backup,
-		test_Load,
-	} {
-		dbDisk, path := mustCreateDatabase()
-		connDisk, err := dbDisk.Connect()
-		if err != nil {
-			t.Fatalf("failed to create connection to on-disk database: %s", err.Error())
-		}
-
+	for _, f := range dbTestfunctions {
 		dbInMem := mustCreateInMemoryDatabase()
 		connInMem, err := dbInMem.Connect()
 		if err != nil {
 			t.Fatalf("failed to create connection to in-memory database: %s", err.Error())
 		}
 
-		f(t, connDisk)
 		f(t, connInMem)
 
-		connDisk.Close()
 		connInMem.Close()
+	}
+}
+
+func TestDatabaseOnDisk(t *testing.T) {
+	t.Parallel()
+
+	type testF func(test *testing.T, c *Conn)
+	for _, f := range dbTestfunctions {
+		dbDisk, path := mustCreateDatabase()
+		connDisk, err := dbDisk.Connect()
+		if err != nil {
+			t.Fatalf("failed to create connection to on-disk database: %s", err.Error())
+		}
+
+		f(t, connDisk)
+
+		connDisk.Close()
 		os.Remove(path)
 	}
 }
 
-func test_TableCreation(t *testing.T, c *Conn) {
+func testTableCreation(t *testing.T, c *Conn) {
 	_, err := c.Execute([]string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"}, false, false)
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -137,7 +199,7 @@ func test_TableCreation(t *testing.T, c *Conn) {
 	}
 }
 
-func test_SQLiteMasterTable(t *testing.T, c *Conn) {
+func testSQLiteMasterTable(t *testing.T, c *Conn) {
 	_, err := c.Execute([]string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"}, false, false)
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -152,7 +214,7 @@ func test_SQLiteMasterTable(t *testing.T, c *Conn) {
 	}
 }
 
-func test_EmptyStatements(t *testing.T, c *Conn) {
+func testEmptyStatements(t *testing.T, c *Conn) {
 	_, err := c.Execute([]string{""}, false, false)
 	if err != nil {
 		t.Fatalf("failed to execute empty statement: %s", err.Error())
@@ -163,7 +225,7 @@ func test_EmptyStatements(t *testing.T, c *Conn) {
 	}
 }
 
-func test_SimpleSingleStatements(t *testing.T, c *Conn) {
+func testSimpleSingleStatements(t *testing.T, c *Conn) {
 	_, err := c.Execute([]string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"}, false, false)
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -220,7 +282,7 @@ func test_SimpleSingleStatements(t *testing.T, c *Conn) {
 	}
 }
 
-func test_SimpleJoinStatements(t *testing.T, c *Conn) {
+func testSimpleJoinStatements(t *testing.T, c *Conn) {
 	_, err := c.Execute([]string{"CREATE TABLE names (id INTEGER NOT NULL PRIMARY KEY, name TEXT, ssn TEXT)"}, false, false)
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -254,7 +316,7 @@ func test_SimpleJoinStatements(t *testing.T, c *Conn) {
 	}
 }
 
-func test_SimpleSingleConcatStatements(t *testing.T, c *Conn) {
+func testSimpleSingleConcatStatements(t *testing.T, c *Conn) {
 	_, err := c.Execute([]string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"}, false, false)
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -274,7 +336,7 @@ func test_SimpleSingleConcatStatements(t *testing.T, c *Conn) {
 	}
 }
 
-func test_SimpleMultiStatements(t *testing.T, c *Conn) {
+func testSimpleMultiStatements(t *testing.T, c *Conn) {
 	_, err := c.Execute([]string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"}, false, false)
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -297,7 +359,7 @@ func test_SimpleMultiStatements(t *testing.T, c *Conn) {
 	}
 }
 
-func test_SimpleSingleMultiLineStatements(t *testing.T, c *Conn) {
+func testSimpleSingleMultiLineStatements(t *testing.T, c *Conn) {
 	_, err := c.Execute([]string{`
 CREATE TABLE foo (
     id INTEGER NOT NULL PRIMARY KEY,
@@ -316,7 +378,7 @@ CREATE TABLE foo (
 	}
 }
 
-func test_SimpleFailingStatements_Execute(t *testing.T, c *Conn) {
+func testSimpleFailingStatements_Execute(t *testing.T, c *Conn) {
 	r, err := c.Execute([]string{`INSERT INTO foo(name) VALUES("fiona")`}, false, false)
 	if err != nil {
 		t.Fatalf("error executing insertion into non-existent table: %s", err.Error())
@@ -363,7 +425,7 @@ func test_SimpleFailingStatements_Execute(t *testing.T, c *Conn) {
 	}
 }
 
-func test_SimpleFailingStatements_Query(t *testing.T, c *Conn) {
+func testSimpleFailingStatements_Query(t *testing.T, c *Conn) {
 	ro, err := c.Query([]string{`SELECT * FROM bar`}, false, false)
 	if err != nil {
 		t.Fatalf("failed to attempt query of non-existent table: %s", err.Error())
@@ -387,7 +449,7 @@ func test_SimpleFailingStatements_Query(t *testing.T, c *Conn) {
 	}
 }
 
-func test_SimplePragmaTableInfo(t *testing.T, c *Conn) {
+func testSimplePragmaTableInfo(t *testing.T, c *Conn) {
 	r, err := c.Execute([]string{`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`}, false, false)
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -406,7 +468,7 @@ func test_SimplePragmaTableInfo(t *testing.T, c *Conn) {
 
 }
 
-func test_CommonTableExpressions(t *testing.T, c *Conn) {
+func testCommonTableExpressions(t *testing.T, c *Conn) {
 	_, err := c.Execute([]string{"CREATE TABLE test(x foo)"}, false, false)
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -434,7 +496,7 @@ func test_CommonTableExpressions(t *testing.T, c *Conn) {
 	}
 }
 
-func test_UniqueConstraints(t *testing.T, c *Conn) {
+func testUniqueConstraints(t *testing.T, c *Conn) {
 	_, err := c.Execute([]string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT, CONSTRAINT name_unique UNIQUE (name))"}, false, false)
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -458,7 +520,7 @@ func test_UniqueConstraints(t *testing.T, c *Conn) {
 	}
 }
 
-func test_ActiveTransaction(t *testing.T, c *Conn) {
+func testActiveTransaction(t *testing.T, c *Conn) {
 	if c.TransactionActive() {
 		t.Fatal("transaction incorrectly marked as active")
 	}
@@ -496,7 +558,7 @@ func test_ActiveTransaction(t *testing.T, c *Conn) {
 	}
 }
 
-func test_AbortTransaction(t *testing.T, c *Conn) {
+func testAbortTransaction(t *testing.T, c *Conn) {
 	if err := c.AbortTransaction(); err != nil {
 		t.Fatalf("error abrorting non-active transaction: %s", err.Error())
 	}
@@ -518,7 +580,7 @@ func test_AbortTransaction(t *testing.T, c *Conn) {
 	}
 }
 
-func test_PartialFail(t *testing.T, c *Conn) {
+func testPartialFail(t *testing.T, c *Conn) {
 	_, err := c.Execute([]string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"}, false, false)
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -546,7 +608,7 @@ func test_PartialFail(t *testing.T, c *Conn) {
 	}
 }
 
-func test_SimpleTransaction(t *testing.T, c *Conn) {
+func testSimpleTransaction(t *testing.T, c *Conn) {
 	_, err := c.Execute([]string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"}, false, false)
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -574,7 +636,7 @@ func test_SimpleTransaction(t *testing.T, c *Conn) {
 	}
 }
 
-func test_PartialFailTransaction(t *testing.T, c *Conn) {
+func testPartialFailTransaction(t *testing.T, c *Conn) {
 	_, err := c.Execute([]string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"}, false, false)
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -602,7 +664,7 @@ func test_PartialFailTransaction(t *testing.T, c *Conn) {
 	}
 }
 
-func test_ForeignKeyConstraints(t *testing.T, c *Conn) {
+func testForeignKeyConstraints(t *testing.T, c *Conn) {
 	_, err := c.Execute([]string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, ref INTEGER REFERENCES foo(id))"}, false, false)
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -659,7 +721,7 @@ func test_ForeignKeyConstraints(t *testing.T, c *Conn) {
 	}
 }
 
-func test_Backup(t *testing.T, c *Conn) {
+func testBackup(t *testing.T, c *Conn) {
 	_, err := c.Execute([]string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"}, false, false)
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -697,7 +759,7 @@ func test_Backup(t *testing.T, c *Conn) {
 	}
 }
 
-func test_Load(t *testing.T, c *Conn) {
+func testLoad(t *testing.T, c *Conn) {
 	dstDB, path := mustCreateDatabase()
 	defer os.Remove(path)
 	dstConn, err := dstDB.Connect()
@@ -741,55 +803,6 @@ func test_Load(t *testing.T, c *Conn) {
 	}
 	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"],[2,"fiona"],[3,"fiona"],[4,"fiona"]]}]`, asJSON(ro); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-	}
-}
-
-func Test_DumpOnDisk(t *testing.T) {
-	t.Parallel()
-
-	db, path := mustCreateDatabase()
-	defer os.Remove(path)
-	c, err := db.Connect()
-	if err != nil {
-		t.Fatalf("failed to create connection to on-disk database: %s", err.Error())
-	}
-
-	_, err = c.Execute([]string{chinook.DB}, false, false)
-	if err != nil {
-		t.Fatalf("failed to load chinook dump: %s", err.Error())
-	}
-
-	var b strings.Builder
-	if err := c.Dump(&b); err != nil {
-		t.Fatalf("failed to dump database: %s", err.Error())
-	}
-
-	if b.String() != chinook.DB {
-		t.Fatal("dumped database does not equal entered database")
-	}
-}
-
-func Test_DumpInMemory(t *testing.T) {
-	t.Parallel()
-
-	db := mustCreateInMemoryDatabase()
-	c, err := db.Connect()
-	if err != nil {
-		t.Fatalf("failed to create connection to on-disk database: %s", err.Error())
-	}
-
-	_, err = c.Execute([]string{chinook.DB}, false, false)
-	if err != nil {
-		t.Fatalf("failed to load chinook dump: %s", err.Error())
-	}
-
-	var b strings.Builder
-	if err := c.Dump(&b); err != nil {
-		t.Fatalf("failed to dump database: %s", err.Error())
-	}
-
-	if b.String() != chinook.DB {
-		t.Fatal("dumped database does not equal entered database")
 	}
 }
 

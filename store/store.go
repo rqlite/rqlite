@@ -55,10 +55,14 @@ const (
 	numRestores = "num_restores"
 )
 
+// BackupFormat represents the backup formats supported by the Store.
 type BackupFormat int
 
 const (
+	// BackupSQL is dump of the database in SQL text format.
 	BackupSQL BackupFormat = iota
+
+	// BackupBinary is a copy of the SQLite database file.
 	BackupBinary
 )
 
