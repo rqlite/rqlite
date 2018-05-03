@@ -134,8 +134,8 @@ var dbTestfunctions []testF = []testF{
 	testSimpleSingleConcatStatements,
 	testSimpleMultiStatements,
 	testSimpleSingleMultiLineStatements,
-	testSimpleFailingStatements_Execute,
-	testSimpleFailingStatements_Query,
+	testSimpleFailingStatementsExecute,
+	testSimpleFailingStatementsQuery,
 	testSimplePragmaTableInfo,
 	testCommonTableExpressions,
 	testForeignKeyConstraints,
@@ -161,7 +161,6 @@ func TestDatabaseInMemory(t *testing.T) {
 		}
 
 		f(t, connInMem)
-
 		connInMem.Close()
 	}
 }
@@ -178,7 +177,6 @@ func TestDatabaseOnDisk(t *testing.T) {
 		}
 
 		f(t, connDisk)
-
 		connDisk.Close()
 		os.Remove(path)
 	}
@@ -378,7 +376,7 @@ CREATE TABLE foo (
 	}
 }
 
-func testSimpleFailingStatements_Execute(t *testing.T, c *Conn) {
+func testSimpleFailingStatementsExecute(t *testing.T, c *Conn) {
 	r, err := c.Execute([]string{`INSERT INTO foo(name) VALUES("fiona")`}, false, false)
 	if err != nil {
 		t.Fatalf("error executing insertion into non-existent table: %s", err.Error())
@@ -425,7 +423,7 @@ func testSimpleFailingStatements_Execute(t *testing.T, c *Conn) {
 	}
 }
 
-func testSimpleFailingStatements_Query(t *testing.T, c *Conn) {
+func testSimpleFailingStatementsQuery(t *testing.T, c *Conn) {
 	ro, err := c.Query([]string{`SELECT * FROM bar`}, false, false)
 	if err != nil {
 		t.Fatalf("failed to attempt query of non-existent table: %s", err.Error())
