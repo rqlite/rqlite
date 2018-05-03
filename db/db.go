@@ -66,7 +66,7 @@ type DB struct {
 	path     string // Path to database file.
 	dsnQuery string // DSN query params, if any.
 	memory   bool   // In-memory only.
-	fqdsn    string
+	fqdsn    string // Fully-qualified DSN for opening SQLite.
 }
 
 // NewDB returns an instance of the database at path. If the database
