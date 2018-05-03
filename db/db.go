@@ -69,7 +69,7 @@ type DB struct {
 	fqdsn    string // Fully-qualified DSN for opening SQLite.
 }
 
-// NewDB returns an instance of the database at path. If the database
+// New returns an instance of the database at path. If the database
 // has already been created and opened, this database will share
 // the data of that database when connected.
 func New(path, dsnQuery string, memory bool) (*DB, error) {
@@ -475,11 +475,7 @@ func copyDatabase(dst *sqlite3.SQLiteConn, src *sqlite3.SQLiteConn) error {
 		time.Sleep(bkDelay * time.Millisecond)
 	}
 
-	if err := bk.Finish(); err != nil {
-		return err
-	}
-
-	return nil
+	return bk.Finish()
 }
 
 // normalizeRowValues performs some normalization of values in the returned rows.
