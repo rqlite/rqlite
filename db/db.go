@@ -71,7 +71,7 @@ type DB struct {
 
 // NewDB returns an instance of the database at path. If the database
 // has already been created and opened, this database will share
-// the data of that database when opened.
+// the data of that database when connected.
 func New(path, dsnQuery string, memory bool) (*DB, error) {
 	q, err := url.ParseQuery(dsnQuery)
 	if err != nil {
