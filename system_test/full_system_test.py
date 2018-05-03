@@ -130,26 +130,28 @@ class Node(object):
     return l
 
   def applied_index(self):
-    return self.status()['store']['raft']['applied_index']
+    return int(self.status()['store']['raft']['applied_index'])
 
   def commit_index(self):
-    return self.status()['store']['raft']['commit_index']
+    return int(self.status()['store']['raft']['commit_index'])
 
   def wait_for_applied_index(self, index, timeout=TIMEOUT):
     t = 0
-    while self.applied_index() != index:
+    while self.applied_index() < index:
       if t > timeout:
         raise Exception('timeout')
       time.sleep(1)
       t+=1
+    return self.applied_index()
 
   def wait_for_commit_index(self, index, timeout=TIMEOUT):
     t = 0
-    while self.commit_index() != index:
+    while self.commit_index() < index:
       if t > timeout:
         raise Exception('timeout')
       time.sleep(1)
       t+=1
+    return self.commit_index()
 
   def wait_for_all_applied(self, timeout=TIMEOUT):
     t = 0
@@ -158,6 +160,7 @@ class Node(object):
         raise Exception('timeout')
       time.sleep(1)
       t+=1
+    return self.applied_index()
 
   def query(self, statement, level='weak'):
     r = requests.get(self._query_url(), params={'q': statement, 'level': level})
@@ -269,14 +272,14 @@ class TestEndToEnd(unittest.TestCase):
     j = n.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
     self.assertEqual(str(j), "{u'results': [{}]}")
     j = n.execute('INSERT INTO foo(name) VALUES("fiona")')
-    n.wait_for_all_applied()
+    applied = n.wait_for_all_applied()
     self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
     j = n.query('SELECT * FROM foo')
     self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
 
     n0 = self.cluster.wait_for_leader().stop()
     n1 = self.cluster.wait_for_leader(node_exc=n0)
-    n1.wait_for_all_applied()
+    n1.wait_for_applied_index(applied)
     j = n1.query('SELECT * FROM foo')
     self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
     j = n1.execute('INSERT INTO foo(name) VALUES("declan")')
