@@ -1,24 +1,27 @@
 ## 5.0.0 (unreleased)
 _To upgrade from an earlier version to this release you should backup the leader node, and load the resultant database dump into a new 5.0 leader node. Check out [BACKUP.md](https://github.com/rqlite/rqlite/blob/master/DOC/BACKUPS.md) for more details._
 
+### New features
+- [PR #406](https://github.com/rqlite/rqlite/pull/406), [PR #408](https://github.com/rqlite/rqlite/pull/408): CLI supports Basic Auth credentials. Fixes [issue #369](https://github.com/rqlite/rqlite/issues/369). Thanks @joaodrp.
+- [PR #414](https://github.com/rqlite/rqlite/pull/414), [PR #416](https://github.com/rqlite/rqlite/pull/416): Support query timings in CLI. Fixes [issue #317](https://github.com/rqlite/rqlite/issues/317). Thanks @joaodrp.
+- [PR #436](https://github.com/rqlite/rqlite/pull/436): Add backup command to CLI. Fixes [issue #432](https://github.com/rqlite/rqlite/issues/432). Thanks @eariassoto.
+- [PR #444](https://github.com/rqlite/rqlite/pull/444): Add basic [expvar](https://golang.org/pkg/expvar/) stats to the Store.
+- [PR #450](https://github.com/rqlite/rqlite/pull/450): Add restore command to CLI. Fixes [issue #439](https://github.com/rqlite/rqlite/issues/439). Thanks @eariassoto.
+- [PR #451](https://github.com/rqlite/rqlite/pull/451), [PR #453](https://github.com/rqlite/rqlite/pull/453): Support dumping database in SQL text format via the API. Fixes [issue #393](https://github.com/rqlite/rqlite/issues/369).
+- [PR #455](https://github.com/rqlite/rqlite/pull/455): Add dump-as-SQL-text command to CLI.
+
+### Design and implementation changes
 - [End-to-end integration test](https://github.com/rqlite/rqlite/blob/master/system_test/full_system_test.py) added. Written in Python, it is automatically run by CircleCI as the committed source changes.
 - [PR #377](https://github.com/rqlite/rqlite/pull/377): Upgrade consensus system to Hashicorp Raft v1.0.
 - [PR #401](https://github.com/rqlite/rqlite/pull/401): Always try to close temporary database file after backup. Fixes [issue #400](https://github.com/rqlite/rqlite/issues/400). Thanks @sum12.
-- [PR #406](https://github.com/rqlite/rqlite/pull/406), [PR #408](https://github.com/rqlite/rqlite/pull/408): CLI supports Basic Auth credentials. Fixes [issue #369](https://github.com/rqlite/rqlite/issues/369). Thanks @joaodrp.
 - [PR #411](https://github.com/rqlite/rqlite/pull/411), [PR #412](https://github.com/rqlite/rqlite/pull/412): Remove any pre-existing node with a given ID, if that node rejoins with a new IP address. Fixes [issue #409](https://github.com/rqlite/rqlite/issues/409).
-- [PR #414](https://github.com/rqlite/rqlite/pull/414), [PR #416](https://github.com/rqlite/rqlite/pull/416): Support timings in CLI. Fixes [issue #317](https://github.com/rqlite/rqlite/issues/317). Thanks @joaodrp.
 - [PR #425](https://github.com/rqlite/rqlite/pull/425): By default use Raft network address as node ID. Fixes [issue #422](https://github.com/rqlite/rqlite/issues/422).
 - [PR #430](https://github.com/rqlite/rqlite/pull/430): Close Raft log on Store close. Fixes [issue #429](https://github.com/rqlite/rqlite/issues/429).
 - [PR #431](https://github.com/rqlite/rqlite/pull/431): Add function to Store that returns Raft leader ID.
 - [PR #434](https://github.com/rqlite/rqlite/pull/434): Broadcast Cluster metadata via Raft consensus mechanism. Fixes [issue #138](https://github.com/rqlite/rqlite/issues/138).
-- [PR #436](https://github.com/rqlite/rqlite/pull/436): Add backup command to CLI. Fixes [issue #432](https://github.com/rqlite/rqlite/issues/432). Thanks @eariassoto.
 - [PR #437](https://github.com/rqlite/rqlite/pull/437), [PR #438](https://github.com/rqlite/rqlite/pull/438): Make keys in diagnostic status output more consistent.
-- [PR #444](https://github.com/rqlite/rqlite/pull/444): Add basic expvar stats to the Store.
 - [PR #448](https://github.com/rqlite/rqlite/pull/448): Support Store aborting transaction on any Execute error. Fixes [issue #385](https://github.com/rqlite/rqlite/issues/385).
-- [PR #450](https://github.com/rqlite/rqlite/pull/450): Add restore command to CLI. Fixes [issue #439](https://github.com/rqlite/rqlite/issues/439). Thanks @eariassoto.
 - [PR #452](https://github.com/rqlite/rqlite/pull/452): Move to Go 1.10.
-- [PR #451](https://github.com/rqlite/rqlite/pull/451), [PR #453](https://github.com/rqlite/rqlite/pull/453): Support dumping database in SQL text format. Fixes [issue #393](https://github.com/rqlite/rqlite/issues/369).
-- [PR #455](https://github.com/rqlite/rqlite/pull/455): Add dump-as-SQL-text command to CLI.
 - [PR #457](https://github.com/rqlite/rqlite/pull/457): Implement new connection-oriented database layer.
 
 ## 4.3.0 (March 18th 2018)
