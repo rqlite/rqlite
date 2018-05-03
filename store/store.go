@@ -507,14 +507,8 @@ func (s *Store) Backup(leader bool, fmt BackupFormat) ([]byte, error) {
 		return nil, ErrNotLeader
 	}
 
-	// Get a new connection so we get a consistent snapshot.
-	conn, err := s.db.Connect()
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Close()
-
 	var b []byte
+	var err error
 	if fmt == BackupBinary {
 		b, err = s.database(leader)
 		if err != nil {
@@ -522,7 +516,7 @@ func (s *Store) Backup(leader bool, fmt BackupFormat) ([]byte, error) {
 		}
 	} else if fmt == BackupSQL {
 		buf := bytes.NewBuffer(nil)
-		if err := conn.Dump(buf); err != nil {
+		if err := s.dbConn.Dump(buf); err != nil {
 			return nil, err
 		}
 		b = buf.Bytes()
