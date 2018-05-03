@@ -26,6 +26,6 @@ curl -s -XGET localhost:4001/db/backup?fmt=sql -o bak.sql
 ```
 
 ## Backup isolation level
-The isolation offered by backups is `READ COMMITTED`. This means that the changes due to a transaction on a connection to the database, including the connection used to backup the database, that take during the backup, will be reflected in the backup once the transaction is committed.
+The isolation offered by backups is `READ COMMITTED`. This means that any changes due to transactions to the database, that take place during the backup, will be reflected immediately once the transaction is committed, but not before.
 
 See the [SQLite documentation](https://www.sqlite.org/isolation.html) for more details.
