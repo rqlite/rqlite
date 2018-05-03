@@ -7,6 +7,7 @@ import (
 	"expvar"
 	"fmt"
 	"io"
+	"net/url"
 	"strings"
 	"time"
 
@@ -41,15 +42,6 @@ func init() {
 	stats.Add(numQueries, 0)
 	stats.Add(numETx, 0)
 	stats.Add(numQTx, 0)
-
-}
-
-// DB is the SQL database.
-type DB struct {
-	sqlite3conn *sqlite3.SQLiteConn // Driver connection to database.
-	path        string              // Path to database file.
-	dsn         string              // DSN, if any.
-	memory      bool                // In-memory only.
 }
 
 // Result represents the outcome of an operation that changes rows.
@@ -69,115 +61,82 @@ type Rows struct {
 	Time    float64         `json:"time,omitempty"`
 }
 
-// Open opens a file-based database, creating it if it does not exist.
-func Open(dbPath string) (*DB, error) {
-	return open(fqdsn(dbPath, ""))
+// DB is the SQL database.
+type DB struct {
+	path     string // Path to database file.
+	dsnQuery string // DSN query params, if any.
+	memory   bool   // In-memory only.
+	fqdsn    string // Fully-qualified DSN for opening SQLite.
 }
 
-// OpenWithDSN opens a file-based database, creating it if it does not exist.
-func OpenWithDSN(dbPath, dsn string) (*DB, error) {
-	return open(fqdsn(dbPath, dsn))
-}
-
-// OpenInMemory opens an in-memory database.
-func OpenInMemory() (*DB, error) {
-	return open(fqdsn(":memory:", ""))
-}
-
-// OpenInMemoryWithDSN opens an in-memory database with a specific DSN.
-func OpenInMemoryWithDSN(dsn string) (*DB, error) {
-	return open(fqdsn(":memory:", dsn))
-}
-
-// LoadInMemoryWithDSN loads an in-memory database with that at the path,
-// with the specified DSN
-func LoadInMemoryWithDSN(dbPath, dsn string) (*DB, error) {
-	db, err := OpenInMemoryWithDSN(dsn)
+// NewDB returns an instance of the database at path. If the database
+// has already been created and opened, this database will share
+// the data of that database when connected.
+func New(path, dsnQuery string, memory bool) (*DB, error) {
+	q, err := url.ParseQuery(dsnQuery)
 	if err != nil {
 		return nil, err
 	}
-
-	srcDB, err := Open(dbPath)
-	if err != nil {
-		return nil, err
+	if memory {
+		q.Set("mode", "memory")
+		q.Set("cache", "shared")
 	}
 
-	if err := copyDatabase(db.sqlite3conn, srcDB.sqlite3conn); err != nil {
-		return nil, err
+	if !strings.HasPrefix(path, "file:") {
+		path = fmt.Sprintf("file:%s", path)
 	}
 
-	if err := srcDB.Close(); err != nil {
-		return nil, err
-	}
-
-	return db, nil
-}
-
-// Close closes the underlying database connection.
-func (db *DB) Close() error {
-	return db.sqlite3conn.Close()
-}
-
-func open(dbPath string) (*DB, error) {
-	d := sqlite3.SQLiteDriver{}
-	dbc, err := d.Open(dbPath)
-	if err != nil {
-		return nil, err
+	var fqdsn string
+	if len(q) > 0 {
+		fqdsn = fmt.Sprintf("%s?%s", path, q.Encode())
+	} else {
+		fqdsn = path
 	}
 
 	return &DB{
-		sqlite3conn: dbc.(*sqlite3.SQLiteConn),
-		path:        dbPath,
+		path:     path,
+		dsnQuery: dsnQuery,
+		memory:   memory,
+		fqdsn:    fqdsn,
 	}, nil
 }
 
-// EnableFKConstraints allows control of foreign key constraint checks.
-func (db *DB) EnableFKConstraints(e bool) error {
-	q := fkChecksEnabled
-	if !e {
-		q = fkChecksDisabled
+// Connect returns a connection to the database.
+func (d *DB) Connect() (*Conn, error) {
+	drv := sqlite3.SQLiteDriver{}
+	c, err := drv.Open(d.fqdsn)
+	if err != nil {
+		return nil, err
 	}
-	_, err := db.sqlite3conn.Exec(q, nil)
-	return err
+
+	return &Conn{
+		sqlite: c.(*sqlite3.SQLiteConn),
+	}, nil
 }
 
-// FKConstraints returns whether FK constraints are set or not.
-func (db *DB) FKConstraints() (bool, error) {
-	r, err := db.sqlite3conn.Query(fkChecks, nil)
-	if err != nil {
-		return false, err
-	}
-
-	dest := make([]driver.Value, len(r.Columns()))
-	types := r.(*sqlite3.SQLiteRows).DeclTypes()
-	if err := r.Next(dest); err != nil {
-		return false, err
-	}
-
-	values := normalizeRowValues(dest, types)
-	if values[0] == int64(1) {
-		return true, nil
-	}
-	return false, nil
+// Conn represents a connection to a database. Two Connection objects
+// to the same database are READ_COMMITTED isolated.
+type Conn struct {
+	sqlite *sqlite3.SQLiteConn
 }
 
 // TransactionActive returns whether a transaction is currently active
 // i.e. if the database is NOT in autocommit mode.
-func (db *DB) TransactionActive() bool {
-	return !db.sqlite3conn.AutoCommit()
+func (c *Conn) TransactionActive() bool {
+	return !c.sqlite.AutoCommit()
 }
 
 // AbortTransaction aborts -- rolls back -- any active transaction. Calling code
 // should know exactly what it is doing if it decides to call this function. It
 // can be used to clean up any dangling state that may result from certain
 // error scenarios.
-func (db *DB) AbortTransaction() error {
-	_, err := db.Execute([]string{`ROLLBACK`}, false, false)
+func (c *Conn) AbortTransaction() error {
+	_, err := c.Execute([]string{`ROLLBACK`}, false, false)
 	return err
 }
 
 // Execute executes queries that modify the database.
-func (db *DB) Execute(queries []string, tx, xTime bool) ([]*Result, error) {
+func (c *Conn) Execute(queries []string, tx, xTime bool) ([]*Result, error) {
 	stats.Add(numExecutions, int64(len(queries)))
 	if tx {
 		stats.Add(numETx, 1)
@@ -219,12 +178,12 @@ func (db *DB) Execute(queries []string, tx, xTime bool) ([]*Result, error) {
 			return true
 		}
 
-		execer = db.sqlite3conn
+		execer = c.sqlite
 
 		// Create the correct execution object, depending on whether a
 		// transaction was requested.
 		if tx {
-			t, err = db.sqlite3conn.Begin()
+			t, err = c.sqlite.Begin()
 			if err != nil {
 				return err
 			}
@@ -280,7 +239,7 @@ func (db *DB) Execute(queries []string, tx, xTime bool) ([]*Result, error) {
 }
 
 // Query executes queries that return rows, but don't modify the database.
-func (db *DB) Query(queries []string, tx, xTime bool) ([]*Rows, error) {
+func (c *Conn) Query(queries []string, tx, xTime bool) ([]*Rows, error) {
 	stats.Add(numQueries, int64(len(queries)))
 	if tx {
 		stats.Add(numQTx, 1)
@@ -305,12 +264,12 @@ func (db *DB) Query(queries []string, tx, xTime bool) ([]*Rows, error) {
 			}
 		}()
 
-		queryer = db.sqlite3conn
+		queryer = c.sqlite
 
 		// Create the correct query object, depending on whether a
 		// transaction was requested.
 		if tx {
-			t, err = db.sqlite3conn.Begin()
+			t, err = c.sqlite.Begin()
 			if err != nil {
 				return err
 			}
@@ -360,51 +319,66 @@ func (db *DB) Query(queries []string, tx, xTime bool) ([]*Rows, error) {
 	return allRows, err
 }
 
-// Backup writes a consistent snapshot of the database to the given file.
-func (db *DB) Backup(path string) error {
-	dstDB, err := Open(path)
-	if err != nil {
-		return err
+// EnableFKConstraints allows control of foreign key constraint checks.
+func (c *Conn) EnableFKConstraints(e bool) error {
+	q := fkChecksEnabled
+	if !e {
+		q = fkChecksDisabled
 	}
-	defer func(db *DB, err *error) {
-		cerr := db.Close()
-		if *err == nil {
-			*err = cerr
-		}
-	}(dstDB, &err)
-
-	if err := copyDatabase(dstDB.sqlite3conn, db.sqlite3conn); err != nil {
-		return err
-	}
-
+	_, err := c.sqlite.Exec(q, nil)
 	return err
 }
 
-// Dump writes a consistent snapshot of the database in SQL text format.
-func (db *DB) Dump(w io.Writer) error {
-	if _, err := w.Write([]byte("PRAGMA foreign_keys=OFF;\nBEGIN TRANSACTION;\n")); err != nil {
-		return err
-	}
-
-	dstDB, err := OpenInMemory()
+// FKConstraints returns whether FK constraints are set or not.
+func (c *Conn) FKConstraints() (bool, error) {
+	r, err := c.sqlite.Query(fkChecks, nil)
 	if err != nil {
-		return err
+		return false, err
 	}
-	defer func(db *DB, err *error) {
-		cerr := db.Close()
-		if *err == nil {
-			*err = cerr
-		}
-	}(dstDB, &err)
 
-	if err := copyDatabase(dstDB.sqlite3conn, db.sqlite3conn); err != nil {
+	dest := make([]driver.Value, len(r.Columns()))
+	types := r.(*sqlite3.SQLiteRows).DeclTypes()
+	if err := r.Next(dest); err != nil {
+		return false, err
+	}
+
+	values := normalizeRowValues(dest, types)
+	if values[0] == int64(1) {
+		return true, nil
+	}
+	return false, nil
+}
+
+// Load loads the connected database from the database connected to src.
+// It overwrites the data contained in this database. It is the caller's
+// responsibility to ensure that no other connections to this database
+// are accessed while this operation is in progress.
+func (c *Conn) Load(src *Conn) error {
+	return copyDatabase(c.sqlite, src.sqlite)
+}
+
+// Backup writes a snapshot of the database over the given database
+// connection, erasing all the contents of the destination database.
+// The consistency of the snapshot is READ_COMMITTED relative to any
+// other connections currently open to this database. The caller must
+// ensure that all connections to the destination database are not
+// accessed during this operation.
+func (c *Conn) Backup(dst *Conn) error {
+	return copyDatabase(dst.sqlite, c.sqlite)
+}
+
+// Dump writes a snapshot of the database in SQL text format. The consistency
+// of the snapshot is READ_COMMITTED relative to any other connections
+// currently open to this database.
+func (c *Conn) Dump(w io.Writer) error {
+	if _, err := w.Write([]byte("PRAGMA foreign_keys=OFF;\nBEGIN TRANSACTION;\n")); err != nil {
 		return err
 	}
 
 	// Get the schema.
 	query := `SELECT "name", "type", "sql" FROM "sqlite_master"
               WHERE "sql" NOT NULL AND "type" == 'table' ORDER BY "name"`
-	rows, err := dstDB.Query([]string{query}, false, false)
+	rows, err := c.Query([]string{query}, false, false)
 	if err != nil {
 		return err
 	}
@@ -428,7 +402,8 @@ func (db *DB) Dump(w io.Writer) error {
 		}
 
 		tableIndent := strings.Replace(table, `"`, `""`, -1)
-		r, err := dstDB.Query([]string{fmt.Sprintf(`PRAGMA table_info("%s")`, tableIndent)}, false, false)
+		query = fmt.Sprintf(`PRAGMA table_info("%s")`, tableIndent)
+		r, err := c.Query([]string{query}, false, false)
 		if err != nil {
 			return err
 		}
@@ -441,7 +416,7 @@ func (db *DB) Dump(w io.Writer) error {
 			tableIndent,
 			strings.Join(columnNames, ","),
 			tableIndent)
-		r, err = dstDB.Query([]string{query}, false, false)
+		r, err = c.Query([]string{query}, false, false)
 		if err != nil {
 			return err
 		}
@@ -456,7 +431,7 @@ func (db *DB) Dump(w io.Writer) error {
 	// Do indexes, triggers, and views.
 	query = `SELECT "name", "type", "sql" FROM "sqlite_master"
 			  WHERE "sql" NOT NULL AND "type" IN ('index', 'trigger', 'view')`
-	rows, err = db.Query([]string{query}, false, false)
+	rows, err = c.Query([]string{query}, false, false)
 	if err != nil {
 		return err
 	}
@@ -471,6 +446,14 @@ func (db *DB) Dump(w io.Writer) error {
 		return err
 	}
 
+	return nil
+}
+
+// Close closes the connection.
+func (c *Conn) Close() error {
+	if c != nil {
+		return c.sqlite.Close()
+	}
 	return nil
 }
 
@@ -531,12 +514,4 @@ func isTextType(t string) bool {
 		strings.HasPrefix(t, "native character") ||
 		strings.HasPrefix(t, "nvarchar") ||
 		strings.HasPrefix(t, "clob")
-}
-
-// fqdsn returns the fully-qualified datasource name.
-func fqdsn(path, dsn string) string {
-	if dsn != "" {
-		return fmt.Sprintf("file:%s?%s", path, dsn)
-	}
-	return path
 }

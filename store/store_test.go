@@ -607,6 +607,13 @@ func Test_SingleNodeSnapshotOnDisk(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
+	if err := s.SetMetadata(map[string]string{"foo": "bar"}); err != nil {
+		t.Fatalf("failed to set metadata on single node: %s", err.Error())
+	}
+	// Ensure metadata is correct.
+	if exp, got := "bar", s.Metadata(s.raftID, "foo"); exp != got {
+		t.Fatalf("unexpected metadata after restore\nexp: %s\ngot: %s", exp, got)
+	}
 
 	// Snap the node and write to disk.
 	f, err := s.Snapshot()
@@ -630,20 +637,33 @@ func Test_SingleNodeSnapshotOnDisk(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open snapshot file: %s", err.Error())
 	}
-	if err := s.Restore(snapFile); err != nil {
+	r := mustNewStore(false)
+	defer os.RemoveAll(s.Path())
+
+	if err := r.Open(true); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer r.Close(true)
+	r.WaitForLeader(10 * time.Second)
+	if err := r.Restore(snapFile); err != nil {
 		t.Fatalf("failed to restore snapshot from disk: %s", err.Error())
 	}
 
 	// Ensure database is back in the correct state.
-	r, err := s.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, None})
+	rows, err := r.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, None})
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
-	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
+	if exp, got := `["id","name"]`, asJSON(rows[0].Columns); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
-	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
+	if exp, got := `[[1,"fiona"]]`, asJSON(rows[0].Values); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	// Ensure metadata is correct.
+	if exp, got := "bar", r.Metadata(s.raftID, "foo"); exp != got {
+		t.Fatalf("unexpected metadata after restore\nexp: %s\ngot: %s", exp, got)
 	}
 }
 
