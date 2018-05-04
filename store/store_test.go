@@ -91,7 +91,32 @@ func Test_SingleNodeInMemExecuteQuery(t *testing.T) {
 	}
 }
 
-func Test_SingleNodeExecuteQueryRaft(t *testing.T) {
+func Test_SingleNodeExecuteQuerySimple(t *testing.T) {
+	t.Parallel()
+
+	s := mustNewStore(true)
+	defer os.RemoveAll(s.Path())
+
+	if err := s.Open(true); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	s.WaitForLeader(10 * time.Second)
+
+	queries := []string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+	}
+	r, err := s.Execute(&ExecuteRequest{queries, false, false, false})
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	if exp, got := `[{},{"last_insert_id":1,"rows_affected":1}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
+func Test_SingleNodeExecuteQuerySimpleRaft(t *testing.T) {
 	t.Parallel()
 
 	s := mustNewStore(true)

@@ -100,11 +100,11 @@ type RaftResult struct {
 
 // Result represents the outcome of an operation that changes rows. XXX CALL THIS ExecuteResult !!!
 type Result struct {
-	LastInsertID int64      `json:"last_insert_id,omitempty"`
-	RowsAffected int64      `json:"rows_affected,omitempty"`
-	Error        string     `json:"error,omitempty"`
-	Time         float64    `json:"time,omitempty"`
-	Raft         RaftResult `json:"raft,omitempty"`
+	LastInsertID int64       `json:"last_insert_id,omitempty"`
+	RowsAffected int64       `json:"rows_affected,omitempty"`
+	Error        string      `json:"error,omitempty"`
+	Time         float64     `json:"time,omitempty"`
+	Raft         *RaftResult `json:"raft,omitempty"`
 }
 
 // ConsistencyLevel represents the available read consistency levels.
@@ -518,7 +518,7 @@ func (s *Store) execute(ex *ExecuteRequest) ([]*Result, error) {
 			Time:         rr.Time,
 		}
 		if ex.Raft {
-			sr.Raft = RaftResult{Index: f.Index()}
+			sr.Raft = &RaftResult{Index: f.Index()}
 		}
 		results = append(results, sr)
 	}
