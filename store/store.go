@@ -90,7 +90,21 @@ type QueryRequest struct {
 type ExecuteRequest struct {
 	Queries []string
 	Timings bool
+	Raft    bool
 	Tx      bool
+}
+
+type RaftResult struct {
+	Index uint64 `json:"index,omitempty"`
+}
+
+// Result represents the outcome of an operation that changes rows. XXX CALL THIS ExecuteResult !!!
+type Result struct {
+	LastInsertID int64       `json:"last_insert_id,omitempty"`
+	RowsAffected int64       `json:"rows_affected,omitempty"`
+	Error        string      `json:"error,omitempty"`
+	Time         float64     `json:"time,omitempty"`
+	Raft         *RaftResult `json:"raft,omitempty"`
 }
 
 // ConsistencyLevel represents the available read consistency levels.
@@ -443,7 +457,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 }
 
 // Execute executes queries that return no rows, but do modify the database.
-func (s *Store) Execute(ex *ExecuteRequest) ([]*sdb.Result, error) {
+func (s *Store) Execute(ex *ExecuteRequest) ([]*Result, error) {
 	s.restoreMu.RLock()
 	defer s.restoreMu.RUnlock()
 	return s.execute(ex)
@@ -451,7 +465,7 @@ func (s *Store) Execute(ex *ExecuteRequest) ([]*sdb.Result, error) {
 
 // ExecuteOrAbort executes the requests, but aborts any active transaction
 // on the underlying database in the case of any error.
-func (s *Store) ExecuteOrAbort(ex *ExecuteRequest) (results []*sdb.Result, retErr error) {
+func (s *Store) ExecuteOrAbort(ex *ExecuteRequest) (results []*Result, retErr error) {
 	s.restoreMu.RLock()
 	defer s.restoreMu.RUnlock()
 	defer func() {
@@ -471,7 +485,7 @@ func (s *Store) ExecuteOrAbort(ex *ExecuteRequest) (results []*sdb.Result, retEr
 	return s.execute(ex)
 }
 
-func (s *Store) execute(ex *ExecuteRequest) ([]*sdb.Result, error) {
+func (s *Store) execute(ex *ExecuteRequest) ([]*Result, error) {
 	d := &databaseSub{
 		Tx:      ex.Tx,
 		Queries: ex.Queries,
@@ -495,7 +509,20 @@ func (s *Store) execute(ex *ExecuteRequest) ([]*sdb.Result, error) {
 	}
 
 	r := f.Response().(*fsmExecuteResponse)
-	return r.results, r.error
+	var results []*Result
+	for _, rr := range r.results {
+		sr := &Result{
+			LastInsertID: rr.LastInsertID,
+			RowsAffected: rr.RowsAffected,
+			Error:        rr.Error,
+			Time:         rr.Time,
+		}
+		if ex.Raft {
+			sr.Raft = &RaftResult{Index: f.Index()}
+		}
+		results = append(results, sr)
+	}
+	return results, r.error
 }
 
 // Backup return a snapshot of the underlying database.
