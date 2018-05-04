@@ -498,37 +498,34 @@ func (s *Store) execute(ex *ExecuteRequest) ([]*sdb.Result, error) {
 	return r.results, r.error
 }
 
-// Backup return a snapshot of the underlying database.
+// Backup writes a snapshot of the underlying database to dst
 //
 // If leader is true, this operation is performed with a read consistency
 // level equivalent to "weak". Otherwise no guarantees are made about the
 // read consistency level.
-func (s *Store) Backup(leader bool, fmt BackupFormat) ([]byte, error) {
+func (s *Store) Backup(leader bool, fmt BackupFormat, dst io.Writer) error {
 	s.restoreMu.RLock()
 	defer s.restoreMu.RUnlock()
 
 	if leader && s.raft.State() != raft.Leader {
-		return nil, ErrNotLeader
+		return ErrNotLeader
 	}
 
-	var b []byte
 	var err error
 	if fmt == BackupBinary {
-		b, err = s.database(leader)
+		err = s.database(leader, dst)
 		if err != nil {
-			return nil, err
+			return err
 		}
 	} else if fmt == BackupSQL {
-		buf := bytes.NewBuffer(nil)
-		if err := s.dbConn.Dump(buf); err != nil {
-			return nil, err
+		if err := s.dbConn.Dump(dst); err != nil {
+			return err
 		}
-		b = buf.Bytes()
 	} else {
-		return nil, ErrInvalidBackupFormat
+		return ErrInvalidBackupFormat
 	}
 	stats.Add(numBackups, 1)
-	return b, nil
+	return nil
 }
 
 // Query executes queries that return rows, and do not modify the database.
@@ -831,38 +828,44 @@ func (s *Store) Apply(l *raft.Log) interface{} {
 	}
 }
 
-// Database returns a byte slice containing a copy of contents of the
-// underlying SQLite file.
-func (s *Store) database(leader bool) ([]byte, error) {
+// Database copies contents of the underlying SQLite file to dst
+func (s *Store) database(leader bool, dst io.Writer) error {
 	if leader && s.raft.State() != raft.Leader {
-		return nil, ErrNotLeader
+		return ErrNotLeader
 	}
 
 	f, err := ioutil.TempFile("", "rqlilte-snap-")
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if err := f.Close(); err != nil {
-		return nil, err
+		return err
 	}
 	os.Remove(f.Name())
 	db, err := sdb.New(f.Name(), "", false)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	conn, err := db.Connect()
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	if err := s.dbConn.Backup(conn); err != nil {
-		return nil, err
+		return err
 	}
 	if err := conn.Close(); err != nil {
-		return nil, err
+		return err
 	}
 
-	return ioutil.ReadFile(f.Name())
+	of, err := os.Open(f.Name())
+	if err != nil {
+		return err
+	}
+	defer of.Close()
+
+	_, err = io.Copy(dst, of)
+	return err
 }
 
 // Snapshot returns a snapshot of the store. The caller must ensure that
@@ -874,11 +877,13 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 
 	fsm := &fsmSnapshot{}
 	var err error
-	fsm.database, err = s.database(false)
+	var buf bytes.Buffer
+	err = s.database(false, &buf)
 	if err != nil {
 		s.logger.Printf("failed to read database for snapshot: %s", err.Error())
 		return nil, err
 	}
+	fsm.database = buf.Bytes()
 
 	fsm.meta, err = json.Marshal(s.meta)
 	if err != nil {
