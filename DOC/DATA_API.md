@@ -37,11 +37,14 @@ The response is of the form:
             "time": 0.00886
         }
     ],
-    "time": 0.0152
+    "time": 0.0152,
+    "index": 4
 }
 ```
 
 The use of the URL param `pretty` is optional, and results in pretty-printed JSON responses. Time is measured in seconds. If you do not want timings, do not pass `timings` as a URL parameter.
+
+The `index` field is the position of the new entry, corresponding to the write command, in the Raft log. Most applications can ignore this field, but it is included for informational purposes. It is a 64-bit unsigned integer value, and is monotonic increasing for the life of the cluster.
 
 ## Querying Data
 Querying data is easy. The most important thing to know is that, by default, queries must go through the leader node. 
@@ -75,7 +78,8 @@ The response is of the form:
             "time": 0.0150043
         }
     ],
-    "time": 0.0220043
+    "time": 0.0220043,
+    "index": 45
 }
 ```
 
@@ -111,7 +115,8 @@ curl -XPOST 'localhost:4001/db/execute?pretty&timings' -H "Content-Type: applica
             "error": "near \"nonsense\": syntax error"
         }
     ],
-    "time": 2.478862
+    "time": 2.478862,
+    "index": 327
 }
 ```
 
