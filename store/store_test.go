@@ -111,7 +111,7 @@ func Test_SingleNodeInMemExecuteQueryFail(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
-	if exp, got := "no such table: foo", r[0].Error; exp != got {
+	if exp, got := "no such table: foo", r.Results[0].Error; exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 }
@@ -272,7 +272,7 @@ COMMIT;
 	if err != nil {
 		t.Fatalf("failed to insert into view on single node: %s", err.Error())
 	}
-	if exp, got := int64(3), r[0].LastInsertID; exp != got {
+	if exp, got := int64(3), r.Results[0].LastInsertID; exp != got {
 		t.Fatalf("unexpected results for query\nexp: %d\ngot: %d", exp, got)
 	}
 }
@@ -339,40 +339,40 @@ COMMIT;
 	if err != nil {
 		t.Fatalf("failed to load commands: %s", err.Error())
 	}
-	if r[0].Error != "" {
-		t.Fatalf("error received creating table: %s", r[0].Error)
+	if r.Results[0].Error != "" {
+		t.Fatalf("error received creating table: %s", r.Results[0].Error)
 	}
 
 	r, err = s.Execute(&ExecuteRequest{[]string{dump}, false, false})
 	if err != nil {
 		t.Fatalf("failed to load commands: %s", err.Error())
 	}
-	if r[0].Error != "table foo already exists" {
-		t.Fatalf("received wrong error message: %s", r[0].Error)
+	if r.Results[0].Error != "table foo already exists" {
+		t.Fatalf("received wrong error message: %s", r.Results[0].Error)
 	}
 
 	r, err = s.Execute(&ExecuteRequest{[]string{dump}, false, false})
 	if err != nil {
 		t.Fatalf("failed to load commands: %s", err.Error())
 	}
-	if r[0].Error != "cannot start a transaction within a transaction" {
-		t.Fatalf("received wrong error message: %s", r[0].Error)
+	if r.Results[0].Error != "cannot start a transaction within a transaction" {
+		t.Fatalf("received wrong error message: %s", r.Results[0].Error)
 	}
 
 	r, err = s.ExecuteOrAbort(&ExecuteRequest{[]string{dump}, false, false})
 	if err != nil {
 		t.Fatalf("failed to load commands: %s", err.Error())
 	}
-	if r[0].Error != "cannot start a transaction within a transaction" {
-		t.Fatalf("received wrong error message: %s", r[0].Error)
+	if r.Results[0].Error != "cannot start a transaction within a transaction" {
+		t.Fatalf("received wrong error message: %s", r.Results[0].Error)
 	}
 
 	r, err = s.Execute(&ExecuteRequest{[]string{dump}, false, false})
 	if err != nil {
 		t.Fatalf("failed to load commands: %s", err.Error())
 	}
-	if r[0].Error != "table foo already exists" {
-		t.Fatalf("received wrong error message: %s", r[0].Error)
+	if r.Results[0].Error != "table foo already exists" {
+		t.Fatalf("received wrong error message: %s", r.Results[0].Error)
 	}
 }
 

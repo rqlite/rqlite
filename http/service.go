@@ -30,11 +30,11 @@ type Store interface {
 	// to return rows. If timings is true, then timing information will
 	// be return. If tx is true, then either all queries will be executed
 	// successfully or it will as though none executed.
-	Execute(er *store.ExecuteRequest) ([]*sql.Result, error)
+	Execute(er *store.ExecuteRequest) (*store.ExecuteResponse, error)
 
 	// ExecuteOrAbort performs the same function as Execute(), but ensures
 	// any transactions are aborted in case of any error.
-	ExecuteOrAbort(er *store.ExecuteRequest) ([]*sql.Result, error)
+	ExecuteOrAbort(er *store.ExecuteRequest) (*store.ExecuteResponse, error)
 
 	// Query executes a slice of queries, each of which returns rows. If
 	// timings is true, then timing information will be returned. If tx

@@ -93,6 +93,12 @@ type ExecuteRequest struct {
 	Tx      bool
 }
 
+type ExecuteResponse struct {
+	Results []*sdb.Result `json:"results,omitempty"`
+	Time    float64       `json:"time,omitempty"`
+	Index   uint64        `json:"index,omitempty"`
+}
+
 // ConsistencyLevel represents the available read consistency levels.
 type ConsistencyLevel int
 
@@ -443,7 +449,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 }
 
 // Execute executes queries that return no rows, but do modify the database.
-func (s *Store) Execute(ex *ExecuteRequest) ([]*sdb.Result, error) {
+func (s *Store) Execute(ex *ExecuteRequest) (*ExecuteResponse, error) {
 	s.restoreMu.RLock()
 	defer s.restoreMu.RUnlock()
 	return s.execute(ex)
@@ -451,13 +457,13 @@ func (s *Store) Execute(ex *ExecuteRequest) ([]*sdb.Result, error) {
 
 // ExecuteOrAbort executes the requests, but aborts any active transaction
 // on the underlying database in the case of any error.
-func (s *Store) ExecuteOrAbort(ex *ExecuteRequest) (results []*sdb.Result, retErr error) {
+func (s *Store) ExecuteOrAbort(ex *ExecuteRequest) (resp *ExecuteResponse, retErr error) {
 	s.restoreMu.RLock()
 	defer s.restoreMu.RUnlock()
 	defer func() {
 		var errored bool
-		for i := range results {
-			if results[i].Error != "" {
+		for i := range resp.Results {
+			if resp.Results[i].Error != "" {
 				errored = true
 				break
 			}
@@ -471,7 +477,9 @@ func (s *Store) ExecuteOrAbort(ex *ExecuteRequest) (results []*sdb.Result, retEr
 	return s.execute(ex)
 }
 
-func (s *Store) execute(ex *ExecuteRequest) ([]*sdb.Result, error) {
+func (s *Store) execute(ex *ExecuteRequest) (*ExecuteResponse, error) {
+	start := time.Now()
+
 	d := &databaseSub{
 		Tx:      ex.Tx,
 		Queries: ex.Queries,
@@ -495,7 +503,11 @@ func (s *Store) execute(ex *ExecuteRequest) ([]*sdb.Result, error) {
 	}
 
 	r := f.Response().(*fsmExecuteResponse)
-	return r.results, r.error
+	return &ExecuteResponse{
+		Results: r.results,
+		Time:    time.Since(start).Seconds(),
+		Index:   f.Index(),
+	}, r.error
 }
 
 // Backup return a snapshot of the underlying database.
