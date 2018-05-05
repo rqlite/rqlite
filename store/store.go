@@ -85,6 +85,13 @@ type QueryRequest struct {
 	Lvl     ConsistencyLevel
 }
 
+// QueryResponse encapsulates a response to a query.
+type QueryResponse struct {
+	Rows  []*sdb.Rows
+	Time  float64
+	Index uint64
+}
+
 // ExecuteRequest represents a query that returns now rows, but does modify
 // the database.
 type ExecuteRequest struct {
@@ -93,10 +100,11 @@ type ExecuteRequest struct {
 	Tx      bool
 }
 
+// ExecuteResponse encapsulates a response to an execute.
 type ExecuteResponse struct {
-	Results []*sdb.Result `json:"results,omitempty"`
-	Time    float64       `json:"time,omitempty"`
-	Index   uint64        `json:"index,omitempty"`
+	Results []*sdb.Result
+	Time    float64
+	Index   uint64
 }
 
 // ConsistencyLevel represents the available read consistency levels.
@@ -544,9 +552,10 @@ func (s *Store) Backup(leader bool, fmt BackupFormat) ([]byte, error) {
 }
 
 // Query executes queries that return rows, and do not modify the database.
-func (s *Store) Query(qr *QueryRequest) ([]*sdb.Rows, error) {
+func (s *Store) Query(qr *QueryRequest) (*QueryResponse, error) {
 	s.restoreMu.RLock()
 	defer s.restoreMu.RUnlock()
+	start := time.Now()
 
 	if qr.Lvl == Strong {
 		d := &databaseSub{
@@ -572,7 +581,11 @@ func (s *Store) Query(qr *QueryRequest) ([]*sdb.Rows, error) {
 		}
 
 		r := f.Response().(*fsmQueryResponse)
-		return r.rows, r.error
+		return &QueryResponse{
+			Rows:  r.rows,
+			Time:  time.Since(start).Seconds(),
+			Index: f.Index(),
+		}, err
 	}
 
 	if qr.Lvl == Weak && s.raft.State() != raft.Leader {
@@ -580,7 +593,10 @@ func (s *Store) Query(qr *QueryRequest) ([]*sdb.Rows, error) {
 	}
 
 	r, err := s.dbConn.Query(qr.Queries, qr.Tx, qr.Timings)
-	return r, err
+	return &QueryResponse{
+		Rows: r,
+		Time: time.Since(start).Seconds(),
+	}, err
 }
 
 // Join joins a node, identified by id and located at addr, to this store.

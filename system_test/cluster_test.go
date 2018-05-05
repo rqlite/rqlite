@@ -71,12 +71,12 @@ func Test_MultiNodeCluster(t *testing.T) {
 	}{
 		{
 			stmt:     `CREATE TABLE foo (id integer not null primary key, name text)`,
-			expected: `{"results":[{}]}`,
+			expected: `{"results":[{}],"index":7}`,
 			execute:  true,
 		},
 		{
 			stmt:     `INSERT INTO foo(name) VALUES("fiona")`,
-			expected: `{"results":[{"last_insert_id":1,"rows_affected":1}]}`,
+			expected: `{"results":[{"last_insert_id":1,"rows_affected":1}],"index":8}`,
 			execute:  true,
 		},
 		{
@@ -118,12 +118,12 @@ func Test_MultiNodeCluster(t *testing.T) {
 	}{
 		{
 			stmt:     `CREATE TABLE foo (id integer not null primary key, name text)`,
-			expected: `{"results":[{"error":"table foo already exists"}]}`,
+			expected: `{"results":[{"error":"table foo already exists"}],"index":10}`,
 			execute:  true,
 		},
 		{
 			stmt:     `INSERT INTO foo(name) VALUES("sinead")`,
-			expected: `{"results":[{"last_insert_id":2,"rows_affected":1}]}`,
+			expected: `{"results":[{"last_insert_id":2,"rows_affected":1}],"index":11}`,
 			execute:  true,
 		},
 		{

@@ -83,10 +83,10 @@ func Test_SingleNodeInMemExecuteQuery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
-	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
+	if exp, got := `["id","name"]`, asJSON(r.Rows[0].Columns); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
-	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
+	if exp, got := `[[1,"fiona"]]`, asJSON(r.Rows[0].Values); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 }
@@ -148,10 +148,10 @@ func Test_SingleNodeFileExecuteQuery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
-	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
+	if exp, got := `["id","name"]`, asJSON(r.Rows[0].Columns); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
-	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
+	if exp, got := `[[1,"fiona"]]`, asJSON(r.Rows[0].Values); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 }
@@ -188,10 +188,10 @@ func Test_SingleNodeExecuteQueryTx(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
-	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
+	if exp, got := `["id","name"]`, asJSON(r.Rows[0].Columns); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
-	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
+	if exp, got := `[[1,"fiona"]]`, asJSON(r.Rows[0].Values); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 	_, err = s.Execute(&ExecuteRequest{queries, false, true})
@@ -228,10 +228,10 @@ COMMIT;
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
-	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
+	if exp, got := `["id","name"]`, asJSON(r.Rows[0].Columns); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
-	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
+	if exp, got := `[[1,"fiona"]]`, asJSON(r.Rows[0].Values); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 }
@@ -399,10 +399,10 @@ func Test_SingleNodeLoadChinook(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
-	if exp, got := `["count(*)"]`, asJSON(r[0].Columns); exp != got {
+	if exp, got := `["count(*)"]`, asJSON(r.Rows[0].Columns); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
-	if exp, got := `[[3503]]`, asJSON(r[0].Values); exp != got {
+	if exp, got := `[[3503]]`, asJSON(r.Rows[0].Values); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
@@ -410,10 +410,10 @@ func Test_SingleNodeLoadChinook(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
-	if exp, got := `["count(*)"]`, asJSON(r[0].Columns); exp != got {
+	if exp, got := `["count(*)"]`, asJSON(r.Rows[0].Columns); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
-	if exp, got := `[[347]]`, asJSON(r[0].Values); exp != got {
+	if exp, got := `[[347]]`, asJSON(r.Rows[0].Values); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
@@ -421,10 +421,10 @@ func Test_SingleNodeLoadChinook(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
-	if exp, got := `["count(*)"]`, asJSON(r[0].Columns); exp != got {
+	if exp, got := `["count(*)"]`, asJSON(r.Rows[0].Columns); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
-	if exp, got := `[[275]]`, asJSON(r[0].Values); exp != got {
+	if exp, got := `[[275]]`, asJSON(r.Rows[0].Values); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
@@ -534,10 +534,10 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
-	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
+	if exp, got := `["id","name"]`, asJSON(r.Rows[0].Columns); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
-	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
+	if exp, got := `[[1,"fiona"]]`, asJSON(r.Rows[0].Values); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
@@ -558,10 +558,10 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
-	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
+	if exp, got := `["id","name"]`, asJSON(r.Rows[0].Columns); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
-	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
+	if exp, got := `[[1,"fiona"]]`, asJSON(r.Rows[0].Values); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
@@ -575,10 +575,10 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query node with None consistency: %s", err.Error())
 	}
-	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
+	if exp, got := `["id","name"]`, asJSON(r.Rows[0].Columns); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
-	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
+	if exp, got := `[[1,"fiona"]]`, asJSON(r.Rows[0].Values); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 }
@@ -650,14 +650,14 @@ func Test_SingleNodeSnapshotOnDisk(t *testing.T) {
 	}
 
 	// Ensure database is back in the correct state.
-	rows, err := r.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, None})
+	results, err := r.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, None})
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
-	if exp, got := `["id","name"]`, asJSON(rows[0].Columns); exp != got {
+	if exp, got := `["id","name"]`, asJSON(results.Rows[0].Columns); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
-	if exp, got := `[[1,"fiona"]]`, asJSON(rows[0].Values); exp != got {
+	if exp, got := `[[1,"fiona"]]`, asJSON(results.Rows[0].Values); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
@@ -723,10 +723,10 @@ func Test_SingleNodeSnapshotInMem(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
-	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
+	if exp, got := `["id","name"]`, asJSON(r.Rows[0].Columns); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
-	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
+	if exp, got := `[[1,"fiona"]]`, asJSON(r.Rows[0].Values); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 }
@@ -793,10 +793,10 @@ func Test_StoreLogTruncationMultinode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
-	if exp, got := `["count(*)"]`, asJSON(r[0].Columns); exp != got {
+	if exp, got := `["count(*)"]`, asJSON(r.Rows[0].Columns); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
-	if exp, got := `[[5]]`, asJSON(r[0].Values); exp != got {
+	if exp, got := `[[5]]`, asJSON(r.Rows[0].Values); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 }
