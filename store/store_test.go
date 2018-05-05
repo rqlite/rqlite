@@ -67,27 +67,38 @@ func Test_SingleNodeInMemExecuteQuery(t *testing.T) {
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 	}
-	_, err := s.Execute(&ExecuteRequest{queries, false, false})
+	re, err := s.Execute(&ExecuteRequest{queries, false, false})
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
-	r, err := s.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, None})
-	if err != nil {
-		t.Fatalf("failed to query single node: %s", err.Error())
+	if exp, got := `[{},{"last_insert_id":1,"rows_affected":1}]`, asJSON(re.Results); exp != got {
+		t.Fatalf("unexpected results for execute\nexp: %s\ngot: %s", exp, got)
 	}
-	r, err = s.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, Weak})
-	if err != nil {
-		t.Fatalf("failed to query single node: %s", err.Error())
+	if exp, got := uint64(3), re.Index; exp != got {
+		t.Fatalf("unexpected Raft index received\nexp: %d\ngot: %d", exp, got)
 	}
-	r, err = s.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, Strong})
-	if err != nil {
-		t.Fatalf("failed to query single node: %s", err.Error())
-	}
-	if exp, got := `["id","name"]`, asJSON(r.Rows[0].Columns); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-	}
-	if exp, got := `[[1,"fiona"]]`, asJSON(r.Rows[0].Values); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+
+	// Ensure Raft index is non-zero only for Strong queries (which are the only ones
+	// that go through the log).
+	for lvl, idx := range map[ConsistencyLevel]uint64{
+		None:   0,
+		Weak:   0,
+		Strong: 4,
+	} {
+
+		rq, err := s.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, lvl})
+		if err != nil {
+			t.Fatalf("failed to query single node: %s", err.Error())
+		}
+		if exp, got := `["id","name"]`, asJSON(rq.Rows[0].Columns); exp != got {
+			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+		}
+		if exp, got := `[[1,"fiona"]]`, asJSON(rq.Rows[0].Values); exp != got {
+			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+		}
+		if exp, got := uint64(idx), rq.Index; exp != got {
+			t.Fatalf("unexpected Raft index received\nexp: %d\ngot: %d", exp, got)
+		}
 	}
 }
 
