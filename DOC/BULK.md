@@ -32,7 +32,7 @@ The response is of the form:
 }
 ```
 
-A bulk update is contained within a single Raft log entry, so the network round-trips between nodes in the cluster are amortized over the bulk update. This should result in better throughput, if it is possible to use this kind of update.
+A bulk update is contained within a single Raft log entry (as evidenced by the single `index` field), so the network round-trips between nodes in the cluster are amortized over the bulk update. This should result in better throughput, if it is possible to use this kind of update.
 
 ## Queries
 If you want to execute more than one query per HTTP request then perform a POST, and place the queries in the body of the request as a JSON array. For example:

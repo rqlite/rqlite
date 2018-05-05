@@ -78,8 +78,7 @@ The response is of the form:
             "time": 0.0150043
         }
     ],
-    "time": 0.0220043,
-    "index": 45
+    "time": 0.0220043
 }
 ```
 
