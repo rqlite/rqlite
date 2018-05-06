@@ -28,7 +28,7 @@ The response is of the form:
         }
     ],
     "time": 0.869015,
-    "raft" {
+    "raft": {
         "index": 32,
         "node_id": "14f66175-eb70-4b64-a716-d5a16c91fcaa"
     }
