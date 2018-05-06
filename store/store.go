@@ -76,6 +76,8 @@ func init() {
 	stats.Add(numRestores, 0)
 }
 
+// RaftResponse is the Raft metadata that will be included with responses, if
+// the associated request modified the Raft log.
 type RaftResponse struct {
 	Index  uint64 `json:"index,omitempty"`
 	NodeID string `json:"node_id,omitempty"`

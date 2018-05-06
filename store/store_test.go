@@ -83,7 +83,7 @@ func Test_SingleNodeInMemExecuteQuery(t *testing.T) {
 	for lvl, rr := range map[ConsistencyLevel]*RaftResponse{
 		None:   nil,
 		Weak:   nil,
-		Strong: &RaftResponse{Index: 4},
+		Strong: {Index: 4},
 	} {
 
 		rq, err := s.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, lvl})
