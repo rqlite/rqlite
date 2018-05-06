@@ -352,3 +352,8 @@ func isJSON(s string) bool {
 	var js map[string]interface{}
 	return json.Unmarshal([]byte(s), &js) == nil
 }
+
+// rr is a helper function that forms expected Raft responses.
+func rr(nodeID string, idx int) string {
+	return fmt.Sprintf(`"raft":{"index":%d,"node_id":"%s"}`, idx, nodeID)
+}

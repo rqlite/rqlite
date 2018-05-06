@@ -76,6 +76,11 @@ func init() {
 	stats.Add(numRestores, 0)
 }
 
+type RaftResponse struct {
+	Index  uint64 `json:"index,omitempty"`
+	NodeID string `json:"node_id,omitempty"`
+}
+
 // QueryRequest represents a query that returns rows, and does not modify
 // the database.
 type QueryRequest struct {
@@ -85,12 +90,26 @@ type QueryRequest struct {
 	Lvl     ConsistencyLevel
 }
 
+// QueryResponse encapsulates a response to a query.
+type QueryResponse struct {
+	Rows []*sdb.Rows
+	Time float64
+	Raft *RaftResponse
+}
+
 // ExecuteRequest represents a query that returns now rows, but does modify
 // the database.
 type ExecuteRequest struct {
 	Queries []string
 	Timings bool
 	Tx      bool
+}
+
+// ExecuteResponse encapsulates a response to an execute.
+type ExecuteResponse struct {
+	Results []*sdb.Result
+	Time    float64
+	Raft    RaftResponse
 }
 
 // ConsistencyLevel represents the available read consistency levels.
@@ -443,7 +462,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 }
 
 // Execute executes queries that return no rows, but do modify the database.
-func (s *Store) Execute(ex *ExecuteRequest) ([]*sdb.Result, error) {
+func (s *Store) Execute(ex *ExecuteRequest) (*ExecuteResponse, error) {
 	s.restoreMu.RLock()
 	defer s.restoreMu.RUnlock()
 	return s.execute(ex)
@@ -451,13 +470,13 @@ func (s *Store) Execute(ex *ExecuteRequest) ([]*sdb.Result, error) {
 
 // ExecuteOrAbort executes the requests, but aborts any active transaction
 // on the underlying database in the case of any error.
-func (s *Store) ExecuteOrAbort(ex *ExecuteRequest) (results []*sdb.Result, retErr error) {
+func (s *Store) ExecuteOrAbort(ex *ExecuteRequest) (resp *ExecuteResponse, retErr error) {
 	s.restoreMu.RLock()
 	defer s.restoreMu.RUnlock()
 	defer func() {
 		var errored bool
-		for i := range results {
-			if results[i].Error != "" {
+		for i := range resp.Results {
+			if resp.Results[i].Error != "" {
 				errored = true
 				break
 			}
@@ -471,7 +490,9 @@ func (s *Store) ExecuteOrAbort(ex *ExecuteRequest) (results []*sdb.Result, retEr
 	return s.execute(ex)
 }
 
-func (s *Store) execute(ex *ExecuteRequest) ([]*sdb.Result, error) {
+func (s *Store) execute(ex *ExecuteRequest) (*ExecuteResponse, error) {
+	start := time.Now()
+
 	d := &databaseSub{
 		Tx:      ex.Tx,
 		Queries: ex.Queries,
@@ -495,7 +516,11 @@ func (s *Store) execute(ex *ExecuteRequest) ([]*sdb.Result, error) {
 	}
 
 	r := f.Response().(*fsmExecuteResponse)
-	return r.results, r.error
+	return &ExecuteResponse{
+		Results: r.results,
+		Time:    time.Since(start).Seconds(),
+		Raft:    RaftResponse{f.Index(), s.raftID},
+	}, r.error
 }
 
 // Backup return a snapshot of the underlying database.
@@ -532,9 +557,10 @@ func (s *Store) Backup(leader bool, fmt BackupFormat) ([]byte, error) {
 }
 
 // Query executes queries that return rows, and do not modify the database.
-func (s *Store) Query(qr *QueryRequest) ([]*sdb.Rows, error) {
+func (s *Store) Query(qr *QueryRequest) (*QueryResponse, error) {
 	s.restoreMu.RLock()
 	defer s.restoreMu.RUnlock()
+	start := time.Now()
 
 	if qr.Lvl == Strong {
 		d := &databaseSub{
@@ -560,7 +586,11 @@ func (s *Store) Query(qr *QueryRequest) ([]*sdb.Rows, error) {
 		}
 
 		r := f.Response().(*fsmQueryResponse)
-		return r.rows, r.error
+		return &QueryResponse{
+			Rows: r.rows,
+			Time: time.Since(start).Seconds(),
+			Raft: &RaftResponse{f.Index(), s.raftID},
+		}, err
 	}
 
 	if qr.Lvl == Weak && s.raft.State() != raft.Leader {
@@ -568,7 +598,10 @@ func (s *Store) Query(qr *QueryRequest) ([]*sdb.Rows, error) {
 	}
 
 	r, err := s.dbConn.Query(qr.Queries, qr.Tx, qr.Timings)
-	return r, err
+	return &QueryResponse{
+		Rows: r,
+		Time: time.Since(start).Seconds(),
+	}, err
 }
 
 // Join joins a node, identified by id and located at addr, to this store.

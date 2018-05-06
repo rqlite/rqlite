@@ -20,7 +20,6 @@ import (
 	"sync"
 	"time"
 
-	sql "github.com/rqlite/rqlite/db"
 	"github.com/rqlite/rqlite/store"
 )
 
@@ -30,17 +29,17 @@ type Store interface {
 	// to return rows. If timings is true, then timing information will
 	// be return. If tx is true, then either all queries will be executed
 	// successfully or it will as though none executed.
-	Execute(er *store.ExecuteRequest) ([]*sql.Result, error)
+	Execute(er *store.ExecuteRequest) (*store.ExecuteResponse, error)
 
 	// ExecuteOrAbort performs the same function as Execute(), but ensures
 	// any transactions are aborted in case of any error.
-	ExecuteOrAbort(er *store.ExecuteRequest) ([]*sql.Result, error)
+	ExecuteOrAbort(er *store.ExecuteRequest) (*store.ExecuteResponse, error)
 
 	// Query executes a slice of queries, each of which returns rows. If
 	// timings is true, then timing information will be returned. If tx
 	// is true, then all queries will take place while a read transaction
 	// is held on the database.
-	Query(qr *store.QueryRequest) ([]*sql.Rows, error)
+	Query(qr *store.QueryRequest) (*store.QueryResponse, error)
 
 	// Join joins the node with the given ID, reachable at addr, to this node.
 	Join(id, addr string, metadata map[string]string) error
@@ -77,12 +76,10 @@ type Statuser interface {
 
 // Response represents a response from the HTTP service.
 type Response struct {
-	Results interface{} `json:"results,omitempty"`
-	Error   string      `json:"error,omitempty"`
-	Time    float64     `json:"time,omitempty"`
-
-	start time.Time
-	end   time.Time
+	Results interface{}         `json:"results,omitempty"`
+	Error   string              `json:"error,omitempty"`
+	Time    float64             `json:"time,omitempty"`
+	Raft    *store.RaftResponse `json:"raft,omitempty"`
 }
 
 // stats captures stats for the HTTP service.
@@ -120,19 +117,6 @@ func init() {
 	stats.Add(numExecutions, 0)
 	stats.Add(numQueries, 0)
 	stats.Add(numBackups, 0)
-}
-
-// SetTime sets the Time attribute of the response. This way it will be present
-// in the serialized JSON version.
-func (r *Response) SetTime() {
-	r.Time = r.end.Sub(r.start).Seconds()
-}
-
-// NewResponse returns a new instance of response.
-func NewResponse() *Response {
-	return &Response{
-		start: time.Now(),
-	}
 }
 
 // Service provides HTTP service.
@@ -433,8 +417,6 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := NewResponse()
-
 	timings, err := timings(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -448,6 +430,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body.Close()
 
+	var resp Response
 	queries := []string{string(b)}
 	results, err := s.store.ExecuteOrAbort(&store.ExecuteRequest{queries, timings, false})
 	if err != nil {
@@ -464,10 +447,13 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 		}
 		resp.Error = err.Error()
 	} else {
-		resp.Results = results
+		resp.Results = results.Results
+		if timings {
+			resp.Time = results.Time
+		}
+		resp.Raft = &results.Raft
 	}
-	resp.end = time.Now()
-	writeResponse(w, r, resp)
+	writeResponse(w, r, &resp)
 }
 
 // handleStatus returns status on the system.
@@ -569,8 +555,6 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := NewResponse()
-
 	isTx, err := isTx(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -596,6 +580,7 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var resp Response
 	results, err := s.store.Execute(&store.ExecuteRequest{queries, timings, isTx})
 	if err != nil {
 		if err == store.ErrNotLeader {
@@ -611,10 +596,13 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 		}
 		resp.Error = err.Error()
 	} else {
-		resp.Results = results
+		resp.Results = results.Results
+		if timings {
+			resp.Time = results.Time
+		}
+		resp.Raft = &results.Raft
 	}
-	resp.end = time.Now()
-	writeResponse(w, r, resp)
+	writeResponse(w, r, &resp)
 }
 
 // handleQuery handles queries that do not modify the database.
@@ -630,8 +618,6 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-
-	resp := NewResponse()
 
 	isTx, err := isTx(r)
 	if err != nil {
@@ -658,6 +644,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var resp Response
 	results, err := s.store.Query(&store.QueryRequest{queries, timings, isTx, lvl})
 	if err != nil {
 		if err == store.ErrNotLeader {
@@ -673,10 +660,13 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 		}
 		resp.Error = err.Error()
 	} else {
-		resp.Results = results
+		resp.Results = results.Rows
+		if timings {
+			resp.Time = results.Time
+		}
+		resp.Raft = results.Raft
 	}
-	resp.end = time.Now()
-	writeResponse(w, r, resp)
+	writeResponse(w, r, &resp)
 }
 
 // handleExpvar serves registered expvar information over HTTP.
@@ -797,11 +787,6 @@ func writeResponse(w http.ResponseWriter, r *http.Request, j *Response) {
 	var b []byte
 	var err error
 	pretty, _ := isPretty(r)
-	timings, _ := timings(r)
-
-	if timings {
-		j.SetTime()
-	}
 
 	if pretty {
 		b, err = json.MarshalIndent(j, "", "    ")
