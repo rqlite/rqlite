@@ -167,7 +167,7 @@ func Test_SingleNodeFileExecuteQuery(t *testing.T) {
 	}
 }
 
-func Test_SingleNodeExecuteQueryTx(t *testing.T) {
+func Test_SingleNodeExecuteQueryAtomic(t *testing.T) {
 	t.Parallel()
 
 	s := mustNewStore(true)

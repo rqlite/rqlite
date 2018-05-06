@@ -555,7 +555,7 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	isTx, err := isTx(r)
+	isAtomic, err := isAtomic(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -581,7 +581,7 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var resp Response
-	results, err := s.store.Execute(&store.ExecuteRequest{queries, timings, isTx})
+	results, err := s.store.Execute(&store.ExecuteRequest{queries, timings, isAtomic})
 	if err != nil {
 		if err == store.ErrNotLeader {
 			leader := s.leaderAPIAddr()
@@ -619,7 +619,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	isTx, err := isTx(r)
+	isAtomic, err := isAtomic(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -645,7 +645,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var resp Response
-	results, err := s.store.Query(&store.QueryRequest{queries, timings, isTx, lvl})
+	results, err := s.store.Query(&store.QueryRequest{queries, timings, isAtomic, lvl})
 	if err != nil {
 		if err == store.ErrNotLeader {
 			leader := s.leaderAPIAddr()
@@ -845,9 +845,16 @@ func isPretty(req *http.Request) (bool, error) {
 	return queryParam(req, "pretty")
 }
 
-// isTx returns whether the HTTP request is requesting a transaction.
-func isTx(req *http.Request) (bool, error) {
-	return queryParam(req, "transaction")
+// isAtomic returns whether the HTTP request is an atomic request.
+func isAtomic(req *http.Request) (bool, error) {
+	// "transaction" is checked for backwards compatibiltiy with
+	// client libraries.
+	for _, q := range []string{"atomic", "transaction"} {
+		if a, err := queryParam(req, q); err != nil || a {
+			return a, err
+		}
+	}
+	return false, nil
 }
 
 // noLeader returns whether processing should skip the leader check.

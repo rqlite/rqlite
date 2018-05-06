@@ -88,7 +88,7 @@ type RaftResponse struct {
 type QueryRequest struct {
 	Queries []string
 	Timings bool
-	Tx      bool
+	Atomic  bool
 	Lvl     ConsistencyLevel
 }
 
@@ -104,7 +104,7 @@ type QueryResponse struct {
 type ExecuteRequest struct {
 	Queries []string
 	Timings bool
-	Tx      bool
+	Atomic  bool
 }
 
 // ExecuteResponse encapsulates a response to an execute.
@@ -496,7 +496,7 @@ func (s *Store) execute(ex *ExecuteRequest) (*ExecuteResponse, error) {
 	start := time.Now()
 
 	d := &databaseSub{
-		Tx:      ex.Tx,
+		Atomic:  ex.Atomic,
 		Queries: ex.Queries,
 		Timings: ex.Timings,
 	}
@@ -566,7 +566,7 @@ func (s *Store) Query(qr *QueryRequest) (*QueryResponse, error) {
 
 	if qr.Lvl == Strong {
 		d := &databaseSub{
-			Tx:      qr.Tx,
+			Atomic:  qr.Atomic,
 			Queries: qr.Queries,
 			Timings: qr.Timings,
 		}
@@ -599,7 +599,7 @@ func (s *Store) Query(qr *QueryRequest) (*QueryResponse, error) {
 		return nil, ErrNotLeader
 	}
 
-	r, err := s.dbConn.Query(qr.Queries, qr.Tx, qr.Timings)
+	r, err := s.dbConn.Query(qr.Queries, qr.Atomic, qr.Timings)
 	return &QueryResponse{
 		Rows: r,
 		Time: time.Since(start).Seconds(),
@@ -829,10 +829,10 @@ func (s *Store) Apply(l *raft.Log) interface{} {
 			return &fsmGenericResponse{error: err}
 		}
 		if c.Typ == execute {
-			r, err := s.dbConn.Execute(d.Queries, d.Tx, d.Timings)
+			r, err := s.dbConn.Execute(d.Queries, d.Atomic, d.Timings)
 			return &fsmExecuteResponse{results: r, error: err}
 		}
-		r, err := s.dbConn.Query(d.Queries, d.Tx, d.Timings)
+		r, err := s.dbConn.Query(d.Queries, d.Atomic, d.Timings)
 		return &fsmQueryResponse{rows: r, error: err}
 	case metadataSet:
 		var d metadataSetSub
