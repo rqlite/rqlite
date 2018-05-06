@@ -3,9 +3,9 @@ _To upgrade from an earlier version to this release you should backup the leader
 
 ### New features
 - [PR #406](https://github.com/rqlite/rqlite/pull/406), [PR #408](https://github.com/rqlite/rqlite/pull/408): CLI supports Basic Auth credentials. Fixes [issue #369](https://github.com/rqlite/rqlite/issues/369). Thanks @joaodrp.
-- [PR #414](https://github.com/rqlite/rqlite/pull/414), [PR #416](https://github.com/rqlite/rqlite/pull/416): Support query timings in CLI. Fixes [issue #317](https://github.com/rqlite/rqlite/issues/317). Thanks @joaodrp.
+- [PR #414](https://github.com/rqlite/rqlite/pull/414), [PR #416](https://github.com/rqlite/rqlite/pull/416): Support display of query timings in CLI. Fixes [issue #317](https://github.com/rqlite/rqlite/issues/317). Thanks @joaodrp.
 - [PR #436](https://github.com/rqlite/rqlite/pull/436): Add backup command to CLI. Fixes [issue #432](https://github.com/rqlite/rqlite/issues/432). Thanks @eariassoto.
-- [PR #444](https://github.com/rqlite/rqlite/pull/444): Add basic [expvar](https://golang.org/pkg/expvar/) stats to the Store.
+- [PR #444](https://github.com/rqlite/rqlite/pull/444): Add basic [expvar](https://golang.org/pkg/expvar/) statistics to the Store.
 - [PR #450](https://github.com/rqlite/rqlite/pull/450): Add restore command to CLI. Fixes [issue #439](https://github.com/rqlite/rqlite/issues/439). Thanks @eariassoto.
 - [PR #451](https://github.com/rqlite/rqlite/pull/451), [PR #453](https://github.com/rqlite/rqlite/pull/453): Support dumping database in SQL text format via the API. Fixes [issue #393](https://github.com/rqlite/rqlite/issues/369).
 - [PR #455](https://github.com/rqlite/rqlite/pull/455): Add dump-as-SQL-text command to CLI.
