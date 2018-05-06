@@ -270,10 +270,10 @@ class TestEndToEnd(unittest.TestCase):
 
     n = self.cluster.wait_for_leader()
     j = n.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
-    self.assertEqual(str(j), "{u'index': 8, u'results': [{}]}")
+    self.assertEqual(str(j), "{u'raft': {u'index': 8, u'node_id': u'0'}, u'results': [{}]}")
     j = n.execute('INSERT INTO foo(name) VALUES("fiona")')
     applied = n.wait_for_all_applied()
-    self.assertEqual(str(j), "{u'index': 9, u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
+    self.assertEqual(str(j), "{u'raft': {u'index': 9, u'node_id': u'0'}, u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
     j = n.query('SELECT * FROM foo')
     self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
 
@@ -283,7 +283,7 @@ class TestEndToEnd(unittest.TestCase):
     j = n1.query('SELECT * FROM foo')
     self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
     j = n1.execute('INSERT INTO foo(name) VALUES("declan")')
-    self.assertEqual(str(j), "{u'index': 11, u'results': [{u'last_insert_id': 2, u'rows_affected': 1}]}")
+    self.assertEqual(str(j), "{u'raft': {u'index': 11, u'node_id': u'1'}, u'results': [{u'last_insert_id': 2, u'rows_affected': 1}]}")
 
     n0.start()
     n0.wait_for_leader()
@@ -314,9 +314,9 @@ class TestEndToEnd(unittest.TestCase):
     l = self.cluster.wait_for_leader()
     j = l.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
 
-    self.assertEqual(str(j), "{u'index': 8, u'results': [{}]}")
+    self.assertEqual(str(j), "{u'raft': {u'index': 8, u'node_id': u'0'}, u'results': [{}]}")
     j = l.execute('INSERT INTO foo (name) VALUES("fiona")')
-    self.assertEqual(str(j), "{u'index': 9, u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
+    self.assertEqual(str(j), "{u'raft': {u'index': 9, u'node_id': u'0'}, u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
 
     f.scramble_network()
     f.start(join=l.APIAddr())
