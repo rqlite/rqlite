@@ -76,6 +76,11 @@ func init() {
 	stats.Add(numRestores, 0)
 }
 
+type RaftResponse struct {
+	Index  uint64 `json:"index,omitempty"`
+	NodeID string `json:"node_id,omitempty"`
+}
+
 // QueryRequest represents a query that returns rows, and does not modify
 // the database.
 type QueryRequest struct {
@@ -87,9 +92,9 @@ type QueryRequest struct {
 
 // QueryResponse encapsulates a response to a query.
 type QueryResponse struct {
-	Rows  []*sdb.Rows
-	Time  float64
-	Index uint64
+	Rows []*sdb.Rows
+	Time float64
+	Raft *RaftResponse
 }
 
 // ExecuteRequest represents a query that returns now rows, but does modify
@@ -104,7 +109,7 @@ type ExecuteRequest struct {
 type ExecuteResponse struct {
 	Results []*sdb.Result
 	Time    float64
-	Index   uint64
+	Raft    RaftResponse
 }
 
 // ConsistencyLevel represents the available read consistency levels.
@@ -514,7 +519,7 @@ func (s *Store) execute(ex *ExecuteRequest) (*ExecuteResponse, error) {
 	return &ExecuteResponse{
 		Results: r.results,
 		Time:    time.Since(start).Seconds(),
-		Index:   f.Index(),
+		Raft:    RaftResponse{f.Index(), s.raftID},
 	}, r.error
 }
 
@@ -582,9 +587,9 @@ func (s *Store) Query(qr *QueryRequest) (*QueryResponse, error) {
 
 		r := f.Response().(*fsmQueryResponse)
 		return &QueryResponse{
-			Rows:  r.rows,
-			Time:  time.Since(start).Seconds(),
-			Index: f.Index(),
+			Rows: r.rows,
+			Time: time.Since(start).Seconds(),
+			Raft: &RaftResponse{f.Index(), s.raftID},
 		}, err
 	}
 

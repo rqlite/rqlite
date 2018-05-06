@@ -38,13 +38,16 @@ The response is of the form:
         }
     ],
     "time": 0.0152,
-    "index": 4
+    "raft" {
+        "index": 43,
+        "node_id": "14f66175-eb70-4b64-a716-d5a16c91fcaa"
+    }
 }
 ```
 
 The use of the URL param `pretty` is optional, and results in pretty-printed JSON responses. Time is measured in seconds. If you do not want timings, do not pass `timings` as a URL parameter.
 
-The `index` field is the position of the new entry, corresponding to the write command, in the Raft log. Most applications can ignore this field, but it is included for informational purposes. It is a 64-bit unsigned integer value, and is monotonic increasing for the life of the cluster.
+The `raft` section includes the index of the new entry, corresponding to the write command, in the Raft log. It also includes the node ID of the leader when the change was committed. Most applications can ignore this section, but it is included for informational purposes.
 
 ## Querying Data
 Querying data is easy. The most important thing to know is that, by default, queries must go through the leader node. 
@@ -115,7 +118,10 @@ curl -XPOST 'localhost:4001/db/execute?pretty&timings' -H "Content-Type: applica
         }
     ],
     "time": 2.478862,
-    "index": 327
+    "raft" {
+        "index": 327,
+        "node_id": "14f66175-eb70-4b64-a716-d5a16c91fcaa"
+    }
 }
 ```
 

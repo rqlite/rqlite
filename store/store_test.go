@@ -74,16 +74,16 @@ func Test_SingleNodeInMemExecuteQuery(t *testing.T) {
 	if exp, got := `[{},{"last_insert_id":1,"rows_affected":1}]`, asJSON(re.Results); exp != got {
 		t.Fatalf("unexpected results for execute\nexp: %s\ngot: %s", exp, got)
 	}
-	if exp, got := uint64(3), re.Index; exp != got {
+	if exp, got := uint64(3), re.Raft.Index; exp != got {
 		t.Fatalf("unexpected Raft index received\nexp: %d\ngot: %d", exp, got)
 	}
 
 	// Ensure Raft index is non-zero only for Strong queries (which are the only ones
 	// that go through the log).
-	for lvl, idx := range map[ConsistencyLevel]uint64{
-		None:   0,
-		Weak:   0,
-		Strong: 4,
+	for lvl, rr := range map[ConsistencyLevel]*RaftResponse{
+		None:   nil,
+		Weak:   nil,
+		Strong: &RaftResponse{Index: 4},
 	} {
 
 		rq, err := s.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, lvl})
@@ -96,8 +96,8 @@ func Test_SingleNodeInMemExecuteQuery(t *testing.T) {
 		if exp, got := `[[1,"fiona"]]`, asJSON(rq.Rows[0].Values); exp != got {
 			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 		}
-		if exp, got := uint64(idx), rq.Index; exp != got {
-			t.Fatalf("unexpected Raft index received\nexp: %d\ngot: %d", exp, got)
+		if rr != nil && rr.Index != rq.Raft.Index {
+			t.Fatalf("unexpected Raft index received\nexp: %d\ngot: %d", rr.Index, rq.Raft.Index)
 		}
 	}
 }

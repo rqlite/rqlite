@@ -76,10 +76,10 @@ type Statuser interface {
 
 // Response represents a response from the HTTP service.
 type Response struct {
-	Results interface{} `json:"results,omitempty"`
-	Error   string      `json:"error,omitempty"`
-	Time    float64     `json:"time,omitempty"`
-	Index   uint64      `json:"index,omitempty"`
+	Results interface{}         `json:"results,omitempty"`
+	Error   string              `json:"error,omitempty"`
+	Time    float64             `json:"time,omitempty"`
+	Raft    *store.RaftResponse `json:"raft,omitempty"`
 }
 
 // stats captures stats for the HTTP service.
@@ -451,7 +451,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 		if timings {
 			resp.Time = results.Time
 		}
-		resp.Index = results.Index
+		resp.Raft = &results.Raft
 	}
 	writeResponse(w, r, &resp)
 }
@@ -600,7 +600,7 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 		if timings {
 			resp.Time = results.Time
 		}
-		resp.Index = results.Index
+		resp.Raft = &results.Raft
 	}
 	writeResponse(w, r, &resp)
 }
@@ -664,7 +664,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 		if timings {
 			resp.Time = results.Time
 		}
-		resp.Index = results.Index
+		resp.Raft = results.Raft
 	}
 	writeResponse(w, r, &resp)
 }
