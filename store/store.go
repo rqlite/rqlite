@@ -398,7 +398,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 	}
 
 	dbStatus := map[string]interface{}{
-		"dns":            s.dbConf.DSN,
+		"dsn":            s.dbConf.DSN,
 		"fk_constraints": enabledFromBool(fkEnabled),
 		"version":        sdb.DBVersion,
 	}
