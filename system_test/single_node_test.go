@@ -4,6 +4,7 @@ Package system runs system-level testing of rqlite. This includes testing of sin
 package system
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -20,22 +21,22 @@ func Test_SingleNode(t *testing.T) {
 	}{
 		{
 			stmt:     `CREATE TABLE foo (id integer not null primary key, name text)`,
-			expected: `{"results":[{}],"index":3}`,
+			expected: fmt.Sprintf(`{"results":[{}],%s}`, rr(node.ID, 3)),
 			execute:  true,
 		},
 		{
 			stmt:     `INSERT INTO foo(name) VALUES("fiona")`,
-			expected: `{"results":[{"last_insert_id":1,"rows_affected":1}],"index":4}`,
+			expected: fmt.Sprintf(`{"results":[{"last_insert_id":1,"rows_affected":1}],%s}`, rr(node.ID, 4)),
 			execute:  true,
 		},
 		{
 			stmt:     `INSERT INTO bar(name) VALUES("fiona")`,
-			expected: `{"results":[{"error":"no such table: bar"}],"index":5}`,
+			expected: fmt.Sprintf(`{"results":[{"error":"no such table: bar"}],%s}`, rr(node.ID, 5)),
 			execute:  true,
 		},
 		{
 			stmt:     `INSERT blah blah`,
-			expected: `{"results":[{"error":"near \"blah\": syntax error"}],"index":6}`,
+			expected: fmt.Sprintf(`{"results":[{"error":"near \"blah\": syntax error"}],%s}`, rr(node.ID, 6)),
 			execute:  true,
 		},
 		{
@@ -45,12 +46,12 @@ func Test_SingleNode(t *testing.T) {
 		},
 		{
 			stmt:     `DROP TABLE bar`,
-			expected: `{"results":[{"error":"no such table: bar"}],"index":7}`,
+			expected: fmt.Sprintf(`{"results":[{"error":"no such table: bar"}],%s}`, rr(node.ID, 7)),
 			execute:  true,
 		},
 		{
 			stmt:     `DROP TABLE foo`,
-			expected: `{"results":[{"last_insert_id":1,"rows_affected":1}],"index":8}`,
+			expected: fmt.Sprintf(`{"results":[{"last_insert_id":1,"rows_affected":1}],%s}`, rr(node.ID, 8)),
 			execute:  true,
 		},
 	}
@@ -85,27 +86,27 @@ func Test_SingleNodeMulti(t *testing.T) {
 	}{
 		{
 			stmt:     `CREATE TABLE foo (id integer not null primary key, name text)`,
-			expected: `{"results":[{}],"index":3}`,
+			expected: fmt.Sprintf(`{"results":[{}],%s}`, rr(node.ID, 3)),
 			execute:  true,
 		},
 		{
 			stmt:     `CREATE TABLE bar (id integer not null primary key, sequence integer)`,
-			expected: `{"results":[{}],"index":4}`,
+			expected: fmt.Sprintf(`{"results":[{}],%s}`, rr(node.ID, 4)),
 			execute:  true,
 		},
 		{
 			stmt:     `INSERT INTO foo(name) VALUES("fiona")`,
-			expected: `{"results":[{"last_insert_id":1,"rows_affected":1}],"index":5}`,
+			expected: fmt.Sprintf(`{"results":[{"last_insert_id":1,"rows_affected":1}],%s}`, rr(node.ID, 5)),
 			execute:  true,
 		},
 		{
 			stmt:     `INSERT INTO foo(name) VALUES("declan")`,
-			expected: `{"results":[{"last_insert_id":2,"rows_affected":1}],"index":6}`,
+			expected: fmt.Sprintf(`{"results":[{"last_insert_id":2,"rows_affected":1}],%s}`, rr(node.ID, 6)),
 			execute:  true,
 		},
 		{
 			stmt:     `INSERT INTO bar(sequence) VALUES(5)`,
-			expected: `{"results":[{"last_insert_id":1,"rows_affected":1}],"index":7}`,
+			expected: fmt.Sprintf(`{"results":[{"last_insert_id":1,"rows_affected":1}],%s}`, rr(node.ID, 7)),
 			execute:  true,
 		},
 	}

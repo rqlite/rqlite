@@ -1,6 +1,7 @@
 package system
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -71,12 +72,12 @@ func Test_MultiNodeCluster(t *testing.T) {
 	}{
 		{
 			stmt:     `CREATE TABLE foo (id integer not null primary key, name text)`,
-			expected: `{"results":[{}],"index":7}`,
+			expected: fmt.Sprintf(`{"results":[{}],%s}`, rr(leader.ID, 7)),
 			execute:  true,
 		},
 		{
 			stmt:     `INSERT INTO foo(name) VALUES("fiona")`,
-			expected: `{"results":[{"last_insert_id":1,"rows_affected":1}],"index":8}`,
+			expected: fmt.Sprintf(`{"results":[{"last_insert_id":1,"rows_affected":1}],%s}`, rr(leader.ID, 8)),
 			execute:  true,
 		},
 		{
@@ -118,12 +119,12 @@ func Test_MultiNodeCluster(t *testing.T) {
 	}{
 		{
 			stmt:     `CREATE TABLE foo (id integer not null primary key, name text)`,
-			expected: `{"results":[{"error":"table foo already exists"}],"index":10}`,
+			expected: fmt.Sprintf(`{"results":[{"error":"table foo already exists"}],%s}`, rr(leader.ID, 10)),
 			execute:  true,
 		},
 		{
 			stmt:     `INSERT INTO foo(name) VALUES("sinead")`,
-			expected: `{"results":[{"last_insert_id":2,"rows_affected":1}],"index":11}`,
+			expected: fmt.Sprintf(`{"results":[{"last_insert_id":2,"rows_affected":1}],%s}`, rr(leader.ID, 11)),
 			execute:  true,
 		},
 		{
