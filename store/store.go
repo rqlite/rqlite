@@ -149,11 +149,11 @@ type Store struct {
 	dbConf  *DBConfig             // SQLite database config.
 	dbPath  string                // Path to underlying SQLite file, if not in-memory.
 
-	dbConn  *sdb.Conn // Utility connection to underlying SQLite database.
 	connsMu sync.RWMutex
 	randSrc *rand.Rand
 	db      *sdb.DB                // The underlying SQLite database.
 	conns   map[uint64]*Connection // Database connections under management.
+	dbConn  *sdb.Conn              // Hidden connection to underlying SQLite database.
 
 	metaMu sync.RWMutex
 	meta   map[string]map[string]string
@@ -273,7 +273,19 @@ func (s *Store) Open(enableSingle bool) error {
 // through this connection are applied via the Raft consensus system. The Store
 // must have been opened first.
 func (s *Store) Connect() (*Connection, error) {
-	connID := s.randSrc.Uint64()
+	connID := func() uint64 {
+		s.connsMu.Lock()
+		defer s.connsMu.Unlock()
+		for {
+			// Make sure we get a new connection ID.
+			id := s.randSrc.Uint64()
+			if _, ok := s.conns[id]; !ok {
+				s.conns[id] = nil
+				return id
+			}
+
+		}
+	}()
 	c := &connectSub{connID}
 
 	cmd, err := newCommand(connect, c)
