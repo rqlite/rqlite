@@ -12,6 +12,7 @@ const (
 	query                             // Commands which query the database.
 	metadataSet                       // Commands which sets Store metadata
 	metadataDelete                    // Commands which deletes Store metadata
+	connect                           // Commands which create a database connection
 )
 
 type command struct {
@@ -40,6 +41,7 @@ func newMetadataSetCommand(id string, md map[string]string) (*command, error) {
 
 // databaseSub is a command sub which involves interaction with the database.
 type databaseSub struct {
+	ConnID  uint64   `json:"conn_id,omitempty"`
 	Tx      bool     `json:"tx,omitempty"`
 	Queries []string `json:"queries,omitempty"`
 	Timings bool     `json:"timings,omitempty"`
@@ -48,4 +50,8 @@ type databaseSub struct {
 type metadataSetSub struct {
 	RaftID string            `json:"raft_id,omitempty"`
 	Data   map[string]string `json:"data,omitempty"`
+}
+
+type connectSub struct {
+	id uint64
 }

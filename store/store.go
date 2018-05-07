@@ -13,6 +13,7 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"sort"
@@ -147,8 +148,12 @@ type Store struct {
 	raftLog *raftboltdb.BoltStore // Persisent log store.
 	dbConf  *DBConfig             // SQLite database config.
 	dbPath  string                // Path to underlying SQLite file, if not in-memory.
-	db      *sdb.DB               // The underlying SQLite database.
-	dbConn  *sdb.Conn             // Default connection to underlying SQLite database.
+
+	dbConn  *sdb.Conn // Utility connection to underlying SQLite database.
+	connsMu sync.RWMutex
+	randSrc *rand.Rand
+	db      *sdb.DB                // The underlying SQLite database.
+	conns   map[uint64]*Connection // Database connections under management.
 
 	metaMu sync.RWMutex
 	meta   map[string]map[string]string
@@ -185,6 +190,7 @@ func New(ln Listener, c *StoreConfig) *Store {
 		raftID:       c.ID,
 		dbConf:       c.DBConf,
 		dbPath:       filepath.Join(c.Dir, sqliteFile),
+		randSrc:      rand.New(rand.NewSource(time.Now().UnixNano())),
 		meta:         make(map[string]map[string]string),
 		logger:       logger,
 		ApplyTimeout: applyTimeout,
@@ -206,7 +212,7 @@ func (s *Store) Open(enableSingle bool) error {
 		return err
 	}
 
-	// Get default connection to database.
+	// Get utility connection to database.
 	conn, err := s.db.Connect()
 	if err != nil {
 		return err
@@ -263,11 +269,41 @@ func (s *Store) Open(enableSingle bool) error {
 	return nil
 }
 
+// Connect returns a new connection to the database. Changes made to the database
+// through this connection are applied via the Raft consensus system. The Store
+// must have been opened first.
+func (s *Store) Connect() (*Connection, error) {
+	connID := s.randSrc.Uint64()
+	c := &connectSub{connID}
+
+	cmd, err := newCommand(connect, c)
+	if err != nil {
+		return nil, err
+	}
+	b, err := json.Marshal(cmd)
+	if err != nil {
+		return nil, err
+	}
+
+	f := s.raft.Apply(b, s.ApplyTimeout)
+	if e := f.(raft.Future); e.Error() != nil {
+		if e.Error() == raft.ErrNotLeader {
+			return nil, ErrNotLeader
+		}
+		return nil, e.Error()
+	}
+
+	s.connsMu.RLock()
+	defer s.connsMu.RUnlock()
+	return s.conns[connID], nil
+}
+
 // Close closes the store. If wait is true, waits for a graceful shutdown.
 func (s *Store) Close(wait bool) error {
 	if err := s.dbConn.Close(); err != nil {
 		return err
 	}
+	// XXX CLOSE OTHER CONNECTIONS
 	f := s.raft.Shutdown()
 	if wait {
 		if e := f.(raft.Future); e.Error() != nil {
@@ -413,10 +449,11 @@ func (s *Store) WaitForAppliedIndex(idx uint64, timeout time.Duration) error {
 
 // Stats returns stats for the store.
 func (s *Store) Stats() (map[string]interface{}, error) {
-	fkEnabled, err := s.dbConn.FKConstraints()
-	if err != nil {
-		return nil, err
-	}
+	// fkEnabled, err := s.dbConn.FKConstraints()
+	// if err != nil {
+	// 	return nil, err
+	// }
+	var fkEnabled bool
 
 	dbStatus := map[string]interface{}{
 		"dsn":            s.dbConf.DSN,
@@ -463,68 +500,6 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 	return status, nil
 }
 
-// Execute executes queries that return no rows, but do modify the database.
-func (s *Store) Execute(ex *ExecuteRequest) (*ExecuteResponse, error) {
-	s.restoreMu.RLock()
-	defer s.restoreMu.RUnlock()
-	return s.execute(ex)
-}
-
-// ExecuteOrAbort executes the requests, but aborts any active transaction
-// on the underlying database in the case of any error.
-func (s *Store) ExecuteOrAbort(ex *ExecuteRequest) (resp *ExecuteResponse, retErr error) {
-	s.restoreMu.RLock()
-	defer s.restoreMu.RUnlock()
-	defer func() {
-		var errored bool
-		for i := range resp.Results {
-			if resp.Results[i].Error != "" {
-				errored = true
-				break
-			}
-		}
-		if retErr != nil || errored {
-			if err := s.dbConn.AbortTransaction(); err != nil {
-				s.logger.Printf("WARNING: failed to abort transaction: %s", err.Error())
-			}
-		}
-	}()
-	return s.execute(ex)
-}
-
-func (s *Store) execute(ex *ExecuteRequest) (*ExecuteResponse, error) {
-	start := time.Now()
-
-	d := &databaseSub{
-		Tx:      ex.Tx,
-		Queries: ex.Queries,
-		Timings: ex.Timings,
-	}
-	c, err := newCommand(execute, d)
-	if err != nil {
-		return nil, err
-	}
-	b, err := json.Marshal(c)
-	if err != nil {
-		return nil, err
-	}
-
-	f := s.raft.Apply(b, s.ApplyTimeout)
-	if e := f.(raft.Future); e.Error() != nil {
-		if e.Error() == raft.ErrNotLeader {
-			return nil, ErrNotLeader
-		}
-		return nil, e.Error()
-	}
-
-	r := f.Response().(*fsmExecuteResponse)
-	return &ExecuteResponse{
-		Results: r.results,
-		Time:    time.Since(start).Seconds(),
-		Raft:    RaftResponse{f.Index(), s.raftID},
-	}, r.error
-}
-
 // Backup return a snapshot of the underlying database.
 //
 // If leader is true, this operation is performed with a read consistency
@@ -556,54 +531,6 @@ func (s *Store) Backup(leader bool, fmt BackupFormat) ([]byte, error) {
 	}
 	stats.Add(numBackups, 1)
 	return b, nil
-}
-
-// Query executes queries that return rows, and do not modify the database.
-func (s *Store) Query(qr *QueryRequest) (*QueryResponse, error) {
-	s.restoreMu.RLock()
-	defer s.restoreMu.RUnlock()
-	start := time.Now()
-
-	if qr.Lvl == Strong {
-		d := &databaseSub{
-			Tx:      qr.Tx,
-			Queries: qr.Queries,
-			Timings: qr.Timings,
-		}
-		c, err := newCommand(query, d)
-		if err != nil {
-			return nil, err
-		}
-		b, err := json.Marshal(c)
-		if err != nil {
-			return nil, err
-		}
-
-		f := s.raft.Apply(b, s.ApplyTimeout)
-		if e := f.(raft.Future); e.Error() != nil {
-			if e.Error() == raft.ErrNotLeader {
-				return nil, ErrNotLeader
-			}
-			return nil, e.Error()
-		}
-
-		r := f.Response().(*fsmQueryResponse)
-		return &QueryResponse{
-			Rows: r.rows,
-			Time: time.Since(start).Seconds(),
-			Raft: &RaftResponse{f.Index(), s.raftID},
-		}, err
-	}
-
-	if qr.Lvl == Weak && s.raft.State() != raft.Leader {
-		return nil, ErrNotLeader
-	}
-
-	r, err := s.dbConn.Query(qr.Queries, qr.Tx, qr.Timings)
-	return &QueryResponse{
-		Rows: r,
-		Time: time.Since(start).Seconds(),
-	}, err
 }
 
 // Join joins a node, identified by id and located at addr, to this store.
@@ -728,6 +655,90 @@ func (s *Store) setMetadata(id string, md map[string]string) error {
 	return nil
 }
 
+// Execute executes queries that return no rows, but do modify the database.
+func (s *Store) execute(c *Connection, ex *ExecuteRequest) (*ExecuteResponse, error) {
+	start := time.Now()
+
+	d := &databaseSub{
+		ConnID:  c.id,
+		Tx:      ex.Tx,
+		Queries: ex.Queries,
+		Timings: ex.Timings,
+	}
+	cmd, err := newCommand(execute, d)
+	if err != nil {
+		return nil, err
+	}
+	b, err := json.Marshal(cmd)
+	if err != nil {
+		return nil, err
+	}
+
+	f := s.raft.Apply(b, s.ApplyTimeout)
+	if e := f.(raft.Future); e.Error() != nil {
+		if e.Error() == raft.ErrNotLeader {
+			return nil, ErrNotLeader
+		}
+		return nil, e.Error()
+	}
+
+	r := f.Response().(*fsmExecuteResponse)
+	return &ExecuteResponse{
+		Results: r.results,
+		Time:    time.Since(start).Seconds(),
+		Raft:    RaftResponse{f.Index(), s.raftID},
+	}, r.error
+}
+
+// Query executes queries that return rows, and do not modify the database.
+func (s *Store) query(c *Connection, qr *QueryRequest) (*QueryResponse, error) {
+	s.restoreMu.RLock()
+	defer s.restoreMu.RUnlock()
+	start := time.Now()
+
+	if qr.Lvl == Strong {
+		d := &databaseSub{
+			ConnID:  c.id,
+			Tx:      qr.Tx,
+			Queries: qr.Queries,
+			Timings: qr.Timings,
+		}
+		cmd, err := newCommand(query, d)
+		if err != nil {
+			return nil, err
+		}
+		b, err := json.Marshal(cmd)
+		if err != nil {
+			return nil, err
+		}
+
+		f := s.raft.Apply(b, s.ApplyTimeout)
+		if e := f.(raft.Future); e.Error() != nil {
+			if e.Error() == raft.ErrNotLeader {
+				return nil, ErrNotLeader
+			}
+			return nil, e.Error()
+		}
+
+		r := f.Response().(*fsmQueryResponse)
+		return &QueryResponse{
+			Rows: r.rows,
+			Time: time.Since(start).Seconds(),
+			Raft: &RaftResponse{f.Index(), s.raftID},
+		}, err
+	}
+
+	if qr.Lvl == Weak && s.raft.State() != raft.Leader {
+		return nil, ErrNotLeader
+	}
+
+	r, err := c.db.Query(qr.Queries, qr.Tx, qr.Timings)
+	return &QueryResponse{
+		Rows: r,
+		Time: time.Since(start).Seconds(),
+	}, err
+}
+
 // createDatabase creates the the in-memory or file-based database.
 func (s *Store) createDatabase() error {
 	var db *sdb.DB
@@ -783,6 +794,12 @@ func (s *Store) remove(id string) error {
 	return nil
 }
 
+func (s *Store) removeConn(id uint64) {
+	s.connsMu.Lock()
+	defer s.connsMu.Unlock()
+	delete(s.conns, id)
+}
+
 // raftConfig returns a new Raft config for the store.
 func (s *Store) raftConfig() *raft.Config {
 	config := raft.DefaultConfig()
@@ -828,11 +845,19 @@ func (s *Store) Apply(l *raft.Log) interface{} {
 		if err := json.Unmarshal(c.Sub, &d); err != nil {
 			return &fsmGenericResponse{error: err}
 		}
+
+		s.connsMu.RLock()
+		defer s.connsMu.RUnlock()
+		conn, ok := s.conns[d.ConnID]
+		if !ok {
+			return &fsmGenericResponse{error: fmt.Errorf("connection %d does not exist", d.ConnID)}
+		}
+
 		if c.Typ == execute {
-			r, err := s.dbConn.Execute(d.Queries, d.Tx, d.Timings)
+			r, err := conn.db.Execute(d.Queries, d.Tx, d.Timings)
 			return &fsmExecuteResponse{results: r, error: err}
 		}
-		r, err := s.dbConn.Query(d.Queries, d.Tx, d.Timings)
+		r, err := conn.db.Query(d.Queries, d.Tx, d.Timings)
 		return &fsmQueryResponse{rows: r, error: err}
 	case metadataSet:
 		var d metadataSetSub
@@ -860,6 +885,19 @@ func (s *Store) Apply(l *raft.Log) interface{} {
 			defer s.metaMu.Unlock()
 			delete(s.meta, d)
 		}()
+		return &fsmGenericResponse{}
+	case connect:
+		var d connectSub
+		if err := json.Unmarshal(c.Sub, &d); err != nil {
+			return &fsmGenericResponse{error: err}
+		}
+		conn, err := s.db.Connect()
+		if err != nil {
+			return &fsmGenericResponse{error: err}
+		}
+		s.connsMu.Lock()
+		defer s.connsMu.Unlock()
+		s.conns[d.id] = NewConnection(conn, s, d.id)
 		return &fsmGenericResponse{}
 	default:
 		return &fsmGenericResponse{error: fmt.Errorf("unknown command: %v", c.Typ)}
