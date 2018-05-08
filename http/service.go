@@ -57,7 +57,7 @@ type Store interface {
 	// Stats returns stats on the Store.
 	Stats() (map[string]interface{}, error)
 
-	// Backup wites backup of the node state to dst
+	// Backup writes backup of the node state to dst
 	Backup(leader bool, f store.BackupFormat, dst io.Writer) error
 }
 
