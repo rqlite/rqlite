@@ -223,6 +223,11 @@ func (s *Store) Open(enableSingle bool) error {
 		return err
 	}
 	s.dbConn = conn
+	s.conns[0] = &Connection{
+		db:    s.dbConn,
+		store: s,
+		id:    0,
+	}
 
 	// Is this a brand new node?
 	newNode := !pathExists(filepath.Join(s.raftDir, "raft.db"))
@@ -689,8 +694,15 @@ func (s *Store) setMetadata(id string, md map[string]string) error {
 	return nil
 }
 
-// Execute executes queries that return no rows, but do modify the database.
+// Execute executes queries that return no rows, but do modify the database. If connection
+// is nil then the utility connection is used.
 func (s *Store) execute(c *Connection, ex *ExecuteRequest) (*ExecuteResponse, error) {
+	if c == nil {
+		s.connsMu.RLock()
+		c = s.conns[0]
+		s.connsMu.RUnlock()
+	}
+
 	start := time.Now()
 
 	d := &databaseSub{
@@ -724,8 +736,15 @@ func (s *Store) execute(c *Connection, ex *ExecuteRequest) (*ExecuteResponse, er
 	}, r.error
 }
 
-// Query executes queries that return rows, and do not modify the database.
+// Query executes queries that return rows, and do not modify the database. If
+// connection is nil, then the utility connection is used.
 func (s *Store) query(c *Connection, qr *QueryRequest) (*QueryResponse, error) {
+	if c == nil {
+		s.connsMu.RLock()
+		c = s.conns[0]
+		s.connsMu.RUnlock()
+	}
+
 	s.restoreMu.RLock()
 	defer s.restoreMu.RUnlock()
 	start := time.Now()
