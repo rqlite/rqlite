@@ -40,7 +40,7 @@ func newMetadataSetCommand(id string, md map[string]string) (*command, error) {
 
 // databaseSub is a command sub which involves interaction with the database.
 type databaseSub struct {
-	Tx      bool     `json:"tx,omitempty"`
+	Atomic  bool     `json:"atomic,omitempty"`
 	Queries []string `json:"queries,omitempty"`
 	Timings bool     `json:"timings,omitempty"`
 }
