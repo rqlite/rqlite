@@ -47,6 +47,7 @@ const (
 	appliedWaitDelay    = 100 * time.Millisecond
 	connectionPoolCount = 5
 	connectionTimeout   = 10 * time.Second
+	raftLogCacheSize    = 512
 )
 
 const (
@@ -140,15 +141,18 @@ const (
 type Store struct {
 	raftDir string
 
-	raft    *raft.Raft // The consensus mechanism.
-	ln      Listener
-	raftTn  *raft.NetworkTransport
-	raftID  string                // Node ID.
-	raftLog *raftboltdb.BoltStore // Persisent log store.
-	dbConf  *DBConfig             // SQLite database config.
-	dbPath  string                // Path to underlying SQLite file, if not in-memory.
-	db      *sdb.DB               // The underlying SQLite database.
-	dbConn  *sdb.Conn             // Default connection to underlying SQLite database.
+	raft   *raft.Raft // The consensus mechanism.
+	ln     Listener
+	raftTn *raft.NetworkTransport
+	raftID string    // Node ID.
+	dbConf *DBConfig // SQLite database config.
+	dbPath string    // Path to underlying SQLite file, if not in-memory.
+	db     *sdb.DB   // The underlying SQLite database.
+	dbConn *sdb.Conn // Default connection to underlying SQLite database.
+
+	raftLog    raft.LogStore         // Persistent log store.
+	raftStable raft.StableStore      // Persistent k-v store.
+	boltStore  *raftboltdb.BoltStore // Physical store.
 
 	metaMu sync.RWMutex
 	meta   map[string]map[string]string
@@ -232,13 +236,18 @@ func (s *Store) Open(enableSingle bool) error {
 	}
 
 	// Create the log store and stable store.
-	s.raftLog, err = raftboltdb.NewBoltStore(filepath.Join(s.raftDir, "raft.db"))
+	s.boltStore, err = raftboltdb.NewBoltStore(filepath.Join(s.raftDir, "raft.db"))
 	if err != nil {
 		return fmt.Errorf("new bolt store: %s", err)
 	}
+	s.raftStable = s.boltStore
+	s.raftLog, err = raft.NewLogCache(raftLogCacheSize, s.boltStore)
+	if err != nil {
+		return fmt.Errorf("new cached store: %s", err)
+	}
 
 	// Instantiate the Raft system.
-	ra, err := raft.NewRaft(config, s, s.raftLog, s.raftLog, snapshots, s.raftTn)
+	ra, err := raft.NewRaft(config, s, s.raftLog, s.raftStable, snapshots, s.raftTn)
 	if err != nil {
 		return fmt.Errorf("new raft: %s", err)
 	}
@@ -268,13 +277,28 @@ func (s *Store) Close(wait bool) error {
 	if err := s.dbConn.Close(); err != nil {
 		return err
 	}
-	f := s.raft.Shutdown()
-	if wait {
-		if e := f.(raft.Future); e.Error() != nil {
-			return e.Error()
+	s.dbConn = nil
+	s.db = nil
+
+	if s.raft != nil {
+		f := s.raft.Shutdown()
+		if wait {
+			if e := f.(raft.Future); e.Error() != nil {
+				return e.Error()
+			}
 		}
+		s.raft = nil
 	}
-	return s.raftLog.Close()
+
+	if s.boltStore != nil {
+		if err := s.boltStore.Close(); err != nil {
+			return err
+		}
+		s.boltStore = nil
+	}
+	s.raftLog = nil
+	s.raftStable = nil
+	return nil
 }
 
 // WaitForApplied waits for all Raft log entries to to be applied to the
