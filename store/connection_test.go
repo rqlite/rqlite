@@ -431,23 +431,18 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
-	// Wait until the 3 log entries have been applied to the follower,
-	// and then query.
-	c1 := mustNewConnection(s1)
-	defer c1.Close()
-
 	if err := s1.WaitForAppliedIndex(3, 5*time.Second); err != nil {
 		t.Fatalf("error waiting for follower to apply index: %s:", err.Error())
 	}
-	r, err = c1.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, Weak})
+	r, err = s1.query(nil, &QueryRequest{[]string{`SELECT * FROM foo`}, false, false, Weak})
 	if err == nil {
 		t.Fatalf("successfully queried non-leader node")
 	}
-	r, err = c1.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, Strong})
+	r, err = s1.query(nil, &QueryRequest{[]string{`SELECT * FROM foo`}, false, false, Strong})
 	if err == nil {
 		t.Fatalf("successfully queried non-leader node")
 	}
-	r, err = c1.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, None})
+	r, err = s1.query(nil, &QueryRequest{[]string{`SELECT * FROM foo`}, false, false, None})
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -460,11 +455,11 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 
 	// Kill the leader and check that query can still be satisfied via None consistency.
 	s0.Close(true)
-	r, err = c1.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, Strong})
+	r, err = s1.query(nil, &QueryRequest{[]string{`SELECT * FROM foo`}, false, false, Strong})
 	if err == nil {
 		t.Fatalf("successfully queried non-leader node: %s", err.Error())
 	}
-	r, err = c1.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, None})
+	r, err = s1.query(nil, &QueryRequest{[]string{`SELECT * FROM foo`}, false, false, None})
 	if err != nil {
 		t.Fatalf("failed to query node with None consistency: %s", err.Error())
 	}

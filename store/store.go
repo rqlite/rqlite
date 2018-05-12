@@ -286,7 +286,8 @@ func (s *Store) Open(enableSingle bool) error {
 
 // Connect returns a new connection to the database. Changes made to the database
 // through this connection are applied via the Raft consensus system. The Store
-// must have been opened first.
+// must have been opened first. Must be called on the leader or an error will
+// we returned.
 func (s *Store) Connect() (*Connection, error) {
 	connID := func() uint64 {
 		s.connsMu.Lock()
