@@ -64,8 +64,13 @@ func (c *Connection) Query(qr *QueryRequest) (*QueryResponse, error) {
 	return c.store.query(c, qr)
 }
 
+// AbortTransaction aborts -- rolls back -- any active transaction. Calling code
+// should know exactly what it is doing if it decides to call this function. It
+// can be used to clean up any dangling state that may result from certain
+// error scenarios.
 func (c *Connection) AbortTransaction() error {
-	return nil
+	_, err := c.Execute(&ExecuteRequest{[]string{"ROLLBACK"}, false, false})
+	return err
 }
 
 func (c *Connection) Close() error {
