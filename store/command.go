@@ -53,5 +53,5 @@ type metadataSetSub struct {
 }
 
 type connectSub struct {
-	id uint64
+	ConnID uint64 `json:"conn_id,omitempty"`
 }

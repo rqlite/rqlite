@@ -195,6 +195,7 @@ func New(ln Listener, c *StoreConfig) *Store {
 		dbConf:       c.DBConf,
 		dbPath:       filepath.Join(c.Dir, sqliteFile),
 		randSrc:      rand.New(rand.NewSource(time.Now().UnixNano())),
+		conns:        make(map[uint64]*Connection),
 		meta:         make(map[string]map[string]string),
 		logger:       logger,
 		ApplyTimeout: applyTimeout,
@@ -930,7 +931,7 @@ func (s *Store) Apply(l *raft.Log) interface{} {
 		}
 		s.connsMu.Lock()
 		defer s.connsMu.Unlock()
-		s.conns[d.id] = NewConnection(conn, s, d.id)
+		s.conns[d.ConnID] = NewConnection(conn, s, d.ConnID)
 		return &fsmGenericResponse{}
 	default:
 		return &fsmGenericResponse{error: fmt.Errorf("unknown command: %v", c.Typ)}

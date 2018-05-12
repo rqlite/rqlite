@@ -51,7 +51,7 @@ func (c *Connection) ExecuteOrAbort(ex *ExecuteRequest) (resp *ExecuteResponse, 
 		}
 		if retErr != nil || errored {
 			if err := c.AbortTransaction(); err != nil {
-				c.logger.Printf("WARNING: failed to abort transaction on connection %s: %s",
+				c.logger.Printf("WARNING: failed to abort transaction on connection %d: %s",
 					c.id, err.Error())
 			}
 		}
