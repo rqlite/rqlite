@@ -471,25 +471,9 @@ func Test_FormRedirectParam(t *testing.T) {
 }
 
 type MockStore struct {
-	executeFn func(queries []string, tx bool) (*store.ExecuteResponse, error)
-	queryFn   func(queries []string, tx, leader, verify bool) (*store.QueryResponse, error)
 }
 
-func (m *MockStore) Execute(er *store.ExecuteRequest) (*store.ExecuteResponse, error) {
-	if m.executeFn == nil {
-		return nil, nil
-	}
-	return nil, nil
-}
-
-func (m *MockStore) ExecuteOrAbort(er *store.ExecuteRequest) (*store.ExecuteResponse, error) {
-	return nil, nil
-}
-
-func (m *MockStore) Query(qr *store.QueryRequest) (*store.QueryResponse, error) {
-	if m.queryFn == nil {
-		return nil, nil
-	}
+func (m *MockStore) Connect() (*store.Connection, error) {
 	return nil, nil
 }
 
