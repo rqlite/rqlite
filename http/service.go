@@ -26,6 +26,8 @@ import (
 
 // Store is the interface the Raft-based database must implement.
 type Store interface {
+	store.ExecerQueryer
+
 	// Join joins the node with the given ID, reachable at addr, to this node.
 	Join(id, addr string, metadata map[string]string) error
 
@@ -112,8 +114,7 @@ type Service struct {
 	addr string       // Bind address of the HTTP service.
 	ln   net.Listener // Service listener
 
-	store Store             // The Raft-backed database store.
-	conn  *store.Connection // The default connection.
+	store Store // The Raft-backed database store.
 
 	start      time.Time // Start up time.
 	lastBackup time.Time // Time of last successful backup.
@@ -173,12 +174,6 @@ func (s *Service) Start() error {
 	}
 	s.ln = ln
 
-	conn, err := s.store.Connect()
-	if err != nil {
-		return err
-	}
-	s.conn = conn
-
 	go func() {
 		err := server.Serve(s.ln)
 		if err != nil {
@@ -193,7 +188,6 @@ func (s *Service) Start() error {
 // Close closes the service.
 func (s *Service) Close() {
 	s.ln.Close()
-	s.conn.Close()
 	return
 }
 
@@ -423,7 +417,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 
 	var resp Response
 	queries := []string{string(b)}
-	results, err := s.conn.ExecuteOrAbort(&store.ExecuteRequest{queries, timings, false})
+	results, err := s.store.ExecuteOrAbort(&store.ExecuteRequest{queries, timings, false})
 	if err != nil {
 		if err == store.ErrNotLeader {
 			leader := s.leaderAPIAddr()
@@ -572,7 +566,7 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var resp Response
-	results, err := s.conn.Execute(&store.ExecuteRequest{queries, timings, isTx})
+	results, err := s.store.Execute(&store.ExecuteRequest{queries, timings, isTx})
 	if err != nil {
 		if err == store.ErrNotLeader {
 			leader := s.leaderAPIAddr()
@@ -636,7 +630,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var resp Response
-	results, err := s.conn.Query(&store.QueryRequest{queries, timings, isTx, lvl})
+	results, err := s.store.Query(&store.QueryRequest{queries, timings, isTx, lvl})
 	if err != nil {
 		if err == store.ErrNotLeader {
 			leader := s.leaderAPIAddr()

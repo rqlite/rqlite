@@ -473,7 +473,7 @@ func Test_FormRedirectParam(t *testing.T) {
 type MockStore struct {
 }
 
-func (m *MockStore) Connect() (*store.Connection, error) {
+func (m *MockStore) Connect() (store.ExecerQueryer, error) {
 	return nil, nil
 }
 
@@ -499,6 +499,18 @@ func (m *MockStore) Stats() (map[string]interface{}, error) {
 
 func (m *MockStore) Backup(leader bool, f store.BackupFormat, w io.Writer) error {
 	return nil
+}
+
+func (m *MockStore) Execute(ex *store.ExecuteRequest) (*store.ExecuteResponse, error) {
+	return nil, nil
+}
+
+func (m *MockStore) ExecuteOrAbort(ex *store.ExecuteRequest) (r *store.ExecuteResponse, err error) {
+	return nil, nil
+}
+
+func (m *MockStore) Query(qr *store.QueryRequest) (*store.QueryResponse, error) {
+	return nil, nil
 }
 
 type mockCredentialStore struct {
