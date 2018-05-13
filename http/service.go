@@ -44,8 +44,8 @@ type Store interface {
 	// Backup writes backup of the node state to dst
 	Backup(leader bool, f store.BackupFormat, dst io.Writer) error
 
-	// Connect returns a new connection to the database.
-	Connect() (*store.Connection, error)
+	// Connect returns an object which can work with the database.
+	Connect() (store.ExecerQueryer, error)
 }
 
 // CredentialStore is the interface credential stores must support.
@@ -193,6 +193,7 @@ func (s *Service) Start() error {
 // Close closes the service.
 func (s *Service) Close() {
 	s.ln.Close()
+	s.conn.Close()
 	return
 }
 

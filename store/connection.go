@@ -41,22 +41,7 @@ func (c *Connection) Execute(ex *ExecuteRequest) (*ExecuteResponse, error) {
 // ExecuteOrAbort executes the requests, but aborts any active transaction
 // on the underlying database in the case of any error.
 func (c *Connection) ExecuteOrAbort(ex *ExecuteRequest) (resp *ExecuteResponse, retErr error) {
-	defer func() {
-		var errored bool
-		for i := range resp.Results {
-			if resp.Results[i].Error != "" {
-				errored = true
-				break
-			}
-		}
-		if retErr != nil || errored {
-			if err := c.AbortTransaction(); err != nil {
-				c.logger.Printf("WARNING: failed to abort transaction on connection %d: %s",
-					c.id, err.Error())
-			}
-		}
-	}()
-	return c.store.execute(c, ex)
+	return c.store.executeOrAbort(c, ex)
 }
 
 // Query executes queries that return rows, and do not modify the database.
@@ -74,6 +59,6 @@ func (c *Connection) AbortTransaction() error {
 }
 
 func (c *Connection) Close() error {
-	// Tell store conn is dead.
+	// XXX Tell store conn is dead.
 	return nil
 }

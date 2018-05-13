@@ -57,6 +57,18 @@ const (
 	numRestores = "num_restores"
 )
 
+type ExecerQueryer interface {
+	// Execute executes queries that return no rows, but do modify the database.
+	Execute(ex *ExecuteRequest) (*ExecuteResponse, error)
+
+	// ExecuteOrAbort executes the requests, but aborts any active transaction
+	// on the underlying database in the case of any error.
+	ExecuteOrAbort(ex *ExecuteRequest) (resp *ExecuteResponse, retErr error)
+
+	// Query executes queries that return rows, and do not modify the database.
+	Query(qr *QueryRequest) (*QueryResponse, error)
+}
+
 // BackupFormat represents the backup formats supported by the Store.
 type BackupFormat int
 
@@ -324,6 +336,22 @@ func (s *Store) Connect() (*Connection, error) {
 	s.connsMu.RLock()
 	defer s.connsMu.RUnlock()
 	return s.conns[connID], nil
+}
+
+// Execute executes queries that return no rows, but do modify the database.
+func (s *Store) Execute(ex *ExecuteRequest) (*ExecuteResponse, error) {
+	return s.execute(nil, ex)
+}
+
+// ExecuteOrAbort executes the requests, but aborts any active transaction
+// on the underlying database in the case of any error.
+func (s *Store) ExecuteOrAbort(ex *ExecuteRequest) (resp *ExecuteResponse, retErr error) {
+	return s.executeOrAbort(nil, ex)
+}
+
+// Query executes queries that return rows, and do not modify the database.
+func (s *Store) Query(qr *QueryRequest) (*QueryResponse, error) {
+	return s.query(nil, qr)
 }
 
 // Close closes the store. If wait is true, waits for a graceful shutdown.
@@ -735,6 +763,31 @@ func (s *Store) execute(c *Connection, ex *ExecuteRequest) (*ExecuteResponse, er
 		Time:    time.Since(start).Seconds(),
 		Raft:    RaftResponse{f.Index(), s.raftID},
 	}, r.error
+}
+
+func (s *Store) executeOrAbort(c *Connection, ex *ExecuteRequest) (resp *ExecuteResponse, retErr error) {
+	if c == nil {
+		s.connsMu.RLock()
+		c = s.conns[0]
+		s.connsMu.RUnlock()
+	}
+
+	defer func() {
+		var errored bool
+		for i := range resp.Results {
+			if resp.Results[i].Error != "" {
+				errored = true
+				break
+			}
+		}
+		if retErr != nil || errored {
+			if err := c.AbortTransaction(); err != nil {
+				c.logger.Printf("WARNING: failed to abort transaction on connection %d: %s",
+					c.id, err.Error())
+			}
+		}
+	}()
+	return c.store.execute(c, ex)
 }
 
 // Query executes queries that return rows, and do not modify the database. If
