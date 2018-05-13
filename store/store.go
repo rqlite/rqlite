@@ -309,6 +309,9 @@ func (s *Store) Open(enableSingle bool) error {
 // through this connection are applied via the Raft consensus system. The Store
 // must have been opened first. Must be called on the leader or an error will
 // we returned.
+//
+// Any connection returned by this call are READ_COMMITTED isolated from all
+// other connections, including the connection built-in to the Store itself.
 func (s *Store) Connect() (ExecerQueryerCloser, error) {
 	connID := func() uint64 {
 		s.connsMu.Lock()
@@ -348,17 +351,25 @@ func (s *Store) Connect() (ExecerQueryerCloser, error) {
 }
 
 // Execute executes queries that return no rows, but do modify the database.
+// Changes made to the database through this call are applied via the Raft
+// consensus system. The Store must have been opened first. Must be called
+// on the leader or an error will we returned. The changes are made using
+// the database connection built-in to the Store.
 func (s *Store) Execute(ex *ExecuteRequest) (*ExecuteResponse, error) {
 	return s.execute(nil, ex)
 }
 
 // ExecuteOrAbort executes the requests, but aborts any active transaction
-// on the underlying database in the case of any error.
+// on the underlying database in the case of any error. Any changes are made
+// using the database connection built-in to the Store.
 func (s *Store) ExecuteOrAbort(ex *ExecuteRequest) (resp *ExecuteResponse, retErr error) {
 	return s.executeOrAbort(nil, ex)
 }
 
 // Query executes queries that return rows, and do not modify the database.
+// The queries are made using the database connection built-in to the Store.
+// Depending on the read consistency requested, it may or may not need to be
+// called on the leader.
 func (s *Store) Query(qr *QueryRequest) (*QueryResponse, error) {
 	return s.query(nil, qr)
 }
