@@ -47,7 +47,7 @@ type Store interface {
 	Backup(leader bool, f store.BackupFormat, dst io.Writer) error
 
 	// Connect returns an object which can work with the database.
-	Connect() (store.ExecerQueryer, error)
+	Connect() (store.ExecerQueryerCloser, error)
 }
 
 // CredentialStore is the interface credential stores must support.

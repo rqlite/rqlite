@@ -69,6 +69,11 @@ type ExecerQueryer interface {
 	Query(qr *QueryRequest) (*QueryResponse, error)
 }
 
+type ExecerQueryerCloser interface {
+	ExecerQueryer
+	Close() error
+}
+
 // BackupFormat represents the backup formats supported by the Store.
 type BackupFormat int
 
@@ -300,7 +305,7 @@ func (s *Store) Open(enableSingle bool) error {
 // through this connection are applied via the Raft consensus system. The Store
 // must have been opened first. Must be called on the leader or an error will
 // we returned.
-func (s *Store) Connect() (*Connection, error) {
+func (s *Store) Connect() (ExecerQueryerCloser, error) {
 	connID := func() uint64 {
 		s.connsMu.Lock()
 		defer s.connsMu.Unlock()

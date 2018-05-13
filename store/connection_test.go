@@ -99,7 +99,7 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 	}
 }
 
-func mustNewConnection(s *Store) *Connection {
+func mustNewConnection(s *Store) ExecerQueryerCloser {
 	c, err := s.Connect()
 	if err != nil {
 		panic(fmt.Sprintf("failed to connect to store: %s", err.Error()))

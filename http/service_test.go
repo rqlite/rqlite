@@ -473,7 +473,7 @@ func Test_FormRedirectParam(t *testing.T) {
 type MockStore struct {
 }
 
-func (m *MockStore) Connect() (store.ExecerQueryer, error) {
+func (m *MockStore) Connect() (store.ExecerQueryerCloser, error) {
 	return nil, nil
 }
 

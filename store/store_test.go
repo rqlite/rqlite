@@ -106,11 +106,10 @@ func Test_StoreConnectFollowerError(t *testing.T) {
 	}
 	s1.WaitForLeader(10 * time.Second)
 
-	c, err := s1.Connect()
+	_, err := s1.Connect()
 	if err != ErrNotLeader {
 		t.Fatal("Connect did not return error on follower")
 	}
-	defer c.Close()
 }
 
 func Test_SingleNodeBackup(t *testing.T) {
