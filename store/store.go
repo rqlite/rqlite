@@ -57,6 +57,7 @@ const (
 	numRestores = "num_restores"
 )
 
+// ExecerQueryer is generic connection for interacting with a database.
 type ExecerQueryer interface {
 	// Execute executes queries that return no rows, but do modify the database.
 	Execute(ex *ExecuteRequest) (*ExecuteResponse, error)
@@ -69,6 +70,9 @@ type ExecerQueryer interface {
 	Query(qr *QueryRequest) (*QueryResponse, error)
 }
 
+// ExecerQueryerCloser is generic connection for interacting with a database,
+// whichalso allows release of its underlying resources. Once closed, it
+// cannot be reused.
 type ExecerQueryerCloser interface {
 	ExecerQueryer
 	Close() error
