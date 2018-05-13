@@ -8,6 +8,7 @@ import (
 	sdb "github.com/rqlite/rqlite/db"
 )
 
+// Connection is a connection to the database.
 type Connection struct {
 	db    *sdb.Conn // Connection to SQLite database.
 	store *Store    // Store to apply commands to.
@@ -16,6 +17,7 @@ type Connection struct {
 	logger *log.Logger
 }
 
+// NewConnection returns a connection to the database.
 func NewConnection(c *sdb.Conn, s *Store, id uint64) *Connection {
 	return &Connection{
 		db:     c,
@@ -25,10 +27,12 @@ func NewConnection(c *sdb.Conn, s *Store, id uint64) *Connection {
 	}
 }
 
+// ID returns the ID of the connection.
 func (c *Connection) ID() uint64 {
 	return c.id
 }
 
+// String implements the Stringer interface on the Connection.
 func (c *Connection) String() string {
 	return fmt.Sprintf("%d", c.id)
 }
@@ -58,6 +62,7 @@ func (c *Connection) AbortTransaction() error {
 	return err
 }
 
+// Close closes the connection.
 func (c *Connection) Close() error {
 	// XXX Tell store conn is dead.
 	return nil
