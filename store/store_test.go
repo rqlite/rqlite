@@ -12,28 +12,28 @@ import (
 	"time"
 )
 
-func Test_OpenStoreSingleNode(t *testing.T) {
-	t.Parallel()
+// func Test_OpenStoreSingleNode(t *testing.T) {
+// 	t.Parallel()
 
-	s := mustNewStore(true)
-	defer os.RemoveAll(s.Path())
+// 	s := mustNewStore(true)
+// 	defer os.RemoveAll(s.Path())
 
-	if err := s.Open(true); err != nil {
-		t.Fatalf("failed to open single-node store: %s", err.Error())
-	}
+// 	if err := s.Open(true); err != nil {
+// 		t.Fatalf("failed to open single-node store: %s", err.Error())
+// 	}
 
-	s.WaitForLeader(10 * time.Second)
-	if got, exp := s.LeaderAddr(), s.Addr(); got != exp {
-		t.Fatalf("wrong leader address returned, got: %s, exp %s", got, exp)
-	}
-	id, err := s.LeaderID()
-	if err != nil {
-		t.Fatalf("failed to retrieve leader ID: %s", err.Error())
-	}
-	if got, exp := id, s.raftID; got != exp {
-		t.Fatalf("wrong leader ID returned, got: %s, exp %s", got, exp)
-	}
-}
+// 	s.WaitForLeader(10 * time.Second)
+// 	if got, exp := s.LeaderAddr(), s.Addr(); got != exp {
+// 		t.Fatalf("wrong leader address returned, got: %s, exp %s", got, exp)
+// 	}
+// 	id, err := s.LeaderID()
+// 	if err != nil {
+// 		t.Fatalf("failed to retrieve leader ID: %s", err.Error())
+// 	}
+// 	if got, exp := id, s.raftID; got != exp {
+// 		t.Fatalf("wrong leader ID returned, got: %s, exp %s", got, exp)
+// 	}
+// }
 
 func Test_OpenStoreCloseSingleNode(t *testing.T) {
 	t.Parallel()
@@ -41,77 +41,82 @@ func Test_OpenStoreCloseSingleNode(t *testing.T) {
 	s := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
 
+	t.Log("opening store #1")
 	if err := s.Open(true); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	s.WaitForLeader(10 * time.Second)
+	t.Log("close store #1")
 	if err := s.Close(true); err != nil {
 		t.Fatalf("failed to close single-node store: %s", err.Error())
 	}
+	t.Log("opening store #2")
 	if err := s.Open(true); err != nil {
 		t.Fatalf("failed to reopen single-node store: %s", err.Error())
 	}
 
+	t.Log("close store #2")
 	if err := s.Close(true); err != nil {
 		t.Fatalf("failed to reclose single-node store: %s", err.Error())
 	}
+	t.Log("close store #3")
 	if err := s.Close(true); err != nil {
 		t.Fatalf("failed to close single-node closed store: %s", err.Error())
 	}
 }
 
-func Test_StoreConnect(t *testing.T) {
-	t.Parallel()
+// func Test_StoreConnect(t *testing.T) {
+// 	t.Parallel()
 
-	s := mustNewStore(true)
-	defer os.RemoveAll(s.Path())
+// 	s := mustNewStore(true)
+// 	defer os.RemoveAll(s.Path())
 
-	if err := s.Open(true); err != nil {
-		t.Fatalf("failed to open single-node store: %s", err.Error())
-	}
-	s.WaitForLeader(10 * time.Second)
+// 	if err := s.Open(true); err != nil {
+// 		t.Fatalf("failed to open single-node store: %s", err.Error())
+// 	}
+// 	s.WaitForLeader(10 * time.Second)
 
-	c, err := s.Connect()
-	if err != nil {
-		t.Fatalf("failed to connect to open store: %s", err.Error())
-	}
-	if c == nil {
-		t.Fatal("new connection is nil")
-	}
-	if err := c.Close(); err != nil {
-		t.Fatalf("failed to close connection: %s", err.Error())
-	}
-}
+// 	c, err := s.Connect()
+// 	if err != nil {
+// 		t.Fatalf("failed to connect to open store: %s", err.Error())
+// 	}
+// 	if c == nil {
+// 		t.Fatal("new connection is nil")
+// 	}
+// 	if err := c.Close(); err != nil {
+// 		t.Fatalf("failed to close connection: %s", err.Error())
+// 	}
+// }
 
-func Test_StoreConnectFollowerError(t *testing.T) {
-	t.Parallel()
+// func Test_StoreConnectFollowerError(t *testing.T) {
+// 	t.Parallel()
 
-	s0 := mustNewStore(true)
-	defer s0.Close(true)
-	defer os.RemoveAll(s0.Path())
-	if err := s0.Open(true); err != nil {
-		t.Fatalf("failed to open single-node store: %s", err.Error())
-	}
-	s0.WaitForLeader(10 * time.Second)
+// 	s0 := mustNewStore(true)
+// 	defer s0.Close(true)
+// 	defer os.RemoveAll(s0.Path())
+// 	if err := s0.Open(true); err != nil {
+// 		t.Fatalf("failed to open single-node store: %s", err.Error())
+// 	}
+// 	s0.WaitForLeader(10 * time.Second)
 
-	s1 := mustNewStore(true)
-	defer os.RemoveAll(s1.Path())
-	if err := s1.Open(false); err != nil {
-		t.Fatalf("failed to open single-node store: %s", err.Error())
-	}
-	defer s1.Close(true)
+// 	s1 := mustNewStore(true)
+// 	defer os.RemoveAll(s1.Path())
+// 	if err := s1.Open(false); err != nil {
+// 		t.Fatalf("failed to open single-node store: %s", err.Error())
+// 	}
+// 	defer s1.Close(true)
 
-	// Join the second node to the first.
-	if err := s0.Join(s1.ID(), s1.Addr(), nil); err != nil {
-		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
-	}
-	s1.WaitForLeader(10 * time.Second)
+// 	// Join the second node to the first.
+// 	if err := s0.Join(s1.ID(), s1.Addr(), nil); err != nil {
+// 		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
+// 	}
+// 	s1.WaitForLeader(10 * time.Second)
 
-	_, err := s1.Connect()
-	if err != ErrNotLeader {
-		t.Fatal("Connect did not return error on follower")
-	}
-}
+// 	_, err := s1.Connect()
+// 	if err != ErrNotLeader {
+// 		t.Fatal("Connect did not return error on follower")
+// 	}
+// }
 
 // func Test_SingleNodeBackup(t *testing.T) {
 // 	t.Parallel()
