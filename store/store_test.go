@@ -420,6 +420,7 @@ func Test_StoreLogTruncationMultinode(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s1.Close(true)
+	defer os.RemoveAll(s1.Path())
 
 	// Join the second node to the first.
 	if err := s0.Join(s1.ID(), s1.Addr(), nil); err != nil {
@@ -453,12 +454,14 @@ func Test_MetadataMultinode(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s0.Close(true)
+	defer os.RemoveAll(s0.Path())
 	s0.WaitForLeader(10 * time.Second)
 	s1 := mustNewStore(true)
 	if err := s1.Open(true); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s1.Close(true)
+	defer os.RemoveAll(s1.Path())
 	s1.WaitForLeader(10 * time.Second)
 
 	if s0.Metadata(s0.raftID, "foo") != "" {
@@ -547,7 +550,6 @@ func Test_State(t *testing.T) {
 
 func mustNewStore(inmem bool) *Store {
 	path := mustTempDir()
-	defer os.RemoveAll(path)
 
 	cfg := NewDBConfig("", inmem)
 	s := New(mustMockLister("localhost:0"), &StoreConfig{
