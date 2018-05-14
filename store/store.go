@@ -1093,6 +1093,11 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 		s.logger.Printf("failed to encode meta for snapshot: %s", err.Error())
 		return nil, err
 	}
+
+	// XXXX
+	// XXX ADD CONNECTIONS to SNAPSHOT
+	/// XXXX
+
 	stats.Add(numSnaphots, 1)
 
 	return fsm, nil

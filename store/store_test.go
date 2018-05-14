@@ -97,7 +97,9 @@ func Test_StoreConnectFollowerError(t *testing.T) {
 	if err := s0.Open(true); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
+	t.Log("waiting for leader for s0")
 	s0.WaitForLeader(10 * time.Second)
+	t.Log("got leader for s0")
 
 	s1 := mustNewStore(true)
 	defer os.RemoveAll(s1.Path())
@@ -110,7 +112,9 @@ func Test_StoreConnectFollowerError(t *testing.T) {
 	if err := s0.Join(s1.ID(), s1.Addr(), nil); err != nil {
 		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
 	}
+	t.Log("waiting for leader for s1")
 	s1.WaitForLeader(10 * time.Second)
+	t.Log("got leader for s1")
 
 	_, err := s1.Connect()
 	if err != ErrNotLeader {
