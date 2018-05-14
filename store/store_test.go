@@ -429,7 +429,8 @@ func Test_StoreLogTruncationMultinode(t *testing.T) {
 	// Wait until the log entries have been applied to the follower,
 	// and then query.
 	if err := s1.WaitForAppliedIndex(10, 5*time.Second); err != nil {
-		t.Fatalf("error waiting for follower to apply index: %s:", err.Error())
+		t.Fatalf("error waiting for follower to apply index: %s (%d, %d)",
+			err.Error(), s1.raft.AppliedIndex(), s1.raft.LastIndex())
 	}
 
 	r, err := s1.query(nil, &QueryRequest{[]string{`SELECT count(*) FROM foo`}, false, true, None})
@@ -486,7 +487,8 @@ func Test_MetadataMultinode(t *testing.T) {
 	// Wait until the log entries have been applied to the follower,
 	// and then query.
 	if err := s1.WaitForAppliedIndex(5, 5*time.Second); err != nil {
-		t.Fatalf("error waiting for follower to apply index: %s:", err.Error())
+		t.Fatalf("error waiting for follower to apply index: %s (%d, %d)",
+			err.Error(), s1.raft.AppliedIndex(), s1.raft.LastIndex())
 	}
 
 	if s1.Metadata(s0.raftID, "foo") != "bar" {
