@@ -1,13 +1,13 @@
 package store
 
 import (
-	"bytes"
+	_ "bytes"
 	"encoding/json"
 	"io/ioutil"
 	"net"
 	"os"
-	"path/filepath"
-	"sort"
+	_ "path/filepath"
+	_ "sort"
 	"testing"
 	"time"
 )
