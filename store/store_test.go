@@ -88,35 +88,35 @@ func Test_StoreConnect(t *testing.T) {
 	}
 }
 
-// func Test_StoreConnectFollowerError(t *testing.T) {
-// 	t.Parallel()
+func Test_StoreConnectFollowerError(t *testing.T) {
+	t.Parallel()
 
-// 	s0 := mustNewStore(true)
-// 	defer s0.Close(true)
-// 	defer os.RemoveAll(s0.Path())
-// 	if err := s0.Open(true); err != nil {
-// 		t.Fatalf("failed to open single-node store: %s", err.Error())
-// 	}
-// 	s0.WaitForLeader(10 * time.Second)
+	s0 := mustNewStore(true)
+	defer s0.Close(true)
+	defer os.RemoveAll(s0.Path())
+	if err := s0.Open(true); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	s0.WaitForLeader(10 * time.Second)
 
-// 	s1 := mustNewStore(true)
-// 	defer os.RemoveAll(s1.Path())
-// 	if err := s1.Open(false); err != nil {
-// 		t.Fatalf("failed to open single-node store: %s", err.Error())
-// 	}
-// 	defer s1.Close(true)
+	s1 := mustNewStore(true)
+	defer os.RemoveAll(s1.Path())
+	if err := s1.Open(false); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s1.Close(true)
 
-// 	// Join the second node to the first.
-// 	if err := s0.Join(s1.ID(), s1.Addr(), nil); err != nil {
-// 		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
-// 	}
-// 	s1.WaitForLeader(10 * time.Second)
+	// Join the second node to the first.
+	if err := s0.Join(s1.ID(), s1.Addr(), nil); err != nil {
+		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
+	}
+	s1.WaitForLeader(10 * time.Second)
 
-// 	_, err := s1.Connect()
-// 	if err != ErrNotLeader {
-// 		t.Fatal("Connect did not return error on follower")
-// 	}
-// }
+	_, err := s1.Connect()
+	if err != ErrNotLeader {
+		t.Fatal("Connect did not return error on follower")
+	}
+}
 
 // func Test_SingleNodeBackup(t *testing.T) {
 // 	t.Parallel()
