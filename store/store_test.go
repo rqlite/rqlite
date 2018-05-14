@@ -65,28 +65,28 @@ func Test_OpenStoreCloseSingleNode(t *testing.T) {
 	}
 }
 
-// func Test_StoreConnect(t *testing.T) {
-// 	t.Parallel()
+func Test_StoreConnect(t *testing.T) {
+	t.Parallel()
 
-// 	s := mustNewStore(true)
-// 	defer os.RemoveAll(s.Path())
+	s := mustNewStore(true)
+	defer os.RemoveAll(s.Path())
 
-// 	if err := s.Open(true); err != nil {
-// 		t.Fatalf("failed to open single-node store: %s", err.Error())
-// 	}
-// 	s.WaitForLeader(10 * time.Second)
+	if err := s.Open(true); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	s.WaitForLeader(10 * time.Second)
 
-// 	c, err := s.Connect()
-// 	if err != nil {
-// 		t.Fatalf("failed to connect to open store: %s", err.Error())
-// 	}
-// 	if c == nil {
-// 		t.Fatal("new connection is nil")
-// 	}
-// 	if err := c.Close(); err != nil {
-// 		t.Fatalf("failed to close connection: %s", err.Error())
-// 	}
-// }
+	c, err := s.Connect()
+	if err != nil {
+		t.Fatalf("failed to connect to open store: %s", err.Error())
+	}
+	if c == nil {
+		t.Fatal("new connection is nil")
+	}
+	if err := c.Close(); err != nil {
+		t.Fatalf("failed to close connection: %s", err.Error())
+	}
+}
 
 // func Test_StoreConnectFollowerError(t *testing.T) {
 // 	t.Parallel()
