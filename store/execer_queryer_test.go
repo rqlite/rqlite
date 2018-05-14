@@ -85,7 +85,6 @@ var testfunctions []testF = []testF{
 	testSimpleLoadNoStatements,
 	testSimpleLoadEmpty,
 	testLoadAbortOnError,
-	testLoadChinook,
 }
 
 func testSimpleExecuteQuery(t *testing.T, eq ExecerQueryer) {
