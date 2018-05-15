@@ -7,7 +7,7 @@ import (
 
 // Test_JoinLeaderNode tests a join operation between a leader and a new node.
 func Test_JoinLeaderNode(t *testing.T) {
-	t.Parallel()
+	
 
 	leader := mustNewLeaderNode()
 	defer leader.Deprovision()
@@ -25,7 +25,7 @@ func Test_JoinLeaderNode(t *testing.T) {
 
 // Test_MultiNodeCluster tests formation of a 3-node cluster, and its operation.
 func Test_MultiNodeCluster(t *testing.T) {
-	t.Parallel()
+	
 
 	node1 := mustNewLeaderNode()
 	defer node1.Deprovision()
