@@ -16,7 +16,7 @@ func (t *testBasicAuther) BasicAuth() (string, string, bool) {
 }
 
 func Test_AuthLoadSingle(t *testing.T) {
-	t.Parallel()
+	
 
 	const jsonStream = `
 		[
@@ -45,7 +45,7 @@ func Test_AuthLoadSingle(t *testing.T) {
 }
 
 func Test_AuthLoadMultiple(t *testing.T) {
-	t.Parallel()
+	
 
 	const jsonStream = `
 		[
@@ -85,7 +85,7 @@ func Test_AuthLoadMultiple(t *testing.T) {
 }
 
 func Test_AuthLoadSingleRequest(t *testing.T) {
-	t.Parallel()
+	
 
 	const jsonStream = `
 		[
@@ -122,7 +122,7 @@ func Test_AuthLoadSingleRequest(t *testing.T) {
 }
 
 func Test_AuthPermsLoadSingle(t *testing.T) {
-	t.Parallel()
+	
 
 	const jsonStream = `
 		[
@@ -171,7 +171,7 @@ func Test_AuthPermsLoadSingle(t *testing.T) {
 }
 
 func Test_AuthLoadHashedSingleRequest(t *testing.T) {
-	t.Parallel()
+	
 
 	const jsonStream = `
 		[
@@ -227,7 +227,7 @@ func Test_AuthLoadHashedSingleRequest(t *testing.T) {
 }
 
 func Test_AuthPermsRequestLoadSingle(t *testing.T) {
-	t.Parallel()
+	
 
 	const jsonStream = `
 		[
@@ -268,7 +268,7 @@ func Test_AuthPermsRequestLoadSingle(t *testing.T) {
 }
 
 func Test_AuthPermsEmptyLoadSingle(t *testing.T) {
-	t.Parallel()
+	
 
 	const jsonStream = `
 		[
@@ -298,7 +298,7 @@ func Test_AuthPermsEmptyLoadSingle(t *testing.T) {
 }
 
 func Test_AuthPermsNilLoadSingle(t *testing.T) {
-	t.Parallel()
+	
 
 	const jsonStream = `
 		[

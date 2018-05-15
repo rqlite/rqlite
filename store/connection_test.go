@@ -15,7 +15,7 @@ func Test_NewConnection(t *testing.T) {
 }
 
 func Test_MultiNodeExecuteQuery(t *testing.T) {
-	t.Parallel()
+	
 
 	s0 := mustNewStore(true)
 	defer os.RemoveAll(s0.Path())

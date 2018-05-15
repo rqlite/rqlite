@@ -13,7 +13,7 @@ import (
 )
 
 func Test_OpenStoreSingleNode(t *testing.T) {
-	t.Parallel()
+	
 
 	s := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
@@ -36,7 +36,7 @@ func Test_OpenStoreSingleNode(t *testing.T) {
 }
 
 func Test_OpenStoreCloseSingleNode(t *testing.T) {
-	t.Parallel()
+	
 
 	s := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
@@ -60,7 +60,7 @@ func Test_OpenStoreCloseSingleNode(t *testing.T) {
 }
 
 func Test_StoreConnect(t *testing.T) {
-	t.Parallel()
+	
 
 	s := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
@@ -83,7 +83,7 @@ func Test_StoreConnect(t *testing.T) {
 }
 
 func Test_StoreConnectFollowerError(t *testing.T) {
-	t.Parallel()
+	
 
 	s0 := mustNewStore(true)
 	defer s0.Close(true)
@@ -113,7 +113,7 @@ func Test_StoreConnectFollowerError(t *testing.T) {
 }
 
 func Test_SingleNodeBackup(t *testing.T) {
-	t.Parallel()
+	
 
 	s := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
@@ -154,7 +154,7 @@ COMMIT;
 }
 
 func Test_MultiNodeJoinRemove(t *testing.T) {
-	t.Parallel()
+	
 
 	s0 := mustNewStore(true)
 	defer os.RemoveAll(s0.Path())
@@ -223,7 +223,7 @@ func Test_MultiNodeJoinRemove(t *testing.T) {
 }
 
 func Test_SingleNodeSnapshotOnDisk(t *testing.T) {
-	t.Parallel()
+	
 
 	s := mustNewStore(false)
 	defer os.RemoveAll(s.Path())
@@ -308,7 +308,7 @@ func Test_SingleNodeSnapshotOnDisk(t *testing.T) {
 }
 
 func Test_SingleNodeSnapshotInMem(t *testing.T) {
-	t.Parallel()
+	
 
 	s := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
@@ -447,7 +447,7 @@ func Test_StoreLogTruncationMultinode(t *testing.T) {
 }
 
 func Test_MetadataMultinode(t *testing.T) {
-	t.Parallel()
+	
 
 	s0 := mustNewStore(true)
 	if err := s0.Open(true); err != nil {
@@ -514,7 +514,7 @@ func Test_MetadataMultinode(t *testing.T) {
 }
 
 func Test_IsLeader(t *testing.T) {
-	t.Parallel()
+	
 
 	s := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
@@ -531,7 +531,7 @@ func Test_IsLeader(t *testing.T) {
 }
 
 func Test_State(t *testing.T) {
-	t.Parallel()
+	
 
 	s := mustNewStore(true)
 	defer os.RemoveAll(s.Path())

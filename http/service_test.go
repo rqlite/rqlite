@@ -10,7 +10,7 @@ import (
 )
 
 func Test_NormalizeAddr(t *testing.T) {
-	t.Parallel()
+	
 
 	tests := []struct {
 		orig string
@@ -50,7 +50,7 @@ func Test_NormalizeAddr(t *testing.T) {
 }
 
 func Test_NewService(t *testing.T) {
-	t.Parallel()
+	
 
 	m := &MockStore{}
 	s := New("127.0.0.1:0", m, nil)
@@ -60,7 +60,7 @@ func Test_NewService(t *testing.T) {
 }
 
 func Test_HasVersionHeader(t *testing.T) {
-	t.Parallel()
+	
 
 	m := &MockStore{}
 	s := New("127.0.0.1:0", m, nil)
@@ -85,7 +85,7 @@ func Test_HasVersionHeader(t *testing.T) {
 }
 
 func Test_HasContentTypeJSON(t *testing.T) {
-	t.Parallel()
+	
 
 	m := &MockStore{}
 	s := New("127.0.0.1:0", m, nil)
@@ -107,7 +107,7 @@ func Test_HasContentTypeJSON(t *testing.T) {
 }
 
 func Test_HasContentTypeOctetStream(t *testing.T) {
-	t.Parallel()
+	
 
 	m := &MockStore{}
 	s := New("127.0.0.1:0", m, nil)
@@ -129,7 +129,7 @@ func Test_HasContentTypeOctetStream(t *testing.T) {
 }
 
 func Test_HasVersionHeaderUnknown(t *testing.T) {
-	t.Parallel()
+	
 
 	m := &MockStore{}
 	s := New("127.0.0.1:0", m, nil)
@@ -151,7 +151,7 @@ func Test_HasVersionHeaderUnknown(t *testing.T) {
 }
 
 func Test_404Routes(t *testing.T) {
-	t.Parallel()
+	
 
 	m := &MockStore{}
 	s := New("127.0.0.1:0", m, nil)
@@ -181,7 +181,7 @@ func Test_404Routes(t *testing.T) {
 }
 
 func Test_404Routes_ExpvarPprofDisabled(t *testing.T) {
-	t.Parallel()
+	
 
 	m := &MockStore{}
 	s := New("127.0.0.1:0", m, nil)
@@ -211,7 +211,7 @@ func Test_404Routes_ExpvarPprofDisabled(t *testing.T) {
 }
 
 func Test_405Routes(t *testing.T) {
-	t.Parallel()
+	
 
 	m := &MockStore{}
 	s := New("127.0.0.1:0", m, nil)
@@ -273,7 +273,7 @@ func Test_405Routes(t *testing.T) {
 }
 
 func Test_400Routes(t *testing.T) {
-	t.Parallel()
+	
 
 	m := &MockStore{}
 	s := New("127.0.0.1:0", m, nil)
@@ -295,7 +295,7 @@ func Test_400Routes(t *testing.T) {
 }
 
 func Test_401Routes_NoBasicAuth(t *testing.T) {
-	t.Parallel()
+	
 
 	c := &mockCredentialStore{CheckOK: false, HasPermOK: false}
 
@@ -335,7 +335,7 @@ func Test_401Routes_NoBasicAuth(t *testing.T) {
 }
 
 func Test_401Routes_BasicAuthBadPassword(t *testing.T) {
-	t.Parallel()
+	
 
 	c := &mockCredentialStore{CheckOK: false, HasPermOK: false}
 
@@ -380,7 +380,7 @@ func Test_401Routes_BasicAuthBadPassword(t *testing.T) {
 }
 
 func Test_401Routes_BasicAuthBadPerm(t *testing.T) {
-	t.Parallel()
+	
 
 	c := &mockCredentialStore{CheckOK: true, HasPermOK: false}
 
@@ -425,7 +425,7 @@ func Test_401Routes_BasicAuthBadPerm(t *testing.T) {
 }
 
 func Test_RegisterStatus(t *testing.T) {
-	t.Parallel()
+	
 
 	var stats *mockStatuser
 	m := &MockStore{}
@@ -441,7 +441,7 @@ func Test_RegisterStatus(t *testing.T) {
 }
 
 func Test_FormRedirect(t *testing.T) {
-	t.Parallel()
+	
 
 	m := &MockStore{}
 	s := New("127.0.0.1:0", m, nil)
@@ -456,7 +456,7 @@ func Test_FormRedirect(t *testing.T) {
 }
 
 func Test_FormRedirectParam(t *testing.T) {
-	t.Parallel()
+	
 
 	m := &MockStore{}
 	s := New("127.0.0.1:0", m, nil)

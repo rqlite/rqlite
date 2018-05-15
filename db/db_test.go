@@ -16,7 +16,7 @@ import (
  */
 
 func TestNewDBOnDisk(t *testing.T) {
-	t.Parallel()
+	
 
 	db, err := New(mustTempFilename(), "", false)
 	if err != nil {
@@ -28,7 +28,7 @@ func TestNewDBOnDisk(t *testing.T) {
 }
 
 func TestNewDBInMemory(t *testing.T) {
-	t.Parallel()
+	
 
 	db, err := New(mustTempFilename(), "", true)
 	if err != nil {
@@ -40,7 +40,7 @@ func TestNewDBInMemory(t *testing.T) {
 }
 
 func TestDBCreateOnDiskConnection(t *testing.T) {
-	t.Parallel()
+	
 
 	db, path := mustCreateDatabase()
 	defer os.Remove(path)
@@ -58,7 +58,7 @@ func TestDBCreateOnDiskConnection(t *testing.T) {
 }
 
 func TestDBCreateInMemoryConnection(t *testing.T) {
-	t.Parallel()
+	
 
 	db := mustCreateInMemoryDatabase()
 
@@ -75,7 +75,7 @@ func TestDBCreateInMemoryConnection(t *testing.T) {
 }
 
 func TestDumpOnDisk(t *testing.T) {
-	t.Parallel()
+	
 
 	db, path := mustCreateDatabase()
 	defer os.Remove(path)
@@ -100,7 +100,7 @@ func TestDumpOnDisk(t *testing.T) {
 }
 
 func TestDumpInMemory(t *testing.T) {
-	t.Parallel()
+	
 
 	db := mustCreateInMemoryDatabase()
 	c, err := db.Connect()
@@ -150,7 +150,7 @@ var dbTestfunctions []testF = []testF{
 }
 
 func TestDatabaseInMemory(t *testing.T) {
-	t.Parallel()
+	
 
 	for _, f := range dbTestfunctions {
 		dbInMem := mustCreateInMemoryDatabase()
@@ -165,7 +165,7 @@ func TestDatabaseInMemory(t *testing.T) {
 }
 
 func TestDatabaseOnDisk(t *testing.T) {
-	t.Parallel()
+	
 
 	for _, f := range dbTestfunctions {
 		dbDisk, path := mustCreateDatabase()
