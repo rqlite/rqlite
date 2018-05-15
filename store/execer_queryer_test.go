@@ -13,66 +13,68 @@ type testF func(t *testing.T, eq ExecerQueryer)
 func TestStoreOnDisk(t *testing.T) {
 	t.Parallel()
 	for _, f := range testfunctions {
-		s := mustNewStore(false)
-		if err := s.Open(true); err != nil {
-			t.Fatalf("failed to open single-node store: %s", err.Error())
-		}
-		defer s.Close(false)
-		defer os.RemoveAll(s.Path())
-		s.WaitForLeader(10 * time.Second)
-
-		f(t, s)
+		func() {
+			s := mustNewStore(false)
+			if err := s.Open(true); err != nil {
+				t.Fatalf("failed to open single-node store: %s", err.Error())
+			}
+			defer s.Close(true)
+			defer os.RemoveAll(s.Path())
+			s.WaitForLeader(10 * time.Second)
+			f(t, s)
+		}()
 	}
 }
 
 func TestStoreInMem(t *testing.T) {
 	t.Parallel()
 	for _, f := range testfunctions {
-		s := mustNewStore(true)
-		if err := s.Open(true); err != nil {
-			t.Fatalf("failed to open single-node store: %s", err.Error())
-		}
-		defer s.Close(false)
-		defer os.RemoveAll(s.Path())
-		s.WaitForLeader(10 * time.Second)
-
-		f(t, s)
+		func() {
+			s := mustNewStore(true)
+			if err := s.Open(true); err != nil {
+				t.Fatalf("failed to open single-node store: %s", err.Error())
+			}
+			defer s.Close(true)
+			defer os.RemoveAll(s.Path())
+			s.WaitForLeader(10 * time.Second)
+			f(t, s)
+		}()
 	}
 }
 
 func TestStoreConnectionOnDisk(t *testing.T) {
 	t.Parallel()
 	for _, f := range testfunctions {
-		s := mustNewStore(false)
-		if err := s.Open(true); err != nil {
-			t.Fatalf("failed to open single-node store: %s", err.Error())
-		}
-		defer s.Close(false)
-		defer os.RemoveAll(s.Path())
-		s.WaitForLeader(10 * time.Second)
-
-		c := mustNewConnection(s)
-		defer c.Close()
-
-		f(t, c)
+		func() {
+			s := mustNewStore(false)
+			if err := s.Open(true); err != nil {
+				t.Fatalf("failed to open single-node store: %s", err.Error())
+			}
+			defer s.Close(true)
+			defer os.RemoveAll(s.Path())
+			s.WaitForLeader(10 * time.Second)
+			c := mustNewConnection(s)
+			defer c.Close()
+			f(t, c)
+		}()
 	}
 }
 
 func TestStoreConnectionInMem(t *testing.T) {
 	t.Parallel()
 	for _, f := range testfunctions {
-		s := mustNewStore(true)
-		if err := s.Open(true); err != nil {
-			t.Fatalf("failed to open single-node store: %s", err.Error())
-		}
-		defer s.Close(false)
-		defer os.RemoveAll(s.Path())
-		s.WaitForLeader(10 * time.Second)
-
-		c := mustNewConnection(s)
-		defer c.Close()
-
-		f(t, c)
+		func() {
+			s := mustNewStore(true)
+			if err := s.Open(true); err != nil {
+				t.Fatalf("failed to open single-node store: %s", err.Error())
+			}
+			defer s.Close(true)
+			defer os.RemoveAll(s.Path())
+			s.WaitForLeader(10 * time.Second)
+			c := mustNewConnection(s)
+			defer c.Close()
+			f(t, c)
+		}()
 	}
 }
 
