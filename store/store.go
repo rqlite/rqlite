@@ -509,6 +509,7 @@ func (s *Store) WaitForLeader(timeout time.Duration) (string, error) {
 		select {
 		case <-tck.C:
 			l := s.LeaderAddr()
+			fmt.Println("leader is", l)
 			if l != "" {
 				return l, nil
 			}
