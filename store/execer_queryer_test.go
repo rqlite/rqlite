@@ -4,8 +4,6 @@ import (
 	"os"
 	"testing"
 	"time"
-
-	"github.com/rqlite/rqlite/testdata/chinook"
 )
 
 type testF func(t *testing.T, eq ExecerQueryer)
@@ -264,47 +262,5 @@ COMMIT;
 	}
 	if r.Results[0].Error != "table foo already exists" {
 		t.Fatalf("received wrong error message: %s", r.Results[0].Error)
-	}
-}
-
-func testLoadChinook(t *testing.T, eq ExecerQueryer) {
-	_, err := eq.Execute(&ExecuteRequest{[]string{chinook.DB}, false, false})
-	if err != nil {
-		t.Fatalf("failed to load chinook dump: %s", err.Error())
-	}
-
-	// Check that data were loaded correctly.
-
-	r, err := eq.Query(&QueryRequest{[]string{`SELECT count(*) FROM track`}, false, true, Strong})
-	if err != nil {
-		t.Fatalf("failed to query single node: %s", err.Error())
-	}
-	if exp, got := `["count(*)"]`, asJSON(r.Rows[0].Columns); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-	}
-	if exp, got := `[[3503]]`, asJSON(r.Rows[0].Values); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-	}
-
-	r, err = eq.Query(&QueryRequest{[]string{`SELECT count(*) FROM album`}, false, true, Strong})
-	if err != nil {
-		t.Fatalf("failed to query single node: %s", err.Error())
-	}
-	if exp, got := `["count(*)"]`, asJSON(r.Rows[0].Columns); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-	}
-	if exp, got := `[[347]]`, asJSON(r.Rows[0].Values); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-	}
-
-	r, err = eq.Query(&QueryRequest{[]string{`SELECT count(*) FROM artist`}, false, true, Strong})
-	if err != nil {
-		t.Fatalf("failed to query single node: %s", err.Error())
-	}
-	if exp, got := `["count(*)"]`, asJSON(r.Rows[0].Columns); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-	}
-	if exp, got := `[[275]]`, asJSON(r.Rows[0].Values); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 }
