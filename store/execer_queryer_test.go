@@ -9,7 +9,6 @@ import (
 type testF func(t *testing.T, eq ExecerQueryer)
 
 func TestStoreOnDisk(t *testing.T) {
-	t.Parallel()
 	for _, f := range testfunctions {
 		func() {
 			s := mustNewStore(false)
@@ -41,7 +40,6 @@ func TestStoreInMem(t *testing.T) {
 }
 
 func TestStoreConnectionOnDisk(t *testing.T) {
-	t.Parallel()
 	for _, f := range testfunctions {
 		func() {
 			s := mustNewStore(false)
@@ -59,7 +57,6 @@ func TestStoreConnectionOnDisk(t *testing.T) {
 }
 
 func TestStoreConnectionInMem(t *testing.T) {
-	t.Parallel()
 	for _, f := range testfunctions {
 		func() {
 			s := mustNewStore(true)
