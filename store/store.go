@@ -311,22 +311,7 @@ func (s *Store) Open(enableSingle bool) error {
 // Any connection returned by this call are READ_COMMITTED isolated from all
 // other connections, including the connection built-in to the Store itself.
 func (s *Store) Connect() (ExecerQueryerCloser, error) {
-	connID := func() uint64 {
-		s.connsMu.Lock()
-		defer s.connsMu.Unlock()
-		for {
-			// Make sure we get a new connection ID.
-			id := s.randSrc.Uint64()
-			if _, ok := s.conns[id]; !ok {
-				s.conns[id] = nil
-				return id
-			}
-
-		}
-	}()
-	c := &connectSub{connID}
-
-	cmd, err := newCommand(connect, c)
+	cmd, err := newCommand(connect, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -345,7 +330,7 @@ func (s *Store) Connect() (ExecerQueryerCloser, error) {
 
 	s.connsMu.RLock()
 	defer s.connsMu.RUnlock()
-	return s.conns[connID], nil
+	return s.conns[f.Response().(uint64)], nil
 }
 
 // Execute executes queries that return no rows, but do modify the database.
@@ -741,6 +726,27 @@ func (s *Store) setMetadata(id string, md map[string]string) error {
 	return nil
 }
 
+func (s *Store) disconnect(c *Connection) error {
+	d := &connectionSub{c.id}
+	cmd, err := newCommand(disconnect, d)
+	if err != nil {
+		return err
+	}
+	b, err := json.Marshal(cmd)
+	if err != nil {
+		return err
+	}
+
+	f := s.raft.Apply(b, s.ApplyTimeout)
+	if e := f.(raft.Future); e.Error() != nil {
+		if e.Error() == raft.ErrNotLeader {
+			return ErrNotLeader
+		}
+		return e.Error()
+	}
+	return nil
+}
+
 // Execute executes queries that return no rows, but do modify the database. If connection
 // is nil then the utility connection is used.
 func (s *Store) execute(c *Connection, ex *ExecuteRequest) (*ExecuteResponse, error) {
@@ -919,12 +925,6 @@ func (s *Store) remove(id string) error {
 	return nil
 }
 
-func (s *Store) removeConn(id uint64) {
-	s.connsMu.Lock()
-	defer s.connsMu.Unlock()
-	delete(s.conns, id)
-}
-
 // raftConfig returns a new Raft config for the store.
 func (s *Store) raftConfig() *raft.Config {
 	config := raft.DefaultConfig()
@@ -972,8 +972,8 @@ func (s *Store) Apply(l *raft.Log) interface{} {
 		}
 
 		s.connsMu.RLock()
-		defer s.connsMu.RUnlock()
 		conn, ok := s.conns[d.ConnID]
+		s.connsMu.RUnlock()
 		if !ok {
 			return &fsmGenericResponse{error: fmt.Errorf("connection %d does not exist", d.ConnID)}
 		}
@@ -1012,17 +1012,42 @@ func (s *Store) Apply(l *raft.Log) interface{} {
 		}()
 		return &fsmGenericResponse{}
 	case connect:
-		var d connectSub
-		if err := json.Unmarshal(c.Sub, &d); err != nil {
-			return &fsmGenericResponse{error: err}
-		}
+		connID := func() uint64 {
+			s.connsMu.Lock()
+			defer s.connsMu.Unlock()
+			for {
+				// Make sure we get a new connection ID.
+				id := s.randSrc.Uint64()
+				if _, ok := s.conns[id]; !ok {
+					s.conns[id] = nil
+					return id
+				}
+
+			}
+		}()
+
 		conn, err := s.db.Connect()
 		if err != nil {
 			return &fsmGenericResponse{error: err}
 		}
 		s.connsMu.Lock()
-		defer s.connsMu.Unlock()
-		s.conns[d.ConnID] = NewConnection(conn, s, d.ConnID)
+		s.conns[connID] = NewConnection(conn, s, connID)
+		s.connsMu.Unlock()
+		return connID
+	case disconnect:
+		var d connectionSub
+		if err := json.Unmarshal(c.Sub, &d); err != nil {
+			return &fsmGenericResponse{error: err}
+		}
+
+		s.connsMu.Lock()
+		conn := s.conns[d.ConnID]
+		if err := conn.db.Close(); err != nil {
+			return &fsmGenericResponse{error: err}
+		}
+		delete(s.conns, d.ConnID)
+		s.connsMu.Unlock()
+
 		return &fsmGenericResponse{}
 	default:
 		return &fsmGenericResponse{error: fmt.Errorf("unknown command: %v", c.Typ)}

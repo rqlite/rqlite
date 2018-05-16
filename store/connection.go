@@ -64,6 +64,5 @@ func (c *Connection) AbortTransaction() error {
 
 // Close closes the connection.
 func (c *Connection) Close() error {
-	// XXX Tell store conn is dead.
-	return nil
+	return c.store.disconnect(c)
 }

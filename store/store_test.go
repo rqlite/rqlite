@@ -77,8 +77,44 @@ func Test_StoreConnect(t *testing.T) {
 	if c == nil {
 		t.Fatal("new connection is nil")
 	}
+
+	// Store comes with a built-in connection.
+	if exp, got := 2, len(s.conns); exp != got {
+		t.Fatalf("connection map is wrong size, exp %d, got %d", exp, got)
+	}
+	if c != s.conns[c.(*Connection).id] {
+		t.Fatal("new connection not in map")
+	}
+
 	if err := c.Close(); err != nil {
 		t.Fatalf("failed to close connection: %s", err.Error())
+	}
+	if exp, got := 1, len(s.conns); exp != got {
+		t.Fatalf("connection map is wrong size, exp %d, got %d", exp, got)
+	}
+}
+
+func Test_StoreDisconnectDefault(t *testing.T) {
+	t.Parallel()
+
+	s := mustNewStore(true)
+	defer os.RemoveAll(s.Path())
+
+	if err := s.Open(true); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	s.WaitForLeader(10 * time.Second)
+
+	// Store comes with a built-in connection.
+	if exp, got := 1, len(s.conns); exp != got {
+		t.Fatalf("connection map is wrong size, exp %d, got %d", exp, got)
+	}
+
+	if err := s.disconnect(NewConnection(nil, nil, defaultConnID)); err == nil {
+		t.Fatal("closed default connection")
+	}
+	if exp, got := 1, len(s.conns); exp != got {
+		t.Fatalf("connection map is wrong size, exp %d, got %d", exp, got)
 	}
 }
 

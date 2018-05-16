@@ -13,6 +13,7 @@ const (
 	metadataSet                       // Commands which sets Store metadata
 	metadataDelete                    // Commands which deletes Store metadata
 	connect                           // Commands which create a database connection
+	disconnect                        // Commands which disconnect to the database.
 )
 
 type command struct {
@@ -52,6 +53,6 @@ type metadataSetSub struct {
 	Data   map[string]string `json:"data,omitempty"`
 }
 
-type connectSub struct {
+type connectionSub struct {
 	ConnID uint64 `json:"conn_id,omitempty"`
 }
