@@ -78,19 +78,13 @@ func Test_StoreConnect(t *testing.T) {
 		t.Fatal("new connection is nil")
 	}
 
-	// Store comes with a built-in connection.
-	if exp, got := 2, len(s.conns); exp != got {
-		t.Fatalf("connection map is wrong size, exp %d, got %d", exp, got)
-	}
-	if c != s.conns[c.(*Connection).id] {
+	cc, ok := s.Connection(c.(*Connection).id)
+	if c != cc && ok {
 		t.Fatal("new connection not in map")
 	}
 
 	if err := c.Close(); err != nil {
 		t.Fatalf("failed to close connection: %s", err.Error())
-	}
-	if exp, got := 1, len(s.conns); exp != got {
-		t.Fatalf("connection map is wrong size, exp %d, got %d", exp, got)
 	}
 }
 
