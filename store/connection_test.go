@@ -37,14 +37,13 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
 	}
 
+	// Write data using explicit connection on store0
 	queries := []string{
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 	}
 	c0 := mustNewConnection(s0)
-	defer c0.Close()
-
-	_, err := c0.Execute(&ExecuteRequest{queries, false, false})
+	re, err := c0.Execute(&ExecuteRequest{queries, false, false})
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
@@ -59,18 +58,34 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
-	if err := s1.WaitForAppliedIndex(3, 5*time.Second); err != nil {
+	// Query using default connection on store0
+	if err := s0.WaitForAppliedIndex(re.Raft.Index, 5*time.Second); err != nil {
+		t.Fatalf("error waiting for leader to apply index: %s:", err.Error())
+	}
+	r, err = s0.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, Weak})
+	if err != nil {
+		t.Fatalf("failed to query leader node: %s", err.Error())
+	}
+	if exp, got := `["id","name"]`, asJSON(r.Rows[0].Columns); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[1,"fiona"]]`, asJSON(r.Rows[0].Values); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	// Query using default connection on store1
+	if err := s1.WaitForAppliedIndex(re.Raft.Index, 5*time.Second); err != nil {
 		t.Fatalf("error waiting for follower to apply index: %s:", err.Error())
 	}
-	r, err = s1.query(nil, &QueryRequest{[]string{`SELECT * FROM foo`}, false, false, Weak})
+	r, err = s1.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, Weak})
 	if err == nil {
 		t.Fatalf("successfully queried non-leader node")
 	}
-	r, err = s1.query(nil, &QueryRequest{[]string{`SELECT * FROM foo`}, false, false, Strong})
+	r, err = s1.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, Strong})
 	if err == nil {
 		t.Fatalf("successfully queried non-leader node")
 	}
-	r, err = s1.query(nil, &QueryRequest{[]string{`SELECT * FROM foo`}, false, false, None})
+	r, err = s1.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, None})
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -82,12 +97,13 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 	}
 
 	// Kill the leader and check that query can still be satisfied via None consistency.
+	c0.Close()
 	s0.Close(true)
-	r, err = s1.query(nil, &QueryRequest{[]string{`SELECT * FROM foo`}, false, false, Strong})
+	r, err = s1.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, Strong})
 	if err == nil {
 		t.Fatalf("successfully queried non-leader node: %s", err.Error())
 	}
-	r, err = s1.query(nil, &QueryRequest{[]string{`SELECT * FROM foo`}, false, false, None})
+	r, err = s1.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, None})
 	if err != nil {
 		t.Fatalf("failed to query node with None consistency: %s", err.Error())
 	}

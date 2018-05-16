@@ -313,7 +313,23 @@ func (s *Store) Open(enableSingle bool) error {
 // Any connection returned by this call are READ_COMMITTED isolated from all
 // other connections, including the connection built-in to the Store itself.
 func (s *Store) Connect() (ExecerQueryerCloser, error) {
-	cmd, err := newCommand(connect, nil)
+	// Randomly-selected connection ID must be part of command so
+	// that all nodes use the same value as connection ID.
+	connID := func() uint64 {
+		s.connsMu.Lock()
+		defer s.connsMu.Unlock()
+		for {
+			// Make sure we get an unused ID.
+			id := s.randSrc.Uint64()
+			if _, ok := s.conns[id]; !ok {
+				s.conns[id] = nil
+				return id
+			}
+		}
+	}()
+
+	d := &connectionSub{connID}
+	cmd, err := newCommand(connect, d)
 	if err != nil {
 		return nil, err
 	}
@@ -332,7 +348,7 @@ func (s *Store) Connect() (ExecerQueryerCloser, error) {
 
 	s.connsMu.RLock()
 	defer s.connsMu.RUnlock()
-	return s.conns[f.Response().(uint64)], nil
+	return s.conns[connID], nil
 }
 
 // Execute executes queries that return no rows, but do modify the database.
@@ -1014,28 +1030,19 @@ func (s *Store) Apply(l *raft.Log) interface{} {
 		}()
 		return &fsmGenericResponse{}
 	case connect:
-		connID := func() uint64 {
-			s.connsMu.Lock()
-			defer s.connsMu.Unlock()
-			for {
-				// Make sure we get a new connection ID.
-				id := s.randSrc.Uint64()
-				if _, ok := s.conns[id]; !ok {
-					s.conns[id] = nil
-					return id
-				}
-
-			}
-		}()
+		var d connectionSub
+		if err := json.Unmarshal(c.Sub, &d); err != nil {
+			return &fsmGenericResponse{error: err}
+		}
 
 		conn, err := s.db.Connect()
 		if err != nil {
 			return &fsmGenericResponse{error: err}
 		}
 		s.connsMu.Lock()
-		s.conns[connID] = NewConnection(conn, s, connID)
+		s.conns[d.ConnID] = NewConnection(conn, s, d.ConnID)
 		s.connsMu.Unlock()
-		return connID
+		return d.ConnID
 	case disconnect:
 		var d connectionSub
 		if err := json.Unmarshal(c.Sub, &d); err != nil {

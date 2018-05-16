@@ -118,6 +118,54 @@ func Test_StoreDisconnectDefault(t *testing.T) {
 	}
 }
 
+func Test_ConnectionSameIDs(t *testing.T) {
+	t.Parallel()
+
+	s0 := mustNewStore(true)
+	defer os.RemoveAll(s0.Path())
+	if err := s0.Open(true); err != nil {
+		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
+	}
+	defer s0.Close(true)
+	s0.WaitForLeader(10 * time.Second)
+
+	s1 := mustNewStore(true)
+	defer os.RemoveAll(s1.Path())
+	if err := s1.Open(false); err != nil {
+		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
+	}
+	defer s1.Close(true)
+
+	// Join the second node to the first.
+	if err := s0.Join(s1.ID(), s1.Addr(), nil); err != nil {
+		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
+	}
+
+	// Create explicit connection on store0.
+	c0, err := s0.Connect()
+	if err != nil {
+		t.Fatalf("failed to create new connection: %s", err.Error())
+	}
+
+	if err := s1.WaitForAppliedIndex(2, 5*time.Second); err != nil {
+		t.Fatalf("error waiting for leader to apply index: %s:", err.Error())
+	}
+
+	// Stores come with a built-in connection.
+	if exp, got := 2, len(s0.conns); exp != got {
+		t.Fatalf("s0 connection map is wrong size, exp %d, got %d", exp, got)
+	}
+	if exp, got := 2, len(s1.conns); exp != got {
+		t.Fatalf("s1 connection map is wrong size, exp %d, got %d", exp, got)
+	}
+
+	// Check connection has same ID on each store.
+	connID := c0.(*Connection).id
+	if s0.conns[connID].id != s1.conns[connID].id {
+		t.Fatal("connections have different IDs in each store")
+	}
+}
+
 func Test_StoreConnectFollowerError(t *testing.T) {
 	t.Parallel()
 
