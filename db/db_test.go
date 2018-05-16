@@ -152,7 +152,6 @@ var dbTestfunctions []testF = []testF{
 func TestDatabaseInMemory(t *testing.T) {
 	t.Parallel()
 
-	type testF func(test *testing.T, c *Conn)
 	for _, f := range dbTestfunctions {
 		dbInMem := mustCreateInMemoryDatabase()
 		connInMem, err := dbInMem.Connect()
@@ -168,7 +167,6 @@ func TestDatabaseInMemory(t *testing.T) {
 func TestDatabaseOnDisk(t *testing.T) {
 	t.Parallel()
 
-	type testF func(test *testing.T, c *Conn)
 	for _, f := range dbTestfunctions {
 		dbDisk, path := mustCreateDatabase()
 		connDisk, err := dbDisk.Connect()
