@@ -147,7 +147,7 @@ func Test_ConnectionSameIDs(t *testing.T) {
 		t.Fatalf("failed to create new connection: %s", err.Error())
 	}
 
-	if err := s1.WaitForAppliedIndex(2, 5*time.Second); err != nil {
+	if err := s1.WaitForAppliedIndex(5, 5*time.Second); err != nil {
 		t.Fatalf("error waiting for leader to apply index: %s:", err.Error())
 	}
 
