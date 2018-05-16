@@ -10,7 +10,6 @@ import (
 
 func TestStoreOnDiskChinook(t *testing.T) {
 	t.Parallel()
-
 	s := mustNewStore(false)
 	if err := s.Open(true); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
@@ -23,7 +22,6 @@ func TestStoreOnDiskChinook(t *testing.T) {
 
 func TestStoreInMemChinook(t *testing.T) {
 	t.Parallel()
-
 	s := mustNewStore(true)
 	if err := s.Open(true); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
@@ -36,7 +34,6 @@ func TestStoreInMemChinook(t *testing.T) {
 
 func TestStoreConnectionOnDiskChinook(t *testing.T) {
 	t.Parallel()
-
 	s := mustNewStore(false)
 	if err := s.Open(true); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
@@ -51,7 +48,6 @@ func TestStoreConnectionOnDiskChinook(t *testing.T) {
 
 func TestStoreConnectionInMemChinook(t *testing.T) {
 	t.Parallel()
-
 	s := mustNewStore(true)
 	if err := s.Open(true); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
