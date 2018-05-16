@@ -115,6 +115,67 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 	}
 }
 
+func Test_TxStateChange(t *testing.T) {
+	t.Parallel()
+
+	s := mustNewStore(true)
+	defer os.RemoveAll(s.Path())
+	if err := s.Open(true); err != nil {
+		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
+	}
+	defer s.Close(true)
+	s.WaitForLeader(10 * time.Second)
+	c := mustNewConnection(s).(*Connection)
+
+	txState := NewTxStateChange(c)
+	txState.CheckAndSet()
+	if !c.txStartedAt.IsZero() {
+		t.Fatal("transaction marked as started")
+	}
+
+	txState = NewTxStateChange(c)
+	c.Execute(&ExecuteRequest{[]string{"BEGIN"}, false, false})
+	txState.CheckAndSet()
+	if c.txStartedAt.IsZero() {
+		t.Fatal("transaction not marked as started")
+	}
+
+	txState = NewTxStateChange(c)
+	c.Execute(&ExecuteRequest{[]string{"INSERT blah blah"}, false, false})
+	txState.CheckAndSet()
+	if c.txStartedAt.IsZero() {
+		t.Fatal("transaction not still marked as started")
+	}
+
+	txState = NewTxStateChange(c)
+	c.Query(&QueryRequest{[]string{"SELECT * FROM foo"}, false, false, None})
+	txState.CheckAndSet()
+	if c.txStartedAt.IsZero() {
+		t.Fatal("transaction not still marked as started")
+	}
+
+	txState = NewTxStateChange(c)
+	c.Execute(&ExecuteRequest{[]string{"COMMIT"}, false, false})
+	txState.CheckAndSet()
+	if !c.txStartedAt.IsZero() {
+		t.Fatal("transaction still marked as started")
+	}
+
+	txState = NewTxStateChange(c)
+	c.Execute(&ExecuteRequest{[]string{"BEGIN"}, false, false})
+	txState.CheckAndSet()
+	if c.txStartedAt.IsZero() {
+		t.Fatal("transaction not marked as started")
+	}
+
+	txState = NewTxStateChange(c)
+	c.Execute(&ExecuteRequest{[]string{"ROLLBACK"}, false, false})
+	txState.CheckAndSet()
+	if !c.txStartedAt.IsZero() {
+		t.Fatal("transaction still marked as started")
+	}
+}
+
 func mustNewConnection(s *Store) ExecerQueryerCloser {
 	c, err := s.Connect()
 	if err != nil {

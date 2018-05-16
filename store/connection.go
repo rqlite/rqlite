@@ -16,10 +16,12 @@ type Connection struct {
 	store *Store    // Store to apply commands to.
 	id    uint64    // Connection ID, used as a handle by clients.
 
-	timeMu      sync.Mutex
-	createdAt   time.Time
-	lastUsedAt  time.Time
-	txCreatedAt time.Time // XXX might need to use autocommit check to do this. Will the conn object need state?
+	timeMu     sync.Mutex
+	createdAt  time.Time
+	lastUsedAt time.Time
+
+	txStateMu   sync.Mutex
+	txStartedAt time.Time
 
 	logger *log.Logger
 }
@@ -47,29 +49,17 @@ func (c *Connection) String() string {
 
 // Execute executes queries that return no rows, but do modify the database.
 func (c *Connection) Execute(ex *ExecuteRequest) (*ExecuteResponse, error) {
-	c.timeMu.Lock()
-	c.lastUsedAt = time.Now()
-	c.timeMu.Unlock()
-
 	return c.store.execute(c, ex)
 }
 
 // ExecuteOrAbort executes the requests, but aborts any active transaction
 // on the underlying database in the case of any error.
 func (c *Connection) ExecuteOrAbort(ex *ExecuteRequest) (resp *ExecuteResponse, retErr error) {
-	c.timeMu.Lock()
-	c.lastUsedAt = time.Now()
-	c.timeMu.Unlock()
-
 	return c.store.executeOrAbort(c, ex)
 }
 
 // Query executes queries that return rows, and do not modify the database.
 func (c *Connection) Query(qr *QueryRequest) (*QueryResponse, error) {
-	c.timeMu.Lock()
-	c.lastUsedAt = time.Now()
-	c.timeMu.Unlock()
-
 	return c.store.query(c, qr)
 }
 
@@ -85,4 +75,39 @@ func (c *Connection) AbortTransaction() error {
 // Close closes the connection.
 func (c *Connection) Close() error {
 	return c.store.disconnect(c)
+}
+
+// TxStateChange is a helper that detects when the transaction state on a
+// connection changes.
+type TxStateChange struct {
+	c    *Connection
+	tx   bool
+	done bool
+}
+
+// NewTxStateChange returns an initialized TxStateChange
+func NewTxStateChange(c *Connection) *TxStateChange {
+	return &TxStateChange{
+		c:  c,
+		tx: c.db.TransactionActive(),
+	}
+}
+
+// CheckAndSet sets whether a transaction has begun or ended on the
+// connection since the TxStateChange was created. Once CheckAndSet
+// has been called, this function will panic if called a second time.
+func (t *TxStateChange) CheckAndSet() {
+	t.c.txStateMu.Lock()
+	defer t.c.txStateMu.Unlock()
+	defer func() { t.done = true }()
+
+	if t.done {
+		panic("CheckAndSet should only be called once")
+	}
+
+	if !t.tx && t.c.db.TransactionActive() && t.c.txStartedAt.IsZero() {
+		t.c.txStartedAt = time.Now()
+	} else if t.tx && !t.c.db.TransactionActive() && !t.c.txStartedAt.IsZero() {
+		t.c.txStartedAt = time.Time{}
+	}
 }
