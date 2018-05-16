@@ -1114,6 +1114,7 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 	s.restoreMu.RLock()
 	defer s.restoreMu.RUnlock()
 
+	// Copy the database.
 	fsm := &fsmSnapshot{}
 	var err error
 	var buf bytes.Buffer
@@ -1124,11 +1125,14 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 	}
 	fsm.database = buf.Bytes()
 
+	// Copy the node metadata.
 	fsm.meta, err = json.Marshal(s.meta)
 	if err != nil {
 		s.logger.Printf("failed to encode meta for snapshot: %s", err.Error())
 		return nil, err
 	}
+
+	// Copy the active connections.
 	stats.Add(numSnaphots, 1)
 
 	return fsm, nil
