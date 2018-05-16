@@ -16,10 +16,10 @@ type Connection struct {
 	store *Store    // Store to apply commands to.
 	id    uint64    // Connection ID, used as a handle by clients.
 
-	timeMu    sync.Mutex
-	created   time.Time
-	lastUsed  time.Time
-	txCreated time.Time
+	timeMu      sync.Mutex
+	createdAt   time.Time
+	lastUsedAt  time.Time
+	txCreatedAt time.Time // XXX might need to use autocommit check to do this. Will the conn object need state?
 
 	logger *log.Logger
 }
@@ -27,11 +27,11 @@ type Connection struct {
 // NewConnection returns a connection to the database.
 func NewConnection(c *sdb.Conn, s *Store, id uint64) *Connection {
 	return &Connection{
-		db:      c,
-		store:   s,
-		id:      id,
-		created: time.Now(),
-		logger:  log.New(os.Stderr, "[connection] ", log.LstdFlags),
+		db:        c,
+		store:     s,
+		id:        id,
+		createdAt: time.Now(),
+		logger:    log.New(os.Stderr, "[connection] ", log.LstdFlags),
 	}
 }
 
@@ -42,14 +42,15 @@ func (c *Connection) ID() uint64 {
 
 // String implements the Stringer interface on the Connection.
 func (c *Connection) String() string {
-	return fmt.Sprintf("%d", c.id)
+	return fmt.Sprintf("connection:%d", c.id)
 }
 
 // Execute executes queries that return no rows, but do modify the database.
 func (c *Connection) Execute(ex *ExecuteRequest) (*ExecuteResponse, error) {
 	c.timeMu.Lock()
-	c.lastUsed = time.Now()
+	c.lastUsedAt = time.Now()
 	c.timeMu.Unlock()
+
 	return c.store.execute(c, ex)
 }
 
@@ -57,16 +58,18 @@ func (c *Connection) Execute(ex *ExecuteRequest) (*ExecuteResponse, error) {
 // on the underlying database in the case of any error.
 func (c *Connection) ExecuteOrAbort(ex *ExecuteRequest) (resp *ExecuteResponse, retErr error) {
 	c.timeMu.Lock()
-	c.lastUsed = time.Now()
+	c.lastUsedAt = time.Now()
 	c.timeMu.Unlock()
+
 	return c.store.executeOrAbort(c, ex)
 }
 
 // Query executes queries that return rows, and do not modify the database.
 func (c *Connection) Query(qr *QueryRequest) (*QueryResponse, error) {
 	c.timeMu.Lock()
-	c.lastUsed = time.Now()
+	c.lastUsedAt = time.Now()
 	c.timeMu.Unlock()
+
 	return c.store.query(c, qr)
 }
 
