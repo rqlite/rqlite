@@ -752,6 +752,8 @@ func (s *Store) setMetadata(id string, md map[string]string) error {
 	return f.Response().(*fsmGenericResponse).error
 }
 
+// disconnect removes a connection to the database, a connection
+// which was previously established via Raft consensus.
 func (s *Store) disconnect(c *Connection) error {
 	d := &connectionSub{c.id}
 	cmd, err := newCommand(disconnect, d)
