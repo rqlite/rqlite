@@ -20,5 +20,5 @@ test:
             parallel: true
 
     post:
-        - case $CIRCLE_NODE_INDEX in 0) go install -ldflags="-X main.branch=$CIRCLE_BRANCH -X main.commit=$CIRCLE_SHA1" ./... ;; esac:
-        - case $CIRCLE_NODE_INDEX in 0) cd $GOBIN && tar cvfz $CIRCLE_ARTIFACTS/rqlite.tar.gz * ;; esac:
+        - case $CIRCLE_NODE_INDEX in 3) go install -ldflags="-X main.branch=$CIRCLE_BRANCH -X main.commit=$CIRCLE_SHA1" ./... ;; esac:
+        - case $CIRCLE_NODE_INDEX in 3) cd $GOBIN && tar cvfz $CIRCLE_ARTIFACTS/rqlite.tar.gz * ;; esac:
