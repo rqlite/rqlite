@@ -78,14 +78,6 @@ rqlite replicates SQLite for fault-tolerance. It does not replicate it for perfo
 
 Depending on your machine (particularly its IO performance) and network, individual INSERT performance could be anything from 10 operations per second to more than 200 operations per second. However, by using the [bulk API](https://github.com/rqlite/rqlite/blob/master/DOC/BULK.md), transactions, or both, throughput will increase significantly, often by 2 orders of magnitude. This speed-up is due to the way SQLite works. So for high throughput, execute as many operations as possible within a bulk request.
 
-### In-memory databases
-By default rqlite uses an [in-memory SQLite database](https://www.sqlite.org/inmemorydb.html) to maximise performance. In this mode no actual SQLite file is created and the entire database is stored in memory. If you wish rqlite to use an actual file-based SQLite database, pass `-on-disk` to rqlite on start-up.
-
-#### Does using an in-memory database put my data at risk?
-No.
-
-Since the Raft log is the authoritative store for all data, and it is written to disk by each node, an in-memory database can be fully recreated on start-up. Using an in-memory database does not put your data at risk.
-
 ## Limitations
  * Only SQL statements that are __deterministic__ are safe to use with rqlite, because statements are committed to the Raft log before they are sent to each node. In other words, rqlite performs _statement-based replication_. For example, the following statement could result in different a SQLite database under each node:
 ```
