@@ -37,6 +37,8 @@ var (
 	// ErrInvalidBackupFormat is returned when the requested backup format
 	// is not valid.
 	ErrInvalidBackupFormat = errors.New("invalid backup format")
+
+	errDefaultConnection = errors.New("cannot delete default connection")
 )
 
 const (
@@ -723,7 +725,7 @@ func (s *Store) setMetadata(id string, md map[string]string) error {
 		e.Error()
 	}
 
-	return nil
+	return f.Response().(*fsmGenericResponse).error
 }
 
 func (s *Store) disconnect(c *Connection) error {
@@ -744,7 +746,7 @@ func (s *Store) disconnect(c *Connection) error {
 		}
 		return e.Error()
 	}
-	return nil
+	return f.Response().(*fsmGenericResponse).error
 }
 
 // Execute executes queries that return no rows, but do modify the database. If connection
@@ -1038,6 +1040,10 @@ func (s *Store) Apply(l *raft.Log) interface{} {
 		var d connectionSub
 		if err := json.Unmarshal(c.Sub, &d); err != nil {
 			return &fsmGenericResponse{error: err}
+		}
+
+		if d.ConnID == defaultConnID {
+			return &fsmGenericResponse{error: errDefaultConnection}
 		}
 
 		s.connsMu.Lock()
