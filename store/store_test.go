@@ -130,7 +130,7 @@ CREATE TABLE foo (id integer not null primary key, name text);
 INSERT INTO "foo" VALUES(1,'fiona');
 COMMIT;
 `
-	_, err := s.execute(nil, &ExecuteRequest{[]string{dump}, false, false})
+	_, err := s.Execute(&ExecuteRequest{[]string{dump}, false, false})
 	if err != nil {
 		t.Fatalf("failed to load simple dump: %s", err.Error())
 	}
@@ -239,11 +239,11 @@ func Test_SingleNodeSnapshotOnDisk(t *testing.T) {
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 	}
 
-	_, err := s.execute(nil, &ExecuteRequest{queries, false, false})
+	_, err := s.Execute(&ExecuteRequest{queries, false, false})
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
-	_, err = s.query(nil, &QueryRequest{[]string{`SELECT * FROM foo`}, false, false, None})
+	_, err = s.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, None})
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -290,7 +290,7 @@ func Test_SingleNodeSnapshotOnDisk(t *testing.T) {
 	}
 
 	// Ensure database is back in the correct state.
-	results, err := r.query(nil, &QueryRequest{[]string{`SELECT * FROM foo`}, false, false, None})
+	results, err := r.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, None})
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -324,11 +324,11 @@ func Test_SingleNodeSnapshotInMem(t *testing.T) {
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 	}
 
-	_, err := s.execute(nil, &ExecuteRequest{queries, false, false})
+	_, err := s.Execute(&ExecuteRequest{queries, false, false})
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
-	_, err = s.query(nil, &QueryRequest{[]string{`SELECT * FROM foo`}, false, false, None})
+	_, err = s.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, None})
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -360,7 +360,7 @@ func Test_SingleNodeSnapshotInMem(t *testing.T) {
 	}
 
 	// Ensure database is back in the correct state.
-	r, err := s.query(nil, &QueryRequest{[]string{`SELECT * FROM foo`}, false, false, None})
+	r, err := s.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, None})
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -434,7 +434,7 @@ func Test_StoreLogTruncationMultinode(t *testing.T) {
 			err.Error(), s1.raft.AppliedIndex(), s1.raft.LastIndex())
 	}
 
-	r, err := s1.query(nil, &QueryRequest{[]string{`SELECT count(*) FROM foo`}, false, true, None})
+	r, err := s1.Query(&QueryRequest{[]string{`SELECT count(*) FROM foo`}, false, true, None})
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}

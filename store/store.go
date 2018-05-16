@@ -57,6 +57,8 @@ const (
 	numRestores = "num_restores"
 )
 
+const defaultConnID = 0
+
 // ExecerQueryer is generic connection for interacting with a database.
 type ExecerQueryer interface {
 	// Execute executes queries that return no rows, but do modify the database.
@@ -244,11 +246,7 @@ func (s *Store) Open(enableSingle bool) error {
 		return err
 	}
 	s.dbConn = conn
-	s.conns[0] = &Connection{
-		db:    s.dbConn,
-		store: s,
-		id:    0,
-	}
+	s.conns[defaultConnID] = NewConnection(s.dbConn, s, defaultConnID)
 
 	// Is this a brand new node?
 	newNode := !pathExists(filepath.Join(s.raftDir, "raft.db"))
@@ -748,7 +746,7 @@ func (s *Store) setMetadata(id string, md map[string]string) error {
 func (s *Store) execute(c *Connection, ex *ExecuteRequest) (*ExecuteResponse, error) {
 	if c == nil {
 		s.connsMu.RLock()
-		c = s.conns[0]
+		c = s.conns[defaultConnID]
 		s.connsMu.RUnlock()
 	}
 
@@ -788,7 +786,7 @@ func (s *Store) execute(c *Connection, ex *ExecuteRequest) (*ExecuteResponse, er
 func (s *Store) executeOrAbort(c *Connection, ex *ExecuteRequest) (resp *ExecuteResponse, retErr error) {
 	if c == nil {
 		s.connsMu.RLock()
-		c = s.conns[0]
+		c = s.conns[defaultConnID]
 		s.connsMu.RUnlock()
 	}
 
@@ -815,7 +813,7 @@ func (s *Store) executeOrAbort(c *Connection, ex *ExecuteRequest) (resp *Execute
 func (s *Store) query(c *Connection, qr *QueryRequest) (*QueryResponse, error) {
 	if c == nil {
 		s.connsMu.RLock()
-		c = s.conns[0]
+		c = s.conns[defaultConnID]
 		s.connsMu.RUnlock()
 	}
 
