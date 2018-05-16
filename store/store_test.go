@@ -146,11 +146,11 @@ func Test_ConnectionSameIDs(t *testing.T) {
 	}
 
 	connID := c0.(*Connection).ID()
-	cc0, ok := s0.Connection(c0.(*Connection).ID())
+	cc0, ok := s0.Connection(connID)
 	if !ok {
 		t.Fatalf("s0 does not have connection %d", connID)
 	}
-	cc1, ok := s1.Connection(c0.(*Connection).ID())
+	cc1, ok := s1.Connection(connID)
 	if !ok {
 		t.Fatalf("s1 does not have connection %d", connID)
 	}
