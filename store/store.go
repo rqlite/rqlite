@@ -455,6 +455,14 @@ func (s *Store) ID() string {
 	return s.raftID
 }
 
+// Connection returns the connection for the given ID.
+func (s *Store) Connection(id uint64) (*Connection, bool) {
+	s.connsMu.RLock()
+	defer s.connsMu.RUnlock()
+	c, ok := s.conns[id]
+	return c, ok
+}
+
 // LeaderAddr returns the Raft address of the current leader. Returns a
 // blank string if there is no leader.
 func (s *Store) LeaderAddr() string {

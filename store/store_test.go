@@ -151,18 +151,17 @@ func Test_ConnectionSameIDs(t *testing.T) {
 		t.Fatalf("error waiting for leader to apply index: %s:", err.Error())
 	}
 
-	// Stores come with a built-in connection.
-	if exp, got := 2, len(s0.conns); exp != got {
-		t.Fatalf("s0 connection map is wrong size, exp %d, got %d", exp, got)
+	connID := c0.(*Connection).ID()
+	cc0, ok := s0.Connection(c0.(*Connection).ID())
+	if !ok {
+		t.Fatalf("s0 does not have connection %d", connID)
 	}
-	if exp, got := 2, len(s1.conns); exp != got {
-		t.Fatalf("s1 connection map is wrong size, exp %d, got %d", exp, got)
+	cc1, ok := s1.Connection(c0.(*Connection).ID())
+	if !ok {
+		t.Fatalf("s1 does not have connection %d", connID)
 	}
-
-	// Check connection has same ID on each store.
-	connID := c0.(*Connection).id
-	if s0.conns[connID].id != s1.conns[connID].id {
-		t.Fatal("connections have different IDs in each store")
+	if cc0.id != cc1.id {
+		t.Fatal("s0 connection ID does not match s1 connection ID")
 	}
 }
 
