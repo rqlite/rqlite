@@ -78,7 +78,7 @@ func (c *Connection) Query(qr *QueryRequest) (*QueryResponse, error) {
 // can be used to clean up any dangling state that may result from certain
 // error scenarios.
 func (c *Connection) AbortTransaction() error {
-	_, err := c.Execute(&ExecuteRequest{[]string{"ROLLBACK"}, false, false})
+	_, err := c.store.execute(c, &ExecuteRequest{[]string{"ROLLBACK"}, false, false})
 	return err
 }
 
