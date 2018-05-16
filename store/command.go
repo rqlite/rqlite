@@ -13,7 +13,7 @@ const (
 	metadataSet                       // Commands which sets Store metadata
 	metadataDelete                    // Commands which deletes Store metadata
 	connect                           // Commands which create a database connection
-	disconnect                        // Commands which disconnect to the database.
+	disconnect                        // Commands which disconnect from the database.
 )
 
 type command struct {
