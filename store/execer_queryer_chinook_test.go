@@ -61,13 +61,10 @@ func TestStoreConnectionInMemChinook(t *testing.T) {
 }
 
 func testLoadChinook(t *testing.T, eq ExecerQueryer) {
-	start := time.Now()
-	t.Logf("%s: loading chinook database, started at %s", t.Name(), time.Now())
 	_, err := eq.Execute(&ExecuteRequest{[]string{chinook.DB}, false, false})
 	if err != nil {
 		t.Fatalf("%s: failed to load chinook dump: %s", err.Error(), t.Name())
 	}
-	t.Logf("%s: loaded chinook database in %s", t.Name(), time.Since(start))
 
 	// Check that data were loaded correctly.
 
