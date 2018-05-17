@@ -1,6 +1,7 @@
 package store
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -75,6 +76,27 @@ func (c *Connection) AbortTransaction() error {
 // Close closes the connection.
 func (c *Connection) Close() error {
 	return c.store.disconnect(c)
+}
+
+// MarshalJSON implements the JSON Marshaler interface.
+func (c *Connection) MarshalJSON() ([]byte, error) {
+	fk, err := c.db.FKConstraints()
+	if err != nil {
+		return nil, err
+	}
+
+	m := make(map[string]interface{})
+	m["fk_constraints"] = enabledFromBool(fk)
+	m["id"] = c.id
+	m["created_at"] = c.createdAt
+	if !c.txStartedAt.IsZero() {
+		m["tx_started_at"] = c.txStartedAt
+	}
+	if !c.lastUsedAt.IsZero() {
+		m["last_used_at"] = c.lastUsedAt
+	}
+
+	return json.Marshal(m)
 }
 
 // TxStateChange is a helper that detects when the transaction state on a

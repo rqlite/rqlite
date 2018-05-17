@@ -176,6 +176,23 @@ func Test_TxStateChange(t *testing.T) {
 	}
 }
 
+func Test_ConnectionJSONMarshal(t *testing.T) {
+	t.Parallel()
+
+	s := mustNewStore(true)
+	defer os.RemoveAll(s.Path())
+	if err := s.Open(true); err != nil {
+		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
+	}
+	defer s.Close(true)
+	s.WaitForLeader(10 * time.Second)
+	c := mustNewConnection(s).(*Connection)
+	_, err := c.MarshalJSON()
+	if err != nil {
+		t.Fatalf("failed to JSON marshal connection: %s", err.Error())
+	}
+}
+
 func mustNewConnection(s *Store) ExecerQueryerCloser {
 	c, err := s.Connect()
 	if err != nil {
