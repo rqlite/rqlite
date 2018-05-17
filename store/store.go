@@ -549,11 +549,10 @@ func (s *Store) WaitForAppliedIndex(idx uint64, timeout time.Duration) error {
 
 // Stats returns stats for the store.
 func (s *Store) Stats() (map[string]interface{}, error) {
-	// fkEnabled, err := s.dbConn.FKConstraints()
-	// if err != nil {
-	// 	return nil, err
-	// }
-	var fkEnabled bool
+	fkEnabled, err := s.dbConn.FKConstraints()
+	if err != nil {
+		return nil, err
+	}
 
 	dbStatus := map[string]interface{}{
 		"dsn":            s.dbConf.DSN,
