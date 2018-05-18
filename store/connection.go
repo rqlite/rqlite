@@ -103,7 +103,7 @@ type TxStateChange struct {
 func NewTxStateChange(c *Connection) *TxStateChange {
 	return &TxStateChange{
 		c:  c,
-		tx: c.db.TransactionActive(),
+		tx: c.TransactionActive(),
 	}
 }
 
@@ -119,9 +119,9 @@ func (t *TxStateChange) CheckAndSet() {
 		panic("CheckAndSet should only be called once")
 	}
 
-	if !t.tx && t.c.db.TransactionActive() && t.c.TxStartedAt.IsZero() {
+	if !t.tx && t.c.TransactionActive() && t.c.TxStartedAt.IsZero() {
 		t.c.TxStartedAt = time.Now()
-	} else if t.tx && !t.c.db.TransactionActive() && !t.c.TxStartedAt.IsZero() {
+	} else if t.tx && !t.c.TransactionActive() && !t.c.TxStartedAt.IsZero() {
 		t.c.TxStartedAt = time.Time{}
 	}
 }
