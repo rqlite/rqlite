@@ -99,6 +99,19 @@ func (c *CredentialsStore) HasPerm(username string, perm string) bool {
 	return true
 }
 
+// HasAnyPerm returns true if username has at least one of the given perms.
+// It does not perform any password checking.
+func (c *CredentialsStore) HasAnyPerm(username string, perm ...string) bool {
+	return func(p []string) bool {
+		for i := range p {
+			if c.HasPerm(username, p[i]) {
+				return true
+			}
+		}
+		return false
+	}(perm)
+}
+
 // HasPermRequest returns true if the username returned by b has the givem perm.
 // It does not perform any password checking, but if there is no username
 // in the request, it returns false.

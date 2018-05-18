@@ -168,6 +168,25 @@ func Test_AuthPermsLoadSingle(t *testing.T) {
 	if perm := store.HasPerm("username2", "baz"); !perm {
 		t.Fatalf("username1 does not have baz perm")
 	}
+
+	if perm := store.HasAnyPerm("username1", "foo"); !perm {
+		t.Fatalf("username1 does not have foo perm")
+	}
+	if perm := store.HasAnyPerm("username1", "bar"); !perm {
+		t.Fatalf("username1 does not have bar perm")
+	}
+	if perm := store.HasAnyPerm("username1", "foo", "bar"); !perm {
+		t.Fatalf("username1 does not have foo or bar perm")
+	}
+	if perm := store.HasAnyPerm("username1", "foo", "qux"); !perm {
+		t.Fatalf("username1 does not have foo or qux perm")
+	}
+	if perm := store.HasAnyPerm("username1", "qux", "bar"); !perm {
+		t.Fatalf("username1 does not have bar perm")
+	}
+	if perm := store.HasAnyPerm("username1", "baz", "qux"); perm {
+		t.Fatalf("username1 has baz or qux perm")
+	}
 }
 
 func Test_AuthLoadHashedSingleRequest(t *testing.T) {
