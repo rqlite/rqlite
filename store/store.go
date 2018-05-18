@@ -86,7 +86,7 @@ type ExecerQueryer interface {
 // cannot be reused.
 type ExecerQueryerCloser interface {
 	ExecerQueryer
-	io.Closer()
+	io.Closer
 }
 
 // ExecerQueryerCloserIDer is generic connection that also returns an ID that
