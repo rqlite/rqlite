@@ -789,9 +789,7 @@ func (s *Store) execute(c *Connection, ex *ExecuteRequest) (*ExecuteResponse, er
 		c = s.conns[defaultConnID]
 		s.connsMu.RUnlock()
 	}
-	c.timeMu.Lock()
-	c.LastUsedAt = time.Now()
-	c.timeMu.Unlock()
+	c.SetLastUsedNow()
 
 	// Keep the transaction state up-to-date on the connection.
 	txChange := NewTxStateChange(c)
@@ -863,10 +861,7 @@ func (s *Store) query(c *Connection, qr *QueryRequest) (*QueryResponse, error) {
 		c = s.conns[defaultConnID]
 		s.connsMu.RUnlock()
 	}
-
-	c.timeMu.Lock()
-	c.LastUsedAt = time.Now()
-	c.timeMu.Unlock()
+	c.SetLastUsedNow()
 
 	s.restoreMu.RLock()
 	defer s.restoreMu.RUnlock()

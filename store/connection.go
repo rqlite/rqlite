@@ -44,6 +44,13 @@ func (c *Connection) Restore(dbConn *sdb.Conn, s *Store) {
 	c.logger = log.New(os.Stderr, "[connection] ", log.LstdFlags)
 }
 
+// SetLastUsedNow marks the connection as being used now.
+func (c *Connection) SetLastUsedNow() {
+	c.timeMu.Lock()
+	c.LastUsedAt = time.Now()
+	c.timeMu.Unlock()
+}
+
 // String implements the Stringer interface on the Connection.
 func (c *Connection) String() string {
 	return fmt.Sprintf("connection:%d", c.ID)
