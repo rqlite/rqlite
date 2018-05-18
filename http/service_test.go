@@ -493,7 +493,7 @@ func (m *MockStore) Query(qr *store.QueryRequest) (*store.QueryResponse, error) 
 	return nil, nil
 }
 
-func (m *MockStore) Connect() (store.ExecerQueryerCloser, error) {
+func (m *MockStore) Connect() (store.ExecerQueryerCloserIDer, error) {
 	return nil, nil
 }
 
