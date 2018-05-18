@@ -1150,7 +1150,7 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 		s.connsMu.Lock()
 		defer s.connsMu.Unlock()
 		for _, c := range s.conns {
-			if c.TxActive() {
+			if c.TransactionActive() {
 				return ErrTransactionActive
 			}
 		}

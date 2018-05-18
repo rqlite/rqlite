@@ -49,9 +49,9 @@ func (c *Connection) String() string {
 	return fmt.Sprintf("connection:%d", c.ID)
 }
 
-// TxActive returns whether a transaction is active on the connection.
-func (c *Connection) TxActive() bool {
-	return !c.TxStartedAt.IsZero()
+// TransactionActive returns whether a transaction is active on the connection.
+func (c *Connection) TransactionActive() bool {
+	return c.db.TransactionActive()
 }
 
 // Execute executes queries that return no rows, but do modify the database.

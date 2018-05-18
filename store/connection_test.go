@@ -129,49 +129,49 @@ func Test_TxStateChange(t *testing.T) {
 
 	txState := NewTxStateChange(c)
 	txState.CheckAndSet()
-	if !c.TxStartedAt.IsZero() || c.TxActive() {
+	if !c.TxStartedAt.IsZero() || c.TransactionActive() {
 		t.Fatal("transaction marked as started")
 	}
 
 	txState = NewTxStateChange(c)
 	c.Execute(&ExecuteRequest{[]string{"BEGIN"}, false, false})
 	txState.CheckAndSet()
-	if c.TxStartedAt.IsZero() || !c.TxActive() {
+	if c.TxStartedAt.IsZero() || !c.TransactionActive() {
 		t.Fatal("transaction not marked as started")
 	}
 
 	txState = NewTxStateChange(c)
 	c.Execute(&ExecuteRequest{[]string{"INSERT blah blah"}, false, false})
 	txState.CheckAndSet()
-	if c.TxStartedAt.IsZero() || !c.TxActive() {
+	if c.TxStartedAt.IsZero() || !c.TransactionActive() {
 		t.Fatal("transaction not still marked as started")
 	}
 
 	txState = NewTxStateChange(c)
 	c.Query(&QueryRequest{[]string{"SELECT * FROM foo"}, false, false, None})
 	txState.CheckAndSet()
-	if c.TxStartedAt.IsZero() || !c.TxActive() {
+	if c.TxStartedAt.IsZero() || !c.TransactionActive() {
 		t.Fatal("transaction not still marked as started")
 	}
 
 	txState = NewTxStateChange(c)
 	c.Execute(&ExecuteRequest{[]string{"COMMIT"}, false, false})
 	txState.CheckAndSet()
-	if !c.TxStartedAt.IsZero() || c.TxActive() {
+	if !c.TxStartedAt.IsZero() || c.TransactionActive() {
 		t.Fatal("transaction still marked as started")
 	}
 
 	txState = NewTxStateChange(c)
 	c.Execute(&ExecuteRequest{[]string{"BEGIN"}, false, false})
 	txState.CheckAndSet()
-	if c.TxStartedAt.IsZero() || !c.TxActive() {
+	if c.TxStartedAt.IsZero() || !c.TransactionActive() {
 		t.Fatal("transaction not marked as started")
 	}
 
 	txState = NewTxStateChange(c)
 	c.Execute(&ExecuteRequest{[]string{"ROLLBACK"}, false, false})
 	txState.CheckAndSet()
-	if !c.TxStartedAt.IsZero() || c.TxActive() {
+	if !c.TxStartedAt.IsZero() || c.TransactionActive() {
 		t.Fatal("transaction still marked as started")
 	}
 }
