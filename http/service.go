@@ -79,10 +79,11 @@ type Response struct {
 var stats *expvar.Map
 
 const (
-	numExecutions = "executions"
-	numQueries    = "queries"
-	numBackups    = "backups"
-	numLoad       = "loads"
+	numConnections = "connections"
+	numExecutions  = "executions"
+	numQueries     = "queries"
+	numBackups     = "backups"
+	numLoad        = "loads"
 
 	// PermAll means all actions permitted.
 	PermAll = "all"
@@ -94,6 +95,8 @@ const (
 	PermExecute = "execute"
 	// PermQuery means user can access query endpoint
 	PermQuery = "query"
+	// PermConnections means user access connections endpoint.
+	PermConnections = "connections"
 	// PermStatus means user can retrieve node status.
 	PermStatus = "status"
 	// PermBackup means user can backup node.
@@ -107,6 +110,7 @@ const (
 
 func init() {
 	stats = expvar.NewMap("http")
+	stats.Add(numConnections, 0)
 	stats.Add(numExecutions, 0)
 	stats.Add(numQueries, 0)
 	stats.Add(numBackups, 0)
@@ -207,6 +211,9 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch {
+	case strings.HasPrefix(r.URL.Path, "/db/connections"):
+		stats.Add(numConnections, 1)
+		s.handleConnections(w, r)
 	case strings.HasPrefix(r.URL.Path, "/db/execute"):
 		stats.Add(numExecutions, 1)
 		s.handleExecute(w, r)
@@ -245,6 +252,19 @@ func (s *Service) RegisterStatus(key string, stat Statuser) error {
 	s.statuses[key] = stat
 
 	return nil
+}
+
+// handleConnections handles connection-related operations
+func (s *Service) handleConnections(w http.ResponseWriter, r *http.Request) {
+	if !s.CheckRequestPerm(r, PermConnections) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method == "POST" {
+		s.createConnection(w, r)
+		return
+	}
 }
 
 // handleJoin handles cluster-join requests from other nodes.
@@ -744,6 +764,16 @@ func (s *Service) addBuildVersion(w http.ResponseWriter) {
 		version = v
 	}
 	w.Header().Add(VersionHTTPHeader, version)
+}
+
+// createConnection creates a connection and returns its location to
+// the client.
+func (s *Service) createConnection(w http.ResponseWriter, r *http.Request) {
+	conn, err := s.store.Connect()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
 }
 
 func requestQueries(r *http.Request) ([]string, error) {
