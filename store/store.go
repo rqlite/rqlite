@@ -60,9 +60,10 @@ const (
 )
 
 const (
-	numSnaphots = "num_snapshots"
-	numBackups  = "num_backups"
-	numRestores = "num_restores"
+	numSnaphots        = "num_snapshots"
+	numSnaphotsBlocked = "num_snapshots_blocked"
+	numBackups         = "num_backups"
+	numRestores        = "num_restores"
 )
 
 const defaultConnID = 0
@@ -1151,6 +1152,7 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 		defer s.connsMu.Unlock()
 		for _, c := range s.conns {
 			if c.TransactionActive() {
+				stats.Add(numSnaphotsBlocked, 1)
 				return ErrTransactionActive
 			}
 		}
