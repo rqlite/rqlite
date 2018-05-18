@@ -82,11 +82,18 @@ type ExecerQueryer interface {
 }
 
 // ExecerQueryerCloser is generic connection for interacting with a database,
-// whichalso allows release of its underlying resources. Once closed, it
+// which also allows release of its underlying resources. Once closed, it
 // cannot be reused.
 type ExecerQueryerCloser interface {
 	ExecerQueryer
-	Close() error
+	io.Closer
+}
+
+// ExecerQueryerCloserIDer is generic connection that also returns an ID that
+// can be used to identify the object.
+type ExecerQueryerCloserIDer interface {
+	ExecerQueryerCloser
+	ID() uint64
 }
 
 // BackupFormat represents the backup formats supported by the Store.
