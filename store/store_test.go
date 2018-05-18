@@ -481,6 +481,46 @@ func Test_SingleNodeSnapshotInMem(t *testing.T) {
 	}
 }
 
+func Test_SingleNodeSnapshotFailTransaction(t *testing.T) {
+	t.Parallel()
+
+	s := mustNewStore(true)
+	defer os.RemoveAll(s.Path())
+
+	if err := s.Open(true); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	s.WaitForLeader(10 * time.Second)
+
+	// New connection
+	conn := mustNewConnection(s)
+	defer conn.Close()
+
+	// Start transaction
+	_, err := conn.Execute(&ExecuteRequest{[]string{"BEGIN"}, false, false})
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	// Transaction should now be active, and snapshotting should be blocked.
+	_, err = s.Snapshot()
+	if err != ErrTransactionActive {
+		t.Fatalf("wrong error received for snapshot")
+	}
+
+	_, err = conn.Execute(&ExecuteRequest{[]string{"COMMIT"}, false, false})
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	// Snapshot should now proceed.
+	_, err = s.Snapshot()
+	if err != nil {
+		t.Fatalf("snapshot failed after transaction completed")
+	}
+}
+
 func Test_StoreLogTruncationMultinode(t *testing.T) {
 	// Test is explicitly not parallel because it accesses global Store stats.
 
