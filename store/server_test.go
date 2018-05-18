@@ -7,10 +7,10 @@ import (
 
 func TestServer_Sort(t *testing.T) {
 	servers := []*Server{
-		&Server{"node3", "addr4"},
-		&Server{"node2", "addr3"},
-		&Server{"node0", "addr0"},
-		&Server{"node1", "addr1"},
+		{"node3", "addr4"},
+		{"node2", "addr3"},
+		{"node0", "addr0"},
+		{"node1", "addr1"},
 	}
 
 	sort.Sort(Servers(servers))
