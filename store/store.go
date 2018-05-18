@@ -791,10 +791,6 @@ func (s *Store) execute(c *Connection, ex *ExecuteRequest) (*ExecuteResponse, er
 	}
 	c.SetLastUsedNow()
 
-	// Keep the transaction state up-to-date on the connection.
-	txChange := NewTxStateChange(c)
-	defer txChange.CheckAndSet()
-
 	start := time.Now()
 
 	d := &databaseSub{
@@ -1019,7 +1015,9 @@ func (s *Store) Apply(l *raft.Log) interface{} {
 		}
 
 		if c.Typ == execute {
+			txChange := NewTxStateChange(conn)
 			r, err := conn.db.Execute(d.Queries, d.Tx, d.Timings)
+			txChange.CheckAndSet()
 			return &fsmExecuteResponse{results: r, error: err}
 		}
 		r, err := conn.db.Query(d.Queries, d.Tx, d.Timings)
