@@ -534,6 +534,10 @@ func (m *mockCredentialStore) HasPerm(username, perm string) bool {
 	return m.HasPermOK
 }
 
+func (m *mockCredentialStore) HasAnyPerm(username string, perm ...string) bool {
+	return m.HasPermOK
+}
+
 type mockStatuser struct {
 }
 
