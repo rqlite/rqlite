@@ -78,7 +78,7 @@ func Test_StoreConnect(t *testing.T) {
 		t.Fatal("new connection is nil")
 	}
 
-	cc, ok := s.Connection(c.(*Connection).id)
+	cc, ok := s.Connection(c.(*Connection).ID)
 	if c != cc && ok {
 		t.Fatal("new connection not in map")
 	}
@@ -145,7 +145,7 @@ func Test_ConnectionSameIDs(t *testing.T) {
 		t.Fatalf("error waiting for leader to apply index: %s:", err.Error())
 	}
 
-	connID := c0.(*Connection).ID()
+	connID := c0.(*Connection).ID
 	cc0, ok := s0.Connection(connID)
 	if !ok {
 		t.Fatalf("s0 does not have connection %d", connID)
@@ -154,7 +154,7 @@ func Test_ConnectionSameIDs(t *testing.T) {
 	if !ok {
 		t.Fatalf("s1 does not have connection %d", connID)
 	}
-	if cc0.id != cc1.id {
+	if cc0.ID != cc1.ID {
 		t.Fatal("s0 connection ID does not match s1 connection ID")
 	}
 }
@@ -396,11 +396,11 @@ func Test_SingleNodeSnapshotInMem(t *testing.T) {
 	defer s.Close(true)
 	s.WaitForLeader(10 * time.Second)
 
+	// SQL data.
 	queries := []string{
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 	}
-
 	_, err := s.Execute(&ExecuteRequest{queries, false, false})
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
@@ -409,6 +409,14 @@ func Test_SingleNodeSnapshotInMem(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
+
+	// Metadata
+	if err := s.SetMetadata(map[string]string{"foo": "bar"}); err != nil {
+		t.Fatalf("failed to set metadata: %s", err.Error())
+	}
+
+	// New connection
+	conn := mustNewConnection(s).(*Connection)
 
 	// Snap the node and write to disk.
 	f, err := s.Snapshot()
@@ -427,17 +435,41 @@ func Test_SingleNodeSnapshotInMem(t *testing.T) {
 		t.Fatalf("failed to persist snapshot to disk: %s", err.Error())
 	}
 
-	// Check restoration.
+	// Check restoration
 	snapFile, err = os.Open(filepath.Join(snapDir, "snapshot"))
 	if err != nil {
 		t.Fatalf("failed to open snapshot file: %s", err.Error())
 	}
+
+	s.conns = nil
+	s.meta = nil
 	if err := s.Restore(snapFile); err != nil {
 		t.Fatalf("failed to restore snapshot from disk: %s", err.Error())
 	}
 
 	// Ensure database is back in the correct state.
 	r, err := s.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, None})
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `["id","name"]`, asJSON(r.Rows[0].Columns); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[1,"fiona"]]`, asJSON(r.Rows[0].Values); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	// Check store metadata
+	if s.Metadata(s.raftID, "foo") != "bar" {
+		t.Fatal("node metadata incorrect after restore")
+	}
+
+	// Check connection.
+	rc, ok := s.Connection(conn.ID)
+	if !ok {
+		t.Fatal("connection missing after snapshot restore")
+	}
+	r, err = rc.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, None})
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}

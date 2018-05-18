@@ -38,6 +38,12 @@ var (
 	// is not valid.
 	ErrInvalidBackupFormat = errors.New("invalid backup format")
 
+	// ErrTransactionActive is returned when an operation is blocked by an
+	// active transaction.
+	ErrTransactionActive = errors.New("transaction in progress")
+
+	// errDefaultConnection is returned when an attempt is made to delete the
+	// default connection.
 	errDefaultConnection = errors.New("cannot delete default connection")
 )
 
@@ -754,7 +760,7 @@ func (s *Store) setMetadata(id string, md map[string]string) error {
 // disconnect removes a connection to the database, a connection
 // which was previously established via Raft consensus.
 func (s *Store) disconnect(c *Connection) error {
-	d := &connectionSub{c.id}
+	d := &connectionSub{c.ID}
 	cmd, err := newCommand(disconnect, d)
 	if err != nil {
 		return err
@@ -783,7 +789,7 @@ func (s *Store) execute(c *Connection, ex *ExecuteRequest) (*ExecuteResponse, er
 		s.connsMu.RUnlock()
 	}
 	c.timeMu.Lock()
-	c.lastUsedAt = time.Now()
+	c.LastUsedAt = time.Now()
 	c.timeMu.Unlock()
 
 	// Keep the transaction state up-to-date on the connection.
@@ -793,7 +799,7 @@ func (s *Store) execute(c *Connection, ex *ExecuteRequest) (*ExecuteResponse, er
 	start := time.Now()
 
 	d := &databaseSub{
-		ConnID:  c.id,
+		ConnID:  c.ID,
 		Tx:      ex.Tx,
 		Queries: ex.Queries,
 		Timings: ex.Timings,
@@ -841,7 +847,7 @@ func (s *Store) executeOrAbort(c *Connection, ex *ExecuteRequest) (resp *Execute
 		if retErr != nil || errored {
 			if err := c.AbortTransaction(); err != nil {
 				c.logger.Printf("WARNING: failed to abort transaction on connection %d: %s",
-					c.id, err.Error())
+					c.ID, err.Error())
 			}
 		}
 	}()
@@ -858,7 +864,7 @@ func (s *Store) query(c *Connection, qr *QueryRequest) (*QueryResponse, error) {
 	}
 
 	c.timeMu.Lock()
-	c.lastUsedAt = time.Now()
+	c.LastUsedAt = time.Now()
 	c.timeMu.Unlock()
 
 	s.restoreMu.RLock()
@@ -867,7 +873,7 @@ func (s *Store) query(c *Connection, qr *QueryRequest) (*QueryResponse, error) {
 
 	if qr.Lvl == Strong {
 		d := &databaseSub{
-			ConnID:  c.id,
+			ConnID:  c.ID,
 			Tx:      qr.Tx,
 			Queries: qr.Queries,
 			Timings: qr.Timings,
@@ -1134,10 +1140,29 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 	s.restoreMu.RLock()
 	defer s.restoreMu.RUnlock()
 
+	// Snapshots are not permitted while any connection has a transaction
+	// in progress, because it's not possible (not without a lot of extra
+	// code anyway) to capture the state of a connection during a transaction
+	// on that connection. Since only during Apply() can a connection change
+	// its transaction state, and Apply() is never called concurrently with
+	// this call, it's safe to check transaction state here across all connections.
+	if err := func() error {
+		s.connsMu.Lock()
+		defer s.connsMu.Unlock()
+		for _, c := range s.conns {
+			if c.TxActive() {
+				return ErrTransactionActive
+			}
+		}
+		return nil
+	}(); err != nil {
+		return nil, err
+	}
+
 	// Copy the database.
 	fsm := &fsmSnapshot{}
-	var err error
 	var buf bytes.Buffer
+	var err error
 	err = s.database(false, &buf)
 	if err != nil {
 		s.logger.Printf("failed to read database for snapshot: %s", err.Error())
@@ -1153,6 +1178,11 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 	}
 
 	// Copy the active connections.
+	fsm.connections, err = json.Marshal(s.conns)
+	if err != nil {
+		s.logger.Printf("failed to encode connections for snapshot: %s", err.Error())
+		return nil, err
+	}
 	stats.Add(numSnaphots, 1)
 
 	return fsm, nil
@@ -1202,16 +1232,45 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 		return err
 	}
 
-	// Read remaining bytes, and set to cluster meta.
-	b, err := ioutil.ReadAll(rc)
+	// Get size of meta, read those bytes, and set to meta.
+	if err := binary.Read(rc, binary.LittleEndian, &sz); err != nil {
+		return err
+	}
+	meta := make([]byte, sz)
+	if _, err := io.ReadFull(rc, meta); err != nil {
+		return err
+	}
+	err = func() error {
+		s.metaMu.Lock()
+		defer s.metaMu.Unlock()
+		return json.Unmarshal(meta, &s.meta)
+	}()
 	if err != nil {
 		return err
 	}
 
+	// Get size of connections, read those bytes, and set to connections.
+	if err := binary.Read(rc, binary.LittleEndian, &sz); err != nil {
+		return err
+	}
+	conns := make([]byte, sz)
+	if _, err := io.ReadFull(rc, conns); err != nil {
+		return err
+	}
 	err = func() error {
-		s.metaMu.Lock()
-		defer s.metaMu.Unlock()
-		return json.Unmarshal(b, &s.meta)
+		s.connsMu.Lock()
+		defer s.connsMu.Unlock()
+		if err := json.Unmarshal(conns, &s.conns); err != nil {
+			return err
+		}
+		for _, c := range s.conns {
+			dbConn, err := s.db.Connect()
+			if err != nil {
+				return err
+			}
+			c.Restore(dbConn, s)
+		}
+		return nil
 	}()
 	if err != nil {
 		return err
@@ -1232,39 +1291,40 @@ func (s *Store) DeregisterObserver(o *raft.Observer) {
 }
 
 type fsmSnapshot struct {
-	database []byte
-	meta     []byte
+	database    []byte
+	meta        []byte
+	connections []byte
 }
 
 // Persist writes the snapshot to the given sink.
 func (f *fsmSnapshot) Persist(sink raft.SnapshotSink) error {
-	err := func() error {
-		// Start by writing size of database.
-		b := new(bytes.Buffer)
-		sz := uint64(len(f.database))
-		err := binary.Write(b, binary.LittleEndian, sz)
+	// sizeWriter writes the size of given byte slize to the
+	// raft sink, followed by the byte slice itself.
+	sizeWriter := func(s raft.SnapshotSink, b []byte) error {
+		buf := new(bytes.Buffer)
+		sz := uint64(len(b))
+		err := binary.Write(buf, binary.LittleEndian, sz)
 		if err != nil {
 			return err
 		}
-		if _, err := sink.Write(b.Bytes()); err != nil {
+		if _, err := s.Write(buf.Bytes()); err != nil {
 			return err
 		}
-
-		// Next write database to sink.
-		if _, err := sink.Write(f.database); err != nil {
+		if _, err := s.Write(b); err != nil {
 			return err
 		}
+		return nil
+	}
 
-		// Finally write the meta.
-		if _, err := sink.Write(f.meta); err != nil {
-			return err
+	if err := func() error {
+		for _, b := range [][]byte{f.database, f.meta, f.connections} {
+			if err := sizeWriter(sink, b); err != nil {
+				return err
+			}
 		}
-
 		// Close the sink.
 		return sink.Close()
-	}()
-
-	if err != nil {
+	}(); err != nil {
 		sink.Cancel()
 		return err
 	}

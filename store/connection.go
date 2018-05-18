@@ -1,7 +1,6 @@
 package store
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -15,14 +14,14 @@ import (
 type Connection struct {
 	db    *sdb.Conn // Connection to SQLite database.
 	store *Store    // Store to apply commands to.
-	id    uint64    // Connection ID, used as a handle by clients.
+	ID    uint64    `json:"id,omitempty"` // Connection ID, used as a handle by clients.
 
 	timeMu     sync.Mutex
-	createdAt  time.Time
-	lastUsedAt time.Time
+	CreatedAt  time.Time `json:"created_at,omitempty"`
+	LastUsedAt time.Time `json:"last_used_at,omitempty"`
 
 	txStateMu   sync.Mutex
-	txStartedAt time.Time
+	TxStartedAt time.Time `json:"tx_started_at,omitempty"`
 
 	logger *log.Logger
 }
@@ -32,20 +31,27 @@ func NewConnection(c *sdb.Conn, s *Store, id uint64) *Connection {
 	return &Connection{
 		db:        c,
 		store:     s,
-		id:        id,
-		createdAt: time.Now(),
+		ID:        id,
+		CreatedAt: time.Now(),
 		logger:    log.New(os.Stderr, "[connection] ", log.LstdFlags),
 	}
 }
 
-// ID returns the ID of the connection.
-func (c *Connection) ID() uint64 {
-	return c.id
+// Restore prepares a partially ready connection.
+func (c *Connection) Restore(dbConn *sdb.Conn, s *Store) {
+	c.db = dbConn
+	c.store = s
+	c.logger = log.New(os.Stderr, "[connection] ", log.LstdFlags)
 }
 
 // String implements the Stringer interface on the Connection.
 func (c *Connection) String() string {
-	return fmt.Sprintf("connection:%d", c.id)
+	return fmt.Sprintf("connection:%d", c.ID)
+}
+
+// TxActive returns whether a transaction is active on the connection.
+func (c *Connection) TxActive() bool {
+	return !c.TxStartedAt.IsZero()
 }
 
 // Execute executes queries that return no rows, but do modify the database.
@@ -78,27 +84,6 @@ func (c *Connection) Close() error {
 	return c.store.disconnect(c)
 }
 
-// MarshalJSON implements the JSON Marshaler interface.
-func (c *Connection) MarshalJSON() ([]byte, error) {
-	fk, err := c.db.FKConstraints()
-	if err != nil {
-		return nil, err
-	}
-
-	m := make(map[string]interface{})
-	m["fk_constraints"] = enabledFromBool(fk)
-	m["id"] = c.id
-	m["created_at"] = c.createdAt
-	if !c.txStartedAt.IsZero() {
-		m["tx_started_at"] = c.txStartedAt
-	}
-	if !c.lastUsedAt.IsZero() {
-		m["last_used_at"] = c.lastUsedAt
-	}
-
-	return json.Marshal(m)
-}
-
 // TxStateChange is a helper that detects when the transaction state on a
 // connection changes.
 type TxStateChange struct {
@@ -127,9 +112,9 @@ func (t *TxStateChange) CheckAndSet() {
 		panic("CheckAndSet should only be called once")
 	}
 
-	if !t.tx && t.c.db.TransactionActive() && t.c.txStartedAt.IsZero() {
-		t.c.txStartedAt = time.Now()
-	} else if t.tx && !t.c.db.TransactionActive() && !t.c.txStartedAt.IsZero() {
-		t.c.txStartedAt = time.Time{}
+	if !t.tx && t.c.db.TransactionActive() && t.c.TxStartedAt.IsZero() {
+		t.c.TxStartedAt = time.Now()
+	} else if t.tx && !t.c.db.TransactionActive() && !t.c.TxStartedAt.IsZero() {
+		t.c.TxStartedAt = time.Time{}
 	}
 }
