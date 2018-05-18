@@ -176,7 +176,7 @@ func Test_TxStateChange(t *testing.T) {
 	}
 }
 
-func mustNewConnection(s *Store) ExecerQueryerCloser {
+func mustNewConnection(s *Store) ExecerQueryerCloserIDer {
 	c, err := s.Connect()
 	if err != nil {
 		panic(fmt.Sprintf("failed to connect to store: %s", err.Error()))

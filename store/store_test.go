@@ -78,7 +78,7 @@ func Test_StoreConnect(t *testing.T) {
 		t.Fatal("new connection is nil")
 	}
 
-	cc, ok := s.Connection(c.(*Connection).ID)
+	cc, ok := s.Connection(c.ID())
 	if c != cc && ok {
 		t.Fatal("new connection not in map")
 	}
@@ -145,7 +145,7 @@ func Test_ConnectionSameIDs(t *testing.T) {
 		t.Fatalf("error waiting for leader to apply index: %s:", err.Error())
 	}
 
-	connID := c0.(*Connection).ID
+	connID := c0.ID()
 	cc0, ok := s0.Connection(connID)
 	if !ok {
 		t.Fatalf("s0 does not have connection %d", connID)
@@ -154,7 +154,7 @@ func Test_ConnectionSameIDs(t *testing.T) {
 	if !ok {
 		t.Fatalf("s1 does not have connection %d", connID)
 	}
-	if cc0.ID != cc1.ID {
+	if cc0.ID() != cc1.ID() {
 		t.Fatal("s0 connection ID does not match s1 connection ID")
 	}
 }
@@ -416,7 +416,7 @@ func Test_SingleNodeSnapshotInMem(t *testing.T) {
 	}
 
 	// New connection
-	conn := mustNewConnection(s).(*Connection)
+	conn := mustNewConnection(s)
 
 	// Snap the node and write to disk.
 	f, err := s.Snapshot()
@@ -465,7 +465,7 @@ func Test_SingleNodeSnapshotInMem(t *testing.T) {
 	}
 
 	// Check connection.
-	rc, ok := s.Connection(conn.ID)
+	rc, ok := s.Connection(conn.ID())
 	if !ok {
 		t.Fatal("connection missing after snapshot restore")
 	}

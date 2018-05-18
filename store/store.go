@@ -326,7 +326,7 @@ func (s *Store) Open(enableSingle bool) error {
 //
 // Any connection returned by this call are READ_COMMITTED isolated from all
 // other connections, including the connection built-in to the Store itself.
-func (s *Store) Connect() (ExecerQueryerCloser, error) {
+func (s *Store) Connect() (ExecerQueryerCloserIDer, error) {
 	// Randomly-selected connection ID must be part of command so
 	// that all nodes use the same value as connection ID.
 	connID := func() uint64 {
@@ -768,7 +768,7 @@ func (s *Store) setMetadata(id string, md map[string]string) error {
 // disconnect removes a connection to the database, a connection
 // which was previously established via Raft consensus.
 func (s *Store) disconnect(c *Connection) error {
-	d := &connectionSub{c.ID}
+	d := &connectionSub{c.ConnID}
 	cmd, err := newCommand(disconnect, d)
 	if err != nil {
 		return err
@@ -801,7 +801,7 @@ func (s *Store) execute(c *Connection, ex *ExecuteRequest) (*ExecuteResponse, er
 	start := time.Now()
 
 	d := &databaseSub{
-		ConnID:  c.ID,
+		ConnID:  c.ConnID,
 		Tx:      ex.Tx,
 		Queries: ex.Queries,
 		Timings: ex.Timings,
@@ -848,8 +848,8 @@ func (s *Store) executeOrAbort(c *Connection, ex *ExecuteRequest) (resp *Execute
 		}
 		if retErr != nil || errored {
 			if err := c.AbortTransaction(); err != nil {
-				c.logger.Printf("WARNING: failed to abort transaction on connection %d: %s",
-					c.ID, err.Error())
+				c.logger.Printf("WARNING: failed to abort transaction on %s: %s",
+					c, err.Error())
 			}
 		}
 	}()
@@ -872,7 +872,7 @@ func (s *Store) query(c *Connection, qr *QueryRequest) (*QueryResponse, error) {
 
 	if qr.Lvl == Strong {
 		d := &databaseSub{
-			ConnID:  c.ID,
+			ConnID:  c.ConnID,
 			Tx:      qr.Tx,
 			Queries: qr.Queries,
 			Timings: qr.Timings,
