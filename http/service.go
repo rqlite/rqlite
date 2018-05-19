@@ -734,6 +734,11 @@ func (s *Service) FormRedirect(r *http.Request, host string) string {
 	return fmt.Sprintf("%s://%s%s%s", protocol, host, r.URL.Path, rq)
 }
 
+// FormConnectionURL returns the URL of the new connection.
+func (s *Service) FormConnectionURL(r *http.Request, id uint64) string {
+	return fmt.Sprintf("%s://%s/db/connections/%d", r.URL.Scheme, r.URL.Host, id)
+}
+
 // CheckRequestPerm returns true if authentication is enabled and the user contained
 // in the BasicAuth request has either PermAll, or the given perm.
 func (s *Service) CheckRequestPerm(r *http.Request, perm string) bool {
@@ -774,6 +779,9 @@ func (s *Service) createConnection(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		return
 	}
+
+	w.Header().Set("Location", s.FormConnectionURL(r, conn.ID()))
+	w.WriteHeader(http.StatusCreated)
 }
 
 func requestQueries(r *http.Request) ([]string, error) {

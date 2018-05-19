@@ -150,6 +150,29 @@ func Test_HasVersionHeaderUnknown(t *testing.T) {
 	}
 }
 
+func Test_CreateConnection(t *testing.T) {
+	t.Parallel()
+
+	m := &MockStore{}
+	s := New("127.0.0.1:0", m, nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start HTTP server: %s", err.Error())
+	}
+	defer s.Close()
+	r, err := http.Post(fmt.Sprintf("http://%s/db/connections", s.Addr().String()), "", nil)
+	if err != nil {
+		t.Fatalf("failed to make connections request: %s", err.Error())
+	}
+	loc, err := r.Location()
+	if err != nil {
+		t.Fatalf("failed to get Location header value: %s", err.Error())
+	}
+	exp := fmt.Sprintf("http://%s/db/connections/1234", s.Addr().String())
+	if loc.String() != exp {
+		t.Fatalf("received wrong connection URL\ngot: %s\nexp: %s\n", loc.String(), exp)
+	}
+}
+
 func Test_404Routes(t *testing.T) {
 	t.Parallel()
 
@@ -470,6 +493,30 @@ func Test_FormRedirectParam(t *testing.T) {
 	}
 }
 
+func Test_FormConnectionURL(t *testing.T) {
+	t.Parallel()
+
+	m := &MockStore{}
+	s := New("127.0.0.1:0", m, nil)
+
+	req := mustNewHTTPRequest("http://foo:4001/db/connections")
+	if got, exp := s.FormConnectionURL(req, 1234), "http://foo:4001/db/connections/1234"; got != exp {
+		t.Fatalf("failed to form redirect for URL:\ngot %s\nexp %s\n", got, exp)
+	}
+	req = mustNewHTTPRequest("http://foo/db/connections")
+	if got, exp := s.FormConnectionURL(req, 1234), "http://foo/db/connections/1234"; got != exp {
+		t.Fatalf("failed to form redirect for URL:\ngot %s\nexp %s\n", got, exp)
+	}
+	req = mustNewHTTPRequest("https://foo/db/connections")
+	if got, exp := s.FormConnectionURL(req, 1234), "https://foo/db/connections/1234"; got != exp {
+		t.Fatalf("failed to form redirect for URL:\ngot %s\nexp %s\n", got, exp)
+	}
+	req = mustNewHTTPRequest("http://foo/db/connections?w=x&y=z")
+	if got, exp := s.FormConnectionURL(req, 1234), "http://foo/db/connections/1234"; got != exp {
+		t.Fatalf("failed to form redirect for URL:\ngot %s\nexp %s\n", got, exp)
+	}
+}
+
 type MockStore struct {
 	executeFn func(queries []string, tx bool) (*store.ExecuteResponse, error)
 	queryFn   func(queries []string, tx, leader, verify bool) (*store.QueryResponse, error)
@@ -494,7 +541,7 @@ func (m *MockStore) Query(qr *store.QueryRequest) (*store.QueryResponse, error) 
 }
 
 func (m *MockStore) Connect() (store.ExecerQueryerCloserIDer, error) {
-	return nil, nil
+	return &mockConnection{1234}, nil
 }
 
 func (m *MockStore) Join(id, addr string, metadata map[string]string) error {
@@ -552,3 +599,31 @@ func mustNewHTTPRequest(url string) *http.Request {
 	}
 	return req
 }
+
+func mustNewHTTPPostRequest(url string) *http.Request {
+	req, err := http.NewRequest("POST", url, nil)
+	if err != nil {
+		panic("failed to create HTTP request for testing")
+	}
+	return req
+}
+
+type mockConnection struct {
+	connID uint64
+}
+
+func (m *mockConnection) Execute(ex *store.ExecuteRequest) (*store.ExecuteResponse, error) {
+	return nil, nil
+}
+
+func (m *mockConnection) ExecuteOrAbort(ex *store.ExecuteRequest) (*store.ExecuteResponse, error) {
+	return nil, nil
+}
+
+func (m *mockConnection) Query(qr *store.QueryRequest) (*store.QueryResponse, error) {
+	return nil, nil
+}
+
+func (m *mockConnection) Close() error { return nil }
+
+func (m *mockConnection) ID() uint64 { return m.connID }
