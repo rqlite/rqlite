@@ -6,6 +6,19 @@ import (
 	"time"
 )
 
+// ExecerQueryer is generic connection for interacting with a database.
+type ExecerQueryer interface {
+	// Execute executes queries that return no rows, but do modify the database.
+	Execute(ex *ExecuteRequest) (*ExecuteResponse, error)
+
+	// ExecuteOrAbort executes the requests, but aborts any active transaction
+	// on the underlying database in the case of any error.
+	ExecuteOrAbort(ex *ExecuteRequest) (resp *ExecuteResponse, retErr error)
+
+	// Query executes queries that return rows, and do not modify the database.
+	Query(qr *QueryRequest) (*QueryResponse, error)
+}
+
 type testF func(t *testing.T, eq ExecerQueryer)
 
 func TestStoreOnDisk(t *testing.T) {

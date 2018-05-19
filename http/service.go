@@ -26,7 +26,15 @@ import (
 
 // Store is the interface the Raft-based database must implement.
 type Store interface {
-	store.ExecerQueryer
+	// Execute executes queries that return no rows, but do modify the database.
+	Execute(ex *store.ExecuteRequest) (*store.ExecuteResponse, error)
+
+	// ExecuteOrAbort executes the requests, but aborts any active transaction
+	// on the underlying database in the case of any error.
+	ExecuteOrAbort(ex *store.ExecuteRequest) (*store.ExecuteResponse, error)
+
+	// Query executes queries that return rows, and do not modify the database.
+	Query(qr *store.QueryRequest) (*store.QueryResponse, error)
 
 	// Join joins the node with the given ID, reachable at addr, to this node.
 	Join(id, addr string, metadata map[string]string) error
@@ -46,8 +54,8 @@ type Store interface {
 	// Backup writes backup of the node state to dst
 	Backup(leader bool, f store.BackupFormat, dst io.Writer) error
 
-	// Connect returns an object which can work with the database.
-	Connect() (store.ExecerQueryerCloserIDer, error)
+	// Connect returns a Connection to the database
+	Connect() (*store.Connection, error)
 }
 
 // CredentialStore is the interface credential stores must support.

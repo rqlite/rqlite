@@ -542,8 +542,8 @@ func (m *MockStore) Query(qr *store.QueryRequest) (*store.QueryResponse, error) 
 	return nil, nil
 }
 
-func (m *MockStore) Connect() (store.ExecerQueryerCloserIDer, error) {
-	return &mockConnection{1234}, nil
+func (m *MockStore) Connect() (*store.Connection, error) {
+	return store.NewConnection(nil, nil, 1234), nil
 }
 
 func (m *MockStore) Join(id, addr string, metadata map[string]string) error {
@@ -601,23 +601,3 @@ func mustNewHTTPRequest(url string) *http.Request {
 	}
 	return req
 }
-
-type mockConnection struct {
-	connID uint64
-}
-
-func (m *mockConnection) Execute(ex *store.ExecuteRequest) (*store.ExecuteResponse, error) {
-	return nil, nil
-}
-
-func (m *mockConnection) ExecuteOrAbort(ex *store.ExecuteRequest) (*store.ExecuteResponse, error) {
-	return nil, nil
-}
-
-func (m *mockConnection) Query(qr *store.QueryRequest) (*store.QueryResponse, error) {
-	return nil, nil
-}
-
-func (m *mockConnection) Close() error { return nil }
-
-func (m *mockConnection) ID() uint64 { return m.connID }
