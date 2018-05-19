@@ -513,10 +513,6 @@ func Test_FormConnectionURL(t *testing.T) {
 	if got, exp := s.FormConnectionURL(req, 1234), "http://foo/db/connections/1234"; got != exp {
 		t.Fatalf("failed to form redirect for URL:\ngot %s\nexp %s\n", got, exp)
 	}
-	req = mustNewHTTPRequest("https://foo/db/connections")
-	if got, exp := s.FormConnectionURL(req, 1234), "https://foo/db/connections/1234"; got != exp {
-		t.Fatalf("failed to form redirect for URL:\ngot %s\nexp %s\n", got, exp)
-	}
 	req = mustNewHTTPRequest("http://foo/db/connections?w=x&y=z")
 	if got, exp := s.FormConnectionURL(req, 1234), "http://foo/db/connections/1234"; got != exp {
 		t.Fatalf("failed to form redirect for URL:\ngot %s\nexp %s\n", got, exp)

@@ -723,24 +723,16 @@ func (s *Service) Addr() net.Addr {
 
 // FormRedirect returns the value for the "Location" header for a 301 response.
 func (s *Service) FormRedirect(r *http.Request, host string) string {
-	protocol := "http"
-	if s.credentialStore != nil {
-		protocol = "https"
-	}
 	rq := r.URL.RawQuery
 	if rq != "" {
 		rq = fmt.Sprintf("?%s", rq)
 	}
-	return fmt.Sprintf("%s://%s%s%s", protocol, host, r.URL.Path, rq)
+	return fmt.Sprintf("%s://%s%s%s", s.protocol(), host, r.URL.Path, rq)
 }
 
 // FormConnectionURL returns the URL of the new connection.
 func (s *Service) FormConnectionURL(r *http.Request, id uint64) string {
-	protocol := "http"
-	if s.credentialStore != nil {
-		protocol = "https"
-	}
-	return fmt.Sprintf("%s://%s/db/connections/%d", protocol, r.Host, id)
+	return fmt.Sprintf("%s://%s/db/connections/%d", s.protocol(), r.Host, id)
 }
 
 // CheckRequestPerm returns true if authentication is enabled and the user contained
@@ -786,6 +778,14 @@ func (s *Service) createConnection(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Location", s.FormConnectionURL(r, conn.ID()))
 	w.WriteHeader(http.StatusCreated)
+}
+
+func (s *Service) protocol() string {
+	protocol := "http"
+	if s.credentialStore != nil {
+		protocol = "https"
+	}
+	return protocol
 }
 
 func requestQueries(r *http.Request) ([]string, error) {
