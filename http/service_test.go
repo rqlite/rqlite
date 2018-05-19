@@ -163,6 +163,9 @@ func Test_CreateConnection(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to make connections request: %s", err.Error())
 	}
+	if r.StatusCode != http.StatusCreated {
+		t.Fatalf("incorrect status code received: %s", r.Status)
+	}
 	loc, err := r.Location()
 	if err != nil {
 		t.Fatalf("failed to get Location header value: %s", err.Error())
@@ -597,14 +600,6 @@ func (m *mockStatuser) Stats() (interface{}, error) {
 
 func mustNewHTTPRequest(url string) *http.Request {
 	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		panic("failed to create HTTP request for testing")
-	}
-	return req
-}
-
-func mustNewHTTPPostRequest(url string) *http.Request {
-	req, err := http.NewRequest("POST", url, nil)
 	if err != nil {
 		panic("failed to create HTTP request for testing")
 	}

@@ -736,7 +736,11 @@ func (s *Service) FormRedirect(r *http.Request, host string) string {
 
 // FormConnectionURL returns the URL of the new connection.
 func (s *Service) FormConnectionURL(r *http.Request, id uint64) string {
-	return fmt.Sprintf("%s://%s/db/connections/%d", r.URL.Scheme, r.URL.Host, id)
+	protocol := "http"
+	if s.credentialStore != nil {
+		protocol = "https"
+	}
+	return fmt.Sprintf("%s://%s/db/connections/%d", protocol, r.Host, id)
 }
 
 // CheckRequestPerm returns true if authentication is enabled and the user contained
