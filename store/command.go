@@ -2,6 +2,7 @@ package store
 
 import (
 	"encoding/json"
+	"time"
 )
 
 // commandType are commands that affect the state of the cluster, and must go through Raft.
@@ -54,5 +55,7 @@ type metadataSetSub struct {
 }
 
 type connectionSub struct {
-	ConnID uint64 `json:"conn_id,omitempty"`
+	ConnID      uint64        `json:"conn_id,omitempty"`
+	IdleTimeout time.Duration `json:"idle_timeout,omitempty"`
+	TxTimeout   time.Duration `json:"tx_timeout,omitempty"`
 }

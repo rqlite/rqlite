@@ -70,7 +70,7 @@ func Test_StoreConnect(t *testing.T) {
 	}
 	s.WaitForLeader(10 * time.Second)
 
-	c, err := s.Connect()
+	c, err := s.Connect(0, 0)
 	if err != nil {
 		t.Fatalf("failed to connect to open store: %s", err.Error())
 	}
@@ -104,7 +104,7 @@ func Test_StoreDisconnectDefault(t *testing.T) {
 		t.Fatalf("connection map is wrong size, exp %d, got %d", exp, got)
 	}
 
-	if err := s.disconnect(NewConnection(nil, nil, defaultConnID)); err == nil {
+	if err := s.disconnect(NewConnection(nil, nil, defaultConnID, 0, 0)); err == nil {
 		t.Fatal("closed default connection")
 	}
 	if exp, got := 1, len(s.conns); exp != got {
@@ -136,7 +136,7 @@ func Test_ConnectionSameIDs(t *testing.T) {
 	}
 
 	// Create explicit connection on store0.
-	c0, err := s0.Connect()
+	c0, err := s0.Connect(0, 0)
 	if err != nil {
 		t.Fatalf("failed to create new connection: %s", err.Error())
 	}
@@ -183,7 +183,7 @@ func Test_StoreConnectFollowerError(t *testing.T) {
 	}
 	s1.WaitForLeader(10 * time.Second)
 
-	_, err := s1.Connect()
+	_, err := s1.Connect(0, 0)
 	if err != ErrNotLeader {
 		t.Fatal("Connect did not return error on follower")
 	}

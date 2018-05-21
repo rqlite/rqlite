@@ -7,10 +7,13 @@ import (
 	"time"
 )
 
-func Test_NewConnection(t *testing.T) {
-	c := NewConnection(nil, nil, 1234)
+func Test_NewConnectionNoStore(t *testing.T) {
+	c := NewConnection(nil, nil, 1234, 0, 0)
 	if c == nil {
 		t.Fatal("failed to create new connection")
+	}
+	if err := c.Close(); err != nil {
+		t.Fatalf("failed to close connection: %s", err.Error())
 	}
 }
 
@@ -177,7 +180,7 @@ func Test_TxStateChange(t *testing.T) {
 }
 
 func mustNewConnection(s *Store) *Connection {
-	c, err := s.Connect()
+	c, err := s.Connect(0, 0)
 	if err != nil {
 		panic(fmt.Sprintf("failed to connect to store: %s", err.Error()))
 	}

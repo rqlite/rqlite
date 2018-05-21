@@ -234,7 +234,7 @@ func (s *Store) Open(enableSingle bool) error {
 		return err
 	}
 	s.dbConn = conn
-	s.conns[defaultConnID] = NewConnection(s.dbConn, s, defaultConnID)
+	s.conns[defaultConnID] = NewConnection(s.dbConn, s, defaultConnID, 0, 0)
 
 	// Is this a brand new node?
 	newNode := !pathExists(filepath.Join(s.raftDir, "raft.db"))
@@ -298,7 +298,7 @@ func (s *Store) Open(enableSingle bool) error {
 //
 // Any connection returned by this call are READ_COMMITTED isolated from all
 // other connections, including the connection built-in to the Store itself.
-func (s *Store) Connect() (*Connection, error) {
+func (s *Store) Connect(idleTimeout, txTimeout time.Duration) (*Connection, error) {
 	// Randomly-selected connection ID must be part of command so
 	// that all nodes use the same value as connection ID.
 	connID := func() uint64 {
@@ -314,7 +314,7 @@ func (s *Store) Connect() (*Connection, error) {
 		}
 	}()
 
-	d := &connectionSub{connID}
+	d := &connectionSub{connID, idleTimeout, txTimeout}
 	cmd, err := newCommand(connect, d)
 	if err != nil {
 		return nil, err
@@ -740,7 +740,9 @@ func (s *Store) setMetadata(id string, md map[string]string) error {
 // disconnect removes a connection to the database, a connection
 // which was previously established via Raft consensus.
 func (s *Store) disconnect(c *Connection) error {
-	d := &connectionSub{c.ID()}
+	d := &connectionSub{
+		ConnID: c.ID(),
+	}
 	cmd, err := newCommand(disconnect, d)
 	if err != nil {
 		return err
@@ -1039,7 +1041,7 @@ func (s *Store) Apply(l *raft.Log) interface{} {
 			return &fsmGenericResponse{error: err}
 		}
 		s.connsMu.Lock()
-		s.conns[d.ConnID] = NewConnection(conn, s, d.ConnID)
+		s.conns[d.ConnID] = NewConnection(conn, s, d.ConnID, d.IdleTimeout, d.TxTimeout)
 		s.connsMu.Unlock()
 		return d.ConnID
 	case disconnect:
