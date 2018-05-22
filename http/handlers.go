@@ -115,22 +115,26 @@ func (h *connectionsHandler) Handler(s *Service) http.Handler {
 				w.Header().Set("Location", s.FormConnectionURL(r, id))
 				w.WriteHeader(http.StatusCreated)
 			} else if r.Method == "GET" {
-				// return connections
+				// XXX return connections
 			} else {
 				w.WriteHeader(http.StatusMethodNotAllowed)
 			}
 		} else {
 			id, err := strconv.ParseUint(head, 10, 64)
 			if err != nil {
-				http.Error(w, err.Error(), http.StatusServiceUnavailable)
+				http.Error(w, err.Error(), http.StatusNotFound)
 			}
-			switch head {
-			case "execute":
-				h.executeH.Handler(id, s).ServeHTTP(w, r)
-			case "query":
-				h.queryH.Handler(id, s).ServeHTTP(w, r)
-			default:
-				w.WriteHeader(http.StatusNotFound)
+			if r.Method == "DELETE" {
+				// DELETE CONNECTION
+			} else {
+				switch head {
+				case "execute":
+					h.executeH.Handler(id, s).ServeHTTP(w, r)
+				case "query":
+					h.queryH.Handler(id, s).ServeHTTP(w, r)
+				default:
+					w.WriteHeader(http.StatusNotFound)
+				}
 			}
 		}
 	})

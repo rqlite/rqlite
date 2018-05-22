@@ -238,6 +238,24 @@ func (s *Service) RegisterStatus(key string, stat Statuser) error {
 	return nil
 }
 
+// createConnection creates a connection and returns its ID.
+func (s *Service) createConnection(w http.ResponseWriter, r *http.Request) (uint64, error) {
+	conn, err := s.store.Connect(nil)
+	if err != nil {
+		return 0, err
+	}
+	return conn.ID, nil
+}
+
+// createConnection creates a connection and returns its ID.
+func (s *Service) deleteConnection(id uint64) error {
+	conn, ok := s.store.Connection(id)
+	if !ok {
+		return errors.New("connection not found")
+	}
+	return conn.Close()
+}
+
 // handleJoin handles cluster-join requests from other nodes.
 func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 	b, err := ioutil.ReadAll(r.Body)
@@ -647,15 +665,6 @@ func (s *Service) addBuildVersion(w http.ResponseWriter) {
 		version = v
 	}
 	w.Header().Add(VersionHTTPHeader, version)
-}
-
-// createConnection creates a connection and returns its ID.
-func (s *Service) createConnection(w http.ResponseWriter, r *http.Request) (uint64, error) {
-	conn, err := s.store.Connect(nil)
-	if err != nil {
-		return 0, err
-	}
-	return conn.ID, nil
 }
 
 func (s *Service) protocol() string {
