@@ -42,9 +42,9 @@ var (
 	// active transaction.
 	ErrTransactionActive = errors.New("transaction in progress")
 
-	// errDefaultConnection is returned when an attempt is made to delete the
+	// ErrDefaultConnection is returned when an attempt is made to delete the
 	// default connection.
-	errDefaultConnection = errors.New("cannot delete default connection")
+	ErrDefaultConnection = errors.New("cannot delete default connection")
 )
 
 const (
@@ -1058,7 +1058,7 @@ func (s *Store) Apply(l *raft.Log) interface{} {
 		}
 
 		if d.ConnID == defaultConnID {
-			return &fsmGenericResponse{error: errDefaultConnection}
+			return &fsmGenericResponse{error: ErrDefaultConnection}
 		}
 
 		s.connsMu.Lock()
