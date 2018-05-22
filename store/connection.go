@@ -19,10 +19,11 @@ type ConnectionOptions struct {
 
 // Connection is a connection to the database.
 type Connection struct {
+	ID uint64 `json:"id,omitempty"` // Connection ID, used as a handle by clients.
+
 	dbMu  sync.RWMutex
 	db    *sdb.Conn // Connection to SQLite database.
 	store *Store    // Store to apply commands to.
-	id    uint64    `json:"id,omitempty"` // Connection ID, used as a handle by clients.
 
 	timeMu      sync.Mutex
 	CreatedAt   time.Time     `json:"created_at,omitempty"`
@@ -45,7 +46,7 @@ func NewConnection(c *sdb.Conn, s *Store, id uint64, it, tt time.Duration) *Conn
 	conn := Connection{
 		db:          c,
 		store:       s,
-		id:          id,
+		ID:          id,
 		CreatedAt:   time.Now(),
 		IdleTimeout: it,
 		TxTimeout:   tt,
@@ -60,7 +61,7 @@ func NewConnection(c *sdb.Conn, s *Store, id uint64, it, tt time.Duration) *Conn
 func (c *Connection) Restore(dbConn *sdb.Conn, s *Store) {
 	c.db = dbConn
 	c.store = s
-	c.logger = log.New(os.Stderr, connectionLogPrefix(c.id), log.LstdFlags)
+	c.logger = log.New(os.Stderr, connectionLogPrefix(c.ID), log.LstdFlags)
 }
 
 // SetLastUsedNow marks the connection as being used now.
@@ -72,12 +73,7 @@ func (c *Connection) SetLastUsedNow() {
 
 // String implements the Stringer interface on the Connection.
 func (c *Connection) String() string {
-	return fmt.Sprintf("connection:%d", c.id)
-}
-
-// ID returns the connection ID.
-func (c *Connection) ID() uint64 {
-	return c.id
+	return fmt.Sprintf("connection:%d", c.ID)
 }
 
 // TransactionActive returns whether a transaction is active on the connection.

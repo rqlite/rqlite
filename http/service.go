@@ -25,17 +25,24 @@ import (
 
 const defaultConnID = 0
 
-// Store is the interface the Raft-based database must implement.
-type Store interface {
+type Execer interface {
 	// Execute executes queries that return no rows, but do modify the database.
 	Execute(ex *store.ExecuteRequest) (*store.ExecuteResponse, error)
 
 	// ExecuteOrAbort executes the requests, but aborts any active transaction
 	// on the underlying database in the case of any error.
 	ExecuteOrAbort(ex *store.ExecuteRequest) (*store.ExecuteResponse, error)
+}
 
+type Queryer interface {
 	// Query executes queries that return rows, and do not modify the database.
 	Query(qr *store.QueryRequest) (*store.QueryResponse, error)
+}
+
+// Store is the interface the Raft-based database must implement.
+type Store interface {
+	Execer
+	Queryer
 
 	// Join joins the node with the given ID, reachable at addr, to this node.
 	Join(id, addr string, metadata map[string]string) error
@@ -55,8 +62,12 @@ type Store interface {
 	// Backup writes backup of the node state to dst
 	Backup(leader bool, f store.BackupFormat, dst io.Writer) error
 
-	// Connect returns a Connection to the database
+	// Connect returns a new Connection to the database
 	Connect(*store.ConnectionOptions) (*store.Connection, error)
+
+	// Connection returns an existing connection to the database. If
+	// OK returns false, a connection with the given ID does not exist.
+	Connection(id uint64) (c *store.Connection, ok bool)
 }
 
 // CredentialStore is the interface credential stores must support.
@@ -458,7 +469,7 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleExecute handles queries that modify the database.
-func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
+func (s *Service) handleExecute(connID uint64, w http.ResponseWriter, r *http.Request) {
 	isTx, err := isTx(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -484,8 +495,21 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get the right executer object.
+	var execer Execer
+	if connID == defaultConnID {
+		execer = s.store
+	} else {
+		c, ok := s.store.Connection(connID)
+		if !ok {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		execer = c
+	}
+
 	var resp Response
-	results, err := s.store.Execute(&store.ExecuteRequest{queries, timings, isTx})
+	results, err := execer.Execute(&store.ExecuteRequest{queries, timings, isTx})
 	if err != nil {
 		if err == store.ErrNotLeader {
 			leader := s.leaderAPIAddr()
@@ -510,7 +534,7 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleQuery handles queries that do not modify the database.
-func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
+func (s *Service) handleQuery(connID uint64, w http.ResponseWriter, r *http.Request) {
 	isTx, err := isTx(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -536,8 +560,21 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get the right queryer object.
+	var queryer Queryer
+	if connID == defaultConnID {
+		queryer = s.store
+	} else {
+		c, ok := s.store.Connection(connID)
+		if !ok {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		queryer = c
+	}
+
 	var resp Response
-	results, err := s.store.Query(&store.QueryRequest{queries, timings, isTx, lvl})
+	results, err := queryer.Query(&store.QueryRequest{queries, timings, isTx, lvl})
 	if err != nil {
 		if err == store.ErrNotLeader {
 			leader := s.leaderAPIAddr()
@@ -618,7 +655,7 @@ func (s *Service) createConnection(w http.ResponseWriter, r *http.Request) (uint
 	if err != nil {
 		return 0, err
 	}
-	return conn.ID(), nil
+	return conn.ID, nil
 }
 
 func (s *Service) protocol() string {

@@ -748,7 +748,7 @@ func (s *Store) setMetadata(id string, md map[string]string) error {
 // which was previously established via Raft consensus.
 func (s *Store) disconnect(c *Connection) error {
 	d := &connectionSub{
-		ConnID: c.ID(),
+		ConnID: c.ID,
 	}
 	cmd, err := newCommand(disconnect, d)
 	if err != nil {
@@ -782,7 +782,7 @@ func (s *Store) execute(c *Connection, ex *ExecuteRequest) (*ExecuteResponse, er
 	start := time.Now()
 
 	d := &databaseSub{
-		ConnID:  c.ID(),
+		ConnID:  c.ID,
 		Tx:      ex.Tx,
 		Queries: ex.Queries,
 		Timings: ex.Timings,
@@ -853,7 +853,7 @@ func (s *Store) query(c *Connection, qr *QueryRequest) (*QueryResponse, error) {
 
 	if qr.Lvl == Strong {
 		d := &databaseSub{
-			ConnID:  c.ID(),
+			ConnID:  c.ID,
 			Tx:      qr.Tx,
 			Queries: qr.Queries,
 			Timings: qr.Timings,

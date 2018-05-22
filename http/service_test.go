@@ -546,6 +546,10 @@ func (m *MockStore) Connect(opt *store.ConnectionOptions) (*store.Connection, er
 	return store.NewConnection(nil, nil, 1234, 0, 0), nil
 }
 
+func (m *MockStore) Connection(id uint64) (*store.Connection, bool) {
+	return store.NewConnection(nil, nil, 1234, 0, 0), true
+}
+
 func (m *MockStore) Join(id, addr string, metadata map[string]string) error {
 	return nil
 }

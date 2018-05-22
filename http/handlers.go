@@ -29,8 +29,7 @@ func (h *executeHandler) Handler(connID uint64, s *Service) http.Handler {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
 		}
-		// XXX MUST USE CONNECTION ID
-		s.handleExecute(w, r)
+		s.handleExecute(connID, w, r)
 	})
 }
 
@@ -50,8 +49,7 @@ func (h *queryHandler) Handler(connID uint64, s *Service) http.Handler {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
 		}
-		// MUST USE CONNECTION ID
-		s.handleQuery(w, r)
+		s.handleQuery(connID, w, r)
 	})
 }
 
@@ -334,9 +332,6 @@ func (h *rootHandler) Handler(s *Service) http.Handler {
 	})
 }
 
-// shiftPath splits off the first component of p, which will be cleaned of
-// relative components before processing. head will never contain a slash and
-// tail will always be a rooted path without trailing slash.
 func shiftPath(p string) (head, tail string) {
 	p = path.Clean("/" + p)
 	i := strings.Index(p[1:], "/") + 1
