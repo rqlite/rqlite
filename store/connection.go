@@ -140,7 +140,6 @@ func (c *Connection) run(done chan struct{}) {
 		for {
 			select {
 			case <-done:
-				c.wg.Done()
 				return
 			case <-ticker.C:
 				c.timeMu.Lock()
