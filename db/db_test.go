@@ -128,6 +128,7 @@ type testF func(test *testing.T, c *Conn)
 var dbTestfunctions []testF = []testF{
 	testTableCreation,
 	testSQLiteMasterTable,
+	testTextTypes,
 	testEmptyStatements,
 	testSimpleSingleStatements,
 	testSimpleJoinStatements,
@@ -218,6 +219,25 @@ func testEmptyStatements(t *testing.T, c *Conn) {
 	_, err = c.Execute([]string{";"}, false, false)
 	if err != nil {
 		t.Fatalf("failed to execute empty statement with semicolon: %s", err.Error())
+	}
+}
+
+func testTextTypes(t *testing.T, c *Conn) {
+	_, err := c.Execute([]string{"CREATE TABLE foo (c0 VARCHAR(36), c1 JSON, c2 NCHAR, c3 NVARCHAR, c4 CLOB)"}, false, false)
+	if err != nil {
+                t.Fatalf("failed to create table: %s", err.Error())
+        }
+	_, err = c.Execute([]string{`INSERT INTO foo(c0, c1, c2, c3, c4) VALUES("fiona", '{"mittens": "foobar"}', "bob", "dana", "declan")`}, false, false)
+	if err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+
+	r, err := c.Query([]string{"SELECT * FROM foo"}, false, false)
+	if err != nil {
+		t.Fatalf("failed to query: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["c0","c1","c2","c3","c4"],"types":["varchar(36)","json","nchar","nvarchar","clob"],"values":[["fiona","{\"mittens\": \"foobar\"}","bob","dana","declan"]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
 }
 
