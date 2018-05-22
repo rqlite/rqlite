@@ -14,7 +14,6 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"net/http/pprof"
 	"os"
 	"runtime"
 	"strings"
@@ -23,6 +22,8 @@ import (
 
 	"github.com/rqlite/rqlite/store"
 )
+
+const defaultConnID = 0
 
 // Store is the interface the Raft-based database must implement.
 type Store interface {
@@ -122,12 +123,14 @@ func init() {
 	stats.Add(numExecutions, 0)
 	stats.Add(numQueries, 0)
 	stats.Add(numBackups, 0)
+	stats.Add(numLoad, 0)
 }
 
 // Service provides HTTP service.
 type Service struct {
-	addr string       // Bind address of the HTTP service.
-	ln   net.Listener // Service listener
+	addr        string       // Bind address of the HTTP service.
+	ln          net.Listener // Service listener
+	rootHandler rootHandler
 
 	store Store // The Raft-backed database store.
 
@@ -208,45 +211,7 @@ func (s *Service) Close() {
 
 // ServeHTTP allows Service to serve HTTP requests.
 func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	s.addBuildVersion(w)
-
-	if s.credentialStore != nil {
-		username, password, ok := r.BasicAuth()
-		if !ok || !s.credentialStore.Check(username, password) {
-			w.WriteHeader(http.StatusUnauthorized)
-			return
-		}
-	}
-
-	switch {
-	case strings.HasPrefix(r.URL.Path, "/db/connections"):
-		stats.Add(numConnections, 1)
-		s.handleConnections(w, r)
-	case strings.HasPrefix(r.URL.Path, "/db/execute"):
-		stats.Add(numExecutions, 1)
-		s.handleExecute(w, r)
-	case strings.HasPrefix(r.URL.Path, "/db/query"):
-		stats.Add(numQueries, 1)
-		s.handleQuery(w, r)
-	case strings.HasPrefix(r.URL.Path, "/db/backup"):
-		stats.Add(numBackups, 1)
-		s.handleBackup(w, r)
-	case strings.HasPrefix(r.URL.Path, "/db/load"):
-		stats.Add(numLoad, 1)
-		s.handleLoad(w, r)
-	case strings.HasPrefix(r.URL.Path, "/join"):
-		s.handleJoin(w, r)
-	case strings.HasPrefix(r.URL.Path, "/remove"):
-		s.handleRemove(w, r)
-	case strings.HasPrefix(r.URL.Path, "/status"):
-		s.handleStatus(w, r)
-	case r.URL.Path == "/debug/vars" && s.Expvar:
-		s.handleExpvar(w, r)
-	case strings.HasPrefix(r.URL.Path, "/debug/pprof") && s.Pprof:
-		s.handlePprof(w, r)
-	default:
-		w.WriteHeader(http.StatusNotFound)
-	}
+	s.rootHandler.Handler(s).ServeHTTP(w, r)
 }
 
 // RegisterStatus allows other modules to register status for serving over HTTP.
@@ -262,31 +227,8 @@ func (s *Service) RegisterStatus(key string, stat Statuser) error {
 	return nil
 }
 
-// handleConnections handles connection-related operations
-func (s *Service) handleConnections(w http.ResponseWriter, r *http.Request) {
-	if !s.CheckRequestPerm(r, PermConnections) {
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-
-	if r.Method == "POST" {
-		s.createConnection(w, r)
-		return
-	}
-}
-
 // handleJoin handles cluster-join requests from other nodes.
 func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
-	if !s.CheckRequestPerm(r, PermJoin) {
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-
-	if r.Method != "POST" {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
 	b, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -338,16 +280,6 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 
 // handleRemove handles cluster-remove requests.
 func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request) {
-	if !s.CheckRequestPerm(r, PermRemove) {
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-
-	if r.Method != "DELETE" {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
 	b, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -390,16 +322,6 @@ func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request) {
 
 // handleBackup returns the consistent database snapshot.
 func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
-	if !s.CheckRequestPerm(r, PermBackup) {
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-
-	if r.Method != "GET" {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
 	noLeader, err := noLeader(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -423,16 +345,6 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
 
 // handleLoad loads the state contained in a .dump output.
 func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
-	if !s.CheckRequestPerm(r, PermLoad) {
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-
-	if r.Method != "POST" {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
 	timings, err := timings(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -474,18 +386,6 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 
 // handleStatus returns status on the system.
 func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-
-	if !s.CheckRequestPerm(r, PermStatus) {
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-
-	if r.Method != "GET" {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
 	results, err := s.store.Stats()
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -559,18 +459,6 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 
 // handleExecute handles queries that modify the database.
 func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-
-	if !s.CheckRequestPerm(r, PermExecute) {
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-
-	if r.Method != "POST" {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
 	isTx, err := isTx(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -623,18 +511,6 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 
 // handleQuery handles queries that do not modify the database.
 func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-
-	if !s.CheckRequestPerm(r, PermQuery) {
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-
-	if r.Method != "GET" && r.Method != "POST" {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
 	isTx, err := isTx(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -683,45 +559,6 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 		resp.Raft = results.Raft
 	}
 	writeResponse(w, r, &resp)
-}
-
-// handleExpvar serves registered expvar information over HTTP.
-func (s *Service) handleExpvar(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	if !s.CheckRequestPerm(r, PermStatus) {
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-
-	fmt.Fprintf(w, "{\n")
-	first := true
-	expvar.Do(func(kv expvar.KeyValue) {
-		if !first {
-			fmt.Fprintf(w, ",\n")
-		}
-		first = false
-		fmt.Fprintf(w, "%q: %s", kv.Key, kv.Value)
-	})
-	fmt.Fprintf(w, "\n}\n")
-}
-
-// handlePprof serves pprof information over HTTP.
-func (s *Service) handlePprof(w http.ResponseWriter, r *http.Request) {
-	if !s.CheckRequestPerm(r, PermStatus) {
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-
-	switch r.URL.Path {
-	case "/debug/pprof/cmdline":
-		pprof.Cmdline(w, r)
-	case "/debug/pprof/profile":
-		pprof.Profile(w, r)
-	case "/debug/pprof/symbol":
-		pprof.Symbol(w, r)
-	default:
-		pprof.Index(w, r)
-	}
 }
 
 // Addr returns the address on which the Service is listening
@@ -775,17 +612,13 @@ func (s *Service) addBuildVersion(w http.ResponseWriter) {
 	w.Header().Add(VersionHTTPHeader, version)
 }
 
-// createConnection creates a connection and returns its location to
-// the client.
-func (s *Service) createConnection(w http.ResponseWriter, r *http.Request) {
+// createConnection creates a connection and returns its ID.
+func (s *Service) createConnection(w http.ResponseWriter, r *http.Request) (uint64, error) {
 	conn, err := s.store.Connect(nil)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusServiceUnavailable)
-		return
+		return 0, err
 	}
-
-	w.Header().Set("Location", s.FormConnectionURL(r, conn.ID()))
-	w.WriteHeader(http.StatusCreated)
+	return conn.ID(), nil
 }
 
 func (s *Service) protocol() string {
