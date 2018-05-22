@@ -70,7 +70,7 @@ func Test_StoreConnect(t *testing.T) {
 	}
 	s.WaitForLeader(10 * time.Second)
 
-	c, err := s.Connect(0, 0)
+	c, err := s.Connect(nil)
 	if err != nil {
 		t.Fatalf("failed to connect to open store: %s", err.Error())
 	}
@@ -136,7 +136,7 @@ func Test_ConnectionSameIDs(t *testing.T) {
 	}
 
 	// Create explicit connection on store0.
-	c0, err := s0.Connect(0, 0)
+	c0, err := s0.Connect(nil)
 	if err != nil {
 		t.Fatalf("failed to create new connection: %s", err.Error())
 	}
@@ -183,7 +183,7 @@ func Test_StoreConnectFollowerError(t *testing.T) {
 	}
 	s1.WaitForLeader(10 * time.Second)
 
-	_, err := s1.Connect(0, 0)
+	_, err := s1.Connect(nil)
 	if err != ErrNotLeader {
 		t.Fatal("Connect did not return error on follower")
 	}

@@ -542,8 +542,8 @@ func (m *MockStore) Query(qr *store.QueryRequest) (*store.QueryResponse, error) 
 	return nil, nil
 }
 
-func (m *MockStore) Connect() (*store.Connection, error) {
-	return store.NewConnection(nil, nil, 1234), nil
+func (m *MockStore) Connect(opt *store.ConnectionOptions) (*store.Connection, error) {
+	return store.NewConnection(nil, nil, 1234, 0, 0), nil
 }
 
 func (m *MockStore) Join(id, addr string, metadata map[string]string) error {

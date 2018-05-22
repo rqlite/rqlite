@@ -12,6 +12,11 @@ import (
 
 const pollPeriod = time.Second
 
+type ConnectionOptions struct {
+	IdleTimeout time.Duration
+	TxTimeout   time.Duration
+}
+
 // Connection is a connection to the database.
 type Connection struct {
 	dbMu  sync.RWMutex
@@ -31,7 +36,8 @@ type Connection struct {
 	wg   sync.WaitGroup
 	done chan struct{}
 
-	logger *log.Logger
+	logPrefix string
+	logger    *log.Logger
 }
 
 // NewConnection returns a connection to the database.
@@ -44,7 +50,7 @@ func NewConnection(c *sdb.Conn, s *Store, id uint64, it, tt time.Duration) *Conn
 		IdleTimeout: it,
 		TxTimeout:   tt,
 		done:        make(chan struct{}, 1),
-		logger:      log.New(os.Stderr, "[connection] ", log.LstdFlags),
+		logger:      log.New(os.Stderr, connectionLogPrefix(id), log.LstdFlags),
 	}
 	conn.run(conn.done)
 	return &conn
@@ -54,7 +60,7 @@ func NewConnection(c *sdb.Conn, s *Store, id uint64, it, tt time.Duration) *Conn
 func (c *Connection) Restore(dbConn *sdb.Conn, s *Store) {
 	c.db = dbConn
 	c.store = s
-	c.logger = log.New(os.Stderr, "[connection] ", log.LstdFlags)
+	c.logger = log.New(os.Stderr, connectionLogPrefix(c.id), log.LstdFlags)
 }
 
 // SetLastUsedNow marks the connection as being used now.
@@ -165,6 +171,10 @@ func (c *Connection) run(done chan struct{}) {
 			}
 		}
 	}()
+}
+
+func connectionLogPrefix(id uint64) string {
+	return fmt.Sprintf("[connection:%d] ", id)
 }
 
 // TxStateChange is a helper that detects when the transaction state on a

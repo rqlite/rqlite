@@ -298,7 +298,7 @@ func (s *Store) Open(enableSingle bool) error {
 //
 // Any connection returned by this call are READ_COMMITTED isolated from all
 // other connections, including the connection built-in to the Store itself.
-func (s *Store) Connect(idleTimeout, txTimeout time.Duration) (*Connection, error) {
+func (s *Store) Connect(opt *ConnectionOptions) (*Connection, error) {
 	// Randomly-selected connection ID must be part of command so
 	// that all nodes use the same value as connection ID.
 	connID := func() uint64 {
@@ -314,7 +314,14 @@ func (s *Store) Connect(idleTimeout, txTimeout time.Duration) (*Connection, erro
 		}
 	}()
 
-	d := &connectionSub{connID, idleTimeout, txTimeout}
+	var it time.Duration
+	var tt time.Duration
+	if opt != nil {
+		it = opt.IdleTimeout
+		tt = opt.TxTimeout
+	}
+
+	d := &connectionSub{connID, it, tt}
 	cmd, err := newCommand(connect, d)
 	if err != nil {
 		return nil, err

@@ -180,7 +180,7 @@ func Test_TxStateChange(t *testing.T) {
 }
 
 func mustNewConnection(s *Store) *Connection {
-	c, err := s.Connect(0, 0)
+	c, err := s.Connect(nil)
 	if err != nil {
 		panic(fmt.Sprintf("failed to connect to store: %s", err.Error()))
 	}

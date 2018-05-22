@@ -55,7 +55,7 @@ type Store interface {
 	Backup(leader bool, f store.BackupFormat, dst io.Writer) error
 
 	// Connect returns a Connection to the database
-	Connect() (*store.Connection, error)
+	Connect(*store.ConnectionOptions) (*store.Connection, error)
 }
 
 // CredentialStore is the interface credential stores must support.
@@ -778,7 +778,7 @@ func (s *Service) addBuildVersion(w http.ResponseWriter) {
 // createConnection creates a connection and returns its location to
 // the client.
 func (s *Service) createConnection(w http.ResponseWriter, r *http.Request) {
-	conn, err := s.store.Connect()
+	conn, err := s.store.Connect(nil)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		return
