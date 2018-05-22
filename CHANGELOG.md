@@ -30,6 +30,7 @@ _To upgrade from an earlier version to this release you should backup the leader
 - [PR #466](https://github.com/rqlite/rqlite/pull/466): Port HTTP service to new connection-oriented design.
 - [PR #486](https://github.com/rqlite/rqlite/pull/486): Store connections in Raft snapshot.
 - [PR #491](https://github.com/rqlite/rqlite/pull/491): Add varadic utility functions to Auth credential store.
+- [PR #494](https://github.com/rqlite/rqlite/pull/494): JSON types are stored as text by SQLite. Fixes [issue #492](https://github.com/rqlite/rqlite/issues/492).
 
 ## 4.3.0 (March 18th 2018)
 - [PR #397](https://github.com/rqlite/rqlite/pull/397), [PR #399](https://github.com/rqlite/rqlite/pull/399): Support hashed passwords. Fixes [issue #395](https://github.com/rqlite/rqlite/issues/395). Thanks @sum12.
