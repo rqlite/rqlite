@@ -10,6 +10,9 @@ import (
 	"strings"
 )
 
+// Handler pattern contained here created by github.com/Merovius
+// See https://blog.merovius.de/2017/06/18/how-not-to-use-an-http-router.html
+
 type executeHandler struct{}
 
 func (h *executeHandler) Handler(connID uint64, s *Service) http.Handler {
