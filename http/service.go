@@ -25,6 +25,21 @@ import (
 
 const defaultConnID = 0
 
+var (
+	// ErrBadRequest is returned when an invalid request is received
+	ErrInvalidRequest = errors.New("invalid request received")
+
+	// ErrInternal is returned when an internal error occurs during processing
+	ErrInternal = errors.New("internal error")
+
+	// ErrDefaultConnection is returned when an operation is prohibited
+	// because it operates on the default database connection.
+	ErrDefaultConnection = errors.New("prohibited on default connection")
+
+	// ErrConnectionNotFound means a requested connection does not exit.
+	ErrConnectionNotFound = errors.New("connection not found")
+)
+
 type Execer interface {
 	// Execute executes queries that return no rows, but do modify the database.
 	Execute(ex *store.ExecuteRequest) (*store.ExecuteResponse, error)
@@ -247,11 +262,12 @@ func (s *Service) createConnection(w http.ResponseWriter, r *http.Request) (uint
 	return conn.ID, nil
 }
 
-// createConnection creates a connection and returns its ID.
+// deleteConnection closes a connection and makes it unavailable for
+// future use.
 func (s *Service) deleteConnection(id uint64) error {
 	conn, ok := s.store.Connection(id)
 	if !ok {
-		return errors.New("connection not found")
+		return nil
 	}
 	return conn.Close()
 }

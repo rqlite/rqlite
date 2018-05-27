@@ -114,8 +114,6 @@ func (h *connectionsHandler) Handler(s *Service) http.Handler {
 
 				w.Header().Set("Location", s.FormConnectionURL(r, id))
 				w.WriteHeader(http.StatusCreated)
-			} else if r.Method == "GET" {
-				// XXX return connections
 			} else {
 				w.WriteHeader(http.StatusMethodNotAllowed)
 			}
@@ -125,7 +123,14 @@ func (h *connectionsHandler) Handler(s *Service) http.Handler {
 				http.Error(w, err.Error(), http.StatusNotFound)
 			}
 			if r.Method == "DELETE" {
-				// DELETE CONNECTION
+				if err := s.deleteConnection(id); err != nil {
+					if err == ErrConnectionNotFound {
+						http.Error(w, err.Error(), http.StatusNotFound)
+					} else {
+						http.Error(w, err.Error(), http.StatusServiceUnavailable)
+					}
+				}
+				w.WriteHeader(http.StatusNoContent)
 			} else {
 				switch head {
 				case "execute":
