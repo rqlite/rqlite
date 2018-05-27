@@ -766,3 +766,22 @@ func asJSON(v interface{}) string {
 	}
 	return string(b)
 }
+
+// pollExpvarStat checks value returned by f every second. If it matches
+// target it returns true. If timeout expires before this happens, it
+// returns false.
+func pollExpvarStat(f func() string, target string, timeout time.Duration) bool {
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+	timer := time.NewTimer(timeout)
+	for {
+		select {
+		case <-timer.C:
+			return false
+		case <-ticker.C:
+			if f() == target {
+				return true
+			}
+		}
+	}
+}

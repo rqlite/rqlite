@@ -64,6 +64,8 @@ const (
 	numSnaphotsBlocked = "num_snapshots_blocked"
 	numBackups         = "num_backups"
 	numRestores        = "num_restores"
+	numConnects        = "num_connects"
+	numDisconnects     = "num_disconnects"
 )
 
 const defaultConnID = 0
@@ -87,6 +89,8 @@ func init() {
 	stats.Add(numSnaphots, 0)
 	stats.Add(numBackups, 0)
 	stats.Add(numRestores, 0)
+	stats.Add(numConnects, 0)
+	stats.Add(numDisconnects, 0)
 }
 
 // RaftResponse is the Raft metadata that will be included with responses, if
@@ -341,6 +345,7 @@ func (s *Store) Connect(opt *ConnectionOptions) (*Connection, error) {
 
 	s.connsMu.RLock()
 	defer s.connsMu.RUnlock()
+	stats.Add(numConnects, 1)
 	return s.conns[connID], nil
 }
 
@@ -766,6 +771,7 @@ func (s *Store) disconnect(c *Connection) error {
 		}
 		return e.Error()
 	}
+	stats.Add(numDisconnects, 1)
 	return f.Response().(*fsmGenericResponse).error
 }
 

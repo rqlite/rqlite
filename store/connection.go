@@ -137,8 +137,8 @@ func (c *Connection) run(done chan struct{}) {
 	defer c.wg.Done()
 
 	ticker := time.NewTicker(pollPeriod)
-	defer ticker.Stop()
 	go func() {
+		defer ticker.Stop()
 		for {
 			select {
 			case <-done:
@@ -151,7 +151,7 @@ func (c *Connection) run(done chan struct{}) {
 					if err := c.Close(); err != nil {
 						c.logger.Printf("failed to close %s:", err.Error())
 					} else {
-						c.logger.Println("closed due to idle timeout")
+						c.logger.Printf("%d closed due to idle timeout", c.ID)
 					}
 				}
 				c.txStateMu.Lock()
@@ -170,7 +170,7 @@ func (c *Connection) run(done chan struct{}) {
 }
 
 func connectionLogPrefix(id uint64) string {
-	return fmt.Sprintf("[connection:%d] ", id)
+	return fmt.Sprintf("[connection] ")
 }
 
 // TxStateChange is a helper that detects when the transaction state on a

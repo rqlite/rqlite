@@ -118,6 +118,48 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 	}
 }
 
+func Test_ConnectionUsedClosed(t *testing.T) {
+	t.Parallel()
+
+	s := mustNewStore(true)
+	defer os.RemoveAll(s.Path())
+	if err := s.Open(true); err != nil {
+		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
+	}
+	defer s.Close(true)
+	s.WaitForLeader(10 * time.Second)
+	c := mustNewConnection(s)
+
+	// Now close the connection and ensure this error is handled. Connections
+	// could be closed during use due to timeouts.
+	c.Close()
+	c.AbortTransaction()
+}
+
+func Test_ConnectionIdleTimeout(t *testing.T) {
+	t.Parallel()
+
+	s := mustNewStore(true)
+	defer os.RemoveAll(s.Path())
+	if err := s.Open(true); err != nil {
+		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
+	}
+	defer s.Close(true)
+	s.WaitForLeader(10 * time.Second)
+	c := mustNewConnectionWithTimeouts(s, time.Second, 0)
+	_, ok := s.Connection(c.ID)
+	if !ok {
+		t.Fatal("connection not in store after connecting")
+	}
+	if !pollExpvarStat(stats.Get(numDisconnects).String, "1", 5*time.Second) {
+		t.Fatalf("connection has not idle-closed: %s", stats.Get(numDisconnects).String())
+	}
+	_, ok = s.Connection(c.ID)
+	if ok {
+		t.Fatal("connection in store after idle-close")
+	}
+}
+
 func Test_TxStateChange(t *testing.T) {
 	t.Parallel()
 
@@ -181,6 +223,14 @@ func Test_TxStateChange(t *testing.T) {
 
 func mustNewConnection(s *Store) *Connection {
 	c, err := s.Connect(nil)
+	if err != nil {
+		panic(fmt.Sprintf("failed to connect to store: %s", err.Error()))
+	}
+	return c
+}
+
+func mustNewConnectionWithTimeouts(s *Store, it, tt time.Duration) *Connection {
+	c, err := s.Connect(&ConnectionOptions{it, tt})
 	if err != nil {
 		panic(fmt.Sprintf("failed to connect to store: %s", err.Error()))
 	}
