@@ -2,7 +2,9 @@ package system
 
 import (
 	"fmt"
+	"strings"
 	"testing"
+	"time"
 )
 
 func Test_SingleNodeConnection(t *testing.T) {
@@ -210,5 +212,82 @@ func Test_SingleNodeConnectionIsolation(t *testing.T) {
 	r, _ = second.Execute(`INSERT INTO foo(name) VALUES("fiona")`)
 	if got, exp := r, fmt.Sprintf(`{"results":[{"error":"database is locked"}],%s}`, rr(node.ID, 15)); got != exp {
 		t.Fatalf("test received wrong result\ngot: %s\nexp: %s\n", got, exp)
+	}
+	second.Execute(`ROLLBACK`)
+
+	first.Execute(`ROLLBACK`)
+	first.Execute(`BEGIN IMMEDIATE`)
+
+	second.Execute(`BEGIN`)
+	if got, exp := r, fmt.Sprintf(`{"results":[{"error":"database is locked"}],%s}`, rr(node.ID, 15)); got != exp {
+		t.Fatalf("test received wrong result\ngot: %s\nexp: %s\n", got, exp)
+	}
+}
+
+func Test_SingleNodeConnectionIsolationTimeouts(t *testing.T) {
+	t.Parallel()
+
+	txTimeout := 2 * time.Second
+	node := mustNewLeaderNode()
+	defer node.Deprovision()
+	first, err := node.ConnectWithTimeouts(0, txTimeout)
+	if err != nil {
+		t.Fatalf("failed to create first connection: %s", err.Error())
+	}
+	second, err := node.Connect()
+	if err != nil {
+		t.Fatalf("failed to create second connection: %s", err.Error())
+	}
+
+	node.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`)
+	r, _ := first.Query(`SELECT * FROM foo`)
+	if got, exp := r, `{"results":[{"columns":["id","name"],"types":["integer","text"]}]}`; got != exp {
+		t.Fatalf("test received wrong result\ngot: %s\nexp: %s\n", got, exp)
+	}
+	r, _ = second.Query(`SELECT * FROM foo`)
+	if got, exp := r, `{"results":[{"columns":["id","name"],"types":["integer","text"]}]}`; got != exp {
+		t.Fatalf("test received wrong result\ngot: %s\nexp: %s\n", got, exp)
+	}
+
+	first.Execute(`BEGIN IMMEDIATE`)
+	first.Execute(`INSERT INTO foo(name) VALUES("fiona")`)
+
+	r, _ = second.Query(`SELECT * FROM foo`)
+	if got, exp := r, `{"results":[{"columns":["id","name"],"types":["integer","text"]}]}`; got != exp {
+		t.Fatalf("test received wrong result\ngot: %s\nexp: %s\n", got, exp)
+	}
+
+	time.Sleep(3 * txTimeout)
+
+	r, _ = second.Execute(`BEGIN`)
+	if got, exp := r, fmt.Sprintf(`{"results":[{}],%s}`, rr(node.ID, 9)); got != exp {
+		t.Fatalf("test received wrong result\ngot: %s\nexp: %s\n", got, exp)
+	}
+	second.Execute(`ROLLBACK`)
+}
+
+func Test_SingleNodeConnectionCloseTimeouts(t *testing.T) {
+	t.Parallel()
+
+	idleTimeout := 2 * time.Second
+	node := mustNewLeaderNode()
+	defer node.Deprovision()
+	first, err := node.ConnectWithTimeouts(idleTimeout, 0)
+	if err != nil {
+		t.Fatalf("failed to create first connection: %s", err.Error())
+	}
+
+	first.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`)
+	first.Execute(`INSERT INTO foo(name) VALUES("fiona")`)
+
+	time.Sleep(3 * idleTimeout)
+
+	r, _ := first.Query(`SELECT * FROM foo`)
+	if !strings.Contains(r, "connection not found") {
+		t.Fatalf("test received wrong result\ngot: %s", r)
+	}
+	r, _ = first.Execute(`INSERT INTO foo(name) VALUES("fiona")`)
+	if !strings.Contains(r, "connection not found") {
+		t.Fatalf("test received wrong result\ngot: %s", r)
 	}
 }

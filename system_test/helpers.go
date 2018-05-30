@@ -23,6 +23,17 @@ type Connection struct {
 	ExecuteURL *url.URL
 }
 
+// NewConnection returns an instantiated Connection.
+func NewConnection(id uint64, n *Node) *Connection {
+	qURL, _ := url.Parse("http://" + n.APIAddr + fmt.Sprintf("/db/connections/%d/query", id))
+	eURL, _ := url.Parse("http://" + n.APIAddr + fmt.Sprintf("/db/connections/%d/execute", id))
+	return &Connection{
+		ConnID:     id,
+		QueryURL:   qURL,
+		ExecuteURL: eURL,
+	}
+}
+
 // Query runs a single query using the connection.
 func (c *Connection) Query(stmt string) (string, error) {
 	v := c.QueryURL
@@ -122,14 +133,16 @@ func (n *Node) Connect() (*Connection, error) {
 	if err != nil {
 		return nil, err
 	}
+	return NewConnection(c.ID, n), nil
+}
 
-	qURL, _ := url.Parse("http://" + n.APIAddr + fmt.Sprintf("/db/connections/%d/query", c.ID))
-	eURL, _ := url.Parse("http://" + n.APIAddr + fmt.Sprintf("/db/connections/%d/execute", c.ID))
-	return &Connection{
-		ConnID:     c.ID,
-		QueryURL:   qURL,
-		ExecuteURL: eURL,
-	}, nil
+// Connect returns an explicit connection to the node's database.
+func (n *Node) ConnectWithTimeouts(it, tt time.Duration) (*Connection, error) {
+	c, err := n.Store.Connect(&store.ConnectionOptions{it, tt})
+	if err != nil {
+		return nil, err
+	}
+	return NewConnection(c.ID, n), nil
 }
 
 // Execute executes a single statement against the node.

@@ -536,7 +536,7 @@ func (s *Service) handleExecute(connID uint64, w http.ResponseWriter, r *http.Re
 	} else {
 		c, ok := s.store.Connection(connID)
 		if !ok {
-			http.Error(w, err.Error(), http.StatusNotFound)
+			http.Error(w, "connection not found", http.StatusNotFound)
 			return
 		}
 		execer = c
@@ -601,7 +601,7 @@ func (s *Service) handleQuery(connID uint64, w http.ResponseWriter, r *http.Requ
 	} else {
 		c, ok := s.store.Connection(connID)
 		if !ok {
-			http.Error(w, err.Error(), http.StatusNotFound)
+			http.Error(w, "connection not found", http.StatusNotFound)
 			return
 		}
 		queryer = c
