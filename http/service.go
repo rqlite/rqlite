@@ -36,7 +36,7 @@ var (
 	// because it operates on the default database connection.
 	ErrDefaultConnection = errors.New("prohibited on default connection")
 
-	// ErrConnectionNotFound means a requested connection does not exit.
+	// ErrConnectionNotFound means a requested connection does not exist.
 	ErrConnectionNotFound = errors.New("connection not found")
 )
 
