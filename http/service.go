@@ -169,6 +169,9 @@ type Service struct {
 	CertFile string // Path to SSL certificate.
 	KeyFile  string // Path to SSL private key.
 
+	ConnIdleTimeout time.Duration
+	ConnTxTimeout   time.Duration
+
 	credentialStore CredentialStore
 
 	Expvar bool
@@ -255,7 +258,11 @@ func (s *Service) RegisterStatus(key string, stat Statuser) error {
 
 // createConnection creates a connection and returns its ID.
 func (s *Service) createConnection(w http.ResponseWriter, r *http.Request) (uint64, error) {
-	conn, err := s.store.Connect(nil)
+	conn, err := s.store.Connect(
+		&store.ConnectionOptions{
+			IdleTimeout: s.ConnIdleTimeout,
+			TxTimeout:   s.ConnTxTimeout,
+		})
 	if err != nil {
 		return 0, err
 	}
@@ -447,9 +454,11 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpStatus := map[string]interface{}{
-		"addr":     s.Addr().String(),
-		"auth":     prettyEnabled(s.credentialStore != nil),
-		"redirect": s.leaderAPIAddr(),
+		"addr":              s.Addr().String(),
+		"auth":              prettyEnabled(s.credentialStore != nil),
+		"redirect":          s.leaderAPIAddr(),
+		"conn_idle_timeout": s.ConnIdleTimeout,
+		"conn_tx_timeout":   s.ConnTxTimeout,
 	}
 
 	nodeStatus := map[string]interface{}{

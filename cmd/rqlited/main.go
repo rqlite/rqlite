@@ -54,6 +54,8 @@ const (
 
 var httpAddr string
 var httpAdv string
+var httpIdleTimeout string
+var httpTxTimeout string
 var authFile string
 var x509Cert string
 var x509Key string
@@ -88,6 +90,8 @@ func init() {
 	flag.StringVar(&nodeID, "node-id", "", "Unique name for node. If not set, set to hostname")
 	flag.StringVar(&httpAddr, "http-addr", "localhost:4001", "HTTP server bind address. For HTTPS, set X.509 cert and key")
 	flag.StringVar(&httpAdv, "http-adv-addr", "", "Advertised HTTP address. If not set, same as HTTP server")
+	flag.StringVar(&httpIdleTimeout, "http-conn-idle-timeout", "60s", "HTTP connection idle timeout. Use 0s for no timeout")
+	flag.StringVar(&httpTxTimeout, "http-conn-tx-timeout", "10s", "HTTP transaction timeout. Use 0s for no timeout")
 	flag.StringVar(&x509Cert, "http-cert", "", "Path to X.509 certificate for HTTP endpoint")
 	flag.StringVar(&x509Key, "http-key", "", "Path to X.509 private key for HTTP endpoint")
 	flag.BoolVar(&noVerify, "http-no-verify", false, "Skip verification of remote HTTPS cert when joining cluster")
@@ -309,6 +313,17 @@ func startHTTPService(str *store.Store) error {
 		s = httpd.New(httpAddr, str, nil)
 	}
 
+	it, err := time.ParseDuration(httpIdleTimeout)
+	if err != nil {
+		return err
+	}
+	tt, err := time.ParseDuration(httpTxTimeout)
+	if err != nil {
+		return err
+	}
+
+	s.ConnIdleTimeout = it
+	s.ConnTxTimeout = tt
 	s.CertFile = x509Cert
 	s.KeyFile = x509Key
 	s.Expvar = expvar
