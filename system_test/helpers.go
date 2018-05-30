@@ -16,6 +16,79 @@ import (
 	"github.com/rqlite/rqlite/tcp"
 )
 
+// Connection represents an explicit connection to the node's database.
+type Connection struct {
+	ConnID     uint64
+	QueryURL   *url.URL
+	ExecuteURL *url.URL
+}
+
+// Query runs a single query using the connection.
+func (c *Connection) Query(stmt string) (string, error) {
+	v := c.QueryURL
+	v.RawQuery = url.Values{"q": []string{stmt}}.Encode()
+
+	resp, err := http.Get(v.String())
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	return string(body), nil
+}
+
+// QueryMulti runs multiple queries against the node.
+func (c *Connection) QueryMulti(stmts []string) (string, error) {
+	j, err := json.Marshal(stmts)
+	if err != nil {
+		return "", err
+	}
+	return c.postQuery(string(j))
+}
+
+// Execute executes a single statement using the connection.
+func (c *Connection) Execute(stmt string) (string, error) {
+	return c.ExecuteMulti([]string{stmt})
+}
+
+// ExecuteMulti executes multiple statements using the connection.
+func (c *Connection) ExecuteMulti(stmts []string) (string, error) {
+	j, err := json.Marshal(stmts)
+	if err != nil {
+		return "", err
+	}
+	return c.postExecute(string(j))
+}
+
+func (c *Connection) postExecute(stmt string) (string, error) {
+	resp, err := http.Post(c.ExecuteURL.String(), "application/json", strings.NewReader(stmt))
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	return string(body), nil
+}
+
+func (c *Connection) postQuery(stmt string) (string, error) {
+	resp, err := http.Post(c.QueryURL.String(), "application/json", strings.NewReader(stmt))
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	return string(body), nil
+}
+
 // Node represents a node under test.
 type Node struct {
 	APIAddr  string
@@ -41,6 +114,22 @@ func (n *Node) Deprovision() {
 // WaitForLeader blocks for up to 10 seconds until the node detects a leader.
 func (n *Node) WaitForLeader() (string, error) {
 	return n.Store.WaitForLeader(10 * time.Second)
+}
+
+// Connect returns an explicit connection to the node's database.
+func (n *Node) Connect() (*Connection, error) {
+	c, err := n.Store.Connect(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	qURL, _ := url.Parse("http://" + n.APIAddr + fmt.Sprintf("/db/connections/%d/query", c.ID))
+	eURL, _ := url.Parse("http://" + n.APIAddr + fmt.Sprintf("/db/connections/%d/execute", c.ID))
+	return &Connection{
+		ConnID:     c.ID,
+		QueryURL:   qURL,
+		ExecuteURL: eURL,
+	}, nil
 }
 
 // Execute executes a single statement against the node.

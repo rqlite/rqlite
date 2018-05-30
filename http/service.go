@@ -81,7 +81,7 @@ type Store interface {
 	Connect(*store.ConnectionOptions) (*store.Connection, error)
 
 	// Connection returns an existing connection to the database. If
-	// OK returns false, a connection with the given ID does not exist.
+	// OK is false, a connection with the given ID does not exist.
 	Connection(id uint64) (c *store.Connection, ok bool)
 }
 

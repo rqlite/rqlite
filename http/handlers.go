@@ -132,6 +132,7 @@ func (h *connectionsHandler) Handler(s *Service) http.Handler {
 				}
 				w.WriteHeader(http.StatusNoContent)
 			} else {
+				head, _ = shiftPath(r.URL.Path)
 				switch head {
 				case "execute":
 					h.executeH.Handler(id, s).ServeHTTP(w, r)
