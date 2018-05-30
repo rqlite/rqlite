@@ -43,11 +43,13 @@ type Connection struct {
 
 // NewConnection returns a connection to the database.
 func NewConnection(c *sdb.Conn, s *Store, id uint64, it, tt time.Duration) *Connection {
+	now := time.Now()
 	conn := Connection{
 		db:          c,
 		store:       s,
 		ID:          id,
-		CreatedAt:   time.Now(),
+		CreatedAt:   now,
+		LastUsedAt:  now,
 		IdleTimeout: it,
 		TxTimeout:   tt,
 		done:        make(chan struct{}, 1),

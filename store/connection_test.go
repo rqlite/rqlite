@@ -191,6 +191,29 @@ func Test_ConnectionIdleTimeout(t *testing.T) {
 	}
 }
 
+func Test_ConnectionIdleNoTimeout(t *testing.T) {
+        s := mustNewStore(true)
+        defer os.RemoveAll(s.Path())
+        if err := s.Open(true); err != nil {
+                t.Fatalf("failed to open node for multi-node test: %s", err.Error())
+        }
+        defer s.Close(true)
+        s.WaitForLeader(10 * time.Second)
+        c := mustNewConnectionWithTimeouts(s, 60*time.Second, 0)
+        _, ok := s.Connection(c.ID)
+        if !ok {
+                t.Fatal("connection not in store after connecting")
+        }
+	defer c.Close()
+
+	// Wait, and check that connection is still open.
+	time.Sleep(5*time.Second)
+        _, ok = s.Connection(c.ID)
+        if !ok {
+                t.Fatal("connection not available before idle-close")
+        }
+}
+
 func Test_ConnectionTxTimeout(t *testing.T) {
 	// Test is explicitly not parallel because it accesses global Store stats.
 
