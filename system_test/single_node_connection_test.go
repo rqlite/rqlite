@@ -1,6 +1,3 @@
-/*
-Package system runs system-level testing of rqlite. This includes testing of single nodes, and multi-node clusters.
-*/
 package system
 
 import (
@@ -151,5 +148,67 @@ func Test_SingleNodeMultiConnection(t *testing.T) {
 	}
 	if r != `{"results":[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"],[2,"declan"]]},{"columns":["id","sequence"],"types":["integer","integer"],"values":[[1,5]]}]}` {
 		t.Fatalf("test received wrong result got %s", r)
+	}
+}
+
+func Test_SingleNodeConnectionIsolation(t *testing.T) {
+	t.Parallel()
+
+	node := mustNewLeaderNode()
+	defer node.Deprovision()
+	first, err := node.Connect()
+	if err != nil {
+		t.Fatalf("failed to create first connection: %s", err.Error())
+	}
+	second, err := node.Connect()
+	if err != nil {
+		t.Fatalf("failed to create second connection: %s", err.Error())
+	}
+
+	first.Execute(`BEGIN`)
+	first.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`)
+	first.Execute(`INSERT INTO foo(name) VALUES("fiona")`)
+
+	r, _ := second.Query(`SELECT * FROM foo`)
+	if got, exp := r, `{"results":[{"error":"no such table: foo"}]}`; got != exp {
+		t.Fatalf("test received wrong result\ngot: %s\nexp: %s\n", got, exp)
+	}
+
+	first.Execute(`COMMIT`)
+
+	r, _ = second.Query(`SELECT * FROM foo`)
+	if got, exp := r, `{"results":[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]}`; got != exp {
+		t.Fatalf("test received wrong result\ngot: %s\nexp: %s\n", got, exp)
+	}
+	second.Execute(`BEGIN`)
+	second.Execute(`INSERT INTO foo(name) VALUES("fiona")`)
+	r, _ = second.Query(`SELECT COUNT(id) FROM foo`)
+	if got, exp := r, `{"results":[{"columns":["COUNT(id)"],"types":[""],"values":[[2]]}]}`; got != exp {
+		t.Fatalf("test received wrong result\ngot: %s\nexp: %s\n", got, exp)
+	}
+
+	r, _ = first.Query(`SELECT COUNT(id) FROM foo`)
+	if got, exp := r, `{"results":[{"columns":["COUNT(id)"],"types":[""],"values":[[1]]}]}`; got != exp {
+		t.Fatalf("test received wrong result\ngot: %s\nexp: %s\n", got, exp)
+	}
+
+	second.Execute(`ROLLBACK`)
+	r, _ = second.Query(`SELECT COUNT(id) FROM foo`)
+	if got, exp := r, `{"results":[{"columns":["COUNT(id)"],"types":[""],"values":[[1]]}]}`; got != exp {
+		t.Fatalf("test received wrong result\ngot: %s\nexp: %s\n", got, exp)
+	}
+
+	r, _ = first.Query(`SELECT COUNT(id) FROM foo`)
+	if got, exp := r, `{"results":[{"columns":["COUNT(id)"],"types":[""],"values":[[1]]}]}`; got != exp {
+		t.Fatalf("test received wrong result\ngot: %s\nexp: %s\n", got, exp)
+	}
+
+	first.Execute(`BEGIN`)
+	first.Execute(`INSERT INTO foo(name) VALUES("fiona")`)
+
+	second.Execute(`BEGIN`)
+	r, _ = second.Execute(`INSERT INTO foo(name) VALUES("fiona")`)
+	if got, exp := r, fmt.Sprintf(`{"results":[{"error":"database is locked"}],%s}`, rr(node.ID, 15)); got != exp {
+		t.Fatalf("test received wrong result\ngot: %s\nexp: %s\n", got, exp)
 	}
 }
