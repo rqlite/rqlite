@@ -126,17 +126,17 @@ const (
 	PermJoin = "join"
 	// PermRemove means user is permitted to remove a node.
 	PermRemove = "remove"
-	// PermExecute means user can access execute endpoint.
+	// PermExecute means user is permitted to access execute endpoint.
 	PermExecute = "execute"
-	// PermQuery means user can access query endpoint
+	// PermQuery means user is permitted to access query endpoint
 	PermQuery = "query"
-	// PermConnections means user access connections endpoint.
+	// PermConnections means user is permitted to access connections endpoint.
 	PermConnections = "connections"
-	// PermStatus means user can retrieve node status.
+	// PermStatus means user is permitted to retrieve node status.
 	PermStatus = "status"
-	// PermBackup means user can backup node.
+	// PermBackup means user is permitted to backup node.
 	PermBackup = "backup"
-	// PermLoad means user can load a SQLite dump into a node.
+	// PermLoad means user is permitted to load a SQLite dump into a node.
 	PermLoad = "load"
 
 	// VersionHTTPHeader is the HTTP header key for the version.
