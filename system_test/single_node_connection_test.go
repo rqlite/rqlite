@@ -232,6 +232,31 @@ func Test_SingleNodeConnectionIsolation(t *testing.T) {
 	}
 }
 
+func Test_SingleNodeConnectionIsolationClose(t *testing.T) {
+	t.Parallel()
+
+	node := mustNewLeaderNode()
+	defer node.Deprovision()
+	first, err := node.Connect()
+	if err != nil {
+		t.Fatalf("failed to create first connection: %s", err.Error())
+	}
+	second, err := node.Connect()
+	if err != nil {
+		t.Fatalf("failed to create second connection: %s", err.Error())
+	}
+
+	first.Execute(`BEGIN`)
+	first.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`)
+	first.Execute(`INSERT INTO foo(name) VALUES("fiona")`)
+	first.Close()
+
+	r, _ := second.Query(`SELECT COUNT(id) FROM foo`)
+	if got, exp := r, `{"results":[{"error":"no such table: foo"}]}`; got != exp {
+		t.Fatalf("test received wrong result\ngot: %s\nexp: %s\n", got, exp)
+	}
+}
+
 func Test_SingleNodeConnectionIsolationTimeouts(t *testing.T) {
 	t.Parallel()
 
