@@ -125,7 +125,7 @@ func Test_TxStateChange(t *testing.T) {
 	}
 	defer s.Close(true)
 	s.WaitForLeader(10 * time.Second)
-	c := mustNewConnection(s).(*Connection)
+	c := mustNewConnection(s)
 
 	txState := NewTxStateChange(c)
 	txState.CheckAndSet()
@@ -176,7 +176,7 @@ func Test_TxStateChange(t *testing.T) {
 	}
 }
 
-func mustNewConnection(s *Store) ExecerQueryerCloserIDer {
+func mustNewConnection(s *Store) *Connection {
 	c, err := s.Connect()
 	if err != nil {
 		panic(fmt.Sprintf("failed to connect to store: %s", err.Error()))

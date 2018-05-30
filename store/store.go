@@ -68,34 +68,6 @@ const (
 
 const defaultConnID = 0
 
-// ExecerQueryer is generic connection for interacting with a database.
-type ExecerQueryer interface {
-	// Execute executes queries that return no rows, but do modify the database.
-	Execute(ex *ExecuteRequest) (*ExecuteResponse, error)
-
-	// ExecuteOrAbort executes the requests, but aborts any active transaction
-	// on the underlying database in the case of any error.
-	ExecuteOrAbort(ex *ExecuteRequest) (resp *ExecuteResponse, retErr error)
-
-	// Query executes queries that return rows, and do not modify the database.
-	Query(qr *QueryRequest) (*QueryResponse, error)
-}
-
-// ExecerQueryerCloser is generic connection for interacting with a database,
-// which also allows release of its underlying resources. Once closed, it
-// cannot be reused.
-type ExecerQueryerCloser interface {
-	ExecerQueryer
-	io.Closer
-}
-
-// ExecerQueryerCloserIDer is generic connection that also returns an ID that
-// can be used to identify the object.
-type ExecerQueryerCloserIDer interface {
-	ExecerQueryerCloser
-	ID() uint64
-}
-
 // BackupFormat represents the backup formats supported by the Store.
 type BackupFormat int
 
@@ -326,7 +298,7 @@ func (s *Store) Open(enableSingle bool) error {
 //
 // Any connection returned by this call are READ_COMMITTED isolated from all
 // other connections, including the connection built-in to the Store itself.
-func (s *Store) Connect() (ExecerQueryerCloserIDer, error) {
+func (s *Store) Connect() (*Connection, error) {
 	// Randomly-selected connection ID must be part of command so
 	// that all nodes use the same value as connection ID.
 	connID := func() uint64 {
@@ -768,7 +740,7 @@ func (s *Store) setMetadata(id string, md map[string]string) error {
 // disconnect removes a connection to the database, a connection
 // which was previously established via Raft consensus.
 func (s *Store) disconnect(c *Connection) error {
-	d := &connectionSub{c.ConnID}
+	d := &connectionSub{c.ID()}
 	cmd, err := newCommand(disconnect, d)
 	if err != nil {
 		return err
@@ -801,7 +773,7 @@ func (s *Store) execute(c *Connection, ex *ExecuteRequest) (*ExecuteResponse, er
 	start := time.Now()
 
 	d := &databaseSub{
-		ConnID:  c.ConnID,
+		ConnID:  c.ID(),
 		Tx:      ex.Tx,
 		Queries: ex.Queries,
 		Timings: ex.Timings,
@@ -872,7 +844,7 @@ func (s *Store) query(c *Connection, qr *QueryRequest) (*QueryResponse, error) {
 
 	if qr.Lvl == Strong {
 		d := &databaseSub{
-			ConnID:  c.ConnID,
+			ConnID:  c.ID(),
 			Tx:      qr.Tx,
 			Queries: qr.Queries,
 			Timings: qr.Timings,

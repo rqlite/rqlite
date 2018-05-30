@@ -12,9 +12,9 @@ import (
 
 // Connection is a connection to the database.
 type Connection struct {
-	db     *sdb.Conn // Connection to SQLite database.
-	store  *Store    // Store to apply commands to.
-	ConnID uint64    `json:"id,omitempty"` // Connection ID, used as a handle by clients.
+	db    *sdb.Conn // Connection to SQLite database.
+	store *Store    // Store to apply commands to.
+	id    uint64    `json:"id,omitempty"` // Connection ID, used as a handle by clients.
 
 	timeMu     sync.Mutex
 	CreatedAt  time.Time `json:"created_at,omitempty"`
@@ -31,7 +31,7 @@ func NewConnection(c *sdb.Conn, s *Store, id uint64) *Connection {
 	return &Connection{
 		db:        c,
 		store:     s,
-		ConnID:    id,
+		id:        id,
 		CreatedAt: time.Now(),
 		logger:    log.New(os.Stderr, "[connection] ", log.LstdFlags),
 	}
@@ -53,12 +53,12 @@ func (c *Connection) SetLastUsedNow() {
 
 // String implements the Stringer interface on the Connection.
 func (c *Connection) String() string {
-	return fmt.Sprintf("connection:%d", c.ConnID)
+	return fmt.Sprintf("connection:%d", c.id)
 }
 
 // ID returns the connection ID.
 func (c *Connection) ID() uint64 {
-	return c.ConnID
+	return c.id
 }
 
 // TransactionActive returns whether a transaction is active on the connection.
