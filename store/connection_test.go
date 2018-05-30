@@ -118,7 +118,7 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 	}
 }
 
-func Test_ConnectionUsedClosed(t *testing.T) {
+func Test_ConnectionExecuteClosed(t *testing.T) {
 	t.Parallel()
 
 	s := mustNewStore(true)
@@ -132,12 +132,43 @@ func Test_ConnectionUsedClosed(t *testing.T) {
 
 	// Now close the connection and ensure this error is handled. Connections
 	// could be closed during use due to timeouts.
-	c.Close()
-	c.AbortTransaction()
+	if err := c.Close(); err != nil {
+		t.Fatalf("failed to close connection: %s", err.Error())
+	}
+	if err := c.AbortTransaction(); err != ErrConnectionDoesNotExist {
+		t.Fatalf("wring error returned closed connection: %v", err)
+	}
+}
+
+func Test_ConnectionQueryClosed(t *testing.T) {
+	t.Parallel()
+
+	s := mustNewStore(true)
+	defer os.RemoveAll(s.Path())
+	if err := s.Open(true); err != nil {
+		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
+	}
+	defer s.Close(true)
+	s.WaitForLeader(10 * time.Second)
+	c := mustNewConnection(s)
+
+	// Now close the connection and ensure this error is handled. Connections
+	// could be closed during use due to timeouts.
+	if err := c.Close(); err != nil {
+		t.Fatalf("failed to close connection: %s", err.Error())
+	}
+	_, err := c.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, Strong})
+	if err != ErrConnectionDoesNotExist {
+		t.Fatalf("wring error returned closed connection: %v", err)
+	}
+	_, err = c.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, Weak})
+	if err != ErrConnectionDoesNotExist {
+		t.Fatalf("wring error returned closed connection: %v", err)
+	}
 }
 
 func Test_ConnectionIdleTimeout(t *testing.T) {
-	t.Parallel()
+	// Test is explicitly not parallel because it accesses global Store stats.
 
 	s := mustNewStore(true)
 	defer os.RemoveAll(s.Path())

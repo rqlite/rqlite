@@ -45,6 +45,11 @@ var (
 	// ErrDefaultConnection is returned when an attempt is made to delete the
 	// default connection.
 	ErrDefaultConnection = errors.New("cannot delete default connection")
+
+	// ErrConnectionDoesNotExist is returned when an operation is attempted
+	// on a non-existent connection. This can happen if the connection
+	// was previously open but is now closed.
+	ErrConnectionDoesNotExist = errors.New("connection does not exist")
 )
 
 const (
@@ -810,12 +815,18 @@ func (s *Store) execute(c *Connection, ex *ExecuteRequest) (*ExecuteResponse, er
 		return nil, e.Error()
 	}
 
-	r := f.Response().(*fsmExecuteResponse)
-	return &ExecuteResponse{
-		Results: r.results,
-		Time:    time.Since(start).Seconds(),
-		Raft:    RaftResponse{f.Index(), s.raftID},
-	}, r.error
+	switch r := f.Response().(type) {
+	case *fsmExecuteResponse:
+		return &ExecuteResponse{
+			Results: r.results,
+			Time:    time.Since(start).Seconds(),
+			Raft:    RaftResponse{f.Index(), s.raftID},
+		}, r.error
+	case *fsmGenericResponse:
+		return nil, r.error
+	default:
+		panic("unsupported type")
+	}
 }
 
 func (s *Store) executeOrAbort(c *Connection, ex *ExecuteRequest) (resp *ExecuteResponse, retErr error) {
@@ -881,12 +892,18 @@ func (s *Store) query(c *Connection, qr *QueryRequest) (*QueryResponse, error) {
 			return nil, e.Error()
 		}
 
-		r := f.Response().(*fsmQueryResponse)
-		return &QueryResponse{
-			Rows: r.rows,
-			Time: time.Since(start).Seconds(),
-			Raft: &RaftResponse{f.Index(), s.raftID},
-		}, err
+		switch r := f.Response().(type) {
+		case *fsmQueryResponse:
+			return &QueryResponse{
+				Rows: r.rows,
+				Time: time.Since(start).Seconds(),
+				Raft: &RaftResponse{f.Index(), s.raftID},
+			}, r.error
+		case *fsmGenericResponse:
+			return nil, r.error
+		default:
+			panic("unsupported type")
+		}
 	}
 
 	if qr.Lvl == Weak && s.raft.State() != raft.Leader {
@@ -1005,7 +1022,7 @@ func (s *Store) Apply(l *raft.Log) interface{} {
 		conn, ok := s.conns[d.ConnID]
 		s.connsMu.RUnlock()
 		if !ok {
-			return &fsmGenericResponse{error: fmt.Errorf("connection %d does not exist", d.ConnID)}
+			return &fsmGenericResponse{error: ErrConnectionDoesNotExist}
 		}
 
 		if c.Typ == execute {

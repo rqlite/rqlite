@@ -59,6 +59,8 @@ func NewConnection(c *sdb.Conn, s *Store, id uint64, it, tt time.Duration) *Conn
 
 // Restore prepares a partially ready connection.
 func (c *Connection) Restore(dbConn *sdb.Conn, s *Store) {
+	c.dbMu.Lock()
+	defer c.dbMu.Unlock()
 	c.db = dbConn
 	c.store = s
 	c.logger = log.New(os.Stderr, connectionLogPrefix(c.ID), log.LstdFlags)
@@ -80,6 +82,9 @@ func (c *Connection) String() string {
 func (c *Connection) TransactionActive() bool {
 	c.dbMu.RLock()
 	defer c.dbMu.RUnlock()
+	if c.db == nil {
+		return false
+	}
 	return c.db.TransactionActive()
 }
 
@@ -87,6 +92,9 @@ func (c *Connection) TransactionActive() bool {
 func (c *Connection) Execute(ex *ExecuteRequest) (*ExecuteResponse, error) {
 	c.dbMu.RLock()
 	defer c.dbMu.RUnlock()
+	if c.db == nil {
+		return nil, ErrConnectionDoesNotExist
+	}
 	return c.store.execute(c, ex)
 }
 
@@ -95,6 +103,9 @@ func (c *Connection) Execute(ex *ExecuteRequest) (*ExecuteResponse, error) {
 func (c *Connection) ExecuteOrAbort(ex *ExecuteRequest) (resp *ExecuteResponse, retErr error) {
 	c.dbMu.RLock()
 	defer c.dbMu.RUnlock()
+	if c.db == nil {
+		return nil, ErrConnectionDoesNotExist
+	}
 	return c.store.executeOrAbort(c, ex)
 }
 
@@ -102,6 +113,9 @@ func (c *Connection) ExecuteOrAbort(ex *ExecuteRequest) (resp *ExecuteResponse, 
 func (c *Connection) Query(qr *QueryRequest) (*QueryResponse, error) {
 	c.dbMu.RLock()
 	defer c.dbMu.RUnlock()
+	if c.db == nil {
+		return nil, ErrConnectionDoesNotExist
+	}
 	return c.store.query(c, qr)
 }
 
@@ -112,6 +126,9 @@ func (c *Connection) Query(qr *QueryRequest) (*QueryResponse, error) {
 func (c *Connection) AbortTransaction() error {
 	c.dbMu.RLock()
 	defer c.dbMu.RUnlock()
+	if c.db == nil {
+		return ErrConnectionDoesNotExist
+	}
 	_, err := c.store.execute(c, &ExecuteRequest{[]string{"ROLLBACK"}, false, false})
 	return err
 }
@@ -127,6 +144,7 @@ func (c *Connection) Close() error {
 			return err
 		}
 	}
+	c.db = nil
 	return nil
 }
 
