@@ -177,12 +177,12 @@ func Test_ConnectionIdleTimeout(t *testing.T) {
 	}
 	defer s.Close(true)
 	s.WaitForLeader(10 * time.Second)
-	c := mustNewConnectionWithTimeouts(s, time.Second, 0)
+	c := mustNewConnectionWithTimeouts(s, 3*time.Second, 0)
 	_, ok := s.Connection(c.ID)
 	if !ok {
 		t.Fatal("connection not in store after connecting")
 	}
-	if !pollExpvarStat(stats.Get(numDisconnects).String, "1", 5*time.Second) {
+	if !pollExpvarStat(stats.Get(numDisconnects).String, "1", 10*time.Second) {
 		t.Fatalf("connection has not idle-closed: %s", stats.Get(numDisconnects).String())
 	}
 	_, ok = s.Connection(c.ID)
