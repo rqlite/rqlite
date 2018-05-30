@@ -182,12 +182,48 @@ func Test_ConnectionIdleTimeout(t *testing.T) {
 	if !ok {
 		t.Fatal("connection not in store after connecting")
 	}
-	if !pollExpvarStat(stats.Get(numDisconnects).String, "1", 10*time.Second) {
-		t.Fatalf("connection has not idle-closed: %s", stats.Get(numDisconnects).String())
+	if !pollExpvarStat(stats.Get(numConnIdleTimeouts).String, "1", 10*time.Second) {
+		t.Fatalf("connection has not idle-closed: %s", stats.Get(numConnIdleTimeouts).String())
 	}
 	_, ok = s.Connection(c.ID)
 	if ok {
 		t.Fatal("connection in store after idle-close")
+	}
+}
+
+func Test_ConnectionTxTimeout(t *testing.T) {
+	// Test is explicitly not parallel because it accesses global Store stats.
+
+	s := mustNewStore(true)
+	defer os.RemoveAll(s.Path())
+	if err := s.Open(true); err != nil {
+		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
+	}
+	defer s.Close(true)
+	s.WaitForLeader(10 * time.Second)
+	c := mustNewConnectionWithTimeouts(s, 0, 3*time.Second)
+	_, ok := s.Connection(c.ID)
+	if !ok {
+		t.Fatal("connection not in store after connecting")
+	}
+
+	_, err := c.Execute(&ExecuteRequest{[]string{"BEGIN"}, false, false})
+	if err != nil {
+		t.Fatalf("failed to begin transaction: %s", err.Error())
+	}
+	if !c.TransactionActive() {
+		t.Fatal("transaction not active")
+	}
+
+	if !pollExpvarStat(stats.Get(numConnTxTimeouts).String, "1", 10*time.Second) {
+		t.Fatalf("connection has not aborted tx: %s", stats.Get(numConnTxTimeouts).String())
+	}
+	_, ok = s.Connection(c.ID)
+	if !ok {
+		t.Fatal("connection not in store after tx timeout")
+	}
+	if c.TransactionActive() {
+		t.Fatal("transaction still active")
 	}
 }
 

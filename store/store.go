@@ -65,12 +65,14 @@ const (
 )
 
 const (
-	numSnaphots        = "num_snapshots"
-	numSnaphotsBlocked = "num_snapshots_blocked"
-	numBackups         = "num_backups"
-	numRestores        = "num_restores"
-	numConnects        = "num_connects"
-	numDisconnects     = "num_disconnects"
+	numSnaphots         = "num_snapshots"
+	numSnaphotsBlocked  = "num_snapshots_blocked"
+	numBackups          = "num_backups"
+	numRestores         = "num_restores"
+	numConnects         = "num_connects"
+	numDisconnects      = "num_disconnects"
+	numConnIdleTimeouts = "num_conn_idle_timeouts"
+	numConnTxTimeouts   = "num_conn_tx_timeouts"
 )
 
 const defaultConnID = 0
@@ -96,6 +98,8 @@ func init() {
 	stats.Add(numRestores, 0)
 	stats.Add(numConnects, 0)
 	stats.Add(numDisconnects, 0)
+	stats.Add(numConnIdleTimeouts, 0)
+	stats.Add(numConnTxTimeouts, 0)
 }
 
 // RaftResponse is the Raft metadata that will be included with responses, if

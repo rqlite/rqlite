@@ -171,16 +171,20 @@ func (c *Connection) run(done chan struct{}) {
 					} else {
 						c.logger.Printf("%d closed due to idle timeout", c.ID)
 					}
+					// Only increment stat here to make testing easier.
+					stats.Add(numConnIdleTimeouts, 1)
 				}
 				c.txStateMu.Lock()
 				tsa := c.TxStartedAt
 				c.txStateMu.Unlock()
-				if time.Since(tsa) > c.TxTimeout && c.TxTimeout != 0 {
+				if !tsa.IsZero() && time.Since(tsa) > c.TxTimeout && c.TxTimeout != 0 {
 					if err := c.AbortTransaction(); err != nil {
 						c.logger.Printf("failed to abort transaction %s:", err.Error())
 					} else {
 						c.logger.Println("transaction aborted due to transaction timeout")
 					}
+					// Only increment stat here to make testing easier.
+					stats.Add(numConnTxTimeouts, 1)
 				}
 			}
 		}
