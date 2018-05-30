@@ -457,8 +457,8 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 		"addr":              s.Addr().String(),
 		"auth":              prettyEnabled(s.credentialStore != nil),
 		"redirect":          s.leaderAPIAddr(),
-		"conn_idle_timeout": s.ConnIdleTimeout,
-		"conn_tx_timeout":   s.ConnTxTimeout,
+		"conn_idle_timeout": s.ConnIdleTimeout.String(),
+		"conn_tx_timeout":   s.ConnTxTimeout.String(),
 	}
 
 	nodeStatus := map[string]interface{}{
