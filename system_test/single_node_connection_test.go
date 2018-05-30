@@ -79,6 +79,14 @@ func Test_SingleNodeConnection(t *testing.T) {
 			t.Fatalf(`test %d received wrong result "%s" got: %s exp: %s`, i, tt.stmt, r, tt.expected)
 		}
 	}
+
+	if err := c.Close(); err != nil {
+		t.Fatalf("failed to close connection: %s", err.Error())
+	}
+	r, _ := c.Query(`SELECT * FROM foo`)
+	if !strings.Contains(r, "connection not found") {
+		t.Fatalf("test received wrong result\ngot: %s", r)
+	}
 }
 
 func Test_SingleNodeMultiConnection(t *testing.T) {

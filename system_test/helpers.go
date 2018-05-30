@@ -19,16 +19,19 @@ import (
 // Connection represents an explicit connection to the node's database.
 type Connection struct {
 	ConnID     uint64
+	URL        *url.URL
 	QueryURL   *url.URL
 	ExecuteURL *url.URL
 }
 
 // NewConnection returns an instantiated Connection.
 func NewConnection(id uint64, n *Node) *Connection {
+	cURL, _ := url.Parse("http://" + n.APIAddr + fmt.Sprintf("/db/connections/%d", id))
 	qURL, _ := url.Parse("http://" + n.APIAddr + fmt.Sprintf("/db/connections/%d/query", id))
 	eURL, _ := url.Parse("http://" + n.APIAddr + fmt.Sprintf("/db/connections/%d/execute", id))
 	return &Connection{
 		ConnID:     id,
+		URL:        cURL,
 		QueryURL:   qURL,
 		ExecuteURL: eURL,
 	}
@@ -72,6 +75,23 @@ func (c *Connection) ExecuteMulti(stmts []string) (string, error) {
 		return "", err
 	}
 	return c.postExecute(string(j))
+}
+
+func (c *Connection) Close() error {
+	client := http.Client{}
+	req, err := http.NewRequest(http.MethodDelete, c.URL.String(), nil)
+	if err != nil {
+		return err
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("connection closed failed: %s", resp.Status)
+	}
+	return nil
 }
 
 func (c *Connection) postExecute(stmt string) (string, error) {
