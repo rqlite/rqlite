@@ -250,6 +250,35 @@ func Test_ConnectionTxTimeout(t *testing.T) {
 	}
 }
 
+func Test_ConnectionTxNoTimeout(t *testing.T) {
+	s := mustNewStore(true)
+	defer os.RemoveAll(s.Path())
+	if err := s.Open(true); err != nil {
+		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
+	}
+	defer s.Close(true)
+	s.WaitForLeader(10 * time.Second)
+	c := mustNewConnectionWithTimeouts(s, 0, 10*time.Second)
+	_, ok := s.Connection(c.ID)
+	if !ok {
+		t.Fatal("connection not in store after connecting")
+	}
+	defer c.Close()
+
+	_, err := c.Execute(&ExecuteRequest{[]string{"BEGIN"}, false, false})
+	if err != nil {
+		t.Fatalf("failed to begin transaction: %s", err.Error())
+	}
+	if !c.TransactionActive() {
+		t.Fatal("transaction not active")
+	}
+
+	time.Sleep(5 * time.Second)
+	if !c.TransactionActive() {
+		t.Fatal("transaction not active before timeout")
+	}
+}
+
 func Test_TxStateChange(t *testing.T) {
 	t.Parallel()
 
