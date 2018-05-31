@@ -180,10 +180,10 @@ func (c *Connection) run(done chan struct{}) {
 				tsa := c.TxStartedAt
 				c.txStateMu.Unlock()
 				if !tsa.IsZero() && time.Since(tsa) > c.TxTimeout && c.TxTimeout != 0 {
-					if err := c.AbortTransaction(); err != nil {
+					if err := c.Close(); err != nil {
 						c.logger.Printf("failed to abort transaction %s:", err.Error())
 					} else {
-						c.logger.Println("transaction aborted due to transaction timeout")
+						c.logger.Printf("transaction aborted due to timeout, %d closed", c.ID)
 					}
 					// Only increment stat here to make testing easier.
 					stats.Add(numConnTxTimeouts, 1)

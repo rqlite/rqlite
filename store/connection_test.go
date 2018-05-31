@@ -242,11 +242,8 @@ func Test_ConnectionTxTimeout(t *testing.T) {
 		t.Fatalf("connection has not aborted tx: %s", stats.Get(numConnTxTimeouts).String())
 	}
 	_, ok = s.Connection(c.ID)
-	if !ok {
-		t.Fatal("connection not in store after tx timeout")
-	}
-	if c.TransactionActive() {
-		t.Fatal("transaction still active")
+	if ok {
+		t.Fatal("connection in store after tx timeout")
 	}
 }
 
