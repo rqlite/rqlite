@@ -586,10 +586,23 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		return nil, err
 	}
 
+	s.connsMu.RLock()
+	conns := make([]Connection, len(s.conns)-1)
+	ci := 0
+	for id, c := range s.conns {
+		if id == defaultConnID {
+			continue
+		}
+		conns[ci] = *c
+		ci++
+	}
+	s.connsMu.RUnlock()
+
 	status := map[string]interface{}{
-		"node_id": s.raftID,
-		"raft":    s.raft.Stats(),
-		"addr":    s.Addr(),
+		"connections": conns,
+		"node_id":     s.raftID,
+		"raft":        s.raft.Stats(),
+		"addr":        s.Addr(),
 		"leader": map[string]string{
 			"node_id": leaderID,
 			"addr":    s.LeaderAddr(),
