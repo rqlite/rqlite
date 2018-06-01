@@ -12,6 +12,7 @@ import (
 
 const pollPeriod = time.Second
 
+// ConnectionOptions controls connection behaviour.
 type ConnectionOptions struct {
 	IdleTimeout time.Duration
 	TxTimeout   time.Duration

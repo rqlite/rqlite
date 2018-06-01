@@ -26,7 +26,7 @@ import (
 const defaultConnID = 0
 
 var (
-	// ErrBadRequest is returned when an invalid request is received
+	// ErrInvalidRequest is returned when an invalid request is received
 	ErrInvalidRequest = errors.New("invalid request received")
 
 	// ErrInternal is returned when an internal error occurs during processing
@@ -40,6 +40,7 @@ var (
 	ErrConnectionNotFound = errors.New("connection not found")
 )
 
+// Execer is implemented by objects which can modify rows in the database.
 type Execer interface {
 	// Execute executes queries that return no rows, but do modify the database.
 	Execute(ex *store.ExecuteRequest) (*store.ExecuteResponse, error)
@@ -49,6 +50,8 @@ type Execer interface {
 	ExecuteOrAbort(ex *store.ExecuteRequest) (*store.ExecuteResponse, error)
 }
 
+// Queryer is implemented by objects which returns rows in the database, but
+// do not modify the database.
 type Queryer interface {
 	// Query executes queries that return rows, and do not modify the database.
 	Query(qr *store.QueryRequest) (*store.QueryResponse, error)
