@@ -135,16 +135,24 @@ func (c *Connection) AbortTransaction() error {
 	return err
 }
 
-// Close closes the connection.
+// Close closes the connection via consensus.
 func (c *Connection) Close() error {
 	c.dbMu.Lock()
 	defer c.dbMu.Unlock()
+
 	close(c.done)
 	c.wg.Wait()
 	if c.store != nil {
 		if err := c.store.disconnect(c); err != nil {
 			return err
 		}
+	}
+
+	if c.db == nil {
+		return nil
+	}
+	if err := c.db.Close(); err != nil {
+		return err
 	}
 	c.db = nil
 	return nil

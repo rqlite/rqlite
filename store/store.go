@@ -1114,15 +1114,13 @@ func (s *Store) Apply(l *raft.Log) interface{} {
 			return &fsmGenericResponse{error: ErrDefaultConnection}
 		}
 
-		s.connsMu.Lock()
-		conn := s.conns[d.ConnID]
-		if err := conn.db.Close(); err != nil {
-			return &fsmGenericResponse{error: err}
-		}
-		delete(s.conns, d.ConnID)
-		s.connsMu.Unlock()
+		return func() interface{} {
+			s.connsMu.Lock()
+			defer s.connsMu.Unlock()
+			delete(s.conns, d.ConnID)
+			return &fsmGenericResponse{}
+		}()
 
-		return &fsmGenericResponse{}
 	default:
 		return &fsmGenericResponse{error: fmt.Errorf("unknown command: %v", c.Typ)}
 	}
