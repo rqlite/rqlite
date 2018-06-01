@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"regexp"
 	"testing"
+	"time"
 
 	"github.com/rqlite/rqlite/store"
 )
@@ -520,6 +521,64 @@ func Test_FormConnectionURL(t *testing.T) {
 	if got, exp := s.FormConnectionURL(req, 1234), "http://foo/db/connections/1234"; got != exp {
 		t.Fatalf("failed to form redirect for URL:\ngot %s\nexp %s\n", got, exp)
 	}
+}
+
+func Test_ConnectionTimingParams(t *testing.T) {
+	t.Parallel()
+
+	var d time.Duration
+	var b bool
+	var err error
+	var req *http.Request
+
+	req, _ = http.NewRequest(http.MethodPost, "http://foo?tx_timeout=1 0s", nil)
+	d, b, err = txTimeout(req)
+	if err == nil {
+		t.Fatal("failed")
+	}
+
+	req, _ = http.NewRequest(http.MethodPost, "http://foo?tx_timeout=10s", nil)
+	d, b, err = txTimeout(req)
+	if d != 10*time.Second || !b || err != nil {
+		t.Fatal("failed")
+	}
+
+	req, _ = http.NewRequest(http.MethodPost, "http://foo?tx_timeout=0s", nil)
+	d, b, err = txTimeout(req)
+	if d != 0 || !b || err != nil {
+		t.Fatal("failed")
+	}
+
+	req, _ = http.NewRequest(http.MethodPost, "http://foo", nil)
+	d, b, err = txTimeout(req)
+	if b || err != nil {
+		t.Fatal("failed")
+	}
+
+	req, _ = http.NewRequest(http.MethodPost, "http://foo?idle_timeout=1 0s", nil)
+	d, b, err = idleTimeout(req)
+	if err == nil {
+		t.Fatal("failed")
+	}
+
+	req, _ = http.NewRequest(http.MethodPost, "http://foo?idle_timeout=10s", nil)
+	d, b, err = idleTimeout(req)
+	if d != 10*time.Second || !b || err != nil {
+		t.Fatal("failed")
+	}
+
+	req, _ = http.NewRequest(http.MethodPost, "http://foo?idle_timeout=0s", nil)
+	d, b, err = idleTimeout(req)
+	if d != 0 || !b || err != nil {
+		t.Fatal("failed")
+	}
+
+	req, _ = http.NewRequest(http.MethodPost, "http://foo", nil)
+	d, b, err = idleTimeout(req)
+	if b || err != nil {
+		t.Fatal("failed")
+	}
+
 }
 
 type MockStore struct {
