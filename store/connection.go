@@ -150,6 +150,27 @@ func (c *Connection) Close() error {
 	return nil
 }
 
+// Stats returns the status of the connection.
+func (c *Connection) Stats() (interface{}, error) {
+	c.dbMu.RLock()
+	defer c.dbMu.RUnlock()
+	c.timeMu.Lock()
+	defer c.timeMu.Unlock()
+	c.txStateMu.Lock()
+	defer c.txStateMu.Unlock()
+
+	m := make(map[string]interface{})
+	m["last_used_at"] = c.LastUsedAt
+	m["created_at"] = c.CreatedAt
+	m["idle_timeout"] = c.IdleTimeout.String()
+	m["tx_timeout"] = c.TxTimeout.String()
+	m["id"] = c.ID
+	if !c.TxStartedAt.IsZero() {
+		m["tx_started_at"] = c.TxStartedAt.String()
+	}
+	return m, nil
+}
+
 // run starts the goroutine that periodically checks if any active transaction
 // on the connection should be aborted, or if the connection should be closed.
 func (c *Connection) run(done chan struct{}) {

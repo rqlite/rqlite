@@ -586,23 +586,10 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		return nil, err
 	}
 
-	s.connsMu.RLock()
-	conns := make([]Connection, len(s.conns)-1)
-	ci := 0
-	for id, c := range s.conns {
-		if id == defaultConnID {
-			continue
-		}
-		conns[ci] = *c
-		ci++
-	}
-	s.connsMu.RUnlock()
-
 	status := map[string]interface{}{
-		"connections": conns,
-		"node_id":     s.raftID,
-		"raft":        s.raft.Stats(),
-		"addr":        s.Addr(),
+		"node_id": s.raftID,
+		"raft":    s.raft.Stats(),
+		"addr":    s.Addr(),
 		"leader": map[string]string{
 			"node_id": leaderID,
 			"addr":    s.LeaderAddr(),
@@ -616,6 +603,32 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		"sqlite3":            dbStatus,
 		"db_conf":            s.dbConf,
 	}
+
+	// Add connections status
+	if err := func() error {
+		s.connsMu.RLock()
+		defer s.connsMu.RUnlock()
+		if len(s.conns) > 1 {
+			conns := make([]interface{}, len(s.conns)-1)
+			ci := 0
+			for id, c := range s.conns {
+				if id == defaultConnID {
+					continue
+				}
+				stats, err := c.Stats()
+				if err != nil {
+					return err
+				}
+				conns[ci] = stats
+				ci++
+			}
+			status["connections"] = conns
+		}
+		return nil
+	}(); err != nil {
+		return nil, err
+	}
+
 	return status, nil
 }
 
