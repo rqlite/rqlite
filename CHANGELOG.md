@@ -10,6 +10,7 @@ _To upgrade from an earlier version to this release you should backup the leader
 - [PR #451](https://github.com/rqlite/rqlite/pull/451), [PR #453](https://github.com/rqlite/rqlite/pull/453): Support dumping database in SQL text format via the API. Fixes [issue #393](https://github.com/rqlite/rqlite/issues/369).
 - [PR #455](https://github.com/rqlite/rqlite/pull/455): Add dump-as-SQL-text command to CLI.
 - [PR #462](https://github.com/rqlite/rqlite/pull/462): Add Raft metadata to responses to requests that modify Raft log.
+- [PR #493](https://github.com/rqlite/rqlite/pull/493): Full connection and transaction control.
 
 ### Design and implementation changes
 - [End-to-end integration test](https://github.com/rqlite/rqlite/blob/master/system_test/full_system_test.py) added. Written in Python, it is automatically run by CircleCI as the committed source changes.
