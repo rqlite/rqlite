@@ -792,7 +792,7 @@ func isPretty(req *http.Request) (bool, error) {
 
 // isAtomic returns whether the HTTP request is an atomic request.
 func isAtomic(req *http.Request) (bool, error) {
-	// "transaction" is checked for backwards compatibiltiy with
+	// "transaction" is checked for backwards compatibility with
 	// client libraries.
 	for _, q := range []string{"atomic", "transaction"} {
 		if a, err := queryParam(req, q); err != nil || a {
