@@ -88,19 +88,19 @@ The response is of the form:
 ### Read Consistency
 You can learn all about the read consistency guarantees supported by rqlite [here](https://github.com/rqlite/rqlite/blob/master/DOC/CONSISTENCY.md).
 
-## Transactions
-Transactions are supported. To execute statements within a transaction, add `transaction` to the URL. An example of the above operation executed within a transaction is shown below.
+## Atomic changes
+You can execute a set commands in an _atomic_ fashion. When executed atomically, either all commands in the request will fail, or none of them. To execute statements atomically, add `atomic` to the URL. An example of the above operation executed atomically is shown below.
 
 ```bash
-curl -XPOST 'localhost:4001/db/execute?pretty&transaction' -H "Content-Type: application/json" -d "[
+curl -XPOST 'localhost:4001/db/execute?pretty&atomic' -H "Content-Type: application/json" -d "[
     \"INSERT INTO foo(name) VALUES('fiona')\",
     \"INSERT INTO foo(name) VALUES('sinead')\"
 ]"
 ```
 
-When a transaction takes place either both statements will succeed, or neither. Performance is *much, much* better if multiple SQL INSERTs or UPDATEs are executed via a transaction. Note that processing of the request ceases the moment any single query results in an error.
+When a such a request takes place either both statements will succeed, or neither. Performance is *much, much* better if multiple SQL INSERTs or UPDATEs are executed in this manner. Note that processing of the request ceases the moment any single query results in an error.
 
-The behaviour of rqlite when using `BEGIN`, `COMMIT`, `ROLLBACK`, `SAVEPOINT`, and `RELEASE` to control transactions is **not defined**. It is important to control transactions only through the query parameters shown above.
+The behaviour of rqlite when using `BEGIN`, `COMMIT`, `ROLLBACK`, `SAVEPOINT`, and `RELEASE` to control transaction-like behavior is **not defined**. It is important to control atomic behavior only through the query parameters shown above.
 
 ## Handling Errors
 If an error occurs while processing a statement, it will be marked as such in the response. For example:
