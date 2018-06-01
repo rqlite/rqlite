@@ -106,14 +106,8 @@ func (h *connectionsHandler) Handler(s *Service) http.Handler {
 		head, r.URL.Path = shiftPath(r.URL.Path)
 		if head == "" {
 			if r.Method == "POST" {
-				id, err := s.createConnection(w, r)
-				if err != nil {
-					http.Error(w, err.Error(), http.StatusServiceUnavailable)
-					return
-				}
+				s.createConnection(w, r)
 
-				w.Header().Set("Location", s.FormConnectionURL(r, id))
-				w.WriteHeader(http.StatusCreated)
 			} else {
 				w.WriteHeader(http.StatusMethodNotAllowed)
 			}

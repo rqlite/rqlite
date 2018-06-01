@@ -260,16 +260,37 @@ func (s *Service) RegisterStatus(key string, stat Statuser) error {
 }
 
 // createConnection creates a connection and returns its ID.
-func (s *Service) createConnection(w http.ResponseWriter, r *http.Request) (uint64, error) {
-	conn, err := s.store.Connect(
-		&store.ConnectionOptions{
-			IdleTimeout: s.ConnIdleTimeout,
-			TxTimeout:   s.ConnTxTimeout,
-		})
-	if err != nil {
-		return 0, err
+func (s *Service) createConnection(w http.ResponseWriter, r *http.Request) {
+	opts := store.ConnectionOptions{
+		IdleTimeout: s.ConnIdleTimeout,
+		TxTimeout:   s.ConnTxTimeout,
 	}
-	return conn.ID, nil
+
+	d, b, err := txTimeout(r)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	if b {
+		opts.TxTimeout = d
+	}
+
+	d, b, err = idleTimeout(r)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	if b {
+		opts.IdleTimeout = d
+	}
+
+	conn, err := s.store.Connect(&opts)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+	w.Header().Set("Location", s.FormConnectionURL(r, conn.ID))
+	w.WriteHeader(http.StatusCreated)
 }
 
 // deleteConnection closes a connection and makes it unavailable for
@@ -773,6 +794,20 @@ func queryParam(req *http.Request, param string) (bool, error) {
 	return false, nil
 }
 
+// durationParam returns the duration of the given query param, if set.
+func durationParam(req *http.Request, param string) (time.Duration, bool, error) {
+	q := req.URL.Query()
+	t := strings.TrimSpace(q.Get(param))
+	if t == "" {
+		return 0, false, nil
+	}
+	dur, err := time.ParseDuration(t)
+	if err != nil {
+		return 0, false, err
+	}
+	return dur, true, nil
+}
+
 // stmtParam returns the value for URL param 'q', if present.
 func stmtParam(req *http.Request) (string, error) {
 	q := req.URL.Query()
@@ -810,6 +845,16 @@ func noLeader(req *http.Request) (bool, error) {
 // timings returns whether timings are requested.
 func timings(req *http.Request) (bool, error) {
 	return queryParam(req, "timings")
+}
+
+// txTimeout returns the duration of any transaction timeout set.
+func txTimeout(req *http.Request) (time.Duration, bool, error) {
+	return durationParam(req, "tx_timeout")
+}
+
+// idleTimeout returns the duration of any idle connection timeout set.
+func idleTimeout(req *http.Request) (time.Duration, bool, error) {
+	return durationParam(req, "idle_timeout")
 }
 
 // level returns the requested consistency level for a query
