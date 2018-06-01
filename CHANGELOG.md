@@ -11,6 +11,7 @@ _To upgrade from an earlier version to this release you should backup the leader
 - [PR #455](https://github.com/rqlite/rqlite/pull/455): Add dump-as-SQL-text command to CLI.
 - [PR #462](https://github.com/rqlite/rqlite/pull/462): Add Raft metadata to responses to requests that modify Raft log.
 - [PR #493](https://github.com/rqlite/rqlite/pull/504), [PR #504](https://github.com/rqlite/rqlite/pull/504): Full connection control and distributed transactions over HTTP.
+- [PR #501](https://github.com/rqlite/rqlite/pull/501): Replace use of term "transaction" with "atomic".
 
 ### Design and implementation changes
 - [End-to-end integration test](https://github.com/rqlite/rqlite/blob/master/system_test/full_system_test.py) added. Written in Python, it is automatically run by CircleCI as the committed source changes.
@@ -32,7 +33,6 @@ _To upgrade from an earlier version to this release you should backup the leader
 - [PR #486](https://github.com/rqlite/rqlite/pull/486): Store connections in Raft snapshot.
 - [PR #491](https://github.com/rqlite/rqlite/pull/491): Add varadic utility functions to Auth credential store.
 - [PR #494](https://github.com/rqlite/rqlite/pull/494): JSON types are stored as text by SQLite. Fixes [issue #492](https://github.com/rqlite/rqlite/issues/492).
-- [PR #501](https://github.com/rqlite/rqlite/pull/501): Replace use of term "transaction" with "atomic".
 
 ## 4.3.0 (March 18th 2018)
 - [PR #397](https://github.com/rqlite/rqlite/pull/397), [PR #399](https://github.com/rqlite/rqlite/pull/399): Support hashed passwords. Fixes [issue #395](https://github.com/rqlite/rqlite/issues/395). Thanks @sum12.
