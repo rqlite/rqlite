@@ -16,9 +16,5 @@ test:
         - go version
         - bash gofmt.sh
         - go tool vet .
-        - case $CIRCLE_NODE_INDEX in 0) go test -timeout 300s -v ./... ;; 1) GORACE="halt_on_error=1" go test -cpu=8 -race -timeout 300s -v ./...;; 2) go install ./...; system_test/full_system_test.py;; esac:
+        - case $CIRCLE_NODE_INDEX in 0) go install ./...; system_test/full_system_test.py;; 1) go install ./...; system_test/full_system_test.py;; 2) go install ./...; system_test/full_system_test.py;; 3) go install ./...; system_test/full_system_test.py;; esac:
             parallel: true
-
-    post:
-        - case $CIRCLE_NODE_INDEX in 0) go install -ldflags="-X main.branch=$CIRCLE_BRANCH -X main.commit=$CIRCLE_SHA1" ./... ;; esac:
-        - case $CIRCLE_NODE_INDEX in 0) cd $GOBIN && tar cvfz $CIRCLE_ARTIFACTS/rqlite.tar.gz * ;; esac:
