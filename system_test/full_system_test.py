@@ -23,10 +23,13 @@ class Node(object):
                api_addr=None, api_adv=None,
                raft_addr=None, raft_adv=None,
                dir=None):
+    sockets = []
     if api_addr is None:
-      api_addr = random_addr()
+      s, api_addr = random_addr()
+      sockets.append(s)
     if raft_addr is None:
-      raft_addr = random_addr()
+      s, raft_addr = random_addr()
+      sockets.append(s)
     if dir is None:
       dir = tempfile.mkdtemp()
     if api_adv is None:
@@ -45,23 +48,38 @@ class Node(object):
     self.stderr_file = os.path.join(dir, 'rqlited.err')
     self.stderr_fd = open(self.stderr_file, 'w')
 
+    # Shutdown sockets, now that we have addresses. Holding
+    # onto them rules out any chance the addresses would be
+    # used twice.
+    for s in sockets:
+      s.close()
+
   def APIAddr(self):
       if self.api_adv is not None:
           return self.api_adv
       return self.api_addr
 
   def scramble_network(self):
+    sockets = []
     if self.api_adv == self.api_addr:
       self.api_adv = None
-    self.api_addr = random_addr()
+    s, self.api_addr = random_addr()
+    sockets.append(s)
     if self.api_adv is None:
       self.api_adv = self.api_addr
 
     if self.raft_adv == self.raft_addr:
       self.raft_adv = None
-    self.raft_addr = random_addr()
+    s, self.raft_addr = random_addr()
+    sockets.append(s)
     if self.raft_adv is None:
       self.raft_adv = self.raft_addr
+
+    # Shutdown sockets, now that we have addresses. Holding
+    # onto them rules out any chance the addresses would be
+    # used twice.
+    for s in sockets:
+      s.close()
 
   def start(self, join=None, wait=True, timeout=TIMEOUT):
     if self.process is not None:
@@ -211,7 +229,7 @@ class Node(object):
 def random_addr():
   s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
   s.bind(('localhost', 0))
-  return ':'.join([s.getsockname()[0], str(s.getsockname()[1])])
+  return s, ':'.join([s.getsockname()[0], str(s.getsockname()[1])])
 
 def deprovision_node(node):
   node.stop()
