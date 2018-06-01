@@ -42,9 +42,14 @@ var (
 	// active transaction.
 	ErrTransactionActive = errors.New("transaction in progress")
 
-	// errDefaultConnection is returned when an attempt is made to delete the
+	// ErrDefaultConnection is returned when an attempt is made to delete the
 	// default connection.
-	errDefaultConnection = errors.New("cannot delete default connection")
+	ErrDefaultConnection = errors.New("cannot delete default connection")
+
+	// ErrConnectionDoesNotExist is returned when an operation is attempted
+	// on a non-existent connection. This can happen if the connection
+	// was previously open but is now closed.
+	ErrConnectionDoesNotExist = errors.New("connection does not exist")
 )
 
 const (
@@ -60,41 +65,17 @@ const (
 )
 
 const (
-	numSnaphots        = "num_snapshots"
-	numSnaphotsBlocked = "num_snapshots_blocked"
-	numBackups         = "num_backups"
-	numRestores        = "num_restores"
+	numSnaphots         = "num_snapshots"
+	numSnaphotsBlocked  = "num_snapshots_blocked"
+	numBackups          = "num_backups"
+	numRestores         = "num_restores"
+	numConnects         = "num_connects"
+	numDisconnects      = "num_disconnects"
+	numConnIdleTimeouts = "num_conn_idle_timeouts"
+	numConnTxTimeouts   = "num_conn_tx_timeouts"
 )
 
 const defaultConnID = 0
-
-// ExecerQueryer is generic connection for interacting with a database.
-type ExecerQueryer interface {
-	// Execute executes queries that return no rows, but do modify the database.
-	Execute(ex *ExecuteRequest) (*ExecuteResponse, error)
-
-	// ExecuteOrAbort executes the requests, but aborts any active transaction
-	// on the underlying database in the case of any error.
-	ExecuteOrAbort(ex *ExecuteRequest) (resp *ExecuteResponse, retErr error)
-
-	// Query executes queries that return rows, and do not modify the database.
-	Query(qr *QueryRequest) (*QueryResponse, error)
-}
-
-// ExecerQueryerCloser is generic connection for interacting with a database,
-// which also allows release of its underlying resources. Once closed, it
-// cannot be reused.
-type ExecerQueryerCloser interface {
-	ExecerQueryer
-	io.Closer
-}
-
-// ExecerQueryerCloserIDer is generic connection that also returns an ID that
-// can be used to identify the object.
-type ExecerQueryerCloserIDer interface {
-	ExecerQueryerCloser
-	ID() uint64
-}
 
 // BackupFormat represents the backup formats supported by the Store.
 type BackupFormat int
@@ -115,6 +96,10 @@ func init() {
 	stats.Add(numSnaphots, 0)
 	stats.Add(numBackups, 0)
 	stats.Add(numRestores, 0)
+	stats.Add(numConnects, 0)
+	stats.Add(numDisconnects, 0)
+	stats.Add(numConnIdleTimeouts, 0)
+	stats.Add(numConnTxTimeouts, 0)
 }
 
 // RaftResponse is the Raft metadata that will be included with responses, if
@@ -262,7 +247,7 @@ func (s *Store) Open(enableSingle bool) error {
 		return err
 	}
 	s.dbConn = conn
-	s.conns[defaultConnID] = NewConnection(s.dbConn, s, defaultConnID)
+	s.conns[defaultConnID] = NewConnection(s.dbConn, s, defaultConnID, 0, 0)
 
 	// Is this a brand new node?
 	newNode := !pathExists(filepath.Join(s.raftDir, "raft.db"))
@@ -326,7 +311,7 @@ func (s *Store) Open(enableSingle bool) error {
 //
 // Any connection returned by this call are READ_COMMITTED isolated from all
 // other connections, including the connection built-in to the Store itself.
-func (s *Store) Connect() (ExecerQueryerCloserIDer, error) {
+func (s *Store) Connect(opt *ConnectionOptions) (*Connection, error) {
 	// Randomly-selected connection ID must be part of command so
 	// that all nodes use the same value as connection ID.
 	connID := func() uint64 {
@@ -342,7 +327,14 @@ func (s *Store) Connect() (ExecerQueryerCloserIDer, error) {
 		}
 	}()
 
-	d := &connectionSub{connID}
+	var it time.Duration
+	var tt time.Duration
+	if opt != nil {
+		it = opt.IdleTimeout
+		tt = opt.TxTimeout
+	}
+
+	d := &connectionSub{connID, it, tt}
 	cmd, err := newCommand(connect, d)
 	if err != nil {
 		return nil, err
@@ -362,6 +354,7 @@ func (s *Store) Connect() (ExecerQueryerCloserIDer, error) {
 
 	s.connsMu.RLock()
 	defer s.connsMu.RUnlock()
+	stats.Add(numConnects, 1)
 	return s.conns[connID], nil
 }
 
@@ -610,6 +603,32 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		"sqlite3":            dbStatus,
 		"db_conf":            s.dbConf,
 	}
+
+	// Add connections status
+	if err := func() error {
+		s.connsMu.RLock()
+		defer s.connsMu.RUnlock()
+		if len(s.conns) > 1 {
+			conns := make([]interface{}, len(s.conns)-1)
+			ci := 0
+			for id, c := range s.conns {
+				if id == defaultConnID {
+					continue
+				}
+				stats, err := c.Stats()
+				if err != nil {
+					return err
+				}
+				conns[ci] = stats
+				ci++
+			}
+			status["connections"] = conns
+		}
+		return nil
+	}(); err != nil {
+		return nil, err
+	}
+
 	return status, nil
 }
 
@@ -768,7 +787,9 @@ func (s *Store) setMetadata(id string, md map[string]string) error {
 // disconnect removes a connection to the database, a connection
 // which was previously established via Raft consensus.
 func (s *Store) disconnect(c *Connection) error {
-	d := &connectionSub{c.ConnID}
+	d := &connectionSub{
+		ConnID: c.ID,
+	}
 	cmd, err := newCommand(disconnect, d)
 	if err != nil {
 		return err
@@ -785,6 +806,7 @@ func (s *Store) disconnect(c *Connection) error {
 		}
 		return e.Error()
 	}
+	stats.Add(numDisconnects, 1)
 	return f.Response().(*fsmGenericResponse).error
 }
 
@@ -801,7 +823,7 @@ func (s *Store) execute(c *Connection, ex *ExecuteRequest) (*ExecuteResponse, er
 	start := time.Now()
 
 	d := &databaseSub{
-		ConnID:  c.ConnID,
+		ConnID:  c.ID,
 		Tx:      ex.Tx,
 		Queries: ex.Queries,
 		Timings: ex.Timings,
@@ -823,12 +845,18 @@ func (s *Store) execute(c *Connection, ex *ExecuteRequest) (*ExecuteResponse, er
 		return nil, e.Error()
 	}
 
-	r := f.Response().(*fsmExecuteResponse)
-	return &ExecuteResponse{
-		Results: r.results,
-		Time:    time.Since(start).Seconds(),
-		Raft:    RaftResponse{f.Index(), s.raftID},
-	}, r.error
+	switch r := f.Response().(type) {
+	case *fsmExecuteResponse:
+		return &ExecuteResponse{
+			Results: r.results,
+			Time:    time.Since(start).Seconds(),
+			Raft:    RaftResponse{f.Index(), s.raftID},
+		}, r.error
+	case *fsmGenericResponse:
+		return nil, r.error
+	default:
+		panic("unsupported type")
+	}
 }
 
 func (s *Store) executeOrAbort(c *Connection, ex *ExecuteRequest) (resp *ExecuteResponse, retErr error) {
@@ -872,7 +900,7 @@ func (s *Store) query(c *Connection, qr *QueryRequest) (*QueryResponse, error) {
 
 	if qr.Lvl == Strong {
 		d := &databaseSub{
-			ConnID:  c.ConnID,
+			ConnID:  c.ID,
 			Tx:      qr.Tx,
 			Queries: qr.Queries,
 			Timings: qr.Timings,
@@ -894,12 +922,18 @@ func (s *Store) query(c *Connection, qr *QueryRequest) (*QueryResponse, error) {
 			return nil, e.Error()
 		}
 
-		r := f.Response().(*fsmQueryResponse)
-		return &QueryResponse{
-			Rows: r.rows,
-			Time: time.Since(start).Seconds(),
-			Raft: &RaftResponse{f.Index(), s.raftID},
-		}, err
+		switch r := f.Response().(type) {
+		case *fsmQueryResponse:
+			return &QueryResponse{
+				Rows: r.rows,
+				Time: time.Since(start).Seconds(),
+				Raft: &RaftResponse{f.Index(), s.raftID},
+			}, r.error
+		case *fsmGenericResponse:
+			return nil, r.error
+		default:
+			panic("unsupported type")
+		}
 	}
 
 	if qr.Lvl == Weak && s.raft.State() != raft.Leader {
@@ -1018,7 +1052,7 @@ func (s *Store) Apply(l *raft.Log) interface{} {
 		conn, ok := s.conns[d.ConnID]
 		s.connsMu.RUnlock()
 		if !ok {
-			return &fsmGenericResponse{error: fmt.Errorf("connection %d does not exist", d.ConnID)}
+			return &fsmGenericResponse{error: ErrConnectionDoesNotExist}
 		}
 
 		if c.Typ == execute {
@@ -1067,7 +1101,7 @@ func (s *Store) Apply(l *raft.Log) interface{} {
 			return &fsmGenericResponse{error: err}
 		}
 		s.connsMu.Lock()
-		s.conns[d.ConnID] = NewConnection(conn, s, d.ConnID)
+		s.conns[d.ConnID] = NewConnection(conn, s, d.ConnID, d.IdleTimeout, d.TxTimeout)
 		s.connsMu.Unlock()
 		return d.ConnID
 	case disconnect:
@@ -1077,18 +1111,16 @@ func (s *Store) Apply(l *raft.Log) interface{} {
 		}
 
 		if d.ConnID == defaultConnID {
-			return &fsmGenericResponse{error: errDefaultConnection}
+			return &fsmGenericResponse{error: ErrDefaultConnection}
 		}
 
-		s.connsMu.Lock()
-		conn := s.conns[d.ConnID]
-		if err := conn.db.Close(); err != nil {
-			return &fsmGenericResponse{error: err}
-		}
-		delete(s.conns, d.ConnID)
-		s.connsMu.Unlock()
+		return func() interface{} {
+			s.connsMu.Lock()
+			defer s.connsMu.Unlock()
+			delete(s.conns, d.ConnID)
+			return &fsmGenericResponse{}
+		}()
 
-		return &fsmGenericResponse{}
 	default:
 		return &fsmGenericResponse{error: fmt.Errorf("unknown command: %v", c.Typ)}
 	}

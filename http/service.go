@@ -14,7 +14,6 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"net/http/pprof"
 	"os"
 	"runtime"
 	"strings"
@@ -24,9 +23,41 @@ import (
 	"github.com/rqlite/rqlite/store"
 )
 
+const defaultConnID = 0
+
+var (
+	// ErrBadRequest is returned when an invalid request is received
+	ErrInvalidRequest = errors.New("invalid request received")
+
+	// ErrInternal is returned when an internal error occurs during processing
+	ErrInternal = errors.New("internal error")
+
+	// ErrDefaultConnection is returned when an operation is prohibited
+	// because it operates on the default database connection.
+	ErrDefaultConnection = errors.New("prohibited on default connection")
+
+	// ErrConnectionNotFound means a requested connection does not exist.
+	ErrConnectionNotFound = errors.New("connection not found")
+)
+
+type Execer interface {
+	// Execute executes queries that return no rows, but do modify the database.
+	Execute(ex *store.ExecuteRequest) (*store.ExecuteResponse, error)
+
+	// ExecuteOrAbort executes the requests, but aborts any active transaction
+	// on the underlying database in the case of any error.
+	ExecuteOrAbort(ex *store.ExecuteRequest) (*store.ExecuteResponse, error)
+}
+
+type Queryer interface {
+	// Query executes queries that return rows, and do not modify the database.
+	Query(qr *store.QueryRequest) (*store.QueryResponse, error)
+}
+
 // Store is the interface the Raft-based database must implement.
 type Store interface {
-	store.ExecerQueryer
+	Execer
+	Queryer
 
 	// Join joins the node with the given ID, reachable at addr, to this node.
 	Join(id, addr string, metadata map[string]string) error
@@ -46,8 +77,12 @@ type Store interface {
 	// Backup writes backup of the node state to dst
 	Backup(leader bool, f store.BackupFormat, dst io.Writer) error
 
-	// Connect returns an object which can work with the database.
-	Connect() (store.ExecerQueryerCloserIDer, error)
+	// Connect returns a new Connection to the database
+	Connect(*store.ConnectionOptions) (*store.Connection, error)
+
+	// Connection returns an existing connection to the database. If
+	// OK is false, a connection with the given ID does not exist.
+	Connection(id uint64) (c *store.Connection, ok bool)
 }
 
 // CredentialStore is the interface credential stores must support.
@@ -79,10 +114,11 @@ type Response struct {
 var stats *expvar.Map
 
 const (
-	numExecutions = "executions"
-	numQueries    = "queries"
-	numBackups    = "backups"
-	numLoad       = "loads"
+	numConnections = "connections"
+	numExecutions  = "executions"
+	numQueries     = "queries"
+	numBackups     = "backups"
+	numLoad        = "loads"
 
 	// PermAll means all actions permitted.
 	PermAll = "all"
@@ -90,15 +126,17 @@ const (
 	PermJoin = "join"
 	// PermRemove means user is permitted to remove a node.
 	PermRemove = "remove"
-	// PermExecute means user can access execute endpoint.
+	// PermExecute means user is permitted to access execute endpoint.
 	PermExecute = "execute"
-	// PermQuery means user can access query endpoint
+	// PermQuery means user is permitted to access query endpoint
 	PermQuery = "query"
-	// PermStatus means user can retrieve node status.
+	// PermConnections means user is permitted to access connections endpoint.
+	PermConnections = "connections"
+	// PermStatus means user is permitted to retrieve node status.
 	PermStatus = "status"
-	// PermBackup means user can backup node.
+	// PermBackup means user is permitted to backup node.
 	PermBackup = "backup"
-	// PermLoad means user can load a SQLite dump into a node.
+	// PermLoad means user is permitted to load a SQLite dump into a node.
 	PermLoad = "load"
 
 	// VersionHTTPHeader is the HTTP header key for the version.
@@ -107,15 +145,18 @@ const (
 
 func init() {
 	stats = expvar.NewMap("http")
+	stats.Add(numConnections, 0)
 	stats.Add(numExecutions, 0)
 	stats.Add(numQueries, 0)
 	stats.Add(numBackups, 0)
+	stats.Add(numLoad, 0)
 }
 
 // Service provides HTTP service.
 type Service struct {
-	addr string       // Bind address of the HTTP service.
-	ln   net.Listener // Service listener
+	addr        string       // Bind address of the HTTP service.
+	ln          net.Listener // Service listener
+	rootHandler rootHandler
 
 	store Store // The Raft-backed database store.
 
@@ -127,6 +168,9 @@ type Service struct {
 
 	CertFile string // Path to SSL certificate.
 	KeyFile  string // Path to SSL private key.
+
+	ConnIdleTimeout time.Duration
+	ConnTxTimeout   time.Duration
 
 	credentialStore CredentialStore
 
@@ -196,42 +240,7 @@ func (s *Service) Close() {
 
 // ServeHTTP allows Service to serve HTTP requests.
 func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	s.addBuildVersion(w)
-
-	if s.credentialStore != nil {
-		username, password, ok := r.BasicAuth()
-		if !ok || !s.credentialStore.Check(username, password) {
-			w.WriteHeader(http.StatusUnauthorized)
-			return
-		}
-	}
-
-	switch {
-	case strings.HasPrefix(r.URL.Path, "/db/execute"):
-		stats.Add(numExecutions, 1)
-		s.handleExecute(w, r)
-	case strings.HasPrefix(r.URL.Path, "/db/query"):
-		stats.Add(numQueries, 1)
-		s.handleQuery(w, r)
-	case strings.HasPrefix(r.URL.Path, "/db/backup"):
-		stats.Add(numBackups, 1)
-		s.handleBackup(w, r)
-	case strings.HasPrefix(r.URL.Path, "/db/load"):
-		stats.Add(numLoad, 1)
-		s.handleLoad(w, r)
-	case strings.HasPrefix(r.URL.Path, "/join"):
-		s.handleJoin(w, r)
-	case strings.HasPrefix(r.URL.Path, "/remove"):
-		s.handleRemove(w, r)
-	case strings.HasPrefix(r.URL.Path, "/status"):
-		s.handleStatus(w, r)
-	case r.URL.Path == "/debug/vars" && s.Expvar:
-		s.handleExpvar(w, r)
-	case strings.HasPrefix(r.URL.Path, "/debug/pprof") && s.Pprof:
-		s.handlePprof(w, r)
-	default:
-		w.WriteHeader(http.StatusNotFound)
-	}
+	s.rootHandler.Handler(s).ServeHTTP(w, r)
 }
 
 // RegisterStatus allows other modules to register status for serving over HTTP.
@@ -247,18 +256,31 @@ func (s *Service) RegisterStatus(key string, stat Statuser) error {
 	return nil
 }
 
+// createConnection creates a connection and returns its ID.
+func (s *Service) createConnection(w http.ResponseWriter, r *http.Request) (uint64, error) {
+	conn, err := s.store.Connect(
+		&store.ConnectionOptions{
+			IdleTimeout: s.ConnIdleTimeout,
+			TxTimeout:   s.ConnTxTimeout,
+		})
+	if err != nil {
+		return 0, err
+	}
+	return conn.ID, nil
+}
+
+// deleteConnection closes a connection and makes it unavailable for
+// future use.
+func (s *Service) deleteConnection(id uint64) error {
+	conn, ok := s.store.Connection(id)
+	if !ok {
+		return nil
+	}
+	return conn.Close()
+}
+
 // handleJoin handles cluster-join requests from other nodes.
 func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
-	if !s.CheckRequestPerm(r, PermJoin) {
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-
-	if r.Method != "POST" {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
 	b, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -310,16 +332,6 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 
 // handleRemove handles cluster-remove requests.
 func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request) {
-	if !s.CheckRequestPerm(r, PermRemove) {
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-
-	if r.Method != "DELETE" {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
 	b, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -362,16 +374,6 @@ func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request) {
 
 // handleBackup returns the consistent database snapshot.
 func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
-	if !s.CheckRequestPerm(r, PermBackup) {
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-
-	if r.Method != "GET" {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
 	noLeader, err := noLeader(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -395,16 +397,6 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
 
 // handleLoad loads the state contained in a .dump output.
 func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
-	if !s.CheckRequestPerm(r, PermLoad) {
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-
-	if r.Method != "POST" {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
 	timings, err := timings(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -446,18 +438,6 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 
 // handleStatus returns status on the system.
 func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-
-	if !s.CheckRequestPerm(r, PermStatus) {
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-
-	if r.Method != "GET" {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
 	results, err := s.store.Stats()
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -474,9 +454,11 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpStatus := map[string]interface{}{
-		"addr":     s.Addr().String(),
-		"auth":     prettyEnabled(s.credentialStore != nil),
-		"redirect": s.leaderAPIAddr(),
+		"addr":              s.Addr().String(),
+		"auth":              prettyEnabled(s.credentialStore != nil),
+		"redirect":          s.leaderAPIAddr(),
+		"conn_idle_timeout": s.ConnIdleTimeout.String(),
+		"conn_tx_timeout":   s.ConnTxTimeout.String(),
 	}
 
 	nodeStatus := map[string]interface{}{
@@ -530,19 +512,7 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleExecute handles queries that modify the database.
-func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-
-	if !s.CheckRequestPerm(r, PermExecute) {
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-
-	if r.Method != "POST" {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
+func (s *Service) handleExecute(connID uint64, w http.ResponseWriter, r *http.Request) {
 	isTx, err := isTx(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -568,8 +538,21 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get the right executer object.
+	var execer Execer
+	if connID == defaultConnID {
+		execer = s.store
+	} else {
+		c, ok := s.store.Connection(connID)
+		if !ok {
+			http.Error(w, "connection not found", http.StatusNotFound)
+			return
+		}
+		execer = c
+	}
+
 	var resp Response
-	results, err := s.store.Execute(&store.ExecuteRequest{queries, timings, isTx})
+	results, err := execer.Execute(&store.ExecuteRequest{queries, timings, isTx})
 	if err != nil {
 		if err == store.ErrNotLeader {
 			leader := s.leaderAPIAddr()
@@ -594,19 +577,7 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleQuery handles queries that do not modify the database.
-func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-
-	if !s.CheckRequestPerm(r, PermQuery) {
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-
-	if r.Method != "GET" && r.Method != "POST" {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
+func (s *Service) handleQuery(connID uint64, w http.ResponseWriter, r *http.Request) {
 	isTx, err := isTx(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -632,8 +603,21 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get the right queryer object.
+	var queryer Queryer
+	if connID == defaultConnID {
+		queryer = s.store
+	} else {
+		c, ok := s.store.Connection(connID)
+		if !ok {
+			http.Error(w, "connection not found", http.StatusNotFound)
+			return
+		}
+		queryer = c
+	}
+
 	var resp Response
-	results, err := s.store.Query(&store.QueryRequest{queries, timings, isTx, lvl})
+	results, err := queryer.Query(&store.QueryRequest{queries, timings, isTx, lvl})
 	if err != nil {
 		if err == store.ErrNotLeader {
 			leader := s.leaderAPIAddr()
@@ -657,45 +641,6 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 	writeResponse(w, r, &resp)
 }
 
-// handleExpvar serves registered expvar information over HTTP.
-func (s *Service) handleExpvar(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	if !s.CheckRequestPerm(r, PermStatus) {
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-
-	fmt.Fprintf(w, "{\n")
-	first := true
-	expvar.Do(func(kv expvar.KeyValue) {
-		if !first {
-			fmt.Fprintf(w, ",\n")
-		}
-		first = false
-		fmt.Fprintf(w, "%q: %s", kv.Key, kv.Value)
-	})
-	fmt.Fprintf(w, "\n}\n")
-}
-
-// handlePprof serves pprof information over HTTP.
-func (s *Service) handlePprof(w http.ResponseWriter, r *http.Request) {
-	if !s.CheckRequestPerm(r, PermStatus) {
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-
-	switch r.URL.Path {
-	case "/debug/pprof/cmdline":
-		pprof.Cmdline(w, r)
-	case "/debug/pprof/profile":
-		pprof.Profile(w, r)
-	case "/debug/pprof/symbol":
-		pprof.Symbol(w, r)
-	default:
-		pprof.Index(w, r)
-	}
-}
-
 // Addr returns the address on which the Service is listening
 func (s *Service) Addr() net.Addr {
 	return s.ln.Addr()
@@ -703,15 +648,16 @@ func (s *Service) Addr() net.Addr {
 
 // FormRedirect returns the value for the "Location" header for a 301 response.
 func (s *Service) FormRedirect(r *http.Request, host string) string {
-	protocol := "http"
-	if s.credentialStore != nil {
-		protocol = "https"
-	}
 	rq := r.URL.RawQuery
 	if rq != "" {
 		rq = fmt.Sprintf("?%s", rq)
 	}
-	return fmt.Sprintf("%s://%s%s%s", protocol, host, r.URL.Path, rq)
+	return fmt.Sprintf("%s://%s%s%s", s.protocol(), host, r.URL.Path, rq)
+}
+
+// FormConnectionURL returns the URL of the new connection.
+func (s *Service) FormConnectionURL(r *http.Request, id uint64) string {
+	return fmt.Sprintf("%s://%s/db/connections/%d", s.protocol(), r.Host, id)
 }
 
 // CheckRequestPerm returns true if authentication is enabled and the user contained
@@ -744,6 +690,14 @@ func (s *Service) addBuildVersion(w http.ResponseWriter) {
 		version = v
 	}
 	w.Header().Add(VersionHTTPHeader, version)
+}
+
+func (s *Service) protocol() string {
+	protocol := "http"
+	if s.credentialStore != nil {
+		protocol = "https"
+	}
+	return protocol
 }
 
 func requestQueries(r *http.Request) ([]string, error) {

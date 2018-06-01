@@ -10,75 +10,114 @@ import (
 	sdb "github.com/rqlite/rqlite/db"
 )
 
+const pollPeriod = time.Second
+
+type ConnectionOptions struct {
+	IdleTimeout time.Duration
+	TxTimeout   time.Duration
+}
+
 // Connection is a connection to the database.
 type Connection struct {
-	db     *sdb.Conn // Connection to SQLite database.
-	store  *Store    // Store to apply commands to.
-	ConnID uint64    `json:"id,omitempty"` // Connection ID, used as a handle by clients.
+	ID uint64 `json:"id,omitempty"` // Connection ID, used as a handle by clients.
 
-	timeMu     sync.Mutex
-	CreatedAt  time.Time `json:"created_at,omitempty"`
-	LastUsedAt time.Time `json:"last_used_at,omitempty"`
+	dbMu  sync.RWMutex
+	db    *sdb.Conn // Connection to SQLite database.
+	store *Store    // Store to apply commands to.
+
+	timeMu      sync.Mutex
+	CreatedAt   time.Time     `json:"created_at,omitempty"`
+	LastUsedAt  time.Time     `json:"last_used_at,omitempty"`
+	IdleTimeout time.Duration `json:"idle_timeout,omitempty"`
+	TxTimeout   time.Duration `json:"tx_timeout,omitempty"`
 
 	txStateMu   sync.Mutex
 	TxStartedAt time.Time `json:"tx_started_at,omitempty"`
 
-	logger *log.Logger
+	wg   sync.WaitGroup
+	done chan struct{}
+
+	logPrefix string
+	logger    *log.Logger
 }
 
 // NewConnection returns a connection to the database.
-func NewConnection(c *sdb.Conn, s *Store, id uint64) *Connection {
-	return &Connection{
-		db:        c,
-		store:     s,
-		ConnID:    id,
-		CreatedAt: time.Now(),
-		logger:    log.New(os.Stderr, "[connection] ", log.LstdFlags),
+func NewConnection(c *sdb.Conn, s *Store, id uint64, it, tt time.Duration) *Connection {
+	now := time.Now()
+	conn := Connection{
+		db:          c,
+		store:       s,
+		ID:          id,
+		CreatedAt:   now,
+		LastUsedAt:  now,
+		IdleTimeout: it,
+		TxTimeout:   tt,
+		done:        make(chan struct{}, 1),
+		logger:      log.New(os.Stderr, connectionLogPrefix(id), log.LstdFlags),
 	}
+	conn.run(conn.done)
+	return &conn
 }
 
 // Restore prepares a partially ready connection.
 func (c *Connection) Restore(dbConn *sdb.Conn, s *Store) {
+	c.dbMu.Lock()
+	defer c.dbMu.Unlock()
 	c.db = dbConn
 	c.store = s
-	c.logger = log.New(os.Stderr, "[connection] ", log.LstdFlags)
+	c.logger = log.New(os.Stderr, connectionLogPrefix(c.ID), log.LstdFlags)
 }
 
 // SetLastUsedNow marks the connection as being used now.
 func (c *Connection) SetLastUsedNow() {
 	c.timeMu.Lock()
+	defer c.timeMu.Unlock()
 	c.LastUsedAt = time.Now()
-	c.timeMu.Unlock()
 }
 
 // String implements the Stringer interface on the Connection.
 func (c *Connection) String() string {
-	return fmt.Sprintf("connection:%d", c.ConnID)
-}
-
-// ID returns the connection ID.
-func (c *Connection) ID() uint64 {
-	return c.ConnID
+	return fmt.Sprintf("connection:%d", c.ID)
 }
 
 // TransactionActive returns whether a transaction is active on the connection.
 func (c *Connection) TransactionActive() bool {
+	c.dbMu.RLock()
+	defer c.dbMu.RUnlock()
+	if c.db == nil {
+		return false
+	}
 	return c.db.TransactionActive()
 }
 
 // Execute executes queries that return no rows, but do modify the database.
 func (c *Connection) Execute(ex *ExecuteRequest) (*ExecuteResponse, error) {
+	c.dbMu.RLock()
+	defer c.dbMu.RUnlock()
+	if c.db == nil {
+		return nil, ErrConnectionDoesNotExist
+	}
 	return c.store.execute(c, ex)
 }
 
 // ExecuteOrAbort executes the requests, but aborts any active transaction
 // on the underlying database in the case of any error.
 func (c *Connection) ExecuteOrAbort(ex *ExecuteRequest) (resp *ExecuteResponse, retErr error) {
+	c.dbMu.RLock()
+	defer c.dbMu.RUnlock()
+	if c.db == nil {
+		return nil, ErrConnectionDoesNotExist
+	}
 	return c.store.executeOrAbort(c, ex)
 }
 
 // Query executes queries that return rows, and do not modify the database.
 func (c *Connection) Query(qr *QueryRequest) (*QueryResponse, error) {
+	c.dbMu.RLock()
+	defer c.dbMu.RUnlock()
+	if c.db == nil {
+		return nil, ErrConnectionDoesNotExist
+	}
 	return c.store.query(c, qr)
 }
 
@@ -87,13 +126,110 @@ func (c *Connection) Query(qr *QueryRequest) (*QueryResponse, error) {
 // can be used to clean up any dangling state that may result from certain
 // error scenarios.
 func (c *Connection) AbortTransaction() error {
+	c.dbMu.RLock()
+	defer c.dbMu.RUnlock()
+	if c.db == nil {
+		return ErrConnectionDoesNotExist
+	}
 	_, err := c.store.execute(c, &ExecuteRequest{[]string{"ROLLBACK"}, false, false})
 	return err
 }
 
-// Close closes the connection.
+// Close closes the connection via consensus.
 func (c *Connection) Close() error {
-	return c.store.disconnect(c)
+	c.dbMu.Lock()
+	defer c.dbMu.Unlock()
+
+	close(c.done)
+	c.wg.Wait()
+	if c.store != nil {
+		if err := c.store.disconnect(c); err != nil {
+			return err
+		}
+	}
+
+	if c.db == nil {
+		return nil
+	}
+	if err := c.db.Close(); err != nil {
+		return err
+	}
+	c.db = nil
+	return nil
+}
+
+// Stats returns the status of the connection.
+func (c *Connection) Stats() (interface{}, error) {
+	c.dbMu.RLock()
+	defer c.dbMu.RUnlock()
+	c.timeMu.Lock()
+	defer c.timeMu.Unlock()
+	c.txStateMu.Lock()
+	defer c.txStateMu.Unlock()
+
+	fkEnabled, err := c.db.FKConstraints()
+	if err != nil {
+		return nil, err
+	}
+
+	m := make(map[string]interface{})
+	m["last_used_at"] = c.LastUsedAt
+	m["created_at"] = c.CreatedAt
+	m["idle_timeout"] = c.IdleTimeout.String()
+	m["tx_timeout"] = c.TxTimeout.String()
+	m["id"] = c.ID
+	m["fk_constraints"] = enabledFromBool(fkEnabled)
+	if !c.TxStartedAt.IsZero() {
+		m["tx_started_at"] = c.TxStartedAt.String()
+	}
+	return m, nil
+}
+
+// run starts the goroutine that periodically checks if any active transaction
+// on the connection should be aborted, or if the connection should be closed.
+func (c *Connection) run(done chan struct{}) {
+	c.wg.Add(1)
+	defer c.wg.Done()
+
+	ticker := time.NewTicker(pollPeriod)
+	go func() {
+		defer ticker.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-ticker.C:
+				c.timeMu.Lock()
+				lua := c.LastUsedAt
+				c.timeMu.Unlock()
+				if time.Since(lua) > c.IdleTimeout && c.IdleTimeout != 0 {
+					if err := c.Close(); err != nil {
+						c.logger.Printf("failed to close %s:", err.Error())
+					} else {
+						c.logger.Printf("%d closed due to idle timeout", c.ID)
+					}
+					// Only increment stat here to make testing easier.
+					stats.Add(numConnIdleTimeouts, 1)
+				}
+				c.txStateMu.Lock()
+				tsa := c.TxStartedAt
+				c.txStateMu.Unlock()
+				if !tsa.IsZero() && time.Since(tsa) > c.TxTimeout && c.TxTimeout != 0 {
+					if err := c.Close(); err != nil {
+						c.logger.Printf("failed to abort transaction %s:", err.Error())
+					} else {
+						c.logger.Printf("transaction aborted due to timeout, %d closed", c.ID)
+					}
+					// Only increment stat here to make testing easier.
+					stats.Add(numConnTxTimeouts, 1)
+				}
+			}
+		}
+	}()
+}
+
+func connectionLogPrefix(id uint64) string {
+	return fmt.Sprintf("[connection] ")
 }
 
 // TxStateChange is a helper that detects when the transaction state on a

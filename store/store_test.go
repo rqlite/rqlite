@@ -70,7 +70,7 @@ func Test_StoreConnect(t *testing.T) {
 	}
 	s.WaitForLeader(10 * time.Second)
 
-	c, err := s.Connect()
+	c, err := s.Connect(nil)
 	if err != nil {
 		t.Fatalf("failed to connect to open store: %s", err.Error())
 	}
@@ -78,7 +78,7 @@ func Test_StoreConnect(t *testing.T) {
 		t.Fatal("new connection is nil")
 	}
 
-	cc, ok := s.Connection(c.ID())
+	cc, ok := s.Connection(c.ID)
 	if c != cc && ok {
 		t.Fatal("new connection not in map")
 	}
@@ -104,7 +104,7 @@ func Test_StoreDisconnectDefault(t *testing.T) {
 		t.Fatalf("connection map is wrong size, exp %d, got %d", exp, got)
 	}
 
-	if err := s.disconnect(NewConnection(nil, nil, defaultConnID)); err == nil {
+	if err := s.disconnect(NewConnection(nil, nil, defaultConnID, 0, 0)); err == nil {
 		t.Fatal("closed default connection")
 	}
 	if exp, got := 1, len(s.conns); exp != got {
@@ -136,7 +136,7 @@ func Test_ConnectionSameIDs(t *testing.T) {
 	}
 
 	// Create explicit connection on store0.
-	c0, err := s0.Connect()
+	c0, err := s0.Connect(nil)
 	if err != nil {
 		t.Fatalf("failed to create new connection: %s", err.Error())
 	}
@@ -145,7 +145,7 @@ func Test_ConnectionSameIDs(t *testing.T) {
 		t.Fatalf("error waiting for leader to apply index: %s:", err.Error())
 	}
 
-	connID := c0.ID()
+	connID := c0.ID
 	cc0, ok := s0.Connection(connID)
 	if !ok {
 		t.Fatalf("s0 does not have connection %d", connID)
@@ -154,7 +154,7 @@ func Test_ConnectionSameIDs(t *testing.T) {
 	if !ok {
 		t.Fatalf("s1 does not have connection %d", connID)
 	}
-	if cc0.ID() != cc1.ID() {
+	if cc0.ID != cc1.ID {
 		t.Fatal("s0 connection ID does not match s1 connection ID")
 	}
 }
@@ -183,7 +183,7 @@ func Test_StoreConnectFollowerError(t *testing.T) {
 	}
 	s1.WaitForLeader(10 * time.Second)
 
-	_, err := s1.Connect()
+	_, err := s1.Connect(nil)
 	if err != ErrNotLeader {
 		t.Fatal("Connect did not return error on follower")
 	}
@@ -465,7 +465,7 @@ func Test_SingleNodeSnapshotInMem(t *testing.T) {
 	}
 
 	// Check connection.
-	rc, ok := s.Connection(conn.ID())
+	rc, ok := s.Connection(conn.ID)
 	if !ok {
 		t.Fatal("connection missing after snapshot restore")
 	}
@@ -765,4 +765,23 @@ func asJSON(v interface{}) string {
 		panic("failed to JSON marshal value")
 	}
 	return string(b)
+}
+
+// pollExpvarStat checks value returned by f every second. If it matches
+// target it returns true. If timeout expires before this happens, it
+// returns false.
+func pollExpvarStat(f func() string, target string, timeout time.Duration) bool {
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+	timer := time.NewTimer(timeout)
+	for {
+		select {
+		case <-timer.C:
+			return false
+		case <-ticker.C:
+			if f() == target {
+				return true
+			}
+		}
+	}
 }
