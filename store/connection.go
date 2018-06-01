@@ -159,12 +159,18 @@ func (c *Connection) Stats() (interface{}, error) {
 	c.txStateMu.Lock()
 	defer c.txStateMu.Unlock()
 
+	fkEnabled, err := c.db.FKConstraints()
+	if err != nil {
+		return nil, err
+	}
+
 	m := make(map[string]interface{})
 	m["last_used_at"] = c.LastUsedAt
 	m["created_at"] = c.CreatedAt
 	m["idle_timeout"] = c.IdleTimeout.String()
 	m["tx_timeout"] = c.TxTimeout.String()
 	m["id"] = c.ID
+	m["fk_constraints"] = enabledFromBool(fkEnabled)
 	if !c.TxStartedAt.IsZero() {
 		m["tx_started_at"] = c.TxStartedAt.String()
 	}
