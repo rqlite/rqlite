@@ -77,6 +77,7 @@ func (c *Connection) ExecuteMulti(stmts []string) (string, error) {
 	return c.postExecute(string(j))
 }
 
+// Close closes the connection.
 func (c *Connection) Close() error {
 	client := http.Client{}
 	req, err := http.NewRequest(http.MethodDelete, c.URL.String(), nil)
@@ -156,7 +157,7 @@ func (n *Node) Connect() (*Connection, error) {
 	return NewConnection(c.ID, n), nil
 }
 
-// Connect returns an explicit connection to the node's database.
+// ConnectWithTimeouts returns an explicit connection to the node's database.
 func (n *Node) ConnectWithTimeouts(it, tt time.Duration) (*Connection, error) {
 	c, err := n.Store.Connect(&store.ConnectionOptions{it, tt})
 	if err != nil {
