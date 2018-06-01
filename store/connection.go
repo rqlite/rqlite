@@ -189,11 +189,10 @@ func (c *Connection) Stats() (interface{}, error) {
 // run starts the goroutine that periodically checks if any active transaction
 // on the connection should be aborted, or if the connection should be closed.
 func (c *Connection) run(done chan struct{}) {
-	c.wg.Add(1)
-	defer c.wg.Done()
-
 	ticker := time.NewTicker(pollPeriod)
+	c.wg.Add(1)
 	go func() {
+		defer c.wg.Done()
 		defer ticker.Stop()
 		for {
 			select {
