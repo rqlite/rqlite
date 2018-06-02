@@ -1082,13 +1082,15 @@ func (s *Store) checkConnections() {
 
 				for _, c := range conns {
 					if err := c.Close(); err != nil {
-						c.logger.Printf("failed to close %s:", err.Error())
-						return
+						if err == ErrNotLeader {
+							// Not an issue, the leader will close it.
+							continue
+						}
+						s.logger.Printf("%s failed to close: %s", c, err.Error())
 					}
-					c.logger.Printf("%d closed due to timeout", c.ID)
+					s.logger.Printf("%s closed due to timeout", c)
 					// Only increment stat here to make testing easier.
 					stats.Add(numConnTimeouts, 1)
-					return
 				}
 			}
 		}

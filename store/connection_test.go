@@ -195,15 +195,29 @@ func Test_ConnectionIdleTimeout(t *testing.T) {
 	}
 	defer s.Close(true)
 	s.WaitForLeader(10 * time.Second)
-	c := mustNewConnectionWithTimeouts(s, 3*time.Second, 0)
-	_, ok := s.Connection(c.ID)
+	c0 := mustNewConnectionWithTimeouts(s, 3*time.Second, 0)
+	_, ok := s.Connection(c0.ID)
 	if !ok {
 		t.Fatal("connection not in store after connecting")
 	}
-	if c.IdleTimedOut() {
+	if c0.IdleTimedOut() {
 		t.Fatal("connection incorrectly marked as timed out")
 	}
 	if !pollExpvarStat(stats.Get(numConnTimeouts).String, "1", 10*time.Second) {
+		t.Fatalf("connection has not idle-closed: %s", stats.Get(numConnTimeouts).String())
+	}
+
+	// Make a second connection, to make sure handling the first connection
+	// didn't leave the Store in a bad state.
+	c1 := mustNewConnectionWithTimeouts(s, 3*time.Second, 0)
+	_, ok = s.Connection(c1.ID)
+	if !ok {
+		t.Fatal("connection not in store after connecting")
+	}
+	if c1.IdleTimedOut() {
+		t.Fatal("connection incorrectly marked as timed out")
+	}
+	if !pollExpvarStat(stats.Get(numConnTimeouts).String, "2", 10*time.Second) {
 		t.Fatalf("connection has not idle-closed: %s", stats.Get(numConnTimeouts).String())
 	}
 }
