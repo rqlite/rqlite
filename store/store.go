@@ -50,6 +50,10 @@ var (
 	// on a non-existent connection. This can happen if the connection
 	// was previously open but is now closed.
 	ErrConnectionDoesNotExist = errors.New("connection does not exist")
+
+	// ErrStoreInvalidState is returned when a Store is in an invalid
+	// state for the requested operation.
+	ErrStoreInvalidState = errors.New("store not in valid state")
 )
 
 const (
@@ -188,6 +192,9 @@ type Store struct {
 	metaMu sync.RWMutex
 	meta   map[string]map[string]string
 
+	closedMu sync.Mutex
+	closed   bool // Has the store been closed?
+
 	restoreMu sync.RWMutex // Restore needs exclusive access to database.
 
 	logger *log.Logger
@@ -231,7 +238,14 @@ func New(ln Listener, c *StoreConfig) *Store {
 
 // Open opens the store. If enableSingle is set, and there are no existing peers,
 // then this node becomes the first node, and therefore leader, of the cluster.
+// Once closed, a Store may not be re-opened.
 func (s *Store) Open(enableSingle bool) error {
+	s.closedMu.Lock()
+	defer s.closedMu.Unlock()
+	if s.closed {
+		return ErrStoreInvalidState
+	}
+
 	s.logger.Printf("opening store with node ID %s", s.raftID)
 
 	s.logger.Printf("ensuring directory at %s exists", s.raftDir)
@@ -389,7 +403,17 @@ func (s *Store) Query(qr *QueryRequest) (*QueryResponse, error) {
 }
 
 // Close closes the store. If wait is true, waits for a graceful shutdown.
+// One closed, a Store may not be re-opened.
 func (s *Store) Close(wait bool) error {
+	s.closedMu.Lock()
+	defer s.closedMu.Unlock()
+	if s.closed {
+		return nil
+	}
+	defer func() {
+		s.closed = true
+	}()
+
 	close(s.done)
 	s.wg.Wait()
 

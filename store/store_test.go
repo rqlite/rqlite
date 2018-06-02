@@ -35,6 +35,27 @@ func Test_OpenStoreSingleNode(t *testing.T) {
 	}
 }
 
+func Test_OpenStoreCloseSingleNode(t *testing.T) {
+	t.Parallel()
+
+	s := mustNewStore(true)
+	defer os.RemoveAll(s.Path())
+
+	if err := s.Open(true); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	s.WaitForLeader(10 * time.Second)
+	if err := s.Close(true); err != nil {
+		t.Fatalf("failed to close single-node store: %s", err.Error())
+	}
+	if err := s.Close(true); err != nil {
+		t.Fatalf("failed to reclose single-node closed store: %s", err.Error())
+	}
+	if err := s.Open(true); err != ErrStoreInvalidState {
+		t.Fatal("incorrect error returned on re-open attempt")
+	}
+}
+
 func Test_StoreConnect(t *testing.T) {
 	t.Parallel()
 
