@@ -83,6 +83,10 @@ func Test_StoreConnect(t *testing.T) {
 	if err := c.Close(); err != nil {
 		t.Fatalf("failed to close connection: %s", err.Error())
 	}
+	_, ok = s.Connection(c.ID)
+	if ok {
+		t.Fatal("connection still in map")
+	}
 }
 
 func Test_StoreDisconnectDefault(t *testing.T) {
