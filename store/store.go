@@ -632,6 +632,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		"apply_timeout":      s.ApplyTimeout.String(),
 		"heartbeat_timeout":  s.HeartbeatTimeout.String(),
 		"snapshot_threshold": s.SnapshotThreshold,
+		"conn_poll_period":   s.connPollPeriod.String(),
 		"metadata":           s.meta,
 		"nodes":              nodes,
 		"dir":                s.raftDir,
