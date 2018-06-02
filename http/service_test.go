@@ -550,13 +550,13 @@ func Test_ConnectionTimingParams(t *testing.T) {
 	}
 
 	req, _ = http.NewRequest(http.MethodPost, "http://foo", nil)
-	d, b, err = txTimeout(req)
+	_, b, err = txTimeout(req)
 	if b || err != nil {
 		t.Fatal("failed")
 	}
 
 	req, _ = http.NewRequest(http.MethodPost, "http://foo?idle_timeout=1 0s", nil)
-	d, b, err = idleTimeout(req)
+	_, b, err = idleTimeout(req)
 	if err == nil {
 		t.Fatal("failed")
 	}
@@ -574,7 +574,7 @@ func Test_ConnectionTimingParams(t *testing.T) {
 	}
 
 	req, _ = http.NewRequest(http.MethodPost, "http://foo", nil)
-	d, b, err = idleTimeout(req)
+	_, b, err = idleTimeout(req)
 	if b || err != nil {
 		t.Fatal("failed")
 	}

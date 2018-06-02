@@ -1083,12 +1083,11 @@ func (s *Store) checkConnections() {
 					if err := c.Close(); err != nil {
 						c.logger.Printf("failed to close %s:", err.Error())
 						return
-					} else {
-						c.logger.Printf("%d closed due to timeout", c.ID)
-						// Only increment stat here to make testing easier.
-						stats.Add(numConnTimeouts, 1)
-						return
 					}
+					c.logger.Printf("%d closed due to timeout", c.ID)
+					// Only increment stat here to make testing easier.
+					stats.Add(numConnTimeouts, 1)
+					return
 				}
 			}
 		}
