@@ -241,7 +241,6 @@ func New(ln Listener, c *StoreConfig) *Store {
 
 // Open opens the store. If enableSingle is set, and there are no existing peers,
 // then this node becomes the first node, and therefore leader, of the cluster.
-// Once closed, a Store may not be re-opened.
 func (s *Store) Open(enableSingle bool) error {
 	s.closedMu.Lock()
 	defer s.closedMu.Unlock()
@@ -406,7 +405,7 @@ func (s *Store) Query(qr *QueryRequest) (*QueryResponse, error) {
 }
 
 // Close closes the store. If wait is true, waits for a graceful shutdown.
-// One closed, a Store may not be re-opened.
+// Once closed, a Store may not be re-opened.
 func (s *Store) Close(wait bool) error {
 	s.closedMu.Lock()
 	defer s.closedMu.Unlock()
