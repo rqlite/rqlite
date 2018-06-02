@@ -135,7 +135,7 @@ func Test_ConnectionExecuteClosed(t *testing.T) {
 		t.Fatalf("failed to close connection: %s", err.Error())
 	}
 	if err := c.AbortTransaction(); err != ErrConnectionDoesNotExist {
-		t.Fatalf("wring error returned closed connection: %v", err)
+		t.Fatalf("wrong error returned by closed connection: %v", err)
 	}
 }
 
@@ -158,11 +158,11 @@ func Test_ConnectionQueryClosed(t *testing.T) {
 	}
 	_, err := c.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, Strong})
 	if err != ErrConnectionDoesNotExist {
-		t.Fatalf("wring error returned closed connection: %v", err)
+		t.Fatalf("wrong error returned by closed connection: %v", err)
 	}
 	_, err = c.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, Weak})
 	if err != ErrConnectionDoesNotExist {
-		t.Fatalf("wring error returned closed connection: %v", err)
+		t.Fatalf("wrong error returned by closed connection: %v", err)
 	}
 }
 
