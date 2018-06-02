@@ -50,29 +50,33 @@ var (
 	// on a non-existent connection. This can happen if the connection
 	// was previously open but is now closed.
 	ErrConnectionDoesNotExist = errors.New("connection does not exist")
+
+	// ErrStoreInvalidState is returned when a Store is in an invalid
+	// state for the requested operation.
+	ErrStoreInvalidState = errors.New("store not in valid state")
 )
 
 const (
-	retainSnapshotCount = 2
-	applyTimeout        = 10 * time.Second
-	openTimeout         = 120 * time.Second
-	sqliteFile          = "db.sqlite"
-	leaderWaitDelay     = 100 * time.Millisecond
-	appliedWaitDelay    = 100 * time.Millisecond
-	connectionPoolCount = 5
-	connectionTimeout   = 10 * time.Second
-	raftLogCacheSize    = 512
+	connectionPollPeriod = 10 * time.Second
+	retainSnapshotCount  = 2
+	applyTimeout         = 10 * time.Second
+	openTimeout          = 120 * time.Second
+	sqliteFile           = "db.sqlite"
+	leaderWaitDelay      = 100 * time.Millisecond
+	appliedWaitDelay     = 100 * time.Millisecond
+	connectionPoolCount  = 5
+	connectionTimeout    = 10 * time.Second
+	raftLogCacheSize     = 512
 )
 
 const (
-	numSnaphots         = "num_snapshots"
-	numSnaphotsBlocked  = "num_snapshots_blocked"
-	numBackups          = "num_backups"
-	numRestores         = "num_restores"
-	numConnects         = "num_connects"
-	numDisconnects      = "num_disconnects"
-	numConnIdleTimeouts = "num_conn_idle_timeouts"
-	numConnTxTimeouts   = "num_conn_tx_timeouts"
+	numSnaphots        = "num_snapshots"
+	numSnaphotsBlocked = "num_snapshots_blocked"
+	numBackups         = "num_backups"
+	numRestores        = "num_restores"
+	numConnects        = "num_connects"
+	numDisconnects     = "num_disconnects"
+	numConnTimeouts    = "num_conn_timeouts"
 )
 
 const defaultConnID = 0
@@ -98,8 +102,7 @@ func init() {
 	stats.Add(numRestores, 0)
 	stats.Add(numConnects, 0)
 	stats.Add(numDisconnects, 0)
-	stats.Add(numConnIdleTimeouts, 0)
-	stats.Add(numConnTxTimeouts, 0)
+	stats.Add(numConnTimeouts, 0)
 }
 
 // RaftResponse is the Raft metadata that will be included with responses, if
@@ -183,8 +186,14 @@ type Store struct {
 	raftStable raft.StableStore      // Persistent k-v store.
 	boltStore  *raftboltdb.BoltStore // Physical store.
 
+	wg   sync.WaitGroup
+	done chan struct{}
+
 	metaMu sync.RWMutex
 	meta   map[string]map[string]string
+
+	closedMu sync.Mutex
+	closed   bool // Has the store been closed?
 
 	restoreMu sync.RWMutex // Restore needs exclusive access to database.
 
@@ -194,6 +203,8 @@ type Store struct {
 	SnapshotInterval  time.Duration
 	HeartbeatTimeout  time.Duration
 	ApplyTimeout      time.Duration
+
+	connPollPeriod time.Duration
 }
 
 // StoreConfig represents the configuration of the underlying Store.
@@ -213,22 +224,31 @@ func New(ln Listener, c *StoreConfig) *Store {
 	}
 
 	return &Store{
-		ln:           ln,
-		raftDir:      c.Dir,
-		raftID:       c.ID,
-		dbConf:       c.DBConf,
-		dbPath:       filepath.Join(c.Dir, sqliteFile),
-		randSrc:      rand.New(rand.NewSource(time.Now().UnixNano())),
-		conns:        make(map[uint64]*Connection),
-		meta:         make(map[string]map[string]string),
-		logger:       logger,
-		ApplyTimeout: applyTimeout,
+		ln:             ln,
+		raftDir:        c.Dir,
+		raftID:         c.ID,
+		dbConf:         c.DBConf,
+		dbPath:         filepath.Join(c.Dir, sqliteFile),
+		randSrc:        rand.New(rand.NewSource(time.Now().UnixNano())),
+		conns:          make(map[uint64]*Connection),
+		done:           make(chan struct{}, 1),
+		meta:           make(map[string]map[string]string),
+		logger:         logger,
+		ApplyTimeout:   applyTimeout,
+		connPollPeriod: connectionPollPeriod,
 	}
 }
 
 // Open opens the store. If enableSingle is set, and there are no existing peers,
 // then this node becomes the first node, and therefore leader, of the cluster.
+// Once closed, a Store may not be re-opened.
 func (s *Store) Open(enableSingle bool) error {
+	s.closedMu.Lock()
+	defer s.closedMu.Unlock()
+	if s.closed {
+		return ErrStoreInvalidState
+	}
+
 	s.logger.Printf("opening store with node ID %s", s.raftID)
 
 	s.logger.Printf("ensuring directory at %s exists", s.raftDir)
@@ -300,6 +320,9 @@ func (s *Store) Open(enableSingle bool) error {
 	}
 
 	s.raft = ra
+
+	// Start connection monitoring
+	s.checkConnections()
 
 	return nil
 }
@@ -383,7 +406,20 @@ func (s *Store) Query(qr *QueryRequest) (*QueryResponse, error) {
 }
 
 // Close closes the store. If wait is true, waits for a graceful shutdown.
+// One closed, a Store may not be re-opened.
 func (s *Store) Close(wait bool) error {
+	s.closedMu.Lock()
+	defer s.closedMu.Unlock()
+	if s.closed {
+		return nil
+	}
+	defer func() {
+		s.closed = true
+	}()
+
+	close(s.done)
+	s.wg.Wait()
+
 	// XXX CLOSE OTHER CONNECTIONS
 	if err := s.dbConn.Close(); err != nil {
 		return err
@@ -1015,6 +1051,49 @@ func (s *Store) raftConfig() *raft.Config {
 		config.HeartbeatTimeout = s.HeartbeatTimeout
 	}
 	return config
+}
+
+// checkConnections periodically checks which connections should
+// close due to timeouts.
+func (s *Store) checkConnections() {
+	s.wg.Add(1)
+	ticker := time.NewTicker(s.connPollPeriod)
+	go func() {
+		defer s.wg.Done()
+		defer ticker.Stop()
+		for {
+			select {
+			case <-s.done:
+				return
+			case <-ticker.C:
+				var conns []*Connection
+				s.connsMu.RLock()
+				for _, c := range s.conns {
+					// Sometimes IDs are in the slice without a connection, if a
+					// connection is in process of being formed via consensus.
+					if c == nil || c.ID == defaultConnID {
+						continue
+					}
+					if c.IdleTimedOut() || c.TxTimedOut() {
+						conns = append(conns, c)
+					}
+				}
+				s.connsMu.RUnlock()
+
+				for _, c := range conns {
+					if err := c.Close(); err != nil {
+						c.logger.Printf("failed to close %s:", err.Error())
+						return
+					} else {
+						c.logger.Printf("%d closed due to timeout", c.ID)
+						// Only increment stat here to make testing easier.
+						stats.Add(numConnTimeouts, 1)
+						return
+					}
+				}
+			}
+		}
+	}()
 }
 
 type fsmExecuteResponse struct {

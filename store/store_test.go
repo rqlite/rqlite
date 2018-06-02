@@ -48,14 +48,11 @@ func Test_OpenStoreCloseSingleNode(t *testing.T) {
 	if err := s.Close(true); err != nil {
 		t.Fatalf("failed to close single-node store: %s", err.Error())
 	}
-	if err := s.Open(true); err != nil {
-		t.Fatalf("failed to reopen single-node store: %s", err.Error())
-	}
 	if err := s.Close(true); err != nil {
-		t.Fatalf("failed to reclose single-node store: %s", err.Error())
+		t.Fatalf("failed to reclose single-node closed store: %s", err.Error())
 	}
-	if err := s.Close(true); err != nil {
-		t.Fatalf("failed to close single-node closed store: %s", err.Error())
+	if err := s.Open(true); err != ErrStoreInvalidState {
+		t.Fatal("incorrect error returned on re-open attempt")
 	}
 }
 
@@ -709,6 +706,7 @@ func mustNewStore(inmem bool) *Store {
 	if s == nil {
 		panic("failed to create new store")
 	}
+	s.connPollPeriod = 100 * time.Millisecond
 	return s
 }
 

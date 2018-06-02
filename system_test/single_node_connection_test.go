@@ -290,7 +290,8 @@ func Test_SingleNodeConnectionIsolationTimeouts(t *testing.T) {
 		t.Fatalf("test received wrong result\ngot: %s\nexp: %s\n", got, exp)
 	}
 
-	time.Sleep(3 * txTimeout)
+	// Account for node polling period.
+	time.Sleep(3*txTimeout + 10*time.Second)
 
 	r, _ = second.Execute(`BEGIN`)
 	if got, exp := r, fmt.Sprintf(`{"results":[{}],%s}`, rr(node.ID, 9)); got != exp {
@@ -313,7 +314,8 @@ func Test_SingleNodeConnectionCloseTimeouts(t *testing.T) {
 	first.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`)
 	first.Execute(`INSERT INTO foo(name) VALUES("fiona")`)
 
-	time.Sleep(3 * idleTimeout)
+	// Account for node polling period.
+	time.Sleep(3*idleTimeout + 10*time.Second)
 
 	r, _ := first.Query(`SELECT * FROM foo`)
 	if !strings.Contains(r, "connection not found") {
