@@ -181,6 +181,9 @@ func Test_ConnectionIdleTimeout(t *testing.T) {
 	if !ok {
 		t.Fatal("connection not in store after connecting")
 	}
+	if c.IdleTimedOut() {
+		t.Fatal("connection incorrectly marked as timed out")
+	}
 	if !pollExpvarStat(stats.Get(numConnTimeouts).String, "1", 10*time.Second) {
 		t.Fatalf("connection has not idle-closed: %s", stats.Get(numConnTimeouts).String())
 	}
@@ -200,12 +203,18 @@ func Test_ConnectionIdleNoTimeout(t *testing.T) {
 		t.Fatal("connection not in store after connecting")
 	}
 	defer c.Close()
+	if c.IdleTimedOut() {
+		t.Fatal("connection incorrectly marked as timed out")
+	}
 
 	// Wait, and check that connection is still open.
 	time.Sleep(5 * time.Second)
 	_, ok = s.Connection(c.ID)
 	if !ok {
 		t.Fatal("connection not available before idle-close")
+	}
+	if c.IdleTimedOut() {
+		t.Fatal("connection incorrectly marked as timed out")
 	}
 }
 
@@ -223,6 +232,9 @@ func Test_ConnectionTxTimeout(t *testing.T) {
 	_, ok := s.Connection(c.ID)
 	if !ok {
 		t.Fatal("connection not in store after connecting")
+	}
+	if c.TxTimedOut() {
+		t.Fatal("transaction incorrectly marked as timed out")
 	}
 
 	_, err := c.Execute(&ExecuteRequest{[]string{"BEGIN"}, false, false})

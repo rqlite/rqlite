@@ -177,12 +177,15 @@ func (c *Connection) Stats() (interface{}, error) {
 	return m, nil
 }
 
+// IdleTimedOut returns if the connection has not been active in the idle time.
 func (c *Connection) IdleTimedOut() bool {
 	c.timeMu.Lock()
 	defer c.timeMu.Unlock()
 	return time.Since(c.LastUsedAt) > c.IdleTimeout && c.IdleTimeout != 0
 }
 
+// TxTimedOut returns if the transaction has been open, without activity in
+// transaction-idle time.
 func (c *Connection) TxTimedOut() bool {
 	c.txStateMu.Lock()
 	defer c.txStateMu.Unlock()
