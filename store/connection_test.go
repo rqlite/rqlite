@@ -166,6 +166,25 @@ func Test_ConnectionQueryClosed(t *testing.T) {
 	}
 }
 
+func Test_ConnectionSimpleTimeoutChecks(t *testing.T) {
+	t.Parallel()
+
+	c := NewConnection(nil, nil, 1234, 1*time.Second, 1*time.Second)
+	if c.IdleTimedOut() {
+		t.Fatal("connection incorrectly marked as timed out")
+	}
+	if c.TxTimedOut() {
+		t.Fatal("transaction incorrectly marked as timed out")
+	}
+	time.Sleep(2 * time.Second)
+	if !c.IdleTimedOut() {
+		t.Fatal("connection incorrectly not marked as timed out")
+	}
+	if c.TxTimedOut() {
+		t.Fatal("transaction incorrectly marked as timed out")
+	}
+}
+
 func Test_ConnectionIdleTimeout(t *testing.T) {
 	// Test is explicitly not parallel because it accesses global Store stats.
 
