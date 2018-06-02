@@ -25,7 +25,6 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 	if err := s0.Open(true); err != nil {
 		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
 	}
-	defer s0.Close(true)
 	s0.WaitForLeader(10 * time.Second)
 
 	s1 := mustNewStore(true)
@@ -182,12 +181,8 @@ func Test_ConnectionIdleTimeout(t *testing.T) {
 	if !ok {
 		t.Fatal("connection not in store after connecting")
 	}
-	if !pollExpvarStat(stats.Get(numConnIdleTimeouts).String, "1", 10*time.Second) {
-		t.Fatalf("connection has not idle-closed: %s", stats.Get(numConnIdleTimeouts).String())
-	}
-	_, ok = s.Connection(c.ID)
-	if ok {
-		t.Fatal("connection in store after idle-close")
+	if !pollExpvarStat(stats.Get(numConnTimeouts).String, "1", 10*time.Second) {
+		t.Fatalf("connection has not idle-closed: %s", stats.Get(numConnTimeouts).String())
 	}
 }
 
@@ -238,12 +233,8 @@ func Test_ConnectionTxTimeout(t *testing.T) {
 		t.Fatal("transaction not active")
 	}
 
-	if !pollExpvarStat(stats.Get(numConnTxTimeouts).String, "1", 10*time.Second) {
-		t.Fatalf("connection has not aborted tx: %s", stats.Get(numConnTxTimeouts).String())
-	}
-	_, ok = s.Connection(c.ID)
-	if ok {
-		t.Fatal("connection in store after tx timeout")
+	if !pollExpvarStat(stats.Get(numConnTimeouts).String, "1", 10*time.Second) {
+		t.Fatalf("connection has not aborted tx: %s", stats.Get(numConnTimeouts).String())
 	}
 }
 

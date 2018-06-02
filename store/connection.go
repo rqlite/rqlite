@@ -10,8 +10,6 @@ import (
 	sdb "github.com/rqlite/rqlite/db"
 )
 
-const pollPeriod = time.Second
-
 // ConnectionOptions controls connection behaviour.
 type ConnectionOptions struct {
 	IdleTimeout time.Duration
@@ -52,7 +50,6 @@ func NewConnection(c *sdb.Conn, s *Store, id uint64, it, tt time.Duration) *Conn
 		TxTimeout:   tt,
 		logger:      log.New(os.Stderr, connectionLogPrefix(id), log.LstdFlags),
 	}
-	conn.run()
 	return &conn
 }
 
@@ -180,51 +177,17 @@ func (c *Connection) Stats() (interface{}, error) {
 	return m, nil
 }
 
-// run starts the goroutine that periodically checks if any active transaction
-// on the connection should be aborted, or if the connection should be closed.
-func (c *Connection) run() {
-	if c.IdleTimeout == 0 && c.TxTimeout == 0 {
-		// Nothing to poll if neither time can ever expire.
-		return
-	}
+func (c *Connection) IdleTimedOut() bool {
+	c.timeMu.Lock()
+	defer c.timeMu.Unlock()
+	return time.Since(c.LastUsedAt) > c.IdleTimeout && c.IdleTimeout != 0
+}
 
-	ticker := time.NewTicker(pollPeriod)
-	go func() {
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				fmt.Println(">>>tick:", c)
-				c.timeMu.Lock()
-				lua := c.LastUsedAt
-				c.timeMu.Unlock()
-				if time.Since(lua) > c.IdleTimeout && c.IdleTimeout != 0 {
-					if err := c.Close(); err != nil {
-						c.logger.Printf("failed to close %s:", err.Error())
-						return
-					} else {
-						c.logger.Printf("%d closed due to idle timeout", c.ID)
-						// Only increment stat here to make testing easier.
-						stats.Add(numConnIdleTimeouts, 1)
-						return
-					}
-				}
-				c.txStateMu.Lock()
-				tsa := c.TxStartedAt
-				c.txStateMu.Unlock()
-				if !tsa.IsZero() && time.Since(tsa) > c.TxTimeout && c.TxTimeout != 0 {
-					if err := c.Close(); err != nil {
-						c.logger.Printf("failed to abort transaction %s:", err.Error())
-					} else {
-						// Only increment stat here to make testing easier.
-						stats.Add(numConnTxTimeouts, 1)
-						c.logger.Printf("transaction aborted due to timeout, %d closed", c.ID)
-						return
-					}
-				}
-			}
-		}
-	}()
+func (c *Connection) TxTimedOut() bool {
+	c.txStateMu.Lock()
+	defer c.txStateMu.Unlock()
+	tsa := c.TxStartedAt
+	return !tsa.IsZero() && time.Since(tsa) > c.TxTimeout && c.TxTimeout != 0
 }
 
 func connectionLogPrefix(id uint64) string {
