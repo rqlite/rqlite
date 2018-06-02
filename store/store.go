@@ -57,7 +57,7 @@ var (
 )
 
 const (
-	connectionPollPeriod = time.Second
+	connectionPollPeriod = 10 * time.Second
 	retainSnapshotCount  = 2
 	applyTimeout         = 10 * time.Second
 	openTimeout          = 120 * time.Second
@@ -203,6 +203,8 @@ type Store struct {
 	SnapshotInterval  time.Duration
 	HeartbeatTimeout  time.Duration
 	ApplyTimeout      time.Duration
+
+	connPollPeriod time.Duration
 }
 
 // StoreConfig represents the configuration of the underlying Store.
@@ -222,17 +224,18 @@ func New(ln Listener, c *StoreConfig) *Store {
 	}
 
 	return &Store{
-		ln:           ln,
-		raftDir:      c.Dir,
-		raftID:       c.ID,
-		dbConf:       c.DBConf,
-		dbPath:       filepath.Join(c.Dir, sqliteFile),
-		randSrc:      rand.New(rand.NewSource(time.Now().UnixNano())),
-		conns:        make(map[uint64]*Connection),
-		done:         make(chan struct{}, 1),
-		meta:         make(map[string]map[string]string),
-		logger:       logger,
-		ApplyTimeout: applyTimeout,
+		ln:             ln,
+		raftDir:        c.Dir,
+		raftID:         c.ID,
+		dbConf:         c.DBConf,
+		dbPath:         filepath.Join(c.Dir, sqliteFile),
+		randSrc:        rand.New(rand.NewSource(time.Now().UnixNano())),
+		conns:          make(map[uint64]*Connection),
+		done:           make(chan struct{}, 1),
+		meta:           make(map[string]map[string]string),
+		logger:         logger,
+		ApplyTimeout:   applyTimeout,
+		connPollPeriod: connectionPollPeriod,
 	}
 }
 
@@ -1054,7 +1057,7 @@ func (s *Store) raftConfig() *raft.Config {
 // close due to timeouts.
 func (s *Store) checkConnections() {
 	s.wg.Add(1)
-	ticker := time.NewTicker(connectionPollPeriod)
+	ticker := time.NewTicker(s.connPollPeriod)
 	go func() {
 		defer s.wg.Done()
 		defer ticker.Stop()

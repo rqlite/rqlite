@@ -706,6 +706,7 @@ func mustNewStore(inmem bool) *Store {
 	if s == nil {
 		panic("failed to create new store")
 	}
+	s.connPollPeriod = 100 * time.Millisecond
 	return s
 }
 
