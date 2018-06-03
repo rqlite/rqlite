@@ -3,6 +3,7 @@ package store
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -187,6 +188,10 @@ func Test_ConnectionSimpleTimeoutChecks(t *testing.T) {
 
 func Test_ConnectionIdleTimeout(t *testing.T) {
 	// Test is explicitly not parallel because it accesses global Store stats.
+	curr, err := strconv.Atoi(stats.Get(numConnTimeouts).String())
+	if err != nil {
+		t.Fatalf("failed to check stats: %s", err.Error())
+	}
 
 	s := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
@@ -195,20 +200,36 @@ func Test_ConnectionIdleTimeout(t *testing.T) {
 	}
 	defer s.Close(true)
 	s.WaitForLeader(10 * time.Second)
-	c := mustNewConnectionWithTimeouts(s, 3*time.Second, 0)
-	_, ok := s.Connection(c.ID)
+	c0 := mustNewConnectionWithTimeouts(s, 3*time.Second, 0)
+	_, ok := s.Connection(c0.ID)
 	if !ok {
 		t.Fatal("connection not in store after connecting")
 	}
-	if c.IdleTimedOut() {
+	if c0.IdleTimedOut() {
 		t.Fatal("connection incorrectly marked as timed out")
 	}
-	if !pollExpvarStat(stats.Get(numConnTimeouts).String, "1", 10*time.Second) {
+	if !pollExpvarStat(stats.Get(numConnTimeouts).String, strconv.Itoa(curr+1), 10*time.Second) {
+		t.Fatalf("connection has not idle-closed: %s", stats.Get(numConnTimeouts).String())
+	}
+
+	// Make a second connection, to make sure handling the first connection
+	// didn't leave the Store in a bad state.
+	c1 := mustNewConnectionWithTimeouts(s, 3*time.Second, 0)
+	_, ok = s.Connection(c1.ID)
+	if !ok {
+		t.Fatal("connection not in store after connecting")
+	}
+	if c1.IdleTimedOut() {
+		t.Fatal("connection incorrectly marked as timed out")
+	}
+	if !pollExpvarStat(stats.Get(numConnTimeouts).String, strconv.Itoa(curr+2), 10*time.Second) {
 		t.Fatalf("connection has not idle-closed: %s", stats.Get(numConnTimeouts).String())
 	}
 }
 
 func Test_ConnectionIdleNoTimeout(t *testing.T) {
+	t.Parallel()
+
 	s := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
 	if err := s.Open(true); err != nil {
@@ -239,6 +260,11 @@ func Test_ConnectionIdleNoTimeout(t *testing.T) {
 
 func Test_ConnectionTxTimeout(t *testing.T) {
 	// Test is explicitly not parallel because it accesses global Store stats.
+	curr, err := strconv.Atoi(stats.Get(numConnTimeouts).String())
+	if err != nil {
+		t.Fatalf("failed to check stats: %s", err.Error())
+	}
+	exp := strconv.Itoa(curr + 1)
 
 	s := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
@@ -256,7 +282,7 @@ func Test_ConnectionTxTimeout(t *testing.T) {
 		t.Fatal("transaction incorrectly marked as timed out")
 	}
 
-	_, err := c.Execute(&ExecuteRequest{[]string{"BEGIN"}, false, false})
+	_, err = c.Execute(&ExecuteRequest{[]string{"BEGIN"}, false, false})
 	if err != nil {
 		t.Fatalf("failed to begin transaction: %s", err.Error())
 	}
@@ -264,12 +290,14 @@ func Test_ConnectionTxTimeout(t *testing.T) {
 		t.Fatal("transaction not active")
 	}
 
-	if !pollExpvarStat(stats.Get(numConnTimeouts).String, "1", 10*time.Second) {
+	if !pollExpvarStat(stats.Get(numConnTimeouts).String, exp, 10*time.Second) {
 		t.Fatalf("connection has not aborted tx: %s", stats.Get(numConnTimeouts).String())
 	}
 }
 
 func Test_ConnectionTxNoTimeout(t *testing.T) {
+	t.Parallel()
+
 	s := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
 	if err := s.Open(true); err != nil {

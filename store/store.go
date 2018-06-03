@@ -1066,6 +1066,13 @@ func (s *Store) checkConnections() {
 			case <-s.done:
 				return
 			case <-ticker.C:
+				// This is not a 100% correct check, but is right almost all
+				// the time, and saves the node from most unneeded network
+				// access. Read https://github.com/rqlite/rqlite/issues/5
+				if !s.IsLeader() {
+					continue
+				}
+
 				var conns []*Connection
 				s.connsMu.RLock()
 				for _, c := range s.conns {
@@ -1082,13 +1089,15 @@ func (s *Store) checkConnections() {
 
 				for _, c := range conns {
 					if err := c.Close(); err != nil {
-						c.logger.Printf("failed to close %s:", err.Error())
-						return
+						if err == ErrNotLeader {
+							// Not an issue, the actual leader will close it.
+							continue
+						}
+						s.logger.Printf("%s failed to close: %s", c, err.Error())
 					}
-					c.logger.Printf("%d closed due to timeout", c.ID)
+					s.logger.Printf("%s closed due to timeout", c)
 					// Only increment stat here to make testing easier.
 					stats.Add(numConnTimeouts, 1)
-					return
 				}
 			}
 		}
