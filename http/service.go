@@ -118,6 +118,7 @@ var stats *expvar.Map
 
 const (
 	numConnections = "connections"
+	numPings       = "pings"
 	numExecutions  = "executions"
 	numQueries     = "queries"
 	numBackups     = "backups"
@@ -533,6 +534,19 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
 		}
 	}
+}
+
+// handlePing marks a connection as still in use, without executing any SQL command.
+func (s *Service) handlePing(connID uint64, w http.ResponseWriter, r *http.Request) {
+	if connID == defaultConnID {
+		return
+	}
+	c, ok := s.store.Connection(connID)
+	if !ok {
+		http.Error(w, "connection not found", http.StatusNotFound)
+		return
+	}
+	c.SetLastUsedNow()
 }
 
 // handleExecute handles queries that modify the database.
