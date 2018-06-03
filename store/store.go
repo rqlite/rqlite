@@ -1066,6 +1066,10 @@ func (s *Store) checkConnections() {
 			case <-s.done:
 				return
 			case <-ticker.C:
+				if !s.IsLeader() {
+					continue
+				}
+
 				var conns []*Connection
 				s.connsMu.RLock()
 				for _, c := range s.conns {
