@@ -1066,6 +1066,9 @@ func (s *Store) checkConnections() {
 			case <-s.done:
 				return
 			case <-ticker.C:
+				// This is not a 100% correct check, but is right almost all
+				// the time, and saves the node from most unneeded network
+				// access. Read https://github.com/rqlite/rqlite/issues/5
 				if !s.IsLeader() {
 					continue
 				}
@@ -1087,7 +1090,7 @@ func (s *Store) checkConnections() {
 				for _, c := range conns {
 					if err := c.Close(); err != nil {
 						if err == ErrNotLeader {
-							// Not an issue, the leader will close it.
+							// Not an issue, the actual leader will close it.
 							continue
 						}
 						s.logger.Printf("%s failed to close: %s", c, err.Error())
