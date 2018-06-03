@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -192,6 +193,10 @@ func Test_StoreConnectFollowerError(t *testing.T) {
 
 func Test_StoreConnectFollowerClosing(t *testing.T) {
 	// Test is explicitly not parallel because it accesses global Store stats.
+	curr, err := strconv.Atoi(stats.Get(numConnTimeouts).String())
+	if err != nil {
+		t.Fatalf("failed to check stats: %s", err.Error())
+	}
 
 	// Long polling interval, to ensure follower tries to close
 	// connection first.
@@ -218,12 +223,12 @@ func Test_StoreConnectFollowerClosing(t *testing.T) {
 	}
 	s1.WaitForLeader(10 * time.Second)
 
-	_, err := s0.Connect(&ConnectionOptions{10 * time.Millisecond, 10 * time.Millisecond})
+	_, err = s0.Connect(&ConnectionOptions{10 * time.Millisecond, 10 * time.Millisecond})
 	if err != nil {
 		t.Fatal("failed to connect")
 	}
 
-	if !pollExpvarStat(stats.Get(numConnTimeouts).String, "1", 10*time.Second) {
+	if !pollExpvarStat(stats.Get(numConnTimeouts).String, strconv.Itoa(curr+1), 10*time.Second) {
 		t.Fatalf("connection has not aborted tx: %s", stats.Get(numConnTimeouts).String())
 	}
 }
