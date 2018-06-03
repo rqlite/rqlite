@@ -13,25 +13,6 @@ import (
 // Handler pattern contained here created by github.com/Merovius
 // See https://blog.merovius.de/2017/06/18/how-not-to-use-an-http-router.html
 
-type pingHandler struct{}
-
-func (h *pingHandler) Handler(connID uint64, s *Service) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		stats.Add(numPings, 1)
-
-		if !s.CheckRequestPerm(r, PermConnections) {
-			w.WriteHeader(http.StatusUnauthorized)
-			return
-		}
-
-		if r.Method != "POST" {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			return
-		}
-		s.handlePing(connID, w, r)
-	})
-}
-
 type executeHandler struct{}
 
 func (h *executeHandler) Handler(connID uint64, s *Service) http.Handler {
@@ -111,7 +92,6 @@ func (h *loadHandler) Handler(s *Service) http.Handler {
 type connectionsHandler struct {
 	executeH executeHandler
 	queryH   queryHandler
-	pingH    pingHandler
 }
 
 func (h *connectionsHandler) Handler(s *Service) http.Handler {
@@ -152,8 +132,6 @@ func (h *connectionsHandler) Handler(s *Service) http.Handler {
 					h.executeH.Handler(id, s).ServeHTTP(w, r)
 				case "query":
 					h.queryH.Handler(id, s).ServeHTTP(w, r)
-				case "ping":
-					h.pingH.Handler(id, s).ServeHTTP(w, r)
 				default:
 					w.WriteHeader(http.StatusNotFound)
 				}
