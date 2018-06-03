@@ -187,10 +187,12 @@ func (c *Connection) IdleTimedOut() bool {
 // TxTimedOut returns if the transaction has been open, without activity in
 // transaction-idle time.
 func (c *Connection) TxTimedOut() bool {
+	c.timeMu.Lock()
+	defer c.timeMu.Unlock()
 	c.txStateMu.Lock()
 	defer c.txStateMu.Unlock()
-	tsa := c.TxStartedAt
-	return !tsa.IsZero() && time.Since(tsa) > c.TxTimeout && c.TxTimeout != 0
+	lau := c.LastUsedAt
+	return !c.TxStartedAt.IsZero() && time.Since(lau) > c.TxTimeout && c.TxTimeout != 0
 }
 
 func connectionLogPrefix(id uint64) string {

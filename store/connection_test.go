@@ -273,7 +273,7 @@ func Test_ConnectionTxTimeout(t *testing.T) {
 	}
 	defer s.Close(true)
 	s.WaitForLeader(10 * time.Second)
-	c := mustNewConnectionWithTimeouts(s, 0, 3*time.Second)
+	c := mustNewConnectionWithTimeouts(s, 10*time.Second, 2*time.Second)
 	_, ok := s.Connection(c.ID)
 	if !ok {
 		t.Fatal("connection not in store after connecting")
@@ -290,7 +290,7 @@ func Test_ConnectionTxTimeout(t *testing.T) {
 		t.Fatal("transaction not active")
 	}
 
-	if !pollExpvarStat(stats.Get(numConnTimeouts).String, exp, 10*time.Second) {
+	if !pollExpvarStat(stats.Get(numConnTimeouts).String, exp, 5*time.Second) {
 		t.Fatalf("connection has not aborted tx: %s", stats.Get(numConnTimeouts).String())
 	}
 }
