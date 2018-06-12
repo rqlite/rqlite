@@ -25,7 +25,7 @@ jobs:
   end_to_end:
     working_directory: ~/rqlite/src/github.com/rqlite/rqlite
     docker:
-      - image: circleci/golang:1.10
+      - image: circleci/golang:3.6.2
     steps:
         - checkout
         - run: python --version
