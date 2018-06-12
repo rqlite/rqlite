@@ -1,0 +1,17 @@
+version: 2
+jobs:
+  build:
+    working_directory: ~/rqlite/src/github.com/rqlite/rqlite
+    docker:
+      - image: circleci/golang:1.10
+
+
+    steps:
+        - checkout
+        - run: go tool vet .
+        - run: go get -t -d -v ./...
+        - run: go test -timeout 60s -v ./...
+        - run:
+            command: go test -race -timeout 120s -v ./...
+            environment:
+                GORACE: "halt_on_error=1"
