@@ -29,6 +29,7 @@ jobs:
       - image: circleci/python:2.7.14
     steps:
         - checkout
+        - run: pip install requests
         - run: go get -t -d -v ./...
         - run:
             command: system_test/full_system_test.py
