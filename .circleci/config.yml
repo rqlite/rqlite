@@ -30,11 +30,11 @@ jobs:
         - checkout
         - run: sudo apt-get install python-requests
         - run: go get -t -d -v ./...
-        - run: go install ./...
+        - run: go build ./...
         - run:
             command: system_test/full_system_test.py
             environment:
-                RQLITED_PATH: ~/rqlite/bin/rqlited
+                RQLITED_PATH: ~/rqlite/src/github.com/rqlite/rqlite/cmd/rqlited/rqlited
 
 workflows:
   version: 2
