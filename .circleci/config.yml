@@ -28,7 +28,7 @@ jobs:
       - image: circleci/golang:1.10
     steps:
         - checkout
-        - run: python --version
+        - run: sudo apt-get install python-requests
         - run: go get -t -d -v ./...
         - run:
             command: system_test/full_system_test.py
