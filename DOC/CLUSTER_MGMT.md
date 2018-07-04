@@ -1,4 +1,6 @@
 # Cluster Guidelines
+_This is the documentation for the upcoming release, 5.0. The documentation for the latest release, 4.0, can be found [here](https://github.com/rqlite/rqlite/tree/v4.3.0/DOC)._
+
 This document describes, in detail, how to create and manage a rqlite cluster.
 
 ## Practical cluster size
