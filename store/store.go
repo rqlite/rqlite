@@ -735,7 +735,7 @@ func (s *Store) Join(id, addr string, metadata map[string]string) error {
 		if e.Error() == raft.ErrNotLeader {
 			return ErrNotLeader
 		}
-		e.Error()
+		return e.Error()
 	}
 
 	if err := s.setMetadata(id, metadata); err != nil {
