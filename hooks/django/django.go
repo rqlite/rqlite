@@ -54,7 +54,7 @@ func _sqlite_datetime_extract(lookup_type string, dt time.Time) int {
 func _sqlite_datetime_trunc(lookup_type string, dt time.Time) string {
 	switch lookup_type {
 	case "year":
-		return fmt.Sprintf("%d-01-01", dt.Year)
+		return fmt.Sprintf("%d-01-01", dt.Year())
 	case "quarter":
 		month := int(dt.Month())
 		month_quarter := month - (month-1)%3
@@ -64,7 +64,7 @@ func _sqlite_datetime_trunc(lookup_type string, dt time.Time) string {
 	case "day":
 		return fmt.Sprintf("%d-%02d-%02d", dt.Year(), dt.Month(), dt.Day())
 	case "hour":
-		return fmt.Sprintf("%02d:%00:00", dt.Hour())
+		return fmt.Sprintf("%02d:00:00", dt.Hour())
 	case "minute":
 		return fmt.Sprintf("%02d:%02d:00", dt.Hour(), dt.Minute())
 	case "second":
