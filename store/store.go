@@ -23,7 +23,6 @@ import (
 	"github.com/hashicorp/raft"
 	"github.com/hashicorp/raft-boltdb"
 	sdb "github.com/rqlite/rqlite/db"
-	djhooks "github.com/rqlite/rqlite/hooks/django"
 )
 
 var (
@@ -262,7 +261,7 @@ func (s *Store) Open(enableSingle bool) error {
 	}
 
 	// Get utility connection to database.
-	conn, err := s.db.ConnectWithHook(djhooks.ConnectHook)
+	conn, err := s.db.Connect()
 	if err != nil {
 		return err
 	}

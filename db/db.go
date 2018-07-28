@@ -101,18 +101,6 @@ func New(path, dsnQuery string, memory bool) (*DB, error) {
 	}, nil
 }
 
-func (d *DB) ConnectWithHook(connectHook func(*sqlite3.SQLiteConn) error) (*Conn, error) {
-	drv := sqlite3.SQLiteDriver{ConnectHook: connectHook}
-	c, err := drv.Open(d.fqdsn)
-	if err != nil {
-		return nil, err
-	}
-
-	return &Conn{
-		sqlite: c.(*sqlite3.SQLiteConn),
-	}, nil
-}
-
 // Connect returns a connection to the database.
 func (d *DB) Connect() (*Conn, error) {
 	drv := sqlite3.SQLiteDriver{}
