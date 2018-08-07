@@ -47,9 +47,14 @@ func main() {
 		}
 		timer := false
 		prefix := fmt.Sprintf("%s:%d>", argv.Host, argv.Port)
+		term, err := prompt.NewTerminal()
+		if err != nil {
+			ctx.String("%s %v\n", ctx.Color().Red("ERR!"), err)
+			return nil
+		}
 	FOR_READ:
 		for {
-			line, err := prompt.Basic(prefix, false)
+			line, err := term.Basic(prefix, false)
 			if err != nil {
 				return err
 			}
