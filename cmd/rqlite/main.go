@@ -47,14 +47,19 @@ func main() {
 		}
 		timer := false
 		prefix := fmt.Sprintf("%s:%d>", argv.Host, argv.Port)
-		term, err := prompt.NewTerminal()
-		if err != nil {
-			ctx.String("%s %v\n", ctx.Color().Red("ERR!"), err)
-			return nil
-		}
+		history := []string{}
 	FOR_READ:
 		for {
+			term, err := prompt.NewTerminal()
+			if err != nil {
+				ctx.String("%s %v\n", ctx.Color().Red("ERR!"), err)
+				return nil
+			}
+			term.History = history
 			line, err := term.Basic(prefix, false)
+			history = term.History
+			term.Close()
+
 			if err != nil {
 				return err
 			}
