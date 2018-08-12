@@ -9,6 +9,7 @@ import (
 	sqlite "github.com/mattn/go-sqlite3"
 )
 
+// extract the specified member (param: lookup_type) from Time (param: dt)
 func _sqlite_datetime_extract(lookup_type string, dt time.Time) int {
 	switch lookup_type {
 	case "week_day":
@@ -28,8 +29,6 @@ func _sqlite_datetime_extract(lookup_type string, dt time.Time) int {
 		} else {
 			return 1
 		}
-	/*case "loc":
-	  return dt.Location()*/
 	case "minute":
 		return dt.Minute()
 	case "month":
@@ -38,19 +37,16 @@ func _sqlite_datetime_extract(lookup_type string, dt time.Time) int {
 		return dt.Nanosecond()
 	case "second":
 		return dt.Second()
-	/*case "unix":
-	return dt.Unix()*/
-	/*case "unixnano":
-	return dt.UnixNano()*/
 	case "year":
 		return dt.Year()
 	case "yearday":
 		return dt.YearDay()
 	}
-	// TODO(sum12): should I panic instead ?
+	// TODO(sum12): should panic instead ?
 	return -1
 }
 
+// trucate Time (param: dt) to the given granularity (param: lookup_type)
 func _sqlite_datetime_trunc(lookup_type string, dt time.Time) string {
 	switch lookup_type {
 	case "year":
@@ -75,6 +71,7 @@ func _sqlite_datetime_trunc(lookup_type string, dt time.Time) string {
 	}
 }
 
+// returns date part of date-time object
 func _sqlite_datetime_cast_date(dt time.Time, tzname string) string {
 	tz, err := time.LoadLocation(tzname)
 	if err != nil {
@@ -84,6 +81,7 @@ func _sqlite_datetime_cast_date(dt time.Time, tzname string) string {
 	return ndt.Format("2006-01-02")
 }
 
+// returns time part of date-time object
 func _sqlite_datetime_cast_time(dt time.Time, tzname string) string {
 	tz, err := time.LoadLocation(tzname)
 	if err != nil {
@@ -93,40 +91,12 @@ func _sqlite_datetime_cast_time(dt time.Time, tzname string) string {
 	return ndt.Format("15:04:05")
 }
 
+// compute diff between times and returns time in millisec
 func _sqlite_time_diff(lhs, rhs time.Time) int {
 	return (lhs.Second()*1000000 - rhs.Second()*1000000)
 }
 
-/*
-def _sqlite_format_dtdelta(conn, lhs, rhs):
-    """
-    LHS and RHS can be either:
-    - An integer number of microseconds
-    - A string representing a timedelta object
-    - A string representing a datetime
-    """
-    try:
-        if isinstance(lhs, int):
-            lhs = str(decimal.Decimal(lhs) / decimal.Decimal(1000000))
-        real_lhs = parse_duration(lhs)
-        if real_lhs is None:
-            real_lhs = backend_utils.typecast_timestamp(lhs)
-        if isinstance(rhs, int):
-            rhs = str(decimal.Decimal(rhs) / decimal.Decimal(1000000))
-        real_rhs = parse_duration(rhs)
-        if real_rhs is None:
-            real_rhs = backend_utils.typecast_timestamp(rhs)
-        if conn.strip() == '+':
-            out = real_lhs + real_rhs
-        else:
-            out = real_lhs - real_rhs
-    except (ValueError, TypeError):
-        return None
-    # typecast_timestamp returns a date or a datetime without timezone.
-    # It will be formatted as "%Y-%m-%d" or "%Y-%m-%d %H:%M:%S[.%f]"
-    return str(out)
-*/
-
+// does regex(param: re) on string(param: s)
 func _sqlite_regexp(re, s string) (bool, error) {
 	return regexp.MatchString(re, s)
 }
@@ -136,6 +106,10 @@ func _sqlite_pow(x, y int64) int64 {
 	return int64(math.Pow(float64(x), float64(y)))
 }
 
+// ConnectHook can be passed as a param (hook) to
+// mattn/go-sqlite3 connecthook-param while creating a
+// new connection, making these these django-sqlite
+// based function available to sqlite
 func ConnectHook(conn *sqlite.SQLiteConn) error {
 	funcmap := make(map[string]interface{})
 	funcmap["django_date_extract"] = _sqlite_datetime_extract
@@ -149,8 +123,6 @@ func ConnectHook(conn *sqlite.SQLiteConn) error {
 	funcmap["django_time_diff"] = _sqlite_time_diff
 	funcmap["regexp"] = _sqlite_regexp
 	funcmap["django_power"] = _sqlite_pow
-	//funcmap["django_timestamp_diff"] = _sqlite_timestamp_diff
-	//funcmap["django_format_dtdelta", 3, _sqlite_format_dtdelta)
 
 	for k, v := range funcmap {
 		if err := conn.RegisterFunc(k, v, true); err != nil {
@@ -160,76 +132,3 @@ func ConnectHook(conn *sqlite.SQLiteConn) error {
 
 	return nil
 }
-
-/*
-func main() {
-	sql.Register("sqlite3_custom", &sqlite.SQLiteDriver{
-		ConnectHook: func(conn *sqlite.SQLiteConn) error {
-
-			funcmap := make(map[string]interface{})
-			funcmap["django_date_extract"] = _sqlite_datetime_extract
-			funcmap["django_date_trunc"] = _sqlite_datetime_trunc
-			funcmap["django_datetime_cast_date"] = _sqlite_datetime_cast_date
-			funcmap["django_datetime_cast_time"] = _sqlite_datetime_cast_time
-			funcmap["django_datetime_extract"] = _sqlite_datetime_extract
-			funcmap["django_datetime_trunc"] = _sqlite_datetime_trunc
-			funcmap["django_time_extract"] = _sqlite_datetime_extract
-			funcmap["django_time_trunc"] = _sqlite_datetime_trunc
-			funcmap["django_time_diff"] = _sqlite_time_diff
-			funcmap["regexp"] = _sqlite_regexp
-			funcmap["django_power"] = _sqlite_pow
-			//funcmap["django_timestamp_diff"] = _sqlite_timestamp_diff
-			//funcmap["django_format_dtdelta", 3, _sqlite_format_dtdelta)
-
-			for k, v := range funcmap {
-				if err := conn.RegisterFunc(k, v, true); err != nil {
-					return err
-				}
-			}
-
-			return nil
-		},
-	})
-
-	db, err := sql.Open("sqlite3_custom", ":memory:")
-	if err != nil {
-		log.Fatal("Failed to open database:", err)
-	}
-	defer db.Close()
-
-	_, err = db.Exec("create table foo (department integer, created datetime)")
-	if err != nil {
-		log.Fatal("Failed to create table:", err)
-	}
-
-	t := time.Now().Format("2006-01-02T15:04:05")
-	//t := time.Now().Format("2006-01-02")
-
-	fmt.Printf("insert into foo values (1, %s)\n", t)
-	_, err = db.Exec(fmt.Sprintf("insert into foo values (%d, '%s')", i, t))
-	if err != nil {
-		log.Fatal("Failed to insert records:", err)
-	}
-
-	fmt.Printf("inserted\n")
-	rows, err := db.Query("select department, django_datetime_extract('year', created) from foo")
-	if err != nil {
-		log.Fatal("STDDEV query error:", err)
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var dept int64
-		//var dev time.Time
-		var yr int
-		if err := rows.Scan(&dept, &yr); err != nil {
-			log.Fatal(err)
-		}
-		//fmt.Printf("dept=%d stddev=%s\n", dept, dev.Format("15:04:05 fuck this 2006-01-02"))
-
-		fmt.Printf("dept=%d stddev=%d\n", dept, yr)
-	}
-	if err := rows.Err(); err != nil {
-		log.Fatal(err)
-	}
-}
-*/
