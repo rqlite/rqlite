@@ -3,7 +3,7 @@ _This is the documentation for the upcoming release, 5.0. The documentation for 
 
 rqlite exposes an HTTP API allowing the database to be modified such that the changes are replicated. Queries are also executed using the HTTP API.
 
-All write-requests must be sent to the leader of the cluster. Queries, however, may be sent to any node, depending on the [read-consistency](https://github.com/rqlite/rqlite/blob/master/doc/CONSISTENCY.md) requirements. But, by default, queries must also be sent to the leader.
+All write-requests must be sent to the leader of the cluster. Queries, however, may be sent to any node, depending on the [read-consistency](https://github.com/rqlite/rqlite/blob/master/DOC/CONSISTENCY.md) requirements. But, by default, queries must also be sent to the leader.
 
 There are [client libraries available](https://github.com/rqlite).
 
