@@ -12,6 +12,7 @@ _To upgrade from an earlier version to this release you should backup the leader
 - [PR #462](https://github.com/rqlite/rqlite/pull/462): Add Raft metadata to responses to requests that modify Raft log.
 - [PR #493](https://github.com/rqlite/rqlite/pull/504), [PR #504](https://github.com/rqlite/rqlite/pull/504): Full connection control and distributed transactions over HTTP.
 - [PR #501](https://github.com/rqlite/rqlite/pull/501): Replace use of term "transaction" with "atomic".
+- [PR #527](https://github.com/rqlite/rqlite/pull/527): rqlite CLI now supports command history. Thanks @rhnvrm.
 
 ### Design and implementation changes
 - [End-to-end integration test](https://github.com/rqlite/rqlite/blob/master/system_test/full_system_test.py) added. Written in Python, it is automatically run by CircleCI as the committed source changes.
