@@ -31,11 +31,10 @@ jobs:
         - run: sudo apt-get install python-requests
         - run: go get -t -d -v ./...
         - run: (cd cmd/rqlited && go build)
-        - run: (cd ~/rqlite/src/github.com/rqlite/rqlite/cmd/rqlited/ && pwd)
         - run:
             command: system_test/full_system_test.py
             environment:
-                RQLITED_PATH: ~/rqlite/src/github.com/rqlite/rqlite/cmd/rqlited/rqlited
+                RQLITED_PATH: /home/circleci/rqlite/src/github.com/rqlite/rqlite/cmd/rqlited/rqlited
 
 workflows:
   version: 2
