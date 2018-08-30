@@ -485,8 +485,12 @@ func Test_SingleNodeSnapshotInMem(t *testing.T) {
 		t.Fatalf("failed to open snapshot file: %s", err.Error())
 	}
 
+	s.connsMu.Lock()
 	s.conns = nil
+	s.connsMu.Unlock()
+	s.metaMu.Lock()
 	s.meta = nil
+	s.metaMu.Unlock()
 	if err := s.Restore(snapFile); err != nil {
 		t.Fatalf("failed to restore snapshot from disk: %s", err.Error())
 	}
