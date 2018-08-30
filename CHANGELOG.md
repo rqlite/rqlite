@@ -34,6 +34,7 @@ _To upgrade from an earlier version to this release you should backup the leader
 - [PR #486](https://github.com/rqlite/rqlite/pull/486): Store connections in Raft snapshot.
 - [PR #491](https://github.com/rqlite/rqlite/pull/491): Add varadic utility functions to Auth credential store.
 - [PR #494](https://github.com/rqlite/rqlite/pull/494): JSON types are stored as text by SQLite. Fixes [issue #492](https://github.com/rqlite/rqlite/issues/492).
+- [PR #518[(https://github.com/rqlite/rqlite/pull/518): Move testing to CircleCI 2.0.
 - [PR #521](https://github.com/rqlite/rqlite/pull/521): Don't ignore any Join error, return it.
 
 ## 4.3.0 (March 18th 2018)
