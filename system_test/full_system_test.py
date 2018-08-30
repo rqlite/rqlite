@@ -79,7 +79,7 @@ class Node(object):
       command += ['-join', 'http://' + join]
     command.append(self.dir)
 
-    print(">>>path is %s, dir is %s" % self.path, self.dir)
+    print(">>>path is %s, dir is %s" % (self.path, self.dir))
     self.process = subprocess.Popen(command, stdout=self.stdout_fd, stderr=self.stderr_fd)
     t = 0
     while wait:
