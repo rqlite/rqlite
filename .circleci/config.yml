@@ -31,6 +31,7 @@ jobs:
         - run: sudo apt-get install python-requests
         - run: go get -t -d -v ./...
         - run: (cd cmd/rqlited && go build)
+        - run ls ~/rqlite/src/github.com/rqlite/rqlite/cmd/rqlited/
         - run:
             command: system_test/full_system_test.py
             environment:
