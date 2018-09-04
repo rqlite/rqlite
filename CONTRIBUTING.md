@@ -43,6 +43,9 @@ cd $GOPATH
 go install github.com/mattn/go-sqlite3
 ```
 
+### Enabling specific features of SQLite
+The prebuilt images of rqlite may not have the features enabled that you want. The Go build system does allow you to enable certain build flags, but you'll need to build your own image. For example, check out a [Google Groups discussion](https://groups.google.com/forum/?lutm_source=footer#!topic/rqlite/ySd1kCyB2PY), showing how to build Diacritical support.
+
 ## Cloning a fork
 If you wish to work with fork of rqlite, your own fork for example, you must still follow the directory structure above. But instead of cloning the main repo, instead clone your fork. You must fork the project if you want to contribute upstream.
 
