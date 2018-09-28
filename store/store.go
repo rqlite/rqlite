@@ -904,10 +904,12 @@ func (s *Store) executeOrAbort(c *Connection, ex *ExecuteRequest) (resp *Execute
 
 	defer func() {
 		var errored bool
-		for i := range resp.Results {
-			if resp.Results[i].Error != "" {
-				errored = true
-				break
+		if resp != nil {
+			for i := range resp.Results {
+				if resp.Results[i].Error != "" {
+					errored = true
+					break
+				}
 			}
 		}
 		if retErr != nil || errored {
