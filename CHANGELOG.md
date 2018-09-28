@@ -36,6 +36,7 @@ _To upgrade from an earlier version to this release you should backup the leader
 - [PR #494](https://github.com/rqlite/rqlite/pull/494): JSON types are stored as text by SQLite. Fixes [issue #492](https://github.com/rqlite/rqlite/issues/492).
 - [PR #518](https://github.com/rqlite/rqlite/pull/518): Move testing to CircleCI 2.0.
 - [PR #521](https://github.com/rqlite/rqlite/pull/521): Don't ignore any Join error, return it.
+- [PR #531](https://github.com/rqlite/rqlite/pull/531): Protect against possible nil pointer. Thanks @runsisi
 
 ## 4.3.0 (March 18th 2018)
 - [PR #397](https://github.com/rqlite/rqlite/pull/397), [PR #399](https://github.com/rqlite/rqlite/pull/399): Support hashed passwords. Fixes [issue #395](https://github.com/rqlite/rqlite/issues/395). Thanks @sum12.
