@@ -814,7 +814,7 @@ func (s *Store) setMetadata(id string, md map[string]string) error {
 		if e.Error() == raft.ErrNotLeader {
 			return ErrNotLeader
 		}
-		e.Error()
+		return e.Error()
 	}
 
 	return f.Response().(*fsmGenericResponse).error
