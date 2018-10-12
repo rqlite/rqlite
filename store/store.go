@@ -199,6 +199,7 @@ type Store struct {
 
 	logger *log.Logger
 
+	ShutdownOnRemove  bool
 	SnapshotThreshold uint64
 	SnapshotInterval  time.Duration
 	HeartbeatTimeout  time.Duration
@@ -1043,6 +1044,7 @@ func (s *Store) remove(id string) error {
 // raftConfig returns a new Raft config for the store.
 func (s *Store) raftConfig() *raft.Config {
 	config := raft.DefaultConfig()
+	config.ShutdownOnRemove = s.ShutdownOnRemove
 	if s.SnapshotThreshold != 0 {
 		config.SnapshotThreshold = s.SnapshotThreshold
 	}
