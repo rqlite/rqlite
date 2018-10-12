@@ -76,6 +76,7 @@ var raftSnapThreshold uint64
 var raftHeartbeatTimeout string
 var raftApplyTimeout string
 var raftOpenTimeout string
+var raftShutdownOnRemove bool
 var showVersion bool
 var cpuProfile string
 var memProfile string
@@ -109,6 +110,7 @@ func init() {
 	flag.StringVar(&raftApplyTimeout, "raft-apply-timeout", "10s", "Raft apply timeout")
 	flag.StringVar(&raftOpenTimeout, "raft-open-timeout", "120s", "Time for initial Raft logs to be applied. Use 0s duration to skip wait")
 	flag.Uint64Var(&raftSnapThreshold, "raft-snap", 8192, "Number of outstanding log entries that trigger snapshot")
+	flag.BoolVar(&raftShutdownOnRemove, "raft-remove-shutdown", false, "Shutdown Raft if node removed")
 	flag.StringVar(&cpuProfile, "cpu-profile", "", "Path to file for CPU profiling information")
 	flag.StringVar(&memProfile, "mem-profile", "", "Path to file for memory profiling information")
 	flag.Usage = func() {
@@ -192,6 +194,7 @@ func main() {
 	})
 
 	// Set optional parameters on store.
+	str.ShutdownOnRemove = raftShutdownOnRemove
 	str.SnapshotThreshold = raftSnapThreshold
 	str.HeartbeatTimeout, err = time.ParseDuration(raftHeartbeatTimeout)
 	if err != nil {
