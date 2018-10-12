@@ -38,6 +38,9 @@ _To upgrade from an earlier version to this release you should backup the leader
 - [PR #521](https://github.com/rqlite/rqlite/pull/521): Don't ignore any Join error, return it.
 - [PR #531](https://github.com/rqlite/rqlite/pull/531): Protect against possible nil pointer. Thanks @runsisi
 
+## 4.3.1 (October 10th 2018)
+- Allow a node to be re-added with same IP address and port, even though it was previously removed. Fixes [issue #534](https://github.com/rqlite/rqlite/issues/534)
+
 ## 4.3.0 (March 18th 2018)
 - [PR #397](https://github.com/rqlite/rqlite/pull/397), [PR #399](https://github.com/rqlite/rqlite/pull/399): Support hashed passwords. Fixes [issue #395](https://github.com/rqlite/rqlite/issues/395). Thanks @sum12.
 
