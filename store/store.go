@@ -1025,6 +1025,9 @@ func (s *Store) remove(id string) error {
 	}
 
 	c, err := newCommand(metadataDelete, id)
+	if err != nil {
+		return err
+	}
 	b, err := json.Marshal(c)
 	if err != nil {
 		return err
