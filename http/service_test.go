@@ -532,7 +532,7 @@ func Test_ConnectionTimingParams(t *testing.T) {
 	var req *http.Request
 
 	req, _ = http.NewRequest(http.MethodPost, "http://foo?tx_timeout=1 0s", nil)
-	_, b, err = txTimeout(req)
+	_, _, err = txTimeout(req)
 	if err == nil {
 		t.Fatal("failed")
 	}
