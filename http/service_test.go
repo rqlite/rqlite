@@ -556,7 +556,7 @@ func Test_ConnectionTimingParams(t *testing.T) {
 	}
 
 	req, _ = http.NewRequest(http.MethodPost, "http://foo?idle_timeout=1 0s", nil)
-	_, b, err = idleTimeout(req)
+	_, _, err = idleTimeout(req)
 	if err == nil {
 		t.Fatal("failed")
 	}
