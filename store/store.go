@@ -189,6 +189,7 @@ type Store struct {
 	ShutdownOnRemove  bool
 	SnapshotThreshold uint64
 	HeartbeatTimeout  time.Duration
+	ElectionTimeout   time.Duration
 	ApplyTimeout      time.Duration
 	OpenTimeout       time.Duration
 }
@@ -450,6 +451,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		"apply_timeout":      s.ApplyTimeout.String(),
 		"open_timeout":       s.OpenTimeout.String(),
 		"heartbeat_timeout":  s.HeartbeatTimeout.String(),
+		"election_timeout":   s.ElectionTimeout.String(),
 		"snapshot_threshold": s.SnapshotThreshold,
 		"meta":               s.meta,
 		"peers":              peers,
@@ -646,6 +648,9 @@ func (s *Store) raftConfig() *raft.Config {
 	}
 	if s.HeartbeatTimeout != 0 {
 		config.HeartbeatTimeout = s.HeartbeatTimeout
+	}
+	if s.ElectionTimeout != 0 {
+		config.ElectionTimeout = s.ElectionTimeout
 	}
 	return config
 }

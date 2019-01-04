@@ -74,6 +74,7 @@ var dsn string
 var onDisk bool
 var raftSnapThreshold uint64
 var raftHeartbeatTimeout string
+var raftElectionTimeout string
 var raftApplyTimeout string
 var raftOpenTimeout string
 var raftShutdownOnRemove bool
@@ -107,6 +108,7 @@ func init() {
 	flag.BoolVar(&onDisk, "on-disk", false, "Use an on-disk SQLite database")
 	flag.BoolVar(&showVersion, "version", false, "Show version information and exit")
 	flag.StringVar(&raftHeartbeatTimeout, "raft-timeout", "1s", "Raft heartbeat timeout")
+	flag.StringVar(&raftElectionTimeout, "raft-election-timeout", "1s", "Raft election timeout")
 	flag.StringVar(&raftApplyTimeout, "raft-apply-timeout", "10s", "Raft apply timeout")
 	flag.StringVar(&raftOpenTimeout, "raft-open-timeout", "120s", "Time for initial Raft logs to be applied. Use 0s duration to skip wait")
 	flag.Uint64Var(&raftSnapThreshold, "raft-snap", 8192, "Number of outstanding log entries that trigger snapshot")
@@ -199,6 +201,10 @@ func main() {
 	str.HeartbeatTimeout, err = time.ParseDuration(raftHeartbeatTimeout)
 	if err != nil {
 		log.Fatalf("failed to parse Raft heartbeat timeout %s: %s", raftHeartbeatTimeout, err.Error())
+	}
+	str.ElectionTimeout, err = time.ParseDuration(raftElectionTimeout)
+	if err != nil {
+		log.Fatalf("failed to parse Raft election timeout %s: %s", raftElectionTimeout, err.Error())
 	}
 	str.ApplyTimeout, err = time.ParseDuration(raftApplyTimeout)
 	if err != nil {
