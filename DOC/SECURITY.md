@@ -67,9 +67,9 @@ This configuration also sets permissions for both users. _bob_ has permission to
 Set the path for your file via the `rqlited` command line option `-auth`.
 
 ## Secure cluster example
-Starting a node with HTTPS enabled, node-to-node encryption, and with the above configuration file. It is assumed the HTTPS X.509 certificate and key are at the paths `server.crt` and `key.pem` respectively, and the node-to-node certificate and key are at `node.crt` and `node-key.pem`
+Starting a node with HTTPS enabled, node-to-node encryption, and with the above configuration file stored in a file located at `/etc/rqlited/config.json`. It is assumed the HTTPS X.509 certificate and key are at the paths `server.crt` and `key.pem` respectively, and the node-to-node certificate and key are at `node.crt` and `node-key.pem`
 ```bash
-rqlited -auth config.json -http-cert server.crt -http-key key.pem \
+rqlited -auth /etc/rqlited/config.json -http-cert server.crt -http-key key.pem \
 -node-encrypt -node-cert node.crt -node-key node-key.pem -node-no-verify \
 ~/node.1
 ```
