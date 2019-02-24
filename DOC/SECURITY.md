@@ -75,7 +75,7 @@ rqlited -auth /etc/rqlited/config.json -http-cert server.crt -http-key key.pem \
 ```
 Bringing up a second node on the same host, joining it to the first node. This allows you to block nodes from joining a cluster, unless those nodes supply a password.
 ```bash
-rqlited -auth config.json -http-addr localhost:4003 -http-cert server.crt \
+rqlited -auth /etc/rqlited/config.json -http-addr localhost:4003 -http-cert server.crt \
 -http-key key.pem -raft-addr :4004 -join https://bob:secret1@localhost:4001 \
 -node-encrypt -node-cert node.crt -node-key node-key.pem -no-node-verify \
 ~/node.2
