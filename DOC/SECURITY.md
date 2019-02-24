@@ -63,6 +63,9 @@ This configuration file sets authentication for two usernames, _bob_ and _mary_,
 
 This configuration also sets permissions for both users. _bob_ has permission to perform all operations, but _mary_ can only query the cluster, as well as check the cluster status.
 
+### Setting the configuration file path
+Set the path for your file via the `rqlited` command line option `-auth`.
+
 ## Secure cluster example
 Starting a node with HTTPS enabled, node-to-node encryption, and with the above configuration file. It is assumed the HTTPS X.509 certificate and key are at the paths `server.crt` and `key.pem` respectively, and the node-to-node certificate and key are at `node.crt` and `node-key.pem`
 ```bash
