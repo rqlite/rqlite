@@ -550,11 +550,11 @@ func (s *Service) handleExecute(connID uint64, w http.ResponseWriter, r *http.Re
 	}
 
 	b, err := ioutil.ReadAll(r.Body)
+	defer r.Body.Close()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	r.Body.Close()
 
 	queries := []string{}
 	if err := json.Unmarshal(b, &queries); err != nil {
