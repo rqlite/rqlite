@@ -306,6 +306,7 @@ func (s *Service) deleteConnection(id uint64) error {
 // handleJoin handles cluster-join requests from other nodes.
 func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 	b, err := ioutil.ReadAll(r.Body)
+	defer r.Body.Close()
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -357,6 +358,7 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 // handleRemove handles cluster-remove requests.
 func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request) {
 	b, err := ioutil.ReadAll(r.Body)
+	defer r.Body.Close()
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -428,11 +430,11 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 	}
 
 	b, err := ioutil.ReadAll(r.Body)
+	defer r.Body.Close()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	r.Body.Close()
 
 	var resp Response
 	queries := []string{string(b)}
@@ -735,10 +737,10 @@ func requestQueries(r *http.Request) ([]string, error) {
 
 	qs := []string{}
 	b, err := ioutil.ReadAll(r.Body)
+	defer r.Body.Close()
 	if err != nil {
 		return nil, errors.New("bad query POST request")
 	}
-	r.Body.Close()
 	if err := json.Unmarshal(b, &qs); err != nil {
 		return nil, errors.New("bad query POST request")
 	}
