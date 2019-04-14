@@ -2,8 +2,11 @@
 package main
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net"
 	"os"
@@ -56,9 +59,11 @@ const (
 var httpAddr string
 var httpAdv string
 var authFile string
+var x509CACert string
 var x509Cert string
 var x509Key string
 var nodeEncrypt bool
+var nodeX509CACert string
 var nodeX509Cert string
 var nodeX509Key string
 var raftAddr string
@@ -89,10 +94,12 @@ storage engine. It provides an easy-to-use, fault-tolerant store for relational 
 func init() {
 	flag.StringVar(&httpAddr, "http-addr", "localhost:4001", "HTTP server bind address. For HTTPS, set X.509 cert and key")
 	flag.StringVar(&httpAdv, "http-adv-addr", "", "Advertised HTTP address. If not set, same as HTTP server")
+	flag.StringVar(&x509CACert, "http-ca-cert", "", "Path to root X.509 certificate for HTTP endpoint")
 	flag.StringVar(&x509Cert, "http-cert", "", "Path to X.509 certificate for HTTP endpoint")
 	flag.StringVar(&x509Key, "http-key", "", "Path to X.509 private key for HTTP endpoint")
 	flag.BoolVar(&noVerify, "http-no-verify", false, "Skip verification of remote HTTPS cert when joining cluster")
 	flag.BoolVar(&nodeEncrypt, "node-encrypt", false, "Enable node-to-node encryption")
+	flag.StringVar(&nodeX509CACert, "node-ca-cert", "", "Path to root X.509 certificate for node-to-node encryption")
 	flag.StringVar(&nodeX509Cert, "node-cert", "cert.pem", "Path to X.509 certificate for node-to-node encryption")
 	flag.StringVar(&nodeX509Key, "node-key", "key.pem", "Path to X.509 private key for node-to-node encryption")
 	flag.BoolVar(&noNodeVerify, "node-no-verify", false, "Skip verification of a remote node cert")
@@ -169,7 +176,7 @@ func main() {
 	var mux *tcp.Mux
 	if nodeEncrypt {
 		log.Printf("enabling node-to-node encryption with cert: %s, key: %s", nodeX509Cert, nodeX509Key)
-		mux, err = tcp.NewTLSMux(ln, adv, nodeX509Cert, nodeX509Key)
+		mux, err = tcp.NewTLSMux(ln, adv, nodeX509Cert, nodeX509Key, nodeX509CACert)
 	} else {
 		mux, err = tcp.NewMux(ln, adv)
 	}
@@ -250,7 +257,21 @@ func main() {
 		if raftAdv != "" {
 			advAddr = raftAdv
 		}
-		if j, err := cluster.Join(joins, advAddr, noVerify); err != nil {
+
+		tlsConfig := tls.Config{InsecureSkipVerify: noVerify}
+		if x509CACert != "" {
+			asn1Data, err := ioutil.ReadFile(x509CACert)
+			if err != nil {
+				log.Fatalf("ioutil.ReadFile failed: %s", err.Error())
+			}
+			tlsConfig.RootCAs = x509.NewCertPool()
+			ok := tlsConfig.RootCAs.AppendCertsFromPEM([]byte(asn1Data))
+			if !ok {
+				log.Fatalf("failed to parse root CA certificate(s) in %q", x509CACert)
+			}
+		}
+
+		if j, err := cluster.Join(joins, advAddr, &tlsConfig); err != nil {
 			log.Fatalf("failed to join cluster at %s: %s", joins, err.Error())
 		} else {
 			log.Println("successfully joined cluster at", j)
@@ -287,6 +308,7 @@ func main() {
 		s = httpd.New(httpAddr, str, nil)
 	}
 
+	s.CACertFile = x509CACert
 	s.CertFile = x509Cert
 	s.KeyFile = x509Key
 	s.Expvar = expvar

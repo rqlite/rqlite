@@ -5,6 +5,7 @@ package http
 import (
 	"bytes"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"expvar"
@@ -144,6 +145,7 @@ type Service struct {
 	statusMu sync.RWMutex
 	statuses map[string]Statuser
 
+	CACertFile string // Path to root X.509 certificate.
 	CertFile string // Path to SSL certificate.
 	KeyFile  string // Path to SSL private key.
 
@@ -184,7 +186,7 @@ func (s *Service) Start() error {
 			return err
 		}
 	} else {
-		config, err := createTLSConfig(s.CertFile, s.KeyFile)
+		config, err := createTLSConfig(s.CertFile, s.KeyFile, s.CACertFile)
 		if err != nil {
 			return err
 		}
@@ -797,13 +799,24 @@ func writeResponse(w http.ResponseWriter, r *http.Request, j *Response) {
 }
 
 // createTLSConfig returns a TLS config from the given cert and key.
-func createTLSConfig(certFile, keyFile string) (*tls.Config, error) {
+func createTLSConfig(certFile, keyFile, caCertFile string) (*tls.Config, error) {
 	var err error
 	config := &tls.Config{}
 	config.Certificates = make([]tls.Certificate, 1)
 	config.Certificates[0], err = tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
 		return nil, err
+	}
+	if caCertFile != "" {
+		asn1Data, err := ioutil.ReadFile(caCertFile)
+		if err != nil {
+			return nil, err
+		}
+		config.RootCAs = x509.NewCertPool()
+		ok := config.RootCAs.AppendCertsFromPEM([]byte(asn1Data))
+		if !ok {
+			return nil, fmt.Errorf("failed to parse root certificate(s) in %q", caCertFile)
+		}
 	}
 	return config, nil
 }

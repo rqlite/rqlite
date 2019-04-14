@@ -21,27 +21,30 @@ const attemptInterval time.Duration = 5 * time.Second
 // Join attempts to join the cluster at one of the addresses given in joinAddr.
 // It walks through joinAddr in order, and sets the Raft address of the joining
 // node as advAddr. It returns the endpoint successfully used to join the cluster.
-func Join(joinAddr []string, advAddr string, skipVerify bool) (string, error) {
+func Join(joinAddr []string, advAddr string, tlsConfig *tls.Config) (string, error) {
 	var err error
 	var j string
 	logger := log.New(os.Stderr, "[cluster-join] ", log.LstdFlags)
+	if tlsConfig == nil {
+		tlsConfig = &tls.Config{InsecureSkipVerify: true}
+	}
 
 	for i := 0; i < numAttempts; i++ {
 		for _, a := range joinAddr {
-			j, err = join(a, advAddr, skipVerify)
+			j, err = join(a, advAddr, tlsConfig)
 			if err == nil {
 				// Success!
 				return j, nil
 			}
 		}
-		logger.Printf("failed to join cluster at %s, sleeping %s before retry", joinAddr, attemptInterval)
+		logger.Printf("failed to join cluster at %s: %s, sleeping %s before retry", joinAddr, err.Error(), attemptInterval)
 		time.Sleep(attemptInterval)
 	}
 	logger.Printf("failed to join cluster at %s, after %d attempts", joinAddr, numAttempts)
 	return "", err
 }
 
-func join(joinAddr string, advAddr string, skipVerify bool) (string, error) {
+func join(joinAddr string, advAddr string, tlsConfig *tls.Config) (string, error) {
 	// Join using IP address, as that is what Hashicorp Raft works in.
 	resv, err := net.ResolveTCPAddr("tcp", advAddr)
 	if err != nil {
@@ -53,7 +56,7 @@ func join(joinAddr string, advAddr string, skipVerify bool) (string, error) {
 
 	// Enable skipVerify as requested.
 	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: skipVerify},
+		TLSClientConfig: tlsConfig,
 	}
 	client := &http.Client{Transport: tr}
 	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
