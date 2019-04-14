@@ -2,6 +2,8 @@ package tcp
 
 import (
 	"crypto/tls"
+	"crypto/x509"
+	"io/ioutil"
 	"fmt"
 	"net"
 	"time"
@@ -11,6 +13,7 @@ import (
 type Transport struct {
 	ln net.Listener
 
+	caCertFile      string // Path to root X.509 cert.
 	certFile        string // Path to local X.509 cert.
 	certKey         string // Path to corresponding X.509 key.
 	remoteEncrypted bool   // Remote nodes use encrypted communication.
@@ -23,8 +26,9 @@ func NewTransport() *Transport {
 }
 
 // NewTLSTransport returns an initialized TLS-ecrypted Transport.
-func NewTLSTransport(certFile, keyPath string, skipVerify bool) *Transport {
+func NewTLSTransport(certFile, keyPath, caCertFile string, skipVerify bool) *Transport {
 	return &Transport{
+		caCertFile:      caCertFile,
 		certFile:        certFile,
 		certKey:         keyPath,
 		remoteEncrypted: true,
@@ -39,7 +43,7 @@ func (t *Transport) Open(addr string) error {
 		return err
 	}
 	if t.certFile != "" {
-		config, err := createTLSConfig(t.certFile, t.certKey)
+		config, err := createTLSConfig(t.certFile, t.certKey, t.caCertFile)
 		if err != nil {
 			return err
 		}
@@ -57,9 +61,11 @@ func (t *Transport) Dial(addr string, timeout time.Duration) (net.Conn, error) {
 	var err error
 	var conn net.Conn
 	if t.remoteEncrypted {
-		conf := &tls.Config{
-			InsecureSkipVerify: t.skipVerify,
+		conf, err := createTLSConfig(t.certFile, t.certKey, t.caCertFile)
+		if err != nil {
+			return nil, err
 		}
+		conf.InsecureSkipVerify = t.skipVerify
 		fmt.Println("doing a TLS dial")
 		conn, err = tls.DialWithDialer(dialer, "tcp", addr, conf)
 	} else {
@@ -89,13 +95,24 @@ func (t *Transport) Addr() net.Addr {
 }
 
 // createTLSConfig returns a TLS config from the given cert and key.
-func createTLSConfig(certFile, keyFile string) (*tls.Config, error) {
+func createTLSConfig(certFile, keyFile, caCertFile string) (*tls.Config, error) {
 	var err error
 	config := &tls.Config{}
 	config.Certificates = make([]tls.Certificate, 1)
 	config.Certificates[0], err = tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
 		return nil, err
+	}
+	if caCertFile != "" {
+		asn1Data, err := ioutil.ReadFile(caCertFile)
+		if err != nil {
+			return nil, err
+		}
+		config.RootCAs = x509.NewCertPool()
+		ok := config.RootCAs.AppendCertsFromPEM([]byte(asn1Data))
+		if !ok {
+			return nil, fmt.Errorf("failed to parse root certificate(s) in %q", caCertFile)
+		}
 	}
 	return config, nil
 }
