@@ -3,6 +3,7 @@ package main
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -23,6 +24,7 @@ type argT struct {
 	Prefix      string `cli:"P,prefix" usage:"rqlited HTTP URL prefix" dft:"/"`
 	Insecure    bool   `cli:"i,insecure" usage:"do not verify rqlited HTTPS certificate" dft:"false"`
 	Credentials string `cli:"u,user" usage:"set basic auth credentials in form username:password"`
+	CACert      string `cli:"c,ca-cert" usage:"path to trusted X.509 root CA certificate"`
 }
 
 const cliHelp = `.help				Show this message
@@ -156,9 +158,24 @@ func expvar(ctx *cli.Context, cmd, line string, argv *argT) error {
 
 func sendRequest(ctx *cli.Context, makeNewRequest func(string) (*http.Request, error), urlStr string, argv *argT) (*[]byte, error) {
 	url := urlStr
+	var rootCAs *x509.CertPool
+
+	if argv.CACert != "" {
+		pemCerts, err:= ioutil.ReadFile(argv.CACert)
+		if err != nil {
+			return nil, err
+		}
+
+		rootCAs = x509.NewCertPool()
+
+		ok := rootCAs.AppendCertsFromPEM(pemCerts)
+		if !ok {
+			return nil, fmt.Errorf("failed to parse root CA certificate(s)")
+		}
+	}
 
 	client := http.Client{Transport: &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: argv.Insecure},
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: argv.Insecure, RootCAs: rootCAs},
 	}}
 
 	// Explicitly handle redirects.
