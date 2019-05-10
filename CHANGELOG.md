@@ -13,6 +13,7 @@ _To upgrade from an earlier version to this release you should backup the leader
 - [PR #493](https://github.com/rqlite/rqlite/pull/504), [PR #504](https://github.com/rqlite/rqlite/pull/504): Full connection control and distributed transactions over HTTP.
 - [PR #501](https://github.com/rqlite/rqlite/pull/501): Replace use of term "transaction" with "atomic".
 - [PR #527](https://github.com/rqlite/rqlite/pull/527): rqlite CLI now supports command history. Thanks @rhnvrm.
+- [PR #550](https://github.com/rqlite/rqlite/pull/550): rqlite CLI supports specifying trusted root CA certificate. Thanks @zmedico.
 
 ### Design and implementation changes
 - [End-to-end integration test](https://github.com/rqlite/rqlite/blob/master/system_test/full_system_test.py) added. Written in Python, it is automatically run by CircleCI as the committed source changes.
@@ -38,6 +39,12 @@ _To upgrade from an earlier version to this release you should backup the leader
 - [PR #521](https://github.com/rqlite/rqlite/pull/521): Don't ignore any Join error, return it.
 - [PR #531](https://github.com/rqlite/rqlite/pull/531): Protect against possible nil pointer. Thanks @runsisi
 
+### 4.5.0 (April 24th 2019)
+- [PR #551](https://github.com/rqlite/rqlite/pull/551): rqlite CLI supports specifying trusted root CA certificate. Thanks @zmedico.
+
+### 4.4.0 (January 3rd 2019)
+- Allow the Raft election timeout [to be set](https://github.com/rqlite/rqlite/commit/2e91858e1ee0feee19f4c20c6f56a21261bcd44a). 
+ 
 ## 4.3.1 (October 10th 2018)
 - Allow a node to be re-added with same IP address and port, even though it was previously removed. Fixes [issue #534](https://github.com/rqlite/rqlite/issues/534).
 

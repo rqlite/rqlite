@@ -63,16 +63,19 @@ This configuration file sets authentication for two usernames, _bob_ and _mary_,
 
 This configuration also sets permissions for both users. _bob_ has permission to perform all operations, but _mary_ can only query the cluster, as well as check the cluster status.
 
+### Setting the configuration file path
+Set the path for your file via the `rqlited` command line option `-auth`.
+
 ## Secure cluster example
-Starting a node with HTTPS enabled, node-to-node encryption, and with the above configuration file. It is assumed the HTTPS X.509 certificate and key are at the paths `server.crt` and `key.pem` respectively, and the node-to-node certificate and key are at `node.crt` and `node-key.pem`
+Starting a node with HTTPS enabled, node-to-node encryption, and with the above configuration file stored in a file located at `/etc/rqlited/config.json`. It is assumed the HTTPS X.509 certificate and key are at the paths `server.crt` and `key.pem` respectively, and the node-to-node certificate and key are at `node.crt` and `node-key.pem`
 ```bash
-rqlited -auth config.json -http-cert server.crt -http-key key.pem \
+rqlited -auth /etc/rqlited/config.json -http-cert server.crt -http-key key.pem \
 -node-encrypt -node-cert node.crt -node-key node-key.pem -node-no-verify \
 ~/node.1
 ```
 Bringing up a second node on the same host, joining it to the first node. This allows you to block nodes from joining a cluster, unless those nodes supply a password.
 ```bash
-rqlited -auth config.json -http-addr localhost:4003 -http-cert server.crt \
+rqlited -auth /etc/rqlited/config.json -http-addr localhost:4003 -http-cert server.crt \
 -http-key key.pem -raft-addr :4004 -join https://bob:secret1@localhost:4001 \
 -node-encrypt -node-cert node.crt -node-key node-key.pem -no-node-verify \
 ~/node.2
