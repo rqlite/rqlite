@@ -28,7 +28,7 @@ type argT struct {
 const cliHelp = `.help				Show this message
 .indexes			Show names of all indexes
 .schema				Show CREATE statements for all tables
-.status				Show status and diagnostic information for connected node
+.status [subsystem]     	Show status and diagnostic information for connected node
 .expvar				Show expvar (Go runtime) information for connected node
 .tables				List names of tables
 .timer on|off			Turn SQL timer on or off
