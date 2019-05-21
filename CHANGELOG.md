@@ -39,10 +39,10 @@ _To upgrade from an earlier version to this release you should backup the leader
 - [PR #521](https://github.com/rqlite/rqlite/pull/521): Don't ignore any Join error, return it.
 - [PR #531](https://github.com/rqlite/rqlite/pull/531): Protect against possible nil pointer. Thanks @runsisi
 
-### 4.5.0 (April 24th 2019)
+## 4.5.0 (April 24th 2019)
 - [PR #551](https://github.com/rqlite/rqlite/pull/551): rqlite CLI supports specifying trusted root CA certificate. Thanks @zmedico.
 
-### 4.4.0 (January 3rd 2019)
+## 4.4.0 (January 3rd 2019)
 - Allow the Raft election timeout [to be set](https://github.com/rqlite/rqlite/commit/2e91858e1ee0feee19f4c20c6f56a21261bcd44a). 
  
 ## 4.3.1 (October 10th 2018)
