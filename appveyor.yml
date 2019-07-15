@@ -6,6 +6,7 @@ clone_folder: c:\gopath\src\github.com\rqlite\rqlite
 
 environment:
   GOPATH: c:\gopath
+  GO111MODULE: on
 
 install:
   - set BUILD_ENV=gnu
@@ -15,8 +16,9 @@ install:
 
 build_script:
   - go version
-  - go get ./...
+  - go get
   - go build -i ./...
+  - go install ./...
   - go test -v ./...
 
 after_build:
