@@ -44,3 +44,5 @@ _testmain.go
 
 *.exe
 *.test
+
+vendor
