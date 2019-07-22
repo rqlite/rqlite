@@ -14,6 +14,7 @@ _To upgrade from an earlier version to this release you should backup the leader
 - [PR #501](https://github.com/rqlite/rqlite/pull/501): Replace use of term "transaction" with "atomic".
 - [PR #527](https://github.com/rqlite/rqlite/pull/527): rqlite CLI now supports command history. Thanks @rhnvrm.
 - [PR #550](https://github.com/rqlite/rqlite/pull/550): rqlite CLI supports specifying trusted root CA certificate. Thanks @zmedico.
+- [PR #561](https://github.com/rqlite/rqlite/pull/561): rqlite server supports specifying trusted root CA certificate. Thanks @zmedico.
 
 ### Design and implementation changes
 - [End-to-end integration test](https://github.com/rqlite/rqlite/blob/master/system_test/full_system_test.py) added. Written in Python, it is automatically run by CircleCI as the committed source changes.
