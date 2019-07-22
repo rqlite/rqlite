@@ -22,27 +22,30 @@ const attemptInterval time.Duration = 5 * time.Second
 // It walks through joinAddr in order, and sets the node ID and Raft address of
 // the joining node as id addr respectively. It returns the endpoint
 // successfully used to join the cluster.
-func Join(joinAddr []string, id, addr string, meta map[string]string, skip bool) (string, error) {
+func Join(joinAddr []string, id, addr string, meta map[string]string, tlsConfig *tls.Config) (string, error) {
 	var err error
 	var j string
 	logger := log.New(os.Stderr, "[cluster-join] ", log.LstdFlags)
+	if tlsConfig == nil {
+		tlsConfig = &tls.Config{InsecureSkipVerify: true}
+	}
 
 	for i := 0; i < numAttempts; i++ {
 		for _, a := range joinAddr {
-			j, err = join(a, id, addr, meta, skip)
+			j, err = join(a, id, addr, meta, tlsConfig)
 			if err == nil {
 				// Success!
 				return j, nil
 			}
 		}
-		logger.Printf("failed to join cluster at %s, sleeping %s before retry", joinAddr, attemptInterval)
+		logger.Printf("failed to join cluster at %s: %s, sleeping %s before retry", joinAddr, err.Error(), attemptInterval)
 		time.Sleep(attemptInterval)
 	}
 	logger.Printf("failed to join cluster at %s, after %d attempts", joinAddr, numAttempts)
 	return "", err
 }
 
-func join(joinAddr string, id, addr string, meta map[string]string, skip bool) (string, error) {
+func join(joinAddr string, id, addr string, meta map[string]string, tlsConfig *tls.Config) (string, error) {
 	if id == "" {
 		return "", fmt.Errorf("node ID not set")
 	}
@@ -58,7 +61,7 @@ func join(joinAddr string, id, addr string, meta map[string]string, skip bool) (
 
 	// Enable skipVerify as requested.
 	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: skip},
+		TLSClientConfig: tlsConfig,
 	}
 	client := &http.Client{Transport: tr}
 	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
