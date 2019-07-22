@@ -38,6 +38,7 @@ _To upgrade from an earlier version to this release you should backup the leader
 - [PR #518](https://github.com/rqlite/rqlite/pull/518): Move testing to CircleCI 2.0.
 - [PR #521](https://github.com/rqlite/rqlite/pull/521): Don't ignore any Join error, return it.
 - [PR #531](https://github.com/rqlite/rqlite/pull/531): Protect against possible nil pointer. Thanks @runsisi
+- [PR #536](https://github.com/rqlite/rqlite/pull/563): Use `go mod` for dependency management. Thanks @elliotcourant
 
 ## 4.5.0 (April 24th 2019)
 - [PR #551](https://github.com/rqlite/rqlite/pull/551): rqlite CLI supports specifying trusted root CA certificate. Thanks @zmedico.
