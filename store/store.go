@@ -10,9 +10,9 @@ import (
 	"errors"
 	"expvar"
 	"fmt"
+	"github.com/hashicorp/go-hclog"
 	"io"
 	"io/ioutil"
-	"log"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -197,7 +197,7 @@ type Store struct {
 
 	restoreMu sync.RWMutex // Restore needs exclusive access to database.
 
-	logger *log.Logger
+	logger hclog.Logger
 
 	SnapshotThreshold uint64
 	SnapshotInterval  time.Duration
@@ -209,18 +209,22 @@ type Store struct {
 
 // StoreConfig represents the configuration of the underlying Store.
 type StoreConfig struct {
-	DBConf *DBConfig   // The DBConfig object for this Store.
-	Dir    string      // The working directory for raft.
-	Tn     Transport   // The underlying Transport for raft.
-	ID     string      // Node ID.
-	Logger *log.Logger // The logger to use to log stuff.
+	DBConf *DBConfig    // The DBConfig object for this Store.
+	Dir    string       // The working directory for raft.
+	Tn     Transport    // The underlying Transport for raft.
+	ID     string       // Node ID.
+	Logger hclog.Logger // The logger to use to log stuff.
 }
 
 // New returns a new Store.
 func New(ln Listener, c *StoreConfig) *Store {
 	logger := c.Logger
 	if logger == nil {
-		logger = log.New(os.Stderr, "[store] ", log.LstdFlags)
+		logger = hclog.New(&hclog.LoggerOptions{
+			Name:   "store",
+			Level:  hclog.DefaultLevel,
+			Output: hclog.DefaultOutput,
+		})
 	}
 
 	return &Store{
@@ -248,9 +252,9 @@ func (s *Store) Open(enableSingle bool) error {
 		return ErrStoreInvalidState
 	}
 
-	s.logger.Printf("opening store with node ID %s", s.raftID)
+	s.logger.Info("opening store", "node ID", s.raftID)
 
-	s.logger.Printf("ensuring directory at %s exists", s.raftDir)
+	s.logger.Info("ensuring directory exists", "directory", s.raftDir)
 	if err := os.MkdirAll(s.raftDir, 0755); err != nil {
 		return err
 	}
@@ -278,6 +282,7 @@ func (s *Store) Open(enableSingle bool) error {
 	// Get the Raft configuration for this store.
 	config := s.raftConfig()
 	config.LocalID = raft.ServerID(s.raftID)
+	config.Logger = s.logger.ResetNamed("raft")
 	// Do not explicitly set logger (yet -- might do different logging).
 
 	// Create the snapshot store. This allows Raft to truncate the log.
@@ -304,7 +309,7 @@ func (s *Store) Open(enableSingle bool) error {
 	}
 
 	if enableSingle && newNode {
-		s.logger.Printf("bootstrap needed")
+		s.logger.Info("bootstrap needed")
 		configuration := raft.Configuration{
 			Servers: []raft.Server{
 				{
@@ -315,7 +320,7 @@ func (s *Store) Open(enableSingle bool) error {
 		}
 		ra.BootstrapCluster(configuration)
 	} else {
-		s.logger.Printf("no bootstrap needed")
+		s.logger.Info("no bootstrap needed")
 	}
 
 	s.raft = ra
@@ -453,7 +458,7 @@ func (s *Store) WaitForApplied(timeout time.Duration) error {
 	if timeout == 0 {
 		return nil
 	}
-	s.logger.Printf("waiting for up to %s for application of initial logs", timeout)
+	s.logger.Info(fmt.Sprintf("waiting for up to %s for application of initial logs", timeout))
 	if err := s.WaitForAppliedIndex(s.raft.LastIndex(), timeout); err != nil {
 		return ErrOpenTimeout
 	}
@@ -517,7 +522,7 @@ func (s *Store) LeaderID() (string, error) {
 	addr := s.LeaderAddr()
 	configFuture := s.raft.GetConfiguration()
 	if err := configFuture.Error(); err != nil {
-		s.logger.Printf("failed to get raft configuration: %v", err)
+		s.logger.Error("failed to get raft configuration", "error", err)
 		return "", err
 	}
 
@@ -701,14 +706,14 @@ func (s *Store) Backup(leader bool, fmt BackupFormat, dst io.Writer) error {
 // Join joins a node, identified by id and located at addr, to this store.
 // The node must be ready to respond to Raft communications at that address.
 func (s *Store) Join(id, addr string, metadata map[string]string) error {
-	s.logger.Printf("received request to join node at %s", addr)
+	s.logger.Info("received request to join node at", "address", addr)
 	if s.raft.State() != raft.Leader {
 		return ErrNotLeader
 	}
 
 	configFuture := s.raft.GetConfiguration()
 	if err := configFuture.Error(); err != nil {
-		s.logger.Printf("failed to get raft configuration: %v", err)
+		s.logger.Error("failed to get raft configuration", "error", err)
 		return err
 	}
 
@@ -719,12 +724,12 @@ func (s *Store) Join(id, addr string, metadata map[string]string) error {
 			// However if *both* the ID and the address are the same, the no
 			// join is actually needed.
 			if srv.Address == raft.ServerAddress(addr) && srv.ID == raft.ServerID(id) {
-				s.logger.Printf("node %s at %s already member of cluster, ignoring join request",
-					id, addr)
+				s.logger.Info("node already member of cluster, ignoring join request",
+					"id", id, "address", addr)
 				return nil
 			}
 			if err := s.remove(id); err != nil {
-				s.logger.Printf("failed to remove node: %v", err)
+				s.logger.Error("failed to remove node", "error", err)
 				return err
 			}
 		}
@@ -742,19 +747,19 @@ func (s *Store) Join(id, addr string, metadata map[string]string) error {
 		return err
 	}
 
-	s.logger.Printf("node at %s joined successfully", addr)
+	s.logger.Info("node joined successfully", "address", addr)
 	return nil
 }
 
 // Remove removes a node from the store, specified by ID.
 func (s *Store) Remove(id string) error {
-	s.logger.Printf("received request to remove node %s", id)
+	s.logger.Info("received request to remove node", "id", id)
 	if err := s.remove(id); err != nil {
-		s.logger.Printf("failed to remove node %s: %s", id, err.Error())
+		s.logger.Error("failed to remove node", "id", id, "error", err)
 		return err
 	}
 
-	s.logger.Printf("node %s removed successfully", id)
+	s.logger.Info("node removed successfully", "id", id)
 	return nil
 }
 
@@ -998,13 +1003,13 @@ func (s *Store) createDatabase() error {
 		if err != nil {
 			return err
 		}
-		s.logger.Println("SQLite database opened at", s.dbPath)
+		s.logger.Debug("SQLite database opened at", s.dbPath)
 	} else {
 		db, err = sdb.New(s.dbPath, s.dbConf.DSN, true)
 		if err != nil {
 			return err
 		}
-		s.logger.Println("SQLite in-memory database opened")
+		s.logger.Debug("SQLite in-memory database opened")
 	}
 	s.db = db
 	return nil
@@ -1098,9 +1103,9 @@ func (s *Store) checkConnections() {
 							// Not an issue, the actual leader will close it.
 							continue
 						}
-						s.logger.Printf("%s failed to close: %s", c, err.Error())
+						s.logger.Error("failed to close", "connection", c.String(), "error", err)
 					}
-					s.logger.Printf("%s closed due to timeout", c)
+					s.logger.Warn("closed due to timeout", "connection", c.String())
 					// Only increment stat here to make testing easier.
 					stats.Add(numConnTimeouts, 1)
 				}
@@ -1291,7 +1296,7 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 	var err error
 	err = s.database(false, &buf)
 	if err != nil {
-		s.logger.Printf("failed to read database for snapshot: %s", err.Error())
+		s.logger.Error("failed to read database for snapshot", "error", err)
 		return nil, err
 	}
 	fsm.database = buf.Bytes()
@@ -1299,14 +1304,14 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 	// Copy the node metadata.
 	fsm.meta, err = json.Marshal(s.meta)
 	if err != nil {
-		s.logger.Printf("failed to encode meta for snapshot: %s", err.Error())
+		s.logger.Error("failed to encode meta for snapshot", "error", err)
 		return nil, err
 	}
 
 	// Copy the active connections.
 	fsm.connections, err = json.Marshal(s.conns)
 	if err != nil {
-		s.logger.Printf("failed to encode connections for snapshot: %s", err.Error())
+		s.logger.Error("failed to encode connections for snapshot", "error", err)
 		return nil, err
 	}
 	stats.Add(numSnaphots, 1)
