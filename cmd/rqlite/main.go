@@ -161,7 +161,7 @@ func sendRequest(ctx *cli.Context, makeNewRequest func(string) (*http.Request, e
 	var rootCAs *x509.CertPool
 
 	if argv.CACert != "" {
-		pemCerts, err:= ioutil.ReadFile(argv.CACert)
+		pemCerts, err := ioutil.ReadFile(argv.CACert)
 		if err != nil {
 			return nil, err
 		}
@@ -175,6 +175,7 @@ func sendRequest(ctx *cli.Context, makeNewRequest func(string) (*http.Request, e
 	}
 
 	client := http.Client{Transport: &http.Transport{
+		Proxy:           http.ProxyFromEnvironment,
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: argv.Insecure, RootCAs: rootCAs},
 	}}
 
@@ -256,6 +257,7 @@ func cliJSON(ctx *cli.Context, cmd, line, url string, argv *argT) error {
 	}
 
 	client := http.Client{Transport: &http.Transport{
+		Proxy:           http.ProxyFromEnvironment,
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: argv.Insecure},
 	}}
 	resp, err := client.Get(url)
