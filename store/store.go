@@ -61,7 +61,6 @@ const (
 	retainSnapshotCount  = 2
 	applyTimeout         = 10 * time.Second
 	openTimeout          = 120 * time.Second
-	sqliteFile           = "db.sqlite"
 	leaderWaitDelay      = 100 * time.Millisecond
 	appliedWaitDelay     = 100 * time.Millisecond
 	connectionPoolCount  = 5
@@ -112,6 +111,8 @@ type RaftResponse struct {
 	NodeID string `json:"node_id,omitempty"`
 }
 
+// It would be great if we can wrap these in C structs. 
+
 // QueryRequest represents a query that returns rows, and does not modify
 // the database.
 type QueryRequest struct {
@@ -123,10 +124,15 @@ type QueryRequest struct {
 
 // QueryResponse encapsulates a response to a query.
 type QueryResponse struct {
-	Rows []*sdb.Rows
+	Rows []*sdb.Rows // sdb.Rows has "Values [][]interface{}", and "Types []string" 
+					 // We can expose the data to C as the response with void**, 
+					 // dereference correctly by reading Types[]
+					 // this way, data isn't serialised, and we can access by direct reference.
 	Time float64
 	Raft *RaftResponse
 }
+
+// ExecuteRequest and ExecuteResponse corresponds to executeNoResultsQuerry in DBDriver. 
 
 // ExecuteRequest represents a query that returns now rows, but does modify
 // the database.
@@ -211,6 +217,7 @@ type Store struct {
 type StoreConfig struct {
 	DBConf *DBConfig   // The DBConfig object for this Store.
 	Dir    string      // The working directory for raft.
+	SqliteFile string
 	Tn     Transport   // The underlying Transport for raft.
 	ID     string      // Node ID.
 	Logger *log.Logger // The logger to use to log stuff.
@@ -228,7 +235,7 @@ func New(ln Listener, c *StoreConfig) *Store {
 		raftDir:        c.Dir,
 		raftID:         c.ID,
 		dbConf:         c.DBConf,
-		dbPath:         filepath.Join(c.Dir, sqliteFile),
+		dbPath:         filepath.Join(c.Dir, c.SqliteFile),
 		randSrc:        rand.New(rand.NewSource(time.Now().UnixNano())),
 		conns:          make(map[uint64]*Connection),
 		done:           make(chan struct{}, 1),
