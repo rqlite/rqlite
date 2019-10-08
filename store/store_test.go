@@ -753,6 +753,7 @@ func mustNewStore(inmem bool) *Store {
 		DBConf: cfg,
 		Dir:    path,
 		ID:     path, // Could be any unique string.
+		SqliteFile: "db.sqlite",
 	})
 	if s == nil {
 		panic("failed to create new store")

@@ -183,6 +183,7 @@ func main() {
 		DBConf: dbConf,
 		Dir:    dataPath,
 		ID:     idOrRaftAddr(),
+		SqliteFile: "db.sqlite",
 	})
 
 	// Set optional parameters on store.

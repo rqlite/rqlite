@@ -434,6 +434,7 @@ func mustNewNode(enableSingle bool) *Node {
 		DBConf: dbConf,
 		Dir:    node.Dir,
 		ID:     tn.Addr().String(),
+		SqliteFile: "db.sqlite",
 	})
 	if err := node.Store.Open(enableSingle); err != nil {
 		node.Deprovision()
