@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rqlite/rqlite/testdata/x509"
+	"github.com/lkm1321/rqlite/testdata/x509"
 )
 
 func Test_NewTransport(t *testing.T) {

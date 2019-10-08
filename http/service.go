@@ -21,7 +21,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rqlite/rqlite/store"
+	"github.com/lkm1321/rqlite/store"
 )
 
 const defaultConnID = 0

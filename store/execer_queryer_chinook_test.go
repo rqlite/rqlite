@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rqlite/rqlite/testdata/chinook"
+	"github.com/lkm1321/rqlite/testdata/chinook"
 )
 
 func TestStoreOnDiskChinook(t *testing.T) {

@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rqlite/rqlite/store"
+	"github.com/lkm1321/rqlite/store"
 )
 
 func Test_NormalizeAddr(t *testing.T) {

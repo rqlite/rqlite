@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	httpd "github.com/rqlite/rqlite/http"
-	"github.com/rqlite/rqlite/store"
-	"github.com/rqlite/rqlite/tcp"
+	httpd "github.com/lkm1321/rqlite/http"
+	"github.com/lkm1321/rqlite/store"
+	"github.com/lkm1321/rqlite/tcp"
 )
 
 // Connection represents an explicit connection to the node's database.

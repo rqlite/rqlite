@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	sdb "github.com/rqlite/rqlite/db"
+	sdb "github.com/lkm1321/rqlite/db"
 )
 
 // ConnectionOptions controls connection behaviour.

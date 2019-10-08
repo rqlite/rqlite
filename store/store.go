@@ -22,7 +22,7 @@ import (
 
 	"github.com/hashicorp/raft"
 	"github.com/hashicorp/raft-boltdb"
-	sdb "github.com/rqlite/rqlite/db"
+	sdb "github.com/lkm1321/rqlite/db"
 )
 
 var (

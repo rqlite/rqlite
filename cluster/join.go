@@ -12,7 +12,7 @@ import (
 	"os"
 	"time"
 
-	httpd "github.com/rqlite/rqlite/http"
+	httpd "github.com/lkm1321/rqlite/http"
 )
 
 const numAttempts int = 3

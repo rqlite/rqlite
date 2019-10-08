@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rqlite/rqlite/testdata/chinook"
+	"github.com/lkm1321/rqlite/testdata/chinook"
 )
 
 /*
