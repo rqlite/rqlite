@@ -79,7 +79,7 @@ rqlite replicates SQLite for fault-tolerance. It does not replicate it for perfo
 Depending on your machine (particularly its IO performance) and network, individual INSERT performance could be anything from 10 operations per second to more than 200 operations per second. However, by using the [bulk API](https://github.com/rqlite/rqlite/blob/master/DOC/BULK.md), transactions, or both, throughput will increase significantly, often by 2 orders of magnitude. This speed-up is due to the way SQLite works. So for high throughput, execute as many operations as possible within a bulk request.
 
 ## Limitations
- * Only SQL statements that are __deterministic__ are safe to use with rqlite, because statements are committed to the Raft log before they are sent to each node. In other words, rqlite performs _statement-based replication_. For example, the following statement could result in different a SQLite database under each node:
+ * Only SQL statements that are __deterministic__ are safe to use with rqlite, because statements are committed to the Raft log before they are sent to each node. In other words, rqlite performs _statement-based replication_. For example, the following statement could result in a different SQLite database under each node:
 ```
 INSERT INTO foo (n) VALUES(random());
 ```
