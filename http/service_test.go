@@ -16,37 +16,44 @@ func Test_NormalizeAddr(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		orig string
-		norm string
+		orig   string
+		schema string
+		norm   string
 	}{
 		{
-			orig: "http://localhost:4001",
-			norm: "http://localhost:4001",
+			orig:   "http://localhost:4001",
+			schema: "http",
+			norm:   "http://localhost:4001",
 		},
 		{
-			orig: "https://localhost:4001",
-			norm: "https://localhost:4001",
+			orig:   "https://localhost:4001",
+			schema: "https",
+			norm:   "https://localhost:4001",
 		},
 		{
-			orig: "https://localhost:4001/foo",
-			norm: "https://localhost:4001/foo",
+			orig:   "https://localhost:4001/foo",
+			schema: "https",
+			norm:   "https://localhost:4001/foo",
 		},
 		{
-			orig: "localhost:4001",
-			norm: "http://localhost:4001",
+			orig:   "localhost:4001",
+			schema: "http",
+			norm:   "http://localhost:4001",
 		},
 		{
-			orig: "localhost",
-			norm: "http://localhost",
+			orig:   "localhost",
+			schema: "http",
+			norm:   "http://localhost",
 		},
 		{
-			orig: ":4001",
-			norm: "http://:4001",
+			orig:   ":4001",
+			schema: "http",
+			norm:   "http://:4001",
 		},
 	}
 
 	for _, tt := range tests {
-		if NormalizeAddr(tt.orig) != tt.norm {
+		if NormalizeAddr(tt.orig, tt.schema) != tt.norm {
 			t.Fatalf("%s not normalized correctly, got: %s", tt.orig, tt.norm)
 		}
 	}

@@ -171,8 +171,8 @@ type Service struct {
 	statuses map[string]Statuser
 
 	CACertFile string // Path to root X.509 certificate.
-	CertFile string // Path to SSL certificate.
-	KeyFile  string // Path to SSL private key.
+	CertFile   string // Path to SSL certificate.
+	KeyFile    string // Path to SSL private key.
 
 	ConnIdleTimeout time.Duration
 	ConnTxTimeout   time.Duration
@@ -680,7 +680,8 @@ func (s *Service) FormRedirect(r *http.Request, host string) string {
 	if rq != "" {
 		rq = fmt.Sprintf("?%s", rq)
 	}
-	return fmt.Sprintf("%s://%s%s%s", s.protocol(), host, r.URL.Path, rq)
+	fmt.Println(r.URL.String())
+	return fmt.Sprintf("%s%s%s", NormalizeAddr(host, s.protocol()), r.URL.Path, rq)
 }
 
 // FormConnectionURL returns the URL of the new connection.
@@ -722,7 +723,7 @@ func (s *Service) addBuildVersion(w http.ResponseWriter) {
 
 func (s *Service) protocol() string {
 	protocol := "http"
-	if s.credentialStore != nil {
+	if s.CACertFile != "" || s.CertFile != "" || s.KeyFile != "" {
 		protocol = "https"
 	}
 	return protocol
@@ -913,9 +914,9 @@ func prettyEnabled(e bool) string {
 
 // NormalizeAddr ensures that the given URL has a HTTP protocol prefix.
 // If none is supplied, it prefixes the URL with "http://".
-func NormalizeAddr(addr string) string {
+func NormalizeAddr(addr string, schema string) string {
 	if !strings.HasPrefix(addr, "http://") && !strings.HasPrefix(addr, "https://") {
-		return fmt.Sprintf("http://%s", addr)
+		return fmt.Sprintf("%s://%s", schema, addr)
 	}
 	return addr
 }
