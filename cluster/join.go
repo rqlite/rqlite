@@ -57,7 +57,12 @@ func join(joinAddr string, id, addr string, meta map[string]string, tlsConfig *t
 	}
 
 	// Check for protocol scheme, and insert default if necessary.
-	fullAddr := httpd.NormalizeAddr(fmt.Sprintf("%s/join", joinAddr))
+	schema := "http"
+	if tlsConfig.RootCAs != nil {
+		schema = "https"
+	}
+	// Check for protocol scheme, and insert default if necessary.
+	fullAddr := httpd.NormalizeAddr(fmt.Sprintf("%s/join", joinAddr), schema)
 
 	// Enable skipVerify as requested.
 	tr := &http.Transport{
@@ -104,3 +109,4 @@ func join(joinAddr string, id, addr string, meta map[string]string, tlsConfig *t
 		}
 	}
 }
+
