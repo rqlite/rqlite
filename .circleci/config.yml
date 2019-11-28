@@ -5,6 +5,9 @@ jobs:
     docker:
       - image: circleci/golang:1.13
     steps:
+        - run:
+          command: |
+            echo 'export GOPATH=~/rqlite/' >> $BASH_ENV
         - run: mkdir -p $CIRCLE_WORKING_DIRECTORY
         - run: cd $CIRCLE_WORKING_DIRECTORY
         - run: git clone https://github.com/rqlite/rqlite.git
