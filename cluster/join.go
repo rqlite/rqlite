@@ -92,7 +92,9 @@ func join(joinAddr string, advAddr string, tlsConfig *tls.Config, logger *log.Lo
 			continue
 		case http.StatusBadRequest:
 			// One possible cause is that the target server is listening for HTTPS, but a HTTP
-			// attempt was made. Switch the protocol to HTTPS, and try again. This
+			// attempt was made. Switch the protocol to HTTPS, and try again. This can happen
+			// when using the Disco service, since it doesn't record information about which
+			// protocol a registered node is actually using.
 			if isHTTPS, err := httpd.CheckHTTPS(fullAddr); err != nil {
 				return "", err
 			} else if isHTTPS {
