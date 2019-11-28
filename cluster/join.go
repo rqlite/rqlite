@@ -31,7 +31,7 @@ func Join(joinAddr []string, advAddr string, tlsConfig *tls.Config) (string, err
 
 	for i := 0; i < numAttempts; i++ {
 		for _, a := range joinAddr {
-			j, err = join(a, advAddr, tlsConfig)
+			j, err = join(a, advAddr, tlsConfig, logger)
 			if err == nil {
 				// Success!
 				return j, nil
@@ -44,7 +44,7 @@ func Join(joinAddr []string, advAddr string, tlsConfig *tls.Config) (string, err
 	return "", err
 }
 
-func join(joinAddr string, advAddr string, tlsConfig *tls.Config) (string, error) {
+func join(joinAddr string, advAddr string, tlsConfig *tls.Config, logger *log.Logger) (string, error) {
 	// Join using IP address, as that is what Hashicorp Raft works in.
 	resv, err := net.ResolveTCPAddr("tcp", advAddr)
 	if err != nil {
@@ -88,6 +88,22 @@ func join(joinAddr string, advAddr string, tlsConfig *tls.Config) (string, error
 			fullAddr = resp.Header.Get("location")
 			if fullAddr == "" {
 				return "", fmt.Errorf("failed to join, invalid redirect received")
+			}
+			continue
+		case http.StatusBadRequest:
+			// One possible cause is that the target server is listening for HTTPS, but a HTTP
+			// attempt was made. Switch the protocol to HTTPS, and try again. This
+			if isHTTPS, err := httpd.CheckHTTPS(fullAddr); err != nil {
+				return "", err
+			} else if isHTTPS {
+				// It's already HTTPS, give up.
+				return "", fmt.Errorf("failed to join, node returned: %s: (%s)", resp.Status, string(b))
+			}
+
+			logger.Print("join via HTTP failed, trying HTTPS")
+			fullAddr, err = httpd.EnsureHTTPS(fullAddr)
+			if err != nil {
+				return "", err
 			}
 			continue
 		default:

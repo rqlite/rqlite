@@ -15,6 +15,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/pprof"
+	"net/url"
 	"os"
 	"runtime"
 	"strings"
@@ -146,8 +147,8 @@ type Service struct {
 	statuses map[string]Statuser
 
 	CACertFile string // Path to root X.509 certificate.
-	CertFile string // Path to SSL certificate.
-	KeyFile  string // Path to SSL private key.
+	CertFile   string // Path to SSL certificate.
+	KeyFile    string // Path to SSL private key.
 
 	credentialStore CredentialStore
 
@@ -891,4 +892,27 @@ func NormalizeAddr(addr string) string {
 		return fmt.Sprintf("http://%s", addr)
 	}
 	return addr
+}
+
+// EnsureHTTPS returns the given URL, ensuring it is using the HTTPS protocol.
+func EnsureHTTPS(addr string) (string, error) {
+	u, err := url.Parse(addr)
+	if err != nil {
+		return "", err
+	}
+	if u.Scheme == "https" {
+		// It's already HTTPS, nothing to do.
+		return addr, nil
+	}
+	u.Scheme = "https"
+	return u.String(), nil
+}
+
+// CheckHTTPS returns true of the given URL uses HTTPS.
+func CheckHTTPS(addr string) (bool, error) {
+	u, err := url.Parse(addr)
+	if err != nil {
+		return false, err
+	}
+	return u.Scheme == "https", nil
 }

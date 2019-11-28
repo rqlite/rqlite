@@ -39,10 +39,10 @@ func (c *Client) URL() string {
 }
 
 // Register attempts to register with the Discovery Service, using the given
-// address.
-func (c *Client) Register(id, addr string) (*Response, error) {
+// proto and address.
+func (c *Client) Register(id, proto, addr string) (*Response, error) {
 	m := map[string]string{
-		"addr": addr,
+		"addr": fmt.Sprintf("%s:%s", proto, addr),
 	}
 
 	url := c.registrationURL(c.url, id)

@@ -120,7 +120,7 @@ func sendRequest(ctx *cli.Context, urlStr string, line string, argv *argT, ret i
 	var rootCAs *x509.CertPool
 
 	if argv.CACert != "" {
-		pemCerts, err:= ioutil.ReadFile(argv.CACert)
+		pemCerts, err := ioutil.ReadFile(argv.CACert)
 		if err != nil {
 			return err
 		}

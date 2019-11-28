@@ -354,7 +354,7 @@ func determineJoinAddresses() ([]string, error) {
 	if discoID != "" {
 		log.Printf("registering with Discovery Service at %s with ID %s", discoURL, discoID)
 		c := disco.New(discoURL)
-		r, err := c.Register(discoID, apiAdv)
+		r, err := c.Register(discoID, "http", apiAdv)
 		if err != nil {
 			return nil, err
 		}
