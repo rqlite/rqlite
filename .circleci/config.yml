@@ -1,0 +1,52 @@
+version: 2
+jobs:
+  test:
+    working_directory: ~/rqlite/src/github.com/rqlite/rqlite
+    docker:
+      - image: circleci/golang:1.13
+    steps:
+        - run: mkdir -p $CIRCLE_WORKING_DIRECTORY
+        - run: cd $CIRCLE_WORKING_DIRECTORY
+        - run: git clone https://github.com/rqlite/rqlite.git
+        - run: cd rqlite
+        - run: go get -u -t ./...
+        - run: git checkout $CIRCLE_BRANCH
+        - run: go vet .
+        - run: go test -timeout 60s -v ./...
+
+  race:
+    working_directory: ~/rqlite/src/github.com/rqlite/rqlite
+    docker:
+      - image: circleci/golang:1.13
+    steps:
+        - checkout
+        - run: git checkout $CIRCLE_BRANCH
+        - run: git branch
+        - run: go get -t -d -v ./...
+        - run:
+            command: go test -race -timeout 120s -v ./...
+            environment:
+                GORACE: "halt_on_error=1"
+
+  end_to_end:
+    working_directory: ~/rqlite/src/github.com/rqlite/rqlite
+    docker:
+      - image: circleci/golang:1.13
+    steps:
+        - checkout
+        - run: git checkout $CIRCLE_BRANCH
+        - run: sudo apt-get install python-requests
+        - run: go get -t -d -v ./...
+        - run: (cd cmd/rqlited && go build)
+        - run:
+            command: system_test/full_system_test.py
+            environment:
+                RQLITED_PATH: /home/circleci/rqlite/src/github.com/rqlite/rqlite/cmd/rqlited/rqlited
+
+workflows:
+  version: 2
+  build_and_test:
+    jobs:
+      - test
+      - race
+
