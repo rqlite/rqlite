@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	httpd "github.com/rqlite/rqlite/http"
@@ -95,18 +96,13 @@ func join(joinAddr string, advAddr string, tlsConfig *tls.Config, logger *log.Lo
 			// attempt was made. Switch the protocol to HTTPS, and try again. This can happen
 			// when using the Disco service, since it doesn't record information about which
 			// protocol a registered node is actually using.
-			if isHTTPS, err := httpd.CheckHTTPS(fullAddr); err != nil {
-				return "", err
-			} else if isHTTPS {
+			if strings.HasPrefix(fullAddr, "https://") {
 				// It's already HTTPS, give up.
 				return "", fmt.Errorf("failed to join, node returned: %s: (%s)", resp.Status, string(b))
 			}
 
-			logger.Print("join via HTTP failed, trying HTTPS")
-			fullAddr, err = httpd.EnsureHTTPS(fullAddr)
-			if err != nil {
-				return "", err
-			}
+			logger.Print("join via HTTP failed, trying via HTTPS")
+			fullAddr = httpd.EnsureHTTPS(fullAddr)
 			continue
 		default:
 			return "", fmt.Errorf("failed to join, node returned: %s: (%s)", resp.Status, string(b))

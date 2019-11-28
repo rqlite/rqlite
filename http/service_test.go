@@ -47,6 +47,36 @@ func Test_NormalizeAddr(t *testing.T) {
 	}
 }
 
+func Test_EnsureHTTPS(t *testing.T) {
+	tests := []struct {
+		orig    string
+		ensured string
+	}{
+		{
+			orig:    "http://localhost:4001",
+			ensured: "https://localhost:4001",
+		},
+		{
+			orig:    "https://localhost:4001",
+			ensured: "https://localhost:4001",
+		},
+		{
+			orig:    "https://localhost:4001/foo",
+			ensured: "https://localhost:4001/foo",
+		},
+		{
+			orig:    "localhost:4001",
+			ensured: "https://localhost:4001",
+		},
+	}
+
+	for _, tt := range tests {
+		if e := EnsureHTTPS(tt.orig); e != tt.ensured {
+			t.Fatalf("%s not HTTPS ensured correctly, exp %s, got %s", tt.orig, tt.ensured, e)
+		}
+	}
+}
+
 func Test_NewService(t *testing.T) {
 	m := &MockStore{}
 	s := New("127.0.0.1:0", m, nil)

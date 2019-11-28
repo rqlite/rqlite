@@ -15,7 +15,6 @@ import (
 	"net"
 	"net/http"
 	"net/http/pprof"
-	"net/url"
 	"os"
 	"runtime"
 	"strings"
@@ -894,25 +893,15 @@ func NormalizeAddr(addr string) string {
 	return addr
 }
 
-// EnsureHTTPS returns the given URL, ensuring it is using the HTTPS protocol.
-func EnsureHTTPS(addr string) (string, error) {
-	u, err := url.Parse(addr)
-	if err != nil {
-		return "", err
+// EnsureHTTPS modifies the given URL, so that is ensures it is using the HTTPS protocol.
+func EnsureHTTPS(addr string) string {
+	if !strings.HasPrefix(addr, "http://") && !strings.HasPrefix(addr, "https://") {
+		return fmt.Sprintf("https://%s", addr)
 	}
-	if u.Scheme == "https" {
-		// It's already HTTPS, nothing to do.
-		return addr, nil
-	}
-	u.Scheme = "https"
-	return u.String(), nil
+	return strings.Replace(addr, "http://", "https://", 1)
 }
 
-// CheckHTTPS returns true of the given URL uses HTTPS.
-func CheckHTTPS(addr string) (bool, error) {
-	u, err := url.Parse(addr)
-	if err != nil {
-		return false, err
-	}
-	return u.Scheme == "https", nil
+// CheckHTTPS returns true if the given URL uses HTTPS.
+func CheckHTTPS(addr string) bool {
+	return strings.HasPrefix(addr, "https://")
 }
