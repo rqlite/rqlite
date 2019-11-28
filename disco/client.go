@@ -39,7 +39,7 @@ func (c *Client) URL() string {
 }
 
 // Register attempts to register with the Discovery Service, using the given
-// proto and address.
+// address.
 func (c *Client) Register(id, addr string) (*Response, error) {
 	m := map[string]string{
 		"addr": addr,
