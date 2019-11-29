@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"net/url"
 
 	"github.com/mkideal/cli"
 )
@@ -20,17 +21,25 @@ type executeResponse struct {
 	Time    float64   `json:"time,omitempty"`
 }
 
-func execute(ctx *cli.Context, cmd, line string, argv *argT) error {
-	urlStr := fmt.Sprintf("%s://%s:%d%sdb/execute", argv.Protocol, argv.Host, argv.Port, argv.Prefix)
+func execute(ctx *cli.Context, cmd, line string, timer bool, argv *argT) error {
+	queryStr := url.Values{}
+	if timer {
+		queryStr.Set("timings", "")
+	}
+	u := url.URL{
+		Scheme:   argv.Protocol,
+		Host:     fmt.Sprintf("%s:%d", argv.Host, argv.Port),
+		Path:     fmt.Sprintf("%sdb/execute", argv.Prefix),
+		RawQuery: queryStr.Encode(),
+	}
 	ret := &executeResponse{}
-	if err := sendRequest(ctx, urlStr, line, argv, ret); err != nil {
+	if err := sendRequest(ctx, u.String(), line, argv, ret); err != nil {
 		return err
 	}
 	if ret.Error != "" {
 		return fmt.Errorf(ret.Error)
 	}
 	if len(ret.Results) != 1 {
-		// What's happen? ret.Results.length MUST be 1
 		return fmt.Errorf("unexpected results length: %d", len(ret.Results))
 	}
 
@@ -44,6 +53,10 @@ func execute(ctx *cli.Context, cmd, line string, argv *argT) error {
 	if result.RowsAffected > 1 {
 		rowString = "rows"
 	}
-	ctx.String("%d %s affected (%f sec)\n", result.RowsAffected, rowString, result.Time)
+	if timer {
+		ctx.String("%d %s affected (%f sec)\n", result.RowsAffected, rowString, result.Time)
+	} else {
+		ctx.String("%d %s affected\n", result.RowsAffected, rowString)
+	}
 	return nil
 }

@@ -1,4 +1,5 @@
 ## 4.6.0 (unreleased)
+- [PR #584](https://github.com/rqlite/rqlite/pull/584): Support showing timings in the CLI. Thanks @joaodrp.
 - [PR #583](https://github.com/rqlite/rqlite/pull/583): Add BasicAuth support to the CLI. Thanks @joaodrp.
 - [PR #564](https://github.com/rqlite/rqlite/pull/564): rqlite server supports specifying trusted root CA certificate. Thanks @zmedico.
 - When joining try HTTPS if HTTP fails. Fixes [issue #577](https://github.com/rqlite/rqlite/issues/577).
