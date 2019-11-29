@@ -1,4 +1,5 @@
 ## 4.6.0 (unreleased)
+- [PR #587](https://github.com/rqlite/rqlite/pull/587): Add expvar stats to store.
 - [PR #586](https://github.com/rqlite/rqlite/pull/586): rqlite CLI now supports command history. Thanks @rhnvrm.
 - [PR #585](https://github.com/rqlite/rqlite/pull/585): Add backup command to CLI: Thanks @eariassoto.
 - [PR #584](https://github.com/rqlite/rqlite/pull/584): Support showing timings in the CLI. Thanks @joaodrp.
