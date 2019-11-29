@@ -71,3 +71,4 @@ workflows:
     jobs:
       - test
       - race
+      - end_to_end
