@@ -511,7 +511,7 @@ func (m *MockStore) Stats() (map[string]interface{}, error) {
 	return nil, nil
 }
 
-func (m *MockStore) Backup(leader bool) ([]byte, error) {
+func (m *MockStore) Backup(leader bool, f store.BackupFormat) ([]byte, error) {
 	return nil, nil
 }
 

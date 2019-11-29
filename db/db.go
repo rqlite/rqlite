@@ -102,26 +102,10 @@ func LoadInMemoryWithDSN(dbPath, dsn string) (*DB, error) {
 		return nil, err
 	}
 
-	bk, err := db.sqlite3conn.Backup("main", srcDB.sqlite3conn, "main")
-	if err != nil {
+	if err := copyDatabase(db.sqlite3conn, srcDB.sqlite3conn); err != nil {
 		return nil, err
 	}
 
-	for {
-		done, err := bk.Step(-1)
-		if err != nil {
-			bk.Finish()
-			return nil, err
-		}
-		if done {
-			break
-		}
-		time.Sleep(bkDelay * time.Millisecond)
-	}
-
-	if err := bk.Finish(); err != nil {
-		return nil, err
-	}
 	if err := srcDB.Close(); err != nil {
 		return nil, err
 	}
@@ -383,24 +367,7 @@ func (db *DB) Backup(path string) error {
 		return err
 	}
 
-	bk, err := dstDB.sqlite3conn.Backup("main", db.sqlite3conn, "main")
-	if err != nil {
-		return err
-	}
-
-	for {
-		done, err := bk.Step(-1)
-		if err != nil {
-			bk.Finish()
-			return err
-		}
-		if done {
-			break
-		}
-		time.Sleep(bkDelay * time.Millisecond)
-	}
-
-	if err := bk.Finish(); err != nil {
+	if err := copyDatabase(dstDB.sqlite3conn, db.sqlite3conn); err != nil {
 		return err
 	}
 
@@ -414,15 +381,25 @@ func (db *DB) Dump(w io.Writer) error {
 	}
 
 	// Get a new connection, so the dump creation is isolated from other activity.
-	conn, err := open(fqdsn(db.path, db.dsn))
+	dstDB, err := OpenInMemory()
 	if err != nil {
-		return nil
+		return err
+	}
+	defer func(db *DB, err *error) {
+		cerr := db.Close()
+		if *err == nil {
+			*err = cerr
+		}
+	}(dstDB, &err)
+
+	if err := copyDatabase(dstDB.sqlite3conn, db.sqlite3conn); err != nil {
+		return err
 	}
 
 	// Get the schema.
 	query := `SELECT "name", "type", "sql" FROM "sqlite_master"
               WHERE "sql" NOT NULL AND "type" == 'table' ORDER BY "name"`
-	rows, err := conn.Query([]string{query}, false, false)
+	rows, err := dstDB.Query([]string{query}, false, false)
 	if err != nil {
 		return err
 	}
@@ -446,7 +423,7 @@ func (db *DB) Dump(w io.Writer) error {
 		}
 
 		tableIndent := strings.Replace(table, `"`, `""`, -1)
-		r, err := conn.Query([]string{fmt.Sprintf(`PRAGMA table_info("%s")`, tableIndent)}, false, false)
+		r, err := dstDB.Query([]string{fmt.Sprintf(`PRAGMA table_info("%s")`, tableIndent)}, false, false)
 		if err != nil {
 			return err
 		}
@@ -459,7 +436,7 @@ func (db *DB) Dump(w io.Writer) error {
 			tableIndent,
 			strings.Join(columnNames, ","),
 			tableIndent)
-		r, err = conn.Query([]string{query}, false, false)
+		r, err = dstDB.Query([]string{query}, false, false)
 		if err != nil {
 			return err
 		}
@@ -474,7 +451,7 @@ func (db *DB) Dump(w io.Writer) error {
 	// Do indexes, triggers, and views.
 	query = `SELECT "name", "type", "sql" FROM "sqlite_master"
 			  WHERE "sql" NOT NULL AND "type" IN ('index', 'trigger', 'view')`
-	rows, err = conn.Query([]string{query}, false, false)
+	rows, err = db.Query([]string{query}, false, false)
 	if err != nil {
 		return err
 	}
@@ -486,6 +463,31 @@ func (db *DB) Dump(w io.Writer) error {
 	}
 
 	if _, err := w.Write([]byte("COMMIT;\n")); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func copyDatabase(dst *sqlite3.SQLiteConn, src *sqlite3.SQLiteConn) error {
+	bk, err := dst.Backup("main", src, "main")
+	if err != nil {
+		return err
+	}
+
+	for {
+		done, err := bk.Step(-1)
+		if err != nil {
+			bk.Finish()
+			return err
+		}
+		if done {
+			break
+		}
+		time.Sleep(bkDelay * time.Millisecond)
+	}
+
+	if err := bk.Finish(); err != nil {
 		return err
 	}
 
