@@ -86,14 +86,6 @@ func Test_SingleNodeInMemExecuteQuery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
-	r, err = s.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, None})
-	if err != nil {
-		t.Fatalf("failed to query single node: %s", err.Error())
-	}
-	r, err = s.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, None})
-	if err != nil {
-		t.Fatalf("failed to query single node: %s", err.Error())
-	}
 	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
