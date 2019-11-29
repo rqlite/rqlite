@@ -49,12 +49,22 @@ func main() {
 
 		timer := false
 		prefix := fmt.Sprintf("%s:%d>", argv.Host, argv.Port)
+		term, err := prompt.NewTerminal()
+		if err != nil {
+			ctx.String("%s %v\n", ctx.Color().Red("ERR!"), err)
+			return nil
+		}
+		term.Close()
+
 	FOR_READ:
 		for {
-			line, err := prompt.Basic(prefix, false)
+			term.Reopen()
+			line, err := term.Basic(prefix, false)
+			term.Close()
 			if err != nil {
 				return err
 			}
+
 			line = strings.TrimSpace(line)
 			if line == "" {
 				continue
