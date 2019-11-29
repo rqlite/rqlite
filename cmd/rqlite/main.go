@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"strings"
@@ -34,6 +35,7 @@ const cliHelp = `.help				Show this message
 .expvar				Show expvar (Go runtime) information for connected node
 .tables				List names of tables
 .timer on|off	    		Turn SQL timer on or off
+.backup <file>			Write database backup to file
 `
 
 func main() {
@@ -78,6 +80,12 @@ func main() {
 				err = status(ctx, cmd, line, argv)
 			case ".EXPVAR":
 				err = expvar(ctx, cmd, line, argv)
+			case ".BACKUP":
+				if index == -1 || index == len(line)-1 {
+					err = fmt.Errorf("Please specify an output file for the backup")
+					break
+				}
+				err = backup(ctx, line[index+1:], argv)
 			case ".HELP":
 				err = help(ctx, cmd, line, argv)
 			case ".QUIT", "QUIT", "EXIT":
@@ -127,22 +135,28 @@ func expvar(ctx *cli.Context, cmd, line string, argv *argT) error {
 	return cliJSON(ctx, cmd, line, url, argv)
 }
 
-func sendRequest(ctx *cli.Context, urlStr string, line string, argv *argT, ret interface{}) error {
-	data := makeJSONBody(line)
+func sendRequest(ctx *cli.Context, method string, urlStr string, line string, argv *argT) (*[]byte, error) {
+	var requestData io.Reader
+	if line != "" {
+		requestData = strings.NewReader(makeJSONBody(line))
+	} else {
+		requestData = nil
+	}
+
 	url := urlStr
 	var rootCAs *x509.CertPool
 
 	if argv.CACert != "" {
 		pemCerts, err := ioutil.ReadFile(argv.CACert)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		rootCAs = x509.NewCertPool()
 
 		ok := rootCAs.AppendCertsFromPEM(pemCerts)
 		if !ok {
-			return fmt.Errorf("failed to parse root CA certificate(s)")
+			return nil, fmt.Errorf("failed to parse root CA certificate(s)")
 		}
 	}
 
@@ -157,46 +171,50 @@ func sendRequest(ctx *cli.Context, urlStr string, line string, argv *argT, ret i
 
 	nRedirect := 0
 	for {
-		req, err := http.NewRequest("POST", url, strings.NewReader(data))
+		req, err := http.NewRequest(method, url, requestData)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		if argv.Credentials != "" {
 			creds := strings.Split(argv.Credentials, ":")
 			if len(creds) != 2 {
-				return fmt.Errorf("invalid Basic Auth credentials format")
+				return nil, fmt.Errorf("invalid Basic Auth credentials format")
 			}
 			req.SetBasicAuth(creds[0], creds[1])
 		}
 
 		resp, err := client.Do(req)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		defer resp.Body.Close()
 
 		if resp.StatusCode == http.StatusUnauthorized {
-			return fmt.Errorf("unauthorized")
+			return nil, fmt.Errorf("unauthorized")
 		}
 
 		// Check for redirect.
 		if resp.StatusCode == http.StatusMovedPermanently {
 			nRedirect++
 			if nRedirect > maxRedirect {
-				return fmt.Errorf("maximum leader redirect limit exceeded")
+				return nil, fmt.Errorf("maximum leader redirect limit exceeded")
 			}
 			url = resp.Header["Location"][0]
 			continue
 		}
 
-		body, err := ioutil.ReadAll(resp.Body)
+		response, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
-		return json.Unmarshal(body, ret)
+		return &response, nil
 	}
+}
+
+func parseResponse(response *[]byte, ret interface{}) error {
+	return json.Unmarshal(*response, ret)
 }
 
 // cliJSON fetches JSON from a URL, and displays it at the CLI.
