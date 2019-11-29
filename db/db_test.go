@@ -512,6 +512,74 @@ func Test_UniqueConstraints(t *testing.T) {
 	}
 }
 
+func Test_ActiveTransaction(t *testing.T) {
+	db, path := mustCreateDatabase()
+	defer db.Close()
+	defer os.Remove(path)
+
+	if db.TransactionActive() {
+		t.Fatal("transaction incorrectly marked as active")
+	}
+
+	if _, err := db.Execute([]string{`BEGIN`}, false, false); err != nil {
+		t.Fatalf("error starting transaction: %s", err.Error())
+	}
+
+	if !db.TransactionActive() {
+		t.Fatal("transaction incorrectly marked as inactive")
+	}
+
+	if _, err := db.Execute([]string{`COMMIT`}, false, false); err != nil {
+		t.Fatalf("error starting transaction: %s", err.Error())
+	}
+
+	if db.TransactionActive() {
+		t.Fatal("transaction incorrectly marked as active")
+	}
+
+	if _, err := db.Execute([]string{`BEGIN`}, false, false); err != nil {
+		t.Fatalf("error starting transaction: %s", err.Error())
+	}
+
+	if !db.TransactionActive() {
+		t.Fatal("transaction incorrectly marked as inactive")
+	}
+
+	if _, err := db.Execute([]string{`ROLLBACK`}, false, false); err != nil {
+		t.Fatalf("error starting transaction: %s", err.Error())
+	}
+
+	if db.TransactionActive() {
+		t.Fatal("transaction incorrectly marked as active")
+	}
+}
+
+func Test_AbortTransaction(t *testing.T) {
+	db, path := mustCreateDatabase()
+	defer db.Close()
+	defer os.Remove(path)
+
+	if err := db.AbortTransaction(); err != nil {
+		t.Fatalf("error abrorting non-active transaction: %s", err.Error())
+	}
+
+	if _, err := db.Execute([]string{`BEGIN`}, false, false); err != nil {
+		t.Fatalf("error starting transaction: %s", err.Error())
+	}
+
+	if !db.TransactionActive() {
+		t.Fatal("transaction incorrectly marked as inactive")
+	}
+
+	if err := db.AbortTransaction(); err != nil {
+		t.Fatalf("error abrorting non-active transaction: %s", err.Error())
+	}
+
+	if db.TransactionActive() {
+		t.Fatal("transaction incorrectly marked as active")
+	}
+}
+
 func Test_PartialFail(t *testing.T) {
 	db, path := mustCreateDatabase()
 	defer db.Close()
