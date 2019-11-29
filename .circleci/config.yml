@@ -51,6 +51,20 @@ jobs:
           environment:
                 GORACE: "halt_on_error=1"
 
+  end_to_end:
+    working_directory: /go/src/github.com/rqlite/rqlite
+    docker:
+      - image: circleci/golang:1.12
+    steps:
+        - checkout
+        - run: sudo apt-get install python-requests
+        - run: go get -t -d -v ./...
+        - run: go install ./...
+        - run:
+            command: system_test/full_system_test.py
+            environment:
+                RQLITED_PATH: /go/bin/rqlited
+
 workflows:
   version: 2
   build_and_test:
