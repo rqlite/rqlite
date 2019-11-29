@@ -1,4 +1,5 @@
 ## 4.6.0 (unreleased)
+- [PR #591](https://github.com/rqlite/rqlite/pull/591): Store layer supports generating SQL format backups
 - [PR #590](https://github.com/rqlite/rqlite/pull/590): DB layer supports generating SQL format backups
 - [PR #589](https://github.com/rqlite/rqlite/pull/589): Add restore command to CLI. Thanks @eariassoto.
 - [PR #588](https://github.com/rqlite/rqlite/pull/588): Abort transaction if load operation fails.
