@@ -1,4 +1,5 @@
 ## 4.6.0 (unreleased)
+- [PR #585](https://github.com/rqlite/rqlite/pull/585): Add backup command to CLI: Thanks @eariassoto.
 - [PR #584](https://github.com/rqlite/rqlite/pull/584): Support showing timings in the CLI. Thanks @joaodrp.
 - [PR #583](https://github.com/rqlite/rqlite/pull/583): Add BasicAuth support to the CLI. Thanks @joaodrp.
 - [PR #564](https://github.com/rqlite/rqlite/pull/564): rqlite server supports specifying trusted root CA certificate. Thanks @zmedico.
