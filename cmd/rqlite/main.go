@@ -6,7 +6,6 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"net/http"
 	"strings"
@@ -36,6 +35,7 @@ const cliHelp = `.help				Show this message
 .tables				List names of tables
 .timer on|off	    		Turn SQL timer on or off
 .backup <file>			Write database backup to file
+.restore <file>			Restore the database from a SQLite dump file
 `
 
 func main() {
@@ -96,6 +96,12 @@ func main() {
 					break
 				}
 				err = backup(ctx, line[index+1:], argv)
+			case ".RESTORE":
+				if index == -1 || index == len(line)-1 {
+					err = fmt.Errorf("Please specify an input file to restore from")
+					break
+				}
+				err = restore(ctx, line[index+1:], argv)
 			case ".HELP":
 				err = help(ctx, cmd, line, argv)
 			case ".QUIT", "QUIT", "EXIT":
@@ -145,14 +151,7 @@ func expvar(ctx *cli.Context, cmd, line string, argv *argT) error {
 	return cliJSON(ctx, cmd, line, url, argv)
 }
 
-func sendRequest(ctx *cli.Context, method string, urlStr string, line string, argv *argT) (*[]byte, error) {
-	var requestData io.Reader
-	if line != "" {
-		requestData = strings.NewReader(makeJSONBody(line))
-	} else {
-		requestData = nil
-	}
-
+func sendRequest(ctx *cli.Context, makeNewRequest func(string) (*http.Request, error), urlStr string, argv *argT) (*[]byte, error) {
 	url := urlStr
 	var rootCAs *x509.CertPool
 
@@ -181,7 +180,7 @@ func sendRequest(ctx *cli.Context, method string, urlStr string, line string, ar
 
 	nRedirect := 0
 	for {
-		req, err := http.NewRequest(method, url, requestData)
+		req, err := makeNewRequest(url)
 		if err != nil {
 			return nil, err
 		}
