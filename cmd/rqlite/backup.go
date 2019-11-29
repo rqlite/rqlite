@@ -99,6 +99,7 @@ func makeRestoreRequest(restoreFile io.Reader) func(string) (*http.Request, erro
 func restore(ctx *cli.Context, filename string, argv *argT) error {
 	statusURL := fmt.Sprintf("%s://%s:%d/status", argv.Protocol, argv.Host, argv.Port)
 	client := http.Client{Transport: &http.Transport{
+		Proxy:           http.ProxyFromEnvironment,
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: argv.Insecure},
 	}}
 	statusResp, err := client.Get(statusURL)
