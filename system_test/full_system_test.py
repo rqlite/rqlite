@@ -305,25 +305,6 @@ class TestEndToEnd(unittest.TestCase):
     for f in self.cluster.followers():
       self.assertEqual(n.APIAddr(), f.redirect_addr())
 
-  # def test_node_restart_different_ip(self):
-  #   ''' Test that a node restarting with different IP addresses successfully rejoins the cluster'''
-
-  #   self.cluster.wait_for_leader()
-  #   f = self.cluster.followers()[0]
-  #   f.stop()
-  #   l = self.cluster.wait_for_leader()
-  #   j = l.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
-  #   self.assertEqual(str(j), "{u'results': [{}]}")
-  #   j = l.execute('INSERT INTO foo (name) VALUES("fiona")')
-  #   self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
-
-  #   f.scramble_network()
-  #   f.start(join=l.APIAddr())
-  #   f.wait_for_leader()
-  #   f.wait_for_applied_index(l.applied_index())
-  #   j = f.query('SELECT * FROM foo', level='none')
-  #   self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
-
 class TestEndToEndAdvAddr(TestEndToEnd):
   def setUp(self):
     n0 = Node(RQLITED_PATH,
