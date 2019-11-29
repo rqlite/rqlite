@@ -1,3 +1,15 @@
+## 4.6.0 (unreleased)
+- [PR #564](https://github.com/rqlite/rqlite/pull/564): rqlite server supports specifying trusted root CA certificate. Thanks @zmedico.
+
+## 4.5.0 (April 24th 2019)
+- [PR #551](https://github.com/rqlite/rqlite/pull/551): rqlite CLI supports specifying trusted root CA certificate. Thanks @zmedico.
+
+## 4.4.0 (January 3rd 2019)
+- Allow the Raft election timeout [to be set](https://github.com/rqlite/rqlite/commit/2e91858e1ee0feee19f4c20c6f56a21261bcd44a). 
+ 
+## 4.3.1 (October 10th 2018)
+- Allow a node to be re-added with same IP address and port, even though it was previously removed. Fixes [issue #534](https://github.com/rqlite/rqlite/issues/534).
+
 ## 4.3.0 (March 18th 2018)
 - [PR #397](https://github.com/rqlite/rqlite/pull/397), [PR #399](https://github.com/rqlite/rqlite/pull/399): Support hashed passwords. Fixes [issue #395](https://github.com/rqlite/rqlite/issues/395). Thanks @sum12.
 
@@ -146,7 +158,7 @@
 - [PR #117](https://github.com/rqlite/rqlite/pull/117): Use Raft advertise address, if exists, during join.
 
 ## 3.0.0 (May 1st 2016)
-**The Raft log format in 3.0 is not compatible with the 2.0 series**. To upgrade from an earlier version to this release you should backup your 2.0 master node, and replay the database dump into a new 3.0 cluster. The HTTP API remains unchanged however.
+**The Raft log format in 3.0 is not compatible with the 2.0 series**. To upgrade from an earlier version to this release you should backup your 2.0 leader node, and replay the database dump into a new 3.0 cluster. The HTTP API remains unchanged however.
 
 - [PR #116](https://github.com/rqlite/rqlite/pull/116): Allow HTTP advertise address to be set.
 - [PR #115](https://github.com/rqlite/rqlite/pull/115): Support advertising address different than Raft bind address.
