@@ -1,5 +1,6 @@
 ## 4.6.0 (unreleased)
 - [PR #564](https://github.com/rqlite/rqlite/pull/564): rqlite server supports specifying trusted root CA certificate. Thanks @zmedico.
+- When joining try HTTPS if HTTP fails. Fixes [issue #577](https://github.com/rqlite/rqlite/issues/577).
 
 ## 4.5.0 (April 24th 2019)
 - [PR #551](https://github.com/rqlite/rqlite/pull/551): rqlite CLI supports specifying trusted root CA certificate. Thanks @zmedico.
