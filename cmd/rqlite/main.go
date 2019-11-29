@@ -178,6 +178,7 @@ func sendRequest(ctx *cli.Context, makeNewRequest func(string) (*http.Request, e
 
 	client := http.Client{Transport: &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: argv.Insecure, RootCAs: rootCAs},
+		Proxy:           http.ProxyFromEnvironment,
 	}}
 
 	// Explicitly handle redirects.
@@ -261,6 +262,7 @@ func cliJSON(ctx *cli.Context, cmd, line, url string, argv *argT) error {
 
 	client := http.Client{Transport: &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: argv.Insecure},
+		Proxy:           http.ProxyFromEnvironment,
 	}}
 	resp, err := client.Get(url)
 	if err != nil {
