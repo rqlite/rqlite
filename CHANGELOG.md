@@ -1,14 +1,14 @@
 ## 4.6.0 (November 29th 2019)
 - [PR #593](https://github.com/rqlite/rqlite/pull/593): rqlite CLI now supports HTTP proxy. Thanks @paulstuart
-- [PR #592](https://github.com/rqlite/rqlite/pull/592): Add .dump database to SQL text file to CLI.
+- [PR #592](https://github.com/rqlite/rqlite/pull/592): Add dump database (to SQL text file) to CLI.
 - [PR #591](https://github.com/rqlite/rqlite/pull/591): Store layer supports generating SQL format backups.
 - [PR #590](https://github.com/rqlite/rqlite/pull/590): DB layer supports generating SQL format backups.
 - [PR #589](https://github.com/rqlite/rqlite/pull/589): Add restore (from SQLite file) command to CLI. Thanks @eariassoto.
-- [PR #588](https://github.com/rqlite/rqlite/pull/588): Abort transaction if load operation fails.
+- [PR #588](https://github.com/rqlite/rqlite/pull/588): Abort transaction if _load from backup_ operation fails.
 - [PR #587](https://github.com/rqlite/rqlite/pull/587): Add expvar statistics to store.
 - [PR #586](https://github.com/rqlite/rqlite/pull/586): rqlite CLI now supports command history. Thanks @rhnvrm.
 - [PR #585](https://github.com/rqlite/rqlite/pull/585): Add backup (to SQLite file) command to CLI: Thanks @eariassoto.
-- [PR #584](https://github.com/rqlite/rqlite/pull/584): Support showing timings in the CLI. Thanks @joaodrp.
+- [PR #584](https://github.com/rqlite/rqlite/pull/584): Support showing query timings in the CLI. Thanks @joaodrp.
 - [PR #583](https://github.com/rqlite/rqlite/pull/583): Add HTTP BasicAuth support to the CLI. Thanks @joaodrp.
 - [PR #564](https://github.com/rqlite/rqlite/pull/564): rqlite server supports specifying trusted root CA certificate. Thanks @zmedico.
 - When joining try HTTPS if HTTP fails. Fixes [issue #577](https://github.com/rqlite/rqlite/issues/577).
