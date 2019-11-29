@@ -18,12 +18,13 @@ const maxRedirect = 21
 
 type argT struct {
 	cli.Helper
-	Protocol string `cli:"s,scheme" usage:"protocol scheme (http or https)" dft:"http"`
-	Host     string `cli:"H,host" usage:"rqlited host address" dft:"127.0.0.1"`
-	Port     uint16 `cli:"p,port" usage:"rqlited host port" dft:"4001"`
-	Prefix   string `cli:"P,prefix" usage:"rqlited HTTP URL prefix" dft:"/"`
-	Insecure bool   `cli:"i,insecure" usage:"do not verify rqlited HTTPS certificate" dft:"false"`
-	CACert   string `cli:"c,ca-cert" usage:"path to trusted X.509 root CA certificate"`
+	Protocol    string `cli:"s,scheme" usage:"protocol scheme (http or https)" dft:"http"`
+	Host        string `cli:"H,host" usage:"rqlited host address" dft:"127.0.0.1"`
+	Port        uint16 `cli:"p,port" usage:"rqlited host port" dft:"4001"`
+	Prefix      string `cli:"P,prefix" usage:"rqlited HTTP URL prefix" dft:"/"`
+	Insecure    bool   `cli:"i,insecure" usage:"do not verify rqlited HTTPS certificate" dft:"false"`
+	CACert      string `cli:"c,ca-cert" usage:"path to trusted X.509 root CA certificate"`
+	Credentials string `cli:"u,user" usage:"set basic auth credentials in form username:password"`
 }
 
 const cliHelp = `.help				Show this message
@@ -144,7 +145,20 @@ func sendRequest(ctx *cli.Context, urlStr string, line string, argv *argT, ret i
 
 	nRedirect := 0
 	for {
-		resp, err := client.Post(url, "application/json", strings.NewReader(data))
+		req, err := http.NewRequest("POST", url, strings.NewReader(data))
+		if err != nil {
+			return err
+		}
+
+		if argv.Credentials != "" {
+			creds := strings.Split(argv.Credentials, ":")
+			if len(creds) != 2 {
+				return fmt.Errorf("invalid Basic Auth credentials format")
+			}
+			req.SetBasicAuth(creds[0], creds[1])
+		}
+
+		resp, err := client.Do(req)
 		if err != nil {
 			return err
 		}
