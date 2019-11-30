@@ -1,5 +1,5 @@
 ## 4.6.0 (November 29th 2019)
-- [PR #593](https://github.com/rqlite/rqlite/pull/593): rqlite CLI now supports HTTP proxy. Thanks @paulstuart
+- [PR #593](https://github.com/rqlite/rqlite/pull/593): rqlite CLI now supports HTTP proxy (via Environment). Thanks @paulstuart
 - [PR #592](https://github.com/rqlite/rqlite/pull/592): Add dump database (to SQL text file) to CLI.
 - [PR #591](https://github.com/rqlite/rqlite/pull/591): Store layer supports generating SQL format backups.
 - [PR #590](https://github.com/rqlite/rqlite/pull/590): DB layer supports generating SQL format backups.
