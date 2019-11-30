@@ -5,7 +5,7 @@
 - [PR #590](https://github.com/rqlite/rqlite/pull/590): DB layer supports generating SQL format backups.
 - [PR #589](https://github.com/rqlite/rqlite/pull/589): Add restore (from SQLite file) command to CLI. Thanks @eariassoto.
 - [PR #588](https://github.com/rqlite/rqlite/pull/588): Abort transaction if _load from backup_ operation fails.
-- [PR #587](https://github.com/rqlite/rqlite/pull/587): Add expvar statistics to store.
+- [PR #587](https://github.com/rqlite/rqlite/pull/587): Add [expvar](https://golang.org/pkg/expvar/) statistics to store.
 - [PR #586](https://github.com/rqlite/rqlite/pull/586): rqlite CLI now supports command history. Thanks @rhnvrm.
 - [PR #585](https://github.com/rqlite/rqlite/pull/585): Add backup (to SQLite file) command to CLI: Thanks @eariassoto.
 - [PR #584](https://github.com/rqlite/rqlite/pull/584): Support showing query timings in the CLI. Thanks @joaodrp.
