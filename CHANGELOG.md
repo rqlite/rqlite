@@ -18,7 +18,7 @@ _This release adds significant new functionality to the command-line tool, inclu
 - [PR #591](https://github.com/rqlite/rqlite/pull/591): Store layer supports generating SQL format backups.
 - [PR #590](https://github.com/rqlite/rqlite/pull/590): DB layer supports generating SQL format backups.
 - [PR #588](https://github.com/rqlite/rqlite/pull/588): Abort transaction if _load from backup_ operation fails.
-- When joining try HTTPS if HTTP fails. Fixes [issue #577](https://github.com/rqlite/rqlite/issues/577).
+- If joining a cluster via HTTP fails, try HTTPS. Fixes [issue #577](https://github.com/rqlite/rqlite/issues/577).
 
 ## 4.5.0 (April 24th 2019)
 - [PR #551](https://github.com/rqlite/rqlite/pull/551): rqlite CLI supports specifying trusted root CA certificate. Thanks @zmedico.
