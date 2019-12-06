@@ -1,3 +1,6 @@
+## 4.7.0 (Unreleased)
+- [PR #595](https://github.com/rqlite/rqlite/pull/595): rqlite CLI prints Welcome message on startup.
+
 ## 4.6.0 (November 29th 2019)
 - [PR #593](https://github.com/rqlite/rqlite/pull/593): rqlite CLI now supports HTTP proxy (via Environment). Thanks @paulstuart
 - [PR #592](https://github.com/rqlite/rqlite/pull/592): Add _dump database_ command (to SQL text file) to CLI.
