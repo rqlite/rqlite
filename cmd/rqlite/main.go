@@ -55,6 +55,7 @@ func main() {
 			ctx.String("%s %v\n", ctx.Color().Red("ERR!"), err)
 			return nil
 		}
+		fmt.Println("Welcome to the rqlite CLI. Enter \".help\" for usage hints.")
 		term.Close()
 
 	FOR_READ:
