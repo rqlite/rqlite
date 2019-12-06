@@ -2,7 +2,7 @@
 - [PR #595](https://github.com/rqlite/rqlite/pull/595): rqlite CLI prints Welcome message on startup.
 
 ## 4.6.0 (November 29th 2019)
-_This release adds significant new functionality to the command-line tool, including much more control over backup and restore of the database._
+_This release adds significant new functionality to the command-line tool, including much more control over backup and restore of the database. [Visit the Releases page](https://github.com/rqlite/rqlite/releases/tag/v4.6.0) to download this release._
 
 ### New features
 - [PR #592](https://github.com/rqlite/rqlite/pull/592): Add _dump database_ command (to SQL text file) to CLI.
