@@ -660,7 +660,7 @@ func (s *Store) Join(addr string) error {
 		if e.Error() == raft.ErrNotLeader {
 			return ErrNotLeader
 		}
-		e.Error()
+		return e.Error()
 	}
 	s.logger.Printf("node at %s joined successfully", addr)
 	return nil
