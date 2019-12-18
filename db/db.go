@@ -367,11 +367,18 @@ func (db *DB) Backup(path string) error {
 		return err
 	}
 
+	defer func(db *DB, err *error) {
+		cerr := db.Close()
+		if *err == nil {
+			*err = cerr
+		}
+	}(dstDB, &err)
+
 	if err := copyDatabase(dstDB.sqlite3conn, db.sqlite3conn); err != nil {
 		return err
 	}
 
-	return dstDB.Close()
+	return err
 }
 
 // Dump writes a consistent snapshot of the database in SQL text format.
