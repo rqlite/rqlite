@@ -425,11 +425,11 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
 
 // handleLoad loads the state contained in a .dump output.
 func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
-	timings, err := timings(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	// timings, err := timings(r)
+	// if err != nil {
+	// 	http.Error(w, err.Error(), http.StatusInternalServerError)
+	// 	return
+	// }
 
 	b, err := ioutil.ReadAll(r.Body)
 	defer r.Body.Close()
@@ -440,7 +440,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 
 	var resp Response
 	queries := []string{string(b)}
-	results, err := s.store.ExecuteOrAbort(&store.ExecuteRequest{queries, timings, false})
+	results, err := s.store.ExecuteOrAbort(&store.ExecuteRequest{queries, false, false})
 	if err != nil {
 		if err == store.ErrNotLeader {
 			leader := s.leaderAPIAddr()
@@ -456,9 +456,9 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 		resp.Error = err.Error()
 	} else {
 		resp.Results = results.Results
-		if timings {
-			resp.Time = results.Time
-		}
+		// if timings {
+		// 	resp.Time = results.Time
+		// }
 		resp.Raft = &results.Raft
 	}
 	writeResponse(w, r, &resp)
