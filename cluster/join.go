@@ -19,10 +19,10 @@ import (
 const numAttempts int = 3
 const attemptInterval time.Duration = 5 * time.Second
 
-// Join attempts to join the cluster at one of the addresses given in joinAddr.
-// It walks through joinAddr in order, and sets the Raft address of the joining
-// node as advAddr. It returns the endpoint successfully used to join the cluster.
-func Join(joinAddr []string, advAddr string, tlsConfig *tls.Config) (string, error) {
+// It walks through joinAddr in order, and sets the node ID and Raft address of
+// the joining node as nodeID advAddr respectively. It returns the endpoint
+// successfully used to join the cluster.
+func Join(joinAddr []string, nodeID, advAddr string, tlsConfig *tls.Config) (string, error) {
 	var err error
 	var j string
 	logger := log.New(os.Stderr, "[cluster-join] ", log.LstdFlags)
@@ -32,7 +32,7 @@ func Join(joinAddr []string, advAddr string, tlsConfig *tls.Config) (string, err
 
 	for i := 0; i < numAttempts; i++ {
 		for _, a := range joinAddr {
-			j, err = join(a, advAddr, tlsConfig, logger)
+			j, err = join(a, nodeID, advAddr, tlsConfig, logger)
 			if err == nil {
 				// Success!
 				return j, nil
@@ -45,7 +45,11 @@ func Join(joinAddr []string, advAddr string, tlsConfig *tls.Config) (string, err
 	return "", err
 }
 
-func join(joinAddr string, advAddr string, tlsConfig *tls.Config, logger *log.Logger) (string, error) {
+func join(joinAddr, nodeID, advAddr string, tlsConfig *tls.Config, logger *log.Logger) (string, error) {
+	if nodeID == "" {
+		return "", fmt.Errorf("node ID not set")
+	}
+
 	// Join using IP address, as that is what Hashicorp Raft works in.
 	resv, err := net.ResolveTCPAddr("tcp", advAddr)
 	if err != nil {
@@ -65,10 +69,10 @@ func join(joinAddr string, advAddr string, tlsConfig *tls.Config, logger *log.Lo
 	}
 
 	for {
-		b, err := json.Marshal(map[string]string{"addr": resv.String()})
-		if err != nil {
-			return "", err
-		}
+		b, err := json.Marshal(map[string]string{
+			"id":   nodeID,
+			"addr": resv.String(),
+		})
 
 		// Attempt to join.
 		resp, err := client.Post(fullAddr, "application-type/json", bytes.NewReader(b))
