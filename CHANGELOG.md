@@ -1,10 +1,13 @@
-## 4.7.0 (Unreleased)
+## 5.0.0 (Unreleased)
+This release uses a new Raft consensus version, with the move to Hashicorp Raft v1. As a result **the Raft system in 5.0 is not compatible with the 4.0 series**. To upgrade from an earlier version to this release you should backup your 4.0 leader node, and restore the database dump into a new 5.0 cluster. The HTTP API remains unchanged however.
+
 ### New features
 - [PR #595](https://github.com/rqlite/rqlite/pull/595): rqlite CLI prints Welcome message on startup.
 
 ### Implementation changes and bug fixes
 - [PR #597](https://github.com/rqlite/rqlite/pull/597): Don't ignore any Join error, instead return it.
 - [PR #598](https://github.com/rqlite/rqlite/pull/598): Ensure backup is correctly closed.
+- [PR #600](https://github.com/rqlite/rqlite/pull/600): Move to Hashicorp Raft v1.
 
 ## 4.6.0 (November 29th 2019)
 _This release adds significant new functionality to the command-line tool, including much more control over backup and restore of the database. [Visit the Releases page](https://github.com/rqlite/rqlite/releases/tag/v4.6.0) to download this release._
