@@ -180,6 +180,30 @@ func Test_SimpleSingleStatements(t *testing.T) {
 	}
 }
 
+func Test_SimpleSingleJSONStatements(t *testing.T) {
+	db, path := mustCreateDatabase()
+	defer db.Close()
+	defer os.Remove(path)
+
+	_, err := db.Execute([]string{"CREATE TABLE foo (c0 VARCHAR(36), c1 JSON, c2 NCHAR, c3 NVARCHAR, c4 CLOB)"}, false, false)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	_, err = db.Execute([]string{`INSERT INTO foo(c0, c1, c2, c3, c4) VALUES("fiona", '{"mittens": "foobar"}', "bob", "dana", "declan")`}, false, false)
+	if err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+
+	r, err := db.Query([]string{"SELECT * FROM foo"}, false, false)
+	if err != nil {
+		t.Fatalf("failed to query: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["c0","c1","c2","c3","c4"],"types":["varchar(36)","json","nchar","nvarchar","clob"],"values":[["fiona","{\"mittens\": \"foobar\"}","bob","dana","declan"]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+}
+
 func Test_SimpleJoinStatements(t *testing.T) {
 	db, path := mustCreateDatabase()
 	defer db.Close()
