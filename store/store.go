@@ -264,8 +264,18 @@ func (s *Store) Open(enableSingle bool) error {
 		return fmt.Errorf("new bolt store: %s", err)
 	}
 
+	cacheStore, err := raft.NewLogCache(512, logStore)
+	if err != nil {
+		return err
+	}
+
+	var log raft.LogStore
+	log = cacheStore
+	var stable raft.StableStore
+	stable = logStore
+
 	// Instantiate the Raft system.
-	ra, err := raft.NewRaft(config, s, logStore, logStore, snapshots, transport)
+	ra, err := raft.NewRaft(config, s, log, stable, snapshots, transport)
 	if err != nil {
 		return fmt.Errorf("new raft: %s", err)
 	}
