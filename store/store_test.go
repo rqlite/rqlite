@@ -117,74 +117,6 @@ func Test_SingleNodeInMemExecuteQueryFail(t *testing.T) {
 	}
 }
 
-func Test_StoreLogTruncationMultinode(t *testing.T) {
-	s0 := mustNewStore(true)
-	defer os.RemoveAll(s0.Path())
-	s0.SnapshotThreshold = 4
-	s0.SnapshotInterval = 100 * time.Millisecond
-
-	if err := s0.Open(true); err != nil {
-		t.Fatalf("failed to open single-node store: %s", err.Error())
-	}
-	defer s0.Close(true)
-	s0.WaitForLeader(10 * time.Second)
-	nSnaps := stats.Get(numSnaphots).String()
-
-	// Write more than s.SnapshotThreshold statements.
-	queries := []string{
-		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
-		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
-		`INSERT INTO foo(id, name) VALUES(2, "fiona")`,
-		`INSERT INTO foo(id, name) VALUES(3, "fiona")`,
-		`INSERT INTO foo(id, name) VALUES(4, "fiona")`,
-		`INSERT INTO foo(id, name) VALUES(5, "fiona")`,
-	}
-	for i := range queries {
-		_, err := s0.Execute(&ExecuteRequest{[]string{queries[i]}, false, false})
-		if err != nil {
-			t.Fatalf("failed to execute on single node: %s", err.Error())
-		}
-	}
-
-	// Wait for the snapshot to happen and log to be truncated.
-	for {
-		time.Sleep(1000 * time.Millisecond)
-		if stats.Get(numSnaphots).String() != nSnaps {
-			// It's changed, so a snap and truncate has happened.
-			break
-		}
-	}
-
-	// Fire up new node and ensure it picks up all changes. This will
-	// involve getting a snapshot and truncated log.
-	s1 := mustNewStore(true)
-	if err := s1.Open(true); err != nil {
-		t.Fatalf("failed to open single-node store: %s", err.Error())
-	}
-	defer s1.Close(true)
-
-	// Join the second node to the first.
-	if err := s0.Join(s1.Addr().String()); err != nil {
-		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
-	}
-	s1.WaitForLeader(10 * time.Second)
-	// Wait until the log entries have been applied to the follower,
-	// and then query.
-	if err := s1.WaitForAppliedIndex(8, 5*time.Second); err != nil {
-		t.Fatalf("error waiting for follower to apply index: %s:", err.Error())
-	}
-	r, err := s1.Query(&QueryRequest{[]string{`SELECT count(*) FROM foo`}, false, true, None})
-	if err != nil {
-		t.Fatalf("failed to query single node: %s", err.Error())
-	}
-	if exp, got := `["count(*)"]`, asJSON(r[0].Columns); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-	}
-	if exp, got := `[[5]]`, asJSON(r[0].Values); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-	}
-}
-
 func Test_SingleNodeFileExecuteQuery(t *testing.T) {
 	s := mustNewStore(false)
 	defer os.RemoveAll(s.Path())
@@ -502,11 +434,11 @@ func Test_MultiNodeJoinRemove(t *testing.T) {
 	defer s1.Close(true)
 
 	// Get sorted list of cluster nodes.
-	storeNodes := []string{s0.Addr().String(), s1.Addr().String()}
+	storeNodes := []string{s0.ID(), s1.ID()}
 	sort.StringSlice(storeNodes).Sort()
 
 	// Join the second node to the first.
-	if err := s0.Join(s1.Addr().String()); err != nil {
+	if err := s0.Join(s1.ID(), s1.Addr().String()); err != nil {
 		t.Fatalf("failed to join to node at %s: %s", s0.Addr().String(), err.Error())
 	}
 
@@ -514,18 +446,17 @@ func Test_MultiNodeJoinRemove(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get nodes: %s", err.Error())
 	}
-	sort.StringSlice(nodes).Sort()
 
 	if len(nodes) != len(storeNodes) {
 		t.Fatalf("size of cluster is not correct")
 	}
-	if storeNodes[0] != nodes[0] && storeNodes[1] != nodes[1] {
+	if storeNodes[0] != nodes[0].ID || storeNodes[1] != nodes[1].ID {
 		t.Fatalf("cluster does not have correct nodes")
 	}
 
 	// Remove a node.
-	if err := s0.Remove(s1.Addr().String()); err != nil {
-		t.Fatalf("failed to remove %s from cluster: %s", s1.Addr().String(), err.Error())
+	if err := s0.Remove(s1.ID()); err != nil {
+		t.Fatalf("failed to remove %s from cluster: %s", s1.ID(), err.Error())
 	}
 
 	nodes, err = s0.Nodes()
@@ -535,7 +466,7 @@ func Test_MultiNodeJoinRemove(t *testing.T) {
 	if len(nodes) != 1 {
 		t.Fatalf("size of cluster is not correct post remove")
 	}
-	if s0.Addr().String() != nodes[0] {
+	if s0.ID() != nodes[0].ID {
 		t.Fatalf("cluster does not have correct nodes post remove")
 	}
 }
@@ -557,7 +488,7 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 	defer s1.Close(true)
 
 	// Join the second node to the first.
-	if err := s0.Join(s1.Addr().String()); err != nil {
+	if err := s0.Join(s1.ID(), s1.Addr().String()); err != nil {
 		t.Fatalf("failed to join to node at %s: %s", s0.Addr().String(), err.Error())
 	}
 
@@ -601,6 +532,74 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
+func Test_StoreLogTruncationMultinode(t *testing.T) {
+	s0 := mustNewStore(true)
+	defer os.RemoveAll(s0.Path())
+	s0.SnapshotThreshold = 4
+	s0.SnapshotInterval = 100 * time.Millisecond
+
+	if err := s0.Open(true); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s0.Close(true)
+	s0.WaitForLeader(10 * time.Second)
+	nSnaps := stats.Get(numSnaphots).String()
+
+	// Write more than s.SnapshotThreshold statements.
+	queries := []string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+		`INSERT INTO foo(id, name) VALUES(2, "fiona")`,
+		`INSERT INTO foo(id, name) VALUES(3, "fiona")`,
+		`INSERT INTO foo(id, name) VALUES(4, "fiona")`,
+		`INSERT INTO foo(id, name) VALUES(5, "fiona")`,
+	}
+	for i := range queries {
+		_, err := s0.Execute(&ExecuteRequest{[]string{queries[i]}, false, false})
+		if err != nil {
+			t.Fatalf("failed to execute on single node: %s", err.Error())
+		}
+	}
+
+	// Wait for the snapshot to happen and log to be truncated.
+	for {
+		time.Sleep(1000 * time.Millisecond)
+		if stats.Get(numSnaphots).String() != nSnaps {
+			// It's changed, so a snap and truncate has happened.
+			break
+		}
+	}
+
+	// Fire up new node and ensure it picks up all changes. This will
+	// involve getting a snapshot and truncated log.
+	s1 := mustNewStore(true)
+	if err := s1.Open(true); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s1.Close(true)
+
+	// Join the second node to the first.
+	if err := s0.Join(s1.ID(), s1.Addr().String()); err != nil {
+		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
+	}
+	s1.WaitForLeader(10 * time.Second)
+	// Wait until the log entries have been applied to the follower,
+	// and then query.
+	if err := s1.WaitForAppliedIndex(8, 5*time.Second); err != nil {
+		t.Fatalf("error waiting for follower to apply index: %s:", err.Error())
+	}
+	r, err := s1.Query(&QueryRequest{[]string{`SELECT count(*) FROM foo`}, false, true, None})
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `["count(*)"]`, asJSON(r[0].Columns); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[5]]`, asJSON(r[0].Values); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 }
@@ -799,11 +798,13 @@ func mustNewStore(inmem bool) *Store {
 	path := mustTempDir()
 	defer os.RemoveAll(path)
 
+	tn := mustMockTransport("localhost:0")
 	cfg := NewDBConfig("", inmem)
 	s := New(&StoreConfig{
 		DBConf: cfg,
 		Dir:    path,
-		Tn:     mustMockTransport("localhost:0"),
+		Tn:     tn,
+		ID:     tn.Addr().String(), // Could be any unique string.
 	})
 	if s == nil {
 		panic("failed to create new store")

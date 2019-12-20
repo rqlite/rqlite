@@ -19,7 +19,7 @@ RQLITED_PATH = os.environ['RQLITED_PATH']
 TIMEOUT=10
 
 class Node(object):
-  def __init__(self, path,
+  def __init__(self, path, node_id,
                api_addr=None, api_adv=None,
                raft_addr=None, raft_adv=None,
                dir=None):
@@ -33,6 +33,7 @@ class Node(object):
       api_adv = api_addr
 
     self.path = path
+    self.node_id = node_id
     self.api_addr = api_addr
     self.api_adv = api_adv
     self.raft_addr = raft_addr
@@ -67,6 +68,7 @@ class Node(object):
       return
 
     command = [self.path,
+               '-node-id', self.node_id,
                '-http-addr', self.api_addr,
                '-raft-addr', self.raft_addr]
     if self.api_adv is not None:
@@ -199,9 +201,9 @@ class Node(object):
   def _load_url(self):
     return 'http://' + self.APIAddr() + '/db/load'
   def __eq__(self, other):
-    return self.raft_addr == other.raft_addr
+    return self.node_id == other.node_id
   def __str__(self):
-    return '%s:[%s]:[%s]' % (self.APIAddr(), self.raft_addr, self.dir)
+    return '%s:[%s]:[%s]:[%s]' % (self.node_id, self.APIAddr(), self.raft_addr, self.dir)
   def __del__(self):
     self.stdout_fd.close()
     self.stderr_fd.close()
@@ -239,15 +241,15 @@ class Cluster(object):
 
 class TestEndToEnd(unittest.TestCase):
   def setUp(self):
-    n0 = Node(RQLITED_PATH)
+    n0 = Node(RQLITED_PATH, '0')
     n0.start()
     n0.wait_for_leader()
 
-    n1 = Node(RQLITED_PATH)
+    n1 = Node(RQLITED_PATH, '1')
     n1.start(join=n0.APIAddr())
     n1.wait_for_leader()
 
-    n2 = Node(RQLITED_PATH)
+    n2 = Node(RQLITED_PATH, '2')
     n2.start(join=n0.APIAddr())
     n2.wait_for_leader()
 
@@ -307,17 +309,17 @@ class TestEndToEnd(unittest.TestCase):
 
 class TestEndToEndAdvAddr(TestEndToEnd):
   def setUp(self):
-    n0 = Node(RQLITED_PATH,
+    n0 = Node(RQLITED_PATH, '0',
               api_addr="0.0.0.0:4001", api_adv="localhost:4001",
               raft_addr="0.0.0.0:4002", raft_adv="localhost:4002")
     n0.start()
     n0.wait_for_leader()
 
-    n1 = Node(RQLITED_PATH)
+    n1 = Node(RQLITED_PATH, '1')
     n1.start(join=n0.APIAddr())
     n1.wait_for_leader()
 
-    n2 = Node(RQLITED_PATH)
+    n2 = Node(RQLITED_PATH, '2')
     n2.start(join=n0.APIAddr())
     n2.wait_for_leader()
 
@@ -328,7 +330,7 @@ class TestEndToEndBackupRestore(unittest.TestCase):
     fd, self.db_file = tempfile.mkstemp()
     os.close(fd)
 
-    self.node0 = Node(RQLITED_PATH)
+    self.node0 = Node(RQLITED_PATH, '0')
     self.node0.start()
     self.node0.wait_for_leader()
     self.node0.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
@@ -342,7 +344,7 @@ class TestEndToEndBackupRestore(unittest.TestCase):
     self.assertEqual(rows[0], (1, u'fiona'))
     conn.close()
 
-    self.node1 = Node(RQLITED_PATH)
+    self.node1 = Node(RQLITED_PATH, '1')
     self.node1.start()
     self.node1.wait_for_leader()
     j = self.node1.restore(self.db_file)

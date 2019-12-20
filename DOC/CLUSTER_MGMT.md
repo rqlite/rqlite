@@ -16,23 +16,26 @@ Let's say you have 3 host machines, _host1_, _host2_, and _host3_, and that each
 
 To create a cluster you must first launch a node that can act as the initial leader. Do this as follows on _host1_:
 ```bash
-host1:$ rqlited -http-addr host1:4001 -raft-addr host1:4002 ~/node
+host1:$ rqlited -node-id 1 -http-addr host1:4001 -raft-addr host1:4002 ~/node
 ```
 With this command a single node is started, listening for API requests on port 4001 and listening on port 4002 for intra-cluster communication and cluster-join requests from other nodes. This node stores its state at `~/node`.
 
 To join a second node to this leader, execute the following command on _host2_:
 ```bash
-host2:$ rqlited -http-addr host2:4001 -raft-addr host2:4002 -join http://host1:4001 ~/node
+host2:$ rqlited -node-id 2 -http-addr host2:4001 -raft-addr host2:4002 -join http://host1:4001 ~/node
 ```
 _If a node receives a join request, and that node is not actually the leader of the cluster, the receiving node will automatically redirect the requesting node to the leader node. As a result a node can actually join a cluster by contacting any node in the cluster. You can also specify multiple join addresses, and the node will try each address until joining is successful._
 
 Once executed you now have a cluster of two nodes. Of course, for fault-tolerance you need a 3-node cluster, so launch a third node like so on _host3_:
 ```bash
-host3:$ rqlited -http-addr host3:4001 -raft-addr host3:4002 -join http://host1:4001 ~/node
+host3:$ rqlited -node-id 3 -http-addr host3:4001 -raft-addr host3:4002 -join http://host1:4001 ~/node
 ```
 _When restarting a node, there is no further need to pass `-join`. It will be ignored if a node is already a member of a cluster._
 
 You've now got a fault-tolerant, distributed, relational database. It can tolerate the failure of any node, even the leader, and remain operational.
+
+## Node IDs
+You can set the Node ID (`-node-id`) to anything you wish, as long as it's unique for each node.
 
 ## Listening on all interfaces
 You can pass `0.0.0.0` to both `-http-addr` and `-raft-addr` if you wish a node to listen on all interfaces. You must still pass an explicit network address to `-join` however. In this case you'll also want to set `-http-adv-addr` to the actual interface address, so other nodes learn the correct network address to use to reach the node listening on `0.0.0.0`.
