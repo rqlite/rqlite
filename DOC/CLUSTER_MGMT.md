@@ -57,7 +57,7 @@ You can grow a cluster, at anytime, simply by starting up a new node and having 
 # Removing or replacing a node
 If a node fails completely and is not coming back, or if you shut down a node because you wish to deprovision it, its record should also be removed from the cluster. To remove the record of a node from a cluster, execute the following command:
 ```
-curl -XDELETE http://localhost:4001/remove -d '{"addr": "<node raft address>"}'
+curl -XDELETE http://localhost:4001/remove -d '{"id": "<node raft ID>"}'
 ```
 assuming `localhost` is the address of the cluster leader. If you do not do this the leader will continually attempt to communicate with that node.
 

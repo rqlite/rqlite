@@ -8,9 +8,10 @@ import (
 type commandType int
 
 const (
-	execute commandType = iota // Commands which modify the database.
-	query                      // Commands which query the database.
-	peer                       // Commands that modify peers map.
+	execute        commandType = iota // Commands which modify the database.
+	query                             // Commands which query the database.
+	metadataSet                       // Commands which sets Store metadata
+	metadataDelete                    // Commands which deletes Store metadata
 )
 
 type command struct {
@@ -27,7 +28,14 @@ func newCommand(t commandType, d interface{}) (*command, error) {
 		Typ: t,
 		Sub: b,
 	}, nil
+}
 
+func newMetadataSetCommand(id string, md map[string]string) (*command, error) {
+	m := metadataSetSub{
+		RaftID: id,
+		Data:   md,
+	}
+	return newCommand(metadataSet, m)
 }
 
 // databaseSub is a command sub which involves interaction with the database.
@@ -37,5 +45,7 @@ type databaseSub struct {
 	Timings bool     `json:"timings,omitempty"`
 }
 
-// peersSub is a command which sets the API address for a Raft address.
-type peersSub map[string]string
+type metadataSetSub struct {
+	RaftID string            `json:"raft_id,omitempty"`
+	Data   map[string]string `json:"data,omitempty"`
+}
