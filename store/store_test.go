@@ -50,6 +50,18 @@ func Test_OpenStoreSingleNode(t *testing.T) {
 	if err := s.Open(true); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
+
+	s.WaitForLeader(10 * time.Second)
+	if got, exp := s.LeaderAddr(), s.Addr().String(); got != exp {
+		t.Fatalf("wrong leader address returned, got: %s, exp %s", got, exp)
+	}
+	id, err := s.LeaderID()
+	if err != nil {
+		t.Fatalf("failed to retrieve leader ID: %s", err.Error())
+	}
+	if got, exp := id, s.raftID; got != exp {
+		t.Fatalf("wrong leader ID returned, got: %s, exp %s", got, exp)
+	}
 }
 
 func Test_OpenStoreCloseSingleNode(t *testing.T) {
@@ -442,6 +454,20 @@ func Test_MultiNodeJoinRemove(t *testing.T) {
 		t.Fatalf("failed to join to node at %s: %s", s0.Addr().String(), err.Error())
 	}
 
+	s1.WaitForLeader(10 * time.Second)
+
+	// Check leader state on follower.
+	if got, exp := s1.LeaderAddr(), s0.Addr().String(); got != exp {
+		t.Fatalf("wrong leader address returned, got: %s, exp %s", got, exp)
+	}
+	id, err := s1.LeaderID()
+	if err != nil {
+		t.Fatalf("failed to retrieve leader ID: %s", err.Error())
+	}
+	if got, exp := id, s0.raftID; got != exp {
+		t.Fatalf("wrong leader ID returned, got: %s, exp %s", got, exp)
+	}
+
 	nodes, err := s0.Nodes()
 	if err != nil {
 		t.Fatalf("failed to get nodes: %s", err.Error())
@@ -804,7 +830,7 @@ func mustNewStore(inmem bool) *Store {
 		DBConf: cfg,
 		Dir:    path,
 		Tn:     tn,
-		ID:     tn.Addr().String(), // Could be any unique string.
+		ID:     path, // Could be any unique string.
 	})
 	if s == nil {
 		panic("failed to create new store")
