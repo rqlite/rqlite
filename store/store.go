@@ -250,7 +250,7 @@ func (s *Store) Open(enableSingle bool) error {
 	config := s.raftConfig()
 
 	config.LocalID = raft.ServerID(s.raftID)
-	// XXXconfig.Logger = log.New(os.Stderr, "[raft] ", log.LstdFlags)
+	// TODO: config.Logger = log.New(os.Stderr, "[raft] ", log.LstdFlags)
 
 	// Create the snapshot store. This allows Raft to truncate the log.
 	snapshots, err := raft.NewFileSnapshotStore(s.raftDir, retainSnapshotCount, os.Stderr)

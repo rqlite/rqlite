@@ -23,6 +23,8 @@ jobs:
       - checkout
 
       # specify any bash command here prefixed with `run: `
+      - run: echo $GOPATH
+      - run: which go
       - run: go get -v -t -d ./...
       - run: bash gofmt.sh
       - run: go vet
