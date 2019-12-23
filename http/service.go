@@ -439,8 +439,9 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var resp Response
-	queries := []string{string(b)}
-	results, err := s.store.ExecuteOrAbort(&store.ExecuteRequest{queries, false, false})
+	// Split by semiclon, which marks each SQL query 
+	queries := strings.Split(string(b), ";")
+	results, err := s.store.ExecuteOrAbort(&store.ExecuteRequest{queries, true, false})
 	if err != nil {
 		if err == store.ErrNotLeader {
 			leader := s.leaderAPIAddr()
@@ -456,6 +457,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 		resp.Error = err.Error()
 	} else {
 		resp.Results = results.Results
+		resp.Time = results.Time
 		// if timings {
 		// 	resp.Time = results.Time
 		// }
