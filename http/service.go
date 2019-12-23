@@ -440,7 +440,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 
 	var resp Response
 	// Split by semiclon, which marks each SQL query 
-	queries := strings.Split(string(b), ";")
+	queries := strings.Split(string(b), ";\n")
 	results, err := s.store.ExecuteOrAbort(&store.ExecuteRequest{queries, true, false})
 	if err != nil {
 		if err == store.ErrNotLeader {
