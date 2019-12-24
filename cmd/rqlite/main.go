@@ -222,6 +222,11 @@ func sendRequest(ctx *cli.Context, makeNewRequest func(string) (*http.Request, e
 			continue
 		}
 
+		// Check for successful response
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("server responded with: %s", resp.Status)
+		}
+
 		response, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
 			return nil, err
