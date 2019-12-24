@@ -10,6 +10,7 @@ import (
 	"errors"
 	"expvar"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"net"
@@ -58,8 +59,8 @@ type Store interface {
 	// Stats returns stats on the Store.
 	Stats() (map[string]interface{}, error)
 
-	// Backup returns a byte slice representing a backup of the node state.
-	Backup(leader bool, f store.BackupFormat) ([]byte, error)
+	// Backup wites backup of the node state to dst
+	Backup(leader bool, f store.BackupFormat, dst io.Writer) error
 }
 
 // CredentialStore is the interface credential stores must support.
@@ -411,17 +412,12 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	b, err := s.store.Backup(!noLeader, bf)
+	err = s.store.Backup(!noLeader, bf, w)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	_, err = w.Write(b)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
 	s.lastBackup = time.Now()
 }
 
