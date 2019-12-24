@@ -95,8 +95,8 @@ INSERT INTO foo (n) VALUES(random());
  * In case it isn't obvious, rqlite does not replicate any changes made directly to any underlying SQLite file, when run in "on disk" mode. **If you change the SQLite file directly, you will cause rqlite to fail**. Only modify the database via the HTTP API.
  * SQLite dot-commands such as `.schema` or `.tables` are not directly supported by the API, but the rqlite CLI supports some very similar functionality. This is because those commands are features of the `sqlite3` command, not SQLite itself.
 
-## Status API
-You can learn how check status and diagnostics [here](https://github.com/rqlite/rqlite/blob/master/DOC/DIAGNOSTICS.md).
+## Status and Diagnotics
+You can learn how ti check status and diagnostics [here](https://github.com/rqlite/rqlite/blob/master/DOC/DIAGNOSTICS.md).
 
 ## Backup and restore
 Learn how to hot backup your rqlite cluster [here](https://github.com/rqlite/rqlite/blob/master/DOC/BACKUPS.md). You can also load data [directly from a SQLite dump file](https://github.com/rqlite/rqlite/blob/master/DOC/RESTORE_FROM_SQLITE.md).
