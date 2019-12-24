@@ -96,7 +96,7 @@ INSERT INTO foo (n) VALUES(random());
  * SQLite dot-commands such as `.schema` or `.tables` are not directly supported by the API, but the rqlite CLI supports some very similar functionality. This is because those commands are features of the `sqlite3` command, not SQLite itself.
 
 ## Status and Diagnotics
-You can learn how ti check status and diagnostics [here](https://github.com/rqlite/rqlite/blob/master/DOC/DIAGNOSTICS.md).
+You can learn how to check status and diagnostics [here](https://github.com/rqlite/rqlite/blob/master/DOC/DIAGNOSTICS.md).
 
 ## Backup and restore
 Learn how to hot backup your rqlite cluster [here](https://github.com/rqlite/rqlite/blob/master/DOC/BACKUPS.md). You can also load data [directly from a SQLite dump file](https://github.com/rqlite/rqlite/blob/master/DOC/RESTORE_FROM_SQLITE.md).
