@@ -9,20 +9,24 @@ The use of the URL param `pretty` is optional, and results in pretty-printed JSO
 
 You can also request the same status information via the CLI:
 ```
-$ rqlite
+$ ./rqlite 
+Welcome to the rqlite CLI. Enter ".help" for usage hints.
 127.0.0.1:4001> .status
+build:
+  build_time: unknown
+  commit: unknown
+  version: 5
+  branch: unknown
+http:
+  addr: 127.0.0.1:4001
+  auth: disabled
+  redirect: 
+node:
+  start_time: 2019-12-23T22:34:46.215507011-05:00
+  uptime: 16.963009139s
 runtime:
-  GOARCH: amd64
-  GOMAXPROCS: 8
-  GOOS: linux
-  numCPU: 8
-  numGoroutine: 13
-  version: go1.8.1
-store:
-  db_conf:
-    Memory: true
-    DSN:
-  peers.....
+  num_goroutine: 9
+  version: go1.13
  ```
 
 ## expvar support
