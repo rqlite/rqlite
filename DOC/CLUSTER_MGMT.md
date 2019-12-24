@@ -30,7 +30,7 @@ Once executed you now have a cluster of two nodes. Of course, for fault-toleranc
 ```bash
 host3:$ rqlited -node-id 3 -http-addr host3:4001 -raft-addr host3:4002 -join http://host1:4001 ~/node
 ```
-_When restarting a node, there is no further need to pass `-join`. The join request will be ignored by the leader if the node is already a member of a cluster, and it will be treated as a simple restart by the node. In that sense join requests are idempotent.
+_When simply restarting a node, there is no further need to pass `-join`. The join request will be ignored by the leader if the node is already a member of a cluster, and it will be treated as a simple restart by the node. This can be convenient because it means join requests are idempotent, allowing you to leave the initial command-line parameters unchanged, including any `join` options._
 
 You've now got a fault-tolerant, distributed, relational database. It can tolerate the failure of any node, even the leader, and remain operational.
 
@@ -53,6 +53,9 @@ If an rqlite process crashes, it is safe to simply to restart it. The node will 
 
 # Growing a cluster
 You can grow a cluster, at anytime, simply by starting up a new node (pick a never before used node ID) and having it explicitly join with the leader as normal, or by passing it a discovery service ID. The new node will automatically pick up changes that have occurred on the cluster since the cluster first started.
+
+# Modifying a node's network addresses
+It is possible to change a node's HTTP(S) address or Raft address between restarts. Simply pass the new address on the command line. You must also, however, explicitly tell the node to join the cluster again, by passing `-join` to the node. In this case what the leader actually does is remove the previous record of the node, before adding a new record of the node.
 
 # Removing or replacing a node
 If a node fails completely and is not coming back, or if you shut down a node because you wish to deprovision it, its record should also be removed from the cluster. To remove the record of a node from a cluster, execute the following command:
