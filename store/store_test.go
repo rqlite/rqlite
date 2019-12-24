@@ -6,42 +6,12 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"reflect"
 	"sort"
 	"testing"
 	"time"
 
 	"github.com/rqlite/rqlite/testdata/chinook"
 )
-
-type mockSnapshotSink struct {
-	*os.File
-}
-
-func (m *mockSnapshotSink) ID() string {
-	return "1"
-}
-
-func (m *mockSnapshotSink) Cancel() error {
-	return nil
-}
-
-func Test_ClusterMeta(t *testing.T) {
-	c := newClusterMeta()
-	c.APIPeers["localhost:4002"] = "localhost:4001"
-
-	if c.AddrForPeer("localhost:4002") != "localhost:4001" {
-		t.Fatalf("wrong address returned for localhost:4002")
-	}
-
-	if c.AddrForPeer("127.0.0.1:4002") != "localhost:4001" {
-		t.Fatalf("wrong address returned for 127.0.0.1:4002")
-	}
-
-	if c.AddrForPeer("127.0.0.1:4004") != "" {
-		t.Fatalf("wrong address returned for 127.0.0.1:4003")
-	}
-}
 
 func Test_OpenStoreSingleNode(t *testing.T) {
 	s := mustNewStore(true)
@@ -52,7 +22,7 @@ func Test_OpenStoreSingleNode(t *testing.T) {
 	}
 
 	s.WaitForLeader(10 * time.Second)
-	if got, exp := s.LeaderAddr(), s.Addr().String(); got != exp {
+	if got, exp := s.LeaderAddr(), s.Addr(); got != exp {
 		t.Fatalf("wrong leader address returned, got: %s, exp %s", got, exp)
 	}
 	id, err := s.LeaderID()
@@ -71,6 +41,7 @@ func Test_OpenStoreCloseSingleNode(t *testing.T) {
 	if err := s.Open(true); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
+	s.WaitForLeader(10 * time.Second)
 	if err := s.Close(true); err != nil {
 		t.Fatalf("failed to close single-node store: %s", err.Error())
 	}
@@ -450,14 +421,14 @@ func Test_MultiNodeJoinRemove(t *testing.T) {
 	sort.StringSlice(storeNodes).Sort()
 
 	// Join the second node to the first.
-	if err := s0.Join(s1.ID(), s1.Addr().String()); err != nil {
-		t.Fatalf("failed to join to node at %s: %s", s0.Addr().String(), err.Error())
+	if err := s0.Join(s1.ID(), s1.Addr(), nil); err != nil {
+		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
 	}
 
 	s1.WaitForLeader(10 * time.Second)
 
 	// Check leader state on follower.
-	if got, exp := s1.LeaderAddr(), s0.Addr().String(); got != exp {
+	if got, exp := s1.LeaderAddr(), s0.Addr(); got != exp {
 		t.Fatalf("wrong leader address returned, got: %s, exp %s", got, exp)
 	}
 	id, err := s1.LeaderID()
@@ -514,8 +485,8 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 	defer s1.Close(true)
 
 	// Join the second node to the first.
-	if err := s0.Join(s1.ID(), s1.Addr().String()); err != nil {
-		t.Fatalf("failed to join to node at %s: %s", s0.Addr().String(), err.Error())
+	if err := s0.Join(s1.ID(), s1.Addr(), nil); err != nil {
+		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
 	}
 
 	queries := []string{
@@ -609,7 +580,7 @@ func Test_StoreLogTruncationMultinode(t *testing.T) {
 	defer s1.Close(true)
 
 	// Join the second node to the first.
-	if err := s0.Join(s1.ID(), s1.Addr().String()); err != nil {
+	if err := s0.Join(s1.ID(), s1.Addr(), nil); err != nil {
 		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
 	}
 	s1.WaitForLeader(10 * time.Second)
@@ -754,38 +725,65 @@ func Test_SingleNodeSnapshotInMem(t *testing.T) {
 	}
 }
 
-func Test_APIPeers(t *testing.T) {
-	s := mustNewStore(false)
-	defer os.RemoveAll(s.Path())
-
-	if err := s.Open(true); err != nil {
+func Test_MetadataMultinode(t *testing.T) {
+	s0 := mustNewStore(true)
+	if err := s0.Open(true); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
-	defer s.Close(true)
-	s.WaitForLeader(10 * time.Second)
+	defer s0.Close(true)
+	s0.WaitForLeader(10 * time.Second)
+	s1 := mustNewStore(true)
+	if err := s1.Open(true); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s1.Close(true)
+	s1.WaitForLeader(10 * time.Second)
 
-	peers := map[string]string{
-		"localhost:4002": "localhost:4001",
-		"localhost:4004": "localhost:4003",
+	if s0.Metadata(s0.raftID, "foo") != "" {
+		t.Fatal("nonexistent metadata foo found")
 	}
-	if err := s.UpdateAPIPeers(peers); err != nil {
-		t.Fatalf("failed to update API peers: %s", err.Error())
-	}
-
-	// Retrieve peers and verify them.
-	apiPeers, err := s.APIPeers()
-	if err != nil {
-		t.Fatalf("failed to retrieve API peers: %s", err.Error())
-	}
-	if !reflect.DeepEqual(peers, apiPeers) {
-		t.Fatalf("set and retrieved API peers not identical, got %v, exp %v",
-			apiPeers, peers)
+	if s0.Metadata("nonsense", "foo") != "" {
+		t.Fatal("nonexistent metadata foo found for nonexistent node")
 	}
 
-	if s.Peer("localhost:4002") != "localhost:4001" ||
-		s.Peer("localhost:4004") != "localhost:4003" ||
-		s.Peer("not exist") != "" {
-		t.Fatalf("failed to retrieve correct single API peer")
+	if err := s0.SetMetadata(map[string]string{"foo": "bar"}); err != nil {
+		t.Fatalf("failed to set metadata: %s", err.Error())
+	}
+	if s0.Metadata(s0.raftID, "foo") != "bar" {
+		t.Fatal("key foo not found")
+	}
+	if s0.Metadata("nonsense", "foo") != "" {
+		t.Fatal("nonexistent metadata foo found for nonexistent node")
+	}
+
+	// Join the second node to the first.
+	meta := map[string]string{"baz": "qux"}
+	if err := s0.Join(s1.ID(), s1.Addr(), meta); err != nil {
+		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
+	}
+	s1.WaitForLeader(10 * time.Second)
+	// Wait until the log entries have been applied to the follower,
+	// and then query.
+	if err := s1.WaitForAppliedIndex(5, 5*time.Second); err != nil {
+		t.Fatalf("error waiting for follower to apply index: %s:", err.Error())
+	}
+
+	if s1.Metadata(s0.raftID, "foo") != "bar" {
+		t.Fatal("key foo not found for s0")
+	}
+	if s0.Metadata(s1.raftID, "baz") != "qux" {
+		t.Fatal("key baz not found for s1")
+	}
+
+	// Remove a node.
+	if err := s0.Remove(s1.ID()); err != nil {
+		t.Fatalf("failed to remove %s from cluster: %s", s1.ID(), err.Error())
+	}
+	if s1.Metadata(s0.raftID, "foo") != "bar" {
+		t.Fatal("key foo not found for s0")
+	}
+	if s0.Metadata(s1.raftID, "baz") != "" {
+		t.Fatal("key baz found for removed node s1")
 	}
 }
 
@@ -824,12 +822,10 @@ func mustNewStore(inmem bool) *Store {
 	path := mustTempDir()
 	defer os.RemoveAll(path)
 
-	tn := mustMockTransport("localhost:0")
 	cfg := NewDBConfig("", inmem)
-	s := New(&StoreConfig{
+	s := New(mustMockLister("localhost:0"), &StoreConfig{
 		DBConf: cfg,
 		Dir:    path,
-		Tn:     tn,
 		ID:     path, // Could be any unique string.
 	})
 	if s == nil {
@@ -837,6 +833,44 @@ func mustNewStore(inmem bool) *Store {
 	}
 	return s
 }
+
+type mockSnapshotSink struct {
+	*os.File
+}
+
+func (m *mockSnapshotSink) ID() string {
+	return "1"
+}
+
+func (m *mockSnapshotSink) Cancel() error {
+	return nil
+}
+
+type mockTransport struct {
+	ln net.Listener
+}
+
+type mockListener struct {
+	ln net.Listener
+}
+
+func mustMockLister(addr string) Listener {
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		panic("failed to create new listner")
+	}
+	return &mockListener{ln}
+}
+
+func (m *mockListener) Dial(addr string, timeout time.Duration) (net.Conn, error) {
+	return net.DialTimeout("tcp", addr, timeout)
+}
+
+func (m *mockListener) Accept() (net.Conn, error) { return m.ln.Accept() }
+
+func (m *mockListener) Close() error { return m.ln.Close() }
+
+func (m *mockListener) Addr() net.Addr { return m.ln.Addr() }
 
 func mustTempDir() string {
 	var err error
@@ -846,28 +880,6 @@ func mustTempDir() string {
 	}
 	return path
 }
-
-type mockTransport struct {
-	ln net.Listener
-}
-
-func mustMockTransport(addr string) Transport {
-	ln, err := net.Listen("tcp", addr)
-	if err != nil {
-		panic("failed to create new transport")
-	}
-	return &mockTransport{ln}
-}
-
-func (m *mockTransport) Dial(addr string, timeout time.Duration) (net.Conn, error) {
-	return net.DialTimeout("tcp", addr, timeout)
-}
-
-func (m *mockTransport) Accept() (net.Conn, error) { return m.ln.Accept() }
-
-func (m *mockTransport) Close() error { return m.ln.Close() }
-
-func (m *mockTransport) Addr() net.Addr { return m.ln.Addr() }
 
 func asJSON(v interface{}) string {
 	b, err := json.Marshal(v)

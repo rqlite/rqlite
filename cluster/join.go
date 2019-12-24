@@ -20,9 +20,9 @@ const numAttempts int = 3
 const attemptInterval time.Duration = 5 * time.Second
 
 // It walks through joinAddr in order, and sets the node ID and Raft address of
-// the joining node as nodeID advAddr respectively. It returns the endpoint
-// successfully used to join the cluster.
-func Join(joinAddr []string, nodeID, advAddr string, tlsConfig *tls.Config) (string, error) {
+// the joining node as id addr respectively. It returns the endpoint successfully
+// used to join the cluster.
+func Join(joinAddr []string, id, addr string, meta map[string]string, tlsConfig *tls.Config) (string, error) {
 	var err error
 	var j string
 	logger := log.New(os.Stderr, "[cluster-join] ", log.LstdFlags)
@@ -32,7 +32,7 @@ func Join(joinAddr []string, nodeID, advAddr string, tlsConfig *tls.Config) (str
 
 	for i := 0; i < numAttempts; i++ {
 		for _, a := range joinAddr {
-			j, err = join(a, nodeID, advAddr, tlsConfig, logger)
+			j, err = join(a, id, addr, meta, tlsConfig, logger)
 			if err == nil {
 				// Success!
 				return j, nil
@@ -45,13 +45,13 @@ func Join(joinAddr []string, nodeID, advAddr string, tlsConfig *tls.Config) (str
 	return "", err
 }
 
-func join(joinAddr, nodeID, advAddr string, tlsConfig *tls.Config, logger *log.Logger) (string, error) {
-	if nodeID == "" {
+func join(joinAddr, id, addr string, meta map[string]string, tlsConfig *tls.Config, logger *log.Logger) (string, error) {
+	if id == "" {
 		return "", fmt.Errorf("node ID not set")
 	}
 
 	// Join using IP address, as that is what Hashicorp Raft works in.
-	resv, err := net.ResolveTCPAddr("tcp", advAddr)
+	resv, err := net.ResolveTCPAddr("tcp", addr)
 	if err != nil {
 		return "", err
 	}
@@ -59,7 +59,7 @@ func join(joinAddr, nodeID, advAddr string, tlsConfig *tls.Config, logger *log.L
 	// Check for protocol scheme, and insert default if necessary.
 	fullAddr := httpd.NormalizeAddr(fmt.Sprintf("%s/join", joinAddr))
 
-	// Enable skipVerify as requested.
+	// Create and configure the client to connect to the other node.
 	tr := &http.Transport{
 		TLSClientConfig: tlsConfig,
 	}
@@ -69,9 +69,10 @@ func join(joinAddr, nodeID, advAddr string, tlsConfig *tls.Config, logger *log.L
 	}
 
 	for {
-		b, err := json.Marshal(map[string]string{
-			"id":   nodeID,
+		b, err := json.Marshal(map[string]interface{}{
+			"id":   id,
 			"addr": resv.String(),
+			"meta": meta,
 		})
 
 		// Attempt to join.

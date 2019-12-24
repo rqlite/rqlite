@@ -1,4 +1,4 @@
 /*
-Package tcp provides various TCP-related utilities. The TCP mux code provided by this package originated with InfluxDB.
+Package tcp provides the internode communication network layer.
 */
 package tcp
