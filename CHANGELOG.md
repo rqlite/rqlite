@@ -3,6 +3,7 @@ This release uses a new Raft consensus version, with the move to Hashicorp Raft 
 
 ### New features
 - [PR #595](https://github.com/rqlite/rqlite/pull/595): rqlite CLI prints Welcome message on startup.
+- [PR #608](https://github.com/rqlite/rqlite/pull/608): Add features list to status output.
 
 ### Implementation changes and bug fixes
 - [PR #597](https://github.com/rqlite/rqlite/pull/597): Don't ignore any Join error, instead return it.
