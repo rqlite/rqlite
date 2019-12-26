@@ -43,6 +43,7 @@ var (
 	commit    = "unknown"
 	branch    = "unknown"
 	buildtime = "unknown"
+	features  = []string{}
 )
 
 const (
