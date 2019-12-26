@@ -310,7 +310,6 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 
 	remoteAddr, ok := md["addr"]
 	if !ok {
-		fmt.Println("4444")
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}

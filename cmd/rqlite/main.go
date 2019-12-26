@@ -206,13 +206,16 @@ func sendRequest(ctx *cli.Context, makeNewRequest func(string) (*http.Request, e
 		if err != nil {
 			return nil, err
 		}
-		defer resp.Body.Close()
+		response, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return nil, err
+		}
+		resp.Body.Close()
 
 		if resp.StatusCode == http.StatusUnauthorized {
 			return nil, fmt.Errorf("unauthorized")
 		}
 
-		// Check for redirect.
 		if resp.StatusCode == http.StatusMovedPermanently {
 			nRedirect++
 			if nRedirect > maxRedirect {
@@ -222,9 +225,8 @@ func sendRequest(ctx *cli.Context, makeNewRequest func(string) (*http.Request, e
 			continue
 		}
 
-		response, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			return nil, err
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("server responded with: %s", resp.Status)
 		}
 
 		return &response, nil
