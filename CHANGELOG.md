@@ -14,6 +14,7 @@ This release uses a new Raft consensus version, with the move to Hashicorp Raft 
 - [PR #603](https://github.com/rqlite/rqlite/pull/603): Fix up status key name style.
 - [PR #604](https://github.com/rqlite/rqlite/pull/604): JSON types are also text.
 - [PR #605](https://github.com/rqlite/rqlite/pull/605): Broadcast Store meta via consensus.
+- [PR #607](https://github.com/rqlite/rqlite/pull/607): Various Redirect fixes.
 
 ## 4.6.0 (November 29th 2019)
 _This release adds significant new functionality to the command-line tool, including much more control over backup and restore of the database. [Visit the Releases page](https://github.com/rqlite/rqlite/releases/tag/v4.6.0) to download this release._
