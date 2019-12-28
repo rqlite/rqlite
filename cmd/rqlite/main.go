@@ -48,6 +48,12 @@ func main() {
 			return nil
 		}
 
+		client, err := getHTTPClient(argv)
+		if err != nil {
+			ctx.String("%s %v\n", ctx.Color().Red("ERR!"), err)
+			return nil
+		}
+
 		timer := false
 		prefix := fmt.Sprintf("%s:%d>", argv.Host, argv.Port)
 		term, err := prompt.NewTerminal()
@@ -81,11 +87,11 @@ func main() {
 			cmd = strings.ToUpper(cmd)
 			switch cmd {
 			case ".TABLES":
-				err = query(ctx, cmd, `SELECT name FROM sqlite_master WHERE type="table"`, timer, argv)
+				err = queryWithClient(ctx, client, argv, timer, `SELECT name FROM sqlite_master WHERE type="table"`)
 			case ".INDEXES":
-				err = query(ctx, cmd, `SELECT sql FROM sqlite_master WHERE type="index"`, timer, argv)
+				err = queryWithClient(ctx, client, argv, timer, `SELECT sql FROM sqlite_master WHERE type="index"`)
 			case ".SCHEMA":
-				err = query(ctx, cmd, "SELECT sql FROM sqlite_master", timer, argv)
+				err = queryWithClient(ctx, client, argv, timer, "SELECT sql FROM sqlite_master")
 			case ".TIMER":
 				err = toggleTimer(line[index+1:], &timer)
 			case ".STATUS":
@@ -115,9 +121,9 @@ func main() {
 			case ".QUIT", "QUIT", "EXIT":
 				break FOR_READ
 			case "SELECT":
-				err = query(ctx, cmd, line, timer, argv)
+				err = queryWithClient(ctx, client, argv, timer, line)
 			default:
-				err = execute(ctx, cmd, line, timer, argv)
+				err = executeWithClient(ctx, client, argv, timer, line)
 			}
 			if err != nil {
 				ctx.String("%s %v\n", ctx.Color().Red("ERR!"), err)
@@ -157,6 +163,36 @@ func status(ctx *cli.Context, cmd, line string, argv *argT) error {
 func expvar(ctx *cli.Context, cmd, line string, argv *argT) error {
 	url := fmt.Sprintf("%s://%s:%d/debug/vars", argv.Protocol, argv.Host, argv.Port)
 	return cliJSON(ctx, cmd, line, url, argv)
+}
+
+func getHTTPClient(argv *argT) (*http.Client, error) {
+	var rootCAs *x509.CertPool
+
+	if argv.CACert != "" {
+		pemCerts, err := ioutil.ReadFile(argv.CACert)
+		if err != nil {
+			return nil, err
+		}
+
+		rootCAs = x509.NewCertPool()
+
+		ok := rootCAs.AppendCertsFromPEM(pemCerts)
+		if !ok {
+			return nil, fmt.Errorf("failed to parse root CA certificate(s)")
+		}
+	}
+
+	client := http.Client{Transport: &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: argv.Insecure, RootCAs: rootCAs},
+		Proxy:           http.ProxyFromEnvironment,
+	}}
+
+	// Explicitly handle redirects.
+	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+
+	return &client, nil
 }
 
 func sendRequest(ctx *cli.Context, makeNewRequest func(string) (*http.Request, error), urlStr string, argv *argT) (*[]byte, error) {

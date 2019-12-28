@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strings"
@@ -82,19 +83,9 @@ type queryResponse struct {
 	Time    float64 `json:"time"`
 }
 
-func makeQueryRequest(line string) func(string) (*http.Request, error) {
-	requestData := strings.NewReader(makeJSONBody(line))
-	return func(urlStr string) (*http.Request, error) {
-		req, err := http.NewRequest("POST", urlStr, requestData)
-		if err != nil {
-			return nil, err
-		}
-		return req, nil
-	}
-}
-
-func query(ctx *cli.Context, cmd, line string, timer bool, argv *argT) error {
+func queryWithClient(ctx *cli.Context, client *http.Client, argv *argT, timer bool, query string) error {
 	queryStr := url.Values{}
+	queryStr.Set("q", query)
 	if timer {
 		queryStr.Set("timings", "")
 	}
@@ -104,31 +95,70 @@ func query(ctx *cli.Context, cmd, line string, timer bool, argv *argT) error {
 		Path:     fmt.Sprintf("%sdb/query", argv.Prefix),
 		RawQuery: queryStr.Encode(),
 	}
+	urlStr := u.String()
 
-	response, err := sendRequest(ctx, makeQueryRequest(line), u.String(), argv)
-	if err != nil {
-		return err
-	}
+	nRedirect := 0
+	for {
+		req, err := http.NewRequest("GET", urlStr, nil)
+		if err != nil {
+			return err
+		}
+		if argv.Credentials != "" {
+			creds := strings.Split(argv.Credentials, ":")
+			if len(creds) != 2 {
+				return fmt.Errorf("invalid Basic Auth credentials format")
+			}
+			req.SetBasicAuth(creds[0], creds[1])
+		}
 
-	ret := &queryResponse{}
-	if err := parseResponse(response, &ret); err != nil {
-		return err
-	}
-	if ret.Error != "" {
-		return fmt.Errorf(ret.Error)
-	}
-	if len(ret.Results) != 1 {
-		return fmt.Errorf("unexpected results length: %d", len(ret.Results))
-	}
+		resp, err := client.Do(req)
+		if err != nil {
+			return err
+		}
+		response, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return err
+		}
+		resp.Body.Close()
 
-	result := ret.Results[0]
-	if err := result.validate(); err != nil {
-		return err
-	}
-	textutil.WriteTable(ctx, result, headerRender)
+		if resp.StatusCode == http.StatusUnauthorized {
+			return fmt.Errorf("unauthorized")
+		}
 
-	if timer {
-		fmt.Printf("Run Time: %f seconds\n", result.Time)
+		if resp.StatusCode == http.StatusMovedPermanently {
+			nRedirect++
+			if nRedirect > maxRedirect {
+				return fmt.Errorf("maximum leader redirect limit exceeded")
+			}
+			urlStr = resp.Header["Location"][0]
+			continue
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("server responded with: %s", resp.Status)
+		}
+
+		// Parse response and write results
+		ret := &queryResponse{}
+		if err := parseResponse(&response, &ret); err != nil {
+			return err
+		}
+		if ret.Error != "" {
+			return fmt.Errorf(ret.Error)
+		}
+		if len(ret.Results) != 1 {
+			return fmt.Errorf("unexpected results length: %d", len(ret.Results))
+		}
+
+		result := ret.Results[0]
+		if err := result.validate(); err != nil {
+			return err
+		}
+		textutil.WriteTable(ctx, result, headerRender)
+
+		if timer {
+			fmt.Printf("Run Time: %f seconds\n", result.Time)
+		}
+		return nil
 	}
-	return nil
 }
