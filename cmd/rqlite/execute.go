@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strings"
@@ -23,59 +24,92 @@ type executeResponse struct {
 	Time    float64   `json:"time,omitempty"`
 }
 
-func makeExecuteRequest(line string) func(string) (*http.Request, error) {
-	requestData := strings.NewReader(makeJSONBody(line))
-	return func(urlStr string) (*http.Request, error) {
-		req, err := http.NewRequest("POST", urlStr, requestData)
-		if err != nil {
-			return nil, err
-		}
-		return req, nil
-	}
-}
-
-func execute(ctx *cli.Context, cmd, line string, timer bool, argv *argT) error {
+func executeWithClient(ctx *cli.Context, client *http.Client, argv *argT, timer bool, stmt string) error {
 	queryStr := url.Values{}
 	if timer {
 		queryStr.Set("timings", "")
 	}
 	u := url.URL{
-		Scheme:   argv.Protocol,
-		Host:     fmt.Sprintf("%s:%d", argv.Host, argv.Port),
-		Path:     fmt.Sprintf("%sdb/execute", argv.Prefix),
-		RawQuery: queryStr.Encode(),
+		Scheme: argv.Protocol,
+		Host:   fmt.Sprintf("%s:%d", argv.Host, argv.Port),
+		Path:   fmt.Sprintf("%sdb/execute", argv.Prefix),
 	}
+	urlStr := u.String()
 
-	response, err := sendRequest(ctx, makeExecuteRequest(line), u.String(), argv)
-	if err != nil {
-		return err
-	}
+	requestData := strings.NewReader(makeJSONBody(stmt))
 
-	ret := &executeResponse{}
-	if err := parseResponse(response, &ret); err != nil {
-		return err
-	}
-	if ret.Error != "" {
-		return fmt.Errorf(ret.Error)
-	}
-	if len(ret.Results) != 1 {
-		return fmt.Errorf("unexpected results length: %d", len(ret.Results))
-	}
+	nRedirect := 0
+	for {
+		req, err := http.NewRequest("POST", urlStr, requestData)
+		if err != nil {
+			return err
+		}
+		if argv.Credentials != "" {
+			creds := strings.Split(argv.Credentials, ":")
+			if len(creds) != 2 {
+				return fmt.Errorf("invalid Basic Auth credentials format")
+			}
+			req.SetBasicAuth(creds[0], creds[1])
+		}
 
-	result := ret.Results[0]
-	if result.Error != "" {
-		ctx.String("Error: %s\n", result.Error)
+		resp, err := client.Do(req)
+		if err != nil {
+			return err
+		}
+		response, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return err
+		}
+		resp.Body.Close()
+
+		if resp.StatusCode == http.StatusUnauthorized {
+			return fmt.Errorf("unauthorized")
+		}
+
+		if resp.StatusCode == http.StatusMovedPermanently {
+			nRedirect++
+			if nRedirect > maxRedirect {
+				return fmt.Errorf("maximum leader redirect limit exceeded")
+			}
+			urlStr = resp.Header["Location"][0]
+			continue
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("server responded with: %s", resp.Status)
+		}
+
+		// Parse response and write results
+		ret := &executeResponse{}
+		if err := parseResponse(&response, &ret); err != nil {
+			return err
+		}
+		if ret.Error != "" {
+			return fmt.Errorf(ret.Error)
+		}
+		if len(ret.Results) != 1 {
+			return fmt.Errorf("unexpected results length: %d", len(ret.Results))
+		}
+
+		result := ret.Results[0]
+		if result.Error != "" {
+			ctx.String("Error: %s\n", result.Error)
+			return nil
+		}
+
+		rowString := "row"
+		if result.RowsAffected > 1 {
+			rowString = "rows"
+		}
+		if timer {
+			ctx.String("%d %s affected (%f sec)\n", result.RowsAffected, rowString, result.Time)
+		} else {
+			ctx.String("%d %s affected\n", result.RowsAffected, rowString)
+		}
+
+		if timer {
+			fmt.Printf("Run Time: %f seconds\n", result.Time)
+		}
 		return nil
 	}
-
-	rowString := "row"
-	if result.RowsAffected > 1 {
-		rowString = "rows"
-	}
-	if timer {
-		ctx.String("%d %s affected (%f sec)\n", result.RowsAffected, rowString, result.Time)
-	} else {
-		ctx.String("%d %s affected\n", result.RowsAffected, rowString)
-	}
-	return nil
 }
