@@ -1,6 +1,7 @@
 package store
 
 import (
+	"bytes"
 	"encoding/json"
 	"io/ioutil"
 	"net"
@@ -177,6 +178,95 @@ func Test_SingleNodeExecuteQueryTx(t *testing.T) {
 	_, err = s.Execute(&ExecuteRequest{queries, false, true})
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+}
+
+func Test_SingleNodeBackupBinary(t *testing.T) {
+	t.Parallel()
+
+	s := mustNewStore(false)
+	defer os.RemoveAll(s.Path())
+
+	if err := s.Open(true); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	s.WaitForLeader(10 * time.Second)
+
+	dump := `PRAGMA foreign_keys=OFF;
+BEGIN TRANSACTION;
+CREATE TABLE foo (id integer not null primary key, name text);
+INSERT INTO "foo" VALUES(1,'fiona');
+COMMIT;
+`
+	_, err := s.Execute(&ExecuteRequest{[]string{dump}, false, false})
+	if err != nil {
+		t.Fatalf("failed to load simple dump: %s", err.Error())
+	}
+
+	f, err := ioutil.TempFile("", "rqlite-baktest-")
+	defer os.Remove(f.Name())
+	s.logger.Printf("backup file is %s", f.Name())
+
+	if err := s.Backup(true, BackupBinary, f); err != nil {
+		t.Fatalf("Backup failed %s", err.Error())
+	}
+
+	// Check the backed up data by reading back up file, underlying SQLite file,
+	// and comparing the two.
+	bkp, err := ioutil.ReadFile(f.Name())
+	if err != nil {
+		t.Fatalf("Backup Failed: unable to read backup file, %s", err.Error())
+	}
+
+	dbFile, err := ioutil.ReadFile(filepath.Join(s.Path(), sqliteFile))
+	if err != nil {
+		t.Fatalf("Backup Failed: unable to read source SQLite file, %s", err.Error())
+	}
+
+	if ret := bytes.Compare(bkp, dbFile); ret != 0 {
+		t.Fatalf("Backup Failed: backup bytes are not same")
+	}
+}
+
+func Test_SingleNodeBackupText(t *testing.T) {
+	t.Parallel()
+
+	s := mustNewStore(true)
+	defer os.RemoveAll(s.Path())
+
+	if err := s.Open(true); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	s.WaitForLeader(10 * time.Second)
+
+	dump := `PRAGMA foreign_keys=OFF;
+BEGIN TRANSACTION;
+CREATE TABLE foo (id integer not null primary key, name text);
+INSERT INTO "foo" VALUES(1,'fiona');
+COMMIT;
+`
+	_, err := s.Execute(&ExecuteRequest{[]string{dump}, false, false})
+	if err != nil {
+		t.Fatalf("failed to load simple dump: %s", err.Error())
+	}
+
+	f, err := ioutil.TempFile("", "rqlite-baktest-")
+	defer os.Remove(f.Name())
+	s.logger.Printf("backup file is %s", f.Name())
+
+	if err := s.Backup(true, BackupSQL, f); err != nil {
+		t.Fatalf("Backup failed %s", err.Error())
+	}
+
+	// Check the backed up data
+	bkp, err := ioutil.ReadFile(f.Name())
+	if err != nil {
+		t.Fatalf("Backup Failed: unable to read backup file, %s", err.Error())
+	}
+	if ret := bytes.Compare(bkp, []byte(dump)); ret != 0 {
+		t.Fatalf("Backup Failed: backup bytes are not same")
 	}
 }
 
