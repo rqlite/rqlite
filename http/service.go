@@ -70,6 +70,9 @@ type CredentialStore interface {
 
 	// HasPerm returns whether username has the given perm.
 	HasPerm(username string, perm string) bool
+
+	// HasAnyPerm returns whether username has any of the given perms.
+	HasAnyPerm(username string, perm ...string) bool
 }
 
 // Statuser is the interface status providers must implement.
@@ -746,7 +749,7 @@ func (s *Service) CheckRequestPerm(r *http.Request, perm string) bool {
 	if !ok {
 		return false
 	}
-	return s.credentialStore.HasPerm(username, PermAll) || s.credentialStore.HasPerm(username, perm)
+	return s.credentialStore.HasAnyPerm(username, perm, PermAll)
 }
 
 func (s *Service) leaderAPIAddr() string {
