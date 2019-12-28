@@ -458,10 +458,12 @@ func (s *Store) Execute(ex *ExecuteRequest) ([]*sql.Result, error) {
 func (s *Store) ExecuteOrAbort(ex *ExecuteRequest) (results []*sql.Result, retErr error) {
 	defer func() {
 		var errored bool
-		for i := range results {
-			if results[i].Error != "" {
-				errored = true
-				break
+		if results != nil {
+			for i := range results {
+				if results[i].Error != "" {
+					errored = true
+					break
+				}
 			}
 		}
 		if retErr != nil || errored {
