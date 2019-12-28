@@ -500,45 +500,30 @@ func (s *Store) execute(ex *ExecuteRequest) ([]*sql.Result, error) {
 	return r.results, r.error
 }
 
-// Backup return a snapshot of the underlying database.
+// Backup writes a snapshot of the underlying database to dst
 //
 // If leader is true, this operation is performed with a read consistency
 // level equivalent to "weak". Otherwise no guarantees are made about the
 // read consistency level.
-func (s *Store) Backup(leader bool, fmt BackupFormat) ([]byte, error) {
+func (s *Store) Backup(leader bool, fmt BackupFormat, dst io.Writer) error {
 	if leader && s.raft.State() != raft.Leader {
-		return nil, ErrNotLeader
+		return ErrNotLeader
 	}
 
-	var b []byte
 	if fmt == BackupBinary {
-		f, err := ioutil.TempFile("", "rqlite-bak-")
-		if err != nil {
-			return nil, err
-		}
-		f.Close()
-		defer os.Remove(f.Name())
-
-		if err := s.db.Backup(f.Name()); err != nil {
-			return nil, err
-		}
-
-		b, err = ioutil.ReadFile(f.Name())
-		if err != nil {
-			return nil, err
+		if err := s.database(leader, dst); err != nil {
+			return err
 		}
 	} else if fmt == BackupSQL {
-		buf := bytes.NewBuffer(nil)
-		if err := s.db.Dump(buf); err != nil {
-			return nil, err
+		if err := s.db.Dump(dst); err != nil {
+			return err
 		}
-		b = buf.Bytes()
 	} else {
-		return nil, ErrInvalidBackupFormat
+		return ErrInvalidBackupFormat
 	}
 
 	stats.Add(numBackups, 1)
-	return b, nil
+	return nil
 }
 
 // Query executes queries that return rows, and do not modify the database.
@@ -1017,6 +1002,34 @@ func (f *fsmSnapshot) Persist(sink raft.SnapshotSink) error {
 	}
 
 	return nil
+}
+
+// Database copies contents of the underlying SQLite database to dst
+func (s *Store) database(leader bool, dst io.Writer) error {
+	if leader && s.raft.State() != raft.Leader {
+		return ErrNotLeader
+	}
+
+	f, err := ioutil.TempFile("", "rqlilte-snap-")
+	if err != nil {
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+
+	if err := s.db.Backup(f.Name()); err != nil {
+		return err
+	}
+
+	of, err := os.Open(f.Name())
+	if err != nil {
+		return err
+	}
+	defer of.Close()
+
+	_, err = io.Copy(dst, of)
+	return err
 }
 
 // Release is a no-op.
