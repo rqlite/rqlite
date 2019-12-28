@@ -228,7 +228,7 @@ func (s *Store) Open(enableSingle bool) error {
 		s.logger.Printf("bootstrap needed")
 		configuration := raft.Configuration{
 			Servers: []raft.Server{
-				raft.Server{
+				{
 					ID:      config.LocalID,
 					Address: s.raftTn.LocalAddr(),
 				},
@@ -308,8 +308,8 @@ func (s *Store) ID() string {
 	return s.raftID
 }
 
-// Leader returns the current leader. Returns a blank string if there is
-// no leader.
+// LeaderAddr returns the address of the current leader. Returns a
+// blank string if there is no leader.
 func (s *Store) LeaderAddr() string {
 	return string(s.raft.Leader())
 }
@@ -730,6 +730,9 @@ func (s *Store) remove(id string) error {
 	}
 
 	c, err := newCommand(metadataDelete, id)
+	if err != nil {
+		return err
+	}
 	b, err := json.Marshal(c)
 	if err != nil {
 		return err

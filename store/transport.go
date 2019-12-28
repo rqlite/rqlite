@@ -7,6 +7,7 @@ import (
 	"github.com/hashicorp/raft"
 )
 
+// Listener is the interface expected by the Store for Transports.
 type Listener interface {
 	net.Listener
 	Dial(address string, timeout time.Duration) (net.Conn, error)
