@@ -19,6 +19,7 @@ import (
 const numAttempts int = 3
 const attemptInterval time.Duration = 5 * time.Second
 
+// Join attempts to join the cluster at one of the addresses given in joinAddr.
 // It walks through joinAddr in order, and sets the node ID and Raft address of
 // the joining node as id addr respectively. It returns the endpoint successfully
 // used to join the cluster.
@@ -74,6 +75,9 @@ func join(joinAddr, id, addr string, meta map[string]string, tlsConfig *tls.Conf
 			"addr": resv.String(),
 			"meta": meta,
 		})
+		if err != nil {
+			return "", err
+		}
 
 		// Attempt to join.
 		resp, err := client.Post(fullAddr, "application-type/json", bytes.NewReader(b))

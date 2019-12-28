@@ -22,7 +22,7 @@ func NewTransport() *Transport {
 	return &Transport{}
 }
 
-// NewTransport returns an initialized TLS-ecrypted Transport.
+// NewTLSTransport returns an initialized TLS-encrypted Transport.
 func NewTLSTransport(certFile, keyPath string, skipVerify bool) *Transport {
 	return &Transport{
 		certFile:        certFile,
