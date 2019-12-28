@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -40,6 +41,10 @@ func executeWithClient(ctx *cli.Context, client *http.Client, argv *argT, timer 
 
 	nRedirect := 0
 	for {
+		if _, err := requestData.Seek(0, io.SeekStart); err != nil {
+			return err
+		}
+
 		req, err := http.NewRequest("POST", urlStr, requestData)
 		if err != nil {
 			return err
