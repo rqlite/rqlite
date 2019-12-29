@@ -1,5 +1,9 @@
 ## 5.0.0 (Unreleased)
-This release uses a new Raft consensus version, with the move to Hashicorp Raft v1. As a result **the Raft system in 5.0 is not compatible with the 4.0 series**. To upgrade from an earlier version to this release you should backup your 4.0 leader node, and restore the database dump into a new 5.0 cluster. The HTTP API remains unchanged however.
+This release uses a new Raft consensus version, with the move to Hashicorp Raft v1. As a result **the Raft system in 5.0 is not compatible with the 4.0 series**. To upgrade from an earlier version to this release you should backup your 4.0 leader node, and restore the database dump into a new 5.0 cluster.
+
+The rqlite server also supports explicitly setting the node ID. While it's not required to set this, it's recommended for production clusters.
+
+The HTTP Query and Insert API remains unchanged in the 5.0 series relative to the 4.0 series.
 
 ### New features
 - [PR #595](https://github.com/rqlite/rqlite/pull/595): rqlite CLI prints Welcome message on startup.
