@@ -12,7 +12,7 @@ The HTTP Query and Insert API remains unchanged in the 5.0 series relative to th
 ### Implementation changes and bug fixes
 - [PR #597](https://github.com/rqlite/rqlite/pull/597): Don't ignore any Join error, instead return it.
 - [PR #598](https://github.com/rqlite/rqlite/pull/598): Ensure backup is correctly closed.
-- [PR #600](https://github.com/rqlite/rqlite/pull/600): Move to Hashicorp Raft v1.
+- [PR #600](https://github.com/rqlite/rqlite/pull/600): Move to Hashicorp Raft v1.1.1.
 - [PR #601](https://github.com/rqlite/rqlite/pull/601): By default use Raft network address as node ID.
 - [PR #602](https://github.com/rqlite/rqlite/pull/602): Add method to Store that returns leader ID.
 - [PR #603](https://github.com/rqlite/rqlite/pull/603): Fix up status key name style.
