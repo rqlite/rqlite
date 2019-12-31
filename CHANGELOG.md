@@ -1,4 +1,4 @@
-## 5.0.0 (Unreleased)
+## 5.0.0 (December 30th 2019)
 This release uses a new Raft consensus version, with the move to Hashicorp Raft v1. As a result **the Raft system in 5.0 is not compatible with the 4.0 series**. To upgrade from an earlier version to this release you should backup your 4.0 leader node, and restore the database dump into a new 5.0 cluster.
 
 The rqlite server also supports explicitly setting the node ID. While it's not required to set this, it's recommended for production clusters.
