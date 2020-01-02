@@ -45,7 +45,7 @@ type Store interface {
 	Query(qr *store.QueryRequest) ([]*sql.Rows, error)
 
 	// Join joins the node with the given ID, reachable at addr, to this node.
-	Join(id, addr string, metadata map[string]string) error
+	Join(id, addr string, voter bool, metadata map[string]string) error
 
 	// Remove removes the node, specified by id, from the cluster.
 	Remove(id string) error
@@ -318,7 +318,12 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.store.Join(remoteID.(string), remoteAddr.(string), m); err != nil {
+	voter, ok := md["voter"]
+	if !ok {
+		voter = true
+	}
+
+	if err := s.store.Join(remoteID.(string), remoteAddr.(string), voter.(bool), m); err != nil {
 		if err == store.ErrNotLeader {
 			leader := s.leaderAPIAddr()
 			if leader == "" {

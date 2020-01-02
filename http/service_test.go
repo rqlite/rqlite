@@ -492,7 +492,7 @@ func (m *MockStore) Query(qr *store.QueryRequest) ([]*sql.Rows, error) {
 	return nil, nil
 }
 
-func (m *MockStore) Join(id, addr string, metadata map[string]string) error {
+func (m *MockStore) Join(id, addr string, voter bool, metadata map[string]string) error {
 	return nil
 }
 

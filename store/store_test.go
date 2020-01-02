@@ -511,7 +511,7 @@ func Test_MultiNodeJoinRemove(t *testing.T) {
 	sort.StringSlice(storeNodes).Sort()
 
 	// Join the second node to the first.
-	if err := s0.Join(s1.ID(), s1.Addr(), nil); err != nil {
+	if err := s0.Join(s1.ID(), s1.Addr(), true, nil); err != nil {
 		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
 	}
 
@@ -558,6 +558,74 @@ func Test_MultiNodeJoinRemove(t *testing.T) {
 	}
 }
 
+func Test_MultiNodeJoinNonVoterRemove(t *testing.T) {
+	s0 := mustNewStore(true)
+	defer os.RemoveAll(s0.Path())
+	if err := s0.Open(true); err != nil {
+		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
+	}
+	defer s0.Close(true)
+	s0.WaitForLeader(10 * time.Second)
+
+	s1 := mustNewStore(true)
+	defer os.RemoveAll(s1.Path())
+	if err := s1.Open(false); err != nil {
+		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
+	}
+	defer s1.Close(true)
+
+	// Get sorted list of cluster nodes.
+	storeNodes := []string{s0.ID(), s1.ID()}
+	sort.StringSlice(storeNodes).Sort()
+
+	// Join the second node to the first.
+	if err := s0.Join(s1.ID(), s1.Addr(), false, nil); err != nil {
+		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
+	}
+
+	s1.WaitForLeader(10 * time.Second)
+
+	// Check leader state on follower.
+	if got, exp := s1.LeaderAddr(), s0.Addr(); got != exp {
+		t.Fatalf("wrong leader address returned, got: %s, exp %s", got, exp)
+	}
+	id, err := s1.LeaderID()
+	if err != nil {
+		t.Fatalf("failed to retrieve leader ID: %s", err.Error())
+	}
+	if got, exp := id, s0.raftID; got != exp {
+		t.Fatalf("wrong leader ID returned, got: %s, exp %s", got, exp)
+	}
+
+	nodes, err := s0.Nodes()
+	if err != nil {
+		t.Fatalf("failed to get nodes: %s", err.Error())
+	}
+
+	if len(nodes) != len(storeNodes) {
+		t.Fatalf("size of cluster is not correct")
+	}
+	if storeNodes[0] != nodes[0].ID || storeNodes[1] != nodes[1].ID {
+		t.Fatalf("cluster does not have correct nodes")
+	}
+
+	// Remove the non-voter.
+	if err := s0.Remove(s1.ID()); err != nil {
+		t.Fatalf("failed to remove %s from cluster: %s", s1.ID(), err.Error())
+	}
+
+	nodes, err = s0.Nodes()
+	if err != nil {
+		t.Fatalf("failed to get nodes post remove: %s", err.Error())
+	}
+	if len(nodes) != 1 {
+		t.Fatalf("size of cluster is not correct post remove")
+	}
+	if s0.ID() != nodes[0].ID {
+		t.Fatalf("cluster does not have correct nodes post remove")
+	}
+}
+
 func Test_MultiNodeExecuteQuery(t *testing.T) {
 	s0 := mustNewStore(true)
 	defer os.RemoveAll(s0.Path())
@@ -574,8 +642,20 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 	}
 	defer s1.Close(true)
 
-	// Join the second node to the first.
-	if err := s0.Join(s1.ID(), s1.Addr(), nil); err != nil {
+	s2 := mustNewStore(true)
+	defer os.RemoveAll(s2.Path())
+	if err := s2.Open(false); err != nil {
+		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
+	}
+	defer s2.Close(true)
+
+	// Join the second node to the first as a voting node.
+	if err := s0.Join(s1.ID(), s1.Addr(), true, nil); err != nil {
+		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
+	}
+
+	// Join the third node to the first as a non-voting node.
+	if err := s0.Join(s2.ID(), s2.Addr(), false, nil); err != nil {
 		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
 	}
 
@@ -589,7 +669,7 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 	}
 	r, err := s0.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, None})
 	if err != nil {
-		t.Fatalf("failed to query single node: %s", err.Error())
+		t.Fatalf("failed to query leader node: %s", err.Error())
 	}
 	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
@@ -598,7 +678,7 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
-	// Wait until the 3 log entries have been applied to the follower,
+	// Wait until the 3 log entries have been applied to the voting follower,
 	// and then query.
 	if err := s1.WaitForAppliedIndex(3, 5*time.Second); err != nil {
 		t.Fatalf("error waiting for follower to apply index: %s:", err.Error())
@@ -613,7 +693,31 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 	}
 	r, err = s1.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, None})
 	if err != nil {
-		t.Fatalf("failed to query single node: %s", err.Error())
+		t.Fatalf("failed to query follower node: %s", err.Error())
+	}
+	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	// Wait until the 3 log entries have been applied to the non-voting follower,
+	// and then query.
+	if err := s2.WaitForAppliedIndex(3, 5*time.Second); err != nil {
+		t.Fatalf("error waiting for follower to apply index: %s:", err.Error())
+	}
+	r, err = s2.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, Weak})
+	if err == nil {
+		t.Fatalf("successfully queried non-voting node")
+	}
+	r, err = s2.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, Strong})
+	if err == nil {
+		t.Fatalf("successfully queried non-voting node")
+	}
+	r, err = s2.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, None})
+	if err != nil {
+		t.Fatalf("failed to query non-voting node: %s", err.Error())
 	}
 	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
@@ -670,7 +774,7 @@ func Test_StoreLogTruncationMultinode(t *testing.T) {
 	defer s1.Close(true)
 
 	// Join the second node to the first.
-	if err := s0.Join(s1.ID(), s1.Addr(), nil); err != nil {
+	if err := s0.Join(s1.ID(), s1.Addr(), true, nil); err != nil {
 		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
 	}
 	s1.WaitForLeader(10 * time.Second)
@@ -848,7 +952,7 @@ func Test_MetadataMultinode(t *testing.T) {
 
 	// Join the second node to the first.
 	meta := map[string]string{"baz": "qux"}
-	if err := s0.Join(s1.ID(), s1.Addr(), meta); err != nil {
+	if err := s0.Join(s1.ID(), s1.Addr(), true, meta); err != nil {
 		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
 	}
 	s1.WaitForLeader(10 * time.Second)

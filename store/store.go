@@ -571,7 +571,7 @@ func (s *Store) Query(qr *QueryRequest) ([]*sql.Rows, error) {
 
 // Join joins a node, identified by id and located at addr, to this store.
 // The node must be ready to respond to Raft communications at that address.
-func (s *Store) Join(id, addr string, metadata map[string]string) error {
+func (s *Store) Join(id, addr string, voter bool, metadata map[string]string) error {
 	s.logger.Printf("received request to join node at %s", addr)
 	if s.raft.State() != raft.Leader {
 		return ErrNotLeader
@@ -601,7 +601,13 @@ func (s *Store) Join(id, addr string, metadata map[string]string) error {
 		}
 	}
 
-	f := s.raft.AddVoter(raft.ServerID(id), raft.ServerAddress(addr), 0, 0)
+	var f raft.IndexFuture
+	if voter {
+		f = s.raft.AddVoter(raft.ServerID(id), raft.ServerAddress(addr), 0, 0)
+	} else {
+
+		f = s.raft.AddNonvoter(raft.ServerID(id), raft.ServerAddress(addr), 0, 0)
+	}
 	if e := f.(raft.Future); e.Error() != nil {
 		if e.Error() == raft.ErrNotLeader {
 			return ErrNotLeader
@@ -613,7 +619,7 @@ func (s *Store) Join(id, addr string, metadata map[string]string) error {
 		return err
 	}
 
-	s.logger.Printf("node at %s joined successfully", addr)
+	s.logger.Printf("node at %s joined successfully as %s", addr, prettyVoter(voter))
 	return nil
 }
 
@@ -1046,6 +1052,14 @@ func enabledFromBool(b bool) string {
 		return "enabled"
 	}
 	return "disabled"
+}
+
+// prettyVoter converts bool to "voter" or "non-voter"
+func prettyVoter(v bool) string {
+	if v {
+		return "voter"
+	}
+	return "non-voter"
 }
 
 // pathExists returns true if the given path exists.
