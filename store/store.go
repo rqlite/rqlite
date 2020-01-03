@@ -29,6 +29,10 @@ var (
 	// operation.
 	ErrNotLeader = errors.New("not leader")
 
+	// ErrStaleRead is returned if the executing the query would violate the
+	// requested freshness.
+	ErrStaleRead = errors.New("stale read")
+
 	// ErrOpenTimeout is returned when the Store does not apply its initial
 	// logs within the specified time.
 	ErrOpenTimeout = errors.New("timeout waiting for initial logs application")
@@ -80,10 +84,11 @@ func init() {
 // QueryRequest represents a query that returns rows, and does not modify
 // the database.
 type QueryRequest struct {
-	Queries []string
-	Timings bool
-	Tx      bool
-	Lvl     ConsistencyLevel
+	Queries   []string
+	Timings   bool
+	Tx        bool
+	Lvl       ConsistencyLevel
+	Freshness time.Duration
 }
 
 // ExecuteRequest represents a query that returns now rows, but does modify
@@ -565,8 +570,11 @@ func (s *Store) Query(qr *QueryRequest) ([]*sql.Rows, error) {
 		return nil, ErrNotLeader
 	}
 
-	r, err := s.db.Query(qr.Queries, qr.Tx, qr.Timings)
-	return r, err
+	// Read straight from database.
+	if qr.Freshness > 0 && time.Since(s.raft.LastContact()) > qr.Freshness {
+		return nil, ErrStaleRead
+	}
+	return s.db.Query(qr.Queries, qr.Tx, qr.Timings)
 }
 
 // Join joins a node, identified by id and located at addr, to this store.

@@ -642,19 +642,25 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 
 	isTx, err := isTx(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	timings, err := timings(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	lvl, err := level(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	frsh, err := freshness(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -665,7 +671,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	results, err := s.store.Query(&store.QueryRequest{queries, timings, isTx, lvl})
+	results, err := s.store.Query(&store.QueryRequest{queries, timings, isTx, lvl, frsh})
 	if err != nil {
 		if err == store.ErrNotLeader {
 			leader := s.leaderAPIAddr()
@@ -909,6 +915,21 @@ func level(req *http.Request) (store.ConsistencyLevel, error) {
 	default:
 		return store.Weak, nil
 	}
+}
+
+// freshness returns any freshness requested with a query.
+func freshness(req *http.Request) (time.Duration, error) {
+	q := req.URL.Query()
+	f := strings.TrimSpace(q.Get("freshness"))
+	if f == "" {
+		return 0, nil
+	}
+
+	d, err := time.ParseDuration(f)
+	if err != nil {
+		return 0, err
+	}
+	return d, nil
 }
 
 // backupFormat returns the request backup format, setting the response header
