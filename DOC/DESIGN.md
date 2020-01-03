@@ -29,8 +29,14 @@ The diagram below shows a high-level view of a rqlite node.
                  ┌───────────────────────────────────────────────┐
                  │                 RAM or disk                   │
                  └───────────────────────────────────────────────┘
+## File system
+### Raft
+The Raft layer always creates a file -- it creates the _Raft log_. The log stores the set of commited SQLite commands, in the order which they were executed. This log is authoritative record of every change that has happened to the system.
 
-## Log Compaction
+### SQLite
+By default the SQLite layer doesn't create a file. Instead it creates the database in RAM. rqlite can create the SQLite database on disk, if so configured at start-time.
+
+## Log Compaction and Truncation.
 rqlite automatically performs log compaction, so that disk usage due to the log remains bounded. After a configurable number of changes rqlite snapshots the SQLite database, and truncates the Raft log. This is a technical feature of the Raft consensus system, and most users of rqlite need not be concerned with this.
 
 ## rqlite and the CAP theorem
