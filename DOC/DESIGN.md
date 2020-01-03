@@ -31,7 +31,7 @@ The diagram below shows a high-level view of an rqlite node.
                  └───────────────────────────────────────────────┘
 ## File system
 ### Raft
-The Raft layer always creates a file -- it creates the _Raft log_. The log stores the set of commited SQLite commands, in the order which they were executed. This log is authoritative record of every change that has happened to the system.
+The Raft layer always creates a file -- it creates the _Raft log_. The log stores the set of commited SQLite commands, in the order which they were executed. This log is authoritative record of every change that has happened to the system. It may also contain some read-only queries entries, depending on read-consistency choices.
 
 ### SQLite
 By default the SQLite layer doesn't create a file. Instead it creates the database in RAM. rqlite can create the SQLite database on disk, if so configured at start-time.
