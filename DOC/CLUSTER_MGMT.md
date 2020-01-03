@@ -2,10 +2,12 @@
 This document describes, in detail, how to create and manage a rqlite cluster.
 
 ## Practical cluster size
-Clusters of 3, 5, 7, or 9, nodes are most practical. Clusters with a greater number start to become unweildy, due to the number of nodes that must be contacted before a database change can take place.
+Clusters of 3, 5, 7, or 9, [_voting_](https://raft.github.io/) nodes are most practical. Clusters with a greater number start to become unweildy, due to the number of nodes that must be contacted before a database change can take place.
+
+It is possible to run larger clusters if you just need nodes [from which you only need to read from](https://github.com/rqlite/rqlite/blob/master/DOC/READ_ONLY_NODES.md).
 
 ## Clusters with an even-number of nodes
-There is little point running clusters with even numbers of nodes. To see why this is imagine you have one cluster of 3 nodes, and a second cluster of 4 nodes. In each case, for the cluster to reach consensus on a given change, a majority of nodes within the cluster are required to have agreed to the change.
+There is little point running clusters with even numbers of voting i.e. Raft nodes. To see why this is imagine you have one cluster of 3 nodes, and a second cluster of 4 nodes. In each case, for the cluster to reach consensus on a given change, a majority of nodes within the cluster are required to have agreed to the change.
 
 A majority is defined as `N/2 + 1` where `N` is the number of nodes in the cluster. For a 3-node a majority is 2; for a 4-node cluster a majority is 3. Therefore a 3-node cluster can tolerate the failure of a single node. However a 4-node cluster can also only tolerate a failure of a single node.
 
