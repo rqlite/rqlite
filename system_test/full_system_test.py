@@ -382,6 +382,55 @@ class TestEndToEndNonVoter(unittest.TestCase):
     for f in self.cluster.followers():
       self.assertEqual(n.APIAddr(), f.redirect_addr())
 
+class TestEndToEndNonVoterFollowsLeader(unittest.TestCase):
+  def setUp(self):
+    n0 = Node(RQLITED_PATH, '0')
+    n0.start()
+    n0.wait_for_leader()
+
+    n1 = Node(RQLITED_PATH, '1')
+    n1.start(join=n0.APIAddr())
+    n1.wait_for_leader()
+
+    n2 = Node(RQLITED_PATH, '2')
+    n2.start(join=n0.APIAddr())
+    n2.wait_for_leader()
+
+    self.non_voter = Node(RQLITED_PATH, '3', raft_voter=False)
+    self.non_voter.start(join=n0.APIAddr())
+    self.non_voter.wait_for_leader()
+
+    self.cluster = Cluster([n0, n1, n2, self.non_voter])
+
+  def tearDown(self):
+    self.cluster.deprovision()
+
+  def test_execute_fail_nonvoter(self):
+    '''Test that a non-voter always picks up changes, even when leader changes'''
+
+    n = self.cluster.wait_for_leader()
+    j = n.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
+    self.assertEqual(str(j), "{u'results': [{}]}")
+    j = n.execute('INSERT INTO foo(name) VALUES("fiona")')
+    applied = n.wait_for_all_applied()
+    self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
+    j = n.query('SELECT * FROM foo')
+    self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
+
+    # Kill leader, and then make more changes.
+    n0 = self.cluster.wait_for_leader().stop()
+    n1 = self.cluster.wait_for_leader(node_exc=n0)
+    n1.wait_for_applied_index(applied)
+    j = n1.query('SELECT * FROM foo')
+    self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
+    j = n1.execute('INSERT INTO foo(name) VALUES("declan")')
+    self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 2, u'rows_affected': 1}]}")
+
+    # Confirm non-voter sees changes made through old and new leader.
+    self.non_voter.wait_for_applied_index(n1.applied_index())
+    j = self.non_voter.query('SELECT * FROM foo', level='none')
+    self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona'], [2, u'declan']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
+
 class TestEndToEndBackupRestore(unittest.TestCase):
   def test_backup_restore(self):
     fd, self.db_file = tempfile.mkstemp()
