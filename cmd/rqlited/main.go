@@ -24,8 +24,6 @@ import (
 	"github.com/rqlite/rqlite/tcp"
 )
 
-const sqliteDSN = "db.sqlite"
-
 const logo = `
             _ _ _
            | (_) |
