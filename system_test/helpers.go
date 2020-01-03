@@ -85,12 +85,25 @@ func (n *Node) QueryMulti(stmts []string) (string, error) {
 
 // Join instructs this node to join the leader.
 func (n *Node) Join(leader *Node) error {
-	resp, err := DoJoinRequest(leader.APIAddr, n.Store.ID(), n.RaftAddr)
+	resp, err := DoJoinRequest(leader.APIAddr, n.Store.ID(), n.RaftAddr, true)
 	if err != nil {
 		return err
 	}
 	if resp.StatusCode != 200 {
-		return fmt.Errorf("failed to join, leader returned: %s", resp.Status)
+		return fmt.Errorf("failed to join as voter, leader returned: %s", resp.Status)
+	}
+	defer resp.Body.Close()
+	return nil
+}
+
+// JoinAsNonVoter instructs this node to join the leader, but as a non-voting node.
+func (n *Node) JoinAsNonVoter(leader *Node) error {
+	resp, err := DoJoinRequest(leader.APIAddr, n.Store.ID(), n.RaftAddr, false)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("failed to join as non-voter, leader returned: %s", resp.Status)
 	}
 	defer resp.Body.Close()
 	return nil
@@ -283,8 +296,8 @@ func Remove(n *Node, addr string) error {
 }
 
 // DoJoinRequest sends a join request to nodeAddr, for raftID, reachable at raftAddr.
-func DoJoinRequest(nodeAddr, raftID, raftAddr string) (*http.Response, error) {
-	b, err := json.Marshal(map[string]string{"id": raftID, "addr": raftAddr})
+func DoJoinRequest(nodeAddr, raftID, raftAddr string, voter bool) (*http.Response, error) {
+	b, err := json.Marshal(map[string]interface{}{"id": raftID, "addr": raftAddr, "voter": voter})
 	if err != nil {
 		return nil, err
 	}
