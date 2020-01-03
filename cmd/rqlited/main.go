@@ -46,16 +46,6 @@ var (
 	features  = []string{}
 )
 
-const (
-	muxRaftHeader = 1 // Raft consensus communications
-	muxMetaHeader = 2 // Cluster meta communications
-)
-
-const (
-	publishPeerDelay   = 1 * time.Second
-	publishPeerTimeout = 30 * time.Second
-)
-
 var httpAddr string
 var httpAdv string
 var authFile string
