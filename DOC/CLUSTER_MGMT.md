@@ -46,9 +46,6 @@ There is also a rqlite _Discovery Service_, allowing nodes to automatically conn
 ## Through the firewall
 On some networks, like AWS EC2 cloud, nodes may have an IP address that is not routable from outside the firewall. Instead these nodes are addressed using a different IP address. You can still form a rqlite cluster however -- check out [this tutorial](http://www.philipotoole.com/rqlite-v3-0-1-globally-replicating-sqlite/) for more details.
 
-## Read-only (non-voting) nodes
-rqlite supports _read only_ nodes. When started in this mode, a node will not partipate in the Raft consensus system, but will subcribe to the stream of committed log entries, which are broadcast by the leader. You can use this feature to add read scalability to the cluster if you need a high volume of reads. Pass `-raft-non-voter=true` to configure read-only mode.
-
 # Dealing with failure
 It is the nature of clustered systems that nodes can fail at anytime. Depending on the size of your cluster, it will tolerate various amounts of failure. With a 3-node cluster, it can tolerate the failure of a single node, including the leader.
 
