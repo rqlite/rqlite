@@ -8,3 +8,6 @@ Any read request to a read-only node must specify [read-consistency](https://git
 
 ## Enabling read-only mode
 Pass `-raft-non-voter=true` to `rqlited` to enable read-only mode.
+
+## Read-only node management
+Otherwise read-only nodes join a cluster in the [same manner as a voting node. They can also be removed using the same operations](https://github.com/rqlite/rqlite/blob/master/DOC/CLUSTER_MGMT.md). 
