@@ -22,6 +22,7 @@ class Node(object):
   def __init__(self, path, node_id,
                api_addr=None, api_adv=None,
                raft_addr=None, raft_adv=None,
+               raft_voter=True,
                dir=None):
     if api_addr is None:
       api_addr = random_addr()
@@ -38,6 +39,7 @@ class Node(object):
     self.api_adv = api_adv
     self.raft_addr = raft_addr
     self.raft_adv = raft_adv
+    self.raft_voter = raft_voter
     self.dir = dir
     self.process = None
     self.stdout_file = os.path.join(dir, 'rqlited.log')
@@ -70,7 +72,8 @@ class Node(object):
     command = [self.path,
                '-node-id', self.node_id,
                '-http-addr', self.api_addr,
-               '-raft-addr', self.raft_addr]
+               '-raft-addr', self.raft_addr,
+               '-raft-non-voter=%s' % str(not self.raft_voter).lower()]
     if self.api_adv is not None:
       command += ['-http-adv-addr', self.api_adv]
     if self.raft_adv is not None:
@@ -324,6 +327,109 @@ class TestEndToEndAdvAddr(TestEndToEnd):
     n2.wait_for_leader()
 
     self.cluster = Cluster([n0, n1, n2])
+
+class TestEndToEndNonVoter(unittest.TestCase):
+  def setUp(self):
+    self.leader = Node(RQLITED_PATH, '0')
+    self.leader.start()
+    self.leader.wait_for_leader()
+
+    self.non_voter = Node(RQLITED_PATH, '1', raft_voter=False)
+    self.non_voter.start(join=self.leader.APIAddr())
+    self.non_voter.wait_for_leader()
+
+    self.cluster = Cluster([self.leader, self.non_voter])
+
+  def tearDown(self):
+    self.cluster.deprovision()
+
+  def test_execute_fail_rejoin(self):
+    '''Test that a non-voter that fails can rejoin the cluster, and pick up changes'''
+
+    # Insert some records via the leader
+    j = self.leader.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
+    self.assertEqual(str(j), "{u'results': [{}]}")
+    j = self.leader.execute('INSERT INTO foo(name) VALUES("fiona")')
+    applied = self.leader.wait_for_all_applied()
+    self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
+    j = self.leader.query('SELECT * FROM foo')
+    self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
+
+    # Stop non-voter and then insert some more records
+    self.non_voter.stop()
+    j = self.leader.execute('INSERT INTO foo(name) VALUES("declan")')
+    self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 2, u'rows_affected': 1}]}")
+
+    # Restart non-voter and confirm it picks up changes
+    self.non_voter.start()
+    self.non_voter.wait_for_leader()
+    self.non_voter.wait_for_applied_index(self.leader.applied_index())
+    j = self.non_voter.query('SELECT * FROM foo', level='none')
+    self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona'], [2, u'declan']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
+
+  def test_leader_redirect(self):
+    return
+    '''Test that non-voters supply the correct leader redirects (HTTP 301)'''
+
+    l = self.cluster.wait_for_leader()
+    fs = self.cluster.followers()
+    self.assertEqual(len(fs), 1)
+    for n in fs:
+      self.assertEqual(l.APIAddr(), n.redirect_addr())
+
+    l.stop()
+    n = self.cluster.wait_for_leader(node_exc=l)
+    for f in self.cluster.followers():
+      self.assertEqual(n.APIAddr(), f.redirect_addr())
+
+class TestEndToEndNonVoterFollowsLeader(unittest.TestCase):
+  def setUp(self):
+    n0 = Node(RQLITED_PATH, '0')
+    n0.start()
+    n0.wait_for_leader()
+
+    n1 = Node(RQLITED_PATH, '1')
+    n1.start(join=n0.APIAddr())
+    n1.wait_for_leader()
+
+    n2 = Node(RQLITED_PATH, '2')
+    n2.start(join=n0.APIAddr())
+    n2.wait_for_leader()
+
+    self.non_voter = Node(RQLITED_PATH, '3', raft_voter=False)
+    self.non_voter.start(join=n0.APIAddr())
+    self.non_voter.wait_for_leader()
+
+    self.cluster = Cluster([n0, n1, n2, self.non_voter])
+
+  def tearDown(self):
+    self.cluster.deprovision()
+
+  def test_execute_fail_nonvoter(self):
+    '''Test that a non-voter always picks up changes, even when leader changes'''
+
+    n = self.cluster.wait_for_leader()
+    j = n.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
+    self.assertEqual(str(j), "{u'results': [{}]}")
+    j = n.execute('INSERT INTO foo(name) VALUES("fiona")')
+    applied = n.wait_for_all_applied()
+    self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
+    j = n.query('SELECT * FROM foo')
+    self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
+
+    # Kill leader, and then make more changes.
+    n0 = self.cluster.wait_for_leader().stop()
+    n1 = self.cluster.wait_for_leader(node_exc=n0)
+    n1.wait_for_applied_index(applied)
+    j = n1.query('SELECT * FROM foo')
+    self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
+    j = n1.execute('INSERT INTO foo(name) VALUES("declan")')
+    self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 2, u'rows_affected': 1}]}")
+
+    # Confirm non-voter sees changes made through old and new leader.
+    self.non_voter.wait_for_applied_index(n1.applied_index())
+    j = self.non_voter.query('SELECT * FROM foo', level='none')
+    self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona'], [2, u'declan']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
 
 class TestEndToEndBackupRestore(unittest.TestCase):
   def test_backup_restore(self):

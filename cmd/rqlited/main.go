@@ -78,6 +78,7 @@ var expvar bool
 var pprofEnabled bool
 var dsn string
 var onDisk bool
+var raftNonVoter bool
 var raftSnapThreshold uint64
 var raftHeartbeatTimeout string
 var raftElectionTimeout string
@@ -116,6 +117,7 @@ func init() {
 	flag.StringVar(&dsn, "dsn", "", `SQLite DSN parameters. E.g. "cache=shared&mode=memory"`)
 	flag.BoolVar(&onDisk, "on-disk", false, "Use an on-disk SQLite database")
 	flag.BoolVar(&showVersion, "version", false, "Show version information and exit")
+	flag.BoolVar(&raftNonVoter, "raft-non-voter", false, "Configure as non-voting node")
 	flag.StringVar(&raftHeartbeatTimeout, "raft-timeout", "1s", "Raft heartbeat timeout")
 	flag.StringVar(&raftElectionTimeout, "raft-election-timeout", "1s", "Raft election timeout")
 	flag.StringVar(&raftApplyTimeout, "raft-apply-timeout", "10s", "Raft apply timeout")
@@ -253,7 +255,7 @@ func main() {
 			}
 		}
 
-		if j, err := cluster.Join(joins, str.ID(), advAddr, meta, &tlsConfig); err != nil {
+		if j, err := cluster.Join(joins, str.ID(), advAddr, !raftNonVoter, meta, &tlsConfig); err != nil {
 			log.Fatalf("failed to join cluster at %s: %s", joins, err.Error())
 		} else {
 			log.Println("successfully joined cluster at", j)

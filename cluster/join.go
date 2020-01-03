@@ -23,7 +23,7 @@ const attemptInterval time.Duration = 5 * time.Second
 // It walks through joinAddr in order, and sets the node ID and Raft address of
 // the joining node as id addr respectively. It returns the endpoint successfully
 // used to join the cluster.
-func Join(joinAddr []string, id, addr string, meta map[string]string, tlsConfig *tls.Config) (string, error) {
+func Join(joinAddr []string, id, addr string, voter bool, meta map[string]string, tlsConfig *tls.Config) (string, error) {
 	var err error
 	var j string
 	logger := log.New(os.Stderr, "[cluster-join] ", log.LstdFlags)
@@ -33,7 +33,7 @@ func Join(joinAddr []string, id, addr string, meta map[string]string, tlsConfig 
 
 	for i := 0; i < numAttempts; i++ {
 		for _, a := range joinAddr {
-			j, err = join(a, id, addr, meta, tlsConfig, logger)
+			j, err = join(a, id, addr, voter, meta, tlsConfig, logger)
 			if err == nil {
 				// Success!
 				return j, nil
@@ -46,7 +46,7 @@ func Join(joinAddr []string, id, addr string, meta map[string]string, tlsConfig 
 	return "", err
 }
 
-func join(joinAddr, id, addr string, meta map[string]string, tlsConfig *tls.Config, logger *log.Logger) (string, error) {
+func join(joinAddr, id, addr string, voter bool, meta map[string]string, tlsConfig *tls.Config, logger *log.Logger) (string, error) {
 	if id == "" {
 		return "", fmt.Errorf("node ID not set")
 	}
@@ -71,9 +71,10 @@ func join(joinAddr, id, addr string, meta map[string]string, tlsConfig *tls.Conf
 
 	for {
 		b, err := json.Marshal(map[string]interface{}{
-			"id":   id,
-			"addr": resv.String(),
-			"meta": meta,
+			"id":    id,
+			"addr":  resv.String(),
+			"voter": voter,
+			"meta":  meta,
 		})
 		if err != nil {
 			return "", err
