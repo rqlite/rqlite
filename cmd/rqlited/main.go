@@ -46,11 +46,6 @@ var (
 	features  = []string{}
 )
 
-const (
-	publishPeerDelay   = 1 * time.Second
-	publishPeerTimeout = 30 * time.Second
-)
-
 var httpAddr string
 var httpAdv string
 var authFile string
