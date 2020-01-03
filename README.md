@@ -22,7 +22,7 @@ rqlite uses [Raft](https://raft.github.io/) to achieve consensus across all the 
 - [Discovery Service support](https://github.com/rqlite/rqlite/blob/master/DOC/DISCOVERY.md), allowing clusters to be dynamically created.
 - [Extensive security and encryption support](https://github.com/rqlite/rqlite/blob/master/DOC/SECURITY.md), including node-to-node encryption.
 - Choice of [read consistency levels](https://github.com/rqlite/rqlite/blob/master/DOC/CONSISTENCY.md).
-- Optional read-only (non-voting) nodes, which can add read scalability to the system.
+- Optional [read-only (non-voting) nodes](https://github.com/rqlite/rqlite/blob/master/DOC/READ_ONLY_NODES.md), which can add read scalability to the system.
 - A form of transaction support.
 - Hot backups.
 
