@@ -4,6 +4,7 @@ This document describes, in detail, how to create and manage a rqlite cluster.
 ## Practical cluster size
 Clusters of 3, 5, 7, or 9, [_voting_](https://raft.github.io/) nodes are most practical. Clusters with a greater number start to become unweildy, due to the number of nodes that must be contacted before a database change can take place.
 
+### Read-only nodes
 It is possible to run larger clusters if you just need nodes [from which you only need to read from](https://github.com/rqlite/rqlite/blob/master/DOC/READ_ONLY_NODES.md).
 
 ## Clusters with an even-number of nodes
