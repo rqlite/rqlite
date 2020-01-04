@@ -2,7 +2,7 @@
 
 ### New features
 - [PR #613](https://github.com/rqlite/rqlite/pull/613): Support read-only, non-voting nodes. These provide read scalability for the system.
-- [PR #614](https://github.com/rqlite/rqlite/pull/614): Support specifying leader freshness with None consistency queries.
+- [PR #614](https://github.com/rqlite/rqlite/pull/614): Support specifying minimum leader freshness with _None_ consistency queries.
 
 ## 5.0.0 (December 30th 2019)
 This release uses a new Raft consensus version, with the move to Hashicorp Raft v1. As a result **the Raft system in 5.0 is not compatible with the 4.0 series**. To upgrade from an earlier version to this release you should backup your 4.0 leader node, and restore the database dump into a new 5.0 cluster.
