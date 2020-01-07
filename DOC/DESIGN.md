@@ -54,9 +54,12 @@ Yes, this is an intrinsic part of the Raft protocol. How long it takes to reach 
 Yes, it is.
 
 ### Do concurrent writes block each other? 
-In this regard rqlite currently offers exactly the same semantics as SQLite. Each HTTP write0request uses the same SQLite connection on the leader, so one write-over-HTTP may block another. Explicit connection control will be available in a future release, which will clients more control over transactions. Only one concurrent write will ever be supported however, due to the nature of SQLite.
+In this regard rqlite currently offers exactly the same semantics as SQLite. Each HTTP write request uses the same SQLite connection on the leader, so one write-over-HTTP may block another. Explicit connection control will be available in a future release, which will clients more control over transactions. Only one concurrent write will ever be supported however, due to the nature of SQLite.
 
 ### How does this solution scale?
 The simplest way to scale for reads and writes is to use higher-performance disks and a lower-latency network. This is known as _scaling vertically_.
 
 rqlite doesn't scale horizontally for writes however, as all writes must go through the leader. It can be scaled horizontally for reads though, via [read-only nodes](https://github.com/rqlite/rqlite/blob/master/DOC/READ_ONLY_NODES.md).
+
+### How does a client detect a partition?
+If the client is on the same side of the partition as a quorum of nodes, there will be no real problem, and any writes should succeed. However if the client is on the other side of the partition, it will still be redirected to the leader, but will then (presumably) fail to contact the leader, and experience a timeout. It may be possible to make this condition clearer to clients in a future release.
