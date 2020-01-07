@@ -57,4 +57,6 @@ Yes, it is.
 In this regard rqlite currently offers exactly the same semantics as SQLite. Each HTTP request uses the same SQLite connection. Explicit connection control will be available in a future request.
 
 ### How does this solution scale?
-It doesn't scale for writes, as all writes must go through the leader. It can be scaled for reads however, via [read-only nodes](https://github.com/rqlite/rqlite/blob/master/DOC/READ_ONLY_NODES.md).
+The simplest way to scale for reads and writes is to use higher-performance disks and a lower-latency network. This is known as _scaling vertically_.
+
+rqlite doesn't scale horizontally for writes however, as all writes must go through the leader. It can be scaled horizontally for reads though, via [read-only nodes](https://github.com/rqlite/rqlite/blob/master/DOC/READ_ONLY_NODES.md).
