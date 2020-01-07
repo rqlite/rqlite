@@ -54,7 +54,7 @@ Yes, this is an intrinsic part of the Raft protocol. How long it takes to reach 
 Yes, it is.
 
 ### Do concurrent writes block each other? 
-In this regard rqlite currently offers exactly the same semantics as SQLite. Each HTTP request uses the same SQLite connection, so one write-over-HTTP may block another. Explicit connection control will be available in a future release.
+In this regard rqlite currently offers exactly the same semantics as SQLite. Each HTTP write0request uses the same SQLite connection on the leader, so one write-over-HTTP may block another. Explicit connection control will be available in a future release, which will clients more control over transactions. Only one concurrent write will ever be supported however, due to the nature of SQLite.
 
 ### How does this solution scale?
 The simplest way to scale for reads and writes is to use higher-performance disks and a lower-latency network. This is known as _scaling vertically_.
