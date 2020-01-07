@@ -39,7 +39,22 @@ By default the SQLite layer doesn't create a file. Instead it creates the databa
 ## Log Compaction and Truncation
 rqlite automatically performs log compaction, so that disk usage due to the log remains bounded. After a configurable number of changes rqlite snapshots the SQLite database, and truncates the Raft log. This is a technical feature of the Raft consensus system, and most users of rqlite need not be concerned with this.
 
-## rqlite and the CAP theorem
+## Distributed Consensus 
+The following provides detailed information related to Raft, Distributed Consensus, and rqlite.
+
+### rqlite and the CAP theorem
 The [CAP theorem](https://en.wikipedia.org/wiki/CAP_theorem) states that it is impossible for a distributed database to provide consistency, availability, and partition tolerance simulataneously -- that, in the face of a network partition, the database can be available or consistent, but not both.
 
 Raft is a Consistency-Partition (CP) protocol. This means that if a rqlite cluster is partitioned, only the side of the cluster that contains a majority of the nodes will be available. The other side of the cluster will not respond to writes. However the side that remains available will return consistent results, and when the partition is healed, consistent results will continue to be returned.
+
+### Does the protocol require consensus be reached before a commit is accepted?
+Yes, this is an intrinsic part of the Raft protocol. How long it takes to reach consensus depends, primarily on your network. It will two rounds trips from a leader to a quorum of nodes, though each of those nodes is contacted in parallel.
+
+### Is the underlying serializable isolation level of SQLite maintained?
+Yes, it is.
+
+### Do concurrent writes block each other? 
+In this regard rqlite currently offers exactly the same semantics as SQLite. Each HTTP request uses the same SQLite connection. Explicit connection control will be available in a future request.
+
+### How does this solution scale?
+It doesn't scale for writes, as all writes must go through the leader. It can be scaled for reads however, via [read-only nodes](https://github.com/rqlite/rqlite/blob/master/DOC/READ_ONLY_NODES.md).
