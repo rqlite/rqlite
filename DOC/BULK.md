@@ -2,7 +2,7 @@
 The bulk API allows multiple updates or queries to be executed in a single request. 
 
 ## Updates
-Bulk updates are supported. To execute multipe statements in one HTTP call, simply include the statements in the JSON array:
+Bulk updates are supported. To execute multiple statements in one HTTP call, simply include the statements in the JSON array:
 
 ```bash
 curl -XPOST 'localhost:4001/db/execute?pretty&timings' -H "Content-Type: application/json" -d "[
