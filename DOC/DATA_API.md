@@ -149,7 +149,7 @@ $ curl -v -G 'localhost:4003/db/query?pretty&timings' --data-urlencode 'q=SELECT
 ```
 It is up the clients to re-issue the command to the leader.
 
-This choice was made, as it provides maximum visibility to the clients. For example, if a follower transparently forwarded a request to the leader, and one of the nodes then crashed during processing, it may be much harder for the client to determine where in the chain of nodes the processing failed.
+This choice was made as it provides maximum visibility to the clients. For example, if a follower transparently forwarded a request to the leader, and one of the nodes then crashed during processing, it may be much harder for the client to determine where in the chain of nodes the processing failed.
 
 ## Bulk API
 You can learn about the bulk API [here](https://github.com/rqlite/rqlite/blob/master/DOC/BULK.md).
