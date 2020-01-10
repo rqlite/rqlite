@@ -1,4 +1,4 @@
-## 5.1.0 (unreleased)
+## 5.1.0 (January 10th 2020)
 
 ### New features
 - [PR #613](https://github.com/rqlite/rqlite/pull/613): Support read-only, non-voting nodes. These provide read scalability for the system.
