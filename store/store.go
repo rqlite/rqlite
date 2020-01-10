@@ -150,6 +150,7 @@ type Store struct {
 	HeartbeatTimeout  time.Duration
 	ElectionTimeout   time.Duration
 	ApplyTimeout      time.Duration
+	RaftLogLevel      string
 }
 
 // StoreConfig represents the configuration of the underlying Store.
@@ -766,6 +767,7 @@ func (s *Store) remove(id string) error {
 func (s *Store) raftConfig() *raft.Config {
 	config := raft.DefaultConfig()
 	config.ShutdownOnRemove = s.ShutdownOnRemove
+	config.LogLevel = s.RaftLogLevel
 	if s.SnapshotThreshold != 0 {
 		config.SnapshotThreshold = s.SnapshotThreshold
 	}

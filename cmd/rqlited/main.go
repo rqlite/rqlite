@@ -66,6 +66,7 @@ var expvar bool
 var pprofEnabled bool
 var dsn string
 var onDisk bool
+var raftLogLevel string
 var raftNonVoter bool
 var raftSnapThreshold uint64
 var raftHeartbeatTimeout string
@@ -112,6 +113,7 @@ func init() {
 	flag.StringVar(&raftOpenTimeout, "raft-open-timeout", "120s", "Time for initial Raft logs to be applied. Use 0s duration to skip wait")
 	flag.Uint64Var(&raftSnapThreshold, "raft-snap", 8192, "Number of outstanding log entries that trigger snapshot")
 	flag.BoolVar(&raftShutdownOnRemove, "raft-remove-shutdown", false, "Shutdown Raft if node removed")
+	flag.StringVar(&raftLogLevel, "raft-log-level", "INFO", "Minimum log level for Raft module")
 	flag.StringVar(&cpuProfile, "cpu-profile", "", "Path to file for CPU profiling information")
 	flag.StringVar(&memProfile, "mem-profile", "", "Path to file for memory profiling information")
 	flag.Usage = func() {
@@ -177,6 +179,7 @@ func main() {
 	})
 
 	// Set optional parameters on store.
+	str.RaftLogLevel = raftLogLevel
 	str.ShutdownOnRemove = raftShutdownOnRemove
 	str.SnapshotThreshold = raftSnapThreshold
 	str.HeartbeatTimeout, err = time.ParseDuration(raftHeartbeatTimeout)
