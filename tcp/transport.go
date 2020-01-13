@@ -17,7 +17,7 @@ type Transport struct {
 	skipVerify      bool   // Skip verification of remote node certs.
 }
 
-// NewTransport returns an initialized unecrypted Transport.
+// NewTransport returns an initialized unencrypted Transport.
 func NewTransport() *Transport {
 	return &Transport{}
 }
