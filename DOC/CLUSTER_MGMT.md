@@ -2,10 +2,14 @@
 This document describes, in detail, how to create and manage a rqlite cluster.
 
 ## Practical cluster size
-Clusters of 3, 5, 7, or 9, [_voting_](https://raft.github.io/) nodes are most practical. Clusters with a greater number start to become unweildy, due to the number of nodes that must be contacted before a database change can take place.
+Firstly, you should understand the basic requirement for systems built on the [Raft protocol](https://raft.github.io/). For a cluster of `N` nodes in size to remain operational, at least `(N/2)+1` nodes must be up and running, and be in contact with each other.  
+
+Clusters of 3, 5, 7, or 9, nodes are most practical. Clusters of those sizes can tolerate failures of 1, 2, 3, and 4 nodes respectively.
+
+Clusters with a greater number of nodes start to become unweildy, due to the number of nodes that must be contacted before a database change can take place.
 
 ### Read-only nodes
-It is possible to run larger clusters if you just need nodes [from which you only need to read from](https://github.com/rqlite/rqlite/blob/master/DOC/READ_ONLY_NODES.md).
+It is possible to run larger clusters if you just need nodes [from which you only need to read from](https://github.com/rqlite/rqlite/blob/master/DOC/READ_ONLY_NODES.md). When it comes to the Raft protocol, these nodes do not count towards `N`, since they do not [vote](https://raft.github.io/).
 
 ## Clusters with an even-number of nodes
 There is little point running clusters with even numbers of voting i.e. Raft nodes. To see why this is imagine you have one cluster of 3 nodes, and a second cluster of 4 nodes. In each case, for the cluster to reach consensus on a given change, a majority of nodes within the cluster are required to have agreed to the change.
