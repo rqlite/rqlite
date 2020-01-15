@@ -13,7 +13,7 @@ That said, it's always possible it's _too_ simple for your needs.
 ## rqlite is distributed. Does that mean it can increase SQLite performance?
 Yes, but only for reads. It does not provide any scaling for writes, since all writes must go through the leader. rqlite is distributed for replication and fault tolerance, not for peformance. In fact write performance is reduced relative to a standalone SQLite database, because of the round-trips between nodes.
 
-### What is the best way to increase rqlite performance
+### What is the best way to increase rqlite performance?
 The simplest way to increase performance is to use higher-performance disks and a lower-latency network. This is known as _scaling vertically_.
 
 ## Where does rqlite fit into the CAP theorem?
