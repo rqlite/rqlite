@@ -1,7 +1,7 @@
 # Frequently asked questions
 
 ## What exactly does rqlite do?
-rqlite is about replicating a set of data, which has been written to it using SQL. The data is replicated for fault tolerance i.e. your data is so important that you want multiple copies distributed in different places, you want be able to query your data even if some nodes may fail, or both. These different places could be different machines on a rack, or different machines, each in different buildings, or even different machines, each on different continents.
+rqlite is about replicating a set of data, which has been written to it using SQL. The data is replicated for fault tolerance because your data is so important that you want multiple copies distributed in different places, you want be able to query your data even if some machines fail, or both. These different places could be different machines on a rack, or different machines, each in different buildings, or even different machines, each on different continents.
 
 On top of that, rqlite provides strong guarantees about what state any copy of that data is in, with respect to a special node called the _leader_. That is where Raft comes in. It prevents divergent copies of the data, and ensures there is an "authoritative" copy of that data at all times.
 
@@ -21,11 +21,13 @@ The [CAP theorem](https://en.wikipedia.org/wiki/CAP_theorem) states that it is i
 
 Raft is a Consistency-Partition (CP) protocol. This means that if a rqlite cluster is partitioned, only the side of the cluster that contains a majority of the nodes will be available. The other side of the cluster will not respond to writes. However the side that remains available will return consistent results, and when the partition is healed, consistent results will continue to be returned.
 
-## Does the rqlite require consensus be reached before a commit is accepted?
+## Does the rqlite require consensus be reached before a write is accepted?
 Yes, this is an intrinsic part of the Raft protocol. How long it takes to reach consensus depends primarily on your network. It will take two rounds trips from a leader to a quorum of nodes, though each of those nodes is contacted in parallel.
 
 ## How does a client detect a cluster partition?
-If the client is on the same side of the partition as a quorum of nodes, there will be no real problem, and any writes should succeed. However if the client is on the other side of the partition, it will still be redirected to the leader, but will then (presumably) fail to contact the leader, and experience a timeout. It may be possible to make this condition clearer to clients in a future release.
+If the client is on the same side of the partition as a quorum of nodes, there will be no real problem, and any writes should succeed. However if the client is on the other side of the partition, one of two things will happen. The client may be redirected to the leader, but will then (presumably) fail to contact the leader due to the partition, and experience a timeout. Alternatively the client may receive a `no leader` error.
+
+It may be possible to make partitions clearer to clients in a future release.
 
 ## Can I run a single node?
 Sure. Many people do so, as they like accessing a SQLite database over HTTP. 
