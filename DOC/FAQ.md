@@ -1,6 +1,6 @@
 # Frequently asked questions
 
-## What exactly does rqlite do?i
+## What exactly does rqlite do?
 rqlite is about replicating a set of data, most likely modeled in a relational manner (after all, it uses SQLite as its storage engine). It's replicated for fault tolerance i.e. your data is so important that you want multiple copies distributed in different places.
 
 On top of that, you want strict guarantees about what state any copy of that data is in, with respect to the leader. That is where Raft comes in. It prevents divergent copies, and ensures there is an "authoritative" copy of that data at all times.
@@ -15,7 +15,7 @@ Yes, but only for reads. It does not provide any scaling for writes, since all w
 No. While it does use SQLite as its storage engine, you must access the system via HTTP. That said, since it does use SQLite, all the power of that database is available. It is also possible that any system built on top of SQLite only needs small changes to work with rqlite.
 
 ## Is rqlite a good match for a network of nodes that come and go -- perhaps thousands of them?
-Unlikely. While rqlite does support read-only nodes, allowing it to scale to many nodes, the consensus protocol at the core of rqlite assumes that the nodes in the cluster don't continually come and go. While it won't break, it just may not work as well as you hope.
+Unlikely. While rqlite does support read-only nodes, allowing it to scale to many nodes, the consensus protocol at the core of rqlite works best when the nodes in the cluster don't continually come and go. While it won't break, it probably won't be practical.
 
 ## How does it different than dqlite?
-dqlite is library, written in C, that you can integrate with your own software. This requires programming. rqlite is a standalone program, a full RDBMS.
+dqlite is library, written in C, that you can integrate with your own software. This requires programming. rqlite is a standalone program -- it's a full RDBMS (albeit a simple one).
