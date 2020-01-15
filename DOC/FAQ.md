@@ -12,7 +12,7 @@ rqlite is very simple to deploy, run, and manage. For example, it's a single bin
 Yes, but only for reads. It does not provide any scaling for writes, since all writes must go through the leader. rqlite is distributed for replication and fault tolerance, not for peformance. In fact write performance is reduced relative to a standalone SQLite instance, because of the round-trips between nodes.
 
 ## Is it a drop-in replacement for SQLite?
-No. While it does use SQLite as its storage engine, you must access the system via HTTP. That said, since it does use SQLite, all the power of that database is available. It is also possible that any system built on top of SQLite only needs small changes to work with rqlite.
+No. While it does use SQLite as its storage engine, you must access the system via HTTP. That said, since it basically exposes SQLite, all the power of that database is available. It is also possible that any system built on top of SQLite only needs small changes to work with rqlite.
 
 ## Is rqlite a good match for a network of nodes that come and go -- perhaps thousands of them?
 Unlikely. While rqlite does support read-only nodes, allowing it to scale to many nodes, the consensus protocol at the core of rqlite works best when the nodes in the cluster don't continually come and go. While it won't break, it probably won't be practical.
