@@ -1,11 +1,11 @@
 # Frequently asked questions
 
 ## What exactly does rqlite do?
-rqlite is about replicating a set of data, which has been written to it using SQL. The data is replicated for fault tolerance i.e. your data is so important that you want multiple copies distributed in different places.
+rqlite is about replicating a set of data, which has been written to it using SQL. The data is replicated for fault tolerance i.e. your data is so important that you want multiple copies distributed in different places. These different places could be different machines on a rack, or different machines, each in different buildings, or even different machines, each on different continents.
 
-On top of that, rqlite provides strong guarantees about what state any copy of that data is in, with respect to the leader. That is where Raft comes in. It prevents divergent copies, and ensures there is an "authoritative" copy of that data at all times.
+On top of that, rqlite provides strong guarantees about what state any copy of that data is in, with respect to a special node called the _leader_. That is where Raft comes in. It prevents divergent copies of the data, and ensures there is an "authoritative" copy of that data at all times.
 
-And, of course, it allows you to read your data back, via standard SQL.
+And, of course, rqlite allows you to read your data back, via standard SQL.
 
 ## Why would I use this, versus some other replicated database?
 rqlite is very simple to deploy, run, and manage. For example, it's a single binary you can drop anywhere on a machine, and just start it. This makes it very convenient. 
