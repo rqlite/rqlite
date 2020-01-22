@@ -226,13 +226,9 @@ func (s *Service) Close() {
 // ServeHTTP allows Service to serve HTTP requests.
 func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.addBuildVersion(w)
-
-	if s.credentialStore != nil {
-		username, password, ok := r.BasicAuth()
-		if !ok || !s.credentialStore.Check(username, password) {
-			w.WriteHeader(http.StatusUnauthorized)
-			return
-		}
+	if !s.checkCredentials(r) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
 	}
 
 	switch {
@@ -779,6 +775,17 @@ func (s *Service) addBuildVersion(w http.ResponseWriter) {
 		version = v
 	}
 	w.Header().Add(VersionHTTPHeader, version)
+}
+
+// checkCredentials returns if any authentication requirements
+// have been successfully met.
+func (s *Service) checkCredentials(r *http.Request) bool {
+	if s.credentialStore == nil {
+		return true
+	}
+
+	username, password, ok := r.BasicAuth()
+	return ok && s.credentialStore.Check(username, password)
 }
 
 func requestQueries(r *http.Request) ([]string, error) {
