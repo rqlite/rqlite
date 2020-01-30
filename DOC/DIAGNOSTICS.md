@@ -59,7 +59,7 @@ memstats:
  ```
 
 ## pprof support
-pprof information is available by default and can be retrieved as follows:
+[pprof](https://golang.org/pkg/net/http/pprof/) information is available by default and can be accessed as follows:
 
 ```bash
 curl localhost:4001/debug/pprof/cmdline
