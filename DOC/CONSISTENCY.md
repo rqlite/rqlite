@@ -11,7 +11,7 @@ This is why rqlite offers selectable read consistency levels of _none_, _weak_, 
 With _none_, the node simply queries its local SQLite database, and does not even check if it is the leader. This offers the fastest query response, but suffers from the potential issues listed above.
 
 ### Limiting read staleness
-You can tell the node not return results (effectively) older than a certain time, however. If a read request sets the query parameter `freshess` to a [Go duration string](https://golang.org/pkg/time/#Duration), the node serving the read will check that less time has passed since it was last in contact with the leader, than that specified via freshness. If more time has passed the node will return an error. `freshness` is ignored for all consistency levels except `none`, and is also ignored if set to zero.
+You can tell the node not return results (effectively) older than a certain time, however. If a read request sets the query parameter `freshness` to a [Go duration string](https://golang.org/pkg/time/#Duration), the node serving the read will check that less time has passed since it was last in contact with the leader, than that specified via freshness. If more time has passed the node will return an error. `freshness` is ignored for all consistency levels except `none`, and is also ignored if set to zero.
 
 If you decide to deploy [read-only nodes](https://github.com/rqlite/rqlite/blob/master/DOC/READ_ONLY_NODES.md) however, _none_ combined with `freshness` can be quite effective at adding read scalability to your system.
 
