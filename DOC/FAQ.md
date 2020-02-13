@@ -10,6 +10,9 @@ rqlite is very simple to deploy, run, and manage. For example, it's a single bin
 
 That said, it's always possible it's _too_ simple for your needs.
 
+## Can any node execute a write requests, and have the system "synchronize it all"?
+No, only the leader can make changes to the database. A client can _send_ a write-request to any node, and if that node is not the leader, the node will respond with the address of the leader, allowing the client to resend the request to the actual leader.
+
 ## rqlite is distributed. Does that mean it can increase SQLite performance?
 Yes, but only for reads. It does not provide any scaling for writes, since all writes must go through the leader. rqlite is distributed for replication and fault tolerance, not for peformance. In fact write performance is reduced relative to a standalone SQLite database, because of the round-trips between nodes.
 
