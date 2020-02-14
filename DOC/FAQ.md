@@ -41,6 +41,9 @@ Unlikely. While rqlite does support read-only nodes, allowing it to scale to man
 ## Is it a drop-in replacement for SQLite?
 No. While it does use SQLite as its storage engine, you must access the system via HTTP. That said, since it basically exposes SQLite, all the power of that database is available. It is also possible that any system built on top of SQLite only needs small changes to work with rqlite.
 
+## Can I use rqlite to replicate my SQLite database to a second node?
+Not in a simple sense, no. rqlite is not a SQLite database replication tool. While each node does have a full copy of a the SQLite database, rqlite is not simply about replicating that database.
+
 ## Is the underlying serializable isolation level of SQLite maintained?
 Yes, it is.
 
