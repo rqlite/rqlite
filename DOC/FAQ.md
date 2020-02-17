@@ -11,7 +11,7 @@
 * [Can I run a single node?](#can-i-run-a-single-node)
 * [Is rqlite a good match for a network of nodes that come and go -- perhaps thousands of them?](#is-rqlite-a-good-match-for-a-network-of-nodes-that-come-and-go----perhaps-thousands-of-them)
 * [Is it a drop-in replacement for SQLite?](#is-it-a-drop-in-replacement-for-sqlite)
-* [Can I modify the SQLite file directly?](#can-i-modify-the-sqlite-file-directly
+* [Can I modify the SQLite file directly?](#can-i-modify-the-sqlite-file-directly)
 * [Can I use rqlite to replicate my SQLite database to a second node?](#can-i-use-rqlite-to-replicate-my-sqlite-database-to-a-second-node)
 * [Is the underlying serializable isolation level of SQLite maintained?](#is-the-underlying-serializable-isolation-level-of-sqlite-maintained)
 * [Do concurrent writes block each other?](#do-concurrent-writes-block-each-other)
