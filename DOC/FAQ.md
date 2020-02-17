@@ -1,4 +1,20 @@
-# Frequently asked questions
+# FAQ
+
+* [What exactly does rqlite do?](#what-exactly-does-rqlite-do)
+* [Why would I use this, versus some other replicated database?](#why-would-i-use-this-versus-some-other-replicated-database)
+* [Can any node execute a write request, and have the system "synchronize it all"?](#can-any-node-execute-a-write-request-and-have-the-system-synchronize-it-all)
+* [rqlite is distributed. Does that mean it can increase SQLite performance?](#rqlite-is-distributed-does-that-mean-it-can-increase-sqlite-performance)
+* [What is the best way to increase rqlite performance?](#what-is-the-best-way-to-increase-rqlite-performance)
+* [Where does rqlite fit into the CAP theorem?](#where-does-rqlite-fit-into-the-cap-theorem)
+* [Does the rqlite require consensus be reached before a write is accepted?](#does-the-rqlite-require-consensus-be-reached-before-a-write-is-accepted)
+* [How does a client detect a cluster partition?](#how-does-a-client-detect-a-cluster-partition)
+* [Can I run a single node?](#can-i-run-a-single-node)
+* [Is rqlite a good match for a network of nodes that come and go -- perhaps thousands of them?](#is-rqlite-a-good-match-for-a-network-of-nodes-that-come-and-go----perhaps-thousands-of-them)
+* [Is it a drop-in replacement for SQLite?](#is-it-a-drop-in-replacement-for-sqlite)
+* [Can I use rqlite to replicate my SQLite database to a second node?](#can-i-use-rqlite-to-replicate-my-sqlite-database-to-a-second-node)
+* [Is the underlying serializable isolation level of SQLite maintained?](#is-the-underlying-serializable-isolation-level-of-sqlite-maintained)
+* [Do concurrent writes block each other?](#do-concurrent-writes-block-each-other)
+* [How is it different than dqlite?](#how-is-it-different-than-dqlite)
 
 ## What exactly does rqlite do?
 rqlite is about replicating a set of data, which has been written to it using SQL. The data is replicated for fault tolerance because your data is so important that you want multiple copies distributed in different places, you want be able to query your data even if some machines fail, or both. These different places could be different machines on a rack, or different machines, each in different buildings, or even different machines, each on different continents.
