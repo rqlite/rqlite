@@ -6,7 +6,7 @@
 * [rqlite is distributed. Does that mean it can increase SQLite performance?](#rqlite-is-distributed-does-that-mean-it-can-increase-sqlite-performance)
 * [What is the best way to increase rqlite performance?](#what-is-the-best-way-to-increase-rqlite-performance)
 * [Where does rqlite fit into the CAP theorem?](#where-does-rqlite-fit-into-the-cap-theorem)
-* [Does the rqlite require consensus be reached before a write is accepted?](#does-the-rqlite-require-consensus-be-reached-before-a-write-is-accepted)
+* [Does rqlite require consensus be reached before a write is accepted?](#does-rqlite-require-consensus-be-reached-before-a-write-is-accepted)
 * [How does a client detect a cluster partition?](#how-does-a-client-detect-a-cluster-partition)
 * [Can I run a single node?](#can-i-run-a-single-node)
 * [Is rqlite a good match for a network of nodes that come and go -- perhaps thousands of them?](#is-rqlite-a-good-match-for-a-network-of-nodes-that-come-and-go----perhaps-thousands-of-them)
@@ -41,7 +41,7 @@ The [CAP theorem](https://en.wikipedia.org/wiki/CAP_theorem) states that it is i
 
 Raft is a Consistency-Partition (CP) protocol. This means that if a rqlite cluster is partitioned, only the side of the cluster that contains a majority of the nodes will be available. The other side of the cluster will not respond to writes. However the side that remains available will return consistent results, and when the partition is healed, consistent results will continue to be returned.
 
-## Does the rqlite require consensus be reached before a write is accepted?
+## Does rqlite require consensus be reached before a write is accepted?
 Yes, this is an intrinsic part of the Raft protocol. How long it takes to reach consensus depends primarily on your network. It will take two rounds trips from a leader to a quorum of nodes, though each of those nodes is contacted in parallel.
 
 ## How does a client detect a cluster partition?
