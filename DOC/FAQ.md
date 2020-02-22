@@ -71,4 +71,4 @@ Yes, it is.
 In this regard rqlite currently offers exactly the same semantics as SQLite. Each HTTP write request uses the same SQLite connection on the leader, so one write-over-HTTP may block another. Explicit connection control will be available in a future release, which will clients more control over transactions. Only one concurrent write will ever be supported however, due to the nature of SQLite.
 
 ## How is it different than dqlite?
-dqlite is library, written in C, that you can integrate with your own software. This requires programming. rqlite is a standalone program -- it's a full RDBMS (albeit a relatively simple one).
+dqlite is library, written in C, that you can integrate with your own software. This requires programming. rqlite is a standalone program -- it's a full [RDBMS](https://techterms.com/definition/rdbms) (albeit a relatively simple one). rqlite has everything you need to read and write data, and backup, maintain, and monitor the database itself.
