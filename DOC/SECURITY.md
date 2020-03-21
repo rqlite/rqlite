@@ -16,7 +16,10 @@ If the IP addresses (or subnets) of rqlite clients is also known, it may also be
 AWS EC2 [Security Groups](http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-network-security.html), for example, support all this functionality. So if running rqlite in the AWS EC2 cloud you can implement this level of security at the network level.
 
 ## HTTPS API
-rqlite supports HTTPS access, ensuring that all communication between clients and a cluster is encrypted. One way to generate the necessary resources is via [openssl](https://www.openssl.org/):
+rqlite supports HTTPS access, ensuring that all communication between clients and a cluster is encrypted. 
+
+### Generating a certificate and private key
+One way to generate the necessary resources is via [openssl](https://www.openssl.org/):
 ```
 openssl req -x509 -nodes -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365
 ```
