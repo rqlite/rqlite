@@ -773,6 +773,13 @@ func Test_MultiNodeExecuteQueryFreshness(t *testing.T) {
 		t.Fatalf("error waiting for follower to apply index: %s:", err.Error())
 	}
 
+	// "Weak" consistency queries with 1 nanosecond freshness should pass, because freshness
+	// is ignored in this case.
+	r, err = s0.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, Weak, mustParseDuration("1ns")})
+	if err != nil {
+		t.Fatalf("Failed to ignore freshness if level is Weak: %s", err.Error())
+	}
+
 	// Kill leader.
 	s0.Close(true)
 

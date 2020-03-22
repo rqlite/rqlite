@@ -572,7 +572,7 @@ func (s *Store) Query(qr *QueryRequest) ([]*sql.Rows, error) {
 	}
 
 	// Read straight from database.
-	if qr.Freshness > 0 && time.Since(s.raft.LastContact()) > qr.Freshness {
+	if qr.Lvl == None && qr.Freshness > 0 && time.Since(s.raft.LastContact()) > qr.Freshness {
 		return nil, ErrStaleRead
 	}
 	return s.db.Query(qr.Queries, qr.Tx, qr.Timings)
