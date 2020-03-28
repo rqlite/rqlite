@@ -1,6 +1,5 @@
-/*
-Command rqbench is a rqlite load test utility.
-*/
+// Command rqbench is a simple rqlite load test utility.
+
 
 package main
 
