@@ -4,9 +4,9 @@
 
 *rqlite* is a lightweight, distributed relational database, which uses [SQLite](https://www.sqlite.org/) as its storage engine. Forming a cluster is very straightforward, it gracefully handles leader elections, and tolerates failures of machines, including the leader. rqlite is available for Linux, OSX, and Microsoft Windows.
 
-### Why?
-_Check out the [FAQ](https://github.com/rqlite/rqlite/blob/master/DOC/FAQ.md)._
+_Check out the [rqlite FAQ](https://github.com/rqlite/rqlite/blob/master/DOC/FAQ.md)._
 
+### Why?
 rqlite gives you the functionality of a [rock solid](http://www.sqlite.org/testing.html), fault-tolerant, replicated relational database, but with very **easy installation, deployment, and operation**. With it you've got a **lightweight** and **reliable distributed relational data store**. Think [etcd](https://github.com/coreos/etcd/) or [Consul](https://github.com/hashicorp/consul), but with relational data modelling also available.
 
 You could use rqlite as part of a larger system, as a central store for some critical relational data, without having to run larger, more complex distributed databases.

@@ -25,7 +25,9 @@ To create a cluster you must first launch a node that can act as the initial lea
 ```bash
 host1:$ rqlited -node-id 1 -http-addr host1:4001 -raft-addr host1:4002 ~/node
 ```
-With this command a single node is started, listening for API requests on port 4001 and listening on port 4002 for intra-cluster communication and cluster-join requests from other nodes. `-node-id` can be any string, as long as it's unique for the cluster. It also shouldn't change, once chosen for this node. The network addresses can change however. This node stores its state at `~/node`.
+With this command a single node is started, listening for API requests on port 4001 and listening on port 4002 for intra-cluster communication and cluster-join requests from other nodes. Note that the addresses passed to `-http-addr` and `-raft-addr` must be reachable from other nodes so that nodes can find each other over the network -- these addresses will be broadcast to other nodes during the _Join_ operation. If a node needs to bind to one address, but broadcast a different address, you must set `-http-adv-addr` and `-raft-adv-addr`.
+
+`-node-id` can be any string, as long as it's unique for the cluster. It also shouldn't change, once chosen for this node. The network addresses can change however. This node stores its state at `~/node`.
 
 To join a second node to this leader, execute the following command on _host2_:
 ```bash

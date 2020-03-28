@@ -30,8 +30,13 @@ The response is of the form:
     "time": 0.869015
 }
 ```
-
 A bulk update is contained within a single Raft log entry, so the network round-trips between nodes in the cluster are amortized over the bulk update. This should result in better throughput, if it is possible to use this kind of update.
+
+### Atomicity
+Because a bulk operation is contained within a single Raft log entry, and only one Raft log entry is every processed at one time, a bulk operation will never be interleaved with other requests.
+
+### Transaction support
+You may still wish to set the `transaction` flag when issuing a bulk update. This ensures that if any error occurs while processing the bulk update, all changes will be rolled back.
 
 ## Queries
 If you want to execute more than one query per HTTP request then perform a POST, and place the queries in the body of the request as a JSON array. For example:
