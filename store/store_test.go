@@ -801,6 +801,7 @@ func Test_MultiNodeExecuteQueryFreshness(t *testing.T) {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
+	// Wait for the freshness interval to pass.
 	time.Sleep(mustParseDuration("1s"))
 
 	// "None" consistency queries with 1 nanosecond freshness should fail, because at least
