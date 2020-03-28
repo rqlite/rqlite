@@ -773,6 +773,19 @@ func Test_MultiNodeExecuteQueryFreshness(t *testing.T) {
 		t.Fatalf("error waiting for follower to apply index: %s:", err.Error())
 	}
 
+	// "Weak" consistency queries with 1 nanosecond freshness should pass, because freshness
+	// is ignored in this case.
+	r, err = s0.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, Weak, mustParseDuration("1ns")})
+	if err != nil {
+		t.Fatalf("Failed to ignore freshness if level is Weak: %s", err.Error())
+	}
+	// "Strong" consistency queries with 1 nanosecond freshness should pass, because freshness
+	// is ignored in this case.
+	r, err = s0.Query(&QueryRequest{[]string{`SELECT * FROM foo`}, false, false, Strong, mustParseDuration("1ns")})
+	if err != nil {
+		t.Fatalf("Failed to ignore freshness if level is Strong: %s", err.Error())
+	}
+
 	// Kill leader.
 	s0.Close(true)
 
@@ -787,6 +800,9 @@ func Test_MultiNodeExecuteQueryFreshness(t *testing.T) {
 	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
+
+	// Wait for the freshness interval to pass.
+	time.Sleep(mustParseDuration("1s"))
 
 	// "None" consistency queries with 1 nanosecond freshness should fail, because at least
 	// one nanosecond *should* have passed since leader died (surely!).
