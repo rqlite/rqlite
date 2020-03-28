@@ -970,7 +970,7 @@ func NormalizeAddr(addr string) string {
 	return addr
 }
 
-// EnsureHTTPS modifies the given URL, so that is ensures it is using the HTTPS protocol.
+// EnsureHTTPS modifies the given URL, ensuring it is using the HTTPS protocol.
 func EnsureHTTPS(addr string) string {
 	if !strings.HasPrefix(addr, "http://") && !strings.HasPrefix(addr, "https://") {
 		return fmt.Sprintf("https://%s", addr)
