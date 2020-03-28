@@ -1,3 +1,6 @@
+## 5.1.1 (March 28th 2020)
+- [PR #636](https://github.com/rqlite/rqlite/pull/636): Check consistency level before freshness check. Thanks @wangfenjin
+
 ## 5.1.0 (January 10th 2020)
 
 ### New features
