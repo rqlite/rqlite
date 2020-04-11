@@ -2,6 +2,7 @@
 
 * [What exactly does rqlite do?](#what-exactly-does-rqlite-do)
 * [Why would I use this, versus some other replicated database?](#why-would-i-use-this-versus-some-other-replicated-database)
+* [How do I access the database?](#how-do-i-access-the-database)
 * [Can any node execute a write request, and have the system "synchronize it all"?](#can-any-node-execute-a-write-request-and-have-the-system-synchronize-it-all)
 * [rqlite is distributed. Does that mean it can increase SQLite performance?](#rqlite-is-distributed-does-that-mean-it-can-increase-sqlite-performance)
 * [What is the best way to increase rqlite performance?](#what-is-the-best-way-to-increase-rqlite-performance)
@@ -26,6 +27,9 @@ On top of that, rqlite provides strong guarantees about what state any copy of t
 rqlite is very simple to deploy, run, and manage. It's a single binary you can drop anywhere on a machine, and just start it. This makes it very convenient. It takes literally seconds to configure and form a cluster.
 
 That said, it's always possible it's _too_ simple for your needs.
+
+## How do I access the database?
+The primary way to access the database is via the [HTTP API](https://github.com/rqlite/rqlite/blob/master/DOC/DATA_API.md). You can access it directly, or use a [client library](https://github.com/rqlite). For more casual use you can use the [command line tool](https://github.com/rqlite/rqlite/blob/master/DOC/CLI.md).
 
 ## Can any node execute a write request, and have the system "synchronize it all"?
 No, only the leader can make changes to the database. A client can _send_ a write-request to any node, and if that node is not the leader, the node will respond with the address of the leader, allowing the client to resend the request to the actual leader.
