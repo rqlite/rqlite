@@ -23,6 +23,7 @@ class Node(object):
                api_addr=None, api_adv=None,
                raft_addr=None, raft_adv=None,
                raft_voter=True,
+               raft_snap_threshold=8192, raft_snap_int="1s",
                dir=None):
     if api_addr is None:
       api_addr = random_addr()
@@ -40,6 +41,8 @@ class Node(object):
     self.raft_addr = raft_addr
     self.raft_adv = raft_adv
     self.raft_voter = raft_voter
+    self.raft_snap_threshold = raft_snap_threshold
+    self.raft_snap_int = raft_snap_int
     self.dir = dir
     self.process = None
     self.stdout_file = os.path.join(dir, 'rqlited.log')
@@ -73,6 +76,8 @@ class Node(object):
                '-node-id', self.node_id,
                '-http-addr', self.api_addr,
                '-raft-addr', self.raft_addr,
+               '-raft-snap', str(self.raft_snap_threshold),
+               '-raft-snap-int', self.raft_snap_int,
                '-raft-non-voter=%s' % str(not self.raft_voter).lower()]
     if self.api_adv is not None:
       command += ['-http-adv-addr', self.api_adv]
@@ -106,6 +111,11 @@ class Node(object):
 
   def status(self):
     r = requests.get(self._status_url())
+    r.raise_for_status()
+    return r.json()
+
+  def expvar(self):
+    r = requests.get(self._expvar_url())
     r.raise_for_status()
     return r.json()
 
@@ -195,6 +205,8 @@ class Node(object):
 
   def _status_url(self):
     return 'http://' + self.APIAddr() + '/status'
+  def _expvar_url(self):
+    return 'http://' + self.APIAddr() + '/debug/vars'
   def _query_url(self):
     return 'http://' + self.APIAddr() + '/db/query'
   def _execute_url(self):
@@ -241,6 +253,27 @@ class Cluster(object):
   def deprovision(self):
     for n in self.nodes:
       deprovision_node(n)
+
+class TestSingleNode(unittest.TestCase):
+  def setUp(self):
+    n0 = Node(RQLITED_PATH, '0',  raft_snap_threshold=1, raft_snap_int="100ms")
+    n0.start()
+    n0.wait_for_leader()
+
+    self.cluster = Cluster([n0])
+
+  def tearDown(self):
+    self.cluster.deprovision()
+
+  def test_snapshot(self):
+    ''' Test that a node peforms a Raft snapshot as expected'''
+    n = self.cluster.wait_for_leader()
+    j = n.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
+    self.assertEqual(str(j), "{u'results': [{}]}")
+
+    # Wait for the snapshot to happen.
+    time.sleep(1)
+    self.assertEqual(2, n.expvar()['store']['num_snapshots'])
 
 class TestEndToEnd(unittest.TestCase):
   def setUp(self):
