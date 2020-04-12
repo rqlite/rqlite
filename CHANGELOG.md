@@ -1,5 +1,5 @@
 ## 5.2.0 (April 11th 2020)
-This release fixes a very significant bug, whereby snapshotting was never occuring due to a zero-interval being passed to the Raft subsystem. This meant that the Raft log would grow without bound, and could result in very long start-up times if the Raft log was very large.
+This release fixes a very significant bug, whereby snapshotting was never occuring due to a zero snapshot-interval being passed to the Raft subsystem. This meant that the Raft log would grow without bound, and could result in very long start-up times if the Raft log was very large.
 
 ### New features
 - [PR #637](https://github.com/rqlite/rqlite/pull/637): Allow the Raft snapshotting check interval to be set at launch time.
