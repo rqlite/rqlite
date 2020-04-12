@@ -256,7 +256,7 @@ class Cluster(object):
 
 class TestSingleNode(unittest.TestCase):
   def setUp(self):
-    n0 = Node(RQLITED_PATH, '0',  raft_snap_threshold=1, raft_snap_int="1s")
+    n0 = Node(RQLITED_PATH, '0',  raft_snap_threshold=2, raft_snap_int="1s")
     n0.start()
     n0.wait_for_leader()
 
@@ -270,6 +270,9 @@ class TestSingleNode(unittest.TestCase):
     n = self.cluster.wait_for_leader()
     j = n.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
     self.assertEqual(str(j), "{u'results': [{}]}")
+    j = n.execute('INSERT INTO foo(name) VALUES("fiona")')
+    applied = n.wait_for_all_applied()
+    self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
 
     # Wait for the snapshot to happen.
     timeout = 5
@@ -502,6 +505,47 @@ class TestEndToEndBackupRestore(unittest.TestCase):
     deprovision_node(self.node0)
     deprovision_node(self.node1)
     os.remove(self.db_file)
+
+class TestEndToEndSnapRestore(unittest.TestCase):
+  def test_join_with_snap(self):
+    '''Check that a node joins a cluster correctly via a snapshot'''
+    self.n0 = Node(RQLITED_PATH, '0',  raft_snap_threshold=100, raft_snap_int="1s")
+    self.n0.start()
+    self.n0.wait_for_leader()
+    self.n0.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
+    for i in range(0,100):
+      self.n0.execute('INSERT INTO foo(name) VALUES("fiona")')
+    self.n0.wait_for_all_applied()
+
+    timeout = 5
+    t = 0
+    while True:
+      if t > timeout:
+        raise Exception('timeout')
+      if self.n0.expvar()['store']['num_snapshots'] is 1:
+        break
+      time.sleep(1)
+      t+=1
+
+    # Add two more nodes to the cluster
+    self.n1 = Node(RQLITED_PATH, '1')
+    self.n1.start(join=self.n0.APIAddr())
+    self.n1.wait_for_leader()
+
+    self.n2 = Node(RQLITED_PATH, '2')
+    self.n2.start(join=self.n0.APIAddr())
+    self.n2.wait_for_leader()
+
+    # Ensure those new nodes have the full correct state.
+    j = self.n1.query('SELECT count(*) FROM foo', level='none')
+    self.assertEqual(str(j), "{u'results': [{u'values': [[100]], u'types': [u''], u'columns': [u'count(*)']}]}")
+    j = self.n2.query('SELECT count(*) FROM foo', level='none')
+    self.assertEqual(str(j), "{u'results': [{u'values': [[100]], u'types': [u''], u'columns': [u'count(*)']}]}")
+
+  def tearDown(self):
+    deprovision_node(self.n0)
+    deprovision_node(self.n1)
+    deprovision_node(self.n2)
 
 if __name__ == "__main__":
   unittest.main(verbosity=2)
