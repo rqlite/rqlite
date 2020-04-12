@@ -256,7 +256,7 @@ class Cluster(object):
 
 class TestSingleNode(unittest.TestCase):
   def setUp(self):
-    n0 = Node(RQLITED_PATH, '0',  raft_snap_threshold=1, raft_snap_int="100ms")
+    n0 = Node(RQLITED_PATH, '0',  raft_snap_threshold=1, raft_snap_int="1s")
     n0.start()
     n0.wait_for_leader()
 
@@ -272,8 +272,15 @@ class TestSingleNode(unittest.TestCase):
     self.assertEqual(str(j), "{u'results': [{}]}")
 
     # Wait for the snapshot to happen.
-    time.sleep(1)
-    self.assertEqual(2, n.expvar()['store']['num_snapshots'])
+    timeout = 5
+    t = 0
+    while True:
+      if t > timeout:
+        raise Exception('timeout')
+      if n.expvar()['store']['num_snapshots'] is 2:
+        return
+      time.sleep(1)
+      t+=1
 
 class TestEndToEnd(unittest.TestCase):
   def setUp(self):
