@@ -325,6 +325,9 @@ func mustNewNode(enableSingle bool) *Node {
 		Dir:    node.Dir,
 		ID:     tn.Addr().String(),
 	})
+	node.Store.SnapshotThreshold = 100
+	node.Store.SnapshotInterval = mustParseDuration("1s")
+
 	if err := node.Store.Open(enableSingle); err != nil {
 		node.Deprovision()
 		panic(fmt.Sprintf("failed to open store: %s", err.Error()))
@@ -359,6 +362,14 @@ func mustTempDir() string {
 		panic("failed to create temp dir")
 	}
 	return path
+}
+
+func mustParseDuration(d string) time.Duration {
+	if dur, err := time.ParseDuration(d); err != nil {
+		panic("failed to parse duration")
+	} else {
+		return dur
+	}
 }
 
 func isJSON(s string) bool {

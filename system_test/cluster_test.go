@@ -2,6 +2,7 @@ package system
 
 import (
 	"testing"
+	"time"
 )
 
 // Test_JoinLeaderNode tests a join operation between a leader and a new node.
@@ -143,6 +144,79 @@ func Test_MultiNodeCluster(t *testing.T) {
 		if r != tt.expected {
 			t.Fatalf(`test %d received wrong result "%s" got: %s exp: %s`, i, tt.stmt, r, tt.expected)
 		}
+	}
+}
+
+// Test_MultiNodeClusterSnapshot tests formation of a 3-node cluster, which involves sharing snapshots.
+func Test_MultiNodeClusterSnapshot(t *testing.T) {
+	node1 := mustNewLeaderNode()
+	defer node1.Deprovision()
+
+	if _, err := node1.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`); err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	// Force snapshots and log truncation to occur.
+	for i := 0; i < 3*int(node1.Store.SnapshotThreshold); i++ {
+		_, err := node1.Execute(`INSERT INTO foo(name) VALUES("sinead")`)
+		if err != nil {
+			t.Fatalf(`failed to write records for Snapshot test: %s`, err.Error())
+		}
+	}
+
+	// Join a second and third nodes, which will get database state via snapshots.
+	node2 := mustNewNode(false)
+	defer node2.Deprovision()
+	if err := node2.Join(node1); err != nil {
+		t.Fatalf("node failed to join leader: %s", err.Error())
+	}
+	_, err := node2.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for leader: %s", err.Error())
+	}
+
+	node3 := mustNewNode(false)
+	defer node3.Deprovision()
+	if err := node3.Join(node1); err != nil {
+		t.Fatalf("node failed to join leader: %s", err.Error())
+	}
+	_, err = node3.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for leader: %s", err.Error())
+	}
+
+	// Create a new cluster.
+	c := Cluster{node1, node2, node3}
+
+	// Kill original node.
+	node1.Deprovision()
+	c.RemoveNode(node1)
+	var leader *Node
+	leader, err = c.WaitForNewLeader(node1)
+	if err != nil {
+		t.Fatalf("failed to find new cluster leader after killing leader: %s", err.Error())
+	}
+
+	// Test that the other nodes pick up the full state.
+	n := 0
+	for {
+		var r string
+		r, err = leader.Query(`SELECT COUNT(*) FROM foo`)
+		if err != nil {
+			t.Fatalf("failed to query follower node: %s", err.Error())
+		}
+
+		if r != `{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[300]]}]}` {
+			if n < 10 {
+				// Wait, and try again.
+				time.Sleep(mustParseDuration("100ms"))
+				n++
+				continue
+			}
+			t.Fatalf("timed out waiting for snapshot state")
+		}
+		// Test passed!
+		break
 	}
 }
 
