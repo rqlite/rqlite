@@ -986,6 +986,15 @@ func (s *Store) DeregisterObserver(o *raft.Observer) {
 	s.raft.DeregisterObserver(o)
 }
 
+// logSize returns the size of the Raft log on disk.
+func (s *Store) logSize() (int64, error) {
+	fi, err := os.Stat(filepath.Join(s.raftDir, "raft.db"))
+	if err != nil {
+		return 0, err
+	}
+	return fi.Size(), nil
+}
+
 type fsmSnapshot struct {
 	database []byte
 	meta     []byte
