@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/Bowery/prompt"
@@ -27,17 +28,19 @@ type argT struct {
 	Credentials string `cli:"u,user" usage:"set basic auth credentials in form username:password"`
 }
 
-const cliHelp = `.help				Show this message
-.indexes			Show names of all indexes
-.schema				Show CREATE statements for all tables
-.status				Show status and diagnostic information for connected node
-.expvar				Show expvar (Go runtime) information for connected node
-.tables				List names of tables
-.timer on|off	    		Turn query timer on or off
-.dump <file>                    Dump the database in SQL text format to a file
-.restore <file>			Restore the database from a SQLite dump file
-.backup <file>			Write database backup to SQLite file
-`
+var cliHelp = []string{
+	`.backup <file>            Write database backup to SQLite file`,
+	`.dump <file>              Dump the database in SQL text format to a file`,
+	`.expvar                   Show expvar (Go runtime) information for connected node`,
+	`.help                     Show this message`,
+	`.indexes                  Show names of all indexes`,
+	`.restore <file>           Restore the database from a SQLite dump file`,
+	`.schema                   Show CREATE statements for all tables`,
+	`.status                   Show status and diagnostic information for connected node`,
+	`.tables                   List names of tables`,
+	`.timer on|off             Turn query timer on or off`,
+	`.remove <raft ID>         Remove a node from the cluster`,
+}
 
 func main() {
 	cli.SetUsageStyle(cli.ManualStyle)
@@ -98,6 +101,8 @@ func main() {
 				err = status(ctx, cmd, line, argv)
 			case ".EXPVAR":
 				err = expvar(ctx, cmd, line, argv)
+			case ".REMOVE":
+				err = removeNode(client, line[index+1:], argv, timer)
 			case ".BACKUP":
 				if index == -1 || index == len(line)-1 {
 					err = fmt.Errorf("Please specify an output file for the backup")
@@ -151,7 +156,8 @@ func makeJSONBody(line string) string {
 }
 
 func help(ctx *cli.Context, cmd, line string, argv *argT) error {
-	fmt.Printf(cliHelp)
+	sort.Strings(cliHelp)
+	fmt.Printf(strings.Join(cliHelp, "\n"))
 	return nil
 }
 

@@ -67,7 +67,14 @@ You can grow a cluster, at anytime, simply by starting up a new node (pick a nev
 It is possible to change a node's HTTP(S) address or Raft address between restarts. Simply pass the new address on the command line. You must also, however, explicitly tell the node to join the cluster again, by passing `-join` to the node. In this case what the leader actually does is remove the previous record of the node, before adding a new record of the node.
 
 # Removing or replacing a node
-If a node fails completely and is not coming back, or if you shut down a node because you wish to deprovision it, its record should also be removed from the cluster. To remove the record of a node from a cluster, execute the following command:
+If a node fails completely and is not coming back, or if you shut down a node because you wish to deprovision it, its record should also be removed from the cluster. To remove the record of a node from a cluster, execute the following command at the rqlite CLI:
+
+```
+127.0.0.1:4001> .remove <node raft ID>
+```
+
+You can also make a direct call to the HTTP API to remove a node:
+
 ```
 curl -XDELETE http://localhost:4001/remove -d '{"id": "<node raft ID>"}'
 ```
