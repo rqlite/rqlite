@@ -1,3 +1,8 @@
+## 5.3.0 (unreleased)
+
+### New features
+- [PR #641](https://github.com/rqlite/rqlite/pull/641): rqlite CLI now supports node removal.
+
 ## 5.2.0 (April 11th 2020)
 This release fixes a very significant bug, whereby snapshotting was never occuring due to a zero snapshot-interval being passed to the Raft subsystem. This meant that the Raft log would grow without bound, and could result in very long start-up times if the Raft log was very large.
 
