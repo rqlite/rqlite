@@ -258,7 +258,7 @@ _This release adds significant new functionality to the command-line tool, inclu
 - Column-oriented API responses.
 - Types in API response body.
 - Query times in addition to sum of query times.
-- New Raft consensus module, built on Hashsicorp's implementation.
+- New Raft consensus module, built on Hashicorp's implementation.
 - Hot backup support.
 - Selectable read-consistency levels of none, weak, and strong.
 - SQLite file size added to HTTP API status endpoint.
