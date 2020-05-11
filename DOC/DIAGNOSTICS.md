@@ -1,5 +1,5 @@
 # Status and Diagnostics API
-A status API exists, which dumps some diagnostic and statistical information, as well as basic information about the underlying Raft node. Assuming the rqlite node is started with default settings, node status is available like so:
+A status API exists, which dumps some diagnostic and statistical information, as well as basic information about the underlying Raft node. Assuming the rqlite node is started with default settings, node status is available via a HTTP `GET` request. To see the raw data, you can issue a `curl` command like so:
 
 ```bash
 curl localhost:4001/status?pretty
