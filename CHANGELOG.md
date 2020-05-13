@@ -1,4 +1,4 @@
-## 5.3.0 (unreleased)
+## 5.3.0 (May 13th 2020)
 
 ### New features
 - [PR #641](https://github.com/rqlite/rqlite/pull/641): rqlite CLI now supports node removal.
