@@ -13,7 +13,7 @@ Enter ".help" for usage hints.
 sqlite> CREATE TABLE foo (id integer not null primary key, name text);
 sqlite> INSERT INTO "foo" VALUES(1,'fiona');
 sqlite> 
-~ $ echo '.dump' | sqlite3 restore.sqlite > restore.dump # Convery SQLite database file to set of SQL commands
+~ $ echo '.dump' | sqlite3 restore.sqlite > restore.dump # Convert SQLite database file to set of SQL commands
 ~ $ ./rqlite 
 Welcome to the rqlite CLI. Enter ".help" for usage hints.
 127.0.0.1:4001> .schema
@@ -41,7 +41,7 @@ Enter ".help" for usage hints.
 sqlite> CREATE TABLE foo (id integer not null primary key, name text);
 sqlite> INSERT INTO "foo" VALUES(1,'fiona');
 sqlite>
-~ $ echo '.dump' | sqlite3 restore.sqlite > restore.dump # Convery SQLite database file to set of SQL commands.
+~ $ echo '.dump' | sqlite3 restore.sqlite > restore.dump # Convert SQLite database file to set of SQL commands.
 ~ $ curl -XPOST localhost:4001/db/load -H "Content-type: text/plain" --data-binary @restore.dump
 ```
 
