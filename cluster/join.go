@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -16,14 +17,17 @@ import (
 	httpd "github.com/rqlite/rqlite/http"
 )
 
-const numAttempts int = 3
-const attemptInterval time.Duration = 5 * time.Second
+var (
+	// ErrJoinFailed is returned when a node fails to join a cluster
+	ErrJoinFailed = errors.New("failed to join cluster")
+)
 
 // Join attempts to join the cluster at one of the addresses given in joinAddr.
 // It walks through joinAddr in order, and sets the node ID and Raft address of
 // the joining node as id addr respectively. It returns the endpoint successfully
 // used to join the cluster.
-func Join(joinAddr []string, id, addr string, voter bool, meta map[string]string, tlsConfig *tls.Config) (string, error) {
+func Join(joinAddr []string, id, addr string, voter bool, meta map[string]string, numAttempts int,
+	attemptInterval time.Duration, tlsConfig *tls.Config) (string, error) {
 	var err error
 	var j string
 	logger := log.New(os.Stderr, "[cluster-join] ", log.LstdFlags)
@@ -43,7 +47,7 @@ func Join(joinAddr []string, id, addr string, voter bool, meta map[string]string
 		time.Sleep(attemptInterval)
 	}
 	logger.Printf("failed to join cluster at %s, after %d attempts", joinAddr, numAttempts)
-	return "", err
+	return "", ErrJoinFailed
 }
 
 func join(joinAddr, id, addr string, voter bool, meta map[string]string, tlsConfig *tls.Config, logger *log.Logger) (string, error) {

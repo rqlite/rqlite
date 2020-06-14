@@ -58,6 +58,8 @@ var nodeID string
 var raftAddr string
 var raftAdv string
 var joinAddr string
+var joinAttempts int
+var joinInterval string
 var noVerify bool
 var noNodeVerify bool
 var discoURL string
@@ -100,6 +102,8 @@ func init() {
 	flag.StringVar(&raftAddr, "raft-addr", "localhost:4002", "Raft communication bind address")
 	flag.StringVar(&raftAdv, "raft-adv-addr", "", "Advertised Raft communication address. If not set, same as Raft bind")
 	flag.StringVar(&joinAddr, "join", "", "Comma-delimited list of nodes, through which a cluster can be joined (proto://host:port)")
+	flag.IntVar(&joinAttempts, "join-attempts", 5, "Number of join attempts to make")
+	flag.StringVar(&joinInterval, "join-interval", "5s", "Period between join attempts")
 	flag.StringVar(&discoURL, "disco-url", "http://discovery.rqlite.com", "Set Discovery Service URL")
 	flag.StringVar(&discoID, "disco-id", "", "Set Discovery ID. If not set, Discovery Service not used")
 	flag.BoolVar(&expvar, "expvar", true, "Serve expvar data on HTTP server")
@@ -239,6 +243,11 @@ func main() {
 			advAddr = raftAdv
 		}
 
+		joinDur, err := time.ParseDuration(joinInterval)
+		if err != nil {
+			log.Fatalf("failed to parse Join interval %s: %s", joinInterval, err.Error())
+		}
+
 		tlsConfig := tls.Config{InsecureSkipVerify: noVerify}
 		if x509CACert != "" {
 			asn1Data, err := ioutil.ReadFile(x509CACert)
@@ -252,7 +261,8 @@ func main() {
 			}
 		}
 
-		if j, err := cluster.Join(joins, str.ID(), advAddr, !raftNonVoter, meta, &tlsConfig); err != nil {
+		if j, err := cluster.Join(joins, str.ID(), advAddr, !raftNonVoter, meta,
+			joinAttempts, joinDur, &tlsConfig); err != nil {
 			log.Fatalf("failed to join cluster at %s: %s", joins, err.Error())
 		} else {
 			log.Println("successfully joined cluster at", j)
