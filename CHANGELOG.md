@@ -1,3 +1,8 @@
+## 5.4.0 (June 14th 2020)
+
+### New features
+- [PR #654](https://github.com/rqlite/rqlite/pull/654): Allow number of Join attempts and Join interval to be specified at startup.
+
 ## 5.3.0 (May 13th 2020)
 
 ### New features
