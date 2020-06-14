@@ -55,6 +55,17 @@ func Test_SingleJoinOK(t *testing.T) {
 	}
 }
 
+func Test_SingleJoinZeroAttempts(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("handler should not have been called")
+	}))
+
+	_, err := Join([]string{ts.URL}, "id0", "127.0.0.1:9090", false, nil, 0, attemptInterval, nil)
+	if err != ErrJoinFailed {
+		t.Fatalf("Incorrect error returned when zero attempts specified")
+	}
+}
+
 func Test_SingleJoinMetaOK(t *testing.T) {
 	var body map[string]interface{}
 

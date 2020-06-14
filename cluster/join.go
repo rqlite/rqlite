@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -14,6 +15,11 @@ import (
 	"time"
 
 	httpd "github.com/rqlite/rqlite/http"
+)
+
+var (
+	// ErrJoinFailed is returned when a node fails to join a cluster
+	ErrJoinFailed = errors.New("failed to join cluster")
 )
 
 // Join attempts to join the cluster at one of the addresses given in joinAddr.
@@ -41,7 +47,7 @@ func Join(joinAddr []string, id, addr string, voter bool, meta map[string]string
 		time.Sleep(attemptInterval)
 	}
 	logger.Printf("failed to join cluster at %s, after %d attempts", joinAddr, numAttempts)
-	return "", err
+	return "", ErrJoinFailed
 }
 
 func join(joinAddr, id, addr string, voter bool, meta map[string]string, tlsConfig *tls.Config, logger *log.Logger) (string, error) {
