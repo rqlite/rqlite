@@ -10,6 +10,7 @@
 * [Does rqlite require consensus be reached before a write is accepted?](#does-rqlite-require-consensus-be-reached-before-a-write-is-accepted)
 * [How does a client detect a cluster partition?](#how-does-a-client-detect-a-cluster-partition)
 * [Can I run a single node?](#can-i-run-a-single-node)
+* [What is the maximum size of a cluster?](https://github.com/rqlite/rqlite/blob/master/DOC/FAQ.md#what-is-the-maximum-size-of-a-cluster)
 * [Is rqlite a good match for a network of nodes that come and go -- perhaps thousands of them?](#is-rqlite-a-good-match-for-a-network-of-nodes-that-come-and-go----perhaps-thousands-of-them)
 * [Is it a drop-in replacement for SQLite?](#is-it-a-drop-in-replacement-for-sqlite)
 * [Does rqlite support transactions?](#does-rqlite-support-transactions)
@@ -58,7 +59,7 @@ It may be possible to make partitions clearer to clients in a future release.
 Sure. Many people do so, as they like accessing a SQLite database over HTTP. Of course, you won't have any redundancy or fault tolerance if you only run a single node.
 
 ## What is the maximum size of a cluster?
-There is no explicit maximum cluster size. However the [practical cluster size limit is about 9 _voting nodes](https://github.com/rqlite/rqlite/blob/master/DOC/CLUSTER_MGMT.md). You can go bigger by adding [read-only nodes](https://github.com/rqlite/rqlite/blob/master/DOC/READ_ONLY_NODES.md).
+There is no explicit maximum cluster size. However the [practical cluster size limit is about 9 _voting nodes_](https://github.com/rqlite/rqlite/blob/master/DOC/CLUSTER_MGMT.md). You can go bigger by adding [read-only nodes](https://github.com/rqlite/rqlite/blob/master/DOC/READ_ONLY_NODES.md).
 
 ## Is rqlite a good match for a network of nodes that come and go -- perhaps thousands of them?
 Unlikely. While rqlite does support read-only nodes, allowing it to scale to many nodes, the consensus protocol at the core of rqlite works best when the nodes in the cluster don't continually come and go. While it won't break, it probably won't be practical.
