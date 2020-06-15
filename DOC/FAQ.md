@@ -55,7 +55,7 @@ If the client is on the same side of the partition as a quorum of nodes, there w
 It may be possible to make partitions clearer to clients in a future release.
 
 ## Can I run a single node?
-Sure. Many people do so, as they like accessing a SQLite database over HTTP. 
+Sure. Many people do so, as they like accessing a SQLite database over HTTP. Of course, you won't have any redundancy or fault tolerance if you only run a single node.
 
 ## Is rqlite a good match for a network of nodes that come and go -- perhaps thousands of them?
 Unlikely. While rqlite does support read-only nodes, allowing it to scale to many nodes, the consensus protocol at the core of rqlite works best when the nodes in the cluster don't continually come and go. While it won't break, it probably won't be practical.
