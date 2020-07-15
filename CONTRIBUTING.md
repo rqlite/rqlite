@@ -21,7 +21,7 @@ A key design goal of rqlite is to keep the build process as simple as possible. 
 mkdir rqlite # Or any directory of your choice.
 cd rqlite/
 export GOPATH=$PWD
-GO111MODULE=on go get -u -t github.com/rqlite/rqlite/...
+go get -u -t github.com/rqlite/rqlite/...
 $GOPATH/bin/rqlited ~/node.1
 ```
 This starts a rqlite server listening on localhost, port 4001. This single node automatically becomes the leader.
