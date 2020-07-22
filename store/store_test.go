@@ -870,13 +870,10 @@ func Test_StoreLogTruncationMultinode(t *testing.T) {
 	}
 
 	// Wait for the snapshot to happen and log to be truncated.
-	for {
-		time.Sleep(1000 * time.Millisecond)
-		if stats.Get(numSnaphots).String() != nSnaps {
-			// It's changed, so a snap and truncate has happened.
-			break
-		}
+	f := func() bool {
+		return stats.Get(numSnaphots).String() != nSnaps
 	}
+	testPoll(t, f, 100*time.Millisecond, 2*time.Second)
 
 	// Fire up new node and ensure it picks up all changes. This will
 	// involve getting a snapshot and truncated log.
@@ -1202,4 +1199,22 @@ func asJSON(v interface{}) string {
 		panic("failed to JSON marshal value")
 	}
 	return string(b)
+}
+
+func testPoll(t *testing.T, f func() bool, p time.Duration, d time.Duration) {
+	tck := time.NewTicker(p)
+	defer tck.Stop()
+	tmr := time.NewTimer(d)
+	defer tmr.Stop()
+
+	for {
+		select {
+		case <-tck.C:
+			if f() {
+				return
+			}
+		case <-tmr.C:
+			t.Fatalf("timeout expired: %s", t.Name())
+		}
+	}
 }
