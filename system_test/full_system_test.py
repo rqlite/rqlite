@@ -278,10 +278,11 @@ class TestSingleNode(unittest.TestCase):
     timeout = 5
     t = 0
     while True:
-      if t > timeout:
-        raise Exception('timeout')
-      if n.expvar()['store']['num_snapshots'] is 2:
+      nSnaps = n.expvar()['store']['num_snapshots']
+      if nSnaps is 2:
         return
+      if t > timeout:
+        raise Exception('timeout', nSnaps)
       time.sleep(1)
       t+=1
 
