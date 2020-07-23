@@ -1,3 +1,7 @@
+## 5.4.1 (unreleased)
+## New features
+- [PR #660](https://github.com/rqlite/rqlite/pull/660): Raft log size on disk now reported via status endpoint.
+
 ## 5.4.0 (June 14th 2020)
 
 ### New features
