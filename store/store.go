@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
 
@@ -430,9 +431,16 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		return nil, err
 	}
 
+	raftStats := s.raft.Stats()
+	ls, err := s.logSize()
+	if err != nil {
+		return nil, err
+	}
+	raftStats["log_size"] = strconv.FormatInt(ls, 10)
+
 	status := map[string]interface{}{
 		"node_id": s.raftID,
-		"raft":    s.raft.Stats(),
+		"raft":    raftStats,
 		"addr":    s.Addr(),
 		"leader": map[string]string{
 			"node_id": leaderID,
