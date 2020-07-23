@@ -275,7 +275,7 @@ class TestSingleNode(unittest.TestCase):
     self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
 
     # Wait for the snapshot to happen.
-    timeout = 5
+    timeout = 10
     t = 0
     while True:
       nSnaps = n.expvar()['store']['num_snapshots']
