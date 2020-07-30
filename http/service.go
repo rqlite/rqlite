@@ -240,15 +240,19 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case strings.HasPrefix(r.URL.Path, "/db/execute"):
 		stats.Add(numExecutions, 1)
+		pNumExecutions.Add(1)
 		s.handleExecute(w, r)
 	case strings.HasPrefix(r.URL.Path, "/db/query"):
 		stats.Add(numQueries, 1)
+		pNumQueries.Add(1)
 		s.handleQuery(w, r)
 	case strings.HasPrefix(r.URL.Path, "/db/backup"):
 		stats.Add(numBackups, 1)
+		pNumBackups.Add(1)
 		s.handleBackup(w, r)
 	case strings.HasPrefix(r.URL.Path, "/db/load"):
 		stats.Add(numLoads, 1)
+		pNumLoads.Add(1)
 		s.handleLoad(w, r)
 	case strings.HasPrefix(r.URL.Path, "/join"):
 		s.handleJoin(w, r)
