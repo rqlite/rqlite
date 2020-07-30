@@ -66,6 +66,7 @@ var discoURL string
 var discoID string
 var expvar bool
 var pprofEnabled bool
+var promEnabled bool
 var dsn string
 var onDisk bool
 var raftLogLevel string
@@ -108,6 +109,7 @@ func init() {
 	flag.StringVar(&discoID, "disco-id", "", "Set Discovery ID. If not set, Discovery Service not used")
 	flag.BoolVar(&expvar, "expvar", true, "Serve expvar data on HTTP server")
 	flag.BoolVar(&pprofEnabled, "pprof", true, "Serve pprof data on HTTP server")
+	flag.BoolVar(&promEnabled, "prometheus", true, "Serve metrics for Prometheus on HTTP server")
 	flag.StringVar(&dsn, "dsn", "", `SQLite DSN parameters. E.g. "cache=shared&mode=memory"`)
 	flag.BoolVar(&onDisk, "on-disk", false, "Use an on-disk SQLite database")
 	flag.BoolVar(&showVersion, "version", false, "Show version information and exit")
@@ -353,6 +355,7 @@ func startHTTPService(str *store.Store) error {
 	s.KeyFile = x509Key
 	s.Expvar = expvar
 	s.Pprof = pprofEnabled
+	s.Prometheus = promEnabled
 	s.BuildInfo = map[string]interface{}{
 		"commit":     commit,
 		"branch":     branch,

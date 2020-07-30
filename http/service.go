@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	sql "github.com/rqlite/rqlite/db"
 	"github.com/rqlite/rqlite/store"
 )
@@ -159,8 +160,11 @@ type Service struct {
 
 	credentialStore CredentialStore
 
-	Expvar bool
-	Pprof  bool
+	promHandler http.Handler
+
+	Expvar     bool
+	Pprof      bool
+	Prometheus bool
 
 	BuildInfo map[string]interface{}
 
@@ -176,6 +180,7 @@ func New(addr string, store Store, credentials CredentialStore) *Service {
 		start:           time.Now(),
 		statuses:        make(map[string]Statuser),
 		credentialStore: credentials,
+		promHandler:     promhttp.Handler(),
 		logger:          log.New(os.Stderr, "[http] ", log.LstdFlags),
 	}
 }
@@ -250,6 +255,8 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.handleRemove(w, r)
 	case strings.HasPrefix(r.URL.Path, "/status"):
 		s.handleStatus(w, r)
+	case r.URL.Path == "/metrics" && s.Prometheus:
+		s.handleProm(w, r)
 	case r.URL.Path == "/debug/vars" && s.Expvar:
 		s.handleExpvar(w, r)
 	case strings.HasPrefix(r.URL.Path, "/debug/pprof") && s.Pprof:
@@ -725,6 +732,15 @@ func (s *Service) handlePprof(w http.ResponseWriter, r *http.Request) {
 	default:
 		pprof.Index(w, r)
 	}
+}
+
+func (s *Service) handleProm(w http.ResponseWriter, r *http.Request) {
+	if !s.CheckRequestPerm(r, PermStatus) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	s.promHandler.ServeHTTP(w, r)
 }
 
 // Addr returns the address on which the Service is listening
