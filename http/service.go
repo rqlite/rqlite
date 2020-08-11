@@ -26,8 +26,8 @@ import (
 	"github.com/rqlite/rqlite/store"
 )
 
-// Store is the interface the Raft-based database must implement.
-type Store interface {
+// Database is the interface any queryable system must implement
+type Database interface {
 	// Execute executes a slice of queries, each of which is not expected
 	// to return rows. If timings is true, then timing information will
 	// be return. If tx is true, then either all queries will be executed
@@ -43,6 +43,11 @@ type Store interface {
 	// is true, then all queries will take place while a read transaction
 	// is held on the database.
 	Query(qr *store.QueryRequest) ([]*sql.Rows, error)
+}
+
+// Store is the interface the Raft-based database must implement.
+type Store interface {
+	Database
 
 	// Join joins the node with the given ID, reachable at addr, to this node.
 	Join(id, addr string, voter bool, metadata map[string]string) error
