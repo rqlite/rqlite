@@ -1,6 +1,6 @@
 # Data API
 
-rqlite exposes an HTTP API allowing the database to be modified such that the changes are replicated. Queries are also executed using the HTTP API.
+rqlite exposes an HTTP API allowing the database to be modified such that the changes are replicated. Queries are also executed using the HTTP API. _It is important to use the correct endpoint for the operation you wish to execute._
 
 All write-requests must be sent to the leader of the cluster. Queries, however, may be sent to any node, depending on the [read-consistency](https://github.com/rqlite/rqlite/blob/master/DOC/CONSISTENCY.md) requirements. But, by default, queries must also be sent to the leader.
 
@@ -10,7 +10,7 @@ There are [client libraries available](https://github.com/rqlite).
 Any modifications to the SQLite database go through the Raft log, ensuring only changes committed by a quorum of rqlite nodes are actually executed against the SQLite database. Queries do not __necessarily__ go through the Raft log, however, since they do not change the state of the database, and therefore do not need to be captured in the log. More on this later.
 
 ## Writing Data
-To write data successfully to the database, you must create at least 1 table. To do this perform a HTTP POST, with a `CREATE TABLE` SQL command encapsulated in a JSON array, in the body of the request. An example via [curl](http://curl.haxx.se/):
+To write data successfully to the database, you must create at least 1 table. To do this perform a HTTP POST on the `/execute` endpoint. Encapsulate the `CREATE TABLE` SQL command in a JSON array, and put it in the body of the request. An example via [curl](http://curl.haxx.se/):
 
 ```bash
 curl -XPOST 'localhost:4001/db/execute?pretty&timings' -H "Content-Type: application/json" -d '[
@@ -46,7 +46,7 @@ The use of the URL param `pretty` is optional, and results in pretty-printed JSO
 ## Querying Data
 Querying data is easy. The most important thing to know is that, by default, queries must go through the leader node. 
 
-For a single query simply perform a HTTP GET, setting the query statement as the query parameter `q`:
+For a single query simply perform a HTTP GET on the `/query` endpoint, setting the query statement as the query parameter `q`:
 
 ```bash
 curl -G 'localhost:4001/db/query?pretty&timings' --data-urlencode 'q=SELECT * FROM foo'
