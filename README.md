@@ -11,7 +11,7 @@ rqlite gives you the functionality of a [rock solid](http://www.sqlite.org/testi
 
 You could use rqlite as part of a larger system, as a central store for some critical relational data, without having to run larger, more complex distributed databases.
 
-Finally, if you're interested in understanding how distributed systems actually work, rqlite is a good example to study. Much thought has gone into its [design](https://github.com/rqlite/rqlite/blob/master/DOC/DESIGN.md) and implementation, with clear separation between the various components, including storage, distributed consensus, and API.
+Finally, if you're interested in understanding how distributed systems actually work, **rqlite is a good example to study**. Much thought has gone into its [design](https://github.com/rqlite/rqlite/blob/master/DOC/DESIGN.md) and implementation, with clear separation between the various components, including storage, distributed consensus, and API.
 
 ### How?
 rqlite uses [Raft](https://raft.github.io/) to achieve consensus across all the instances of the SQLite databases, ensuring that every change made to the system is made to a quorum of SQLite databases, or none at all. You can learn more about the design [here](https://github.com/rqlite/rqlite/blob/master/DOC/DESIGN.md).
