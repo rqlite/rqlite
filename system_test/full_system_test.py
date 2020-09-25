@@ -55,6 +55,9 @@ class Node(object):
           return self.api_adv
       return self.api_addr
 
+  def APIProtoAddr(self):
+      return "http://%s" % self.APIAddr()
+
   def scramble_network(self):
     if self.api_adv == self.api_addr:
       self.api_adv = None
@@ -201,7 +204,7 @@ class Node(object):
   def redirect_addr(self):
     r = requests.post(self._execute_url(), data=json.dumps(['nonsense']), allow_redirects=False)
     if r.status_code == 301:
-      return urlparse(r.headers['Location']).netloc
+      return "%s://%s" % (urlparse(r.headers['Location']).scheme, urlparse(r.headers['Location']).netloc)
 
   def _status_url(self):
     return 'http://' + self.APIAddr() + '/status'
@@ -347,12 +350,12 @@ class TestEndToEnd(unittest.TestCase):
     fs = self.cluster.followers()
     self.assertEqual(len(fs), 2)
     for n in fs:
-      self.assertEqual(l.APIAddr(), n.redirect_addr())
+      self.assertEqual(l.APIProtoAddr(), n.redirect_addr())
 
     l.stop()
     n = self.cluster.wait_for_leader(node_exc=l)
     for f in self.cluster.followers():
-      self.assertEqual(n.APIAddr(), f.redirect_addr())
+      self.assertEqual(n.APIProtoAddr(), f.redirect_addr())
 
 class TestEndToEndAdvAddr(TestEndToEnd):
   def setUp(self):
