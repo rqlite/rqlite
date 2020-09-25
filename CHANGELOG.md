@@ -1,4 +1,10 @@
+## 5.4.2 (September 25th 2020)
+
+### Implementation changes and bug fixes
+- [PR #672](https://github.com/rqlite/rqlite/pull/672): Fix issue causing HTTPS-only redirects.
+
 ## 5.4.1 (September 24th 2020)
+_This release should not be used, due to a HTTP redirection bug._
 
 ### Implementation changes and bug fixes
 - [PR #660](https://github.com/rqlite/rqlite/pull/660): Raft log size on disk now reported via status endpoint.
