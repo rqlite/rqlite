@@ -321,12 +321,17 @@ func mustNewNode(enableSingle bool) *Node {
 
 func mustNewNodeEncrypted(enableSingle, httpEncrypt, nodeEncrypt bool) *Node {
 	dir := mustTempDir()
+	nodeCertPath := x509.CertFile(dir)
+	nodeKeyPath := x509.KeyFile(dir)
+	httpCertPath := nodeCertPath
+	httpKeyPath := nodeKeyPath
+
 	node := &Node{
 		Dir:          dir,
-		NodeCertPath: x509.CertFile(dir),
-		NodeKeyPath:  x509.KeyFile(dir),
-		HTTPCertPath: x509.CertFile(dir),
-		HTTPKeyPath:  x509.KeyFile(dir),
+		NodeCertPath: nodeCertPath,
+		NodeKeyPath:  nodeKeyPath,
+		HTTPCertPath: httpCertPath,
+		HTTPKeyPath:  httpKeyPath,
 	}
 
 	dbConf := store.NewDBConfig("", false)
@@ -359,6 +364,11 @@ func mustNewNodeEncrypted(enableSingle, httpEncrypt, nodeEncrypt bool) *Node {
 
 	node.Service = httpd.New("localhost:0", node.Store, nil)
 	node.Service.Expvar = true
+	if httpEncrypt {
+		node.Service.CertFile = node.HTTPCertPath
+		node.Service.KeyFile = node.HTTPKeyPath
+	}
+
 	if err := node.Service.Start(); err != nil {
 		node.Deprovision()
 		panic(fmt.Sprintf("failed to start HTTP server: %s", err.Error()))
