@@ -326,13 +326,14 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.store.Join(remoteID.(string), remoteAddr.(string), voter.(bool), m); err != nil {
 		if err == store.ErrNotLeader {
-			leader := s.leaderAPIAddr()
-			if leader == "" {
+			leaderAPIAddr := s.leaderAPIAddr()
+			leaderProto := s.leaderAPIProto()
+			if leaderAPIAddr == "" {
 				http.Error(w, err.Error(), http.StatusServiceUnavailable)
 				return
 			}
 
-			redirect := s.FormRedirect(r, leader)
+			redirect := s.FormRedirect(r, leaderProto, leaderAPIAddr)
 			http.Redirect(w, r, redirect, http.StatusMovedPermanently)
 			return
 		}
@@ -380,13 +381,14 @@ func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.store.Remove(remoteID); err != nil {
 		if err == store.ErrNotLeader {
-			leader := s.leaderAPIAddr()
-			if leader == "" {
+			leaderAPIAddr := s.leaderAPIAddr()
+			leaderProto := s.leaderAPIProto()
+			if leaderAPIAddr == "" {
 				http.Error(w, err.Error(), http.StatusServiceUnavailable)
 				return
 			}
 
-			redirect := s.FormRedirect(r, leader)
+			redirect := s.FormRedirect(r, leaderProto, leaderAPIAddr)
 			http.Redirect(w, r, redirect, http.StatusMovedPermanently)
 			return
 		}
@@ -460,13 +462,14 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 	results, err := s.store.ExecuteOrAbort(&store.ExecuteRequest{queries, timings, false})
 	if err != nil {
 		if err == store.ErrNotLeader {
-			leader := s.leaderAPIAddr()
-			if leader == "" {
+			leaderAPIAddr := s.leaderAPIAddr()
+			leaderProto := s.leaderAPIProto()
+			if leaderAPIAddr == "" {
 				http.Error(w, err.Error(), http.StatusServiceUnavailable)
 				return
 			}
 
-			redirect := s.FormRedirect(r, leader)
+			redirect := s.FormRedirect(r, leaderProto, leaderAPIAddr)
 			http.Redirect(w, r, redirect, http.StatusMovedPermanently)
 			return
 		}
@@ -607,13 +610,14 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 	results, err := s.store.Execute(&store.ExecuteRequest{queries, timings, isTx})
 	if err != nil {
 		if err == store.ErrNotLeader {
-			leader := s.leaderAPIAddr()
-			if leader == "" {
+			leaderAPIAddr := s.leaderAPIAddr()
+			leaderProto := s.leaderAPIProto()
+			if leaderAPIAddr == "" {
 				http.Error(w, err.Error(), http.StatusServiceUnavailable)
 				return
 			}
 
-			redirect := s.FormRedirect(r, leader)
+			redirect := s.FormRedirect(r, leaderProto, leaderAPIAddr)
 			http.Redirect(w, r, redirect, http.StatusMovedPermanently)
 			return
 		}
@@ -675,13 +679,14 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 	results, err := s.store.Query(&store.QueryRequest{queries, timings, isTx, lvl, frsh})
 	if err != nil {
 		if err == store.ErrNotLeader {
-			leader := s.leaderAPIAddr()
-			if leader == "" {
+			leaderAPIAddr := s.leaderAPIAddr()
+			leaderProto := s.leaderAPIProto()
+			if leaderAPIAddr == "" {
 				http.Error(w, err.Error(), http.StatusServiceUnavailable)
 				return
 			}
 
-			redirect := s.FormRedirect(r, leader)
+			redirect := s.FormRedirect(r, leaderProto, leaderAPIAddr)
 			http.Redirect(w, r, redirect, http.StatusMovedPermanently)
 			return
 		}
@@ -738,11 +743,7 @@ func (s *Service) Addr() net.Addr {
 }
 
 // FormRedirect returns the value for the "Location" header for a 301 response.
-func (s *Service) FormRedirect(r *http.Request, host string) string {
-	protocol := "http"
-	if s.credentialStore != nil {
-		protocol = "https"
-	}
+func (s *Service) FormRedirect(r *http.Request, protocol, host string) string {
 	rq := r.URL.RawQuery
 	if rq != "" {
 		rq = fmt.Sprintf("?%s", rq)
@@ -770,6 +771,19 @@ func (s *Service) leaderAPIAddr() string {
 		return ""
 	}
 	return s.store.Metadata(id, "api_addr")
+}
+
+func (s *Service) leaderAPIProto() string {
+	id, err := s.store.LeaderID()
+	if err != nil {
+		return "http"
+	}
+
+	p := s.store.Metadata(id, "api_proto")
+	if p == "" {
+		return "http"
+	}
+	return "https"
 }
 
 // addBuildVersion adds the build version to the HTTP response.

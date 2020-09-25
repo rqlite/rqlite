@@ -43,6 +43,15 @@ func Test_MultiNodeCluster(t *testing.T) {
 		t.Fatalf("failed to find cluster leader: %s", err.Error())
 	}
 
+	// Get a follower and confirm redirects work properly.
+	followers, err := c.Followers()
+	if err != nil {
+		t.Fatalf("failed to get followers: %s", err.Error())
+	}
+	if len(followers) != 1 {
+		t.Fatalf("got incorrect number of followers: %d", len(followers))
+	}
+
 	node3 := mustNewNode(false)
 	defer node3.Deprovision()
 	if err := node3.Join(leader); err != nil {
