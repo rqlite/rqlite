@@ -1,8 +1,7 @@
-## 5.4.1 (unreleased)
-### New features
-- [PR #660](https://github.com/rqlite/rqlite/pull/660): Raft log size on disk now reported via status endpoint.
+## 5.4.1 (Septemerb 24th 2020)
 
 ### Implementation changes and bug fixes
+- [PR #660](https://github.com/rqlite/rqlite/pull/660): Raft log size on disk now reported via status endpoint.
 - [PR #670](https://github.com/rqlite/rqlite/pull/670): Add utilities for testing encrypted nodes.
 - [PR #671](https://github.com/rqlite/rqlite/pull/671): Set Location for HTTP redirect properly for secure nodes.
 
