@@ -4,6 +4,7 @@
 
 ### Implementation changes and bug fixes
 - [PR #670](https://github.com/rqlite/rqlite/pull/670): Add utilities for testing encrypted nodes.
+- [PR #671](https://github.com/rqlite/rqlite/pull/671): Set Location for HTTP redirect properly for secure nodes.
 
 ## 5.4.0 (June 14th 2020)
 
