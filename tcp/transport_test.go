@@ -41,9 +41,9 @@ func Test_TransportDial(t *testing.T) {
 }
 
 func Test_NewTLSTransport(t *testing.T) {
-	c := x509.CertFile()
+	c := x509.CertFile("")
 	defer os.Remove(c)
-	k := x509.KeyFile()
+	k := x509.KeyFile("")
 	defer os.Remove(k)
 
 	if NewTLSTransport(c, k, true) == nil {
@@ -52,9 +52,9 @@ func Test_NewTLSTransport(t *testing.T) {
 }
 
 func Test_TLSTransportOpenClose(t *testing.T) {
-	c := x509.CertFile()
+	c := x509.CertFile("")
 	defer os.Remove(c)
-	k := x509.KeyFile()
+	k := x509.KeyFile("")
 	defer os.Remove(k)
 
 	tn := NewTLSTransport(c, k, true)

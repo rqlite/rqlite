@@ -14,16 +14,21 @@ import (
 	httpd "github.com/rqlite/rqlite/http"
 	"github.com/rqlite/rqlite/store"
 	"github.com/rqlite/rqlite/tcp"
+	"github.com/rqlite/rqlite/testdata/x509"
 )
 
 // Node represents a node under test.
 type Node struct {
-	APIAddr  string
-	RaftAddr string
-	ID       string
-	Dir      string
-	Store    *store.Store
-	Service  *httpd.Service
+	APIAddr      string
+	RaftAddr     string
+	ID           string
+	Dir          string
+	NodeCertPath string
+	NodeKeyPath  string
+	HTTPCertPath string
+	HTTPKeyPath  string
+	Store        *store.Store
+	Service      *httpd.Service
 }
 
 // SameAs returns true if this node is the same as node o.
@@ -311,15 +316,37 @@ func DoJoinRequest(nodeAddr, raftID, raftAddr string, voter bool) (*http.Respons
 }
 
 func mustNewNode(enableSingle bool) *Node {
+	return mustNewNodeEncrypted(enableSingle, false, false)
+}
+
+func mustNewNodeEncrypted(enableSingle, httpEncrypt, nodeEncrypt bool) *Node {
+	dir := mustTempDir()
+	nodeCertPath := x509.CertFile(dir)
+	nodeKeyPath := x509.KeyFile(dir)
+	httpCertPath := nodeCertPath
+	httpKeyPath := nodeKeyPath
+
 	node := &Node{
-		Dir: mustTempDir(),
+		Dir:          dir,
+		NodeCertPath: nodeCertPath,
+		NodeKeyPath:  nodeKeyPath,
+		HTTPCertPath: httpCertPath,
+		HTTPKeyPath:  httpKeyPath,
 	}
 
 	dbConf := store.NewDBConfig("", false)
-	tn := tcp.NewTransport()
+
+	var tn *tcp.Transport
+	if nodeEncrypt {
+		tn = tcp.NewTLSTransport(node.NodeCertPath, node.NodeCertPath, true)
+	} else {
+		tn = tcp.NewTransport()
+	}
+
 	if err := tn.Open("localhost:0"); err != nil {
 		panic(err.Error())
 	}
+
 	node.Store = store.New(tn, &store.StoreConfig{
 		DBConf: dbConf,
 		Dir:    node.Dir,
@@ -337,6 +364,11 @@ func mustNewNode(enableSingle bool) *Node {
 
 	node.Service = httpd.New("localhost:0", node.Store, nil)
 	node.Service.Expvar = true
+	if httpEncrypt {
+		node.Service.CertFile = node.HTTPCertPath
+		node.Service.KeyFile = node.HTTPKeyPath
+	}
+
 	if err := node.Service.Start(); err != nil {
 		node.Deprovision()
 		panic(fmt.Sprintf("failed to start HTTP server: %s", err.Error()))
