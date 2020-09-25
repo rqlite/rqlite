@@ -743,8 +743,6 @@ func (s *Service) Addr() net.Addr {
 }
 
 // FormRedirect returns the value for the "Location" header for a 301 response.
-// This function assume that if this node is using HTTPS, then all other nodes
-// are using HTTP.
 func (s *Service) FormRedirect(r *http.Request, protocol, host string) string {
 	rq := r.URL.RawQuery
 	if rq != "" {
