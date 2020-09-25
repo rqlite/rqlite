@@ -459,7 +459,7 @@ func Test_LeaderAPIAddrProto(t *testing.T) {
 	}
 
 	m.metadata = map[string]string{
-		"api_addr":  "1.2.3.4:999",
+		"api_addr": "1.2.3.4:999",
 	}
 	if addr := s.LeaderAPIAddr(); addr != "1.2.3.4:999" {
 		t.Fatalf("incorrect Leader API addresss, got %s", addr)
