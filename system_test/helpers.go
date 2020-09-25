@@ -14,16 +14,21 @@ import (
 	httpd "github.com/rqlite/rqlite/http"
 	"github.com/rqlite/rqlite/store"
 	"github.com/rqlite/rqlite/tcp"
+	"github.com/rqlite/rqlite/testdata/x509"
 )
 
 // Node represents a node under test.
 type Node struct {
-	APIAddr  string
-	RaftAddr string
-	ID       string
-	Dir      string
-	Store    *store.Store
-	Service  *httpd.Service
+	APIAddr      string
+	RaftAddr     string
+	ID           string
+	Dir          string
+	NodeCertPath string
+	NodeKeyPath  string
+	HTTPCertPath string
+	HTTPKeyPath  string
+	Store        *store.Store
+	Service      *httpd.Service
 }
 
 // SameAs returns true if this node is the same as node o.
@@ -311,8 +316,13 @@ func DoJoinRequest(nodeAddr, raftID, raftAddr string, voter bool) (*http.Respons
 }
 
 func mustNewNode(enableSingle bool) *Node {
+	dir := mustTempDir()
 	node := &Node{
-		Dir: mustTempDir(),
+		Dir:          dir,
+		NodeCertPath: x509.CertFile(dir),
+		NodeKeyPath:  x509.KeyFile(dir),
+		HTTPCertPath: x509.CertFile(dir),
+		HTTPKeyPath:  x509.KeyFile(dir),
 	}
 
 	dbConf := store.NewDBConfig("", false)
@@ -320,6 +330,50 @@ func mustNewNode(enableSingle bool) *Node {
 	if err := tn.Open("localhost:0"); err != nil {
 		panic(err.Error())
 	}
+	node.Store = store.New(tn, &store.StoreConfig{
+		DBConf: dbConf,
+		Dir:    node.Dir,
+		ID:     tn.Addr().String(),
+	})
+	node.Store.SnapshotThreshold = 100
+	node.Store.SnapshotInterval = mustParseDuration("1s")
+
+	if err := node.Store.Open(enableSingle); err != nil {
+		node.Deprovision()
+		panic(fmt.Sprintf("failed to open store: %s", err.Error()))
+	}
+	node.RaftAddr = node.Store.Addr()
+	node.ID = node.Store.ID()
+
+	node.Service = httpd.New("localhost:0", node.Store, nil)
+	node.Service.Expvar = true
+	if err := node.Service.Start(); err != nil {
+		node.Deprovision()
+		panic(fmt.Sprintf("failed to start HTTP server: %s", err.Error()))
+	}
+	node.APIAddr = node.Service.Addr().String()
+
+	return node
+}
+
+func mustNewNodeEncrypted(enableSingle, httpEncrypt, nodeEncrypt bool) *Node {
+	node := &Node{
+		Dir: mustTempDir(),
+	}
+
+	dbConf := store.NewDBConfig("", false)
+
+	var tn *tcp.Transport
+	if nodeEncrypt {
+		tn = tcp.NewTLSTransport(node.NodeCertPath, node.NodeCertPath, true)
+	} else {
+		tn = tcp.NewTransport()
+	}
+
+	if err := tn.Open("localhost:0"); err != nil {
+		panic(err.Error())
+	}
+
 	node.Store = store.New(tn, &store.StoreConfig{
 		DBConf: dbConf,
 		Dir:    node.Dir,
