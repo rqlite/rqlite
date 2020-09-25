@@ -4,32 +4,35 @@ import (
 	"io/ioutil"
 )
 
-// CertFile returns the path to a temporary file containing a cert.
-// It is up to the caller to remove the file when finished.
-func CertFile() string {
-	return mustWriteToFile(cert)
+// CertFile returns the path to a temporary file, in directory dir, containing a cert.
+// It is up to the caller to remove the file when finished. If dir is the empty string
+// then the default directory for temporary files is used.
+func CertFile(dir string) string {
+	return mustWriteToFile(dir, cert)
 }
 
-// KeyFile returns the path to a temporary file containing a key.
-// It is up to the caller to remove the file when finished.
-func KeyFile() string {
-	return mustWriteToFile(key)
+// KeyFile returns the path to a temporary file, in directory dir, containing a key.
+// It is up to the caller to remove the file when finished.If dir is the empty string
+// then the default directory for temporary files is used.
+func KeyFile(dir string) string {
+	return mustWriteToFile(dir, key)
 }
 
-func mustWriteToFile(content string) string {
+func mustWriteToFile(dir, content string) string {
 	b := []byte(content)
 
-	path := mustTempFile()
+	path := mustTempFile(dir)
 	if err := ioutil.WriteFile(path, b, 0600); err != nil {
 		panic(err.Error())
 	}
 	return path
 }
 
-// mustTempFile returns a path to a temporary file. It is up to the
-// caller to remove the file once it is no longer needed.
-func mustTempFile() string {
-	tmpfile, err := ioutil.TempFile("", "rqlite-tls-test")
+// mustTempFile returns a path to a temporary file in directory dir. It is up to the
+// caller to remove the file once it is no longer needed. If dir is the empty
+// string, then the default directory for temporary files is used.
+func mustTempFile(dir string) string {
+	tmpfile, err := ioutil.TempFile(dir, "rqlite-tls-test")
 	if err != nil {
 		panic(err.Error())
 	}
