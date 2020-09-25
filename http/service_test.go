@@ -443,6 +443,43 @@ func Test_RegisterStatus(t *testing.T) {
 	}
 }
 
+func Test_LeaderAPIAddrProto(t *testing.T) {
+	m := &MockStore{}
+	s := New("127.0.0.1:0", m, nil)
+
+	m.metadata = map[string]string{
+		"api_addr":  "1.2.3.4:999",
+		"api_proto": "http",
+	}
+	if addr := s.LeaderAPIAddr(); addr != "1.2.3.4:999" {
+		t.Fatalf("incorrect Leader API addresss, got %s", addr)
+	}
+	if proto := s.LeaderAPIProto(); proto != "http" {
+		t.Fatalf("incorrect Leader API proto, got %s", proto)
+	}
+
+	m.metadata = map[string]string{
+		"api_addr":  "1.2.3.4:999",
+	}
+	if addr := s.LeaderAPIAddr(); addr != "1.2.3.4:999" {
+		t.Fatalf("incorrect Leader API addresss, got %s", addr)
+	}
+	if proto := s.LeaderAPIProto(); proto != "http" {
+		t.Fatalf("incorrect Leader API proto, got %s", proto)
+	}
+
+	m.metadata = map[string]string{
+		"api_addr":  "1.2.3.4:999",
+		"api_proto": "https",
+	}
+	if addr := s.LeaderAPIAddr(); addr != "1.2.3.4:999" {
+		t.Fatalf("incorrect Leader API addresss, got %s", addr)
+	}
+	if proto := s.LeaderAPIProto(); proto != "https" {
+		t.Fatalf("incorrect Leader API proto, got %s", proto)
+	}
+}
+
 func Test_FormRedirect(t *testing.T) {
 	m := &MockStore{}
 	s := New("127.0.0.1:0", m, nil)
@@ -485,6 +522,8 @@ func Test_FormRedirectHTTPS(t *testing.T) {
 type MockStore struct {
 	executeFn func(queries []string, tx bool) ([]*sql.Result, error)
 	queryFn   func(queries []string, tx, leader, verify bool) ([]*sql.Rows, error)
+	leaderID  string
+	metadata  map[string]string
 }
 
 func (m *MockStore) Execute(er *store.ExecuteRequest) ([]*sql.Result, error) {
@@ -514,11 +553,15 @@ func (m *MockStore) Remove(id string) error {
 }
 
 func (m *MockStore) LeaderID() (string, error) {
-	return "", nil
+	return m.leaderID, nil
 }
 
 func (m *MockStore) Metadata(id, key string) string {
-	return ""
+	// If the preset leaderID is not used in the call, return nothing.
+	if id != m.leaderID {
+		return ""
+	}
+	return m.metadata[key]
 }
 
 func (m *MockStore) Stats() (map[string]interface{}, error) {

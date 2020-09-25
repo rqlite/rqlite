@@ -326,14 +326,14 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.store.Join(remoteID.(string), remoteAddr.(string), voter.(bool), m); err != nil {
 		if err == store.ErrNotLeader {
-			leaderAPIAddr := s.leaderAPIAddr()
-			leaderProto := s.leaderAPIProto()
-			if leaderAPIAddr == "" {
+			LeaderAPIAddr := s.LeaderAPIAddr()
+			leaderProto := s.LeaderAPIProto()
+			if LeaderAPIAddr == "" {
 				http.Error(w, err.Error(), http.StatusServiceUnavailable)
 				return
 			}
 
-			redirect := s.FormRedirect(r, leaderProto, leaderAPIAddr)
+			redirect := s.FormRedirect(r, leaderProto, LeaderAPIAddr)
 			http.Redirect(w, r, redirect, http.StatusMovedPermanently)
 			return
 		}
@@ -381,14 +381,14 @@ func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.store.Remove(remoteID); err != nil {
 		if err == store.ErrNotLeader {
-			leaderAPIAddr := s.leaderAPIAddr()
-			leaderProto := s.leaderAPIProto()
-			if leaderAPIAddr == "" {
+			LeaderAPIAddr := s.LeaderAPIAddr()
+			leaderProto := s.LeaderAPIProto()
+			if LeaderAPIAddr == "" {
 				http.Error(w, err.Error(), http.StatusServiceUnavailable)
 				return
 			}
 
-			redirect := s.FormRedirect(r, leaderProto, leaderAPIAddr)
+			redirect := s.FormRedirect(r, leaderProto, LeaderAPIAddr)
 			http.Redirect(w, r, redirect, http.StatusMovedPermanently)
 			return
 		}
@@ -462,14 +462,14 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 	results, err := s.store.ExecuteOrAbort(&store.ExecuteRequest{queries, timings, false})
 	if err != nil {
 		if err == store.ErrNotLeader {
-			leaderAPIAddr := s.leaderAPIAddr()
-			leaderProto := s.leaderAPIProto()
-			if leaderAPIAddr == "" {
+			LeaderAPIAddr := s.LeaderAPIAddr()
+			leaderProto := s.LeaderAPIProto()
+			if LeaderAPIAddr == "" {
 				http.Error(w, err.Error(), http.StatusServiceUnavailable)
 				return
 			}
 
-			redirect := s.FormRedirect(r, leaderProto, leaderAPIAddr)
+			redirect := s.FormRedirect(r, leaderProto, LeaderAPIAddr)
 			http.Redirect(w, r, redirect, http.StatusMovedPermanently)
 			return
 		}
@@ -513,7 +513,7 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 	httpStatus := map[string]interface{}{
 		"addr":     s.Addr().String(),
 		"auth":     prettyEnabled(s.credentialStore != nil),
-		"redirect": s.leaderAPIAddr(),
+		"redirect": s.LeaderAPIAddr(),
 	}
 
 	nodeStatus := map[string]interface{}{
@@ -610,14 +610,14 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 	results, err := s.store.Execute(&store.ExecuteRequest{queries, timings, isTx})
 	if err != nil {
 		if err == store.ErrNotLeader {
-			leaderAPIAddr := s.leaderAPIAddr()
-			leaderProto := s.leaderAPIProto()
-			if leaderAPIAddr == "" {
+			LeaderAPIAddr := s.LeaderAPIAddr()
+			leaderProto := s.LeaderAPIProto()
+			if LeaderAPIAddr == "" {
 				http.Error(w, err.Error(), http.StatusServiceUnavailable)
 				return
 			}
 
-			redirect := s.FormRedirect(r, leaderProto, leaderAPIAddr)
+			redirect := s.FormRedirect(r, leaderProto, LeaderAPIAddr)
 			http.Redirect(w, r, redirect, http.StatusMovedPermanently)
 			return
 		}
@@ -679,14 +679,14 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 	results, err := s.store.Query(&store.QueryRequest{queries, timings, isTx, lvl, frsh})
 	if err != nil {
 		if err == store.ErrNotLeader {
-			leaderAPIAddr := s.leaderAPIAddr()
-			leaderProto := s.leaderAPIProto()
-			if leaderAPIAddr == "" {
+			LeaderAPIAddr := s.LeaderAPIAddr()
+			leaderProto := s.LeaderAPIProto()
+			if LeaderAPIAddr == "" {
 				http.Error(w, err.Error(), http.StatusServiceUnavailable)
 				return
 			}
 
-			redirect := s.FormRedirect(r, leaderProto, leaderAPIAddr)
+			redirect := s.FormRedirect(r, leaderProto, LeaderAPIAddr)
 			http.Redirect(w, r, redirect, http.StatusMovedPermanently)
 			return
 		}
@@ -765,7 +765,8 @@ func (s *Service) CheckRequestPerm(r *http.Request, perm string) bool {
 	return s.credentialStore.HasAnyPerm(username, perm, PermAll)
 }
 
-func (s *Service) leaderAPIAddr() string {
+// LeaderAPIAddr returns the API address of the leader, as known by this node.
+func (s *Service) LeaderAPIAddr() string {
 	id, err := s.store.LeaderID()
 	if err != nil {
 		return ""
@@ -773,7 +774,8 @@ func (s *Service) leaderAPIAddr() string {
 	return s.store.Metadata(id, "api_addr")
 }
 
-func (s *Service) leaderAPIProto() string {
+// LeaderAPIProto returns the protocol used by the leader, as known by this node.
+func (s *Service) LeaderAPIProto() string {
 	id, err := s.store.LeaderID()
 	if err != nil {
 		return "http"
@@ -783,7 +785,7 @@ func (s *Service) leaderAPIProto() string {
 	if p == "" {
 		return "http"
 	}
-	return "https"
+	return p
 }
 
 // addBuildVersion adds the build version to the HTTP response.
