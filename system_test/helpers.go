@@ -316,6 +316,10 @@ func DoJoinRequest(nodeAddr, raftID, raftAddr string, voter bool) (*http.Respons
 }
 
 func mustNewNode(enableSingle bool) *Node {
+	return mustNewNodeEncrypted(enableSingle, false, false)
+}
+
+func mustNewNodeEncrypted(enableSingle, httpEncrypt, nodeEncrypt bool) *Node {
 	dir := mustTempDir()
 	node := &Node{
 		Dir:          dir,
@@ -323,42 +327,6 @@ func mustNewNode(enableSingle bool) *Node {
 		NodeKeyPath:  x509.KeyFile(dir),
 		HTTPCertPath: x509.CertFile(dir),
 		HTTPKeyPath:  x509.KeyFile(dir),
-	}
-
-	dbConf := store.NewDBConfig("", false)
-	tn := tcp.NewTransport()
-	if err := tn.Open("localhost:0"); err != nil {
-		panic(err.Error())
-	}
-	node.Store = store.New(tn, &store.StoreConfig{
-		DBConf: dbConf,
-		Dir:    node.Dir,
-		ID:     tn.Addr().String(),
-	})
-	node.Store.SnapshotThreshold = 100
-	node.Store.SnapshotInterval = mustParseDuration("1s")
-
-	if err := node.Store.Open(enableSingle); err != nil {
-		node.Deprovision()
-		panic(fmt.Sprintf("failed to open store: %s", err.Error()))
-	}
-	node.RaftAddr = node.Store.Addr()
-	node.ID = node.Store.ID()
-
-	node.Service = httpd.New("localhost:0", node.Store, nil)
-	node.Service.Expvar = true
-	if err := node.Service.Start(); err != nil {
-		node.Deprovision()
-		panic(fmt.Sprintf("failed to start HTTP server: %s", err.Error()))
-	}
-	node.APIAddr = node.Service.Addr().String()
-
-	return node
-}
-
-func mustNewNodeEncrypted(enableSingle, httpEncrypt, nodeEncrypt bool) *Node {
-	node := &Node{
-		Dir: mustTempDir(),
 	}
 
 	dbConf := store.NewDBConfig("", false)
