@@ -231,8 +231,13 @@ func main() {
 	if httpAdv != "" {
 		apiAdv = httpAdv
 	}
+	apiProto := "http"
+	if x509Cert != "" {
+		apiProto = "https"
+	}
 	meta := map[string]string{
-		"api_addr": apiAdv,
+		"api_addr":  apiAdv,
+		"api_proto": apiProto,
 	}
 
 	// Execute any requested join operation.

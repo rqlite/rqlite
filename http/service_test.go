@@ -448,10 +448,10 @@ func Test_FormRedirect(t *testing.T) {
 	s := New("127.0.0.1:0", m, nil)
 	req := mustNewHTTPRequest("http://qux:4001")
 
-	if rd := s.FormRedirect(req, "foo:4001"); rd != "http://foo:4001" {
+	if rd := s.FormRedirect(req, "http", "foo:4001"); rd != "http://foo:4001" {
 		t.Fatal("failed to form redirect for simple URL")
 	}
-	if rd := s.FormRedirect(req, "bar:4002"); rd != "http://bar:4002" {
+	if rd := s.FormRedirect(req, "http", "bar:4002"); rd != "http://bar:4002" {
 		t.Fatal("failed to form redirect for simple URL with new host")
 	}
 }
@@ -461,10 +461,10 @@ func Test_FormRedirectParam(t *testing.T) {
 	s := New("127.0.0.1:0", m, nil)
 	req := mustNewHTTPRequest("http://qux:4001/db/query?x=y")
 
-	if rd := s.FormRedirect(req, "foo:4001"); rd != "http://foo:4001/db/query?x=y" {
+	if rd := s.FormRedirect(req, "http", "foo:4001"); rd != "http://foo:4001/db/query?x=y" {
 		t.Fatal("failed to form redirect for URL")
 	}
-	if rd := s.FormRedirect(req, "bar:4003"); rd != "http://bar:4003/db/query?x=y" {
+	if rd := s.FormRedirect(req, "http", "bar:4003"); rd != "http://bar:4003/db/query?x=y" {
 		t.Fatal("failed to form redirect for URL with new host")
 	}
 }
@@ -472,13 +472,12 @@ func Test_FormRedirectParam(t *testing.T) {
 func Test_FormRedirectHTTPS(t *testing.T) {
 	m := &MockStore{}
 	s := New("127.0.0.1:0", m, nil)
-	s.CertFile = "/some/dummy/path"
 	req := mustNewHTTPRequest("http://qux:4001")
 
-	if rd := s.FormRedirect(req, "foo:4001"); rd != "https://foo:4001" {
+	if rd := s.FormRedirect(req, "https", "foo:4001"); rd != "https://foo:4001" {
 		t.Fatal("failed to form redirect for simple URL")
 	}
-	if rd := s.FormRedirect(req, "bar:4002"); rd != "https://bar:4002" {
+	if rd := s.FormRedirect(req, "https", "bar:4002"); rd != "https://bar:4002" {
 		t.Fatal("failed to form redirect for simple URL with new host")
 	}
 }
