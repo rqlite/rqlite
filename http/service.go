@@ -326,14 +326,14 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.store.Join(remoteID.(string), remoteAddr.(string), voter.(bool), m); err != nil {
 		if err == store.ErrNotLeader {
-			LeaderAPIAddr := s.LeaderAPIAddr()
+			leaderAPIAddr := s.LeaderAPIAddr()
 			leaderProto := s.LeaderAPIProto()
-			if LeaderAPIAddr == "" {
+			if leaderAPIAddr == "" {
 				http.Error(w, err.Error(), http.StatusServiceUnavailable)
 				return
 			}
 
-			redirect := s.FormRedirect(r, leaderProto, LeaderAPIAddr)
+			redirect := s.FormRedirect(r, leaderProto, leaderAPIAddr)
 			http.Redirect(w, r, redirect, http.StatusMovedPermanently)
 			return
 		}
@@ -381,14 +381,14 @@ func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.store.Remove(remoteID); err != nil {
 		if err == store.ErrNotLeader {
-			LeaderAPIAddr := s.LeaderAPIAddr()
+			leaderAPIAddr := s.LeaderAPIAddr()
 			leaderProto := s.LeaderAPIProto()
-			if LeaderAPIAddr == "" {
+			if leaderAPIAddr == "" {
 				http.Error(w, err.Error(), http.StatusServiceUnavailable)
 				return
 			}
 
-			redirect := s.FormRedirect(r, leaderProto, LeaderAPIAddr)
+			redirect := s.FormRedirect(r, leaderProto, leaderAPIAddr)
 			http.Redirect(w, r, redirect, http.StatusMovedPermanently)
 			return
 		}
@@ -462,14 +462,14 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 	results, err := s.store.ExecuteOrAbort(&store.ExecuteRequest{queries, timings, false})
 	if err != nil {
 		if err == store.ErrNotLeader {
-			LeaderAPIAddr := s.LeaderAPIAddr()
+			leaderAPIAddr := s.LeaderAPIAddr()
 			leaderProto := s.LeaderAPIProto()
-			if LeaderAPIAddr == "" {
+			if leaderAPIAddr == "" {
 				http.Error(w, err.Error(), http.StatusServiceUnavailable)
 				return
 			}
 
-			redirect := s.FormRedirect(r, leaderProto, LeaderAPIAddr)
+			redirect := s.FormRedirect(r, leaderProto, leaderAPIAddr)
 			http.Redirect(w, r, redirect, http.StatusMovedPermanently)
 			return
 		}
@@ -610,14 +610,14 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 	results, err := s.store.Execute(&store.ExecuteRequest{queries, timings, isTx})
 	if err != nil {
 		if err == store.ErrNotLeader {
-			LeaderAPIAddr := s.LeaderAPIAddr()
+			leaderAPIAddr := s.LeaderAPIAddr()
 			leaderProto := s.LeaderAPIProto()
-			if LeaderAPIAddr == "" {
+			if leaderAPIAddr == "" {
 				http.Error(w, err.Error(), http.StatusServiceUnavailable)
 				return
 			}
 
-			redirect := s.FormRedirect(r, leaderProto, LeaderAPIAddr)
+			redirect := s.FormRedirect(r, leaderProto, leaderAPIAddr)
 			http.Redirect(w, r, redirect, http.StatusMovedPermanently)
 			return
 		}
@@ -679,14 +679,14 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 	results, err := s.store.Query(&store.QueryRequest{queries, timings, isTx, lvl, frsh})
 	if err != nil {
 		if err == store.ErrNotLeader {
-			LeaderAPIAddr := s.LeaderAPIAddr()
+			leaderAPIAddr := s.LeaderAPIAddr()
 			leaderProto := s.LeaderAPIProto()
-			if LeaderAPIAddr == "" {
+			if leaderAPIAddr == "" {
 				http.Error(w, err.Error(), http.StatusServiceUnavailable)
 				return
 			}
 
-			redirect := s.FormRedirect(r, leaderProto, LeaderAPIAddr)
+			redirect := s.FormRedirect(r, leaderProto, leaderAPIAddr)
 			http.Redirect(w, r, redirect, http.StatusMovedPermanently)
 			return
 		}
