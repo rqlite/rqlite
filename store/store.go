@@ -92,12 +92,20 @@ type QueryRequest struct {
 	Freshness time.Duration
 }
 
+func (q *QueryRequest) Statements() []sql.Statement {
+	return statementsfromStrings(q.Queries)
+}
+
 // ExecuteRequest represents a query that returns now rows, but does modify
 // the database.
 type ExecuteRequest struct {
 	Queries []string
 	Timings bool
 	Tx      bool
+}
+
+func (e *ExecuteRequest) Statements() []sql.Statement {
+	return statementsfromStrings(e.Queries)
 }
 
 // ConsistencyLevel represents the available read consistency levels.
@@ -585,7 +593,7 @@ func (s *Store) Query(qr *QueryRequest) ([]*sql.Rows, error) {
 	}
 
 	// Read straight from database.
-	return s.db.Query(qr.Queries, qr.Tx, qr.Timings)
+	return s.db.Query(qr.Statements(), qr.Tx, qr.Timings)
 }
 
 // Join joins a node, identified by id and located at addr, to this store.
@@ -821,10 +829,10 @@ func (s *Store) Apply(l *raft.Log) interface{} {
 			return &fsmGenericResponse{error: err}
 		}
 		if c.Typ == execute {
-			r, err := s.db.Execute(d.Queries, d.Tx, d.Timings)
+			r, err := s.db.Execute(statementsfromStrings(d.Queries), d.Tx, d.Timings)
 			return &fsmExecuteResponse{results: r, error: err}
 		}
-		r, err := s.db.Query(d.Queries, d.Tx, d.Timings)
+		r, err := s.db.Query(statementsfromStrings(d.Queries), d.Tx, d.Timings)
 		return &fsmQueryResponse{rows: r, error: err}
 	case metadataSet:
 		var d metadataSetSub
@@ -1074,6 +1082,15 @@ func (s *Store) database(leader bool, dst io.Writer) error {
 
 // Release is a no-op.
 func (f *fsmSnapshot) Release() {}
+
+// statementsfromStrings converts a slice of strings into DB statements
+func statementsfromStrings(s []string) []sql.Statement {
+	stmts := make([]sql.Statement, len(s))
+	for i, ss := range s {
+		stmts[i] = sql.Statement{ss, nil}
+	}
+	return stmts
+}
 
 // enabledFromBool converts bool to "enabled" or "disabled".
 func enabledFromBool(b bool) string {
