@@ -1,6 +1,7 @@
 package db
 
 import (
+	"database/sql/driver"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -426,7 +427,71 @@ func Test_SimplePragmaTableInfo(t *testing.T) {
 	if exp, got := `[{"columns":["cid","name","type","notnull","dflt_value","pk"],"types":["","","","","",""],"values":[[0,"id","INTEGER",1,null,1],[1,"name","TEXT",0,null,0]]}]`, asJSON(res); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
+}
 
+func Test_SimpleParameterizedStatements(t *testing.T) {
+	db, path := mustCreateDatabase()
+	defer db.Close()
+	defer os.Remove(path)
+
+	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	s := Statement{
+		Query:      "INSERT INTO foo(name) VALUES(?)",
+		Parameters: []driver.Value{"fiona"},
+	}
+	_, err = db.Execute([]Statement{s}, false, false)
+	if err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+
+	s.Parameters = []driver.Value{"aoife"}
+	_, err = db.Execute([]Statement{s}, false, false)
+	if err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+
+	r, err := db.QueryStringStmt(`SELECT * FROM foo`)
+	if err != nil {
+		t.Fatalf("failed to query table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"],[2,"aoife"]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	s.Query = "SELECT * FROM foo WHERE name=?"
+	s.Parameters = []driver.Value{"aoife"}
+	r, err = db.Query([]Statement{s}, false, false)
+	if err != nil {
+		t.Fatalf("failed to query table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[2,"aoife"]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	s.Parameters = []driver.Value{"fiona"}
+	r, err = db.Query([]Statement{s}, false, false)
+	if err != nil {
+		t.Fatalf("failed to query table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	stmts := []Statement{
+		Statement{"SELECT * FROM foo WHERE NAME=?", []driver.Value{"fiona"}},
+		Statement{"SELECT * FROM foo WHERE NAME=?", []driver.Value{"aoife"}},
+	}
+	r, err = db.Query(stmts, false, false)
+	if err != nil {
+		t.Fatalf("failed to query table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]},{"columns":["id","name"],"types":["integer","text"],"values":[[2,"aoife"]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
 }
 
 func Test_CommonTableExpressions(t *testing.T) {
