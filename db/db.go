@@ -69,6 +69,11 @@ type Rows struct {
 	Time    float64         `json:"time,omitempty"`
 }
 
+type Statement struct {
+	Query      string
+	Parameters []driver.Value
+}
+
 // Open opens a file-based database, creating it if it does not exist.
 func Open(dbPath string) (*DB, error) {
 	return open(fqdsn(dbPath, ""))
@@ -172,13 +177,19 @@ func (db *DB) TransactionActive() bool {
 // can be used to clean up any dangling state that may result from certain
 // error scenarios.
 func (db *DB) AbortTransaction() error {
-	_, err := db.Execute([]string{`ROLLBACK`}, false, false)
+	_, err := db.ExecuteStringStmt("ROLLBACK")
 	return err
 }
 
+// ExecuteStringStmt executes a single query that modifies the database. This is
+// primarily a convenience function.
+func (db *DB) ExecuteStringStmt(query string) ([]*Result, error) {
+	return db.Execute([]Statement{Statement{query, nil}}, false, false)
+}
+
 // Execute executes queries that modify the database.
-func (db *DB) Execute(queries []string, tx, xTime bool) ([]*Result, error) {
-	stats.Add(numExecutions, int64(len(queries)))
+func (db *DB) Execute(stmts []Statement, tx, xTime bool) ([]*Result, error) {
+	stats.Add(numExecutions, int64(len(stmts)))
 	if tx {
 		stats.Add(numETx, 1)
 	}
@@ -231,15 +242,15 @@ func (db *DB) Execute(queries []string, tx, xTime bool) ([]*Result, error) {
 		}
 
 		// Execute each query.
-		for _, q := range queries {
-			if q == "" {
+		for _, stmt := range stmts {
+			if stmt.Query == "" {
 				continue
 			}
 
 			result := &Result{}
 			start := time.Now()
 
-			r, err := execer.Exec(q, nil)
+			r, err := execer.Exec(stmt.Query, stmt.Parameters)
 			if err != nil {
 				if handleError(result, err) {
 					continue
