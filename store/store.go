@@ -82,30 +82,70 @@ func init() {
 	stats.Add(numRestores, 0)
 }
 
+// Value is the type for parameters passed to a parameterized SQL statement.
+type Value interface{}
+
+// Statement represent a possible parameterized SQL statement.
+type Statement struct {
+	Query      string
+	Parameters []Value
+}
+
 // QueryRequest represents a query that returns rows, and does not modify
 // the database.
 type QueryRequest struct {
-	Queries   []string
+	Stmts     []Statement
 	Timings   bool
 	Tx        bool
 	Lvl       ConsistencyLevel
 	Freshness time.Duration
 }
 
-func (q *QueryRequest) Statements() []sql.Statement {
-	return statementsfromStrings(q.Queries)
+func (q *QueryRequest) statements() []sql.Statement {
+	stmts := make([]sql.Statement, len(q.Stmts))
+	for i, s := range q.Stmts {
+		stmts[i].Query = s.Query
+		for j := range stmts[i].Parameters {
+			s.Parameters[j] = stmts[i].Parameters[j]
+		}
+	}
+	return stmts
 }
 
-// ExecuteRequest represents a query that returns now rows, but does modify
-// the database.
+func (q *QueryRequest) command() *databaseSub {
+	c := databaseSub{
+		Tx:         q.Tx,
+		Queries:    make([]string, len(q.Stmts)),
+		Parameters: make([][]Value, len(q.Stmts)),
+		Timings:    q.Timings,
+	}
+	for i, s := range q.Stmts {
+		c.Queries[i] = s.Query
+		c.Parameters[i] = s.Parameters
+	}
+	return &c
+}
+
+// ExecuteRequest represents a query that returns no rows, but does modify
+// tvhe database.
 type ExecuteRequest struct {
-	Queries []string
+	Stmts   []Statement
 	Timings bool
 	Tx      bool
 }
 
-func (e *ExecuteRequest) Statements() []sql.Statement {
-	return statementsfromStrings(e.Queries)
+func (e *ExecuteRequest) command() *databaseSub {
+	c := databaseSub{
+		Tx:         e.Tx,
+		Queries:    make([]string, len(e.Stmts)),
+		Parameters: make([][]Value, len(e.Stmts)),
+		Timings:    e.Timings,
+	}
+	for i, s := range e.Stmts {
+		c.Queries[i] = s.Query
+		c.Parameters[i] = s.Parameters
+	}
+	return &c
 }
 
 // ConsistencyLevel represents the available read consistency levels.
@@ -499,12 +539,7 @@ func (s *Store) ExecuteOrAbort(ex *ExecuteRequest) (results []*sql.Result, retEr
 }
 
 func (s *Store) execute(ex *ExecuteRequest) ([]*sql.Result, error) {
-	d := &databaseSub{
-		Tx:      ex.Tx,
-		Queries: ex.Queries,
-		Timings: ex.Timings,
-	}
-	c, err := newCommand(execute, d)
+	c, err := newCommand(execute, ex.command())
 	if err != nil {
 		return nil, err
 	}
@@ -558,12 +593,7 @@ func (s *Store) Query(qr *QueryRequest) ([]*sql.Rows, error) {
 	defer s.mu.RUnlock()
 
 	if qr.Lvl == Strong {
-		d := &databaseSub{
-			Tx:      qr.Tx,
-			Queries: qr.Queries,
-			Timings: qr.Timings,
-		}
-		c, err := newCommand(query, d)
+		c, err := newCommand(query, qr.command())
 		if err != nil {
 			return nil, err
 		}
@@ -593,7 +623,7 @@ func (s *Store) Query(qr *QueryRequest) ([]*sql.Rows, error) {
 	}
 
 	// Read straight from database.
-	return s.db.Query(qr.Statements(), qr.Tx, qr.Timings)
+	return s.db.Query(qr.statements(), qr.Tx, qr.Timings)
 }
 
 // Join joins a node, identified by id and located at addr, to this store.
@@ -828,11 +858,13 @@ func (s *Store) Apply(l *raft.Log) interface{} {
 		if err := json.Unmarshal(c.Sub, &d); err != nil {
 			return &fsmGenericResponse{error: err}
 		}
+		stmts := subCommandToStatements(&d)
+
 		if c.Typ == execute {
-			r, err := s.db.Execute(statementsfromStrings(d.Queries), d.Tx, d.Timings)
+			r, err := s.db.Execute(stmts, d.Tx, d.Timings)
 			return &fsmExecuteResponse{results: r, error: err}
 		}
-		r, err := s.db.Query(statementsfromStrings(d.Queries), d.Tx, d.Timings)
+		r, err := s.db.Query(stmts, d.Tx, d.Timings)
 		return &fsmQueryResponse{rows: r, error: err}
 	case metadataSet:
 		var d metadataSetSub
@@ -1083,11 +1115,13 @@ func (s *Store) database(leader bool, dst io.Writer) error {
 // Release is a no-op.
 func (f *fsmSnapshot) Release() {}
 
-// statementsfromStrings converts a slice of strings into DB statements
-func statementsfromStrings(s []string) []sql.Statement {
-	stmts := make([]sql.Statement, len(s))
-	for i, ss := range s {
-		stmts[i] = sql.Statement{ss, nil}
+func subCommandToStatements(d *databaseSub) []sql.Statement {
+	stmts := make([]sql.Statement, len(d.Queries))
+	for i := range d.Queries {
+		stmts[i].Query = d.Queries[i]
+		for j := range d.Parameters[i] {
+			stmts[i].Parameters[j] = d.Parameters[i][j]
+		}
 	}
 	return stmts
 }
