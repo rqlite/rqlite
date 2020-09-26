@@ -290,9 +290,14 @@ func (db *DB) Execute(stmts []Statement, tx, xTime bool) ([]*Result, error) {
 	return allResults, err
 }
 
+// QueryStringStmt executes a single query that return rows, but don't modify database.
+func (db *DB) QueryStringStmt(query string) ([]*Rows, error) {
+	return db.Query([]Statement{Statement{query, nil}}, false, false)
+}
+
 // Query executes queries that return rows, but don't modify the database.
-func (db *DB) Query(queries []string, tx, xTime bool) ([]*Rows, error) {
-	stats.Add(numQueries, int64(len(queries)))
+func (db *DB) Query(stmts []Statement, tx, xTime bool) ([]*Rows, error) {
+	stats.Add(numQueries, int64(len(stmts)))
 	if tx {
 		stats.Add(numQTx, 1)
 	}
@@ -327,15 +332,15 @@ func (db *DB) Query(queries []string, tx, xTime bool) ([]*Rows, error) {
 			}
 		}
 
-		for _, q := range queries {
-			if q == "" {
+		for _, stmt := range stmts {
+			if stmt.Query == "" {
 				continue
 			}
 
 			rows := &Rows{}
 			start := time.Now()
 
-			rs, err := queryer.Query(q, nil)
+			rs, err := queryer.Query(stmt.Query, stmt.Parameters)
 			if err != nil {
 				rows.Error = err.Error()
 				allRows = append(allRows, rows)
@@ -417,7 +422,7 @@ func (db *DB) Dump(w io.Writer) error {
 	// Get the schema.
 	query := `SELECT "name", "type", "sql" FROM "sqlite_master"
               WHERE "sql" NOT NULL AND "type" == 'table' ORDER BY "name"`
-	rows, err := dstDB.Query([]string{query}, false, false)
+	rows, err := dstDB.QueryStringStmt(query)
 	if err != nil {
 		return err
 	}
@@ -441,7 +446,7 @@ func (db *DB) Dump(w io.Writer) error {
 		}
 
 		tableIndent := strings.Replace(table, `"`, `""`, -1)
-		r, err := dstDB.Query([]string{fmt.Sprintf(`PRAGMA table_info("%s")`, tableIndent)}, false, false)
+		r, err := dstDB.QueryStringStmt(fmt.Sprintf(`PRAGMA table_info("%s")`, tableIndent))
 		if err != nil {
 			return err
 		}
@@ -454,7 +459,7 @@ func (db *DB) Dump(w io.Writer) error {
 			tableIndent,
 			strings.Join(columnNames, ","),
 			tableIndent)
-		r, err = dstDB.Query([]string{query}, false, false)
+		r, err = dstDB.QueryStringStmt(query)
 		if err != nil {
 			return err
 		}
@@ -469,7 +474,7 @@ func (db *DB) Dump(w io.Writer) error {
 	// Do indexes, triggers, and views.
 	query = `SELECT "name", "type", "sql" FROM "sqlite_master"
 			  WHERE "sql" NOT NULL AND "type" IN ('index', 'trigger', 'view')`
-	rows, err = db.Query([]string{query}, false, false)
+	rows, err = db.QueryStringStmt(query)
 	if err != nil {
 		return err
 	}
