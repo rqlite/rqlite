@@ -65,7 +65,7 @@ The response is of the form:
             "types": [
                 "integer",
                 "text",
-                'integer"
+                "integer"
             ],
             "values": [
                 [
