@@ -1121,10 +1121,16 @@ func subCommandToStatements(d *databaseSub) []sql.Statement {
 	stmts := make([]sql.Statement, len(d.Queries))
 	for i := range d.Queries {
 		stmts[i].Query = d.Queries[i]
-		stmts[i].Parameters = make([]gosql.Value, len(d.Parameters[i]))
 
-		for j := range d.Parameters[i] {
-			stmts[i].Parameters[j] = d.Parameters[i][j]
+		// Support backwards-compatibility, since previous versions didn't
+		// have Parameters in Raft commands.
+		if len(d.Parameters) == 0 {
+			stmts[i].Parameters = make([]gosql.Value, 0)
+		} else {
+			stmts[i].Parameters = make([]gosql.Value, len(d.Parameters[i]))
+			for j := range d.Parameters[i] {
+				stmts[i].Parameters[j] = d.Parameters[i][j]
+			}
 		}
 	}
 	return stmts
