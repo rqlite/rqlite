@@ -69,6 +69,13 @@ type Rows struct {
 	Time    float64         `json:"time,omitempty"`
 }
 
+// Statement represents a single parameterized statement for processing
+// by the database layer.
+type Statement struct {
+	Query      string
+	Parameters []driver.Value
+}
+
 // Open opens a file-based database, creating it if it does not exist.
 func Open(dbPath string) (*DB, error) {
 	return open(fqdsn(dbPath, ""))
@@ -172,13 +179,19 @@ func (db *DB) TransactionActive() bool {
 // can be used to clean up any dangling state that may result from certain
 // error scenarios.
 func (db *DB) AbortTransaction() error {
-	_, err := db.Execute([]string{`ROLLBACK`}, false, false)
+	_, err := db.ExecuteStringStmt("ROLLBACK")
 	return err
 }
 
+// ExecuteStringStmt executes a single query that modifies the database. This is
+// primarily a convenience function.
+func (db *DB) ExecuteStringStmt(query string) ([]*Result, error) {
+	return db.Execute([]Statement{Statement{query, nil}}, false, false)
+}
+
 // Execute executes queries that modify the database.
-func (db *DB) Execute(queries []string, tx, xTime bool) ([]*Result, error) {
-	stats.Add(numExecutions, int64(len(queries)))
+func (db *DB) Execute(stmts []Statement, tx, xTime bool) ([]*Result, error) {
+	stats.Add(numExecutions, int64(len(stmts)))
 	if tx {
 		stats.Add(numETx, 1)
 	}
@@ -231,15 +244,15 @@ func (db *DB) Execute(queries []string, tx, xTime bool) ([]*Result, error) {
 		}
 
 		// Execute each query.
-		for _, q := range queries {
-			if q == "" {
+		for _, stmt := range stmts {
+			if stmt.Query == "" {
 				continue
 			}
 
 			result := &Result{}
 			start := time.Now()
 
-			r, err := execer.Exec(q, nil)
+			r, err := execer.Exec(stmt.Query, stmt.Parameters)
 			if err != nil {
 				if handleError(result, err) {
 					continue
@@ -279,9 +292,14 @@ func (db *DB) Execute(queries []string, tx, xTime bool) ([]*Result, error) {
 	return allResults, err
 }
 
+// QueryStringStmt executes a single query that return rows, but don't modify database.
+func (db *DB) QueryStringStmt(query string) ([]*Rows, error) {
+	return db.Query([]Statement{Statement{query, nil}}, false, false)
+}
+
 // Query executes queries that return rows, but don't modify the database.
-func (db *DB) Query(queries []string, tx, xTime bool) ([]*Rows, error) {
-	stats.Add(numQueries, int64(len(queries)))
+func (db *DB) Query(stmts []Statement, tx, xTime bool) ([]*Rows, error) {
+	stats.Add(numQueries, int64(len(stmts)))
 	if tx {
 		stats.Add(numQTx, 1)
 	}
@@ -316,15 +334,15 @@ func (db *DB) Query(queries []string, tx, xTime bool) ([]*Rows, error) {
 			}
 		}
 
-		for _, q := range queries {
-			if q == "" {
+		for _, stmt := range stmts {
+			if stmt.Query == "" {
 				continue
 			}
 
 			rows := &Rows{}
 			start := time.Now()
 
-			rs, err := queryer.Query(q, nil)
+			rs, err := queryer.Query(stmt.Query, stmt.Parameters)
 			if err != nil {
 				rows.Error = err.Error()
 				allRows = append(allRows, rows)
@@ -406,7 +424,7 @@ func (db *DB) Dump(w io.Writer) error {
 	// Get the schema.
 	query := `SELECT "name", "type", "sql" FROM "sqlite_master"
               WHERE "sql" NOT NULL AND "type" == 'table' ORDER BY "name"`
-	rows, err := dstDB.Query([]string{query}, false, false)
+	rows, err := dstDB.QueryStringStmt(query)
 	if err != nil {
 		return err
 	}
@@ -430,7 +448,7 @@ func (db *DB) Dump(w io.Writer) error {
 		}
 
 		tableIndent := strings.Replace(table, `"`, `""`, -1)
-		r, err := dstDB.Query([]string{fmt.Sprintf(`PRAGMA table_info("%s")`, tableIndent)}, false, false)
+		r, err := dstDB.QueryStringStmt(fmt.Sprintf(`PRAGMA table_info("%s")`, tableIndent))
 		if err != nil {
 			return err
 		}
@@ -443,7 +461,7 @@ func (db *DB) Dump(w io.Writer) error {
 			tableIndent,
 			strings.Join(columnNames, ","),
 			tableIndent)
-		r, err = dstDB.Query([]string{query}, false, false)
+		r, err = dstDB.QueryStringStmt(query)
 		if err != nil {
 			return err
 		}
@@ -458,7 +476,7 @@ func (db *DB) Dump(w io.Writer) error {
 	// Do indexes, triggers, and views.
 	query = `SELECT "name", "type", "sql" FROM "sqlite_master"
 			  WHERE "sql" NOT NULL AND "type" IN ('index', 'trigger', 'view')`
-	rows, err = db.Query([]string{query}, false, false)
+	rows, err = db.QueryStringStmt(query)
 	if err != nil {
 		return err
 	}

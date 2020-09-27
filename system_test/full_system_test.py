@@ -178,13 +178,20 @@ class Node(object):
       t+=1
     return self.applied_index()
 
-  def query(self, statement, level='weak'):
-    r = requests.get(self._query_url(), params={'q': statement, 'level': level})
+  def query(self, statement, params=None, level='weak'):
+    body = [statement]
+    if params is not None:
+      body = [body + params]
+    r = requests.post(self._query_url(), params={'level': level}, data=json.dumps(body))
     r.raise_for_status()
     return r.json()
 
-  def execute(self, statement):
-    r = requests.post(self._execute_url(), data=json.dumps([statement]))
+  def execute(self, statement, params=None):
+    body = [statement]
+    if params is not None:
+      body = [body + params]
+
+    r = requests.post(self._execute_url(), data=json.dumps(body))
     r.raise_for_status()
     return r.json()
 
@@ -195,6 +202,7 @@ class Node(object):
       fd.write(r.content)
 
   def restore(self, file):
+    # This is the one API that doesn't expect JSON.
     conn = sqlite3.connect(file)
     r = requests.post(self._load_url(), data='\n'.join(conn.iterdump()))
     r.raise_for_status()
@@ -267,6 +275,30 @@ class TestSingleNode(unittest.TestCase):
 
   def tearDown(self):
     self.cluster.deprovision()
+
+  def test_simple_raw_queries(self):
+    '''Test simple queries work as expected'''
+    n = self.cluster.wait_for_leader()
+    j = n.execute('CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
+    self.assertEqual(str(j), "{u'results': [{}]}")
+    j = n.execute('INSERT INTO bar(name) VALUES("fiona")')
+    applied = n.wait_for_all_applied()
+    self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
+    j = n.query('SELECT * from bar')
+    self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
+
+  def test_simple_parameterized_queries(self):
+    '''Test parameterized queries work as expected'''
+    n = self.cluster.wait_for_leader()
+    j = n.execute('CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT, age INTEGER)')
+    self.assertEqual(str(j), "{u'results': [{}]}")
+    j = n.execute('INSERT INTO bar(name, age) VALUES(?,?)', params=["fiona", 20])
+    applied = n.wait_for_all_applied()
+    self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
+    j = n.query('SELECT * from bar')
+    self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona', 20]], u'types': [u'integer', u'text', u'integer'], u'columns': [u'id', u'name', u'age']}]}")
+    j = n.query('SELECT * from bar WHERE age=?', params=[20])
+    self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona', 20]], u'types': [u'integer', u'text', u'integer'], u'columns': [u'id', u'name', u'age']}]}")
 
   def test_snapshot(self):
     ''' Test that a node peforms a Raft snapshot as expected'''

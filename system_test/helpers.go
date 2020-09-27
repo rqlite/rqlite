@@ -62,6 +62,18 @@ func (n *Node) ExecuteMulti(stmts []string) (string, error) {
 	return n.postExecute(string(j))
 }
 
+// ExecuteParameterized executes a single paramterized query against the ndoe
+func (n *Node) ExecuteParameterized(stmt []interface{}) (string, error) {
+	m := make([][]interface{}, 1)
+	m[0] = stmt
+
+	j, err := json.Marshal(m)
+	if err != nil {
+		return "", err
+	}
+	return n.postExecute(string(j))
+}
+
 // Query runs a single query against the node.
 func (n *Node) Query(stmt string) (string, error) {
 	v, _ := url.Parse("http://" + n.APIAddr + "/db/query")
@@ -102,6 +114,18 @@ func (n *Node) QueryNoneConsistency(stmt string) (string, error) {
 // QueryMulti runs multiple queries against the node.
 func (n *Node) QueryMulti(stmts []string) (string, error) {
 	j, err := json.Marshal(stmts)
+	if err != nil {
+		return "", err
+	}
+	return n.postQuery(string(j))
+}
+
+// QueryParameterized run a single paramterized query against the ndoe
+func (n *Node) QueryParameterized(stmt []interface{}) (string, error) {
+	m := make([][]interface{}, 1)
+	m[0] = stmt
+
+	j, err := json.Marshal(m)
 	if err != nil {
 		return "", err
 	}

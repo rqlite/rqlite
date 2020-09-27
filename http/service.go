@@ -431,7 +431,8 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
 	s.lastBackup = time.Now()
 }
 
-// handleLoad loads the state contained in a .dump output.
+// handleLoad loads the state contained in a .dump output. This API is different
+// from others in that it expects a raw file, not wrapped in any kind of JSON.
 func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 	if !s.CheckRequestPerm(r, PermLoad) {
 		w.WriteHeader(http.StatusUnauthorized)
@@ -458,8 +459,14 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body.Close()
 
+	// No JSON structure expected for this API.
 	queries := []string{string(b)}
-	results, err := s.store.ExecuteOrAbort(&store.ExecuteRequest{queries, timings, false})
+	stmts := make([]store.Statement, len(queries))
+	for i := range queries {
+		stmts[i].Query = queries[i]
+	}
+
+	results, err := s.store.ExecuteOrAbort(&store.ExecuteRequest{stmts, timings, false})
 	if err != nil {
 		if err == store.ErrNotLeader {
 			leaderAPIAddr := s.LeaderAPIAddr()
@@ -601,13 +608,13 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body.Close()
 
-	queries := []string{}
-	if err := json.Unmarshal(b, &queries); err != nil {
+	stmts, err := ParseRequest(b)
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	results, err := s.store.Execute(&store.ExecuteRequest{queries, timings, isTx})
+	results, err := s.store.Execute(&store.ExecuteRequest{stmts, timings, isTx})
 	if err != nil {
 		if err == store.ErrNotLeader {
 			leaderAPIAddr := s.LeaderAPIAddr()
@@ -809,29 +816,24 @@ func (s *Service) checkCredentials(r *http.Request) bool {
 	return ok && s.credentialStore.Check(username, password)
 }
 
-func requestQueries(r *http.Request) ([]string, error) {
+func requestQueries(r *http.Request) ([]store.Statement, error) {
 	if r.Method == "GET" {
 		query, err := stmtParam(r)
 		if err != nil || query == "" {
 			return nil, errors.New("bad query GET request")
 		}
-		return []string{query}, nil
+		return []store.Statement{
+			store.Statement{query, nil},
+		}, nil
 	}
 
-	qs := []string{}
 	b, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		return nil, errors.New("bad query POST request")
 	}
 	r.Body.Close()
-	if err := json.Unmarshal(b, &qs); err != nil {
-		return nil, errors.New("bad query POST request")
-	}
-	if len(qs) == 0 {
-		return nil, errors.New("bad query POST request")
-	}
 
-	return qs, nil
+	return ParseRequest(b)
 }
 
 func writeResponse(w http.ResponseWriter, r *http.Request, j *Response) {

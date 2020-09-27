@@ -1,6 +1,7 @@
 package db
 
 import (
+	"database/sql/driver"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -38,12 +39,12 @@ func Test_TableCreation(t *testing.T) {
 	defer db.Close()
 	defer os.Remove(path)
 
-	_, err := db.Execute([]string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"}, false, false)
+	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
 
-	r, err := db.Query([]string{"SELECT * FROM foo"}, false, false)
+	r, err := db.QueryStringStmt("SELECT * FROM foo")
 	if err != nil {
 		t.Fatalf("failed to query empty table: %s", err.Error())
 	}
@@ -57,12 +58,12 @@ func Test_SQLiteMasterTable(t *testing.T) {
 	defer db.Close()
 	defer os.Remove(path)
 
-	_, err := db.Execute([]string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"}, false, false)
+	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
 
-	r, err := db.Query([]string{"SELECT * FROM sqlite_master"}, false, false)
+	r, err := db.QueryStringStmt("SELECT * FROM sqlite_master")
 	if err != nil {
 		t.Fatalf("failed to query master table: %s", err.Error())
 	}
@@ -76,12 +77,12 @@ func Test_LoadInMemory(t *testing.T) {
 	defer db.Close()
 	defer os.Remove(path)
 
-	_, err := db.Execute([]string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"}, false, false)
+	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
 
-	r, err := db.Query([]string{"SELECT * FROM foo"}, false, false)
+	r, err := db.QueryStringStmt("SELECT * FROM foo")
 	if err != nil {
 		t.Fatalf("failed to query empty table: %s", err.Error())
 	}
@@ -95,7 +96,7 @@ func Test_LoadInMemory(t *testing.T) {
 	}
 
 	// Ensure it has been loaded correctly into the database
-	r, err = inmem.Query([]string{"SELECT * FROM foo"}, false, false)
+	r, err = inmem.QueryStringStmt("SELECT * FROM foo")
 	if err != nil {
 		t.Fatalf("failed to query empty table: %s", err.Error())
 	}
@@ -109,11 +110,11 @@ func Test_EmptyStatements(t *testing.T) {
 	defer db.Close()
 	defer os.Remove(path)
 
-	_, err := db.Execute([]string{""}, false, false)
+	_, err := db.Execute([]Statement{Statement{"", nil}}, false, false)
 	if err != nil {
 		t.Fatalf("failed to execute empty statement: %s", err.Error())
 	}
-	_, err = db.Execute([]string{";"}, false, false)
+	_, err = db.Execute([]Statement{Statement{";", nil}}, false, false)
 	if err != nil {
 		t.Fatalf("failed to execute empty statement with semicolon: %s", err.Error())
 	}
@@ -124,22 +125,22 @@ func Test_SimpleSingleStatements(t *testing.T) {
 	defer db.Close()
 	defer os.Remove(path)
 
-	_, err := db.Execute([]string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"}, false, false)
+	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
 
-	_, err = db.Execute([]string{`INSERT INTO foo(name) VALUES("fiona")`}, false, false)
+	_, err = db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("fiona")`)
 	if err != nil {
 		t.Fatalf("failed to insert record: %s", err.Error())
 	}
 
-	_, err = db.Execute([]string{`INSERT INTO foo(name) VALUES("aoife")`}, false, false)
+	_, err = db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("aoife")`)
 	if err != nil {
 		t.Fatalf("failed to insert record: %s", err.Error())
 	}
 
-	r, err := db.Query([]string{`SELECT * FROM foo`}, false, false)
+	r, err := db.QueryStringStmt(`SELECT * FROM foo`)
 	if err != nil {
 		t.Fatalf("failed to query table: %s", err.Error())
 	}
@@ -147,7 +148,7 @@ func Test_SimpleSingleStatements(t *testing.T) {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
-	r, err = db.Query([]string{`SELECT * FROM foo WHERE name="aoife"`}, false, false)
+	r, err = db.QueryStringStmt(`SELECT * FROM foo WHERE name="aoife"`)
 	if err != nil {
 		t.Fatalf("failed to query table: %s", err.Error())
 	}
@@ -155,7 +156,7 @@ func Test_SimpleSingleStatements(t *testing.T) {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
-	r, err = db.Query([]string{`SELECT * FROM foo WHERE name="dana"`}, false, false)
+	r, err = db.QueryStringStmt(`SELECT * FROM foo WHERE name="dana"`)
 	if err != nil {
 		t.Fatalf("failed to query table: %s", err.Error())
 	}
@@ -163,7 +164,7 @@ func Test_SimpleSingleStatements(t *testing.T) {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
-	r, err = db.Query([]string{`SELECT * FROM foo ORDER BY name`}, false, false)
+	r, err = db.QueryStringStmt(`SELECT * FROM foo ORDER BY name`)
 	if err != nil {
 		t.Fatalf("failed to query table: %s", err.Error())
 	}
@@ -171,7 +172,7 @@ func Test_SimpleSingleStatements(t *testing.T) {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
-	r, err = db.Query([]string{`SELECT *,name FROM foo`}, false, false)
+	r, err = db.QueryStringStmt(`SELECT *,name FROM foo`)
 	if err != nil {
 		t.Fatalf("failed to query table: %s", err.Error())
 	}
@@ -185,17 +186,17 @@ func Test_SimpleSingleJSONStatements(t *testing.T) {
 	defer db.Close()
 	defer os.Remove(path)
 
-	_, err := db.Execute([]string{"CREATE TABLE foo (c0 VARCHAR(36), c1 JSON, c2 NCHAR, c3 NVARCHAR, c4 CLOB)"}, false, false)
+	_, err := db.ExecuteStringStmt("CREATE TABLE foo (c0 VARCHAR(36), c1 JSON, c2 NCHAR, c3 NVARCHAR, c4 CLOB)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
 
-	_, err = db.Execute([]string{`INSERT INTO foo(c0, c1, c2, c3, c4) VALUES("fiona", '{"mittens": "foobar"}', "bob", "dana", "declan")`}, false, false)
+	_, err = db.ExecuteStringStmt(`INSERT INTO foo(c0, c1, c2, c3, c4) VALUES("fiona", '{"mittens": "foobar"}', "bob", "dana", "declan")`)
 	if err != nil {
 		t.Fatalf("failed to insert record: %s", err.Error())
 	}
 
-	r, err := db.Query([]string{"SELECT * FROM foo"}, false, false)
+	r, err := db.QueryStringStmt("SELECT * FROM foo")
 	if err != nil {
 		t.Fatalf("failed to query: %s", err.Error())
 	}
@@ -209,31 +210,31 @@ func Test_SimpleJoinStatements(t *testing.T) {
 	defer db.Close()
 	defer os.Remove(path)
 
-	_, err := db.Execute([]string{"CREATE TABLE names (id INTEGER NOT NULL PRIMARY KEY, name TEXT, ssn TEXT)"}, false, false)
+	_, err := db.ExecuteStringStmt("CREATE TABLE names (id INTEGER NOT NULL PRIMARY KEY, name TEXT, ssn TEXT)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
 
-	_, err = db.Execute([]string{
-		`INSERT INTO "names" VALUES(1,'bob','123-45-678')`,
-		`INSERT INTO "names" VALUES(2,'tom','111-22-333')`,
-		`INSERT INTO "names" VALUES(3,'matt','222-22-333')`,
+	_, err = db.Execute([]Statement{
+		Statement{`INSERT INTO "names" VALUES(1,'bob','123-45-678')`, nil},
+		Statement{`INSERT INTO "names" VALUES(2,'tom','111-22-333')`, nil},
+		Statement{`INSERT INTO "names" VALUES(3,'matt','222-22-333')`, nil},
 	}, false, false)
 	if err != nil {
 		t.Fatalf("failed to insert record: %s", err.Error())
 	}
 
-	_, err = db.Execute([]string{"CREATE TABLE staff (id INTEGER NOT NULL PRIMARY KEY, employer TEXT, ssn TEXT)"}, false, false)
+	_, err = db.ExecuteStringStmt("CREATE TABLE staff (id INTEGER NOT NULL PRIMARY KEY, employer TEXT, ssn TEXT)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
 
-	_, err = db.Execute([]string{`INSERT INTO "staff" VALUES(1,'acme','222-22-333')`}, false, false)
+	_, err = db.ExecuteStringStmt(`INSERT INTO "staff" VALUES(1,'acme','222-22-333')`)
 	if err != nil {
 		t.Fatalf("failed to insert record: %s", err.Error())
 	}
 
-	r, err := db.Query([]string{`SELECT names.id,name,names.ssn,employer FROM names INNER JOIN staff ON staff.ssn = names.ssn`}, false, false)
+	r, err := db.QueryStringStmt(`SELECT names.id,name,names.ssn,employer FROM names INNER JOIN staff ON staff.ssn = names.ssn`)
 	if err != nil {
 		t.Fatalf("failed to query table using JOIN: %s", err.Error())
 	}
@@ -247,17 +248,17 @@ func Test_SimpleSingleConcatStatements(t *testing.T) {
 	defer db.Close()
 	defer os.Remove(path)
 
-	_, err := db.Execute([]string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"}, false, false)
+	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
 
-	_, err = db.Execute([]string{`INSERT INTO foo(name) VALUES("fiona")`}, false, false)
+	_, err = db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("fiona")`)
 	if err != nil {
 		t.Fatalf("failed to insert record: %s", err.Error())
 	}
 
-	r, err := db.Query([]string{`SELECT id || "_bar", name FROM foo`}, false, false)
+	r, err := db.QueryStringStmt(`SELECT id || "_bar", name FROM foo`)
 	if err != nil {
 		t.Fatalf("failed to query table: %s", err.Error())
 	}
@@ -271,12 +272,15 @@ func Test_SimpleMultiStatements(t *testing.T) {
 	defer db.Close()
 	defer os.Remove(path)
 
-	_, err := db.Execute([]string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"}, false, false)
+	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
 
-	re, err := db.Execute([]string{`INSERT INTO foo(name) VALUES("fiona")`, `INSERT INTO foo(name) VALUES("dana")`}, false, false)
+	re, err := db.Execute([]Statement{
+		Statement{`INSERT INTO foo(name) VALUES("fiona")`, nil},
+		Statement{`INSERT INTO foo(name) VALUES("dana")`, nil},
+	}, false, false)
 	if err != nil {
 		t.Fatalf("failed to insert record: %s", err.Error())
 	}
@@ -284,7 +288,10 @@ func Test_SimpleMultiStatements(t *testing.T) {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
-	ro, err := db.Query([]string{`SELECT * FROM foo`, `SELECT * FROM foo`}, false, false)
+	ro, err := db.Query([]Statement{
+		Statement{`SELECT * FROM foo`, nil},
+		Statement{`SELECT * FROM foo`, nil},
+	}, false, false)
 	if err != nil {
 		t.Fatalf("failed to query empty table: %s", err.Error())
 	}
@@ -298,16 +305,21 @@ func Test_SimpleSingleMultiLineStatements(t *testing.T) {
 	defer db.Close()
 	defer os.Remove(path)
 
-	_, err := db.Execute([]string{`
+	_, err := db.Execute([]Statement{
+		Statement{`
 CREATE TABLE foo (
     id INTEGER NOT NULL PRIMARY KEY,
     name TEXT
-)`}, false, false)
+)`, nil}}, false, false)
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
 
-	re, err := db.Execute([]string{`INSERT INTO foo(name) VALUES("fiona")`, `INSERT INTO foo(name) VALUES("dana")`}, false, false)
+	re, err := db.Execute(
+		[]Statement{
+			Statement{`INSERT INTO foo(name) VALUES("fiona")`, nil},
+			Statement{`INSERT INTO foo(name) VALUES("dana")`, nil},
+		}, false, false)
 	if err != nil {
 		t.Fatalf("failed to insert record: %s", err.Error())
 	}
@@ -321,7 +333,7 @@ func Test_SimpleFailingStatements_Execute(t *testing.T) {
 	defer db.Close()
 	defer os.Remove(path)
 
-	r, err := db.Execute([]string{`INSERT INTO foo(name) VALUES("fiona")`}, false, false)
+	r, err := db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("fiona")`)
 	if err != nil {
 		t.Fatalf("error executing insertion into non-existent table: %s", err.Error())
 	}
@@ -329,14 +341,14 @@ func Test_SimpleFailingStatements_Execute(t *testing.T) {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
-	r, err = db.Execute([]string{`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`}, false, false)
+	r, err = db.ExecuteStringStmt(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`)
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
 	if exp, got := `[{}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
-	r, err = db.Execute([]string{`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`}, false, false)
+	r, err = db.ExecuteStringStmt(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`)
 	if err != nil {
 		t.Fatalf("failed to attempt creation of duplicate table: %s", err.Error())
 	}
@@ -344,14 +356,14 @@ func Test_SimpleFailingStatements_Execute(t *testing.T) {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
-	r, err = db.Execute([]string{`INSERT INTO foo(id, name) VALUES(11, "fiona")`}, false, false)
+	r, err = db.ExecuteStringStmt(`INSERT INTO foo(id, name) VALUES(11, "fiona")`)
 	if err != nil {
 		t.Fatalf("failed to insert record: %s", err.Error())
 	}
 	if exp, got := `[{"last_insert_id":11,"rows_affected":1}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
-	r, err = db.Execute([]string{`INSERT INTO foo(id, name) VALUES(11, "fiona")`}, false, false)
+	r, err = db.ExecuteStringStmt(`INSERT INTO foo(id, name) VALUES(11, "fiona")`)
 	if err != nil {
 		t.Fatalf("failed to attempt duplicate record insertion: %s", err.Error())
 	}
@@ -359,7 +371,7 @@ func Test_SimpleFailingStatements_Execute(t *testing.T) {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
-	r, err = db.Execute([]string{`utter nonsense`}, false, false)
+	r, err = db.ExecuteStringStmt(`utter nonsense`)
 	if err != nil {
 		if exp, got := `[{"error":"near \"utter\": syntax error"}]`, asJSON(r); exp != got {
 			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
@@ -372,7 +384,7 @@ func Test_SimpleFailingStatements_Query(t *testing.T) {
 	defer db.Close()
 	defer os.Remove(path)
 
-	ro, err := db.Query([]string{`SELECT * FROM bar`}, false, false)
+	ro, err := db.QueryStringStmt(`SELECT * FROM bar`)
 	if err != nil {
 		t.Fatalf("failed to attempt query of non-existent table: %s", err.Error())
 	}
@@ -380,14 +392,14 @@ func Test_SimpleFailingStatements_Query(t *testing.T) {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
-	ro, err = db.Query([]string{`SELECTxx * FROM foo`}, false, false)
+	ro, err = db.QueryStringStmt(`SELECTxx * FROM foo`)
 	if err != nil {
 		t.Fatalf("failed to attempt nonsense query: %s", err.Error())
 	}
 	if exp, got := `[{"error":"near \"SELECTxx\": syntax error"}]`, asJSON(ro); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
-	r, err := db.Query([]string{`utter nonsense`}, false, false)
+	r, err := db.QueryStringStmt(`utter nonsense`)
 	if err != nil {
 		if exp, got := `[{"error":"near \"utter\": syntax error"}]`, asJSON(r); exp != got {
 			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
@@ -400,7 +412,7 @@ func Test_SimplePragmaTableInfo(t *testing.T) {
 	defer db.Close()
 	defer os.Remove(path)
 
-	r, err := db.Execute([]string{`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`}, false, false)
+	r, err := db.ExecuteStringStmt(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`)
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
@@ -408,14 +420,78 @@ func Test_SimplePragmaTableInfo(t *testing.T) {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
-	res, err := db.Query([]string{`PRAGMA table_info("foo")`}, false, false)
+	res, err := db.QueryStringStmt(`PRAGMA table_info("foo")`)
 	if err != nil {
 		t.Fatalf("failed to query a common table expression: %s", err.Error())
 	}
 	if exp, got := `[{"columns":["cid","name","type","notnull","dflt_value","pk"],"types":["","","","","",""],"values":[[0,"id","INTEGER",1,null,1],[1,"name","TEXT",0,null,0]]}]`, asJSON(res); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
+}
 
+func Test_SimpleParameterizedStatements(t *testing.T) {
+	db, path := mustCreateDatabase()
+	defer db.Close()
+	defer os.Remove(path)
+
+	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	s := Statement{
+		Query:      "INSERT INTO foo(name) VALUES(?)",
+		Parameters: []driver.Value{"fiona"},
+	}
+	_, err = db.Execute([]Statement{s}, false, false)
+	if err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+
+	s.Parameters = []driver.Value{"aoife"}
+	_, err = db.Execute([]Statement{s}, false, false)
+	if err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+
+	r, err := db.QueryStringStmt(`SELECT * FROM foo`)
+	if err != nil {
+		t.Fatalf("failed to query table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"],[2,"aoife"]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	s.Query = "SELECT * FROM foo WHERE name=?"
+	s.Parameters = []driver.Value{"aoife"}
+	r, err = db.Query([]Statement{s}, false, false)
+	if err != nil {
+		t.Fatalf("failed to query table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[2,"aoife"]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	s.Parameters = []driver.Value{"fiona"}
+	r, err = db.Query([]Statement{s}, false, false)
+	if err != nil {
+		t.Fatalf("failed to query table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	stmts := []Statement{
+		Statement{"SELECT * FROM foo WHERE NAME=?", []driver.Value{"fiona"}},
+		Statement{"SELECT * FROM foo WHERE NAME=?", []driver.Value{"aoife"}},
+	}
+	r, err = db.Query(stmts, false, false)
+	if err != nil {
+		t.Fatalf("failed to query table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]},{"columns":["id","name"],"types":["integer","text"],"values":[[2,"aoife"]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
 }
 
 func Test_CommonTableExpressions(t *testing.T) {
@@ -423,17 +499,17 @@ func Test_CommonTableExpressions(t *testing.T) {
 	defer db.Close()
 	defer os.Remove(path)
 
-	_, err := db.Execute([]string{"CREATE TABLE test(x foo)"}, false, false)
+	_, err := db.ExecuteStringStmt("CREATE TABLE test(x foo)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
 
-	_, err = db.Execute([]string{`INSERT INTO test VALUES(1)`}, false, false)
+	_, err = db.ExecuteStringStmt(`INSERT INTO test VALUES(1)`)
 	if err != nil {
 		t.Fatalf("failed to insert record: %s", err.Error())
 	}
 
-	r, err := db.Query([]string{`WITH bar AS (SELECT * FROM test) SELECT * FROM test WHERE x = 1`}, false, false)
+	r, err := db.QueryStringStmt(`WITH bar AS (SELECT * FROM test) SELECT * FROM test WHERE x = 1`)
 	if err != nil {
 		t.Fatalf("failed to query a common table expression: %s", err.Error())
 	}
@@ -441,7 +517,7 @@ func Test_CommonTableExpressions(t *testing.T) {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
-	r, err = db.Query([]string{`WITH bar AS (SELECT * FROM test) SELECT * FROM test WHERE x = 2`}, false, false)
+	r, err = db.QueryStringStmt(`WITH bar AS (SELECT * FROM test) SELECT * FROM test WHERE x = 2`)
 	if err != nil {
 		t.Fatalf("failed to query a common table expression: %s", err.Error())
 	}
@@ -455,7 +531,7 @@ func Test_ForeignKeyConstraints(t *testing.T) {
 	defer db.Close()
 	defer os.Remove(path)
 
-	_, err := db.Execute([]string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, ref INTEGER REFERENCES foo(id))"}, false, false)
+	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, ref INTEGER REFERENCES foo(id))")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
@@ -474,10 +550,7 @@ func Test_ForeignKeyConstraints(t *testing.T) {
 		t.Fatal("FK constraints are not disabled")
 	}
 
-	stmts := []string{
-		`INSERT INTO foo(id, ref) VALUES(1, 2)`,
-	}
-	r, err := db.Execute(stmts, false, false)
+	r, err := db.ExecuteStringStmt(`INSERT INTO foo(id, ref) VALUES(1, 2)`)
 	if err != nil {
 		t.Fatalf("failed to execute FK test statement: %s", err.Error())
 	}
@@ -499,10 +572,7 @@ func Test_ForeignKeyConstraints(t *testing.T) {
 		t.Fatal("FK constraints are not enabled")
 	}
 
-	stmts = []string{
-		`INSERT INTO foo(id, ref) VALUES(1, 3)`,
-	}
-	r, err = db.Execute(stmts, false, false)
+	r, err = db.ExecuteStringStmt(`INSERT INTO foo(id, ref) VALUES(1, 3)`)
 	if err != nil {
 		t.Fatalf("failed to execute FK test statement: %s", err.Error())
 	}
@@ -516,12 +586,12 @@ func Test_UniqueConstraints(t *testing.T) {
 	defer db.Close()
 	defer os.Remove(path)
 
-	_, err := db.Execute([]string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT, CONSTRAINT name_unique UNIQUE (name))"}, false, false)
+	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT, CONSTRAINT name_unique UNIQUE (name))")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
 
-	r, err := db.Execute([]string{`INSERT INTO foo(name) VALUES("fiona")`}, false, false)
+	r, err := db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("fiona")`)
 	if err != nil {
 		t.Fatalf("error executing insertion into table: %s", err.Error())
 	}
@@ -530,7 +600,7 @@ func Test_UniqueConstraints(t *testing.T) {
 	}
 
 	// UNIQUE constraint should fire.
-	r, err = db.Execute([]string{`INSERT INTO foo(name) VALUES("fiona")`}, false, false)
+	r, err = db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("fiona")`)
 	if err != nil {
 		t.Fatalf("error executing insertion into table: %s", err.Error())
 	}
@@ -548,7 +618,7 @@ func Test_ActiveTransaction(t *testing.T) {
 		t.Fatal("transaction incorrectly marked as active")
 	}
 
-	if _, err := db.Execute([]string{`BEGIN`}, false, false); err != nil {
+	if _, err := db.ExecuteStringStmt(`BEGIN`); err != nil {
 		t.Fatalf("error starting transaction: %s", err.Error())
 	}
 
@@ -556,7 +626,7 @@ func Test_ActiveTransaction(t *testing.T) {
 		t.Fatal("transaction incorrectly marked as inactive")
 	}
 
-	if _, err := db.Execute([]string{`COMMIT`}, false, false); err != nil {
+	if _, err := db.ExecuteStringStmt(`COMMIT`); err != nil {
 		t.Fatalf("error starting transaction: %s", err.Error())
 	}
 
@@ -564,7 +634,7 @@ func Test_ActiveTransaction(t *testing.T) {
 		t.Fatal("transaction incorrectly marked as active")
 	}
 
-	if _, err := db.Execute([]string{`BEGIN`}, false, false); err != nil {
+	if _, err := db.ExecuteStringStmt(`BEGIN`); err != nil {
 		t.Fatalf("error starting transaction: %s", err.Error())
 	}
 
@@ -572,7 +642,7 @@ func Test_ActiveTransaction(t *testing.T) {
 		t.Fatal("transaction incorrectly marked as inactive")
 	}
 
-	if _, err := db.Execute([]string{`ROLLBACK`}, false, false); err != nil {
+	if _, err := db.ExecuteStringStmt(`ROLLBACK`); err != nil {
 		t.Fatalf("error starting transaction: %s", err.Error())
 	}
 
@@ -590,7 +660,7 @@ func Test_AbortTransaction(t *testing.T) {
 		t.Fatalf("error abrorting non-active transaction: %s", err.Error())
 	}
 
-	if _, err := db.Execute([]string{`BEGIN`}, false, false); err != nil {
+	if _, err := db.ExecuteStringStmt(`BEGIN`); err != nil {
 		t.Fatalf("error starting transaction: %s", err.Error())
 	}
 
@@ -612,16 +682,16 @@ func Test_PartialFail(t *testing.T) {
 	defer db.Close()
 	defer os.Remove(path)
 
-	_, err := db.Execute([]string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"}, false, false)
+	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
 
-	stmts := []string{
-		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
-		`INSERT INTO foo(id, name) VALUES(2, "fiona")`,
-		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
-		`INSERT INTO foo(id, name) VALUES(4, "fiona")`,
+	stmts := []Statement{
+		Statement{`INSERT INTO foo(id, name) VALUES(1, "fiona")`, nil},
+		Statement{`INSERT INTO foo(id, name) VALUES(2, "fiona")`, nil},
+		Statement{`INSERT INTO foo(id, name) VALUES(1, "fiona")`, nil},
+		Statement{`INSERT INTO foo(id, name) VALUES(4, "fiona")`, nil},
 	}
 	r, err := db.Execute(stmts, false, false)
 	if err != nil {
@@ -630,7 +700,7 @@ func Test_PartialFail(t *testing.T) {
 	if exp, got := `[{"last_insert_id":1,"rows_affected":1},{"last_insert_id":2,"rows_affected":1},{"error":"UNIQUE constraint failed: foo.id"},{"last_insert_id":4,"rows_affected":1}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
-	ro, err := db.Query([]string{`SELECT * FROM foo`}, false, false)
+	ro, err := db.QueryStringStmt(`SELECT * FROM foo`)
 	if err != nil {
 		t.Fatalf("failed to query table: %s", err.Error())
 	}
@@ -644,16 +714,16 @@ func Test_SimpleTransaction(t *testing.T) {
 	defer db.Close()
 	defer os.Remove(path)
 
-	_, err := db.Execute([]string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"}, false, false)
+	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
 
-	stmts := []string{
-		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
-		`INSERT INTO foo(id, name) VALUES(2, "fiona")`,
-		`INSERT INTO foo(id, name) VALUES(3, "fiona")`,
-		`INSERT INTO foo(id, name) VALUES(4, "fiona")`,
+	stmts := []Statement{
+		Statement{`INSERT INTO foo(id, name) VALUES(1, "fiona")`, nil},
+		Statement{`INSERT INTO foo(id, name) VALUES(2, "fiona")`, nil},
+		Statement{`INSERT INTO foo(id, name) VALUES(3, "fiona")`, nil},
+		Statement{`INSERT INTO foo(id, name) VALUES(4, "fiona")`, nil},
 	}
 	r, err := db.Execute(stmts, true, false)
 	if err != nil {
@@ -662,7 +732,7 @@ func Test_SimpleTransaction(t *testing.T) {
 	if exp, got := `[{"last_insert_id":1,"rows_affected":1},{"last_insert_id":2,"rows_affected":1},{"last_insert_id":3,"rows_affected":1},{"last_insert_id":4,"rows_affected":1}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
-	ro, err := db.Query([]string{`SELECT * FROM foo`}, false, false)
+	ro, err := db.QueryStringStmt(`SELECT * FROM foo`)
 	if err != nil {
 		t.Fatalf("failed to query table: %s", err.Error())
 	}
@@ -676,16 +746,16 @@ func Test_PartialFailTransaction(t *testing.T) {
 	defer db.Close()
 	defer os.Remove(path)
 
-	_, err := db.Execute([]string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"}, false, false)
+	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
 
-	stmts := []string{
-		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
-		`INSERT INTO foo(id, name) VALUES(2, "fiona")`,
-		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
-		`INSERT INTO foo(id, name) VALUES(4, "fiona")`,
+	stmts := []Statement{
+		Statement{`INSERT INTO foo(id, name) VALUES(1, "fiona")`, nil},
+		Statement{`INSERT INTO foo(id, name) VALUES(2, "fiona")`, nil},
+		Statement{`INSERT INTO foo(id, name) VALUES(1, "fiona")`, nil},
+		Statement{`INSERT INTO foo(id, name) VALUES(4, "fiona")`, nil},
 	}
 	r, err := db.Execute(stmts, true, false)
 	if err != nil {
@@ -694,7 +764,7 @@ func Test_PartialFailTransaction(t *testing.T) {
 	if exp, got := `[{"last_insert_id":1,"rows_affected":1},{"last_insert_id":2,"rows_affected":1},{"error":"UNIQUE constraint failed: foo.id"}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
-	ro, err := db.Query([]string{`SELECT * FROM foo`}, false, false)
+	ro, err := db.QueryStringStmt(`SELECT * FROM foo`)
 	if err != nil {
 		t.Fatalf("failed to query table: %s", err.Error())
 	}
@@ -708,16 +778,16 @@ func Test_Backup(t *testing.T) {
 	defer db.Close()
 	defer os.Remove(path)
 
-	_, err := db.Execute([]string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"}, false, false)
+	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
 
-	stmts := []string{
-		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
-		`INSERT INTO foo(id, name) VALUES(2, "fiona")`,
-		`INSERT INTO foo(id, name) VALUES(3, "fiona")`,
-		`INSERT INTO foo(id, name) VALUES(4, "fiona")`,
+	stmts := []Statement{
+		Statement{`INSERT INTO foo(id, name) VALUES(1, "fiona")`, nil},
+		Statement{`INSERT INTO foo(id, name) VALUES(2, "fiona")`, nil},
+		Statement{`INSERT INTO foo(id, name) VALUES(3, "fiona")`, nil},
+		Statement{`INSERT INTO foo(id, name) VALUES(4, "fiona")`, nil},
 	}
 	_, err = db.Execute(stmts, true, false)
 	if err != nil {
@@ -742,7 +812,7 @@ func Test_Backup(t *testing.T) {
 	}
 	defer newDB.Close()
 	defer os.Remove(dstDB.Name())
-	ro, err := newDB.Query([]string{`SELECT * FROM foo`}, false, false)
+	ro, err := newDB.QueryStringStmt(`SELECT * FROM foo`)
 	if err != nil {
 		t.Fatalf("failed to query table: %s", err.Error())
 	}
@@ -758,7 +828,7 @@ func Test_Dump(t *testing.T) {
 	defer db.Close()
 	defer os.Remove(path)
 
-	_, err := db.Execute([]string{chinook.DB}, false, false)
+	_, err := db.ExecuteStringStmt(chinook.DB)
 	if err != nil {
 		t.Fatalf("failed to load chinook dump: %s", err.Error())
 	}
@@ -785,7 +855,7 @@ func Test_DumpMemory(t *testing.T) {
 		t.Fatalf("failed to create loaded in-memory database: %s", err.Error())
 	}
 
-	_, err = inmem.Execute([]string{chinook.DB}, false, false)
+	_, err = inmem.ExecuteStringStmt(chinook.DB)
 	if err != nil {
 		t.Fatalf("failed to load chinook dump: %s", err.Error())
 	}
@@ -839,7 +909,7 @@ func mustWriteAndOpenDatabase(b []byte) (*DB, string) {
 // mustExecute executes a statement, and panics on failure. Used for statements
 // that should never fail, even taking into account test setup.
 func mustExecute(db *DB, stmt string) {
-	_, err := db.Execute([]string{stmt}, false, false)
+	_, err := db.ExecuteStringStmt(stmt)
 	if err != nil {
 		panic(fmt.Sprintf("failed to execute statement: %s", err.Error()))
 	}
@@ -848,7 +918,7 @@ func mustExecute(db *DB, stmt string) {
 // mustQuery executes a statement, and panics on failure. Used for statements
 // that should never fail, even taking into account test setup.
 func mustQuery(db *DB, stmt string) {
-	_, err := db.Execute([]string{stmt}, false, false)
+	_, err := db.QueryStringStmt(stmt)
 	if err != nil {
 		panic(fmt.Sprintf("failed to query: %s", err.Error()))
 	}

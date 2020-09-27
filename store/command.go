@@ -39,10 +39,13 @@ func newMetadataSetCommand(id string, md map[string]string) (*command, error) {
 }
 
 // databaseSub is a command sub which involves interaction with the database.
+// Queries and Parameters are separate fields, for backwards-compatibility
+// reasons. Unless Parameters is nil, it should be the same length as Queries.
 type databaseSub struct {
-	Tx      bool     `json:"tx,omitempty"`
-	Queries []string `json:"queries,omitempty"`
-	Timings bool     `json:"timings,omitempty"`
+	Tx         bool      `json:"tx,omitempty"`
+	Queries    []string  `json:"queries,omitempty"`
+	Parameters [][]Value `json:"Parameters,omitempty`
+	Timings    bool      `json:"timings,omitempty"`
 }
 
 type metadataSetSub struct {
