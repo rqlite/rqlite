@@ -91,6 +91,8 @@ The response will be in the same form as when the query is made via HTTP GET.
 You can learn all about the read consistency guarantees supported by rqlite [here](https://github.com/rqlite/rqlite/blob/master/DOC/CONSISTENCY.md).
 
 ## Parameterized Statements
+_Support for Parameterized Statements was introduced in v5.5.0. The commands below will not work with earlier versions of rqlite._
+
 While the "raw" API described above can be convenient and simple to use, it is vulnerable to [SQL Injection attacks](https://owasp.org/www-community/attacks/SQL_Injection). To protect against this issue, rqlite also supports [SQLite parameterized statements](https://www.sqlite.org/lang_expr.html#varparam), for both read and writes. To use this feature, send the SQL statement and values as distinct elements within a new JSON array, as follows:
 
 _Writing data_
