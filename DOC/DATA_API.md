@@ -79,8 +79,33 @@ The response is of the form:
 }
 ```
 
+You can also query via a HTTP POST request:
+```bash
+curl -XPOST 'localhost:4001/db/query?pretty&timings' -H "Content-Type: application/json" -d '[
+    "SELECT * FROM foo"
+]'
+```
+The response will be in the same form as when the query is made via HTTP GET.
+
 ### Read Consistency
 You can learn all about the read consistency guarantees supported by rqlite [here](https://github.com/rqlite/rqlite/blob/master/DOC/CONSISTENCY.md).
+
+## Parameterized Statements
+While the "raw" API described above can be convenient and simple to use, it is vulnerable to [SQL Injection attacks](https://owasp.org/www-community/attacks/SQL_Injection). To protect against this issue, rqlite also supports [SQLite parameterized statements](https://www.sqlite.org/lang_expr.html#varparam), for both read and writes. To use this feature, send the SQL statement and values as distinct elements within a new JSON array, as follows:
+
+_Writing data_
+```bash
+curl -XPOST 'localhost:4001/db/execute?pretty&timings' -H "Content-Type: application/json" -d '[
+    ["INSERT INTO foo(name) VALUES(?)", "fiona"]
+]'
+```
+_Reading data_
+```bash
+curl -XPOST 'localhost:4001/db/query?pretty&timings' -H "Content-Type: application/json" -d '[
+    ["SELECT * FROM foo WHERE name=?", "fiona"]
+]'
+```
+Currently named parameters are not yet supported, only simple parameters that use `?`. The API also does not support mixing the parameterized and non-parameterized form in a single request.
 
 ## Transactions
 A **form** of transactions are supported. To execute statements within a transaction, add `transaction` to the URL. An example of the above operation executed within a transaction is shown below.
