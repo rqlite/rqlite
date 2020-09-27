@@ -86,7 +86,7 @@ func init() {
 // Value is the type for parameters passed to a parameterized SQL statement.
 type Value interface{}
 
-// Statement represent a possible parameterized SQL statement.
+// Statement represent a parameterized SQL statement.
 type Statement struct {
 	Query      string
 	Parameters []Value
@@ -129,7 +129,7 @@ func (q *QueryRequest) command() *databaseSub {
 }
 
 // ExecuteRequest represents a query that returns no rows, but does modify
-// tvhe database.
+// the database.
 type ExecuteRequest struct {
 	Stmts   []Statement
 	Timings bool

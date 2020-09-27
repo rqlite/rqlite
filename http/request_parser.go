@@ -22,7 +22,7 @@ func ParseRequest(b []byte) ([]store.Statement, error) {
 	}
 
 	simple := []string{}               // Represents a set of unparameterized queries
-	parameterized := [][]interface{}{} //Represents a set of parameterized queries
+	parameterized := [][]interface{}{} // Represents a set of parameterized queries
 
 	// Try simple form first.
 	err := json.Unmarshal(b, &simple)

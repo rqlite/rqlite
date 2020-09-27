@@ -69,6 +69,8 @@ type Rows struct {
 	Time    float64         `json:"time,omitempty"`
 }
 
+// Statement represents a single parameterized statement for processing
+// by the database layer.
 type Statement struct {
 	Query      string
 	Parameters []driver.Value
