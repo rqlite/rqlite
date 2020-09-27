@@ -458,7 +458,12 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body.Close()
 
-	queries := []string{string(b)}
+	queries, err := ParseRequest(b)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	results, err := s.store.ExecuteOrAbort(&store.ExecuteRequest{queries, timings, false})
 	if err != nil {
 		if err == store.ErrNotLeader {
@@ -601,13 +606,19 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body.Close()
 
+	stmts, err := ParseRequest(b)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	queries := []string{}
 	if err := json.Unmarshal(b, &queries); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	results, err := s.store.Execute(&store.ExecuteRequest{queries, timings, isTx})
+	results, err := s.store.Execute(&store.ExecuteRequest{stmts, timings, isTx})
 	if err != nil {
 		if err == store.ErrNotLeader {
 			leaderAPIAddr := s.LeaderAPIAddr()
@@ -809,29 +820,24 @@ func (s *Service) checkCredentials(r *http.Request) bool {
 	return ok && s.credentialStore.Check(username, password)
 }
 
-func requestQueries(r *http.Request) ([]string, error) {
+func requestQueries(r *http.Request) ([]store.Statement, error) {
 	if r.Method == "GET" {
 		query, err := stmtParam(r)
 		if err != nil || query == "" {
 			return nil, errors.New("bad query GET request")
 		}
-		return []string{query}, nil
+		return []store.Statement{
+			store.Statement{query, nil},
+		}, nil
 	}
 
-	qs := []string{}
 	b, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		return nil, errors.New("bad query POST request")
 	}
 	r.Body.Close()
-	if err := json.Unmarshal(b, &qs); err != nil {
-		return nil, errors.New("bad query POST request")
-	}
-	if len(qs) == 0 {
-		return nil, errors.New("bad query POST request")
-	}
 
-	return qs, nil
+	return ParseRequest(b)
 }
 
 func writeResponse(w http.ResponseWriter, r *http.Request, j *Response) {
