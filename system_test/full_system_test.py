@@ -195,6 +195,7 @@ class Node(object):
       fd.write(r.content)
 
   def restore(self, file):
+    # This is the one API that doesn't expect JSON.
     conn = sqlite3.connect(file)
     r = requests.post(self._load_url(), data='\n'.join(conn.iterdump()))
     r.raise_for_status()
