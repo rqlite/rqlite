@@ -5,10 +5,24 @@ import (
 	"testing"
 )
 
-func Test_EmptyRequest(t *testing.T) {
+func Test_NilRequest(t *testing.T) {
 	_, err := ParseRequest(nil)
 	if err != ErrNoStatements {
 		t.Fatalf("nil request did not result in correct error")
+	}
+}
+
+func Test_EmptyRequests(t *testing.T) {
+	b := []byte(fmt.Sprintf(`[]`))
+	_, err := ParseRequest(b)
+	if err != ErrNoStatements {
+		t.Fatalf("empty simple request did not result in correct error")
+	}
+
+	b = []byte(fmt.Sprintf(`[[]]`))
+	_, err = ParseRequest(b)
+	if err != ErrNoStatements {
+		t.Fatalf("empty parameterized request did not result in correct error")
 	}
 }
 

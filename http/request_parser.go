@@ -45,6 +45,10 @@ func ParseRequest(b []byte) ([]store.Statement, error) {
 	stmts := make([]store.Statement, len(parameterized))
 
 	for i := range parameterized {
+		if len(parameterized[i]) == 0 {
+			return nil, ErrNoStatements
+		}
+
 		stmts[i].Query = parameterized[i][0].(string)
 		if len(parameterized[i]) == 1 {
 			continue
