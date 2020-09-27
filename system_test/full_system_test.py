@@ -151,6 +151,15 @@ class Node(object):
   def commit_index(self):
     return int(self.status()['store']['raft']['commit_index'])
 
+  def last_log_index(self):
+    return int(self.status()['store']['raft']['last_log_index'])
+
+  def last_snapshot_index(self):
+    return int(self.status()['store']['raft']['last_snapshot_index'])
+
+  def num_snapshots(self):
+    return int(self.expvar()['store']['num_snapshots'])
+
   def wait_for_applied_index(self, index, timeout=TIMEOUT):
     t = 0
     while self.applied_index() < index:
@@ -301,20 +310,21 @@ class TestSingleNode(unittest.TestCase):
     self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona', 20]], u'types': [u'integer', u'text', u'integer'], u'columns': [u'id', u'name', u'age']}]}")
 
   def test_snapshot(self):
-    ''' Test that a node peforms a Raft snapshot as expected'''
+    ''' Test that a node peforms at least 1 snapshot'''
     n = self.cluster.wait_for_leader()
     j = n.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
     self.assertEqual(str(j), "{u'results': [{}]}")
     j = n.execute('INSERT INTO foo(name) VALUES("fiona")')
-    applied = n.wait_for_all_applied()
     self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
 
-    # Wait for the snapshot to happen.
+    applied = n.wait_for_all_applied()
+
+    # Wait for a snapshot to happen.
     timeout = 10
     t = 0
     while True:
       nSnaps = n.expvar()['store']['num_snapshots']
-      if nSnaps is 2:
+      if nSnaps > 0:
         return
       if t > timeout:
         raise Exception('timeout', nSnaps)
