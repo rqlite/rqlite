@@ -431,7 +431,8 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
 	s.lastBackup = time.Now()
 }
 
-// handleLoad loads the state contained in a .dump output.
+// handleLoad loads the state contained in a .dump output. This API is different
+// from others in that it expects a raw file, not wrapped in any kind of JSON.
 func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 	if !s.CheckRequestPerm(r, PermLoad) {
 		w.WriteHeader(http.StatusUnauthorized)
@@ -458,13 +459,14 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body.Close()
 
-	queries, err := ParseRequest(b)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+	// No JSON structure expected for this API.
+	queries := []string{string(b)}
+	stmts := make([]store.Statement, len(queries))
+	for i := range queries {
+		stmts[i].Query = queries[i]
 	}
 
-	results, err := s.store.ExecuteOrAbort(&store.ExecuteRequest{queries, timings, false})
+	results, err := s.store.ExecuteOrAbort(&store.ExecuteRequest{stmts, timings, false})
 	if err != nil {
 		if err == store.ErrNotLeader {
 			leaderAPIAddr := s.LeaderAPIAddr()
