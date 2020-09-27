@@ -1,4 +1,4 @@
-## 5.5.0 (unreleased)
+## 5.5.0 (September 27th 2020)
 
 ### New features
 - [PR #654](https://github.com/rqlite/rqlite/pull/673): Support parameterized statements. Fixes [issue #140](https://github.com/rqlite/rqlite/issues/140).
