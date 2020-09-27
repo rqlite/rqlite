@@ -91,6 +91,26 @@ func (n *Node) Query(stmt string) (string, error) {
 	return string(body), nil
 }
 
+// QueryNoneConsistency runs a single query against the node, with no read consistency.
+func (n *Node) QueryNoneConsistency(stmt string) (string, error) {
+	v, _ := url.Parse("http://" + n.APIAddr + "/db/query")
+	v.RawQuery = url.Values{
+		"q":     []string{stmt},
+		"level": []string{"none"},
+	}.Encode()
+
+	resp, err := http.Get(v.String())
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	return string(body), nil
+}
+
 // QueryMulti runs multiple queries against the node.
 func (n *Node) QueryMulti(stmts []string) (string, error) {
 	j, err := json.Marshal(stmts)

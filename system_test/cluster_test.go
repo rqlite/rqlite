@@ -197,6 +197,36 @@ func Test_MultiNodeClusterSnapshot(t *testing.T) {
 	// Create a new cluster.
 	c := Cluster{node1, node2, node3}
 
+	// Wait for followers to pick up state.
+	followers, err := c.Followers()
+	if err != nil {
+		t.Fatalf("failed to determine followers: %s", err.Error())
+	}
+
+	var n int
+	var r string
+	for _, f := range followers {
+		n = 0
+		for {
+			r, err = f.QueryNoneConsistency(`SELECT COUNT(*) FROM foo`)
+			if err != nil {
+				t.Fatalf("failed to query follower node: %s", err.Error())
+			}
+
+			if r != `{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[300]]}]}` {
+				if n < 20 {
+					// Wait, and try again.
+					time.Sleep(mustParseDuration("1s"))
+					n++
+					continue
+				}
+				t.Fatalf("timed out waiting for snapshot state")
+			}
+			// The node passed!
+			break
+		}
+	}
+
 	// Kill original node.
 	node1.Deprovision()
 	c.RemoveNode(node1)
@@ -206,8 +236,8 @@ func Test_MultiNodeClusterSnapshot(t *testing.T) {
 		t.Fatalf("failed to find new cluster leader after killing leader: %s", err.Error())
 	}
 
-	// Test that the other nodes pick up the full state.
-	n := 0
+	// Test that the new leader still has the full state.
+	n = 0
 	for {
 		var r string
 		r, err = leader.Query(`SELECT COUNT(*) FROM foo`)
