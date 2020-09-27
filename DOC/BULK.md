@@ -1,14 +1,22 @@
 # Bulk API
-The bulk API allows multiple updates or queries to be executed in a single request. 
+The bulk API allows multiple updates or queries to be executed in a single request. Both non-paramterized and parameterized requests are supported by the Bulk API. The API does not support mixing the parameterized and non-parameterized form in a single request.
 
 ## Updates
 Bulk updates are supported. To execute multiple statements in one HTTP call, simply include the statements in the JSON array:
 
+_Non-parameterized example:_
 ```bash
 curl -XPOST 'localhost:4001/db/execute?pretty&timings' -H "Content-Type: application/json" -d "[
     \"INSERT INTO foo(name) VALUES('fiona')\",
     \"INSERT INTO foo(name) VALUES('sinead')\"
 ]"
+```
+_Parameterized example:_
+```bash
+curl -XPOST 'localhost:4001/db/execute?pretty&timings' -H "Content-Type: application/json" -d '[
+    ["INSERT INTO foo(name) VALUES(?)", "fiona"],
+    ["INSERT INTO foo(name) VALUES(?)", "sinead"]
+]'
 ```
 
 The response is of the form:
@@ -47,3 +55,4 @@ curl -XPOST 'localhost:4001/db/query?pretty' -H "Content-Type: application/json"
     "SELECT * FROM bar"
 ]'
 ```
+Parameterized statements are also supported.
