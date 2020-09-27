@@ -612,12 +612,6 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	queries := []string{}
-	if err := json.Unmarshal(b, &queries); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
 	results, err := s.store.Execute(&store.ExecuteRequest{stmts, timings, isTx})
 	if err != nil {
 		if err == store.ErrNotLeader {

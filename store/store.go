@@ -5,6 +5,7 @@ package store
 
 import (
 	"bytes"
+	gosql "database/sql/driver"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -105,8 +106,9 @@ func (q *QueryRequest) statements() []sql.Statement {
 	stmts := make([]sql.Statement, len(q.Stmts))
 	for i, s := range q.Stmts {
 		stmts[i].Query = s.Query
-		for j := range stmts[i].Parameters {
-			s.Parameters[j] = stmts[i].Parameters[j]
+		stmts[i].Parameters = make([]gosql.Value, len(s.Parameters))
+		for j := range s.Parameters {
+			stmts[i].Parameters[j] = s.Parameters[j]
 		}
 	}
 	return stmts
@@ -1119,6 +1121,8 @@ func subCommandToStatements(d *databaseSub) []sql.Statement {
 	stmts := make([]sql.Statement, len(d.Queries))
 	for i := range d.Queries {
 		stmts[i].Query = d.Queries[i]
+		stmts[i].Parameters = make([]gosql.Value, len(d.Parameters[i]))
+
 		for j := range d.Parameters[i] {
 			stmts[i].Parameters[j] = d.Parameters[i][j]
 		}
