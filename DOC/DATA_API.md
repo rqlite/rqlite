@@ -14,7 +14,7 @@ To write data successfully to the database, you must create at least 1 table. To
 
 ```bash
 curl -XPOST 'localhost:4001/db/execute?pretty&timings' -H "Content-Type: application/json" -d '[
-    "CREATE TABLE foo (id integer not null primary key, name text)"
+    "CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT, age INTEGER)"
 ]'
 ```
 
@@ -22,7 +22,7 @@ To insert an entry into the database, execute a second SQL command:
 
 ```bash
 curl -XPOST 'localhost:4001/db/execute?pretty&timings' -H "Content-Type: application/json" -d '[
-    "INSERT INTO foo(name) VALUES(\"fiona\")"
+    "INSERT INTO foo(name, age) VALUES(\"fiona\", 20)"
 ]'
 ```
 
@@ -64,12 +64,14 @@ The response is of the form:
             ],
             "types": [
                 "integer",
-                "text"
+                "text",
+                "integer"
             ],
             "values": [
                 [
                     1,
-                    "fiona"
+                    "fiona",
+                    20
                 ]
             ],
             "time": 0.0150043
@@ -98,7 +100,7 @@ While the "raw" API described above can be convenient and simple to use, it is v
 _Writing data_
 ```bash
 curl -XPOST 'localhost:4001/db/execute?pretty&timings' -H "Content-Type: application/json" -d '[
-    ["INSERT INTO foo(name) VALUES(?)", "fiona"]
+    ["INSERT INTO foo(name, age) VALUES(?, ?)", "fiona", 20]
 ]'
 ```
 _Reading data_
