@@ -454,6 +454,10 @@ func Test_BackupOK(t *testing.T) {
 
 func Test_BackupFlagsNoLeader(t *testing.T) {
 	m := &MockStore{}
+	m.metadata = map[string]string{
+		"api_addr":  "1.2.3.4:999",
+		"api_proto": "http",
+	}
 
 	s := New("127.0.0.1:0", m, nil)
 
@@ -467,12 +471,16 @@ func Test_BackupFlagsNoLeader(t *testing.T) {
 	}
 
 	client := &http.Client{}
+	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+
 	host := fmt.Sprintf("http://%s", s.Addr().String())
 	resp, err := client.Get(host + "/db/backup")
 	if err != nil {
-		t.Fatalf("failed to make backup request")
+		t.Fatalf("failed to make backup request: %s", err.Error())
 	}
-	if resp.StatusCode != http.StatusServiceUnavailable {
+	if resp.StatusCode != http.StatusMovedPermanently {
 		t.Fatalf("failed to get expected StatusServiceUnavailable for backup, got %d", resp.StatusCode)
 	}
 }
