@@ -21,7 +21,7 @@
 * [How is it different than dqlite?](#how-is-it-different-than-dqlite)
 
 ## What exactly does rqlite do?
-rqlite is about replicating a set of data, which has been written to it using SQL. The data is replicated for fault tolerance because your data is so important that you want multiple copies distributed in different places, you want be able to query your data even if some machines fail, or both. These different places could be different machines on a rack, or different machines, each in different buildings, or even different machines, each on different continents.
+rqlite is about replicating a set of data, which has been written to it using SQL. The data is replicated for fault tolerance because your data is so important that you want multiple copies distributed in different places, you want be able to query your data even if some machines fail, or both. These different places could be different machines on a rack, or different machines, each in different buildings, or even different machines, [each on different continents](https://www.philipotoole.com/rqlite-v3-0-1-globally-replicating-sqlite/).
 
 On top of that, rqlite provides strong guarantees about what state any copy of that data is in, with respect to a special node called the _leader_. That is where Raft comes in. It prevents divergent copies of the data, and ensures there is an "authoritative" copy of that data at all times.
 
@@ -80,7 +80,9 @@ Not in a simple sense, no. rqlite is not a SQLite database replication tool. Whi
 Yes, it is.
 
 ## Do concurrent writes block each other? 
-In this regard rqlite currently offers exactly the same semantics as SQLite. Each HTTP write request uses the same SQLite connection on the leader, so one write-over-HTTP may block another. Explicit connection control will be available in a future release, which will clients more control over transactions. Only one concurrent write will ever be supported however, due to the nature of SQLite.
+In this regard rqlite currently offers exactly the same semantics as SQLite. Each HTTP write request uses the same SQLite connection on the leader, so one write-over-HTTP may block another. Explicit connection control will be available in a future release, which will give clients more control over transactions. Only one concurrent write will ever be supported however, due to the nature of SQLite.
 
 ## How is it different than dqlite?
-dqlite is library, written in C, that you can integrate with your own software. This requires programming. rqlite is a standalone program -- it's a full [RDBMS](https://techterms.com/definition/rdbms) (albeit a relatively simple one). rqlite has everything you need to read and write data, and backup, maintain, and monitor the database itself.
+dqlite is library, written in C, that you need to integrate with your own software. That requires programming. rqlite is a standalone application -- it's a full [RDBMS](https://techterms.com/definition/rdbms) (albeit a relatively simple one). rqlite has everything you need to read and write data, and backup, maintain, and monitor the database itself.
+
+rqlite and dqlite are completely separate projects, and rqlite does not use dqlite. In fact, rqlite was created before dqlite.
