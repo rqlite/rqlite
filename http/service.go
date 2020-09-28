@@ -424,6 +424,18 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
 
 	err = s.store.Backup(!noLeader, bf, w)
 	if err != nil {
+		if err == store.ErrNotLeader {
+			leaderAPIAddr := s.LeaderAPIAddr()
+			leaderProto := s.LeaderAPIProto()
+			if leaderAPIAddr == "" {
+				http.Error(w, err.Error(), http.StatusServiceUnavailable)
+				return
+			}
+
+			redirect := s.FormRedirect(r, leaderProto, leaderAPIAddr)
+			http.Redirect(w, r, redirect, http.StatusMovedPermanently)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
