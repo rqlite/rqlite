@@ -429,6 +429,82 @@ func Test_401Routes_BasicAuthBadPerm(t *testing.T) {
 	}
 }
 
+func Test_BackupOK(t *testing.T) {
+	m := &MockStore{}
+	s := New("127.0.0.1:0", m, nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	m.backupFn = func(leader bool, f store.BackupFormat, dst io.Writer) error {
+		return nil
+	}
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+	resp, err := client.Get(host + "/db/backup")
+	if err != nil {
+		t.Fatalf("failed to make backup request")
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("failed to get expected StatusOK for backup, got %d", resp.StatusCode)
+	}
+}
+
+func Test_BackupFlagsNoLeader(t *testing.T) {
+	m := &MockStore{}
+
+	s := New("127.0.0.1:0", m, nil)
+
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	m.backupFn = func(leader bool, f store.BackupFormat, dst io.Writer) error {
+		return store.ErrNotLeader
+	}
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+	resp, err := client.Get(host + "/db/backup")
+	if err != nil {
+		t.Fatalf("failed to make backup request")
+	}
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("failed to get expected StatusServiceUnavailable for backup, got %d", resp.StatusCode)
+	}
+}
+
+func Test_BackupFlagsNoLeaderOK(t *testing.T) {
+	m := &MockStore{}
+
+	s := New("127.0.0.1:0", m, nil)
+
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	m.backupFn = func(leader bool, f store.BackupFormat, dst io.Writer) error {
+		if !leader {
+			return nil
+		}
+		return store.ErrNotLeader
+	}
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+	resp, err := client.Get(host + "/db/backup?noleader")
+	if err != nil {
+		t.Fatalf("failed to make backup request")
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("failed to get expected StatusOK for backup, got %d", resp.StatusCode)
+	}
+}
+
 func Test_RegisterStatus(t *testing.T) {
 	var stats *mockStatuser
 	m := &MockStore{}
@@ -522,6 +598,7 @@ func Test_FormRedirectHTTPS(t *testing.T) {
 type MockStore struct {
 	executeFn func(queries []string, tx bool) ([]*sql.Result, error)
 	queryFn   func(queries []string, tx, leader, verify bool) ([]*sql.Rows, error)
+	backupFn  func(leader bool, f store.BackupFormat, dst io.Writer) error
 	leaderID  string
 	metadata  map[string]string
 }
@@ -569,7 +646,10 @@ func (m *MockStore) Stats() (map[string]interface{}, error) {
 }
 
 func (m *MockStore) Backup(leader bool, f store.BackupFormat, w io.Writer) error {
-	return nil
+	if m.backupFn == nil {
+		return nil
+	}
+	return m.backupFn(leader, f, w)
 }
 
 type mockCredentialStore struct {
