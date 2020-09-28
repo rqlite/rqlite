@@ -298,6 +298,11 @@ func (s *Store) Open(enableSingle bool) error {
 
 	s.raft = ra
 
+	// Register Raft file size Prometheus metric.
+	registerFileSizeMetric("rqlite_server_raft_log_size_bytes",
+		"Size of Raft log on disk.",
+		filepath.Join(s.raftDir, "raft.db"))
+
 	return nil
 }
 
@@ -585,6 +590,7 @@ func (s *Store) Backup(leader bool, fmt BackupFormat, dst io.Writer) error {
 	}
 
 	stats.Add(numBackups, 1)
+	pNumBackups.Add(1)
 	return nil
 }
 
@@ -953,6 +959,7 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 	}
 
 	stats.Add(numSnaphots, 1)
+	pNumSnaphots.Add(1)
 	return fsm, nil
 }
 
@@ -1023,6 +1030,7 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 		return err
 	}
 	stats.Add(numRestores, 1)
+	pNumRestores.Add(1)
 	return nil
 }
 
