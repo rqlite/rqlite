@@ -42,7 +42,7 @@ func Test_SingleSimpleRequest(t *testing.T) {
 		t.Fatalf("incorrect statement parsed, exp %s, got %s", s, stmts[0].Query)
 	}
 	if stmts[0].Parameters != nil {
-		t.Fatal("statment parameters are not nil")
+		t.Fatal("statement parameters are not nil")
 	}
 }
 
@@ -73,13 +73,13 @@ func Test_DoubleSimpleRequest(t *testing.T) {
 		t.Fatalf("incorrect statement parsed, exp %s, got %s", s0, stmts[0].Query)
 	}
 	if stmts[0].Parameters != nil {
-		t.Fatal("statment parameters are not nil")
+		t.Fatal("statement parameters are not nil")
 	}
 	if stmts[1].Query != s1 {
 		t.Fatalf("incorrect statement parsed, exp %s, got %s", s1, stmts[1].Query)
 	}
 	if stmts[1].Parameters != nil {
-		t.Fatal("statment parameters are not nil")
+		t.Fatal("statement parameters are not nil")
 	}
 }
 
@@ -129,7 +129,7 @@ func Test_SingleSimpleParameterizedRequest(t *testing.T) {
 	}
 
 	if stmts[0].Parameters != nil {
-		t.Fatal("statment parameters are not nil")
+		t.Fatal("statement parameters are not nil")
 	}
 }
 

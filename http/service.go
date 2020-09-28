@@ -823,7 +823,7 @@ func requestQueries(r *http.Request) ([]store.Statement, error) {
 			return nil, errors.New("bad query GET request")
 		}
 		return []store.Statement{
-			store.Statement{query, nil},
+			{query, nil},
 		}, nil
 	}
 

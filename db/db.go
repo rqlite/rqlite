@@ -186,7 +186,7 @@ func (db *DB) AbortTransaction() error {
 // ExecuteStringStmt executes a single query that modifies the database. This is
 // primarily a convenience function.
 func (db *DB) ExecuteStringStmt(query string) ([]*Result, error) {
-	return db.Execute([]Statement{Statement{query, nil}}, false, false)
+	return db.Execute([]Statement{{query, nil}}, false, false)
 }
 
 // Execute executes queries that modify the database.
@@ -294,7 +294,7 @@ func (db *DB) Execute(stmts []Statement, tx, xTime bool) ([]*Result, error) {
 
 // QueryStringStmt executes a single query that return rows, but don't modify database.
 func (db *DB) QueryStringStmt(query string) ([]*Rows, error) {
-	return db.Query([]Statement{Statement{query, nil}}, false, false)
+	return db.Query([]Statement{{query, nil}}, false, false)
 }
 
 // Query executes queries that return rows, but don't modify the database.

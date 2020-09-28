@@ -110,11 +110,11 @@ func Test_EmptyStatements(t *testing.T) {
 	defer db.Close()
 	defer os.Remove(path)
 
-	_, err := db.Execute([]Statement{Statement{"", nil}}, false, false)
+	_, err := db.Execute([]Statement{{"", nil}}, false, false)
 	if err != nil {
 		t.Fatalf("failed to execute empty statement: %s", err.Error())
 	}
-	_, err = db.Execute([]Statement{Statement{";", nil}}, false, false)
+	_, err = db.Execute([]Statement{{";", nil}}, false, false)
 	if err != nil {
 		t.Fatalf("failed to execute empty statement with semicolon: %s", err.Error())
 	}
@@ -216,9 +216,9 @@ func Test_SimpleJoinStatements(t *testing.T) {
 	}
 
 	_, err = db.Execute([]Statement{
-		Statement{`INSERT INTO "names" VALUES(1,'bob','123-45-678')`, nil},
-		Statement{`INSERT INTO "names" VALUES(2,'tom','111-22-333')`, nil},
-		Statement{`INSERT INTO "names" VALUES(3,'matt','222-22-333')`, nil},
+		{`INSERT INTO "names" VALUES(1,'bob','123-45-678')`, nil},
+		{`INSERT INTO "names" VALUES(2,'tom','111-22-333')`, nil},
+		{`INSERT INTO "names" VALUES(3,'matt','222-22-333')`, nil},
 	}, false, false)
 	if err != nil {
 		t.Fatalf("failed to insert record: %s", err.Error())
@@ -278,8 +278,8 @@ func Test_SimpleMultiStatements(t *testing.T) {
 	}
 
 	re, err := db.Execute([]Statement{
-		Statement{`INSERT INTO foo(name) VALUES("fiona")`, nil},
-		Statement{`INSERT INTO foo(name) VALUES("dana")`, nil},
+		{`INSERT INTO foo(name) VALUES("fiona")`, nil},
+		{`INSERT INTO foo(name) VALUES("dana")`, nil},
 	}, false, false)
 	if err != nil {
 		t.Fatalf("failed to insert record: %s", err.Error())
@@ -289,8 +289,8 @@ func Test_SimpleMultiStatements(t *testing.T) {
 	}
 
 	ro, err := db.Query([]Statement{
-		Statement{`SELECT * FROM foo`, nil},
-		Statement{`SELECT * FROM foo`, nil},
+		{`SELECT * FROM foo`, nil},
+		{`SELECT * FROM foo`, nil},
 	}, false, false)
 	if err != nil {
 		t.Fatalf("failed to query empty table: %s", err.Error())
@@ -306,7 +306,7 @@ func Test_SimpleSingleMultiLineStatements(t *testing.T) {
 	defer os.Remove(path)
 
 	_, err := db.Execute([]Statement{
-		Statement{`
+		{`
 CREATE TABLE foo (
     id INTEGER NOT NULL PRIMARY KEY,
     name TEXT
@@ -317,8 +317,8 @@ CREATE TABLE foo (
 
 	re, err := db.Execute(
 		[]Statement{
-			Statement{`INSERT INTO foo(name) VALUES("fiona")`, nil},
-			Statement{`INSERT INTO foo(name) VALUES("dana")`, nil},
+			{`INSERT INTO foo(name) VALUES("fiona")`, nil},
+			{`INSERT INTO foo(name) VALUES("dana")`, nil},
 		}, false, false)
 	if err != nil {
 		t.Fatalf("failed to insert record: %s", err.Error())
@@ -482,8 +482,8 @@ func Test_SimpleParameterizedStatements(t *testing.T) {
 	}
 
 	stmts := []Statement{
-		Statement{"SELECT * FROM foo WHERE NAME=?", []driver.Value{"fiona"}},
-		Statement{"SELECT * FROM foo WHERE NAME=?", []driver.Value{"aoife"}},
+		{"SELECT * FROM foo WHERE NAME=?", []driver.Value{"fiona"}},
+		{"SELECT * FROM foo WHERE NAME=?", []driver.Value{"aoife"}},
 	}
 	r, err = db.Query(stmts, false, false)
 	if err != nil {
@@ -688,10 +688,10 @@ func Test_PartialFail(t *testing.T) {
 	}
 
 	stmts := []Statement{
-		Statement{`INSERT INTO foo(id, name) VALUES(1, "fiona")`, nil},
-		Statement{`INSERT INTO foo(id, name) VALUES(2, "fiona")`, nil},
-		Statement{`INSERT INTO foo(id, name) VALUES(1, "fiona")`, nil},
-		Statement{`INSERT INTO foo(id, name) VALUES(4, "fiona")`, nil},
+		{`INSERT INTO foo(id, name) VALUES(1, "fiona")`, nil},
+		{`INSERT INTO foo(id, name) VALUES(2, "fiona")`, nil},
+		{`INSERT INTO foo(id, name) VALUES(1, "fiona")`, nil},
+		{`INSERT INTO foo(id, name) VALUES(4, "fiona")`, nil},
 	}
 	r, err := db.Execute(stmts, false, false)
 	if err != nil {
@@ -720,10 +720,10 @@ func Test_SimpleTransaction(t *testing.T) {
 	}
 
 	stmts := []Statement{
-		Statement{`INSERT INTO foo(id, name) VALUES(1, "fiona")`, nil},
-		Statement{`INSERT INTO foo(id, name) VALUES(2, "fiona")`, nil},
-		Statement{`INSERT INTO foo(id, name) VALUES(3, "fiona")`, nil},
-		Statement{`INSERT INTO foo(id, name) VALUES(4, "fiona")`, nil},
+		{`INSERT INTO foo(id, name) VALUES(1, "fiona")`, nil},
+		{`INSERT INTO foo(id, name) VALUES(2, "fiona")`, nil},
+		{`INSERT INTO foo(id, name) VALUES(3, "fiona")`, nil},
+		{`INSERT INTO foo(id, name) VALUES(4, "fiona")`, nil},
 	}
 	r, err := db.Execute(stmts, true, false)
 	if err != nil {
@@ -752,10 +752,10 @@ func Test_PartialFailTransaction(t *testing.T) {
 	}
 
 	stmts := []Statement{
-		Statement{`INSERT INTO foo(id, name) VALUES(1, "fiona")`, nil},
-		Statement{`INSERT INTO foo(id, name) VALUES(2, "fiona")`, nil},
-		Statement{`INSERT INTO foo(id, name) VALUES(1, "fiona")`, nil},
-		Statement{`INSERT INTO foo(id, name) VALUES(4, "fiona")`, nil},
+		{`INSERT INTO foo(id, name) VALUES(1, "fiona")`, nil},
+		{`INSERT INTO foo(id, name) VALUES(2, "fiona")`, nil},
+		{`INSERT INTO foo(id, name) VALUES(1, "fiona")`, nil},
+		{`INSERT INTO foo(id, name) VALUES(4, "fiona")`, nil},
 	}
 	r, err := db.Execute(stmts, true, false)
 	if err != nil {
@@ -784,10 +784,10 @@ func Test_Backup(t *testing.T) {
 	}
 
 	stmts := []Statement{
-		Statement{`INSERT INTO foo(id, name) VALUES(1, "fiona")`, nil},
-		Statement{`INSERT INTO foo(id, name) VALUES(2, "fiona")`, nil},
-		Statement{`INSERT INTO foo(id, name) VALUES(3, "fiona")`, nil},
-		Statement{`INSERT INTO foo(id, name) VALUES(4, "fiona")`, nil},
+		{`INSERT INTO foo(id, name) VALUES(1, "fiona")`, nil},
+		{`INSERT INTO foo(id, name) VALUES(2, "fiona")`, nil},
+		{`INSERT INTO foo(id, name) VALUES(3, "fiona")`, nil},
+		{`INSERT INTO foo(id, name) VALUES(4, "fiona")`, nil},
 	}
 	_, err = db.Execute(stmts, true, false)
 	if err != nil {
