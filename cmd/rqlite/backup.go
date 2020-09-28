@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/mkideal/cli"
 )
@@ -102,7 +103,20 @@ func restore(ctx *cli.Context, filename string, argv *argT) error {
 		Proxy:           http.ProxyFromEnvironment,
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: argv.Insecure},
 	}}
-	statusResp, err := client.Get(statusURL)
+
+	req, err := http.NewRequest("GET", statusURL, nil)
+	if err != nil {
+		return err
+	}
+	if argv.Credentials != "" {
+		creds := strings.Split(argv.Credentials, ":")
+		if len(creds) != 2 {
+			return fmt.Errorf("invalid Basic Auth credentials format")
+		}
+		req.SetBasicAuth(creds[0], creds[1])
+	}
+
+	statusResp, err := client.Do(req)
 	if err != nil {
 		return err
 	}
