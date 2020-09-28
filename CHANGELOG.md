@@ -1,7 +1,12 @@
+## 5.5.1 (unreleased)
+
+### Implementation changes and bug fixes
+- [PR #680](https://github.com/rqlite/rqlite/pull/680): Add missing calls to set BasicAuth in CLI. Partially fixes [issue #678](https://github.com/rqlite/rqlite/issues/678).
+
 ## 5.5.0 (September 27th 2020)
 
 ### New features
-- [PR #654](https://github.com/rqlite/rqlite/pull/673): Support parameterized statements. Fixes [issue #140](https://github.com/rqlite/rqlite/issues/140).
+- [PR #673](https://github.com/rqlite/rqlite/pull/673): Support parameterized statements. Fixes [issue #140](https://github.com/rqlite/rqlite/issues/140).
 
 ## 5.4.2 (September 25th 2020)
 
