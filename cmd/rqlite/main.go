@@ -309,7 +309,20 @@ func cliJSON(ctx *cli.Context, cmd, line, url string, argv *argT) error {
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: argv.Insecure},
 		Proxy:           http.ProxyFromEnvironment,
 	}}
-	resp, err := client.Get(url)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return err
+	}
+	if argv.Credentials != "" {
+		creds := strings.Split(argv.Credentials, ":")
+		if len(creds) != 2 {
+			return fmt.Errorf("invalid Basic Auth credentials format")
+		}
+		req.SetBasicAuth(creds[0], creds[1])
+	}
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}
