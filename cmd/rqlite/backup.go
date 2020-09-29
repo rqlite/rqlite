@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto/tls"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -86,9 +85,9 @@ func dump(ctx *cli.Context, filename string, argv *argT) error {
 	return nil
 }
 
-func makeRestoreRequest(restoreFile io.Reader) func(string) (*http.Request, error) {
+func makeRestoreRequest(b []byte) func(string) (*http.Request, error) {
 	return func(urlStr string) (*http.Request, error) {
-		req, err := http.NewRequest("POST", urlStr, restoreFile)
+		req, err := http.NewRequest("POST", urlStr, bytes.NewReader(b))
 		req.Header["Content-type"] = []string{"text/plain"}
 		if err != nil {
 			return nil, err
@@ -158,8 +157,7 @@ func restore(ctx *cli.Context, filename string, argv *argT) error {
 		Path:     fmt.Sprintf("%sdb/load", argv.Prefix),
 		RawQuery: queryStr.Encode(),
 	}
-	restoreFileReader := bytes.NewReader(restoreFile)
-	response, err := sendRequest(ctx, makeRestoreRequest(restoreFileReader), restoreURL.String(), argv)
+	response, err := sendRequest(ctx, makeRestoreRequest(restoreFile), restoreURL.String(), argv)
 	if err != nil {
 		return err
 	}
