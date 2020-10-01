@@ -24,7 +24,7 @@ class Node(object):
                raft_addr=None, raft_adv=None,
                raft_voter=True,
                raft_snap_threshold=8192, raft_snap_int="1s",
-               dir=None):
+               dir=None, on_disk=False):
     if api_addr is None:
       api_addr = random_addr()
     if raft_addr is None:
@@ -44,6 +44,7 @@ class Node(object):
     self.raft_snap_threshold = raft_snap_threshold
     self.raft_snap_int = raft_snap_int
     self.dir = dir
+    self.on_disk = on_disk
     self.process = None
     self.stdout_file = os.path.join(dir, 'rqlited.log')
     self.stdout_fd = open(self.stdout_file, 'w')
@@ -86,6 +87,8 @@ class Node(object):
       command += ['-http-adv-addr', self.api_adv]
     if self.raft_adv is not None:
       command += ['-raft-adv-addr', self.raft_adv]
+    if self.on_disk:
+      command += ['-on-disk']
     if join is not None:
       command += ['-join', 'http://' + join]
     command.append(self.dir)
@@ -399,6 +402,22 @@ class TestEndToEnd(unittest.TestCase):
     for f in self.cluster.followers():
       self.assertEqual(n.APIProtoAddr(), f.redirect_addr())
 
+class TestEndToEndOnDisk(TestEndToEnd):
+  def setUp(self):
+    n0 = Node(RQLITED_PATH, '0', on_disk=True)
+    n0.start()
+    n0.wait_for_leader()
+
+    n1 = Node(RQLITED_PATH, '1', on_disk=True)
+    n1.start(join=n0.APIAddr())
+    n1.wait_for_leader()
+
+    n2 = Node(RQLITED_PATH, '2', on_disk=True)
+    n2.start(join=n0.APIAddr())
+    n2.wait_for_leader()
+
+    self.cluster = Cluster([n0, n1, n2])
+    
 class TestEndToEndAdvAddr(TestEndToEnd):
   def setUp(self):
     n0 = Node(RQLITED_PATH, '0',
