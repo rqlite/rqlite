@@ -756,12 +756,13 @@ func (s *Store) setMetadata(id string, md map[string]string) error {
 	return nil
 }
 
-// open opens the the in-memory or file-based database.
+// open opens the in-memory or file-based database.
 func (s *Store) open() (*sql.DB, error) {
 	var db *sql.DB
 	var err error
 	if !s.dbConf.Memory {
-		// as it will be rebuilt from (possibly) a snapshot and committed log entries.
+		// Explicitly remove any pre-existing SQLite database file as it will be
+		// completely rebuilt from committed log entries (and possibly a snapshot).
 		if err := os.Remove(s.dbPath); err != nil && !os.IsNotExist(err) {
 			return nil, err
 		}
