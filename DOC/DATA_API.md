@@ -109,7 +109,7 @@ curl -XPOST 'localhost:4001/db/query?pretty&timings' -H "Content-Type: applicati
     ["SELECT * FROM foo WHERE name=?", "fiona"]
 ]'
 ```
-Currently named parameters are not yet supported, only simple parameters that use `?`. The API also does not support mixing the parameterized and non-parameterized form in a single request.
+Currently named parameters are not yet supported, only simple parameters that use `?`.
 
 ## Transactions
 A **form** of transactions are supported. To execute statements within a transaction, add `transaction` to the URL. An example of the above operation executed within a transaction is shown below.
