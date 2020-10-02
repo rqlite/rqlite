@@ -202,8 +202,10 @@ class Node(object):
     body = [statement]
     if params is not None:
       body = [body + params]
+    return self.execute_raw(json.dumps(body))
 
-    r = requests.post(self._execute_url(), data=json.dumps(body))
+  def execute_raw(self, body):
+    r = requests.post(self._execute_url(), data=body)
     r.raise_for_status()
     return r.json()
 
@@ -311,6 +313,22 @@ class TestSingleNode(unittest.TestCase):
     self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona', 20]], u'types': [u'integer', u'text', u'integer'], u'columns': [u'id', u'name', u'age']}]}")
     j = n.query('SELECT * from bar WHERE age=?', params=[20])
     self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona', 20]], u'types': [u'integer', u'text', u'integer'], u'columns': [u'id', u'name', u'age']}]}")
+
+  def test_simple_parameterized_mixed_queries(self):
+    '''Test a mix of parameterized and non-parameterized queries work as expected'''
+    n = self.cluster.wait_for_leader()
+    j = n.execute('CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT, age INTEGER)')
+    self.assertEqual(str(j), "{u'results': [{}]}")
+
+    body = json.dumps([
+        ["INSERT INTO bar(name, age) VALUES(?,?)", "fiona", 20],
+        ['INSERT INTO bar(name, age) VALUES("sinead", 25)']
+    ])
+    j = n.execute_raw(body)
+    applied = n.wait_for_all_applied()
+    self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}, {u'last_insert_id': 2, u'rows_affected': 1}]}")
+    j = n.query('SELECT * from bar')
+    self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona', 20], [2, u'sinead', 25]], u'types': [u'integer', u'text', u'integer'], u'columns': [u'id', u'name', u'age']}]}")
 
   def test_snapshot(self):
     ''' Test that a node peforms at least 1 snapshot'''

@@ -84,7 +84,7 @@ func Test_DoubleSimpleRequest(t *testing.T) {
 }
 
 func Test_SingleParameterizedRequest(t *testing.T) {
-	s := "SELECT * FROM ? ?"
+	s := "SELECT * FROM ? WHERE bar=?"
 	p0 := "FOO"
 	p1 := 1
 	b := []byte(fmt.Sprintf(`[["%s", "%s", %d]]`, s, p0, p1))
@@ -109,6 +109,59 @@ func Test_SingleParameterizedRequest(t *testing.T) {
 	}
 	if int(stmts[0].Parameters[1].(float64)) != p1 {
 		t.Fatalf("incorrect paramter, exp %d, got %d", p1, stmts[0].Parameters[1])
+	}
+}
+
+func Test_SingleParameterizedRequestNoParams(t *testing.T) {
+	s := "SELECT * FROM foo"
+	b := []byte(fmt.Sprintf(`[["%s"]]`, s))
+
+	stmts, err := ParseRequest(b)
+	if err != nil {
+		t.Fatalf("failed to parse request: %s", err.Error())
+	}
+
+	if len(stmts) != 1 {
+		t.Fatalf("incorrect number of statements returned: %d", len(stmts))
+	}
+	if stmts[0].Query != s {
+		t.Fatalf("incorrect statement parsed, exp %s, got %s", s, stmts[0].Query)
+	}
+
+	if len(stmts[0].Parameters) != 0 {
+		t.Fatalf("incorrect number of parameters returned: %d", len(stmts[0].Parameters))
+	}
+}
+
+func Test_SingleParameterizedRequestNoParamsMixed(t *testing.T) {
+	s1 := "SELECT * FROM foo"
+	s2 := "SELECT * FROM foo WHERE name=?"
+	p2 := "bar"
+	b := []byte(fmt.Sprintf(`[["%s"], ["%s", "%s"]]`, s1, s2, p2))
+
+	stmts, err := ParseRequest(b)
+	if err != nil {
+		t.Fatalf("failed to parse request: %s", err.Error())
+	}
+
+	if len(stmts) != 2 {
+		t.Fatalf("incorrect number of statements returned: %d", len(stmts))
+	}
+	if stmts[0].Query != s1 {
+		t.Fatalf("incorrect statement parsed, exp %s, got %s", s1, stmts[0].Query)
+	}
+	if len(stmts[0].Parameters) != 0 {
+		t.Fatalf("incorrect number of parameters returned: %d", len(stmts[0].Parameters))
+	}
+
+	if stmts[1].Query != s2 {
+		t.Fatalf("incorrect statement parsed, exp %s, got %s", s2, stmts[0].Query)
+	}
+	if len(stmts[1].Parameters) != 1 {
+		t.Fatalf("incorrect number of parameters returned: %d", len(stmts[0].Parameters))
+	}
+	if stmts[1].Parameters[0] != p2 {
+		t.Fatalf("incorrect parameter, exp %s, got %s", p2, stmts[1].Parameters[0])
 	}
 }
 
