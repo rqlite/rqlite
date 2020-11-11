@@ -29,15 +29,16 @@ func Test_TransportOpenClose(t *testing.T) {
 
 func Test_TransportDial(t *testing.T) {
 	tn1 := NewTransport()
+	defer tn1.Close()
 	tn1.Open("localhost:0")
 	go tn1.Accept()
-	tn2 := NewTransport()
 
+	tn2 := NewTransport()
+	defer tn2.Close()
 	_, err := tn2.Dial(tn1.Addr().String(), time.Second)
 	if err != nil {
 		t.Fatalf("failed to connect to first transport: %s", err.Error())
 	}
-	tn1.Close()
 }
 
 func Test_NewTLSTransport(t *testing.T) {

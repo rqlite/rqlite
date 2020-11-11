@@ -80,7 +80,10 @@ func (t *Transport) Accept() (net.Conn, error) {
 
 // Close closes the transport
 func (t *Transport) Close() error {
-	return t.ln.Close()
+	if t.ln != nil {
+		return t.ln.Close()
+	}
+	return nil
 }
 
 // Addr returns the binding address of the transport.
