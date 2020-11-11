@@ -32,7 +32,7 @@ func Test_TransportDial(t *testing.T) {
 	defer tn1.Close()
 	tn1.Open("localhost:0")
 	go tn1.Accept()
-	
+
 	tn2 := NewTransport()
 	defer tn2.Close()
 	_, err := tn2.Dial(tn1.Addr().String(), time.Second)
