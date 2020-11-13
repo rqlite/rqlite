@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	sql "github.com/rqlite/rqlite/db"
 	"github.com/rqlite/rqlite/testdata/chinook"
 )
 
@@ -121,24 +122,46 @@ func Test_SingleNodeFileExecuteQuery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
+
+	// Every query should return the same results, so use a function for the check.
+	check := func(r []*sql.Rows) {
+		if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
+			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+		}
+		if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
+			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+		}
+	}
+
 	r, err := s.Query(&QueryRequest{stmtsFromString("SELECT * FROM foo"), false, false, None, 0})
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
-	r, err = s.Query(&QueryRequest{stmtsFromString("SELECT * FROM foo"), false, false, None, 0})
+	check(r)
+
+	r, err = s.Query(&QueryRequest{stmtsFromString("SELECT * FROM foo"), false, false, Weak, 0})
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
-	r, err = s.Query(&QueryRequest{stmtsFromString("SELECT * FROM foo"), false, false, None, 0})
+	check(r)
+
+	r, err = s.Query(&QueryRequest{stmtsFromString("SELECT * FROM foo"), false, false, Strong, 0})
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
-	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	check(r)
+
+	r, err = s.Query(&QueryRequest{stmtsFromString("SELECT * FROM foo"), false, true, None, 0})
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
 	}
-	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	check(r)
+
+	r, err = s.Query(&QueryRequest{stmtsFromString("SELECT * FROM foo"), true, false, None, 0})
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
 	}
+	check(r)
 }
 
 func Test_SingleNodeExecuteQueryTx(t *testing.T) {
