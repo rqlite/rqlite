@@ -72,6 +72,7 @@ var raftLogLevel string
 var raftNonVoter bool
 var raftSnapThreshold uint64
 var raftSnapInterval string
+var raftLeaderLeaseTimeout string
 var raftHeartbeatTimeout string
 var raftElectionTimeout string
 var raftApplyTimeout string
@@ -118,6 +119,7 @@ func init() {
 	flag.StringVar(&raftOpenTimeout, "raft-open-timeout", "120s", "Time for initial Raft logs to be applied. Use 0s duration to skip wait")
 	flag.Uint64Var(&raftSnapThreshold, "raft-snap", 8192, "Number of outstanding log entries that trigger snapshot")
 	flag.StringVar(&raftSnapInterval, "raft-snap-int", "30s", "Snapshot threshold check interval")
+	flag.StringVar(&raftLeaderLeaseTimeout, "raft-leader-lease-timeout", "0s", "Raft leader lease timeout. Use 0s for Raft default")
 	flag.BoolVar(&raftShutdownOnRemove, "raft-remove-shutdown", false, "Shutdown Raft if node removed")
 	flag.StringVar(&raftLogLevel, "raft-log-level", "INFO", "Minimum log level for Raft module")
 	flag.StringVar(&cpuProfile, "cpu-profile", "", "Path to file for CPU profiling information")
@@ -191,6 +193,10 @@ func main() {
 	str.SnapshotInterval, err = time.ParseDuration(raftSnapInterval)
 	if err != nil {
 		log.Fatalf("failed to parse Raft Snapsnot interval %s: %s", raftSnapInterval, err.Error())
+	}
+	str.LeaderLeaseTimeout, err = time.ParseDuration(raftLeaderLeaseTimeout)
+	if err != nil {
+		log.Fatalf("failed to parse Raft Leader lease timeout %s: %s", raftLeaderLeaseTimeout, err.Error())
 	}
 	str.HeartbeatTimeout, err = time.ParseDuration(raftHeartbeatTimeout)
 	if err != nil {
