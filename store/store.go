@@ -195,13 +195,14 @@ type Store struct {
 
 	logger *log.Logger
 
-	ShutdownOnRemove  bool
-	SnapshotThreshold uint64
-	SnapshotInterval  time.Duration
-	HeartbeatTimeout  time.Duration
-	ElectionTimeout   time.Duration
-	ApplyTimeout      time.Duration
-	RaftLogLevel      string
+	ShutdownOnRemove   bool
+	SnapshotThreshold  uint64
+	SnapshotInterval   time.Duration
+	LeaderLeaseTimeout time.Duration
+	HeartbeatTimeout   time.Duration
+	ElectionTimeout    time.Duration
+	ApplyTimeout       time.Duration
+	RaftLogLevel       string
 }
 
 // StoreConfig represents the configuration of the underlying Store.
@@ -824,6 +825,9 @@ func (s *Store) raftConfig() *raft.Config {
 	}
 	if s.SnapshotInterval != 0 {
 		config.SnapshotInterval = s.SnapshotInterval
+	}
+	if s.LeaderLeaseTimeout != 0 {
+		config.LeaderLeaseTimeout = s.LeaderLeaseTimeout
 	}
 	if s.HeartbeatTimeout != 0 {
 		config.HeartbeatTimeout = s.HeartbeatTimeout
