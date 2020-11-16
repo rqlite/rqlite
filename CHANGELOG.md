@@ -1,3 +1,8 @@
+## 5.6.0 (unreleased)
+
+### New features
+- [PR #692](https://github.com/rqlite/rqlite/pull/692): Support setting Raft leader lease timeout.
+
 ## 5.5.1 (October 27th 2020)
 
 ### Implementation changes and bug fixes
