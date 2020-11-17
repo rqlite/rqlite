@@ -1,11 +1,13 @@
-## 5.6.0 (unreleased)
+## 5.6.0 (November 17th 2020)
 
 ### New features
 - [PR #692](https://github.com/rqlite/rqlite/pull/692): Support setting Raft leader lease timeout.
 
+### Implementation changes and bug fixes
+- [PR #693](https://github.com/rqlite/rqlite/pull/693): Upgrade Go mod depdencies, including upgrading Hashicorp Raft to v1.2.0.
+
 ## 5.5.1 (October 27th 2020)
 
-### Implementation changes and bug fixes
 - [PR #680](https://github.com/rqlite/rqlite/pull/680), [PR #681](https://github.com/rqlite/rqlite/pull/681): Add missing calls to set BasicAuth in CLI. Fixes [issue #678](https://github.com/rqlite/rqlite/issues/678).
 - [PR #682](https://github.com/rqlite/rqlite/pull/682): Explicitly handle "no leader" during backup, and return redirect if necessary.
 - [PR #683](https://github.com/rqlite/rqlite/pull/683): Restore request should re-read file every attempt.
