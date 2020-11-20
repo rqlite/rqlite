@@ -81,7 +81,7 @@ func executeWithClient(ctx *cli.Context, client *http.Client, argv *argT, timer 
 		}
 
 		if resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("server responded with: %s", resp.Status)
+			return fmt.Errorf("server responded with %s: %s", resp.Status, response)
 		}
 
 		// Parse response and write results
