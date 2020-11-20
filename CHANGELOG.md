@@ -1,3 +1,6 @@
+### 5.6.1 (unreleased)
+- [PR #694](https://github.com/rqlite/rqlite/pull/694): Display, in the CLI, the HTTP response body on HTTP status 503.
+
 ## 5.6.0 (November 17th 2020)
 
 ### New features
