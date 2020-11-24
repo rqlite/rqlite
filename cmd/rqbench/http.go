@@ -20,7 +20,7 @@ type HTTPTester struct {
 func NewHTTPTester(addr string) *HTTPTester {
 	return &HTTPTester{
 		client: http.Client{},
-		url:    fmt.Sprintf("http://%s:/db/execute", addr),
+		url:    fmt.Sprintf("http://%s/db/execute", addr),
 	}
 }
 
