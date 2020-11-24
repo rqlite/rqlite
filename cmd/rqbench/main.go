@@ -48,7 +48,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "not a valid transport: %s\n", tp)
 	}
 
-	tester := NewHTTPTester(addr)
+	tester := NewHTTPTester(addr, "/db/execute")
 	if err := tester.Prepare(stmt, batchSz, tx); err != nil {
 		fmt.Println("failed to prepare test:", err.Error())
 		os.Exit(1)

@@ -17,10 +17,10 @@ type HTTPTester struct {
 }
 
 // NewHTTPTester returns an instantiated HTTP tester.
-func NewHTTPTester(addr string) *HTTPTester {
+func NewHTTPTester(addr, path string) *HTTPTester {
 	return &HTTPTester{
 		client: http.Client{},
-		url:    fmt.Sprintf("http://%s/db/execute", addr),
+		url:    fmt.Sprintf("http://%s%s", addr, path),
 	}
 }
 
