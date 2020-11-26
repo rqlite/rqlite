@@ -497,7 +497,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 		resp.Results = results
 	}
 	resp.end = time.Now()
-	writeResponse(w, r, resp)
+	s.writeResponse(w, r, resp)
 }
 
 // handleStatus returns status on the system.
@@ -645,7 +645,7 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 		resp.Results = results
 	}
 	resp.end = time.Now()
-	writeResponse(w, r, resp)
+	s.writeResponse(w, r, resp)
 }
 
 // handleQuery handles queries that do not modify the database.
@@ -714,7 +714,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 		resp.Results = results
 	}
 	resp.end = time.Now()
-	writeResponse(w, r, resp)
+	s.writeResponse(w, r, resp)
 }
 
 // handleExpvar serves registered expvar information over HTTP.
@@ -828,27 +828,8 @@ func (s *Service) checkCredentials(r *http.Request) bool {
 	return ok && s.credentialStore.Check(username, password)
 }
 
-func requestQueries(r *http.Request) ([]store.Statement, error) {
-	if r.Method == "GET" {
-		query, err := stmtParam(r)
-		if err != nil || query == "" {
-			return nil, errors.New("bad query GET request")
-		}
-		return []store.Statement{
-			{query, nil},
-		}, nil
-	}
-
-	b, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		return nil, errors.New("bad query POST request")
-	}
-	r.Body.Close()
-
-	return ParseRequest(b)
-}
-
-func writeResponse(w http.ResponseWriter, r *http.Request, j *Response) {
+// writeResponse writes the given response to the given writer.
+func (s *Service) writeResponse(w http.ResponseWriter, r *http.Request, j *Response) {
 	var b []byte
 	var err error
 	pretty, _ := isPretty(r)
@@ -870,8 +851,28 @@ func writeResponse(w http.ResponseWriter, r *http.Request, j *Response) {
 	}
 	_, err = w.Write(b)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		s.logger.Println("writing response failed:", err.Error())
 	}
+}
+
+func requestQueries(r *http.Request) ([]store.Statement, error) {
+	if r.Method == "GET" {
+		query, err := stmtParam(r)
+		if err != nil || query == "" {
+			return nil, errors.New("bad query GET request")
+		}
+		return []store.Statement{
+			{query, nil},
+		}, nil
+	}
+
+	b, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		return nil, errors.New("bad query POST request")
+	}
+	r.Body.Close()
+
+	return ParseRequest(b)
 }
 
 // createTLSConfig returns a TLS config from the given cert and key.

@@ -16,6 +16,7 @@ var batchSz int
 var modPrint int
 var tx bool
 var tp string
+var path string
 
 const name = `rqbench`
 const desc = `rqbench is a simple load testing utility for rqlite.`
@@ -27,6 +28,7 @@ func init() {
 	flag.IntVar(&modPrint, "m", 0, "Print progress every m requests")
 	flag.BoolVar(&tx, "x", false, "Use explicit transaction per request")
 	flag.StringVar(&tp, "t", "http", "Transport to use")
+	flag.StringVar(&path, "p", "/db/execute", "Endpoint to use")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "\n%s\n\n", desc)
 		fmt.Fprintf(os.Stderr, "Usage: %s [arguments] <SQL statement>\n", name)
@@ -48,11 +50,12 @@ func main() {
 		fmt.Fprintf(os.Stderr, "not a valid transport: %s\n", tp)
 	}
 
-	tester := NewHTTPTester(addr)
+	tester := NewHTTPTester(addr, path)
 	if err := tester.Prepare(stmt, batchSz, tx); err != nil {
 		fmt.Println("failed to prepare test:", err.Error())
 		os.Exit(1)
 	}
+	fmt.Println("Test target:", tester.String())
 
 	d, err := run(tester, numReqs)
 	if err != nil {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"time"
 )
@@ -17,11 +18,16 @@ type HTTPTester struct {
 }
 
 // NewHTTPTester returns an instantiated HTTP tester.
-func NewHTTPTester(addr string) *HTTPTester {
+func NewHTTPTester(addr, path string) *HTTPTester {
 	return &HTTPTester{
 		client: http.Client{},
-		url:    fmt.Sprintf("http://%s:/db/execute", addr),
+		url:    fmt.Sprintf("http://%s%s", addr, path),
 	}
+}
+
+// String returns a string representation of the tester.
+func (h *HTTPTester) String() string {
+	return h.url
 }
 
 // Prepare prepares the tester for execution.
@@ -54,6 +60,11 @@ func (h *HTTPTester) Once() (time.Duration, error) {
 		return 0, err
 	}
 	defer resp.Body.Close()
+
+	_, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return 0, err
+	}
 
 	if resp.StatusCode != http.StatusOK {
 		return 0, fmt.Errorf("received %s", resp.Status)
