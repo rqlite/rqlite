@@ -1,4 +1,7 @@
-### 5.6.1 (unreleased)
+## 5.7.0 (unreleased)
+
+### New features
+- [PR #696](https://github.com/rqlite/rqlite/pull/696): Benchmarking tool now supports query testing.
 
 ### Implementation changes and bug fixes
 - [PR #694](https://github.com/rqlite/rqlite/pull/694): Display, in the CLI, the HTTP response body on HTTP status 503.
