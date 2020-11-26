@@ -5,7 +5,7 @@
 
 ### Implementation changes and bug fixes
 - [PR #694](https://github.com/rqlite/rqlite/pull/694): Display, in the CLI, the HTTP response body on HTTP status 503.
-- [PR #697](https://github.com/rqlite/rqlite/pull/697): Do not use resolved addresss in join request.
+- [PR #697](https://github.com/rqlite/rqlite/pull/697): Do not use resolved address in join request.
 
 ## 5.6.0 (November 17th 2020)
 
