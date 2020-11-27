@@ -27,6 +27,8 @@ jobs:
       - run: bash gofmt.sh
       - run: go vet
       - run: go test -v ./...
+      - store_artifacts:
+          path: /go/bin/rqlited
 
   race:
     docker:
@@ -52,6 +54,8 @@ jobs:
           command: go test -race -v ./...
           environment:
                 GORACE: "halt_on_error=1"
+      - store_artifacts:
+          path: /go/bin/rqlited
 
   end_to_end:
     working_directory: /go/src/github.com/rqlite/rqlite
@@ -66,6 +70,8 @@ jobs:
             command: system_test/full_system_test.py
             environment:
                 RQLITED_PATH: /go/bin/rqlited
+        - store_artifacts:
+            path: /go/bin/rqlited
 
 workflows:
   version: 2
