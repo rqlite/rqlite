@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -54,6 +55,12 @@ func join(joinAddr, id, addr string, voter bool, meta map[string]string, tlsConf
 		return "", fmt.Errorf("node ID not set")
 	}
 
+	// Join using IP address, as that is what Hashicorp Raft works in.
+	resv, err := net.ResolveTCPAddr("tcp", addr)
+	if err != nil {
+		return "", err
+	}
+
 	// Check for protocol scheme, and insert default if necessary.
 	fullAddr := httpd.NormalizeAddr(fmt.Sprintf("%s/join", joinAddr))
 
@@ -69,7 +76,7 @@ func join(joinAddr, id, addr string, voter bool, meta map[string]string, tlsConf
 	for {
 		b, err := json.Marshal(map[string]interface{}{
 			"id":    id,
-			"addr":  addr,
+			"addr":  resv.String(),
 			"voter": voter,
 			"meta":  meta,
 		})
