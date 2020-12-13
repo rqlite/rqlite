@@ -49,7 +49,11 @@ func ParseRequest(b []byte) ([]store.Statement, error) {
 			return nil, ErrNoStatements
 		}
 
-		stmts[i].SQL = parameterized[i][0].(string)
+		var ok bool
+		stmts[i].SQL, ok = parameterized[i][0].(string)
+		if !ok {
+			return nil, ErrInvalidRequest
+		}
 		if len(parameterized[i]) == 1 {
 			continue
 		}

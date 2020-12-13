@@ -5,6 +5,7 @@
 
 ### Implementation changes and bug fixes
 - [PR #694](https://github.com/rqlite/rqlite/pull/694): Display, in the CLI, the HTTP response body on HTTP status 503.
+- [PR #703](https://github.com/rqlite/rqlite/pull/703): Fix potential panic during request parsing.
 
 ## 5.6.0 (November 17th 2020)
 
@@ -12,7 +13,7 @@
 - [PR #692](https://github.com/rqlite/rqlite/pull/692): Support setting Raft leader lease timeout.
 
 ### Implementation changes and bug fixes
-- [PR #693](https://github.com/rqlite/rqlite/pull/693): Upgrade Go mod depdencies, including upgrading Hashicorp Raft to v1.2.0.
+- [PR #693](https://github.com/rqlite/rqlite/pull/693): Upgrade Go mod dependencies, including upgrading Hashicorp Raft to v1.2.0.
 
 ## 5.5.1 (October 27th 2020)
 
