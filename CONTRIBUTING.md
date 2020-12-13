@@ -56,6 +56,8 @@ go get -u github.com/golang/protobuf/protoc-gen-go
 go install github.com/golang/protobuf/protoc-gen-go
 export GOBIN=$GOPATH/bin
 export PATH=$PATH:$GOBIN
+export SRC_DIR=$GOPATH/src/github.com/rqlite/rqlite/store/proto
+export DEST_DIR=$GOPATH/src
 protoc -I=$SRC_DIR --go_out=$DEST_DIR $SRC_DIR/command.proto
 ```
 
