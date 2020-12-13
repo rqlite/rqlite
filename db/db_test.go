@@ -440,7 +440,7 @@ func Test_SimpleParameterizedStatements(t *testing.T) {
 	}
 
 	s := Statement{
-		Query:      "INSERT INTO foo(name) VALUES(?)",
+		SQL:        "INSERT INTO foo(name) VALUES(?)",
 		Parameters: []driver.Value{"fiona"},
 	}
 	_, err = db.Execute([]Statement{s}, false, false)
@@ -462,7 +462,7 @@ func Test_SimpleParameterizedStatements(t *testing.T) {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
-	s.Query = "SELECT * FROM foo WHERE name=?"
+	s.SQL = "SELECT * FROM foo WHERE name=?"
 	s.Parameters = []driver.Value{"aoife"}
 	r, err = db.Query([]Statement{s}, false, false)
 	if err != nil {

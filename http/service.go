@@ -475,7 +475,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 	queries := []string{string(b)}
 	stmts := make([]store.Statement, len(queries))
 	for i := range queries {
-		stmts[i].Query = queries[i]
+		stmts[i].SQL = queries[i]
 	}
 
 	results, err := s.store.ExecuteOrAbort(&store.ExecuteRequest{stmts, timings, false})

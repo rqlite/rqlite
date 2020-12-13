@@ -88,7 +88,7 @@ type Value interface{}
 
 // Statement represent a parameterized SQL statement.
 type Statement struct {
-	Query      string
+	SQL        string
 	Parameters []Value
 }
 
@@ -105,7 +105,7 @@ type QueryRequest struct {
 func (q *QueryRequest) statements() []sql.Statement {
 	stmts := make([]sql.Statement, len(q.Stmts))
 	for i, s := range q.Stmts {
-		stmts[i].Query = s.Query
+		stmts[i].SQL = s.SQL
 		stmts[i].Parameters = make([]gosql.Value, len(s.Parameters))
 		for j := range s.Parameters {
 			stmts[i].Parameters[j] = s.Parameters[j]
@@ -117,12 +117,12 @@ func (q *QueryRequest) statements() []sql.Statement {
 func (q *QueryRequest) command() *databaseSub {
 	c := databaseSub{
 		Tx:         q.Tx,
-		Queries:    make([]string, len(q.Stmts)),
+		SQLs:       make([]string, len(q.Stmts)),
 		Parameters: make([][]Value, len(q.Stmts)),
 		Timings:    q.Timings,
 	}
 	for i, s := range q.Stmts {
-		c.Queries[i] = s.Query
+		c.SQLs[i] = s.SQL
 		c.Parameters[i] = s.Parameters
 	}
 	return &c
@@ -139,12 +139,12 @@ type ExecuteRequest struct {
 func (e *ExecuteRequest) command() *databaseSub {
 	c := databaseSub{
 		Tx:         e.Tx,
-		Queries:    make([]string, len(e.Stmts)),
+		SQLs:       make([]string, len(e.Stmts)),
 		Parameters: make([][]Value, len(e.Stmts)),
 		Timings:    e.Timings,
 	}
 	for i, s := range e.Stmts {
-		c.Queries[i] = s.Query
+		c.SQLs[i] = s.SQL
 		c.Parameters[i] = s.Parameters
 	}
 	return &c
@@ -1123,9 +1123,9 @@ func (s *Store) database(leader bool, dst io.Writer) error {
 func (f *fsmSnapshot) Release() {}
 
 func subCommandToStatements(d *databaseSub) []sql.Statement {
-	stmts := make([]sql.Statement, len(d.Queries))
-	for i := range d.Queries {
-		stmts[i].Query = d.Queries[i]
+	stmts := make([]sql.Statement, len(d.SQLs))
+	for i := range d.SQLs {
+		stmts[i].SQL = d.SQLs[i]
 
 		// Support backwards-compatibility, since previous versions didn't
 		// have Parameters in Raft commands.
