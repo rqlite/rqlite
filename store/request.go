@@ -9,8 +9,19 @@ import (
 	"github.com/rqlite/rqlite/store/proto"
 )
 
+const (
+	batchCompressSize = 5
+	sqlCompressSize   = 100
+)
+
 type QueryRequest2 struct {
 	command *proto.QueryCommand
+}
+
+func NewQueryRequest2() *QueryRequest2 {
+	return &QueryRequest2{
+		command: &proto.QueryCommand{},
+	}
 }
 
 func (q *QueryRequest2) SetTimings(b bool) {
@@ -21,18 +32,19 @@ func (q *QueryRequest2) SetTransaction(b bool) {
 	q.command.Transaction = b
 }
 
-func (q *QueryRequest2) SetSQL(sqls []string) error {
-	if shouldCompress(sqls) {
+func (q *QueryRequest2) SetSQL(sqls []string) (bool, error) {
+	c := shouldCompress(sqls)
+	if c {
 		b, err := doCompress(sqls)
 		if err != nil {
-			return err
+			return false, err
 		}
 		q.command.CompressedSqls = b
 	} else {
 		q.command.Sqls = sqls
 	}
 
-	return nil
+	return c, nil
 }
 
 func (q *QueryRequest2) GetTimings() bool { return q.command.Timings }
@@ -51,12 +63,12 @@ func (q *QueryRequest2) Marshal() ([]byte, error) {
 }
 
 func shouldCompress(s []string) bool {
-	if len(s) > 4 {
+	if len(s) >= batchCompressSize {
 		return true
 	}
 
 	for i := range s {
-		if len(s[i]) > 99 {
+		if len(s[i]) >= sqlCompressSize {
 			return true
 		}
 	}
@@ -76,6 +88,8 @@ func doCompress(sqls []string) ([]byte, error) {
 	if err := gz.Close(); err != nil {
 		return nil, err
 	}
+
+	// XXXX NEED TO COMPRESS PARAMETERS TOO!
 
 	return b.Bytes(), nil
 }
