@@ -33,7 +33,7 @@ func ParseRequest(b []byte) ([]store.Statement, error) {
 
 		stmts := make([]store.Statement, len(simple))
 		for i := range simple {
-			stmts[i].Query = simple[i]
+			stmts[i].SQL = simple[i]
 		}
 		return stmts, nil
 	}
@@ -49,7 +49,7 @@ func ParseRequest(b []byte) ([]store.Statement, error) {
 			return nil, ErrNoStatements
 		}
 
-		stmts[i].Query = parameterized[i][0].(string)
+		stmts[i].SQL = parameterized[i][0].(string)
 		if len(parameterized[i]) == 1 {
 			continue
 		}

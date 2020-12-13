@@ -72,7 +72,7 @@ type Rows struct {
 // Statement represents a single parameterized statement for processing
 // by the database layer.
 type Statement struct {
-	Query      string
+	SQL        string
 	Parameters []driver.Value
 }
 
@@ -243,16 +243,16 @@ func (db *DB) Execute(stmts []Statement, tx, xTime bool) ([]*Result, error) {
 			}
 		}
 
-		// Execute each query.
+		// Execute each statement.
 		for _, stmt := range stmts {
-			if stmt.Query == "" {
+			if stmt.SQL == "" {
 				continue
 			}
 
 			result := &Result{}
 			start := time.Now()
 
-			r, err := execer.Exec(stmt.Query, stmt.Parameters)
+			r, err := execer.Exec(stmt.SQL, stmt.Parameters)
 			if err != nil {
 				if handleError(result, err) {
 					continue
@@ -335,14 +335,14 @@ func (db *DB) Query(stmts []Statement, tx, xTime bool) ([]*Rows, error) {
 		}
 
 		for _, stmt := range stmts {
-			if stmt.Query == "" {
+			if stmt.SQL == "" {
 				continue
 			}
 
 			rows := &Rows{}
 			start := time.Now()
 
-			rs, err := queryer.Query(stmt.Query, stmt.Parameters)
+			rs, err := queryer.Query(stmt.SQL, stmt.Parameters)
 			if err != nil {
 				rows.Error = err.Error()
 				allRows = append(allRows, rows)

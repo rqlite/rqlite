@@ -43,7 +43,7 @@ func newMetadataSetCommand(id string, md map[string]string) (*command, error) {
 // reasons. Unless Parameters is nil, it should be the same length as Queries.
 type databaseSub struct {
 	Tx         bool      `json:"tx,omitempty"`
-	Queries    []string  `json:"queries,omitempty"`
+	SQLs       []string  `json:"queries,omitempty"`
 	Parameters [][]Value `json:"Parameters,omitempty`
 	Timings    bool      `json:"timings,omitempty"`
 }
