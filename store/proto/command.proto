@@ -6,9 +6,9 @@ option go_package = "github.com/rqlite/rqlite/store/proto";
 message Parameter {
 	oneof value {
 		sint64 i = 1;
-		float f = 2;
+		double d = 2;
 		bool b = 3;
-		bytes bs = 4;
+		bytes y = 4;
 		string s = 5;
 	}
 }
