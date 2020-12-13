@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"encoding/json"
 
+	pb "github.com/golang/protobuf/proto"
 	"github.com/rqlite/rqlite/store/proto"
 )
 
@@ -43,6 +44,10 @@ func (q *QueryRequest2) GetSQL() ([]string, error) {
 		return doDecompress(q.command.CompressedSqls)
 	}
 	return q.command.Sqls, nil
+}
+
+func (q *QueryRequest2) Marshal() ([]byte, error) {
+	return pb.Marshal(q.command)
 }
 
 func shouldCompress(s []string) bool {
