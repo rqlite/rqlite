@@ -1,0 +1,43 @@
+syntax = "proto3";
+package command;
+
+option go_package = "github.com/rqlite/rqlite/store/proto";
+
+message Parameter {
+	oneof value {
+		sint64 i = 1;
+		float f = 2;
+		bool b = 3;
+		bytes bs = 4;
+		string s = 5;
+	}
+}
+
+message Parameters {
+	repeated Parameter values = 1;
+}
+
+message QueryCommand {
+	bool timings = 1;
+	bool transaction = 2;
+	repeated string sqls = 3;
+	bytes compressed_sqls = 4;
+	repeated Parameters values = 5;
+}
+
+message ExecuteCommand {
+	bool timings = 1;
+	bool transaction = 2;
+	repeated string sqls = 3;
+	bytes compressed_sqls = 4;
+	repeated Parameters values = 5;
+}
+
+message MetadataSetCommand {
+	string raft_id = 1;
+	map<string, string> data = 2;
+}
+
+message MetadataDeleteCommand {
+	string raft_id = 1;
+}
