@@ -206,3 +206,20 @@ func Test_MixedInvalidRequest(t *testing.T) {
 		t.Fatal("got unexpected error for invalid request")
 	}
 }
+
+func Test_SingleInvalidTypeRequests(t *testing.T) {
+	_, err := ParseRequest([]byte(fmt.Sprintf(`[1]`)))
+	if err != ErrInvalidRequest {
+		t.Fatal("got unexpected error for invalid request")
+	}
+
+	_, err = ParseRequest([]byte(fmt.Sprintf(`[[1]]`)))
+	if err != ErrInvalidRequest {
+		t.Fatal("got unexpected error for invalid request")
+	}
+
+	_, err = ParseRequest([]byte(fmt.Sprintf(`[[1, "x", 2]]`)))
+	if err != ErrInvalidRequest {
+		t.Fatal("got unexpected error for invalid request")
+	}
+}
