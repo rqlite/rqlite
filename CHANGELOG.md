@@ -13,7 +13,7 @@
 - [PR #692](https://github.com/rqlite/rqlite/pull/692): Support setting Raft leader lease timeout.
 
 ### Implementation changes and bug fixes
-- [PR #693](https://github.com/rqlite/rqlite/pull/693): Upgrade Go mod depdencies, including upgrading Hashicorp Raft to v1.2.0.
+- [PR #693](https://github.com/rqlite/rqlite/pull/693): Upgrade Go mod dependencies, including upgrading Hashicorp Raft to v1.2.0.
 
 ## 5.5.1 (October 27th 2020)
 
