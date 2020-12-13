@@ -47,6 +47,18 @@ cd $GOPATH
 go install github.com/mattn/go-sqlite3
 ```
 
+### Protobuf code generation
+_This step is not necessary unless you are making changes to protobuf definitions._
+
+Ensure you have the required tools installed, and that `GOPATH` is set.
+```bash
+go get -u github.com/golang/protobuf/protoc-gen-go
+go install github.com/golang/protobuf/protoc-gen-go
+export GOBIN=$GOPATH/bin
+export PATH=$PATH:$GOBIN
+protoc -I=$SRC_DIR --go_out=$DEST_DIR $SRC_DIR/command.proto
+```
+
 ## Cloning a fork
 If you wish to work with fork of rqlite, your own fork for example, you must still follow the directory structure above. But instead of cloning the main repo, instead clone your fork. You must fork the project if you want to contribute upstream.
 
