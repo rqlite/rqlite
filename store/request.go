@@ -14,51 +14,71 @@ const (
 	sqlCompressSize   = 100
 )
 
-type QueryRequest2 struct {
-	command *proto.QueryCommand
+type Request2 struct {
+	command *proto.Command
 }
 
-func NewQueryRequest2() *QueryRequest2 {
-	return &QueryRequest2{
-		command: &proto.QueryCommand{},
+func NewQueryRequest2() *Request2 {
+	return &Request2{
+		command: &proto.Command{
+			Type: proto.Command_QUERY,
+		},
 	}
 }
 
-func (q *QueryRequest2) SetTimings(b bool) {
+func NewExecuteRequest2() *Request2 {
+	return &Request2{
+		command: &proto.Command{
+			Type: proto.Command_EXECUTE,
+		},
+	}
+}
+
+func NewRequest2() *Request2 {
+	return &Request2{
+		command: &proto.Command{},
+	}
+}
+
+func (q *Request2) SetTimings(b bool) {
 	q.command.Timings = b
 }
 
-func (q *QueryRequest2) SetTransaction(b bool) {
+func (q *Request2) SetTransaction(b bool) {
 	q.command.Transaction = b
 }
 
-func (q *QueryRequest2) SetSQL(sqls []string) (bool, error) {
+func (q *Request2) SetSQL(sqls []string) error {
 	c := shouldCompress(sqls)
 	if c {
 		b, err := doCompress(sqls)
 		if err != nil {
-			return false, err
+			return err
 		}
 		q.command.CompressedSqls = b
 	} else {
 		q.command.Sqls = sqls
 	}
 
-	return c, nil
+	return nil
 }
 
-func (q *QueryRequest2) GetTimings() bool { return q.command.Timings }
+func (q *Request2) GetTimings() bool { return q.command.Timings }
 
-func (q *QueryRequest2) GetTransaction() bool { return q.command.Transaction }
+func (q *Request2) GetTransaction() bool { return q.command.Transaction }
 
-func (q *QueryRequest2) GetSQL() ([]string, error) {
+func (q *Request2) GetSQL() ([]string, error) {
 	if q.command.CompressedSqls != nil {
 		return doDecompress(q.command.CompressedSqls)
 	}
 	return q.command.Sqls, nil
 }
 
-func (q *QueryRequest2) Marshal() ([]byte, error) {
+func (q *Request2) Compressed() bool {
+	return q.command.CompressedSqls != nil
+}
+
+func (q *Request2) Marshal() ([]byte, error) {
 	return pb.Marshal(q.command)
 }
 

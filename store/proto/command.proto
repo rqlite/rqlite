@@ -17,20 +17,18 @@ message Parameters {
 	repeated Parameter values = 1;
 }
 
-message QueryCommand {
-	bool timings = 1;
-	bool transaction = 2;
-	repeated string sqls = 3;
-	bytes compressed_sqls = 4;
-	repeated Parameters values = 5;
-}
-
-message ExecuteCommand {
-	bool timings = 1;
-	bool transaction = 2;
-	repeated string sqls = 3;
-	bytes compressed_sqls = 4;
-	repeated Parameters values = 5;
+message Command {
+	enum Type {
+		UNKNOWN = 0;
+		QUERY = 1;
+		EXECUTE = 2;
+	}
+	Type type = 1;
+	bool timings = 2;
+	bool transaction = 3;
+	repeated string sqls = 4;
+	bytes compressed_sqls = 5;
+	repeated Parameters values = 6;
 }
 
 message MetadataSetCommand {
