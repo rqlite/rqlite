@@ -10,9 +10,19 @@ func Test_RequestNonCompressedSingle(t *testing.T) {
 
 	r.SetTimings(true)
 	r.SetTransaction(true)
-	if err := r.SetSQL([]string{"SELECT * FROM foo"}); err != nil {
+
+	if err := r.SetSQL([]string{"SELECT * FROM ? WHERE x = ?"}); err != nil {
 		t.Fatalf("Failed to set SQL: %s", err)
 	}
+
+	params := make([][]Value, 1)
+	params[0] = make([]Value, 2)
+	params[0][0] = "foo"
+	params[0][1] = 1
+	if err := r.SetParameters(params); err != nil {
+		t.Fatalf("Failed to set parameters: %s", err)
+	}
+
 	if r.Compressed() {
 		t.Fatalf("Request was unexpectedly compressed")
 	}
@@ -21,6 +31,7 @@ func Test_RequestNonCompressedSingle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to marshal request")
 	}
+	t.Logf("Size of single proto-encoded request: %d bytes", len(b))
 
 	r, err = UnmarshalRequest(b)
 	if err != nil {
@@ -32,11 +43,25 @@ func Test_RequestNonCompressedSingle(t *testing.T) {
 	if r.GetTransaction() != true {
 		t.Fatalf("transaction not preserved")
 	}
+
 	if sql, err := r.GetSQL(); err != nil {
 		t.Fatalf("failed to get SQL: %s", err)
-	} else if !reflect.DeepEqual(sql, []string{"SELECT * FROM foo"}) {
+	} else if !reflect.DeepEqual(sql, []string{"SELECT * FROM ? WHERE x = ?"}) {
 		t.Fatalf("SQL not preserved")
 	}
+
+	if rparams, err := r.GetParameters(); err != nil {
+		t.Fatalf("failed to get parameters: %s", err)
+	} else if !reflect.DeepEqual(params, rparams) {
+		t.Fatalf("parameters not preserved")
+	}
+
+	// For coverage.
+	j, err := r.JSON()
+	if err != nil {
+		t.Fatalf("failed to JSON marshal request")
+	}
+	t.Logf("Size of single JSON-encoded request: %d bytes", len(j))
 }
 
 func Test_RequestCompressedSingleLargeSQL(t *testing.T) {

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
+	"fmt"
 
 	pb "github.com/golang/protobuf/proto"
 	"github.com/rqlite/rqlite/store/proto"
@@ -40,46 +41,134 @@ func NewRequest2() *Request2 {
 	}
 }
 
-func (q *Request2) SetTimings(b bool) {
-	q.command.Timings = b
+func (r *Request2) SetTimings(b bool) {
+	r.command.Timings = b
 }
 
-func (q *Request2) SetTransaction(b bool) {
-	q.command.Transaction = b
+func (r *Request2) SetTransaction(b bool) {
+	r.command.Transaction = b
 }
 
-func (q *Request2) SetSQL(sqls []string) error {
+func (r *Request2) SetSQL(sqls []string) error {
 	c := shouldCompress(sqls)
 	if c {
 		b, err := doCompress(sqls)
 		if err != nil {
 			return err
 		}
-		q.command.CompressedSqls = b
+		r.command.CompressedSqls = b
 	} else {
-		q.command.Sqls = sqls
+		r.command.Sqls = sqls
 	}
 
 	return nil
 }
 
-func (q *Request2) GetTimings() bool { return q.command.Timings }
-
-func (q *Request2) GetTransaction() bool { return q.command.Transaction }
-
-func (q *Request2) GetSQL() ([]string, error) {
-	if q.command.CompressedSqls != nil {
-		return doDecompress(q.command.CompressedSqls)
+func (r *Request2) SetParameters(values [][]Value) error {
+	if values == nil {
+		return nil
 	}
-	return q.command.Sqls, nil
+
+	r.command.Values = make([]*proto.Parameters, len(values))
+	var p *proto.Parameters
+	for i := range values {
+		p = &proto.Parameters{}
+		p.Values = make([]*proto.Parameter, len(values[i]))
+
+		for ii := range values[i] {
+			switch v := values[i][ii].(type) {
+			case int:
+			case int64:
+				p.Values[ii] = &proto.Parameter{
+					Value: &proto.Parameter_I{
+						I: v,
+					},
+				}
+			case float64:
+				p.Values[ii] = &proto.Parameter{
+					Value: &proto.Parameter_D{
+						D: v,
+					},
+				}
+			case bool:
+				p.Values[ii] = &proto.Parameter{
+					Value: &proto.Parameter_B{
+						B: v,
+					},
+				}
+			case []byte:
+				p.Values[ii] = &proto.Parameter{
+					Value: &proto.Parameter_Y{
+						Y: v,
+					},
+				}
+			case string:
+				p.Values[ii] = &proto.Parameter{
+					Value: &proto.Parameter_S{
+						S: v,
+					},
+				}
+			default:
+				return fmt.Errorf("unsupported type: %T", v)
+			}
+		}
+
+		r.command.Values[i] = p
+	}
+
+	return nil
 }
 
-func (q *Request2) Compressed() bool {
-	return q.command.CompressedSqls != nil
+func (r *Request2) GetTimings() bool { return r.command.Timings }
+
+func (r *Request2) GetTransaction() bool { return r.command.Transaction }
+
+func (r *Request2) GetSQL() ([]string, error) {
+	if r.command.CompressedSqls != nil {
+		return doDecompress(r.command.CompressedSqls)
+	}
+	return r.command.Sqls, nil
 }
 
-func (q *Request2) Marshal() ([]byte, error) {
-	return pb.Marshal(q.command)
+func (r *Request2) GetParameters() ([][]Value, error) {
+	if r.command.Values == nil {
+		return nil, nil
+	}
+
+	values := make([][]Value, len(r.command.Values))
+	for i := range r.command.Values {
+		v := make([]Value, len(r.command.Values[i].Values))
+		for ii := range r.command.Values[i].Values {
+			switch w := r.command.Values[i].Values[ii].GetValue().(type) {
+			case *proto.Parameter_I:
+				v[ii] = w
+			case *proto.Parameter_D:
+				v[ii] = w
+			case *proto.Parameter_B:
+				v[ii] = w
+			case *proto.Parameter_Y:
+				v[ii] = w
+			case *proto.Parameter_S:
+				v[ii] = w
+			default:
+				return nil, fmt.Errorf("unsupported type: %T", w)
+			}
+		}
+		values[i] = v
+	}
+	return values, nil
+}
+
+func (r *Request2) Compressed() bool {
+	return r.command.CompressedSqls != nil
+}
+
+func (r *Request2) Marshal() ([]byte, error) {
+	return pb.Marshal(r.command)
+}
+
+func (r *Request2) JSON() ([]byte, error) {
+	return json.Marshal(r.command)
 }
 
 func UnmarshalRequest(b []byte) (*Request2, error) {
