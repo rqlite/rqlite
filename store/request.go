@@ -82,6 +82,18 @@ func (q *Request2) Marshal() ([]byte, error) {
 	return pb.Marshal(q.command)
 }
 
+func UnmarshalRequest(b []byte) (*Request2, error) {
+	c := &proto.Command{}
+	err := pb.Unmarshal(b, c)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Request2{
+		command: c,
+	}, nil
+}
+
 func shouldCompress(s []string) bool {
 	if len(s) >= batchCompressSize {
 		return true
@@ -121,7 +133,7 @@ func doDecompress(b []byte) ([]string, error) {
 	}
 
 	sqls := make([]string, 0)
-	if err := json.NewDecoder(gz).Decode(sqls); err != nil {
+	if err := json.NewDecoder(gz).Decode(&sqls); err != nil {
 		return nil, err
 	}
 	return sqls, nil
