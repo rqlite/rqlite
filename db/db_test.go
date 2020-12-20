@@ -217,13 +217,13 @@ func Test_SimpleJoinStatements(t *testing.T) {
 
 	req := &command.Request{
 		Statements: []*command.Statement{
-			&command.Statement{
+			{
 				Sql: `INSERT INTO "names" VALUES(1,'bob','123-45-678')`,
 			},
-			&command.Statement{
+			{
 				Sql: `INSERT INTO "names" VALUES(2,'tom','111-22-333')`,
 			},
-			&command.Statement{
+			{
 				Sql: `INSERT INTO "names" VALUES(3,'matt','222-22-333')`,
 			},
 		},
@@ -288,10 +288,10 @@ func Test_SimpleMultiStatements(t *testing.T) {
 
 	req := &command.Request{
 		Statements: []*command.Statement{
-			&command.Statement{
+			{
 				Sql: `INSERT INTO foo(name) VALUES("fiona")`,
 			},
-			&command.Statement{
+			{
 				Sql: `INSERT INTO foo(name) VALUES("dana")`,
 			},
 		},
@@ -306,10 +306,10 @@ func Test_SimpleMultiStatements(t *testing.T) {
 
 	req = &command.Request{
 		Statements: []*command.Statement{
-			&command.Statement{
+			{
 				Sql: `SELECT * FROM foo`,
 			},
-			&command.Statement{
+			{
 				Sql: `SELECT * FROM foo`,
 			},
 		},
@@ -330,7 +330,7 @@ func Test_SimpleSingleMultiLineStatements(t *testing.T) {
 
 	req := &command.Request{
 		Statements: []*command.Statement{
-			&command.Statement{
+			{
 				Sql: `
 CREATE TABLE foo (
 id INTEGER NOT NULL PRIMARY KEY,
@@ -346,10 +346,10 @@ name TEXT
 
 	req = &command.Request{
 		Statements: []*command.Statement{
-			&command.Statement{
+			{
 				Sql: `INSERT INTO foo(name) VALUES("fiona")`,
 			},
-			&command.Statement{
+			{
 				Sql: `INSERT INTO foo(name) VALUES("dana")`,
 			},
 		},
@@ -476,10 +476,10 @@ func Test_SimpleParameterizedStatements(t *testing.T) {
 
 	req := &command.Request{
 		Statements: []*command.Statement{
-			&command.Statement{
+			{
 				Sql: "INSERT INTO foo(name) VALUES(?)",
 				Parameters: []*command.Parameter{
-					&command.Parameter{
+					{
 						Value: &command.Parameter_S{
 							S: "fiona",
 						},
@@ -540,20 +540,20 @@ func Test_SimpleParameterizedStatements(t *testing.T) {
 
 	req = &command.Request{
 		Statements: []*command.Statement{
-			&command.Statement{
+			{
 				Sql: "SELECT * FROM foo WHERE NAME=?",
 				Parameters: []*command.Parameter{
-					&command.Parameter{
+					{
 						Value: &command.Parameter_S{
 							S: "fiona",
 						},
 					},
 				},
 			},
-			&command.Statement{
+			{
 				Sql: "SELECT * FROM foo WHERE NAME=?",
 				Parameters: []*command.Parameter{
-					&command.Parameter{
+					{
 						Value: &command.Parameter_S{
 							S: "aoife",
 						},
@@ -766,16 +766,16 @@ func Test_PartialFail(t *testing.T) {
 
 	req := &command.Request{
 		Statements: []*command.Statement{
-			&command.Statement{
+			{
 				Sql: `INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 			},
-			&command.Statement{
+			{
 				Sql: `INSERT INTO foo(id, name) VALUES(2, "fiona")`,
 			},
-			&command.Statement{
+			{
 				Sql: `INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 			},
-			&command.Statement{
+			{
 				Sql: `INSERT INTO foo(id, name) VALUES(4, "fiona")`,
 			},
 		},
@@ -809,16 +809,16 @@ func Test_SimpleTransaction(t *testing.T) {
 	req := &command.Request{
 		Transaction: true,
 		Statements: []*command.Statement{
-			&command.Statement{
+			{
 				Sql: `INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 			},
-			&command.Statement{
+			{
 				Sql: `INSERT INTO foo(id, name) VALUES(2, "fiona")`,
 			},
-			&command.Statement{
+			{
 				Sql: `INSERT INTO foo(id, name) VALUES(3, "fiona")`,
 			},
-			&command.Statement{
+			{
 				Sql: `INSERT INTO foo(id, name) VALUES(4, "fiona")`,
 			},
 		},
@@ -852,16 +852,16 @@ func Test_PartialFailTransaction(t *testing.T) {
 	req := &command.Request{
 		Transaction: true,
 		Statements: []*command.Statement{
-			&command.Statement{
+			{
 				Sql: `INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 			},
-			&command.Statement{
+			{
 				Sql: `INSERT INTO foo(id, name) VALUES(2, "fiona")`,
 			},
-			&command.Statement{
+			{
 				Sql: `INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 			},
-			&command.Statement{
+			{
 				Sql: `INSERT INTO foo(id, name) VALUES(4, "fiona")`,
 			},
 		},
@@ -895,16 +895,16 @@ func Test_Backup(t *testing.T) {
 	req := &command.Request{
 		Transaction: true,
 		Statements: []*command.Statement{
-			&command.Statement{
+			{
 				Sql: `INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 			},
-			&command.Statement{
+			{
 				Sql: `INSERT INTO foo(id, name) VALUES(2, "fiona")`,
 			},
-			&command.Statement{
+			{
 				Sql: `INSERT INTO foo(id, name) VALUES(3, "fiona")`,
 			},
-			&command.Statement{
+			{
 				Sql: `INSERT INTO foo(id, name) VALUES(4, "fiona")`,
 			},
 		},

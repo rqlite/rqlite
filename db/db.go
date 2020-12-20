@@ -189,7 +189,7 @@ func (db *DB) AbortTransaction() error {
 func (db *DB) ExecuteStringStmt(query string) ([]*Result, error) {
 	r := &command.Request{
 		Statements: []*command.Statement{
-			&command.Statement{
+			{
 				Sql: query,
 			},
 		},
@@ -315,7 +315,7 @@ func (db *DB) Execute(req *command.Request, xTime bool) ([]*Result, error) {
 func (db *DB) QueryStringStmt(query string) ([]*Rows, error) {
 	r := &command.Request{
 		Statements: []*command.Statement{
-			&command.Statement{
+			{
 				Sql: query,
 			},
 		},
