@@ -13,22 +13,39 @@ message Parameter {
 	}
 }
 
-message Parameters {
-	repeated Parameter values = 1;
+// These should be built in mind with a future grpc interface. HTTP is a thin layer then on system built with Protbuf at the core of the system.
+message Statement {
+	string sql = 1;
+	repeated Parameter parameters = 2;
 }
 
-message Command {
-	enum Type {
-		UNKNOWN = 0;
-		QUERY = 1;
-		EXECUTE = 2;
-	}
-	Type type = 1;
+message Request {
 	bool timings = 2;
 	bool transaction = 3;
-	repeated string sqls = 4;
-	bytes compressed_sqls = 5;
-	repeated Parameters values = 6;
+	repeated Statement statements = 4;
+}
+
+message ExecuteRequest {
+	Request request
+}
+
+message QueryRequest {
+	Request request
+}
+
+message DatabaseCommand {
+        enum Type {
+                UNKNOWN = 0;
+                QUERY = 1;
+                EXECUTE = 2;
+        }
+        Type type = 1;
+	Request request
+	oneof {  //? Use this? Can then use has_excecute()? etc
+		ExecuteRequest execute
+		QueryRequest query
+	}	
+	bytes compressed_statements = 5;
 }
 
 message MetadataSetCommand {
