@@ -1,7 +1,6 @@
 package db
 
 import (
-	"database/sql/driver"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -10,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rqlite/rqlite/command"
 	"github.com/rqlite/rqlite/testdata/chinook"
 )
 
@@ -110,11 +110,11 @@ func Test_EmptyStatements(t *testing.T) {
 	defer db.Close()
 	defer os.Remove(path)
 
-	_, err := db.Execute([]Statement{{"", nil}}, false, false)
+	_, err := db.ExecuteStringStmt("")
 	if err != nil {
 		t.Fatalf("failed to execute empty statement: %s", err.Error())
 	}
-	_, err = db.Execute([]Statement{{";", nil}}, false, false)
+	_, err = db.ExecuteStringStmt(";")
 	if err != nil {
 		t.Fatalf("failed to execute empty statement with semicolon: %s", err.Error())
 	}
@@ -215,11 +215,20 @@ func Test_SimpleJoinStatements(t *testing.T) {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
 
-	_, err = db.Execute([]Statement{
-		{`INSERT INTO "names" VALUES(1,'bob','123-45-678')`, nil},
-		{`INSERT INTO "names" VALUES(2,'tom','111-22-333')`, nil},
-		{`INSERT INTO "names" VALUES(3,'matt','222-22-333')`, nil},
-	}, false, false)
+	req := &command.Request{
+		Statements: []*command.Statement{
+			&command.Statement{
+				Sql: `INSERT INTO "names" VALUES(1,'bob','123-45-678')`,
+			},
+			&command.Statement{
+				Sql: `INSERT INTO "names" VALUES(2,'tom','111-22-333')`,
+			},
+			&command.Statement{
+				Sql: `INSERT INTO "names" VALUES(3,'matt','222-22-333')`,
+			},
+		},
+	}
+	_, err = db.Execute(req, false)
 	if err != nil {
 		t.Fatalf("failed to insert record: %s", err.Error())
 	}
@@ -277,10 +286,17 @@ func Test_SimpleMultiStatements(t *testing.T) {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
 
-	re, err := db.Execute([]Statement{
-		{`INSERT INTO foo(name) VALUES("fiona")`, nil},
-		{`INSERT INTO foo(name) VALUES("dana")`, nil},
-	}, false, false)
+	req := &command.Request{
+		Statements: []*command.Statement{
+			&command.Statement{
+				Sql: `INSERT INTO foo(name) VALUES("fiona")`,
+			},
+			&command.Statement{
+				Sql: `INSERT INTO foo(name) VALUES("dana")`,
+			},
+		},
+	}
+	re, err := db.Execute(req, false)
 	if err != nil {
 		t.Fatalf("failed to insert record: %s", err.Error())
 	}
@@ -288,10 +304,17 @@ func Test_SimpleMultiStatements(t *testing.T) {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
-	ro, err := db.Query([]Statement{
-		{`SELECT * FROM foo`, nil},
-		{`SELECT * FROM foo`, nil},
-	}, false, false)
+	req = &command.Request{
+		Statements: []*command.Statement{
+			&command.Statement{
+				Sql: `SELECT * FROM foo`,
+			},
+			&command.Statement{
+				Sql: `SELECT * FROM foo`,
+			},
+		},
+	}
+	ro, err := db.Query(req, false)
 	if err != nil {
 		t.Fatalf("failed to query empty table: %s", err.Error())
 	}
@@ -305,21 +328,33 @@ func Test_SimpleSingleMultiLineStatements(t *testing.T) {
 	defer db.Close()
 	defer os.Remove(path)
 
-	_, err := db.Execute([]Statement{
-		{`
+	req := &command.Request{
+		Statements: []*command.Statement{
+			&command.Statement{
+				Sql: `
 CREATE TABLE foo (
-    id INTEGER NOT NULL PRIMARY KEY,
-    name TEXT
-)`, nil}}, false, false)
+id INTEGER NOT NULL PRIMARY KEY,
+name TEXT
+)`,
+			},
+		},
+	}
+	_, err := db.Execute(req, false)
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
 
-	re, err := db.Execute(
-		[]Statement{
-			{`INSERT INTO foo(name) VALUES("fiona")`, nil},
-			{`INSERT INTO foo(name) VALUES("dana")`, nil},
-		}, false, false)
+	req = &command.Request{
+		Statements: []*command.Statement{
+			&command.Statement{
+				Sql: `INSERT INTO foo(name) VALUES("fiona")`,
+			},
+			&command.Statement{
+				Sql: `INSERT INTO foo(name) VALUES("dana")`,
+			},
+		},
+	}
+	re, err := db.Execute(req, false)
 	if err != nil {
 		t.Fatalf("failed to insert record: %s", err.Error())
 	}
@@ -439,17 +474,31 @@ func Test_SimpleParameterizedStatements(t *testing.T) {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
 
-	s := Statement{
-		SQL:        "INSERT INTO foo(name) VALUES(?)",
-		Parameters: []driver.Value{"fiona"},
+	req := &command.Request{
+		Statements: []*command.Statement{
+			&command.Statement{
+				Sql: "INSERT INTO foo(name) VALUES(?)",
+				Parameters: []*command.Parameter{
+					&command.Parameter{
+						Value: &command.Parameter_S{
+							S: "fiona",
+						},
+					},
+				},
+			},
+		},
 	}
-	_, err = db.Execute([]Statement{s}, false, false)
+	_, err = db.Execute(req, false)
 	if err != nil {
 		t.Fatalf("failed to insert record: %s", err.Error())
 	}
 
-	s.Parameters = []driver.Value{"aoife"}
-	_, err = db.Execute([]Statement{s}, false, false)
+	req.Statements[0].Parameters[0] = &command.Parameter{
+		Value: &command.Parameter_S{
+			S: "aoife",
+		},
+	}
+	_, err = db.Execute(req, false)
 	if err != nil {
 		t.Fatalf("failed to insert record: %s", err.Error())
 	}
@@ -462,9 +511,13 @@ func Test_SimpleParameterizedStatements(t *testing.T) {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
-	s.SQL = "SELECT * FROM foo WHERE name=?"
-	s.Parameters = []driver.Value{"aoife"}
-	r, err = db.Query([]Statement{s}, false, false)
+	req.Statements[0].Sql = "SELECT * FROM foo WHERE name=?"
+	req.Statements[0].Parameters[0] = &command.Parameter{
+		Value: &command.Parameter_S{
+			S: "aoife",
+		},
+	}
+	r, err = db.Query(req, false)
 	if err != nil {
 		t.Fatalf("failed to query table: %s", err.Error())
 	}
@@ -472,8 +525,12 @@ func Test_SimpleParameterizedStatements(t *testing.T) {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
-	s.Parameters = []driver.Value{"fiona"}
-	r, err = db.Query([]Statement{s}, false, false)
+	req.Statements[0].Parameters[0] = &command.Parameter{
+		Value: &command.Parameter_S{
+			S: "fiona",
+		},
+	}
+	r, err = db.Query(req, false)
 	if err != nil {
 		t.Fatalf("failed to query table: %s", err.Error())
 	}
@@ -481,11 +538,31 @@ func Test_SimpleParameterizedStatements(t *testing.T) {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
-	stmts := []Statement{
-		{"SELECT * FROM foo WHERE NAME=?", []driver.Value{"fiona"}},
-		{"SELECT * FROM foo WHERE NAME=?", []driver.Value{"aoife"}},
+	req = &command.Request{
+		Statements: []*command.Statement{
+			&command.Statement{
+				Sql: "SELECT * FROM foo WHERE NAME=?",
+				Parameters: []*command.Parameter{
+					&command.Parameter{
+						Value: &command.Parameter_S{
+							S: "fiona",
+						},
+					},
+				},
+			},
+			&command.Statement{
+				Sql: "SELECT * FROM foo WHERE NAME=?",
+				Parameters: []*command.Parameter{
+					&command.Parameter{
+						Value: &command.Parameter_S{
+							S: "aoife",
+						},
+					},
+				},
+			},
+		},
 	}
-	r, err = db.Query(stmts, false, false)
+	r, err = db.Query(req, false)
 	if err != nil {
 		t.Fatalf("failed to query table: %s", err.Error())
 	}
@@ -687,13 +764,23 @@ func Test_PartialFail(t *testing.T) {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
 
-	stmts := []Statement{
-		{`INSERT INTO foo(id, name) VALUES(1, "fiona")`, nil},
-		{`INSERT INTO foo(id, name) VALUES(2, "fiona")`, nil},
-		{`INSERT INTO foo(id, name) VALUES(1, "fiona")`, nil},
-		{`INSERT INTO foo(id, name) VALUES(4, "fiona")`, nil},
+	req := &command.Request{
+		Statements: []*command.Statement{
+			&command.Statement{
+				Sql: `INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+			},
+			&command.Statement{
+				Sql: `INSERT INTO foo(id, name) VALUES(2, "fiona")`,
+			},
+			&command.Statement{
+				Sql: `INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+			},
+			&command.Statement{
+				Sql: `INSERT INTO foo(id, name) VALUES(4, "fiona")`,
+			},
+		},
 	}
-	r, err := db.Execute(stmts, false, false)
+	r, err := db.Execute(req, false)
 	if err != nil {
 		t.Fatalf("failed to insert records: %s", err.Error())
 	}
@@ -719,13 +806,24 @@ func Test_SimpleTransaction(t *testing.T) {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
 
-	stmts := []Statement{
-		{`INSERT INTO foo(id, name) VALUES(1, "fiona")`, nil},
-		{`INSERT INTO foo(id, name) VALUES(2, "fiona")`, nil},
-		{`INSERT INTO foo(id, name) VALUES(3, "fiona")`, nil},
-		{`INSERT INTO foo(id, name) VALUES(4, "fiona")`, nil},
+	req := &command.Request{
+		Transaction: true,
+		Statements: []*command.Statement{
+			&command.Statement{
+				Sql: `INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+			},
+			&command.Statement{
+				Sql: `INSERT INTO foo(id, name) VALUES(2, "fiona")`,
+			},
+			&command.Statement{
+				Sql: `INSERT INTO foo(id, name) VALUES(3, "fiona")`,
+			},
+			&command.Statement{
+				Sql: `INSERT INTO foo(id, name) VALUES(4, "fiona")`,
+			},
+		},
 	}
-	r, err := db.Execute(stmts, true, false)
+	r, err := db.Execute(req, false)
 	if err != nil {
 		t.Fatalf("failed to insert records: %s", err.Error())
 	}
@@ -751,13 +849,24 @@ func Test_PartialFailTransaction(t *testing.T) {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
 
-	stmts := []Statement{
-		{`INSERT INTO foo(id, name) VALUES(1, "fiona")`, nil},
-		{`INSERT INTO foo(id, name) VALUES(2, "fiona")`, nil},
-		{`INSERT INTO foo(id, name) VALUES(1, "fiona")`, nil},
-		{`INSERT INTO foo(id, name) VALUES(4, "fiona")`, nil},
+	req := &command.Request{
+		Transaction: true,
+		Statements: []*command.Statement{
+			&command.Statement{
+				Sql: `INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+			},
+			&command.Statement{
+				Sql: `INSERT INTO foo(id, name) VALUES(2, "fiona")`,
+			},
+			&command.Statement{
+				Sql: `INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+			},
+			&command.Statement{
+				Sql: `INSERT INTO foo(id, name) VALUES(4, "fiona")`,
+			},
+		},
 	}
-	r, err := db.Execute(stmts, true, false)
+	r, err := db.Execute(req, false)
 	if err != nil {
 		t.Fatalf("failed to insert records: %s", err.Error())
 	}
@@ -783,13 +892,24 @@ func Test_Backup(t *testing.T) {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
 
-	stmts := []Statement{
-		{`INSERT INTO foo(id, name) VALUES(1, "fiona")`, nil},
-		{`INSERT INTO foo(id, name) VALUES(2, "fiona")`, nil},
-		{`INSERT INTO foo(id, name) VALUES(3, "fiona")`, nil},
-		{`INSERT INTO foo(id, name) VALUES(4, "fiona")`, nil},
+	req := &command.Request{
+		Transaction: true,
+		Statements: []*command.Statement{
+			&command.Statement{
+				Sql: `INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+			},
+			&command.Statement{
+				Sql: `INSERT INTO foo(id, name) VALUES(2, "fiona")`,
+			},
+			&command.Statement{
+				Sql: `INSERT INTO foo(id, name) VALUES(3, "fiona")`,
+			},
+			&command.Statement{
+				Sql: `INSERT INTO foo(id, name) VALUES(4, "fiona")`,
+			},
+		},
 	}
-	_, err = db.Execute(stmts, true, false)
+	_, err = db.Execute(req, false)
 	if err != nil {
 		t.Fatalf("failed to insert records: %s", err.Error())
 	}
