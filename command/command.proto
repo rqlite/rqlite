@@ -1,0 +1,46 @@
+syntax = "proto3";
+package command;
+
+option go_package = "github.com/rqlite/rqlite/command";
+
+message Parameter {
+	oneof value {
+		sint64 i = 1;
+		double d = 2;
+		bool b = 3;
+		bytes y = 4;
+		string s = 5;
+	}
+}
+
+message Statement {
+	string sql = 1;
+	repeated Parameter parameters = 2;
+}
+
+message Request {
+	bool transaction = 3;
+	repeated Statement statements = 4;
+}
+
+message MetadataSet {
+	string raft_id = 1;
+	map<string, string> data = 2;
+}
+
+message MetadataDelete {
+	string raft_id = 1;
+}
+
+message Command {
+    enum Type {
+        COMMAND_TYPE_UNKNOWN = 0;
+        COMMAND_TYPE_QUERY = 1;
+        COMMAND_TYPE_EXECUTE = 2;
+        COMMAND_TYPE_METADATA_SET = 3;
+        COMMAND_TYPE_METADATA_DELETE = 4;
+    }
+    Type type = 1;
+    bytes sub_command = 2;
+    bool compressed = 3;
+}
