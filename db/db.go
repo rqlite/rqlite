@@ -70,13 +70,6 @@ type Rows struct {
 	Time    float64         `json:"time,omitempty"`
 }
 
-// Statement represents a single parameterized statement for processing
-// by the database layer.
-type Statement struct {
-	SQL        string
-	Parameters []driver.Value
-}
-
 // Open opens a file-based database, creating it if it does not exist.
 func Open(dbPath string) (*DB, error) {
 	return open(fqdsn(dbPath, ""))
@@ -555,6 +548,7 @@ func copyDatabase(dst *sqlite3.SQLiteConn, src *sqlite3.SQLiteConn) error {
 	return nil
 }
 
+// parametersToValues maps values in the proto params to SQL driver values.
 func parametersToValues(parameters []*command.Parameter) ([]driver.Value, error) {
 	if parameters == nil {
 		return nil, nil
