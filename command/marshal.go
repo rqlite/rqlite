@@ -3,6 +3,7 @@ package command
 import (
 	"bytes"
 	"compress/gzip"
+	"io/ioutil"
 
 	"github.com/golang/protobuf/proto"
 )
@@ -101,10 +102,11 @@ func UnmarshalSubCommand(c *Command, m proto.Message) error {
 			return err
 		}
 
-		var ub []byte
-		if _, err := gz.Read(ub); err != nil {
+		ub, err := ioutil.ReadAll(gz)
+		if err != nil {
 			return err
 		}
+
 		if err := gz.Close(); err != nil {
 			return err
 		}
