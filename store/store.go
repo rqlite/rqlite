@@ -793,10 +793,8 @@ type fsmGenericResponse struct {
 
 // Apply applies a Raft log entry to the database.
 func (s *Store) Apply(l *raft.Log) interface{} {
-	// XXX NEED TO CHECK FOR LEGACY JSON HERE. Function to map JSON TO NEW TYPE TRANSPARENTLY
-
 	var c command.Command
-	if err := json.Unmarshal(l.Data, &c); err != nil {
+	if err := command.Unmarshal(l.Data, &c); err != nil {
 		panic(fmt.Sprintf("failed to unmarshal cluster command: %s", err.Error()))
 	}
 
