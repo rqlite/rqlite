@@ -678,15 +678,25 @@ func (s *Store) setMetadata(id string, md map[string]string) error {
 		return nil
 	}
 
-	c := &command.MetadataSet{
+	ms := &command.MetadataSet{
 		RaftId: id,
 		Data:   md,
 	}
-	b, err := command.MarshalMetadataSet(c)
+	bms, err := command.MarshalMetadataSet(ms)
 	if err != nil {
 		return err
 	}
-	f := s.raft.Apply(b, s.ApplyTimeout)
+
+	c := &command.Command{
+		Type:       command.Command_COMMAND_TYPE_METADATA_SET,
+		SubCommand: bms,
+	}
+	bc, err := command.Marshal(c)
+	if err != nil {
+		return err
+	}
+
+	f := s.raft.Apply(bc, s.ApplyTimeout)
 	if e := f.(raft.Future); e.Error() != nil {
 		if e.Error() == raft.ErrNotLeader {
 			return ErrNotLeader
@@ -736,14 +746,24 @@ func (s *Store) remove(id string) error {
 		return f.Error()
 	}
 
-	c := command.MetadataDelete{
+	md := command.MetadataDelete{
 		RaftId: id,
 	}
-	b, err := command.MarshalMetadataDelete(&c)
+	bmd, err := command.MarshalMetadataDelete(&md)
 	if err != nil {
 		return err
 	}
-	f = s.raft.Apply(b, s.ApplyTimeout)
+
+	c := &command.Command{
+		Type:       command.Command_COMMAND_TYPE_METADATA_DELETE,
+		SubCommand: bmd,
+	}
+	bc, err := command.Marshal(c)
+	if err != nil {
+		return err
+	}
+
+	f = s.raft.Apply(bc, s.ApplyTimeout)
 	if e := f.(raft.Future); e.Error() != nil {
 		if e.Error() == raft.ErrNotLeader {
 			return ErrNotLeader
