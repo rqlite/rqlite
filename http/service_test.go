@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/rqlite/rqlite/command"
 	sql "github.com/rqlite/rqlite/db"
 	"github.com/rqlite/rqlite/store"
 )
@@ -611,18 +612,18 @@ type MockStore struct {
 	metadata  map[string]string
 }
 
-func (m *MockStore) Execute(er *store.ExecuteRequest) ([]*sql.Result, error) {
+func (m *MockStore) Execute(er *command.ExecuteRequest) ([]*sql.Result, error) {
 	if m.executeFn == nil {
 		return nil, nil
 	}
 	return nil, nil
 }
 
-func (m *MockStore) ExecuteOrAbort(er *store.ExecuteRequest) ([]*sql.Result, error) {
+func (m *MockStore) ExecuteOrAbort(er *command.ExecuteRequest) ([]*sql.Result, error) {
 	return nil, nil
 }
 
-func (m *MockStore) Query(qr *store.QueryRequest) ([]*sql.Rows, error) {
+func (m *MockStore) Query(qr *command.QueryRequest) ([]*sql.Rows, error) {
 	if m.queryFn == nil {
 		return nil, nil
 	}

@@ -104,11 +104,11 @@ func Test_SingleParameterizedRequest(t *testing.T) {
 	if len(stmts[0].Parameters) != 2 {
 		t.Fatalf("incorrect number of parameters returned: %d", len(stmts[0].Parameters))
 	}
-	if stmts[0].Parameters[0] != p0 {
+	if stmts[0].Parameters[0].GetS() != p0 {
 		t.Fatalf("incorrect paramter, exp %s, got %s", p0, stmts[0].Parameters[0])
 	}
-	if int(stmts[0].Parameters[1].(float64)) != p1 {
-		t.Fatalf("incorrect paramter, exp %d, got %d", p1, stmts[0].Parameters[1])
+	if int(stmts[0].Parameters[1].GetD()) != p1 {
+		t.Fatalf("incorrect paramter, exp %d, got %d", p1, int(stmts[0].Parameters[1].GetI()))
 	}
 }
 
@@ -160,7 +160,7 @@ func Test_SingleParameterizedRequestNoParamsMixed(t *testing.T) {
 	if len(stmts[1].Parameters) != 1 {
 		t.Fatalf("incorrect number of parameters returned: %d", len(stmts[0].Parameters))
 	}
-	if stmts[1].Parameters[0] != p2 {
+	if stmts[1].Parameters[0].GetS() != p2 {
 		t.Fatalf("incorrect parameter, exp %s, got %s", p2, stmts[1].Parameters[0])
 	}
 }
