@@ -57,9 +57,11 @@ const (
 )
 
 const (
-	numSnaphots = "num_snapshots"
-	numBackups  = "num_backups"
-	numRestores = "num_restores"
+	numSnaphots             = "num_snapshots"
+	numBackups              = "num_backups"
+	numRestores             = "num_restores"
+	numUncompressedCommands = "num_uncompressed_commands"
+	numCompressedCommands   = "num_compressed_commands"
 )
 
 // BackupFormat represents the format of database backup.
@@ -81,6 +83,8 @@ func init() {
 	stats.Add(numSnaphots, 0)
 	stats.Add(numBackups, 0)
 	stats.Add(numRestores, 0)
+	stats.Add(numUncompressedCommands, 0)
+	stats.Add(numCompressedCommands, 0)
 }
 
 // ClusterState defines the possible Raft states the current node can be in
@@ -471,6 +475,11 @@ func (s *Store) execute(ex *command.ExecuteRequest) ([]*sql.Result, error) {
 	if err != nil {
 		return nil, err
 	}
+	if compressed {
+		stats.Add(numCompressedCommands, 1)
+	} else {
+		stats.Add(numUncompressedCommands, 1)
+	}
 
 	c := &command.Command{
 		Type:       command.Command_COMMAND_TYPE_EXECUTE,
@@ -531,6 +540,11 @@ func (s *Store) Query(qr *command.QueryRequest) ([]*sql.Rows, error) {
 		b, compressed, err := s.reqMarshaller.Marshal(qr)
 		if err != nil {
 			return nil, err
+		}
+		if compressed {
+			stats.Add(numCompressedCommands, 1)
+		} else {
+			stats.Add(numUncompressedCommands, 1)
 		}
 
 		c := &command.Command{
