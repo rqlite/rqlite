@@ -804,21 +804,21 @@ func (s *Store) Apply(l *raft.Log) interface{} {
 	case command.Command_COMMAND_TYPE_QUERY:
 		var qr command.QueryRequest
 		if err := command.UnmarshalSubCommand(&c, &qr); err != nil {
-			panic(fmt.Sprint("failed to unmarshal query subcommand: %s", err.Error()))
+			panic(fmt.Sprintf("failed to unmarshal query subcommand: %s", err.Error()))
 		}
 		r, err := s.db.Query(qr.Request, qr.Timings)
 		return &fsmQueryResponse{rows: r, error: err}
 	case command.Command_COMMAND_TYPE_EXECUTE:
 		var er command.ExecuteRequest
 		if err := command.UnmarshalSubCommand(&c, &er); err != nil {
-			panic(fmt.Sprint("failed to unmarshal execute subcommand: %s", err.Error()))
+			panic(fmt.Sprintf("failed to unmarshal execute subcommand: %s", err.Error()))
 		}
 		r, err := s.db.Execute(er.Request, er.Timings)
 		return &fsmExecuteResponse{results: r, error: err}
 	case command.Command_COMMAND_TYPE_METADATA_SET:
 		var ms command.MetadataSet
 		if err := command.UnmarshalSubCommand(&c, &ms); err != nil {
-			panic(fmt.Sprint("failed to unmarshal metadata set subcommand: %s", err.Error()))
+			panic(fmt.Sprintf("failed to unmarshal metadata set subcommand: %s", err.Error()))
 		}
 		func() {
 			s.metaMu.Lock()
@@ -834,7 +834,7 @@ func (s *Store) Apply(l *raft.Log) interface{} {
 	case command.Command_COMMAND_TYPE_METADATA_DELETE:
 		var md command.MetadataDelete
 		if err := command.UnmarshalSubCommand(&c, &md); err != nil {
-			panic(fmt.Sprint("failed to unmarshal metadata delete subcommand: %s", err.Error()))
+			panic(fmt.Sprintf("failed to unmarshal metadata delete subcommand: %s", err.Error()))
 		}
 		func() {
 			s.metaMu.Lock()

@@ -808,15 +808,18 @@ func Test_MultiNodeExecuteQueryFreshness(t *testing.T) {
 		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
 	}
 
-	queries := stmtsFromStrings([]string{
+	er := executeRequestFromStrings([]string{
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
-	})
-	_, err := s0.Execute(&ExecuteRequest{queries, false, false})
+	}, false, false)
+	_, err := s0.Execute(er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
-	r, err := s0.Query(&QueryRequest{stmtsFromString("SELECT * FROM foo"), false, false, None, 0})
+
+	qr := queryRequestFromString("SELECT * FROM foo", false, false)
+	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+	r, err := s0.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query leader node: %s", err.Error())
 	}
@@ -835,13 +838,16 @@ func Test_MultiNodeExecuteQueryFreshness(t *testing.T) {
 
 	// "Weak" consistency queries with 1 nanosecond freshness should pass, because freshness
 	// is ignored in this case.
-	r, err = s0.Query(&QueryRequest{stmtsFromString("SELECT * FROM foo"), false, false, Weak, mustParseDuration("1ns")})
+	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_WEAK
+	qr.Freshness = mustParseDuration("1ns").Nanoseconds()
+	r, err = s0.Query(qr)
 	if err != nil {
 		t.Fatalf("Failed to ignore freshness if level is Weak: %s", err.Error())
 	}
+	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
 	// "Strong" consistency queries with 1 nanosecond freshness should pass, because freshness
 	// is ignored in this case.
-	r, err = s0.Query(&QueryRequest{stmtsFromString("SELECT * FROM foo"), false, false, Strong, mustParseDuration("1ns")})
+	r, err = s0.Query(qr)
 	if err != nil {
 		t.Fatalf("Failed to ignore freshness if level is Strong: %s", err.Error())
 	}
@@ -850,7 +856,9 @@ func Test_MultiNodeExecuteQueryFreshness(t *testing.T) {
 	s0.Close(true)
 
 	// "None" consistency queries should still work.
-	r, err = s1.Query(&QueryRequest{stmtsFromString("SELECT * FROM foo"), false, false, None, 0})
+	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+	qr.Freshness = 0
+	r, err = s1.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query follower node: %s", err.Error())
 	}
@@ -866,7 +874,9 @@ func Test_MultiNodeExecuteQueryFreshness(t *testing.T) {
 
 	// "None" consistency queries with 1 nanosecond freshness should fail, because at least
 	// one nanosecond *should* have passed since leader died (surely!).
-	r, err = s1.Query(&QueryRequest{stmtsFromString("SELECT * FROM foo"), false, false, None, mustParseDuration("1ns")})
+	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+	qr.Freshness = mustParseDuration("1ns").Nanoseconds()
+	r, err = s1.Query(qr)
 	if err == nil {
 		t.Fatalf("freshness violating query didn't return an error")
 	}
@@ -875,7 +885,8 @@ func Test_MultiNodeExecuteQueryFreshness(t *testing.T) {
 	}
 
 	// Freshness of 0 is ignored.
-	r, err = s1.Query(&QueryRequest{stmtsFromString("SELECT * FROM foo"), false, false, None, 0})
+	qr.Freshness = 0
+	r, err = s1.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query follower node: %s", err.Error())
 	}
@@ -888,7 +899,8 @@ func Test_MultiNodeExecuteQueryFreshness(t *testing.T) {
 
 	// "None" consistency queries with 1 hour freshness should pass, because it should
 	// not be that long since the leader died.
-	r, err = s1.Query(&QueryRequest{stmtsFromString("SELECT * FROM foo"), false, false, None, mustParseDuration("1h")})
+	qr.Freshness = mustParseDuration("1h").Nanoseconds()
+	r, err = s1.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query follower node: %s", err.Error())
 	}
@@ -923,7 +935,7 @@ func Test_StoreLogTruncationMultinode(t *testing.T) {
 		`INSERT INTO foo(id, name) VALUES(5, "fiona")`,
 	}
 	for i := range queries {
-		_, err := s0.Execute(&ExecuteRequest{stmtsFromString(queries[i]), false, false})
+		_, err := s0.Execute(executeRequestFromString(queries[i], false, false))
 		if err != nil {
 			t.Fatalf("failed to execute on single node: %s", err.Error())
 		}
@@ -953,7 +965,8 @@ func Test_StoreLogTruncationMultinode(t *testing.T) {
 	if err := s1.WaitForAppliedIndex(8, 5*time.Second); err != nil {
 		t.Fatalf("error waiting for follower to apply index: %s:", err.Error())
 	}
-	r, err := s1.Query(&QueryRequest{stmtsFromString("SELECT count(*) FROM foo"), false, true, None, 0})
+	qr := queryRequestFromString("SELECT count(*) FROM foo", false, true)
+	r, err := s1.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -975,15 +988,15 @@ func Test_SingleNodeSnapshotOnDisk(t *testing.T) {
 	defer s.Close(true)
 	s.WaitForLeader(10 * time.Second)
 
-	queries := stmtsFromStrings([]string{
+	queries := []string{
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
-	})
-	_, err := s.Execute(&ExecuteRequest{queries, false, false})
+	}
+	_, err := s.Execute(executeRequestFromStrings(queries, false, false))
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
-	_, err = s.Query(&QueryRequest{stmtsFromString("SELECT * FROM foo"), false, false, None, 0})
+	_, err = s.Query(queryRequestFromString("SELECT * FROM foo", false, false))
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -1015,7 +1028,7 @@ func Test_SingleNodeSnapshotOnDisk(t *testing.T) {
 	}
 
 	// Ensure database is back in the correct state.
-	r, err := s.Query(&QueryRequest{stmtsFromString("SELECT * FROM foo"), false, false, None, 0})
+	r, err := s.Query(queryRequestFromString("SELECT * FROM foo", false, false))
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -1037,15 +1050,15 @@ func Test_SingleNodeSnapshotInMem(t *testing.T) {
 	defer s.Close(true)
 	s.WaitForLeader(10 * time.Second)
 
-	queries := stmtsFromStrings([]string{
+	queries := []string{
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
-	})
-	_, err := s.Execute(&ExecuteRequest{queries, false, false})
+	}
+	_, err := s.Execute(executeRequestFromStrings(queries, false, false))
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
-	_, err = s.Query(&QueryRequest{stmtsFromString("SELECT * FROM foo"), false, false, None, 0})
+	_, err = s.Query(queryRequestFromString("SELECT * FROM foo", false, false))
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -1077,7 +1090,7 @@ func Test_SingleNodeSnapshotInMem(t *testing.T) {
 	}
 
 	// Ensure database is back in the correct state.
-	r, err := s.Query(&QueryRequest{stmtsFromString("SELECT * FROM foo"), false, false, None, 0})
+	r, err := s.Query(queryRequestFromString("SELECT * FROM foo", false, false))
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -1259,9 +1272,9 @@ func executeRequestFromString(s string, timings, tx bool) *command.ExecuteReques
 
 // queryRequestFromStrings converts a slice of strings into a command.QueryRequest
 func executeRequestFromStrings(s []string, timings, tx bool) *command.ExecuteRequest {
-	stmts := make(*command.Statement, len(s))
+	stmts := make([]*command.Statement, len(s))
 	for i := range s {
-		stmts[i] = &command.Statment{
+		stmts[i] = &command.Statement{
 			Sql: s[i],
 		}
 
@@ -1281,9 +1294,9 @@ func queryRequestFromString(s string, timings, tx bool) *command.QueryRequest {
 
 // queryRequestFromStrings converts a slice of strings into a command.QueryRequest
 func queryRequestFromStrings(s []string, timings, tx bool) *command.QueryRequest {
-	stmts := make(*command.Statement, len(s))
+	stmts := make([]*command.Statement, len(s))
 	for i := range s {
-		stmts[i] = &command.Statment{
+		stmts[i] = &command.Statement{
 			Sql: s[i],
 		}
 
