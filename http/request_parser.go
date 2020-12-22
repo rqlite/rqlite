@@ -14,7 +14,7 @@ var (
 	// ErrInvalidRequest is returned when a request cannot be parsed.
 	ErrInvalidRequest = errors.New("invalid request")
 
-	// ErrUnsupportedType is returned when a request contains an unsupporte type.
+	// ErrUnsupportedType is returned when a request contains an unsupported type.
 	ErrUnsupportedType = errors.New("unsupported type")
 )
 
