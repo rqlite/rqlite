@@ -139,37 +139,36 @@ func subCommandToStatements(d *databaseSub) ([]*command.Statement, error) {
 		if len(d.Parameters) == 0 {
 			continue
 		}
-
 		stmts[i].Parameters = make([]*command.Parameter, len(d.Parameters[i]))
 		for j := range d.Parameters[i] {
 			switch v := d.Parameters[i][j].(type) {
 			case int:
 			case int64:
-				stmts[i].Parameters[i] = &command.Parameter{
+				stmts[i].Parameters[j] = &command.Parameter{
 					Value: &command.Parameter_I{
 						I: v,
 					},
 				}
 			case float64:
-				stmts[i].Parameters[i] = &command.Parameter{
+				stmts[i].Parameters[j] = &command.Parameter{
 					Value: &command.Parameter_D{
 						D: v,
 					},
 				}
 			case bool:
-				stmts[i].Parameters[i] = &command.Parameter{
+				stmts[i].Parameters[j] = &command.Parameter{
 					Value: &command.Parameter_B{
 						B: v,
 					},
 				}
 			case []byte:
-				stmts[i].Parameters[i] = &command.Parameter{
+				stmts[i].Parameters[j] = &command.Parameter{
 					Value: &command.Parameter_Y{
 						Y: v,
 					},
 				}
 			case string:
-				stmts[i].Parameters[i] = &command.Parameter{
+				stmts[i].Parameters[j] = &command.Parameter{
 					Value: &command.Parameter_S{
 						S: v,
 					},
