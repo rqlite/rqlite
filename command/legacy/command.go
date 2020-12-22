@@ -16,7 +16,10 @@ const (
 )
 
 var (
-	// ErrUnknownType is returned when an unknown command type is encountered
+	// ErrNotLegacyCommand  is returned when a command is not legacy encoded.
+	ErrNotLegacyCommand = errors.New("not legacy command")
+
+	// ErrUnknownType is returned when an unknown command type is encountered.
 	ErrUnknownCommandType = errors.New("unknown command type")
 
 	// ErrUnsupportedType is returned when a request contains an unsupported type.
@@ -50,6 +53,10 @@ type metadataSetSub struct {
 }
 
 func Unmarshal(b []byte, c *command.Command) error {
+	if b == nil || len(b) == 0 || b[0] != '{' {
+		return ErrNotLegacyCommand
+	}
+
 	var lc Command
 	if err := json.Unmarshal(b, &lc); err != nil {
 		return err

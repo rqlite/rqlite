@@ -23,6 +23,7 @@ import (
 	"github.com/hashicorp/raft"
 	"github.com/hashicorp/raft-boltdb"
 	"github.com/rqlite/rqlite/command"
+	legacy "github.com/rqlite/rqlite/command/legacy"
 	sql "github.com/rqlite/rqlite/db"
 )
 
