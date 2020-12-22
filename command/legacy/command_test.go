@@ -129,3 +129,24 @@ func Test_MetadataSet(t *testing.T) {
 		t.Fatalf("map is incorrect: %s", ms.Data)
 	}
 }
+
+func Test_MetadataDelete(t *testing.T) {
+	b := []byte{123, 34, 116, 121, 112, 34, 58, 51, 44, 34, 115, 117, 98, 34, 58, 34, 108, 111, 99, 97, 108, 104, 111, 115, 116, 58, 52, 48, 48, 52, 34, 125}
+
+	var c command.Command
+	var md command.MetadataDelete
+
+	if err := Unmarshal(b, &c); err != nil {
+		t.Fatalf("failed to Unmarshal: %s", err)
+	}
+
+	if c.Type != command.Command_COMMAND_TYPE_METADATA_DELETE {
+		t.Fatalf("incorrect command type: %s", c.Type)
+	}
+	if err := command.UnmarshalSubCommand(&c, &md); err != nil {
+		t.Fatalf("failed to Unmarshal subcommand: %s", err)
+	}
+	if id := md.RaftId; id != "localhost:4004" {
+		t.Fatalf("incorrect Raft ID: %s", id)
+	}
+}
