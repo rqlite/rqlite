@@ -1,6 +1,7 @@
 package legacy
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/rqlite/rqlite/command"
@@ -102,5 +103,29 @@ func Test_SingleParameterized(t *testing.T) {
 	}
 	if v := er.Request.Statements[0].Parameters[1].GetD(); v != 20 {
 		t.Fatalf("incorrect value for 2nd parameter: %f", v)
+	}
+}
+
+func Test_MetadataSet(t *testing.T) {
+	b := []byte{123, 34, 116, 121, 112, 34, 58, 50, 44, 34, 115, 117, 98, 34, 58, 123, 34, 114, 97, 102, 116, 95, 105, 100, 34, 58, 34, 108, 111, 99, 97, 108, 104, 111, 115, 116, 58, 52, 48, 48, 50, 34, 44, 34, 100, 97, 116, 97, 34, 58, 123, 34, 97, 112, 105, 95, 97, 100, 100, 114, 34, 58, 34, 108, 111, 99, 97, 108, 104, 111, 115, 116, 58, 52, 48, 48, 49, 34, 44, 34, 97, 112, 105, 95, 112, 114, 111, 116, 111, 34, 58, 34, 104, 116, 116, 112, 34, 125, 125, 125}
+
+	var c command.Command
+	var ms command.MetadataSet
+
+	if err := Unmarshal(b, &c); err != nil {
+		t.Fatalf("failed to Unmarshal: %s", err)
+	}
+
+	if c.Type != command.Command_COMMAND_TYPE_METADATA_SET {
+		t.Fatalf("incorrect command type: %s", c.Type)
+	}
+	if err := command.UnmarshalSubCommand(&c, &ms); err != nil {
+		t.Fatalf("failed to Unmarshal subcommand: %s", err)
+	}
+	if id := ms.RaftId; id != "localhost:4002" {
+		t.Fatalf("incorrect Raft ID: %s", id)
+	}
+	if !reflect.DeepEqual(ms.Data, map[string]string{"api_addr": "localhost:4001", "api_proto": "http"}) {
+		t.Fatalf("map is incorrect: %s", ms.Data)
 	}
 }
