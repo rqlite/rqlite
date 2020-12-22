@@ -829,8 +829,11 @@ type fsmGenericResponse struct {
 // Apply applies a Raft log entry to the database.
 func (s *Store) Apply(l *raft.Log) interface{} {
 	var c command.Command
-	if err := command.Unmarshal(l.Data, &c); err != nil {
-		panic(fmt.Sprintf("failed to unmarshal cluster command: %s", err.Error()))
+
+	if err := legacy.Unmarshal(l.Data, &c); err != nil {
+		if err = command.Unmarshal(l.Data, &c); err != nil {
+			panic(fmt.Sprintf("failed to unmarshal cluster command: %s", err.Error()))
+		}
 	}
 
 	switch c.Type {
