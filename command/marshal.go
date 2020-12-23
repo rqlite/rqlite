@@ -11,7 +11,7 @@ import (
 
 const (
 	DefaultBatchThreshold = 5
-	DefaultSizeThreshold  = 100
+	DefaultSizeThreshold  = 150
 )
 
 type Requester interface {
