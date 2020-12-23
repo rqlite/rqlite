@@ -198,15 +198,16 @@ func Test_SingleNodeExecuteQueryTx(t *testing.T) {
 	}
 
 	qr := queryRequestFromString("SELECT * FROM foo", false, true)
+	var r []*sql.Rows
 
 	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
-	r, err := s.Query(qr)
+	_, err = s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
 
 	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_WEAK
-	r, err = s.Query(qr)
+	_, err = s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
@@ -737,13 +738,14 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 	if err := s1.WaitForAppliedIndex(3, 5*time.Second); err != nil {
 		t.Fatalf("error waiting for follower to apply index: %s:", err.Error())
 	}
+
 	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_WEAK
-	r, err = s1.Query(qr)
+	_, err = s1.Query(qr)
 	if err == nil {
 		t.Fatalf("successfully queried non-leader node")
 	}
 	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
-	r, err = s1.Query(qr)
+	_, err = s1.Query(qr)
 	if err == nil {
 		t.Fatalf("successfully queried non-leader node")
 	}
@@ -764,13 +766,14 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 	if err := s2.WaitForAppliedIndex(3, 5*time.Second); err != nil {
 		t.Fatalf("error waiting for follower to apply index: %s:", err.Error())
 	}
+
 	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_WEAK
-	r, err = s1.Query(qr)
+	_, err = s1.Query(qr)
 	if err == nil {
 		t.Fatalf("successfully queried non-voting node with Weak")
 	}
 	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
-	r, err = s1.Query(qr)
+	_, err = s1.Query(qr)
 	if err == nil {
 		t.Fatalf("successfully queried non-voting node with Strong")
 	}
@@ -840,14 +843,14 @@ func Test_MultiNodeExecuteQueryFreshness(t *testing.T) {
 	// is ignored in this case.
 	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_WEAK
 	qr.Freshness = mustParseDuration("1ns").Nanoseconds()
-	r, err = s0.Query(qr)
+	_, err = s0.Query(qr)
 	if err != nil {
 		t.Fatalf("Failed to ignore freshness if level is Weak: %s", err.Error())
 	}
 	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
 	// "Strong" consistency queries with 1 nanosecond freshness should pass, because freshness
 	// is ignored in this case.
-	r, err = s0.Query(qr)
+	_, err = s0.Query(qr)
 	if err != nil {
 		t.Fatalf("Failed to ignore freshness if level is Strong: %s", err.Error())
 	}
