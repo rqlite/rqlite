@@ -879,7 +879,7 @@ func Test_MultiNodeExecuteQueryFreshness(t *testing.T) {
 	// one nanosecond *should* have passed since leader died (surely!).
 	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
 	qr.Freshness = mustParseDuration("1ns").Nanoseconds()
-	r, err = s1.Query(qr)
+	_, err = s1.Query(qr)
 	if err == nil {
 		t.Fatalf("freshness violating query didn't return an error")
 	}
