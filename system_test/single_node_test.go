@@ -5,6 +5,7 @@ package system
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -277,7 +278,17 @@ func Test_SingleNodeNoSQLInjection(t *testing.T) {
 }
 
 func Test_SingleNodeRestart(t *testing.T) {
-	node := mustNodeEncrypted(filepath.Join("testdata", "v5.6.0-data"), true, false, false)
+	// Deprovision of a node deletes the node's dir, so make a copy first.
+	srcdir := filepath.Join("testdata", "v5.6.0-data")
+	destdir := mustTempDir()
+	if err := os.Remove(destdir); err != nil {
+		t.Fatalf("failed to remove dest dir: %s", err)
+	}
+	if err := copyDir(srcdir, destdir); err != nil {
+		t.Fatalf("failed to copy node test directory: %s", err)
+	}
+
+	node := mustNodeEncrypted(destdir, true, false, false)
 	defer node.Deprovision()
 }
 
