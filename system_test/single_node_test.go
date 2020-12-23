@@ -298,7 +298,7 @@ func Test_SingleNodeRestart(t *testing.T) {
 	// Let's wait a few seconds to be sure logs are applied.
 	n := 0
 	for {
-		time.Sleep(5 * time.Second)
+		time.Sleep(1 * time.Second)
 
 		r, err := node.QueryNoneConsistency(`SELECT * FROM foo`)
 		if err != nil {
@@ -306,7 +306,7 @@ func Test_SingleNodeRestart(t *testing.T) {
 		}
 
 		expected := `{"results":[{"columns":["id","name","age"],"types":["integer","text","integer"],"values":[[1,"fiona",20]]}]}`
-		if r != expected && n == 3 {
+		if r != expected && n == 10 {
 			t.Fatalf(`query received wrong result, got: %s exp: %s`, r, expected)
 		} else {
 			break // Test successful!
