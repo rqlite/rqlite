@@ -878,7 +878,7 @@ func requestQueries(r *http.Request) ([]*command.Statement, error) {
 			return nil, errors.New("bad query GET request")
 		}
 		return []*command.Statement{
-			&command.Statement{
+			{
 				Sql: query,
 			},
 		}, nil
