@@ -5,7 +5,10 @@ package system
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
+	"time"
 )
 
 func Test_SingleNode(t *testing.T) {
@@ -272,6 +275,44 @@ func Test_SingleNodeNoSQLInjection(t *testing.T) {
 		if r != tt.expected {
 			t.Fatalf(`test %d received wrong result "%s" got: %s exp: %s`, i, tt.stmt, r, tt.expected)
 		}
+	}
+}
+
+func Test_SingleNodeRestart(t *testing.T) {
+	// Deprovision of a node deletes the node's dir, so make a copy first.
+	srcdir := filepath.Join("testdata", "v5.6.0-data")
+	destdir := mustTempDir()
+	if err := os.Remove(destdir); err != nil {
+		t.Fatalf("failed to remove dest dir: %s", err)
+	}
+	if err := copyDir(srcdir, destdir); err != nil {
+		t.Fatalf("failed to copy node test directory: %s", err)
+	}
+
+	node := mustNodeEncrypted(destdir, true, false, false, "node1")
+	defer node.Deprovision()
+	if _, err := node.WaitForLeader(); err != nil {
+		t.Fatal("node never became leader")
+	}
+
+	// Let's wait a few seconds to be sure logs are applied.
+	n := 0
+	for {
+		time.Sleep(1 * time.Second)
+
+		r, err := node.QueryNoneConsistency(`SELECT * FROM foo`)
+		if err != nil {
+			t.Fatalf("query failed: %s", err)
+		}
+
+		expected := `{"results":[{"columns":["id","name","age"],"types":["integer","text","integer"],"values":[[1,"fiona",20]]}]}`
+		if r != expected && n == 10 {
+			t.Fatalf(`query received wrong result, got: %s exp: %s`, r, expected)
+		} else {
+			break // Test successful!
+		}
+
+		n++
 	}
 }
 
