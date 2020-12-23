@@ -78,6 +78,8 @@ var raftElectionTimeout string
 var raftApplyTimeout string
 var raftOpenTimeout string
 var raftShutdownOnRemove bool
+var compressionSize int
+var compressionBatch int
 var showVersion bool
 var cpuProfile string
 var memProfile string
@@ -122,6 +124,8 @@ func init() {
 	flag.StringVar(&raftLeaderLeaseTimeout, "raft-leader-lease-timeout", "0s", "Raft leader lease timeout. Use 0s for Raft default")
 	flag.BoolVar(&raftShutdownOnRemove, "raft-remove-shutdown", false, "Shutdown Raft if node removed")
 	flag.StringVar(&raftLogLevel, "raft-log-level", "INFO", "Minimum log level for Raft module")
+	flag.IntVar(&compressionSize, "compression-size", 150, "Request query size for compression attempt")
+	flag.IntVar(&compressionBatch, "compression-batch", 5, "Request batch threshold for compression attempt")
 	flag.StringVar(&cpuProfile, "cpu-profile", "", "Path to file for CPU profiling information")
 	flag.StringVar(&memProfile, "mem-profile", "", "Path to file for memory profiling information")
 	flag.Usage = func() {
@@ -187,6 +191,7 @@ func main() {
 	})
 
 	// Set optional parameters on store.
+	str.SetRequestCompression(compressionBatch, compressionSize)
 	str.RaftLogLevel = raftLogLevel
 	str.ShutdownOnRemove = raftShutdownOnRemove
 	str.SnapshotThreshold = raftSnapThreshold

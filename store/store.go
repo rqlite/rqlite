@@ -360,6 +360,13 @@ func (s *Store) WaitForLeader(timeout time.Duration) (string, error) {
 	}
 }
 
+// SetRequestCompression allows low-level control over the compression threshold
+// for the request marshaler.
+func (s *Store) SetRequestCompression(batch, size int) {
+	s.reqMarshaller.BatchThreshold = batch
+	s.reqMarshaller.SizeThreshold = size
+}
+
 // WaitForAppliedIndex blocks until a given log index has been applied,
 // or the timeout expires.
 func (s *Store) WaitForAppliedIndex(idx uint64, timeout time.Duration) error {
@@ -432,6 +439,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		"election_timeout":   s.ElectionTimeout.String(),
 		"snapshot_threshold": s.SnapshotThreshold,
 		"snapshot_interval":  s.SnapshotInterval,
+		"request_marshaler":  s.reqMarshaller.Stats(),
 		"metadata":           s.meta,
 		"nodes":              nodes,
 		"dir":                s.raftDir,

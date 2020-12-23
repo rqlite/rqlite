@@ -112,6 +112,14 @@ func (m *RequestMarshaler) Marshal(r Requester) ([]byte, bool, error) {
 	return b, compress, nil
 }
 
+func (m *RequestMarshaler) Stats() map[string]interface{} {
+	return map[string]interface{}{
+		"compression_size":  m.SizeThreshold,
+		"compression_batch": m.BatchThreshold,
+		"force_compression": m.ForceCompression,
+	}
+}
+
 func Marshal(c *Command) ([]byte, error) {
 	return proto.Marshal(c)
 }
