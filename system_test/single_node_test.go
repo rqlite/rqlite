@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func Test_SingleNode(t *testing.T) {
@@ -294,14 +295,24 @@ func Test_SingleNodeRestart(t *testing.T) {
 		t.Fatal("node never became leader")
 	}
 
-	r, err := node.QueryNoneConsistency(`SELECT * FROM foo`)
-	if err != nil {
-		t.Fatalf("query failed: %s", err)
-	}
+	// Let's wait a few seconds to be sure logs are applied.
+	n := 0
+	for {
+		time.Sleep(5 * time.Second)
 
-	expected := `{"results":[{"columns":["id","name","age"],"types":["integer","text","integer"],"values":[[1,"fiona",20]]}]}`
-	if r != expected {
-		t.Fatalf(`query received wrong result, got: %s exp: %s`, r, expected)
+		r, err := node.QueryNoneConsistency(`SELECT * FROM foo`)
+		if err != nil {
+			t.Fatalf("query failed: %s", err)
+		}
+
+		expected := `{"results":[{"columns":["id","name","age"],"types":["integer","text","integer"],"values":[[1,"fiona",20]]}]}`
+		if r != expected && n == 3 {
+			t.Fatalf(`query received wrong result, got: %s exp: %s`, r, expected)
+		} else {
+			break // Test successful!
+		}
+
+		n++
 	}
 }
 
