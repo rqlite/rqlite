@@ -288,7 +288,7 @@ func Test_SingleNodeRestart(t *testing.T) {
 		t.Fatalf("failed to copy node test directory: %s", err)
 	}
 
-	node := mustNodeEncrypted(destdir, true, false, false, "")
+	node := mustNodeEncrypted(destdir, true, false, false, "node1")
 	defer node.Deprovision()
 	if _, err := node.WaitForLeader(); err != nil {
 		t.Fatal("node never became leader")

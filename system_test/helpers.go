@@ -364,10 +364,10 @@ func mustNewNode(enableSingle bool) *Node {
 }
 
 func mustNewNodeEncrypted(enableSingle, httpEncrypt, nodeEncrypt bool) *Node {
-	return mustNodeEncrypted(mustTempDir(), enableSingle, httpEncrypt, nodeEncrypt)
+	return mustNodeEncrypted(mustTempDir(), enableSingle, httpEncrypt, nodeEncrypt, "")
 }
 
-func mustNodeEncrypted(dir string, enableSingle, httpEncrypt, nodeEncrypt bool) *Node {
+func mustNodeEncrypted(dir string, enableSingle, httpEncrypt, nodeEncrypt bool, nodeID string) *Node {
 	nodeCertPath := x509.CertFile(dir)
 	nodeKeyPath := x509.KeyFile(dir)
 	httpCertPath := nodeCertPath
@@ -394,10 +394,14 @@ func mustNodeEncrypted(dir string, enableSingle, httpEncrypt, nodeEncrypt bool) 
 		panic(err.Error())
 	}
 
+	id := nodeID
+	if id == "" {
+		id = tn.Addr().String()
+	}
 	node.Store = store.New(tn, &store.StoreConfig{
 		DBConf: dbConf,
 		Dir:    node.Dir,
-		ID:     tn.Addr().String(),
+		ID:     id,
 	})
 	node.Store.SnapshotThreshold = 100
 	node.Store.SnapshotInterval = mustParseDuration("1s")
