@@ -290,6 +290,34 @@ func Test_SingleNodeRestart(t *testing.T) {
 
 	node := mustNodeEncrypted(destdir, true, false, false)
 	defer node.Deprovision()
+
+	tests := []struct {
+		stmt     []interface{}
+		expected string
+		execute  bool
+	}{
+		{
+			stmt:     []interface{}{`SELECT * FROM foo`},
+			expected: `{"results":[{"columns":["id","name"],"types":["integer","text"]}]}`,
+			execute:  false,
+		},
+	}
+
+	for i, tt := range tests {
+		var r string
+		var err error
+		if tt.execute {
+			r, err = node.ExecuteParameterized(tt.stmt)
+		} else {
+			r, err = node.QueryParameterized(tt.stmt)
+		}
+		if err != nil {
+			t.Fatalf(`test %d failed "%s": %s`, i, tt.stmt, err.Error())
+		}
+		if r != tt.expected {
+			t.Fatalf(`test %d received wrong result "%s" got: %s exp: %s`, i, tt.stmt, r, tt.expected)
+		}
+	}
 }
 
 func Test_SingleNodeCoverage(t *testing.T) {
