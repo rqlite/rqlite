@@ -5,6 +5,7 @@ package system
 
 import (
 	"fmt"
+	"path/filepath"
 	"testing"
 )
 
@@ -273,6 +274,11 @@ func Test_SingleNodeNoSQLInjection(t *testing.T) {
 			t.Fatalf(`test %d received wrong result "%s" got: %s exp: %s`, i, tt.stmt, r, tt.expected)
 		}
 	}
+}
+
+func Test_SingleNodeRestart(t *testing.T) {
+	node := mustNodeEncrypted(filepath.Join("testdata", "v5.6.0-data"), true, false, false)
+	defer node.Deprovision()
 }
 
 func Test_SingleNodeCoverage(t *testing.T) {

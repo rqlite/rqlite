@@ -364,7 +364,10 @@ func mustNewNode(enableSingle bool) *Node {
 }
 
 func mustNewNodeEncrypted(enableSingle, httpEncrypt, nodeEncrypt bool) *Node {
-	dir := mustTempDir()
+	return mustNodeEncrypted(mustTempDir(), enableSingle, httpEncrypt, nodeEncrypt)
+}
+
+func mustNodeEncrypted(dir string, enableSingle, httpEncrypt, nodeEncrypt bool) *Node {
 	nodeCertPath := x509.CertFile(dir)
 	nodeKeyPath := x509.KeyFile(dir)
 	httpCertPath := nodeCertPath
