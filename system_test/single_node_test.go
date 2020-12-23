@@ -298,8 +298,10 @@ func Test_SingleNodeRestart(t *testing.T) {
 	if err != nil {
 		t.Fatalf("query failed: %s", err)
 	}
-	if r != "xxx" {
-		t.Fatalf(`query received wrong result, got: %s exp: %s`, r, "xxx")
+
+	expected := `{"results":[{"columns":["id","name","age"],"types":["integer","text","integer"],"values":[[1,"fiona",20]]}]}`
+	if r != expected {
+		t.Fatalf(`query received wrong result, got: %s exp: %s`, r, expected)
 	}
 }
 
