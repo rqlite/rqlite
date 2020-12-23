@@ -11,15 +11,19 @@ import (
 )
 
 const (
-	DefaultBatchThreshold = 5
-	DefaultSizeThreshold  = 150
+	defaultBatchThreshold = 5
+	defaultSizeThreshold  = 150
 )
 
+// Requester is the interface objects must support to be marshaled
+// successfully.
 type Requester interface {
 	proto.Message
 	GetRequest() *Request
 }
 
+// RequestMarshaler marshals Request objects, potentially performing
+// gzip compression.
 type RequestMarshaler struct {
 	BatchThreshold   int
 	SizeThreshold    int
@@ -52,6 +56,7 @@ func init() {
 	stats.Add(numPrecompressedBytes, 0)
 }
 
+// NewRequestMarshaler returns an initialized RequestMarshaler.
 func NewRequestMarshaler() *RequestMarshaler {
 	w, err := gzip.NewWriterLevel(nil, gzip.BestCompression)
 	if err != nil {
@@ -59,12 +64,14 @@ func NewRequestMarshaler() *RequestMarshaler {
 	}
 
 	return &RequestMarshaler{
-		BatchThreshold: DefaultBatchThreshold,
-		SizeThreshold:  DefaultSizeThreshold,
+		BatchThreshold: defaultBatchThreshold,
+		SizeThreshold:  defaultSizeThreshold,
 		gz:             w,
 	}
 }
 
+// Marshal marshals a Requester object, returning a byte slice, a bool
+// indicating whether the contents are compressed, or an error.
 func (m *RequestMarshaler) Marshal(r Requester) ([]byte, bool, error) {
 	stats.Add(numRequests, 0)
 	compress := false
@@ -118,6 +125,8 @@ func (m *RequestMarshaler) Marshal(r Requester) ([]byte, bool, error) {
 	return b, compress, nil
 }
 
+// Stats returns status and diagnostic information about
+// the RequestMarshaler.
 func (m *RequestMarshaler) Stats() map[string]interface{} {
 	return map[string]interface{}{
 		"compression_size":  m.SizeThreshold,
@@ -126,31 +135,38 @@ func (m *RequestMarshaler) Stats() map[string]interface{} {
 	}
 }
 
+// Marshal marshals a Command.
 func Marshal(c *Command) ([]byte, error) {
 	return proto.Marshal(c)
 }
 
+// Unmarshal unmarshals a Command
 func Unmarshal(b []byte, c *Command) error {
 	return proto.Unmarshal(b, c)
 }
 
+// MarshalMetadataSet marshals a MetadataSet command
 func MarshalMetadataSet(c *MetadataSet) ([]byte, error) {
 	return proto.Marshal(c)
 }
 
+// UnMarshalMetadataSet unmarshals a MetadataSet command
 func UnMarshalMetadataSet(b []byte, c *MetadataSet) error {
 	return proto.Unmarshal(b, c)
 }
 
+// MarshalMetadataDelete marshals a MetadataDelete command
 func MarshalMetadataDelete(c *MetadataDelete) ([]byte, error) {
 	return proto.Marshal(c)
 }
 
+// UnMarshalMetadataDelete unmarshals a MetadataDelete command
 func UnMarshalMetadataDelete(b []byte, c *MetadataDelete) error {
 	return proto.Unmarshal(b, c)
 }
 
-// Assumes m is the is the right type....caller must use c.Type
+// UnmarshalSubCommand unmarshalls a sub command m. It assumes that
+// m is the correct type.
 func UnmarshalSubCommand(c *Command, m proto.Message) error {
 	b := c.SubCommand
 	if c.Compressed {

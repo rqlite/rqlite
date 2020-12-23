@@ -1,3 +1,5 @@
+// Package system supports running end-to-end type testing of rqlite
+
 /* MIT License
  *
  * Copyright (c) 2017 Roland Singer [roland.singer@desertbit.com]

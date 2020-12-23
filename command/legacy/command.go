@@ -19,7 +19,7 @@ var (
 	// ErrNotLegacyCommand  is returned when a command is not legacy encoded.
 	ErrNotLegacyCommand = errors.New("not legacy command")
 
-	// ErrUnknownType is returned when an unknown command type is encountered.
+	// ErrUnknownCommandType is returned when an unknown command type is encountered.
 	ErrUnknownCommandType = errors.New("unknown command type")
 
 	// ErrUnsupportedType is returned when a request contains an unsupported type.
@@ -32,6 +32,7 @@ type commandType int
 // Value is the type for parameters passed to a parameterized SQL statement.
 type Value interface{}
 
+// Command is the type of legacy JSON-encoded commands in the Raft log.
 type Command struct {
 	Typ commandType     `json:"typ,omitempty"`
 	Sub json.RawMessage `json:"sub,omitempty"`
@@ -52,6 +53,7 @@ type metadataSetSub struct {
 	Data   map[string]string `json:"data,omitempty"`
 }
 
+// Unmarshal unmarshals a legacy JSON-encoded command in the Raft log.
 func Unmarshal(b []byte, c *command.Command) error {
 	if b == nil || len(b) == 0 || b[0] != '{' {
 		return ErrNotLegacyCommand
