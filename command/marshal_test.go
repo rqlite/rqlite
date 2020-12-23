@@ -7,14 +7,17 @@ import (
 )
 
 func Test_NewRequestMarshaler(t *testing.T) {
-	rm := NewRequestMarshaler()
-	if rm == nil {
-		t.Fatal("failed to create Request marshaler")
+	_, err := NewRequestMarshaler()
+	if err != nil {
+		t.Fatalf("failed to create Request marshaler: %s", err)
 	}
 }
 
 func Test_MarshalUncompressed(t *testing.T) {
-	rm := NewRequestMarshaler()
+	rm, err := NewRequestMarshaler()
+	if err != nil {
+		t.Fatalf("failed to create Request marshaler: %s", err)
+	}
 	r := &QueryRequest{
 		Request: &Request{
 			Statements: []*Statement{
@@ -76,7 +79,10 @@ func Test_MarshalUncompressed(t *testing.T) {
 }
 
 func Test_MarshalCompressedBatch(t *testing.T) {
-	rm := NewRequestMarshaler()
+	rm, err := NewRequestMarshaler()
+	if err != nil {
+		t.Fatalf("failed to create Request marshaler: %s", err)
+	}
 	rm.BatchThreshold = 1
 	rm.ForceCompression = true
 
@@ -132,7 +138,10 @@ func Test_MarshalCompressedBatch(t *testing.T) {
 }
 
 func Test_MarshalCompressedSize(t *testing.T) {
-	rm := NewRequestMarshaler()
+	rm, err := NewRequestMarshaler()
+	if err != nil {
+		t.Fatalf("failed to create Request marshaler: %s", err)
+	}
 	rm.SizeThreshold = 1
 	rm.ForceCompression = true
 
@@ -188,7 +197,10 @@ func Test_MarshalCompressedSize(t *testing.T) {
 }
 
 func Test_MarshalWontCompressBatch(t *testing.T) {
-	rm := NewRequestMarshaler()
+	rm, err := NewRequestMarshaler()
+	if err != nil {
+		t.Fatalf("failed to create Request marshaler: %s", err)
+	}
 	rm.BatchThreshold = 1
 
 	r := &QueryRequest{
@@ -213,7 +225,10 @@ func Test_MarshalWontCompressBatch(t *testing.T) {
 }
 
 func Test_MarshalWontCompressSize(t *testing.T) {
-	rm := NewRequestMarshaler()
+	rm, err := NewRequestMarshaler()
+	if err != nil {
+		t.Fatalf("failed to create Request marshaler: %s", err)
+	}
 	rm.SizeThreshold = 1
 
 	r := &QueryRequest{
