@@ -78,6 +78,7 @@ func Test_MarshalUncompressed(t *testing.T) {
 func Test_MarshalCompressedBatch(t *testing.T) {
 	rm := NewRequestMarshaler()
 	rm.BatchThreshold = 1
+	rm.ForceCompression = true
 
 	r := &QueryRequest{
 		Request: &Request{
@@ -133,6 +134,7 @@ func Test_MarshalCompressedBatch(t *testing.T) {
 func Test_MarshalCompressedSize(t *testing.T) {
 	rm := NewRequestMarshaler()
 	rm.SizeThreshold = 1
+	rm.ForceCompression = true
 
 	r := &QueryRequest{
 		Request: &Request{

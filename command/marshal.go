@@ -20,11 +20,13 @@ type Requester interface {
 }
 
 type RequestMarshaler struct {
-	BatchThreshold int
-	SizeThreshold  int
+	BatchThreshold   int
+	SizeThreshold    int
+	ForceCompression bool
 }
 
 const (
+	numRequests             = "num_requests"
 	numCompressedRequests   = "num_compressed_requests"
 	numUncompressedRequests = "num_uncompressed_requests"
 	numCompressedBytes      = "num_compressed_bytes"
@@ -38,6 +40,7 @@ var stats *expvar.Map
 
 func init() {
 	stats = expvar.NewMap("proto")
+	stats.Add(numRequests, 0)
 	stats.Add(numCompressedRequests, 0)
 	stats.Add(numUncompressedRequests, 0)
 	stats.Add(numCompressedBytes, 0)
@@ -54,6 +57,7 @@ func NewRequestMarshaler() *RequestMarshaler {
 }
 
 func (m *RequestMarshaler) Marshal(r Requester) ([]byte, bool, error) {
+	stats.Add(numRequests, 0)
 	compress := false
 
 	stmts := r.GetRequest().GetStatements()
@@ -72,8 +76,11 @@ func (m *RequestMarshaler) Marshal(r Requester) ([]byte, bool, error) {
 	if err != nil {
 		return nil, false, err
 	}
+	ubz := len(b)
+	stats.Add(numPrecompressedBytes, int64(ubz))
 
 	if compress {
+		// Let's try compression.
 		var buf bytes.Buffer
 		gz, err := gzip.NewWriterLevel(&buf, gzip.BestCompression)
 		if err != nil {
@@ -86,13 +93,15 @@ func (m *RequestMarshaler) Marshal(r Requester) ([]byte, bool, error) {
 			return nil, false, err
 		}
 
-		ubz := len(b)
-		b = buf.Bytes()
-		bz := len(b)
-		stats.Add(numPrecompressedBytes, int64(ubz))
-		stats.Add(numCompressedRequests, 1)
-		stats.Add(numCompressedBytes, int64(bz))
-		if bz > ubz {
+		// Is compression better?
+		if ubz > len(buf.Bytes()) || m.ForceCompression {
+			// Yes! Let's keep it.
+			b = buf.Bytes()
+			stats.Add(numCompressedRequests, 1)
+			stats.Add(numCompressedBytes, int64(len(b)))
+		} else {
+			// No. :-( Dump it.
+			compress = false
 			stats.Add(numCompressionMisses, 1)
 		}
 	} else {
