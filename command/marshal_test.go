@@ -186,3 +186,53 @@ func Test_MarshalCompressedSize(t *testing.T) {
 		t.Fatal("Original and unmarshaled Query Request are not equal")
 	}
 }
+
+func Test_MarshalWontCompressBatch(t *testing.T) {
+	rm := NewRequestMarshaler()
+	rm.BatchThreshold = 1
+
+	r := &QueryRequest{
+		Request: &Request{
+			Statements: []*Statement{
+				{
+					Sql: `INSERT INTO "names" VALUES(1,'bob','123-45-678')`,
+				},
+			},
+		},
+		Timings:   true,
+		Freshness: 100,
+	}
+
+	_, comp, err := rm.Marshal(r)
+	if err != nil {
+		t.Fatalf("failed to marshal QueryRequest: %s", err)
+	}
+	if comp {
+		t.Fatal("Marshaled QueryRequest was compressed")
+	}
+}
+
+func Test_MarshalWontCompressSize(t *testing.T) {
+	rm := NewRequestMarshaler()
+	rm.SizeThreshold = 1
+
+	r := &QueryRequest{
+		Request: &Request{
+			Statements: []*Statement{
+				{
+					Sql: `INSERT INTO "names" VALUES(1,'bob','123-45-678')`,
+				},
+			},
+		},
+		Timings:   true,
+		Freshness: 100,
+	}
+
+	_, comp, err := rm.Marshal(r)
+	if err != nil {
+		t.Fatalf("failed to marshal QueryRequest: %s", err)
+	}
+	if comp {
+		t.Fatal("Marshaled QueryRequest was compressed")
+	}
+}
