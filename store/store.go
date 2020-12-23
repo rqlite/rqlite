@@ -5,7 +5,6 @@ package store
 
 import (
 	"bytes"
-	gosql "database/sql/driver"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -23,6 +22,8 @@ import (
 
 	"github.com/hashicorp/raft"
 	"github.com/hashicorp/raft-boltdb"
+	"github.com/rqlite/rqlite/command"
+	legacy "github.com/rqlite/rqlite/command/legacy"
 	sql "github.com/rqlite/rqlite/db"
 )
 
@@ -57,9 +58,11 @@ const (
 )
 
 const (
-	numSnaphots = "num_snapshots"
-	numBackups  = "num_backups"
-	numRestores = "num_restores"
+	numSnaphots             = "num_snapshots"
+	numBackups              = "num_backups"
+	numRestores             = "num_restores"
+	numUncompressedCommands = "num_uncompressed_commands"
+	numCompressedCommands   = "num_compressed_commands"
 )
 
 // BackupFormat represents the format of database backup.
@@ -81,84 +84,9 @@ func init() {
 	stats.Add(numSnaphots, 0)
 	stats.Add(numBackups, 0)
 	stats.Add(numRestores, 0)
+	stats.Add(numUncompressedCommands, 0)
+	stats.Add(numCompressedCommands, 0)
 }
-
-// Value is the type for parameters passed to a parameterized SQL statement.
-type Value interface{}
-
-// Statement represent a parameterized SQL statement.
-type Statement struct {
-	SQL        string
-	Parameters []Value
-}
-
-// QueryRequest represents a query that returns rows, and does not modify
-// the database.
-type QueryRequest struct {
-	Stmts     []Statement
-	Timings   bool
-	Tx        bool
-	Lvl       ConsistencyLevel
-	Freshness time.Duration
-}
-
-func (q *QueryRequest) statements() []sql.Statement {
-	stmts := make([]sql.Statement, len(q.Stmts))
-	for i, s := range q.Stmts {
-		stmts[i].SQL = s.SQL
-		stmts[i].Parameters = make([]gosql.Value, len(s.Parameters))
-		for j := range s.Parameters {
-			stmts[i].Parameters[j] = s.Parameters[j]
-		}
-	}
-	return stmts
-}
-
-func (q *QueryRequest) command() *databaseSub {
-	c := databaseSub{
-		Tx:         q.Tx,
-		SQLs:       make([]string, len(q.Stmts)),
-		Parameters: make([][]Value, len(q.Stmts)),
-		Timings:    q.Timings,
-	}
-	for i, s := range q.Stmts {
-		c.SQLs[i] = s.SQL
-		c.Parameters[i] = s.Parameters
-	}
-	return &c
-}
-
-// ExecuteRequest represents a query that returns no rows, but does modify
-// the database.
-type ExecuteRequest struct {
-	Stmts   []Statement
-	Timings bool
-	Tx      bool
-}
-
-func (e *ExecuteRequest) command() *databaseSub {
-	c := databaseSub{
-		Tx:         e.Tx,
-		SQLs:       make([]string, len(e.Stmts)),
-		Parameters: make([][]Value, len(e.Stmts)),
-		Timings:    e.Timings,
-	}
-	for i, s := range e.Stmts {
-		c.SQLs[i] = s.SQL
-		c.Parameters[i] = s.Parameters
-	}
-	return &c
-}
-
-// ConsistencyLevel represents the available read consistency levels.
-type ConsistencyLevel int
-
-// Represents the available consistency levels.
-const (
-	None ConsistencyLevel = iota
-	Weak
-	Strong
-)
 
 // ClusterState defines the possible Raft states the current node can be in
 type ClusterState int
@@ -186,9 +114,10 @@ type Store struct {
 	dbPath string    // Path to underlying SQLite file, if not in-memory.
 	db     *sql.DB   // The underlying SQLite store.
 
-	raftLog    raft.LogStore         // Persistent log store.
-	raftStable raft.StableStore      // Persistent k-v store.
-	boltStore  *raftboltdb.BoltStore // Physical store.
+	reqMarshaller *command.RequestMarshaler // Request marshaler for writing to log.
+	raftLog       raft.LogStore             // Persistent log store.
+	raftStable    raft.StableStore          // Persistent k-v store.
+	boltStore     *raftboltdb.BoltStore     // Physical store.
 
 	metaMu sync.RWMutex
 	meta   map[string]map[string]string
@@ -222,14 +151,15 @@ func New(ln Listener, c *StoreConfig) *Store {
 	}
 
 	return &Store{
-		ln:           ln,
-		raftDir:      c.Dir,
-		raftID:       c.ID,
-		dbConf:       c.DBConf,
-		dbPath:       filepath.Join(c.Dir, sqliteFile),
-		meta:         make(map[string]map[string]string),
-		logger:       logger,
-		ApplyTimeout: applyTimeout,
+		ln:            ln,
+		raftDir:       c.Dir,
+		raftID:        c.ID,
+		dbConf:        c.DBConf,
+		dbPath:        filepath.Join(c.Dir, sqliteFile),
+		reqMarshaller: command.NewRequestMarshaler(),
+		meta:          make(map[string]map[string]string),
+		logger:        logger,
+		ApplyTimeout:  applyTimeout,
 	}
 }
 
@@ -239,7 +169,8 @@ func (s *Store) Open(enableSingle bool) error {
 	s.logger.Printf("opening store with node ID %s", s.raftID)
 
 	s.logger.Printf("ensuring directory at %s exists", s.raftDir)
-	if err := os.MkdirAll(s.raftDir, 0755); err != nil {
+	err := os.MkdirAll(s.raftDir, 0755)
+	if err != nil {
 		return err
 	}
 
@@ -430,6 +361,13 @@ func (s *Store) WaitForLeader(timeout time.Duration) (string, error) {
 	}
 }
 
+// SetRequestCompression allows low-level control over the compression threshold
+// for the request marshaler.
+func (s *Store) SetRequestCompression(batch, size int) {
+	s.reqMarshaller.BatchThreshold = batch
+	s.reqMarshaller.SizeThreshold = size
+}
+
 // WaitForAppliedIndex blocks until a given log index has been applied,
 // or the timeout expires.
 func (s *Store) WaitForAppliedIndex(idx uint64, timeout time.Duration) error {
@@ -502,6 +440,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		"election_timeout":   s.ElectionTimeout.String(),
 		"snapshot_threshold": s.SnapshotThreshold,
 		"snapshot_interval":  s.SnapshotInterval,
+		"request_marshaler":  s.reqMarshaller.Stats(),
 		"metadata":           s.meta,
 		"nodes":              nodes,
 		"dir":                s.raftDir,
@@ -512,7 +451,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 }
 
 // Execute executes queries that return no rows, but do modify the database.
-func (s *Store) Execute(ex *ExecuteRequest) ([]*sql.Result, error) {
+func (s *Store) Execute(ex *command.ExecuteRequest) ([]*sql.Result, error) {
 	if s.raft.State() != raft.Leader {
 		return nil, ErrNotLeader
 	}
@@ -521,7 +460,7 @@ func (s *Store) Execute(ex *ExecuteRequest) ([]*sql.Result, error) {
 
 // ExecuteOrAbort executes the requests, but aborts any active transaction
 // on the underlying database in the case of any error.
-func (s *Store) ExecuteOrAbort(ex *ExecuteRequest) (results []*sql.Result, retErr error) {
+func (s *Store) ExecuteOrAbort(ex *command.ExecuteRequest) (results []*sql.Result, retErr error) {
 	defer func() {
 		var errored bool
 		if results != nil {
@@ -541,12 +480,24 @@ func (s *Store) ExecuteOrAbort(ex *ExecuteRequest) (results []*sql.Result, retEr
 	return s.execute(ex)
 }
 
-func (s *Store) execute(ex *ExecuteRequest) ([]*sql.Result, error) {
-	c, err := newCommand(execute, ex.command())
+func (s *Store) execute(ex *command.ExecuteRequest) ([]*sql.Result, error) {
+	b, compressed, err := s.reqMarshaller.Marshal(ex)
 	if err != nil {
 		return nil, err
 	}
-	b, err := json.Marshal(c)
+	if compressed {
+		stats.Add(numCompressedCommands, 1)
+	} else {
+		stats.Add(numUncompressedCommands, 1)
+	}
+
+	c := &command.Command{
+		Type:       command.Command_COMMAND_TYPE_EXECUTE,
+		SubCommand: b,
+		Compressed: compressed,
+	}
+
+	b, err = command.Marshal(c)
 	if err != nil {
 		return nil, err
 	}
@@ -590,17 +541,29 @@ func (s *Store) Backup(leader bool, fmt BackupFormat, dst io.Writer) error {
 }
 
 // Query executes queries that return rows, and do not modify the database.
-func (s *Store) Query(qr *QueryRequest) ([]*sql.Rows, error) {
+func (s *Store) Query(qr *command.QueryRequest) ([]*sql.Rows, error) {
 	// Allow concurrent queries.
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	if qr.Lvl == Strong {
-		c, err := newCommand(query, qr.command())
+	if qr.Level == command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG {
+		b, compressed, err := s.reqMarshaller.Marshal(qr)
 		if err != nil {
 			return nil, err
 		}
-		b, err := json.Marshal(c)
+		if compressed {
+			stats.Add(numCompressedCommands, 1)
+		} else {
+			stats.Add(numUncompressedCommands, 1)
+		}
+
+		c := &command.Command{
+			Type:       command.Command_COMMAND_TYPE_QUERY,
+			SubCommand: b,
+			Compressed: compressed,
+		}
+
+		b, err = command.Marshal(c)
 		if err != nil {
 			return nil, err
 		}
@@ -617,16 +580,17 @@ func (s *Store) Query(qr *QueryRequest) ([]*sql.Rows, error) {
 		return r.rows, r.error
 	}
 
-	if qr.Lvl == Weak && s.raft.State() != raft.Leader {
+	if qr.Level == command.QueryRequest_QUERY_REQUEST_LEVEL_WEAK && s.raft.State() != raft.Leader {
 		return nil, ErrNotLeader
 	}
 
-	if qr.Lvl == None && qr.Freshness > 0 && time.Since(s.raft.LastContact()) > qr.Freshness {
+	if qr.Level == command.QueryRequest_QUERY_REQUEST_LEVEL_NONE && qr.Freshness > 0 &&
+		time.Since(s.raft.LastContact()).Nanoseconds() > qr.Freshness {
 		return nil, ErrStaleRead
 	}
 
 	// Read straight from database.
-	return s.db.Query(qr.statements(), qr.Tx, qr.Timings)
+	return s.db.Query(qr.Request, qr.Timings)
 }
 
 // Join joins a node, identified by id and located at addr, to this store.
@@ -738,15 +702,25 @@ func (s *Store) setMetadata(id string, md map[string]string) error {
 		return nil
 	}
 
-	c, err := newMetadataSetCommand(id, md)
+	ms := &command.MetadataSet{
+		RaftId: id,
+		Data:   md,
+	}
+	bms, err := command.MarshalMetadataSet(ms)
 	if err != nil {
 		return err
 	}
-	b, err := json.Marshal(c)
+
+	c := &command.Command{
+		Type:       command.Command_COMMAND_TYPE_METADATA_SET,
+		SubCommand: bms,
+	}
+	bc, err := command.Marshal(c)
 	if err != nil {
 		return err
 	}
-	f := s.raft.Apply(b, s.ApplyTimeout)
+
+	f := s.raft.Apply(bc, s.ApplyTimeout)
 	if e := f.(raft.Future); e.Error() != nil {
 		if e.Error() == raft.ErrNotLeader {
 			return ErrNotLeader
@@ -796,15 +770,24 @@ func (s *Store) remove(id string) error {
 		return f.Error()
 	}
 
-	c, err := newCommand(metadataDelete, id)
+	md := command.MetadataDelete{
+		RaftId: id,
+	}
+	bmd, err := command.MarshalMetadataDelete(&md)
 	if err != nil {
 		return err
 	}
-	b, err := json.Marshal(c)
+
+	c := &command.Command{
+		Type:       command.Command_COMMAND_TYPE_METADATA_DELETE,
+		SubCommand: bmd,
+	}
+	bc, err := command.Marshal(c)
 	if err != nil {
 		return err
 	}
-	f = s.raft.Apply(b, s.ApplyTimeout)
+
+	f = s.raft.Apply(bc, s.ApplyTimeout)
 	if e := f.(raft.Future); e.Error() != nil {
 		if e.Error() == raft.ErrNotLeader {
 			return ErrNotLeader
@@ -854,54 +837,58 @@ type fsmGenericResponse struct {
 
 // Apply applies a Raft log entry to the database.
 func (s *Store) Apply(l *raft.Log) interface{} {
-	var c command
-	if err := json.Unmarshal(l.Data, &c); err != nil {
-		panic(fmt.Sprintf("failed to unmarshal cluster command: %s", err.Error()))
+	var c command.Command
+
+	if err := legacy.Unmarshal(l.Data, &c); err != nil {
+		if err = command.Unmarshal(l.Data, &c); err != nil {
+			panic(fmt.Sprintf("failed to unmarshal cluster command: %s", err.Error()))
+		}
 	}
 
-	switch c.Typ {
-	case execute, query:
-		var d databaseSub
-		if err := json.Unmarshal(c.Sub, &d); err != nil {
-			return &fsmGenericResponse{error: err}
+	switch c.Type {
+	case command.Command_COMMAND_TYPE_QUERY:
+		var qr command.QueryRequest
+		if err := command.UnmarshalSubCommand(&c, &qr); err != nil {
+			panic(fmt.Sprintf("failed to unmarshal query subcommand: %s", err.Error()))
 		}
-		stmts := subCommandToStatements(&d)
-
-		if c.Typ == execute {
-			r, err := s.db.Execute(stmts, d.Tx, d.Timings)
-			return &fsmExecuteResponse{results: r, error: err}
-		}
-		r, err := s.db.Query(stmts, d.Tx, d.Timings)
+		r, err := s.db.Query(qr.Request, qr.Timings)
 		return &fsmQueryResponse{rows: r, error: err}
-	case metadataSet:
-		var d metadataSetSub
-		if err := json.Unmarshal(c.Sub, &d); err != nil {
-			return &fsmGenericResponse{error: err}
+	case command.Command_COMMAND_TYPE_EXECUTE:
+		var er command.ExecuteRequest
+		if err := command.UnmarshalSubCommand(&c, &er); err != nil {
+			panic(fmt.Sprintf("failed to unmarshal execute subcommand: %s", err.Error()))
+		}
+		r, err := s.db.Execute(er.Request, er.Timings)
+		return &fsmExecuteResponse{results: r, error: err}
+	case command.Command_COMMAND_TYPE_METADATA_SET:
+		var ms command.MetadataSet
+		if err := command.UnmarshalSubCommand(&c, &ms); err != nil {
+			panic(fmt.Sprintf("failed to unmarshal metadata set subcommand: %s", err.Error()))
 		}
 		func() {
 			s.metaMu.Lock()
 			defer s.metaMu.Unlock()
-			if _, ok := s.meta[d.RaftID]; !ok {
-				s.meta[d.RaftID] = make(map[string]string)
+			if _, ok := s.meta[ms.RaftId]; !ok {
+				s.meta[ms.RaftId] = make(map[string]string)
 			}
-			for k, v := range d.Data {
-				s.meta[d.RaftID][k] = v
+			for k, v := range ms.Data {
+				s.meta[ms.RaftId][k] = v
 			}
 		}()
 		return &fsmGenericResponse{}
-	case metadataDelete:
-		var d string
-		if err := json.Unmarshal(c.Sub, &d); err != nil {
-			return &fsmGenericResponse{error: err}
+	case command.Command_COMMAND_TYPE_METADATA_DELETE:
+		var md command.MetadataDelete
+		if err := command.UnmarshalSubCommand(&c, &md); err != nil {
+			panic(fmt.Sprintf("failed to unmarshal metadata delete subcommand: %s", err.Error()))
 		}
 		func() {
 			s.metaMu.Lock()
 			defer s.metaMu.Unlock()
-			delete(s.meta, d)
+			delete(s.meta, md.RaftId)
 		}()
 		return &fsmGenericResponse{}
 	default:
-		return &fsmGenericResponse{error: fmt.Errorf("unknown command: %v", c.Typ)}
+		return &fsmGenericResponse{error: fmt.Errorf("unhandled command: %v", c.Type)}
 	}
 }
 
@@ -1121,25 +1108,6 @@ func (s *Store) database(leader bool, dst io.Writer) error {
 
 // Release is a no-op.
 func (f *fsmSnapshot) Release() {}
-
-func subCommandToStatements(d *databaseSub) []sql.Statement {
-	stmts := make([]sql.Statement, len(d.SQLs))
-	for i := range d.SQLs {
-		stmts[i].SQL = d.SQLs[i]
-
-		// Support backwards-compatibility, since previous versions didn't
-		// have Parameters in Raft commands.
-		if len(d.Parameters) == 0 {
-			stmts[i].Parameters = make([]gosql.Value, 0)
-		} else {
-			stmts[i].Parameters = make([]gosql.Value, len(d.Parameters[i]))
-			for j := range d.Parameters[i] {
-				stmts[i].Parameters[j] = d.Parameters[i][j]
-			}
-		}
-	}
-	return stmts
-}
 
 // enabledFromBool converts bool to "enabled" or "disabled".
 func enabledFromBool(b bool) string {

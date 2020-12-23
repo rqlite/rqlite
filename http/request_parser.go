@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/rqlite/rqlite/store"
+	"github.com/rqlite/rqlite/command"
 )
 
 var (
@@ -13,10 +13,13 @@ var (
 
 	// ErrInvalidRequest is returned when a request cannot be parsed.
 	ErrInvalidRequest = errors.New("invalid request")
+
+	// ErrUnsupportedType is returned when a request contains an unsupported type.
+	ErrUnsupportedType = errors.New("unsupported type")
 )
 
 // ParseRequest generates a set of Statements for a given byte slice.
-func ParseRequest(b []byte) ([]store.Statement, error) {
+func ParseRequest(b []byte) ([]*command.Statement, error) {
 	if b == nil {
 		return nil, ErrNoStatements
 	}
@@ -31,9 +34,11 @@ func ParseRequest(b []byte) ([]store.Statement, error) {
 			return nil, ErrNoStatements
 		}
 
-		stmts := make([]store.Statement, len(simple))
+		stmts := make([]*command.Statement, len(simple))
 		for i := range simple {
-			stmts[i].SQL = simple[i]
+			stmts[i] = &command.Statement{
+				Sql: simple[i],
+			}
 		}
 		return stmts, nil
 	}
@@ -42,26 +47,64 @@ func ParseRequest(b []byte) ([]store.Statement, error) {
 	if err := json.Unmarshal(b, &parameterized); err != nil {
 		return nil, ErrInvalidRequest
 	}
-	stmts := make([]store.Statement, len(parameterized))
+	stmts := make([]*command.Statement, len(parameterized))
 
 	for i := range parameterized {
 		if len(parameterized[i]) == 0 {
 			return nil, ErrNoStatements
 		}
 
-		var ok bool
-		stmts[i].SQL, ok = parameterized[i][0].(string)
+		sql, ok := parameterized[i][0].(string)
 		if !ok {
 			return nil, ErrInvalidRequest
 		}
+		stmts[i] = &command.Statement{
+			Sql:        sql,
+			Parameters: nil,
+		}
 		if len(parameterized[i]) == 1 {
+			// No actual parameters after the SQL string
 			continue
 		}
 
-		stmts[i].Parameters = make([]store.Value, len(parameterized[i])-1)
+		stmts[i].Parameters = make([]*command.Parameter, len(parameterized[i])-1)
 
 		for j := range parameterized[i][1:] {
-			stmts[i].Parameters[j] = parameterized[i][j+1]
+			switch v := parameterized[i][j+1].(type) {
+			case int:
+			case int64:
+				stmts[i].Parameters[j] = &command.Parameter{
+					Value: &command.Parameter_I{
+						I: v,
+					},
+				}
+			case float64:
+				stmts[i].Parameters[j] = &command.Parameter{
+					Value: &command.Parameter_D{
+						D: v,
+					},
+				}
+			case bool:
+				stmts[i].Parameters[j] = &command.Parameter{
+					Value: &command.Parameter_B{
+						B: v,
+					},
+				}
+			case []byte:
+				stmts[i].Parameters[j] = &command.Parameter{
+					Value: &command.Parameter_Y{
+						Y: v,
+					},
+				}
+			case string:
+				stmts[i].Parameters[j] = &command.Parameter{
+					Value: &command.Parameter_S{
+						S: v,
+					},
+				}
+			default:
+				return nil, ErrUnsupportedType
+			}
 		}
 	}
 	return stmts, nil

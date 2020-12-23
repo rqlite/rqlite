@@ -40,6 +40,20 @@ $GOPATH/bin/rqlited ~/node.1
 ### Raspberry Pi
 The process outlined above will work for Linux, OSX, and Windows. For Raspberry Pi, check out [this issue](https://github.com/rqlite/rqlite/issues/340).
 
+### Protobuf code generation
+_This step is not necessary unless you are making changes to protobuf definitions._
+
+Ensure you have the required tools installed, and that `GOPATH` is set.
+```bash
+go get -u github.com/golang/protobuf/protoc-gen-go
+go install github.com/golang/protobuf/protoc-gen-go
+export GOBIN=$GOPATH/bin
+export PATH=$PATH:$GOBIN
+export SRC_DIR=$GOPATH/src/github.com/rqlite/rqlite/command
+export DEST_DIR=$GOPATH/src
+protoc -I=$SRC_DIR --go_out=$DEST_DIR $SRC_DIR/command.proto
+```
+
 ### Speeding up the build process
 It can be rather slow to rebuild rqlite, due to the repeated compilation of the SQLite source code. You can compile and install the SQLite libary once, so subsequent builds are much faster. To do so, execute the following commands:
 ```bash

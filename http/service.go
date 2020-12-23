@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rqlite/rqlite/command"
 	sql "github.com/rqlite/rqlite/db"
 	"github.com/rqlite/rqlite/store"
 )
@@ -32,17 +33,17 @@ type Database interface {
 	// to return rows. If timings is true, then timing information will
 	// be return. If tx is true, then either all queries will be executed
 	// successfully or it will as though none executed.
-	Execute(er *store.ExecuteRequest) ([]*sql.Result, error)
+	Execute(er *command.ExecuteRequest) ([]*sql.Result, error)
 
 	// ExecuteOrAbort performs the same function as Execute(), but ensures
 	// any transactions are aborted in case of any error.
-	ExecuteOrAbort(er *store.ExecuteRequest) ([]*sql.Result, error)
+	ExecuteOrAbort(er *command.ExecuteRequest) ([]*sql.Result, error)
 
 	// Query executes a slice of queries, each of which returns rows. If
 	// timings is true, then timing information will be returned. If tx
 	// is true, then all queries will take place while a read transaction
 	// is held on the database.
-	Query(qr *store.QueryRequest) ([]*sql.Rows, error)
+	Query(qr *command.QueryRequest) ([]*sql.Rows, error)
 }
 
 // Store is the interface the Raft-based database must implement.
@@ -473,12 +474,9 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 
 	// No JSON structure expected for this API.
 	queries := []string{string(b)}
-	stmts := make([]store.Statement, len(queries))
-	for i := range queries {
-		stmts[i].SQL = queries[i]
-	}
+	er := executeRequestFromStrings(queries, timings, false)
 
-	results, err := s.store.ExecuteOrAbort(&store.ExecuteRequest{stmts, timings, false})
+	results, err := s.store.ExecuteOrAbort(er)
 	if err != nil {
 		if err == store.ErrNotLeader {
 			leaderAPIAddr := s.LeaderAPIAddr()
@@ -626,7 +624,15 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	results, err := s.store.Execute(&store.ExecuteRequest{stmts, timings, isTx})
+	er := &command.ExecuteRequest{
+		Request: &command.Request{
+			Transaction: isTx,
+			Statements:  stmts,
+		},
+		Timings: timings,
+	}
+
+	results, err := s.store.Execute(er)
 	if err != nil {
 		if err == store.ErrNotLeader {
 			leaderAPIAddr := s.LeaderAPIAddr()
@@ -695,7 +701,17 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	results, err := s.store.Query(&store.QueryRequest{queries, timings, isTx, lvl, frsh})
+	qr := &command.QueryRequest{
+		Request: &command.Request{
+			Transaction: isTx,
+			Statements:  queries,
+		},
+		Timings:   timings,
+		Level:     lvl,
+		Freshness: frsh.Nanoseconds(),
+	}
+
+	results, err := s.store.Query(qr)
 	if err != nil {
 		if err == store.ErrNotLeader {
 			leaderAPIAddr := s.LeaderAPIAddr()
@@ -855,14 +871,16 @@ func (s *Service) writeResponse(w http.ResponseWriter, r *http.Request, j *Respo
 	}
 }
 
-func requestQueries(r *http.Request) ([]store.Statement, error) {
+func requestQueries(r *http.Request) ([]*command.Statement, error) {
 	if r.Method == "GET" {
 		query, err := stmtParam(r)
 		if err != nil || query == "" {
 			return nil, errors.New("bad query GET request")
 		}
-		return []store.Statement{
-			{query, nil},
+		return []*command.Statement{
+			&command.Statement{
+				Sql: query,
+			},
 		}, nil
 	}
 
@@ -944,19 +962,19 @@ func timings(req *http.Request) (bool, error) {
 }
 
 // level returns the requested consistency level for a query
-func level(req *http.Request) (store.ConsistencyLevel, error) {
+func level(req *http.Request) (command.QueryRequest_Level, error) {
 	q := req.URL.Query()
 	lvl := strings.TrimSpace(q.Get("level"))
 
 	switch strings.ToLower(lvl) {
 	case "none":
-		return store.None, nil
+		return command.QueryRequest_QUERY_REQUEST_LEVEL_NONE, nil
 	case "weak":
-		return store.Weak, nil
+		return command.QueryRequest_QUERY_REQUEST_LEVEL_WEAK, nil
 	case "strong":
-		return store.Strong, nil
+		return command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG, nil
 	default:
-		return store.Weak, nil
+		return command.QueryRequest_QUERY_REQUEST_LEVEL_WEAK, nil
 	}
 }
 
@@ -1017,4 +1035,40 @@ func EnsureHTTPS(addr string) string {
 // CheckHTTPS returns true if the given URL uses HTTPS.
 func CheckHTTPS(addr string) bool {
 	return strings.HasPrefix(addr, "https://")
+}
+
+// queryRequestFromStrings converts a slice of strings into a command.QueryRequest
+func executeRequestFromStrings(s []string, timings, tx bool) *command.ExecuteRequest {
+	stmts := make([]*command.Statement, len(s))
+	for i := range s {
+		stmts[i] = &command.Statement{
+			Sql: s[i],
+		}
+
+	}
+	return &command.ExecuteRequest{
+		Request: &command.Request{
+			Statements:  stmts,
+			Transaction: tx,
+		},
+		Timings: timings,
+	}
+}
+
+// queryRequestFromStrings converts a slice of strings into a command.QueryRequest
+func queryRequestFromStrings(s []string, timings, tx bool) *command.QueryRequest {
+	stmts := make([]*command.Statement, len(s))
+	for i := range s {
+		stmts[i] = &command.Statement{
+			Sql: s[i],
+		}
+
+	}
+	return &command.QueryRequest{
+		Request: &command.Request{
+			Statements:  stmts,
+			Transaction: tx,
+		},
+		Timings: timings,
+	}
 }

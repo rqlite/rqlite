@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/mattn/go-sqlite3"
+	"github.com/rqlite/rqlite/command"
 )
 
 const bkDelay = 250
@@ -67,13 +68,6 @@ type Rows struct {
 	Values  [][]interface{} `json:"values,omitempty"`
 	Error   string          `json:"error,omitempty"`
 	Time    float64         `json:"time,omitempty"`
-}
-
-// Statement represents a single parameterized statement for processing
-// by the database layer.
-type Statement struct {
-	SQL        string
-	Parameters []driver.Value
 }
 
 // Open opens a file-based database, creating it if it does not exist.
@@ -186,12 +180,21 @@ func (db *DB) AbortTransaction() error {
 // ExecuteStringStmt executes a single query that modifies the database. This is
 // primarily a convenience function.
 func (db *DB) ExecuteStringStmt(query string) ([]*Result, error) {
-	return db.Execute([]Statement{{query, nil}}, false, false)
+	r := &command.Request{
+		Statements: []*command.Statement{
+			{
+				Sql: query,
+			},
+		},
+	}
+	return db.Execute(r, false)
 }
 
 // Execute executes queries that modify the database.
-func (db *DB) Execute(stmts []Statement, tx, xTime bool) ([]*Result, error) {
-	stats.Add(numExecutions, int64(len(stmts)))
+func (db *DB) Execute(req *command.Request, xTime bool) ([]*Result, error) {
+	stats.Add(numExecutions, int64(len(req.Statements)))
+
+	tx := req.Transaction
 	if tx {
 		stats.Add(numETx, 1)
 	}
@@ -244,15 +247,24 @@ func (db *DB) Execute(stmts []Statement, tx, xTime bool) ([]*Result, error) {
 		}
 
 		// Execute each statement.
-		for _, stmt := range stmts {
-			if stmt.SQL == "" {
+		for _, stmt := range req.Statements {
+			sql := stmt.Sql
+			if sql == "" {
 				continue
 			}
 
 			result := &Result{}
 			start := time.Now()
 
-			r, err := execer.Exec(stmt.SQL, stmt.Parameters)
+			parameters, err := parametersToValues(stmt.Parameters)
+			if err != nil {
+				if handleError(result, err) {
+					continue
+				}
+				break
+			}
+
+			r, err := execer.Exec(sql, parameters)
 			if err != nil {
 				if handleError(result, err) {
 					continue
@@ -294,12 +306,21 @@ func (db *DB) Execute(stmts []Statement, tx, xTime bool) ([]*Result, error) {
 
 // QueryStringStmt executes a single query that return rows, but don't modify database.
 func (db *DB) QueryStringStmt(query string) ([]*Rows, error) {
-	return db.Query([]Statement{{query, nil}}, false, false)
+	r := &command.Request{
+		Statements: []*command.Statement{
+			{
+				Sql: query,
+			},
+		},
+	}
+	return db.Query(r, false)
 }
 
 // Query executes queries that return rows, but don't modify the database.
-func (db *DB) Query(stmts []Statement, tx, xTime bool) ([]*Rows, error) {
-	stats.Add(numQueries, int64(len(stmts)))
+func (db *DB) Query(req *command.Request, xTime bool) ([]*Rows, error) {
+	stats.Add(numQueries, int64(len(req.Statements)))
+
+	tx := req.Transaction
 	if tx {
 		stats.Add(numQTx, 1)
 	}
@@ -334,15 +355,23 @@ func (db *DB) Query(stmts []Statement, tx, xTime bool) ([]*Rows, error) {
 			}
 		}
 
-		for _, stmt := range stmts {
-			if stmt.SQL == "" {
+		for _, stmt := range req.Statements {
+			sql := stmt.Sql
+			if sql == "" {
 				continue
 			}
 
 			rows := &Rows{}
 			start := time.Now()
 
-			rs, err := queryer.Query(stmt.SQL, stmt.Parameters)
+			parameters, err := parametersToValues(stmt.Parameters)
+			if err != nil {
+				rows.Error = err.Error()
+				allRows = append(allRows, rows)
+				continue
+			}
+
+			rs, err := queryer.Query(sql, parameters)
 			if err != nil {
 				rows.Error = err.Error()
 				allRows = append(allRows, rows)
@@ -517,6 +546,32 @@ func copyDatabase(dst *sqlite3.SQLiteConn, src *sqlite3.SQLiteConn) error {
 	}
 
 	return nil
+}
+
+// parametersToValues maps values in the proto params to SQL driver values.
+func parametersToValues(parameters []*command.Parameter) ([]driver.Value, error) {
+	if parameters == nil {
+		return nil, nil
+	}
+
+	values := make([]driver.Value, len(parameters))
+	for i := range parameters {
+		switch w := parameters[i].GetValue().(type) {
+		case *command.Parameter_I:
+			values[i] = w.I
+		case *command.Parameter_D:
+			values[i] = w.D
+		case *command.Parameter_B:
+			values[i] = w.B
+		case *command.Parameter_Y:
+			values[i] = w.Y
+		case *command.Parameter_S:
+			values[i] = w.S
+		default:
+			return nil, fmt.Errorf("unsupported type: %T", w)
+		}
+	}
+	return values, nil
 }
 
 // normalizeRowValues performs some normalization of values in the returned rows.
