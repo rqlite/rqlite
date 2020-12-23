@@ -6,6 +6,7 @@
 ### Implementation changes and bug fixes
 - [PR #694](https://github.com/rqlite/rqlite/pull/694): Display, in the CLI, the HTTP response body on HTTP status 503.
 - [PR #703](https://github.com/rqlite/rqlite/pull/703): Fix potential panic during request parsing.
+- [PR #705](https://github.com/rqlite/rqlite/pull/705): Use Protobuf for encoding Raft Log commands.
 
 ## 5.6.0 (November 17th 2020)
 
