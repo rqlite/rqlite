@@ -151,14 +151,15 @@ func New(ln Listener, c *StoreConfig) *Store {
 	}
 
 	return &Store{
-		ln:           ln,
-		raftDir:      c.Dir,
-		raftID:       c.ID,
-		dbConf:       c.DBConf,
-		dbPath:       filepath.Join(c.Dir, sqliteFile),
-		meta:         make(map[string]map[string]string),
-		logger:       logger,
-		ApplyTimeout: applyTimeout,
+		ln:            ln,
+		raftDir:       c.Dir,
+		raftID:        c.ID,
+		dbConf:        c.DBConf,
+		dbPath:        filepath.Join(c.Dir, sqliteFile),
+		reqMarshaller: command.NewRequestMarshaler(),
+		meta:          make(map[string]map[string]string),
+		logger:        logger,
+		ApplyTimeout:  applyTimeout,
 	}
 }
 
@@ -171,12 +172,6 @@ func (s *Store) Open(enableSingle bool) error {
 	err := os.MkdirAll(s.raftDir, 0755)
 	if err != nil {
 		return err
-	}
-
-	// Create a request proto marshaler
-	s.reqMarshaller, err = command.NewRequestMarshaler()
-	if err != nil {
-		return fmt.Errorf("failed to create Request Mashaler: %s", err)
 	}
 
 	// Open underlying database.

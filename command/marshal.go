@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"expvar"
+	"fmt"
 	"io/ioutil"
 
 	"github.com/golang/protobuf/proto"
@@ -51,17 +52,17 @@ func init() {
 	stats.Add(numPrecompressedBytes, 0)
 }
 
-func NewRequestMarshaler() (*RequestMarshaler, error) {
+func NewRequestMarshaler() *RequestMarshaler {
 	w, err := gzip.NewWriterLevel(nil, gzip.BestCompression)
 	if err != nil {
-		return nil, err
+		panic(fmt.Sprintf("failed to create GZIP writer: %s", err.Error()))
 	}
 
 	return &RequestMarshaler{
 		BatchThreshold: DefaultBatchThreshold,
 		SizeThreshold:  DefaultSizeThreshold,
 		gz:             w,
-	}, nil
+	}
 }
 
 func (m *RequestMarshaler) Marshal(r Requester) ([]byte, bool, error) {
