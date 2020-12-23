@@ -3,6 +3,7 @@ package command
 import (
 	"bytes"
 	"compress/gzip"
+	"expvar"
 	"io/ioutil"
 
 	"github.com/golang/protobuf/proto"
@@ -21,6 +22,28 @@ type Requester interface {
 type RequestMarshaler struct {
 	BatchThreshold int
 	SizeThreshold  int
+}
+
+const (
+	numCompressedRequests   = "num_compressed_requests"
+	numUncompressedRequests = "num_uncompressed_requests"
+	numCompressedBytes      = "num_compressed_bytes"
+	numPrecompressedBytes   = "num_precompressed_bytes"
+	numUncompressedBytes    = "num_uncompressed_bytes"
+	numCompressionMisses    = "num_compression_misses"
+)
+
+// stats captures stats for the Proto marshaler.
+var stats *expvar.Map
+
+func init() {
+	stats = expvar.NewMap("proto")
+	stats.Add(numCompressedRequests, 0)
+	stats.Add(numUncompressedRequests, 0)
+	stats.Add(numCompressedBytes, 0)
+	stats.Add(numUncompressedBytes, 0)
+	stats.Add(numCompressionMisses, 0)
+	stats.Add(numPrecompressedBytes, 0)
 }
 
 func NewRequestMarshaler() *RequestMarshaler {
@@ -63,7 +86,18 @@ func (m *RequestMarshaler) Marshal(r Requester) ([]byte, bool, error) {
 			return nil, false, err
 		}
 
+		ubz := len(b)
 		b = buf.Bytes()
+		bz := len(b)
+		stats.Add(numPrecompressedBytes, int64(ubz))
+		stats.Add(numCompressedRequests, 1)
+		stats.Add(numCompressedBytes, int64(bz))
+		if bz > ubz {
+			stats.Add(numCompressionMisses, 1)
+		}
+	} else {
+		stats.Add(numUncompressedRequests, 1)
+		stats.Add(numUncompressedBytes, int64(len(b)))
 	}
 
 	return b, compress, nil
