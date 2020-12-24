@@ -1,4 +1,4 @@
-## 5.7.0 (unreleased)
+## 5.7.0 (December 23rd 2020)
 
 ### New features
 - [PR #696](https://github.com/rqlite/rqlite/pull/696): Benchmarking tool now supports query testing.
