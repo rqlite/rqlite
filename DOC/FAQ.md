@@ -64,6 +64,12 @@ There is no explicit maximum cluster size. However the [practical cluster size l
 ## Is rqlite a good match for a network of nodes that come and go -- perhaps thousands of them?
 Unlikely. While rqlite does support read-only nodes, allowing it to scale to many nodes, the consensus protocol at the core of rqlite works best when the nodes in the cluster don't continually come and go. While it won't break, it probably won't be practical.
 
+## Can I use rqlite to broadcast changes to lots of other nodes -- perhaps hundreds -- as long as those nodes don't write data?
+Yes, try out [read-only nodes](https://github.com/rqlite/rqlite/blob/master/DOC/READ_ONLY_NODES.md).
+
+## What if read-only nodes -- or clients accessing read-only nodes -- want to write data after all?
+Then they must do it by sending write requests to the leader node. But if they can reach the leader node, it is an effective way for one node at the edge to send a message to all other nodes (well, at least other nodes that are connected to the cluster at that time).
+
 ## Is it a drop-in replacement for SQLite?
 No. While it does use SQLite as its storage engine, you must access the system via HTTP. That said, since it basically exposes SQLite, all the power of that database is available. It is also possible that any system built on top of SQLite only needs small changes to work with rqlite.
 
