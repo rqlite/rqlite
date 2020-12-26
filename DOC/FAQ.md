@@ -13,7 +13,7 @@
 * [What is the maximum size of a cluster?](https://github.com/rqlite/rqlite/blob/master/DOC/FAQ.md#what-is-the-maximum-size-of-a-cluster)
 * [Is rqlite a good match for a network of nodes that come and go -- perhaps thousands of them?](#is-rqlite-a-good-match-for-a-network-of-nodes-that-come-and-go----perhaps-thousands-of-them)
 * [Can I use rqlite to broadcast changes to lots of other nodes -- perhaps hundreds -- as long as those nodes don't write data?](#can-i-use-rqlite-to-broadcast-changes-to-lots-of-other-nodes----perhaps-hundreds----as-long-as-those-nodes-dont-write-data)
-* [What if read-only nodes -- or clients accessing read-only nodes -- want to write data after all?](#what-if-read-only-nodes----or-clients-accessing-read-only-nodes----want-to-write-data-after-all)
+* [What if read-only nodes -- or clients accessing read-only nodes -- want to write data?](#what-if-read-only-nodes----or-clients-accessing-read-only-nodes----want-to-write-data)
 * [Is it a drop-in replacement for SQLite?](#is-it-a-drop-in-replacement-for-sqlite)
 * [Does rqlite support transactions?](#does-rqlite-support-transactions)
 * [Can I modify the SQLite file directly?](#can-i-modify-the-sqlite-file-directly)
