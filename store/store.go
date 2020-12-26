@@ -1052,7 +1052,7 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 		return json.Unmarshal(b, &s.meta)
 	}()
 	if err != nil {
-		return err
+		return fmt.Errorf("cluster metadata unmarshal: %s", err)
 	}
 	stats.Add(numRestores, 1)
 	return nil
