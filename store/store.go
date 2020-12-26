@@ -5,6 +5,7 @@ package store
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -13,6 +14,7 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -954,20 +956,58 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 		return err
 	}
 
-	// Get size of database.
-	var sz uint64
-	if err := binary.Read(rc, binary.LittleEndian, &sz); err != nil {
-		return err
+	readUint64 := func(io.ReadCloser) (uint64, error) {
+		var sz uint64
+		if err := binary.Read(rc, binary.LittleEndian, &sz); err != nil {
+			return 0, fmt.Errorf("read initial size: %s", err)
+		}
+		return sz, nil
 	}
 
-	// Now read in the database file data and restore.
+	// Get size of database, checking for compression.
+	compressed := false
+	sz, err := readUint64(rc)
+	if err != nil {
+		return fmt.Errorf("read compression check: %s", err)
+	}
+	if sz == math.MaxUint64 {
+		compressed = true
+		// Database is actually compressed, read actual size next.
+		sz, err = readUint64(rc)
+		if err != nil {
+			return fmt.Errorf("read compressed size: %s", err)
+		}
+
+	}
+
+	// Now read in the database file data, decompress if necessary, and restore.
 	database := make([]byte, sz)
-	if _, err := io.ReadFull(rc, database); err != nil {
-		return err
+	if compressed {
+		fmt.Println("COMPRESSED")
+		buf := new(bytes.Buffer)
+		gz, err := gzip.NewReader(rc)
+		if err != nil {
+			return err
+		}
+		gz.Multistream(false) // Tell GZ to return EOF after reading compressed data.
+
+		if n, err := io.Copy(buf, gz); err != nil {
+			return fmt.Errorf("decompress: %s", err)
+		} else {
+			fmt.Println("####", n)
+		}
+
+		if err := gz.Close(); err != nil {
+			return err
+		}
+		database = buf.Bytes()
+	} else {
+		if _, err := io.ReadFull(rc, database); err != nil {
+			return fmt.Errorf("read uncompressed database: %s", err)
+		}
 	}
 
 	var db *sql.DB
-	var err error
 	if !s.dbConf.Memory {
 		// Write snapshot over any existing database file.
 		if err := ioutil.WriteFile(s.dbPath, database, 0660); err != nil {
@@ -977,7 +1017,7 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 		// Re-open it.
 		db, err = sql.OpenWithDSN(s.dbPath, s.dbConf.DSN)
 		if err != nil {
-			return err
+			return fmt.Errorf("open with DSN: %s", err)
 		}
 	} else {
 		// In memory. Copy to temporary file, and then load memory from file.
@@ -995,7 +1035,7 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 		// Load an in-memory database from the snapshot now on disk.
 		db, err = sql.LoadInMemoryWithDSN(f.Name(), s.dbConf.DSN)
 		if err != nil {
-			return err
+			return fmt.Errorf("load into memory with DSN: %s", err)
 		}
 	}
 	s.db = db
@@ -1003,7 +1043,7 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 	// Read remaining bytes, and set to cluster meta.
 	b, err := ioutil.ReadAll(rc)
 	if err != nil {
-		return err
+		return fmt.Errorf("snapshot remaining read: %s", err)
 	}
 
 	err = func() error {
@@ -1045,10 +1085,31 @@ type fsmSnapshot struct {
 // Persist writes the snapshot to the given sink.
 func (f *fsmSnapshot) Persist(sink raft.SnapshotSink) error {
 	err := func() error {
-		// Start by writing size of database.
-		b := new(bytes.Buffer)
-		sz := uint64(len(f.database))
-		err := binary.Write(b, binary.LittleEndian, sz)
+		var b *bytes.Buffer
+		var sz uint64
+
+		// Flag compressed database by writing max uint64 value first.
+		// No SQLite database written by earlier versions will have this
+		// as a size. *Surely*.
+		b = new(bytes.Buffer)
+		err := binary.Write(b, binary.LittleEndian, uint64(math.MaxUint64))
+		if err != nil {
+			return err
+		}
+		if _, err := sink.Write(b.Bytes()); err != nil {
+			return err
+		}
+		b.Reset() // Clear state of buffer for future use.
+
+		// Get compressed copy of database.
+		cdb, err := f.compressedDatabase()
+		if err != nil {
+			return err
+		}
+
+		// Write size of compressed database.
+		sz = uint64(len(cdb))
+		err = binary.Write(b, binary.LittleEndian, sz)
 		if err != nil {
 			return err
 		}
@@ -1056,12 +1117,12 @@ func (f *fsmSnapshot) Persist(sink raft.SnapshotSink) error {
 			return err
 		}
 
-		// Next write database to sink.
-		if _, err := sink.Write(f.database); err != nil {
+		// Write compressed database to sink.
+		if _, err := sink.Write(cdb); err != nil {
 			return err
 		}
 
-		// Finally write the meta.
+		// Write the cluster metadata.
 		if _, err := sink.Write(f.meta); err != nil {
 			return err
 		}
@@ -1076,6 +1137,22 @@ func (f *fsmSnapshot) Persist(sink raft.SnapshotSink) error {
 	}
 
 	return nil
+}
+
+func (f *fsmSnapshot) compressedDatabase() ([]byte, error) {
+	var buf bytes.Buffer
+	gz, err := gzip.NewWriterLevel(&buf, gzip.BestCompression)
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err := gz.Write(f.database); err != nil {
+		return nil, err
+	}
+	if err := gz.Close(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
 
 // Database copies contents of the underlying SQLite database to dst
