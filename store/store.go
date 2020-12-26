@@ -941,6 +941,7 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 	}
 
 	fsm.meta, err = json.Marshal(s.meta)
+	fmt.Println(">>>>", s.meta)
 	if err != nil {
 		s.logger.Printf("failed to encode meta for snapshot: %s", err.Error())
 		return nil, err
@@ -983,24 +984,21 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 	// Now read in the database file data, decompress if necessary, and restore.
 	database := make([]byte, sz)
 	if compressed {
-		fmt.Println("COMPRESSED")
 		buf := new(bytes.Buffer)
 		gz, err := gzip.NewReader(rc)
 		if err != nil {
 			return err
 		}
-		gz.Multistream(false) // Tell GZ to return EOF after reading compressed data.
 
-		if n, err := io.Copy(buf, gz); err != nil {
-			return fmt.Errorf("decompress: %s", err)
-		} else {
-			fmt.Println("####", n)
+		if _, err := io.CopyN(buf, gz, 8192 /*int64(sz)*/); err != nil {
+			return fmt.Errorf("SQLite database decompress: %s", err)
 		}
 
 		if err := gz.Close(); err != nil {
 			return err
 		}
 		database = buf.Bytes()
+		fmt.Println("Size of db postcompression:", sz, len(database))
 	} else {
 		if _, err := io.ReadFull(rc, database); err != nil {
 			return fmt.Errorf("read uncompressed database: %s", err)
@@ -1102,6 +1100,7 @@ func (f *fsmSnapshot) Persist(sink raft.SnapshotSink) error {
 		b.Reset() // Clear state of buffer for future use.
 
 		// Get compressed copy of database.
+		fmt.Println("Size of db precompression:", len(f.database))
 		cdb, err := f.compressedDatabase()
 		if err != nil {
 			return err
