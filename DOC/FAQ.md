@@ -17,6 +17,7 @@
 * [Is it a drop-in replacement for SQLite?](#is-it-a-drop-in-replacement-for-sqlite)
 * [Does rqlite support transactions?](#does-rqlite-support-transactions)
 * [Can I modify the SQLite file directly?](#can-i-modify-the-sqlite-file-directly)
+* [Can I read the SQLite file directly?](#can-i-read-the-sqlite-file-directly)
 * [Can I use rqlite to replicate my SQLite database to a second node?](#can-i-use-rqlite-to-replicate-my-sqlite-database-to-a-second-node)
 * [Is the underlying serializable isolation level of SQLite maintained?](#is-the-underlying-serializable-isolation-level-of-sqlite-maintained)
 * [Do concurrent writes block each other?](#do-concurrent-writes-block-each-other)
@@ -64,8 +65,10 @@ Sure. Many people do so, as they like accessing a SQLite database over HTTP. Of 
 There is no explicit maximum cluster size. However the [practical cluster size limit is about 9 _voting nodes_](https://github.com/rqlite/rqlite/blob/master/DOC/CLUSTER_MGMT.md). You can go bigger by adding [read-only nodes](https://github.com/rqlite/rqlite/blob/master/DOC/READ_ONLY_NODES.md).
 
 ## Is rqlite a good match for a network of nodes that come and go -- perhaps thousands of them?
-Unlikely. While rqlite does support read-only nodes, allowing it to scale to many nodes, the consensus protocol at the core of rqlite works best when the nodes in the cluster don't continually come and go. While it won't break, it probably won't be practical.
+Unlikely. While rqlite does support read-only nodes, allowing it to scale to many nodes, the consensus protocol at the core of rqlite works best when the **voting** nodes in the cluster don't continually come and go. While it won't break, it probably won't be practical.
 
+However if the nodes that come and go only need to stay up-to-date with changes, and serve read requests, it might work. Learn about [read-only nodes](https://github.com/rqlite/rqlite/blob/master/DOC/READ_ONLY_NODES.md).
+ 
 ## Can I use rqlite to broadcast changes to lots of other nodes -- perhaps hundreds -- as long as those nodes don't write data?
 Yes, try out [read-only nodes](https://github.com/rqlite/rqlite/blob/master/DOC/READ_ONLY_NODES.md).
 
@@ -79,7 +82,10 @@ No. While it does use SQLite as its storage engine, you must access the system v
 It supports [a form of transactions](https://github.com/rqlite/rqlite/blob/master/DOC/DATA_API.md#transactions). You can wrap a bulk update in a transaction such that all the statements in the bulk request will succeed, or none of them will. However the behaviour or rqlite is undefined if you send explicit `BEGIN`, `COMMIT`, or `ROLLBACK` statements. This is not because they won't work -- they will -- but if your node (or cluster) fails while a transaction is in progress, the system may be left in a hard-to-use state. So until rqlite can offer strict guarantees about its behaviour if it fails during a transaction, using `BEGIN`, `COMMIT`, and `ROLLBACK` is officially unsupported. Unfortunately this does mean that rqlite may not be suitable for some applications.
 
 ## Can I modify the SQLite file directly?
-No, you must only change the database using the HTTP API.
+No, you must only change the database using the HTTP API. The moment you directly modify the SQLite file under any node (if running in _on-disk_ mode) the behavior of rqlite is undefined. In otherwords, you run the risk of breaking your cluster.
+
+## Can I read the SQLite file directly?
+While not officially supported, if you run a node in _on-disk_ mode, you can read the SQLite file directly.
 
 ## Can I use rqlite to replicate my SQLite database to a second node?
 Not in a simple sense, no. rqlite is not a SQLite database replication tool. While each node does have a full copy of the SQLite database, rqlite is not simply about replicating that database.

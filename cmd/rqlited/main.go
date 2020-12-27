@@ -216,24 +216,39 @@ func main() {
 		log.Fatalf("failed to parse Raft apply timeout %s: %s", raftApplyTimeout, err.Error())
 	}
 
-	// Determine join addresses, if necessary.
-	ja, err := store.JoinAllowed(dataPath)
-	if err != nil {
-		log.Fatalf("unable to determine if join permitted: %s", err.Error())
+	// Any prexisting node state?
+	var enableBootstrap bool
+	isNew := store.IsNewNode(dataPath)
+	if isNew {
+		log.Printf("no preexisting node state detected in %s, node may be bootstrapping", dataPath)
+		enableBootstrap = true // New node, so we may be bootstrapping
+	} else {
+		log.Printf("preexisting node state detected in %s", dataPath)
 	}
 
+	// Determine join addresses
 	var joins []string
-	if ja {
-		joins, err = determineJoinAddresses()
-		if err != nil {
-			log.Fatalf("unable to determine join addresses: %s", err.Error())
-		}
+	joins, err = determineJoinAddresses()
+	if err != nil {
+		log.Fatalf("unable to determine join addresses: %s", err.Error())
+	}
+
+	// Supplying join addresses means bootstrapping a new cluster won't
+	// be required.
+	if len(joins) > 0 {
+		enableBootstrap = false
+		log.Println("join addresses specified, node is not bootstrapping")
 	} else {
-		log.Println("node is already member of cluster, skip determining join addresses")
+		log.Println("no join addresses set")
+	}
+
+	// Join address supplied, but we don't need them!
+	if !isNew && len(joins) > 0 {
+		log.Println("node is already member of cluster, ignoring join addresses")
 	}
 
 	// Now, open store.
-	if err := str.Open(len(joins) == 0); err != nil {
+	if err := str.Open(enableBootstrap); err != nil {
 		log.Fatalf("failed to open store: %s", err.Error())
 	}
 
@@ -252,7 +267,7 @@ func main() {
 	}
 
 	// Execute any requested join operation.
-	if len(joins) > 0 {
+	if len(joins) > 0 && isNew {
 		log.Println("join addresses are:", joins)
 		advAddr := raftAddr
 		if raftAdv != "" {
@@ -284,8 +299,6 @@ func main() {
 			log.Println("successfully joined cluster at", j)
 		}
 
-	} else {
-		log.Println("no join addresses set")
 	}
 
 	// Wait until the store is in full consensus.
