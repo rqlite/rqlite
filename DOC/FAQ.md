@@ -82,7 +82,7 @@ No. While it does use SQLite as its storage engine, you must access the system v
 It supports [a form of transactions](https://github.com/rqlite/rqlite/blob/master/DOC/DATA_API.md#transactions). You can wrap a bulk update in a transaction such that all the statements in the bulk request will succeed, or none of them will. However the behaviour or rqlite is undefined if you send explicit `BEGIN`, `COMMIT`, or `ROLLBACK` statements. This is not because they won't work -- they will -- but if your node (or cluster) fails while a transaction is in progress, the system may be left in a hard-to-use state. So until rqlite can offer strict guarantees about its behaviour if it fails during a transaction, using `BEGIN`, `COMMIT`, and `ROLLBACK` is officially unsupported. Unfortunately this does mean that rqlite may not be suitable for some applications.
 
 ## Can I modify the SQLite file directly?
-No, you must only change the database using the HTTP API. The moment you modify the SQLite file under any node (if running in _on-disk_ mode) the behavior of rqlite is undefined. In otherwords, you run the risk of breaking your cluster.
+No, you must only change the database using the HTTP API. The moment you directly modify the SQLite file under any node (if running in _on-disk_ mode) the behavior of rqlite is undefined. In otherwords, you run the risk of breaking your cluster.
 
 ## Can I read the SQLite file directly?
 While not officially supported, if you run a node in _on-disk_ mode, you can read the SQLite file directly.
