@@ -221,7 +221,7 @@ func (s *Service) Start() error {
 			s.logger.Println("HTTP service Serve() returned:", err.Error())
 		}
 	}()
-	s.logger.Println("service listening on", s.addr)
+	s.logger.Println("service listening on", s.Addr())
 
 	return nil
 }
@@ -900,7 +900,9 @@ func requestQueries(r *http.Request) ([]*command.Statement, error) {
 // createTLSConfig returns a TLS config from the given cert and key.
 func createTLSConfig(certFile, keyFile, caCertFile string) (*tls.Config, error) {
 	var err error
-	config := &tls.Config{}
+	config := &tls.Config{
+		NextProtos: []string{"h2"},
+	}
 	config.Certificates = make([]tls.Certificate, 1)
 	config.Certificates[0], err = tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
