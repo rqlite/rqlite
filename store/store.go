@@ -135,6 +135,14 @@ type Store struct {
 	RaftLogLevel       string
 }
 
+// IsNewNode returns whether a node using raftDir would be a brand new node.
+// It also means that the window this node joining a different cluster has passed.
+func IsNewNode(raftDir string) bool {
+	// If there is any pre-existing Raft state, then this node
+	// has already been created.
+	return !pathExists(filepath.Join(raftDir, raftDBPath))
+}
+
 // StoreConfig represents the configuration of the underlying Store.
 type StoreConfig struct {
 	DBConf *DBConfig   // The DBConfig object for this Store.
@@ -164,9 +172,11 @@ func New(ln Listener, c *StoreConfig) *Store {
 	}
 }
 
-// Open opens the store. If enableSingle is set, and there are no existing peers,
-// then this node becomes the first node, and therefore leader, of the cluster.
-func (s *Store) Open(enableSingle bool) error {
+// Open opens the Store. If enableBootstrap is set, then this node becomes a
+// standalone node. If not set, then the calling layer must know that this
+// node has pre-existing state, or the calling layer will trigger a join
+// operation after opening the Store.
+func (s *Store) Open(enableBootstrap bool) error {
 	s.logger.Printf("opening store with node ID %s", s.raftID)
 
 	s.logger.Printf("ensuring directory at %s exists", s.raftDir)
@@ -181,9 +191,6 @@ func (s *Store) Open(enableSingle bool) error {
 		return err
 	}
 	s.db = db
-
-	// Is this a brand new node?
-	newNode := !pathExists(filepath.Join(s.raftDir, raftDBPath))
 
 	// Create Raft-compatible network layer.
 	s.raftTn = raft.NewNetworkTransport(NewTransport(s.ln), connectionPoolCount, connectionTimeout, nil)
@@ -214,8 +221,8 @@ func (s *Store) Open(enableSingle bool) error {
 		return fmt.Errorf("new raft: %s", err)
 	}
 
-	if enableSingle && newNode {
-		s.logger.Printf("bootstrap needed")
+	if enableBootstrap {
+		s.logger.Printf("executing new cluster bootstrap")
 		configuration := raft.Configuration{
 			Servers: []raft.Server{
 				{
@@ -226,7 +233,7 @@ func (s *Store) Open(enableSingle bool) error {
 		}
 		ra.BootstrapCluster(configuration)
 	} else {
-		s.logger.Printf("no bootstrap needed")
+		s.logger.Printf("no cluster bootstrap requested")
 	}
 
 	s.raft = ra
