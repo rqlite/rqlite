@@ -1105,6 +1105,39 @@ func Test_SingleNodeSnapshotInMem(t *testing.T) {
 	}
 }
 
+func Test_SingleNodeRestoreNoncompressed(t *testing.T) {
+	s := mustNewStore(false)
+	defer os.RemoveAll(s.Path())
+
+	if err := s.Open(true); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	s.WaitForLeader(10 * time.Second)
+
+	// Check restoration from a pre-compressed SQLite database snap.
+	// This is to test for backwards compatilibty of this code.
+	f, err := os.Open(filepath.Join("testdata", "noncompressed-sqlite-snap.bin"))
+	if err != nil {
+		t.Fatalf("failed to open snapshot file: %s", err.Error())
+	}
+	if err := s.Restore(f); err != nil {
+		t.Fatalf("failed to restore noncompressed snapshot from disk: %s", err.Error())
+	}
+
+	// Ensure database is back in the expected state.
+	r, err := s.Query(queryRequestFromString("SELECT count(*) FROM foo", false, false))
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `["count(*)"]`, asJSON(r[0].Columns); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[5000]]`, asJSON(r[0].Values); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
 func Test_MetadataMultinode(t *testing.T) {
 	s0 := mustNewStore(true)
 	if err := s0.Open(true); err != nil {
