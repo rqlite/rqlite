@@ -18,6 +18,7 @@ require (
 	github.com/mkideal/cli v0.2.3
 	github.com/mkideal/pkg v0.1.2
 	golang.org/x/crypto v0.0.0-20201221181555-eec23a3978ad
+	golang.org/x/net v0.0.0-20200707034311-ab3426394381
 	golang.org/x/sys v0.0.0-20201223074533-0d417f636930 // indirect
 	golang.org/x/term v0.0.0-20201210144234-2321bbc49cbf // indirect
 	google.golang.org/protobuf v1.25.0

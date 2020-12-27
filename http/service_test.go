@@ -1,14 +1,19 @@
 package http
 
 import (
+	"crypto/tls"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"testing"
 
 	"github.com/rqlite/rqlite/command"
 	sql "github.com/rqlite/rqlite/db"
 	"github.com/rqlite/rqlite/store"
+	"github.com/rqlite/rqlite/testdata/x509"
+
+	"golang.org/x/net/http2"
 )
 
 func Test_NormalizeAddr(t *testing.T) {
@@ -604,6 +609,54 @@ func Test_FormRedirectHTTPS(t *testing.T) {
 	}
 }
 
+func Test_TLSServce(t *testing.T) {
+	m := &MockStore{}
+	var s *Service
+	tempDir := mustTempDir()
+
+	s = New("127.0.0.1:0", m, nil)
+	s.CertFile = x509.CertFile(tempDir)
+	s.KeyFile = x509.KeyFile(tempDir)
+	s.BuildInfo = map[string]interface{}{
+		"version": "the version",
+	}
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	url := fmt.Sprintf("https://%s", s.Addr().String())
+
+	// Test connecting with a HTTP client.
+	tn := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	client := &http.Client{Transport: tn}
+	resp, err := client.Get(url)
+	if err != nil {
+		t.Fatalf("failed to make HTTP request: %s", err)
+	}
+
+	if v := resp.Header.Get("X-RQLITE-VERSION"); v != "the version" {
+		t.Fatalf("incorrect build version present in HTTP response header, got: %s", v)
+	}
+
+	// Test connecting with a HTTP/2 client.
+	client = &http.Client{
+		Transport: &http2.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		},
+	}
+	resp, err = client.Get(url)
+	if err != nil {
+		t.Fatalf("failed to make HTTP/2 request: %s", err)
+	}
+
+	if v := resp.Header.Get("X-RQLITE-VERSION"); v != "the version" {
+		t.Fatalf("incorrect build version present in HTTP/2 response header, got: %s", v)
+	}
+}
+
 type MockStore struct {
 	executeFn func(queries []string, tx bool) ([]*sql.Result, error)
 	queryFn   func(queries []string, tx, leader, verify bool) ([]*sql.Rows, error)
@@ -691,4 +744,13 @@ func mustNewHTTPRequest(url string) *http.Request {
 		panic("failed to create HTTP request for testing")
 	}
 	return req
+}
+
+func mustTempDir() string {
+	var err error
+	path, err := ioutil.TempDir("", "rqlilte-system-test-")
+	if err != nil {
+		panic("failed to create temp dir")
+	}
+	return path
 }
