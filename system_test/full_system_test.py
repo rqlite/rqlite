@@ -163,6 +163,9 @@ class Node(object):
   def num_snapshots(self):
     return int(self.expvar()['store']['num_snapshots'])
 
+  def num_join_requests(self):
+    return int(self.expvar()['http']['joins'])
+
   def wait_for_applied_index(self, index, timeout=TIMEOUT):
     t = 0
     while self.applied_index() < index:
@@ -351,6 +354,29 @@ class TestSingleNode(unittest.TestCase):
         raise Exception('timeout', nSnaps)
       time.sleep(1)
       t+=1
+
+class TestIdempotentJoin(unittest.TestCase):
+  def tearDown(self):
+    deprovision_node(self.n0)
+    deprovision_node(self.n1)
+
+  def test(self):
+    self.n0 = Node(RQLITED_PATH, '0')
+    self.n0.start()
+    self.n0.wait_for_leader()
+
+    self.n1 = Node(RQLITED_PATH, '1')
+    self.n1.start(join=self.n0.APIAddr())
+    self.n1.wait_for_leader()
+
+    self.assertEqual(self.n0.num_join_requests(), 1)
+
+    # Restart n1, and ensure it doesn't make a second join request
+    # since it's already part of the cluster.
+    self.n1.stop()
+    self.n1.start(join=self.n0.APIAddr())
+    self.n1.wait_for_leader()
+    self.assertEqual(self.n0.num_join_requests(), 1)
 
 class TestEndToEnd(unittest.TestCase):
   def setUp(self):
