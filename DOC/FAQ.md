@@ -64,8 +64,10 @@ Sure. Many people do so, as they like accessing a SQLite database over HTTP. Of 
 There is no explicit maximum cluster size. However the [practical cluster size limit is about 9 _voting nodes_](https://github.com/rqlite/rqlite/blob/master/DOC/CLUSTER_MGMT.md). You can go bigger by adding [read-only nodes](https://github.com/rqlite/rqlite/blob/master/DOC/READ_ONLY_NODES.md).
 
 ## Is rqlite a good match for a network of nodes that come and go -- perhaps thousands of them?
-Unlikely. While rqlite does support read-only nodes, allowing it to scale to many nodes, the consensus protocol at the core of rqlite works best when the nodes in the cluster don't continually come and go. While it won't break, it probably won't be practical.
+Unlikely. While rqlite does support read-only nodes, allowing it to scale to many nodes, the consensus protocol at the core of rqlite works best when the **voting** nodes in the cluster don't continually come and go. While it won't break, it probably won't be practical.
 
+However if the nodes that come and go only need to stay up-to-date with changes, and serve read requests, it might work. Learn about [read-only nodes](https://github.com/rqlite/rqlite/blob/master/DOC/READ_ONLY_NODES.md).
+ 
 ## Can I use rqlite to broadcast changes to lots of other nodes -- perhaps hundreds -- as long as those nodes don't write data?
 Yes, try out [read-only nodes](https://github.com/rqlite/rqlite/blob/master/DOC/READ_ONLY_NODES.md).
 
