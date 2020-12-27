@@ -104,6 +104,7 @@ const (
 	numQueries    = "queries"
 	numBackups    = "backups"
 	numLoad       = "loads"
+	numJoins      = "joins"
 
 	// PermAll means all actions permitted.
 	PermAll = "all"
@@ -131,6 +132,8 @@ func init() {
 	stats.Add(numExecutions, 0)
 	stats.Add(numQueries, 0)
 	stats.Add(numBackups, 0)
+	stats.Add(numLoad, 0)
+	stats.Add(numJoins, 0)
 }
 
 // SetTime sets the Time attribute of the response. This way it will be present
@@ -251,6 +254,7 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		stats.Add(numLoad, 1)
 		s.handleLoad(w, r)
 	case strings.HasPrefix(r.URL.Path, "/join"):
+		stats.Add(numJoins, 1)
 		s.handleJoin(w, r)
 	case strings.HasPrefix(r.URL.Path, "/remove"):
 		s.handleRemove(w, r)
