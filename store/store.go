@@ -1021,11 +1021,8 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 		database = buf.Bytes()
 		offset += int64(sz)
 	} else {
-		if n, err := io.ReadFull(rc, database); err != nil {
-			return fmt.Errorf("read uncompressed database: %s", err)
-		} else {
-			offset += int64(n)
-		}
+		database = b[offset : offset+int64(sz)]
+		offset += int64(sz)
 	}
 
 	var db *sql.DB
