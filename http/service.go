@@ -901,7 +901,7 @@ func requestQueries(r *http.Request) ([]*command.Statement, error) {
 func createTLSConfig(certFile, keyFile, caCertFile string) (*tls.Config, error) {
 	var err error
 	config := &tls.Config{
-		NextProtos: []string{"h2"},
+		NextProtos: []string{"h2", "http/1.1"},
 	}
 	config.Certificates = make([]tls.Certificate, 1)
 	config.Certificates[0], err = tls.LoadX509KeyPair(certFile, keyFile)
