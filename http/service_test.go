@@ -12,6 +12,8 @@ import (
 	sql "github.com/rqlite/rqlite/db"
 	"github.com/rqlite/rqlite/store"
 	"github.com/rqlite/rqlite/testdata/x509"
+
+	"golang.org/x/net/http2"
 )
 
 func Test_NormalizeAddr(t *testing.T) {
@@ -625,17 +627,33 @@ func Test_TLSServce(t *testing.T) {
 
 	url := fmt.Sprintf("https://%s", s.Addr().String())
 
+	// Test connecting with a HTTP client.
 	tn := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
 	client := &http.Client{Transport: tn}
 	resp, err := client.Get(url)
 	if err != nil {
-		t.Fatalf("failed to make request")
+		t.Fatalf("failed to make HTTP request: %s", err)
 	}
 
 	if v := resp.Header.Get("X-RQLITE-VERSION"); v != "the version" {
 		t.Fatalf("incorrect build version present in HTTP response header, got: %s", v)
+	}
+
+	// Test connecting with a HTTP/2 client.
+	client = &http.Client{
+		Transport: &http2.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		},
+	}
+	resp, err = client.Get(url)
+	if err != nil {
+		t.Fatalf("failed to make HTTP/2 request: %s", err)
+	}
+
+	if v := resp.Header.Get("X-RQLITE-VERSION"); v != "the version" {
+		t.Fatalf("incorrect build version present in HTTP/2 response header, got: %s", v)
 	}
 }
 
