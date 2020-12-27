@@ -965,8 +965,8 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 		return err
 	}
 
-	var sizes uint64
-	inc := int64(unsafe.Sizeof(sizes))
+	var uint64_size uint64
+	inc := int64(unsafe.Sizeof(uint64_size))
 
 	// Read all the data into RAM, since we have to decode known-length
 	// chunks of various forms.
