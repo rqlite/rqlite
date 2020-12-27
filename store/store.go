@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"sync"
 	"time"
+	"unsafe"
 
 	"github.com/hashicorp/raft"
 	"github.com/hashicorp/raft-boltdb"
@@ -949,7 +950,6 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 	}
 
 	fsm.meta, err = json.Marshal(s.meta)
-	fmt.Println(">>>>", s.meta)
 	if err != nil {
 		s.logger.Printf("failed to encode meta for snapshot: %s", err.Error())
 		return nil, err
@@ -965,9 +965,20 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 		return err
 	}
 
-	readUint64 := func(io.ReadCloser) (uint64, error) {
+	var sizes uint64
+	inc := int64(unsafe.Sizeof(sizes))
+
+	// Read all the data into RAM, since we have to decode known-length
+	// chunks of various forms.
+	var offset int64
+	b, err := ioutil.ReadAll(rc)
+	if err != nil {
+		return fmt.Errorf("readall: %s", err)
+	}
+
+	readUint64 := func(bb []byte) (uint64, error) {
 		var sz uint64
-		if err := binary.Read(rc, binary.LittleEndian, &sz); err != nil {
+		if err := binary.Read(bytes.NewReader(bb), binary.LittleEndian, &sz); err != nil {
 			return 0, fmt.Errorf("read initial size: %s", err)
 		}
 		return sz, nil
@@ -975,30 +986,32 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 
 	// Get size of database, checking for compression.
 	compressed := false
-	sz, err := readUint64(rc)
+	sz, err := readUint64(b[offset : offset+inc])
 	if err != nil {
 		return fmt.Errorf("read compression check: %s", err)
 	}
+	offset = offset + inc
+
 	if sz == math.MaxUint64 {
 		compressed = true
 		// Database is actually compressed, read actual size next.
-		sz, err = readUint64(rc)
+		sz, err = readUint64(b[offset : offset+inc])
 		if err != nil {
 			return fmt.Errorf("read compressed size: %s", err)
 		}
-
+		offset = offset + inc
 	}
 
 	// Now read in the database file data, decompress if necessary, and restore.
 	database := make([]byte, sz)
 	if compressed {
 		buf := new(bytes.Buffer)
-		gz, err := gzip.NewReader(rc)
+		gz, err := gzip.NewReader(bytes.NewReader(b[offset : offset+int64(sz)]))
 		if err != nil {
 			return err
 		}
 
-		if _, err := io.CopyN(buf, gz, 8192 /*int64(sz)*/); err != nil {
+		if _, err := io.Copy(buf, gz); err != nil {
 			return fmt.Errorf("SQLite database decompress: %s", err)
 		}
 
@@ -1006,10 +1019,12 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 			return err
 		}
 		database = buf.Bytes()
-		fmt.Println("Size of db postcompression:", sz, len(database))
+		offset += int64(sz)
 	} else {
-		if _, err := io.ReadFull(rc, database); err != nil {
+		if n, err := io.ReadFull(rc, database); err != nil {
 			return fmt.Errorf("read uncompressed database: %s", err)
+		} else {
+			offset += int64(n)
 		}
 	}
 
@@ -1046,16 +1061,11 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 	}
 	s.db = db
 
-	// Read remaining bytes, and set to cluster meta.
-	b, err := ioutil.ReadAll(rc)
-	if err != nil {
-		return fmt.Errorf("snapshot remaining read: %s", err)
-	}
-
+	// Unmarshal remaining bytes, and set to cluster meta.
 	err = func() error {
 		s.metaMu.Lock()
 		defer s.metaMu.Unlock()
-		return json.Unmarshal(b, &s.meta)
+		return json.Unmarshal(b[offset:], &s.meta)
 	}()
 	if err != nil {
 		return fmt.Errorf("cluster metadata unmarshal: %s", err)
@@ -1108,7 +1118,6 @@ func (f *fsmSnapshot) Persist(sink raft.SnapshotSink) error {
 		b.Reset() // Clear state of buffer for future use.
 
 		// Get compressed copy of database.
-		fmt.Println("Size of db precompression:", len(f.database))
 		cdb, err := f.compressedDatabase()
 		if err != nil {
 			return err
