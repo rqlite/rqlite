@@ -46,6 +46,7 @@ var (
 )
 
 const (
+	raftDBPath          = "raft.db" // Changing this will break backwards compatibilty.
 	retainSnapshotCount = 2
 	applyTimeout        = 10 * time.Second
 	openTimeout         = 120 * time.Second
@@ -182,7 +183,7 @@ func (s *Store) Open(enableSingle bool) error {
 	s.db = db
 
 	// Is this a brand new node?
-	newNode := !pathExists(filepath.Join(s.raftDir, "raft.db"))
+	newNode := !pathExists(filepath.Join(s.raftDir, raftDBPath))
 
 	// Create Raft-compatible network layer.
 	s.raftTn = raft.NewNetworkTransport(NewTransport(s.ln), connectionPoolCount, connectionTimeout, nil)
@@ -197,7 +198,7 @@ func (s *Store) Open(enableSingle bool) error {
 	}
 
 	// Create the log store and stable store.
-	s.boltStore, err = raftboltdb.NewBoltStore(filepath.Join(s.raftDir, "raft.db"))
+	s.boltStore, err = raftboltdb.NewBoltStore(filepath.Join(s.raftDir, raftDBPath))
 	if err != nil {
 		return fmt.Errorf("new bolt store: %s", err)
 	}
@@ -1030,7 +1031,7 @@ func (s *Store) DeregisterObserver(o *raft.Observer) {
 
 // logSize returns the size of the Raft log on disk.
 func (s *Store) logSize() (int64, error) {
-	fi, err := os.Stat(filepath.Join(s.raftDir, "raft.db"))
+	fi, err := os.Stat(filepath.Join(s.raftDir, raftDBPath))
 	if err != nil {
 		return 0, err
 	}
