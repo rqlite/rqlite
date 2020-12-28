@@ -162,6 +162,19 @@ func (db *DB) FKConstraints() (bool, error) {
 	return false, nil
 }
 
+// Size returns the size of the database in bytes. "Size" is defined as
+// page_count * schema.page_size.
+func (db *DB) Size() (int64, error) {
+        query := `SELECT page_count * page_size as size FROM pragma_page_count(), pragma_page_size()`
+        r, err := db.QueryStringStmt(query)
+        if err != nil {
+                return 0, err
+        }
+
+	return r[0].Values[0][0].(int64), nil
+}
+
+
 // TransactionActive returns whether a transaction is currently active
 // i.e. if the database is NOT in autocommit mode.
 func (db *DB) TransactionActive() bool {
