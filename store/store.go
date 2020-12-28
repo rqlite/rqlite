@@ -414,7 +414,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		"dsn":            s.dbConf.DSN,
 		"fk_constraints": enabledFromBool(fkEnabled),
 		"version":        sql.DBVersion,
-		"size":		  dbSz,
+		"size":           dbSz,
 	}
 	if !s.dbConf.Memory {
 		dbStatus["path"] = s.dbPath

@@ -689,7 +689,7 @@ func Test_UniqueConstraints(t *testing.T) {
 func Test_DBSize(t *testing.T) {
 	db, path := mustCreateDatabase()
 	defer db.Close()
-        defer os.Remove(path)
+	defer os.Remove(path)
 
 	if _, err := db.Size(); err != nil {
 		t.Fatalf("failed to read database size: %s", err)
