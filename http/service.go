@@ -3,7 +3,6 @@
 package http
 
 import (
-	"bytes"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
@@ -343,9 +342,7 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		b := bytes.NewBufferString(err.Error())
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write(b.Bytes())
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 }
@@ -398,7 +395,7 @@ func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		w.WriteHeader(http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 }
@@ -518,7 +515,7 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 
 	results, err := s.store.Stats()
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -582,7 +579,8 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 	} else {
 		_, err = w.Write([]byte(b))
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 		}
 	}
 }
