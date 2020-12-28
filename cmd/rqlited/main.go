@@ -130,7 +130,7 @@ func init() {
 	flag.StringVar(&memProfile, "mem-profile", "", "Path to file for memory profiling information")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "\n%s\n\n", desc)
-		fmt.Fprintf(os.Stderr, "Usage: %s [arguments] <data directory>\n", name)
+		fmt.Fprintf(os.Stderr, "Usage: %s [flags] <data directory>\n", name)
 		flag.PrintDefaults()
 	}
 }
@@ -145,8 +145,14 @@ func main() {
 	}
 
 	// Ensure the data path is set.
-	if flag.NArg() == 0 {
-		flag.Usage()
+	if flag.NArg() < 1 {
+		fmt.Fprintf(os.Stderr, "fatal: no data directory set\n")
+		os.Exit(1)
+	}
+
+	// Ensure no args come after the data directory.
+	if flag.NArg() > 1 {
+		fmt.Fprintf(os.Stderr, "fatal: arguments after data directory are not accepted\n")
 		os.Exit(1)
 	}
 
