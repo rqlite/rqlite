@@ -31,7 +31,7 @@ const logo = `
  | '__/ _  | | | __/ _ \   The lightweight, distributed
  | | | (_| | | | ||  __/   relational database.
  |_|  \__, |_|_|\__\___|
-         | |
+         | |               www.rqlite.com
          |_|
 `
 
@@ -320,6 +320,7 @@ func main() {
 	if err := startHTTPService(str); err != nil {
 		log.Fatalf("failed to start HTTP server: %s", err.Error())
 	}
+	log.Println("node is ready")
 
 	// Block until signalled.
 	terminate := make(chan os.Signal, 1)
