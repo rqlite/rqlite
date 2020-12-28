@@ -7,6 +7,7 @@ import (
 	"expvar"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"time"
 
@@ -160,6 +161,31 @@ func (db *DB) FKConstraints() (bool, error) {
 		return true, nil
 	}
 	return false, nil
+}
+
+// Size returns the size of the database in bytes. "Size" is defined as
+// page_count * schema.page_size.
+func (db *DB) Size() (int64, error) {
+	query := `SELECT page_count * page_size as size FROM pragma_page_count(), pragma_page_size()`
+	r, err := db.QueryStringStmt(query)
+	if err != nil {
+		return 0, err
+	}
+
+	return r[0].Values[0][0].(int64), nil
+}
+
+// FileSize returns the size of the SQLite file on disk. If running in
+// on-memory mode, this function returns 0.
+func (db *DB) FileSize() (int64, error) {
+	if db.memory {
+		return 0, nil
+	}
+	fi, err := os.Stat(db.path)
+	if err != nil {
+		return 0, err
+	}
+	return fi.Size(), nil
 }
 
 // TransactionActive returns whether a transaction is currently active
