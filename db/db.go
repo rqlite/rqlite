@@ -7,6 +7,7 @@ import (
 	"expvar"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"time"
 
@@ -172,6 +173,19 @@ func (db *DB) Size() (int64, error) {
 	}
 
 	return r[0].Values[0][0].(int64), nil
+}
+
+// FileSize returns the size of the SQLite file on disk. If running in
+// on-memory mode, this function returns 0.
+func (db *DB) FileSize() (int64, error) {
+	if db.memory {
+		return 0, nil
+	}
+	fi, err := os.Stat(db.path)
+	if err != nil {
+		return 0, err
+	}
+	return fi.Size(), nil
 }
 
 // TransactionActive returns whether a transaction is currently active
