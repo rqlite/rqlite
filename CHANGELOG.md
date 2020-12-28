@@ -1,4 +1,4 @@
-## 5.8.0 (unreleased)
+## 5.8.0 (December 28th 2020)
 
 ### New features
 - [PR #716](https://github.com/rqlite/rqlite/pull/716): Support HTTP/2 protocol over TLS. Fixes [issue #516](https://github.com/rqlite/rqlite/issues/516).
