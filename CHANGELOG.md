@@ -6,6 +6,7 @@
 ### Implementation changes and bug fixes
 - [PR #711](https://github.com/rqlite/rqlite/pull/711), [PR# 712](https://github.com/rqlite/rqlite/pull/712): Ignore join addresses if node already part of cluster. Fixes [issue #710](https://github.com/rqlite/rqlite/issues/710).
 - [PR #715](https://github.com/rqlite/rqlite/pull/715): Compress SQLite database in Raft snapshot.
+- [PR #717](https://github.com/rqlite/rqlite/pull/717): Add SQLite database page-centric size to status output.
 
 ## 5.7.0 (December 23rd 2020)
 
