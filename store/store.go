@@ -418,11 +418,9 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 	}
 	if !s.dbConf.Memory {
 		dbStatus["path"] = s.dbPath
-		sz, err := s.db.FileSize()
-		if err != nil {
+		if dbStatus["size"], err = s.db.FileSize(); err != nil {
 			return nil, err
 		}
-		dbStatus["size"] = sz
 	} else {
 		dbStatus["path"] = ":memory:"
 	}
