@@ -410,16 +410,11 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	dbFileSz, err := s.db.FileSize()
-	if err != nil {
-		return nil, err
-	}
 	dbStatus := map[string]interface{}{
 		"dsn":            s.dbConf.DSN,
 		"fk_constraints": enabledFromBool(fkEnabled),
 		"version":        sql.DBVersion,
-		"size":           dbSz,
-		"file_size":      dbFileSz,
+		"db_size":        dbSz,
 	}
 	if !s.dbConf.Memory {
 		dbStatus["path"] = s.dbPath
