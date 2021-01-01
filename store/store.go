@@ -979,14 +979,6 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 		return fmt.Errorf("readall: %s", err)
 	}
 
-	readUint64 := func(bb []byte) (uint64, error) {
-		var sz uint64
-		if err := binary.Read(bytes.NewReader(bb), binary.LittleEndian, &sz); err != nil {
-			return 0, fmt.Errorf("read initial size: %s", err)
-		}
-		return sz, nil
-	}
-
 	// Get size of database, checking for compression.
 	compressed := false
 	sz, err := readUint64(b[offset : offset+inc])
@@ -1101,14 +1093,12 @@ type fsmSnapshot struct {
 // Persist writes the snapshot to the given sink.
 func (f *fsmSnapshot) Persist(sink raft.SnapshotSink) error {
 	err := func() error {
-		var b *bytes.Buffer
-		var sz uint64
+		b := new(bytes.Buffer)
 
 		// Flag compressed database by writing max uint64 value first.
 		// No SQLite database written by earlier versions will have this
 		// as a size. *Surely*.
-		b = new(bytes.Buffer)
-		err := binary.Write(b, binary.LittleEndian, uint64(math.MaxUint64))
+		err := writeUint64(b, math.MaxUint64)
 		if err != nil {
 			return err
 		}
@@ -1124,8 +1114,7 @@ func (f *fsmSnapshot) Persist(sink raft.SnapshotSink) error {
 		}
 
 		// Write size of compressed database.
-		sz = uint64(len(cdb))
-		err = binary.Write(b, binary.LittleEndian, sz)
+		err = writeUint64(b, uint64(len(cdb)))
 		if err != nil {
 			return err
 		}
@@ -1201,6 +1190,18 @@ func (s *Store) database(leader bool, dst io.Writer) error {
 
 // Release is a no-op.
 func (f *fsmSnapshot) Release() {}
+
+func readUint64(b []byte) (uint64, error) {
+	var sz uint64
+	if err := binary.Read(bytes.NewReader(b), binary.LittleEndian, &sz); err != nil {
+		return 0, err
+	}
+	return sz, nil
+}
+
+func writeUint64(w io.Writer, v uint64) error {
+	return binary.Write(w, binary.LittleEndian, v)
+}
 
 // enabledFromBool converts bool to "enabled" or "disabled".
 func enabledFromBool(b bool) string {
