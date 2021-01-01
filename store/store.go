@@ -1093,12 +1093,11 @@ type fsmSnapshot struct {
 // Persist writes the snapshot to the given sink.
 func (f *fsmSnapshot) Persist(sink raft.SnapshotSink) error {
 	err := func() error {
-		var b *bytes.Buffer
+		b := new(bytes.Buffer)
 
 		// Flag compressed database by writing max uint64 value first.
 		// No SQLite database written by earlier versions will have this
 		// as a size. *Surely*.
-		b = new(bytes.Buffer)
 		err := writeUint64(b, math.MaxUint64)
 		if err != nil {
 			return err
