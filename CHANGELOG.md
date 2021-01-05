@@ -2,6 +2,7 @@
 
 ### Implementation changes and bug fixes
 - [PR #724](https://github.com/rqlite/rqlite/pull/724): rqlite CLI displays node version at startup.
+- [PR #726](https://github.com/rqlite/rqlite/pull/726): Count number of legacy commands unmarshaled.
 
 ## 5.8.0 (December 28th 2020)
 
