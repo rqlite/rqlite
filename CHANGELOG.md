@@ -1,7 +1,7 @@
 ## 5.8.1 (unreleased)
 
 ### Implementation changes and bug fixes
-- [PR #724](https://github.com/rqlite/rqlite/pull/724): rqlite displays node version at startup.
+- [PR #724](https://github.com/rqlite/rqlite/pull/724): rqlite CLI displays node version at startup.
 
 ## 5.8.0 (December 28th 2020)
 
