@@ -17,10 +17,10 @@ const (
 
 var (
 	// ErrNotLegacyCommand  is returned when a command is not legacy encoded.
-	ErrNotLegacyCommand = errors.New("not legacy command")
+	ErrNotLegacyCommand = errors.New("not legacy JSON-encoded command")
 
 	// ErrUnknownCommandType is returned when an unknown command type is encountered.
-	ErrUnknownCommandType = errors.New("unknown command type")
+	ErrUnknownCommandType = errors.New("unknown JSON-encoded command type")
 
 	// ErrUnsupportedType is returned when a request contains an unsupported type.
 	ErrUnsupportedType = errors.New("unsupported type")

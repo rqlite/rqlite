@@ -854,8 +854,8 @@ func (s *Store) Apply(l *raft.Log) interface{} {
 	var c command.Command
 
 	if err := legacy.Unmarshal(l.Data, &c); err != nil {
-		if err = command.Unmarshal(l.Data, &c); err != nil {
-			panic(fmt.Sprintf("failed to unmarshal cluster command: %s", err.Error()))
+		if err2 := command.Unmarshal(l.Data, &c); err2 != nil {
+			panic(fmt.Sprintf("failed to unmarshal cluster command: %s (legacy unmarshal: %s)", err2.Error(), err.Error()))
 		}
 	}
 
