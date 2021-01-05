@@ -67,6 +67,7 @@ const (
 	numRestores             = "num_restores"
 	numUncompressedCommands = "num_uncompressed_commands"
 	numCompressedCommands   = "num_compressed_commands"
+	numLegacyCommands       = "num_legacy_commands"
 )
 
 // BackupFormat represents the format of database backup.
@@ -90,6 +91,7 @@ func init() {
 	stats.Add(numRestores, 0)
 	stats.Add(numUncompressedCommands, 0)
 	stats.Add(numCompressedCommands, 0)
+	stats.Add(numLegacyCommands, 0)
 }
 
 // ClusterState defines the possible Raft states the current node can be in
@@ -855,8 +857,11 @@ func (s *Store) Apply(l *raft.Log) interface{} {
 
 	if err := legacy.Unmarshal(l.Data, &c); err != nil {
 		if err2 := command.Unmarshal(l.Data, &c); err2 != nil {
-			panic(fmt.Sprintf("failed to unmarshal cluster command: %s (legacy unmarshal: %s)", err2.Error(), err.Error()))
+			panic(fmt.Sprintf("failed to unmarshal cluster command: %s (legacy unmarshal: %s)",
+				err2.Error(), err.Error()))
 		}
+	} else {
+		stats.Add(numLegacyCommands, 1)
 	}
 
 	switch c.Type {
