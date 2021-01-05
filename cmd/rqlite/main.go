@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 
@@ -57,6 +58,15 @@ func main() {
 			return nil
 		}
 
+		version, err := getVersionWithClient(client, argv)
+		if err != nil {
+			ctx.String("%s %v\n", ctx.Color().Red("ERR!"), err)
+			return nil
+		}
+
+		fmt.Println("Welcome to the rqlite CLI. Enter \".help\" for usage hints.")
+		fmt.Printf("Connected to version %s\n", version)
+
 		timer := false
 		prefix := fmt.Sprintf("%s:%d>", argv.Host, argv.Port)
 		term, err := prompt.NewTerminal()
@@ -64,7 +74,6 @@ func main() {
 			ctx.String("%s %v\n", ctx.Color().Red("ERR!"), err)
 			return nil
 		}
-		fmt.Println("Welcome to the rqlite CLI. Enter \".help\" for usage hints.")
 		term.Close()
 
 	FOR_READ:
@@ -199,6 +208,38 @@ func getHTTPClient(argv *argT) (*http.Client, error) {
 	}
 
 	return &client, nil
+}
+
+func getVersionWithClient(client *http.Client, argv *argT) (string, error) {
+	u := url.URL{
+		Scheme: argv.Protocol,
+		Host:   fmt.Sprintf("%s:%d", argv.Host, argv.Port),
+		Path:   fmt.Sprintf("%s/status", argv.Prefix),
+	}
+	urlStr := u.String()
+
+	req, err := http.NewRequest("GET", urlStr, nil)
+	if err != nil {
+		return "", err
+	}
+	if argv.Credentials != "" {
+		creds := strings.Split(argv.Credentials, ":")
+		if len(creds) != 2 {
+			return "", fmt.Errorf("invalid Basic Auth credentials format")
+		}
+		req.SetBasicAuth(creds[0], creds[1])
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+
+	version, ok := resp.Header["X-Rqlite-Version"]
+	if !ok || len(version) != 1 {
+		return "unknown", nil
+	}
+	return version[0], nil
 }
 
 func sendRequest(ctx *cli.Context, makeNewRequest func(string) (*http.Request, error), urlStr string, argv *argT) (*[]byte, error) {
