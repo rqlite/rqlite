@@ -15,7 +15,7 @@ Please avoid using libaries other than those available in the standard library, 
 ## Building rqlite
 *Building rqlite requires Go 1.14 or later. [gvm](https://github.com/moovweb/gvm) is a great tool for installing and managing your versions of Go.*
 
-A key design goal of rqlite is to keep the build process as simple as possible. Download, build, and run rqlite like so (tested on 64-bit Kubuntu 16.04 and OSX):
+One goal of rqlite is to keep the build process as simple as possible. Download, build, and run rqlite like so (tested on 64-bit Kubuntu 16.04 and OSX):
 
 ```bash
 mkdir rqlite # Or any directory of your choice.
