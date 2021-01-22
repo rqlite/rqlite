@@ -34,7 +34,7 @@ rqlite is very simple to deploy, run, and manage. It's a single binary you can d
 That said, it's always possible it's _too_ simple for your needs.
 
 ## How do I access the database?
-The primary way to access the database is via the [HTTP API](https://github.com/rqlite/rqlite/blob/master/DOC/DATA_API.md). You can access it directly, or use a [client library](https://github.com/rqlite). For more casual use you can use the [command line tool](https://github.com/rqlite/rqlite/blob/master/DOC/CLI.md).
+The primary way to access the database is via the [HTTP API](https://github.com/rqlite/rqlite/blob/master/DOC/DATA_API.md). You can access it directly, or use a [client library](https://github.com/rqlite). For more casual use you can use the [command line tool](https://github.com/rqlite/rqlite/blob/master/DOC/CLI.md). It is also technically possible to [read the SQLite file directly](https://github.com/rqlite/rqlite/blob/master/DOC/FAQ.md#can-i-read-the-sqlite-file-directly), but it's not officially supported.
 
 ## Can any node execute a write request, and have the system "synchronize it all"?
 No, only the leader can make changes to the database. A client can _send_ a write-request to any node, and if that node is not the leader, the node will respond with the address of the leader, allowing the client to resend the request to the actual leader.
