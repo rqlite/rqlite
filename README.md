@@ -2,7 +2,7 @@
 
 [![Circle CI](https://circleci.com/gh/rqlite/rqlite/tree/master.svg?style=svg)](https://circleci.com/gh/rqlite/rqlite/tree/master) [![appveyor](https://ci.appveyor.com/api/projects/status/github/rqlite/rqlite?branch=master&svg=true)](https://ci.appveyor.com/project/otoolep/rqlite) [![GoDoc](https://godoc.org/github.com/rqlite/rqlite?status.svg)](https://godoc.org/github.com/rqlite/rqlite) [![Go Report Card](https://goreportcard.com/badge/github.com/rqlite/rqlite)](https://goreportcard.com/report/github.com/rqlite/rqlite) [![Release](https://img.shields.io/github/release/rqlite/rqlite.svg)](https://github.com/rqlite/rqlite/releases) [![Docker](https://img.shields.io/docker/pulls/rqlite/rqlite?style=plastic)](https://hub.docker.com/r/rqlite/rqlite/) [![Google Group](https://img.shields.io/badge/Google%20Group--blue.svg)](https://groups.google.com/group/rqlite)
 
-*rqlite* is a lightweight, distributed relational database, which uses [SQLite](https://www.sqlite.org/) as its storage engine. Forming a cluster is very straightforward, it gracefully handles leader elections, and tolerates failures of machines, including the leader. rqlite is available for Linux, OSX, and Microsoft Windows.
+*rqlite* is a lightweight, distributed relational database, which uses [SQLite](https://www.sqlite.org/) as its storage engine. Forming a cluster is very straightforward, it gracefully handles leader elections, and tolerates failures of machines, including the leader. rqlite is available for Linux, macOS, and Microsoft Windows.
 
 _Check out the [rqlite FAQ](https://github.com/rqlite/rqlite/blob/master/DOC/FAQ.md)._
 
@@ -31,7 +31,7 @@ rqlite uses [Raft](https://raft.github.io/) to achieve consensus across all the 
 ## Quick Start
 _Detailed documentation [is available](https://github.com/rqlite/rqlite/tree/master/DOC). You may also wish to check out the [rqlite Google Group](https://groups.google.com/forum/#!forum/rqlite)._
 
-The quickest way to get running on OSX and Linux is to download a pre-built release binary. You can find these binaries on the [Github releases page](https://github.com/rqlite/rqlite/releases). If you prefer Windows you can download the latest build [here](https://ci.appveyor.com/api/projects/otoolep/rqlite/artifacts/rqlite-latest-win64.zip?branch=master). Once installed, you can start a single rqlite node like so:
+The quickest way to get running on macOS and Linux is to download a pre-built release binary. You can find these binaries on the [Github releases page](https://github.com/rqlite/rqlite/releases). If you prefer Windows you can download the latest build [here](https://ci.appveyor.com/api/projects/otoolep/rqlite/artifacts/rqlite-latest-win64.zip?branch=master). Once installed, you can start a single rqlite node like so:
 ```bash
 rqlited -node-id 1 ~/node.1
 ```
