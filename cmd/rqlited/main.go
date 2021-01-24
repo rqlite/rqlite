@@ -230,6 +230,11 @@ func main() {
 		enableBootstrap = true // New node, so we may be bootstrapping
 	} else {
 		log.Printf("preexisting node state detected in %s", dataPath)
+		fi, li, err := store.NewLog(dataPath).Indexes()
+		if err != nil {
+			log.Fatalf("failed to get Log first and last indexes: %s", err.Error())
+		}
+		log.Printf("first log index is %d, last log index is %d", fi, li)
 	}
 
 	// Determine join addresses
