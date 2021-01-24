@@ -616,25 +616,35 @@ class TestEndToEndBackupRestore(unittest.TestCase):
     os.remove(self.db_file)
 
 class TestEndToEndSnapRestore(unittest.TestCase):
-  def test_join_with_snap(self):
-    '''Check that a node joins a cluster correctly via a snapshot'''
-    self.n0 = Node(RQLITED_PATH, '0',  raft_snap_threshold=100, raft_snap_int="1s")
-    self.n0.start()
-    self.n0.wait_for_leader()
-    self.n0.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
-    for i in range(0,100):
-      self.n0.execute('INSERT INTO foo(name) VALUES("fiona")')
-    self.n0.wait_for_all_applied()
-
-    timeout = 5
+  def waitForSnap(self, n):
+    timeout = 10
     t = 0
     while True:
       if t > timeout:
         raise Exception('timeout')
-      if self.n0.expvar()['store']['num_snapshots'] is 1:
+      if self.n0.expvar()['store']['num_snapshots'] is n:
         break
       time.sleep(1)
       t+=1
+
+  def test_join_with_snap(self):
+
+    '''Check that a node joins a cluster correctly via a snapshot'''
+    self.n0 = Node(RQLITED_PATH, '0',  raft_snap_threshold=100, raft_snap_int="1s")
+    self.n0.start()
+    self.n0.wait_for_leader()
+
+    # Let's get TWO snapshots done.
+    self.n0.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
+    for i in range(0,100):
+      self.n0.execute('INSERT INTO foo(name) VALUES("fiona")')
+    self.n0.wait_for_all_applied()
+    self.waitForSnap(1)
+
+    for i in range(0,100):
+      self.n0.execute('INSERT INTO foo(name) VALUES("fiona")')
+    self.n0.wait_for_all_applied()
+    self.waitForSnap(2)
 
     # Add two more nodes to the cluster
     self.n1 = Node(RQLITED_PATH, '1')
@@ -647,9 +657,27 @@ class TestEndToEndSnapRestore(unittest.TestCase):
 
     # Ensure those new nodes have the full correct state.
     j = self.n1.query('SELECT count(*) FROM foo', level='none')
-    self.assertEqual(str(j), "{u'results': [{u'values': [[100]], u'types': [u''], u'columns': [u'count(*)']}]}")
+    self.assertEqual(str(j), "{u'results': [{u'values': [[200]], u'types': [u''], u'columns': [u'count(*)']}]}")
     j = self.n2.query('SELECT count(*) FROM foo', level='none')
-    self.assertEqual(str(j), "{u'results': [{u'values': [[100]], u'types': [u''], u'columns': [u'count(*)']}]}")
+    self.assertEqual(str(j), "{u'results': [{u'values': [[200]], u'types': [u''], u'columns': [u'count(*)']}]}")
+
+    # Kill one of the nodes, and make more changes, enough to trigger more snaps.
+    self.n2.stop()
+
+    for i in range(0,100):
+      self.n0.execute('INSERT INTO foo(name) VALUES("fiona")')
+    self.n0.wait_for_all_applied()
+    self.waitForSnap(3)
+    for i in range(0,100):
+      self.n0.execute('INSERT INTO foo(name) VALUES("fiona")')
+    self.n0.wait_for_all_applied()
+    self.waitForSnap(4)
+
+    # Restart killed node, check it has full state.
+    self.n2.start()
+    self.n2.wait_for_leader()
+    j = self.n2.query('SELECT count(*) FROM foo', level='none')
+    self.assertEqual(str(j), "{u'results': [{u'values': [[400]], u'types': [u''], u'columns': [u'count(*)']}]}")
 
   def tearDown(self):
     deprovision_node(self.n0)
