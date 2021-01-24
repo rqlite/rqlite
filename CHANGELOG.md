@@ -1,4 +1,4 @@
-## 5.9.0 (unreleased)
+## 5.9.0 (January 24th 2021)
 ### New features
 - [PR #734](https://github.com/rqlite/rqlite/pull/734): Better control over waiting for Leader at startup, via command line options.
 
