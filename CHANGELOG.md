@@ -1,4 +1,6 @@
-## 5.8.1 (unreleased)
+## 5.9.0 (unreleased)
+### New features
+- [PR #734](https://github.com/rqlite/rqlite/pull/734): Better control over waiting for Leader at startup, via command line options.
 
 ### Implementation changes and bug fixes
 - [PR #724](https://github.com/rqlite/rqlite/pull/724): rqlite CLI displays node version at startup.
