@@ -317,8 +317,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to parse Raft open timeout %s: %s", raftOpenTimeout, err.Error())
 	}
-	str.WaitForLeader(openTimeout)
-	str.WaitForApplied(openTimeout)
+	if _, err := str.WaitForLeader(openTimeout); err != nil {
+		log.Fatalf("leader did not appear within timeout: %s", err.Error())
+	}
+	if err := str.WaitForApplied(openTimeout); err != nil {
+		log.Fatalf("log was not fully applied within timeout: %s", err.Error())
+	}
 
 	// This may be a standalone server. In that case set its own metadata.
 	if err := str.SetMetadata(meta); err != nil && err != store.ErrNotLeader {
