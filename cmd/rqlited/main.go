@@ -77,6 +77,7 @@ var raftHeartbeatTimeout string
 var raftElectionTimeout string
 var raftApplyTimeout string
 var raftOpenTimeout string
+var raftWaitForLeader bool
 var raftShutdownOnRemove bool
 var compressionSize int
 var compressionBatch int
@@ -119,6 +120,7 @@ func init() {
 	flag.StringVar(&raftElectionTimeout, "raft-election-timeout", "1s", "Raft election timeout")
 	flag.StringVar(&raftApplyTimeout, "raft-apply-timeout", "10s", "Raft apply timeout")
 	flag.StringVar(&raftOpenTimeout, "raft-open-timeout", "120s", "Time for initial Raft logs to be applied. Use 0s duration to skip wait")
+	flag.BoolVar(&raftWaitForLeader, "raft-leader-wait", true, "Node waits for a leader before answering requests")
 	flag.Uint64Var(&raftSnapThreshold, "raft-snap", 8192, "Number of outstanding log entries that trigger snapshot")
 	flag.StringVar(&raftSnapInterval, "raft-snap-int", "30s", "Snapshot threshold check interval")
 	flag.StringVar(&raftLeaderLeaseTimeout, "raft-leader-lease-timeout", "0s", "Raft leader lease timeout. Use 0s for Raft default")
@@ -313,15 +315,8 @@ func main() {
 	}
 
 	// Wait until the store is in full consensus.
-	openTimeout, err := time.ParseDuration(raftOpenTimeout)
-	if err != nil {
-		log.Fatalf("failed to parse Raft open timeout %s: %s", raftOpenTimeout, err.Error())
-	}
-	if _, err := str.WaitForLeader(openTimeout); err != nil {
-		log.Fatalf("leader did not appear within timeout: %s", err.Error())
-	}
-	if err := str.WaitForApplied(openTimeout); err != nil {
-		log.Fatalf("log was not fully applied within timeout: %s", err.Error())
+	if err := waitForConsensus(str); err != nil {
+		log.Fatalf(err.Error())
 	}
 
 	// This may be a standalone server. In that case set its own metadata.
@@ -377,6 +372,28 @@ func determineJoinAddresses() ([]string, error) {
 	}
 
 	return addrs, nil
+}
+
+func waitForConsensus(str *store.Store) error {
+	openTimeout, err := time.ParseDuration(raftOpenTimeout)
+	if err != nil {
+		return fmt.Errorf("failed to parse Raft open timeout %s: %s", raftOpenTimeout, err.Error())
+	}
+	if _, err := str.WaitForLeader(openTimeout); err != nil {
+		if raftWaitForLeader {
+			return fmt.Errorf("leader did not appear within timeout: %s", err.Error())
+		} else {
+			log.Println("ignoring error waiting for leader")
+		}
+	}
+	if openTimeout != 0 {
+		if err := str.WaitForApplied(openTimeout); err != nil {
+			return fmt.Errorf("log was not fully applied within timeout: %s", err.Error())
+		}
+	} else {
+		log.Println("not waiting for logs to be applied")
+	}
+	return nil
 }
 
 func startHTTPService(str *store.Store) error {
