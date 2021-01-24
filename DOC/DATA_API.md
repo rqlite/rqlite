@@ -90,7 +90,7 @@ curl -XPOST 'localhost:4001/db/query?pretty&timings' -H "Content-Type: applicati
 The response will be in the same form as when the query is made via HTTP GET.
 
 ### Read Consistency
-You can learn all about the read consistency guarantees supported by rqlite [here](https://github.com/rqlite/rqlite/blob/master/DOC/CONSISTENCY.md).
+If you want to read data from nodes other than the leader you should learn about the read consistency guarantees supported by rqlite [here](https://github.com/rqlite/rqlite/blob/master/DOC/CONSISTENCY.md).
 
 ## Parameterized Statements
 _Support for Parameterized Statements was introduced in v5.5.0. The commands below will not work with earlier versions of rqlite._
