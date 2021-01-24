@@ -38,3 +38,16 @@ func (l *Log) LastIndex() (uint64, error) {
 	defer bs.Close()
 	return bs.LastIndex()
 }
+
+// Indexes returns the first and last indexes.
+func (l *Log) Indexes() (uint64, uint64, error) {
+	fi, err := l.FirstIndex()
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to get first index: %s", err)
+	}
+	li, err := l.LastIndex()
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to get last index: %s", err)
+	}
+	return fi, li, nil
+}

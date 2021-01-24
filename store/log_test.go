@@ -134,4 +134,14 @@ func Test_LogNewExistNotEmpty(t *testing.T) {
 		t.Fatalf("got wrong for last index of empty log: %d", li)
 	}
 
+	fi, li, err = l.Indexes()
+	if err != nil {
+		t.Fatalf("failed to get indexes: %s", err)
+	}
+	if fi != 2 {
+		t.Fatalf("got wrong value for first index of empty log: %d", fi)
+	}
+	if li != 4 {
+		t.Fatalf("got wrong for last index of empty log: %d", li)
+	}
 }
