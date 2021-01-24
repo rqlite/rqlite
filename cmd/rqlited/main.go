@@ -230,6 +230,11 @@ func main() {
 		enableBootstrap = true // New node, so we may be bootstrapping
 	} else {
 		log.Printf("preexisting node state detected in %s", dataPath)
+		fi, li, err := store.NewLog(dataPath).Indexes()
+		if err != nil {
+			log.Fatalf("failed to get Log first and last indexes: %s", err.Error())
+		}
+		log.Printf("first log index is %d, last log index is %d", fi, li)
 	}
 
 	// Determine join addresses
@@ -312,8 +317,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to parse Raft open timeout %s: %s", raftOpenTimeout, err.Error())
 	}
-	str.WaitForLeader(openTimeout)
-	str.WaitForApplied(openTimeout)
+	if _, err := str.WaitForLeader(openTimeout); err != nil {
+		log.Fatalf("leader did not appear within timeout: %s", err.Error())
+	}
+	if err := str.WaitForApplied(openTimeout); err != nil {
+		log.Fatalf("log was not fully applied within timeout: %s", err.Error())
+	}
 
 	// This may be a standalone server. In that case set its own metadata.
 	if err := str.SetMetadata(meta); err != nil && err != store.ErrNotLeader {
