@@ -59,6 +59,7 @@ const (
 	connectionPoolCount = 5
 	connectionTimeout   = 10 * time.Second
 	raftLogCacheSize    = 512
+	trailingScale       = 1.25
 )
 
 const (
@@ -138,6 +139,8 @@ type Store struct {
 	ElectionTimeout    time.Duration
 	ApplyTimeout       time.Duration
 	RaftLogLevel       string
+
+	numTrailingLogs uint64
 }
 
 // IsNewNode returns whether a node using raftDir would be a brand new node.
@@ -199,6 +202,9 @@ func (s *Store) Open(enableBootstrap bool) error {
 
 	// Create Raft-compatible network layer.
 	s.raftTn = raft.NewNetworkTransport(NewTransport(s.ln), connectionPoolCount, connectionTimeout, nil)
+
+	// Don't allow control over trailing logs directly, just implement a policy.
+	s.numTrailingLogs = uint64(float64(s.SnapshotThreshold) * trailingScale)
 
 	config := s.raftConfig()
 	config.LocalID = raft.ServerID(s.raftID)
@@ -456,6 +462,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		"election_timeout":   s.ElectionTimeout.String(),
 		"snapshot_threshold": s.SnapshotThreshold,
 		"snapshot_interval":  s.SnapshotInterval,
+		"trailing_logs":      s.numTrailingLogs,
 		"request_marshaler":  s.reqMarshaller.Stats(),
 		"metadata":           s.meta,
 		"nodes":              nodes,
@@ -821,6 +828,7 @@ func (s *Store) raftConfig() *raft.Config {
 	config.LogLevel = s.RaftLogLevel
 	if s.SnapshotThreshold != 0 {
 		config.SnapshotThreshold = s.SnapshotThreshold
+		config.TrailingLogs = s.numTrailingLogs
 	}
 	if s.SnapshotInterval != 0 {
 		config.SnapshotInterval = s.SnapshotInterval
