@@ -19,7 +19,7 @@ func NewLog(dir string) *Log {
 	}
 }
 
-// FirstIndex returns the first index written. 0 for no entries
+// FirstIndex returns the first index written. 0 for no entries.
 func (l *Log) FirstIndex() (uint64, error) {
 	bs, err := raftboltdb.NewBoltStore(l.path)
 	if err != nil {
