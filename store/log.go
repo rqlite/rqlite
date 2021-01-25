@@ -7,19 +7,19 @@ import (
 	"github.com/hashicorp/raft-boltdb"
 )
 
+// Log is an object that can return information about the Raft log.
 type Log struct {
 	path string
 }
 
-// NewLog returns an object that can return information about the
-// Raft log.
+// NewLog returns an instantiated Log object.
 func NewLog(dir string) *Log {
 	return &Log{
 		path: filepath.Join(dir, raftDBPath),
 	}
 }
 
-// FirstIndex returns the first index written. 0 for no entries
+// FirstIndex returns the first index written. 0 for no entries.
 func (l *Log) FirstIndex() (uint64, error) {
 	bs, err := raftboltdb.NewBoltStore(l.path)
 	if err != nil {

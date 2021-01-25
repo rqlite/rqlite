@@ -382,9 +382,8 @@ func waitForConsensus(str *store.Store) error {
 	if _, err := str.WaitForLeader(openTimeout); err != nil {
 		if raftWaitForLeader {
 			return fmt.Errorf("leader did not appear within timeout: %s", err.Error())
-		} else {
-			log.Println("ignoring error waiting for leader")
 		}
+		log.Println("ignoring error while waiting for leader")
 	}
 	if openTimeout != 0 {
 		if err := str.WaitForApplied(openTimeout); err != nil {
