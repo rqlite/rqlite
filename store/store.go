@@ -49,7 +49,7 @@ var (
 )
 
 const (
-	raftDBPath          = "raft.db" // Changing this will break backwards compatibilty.
+	raftDBPath          = "raft.db" // Changing this will break backwards compatibility.
 	retainSnapshotCount = 2
 	applyTimeout        = 10 * time.Second
 	openTimeout         = 120 * time.Second

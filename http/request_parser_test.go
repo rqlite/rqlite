@@ -105,10 +105,10 @@ func Test_SingleParameterizedRequest(t *testing.T) {
 		t.Fatalf("incorrect number of parameters returned: %d", len(stmts[0].Parameters))
 	}
 	if stmts[0].Parameters[0].GetS() != p0 {
-		t.Fatalf("incorrect paramter, exp %s, got %s", p0, stmts[0].Parameters[0])
+		t.Fatalf("incorrect parameter, exp %s, got %s", p0, stmts[0].Parameters[0])
 	}
 	if int(stmts[0].Parameters[1].GetD()) != p1 {
-		t.Fatalf("incorrect paramter, exp %d, got %d", p1, int(stmts[0].Parameters[1].GetI()))
+		t.Fatalf("incorrect parameter, exp %d, got %d", p1, int(stmts[0].Parameters[1].GetI()))
 	}
 }
 
