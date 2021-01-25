@@ -1011,7 +1011,7 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 	}
 
 	// Now read in the database file data, decompress if necessary, and restore.
-	database := make([]byte, sz)
+	var database []byte
 	if compressed {
 		buf := new(bytes.Buffer)
 		gz, err := gzip.NewReader(bytes.NewReader(b[offset : offset+int64(sz)]))
