@@ -7,12 +7,12 @@ import (
 	"github.com/hashicorp/raft-boltdb"
 )
 
+// Log is an object that can return information about the Raft log.
 type Log struct {
 	path string
 }
 
-// NewLog returns an object that can return information about the
-// Raft log.
+// NewLog returns an instantiated Log object.
 func NewLog(dir string) *Log {
 	return &Log{
 		path: filepath.Join(dir, raftDBPath),
