@@ -768,13 +768,13 @@ func (s *Store) open() (*sql.DB, error) {
 		if err != nil {
 			return nil, err
 		}
-		s.logger.Println("SQLite database opened at", s.dbPath)
+		s.logger.Printf("SQLite %s database opened at %s", s.databaseTypePretty(), s.dbPath)
 	} else {
 		db, err = sql.OpenInMemoryWithDSN(s.dbConf.DSN)
 		if err != nil {
 			return nil, err
 		}
-		s.logger.Println("SQLite in-memory database opened")
+		s.logger.Printf("SQLite %s database opened", s.databaseTypePretty())
 	}
 	return db, nil
 }
@@ -1043,7 +1043,13 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 			return fmt.Errorf("failed to deserialize database: %s", err)
 		}
 	}
+
+	if err := s.db.Close(); err != nil {
+		return fmt.Errorf("failed to close pre-restore database: %s", err)
+	}
 	s.db = db
+	s.logger.Printf("successfully restored %s database from snapshot",
+		s.databaseTypePretty())
 
 	// Unmarshal remaining bytes, and set to cluster meta.
 	err = func() error {
@@ -1178,6 +1184,13 @@ func (s *Store) database(leader bool, dst io.Writer) error {
 
 	_, err = io.Copy(dst, of)
 	return err
+}
+
+func (s *Store) databaseTypePretty() string {
+	if s.dbConf.Memory {
+		return "in-memory"
+	}
+	return "on-disk"
 }
 
 // Release is a no-op.
