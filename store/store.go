@@ -926,7 +926,7 @@ func (s *Store) Apply(l *raft.Log) interface{} {
 	}
 }
 
-// Database returns a copy of the underlying database. The caller should
+// Database returns a copy of the underlying database. The caller MUST
 // ensure that no transaction is taking place during this call, or an error may
 // be returned. If leader is true, this operation is performed with a read
 // consistency level equivalent to "weak". Otherwise no guarantees are made
