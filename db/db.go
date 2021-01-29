@@ -434,6 +434,7 @@ func (db *DB) Query(req *command.Request, xTime bool) ([]*Rows, error) {
 }
 
 // Backup writes a consistent snapshot of the database to the given file.
+// This function can be called when changes to the database are in flight.
 func (db *DB) Backup(path string) error {
 	dstDB, err := Open(path)
 	if err != nil {
@@ -459,6 +460,9 @@ func (db *DB) Backup(path string) error {
 // disk file. For an in-memory database or a "TEMP" database, the serialization
 // is the same sequence of bytes which would be written to disk if that database
 // were backed up to disk.
+//
+// It is up to the caller to ensure no changes or transactions are in progress
+// when this function is called.
 func (db *DB) Serialize() ([]byte, error) {
 	b := db.sqlite3conn.Serialize("")
 	if b == nil {
@@ -477,6 +481,7 @@ func (db *DB) Deserialize(b []byte) error {
 }
 
 // Dump writes a consistent snapshot of the database in SQL text format.
+// This function can be called when changes to the database are in flight.
 func (db *DB) Dump(w io.Writer) error {
 	if _, err := w.Write([]byte("PRAGMA foreign_keys=OFF;\nBEGIN TRANSACTION;\n")); err != nil {
 		return err
