@@ -961,6 +961,70 @@ func Test_Backup(t *testing.T) {
 	}
 }
 
+func Test_Serialize(t *testing.T) {
+	db, path := mustCreateDatabase()
+	defer db.Close()
+	defer os.Remove(path)
+
+	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	req := &command.Request{
+		Transaction: true,
+		Statements: []*command.Statement{
+			{
+				Sql: `INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+			},
+			{
+				Sql: `INSERT INTO foo(id, name) VALUES(2, "fiona")`,
+			},
+			{
+				Sql: `INSERT INTO foo(id, name) VALUES(3, "fiona")`,
+			},
+			{
+				Sql: `INSERT INTO foo(id, name) VALUES(4, "fiona")`,
+			},
+		},
+	}
+	_, err = db.Execute(req, false)
+	if err != nil {
+		t.Fatalf("failed to insert records: %s", err.Error())
+	}
+
+	dstDB, err := ioutil.TempFile("", "rqlite-bak-")
+	if err != nil {
+		t.Fatalf("failed to create temp file: %s", err.Error())
+	}
+	dstDB.Close()
+	defer os.Remove(dstDB.Name())
+
+	// Get the bytes, and write to a temp file.
+	b, err := db.Serialize()
+	if err != nil {
+		t.Fatalf("failed to serialize database: %s", err.Error())
+	}
+	err = ioutil.WriteFile(dstDB.Name(), b, 0644)
+	if err != nil {
+		t.Fatalf("failed to write serialized database to file: %s", err.Error())
+	}
+
+	newDB, err := Open(dstDB.Name())
+	if err != nil {
+		t.Fatalf("failed to open backup database: %s", err.Error())
+	}
+	defer newDB.Close()
+	defer os.Remove(dstDB.Name())
+	ro, err := newDB.QueryStringStmt(`SELECT * FROM foo`)
+	if err != nil {
+		t.Fatalf("failed to query table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"],[2,"fiona"],[3,"fiona"],[4,"fiona"]]}]`, asJSON(ro); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
 func Test_Dump(t *testing.T) {
 	t.Parallel()
 
@@ -1012,7 +1076,7 @@ func Test_DumpMemory(t *testing.T) {
 
 func mustCreateDatabase() (*DB, string) {
 	var err error
-	f, err := ioutil.TempFile("", "rqlilte-test-")
+	f, err := ioutil.TempFile("", "rqlite-test-")
 	if err != nil {
 		panic("failed to create temp file")
 	}

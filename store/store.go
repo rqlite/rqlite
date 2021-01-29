@@ -935,19 +935,7 @@ func (s *Store) Database(leader bool) ([]byte, error) {
 	// Ensure only one snapshot can take place at once, and block all queries.
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
-	f, err := ioutil.TempFile("", "rqlilte-snap-")
-	if err != nil {
-		return nil, err
-	}
-	f.Close()
-	defer os.Remove(f.Name())
-
-	if err := s.db.Backup(f.Name()); err != nil {
-		return nil, err
-	}
-
-	return ioutil.ReadFile(f.Name())
+	return s.db.Serialize()
 }
 
 // Snapshot returns a snapshot of the database. The caller must ensure that
