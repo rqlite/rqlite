@@ -124,7 +124,8 @@ type Store struct {
 	raftStable    raft.StableStore          // Persistent k-v store.
 	boltStore     *raftboltdb.BoltStore     // Physical store.
 
-	txMu sync.RWMutex // Sync between snapshots and query transactions.
+	txMu    sync.RWMutex // Sync between snapshots and query-level transactions.
+	queryMu sync.RWMutex // Sync queries generally with other operations.
 
 	metaMu sync.RWMutex
 	meta   map[string]map[string]string
@@ -565,6 +566,9 @@ func (s *Store) Backup(leader bool, fmt BackupFormat, dst io.Writer) error {
 
 // Query executes queries that return rows, and do not modify the database.
 func (s *Store) Query(qr *command.QueryRequest) ([]*sql.Rows, error) {
+	s.queryMu.RLock()
+	defer s.queryMu.RUnlock()
+
 	if qr.Level == command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG {
 		b, compressed, err := s.reqMarshaller.Marshal(qr)
 		if err != nil {
@@ -974,10 +978,11 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 
 // Restore restores the node to a previous state. The Hashicorp docs state this
 // will not be called concurrently with Apply(), so synchronization with Execute()
-// is not necessary. To be safe, this function does block query transactions.
+// is not necessary.To prevent problems during queries, which may not go through
+// the log, it blocks all query requests.
 func (s *Store) Restore(rc io.ReadCloser) error {
-	s.txMu.Lock()
-	defer s.txMu.Unlock()
+	s.queryMu.Lock()
+	defer s.queryMu.Unlock()
 
 	var uint64Size uint64
 	inc := int64(unsafe.Sizeof(uint64Size))
