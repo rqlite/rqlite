@@ -1103,6 +1103,23 @@ func Test_SingleNodeSnapshotInMem(t *testing.T) {
 	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
+
+	// Write a record, ensuring it works and can be queried back i.e. that
+	// the system remains functional.
+	_, err = s.Execute(executeRequestFromString(`INSERT INTO foo(id, name) VALUES(2, "fiona")`, false, false))
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	r, err = s.Query(queryRequestFromString("SELECT COUNT(*) FROM foo", false, false))
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `["COUNT(*)"]`, asJSON(r[0].Columns); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[2]]`, asJSON(r[0].Values); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
 }
 
 func Test_SingleNodeRestoreNoncompressed(t *testing.T) {
