@@ -1,4 +1,6 @@
-## 5.9.1 (unreleased)
+## 5.10.0 (unreleased)
+### New features
+- [PR #742](https://github.com/rqlite/rqlite/pull/742): Add one-shot option to rqbench.
 
 ### Implementation changes and bug fixes
 - [PR #738](https://github.com/rqlite/rqlite/pull/738): Don't use temp file when snapshotting database
