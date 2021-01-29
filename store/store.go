@@ -111,8 +111,6 @@ const (
 type Store struct {
 	raftDir string
 
-	mu sync.RWMutex // Sync access between queries and snapshots.
-
 	raft   *raft.Raft // The consensus mechanism.
 	ln     Listener
 	raftTn *raft.NetworkTransport
@@ -125,6 +123,8 @@ type Store struct {
 	raftLog       raft.LogStore             // Persistent log store.
 	raftStable    raft.StableStore          // Persistent k-v store.
 	boltStore     *raftboltdb.BoltStore     // Physical store.
+
+	txMu sync.RWMutex // Sync between snapshots and query transactions.
 
 	metaMu sync.RWMutex
 	meta   map[string]map[string]string
@@ -565,10 +565,6 @@ func (s *Store) Backup(leader bool, fmt BackupFormat, dst io.Writer) error {
 
 // Query executes queries that return rows, and do not modify the database.
 func (s *Store) Query(qr *command.QueryRequest) ([]*sql.Rows, error) {
-	// Allow concurrent queries.
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
 	if qr.Level == command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG {
 		b, compressed, err := s.reqMarshaller.Marshal(qr)
 		if err != nil {
@@ -612,7 +608,12 @@ func (s *Store) Query(qr *command.QueryRequest) ([]*sql.Rows, error) {
 		return nil, ErrStaleRead
 	}
 
-	// Read straight from database.
+	// Read straight from database. If a transaction is requested, we must block
+	// certain other database operations.
+	if qr.Request.Transaction {
+		s.txMu.Lock()
+		defer s.txMu.Unlock()
+	}
 	return s.db.Query(qr.Request, qr.Timings)
 }
 
@@ -878,6 +879,12 @@ func (s *Store) Apply(l *raft.Log) interface{} {
 		if err := command.UnmarshalSubCommand(&c, &qr); err != nil {
 			panic(fmt.Sprintf("failed to unmarshal query subcommand: %s", err.Error()))
 		}
+		// Read from database. If a transaction is requested, we must block
+		// certain other database operations.
+		if qr.Request.Transaction {
+			s.txMu.Lock()
+			defer s.txMu.Unlock()
+		}
 		r, err := s.db.Query(qr.Request, qr.Timings)
 		return &fsmQueryResponse{rows: r, error: err}
 	case command.Command_COMMAND_TYPE_EXECUTE:
@@ -931,25 +938,27 @@ func (s *Store) Database(leader bool) ([]byte, error) {
 	if leader && s.raft.State() != raft.Leader {
 		return nil, ErrNotLeader
 	}
-
-	// Ensure only one snapshot can take place at once, and block all queries.
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	return s.db.Serialize()
 }
 
 // Snapshot returns a snapshot of the database. The caller must ensure that
 // no transaction is taking place during this call. Hashicorp Raft guarantees
-// that this function will not be called concurrently with Apply.
+// that this function will not be called concurrently with Apply, as it states
+// Apply and Snapshot are always called from the same thread. This means there
+// is no need to synchronize this function with Execute(). However queries that
+// involve a transaction must be blocked.
 //
 // http://sqlite.org/howtocorrupt.html states it is safe to do this
 // as long as no transaction is in progress.
 func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
+	s.txMu.Lock()
+	defer s.txMu.Unlock()
+
 	fsm := &fsmSnapshot{}
 	var err error
-	fsm.database, err = s.Database(false)
+	fsm.database, err = s.db.Serialize()
 	if err != nil {
-		s.logger.Printf("failed to read database for snapshot: %s", err.Error())
+		s.logger.Printf("failed to serialize database for snapshot: %s", err.Error())
 		return nil, err
 	}
 
