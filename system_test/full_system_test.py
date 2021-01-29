@@ -160,9 +160,6 @@ class Node(object):
   def last_snapshot_index(self):
     return int(self.status()['store']['raft']['last_snapshot_index'])
 
-  def num_snapshots(self):
-    return int(self.expvar()['store']['num_snapshots'])
-
   def num_join_requests(self):
     return int(self.expvar()['http']['joins'])
 
@@ -615,7 +612,58 @@ class TestEndToEndBackupRestore(unittest.TestCase):
     deprovision_node(self.node1)
     os.remove(self.db_file)
 
-class TestEndToEndSnapRestore(unittest.TestCase):
+class TestEndToEndSnapRestoreSingle(unittest.TestCase):
+  def setUp(self):
+    self.n0 = Node(RQLITED_PATH, '0',  raft_snap_threshold=10, raft_snap_int="1s")
+    self.n0.start()
+    self.n0.wait_for_leader()
+
+  def waitForSnapIndex(self, n):
+    timeout = 10
+    t = 0
+    while True:
+      if t > timeout:
+        raise Exception('timeout')
+      if self.n0.last_snapshot_index() >= n:
+        break
+      time.sleep(1)
+      t+=1
+
+  def test_snap_and_restart(self):
+    '''Check that an node restarts correctly after multiple snapshots'''
+
+    # Let's get multiple snapshots done.
+    self.n0.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
+
+    for i in range(0,200):
+      self.n0.execute('INSERT INTO foo(name) VALUES("fiona")')
+    self.n0.wait_for_all_applied()
+    self.waitForSnapIndex(175)
+
+    # Ensure node has the full correct state.
+    j = self.n0.query('SELECT count(*) FROM foo', level='none')
+    self.assertEqual(str(j), "{u'results': [{u'values': [[200]], u'types': [u''], u'columns': [u'count(*)']}]}")
+
+    # Restart nodes, and make sure it comes back with the correct state
+    self.n0.stop()
+    self.n0.start()
+    self.n0.wait_for_leader()
+    self.n0.wait_for_all_applied()
+    self.assertEqual(self.n0.expvar()['store']['num_restores'], 1)
+
+    j = self.n0.query('SELECT count(*) FROM foo', level='none')
+    self.assertEqual(str(j), "{u'results': [{u'values': [[200]], u'types': [u''], u'columns': [u'count(*)']}]}")
+
+  def tearDown(self):
+    deprovision_node(self.n0)
+
+class TestEndToEndSnapRestoreSingleOnDisk(TestEndToEndSnapRestoreSingle):
+  def setUp(self):
+    self.n0 = Node(RQLITED_PATH, '0',  raft_snap_threshold=10, raft_snap_int="1s", on_disk=True)
+    self.n0.start()
+    self.n0.wait_for_leader()
+
+class TestEndToEndSnapRestoreCluster(unittest.TestCase):
   def waitForSnap(self, n):
     timeout = 10
     t = 0
