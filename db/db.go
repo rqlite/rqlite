@@ -467,6 +467,15 @@ func (db *DB) Serialize() ([]byte, error) {
 	return b, nil
 }
 
+// Deserialize forces a disconnect from the current database and then re-open
+// as an in-memory database based on the contents of the byte slice.
+func (db *DB) Deserialize(b []byte) error {
+	if err := db.sqlite3conn.Deserialize(b, ""); err != nil {
+		return fmt.Errorf("failed to deserialize database: %s", err.Error())
+	}
+	return nil
+}
+
 // Dump writes a consistent snapshot of the database in SQL text format.
 func (db *DB) Dump(w io.Writer) error {
 	if _, err := w.Write([]byte("PRAGMA foreign_keys=OFF;\nBEGIN TRANSACTION;\n")); err != nil {
