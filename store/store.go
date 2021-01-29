@@ -1034,22 +1034,13 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 			return fmt.Errorf("open with DSN: %s", err)
 		}
 	} else {
-		// In memory. Copy to temporary file, and then load memory from file.
-		f, err := ioutil.TempFile("", "rqlilte-snap-")
+		// In memory, so directly deserialize into the database.
+		db, err = sql.OpenInMemoryWithDSN(s.dbConf.DSN)
 		if err != nil {
-			return err
+			return fmt.Errorf("open in memory with DSN: %s", err)
 		}
-		f.Close()
-		defer os.Remove(f.Name())
-
-		if err := ioutil.WriteFile(f.Name(), database, 0660); err != nil {
-			return err
-		}
-
-		// Load an in-memory database from the snapshot now on disk.
-		db, err = sql.LoadInMemoryWithDSN(f.Name(), s.dbConf.DSN)
-		if err != nil {
-			return fmt.Errorf("load into memory with DSN: %s", err)
+		if err := db.Deserialize(database); err != nil {
+			return fmt.Errorf("failed to deserialize database: %s", err)
 		}
 	}
 	s.db = db
