@@ -1,3 +1,8 @@
+## 5.9.1 (unreleased)
+
+### Implementation changes and bug fixes
+- [PR #738](https://github.com/rqlite/rqlite/pull/738): Don't use temp file when snapshotting database
+
 ## 5.9.0 (January 24th 2021)
 ### New features
 - [PR #734](https://github.com/rqlite/rqlite/pull/734): Better control over waiting for Leader at startup, via command line options.
