@@ -936,7 +936,7 @@ func (s *Store) Database(leader bool) ([]byte, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	f, err := ioutil.TempFile("", "rqlilte-snap-")
+	f, err := ioutil.TempFile("", "rqlite-snap-")
 	if err != nil {
 		return nil, err
 	}

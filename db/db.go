@@ -454,6 +454,19 @@ func (db *DB) Backup(path string) error {
 	return err
 }
 
+// Serialize returns a byte slice representation of the SQLite database. For
+// an ordinary on-disk database file, the serialization is just a copy of the
+// disk file. For an in-memory database or a "TEMP" database, the serialization
+// is the same sequence of bytes which would be written to disk if that database
+// were backed up to disk.
+func (db *DB) Serialize() ([]byte, error) {
+	b := db.sqlite3conn.Serialize("")
+	if b == nil {
+		return nil, fmt.Errorf("failed to serialize database")
+	}
+	return b, nil
+}
+
 // Dump writes a consistent snapshot of the database in SQL text format.
 func (db *DB) Dump(w io.Writer) error {
 	if _, err := w.Write([]byte("PRAGMA foreign_keys=OFF;\nBEGIN TRANSACTION;\n")); err != nil {
