@@ -972,11 +972,12 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 	return fsm, nil
 }
 
-// Restore restores the node to a previous state.
+// Restore restores the node to a previous state. The Hashicorp docs state this
+// will not be called concurrently with Apply(), so synchronization with Execute()
+// is not necessary. To be safe, this function does block query transactions.
 func (s *Store) Restore(rc io.ReadCloser) error {
-	if err := s.db.Close(); err != nil {
-		return err
-	}
+	s.txMu.Lock()
+	defer s.txMu.Unlock()
 
 	var uint64Size uint64
 	inc := int64(unsafe.Sizeof(uint64Size))
