@@ -644,7 +644,7 @@ class TestEndToEndSnapRestoreSingle(unittest.TestCase):
     j = self.n0.query('SELECT count(*) FROM foo', level='none')
     self.assertEqual(str(j), "{u'results': [{u'values': [[200]], u'types': [u''], u'columns': [u'count(*)']}]}")
 
-    # Restart nodes, and make sure it comes back with the correct state
+    # Restart node, and make sure it comes back with the correct state
     self.n0.stop()
     self.n0.start()
     self.n0.wait_for_leader()
