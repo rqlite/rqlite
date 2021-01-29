@@ -58,7 +58,7 @@ protoc -I=$SRC_DIR --go_out=$DEST_DIR $SRC_DIR/command.proto
 It can be rather slow to rebuild rqlite, due to the repeated compilation of the SQLite source code. You can compile and install the SQLite libary once, so subsequent builds are much faster. To do so, execute the following commands:
 ```bash
 cd $GOPATH
-go install github.com/mattn/go-sqlite3
+go install github.com/rqlite/go-sqlite3
 ```
 
 ## Cloning a fork
