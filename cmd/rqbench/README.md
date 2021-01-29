@@ -29,9 +29,14 @@ Usage: rqbench [arguments] <SQL statement>
   -x    Use explicit transaction per request
  ```
 
- ## Example
+ ## Examples
 
 ```sh
+$ rqbench -b 10 -m 100 -n 1 -o 'CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)' 'INSERT INTO foo(name) VALUES("fiona")'
+Test target: http://localhost:4001/db/execute
+Total duration: 10.094572ms
+Requests/sec: 99.06
+Statements/sec: 990.63
 $ rqbench -b 10 -m 10 -n 100 'INSERT INTO foo(name) VALUES("fiona")' -a localhost:4001
 Test target: http://localhost:4001/db/execute
 10 requests completed in 16.130142ms
