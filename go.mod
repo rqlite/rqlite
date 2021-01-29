@@ -17,7 +17,7 @@ require (
 	github.com/mattn/go-sqlite3 v2.0.3+incompatible
 	github.com/mkideal/cli v0.2.3
 	github.com/mkideal/pkg v0.1.2
-	github.com/rqlite/go-sqlite3 v1.15.0
+	github.com/rqlite/go-sqlite3 v1.18.0
 	golang.org/x/crypto v0.0.0-20201221181555-eec23a3978ad
 	golang.org/x/net v0.0.0-20200707034311-ab3426394381
 	golang.org/x/sys v0.0.0-20210124154548-22da62e12c0c // indirect
