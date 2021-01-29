@@ -17,6 +17,7 @@ var modPrint int
 var tx bool
 var tp string
 var path string
+var oneshot string
 
 const name = `rqbench`
 const desc = `rqbench is a simple load testing utility for rqlite.`
@@ -29,6 +30,7 @@ func init() {
 	flag.BoolVar(&tx, "x", false, "Use explicit transaction per request")
 	flag.StringVar(&tp, "t", "http", "Transport to use")
 	flag.StringVar(&path, "p", "/db/execute", "Endpoint to use")
+	flag.StringVar(&oneshot, "o", "", "One-shot execute statement to preload")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "\n%s\n\n", desc)
 		fmt.Fprintf(os.Stderr, "Usage: %s [arguments] <SQL statement>\n", name)
@@ -48,6 +50,19 @@ func main() {
 
 	if tp != "http" {
 		fmt.Fprintf(os.Stderr, "not a valid transport: %s\n", tp)
+	}
+
+	if oneshot != "" {
+		o := NewHTTPTester(addr, "/db/execute")
+		if err := o.Prepare(oneshot, 1, false); err != nil {
+			fmt.Println("failed to prepare oneshot:", err.Error())
+			os.Exit(1)
+		}
+		_, err := run(o, 1)
+		if err != nil {
+			fmt.Println("failed to execute oneshot:", err.Error())
+			os.Exit(1)
+		}
 	}
 
 	tester := NewHTTPTester(addr, path)
