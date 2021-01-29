@@ -3,7 +3,7 @@
 ### Implementation changes and bug fixes
 - [PR #738](https://github.com/rqlite/rqlite/pull/738): Don't use temp file when snapshotting database
 - [PR #738](https://github.com/rqlite/rqlite/pull/738): Switch to rqlite fork of mattn/go-sqlite3. The SQLite C code remains unchanged.
-- [PR #741](https://github.com/rqlite/rqlite/pull/741): Tighthen up Store-level locking.
+- [PR #741](https://github.com/rqlite/rqlite/pull/741): Tighten up Store-level locking.
 
 ## 5.9.0 (January 24th 2021)
 ### New features
