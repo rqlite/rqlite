@@ -46,6 +46,7 @@ var (
 
 var httpAddr string
 var httpAdv string
+var tls1011 bool
 var authFile string
 var x509CACert string
 var x509Cert string
@@ -93,6 +94,7 @@ func init() {
 	flag.StringVar(&nodeID, "node-id", "", "Unique name for node. If not set, set to hostname")
 	flag.StringVar(&httpAddr, "http-addr", "localhost:4001", "HTTP server bind address. For HTTPS, set X.509 cert and key")
 	flag.StringVar(&httpAdv, "http-adv-addr", "", "Advertised HTTP address. If not set, same as HTTP server")
+	flag.BoolVar(&tls1011, "tls1011", false, "Support deprecated TLS versions 1.0 and 1.1")
 	flag.StringVar(&x509CACert, "http-ca-cert", "", "Path to root X.509 certificate for HTTP endpoint")
 	flag.StringVar(&x509Cert, "http-cert", "", "Path to X.509 certificate for HTTP endpoint")
 	flag.StringVar(&x509Key, "http-key", "", "Path to X.509 private key for HTTP endpoint")
@@ -412,6 +414,7 @@ func startHTTPService(str *store.Store) error {
 
 	s.CertFile = x509Cert
 	s.KeyFile = x509Key
+	s.TLS1011 = tls1011
 	s.Expvar = expvar
 	s.Pprof = pprofEnabled
 	s.BuildInfo = map[string]interface{}{
