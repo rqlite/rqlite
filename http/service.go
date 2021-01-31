@@ -164,6 +164,7 @@ type Service struct {
 	CACertFile string // Path to root X.509 certificate.
 	CertFile   string // Path to SSL certificate.
 	KeyFile    string // Path to SSL private key.
+	TLS1011    bool   // Whether older, deprecated TLS should be supported.
 
 	credentialStore CredentialStore
 
@@ -202,7 +203,7 @@ func (s *Service) Start() error {
 			return err
 		}
 	} else {
-		config, err := createTLSConfig(s.CertFile, s.KeyFile, s.CACertFile)
+		config, err := createTLSConfig(s.CertFile, s.KeyFile, s.CACertFile, s.TLS1011)
 		if err != nil {
 			return err
 		}
@@ -896,10 +897,17 @@ func requestQueries(r *http.Request) ([]*command.Statement, error) {
 }
 
 // createTLSConfig returns a TLS config from the given cert and key.
-func createTLSConfig(certFile, keyFile, caCertFile string) (*tls.Config, error) {
+func createTLSConfig(certFile, keyFile, caCertFile string, tls1011 bool) (*tls.Config, error) {
 	var err error
+
+	var minTls = uint16(tls.VersionTLS12)
+	if tls1011 {
+		minTls = tls.VersionTLS10
+	}
+
 	config := &tls.Config{
 		NextProtos: []string{"h2", "http/1.1"},
+		MinVersion: minTls,
 	}
 	config.Certificates = make([]tls.Certificate, 1)
 	config.Certificates[0], err = tls.LoadX509KeyPair(certFile, keyFile)
