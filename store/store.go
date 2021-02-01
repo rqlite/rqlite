@@ -124,7 +124,8 @@ type Store struct {
 	raftStable    raft.StableStore          // Persistent k-v store.
 	boltStore     *raftboltdb.BoltStore     // Physical store.
 
-	txMu sync.RWMutex // Sync between snapshots and query transactions.
+	txMu    sync.RWMutex // Sync between snapshots and query-level transactions.
+	queryMu sync.RWMutex // Sync queries generally with other operations.
 
 	metaMu sync.RWMutex
 	meta   map[string]map[string]string
@@ -565,6 +566,9 @@ func (s *Store) Backup(leader bool, fmt BackupFormat, dst io.Writer) error {
 
 // Query executes queries that return rows, and do not modify the database.
 func (s *Store) Query(qr *command.QueryRequest) ([]*sql.Rows, error) {
+	s.queryMu.RLock()
+	defer s.queryMu.RUnlock()
+
 	if qr.Level == command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG {
 		b, compressed, err := s.reqMarshaller.Marshal(qr)
 		if err != nil {
@@ -769,13 +773,13 @@ func (s *Store) open() (*sql.DB, error) {
 		if err != nil {
 			return nil, err
 		}
-		s.logger.Println("SQLite database opened at", s.dbPath)
+		s.logger.Printf("SQLite %s database opened at %s", s.databaseTypePretty(), s.dbPath)
 	} else {
 		db, err = sql.OpenInMemoryWithDSN(s.dbConf.DSN)
 		if err != nil {
 			return nil, err
 		}
-		s.logger.Println("SQLite in-memory database opened")
+		s.logger.Printf("SQLite %s database opened", s.databaseTypePretty())
 	}
 	return db, nil
 }
@@ -972,11 +976,13 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 	return fsm, nil
 }
 
-// Restore restores the node to a previous state.
+// Restore restores the node to a previous state. The Hashicorp docs state this
+// will not be called concurrently with Apply(), so synchronization with Execute()
+// is not necessary.To prevent problems during queries, which may not go through
+// the log, it blocks all query requests.
 func (s *Store) Restore(rc io.ReadCloser) error {
-	if err := s.db.Close(); err != nil {
-		return err
-	}
+	s.queryMu.Lock()
+	defer s.queryMu.Unlock()
 
 	var uint64Size uint64
 	inc := int64(unsafe.Sizeof(uint64Size))
@@ -1043,25 +1049,19 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 			return fmt.Errorf("open with DSN: %s", err)
 		}
 	} else {
-		// In memory. Copy to temporary file, and then load memory from file.
-		f, err := ioutil.TempFile("", "rqlilte-snap-")
+		// In memory, so directly deserialize into the database.
+		db, err = sql.DeserializeInMemoryWithDSN(database, s.dbConf.DSN)
 		if err != nil {
-			return err
-		}
-		f.Close()
-		defer os.Remove(f.Name())
-
-		if err := ioutil.WriteFile(f.Name(), database, 0660); err != nil {
-			return err
-		}
-
-		// Load an in-memory database from the snapshot now on disk.
-		db, err = sql.LoadInMemoryWithDSN(f.Name(), s.dbConf.DSN)
-		if err != nil {
-			return fmt.Errorf("load into memory with DSN: %s", err)
+			return fmt.Errorf("DeserializeInMemoryWithDSN with DSN: %s", err)
 		}
 	}
+
+	if err := s.db.Close(); err != nil {
+		return fmt.Errorf("failed to close pre-restore database: %s", err)
+	}
 	s.db = db
+	s.logger.Printf("successfully restored %s database from snapshot",
+		s.databaseTypePretty())
 
 	// Unmarshal remaining bytes, and set to cluster meta.
 	err = func() error {
@@ -1196,6 +1196,13 @@ func (s *Store) database(leader bool, dst io.Writer) error {
 
 	_, err = io.Copy(dst, of)
 	return err
+}
+
+func (s *Store) databaseTypePretty() string {
+	if s.dbConf.Memory {
+		return "in-memory"
+	}
+	return "on-disk"
 }
 
 // Release is a no-op.

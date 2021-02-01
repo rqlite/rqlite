@@ -105,6 +105,82 @@ func Test_LoadInMemory(t *testing.T) {
 	}
 }
 
+func Test_DeserializeInMemoryWithDSN(t *testing.T) {
+	db, path := mustCreateDatabase()
+	defer db.Close()
+	defer os.Remove(path)
+
+	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	req := &command.Request{
+		Transaction: true,
+		Statements: []*command.Statement{
+			{
+				Sql: `INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+			},
+			{
+				Sql: `INSERT INTO foo(id, name) VALUES(2, "fiona")`,
+			},
+			{
+				Sql: `INSERT INTO foo(id, name) VALUES(3, "fiona")`,
+			},
+			{
+				Sql: `INSERT INTO foo(id, name) VALUES(4, "fiona")`,
+			},
+		},
+	}
+	_, err = db.Execute(req, false)
+	if err != nil {
+		t.Fatalf("failed to insert records: %s", err.Error())
+	}
+
+	// Get byte representation of database on disk which, according to SQLite docs
+	// is the same as a serialized version.
+	b, err := ioutil.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read database on disk: %s", err.Error())
+	}
+
+	newDB, err := DeserializeInMemoryWithDSN(b, "")
+	if err != nil {
+		t.Fatalf("failed to deserialize database: %s", err.Error())
+	}
+	defer newDB.Close()
+
+	ro, err := newDB.QueryStringStmt(`SELECT * FROM foo`)
+	if err != nil {
+		t.Fatalf("failed to query table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"],[2,"fiona"],[3,"fiona"],[4,"fiona"]]}]`, asJSON(ro); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	// Write a lot of records to the new database, to ensure it's fully functional.
+	req = &command.Request{
+		Statements: []*command.Statement{
+			{
+				Sql: `INSERT INTO foo(name) VALUES("fiona")`,
+			},
+		},
+	}
+	for i := 0; i < 5000; i++ {
+		_, err = newDB.Execute(req, false)
+		if err != nil {
+			t.Fatalf("failed to insert records: %s", err.Error())
+		}
+	}
+	ro, err = newDB.QueryStringStmt(`SELECT COUNT(*) FROM foo`)
+	if err != nil {
+		t.Fatalf("failed to query table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["COUNT(*)"],"types":[""],"values":[[5004]]}]`, asJSON(ro); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
 func Test_EmptyStatements(t *testing.T) {
 	db, path := mustCreateDatabase()
 	defer db.Close()
@@ -1062,7 +1138,7 @@ func Test_Serialize(t *testing.T) {
 
 	newDB, err := Open(dstDB.Name())
 	if err != nil {
-		t.Fatalf("failed to open backup database: %s", err.Error())
+		t.Fatalf("failed to open on-disk serialized database: %s", err.Error())
 	}
 	defer newDB.Close()
 	defer os.Remove(dstDB.Name())
