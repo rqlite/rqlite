@@ -124,9 +124,10 @@ type Store struct {
 	raftStable    raft.StableStore          // Persistent k-v store.
 	boltStore     *raftboltdb.BoltStore     // Physical store.
 
-	lastIdxOnOpen uint64    // Last index on log when Store opens.
-	appliedOnOpen uint64    // Number of logs applied at open.
-	openT         time.Time // Timestamp when Store opens.
+	lastIdxOnOpen    uint64    // Last index on log when Store opens.
+	firstLogAppliedT time.Time // Time first log is applied
+	appliedOnOpen    uint64    // Number of logs applied at open.
+	openT            time.Time // Timestamp when Store opens.
 
 	txMu    sync.RWMutex // Sync between snapshots and query-level transactions.
 	queryMu sync.RWMutex // Sync queries generally with other operations.
@@ -881,11 +882,16 @@ func (s *Store) Apply(l *raft.Log) interface{} {
 		if l.Index <= s.lastIdxOnOpen {
 			s.appliedOnOpen++
 			if l.Index == s.lastIdxOnOpen {
-				s.logger.Printf("%d committed log entries applied in %s",
-					s.appliedOnOpen, time.Since(s.openT))
+				s.logger.Printf("%d committed log entries applied in %s, took %s since open",
+					s.appliedOnOpen, time.Since(s.firstLogAppliedT), time.Since(s.openT))
 			}
 		}
 	}()
+
+	if s.firstLogAppliedT.IsZero() {
+		s.firstLogAppliedT = time.Now()
+	}
+
 	var c command.Command
 
 	if err := legacy.Unmarshal(l.Data, &c); err != nil {
