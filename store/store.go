@@ -124,6 +124,11 @@ type Store struct {
 	raftStable    raft.StableStore          // Persistent k-v store.
 	boltStore     *raftboltdb.BoltStore     // Physical store.
 
+	lastIdxOnOpen    uint64    // Last index on log when Store opens.
+	firstLogAppliedT time.Time // Time first log is applied
+	appliedOnOpen    uint64    // Number of logs applied at open.
+	openT            time.Time // Timestamp when Store opens.
+
 	txMu    sync.RWMutex // Sync between snapshots and query-level transactions.
 	queryMu sync.RWMutex // Sync queries generally with other operations.
 
@@ -186,6 +191,7 @@ func New(ln Listener, c *StoreConfig) *Store {
 // node has pre-existing state, or the calling layer will trigger a join
 // operation after opening the Store.
 func (s *Store) Open(enableBootstrap bool) error {
+	s.openT = time.Now()
 	s.logger.Printf("opening store with node ID %s", s.raftID)
 
 	s.logger.Printf("ensuring directory at %s exists", s.raftDir)
@@ -225,6 +231,12 @@ func (s *Store) Open(enableBootstrap bool) error {
 	s.raftLog, err = raft.NewLogCache(raftLogCacheSize, s.boltStore)
 	if err != nil {
 		return fmt.Errorf("new cached store: %s", err)
+	}
+
+	// Get some info about the log, before any more entries are committed.
+	s.lastIdxOnOpen, err = s.raftLog.LastIndex()
+	if err != nil {
+		return fmt.Errorf("failed to get last index: %s", err)
 	}
 
 	// Instantiate the Raft system.
@@ -866,6 +878,20 @@ type fsmGenericResponse struct {
 
 // Apply applies a Raft log entry to the database.
 func (s *Store) Apply(l *raft.Log) interface{} {
+	defer func() {
+		if l.Index <= s.lastIdxOnOpen {
+			s.appliedOnOpen++
+			if l.Index == s.lastIdxOnOpen {
+				s.logger.Printf("%d committed log entries applied in %s, took %s since open",
+					s.appliedOnOpen, time.Since(s.firstLogAppliedT), time.Since(s.openT))
+			}
+		}
+	}()
+
+	if s.firstLogAppliedT.IsZero() {
+		s.firstLogAppliedT = time.Now()
+	}
+
 	var c command.Command
 
 	if err := legacy.Unmarshal(l.Data, &c); err != nil {
@@ -955,10 +981,14 @@ func (s *Store) Database(leader bool) ([]byte, error) {
 // http://sqlite.org/howtocorrupt.html states it is safe to do this
 // as long as no transaction is in progress.
 func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
+	fsm := &fsmSnapshot{
+		startT: time.Now(),
+		logger: s.logger,
+	}
+
 	s.txMu.Lock()
 	defer s.txMu.Unlock()
 
-	fsm := &fsmSnapshot{}
 	var err error
 	fsm.database, err = s.db.Serialize()
 	if err != nil {
@@ -973,6 +1003,7 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 	}
 
 	stats.Add(numSnaphots, 1)
+	s.logger.Printf("node snapshot created in %s", time.Since(fsm.startT))
 	return fsm, nil
 }
 
@@ -981,6 +1012,8 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 // is not necessary.To prevent problems during queries, which may not go through
 // the log, it blocks all query requests.
 func (s *Store) Restore(rc io.ReadCloser) error {
+	startT := time.Now()
+
 	s.queryMu.Lock()
 	defer s.queryMu.Unlock()
 
@@ -1072,7 +1105,9 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 	if err != nil {
 		return fmt.Errorf("cluster metadata unmarshal: %s", err)
 	}
+
 	stats.Add(numRestores, 1)
+	s.logger.Printf("node restored in %s", time.Since(startT))
 	return nil
 }
 
@@ -1096,12 +1131,19 @@ func (s *Store) logSize() (int64, error) {
 }
 
 type fsmSnapshot struct {
+	startT time.Time
+	logger *log.Logger
+
 	database []byte
 	meta     []byte
 }
 
 // Persist writes the snapshot to the given sink.
 func (f *fsmSnapshot) Persist(sink raft.SnapshotSink) error {
+	defer func() {
+		f.logger.Printf("snapshot and persist took %s", time.Since(f.startT))
+	}()
+
 	err := func() error {
 		b := new(bytes.Buffer)
 
