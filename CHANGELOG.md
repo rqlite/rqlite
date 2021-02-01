@@ -8,6 +8,7 @@
 - [PR #739](https://github.com/rqlite/rqlite/pull/739): Don't use temp file when restoring an in-memory database.
 - [PR #738](https://github.com/rqlite/rqlite/pull/738): Switch to rqlite fork of mattn/go-sqlite3. The SQLite C code remains unchanged.
 - [PR #741](https://github.com/rqlite/rqlite/pull/741): Tighten up Store-level locking.
+- [PR #747](https://github.com/rqlite/rqlite/pull/747): Time snapshot, restore, and startup times.
 
 ## 5.9.0 (January 24th 2021)
 ### New features
