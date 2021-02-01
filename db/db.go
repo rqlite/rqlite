@@ -449,10 +449,20 @@ func (db *DB) Backup(path string) error {
 	}(dstDB, &err)
 
 	if err := copyDatabase(dstDB.sqlite3conn, db.sqlite3conn); err != nil {
-		return err
+		return fmt.Errorf("backup database: %s", err)
 	}
+	return nil
+}
 
-	return err
+// Copy copies the contents of the database to the given database. All other
+// attributes of the given database remain untouched e.g. whether it's an
+// on-disk database. This function can be called when changes to the source
+// database are in flight.
+func (db *DB) Copy(dstDB *DB) error {
+	if err := copyDatabase(dstDB.sqlite3conn, db.sqlite3conn); err != nil {
+		return fmt.Errorf("copy database: %s", err)
+	}
+	return nil
 }
 
 // Serialize returns a byte slice representation of the SQLite database. For
