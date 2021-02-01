@@ -115,6 +115,34 @@ func LoadInMemoryWithDSN(dbPath, dsn string) (*DB, error) {
 	return db, nil
 }
 
+// DeserializeInMemoryWithDSN loads an in-memory database with that contained
+// in the byte slide, with the specified DSN. The byte slice must not be changed
+// or garbage-collected until after this function returns.
+func DeserializeInMemoryWithDSN(b []byte, dsn string) (*DB, error) {
+	tmpDB, err := OpenInMemoryWithDSN(dsn)
+	if err != nil {
+		return nil, fmt.Errorf("DeserializeInMemoryWithDSN: %s", err.Error())
+	}
+	defer tmpDB.Close()
+
+	if err := tmpDB.sqlite3conn.Deserialize(b, ""); err != nil {
+		return nil, fmt.Errorf("DeserializeInMemoryWithDSN: %s", err.Error())
+	}
+
+	// tmpDB is still using memory in Go space, so it needs to be explicitly
+	// copied to a new database.
+	db, err := OpenInMemoryWithDSN(dsn)
+	if err != nil {
+		return nil, fmt.Errorf("DeserializeInMemoryWithDSN: %s", err.Error())
+	}
+
+	if err := copyDatabase(db.sqlite3conn, tmpDB.sqlite3conn); err != nil {
+		return nil, fmt.Errorf("DeserializeInMemoryWithDSN: %s", err.Error())
+	}
+
+	return db, nil
+}
+
 // Close closes the underlying database connection.
 func (db *DB) Close() error {
 	return db.sqlite3conn.Close()
@@ -479,15 +507,6 @@ func (db *DB) Serialize() ([]byte, error) {
 		return nil, fmt.Errorf("failed to serialize database")
 	}
 	return b, nil
-}
-
-// Deserialize forces a disconnect from the current database and then re-open
-// as an in-memory database based on the contents of the byte slice.
-func (db *DB) Deserialize(b []byte) error {
-	if err := db.sqlite3conn.Deserialize(b, ""); err != nil {
-		return fmt.Errorf("failed to deserialize database: %s", err.Error())
-	}
-	return nil
 }
 
 // Dump writes a consistent snapshot of the database in SQL text format.
