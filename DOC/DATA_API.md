@@ -44,7 +44,7 @@ The response is of the form:
 The use of the URL param `pretty` is optional, and results in pretty-printed JSON responses. Time is measured in seconds. If you do not want timings, do not pass `timings` as a URL parameter.
 
 ## Querying Data
-Querying data is easy. The most important thing to know is that, by default, queries must go through the leader node. 
+Querying data is easy. The most important thing to know is that, by default, queries must be sent to the leader node. 
 
 For a single query simply perform a HTTP GET on the `/query` endpoint, setting the query statement as the query parameter `q`:
 
