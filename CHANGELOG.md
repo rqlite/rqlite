@@ -1,12 +1,13 @@
 ## 5.10.0 (unreleased)
 ### New features
 - [PR #742](https://github.com/rqlite/rqlite/pull/742): Add one-shot option to rqbench.
+- [PR #745](https://github.com/rqlite/rqlite/pull/745): TLS version 1.0 and 1.1 disabled by default, but can be re-enabled at the command line. Fixes [issue #743](https://github.com/rqlite/rqlite/issues/743).
 
 ### Implementation changes and bug fixes
-- [PR #738](https://github.com/rqlite/rqlite/pull/738): Don't use temp file when snapshotting database
+- [PR #738](https://github.com/rqlite/rqlite/pull/738): Don't use temp file when snapshotting database.
+- [PR #739](https://github.com/rqlite/rqlite/pull/739): Don't use temp file when restoring an in-memory database.
 - [PR #738](https://github.com/rqlite/rqlite/pull/738): Switch to rqlite fork of mattn/go-sqlite3. The SQLite C code remains unchanged.
 - [PR #741](https://github.com/rqlite/rqlite/pull/741): Tighten up Store-level locking.
-- [PR #745](https://github.com/rqlite/rqlite/pull/745): TLS version 1.0 and 1.1 disabled by default. Fixes [issue #743](https://github.com/rqlite/rqlite/issues/743).
 
 ## 5.9.0 (January 24th 2021)
 ### New features
