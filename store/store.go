@@ -1050,12 +1050,9 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 		}
 	} else {
 		// In memory, so directly deserialize into the database.
-		db, err = sql.OpenInMemoryWithDSN(s.dbConf.DSN)
+		db, err = sql.DeserializeInMemoryWithDSN(database, s.dbConf.DSN)
 		if err != nil {
-			return fmt.Errorf("open in memory with DSN: %s", err)
-		}
-		if err := db.Deserialize(database); err != nil {
-			return fmt.Errorf("failed to deserialize database: %s", err)
+			return fmt.Errorf("DeserializeInMemoryWithDSN with DSN: %s", err)
 		}
 	}
 
