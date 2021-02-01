@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/hashicorp/raft"
 	"github.com/hashicorp/raft-boltdb"
 )
 
@@ -37,6 +38,33 @@ func (l *Log) LastIndex() (uint64, error) {
 	}
 	defer bs.Close()
 	return bs.LastIndex()
+}
+
+// LastCommandIndex returns the index of the last Command
+// log entry written to the Raft log. Returns an index of
+// zero if no such log exists.
+func (l *Log) LastCommandIndex() (uint64, error) {
+	fi, li, err := l.Indexes()
+	if err != nil {
+		return 0, fmt.Errorf("get indexes: %s", err)
+	}
+
+	bs, err := raftboltdb.NewBoltStore(l.path)
+	if err != nil {
+		return 0, fmt.Errorf("new bolt store: %s", err)
+	}
+	defer bs.Close()
+
+	var rl raft.Log
+	for i := li; i >= fi; i-- {
+		if err := bs.GetLog(i, &rl); err != nil {
+			return 0, fmt.Errorf("get log: %s", err)
+		}
+		if rl.Type == raft.LogCommand {
+			return i, nil
+		}
+	}
+	return 0, nil
 }
 
 // Indexes returns the first and last indexes.
