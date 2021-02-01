@@ -158,8 +158,7 @@ func Test_DeserializeInMemoryWithDSN(t *testing.T) {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
-	// Write a some records to the new database, to ensure
-	// it's fully functional.
+	// Write a lot of records to the new database, to ensure it's fully functional.
 	req = &command.Request{
 		Statements: []*command.Statement{
 			{
@@ -167,7 +166,7 @@ func Test_DeserializeInMemoryWithDSN(t *testing.T) {
 			},
 		},
 	}
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 5000; i++ {
 		_, err = newDB.Execute(req, false)
 		if err != nil {
 			t.Fatalf("failed to insert records: %s", err.Error())
@@ -177,7 +176,7 @@ func Test_DeserializeInMemoryWithDSN(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query table: %s", err.Error())
 	}
-	if exp, got := `[{"columns":["COUNT(*)"],"types":[""],"values":[[1004]]}]`, asJSON(ro); exp != got {
+	if exp, got := `[{"columns":["COUNT(*)"],"types":[""],"values":[[5004]]}]`, asJSON(ro); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 }
