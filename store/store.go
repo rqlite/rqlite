@@ -124,6 +124,7 @@ type Store struct {
 	raftStable    raft.StableStore          // Persistent k-v store.
 	boltStore     *rlog.Log                 // Physical store.
 
+	snapsExistOnOpen     bool      // Any snaps present when store opens?
 	firstIdxOnOpen       uint64    // First index on log when Store opens.
 	lastIdxOnOpen        uint64    // Last index on log when Store opens.
 	lastCommandIdxOnOpen uint64    // Last command index on log when Store opens.
@@ -202,13 +203,6 @@ func (s *Store) Open(enableBootstrap bool) error {
 		return err
 	}
 
-	// Open underlying database.
-	db, err := s.open()
-	if err != nil {
-		return err
-	}
-	s.db = db
-
 	// Create Raft-compatible network layer.
 	s.raftTn = raft.NewNetworkTransport(NewTransport(s.ln), connectionPoolCount, connectionTimeout, nil)
 
@@ -223,6 +217,12 @@ func (s *Store) Open(enableBootstrap bool) error {
 	if err != nil {
 		return fmt.Errorf("file snapshot store: %s", err)
 	}
+	snaps, err := snapshots.List()
+	if err != nil {
+		return fmt.Errorf("list snapshots: %s", err)
+	}
+	s.logger.Printf("%s preexisting snapshots present")
+	s.snapsExistOnOpen = len(snaps) > 0
 
 	// Create the log store and stable store.
 	s.boltStore, err = rlog.NewLog(filepath.Join(s.raftDir, raftDBPath))
@@ -250,6 +250,24 @@ func (s *Store) Open(enableBootstrap bool) error {
 	}
 	s.logger.Printf("first log index: %d, last log index: %d, last command log index: %d:",
 		s.firstIdxOnOpen, s.lastIdxOnOpen, s.lastCommandIdxOnOpen)
+
+	// If an on-disk database has been requested, and there are no snapshots, and
+	// there are no commands in the log, then this is the only opportunity to
+	// create that on-disk database file before Raft initializes.
+	if !s.dbConf.Memory && !s.snapsExistOnOpen && s.lastCommandIdxOnOpen == 0 {
+		db, err := s.openOnDisk()
+		if err != nil {
+			return fmt.Errorf("failed to open on-disk database")
+		}
+		s.db = db
+	} else {
+		// We need an in-memory database, at least for bootstrapping purposes.
+		db, err := s.openInMemory()
+		if err != nil {
+			return fmt.Errorf("failed to open in-memory database")
+		}
+		s.db = db
+	}
 
 	// Instantiate the Raft system.
 	ra, err := raft.NewRaft(config, s, s.raftLog, s.raftStable, snapshots, s.raftTn)
@@ -783,27 +801,25 @@ func (s *Store) setMetadata(id string, md map[string]string) error {
 	return nil
 }
 
-// open opens the in-memory or file-based database.
-func (s *Store) open() (*sql.DB, error) {
-	var db *sql.DB
-	var err error
-	if s.dbConf.Memory {
-		db, err = sql.OpenInMemoryWithDSN(s.dbConf.DSN)
-		if err != nil {
-			return nil, err
-		}
-		s.logger.Printf("SQLite %s database opened", s.databaseTypePretty())
-	} else {
-		// Explicitly remove any pre-existing SQLite database file as it will be
-		// completely rebuilt from committed log entries (and possibly a snapshot).
-		if err := os.Remove(s.dbPath); err != nil && !os.IsNotExist(err) {
-			return nil, err
-		}
-		db, err = sql.OpenWithDSN(s.dbPath, s.dbConf.DSN)
-		if err != nil {
-			return nil, err
-		}
-		s.logger.Printf("SQLite %s database opened at %s", s.databaseTypePretty(), s.dbPath)
+// openOnDisk opens an empty in-memory database at the Store's configured path.
+func (s *Store) openInMemory() (*sql.DB, error) {
+	db, err := sql.OpenInMemoryWithDSN(s.dbConf.DSN)
+	if err != nil {
+		return nil, err
+	}
+	return db, nil
+}
+
+// openOnDisk opens an empty on-disk database at the Store's configured path.
+func (s *Store) openOnDisk() (*sql.DB, error) {
+	// Explicitly remove any pre-existing SQLite database file as it will be
+	// completely rebuilt from committed log entries (and possibly a snapshot).
+	if err := os.Remove(s.dbPath); err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+	db, err := sql.OpenWithDSN(s.dbPath, s.dbConf.DSN)
+	if err != nil {
+		return nil, err
 	}
 	return db, nil
 }
@@ -899,6 +915,10 @@ func (s *Store) Apply(l *raft.Log) (e interface{}) {
 
 				// Last command log applied. Time to switch to on-disk database?
 				if !s.dbConf.Memory {
+					// Since we're here, it means that a) an on-disk database was requested
+					// *and* there were commands in the log. A snapshot may or may not have
+					// been applied, but it wouldn't have created the on-disk database. This
+					// is the very last chance to do it.
 					b, err := s.db.Serialize()
 					if err != nil {
 						e = err
@@ -919,6 +939,9 @@ func (s *Store) Apply(l *raft.Log) (e interface{}) {
 					if err != nil {
 						e = err
 					}
+					s.logger.Println("successfully switched to on-disk database")
+				} else {
+					s.logger.Println("continuing use of in-memory database")
 				}
 			}
 		}
@@ -1106,9 +1129,11 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 	}
 
 	var db *sql.DB
-	if s.lastCommandIdxOnOpen == 0 && !s.dbConf.Memory {
-		// Write snapshot over any existing database file, but only if there
-		// are no command entries in the log to be applied.
+	if !s.dbConf.Memory && s.lastCommandIdxOnOpen == 0 {
+		// A snapshot clearly exists (this function has been called) but there
+		// are no command entries in the log -- so Apply will not be called.
+		// Therefore this is the last opportunity to create the on-disk database
+		// before Raft starts.
 		if err := ioutil.WriteFile(s.dbPath, database, 0660); err != nil {
 			return err
 		}
@@ -1119,9 +1144,11 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 			return fmt.Errorf("open with DSN: %s", err)
 		}
 	} else {
-		// In memory (at least for now), so directly deserialize into the database.
-		// We stay in memory for now, if there are command entries in the log, as
-		// this will minimize startup times when in on-disk mode.
+		// Deserialize into an in-memory database because a) an in-memory database
+		// has been requested, or b) while there was a snapshot, there are also
+		// command entries in the log. So by sticking with an in-memory database
+		// those entries will be applied in the fastest possible manner. We will
+		// defer creation of any database on disk until the Apply function.
 		db, err = sql.DeserializeInMemoryWithDSN(database, s.dbConf.DSN)
 		if err != nil {
 			return fmt.Errorf("DeserializeInMemoryWithDSN with DSN: %s", err)

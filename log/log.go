@@ -43,10 +43,15 @@ func (l *Log) LastCommandIndex() (uint64, error) {
 		return 0, fmt.Errorf("get indexes: %s", err)
 	}
 
+	// Check for empty log.
+	if li == 0 {
+		return 0, nil
+	}
+
 	var rl raft.Log
 	for i := li; i >= fi; i-- {
 		if err := l.GetLog(i, &rl); err != nil {
-			return 0, fmt.Errorf("get log: %s", err)
+			return 0, fmt.Errorf("get log at index %d: %s", i, err)
 		}
 		if rl.Type == raft.LogCommand {
 			return i, nil

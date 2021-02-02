@@ -32,6 +32,15 @@ func Test_LogNewEmpty(t *testing.T) {
 	if li != 0 {
 		t.Fatalf("got non-zero value for last index of empty log: %d", li)
 	}
+
+	lci, err := l.LastCommandIndex()
+	if err != nil {
+		t.Fatalf("failed to get last command index: %s", err)
+	}
+	if lci != 0 {
+		t.Fatalf("got wrong value for last command index of not empty log: %d", lci)
+	}
+
 }
 
 func Test_LogNewExistNotEmpty(t *testing.T) {
@@ -183,7 +192,7 @@ func Test_LogLastCommandIndexNotExist(t *testing.T) {
 		t.Fatalf("failed to get last command index: %s", err)
 	}
 	if lci != 0 {
-		t.Fatalf("got wrong for last command index of not empty log: %d", lci)
+		t.Fatalf("got wrong value for last command index of not empty log: %d", lci)
 	}
 
 	if err := l.Close(); err != nil {
@@ -212,7 +221,7 @@ func Test_LogLastCommandIndexNotExist(t *testing.T) {
 		t.Fatalf("failed to get last command index: %s", err)
 	}
 	if lci != 0 {
-		t.Fatalf("got wrong for last command index of not empty log: %d", lci)
+		t.Fatalf("got wrong value for last command index of not empty log: %d", lci)
 	}
 }
 
