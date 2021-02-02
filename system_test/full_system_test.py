@@ -117,6 +117,8 @@ class Node(object):
 
   def status(self):
     r = requests.get(self._status_url())
+    if r.status_code == 500:
+        print(r.text)
     r.raise_for_status()
     return r.json()
 
