@@ -24,10 +24,10 @@ import (
 	"unsafe"
 
 	"github.com/hashicorp/raft"
-	"github.com/hashicorp/raft-boltdb"
 	"github.com/rqlite/rqlite/command"
 	legacy "github.com/rqlite/rqlite/command/legacy"
 	sql "github.com/rqlite/rqlite/db"
+	rlog "github.com/rqlite/rqlite/log"
 )
 
 var (
@@ -122,12 +122,14 @@ type Store struct {
 	reqMarshaller *command.RequestMarshaler // Request marshaler for writing to log.
 	raftLog       raft.LogStore             // Persistent log store.
 	raftStable    raft.StableStore          // Persistent k-v store.
-	boltStore     *raftboltdb.BoltStore     // Physical store.
+	boltStore     *rlog.Log                 // Physical store.
 
-	lastIdxOnOpen    uint64    // Last index on log when Store opens.
-	firstLogAppliedT time.Time // Time first log is applied
-	appliedOnOpen    uint64    // Number of logs applied at open.
-	openT            time.Time // Timestamp when Store opens.
+	firstIdxOnOpen       uint64    // First index on log when Store opens.
+	lastIdxOnOpen        uint64    // Last index on log when Store opens.
+	lastCommandIdxOnOpen uint64    // Last command index on log when Store opens.
+	firstLogAppliedT     time.Time // Time first log is applied
+	appliedOnOpen        uint64    // Number of logs applied at open.
+	openT                time.Time // Timestamp when Store opens.
 
 	txMu    sync.RWMutex // Sync between snapshots and query-level transactions.
 	queryMu sync.RWMutex // Sync queries generally with other operations.
@@ -223,9 +225,9 @@ func (s *Store) Open(enableBootstrap bool) error {
 	}
 
 	// Create the log store and stable store.
-	s.boltStore, err = raftboltdb.NewBoltStore(filepath.Join(s.raftDir, raftDBPath))
+	s.boltStore, err = rlog.NewLog(filepath.Join(s.raftDir, raftDBPath))
 	if err != nil {
-		return fmt.Errorf("new bolt store: %s", err)
+		return fmt.Errorf("new log store: %s", err)
 	}
 	s.raftStable = s.boltStore
 	s.raftLog, err = raft.NewLogCache(raftLogCacheSize, s.boltStore)
@@ -234,10 +236,20 @@ func (s *Store) Open(enableBootstrap bool) error {
 	}
 
 	// Get some info about the log, before any more entries are committed.
-	s.lastIdxOnOpen, err = s.raftLog.LastIndex()
+	s.firstIdxOnOpen, err = s.boltStore.FirstIndex()
 	if err != nil {
 		return fmt.Errorf("failed to get last index: %s", err)
 	}
+	s.lastIdxOnOpen, err = s.boltStore.LastIndex()
+	if err != nil {
+		return fmt.Errorf("failed to get last index: %s", err)
+	}
+	s.lastCommandIdxOnOpen, err = s.boltStore.LastCommandIndex()
+	if err != nil {
+		return fmt.Errorf("failed to get last command index: %s", err)
+	}
+	s.logger.Printf("first log index: %d, last log index: %d, last command log index: %d:",
+		s.firstIdxOnOpen, s.lastIdxOnOpen, s.lastCommandIdxOnOpen)
 
 	// Instantiate the Raft system.
 	ra, err := raft.NewRaft(config, s, s.raftLog, s.raftStable, snapshots, s.raftTn)
@@ -877,13 +889,37 @@ type fsmGenericResponse struct {
 }
 
 // Apply applies a Raft log entry to the database.
-func (s *Store) Apply(l *raft.Log) interface{} {
+func (s *Store) Apply(l *raft.Log) (e interface{}) {
 	defer func() {
-		if l.Index <= s.lastIdxOnOpen {
+		if l.Index <= s.lastCommandIdxOnOpen {
 			s.appliedOnOpen++
-			if l.Index == s.lastIdxOnOpen {
+			if l.Index == s.lastCommandIdxOnOpen {
 				s.logger.Printf("%d committed log entries applied in %s, took %s since open",
 					s.appliedOnOpen, time.Since(s.firstLogAppliedT), time.Since(s.openT))
+
+				// Last command log applied. Time to switch to on-disk database?
+				if !s.dbConf.Memory {
+					b, err := s.db.Serialize()
+					if err != nil {
+						e = err
+						return
+					}
+					if err := s.db.Close(); err != nil {
+						e = err
+						return
+					}
+					// Write new database to file on disk
+					if err := ioutil.WriteFile(s.dbPath, b, 0660); err != nil {
+						e = err
+						return
+					}
+
+					// Re-open it.
+					s.db, err = sql.OpenWithDSN(s.dbPath, s.dbConf.DSN)
+					if err != nil {
+						e = err
+					}
+				}
 			}
 		}
 	}()
@@ -1070,8 +1106,9 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 	}
 
 	var db *sql.DB
-	if !s.dbConf.Memory {
-		// Write snapshot over any existing database file.
+	if s.lastCommandIdxOnOpen == 0 && !s.dbConf.Memory {
+		// Write snapshot over any existing database file, but only if there
+		// are no command entries in the log to be applied.
 		if err := ioutil.WriteFile(s.dbPath, database, 0660); err != nil {
 			return err
 		}
@@ -1082,7 +1119,9 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 			return fmt.Errorf("open with DSN: %s", err)
 		}
 	} else {
-		// In memory, so directly deserialize into the database.
+		// In memory (at least for now), so directly deserialize into the database.
+		// We stay in memory for now, if there are command entries in the log, as
+		// this will minimize startup times when in on-disk mode.
 		db, err = sql.DeserializeInMemoryWithDSN(database, s.dbConf.DSN)
 		if err != nil {
 			return fmt.Errorf("DeserializeInMemoryWithDSN with DSN: %s", err)
