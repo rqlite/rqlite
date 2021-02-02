@@ -221,7 +221,7 @@ func (s *Store) Open(enableBootstrap bool) error {
 	if err != nil {
 		return fmt.Errorf("list snapshots: %s", err)
 	}
-	s.logger.Printf("%s preexisting snapshots present", len(snaps))
+	s.logger.Printf("%d preexisting snapshots present", len(snaps))
 	s.snapsExistOnOpen = len(snaps) > 0
 
 	// Create the log store and stable store.
@@ -1159,8 +1159,6 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 		return fmt.Errorf("failed to close pre-restore database: %s", err)
 	}
 	s.db = db
-	s.logger.Printf("successfully restored %s database from snapshot",
-		s.databaseTypePretty())
 
 	// Unmarshal remaining bytes, and set to cluster meta.
 	err = func() error {
