@@ -921,23 +921,23 @@ func (s *Store) Apply(l *raft.Log) (e interface{}) {
 					// is the very last chance to do it.
 					b, err := s.db.Serialize()
 					if err != nil {
-						e = err
+						e = &fsmGenericResponse{error: fmt.Errorf("serialize failed: %s", err)}
 						return
 					}
 					if err := s.db.Close(); err != nil {
-						e = err
+						e = &fsmGenericResponse{error: fmt.Errorf("close failed: %s", err)}
 						return
 					}
 					// Write new database to file on disk
 					if err := ioutil.WriteFile(s.dbPath, b, 0660); err != nil {
-						e = err
+						e = &fsmGenericResponse{error: fmt.Errorf("write failed: %s", err)}
 						return
 					}
 
 					// Re-open it.
 					s.db, err = sql.OpenWithDSN(s.dbPath, s.dbConf.DSN)
 					if err != nil {
-						e = err
+						e = &fsmGenericResponse{error: fmt.Errorf("open on-disk failed: %s", err)}
 					}
 					s.logger.Println("successfully switched to on-disk database")
 				} else {
