@@ -124,6 +124,7 @@ type Store struct {
 	raftStable    raft.StableStore          // Persistent k-v store.
 	boltStore     *rlog.Log                 // Physical store.
 
+	onDiskCreated        bool      // On disk database actually created?
 	snapsExistOnOpen     bool      // Any snaps present when store opens?
 	firstIdxOnOpen       uint64    // First index on log when Store opens.
 	lastIdxOnOpen        uint64    // Last index on log when Store opens.
@@ -251,6 +252,7 @@ func (s *Store) Open(enableBootstrap bool) error {
 			return fmt.Errorf("failed to open on-disk database")
 		}
 		s.db = db
+		s.onDiskCreated = true
 	} else {
 		// We need an in-memory database, at least for bootstrapping purposes.
 		db, err := s.openInMemory()
@@ -458,13 +460,15 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		"version":        sql.DBVersion,
 		"db_size":        dbSz,
 	}
-	if !s.dbConf.Memory {
-		dbStatus["path"] = s.dbPath
-		if dbStatus["size"], err = s.db.FileSize(); err != nil {
-			return nil, err
-		}
-	} else {
+	if s.dbConf.Memory {
 		dbStatus["path"] = ":memory:"
+	} else {
+		dbStatus["path"] = s.dbPath
+		if s.onDiskCreated {
+			if dbStatus["size"], err = s.db.FileSize(); err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	nodes, err := s.Nodes()
@@ -951,6 +955,7 @@ func (s *Store) Apply(l *raft.Log) (e interface{}) {
 					if err != nil {
 						e = &fsmGenericResponse{error: fmt.Errorf("open on-disk failed: %s", err)}
 					}
+					s.onDiskCreated = true
 					s.logger.Println("successfully switched to on-disk database")
 				} else {
 					s.logger.Println("continuing use of in-memory database")
@@ -1155,6 +1160,8 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 		if err != nil {
 			return fmt.Errorf("open with DSN: %s", err)
 		}
+		s.onDiskCreated = true
+		s.logger.Println("successfully switched to on-disk database due to restore")
 	} else {
 		// Deserialize into an in-memory database because a) an in-memory database
 		// has been requested, or b) while there was a snapshot, there are also
