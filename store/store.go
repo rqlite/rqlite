@@ -929,7 +929,9 @@ func (s *Store) Apply(l *raft.Log) (e interface{}) {
 					s.appliedOnOpen, time.Since(s.firstLogAppliedT), time.Since(s.openT))
 
 				// Last command log applied. Time to switch to on-disk database?
-				if !s.dbConf.Memory {
+				if s.dbConf.Memory {
+					s.logger.Println("continuing use of in-memory database")
+				} else {
 					// Since we're here, it means that a) an on-disk database was requested
 					// *and* there were commands in the log. A snapshot may or may not have
 					// been applied, but it wouldn't have created the on-disk database in that
@@ -957,8 +959,6 @@ func (s *Store) Apply(l *raft.Log) (e interface{}) {
 					}
 					s.onDiskCreated = true
 					s.logger.Println("successfully switched to on-disk database")
-				} else {
-					s.logger.Println("continuing use of in-memory database")
 				}
 			}
 		}
