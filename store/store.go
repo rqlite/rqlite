@@ -221,7 +221,7 @@ func (s *Store) Open(enableBootstrap bool) error {
 	if err != nil {
 		return fmt.Errorf("list snapshots: %s", err)
 	}
-	s.logger.Printf("%s preexisting snapshots present")
+	s.logger.Printf("%s preexisting snapshots present", len(snaps))
 	s.snapsExistOnOpen = len(snaps) > 0
 
 	// Create the log store and stable store.
