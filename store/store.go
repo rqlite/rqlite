@@ -917,6 +917,8 @@ type fsmGenericResponse struct {
 func (s *Store) Apply(l *raft.Log) (e interface{}) {
 	defer func() {
 		if l.Index <= s.lastCommandIdxOnOpen {
+			// In here means at least one command entry was in the log when the Store
+			// opened.
 			s.appliedOnOpen++
 			if l.Index == s.lastCommandIdxOnOpen {
 				s.logger.Printf("%d committed log entries applied in %s, took %s since open",
@@ -926,8 +928,9 @@ func (s *Store) Apply(l *raft.Log) (e interface{}) {
 				if !s.dbConf.Memory {
 					// Since we're here, it means that a) an on-disk database was requested
 					// *and* there were commands in the log. A snapshot may or may not have
-					// been applied, but it wouldn't have created the on-disk database. This
-					// is the very last chance to do it.
+					// been applied, but it wouldn't have created the on-disk database in that
+					// case since there were commands in the log. This is the very last chance
+					// to do it.
 					b, err := s.db.Serialize()
 					if err != nil {
 						e = &fsmGenericResponse{error: fmt.Errorf("serialize failed: %s", err)}
