@@ -9,6 +9,7 @@
 - [PR #738](https://github.com/rqlite/rqlite/pull/738): Switch to rqlite fork of mattn/go-sqlite3. The SQLite C code remains unchanged.
 - [PR #741](https://github.com/rqlite/rqlite/pull/741): Tighten up Store-level locking.
 - [PR #747](https://github.com/rqlite/rqlite/pull/747): Time snapshot, restore, and startup times.
+- [PR #750](https://github.com/rqlite/rqlite/pull/750): Build on-disk databases in-memory first. Fixes [issue #731](https://github.com/rqlite/rqlite/issues/731).
 
 ## 5.9.0 (January 24th 2021)
 ### New features
