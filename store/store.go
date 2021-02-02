@@ -236,17 +236,8 @@ func (s *Store) Open(enableBootstrap bool) error {
 	}
 
 	// Get some info about the log, before any more entries are committed.
-	s.firstIdxOnOpen, err = s.boltStore.FirstIndex()
-	if err != nil {
-		return fmt.Errorf("failed to get last index: %s", err)
-	}
-	s.lastIdxOnOpen, err = s.boltStore.LastIndex()
-	if err != nil {
-		return fmt.Errorf("failed to get last index: %s", err)
-	}
-	s.lastCommandIdxOnOpen, err = s.boltStore.LastCommandIndex()
-	if err != nil {
-		return fmt.Errorf("failed to get last command index: %s", err)
+	if err := s.setLogInfo(); err != nil {
+		return fmt.Errorf("set log info: %s", err)
 	}
 	s.logger.Printf("first log index: %d, last log index: %d, last command log index: %d:",
 		s.firstIdxOnOpen, s.lastIdxOnOpen, s.lastCommandIdxOnOpen)
@@ -822,6 +813,24 @@ func (s *Store) openOnDisk() (*sql.DB, error) {
 		return nil, err
 	}
 	return db, nil
+}
+
+// setLogInfo records some key indexs about the log.
+func (s *Store) setLogInfo() error {
+	var err error
+	s.firstIdxOnOpen, err = s.boltStore.FirstIndex()
+	if err != nil {
+		return fmt.Errorf("failed to get last index: %s", err)
+	}
+	s.lastIdxOnOpen, err = s.boltStore.LastIndex()
+	if err != nil {
+		return fmt.Errorf("failed to get last index: %s", err)
+	}
+	s.lastCommandIdxOnOpen, err = s.boltStore.LastCommandIndex()
+	if err != nil {
+		return fmt.Errorf("failed to get last command index: %s", err)
+	}
+	return nil
 }
 
 // remove removes the node, with the given ID, from the cluster.
