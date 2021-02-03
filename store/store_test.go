@@ -1155,6 +1155,19 @@ func Test_SingleNodeRestoreNoncompressed(t *testing.T) {
 	}
 }
 
+func Test_SingleNodeNoop(t *testing.T) {
+	s0 := mustNewStore(true)
+	if err := s0.Open(true); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s0.Close(true)
+	s0.WaitForLeader(10 * time.Second)
+
+	if err := s0.Noop("1"); err != nil {
+		t.Fatalf("failed to write noop command: %s", err.Error())
+	}
+}
+
 func Test_MetadataMultinode(t *testing.T) {
 	s0 := mustNewStore(true)
 	if err := s0.Open(true); err != nil {

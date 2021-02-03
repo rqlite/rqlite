@@ -743,6 +743,37 @@ func (s *Store) SetMetadata(md map[string]string) error {
 	return s.setMetadata(s.raftID, md)
 }
 
+// Noop writes a noop command to the Raft log. A noop command simply
+// consumes a slot in the Raft log, but has no other affect on the
+// system.
+func (s *Store) Noop(id string) error {
+	n := &command.Noop{
+		Id: id,
+	}
+	b, err := command.MarshalNoop(n)
+	if err != nil {
+		return err
+	}
+
+	c := &command.Command{
+		Type:       command.Command_COMMAND_TYPE_NOOP,
+		SubCommand: b,
+	}
+	bc, err := command.Marshal(c)
+	if err != nil {
+		return err
+	}
+
+	f := s.raft.Apply(bc, s.ApplyTimeout)
+	if e := f.(raft.Future); e.Error() != nil {
+		if e.Error() == raft.ErrNotLeader {
+			return ErrNotLeader
+		}
+		return e.Error()
+	}
+	return nil
+}
+
 // setMetadata adds the metadata md to any existing metadata for
 // the given node ID.
 func (s *Store) setMetadata(id string, md map[string]string) error {
@@ -1021,6 +1052,8 @@ func (s *Store) Apply(l *raft.Log) (e interface{}) {
 			defer s.metaMu.Unlock()
 			delete(s.meta, md.RaftId)
 		}()
+		return &fsmGenericResponse{}
+	case command.Command_COMMAND_TYPE_NOOP:
 		return &fsmGenericResponse{}
 	default:
 		return &fsmGenericResponse{error: fmt.Errorf("unhandled command: %v", c.Type)}

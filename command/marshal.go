@@ -165,6 +165,16 @@ func UnMarshalMetadataDelete(b []byte, c *MetadataDelete) error {
 	return proto.Unmarshal(b, c)
 }
 
+// MarshalNoop marshals a Noop command
+func MarshalNoop(c *Noop) ([]byte, error) {
+	return proto.Marshal(c)
+}
+
+// UnmarshalNoop unmarshals a Noop command
+func UnMarshalNoop(b []byte, c *Noop) error {
+	return proto.Unmarshal(b, c)
+}
+
 // UnmarshalSubCommand unmarshalls a sub command m. It assumes that
 // m is the correct type.
 func UnmarshalSubCommand(c *Command, m proto.Message) error {
