@@ -49,6 +49,10 @@ message MetadataDelete {
 	string raft_id = 1;
 }
 
+message Noop {
+	string id = 1;
+}
+
 message Command {
     enum Type {
         COMMAND_TYPE_UNKNOWN = 0;
@@ -56,6 +60,7 @@ message Command {
         COMMAND_TYPE_EXECUTE = 2;
         COMMAND_TYPE_METADATA_SET = 3;
         COMMAND_TYPE_METADATA_DELETE = 4;
+        COMMAND_TYPE_NOOP = 5;
     }
     Type type = 1;
     bytes sub_command = 2;

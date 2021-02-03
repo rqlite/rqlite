@@ -1155,6 +1155,35 @@ func Test_SingleNodeRestoreNoncompressed(t *testing.T) {
 	}
 }
 
+// Test_SingleNodeSnapshotRestore_NoDBCommandsNoSnaps tests a node starting
+// up with commands in the log, but no *database* commands, and no snapshots.
+func Test_SingleNodeSnapshotRestore_NoDBCommandsNoSnaps(t *testing.T) {
+	s0 := mustNewStore(true)
+	s0.SnapshotThreshold = 8192 // High value, ensure no snapshotting
+	if err := s0.Open(true); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s0.Close(false)
+	s0.WaitForLeader(10 * time.Second)
+
+	// Write a non-DB commands to the log.
+	if err := s0.Noop("1"); err != nil {
+		t.Fatalf("failed to write noop command: %s", err.Error())
+	}
+
+	// Restart node, ensure it comes up OK.
+	if err := s0.Close(true); err != nil {
+		t.Fatalf("failed to close store: %s", err.Error())
+	}
+	if err := s0.Open(true); err != nil {
+		t.Fatalf("failed to open store: %s", err.Error())
+	}
+	s0.WaitForLeader(10 * time.Second)
+	if err := s0.WaitForAppliedIndex(5, 5*time.Second); err != nil {
+		t.Fatalf("error waiting for follower to apply index: %s:", err.Error())
+	}
+}
+
 func Test_MetadataMultinode(t *testing.T) {
 	s0 := mustNewStore(true)
 	if err := s0.Open(true); err != nil {
