@@ -247,19 +247,17 @@ func (s *Store) Open(enableBootstrap bool) error {
 	// there are no commands in the log, then this is the only opportunity to
 	// create that on-disk database file before Raft initializes.
 	if !s.dbConf.Memory && !s.snapsExistOnOpen && s.lastCommandIdxOnOpen == 0 {
-		db, err := s.openOnDisk()
+		s.db, err = s.openOnDisk(nil)
 		if err != nil {
 			return fmt.Errorf("failed to open on-disk database")
 		}
-		s.db = db
 		s.onDiskCreated = true
 	} else {
 		// We need an in-memory database, at least for bootstrapping purposes.
-		db, err := s.openInMemory()
+		s.db, err = s.openInMemory(nil)
 		if err != nil {
 			return fmt.Errorf("failed to open in-memory database")
 		}
-		s.db = db
 	}
 
 	// Instantiate the Raft system.
@@ -796,27 +794,30 @@ func (s *Store) setMetadata(id string, md map[string]string) error {
 	return nil
 }
 
-// openOnDisk opens an empty in-memory database at the Store's configured path.
-func (s *Store) openInMemory() (*sql.DB, error) {
-	db, err := sql.OpenInMemoryWithDSN(s.dbConf.DSN)
-	if err != nil {
-		return nil, err
+// openInMemory returns an in-memory database. If b is non-nil, then the
+// database will be initialized with the contents of b.
+func (s *Store) openInMemory(b []byte) (db *sql.DB, err error) {
+	if b == nil {
+		db, err = sql.OpenInMemoryWithDSN(s.dbConf.DSN)
+	} else {
+		db, err = sql.DeserializeInMemoryWithDSN(b, s.dbConf.DSN)
 	}
-	return db, nil
+	return
 }
 
-// openOnDisk opens an empty on-disk database at the Store's configured path.
-func (s *Store) openOnDisk() (*sql.DB, error) {
-	// Explicitly remove any pre-existing SQLite database file as it will be
-	// completely rebuilt from committed log entries (and possibly a snapshot).
+// openOnDisk opens an on-disk database file at the Store's configured path. If
+// b is non-nil, any preexisting file will first be overwritten with those contents.
+// Otherwise any pre-existing file will be removed before the database is opened.
+func (s *Store) openOnDisk(b []byte) (*sql.DB, error) {
 	if err := os.Remove(s.dbPath); err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
-	db, err := sql.OpenWithDSN(s.dbPath, s.dbConf.DSN)
-	if err != nil {
-		return nil, err
+	if b != nil {
+		if err := ioutil.WriteFile(s.dbPath, b, 0660); err != nil {
+			return nil, err
+		}
 	}
-	return db, nil
+	return sql.OpenWithDSN(s.dbPath, s.dbConf.DSN)
 }
 
 // setLogInfo records some key indexs about the log.
@@ -946,15 +947,9 @@ func (s *Store) Apply(l *raft.Log) (e interface{}) {
 						e = &fsmGenericResponse{error: fmt.Errorf("close failed: %s", err)}
 						return
 					}
-					// Write new database to file on disk
+					// Open a new on-disk database.
+					s.db, err = s.openOnDisk(b)
 					if err := ioutil.WriteFile(s.dbPath, b, 0660); err != nil {
-						e = &fsmGenericResponse{error: fmt.Errorf("write failed: %s", err)}
-						return
-					}
-
-					// Re-open it.
-					s.db, err = sql.OpenWithDSN(s.dbPath, s.dbConf.DSN)
-					if err != nil {
 						e = &fsmGenericResponse{error: fmt.Errorf("open on-disk failed: %s", err)}
 					}
 					s.onDiskCreated = true
@@ -1145,20 +1140,19 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 		offset += int64(sz)
 	}
 
+	if err := s.db.Close(); err != nil {
+		return fmt.Errorf("failed to close pre-restore database: %s", err)
+	}
+
 	var db *sql.DB
 	if !s.dbConf.Memory && s.lastCommandIdxOnOpen == 0 {
 		// A snapshot clearly exists (this function has been called) but there
 		// are no command entries in the log -- so Apply will not be called.
 		// Therefore this is the last opportunity to create the on-disk database
 		// before Raft starts.
-		if err := ioutil.WriteFile(s.dbPath, database, 0660); err != nil {
-			return err
-		}
-
-		// Re-open it.
-		db, err = sql.OpenWithDSN(s.dbPath, s.dbConf.DSN)
+		db, err = s.openOnDisk(database)
 		if err != nil {
-			return fmt.Errorf("open with DSN: %s", err)
+			return fmt.Errorf("open on-disk file during restore: %s", err)
 		}
 		s.onDiskCreated = true
 		s.logger.Println("successfully switched to on-disk database due to restore")
@@ -1168,14 +1162,10 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 		// command entries in the log. So by sticking with an in-memory database
 		// those entries will be applied in the fastest possible manner. We will
 		// defer creation of any database on disk until the Apply function.
-		db, err = sql.DeserializeInMemoryWithDSN(database, s.dbConf.DSN)
+		db, err = s.openInMemory(database)
 		if err != nil {
-			return fmt.Errorf("DeserializeInMemoryWithDSN with DSN: %s", err)
+			return fmt.Errorf("openInMemory: %s", err)
 		}
-	}
-
-	if err := s.db.Close(); err != nil {
-		return fmt.Errorf("failed to close pre-restore database: %s", err)
 	}
 	s.db = db
 
