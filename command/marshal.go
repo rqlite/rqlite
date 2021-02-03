@@ -171,7 +171,7 @@ func MarshalNoop(c *Noop) ([]byte, error) {
 }
 
 // UnmarshalNoop unmarshals a Noop command
-func UnMarshalNoop(b []byte, c *Noop) error {
+func UnmarshalNoop(b []byte, c *Noop) error {
 	return proto.Unmarshal(b, c)
 }
 
