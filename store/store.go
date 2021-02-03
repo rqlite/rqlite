@@ -795,7 +795,7 @@ func (s *Store) setMetadata(id string, md map[string]string) error {
 }
 
 // openInMemory returns an in-memory database. If b is non-nil, then the
-// database will be initialized with the contents of b
+// database will be initialized with the contents of b.
 func (s *Store) openInMemory(b []byte) (db *sql.DB, err error) {
 	if b == nil {
 		db, err = sql.OpenInMemoryWithDSN(s.dbConf.DSN)
@@ -1140,6 +1140,10 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 		offset += int64(sz)
 	}
 
+	if err := s.db.Close(); err != nil {
+		return fmt.Errorf("failed to close pre-restore database: %s", err)
+	}
+
 	var db *sql.DB
 	if !s.dbConf.Memory && s.lastCommandIdxOnOpen == 0 {
 		// A snapshot clearly exists (this function has been called) but there
@@ -1162,10 +1166,6 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 		if err != nil {
 			return fmt.Errorf("openInMemory: %s", err)
 		}
-	}
-
-	if err := s.db.Close(); err != nil {
-		return fmt.Errorf("failed to close pre-restore database: %s", err)
 	}
 	s.db = db
 
