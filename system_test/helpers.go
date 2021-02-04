@@ -391,6 +391,10 @@ func mustNewNodeEncrypted(enableSingle, httpEncrypt, nodeEncrypt bool) *Node {
 }
 
 func mustNodeEncrypted(dir string, enableSingle, httpEncrypt bool, tn store.Listener, nodeID string) *Node {
+	return mustNodeEncryptedOnDisk(dir, enableSingle, httpEncrypt, tn, nodeID, false)
+}
+
+func mustNodeEncryptedOnDisk(dir string, enableSingle, httpEncrypt bool, tn store.Listener, nodeID string, onDisk bool) *Node {
 	nodeCertPath := x509.CertFile(dir)
 	nodeKeyPath := x509.KeyFile(dir)
 	httpCertPath := nodeCertPath
@@ -404,7 +408,7 @@ func mustNodeEncrypted(dir string, enableSingle, httpEncrypt bool, tn store.List
 		HTTPKeyPath:  httpKeyPath,
 	}
 
-	dbConf := store.NewDBConfig("", false)
+	dbConf := store.NewDBConfig("", !onDisk)
 
 	id := nodeID
 	if id == "" {

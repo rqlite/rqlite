@@ -414,38 +414,111 @@ func Test_SingleNodeNoopReopen(t *testing.T) {
 // This tests that the code can handle a snapshot that doesn't
 // contain database data. This shouldn't happen in real systems
 func Test_SingleNodeNoopSnapReopen(t *testing.T) {
-	dir := mustTempDir()
-	tn := mustNewOpenTransport("")
-	node := mustNodeEncrypted(dir, true, false, tn, "")
+	onDisk := false
 
-	if _, err := node.WaitForLeader(); err != nil {
-		t.Fatalf("node never became leader")
-	}
+	for {
+		t.Logf("running test, on-disk=%v", onDisk)
 
-	for i := 0; i < 150; i++ {
-		if err := node.Noop(fmt.Sprintf("%d", i)); err != nil {
-			t.Fatalf("failed to write noop command: %s", err)
+		dir := mustTempDir()
+		tn := mustNewOpenTransport("")
+		node := mustNodeEncryptedOnDisk(dir, true, false, tn, "", onDisk)
+
+		if _, err := node.WaitForLeader(); err != nil {
+			t.Fatalf("node never became leader")
+		}
+
+		for i := 0; i < 150; i++ {
+			if err := node.Noop(fmt.Sprintf("%d", i)); err != nil {
+				t.Fatalf("failed to write noop command: %s", err)
+			}
+		}
+
+		// Wait for a snapshot to happen.
+		time.Sleep(5 * time.Second)
+
+		if err := node.Close(true); err != nil {
+			t.Fatalf("failed to close node")
+		}
+
+		if err := tn.Open("localhost:0"); err != nil {
+			t.Fatalf("failed to re-open transport: %s", err)
+		}
+		if err := node.Store.Open(true); err != nil {
+			t.Fatalf("failed to re-open store: %s", err)
+		}
+		if err := node.Service.Start(); err != nil {
+			t.Fatalf("failed to restart service: %s", err)
+		}
+
+		if _, err := node.WaitForLeader(); err != nil {
+			t.Fatalf("node never became leader")
+		}
+
+		node.Deprovision()
+
+		onDisk = !onDisk
+		if onDisk == false {
+			break
 		}
 	}
+}
 
-	// Wait for a snapshot to happen.
-	time.Sleep(5 * time.Second)
+// Test_SingleNodeNoopSnapLogsReopen tests that a node can be re-opened OK,
+// with a snapshot present which was triggered by non-database commands.
+// This tests that the code can handle a snapshot that doesn't
+// contain database data. This shouldn't happen in real systems
+func Test_SingleNodeNoopSnapLogsReopen(t *testing.T) {
+	onDisk := false
 
-	if err := node.Close(true); err != nil {
-		t.Fatalf("failed to close node")
-	}
+	for {
+		t.Logf("running test, on-disk=%v", onDisk)
 
-	if err := tn.Open("localhost:0"); err != nil {
-		t.Fatalf("failed to re-open transport: %s", err)
-	}
-	if err := node.Store.Open(true); err != nil {
-		t.Fatalf("failed to re-open store: %s", err)
-	}
-	if err := node.Service.Start(); err != nil {
-		t.Fatalf("failed to restart service: %s", err)
-	}
+		dir := mustTempDir()
+		tn := mustNewOpenTransport("")
+		node := mustNodeEncryptedOnDisk(dir, true, false, tn, "", onDisk)
 
-	if _, err := node.WaitForLeader(); err != nil {
-		t.Fatalf("node never became leader")
+		if _, err := node.WaitForLeader(); err != nil {
+			t.Fatalf("node never became leader")
+		}
+
+		for i := 0; i < 150; i++ {
+			if err := node.Noop(fmt.Sprintf("%d", i)); err != nil {
+				t.Fatalf("failed to write noop command: %s", err)
+			}
+		}
+
+		// Wait for a snapshot to happen.
+		time.Sleep(10 * time.Second)
+
+		for i := 0; i < 5; i++ {
+			if err := node.Noop(fmt.Sprintf("%d", i)); err != nil {
+				t.Fatalf("failed to write noop command: %s", err)
+			}
+		}
+
+		if err := node.Close(true); err != nil {
+			t.Fatalf("failed to close node")
+		}
+
+		if err := tn.Open("localhost:0"); err != nil {
+			t.Fatalf("failed to re-open transport: %s", err)
+		}
+		if err := node.Store.Open(true); err != nil {
+			t.Fatalf("failed to re-open store: %s", err)
+		}
+		if err := node.Service.Start(); err != nil {
+			t.Fatalf("failed to restart service: %s", err)
+		}
+
+		if _, err := node.WaitForLeader(); err != nil {
+			t.Fatalf("node never became leader")
+		}
+
+		node.Deprovision()
+
+		onDisk = !onDisk
+		if onDisk == false {
+			break
+		}
 	}
 }
