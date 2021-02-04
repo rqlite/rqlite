@@ -1101,11 +1101,9 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 	defer s.txMu.Unlock()
 
 	var err error
-	fsm.database, err = s.db.Serialize()
-	if err != nil {
-		s.logger.Printf("failed to serialize database for snapshot: %s", err.Error())
-		return nil, err
-	}
+	fsm.database, _ = s.db.Serialize()
+	// The error code is not meaningful from Serialize(). The code needs to be able
+	// handle a nil byte slide being returned.
 
 	fsm.meta, err = json.Marshal(s.meta)
 	if err != nil {
@@ -1159,25 +1157,30 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 
 	// Now read in the database file data, decompress if necessary, and restore.
 	var database []byte
-	if compressed {
-		buf := new(bytes.Buffer)
-		gz, err := gzip.NewReader(bytes.NewReader(b[offset : offset+int64(sz)]))
-		if err != nil {
-			return err
-		}
+	if sz > 0 {
+		if compressed {
+			buf := new(bytes.Buffer)
+			gz, err := gzip.NewReader(bytes.NewReader(b[offset : offset+int64(sz)]))
+			if err != nil {
+				return err
+			}
 
-		if _, err := io.Copy(buf, gz); err != nil {
-			return fmt.Errorf("SQLite database decompress: %s", err)
-		}
+			if _, err := io.Copy(buf, gz); err != nil {
+				return fmt.Errorf("SQLite database decompress: %s", err)
+			}
 
-		if err := gz.Close(); err != nil {
-			return err
+			if err := gz.Close(); err != nil {
+				return err
+			}
+			database = buf.Bytes()
+			offset += int64(sz)
+		} else {
+			database = b[offset : offset+int64(sz)]
+			offset += int64(sz)
 		}
-		database = buf.Bytes()
-		offset += int64(sz)
 	} else {
-		database = b[offset : offset+int64(sz)]
-		offset += int64(sz)
+		s.logger.Println("no database data present in restored snapshot")
+		database = nil
 	}
 
 	if err := s.db.Close(); err != nil {
@@ -1278,18 +1281,29 @@ func (f *fsmSnapshot) Persist(sink raft.SnapshotSink) error {
 			return err
 		}
 
-		// Write size of compressed database.
-		err = writeUint64(b, uint64(len(cdb)))
-		if err != nil {
-			return err
-		}
-		if _, err := sink.Write(b.Bytes()); err != nil {
-			return err
-		}
+		if cdb != nil {
+			// Write size of compressed database.
+			err = writeUint64(b, uint64(len(cdb)))
+			if err != nil {
+				return err
+			}
+			if _, err := sink.Write(b.Bytes()); err != nil {
+				return err
+			}
 
-		// Write compressed database to sink.
-		if _, err := sink.Write(cdb); err != nil {
-			return err
+			// Write compressed database to sink.
+			if _, err := sink.Write(cdb); err != nil {
+				return err
+			}
+		} else {
+			f.logger.Println("no database data available for snapshot")
+			err = writeUint64(b, uint64(0))
+			if err != nil {
+				return err
+			}
+			if _, err := sink.Write(b.Bytes()); err != nil {
+				return err
+			}
 		}
 
 		// Write the cluster metadata.
@@ -1310,6 +1324,10 @@ func (f *fsmSnapshot) Persist(sink raft.SnapshotSink) error {
 }
 
 func (f *fsmSnapshot) compressedDatabase() ([]byte, error) {
+	if f.database == nil {
+		return nil, nil
+	}
+
 	var buf bytes.Buffer
 	gz, err := gzip.NewWriterLevel(&buf, gzip.BestCompression)
 	if err != nil {

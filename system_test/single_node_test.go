@@ -345,3 +345,107 @@ func Test_SingleNodeCoverage(t *testing.T) {
 		t.Fatalf("output from expvar endpoint is not valid JSON: %s", str)
 	}
 }
+
+// Test_SingleNodeReopen tests that a node can be re-opened OK.
+func Test_SingleNodeReopen(t *testing.T) {
+	dir := mustTempDir()
+	tn := mustNewOpenTransport("")
+	node := mustNodeEncrypted(dir, true, false, tn, "")
+
+	if _, err := node.WaitForLeader(); err != nil {
+		t.Fatalf("node never became leader")
+	}
+
+	if err := node.Close(true); err != nil {
+		t.Fatalf("failed to close node")
+	}
+
+	if err := tn.Open("localhost:0"); err != nil {
+		t.Fatalf("failed to re-open transport: %s", err)
+	}
+	if err := node.Store.Open(true); err != nil {
+		t.Fatalf("failed to re-open store: %s", err)
+	}
+	if err := node.Service.Start(); err != nil {
+		t.Fatalf("failed to restart service: %s", err)
+	}
+
+	if _, err := node.WaitForLeader(); err != nil {
+		t.Fatalf("node never became leader")
+	}
+}
+
+// Test_SingleNodeReopen tests that a node can be re-opened OK, with
+// a non-database command in the log.
+func Test_SingleNodeNoopReopen(t *testing.T) {
+	dir := mustTempDir()
+	tn := mustNewOpenTransport("")
+	node := mustNodeEncrypted(dir, true, false, tn, "")
+
+	if _, err := node.WaitForLeader(); err != nil {
+		t.Fatalf("node never became leader")
+	}
+
+	if err := node.Noop("#1"); err != nil {
+		t.Fatalf("failed to write noop command: %s", err)
+	}
+
+	if err := node.Close(true); err != nil {
+		t.Fatalf("failed to close node")
+	}
+
+	if err := tn.Open("localhost:0"); err != nil {
+		t.Fatalf("failed to re-open transport: %s", err)
+	}
+	if err := node.Store.Open(true); err != nil {
+		t.Fatalf("failed to re-open store: %s", err)
+	}
+	if err := node.Service.Start(); err != nil {
+		t.Fatalf("failed to restart service: %s", err)
+	}
+
+	if _, err := node.WaitForLeader(); err != nil {
+		t.Fatalf("node never became leader")
+	}
+}
+
+// Test_SingleNodeReopen tests that a node can be re-opened OK, with
+// a snapshot present which was triggered by non-database commands.
+// This tests that the code can handle a snapshot that doesn't
+// contain database data. This shouldn't happen in real systems
+func Test_SingleNodeNoopSnapReopen(t *testing.T) {
+	dir := mustTempDir()
+	tn := mustNewOpenTransport("")
+	node := mustNodeEncrypted(dir, true, false, tn, "")
+
+	if _, err := node.WaitForLeader(); err != nil {
+		t.Fatalf("node never became leader")
+	}
+
+	for i := 0; i < 150; i++ {
+		if err := node.Noop(fmt.Sprintf("%d", i)); err != nil {
+			t.Fatalf("failed to write noop command: %s", err)
+		}
+	}
+
+	// Wait for a snapshot to happen.
+	time.Sleep(5 * time.Second)
+
+	if err := node.Close(true); err != nil {
+		t.Fatalf("failed to close node")
+	}
+
+	if err := tn.Open("localhost:0"); err != nil {
+		t.Fatalf("failed to re-open transport: %s", err)
+	}
+	if err := node.Store.Open(true); err != nil {
+		t.Fatalf("failed to re-open store: %s", err)
+	}
+	if err := node.Service.Start(); err != nil {
+		t.Fatalf("failed to restart service: %s", err)
+	}
+
+	if _, err := node.WaitForLeader(); err != nil {
+		t.Fatalf("node never became leader")
+	}
+}

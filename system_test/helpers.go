@@ -38,6 +38,15 @@ func (n *Node) SameAs(o *Node) bool {
 	return n.RaftAddr == o.RaftAddr
 }
 
+// Close closes the node.
+func (n *Node) Close(graceful bool) error {
+	if err := n.Store.Close(graceful); err != nil {
+		return err
+	}
+	n.Service.Close()
+	return nil
+}
+
 // Deprovision shuts down and removes all resources associated with the node.
 func (n *Node) Deprovision() {
 	n.Store.Close(false)
@@ -132,6 +141,10 @@ func (n *Node) QueryParameterized(stmt []interface{}) (string, error) {
 		return "", err
 	}
 	return n.postQuery(string(j))
+}
+
+func (n *Node) Noop(id string) error {
+	return n.Store.Noop(id)
 }
 
 // Join instructs this node to join the leader.
