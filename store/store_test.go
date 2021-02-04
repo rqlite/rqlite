@@ -1261,10 +1261,7 @@ func Test_State(t *testing.T) {
 	}
 }
 
-func mustNewStore(inmem bool) *Store {
-	path := mustTempDir()
-	defer os.RemoveAll(path)
-
+func mustNewStoreAtPath(path string, inmem bool) *Store {
 	cfg := NewDBConfig("", inmem)
 	s := New(mustMockLister("localhost:0"), &StoreConfig{
 		DBConf: cfg,
@@ -1275,6 +1272,10 @@ func mustNewStore(inmem bool) *Store {
 		panic("failed to create new store")
 	}
 	return s
+}
+
+func mustNewStore(inmem bool) *Store {
+	return mustNewStoreAtPath(mustTempDir(), inmem)
 }
 
 type mockSnapshotSink struct {
