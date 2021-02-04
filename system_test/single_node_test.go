@@ -9,8 +9,6 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
-
-	"github.com/rqlite/rqlite/tcp"
 )
 
 func Test_SingleNode(t *testing.T) {
@@ -291,10 +289,7 @@ func Test_SingleNodeRestart(t *testing.T) {
 		t.Fatalf("failed to copy node test directory: %s", err)
 	}
 
-	tn := tcp.NewTransport()
-	if err := tn.Open("localhost:0"); err != nil {
-		t.Fatalf("failed to open transport: %s", err)
-	}
+	tn := mustNewOpenTransport("")
 	defer tn.Close()
 
 	node := mustNodeEncrypted(destdir, true, false, tn, "node1")
