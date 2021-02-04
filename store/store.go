@@ -293,6 +293,9 @@ func (s *Store) Close(wait bool) error {
 	if err := s.db.Close(); err != nil {
 		return err
 	}
+	if err := s.boltStore.Close(); err != nil {
+		return err
+	}
 	f := s.raft.Shutdown()
 	if wait {
 		if e := f.(raft.Future); e.Error() != nil {
