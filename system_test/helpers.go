@@ -366,10 +366,21 @@ func mustNewNode(enableSingle bool) *Node {
 }
 
 func mustNewNodeEncrypted(enableSingle, httpEncrypt, nodeEncrypt bool) *Node {
-	return mustNodeEncrypted(mustTempDir(), enableSingle, httpEncrypt, nodeEncrypt, "")
+	dir := mustTempDir()
+	var tn *tcp.Transport
+	if nodeEncrypt {
+		tn = tcp.NewTLSTransport(x509.CertFile(dir), x509.CertFile(dir), true)
+	} else {
+		tn = tcp.NewTransport()
+	}
+	if err := tn.Open("localhost:0"); err != nil {
+		panic(err.Error())
+	}
+
+	return mustNodeEncrypted(dir, enableSingle, httpEncrypt, tn, "")
 }
 
-func mustNodeEncrypted(dir string, enableSingle, httpEncrypt, nodeEncrypt bool, nodeID string) *Node {
+func mustNodeEncrypted(dir string, enableSingle, httpEncrypt bool, tn store.Listener, nodeID string) *Node {
 	nodeCertPath := x509.CertFile(dir)
 	nodeKeyPath := x509.KeyFile(dir)
 	httpCertPath := nodeCertPath
@@ -384,17 +395,6 @@ func mustNodeEncrypted(dir string, enableSingle, httpEncrypt, nodeEncrypt bool, 
 	}
 
 	dbConf := store.NewDBConfig("", false)
-
-	var tn *tcp.Transport
-	if nodeEncrypt {
-		tn = tcp.NewTLSTransport(node.NodeCertPath, node.NodeCertPath, true)
-	} else {
-		tn = tcp.NewTransport()
-	}
-
-	if err := tn.Open("localhost:0"); err != nil {
-		panic(err.Error())
-	}
 
 	id := nodeID
 	if id == "" {
