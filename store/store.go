@@ -968,7 +968,7 @@ func (s *Store) Apply(l *raft.Log) (e interface{}) {
 					// *and* there were commands in the log. A snapshot may or may not have
 					// been applied, but it wouldn't have created the on-disk database in that
 					// case since there were commands in the log. This is the very last chance
-					// to do it.
+					// to do convert from in-memory to on-disk.
 					b, err := s.db.Serialize()
 					if err != nil {
 						e = &fsmGenericResponse{error: fmt.Errorf("serialize failed: %s", err)}
@@ -980,8 +980,9 @@ func (s *Store) Apply(l *raft.Log) (e interface{}) {
 					}
 					// Open a new on-disk database.
 					s.db, err = s.openOnDisk(b)
-					if err := ioutil.WriteFile(s.dbPath, b, 0660); err != nil {
+					if err != nil {
 						e = &fsmGenericResponse{error: fmt.Errorf("open on-disk failed: %s", err)}
+						return
 					}
 					s.onDiskCreated = true
 					s.logger.Println("successfully switched to on-disk database")
