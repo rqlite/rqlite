@@ -133,6 +133,8 @@ type Store struct {
 	appliedOnOpen        uint64    // Number of logs applied at open.
 	openT                time.Time // Timestamp when Store opens.
 
+	numNoops int // For whitebox testing
+
 	txMu    sync.RWMutex // Sync between snapshots and query-level transactions.
 	queryMu sync.RWMutex // Sync queries generally with other operations.
 
@@ -1054,6 +1056,7 @@ func (s *Store) Apply(l *raft.Log) (e interface{}) {
 		}()
 		return &fsmGenericResponse{}
 	case command.Command_COMMAND_TYPE_NOOP:
+		s.numNoops++
 		return &fsmGenericResponse{}
 	default:
 		return &fsmGenericResponse{error: fmt.Errorf("unhandled command: %v", c.Type)}

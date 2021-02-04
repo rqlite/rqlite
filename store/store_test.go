@@ -1166,6 +1166,9 @@ func Test_SingleNodeNoop(t *testing.T) {
 	if err := s0.Noop("1"); err != nil {
 		t.Fatalf("failed to write noop command: %s", err.Error())
 	}
+	if s0.numNoops != 1 {
+		t.Fatalf("noop count is wrong, got: %d", s0.numNoops)
+	}
 }
 
 func Test_MetadataMultinode(t *testing.T) {
