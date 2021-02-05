@@ -20,6 +20,7 @@ import (
 )
 
 const (
+	// SnapshotInterval is the period between snapshot checks
 	SnapshotInterval = time.Second
 )
 
@@ -147,6 +148,7 @@ func (n *Node) QueryParameterized(stmt []interface{}) (string, error) {
 	return n.postQuery(string(j))
 }
 
+// Noop inserts a noop command into the Store's Raft log.
 func (n *Node) Noop(id string) error {
 	return n.Store.Noop(id)
 }
