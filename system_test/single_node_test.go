@@ -348,30 +348,43 @@ func Test_SingleNodeCoverage(t *testing.T) {
 
 // Test_SingleNodeReopen tests that a node can be re-opened OK.
 func Test_SingleNodeReopen(t *testing.T) {
-	dir := mustTempDir()
-	tn := mustNewOpenTransport("")
-	node := mustNodeEncrypted(dir, true, false, tn, "")
+	onDisk := false
 
-	if _, err := node.WaitForLeader(); err != nil {
-		t.Fatalf("node never became leader")
-	}
+	for {
+		t.Logf("running test %s, on-disk=%v", t.Name(), onDisk)
 
-	if err := node.Close(true); err != nil {
-		t.Fatalf("failed to close node")
-	}
+		dir := mustTempDir()
+		tn := mustNewOpenTransport("")
+		node := mustNodeEncrypted(dir, true, false, tn, "")
 
-	if err := tn.Open("localhost:0"); err != nil {
-		t.Fatalf("failed to re-open transport: %s", err)
-	}
-	if err := node.Store.Open(true); err != nil {
-		t.Fatalf("failed to re-open store: %s", err)
-	}
-	if err := node.Service.Start(); err != nil {
-		t.Fatalf("failed to restart service: %s", err)
-	}
+		if _, err := node.WaitForLeader(); err != nil {
+			t.Fatalf("node never became leader")
+		}
 
-	if _, err := node.WaitForLeader(); err != nil {
-		t.Fatalf("node never became leader")
+		if err := node.Close(true); err != nil {
+			t.Fatalf("failed to close node")
+		}
+
+		if err := tn.Open("localhost:0"); err != nil {
+			t.Fatalf("failed to re-open transport: %s", err)
+		}
+		if err := node.Store.Open(true); err != nil {
+			t.Fatalf("failed to re-open store: %s", err)
+		}
+		if err := node.Service.Start(); err != nil {
+			t.Fatalf("failed to restart service: %s", err)
+		}
+
+		if _, err := node.WaitForLeader(); err != nil {
+			t.Fatalf("node never became leader")
+		}
+
+		node.Deprovision()
+		// Switch to other mode for another test.
+		onDisk = !onDisk
+		if onDisk == false {
+			break
+		}
 	}
 }
 
@@ -381,7 +394,7 @@ func Test_SingleNodeNoopReopen(t *testing.T) {
 	onDisk := false
 
 	for {
-		t.Logf("running test, on-disk=%v", onDisk)
+		t.Logf("running test %s, on-disk=%v", t.Name(), onDisk)
 
 		dir := mustTempDir()
 		tn := mustNewOpenTransport("")
@@ -472,7 +485,7 @@ func Test_SingleNodeNoopSnapReopen(t *testing.T) {
 	onDisk := false
 
 	for {
-		t.Logf("running test, on-disk=%v", onDisk)
+		t.Logf("running test %s, on-disk=%v", t.Name(), onDisk)
 
 		dir := mustTempDir()
 		tn := mustNewOpenTransport("")
@@ -568,7 +581,7 @@ func Test_SingleNodeNoopSnapLogsReopen(t *testing.T) {
 	var raftAddr string
 
 	for {
-		t.Logf("running test, on-disk=%v", onDisk)
+		t.Logf("running test %s, on-disk=%v", t.Name(), onDisk)
 
 		dir := mustTempDir()
 		tn := mustNewOpenTransport("")

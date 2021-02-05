@@ -1100,7 +1100,7 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 	var err error
 	fsm.database, _ = s.db.Serialize()
 	// The error code is not meaningful from Serialize(). The code needs to be able
-	// handle a nil byte slide being returned.
+	// handle a nil byte slice being returned.
 
 	fsm.meta, err = json.Marshal(s.meta)
 	if err != nil {
