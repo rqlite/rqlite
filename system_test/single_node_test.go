@@ -345,3 +345,335 @@ func Test_SingleNodeCoverage(t *testing.T) {
 		t.Fatalf("output from expvar endpoint is not valid JSON: %s", str)
 	}
 }
+
+// Test_SingleNodeReopen tests that a node can be re-opened OK.
+func Test_SingleNodeReopen(t *testing.T) {
+	onDisk := false
+
+	for {
+		t.Logf("running test %s, on-disk=%v", t.Name(), onDisk)
+
+		dir := mustTempDir()
+		tn := mustNewOpenTransport("")
+		node := mustNodeEncrypted(dir, true, false, tn, "")
+
+		if _, err := node.WaitForLeader(); err != nil {
+			t.Fatalf("node never became leader")
+		}
+
+		if err := node.Close(true); err != nil {
+			t.Fatalf("failed to close node")
+		}
+
+		if err := tn.Open("localhost:0"); err != nil {
+			t.Fatalf("failed to re-open transport: %s", err)
+		}
+		if err := node.Store.Open(true); err != nil {
+			t.Fatalf("failed to re-open store: %s", err)
+		}
+		if err := node.Service.Start(); err != nil {
+			t.Fatalf("failed to restart service: %s", err)
+		}
+
+		if _, err := node.WaitForLeader(); err != nil {
+			t.Fatalf("node never became leader")
+		}
+
+		node.Deprovision()
+		// Switch to other mode for another test.
+		onDisk = !onDisk
+		if onDisk == false {
+			break
+		}
+	}
+}
+
+// Test_SingleNodeReopen tests that a node can be re-opened OK, with
+// a non-database command in the log.
+func Test_SingleNodeNoopReopen(t *testing.T) {
+	onDisk := false
+
+	for {
+		t.Logf("running test %s, on-disk=%v", t.Name(), onDisk)
+
+		dir := mustTempDir()
+		tn := mustNewOpenTransport("")
+		node := mustNodeEncryptedOnDisk(dir, true, false, tn, "", false)
+
+		if _, err := node.WaitForLeader(); err != nil {
+			t.Fatalf("node never became leader")
+		}
+
+		if err := node.Noop("#1"); err != nil {
+			t.Fatalf("failed to write noop command: %s", err)
+		}
+
+		if err := node.Close(true); err != nil {
+			t.Fatalf("failed to close node")
+		}
+
+		if err := tn.Open("localhost:0"); err != nil {
+			t.Fatalf("failed to re-open transport: %s", err)
+		}
+		if err := node.Store.Open(true); err != nil {
+			t.Fatalf("failed to re-open store: %s", err)
+		}
+		if err := node.Service.Start(); err != nil {
+			t.Fatalf("failed to restart service: %s", err)
+		}
+		// This testing tells service to restart with localhost:0
+		// again, so explicitly set the API address again.
+		node.APIAddr = node.Service.Addr().String()
+
+		if _, err := node.WaitForLeader(); err != nil {
+			t.Fatalf("node never became leader")
+		}
+
+		// Ensure node is fully functional after restart.
+		tests := []struct {
+			stmt     []interface{}
+			expected string
+			execute  bool
+		}{
+			{
+				stmt:     []interface{}{"CREATE TABLE foo (id integer not null primary key, name text, age integer)"},
+				expected: `{"results":[{}]}`,
+				execute:  true,
+			},
+			{
+				stmt:     []interface{}{"INSERT INTO foo(name, age) VALUES(?, ?)", "fiona", 20},
+				expected: `{"results":[{"last_insert_id":1,"rows_affected":1}]}`,
+				execute:  true,
+			},
+			{
+				stmt:     []interface{}{"SELECT * FROM foo WHERE NAME=?", "fiona"},
+				expected: `{"results":[{"columns":["id","name","age"],"types":["integer","text","integer"],"values":[[1,"fiona",20]]}]}`,
+				execute:  false,
+			},
+		}
+
+		for i, tt := range tests {
+			var r string
+			var err error
+			if tt.execute {
+				r, err = node.ExecuteParameterized(tt.stmt)
+			} else {
+				r, err = node.QueryParameterized(tt.stmt)
+			}
+			if err != nil {
+				t.Fatalf(`test %d failed "%s": %s`, i, tt.stmt, err.Error())
+			}
+			if r != tt.expected {
+				t.Fatalf(`test %d received wrong result "%s" got: %s exp: %s`, i, tt.stmt, r, tt.expected)
+			}
+		}
+
+		node.Deprovision()
+		// Switch to other mode for another test.
+		onDisk = !onDisk
+		if onDisk == false {
+			break
+		}
+	}
+}
+
+// Test_SingleNodeReopen tests that a node can be re-opened OK, with
+// a snapshot present which was triggered by non-database commands.
+// This tests that the code can handle a snapshot that doesn't
+// contain database data. This shouldn't happen in real systems
+func Test_SingleNodeNoopSnapReopen(t *testing.T) {
+	onDisk := false
+
+	for {
+		t.Logf("running test %s, on-disk=%v", t.Name(), onDisk)
+
+		dir := mustTempDir()
+		tn := mustNewOpenTransport("")
+		node := mustNodeEncryptedOnDisk(dir, true, false, tn, "", onDisk)
+
+		if _, err := node.WaitForLeader(); err != nil {
+			t.Fatalf("node never became leader")
+		}
+
+		for i := 0; i < 150; i++ {
+			if err := node.Noop(fmt.Sprintf("%d", i)); err != nil {
+				t.Fatalf("failed to write noop command: %s", err)
+			}
+		}
+
+		// Wait for a snapshot to happen.
+		time.Sleep(5 * time.Second)
+
+		if err := node.Close(true); err != nil {
+			t.Fatalf("failed to close node")
+		}
+
+		if err := tn.Open("localhost:0"); err != nil {
+			t.Fatalf("failed to re-open transport: %s", err)
+		}
+		if err := node.Store.Open(true); err != nil {
+			t.Fatalf("failed to re-open store: %s", err)
+		}
+		if err := node.Service.Start(); err != nil {
+			t.Fatalf("failed to restart service: %s", err)
+		}
+		// This testing tells service to restart with localhost:0
+		// again, so explicitly set the API address again.
+		node.APIAddr = node.Service.Addr().String()
+
+		if _, err := node.WaitForLeader(); err != nil {
+			t.Fatalf("node never became leader")
+		}
+
+		// Ensure node is fully functional after restart.
+		tests := []struct {
+			stmt     []interface{}
+			expected string
+			execute  bool
+		}{
+			{
+				stmt:     []interface{}{"CREATE TABLE foo (id integer not null primary key, name text, age integer)"},
+				expected: `{"results":[{}]}`,
+				execute:  true,
+			},
+			{
+				stmt:     []interface{}{"INSERT INTO foo(name, age) VALUES(?, ?)", "fiona", 20},
+				expected: `{"results":[{"last_insert_id":1,"rows_affected":1}]}`,
+				execute:  true,
+			},
+			{
+				stmt:     []interface{}{"SELECT * FROM foo WHERE NAME=?", "fiona"},
+				expected: `{"results":[{"columns":["id","name","age"],"types":["integer","text","integer"],"values":[[1,"fiona",20]]}]}`,
+				execute:  false,
+			},
+		}
+
+		for i, tt := range tests {
+			var r string
+			var err error
+			if tt.execute {
+				r, err = node.ExecuteParameterized(tt.stmt)
+			} else {
+				r, err = node.QueryParameterized(tt.stmt)
+			}
+			if err != nil {
+				t.Fatalf(`test %d failed "%s": %s`, i, tt.stmt, err.Error())
+			}
+			if r != tt.expected {
+				t.Fatalf(`test %d received wrong result "%s" got: %s exp: %s`, i, tt.stmt, r, tt.expected)
+			}
+		}
+
+		node.Deprovision()
+		onDisk = !onDisk
+		if onDisk == false {
+			break
+		}
+	}
+}
+
+// Test_SingleNodeNoopSnapLogsReopen tests that a node can be re-opened OK,
+// with a snapshot present which was triggered by non-database commands.
+// This tests that the code can handle a snapshot that doesn't
+// contain database data. This shouldn't happen in real systems
+func Test_SingleNodeNoopSnapLogsReopen(t *testing.T) {
+	onDisk := false
+	var raftAddr string
+
+	for {
+		t.Logf("running test %s, on-disk=%v", t.Name(), onDisk)
+
+		dir := mustTempDir()
+		tn := mustNewOpenTransport("")
+		node := mustNodeEncryptedOnDisk(dir, true, false, tn, "", onDisk)
+		raftAddr = node.RaftAddr
+		t.Logf("node listening for Raft on %s", raftAddr)
+
+		if _, err := node.WaitForLeader(); err != nil {
+			t.Fatalf("node never became leader")
+		}
+
+		for i := 0; i < 150; i++ {
+			if err := node.Noop(fmt.Sprintf("%d", i)); err != nil {
+				t.Fatalf("failed to write noop command: %s", err)
+			}
+		}
+
+		// Wait for a snapshot to happen, and then write some more commands.
+		time.Sleep(5 * time.Second)
+		for i := 0; i < 5; i++ {
+			if err := node.Noop(fmt.Sprintf("%d", i)); err != nil {
+				t.Fatalf("failed to write noop command: %s", err)
+			}
+		}
+
+		if err := node.Close(true); err != nil {
+			t.Fatalf("failed to close node")
+		}
+
+		// Reset network state in node.
+		if err := tn.Open(raftAddr); err != nil {
+			t.Fatalf("failed to re-open transport: %s", err)
+		}
+
+		if err := node.Store.Open(true); err != nil {
+			t.Fatalf("failed to re-open store: %s", err)
+		}
+		if err := node.Service.Start(); err != nil {
+			t.Fatalf("failed to restart service: %s", err)
+		}
+		// This testing tells service to restart with localhost:0
+		// again, so explicitly set the API address again.
+		node.APIAddr = node.Service.Addr().String()
+
+		if _, err := node.WaitForLeader(); err != nil {
+			t.Fatalf("node never became leader")
+		}
+
+		// Ensure node is fully functional after restart.
+		tests := []struct {
+			stmt     []interface{}
+			expected string
+			execute  bool
+		}{
+			{
+				stmt:     []interface{}{"CREATE TABLE foo (id integer not null primary key, name text, age integer)"},
+				expected: `{"results":[{}]}`,
+				execute:  true,
+			},
+			{
+				stmt:     []interface{}{"INSERT INTO foo(name, age) VALUES(?, ?)", "fiona", 20},
+				expected: `{"results":[{"last_insert_id":1,"rows_affected":1}]}`,
+				execute:  true,
+			},
+			{
+				stmt:     []interface{}{"SELECT * FROM foo WHERE NAME=?", "fiona"},
+				expected: `{"results":[{"columns":["id","name","age"],"types":["integer","text","integer"],"values":[[1,"fiona",20]]}]}`,
+				execute:  false,
+			},
+		}
+
+		for i, tt := range tests {
+			var r string
+			var err error
+			if tt.execute {
+				r, err = node.ExecuteParameterized(tt.stmt)
+			} else {
+				r, err = node.QueryParameterized(tt.stmt)
+			}
+			if err != nil {
+				t.Fatalf(`test %d failed "%s": %s`, i, tt.stmt, err.Error())
+			}
+			if r != tt.expected {
+				t.Fatalf(`test %d received wrong result "%s" got: %s exp: %s`, i, tt.stmt, r, tt.expected)
+			}
+		}
+
+		node.Deprovision()
+		// Switch to other mode for another test.
+		onDisk = !onDisk
+		if onDisk == false {
+			break
+		}
+	}
+}

@@ -19,6 +19,10 @@ import (
 	"github.com/rqlite/rqlite/testdata/x509"
 )
 
+const (
+	SnapshotInterval = time.Second
+)
+
 // Node represents a node under test.
 type Node struct {
 	APIAddr      string
@@ -36,6 +40,15 @@ type Node struct {
 // SameAs returns true if this node is the same as node o.
 func (n *Node) SameAs(o *Node) bool {
 	return n.RaftAddr == o.RaftAddr
+}
+
+// Close closes the node.
+func (n *Node) Close(graceful bool) error {
+	if err := n.Store.Close(graceful); err != nil {
+		return err
+	}
+	n.Service.Close()
+	return nil
 }
 
 // Deprovision shuts down and removes all resources associated with the node.
@@ -132,6 +145,10 @@ func (n *Node) QueryParameterized(stmt []interface{}) (string, error) {
 		return "", err
 	}
 	return n.postQuery(string(j))
+}
+
+func (n *Node) Noop(id string) error {
+	return n.Store.Noop(id)
 }
 
 // Join instructs this node to join the leader.
@@ -378,6 +395,10 @@ func mustNewNodeEncrypted(enableSingle, httpEncrypt, nodeEncrypt bool) *Node {
 }
 
 func mustNodeEncrypted(dir string, enableSingle, httpEncrypt bool, tn store.Listener, nodeID string) *Node {
+	return mustNodeEncryptedOnDisk(dir, enableSingle, httpEncrypt, tn, nodeID, false)
+}
+
+func mustNodeEncryptedOnDisk(dir string, enableSingle, httpEncrypt bool, tn store.Listener, nodeID string, onDisk bool) *Node {
 	nodeCertPath := x509.CertFile(dir)
 	nodeKeyPath := x509.KeyFile(dir)
 	httpCertPath := nodeCertPath
@@ -391,7 +412,7 @@ func mustNodeEncrypted(dir string, enableSingle, httpEncrypt bool, tn store.List
 		HTTPKeyPath:  httpKeyPath,
 	}
 
-	dbConf := store.NewDBConfig("", false)
+	dbConf := store.NewDBConfig("", !onDisk)
 
 	id := nodeID
 	if id == "" {
@@ -403,7 +424,7 @@ func mustNodeEncrypted(dir string, enableSingle, httpEncrypt bool, tn store.List
 		ID:     id,
 	})
 	node.Store.SnapshotThreshold = 100
-	node.Store.SnapshotInterval = mustParseDuration("1s")
+	node.Store.SnapshotInterval = SnapshotInterval
 
 	if err := node.Store.Open(enableSingle); err != nil {
 		node.Deprovision()
