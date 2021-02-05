@@ -11,7 +11,7 @@
 - [PR #747](https://github.com/rqlite/rqlite/pull/747): Time snapshot, restore, and startup times.
 - [PR #750](https://github.com/rqlite/rqlite/pull/750): Build on-disk databases in-memory first. Fixes [issue #731](https://github.com/rqlite/rqlite/issues/731).
 - [PR #754](https://github.com/rqlite/rqlite/pull/754): Support Noop commands in Raft Log.
-- [PR #759](https://github.com/rqlite/rqlite/pull/759): Close BoltDB on Store close.
+- [PR #759](https://github.com/rqlite/rqlite/pull/759), [PR #760](https://github.com/rqlite/rqlite/pull/760): Close BoltDB on Store close.
 - [PR #757](https://github.com/rqlite/rqlite/pull/757): More extensive system-level testing of Snapshot and Restore.
 
 ## 5.9.0 (January 24th 2021)
