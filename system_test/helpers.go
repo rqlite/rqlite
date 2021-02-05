@@ -19,6 +19,10 @@ import (
 	"github.com/rqlite/rqlite/testdata/x509"
 )
 
+const (
+	SnapshotInterval = time.Second
+)
+
 // Node represents a node under test.
 type Node struct {
 	APIAddr      string
@@ -420,7 +424,7 @@ func mustNodeEncryptedOnDisk(dir string, enableSingle, httpEncrypt bool, tn stor
 		ID:     id,
 	})
 	node.Store.SnapshotThreshold = 100
-	node.Store.SnapshotInterval = mustParseDuration("1s")
+	node.Store.SnapshotInterval = SnapshotInterval
 
 	if err := node.Store.Open(enableSingle); err != nil {
 		node.Deprovision()

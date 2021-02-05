@@ -974,12 +974,9 @@ func (s *Store) Apply(l *raft.Log) (e interface{}) {
 					// been applied, but it wouldn't have created the on-disk database in that
 					// case since there were commands in the log. This is the very last chance
 					// to do convert from in-memory to on-disk.
-					b, err := s.db.Serialize()
+					b, _ := s.db.Serialize()
+					err := s.db.Close()
 					if err != nil {
-						e = &fsmGenericResponse{error: fmt.Errorf("serialize failed: %s", err)}
-						return
-					}
-					if err := s.db.Close(); err != nil {
 						e = &fsmGenericResponse{error: fmt.Errorf("close failed: %s", err)}
 						return
 					}
