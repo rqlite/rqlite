@@ -408,9 +408,51 @@ func Test_SingleNodeNoopReopen(t *testing.T) {
 		if err := node.Service.Start(); err != nil {
 			t.Fatalf("failed to restart service: %s", err)
 		}
+		// This testing tells service to restart with localhost:0
+		// again, so explicitly set the API address again.
+		node.APIAddr = node.Service.Addr().String()
 
 		if _, err := node.WaitForLeader(); err != nil {
 			t.Fatalf("node never became leader")
+		}
+
+		// Ensure node is fully functional after restart.
+		tests := []struct {
+			stmt     []interface{}
+			expected string
+			execute  bool
+		}{
+			{
+				stmt:     []interface{}{"CREATE TABLE foo (id integer not null primary key, name text, age integer)"},
+				expected: `{"results":[{}]}`,
+				execute:  true,
+			},
+			{
+				stmt:     []interface{}{"INSERT INTO foo(name, age) VALUES(?, ?)", "fiona", 20},
+				expected: `{"results":[{"last_insert_id":1,"rows_affected":1}]}`,
+				execute:  true,
+			},
+			{
+				stmt:     []interface{}{"SELECT * FROM foo WHERE NAME=?", "fiona"},
+				expected: `{"results":[{"columns":["id","name","age"],"types":["integer","text","integer"],"values":[[1,"fiona",20]]}]}`,
+				execute:  false,
+			},
+		}
+
+		for i, tt := range tests {
+			var r string
+			var err error
+			if tt.execute {
+				r, err = node.ExecuteParameterized(tt.stmt)
+			} else {
+				r, err = node.QueryParameterized(tt.stmt)
+			}
+			if err != nil {
+				t.Fatalf(`test %d failed "%s": %s`, i, tt.stmt, err.Error())
+			}
+			if r != tt.expected {
+				t.Fatalf(`test %d received wrong result "%s" got: %s exp: %s`, i, tt.stmt, r, tt.expected)
+			}
 		}
 
 		node.Deprovision()
@@ -462,9 +504,51 @@ func Test_SingleNodeNoopSnapReopen(t *testing.T) {
 		if err := node.Service.Start(); err != nil {
 			t.Fatalf("failed to restart service: %s", err)
 		}
+		// This testing tells service to restart with localhost:0
+		// again, so explicitly set the API address again.
+		node.APIAddr = node.Service.Addr().String()
 
 		if _, err := node.WaitForLeader(); err != nil {
 			t.Fatalf("node never became leader")
+		}
+
+		// Ensure node is fully functional after restart.
+		tests := []struct {
+			stmt     []interface{}
+			expected string
+			execute  bool
+		}{
+			{
+				stmt:     []interface{}{"CREATE TABLE foo (id integer not null primary key, name text, age integer)"},
+				expected: `{"results":[{}]}`,
+				execute:  true,
+			},
+			{
+				stmt:     []interface{}{"INSERT INTO foo(name, age) VALUES(?, ?)", "fiona", 20},
+				expected: `{"results":[{"last_insert_id":1,"rows_affected":1}]}`,
+				execute:  true,
+			},
+			{
+				stmt:     []interface{}{"SELECT * FROM foo WHERE NAME=?", "fiona"},
+				expected: `{"results":[{"columns":["id","name","age"],"types":["integer","text","integer"],"values":[[1,"fiona",20]]}]}`,
+				execute:  false,
+			},
+		}
+
+		for i, tt := range tests {
+			var r string
+			var err error
+			if tt.execute {
+				r, err = node.ExecuteParameterized(tt.stmt)
+			} else {
+				r, err = node.QueryParameterized(tt.stmt)
+			}
+			if err != nil {
+				t.Fatalf(`test %d failed "%s": %s`, i, tt.stmt, err.Error())
+			}
+			if r != tt.expected {
+				t.Fatalf(`test %d received wrong result "%s" got: %s exp: %s`, i, tt.stmt, r, tt.expected)
+			}
 		}
 
 		node.Deprovision()
