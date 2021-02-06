@@ -484,12 +484,19 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		return nil, err
 	}
 
-	raftStats := s.raft.Stats()
-	ls, err := s.logSize()
+	// Perform type-conversion to actual numbers where possible.
+	raftStats := make(map[string]interface{})
+	for k, v := range s.raft.Stats() {
+		if s, err := strconv.ParseInt(v, 10, 64); err != nil {
+			raftStats[k] = v
+		} else {
+			raftStats[k] = s
+		}
+	}
+	raftStats["log_size"], err = s.logSize()
 	if err != nil {
 		return nil, err
 	}
-	raftStats["log_size"] = strconv.FormatInt(ls, 10)
 
 	status := map[string]interface{}{
 		"node_id": s.raftID,
