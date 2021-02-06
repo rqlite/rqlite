@@ -13,6 +13,7 @@
 - [PR #754](https://github.com/rqlite/rqlite/pull/754): Support Noop commands in Raft Log.
 - [PR #759](https://github.com/rqlite/rqlite/pull/759), [PR #760](https://github.com/rqlite/rqlite/pull/760): Close BoltDB on Store close.
 - [PR #757](https://github.com/rqlite/rqlite/pull/757): More extensive system-level testing of Snapshot and Restore.
+- [PR #762](https://github.com/rqlite/rqlite/pull/762): Convert Raft stats to numbers where possible. Fixes [issue #763](https://github.com/rqlite/rqlite/issues/763).
 
 ## 5.9.0 (January 24th 2021)
 ### New features
