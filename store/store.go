@@ -290,16 +290,16 @@ func (s *Store) Open(enableBootstrap bool) error {
 
 // Close closes the store. If wait is true, waits for a graceful shutdown.
 func (s *Store) Close(wait bool) error {
-	if err := s.db.Close(); err != nil {
-		return err
-	}
 	f := s.raft.Shutdown()
 	if wait {
 		if e := f.(raft.Future); e.Error() != nil {
 			return e.Error()
 		}
 	}
-	// Only shutdown Bolt when Raft is done with it.
+	// Only shutdown Bolt and SQLite when Raft is done.
+	if err := s.db.Close(); err != nil {
+		return err
+	}
 	if err := s.boltStore.Close(); err != nil {
 		return err
 	}
@@ -498,6 +498,11 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		return nil, err
 	}
 
+	dirSz, err := dirSize(s.raftDir)
+	if err != nil {
+		return nil, err
+	}
+
 	status := map[string]interface{}{
 		"node_id": s.raftID,
 		"raft":    raftStats,
@@ -516,6 +521,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		"metadata":           s.meta,
 		"nodes":              nodes,
 		"dir":                s.raftDir,
+		"dir_size":           dirSz,
 		"sqlite3":            dbStatus,
 		"db_conf":            s.dbConf,
 	}
@@ -1420,4 +1426,19 @@ func pathExists(p string) bool {
 		return false
 	}
 	return true
+}
+
+// dirSize returns the total size of all files in the given directory
+func dirSize(path string) (int64, error) {
+	var size int64
+	err := filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			size += info.Size()
+		}
+		return err
+	})
+	return size, err
 }
