@@ -290,16 +290,16 @@ func (s *Store) Open(enableBootstrap bool) error {
 
 // Close closes the store. If wait is true, waits for a graceful shutdown.
 func (s *Store) Close(wait bool) error {
-	if err := s.db.Close(); err != nil {
-		return err
-	}
 	f := s.raft.Shutdown()
 	if wait {
 		if e := f.(raft.Future); e.Error() != nil {
 			return e.Error()
 		}
 	}
-	// Only shutdown Bolt when Raft is done with it.
+	// Only shutdown Bolt and SQLite when Raft is done.
+	if err := s.db.Close(); err != nil {
+		return err
+	}
 	if err := s.boltStore.Close(); err != nil {
 		return err
 	}
