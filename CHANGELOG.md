@@ -16,6 +16,7 @@
 - [PR #762](https://github.com/rqlite/rqlite/pull/762): Convert Raft stats to numbers where possible. Fixes [issue #763](https://github.com/rqlite/rqlite/issues/763).
 - [PR #764](https://github.com/rqlite/rqlite/pull/764): Add total Raft directory size to Store stats.
 - [PR #764](https://github.com/rqlite/rqlite/pull/764): Close SQLite database only after Raft has been shut down.
+- [PR #765](https://github.com/rqlite/rqlite/pull/765): Add auth-ok and auth-fail events to stats.
 
 ## 5.9.0 (January 24th 2021)
 ### New features
