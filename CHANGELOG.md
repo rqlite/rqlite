@@ -1,4 +1,4 @@
-## 5.10.0 (unreleased)
+## 5.10.0 (February 7th 2021)
 ### New features
 - [PR #742](https://github.com/rqlite/rqlite/pull/742): Add one-shot option to rqbench.
 - [PR #745](https://github.com/rqlite/rqlite/pull/745): TLS version 1.0 and 1.1 disabled by default, but can be re-enabled at the command line. Fixes [issue #743](https://github.com/rqlite/rqlite/issues/743).
