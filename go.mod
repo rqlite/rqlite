@@ -6,6 +6,7 @@ require (
 	github.com/Bowery/prompt v0.0.0-20190916142128-fa8279994f75
 	github.com/armon/go-metrics v0.3.6 // indirect
 	github.com/fatih/color v1.10.0 // indirect
+	github.com/go-test/deep v1.0.7
 	github.com/golang/protobuf v1.4.3
 	github.com/hashicorp/go-hclog v0.15.0 // indirect
 	github.com/hashicorp/go-immutable-radix v1.3.0 // indirect
