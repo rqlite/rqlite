@@ -104,6 +104,8 @@ const (
 	numBackups    = "backups"
 	numLoad       = "loads"
 	numJoins      = "joins"
+	numAuthOK     = "authOK"
+	numAuthFail   = "authFail"
 
 	// PermAll means all actions permitted.
 	PermAll = "all"
@@ -133,6 +135,8 @@ func init() {
 	stats.Add(numBackups, 0)
 	stats.Add(numLoad, 0)
 	stats.Add(numJoins, 0)
+	stats.Add(numAuthOK, 0)
+	stats.Add(numAuthFail, 0)
 }
 
 // SetTime sets the Time attribute of the response. This way it will be present
@@ -791,7 +795,14 @@ func (s *Service) FormRedirect(r *http.Request, protocol, host string) string {
 
 // CheckRequestPerm returns true if authentication is enabled and the user contained
 // in the BasicAuth request has either PermAll, or the given perm.
-func (s *Service) CheckRequestPerm(r *http.Request, perm string) bool {
+func (s *Service) CheckRequestPerm(r *http.Request, perm string) (b bool) {
+	defer func() {
+		if b {
+			stats.Add(numAuthOK, 1)
+		} else {
+			stats.Add(numAuthFail, 1)
+		}
+	}()
 	if s.credentialStore == nil {
 		return true
 	}
