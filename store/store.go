@@ -457,20 +457,23 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		return nil, err
 	}
 
+	dbSz, err := s.db.Size()
+	if err != nil {
+		return nil, err
+	}
 	dbStatus := map[string]interface{}{
 		"dsn":            s.dbConf.DSN,
 		"fk_constraints": enabledFromBool(fkEnabled),
 		"version":        sql.DBVersion,
+		"db_size":        dbSz,
 	}
-	if !s.dbConf.Memory {
+	if s.dbConf.Memory {
+		dbStatus["path"] = ":memory:"
+	} else {
 		dbStatus["path"] = s.dbPath
-		stat, err := os.Stat(s.dbPath)
-		if err != nil {
+		if dbStatus["size"], err = s.db.FileSize(); err != nil {
 			return nil, err
 		}
-		dbStatus["size"] = stat.Size()
-	} else {
-		dbStatus["path"] = ":memory:"
 	}
 
 	nodes, err := s.Nodes()
@@ -482,12 +485,24 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		return nil, err
 	}
 
-	raftStats := s.raft.Stats()
-	ls, err := s.logSize()
+	// Perform type-conversion to actual numbers where possible.
+	raftStats := make(map[string]interface{})
+	for k, v := range s.raft.Stats() {
+		if s, err := strconv.ParseInt(v, 10, 64); err != nil {
+			raftStats[k] = v
+		} else {
+			raftStats[k] = s
+		}
+	}
+	raftStats["log_size"], err = s.logSize()
 	if err != nil {
 		return nil, err
 	}
-	raftStats["log_size"] = strconv.FormatInt(ls, 10)
+
+	dirSz, err := dirSize(s.raftDir)
+	if err != nil {
+		return nil, err
+	}
 
 	status := map[string]interface{}{
 		"node_id": s.raftID,
@@ -505,6 +520,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		"metadata":           s.meta,
 		"nodes":              nodes,
 		"dir":                s.raftDir,
+		"dir_size":           dirSz,
 		"sqlite3":            dbStatus,
 		"db_conf":            s.dbConf,
 	}
@@ -1163,4 +1179,19 @@ func pathExists(p string) bool {
 		return false
 	}
 	return true
+}
+
+// dirSize returns the total size of all files in the given directory
+func dirSize(path string) (int64, error) {
+	var size int64
+	err := filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			size += info.Size()
+		}
+		return err
+	})
+	return size, err
 }
