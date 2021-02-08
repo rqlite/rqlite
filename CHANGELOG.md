@@ -1,6 +1,6 @@
 ## 5.10.1 (February 8th 2021)
 ### Implementation changes and bug fixes
-- [PR #769](https://github.com/rqlite/rqlite/pull/769): Upgrade to rqlite/go-sqlite3, to address significant memory leak.
+- [PR #769](https://github.com/rqlite/rqlite/pull/769): Upgrade to rqlite/go-sqlite3, to address [a significant memory leak](https://www.philipotoole.com/plugging-a-memory-leak-in-rqlite/).
 
 ## 5.10.0 (February 7th 2021)
 ### New features
