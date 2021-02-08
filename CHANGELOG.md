@@ -1,3 +1,7 @@
+## 5.10.1 (February 8th 2021)
+### Implementation changes and bug fixes
+- [PR #769](https://github.com/rqlite/rqlite/pull/769): Upgrade to rqlite/go-sqlite3, to address memory leak.
+
 ## 5.10.0 (February 7th 2021)
 ### New features
 - [PR #742](https://github.com/rqlite/rqlite/pull/742): Add one-shot option to rqbench.
