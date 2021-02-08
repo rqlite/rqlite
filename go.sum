@@ -202,6 +202,8 @@ github.com/rqlite/go-sqlite3 v1.19.0 h1:0EhyoFWxHQgFoGjP7oXVJ5QFjXCGk0whOp7tBqGO
 github.com/rqlite/go-sqlite3 v1.19.0/go.mod h1:ml55MVv28UP7V8zrxILd2EsrI6Wfsz76YSskpg08Ut4=
 github.com/rqlite/go-sqlite3 v1.20.0 h1:3Anrr2N9C8KJfc3VF1tJPjoSbSIBEFIwhacTBQAj3Jw=
 github.com/rqlite/go-sqlite3 v1.20.0/go.mod h1:ml55MVv28UP7V8zrxILd2EsrI6Wfsz76YSskpg08Ut4=
+github.com/rqlite/go-sqlite3 v1.20.1 h1:cmL4F6AwgJLjdIrC7uP2wMw/1NfrbT0jRAw8iKQfugc=
+github.com/rqlite/go-sqlite3 v1.20.1/go.mod h1:ml55MVv28UP7V8zrxILd2EsrI6Wfsz76YSskpg08Ut4=
 github.com/shopspring/decimal v0.0.0-20180709203117-cd690d0c9e24/go.mod h1:M+9NzErvs504Cn4c5DxATwIqPbtswREoFCre64PpcG4=
 github.com/sirupsen/logrus v1.2.0/go.mod h1:LxeOpSwHxABJmUn/MG1IvRgCAasNZTLOkJPxbbu5VWo=
 github.com/sirupsen/logrus v1.4.2/go.mod h1:tLMulIdttU9McNUspp0xgXVQah82FyeX6MwdIuYE2rE=
