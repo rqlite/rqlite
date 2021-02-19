@@ -1,4 +1,4 @@
-## 5.10.2 (unreleased)
+## 5.10.2 (February 19th 2021)
 ### Implementation changes and bug fixes
 - [PR #772](https://github.com/rqlite/rqlite/pull/772): Log launch command.
 
