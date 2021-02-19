@@ -1,3 +1,7 @@
+## 5.10.2 (unreleased)
+### Implementation changes and bug fixes
+- [PR #772](https://github.com/rqlite/rqlite/pull/772): Launch log command.
+
 ## 5.10.1 (February 8th 2021)
 ### Implementation changes and bug fixes
 - [PR #769](https://github.com/rqlite/rqlite/pull/769): Upgrade to rqlite/go-sqlite3 1.20.1, to address [a significant memory leak](https://www.philipotoole.com/plugging-a-memory-leak-in-rqlite/).

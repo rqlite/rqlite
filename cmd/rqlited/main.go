@@ -171,6 +171,7 @@ func main() {
 	log.SetPrefix(fmt.Sprintf("[%s] ", name))
 	log.Printf("%s starting, version %s, commit %s, branch %s", name, version, commit, branch)
 	log.Printf("%s, target architecture is %s, operating system target is %s", runtime.Version(), runtime.GOARCH, runtime.GOOS)
+	log.Printf("launch command: %s", strings.Join(os.Args, " "))
 
 	// Start requested profiling.
 	startProfile(cpuProfile, memProfile)
