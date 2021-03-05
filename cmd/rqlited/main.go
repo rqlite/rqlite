@@ -85,6 +85,7 @@ var compressionBatch int
 var showVersion bool
 var cpuProfile string
 var memProfile string
+var srcIP string
 
 const name = `rqlited`
 const desc = `rqlite is a lightweight, distributed relational database, which uses SQLite as its
@@ -132,6 +133,8 @@ func init() {
 	flag.IntVar(&compressionBatch, "compression-batch", 5, "Request batch threshold for compression attempt")
 	flag.StringVar(&cpuProfile, "cpu-profile", "", "Path to file for CPU profiling information")
 	flag.StringVar(&memProfile, "mem-profile", "", "Path to file for memory profiling information")
+	flag.StringVar(&srcIP, "src-ip", "", "Specify a source ip address, when your node has multiple ip address segments")
+
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "\n%s\n\n", desc)
 		fmt.Fprintf(os.Stderr, "Usage: %s [flags] <data directory>\n", name)
@@ -303,7 +306,7 @@ func main() {
 			}
 		}
 
-		if j, err := cluster.Join(joins, str.ID(), advAddr, !raftNonVoter, meta,
+		if j, err := cluster.Join(srcIP, joins, str.ID(), advAddr, !raftNonVoter, meta,
 			joinAttempts, joinDur, &tlsConfig); err != nil {
 			log.Fatalf("failed to join cluster at %s: %s", joins, err.Error())
 		} else {
