@@ -26,7 +26,7 @@ var (
 // It walks through joinAddr in order, and sets the node ID and Raft address of
 // the joining node as id addr respectively. It returns the endpoint successfully
 // used to join the cluster.
-func Join(joinAddr []string, id, addr string, voter bool, meta map[string]string, numAttempts int,
+func Join(sourceIp string, joinAddr []string, id, addr string, voter bool, meta map[string]string, numAttempts int,
 	attemptInterval time.Duration, tlsConfig *tls.Config) (string, error) {
 	var err error
 	var j string
@@ -37,7 +37,7 @@ func Join(joinAddr []string, id, addr string, voter bool, meta map[string]string
 
 	for i := 0; i < numAttempts; i++ {
 		for _, a := range joinAddr {
-			j, err = join(a, id, addr, voter, meta, tlsConfig, logger)
+			j, err = join(sourceIp, a, id, addr, voter, meta, tlsConfig, logger)
 			if err == nil {
 				// Success!
 				return j, nil
@@ -50,11 +50,20 @@ func Join(joinAddr []string, id, addr string, voter bool, meta map[string]string
 	return "", ErrJoinFailed
 }
 
-func join(joinAddr, id, addr string, voter bool, meta map[string]string, tlsConfig *tls.Config, logger *log.Logger) (string, error) {
+func join(sourceIp string, joinAddr, id, addr string, voter bool, meta map[string]string, tlsConfig *tls.Config, logger *log.Logger) (string, error) {
 	if id == "" {
 		return "", fmt.Errorf("node ID not set")
 	}
-
+	//The specified source IP is optional
+	var dialer *net.Dialer
+	dialer = &net.Dialer{}
+	if sourceIp != "" {
+		netSourceIpAddr := &net.TCPAddr{
+			IP:   net.ParseIP(sourceIp),
+			Port: 0,
+		}
+		dialer = &net.Dialer{LocalAddr: netSourceIpAddr}
+	}
 	// Join using IP address, as that is what Hashicorp Raft works in.
 	resv, err := net.ResolveTCPAddr("tcp", addr)
 	if err != nil {
@@ -67,6 +76,7 @@ func join(joinAddr, id, addr string, voter bool, meta map[string]string, tlsConf
 	// Create and configure the client to connect to the other node.
 	tr := &http.Transport{
 		TLSClientConfig: tlsConfig,
+		Dial: dialer.Dial,
 	}
 	client := &http.Client{Transport: tr}
 	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
