@@ -1,3 +1,7 @@
+## 5.11.0 (unreleased)
+### New features
+- [PR #776](https://github.com/rqlite/rqlite/pull/776): Support specifying Dialer's local address when performing Join request. Fixes [issue #774](https://github.com/rqlite/rqlite/issues/774). Thanks @osxlinux
+
 ## 5.10.2 (February 19th 2021)
 ### Implementation changes and bug fixes
 - [PR #772](https://github.com/rqlite/rqlite/pull/772): Log launch command.
