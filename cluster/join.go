@@ -76,7 +76,7 @@ func join(sourceIp string, joinAddr, id, addr string, voter bool, meta map[strin
 	// Create and configure the client to connect to the other node.
 	tr := &http.Transport{
 		TLSClientConfig: tlsConfig,
-		Dial: dialer.Dial,
+		Dial:            dialer.Dial,
 	}
 	client := &http.Client{Transport: tr}
 	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {

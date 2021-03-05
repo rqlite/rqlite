@@ -58,7 +58,7 @@ func (t *Transport) Dial(addr string, timeout time.Duration) (net.Conn, error) {
 	dialer = &net.Dialer{Timeout: timeout}
 	if t.sourceIp != "" {
 		netAddr := &net.TCPAddr{
-			IP:  net.ParseIP(t.sourceIp),
+			IP:   net.ParseIP(t.sourceIp),
 			Port: 0,
 		}
 		dialer = &net.Dialer{Timeout: timeout, LocalAddr: netAddr}

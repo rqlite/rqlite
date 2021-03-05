@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ChangeListManager">
+    <list default="true" id="2eea6fd3-7bb8-4e65-b6d7-d02c58c8854e" name="Default Changelist" comment="" />
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="GOROOT" path="/usr/local/Cellar/go/1.15.5/libexec" />
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="GoLibraries">
+    <option name="indexEntireGoPath" value="false" />
+  </component>
+  <component name="ProjectId" id="1pJrc9nG5OF5aTUNld9DfrUR7fB" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent">
+    <property name="RunOnceActivity.OpenProjectViewOnStart" value="true" />
+    <property name="WebServerToolWindowFactoryState" value="false" />
+    <property name="go.import.settings.migrated" value="true" />
+    <property name="go.sdk.automatically.set" value="true" />
+    <property name="go.tried.to.enable.integration.vgo.integrator" value="true" />
+    <property name="last_opened_file_path" value="$USER_HOME$" />
+    <property name="settings.editor.selected.configurable" value="preferences.fileTypes" />
+  </component>
+  <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="VgoProject">
+    <integration-enabled>true</integration-enabled>
+  </component>
+  <component name="WindowStateProjectService">
+    <state x="-755" y="864" key="#GOROOT" timestamp="1614912116678">
+      <screen x="-1080" y="-21" width="1080" height="1897" />
+    </state>
+    <state x="-755" y="864" key="#GOROOT/-1080.-21.1080.1897/0.23.1920.1009@-1080.-21.1080.1897" timestamp="1614912116678" />
+    <state x="-1039" y="566" key="SettingsEditor" timestamp="1614912155484">
+      <screen x="-1080" y="-21" width="1080" height="1897" />
+    </state>
+    <state x="-1039" y="566" key="SettingsEditor/-1080.-21.1080.1897/0.23.1920.1009@-1080.-21.1080.1897" timestamp="1614912155484" />
+    <state x="-848" y="682" width="615" height="490" key="find.popup" timestamp="1614912686709">
+      <screen x="-1080" y="-21" width="1080" height="1897" />
+    </state>
+    <state x="-848" y="682" width="615" height="490" key="find.popup/-1080.-21.1080.1897/0.23.1920.1009@-1080.-21.1080.1897" timestamp="1614912686709" />
+  </component>
+</project>

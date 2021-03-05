@@ -60,7 +60,7 @@ func Test_SingleJoinZeroAttempts(t *testing.T) {
 		t.Fatalf("handler should not have been called")
 	}))
 
-	_, err := Join("",[]string{ts.URL}, "id0", "127.0.0.1:9090", false, nil, 0, attemptInterval, nil)
+	_, err := Join("", []string{ts.URL}, "id0", "127.0.0.1:9090", false, nil, 0, attemptInterval, nil)
 	if err != ErrJoinFailed {
 		t.Fatalf("Incorrect error returned when zero attempts specified")
 	}
