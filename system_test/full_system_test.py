@@ -608,8 +608,10 @@ class TestEndToEndBackupRestore(unittest.TestCase):
     self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
 
   def tearDown(self):
-    deprovision_node(self.node0)
-    deprovision_node(self.node1)
+    if hasattr(self, 'node0'):
+      deprovision_node(self.node0)
+    if hasattr(self, 'node1'):
+      deprovision_node(self.node1)
     os.remove(self.db_file)
 
 class TestEndToEndSnapRestoreSingle(unittest.TestCase):
