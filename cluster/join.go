@@ -50,7 +50,7 @@ func Join(srcIP string, joinAddr []string, id, addr string, voter bool, meta map
 	return "", ErrJoinFailed
 }
 
-func join(srcIP , joinAddr, id, addr string, voter bool, meta map[string]string, tlsConfig *tls.Config, logger *log.Logger) (string, error) {
+func join(srcIP, joinAddr, id, addr string, voter bool, meta map[string]string, tlsConfig *tls.Config, logger *log.Logger) (string, error) {
 	if id == "" {
 		return "", fmt.Errorf("node ID not set")
 	}
