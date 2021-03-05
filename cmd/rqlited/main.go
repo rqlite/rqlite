@@ -46,6 +46,7 @@ var (
 
 var httpAddr string
 var httpAdv string
+var joinSrcIP string
 var tls1011 bool
 var authFile string
 var x509CACert string
@@ -85,7 +86,6 @@ var compressionBatch int
 var showVersion bool
 var cpuProfile string
 var memProfile string
-var srcIP string
 
 const name = `rqlited`
 const desc = `rqlite is a lightweight, distributed relational database, which uses SQLite as its
@@ -95,6 +95,7 @@ func init() {
 	flag.StringVar(&nodeID, "node-id", "", "Unique name for node. If not set, set to hostname")
 	flag.StringVar(&httpAddr, "http-addr", "localhost:4001", "HTTP server bind address. For HTTPS, set X.509 cert and key")
 	flag.StringVar(&httpAdv, "http-adv-addr", "", "Advertised HTTP address. If not set, same as HTTP server")
+	flag.StringVar(&joinSrcIP, "join-source-ip", "", "Set source IP address during Join request")
 	flag.BoolVar(&tls1011, "tls1011", false, "Support deprecated TLS versions 1.0 and 1.1")
 	flag.StringVar(&x509CACert, "http-ca-cert", "", "Path to root X.509 certificate for HTTP endpoint")
 	flag.StringVar(&x509Cert, "http-cert", "", "Path to X.509 certificate for HTTP endpoint")
@@ -133,7 +134,6 @@ func init() {
 	flag.IntVar(&compressionBatch, "compression-batch", 5, "Request batch threshold for compression attempt")
 	flag.StringVar(&cpuProfile, "cpu-profile", "", "Path to file for CPU profiling information")
 	flag.StringVar(&memProfile, "mem-profile", "", "Path to file for memory profiling information")
-	flag.StringVar(&srcIP, "src-ip", "", "Specify a source ip address, when your node has multiple ip address segments")
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "\n%s\n\n", desc)
@@ -306,7 +306,7 @@ func main() {
 			}
 		}
 
-		if j, err := cluster.Join(srcIP, joins, str.ID(), advAddr, !raftNonVoter, meta,
+		if j, err := cluster.Join(joinSrcIP, joins, str.ID(), advAddr, !raftNonVoter, meta,
 			joinAttempts, joinDur, &tlsConfig); err != nil {
 			log.Fatalf("failed to join cluster at %s: %s", joins, err.Error())
 		} else {
