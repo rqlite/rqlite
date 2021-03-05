@@ -15,7 +15,7 @@ type Transport struct {
 	certKey         string // Path to corresponding X.509 key.
 	remoteEncrypted bool   // Remote nodes use encrypted communication.
 	skipVerify      bool   // Skip verification of remote node certs.
-	sourceIp        string // The specified source IP is optional
+	srcIP           string // The specified source IP is optional
 }
 
 // NewTransport returns an initialized unencrypted Transport.
@@ -53,12 +53,11 @@ func (t *Transport) Open(addr string) error {
 
 // Dial opens a network connection.
 func (t *Transport) Dial(addr string, timeout time.Duration) (net.Conn, error) {
-	//dialer := &net.Dialer{Timeout: timeout}
 	var dialer *net.Dialer
 	dialer = &net.Dialer{Timeout: timeout}
-	if t.sourceIp != "" {
+	if t.srcIP != "" {
 		netAddr := &net.TCPAddr{
-			IP:   net.ParseIP(t.sourceIp),
+			IP:   net.ParseIP(t.srcIP),
 			Port: 0,
 		}
 		dialer = &net.Dialer{Timeout: timeout, LocalAddr: netAddr}
