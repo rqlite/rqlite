@@ -7,7 +7,7 @@ All write-requests must be sent to the leader of the cluster. Queries, however, 
 There are [client libraries available](https://github.com/rqlite).
 
 ## Data and the Raft log
-Any modifications to the SQLite database go through the Raft log, ensuring only changes committed by a quorum of rqlite nodes are actually executed against the SQLite database. Queries do not __necessarily__ go through the Raft log, however, since they do not change the state of the database, and therefore do not need to be captured in the log. More on this later.
+Any modifications to the SQLite database go through the Raft log, ensuring only changes committed by a quorum of rqlite nodes are actually applied to the SQLite database. Queries do not __necessarily__ go through the Raft log, however, since they do not change the state of the database, and therefore do not need to be captured in the log. More on this later.
 
 ## Writing Data
 To write data successfully to the database, you must create at least 1 table. To do this perform a HTTP POST on the `/execute` endpoint. Encapsulate the `CREATE TABLE` SQL command in a JSON array, and put it in the body of the request. An example via [curl](http://curl.haxx.se/):
@@ -126,7 +126,7 @@ When a transaction takes place either both statements will succeed, or neither. 
 The behaviour of rqlite if you explicitly issue `BEGIN`, `COMMIT`, `ROLLBACK`, `SAVEPOINT`, and `RELEASE` to control your own transactions is **not defined**. This is because the behavior of a cluster if it fails while such a manually-controlled transaction is not yet defined. It is important to control transactions only through the query parameters shown above.
 
 ## Handling Errors
-If an error occurs while processing a statement, it will be marked as such in the response. For example:
+If an error occurs while processing a statement, it will be indicated via the presence of an `error` key in the JSON response. For example:
 
 ```bash
 curl -XPOST 'localhost:4001/db/execute?pretty&timings' -H "Content-Type: application/json" -d "[
@@ -147,7 +147,7 @@ curl -XPOST 'localhost:4001/db/execute?pretty&timings' -H "Content-Type: applica
 ## Sending requests to followers
 What happens when you send a request to a follower depends on the nature of the request.
 
-You must always send write-requests (requests will change the database) to the leader. If you send a write-request to a follower, the follower will respond with [HTTP 301 Moved Permanently](https://en.wikipedia.org/wiki/HTTP_301) and include the address of the leader as the `Location` header in the response.
+You must always send write-requests (requests that will modify the database) to the leader. If you send a write-request to a follower, the follower will respond with [HTTP 301 Moved Permanently](https://en.wikipedia.org/wiki/HTTP_301) and include the address of the leader as the `Location` header in the response.
 
 The situation for queries -- requests which just read data -- is somewhat different. If you send the request to a node that is not the leader of the cluster, and specify `strong` or `weak` as the [read-consistency level](https://github.com/rqlite/rqlite/blob/master/DOC/CONSISTENCY.md), the node will also respond with [HTTP 301 Moved Permanently](https://en.wikipedia.org/wiki/HTTP_301) and include the address of the leader as the `Location` header in the response.
 
