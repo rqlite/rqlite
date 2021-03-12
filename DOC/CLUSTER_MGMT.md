@@ -78,6 +78,31 @@ You can also make a direct call to the HTTP API to remove a node:
 ```
 curl -XDELETE http://localhost:4001/remove -d '{"id": "<node raft ID>"}'
 ```
-assuming `localhost` is the address of the cluster leader. If you do not do this the leader will continually attempt to communicate with that node.
+assuming `localhost` is the address of the cluster leader. If you do not do this the leader will continually attempt to communicate with that node. Note that the cluster must be functional -- there must still be an operational leader -- for this removal to be successful. If, after a node failure, a given cluster does not have a quorum of nodes still running, you must bring back the failed node. Any attempt to remove it will fail as there will be no leader to respond to the failure request
 
-Removing a node does not change the number of nodes required to reach quorum, so you must add a new node to cluster as a replacement. To do so, simply follow the instructions for _Growing a cluster_.
+## Examples
+_Quorum is defined as (N/2)+1 where N is the size of the cluster._
+
+### 2-node cluster 
+Quorum of a 2-node cluster is 2.
+
+If 1 node fails, quorum can no longer reached. The failing node must be recovered, as the failed node cannot be removed, and a new node cannot be added to the cluster to takes its place. This is why you shouldn't run 2-node clusters, except for testing purposes. In general it doesn't make much sense to run clusters with even-number of nodes at all.
+
+If you remove a single node from a fully-functional 2-node cluster, quorum will be reduced to 1 since you will be left with a 1-node cluster.
+
+### 3-node cluster
+Quorum of a 3-node cluster is 2.
+
+If 1 node fails, the cluster can still reach quorum. Remove the failing node, or restart it. If you remove the node, quorum remains at 2. You should add a new node to get the cluster back to 3 nodes in size. If 2 nodes fail, the cluster will not be able to reach quorum. You must instead restart at least one of the nodes.
+
+If you remove a single node from a fully-functional 3-node cluster, quorum will be unchanged since you now have a 2-node cluster.
+
+### 4-node cluster
+Quorum of a 4-node cluster is 3.
+
+The situation is similar for a 3-node cluster, in the sense that it can only tolerate the failure of a single node. If you remove a single node from a fully-functional 4-node cluster, quorum will decrease to 2 you now have a 3-node cluster.
+
+### 5-node cluster
+Quorum of a 5-node cluster is 3.
+
+With a 5-node cluster, the cluster can tolerate the failure of 2 nodes. However if 3 nodes fail, at least one of those nodes must be restarted before you can make any change. If you remove a single node from a fully-functional 5-node cluster, quorum will be unchanged since you now have a 4-node cluster.
