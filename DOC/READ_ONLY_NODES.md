@@ -1,5 +1,5 @@
 # Read-only nodes
-rqlite supports adding _read-only_ nodes. You can use this feature to add read scalability to the cluster if you need a high volume of reads, without adding write latency to the cluster. These types of nodes are also known as _non-voting_ nodes.
+rqlite supports adding _read-only_ nodes. You can use this feature to add read scalability to the cluster if you need a high volume of reads, or want to distribute copies of the data nearer to clients -- but don't want those nodes counted towards the quorum. These types of nodes are also known as _non-voting_ nodes.
 
 What this means is that a read-only node doesn't participate in the Raft consensus system i.e. it doesn't contribute towards quorum, nor does it cast a vote during the leader election process. Just like voting nodes, however, read-only nodes still subscribe to the stream of committed log entries broadcast by the leader. Read-only nodes update the local SQLite database, and in every other sense act like any other node in the cluster.
 
