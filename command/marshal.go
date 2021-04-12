@@ -182,19 +182,22 @@ func UnmarshalSubCommand(c *Command, m proto.Message) error {
 	if c.Compressed {
 		gz, err := gzip.NewReader(bytes.NewReader(b))
 		if err != nil {
-			return err
+			fmt.Errorf("unmarshal sub gzip NewReader: %s", err)
 		}
 
 		ub, err := ioutil.ReadAll(gz)
 		if err != nil {
-			return err
+			fmt.Errorf("unmarshal sub gzip ReadAll: %s", err)
 		}
 
 		if err := gz.Close(); err != nil {
-			return err
+			fmt.Errorf("unmarshal sub gzip Close: %s", err)
 		}
 		b = ub
 	}
 
-	return proto.Unmarshal(b, m)
+	if err := proto.Unmarshal(b, m); err != nil {
+		return fmt.Errorf("proto unmarshal: %s", err)
+	}
+	return nil
 }
