@@ -244,7 +244,6 @@ func Test_MarshalCompressedConcurrent(t *testing.T) {
 			}
 		}()
 	}
-
 	wg.Wait()
 }
 
