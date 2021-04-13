@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 )
@@ -131,6 +132,39 @@ func Test_SingleNodeMulti(t *testing.T) {
 		t.Fatalf("failed to run multiple queries: %s", err.Error())
 	}
 	if r != `{"results":[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"],[2,"declan"]]},{"columns":["id","sequence"],"types":["integer","integer"],"values":[[1,5]]}]}` {
+		t.Fatalf("test received wrong result got %s", r)
+	}
+}
+
+func Test_SingleNodeConcurrentRequests(t *testing.T) {
+	var err error
+	node := mustNewLeaderNode()
+	defer node.Deprovision()
+
+	_, err = node.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	var wg sync.WaitGroup
+	for i := 0; i < 200; i++ {
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+			_, err = node.Execute(`INSERT INTO foo(name) VALUES("fiona")`)
+			if err != nil {
+				t.Fatalf("failed to insert record: %s", err.Error())
+			}
+		}()
+	}
+
+	wg.Wait()
+	r, err := node.Query("SELECT COUNT(*) FROM foo")
+	if err != nil {
+		t.Fatalf("failed to count records: %s", err.Error())
+	}
+	if r != `{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[200]]}]}` {
 		t.Fatalf("test received wrong result got %s", r)
 	}
 }
