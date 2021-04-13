@@ -152,9 +152,9 @@ func Test_SingleNodeConcurrentRequests(t *testing.T) {
 
 		go func() {
 			defer wg.Done()
-			_, err = node.Execute(`INSERT INTO foo(name) VALUES("fiona")`)
+			resp, err := PostExecuteStmt(node.APIAddr, `INSERT INTO foo(name) VALUES("fiona")`)
 			if err != nil {
-				t.Fatalf("failed to insert record: %s", err.Error())
+				t.Fatalf("failed to insert record: %s %s", err.Error(), resp)
 			}
 		}()
 	}
