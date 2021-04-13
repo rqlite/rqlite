@@ -264,8 +264,13 @@ func (n *Node) postQuery(stmt string) (string, error) {
 }
 
 // PostExecuteStmt performs a HTTP execute request
-func PostExecuteStmt(apiAddr, stmt string) (string, error) {
-	j, err := json.Marshal([]string{stmt})
+func PostExecuteStmt(apiAddr string, stmt string) (string, error) {
+	return PostExecuteStmtMulti(apiAddr, []string{stmt})
+}
+
+// PostExecuteStmtMulti performs a HTTP batch execute request
+func PostExecuteStmtMulti(apiAddr string, stmts []string) (string, error) {
+	j, err := json.Marshal(stmts)
 	if err != nil {
 		return "", err
 	}
