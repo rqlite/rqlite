@@ -139,6 +139,40 @@ func Test_SingleNodeMulti(t *testing.T) {
 func Test_SingleNodeConcurrentRequests(t *testing.T) {
 	var err error
 	node := mustNewLeaderNode()
+	node.Store.SetRequestCompression(1024, 1024) // Ensure no compression
+	defer node.Deprovision()
+
+	_, err = node.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	var wg sync.WaitGroup
+	for i := 0; i < 200; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			resp, err := PostExecuteStmt(node.APIAddr, `INSERT INTO foo(name) VALUES("fiona")`)
+			if err != nil {
+				t.Fatalf("failed to insert record: %s %s", err.Error(), resp)
+			}
+		}()
+	}
+
+	wg.Wait()
+	r, err := node.Query("SELECT COUNT(*) FROM foo")
+	if err != nil {
+		t.Fatalf("failed to count records: %s", err.Error())
+	}
+	if r != `{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[200]]}]}` {
+		t.Fatalf("test received wrong result got %s", r)
+	}
+}
+
+func Test_SingleNodeConcurrentRequestsCompressed(t *testing.T) {
+	var err error
+	node := mustNewLeaderNode()
+	node.Store.SetRequestCompression(0, 0) // Ensure compression
 	defer node.Deprovision()
 
 	_, err = node.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`)
