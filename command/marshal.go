@@ -97,10 +97,10 @@ func (m *RequestMarshaler) Marshal(r Requester) ([]byte, bool, error) {
 		var buf bytes.Buffer
 		gzw.Reset(&buf)
 		if _, err := gzw.Write(b); err != nil {
-			return nil, false, err
+			return nil, false, fmt.Errorf("gzip Write: %s", err)
 		}
 		if err := gzw.Close(); err != nil {
-			return nil, false, err
+			return nil, false, fmt.Errorf("gzip Close: %s", err)
 		}
 
 		// Is compression better?
