@@ -263,6 +263,25 @@ func (n *Node) postQuery(stmt string) (string, error) {
 	return string(body), nil
 }
 
+// PostExecuteStmt performs a HTTP execute request
+func PostExecuteStmt(apiAddr, stmt string) (string, error) {
+	j, err := json.Marshal([]string{stmt})
+	if err != nil {
+		return "", err
+	}
+
+	resp, err := http.Post("http://"+apiAddr+"/db/execute", "application/json", strings.NewReader(string(j)))
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	return string(body), nil
+}
+
 // Cluster represents a cluster of nodes.
 type Cluster []*Node
 
