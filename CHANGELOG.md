@@ -1,3 +1,7 @@
+## 5.11.1 (April 13th 2021)
+### Implementation changes and bug fixes
+- [PR #783](https://github.com/rqlite/rqlite/pull/783): Create GZIP writer for every compression request. Fixes [issue #781](https://github.com/rqlite/rqlite/issues/781).
+
 ## 5.11.0 (April 12th 2021)
 ### New features
 - [PR #776](https://github.com/rqlite/rqlite/pull/776), [PR #777](https://github.com/rqlite/rqlite/pull/777): Support specifying Dialer's local address when performing Join request. Fixes [issue #774](https://github.com/rqlite/rqlite/issues/774). Thanks @osxlinux
