@@ -28,8 +28,6 @@ type RequestMarshaler struct {
 	BatchThreshold   int
 	SizeThreshold    int
 	ForceCompression bool
-
-	gz *gzip.Writer
 }
 
 const (
@@ -58,15 +56,9 @@ func init() {
 
 // NewRequestMarshaler returns an initialized RequestMarshaler.
 func NewRequestMarshaler() *RequestMarshaler {
-	w, err := gzip.NewWriterLevel(nil, gzip.BestCompression)
-	if err != nil {
-		panic(fmt.Sprintf("failed to create GZIP writer: %s", err.Error()))
-	}
-
 	return &RequestMarshaler{
 		BatchThreshold: defaultBatchThreshold,
 		SizeThreshold:  defaultSizeThreshold,
-		gz:             w,
 	}
 }
 
@@ -75,6 +67,11 @@ func NewRequestMarshaler() *RequestMarshaler {
 func (m *RequestMarshaler) Marshal(r Requester) ([]byte, bool, error) {
 	stats.Add(numRequests, 0)
 	compress := false
+
+	gzw, err := gzip.NewWriterLevel(nil, gzip.BestCompression)
+	if err != nil {
+		panic(fmt.Sprintf("failed to create GZIP writer: %s", err.Error()))
+	}
 
 	stmts := r.GetRequest().GetStatements()
 	if len(stmts) >= m.BatchThreshold {
@@ -98,11 +95,11 @@ func (m *RequestMarshaler) Marshal(r Requester) ([]byte, bool, error) {
 	if compress {
 		// Let's try compression.
 		var buf bytes.Buffer
-		m.gz.Reset(&buf)
-		if _, err := m.gz.Write(b); err != nil {
+		gzw.Reset(&buf)
+		if _, err := gzw.Write(b); err != nil {
 			return nil, false, err
 		}
-		if err := m.gz.Close(); err != nil {
+		if err := gzw.Close(); err != nil {
 			return nil, false, err
 		}
 
