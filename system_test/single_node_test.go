@@ -184,7 +184,6 @@ func Test_SingleNodeConcurrentRequestsCompressed(t *testing.T) {
 	var wg sync.WaitGroup
 	for i := 0; i < 200; i++ {
 		wg.Add(1)
-
 		go func() {
 			defer wg.Done()
 			resp, err := PostExecuteStmt(node.APIAddr, `INSERT INTO foo(name) VALUES("fiona")`)
