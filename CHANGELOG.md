@@ -1,3 +1,7 @@
+## 5.12.0 (unreleased)
+## New features
+ - [PR #788](https://github.com/rqlite/rqlite/pull/788): Upgrade to SQLite 3.35.4.
+
 ## 5.11.1 (April 13th 2021)
 ### Implementation changes and bug fixes
 - [PR #783](https://github.com/rqlite/rqlite/pull/783): Create GZIP writer for every compression request. Fixes [issue #781](https://github.com/rqlite/rqlite/issues/781).
