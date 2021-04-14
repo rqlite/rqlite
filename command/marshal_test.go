@@ -1,6 +1,7 @@
 package command
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/golang/protobuf/proto"
@@ -210,6 +211,40 @@ func Test_MarshalWontCompressBatch(t *testing.T) {
 	if comp {
 		t.Fatal("Marshaled QueryRequest was compressed")
 	}
+}
+
+func Test_MarshalCompressedConcurrent(t *testing.T) {
+	rm := NewRequestMarshaler()
+	rm.SizeThreshold = 1
+	rm.ForceCompression = true
+
+	r := &QueryRequest{
+		Request: &Request{
+			Statements: []*Statement{
+				{
+					Sql: `INSERT INTO "names" VALUES(1,'bob','123-45-678')`,
+				},
+			},
+		},
+		Timings:   true,
+		Freshness: 100,
+	}
+
+	var wg sync.WaitGroup
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, comp, err := rm.Marshal(r)
+			if err != nil {
+				t.Fatalf("failed to marshal QueryRequest: %s", err)
+			}
+			if !comp {
+				t.Fatal("Marshaled QueryRequest wasn't compressed")
+			}
+		}()
+	}
+	wg.Wait()
 }
 
 func Test_MarshalWontCompressSize(t *testing.T) {
