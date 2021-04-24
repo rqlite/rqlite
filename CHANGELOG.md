@@ -1,4 +1,4 @@
-## 5.12.0 (unreleased)
+## 5.12.0 (April 24th 2021)
 ## New features
  - [PR #788](https://github.com/rqlite/rqlite/pull/788): Upgrade to SQLite 3.35.4.
 
