@@ -510,7 +510,7 @@ func mustNewOpenTLSTransport(certFile, keyPath, addr string) *tcp.Transport {
 		addr = "localhost:0"
 	}
 
-	tn := tcp.NewTLSTransport(certFile, keyPath, true)
+	tn := tcp.NewTLSTransport(certFile, keyPath, "", true)
 	if err := tn.Open(addr); err != nil {
 		panic(fmt.Sprintf("failed to open transport: %s", err))
 	}
