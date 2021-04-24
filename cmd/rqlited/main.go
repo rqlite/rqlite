@@ -183,7 +183,7 @@ func main() {
 	var tn *tcp.Transport
 	if nodeEncrypt {
 		log.Printf("enabling node-to-node encryption with cert: %s, key: %s", nodeX509Cert, nodeX509Key)
-		tn = tcp.NewTLSTransport(nodeX509Cert, nodeX509Key, noVerify)
+		tn = tcp.NewTLSTransport(nodeX509Cert, nodeX509Key, nodeX509CACert, noVerify)
 	} else {
 		tn = tcp.NewTransport()
 	}

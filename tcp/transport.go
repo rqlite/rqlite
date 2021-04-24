@@ -2,7 +2,9 @@ package tcp
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"time"
 )
@@ -13,6 +15,7 @@ type Transport struct {
 
 	certFile        string // Path to local X.509 cert.
 	certKey         string // Path to corresponding X.509 key.
+	caCertFile      string // Path to root X.509 certificate.
 	remoteEncrypted bool   // Remote nodes use encrypted communication.
 	skipVerify      bool   // Skip verification of remote node certs.
 	srcIP           string // The specified source IP is optional
@@ -24,10 +27,11 @@ func NewTransport() *Transport {
 }
 
 // NewTLSTransport returns an initialized TLS-encrypted Transport.
-func NewTLSTransport(certFile, keyPath string, skipVerify bool) *Transport {
+func NewTLSTransport(certFile, keyPath, caCertFile string, skipVerify bool) *Transport {
 	return &Transport{
 		certFile:        certFile,
 		certKey:         keyPath,
+		caCertFile:      caCertFile,
 		remoteEncrypted: true,
 		skipVerify:      skipVerify,
 	}
@@ -40,7 +44,7 @@ func (t *Transport) Open(addr string) error {
 		return err
 	}
 	if t.certFile != "" {
-		config, err := createTLSConfig(t.certFile, t.certKey)
+		config, err := createTLSConfig(t.certFile, t.certKey, t.caCertFile)
 		if err != nil {
 			return err
 		}
@@ -101,7 +105,7 @@ func (t *Transport) Addr() net.Addr {
 }
 
 // createTLSConfig returns a TLS config from the given cert and key.
-func createTLSConfig(certFile, keyFile string) (*tls.Config, error) {
+func createTLSConfig(certFile, keyFile, caCertFile string) (*tls.Config, error) {
 	var err error
 	config := &tls.Config{}
 	config.Certificates = make([]tls.Certificate, 1)
@@ -109,5 +113,18 @@ func createTLSConfig(certFile, keyFile string) (*tls.Config, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	if caCertFile != "" {
+		asn1Data, err := ioutil.ReadFile(caCertFile)
+		if err != nil {
+			return nil, err
+		}
+		config.RootCAs = x509.NewCertPool()
+		ok := config.RootCAs.AppendCertsFromPEM([]byte(asn1Data))
+		if !ok {
+			return nil, fmt.Errorf("failed to parse root certificate(s) in %q", caCertFile)
+		}
+	}
+
 	return config, nil
 }
