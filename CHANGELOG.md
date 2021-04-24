@@ -2,6 +2,9 @@
 ## New features
  - [PR #788](https://github.com/rqlite/rqlite/pull/788): Upgrade to SQLite 3.35.4.
 
+### Implementation changes and bug fixes
+ - [PR #790](https://github.com/rqlite/rqlite/pull/790): Upgrade dependencies, including Hashicorp Raft to v1.3.0
+
 ## 5.11.1 (April 13th 2021)
 ### Implementation changes and bug fixes
 - [PR #783](https://github.com/rqlite/rqlite/pull/783): Create GZIP writer for every compression request. Fixes [issue #781](https://github.com/rqlite/rqlite/issues/781).
