@@ -32,11 +32,6 @@ type Layer struct {
 	tlsConfig       *tls.Config
 }
 
-// Addr returns the local address for the layer.
-func (l *Layer) Addr() net.Addr {
-	return l.addr
-}
-
 // Dial creates a new network connection.
 func (l *Layer) Dial(addr string, timeout time.Duration) (net.Conn, error) {
 	dialer := &net.Dialer{Timeout: timeout}
@@ -66,6 +61,11 @@ func (l *Layer) Accept() (net.Conn, error) { return l.ln.Accept() }
 
 // Close closes the layer.
 func (l *Layer) Close() error { return l.ln.Close() }
+
+// Addr returns the local address for the layer.
+func (l *Layer) Addr() net.Addr {
+	return l.addr
+}
 
 // Mux multiplexes a network connection.
 type Mux struct {
