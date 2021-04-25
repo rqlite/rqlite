@@ -104,7 +104,8 @@ func (t *Transport) Addr() net.Addr {
 	return t.ln.Addr()
 }
 
-// createTLSConfig returns a TLS config from the given cert and key.
+// createTLSConfig returns a TLS config from the given cert, key and optionally
+// Certificate Authority cert.
 func createTLSConfig(certFile, keyFile, caCertFile string) (*tls.Config, error) {
 	var err error
 	config := &tls.Config{}
