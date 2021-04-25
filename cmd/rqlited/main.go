@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -184,20 +185,34 @@ func main() {
 	// Start requested profiling.
 	startProfile(cpuProfile, memProfile)
 
-	// Create internode network layer.
-	var tn *tcp.Transport
-	if nodeEncrypt {
-		log.Printf("enabling node-to-node encryption with cert: %s, key: %s", nodeX509Cert, nodeX509Key)
-		tn = tcp.NewTLSTransport(nodeX509Cert, nodeX509Key, nodeX509CACert, noVerify)
-	} else {
-		tn = tcp.NewTransport()
+	// Create internode network layer and mux.
+	ln, err := net.Listen("tcp", raftAddr)
+	if err != nil {
+		log.Fatalf("failed to listen on %s: %s", raftAddr, err.Error())
 	}
-	if err := tn.Open(raftAddr); err != nil {
-		log.Fatalf("failed to open internode network layer: %s", err.Error())
+	var adv net.Addr
+	if raftAdv != "" {
+		adv, err = net.ResolveTCPAddr("tcp", raftAdv)
+		if err != nil {
+			log.Fatalf("failed to resolve advertise address %s: %s", raftAdv, err.Error())
+		}
 	}
 
+	var mux *tcp.Mux
+	if nodeEncrypt {
+		log.Printf("enabling node-to-node encryption with cert: %s, key: %s", nodeX509Cert, nodeX509Key)
+		mux, err = tcp.NewTLSMux(ln, adv, nodeX509Cert, nodeX509Key, nodeX509CACert)
+	} else {
+		mux, err = tcp.NewMux(ln, adv)
+	}
+	if err != nil {
+		log.Fatalf("failed to create node-to-node mux: %s", err.Error())
+	}
+	go mux.Serve()
+	tn := mux.Listen(muxRaftHeader)
+
 	// Create and open the store.
-	dataPath, err := filepath.Abs(dataPath)
+	dataPath, err = filepath.Abs(dataPath)
 	if err != nil {
 		log.Fatalf("failed to determine absolute data path: %s", err.Error())
 	}
