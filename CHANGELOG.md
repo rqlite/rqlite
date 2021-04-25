@@ -1,9 +1,14 @@
+## 5.12.1 (unreleased)
+
+### Implementation changes and bug fixes
+ - [PR #791](https://github.com/rqlite/rqlite/pull/791): Reinstate node CA cert support which was erroneously removed in an earlier change.
+
 ## 5.12.0 (April 24th 2021)
 ## New features
  - [PR #788](https://github.com/rqlite/rqlite/pull/788): Upgrade to SQLite 3.35.4.
 
 ### Implementation changes and bug fixes
- - [PR #790](https://github.com/rqlite/rqlite/pull/790): Upgrade dependencies, including Hashicorp Raft to v1.3.0
+ - [PR #790](https://github.com/rqlite/rqlite/pull/790): Upgrade dependencies, including Hashicorp Raft to v1.3.0.
 
 ## 5.11.1 (April 13th 2021)
 ### Implementation changes and bug fixes
