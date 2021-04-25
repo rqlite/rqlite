@@ -156,6 +156,154 @@ func Test_MultiNodeCluster(t *testing.T) {
 	}
 }
 
+// Test_MultiNodeClusterNodeEncrypted tests formation of a 3-node cluster, and its operation.
+// This test enables inter-node encryption, but keeps the unencrypted HTTP API.
+func Test_MultiNodeClusterNodeEncrypted(t *testing.T) {
+	node1 := mustNewNodeEncrypted(true, false, true)
+	defer node1.Deprovision()
+	if _, err := node1.WaitForLeader(); err != nil {
+		t.Fatalf("node never became leader")
+	}
+
+	node2 := mustNewNodeEncrypted(false, false, true)
+	defer node2.Deprovision()
+	if err := node2.Join(node1); err != nil {
+		t.Fatalf("node failed to join leader: %s", err.Error())
+	}
+	_, err := node2.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for leader: %s", err.Error())
+	}
+
+	// Get the new leader, in case it changed.
+	c := Cluster{node1, node2}
+	leader, err := c.Leader()
+	if err != nil {
+		t.Fatalf("failed to find cluster leader: %s", err.Error())
+	}
+
+	// Check the followers
+	followers, err := c.Followers()
+	if err != nil {
+		t.Fatalf("failed to get followers: %s", err.Error())
+	}
+	if len(followers) != 1 {
+		t.Fatalf("got incorrect number of followers: %d", len(followers))
+	}
+
+	node3 := mustNewNodeEncrypted(false, false, true)
+	defer node3.Deprovision()
+	if err := node3.Join(leader); err != nil {
+		t.Fatalf("node failed to join leader: %s", err.Error())
+	}
+	_, err = node3.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for leader: %s", err.Error())
+	}
+
+	// Get the new leader, in case it changed.
+	c = Cluster{node1, node2, node3}
+	leader, err = c.Leader()
+	if err != nil {
+		t.Fatalf("failed to find cluster leader: %s", err.Error())
+	}
+
+	// Check the followers
+	followers, err = c.Followers()
+	if err != nil {
+		t.Fatalf("failed to get followers: %s", err.Error())
+	}
+	if len(followers) != 2 {
+		t.Fatalf("got incorrect number of followers: %d", len(followers))
+	}
+
+	// Run queries against cluster.
+	tests := []struct {
+		stmt     string
+		expected string
+		execute  bool
+	}{
+		{
+			stmt:     `CREATE TABLE foo (id integer not null primary key, name text)`,
+			expected: `{"results":[{}]}`,
+			execute:  true,
+		},
+		{
+			stmt:     `INSERT INTO foo(name) VALUES("fiona")`,
+			expected: `{"results":[{"last_insert_id":1,"rows_affected":1}]}`,
+			execute:  true,
+		},
+		{
+			stmt:     `SELECT * FROM foo`,
+			expected: `{"results":[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]}`,
+			execute:  false,
+		},
+	}
+
+	for i, tt := range tests {
+		var r string
+		var err error
+		if tt.execute {
+			r, err = leader.Execute(tt.stmt)
+		} else {
+			r, err = leader.Query(tt.stmt)
+		}
+		if err != nil {
+			t.Fatalf(`test %d failed "%s": %s`, i, tt.stmt, err.Error())
+		}
+		if r != tt.expected {
+			t.Fatalf(`test %d received wrong result "%s" got: %s exp: %s`, i, tt.stmt, r, tt.expected)
+		}
+	}
+
+	// Kill the leader and wait for the new leader.
+	leader.Deprovision()
+	c.RemoveNode(leader)
+	leader, err = c.WaitForNewLeader(leader)
+	if err != nil {
+		t.Fatalf("failed to find new cluster leader after killing leader: %s", err.Error())
+	}
+
+	// Run queries against the now 2-node cluster.
+	tests = []struct {
+		stmt     string
+		expected string
+		execute  bool
+	}{
+		{
+			stmt:     `CREATE TABLE foo (id integer not null primary key, name text)`,
+			expected: `{"results":[{"error":"table foo already exists"}]}`,
+			execute:  true,
+		},
+		{
+			stmt:     `INSERT INTO foo(name) VALUES("sinead")`,
+			expected: `{"results":[{"last_insert_id":2,"rows_affected":1}]}`,
+			execute:  true,
+		},
+		{
+			stmt:     `SELECT * FROM foo`,
+			expected: `{"results":[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"],[2,"sinead"]]}]}`,
+			execute:  false,
+		},
+	}
+
+	for i, tt := range tests {
+		var r string
+		var err error
+		if tt.execute {
+			r, err = leader.Execute(tt.stmt)
+		} else {
+			r, err = leader.Query(tt.stmt)
+		}
+		if err != nil {
+			t.Fatalf(`test %d failed "%s": %s`, i, tt.stmt, err.Error())
+		}
+		if r != tt.expected {
+			t.Fatalf(`test %d received wrong result "%s" got: %s exp: %s`, i, tt.stmt, r, tt.expected)
+		}
+	}
+}
+
 // Test_MultiNodeClusterSnapshot tests formation of a 3-node cluster, which involves sharing snapshots.
 func Test_MultiNodeClusterSnapshot(t *testing.T) {
 	node1 := mustNewLeaderNode()
