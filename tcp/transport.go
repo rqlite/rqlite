@@ -73,7 +73,6 @@ func (t *Transport) Dial(addr string, timeout time.Duration) (net.Conn, error) {
 		conf := &tls.Config{
 			InsecureSkipVerify: t.skipVerify,
 		}
-		fmt.Println("doing a TLS dial")
 		conn, err = tls.DialWithDialer(dialer, "tcp", addr, conf)
 	} else {
 		conn, err = dialer.Dial("tcp", addr)

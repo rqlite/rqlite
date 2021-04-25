@@ -412,7 +412,7 @@ func mustNewNodeEncrypted(enableSingle, httpEncrypt, nodeEncrypt bool) *Node {
 	dir := mustTempDir()
 	var tn *tcp.Transport
 	if nodeEncrypt {
-		tn = mustNewOpenTLSTransport(x509.CertFile(dir), x509.CertFile(dir), "")
+		tn = mustNewOpenTLSTransport(x509.CertFile(dir), x509.KeyFile(dir), "")
 	} else {
 		tn = mustNewOpenTransport("")
 	}
