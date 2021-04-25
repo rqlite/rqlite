@@ -47,7 +47,7 @@ func Test_NewTLSTransport(t *testing.T) {
 	k := x509.KeyFile("")
 	defer os.Remove(k)
 
-	if NewTLSTransport(c, k, true) == nil {
+	if NewTLSTransport(c, k, "", true) == nil {
 		t.Fatal("failed to create new TLS Transport")
 	}
 }
@@ -58,7 +58,7 @@ func Test_TLSTransportOpenClose(t *testing.T) {
 	k := x509.KeyFile("")
 	defer os.Remove(k)
 
-	tn := NewTLSTransport(c, k, true)
+	tn := NewTLSTransport(c, k, "", true)
 	if err := tn.Open("localhost:0"); err != nil {
 		t.Fatalf("failed to open TLS transport: %s", err.Error())
 	}
