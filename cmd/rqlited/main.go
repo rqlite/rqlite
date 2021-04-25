@@ -44,6 +44,11 @@ var (
 	features  = []string{}
 )
 
+const (
+	muxRaftHeader    = 1 // Raft consensus communications
+	muxClusterHeader = 2 // Cluster state communications
+)
+
 var httpAddr string
 var httpAdv string
 var joinSrcIP string

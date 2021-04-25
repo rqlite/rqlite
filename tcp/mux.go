@@ -18,7 +18,9 @@ const (
 	DefaultTimeout = 30 * time.Second
 )
 
-// Layer represents the connection between nodes.
+// Layer represents the connection between nodes. It can be both used to
+// make connections to other nodes, and receive connections from other
+// nodes.
 type Layer struct {
 	ln     net.Listener
 	header byte
@@ -82,13 +84,13 @@ type Mux struct {
 	Logger *log.Logger
 
 	// Path to root X.509 certificate.
-	nodeX509CACert string
+	x509CACert string
 
 	// Path to X509 certificate
-	nodeX509Cert string
+	x509Cert string
 
 	// Path to X509 key.
-	nodeX509Key string
+	x509Key string
 
 	// Whether to skip verification of other nodes' certificates.
 	InsecureSkipVerify bool
@@ -128,9 +130,9 @@ func NewTLSMux(ln net.Listener, adv net.Addr, cert, key, caCert string) (*Mux, e
 
 	mux.ln = tls.NewListener(ln, mux.tlsConfig)
 	mux.remoteEncrypted = true
-	mux.nodeX509CACert = caCert
-	mux.nodeX509Cert = cert
-	mux.nodeX509Key = key
+	mux.x509CACert = caCert
+	mux.x509Cert = cert
+	mux.x509Key = key
 
 	return mux, nil
 }
@@ -173,9 +175,9 @@ func (mux *Mux) Stats() (interface{}, error) {
 	}
 
 	if mux.remoteEncrypted {
-		s["certificate"] = mux.nodeX509Cert
-		s["key"] = mux.nodeX509Key
-		s["ca_certificate"] = mux.nodeX509CACert
+		s["certificate"] = mux.x509Cert
+		s["key"] = mux.x509Key
+		s["ca_certificate"] = mux.x509CACert
 		s["skip_verify"] = strconv.FormatBool(mux.InsecureSkipVerify)
 	}
 
@@ -218,8 +220,8 @@ func (mux *Mux) handleConn(conn net.Conn) {
 	handler.c <- conn
 }
 
-// Listen returns a listener identified by header.
-// Any connection accepted by mux is multiplexed based on the initial header byte.
+// Listen returns a Layer associated with the given header. Any connection
+// accepted by mux is multiplexed based on the initial header byte.
 func (mux *Mux) Listen(header byte) *Layer {
 	// Ensure two listeners are not created for the same header byte.
 	if _, ok := mux.m[header]; ok {
@@ -238,7 +240,7 @@ func (mux *Mux) Listen(header byte) *Layer {
 		addr:            mux.addr,
 		remoteEncrypted: mux.remoteEncrypted,
 		skipVerify:      mux.InsecureSkipVerify,
-		nodeX509CACert:  mux.nodeX509CACert,
+		nodeX509CACert:  mux.x509CACert,
 		tlsConfig:       mux.tlsConfig,
 	}
 
