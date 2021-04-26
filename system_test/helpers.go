@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -410,11 +411,11 @@ func mustNewNode(enableSingle bool) *Node {
 
 func mustNewNodeEncrypted(enableSingle, httpEncrypt, nodeEncrypt bool) *Node {
 	dir := mustTempDir()
-	var tn *tcp.Transport
+	var tn *tcp.Layer
 	if nodeEncrypt {
-		tn = mustNewOpenTLSTransport(x509.CertFile(dir), x509.KeyFile(dir), "")
+		_, tn = mustNewOpenTLSTransport(x509.CertFile(dir), x509.KeyFile(dir), "")
 	} else {
-		tn = mustNewOpenTransport("")
+		_, tn = mustNewOpenTransport("")
 	}
 
 	return mustNodeEncrypted(dir, enableSingle, httpEncrypt, tn, "")
@@ -493,28 +494,45 @@ func mustTempDir() string {
 	return path
 }
 
-func mustNewOpenTransport(addr string) *tcp.Transport {
+func mustNewOpenTransport(addr string) (*tcp.Mux, *tcp.Layer) {
 	if addr == "" {
 		addr = "localhost:0"
 	}
 
-	tn := tcp.NewTransport()
-	if err := tn.Open(addr); err != nil {
-		panic(fmt.Sprintf("failed to open transport: %s", err))
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		panic(fmt.Sprintf("failed to listen on %s: %s", addr, err.Error()))
 	}
-	return tn
+
+	var mux *tcp.Mux
+	mux, err = tcp.NewMux(ln, nil)
+	if err != nil {
+		panic(fmt.Sprintf("failed to create node-to-node mux: %s", err.Error()))
+	}
+
+	go mux.Serve()
+	return mux, mux.Listen(1) // Could be any byte value.
 }
 
-func mustNewOpenTLSTransport(certFile, keyPath, addr string) *tcp.Transport {
+func mustNewOpenTLSTransport(certFile, keyPath, addr string) (*tcp.Mux, *tcp.Layer) {
 	if addr == "" {
 		addr = "localhost:0"
 	}
 
-	tn := tcp.NewTLSTransport(certFile, keyPath, "", true)
-	if err := tn.Open(addr); err != nil {
-		panic(fmt.Sprintf("failed to open transport: %s", err))
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		panic(fmt.Sprintf("failed to listen on %s: %s", addr, err.Error()))
 	}
-	return tn
+
+	var mux *tcp.Mux
+	mux, err = tcp.NewTLSMux(ln, nil, certFile, keyPath, "")
+	if err != nil {
+		panic(fmt.Sprintf("failed to create node-to-node mux: %s", err.Error()))
+	}
+	mux.InsecureSkipVerify = true
+
+	go mux.Serve()
+	return mux, mux.Listen(1) // Could be any byte value.
 }
 
 func mustParseDuration(d string) time.Duration {

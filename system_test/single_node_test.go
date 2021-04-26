@@ -356,7 +356,7 @@ func Test_SingleNodeRestart(t *testing.T) {
 		t.Fatalf("failed to copy node test directory: %s", err)
 	}
 
-	tn := mustNewOpenTransport("")
+	_, tn := mustNewOpenTransport("")
 	defer tn.Close()
 
 	node := mustNodeEncrypted(destdir, true, false, tn, "node1")
@@ -421,7 +421,7 @@ func Test_SingleNodeReopen(t *testing.T) {
 		t.Logf("running test %s, on-disk=%v", t.Name(), onDisk)
 
 		dir := mustTempDir()
-		tn := mustNewOpenTransport("")
+		_, tn := mustNewOpenTransport("")
 		node := mustNodeEncrypted(dir, true, false, tn, "")
 
 		if _, err := node.WaitForLeader(); err != nil {
@@ -432,9 +432,9 @@ func Test_SingleNodeReopen(t *testing.T) {
 			t.Fatalf("failed to close node")
 		}
 
-		if err := tn.Open("localhost:0"); err != nil {
-			t.Fatalf("failed to re-open transport: %s", err)
-		}
+		// if err := tn.Open("localhost:0"); err != nil {
+		// 	t.Fatalf("failed to re-open transport: %s", err)
+		// }
 		if err := node.Store.Open(true); err != nil {
 			t.Fatalf("failed to re-open store: %s", err)
 		}
@@ -464,7 +464,7 @@ func Test_SingleNodeNoopReopen(t *testing.T) {
 		t.Logf("running test %s, on-disk=%v", t.Name(), onDisk)
 
 		dir := mustTempDir()
-		tn := mustNewOpenTransport("")
+		_, tn := mustNewOpenTransport("")
 		node := mustNodeEncryptedOnDisk(dir, true, false, tn, "", false)
 
 		if _, err := node.WaitForLeader(); err != nil {
@@ -479,9 +479,9 @@ func Test_SingleNodeNoopReopen(t *testing.T) {
 			t.Fatalf("failed to close node")
 		}
 
-		if err := tn.Open("localhost:0"); err != nil {
-			t.Fatalf("failed to re-open transport: %s", err)
-		}
+		// if err := tn.Open("localhost:0"); err != nil {
+		// 	t.Fatalf("failed to re-open transport: %s", err)
+		// }
 		if err := node.Store.Open(true); err != nil {
 			t.Fatalf("failed to re-open store: %s", err)
 		}
@@ -555,7 +555,7 @@ func Test_SingleNodeNoopSnapReopen(t *testing.T) {
 		t.Logf("running test %s, on-disk=%v", t.Name(), onDisk)
 
 		dir := mustTempDir()
-		tn := mustNewOpenTransport("")
+		_, tn := mustNewOpenTransport("")
 		node := mustNodeEncryptedOnDisk(dir, true, false, tn, "", onDisk)
 
 		if _, err := node.WaitForLeader(); err != nil {
@@ -575,9 +575,9 @@ func Test_SingleNodeNoopSnapReopen(t *testing.T) {
 			t.Fatalf("failed to close node")
 		}
 
-		if err := tn.Open("localhost:0"); err != nil {
-			t.Fatalf("failed to re-open transport: %s", err)
-		}
+		// if err := tn.Open("localhost:0"); err != nil {
+		// 	t.Fatalf("failed to re-open transport: %s", err)
+		// }
 		if err := node.Store.Open(true); err != nil {
 			t.Fatalf("failed to re-open store: %s", err)
 		}
@@ -651,7 +651,7 @@ func Test_SingleNodeNoopSnapLogsReopen(t *testing.T) {
 		t.Logf("running test %s, on-disk=%v", t.Name(), onDisk)
 
 		dir := mustTempDir()
-		tn := mustNewOpenTransport("")
+		_, tn := mustNewOpenTransport("")
 		node := mustNodeEncryptedOnDisk(dir, true, false, tn, "", onDisk)
 		raftAddr = node.RaftAddr
 		t.Logf("node listening for Raft on %s", raftAddr)
@@ -679,9 +679,9 @@ func Test_SingleNodeNoopSnapLogsReopen(t *testing.T) {
 		}
 
 		// Reset network state in node.
-		if err := tn.Open(raftAddr); err != nil {
-			t.Fatalf("failed to re-open transport: %s", err)
-		}
+		// if err := tn.Open(raftAddr); err != nil {
+		// 	t.Fatalf("failed to re-open transport: %s", err)
+		// }
 
 		if err := node.Store.Open(true); err != nil {
 			t.Fatalf("failed to re-open store: %s", err)

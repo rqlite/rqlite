@@ -2,9 +2,11 @@ package tcp
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"net"
 	"os"
@@ -39,7 +41,10 @@ func (l *Layer) Dial(addr string, timeout time.Duration) (net.Conn, error) {
 	var err error
 	var conn net.Conn
 	if l.remoteEncrypted {
-		conn, err = tls.DialWithDialer(dialer, "tcp", addr, l.tlsConfig)
+		conf := &tls.Config{
+			InsecureSkipVerify: l.skipVerify,
+		}
+		conn, err = tls.DialWithDialer(dialer, "tcp", addr, conf)
 	} else {
 		conn, err = dialer.Dial("tcp", addr)
 	}
@@ -275,4 +280,30 @@ func newTLSListener(ln net.Listener, certFile, keyFile, caCertFile string) (net.
 	}
 
 	return tls.NewListener(ln, config), nil
+}
+
+// createTLSConfig returns a TLS config from the given cert, key and optionally
+// Certificate Authority cert.
+func createTLSConfig(certFile, keyFile, caCertFile string) (*tls.Config, error) {
+	var err error
+	config := &tls.Config{}
+	config.Certificates = make([]tls.Certificate, 1)
+	config.Certificates[0], err = tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return nil, err
+	}
+
+	if caCertFile != "" {
+		asn1Data, err := ioutil.ReadFile(caCertFile)
+		if err != nil {
+			return nil, err
+		}
+		config.RootCAs = x509.NewCertPool()
+		ok := config.RootCAs.AppendCertsFromPEM([]byte(asn1Data))
+		if !ok {
+			return nil, fmt.Errorf("failed to parse root certificate(s) in %q", caCertFile)
+		}
+	}
+
+	return config, nil
 }

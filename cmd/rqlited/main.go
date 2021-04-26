@@ -185,31 +185,13 @@ func main() {
 	// Start requested profiling.
 	startProfile(cpuProfile, memProfile)
 
-	// Create internode network layer and mux.
-	ln, err := net.Listen("tcp", raftAddr)
+	// Create internode network mux and configure.
+	mux, err := startNodeMux()
 	if err != nil {
-		log.Fatalf("failed to listen on %s: %s", raftAddr, err.Error())
+		log.Fatalf("failed to start node mux: %s", err.Error())
 	}
-	var adv net.Addr
-	if raftAdv != "" {
-		adv, err = net.ResolveTCPAddr("tcp", raftAdv)
-		if err != nil {
-			log.Fatalf("failed to resolve advertise address %s: %s", raftAdv, err.Error())
-		}
-	}
-
-	var mux *tcp.Mux
-	if nodeEncrypt {
-		log.Printf("enabling node-to-node encryption with cert: %s, key: %s", nodeX509Cert, nodeX509Key)
-		mux, err = tcp.NewTLSMux(ln, adv, nodeX509Cert, nodeX509Key, nodeX509CACert)
-	} else {
-		mux, err = tcp.NewMux(ln, adv)
-	}
-	if err != nil {
-		log.Fatalf("failed to create node-to-node mux: %s", err.Error())
-	}
-	go mux.Serve()
-	tn := mux.Listen(muxRaftHeader)
+	raftTn := mux.Listen(muxRaftHeader)
+	//clusterTn := mux.Listen(muxClusterHeader)
 
 	// Create and open the store.
 	dataPath, err = filepath.Abs(dataPath)
@@ -218,7 +200,7 @@ func main() {
 	}
 	dbConf := store.NewDBConfig(dsn, !onDisk)
 
-	str := store.New(tn, &store.StoreConfig{
+	str := store.New(raftTn, &store.StoreConfig{
 		DBConf: dbConf,
 		Dir:    dataPath,
 		ID:     idOrRaftAddr(),
@@ -443,6 +425,35 @@ func startHTTPService(str *store.Store) error {
 		"build_time": buildtime,
 	}
 	return s.Start()
+}
+
+func startNodeMux() (*tcp.Mux, error) {
+	ln, err := net.Listen("tcp", raftAddr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to listen on %s: %s", raftAddr, err.Error())
+	}
+	var adv net.Addr
+	if raftAdv != "" {
+		adv, err = net.ResolveTCPAddr("tcp", raftAdv)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve advertise address %s: %s", raftAdv, err.Error())
+		}
+	}
+
+	var mux *tcp.Mux
+	if nodeEncrypt {
+		log.Printf("enabling node-to-node encryption with cert: %s, key: %s", nodeX509Cert, nodeX509Key)
+		mux, err = tcp.NewTLSMux(ln, adv, nodeX509Cert, nodeX509Key, nodeX509CACert)
+	} else {
+		mux, err = tcp.NewMux(ln, adv)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to create node-to-node mux: %s", err.Error())
+	}
+	mux.InsecureSkipVerify = noNodeVerify
+	go mux.Serve()
+
+	return mux, nil
 }
 
 func credentialStore() (*auth.CredentialsStore, error) {
