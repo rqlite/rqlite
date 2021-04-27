@@ -62,8 +62,17 @@ func Test_NewServiceSetGetNodeAPIAddr(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get node API address: %s", err)
 	}
-	if addr != "foo" {
-		t.Fatalf("failed to get correct node API address")
+	if addr != "http://foo" {
+		t.Fatalf("failed to get correct node API address, exp %s, got %s", "http://foo", addr)
+	}
+
+	s.EnableHTTPS(true)
+	addr, err = s.GetNodeAPIAddr(s.Addr())
+	if err != nil {
+		t.Fatalf("failed to get node API address: %s", err)
+	}
+	if addr != "https://foo" {
+		t.Fatalf("failed to get correct node API address, exp %s, got %s", "https://foo", addr)
 	}
 
 	if err := s.Close(); err != nil {

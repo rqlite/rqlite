@@ -1,12 +1,17 @@
 package cluster
 
 import (
+	"encoding/binary"
+	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"net"
 	"os"
 	"sync"
 	"time"
+
+	"github.com/golang/protobuf/proto"
 )
 
 // Transport is the interface the network layer must provide.
@@ -25,6 +30,7 @@ type Service struct {
 	timeout time.Duration
 
 	mu      sync.RWMutex
+	https   bool   // Serving HTTPS?
 	apiAddr string // host:port this node serves the HTTP API.
 
 	wg sync.WaitGroup
@@ -62,6 +68,12 @@ func (s *Service) Addr() string {
 	return s.addr.String()
 }
 
+func (s *Service) EnableHTTPS(b bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.https = b
+}
+
 func (s *Service) SetAPIAddr(addr string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -81,11 +93,34 @@ func (s *Service) GetNodeAPIAddr(nodeAddr string) (string, error) {
 	}
 	defer conn.Close()
 
-	b, err := ioutil.ReadAll(conn)
+	// Send the request
+	c := &Command{
+		Type: Command_COMMAND_TYPE_GET_NODE_API_URL,
+	}
+	p, err := proto.Marshal(c)
+	if err != nil {
+		conn.Close()
+	}
+
+	// Write length of Protobuf, the Protobuf
+	b := make([]byte, 4)
+	binary.LittleEndian.PutUint16(b[0:], uint16(len(p)))
+
+	conn.Write(b)
+	conn.Write(p)
+
+	b, err = ioutil.ReadAll(conn)
 	if err != nil {
 		return "", err
 	}
-	return string(b), nil
+
+	a := &Address{}
+	err = proto.Unmarshal(b, a)
+	if err != nil {
+		return "", err
+	}
+
+	return a.Url, nil
 }
 
 func (s *Service) serve() error {
@@ -101,8 +136,42 @@ func (s *Service) serve() error {
 }
 
 func (s *Service) handleConn(conn net.Conn) {
-	// This is where we'd actually switch on incoming command in protobuf format
-	// and write a protobuf back out.
-	conn.Write([]byte(s.apiAddr))
-	conn.Close()
+	b := make([]byte, 4)
+	_, err := io.ReadFull(conn, b)
+	if err != nil {
+		conn.Close() // Only way to signal an error.
+	}
+	sz := binary.LittleEndian.Uint16(b[0:])
+
+	b = make([]byte, sz)
+	_, err = io.ReadFull(conn, b)
+	if err != nil {
+		conn.Close() // Only way to signal an error.
+	}
+
+	c := &Command{}
+	err = proto.Unmarshal(b, c)
+	if err != nil {
+		conn.Close()
+	}
+
+	switch c.Type {
+	case Command_COMMAND_TYPE_GET_NODE_API_URL:
+		s.mu.RLock()
+		defer s.mu.RUnlock()
+
+		a := &Address{}
+		scheme := "http"
+		if s.https {
+			scheme = "https"
+		}
+		a.Url = fmt.Sprintf("%s://%s", scheme, s.apiAddr)
+
+		b, err = proto.Marshal(a)
+		if err != nil {
+			conn.Close()
+		}
+		conn.Write(b)
+		conn.Close()
+	}
 }

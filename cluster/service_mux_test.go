@@ -28,7 +28,7 @@ func Test_NewServiceSetGetNodeAPIAddrMuxed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get node API address: %s", err)
 	}
-	if addr != "foo" {
+	if addr != "http://foo" {
 		t.Fatalf("failed to get correct node API address")
 	}
 
