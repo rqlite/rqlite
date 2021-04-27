@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"crypto/tls"
 	"net"
 	"testing"
 	"time"
@@ -81,7 +82,8 @@ func Test_NewServiceSetGetNodeAPIAddr(t *testing.T) {
 }
 
 type mockTransport struct {
-	tn net.Listener
+	tn        net.Listener
+	tlsConfig *tls.Config
 }
 
 func mustNewMockTransport() *mockTransport {
@@ -92,6 +94,10 @@ func mustNewMockTransport() *mockTransport {
 	return &mockTransport{
 		tn: tn,
 	}
+}
+
+func mustNewMockTLSTransport() *mockTransport {
+	// Do this next
 }
 
 func (ml *mockTransport) Accept() (c net.Conn, err error) {
