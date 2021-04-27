@@ -136,17 +136,19 @@ func (s *Service) serve() error {
 }
 
 func (s *Service) handleConn(conn net.Conn) {
+	defer conn.Close()
+
 	b := make([]byte, 4)
 	_, err := io.ReadFull(conn, b)
 	if err != nil {
-		conn.Close() // Only way to signal an error.
+		return
 	}
 	sz := binary.LittleEndian.Uint16(b[0:])
 
 	b = make([]byte, sz)
 	_, err = io.ReadFull(conn, b)
 	if err != nil {
-		conn.Close() // Only way to signal an error.
+		return
 	}
 
 	c := &Command{}
@@ -172,6 +174,5 @@ func (s *Service) handleConn(conn net.Conn) {
 			conn.Close()
 		}
 		conn.Write(b)
-		conn.Close()
 	}
 }
