@@ -702,6 +702,10 @@ func (m *mockCredentialStore) HasPerm(username, perm string) bool {
 	return m.HasPermOK
 }
 
+func (m *mockClusterService) Stats() (map[string]interface{}, error) {
+	return nil, nil
+}
+
 func (m *mockCredentialStore) HasAnyPerm(username string, perm ...string) bool {
 	return m.HasPermOK
 }
