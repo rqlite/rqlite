@@ -55,17 +55,20 @@ type Store interface {
 	// Remove removes the node, specified by id, from the cluster.
 	Remove(id string) error
 
-	// Metadata returns the value for the given node ID, for the given key.
-	Metadata(id, key string) string
-
-	// Leader returns the Raft address of the leader of the cluster.
-	LeaderID() (string, error)
+	// LeaderAddr returns the Raft address of the leader of the cluster.
+	LeaderAddr() (string, error)
 
 	// Stats returns stats on the Store.
 	Stats() (map[string]interface{}, error)
 
 	// Backup wites backup of the node state to dst
 	Backup(leader bool, f store.BackupFormat, dst io.Writer) error
+}
+
+// Cluster is the interface node API services must provide
+type Cluster interface {
+	// GetNodeAPIAddr returns the HTTP API URL for the node at the given Raft address.
+	GetNodeAPIAddr(nodeAddr string) (string, error)
 }
 
 // CredentialStore is the interface credential stores must support.
@@ -159,6 +162,8 @@ type Service struct {
 
 	store Store // The Raft-backed database store.
 
+	cluster Cluster // The Cluster service.
+
 	start      time.Time // Start up time.
 	lastBackup time.Time // Time of last successful backup.
 
@@ -182,10 +187,11 @@ type Service struct {
 
 // New returns an uninitialized HTTP service. If credentials is nil, then
 // the service performs no authentication and authorization checks.
-func New(addr string, store Store, credentials CredentialStore) *Service {
+func New(addr string, store Store, cluster Cluster, credentials CredentialStore) *Service {
 	return &Service{
 		addr:            addr,
 		store:           store,
+		cluster:         cluster,
 		start:           time.Now(),
 		statuses:        make(map[string]Statuser),
 		credentialStore: credentials,
@@ -336,13 +342,12 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 	if err := s.store.Join(remoteID.(string), remoteAddr.(string), voter.(bool), m); err != nil {
 		if err == store.ErrNotLeader {
 			leaderAPIAddr := s.LeaderAPIAddr()
-			leaderProto := s.LeaderAPIProto()
 			if leaderAPIAddr == "" {
 				http.Error(w, err.Error(), http.StatusServiceUnavailable)
 				return
 			}
 
-			redirect := s.FormRedirect(r, leaderProto, leaderAPIAddr)
+			redirect := s.FormRedirect(r, leaderAPIAddr)
 			http.Redirect(w, r, redirect, http.StatusMovedPermanently)
 			return
 		}
@@ -389,13 +394,12 @@ func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request) {
 	if err := s.store.Remove(remoteID); err != nil {
 		if err == store.ErrNotLeader {
 			leaderAPIAddr := s.LeaderAPIAddr()
-			leaderProto := s.LeaderAPIProto()
 			if leaderAPIAddr == "" {
 				http.Error(w, err.Error(), http.StatusServiceUnavailable)
 				return
 			}
 
-			redirect := s.FormRedirect(r, leaderProto, leaderAPIAddr)
+			redirect := s.FormRedirect(r, leaderAPIAddr)
 			http.Redirect(w, r, redirect, http.StatusMovedPermanently)
 			return
 		}
@@ -433,13 +437,12 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if err == store.ErrNotLeader {
 			leaderAPIAddr := s.LeaderAPIAddr()
-			leaderProto := s.LeaderAPIProto()
 			if leaderAPIAddr == "" {
 				http.Error(w, err.Error(), http.StatusServiceUnavailable)
 				return
 			}
 
-			redirect := s.FormRedirect(r, leaderProto, leaderAPIAddr)
+			redirect := s.FormRedirect(r, leaderAPIAddr)
 			http.Redirect(w, r, redirect, http.StatusMovedPermanently)
 			return
 		}
@@ -486,13 +489,12 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if err == store.ErrNotLeader {
 			leaderAPIAddr := s.LeaderAPIAddr()
-			leaderProto := s.LeaderAPIProto()
 			if leaderAPIAddr == "" {
 				http.Error(w, err.Error(), http.StatusServiceUnavailable)
 				return
 			}
 
-			redirect := s.FormRedirect(r, leaderProto, leaderAPIAddr)
+			redirect := s.FormRedirect(r, leaderAPIAddr)
 			http.Redirect(w, r, redirect, http.StatusMovedPermanently)
 			return
 		}
@@ -643,13 +645,12 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if err == store.ErrNotLeader {
 			leaderAPIAddr := s.LeaderAPIAddr()
-			leaderProto := s.LeaderAPIProto()
 			if leaderAPIAddr == "" {
 				http.Error(w, err.Error(), http.StatusServiceUnavailable)
 				return
 			}
 
-			redirect := s.FormRedirect(r, leaderProto, leaderAPIAddr)
+			redirect := s.FormRedirect(r, leaderAPIAddr)
 			http.Redirect(w, r, redirect, http.StatusMovedPermanently)
 			return
 		}
@@ -722,13 +723,12 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if err == store.ErrNotLeader {
 			leaderAPIAddr := s.LeaderAPIAddr()
-			leaderProto := s.LeaderAPIProto()
 			if leaderAPIAddr == "" {
 				http.Error(w, err.Error(), http.StatusServiceUnavailable)
 				return
 			}
 
-			redirect := s.FormRedirect(r, leaderProto, leaderAPIAddr)
+			redirect := s.FormRedirect(r, leaderAPIAddr)
 			http.Redirect(w, r, redirect, http.StatusMovedPermanently)
 			return
 		}
@@ -785,12 +785,12 @@ func (s *Service) Addr() net.Addr {
 }
 
 // FormRedirect returns the value for the "Location" header for a 301 response.
-func (s *Service) FormRedirect(r *http.Request, protocol, host string) string {
+func (s *Service) FormRedirect(r *http.Request, url string) string {
 	rq := r.URL.RawQuery
 	if rq != "" {
 		rq = fmt.Sprintf("?%s", rq)
 	}
-	return fmt.Sprintf("%s://%s%s%s", protocol, host, r.URL.Path, rq)
+	return fmt.Sprintf("%s%s%s", url, r.URL.Path, rq)
 }
 
 // CheckRequestPerm returns true if authentication is enabled and the user contained
@@ -816,25 +816,17 @@ func (s *Service) CheckRequestPerm(r *http.Request, perm string) (b bool) {
 
 // LeaderAPIAddr returns the API address of the leader, as known by this node.
 func (s *Service) LeaderAPIAddr() string {
-	id, err := s.store.LeaderID()
+	nodeAddr, err := s.store.LeaderAddr()
 	if err != nil {
 		return ""
 	}
-	return s.store.Metadata(id, "api_addr")
-}
 
-// LeaderAPIProto returns the protocol used by the leader, as known by this node.
-func (s *Service) LeaderAPIProto() string {
-	id, err := s.store.LeaderID()
+	apiAddr, err := s.cluster.GetNodeAPIAddr(nodeAddr)
+
 	if err != nil {
-		return "http"
+		return ""
 	}
-
-	p := s.store.Metadata(id, "api_proto")
-	if p == "" {
-		return "http"
-	}
-	return p
+	return apiAddr
 }
 
 // addBuildVersion adds the build version to the HTTP response.
