@@ -1,5 +1,7 @@
 ## 6.0.0 (unreleased)
-This release implements a significant design change, which improves rqlite cluster reliability. In the 5.0 series, Follower nodes learned the HTTP API address of a cluster Leader via information - known as _Metadata_ - that each node wrote to the Raft log. This Metadata was then available to each node in the cluster, if it needed to redirect queries to the cluster Leader. However this design is somewhat complex, and requires the tracking of state, in addition to the SQLite database. It also meant that if the Metadata got out of sync with the Raft state, the cluster could be in a degraded state.
+This release implements a significant design change, which improves rqlite cluster reliability.
+
+In the 5.0 series, Follower nodes learned the HTTP API address of a cluster Leader via information - known as _Metadata_ - that each node wrote to the Raft log. This Metadata was then available to each node in the cluster, if it needed to redirect queries to the cluster Leader. However this design is somewhat complex, and requires the tracking of state, in addition to the SQLite database. It also meant that if the Metadata got out of sync with the Raft state, the cluster could be in a degraded state.
 
 In this new design, a node now queries the Leader as needed, when that node needs to learn the Leader's HTTP API address. The Metadata component has been removed from rqlite as a result. And without any possibility of discrepancy between Metadata and Raft state, a whole class of potential bugs is removed. The request for the Leader HTTP API address travels over the existing Raft TCP connection, so does not introduce any new failure modes. This multiplexing of the Raft connection is performed via the `mux` package.
 
