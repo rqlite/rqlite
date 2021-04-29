@@ -144,7 +144,11 @@ func NewTLSMux(ln net.Listener, adv net.Addr, cert, key, caCert string) (*Mux, e
 
 // Serve handles connections from ln and multiplexes then across registered listener.
 func (mux *Mux) Serve() error {
-	mux.Logger.Printf("mux serving on %s, advertising %s", mux.ln.Addr().String(), mux.addr)
+	tlsStr := ""
+	if mux.tlsConfig != nil {
+		tlsStr = "TLS "
+	}
+	mux.Logger.Printf("%smux serving on %s, advertising %s", tls, mux.ln.Addr().String(), mux.addr)
 
 	for {
 		// Wait for the next connection.

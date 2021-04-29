@@ -2,17 +2,31 @@ package cluster
 
 import (
 	"encoding/binary"
+	"expvar"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
 	"net"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
 	"github.com/golang/protobuf/proto"
 )
+
+// stats captures stats for the Cluster service.
+var stats *expvar.Map
+
+const (
+	numGetNodeAPI = "num_get_node_api"
+)
+
+func init() {
+	stats = expvar.NewMap("cluster")
+	stats.Add(numGetNodeAPI, 0)
+}
 
 // Transport is the interface the network layer must provide.
 type Transport interface {
@@ -123,6 +137,18 @@ func (s *Service) GetNodeAPIAddr(nodeAddr string) (string, error) {
 	return a.Url, nil
 }
 
+// Stats returns status of the Service.
+func (s *Service) Stats() (interface{}, error) {
+	st := map[string]string{
+		"addr":     s.addr.String(),
+		"timeout":  s.timeout.String(),
+		"https":    strconv.FormatBool(s.https),
+		"api_addr": s.apiAddr,
+	}
+
+	return st, nil
+}
+
 func (s *Service) serve() error {
 	defer s.wg.Done()
 	for {
@@ -159,6 +185,8 @@ func (s *Service) handleConn(conn net.Conn) {
 
 	switch c.Type {
 	case Command_COMMAND_TYPE_GET_NODE_API_URL:
+		stats.Add(numGetNodeAPI, 1)
+
 		s.mu.RLock()
 		defer s.mu.RUnlock()
 
