@@ -78,24 +78,28 @@ func (s *Service) Addr() string {
 	return s.addr.String()
 }
 
+// EnableHTTPS tells the cluster service the API serves HTTPS.
 func (s *Service) EnableHTTPS(b bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.https = b
 }
 
+// SetAPIAddr sets the API address the cluster service returns.
 func (s *Service) SetAPIAddr(addr string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.apiAddr = addr
 }
 
+// GetAPIAddr returns the previously-set API address
 func (s *Service) GetAPIAddr() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.apiAddr
 }
 
+// GetNodeAPIAddr retrieves the API Address for the node at nodeAddr
 func (s *Service) GetNodeAPIAddr(nodeAddr string) (string, error) {
 	conn, err := s.tn.Dial(nodeAddr, s.timeout)
 	if err != nil {
