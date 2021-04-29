@@ -1,4 +1,4 @@
-## 5.12.1 (unreleased)
+## 5.12.1 (April 29th 2021)
 
 ### Implementation changes and bug fixes
  - [PR #791](https://github.com/rqlite/rqlite/pull/791): Reinstate node CA cert support which was erroneously removed in an earlier change.
