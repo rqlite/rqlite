@@ -356,10 +356,9 @@ func Test_SingleNodeRestart(t *testing.T) {
 		t.Fatalf("failed to copy node test directory: %s", err)
 	}
 
-	_, tn := mustNewOpenTransport("")
-	defer tn.Close()
+	mux := mustNewOpenMux("")
 
-	node := mustNodeEncrypted(destdir, true, false, tn, "node1")
+	node := mustNodeEncrypted(destdir, true, false, mux, "node1")
 	defer node.Deprovision()
 	if _, err := node.WaitForLeader(); err != nil {
 		t.Fatal("node never became leader")
@@ -421,8 +420,8 @@ func Test_SingleNodeReopen(t *testing.T) {
 		t.Logf("running test %s, on-disk=%v", t.Name(), onDisk)
 
 		dir := mustTempDir()
-		_, tn := mustNewOpenTransport("")
-		node := mustNodeEncrypted(dir, true, false, tn, "")
+		mux := mustNewOpenMux("")
+		node := mustNodeEncrypted(dir, true, false, mux, "")
 
 		if _, err := node.WaitForLeader(); err != nil {
 			t.Fatalf("node never became leader")
@@ -464,8 +463,8 @@ func Test_SingleNodeNoopReopen(t *testing.T) {
 		t.Logf("running test %s, on-disk=%v", t.Name(), onDisk)
 
 		dir := mustTempDir()
-		_, tn := mustNewOpenTransport("")
-		node := mustNodeEncryptedOnDisk(dir, true, false, tn, "", false)
+		mux := mustNewOpenMux("")
+		node := mustNodeEncryptedOnDisk(dir, true, false, mux, "", false)
 
 		if _, err := node.WaitForLeader(); err != nil {
 			t.Fatalf("node never became leader")
@@ -555,8 +554,8 @@ func Test_SingleNodeNoopSnapReopen(t *testing.T) {
 		t.Logf("running test %s, on-disk=%v", t.Name(), onDisk)
 
 		dir := mustTempDir()
-		_, tn := mustNewOpenTransport("")
-		node := mustNodeEncryptedOnDisk(dir, true, false, tn, "", onDisk)
+		mux := mustNewOpenMux("")
+		node := mustNodeEncryptedOnDisk(dir, true, false, mux, "", onDisk)
 
 		if _, err := node.WaitForLeader(); err != nil {
 			t.Fatalf("node never became leader")
@@ -651,8 +650,8 @@ func Test_SingleNodeNoopSnapLogsReopen(t *testing.T) {
 		t.Logf("running test %s, on-disk=%v", t.Name(), onDisk)
 
 		dir := mustTempDir()
-		_, tn := mustNewOpenTransport("")
-		node := mustNodeEncryptedOnDisk(dir, true, false, tn, "", onDisk)
+		mux := mustNewOpenMux("")
+		node := mustNodeEncryptedOnDisk(dir, true, false, mux, "", onDisk)
 		raftAddr = node.RaftAddr
 		t.Logf("node listening for Raft on %s", raftAddr)
 
