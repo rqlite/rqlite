@@ -148,7 +148,7 @@ func (mux *Mux) Serve() error {
 	if mux.tlsConfig != nil {
 		tlsStr = "TLS "
 	}
-	mux.Logger.Printf("%smux serving on %s, advertising %s", tls, mux.ln.Addr().String(), mux.addr)
+	mux.Logger.Printf("%smux serving on %s, advertising %s", tlsStr, mux.ln.Addr().String(), mux.addr)
 
 	for {
 		// Wait for the next connection.
