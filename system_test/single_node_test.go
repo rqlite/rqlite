@@ -429,9 +429,6 @@ func Test_SingleNodeReopen(t *testing.T) {
 			t.Fatalf("failed to close node")
 		}
 
-		// if err := tn.Open("localhost:0"); err != nil {
-		// 	t.Fatalf("failed to re-open transport: %s", err)
-		// }
 		if err := node.Store.Open(true); err != nil {
 			t.Fatalf("failed to re-open store: %s", err)
 		}
@@ -476,9 +473,6 @@ func Test_SingleNodeNoopReopen(t *testing.T) {
 			t.Fatalf("failed to close node")
 		}
 
-		// if err := tn.Open("localhost:0"); err != nil {
-		// 	t.Fatalf("failed to re-open transport: %s", err)
-		// }
 		if err := node.Store.Open(true); err != nil {
 			t.Fatalf("failed to re-open store: %s", err)
 		}
@@ -572,9 +566,6 @@ func Test_SingleNodeNoopSnapReopen(t *testing.T) {
 			t.Fatalf("failed to close node")
 		}
 
-		// if err := tn.Open("localhost:0"); err != nil {
-		// 	t.Fatalf("failed to re-open transport: %s", err)
-		// }
 		if err := node.Store.Open(true); err != nil {
 			t.Fatalf("failed to re-open store: %s", err)
 		}
@@ -674,11 +665,6 @@ func Test_SingleNodeNoopSnapLogsReopen(t *testing.T) {
 		if err := node.Close(true); err != nil {
 			t.Fatalf("failed to close node")
 		}
-
-		// Reset network state in node.
-		// if err := tn.Open(raftAddr); err != nil {
-		// 	t.Fatalf("failed to re-open transport: %s", err)
-		// }
 
 		if err := node.Store.Open(true); err != nil {
 			t.Fatalf("failed to re-open store: %s", err)

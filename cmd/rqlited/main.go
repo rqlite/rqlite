@@ -45,11 +45,6 @@ var (
 	features  = []string{}
 )
 
-const (
-	muxRaftHeader    = 1 // Raft consensus communications
-	muxClusterHeader = 2 // Cluster state communications
-)
-
 var httpAddr string
 var httpAdv string
 var joinSrcIP string
@@ -194,7 +189,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to start node mux: %s", err.Error())
 	}
-	raftTn := mux.Listen(muxRaftHeader)
+	raftTn := mux.Listen(cluster.MuxRaftHeader)
 
 	// Create and open the store.
 	dataPath, err = filepath.Abs(dataPath)
@@ -326,7 +321,7 @@ func main() {
 	}
 
 	// Create cluster service, so nodes can learn information about each other.
-	clstr, err := clusterService(mux.Listen(muxClusterHeader))
+	clstr, err := clusterService(mux.Listen(cluster.MuxClusterHeader))
 	if err != nil {
 		log.Fatalf("failed to create cluster service: %s", err.Error())
 	}
@@ -475,7 +470,7 @@ func credentialStore() (*auth.CredentialsStore, error) {
 }
 
 func clusterService(tn cluster.Transport) (*cluster.Service, error) {
-	c := cluster.NewService(tn)
+	c := cluster.New(tn)
 	apiAddr := httpAddr
 	if httpAdv != "" {
 		apiAddr = httpAdv

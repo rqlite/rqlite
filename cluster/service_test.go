@@ -12,7 +12,7 @@ import (
 
 func Test_NewServiceOpenClose(t *testing.T) {
 	ml := mustNewMockTransport()
-	s := NewService(ml)
+	s := New(ml)
 	if s == nil {
 		t.Fatalf("failed to create cluster service")
 	}
@@ -30,7 +30,7 @@ func Test_NewServiceOpenClose(t *testing.T) {
 
 func Test_NewServiceSetGetAPIAddr(t *testing.T) {
 	ml := mustNewMockTransport()
-	s := NewService(ml)
+	s := New(ml)
 	if s == nil {
 		t.Fatalf("failed to create cluster service")
 	}
@@ -51,7 +51,7 @@ func Test_NewServiceSetGetAPIAddr(t *testing.T) {
 
 func Test_NewServiceSetGetNodeAPIAddr(t *testing.T) {
 	ml := mustNewMockTransport()
-	s := NewService(ml)
+	s := New(ml)
 	if s == nil {
 		t.Fatalf("failed to create cluster service")
 	}
@@ -87,7 +87,7 @@ func Test_NewServiceSetGetNodeAPIAddr(t *testing.T) {
 
 func Test_NewServiceSetGetNodeAPIAddrTLS(t *testing.T) {
 	ml := mustNewMockTLSTransport()
-	s := NewService(ml)
+	s := New(ml)
 	if s == nil {
 		t.Fatalf("failed to create cluster service")
 	}

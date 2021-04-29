@@ -20,12 +20,21 @@ import (
 var stats *expvar.Map
 
 const (
-	numGetNodeAPI = "num_get_node_api"
+	numGetNodeAPI         = "num_get_node_api"
+	numGetNodeAPIRequest  = "num_get_node_api_req"
+	numGetNodeAPIResponse = "num_get_node_api_resp"
+)
+
+const (
+	MuxRaftHeader    = 1 // Raft consensus communications
+	MuxClusterHeader = 2 // Cluster state communications
 )
 
 func init() {
 	stats = expvar.NewMap("cluster")
 	stats.Add(numGetNodeAPI, 0)
+	stats.Add(numGetNodeAPIRequest, 0)
+	stats.Add(numGetNodeAPIResponse, 0)
 }
 
 // Transport is the interface the network layer must provide.
@@ -50,8 +59,8 @@ type Service struct {
 	logger *log.Logger
 }
 
-// NewService returns a new instance of the cluster service
-func NewService(tn Transport) *Service {
+// New returns a new instance of the cluster service
+func New(tn Transport) *Service {
 	return &Service{
 		tn:      tn,
 		addr:    tn.Addr(),
@@ -101,6 +110,8 @@ func (s *Service) GetAPIAddr() string {
 
 // GetNodeAPIAddr retrieves the API Address for the node at nodeAddr
 func (s *Service) GetNodeAPIAddr(nodeAddr string) (string, error) {
+	stats.Add(numGetNodeAPI, 0)
+
 	conn, err := s.tn.Dial(nodeAddr, s.timeout)
 	if err != nil {
 		return "", err
@@ -184,8 +195,7 @@ func (s *Service) handleConn(conn net.Conn) {
 
 	switch c.Type {
 	case Command_COMMAND_TYPE_GET_NODE_API_URL:
-		stats.Add(numGetNodeAPI, 1)
-
+		stats.Add(numGetNodeAPIRequest, 1)
 		s.mu.RLock()
 		defer s.mu.RUnlock()
 
@@ -201,5 +211,6 @@ func (s *Service) handleConn(conn net.Conn) {
 			conn.Close()
 		}
 		conn.Write(b)
+		stats.Add(numGetNodeAPIResponse, 1)
 	}
 }

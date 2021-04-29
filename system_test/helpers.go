@@ -24,9 +24,6 @@ import (
 const (
 	// SnapshotInterval is the period between snapshot checks
 	SnapshotInterval = time.Second
-
-	muxRaftHeader    = 1 // Node communications
-	muxClusterHeader = 2 // Cluster state communications
 )
 
 // Node represents a node under test.
@@ -445,7 +442,7 @@ func mustNodeEncryptedOnDisk(dir string, enableSingle, httpEncrypt bool, mux *tc
 
 	dbConf := store.NewDBConfig("", !onDisk)
 
-	raftTn := mux.Listen(muxRaftHeader)
+	raftTn := mux.Listen(cluster.MuxRaftHeader)
 	id := nodeID
 	if id == "" {
 		id = raftTn.Addr().String()
@@ -465,7 +462,7 @@ func mustNodeEncryptedOnDisk(dir string, enableSingle, httpEncrypt bool, mux *tc
 	node.RaftAddr = node.Store.Addr()
 	node.ID = node.Store.ID()
 
-	cluster := cluster.NewService(mux.Listen(muxClusterHeader))
+	cluster := cluster.New(mux.Listen(cluster.MuxClusterHeader))
 	if err := cluster.Open(); err != nil {
 		panic("failed to open Cluster service)")
 	}
