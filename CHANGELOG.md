@@ -5,6 +5,8 @@ The request for the Leader HTTP API address travels over the existing Raft TCP c
 
 This new design means that nodes running earlier software cannot communicate with 6.0 nodes, as 6.0 software no longer performs Metadata updates. As a result, **rqlite clusters running 5.x software or earlier must be explicitly upgraded**. To upgrade from an earlier version to this release you should [backup your Leader node](https://github.com/rqlite/rqlite/blob/master/DOC/BACKUPS.md), and [restore the database dump](https://github.com/rqlite/rqlite/blob/master/DOC/RESTORE_FROM_SQLITE.md) into a new 6.0 cluster.
 
+The data API and cluster-management API remain unchanged however, so client code that communicates with rqlite should not need any changes.
+
 ### Implementation changes and bug fixes
  - [PR #792](https://github.com/rqlite/rqlite/pull/792): Fetch leader HTTP API addresses on demand.
 
