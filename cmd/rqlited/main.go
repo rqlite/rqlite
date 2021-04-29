@@ -325,13 +325,6 @@ func main() {
 		log.Fatalf(err.Error())
 	}
 
-	// This may be a standalone server. In that case set its own metadata.
-	if err := str.SetMetadata(meta); err != nil && err != store.ErrNotLeader {
-		// Non-leader errors are OK, since metadata will then be set through
-		// consensus as a result of a join. All other errors indicate a problem.
-		log.Fatalf("failed to set store metadata: %s", err.Error())
-	}
-
 	// Create cluster service, so nodes can learn information about each other.
 	clstr, err := clusterService(mux.Listen(muxClusterHeader))
 	if err != nil {

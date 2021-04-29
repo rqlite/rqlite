@@ -50,7 +50,7 @@ type Store interface {
 	Database
 
 	// Join joins the node with the given ID, reachable at addr, to this node.
-	Join(id, addr string, voter bool, metadata map[string]string) error
+	Join(id, addr string, voter bool) error
 
 	// Remove removes the node, specified by id, from the cluster.
 	Remove(id string) error
@@ -323,13 +323,6 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	var m map[string]string
-	if _, ok := md["meta"].(map[string]interface{}); ok {
-		m = make(map[string]string)
-		for k, v := range md["meta"].(map[string]interface{}) {
-			m[k] = v.(string)
-		}
-	}
 
 	remoteAddr, ok := md["addr"]
 	if !ok {
@@ -342,7 +335,7 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 		voter = true
 	}
 
-	if err := s.store.Join(remoteID.(string), remoteAddr.(string), voter.(bool), m); err != nil {
+	if err := s.store.Join(remoteID.(string), remoteAddr.(string), voter.(bool)); err != nil {
 		if err == store.ErrNotLeader {
 			leaderAPIAddr := s.LeaderAPIAddr()
 			if leaderAPIAddr == "" {
