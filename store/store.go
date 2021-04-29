@@ -358,14 +358,17 @@ func (s *Store) ID() string {
 
 // LeaderAddr returns the address of the current leader. Returns a
 // blank string if there is no leader.
-func (s *Store) LeaderAddr() string {
-	return string(s.raft.Leader())
+func (s *Store) LeaderAddr() (string, error) {
+	return string(s.raft.Leader()), nil
 }
 
 // LeaderID returns the node ID of the Raft leader. Returns a
 // blank string if there is no leader, or an error.
 func (s *Store) LeaderID() (string, error) {
-	addr := s.LeaderAddr()
+	addr, err := s.LeaderAddr()
+	if err != nil {
+		return "", nil
+	}
 	configFuture := s.raft.GetConfiguration()
 	if err := configFuture.Error(); err != nil {
 		s.logger.Printf("failed to get raft configuration: %v", err)
@@ -410,7 +413,10 @@ func (s *Store) WaitForLeader(timeout time.Duration) (string, error) {
 	for {
 		select {
 		case <-tck.C:
-			l := s.LeaderAddr()
+			l, err := s.LeaderAddr()
+			if err != nil {
+				return "", nil
+			}
 			if l != "" {
 				return l, nil
 			}
@@ -503,13 +509,17 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		return nil, err
 	}
 
+	leaderAddr, err := s.LeaderAddr()
+	if err != nil {
+		return nil, err
+	}
 	status := map[string]interface{}{
 		"node_id": s.raftID,
 		"raft":    raftStats,
 		"addr":    s.Addr(),
 		"leader": map[string]string{
 			"node_id": leaderID,
-			"addr":    s.LeaderAddr(),
+			"addr":    leaderAddr,
 		},
 		"apply_timeout":      s.ApplyTimeout.String(),
 		"heartbeat_timeout":  s.HeartbeatTimeout.String(),

@@ -25,7 +25,11 @@ func Test_OpenStoreSingleNode(t *testing.T) {
 	}
 
 	s.WaitForLeader(10 * time.Second)
-	if got, exp := s.LeaderAddr(), s.Addr(); got != exp {
+	got, err := s.LeaderAddr()
+	if err != nil {
+		t.Fatalf("failed to get leader address: %s", err.Error())
+	}
+	if exp := got; got != exp {
 		t.Fatalf("wrong leader address returned, got: %s, exp %s", got, exp)
 	}
 	id, err := s.LeaderID()
@@ -570,8 +574,12 @@ func Test_MultiNodeJoinRemove(t *testing.T) {
 
 	s1.WaitForLeader(10 * time.Second)
 
+	got, err := s1.LeaderAddr()
+	if err != nil {
+		t.Fatalf("failed to get leader address: %s", err.Error())
+	}
 	// Check leader state on follower.
-	if got, exp := s1.LeaderAddr(), s0.Addr(); got != exp {
+	if exp := s0.Addr(); got != exp {
 		t.Fatalf("wrong leader address returned, got: %s, exp %s", got, exp)
 	}
 	id, err := s1.LeaderID()
@@ -639,7 +647,11 @@ func Test_MultiNodeJoinNonVoterRemove(t *testing.T) {
 	s1.WaitForLeader(10 * time.Second)
 
 	// Check leader state on follower.
-	if got, exp := s1.LeaderAddr(), s0.Addr(); got != exp {
+	got, err := s1.LeaderAddr()
+	if err != nil {
+		t.Fatalf("failed to get leader address: %s", err.Error())
+	}
+	if exp := s0.Addr(); got != exp {
 		t.Fatalf("wrong leader address returned, got: %s, exp %s", got, exp)
 	}
 	id, err := s1.LeaderID()
