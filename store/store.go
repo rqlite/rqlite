@@ -1045,10 +1045,8 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 				return err
 			}
 			database = buf.Bytes()
-			offset += int64(sz)
 		} else {
 			database = b[offset : offset+int64(sz)]
-			offset += int64(sz)
 		}
 	} else {
 		s.logger.Println("no database data present in restored snapshot")

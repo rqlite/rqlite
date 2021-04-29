@@ -26,7 +26,10 @@ const (
 )
 
 const (
-	MuxRaftHeader    = 1 // Raft consensus communications
+	// MuxRaftHeader is the byte used to indicate internode Raft communications.
+	MuxRaftHeader = 1
+
+	// MuxClusterHeader is the byte used to request internode cluster state information.
 	MuxClusterHeader = 2 // Cluster state communications
 )
 
