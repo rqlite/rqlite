@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
+	"expvar"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -19,6 +20,20 @@ const (
 	// DefaultTimeout is the default length of time to wait for first byte.
 	DefaultTimeout = 30 * time.Second
 )
+
+// stats captures stats for the mux system.
+var stats *expvar.Map
+
+const (
+	numConnectionsHandled   = "num_connections_handled"
+	numUnregisteredHandlers = "num_unregistered_handlers"
+)
+
+func init() {
+	stats = expvar.NewMap("mux")
+	stats.Add(numConnectionsHandled, 0)
+	stats.Add(numUnregisteredHandlers, 0)
+}
 
 // Layer represents the connection between nodes. It can be both used to
 // make connections to other nodes, and receive connections from other
@@ -194,6 +209,8 @@ func (mux *Mux) Stats() (interface{}, error) {
 }
 
 func (mux *Mux) handleConn(conn net.Conn) {
+	stats.Add(numConnectionsHandled, 1)
+
 	defer mux.wg.Done()
 	// Set a read deadline so connections with no data don't timeout.
 	if err := conn.SetReadDeadline(time.Now().Add(mux.Timeout)); err != nil {
@@ -221,7 +238,8 @@ func (mux *Mux) handleConn(conn net.Conn) {
 	handler := mux.m[typ[0]]
 	if handler == nil {
 		conn.Close()
-		mux.Logger.Printf("tcp.Mux: handler not registered: %d", typ[0])
+		stats.Add(numUnregisteredHandlers, 1)
+		mux.Logger.Printf("tcp.Mux: handler not registered: %d (unsupported protocol?)", typ[0])
 		return
 	}
 

@@ -110,7 +110,7 @@ func (s *Service) GetAPIAddr() string {
 
 // GetNodeAPIAddr retrieves the API Address for the node at nodeAddr
 func (s *Service) GetNodeAPIAddr(nodeAddr string) (string, error) {
-	stats.Add(numGetNodeAPI, 0)
+	stats.Add(numGetNodeAPI, 1)
 
 	conn, err := s.tn.Dial(nodeAddr, s.timeout)
 	if err != nil {
