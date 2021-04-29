@@ -7,7 +7,6 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/binary"
-	"encoding/json"
 	"errors"
 	"expvar"
 	"fmt"
@@ -25,7 +24,6 @@ import (
 
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/command"
-	legacy "github.com/rqlite/rqlite/command/legacy"
 	sql "github.com/rqlite/rqlite/db"
 	rlog "github.com/rqlite/rqlite/log"
 )
@@ -68,7 +66,6 @@ const (
 	numRestores             = "num_restores"
 	numUncompressedCommands = "num_uncompressed_commands"
 	numCompressedCommands   = "num_compressed_commands"
-	numLegacyCommands       = "num_legacy_commands"
 )
 
 // BackupFormat represents the format of database backup.
@@ -92,7 +89,6 @@ func init() {
 	stats.Add(numRestores, 0)
 	stats.Add(numUncompressedCommands, 0)
 	stats.Add(numCompressedCommands, 0)
-	stats.Add(numLegacyCommands, 0)
 }
 
 // ClusterState defines the possible Raft states the current node can be in
@@ -137,9 +133,6 @@ type Store struct {
 
 	txMu    sync.RWMutex // Sync between snapshots and query-level transactions.
 	queryMu sync.RWMutex // Sync queries generally with other operations.
-
-	metaMu sync.RWMutex
-	meta   map[string]map[string]string
 
 	logger *log.Logger
 
@@ -186,7 +179,6 @@ func New(ln Listener, c *StoreConfig) *Store {
 		dbConf:        c.DBConf,
 		dbPath:        filepath.Join(c.Dir, sqliteFile),
 		reqMarshaller: command.NewRequestMarshaler(),
-		meta:          make(map[string]map[string]string),
 		logger:        logger,
 		ApplyTimeout:  applyTimeout,
 	}
@@ -358,14 +350,17 @@ func (s *Store) ID() string {
 
 // LeaderAddr returns the address of the current leader. Returns a
 // blank string if there is no leader.
-func (s *Store) LeaderAddr() string {
-	return string(s.raft.Leader())
+func (s *Store) LeaderAddr() (string, error) {
+	return string(s.raft.Leader()), nil
 }
 
 // LeaderID returns the node ID of the Raft leader. Returns a
 // blank string if there is no leader, or an error.
 func (s *Store) LeaderID() (string, error) {
-	addr := s.LeaderAddr()
+	addr, err := s.LeaderAddr()
+	if err != nil {
+		return "", nil
+	}
 	configFuture := s.raft.GetConfiguration()
 	if err := configFuture.Error(); err != nil {
 		s.logger.Printf("failed to get raft configuration: %v", err)
@@ -410,7 +405,10 @@ func (s *Store) WaitForLeader(timeout time.Duration) (string, error) {
 	for {
 		select {
 		case <-tck.C:
-			l := s.LeaderAddr()
+			l, err := s.LeaderAddr()
+			if err != nil {
+				return "", nil
+			}
 			if l != "" {
 				return l, nil
 			}
@@ -503,13 +501,17 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		return nil, err
 	}
 
+	leaderAddr, err := s.LeaderAddr()
+	if err != nil {
+		return nil, err
+	}
 	status := map[string]interface{}{
 		"node_id": s.raftID,
 		"raft":    raftStats,
 		"addr":    s.Addr(),
 		"leader": map[string]string{
 			"node_id": leaderID,
-			"addr":    s.LeaderAddr(),
+			"addr":    leaderAddr,
 		},
 		"apply_timeout":      s.ApplyTimeout.String(),
 		"heartbeat_timeout":  s.HeartbeatTimeout.String(),
@@ -518,7 +520,6 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		"snapshot_interval":  s.SnapshotInterval,
 		"trailing_logs":      s.numTrailingLogs,
 		"request_marshaler":  s.reqMarshaller.Stats(),
-		"metadata":           s.meta,
 		"nodes":              nodes,
 		"dir":                s.raftDir,
 		"dir_size":           dirSz,
@@ -677,7 +678,7 @@ func (s *Store) Query(qr *command.QueryRequest) ([]*sql.Rows, error) {
 
 // Join joins a node, identified by id and located at addr, to this store.
 // The node must be ready to respond to Raft communications at that address.
-func (s *Store) Join(id, addr string, voter bool, metadata map[string]string) error {
+func (s *Store) Join(id, addr string, voter bool) error {
 	s.logger.Printf("received request to join node at %s", addr)
 	if s.raft.State() != raft.Leader {
 		return ErrNotLeader
@@ -721,10 +722,6 @@ func (s *Store) Join(id, addr string, voter bool, metadata map[string]string) er
 		return e.Error()
 	}
 
-	if err := s.setMetadata(id, metadata); err != nil {
-		return err
-	}
-
 	s.logger.Printf("node at %s joined successfully as %s", addr, prettyVoter(voter))
 	return nil
 }
@@ -739,27 +736,6 @@ func (s *Store) Remove(id string) error {
 
 	s.logger.Printf("node %s removed successfully", id)
 	return nil
-}
-
-// Metadata returns the value for a given key, for a given node ID.
-func (s *Store) Metadata(id, key string) string {
-	s.metaMu.RLock()
-	defer s.metaMu.RUnlock()
-
-	if _, ok := s.meta[id]; !ok {
-		return ""
-	}
-	v, ok := s.meta[id][key]
-	if ok {
-		return v
-	}
-	return ""
-}
-
-// SetMetadata adds the metadata md to any existing metadata for
-// this node.
-func (s *Store) SetMetadata(md map[string]string) error {
-	return s.setMetadata(s.raftID, md)
 }
 
 // Noop writes a noop command to the Raft log. A noop command simply
@@ -790,57 +766,6 @@ func (s *Store) Noop(id string) error {
 		}
 		return e.Error()
 	}
-	return nil
-}
-
-// setMetadata adds the metadata md to any existing metadata for
-// the given node ID.
-func (s *Store) setMetadata(id string, md map[string]string) error {
-	// Check local data first.
-	if func() bool {
-		s.metaMu.RLock()
-		defer s.metaMu.RUnlock()
-		if _, ok := s.meta[id]; ok {
-			for k, v := range md {
-				if s.meta[id][k] != v {
-					return false
-				}
-			}
-			return true
-		}
-		return false
-	}() {
-		// Local data is same as data being pushed in,
-		// nothing to do.
-		return nil
-	}
-
-	ms := &command.MetadataSet{
-		RaftId: id,
-		Data:   md,
-	}
-	bms, err := command.MarshalMetadataSet(ms)
-	if err != nil {
-		return err
-	}
-
-	c := &command.Command{
-		Type:       command.Command_COMMAND_TYPE_METADATA_SET,
-		SubCommand: bms,
-	}
-	bc, err := command.Marshal(c)
-	if err != nil {
-		return err
-	}
-
-	f := s.raft.Apply(bc, s.ApplyTimeout)
-	if e := f.(raft.Future); e.Error() != nil {
-		if e.Error() == raft.ErrNotLeader {
-			return ErrNotLeader
-		}
-		return e.Error()
-	}
-
 	return nil
 }
 
@@ -900,31 +825,6 @@ func (s *Store) remove(id string) error {
 			return ErrNotLeader
 		}
 		return f.Error()
-	}
-
-	md := command.MetadataDelete{
-		RaftId: id,
-	}
-	bmd, err := command.MarshalMetadataDelete(&md)
-	if err != nil {
-		return err
-	}
-
-	c := &command.Command{
-		Type:       command.Command_COMMAND_TYPE_METADATA_DELETE,
-		SubCommand: bmd,
-	}
-	bc, err := command.Marshal(c)
-	if err != nil {
-		return err
-	}
-
-	f = s.raft.Apply(bc, s.ApplyTimeout)
-	if e := f.(raft.Future); e.Error() != nil {
-		if e.Error() == raft.ErrNotLeader {
-			return ErrNotLeader
-		}
-		e.Error()
 	}
 
 	return nil
@@ -1013,13 +913,8 @@ func (s *Store) Apply(l *raft.Log) (e interface{}) {
 
 	var c command.Command
 
-	if err := legacy.Unmarshal(l.Data, &c); err != nil {
-		if err2 := command.Unmarshal(l.Data, &c); err2 != nil {
-			panic(fmt.Sprintf("failed to unmarshal cluster command: %s (legacy unmarshal: %s)",
-				err2.Error(), err.Error()))
-		}
-	} else {
-		stats.Add(numLegacyCommands, 1)
+	if err := command.Unmarshal(l.Data, &c); err != nil {
+		panic(fmt.Sprintf("failed to unmarshal cluster command: %s", err.Error()))
 	}
 
 	switch c.Type {
@@ -1043,33 +938,6 @@ func (s *Store) Apply(l *raft.Log) (e interface{}) {
 		}
 		r, err := s.db.Execute(er.Request, er.Timings)
 		return &fsmExecuteResponse{results: r, error: err}
-	case command.Command_COMMAND_TYPE_METADATA_SET:
-		var ms command.MetadataSet
-		if err := command.UnmarshalSubCommand(&c, &ms); err != nil {
-			panic(fmt.Sprintf("failed to unmarshal metadata set subcommand: %s", err.Error()))
-		}
-		func() {
-			s.metaMu.Lock()
-			defer s.metaMu.Unlock()
-			if _, ok := s.meta[ms.RaftId]; !ok {
-				s.meta[ms.RaftId] = make(map[string]string)
-			}
-			for k, v := range ms.Data {
-				s.meta[ms.RaftId][k] = v
-			}
-		}()
-		return &fsmGenericResponse{}
-	case command.Command_COMMAND_TYPE_METADATA_DELETE:
-		var md command.MetadataDelete
-		if err := command.UnmarshalSubCommand(&c, &md); err != nil {
-			panic(fmt.Sprintf("failed to unmarshal metadata delete subcommand: %s", err.Error()))
-		}
-		func() {
-			s.metaMu.Lock()
-			defer s.metaMu.Unlock()
-			delete(s.meta, md.RaftId)
-		}()
-		return &fsmGenericResponse{}
 	case command.Command_COMMAND_TYPE_NOOP:
 		s.numNoops++
 		return &fsmGenericResponse{}
@@ -1111,16 +979,9 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 	s.txMu.Lock()
 	defer s.txMu.Unlock()
 
-	var err error
 	fsm.database, _ = s.db.Serialize()
 	// The error code is not meaningful from Serialize(). The code needs to be able
 	// handle a nil byte slice being returned.
-
-	fsm.meta, err = json.Marshal(s.meta)
-	if err != nil {
-		s.logger.Printf("failed to encode meta for snapshot: %s", err.Error())
-		return nil, err
-	}
 
 	stats.Add(numSnaphots, 1)
 	s.logger.Printf("node snapshot created in %s", time.Since(fsm.startT))
@@ -1223,16 +1084,6 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 	}
 	s.db = db
 
-	// Unmarshal remaining bytes, and set to cluster meta.
-	err = func() error {
-		s.metaMu.Lock()
-		defer s.metaMu.Unlock()
-		return json.Unmarshal(b[offset:], &s.meta)
-	}()
-	if err != nil {
-		return fmt.Errorf("cluster metadata unmarshal: %s", err)
-	}
-
 	stats.Add(numRestores, 1)
 	s.logger.Printf("node restored in %s", time.Since(startT))
 	return nil
@@ -1262,7 +1113,6 @@ type fsmSnapshot struct {
 	logger *log.Logger
 
 	database []byte
-	meta     []byte
 }
 
 // Persist writes the snapshot to the given sink.
@@ -1315,11 +1165,6 @@ func (f *fsmSnapshot) Persist(sink raft.SnapshotSink) error {
 			if _, err := sink.Write(b.Bytes()); err != nil {
 				return err
 			}
-		}
-
-		// Write the cluster metadata.
-		if _, err := sink.Write(f.meta); err != nil {
-			return err
 		}
 
 		// Close the sink.

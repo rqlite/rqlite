@@ -25,7 +25,11 @@ func Test_OpenStoreSingleNode(t *testing.T) {
 	}
 
 	s.WaitForLeader(10 * time.Second)
-	if got, exp := s.LeaderAddr(), s.Addr(); got != exp {
+	got, err := s.LeaderAddr()
+	if err != nil {
+		t.Fatalf("failed to get leader address: %s", err.Error())
+	}
+	if exp := got; got != exp {
 		t.Fatalf("wrong leader address returned, got: %s, exp %s", got, exp)
 	}
 	id, err := s.LeaderID()
@@ -564,14 +568,18 @@ func Test_MultiNodeJoinRemove(t *testing.T) {
 	sort.StringSlice(storeNodes).Sort()
 
 	// Join the second node to the first.
-	if err := s0.Join(s1.ID(), s1.Addr(), true, nil); err != nil {
+	if err := s0.Join(s1.ID(), s1.Addr(), true); err != nil {
 		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
 	}
 
 	s1.WaitForLeader(10 * time.Second)
 
+	got, err := s1.LeaderAddr()
+	if err != nil {
+		t.Fatalf("failed to get leader address: %s", err.Error())
+	}
 	// Check leader state on follower.
-	if got, exp := s1.LeaderAddr(), s0.Addr(); got != exp {
+	if exp := s0.Addr(); got != exp {
 		t.Fatalf("wrong leader address returned, got: %s, exp %s", got, exp)
 	}
 	id, err := s1.LeaderID()
@@ -632,14 +640,18 @@ func Test_MultiNodeJoinNonVoterRemove(t *testing.T) {
 	sort.StringSlice(storeNodes).Sort()
 
 	// Join the second node to the first.
-	if err := s0.Join(s1.ID(), s1.Addr(), false, nil); err != nil {
+	if err := s0.Join(s1.ID(), s1.Addr(), false); err != nil {
 		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
 	}
 
 	s1.WaitForLeader(10 * time.Second)
 
 	// Check leader state on follower.
-	if got, exp := s1.LeaderAddr(), s0.Addr(); got != exp {
+	got, err := s1.LeaderAddr()
+	if err != nil {
+		t.Fatalf("failed to get leader address: %s", err.Error())
+	}
+	if exp := s0.Addr(); got != exp {
 		t.Fatalf("wrong leader address returned, got: %s, exp %s", got, exp)
 	}
 	id, err := s1.LeaderID()
@@ -703,12 +715,12 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 	defer s2.Close(true)
 
 	// Join the second node to the first as a voting node.
-	if err := s0.Join(s1.ID(), s1.Addr(), true, nil); err != nil {
+	if err := s0.Join(s1.ID(), s1.Addr(), true); err != nil {
 		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
 	}
 
 	// Join the third node to the first as a non-voting node.
-	if err := s0.Join(s2.ID(), s2.Addr(), false, nil); err != nil {
+	if err := s0.Join(s2.ID(), s2.Addr(), false); err != nil {
 		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
 	}
 
@@ -807,7 +819,7 @@ func Test_MultiNodeExecuteQueryFreshness(t *testing.T) {
 	defer s1.Close(true)
 
 	// Join the second node to the first.
-	if err := s0.Join(s1.ID(), s1.Addr(), true, nil); err != nil {
+	if err := s0.Join(s1.ID(), s1.Addr(), true); err != nil {
 		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
 	}
 
@@ -959,7 +971,7 @@ func Test_StoreLogTruncationMultinode(t *testing.T) {
 	defer s1.Close(true)
 
 	// Join the second node to the first.
-	if err := s0.Join(s1.ID(), s1.Addr(), true, nil); err != nil {
+	if err := s0.Join(s1.ID(), s1.Addr(), true); err != nil {
 		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
 	}
 	s1.WaitForLeader(10 * time.Second)
@@ -1168,68 +1180,6 @@ func Test_SingleNodeNoop(t *testing.T) {
 	}
 	if s0.numNoops != 1 {
 		t.Fatalf("noop count is wrong, got: %d", s0.numNoops)
-	}
-}
-
-func Test_MetadataMultinode(t *testing.T) {
-	s0 := mustNewStore(true)
-	if err := s0.Open(true); err != nil {
-		t.Fatalf("failed to open single-node store: %s", err.Error())
-	}
-	defer s0.Close(true)
-	s0.WaitForLeader(10 * time.Second)
-	s1 := mustNewStore(true)
-	if err := s1.Open(true); err != nil {
-		t.Fatalf("failed to open single-node store: %s", err.Error())
-	}
-	defer s1.Close(true)
-	s1.WaitForLeader(10 * time.Second)
-
-	if s0.Metadata(s0.raftID, "foo") != "" {
-		t.Fatal("nonexistent metadata foo found")
-	}
-	if s0.Metadata("nonsense", "foo") != "" {
-		t.Fatal("nonexistent metadata foo found for nonexistent node")
-	}
-
-	if err := s0.SetMetadata(map[string]string{"foo": "bar"}); err != nil {
-		t.Fatalf("failed to set metadata: %s", err.Error())
-	}
-	if s0.Metadata(s0.raftID, "foo") != "bar" {
-		t.Fatal("key foo not found")
-	}
-	if s0.Metadata("nonsense", "foo") != "" {
-		t.Fatal("nonexistent metadata foo found for nonexistent node")
-	}
-
-	// Join the second node to the first.
-	meta := map[string]string{"baz": "qux"}
-	if err := s0.Join(s1.ID(), s1.Addr(), true, meta); err != nil {
-		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
-	}
-	s1.WaitForLeader(10 * time.Second)
-	// Wait until the log entries have been applied to the follower,
-	// and then query.
-	if err := s1.WaitForAppliedIndex(5, 5*time.Second); err != nil {
-		t.Fatalf("error waiting for follower to apply index: %s:", err.Error())
-	}
-
-	if s1.Metadata(s0.raftID, "foo") != "bar" {
-		t.Fatal("key foo not found for s0")
-	}
-	if s0.Metadata(s1.raftID, "baz") != "qux" {
-		t.Fatal("key baz not found for s1")
-	}
-
-	// Remove a node.
-	if err := s0.Remove(s1.ID()); err != nil {
-		t.Fatalf("failed to remove %s from cluster: %s", s1.ID(), err.Error())
-	}
-	if s1.Metadata(s0.raftID, "foo") != "bar" {
-		t.Fatal("key foo not found for s0")
-	}
-	if s0.Metadata(s1.raftID, "baz") != "" {
-		t.Fatal("key baz found for removed node s1")
 	}
 }
 

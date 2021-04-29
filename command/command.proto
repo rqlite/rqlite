@@ -40,15 +40,6 @@ message ExecuteRequest {
 	bool timings = 2;	
 }
 
-message MetadataSet {
-	string raft_id = 1;
-	map<string, string> data = 2;
-}
-
-message MetadataDelete {
-	string raft_id = 1;
-}
-
 message Noop {
 	string id = 1;
 }
@@ -58,9 +49,7 @@ message Command {
         COMMAND_TYPE_UNKNOWN = 0;
         COMMAND_TYPE_QUERY = 1;
         COMMAND_TYPE_EXECUTE = 2;
-        COMMAND_TYPE_METADATA_SET = 3;
-        COMMAND_TYPE_METADATA_DELETE = 4;
-        COMMAND_TYPE_NOOP = 5;
+        COMMAND_TYPE_NOOP = 3;
     }
     Type type = 1;
     bytes sub_command = 2;

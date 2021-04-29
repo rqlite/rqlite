@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -37,7 +38,7 @@ const logo = `
 
 // These variables are populated via the Go linker.
 var (
-	version   = "5"
+	version   = "6"
 	commit    = "unknown"
 	branch    = "unknown"
 	buildtime = "unknown"
@@ -179,26 +180,25 @@ func main() {
 	// Start requested profiling.
 	startProfile(cpuProfile, memProfile)
 
-	// Create internode network layer.
-	var tn *tcp.Transport
-	if nodeEncrypt {
-		log.Printf("enabling node-to-node encryption with cert: %s, key: %s", nodeX509Cert, nodeX509Key)
-		tn = tcp.NewTLSTransport(nodeX509Cert, nodeX509Key, nodeX509CACert, noVerify)
-	} else {
-		tn = tcp.NewTransport()
+	// Create internode network mux and configure.
+	muxLn, err := net.Listen("tcp", raftAddr)
+	if err != nil {
+		log.Fatalf("failed to listen on %s: %s", raftAddr, err.Error())
 	}
-	if err := tn.Open(raftAddr); err != nil {
-		log.Fatalf("failed to open internode network layer: %s", err.Error())
+	mux, err := startNodeMux(muxLn)
+	if err != nil {
+		log.Fatalf("failed to start node mux: %s", err.Error())
 	}
+	raftTn := mux.Listen(cluster.MuxRaftHeader)
 
 	// Create and open the store.
-	dataPath, err := filepath.Abs(dataPath)
+	dataPath, err = filepath.Abs(dataPath)
 	if err != nil {
 		log.Fatalf("failed to determine absolute data path: %s", err.Error())
 	}
 	dbConf := store.NewDBConfig(dsn, !onDisk)
 
-	str := store.New(tn, &store.StoreConfig{
+	str := store.New(raftTn, &store.StoreConfig{
 		DBConf: dbConf,
 		Dir:    dataPath,
 		ID:     idOrRaftAddr(),
@@ -320,15 +320,14 @@ func main() {
 		log.Fatalf(err.Error())
 	}
 
-	// This may be a standalone server. In that case set its own metadata.
-	if err := str.SetMetadata(meta); err != nil && err != store.ErrNotLeader {
-		// Non-leader errors are OK, since metadata will then be set through
-		// consensus as a result of a join. All other errors indicate a problem.
-		log.Fatalf("failed to set store metadata: %s", err.Error())
+	// Create cluster service, so nodes can learn information about each other.
+	clstr, err := clusterService(mux.Listen(cluster.MuxClusterHeader))
+	if err != nil {
+		log.Fatalf("failed to create cluster service: %s", err.Error())
 	}
 
 	// Start the HTTP API server.
-	if err := startHTTPService(str); err != nil {
+	if err := startHTTPService(str, clstr); err != nil {
 		log.Fatalf("failed to start HTTP server: %s", err.Error())
 	}
 	log.Println("node is ready")
@@ -340,6 +339,8 @@ func main() {
 	if err := str.Close(true); err != nil {
 		log.Printf("failed to close store: %s", err.Error())
 	}
+	clstr.Close()
+	muxLn.Close()
 	stopProfile()
 	log.Println("rqlite server stopped")
 }
@@ -396,7 +397,7 @@ func waitForConsensus(str *store.Store) error {
 	return nil
 }
 
-func startHTTPService(str *store.Store) error {
+func startHTTPService(str *store.Store, cltr *cluster.Service) error {
 	// Get the credential store.
 	credStr, err := credentialStore()
 	if err != nil {
@@ -406,9 +407,9 @@ func startHTTPService(str *store.Store) error {
 	// Create HTTP server and load authentication information if required.
 	var s *httpd.Service
 	if credStr != nil {
-		s = httpd.New(httpAddr, str, credStr)
+		s = httpd.New(httpAddr, str, cltr, credStr)
 	} else {
-		s = httpd.New(httpAddr, str, nil)
+		s = httpd.New(httpAddr, str, cltr, nil)
 	}
 
 	s.CertFile = x509Cert
@@ -423,6 +424,32 @@ func startHTTPService(str *store.Store) error {
 		"build_time": buildtime,
 	}
 	return s.Start()
+}
+
+func startNodeMux(ln net.Listener) (*tcp.Mux, error) {
+	var adv net.Addr
+	var err error
+	if raftAdv != "" {
+		adv, err = net.ResolveTCPAddr("tcp", raftAdv)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve advertise address %s: %s", raftAdv, err.Error())
+		}
+	}
+
+	var mux *tcp.Mux
+	if nodeEncrypt {
+		log.Printf("enabling node-to-node encryption with cert: %s, key: %s", nodeX509Cert, nodeX509Key)
+		mux, err = tcp.NewTLSMux(ln, adv, nodeX509Cert, nodeX509Key, nodeX509CACert)
+	} else {
+		mux, err = tcp.NewMux(ln, adv)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to create node-to-node mux: %s", err.Error())
+	}
+	mux.InsecureSkipVerify = noNodeVerify
+	go mux.Serve()
+
+	return mux, nil
 }
 
 func credentialStore() (*auth.CredentialsStore, error) {
@@ -440,6 +467,21 @@ func credentialStore() (*auth.CredentialsStore, error) {
 		return nil, err
 	}
 	return cs, nil
+}
+
+func clusterService(tn cluster.Transport) (*cluster.Service, error) {
+	c := cluster.New(tn)
+	apiAddr := httpAddr
+	if httpAdv != "" {
+		apiAddr = httpAdv
+	}
+	c.SetAPIAddr(apiAddr)
+	c.EnableHTTPS(x509Cert != "" && x509Key != "") // Conditions met for a HTTPS API
+
+	if err := c.Open(); err != nil {
+		return nil, err
+	}
+	return c, nil
 }
 
 func idOrRaftAddr() string {

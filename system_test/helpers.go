@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rqlite/rqlite/cluster"
 	httpd "github.com/rqlite/rqlite/http"
 	"github.com/rqlite/rqlite/store"
 	"github.com/rqlite/rqlite/tcp"
@@ -410,21 +412,21 @@ func mustNewNode(enableSingle bool) *Node {
 
 func mustNewNodeEncrypted(enableSingle, httpEncrypt, nodeEncrypt bool) *Node {
 	dir := mustTempDir()
-	var tn *tcp.Transport
+	var mux *tcp.Mux
 	if nodeEncrypt {
-		tn = mustNewOpenTLSTransport(x509.CertFile(dir), x509.KeyFile(dir), "")
+		mux = mustNewOpenTLSMux(x509.CertFile(dir), x509.KeyFile(dir), "")
 	} else {
-		tn = mustNewOpenTransport("")
+		mux = mustNewOpenMux("")
 	}
 
-	return mustNodeEncrypted(dir, enableSingle, httpEncrypt, tn, "")
+	return mustNodeEncrypted(dir, enableSingle, httpEncrypt, mux, "")
 }
 
-func mustNodeEncrypted(dir string, enableSingle, httpEncrypt bool, tn store.Listener, nodeID string) *Node {
-	return mustNodeEncryptedOnDisk(dir, enableSingle, httpEncrypt, tn, nodeID, false)
+func mustNodeEncrypted(dir string, enableSingle, httpEncrypt bool, mux *tcp.Mux, nodeID string) *Node {
+	return mustNodeEncryptedOnDisk(dir, enableSingle, httpEncrypt, mux, nodeID, false)
 }
 
-func mustNodeEncryptedOnDisk(dir string, enableSingle, httpEncrypt bool, tn store.Listener, nodeID string, onDisk bool) *Node {
+func mustNodeEncryptedOnDisk(dir string, enableSingle, httpEncrypt bool, mux *tcp.Mux, nodeID string, onDisk bool) *Node {
 	nodeCertPath := x509.CertFile(dir)
 	nodeKeyPath := x509.KeyFile(dir)
 	httpCertPath := nodeCertPath
@@ -440,11 +442,12 @@ func mustNodeEncryptedOnDisk(dir string, enableSingle, httpEncrypt bool, tn stor
 
 	dbConf := store.NewDBConfig("", !onDisk)
 
+	raftTn := mux.Listen(cluster.MuxRaftHeader)
 	id := nodeID
 	if id == "" {
-		id = tn.Addr().String()
+		id = raftTn.Addr().String()
 	}
-	node.Store = store.New(tn, &store.StoreConfig{
+	node.Store = store.New(raftTn, &store.StoreConfig{
 		DBConf: dbConf,
 		Dir:    node.Dir,
 		ID:     id,
@@ -459,7 +462,12 @@ func mustNodeEncryptedOnDisk(dir string, enableSingle, httpEncrypt bool, tn stor
 	node.RaftAddr = node.Store.Addr()
 	node.ID = node.Store.ID()
 
-	node.Service = httpd.New("localhost:0", node.Store, nil)
+	cluster := cluster.New(mux.Listen(cluster.MuxClusterHeader))
+	if err := cluster.Open(); err != nil {
+		panic("failed to open Cluster service)")
+	}
+
+	node.Service = httpd.New("localhost:0", node.Store, cluster, nil)
 	node.Service.Expvar = true
 	if httpEncrypt {
 		node.Service.CertFile = node.HTTPCertPath
@@ -493,28 +501,45 @@ func mustTempDir() string {
 	return path
 }
 
-func mustNewOpenTransport(addr string) *tcp.Transport {
+func mustNewOpenMux(addr string) *tcp.Mux {
 	if addr == "" {
 		addr = "localhost:0"
 	}
 
-	tn := tcp.NewTransport()
-	if err := tn.Open(addr); err != nil {
-		panic(fmt.Sprintf("failed to open transport: %s", err))
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		panic(fmt.Sprintf("failed to listen on %s: %s", addr, err.Error()))
 	}
-	return tn
+
+	var mux *tcp.Mux
+	mux, err = tcp.NewMux(ln, nil)
+	if err != nil {
+		panic(fmt.Sprintf("failed to create node-to-node mux: %s", err.Error()))
+	}
+
+	go mux.Serve()
+	return mux
 }
 
-func mustNewOpenTLSTransport(certFile, keyPath, addr string) *tcp.Transport {
+func mustNewOpenTLSMux(certFile, keyPath, addr string) *tcp.Mux {
 	if addr == "" {
 		addr = "localhost:0"
 	}
 
-	tn := tcp.NewTLSTransport(certFile, keyPath, "", true)
-	if err := tn.Open(addr); err != nil {
-		panic(fmt.Sprintf("failed to open transport: %s", err))
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		panic(fmt.Sprintf("failed to listen on %s: %s", addr, err.Error()))
 	}
-	return tn
+
+	var mux *tcp.Mux
+	mux, err = tcp.NewTLSMux(ln, nil, certFile, keyPath, "")
+	if err != nil {
+		panic(fmt.Sprintf("failed to create node-to-node mux: %s", err.Error()))
+	}
+	mux.InsecureSkipVerify = true
+
+	go mux.Serve()
+	return mux
 }
 
 func mustParseDuration(d string) time.Duration {

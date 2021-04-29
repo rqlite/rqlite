@@ -141,26 +141,6 @@ func Unmarshal(b []byte, c *Command) error {
 	return proto.Unmarshal(b, c)
 }
 
-// MarshalMetadataSet marshals a MetadataSet command
-func MarshalMetadataSet(c *MetadataSet) ([]byte, error) {
-	return proto.Marshal(c)
-}
-
-// UnMarshalMetadataSet unmarshals a MetadataSet command
-func UnMarshalMetadataSet(b []byte, c *MetadataSet) error {
-	return proto.Unmarshal(b, c)
-}
-
-// MarshalMetadataDelete marshals a MetadataDelete command
-func MarshalMetadataDelete(c *MetadataDelete) ([]byte, error) {
-	return proto.Marshal(c)
-}
-
-// UnMarshalMetadataDelete unmarshals a MetadataDelete command
-func UnMarshalMetadataDelete(b []byte, c *MetadataDelete) error {
-	return proto.Unmarshal(b, c)
-}
-
 // MarshalNoop marshals a Noop command
 func MarshalNoop(c *Noop) ([]byte, error) {
 	return proto.Marshal(c)

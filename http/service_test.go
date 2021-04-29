@@ -86,7 +86,8 @@ func Test_EnsureHTTPS(t *testing.T) {
 
 func Test_NewService(t *testing.T) {
 	m := &MockStore{}
-	s := New("127.0.0.1:0", m, nil)
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, nil)
 	if s == nil {
 		t.Fatalf("failed to create new service")
 	}
@@ -94,7 +95,8 @@ func Test_NewService(t *testing.T) {
 
 func Test_HasVersionHeader(t *testing.T) {
 	m := &MockStore{}
-	s := New("127.0.0.1:0", m, nil)
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, nil)
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
@@ -117,7 +119,8 @@ func Test_HasVersionHeader(t *testing.T) {
 
 func Test_HasContentTypeJSON(t *testing.T) {
 	m := &MockStore{}
-	s := New("127.0.0.1:0", m, nil)
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, nil)
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
@@ -137,7 +140,8 @@ func Test_HasContentTypeJSON(t *testing.T) {
 
 func Test_HasContentTypeOctetStream(t *testing.T) {
 	m := &MockStore{}
-	s := New("127.0.0.1:0", m, nil)
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, nil)
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
@@ -157,7 +161,8 @@ func Test_HasContentTypeOctetStream(t *testing.T) {
 
 func Test_HasVersionHeaderUnknown(t *testing.T) {
 	m := &MockStore{}
-	s := New("127.0.0.1:0", m, nil)
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, nil)
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
@@ -177,7 +182,8 @@ func Test_HasVersionHeaderUnknown(t *testing.T) {
 
 func Test_404Routes(t *testing.T) {
 	m := &MockStore{}
-	s := New("127.0.0.1:0", m, nil)
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, nil)
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
@@ -205,7 +211,8 @@ func Test_404Routes(t *testing.T) {
 
 func Test_404Routes_ExpvarPprofDisabled(t *testing.T) {
 	m := &MockStore{}
-	s := New("127.0.0.1:0", m, nil)
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, nil)
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
@@ -233,7 +240,8 @@ func Test_404Routes_ExpvarPprofDisabled(t *testing.T) {
 
 func Test_405Routes(t *testing.T) {
 	m := &MockStore{}
-	s := New("127.0.0.1:0", m, nil)
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, nil)
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
@@ -293,7 +301,8 @@ func Test_405Routes(t *testing.T) {
 
 func Test_400Routes(t *testing.T) {
 	m := &MockStore{}
-	s := New("127.0.0.1:0", m, nil)
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, nil)
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
@@ -315,7 +324,8 @@ func Test_401Routes_NoBasicAuth(t *testing.T) {
 	c := &mockCredentialStore{CheckOK: false, HasPermOK: false}
 
 	m := &MockStore{}
-	s := New("127.0.0.1:0", m, c)
+	n := &mockClusterService{}
+	s := New("127.0.0.1:0", m, n, c)
 	s.Expvar = true
 	s.Pprof = true
 	if err := s.Start(); err != nil {
@@ -353,7 +363,8 @@ func Test_401Routes_BasicAuthBadPassword(t *testing.T) {
 	c := &mockCredentialStore{CheckOK: false, HasPermOK: false}
 
 	m := &MockStore{}
-	s := New("127.0.0.1:0", m, c)
+	n := &mockClusterService{}
+	s := New("127.0.0.1:0", m, n, c)
 	s.Expvar = true
 	s.Pprof = true
 	if err := s.Start(); err != nil {
@@ -396,7 +407,8 @@ func Test_401Routes_BasicAuthBadPerm(t *testing.T) {
 	c := &mockCredentialStore{CheckOK: true, HasPermOK: false}
 
 	m := &MockStore{}
-	s := New("127.0.0.1:0", m, c)
+	n := &mockClusterService{}
+	s := New("127.0.0.1:0", m, n, c)
 	s.Expvar = true
 	s.Pprof = true
 	if err := s.Start(); err != nil {
@@ -437,7 +449,8 @@ func Test_401Routes_BasicAuthBadPerm(t *testing.T) {
 
 func Test_BackupOK(t *testing.T) {
 	m := &MockStore{}
-	s := New("127.0.0.1:0", m, nil)
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, nil)
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
@@ -460,12 +473,11 @@ func Test_BackupOK(t *testing.T) {
 
 func Test_BackupFlagsNoLeader(t *testing.T) {
 	m := &MockStore{}
-	m.metadata = map[string]string{
-		"api_addr":  "1.2.3.4:999",
-		"api_proto": "http",
+	c := &mockClusterService{
+		apiAddr: "http://1.2.3.4:999",
 	}
 
-	s := New("127.0.0.1:0", m, nil)
+	s := New("127.0.0.1:0", m, c, nil)
 
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
@@ -493,8 +505,11 @@ func Test_BackupFlagsNoLeader(t *testing.T) {
 
 func Test_BackupFlagsNoLeaderOK(t *testing.T) {
 	m := &MockStore{}
+	c := &mockClusterService{
+		apiAddr: "http://1.2.3.4:999",
+	}
 
-	s := New("127.0.0.1:0", m, nil)
+	s := New("127.0.0.1:0", m, c, nil)
 
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
@@ -522,7 +537,9 @@ func Test_BackupFlagsNoLeaderOK(t *testing.T) {
 func Test_RegisterStatus(t *testing.T) {
 	var stats *mockStatuser
 	m := &MockStore{}
-	s := New("127.0.0.1:0", m, nil)
+	c := &mockClusterService{}
+
+	s := New("127.0.0.1:0", m, c, nil)
 
 	if err := s.RegisterStatus("foo", stats); err != nil {
 		t.Fatalf("failed to register statuser: %s", err.Error())
@@ -533,88 +550,47 @@ func Test_RegisterStatus(t *testing.T) {
 	}
 }
 
-func Test_LeaderAPIAddrProto(t *testing.T) {
-	m := &MockStore{}
-	s := New("127.0.0.1:0", m, nil)
-
-	m.metadata = map[string]string{
-		"api_addr":  "1.2.3.4:999",
-		"api_proto": "http",
-	}
-	if addr := s.LeaderAPIAddr(); addr != "1.2.3.4:999" {
-		t.Fatalf("incorrect Leader API addresss, got %s", addr)
-	}
-	if proto := s.LeaderAPIProto(); proto != "http" {
-		t.Fatalf("incorrect Leader API proto, got %s", proto)
-	}
-
-	m.metadata = map[string]string{
-		"api_addr": "1.2.3.4:999",
-	}
-	if addr := s.LeaderAPIAddr(); addr != "1.2.3.4:999" {
-		t.Fatalf("incorrect Leader API addresss, got %s", addr)
-	}
-	if proto := s.LeaderAPIProto(); proto != "http" {
-		t.Fatalf("incorrect Leader API proto, got %s", proto)
-	}
-
-	m.metadata = map[string]string{
-		"api_addr":  "1.2.3.4:999",
-		"api_proto": "https",
-	}
-	if addr := s.LeaderAPIAddr(); addr != "1.2.3.4:999" {
-		t.Fatalf("incorrect Leader API addresss, got %s", addr)
-	}
-	if proto := s.LeaderAPIProto(); proto != "https" {
-		t.Fatalf("incorrect Leader API proto, got %s", proto)
-	}
-}
-
 func Test_FormRedirect(t *testing.T) {
 	m := &MockStore{}
-	s := New("127.0.0.1:0", m, nil)
+	c := &mockClusterService{}
+
+	s := New("127.0.0.1:0", m, c, nil)
 	req := mustNewHTTPRequest("http://qux:4001")
 
-	if rd := s.FormRedirect(req, "http", "foo:4001"); rd != "http://foo:4001" {
+	if rd := s.FormRedirect(req, "http://foo:4001"); rd != "http://foo:4001" {
 		t.Fatal("failed to form redirect for simple URL")
-	}
-	if rd := s.FormRedirect(req, "http", "bar:4002"); rd != "http://bar:4002" {
-		t.Fatal("failed to form redirect for simple URL with new host")
 	}
 }
 
 func Test_FormRedirectParam(t *testing.T) {
 	m := &MockStore{}
-	s := New("127.0.0.1:0", m, nil)
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, nil)
 	req := mustNewHTTPRequest("http://qux:4001/db/query?x=y")
 
-	if rd := s.FormRedirect(req, "http", "foo:4001"); rd != "http://foo:4001/db/query?x=y" {
+	if rd := s.FormRedirect(req, "http://foo:4001"); rd != "http://foo:4001/db/query?x=y" {
 		t.Fatal("failed to form redirect for URL")
-	}
-	if rd := s.FormRedirect(req, "http", "bar:4003"); rd != "http://bar:4003/db/query?x=y" {
-		t.Fatal("failed to form redirect for URL with new host")
 	}
 }
 
 func Test_FormRedirectHTTPS(t *testing.T) {
 	m := &MockStore{}
-	s := New("127.0.0.1:0", m, nil)
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, nil)
 	req := mustNewHTTPRequest("http://qux:4001")
 
-	if rd := s.FormRedirect(req, "https", "foo:4001"); rd != "https://foo:4001" {
+	if rd := s.FormRedirect(req, "https://foo:4001"); rd != "https://foo:4001" {
 		t.Fatal("failed to form redirect for simple URL")
-	}
-	if rd := s.FormRedirect(req, "https", "bar:4002"); rd != "https://bar:4002" {
-		t.Fatal("failed to form redirect for simple URL with new host")
 	}
 }
 
 func Test_TLSServce(t *testing.T) {
 	m := &MockStore{}
+	c := &mockClusterService{}
 	var s *Service
 	tempDir := mustTempDir()
 
-	s = New("127.0.0.1:0", m, nil)
+	s = New("127.0.0.1:0", m, c, nil)
 	s.CertFile = x509.CertFile(tempDir)
 	s.KeyFile = x509.KeyFile(tempDir)
 	s.BuildInfo = map[string]interface{}{
@@ -658,11 +634,10 @@ func Test_TLSServce(t *testing.T) {
 }
 
 type MockStore struct {
-	executeFn func(queries []string, tx bool) ([]*sql.Result, error)
-	queryFn   func(queries []string, tx, leader, verify bool) ([]*sql.Rows, error)
-	backupFn  func(leader bool, f store.BackupFormat, dst io.Writer) error
-	leaderID  string
-	metadata  map[string]string
+	executeFn  func(queries []string, tx bool) ([]*sql.Result, error)
+	queryFn    func(queries []string, tx, leader, verify bool) ([]*sql.Rows, error)
+	backupFn   func(leader bool, f store.BackupFormat, dst io.Writer) error
+	leaderAddr string
 }
 
 func (m *MockStore) Execute(er *command.ExecuteRequest) ([]*sql.Result, error) {
@@ -683,7 +658,7 @@ func (m *MockStore) Query(qr *command.QueryRequest) ([]*sql.Rows, error) {
 	return nil, nil
 }
 
-func (m *MockStore) Join(id, addr string, voter bool, metadata map[string]string) error {
+func (m *MockStore) Join(id, addr string, voter bool) error {
 	return nil
 }
 
@@ -691,16 +666,8 @@ func (m *MockStore) Remove(id string) error {
 	return nil
 }
 
-func (m *MockStore) LeaderID() (string, error) {
-	return m.leaderID, nil
-}
-
-func (m *MockStore) Metadata(id, key string) string {
-	// If the preset leaderID is not used in the call, return nothing.
-	if id != m.leaderID {
-		return ""
-	}
-	return m.metadata[key]
+func (m *MockStore) LeaderAddr() (string, error) {
+	return m.leaderAddr, nil
 }
 
 func (m *MockStore) Stats() (map[string]interface{}, error) {
@@ -714,6 +681,14 @@ func (m *MockStore) Backup(leader bool, f store.BackupFormat, w io.Writer) error
 	return m.backupFn(leader, f, w)
 }
 
+type mockClusterService struct {
+	apiAddr string
+}
+
+func (m *mockClusterService) GetNodeAPIAddr(a string) (string, error) {
+	return m.apiAddr, nil
+}
+
 type mockCredentialStore struct {
 	CheckOK   bool
 	HasPermOK bool
@@ -725,6 +700,10 @@ func (m *mockCredentialStore) Check(username, password string) bool {
 
 func (m *mockCredentialStore) HasPerm(username, perm string) bool {
 	return m.HasPermOK
+}
+
+func (m *mockClusterService) Stats() (map[string]interface{}, error) {
+	return nil, nil
 }
 
 func (m *mockCredentialStore) HasAnyPerm(username string, perm ...string) bool {
