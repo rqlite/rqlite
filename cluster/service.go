@@ -47,8 +47,6 @@ type Service struct {
 	https   bool   // Serving HTTPS?
 	apiAddr string // host:port this node serves the HTTP API.
 
-	wg sync.WaitGroup
-
 	logger *log.Logger
 }
 
@@ -64,7 +62,6 @@ func NewService(tn Transport) *Service {
 
 // Open opens the Service.
 func (s *Service) Open() error {
-	s.wg.Add(1)
 	go s.serve()
 	s.logger.Println("service listening on", s.tn.Addr())
 	return nil
@@ -73,7 +70,6 @@ func (s *Service) Open() error {
 // Close closes the service.
 func (s *Service) Close() error {
 	s.tn.Close()
-	s.wg.Wait()
 	return nil
 }
 
@@ -138,8 +134,8 @@ func (s *Service) GetNodeAPIAddr(nodeAddr string) (string, error) {
 }
 
 // Stats returns status of the Service.
-func (s *Service) Stats() (interface{}, error) {
-	st := map[string]string{
+func (s *Service) Stats() (map[string]interface{}, error) {
+	st := map[string]interface{}{
 		"addr":     s.addr.String(),
 		"timeout":  s.timeout.String(),
 		"https":    strconv.FormatBool(s.https),
@@ -150,7 +146,6 @@ func (s *Service) Stats() (interface{}, error) {
 }
 
 func (s *Service) serve() error {
-	defer s.wg.Done()
 	for {
 		conn, err := s.tn.Accept()
 		if err != nil {

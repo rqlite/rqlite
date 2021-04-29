@@ -186,12 +186,15 @@ func main() {
 	startProfile(cpuProfile, memProfile)
 
 	// Create internode network mux and configure.
-	mux, err := startNodeMux()
+	muxLn, err := net.Listen("tcp", raftAddr)
+	if err != nil {
+		log.Fatalf("failed to listen on %s: %s", raftAddr, err.Error())
+	}
+	mux, err := startNodeMux(muxLn)
 	if err != nil {
 		log.Fatalf("failed to start node mux: %s", err.Error())
 	}
 	raftTn := mux.Listen(muxRaftHeader)
-	//clusterTn := mux.Listen(muxClusterHeader)
 
 	// Create and open the store.
 	dataPath, err = filepath.Abs(dataPath)
@@ -329,8 +332,14 @@ func main() {
 		log.Fatalf("failed to set store metadata: %s", err.Error())
 	}
 
+	// Create cluster service, so nodes can learn information about each other.
+	clstr, err := clusterService(mux.Listen(muxClusterHeader))
+	if err != nil {
+		log.Fatalf("failed to create cluster service: %s", err.Error())
+	}
+
 	// Start the HTTP API server.
-	if err := startHTTPService(str); err != nil {
+	if err := startHTTPService(str, clstr); err != nil {
 		log.Fatalf("failed to start HTTP server: %s", err.Error())
 	}
 	log.Println("node is ready")
@@ -342,6 +351,8 @@ func main() {
 	if err := str.Close(true); err != nil {
 		log.Printf("failed to close store: %s", err.Error())
 	}
+	clstr.Close()
+	muxLn.Close()
 	stopProfile()
 	log.Println("rqlite server stopped")
 }
@@ -398,7 +409,7 @@ func waitForConsensus(str *store.Store) error {
 	return nil
 }
 
-func startHTTPService(str *store.Store) error {
+func startHTTPService(str *store.Store, cltr *cluster.Service) error {
 	// Get the credential store.
 	credStr, err := credentialStore()
 	if err != nil {
@@ -408,9 +419,9 @@ func startHTTPService(str *store.Store) error {
 	// Create HTTP server and load authentication information if required.
 	var s *httpd.Service
 	if credStr != nil {
-		s = httpd.New(httpAddr, str, credStr)
+		s = httpd.New(httpAddr, str, cltr, credStr)
 	} else {
-		s = httpd.New(httpAddr, str, nil)
+		s = httpd.New(httpAddr, str, cltr, nil)
 	}
 
 	s.CertFile = x509Cert
@@ -427,12 +438,9 @@ func startHTTPService(str *store.Store) error {
 	return s.Start()
 }
 
-func startNodeMux() (*tcp.Mux, error) {
-	ln, err := net.Listen("tcp", raftAddr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to listen on %s: %s", raftAddr, err.Error())
-	}
+func startNodeMux(ln net.Listener) (*tcp.Mux, error) {
 	var adv net.Addr
+	var err error
 	if raftAdv != "" {
 		adv, err = net.ResolveTCPAddr("tcp", raftAdv)
 		if err != nil {
@@ -471,6 +479,21 @@ func credentialStore() (*auth.CredentialsStore, error) {
 		return nil, err
 	}
 	return cs, nil
+}
+
+func clusterService(tn cluster.Transport) (*cluster.Service, error) {
+	c := cluster.NewService(tn)
+	apiAddr := httpAddr
+	if httpAdv != "" {
+		apiAddr = httpAdv
+	}
+	c.SetAPIAddr(apiAddr)
+	c.EnableHTTPS(x509Cert != "" && x509Key != "") // Conditions met for a HTTPS API
+
+	if err := c.Open(); err != nil {
+		return nil, err
+	}
+	return c, nil
 }
 
 func idOrRaftAddr() string {

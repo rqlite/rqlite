@@ -69,6 +69,9 @@ type Store interface {
 type Cluster interface {
 	// GetNodeAPIAddr returns the HTTP API URL for the node at the given Raft address.
 	GetNodeAPIAddr(nodeAddr string) (string, error)
+
+	// Stats returns stats on the Cluster.
+	Stats() (map[string]interface{}, error)
 }
 
 // CredentialStore is the interface credential stores must support.
@@ -520,7 +523,7 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	results, err := s.store.Stats()
+	storeStatus, err := s.store.Stats()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -546,10 +549,17 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 		"uptime":     time.Since(s.start).String(),
 	}
 
+	clusterStatus, err := s.cluster.Stats()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	// Build the status response.
 	status := map[string]interface{}{
 		"runtime": rt,
-		"store":   results,
+		"cluster": clusterStatus,
+		"store":   storeStatus,
 		"http":    httpStatus,
 		"node":    nodeStatus,
 	}
