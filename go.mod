@@ -1,4 +1,4 @@
-module github.com/rqlite/rqlite
+module github.com/rqlite/rqlite/v6
 
 go 1.13
 

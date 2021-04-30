@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rqlite/rqlite/command"
-	sql "github.com/rqlite/rqlite/db"
-	"github.com/rqlite/rqlite/testdata/chinook"
+	"github.com/rqlite/rqlite/v6/command"
+	sql "github.com/rqlite/rqlite/v6/db"
+	"github.com/rqlite/rqlite/v6/testdata/chinook"
 )
 
 func Test_OpenStoreSingleNode(t *testing.T) {

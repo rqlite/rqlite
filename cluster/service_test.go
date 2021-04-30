@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rqlite/rqlite/testdata/x509"
+	"github.com/rqlite/rqlite/v6/testdata/x509"
 )
 
 func Test_NewServiceOpenClose(t *testing.T) {

@@ -8,10 +8,10 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/rqlite/rqlite/command"
-	sql "github.com/rqlite/rqlite/db"
-	"github.com/rqlite/rqlite/store"
-	"github.com/rqlite/rqlite/testdata/x509"
+	"github.com/rqlite/rqlite/v6/command"
+	sql "github.com/rqlite/rqlite/v6/db"
+	"github.com/rqlite/rqlite/v6/store"
+	"github.com/rqlite/rqlite/v6/testdata/x509"
 
 	"golang.org/x/net/http2"
 )
