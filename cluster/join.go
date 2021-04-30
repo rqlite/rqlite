@@ -26,7 +26,7 @@ var (
 // It walks through joinAddr in order, and sets the node ID and Raft address of
 // the joining node as id addr respectively. It returns the endpoint successfully
 // used to join the cluster.
-func Join(srcIP string, joinAddr []string, id, addr string, voter bool, meta map[string]string, numAttempts int,
+func Join(srcIP string, joinAddr []string, id, addr string, voter bool, numAttempts int,
 	attemptInterval time.Duration, tlsConfig *tls.Config) (string, error) {
 	var err error
 	var j string
@@ -37,7 +37,7 @@ func Join(srcIP string, joinAddr []string, id, addr string, voter bool, meta map
 
 	for i := 0; i < numAttempts; i++ {
 		for _, a := range joinAddr {
-			j, err = join(srcIP, a, id, addr, voter, meta, tlsConfig, logger)
+			j, err = join(srcIP, a, id, addr, voter, tlsConfig, logger)
 			if err == nil {
 				// Success!
 				return j, nil
@@ -50,7 +50,7 @@ func Join(srcIP string, joinAddr []string, id, addr string, voter bool, meta map
 	return "", ErrJoinFailed
 }
 
-func join(srcIP, joinAddr, id, addr string, voter bool, meta map[string]string, tlsConfig *tls.Config, logger *log.Logger) (string, error) {
+func join(srcIP, joinAddr, id, addr string, voter bool, tlsConfig *tls.Config, logger *log.Logger) (string, error) {
 	if id == "" {
 		return "", fmt.Errorf("node ID not set")
 	}
@@ -88,7 +88,6 @@ func join(srcIP, joinAddr, id, addr string, voter bool, meta map[string]string, 
 			"id":    id,
 			"addr":  resv.String(),
 			"voter": voter,
-			"meta":  meta,
 		})
 		if err != nil {
 			return "", err

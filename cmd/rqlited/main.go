@@ -266,20 +266,6 @@ func main() {
 		log.Fatalf("failed to open store: %s", err.Error())
 	}
 
-	// Prepare metadata for join command.
-	apiAdv := httpAddr
-	if httpAdv != "" {
-		apiAdv = httpAdv
-	}
-	apiProto := "http"
-	if x509Cert != "" {
-		apiProto = "https"
-	}
-	meta := map[string]string{
-		"api_addr":  apiAdv,
-		"api_proto": apiProto,
-	}
-
 	// Execute any requested join operation.
 	if len(joins) > 0 && isNew {
 		log.Println("join addresses are:", joins)
@@ -306,7 +292,7 @@ func main() {
 			}
 		}
 
-		if j, err := cluster.Join(joinSrcIP, joins, str.ID(), advAddr, !raftNonVoter, meta,
+		if j, err := cluster.Join(joinSrcIP, joins, str.ID(), advAddr, !raftNonVoter,
 			joinAttempts, joinDur, &tlsConfig); err != nil {
 			log.Fatalf("failed to join cluster at %s: %s", joins, err.Error())
 		} else {
