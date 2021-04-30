@@ -17,6 +17,7 @@ import (
 	"net/http/pprof"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -60,6 +61,9 @@ type Store interface {
 
 	// Stats returns stats on the Store.
 	Stats() (map[string]interface{}, error)
+
+	// Nodes returns the slice of store.Servers in the cluster
+	Nodes() ([]*store.Server, error)
 
 	// Backup wites backup of the node state to dst
 	Backup(leader bool, f store.BackupFormat, dst io.Writer) error
@@ -273,6 +277,8 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.handleRemove(w, r)
 	case strings.HasPrefix(r.URL.Path, "/status"):
 		s.handleStatus(w, r)
+	case strings.HasPrefix(r.URL.Path, "/nodes"):
+		s.handleNodes(w, r)
 	case r.URL.Path == "/debug/vars" && s.Expvar:
 		s.handleExpvar(w, r)
 	case strings.HasPrefix(r.URL.Path, "/debug/pprof") && s.Pprof:
@@ -583,6 +589,70 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 		b, err = json.MarshalIndent(status, "", "    ")
 	} else {
 		b, err = json.Marshal(status)
+	}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	} else {
+		_, err = w.Write([]byte(b))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+}
+
+// handleNodes returns status on the other nodes in the system. This
+// attempts to contact all the nodes in the cluster, so may take some
+// time to return.
+func (s *Service) handleNodes(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+	if !s.CheckRequestPerm(r, PermStatus) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method != "GET" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	_, err := timeout(r, time.Duration(1))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	nodes, err := s.store.Nodes()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Attempt contact with each node.
+	//var wg sync.WaitGroup
+	online := make(map[string]bool)
+	for _, n := range nodes {
+		_, err := s.cluster.GetNodeAPIAddr(n.Addr)
+		if err != nil {
+			online[n.ID] = false
+		}
+	}
+
+	resp := make([]map[string]string, len(nodes))
+	for i, n := range nodes {
+		resp[i] = make(map[string]string)
+		resp[i]["id"] = n.ID
+		resp[i]["addr"] = n.Addr
+		resp[i]["reachable"] = strconv.FormatBool(online[n.ID])
+	}
+
+	pretty, _ := isPretty(r)
+	var b []byte
+	if pretty {
+		b, err = json.MarshalIndent(resp, "", "    ")
+	} else {
+		b, err = json.Marshal(resp)
 	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -977,6 +1047,21 @@ func noLeader(req *http.Request) (bool, error) {
 // timings returns whether timings are requested.
 func timings(req *http.Request) (bool, error) {
 	return queryParam(req, "timings")
+}
+
+// timeout returns the timeout included in the query, or the given default
+func timeout(req *http.Request, d time.Duration) (time.Duration, error) {
+	q := req.URL.Query()
+	tStr := q.Get("timeout")
+	if tStr == "" {
+		return d, nil
+	}
+
+	t, err := time.ParseDuration(tStr)
+	if err != nil {
+		return d, nil
+	}
+	return t, nil
 }
 
 // level returns the requested consistency level for a query

@@ -6,7 +6,9 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"testing"
+	"time"
 
 	"github.com/rqlite/rqlite/command"
 	sql "github.com/rqlite/rqlite/db"
@@ -633,6 +635,49 @@ func Test_TLSServce(t *testing.T) {
 	}
 }
 
+func Test_timeoutQueryParam(t *testing.T) {
+	var req http.Request
+
+	defStr := "10s"
+	def := mustParseDuration(defStr)
+	tests := []struct {
+		u   string
+		dur string
+	}{
+		{
+			u:   "http://localhost:4001/nodes?timeout=5s",
+			dur: "5s",
+		},
+		{
+			u:   "http://localhost:4001/nodes?timeout=2m",
+			dur: "2m",
+		},
+		{
+			u:   "http://localhost:4001/nodes?x=777&timeout=5s",
+			dur: "5s",
+		},
+		{
+			u:   "http://localhost:4001/nodes",
+			dur: defStr,
+		},
+		{
+			u:   "http://localhost:4001/nodes?timeout=zdfjkh",
+			dur: defStr,
+		},
+	}
+
+	for _, tt := range tests {
+		req.URL = mustURLParse(tt.u)
+		timeout, err := timeout(&req, def)
+		if err != nil {
+			t.Fatalf("failed to get timeout: %s", err)
+		}
+		if timeout != mustParseDuration(tt.dur) {
+			t.Fatalf("got wrong timeout, expected %s, got %s", mustParseDuration(tt.dur), timeout)
+		}
+	}
+}
+
 type MockStore struct {
 	executeFn  func(queries []string, tx bool) ([]*sql.Result, error)
 	queryFn    func(queries []string, tx, leader, verify bool) ([]*sql.Rows, error)
@@ -671,6 +716,10 @@ func (m *MockStore) LeaderAddr() (string, error) {
 }
 
 func (m *MockStore) Stats() (map[string]interface{}, error) {
+	return nil, nil
+}
+
+func (m *MockStore) Nodes() ([]*store.Server, error) {
 	return nil, nil
 }
 
@@ -732,4 +781,20 @@ func mustTempDir() string {
 		panic("failed to create temp dir")
 	}
 	return path
+}
+
+func mustURLParse(s string) *url.URL {
+	u, err := url.Parse(s)
+	if err != nil {
+		panic("failed to URL parse string")
+	}
+	return u
+}
+
+func mustParseDuration(d string) time.Duration {
+	if dur, err := time.ParseDuration(d); err != nil {
+		panic("failed to parse duration")
+	} else {
+		return dur
+	}
 }
