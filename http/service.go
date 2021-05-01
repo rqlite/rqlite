@@ -617,7 +617,7 @@ func (s *Service) handleNodes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err := timeout(r, time.Duration(1))
+	t, err := timeout(r, time.Duration(1))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -629,14 +629,10 @@ func (s *Service) handleNodes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Attempt contact with each node.
-	//var wg sync.WaitGroup
-	online := make(map[string]bool)
-	for _, n := range nodes {
-		_, err := s.cluster.GetNodeAPIAddr(n.Addr)
-		if err != nil {
-			online[n.ID] = false
-		}
+	reachable, err := s.checkNodesReachable(nodes, t)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 
 	resp := make([]map[string]string, len(nodes))
@@ -644,7 +640,7 @@ func (s *Service) handleNodes(w http.ResponseWriter, r *http.Request) {
 		resp[i] = make(map[string]string)
 		resp[i]["id"] = n.ID
 		resp[i]["addr"] = n.Addr
-		resp[i]["reachable"] = strconv.FormatBool(online[n.ID])
+		resp[i]["reachable"] = strconv.FormatBool(reachable[n.ID])
 	}
 
 	pretty, _ := isPretty(r)
@@ -900,6 +896,36 @@ func (s *Service) LeaderAPIAddr() string {
 		return ""
 	}
 	return apiAddr
+}
+
+// checkNodesReachable returns a map of node ID to reachable status, reachable
+// being defined as node responds to a simple request over the network.
+func (s *Service) checkNodesReachable(nodes []*store.Server, timeout time.Duration) (map[string]bool, error) {
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	reachable := make(map[string]bool)
+
+	// Assume reachable.
+	for _, n := range nodes {
+		reachable[n.ID] = true
+	}
+
+	// Now confirm.
+	for _, n := range nodes {
+		go func() {
+			wg.Add(1)
+			defer wg.Done()
+			_, err := s.cluster.GetNodeAPIAddr(n.Addr)
+			if err != nil {
+				mu.Lock()
+				reachable[n.ID] = false
+				mu.Unlock()
+			}
+		}()
+	}
+	wg.Wait()
+
+	return reachable, nil
 }
 
 // addBuildVersion adds the build version to the HTTP response.
