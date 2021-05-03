@@ -353,6 +353,7 @@ class TestSingleNode(unittest.TestCase):
       t+=1
 
 class TestIdempotentJoin(unittest.TestCase):
+    '''Test that a node performing two join requests works fine'''
   def tearDown(self):
     deprovision_node(self.n0)
     deprovision_node(self.n1)
