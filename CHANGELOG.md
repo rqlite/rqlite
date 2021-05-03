@@ -11,6 +11,7 @@ The data API and cluster-management API remain unchanged however, so client code
 
 ### Implementation changes and bug fixes
  - [PR #792](https://github.com/rqlite/rqlite/pull/792): Fetch leader HTTP API addresses on demand.
+ - [PR #797](https://github.com/rqlite/rqlite/pull/797): Remove `redirect` key from HTTP status output.
 
 ## 5.12.1 (April 29th 2021)
 
