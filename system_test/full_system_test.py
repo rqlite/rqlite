@@ -353,12 +353,12 @@ class TestSingleNode(unittest.TestCase):
       t+=1
 
 class TestIdempotentJoin(unittest.TestCase):
-    '''Test that a node performing two join requests works fine'''
   def tearDown(self):
     deprovision_node(self.n0)
     deprovision_node(self.n1)
 
   def test(self):
+    '''Test that a node performing two join requests works fine'''
     self.n0 = Node(RQLITED_PATH, '0')
     self.n0.start()
     self.n0.wait_for_leader()
