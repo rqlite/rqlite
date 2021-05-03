@@ -358,6 +358,7 @@ class TestIdempotentJoin(unittest.TestCase):
     deprovision_node(self.n1)
 
   def test(self):
+    '''Test that a node performing two join requests works fine'''
     self.n0 = Node(RQLITED_PATH, '0')
     self.n0.start()
     self.n0.wait_for_leader()

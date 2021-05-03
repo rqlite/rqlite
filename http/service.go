@@ -538,9 +538,8 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpStatus := map[string]interface{}{
-		"addr":     s.Addr().String(),
-		"auth":     prettyEnabled(s.credentialStore != nil),
-		"redirect": s.LeaderAPIAddr(),
+		"addr": s.Addr().String(),
+		"auth": prettyEnabled(s.credentialStore != nil),
 	}
 
 	nodeStatus := map[string]interface{}{
