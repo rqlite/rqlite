@@ -9,6 +9,9 @@ This new design does mean that nodes running earlier software cannot communicate
 
 The data API and cluster-management API remain unchanged however, so client code that communicates with rqlite should not need any changes.
 
+## New features
+- [PR #796](https://github.com/rqlite/rqlite/pull/796): `nodes/` API reports real-time status of other nodes in cluster. Fixes [issue #768](https://github.com/rqlite/rqlite/issues/768).
+
 ### Implementation changes and bug fixes
  - [PR #792](https://github.com/rqlite/rqlite/pull/792): Fetch leader HTTP API addresses on demand.
  - [PR #797](https://github.com/rqlite/rqlite/pull/797): Remove `redirect` key from HTTP status output.
