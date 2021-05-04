@@ -9,7 +9,7 @@ This new design does mean that nodes running earlier software cannot communicate
 
 The data API and cluster-management API remain unchanged however, so client code that communicates with rqlite should not need any changes.
 
-## New features
+### New features
 - [PR #796](https://github.com/rqlite/rqlite/pull/796): `nodes/` API reports real-time status of other nodes in cluster. Fixes [issue #768](https://github.com/rqlite/rqlite/issues/768).
 
 ### Implementation changes and bug fixes
@@ -22,7 +22,7 @@ The data API and cluster-management API remain unchanged however, so client code
  - [PR #791](https://github.com/rqlite/rqlite/pull/791): Reinstate node CA cert support which was erroneously removed in an earlier change.
 
 ## 5.12.0 (April 24th 2021)
-## New features
+### New features
  - [PR #788](https://github.com/rqlite/rqlite/pull/788): Upgrade to SQLite 3.35.4.
 
 ### Implementation changes and bug fixes
