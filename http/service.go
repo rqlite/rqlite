@@ -61,6 +61,9 @@ type Store interface {
 	// Stats returns stats on the Store.
 	Stats() (map[string]interface{}, error)
 
+	// Nodes returns the slice of store.Servers in the cluster
+	Nodes() ([]*store.Server, error)
+
 	// Backup wites backup of the node state to dst
 	Backup(leader bool, f store.BackupFormat, dst io.Writer) error
 }
@@ -273,6 +276,8 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.handleRemove(w, r)
 	case strings.HasPrefix(r.URL.Path, "/status"):
 		s.handleStatus(w, r)
+	case strings.HasPrefix(r.URL.Path, "/nodes"):
+		s.handleNodes(w, r)
 	case r.URL.Path == "/debug/vars" && s.Expvar:
 		s.handleExpvar(w, r)
 	case strings.HasPrefix(r.URL.Path, "/debug/pprof") && s.Pprof:
@@ -594,6 +599,80 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// handleNodes returns status on the other nodes in the system. This
+// attempts to contact all the nodes in the cluster, so may take some
+// time to return.
+func (s *Service) handleNodes(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+	if !s.CheckRequestPerm(r, PermStatus) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method != "GET" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	t, err := timeout(r, time.Duration(1))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	nodes, err := s.store.Nodes()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	lAddr, err := s.store.LeaderAddr()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	apiAddrs, err := s.checkNodesAPIAddr(nodes, t)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	resp := make(map[string]struct {
+		APIAddr   string `json:"api_addr,omitempty"`
+		Addr      string `json:"addr,omitempty"`
+		Reachable bool   `json:"reachable,omitempty"`
+		Leader    bool   `json:"leader"`
+	})
+
+	for _, n := range nodes {
+		nn := resp[n.ID]
+		nn.Addr = n.Addr
+		nn.Leader = nn.Addr == lAddr
+		nn.APIAddr = apiAddrs[n.ID]
+		nn.Reachable = apiAddrs[n.ID] != ""
+		resp[n.ID] = nn
+	}
+
+	pretty, _ := isPretty(r)
+	var b []byte
+	if pretty {
+		b, err = json.MarshalIndent(resp, "", "    ")
+	} else {
+		b, err = json.Marshal(resp)
+	}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	} else {
+		_, err = w.Write([]byte(b))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+}
+
 // handleExecute handles queries that modify the database.
 func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -831,6 +910,36 @@ func (s *Service) LeaderAPIAddr() string {
 	return apiAddr
 }
 
+// checkNodesAPIAddr returns a map of node ID to API addresses, reachable
+// being defined as node responds to a simple request over the network.
+func (s *Service) checkNodesAPIAddr(nodes []*store.Server, timeout time.Duration) (map[string]string, error) {
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	apiAddrs := make(map[string]string)
+
+	// Assume unreachable
+	for _, n := range nodes {
+		apiAddrs[n.ID] = ""
+	}
+
+	// Now confirm.
+	for _, n := range nodes {
+		wg.Add(1)
+		go func(id, raftAddr string) {
+			defer wg.Done()
+			apiAddr, err := s.cluster.GetNodeAPIAddr(raftAddr)
+			if err == nil {
+				mu.Lock()
+				apiAddrs[id] = apiAddr
+				mu.Unlock()
+			}
+		}(n.ID, n.Addr)
+	}
+	wg.Wait()
+
+	return apiAddrs, nil
+}
+
 // addBuildVersion adds the build version to the HTTP response.
 func (s *Service) addBuildVersion(w http.ResponseWriter) {
 	// Add version header to every response, if available.
@@ -976,6 +1085,21 @@ func noLeader(req *http.Request) (bool, error) {
 // timings returns whether timings are requested.
 func timings(req *http.Request) (bool, error) {
 	return queryParam(req, "timings")
+}
+
+// timeout returns the timeout included in the query, or the given default
+func timeout(req *http.Request, d time.Duration) (time.Duration, error) {
+	q := req.URL.Query()
+	tStr := q.Get("timeout")
+	if tStr == "" {
+		return d, nil
+	}
+
+	t, err := time.ParseDuration(tStr)
+	if err != nil {
+		return d, nil
+	}
+	return t, nil
 }
 
 // level returns the requested consistency level for a query

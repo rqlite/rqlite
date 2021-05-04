@@ -36,6 +36,7 @@ var cliHelp = []string{
 	`.help                     Show this message`,
 	`.indexes                  Show names of all indexes`,
 	`.restore <file>           Restore the database from a SQLite dump file`,
+	`.nodes                    Show connection status of all nodes in cluster`,
 	`.schema                   Show CREATE statements for all tables`,
 	`.status                   Show status and diagnostic information for connected node`,
 	`.tables                   List names of tables`,
@@ -108,6 +109,8 @@ func main() {
 				err = toggleTimer(line[index+1:], &timer)
 			case ".STATUS":
 				err = status(ctx, cmd, line, argv)
+			case ".NODES":
+				err = nodes(ctx, cmd, line, argv)
 			case ".EXPVAR":
 				err = expvar(ctx, cmd, line, argv)
 			case ".REMOVE":
@@ -172,6 +175,11 @@ func help(ctx *cli.Context, cmd, line string, argv *argT) error {
 
 func status(ctx *cli.Context, cmd, line string, argv *argT) error {
 	url := fmt.Sprintf("%s://%s:%d/status", argv.Protocol, argv.Host, argv.Port)
+	return cliJSON(ctx, cmd, line, url, argv)
+}
+
+func nodes(ctx *cli.Context, cmd, line string, argv *argT) error {
+	url := fmt.Sprintf("%s://%s:%d/nodes", argv.Protocol, argv.Host, argv.Port)
 	return cliJSON(ctx, cmd, line, url, argv)
 }
 

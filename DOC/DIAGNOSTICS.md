@@ -29,6 +29,33 @@ runtime:
   version: go1.13
  ```
 
+ ## Nodes API
+ The _nodes_ API returns basic information for every node in the cluster, as seen by the node receiving the _nodes_ request. The receiving node will also check whether each other node is currently connected to it, and report that status. This is an effective way to determine the cluster leader, and the leader's HTTP API address. It can also be used to check if the cluster is **basically** running -- if every node is reachable, it probably is.
+
+ ```bash
+ curl localhost:4001/nodes?pretty
+```
+
+You can also request the same nodes information via the CLI:
+```
+$ ./rqlite
+Welcome to the rqlite CLI. Enter ".help" for usage hints.
+127.0.0.1:4001> .nodes
+1:
+  api_addr: http://localhost:4001
+  addr: 127.0.0.1:4002
+  reachable: true
+  leader: true
+2:
+  api_addr: http://localhost:4003
+  addr: 127.0.0.1:4004
+  reachable: true
+3:
+  api_addr: http://localhost:4005
+  addr: 127.0.0.1:4006
+  reachable: true
+ ```
+
 ## expvar support
 rqlite also exports [expvar](http://godoc.org/pkg/expvar/) information. The standard expvar information, as well as some custom information, is exposed. This data can be retrieved like so (assuming the node is started in its default configuration):
 
