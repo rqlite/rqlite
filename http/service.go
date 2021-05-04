@@ -643,7 +643,7 @@ func (s *Service) handleNodes(w http.ResponseWriter, r *http.Request) {
 		APIAddr   string `json:"api_addr,omitempty"`
 		Addr      string `json:"addr,omitempty"`
 		Reachable bool   `json:"reachable,omitempty"`
-		Leader    bool   `json:"leader,omitempty"`
+		Leader    bool   `json:"leader"`
 	})
 
 	for _, n := range nodes {
