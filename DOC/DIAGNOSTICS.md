@@ -36,7 +36,7 @@ runtime:
 
 ```bash
 curl localhost:4001/nodes?pretty
-curl localhost:4001/nodes?nonvoters&pretty
+curl localhost:4001/nodes?nonvoters&pretty  # Also check non-voting nodes.
 ```
 
 You can also request the same nodes information via the CLI:
