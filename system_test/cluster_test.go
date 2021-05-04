@@ -1,6 +1,7 @@
 package system
 
 import (
+	"fmt"
 	"testing"
 	"time"
 )
@@ -154,6 +155,97 @@ func Test_MultiNodeCluster(t *testing.T) {
 			t.Fatalf(`test %d received wrong result "%s" got: %s exp: %s`, i, tt.stmt, r, tt.expected)
 		}
 	}
+}
+
+// Test_MultiNodeClusterNodes checks nodes/ endpoint under various situations.
+func Test_MultiNodeClusterNodes(t *testing.T) {
+	node1 := mustNewLeaderNode()
+	defer node1.Deprovision()
+
+	node2 := mustNewNode(false)
+	defer node2.Deprovision()
+	if err := node2.Join(node1); err != nil {
+		t.Fatalf("node failed to join leader: %s", err.Error())
+	}
+	_, err := node2.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for leader: %s", err.Error())
+	}
+
+	// Get the new leader, in case it changed.
+	c := Cluster{node1, node2}
+	leader, err := c.Leader()
+	if err != nil {
+		t.Fatalf("failed to find cluster leader: %s", err.Error())
+	}
+
+	node3 := mustNewNode(false)
+	defer node3.Deprovision()
+	if err := node3.Join(leader); err != nil {
+		t.Fatalf("node failed to join leader: %s", err.Error())
+	}
+	_, err = node3.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for leader: %s", err.Error())
+	}
+
+	// Get the new leader, in case it changed.
+	c = Cluster{node1, node2, node3}
+	leader, err = c.Leader()
+	if err != nil {
+		t.Fatalf("failed to find cluster leader: %s", err.Error())
+	}
+
+	// Get nodes/ status from a node
+	nodes, err := node1.Nodes()
+	if err != nil {
+		t.Fatalf("failed to get nodes status: %s", err.Error())
+	}
+	fmt.Println(nodes)
+	if len(nodes) != len(c) {
+		t.Fatalf("nodes/ output returned wrong number of nodes, got %d, exp %d", len(nodes), len(c))
+	}
+	ns, ok := nodes[leader.ID]
+	if !ok {
+		t.Fatalf("failed to find leader with ID %s in node status", leader.ID)
+	}
+	if !ns.Leader {
+		t.Fatalf("node is not leader")
+	}
+	if ns.Addr != leader.RaftAddr {
+		t.Fatalf("node has wrong Raft address for leader")
+	}
+	leaderAPIAddr := fmt.Sprintf("http://%s", leader.APIAddr)
+	if ns.APIAddr != leaderAPIAddr {
+		t.Fatalf("node has wrong API address for leader, got %s, exp %s", ns.APIAddr, leaderAPIAddr)
+	}
+	if !ns.Reachable {
+		t.Fatalf("node is not reachable")
+	}
+
+	// Get a follower and confirm nodes/ looks good.
+	followers, err := c.Followers()
+	if err != nil {
+		t.Fatalf("failed to get followers: %s", err.Error())
+	}
+	if len(followers) != 2 {
+		t.Fatalf("got incorrect number of followers: %d", len(followers))
+	}
+	f := followers[0]
+	ns = nodes[f.ID]
+	if ns.Addr != leader.RaftAddr {
+		t.Fatalf("node has wrong Raft address for follower")
+	}
+	if ns.APIAddr != fmt.Sprintf("http://%s", f.APIAddr) {
+		t.Fatalf("node has wrong API address for follower")
+	}
+	if ns.Leader {
+		t.Fatalf("node is not a follower")
+	}
+	if !ns.Reachable {
+		t.Fatalf("node is not reachable")
+	}
+
 }
 
 // Test_MultiNodeClusterNodeEncrypted tests formation of a 3-node cluster, and its operation.

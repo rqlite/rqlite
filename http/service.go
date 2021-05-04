@@ -17,7 +17,6 @@ import (
 	"net/http/pprof"
 	"os"
 	"runtime"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -628,18 +627,32 @@ func (s *Service) handleNodes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	reachable, err := s.checkNodesReachable(nodes, t)
+	lAddr, err := s.store.LeaderAddr()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	resp := make([]map[string]string, len(nodes))
-	for i, n := range nodes {
-		resp[i] = make(map[string]string)
-		resp[i]["id"] = n.ID
-		resp[i]["addr"] = n.Addr
-		resp[i]["reachable"] = strconv.FormatBool(reachable[n.ID])
+	apiAddrs, err := s.checkNodesAPIAddr(nodes, t)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	resp := make(map[string]struct {
+		APIAddr   string `json:"api_addr,omitempty"`
+		Addr      string `json:"addr,omitempty"`
+		Reachable bool   `json:"reachable,omitempty"`
+		Leader    bool   `json:"leader,omitempty"`
+	})
+
+	for _, n := range nodes {
+		nn := resp[n.ID]
+		nn.Addr = n.Addr
+		nn.Leader = nn.Addr == lAddr
+		nn.APIAddr = apiAddrs[n.ID]
+		nn.Reachable = apiAddrs[n.ID] != ""
+		resp[n.ID] = nn
 	}
 
 	pretty, _ := isPretty(r)
@@ -897,34 +910,34 @@ func (s *Service) LeaderAPIAddr() string {
 	return apiAddr
 }
 
-// checkNodesReachable returns a map of node ID to reachable status, reachable
+// checkNodesAPIAddr returns a map of node ID to API addresses, reachable
 // being defined as node responds to a simple request over the network.
-func (s *Service) checkNodesReachable(nodes []*store.Server, timeout time.Duration) (map[string]bool, error) {
+func (s *Service) checkNodesAPIAddr(nodes []*store.Server, timeout time.Duration) (map[string]string, error) {
 	var wg sync.WaitGroup
 	var mu sync.Mutex
-	reachable := make(map[string]bool)
+	apiAddrs := make(map[string]string)
 
-	// Assume reachable.
+	// Assume unreachable
 	for _, n := range nodes {
-		reachable[n.ID] = true
+		apiAddrs[n.ID] = ""
 	}
 
 	// Now confirm.
 	for _, n := range nodes {
+		wg.Add(1)
 		go func() {
-			wg.Add(1)
 			defer wg.Done()
-			_, err := s.cluster.GetNodeAPIAddr(n.Addr)
-			if err != nil {
+			addr, err := s.cluster.GetNodeAPIAddr(n.Addr)
+			if err == nil {
 				mu.Lock()
-				reachable[n.ID] = false
+				apiAddrs[n.ID] = addr
 				mu.Unlock()
 			}
 		}()
 	}
 	wg.Wait()
 
-	return reachable, nil
+	return apiAddrs, nil
 }
 
 // addBuildVersion adds the build version to the HTTP response.

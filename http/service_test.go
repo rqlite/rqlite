@@ -586,6 +586,30 @@ func Test_FormRedirectHTTPS(t *testing.T) {
 	}
 }
 
+func Test_Nodes(t *testing.T) {
+	m := &MockStore{
+		leaderAddr: "foo:1234",
+	}
+	c := &mockClusterService{
+		apiAddr: "https://bar:5678",
+	}
+	s := New("127.0.0.1:0", m, c, nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+	resp, err := client.Get(host + "/nodes")
+	if err != nil {
+		t.Fatalf("failed to make nodes request")
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("failed to get expected StatusOK for nodes, got %d", resp.StatusCode)
+	}
+}
+
 func Test_TLSServce(t *testing.T) {
 	m := &MockStore{}
 	c := &mockClusterService{}
@@ -797,4 +821,13 @@ func mustParseDuration(d string) time.Duration {
 	} else {
 		return dur
 	}
+}
+
+func mustReadResponseBody(resp *http.Response) string {
+	response, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		panic("failed to ReadAll response body")
+	}
+	resp.Body.Close()
+	return string(response)
 }

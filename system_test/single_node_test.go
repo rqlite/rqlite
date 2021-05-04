@@ -387,6 +387,37 @@ func Test_SingleNodeRestart(t *testing.T) {
 	}
 }
 
+func Test_SingleNodeNodes(t *testing.T) {
+	node := mustNewLeaderNode()
+	defer node.Deprovision()
+
+	// Access endpoints to ensure the code is covered.
+	nodes, err := node.Nodes()
+	if err != nil {
+		t.Fatalf("failed to access nodes endpoint: %s", err.Error())
+	}
+
+	if len(nodes) != 1 {
+		t.Fatalf("wrong number of nodes in response")
+	}
+	n, ok := nodes[node.ID]
+	if !ok {
+		t.Fatalf("node not found by ID in response")
+	}
+	if n.Addr != node.RaftAddr {
+		t.Fatalf("node has wrong Raft address")
+	}
+	if n.APIAddr != fmt.Sprintf("http://%s", node.APIAddr) {
+		t.Fatalf("node has wrong API address")
+	}
+	if !n.Leader {
+		t.Fatalf("node is not leader")
+	}
+	if !n.Reachable {
+		t.Fatalf("node is not reachable")
+	}
+}
+
 func Test_SingleNodeCoverage(t *testing.T) {
 	node := mustNewLeaderNode()
 	defer node.Deprovision()

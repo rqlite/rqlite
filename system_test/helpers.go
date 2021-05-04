@@ -181,6 +181,37 @@ func (n *Node) JoinAsNonVoter(leader *Node) error {
 	return nil
 }
 
+type NodesStatus map[string]struct {
+	APIAddr   string `json:"api_addr,omitempty"`
+	Addr      string `json:"addr,omitempty"`
+	Reachable bool   `json:"reachable,omitempty"`
+	Leader    bool   `json:"leader,omitempty"`
+}
+
+// Nodes returns the sNodes endpoint output for node.
+func (n *Node) Nodes() (NodesStatus, error) {
+	v, _ := url.Parse("http://" + n.APIAddr + "/nodes")
+
+	resp, err := http.Get(v.String())
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("nodes endpoint returned: %s", resp.Status)
+	}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var nstatus NodesStatus
+	if err = json.Unmarshal(body, &nstatus); err != nil {
+		return nil, err
+	}
+	return nstatus, nil
+}
+
 // Status returns the status and diagnostic output for node.
 func (n *Node) Status() (string, error) {
 	v, _ := url.Parse("http://" + n.APIAddr + "/status")
@@ -479,6 +510,9 @@ func mustNodeEncryptedOnDisk(dir string, enableSingle, httpEncrypt bool, mux *tc
 		panic(fmt.Sprintf("failed to start HTTP server: %s", err.Error()))
 	}
 	node.APIAddr = node.Service.Addr().String()
+
+	// Finally, set API address in Cluster service
+	cluster.SetAPIAddr(node.APIAddr)
 
 	return node
 }
