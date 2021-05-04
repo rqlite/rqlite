@@ -53,10 +53,12 @@ Welcome to the rqlite CLI. Enter ".help" for usage hints.
   api_addr: http://localhost:4003
   addr: 127.0.0.1:4004
   reachable: true
+  leader: false
 3:
   api_addr: http://localhost:4005
   addr: 127.0.0.1:4006
   reachable: true
+  leader: false
  ```
 
 ## expvar support
