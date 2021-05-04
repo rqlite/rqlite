@@ -120,33 +120,57 @@ class Node(object):
     r.raise_for_status()
     return r.json()
 
+  def nodes(self):
+    r = requests.get(self._nodes_url())
+    r.raise_for_status()
+    return r.json()
+
   def expvar(self):
     r = requests.get(self._expvar_url())
     r.raise_for_status()
     return r.json()
 
   def is_leader(self):
+    '''
+    is_leader returns whether this node is the cluster leader
+    It also performs a check, to ensure the node nevers gives out
+    conflicting information about leader state.
+    '''
+
     try:
-      return self.status()['store']['raft']['state'] == 'Leader'
+      isLeaderRaft = self.status()['store']['raft']['state'] == 'Leader'
+      isLeaderNodes = self.nodes()[self.node_id]['leader'] is True
     except requests.exceptions.ConnectionError:
       return False
+
+    if isLeaderRaft != isLeaderNodes:
+      raise AssertionError("conflicting states reported for leadership (raft: %s, nodes: %s)"
+        % (isLeaderRaft, isLeaderNodes))
+    return isLeaderNodes
 
   def is_follower(self):
     try:
-      return self.status()['store']['raft']['state'] == 'Follower'
+      isFollowerRaft = self.status()['store']['raft']['state'] == 'Follower'
+      isFollowersNodes = self.nodes()[self.node_id]['leader'] is False
     except requests.exceptions.ConnectionError:
       return False
 
+    if isFollowerRaft != isFollowersNodes:
+      raise AssertionError("conflicting states reported for followership (raft: %s, nodes: %s)"
+        % (isFollowerRaft, isFollowersNodes))
+    return isFollowersNodes
+
   def wait_for_leader(self, timeout=TIMEOUT):
-    l = None
+    lr = None
     t = 0
-    while l == None or l is '':
+    while lr == None or lr is '':
       if t > timeout:
         raise Exception('timeout')
-      l = self.status()['store']['leader']
+      lr = self.status()['store']['leader']
       time.sleep(1)
       t+=1
-    return l
+
+    return lr
 
   def applied_index(self):
     return int(self.status()['store']['raft']['applied_index'])
@@ -230,6 +254,8 @@ class Node(object):
 
   def _status_url(self):
     return 'http://' + self.APIAddr() + '/status'
+  def _nodes_url(self):
+    return 'http://' + self.APIAddr() + '/nodes'
   def _expvar_url(self):
     return 'http://' + self.APIAddr() + '/debug/vars'
   def _query_url(self):
