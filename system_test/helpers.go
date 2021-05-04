@@ -449,6 +449,7 @@ func mustNewNodeEncrypted(enableSingle, httpEncrypt, nodeEncrypt bool) *Node {
 	} else {
 		mux = mustNewOpenMux("")
 	}
+	go mux.Serve()
 
 	return mustNodeEncrypted(dir, enableSingle, httpEncrypt, mux, "")
 }

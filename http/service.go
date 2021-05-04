@@ -925,15 +925,15 @@ func (s *Service) checkNodesAPIAddr(nodes []*store.Server, timeout time.Duration
 	// Now confirm.
 	for _, n := range nodes {
 		wg.Add(1)
-		go func() {
+		go func(id, raftAddr string) {
 			defer wg.Done()
-			addr, err := s.cluster.GetNodeAPIAddr(n.Addr)
+			apiAddr, err := s.cluster.GetNodeAPIAddr(raftAddr)
 			if err == nil {
 				mu.Lock()
-				apiAddrs[n.ID] = addr
+				apiAddrs[id] = apiAddr
 				mu.Unlock()
 			}
-		}()
+		}(n.ID, n.Addr)
 	}
 	wg.Wait()
 

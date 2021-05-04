@@ -201,7 +201,6 @@ func Test_MultiNodeClusterNodes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get nodes status: %s", err.Error())
 	}
-	fmt.Println(nodes)
 	if len(nodes) != len(c) {
 		t.Fatalf("nodes/ output returned wrong number of nodes, got %d, exp %d", len(nodes), len(c))
 	}
@@ -233,7 +232,7 @@ func Test_MultiNodeClusterNodes(t *testing.T) {
 	}
 	f := followers[0]
 	ns = nodes[f.ID]
-	if ns.Addr != leader.RaftAddr {
+	if ns.Addr != f.RaftAddr {
 		t.Fatalf("node has wrong Raft address for follower")
 	}
 	if ns.APIAddr != fmt.Sprintf("http://%s", f.APIAddr) {
