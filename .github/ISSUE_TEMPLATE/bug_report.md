@@ -15,6 +15,6 @@ assignees: ''
 
 **What happened instead?**
 
-**Please include the Status and Expvar output from each node**
+**Please include the Status, Nodes, and Expvar output from each node (or at least the Leader!)**
 
 See https://github.com/rqlite/rqlite/blob/master/DOC/DIAGNOSTICS.md
