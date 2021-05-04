@@ -657,7 +657,7 @@ func (s *Service) handleNodes(w http.ResponseWriter, r *http.Request) {
 	resp := make(map[string]struct {
 		APIAddr   string `json:"api_addr,omitempty"`
 		Addr      string `json:"addr,omitempty"`
-		Reachable bool   `json:"reachable,omitempty"`
+		Reachable bool   `json:"reachable"`
 		Leader    bool   `json:"leader"`
 	})
 
