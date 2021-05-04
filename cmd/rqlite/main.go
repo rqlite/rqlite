@@ -39,6 +39,7 @@ var cliHelp = []string{
 	`.nodes                    Show connection status of all nodes in cluster`,
 	`.schema                   Show CREATE statements for all tables`,
 	`.status                   Show status and diagnostic information for connected node`,
+	`.sysdump <file>           Dump system diagnostics to a file for offline analysis`,
 	`.tables                   List names of tables`,
 	`.timer on|off             Turn query timer on or off`,
 	`.remove <raft ID>         Remove a node from the cluster`,
@@ -127,6 +128,12 @@ func main() {
 					break
 				}
 				err = restore(ctx, line[index+1:], argv)
+			case ".SYSDUMP":
+				if index == -1 || index == len(line)-1 {
+					err = fmt.Errorf("Please specify an output file for the sysdump")
+					break
+				}
+				err = sysdump(ctx, line[index+1:], argv)
 			case ".DUMP":
 				if index == -1 || index == len(line)-1 {
 					err = fmt.Errorf("Please specify an output file for the SQL text")
@@ -186,6 +193,10 @@ func nodes(ctx *cli.Context, cmd, line string, argv *argT) error {
 func expvar(ctx *cli.Context, cmd, line string, argv *argT) error {
 	url := fmt.Sprintf("%s://%s:%d/debug/vars", argv.Protocol, argv.Host, argv.Port)
 	return cliJSON(ctx, cmd, line, url, argv)
+}
+
+func sysdump(ctx *cli.Context, filename string, argv *argT) error {
+	return nil
 }
 
 func getHTTPClient(argv *argT) (*http.Client, error) {
