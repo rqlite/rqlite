@@ -602,10 +602,6 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 // handleNodes returns status on the other voting nodes in the system.
 // This attempts to contact all the nodes in the cluster, so may take
 // some time to return.
-//
-// Only voting nodes are contacted because a) they are the most important
-// nodes in the cluster, and b) there could be a large number of non-voting
-// nodes in the cluster.
 func (s *Service) handleNodes(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 
@@ -631,7 +627,7 @@ func (s *Service) handleNodes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get nodes in the cluster, and filter out non-voters.
+	// Get nodes in the cluster, and possibly filter out non-voters.
 	nodes, err := s.store.Nodes()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -665,7 +661,7 @@ func (s *Service) handleNodes(w http.ResponseWriter, r *http.Request) {
 		Leader    bool   `json:"leader"`
 	})
 
-	for _, n := range nodes {
+	for _, n := range filteredNodes {
 		nn := resp[n.ID]
 		nn.Addr = n.Addr
 		nn.Leader = nn.Addr == lAddr

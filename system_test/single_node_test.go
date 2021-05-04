@@ -392,7 +392,7 @@ func Test_SingleNodeNodes(t *testing.T) {
 	defer node.Deprovision()
 
 	// Access endpoints to ensure the code is covered.
-	nodes, err := node.Nodes()
+	nodes, err := node.Nodes(false)
 	if err != nil {
 		t.Fatalf("failed to access nodes endpoint: %s", err.Error())
 	}

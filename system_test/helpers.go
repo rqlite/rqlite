@@ -189,8 +189,13 @@ type NodesStatus map[string]struct {
 }
 
 // Nodes returns the sNodes endpoint output for node.
-func (n *Node) Nodes() (NodesStatus, error) {
+func (n *Node) Nodes(includeNonVoters bool) (NodesStatus, error) {
 	v, _ := url.Parse("http://" + n.APIAddr + "/nodes")
+	if includeNonVoters {
+		q := v.Query()
+		q.Set("nonvoters", "true")
+		v.RawQuery = q.Encode()
+	}
 
 	resp, err := http.Get(v.String())
 	if err != nil {
