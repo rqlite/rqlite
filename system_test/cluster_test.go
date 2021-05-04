@@ -197,7 +197,7 @@ func Test_MultiNodeClusterNodes(t *testing.T) {
 	}
 
 	// Get nodes/ status from a node
-	nodes, err := node1.Nodes()
+	nodes, err := node1.Nodes(false)
 	if err != nil {
 		t.Fatalf("failed to get nodes status: %s", err.Error())
 	}
@@ -244,7 +244,63 @@ func Test_MultiNodeClusterNodes(t *testing.T) {
 	if !ns.Reachable {
 		t.Fatalf("node is not reachable")
 	}
+}
 
+// Test_MultiNodeClusterNodesNonVoter checks nodes/ endpoint with a non-voting node.
+func Test_MultiNodeClusterNodesNonVoter(t *testing.T) {
+	node1 := mustNewLeaderNode()
+	defer node1.Deprovision()
+
+	node2 := mustNewNode(false)
+	defer node2.Deprovision()
+	if err := node2.Join(node1); err != nil {
+		t.Fatalf("node failed to join leader: %s", err.Error())
+	}
+	_, err := node2.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for leader: %s", err.Error())
+	}
+
+	// Get the new leader, in case it changed.
+	c := Cluster{node1, node2}
+	leader, err := c.Leader()
+	if err != nil {
+		t.Fatalf("failed to find cluster leader: %s", err.Error())
+	}
+
+	node3 := mustNewNode(false)
+	defer node3.Deprovision()
+	if err := node3.JoinAsNonVoter(leader); err != nil {
+		t.Fatalf("node failed to join leader: %s", err.Error())
+	}
+	_, err = node3.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for leader: %s", err.Error())
+	}
+
+	// Get the new leader, in case it changed.
+	c = Cluster{node1, node2, node3}
+	leader, err = c.Leader()
+	if err != nil {
+		t.Fatalf("failed to find cluster leader: %s", err.Error())
+	}
+
+	// Get nodes/ status from a node
+	nodes, err := node1.Nodes(false)
+	if err != nil {
+		t.Fatalf("failed to get nodes status: %s", err.Error())
+	}
+	if len(nodes) != len(c)-1 {
+		t.Fatalf("nodes/ output returned wrong number of nodes, got %d, exp %d", len(nodes), len(c))
+	}
+
+	nodes, err = node1.Nodes(true)
+	if err != nil {
+		t.Fatalf("failed to get nodes status including non-voters: %s", err.Error())
+	}
+	if len(nodes) != len(c) {
+		t.Fatalf("nodes/ output returned wrong number of nodes, got %d, exp %d", len(nodes), len(c))
+	}
 }
 
 // Test_MultiNodeClusterNodeEncrypted tests formation of a 3-node cluster, and its operation.

@@ -2,8 +2,9 @@ package store
 
 // Server represents another node in the cluster.
 type Server struct {
-	ID   string `json:"id,omitempty"`
-	Addr string `json:"addr,omitempty"`
+	ID       string `json:"id,omitempty"`
+	Addr     string `json:"addr,omitempty"`
+	Suffrage string `json:"suffrage,omitempty"`
 }
 
 // Servers is a set of Servers.

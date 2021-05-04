@@ -30,10 +30,13 @@ runtime:
  ```
 
  ## Nodes API
- The _nodes_ API returns basic information for every node in the cluster, as seen by the node receiving the _nodes_ request. The receiving node will also check whether each other node is currently connected to it, and report that status. This is an effective way to determine the cluster leader, and the leader's HTTP API address. It can also be used to check if the cluster is **basically** running -- if every node is reachable, it probably is.
+ The _nodes_ API returns basic information for nodes in the cluster, as seen by the node receiving the _nodes_ request. The receiving node will also check whether it can actually connect to those nodes. This is an effective way to determine the cluster leader, and the leader's HTTP API address. It can also be used to check if the cluster is **basically** running -- if the other nodes are reachable, it probably is.
 
- ```bash
- curl localhost:4001/nodes?pretty
+ By default the node only checks if _voting_ nodes are contactable.
+
+```bash
+curl localhost:4001/nodes?pretty
+curl localhost:4001/nodes?nonvoters&pretty  # Also check non-voting nodes.
 ```
 
 You can also request the same nodes information via the CLI:

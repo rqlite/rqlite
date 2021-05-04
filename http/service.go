@@ -599,9 +599,9 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleNodes returns status on the other nodes in the system. This
-// attempts to contact all the nodes in the cluster, so may take some
-// time to return.
+// handleNodes returns status on the other voting nodes in the system.
+// This attempts to contact all the nodes in the cluster, so may take
+// some time to return.
 func (s *Service) handleNodes(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 
@@ -621,10 +621,25 @@ func (s *Service) handleNodes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	includeNonVoters, err := nonVoters(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Get nodes in the cluster, and possibly filter out non-voters.
 	nodes, err := s.store.Nodes()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+
+	filteredNodes := make([]*store.Server, 0)
+	for _, n := range nodes {
+		if n.Suffrage != "Voter" && !includeNonVoters {
+			continue
+		}
+		filteredNodes = append(filteredNodes, n)
 	}
 
 	lAddr, err := s.store.LeaderAddr()
@@ -633,7 +648,7 @@ func (s *Service) handleNodes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	apiAddrs, err := s.checkNodesAPIAddr(nodes, t)
+	apiAddrs, err := s.checkNodesAPIAddr(filteredNodes, t)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -646,7 +661,7 @@ func (s *Service) handleNodes(w http.ResponseWriter, r *http.Request) {
 		Leader    bool   `json:"leader"`
 	})
 
-	for _, n := range nodes {
+	for _, n := range filteredNodes {
 		nn := resp[n.ID]
 		nn.Addr = n.Addr
 		nn.Leader = nn.Addr == lAddr
@@ -1080,6 +1095,11 @@ func isTx(req *http.Request) (bool, error) {
 // noLeader returns whether processing should skip the leader check.
 func noLeader(req *http.Request) (bool, error) {
 	return queryParam(req, "noleader")
+}
+
+// nonVoters returns whether a query is requesting to include non-voter results
+func nonVoters(req *http.Request) (bool, error) {
+	return queryParam(req, "nonvoters")
 }
 
 // timings returns whether timings are requested.

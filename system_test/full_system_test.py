@@ -255,7 +255,7 @@ class Node(object):
   def _status_url(self):
     return 'http://' + self.APIAddr() + '/status'
   def _nodes_url(self):
-    return 'http://' + self.APIAddr() + '/nodes'
+    return 'http://' + self.APIAddr() + '/nodes?nonvoters' # Getting all nodes back makes testing easier
   def _expvar_url(self):
     return 'http://' + self.APIAddr() + '/debug/vars'
   def _query_url(self):
