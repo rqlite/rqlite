@@ -386,8 +386,9 @@ func (s *Store) Nodes() ([]*Server, error) {
 	servers := make([]*Server, len(rs))
 	for i := range rs {
 		servers[i] = &Server{
-			ID:   string(rs[i].ID),
-			Addr: string(rs[i].Address),
+			ID:       string(rs[i].ID),
+			Addr:     string(rs[i].Address),
+			Suffrage: rs[i].Suffrage.String(),
 		}
 	}
 
