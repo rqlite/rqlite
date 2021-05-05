@@ -6,9 +6,11 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os"
 	"sort"
 	"strings"
 
@@ -196,7 +198,21 @@ func expvar(ctx *cli.Context, cmd, line string, argv *argT) error {
 }
 
 func sysdump(ctx *cli.Context, filename string, argv *argT) error {
-	return nil
+	f, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+
+	urls := []string{
+		fmt.Sprintf("%s://%s:%d/status?pretty", argv.Protocol, argv.Host, argv.Port),
+		fmt.Sprintf("%s://%s:%d/nodes?pretty", argv.Protocol, argv.Host, argv.Port),
+		fmt.Sprintf("%s://%s:%d/debug/vars", argv.Protocol, argv.Host, argv.Port),
+	}
+
+	if err := urlsToWriter(urls, f, argv); err != nil {
+		return err
+	}
+	return f.Close()
 }
 
 func getHTTPClient(argv *argT) (*http.Client, error) {
@@ -408,6 +424,64 @@ func cliJSON(ctx *cli.Context, cmd, line, url string, argv *argT) error {
 		ret = map[string]interface{}{parts[1]: ret[parts[1]]}
 	}
 	pprint(0, ret)
+
+	return nil
+}
+
+func urlsToWriter(urls []string, w io.Writer, argv *argT) error {
+	client := http.Client{Transport: &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: argv.Insecure},
+		Proxy:           http.ProxyFromEnvironment,
+	}}
+
+	for i := range urls {
+		err := func() error {
+			w.Write([]byte("\n=========================================\n"))
+			w.Write([]byte(fmt.Sprintf("URL: %s\n", urls[i])))
+
+			req, err := http.NewRequest("GET", urls[i], nil)
+			if err != nil {
+				return err
+			}
+			if argv.Credentials != "" {
+				creds := strings.Split(argv.Credentials, ":")
+				if len(creds) != 2 {
+					return fmt.Errorf("invalid Basic Auth credentials format")
+				}
+				req.SetBasicAuth(creds[0], creds[1])
+			}
+
+			resp, err := client.Do(req)
+			if err != nil {
+				if _, err := w.Write([]byte(fmt.Sprintf("Status: %s\n\n", err))); err != nil {
+					return err
+				}
+				return nil
+			}
+			defer resp.Body.Close()
+
+			if _, err := w.Write([]byte(fmt.Sprintf("Status: %s\n\n", resp.Status))); err != nil {
+				return err
+			}
+
+			if resp.StatusCode != http.StatusOK {
+				return nil
+			}
+
+			body, err := ioutil.ReadAll(resp.Body)
+			if err != nil {
+				return err
+			}
+
+			if _, err := w.Write(body); err != nil {
+				return err
+			}
+			return nil
+		}()
+		if err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
