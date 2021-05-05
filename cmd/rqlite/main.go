@@ -13,6 +13,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/Bowery/prompt"
 	"github.com/mkideal/cli"
@@ -429,10 +430,13 @@ func cliJSON(ctx *cli.Context, cmd, line, url string, argv *argT) error {
 }
 
 func urlsToWriter(urls []string, w io.Writer, argv *argT) error {
-	client := http.Client{Transport: &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: argv.Insecure},
-		Proxy:           http.ProxyFromEnvironment,
-	}}
+	client := http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: argv.Insecure},
+			Proxy:           http.ProxyFromEnvironment,
+		},
+		Timeout: 10 * time.Second,
+	}
 
 	for i := range urls {
 		err := func() error {
