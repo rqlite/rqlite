@@ -17,12 +17,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rqlite/rqlite/auth"
-	"github.com/rqlite/rqlite/cluster"
-	"github.com/rqlite/rqlite/disco"
-	httpd "github.com/rqlite/rqlite/http"
-	"github.com/rqlite/rqlite/store"
-	"github.com/rqlite/rqlite/tcp"
+	"github.com/rqlite/rqlite/v6/auth"
+	"github.com/rqlite/rqlite/v6/cluster"
+	"github.com/rqlite/rqlite/v6/disco"
+	httpd "github.com/rqlite/rqlite/v6/http"
+	"github.com/rqlite/rqlite/v6/store"
+	"github.com/rqlite/rqlite/v6/tcp"
 )
 
 const logo = `

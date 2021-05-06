@@ -6,8 +6,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/rqlite/rqlite/tcp"
-	"github.com/rqlite/rqlite/testdata/x509"
+	"github.com/rqlite/rqlite/v6/tcp"
+	"github.com/rqlite/rqlite/v6/testdata/x509"
 )
 
 func Test_NewServiceSetGetNodeAPIAddrMuxed(t *testing.T) {

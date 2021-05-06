@@ -21,9 +21,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rqlite/rqlite/command"
-	sql "github.com/rqlite/rqlite/db"
-	"github.com/rqlite/rqlite/store"
+	"github.com/rqlite/rqlite/v6/command"
+	sql "github.com/rqlite/rqlite/v6/db"
+	"github.com/rqlite/rqlite/v6/store"
 )
 
 // Database is the interface any queryable system must implement

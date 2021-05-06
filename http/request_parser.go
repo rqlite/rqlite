@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/rqlite/rqlite/command"
+	"github.com/rqlite/rqlite/v6/command"
 )
 
 var (
