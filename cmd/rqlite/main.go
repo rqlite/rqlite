@@ -6,11 +6,14 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/Bowery/prompt"
 	"github.com/mkideal/cli"
@@ -39,6 +42,7 @@ var cliHelp = []string{
 	`.nodes                    Show connection status of all nodes in cluster`,
 	`.schema                   Show CREATE statements for all tables`,
 	`.status                   Show status and diagnostic information for connected node`,
+	`.sysdump <file>           Dump system diagnostics to a file for offline analysis`,
 	`.tables                   List names of tables`,
 	`.timer on|off             Turn query timer on or off`,
 	`.remove <raft ID>         Remove a node from the cluster`,
@@ -127,6 +131,12 @@ func main() {
 					break
 				}
 				err = restore(ctx, line[index+1:], argv)
+			case ".SYSDUMP":
+				if index == -1 || index == len(line)-1 {
+					err = fmt.Errorf("Please specify an output file for the sysdump")
+					break
+				}
+				err = sysdump(ctx, line[index+1:], argv)
 			case ".DUMP":
 				if index == -1 || index == len(line)-1 {
 					err = fmt.Errorf("Please specify an output file for the SQL text")
@@ -186,6 +196,24 @@ func nodes(ctx *cli.Context, cmd, line string, argv *argT) error {
 func expvar(ctx *cli.Context, cmd, line string, argv *argT) error {
 	url := fmt.Sprintf("%s://%s:%d/debug/vars", argv.Protocol, argv.Host, argv.Port)
 	return cliJSON(ctx, cmd, line, url, argv)
+}
+
+func sysdump(ctx *cli.Context, filename string, argv *argT) error {
+	f, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+
+	urls := []string{
+		fmt.Sprintf("%s://%s:%d/status?pretty", argv.Protocol, argv.Host, argv.Port),
+		fmt.Sprintf("%s://%s:%d/nodes?pretty", argv.Protocol, argv.Host, argv.Port),
+		fmt.Sprintf("%s://%s:%d/debug/vars", argv.Protocol, argv.Host, argv.Port),
+	}
+
+	if err := urlsToWriter(urls, f, argv); err != nil {
+		return err
+	}
+	return f.Close()
 }
 
 func getHTTPClient(argv *argT) (*http.Client, error) {
@@ -397,6 +425,67 @@ func cliJSON(ctx *cli.Context, cmd, line, url string, argv *argT) error {
 		ret = map[string]interface{}{parts[1]: ret[parts[1]]}
 	}
 	pprint(0, ret)
+
+	return nil
+}
+
+func urlsToWriter(urls []string, w io.Writer, argv *argT) error {
+	client := http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: argv.Insecure},
+			Proxy:           http.ProxyFromEnvironment,
+		},
+		Timeout: 10 * time.Second,
+	}
+
+	for i := range urls {
+		err := func() error {
+			w.Write([]byte("\n=========================================\n"))
+			w.Write([]byte(fmt.Sprintf("URL: %s\n", urls[i])))
+
+			req, err := http.NewRequest("GET", urls[i], nil)
+			if err != nil {
+				return err
+			}
+			if argv.Credentials != "" {
+				creds := strings.Split(argv.Credentials, ":")
+				if len(creds) != 2 {
+					return fmt.Errorf("invalid Basic Auth credentials format")
+				}
+				req.SetBasicAuth(creds[0], creds[1])
+			}
+
+			resp, err := client.Do(req)
+			if err != nil {
+				if _, err := w.Write([]byte(fmt.Sprintf("Status: %s\n\n", err))); err != nil {
+					return err
+				}
+				return nil
+			}
+			defer resp.Body.Close()
+
+			if _, err := w.Write([]byte(fmt.Sprintf("Status: %s\n\n", resp.Status))); err != nil {
+				return err
+			}
+
+			if resp.StatusCode != http.StatusOK {
+				return nil
+			}
+
+			body, err := ioutil.ReadAll(resp.Body)
+			if err != nil {
+				return err
+			}
+
+			if _, err := w.Write(body); err != nil {
+				return err
+			}
+			return nil
+		}()
+		if err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
