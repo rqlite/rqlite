@@ -11,6 +11,7 @@ The data API and cluster-management API remain unchanged however, so client code
 
 ### New features
 - [PR #796](https://github.com/rqlite/rqlite/pull/796): `nodes/` API reports real-time status of other nodes in cluster. Fixes [issue #768](https://github.com/rqlite/rqlite/issues/768).
+- [PR #802](https://github.com/rqlite/rqlite/pull/802): Add `.sysdump` command to rqlite CLI.
 
 ### Implementation changes and bug fixes
  - [PR #792](https://github.com/rqlite/rqlite/pull/792): Fetch leader HTTP API addresses on demand.
