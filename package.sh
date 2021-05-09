@@ -37,7 +37,9 @@ cd $tmp_build/src/github.com/rqlite
 git clone $REPO_URL
 cd rqlite
 go get -d ./...
-go install -ldflags="-X cmd.Version=$VERSION -X cmd.Branch=$branch -X cmd.Commit=$commit -X cmd.Buildtime=$buildtime" ./...
+
+LINKER_PKG_PATH=github.com/rqlite/rqlite/cmd
+go install -ldflags="-X $LINKER_PKG_PATH.Version=$VERSION -X $LINKER_PKG_PATH.Branch=$branch -X $LINKER_PKG_PATH.Commit=$commit -X $LINKER_PKG_PATH.Buildtime=$buildtime" ./...
 
 release=`echo rqlite-$VERSION-$kernel-$machine | tr '[:upper:]' '[:lower:]'`
 release_pkg=${release}.tar.gz

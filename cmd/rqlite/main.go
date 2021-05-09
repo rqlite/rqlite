@@ -71,7 +71,7 @@ func main() {
 		}
 
 		fmt.Println("Welcome to the rqlite CLI. Enter \".help\" for usage hints.")
-		fmt.Println("Version %s, commit %s, branch %s", name, cmd.Version, cmd.Commit, cmd.Branch)
+		fmt.Printf("Version %s, commit %s, branch %s\n", cmd.Version, cmd.Commit, cmd.Branch)
 		fmt.Printf("Connected to rqlited version %s\n", version)
 
 		timer := false
