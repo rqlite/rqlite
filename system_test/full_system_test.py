@@ -1,5 +1,11 @@
 #!/usr/bin/env python
 
+# End-to-end testing using actual rqlited binary.
+#
+# To run a specific test, execute
+#
+#  python system_test/full_system_test.py Class.test
+
 from __future__ import print_function
 import tempfile
 import argparse
@@ -401,6 +407,28 @@ class TestIdempotentJoin(unittest.TestCase):
     self.n1.start(join=self.n0.APIAddr())
     self.n1.wait_for_leader()
     self.assertEqual(self.n0.num_join_requests(), 1)
+
+class TestRedirectedJoin(unittest.TestCase):
+  def tearDown(self):
+    deprovision_node(self.n0)
+    deprovision_node(self.n1)
+    deprovision_node(self.n2)
+
+  def test(self):
+    '''Test that a node can join via a follower'''
+    self.n0 = Node(RQLITED_PATH, '0')
+    self.n0.start()
+    l0 = self.n0.wait_for_leader()
+
+    self.n1 = Node(RQLITED_PATH, '1')
+    self.n1.start(join=self.n0.APIAddr())
+    self.n1.wait_for_leader()
+    self.assertTrue(self.n1.is_follower())
+
+    self.n2 = Node(RQLITED_PATH, '2')
+    self.n2.start(join=self.n1.APIAddr())
+    l2 = self.n2.wait_for_leader()
+    self.assertEqual(l0, l2)
 
 class TestEndToEnd(unittest.TestCase):
   def setUp(self):
