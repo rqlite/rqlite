@@ -430,6 +430,23 @@ class TestRedirectedJoin(unittest.TestCase):
     l2 = self.n2.wait_for_leader()
     self.assertEqual(l0, l2)
 
+  def test_api_adv(self):
+    '''Test that a node can join via a follower that advertises a different API address'''
+    self.n0 = Node(RQLITED_PATH, '0',
+      api_addr="0.0.0.0:4001", api_adv="localhost:4001")
+    self.n0.start()
+    l0 = self.n0.wait_for_leader()
+
+    self.n1 = Node(RQLITED_PATH, '1')
+    self.n1.start(join=self.n0.APIAddr())
+    self.n1.wait_for_leader()
+    self.assertTrue(self.n1.is_follower())
+
+    self.n2 = Node(RQLITED_PATH, '2')
+    self.n2.start(join=self.n1.APIAddr())
+    l2 = self.n2.wait_for_leader()
+    self.assertEqual(l0, l2)
+
 class TestEndToEnd(unittest.TestCase):
   def setUp(self):
     n0 = Node(RQLITED_PATH, '0')
