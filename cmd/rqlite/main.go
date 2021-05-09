@@ -17,6 +17,7 @@ import (
 
 	"github.com/Bowery/prompt"
 	"github.com/mkideal/cli"
+	"github.com/rqlite/rqlite/cmd"
 )
 
 const maxRedirect = 21
@@ -70,7 +71,8 @@ func main() {
 		}
 
 		fmt.Println("Welcome to the rqlite CLI. Enter \".help\" for usage hints.")
-		fmt.Printf("Connected to version %s\n", version)
+		fmt.Println("Version %s, commit %s, branch %s", name, cmd.Version, cmd.Commit, cmd.Branch)
+		fmt.Printf("Connected to rqlited version %s\n", version)
 
 		timer := false
 		prefix := fmt.Sprintf("%s:%d>", argv.Host, argv.Port)

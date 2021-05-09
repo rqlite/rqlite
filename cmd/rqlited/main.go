@@ -19,6 +19,7 @@ import (
 
 	"github.com/rqlite/rqlite/auth"
 	"github.com/rqlite/rqlite/cluster"
+	"github.com/rqlite/rqlite/cmd"
 	"github.com/rqlite/rqlite/disco"
 	httpd "github.com/rqlite/rqlite/http"
 	"github.com/rqlite/rqlite/store"
@@ -35,15 +36,6 @@ const logo = `
          | |               www.rqlite.com
          |_|
 `
-
-// These variables are populated via the Go linker.
-var (
-	version   = "6"
-	commit    = "unknown"
-	branch    = "unknown"
-	buildtime = "unknown"
-	features  = []string{}
-)
 
 var httpAddr string
 var httpAdv string
@@ -148,7 +140,7 @@ func main() {
 
 	if showVersion {
 		fmt.Printf("%s %s %s %s %s (commit %s, branch %s)\n",
-			name, version, runtime.GOOS, runtime.GOARCH, runtime.Version(), commit, branch)
+			name, cmd.Version, runtime.GOOS, runtime.GOARCH, runtime.Version(), cmd.Commit, cmd.Branch)
 		os.Exit(0)
 	}
 
@@ -173,7 +165,7 @@ func main() {
 	log.SetFlags(log.LstdFlags)
 	log.SetOutput(os.Stderr)
 	log.SetPrefix(fmt.Sprintf("[%s] ", name))
-	log.Printf("%s starting, version %s, commit %s, branch %s", name, version, commit, branch)
+	log.Printf("%s starting, version %s, commit %s, branch %s", name, cmd.Version, cmd.Commit, cmd.Branch)
 	log.Printf("%s, target architecture is %s, operating system target is %s", runtime.Version(), runtime.GOARCH, runtime.GOOS)
 	log.Printf("launch command: %s", strings.Join(os.Args, " "))
 
@@ -404,10 +396,10 @@ func startHTTPService(str *store.Store, cltr *cluster.Service) error {
 	s.Expvar = expvar
 	s.Pprof = pprofEnabled
 	s.BuildInfo = map[string]interface{}{
-		"commit":     commit,
-		"branch":     branch,
-		"version":    version,
-		"build_time": buildtime,
+		"commit":     cmd.Commit,
+		"branch":     cmd.Branch,
+		"version":    cmd.Version,
+		"build_time": cmd.Buildtime,
 	}
 	return s.Start()
 }
