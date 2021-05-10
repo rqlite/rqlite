@@ -21,6 +21,9 @@ API_TOKEN=$3
 tmp_build=`mktemp -d`
 tmp_pkg=`mktemp -d`
 
+echo "$tmp_build created for build process."
+echo "$tmp_pkg created for packaging process."
+
 kernel=`uname -s`
 machine=`uname -m`
 if [ "$machine" == "x86_64" ]; then
