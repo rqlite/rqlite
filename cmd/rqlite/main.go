@@ -17,6 +17,7 @@ import (
 
 	"github.com/Bowery/prompt"
 	"github.com/mkideal/cli"
+	"github.com/rqlite/rqlite/cmd"
 )
 
 const maxRedirect = 21
@@ -30,6 +31,7 @@ type argT struct {
 	Insecure    bool   `cli:"i,insecure" usage:"do not verify rqlited HTTPS certificate" dft:"false"`
 	CACert      string `cli:"c,ca-cert" usage:"path to trusted X.509 root CA certificate"`
 	Credentials string `cli:"u,user" usage:"set basic auth credentials in form username:password"`
+	Version     bool   `cli:"v,version" usage:"display CLI version"`
 }
 
 var cliHelp = []string{
@@ -57,6 +59,12 @@ func main() {
 			return nil
 		}
 
+		if argv.Version {
+			ctx.String("Version %s, commmit %s, branch %s, built on %s\n", cmd.Version,
+				cmd.Commit, cmd.Branch, cmd.Buildtime)
+			return nil
+		}
+
 		client, err := getHTTPClient(argv)
 		if err != nil {
 			ctx.String("%s %v\n", ctx.Color().Red("ERR!"), err)
@@ -70,7 +78,8 @@ func main() {
 		}
 
 		fmt.Println("Welcome to the rqlite CLI. Enter \".help\" for usage hints.")
-		fmt.Printf("Connected to version %s\n", version)
+		fmt.Printf("Version %s, commit %s, branch %s\n", cmd.Version, cmd.Commit, cmd.Branch)
+		fmt.Printf("Connected to rqlited version %s\n", version)
 
 		timer := false
 		prefix := fmt.Sprintf("%s:%d>", argv.Host, argv.Port)
