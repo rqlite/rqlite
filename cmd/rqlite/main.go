@@ -31,6 +31,7 @@ type argT struct {
 	Insecure    bool   `cli:"i,insecure" usage:"do not verify rqlited HTTPS certificate" dft:"false"`
 	CACert      string `cli:"c,ca-cert" usage:"path to trusted X.509 root CA certificate"`
 	Credentials string `cli:"u,user" usage:"set basic auth credentials in form username:password"`
+	Version     bool   `cli:"v,version" usage:"display CLI version"`
 }
 
 var cliHelp = []string{
@@ -55,6 +56,12 @@ func main() {
 		argv := ctx.Argv().(*argT)
 		if argv.Help {
 			ctx.WriteUsage()
+			return nil
+		}
+
+		if argv.Version {
+			ctx.String("Version %s, commmit %s, branch %s, built on %s\n", cmd.Version,
+				cmd.Commit, cmd.Branch, cmd.Buildtime)
 			return nil
 		}
 
