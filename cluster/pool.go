@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"errors"
 	"net"
 	"sync"
 	"time"
@@ -21,15 +22,19 @@ func (pc *PoolConn) Read(b []byte) (n int, err error) {
 }
 
 func (pc *PoolConn) Close() error {
+	pc.pool.mu.Lock()
+	defer pc.pool.mu.Unlock()
 	return pc.conn.Close()
 }
 
 type PooledTransport struct {
-	mu    sync.RWMutex
-	tn    Transport
-	conns map[string]chan net.Conn
+	mu   sync.RWMutex
+	tn   Transport
+	pool map[string]chan net.Conn
 }
 
+// XXX This model isn't going to work. Too complex. I need a pool *per address*!!!
+// Pool logic shouldn't care about address, just hold connections.
 func NewPooledTransport(tn Transport) *PooledTransport {
 	c := &PooledTransport{
 		tn: tn,
@@ -39,6 +44,27 @@ func NewPooledTransport(tn Transport) *PooledTransport {
 }
 
 func (pt *PooledTransport) Dial(address string, timeout time.Duration) (net.Conn, error) {
+	pt.mu.Lock()
+	defer pt.mu.Unlock()
+
+	conns, ok := pt.pool[address]
+	if ok {
+		select {
+		case conn := <-conns:
+			if conn == nil {
+				return nil, errors.New("connection pool closed")
+			}
+
+			return pt.wrapConn(conn), nil
+		default:
+			conn, err := pt.tn.Dial(address, timeout)
+			if err != nil {
+				return nil, err
+			}
+
+			return pt.wrapConn(conn), nil
+		}
+	}
 	return pt.tn.Dial(address, timeout)
 }
 
@@ -53,3 +79,12 @@ func (pt *PooledTransport) Close() error {
 func (pt *PooledTransport) Addr() net.Addr {
 	return pt.tn.Addr()
 }
+
+func (pt *PooledTransport) wrapConn(c net.Conn) net.Conn {
+	return &PoolConn{
+		conn: c,
+		pool: pt,
+	}
+}
+
+func (pt *PooledTransport) returnConn()
