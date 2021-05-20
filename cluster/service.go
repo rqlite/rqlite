@@ -117,7 +117,7 @@ func (s *Service) GetNodeAPIAddr(nodeAddr string) (string, error) {
 
 	conn, err := s.tn.Dial(nodeAddr, s.timeout)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("dial connection: %s", err)
 	}
 	defer conn.Close()
 
@@ -127,25 +127,31 @@ func (s *Service) GetNodeAPIAddr(nodeAddr string) (string, error) {
 	}
 	p, err := proto.Marshal(c)
 	if err != nil {
-		conn.Close()
+		return "", fmt.Errorf("command marshal: %s", err)
 	}
 
 	// Write length of Protobuf, the Protobuf
 	b := make([]byte, 4)
 	binary.LittleEndian.PutUint16(b[0:], uint16(len(p)))
 
-	conn.Write(b)
-	conn.Write(p)
+	_, err = conn.Write(b)
+	if err != nil {
+		return "", fmt.Errorf("write protobuf length: %s", err)
+	}
+	_, err = conn.Write(p)
+	if err != nil {
+		return "", fmt.Errorf("write protobuf: %s", err)
+	}
 
 	b, err = ioutil.ReadAll(conn)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("read protobuf bytes: %s", err)
 	}
 
 	a := &Address{}
 	err = proto.Unmarshal(b, a)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("protobuf unmarshal: %s", err)
 	}
 
 	return a.Url, nil
