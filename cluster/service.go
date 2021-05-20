@@ -134,8 +134,14 @@ func (s *Service) GetNodeAPIAddr(nodeAddr string) (string, error) {
 	b := make([]byte, 4)
 	binary.LittleEndian.PutUint16(b[0:], uint16(len(p)))
 
-	conn.Write(b)
-	conn.Write(p)
+	_, err = conn.Write(b)
+	if err != nil {
+		return "", fmt.Errorf("write protobuf length: %s", err)
+	}
+	_, err = conn.Write(p)
+	if err != nil {
+		return "", fmt.Errorf("write protobuf: %s", err)
+	}
 
 	b, err = ioutil.ReadAll(conn)
 	if err != nil {
