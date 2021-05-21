@@ -183,6 +183,13 @@ func main() {
 	}
 	raftTn := mux.Listen(cluster.MuxRaftHeader)
 
+	// Create cluster service, so nodes can learn information about each other. This can be started
+	// now since it doesn't require a functioning Store yet.
+	clstr, err := clusterService(mux.Listen(cluster.MuxClusterHeader))
+	if err != nil {
+		log.Fatalf("failed to create cluster service: %s", err.Error())
+	}
+
 	// Create and open the store.
 	dataPath, err = filepath.Abs(dataPath)
 	if err != nil {
@@ -297,12 +304,7 @@ func main() {
 	if err := waitForConsensus(str); err != nil {
 		log.Fatalf(err.Error())
 	}
-
-	// Create cluster service, so nodes can learn information about each other.
-	clstr, err := clusterService(mux.Listen(cluster.MuxClusterHeader))
-	if err != nil {
-		log.Fatalf("failed to create cluster service: %s", err.Error())
-	}
+	log.Println("store has reached consensus")
 
 	// Start the HTTP API server.
 	if err := startHTTPService(str, clstr); err != nil {
