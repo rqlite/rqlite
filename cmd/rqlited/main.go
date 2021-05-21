@@ -297,6 +297,7 @@ func main() {
 	if err := waitForConsensus(str); err != nil {
 		log.Fatalf(err.Error())
 	}
+	log.Println("store has reached consensus")
 
 	// Create cluster service, so nodes can learn information about each other.
 	clstr, err := clusterService(mux.Listen(cluster.MuxClusterHeader))

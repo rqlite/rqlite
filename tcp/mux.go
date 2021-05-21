@@ -254,6 +254,7 @@ func (mux *Mux) Listen(header byte) *Layer {
 	if _, ok := mux.m[header]; ok {
 		panic(fmt.Sprintf("listener already registered under header byte: %d", header))
 	}
+	mux.Logger.Printf("received handler registration request for header %d", header)
 
 	// Create a new listener and assign it.
 	ln := &listener{
