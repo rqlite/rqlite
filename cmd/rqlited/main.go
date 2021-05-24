@@ -85,7 +85,7 @@ const desc = `rqlite is a lightweight, distributed relational database, which us
 storage engine. It provides an easy-to-use, fault-tolerant store for relational data.`
 
 func init() {
-	flag.StringVar(&nodeID, "node-id", "", "Unique name for node. If not set, set to hostname")
+	flag.StringVar(&nodeID, "node-id", "", "Unique name for node. If not set, set to Raft address")
 	flag.StringVar(&httpAddr, "http-addr", "localhost:4001", "HTTP server bind address. For HTTPS, set X.509 cert and key")
 	flag.StringVar(&httpAdv, "http-adv-addr", "", "Advertised HTTP address. If not set, same as HTTP server")
 	flag.StringVar(&joinSrcIP, "join-source-ip", "", "Set source IP address during Join request")
