@@ -136,7 +136,7 @@ class Node(object):
     r.raise_for_status()
     return r.json()
 
-  def is_leader(self):
+  def is_leader(self, constraint_check=True):
     '''
     is_leader returns whether this node is the cluster leader
     It also performs a check, to ensure the node nevers gives out
@@ -149,7 +149,7 @@ class Node(object):
     except requests.exceptions.ConnectionError:
       return False
 
-    if isLeaderRaft != isLeaderNodes:
+    if (isLeaderRaft != isLeaderNodes) and constraint_check:
       raise AssertionError("conflicting states reported for leadership (raft: %s, nodes: %s)"
         % (isLeaderRaft, isLeaderNodes))
     return isLeaderNodes
@@ -293,7 +293,7 @@ def deprovision_node(node):
 class Cluster(object):
   def __init__(self, nodes):
     self.nodes = nodes
-  def wait_for_leader(self, node_exc=None, timeout=TIMEOUT):
+  def wait_for_leader(self, node_exc=None, timeout=TIMEOUT, constraint_check=True):
     t = 0
     while True:
       if t > timeout:
@@ -301,7 +301,7 @@ class Cluster(object):
       for n in self.nodes:
         if node_exc is not None and n == node_exc:
           continue
-        if n.is_leader():
+        if n.is_leader(constraint_check):
           return n
       time.sleep(1)
       t+=1
@@ -638,9 +638,10 @@ class TestEndToEndNonVoterFollowsLeader(unittest.TestCase):
     j = n.query('SELECT * FROM foo')
     self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
 
-    # Kill leader, and then make more changes.
-    n0 = self.cluster.wait_for_leader().stop()
-    n1 = self.cluster.wait_for_leader(node_exc=n0)
+    # Kill leader, and then make more changes. Don't perform leader-constraint checks
+    # since the cluster is changing right now.
+    n0 = self.cluster.wait_for_leader(constraint_check=False).stop()
+    n1 = self.cluster.wait_for_leader(node_exc=n0, constraint_check=False)
     n1.wait_for_applied_index(applied)
     j = n1.query('SELECT * FROM foo')
     self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
