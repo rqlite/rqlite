@@ -120,6 +120,8 @@ type Store struct {
 	raftStable    raft.StableStore          // Persistent k-v store.
 	boltStore     *rlog.Log                 // Physical store.
 
+	inmemStore *raft.InmemStore // In-memory store.
+
 	onDiskCreated        bool      // On disk database actually created?
 	snapsExistOnOpen     bool      // Any snaps present when store opens?
 	firstIdxOnOpen       uint64    // First index on log when Store opens.
@@ -219,12 +221,15 @@ func (s *Store) Open(enableBootstrap bool) error {
 	s.logger.Printf("%d preexisting snapshots present", len(snaps))
 	s.snapsExistOnOpen = len(snaps) > 0
 
-	// Create the log store and stable store.
+	// Create the log store and stable store, both BoltDB-based and in-memory
 	s.boltStore, err = rlog.NewLog(filepath.Join(s.raftDir, raftDBPath))
 	if err != nil {
 		return fmt.Errorf("new log store: %s", err)
 	}
-	s.raftStable = s.boltStore
+	s.inmemStore = raft.NewInmemStore()
+
+	// Provide log and store resources to Raft.
+	s.raftStable = s.inmemStore
 	s.raftLog, err = raft.NewLogCache(raftLogCacheSize, s.boltStore)
 	if err != nil {
 		return fmt.Errorf("new cached store: %s", err)
