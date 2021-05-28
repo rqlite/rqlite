@@ -280,7 +280,7 @@ func Test_MultiNodeClusterNodesNonVoter(t *testing.T) {
 
 	// Get the new leader, in case it changed.
 	c = Cluster{node1, node2, node3}
-	leader, err = c.Leader()
+	_, err = c.Leader()
 	if err != nil {
 		t.Fatalf("failed to find cluster leader: %s", err.Error())
 	}

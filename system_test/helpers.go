@@ -181,6 +181,7 @@ func (n *Node) JoinAsNonVoter(leader *Node) error {
 	return nil
 }
 
+// NodesStatus is the Go type /nodes endpoint response is marshaled into.
 type NodesStatus map[string]struct {
 	APIAddr   string `json:"api_addr,omitempty"`
 	Addr      string `json:"addr,omitempty"`
