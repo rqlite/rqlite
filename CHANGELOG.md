@@ -1,4 +1,4 @@
-## 6.0.0 (unreleased)
+## 6.0.0 (June 8th 2021)
 This release implements a significant design change, which improves rqlite cluster reliability. With this change a rqlite node can more reliably direct read and write requests to the correct node.
 
 In the 5.0 series, _Follower_ nodes learned the HTTP API address of the cluster Leader via information - known as _Metadata_ - that each node wrote to the Raft log. This Metadata was then available to each node in the cluster, if that node needed to redirect queries to the cluster Leader (assuming that node wasn't the Leader at that time). However that design was somewhat complex, and required the tracking of extra state, in addition to the SQLite database. It also meant that if the Metadata got out of sync with the Raft state, the cluster could be in a degraded state.
