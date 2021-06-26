@@ -695,7 +695,7 @@ func (s *Store) Join(id, addr string, voter bool) error {
 		// If a node already exists with either the joining node's ID or address,
 		// that node may need to be removed from the config first.
 		if srv.ID == raft.ServerID(id) || srv.Address == raft.ServerAddress(addr) {
-			// However if *both* the ID and the address are the same, the no
+			// However if *both* the ID and the address are the same, then no
 			// join is actually needed.
 			if srv.Address == raft.ServerAddress(addr) && srv.ID == raft.ServerID(id) {
 				s.logger.Printf("node %s at %s already member of cluster, ignoring join request", id, addr)
