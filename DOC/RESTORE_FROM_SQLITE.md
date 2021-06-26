@@ -56,7 +56,7 @@ $ rqlite
 +----+-------+
 ```
 
-**Note that you must convert the backup file (in the above examples the file named `restore.sqlite`) to the list of SQL commands**. You cannot restore using SQLite backup file.
+**Note that you must convert the SQLite file (in the above examples the file named `restore.sqlite`) to the list of SQL commands**. You cannot restore using the actual SQLite database file.
 
 ## Caveats
 The behavior of the restore operation when data already exists on the cluster is undefined -- you should only restore to a cluster that has no data, or a brand-new cluster. Also, please **note that SQLite dump files normally contain a command to disable Foreign Key constraints**. If you wish to re-enable Foreign Key constraints after the load operation completes, check out [this documentation](https://github.com/rqlite/rqlite/blob/master/DOC/FOREIGN_KEY_CONSTRAINTS.md).
