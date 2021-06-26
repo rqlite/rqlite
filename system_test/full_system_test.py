@@ -401,12 +401,10 @@ class TestIdempotentJoin(unittest.TestCase):
 
     self.assertEqual(self.n0.num_join_requests(), 1)
 
-    # Restart n1, and ensure it doesn't make a second join request
-    # since it's already part of the cluster.
     self.n1.stop()
     self.n1.start(join=self.n0.APIAddr())
     self.n1.wait_for_leader()
-    self.assertEqual(self.n0.num_join_requests(), 1)
+    self.assertEqual(self.n0.num_join_requests(), 2)
 
 class TestRedirectedJoin(unittest.TestCase):
   def tearDown(self):
