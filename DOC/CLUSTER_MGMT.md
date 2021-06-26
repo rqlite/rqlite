@@ -39,7 +39,7 @@ Once executed you now have a cluster of two nodes. Of course, for fault-toleranc
 ```bash
 host3:$ rqlited -node-id 3 -http-addr host3:4001 -raft-addr host3:4002 -join http://host1:4001 ~/node
 ```
-_When simply restarting a node, there is no further need to pass `-join`. In fact, if a node is already a member of cluster (even if the cluster is just that node) `-join` is then ignored. Any join request will also be ignored by the leader if the joining node is already a member of the cluster, and it will be treated as a simple restart by the node. This can be convenient because it means join requests are idempotent, allowing you to leave the initial command-line parameters unchanged, including any `join` options._
+_When simply restarting a node, there is no further need to pass `-join`. In fact, if a node is already a member of a cluster (even if the cluster is just that node) `-join` is then ignored. Any join request will also be ignored by the leader if the joining node is already a member of the cluster, and it will be treated as a simple restart by the node. This can be convenient because it means join requests are idempotent, allowing you to leave the initial command-line parameters unchanged, including any `join` options._
 
 You've now got a fault-tolerant, distributed, relational database. It can tolerate the failure of any node, even the leader, and remain operational.
 
