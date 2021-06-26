@@ -703,9 +703,10 @@ func (s *Store) Join(id, addr string, voter bool) error {
 			}
 
 			if err := s.remove(id); err != nil {
-				s.logger.Printf("failed to remove node: %v", err)
+				s.logger.Printf("failed to remove node %s: %v", id, err)
 				return err
 			}
+			s.logger.Printf("removed node %s prior to rejoin with changed ID or address", id)
 		}
 	}
 
