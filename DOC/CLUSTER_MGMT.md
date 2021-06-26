@@ -39,7 +39,7 @@ Once executed you now have a cluster of two nodes. Of course, for fault-toleranc
 ```bash
 host3:$ rqlited -node-id 3 -http-addr host3:4001 -raft-addr host3:4002 -join http://host1:4001 ~/node
 ```
-_When simply restarting a node, there is no further need to pass `-join`._
+_When simply restarting a node, there is no further need to pass `-join`. However if a node does attempt to join a cluster it is already a member of, and neither its node ID or Raft network address has changed, then the cluster will ignore the join request as there is nothing to do -- the joining node is already a member of the cluster. However, if either the node ID or Raft network address of the joining node has changed, the cluster will first remove the joining node before processing the join request._
 
 You've now got a fault-tolerant, distributed, relational database. It can tolerate the failure of any node, even the leader, and remain operational.
 
