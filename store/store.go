@@ -66,6 +66,9 @@ const (
 	numRestores             = "num_restores"
 	numUncompressedCommands = "num_uncompressed_commands"
 	numCompressedCommands   = "num_compressed_commands"
+	numJoins                = "num_joins"
+	numIgnoredJoins         = "num_ignored_joins"
+	numRemovedBeforeJoins   = "num_removed_before_joins"
 )
 
 // BackupFormat represents the format of database backup.
@@ -89,6 +92,9 @@ func init() {
 	stats.Add(numRestores, 0)
 	stats.Add(numUncompressedCommands, 0)
 	stats.Add(numCompressedCommands, 0)
+	stats.Add(numJoins, 0)
+	stats.Add(numIgnoredJoins, 0)
+	stats.Add(numRemovedBeforeJoins, 0)
 }
 
 // ClusterState defines the possible Raft states the current node can be in
@@ -698,6 +704,7 @@ func (s *Store) Join(id, addr string, voter bool) error {
 			// However if *both* the ID and the address are the same, then no
 			// join is actually needed.
 			if srv.Address == raft.ServerAddress(addr) && srv.ID == raft.ServerID(id) {
+				stats.Add(numIgnoredJoins, 1)
 				s.logger.Printf("node %s at %s already member of cluster, ignoring join request", id, addr)
 				return nil
 			}
@@ -706,6 +713,7 @@ func (s *Store) Join(id, addr string, voter bool) error {
 				s.logger.Printf("failed to remove node %s: %v", id, err)
 				return err
 			}
+			stats.Add(numRemovedBeforeJoins, 1)
 			s.logger.Printf("removed node %s prior to rejoin with changed ID or address", id)
 		}
 	}
@@ -724,6 +732,7 @@ func (s *Store) Join(id, addr string, voter bool) error {
 		return e.Error()
 	}
 
+	stats.Add(numJoins, 1)
 	s.logger.Printf("node at %s joined successfully as %s", addr, prettyVoter(voter))
 	return nil
 }
