@@ -813,6 +813,7 @@ class TestJoinCatchup(unittest.TestCase):
     self.n1.start(join=self.n0.APIAddr())
     self.n1.wait_for_leader()
     self.n1.wait_for_applied_index(applied)
+    self.assertEqual(n0.expvar()['store']['num_ignored_joins'], 1)
     j = self.n1.query('SELECT COUNT(*) FROM foo', level='none')
     self.assertEqual(str(j), "{u'results': [{u'values': [[2]], u'types': [u''], u'columns': [u'COUNT(*)']}]}")
 
@@ -844,6 +845,7 @@ class TestJoinCatchup(unittest.TestCase):
     self.n1.scramble_network()
     self.n1.start(join=self.n0.APIAddr())
     self.n1.wait_for_leader()
+    self.assertEqual(n0.expvar()['store']['num_removed_before_joins'], 1)
     self.n1.wait_for_applied_index(applied)
     j = self.n1.query('SELECT COUNT(*) FROM foo', level='none')
     self.assertEqual(str(j), "{u'results': [{u'values': [[2]], u'types': [u''], u'columns': [u'COUNT(*)']}]}")
