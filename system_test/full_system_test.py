@@ -384,67 +384,6 @@ class TestSingleNode(unittest.TestCase):
       time.sleep(1)
       t+=1
 
-class TestIdempotentJoin(unittest.TestCase):
-  def tearDown(self):
-    deprovision_node(self.n0)
-    deprovision_node(self.n1)
-
-  def test(self):
-    '''Test that a node performing two join requests works fine'''
-    self.n0 = Node(RQLITED_PATH, '0')
-    self.n0.start()
-    self.n0.wait_for_leader()
-
-    self.n1 = Node(RQLITED_PATH, '1')
-    self.n1.start(join=self.n0.APIAddr())
-    self.n1.wait_for_leader()
-
-    self.assertEqual(self.n0.num_join_requests(), 1)
-
-    self.n1.stop()
-    self.n1.start(join=self.n0.APIAddr())
-    self.n1.wait_for_leader()
-    self.assertEqual(self.n0.num_join_requests(), 2)
-
-class TestRedirectedJoin(unittest.TestCase):
-  def tearDown(self):
-    deprovision_node(self.n0)
-    deprovision_node(self.n1)
-    deprovision_node(self.n2)
-
-  def test(self):
-    '''Test that a node can join via a follower'''
-    self.n0 = Node(RQLITED_PATH, '0')
-    self.n0.start()
-    l0 = self.n0.wait_for_leader()
-
-    self.n1 = Node(RQLITED_PATH, '1')
-    self.n1.start(join=self.n0.APIAddr())
-    self.n1.wait_for_leader()
-    self.assertTrue(self.n1.is_follower())
-
-    self.n2 = Node(RQLITED_PATH, '2')
-    self.n2.start(join=self.n1.APIAddr())
-    l2 = self.n2.wait_for_leader()
-    self.assertEqual(l0, l2)
-
-  def test_api_adv(self):
-    '''Test that a node can join via a follower that advertises a different API address'''
-    self.n0 = Node(RQLITED_PATH, '0',
-      api_addr="0.0.0.0:4001", api_adv="localhost:4001")
-    self.n0.start()
-    l0 = self.n0.wait_for_leader()
-
-    self.n1 = Node(RQLITED_PATH, '1')
-    self.n1.start(join=self.n0.APIAddr())
-    self.n1.wait_for_leader()
-    self.assertTrue(self.n1.is_follower())
-
-    self.n2 = Node(RQLITED_PATH, '2')
-    self.n2.start(join=self.n1.APIAddr())
-    l2 = self.n2.wait_for_leader()
-    self.assertEqual(l0, l2)
-
 class TestEndToEnd(unittest.TestCase):
   def setUp(self):
     n0 = Node(RQLITED_PATH, '0')
@@ -804,6 +743,149 @@ class TestEndToEndSnapRestoreCluster(unittest.TestCase):
     deprovision_node(self.n0)
     deprovision_node(self.n1)
     deprovision_node(self.n2)
+
+class TestIdempotentJoin(unittest.TestCase):
+  def tearDown(self):
+    deprovision_node(self.n0)
+    deprovision_node(self.n1)
+
+  def test(self):
+    '''Test that a node performing two join requests works fine'''
+    self.n0 = Node(RQLITED_PATH, '0')
+    self.n0.start()
+    self.n0.wait_for_leader()
+
+    self.n1 = Node(RQLITED_PATH, '1')
+    self.n1.start(join=self.n0.APIAddr())
+    self.n1.wait_for_leader()
+
+    self.assertEqual(self.n0.num_join_requests(), 1)
+
+    self.n1.stop()
+    self.n1.start(join=self.n0.APIAddr())
+    self.n1.wait_for_leader()
+    self.assertEqual(self.n0.num_join_requests(), 2)
+
+class TestJoinCatchup(unittest.TestCase):
+  def setUp(self):
+    self.n0 = Node(RQLITED_PATH, '0')
+    self.n0.start()
+    self.n0.wait_for_leader()
+
+    self.n1 = Node(RQLITED_PATH, '1')
+    self.n1.start(join=self.n0.APIAddr())
+    self.n1.wait_for_leader()
+
+    self.n2 = Node(RQLITED_PATH, '2')
+    self.n2.start(join=self.n0.APIAddr())
+    self.n2.wait_for_leader()
+
+    self.cluster = Cluster([self.n0, self.n1, self.n2])
+
+  def tearDown(self):
+    self.cluster.deprovision()
+
+  def test_no_change_id_addr(self):
+    '''Test that a node rejoining without changing ID or address picks up changes'''
+    n0 = self.cluster.wait_for_leader()
+    j = n0.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
+    self.assertEqual(str(j), "{u'results': [{}]}")
+    j = n0.execute('INSERT INTO foo(name) VALUES("fiona")')
+    self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
+    j = n0.query('SELECT * FROM foo')
+    self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
+    applied = n0.wait_for_all_applied()
+
+    # Test that follower node has correct state in local database, and then kill the follower
+    self.n1.wait_for_applied_index(applied)
+    j = self.n1.query('SELECT * FROM foo', level='none')
+    self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
+    self.n1.stop()
+
+    # Insert a new record
+    j = n0.execute('INSERT INTO foo(name) VALUES("fiona")')
+    self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 2, u'rows_affected': 1}]}")
+    j = n0.query('SELECT COUNT(*) FROM foo')
+    self.assertEqual(str(j), "{u'results': [{u'values': [[2]], u'types': [u''], u'columns': [u'COUNT(*)']}]}")
+    applied = n0.wait_for_all_applied()
+
+    # Restart follower, explicity rejoin, and ensure it picks up new records
+    self.n1.start(join=self.n0.APIAddr())
+    self.n1.wait_for_leader()
+    self.n1.wait_for_applied_index(applied)
+    j = self.n1.query('SELECT COUNT(*) FROM foo', level='none')
+    self.assertEqual(str(j), "{u'results': [{u'values': [[2]], u'types': [u''], u'columns': [u'COUNT(*)']}]}")
+
+  def test_change_addresses(self):
+    '''Test that a node rejoining with new addresses works fine'''
+    n0 = self.cluster.wait_for_leader()
+    j = n0.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
+    self.assertEqual(str(j), "{u'results': [{}]}")
+    j = n0.execute('INSERT INTO foo(name) VALUES("fiona")')
+    self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
+    j = n0.query('SELECT * FROM foo')
+    self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
+    applied = n0.wait_for_all_applied()
+
+    # Test that follower node has correct state in local database, and then kill the follower
+    self.n1.wait_for_applied_index(applied)
+    j = self.n1.query('SELECT * FROM foo', level='none')
+    self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
+    self.n1.stop()
+
+    # Insert a new record
+    j = n0.execute('INSERT INTO foo(name) VALUES("fiona")')
+    self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 2, u'rows_affected': 1}]}")
+    j = n0.query('SELECT COUNT(*) FROM foo')
+    self.assertEqual(str(j), "{u'results': [{u'values': [[2]], u'types': [u''], u'columns': [u'COUNT(*)']}]}")
+    applied = n0.wait_for_all_applied()
+
+    # Restart follower with new network attributes, explicity rejoin, and ensure it picks up new records
+    self.n1.scramble_network()
+    self.n1.start(join=self.n0.APIAddr())
+    self.n1.wait_for_leader()
+    self.n1.wait_for_applied_index(applied)
+    j = self.n1.query('SELECT COUNT(*) FROM foo', level='none')
+    self.assertEqual(str(j), "{u'results': [{u'values': [[2]], u'types': [u''], u'columns': [u'COUNT(*)']}]}")
+
+class TestRedirectedJoin(unittest.TestCase):
+  def tearDown(self):
+    deprovision_node(self.n0)
+    deprovision_node(self.n1)
+    deprovision_node(self.n2)
+
+  def test(self):
+    '''Test that a node can join via a follower'''
+    self.n0 = Node(RQLITED_PATH, '0')
+    self.n0.start()
+    l0 = self.n0.wait_for_leader()
+
+    self.n1 = Node(RQLITED_PATH, '1')
+    self.n1.start(join=self.n0.APIAddr())
+    self.n1.wait_for_leader()
+    self.assertTrue(self.n1.is_follower())
+
+    self.n2 = Node(RQLITED_PATH, '2')
+    self.n2.start(join=self.n1.APIAddr())
+    l2 = self.n2.wait_for_leader()
+    self.assertEqual(l0, l2)
+
+  def test_api_adv(self):
+    '''Test that a node can join via a follower that advertises a different API address'''
+    self.n0 = Node(RQLITED_PATH, '0',
+      api_addr="0.0.0.0:4001", api_adv="localhost:4001")
+    self.n0.start()
+    l0 = self.n0.wait_for_leader()
+
+    self.n1 = Node(RQLITED_PATH, '1')
+    self.n1.start(join=self.n0.APIAddr())
+    self.n1.wait_for_leader()
+    self.assertTrue(self.n1.is_follower())
+
+    self.n2 = Node(RQLITED_PATH, '2')
+    self.n2.start(join=self.n1.APIAddr())
+    l2 = self.n2.wait_for_leader()
+    self.assertEqual(l0, l2)
 
 if __name__ == "__main__":
   unittest.main(verbosity=2)
