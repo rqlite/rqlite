@@ -1,3 +1,6 @@
+## 6.0.1 (unreleased)
+- [PR #822](https://github.com/rqlite/rqlite/pull/822): Don't ignore `-join` even if previous state exists. Fixes [issue #818](https://github.com/rqlite/rqlite/issues/818).
+
 ## 6.0.0 (June 8th 2021)
 This release implements a significant design change, which improves rqlite cluster reliability. With this change a rqlite node can more reliably direct read and write requests to the correct node.
 

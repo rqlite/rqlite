@@ -255,18 +255,13 @@ func main() {
 		log.Println("no join addresses set")
 	}
 
-	// Join address supplied, but we don't need them!
-	if !isNew && len(joins) > 0 {
-		log.Println("node is already member of cluster, ignoring join addresses")
-	}
-
 	// Now, open store.
 	if err := str.Open(enableBootstrap); err != nil {
 		log.Fatalf("failed to open store: %s", err.Error())
 	}
 
 	// Execute any requested join operation.
-	if len(joins) > 0 && isNew {
+	if len(joins) > 0 {
 		log.Println("join addresses are:", joins)
 		advAddr := raftAddr
 		if raftAdv != "" {
