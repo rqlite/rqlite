@@ -185,7 +185,7 @@ func (db *DB) FKConstraints() (bool, error) {
 	}
 
 	values := normalizeRowValues(dest, types)
-	if values[0] == int64(1) {
+	if values[0].GetI() == int64(1) {
 		return true, nil
 	}
 	return false, nil
@@ -200,7 +200,7 @@ func (db *DB) Size() (int64, error) {
 		return 0, err
 	}
 
-	return r[0].Values[0][0].(int64), nil
+	return r[0].Values[0].Parameters[0].GetI(), nil
 }
 
 // FileSize returns the size of the SQLite file on disk. If running in
@@ -359,7 +359,7 @@ func (db *DB) Execute(req *command.Request, xTime bool) ([]*command.ExecuteResul
 }
 
 // QueryStringStmt executes a single query that return rows, but don't modify database.
-func (db *DB) QueryStringStmt(query string) ([]*Rows, error) {
+func (db *DB) QueryStringStmt(query string) ([]*command.QueryRows, error) {
 	r := &command.Request{
 		Statements: []*command.Statement{
 			{
@@ -371,7 +371,7 @@ func (db *DB) QueryStringStmt(query string) ([]*Rows, error) {
 }
 
 // Query executes queries that return rows, but don't modify the database.
-func (db *DB) Query(req *command.Request, xTime bool) ([]*Rows, error) {
+func (db *DB) Query(req *command.Request, xTime bool) ([]*command.QueryRows, error) {
 	stats.Add(numQueries, int64(len(req.Statements)))
 
 	tx := req.Transaction
@@ -383,7 +383,7 @@ func (db *DB) Query(req *command.Request, xTime bool) ([]*Rows, error) {
 		Query(query string, args []driver.Value) (driver.Rows, error)
 	}
 
-	var allRows []*Rows
+	var allRows []*command.QueryRows
 	err := func() (err error) {
 		var queryer Queryer
 		var t driver.Tx
@@ -415,7 +415,7 @@ func (db *DB) Query(req *command.Request, xTime bool) ([]*Rows, error) {
 				continue
 			}
 
-			rows := &Rows{}
+			rows := &command.QueryRows{}
 			start := time.Now()
 
 			parameters, err := parametersToDriverValues(stmt.Parameters)
@@ -446,8 +446,9 @@ func (db *DB) Query(req *command.Request, xTime bool) ([]*Rows, error) {
 					break
 				}
 
-				values := normalizeRowValues(dest, rows.Types)
-				rows.Values = append(rows.Values, values)
+				rows.Values = append(rows.Values, &command.Values{
+					Parameters: normalizeRowValues(dest, rows.Types),
+				})
 			}
 			if xTime {
 				rows.Time = time.Now().Sub(start).Seconds()
@@ -541,7 +542,7 @@ func (db *DB) Dump(w io.Writer) error {
 	}
 	row := rows[0]
 	for _, v := range row.Values {
-		table := v[0].(string)
+		table := v.Parameters[0].GetS()
 		var stmt string
 
 		if table == "sqlite_sequence" {
@@ -551,7 +552,7 @@ func (db *DB) Dump(w io.Writer) error {
 		} else if strings.HasPrefix(table, "sqlite_") {
 			continue
 		} else {
-			stmt = v[2].(string)
+			stmt = v.Parameters[2].GetS()
 		}
 
 		if _, err := w.Write([]byte(fmt.Sprintf("%s;\n", stmt))); err != nil {
@@ -565,7 +566,7 @@ func (db *DB) Dump(w io.Writer) error {
 		}
 		var columnNames []string
 		for _, w := range r[0].Values {
-			columnNames = append(columnNames, fmt.Sprintf(`'||quote("%s")||'`, w[1].(string)))
+			columnNames = append(columnNames, fmt.Sprintf(`'||quote("%s")||'`, w.Parameters[1].GetS()))
 		}
 
 		query = fmt.Sprintf(`SELECT 'INSERT INTO "%s" VALUES(%s)' FROM "%s";`,
@@ -577,7 +578,7 @@ func (db *DB) Dump(w io.Writer) error {
 			return err
 		}
 		for _, x := range r[0].Values {
-			y := fmt.Sprintf("%s;\n", x[0].(string))
+			y := fmt.Sprintf("%s;\n", x.Parameters[0].GetS())
 			if _, err := w.Write([]byte(y)); err != nil {
 				return err
 			}
@@ -593,7 +594,7 @@ func (db *DB) Dump(w io.Writer) error {
 	}
 	row = rows[0]
 	for _, v := range row.Values {
-		if _, err := w.Write([]byte(fmt.Sprintf("%s;\n", v[2]))); err != nil {
+		if _, err := w.Write([]byte(fmt.Sprintf("%s;\n", v.Parameters[2].GetS()))); err != nil {
 			return err
 		}
 	}
@@ -660,18 +661,33 @@ func parametersToDriverValues(parameters []*command.Parameter) ([]driver.Value, 
 // Text values come over (from sqlite-go) as []byte instead of strings
 // for some reason, so we have explicitly convert (but only when type
 // is "text" so we don't affect BLOB types)
-func normalizeRowValues(row []driver.Value, types []string) []interface{} {
-	values := make([]interface{}, len(types))
+func normalizeRowValues(row []driver.Value, types []string) []*command.Parameter {
+	values := make([]*command.Parameter, len(types))
 	for i, v := range row {
 		if isTextType(types[i]) {
-			switch val := v.(type) {
-			case []byte:
-				values[i] = string(val)
-			default:
-				values[i] = val
+			values[i].Value = &command.Parameter_S{
+				S: string(v.([]byte)),
 			}
 		} else {
-			values[i] = v
+			switch val := v.(type) {
+			case int:
+			case int64:
+				values[i].Value = &command.Parameter_I{
+					I: val,
+				}
+			case float64:
+				values[i].Value = &command.Parameter_D{
+					D: val,
+				}
+			case bool:
+				values[i].Value = &command.Parameter_B{
+					B: val,
+				}
+			case []byte:
+				values[i].Value = &command.Parameter_Y{
+					Y: val,
+				}
+			}
 		}
 	}
 	return values
