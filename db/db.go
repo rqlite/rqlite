@@ -664,28 +664,42 @@ func parametersToDriverValues(parameters []*command.Parameter) ([]driver.Value, 
 func normalizeRowValues(row []driver.Value, types []string) []*command.Parameter {
 	values := make([]*command.Parameter, len(types))
 	for i, v := range row {
-		if isTextType(types[i]) {
-			values[i].Value = &command.Parameter_S{
-				S: string(v.([]byte)),
-			}
-		} else {
-			switch val := v.(type) {
-			case int:
-			case int64:
-				values[i].Value = &command.Parameter_I{
+		switch val := v.(type) {
+		case int:
+		case int64:
+			values[i] = &command.Parameter{
+				Value: &command.Parameter_I{
 					I: val,
-				}
-			case float64:
-				values[i].Value = &command.Parameter_D{
+				},
+			}
+		case float64:
+			values[i] = &command.Parameter{
+				Value: &command.Parameter_D{
 					D: val,
-				}
-			case bool:
-				values[i].Value = &command.Parameter_B{
+				},
+			}
+		case bool:
+			values[i] = &command.Parameter{
+				Value: &command.Parameter_B{
 					B: val,
+				},
+			}
+		case string:
+			values[i] = &command.Parameter{
+				Value: &command.Parameter_S{
+					S: val,
+				},
+			}
+		case []byte:
+			if isTextType(types[i]) {
+				values[i].Value = &command.Parameter_S{
+					S: string(val),
 				}
-			case []byte:
-				values[i].Value = &command.Parameter_Y{
-					Y: val,
+			} else {
+				values[i] = &command.Parameter{
+					Value: &command.Parameter_Y{
+						Y: val,
+					},
 				}
 			}
 		}
