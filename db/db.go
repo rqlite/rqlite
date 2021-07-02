@@ -233,7 +233,7 @@ func (db *DB) AbortTransaction() error {
 
 // ExecuteStringStmt executes a single query that modifies the database. This is
 // primarily a convenience function.
-func (db *DB) ExecuteStringStmt(query string) ([]*Result, error) {
+func (db *DB) ExecuteStringStmt(query string) ([]*command.ExecuteResult, error) {
 	r := &command.Request{
 		Statements: []*command.Statement{
 			{
@@ -245,7 +245,7 @@ func (db *DB) ExecuteStringStmt(query string) ([]*Result, error) {
 }
 
 // Execute executes queries that modify the database.
-func (db *DB) Execute(req *command.Request, xTime bool) ([]*Result, error) {
+func (db *DB) Execute(req *command.Request, xTime bool) ([]*command.ExecuteResult, error) {
 	stats.Add(numExecutions, int64(len(req.Statements)))
 
 	tx := req.Transaction
@@ -257,7 +257,7 @@ func (db *DB) Execute(req *command.Request, xTime bool) ([]*Result, error) {
 		Exec(query string, args []driver.Value) (driver.Result, error)
 	}
 
-	var allResults []*Result
+	var allResults []*command.ExecuteResult
 	err := func() error {
 		var execer Execer
 		var rollback bool
@@ -277,7 +277,7 @@ func (db *DB) Execute(req *command.Request, xTime bool) ([]*Result, error) {
 
 		// handleError sets the error field on the given result. It returns
 		// whether the caller should continue processing or break.
-		handleError := func(result *Result, err error) bool {
+		handleError := func(result *command.ExecuteResult, err error) bool {
 			stats.Add(numExecutionErrors, 1)
 
 			result.Error = err.Error()
@@ -307,7 +307,7 @@ func (db *DB) Execute(req *command.Request, xTime bool) ([]*Result, error) {
 				continue
 			}
 
-			result := &Result{}
+			result := &command.ExecuteResult{}
 			start := time.Now()
 
 			parameters, err := parametersToValues(stmt.Parameters)
@@ -336,7 +336,7 @@ func (db *DB) Execute(req *command.Request, xTime bool) ([]*Result, error) {
 				}
 				break
 			}
-			result.LastInsertID = lid
+			result.LastInsertId = lid
 
 			ra, err := r.RowsAffected()
 			if err != nil {
