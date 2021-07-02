@@ -310,7 +310,7 @@ func (db *DB) Execute(req *command.Request, xTime bool) ([]*command.ExecuteResul
 			result := &command.ExecuteResult{}
 			start := time.Now()
 
-			parameters, err := parametersToValues(stmt.Parameters)
+			parameters, err := parametersToDriverValues(stmt.Parameters)
 			if err != nil {
 				if handleError(result, err) {
 					continue
@@ -418,7 +418,7 @@ func (db *DB) Query(req *command.Request, xTime bool) ([]*Rows, error) {
 			rows := &Rows{}
 			start := time.Now()
 
-			parameters, err := parametersToValues(stmt.Parameters)
+			parameters, err := parametersToDriverValues(stmt.Parameters)
 			if err != nil {
 				rows.Error = err.Error()
 				allRows = append(allRows, rows)
@@ -630,8 +630,8 @@ func copyDatabase(dst *sqlite3.SQLiteConn, src *sqlite3.SQLiteConn) error {
 	return nil
 }
 
-// parametersToValues maps values in the proto params to SQL driver values.
-func parametersToValues(parameters []*command.Parameter) ([]driver.Value, error) {
+// parametersToDriverValues maps values in the proto params to SQL driver values.
+func parametersToDriverValues(parameters []*command.Parameter) ([]driver.Value, error) {
 	if parameters == nil {
 		return nil, nil
 	}
