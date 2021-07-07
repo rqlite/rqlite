@@ -54,23 +54,6 @@ type DB struct {
 	memory      bool                // In-memory only.
 }
 
-// Result represents the outcome of an operation that changes rows.
-type Result struct {
-	LastInsertID int64   `json:"last_insert_id,omitempty"`
-	RowsAffected int64   `json:"rows_affected,omitempty"`
-	Error        string  `json:"error,omitempty"`
-	Time         float64 `json:"time,omitempty"`
-}
-
-// Rows represents the outcome of an operation that returns query data.
-type Rows struct {
-	Columns []string        `json:"columns,omitempty"`
-	Types   []string        `json:"types,omitempty"`
-	Values  [][]interface{} `json:"values,omitempty"`
-	Error   string          `json:"error,omitempty"`
-	Time    float64         `json:"time,omitempty"`
-}
-
 // Open opens a file-based database, creating it if it does not exist.
 func Open(dbPath string) (*DB, error) {
 	return open(fqdsn(dbPath, ""))
