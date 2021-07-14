@@ -34,7 +34,6 @@ func JSONMarshal(i interface{}) ([]byte, error) {
 			Time:         v.Time,
 		})
 	case *command.QueryRows:
-		rowValues := make([]interface{}, len(v.Columns))
 		rows := make([][]interface{}, 0)
 
 		for n := range v.Values {
@@ -50,6 +49,7 @@ func JSONMarshal(i interface{}) ([]byte, error) {
 				continue
 			}
 
+			rowValues := make([]interface{}, len(v.Columns))
 			for p := range params {
 				switch w := params[p].GetValue().(type) {
 				case *command.Parameter_I:
@@ -66,6 +66,7 @@ func JSONMarshal(i interface{}) ([]byte, error) {
 					return nil, fmt.Errorf("unsupported type: %T", w)
 				}
 			}
+			rows = append(rows, rowValues)
 		}
 
 		return json.Marshal(&Rows{
