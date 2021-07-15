@@ -1,4 +1,9 @@
+## 6.0.2 (unreleased)
+### Implementation changes and bug fixes
+- [PR #827](https://github.com/rqlite/rqlite/pull/827): Upgrade dependencies, including SQLite to 3.36.
+
 ## 6.0.1 (June 28th 2021)
+### Implementation changes and bug fixes
 - [PR #822](https://github.com/rqlite/rqlite/pull/822): Don't ignore `-join` even if previous state exists. Fixes [issue #818](https://github.com/rqlite/rqlite/issues/818).
 
 ## 6.0.0 (June 8th 2021)
