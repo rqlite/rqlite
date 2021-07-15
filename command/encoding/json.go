@@ -24,6 +24,7 @@ type Rows struct {
 	Time    float64         `json:"time,omitempty"`
 }
 
+// XXX MUST Support pretty!
 func JSONMarshal(i interface{}) ([]byte, error) {
 	switch v := i.(type) {
 	case *command.ExecuteResult:
@@ -72,6 +73,7 @@ func JSONMarshal(i interface{}) ([]byte, error) {
 		return json.Marshal(&Rows{
 			Columns: v.Columns,
 			Types:   v.Types,
+			Values:  rows,
 			Error:   v.Error,
 			Time:    v.Time,
 		})
