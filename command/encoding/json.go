@@ -36,22 +36,34 @@ func NewResultFromExecuteResult(e *command.ExecuteResult) (*Result, error) {
 
 // NewRowsFromQueryRows returns an API Rows object from a QueryRows
 func NewRowsFromQueryRows(q *command.QueryRows) (*Rows, error) {
-	rows := make([][]interface{}, 0)
+	values := make([][]interface{}, len(q.Values))
+	if err := NewValuesFromQueryValues(values, q.Values); err != nil {
+		return nil, err
+	}
+	return &Rows{
+		Columns: q.Columns,
+		Types:   q.Types,
+		Values:  values,
+		Error:   q.Error,
+		Time:    q.Time,
+	}, nil
+}
 
-	for n := range q.Values {
-		vals := q.Values[n]
+func NewValuesFromQueryValues(dest [][]interface{}, v []*command.Values) error {
+	for n := range v {
+		vals := v[n]
 		if vals == nil {
-			rows = append(rows, nil)
+			dest[n] = nil
 			continue
 		}
 
 		params := vals.GetParameters()
 		if params == nil {
-			rows = append(rows, nil)
+			dest[n] = nil
 			continue
 		}
 
-		rowValues := make([]interface{}, len(q.Columns))
+		rowValues := make([]interface{}, len(params))
 		for p := range params {
 			switch w := params[p].GetValue().(type) {
 			case *command.Parameter_I:
@@ -67,19 +79,13 @@ func NewRowsFromQueryRows(q *command.QueryRows) (*Rows, error) {
 			case nil:
 				rowValues[p] = nil
 			default:
-				return nil, fmt.Errorf("unsupported parameter type at index %d: %T", p, w)
+				return fmt.Errorf("unsupported parameter type at index %d: %T", p, w)
 			}
 		}
-		rows = append(rows, rowValues)
+		dest[n] = rowValues
 	}
 
-	return &Rows{
-		Columns: q.Columns,
-		Types:   q.Types,
-		Values:  rows,
-		Error:   q.Error,
-		Time:    q.Time,
-	}, nil
+	return nil
 }
 
 // XXX MUST Support pretty!
@@ -117,8 +123,13 @@ func JSONMarshal(i interface{}) ([]byte, error) {
 			}
 		}
 		return json.Marshal(rows)
-
+	case []*command.Values:
+		values := make([][]interface{}, len(v))
+		if err := NewValuesFromQueryValues(values, v); err != nil {
+			return nil, err
+		}
+		return json.Marshal(v)
 	default:
-		return nil, fmt.Errorf("unsupported command type: %T", v)
+		return json.Marshal(v)
 	}
 }
