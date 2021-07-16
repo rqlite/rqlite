@@ -537,7 +537,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 }
 
 // Execute executes queries that return no rows, but do modify the database.
-func (s *Store) Execute(ex *command.ExecuteRequest) ([]*sql.Result, error) {
+func (s *Store) Execute(ex *command.ExecuteRequest) ([]*command.ExecuteResult, error) {
 	if s.raft.State() != raft.Leader {
 		return nil, ErrNotLeader
 	}
@@ -546,7 +546,7 @@ func (s *Store) Execute(ex *command.ExecuteRequest) ([]*sql.Result, error) {
 
 // ExecuteOrAbort executes the requests, but aborts any active transaction
 // on the underlying database in the case of any error.
-func (s *Store) ExecuteOrAbort(ex *command.ExecuteRequest) (results []*sql.Result, retErr error) {
+func (s *Store) ExecuteOrAbort(ex *command.ExecuteRequest) (results []*command.ExecuteResult, retErr error) {
 	defer func() {
 		var errored bool
 		if results != nil {
@@ -566,7 +566,7 @@ func (s *Store) ExecuteOrAbort(ex *command.ExecuteRequest) (results []*sql.Resul
 	return s.execute(ex)
 }
 
-func (s *Store) execute(ex *command.ExecuteRequest) ([]*sql.Result, error) {
+func (s *Store) execute(ex *command.ExecuteRequest) ([]*command.ExecuteResult, error) {
 	b, compressed, err := s.reqMarshaller.Marshal(ex)
 	if err != nil {
 		return nil, err
@@ -627,7 +627,7 @@ func (s *Store) Backup(leader bool, fmt BackupFormat, dst io.Writer) error {
 }
 
 // Query executes queries that return rows, and do not modify the database.
-func (s *Store) Query(qr *command.QueryRequest) ([]*sql.Rows, error) {
+func (s *Store) Query(qr *command.QueryRequest) ([]*command.QueryRows, error) {
 	s.queryMu.RLock()
 	defer s.queryMu.RUnlock()
 
@@ -866,12 +866,12 @@ func (s *Store) raftConfig() *raft.Config {
 }
 
 type fsmExecuteResponse struct {
-	results []*sql.Result
+	results []*command.ExecuteResult
 	error   error
 }
 
 type fsmQueryResponse struct {
-	rows  []*sql.Rows
+	rows  []*command.QueryRows
 	error error
 }
 

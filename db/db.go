@@ -54,23 +54,6 @@ type DB struct {
 	memory      bool                // In-memory only.
 }
 
-// Result represents the outcome of an operation that changes rows.
-type Result struct {
-	LastInsertID int64   `json:"last_insert_id,omitempty"`
-	RowsAffected int64   `json:"rows_affected,omitempty"`
-	Error        string  `json:"error,omitempty"`
-	Time         float64 `json:"time,omitempty"`
-}
-
-// Rows represents the outcome of an operation that returns query data.
-type Rows struct {
-	Columns []string        `json:"columns,omitempty"`
-	Types   []string        `json:"types,omitempty"`
-	Values  [][]interface{} `json:"values,omitempty"`
-	Error   string          `json:"error,omitempty"`
-	Time    float64         `json:"time,omitempty"`
-}
-
 // Open opens a file-based database, creating it if it does not exist.
 func Open(dbPath string) (*DB, error) {
 	return open(fqdsn(dbPath, ""))
@@ -185,7 +168,7 @@ func (db *DB) FKConstraints() (bool, error) {
 	}
 
 	values := normalizeRowValues(dest, types)
-	if values[0] == int64(1) {
+	if values[0].GetI() == int64(1) {
 		return true, nil
 	}
 	return false, nil
@@ -200,7 +183,7 @@ func (db *DB) Size() (int64, error) {
 		return 0, err
 	}
 
-	return r[0].Values[0][0].(int64), nil
+	return r[0].Values[0].Parameters[0].GetI(), nil
 }
 
 // FileSize returns the size of the SQLite file on disk. If running in
@@ -233,7 +216,7 @@ func (db *DB) AbortTransaction() error {
 
 // ExecuteStringStmt executes a single query that modifies the database. This is
 // primarily a convenience function.
-func (db *DB) ExecuteStringStmt(query string) ([]*Result, error) {
+func (db *DB) ExecuteStringStmt(query string) ([]*command.ExecuteResult, error) {
 	r := &command.Request{
 		Statements: []*command.Statement{
 			{
@@ -245,7 +228,7 @@ func (db *DB) ExecuteStringStmt(query string) ([]*Result, error) {
 }
 
 // Execute executes queries that modify the database.
-func (db *DB) Execute(req *command.Request, xTime bool) ([]*Result, error) {
+func (db *DB) Execute(req *command.Request, xTime bool) ([]*command.ExecuteResult, error) {
 	stats.Add(numExecutions, int64(len(req.Statements)))
 
 	tx := req.Transaction
@@ -257,7 +240,7 @@ func (db *DB) Execute(req *command.Request, xTime bool) ([]*Result, error) {
 		Exec(query string, args []driver.Value) (driver.Result, error)
 	}
 
-	var allResults []*Result
+	var allResults []*command.ExecuteResult
 	err := func() error {
 		var execer Execer
 		var rollback bool
@@ -277,7 +260,7 @@ func (db *DB) Execute(req *command.Request, xTime bool) ([]*Result, error) {
 
 		// handleError sets the error field on the given result. It returns
 		// whether the caller should continue processing or break.
-		handleError := func(result *Result, err error) bool {
+		handleError := func(result *command.ExecuteResult, err error) bool {
 			stats.Add(numExecutionErrors, 1)
 
 			result.Error = err.Error()
@@ -307,10 +290,10 @@ func (db *DB) Execute(req *command.Request, xTime bool) ([]*Result, error) {
 				continue
 			}
 
-			result := &Result{}
+			result := &command.ExecuteResult{}
 			start := time.Now()
 
-			parameters, err := parametersToValues(stmt.Parameters)
+			parameters, err := parametersToDriverValues(stmt.Parameters)
 			if err != nil {
 				if handleError(result, err) {
 					continue
@@ -336,7 +319,7 @@ func (db *DB) Execute(req *command.Request, xTime bool) ([]*Result, error) {
 				}
 				break
 			}
-			result.LastInsertID = lid
+			result.LastInsertId = lid
 
 			ra, err := r.RowsAffected()
 			if err != nil {
@@ -359,7 +342,7 @@ func (db *DB) Execute(req *command.Request, xTime bool) ([]*Result, error) {
 }
 
 // QueryStringStmt executes a single query that return rows, but don't modify database.
-func (db *DB) QueryStringStmt(query string) ([]*Rows, error) {
+func (db *DB) QueryStringStmt(query string) ([]*command.QueryRows, error) {
 	r := &command.Request{
 		Statements: []*command.Statement{
 			{
@@ -371,7 +354,7 @@ func (db *DB) QueryStringStmt(query string) ([]*Rows, error) {
 }
 
 // Query executes queries that return rows, but don't modify the database.
-func (db *DB) Query(req *command.Request, xTime bool) ([]*Rows, error) {
+func (db *DB) Query(req *command.Request, xTime bool) ([]*command.QueryRows, error) {
 	stats.Add(numQueries, int64(len(req.Statements)))
 
 	tx := req.Transaction
@@ -383,7 +366,7 @@ func (db *DB) Query(req *command.Request, xTime bool) ([]*Rows, error) {
 		Query(query string, args []driver.Value) (driver.Rows, error)
 	}
 
-	var allRows []*Rows
+	var allRows []*command.QueryRows
 	err := func() (err error) {
 		var queryer Queryer
 		var t driver.Tx
@@ -415,10 +398,10 @@ func (db *DB) Query(req *command.Request, xTime bool) ([]*Rows, error) {
 				continue
 			}
 
-			rows := &Rows{}
+			rows := &command.QueryRows{}
 			start := time.Now()
 
-			parameters, err := parametersToValues(stmt.Parameters)
+			parameters, err := parametersToDriverValues(stmt.Parameters)
 			if err != nil {
 				rows.Error = err.Error()
 				allRows = append(allRows, rows)
@@ -446,8 +429,9 @@ func (db *DB) Query(req *command.Request, xTime bool) ([]*Rows, error) {
 					break
 				}
 
-				values := normalizeRowValues(dest, rows.Types)
-				rows.Values = append(rows.Values, values)
+				rows.Values = append(rows.Values, &command.Values{
+					Parameters: normalizeRowValues(dest, rows.Types),
+				})
 			}
 			if xTime {
 				rows.Time = time.Now().Sub(start).Seconds()
@@ -541,7 +525,7 @@ func (db *DB) Dump(w io.Writer) error {
 	}
 	row := rows[0]
 	for _, v := range row.Values {
-		table := v[0].(string)
+		table := v.Parameters[0].GetS()
 		var stmt string
 
 		if table == "sqlite_sequence" {
@@ -551,7 +535,7 @@ func (db *DB) Dump(w io.Writer) error {
 		} else if strings.HasPrefix(table, "sqlite_") {
 			continue
 		} else {
-			stmt = v[2].(string)
+			stmt = v.Parameters[2].GetS()
 		}
 
 		if _, err := w.Write([]byte(fmt.Sprintf("%s;\n", stmt))); err != nil {
@@ -565,7 +549,7 @@ func (db *DB) Dump(w io.Writer) error {
 		}
 		var columnNames []string
 		for _, w := range r[0].Values {
-			columnNames = append(columnNames, fmt.Sprintf(`'||quote("%s")||'`, w[1].(string)))
+			columnNames = append(columnNames, fmt.Sprintf(`'||quote("%s")||'`, w.Parameters[1].GetS()))
 		}
 
 		query = fmt.Sprintf(`SELECT 'INSERT INTO "%s" VALUES(%s)' FROM "%s";`,
@@ -577,7 +561,7 @@ func (db *DB) Dump(w io.Writer) error {
 			return err
 		}
 		for _, x := range r[0].Values {
-			y := fmt.Sprintf("%s;\n", x[0].(string))
+			y := fmt.Sprintf("%s;\n", x.Parameters[0].GetS())
 			if _, err := w.Write([]byte(y)); err != nil {
 				return err
 			}
@@ -593,7 +577,7 @@ func (db *DB) Dump(w io.Writer) error {
 	}
 	row = rows[0]
 	for _, v := range row.Values {
-		if _, err := w.Write([]byte(fmt.Sprintf("%s;\n", v[2]))); err != nil {
+		if _, err := w.Write([]byte(fmt.Sprintf("%s;\n", v.Parameters[2].GetS()))); err != nil {
 			return err
 		}
 	}
@@ -630,8 +614,8 @@ func copyDatabase(dst *sqlite3.SQLiteConn, src *sqlite3.SQLiteConn) error {
 	return nil
 }
 
-// parametersToValues maps values in the proto params to SQL driver values.
-func parametersToValues(parameters []*command.Parameter) ([]driver.Value, error) {
+// parametersToDriverValues maps values in the proto params to SQL driver values.
+func parametersToDriverValues(parameters []*command.Parameter) ([]driver.Value, error) {
 	if parameters == nil {
 		return nil, nil
 	}
@@ -660,18 +644,47 @@ func parametersToValues(parameters []*command.Parameter) ([]driver.Value, error)
 // Text values come over (from sqlite-go) as []byte instead of strings
 // for some reason, so we have explicitly convert (but only when type
 // is "text" so we don't affect BLOB types)
-func normalizeRowValues(row []driver.Value, types []string) []interface{} {
-	values := make([]interface{}, len(types))
+func normalizeRowValues(row []driver.Value, types []string) []*command.Parameter {
+	values := make([]*command.Parameter, len(types))
 	for i, v := range row {
-		if isTextType(types[i]) {
-			switch val := v.(type) {
-			case []byte:
-				values[i] = string(val)
-			default:
-				values[i] = val
+		switch val := v.(type) {
+		case int:
+		case int64:
+			values[i] = &command.Parameter{
+				Value: &command.Parameter_I{
+					I: val,
+				},
 			}
-		} else {
-			values[i] = v
+		case float64:
+			values[i] = &command.Parameter{
+				Value: &command.Parameter_D{
+					D: val,
+				},
+			}
+		case bool:
+			values[i] = &command.Parameter{
+				Value: &command.Parameter_B{
+					B: val,
+				},
+			}
+		case string:
+			values[i] = &command.Parameter{
+				Value: &command.Parameter_S{
+					S: val,
+				},
+			}
+		case []byte:
+			if isTextType(types[i]) {
+				values[i].Value = &command.Parameter_S{
+					S: string(val),
+				}
+			} else {
+				values[i] = &command.Parameter{
+					Value: &command.Parameter_Y{
+						Y: val,
+					},
+				}
+			}
 		}
 	}
 	return values
