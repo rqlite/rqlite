@@ -1,7 +1,6 @@
 package db
 
 import (
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -10,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/rqlite/rqlite/command"
+	"github.com/rqlite/rqlite/command/encoding"
 	"github.com/rqlite/rqlite/testdata/chinook"
 )
 
@@ -1245,9 +1245,9 @@ func mustQuery(db *DB, stmt string) {
 }
 
 func asJSON(v interface{}) string {
-	b, err := json.Marshal(v)
+	b, err := encoding.JSONMarshal(v)
 	if err != nil {
-		panic("failed to JSON marshal value")
+		panic(fmt.Sprintf("failed to JSON marshal value: %s", err.Error()))
 	}
 	return string(b)
 }

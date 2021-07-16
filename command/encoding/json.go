@@ -64,8 +64,10 @@ func NewRowsFromQueryRows(q *command.QueryRows) (*Rows, error) {
 				rowValues[p] = w.Y
 			case *command.Parameter_S:
 				rowValues[p] = w.S
+			case nil:
+				rowValues[p] = nil
 			default:
-				return nil, fmt.Errorf("unsupported type: %T", w)
+				return nil, fmt.Errorf("unsupported parameter type at index %d: %T", p, w)
 			}
 		}
 		rows = append(rows, rowValues)
@@ -117,6 +119,6 @@ func JSONMarshal(i interface{}) ([]byte, error) {
 		return json.Marshal(rows)
 
 	default:
-		return nil, fmt.Errorf("unsupported type: %T", v)
+		return nil, fmt.Errorf("unsupported command type: %T", v)
 	}
 }
