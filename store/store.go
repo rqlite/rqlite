@@ -880,7 +880,7 @@ type fsmGenericResponse struct {
 }
 
 // Apply applies a Raft log entry to the database.
-func (s *Store) Apply(l *raft.Log) (e interface{}) {
+func (s *Store) Apply(l *raft.Log) interface{} {
 	defer func() {
 		if l.Index <= s.lastCommandIdxOnOpen {
 			// In here means at least one command entry was in the log when the Store
@@ -902,14 +902,12 @@ func (s *Store) Apply(l *raft.Log) (e interface{}) {
 					b, _ := s.db.Serialize()
 					err := s.db.Close()
 					if err != nil {
-						e = &fsmGenericResponse{error: fmt.Errorf("close failed: %s", err)}
-						return
+						panic(fmt.Errorf("close of on-disk database failed: %s", err))
 					}
 					// Open a new on-disk database.
 					s.db, err = s.openOnDisk(b)
 					if err != nil {
-						e = &fsmGenericResponse{error: fmt.Errorf("open on-disk failed: %s", err)}
-						return
+						panic(fmt.Errorf("open of on-disk database failed: %s", err))
 					}
 					s.onDiskCreated = true
 					s.logger.Println("successfully switched to on-disk database")
