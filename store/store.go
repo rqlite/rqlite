@@ -249,14 +249,14 @@ func (s *Store) Open(enableBootstrap bool) error {
 	if !s.dbConf.Memory && !s.snapsExistOnOpen && s.lastCommandIdxOnOpen == 0 {
 		s.db, err = s.createOnDisk(nil)
 		if err != nil {
-			return fmt.Errorf("failed to open on-disk database")
+			return fmt.Errorf("failed to create on-disk database")
 		}
 		s.onDiskCreated = true
 	} else {
 		// We need an in-memory database, at least for bootstrapping purposes.
-		s.db, err = s.openInMemory(nil)
+		s.db, err = s.createInMemory(nil)
 		if err != nil {
-			return fmt.Errorf("failed to open in-memory database")
+			return fmt.Errorf("failed to create in-memory database")
 		}
 	}
 
@@ -780,9 +780,9 @@ func (s *Store) Noop(id string) error {
 	return nil
 }
 
-// openInMemory returns an in-memory database. If b is non-nil, then the
+// createInMemory returns an in-memory database. If b is non-nil, then the
 // database will be initialized with the contents of b.
-func (s *Store) openInMemory(b []byte) (db *sql.DB, err error) {
+func (s *Store) createInMemory(b []byte) (db *sql.DB, err error) {
 	if b == nil {
 		db, err = sql.OpenInMemoryWithDSN(s.dbConf.DSN)
 	} else {
@@ -1086,9 +1086,9 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 		// command entries in the log. So by sticking with an in-memory database
 		// those entries will be applied in the fastest possible manner. We will
 		// defer creation of any database on disk until the Apply function.
-		db, err = s.openInMemory(database)
+		db, err = s.createInMemory(database)
 		if err != nil {
-			return fmt.Errorf("openInMemory: %s", err)
+			return fmt.Errorf("createInMemory: %s", err)
 		}
 	}
 	s.db = db
