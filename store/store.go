@@ -611,17 +611,23 @@ func (s *Store) execute(ex *command.ExecuteRequest) ([]*sql.Result, error) {
 // If leader is true, this operation is performed with a read consistency
 // level equivalent to "weak". Otherwise no guarantees are made about the
 // read consistency level.
-func (s *Store) Backup(leader bool, fmt BackupFormat, dst io.Writer) error {
+func (s *Store) Backup(leader bool, bf BackupFormat, dst io.Writer) error {
 	if leader && s.raft.State() != raft.Leader {
 		return ErrNotLeader
 	}
 
-	if fmt == BackupBinary {
+	if bf == BackupBinary {
 		if err := s.database(leader, dst); err != nil {
 			return err
 		}
-	} else if fmt == BackupSQL {
-		if err := s.db.Dump(dst); err != nil {
+	} else if bf == BackupSQL {
+		db, err := s.openCurrentDatabase()
+		if err != nil {
+			return fmt.Errorf("failed to open current database: %s", err)
+		}
+		defer db.Close()
+
+		if err := db.Dump(dst); err != nil {
 			return err
 		}
 	} else {
@@ -984,7 +990,13 @@ func (s *Store) Database(leader bool) ([]byte, error) {
 	if leader && s.raft.State() != raft.Leader {
 		return nil, ErrNotLeader
 	}
-	return s.db.Serialize()
+	db, err := s.openCurrentDatabase()
+	if err != nil {
+		return nil, fmt.Errorf("failed to open current database: %s", err)
+	}
+	defer db.Close()
+
+	return db.Serialize()
 }
 
 // Snapshot returns a snapshot of the database. The caller must ensure that
@@ -1223,7 +1235,9 @@ func (f *fsmSnapshot) compressedDatabase() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// Database copies contents of the underlying SQLite database to dst
+// Database copies contents of the underlying SQLite database to dst. It
+// opens a new connection to the database during the copy, and will
+// close it afterwards.
 func (s *Store) database(leader bool, dst io.Writer) error {
 	if leader && s.raft.State() != raft.Leader {
 		return ErrNotLeader
@@ -1237,7 +1251,13 @@ func (s *Store) database(leader bool, dst io.Writer) error {
 		return err
 	}
 
-	if err := s.db.Backup(f.Name()); err != nil {
+	db, err := s.openCurrentDatabase()
+	if err != nil {
+		return fmt.Errorf("failed to open current database: %s", err)
+	}
+	defer db.Close()
+
+	if err := db.Backup(f.Name()); err != nil {
 		return err
 	}
 
