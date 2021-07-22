@@ -454,12 +454,18 @@ func (s *Store) WaitForAppliedIndex(idx uint64, timeout time.Duration) error {
 
 // Stats returns stats for the store.
 func (s *Store) Stats() (map[string]interface{}, error) {
-	fkEnabled, err := s.db.FKConstraints()
+	db, err := s.openCurrentDatabase()
+	if err != nil {
+		return nil, fmt.Errorf("failed to open database: %s", err)
+	}
+	defer db.Close()
+
+	fkEnabled, err := db.FKConstraints()
 	if err != nil {
 		return nil, err
 	}
 
-	dbSz, err := s.db.Size()
+	dbSz, err := db.Size()
 	if err != nil {
 		return nil, err
 	}
@@ -474,7 +480,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 	} else {
 		dbStatus["path"] = s.dbPath
 		if s.onDiskCreated {
-			if dbStatus["size"], err = s.db.FileSize(); err != nil {
+			if dbStatus["size"], err = db.FileSize(); err != nil {
 				return nil, err
 			}
 		}
@@ -778,6 +784,15 @@ func (s *Store) Noop(id string) error {
 		return e.Error()
 	}
 	return nil
+}
+
+// openCurrentDatabase returns a DB object connected to the current database, whether
+// on-disk or in-memory.
+func (s *Store) openCurrentDatabase() (db *sql.DB, err error) {
+	if s.dbConf.Memory {
+		return sql.OpenInMemoryWithDSN(s.dbConf.DSN)
+	}
+	return sql.OpenWithDSN(s.dbPath, s.dbConf.DSN)
 }
 
 // createInMemory returns an in-memory database. If b is non-nil, then the
