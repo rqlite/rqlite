@@ -247,7 +247,7 @@ func (s *Store) Open(enableBootstrap bool) error {
 	// there are no commands in the log, then this is the only opportunity to
 	// create that on-disk database file before Raft initializes.
 	if !s.dbConf.Memory && !s.snapsExistOnOpen && s.lastCommandIdxOnOpen == 0 {
-		s.db, err = s.openOnDisk(nil)
+		s.db, err = s.createOnDisk(nil)
 		if err != nil {
 			return fmt.Errorf("failed to open on-disk database")
 		}
@@ -791,10 +791,10 @@ func (s *Store) openInMemory(b []byte) (db *sql.DB, err error) {
 	return
 }
 
-// openOnDisk opens an on-disk database file at the Store's configured path. If
+// createOnDisk opens an on-disk database file at the Store's configured path. If
 // b is non-nil, any preexisting file will first be overwritten with those contents.
 // Otherwise any pre-existing file will be removed before the database is opened.
-func (s *Store) openOnDisk(b []byte) (*sql.DB, error) {
+func (s *Store) createOnDisk(b []byte) (*sql.DB, error) {
 	if err := os.Remove(s.dbPath); err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
@@ -906,7 +906,7 @@ func (s *Store) Apply(l *raft.Log) (e interface{}) {
 						return
 					}
 					// Open a new on-disk database.
-					s.db, err = s.openOnDisk(b)
+					s.db, err = s.createOnDisk(b)
 					if err != nil {
 						e = &fsmGenericResponse{error: fmt.Errorf("open on-disk failed: %s", err)}
 						return
@@ -1074,7 +1074,7 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 		// are no command entries in the log -- so Apply will not be called.
 		// Therefore this is the last opportunity to create the on-disk database
 		// before Raft starts.
-		db, err = s.openOnDisk(database)
+		db, err = s.createOnDisk(database)
 		if err != nil {
 			return fmt.Errorf("open on-disk file during restore: %s", err)
 		}
