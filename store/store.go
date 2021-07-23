@@ -18,7 +18,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
-	"sync"
 	"time"
 	"unsafe"
 
@@ -136,9 +135,6 @@ type Store struct {
 	openT                time.Time // Timestamp when Store opens.
 
 	numNoops int // For whitebox testing
-
-	txMu    sync.RWMutex // Sync between snapshots and query-level transactions.
-	queryMu sync.RWMutex // Sync queries generally with other operations.
 
 	logger *log.Logger
 
@@ -628,9 +624,6 @@ func (s *Store) Backup(leader bool, fmt BackupFormat, dst io.Writer) error {
 
 // Query executes queries that return rows, and do not modify the database.
 func (s *Store) Query(qr *command.QueryRequest) ([]*sql.Rows, error) {
-	s.queryMu.RLock()
-	defer s.queryMu.RUnlock()
-
 	if qr.Level == command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG {
 		b, compressed, err := s.reqMarshaller.Marshal(qr)
 		if err != nil {
@@ -674,12 +667,6 @@ func (s *Store) Query(qr *command.QueryRequest) ([]*sql.Rows, error) {
 		return nil, ErrStaleRead
 	}
 
-	// Read straight from database. If a transaction is requested, we must block
-	// certain other database operations.
-	if qr.Request.Transaction {
-		s.txMu.Lock()
-		defer s.txMu.Unlock()
-	}
 	return s.db.Query(qr.Request, qr.Timings)
 }
 
@@ -934,12 +921,6 @@ func (s *Store) Apply(l *raft.Log) (e interface{}) {
 		if err := command.UnmarshalSubCommand(&c, &qr); err != nil {
 			panic(fmt.Sprintf("failed to unmarshal query subcommand: %s", err.Error()))
 		}
-		// Read from database. If a transaction is requested, we must block
-		// certain other database operations.
-		if qr.Request.Transaction {
-			s.txMu.Lock()
-			defer s.txMu.Unlock()
-		}
 		r, err := s.db.Query(qr.Request, qr.Timings)
 		return &fsmQueryResponse{rows: r, error: err}
 	case command.Command_COMMAND_TYPE_EXECUTE:
@@ -987,9 +968,6 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 		logger: s.logger,
 	}
 
-	s.txMu.Lock()
-	defer s.txMu.Unlock()
-
 	fsm.database, _ = s.db.Serialize()
 	// The error code is not meaningful from Serialize(). The code needs to be able
 	// handle a nil byte slice being returned.
@@ -1005,9 +983,6 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 // the log, it blocks all query requests.
 func (s *Store) Restore(rc io.ReadCloser) error {
 	startT := time.Now()
-
-	s.queryMu.Lock()
-	defer s.queryMu.Unlock()
 
 	var uint64Size uint64
 	inc := int64(unsafe.Sizeof(uint64Size))
