@@ -1,6 +1,7 @@
 ## 6.0.2 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #827](https://github.com/rqlite/rqlite/pull/827): Upgrade dependencies, including SQLite to 3.36.
+- [PR #834](https://github.com/rqlite/rqlite/pull/834): Synchronize use of database connection. Fixes [issue #830](https://github.com/rqlite/rqlite/issues/830).
 
 ## 6.0.1 (June 28th 2021)
 ### Implementation changes and bug fixes
