@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rqlite/go-sqlite3"
@@ -52,6 +53,7 @@ type DB struct {
 	path        string              // Path to database file.
 	dsn         string              // DSN, if any.
 	memory      bool                // In-memory only.
+	mu          sync.Mutex          // Serialize use of DB driver connection
 }
 
 // Result represents the outcome of an operation that changes rows.
@@ -145,6 +147,8 @@ func DeserializeInMemoryWithDSN(b []byte, dsn string) (*DB, error) {
 
 // Close closes the underlying database connection.
 func (db *DB) Close() error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
 	return db.sqlite3conn.Close()
 }
 
@@ -163,6 +167,9 @@ func open(dbPath string) (*DB, error) {
 
 // EnableFKConstraints allows control of foreign key constraint checks.
 func (db *DB) EnableFKConstraints(e bool) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
 	q := fkChecksEnabled
 	if !e {
 		q = fkChecksDisabled
@@ -173,6 +180,9 @@ func (db *DB) EnableFKConstraints(e bool) error {
 
 // FKConstraints returns whether FK constraints are set or not.
 func (db *DB) FKConstraints() (bool, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
 	r, err := db.sqlite3conn.Query(fkChecks, nil)
 	if err != nil {
 		return false, err
@@ -246,6 +256,9 @@ func (db *DB) ExecuteStringStmt(query string) ([]*Result, error) {
 
 // Execute executes queries that modify the database.
 func (db *DB) Execute(req *command.Request, xTime bool) ([]*Result, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
 	stats.Add(numExecutions, int64(len(req.Statements)))
 
 	tx := req.Transaction
@@ -372,6 +385,9 @@ func (db *DB) QueryStringStmt(query string) ([]*Rows, error) {
 
 // Query executes queries that return rows, but don't modify the database.
 func (db *DB) Query(req *command.Request, xTime bool) ([]*Rows, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
 	stats.Add(numQueries, int64(len(req.Statements)))
 
 	tx := req.Transaction
@@ -464,13 +480,16 @@ func (db *DB) Query(req *command.Request, xTime bool) ([]*Rows, error) {
 // Backup writes a consistent snapshot of the database to the given file.
 // This function can be called when changes to the database are in flight.
 func (db *DB) Backup(path string) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
 	dstDB, err := Open(path)
 	if err != nil {
 		return err
 	}
 
 	defer func(db *DB, err *error) {
-		cerr := db.Close()
+		cerr := db.sqlite3conn.Close()
 		if *err == nil {
 			*err = cerr
 		}
@@ -487,6 +506,9 @@ func (db *DB) Backup(path string) error {
 // on-disk database. This function can be called when changes to the source
 // database are in flight.
 func (db *DB) Copy(dstDB *DB) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
 	if err := copyDatabase(dstDB.sqlite3conn, db.sqlite3conn); err != nil {
 		return fmt.Errorf("copy database: %s", err)
 	}
@@ -498,10 +520,10 @@ func (db *DB) Copy(dstDB *DB) error {
 // disk file. For an in-memory database or a "TEMP" database, the serialization
 // is the same sequence of bytes which would be written to disk if that database
 // were backed up to disk.
-//
-// It is up to the caller to ensure no changes or transactions are in progress
-// when this function is called.
 func (db *DB) Serialize() ([]byte, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
 	b := db.sqlite3conn.Serialize("")
 	if b == nil {
 		return nil, fmt.Errorf("failed to serialize database")
@@ -522,13 +544,17 @@ func (db *DB) Dump(w io.Writer) error {
 		return err
 	}
 	defer func(db *DB, err *error) {
-		cerr := db.Close()
+		cerr := db.sqlite3conn.Close()
 		if *err == nil {
 			*err = cerr
 		}
 	}(dstDB, &err)
 
-	if err := copyDatabase(dstDB.sqlite3conn, db.sqlite3conn); err != nil {
+	if err := func() error {
+		db.mu.Lock()
+		defer db.mu.Unlock()
+		return copyDatabase(dstDB.sqlite3conn, db.sqlite3conn)
+	}(); err != nil {
 		return err
 	}
 
@@ -587,7 +613,7 @@ func (db *DB) Dump(w io.Writer) error {
 	// Do indexes, triggers, and views.
 	query = `SELECT "name", "type", "sql" FROM "sqlite_master"
 			  WHERE "sql" NOT NULL AND "type" IN ('index', 'trigger', 'view')`
-	rows, err = db.QueryStringStmt(query)
+	rows, err = dstDB.QueryStringStmt(query)
 	if err != nil {
 		return err
 	}
