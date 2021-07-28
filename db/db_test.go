@@ -39,16 +39,19 @@ func Test_TableCreation(t *testing.T) {
 	defer db.Close()
 	defer os.Remove(path)
 
-	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
+	r, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
+	if exp, got := `[{}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
 
-	r, err := db.QueryStringStmt("SELECT * FROM foo")
+	q, err := db.QueryStringStmt("SELECT * FROM foo")
 	if err != nil {
 		t.Fatalf("failed to query empty table: %s", err.Error())
 	}
-	if exp, got := `[{"columns":["id","name"],"types":["integer","text"]}]`, asJSON(r); exp != got {
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"]}]`, asJSON(q); exp != got {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
 }

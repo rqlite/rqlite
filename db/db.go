@@ -3,6 +3,8 @@
 package db
 
 import (
+	"context"
+	"database/sql"
 	"database/sql/driver"
 	"expvar"
 	"fmt"
@@ -49,6 +51,7 @@ func init() {
 
 // DB is the SQL database.
 type DB struct {
+	db          *sql.DB             // Std library database connection
 	sqlite3conn *sqlite3.SQLiteConn // Driver connection to database.
 	path        string              // Path to database file.
 	dsn         string              // DSN, if any.
@@ -85,12 +88,12 @@ func OpenWithDSN(dbPath, dsn string) (*DB, error) {
 
 // OpenInMemory opens an in-memory database.
 func OpenInMemory() (*DB, error) {
-	return open(fqdsn(":memory:", ""))
+	return open(fqdsn("file:rqlite?mode=memory", ""))
 }
 
 // OpenInMemoryWithDSN opens an in-memory database with a specific DSN.
 func OpenInMemoryWithDSN(dsn string) (*DB, error) {
-	return open(fqdsn(":memory:", dsn))
+	return open(fqdsn("file:rqlite?mode=memory", dsn))
 }
 
 // LoadInMemoryWithDSN loads an in-memory database with that at the path,
@@ -147,12 +150,18 @@ func DeserializeInMemoryWithDSN(b []byte, dsn string) (*DB, error) {
 
 // Close closes the underlying database connection.
 func (db *DB) Close() error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	return db.sqlite3conn.Close()
+	if err := db.sqlite3conn.Close(); err != nil {
+		return err
+	}
+	return db.db.Close()
 }
 
 func open(dbPath string) (*DB, error) {
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		return nil, err
+	}
+
 	d := sqlite3.SQLiteDriver{}
 	dbc, err := d.Open(dbPath)
 	if err != nil {
@@ -160,6 +169,7 @@ func open(dbPath string) (*DB, error) {
 	}
 
 	return &DB{
+		db:          db,
 		sqlite3conn: dbc.(*sqlite3.SQLiteConn),
 		path:        dbPath,
 	}, nil
@@ -167,35 +177,22 @@ func open(dbPath string) (*DB, error) {
 
 // EnableFKConstraints allows control of foreign key constraint checks.
 func (db *DB) EnableFKConstraints(e bool) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
 	q := fkChecksEnabled
 	if !e {
 		q = fkChecksDisabled
 	}
-	_, err := db.sqlite3conn.Exec(q, nil)
+
+	_, err := db.ExecuteStringStmt(q)
 	return err
 }
 
 // FKConstraints returns whether FK constraints are set or not.
 func (db *DB) FKConstraints() (bool, error) {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	r, err := db.sqlite3conn.Query(fkChecks, nil)
+	r, err := db.QueryStringStmt(fkChecks)
 	if err != nil {
 		return false, err
 	}
-
-	dest := make([]driver.Value, len(r.Columns()))
-	types := r.(*sqlite3.SQLiteRows).DeclTypes()
-	if err := r.Next(dest); err != nil {
-		return false, err
-	}
-
-	values := normalizeRowValues(dest, types)
-	if values[0] == int64(1) {
+	if r[0].Values[0][0] == int64(1) {
 		return true, nil
 	}
 	return false, nil
@@ -256,9 +253,6 @@ func (db *DB) ExecuteStringStmt(query string) ([]*Result, error) {
 
 // Execute executes queries that modify the database.
 func (db *DB) Execute(req *command.Request, xTime bool) ([]*Result, error) {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
 	stats.Add(numExecutions, int64(len(req.Statements)))
 
 	tx := req.Transaction
@@ -266,27 +260,19 @@ func (db *DB) Execute(req *command.Request, xTime bool) ([]*Result, error) {
 		stats.Add(numETx, 1)
 	}
 
-	type Execer interface {
-		Exec(query string, args []driver.Value) (driver.Result, error)
-	}
-
 	var allResults []*Result
 	err := func() error {
-		var execer Execer
-		var rollback bool
-		var t driver.Tx
-		var err error
 
-		// Check for the err, if set rollback.
-		defer func() {
-			if t != nil {
-				if rollback {
-					t.Rollback()
-					return
-				}
-				t.Commit()
-			}
-		}()
+		// // Check for the err, if set rollback.
+		// defer func() {
+		// 	if t != nil {
+		// 		if rollback {
+		// 			t.Rollback()
+		// 			return
+		// 		}
+		// 		t.Commit()
+		// 	}
+		// }()
 
 		// handleError sets the error field on the given result. It returns
 		// whether the caller should continue processing or break.
@@ -295,28 +281,28 @@ func (db *DB) Execute(req *command.Request, xTime bool) ([]*Result, error) {
 
 			result.Error = err.Error()
 			allResults = append(allResults, result)
-			if tx {
-				rollback = true // Will trigger the rollback.
-				return false
-			}
 			return true
 		}
 
-		execer = db.sqlite3conn
+		// // Create the correct execution object, depending on whether a
+		// // transaction was requested.
+		// if false {
+		// 	t, err = db.sqlite3conn.Begin()
+		// 	if err != nil {
+		// 		return err
+		// 	}
+		// }
 
-		// Create the correct execution object, depending on whether a
-		// transaction was requested.
-		if tx {
-			t, err = db.sqlite3conn.Begin()
-			if err != nil {
-				return err
-			}
+		conn, err := db.db.Conn(context.Background())
+		if err != nil {
+			return err
 		}
+		defer conn.Close()
 
 		// Execute each statement.
 		for _, stmt := range req.Statements {
-			sql := stmt.Sql
-			if sql == "" {
+			ss := stmt.Sql
+			if ss == "" {
 				continue
 			}
 
@@ -331,13 +317,14 @@ func (db *DB) Execute(req *command.Request, xTime bool) ([]*Result, error) {
 				break
 			}
 
-			r, err := execer.Exec(sql, parameters)
+			r, err := conn.ExecContext(context.Background(), ss, parameters...)
 			if err != nil {
 				if handleError(result, err) {
 					continue
 				}
 				break
 			}
+
 			if r == nil {
 				continue
 			}
@@ -385,9 +372,6 @@ func (db *DB) QueryStringStmt(query string) ([]*Rows, error) {
 
 // Query executes queries that return rows, but don't modify the database.
 func (db *DB) Query(req *command.Request, xTime bool) ([]*Rows, error) {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
 	stats.Add(numQueries, int64(len(req.Statements)))
 
 	tx := req.Transaction
@@ -395,13 +379,8 @@ func (db *DB) Query(req *command.Request, xTime bool) ([]*Rows, error) {
 		stats.Add(numQTx, 1)
 	}
 
-	type Queryer interface {
-		Query(query string, args []driver.Value) (driver.Rows, error)
-	}
-
 	var allRows []*Rows
 	err := func() (err error) {
-		var queryer Queryer
 		var t driver.Tx
 		defer func() {
 			// XXX THIS DOESN'T ACTUALLY WORK! Might as WELL JUST COMMIT?
@@ -414,16 +393,20 @@ func (db *DB) Query(req *command.Request, xTime bool) ([]*Rows, error) {
 			}
 		}()
 
-		queryer = db.sqlite3conn
-
 		// Create the correct query object, depending on whether a
-		// transaction was requested.
+		// transaction was requested.   XXXX NEED FIXING
 		if tx {
 			t, err = db.sqlite3conn.Begin()
 			if err != nil {
 				return err
 			}
 		}
+
+		conn, err := db.db.Conn(context.Background())
+		if err != nil {
+			return err
+		}
+		defer conn.Close()
 
 		for _, stmt := range req.Statements {
 			sql := stmt.Sql
@@ -441,30 +424,44 @@ func (db *DB) Query(req *command.Request, xTime bool) ([]*Rows, error) {
 				continue
 			}
 
-			rs, err := queryer.Query(sql, parameters)
+			rs, err := conn.QueryContext(context.Background(), sql, parameters...)
 			if err != nil {
 				rows.Error = err.Error()
 				allRows = append(allRows, rows)
 				continue
 			}
 			defer rs.Close()
-			columns := rs.Columns()
 
-			rows.Columns = columns
-			rows.Types = rs.(*sqlite3.SQLiteRows).DeclTypes()
-			dest := make([]driver.Value, len(rows.Columns))
-			for {
-				err := rs.Next(dest)
-				if err != nil {
-					if err != io.EOF {
-						rows.Error = err.Error()
-					}
-					break
+			rows.Columns, err = rs.Columns()
+			if err != nil {
+				return err
+			}
+
+			types, err := rs.ColumnTypes()
+			if err != nil {
+				return err
+			}
+			rows.Types = make([]string, len(types))
+			for i := range types {
+				rows.Types[i] = strings.ToLower(types[i].DatabaseTypeName())
+			}
+
+			dest := make([]interface{}, 0)
+			for rs.Next() {
+				var v driver.Value
+				if err := rs.Scan(dest); err != nil {
+					return err
 				}
-
+				dest = append(dest, v)
 				values := normalizeRowValues(dest, rows.Types)
 				rows.Values = append(rows.Values, values)
 			}
+
+			// Check for errors from iterating over rows.
+			if err := rs.Err(); err != nil {
+				return err
+			}
+
 			if xTime {
 				rows.Time = time.Now().Sub(start).Seconds()
 			}
@@ -657,12 +654,12 @@ func copyDatabase(dst *sqlite3.SQLiteConn, src *sqlite3.SQLiteConn) error {
 }
 
 // parametersToValues maps values in the proto params to SQL driver values.
-func parametersToValues(parameters []*command.Parameter) ([]driver.Value, error) {
+func parametersToValues(parameters []*command.Parameter) ([]interface{}, error) {
 	if parameters == nil {
 		return nil, nil
 	}
 
-	values := make([]driver.Value, len(parameters))
+	values := make([]interface{}, len(parameters))
 	for i := range parameters {
 		switch w := parameters[i].GetValue().(type) {
 		case *command.Parameter_I:
@@ -686,21 +683,16 @@ func parametersToValues(parameters []*command.Parameter) ([]driver.Value, error)
 // Text values come over (from sqlite-go) as []byte instead of strings
 // for some reason, so we have explicitly convert (but only when type
 // is "text" so we don't affect BLOB types)
-func normalizeRowValues(row []driver.Value, types []string) []interface{} {
-	values := make([]interface{}, len(types))
+func normalizeRowValues(row []interface{}, types []string) []interface{} {
 	for i, v := range row {
 		if isTextType(types[i]) {
-			switch val := v.(type) {
-			case []byte:
-				values[i] = string(val)
-			default:
-				values[i] = val
+			val, ok := v.([]byte)
+			if ok {
+				row[i] = string(val)
 			}
-		} else {
-			values[i] = v
 		}
 	}
-	return values
+	return row
 }
 
 // isTextType returns whether the given type has a SQLite text affinity.
