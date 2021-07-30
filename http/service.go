@@ -34,10 +34,6 @@ type Database interface {
 	// successfully or it will as though none executed.
 	Execute(er *command.ExecuteRequest) ([]*sql.Result, error)
 
-	// ExecuteOrAbort performs the same function as Execute(), but ensures
-	// any transactions are aborted in case of any error.
-	ExecuteOrAbort(er *command.ExecuteRequest) ([]*sql.Result, error)
-
 	// Query executes a slice of queries, each of which returns rows. If
 	// timings is true, then timing information will be returned. If tx
 	// is true, then all queries will take place while a read transaction
@@ -486,7 +482,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 	queries := []string{string(b)}
 	er := executeRequestFromStrings(queries, timings, false)
 
-	results, err := s.store.ExecuteOrAbort(er)
+	results, err := s.store.Execute(er)
 	if err != nil {
 		if err == store.ErrNotLeader {
 			leaderAPIAddr := s.LeaderAPIAddr()

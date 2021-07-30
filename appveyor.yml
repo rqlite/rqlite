@@ -1,4 +1,8 @@
-version: 5.{build}
+os: Visual Studio 2019
+
+stack: go 1.16
+
+version: 6.{build}
 
 platform: x64
 
@@ -14,6 +18,7 @@ install:
   - if %BUILD_ENV%==gnu  set MSYS=winsymlinks=lnk
 
 build_script:
+  - go version
   - go get ./...
   - go build -i ./...
   - go test -v ./...

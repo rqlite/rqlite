@@ -460,10 +460,11 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		return nil, err
 	}
 	dbStatus := map[string]interface{}{
-		"dsn":            s.dbConf.DSN,
-		"fk_constraints": enabledFromBool(fkEnabled),
-		"version":        sql.DBVersion,
-		"db_size":        dbSz,
+		"dsn":             s.dbConf.DSN,
+		"fk_constraints":  enabledFromBool(fkEnabled),
+		"version":         sql.DBVersion,
+		"db_size":         dbSz,
+		"conn_pool_stats": s.db.ConnectionPoolStats(),
 	}
 	if s.dbConf.Memory {
 		dbStatus["path"] = ":memory:"
@@ -537,28 +538,6 @@ func (s *Store) Execute(ex *command.ExecuteRequest) ([]*sql.Result, error) {
 	if s.raft.State() != raft.Leader {
 		return nil, ErrNotLeader
 	}
-	return s.execute(ex)
-}
-
-// ExecuteOrAbort executes the requests, but aborts any active transaction
-// on the underlying database in the case of any error.
-func (s *Store) ExecuteOrAbort(ex *command.ExecuteRequest) (results []*sql.Result, retErr error) {
-	defer func() {
-		var errored bool
-		if results != nil {
-			for i := range results {
-				if results[i].Error != "" {
-					errored = true
-					break
-				}
-			}
-		}
-		if retErr != nil || errored {
-			if err := s.db.AbortTransaction(); err != nil {
-				s.logger.Printf("WARNING: failed to abort transaction: %s", err.Error())
-			}
-		}
-	}()
 	return s.execute(ex)
 }
 
