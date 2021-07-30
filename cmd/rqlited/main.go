@@ -182,6 +182,7 @@ func main() {
 		log.Fatalf("failed to start node mux: %s", err.Error())
 	}
 	raftTn := mux.Listen(cluster.MuxRaftHeader)
+	log.Printf("Raft TCP mux Listener registered with %d", cluster.MuxRaftHeader)
 
 	// Create cluster service, so nodes can learn information about each other. This can be started
 	// now since it doesn't require a functioning Store yet.
@@ -189,6 +190,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to create cluster service: %s", err.Error())
 	}
+	log.Printf("Cluster TCP mux Listener registered with %d", cluster.MuxClusterHeader)
 
 	// Create and open the store.
 	dataPath, err = filepath.Abs(dataPath)
