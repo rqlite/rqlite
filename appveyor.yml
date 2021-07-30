@@ -1,4 +1,8 @@
-version: 5.{build}
+os: Visual Studio 2019
+
+stack: go 1.16
+
+version: 6.{build}
 
 platform: x64
 
@@ -14,10 +18,10 @@ install:
   - if %BUILD_ENV%==gnu  set MSYS=winsymlinks=lnk
 
 build_script:
-  - C:\go version
-  - C:\go get ./...
-  - C:\go build -i ./...
-  - C:\go test -v ./...
+  - go version
+  - go get ./...
+  - go build -i ./...
+  - go test -v ./...
 
 after_build:
   - 7z a rqlite-latest-win64.zip %GOPATH%\bin\rq*.exe
