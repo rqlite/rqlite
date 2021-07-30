@@ -2,7 +2,8 @@
 ### Implementation changes and bug fixes
 - [PR #827](https://github.com/rqlite/rqlite/pull/827): Upgrade dependencies, including SQLite to 3.36.
 - [PR #835](https://github.com/rqlite/rqlite/pull/835): Use Go standard libary sql/database abstraction. Fixes [issue #830](https://github.com/rqlite/rqlite/issues/830).
-- [PR #835](https://github.com/rqlite/rqlite/pull/835): Use SQLite connection pool.
+- [PR #835](https://github.com/rqlite/rqlite/pull/835): Use SQLite connection pool and add pool statistics to status output.
+- [PR #836](https://github.com/rqlite/rqlite/pull/836): Add current SQLite journal mode to status output.
 
 ## 6.0.1 (June 28th 2021)
 ### Implementation changes and bug fixes
