@@ -541,28 +541,6 @@ func (s *Store) Execute(ex *command.ExecuteRequest) ([]*sql.Result, error) {
 	return s.execute(ex)
 }
 
-// ExecuteOrAbort executes the requests, but aborts any active transaction
-// on the underlying database in the case of any error.
-func (s *Store) ExecuteOrAbort(ex *command.ExecuteRequest) (results []*sql.Result, retErr error) {
-	defer func() {
-		var errored bool
-		if results != nil {
-			for i := range results {
-				if results[i].Error != "" {
-					errored = true
-					break
-				}
-			}
-		}
-		if retErr != nil || errored {
-			if err := s.db.AbortTransaction(); err != nil {
-				s.logger.Printf("WARNING: failed to abort transaction: %s", err.Error())
-			}
-		}
-	}()
-	return s.execute(ex)
-}
-
 func (s *Store) execute(ex *command.ExecuteRequest) ([]*sql.Result, error) {
 	b, compressed, err := s.reqMarshaller.Marshal(ex)
 	if err != nil {

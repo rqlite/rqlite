@@ -257,19 +257,21 @@ func (db *DB) FileSize() (int64, error) {
 	return fi.Size(), nil
 }
 
-// TransactionActive returns whether a transaction is currently active
-// i.e. if the database is NOT in autocommit mode.
-func (db *DB) TransactionActive() bool {
-	return !db.sqlite3conn.AutoCommit()
-}
+// ConnectionPoolStats returns database pool statistics
+func (db *DB) ConnectionPoolStats() *PoolStats {
+	s := db.db.Stats()
+	return &PoolStats{
+		MaxOpenConnections: s.MaxOpenConnections,
+		OpenConnections:    s.OpenConnections,
+		InUse:              s.InUse,
+		Idle:               s.Idle,
+		WaitCount:          s.WaitCount,
+		WaitDuration:       s.WaitDuration,
+		MaxIdleClosed:      s.MaxIdleClosed,
+		MaxIdleTimeClosed:  s.MaxIdleTimeClosed,
+		MaxLifetimeClosed:  s.MaxLifetimeClosed,
+	}
 
-// AbortTransaction aborts -- rolls back -- any active transaction. Calling code
-// should know exactly what it is doing if it decides to call this function. It
-// can be used to clean up any dangling state that may result from certain
-// error scenarios.
-func (db *DB) AbortTransaction() error {
-	_, err := db.ExecuteStringStmt("ROLLBACK")
-	return err
 }
 
 // ExecuteStringStmt executes a single query that modifies the database. This is
@@ -336,6 +338,9 @@ func (db *DB) Execute(req *command.Request, xTime bool) ([]*Result, error) {
 	// Execute each statement.
 	for _, stmt := range req.Statements {
 		ss := stmt.Sql
+		if ss == "" {
+			continue
+		}
 
 		result := &Result{}
 		start := time.Now()

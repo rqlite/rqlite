@@ -209,20 +209,20 @@ func Test_DeserializeInMemoryWithDSN(t *testing.T) {
 	}
 }
 
-func Test_EmptyStatements(t *testing.T) {
-	db, path := mustCreateDatabase()
-	defer db.Close()
-	defer os.Remove(path)
+// func Test_EmptyStatements(t *testing.T) {
+// 	db, path := mustCreateDatabase()
+// 	defer db.Close()
+// 	defer os.Remove(path)
 
-	_, err := db.ExecuteStringStmt("")
-	if err != nil {
-		t.Fatalf("failed to execute empty statement: %s", err.Error())
-	}
-	_, err = db.ExecuteStringStmt(";")
-	if err != nil {
-		t.Fatalf("failed to execute empty statement with semicolon: %s", err.Error())
-	}
-}
+// 	_, err := db.ExecuteStringStmt("")
+// 	if err != nil {
+// 		t.Fatalf("failed to execute empty statement: %s", err.Error())
+// 	}
+// 	_, err = db.ExecuteStringStmt(";")
+// 	if err != nil {
+// 		t.Fatalf("failed to execute empty statement with semicolon: %s", err.Error())
+// 	}
+// }
 
 func Test_SimpleSingleStatements(t *testing.T) {
 	db, path := mustCreateDatabase()
@@ -807,24 +807,6 @@ func Test_DBFileSize(t *testing.T) {
 
 	if _, err := db.FileSize(); err != nil {
 		t.Fatalf("failed to read database file size: %s", err)
-	}
-}
-
-func Test_AbortTransaction(t *testing.T) {
-	db, path := mustCreateDatabase()
-	defer db.Close()
-	defer os.Remove(path)
-
-	if err := db.AbortTransaction(); err != nil {
-		t.Fatalf("error abrorting non-active transaction: %s", err.Error())
-	}
-
-	if _, err := db.ExecuteStringStmt(`BEGIN`); err != nil {
-		t.Fatalf("error starting transaction: %s", err.Error())
-	}
-
-	if err := db.AbortTransaction(); err != nil {
-		t.Fatalf("error abrorting non-active transaction: %s", err.Error())
 	}
 }
 
