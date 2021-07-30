@@ -7,8 +7,6 @@ clone_folder: c:\gopath\src\github.com\rqlite\rqlite
 environment:
   GOPATH: c:\gopath
 
-stack: go 1.16
-
 install:
   - set BUILD_ENV=gnu
   - if %BUILD_ENV%==gnu  set PATH=C:\msys64\mingw64\bin;C:\msys64\usr\bin\;%PATH%
@@ -16,6 +14,7 @@ install:
   - if %BUILD_ENV%==gnu  set MSYS=winsymlinks=lnk
 
 build_script:
+  - where.exe go
   - go version
   - go get ./...
   - go build -i ./...
