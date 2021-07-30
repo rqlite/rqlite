@@ -27,6 +27,7 @@ const (
 	fkChecks         = "PRAGMA foreign_keys"
 	fkChecksEnabled  = "PRAGMA foreign_keys=ON"
 	fkChecksDisabled = "PRAGMA foreign_keys=OFF"
+	journalCheck     = "PRAGMA journal_mode"
 
 	numExecutions      = "executions"
 	numExecutionErrors = "execution_errors"
@@ -230,6 +231,15 @@ func (db *DB) FKConstraints() (bool, error) {
 		return true, nil
 	}
 	return false, nil
+}
+
+// JournalMode returns the current journal mode.
+func (db *DB) JournalMode() (string, error) {
+	r, err := db.QueryStringStmt(journalCheck)
+	if err != nil {
+		return "", err
+	}
+	return r[0].Values[0][0].(string), nil
 }
 
 // Size returns the size of the database in bytes. "Size" is defined as
