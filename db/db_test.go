@@ -56,6 +56,31 @@ func Test_TableCreation(t *testing.T) {
 	}
 }
 
+// Test_TableCreationInMemory tests basic operation of an in-memory database,
+// ensuring that using different connection objects (as the Execute and Query
+// will do) works properly i.e. that the connections object work on the same
+// in-memory database.
+func Test_TableCreationInMemory(t *testing.T) {
+	db := mustCreateInMemoryDatabase()
+	defer db.Close()
+
+	r, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if exp, got := `[{}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+
+	q, err := db.QueryStringStmt("SELECT * FROM foo")
+	if err != nil {
+		t.Fatalf("failed to query empty table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"]}]`, asJSON(q); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+}
+
 func Test_SQLiteMasterTable(t *testing.T) {
 	db, path := mustCreateDatabase()
 	defer db.Close()
@@ -785,48 +810,6 @@ func Test_DBFileSize(t *testing.T) {
 	}
 }
 
-func Test_ActiveTransaction(t *testing.T) {
-	db, path := mustCreateDatabase()
-	defer db.Close()
-	defer os.Remove(path)
-
-	if db.TransactionActive() {
-		t.Fatal("transaction incorrectly marked as active")
-	}
-
-	if _, err := db.ExecuteStringStmt(`BEGIN`); err != nil {
-		t.Fatalf("error starting transaction: %s", err.Error())
-	}
-
-	if !db.TransactionActive() {
-		t.Fatal("transaction incorrectly marked as inactive")
-	}
-
-	if _, err := db.ExecuteStringStmt(`COMMIT`); err != nil {
-		t.Fatalf("error starting transaction: %s", err.Error())
-	}
-
-	if db.TransactionActive() {
-		t.Fatal("transaction incorrectly marked as active")
-	}
-
-	if _, err := db.ExecuteStringStmt(`BEGIN`); err != nil {
-		t.Fatalf("error starting transaction: %s", err.Error())
-	}
-
-	if !db.TransactionActive() {
-		t.Fatal("transaction incorrectly marked as inactive")
-	}
-
-	if _, err := db.ExecuteStringStmt(`ROLLBACK`); err != nil {
-		t.Fatalf("error starting transaction: %s", err.Error())
-	}
-
-	if db.TransactionActive() {
-		t.Fatal("transaction incorrectly marked as active")
-	}
-}
-
 func Test_AbortTransaction(t *testing.T) {
 	db, path := mustCreateDatabase()
 	defer db.Close()
@@ -840,16 +823,8 @@ func Test_AbortTransaction(t *testing.T) {
 		t.Fatalf("error starting transaction: %s", err.Error())
 	}
 
-	if !db.TransactionActive() {
-		t.Fatal("transaction incorrectly marked as inactive")
-	}
-
 	if err := db.AbortTransaction(); err != nil {
 		t.Fatalf("error abrorting non-active transaction: %s", err.Error())
-	}
-
-	if db.TransactionActive() {
-		t.Fatal("transaction incorrectly marked as active")
 	}
 }
 
@@ -1212,6 +1187,14 @@ func mustCreateDatabase() (*DB, string) {
 	}
 
 	return db, f
+}
+
+func mustCreateInMemoryDatabase() *DB {
+	db, err := OpenInMemory()
+	if err != nil {
+		panic("failed to open in-memory database")
+	}
+	return db
 }
 
 func mustWriteAndOpenDatabase(b []byte) (*DB, string) {

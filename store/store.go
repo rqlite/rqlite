@@ -460,10 +460,11 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		return nil, err
 	}
 	dbStatus := map[string]interface{}{
-		"dsn":            s.dbConf.DSN,
-		"fk_constraints": enabledFromBool(fkEnabled),
-		"version":        sql.DBVersion,
-		"db_size":        dbSz,
+		"dsn":             s.dbConf.DSN,
+		"fk_constraints":  enabledFromBool(fkEnabled),
+		"version":         sql.DBVersion,
+		"db_size":         dbSz,
+		"conn_pool_stats": s.db.ConnectionPoolStats(),
 	}
 	if s.dbConf.Memory {
 		dbStatus["path"] = ":memory:"
