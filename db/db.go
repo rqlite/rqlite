@@ -139,7 +139,7 @@ func LoadInMemoryWithDSN(dbPath, dsn string) (*DB, error) {
 // DeserializeInMemoryWithDSN loads an in-memory database with that contained
 // in the byte slide, with the specified DSN. The byte slice must not be changed
 // or garbage-collected until after this function returns.
-func DeserializeInMemoryWithDSN(b []byte, dsn string) (*DB, error) {
+func DeserializeInMemoryWithDSN(b []byte, dsn string) (retDB *DB, retErr error) {
 	tmpDB, err := OpenInMemoryWithDSN(dsn)
 	if err != nil {
 		return nil, fmt.Errorf("DeserializeInMemoryWithDSN: %s", err.Error())
@@ -173,6 +173,12 @@ func DeserializeInMemoryWithDSN(b []byte, dsn string) (*DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("DeserializeInMemoryWithDSN: %s", err.Error())
 	}
+	defer func() {
+		// Don't leak a database if deserialization fails.
+		if retErr != nil {
+			db.Close()
+		}
+	}()
 
 	if err := copyDatabase(db, tmpDB); err != nil {
 		return nil, fmt.Errorf("DeserializeInMemoryWithDSN: %s", err.Error())
