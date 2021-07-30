@@ -762,6 +762,34 @@ func Test_ForeignKeyConstraints(t *testing.T) {
 	}
 }
 
+func Test_JournalMode(t *testing.T) {
+	db, path := mustCreateDatabase()
+	defer db.Close()
+	defer os.Remove(path)
+
+	m, err := db.JournalMode()
+	if err != nil {
+		t.Fatalf("failed to check journal mode: %s", err.Error())
+	}
+	if exp, got := "delete", m; exp != got {
+		t.Fatalf("got wrong mode for journal, expected %s, got %s", exp, got)
+	}
+
+	_, err = db.ExecuteStringStmt(`PRAGMA journal_mode=off`)
+	if err != nil {
+		t.Fatalf(`failed to execute 'PRAGMA journal_mode' statement: %s`, err.Error())
+	}
+
+	m, err = db.JournalMode()
+	if err != nil {
+		t.Fatalf("failed to check journal mode: %s", err.Error())
+	}
+	if exp, got := "off", m; exp != got {
+		t.Fatalf("got wrong mode for journal, expected %s, got %s", exp, got)
+	}
+
+}
+
 func Test_UniqueConstraints(t *testing.T) {
 	db, path := mustCreateDatabase()
 	defer db.Close()

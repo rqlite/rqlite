@@ -459,12 +459,17 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
+	jm, err := s.db.JournalMode()
+	if err != nil {
+		return nil, err
+	}
 	dbStatus := map[string]interface{}{
 		"dsn":             s.dbConf.DSN,
 		"fk_constraints":  enabledFromBool(fkEnabled),
 		"version":         sql.DBVersion,
 		"db_size":         dbSz,
 		"conn_pool_stats": s.db.ConnectionPoolStats(),
+		"journal_mode":    jm,
 	}
 	if s.dbConf.Memory {
 		dbStatus["path"] = ":memory:"
