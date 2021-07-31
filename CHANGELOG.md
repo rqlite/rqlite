@@ -1,4 +1,6 @@
-## 6.0.2 (unreleased)
+## 6.0.2 (July 31st 2021)
+This release addresses a significant issue related to SQLite connection handling and multithreading. All users should upgrade to this version.
+
 ### Implementation changes and bug fixes
 - [PR #827](https://github.com/rqlite/rqlite/pull/827): Upgrade dependencies, including SQLite to 3.36.
 - [PR #835](https://github.com/rqlite/rqlite/pull/835): Use Go standard libary sql/database abstraction. Fixes [issue #830](https://github.com/rqlite/rqlite/issues/830).
