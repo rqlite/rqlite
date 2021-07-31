@@ -7,7 +7,9 @@ import (
 	"os"
 	"path"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/rqlite/rqlite/command"
 	"github.com/rqlite/rqlite/testdata/chinook"
@@ -1186,6 +1188,106 @@ func Test_DumpMemory(t *testing.T) {
 	if b.String() != chinook.DB {
 		t.Fatal("dumped database does not equal entered database")
 	}
+}
+
+// Test_ParallelOperationsInMemory runs multiple accesses concurrently, ensuring
+// that correct results are returned in every goroutine. It's not 100% that this
+// test would bring out a bug, but it's almost 100%.
+//
+// See https://github.com/mattn/go-sqlite3/issues/959#issuecomment-890283264
+func Test_ParallelOperationsInMemory(t *testing.T) {
+	t.Parallel()
+	db := mustCreateInMemoryDatabase()
+	defer db.Close()
+
+	if _, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"); err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	if _, err := db.ExecuteStringStmt("CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"); err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	if _, err := db.ExecuteStringStmt("CREATE TABLE qux (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"); err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	// Confirm schema is as expected, when checked from same goroutine.
+	if rows, err := db.QueryStringStmt(`SELECT sql FROM sqlite_master`); err != nil {
+		t.Fatalf("failed to query for schema after creation: %s", err.Error())
+	} else {
+		if exp, got := `[{"columns":["sql"],"types":["text"],"values":[["CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"],["CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"],["CREATE TABLE qux (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"]]}]`, asJSON(rows); exp != got {
+			t.Fatalf("schema not as expected during after creation, exp %s, got %s", exp, got)
+		}
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(3)
+
+	foo := make(chan time.Time)
+	bar := make(chan time.Time)
+	qux := make(chan time.Time)
+	done := make(chan bool)
+
+	ticker := time.NewTicker(1 * time.Millisecond)
+	go func() {
+		for {
+			select {
+			case t := <-ticker.C:
+				foo <- t
+				bar <- t
+				qux <- t
+			case <-done:
+				close(foo)
+				close(bar)
+				close(qux)
+				return
+			}
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		for range foo {
+			if _, err := db.ExecuteStringStmt(`INSERT INTO foo(id, name) VALUES(1, "fiona")`); err != nil {
+				t.Fatalf("failed to create table: %s", err.Error())
+			}
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for range bar {
+			if _, err := db.ExecuteStringStmt(`INSERT INTO bar(id, name) VALUES(1, "fiona")`); err != nil {
+				t.Fatalf("failed to create table: %s", err.Error())
+			}
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for range qux {
+			if _, err := db.ExecuteStringStmt(`INSERT INTO qux(id, name) VALUES(1, "fiona")`); err != nil {
+				t.Fatalf("failed to create table: %s", err.Error())
+			}
+		}
+	}()
+
+	var n int
+	for {
+		if rows, err := db.QueryStringStmt(`SELECT sql FROM sqlite_master`); err != nil {
+			t.Fatalf("failed to query for schema during goroutine execution: %s", err.Error())
+		} else {
+			n++
+			if exp, got := `[{"columns":["sql"],"types":["text"],"values":[["CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"],["CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"],["CREATE TABLE qux (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"]]}]`, asJSON(rows); exp != got {
+				t.Fatalf("schema not as expected during goroutine execution, exp %s, got %s, after %d queries", exp, got, n)
+			}
+		}
+		if n == 500000 {
+			break
+		}
+	}
+
+	close(done)
+	wg.Wait()
 }
 
 func mustCreateDatabase() (*DB, string) {

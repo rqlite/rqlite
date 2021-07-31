@@ -4,6 +4,7 @@
 - [PR #835](https://github.com/rqlite/rqlite/pull/835): Use Go standard libary sql/database abstraction. Fixes [issue #830](https://github.com/rqlite/rqlite/issues/830).
 - [PR #835](https://github.com/rqlite/rqlite/pull/835): Use SQLite connection pool and add pool statistics to status output.
 - [PR #836](https://github.com/rqlite/rqlite/pull/836): Add current SQLite journal mode to status output.
+- [PR #839](https://github.com/rqlite/rqlite/pull/839): Limit in-memory connection pool to 1 connection.
 
 ## 6.0.1 (June 28th 2021)
 ### Implementation changes and bug fixes
