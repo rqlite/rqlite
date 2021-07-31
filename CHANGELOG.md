@@ -5,6 +5,7 @@
 - [PR #835](https://github.com/rqlite/rqlite/pull/835): Use SQLite connection pool and add pool statistics to status output.
 - [PR #836](https://github.com/rqlite/rqlite/pull/836): Add current SQLite journal mode to status output.
 - [PR #839](https://github.com/rqlite/rqlite/pull/839): Limit in-memory connection pool to 1 connection.
+- [PR #840](https://github.com/rqlite/rqlite/pull/840): Upgrade to rqlite/go-sqlite3 v1.20.4. See [this issue](https://github.com/mattn/go-sqlite3/issues/963).
 
 ## 6.0.1 (June 28th 2021)
 ### Implementation changes and bug fixes
