@@ -20,9 +20,7 @@ import (
 const bkDelay = 250
 
 const (
-	connMaxIdleTime = time.Duration(30 * time.Second)
-	maxOpenConns    = 128
-	maxIdleConns    = 16
+	onDiskMaxOpenConns = 32
 
 	fkChecks         = "PRAGMA foreign_keys"
 	fkChecksEnabled  = "PRAGMA foreign_keys=ON"
@@ -93,22 +91,44 @@ type Rows struct {
 
 // Open opens a file-based database, creating it if it does not exist.
 func Open(dbPath string) (*DB, error) {
-	return open(fqdsn(dbPath, ""))
+	db, err := open(fqdsn(dbPath, ""))
+	if err != nil {
+		return nil, err
+	}
+	db.db.SetMaxOpenConns(onDiskMaxOpenConns)
+	return db, nil
 }
 
 // OpenWithDSN opens a file-based database, creating it if it does not exist.
 func OpenWithDSN(dbPath, dsn string) (*DB, error) {
-	return open(fqdsn(dbPath, dsn))
+	db, err := open(fqdsn(dbPath, dsn))
+	if err != nil {
+		return nil, err
+	}
+	db.db.SetMaxOpenConns(onDiskMaxOpenConns)
+	return db, nil
 }
 
 // OpenInMemory opens an in-memory database.
 func OpenInMemory() (*DB, error) {
-	return open(fqdsn(randomInMemoryDB(), ""))
+	db, err := open(fqdsn(randomInMemoryDB(), ""))
+	if err != nil {
+		return nil, err
+	}
+	// In-memory databases do not support connection pooling.
+	db.db.SetMaxOpenConns(1)
+	return db, nil
 }
 
 // OpenInMemoryWithDSN opens an in-memory database with a specific DSN.
 func OpenInMemoryWithDSN(dsn string) (*DB, error) {
-	return open(fqdsn(randomInMemoryDB(), dsn))
+	db, err := open(fqdsn(randomInMemoryDB(), dsn))
+	if err != nil {
+		return nil, err
+	}
+	// In-memory databases do not support connection pooling.
+	db.db.SetMaxOpenConns(1)
+	return db, nil
 }
 
 // LoadInMemoryWithDSN loads an in-memory database with that at the path,
@@ -197,13 +217,6 @@ func open(dbPath string) (*DB, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	// Configure connection pool parameters such that rqlite behavior
-	// remains generally similar to previous versions that didn't use
-	// a pool. The pool may be configurable in a future release
-	db.SetConnMaxIdleTime(connMaxIdleTime)
-	db.SetMaxIdleConns(maxIdleConns)
-	db.SetMaxOpenConns(maxOpenConns)
 
 	// Ensure database is basically healthy.
 	if err := db.Ping(); err != nil {
