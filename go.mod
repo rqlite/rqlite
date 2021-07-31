@@ -22,7 +22,7 @@ require (
 	github.com/mkideal/cli v0.2.7
 	github.com/mkideal/log v1.0.0 // indirect
 	github.com/mkideal/pkg v0.1.3
-	github.com/rqlite/go-sqlite3 v1.20.3
+	github.com/rqlite/go-sqlite3 v1.20.4
 	golang.org/x/crypto v0.0.0-20210711020723-a769d52b0f97
 	golang.org/x/net v0.0.0-20210226172049-e18ecbb05110
 	golang.org/x/sys v0.0.0-20210630005230-0f9fa26af87c // indirect
