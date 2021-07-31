@@ -21,6 +21,7 @@ const bkDelay = 250
 
 const (
 	onDiskMaxOpenConns = 32
+	onDiskMaxIdleTime  = 120 * time.Second
 
 	fkChecks         = "PRAGMA foreign_keys"
 	fkChecksEnabled  = "PRAGMA foreign_keys=ON"
@@ -91,12 +92,7 @@ type Rows struct {
 
 // Open opens a file-based database, creating it if it does not exist.
 func Open(dbPath string) (*DB, error) {
-	db, err := open(fqdsn(dbPath, ""))
-	if err != nil {
-		return nil, err
-	}
-	db.db.SetMaxOpenConns(onDiskMaxOpenConns)
-	return db, nil
+	return OpenWithDSN(dbPath, "")
 }
 
 // OpenWithDSN opens a file-based database, creating it if it does not exist.
@@ -105,19 +101,16 @@ func OpenWithDSN(dbPath, dsn string) (*DB, error) {
 	if err != nil {
 		return nil, err
 	}
+	db.db.SetConnMaxIdleTime(onDiskMaxIdleTime)
+	db.db.SetConnMaxLifetime(0)
+	db.db.SetMaxIdleConns(onDiskMaxOpenConns)
 	db.db.SetMaxOpenConns(onDiskMaxOpenConns)
 	return db, nil
 }
 
 // OpenInMemory opens an in-memory database.
 func OpenInMemory() (*DB, error) {
-	db, err := open(fqdsn(randomInMemoryDB(), ""))
-	if err != nil {
-		return nil, err
-	}
-	// In-memory databases do not support connection pooling.
-	db.db.SetMaxOpenConns(1)
-	return db, nil
+	return OpenInMemoryWithDSN("")
 }
 
 // OpenInMemoryWithDSN opens an in-memory database with a specific DSN.
@@ -126,7 +119,10 @@ func OpenInMemoryWithDSN(dsn string) (*DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	// In-memory databases do not support connection pooling.
+	// In-memory databases do not support practical connection pooling.
+	db.db.SetConnMaxIdleTime(0)
+	db.db.SetConnMaxLifetime(0)
+	db.db.SetMaxIdleConns(1)
 	db.db.SetMaxOpenConns(1)
 	return db, nil
 }
