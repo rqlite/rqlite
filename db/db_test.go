@@ -120,7 +120,7 @@ func Test_LoadInMemory(t *testing.T) {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
 
-	inmem, err := LoadInMemoryWithDSN(path, "")
+	inmem, err := LoadInMemory(path)
 	if err != nil {
 		t.Fatalf("failed to create loaded in-memory database: %s", err.Error())
 	}
@@ -135,7 +135,7 @@ func Test_LoadInMemory(t *testing.T) {
 	}
 }
 
-func Test_DeserializeInMemoryWithDSN(t *testing.T) {
+func Test_DeserializeInMemory(t *testing.T) {
 	db, path := mustCreateDatabase()
 	defer db.Close()
 	defer os.Remove(path)
@@ -174,7 +174,7 @@ func Test_DeserializeInMemoryWithDSN(t *testing.T) {
 		t.Fatalf("failed to read database on disk: %s", err.Error())
 	}
 
-	newDB, err := DeserializeInMemoryWithDSN(b, "")
+	newDB, err := DeserializeInMemory(b)
 	if err != nil {
 		t.Fatalf("failed to deserialize database: %s", err.Error())
 	}
@@ -1170,7 +1170,7 @@ func Test_DumpMemory(t *testing.T) {
 	defer db.Close()
 	defer os.Remove(path)
 
-	inmem, err := LoadInMemoryWithDSN(path, "")
+	inmem, err := LoadInMemory(path)
 	if err != nil {
 		t.Fatalf("failed to create loaded in-memory database: %s", err.Error())
 	}
