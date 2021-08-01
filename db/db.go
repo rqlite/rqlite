@@ -54,9 +54,10 @@ func init() {
 
 // DB is the SQL database.
 type DB struct {
-	db     *sql.DB // Std library database connection
-	path   string  // Path to database file.
-	memory bool    // In-memory only.
+	rwDB   *sql.DB
+	roDB   *sql.DB
+	path   string // Path to database file.
+	memory bool   // In-memory only.
 }
 
 // PoolStats represents connection pool statistics
@@ -91,29 +92,59 @@ type Rows struct {
 
 // Open opens a file-based database, creating it if it does not exist.
 func Open(dbPath string) (*DB, error) {
-	db, err := open(dbPath)
-	if err != nil {
-		return nil, err
-	}
-	db.db.SetConnMaxIdleTime(onDiskMaxIdleTime)
-	db.db.SetConnMaxLifetime(0)
-	db.db.SetMaxIdleConns(onDiskMaxOpenConns)
-	db.db.SetMaxOpenConns(onDiskMaxOpenConns)
-	return db, nil
+	return nil, nil
+	// db, err := open(dbPath)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// db.db.SetConnMaxIdleTime(onDiskMaxIdleTime)
+	// db.db.SetConnMaxLifetime(0)
+	// db.db.SetMaxIdleConns(onDiskMaxOpenConns)
+	// db.db.SetMaxOpenConns(onDiskMaxOpenConns)
+	// return db, nil
 }
 
 // OpenInMemory returns a new in-memory database.
 func OpenInMemory() (*DB, error) {
-	db, err := open(randomInMemoryDB())
+	inMemPath := randomInMemoryDB()
+
+	// Create database connection for executes and queries
+	inMemPathRW := strings.Join(
+		[]string{
+			inMemPath + "&",
+			"mode=rw",
+			"_txlock=immediate",
+		}, "&")
+
+	rwDB, err := sql.Open("sqlite3", inMemPathRW)
 	if err != nil {
 		return nil, err
 	}
-	// In-memory databases do not support practical connection pooling.
-	db.db.SetConnMaxIdleTime(0)
-	db.db.SetConnMaxLifetime(0)
-	db.db.SetMaxIdleConns(1)
-	db.db.SetMaxOpenConns(1)
-	return db, nil
+
+	// Ensure there is only one connection and it never closes.
+	// If it closed, in-memory database could be lost.
+	rwDB.SetConnMaxIdleTime(0)
+	rwDB.SetConnMaxLifetime(0)
+	rwDB.SetMaxIdleConns(1)
+	rwDB.SetMaxOpenConns(1)
+
+	// Create database connection just for queries
+	inMemPathRO := strings.Join(
+		[]string{
+			inMemPath + "&",
+			"mode=ro",
+			"_txlock=deferred",
+		}, "&")
+
+	roDB, err := sql.Open("sqlite3", inMemPathRO)
+	if err != nil {
+		return nil, err
+	}
+
+	return &DB{
+		rwDB: rwDB,
+		roDB: roDB,
+	}, nil
 }
 
 // LoadInMemory loads an in-memory database with that at the path.
@@ -151,7 +182,7 @@ func DeserializeInMemory(b []byte) (retDB *DB, retErr error) {
 	}
 	defer tmpDB.Close()
 
-	tmpConn, err := tmpDB.db.Conn(context.Background())
+	tmpConn, err := tmpDB.rwDB.Conn(context.Background())
 	if err != nil {
 		return nil, err
 	}
@@ -194,24 +225,28 @@ func DeserializeInMemory(b []byte) (retDB *DB, retErr error) {
 
 // Close closes the underlying database connection.
 func (db *DB) Close() error {
-	return db.db.Close()
+	if err := db.rwDB.Close(); err != nil {
+		return err
+	}
+	return db.roDB.Close()
 }
 
 func open(dbPath string) (*DB, error) {
-	db, err := sql.Open("sqlite3", dbPath)
-	if err != nil {
-		return nil, err
-	}
+	return nil, nil
+	// db, err := sql.Open("sqlite3", dbPath)
+	// if err != nil {
+	// 	return nil, err
+	// }
 
-	// Ensure database is basically healthy.
-	if err := db.Ping(); err != nil {
-		return nil, fmt.Errorf("Ping database: %s", err.Error())
-	}
+	// // Ensure database is basically healthy.
+	// if err := db.Ping(); err != nil {
+	// 	return nil, fmt.Errorf("Ping database: %s", err.Error())
+	// }
 
-	return &DB{
-		db:   db,
-		path: dbPath,
-	}, nil
+	// return &DB{
+	// 	db:   db,
+	// 	path: dbPath,
+	// }, nil
 }
 
 // EnableFKConstraints allows control of foreign key constraint checks.
@@ -273,7 +308,7 @@ func (db *DB) FileSize() (int64, error) {
 
 // ConnectionPoolStats returns database pool statistics
 func (db *DB) ConnectionPoolStats() *PoolStats {
-	s := db.db.Stats()
+	s := db.rwDB.Stats()
 	return &PoolStats{
 		MaxOpenConnections: s.MaxOpenConnections,
 		OpenConnections:    s.OpenConnections,
@@ -305,7 +340,7 @@ func (db *DB) ExecuteStringStmt(query string) ([]*Result, error) {
 func (db *DB) Execute(req *command.Request, xTime bool) ([]*Result, error) {
 	stats.Add(numExecutions, int64(len(req.Statements)))
 
-	conn, err := db.db.Conn(context.Background())
+	conn, err := db.rwDB.Conn(context.Background())
 	if err != nil {
 		return nil, err
 	}
@@ -423,7 +458,7 @@ func (db *DB) QueryStringStmt(query string) ([]*Rows, error) {
 // Query executes queries that return rows, but don't modify the database.
 func (db *DB) Query(req *command.Request, xTime bool) ([]*Rows, error) {
 	stats.Add(numQueries, int64(len(req.Statements)))
-	conn, err := db.db.Conn(context.Background())
+	conn, err := db.roDB.Conn(context.Background())
 	if err != nil {
 		return nil, err
 	}
@@ -551,7 +586,7 @@ func (db *DB) Copy(dstDB *DB) error {
 // is the same sequence of bytes which would be written to disk if that database
 // were backed up to disk.
 func (db *DB) Serialize() ([]byte, error) {
-	conn, err := db.db.Conn(context.Background())
+	conn, err := db.roDB.Conn(context.Background())
 	if err != nil {
 		return nil, err
 	}
@@ -576,7 +611,7 @@ func (db *DB) Serialize() ([]byte, error) {
 // Dump writes a consistent snapshot of the database in SQL text format.
 // This function can be called when changes to the database are in flight.
 func (db *DB) Dump(w io.Writer) error {
-	conn, err := db.db.Conn(context.Background())
+	conn, err := db.roDB.Conn(context.Background())
 	if err != nil {
 		return err
 	}
@@ -673,12 +708,12 @@ func (db *DB) Dump(w io.Writer) error {
 }
 
 func copyDatabase(dst *DB, src *DB) error {
-	dstConn, err := dst.db.Conn(context.Background())
+	dstConn, err := dst.rwDB.Conn(context.Background())
 	if err != nil {
 		return err
 	}
 	defer dstConn.Close()
-	srcConn, err := src.db.Conn(context.Background())
+	srcConn, err := src.roDB.Conn(context.Background())
 	if err != nil {
 		return err
 	}
