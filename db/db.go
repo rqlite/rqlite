@@ -92,12 +92,7 @@ type Rows struct {
 
 // Open opens a file-based database, creating it if it does not exist.
 func Open(dbPath string) (*DB, error) {
-	return OpenWithDSN(dbPath, "")
-}
-
-// OpenWithDSN opens a file-based database, creating it if it does not exist.
-func OpenWithDSN(dbPath, dsn string) (*DB, error) {
-	db, err := open(fqdsn(dbPath, dsn))
+	db, err := open(dbPath)
 	if err != nil {
 		return nil, err
 	}
@@ -108,14 +103,9 @@ func OpenWithDSN(dbPath, dsn string) (*DB, error) {
 	return db, nil
 }
 
-// OpenInMemory opens an in-memory database.
+// OpenInMemory returns a new in-memory database.
 func OpenInMemory() (*DB, error) {
-	return OpenInMemoryWithDSN("")
-}
-
-// OpenInMemoryWithDSN opens an in-memory database with a specific DSN.
-func OpenInMemoryWithDSN(dsn string) (*DB, error) {
-	db, err := open(fqdsn(randomInMemoryDB(), dsn))
+	db, err := open(randomInMemoryDB())
 	if err != nil {
 		return nil, err
 	}
@@ -127,11 +117,11 @@ func OpenInMemoryWithDSN(dsn string) (*DB, error) {
 	return db, nil
 }
 
-// LoadInMemoryWithDSN loads an in-memory database with that at the path,
-// with the specified DSN. Not safe to call while other operations
-// are happening with the source database.
-func LoadInMemoryWithDSN(dbPath, dsn string) (*DB, error) {
-	dstDB, err := OpenInMemoryWithDSN(dsn)
+// LoadInMemory loads an in-memory database with that at the path.
+// Not safe to call while other operations are happening with the
+// source database.
+func LoadInMemory(dbPath string) (*DB, error) {
+	dstDB, err := OpenInMemory()
 	if err != nil {
 		return nil, err
 	}
@@ -153,12 +143,12 @@ func LoadInMemoryWithDSN(dbPath, dsn string) (*DB, error) {
 }
 
 // DeserializeInMemoryWithDSN loads an in-memory database with that contained
-// in the byte slide, with the specified DSN. The byte slice must not be changed
-// or garbage-collected until after this function returns.
-func DeserializeInMemoryWithDSN(b []byte, dsn string) (retDB *DB, retErr error) {
-	tmpDB, err := OpenInMemoryWithDSN(dsn)
+// in the byte slide. The byte slice must not be changed or garbage-collected
+// until after this function returns.
+func DeserializeInMemory(b []byte) (retDB *DB, retErr error) {
+	tmpDB, err := OpenInMemory()
 	if err != nil {
-		return nil, fmt.Errorf("DeserializeInMemoryWithDSN: %s", err.Error())
+		return nil, fmt.Errorf("DeserializeInMemory: %s", err.Error())
 	}
 	defer tmpDB.Close()
 
@@ -171,7 +161,7 @@ func DeserializeInMemoryWithDSN(b []byte, dsn string) (retDB *DB, retErr error) 
 		c := driverConn.(*sqlite3.SQLiteConn)
 		err2 := c.Deserialize(b, "")
 		if err2 != nil {
-			return fmt.Errorf("DeserializeInMemoryWithDSN: %s", err.Error())
+			return fmt.Errorf("DeserializeInMemory: %s", err.Error())
 		}
 		return nil
 	}); err != nil {
@@ -180,14 +170,14 @@ func DeserializeInMemoryWithDSN(b []byte, dsn string) (retDB *DB, retErr error) 
 
 	// Testing shows closing the temp conn is necessary.
 	if err := tmpConn.Close(); err != nil {
-		return nil, fmt.Errorf("DeserializeInMemoryWithDSN: %s", err.Error())
+		return nil, fmt.Errorf("DeserializeInMemory: %s", err.Error())
 	}
 
 	// tmpDB is still using memory in Go space, so tmpDB needs to be explicitly
 	// copied to a new database.
-	db, err := OpenInMemoryWithDSN(dsn)
+	db, err := OpenInMemory()
 	if err != nil {
-		return nil, fmt.Errorf("DeserializeInMemoryWithDSN: %s", err.Error())
+		return nil, fmt.Errorf("DeserializeInMemory: %s", err.Error())
 	}
 	defer func() {
 		// Don't leak a database if deserialization fails.
@@ -197,7 +187,7 @@ func DeserializeInMemoryWithDSN(b []byte, dsn string) (retDB *DB, retErr error) 
 	}()
 
 	if err := copyDatabase(db, tmpDB); err != nil {
-		return nil, fmt.Errorf("DeserializeInMemoryWithDSN: %s", err.Error())
+		return nil, fmt.Errorf("DeserializeInMemory: %s", err.Error())
 	}
 
 	return db, nil
@@ -785,14 +775,6 @@ func isTextType(t string) bool {
 		strings.HasPrefix(t, "native character") ||
 		strings.HasPrefix(t, "nvarchar") ||
 		strings.HasPrefix(t, "clob")
-}
-
-// fqdsn returns the fully-qualified datasource name.
-func fqdsn(path, dsn string) string {
-	if dsn != "" {
-		return fmt.Sprintf("file:%s?%s", path, dsn)
-	}
-	return path
 }
 
 func randomInMemoryDB() string {

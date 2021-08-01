@@ -464,7 +464,6 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		return nil, err
 	}
 	dbStatus := map[string]interface{}{
-		"dsn":             s.dbConf.DSN,
 		"fk_constraints":  enabledFromBool(fkEnabled),
 		"version":         sql.DBVersion,
 		"db_size":         dbSz,
@@ -755,9 +754,9 @@ func (s *Store) Noop(id string) error {
 // database will be initialized with the contents of b.
 func (s *Store) createInMemory(b []byte) (db *sql.DB, err error) {
 	if b == nil {
-		db, err = sql.OpenInMemoryWithDSN(s.dbConf.DSN)
+		db, err = sql.OpenInMemory()
 	} else {
-		db, err = sql.DeserializeInMemoryWithDSN(b, s.dbConf.DSN)
+		db, err = sql.DeserializeInMemory(b)
 	}
 	return
 }
@@ -774,7 +773,7 @@ func (s *Store) createOnDisk(b []byte) (*sql.DB, error) {
 			return nil, err
 		}
 	}
-	return sql.OpenWithDSN(s.dbPath, s.dbConf.DSN)
+	return sql.Open(s.dbPath)
 }
 
 // setLogInfo records some key indexs about the log.

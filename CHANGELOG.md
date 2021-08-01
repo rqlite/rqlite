@@ -1,3 +1,6 @@
+## 6.0.3 (unreleased)
+- [PR #841](https://github.com/rqlite/rqlite/pull/841): Remove support for specifying SQLite DSN.
+
 ## 6.0.2 (July 31st 2021)
 This release addresses a significant issue related to SQLite connection handling and multithreading. All users should upgrade to this version.
 

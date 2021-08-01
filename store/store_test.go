@@ -1157,7 +1157,7 @@ func Test_State(t *testing.T) {
 }
 
 func mustNewStoreAtPath(path string, inmem bool) *Store {
-	cfg := NewDBConfig("", inmem)
+	cfg := NewDBConfig(inmem)
 	s := New(mustMockLister("localhost:0"), &StoreConfig{
 		DBConf: cfg,
 		Dir:    path,
