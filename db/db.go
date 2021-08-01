@@ -56,7 +56,6 @@ func init() {
 type DB struct {
 	db     *sql.DB // Std library database connection
 	path   string  // Path to database file.
-	dsn    string  // DSN, if any.
 	memory bool    // In-memory only.
 }
 
@@ -142,7 +141,7 @@ func LoadInMemory(dbPath string) (*DB, error) {
 	return dstDB, nil
 }
 
-// DeserializeInMemoryWithDSN loads an in-memory database with that contained
+// DeserializeInMemory loads an in-memory database with that contained
 // in the byte slide. The byte slice must not be changed or garbage-collected
 // until after this function returns.
 func DeserializeInMemory(b []byte) (retDB *DB, retErr error) {
