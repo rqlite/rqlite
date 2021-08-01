@@ -1,5 +1,5 @@
 # Status and Diagnostics API
-A status API exists, which dumps some diagnostic and statistical information, as well as basic information about the underlying Raft node. Assuming the rqlite node is started with default settings, node status is available via a HTTP `GET` request. To see the raw data, you can issue a `curl` command like so:
+A status API exists, which returns extensive diagnostic and statistical information, as well as basic information about the underlying Raft node. Assuming the rqlite node is started with default settings, node status is available via a HTTP `GET` request. To see the raw data, you can issue a `curl` command like so:
 
 ```bash
 curl localhost:4001/status?pretty
@@ -30,7 +30,7 @@ runtime:
  ```
 
  ## Nodes API
- The _nodes_ API returns basic information for nodes in the cluster, as seen by the node receiving the _nodes_ request. The receiving node will also check whether it can actually connect to those nodes. This is an effective way to determine the cluster leader, and the leader's HTTP API address. It can also be used to check if the cluster is **basically** running -- if the other nodes are reachable, it probably is.
+ The _nodes_ API returns basic information for nodes in the cluster, as seen by the node receiving the _nodes_ request. The receiving node will also check whether it can actually connect to all other nodes in the cluster. This is an effective way to determine the cluster leader, and the leader's HTTP API address. It can also be used to check if the cluster is **basically** running -- if the other nodes are reachable, it probably is.
 
  By default the node only checks if _voting_ nodes are contactable.
 
