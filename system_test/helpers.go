@@ -478,7 +478,7 @@ func mustNodeEncryptedOnDisk(dir string, enableSingle, httpEncrypt bool, mux *tc
 		HTTPKeyPath:  httpKeyPath,
 	}
 
-	dbConf := store.NewDBConfig("", !onDisk)
+	dbConf := store.NewDBConfig(!onDisk)
 
 	raftTn := mux.Listen(cluster.MuxRaftHeader)
 	id := nodeID
