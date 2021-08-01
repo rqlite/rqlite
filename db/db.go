@@ -784,5 +784,5 @@ func randomInMemoryDB() string {
 		randomChar := chars[random]
 		output.WriteString(string(randomChar))
 	}
-	return fmt.Sprintf("file:%s?mode=memory", output.String())
+	return fmt.Sprintf("file:/%s?vfs=memdb", output.String())
 }
