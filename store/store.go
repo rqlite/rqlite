@@ -450,25 +450,14 @@ func (s *Store) WaitForAppliedIndex(idx uint64, timeout time.Duration) error {
 
 // Stats returns stats for the store.
 func (s *Store) Stats() (map[string]interface{}, error) {
-	fkEnabled, err := s.db.FKConstraints()
-	if err != nil {
-		return nil, err
-	}
-
 	dbSz, err := s.db.Size()
 	if err != nil {
 		return nil, err
 	}
-	jm, err := s.db.JournalMode()
-	if err != nil {
-		return nil, err
-	}
 	dbStatus := map[string]interface{}{
-		"fk_constraints":  enabledFromBool(fkEnabled),
 		"version":         sql.DBVersion,
 		"db_size":         dbSz,
 		"conn_pool_stats": s.db.ConnectionPoolStats(),
-		"journal_mode":    jm,
 	}
 	if s.dbConf.Memory {
 		dbStatus["path"] = ":memory:"
@@ -756,7 +745,7 @@ func (s *Store) createInMemory(b []byte) (db *sql.DB, err error) {
 	if b == nil {
 		db, err = sql.OpenInMemory()
 	} else {
-		db, err = sql.DeserializeInMemory(b)
+		db, err = sql.DeserializeIntoMemory(b)
 	}
 	return
 }

@@ -54,10 +54,11 @@ func init() {
 
 // DB is the SQL database.
 type DB struct {
-	rwDB   *sql.DB
-	roDB   *sql.DB
 	path   string // Path to database file.
 	memory bool   // In-memory only.
+
+	rwDB *sql.DB
+	roDB *sql.DB
 }
 
 // PoolStats represents connection pool statistics
@@ -92,31 +93,48 @@ type Rows struct {
 
 // Open opens a file-based database, creating it if it does not exist.
 func Open(dbPath string) (*DB, error) {
-	return nil, nil
-	// db, err := open(dbPath)
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// db.db.SetConnMaxIdleTime(onDiskMaxIdleTime)
-	// db.db.SetConnMaxLifetime(0)
-	// db.db.SetMaxIdleConns(onDiskMaxOpenConns)
-	// db.db.SetMaxOpenConns(onDiskMaxOpenConns)
-	// return db, nil
+	rwOpts := strings.Join(
+		[]string{
+			"mode=rw",
+		}, "&")
+
+	rwDB, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?%s", dbPath, rwOpts))
+	if err != nil {
+		return nil, err
+	}
+
+	// XXX NOT SURE IF WAL WILL WORK. SIMPLY COPYING THE DATABASE FILE
+	// WONT GET THE ENTIRE DATABASE. CAN WAL COMPACT BE FORCED?
+
+	roOpts := strings.Join(
+		[]string{
+			"mode=ro",
+		}, "&")
+
+	roDB, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?%s", dbPath, roOpts))
+	if err != nil {
+		return nil, err
+	}
+
+	// Set some reasonable connection pool behaviour.
+	rwDB.SetConnMaxIdleTime(30 * time.Second)
+	rwDB.SetConnMaxLifetime(0)
+	roDB.SetConnMaxIdleTime(30 * time.Second)
+	roDB.SetConnMaxLifetime(0)
+
+	return &DB{
+		path: dbPath,
+		rwDB: rwDB,
+		roDB: roDB,
+	}, nil
 }
 
 // OpenInMemory returns a new in-memory database.
 func OpenInMemory() (*DB, error) {
-	inMemPath := randomInMemoryDB()
+	inMemPath := fmt.Sprintf("file:/%s", randomString())
 
-	// Create database connection for executes and queries
-	inMemPathRW := strings.Join(
-		[]string{
-			inMemPath + "&",
-			"mode=rw",
-			"_txlock=immediate",
-		}, "&")
-
-	rwDB, err := sql.Open("sqlite3", inMemPathRW)
+	//rwDB, err := sql.Open("sqlite3", fmt.Sprintf("file:/%s?%s", inMemPath, rwOpts))
+	rwDB, err := sql.Open("sqlite3", fmt.Sprintf("file:/%s?mode=rw&vfs=memdb&_txlock=immediate", inMemPath))
 	if err != nil {
 		return nil, err
 	}
@@ -128,15 +146,7 @@ func OpenInMemory() (*DB, error) {
 	rwDB.SetMaxIdleConns(1)
 	rwDB.SetMaxOpenConns(1)
 
-	// Create database connection just for queries
-	inMemPathRO := strings.Join(
-		[]string{
-			inMemPath + "&",
-			"mode=ro",
-			"_txlock=deferred",
-		}, "&")
-
-	roDB, err := sql.Open("sqlite3", inMemPathRO)
+	roDB, err := sql.Open("sqlite3", fmt.Sprintf("file:/%s?mode=ro&vfs=memdb&_txlock=deferred", inMemPath))
 	if err != nil {
 		return nil, err
 	}
@@ -147,10 +157,10 @@ func OpenInMemory() (*DB, error) {
 	}, nil
 }
 
-// LoadInMemory loads an in-memory database with that at the path.
+// LoadIntoMemory loads an in-memory database with that at the path.
 // Not safe to call while other operations are happening with the
 // source database.
-func LoadInMemory(dbPath string) (*DB, error) {
+func LoadIntoMemory(dbPath string) (*DB, error) {
 	dstDB, err := OpenInMemory()
 	if err != nil {
 		return nil, err
@@ -172,42 +182,27 @@ func LoadInMemory(dbPath string) (*DB, error) {
 	return dstDB, nil
 }
 
-// DeserializeInMemory loads an in-memory database with that contained
+// DeserializeIntoMemory loads an in-memory database with that contained
 // in the byte slide. The byte slice must not be changed or garbage-collected
 // until after this function returns.
-func DeserializeInMemory(b []byte) (retDB *DB, retErr error) {
-	tmpDB, err := OpenInMemory()
+func DeserializeIntoMemory(b []byte) (retDB *DB, retErr error) {
+	// Get a plain-ol' in-memory database.
+	tmpDB, err := sql.Open("sqlite3", ":memory:")
 	if err != nil {
-		return nil, fmt.Errorf("DeserializeInMemory: %s", err.Error())
+		return nil, fmt.Errorf("DeserializeIntoMemory: %s", err.Error())
 	}
 	defer tmpDB.Close()
 
-	tmpConn, err := tmpDB.rwDB.Conn(context.Background())
+	tmpConn, err := tmpDB.Conn(context.Background())
 	if err != nil {
 		return nil, err
 	}
 
-	if err := tmpConn.Raw(func(driverConn interface{}) error {
-		c := driverConn.(*sqlite3.SQLiteConn)
-		err2 := c.Deserialize(b, "")
-		if err2 != nil {
-			return fmt.Errorf("DeserializeInMemory: %s", err.Error())
-		}
-		return nil
-	}); err != nil {
-		return nil, err
-	}
-
-	// Testing shows closing the temp conn is necessary.
-	if err := tmpConn.Close(); err != nil {
-		return nil, fmt.Errorf("DeserializeInMemory: %s", err.Error())
-	}
-
-	// tmpDB is still using memory in Go space, so tmpDB needs to be explicitly
-	// copied to a new database.
+	// tmpDB will still be using memory in Go space, so tmpDB needs to be explicitly
+	// copied to a new database, which we create now.
 	db, err := OpenInMemory()
 	if err != nil {
-		return nil, fmt.Errorf("DeserializeInMemory: %s", err.Error())
+		return nil, fmt.Errorf("DeserializeIntoMemory: %s", err.Error())
 	}
 	defer func() {
 		// Don't leak a database if deserialization fails.
@@ -216,8 +211,28 @@ func DeserializeInMemory(b []byte) (retDB *DB, retErr error) {
 		}
 	}()
 
-	if err := copyDatabase(db, tmpDB); err != nil {
-		return nil, fmt.Errorf("DeserializeInMemory: %s", err.Error())
+	if err := tmpConn.Raw(func(driverConn interface{}) error {
+		srcConn := driverConn.(*sqlite3.SQLiteConn)
+		err2 := srcConn.Deserialize(b, "")
+		if err2 != nil {
+			return fmt.Errorf("DeserializeIntoMemory: %s", err.Error())
+		}
+		defer srcConn.Close()
+
+		// Now copy from tmp database to the database this function will return.
+		dbConn, err3 := db.rwDB.Conn(context.Background())
+		if err3 != nil {
+			return fmt.Errorf("DeserializeIntoMemory: %s", err.Error())
+		}
+		defer dbConn.Close()
+
+		return dbConn.Raw(func(driverConn interface{}) error {
+			dstConn := driverConn.(*sqlite3.SQLiteConn)
+			return copyDatabaseConnection(dstConn, srcConn)
+		})
+
+	}); err != nil {
+		return nil, err
 	}
 
 	return db, nil
@@ -231,24 +246,6 @@ func (db *DB) Close() error {
 	return db.roDB.Close()
 }
 
-func open(dbPath string) (*DB, error) {
-	return nil, nil
-	// db, err := sql.Open("sqlite3", dbPath)
-	// if err != nil {
-	// 	return nil, err
-	// }
-
-	// // Ensure database is basically healthy.
-	// if err := db.Ping(); err != nil {
-	// 	return nil, fmt.Errorf("Ping database: %s", err.Error())
-	// }
-
-	// return &DB{
-	// 	db:   db,
-	// 	path: dbPath,
-	// }, nil
-}
-
 // EnableFKConstraints allows control of foreign key constraint checks.
 func (db *DB) EnableFKConstraints(e bool) error {
 	q := fkChecksEnabled
@@ -258,27 +255,6 @@ func (db *DB) EnableFKConstraints(e bool) error {
 
 	_, err := db.ExecuteStringStmt(q)
 	return err
-}
-
-// FKConstraints returns whether FK constraints are set or not.
-func (db *DB) FKConstraints() (bool, error) {
-	r, err := db.QueryStringStmt(fkChecks)
-	if err != nil {
-		return false, err
-	}
-	if r[0].Values[0][0] == int64(1) {
-		return true, nil
-	}
-	return false, nil
-}
-
-// JournalMode returns the current journal mode.
-func (db *DB) JournalMode() (string, error) {
-	r, err := db.QueryStringStmt(journalCheck)
-	if err != nil {
-		return "", err
-	}
-	return r[0].Values[0][0].(string), nil
 }
 
 // Size returns the size of the database in bytes. "Size" is defined as
@@ -724,28 +700,7 @@ func copyDatabase(dst *DB, src *DB) error {
 	// Define the backup function.
 	bf := func(driverConn interface{}) error {
 		srcSQLiteConn := driverConn.(*sqlite3.SQLiteConn)
-
-		bk, err := dstSQLiteConn.Backup("main", srcSQLiteConn, "main")
-		if err != nil {
-			return err
-		}
-
-		for {
-			done, err := bk.Step(-1)
-			if err != nil {
-				bk.Finish()
-				return err
-			}
-			if done {
-				break
-			}
-			time.Sleep(bkDelay * time.Millisecond)
-		}
-
-		if err := bk.Finish(); err != nil {
-			return err
-		}
-		return nil
+		return copyDatabaseConnection(dstSQLiteConn, srcSQLiteConn)
 	}
 
 	return dstConn.Raw(
@@ -753,6 +708,26 @@ func copyDatabase(dst *DB, src *DB) error {
 			dstSQLiteConn = driverConn.(*sqlite3.SQLiteConn)
 			return srcConn.Raw(bf)
 		})
+}
+
+func copyDatabaseConnection(dst, src *sqlite3.SQLiteConn) error {
+	bk, err := dst.Backup("main", src, "main")
+	if err != nil {
+		return err
+	}
+
+	for {
+		done, err := bk.Step(-1)
+		if err != nil {
+			bk.Finish()
+			return err
+		}
+		if done {
+			break
+		}
+		time.Sleep(bkDelay * time.Millisecond)
+	}
+	return bk.Finish()
 }
 
 // parametersToValues maps values in the proto params to SQL driver values.
@@ -811,7 +786,7 @@ func isTextType(t string) bool {
 		strings.HasPrefix(t, "clob")
 }
 
-func randomInMemoryDB() string {
+func randomString() string {
 	var output strings.Builder
 	chars := "abcdedfghijklmnopqrstABCDEFGHIJKLMNOP"
 	for i := 0; i < 20; i++ {
@@ -819,5 +794,5 @@ func randomInMemoryDB() string {
 		randomChar := chars[random]
 		output.WriteString(string(randomChar))
 	}
-	return fmt.Sprintf("file:/%s?vfs=memdb", output.String())
+	return output.String()
 }

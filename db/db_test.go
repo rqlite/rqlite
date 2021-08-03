@@ -102,7 +102,7 @@ func Test_SQLiteMasterTable(t *testing.T) {
 	}
 }
 
-func Test_LoadInMemory(t *testing.T) {
+func Test_LoadIntoMemory(t *testing.T) {
 	db, path := mustCreateDatabase()
 	defer db.Close()
 	defer os.Remove(path)
@@ -120,7 +120,7 @@ func Test_LoadInMemory(t *testing.T) {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
 
-	inmem, err := LoadInMemory(path)
+	inmem, err := LoadIntoMemory(path)
 	if err != nil {
 		t.Fatalf("failed to create loaded in-memory database: %s", err.Error())
 	}
@@ -135,7 +135,7 @@ func Test_LoadInMemory(t *testing.T) {
 	}
 }
 
-func Test_DeserializeInMemory(t *testing.T) {
+func Test_DeserializeIntoMemory(t *testing.T) {
 	db, path := mustCreateDatabase()
 	defer db.Close()
 	defer os.Remove(path)
@@ -174,7 +174,7 @@ func Test_DeserializeInMemory(t *testing.T) {
 		t.Fatalf("failed to read database on disk: %s", err.Error())
 	}
 
-	newDB, err := DeserializeInMemory(b)
+	newDB, err := DeserializeIntoMemory(b)
 	if err != nil {
 		t.Fatalf("failed to deserialize database: %s", err.Error())
 	}
@@ -709,89 +709,6 @@ func Test_CommonTableExpressions(t *testing.T) {
 	}
 }
 
-func Test_ForeignKeyConstraints(t *testing.T) {
-	db, path := mustCreateDatabase()
-	defer db.Close()
-	defer os.Remove(path)
-
-	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, ref INTEGER REFERENCES foo(id))")
-	if err != nil {
-		t.Fatalf("failed to create table: %s", err.Error())
-	}
-
-	// Explicitly disable constraints.
-	if err := db.EnableFKConstraints(false); err != nil {
-		t.Fatalf("failed to enable foreign key constraints: %s", err.Error())
-	}
-
-	// Check constraints
-	fk, err := db.FKConstraints()
-	if err != nil {
-		t.Fatalf("failed to check FK constraints: %s", err.Error())
-	}
-	if fk != false {
-		t.Fatal("FK constraints are not disabled")
-	}
-
-	r, err := db.ExecuteStringStmt(`INSERT INTO foo(id, ref) VALUES(1, 2)`)
-	if err != nil {
-		t.Fatalf("failed to execute FK test statement: %s", err.Error())
-	}
-	if exp, got := `[{"last_insert_id":1,"rows_affected":1}]`, asJSON(r); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-	}
-
-	// Explicitly enable constraints.
-	if err := db.EnableFKConstraints(true); err != nil {
-		t.Fatalf("failed to enable foreign key constraints: %s", err.Error())
-	}
-
-	// Check constraints
-	fk, err = db.FKConstraints()
-	if err != nil {
-		t.Fatalf("failed to check FK constraints: %s", err.Error())
-	}
-	if fk != true {
-		t.Fatal("FK constraints are not enabled")
-	}
-
-	r, err = db.ExecuteStringStmt(`INSERT INTO foo(id, ref) VALUES(1, 3)`)
-	if err != nil {
-		t.Fatalf("failed to execute FK test statement: %s", err.Error())
-	}
-	if exp, got := `[{"error":"UNIQUE constraint failed: foo.id"}]`, asJSON(r); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-	}
-}
-
-func Test_JournalMode(t *testing.T) {
-	db, path := mustCreateDatabase()
-	defer db.Close()
-	defer os.Remove(path)
-
-	m, err := db.JournalMode()
-	if err != nil {
-		t.Fatalf("failed to check journal mode: %s", err.Error())
-	}
-	if exp, got := "delete", m; exp != got {
-		t.Fatalf("got wrong mode for journal, expected %s, got %s", exp, got)
-	}
-
-	_, err = db.ExecuteStringStmt(`PRAGMA journal_mode=off`)
-	if err != nil {
-		t.Fatalf(`failed to execute 'PRAGMA journal_mode' statement: %s`, err.Error())
-	}
-
-	m, err = db.JournalMode()
-	if err != nil {
-		t.Fatalf("failed to check journal mode: %s", err.Error())
-	}
-	if exp, got := "off", m; exp != got {
-		t.Fatalf("got wrong mode for journal, expected %s, got %s", exp, got)
-	}
-
-}
-
 func Test_UniqueConstraints(t *testing.T) {
 	db, path := mustCreateDatabase()
 	defer db.Close()
@@ -1170,7 +1087,7 @@ func Test_DumpMemory(t *testing.T) {
 	defer db.Close()
 	defer os.Remove(path)
 
-	inmem, err := LoadInMemory(path)
+	inmem, err := LoadIntoMemory(path)
 	if err != nil {
 		t.Fatalf("failed to create loaded in-memory database: %s", err.Error())
 	}
