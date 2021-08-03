@@ -93,25 +93,14 @@ type Rows struct {
 
 // Open opens a file-based database, creating it if it does not exist.
 func Open(dbPath string) (*DB, error) {
-	rwOpts := strings.Join(
-		[]string{
-			"mode=rw",
-		}, "&")
-
-	rwDB, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?%s", dbPath, rwOpts))
+	rwDB, err := sql.Open("sqlite3", fmt.Sprintf("file:%s", dbPath))
 	if err != nil {
 		return nil, err
 	}
 
 	// XXX NOT SURE IF WAL WILL WORK. SIMPLY COPYING THE DATABASE FILE
 	// WONT GET THE ENTIRE DATABASE. CAN WAL COMPACT BE FORCED?
-
-	roOpts := strings.Join(
-		[]string{
-			"mode=ro",
-		}, "&")
-
-	roDB, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?%s", dbPath, roOpts))
+	roDB, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?mode=ro", dbPath))
 	if err != nil {
 		return nil, err
 	}
