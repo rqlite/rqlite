@@ -593,7 +593,7 @@ func Test_WriteOnQueryOnDiskDatabase(t *testing.T) {
 
 	_, err = db.QueryStringStmt(`INSERT INTO foo(id, name) VALUES(2, "fiona")`)
 	if err == nil {
-		t.Fatalf("no error attempting to write to read-only database")
+		t.Fatalf("no error attempting to write using read-only database connection")
 	}
 
 	ro, err := db.QueryStringStmt(`SELECT COUNT(*) FROM foo`)
@@ -627,7 +627,7 @@ func Test_WriteOnQueryInMemDatabase(t *testing.T) {
 
 	_, err = db.QueryStringStmt(`INSERT INTO foo(id, name) VALUES(2, "fiona")`)
 	if err == nil {
-		t.Fatalf("no error attempting to write to read-only database")
+		t.Fatalf("no error attempting to write using read-only database connection")
 	}
 
 	ro, err := db.QueryStringStmt(`SELECT COUNT(*) FROM foo`)
