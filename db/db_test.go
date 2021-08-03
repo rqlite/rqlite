@@ -570,6 +570,75 @@ func Test_SimplePragmaTableInfo(t *testing.T) {
 	}
 }
 
+func Test_WriteOnQueryOnDiskDatabase(t *testing.T) {
+	db, path := mustCreateDatabase()
+	defer db.Close()
+	defer os.Remove(path)
+
+	r, err := db.ExecuteStringStmt(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if exp, got := `[{}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	r, err = db.ExecuteStringStmt(`INSERT INTO foo(id, name) VALUES(1, "fiona")`)
+	if err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+	if exp, got := `[{"last_insert_id":1,"rows_affected":1}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	_, err = db.QueryStringStmt(`INSERT INTO foo(id, name) VALUES(2, "fiona")`)
+	if err == nil {
+		t.Fatalf("no error attempting to write to read-only database")
+	}
+
+	ro, err := db.QueryStringStmt(`SELECT COUNT(*) FROM foo`)
+	if err != nil {
+		t.Fatalf("failed to query table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["COUNT(*)"],"types":[""],"values":[[1]]}]`, asJSON(ro); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
+func Test_WriteOnQueryInMemDatabase(t *testing.T) {
+	db := mustCreateInMemoryDatabase()
+	defer db.Close()
+
+	r, err := db.ExecuteStringStmt(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if exp, got := `[{}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	r, err = db.ExecuteStringStmt(`INSERT INTO foo(id, name) VALUES(1, "fiona")`)
+	if err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+	if exp, got := `[{"last_insert_id":1,"rows_affected":1}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	_, err = db.QueryStringStmt(`INSERT INTO foo(id, name) VALUES(2, "fiona")`)
+	if err == nil {
+		t.Fatalf("no error attempting to write to read-only database")
+	}
+
+	ro, err := db.QueryStringStmt(`SELECT COUNT(*) FROM foo`)
+	if err != nil {
+		t.Fatalf("failed to query table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["COUNT(*)"],"types":[""],"values":[[1]]}]`, asJSON(ro); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
 func Test_SimpleParameterizedStatements(t *testing.T) {
 	db, path := mustCreateDatabase()
 	defer db.Close()
