@@ -248,13 +248,28 @@ func (db *DB) EnableFKConstraints(e bool) error {
 // Size returns the size of the database in bytes. "Size" is defined as
 // page_count * schema.page_size.
 func (db *DB) Size() (int64, error) {
-	query := `SELECT page_count * page_size as size FROM pragma_page_count(), pragma_page_size()`
-	r, err := db.QueryStringStmt(query)
+	req := &command.Request{
+		Statements: []*command.Statement{
+			{
+				Sql: `SELECT page_count * page_size as size FROM pragma_page_count(), pragma_page_size()`,
+			},
+		},
+	}
+
+	// The SQL statement is considered a read-write statement, so much use the
+	// rw connection. XXX THIS IS GOING TO CAUSE PRAGMA ISSUES!
+	conn, err := db.rwDB.Conn(context.Background())
+	if err != nil {
+		return 0, err
+	}
+	defer conn.Close()
+
+	rows, err := db.queryWithConn(req, false, conn)
 	if err != nil {
 		return 0, err
 	}
 
-	return r[0].Values[0][0].(int64), nil
+	return rows[0].Values[0][0].(int64), nil
 }
 
 // FileSize returns the size of the SQLite file on disk. If running in

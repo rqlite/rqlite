@@ -12,6 +12,28 @@ import (
 	"time"
 )
 
+func Test_SingleNodeBasicEndpoint(t *testing.T) {
+	node := mustNewLeaderNode()
+	defer node.Deprovision()
+
+	// Ensure accessing endpoints in basic manner works
+	_, err := node.Status()
+	if err != nil {
+		t.Fatalf(`failed to retrieve status for in-memory: %s`, err)
+	}
+
+	dir := mustTempDir()
+	mux := mustNewOpenMux("")
+	node = mustNodeEncryptedOnDisk(dir, true, false, mux, "", false)
+	if _, err := node.WaitForLeader(); err != nil {
+		t.Fatalf("node never became leader")
+	}
+	_, err = node.Status()
+	if err != nil {
+		t.Fatalf(`failed to retrieve status for on-disk: %s`, err)
+	}
+}
+
 func Test_SingleNode(t *testing.T) {
 	node := mustNewLeaderNode()
 	defer node.Deprovision()
