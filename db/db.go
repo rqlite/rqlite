@@ -122,7 +122,6 @@ func Open(dbPath string) (*DB, error) {
 func OpenInMemory() (*DB, error) {
 	inMemPath := fmt.Sprintf("file:/%s", randomString())
 
-	//rwDB, err := sql.Open("sqlite3", fmt.Sprintf("file:/%s?%s", inMemPath, rwOpts))
 	rwDB, err := sql.Open("sqlite3", fmt.Sprintf("file:/%s?mode=rw&vfs=memdb&_txlock=immediate", inMemPath))
 	if err != nil {
 		return nil, err
@@ -476,7 +475,7 @@ func (db *DB) queryWithConn(req *command.Request, xTime bool, conn *sql.Conn) ([
 		}
 		defer rs.Close()
 
-		rows.Columns, err = rs.Columns()
+		columns, err := rs.Columns()
 		if err != nil {
 			return nil, err
 		}
@@ -485,13 +484,13 @@ func (db *DB) queryWithConn(req *command.Request, xTime bool, conn *sql.Conn) ([
 		if err != nil {
 			return nil, err
 		}
-		rows.Types = make([]string, len(types))
+		xTypes := make([]string, len(types))
 		for i := range types {
-			rows.Types[i] = strings.ToLower(types[i].DatabaseTypeName())
+			xTypes[i] = strings.ToLower(types[i].DatabaseTypeName())
 		}
 
 		for rs.Next() {
-			dest := make([]interface{}, len(rows.Columns))
+			dest := make([]interface{}, len(columns))
 			ptrs := make([]interface{}, len(dest))
 			for i := range ptrs {
 				ptrs[i] = &dest[i]
@@ -499,18 +498,23 @@ func (db *DB) queryWithConn(req *command.Request, xTime bool, conn *sql.Conn) ([
 			if err := rs.Scan(ptrs...); err != nil {
 				return nil, err
 			}
-			values := normalizeRowValues(dest, rows.Types)
+			values := normalizeRowValues(dest, xTypes)
 			rows.Values = append(rows.Values, values)
 		}
 
 		// Check for errors from iterating over rows.
 		if err := rs.Err(); err != nil {
-			return nil, err
+			rows.Error = err.Error()
+			allRows = append(allRows, rows)
+			continue
 		}
 
 		if xTime {
 			rows.Time = time.Now().Sub(start).Seconds()
 		}
+
+		rows.Columns = columns
+		rows.Types = xTypes
 		allRows = append(allRows, rows)
 	}
 

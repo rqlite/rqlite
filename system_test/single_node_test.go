@@ -262,14 +262,19 @@ func Test_SingleNodeSQLInjection(t *testing.T) {
 			execute:  true,
 		},
 		{
-			stmt:     `SELECT * FROM foo WHERE name="baz"`,
+			stmt:     `CREATE TABLE bar (id integer not null primary key, name text)`,
+			expected: `{"results":[{}]}`,
+			execute:  true,
+		},
+		{
+			stmt:     `SELECT * FROM foo`,
 			expected: `{"results":[{"columns":["id","name"],"types":["integer","text"]}]}`,
 			execute:  false,
 		},
 		{
-			stmt:     fmt.Sprintf(`SELECT * FROM foo WHERE name=%s`, `"baz";DROP TABLE FOO`),
-			expected: `{"results":[{}]}`,
-			execute:  false,
+			stmt:     fmt.Sprintf(`INSERT INTO foo(name) VALUES(%s)`, `"alice");DROP TABLE foo;INSERT INTO bar(name) VALUES("bob"`),
+			expected: `{"results":[{"last_insert_id":1,"rows_affected":1}]}`,
+			execute:  true,
 		},
 		{
 			stmt:     `SELECT * FROM foo`,

@@ -639,7 +639,8 @@ func (s *Store) Query(qr *command.QueryRequest) ([]*sql.Rows, error) {
 		return nil, ErrStaleRead
 	}
 
-	return s.db.Query(qr.Request, qr.Timings)
+	rows, err := s.db.Query(qr.Request, qr.Timings)
+	return rows, err
 }
 
 // Join joins a node, identified by id and located at addr, to this store.

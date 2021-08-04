@@ -36,6 +36,20 @@ func Test_DbFileCreation(t *testing.T) {
 	}
 }
 
+func Test_TableNotExist(t *testing.T) {
+	db, path := mustCreateDatabase()
+	defer db.Close()
+	defer os.Remove(path)
+
+	q, err := db.QueryStringStmt("SELECT * FROM foo")
+	if err != nil {
+		t.Fatalf("failed to query empty table: %s", err.Error())
+	}
+	if exp, got := `[{"error":"no such table: foo"}]`, asJSON(q); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+}
+
 func Test_TableCreation(t *testing.T) {
 	db, path := mustCreateDatabase()
 	defer db.Close()
@@ -591,12 +605,15 @@ func Test_WriteOnQueryOnDiskDatabase(t *testing.T) {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
-	_, err = db.QueryStringStmt(`INSERT INTO foo(id, name) VALUES(2, "fiona")`)
-	if err == nil {
-		t.Fatalf("no error attempting to write using read-only database connection")
+	ro, err := db.QueryStringStmt(`INSERT INTO foo(id, name) VALUES(2, "fiona")`)
+	if err != nil {
+		t.Fatalf("error attempting read-only write test: %s", err)
+	}
+	if exp, got := `[{"error":"attempt to write a readonly database"}]`, asJSON(ro); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
-	ro, err := db.QueryStringStmt(`SELECT COUNT(*) FROM foo`)
+	ro, err = db.QueryStringStmt(`SELECT COUNT(*) FROM foo`)
 	if err != nil {
 		t.Fatalf("failed to query table: %s", err.Error())
 	}
@@ -625,12 +642,14 @@ func Test_WriteOnQueryInMemDatabase(t *testing.T) {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
-	_, err = db.QueryStringStmt(`INSERT INTO foo(id, name) VALUES(2, "fiona")`)
-	if err == nil {
-		t.Fatalf("no error attempting to write using read-only database connection")
+	ro, err := db.QueryStringStmt(`INSERT INTO foo(id, name) VALUES(2, "fiona")`)
+	if err != nil {
+		t.Fatalf("error attempting read-only write test: %s", err)
 	}
-
-	ro, err := db.QueryStringStmt(`SELECT COUNT(*) FROM foo`)
+	if exp, got := `[{"error":"attempt to write a readonly database"}]`, asJSON(ro); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	ro, err = db.QueryStringStmt(`SELECT COUNT(*) FROM foo`)
 	if err != nil {
 		t.Fatalf("failed to query table: %s", err.Error())
 	}
