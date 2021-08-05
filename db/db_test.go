@@ -682,8 +682,8 @@ func Test_ConcurrentQueriesInMemory(t *testing.T) {
 
 	var wg sync.WaitGroup
 	for i := 0; i < 32; i++ {
+		wg.Add(1)
 		go func() {
-			wg.Add(1)
 			defer wg.Done()
 			ro, err := db.QueryStringStmt(`SELECT COUNT(*) FROM foo`)
 			if err != nil {
