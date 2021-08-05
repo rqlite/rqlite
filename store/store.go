@@ -315,14 +315,15 @@ func (s *Store) Close(wait bool) error {
 
 // WaitForAppliedFSM waits until the currently applied logs (at the time this
 // function is called) are actually reflected by the FSM, or the timeout expires.
-func (s *Store) WaitForAppliedFSM(timeout time.Duration) error {
+func (s *Store) WaitForAppliedFSM(timeout time.Duration) (uint64, error) {
 	if timeout == 0 {
-		return nil
+		return 0, nil
 	}
-	if err := s.WaitForFSMIndex(s.raft.AppliedIndex(), timeout); err != nil {
-		return ErrOpenTimeout
+	if fsmIdx, err := s.WaitForFSMIndex(s.raft.AppliedIndex(), timeout); err != nil {
+		return 0, ErrOpenTimeout
+	} else {
+		return fsmIdx, nil
 	}
-	return nil
 }
 
 // WaitForInitialLogs waits for logs that were in the Store at time of open
@@ -489,27 +490,24 @@ func (s *Store) SetRequestCompression(batch, size int) {
 
 // WaitForFSMIndex blocks until a given log index has been applied to the
 // state machine or the timeout expires.
-func (s *Store) WaitForFSMIndex(idx uint64, timeout time.Duration) error {
+func (s *Store) WaitForFSMIndex(idx uint64, timeout time.Duration) (uint64, error) {
 	tck := time.NewTicker(appliedWaitDelay)
 	defer tck.Stop()
 	tmr := time.NewTimer(timeout)
 	defer tmr.Stop()
 
+	var fsmIdx uint64
 	for {
 		select {
 		case <-tck.C:
-			if func() bool {
-				s.fsmIndexMu.RLock()
-				defer s.fsmIndexMu.RUnlock()
-				if s.fsmIndex >= idx {
-					return true
-				}
-				return false
-			}() == true {
-				return nil
+			s.fsmIndexMu.RLock()
+			fsmIdx = s.fsmIndex
+			s.fsmIndexMu.RUnlock()
+			if fsmIdx >= idx {
+				return fsmIdx, nil
 			}
 		case <-tmr.C:
-			return fmt.Errorf("timeout expired")
+			return 0, fmt.Errorf("timeout expired")
 		}
 	}
 }
