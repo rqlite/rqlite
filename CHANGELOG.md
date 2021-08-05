@@ -1,5 +1,5 @@
 ## 6.0.3 (unreleased)
-This release makes significant changes to SQLite database connection handling, resulting in proper support for high-performance concurrent reads queries of in-memory databases (the default choice for rqlite). 
+This release makes significant changes to SQLite database connection handling, resulting in proper support for high-performance concurrent reads of in-memory databases (the default choice for rqlite). 
 
 ### Implementation changes and bug fixes
 - [PR #841](https://github.com/rqlite/rqlite/pull/841): Remove support for specifying SQLite DSN.
