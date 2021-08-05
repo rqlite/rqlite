@@ -23,11 +23,6 @@ const (
 	onDiskMaxOpenConns = 32
 	onDiskMaxIdleTime  = 120 * time.Second
 
-	fkChecks         = "PRAGMA foreign_keys"
-	fkChecksEnabled  = "PRAGMA foreign_keys=ON"
-	fkChecksDisabled = "PRAGMA foreign_keys=OFF"
-	journalCheck     = "PRAGMA journal_mode"
-
 	numExecutions      = "executions"
 	numExecutionErrors = "execution_errors"
 	numQueries         = "queries"
@@ -108,6 +103,11 @@ func Open(dbPath string) (*DB, error) {
 		return nil, err
 	}
 
+	// Force creation of on-disk database file.
+	if err := rwDB.Ping(); err != nil {
+		return nil, fmt.Errorf("failed to ping on-disk database: %s", err.Error())
+	}
+
 	// Set some reasonable connection pool behaviour.
 	rwDB.SetConnMaxIdleTime(30 * time.Second)
 	rwDB.SetConnMaxLifetime(0)
@@ -144,6 +144,11 @@ func OpenInMemory() (*DB, error) {
 	roDB, err := sql.Open("sqlite3", roDSN)
 	if err != nil {
 		return nil, err
+	}
+
+	// Ensure database is basically healthy.
+	if err := rwDB.Ping(); err != nil {
+		return nil, fmt.Errorf("failed to ping in-memory database: %s", err.Error())
 	}
 
 	return &DB{
@@ -246,6 +251,10 @@ func (db *DB) Close() error {
 
 // Stats returns status and diagnostics for the database.
 func (db *DB) Stats() (map[string]interface{}, error) {
+	copts, err := db.CompileOptions()
+	if err != nil {
+		return nil, err
+	}
 	connPoolStats := map[string]interface{}{
 		"ro": db.ConnectionPoolStats(db.roDB),
 		"rw": db.ConnectionPoolStats(db.rwDB),
@@ -256,6 +265,7 @@ func (db *DB) Stats() (map[string]interface{}, error) {
 	}
 	stats := map[string]interface{}{
 		"version":         DBVersion,
+		"compile_options": copts,
 		"db_size":         dbSz,
 		"rw_dsn":          string(db.rwDSN),
 		"ro_dsn":          db.roDSN,
@@ -276,23 +286,7 @@ func (db *DB) Stats() (map[string]interface{}, error) {
 // Size returns the size of the database in bytes. "Size" is defined as
 // page_count * schema.page_size.
 func (db *DB) Size() (int64, error) {
-	req := &command.Request{
-		Statements: []*command.Statement{
-			{
-				Sql: `SELECT page_count * page_size as size FROM pragma_page_count(), pragma_page_size()`,
-			},
-		},
-	}
-
-	// The SQL statement is considered a read-write statement, so much use the
-	// rw connection.
-	conn, err := db.rwDB.Conn(context.Background())
-	if err != nil {
-		return 0, err
-	}
-	defer conn.Close()
-
-	rows, err := db.queryWithConn(req, false, conn)
+	rows, err := db.QueryStringStmt(`SELECT page_count * page_size as size FROM pragma_page_count(), pragma_page_size()`)
 	if err != nil {
 		return 0, err
 	}
@@ -311,6 +305,30 @@ func (db *DB) FileSize() (int64, error) {
 		return 0, err
 	}
 	return fi.Size(), nil
+}
+
+// CompileOptions returns the SQLite compilation options.
+func (db *DB) CompileOptions() ([]string, error) {
+	res, err := db.QueryStringStmt("PRAGMA compile_options")
+	if err != nil {
+		return nil, err
+	}
+	if len(res) != 1 {
+		return nil, fmt.Errorf("compile options result wrong size (%d)", len(res))
+	}
+
+	copts := make([]string, len(res[0].Values))
+	for i := range copts {
+		if len(res[0].Values[i]) != 1 {
+			return nil, fmt.Errorf("compile options values wrong size (%d)", len(res))
+		}
+		if co, ok := res[0].Values[i][0].(string); !ok {
+			copts[i] = "not string!"
+		} else {
+			copts[i] = co
+		}
+	}
+	return copts, nil
 }
 
 // ConnectionPoolStats returns database pool statistics

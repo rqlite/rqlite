@@ -22,17 +22,33 @@ import (
 func Test_DbFileCreation(t *testing.T) {
 	dir, err := ioutil.TempDir("", "rqlite-test-")
 	defer os.RemoveAll(dir)
+	dbPath := path.Join(dir, "test_db")
 
-	db, err := Open(path.Join(dir, "test_db"))
+	db, err := Open(dbPath)
 	if err != nil {
 		t.Fatalf("failed to open new database: %s", err.Error())
 	}
 	if db == nil {
 		t.Fatal("database is nil")
 	}
+
+	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+		t.Fatalf("%s does not exist after open", dbPath)
+	}
 	err = db.Close()
 	if err != nil {
 		t.Fatalf("failed to close database: %s", err.Error())
+	}
+}
+
+func Test_CompileOptions(t *testing.T) {
+	db, path := mustCreateDatabase()
+	defer db.Close()
+	defer os.Remove(path)
+
+	_, err := db.CompileOptions()
+	if err != nil {
+		t.Fatalf("failed to retrieve compilation options: %s", err.Error())
 	}
 }
 
@@ -864,7 +880,7 @@ func Test_UniqueConstraints(t *testing.T) {
 	}
 }
 
-func Test_DBSize(t *testing.T) {
+func Test_Size(t *testing.T) {
 	db, path := mustCreateDatabase()
 	defer db.Close()
 	defer os.Remove(path)

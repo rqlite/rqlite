@@ -261,12 +261,14 @@ func (s *Store) Open(enableBootstrap bool) error {
 			return fmt.Errorf("failed to create on-disk database")
 		}
 		s.onDiskCreated = true
+		s.logger.Printf("created on-disk database at open")
 	} else {
 		// We need an in-memory database, at least for bootstrapping purposes.
 		s.db, err = s.createInMemory(nil)
 		if err != nil {
 			return fmt.Errorf("failed to create in-memory database")
 		}
+		s.logger.Printf("created in-memory database at open")
 	}
 
 	// Instantiate the Raft system.
