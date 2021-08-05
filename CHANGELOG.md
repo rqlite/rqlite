@@ -3,7 +3,7 @@ This release makes significant changes to SQLite database connection handling, r
 
 ### Implementation changes and bug fixes
 - [PR #841](https://github.com/rqlite/rqlite/pull/841): Remove support for specifying SQLite DSN.
-- [PR 842](https://github.com/rqlite/rqlite/pull/842): Use `vfs=memdb` allowing concurrent read queries of in-memory databases.
+- [PR 842](https://github.com/rqlite/rqlite/pull/842): Use `vfs=memdb` allowing concurrent read queries of in-memory databases. Special thanks to @rittneje
 - [PR 842](https://github.com/rqlite/rqlite/pull/842): Use read-only database connection for read queries, ensuring write SQL commands are not executed on the wrong endpoint.
 
 ## 6.0.2 (July 31st 2021)
