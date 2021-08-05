@@ -36,6 +36,20 @@ func Test_DbFileCreation(t *testing.T) {
 	}
 }
 
+func Test_TableNotExist(t *testing.T) {
+	db, path := mustCreateDatabase()
+	defer db.Close()
+	defer os.Remove(path)
+
+	q, err := db.QueryStringStmt("SELECT * FROM foo")
+	if err != nil {
+		t.Fatalf("failed to query empty table: %s", err.Error())
+	}
+	if exp, got := `[{"error":"no such table: foo"}]`, asJSON(q); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+}
+
 func Test_TableCreation(t *testing.T) {
 	db, path := mustCreateDatabase()
 	defer db.Close()
@@ -102,7 +116,7 @@ func Test_SQLiteMasterTable(t *testing.T) {
 	}
 }
 
-func Test_LoadInMemory(t *testing.T) {
+func Test_LoadIntoMemory(t *testing.T) {
 	db, path := mustCreateDatabase()
 	defer db.Close()
 	defer os.Remove(path)
@@ -120,7 +134,7 @@ func Test_LoadInMemory(t *testing.T) {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
 
-	inmem, err := LoadInMemory(path)
+	inmem, err := LoadIntoMemory(path)
 	if err != nil {
 		t.Fatalf("failed to create loaded in-memory database: %s", err.Error())
 	}
@@ -135,7 +149,7 @@ func Test_LoadInMemory(t *testing.T) {
 	}
 }
 
-func Test_DeserializeInMemory(t *testing.T) {
+func Test_DeserializeIntoMemory(t *testing.T) {
 	db, path := mustCreateDatabase()
 	defer db.Close()
 	defer os.Remove(path)
@@ -174,7 +188,7 @@ func Test_DeserializeInMemory(t *testing.T) {
 		t.Fatalf("failed to read database on disk: %s", err.Error())
 	}
 
-	newDB, err := DeserializeInMemory(b)
+	newDB, err := DeserializeIntoMemory(b)
 	if err != nil {
 		t.Fatalf("failed to deserialize database: %s", err.Error())
 	}
@@ -570,6 +584,119 @@ func Test_SimplePragmaTableInfo(t *testing.T) {
 	}
 }
 
+func Test_WriteOnQueryOnDiskDatabase(t *testing.T) {
+	db, path := mustCreateDatabase()
+	defer db.Close()
+	defer os.Remove(path)
+
+	r, err := db.ExecuteStringStmt(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if exp, got := `[{}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	r, err = db.ExecuteStringStmt(`INSERT INTO foo(id, name) VALUES(1, "fiona")`)
+	if err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+	if exp, got := `[{"last_insert_id":1,"rows_affected":1}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	ro, err := db.QueryStringStmt(`INSERT INTO foo(id, name) VALUES(2, "fiona")`)
+	if err != nil {
+		t.Fatalf("error attempting read-only write test: %s", err)
+	}
+	if exp, got := `[{"error":"attempt to write a readonly database"}]`, asJSON(ro); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	ro, err = db.QueryStringStmt(`SELECT COUNT(*) FROM foo`)
+	if err != nil {
+		t.Fatalf("failed to query table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["COUNT(*)"],"types":[""],"values":[[1]]}]`, asJSON(ro); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
+func Test_WriteOnQueryInMemDatabase(t *testing.T) {
+	db := mustCreateInMemoryDatabase()
+	defer db.Close()
+
+	r, err := db.ExecuteStringStmt(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if exp, got := `[{}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	r, err = db.ExecuteStringStmt(`INSERT INTO foo(id, name) VALUES(1, "fiona")`)
+	if err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+	if exp, got := `[{"last_insert_id":1,"rows_affected":1}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	ro, err := db.QueryStringStmt(`INSERT INTO foo(id, name) VALUES(2, "fiona")`)
+	if err != nil {
+		t.Fatalf("error attempting read-only write test: %s", err)
+	}
+	if exp, got := `[{"error":"attempt to write a readonly database"}]`, asJSON(ro); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	ro, err = db.QueryStringStmt(`SELECT COUNT(*) FROM foo`)
+	if err != nil {
+		t.Fatalf("failed to query table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["COUNT(*)"],"types":[""],"values":[[1]]}]`, asJSON(ro); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
+func Test_ConcurrentQueriesInMemory(t *testing.T) {
+	db := mustCreateInMemoryDatabase()
+	defer db.Close()
+
+	r, err := db.ExecuteStringStmt(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if exp, got := `[{}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	for i := 0; i < 5000; i++ {
+		r, err = db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("fiona")`)
+		if err != nil {
+			t.Fatalf("failed to insert record: %s", err.Error())
+		}
+		if exp, got := fmt.Sprintf(`[{"last_insert_id":%d,"rows_affected":1}]`, i+1), asJSON(r); exp != got {
+			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+		}
+	}
+
+	var wg sync.WaitGroup
+	for i := 0; i < 32; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			ro, err := db.QueryStringStmt(`SELECT COUNT(*) FROM foo`)
+			if err != nil {
+				t.Fatalf("failed to query table: %s", err.Error())
+			}
+			if exp, got := `[{"columns":["COUNT(*)"],"types":[""],"values":[[5000]]}]`, asJSON(ro); exp != got {
+				t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+			}
+		}()
+	}
+	wg.Wait()
+}
+
 func Test_SimpleParameterizedStatements(t *testing.T) {
 	db, path := mustCreateDatabase()
 	defer db.Close()
@@ -707,89 +834,6 @@ func Test_CommonTableExpressions(t *testing.T) {
 	if exp, got := `[{"columns":["x"],"types":["foo"]}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
-}
-
-func Test_ForeignKeyConstraints(t *testing.T) {
-	db, path := mustCreateDatabase()
-	defer db.Close()
-	defer os.Remove(path)
-
-	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, ref INTEGER REFERENCES foo(id))")
-	if err != nil {
-		t.Fatalf("failed to create table: %s", err.Error())
-	}
-
-	// Explicitly disable constraints.
-	if err := db.EnableFKConstraints(false); err != nil {
-		t.Fatalf("failed to enable foreign key constraints: %s", err.Error())
-	}
-
-	// Check constraints
-	fk, err := db.FKConstraints()
-	if err != nil {
-		t.Fatalf("failed to check FK constraints: %s", err.Error())
-	}
-	if fk != false {
-		t.Fatal("FK constraints are not disabled")
-	}
-
-	r, err := db.ExecuteStringStmt(`INSERT INTO foo(id, ref) VALUES(1, 2)`)
-	if err != nil {
-		t.Fatalf("failed to execute FK test statement: %s", err.Error())
-	}
-	if exp, got := `[{"last_insert_id":1,"rows_affected":1}]`, asJSON(r); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-	}
-
-	// Explicitly enable constraints.
-	if err := db.EnableFKConstraints(true); err != nil {
-		t.Fatalf("failed to enable foreign key constraints: %s", err.Error())
-	}
-
-	// Check constraints
-	fk, err = db.FKConstraints()
-	if err != nil {
-		t.Fatalf("failed to check FK constraints: %s", err.Error())
-	}
-	if fk != true {
-		t.Fatal("FK constraints are not enabled")
-	}
-
-	r, err = db.ExecuteStringStmt(`INSERT INTO foo(id, ref) VALUES(1, 3)`)
-	if err != nil {
-		t.Fatalf("failed to execute FK test statement: %s", err.Error())
-	}
-	if exp, got := `[{"error":"UNIQUE constraint failed: foo.id"}]`, asJSON(r); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-	}
-}
-
-func Test_JournalMode(t *testing.T) {
-	db, path := mustCreateDatabase()
-	defer db.Close()
-	defer os.Remove(path)
-
-	m, err := db.JournalMode()
-	if err != nil {
-		t.Fatalf("failed to check journal mode: %s", err.Error())
-	}
-	if exp, got := "delete", m; exp != got {
-		t.Fatalf("got wrong mode for journal, expected %s, got %s", exp, got)
-	}
-
-	_, err = db.ExecuteStringStmt(`PRAGMA journal_mode=off`)
-	if err != nil {
-		t.Fatalf(`failed to execute 'PRAGMA journal_mode' statement: %s`, err.Error())
-	}
-
-	m, err = db.JournalMode()
-	if err != nil {
-		t.Fatalf("failed to check journal mode: %s", err.Error())
-	}
-	if exp, got := "off", m; exp != got {
-		t.Fatalf("got wrong mode for journal, expected %s, got %s", exp, got)
-	}
-
 }
 
 func Test_UniqueConstraints(t *testing.T) {
@@ -1170,7 +1214,7 @@ func Test_DumpMemory(t *testing.T) {
 	defer db.Close()
 	defer os.Remove(path)
 
-	inmem, err := LoadInMemory(path)
+	inmem, err := LoadIntoMemory(path)
 	if err != nil {
 		t.Fatalf("failed to create loaded in-memory database: %s", err.Error())
 	}
