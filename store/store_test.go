@@ -904,6 +904,13 @@ func Test_StoreLogTruncationMultinode(t *testing.T) {
 	}
 	testPoll(t, f, 100*time.Millisecond, 2*time.Second)
 
+	// Do one more execute, to ensure there is at least one log not snapshot.
+	// Without this, there is no guaratnee fsmIndex will be set on s1.
+	_, err := s0.Execute(executeRequestFromString(`INSERT INTO foo(id, name) VALUES(6, "fiona")`, false, false))
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
 	// Fire up new node and ensure it picks up all changes. This will
 	// involve getting a snapshot and truncated log.
 	s1 := mustNewStore(true)
@@ -923,6 +930,7 @@ func Test_StoreLogTruncationMultinode(t *testing.T) {
 		t.Fatalf("error waiting for follower to apply index: %s:", err.Error())
 	}
 	qr := queryRequestFromString("SELECT count(*) FROM foo", false, true)
+	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
 	r, err := s1.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
@@ -930,7 +938,7 @@ func Test_StoreLogTruncationMultinode(t *testing.T) {
 	if exp, got := `["count(*)"]`, asJSON(r[0].Columns); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
-	if exp, got := `[[5]]`, asJSON(r[0].Values); exp != got {
+	if exp, got := `[[6]]`, asJSON(r[0].Values); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 }
