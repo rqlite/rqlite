@@ -321,11 +321,7 @@ func (s *Store) WaitForAppliedFSM(timeout time.Duration) (uint64, error) {
 	if timeout == 0 {
 		return 0, nil
 	}
-	if fsmIdx, err := s.WaitForFSMIndex(s.raft.AppliedIndex(), timeout); err != nil {
-		return 0, ErrOpenTimeout
-	} else {
-		return fsmIdx, nil
-	}
+	return s.WaitForFSMIndex(s.raft.AppliedIndex(), timeout)
 }
 
 // WaitForInitialLogs waits for logs that were in the Store at time of open
@@ -336,10 +332,7 @@ func (s *Store) WaitForInitialLogs(timeout time.Duration) error {
 	}
 	s.logger.Printf("waiting for up to %s for application of initial logs (lcIdx=%d)",
 		timeout, s.lastCommandIdxOnOpen)
-	if err := s.WaitForApplied(timeout); err != nil {
-		return ErrOpenTimeout
-	}
-	return nil
+	return s.WaitForApplied(timeout)
 }
 
 // WaitForApplied waits for all Raft log entries to to be applied to the
@@ -349,10 +342,7 @@ func (s *Store) WaitForApplied(timeout time.Duration) error {
 		return nil
 	}
 	s.logger.Printf("waiting for up to %s for application of initial logs", timeout)
-	if err := s.WaitForAppliedIndex(s.raft.LastIndex(), timeout); err != nil {
-		return ErrOpenTimeout
-	}
-	return nil
+	return s.WaitForAppliedIndex(s.raft.LastIndex(), timeout)
 }
 
 // WaitForAppliedIndex blocks until a given log index has been applied,
