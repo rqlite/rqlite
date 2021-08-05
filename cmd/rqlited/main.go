@@ -363,7 +363,7 @@ func waitForConsensus(str *store.Store) error {
 		log.Println("ignoring error while waiting for leader")
 	}
 	if openTimeout != 0 {
-		if err := str.WaitForApplied(openTimeout); err != nil {
+		if err := str.WaitForInitialLogs(openTimeout); err != nil {
 			return fmt.Errorf("log was not fully applied within timeout: %s", err.Error())
 		}
 	} else {

@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"sync"
 	"time"
 	"unsafe"
 
@@ -119,6 +120,12 @@ type Store struct {
 	dbConf *DBConfig // SQLite database config.
 	dbPath string    // Path to underlying SQLite file, if not in-memory.
 	db     *sql.DB   // The underlying SQLite store.
+
+	dbAppliedIndexMu sync.RWMutex
+	dbAppliedIndex   uint64
+
+	fsmIndexMu sync.RWMutex
+	fsmIndex   uint64 // Latest log entry index actually reflected by the FSM.
 
 	reqMarshaller *command.RequestMarshaler // Request marshaler for writing to log.
 	raftLog       raft.LogStore             // Persistent log store.
@@ -306,6 +313,32 @@ func (s *Store) Close(wait bool) error {
 	return nil
 }
 
+// WaitForAppliedFSM waits until the currently applied logs (at the time this
+// function is called) are actually reflected by the FSM, or the timeout expires.
+func (s *Store) WaitForAppliedFSM(timeout time.Duration) error {
+	if timeout == 0 {
+		return nil
+	}
+	if err := s.WaitForFSMIndex(s.raft.AppliedIndex(), timeout); err != nil {
+		return ErrOpenTimeout
+	}
+	return nil
+}
+
+// WaitForInitialLogs waits for logs that were in the Store at time of open
+// to be applied to the state machine.
+func (s *Store) WaitForInitialLogs(timeout time.Duration) error {
+	if timeout == 0 {
+		return nil
+	}
+	s.logger.Printf("waiting for up to %s for application of initial logs (lcIdx=%d)",
+		timeout, s.lastCommandIdxOnOpen)
+	if err := s.WaitForApplied(timeout); err != nil {
+		return ErrOpenTimeout
+	}
+	return nil
+}
+
 // WaitForApplied waits for all Raft log entries to to be applied to the
 // underlying database.
 func (s *Store) WaitForApplied(timeout time.Duration) error {
@@ -317,6 +350,26 @@ func (s *Store) WaitForApplied(timeout time.Duration) error {
 		return ErrOpenTimeout
 	}
 	return nil
+}
+
+// WaitForAppliedIndex blocks until a given log index has been applied,
+// or the timeout expires.
+func (s *Store) WaitForAppliedIndex(idx uint64, timeout time.Duration) error {
+	tck := time.NewTicker(appliedWaitDelay)
+	defer tck.Stop()
+	tmr := time.NewTimer(timeout)
+	defer tmr.Stop()
+
+	for {
+		select {
+		case <-tck.C:
+			if s.raft.AppliedIndex() >= idx {
+				return nil
+			}
+		case <-tmr.C:
+			return fmt.Errorf("timeout expired")
+		}
+	}
 }
 
 // IsLeader is used to determine if the current node is cluster leader
@@ -434,9 +487,9 @@ func (s *Store) SetRequestCompression(batch, size int) {
 	s.reqMarshaller.SizeThreshold = size
 }
 
-// WaitForAppliedIndex blocks until a given log index has been applied,
-// or the timeout expires.
-func (s *Store) WaitForAppliedIndex(idx uint64, timeout time.Duration) error {
+// WaitForFSMIndex blocks until a given log index has been applied to the
+// state machine or the timeout expires.
+func (s *Store) WaitForFSMIndex(idx uint64, timeout time.Duration) error {
 	tck := time.NewTicker(appliedWaitDelay)
 	defer tck.Stop()
 	tmr := time.NewTimer(timeout)
@@ -445,7 +498,14 @@ func (s *Store) WaitForAppliedIndex(idx uint64, timeout time.Duration) error {
 	for {
 		select {
 		case <-tck.C:
-			if s.raft.AppliedIndex() >= idx {
+			if func() bool {
+				s.fsmIndexMu.RLock()
+				defer s.fsmIndexMu.RUnlock()
+				if s.fsmIndex >= idx {
+					return true
+				}
+				return false
+			}() == true {
 				return nil
 			}
 		case <-tmr.C:
@@ -456,6 +516,16 @@ func (s *Store) WaitForAppliedIndex(idx uint64, timeout time.Duration) error {
 
 // Stats returns stats for the store.
 func (s *Store) Stats() (map[string]interface{}, error) {
+	fsmIdx := func() uint64 {
+		s.fsmIndexMu.RLock()
+		defer s.fsmIndexMu.RUnlock()
+		return s.fsmIndex
+	}()
+	dbAppliedIdx := func() uint64 {
+		s.dbAppliedIndexMu.Lock()
+		defer s.dbAppliedIndexMu.Unlock()
+		return s.dbAppliedIndex
+	}()
 	dbStatus, err := s.db.Stats()
 	if err != nil {
 		return nil, err
@@ -494,9 +564,11 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		return nil, err
 	}
 	status := map[string]interface{}{
-		"node_id": s.raftID,
-		"raft":    raftStats,
-		"addr":    s.Addr(),
+		"node_id":          s.raftID,
+		"raft":             raftStats,
+		"fsm_index":        fsmIdx,
+		"db_applied_index": dbAppliedIdx,
+		"addr":             s.Addr(),
 		"leader": map[string]string{
 			"node_id": leaderID,
 			"addr":    leaderAddr,
@@ -547,15 +619,18 @@ func (s *Store) execute(ex *command.ExecuteRequest) ([]*sql.Result, error) {
 		return nil, err
 	}
 
-	f := s.raft.Apply(b, s.ApplyTimeout)
-	if e := f.(raft.Future); e.Error() != nil {
-		if e.Error() == raft.ErrNotLeader {
+	af := s.raft.Apply(b, s.ApplyTimeout).(raft.ApplyFuture)
+	if af.Error() != nil {
+		if af.Error() == raft.ErrNotLeader {
 			return nil, ErrNotLeader
 		}
-		return nil, e.Error()
+		return nil, af.Error()
 	}
 
-	r := f.Response().(*fsmExecuteResponse)
+	s.dbAppliedIndexMu.Lock()
+	s.dbAppliedIndex = af.Index()
+	s.dbAppliedIndexMu.Unlock()
+	r := af.Response().(*fsmExecuteResponse)
 	return r.results, r.error
 }
 
@@ -609,15 +684,18 @@ func (s *Store) Query(qr *command.QueryRequest) ([]*sql.Rows, error) {
 			return nil, err
 		}
 
-		f := s.raft.Apply(b, s.ApplyTimeout)
-		if e := f.(raft.Future); e.Error() != nil {
-			if e.Error() == raft.ErrNotLeader {
+		af := s.raft.Apply(b, s.ApplyTimeout).(raft.ApplyFuture)
+		if af.Error() != nil {
+			if af.Error() == raft.ErrNotLeader {
 				return nil, ErrNotLeader
 			}
-			return nil, e.Error()
+			return nil, af.Error()
 		}
 
-		r := f.Response().(*fsmQueryResponse)
+		s.dbAppliedIndexMu.Lock()
+		s.dbAppliedIndex = af.Index()
+		s.dbAppliedIndexMu.Unlock()
+		r := af.Response().(*fsmQueryResponse)
 		return r.rows, r.error
 	}
 
@@ -721,12 +799,12 @@ func (s *Store) Noop(id string) error {
 		return err
 	}
 
-	f := s.raft.Apply(bc, s.ApplyTimeout)
-	if e := f.(raft.Future); e.Error() != nil {
-		if e.Error() == raft.ErrNotLeader {
+	af := s.raft.Apply(bc, s.ApplyTimeout).(raft.ApplyFuture)
+	if af.Error() != nil {
+		if af.Error() == raft.ErrNotLeader {
 			return ErrNotLeader
 		}
-		return e.Error()
+		return af.Error()
 	}
 	return nil
 }
@@ -833,6 +911,10 @@ type fsmGenericResponse struct {
 // Apply applies a Raft log entry to the database.
 func (s *Store) Apply(l *raft.Log) (e interface{}) {
 	defer func() {
+		s.fsmIndexMu.Lock()
+		defer s.fsmIndexMu.Unlock()
+		s.fsmIndex = l.Index
+
 		if l.Index <= s.lastCommandIdxOnOpen {
 			// In here means at least one command entry was in the log when the Store
 			// opened.
