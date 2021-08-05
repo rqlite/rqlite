@@ -254,7 +254,6 @@ func (db *DB) Stats() (map[string]interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println(">>>", db.rwDSN)
 	stats := map[string]interface{}{
 		"version":         DBVersion,
 		"db_size":         dbSz,
