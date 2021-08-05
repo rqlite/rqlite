@@ -244,7 +244,7 @@ func (db *DB) Close() error {
 	return db.roDB.Close()
 }
 
-// Stats returns status and diagnotics for the database.
+// Stats returns status and diagnostics for the database.
 func (db *DB) Stats() (map[string]interface{}, error) {
 	connPoolStats := map[string]interface{}{
 		"ro": db.ConnectionPoolStats(db.roDB),
