@@ -273,17 +273,6 @@ func (db *DB) Stats() (map[string]interface{}, error) {
 	return stats, nil
 }
 
-// EnableFKConstraints allows control of foreign key constraint checks.
-func (db *DB) EnableFKConstraints(e bool) error {
-	q := fkChecksEnabled
-	if !e {
-		q = fkChecksDisabled
-	}
-
-	_, err := db.ExecuteStringStmt(q)
-	return err
-}
-
 // Size returns the size of the database in bytes. "Size" is defined as
 // page_count * schema.page_size.
 func (db *DB) Size() (int64, error) {
