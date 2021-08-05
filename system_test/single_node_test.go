@@ -12,6 +12,28 @@ import (
 	"time"
 )
 
+func Test_SingleNodeBasicEndpoint(t *testing.T) {
+	node := mustNewLeaderNode()
+	defer node.Deprovision()
+
+	// Ensure accessing endpoints in basic manner works
+	_, err := node.Status()
+	if err != nil {
+		t.Fatalf(`failed to retrieve status for in-memory: %s`, err)
+	}
+
+	dir := mustTempDir()
+	mux := mustNewOpenMux("")
+	node = mustNodeEncryptedOnDisk(dir, true, false, mux, "", false)
+	if _, err := node.WaitForLeader(); err != nil {
+		t.Fatalf("node never became leader")
+	}
+	_, err = node.Status()
+	if err != nil {
+		t.Fatalf(`failed to retrieve status for on-disk: %s`, err)
+	}
+}
+
 func Test_SingleNode(t *testing.T) {
 	node := mustNewLeaderNode()
 	defer node.Deprovision()
@@ -262,14 +284,19 @@ func Test_SingleNodeSQLInjection(t *testing.T) {
 			execute:  true,
 		},
 		{
-			stmt:     `SELECT * FROM foo WHERE name="baz"`,
+			stmt:     `CREATE TABLE bar (id integer not null primary key, name text)`,
+			expected: `{"results":[{}]}`,
+			execute:  true,
+		},
+		{
+			stmt:     `SELECT * FROM foo`,
 			expected: `{"results":[{"columns":["id","name"],"types":["integer","text"]}]}`,
 			execute:  false,
 		},
 		{
-			stmt:     fmt.Sprintf(`SELECT * FROM foo WHERE name=%s`, `"baz";DROP TABLE FOO`),
-			expected: `{"results":[{}]}`,
-			execute:  false,
+			stmt:     fmt.Sprintf(`INSERT INTO foo(name) VALUES(%s)`, `"alice");DROP TABLE foo;INSERT INTO bar(name) VALUES("bob"`),
+			expected: `{"results":[{"last_insert_id":1,"rows_affected":1}]}`,
+			execute:  true,
 		},
 		{
 			stmt:     `SELECT * FROM foo`,

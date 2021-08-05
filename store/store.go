@@ -450,35 +450,9 @@ func (s *Store) WaitForAppliedIndex(idx uint64, timeout time.Duration) error {
 
 // Stats returns stats for the store.
 func (s *Store) Stats() (map[string]interface{}, error) {
-	fkEnabled, err := s.db.FKConstraints()
+	dbStatus, err := s.db.Stats()
 	if err != nil {
 		return nil, err
-	}
-
-	dbSz, err := s.db.Size()
-	if err != nil {
-		return nil, err
-	}
-	jm, err := s.db.JournalMode()
-	if err != nil {
-		return nil, err
-	}
-	dbStatus := map[string]interface{}{
-		"fk_constraints":  enabledFromBool(fkEnabled),
-		"version":         sql.DBVersion,
-		"db_size":         dbSz,
-		"conn_pool_stats": s.db.ConnectionPoolStats(),
-		"journal_mode":    jm,
-	}
-	if s.dbConf.Memory {
-		dbStatus["path"] = ":memory:"
-	} else {
-		dbStatus["path"] = s.dbPath
-		if s.onDiskCreated {
-			if dbStatus["size"], err = s.db.FileSize(); err != nil {
-				return nil, err
-			}
-		}
 	}
 
 	nodes, err := s.Nodes()
@@ -650,7 +624,8 @@ func (s *Store) Query(qr *command.QueryRequest) ([]*sql.Rows, error) {
 		return nil, ErrStaleRead
 	}
 
-	return s.db.Query(qr.Request, qr.Timings)
+	rows, err := s.db.Query(qr.Request, qr.Timings)
+	return rows, err
 }
 
 // Join joins a node, identified by id and located at addr, to this store.
@@ -756,7 +731,7 @@ func (s *Store) createInMemory(b []byte) (db *sql.DB, err error) {
 	if b == nil {
 		db, err = sql.OpenInMemory()
 	} else {
-		db, err = sql.DeserializeInMemory(b)
+		db, err = sql.DeserializeIntoMemory(b)
 	}
 	return
 }
