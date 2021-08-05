@@ -450,24 +450,9 @@ func (s *Store) WaitForAppliedIndex(idx uint64, timeout time.Duration) error {
 
 // Stats returns stats for the store.
 func (s *Store) Stats() (map[string]interface{}, error) {
-	dbSz, err := s.db.Size()
+	dbStatus, err := s.db.Stats()
 	if err != nil {
 		return nil, err
-	}
-	dbStatus := map[string]interface{}{
-		"version":         sql.DBVersion,
-		"db_size":         dbSz,
-		"conn_pool_stats": s.db.ConnectionPoolStats(),
-	}
-	if s.dbConf.Memory {
-		dbStatus["path"] = ":memory:"
-	} else {
-		dbStatus["path"] = s.dbPath
-		if s.onDiskCreated {
-			if dbStatus["size"], err = s.db.FileSize(); err != nil {
-				return nil, err
-			}
-		}
 	}
 
 	nodes, err := s.Nodes()

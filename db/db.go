@@ -57,8 +57,11 @@ type DB struct {
 	path   string // Path to database file.
 	memory bool   // In-memory only.
 
-	rwDB *sql.DB
-	roDB *sql.DB
+	rwDB *sql.DB // Database connection for database reads and writes.
+	roDB *sql.DB // Database connection database reads.
+
+	rwDSN string // DSN used for read-write connection
+	roDSN string // DSN used for read-only connections
 }
 
 // PoolStats represents connection pool statistics
@@ -93,14 +96,14 @@ type Rows struct {
 
 // Open opens a file-based database, creating it if it does not exist.
 func Open(dbPath string) (*DB, error) {
-	rwDB, err := sql.Open("sqlite3", fmt.Sprintf("file:%s", dbPath))
+	rwDSN := fmt.Sprintf("file:%s", dbPath)
+	rwDB, err := sql.Open("sqlite3", rwDSN)
 	if err != nil {
 		return nil, err
 	}
 
-	// XXX NOT SURE IF WAL WILL WORK. SIMPLY COPYING THE DATABASE FILE
-	// WONT GET THE ENTIRE DATABASE. CAN WAL COMPACT BE FORCED?
-	roDB, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?mode=ro", dbPath))
+	roDSN := fmt.Sprintf("file:%s?mode=ro", dbPath)
+	roDB, err := sql.Open("sqlite3", roDSN)
 	if err != nil {
 		return nil, err
 	}
@@ -112,9 +115,11 @@ func Open(dbPath string) (*DB, error) {
 	roDB.SetConnMaxLifetime(0)
 
 	return &DB{
-		path: dbPath,
-		rwDB: rwDB,
-		roDB: roDB,
+		path:  dbPath,
+		rwDB:  rwDB,
+		roDB:  roDB,
+		rwDSN: rwDSN,
+		roDSN: roDSN,
 	}, nil
 }
 
@@ -122,7 +127,8 @@ func Open(dbPath string) (*DB, error) {
 func OpenInMemory() (*DB, error) {
 	inMemPath := fmt.Sprintf("file:/%s", randomString())
 
-	rwDB, err := sql.Open("sqlite3", fmt.Sprintf("file:/%s?mode=rw&vfs=memdb&_txlock=immediate", inMemPath))
+	rwDSN := fmt.Sprintf("%s?mode=rw&vfs=memdb&_txlock=immediate", inMemPath)
+	rwDB, err := sql.Open("sqlite3", rwDSN)
 	if err != nil {
 		return nil, err
 	}
@@ -134,14 +140,18 @@ func OpenInMemory() (*DB, error) {
 	rwDB.SetMaxIdleConns(1)
 	rwDB.SetMaxOpenConns(1)
 
-	roDB, err := sql.Open("sqlite3", fmt.Sprintf("file:/%s?mode=ro&vfs=memdb&_txlock=deferred", inMemPath))
+	roDSN := fmt.Sprintf("%s?mode=ro&vfs=memdb&_txlock=deferred", inMemPath)
+	roDB, err := sql.Open("sqlite3", roDSN)
 	if err != nil {
 		return nil, err
 	}
 
 	return &DB{
-		rwDB: rwDB,
-		roDB: roDB,
+		memory: true,
+		rwDB:   rwDB,
+		roDB:   roDB,
+		rwDSN:  rwDSN,
+		roDSN:  roDSN,
 	}, nil
 }
 
@@ -234,6 +244,36 @@ func (db *DB) Close() error {
 	return db.roDB.Close()
 }
 
+// Stats returns status and diagnotics for the database.
+func (db *DB) Stats() (map[string]interface{}, error) {
+	connPoolStats := map[string]interface{}{
+		"ro": db.ConnectionPoolStats(db.roDB),
+		"rw": db.ConnectionPoolStats(db.rwDB),
+	}
+	dbSz, err := db.Size()
+	if err != nil {
+		return nil, err
+	}
+	fmt.Println(">>>", db.rwDSN)
+	stats := map[string]interface{}{
+		"version":         DBVersion,
+		"db_size":         dbSz,
+		"rw_dsn":          string(db.rwDSN),
+		"ro_dsn":          db.roDSN,
+		"conn_pool_stats": connPoolStats,
+	}
+
+	if db.memory {
+		stats["path"] = ":memory:"
+	} else {
+		stats["path"] = db.path
+		if stats["size"], err = db.FileSize(); err != nil {
+			return nil, err
+		}
+	}
+	return stats, nil
+}
+
 // EnableFKConstraints allows control of foreign key constraint checks.
 func (db *DB) EnableFKConstraints(e bool) error {
 	q := fkChecksEnabled
@@ -257,7 +297,7 @@ func (db *DB) Size() (int64, error) {
 	}
 
 	// The SQL statement is considered a read-write statement, so much use the
-	// rw connection. XXX THIS IS GOING TO CAUSE PRAGMA ISSUES!
+	// rw connection.
 	conn, err := db.rwDB.Conn(context.Background())
 	if err != nil {
 		return 0, err
@@ -286,8 +326,8 @@ func (db *DB) FileSize() (int64, error) {
 }
 
 // ConnectionPoolStats returns database pool statistics
-func (db *DB) ConnectionPoolStats() *PoolStats {
-	s := db.rwDB.Stats()
+func (db *DB) ConnectionPoolStats(sqlDB *sql.DB) *PoolStats {
+	s := sqlDB.Stats()
 	return &PoolStats{
 		MaxOpenConnections: s.MaxOpenConnections,
 		OpenConnections:    s.OpenConnections,
