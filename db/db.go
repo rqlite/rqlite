@@ -103,6 +103,11 @@ func Open(dbPath string) (*DB, error) {
 		return nil, err
 	}
 
+	// Force creation of on-disk database file.
+	if err := rwDB.Ping(); err != nil {
+		return nil, fmt.Errorf("failed to ping on-disk database: %s", err.Error())
+	}
+
 	// Set some reasonable connection pool behaviour.
 	rwDB.SetConnMaxIdleTime(30 * time.Second)
 	rwDB.SetConnMaxLifetime(0)
@@ -139,6 +144,11 @@ func OpenInMemory() (*DB, error) {
 	roDB, err := sql.Open("sqlite3", roDSN)
 	if err != nil {
 		return nil, err
+	}
+
+	// Ensure database is basically healthy.
+	if err := rwDB.Ping(); err != nil {
+		return nil, fmt.Errorf("failed to ping in-memory database: %s", err.Error())
 	}
 
 	return &DB{
@@ -276,23 +286,7 @@ func (db *DB) Stats() (map[string]interface{}, error) {
 // Size returns the size of the database in bytes. "Size" is defined as
 // page_count * schema.page_size.
 func (db *DB) Size() (int64, error) {
-	req := &command.Request{
-		Statements: []*command.Statement{
-			{
-				Sql: `SELECT page_count * page_size as size FROM pragma_page_count(), pragma_page_size()`,
-			},
-		},
-	}
-
-	// The SQL statement is considered a read-write statement, so much use the
-	// rw connection.
-	conn, err := db.rwDB.Conn(context.Background())
-	if err != nil {
-		return 0, err
-	}
-	defer conn.Close()
-
-	rows, err := db.queryWithConn(req, false, conn)
+	rows, err := db.QueryStringStmt(`SELECT page_count * page_size as size FROM pragma_page_count(), pragma_page_size()`)
 	if err != nil {
 		return 0, err
 	}
