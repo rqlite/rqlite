@@ -674,6 +674,11 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
+	s0FsmIdx, err := s0.WaitForAppliedFSM(5 * time.Second)
+	if err != nil {
+		t.Fatalf("failed to wait for fsmIndex: %s", err.Error())
+	}
+
 	qr := queryRequestFromString("SELECT * FROM foo", false, false)
 	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
 	r, err := s0.Query(qr)
@@ -687,9 +692,9 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
-	// Wait until the 3 log entries have been applied to the voting follower,
+	// Wait until the log entries have been applied to the voting follower,
 	// and then query.
-	if err := s1.WaitForAppliedIndex(3, 5*time.Second); err != nil {
+	if _, err := s1.WaitForFSMIndex(s0FsmIdx, 5*time.Second); err != nil {
 		t.Fatalf("error waiting for follower to apply index: %s:", err.Error())
 	}
 
