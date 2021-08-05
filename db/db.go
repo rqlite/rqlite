@@ -23,11 +23,6 @@ const (
 	onDiskMaxOpenConns = 32
 	onDiskMaxIdleTime  = 120 * time.Second
 
-	fkChecks         = "PRAGMA foreign_keys"
-	fkChecksEnabled  = "PRAGMA foreign_keys=ON"
-	fkChecksDisabled = "PRAGMA foreign_keys=OFF"
-	journalCheck     = "PRAGMA journal_mode"
-
 	numExecutions      = "executions"
 	numExecutionErrors = "execution_errors"
 	numQueries         = "queries"
@@ -246,6 +241,10 @@ func (db *DB) Close() error {
 
 // Stats returns status and diagnostics for the database.
 func (db *DB) Stats() (map[string]interface{}, error) {
+	copts, err := db.CompileOptions()
+	if err != nil {
+		return nil, err
+	}
 	connPoolStats := map[string]interface{}{
 		"ro": db.ConnectionPoolStats(db.roDB),
 		"rw": db.ConnectionPoolStats(db.rwDB),
@@ -256,6 +255,7 @@ func (db *DB) Stats() (map[string]interface{}, error) {
 	}
 	stats := map[string]interface{}{
 		"version":         DBVersion,
+		"compile_options": copts,
 		"db_size":         dbSz,
 		"rw_dsn":          string(db.rwDSN),
 		"ro_dsn":          db.roDSN,
@@ -311,6 +311,30 @@ func (db *DB) FileSize() (int64, error) {
 		return 0, err
 	}
 	return fi.Size(), nil
+}
+
+// CompileOptions returns the SQLite compilation options.
+func (db *DB) CompileOptions() ([]string, error) {
+	res, err := db.QueryStringStmt("PRAGMA compile_options")
+	if err != nil {
+		return nil, err
+	}
+	if len(res) != 1 {
+		return nil, fmt.Errorf("compile options result wrong size (%d)", len(res))
+	}
+
+	copts := make([]string, len(res[0].Values))
+	for i := range copts {
+		if len(res[0].Values[i]) != 1 {
+			return nil, fmt.Errorf("compile options values wrong size (%d)", len(res))
+		}
+		if co, ok := res[0].Values[i][0].(string); !ok {
+			copts[i] = "not string!"
+		} else {
+			copts[i] = co
+		}
+	}
+	return copts, nil
 }
 
 // ConnectionPoolStats returns database pool statistics

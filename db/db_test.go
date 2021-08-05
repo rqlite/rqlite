@@ -36,6 +36,17 @@ func Test_DbFileCreation(t *testing.T) {
 	}
 }
 
+func Test_CompileOptions(t *testing.T) {
+	db, path := mustCreateDatabase()
+	defer db.Close()
+	defer os.Remove(path)
+
+	_, err := db.CompileOptions()
+	if err != nil {
+		t.Fatalf("failed to retrieve compilation options: %s", err.Error())
+	}
+}
+
 func Test_TableNotExist(t *testing.T) {
 	db, path := mustCreateDatabase()
 	defer db.Close()
