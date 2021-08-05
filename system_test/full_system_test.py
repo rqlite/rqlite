@@ -178,11 +178,17 @@ class Node(object):
 
     return lr
 
-  def applied_index(self):
-    return int(self.status()['store']['raft']['applied_index'])
+  def db_applied_index(self):
+    return int(self.status()['store']['db_applied_index'])
+
+  def fsm_index(self):
+    return int(self.status()['store']['fsm_index'])
 
   def commit_index(self):
     return int(self.status()['store']['raft']['commit_index'])
+
+  def applied_index(self):
+    return int(self.status()['store']['raft']['applied_index'])
 
   def last_log_index(self):
     return int(self.status()['store']['raft']['last_log_index'])
@@ -193,16 +199,22 @@ class Node(object):
   def num_join_requests(self):
     return int(self.expvar()['http']['joins'])
 
-  def wait_for_applied_index(self, index, timeout=TIMEOUT):
+  def wait_for_fsm_index(self, index, timeout=TIMEOUT):
+    '''
+    Wait until the given index has been applied to the state machine.
+    '''
     t = 0
-    while self.applied_index() < index:
+    while self.fsm_index() < index:
       if t > timeout:
         raise Exception('timeout')
       time.sleep(1)
       t+=1
-    return self.applied_index()
+    return self.fsm_index()
 
   def wait_for_commit_index(self, index, timeout=TIMEOUT):
+    '''
+    Wait until the commit index reaches the given value
+    '''
     t = 0
     while self.commit_index() < index:
       if t > timeout:
@@ -212,6 +224,9 @@ class Node(object):
     return self.commit_index()
 
   def wait_for_all_applied(self, timeout=TIMEOUT):
+    '''
+    Wait until the applied index equals the commit index.
+    '''
     t = 0
     while self.commit_index() != self.applied_index():
       if t > timeout:
@@ -219,6 +234,19 @@ class Node(object):
       time.sleep(1)
       t+=1
     return self.applied_index()
+
+  def wait_for_all_fsm(self, timeout=TIMEOUT):
+    '''
+    Wait until all outstanding database commands have actually
+    been applied to the database i.e. state machine.
+    '''
+    t = 0
+    while self.fsm_index() != self.db_applied_index():
+      if t > timeout:
+        raise Exception('timeout')
+      time.sleep(1)
+      t+=1
+    return self.fsm_index()
 
   def query(self, statement, params=None, level='weak'):
     body = [statement]
@@ -328,7 +356,7 @@ class TestSingleNode(unittest.TestCase):
     j = n.execute('CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
     self.assertEqual(str(j), "{u'results': [{}]}")
     j = n.execute('INSERT INTO bar(name) VALUES("fiona")')
-    applied = n.wait_for_all_applied()
+    applied = n.wait_for_all_fsm()
     self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
     j = n.query('SELECT * from bar')
     self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
@@ -339,7 +367,7 @@ class TestSingleNode(unittest.TestCase):
     j = n.execute('CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT, age INTEGER)')
     self.assertEqual(str(j), "{u'results': [{}]}")
     j = n.execute('INSERT INTO bar(name, age) VALUES(?,?)', params=["fiona", 20])
-    applied = n.wait_for_all_applied()
+    applied = n.wait_for_all_fsm()
     self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
     j = n.query('SELECT * from bar')
     self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona', 20]], u'types': [u'integer', u'text', u'integer'], u'columns': [u'id', u'name', u'age']}]}")
@@ -357,7 +385,7 @@ class TestSingleNode(unittest.TestCase):
         ['INSERT INTO bar(name, age) VALUES("sinead", 25)']
     ])
     j = n.execute_raw(body)
-    applied = n.wait_for_all_applied()
+    applied = n.wait_for_all_fsm()
     self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}, {u'last_insert_id': 2, u'rows_affected': 1}]}")
     j = n.query('SELECT * from bar')
     self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona', 20], [2, u'sinead', 25]], u'types': [u'integer', u'text', u'integer'], u'columns': [u'id', u'name', u'age']}]}")
@@ -370,7 +398,7 @@ class TestSingleNode(unittest.TestCase):
     j = n.execute('INSERT INTO foo(name) VALUES("fiona")')
     self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
 
-    applied = n.wait_for_all_applied()
+    applied = n.wait_for_all_fsm()
 
     # Wait for a snapshot to happen.
     timeout = 10
@@ -419,14 +447,14 @@ class TestEndToEnd(unittest.TestCase):
     j = n.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
     self.assertEqual(str(j), "{u'results': [{}]}")
     j = n.execute('INSERT INTO foo(name) VALUES("fiona")')
-    applied = n.wait_for_all_applied()
+    fsmIdx = n.wait_for_all_fsm()
     self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
     j = n.query('SELECT * FROM foo')
     self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
 
     n0 = self.cluster.wait_for_leader().stop()
     n1 = self.cluster.wait_for_leader(node_exc=n0)
-    n1.wait_for_applied_index(applied)
+    n1.wait_for_fsm_index(fsmIdx)
     j = n1.query('SELECT * FROM foo')
     self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
     j = n1.execute('INSERT INTO foo(name) VALUES("declan")')
@@ -434,7 +462,7 @@ class TestEndToEnd(unittest.TestCase):
 
     n0.start()
     n0.wait_for_leader()
-    n0.wait_for_applied_index(n1.applied_index())
+    n0.wait_for_fsm_index(n1.fsm_index())
     j = n0.query('SELECT * FROM foo', level='none')
     self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona'], [2, u'declan']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
 
@@ -508,7 +536,7 @@ class TestEndToEndNonVoter(unittest.TestCase):
     j = self.leader.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
     self.assertEqual(str(j), "{u'results': [{}]}")
     j = self.leader.execute('INSERT INTO foo(name) VALUES("fiona")')
-    applied = self.leader.wait_for_all_applied()
+    self.leader.wait_for_all_fsm()
     self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
     j = self.leader.query('SELECT * FROM foo')
     self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
@@ -521,7 +549,7 @@ class TestEndToEndNonVoter(unittest.TestCase):
     # Restart non-voter and confirm it picks up changes
     self.non_voter.start()
     self.non_voter.wait_for_leader()
-    self.non_voter.wait_for_applied_index(self.leader.applied_index())
+    self.non_voter.wait_for_fsm_index(self.leader.fsm_index())
     j = self.non_voter.query('SELECT * FROM foo', level='none')
     self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona'], [2, u'declan']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
 
@@ -570,7 +598,7 @@ class TestEndToEndNonVoterFollowsLeader(unittest.TestCase):
     j = n.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
     self.assertEqual(str(j), "{u'results': [{}]}")
     j = n.execute('INSERT INTO foo(name) VALUES("fiona")')
-    applied = n.wait_for_all_applied()
+    n.wait_for_all_fsm()
     self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
     j = n.query('SELECT * FROM foo')
     self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
@@ -579,14 +607,14 @@ class TestEndToEndNonVoterFollowsLeader(unittest.TestCase):
     # since the cluster is changing right now.
     n0 = self.cluster.wait_for_leader(constraint_check=False).stop()
     n1 = self.cluster.wait_for_leader(node_exc=n0, constraint_check=False)
-    n1.wait_for_applied_index(applied)
+    n1.wait_for_all_applied()
     j = n1.query('SELECT * FROM foo')
     self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
     j = n1.execute('INSERT INTO foo(name) VALUES("declan")')
     self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 2, u'rows_affected': 1}]}")
 
     # Confirm non-voter sees changes made through old and new leader.
-    self.non_voter.wait_for_applied_index(n1.applied_index())
+    self.non_voter.wait_for_fsm_index(n1.fsm_index())
     j = self.non_voter.query('SELECT * FROM foo', level='none')
     self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona'], [2, u'declan']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
 
@@ -600,7 +628,7 @@ class TestEndToEndBackupRestore(unittest.TestCase):
     self.node0.wait_for_leader()
     self.node0.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
     self.node0.execute('INSERT INTO foo(name) VALUES("fiona")')
-    self.node0.wait_for_all_applied()
+    self.node0.wait_for_all_fsm()
 
     self.node0.backup(self.db_file)
     conn = sqlite3.connect(self.db_file)
@@ -649,7 +677,7 @@ class TestEndToEndSnapRestoreSingle(unittest.TestCase):
 
     for i in range(0,200):
       self.n0.execute('INSERT INTO foo(name) VALUES("fiona")')
-    self.n0.wait_for_all_applied()
+    self.n0.wait_for_all_fsm()
     self.waitForSnapIndex(175)
 
     # Ensure node has the full correct state.
@@ -698,12 +726,12 @@ class TestEndToEndSnapRestoreCluster(unittest.TestCase):
     self.n0.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
     for i in range(0,100):
       self.n0.execute('INSERT INTO foo(name) VALUES("fiona")')
-    self.n0.wait_for_all_applied()
+    self.n0.wait_for_all_fsm()
     self.waitForSnap(1)
 
     for i in range(0,100):
       self.n0.execute('INSERT INTO foo(name) VALUES("fiona")')
-    self.n0.wait_for_all_applied()
+    self.n0.wait_for_all_fsm()
     self.waitForSnap(2)
 
     # Add two more nodes to the cluster
@@ -726,11 +754,11 @@ class TestEndToEndSnapRestoreCluster(unittest.TestCase):
 
     for i in range(0,100):
       self.n0.execute('INSERT INTO foo(name) VALUES("fiona")')
-    self.n0.wait_for_all_applied()
+    self.n0.wait_for_all_fsm()
     self.waitForSnap(3)
     for i in range(0,100):
       self.n0.execute('INSERT INTO foo(name) VALUES("fiona")')
-    self.n0.wait_for_all_applied()
+    self.n0.wait_for_all_fsm()
     self.waitForSnap(4)
 
     # Restart killed node, check it has full state.
@@ -794,10 +822,10 @@ class TestJoinCatchup(unittest.TestCase):
     self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
     j = n0.query('SELECT * FROM foo')
     self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
-    applied = n0.wait_for_all_applied()
+    applied = n0.wait_for_all_fsm()
 
     # Test that follower node has correct state in local database, and then kill the follower
-    self.n1.wait_for_applied_index(applied)
+    self.n1.wait_for_fsm_index(applied)
     j = self.n1.query('SELECT * FROM foo', level='none')
     self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
     self.n1.stop()
@@ -807,12 +835,12 @@ class TestJoinCatchup(unittest.TestCase):
     self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 2, u'rows_affected': 1}]}")
     j = n0.query('SELECT COUNT(*) FROM foo')
     self.assertEqual(str(j), "{u'results': [{u'values': [[2]], u'types': [u''], u'columns': [u'COUNT(*)']}]}")
-    applied = n0.wait_for_all_applied()
+    applied = n0.wait_for_all_fsm()
 
     # Restart follower, explicity rejoin, and ensure it picks up new records
     self.n1.start(join=self.n0.APIAddr())
     self.n1.wait_for_leader()
-    self.n1.wait_for_applied_index(applied)
+    self.n1.wait_for_fsm_index(applied)
     self.assertEqual(n0.expvar()['store']['num_ignored_joins'], 1)
     j = self.n1.query('SELECT COUNT(*) FROM foo', level='none')
     self.assertEqual(str(j), "{u'results': [{u'values': [[2]], u'types': [u''], u'columns': [u'COUNT(*)']}]}")
@@ -826,10 +854,10 @@ class TestJoinCatchup(unittest.TestCase):
     self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
     j = n0.query('SELECT * FROM foo')
     self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
-    applied = n0.wait_for_all_applied()
+    applied = n0.wait_for_all_fsm()
 
     # Test that follower node has correct state in local database, and then kill the follower
-    self.n1.wait_for_applied_index(applied)
+    self.n1.wait_for_fsm_index(applied)
     j = self.n1.query('SELECT * FROM foo', level='none')
     self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
     self.n1.stop()
@@ -839,14 +867,14 @@ class TestJoinCatchup(unittest.TestCase):
     self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 2, u'rows_affected': 1}]}")
     j = n0.query('SELECT COUNT(*) FROM foo')
     self.assertEqual(str(j), "{u'results': [{u'values': [[2]], u'types': [u''], u'columns': [u'COUNT(*)']}]}")
-    applied = n0.wait_for_all_applied()
+    applied = n0.wait_for_all_fsm()
 
     # Restart follower with new network attributes, explicity rejoin, and ensure it picks up new records
     self.n1.scramble_network()
     self.n1.start(join=self.n0.APIAddr())
     self.n1.wait_for_leader()
     self.assertEqual(n0.expvar()['store']['num_removed_before_joins'], 1)
-    self.n1.wait_for_applied_index(applied)
+    self.n1.wait_for_fsm_index(applied)
     j = self.n1.query('SELECT COUNT(*) FROM foo', level='none')
     self.assertEqual(str(j), "{u'results': [{u'values': [[2]], u'types': [u''], u'columns': [u'COUNT(*)']}]}")
 
