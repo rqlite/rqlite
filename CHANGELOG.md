@@ -1,5 +1,7 @@
-## 6.0.3 (unreleased)
+## 6.1.0 (unreleased)
 This release makes significant changes to SQLite database connection handling, resulting in proper support for high-performance concurrent reads of in-memory databases (the default choice for rqlite). 
+
+- [PR #848](https://github.com/rqlite/rqlite/pull/848): Enable DBSTATS table and JSON support. Fixes [issue #843](https://github.com/rqlite/rqlite/issues/843).
 
 ### Implementation changes and bug fixes
 - [PR #841](https://github.com/rqlite/rqlite/pull/841): Remove support for specifying SQLite DSN.
