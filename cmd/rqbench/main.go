@@ -5,9 +5,8 @@ package main
 import (
 	"flag"
 	"fmt"
-	"time"
-
 	"os"
+	"time"
 )
 
 var addr string
