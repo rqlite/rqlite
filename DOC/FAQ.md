@@ -21,6 +21,7 @@
 * [Can I use rqlite to replicate my SQLite database to a second node?](#can-i-use-rqlite-to-replicate-my-sqlite-database-to-a-second-node)
 * [Is the underlying serializable isolation level of SQLite maintained?](#is-the-underlying-serializable-isolation-level-of-sqlite-maintained)
 * [Do concurrent writes block each other?](#do-concurrent-writes-block-each-other)
+* [Do concurrent reads block each other?](#do-concurrent-reads-block-each-other)
 * [How is it different than dqlite?](#how-is-it-different-than-dqlite)
 
 ## What exactly does rqlite do?
@@ -94,7 +95,10 @@ Not in a simple sense, no. rqlite is not a SQLite database replication tool. Whi
 Yes, it is.
 
 ## Do concurrent writes block each other? 
-In this regard rqlite currently offers exactly the same semantics as SQLite. Each HTTP write request uses the same SQLite connection on the leader, so one write-over-HTTP may block another. Explicit connection control will be available in a future release, which will give clients more control over transactions. Only one concurrent write will ever be supported however, due to the nature of SQLite.
+In this regard rqlite currently offers exactly the same semantics as SQLite. Each HTTP write request uses the same SQLite connection on the leader, so one write-over-HTTP may block another, due to the nature of SQLite.
+
+## Do concurrent writes block each other? 
+No, a read does not block other reads, nor does a read block a write.
 
 ## How is it different than dqlite?
 dqlite is library, written in C, that you need to integrate with your own software. That requires programming. rqlite is a standalone application -- it's a full [RDBMS](https://techterms.com/definition/rdbms) (albeit a relatively simple one). rqlite has everything you need to read and write data, and backup, maintain, and monitor the database itself.
