@@ -26,6 +26,7 @@ const (
 	numExecutions      = "executions"
 	numExecutionErrors = "execution_errors"
 	numQueries         = "queries"
+	numQueryErrors     = "query_errors"
 	numETx             = "execute_transactions"
 	numQTx             = "query_transactions"
 )
@@ -42,6 +43,7 @@ func init() {
 	stats.Add(numExecutions, 0)
 	stats.Add(numExecutionErrors, 0)
 	stats.Add(numQueries, 0)
+	stats.Add(numQueryErrors, 0)
 	stats.Add(numETx, 0)
 	stats.Add(numQTx, 0)
 
@@ -523,6 +525,7 @@ func (db *DB) queryWithConn(req *command.Request, xTime bool, conn *sql.Conn) ([
 
 		parameters, err := parametersToValues(stmt.Parameters)
 		if err != nil {
+			stats.Add(numQueryErrors, 1)
 			rows.Error = err.Error()
 			allRows = append(allRows, rows)
 			continue
@@ -530,6 +533,7 @@ func (db *DB) queryWithConn(req *command.Request, xTime bool, conn *sql.Conn) ([
 
 		rs, err := queryer.QueryContext(context.Background(), sql, parameters...)
 		if err != nil {
+			stats.Add(numQueryErrors, 1)
 			rows.Error = err.Error()
 			allRows = append(allRows, rows)
 			continue
@@ -565,6 +569,7 @@ func (db *DB) queryWithConn(req *command.Request, xTime bool, conn *sql.Conn) ([
 
 		// Check for errors from iterating over rows.
 		if err := rs.Err(); err != nil {
+			stats.Add(numQueryErrors, 1)
 			rows.Error = err.Error()
 			allRows = append(allRows, rows)
 			continue
