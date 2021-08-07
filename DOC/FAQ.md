@@ -97,7 +97,7 @@ Yes, it is.
 ## Do concurrent writes block each other? 
 In this regard rqlite currently offers exactly the same semantics as SQLite. Each HTTP write request uses the same SQLite connection on the leader, so one write-over-HTTP may block another, due to the nature of SQLite.
 
-## Do concurrent writes block each other? 
+## Do concurrent reads block each other? 
 No, a read does not block other reads, nor does a read block a write.
 
 ## How is it different than dqlite?
