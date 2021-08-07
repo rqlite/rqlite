@@ -1376,6 +1376,36 @@ func Test_DBSTAT_table(t *testing.T) {
 	}
 }
 
+func Test_JSON1(t *testing.T) {
+	db := mustCreateInMemoryDatabase()
+	defer db.Close()
+
+	_, err := db.ExecuteStringStmt("CREATE TABLE customer(name,phone);")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	_, err = db.ExecuteStringStmt(`INSERT INTO customer (name, phone) VALUES("fiona", json('{"mobile":"789111", "home":"123456"}'))`)
+	if err != nil {
+		t.Fatalf("failed to insert JSON record: %s", err.Error())
+	}
+
+	q, err := db.QueryStringStmt("SELECT customer.phone FROM customer WHERE customer.name=='fiona'")
+	if err != nil {
+		t.Fatalf("failed to perform simple SELECT: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["phone"],"types":[""],"values":[["{\"mobile\":\"789111\",\"home\":\"123456\"}"]]}]`, asJSON(q); exp != got {
+		t.Fatalf("unexpected results for simple query, expected %s, got %s", exp, got)
+	}
+	q, err = db.QueryStringStmt("SELECT json_extract(customer.phone, '$.mobile') FROM customer;")
+	if err != nil {
+		t.Fatalf("failed to perform simple SELECT: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["json_extract(customer.phone, '$.mobile')"],"types":[""],"values":[["789111"]]}]`, asJSON(q); exp != got {
+		t.Fatalf("unexpected results for JSON query, expected %s, got %s", exp, got)
+	}
+}
+
 func mustCreateDatabase() (*DB, string) {
 	var err error
 	f := mustTempFile()
