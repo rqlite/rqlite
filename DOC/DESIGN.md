@@ -1,7 +1,9 @@
 # rqlite
 You can find details on the design and implementation of rqlite from [these blog posts](http://www.philipotoole.com/tag/rqlite/) (in particular [this post](https://www.philipotoole.com/replicating-sqlite-using-raft-consensus/) and [this post](https://www.philipotoole.com/rqlite-replicated-sqlite-with-new-raft-consensus-and-api/)).
 
-The design and implementation of rqlite was also presented at the [GoSF](http://www.meetup.com/golangsf/) [April 2016](http://www.meetup.com/golangsf/events/230127735/) Meetup. You can find the slides [here](http://www.slideshare.net/PhilipOToole/rqlite-replicating-sqlite-via-raft-consensu). A similar talk was given to the University of Pittsburgh in April 2018. Those slides are [here](https://docs.google.com/presentation/d/1lSNrZJUbAGD-ZsfD8B6_VPLVjq5zb7SlJMzDblq2yzU/edit?usp=sharing).
+## Design Presentations
+- [Presentation](http://www.slideshare.net/PhilipOToole/rqlite-replicating-sqlite-via-raft-consensu) given at the [GoSF](http://www.meetup.com/golangsf/) [April 2016](http://www.meetup.com/golangsf/events/230127735/) Meetup.
+- [Presentation](https://docs.google.com/presentation/d/1lSNrZJUbAGD-ZsfD8B6_VPLVjq5zb7SlJMzDblq2yzU/edit?usp=sharing) given to the University of Pittsburgh, April 2018.
 
 ## Node design
 The diagram below shows a high-level view of an rqlite node.
