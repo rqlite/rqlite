@@ -157,6 +157,7 @@ func main() {
 			case ".QUIT", "QUIT", "EXIT":
 				break FOR_READ
 			case "SELECT":
+			case "PRAGMA":
 				err = queryWithClient(ctx, client, argv, timer, line)
 			default:
 				err = executeWithClient(ctx, client, argv, timer, line)

@@ -56,9 +56,6 @@ func (r *Rows) validate() error {
 	if r.Error != "" {
 		return fmt.Errorf(r.Error)
 	}
-	if r.Columns == nil || r.Types == nil {
-		return fmt.Errorf("unexpected result")
-	}
 	return nil
 }
 
