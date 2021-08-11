@@ -110,7 +110,7 @@ func init() {
 	flag.BoolVar(&expvar, "expvar", true, "Serve expvar data on HTTP server")
 	flag.BoolVar(&pprofEnabled, "pprof", true, "Serve pprof data on HTTP server")
 	flag.BoolVar(&onDisk, "on-disk", false, "Use an on-disk SQLite database")
-	flag.BoolVar(&fkConstraints, "fk", false, "Enable SQLit foreign key constraints")
+	flag.BoolVar(&fkConstraints, "fk", false, "Enable SQLite foreign key constraints")
 	flag.BoolVar(&showVersion, "version", false, "Show version information and exit")
 	flag.BoolVar(&raftNonVoter, "raft-non-voter", false, "Configure as non-voting node")
 	flag.StringVar(&raftHeartbeatTimeout, "raft-timeout", "1s", "Raft heartbeat timeout")
