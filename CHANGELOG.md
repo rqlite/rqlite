@@ -1,3 +1,6 @@
+## 6.2.0 (unreleased)
+- [PR #851](https://github.com/rqlite/rqlite/pull/851): rqlite CLI properly supports PRAGMA directives.
+
 ## 6.1.0 (August 5th 2021)
 This release makes significant changes to SQLite database connection handling, resulting in proper support for high-performance concurrent reads of in-memory databases (the default choice for rqlite). 
 

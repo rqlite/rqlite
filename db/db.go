@@ -99,7 +99,11 @@ func Open(dbPath string) (*DB, error) {
 		return nil, err
 	}
 
-	roDSN := fmt.Sprintf("file:%s?mode=ro", dbPath)
+	roOpts := []string{
+		"mode=ro",
+	}
+
+	roDSN := fmt.Sprintf("file:%s?%s", dbPath, strings.Join(roOpts, "&"))
 	roDB, err := sql.Open("sqlite3", roDSN)
 	if err != nil {
 		return nil, err
@@ -129,7 +133,13 @@ func Open(dbPath string) (*DB, error) {
 func OpenInMemory() (*DB, error) {
 	inMemPath := fmt.Sprintf("file:/%s", randomString())
 
-	rwDSN := fmt.Sprintf("%s?mode=rw&vfs=memdb&_txlock=immediate", inMemPath)
+	rwOpts := []string{
+		"mode=rw",
+		"vfs=memdb",
+		"_txlock=immediate",
+	}
+
+	rwDSN := fmt.Sprintf("%s?%s", inMemPath, strings.Join(rwOpts, "&"))
 	rwDB, err := sql.Open("sqlite3", rwDSN)
 	if err != nil {
 		return nil, err
@@ -142,7 +152,13 @@ func OpenInMemory() (*DB, error) {
 	rwDB.SetMaxIdleConns(1)
 	rwDB.SetMaxOpenConns(1)
 
-	roDSN := fmt.Sprintf("%s?mode=ro&vfs=memdb&_txlock=deferred", inMemPath)
+	roOpts := []string{
+		"mode=ro",
+		"vfs=memdb",
+		"_txlock=deferred",
+	}
+
+	roDSN := fmt.Sprintf("%s?%s", inMemPath, strings.Join(roOpts, "&"))
 	roDB, err := sql.Open("sqlite3", roDSN)
 	if err != nil {
 		return nil, err
