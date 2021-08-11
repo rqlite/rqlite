@@ -803,9 +803,9 @@ func (s *Store) Noop(id string) error {
 // database will be initialized with the contents of b.
 func (s *Store) createInMemory(b []byte) (db *sql.DB, err error) {
 	if b == nil {
-		db, err = sql.OpenInMemory()
+		db, err = sql.OpenInMemory(s.dbConf.FKConstraints)
 	} else {
-		db, err = sql.DeserializeIntoMemory(b)
+		db, err = sql.DeserializeIntoMemory(b, s.dbConf.FKConstraints)
 	}
 	return
 }
@@ -822,7 +822,7 @@ func (s *Store) createOnDisk(b []byte) (*sql.DB, error) {
 			return nil, err
 		}
 	}
-	return sql.Open(s.dbPath)
+	return sql.Open(s.dbPath, s.dbConf.FKConstraints)
 }
 
 // setLogInfo records some key indexs about the log.

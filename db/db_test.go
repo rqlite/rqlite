@@ -24,7 +24,7 @@ func Test_DbFileCreation(t *testing.T) {
 	defer os.RemoveAll(dir)
 	dbPath := path.Join(dir, "test_db")
 
-	db, err := Open(dbPath)
+	db, err := Open(dbPath, false)
 	if err != nil {
 		t.Fatalf("failed to open new database: %s", err.Error())
 	}
@@ -150,7 +150,7 @@ func Test_LoadIntoMemory(t *testing.T) {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
 
-	inmem, err := LoadIntoMemory(path)
+	inmem, err := LoadIntoMemory(path, false)
 	if err != nil {
 		t.Fatalf("failed to create loaded in-memory database: %s", err.Error())
 	}
@@ -204,7 +204,7 @@ func Test_DeserializeIntoMemory(t *testing.T) {
 		t.Fatalf("failed to read database on disk: %s", err.Error())
 	}
 
-	newDB, err := DeserializeIntoMemory(b)
+	newDB, err := DeserializeIntoMemory(b, false)
 	if err != nil {
 		t.Fatalf("failed to deserialize database: %s", err.Error())
 	}
@@ -1068,7 +1068,7 @@ func Test_Backup(t *testing.T) {
 		t.Fatalf("failed to backup database: %s", err.Error())
 	}
 
-	newDB, err := Open(dstDB)
+	newDB, err := Open(dstDB, false)
 	if err != nil {
 		t.Fatalf("failed to open backup database: %s", err.Error())
 	}
@@ -1117,7 +1117,7 @@ func Test_Copy(t *testing.T) {
 
 	dstFile := mustTempFile()
 	defer os.Remove(dstFile)
-	dstDB, err := Open(dstFile)
+	dstDB, err := Open(dstFile, false)
 	if err != nil {
 		t.Fatalf("failed to open destination database: %s", err)
 	}
@@ -1186,7 +1186,7 @@ func Test_Serialize(t *testing.T) {
 		t.Fatalf("failed to write serialized database to file: %s", err.Error())
 	}
 
-	newDB, err := Open(dstDB.Name())
+	newDB, err := Open(dstDB.Name(), false)
 	if err != nil {
 		t.Fatalf("failed to open on-disk serialized database: %s", err.Error())
 	}
@@ -1230,7 +1230,7 @@ func Test_DumpMemory(t *testing.T) {
 	defer db.Close()
 	defer os.Remove(path)
 
-	inmem, err := LoadIntoMemory(path)
+	inmem, err := LoadIntoMemory(path, false)
 	if err != nil {
 		t.Fatalf("failed to create loaded in-memory database: %s", err.Error())
 	}
@@ -1409,7 +1409,7 @@ func Test_JSON1(t *testing.T) {
 func mustCreateDatabase() (*DB, string) {
 	var err error
 	f := mustTempFile()
-	db, err := Open(f)
+	db, err := Open(f, false)
 	if err != nil {
 		panic("failed to open database")
 	}
@@ -1418,7 +1418,7 @@ func mustCreateDatabase() (*DB, string) {
 }
 
 func mustCreateInMemoryDatabase() *DB {
-	db, err := OpenInMemory()
+	db, err := OpenInMemory(false)
 	if err != nil {
 		panic("failed to open in-memory database")
 	}
@@ -1433,7 +1433,7 @@ func mustWriteAndOpenDatabase(b []byte) (*DB, string) {
 		panic("failed to write file")
 	}
 
-	db, err := Open(f)
+	db, err := Open(f, false)
 	if err != nil {
 		panic("failed to open database")
 	}
