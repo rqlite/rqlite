@@ -229,6 +229,31 @@ func Test_SingleNodeExecuteQueryTx(t *testing.T) {
 	}
 }
 
+func Test_SingleNodeInMemFK(t *testing.T) {
+	s := mustNewStoreFK(true)
+	defer os.RemoveAll(s.Path())
+
+	if err := s.Open(true); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	s.WaitForLeader(10 * time.Second)
+
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		`CREATE TABLE bar (fooid INTEGER NOT NULL PRIMARY KEY, FOREIGN KEY(fooid) REFERENCES foo(id))`,
+	}, false, false)
+	_, err := s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	res, err := s.Execute(executeRequestFromString("INSERT INTO bar(fooid) VALUES(1)", false, false))
+	if got, exp := asJSON(res), `[{"error":"FOREIGN KEY constraint failed"}]`; exp != got {
+		t.Fatalf("unexpected results for execute\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
 func Test_SingleNodeBackupBinary(t *testing.T) {
 	t.Parallel()
 
@@ -1169,8 +1194,10 @@ func Test_State(t *testing.T) {
 	}
 }
 
-func mustNewStoreAtPath(path string, inmem bool) *Store {
+func mustNewStoreAtPath(path string, inmem, fk bool) *Store {
 	cfg := NewDBConfig(inmem)
+	cfg.FKConstraints = fk
+
 	s := New(mustMockLister("localhost:0"), &StoreConfig{
 		DBConf: cfg,
 		Dir:    path,
@@ -1183,7 +1210,11 @@ func mustNewStoreAtPath(path string, inmem bool) *Store {
 }
 
 func mustNewStore(inmem bool) *Store {
-	return mustNewStoreAtPath(mustTempDir(), inmem)
+	return mustNewStoreAtPath(mustTempDir(), inmem, false)
+}
+
+func mustNewStoreFK(inmem bool) *Store {
+	return mustNewStoreAtPath(mustTempDir(), inmem, true)
 }
 
 type mockSnapshotSink struct {
