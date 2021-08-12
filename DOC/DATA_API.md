@@ -10,7 +10,7 @@ There are [client libraries available](https://github.com/rqlite).
 Any modifications to the SQLite database go through the Raft log, ensuring only changes committed by a quorum of rqlite nodes are actually applied to the SQLite database. Queries do not __necessarily__ go through the Raft log, however, since they do not change the state of the database, and therefore do not need to be captured in the log. More on this later.
 
 ## Writing Data
-To write data successfully to the database, you must create at least 1 table. To do this perform a HTTP POST on the `/execute` endpoint. Encapsulate the `CREATE TABLE` SQL command in a JSON array, and put it in the body of the request. An example via [curl](http://curl.haxx.se/):
+To write data successfully to the database, you must create at least 1 table. To do this perform a HTTP POST on the `/db/execute` endpoint. Encapsulate the `CREATE TABLE` SQL command in a JSON array, and put it in the body of the request. An example via [curl](http://curl.haxx.se/):
 
 ```bash
 curl -XPOST 'localhost:4001/db/execute?pretty&timings' -H "Content-Type: application/json" -d '[
@@ -46,7 +46,7 @@ The use of the URL param `pretty` is optional, and results in pretty-printed JSO
 ## Querying Data
 Querying data is easy. The most important thing to know is that, by default, queries must be sent to the leader node. 
 
-For a single query simply perform a HTTP GET on the `/query` endpoint, setting the query statement as the query parameter `q`:
+For a single query simply perform a HTTP GET on the `/db/query` endpoint, setting the query statement as the query parameter `q`:
 
 ```bash
 curl -G 'localhost:4001/db/query?pretty&timings' --data-urlencode 'q=SELECT * FROM foo'
