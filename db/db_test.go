@@ -24,7 +24,7 @@ func Test_DbFileCreation(t *testing.T) {
 	defer os.RemoveAll(dir)
 	dbPath := path.Join(dir, "test_db")
 
-	db, err := Open(dbPath)
+	db, err := Open(dbPath, false)
 	if err != nil {
 		t.Fatalf("failed to open new database: %s", err.Error())
 	}
@@ -113,6 +113,68 @@ func Test_TableCreationInMemory(t *testing.T) {
 	}
 }
 
+// Test_TableCreationInMemoryFK ensures foreign key constraints work
+func Test_TableCreationInMemoryFK(t *testing.T) {
+	createTableFoo := "CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"
+	createTableBar := "CREATE TABLE bar (fooid INTEGER NOT NULL PRIMARY KEY, FOREIGN KEY(fooid) REFERENCES foo(id))"
+	insertIntoBar := "INSERT INTO bar(fooid) VALUES(1)"
+
+	db := mustCreateInMemoryDatabase()
+	defer db.Close()
+
+	r, err := db.ExecuteStringStmt(createTableFoo)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if exp, got := `[{}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+
+	r, err = db.ExecuteStringStmt(createTableBar)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if exp, got := `[{}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+
+	r, err = db.ExecuteStringStmt(insertIntoBar)
+	if err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+	if exp, got := `[{"last_insert_id":1,"rows_affected":1}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+
+	// Now, do same testing with FK constraints enabled.
+	dbFK := mustCreateInMemoryDatabaseFK()
+	defer dbFK.Close()
+
+	r, err = dbFK.ExecuteStringStmt(createTableFoo)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if exp, got := `[{}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+
+	r, err = dbFK.ExecuteStringStmt(createTableBar)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if exp, got := `[{}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+
+	r, err = dbFK.ExecuteStringStmt(insertIntoBar)
+	if err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+	if exp, got := `[{"error":"FOREIGN KEY constraint failed"}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+}
+
 func Test_SQLiteMasterTable(t *testing.T) {
 	db, path := mustCreateDatabase()
 	defer db.Close()
@@ -150,7 +212,7 @@ func Test_LoadIntoMemory(t *testing.T) {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
 
-	inmem, err := LoadIntoMemory(path)
+	inmem, err := LoadIntoMemory(path, false)
 	if err != nil {
 		t.Fatalf("failed to create loaded in-memory database: %s", err.Error())
 	}
@@ -204,7 +266,7 @@ func Test_DeserializeIntoMemory(t *testing.T) {
 		t.Fatalf("failed to read database on disk: %s", err.Error())
 	}
 
-	newDB, err := DeserializeIntoMemory(b)
+	newDB, err := DeserializeIntoMemory(b, false)
 	if err != nil {
 		t.Fatalf("failed to deserialize database: %s", err.Error())
 	}
@@ -1068,7 +1130,7 @@ func Test_Backup(t *testing.T) {
 		t.Fatalf("failed to backup database: %s", err.Error())
 	}
 
-	newDB, err := Open(dstDB)
+	newDB, err := Open(dstDB, false)
 	if err != nil {
 		t.Fatalf("failed to open backup database: %s", err.Error())
 	}
@@ -1117,7 +1179,7 @@ func Test_Copy(t *testing.T) {
 
 	dstFile := mustTempFile()
 	defer os.Remove(dstFile)
-	dstDB, err := Open(dstFile)
+	dstDB, err := Open(dstFile, false)
 	if err != nil {
 		t.Fatalf("failed to open destination database: %s", err)
 	}
@@ -1186,7 +1248,7 @@ func Test_Serialize(t *testing.T) {
 		t.Fatalf("failed to write serialized database to file: %s", err.Error())
 	}
 
-	newDB, err := Open(dstDB.Name())
+	newDB, err := Open(dstDB.Name(), false)
 	if err != nil {
 		t.Fatalf("failed to open on-disk serialized database: %s", err.Error())
 	}
@@ -1230,7 +1292,7 @@ func Test_DumpMemory(t *testing.T) {
 	defer db.Close()
 	defer os.Remove(path)
 
-	inmem, err := LoadIntoMemory(path)
+	inmem, err := LoadIntoMemory(path, false)
 	if err != nil {
 		t.Fatalf("failed to create loaded in-memory database: %s", err.Error())
 	}
@@ -1409,7 +1471,7 @@ func Test_JSON1(t *testing.T) {
 func mustCreateDatabase() (*DB, string) {
 	var err error
 	f := mustTempFile()
-	db, err := Open(f)
+	db, err := Open(f, false)
 	if err != nil {
 		panic("failed to open database")
 	}
@@ -1418,9 +1480,17 @@ func mustCreateDatabase() (*DB, string) {
 }
 
 func mustCreateInMemoryDatabase() *DB {
-	db, err := OpenInMemory()
+	db, err := OpenInMemory(false)
 	if err != nil {
 		panic("failed to open in-memory database")
+	}
+	return db
+}
+
+func mustCreateInMemoryDatabaseFK() *DB {
+	db, err := OpenInMemory(true)
+	if err != nil {
+		panic("failed to open in-memory database with foreign key constraints")
 	}
 	return db
 }
@@ -1433,7 +1503,7 @@ func mustWriteAndOpenDatabase(b []byte) (*DB, string) {
 		panic("failed to write file")
 	}
 
-	db, err := Open(f)
+	db, err := Open(f, false)
 	if err != nil {
 		panic("failed to open database")
 	}

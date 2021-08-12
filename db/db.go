@@ -10,6 +10,7 @@ import (
 	"io"
 	"math/rand"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -92,8 +93,8 @@ type Rows struct {
 }
 
 // Open opens a file-based database, creating it if it does not exist.
-func Open(dbPath string) (*DB, error) {
-	rwDSN := fmt.Sprintf("file:%s", dbPath)
+func Open(dbPath string, fkEnabled bool) (*DB, error) {
+	rwDSN := fmt.Sprintf("file:%s?_fk=%s", dbPath, strconv.FormatBool(fkEnabled))
 	rwDB, err := sql.Open("sqlite3", rwDSN)
 	if err != nil {
 		return nil, err
@@ -101,6 +102,7 @@ func Open(dbPath string) (*DB, error) {
 
 	roOpts := []string{
 		"mode=ro",
+		fmt.Sprintf("_fk=%s", strconv.FormatBool(fkEnabled)),
 	}
 
 	roDSN := fmt.Sprintf("file:%s?%s", dbPath, strings.Join(roOpts, "&"))
@@ -130,13 +132,14 @@ func Open(dbPath string) (*DB, error) {
 }
 
 // OpenInMemory returns a new in-memory database.
-func OpenInMemory() (*DB, error) {
+func OpenInMemory(fkEnabled bool) (*DB, error) {
 	inMemPath := fmt.Sprintf("file:/%s", randomString())
 
 	rwOpts := []string{
 		"mode=rw",
 		"vfs=memdb",
 		"_txlock=immediate",
+		fmt.Sprintf("_fk=%s", strconv.FormatBool(fkEnabled)),
 	}
 
 	rwDSN := fmt.Sprintf("%s?%s", inMemPath, strings.Join(rwOpts, "&"))
@@ -156,6 +159,7 @@ func OpenInMemory() (*DB, error) {
 		"mode=ro",
 		"vfs=memdb",
 		"_txlock=deferred",
+		fmt.Sprintf("_fk=%s", strconv.FormatBool(fkEnabled)),
 	}
 
 	roDSN := fmt.Sprintf("%s?%s", inMemPath, strings.Join(roOpts, "&"))
@@ -181,13 +185,13 @@ func OpenInMemory() (*DB, error) {
 // LoadIntoMemory loads an in-memory database with that at the path.
 // Not safe to call while other operations are happening with the
 // source database.
-func LoadIntoMemory(dbPath string) (*DB, error) {
-	dstDB, err := OpenInMemory()
+func LoadIntoMemory(dbPath string, fkEnabled bool) (*DB, error) {
+	dstDB, err := OpenInMemory(fkEnabled)
 	if err != nil {
 		return nil, err
 	}
 
-	srcDB, err := Open(dbPath)
+	srcDB, err := Open(dbPath, false)
 	if err != nil {
 		return nil, err
 	}
@@ -206,7 +210,7 @@ func LoadIntoMemory(dbPath string) (*DB, error) {
 // DeserializeIntoMemory loads an in-memory database with that contained
 // in the byte slide. The byte slice must not be changed or garbage-collected
 // until after this function returns.
-func DeserializeIntoMemory(b []byte) (retDB *DB, retErr error) {
+func DeserializeIntoMemory(b []byte, fkEnabled bool) (retDB *DB, retErr error) {
 	// Get a plain-ol' in-memory database.
 	tmpDB, err := sql.Open("sqlite3", ":memory:")
 	if err != nil {
@@ -221,7 +225,7 @@ func DeserializeIntoMemory(b []byte) (retDB *DB, retErr error) {
 
 	// tmpDB will still be using memory in Go space, so tmpDB needs to be explicitly
 	// copied to a new database, which we create now.
-	db, err := OpenInMemory()
+	db, err := OpenInMemory(fkEnabled)
 	if err != nil {
 		return nil, fmt.Errorf("DeserializeIntoMemory: %s", err.Error())
 	}
@@ -609,7 +613,7 @@ func (db *DB) queryWithConn(req *command.Request, xTime bool, conn *sql.Conn) ([
 // Backup writes a consistent snapshot of the database to the given file.
 // This function can be called when changes to the database are in flight.
 func (db *DB) Backup(path string) error {
-	dstDB, err := Open(path)
+	dstDB, err := Open(path, false)
 	if err != nil {
 		return err
 	}
