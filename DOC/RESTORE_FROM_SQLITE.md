@@ -59,4 +59,9 @@ $ rqlite
 **Note that you must convert the SQLite file (in the above examples the file named `restore.sqlite`) to the list of SQL commands**. You cannot restore using the actual SQLite database file.
 
 ## Caveats
-The behavior of the restore operation when data already exists on the cluster is undefined -- you should only restore to a cluster that has no data, or a brand-new cluster. Also, please **note that SQLite dump files normally contain a command to disable Foreign Key constraints**. To account for this if rqlite is running with Foreign Key constraints enabled, rqlite will automatically reenable Foreign Key constraints after the restore operation completes.
+The behavior of the restore operation when data already exists on the cluster is undefined -- you should only restore to a cluster that has no data, or a brand-new cluster. Also, please **note that SQLite dump files normally contain a command to disable Foreign Key constraints**. If you are running with Foreign Key Constraints enabled, and wish to re-enable this, this is the one time you should explicitly re-enable those constraints via the following `curl` command:
+```bash
+curl -XPOST 'localhost:4001/db/execute?pretty' -H "Content-Type: application/json" -d '[
+    "PRAGMA foreign_keys = 1"
+]'
+```
