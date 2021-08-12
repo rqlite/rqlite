@@ -1,5 +1,5 @@
 ## 6.2.0 (unreleased)
-- [PR #851](https://github.com/rqlite/rqlite/pull/851): rqlite CLI properly supports PRAGMA directives.
+- [PR #851](https://github.com/rqlite/rqlite/pull/851), [PR #855](https://github.com/rqlite/rqlite/pull/855): rqlite CLI properly supports PRAGMA directives.
 - [PR #853](https://github.com/rqlite/rqlite/pull/853): Support enabling Foreign Key constraints via command-line options.
 
 ## 6.1.0 (August 5th 2021)
