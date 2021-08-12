@@ -113,6 +113,68 @@ func Test_TableCreationInMemory(t *testing.T) {
 	}
 }
 
+// Test_TableCreationInMemoryFK ensures foreign key constraints work
+func Test_TableCreationInMemoryFK(t *testing.T) {
+	createTableFoo := "CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"
+	createTableBar := "CREATE TABLE bar (fooid INTEGER NOT NULL PRIMARY KEY, FOREIGN KEY(fooid) REFERENCES foo(id))"
+	insertIntoBar := "INSERT INTO bar(fooid) VALUES(1)"
+
+	db := mustCreateInMemoryDatabase()
+	defer db.Close()
+
+	r, err := db.ExecuteStringStmt(createTableFoo)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if exp, got := `[{}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+
+	r, err = db.ExecuteStringStmt(createTableBar)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if exp, got := `[{}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+
+	r, err = db.ExecuteStringStmt(insertIntoBar)
+	if err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+	if exp, got := `[{"last_insert_id":1,"rows_affected":1}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+
+	// Now, do same testing with FK constraints enabled.
+	dbFK := mustCreateInMemoryDatabaseFK()
+	defer dbFK.Close()
+
+	r, err = dbFK.ExecuteStringStmt(createTableFoo)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if exp, got := `[{}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+
+	r, err = dbFK.ExecuteStringStmt(createTableBar)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if exp, got := `[{}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+
+	r, err = dbFK.ExecuteStringStmt(insertIntoBar)
+	if err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+	if exp, got := `[{"error":"FOREIGN KEY constraint failed"}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+}
+
 func Test_SQLiteMasterTable(t *testing.T) {
 	db, path := mustCreateDatabase()
 	defer db.Close()
@@ -1421,6 +1483,14 @@ func mustCreateInMemoryDatabase() *DB {
 	db, err := OpenInMemory(false)
 	if err != nil {
 		panic("failed to open in-memory database")
+	}
+	return db
+}
+
+func mustCreateInMemoryDatabaseFK() *DB {
+	db, err := OpenInMemory(true)
+	if err != nil {
+		panic("failed to open in-memory database with foreign key constraints")
 	}
 	return db
 }
