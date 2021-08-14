@@ -49,6 +49,7 @@ func NewRowsFromQueryRows(q *command.QueryRows) (*Rows, error) {
 	}, nil
 }
 
+// NewValuesFromQueryValues sets Values from a QueryValue object.
 func NewValuesFromQueryValues(dest [][]interface{}, v []*command.Values) error {
 	for n := range v {
 		vals := v[n]
