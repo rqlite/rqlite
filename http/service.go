@@ -103,7 +103,7 @@ func (d *DBResults) MarshalJSON() ([]byte, error) {
 	} else if d.QueryRows != nil {
 		return encoding.JSONMarshal(d.QueryRows)
 	}
-	return nil, nil
+	return nil, fmt.Errorf("no DB results set")
 }
 
 // Response represents a response from the HTTP service.

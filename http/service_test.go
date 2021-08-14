@@ -20,6 +20,12 @@ import (
 
 func Test_ResponseJSONMarshal(t *testing.T) {
 	resp := NewResponse()
+	_, err := json.Marshal(resp)
+	if err == nil {
+		t.Fatalf("no error JSON marshaling invalid Response")
+	}
+
+	resp = NewResponse()
 	resp.Results.ExecuteResult = []*command.ExecuteResult{&command.ExecuteResult{
 		LastInsertId: 39,
 		RowsAffected: 45,
