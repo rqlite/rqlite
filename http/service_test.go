@@ -2,6 +2,7 @@ package http
 
 import (
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -16,6 +17,64 @@ import (
 
 	"golang.org/x/net/http2"
 )
+
+func Test_ResponseJSONMarshal(t *testing.T) {
+	resp := NewResponse()
+	resp.Results.ExecuteResult = []*command.ExecuteResult{&command.ExecuteResult{
+		LastInsertId: 39,
+		RowsAffected: 45,
+		Time:         1234,
+	}}
+	b, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatalf("failed to JSON marshal empty Response: %s", err)
+	}
+	if exp, got := `{"results":[{"last_insert_id":39,"rows_affected":45,"time":1234}]}`, string(b); exp != got {
+		t.Fatalf("Incorrect marshal, exp: %s, got: %s", exp, got)
+	}
+
+	resp = NewResponse()
+	resp.Results.QueryRows = []*command.QueryRows{&command.QueryRows{
+		Columns: []string{"id", "name"},
+		Types:   []string{"int", "string"},
+	}}
+	b, err = json.Marshal(resp)
+	if err != nil {
+		t.Fatalf("failed to JSON marshal empty Response: %s", err)
+	}
+	if exp, got := `{"results":[{"columns":["id","name"],"types":["int","string"]}]}`, string(b); exp != got {
+		t.Fatalf("Incorrect marshal, exp: %s, got: %s", exp, got)
+	}
+
+	resp = NewResponse()
+	resp.Results.QueryRows = []*command.QueryRows{&command.QueryRows{
+		Columns: []string{"id", "name"},
+		Types:   []string{"int", "string"},
+		Values: []*command.Values{
+			&command.Values{
+				Parameters: []*command.Parameter{
+					&command.Parameter{
+						Value: &command.Parameter_S{
+							S: "fiona",
+						},
+					},
+					&command.Parameter{
+						Value: &command.Parameter_I{
+							I: 5,
+						},
+					},
+				},
+			},
+		},
+	}}
+	b, err = json.Marshal(resp)
+	if err != nil {
+		t.Fatalf("failed to JSON marshal empty Response: %s", err)
+	}
+	if exp, got := `{"results":[{"columns":["id","name"],"types":["int","string"],"values":[["fiona",5]]}]}`, string(b); exp != got {
+		t.Fatalf("Incorrect marshal, exp: %s, got: %s", exp, got)
+	}
+}
 
 func Test_NormalizeAddr(t *testing.T) {
 	tests := []struct {
