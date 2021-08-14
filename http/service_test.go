@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/rqlite/rqlite/command"
-	sql "github.com/rqlite/rqlite/db"
 	"github.com/rqlite/rqlite/store"
 	"github.com/rqlite/rqlite/testdata/x509"
 
@@ -705,20 +704,20 @@ func Test_timeoutQueryParam(t *testing.T) {
 }
 
 type MockStore struct {
-	executeFn  func(queries []string, tx bool) ([]*sql.Result, error)
-	queryFn    func(queries []string, tx, leader, verify bool) ([]*sql.Rows, error)
+	executeFn  func(queries []string, tx bool) ([]*command.ExecuteResult, error)
+	queryFn    func(queries []string, tx, leader, verify bool) ([]*command.QueryRows, error)
 	backupFn   func(leader bool, f store.BackupFormat, dst io.Writer) error
 	leaderAddr string
 }
 
-func (m *MockStore) Execute(er *command.ExecuteRequest) ([]*sql.Result, error) {
+func (m *MockStore) Execute(er *command.ExecuteRequest) ([]*command.ExecuteResult, error) {
 	if m.executeFn == nil {
 		return nil, nil
 	}
 	return nil, nil
 }
 
-func (m *MockStore) Query(qr *command.QueryRequest) ([]*sql.Rows, error) {
+func (m *MockStore) Query(qr *command.QueryRequest) ([]*command.QueryRows, error) {
 	if m.queryFn == nil {
 		return nil, nil
 	}

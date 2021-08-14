@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"github.com/rqlite/rqlite/command"
-	sql "github.com/rqlite/rqlite/db"
+	"github.com/rqlite/rqlite/command/encoding"
 	"github.com/rqlite/rqlite/store"
 )
 
@@ -32,13 +32,13 @@ type Database interface {
 	// to return rows. If timings is true, then timing information will
 	// be return. If tx is true, then either all queries will be executed
 	// successfully or it will as though none executed.
-	Execute(er *command.ExecuteRequest) ([]*sql.Result, error)
+	Execute(er *command.ExecuteRequest) ([]*command.ExecuteResult, error)
 
 	// Query executes a slice of queries, each of which returns rows. If
 	// timings is true, then timing information will be returned. If tx
 	// is true, then all queries will take place while a read transaction
 	// is held on the database.
-	Query(qr *command.QueryRequest) ([]*sql.Rows, error)
+	Query(qr *command.QueryRequest) ([]*command.QueryRows, error)
 }
 
 // Store is the interface the Raft-based database must implement.
@@ -984,9 +984,9 @@ func (s *Service) writeResponse(w http.ResponseWriter, r *http.Request, j *Respo
 	}
 
 	if pretty {
-		b, err = json.MarshalIndent(j, "", "    ")
+		b, err = encoding.JSONMarshalIndent(j, "", "    ")
 	} else {
-		b, err = json.Marshal(j)
+		b, err = encoding.JSONMarshal(j)
 	}
 
 	if err != nil {
