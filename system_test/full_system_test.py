@@ -248,12 +248,18 @@ class Node(object):
       t+=1
     return self.fsm_index()
 
-  def query(self, statement, params=None, level='weak'):
+  def query(self, statement, params=None, level='weak', pretty=False):
     body = [statement]
     if params is not None:
       body = [body + params]
-    r = requests.post(self._query_url(), params={'level': level}, data=json.dumps(body))
+
+    reqParams = {'level': level}
+    if pretty:
+      reqParams['pretty'] = "yes"
+    r = requests.post(self._query_url(), params=reqParams, data=json.dumps(body))
     r.raise_for_status()
+    if pretty:
+      return r.text
     return r.json()
 
   def execute(self, statement, params=None):
@@ -360,6 +366,37 @@ class TestSingleNode(unittest.TestCase):
     self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
     j = n.query('SELECT * from bar')
     self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
+
+  def test_simple_raw_queries_pretty(self):
+    '''Test simple queries, requesting pretty output, work as expected'''
+    n = self.cluster.wait_for_leader()
+    j = n.execute('CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
+    self.assertEqual(str(j), "{u'results': [{}]}")
+    j = n.execute('INSERT INTO bar(name) VALUES("fiona")')
+    applied = n.wait_for_all_fsm()
+    self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
+    j = n.query('SELECT * from bar', pretty=True)
+    exp = '''{
+    "results": [
+        {
+            "columns": [
+                "id",
+                "name"
+            ],
+            "types": [
+                "integer",
+                "text"
+            ],
+            "values": [
+                [
+                    1,
+                    "fiona"
+                ]
+            ]
+        }
+    ]
+}'''
+    self.assertEqual(str(j), exp)
 
   def test_simple_parameterized_queries(self):
     '''Test parameterized queries work as expected'''
