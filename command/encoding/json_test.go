@@ -31,12 +31,28 @@ func Test_MarshalExecuteResult(t *testing.T) {
 		Error:        "something went wrong",
 		Time:         6789,
 	}
+
 	b, err = JSONMarshal(r)
 	if err != nil {
 		t.Fatalf("failed to marshal ExecuteResult: %s", err.Error())
 	}
 	if exp, got := `{"last_insert_id":4,"rows_affected":5,"error":"something went wrong","time":6789}`, string(b); exp != got {
 		t.Fatalf("failed to marshal ExecuteResult: exp %s, got %s", exp, got)
+	}
+
+	b, err = JSONMarshalIndent(r, "", "    ")
+	if err != nil {
+		t.Fatalf("failed to marshal ExecuteResult: %s", err.Error())
+	}
+	exp := `{
+    "last_insert_id": 4,
+    "rows_affected": 5,
+    "error": "something went wrong",
+    "time": 6789
+}`
+	got := string(b)
+	if exp != got {
+		t.Fatalf("failed to pretty marshal ExecuteResult: exp: %s, got: %s", exp, got)
 	}
 }
 
@@ -102,6 +118,35 @@ func Test_MarshalQueryRows(t *testing.T) {
 	}
 	if exp, got := `{"columns":["c1","c2","c3"],"types":["int","float","string"],"values":[[123,678,"fiona"]],"time":6789}`, string(b); exp != got {
 		t.Fatalf("failed to marshal QueryRows: exp %s, got %s", exp, got)
+	}
+
+	b, err = JSONMarshalIndent(r, "", "    ")
+	if err != nil {
+		t.Fatalf("failed to marshal QueryRows: %s", err.Error())
+	}
+	exp := `{
+    "columns": [
+        "c1",
+        "c2",
+        "c3"
+    ],
+    "types": [
+        "int",
+        "float",
+        "string"
+    ],
+    "values": [
+        [
+            123,
+            678,
+            "fiona"
+        ]
+    ],
+    "time": 6789
+}`
+	got := string(b)
+	if exp != got {
+		t.Fatalf("failed to pretty marshal QueryRows: exp: %s, got: %s", exp, got)
 	}
 }
 

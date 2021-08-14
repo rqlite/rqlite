@@ -88,15 +88,28 @@ func NewValuesFromQueryValues(dest [][]interface{}, v []*command.Values) error {
 	return nil
 }
 
-// XXX MUST Support pretty!
+// JSONMarshal serializes Execute and Query results to JSON API format.
 func JSONMarshal(i interface{}) ([]byte, error) {
+	return jsonMarshal(i, json.Marshal)
+}
+
+// JSONMarshalIndent serializes Execute and Query results to JSON API format,
+// but also applies indent to the output.
+func JSONMarshalIndent(i interface{}, prefix, indent string) ([]byte, error) {
+	f := func(i interface{}) ([]byte, error) {
+		return json.MarshalIndent(i, prefix, indent)
+	}
+	return jsonMarshal(i, f)
+}
+
+func jsonMarshal(i interface{}, f func(i interface{}) ([]byte, error)) ([]byte, error) {
 	switch v := i.(type) {
 	case *command.ExecuteResult:
 		r, err := NewResultFromExecuteResult(v)
 		if err != nil {
 			return nil, err
 		}
-		return json.Marshal(r)
+		return f(r)
 	case []*command.ExecuteResult:
 		var err error
 		results := make([]*Result, len(v))
@@ -106,13 +119,13 @@ func JSONMarshal(i interface{}) ([]byte, error) {
 				return nil, err
 			}
 		}
-		return json.Marshal(results)
+		return f(results)
 	case *command.QueryRows:
 		r, err := NewRowsFromQueryRows(v)
 		if err != nil {
 			return nil, err
 		}
-		return json.Marshal(r)
+		return f(r)
 	case []*command.QueryRows:
 		var err error
 		rows := make([]*Rows, len(v))
@@ -122,14 +135,14 @@ func JSONMarshal(i interface{}) ([]byte, error) {
 				return nil, err
 			}
 		}
-		return json.Marshal(rows)
+		return f(rows)
 	case []*command.Values:
 		values := make([][]interface{}, len(v))
 		if err := NewValuesFromQueryValues(values, v); err != nil {
 			return nil, err
 		}
-		return json.Marshal(v)
+		return f(values)
 	default:
-		return json.Marshal(v)
+		return f(v)
 	}
 }
