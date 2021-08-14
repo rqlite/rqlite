@@ -90,11 +90,27 @@ type Statuser interface {
 	Stats() (interface{}, error)
 }
 
+// DBResults stores either an Execute result or a Query result
+type DBResults struct {
+	ExecuteResult []*command.ExecuteResult
+	QueryRows     []*command.QueryRows
+}
+
+// MarshalJSON implements the JSON Marshaler interface.
+func (d *DBResults) MarshalJSON() ([]byte, error) {
+	if d.ExecuteResult != nil {
+		return encoding.JSONMarshal(d.ExecuteResult)
+	} else if d.QueryRows != nil {
+		return encoding.JSONMarshal(d.QueryRows)
+	}
+	return nil, nil
+}
+
 // Response represents a response from the HTTP service.
 type Response struct {
-	Results interface{} `json:"results,omitempty"`
-	Error   string      `json:"error,omitempty"`
-	Time    float64     `json:"time,omitempty"`
+	Results *DBResults `json:"results,omitempty"`
+	Error   string     `json:"error,omitempty"`
+	Time    float64    `json:"time,omitempty"`
 
 	start time.Time
 	end   time.Time
@@ -153,7 +169,8 @@ func (r *Response) SetTime() {
 // NewResponse returns a new instance of response.
 func NewResponse() *Response {
 	return &Response{
-		start: time.Now(),
+		Results: &DBResults{},
+		start:   time.Now(),
 	}
 }
 
@@ -497,7 +514,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 		}
 		resp.Error = err.Error()
 	} else {
-		resp.Results = results
+		resp.Results.ExecuteResult = results
 	}
 	resp.end = time.Now()
 	s.writeResponse(w, r, resp)
@@ -748,7 +765,7 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 		}
 		resp.Error = err.Error()
 	} else {
-		resp.Results = results
+		resp.Results.ExecuteResult = results
 	}
 	resp.end = time.Now()
 	s.writeResponse(w, r, resp)
@@ -826,7 +843,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 		}
 		resp.Error = err.Error()
 	} else {
-		resp.Results = results
+		resp.Results.QueryRows = results
 	}
 	resp.end = time.Now()
 	s.writeResponse(w, r, resp)
@@ -984,9 +1001,9 @@ func (s *Service) writeResponse(w http.ResponseWriter, r *http.Request, j *Respo
 	}
 
 	if pretty {
-		b, err = encoding.JSONMarshalIndent(j, "", "    ")
+		b, err = json.MarshalIndent(j, "", "    ")
 	} else {
-		b, err = encoding.JSONMarshal(j)
+		b, err = json.Marshal(j)
 	}
 
 	if err != nil {
