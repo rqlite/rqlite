@@ -2,7 +2,7 @@ package store
 
 import (
 	"bytes"
-	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net"
 	"os"
@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/rqlite/rqlite/command"
-	sql "github.com/rqlite/rqlite/db"
+	"github.com/rqlite/rqlite/command/encoding"
 	"github.com/rqlite/rqlite/testdata/chinook"
 )
 
@@ -130,7 +130,7 @@ func Test_SingleNodeFileExecuteQuery(t *testing.T) {
 	}
 
 	// Every query should return the same results, so use a function for the check.
-	check := func(r []*sql.Rows) {
+	check := func(r []*command.QueryRows) {
 		if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
 			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 		}
@@ -202,7 +202,7 @@ func Test_SingleNodeExecuteQueryTx(t *testing.T) {
 	}
 
 	qr := queryRequestFromString("SELECT * FROM foo", false, true)
-	var r []*sql.Rows
+	var r []*command.QueryRows
 
 	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
 	_, err = s.Query(qr)
@@ -414,7 +414,7 @@ COMMIT;
 	if err != nil {
 		t.Fatalf("failed to insert into view on single node: %s", err.Error())
 	}
-	if exp, got := int64(3), r[0].LastInsertID; exp != got {
+	if exp, got := int64(3), r[0].GetLastInsertId(); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %d\ngot: %d", exp, got)
 	}
 }
@@ -1317,9 +1317,9 @@ func queryRequestFromStrings(s []string, timings, tx bool) *command.QueryRequest
 }
 
 func asJSON(v interface{}) string {
-	b, err := json.Marshal(v)
+	b, err := encoding.JSONMarshal(v)
 	if err != nil {
-		panic("failed to JSON marshal value")
+		panic(fmt.Sprintf("failed to JSON marshal value: %s", err.Error()))
 	}
 	return string(b)
 }
