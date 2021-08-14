@@ -35,9 +35,28 @@ message QueryRequest {
 	int64 freshness = 4;
 }
 
+message Values {
+	repeated Parameter parameters = 1;
+}
+
+message QueryRows {
+	repeated string columns = 1;
+	repeated string types = 2;
+	repeated Values values = 3;
+	string error = 4;
+	double time = 5;
+}
+
 message ExecuteRequest {
 	Request request = 1;
 	bool timings = 2;	
+}
+
+message ExecuteResult {
+	int64 last_insert_id = 1;
+	int64 rows_affected = 2;
+	string error = 3;
+	double time = 4;
 }
 
 message Noop {

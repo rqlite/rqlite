@@ -2,6 +2,7 @@ package http
 
 import (
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -11,12 +12,75 @@ import (
 	"time"
 
 	"github.com/rqlite/rqlite/command"
-	sql "github.com/rqlite/rqlite/db"
 	"github.com/rqlite/rqlite/store"
 	"github.com/rqlite/rqlite/testdata/x509"
 
 	"golang.org/x/net/http2"
 )
+
+func Test_ResponseJSONMarshal(t *testing.T) {
+	resp := NewResponse()
+	_, err := json.Marshal(resp)
+	if err == nil {
+		t.Fatalf("no error JSON marshaling invalid Response")
+	}
+
+	resp = NewResponse()
+	resp.Results.ExecuteResult = []*command.ExecuteResult{&command.ExecuteResult{
+		LastInsertId: 39,
+		RowsAffected: 45,
+		Time:         1234,
+	}}
+	b, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatalf("failed to JSON marshal empty Response: %s", err)
+	}
+	if exp, got := `{"results":[{"last_insert_id":39,"rows_affected":45,"time":1234}]}`, string(b); exp != got {
+		t.Fatalf("Incorrect marshal, exp: %s, got: %s", exp, got)
+	}
+
+	resp = NewResponse()
+	resp.Results.QueryRows = []*command.QueryRows{&command.QueryRows{
+		Columns: []string{"id", "name"},
+		Types:   []string{"int", "string"},
+	}}
+	b, err = json.Marshal(resp)
+	if err != nil {
+		t.Fatalf("failed to JSON marshal empty Response: %s", err)
+	}
+	if exp, got := `{"results":[{"columns":["id","name"],"types":["int","string"]}]}`, string(b); exp != got {
+		t.Fatalf("Incorrect marshal, exp: %s, got: %s", exp, got)
+	}
+
+	resp = NewResponse()
+	resp.Results.QueryRows = []*command.QueryRows{&command.QueryRows{
+		Columns: []string{"id", "name"},
+		Types:   []string{"int", "string"},
+		Values: []*command.Values{
+			&command.Values{
+				Parameters: []*command.Parameter{
+					&command.Parameter{
+						Value: &command.Parameter_S{
+							S: "fiona",
+						},
+					},
+					&command.Parameter{
+						Value: &command.Parameter_I{
+							I: 5,
+						},
+					},
+				},
+			},
+		},
+	}}
+	b, err = json.Marshal(resp)
+	if err != nil {
+		t.Fatalf("failed to JSON marshal empty Response: %s", err)
+	}
+	if exp, got := `{"results":[{"columns":["id","name"],"types":["int","string"],"values":[["fiona",5]]}]}`, string(b); exp != got {
+		t.Fatalf("Incorrect marshal, exp: %s, got: %s", exp, got)
+	}
+}
 
 func Test_NormalizeAddr(t *testing.T) {
 	tests := []struct {
@@ -705,20 +769,20 @@ func Test_timeoutQueryParam(t *testing.T) {
 }
 
 type MockStore struct {
-	executeFn  func(queries []string, tx bool) ([]*sql.Result, error)
-	queryFn    func(queries []string, tx, leader, verify bool) ([]*sql.Rows, error)
+	executeFn  func(queries []string, tx bool) ([]*command.ExecuteResult, error)
+	queryFn    func(queries []string, tx, leader, verify bool) ([]*command.QueryRows, error)
 	backupFn   func(leader bool, f store.BackupFormat, dst io.Writer) error
 	leaderAddr string
 }
 
-func (m *MockStore) Execute(er *command.ExecuteRequest) ([]*sql.Result, error) {
+func (m *MockStore) Execute(er *command.ExecuteRequest) ([]*command.ExecuteResult, error) {
 	if m.executeFn == nil {
 		return nil, nil
 	}
 	return nil, nil
 }
 
-func (m *MockStore) Query(qr *command.QueryRequest) ([]*sql.Rows, error) {
+func (m *MockStore) Query(qr *command.QueryRequest) ([]*command.QueryRows, error) {
 	if m.queryFn == nil {
 		return nil, nil
 	}

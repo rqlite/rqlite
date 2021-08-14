@@ -248,7 +248,7 @@ class Node(object):
       t+=1
     return self.fsm_index()
 
-  def query(self, statement, params=None, level='weak', pretty=False):
+  def query(self, statement, params=None, level='weak', pretty=False, text=False):
     body = [statement]
     if params is not None:
       body = [body + params]
@@ -258,7 +258,7 @@ class Node(object):
       reqParams['pretty'] = "yes"
     r = requests.post(self._query_url(), params=reqParams, data=json.dumps(body))
     r.raise_for_status()
-    if pretty:
+    if text:
       return r.text
     return r.json()
 
@@ -367,6 +367,10 @@ class TestSingleNode(unittest.TestCase):
     j = n.query('SELECT * from bar')
     self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
 
+    # Ensure raw response from API is as expected.
+    j = n.query('SELECT * from bar', text=True)
+    self.assertEqual(str(j), '{"results":[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]}')
+
   def test_simple_raw_queries_pretty(self):
     '''Test simple queries, requesting pretty output, work as expected'''
     n = self.cluster.wait_for_leader()
@@ -375,7 +379,7 @@ class TestSingleNode(unittest.TestCase):
     j = n.execute('INSERT INTO bar(name) VALUES("fiona")')
     applied = n.wait_for_all_fsm()
     self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
-    j = n.query('SELECT * from bar', pretty=True)
+    j = n.query('SELECT * from bar', pretty=True, text=True)
     exp = '''{
     "results": [
         {

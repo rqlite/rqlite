@@ -580,14 +580,14 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 }
 
 // Execute executes queries that return no rows, but do modify the database.
-func (s *Store) Execute(ex *command.ExecuteRequest) ([]*sql.Result, error) {
+func (s *Store) Execute(ex *command.ExecuteRequest) ([]*command.ExecuteResult, error) {
 	if s.raft.State() != raft.Leader {
 		return nil, ErrNotLeader
 	}
 	return s.execute(ex)
 }
 
-func (s *Store) execute(ex *command.ExecuteRequest) ([]*sql.Result, error) {
+func (s *Store) execute(ex *command.ExecuteRequest) ([]*command.ExecuteResult, error) {
 	b, compressed, err := s.reqMarshaller.Marshal(ex)
 	if err != nil {
 		return nil, err
@@ -624,34 +624,8 @@ func (s *Store) execute(ex *command.ExecuteRequest) ([]*sql.Result, error) {
 	return r.results, r.error
 }
 
-// Backup writes a snapshot of the underlying database to dst
-//
-// If leader is true, this operation is performed with a read consistency
-// level equivalent to "weak". Otherwise no guarantees are made about the
-// read consistency level.
-func (s *Store) Backup(leader bool, fmt BackupFormat, dst io.Writer) error {
-	if leader && s.raft.State() != raft.Leader {
-		return ErrNotLeader
-	}
-
-	if fmt == BackupBinary {
-		if err := s.database(leader, dst); err != nil {
-			return err
-		}
-	} else if fmt == BackupSQL {
-		if err := s.db.Dump(dst); err != nil {
-			return err
-		}
-	} else {
-		return ErrInvalidBackupFormat
-	}
-
-	stats.Add(numBackups, 1)
-	return nil
-}
-
 // Query executes queries that return rows, and do not modify the database.
-func (s *Store) Query(qr *command.QueryRequest) ([]*sql.Rows, error) {
+func (s *Store) Query(qr *command.QueryRequest) ([]*command.QueryRows, error) {
 	if qr.Level == command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG {
 		b, compressed, err := s.reqMarshaller.Marshal(qr)
 		if err != nil {
@@ -700,6 +674,32 @@ func (s *Store) Query(qr *command.QueryRequest) ([]*sql.Rows, error) {
 
 	rows, err := s.db.Query(qr.Request, qr.Timings)
 	return rows, err
+}
+
+// Backup writes a snapshot of the underlying database to dst
+//
+// If leader is true, this operation is performed with a read consistency
+// level equivalent to "weak". Otherwise no guarantees are made about the
+// read consistency level.
+func (s *Store) Backup(leader bool, fmt BackupFormat, dst io.Writer) error {
+	if leader && s.raft.State() != raft.Leader {
+		return ErrNotLeader
+	}
+
+	if fmt == BackupBinary {
+		if err := s.database(leader, dst); err != nil {
+			return err
+		}
+	} else if fmt == BackupSQL {
+		if err := s.db.Dump(dst); err != nil {
+			return err
+		}
+	} else {
+		return ErrInvalidBackupFormat
+	}
+
+	stats.Add(numBackups, 1)
+	return nil
 }
 
 // Join joins a node, identified by id and located at addr, to this store.
@@ -885,12 +885,12 @@ func (s *Store) raftConfig() *raft.Config {
 }
 
 type fsmExecuteResponse struct {
-	results []*sql.Result
+	results []*command.ExecuteResult
 	error   error
 }
 
 type fsmQueryResponse struct {
-	rows  []*sql.Rows
+	rows  []*command.QueryRows
 	error error
 }
 
