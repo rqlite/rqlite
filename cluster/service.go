@@ -5,7 +5,6 @@ import (
 	"expvar"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net"
 	"os"
@@ -20,7 +19,6 @@ import (
 var stats *expvar.Map
 
 const (
-	numGetNodeAPI         = "num_get_node_api"
 	numGetNodeAPIRequest  = "num_get_node_api_req"
 	numGetNodeAPIResponse = "num_get_node_api_resp"
 )
@@ -35,7 +33,6 @@ const (
 
 func init() {
 	stats = expvar.NewMap("cluster")
-	stats.Add(numGetNodeAPI, 0)
 	stats.Add(numGetNodeAPIRequest, 0)
 	stats.Add(numGetNodeAPIResponse, 0)
 }
@@ -51,9 +48,8 @@ type Transport interface {
 
 // Service provides information about the node and cluster.
 type Service struct {
-	tn      Transport // Network layer this service uses
-	addr    net.Addr  // Address on which this service is listening
-	timeout time.Duration
+	tn   Transport // Network layer this service uses
+	addr net.Addr  // Address on which this service is listening
 
 	mu      sync.RWMutex
 	https   bool   // Serving HTTPS?
@@ -65,10 +61,9 @@ type Service struct {
 // New returns a new instance of the cluster service
 func New(tn Transport) *Service {
 	return &Service{
-		tn:      tn,
-		addr:    tn.Addr(),
-		timeout: 10 * time.Second,
-		logger:  log.New(os.Stderr, "[cluster] ", log.LstdFlags),
+		tn:     tn,
+		addr:   tn.Addr(),
+		logger: log.New(os.Stderr, "[cluster] ", log.LstdFlags),
 	}
 }
 
@@ -111,57 +106,10 @@ func (s *Service) GetAPIAddr() string {
 	return s.apiAddr
 }
 
-// GetNodeAPIAddr retrieves the API Address for the node at nodeAddr
-func (s *Service) GetNodeAPIAddr(nodeAddr string) (string, error) {
-	stats.Add(numGetNodeAPI, 1)
-
-	conn, err := s.tn.Dial(nodeAddr, s.timeout)
-	if err != nil {
-		return "", fmt.Errorf("dial connection: %s", err)
-	}
-	defer conn.Close()
-
-	// Send the request
-	c := &Command{
-		Type: Command_COMMAND_TYPE_GET_NODE_API_URL,
-	}
-	p, err := proto.Marshal(c)
-	if err != nil {
-		return "", fmt.Errorf("command marshal: %s", err)
-	}
-
-	// Write length of Protobuf, the Protobuf
-	b := make([]byte, 4)
-	binary.LittleEndian.PutUint16(b[0:], uint16(len(p)))
-
-	_, err = conn.Write(b)
-	if err != nil {
-		return "", fmt.Errorf("write protobuf length: %s", err)
-	}
-	_, err = conn.Write(p)
-	if err != nil {
-		return "", fmt.Errorf("write protobuf: %s", err)
-	}
-
-	b, err = ioutil.ReadAll(conn)
-	if err != nil {
-		return "", fmt.Errorf("read protobuf bytes: %s", err)
-	}
-
-	a := &Address{}
-	err = proto.Unmarshal(b, a)
-	if err != nil {
-		return "", fmt.Errorf("protobuf unmarshal: %s", err)
-	}
-
-	return a.Url, nil
-}
-
 // Stats returns status of the Service.
 func (s *Service) Stats() (map[string]interface{}, error) {
 	st := map[string]interface{}{
 		"addr":     s.addr.String(),
-		"timeout":  s.timeout.String(),
 		"https":    strconv.FormatBool(s.https),
 		"api_addr": s.apiAddr,
 	}

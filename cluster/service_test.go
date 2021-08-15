@@ -63,7 +63,8 @@ func Test_NewServiceSetGetNodeAPIAddr(t *testing.T) {
 	s.SetAPIAddr("foo")
 
 	// Test by connecting to itself.
-	addr, err := s.GetNodeAPIAddr(s.Addr())
+	c := NewClient(ml)
+	addr, err := c.GetNodeAPIAddr(s.Addr())
 	if err != nil {
 		t.Fatalf("failed to get node API address: %s", err)
 	}
@@ -72,7 +73,8 @@ func Test_NewServiceSetGetNodeAPIAddr(t *testing.T) {
 	}
 
 	s.EnableHTTPS(true)
-	addr, err = s.GetNodeAPIAddr(s.Addr())
+
+	addr, err = c.GetNodeAPIAddr(s.Addr())
 	if err != nil {
 		t.Fatalf("failed to get node API address: %s", err)
 	}
@@ -99,7 +101,8 @@ func Test_NewServiceSetGetNodeAPIAddrTLS(t *testing.T) {
 	s.SetAPIAddr("foo")
 
 	// Test by connecting to itself.
-	addr, err := s.GetNodeAPIAddr(s.Addr())
+	c := NewClient(ml)
+	addr, err := c.GetNodeAPIAddr(s.Addr())
 	if err != nil {
 		t.Fatalf("failed to get node API address: %s", err)
 	}
@@ -109,7 +112,7 @@ func Test_NewServiceSetGetNodeAPIAddrTLS(t *testing.T) {
 	}
 
 	s.EnableHTTPS(true)
-	addr, err = s.GetNodeAPIAddr(s.Addr())
+	addr, err = c.GetNodeAPIAddr(s.Addr())
 	if err != nil {
 		t.Fatalf("failed to get node API address: %s", err)
 	}

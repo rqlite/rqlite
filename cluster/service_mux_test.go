@@ -26,7 +26,9 @@ func Test_NewServiceSetGetNodeAPIAddrMuxed(t *testing.T) {
 
 	s.SetAPIAddr("foo")
 
-	addr, err := s.GetNodeAPIAddr(s.Addr())
+	c := NewClient(tn)
+
+	addr, err := c.GetNodeAPIAddr(s.Addr())
 	if err != nil {
 		t.Fatalf("failed to get node API address: %s", err)
 	}
@@ -58,7 +60,9 @@ func Test_NewServiceSetGetNodeAPIAddrMuxedTLS(t *testing.T) {
 
 	s.SetAPIAddr("foo")
 
-	addr, err := s.GetNodeAPIAddr(s.Addr())
+	c := NewClient(tn)
+
+	addr, err := c.GetNodeAPIAddr(s.Addr())
 	if err != nil {
 		t.Fatalf("failed to get node API address: %s", err)
 	}
