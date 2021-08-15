@@ -35,29 +35,31 @@ func init() {
 	stats.Add(numUnregisteredHandlers, 0)
 }
 
-// Layer represents the connection between nodes. It can be both used to
-// make connections to other nodes, and receive connections from other
-// nodes.
-type Layer struct {
-	ln     net.Listener
-	header byte
-	addr   net.Addr
-
-	remoteEncrypted bool
-	skipVerify      bool
-	nodeX509CACert  string
-	tlsConfig       *tls.Config
+// NewDialer returns an initialized Dialer
+func NewDialer(header byte, remoteEncrypted, skipVerify bool) *Dialer {
+	return &Dialer{
+		header:          header,
+		remoteEncrypted: remoteEncrypted,
+		skipVerify:      skipVerify,
+	}
 }
 
-// Dial creates a new network connection.
-func (l *Layer) Dial(addr string, timeout time.Duration) (net.Conn, error) {
+// Dialer supports dialing a cluster service.
+type Dialer struct {
+	header          byte
+	remoteEncrypted bool
+	skipVerify      bool
+}
+
+// Dial dials the cluster service a the given addr and returns a connection.
+func (d *Dialer) Dial(addr string, timeout time.Duration) (net.Conn, error) {
 	dialer := &net.Dialer{Timeout: timeout}
 
 	var err error
 	var conn net.Conn
-	if l.remoteEncrypted {
+	if d.remoteEncrypted {
 		conf := &tls.Config{
-			InsecureSkipVerify: l.skipVerify,
+			InsecureSkipVerify: d.skipVerify,
 		}
 		conn, err = tls.DialWithDialer(dialer, "tcp", addr, conf)
 	} else {
@@ -68,12 +70,30 @@ func (l *Layer) Dial(addr string, timeout time.Duration) (net.Conn, error) {
 	}
 
 	// Write a marker byte to indicate message type.
-	_, err = conn.Write([]byte{l.header})
+	_, err = conn.Write([]byte{d.header})
 	if err != nil {
 		conn.Close()
 		return nil, err
 	}
 	return conn, err
+}
+
+// Layer represents the connection between nodes. It can be both used to
+// make connections to other nodes, and receive connections from other
+// nodes.
+type Layer struct {
+	ln   net.Listener
+	addr net.Addr
+
+	dialer *Dialer
+
+	nodeX509CACert string
+	tlsConfig      *tls.Config
+}
+
+// Dial creates a new network connection.
+func (l *Layer) Dial(addr string, timeout time.Duration) (net.Conn, error) {
+	return l.dialer.Dial(addr, timeout)
 }
 
 // Accept waits for the next connection.
@@ -263,14 +283,12 @@ func (mux *Mux) Listen(header byte) *Layer {
 	mux.m[header] = ln
 
 	layer := &Layer{
-		ln:              ln,
-		header:          header,
-		addr:            mux.addr,
-		remoteEncrypted: mux.remoteEncrypted,
-		skipVerify:      mux.InsecureSkipVerify,
-		nodeX509CACert:  mux.x509CACert,
-		tlsConfig:       mux.tlsConfig,
+		ln:             ln,
+		addr:           mux.addr,
+		nodeX509CACert: mux.x509CACert,
+		tlsConfig:      mux.tlsConfig,
 	}
+	layer.dialer = NewDialer(header, mux.remoteEncrypted, mux.InsecureSkipVerify)
 
 	return layer
 }

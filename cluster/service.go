@@ -37,13 +37,17 @@ func init() {
 	stats.Add(numGetNodeAPIResponse, 0)
 }
 
-// Transport is the interface the network layer must provide.
-type Transport interface {
-	net.Listener
-
+// Dialer is the interface dialers must implement.
+type Dialer interface {
 	// Dial is used to create a connection to a service listening
 	// on an address.
 	Dial(address string, timeout time.Duration) (net.Conn, error)
+}
+
+// Transport is the interface the network layer must provide.
+type Transport interface {
+	net.Listener
+	Dialer
 }
 
 // Service provides information about the node and cluster.
