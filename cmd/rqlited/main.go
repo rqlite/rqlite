@@ -305,7 +305,9 @@ func main() {
 	log.Println("store has reached consensus")
 
 	// Start the HTTP API server.
-	if err := startHTTPService(str, clstr); err != nil {
+	clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, nodeEncrypt, noNodeVerify)
+	clstrClient := cluster.NewClient(clstrDialer)
+	if err := startHTTPService(str, clstrClient); err != nil {
 		log.Fatalf("failed to start HTTP server: %s", err.Error())
 	}
 	log.Println("node is ready")
@@ -375,7 +377,7 @@ func waitForConsensus(str *store.Store) error {
 	return nil
 }
 
-func startHTTPService(str *store.Store, cltr *cluster.Service) error {
+func startHTTPService(str *store.Store, cltr *cluster.Client) error {
 	// Get the credential store.
 	credStr, err := credentialStore()
 	if err != nil {

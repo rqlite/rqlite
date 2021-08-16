@@ -500,12 +500,14 @@ func mustNodeEncryptedOnDisk(dir string, enableSingle, httpEncrypt bool, mux *tc
 	node.RaftAddr = node.Store.Addr()
 	node.ID = node.Store.ID()
 
-	cluster := cluster.New(mux.Listen(cluster.MuxClusterHeader))
-	if err := cluster.Open(); err != nil {
+	clstr := cluster.New(mux.Listen(cluster.MuxClusterHeader))
+	if err := clstr.Open(); err != nil {
 		panic("failed to open Cluster service)")
 	}
 
-	node.Service = httpd.New("localhost:0", node.Store, cluster, nil)
+	clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, false, true)
+	clstrClient := cluster.NewClient(clstrDialer)
+	node.Service = httpd.New("localhost:0", node.Store, clstrClient, nil)
 	node.Service.Expvar = true
 	if httpEncrypt {
 		node.Service.CertFile = node.HTTPCertPath
@@ -519,7 +521,7 @@ func mustNodeEncryptedOnDisk(dir string, enableSingle, httpEncrypt bool, mux *tc
 	node.APIAddr = node.Service.Addr().String()
 
 	// Finally, set API address in Cluster service
-	cluster.SetAPIAddr(node.APIAddr)
+	clstr.SetAPIAddr(node.APIAddr)
 
 	return node
 }
