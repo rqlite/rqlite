@@ -2,6 +2,7 @@ package tcp
 
 import (
 	"crypto/tls"
+	"errors"
 	"net"
 	"os"
 	"testing"
@@ -28,7 +29,7 @@ func Test_DialerNoConnect(t *testing.T) {
 func Test_DialerHeader(t *testing.T) {
 	s := mustNewEchoServer()
 	defer s.Close()
-	go s.MustStart()
+	go s.Start(t)
 
 	d := NewDialer(64, false, false)
 	conn, err := d.Dial(s.Addr(), 10*time.Second)
@@ -37,6 +38,8 @@ func Test_DialerHeader(t *testing.T) {
 	}
 
 	buf := make([]byte, 1)
+
+	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 	_, err = conn.Read(buf)
 	if err != nil {
 		t.Fatalf("failed to read from echo server: %s", err.Error())
@@ -51,21 +54,47 @@ func Test_DialerHeaderTLS(t *testing.T) {
 	defer s.Close()
 	defer os.Remove(cert)
 	defer os.Remove(key)
-	go s.MustStart()
+	go s.Start(t)
 
 	d := NewDialer(23, true, true)
-	conn, err := d.Dial(s.Addr(), 10*time.Second)
+	conn, err := d.Dial(s.Addr(), 5*time.Second)
 	if err != nil {
 		t.Fatalf("failed to dial TLS echo server: %s", err.Error())
 	}
 
 	buf := make([]byte, 1)
+
+	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 	_, err = conn.Read(buf)
 	if err != nil {
 		t.Fatalf("failed to read from TLS echo server: %s", err.Error())
 	}
 	if exp, got := buf[0], byte(23); exp != got {
 		t.Fatalf("got wrong response from TLS echo server, exp %d, got %d", exp, got)
+	}
+}
+
+func Test_DialerHeaderTLSBadConnect(t *testing.T) {
+	s, cert, key := mustNewEchoServerTLS()
+	defer s.Close()
+	defer os.Remove(cert)
+	defer os.Remove(key)
+	go s.Start(t)
+
+	// Connect to a TLS server with a unencrypted client, to make sure
+	// code can handle that misconfig.
+	d := NewDialer(56, false, false)
+	conn, err := d.Dial(s.Addr(), 5*time.Second)
+	if err != nil {
+		t.Fatalf("failed to dial TLS echo server: %s", err.Error())
+	}
+
+	buf := make([]byte, 1)
+
+	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_, err = conn.Read(buf)
+	if err != nil && !errors.Is(err, os.ErrDeadlineExceeded) {
+		t.Fatalf("unexpected error from TLS echo server: %s", err.Error())
 	}
 }
 
@@ -78,22 +107,26 @@ func (e *echoServer) Addr() string {
 	return e.ln.Addr().String()
 }
 
-// MustStart starts the echo server.
-func (e *echoServer) MustStart() {
+// Start starts the echo server.
+func (e *echoServer) Start(t *testing.T) {
 	for {
 		conn, err := e.ln.Accept()
 		if err != nil {
-			return
+			if errors.Is(err, net.ErrClosed) {
+				// Successful testing can cause this.
+				return
+			}
+			t.Fatalf("failed to accept a connection: %s", err.Error())
 		}
 		go func(c net.Conn) {
 			buf := make([]byte, 1)
 			_, err := c.Read(buf)
 			if err != nil {
-				panic("failed to read byte")
+				return
 			}
 			_, err = c.Write(buf)
 			if err != nil {
-				panic("failed to echo received byte")
+				t.Fatalf("failed to write byte: %s", err.Error())
 			}
 			c.Close()
 		}(conn)
