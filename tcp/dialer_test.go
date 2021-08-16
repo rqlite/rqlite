@@ -43,17 +43,17 @@ func Test_DialerHeader(t *testing.T) {
 	}
 }
 
-type echoSever struct {
+type echoServer struct {
 	ln net.Listener
 }
 
 // Addr returns the address of the echo server.
-func (e *echoSever) Addr() string {
+func (e *echoServer) Addr() string {
 	return e.ln.Addr().String()
 }
 
 // MustStart starts the echo server.
-func (e *echoSever) MustStart() {
+func (e *echoServer) MustStart() {
 	for {
 		conn, err := e.ln.Accept()
 		if err != nil {
@@ -75,12 +75,12 @@ func (e *echoSever) MustStart() {
 }
 
 // Close closes the echo server.
-func (e *echoSever) Close() {
+func (e *echoServer) Close() {
 	e.ln.Close()
 }
 
-func mustNewEchoServer() *echoSever {
-	return &echoSever{
+func mustNewEchoServer() *echoServer {
+	return &echoServer{
 		ln: mustTCPListener("127.0.0.1:0"),
 	}
 }
