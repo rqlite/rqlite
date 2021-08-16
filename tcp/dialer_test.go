@@ -27,7 +27,7 @@ func Test_DialerHeader(t *testing.T) {
 
 	go s.MustStart()
 
-	d := NewDialer(87, false, false)
+	d := NewDialer(64, false, false)
 	conn, err := d.Dial(s.Addr(), 10*time.Second)
 	if err != nil {
 		t.Fatalf("failed to dial echo server: %s", err.Error())
@@ -38,7 +38,7 @@ func Test_DialerHeader(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read from echo server: %s", err.Error())
 	}
-	if exp, got := buf[0], byte(87); exp != got {
+	if exp, got := buf[0], byte(64); exp != got {
 		t.Fatalf("got wrong response from echo server, exp %d, got %d", exp, got)
 	}
 }
