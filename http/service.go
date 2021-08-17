@@ -866,7 +866,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 	}
 
 	results, resultsErr := s.store.Query(qr)
-	if err != nil && err == store.ErrNotLeader {
+	if resultsErr != nil && resultsErr == store.ErrNotLeader {
 		if redirect {
 			leaderAPIAddr := s.LeaderAPIAddr()
 			if leaderAPIAddr == "" {
