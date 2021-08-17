@@ -26,7 +26,7 @@ func Test_NewServiceSetGetNodeAPIAddrMuxed(t *testing.T) {
 
 	s.SetAPIAddr("foo")
 
-	c := NewClient(tn)
+	c := NewClient(mustNewDialer(1, false, false))
 
 	addr, err := c.GetNodeAPIAddr(s.Addr())
 	if err != nil {
@@ -60,7 +60,7 @@ func Test_NewServiceSetGetNodeAPIAddrMuxedTLS(t *testing.T) {
 
 	s.SetAPIAddr("foo")
 
-	c := NewClient(tn)
+	c := NewClient(mustNewDialer(1, true, true))
 
 	addr, err := c.GetNodeAPIAddr(s.Addr())
 	if err != nil {
@@ -110,4 +110,8 @@ func mustNewTLSMux() (net.Listener, *tcp.Mux) {
 	mux.InsecureSkipVerify = true
 
 	return ln, mux
+}
+
+func mustNewDialer(header byte, remoteEncrypted, skipVerify bool) *tcp.Dialer {
+	return tcp.NewDialer(header, remoteEncrypted, skipVerify)
 }
