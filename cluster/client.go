@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/rqlite/rqlite/command"
 )
 
 // Client allows communicating with a remote node.

@@ -200,22 +200,23 @@ func (s *Service) handleConn(conn net.Conn) {
 	case Command_COMMAND_TYPE_EXECUTE:
 		stats.Add(numExecuteRequest, 1)
 
-		er := &command.ExecuteRequest{}
-		if err = proto.Unmarshal(c.SubCommand, er); err != nil {
-			// Write some error, then close?
-			return
-		}
-
 		resp := &CommandExecuteResponse{}
-		res, err := s.db.Execute(er)
-		if err != nil {
-			resp.Error = err.Error()
+
+		er := c.GetExecuteRequest()
+		if er == nil {
+			resp.Error = "ExecuteRequest is nil"
 		} else {
-			resp.Results = make([]*command.ExecuteResult, len(res))
-			for i := range res {
-				resp.Results[i] = res[i]
+			res, err := s.db.Execute(er)
+			if err != nil {
+				resp.Error = err.Error()
+			} else {
+				resp.Results = make([]*command.ExecuteResult, len(res))
+				for i := range res {
+					resp.Results[i] = res[i]
+				}
 			}
 		}
+
 		b, err = proto.Marshal(resp)
 		if err != nil {
 			return
@@ -224,24 +225,24 @@ func (s *Service) handleConn(conn net.Conn) {
 
 	case Command_COMMAND_TYPE_QUERY:
 		stats.Add(numQueryRequest, 1)
-		return
-
-		qr := &command.QueryRequest{}
-		if err = proto.Unmarshal(c.SubCommand, qr); err != nil {
-			// Write some error, then close?
-			return
-		}
 
 		resp := &CommandQueryResponse{}
-		res, err := s.db.Query(qr)
-		if err != nil {
-			resp.Error = err.Error()
+
+		qr := c.GetQueryRequest()
+		if qr == nil {
+			resp.Error = "QueryRequest is nil"
 		} else {
-			resp.Rows = make([]*command.QueryRows, len(res))
-			for i := range res {
-				resp.Rows[i] = res[i]
+			res, err := s.db.Query(qr)
+			if err != nil {
+				resp.Error = err.Error()
+			} else {
+				resp.Rows = make([]*command.QueryRows, len(res))
+				for i := range res {
+					resp.Rows[i] = res[i]
+				}
 			}
 		}
+
 		b, err = proto.Marshal(resp)
 		if err != nil {
 			return

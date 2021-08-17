@@ -17,7 +17,11 @@ message Command {
         COMMAND_TYPE_QUERY = 3;
     }
     Type type = 1;
-    bytes sub_command = 2;
+
+    oneof request {
+        command.ExecuteRequest execute_request = 2;
+        command.QueryRequest query_request = 3;
+    }
 }
 
 message CommandExecuteResponse {
