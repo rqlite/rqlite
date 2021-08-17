@@ -824,6 +824,14 @@ func (m *mockClusterService) GetNodeAPIAddr(a string) (string, error) {
 	return m.apiAddr, nil
 }
 
+func (m *mockClusterService) Execute(addr string, er *command.ExecuteRequest) ([]*command.ExecuteResult, error) {
+	return nil, nil
+}
+
+func (m *mockClusterService) Query(addr string, qr *command.QueryRequest) ([]*command.QueryRows, error) {
+	return nil, nil
+}
+
 type mockCredentialStore struct {
 	CheckOK   bool
 	HasPermOK bool
