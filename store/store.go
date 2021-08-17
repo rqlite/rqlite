@@ -676,8 +676,7 @@ func (s *Store) Query(qr *command.QueryRequest) ([]*command.QueryRows, error) {
 		return nil, ErrStaleRead
 	}
 
-	rows, err := s.db.Query(qr.Request, qr.Timings)
-	return rows, err
+	return s.db.Query(qr.Request, qr.Timings)
 }
 
 // Backup writes a snapshot of the underlying database to dst
