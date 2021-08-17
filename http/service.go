@@ -126,13 +126,15 @@ type Response struct {
 var stats *expvar.Map
 
 const (
-	numExecutions = "executions"
-	numQueries    = "queries"
-	numBackups    = "backups"
-	numLoad       = "loads"
-	numJoins      = "joins"
-	numAuthOK     = "authOK"
-	numAuthFail   = "authFail"
+	numExecutions       = "executions"
+	numQueries          = "queries"
+	numRemoteExecutions = "remote_executions"
+	numRemoteQueries    = "remote_queries"
+	numBackups          = "backups"
+	numLoad             = "loads"
+	numJoins            = "joins"
+	numAuthOK           = "authOK"
+	numAuthFail         = "authFail"
 
 	// PermAll means all actions permitted.
 	PermAll = "all"
@@ -153,12 +155,19 @@ const (
 
 	// VersionHTTPHeader is the HTTP header key for the version.
 	VersionHTTPHeader = "X-RQLITE-VERSION"
+
+	// ServedByHTTPHeader is the HTTP header used to report which
+	// node (by node Raft address) actually served the request if
+	// it wasn't served by this node.
+	ServedByHTTPHeader = "X-RQLITE-SERVED-BY"
 )
 
 func init() {
 	stats = expvar.NewMap("http")
 	stats.Add(numExecutions, 0)
 	stats.Add(numQueries, 0)
+	stats.Add(numRemoteExecutions, 0)
+	stats.Add(numRemoteQueries, 0)
 	stats.Add(numBackups, 0)
 	stats.Add(numLoad, 0)
 	stats.Add(numJoins, 0)
@@ -725,13 +734,19 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 
 	isTx, err := isTx(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	redirect, err := isRedirect(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	timings, err := timings(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -756,20 +771,30 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 		Timings: timings,
 	}
 
-	results, err := s.store.Execute(er)
-	if err != nil {
-		if err == store.ErrNotLeader {
+	results, resultsErr := s.store.Execute(er)
+	if resultsErr != nil && resultsErr == store.ErrNotLeader {
+		if redirect {
 			leaderAPIAddr := s.LeaderAPIAddr()
 			if leaderAPIAddr == "" {
 				http.Error(w, err.Error(), http.StatusServiceUnavailable)
 				return
 			}
-
-			redirect := s.FormRedirect(r, leaderAPIAddr)
-			http.Redirect(w, r, redirect, http.StatusMovedPermanently)
+			loc := s.FormRedirect(r, leaderAPIAddr)
+			http.Redirect(w, r, loc, http.StatusMovedPermanently)
 			return
 		}
-		resp.Error = err.Error()
+
+		addr, err := s.store.LeaderAddr()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		results, resultsErr = s.cluster.Execute(addr, er)
+		stats.Add(numRemoteExecutions, 1)
+		w.Header().Add(ServedByHTTPHeader, addr)
+	}
+
+	if resultsErr != nil {
+		resp.Error = resultsErr.Error()
 	} else {
 		resp.Results.ExecuteResult = results
 	}
@@ -794,6 +819,12 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 	resp := NewResponse()
 
 	isTx, err := isTx(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	redirect, err := isRedirect(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -834,20 +865,30 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 		Freshness: frsh.Nanoseconds(),
 	}
 
-	results, err := s.store.Query(qr)
-	if err != nil {
-		if err == store.ErrNotLeader {
+	results, resultsErr := s.store.Query(qr)
+	if err != nil && err == store.ErrNotLeader {
+		if redirect {
 			leaderAPIAddr := s.LeaderAPIAddr()
 			if leaderAPIAddr == "" {
 				http.Error(w, err.Error(), http.StatusServiceUnavailable)
 				return
 			}
-
-			redirect := s.FormRedirect(r, leaderAPIAddr)
-			http.Redirect(w, r, redirect, http.StatusMovedPermanently)
+			loc := s.FormRedirect(r, leaderAPIAddr)
+			http.Redirect(w, r, loc, http.StatusMovedPermanently)
 			return
 		}
-		resp.Error = err.Error()
+
+		addr, err := s.store.LeaderAddr()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		results, resultsErr = s.cluster.Query(addr, qr)
+		stats.Add(numRemoteQueries, 1)
+		w.Header().Add(ServedByHTTPHeader, addr)
+	}
+
+	if resultsErr != nil {
+		resp.Error = resultsErr.Error()
 	} else {
 		resp.Results.QueryRows = results
 	}
@@ -1104,6 +1145,13 @@ func fmtParam(req *http.Request) (string, error) {
 // isPretty returns whether the HTTP response body should be pretty-printed.
 func isPretty(req *http.Request) (bool, error) {
 	return queryParam(req, "pretty")
+}
+
+// isRedirect returns whether the HTTP request is requesting a explicit
+// redirect to the leader, if necessary.
+func isRedirect(req *http.Request) (bool, error) {
+	return true, nil // Keep current behavior for now.
+	return queryParam(req, "redirect")
 }
 
 // isTx returns whether the HTTP request is requesting a transaction.
