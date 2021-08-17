@@ -69,10 +69,85 @@ func Test_ServiceExecute(t *testing.T) {
 	}
 	res, err = c.Execute(s.Addr(), executeRequestFromString("some SQL"))
 	if err != nil {
-		t.Fatalf("failed to execute query: %s", err.Error())
+		t.Fatalf("failed to execute: %s", err.Error())
 	}
 	if exp, got := `[{"error":"no such table"}]`, asJSON(res); exp != got {
 		t.Fatalf("unexpected results for execute, expected %s, got %s", exp, got)
+	}
+
+	// Clean up resources.
+	if err := ln.Close(); err != nil {
+		t.Fatalf("failed to close Mux's listener: %s", err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatalf("failed to close cluster service")
+	}
+}
+
+func Test_ServiceQuery(t *testing.T) {
+	ln, mux := mustNewMux()
+	go mux.Serve()
+	tn := mux.Listen(1) // Could be any byte value.
+	db := mustNewMockDatabase()
+	s := New(tn, db)
+	if s == nil {
+		t.Fatalf("failed to create cluster service")
+	}
+
+	c := NewClient(mustNewDialer(1, false, false))
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open cluster service: %s", err.Error())
+	}
+
+	// Ready for Query tests now.
+	db.queryFn = func(er *command.QueryRequest) ([]*command.QueryRows, error) {
+		if er.Request.Statements[0].Sql != "SELECT * FROM foo" {
+			t.Fatalf("incorrect SQL query received")
+		}
+		return nil, errors.New("query failed")
+	}
+	_, err := c.Query(s.Addr(), queryRequestFromString("SELECT * FROM foo"))
+	if err == nil {
+		t.Fatalf("client failed to report error")
+	}
+	if err.Error() != "query failed" {
+		t.Fatalf("incorrect error message received, got: %s", err.Error())
+	}
+
+	db.queryFn = func(er *command.QueryRequest) ([]*command.QueryRows, error) {
+		if er.Request.Statements[0].Sql != "SELECT * FROM foo" {
+			t.Fatalf("incorrect SQL statement received")
+		}
+		rows := &command.QueryRows{
+			Columns: []string{"c1", "c2"},
+			Types:   []string{"t1", "t2"},
+		}
+		return []*command.QueryRows{rows}, nil
+	}
+	res, err := c.Query(s.Addr(), queryRequestFromString("SELECT * FROM foo"))
+	if err != nil {
+		t.Fatalf("failed to query: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["c1","c2"],"types":["t1","t2"]}]`, asJSON(res); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+
+	db.queryFn = func(er *command.QueryRequest) ([]*command.QueryRows, error) {
+		if er.Request.Statements[0].Sql != "SELECT * FROM foo" {
+			t.Fatalf("incorrect SQL statement received")
+		}
+		rows := &command.QueryRows{
+			Error: "no such table",
+		}
+		return []*command.QueryRows{rows}, nil
+	}
+	res, err = c.Query(s.Addr(), queryRequestFromString("SELECT * FROM foo"))
+	if err != nil {
+		t.Fatalf("failed to query: %s", err.Error())
+	}
+	if exp, got := `[{"error":"no such table"}]`, asJSON(res); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
 
 	// Clean up resources.
@@ -97,6 +172,27 @@ func executeRequestFromStrings(s []string) *command.ExecuteRequest {
 		}
 	}
 	return &command.ExecuteRequest{
+		Request: &command.Request{
+			Statements:  stmts,
+			Transaction: false,
+		},
+		Timings: false,
+	}
+}
+
+func queryRequestFromString(s string) *command.QueryRequest {
+	return queryRequestFromStrings([]string{s})
+}
+
+// queryRequestFromStrings converts a slice of strings into a command.QueryRequest
+func queryRequestFromStrings(s []string) *command.QueryRequest {
+	stmts := make([]*command.Statement, len(s))
+	for i := range s {
+		stmts[i] = &command.Statement{
+			Sql: s[i],
+		}
+	}
+	return &command.QueryRequest{
 		Request: &command.Request{
 			Statements:  stmts,
 			Transaction: false,
