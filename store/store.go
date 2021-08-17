@@ -627,6 +627,10 @@ func (s *Store) execute(ex *command.ExecuteRequest) ([]*command.ExecuteResult, e
 // Query executes queries that return rows, and do not modify the database.
 func (s *Store) Query(qr *command.QueryRequest) ([]*command.QueryRows, error) {
 	if qr.Level == command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG {
+		if s.raft.State() != raft.Leader {
+			return nil, ErrNotLeader
+		}
+
 		b, compressed, err := s.reqMarshaller.Marshal(qr)
 		if err != nil {
 			return nil, err
