@@ -1150,7 +1150,6 @@ func isPretty(req *http.Request) (bool, error) {
 // isRedirect returns whether the HTTP request is requesting a explicit
 // redirect to the leader, if necessary.
 func isRedirect(req *http.Request) (bool, error) {
-	return true, nil // Keep current behavior for now.
 	return queryParam(req, "redirect")
 }
 

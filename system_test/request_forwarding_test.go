@@ -98,6 +98,87 @@ func Test_StoreClientSideBySide(t *testing.T) {
 	}
 }
 
+// Test_MultiNodeCluster tests formation of a 3-node cluster and query
+// against all nodes to test requests are forwarded to leader transparently.
+func Test_MultiNodeClusterRequestForwardOK(t *testing.T) {
+	node1 := mustNewLeaderNode()
+	defer node1.Deprovision()
+
+	node2 := mustNewNode(false)
+	defer node2.Deprovision()
+	if err := node2.Join(node1); err != nil {
+		t.Fatalf("node failed to join leader: %s", err.Error())
+	}
+	_, err := node2.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for leader: %s", err.Error())
+	}
+
+	// Get the new leader, in case it changed.
+	c := Cluster{node1, node2}
+	leader, err := c.Leader()
+	if err != nil {
+		t.Fatalf("failed to find cluster leader: %s", err.Error())
+	}
+
+	node3 := mustNewNode(false)
+	defer node3.Deprovision()
+	if err := node3.Join(leader); err != nil {
+		t.Fatalf("node failed to join leader: %s", err.Error())
+	}
+	_, err = node3.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for leader: %s", err.Error())
+	}
+
+	// Get the new leader, in case it changed.
+	c = Cluster{node1, node2, node3}
+	leader, err = c.Leader()
+	if err != nil {
+		t.Fatalf("failed to find cluster leader: %s", err.Error())
+	}
+
+	followers, err := c.Followers()
+	if err != nil {
+		t.Fatalf("failed to get followers: %s", err.Error())
+	}
+	if len(followers) != 2 {
+		t.Fatalf("got incorrect number of followers: %d", len(followers))
+	}
+
+	res, err := followers[0].Execute(`CREATE TABLE foo (id integer not null primary key, name text)`)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if exp, got := `{"results":[{}]}`, res; exp != got {
+		t.Fatalf("got incorrect response from follower exp: %s, got: %s", exp, got)
+	}
+
+	res, err = followers[1].Execute(`INSERT INTO foo(name) VALUES("fiona")`)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if exp, got := `{"results":[{"last_insert_id":1,"rows_affected":1}]}`, res; exp != got {
+		t.Fatalf("got incorrect response from follower exp: %s, got: %s", exp, got)
+	}
+
+	res, err = leader.Execute(`INSERT INTO foo(name) VALUES("fiona")`)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if exp, got := `{"results":[{"last_insert_id":2,"rows_affected":1}]}`, res; exp != got {
+		t.Fatalf("got incorrect response from follower exp: %s, got: %s", exp, got)
+	}
+
+	rows, err := followers[0].Query(`SELECT COUNT(*) FROM foo`)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if exp, got := `{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[2]]}]}`, rows; exp != got {
+		t.Fatalf("got incorrect response from follower exp: %s, got: %s", exp, got)
+	}
+}
+
 func executeRequestFromString(s string) *command.ExecuteRequest {
 	return executeRequestFromStrings([]string{s})
 }
