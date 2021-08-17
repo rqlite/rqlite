@@ -7,12 +7,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rqlite/rqlite/command"
 	"github.com/rqlite/rqlite/testdata/x509"
 )
 
 func Test_NewServiceOpenClose(t *testing.T) {
 	ml := mustNewMockTransport()
-	s := New(ml)
+	s := New(ml, mustNewMockDatabase())
 	if s == nil {
 		t.Fatalf("failed to create cluster service")
 	}
@@ -30,7 +31,7 @@ func Test_NewServiceOpenClose(t *testing.T) {
 
 func Test_NewServiceSetGetAPIAddr(t *testing.T) {
 	ml := mustNewMockTransport()
-	s := New(ml)
+	s := New(ml, mustNewMockDatabase())
 	if s == nil {
 		t.Fatalf("failed to create cluster service")
 	}
@@ -51,7 +52,7 @@ func Test_NewServiceSetGetAPIAddr(t *testing.T) {
 
 func Test_NewServiceSetGetNodeAPIAddr(t *testing.T) {
 	ml := mustNewMockTransport()
-	s := New(ml)
+	s := New(ml, mustNewMockDatabase())
 	if s == nil {
 		t.Fatalf("failed to create cluster service")
 	}
@@ -89,7 +90,7 @@ func Test_NewServiceSetGetNodeAPIAddr(t *testing.T) {
 
 func Test_NewServiceSetGetNodeAPIAddrTLS(t *testing.T) {
 	ml := mustNewMockTLSTransport()
-	s := New(ml)
+	s := New(ml, mustNewMockDatabase())
 	if s == nil {
 		t.Fatalf("failed to create cluster service")
 	}
@@ -130,24 +131,6 @@ type mockTransport struct {
 	remoteEncrypted bool
 }
 
-func mustNewMockTransport() *mockTransport {
-	tn, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		panic("failed to create mock listener")
-	}
-	return &mockTransport{
-		tn: tn,
-	}
-}
-
-func mustNewMockTLSTransport() *mockTransport {
-	tn := mustNewMockTransport()
-	return &mockTransport{
-		tn:              tls.NewListener(tn, mustCreateTLSConfig()),
-		remoteEncrypted: true,
-	}
-}
-
 func (ml *mockTransport) Accept() (c net.Conn, err error) {
 	return ml.tn.Accept()
 }
@@ -175,6 +158,41 @@ func (ml *mockTransport) Dial(addr string, timeout time.Duration) (net.Conn, err
 	}
 
 	return conn, err
+}
+
+func mustNewMockTransport() *mockTransport {
+	tn, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		panic("failed to create mock listener")
+	}
+	return &mockTransport{
+		tn: tn,
+	}
+}
+
+func mustNewMockTLSTransport() *mockTransport {
+	tn := mustNewMockTransport()
+	return &mockTransport{
+		tn:              tls.NewListener(tn, mustCreateTLSConfig()),
+		remoteEncrypted: true,
+	}
+}
+
+type mockDatabase struct {
+	executeFn func(er *command.ExecuteRequest) ([]*command.ExecuteResult, error)
+	queryFn   func(qr *command.QueryRequest) ([]*command.QueryRows, error)
+}
+
+func (m *mockDatabase) Execute(er *command.ExecuteRequest) ([]*command.ExecuteResult, error) {
+	return m.executeFn(er)
+}
+
+func (m *mockDatabase) Query(qr *command.QueryRequest) ([]*command.QueryRows, error) {
+	return m.queryFn(qr)
+}
+
+func mustNewMockDatabase() *mockDatabase {
+	return &mockDatabase{}
 }
 
 func mustCreateTLSConfig() *tls.Config {

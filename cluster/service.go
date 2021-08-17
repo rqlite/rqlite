@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/rqlite/rqlite/command"
 )
 
 // stats captures stats for the Cluster service.
@@ -21,6 +22,8 @@ var stats *expvar.Map
 const (
 	numGetNodeAPIRequest  = "num_get_node_api_req"
 	numGetNodeAPIResponse = "num_get_node_api_resp"
+	numExecuteRequest     = "num_execute_req"
+	numQueryRequest       = "num_query_req"
 )
 
 const (
@@ -35,6 +38,8 @@ func init() {
 	stats = expvar.NewMap("cluster")
 	stats.Add(numGetNodeAPIRequest, 0)
 	stats.Add(numGetNodeAPIResponse, 0)
+	stats.Add(numExecuteRequest, 0)
+	stats.Add(numQueryRequest, 0)
 }
 
 // Dialer is the interface dialers must implement.
@@ -42,6 +47,21 @@ type Dialer interface {
 	// Dial is used to create a connection to a service listening
 	// on an address.
 	Dial(address string, timeout time.Duration) (net.Conn, error)
+}
+
+// Database is the interface any queryable system must implement
+type Database interface {
+	// Execute executes a slice of queries, each of which is not expected
+	// to return rows. If timings is true, then timing information will
+	// be return. If tx is true, then either all queries will be executed
+	// successfully or it will as though none executed.
+	Execute(er *command.ExecuteRequest) ([]*command.ExecuteResult, error)
+
+	// Query executes a slice of queries, each of which returns rows. If
+	// timings is true, then timing information will be returned. If tx
+	// is true, then all queries will take place while a read transaction
+	// is held on the database.
+	Query(qr *command.QueryRequest) ([]*command.QueryRows, error)
 }
 
 // Transport is the interface the network layer must provide.
@@ -55,6 +75,8 @@ type Service struct {
 	tn   Transport // Network layer this service uses
 	addr net.Addr  // Address on which this service is listening
 
+	db Database // The queryable system.
+
 	mu      sync.RWMutex
 	https   bool   // Serving HTTPS?
 	apiAddr string // host:port this node serves the HTTP API.
@@ -63,10 +85,11 @@ type Service struct {
 }
 
 // New returns a new instance of the cluster service
-func New(tn Transport) *Service {
+func New(tn Transport, db Database) *Service {
 	return &Service{
 		tn:     tn,
 		addr:   tn.Addr(),
+		db:     db,
 		logger: log.New(os.Stderr, "[cluster] ", log.LstdFlags),
 	}
 }
@@ -173,5 +196,56 @@ func (s *Service) handleConn(conn net.Conn) {
 		}
 		conn.Write(b)
 		stats.Add(numGetNodeAPIResponse, 1)
+
+	case Command_COMMAND_TYPE_EXECUTE:
+		stats.Add(numExecuteRequest, 1)
+
+		er := &command.ExecuteRequest{}
+		if err = proto.Unmarshal(c.SubCommand, er); err != nil {
+			// Write some error, then close?
+			return
+		}
+
+		resp := &CommandExecuteResponse{}
+		res, err := s.db.Execute(er)
+		if err != nil {
+			resp.Error = err.Error()
+		} else {
+			resp.Results = make([]*command.ExecuteResult, len(res))
+			for i := range res {
+				resp.Results[i] = res[i]
+			}
+		}
+		b, err = proto.Marshal(resp)
+		if err != nil {
+			return
+		}
+		conn.Write(b)
+
+	case Command_COMMAND_TYPE_QUERY:
+		stats.Add(numQueryRequest, 1)
+		return
+
+		qr := &command.QueryRequest{}
+		if err = proto.Unmarshal(c.SubCommand, qr); err != nil {
+			// Write some error, then close?
+			return
+		}
+
+		resp := &CommandQueryResponse{}
+		res, err := s.db.Query(qr)
+		if err != nil {
+			resp.Error = err.Error()
+		} else {
+			resp.Rows = make([]*command.QueryRows, len(res))
+			for i := range res {
+				resp.Rows[i] = res[i]
+			}
+		}
+		b, err = proto.Marshal(resp)
+		if err != nil {
+			return
+		}
+		conn.Write(b)
 	}
 }
