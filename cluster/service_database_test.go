@@ -1,0 +1,114 @@
+package cluster
+
+import (
+	"errors"
+	"fmt"
+	"testing"
+
+	"github.com/rqlite/rqlite/command"
+	"github.com/rqlite/rqlite/command/encoding"
+)
+
+func Test_ServiceExecute(t *testing.T) {
+	ln, mux := mustNewMux()
+	go mux.Serve()
+	tn := mux.Listen(1) // Could be any byte value.
+	db := mustNewMockDatabase()
+	s := New(tn, db)
+	if s == nil {
+		t.Fatalf("failed to create cluster service")
+	}
+
+	c := NewClient(mustNewDialer(1, false, false))
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open cluster service: %s", err.Error())
+	}
+
+	// Ready for Execute tests now.
+	db.executeFn = func(er *command.ExecuteRequest) ([]*command.ExecuteResult, error) {
+		if er.Request.Statements[0].Sql != "some SQL" {
+			t.Fatalf("incorrect SQL statement received")
+		}
+		return nil, errors.New("execute failed")
+	}
+	_, err := c.Execute(s.Addr(), executeRequestFromString("some SQL"))
+	if err == nil {
+		t.Fatalf("client failed to report error")
+	}
+	if err.Error() != "execute failed" {
+		t.Fatalf("incorrect error message received, got: %s", err.Error())
+	}
+
+	db.executeFn = func(er *command.ExecuteRequest) ([]*command.ExecuteResult, error) {
+		if er.Request.Statements[0].Sql != "some SQL" {
+			t.Fatalf("incorrect SQL statement received")
+		}
+		result := &command.ExecuteResult{
+			LastInsertId: 1234,
+			RowsAffected: 5678,
+		}
+		return []*command.ExecuteResult{result}, nil
+	}
+	res, err := c.Execute(s.Addr(), executeRequestFromString("some SQL"))
+	if err != nil {
+		t.Fatalf("failed to execute query: %s", err.Error())
+	}
+	if exp, got := `[{"last_insert_id":1234,"rows_affected":5678}]`, asJSON(res); exp != got {
+		t.Fatalf("unexpected results for execute, expected %s, got %s", exp, got)
+	}
+
+	db.executeFn = func(er *command.ExecuteRequest) ([]*command.ExecuteResult, error) {
+		if er.Request.Statements[0].Sql != "some SQL" {
+			t.Fatalf("incorrect SQL statement received")
+		}
+		result := &command.ExecuteResult{
+			Error: "no such table",
+		}
+		return []*command.ExecuteResult{result}, nil
+	}
+	res, err = c.Execute(s.Addr(), executeRequestFromString("some SQL"))
+	if err != nil {
+		t.Fatalf("failed to execute query: %s", err.Error())
+	}
+	if exp, got := `[{"error":"no such table"}]`, asJSON(res); exp != got {
+		t.Fatalf("unexpected results for execute, expected %s, got %s", exp, got)
+	}
+
+	// Clean up resources.
+	if err := ln.Close(); err != nil {
+		t.Fatalf("failed to close Mux's listener: %s", err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatalf("failed to close cluster service")
+	}
+}
+
+func executeRequestFromString(s string) *command.ExecuteRequest {
+	return executeRequestFromStrings([]string{s})
+}
+
+// queryRequestFromStrings converts a slice of strings into a command.ExecuteRequest
+func executeRequestFromStrings(s []string) *command.ExecuteRequest {
+	stmts := make([]*command.Statement, len(s))
+	for i := range s {
+		stmts[i] = &command.Statement{
+			Sql: s[i],
+		}
+	}
+	return &command.ExecuteRequest{
+		Request: &command.Request{
+			Statements:  stmts,
+			Transaction: false,
+		},
+		Timings: false,
+	}
+}
+
+func asJSON(v interface{}) string {
+	b, err := encoding.JSONMarshal(v)
+	if err != nil {
+		panic(fmt.Sprintf("failed to JSON marshal value: %s", err.Error()))
+	}
+	return string(b)
+}
