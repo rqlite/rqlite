@@ -69,6 +69,12 @@ type Cluster interface {
 	// GetNodeAPIAddr returns the HTTP API URL for the node at the given Raft address.
 	GetNodeAPIAddr(nodeAddr string) (string, error)
 
+	// Execute performs an Execute Request on a remote node.
+	Execute(nodeAddr string, er *command.ExecuteRequest) ([]*command.ExecuteResult, error)
+
+	// Query performs an Query Request on a remote node.
+	Query(nodeAddr string, qr *command.QueryRequest) ([]*command.QueryRows, error)
+
 	// Stats returns stats on the Cluster.
 	Stats() (map[string]interface{}, error)
 }
