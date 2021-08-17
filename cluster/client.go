@@ -69,6 +69,7 @@ func (c *Client) GetNodeAPIAddr(nodeAddr string) (string, error) {
 	return a.Url, nil
 }
 
+// Execute performs an Execute on a remote node.
 func (c *Client) Execute(nodeAddr string, er *command.ExecuteRequest) ([]*command.ExecuteResult, error) {
 	conn, err := c.dialer.Dial(nodeAddr, c.timeout)
 	if err != nil {
@@ -118,6 +119,7 @@ func (c *Client) Execute(nodeAddr string, er *command.ExecuteRequest) ([]*comman
 	return a.Results, nil
 }
 
+// Query performs an Query on a remote node.
 func (c *Client) Query(nodeAddr string, qr *command.QueryRequest) ([]*command.QueryRows, error) {
 	conn, err := c.dialer.Dial(nodeAddr, c.timeout)
 	if err != nil {
