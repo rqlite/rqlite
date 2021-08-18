@@ -1,4 +1,4 @@
-## 6.2.0 (unreleased)
+## 6.2.0 (August 18th 2021)
 ### New features
 - [PR #851](https://github.com/rqlite/rqlite/pull/851), [PR #855](https://github.com/rqlite/rqlite/pull/855): rqlite CLI properly supports PRAGMA directives.
 - [PR #853](https://github.com/rqlite/rqlite/pull/853): Support enabling Foreign Key constraints via command-line options.
@@ -7,6 +7,7 @@
 ### Implementation changes and bug fixes
 - [PR #857](https://github.com/rqlite/rqlite/pull/857): Use Protobufs as core data model.
 - [PR #858](https://github.com/rqlite/rqlite/pull/858): Create dedicated client for talking to a cluster service.
+- [PR #862](https://github.com/rqlite/rqlite/pull/862): Add detailed SQLite memory statistics to status output.
 
 ## 6.1.0 (August 5th 2021)
 This release makes significant changes to SQLite database connection handling, resulting in proper support for high-performance concurrent reads of in-memory databases (an in-memory SQLite database is the default option for rqlite). 
