@@ -260,6 +260,10 @@ func (db *DB) Stats() (map[string]interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
+	memStats, err := db.memStats()
+	if err != nil {
+		return nil, err
+	}
 	connPoolStats := map[string]interface{}{
 		"ro": db.ConnectionPoolStats(db.roDB),
 		"rw": db.ConnectionPoolStats(db.rwDB),
@@ -271,6 +275,7 @@ func (db *DB) Stats() (map[string]interface{}, error) {
 	stats := map[string]interface{}{
 		"version":         DBVersion,
 		"compile_options": copts,
+		"mem_stats":       memStats,
 		"db_size":         dbSz,
 		"rw_dsn":          string(db.rwDSN),
 		"ro_dsn":          db.roDSN,
@@ -740,6 +745,26 @@ func (db *DB) Dump(w io.Writer) error {
 	}
 
 	return nil
+}
+
+func (db *DB) memStats() (map[string]int64, error) {
+	ms := make(map[string]int64)
+	for _, p := range []string{
+		"max_page_count",
+		"page_count",
+		"page_size",
+		"hard_heap_limit",
+		"soft_heap_limit",
+		"cache_size",
+		"freelist_count",
+	} {
+		res, err := db.QueryStringStmt(fmt.Sprintf("PRAGMA %s", p))
+		if err != nil {
+			return nil, err
+		}
+		ms[p] = res[0].Values[0].Parameters[0].GetI()
+	}
+	return ms, nil
 }
 
 func copyDatabase(dst *DB, src *DB) error {
