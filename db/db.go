@@ -749,7 +749,6 @@ func (db *DB) Dump(w io.Writer) error {
 
 func (db *DB) memStats() (map[string]int64, error) {
 	ms := make(map[string]int64)
-
 	for _, p := range []string{
 		"max_page_count",
 		"page_count",
@@ -765,7 +764,6 @@ func (db *DB) memStats() (map[string]int64, error) {
 		}
 		ms[p] = res[0].Values[0].Parameters[0].GetI()
 	}
-
 	return ms, nil
 }
 
