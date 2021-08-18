@@ -1,8 +1,12 @@
+## 6.3.0 (unreleased)
+### New features
+
+- [PR #859](https://github.com/rqlite/rqlite/pull/859): Support transparent Execute and Query request forwarding. Fixes [issue #330](https://github.com/rqlite/rqlite/issues/330).
+
 ## 6.2.0 (August 18th 2021)
 ### New features
 - [PR #851](https://github.com/rqlite/rqlite/pull/851), [PR #855](https://github.com/rqlite/rqlite/pull/855): rqlite CLI properly supports PRAGMA directives.
 - [PR #853](https://github.com/rqlite/rqlite/pull/853): Support enabling Foreign Key constraints via command-line options.
-- [PR #859](https://github.com/rqlite/rqlite/pull/859): Support transparent Execute and Query request forwarding. Fixes [issue #330](https://github.com/rqlite/rqlite/issues/330).
 
 ### Implementation changes and bug fixes
 - [PR #857](https://github.com/rqlite/rqlite/pull/857): Use Protobufs as core data model.
