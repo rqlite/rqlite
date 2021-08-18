@@ -2,7 +2,9 @@
 
 rqlite exposes an HTTP API allowing the database to be modified such that the changes are replicated. Queries are also executed using the HTTP API. _It is important to use the correct endpoint for the operation you wish to execute._
 
-All write-requests must be sent to the leader of the cluster. Queries, however, may be sent to any node, depending on the [read-consistency](https://github.com/rqlite/rqlite/blob/master/DOC/CONSISTENCY.md) requirements. But, by default, queries must also be sent to the leader.
+All write-requests must be serviced by the Leader of the cluster. If a write request is sent to a Follower, the Follower transparently forwards the request to the Leader. The Follower waits for the response from the Leader, and returns it to the client making the write-request.
+
+Queries, however, may be serviced by any node, depending on the [read-consistency](https://github.com/rqlite/rqlite/blob/master/DOC/CONSISTENCY.md) requirements. But, by default, queries must also be sent to the Leader. Like write-requests, Followers will transparently forward requests to the Leader if needed, and respond to client after receiving the response from the Leader.
 
 There are [client libraries available](https://github.com/rqlite).
 
@@ -144,18 +146,12 @@ curl -XPOST 'localhost:4001/db/execute?pretty&timings' -H "Content-Type: applica
 }
 ```
 
-## Sending requests to followers
-What happens when you send a request to a follower depends on the nature of the request.
-
-You must always send write-requests (requests that will modify the database) to the leader. If you send a write-request to a follower, the follower will respond with [HTTP 301 Moved Permanently](https://en.wikipedia.org/wiki/HTTP_301) and include the address of the leader as the `Location` header in the response.
-
-The situation for queries -- requests which just read data -- is somewhat different. If you send the request to a node that is not the leader of the cluster, and specify `strong` or `weak` as the [read-consistency level](https://github.com/rqlite/rqlite/blob/master/DOC/CONSISTENCY.md), the node will also respond with [HTTP 301 Moved Permanently](https://en.wikipedia.org/wiki/HTTP_301) and include the address of the leader as the `Location` header in the response.
-
-However, if you specify `none` for read-consistency the node will query its local SQLite database. No redirect will be returned.
+## Controlling Request Forwarding
+If you do not wish a Follower to transparently forward a request to a Leader, add `redirect` to the URL as a query parameter. If a Follower receives a request that can only be serviced by the Leader, the Follower will respond with [HTTP 301 Moved Permanently](https://en.wikipedia.org/wiki/HTTP_301) and include the address of the Leader as the `Location` header in the response.
 
 ## Example of redirect on query
 ```
-$ curl -v -G 'localhost:4003/db/query?pretty&timings' --data-urlencode 'q=SELECT * FROM foo'
+$ curl -v -G 'localhost:4003/db/query?pretty&timings&redirect' --data-urlencode 'q=SELECT * FROM foo'
 *   Trying ::1...
 * connect to ::1 port 4003 failed: Connection refused
 *   Trying 127.0.0.1...
@@ -176,9 +172,9 @@ $ curl -v -G 'localhost:4003/db/query?pretty&timings' --data-urlencode 'q=SELECT
 
 * Connection #0 to host localhost left intact
 ```
-It is up the clients to re-issue the command to the leader.
+It is up the clients to re-issue the command to the Leader.
 
-This choice was made as it provides maximum visibility to the clients. For example, if a follower transparently forwarded a request to the leader, and one of the nodes then crashed during processing, it may be much harder for the client to determine where in the chain of nodes the processing failed.
+This option was made available as it provides maximum visibility to the clients, should they prefer if. For example, if a Follower transparently forwarded a request to the Leader, and one of the nodes then crashed during processing, it may be difficult for the client to determine where in the chain of nodes the processing failed.
 
 ## Bulk API
 You can learn about the bulk API [here](https://github.com/rqlite/rqlite/blob/master/DOC/BULK.md).
