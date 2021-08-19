@@ -500,7 +500,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 
 	resp := NewResponse()
 
-	timings, err := timings(r)
+	timings, err := isTimings(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -735,25 +735,7 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 
 	resp := NewResponse()
 
-	isTx, err := isTx(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	redirect, err := isRedirect(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	timings, err := timings(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	timeout, err := timeoutParam(r, defaulTimeout)
+	timeout, isTx, timings, redirect, err := reqParams(r, defaulTimeout)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -827,25 +809,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 
 	resp := NewResponse()
 
-	isTx, err := isTx(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	redirect, err := isRedirect(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	timings, err := timings(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	timeout, err := timeoutParam(r, defaulTimeout)
+	timeout, isTx, timings, redirect, err := reqParams(r, defaulTimeout)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -1056,7 +1020,7 @@ func (s *Service) writeResponse(w http.ResponseWriter, r *http.Request, j *Respo
 	var b []byte
 	var err error
 	pretty, _ := isPretty(r)
-	timings, _ := timings(r)
+	timings, _ := isTimings(r)
 
 	if timings {
 		j.SetTime()
@@ -1188,6 +1152,28 @@ func isTx(req *http.Request) (bool, error) {
 	return queryParam(req, "transaction")
 }
 
+// reqParams is a convenience function to get a bunch of query params
+// in one function call.
+func reqParams(req *http.Request, def time.Duration) (timeout time.Duration, tx, timings, redirect bool, err error) {
+	timeout, err = timeoutParam(req, def)
+	if err != nil {
+		return 0, false, false, false, err
+	}
+	tx, err = isTx(req)
+	if err != nil {
+		return 0, false, false, false, err
+	}
+	timings, err = isTimings(req)
+	if err != nil {
+		return 0, false, false, false, err
+	}
+	redirect, err = isRedirect(req)
+	if err != nil {
+		return 0, false, false, false, err
+	}
+	return timeout, tx, timings, redirect, nil
+}
+
 // noLeader returns whether processing should skip the leader check.
 func noLeader(req *http.Request) (bool, error) {
 	return queryParam(req, "noleader")
@@ -1198,8 +1184,8 @@ func nonVoters(req *http.Request) (bool, error) {
 	return queryParam(req, "nonvoters")
 }
 
-// timings returns whether timings are requested.
-func timings(req *http.Request) (bool, error) {
+// isTimings returns whether timings are requested.
+func isTimings(req *http.Request) (bool, error) {
 	return queryParam(req, "timings")
 }
 
