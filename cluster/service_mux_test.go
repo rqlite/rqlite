@@ -15,7 +15,7 @@ func Test_NewServiceSetGetNodeAPIAddrMuxed(t *testing.T) {
 	go mux.Serve()
 	tn := mux.Listen(1) // Could be any byte value.
 
-	s := New(tn)
+	s := New(tn, mustNewMockDatabase())
 	if s == nil {
 		t.Fatalf("failed to create cluster service")
 	}
@@ -26,7 +26,7 @@ func Test_NewServiceSetGetNodeAPIAddrMuxed(t *testing.T) {
 
 	s.SetAPIAddr("foo")
 
-	c := NewClient(tn)
+	c := NewClient(mustNewDialer(1, false, false))
 
 	addr, err := c.GetNodeAPIAddr(s.Addr())
 	if err != nil {
@@ -49,7 +49,7 @@ func Test_NewServiceSetGetNodeAPIAddrMuxedTLS(t *testing.T) {
 	go mux.Serve()
 	tn := mux.Listen(1) // Could be any byte value.
 
-	s := New(tn)
+	s := New(tn, mustNewMockDatabase())
 	if s == nil {
 		t.Fatalf("failed to create cluster service")
 	}
@@ -60,7 +60,7 @@ func Test_NewServiceSetGetNodeAPIAddrMuxedTLS(t *testing.T) {
 
 	s.SetAPIAddr("foo")
 
-	c := NewClient(tn)
+	c := NewClient(mustNewDialer(1, true, true))
 
 	addr, err := c.GetNodeAPIAddr(s.Addr())
 	if err != nil {
@@ -110,4 +110,8 @@ func mustNewTLSMux() (net.Listener, *tcp.Mux) {
 	mux.InsecureSkipVerify = true
 
 	return ln, mux
+}
+
+func mustNewDialer(header byte, remoteEncrypted, skipVerify bool) *tcp.Dialer {
+	return tcp.NewDialer(header, remoteEncrypted, skipVerify)
 }

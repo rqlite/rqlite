@@ -500,7 +500,7 @@ func mustNodeEncryptedOnDisk(dir string, enableSingle, httpEncrypt bool, mux *tc
 	node.RaftAddr = node.Store.Addr()
 	node.ID = node.Store.ID()
 
-	clstr := cluster.New(mux.Listen(cluster.MuxClusterHeader))
+	clstr := cluster.New(mux.Listen(cluster.MuxClusterHeader), node.Store)
 	if err := clstr.Open(); err != nil {
 		panic("failed to open Cluster service)")
 	}

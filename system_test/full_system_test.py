@@ -288,7 +288,7 @@ class Node(object):
     return r.json()
 
   def redirect_addr(self):
-    r = requests.post(self._execute_url(), data=json.dumps(['nonsense']), allow_redirects=False)
+    r = requests.post(self._execute_url(redirect=True), data=json.dumps(['nonsense']), allow_redirects=False)
     if r.status_code == 301:
       return "%s://%s" % (urlparse(r.headers['Location']).scheme, urlparse(r.headers['Location']).netloc)
 
@@ -298,10 +298,16 @@ class Node(object):
     return 'http://' + self.APIAddr() + '/nodes?nonvoters' # Getting all nodes back makes testing easier
   def _expvar_url(self):
     return 'http://' + self.APIAddr() + '/debug/vars'
-  def _query_url(self):
-    return 'http://' + self.APIAddr() + '/db/query'
-  def _execute_url(self):
-    return 'http://' + self.APIAddr() + '/db/execute'
+  def _query_url(self, redirect=False):
+    rd = ""
+    if redirect:
+      rd = "?redirect"
+    return 'http://' + self.APIAddr() + '/db/query' + rd
+  def _execute_url(self, redirect=False):
+    rd = ""
+    if redirect:
+      rd = "?redirect"
+    return 'http://' + self.APIAddr() + '/db/execute' + rd
   def _backup_url(self):
     return 'http://' + self.APIAddr() + '/db/backup'
   def _load_url(self):
@@ -554,6 +560,38 @@ class TestEndToEndAdvAddr(TestEndToEnd):
     n2.wait_for_leader()
 
     self.cluster = Cluster([n0, n1, n2])
+
+class TestRequestForwarding(unittest.TestCase):
+  '''Test that followers transparently forward requests to leaders'''
+
+  def setUp(self):
+    n0 = Node(RQLITED_PATH, '0')
+    n0.start()
+    n0.wait_for_leader()
+
+    n1 = Node(RQLITED_PATH, '1')
+    n1.start(join=n0.APIAddr())
+    n1.wait_for_leader()
+
+    self.cluster = Cluster([n0, n1])
+
+  def tearDown(self):
+    self.cluster.deprovision()
+
+  def test_execute_query_forward(self):
+      l = self.cluster.wait_for_leader()
+      j = l.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
+      self.assertEqual(str(j), "{u'results': [{}]}")
+
+      f = self.cluster.followers()[0]
+      j = f.execute('INSERT INTO foo(name) VALUES("fiona")')
+      self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
+      fsmIdx = l.wait_for_all_fsm()
+
+      j = l.query('SELECT * FROM foo')
+      self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
+      j = f.query('SELECT * FROM foo')
+      self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
 
 class TestEndToEndNonVoter(unittest.TestCase):
   def setUp(self):
