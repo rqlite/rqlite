@@ -1,7 +1,8 @@
 # Command Line Interface
 rqlite comes with a CLI, which makes it easier to interact with a rqlite system. It is installed in the same directory as the node binary `rqlited`. 
 
-> :warning: **Only enter one command at a time at CLI. Don't enter multiple commands at once, separated by ;** While it may work, mixing reads and writes to the database in a single CLI command results in undefined behavior.
+> **⚠ WARNING: Only enter one command at a time at CLI. Don't enter multiple commands at once, separated by ;**  
+> While it may work, mixing reads and writes to the database in a single CLI command results in undefined behavior.
 
 An example session is shown below.
 ```sh
