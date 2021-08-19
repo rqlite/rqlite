@@ -3,12 +3,15 @@ package system
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/rqlite/rqlite/cluster"
 	"github.com/rqlite/rqlite/command"
 	"github.com/rqlite/rqlite/command/encoding"
 	"github.com/rqlite/rqlite/tcp"
 )
+
+const fiveSec = 5 * time.Second
 
 // Test_StoreClientSideBySide operates on the same store directly, and via
 // RPC, and ensures results are the same for basically the same operation.
@@ -29,7 +32,7 @@ func Test_StoreClientSideBySide(t *testing.T) {
 	if exp, got := "[{}]", asJSON(res); exp != got {
 		t.Fatalf("unexpected results, expt %s, got %s", exp, got)
 	}
-	res, err = client.Execute(leaderAddr, executeRequestFromString("CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"))
+	res, err = client.Execute(leaderAddr, executeRequestFromString("CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"), fiveSec)
 	if err != nil {
 		t.Fatalf("failed to execute via remote: %s", err.Error())
 	}
@@ -44,7 +47,7 @@ func Test_StoreClientSideBySide(t *testing.T) {
 	if exp, got := `[{"last_insert_id":1,"rows_affected":1}]`, asJSON(res); exp != got {
 		t.Fatalf("unexpected results, expt %s, got %s", exp, got)
 	}
-	res, err = client.Execute(leaderAddr, executeRequestFromString(`INSERT INTO bar(name) VALUES("fiona")`))
+	res, err = client.Execute(leaderAddr, executeRequestFromString(`INSERT INTO bar(name) VALUES("fiona")`), fiveSec)
 	if err != nil {
 		t.Fatalf("failed to execute via remote: %s", err.Error())
 	}
@@ -67,14 +70,14 @@ func Test_StoreClientSideBySide(t *testing.T) {
 		t.Fatalf("unexpected results, expt %s, got %s", exp, got)
 	}
 
-	rows, err = client.Query(leaderAddr, queryRequestFromString(`SELECT * FROM foo`))
+	rows, err = client.Query(leaderAddr, queryRequestFromString(`SELECT * FROM foo`), fiveSec)
 	if err != nil {
 		t.Fatalf("failed to query via remote: %s", err.Error())
 	}
 	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(rows); exp != got {
 		t.Fatalf("unexpected results, expt %s, got %s", exp, got)
 	}
-	rows, err = client.Query(leaderAddr, queryRequestFromString(`SELECT * FROM bar`))
+	rows, err = client.Query(leaderAddr, queryRequestFromString(`SELECT * FROM bar`), fiveSec)
 	if err != nil {
 		t.Fatalf("failed to query via remote: %s", err.Error())
 	}
@@ -89,7 +92,7 @@ func Test_StoreClientSideBySide(t *testing.T) {
 	if exp, got := `[{"error":"no such table: qux"}]`, asJSON(rows); exp != got {
 		t.Fatalf("unexpected results, expt %s, got %s", exp, got)
 	}
-	rows, err = client.Query(leaderAddr, queryRequestFromString(`SELECT * FROM qux`))
+	rows, err = client.Query(leaderAddr, queryRequestFromString(`SELECT * FROM qux`), fiveSec)
 	if err != nil {
 		t.Fatalf("failed to query via remote: %s", err.Error())
 	}

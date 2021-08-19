@@ -3,11 +3,16 @@ package cluster
 import (
 	"errors"
 	"fmt"
+	"os"
 	"testing"
+	"time"
 
 	"github.com/rqlite/rqlite/command"
 	"github.com/rqlite/rqlite/command/encoding"
 )
+
+const oneSec = 1 * time.Second
+const fiveSec = 5 * time.Second
 
 func Test_ServiceExecute(t *testing.T) {
 	ln, mux := mustNewMux()
@@ -32,7 +37,7 @@ func Test_ServiceExecute(t *testing.T) {
 		}
 		return nil, errors.New("execute failed")
 	}
-	_, err := c.Execute(s.Addr(), executeRequestFromString("some SQL"))
+	_, err := c.Execute(s.Addr(), executeRequestFromString("some SQL"), fiveSec)
 	if err == nil {
 		t.Fatalf("client failed to report error")
 	}
@@ -50,7 +55,7 @@ func Test_ServiceExecute(t *testing.T) {
 		}
 		return []*command.ExecuteResult{result}, nil
 	}
-	res, err := c.Execute(s.Addr(), executeRequestFromString("some SQL"))
+	res, err := c.Execute(s.Addr(), executeRequestFromString("some SQL"), fiveSec)
 	if err != nil {
 		t.Fatalf("failed to execute query: %s", err.Error())
 	}
@@ -67,12 +72,24 @@ func Test_ServiceExecute(t *testing.T) {
 		}
 		return []*command.ExecuteResult{result}, nil
 	}
-	res, err = c.Execute(s.Addr(), executeRequestFromString("some SQL"))
+	res, err = c.Execute(s.Addr(), executeRequestFromString("some SQL"), fiveSec)
 	if err != nil {
 		t.Fatalf("failed to execute: %s", err.Error())
 	}
 	if exp, got := `[{"error":"no such table"}]`, asJSON(res); exp != got {
 		t.Fatalf("unexpected results for execute, expected %s, got %s", exp, got)
+	}
+
+	db.executeFn = func(er *command.ExecuteRequest) ([]*command.ExecuteResult, error) {
+		time.Sleep(fiveSec)
+		return nil, nil
+	}
+	_, err = c.Execute(s.Addr(), executeRequestFromString("some SQL"), oneSec)
+	if err == nil {
+		t.Fatalf("failed to receive expected error")
+	}
+	if !errors.Is(err, os.ErrDeadlineExceeded) {
+		t.Fatalf("failed to receive expected error, got: %T %s", err, err)
 	}
 
 	// Clean up resources.
@@ -107,7 +124,7 @@ func Test_ServiceQuery(t *testing.T) {
 		}
 		return nil, errors.New("query failed")
 	}
-	_, err := c.Query(s.Addr(), queryRequestFromString("SELECT * FROM foo"))
+	_, err := c.Query(s.Addr(), queryRequestFromString("SELECT * FROM foo"), fiveSec)
 	if err == nil {
 		t.Fatalf("client failed to report error")
 	}
@@ -125,7 +142,7 @@ func Test_ServiceQuery(t *testing.T) {
 		}
 		return []*command.QueryRows{rows}, nil
 	}
-	res, err := c.Query(s.Addr(), queryRequestFromString("SELECT * FROM foo"))
+	res, err := c.Query(s.Addr(), queryRequestFromString("SELECT * FROM foo"), fiveSec)
 	if err != nil {
 		t.Fatalf("failed to query: %s", err.Error())
 	}
@@ -142,12 +159,24 @@ func Test_ServiceQuery(t *testing.T) {
 		}
 		return []*command.QueryRows{rows}, nil
 	}
-	res, err = c.Query(s.Addr(), queryRequestFromString("SELECT * FROM foo"))
+	res, err = c.Query(s.Addr(), queryRequestFromString("SELECT * FROM foo"), fiveSec)
 	if err != nil {
 		t.Fatalf("failed to query: %s", err.Error())
 	}
 	if exp, got := `[{"error":"no such table"}]`, asJSON(res); exp != got {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+
+	db.queryFn = func(er *command.QueryRequest) ([]*command.QueryRows, error) {
+		time.Sleep(fiveSec)
+		return nil, nil
+	}
+	_, err = c.Query(s.Addr(), queryRequestFromString("some SQL"), oneSec)
+	if err == nil {
+		t.Fatalf("failed to receive expected error")
+	}
+	if !errors.Is(err, os.ErrDeadlineExceeded) {
+		t.Fatalf("failed to receive expected error, got: %T %s", err, err)
 	}
 
 	// Clean up resources.

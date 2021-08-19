@@ -70,10 +70,10 @@ type Cluster interface {
 	GetNodeAPIAddr(nodeAddr string) (string, error)
 
 	// Execute performs an Execute Request on a remote node.
-	Execute(nodeAddr string, er *command.ExecuteRequest) ([]*command.ExecuteResult, error)
+	Execute(nodeAddr string, er *command.ExecuteRequest, timeout time.Duration) ([]*command.ExecuteResult, error)
 
 	// Query performs an Query Request on a remote node.
-	Query(nodeAddr string, qr *command.QueryRequest) ([]*command.QueryRows, error)
+	Query(nodeAddr string, qr *command.QueryRequest, timeout time.Duration) ([]*command.QueryRows, error)
 
 	// Stats returns stats on the Cluster.
 	Stats() (map[string]interface{}, error)
@@ -135,6 +135,9 @@ const (
 	numJoins            = "joins"
 	numAuthOK           = "authOK"
 	numAuthFail         = "authFail"
+
+	// Default timeout for request forwarding
+	defaulTimeout = 30 * time.Second
 
 	// PermAll means all actions permitted.
 	PermAll = "all"
@@ -750,6 +753,12 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	timeout, err := timeoutParam(r, defaulTimeout)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	b, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -788,7 +797,7 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
-		results, resultsErr = s.cluster.Execute(addr, er)
+		results, resultsErr = s.cluster.Execute(addr, er, timeout)
 		stats.Add(numRemoteExecutions, 1)
 		w.Header().Add(ServedByHTTPHeader, addr)
 	}
@@ -831,6 +840,12 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 	}
 
 	timings, err := timings(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	timeout, err := timeoutParam(r, defaulTimeout)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -882,7 +897,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
-		results, resultsErr = s.cluster.Query(addr, qr)
+		results, resultsErr = s.cluster.Query(addr, qr, timeout)
 		stats.Add(numRemoteQueries, 1)
 		w.Header().Add(ServedByHTTPHeader, addr)
 	}
@@ -1117,7 +1132,7 @@ func createTLSConfig(certFile, keyFile, caCertFile string, tls1011 bool) (*tls.C
 	return config, nil
 }
 
-// queryParam returns whether the given query param is set to true.
+// queryParam returns whether the given query param is present.
 func queryParam(req *http.Request, param string) (bool, error) {
 	err := req.ParseForm()
 	if err != nil {
@@ -1151,6 +1166,21 @@ func isPretty(req *http.Request) (bool, error) {
 // redirect to the leader, if necessary.
 func isRedirect(req *http.Request) (bool, error) {
 	return queryParam(req, "redirect")
+}
+
+// timeoutParam returns the value, if any, set for timeout. If not set,
+// it returns the value passed in as a default.
+func timeoutParam(req *http.Request, def time.Duration) (time.Duration, error) {
+	q := req.URL.Query()
+	timeout := strings.TrimSpace(q.Get("timeout"))
+	if timeout == "" {
+		return def, nil
+	}
+	d, err := time.ParseDuration(timeout)
+	if err != nil {
+		return 0, err
+	}
+	return d, nil
 }
 
 // isTx returns whether the HTTP request is requesting a transaction.

@@ -135,6 +135,9 @@ curl -XPOST 'localhost:4001/db/execute?pretty&timings' -H "Content-Type: applica
 ```
 
 ## How rqlite handles requests
+_This section assumes a basic familiarity with the Raft protocol. A simple introduction to Raft can be found [here](http://thesecretlivesofdata.com/raft/)._
+
+To make best use of the rqlite API, there are some important details to know.
 
 With any rqlite cluster, all write-requests must be serviced by the cluster Leader -- this is due to the way the Raft consensus protocol works. If a write request is sent to a Follower, the Follower transparently forwards the request to the Leader. The Follower waits for the response from the Leader, and returns it to the client making the write-request.
 
@@ -142,6 +145,14 @@ Queries, by default, are also serviced by the cluster Leader. Like write-request
 
 ### Data and the Raft log
 Any writes to the SQLite database go through the Raft log, ensuring only changes committed by a quorum of rqlite nodes are actually applied to the SQLite database. Queries do not __necessarily__ go through the Raft log, however, since they do not change the state of the database, and therefore do not need to be captured in the log. Only if _Strong_ read consistency requested does a query go through the Raft log.
+
+## Request forwarding timeouts
+If a Follower forwards a request to a Leader, by default it must hear from the Leader within 30 seconds. You can control this timeout by setting to the `timeout` parameter. For example, to set a 2 minute timeout, you would issue the following request:
+```bash
+curl -XPOST 'localhost:4001/db/execute?timeout=2m' -H "Content-Type: application/json" -d '[
+    ["INSERT INTO foo(name, age) VALUES(?, ?)", "fiona", 20]
+]'
+```
 
 ## Disabling Request Forwarding
 If you do not wish a Follower to transparently forward a request to a Leader, add `redirect` to the URL as a query parameter. In that case if a Follower receives a request that can only be serviced by the Leader, the Follower will respond with [HTTP 301 Moved Permanently](https://en.wikipedia.org/wiki/HTTP_301) and include the address of the Leader as the `Location` header in the response. It is then up the clients to re-issue the command to the Leader.

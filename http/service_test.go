@@ -824,11 +824,11 @@ func (m *mockClusterService) GetNodeAPIAddr(a string) (string, error) {
 	return m.apiAddr, nil
 }
 
-func (m *mockClusterService) Execute(addr string, er *command.ExecuteRequest) ([]*command.ExecuteResult, error) {
+func (m *mockClusterService) Execute(addr string, er *command.ExecuteRequest, t time.Duration) ([]*command.ExecuteResult, error) {
 	return nil, nil
 }
 
-func (m *mockClusterService) Query(addr string, qr *command.QueryRequest) ([]*command.QueryRows, error) {
+func (m *mockClusterService) Query(addr string, qr *command.QueryRequest, t time.Duration) ([]*command.QueryRows, error) {
 	return nil, nil
 }
 

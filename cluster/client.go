@@ -21,7 +21,7 @@ type Client struct {
 func NewClient(dl Dialer) *Client {
 	return &Client{
 		dialer:  dl,
-		timeout: 10 * time.Second,
+		timeout: 30 * time.Second,
 	}
 }
 
@@ -70,7 +70,7 @@ func (c *Client) GetNodeAPIAddr(nodeAddr string) (string, error) {
 }
 
 // Execute performs an Execute on a remote node.
-func (c *Client) Execute(nodeAddr string, er *command.ExecuteRequest) ([]*command.ExecuteResult, error) {
+func (c *Client) Execute(nodeAddr string, er *command.ExecuteRequest, timeout time.Duration) ([]*command.ExecuteResult, error) {
 	conn, err := c.dialer.Dial(nodeAddr, c.timeout)
 	if err != nil {
 		return nil, fmt.Errorf("dial connection: %s", err)
@@ -93,24 +93,33 @@ func (c *Client) Execute(nodeAddr string, er *command.ExecuteRequest) ([]*comman
 	b := make([]byte, 4)
 	binary.LittleEndian.PutUint16(b[0:], uint16(len(p)))
 
+	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
+		return nil, err
+	}
 	_, err = conn.Write(b)
 	if err != nil {
-		return nil, fmt.Errorf("write protobuf length: %s", err)
+		return nil, err
+	}
+	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
+		return nil, err
 	}
 	_, err = conn.Write(p)
 	if err != nil {
-		return nil, fmt.Errorf("write protobuf: %s", err)
+		return nil, err
 	}
 
+	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
+		return nil, err
+	}
 	b, err = ioutil.ReadAll(conn)
 	if err != nil {
-		return nil, fmt.Errorf("read protobuf bytes: %s", err)
+		return nil, err
 	}
 
 	a := &CommandExecuteResponse{}
 	err = proto.Unmarshal(b, a)
 	if err != nil {
-		return nil, fmt.Errorf("protobuf unmarshal: %s", err)
+		return nil, err
 	}
 
 	if a.Error != "" {
@@ -120,7 +129,7 @@ func (c *Client) Execute(nodeAddr string, er *command.ExecuteRequest) ([]*comman
 }
 
 // Query performs an Query on a remote node.
-func (c *Client) Query(nodeAddr string, qr *command.QueryRequest) ([]*command.QueryRows, error) {
+func (c *Client) Query(nodeAddr string, qr *command.QueryRequest, timeout time.Duration) ([]*command.QueryRows, error) {
 	conn, err := c.dialer.Dial(nodeAddr, c.timeout)
 	if err != nil {
 		return nil, fmt.Errorf("dial connection: %s", err)
@@ -143,24 +152,33 @@ func (c *Client) Query(nodeAddr string, qr *command.QueryRequest) ([]*command.Qu
 	b := make([]byte, 4)
 	binary.LittleEndian.PutUint16(b[0:], uint16(len(p)))
 
+	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
+		return nil, err
+	}
 	_, err = conn.Write(b)
 	if err != nil {
-		return nil, fmt.Errorf("write protobuf length: %s", err)
+		return nil, err
+	}
+	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
+		return nil, err
 	}
 	_, err = conn.Write(p)
 	if err != nil {
-		return nil, fmt.Errorf("write protobuf: %s", err)
+		return nil, err
 	}
 
+	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
+		return nil, err
+	}
 	b, err = ioutil.ReadAll(conn)
 	if err != nil {
-		return nil, fmt.Errorf("read protobuf bytes: %s", err)
+		return nil, err
 	}
 
 	a := &CommandQueryResponse{}
 	err = proto.Unmarshal(b, a)
 	if err != nil {
-		return nil, fmt.Errorf("protobuf unmarshal: %s", err)
+		return nil, err
 	}
 
 	if a.Error != "" {
