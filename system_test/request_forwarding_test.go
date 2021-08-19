@@ -32,7 +32,7 @@ func Test_StoreClientSideBySide(t *testing.T) {
 	if exp, got := "[{}]", asJSON(res); exp != got {
 		t.Fatalf("unexpected results, expt %s, got %s", exp, got)
 	}
-	res, err = client.Execute(leaderAddr, executeRequestFromString("CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"), fiveSec)
+	res, err = client.Execute(executeRequestFromString("CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"), leaderAddr, fiveSec)
 	if err != nil {
 		t.Fatalf("failed to execute via remote: %s", err.Error())
 	}
@@ -47,7 +47,7 @@ func Test_StoreClientSideBySide(t *testing.T) {
 	if exp, got := `[{"last_insert_id":1,"rows_affected":1}]`, asJSON(res); exp != got {
 		t.Fatalf("unexpected results, expt %s, got %s", exp, got)
 	}
-	res, err = client.Execute(leaderAddr, executeRequestFromString(`INSERT INTO bar(name) VALUES("fiona")`), fiveSec)
+	res, err = client.Execute(executeRequestFromString(`INSERT INTO bar(name) VALUES("fiona")`), leaderAddr, fiveSec)
 	if err != nil {
 		t.Fatalf("failed to execute via remote: %s", err.Error())
 	}
@@ -70,14 +70,14 @@ func Test_StoreClientSideBySide(t *testing.T) {
 		t.Fatalf("unexpected results, expt %s, got %s", exp, got)
 	}
 
-	rows, err = client.Query(leaderAddr, queryRequestFromString(`SELECT * FROM foo`), fiveSec)
+	rows, err = client.Query(queryRequestFromString(`SELECT * FROM foo`), leaderAddr, fiveSec)
 	if err != nil {
 		t.Fatalf("failed to query via remote: %s", err.Error())
 	}
 	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(rows); exp != got {
 		t.Fatalf("unexpected results, expt %s, got %s", exp, got)
 	}
-	rows, err = client.Query(leaderAddr, queryRequestFromString(`SELECT * FROM bar`), fiveSec)
+	rows, err = client.Query(queryRequestFromString(`SELECT * FROM bar`), leaderAddr, fiveSec)
 	if err != nil {
 		t.Fatalf("failed to query via remote: %s", err.Error())
 	}
@@ -92,7 +92,7 @@ func Test_StoreClientSideBySide(t *testing.T) {
 	if exp, got := `[{"error":"no such table: qux"}]`, asJSON(rows); exp != got {
 		t.Fatalf("unexpected results, expt %s, got %s", exp, got)
 	}
-	rows, err = client.Query(leaderAddr, queryRequestFromString(`SELECT * FROM qux`), fiveSec)
+	rows, err = client.Query(queryRequestFromString(`SELECT * FROM qux`), leaderAddr, fiveSec)
 	if err != nil {
 		t.Fatalf("failed to query via remote: %s", err.Error())
 	}

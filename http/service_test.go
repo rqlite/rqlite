@@ -818,24 +818,24 @@ func (m *MockStore) Backup(leader bool, f store.BackupFormat, w io.Writer) error
 
 type mockClusterService struct {
 	apiAddr   string
-	executeFn func(addr string, er *command.ExecuteRequest, t time.Duration) ([]*command.ExecuteResult, error)
-	queryFn   func(addr string, qr *command.QueryRequest, t time.Duration) ([]*command.QueryRows, error)
+	executeFn func(er *command.ExecuteRequest, addr string, t time.Duration) ([]*command.ExecuteResult, error)
+	queryFn   func(qr *command.QueryRequest, addr string, t time.Duration) ([]*command.QueryRows, error)
 }
 
 func (m *mockClusterService) GetNodeAPIAddr(a string) (string, error) {
 	return m.apiAddr, nil
 }
 
-func (m *mockClusterService) Execute(addr string, er *command.ExecuteRequest, t time.Duration) ([]*command.ExecuteResult, error) {
+func (m *mockClusterService) Execute(er *command.ExecuteRequest, addr string, t time.Duration) ([]*command.ExecuteResult, error) {
 	if m.executeFn != nil {
-		return m.executeFn(addr, er, t)
+		return m.executeFn(er, addr, t)
 	}
 	return nil, nil
 }
 
-func (m *mockClusterService) Query(addr string, qr *command.QueryRequest, t time.Duration) ([]*command.QueryRows, error) {
+func (m *mockClusterService) Query(qr *command.QueryRequest, addr string, t time.Duration) ([]*command.QueryRows, error) {
 	if m.queryFn != nil {
-		return m.queryFn(addr, qr, t)
+		return m.queryFn(qr, addr, t)
 	}
 	return nil, nil
 }

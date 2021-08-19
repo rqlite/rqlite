@@ -70,10 +70,10 @@ type Cluster interface {
 	GetNodeAPIAddr(nodeAddr string) (string, error)
 
 	// Execute performs an Execute Request on a remote node.
-	Execute(nodeAddr string, er *command.ExecuteRequest, timeout time.Duration) ([]*command.ExecuteResult, error)
+	Execute(er *command.ExecuteRequest, nodeAddr string, timeout time.Duration) ([]*command.ExecuteResult, error)
 
 	// Query performs an Query Request on a remote node.
-	Query(nodeAddr string, qr *command.QueryRequest, timeout time.Duration) ([]*command.QueryRows, error)
+	Query(qr *command.QueryRequest, nodeAddr string, timeout time.Duration) ([]*command.QueryRows, error)
 
 	// Stats returns stats on the Cluster.
 	Stats() (map[string]interface{}, error)
@@ -779,7 +779,7 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
-		results, resultsErr = s.cluster.Execute(addr, er, timeout)
+		results, resultsErr = s.cluster.Execute(er, addr, timeout)
 		stats.Add(numRemoteExecutions, 1)
 		w.Header().Add(ServedByHTTPHeader, addr)
 	}
@@ -861,7 +861,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
-		results, resultsErr = s.cluster.Query(addr, qr, timeout)
+		results, resultsErr = s.cluster.Query(qr, addr, timeout)
 		stats.Add(numRemoteQueries, 1)
 		w.Header().Add(ServedByHTTPHeader, addr)
 	}

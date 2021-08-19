@@ -70,7 +70,7 @@ func (c *Client) GetNodeAPIAddr(nodeAddr string) (string, error) {
 }
 
 // Execute performs an Execute on a remote node.
-func (c *Client) Execute(nodeAddr string, er *command.ExecuteRequest, timeout time.Duration) ([]*command.ExecuteResult, error) {
+func (c *Client) Execute(er *command.ExecuteRequest, nodeAddr string, timeout time.Duration) ([]*command.ExecuteResult, error) {
 	conn, err := c.dialer.Dial(nodeAddr, c.timeout)
 	if err != nil {
 		return nil, fmt.Errorf("dial connection: %s", err)
@@ -129,7 +129,7 @@ func (c *Client) Execute(nodeAddr string, er *command.ExecuteRequest, timeout ti
 }
 
 // Query performs an Query on a remote node.
-func (c *Client) Query(nodeAddr string, qr *command.QueryRequest, timeout time.Duration) ([]*command.QueryRows, error) {
+func (c *Client) Query(qr *command.QueryRequest, nodeAddr string, timeout time.Duration) ([]*command.QueryRows, error) {
 	conn, err := c.dialer.Dial(nodeAddr, c.timeout)
 	if err != nil {
 		return nil, fmt.Errorf("dial connection: %s", err)
