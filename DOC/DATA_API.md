@@ -1,8 +1,8 @@
 # Data API
 
-Each rqlite node exposes an HTTP API allowing data to be inserted into, and read back from, the database. The best way to understand the API is to work through the simple examples below. Writes to the database must be sent to the `/db/execute` endpoint, and reads should be sent to the `/db/query` endpoint. _It is important to use the correct endpoint for the operation you wish to perform._
+Each rqlite node exposes an HTTP API allowing data to be inserted into, and read back from, the database. Writes to the database must be sent to the `/db/execute` endpoint, and reads should be sent to the `/db/query` endpoint. _It is important to use the correct endpoint for the operation you wish to perform._
 
-There are also [client libraries available](https://github.com/rqlite).
+The best way to understand the API is to work through the simple examples below. There are also [client libraries available](https://github.com/rqlite).
 
 ## Writing Data
 To write data successfully to the database, you must create at least 1 table. To do this perform a HTTP POST on the `/db/execute` endpoint on any rqlite node. Encapsulate the `CREATE TABLE` SQL command in a JSON array, and put it in the body of the request. An example via [curl](http://curl.haxx.se/):
@@ -83,8 +83,6 @@ curl -XPOST 'localhost:4001/db/query?pretty&timings' -H "Content-Type: applicati
 The response will be in the same form as when the query is made via HTTP GET.
 
 ## Parameterized Statements
-_Support for Parameterized Statements was introduced in v5.5.0. The commands below will not work with earlier versions of rqlite._
-
 While the "raw" API described above can be convenient and simple to use, it is vulnerable to [SQL Injection attacks](https://owasp.org/www-community/attacks/SQL_Injection). To protect against this issue, rqlite also supports [SQLite parameterized statements](https://www.sqlite.org/lang_expr.html#varparam), for both read and writes. To use this feature, send the SQL statement and values as distinct elements within a new JSON array, as follows:
 
 _Writing data_
@@ -139,15 +137,15 @@ _This section assumes a basic familiarity with the Raft protocol. A simple intro
 
 To make best use of the rqlite API, there are some important details to know.
 
-With any rqlite cluster, all write-requests must be serviced by the cluster Leader -- this is due to the way the Raft consensus protocol works. If a write request is sent to a Follower, the Follower transparently forwards the request to the Leader. The Follower waits for the response from the Leader, and returns it to the client making the write-request.
+With any rqlite cluster, all write-requests must be serviced by the cluster Leader -- this is due to the way the Raft consensus protocol works. If a client sends a write request to a Follower, the Follower transparently forwards the request to the Leader. The Follower waits for the response from the Leader, and returns it to the client.
 
-Queries, by default, are also serviced by the cluster Leader. Like write-requests, Followers will, by default, transparently forward queries to the Leader, and respond to client after receiving the response from the Leader. However, depending on the [read-consistency](https://github.com/rqlite/rqlite/blob/master/DOC/CONSISTENCY.md) specified with the request, if a Follower received the query request it may serve that request directly and not contact the Leader. Which read-consistency level makes sense depends on your application.
+Queries, by default, are also serviced by the cluster Leader. Like write-requests, Followers will, by default, transparently forward queries to the Leader, and respond to the client after receiving the response from the Leader. However, depending on the [read-consistency](https://github.com/rqlite/rqlite/blob/master/DOC/CONSISTENCY.md) specified with the request, if a Follower received the query request it may serve that request directly and not contact the Leader. Which read-consistency level makes sense depends on your application.
 
 ### Data and the Raft log
-Any writes to the SQLite database go through the Raft log, ensuring only changes committed by a quorum of rqlite nodes are actually applied to the SQLite database. Queries do not __necessarily__ go through the Raft log, however, since they do not change the state of the database, and therefore do not need to be captured in the log. Only if _Strong_ read consistency requested does a query go through the Raft log.
+Any writes to the SQLite database go through the Raft log, ensuring only changes committed by a quorum of rqlite nodes are actually applied to the SQLite database. Queries do not __necessarily__ go through the Raft log, however, since they do not change the state of the database, and therefore do not need to be captured in the log. Only if _Strong_ read consistency is requested does a query go through the Raft log.
 
 ## Request forwarding timeouts
-If a Follower forwards a request to a Leader, by default it must hear from the Leader within 30 seconds. You can control this timeout by setting to the `timeout` parameter. For example, to set a 2 minute timeout, you would issue the following request:
+If a Follower forwards a request to a Leader, by default the Leader must respond within 30 seconds. You can control this timeout by setting the `timeout` parameter. For example, to set a 2 minute timeout, you would issue the following request:
 ```bash
 curl -XPOST 'localhost:4001/db/execute?timeout=2m' -H "Content-Type: application/json" -d '[
     ["INSERT INTO foo(name, age) VALUES(?, ?)", "fiona", 20]
