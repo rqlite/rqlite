@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -676,6 +677,106 @@ func Test_Nodes(t *testing.T) {
 	}
 }
 
+func Test_ForwardingRedirectQueries(t *testing.T) {
+	m := &MockStore{
+		leaderAddr: "foo:1234",
+	}
+	m.queryFn = func(qr *command.QueryRequest) ([]*command.QueryRows, error) {
+		return nil, store.ErrNotLeader
+	}
+
+	c := &mockClusterService{
+		apiAddr: "https://bar:5678",
+	}
+	c.queryFn = func(qr *command.QueryRequest, addr string, timeout time.Duration) ([]*command.QueryRows, error) {
+		rows := &command.QueryRows{
+			Columns: []string{},
+			Types:   []string{},
+		}
+		return []*command.QueryRows{rows}, nil
+	}
+
+	s := New("127.0.0.1:0", m, c, nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	// Check queries.
+	client := &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+
+	resp, err := client.Get(host + "/db/query?pretty&timings&q=SELECT%20%2A%20FROM%20foo")
+	if err != nil {
+		t.Fatalf("failed to make query request")
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("failed to get expected StatusOK for nodes, got %d", resp.StatusCode)
+	}
+
+	resp, err = client.Get(host + "/db/query?redirect&pretty&timings&q=SELECT%20%2A%20FROM%20foo")
+	if err != nil {
+		t.Fatalf("failed to make redirected query request: %s", err)
+	}
+	if resp.StatusCode != http.StatusMovedPermanently {
+		t.Fatalf("failed to get expected StatusMovedPermanently for query, got %d", resp.StatusCode)
+	}
+}
+
+func Test_ForwardingRedirectExecute(t *testing.T) {
+	m := &MockStore{
+		leaderAddr: "foo:1234",
+	}
+	m.executeFn = func(er *command.ExecuteRequest) ([]*command.ExecuteResult, error) {
+		return nil, store.ErrNotLeader
+	}
+
+	c := &mockClusterService{
+		apiAddr: "https://bar:5678",
+	}
+	c.executeFn = func(er *command.ExecuteRequest, addr string, timeout time.Duration) ([]*command.ExecuteResult, error) {
+		result := &command.ExecuteResult{
+			LastInsertId: 1234,
+			RowsAffected: 5678,
+		}
+		return []*command.ExecuteResult{result}, nil
+	}
+
+	s := New("127.0.0.1:0", m, c, nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	// Check executes.
+	client := &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+
+	resp, err := client.Post(host+"/db/execute", "application/json", strings.NewReader(`["Some SQL"]`))
+	if err != nil {
+		t.Fatalf("failed to make execute request")
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("failed to get expected StatusOK for execute, got %d", resp.StatusCode)
+	}
+
+	resp, err = client.Post(host+"/db/execute?redirect", "application/json", strings.NewReader(`["Some SQL"]`))
+	if err != nil {
+		t.Fatalf("failed to make redirected execute request: %s", err)
+	}
+	if resp.StatusCode != http.StatusMovedPermanently {
+		t.Fatalf("failed to get expected StatusMovedPermanently for execute, got %d", resp.StatusCode)
+	}
+}
+
 func Test_TLSServce(t *testing.T) {
 	m := &MockStore{}
 	c := &mockClusterService{}
@@ -769,22 +870,22 @@ func Test_timeoutQueryParam(t *testing.T) {
 }
 
 type MockStore struct {
-	executeFn  func(queries []string, tx bool) ([]*command.ExecuteResult, error)
-	queryFn    func(queries []string, tx, leader, verify bool) ([]*command.QueryRows, error)
+	executeFn  func(er *command.ExecuteRequest) ([]*command.ExecuteResult, error)
+	queryFn    func(qr *command.QueryRequest) ([]*command.QueryRows, error)
 	backupFn   func(leader bool, f store.BackupFormat, dst io.Writer) error
 	leaderAddr string
 }
 
 func (m *MockStore) Execute(er *command.ExecuteRequest) ([]*command.ExecuteResult, error) {
-	if m.executeFn == nil {
-		return nil, nil
+	if m.executeFn != nil {
+		return m.executeFn(er)
 	}
 	return nil, nil
 }
 
 func (m *MockStore) Query(qr *command.QueryRequest) ([]*command.QueryRows, error) {
-	if m.queryFn == nil {
-		return nil, nil
+	if m.queryFn != nil {
+		return m.queryFn(qr)
 	}
 	return nil, nil
 }
