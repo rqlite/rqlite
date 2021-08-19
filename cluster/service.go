@@ -51,16 +51,11 @@ type Dialer interface {
 
 // Database is the interface any queryable system must implement
 type Database interface {
-	// Execute executes a slice of queries, each of which is not expected
-	// to return rows. If timings is true, then timing information will
-	// be return. If tx is true, then either all queries will be executed
-	// successfully or it will as though none executed.
+	// Execute executes a slice of queries, none of which is expected
+	// to return rows.
 	Execute(er *command.ExecuteRequest) ([]*command.ExecuteResult, error)
 
-	// Query executes a slice of queries, each of which returns rows. If
-	// timings is true, then timing information will be returned. If tx
-	// is true, then all queries will take place while a read transaction
-	// is held on the database.
+	// Query executes a slice of queries, each of which returns rows.
 	Query(qr *command.QueryRequest) ([]*command.QueryRows, error)
 }
 

@@ -42,7 +42,7 @@ func (c *Client) GetNodeAPIAddr(nodeAddr string) (string, error) {
 		return "", fmt.Errorf("command marshal: %s", err)
 	}
 
-	// Write length of Protobuf, the Protobuf
+	// Write length of Protobuf
 	b := make([]byte, 4)
 	binary.LittleEndian.PutUint16(b[0:], uint16(len(p)))
 
@@ -89,7 +89,7 @@ func (c *Client) Execute(er *command.ExecuteRequest, nodeAddr string, timeout ti
 		return nil, fmt.Errorf("command marshal: %s", err)
 	}
 
-	// Write length of Protobuf, the Protobuf
+	// Write length of Protobuf
 	b := make([]byte, 4)
 	binary.LittleEndian.PutUint16(b[0:], uint16(len(p)))
 
