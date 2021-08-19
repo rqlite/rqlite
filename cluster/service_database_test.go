@@ -132,8 +132,8 @@ func Test_ServiceQuery(t *testing.T) {
 		t.Fatalf("incorrect error message received, got: %s", err.Error())
 	}
 
-	db.queryFn = func(er *command.QueryRequest) ([]*command.QueryRows, error) {
-		if er.Request.Statements[0].Sql != "SELECT * FROM foo" {
+	db.queryFn = func(qr *command.QueryRequest) ([]*command.QueryRows, error) {
+		if qr.Request.Statements[0].Sql != "SELECT * FROM foo" {
 			t.Fatalf("incorrect SQL statement received")
 		}
 		rows := &command.QueryRows{
@@ -150,8 +150,8 @@ func Test_ServiceQuery(t *testing.T) {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
 
-	db.queryFn = func(er *command.QueryRequest) ([]*command.QueryRows, error) {
-		if er.Request.Statements[0].Sql != "SELECT * FROM foo" {
+	db.queryFn = func(qr *command.QueryRequest) ([]*command.QueryRows, error) {
+		if qr.Request.Statements[0].Sql != "SELECT * FROM foo" {
 			t.Fatalf("incorrect SQL statement received")
 		}
 		rows := &command.QueryRows{
