@@ -184,14 +184,6 @@ func main() {
 	raftTn := mux.Listen(cluster.MuxRaftHeader)
 	log.Printf("Raft TCP mux Listener registered with %d", cluster.MuxRaftHeader)
 
-	// Create cluster service, so nodes can learn information about each other. This can be started
-	// now since it doesn't require a functioning Store yet.
-	clstr, err := clusterService(mux.Listen(cluster.MuxClusterHeader))
-	if err != nil {
-		log.Fatalf("failed to create cluster service: %s", err.Error())
-	}
-	log.Printf("Cluster TCP mux Listener registered with %d", cluster.MuxClusterHeader)
-
 	// Create and open the store.
 	dataPath, err = filepath.Abs(dataPath)
 	if err != nil {
@@ -262,6 +254,13 @@ func main() {
 	if err := str.Open(enableBootstrap); err != nil {
 		log.Fatalf("failed to open store: %s", err.Error())
 	}
+
+	// Create cluster service now, so nodes will be able to learn information about each other.
+	clstr, err := clusterService(mux.Listen(cluster.MuxClusterHeader), str)
+	if err != nil {
+		log.Fatalf("failed to create cluster service: %s", err.Error())
+	}
+	log.Printf("Cluster TCP mux Listener registered with %d", cluster.MuxClusterHeader)
 
 	// Execute any requested join operation.
 	if len(joins) > 0 {
@@ -449,8 +448,8 @@ func credentialStore() (*auth.CredentialsStore, error) {
 	return cs, nil
 }
 
-func clusterService(tn cluster.Transport) (*cluster.Service, error) {
-	c := cluster.New(tn)
+func clusterService(tn cluster.Transport, db cluster.Database) (*cluster.Service, error) {
+	c := cluster.New(tn, db)
 	apiAddr := httpAddr
 	if httpAdv != "" {
 		apiAddr = httpAdv

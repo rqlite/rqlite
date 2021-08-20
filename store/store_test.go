@@ -1276,14 +1276,13 @@ func executeRequestFromString(s string, timings, tx bool) *command.ExecuteReques
 	return executeRequestFromStrings([]string{s}, timings, tx)
 }
 
-// queryRequestFromStrings converts a slice of strings into a command.QueryRequest
+// queryRequestFromStrings converts a slice of strings into a command.ExecuteRequest
 func executeRequestFromStrings(s []string, timings, tx bool) *command.ExecuteRequest {
 	stmts := make([]*command.Statement, len(s))
 	for i := range s {
 		stmts[i] = &command.Statement{
 			Sql: s[i],
 		}
-
 	}
 	return &command.ExecuteRequest{
 		Request: &command.Request{
@@ -1305,7 +1304,6 @@ func queryRequestFromStrings(s []string, timings, tx bool) *command.QueryRequest
 		stmts[i] = &command.Statement{
 			Sql: s[i],
 		}
-
 	}
 	return &command.QueryRequest{
 		Request: &command.Request{

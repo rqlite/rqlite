@@ -52,10 +52,10 @@ export PATH=$PATH:$GOBIN
 export DEST_DIR=$GOPATH/src
 
 export SRC_DIR=$GOPATH/src/github.com/rqlite/rqlite/command
-protoc -I=$SRC_DIR --go_out=$DEST_DIR $SRC_DIR/command.proto
+protoc -I=$SRC_DIR --proto_path=$GOPATH/src/github.com/rqlite/rqlite --go_out=$DEST_DIR $SRC_DIR/command.proto
 
 export SRC_DIR=$GOPATH/src/github.com/rqlite/rqlite/cluster
-protoc -I=$SRC_DIR --go_out=$DEST_DIR $SRC_DIR/message.proto
+protoc -I=$SRC_DIR --proto_path=$GOPATH/src/github.com/rqlite/rqlite --go_out=$DEST_DIR $SRC_DIR/message.proto
 ```
 
 ### Speeding up the build process

@@ -2,11 +2,13 @@ package cluster
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/rqlite/rqlite/command"
 )
 
 // Client allows communicating with a remote node.
@@ -19,7 +21,7 @@ type Client struct {
 func NewClient(dl Dialer) *Client {
 	return &Client{
 		dialer:  dl,
-		timeout: 10 * time.Second,
+		timeout: 30 * time.Second,
 	}
 }
 
@@ -40,7 +42,7 @@ func (c *Client) GetNodeAPIAddr(nodeAddr string) (string, error) {
 		return "", fmt.Errorf("command marshal: %s", err)
 	}
 
-	// Write length of Protobuf, the Protobuf
+	// Write length of Protobuf
 	b := make([]byte, 4)
 	binary.LittleEndian.PutUint16(b[0:], uint16(len(p)))
 
@@ -65,6 +67,124 @@ func (c *Client) GetNodeAPIAddr(nodeAddr string) (string, error) {
 	}
 
 	return a.Url, nil
+}
+
+// Execute performs an Execute on a remote node.
+func (c *Client) Execute(er *command.ExecuteRequest, nodeAddr string, timeout time.Duration) ([]*command.ExecuteResult, error) {
+	conn, err := c.dialer.Dial(nodeAddr, c.timeout)
+	if err != nil {
+		return nil, fmt.Errorf("dial connection: %s", err)
+	}
+	defer conn.Close()
+
+	// Create the request.
+	command := &Command{
+		Type: Command_COMMAND_TYPE_EXECUTE,
+		Request: &Command_ExecuteRequest{
+			ExecuteRequest: er,
+		},
+	}
+	p, err := proto.Marshal(command)
+	if err != nil {
+		return nil, fmt.Errorf("command marshal: %s", err)
+	}
+
+	// Write length of Protobuf
+	b := make([]byte, 4)
+	binary.LittleEndian.PutUint16(b[0:], uint16(len(p)))
+
+	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
+		return nil, err
+	}
+	_, err = conn.Write(b)
+	if err != nil {
+		return nil, err
+	}
+	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
+		return nil, err
+	}
+	_, err = conn.Write(p)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
+		return nil, err
+	}
+	b, err = ioutil.ReadAll(conn)
+	if err != nil {
+		return nil, err
+	}
+
+	a := &CommandExecuteResponse{}
+	err = proto.Unmarshal(b, a)
+	if err != nil {
+		return nil, err
+	}
+
+	if a.Error != "" {
+		return nil, errors.New(a.Error)
+	}
+	return a.Results, nil
+}
+
+// Query performs an Query on a remote node.
+func (c *Client) Query(qr *command.QueryRequest, nodeAddr string, timeout time.Duration) ([]*command.QueryRows, error) {
+	conn, err := c.dialer.Dial(nodeAddr, c.timeout)
+	if err != nil {
+		return nil, fmt.Errorf("dial connection: %s", err)
+	}
+	defer conn.Close()
+
+	// Create the request.
+	command := &Command{
+		Type: Command_COMMAND_TYPE_QUERY,
+		Request: &Command_QueryRequest{
+			QueryRequest: qr,
+		},
+	}
+	p, err := proto.Marshal(command)
+	if err != nil {
+		return nil, fmt.Errorf("command marshal: %s", err)
+	}
+
+	// Write length of Protobuf, the Protobuf
+	b := make([]byte, 4)
+	binary.LittleEndian.PutUint16(b[0:], uint16(len(p)))
+
+	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
+		return nil, err
+	}
+	_, err = conn.Write(b)
+	if err != nil {
+		return nil, err
+	}
+	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
+		return nil, err
+	}
+	_, err = conn.Write(p)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
+		return nil, err
+	}
+	b, err = ioutil.ReadAll(conn)
+	if err != nil {
+		return nil, err
+	}
+
+	a := &CommandQueryResponse{}
+	err = proto.Unmarshal(b, a)
+	if err != nil {
+		return nil, err
+	}
+
+	if a.Error != "" {
+		return nil, errors.New(a.Error)
+	}
+	return a.Rows, nil
 }
 
 // Stats returns stats on the Client instance
