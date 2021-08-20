@@ -61,14 +61,16 @@ const (
 )
 
 const (
-	numSnaphots             = "num_snapshots"
-	numBackups              = "num_backups"
-	numRestores             = "num_restores"
-	numUncompressedCommands = "num_uncompressed_commands"
-	numCompressedCommands   = "num_compressed_commands"
-	numJoins                = "num_joins"
-	numIgnoredJoins         = "num_ignored_joins"
-	numRemovedBeforeJoins   = "num_removed_before_joins"
+	numSnaphots               = "num_snapshots"
+	numBackups                = "num_backups"
+	numRestores               = "num_restores"
+	numUncompressedCommands   = "num_uncompressed_commands"
+	numCompressedCommands     = "num_compressed_commands"
+	numJoins                  = "num_joins"
+	numIgnoredJoins           = "num_ignored_joins"
+	numRemovedBeforeJoins     = "num_removed_before_joins"
+	snapshot_create_duration  = "snapshot_create_duration"
+	snapshot_persist_duration = "snapshot_persist_duration"
 )
 
 // BackupFormat represents the format of database backup.
@@ -95,6 +97,8 @@ func init() {
 	stats.Add(numJoins, 0)
 	stats.Add(numIgnoredJoins, 0)
 	stats.Add(numRemovedBeforeJoins, 0)
+	stats.Add(snapshot_create_duration, 0)
+	stats.Add(snapshot_persist_duration, 0)
 }
 
 // ClusterState defines the possible Raft states the current node can be in
@@ -1011,8 +1015,10 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 	// The error code is not meaningful from Serialize(). The code needs to be able
 	// handle a nil byte slice being returned.
 
+	dur := time.Since(fsm.startT)
 	stats.Add(numSnaphots, 1)
-	s.logger.Printf("node snapshot created in %s", time.Since(fsm.startT))
+	stats.Get(snapshot_create_duration).(*expvar.Int).Set(dur.Milliseconds())
+	s.logger.Printf("node snapshot created in %s", dur)
 	return fsm, nil
 }
 
@@ -1141,7 +1147,9 @@ type fsmSnapshot struct {
 // Persist writes the snapshot to the given sink.
 func (f *fsmSnapshot) Persist(sink raft.SnapshotSink) error {
 	defer func() {
-		f.logger.Printf("snapshot and persist took %s", time.Since(f.startT))
+		dur := time.Since(f.startT)
+		stats.Get(snapshot_persist_duration).(*expvar.Int).Set(dur.Milliseconds())
+		f.logger.Printf("snapshot and persist took %s", dur)
 	}()
 
 	err := func() error {
