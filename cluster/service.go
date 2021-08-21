@@ -153,95 +153,109 @@ func (s *Service) serve() error {
 func (s *Service) handleConn(conn net.Conn) {
 	defer conn.Close()
 
-	b := make([]byte, 4)
-	_, err := io.ReadFull(conn, b)
-	if err != nil {
-		return
-	}
-	sz := binary.LittleEndian.Uint16(b[0:])
-
-	b = make([]byte, sz)
-	_, err = io.ReadFull(conn, b)
-	if err != nil {
-		return
-	}
-
-	c := &Command{}
-	err = proto.Unmarshal(b, c)
-	if err != nil {
-		conn.Close()
-	}
-
-	switch c.Type {
-	case Command_COMMAND_TYPE_GET_NODE_API_URL:
-		stats.Add(numGetNodeAPIRequest, 1)
-		s.mu.RLock()
-		defer s.mu.RUnlock()
-
-		a := &Address{}
-		scheme := "http"
-		if s.https {
-			scheme = "https"
+	for {
+		b := make([]byte, 4)
+		_, err := io.ReadFull(conn, b)
+		if err != nil {
+			return
 		}
-		a.Url = fmt.Sprintf("%s://%s", scheme, s.apiAddr)
+		sz := binary.LittleEndian.Uint16(b[0:])
 
-		b, err = proto.Marshal(a)
+		p := make([]byte, sz)
+		_, err = io.ReadFull(conn, p)
+		if err != nil {
+			return
+		}
+
+		c := &Command{}
+		err = proto.Unmarshal(p, c)
 		if err != nil {
 			conn.Close()
 		}
-		conn.Write(b)
-		stats.Add(numGetNodeAPIResponse, 1)
 
-	case Command_COMMAND_TYPE_EXECUTE:
-		stats.Add(numExecuteRequest, 1)
+		switch c.Type {
+		case Command_COMMAND_TYPE_GET_NODE_API_URL:
+			stats.Add(numGetNodeAPIRequest, 1)
 
-		resp := &CommandExecuteResponse{}
+			s.mu.RLock()
+			a := &Address{}
+			scheme := "http"
+			if s.https {
+				scheme = "https"
+			}
+			a.Url = fmt.Sprintf("%s://%s", scheme, s.apiAddr)
+			s.mu.RUnlock()
 
-		er := c.GetExecuteRequest()
-		if er == nil {
-			resp.Error = "ExecuteRequest is nil"
-		} else {
-			res, err := s.db.Execute(er)
+			p, err = proto.Marshal(a)
 			if err != nil {
-				resp.Error = err.Error()
+				conn.Close()
+			}
+			// Write length of Protobuf first, then write the actual Protobuf.
+			b = make([]byte, 4)
+			binary.LittleEndian.PutUint16(b[0:], uint16(len(p)))
+			conn.Write(b)
+			conn.Write(p)
+			stats.Add(numGetNodeAPIResponse, 1)
+
+		case Command_COMMAND_TYPE_EXECUTE:
+			stats.Add(numExecuteRequest, 1)
+
+			resp := &CommandExecuteResponse{}
+
+			er := c.GetExecuteRequest()
+			if er == nil {
+				resp.Error = "ExecuteRequest is nil"
 			} else {
-				resp.Results = make([]*command.ExecuteResult, len(res))
-				for i := range res {
-					resp.Results[i] = res[i]
+				res, err := s.db.Execute(er)
+				if err != nil {
+					resp.Error = err.Error()
+				} else {
+					resp.Results = make([]*command.ExecuteResult, len(res))
+					for i := range res {
+						resp.Results[i] = res[i]
+					}
 				}
 			}
-		}
 
-		b, err = proto.Marshal(resp)
-		if err != nil {
-			return
-		}
-		conn.Write(b)
-
-	case Command_COMMAND_TYPE_QUERY:
-		stats.Add(numQueryRequest, 1)
-
-		resp := &CommandQueryResponse{}
-
-		qr := c.GetQueryRequest()
-		if qr == nil {
-			resp.Error = "QueryRequest is nil"
-		} else {
-			res, err := s.db.Query(qr)
+			p, err := proto.Marshal(resp)
 			if err != nil {
-				resp.Error = err.Error()
+				return
+			}
+			// Write length of Protobuf first, then write the actual Protobuf.
+			b = make([]byte, 4)
+			binary.LittleEndian.PutUint16(b[0:], uint16(len(p)))
+			conn.Write(b)
+			conn.Write(p)
+
+		case Command_COMMAND_TYPE_QUERY:
+			stats.Add(numQueryRequest, 1)
+
+			resp := &CommandQueryResponse{}
+
+			qr := c.GetQueryRequest()
+			if qr == nil {
+				resp.Error = "QueryRequest is nil"
 			} else {
-				resp.Rows = make([]*command.QueryRows, len(res))
-				for i := range res {
-					resp.Rows[i] = res[i]
+				res, err := s.db.Query(qr)
+				if err != nil {
+					resp.Error = err.Error()
+				} else {
+					resp.Rows = make([]*command.QueryRows, len(res))
+					for i := range res {
+						resp.Rows[i] = res[i]
+					}
 				}
 			}
-		}
 
-		b, err = proto.Marshal(resp)
-		if err != nil {
-			return
+			p, err = proto.Marshal(resp)
+			if err != nil {
+				return
+			}
+			// Write length of Protobuf first, then write the actual Protobuf.
+			b = make([]byte, 4)
+			binary.LittleEndian.PutUint16(b[0:], uint16(len(p)))
+			conn.Write(b)
+			conn.Write(p)
 		}
-		conn.Write(b)
 	}
 }

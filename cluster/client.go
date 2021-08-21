@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"sync"
 	"time"
@@ -69,14 +69,22 @@ func (c *Client) GetNodeAPIAddr(nodeAddr string) (string, error) {
 		return "", fmt.Errorf("write protobuf: %s", err)
 	}
 
-	b, err = ioutil.ReadAll(conn)
+	// Read length of response.
+	_, err = io.ReadFull(conn, b)
 	if err != nil {
-		handleConnError(conn)
-		return "", fmt.Errorf("read protobuf bytes: %s", err)
+		return "", err
+	}
+	sz := binary.LittleEndian.Uint16(b[0:])
+
+	// Read in the actual response.
+	p = make([]byte, sz)
+	_, err = io.ReadFull(conn, p)
+	if err != nil {
+		return "", err
 	}
 
 	a := &Address{}
-	err = proto.Unmarshal(b, a)
+	err = proto.Unmarshal(p, a)
 	if err != nil {
 		return "", fmt.Errorf("protobuf unmarshal: %s", err)
 	}
@@ -131,14 +139,23 @@ func (c *Client) Execute(er *command.ExecuteRequest, nodeAddr string, timeout ti
 		handleConnError(conn)
 		return nil, err
 	}
-	b, err = ioutil.ReadAll(conn)
+
+	// Read length of response.
+	_, err = io.ReadFull(conn, b)
 	if err != nil {
-		handleConnError(conn)
+		return nil, err
+	}
+	sz := binary.LittleEndian.Uint16(b[0:])
+
+	// Read in the actual response.
+	p = make([]byte, sz)
+	_, err = io.ReadFull(conn, p)
+	if err != nil {
 		return nil, err
 	}
 
 	a := &CommandExecuteResponse{}
-	err = proto.Unmarshal(b, a)
+	err = proto.Unmarshal(p, a)
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +186,7 @@ func (c *Client) Query(qr *command.QueryRequest, nodeAddr string, timeout time.D
 		return nil, fmt.Errorf("command marshal: %s", err)
 	}
 
-	// Write length of Protobuf, the Protobuf
+	// Write length of Protobuf, then the Protobuf
 	b := make([]byte, 4)
 	binary.LittleEndian.PutUint16(b[0:], uint16(len(p)))
 
@@ -196,14 +213,23 @@ func (c *Client) Query(qr *command.QueryRequest, nodeAddr string, timeout time.D
 		handleConnError(conn)
 		return nil, err
 	}
-	b, err = ioutil.ReadAll(conn)
+
+	// Read length of response.
+	_, err = io.ReadFull(conn, b)
 	if err != nil {
-		handleConnError(conn)
+		return nil, err
+	}
+	sz := binary.LittleEndian.Uint16(b[0:])
+
+	// Read in the actual response.
+	p = make([]byte, sz)
+	_, err = io.ReadFull(conn, p)
+	if err != nil {
 		return nil, err
 	}
 
 	a := &CommandQueryResponse{}
-	err = proto.Unmarshal(b, a)
+	err = proto.Unmarshal(p, a)
 	if err != nil {
 		return nil, err
 	}
@@ -216,8 +242,20 @@ func (c *Client) Query(qr *command.QueryRequest, nodeAddr string, timeout time.D
 
 // Stats returns stats on the Client instance
 func (c *Client) Stats() (map[string]interface{}, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	poolStats := make(map[string]interface{}, len(c.pools))
+	for k, v := range c.pools {
+		s, err := v.Stats()
+		if err != nil {
+			return nil, err
+		}
+		poolStats[k] = s
+	}
 	return map[string]interface{}{
 		"timeout": c.timeout,
+		"pool":    poolStats,
 	}, nil
 }
 
