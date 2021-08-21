@@ -677,7 +677,7 @@ func Test_Nodes(t *testing.T) {
 	}
 }
 
-func Test_ForwardingRedirectQueries(t *testing.T) {
+func Test_ForwardingRedirectQuery(t *testing.T) {
 	m := &MockStore{
 		leaderAddr: "foo:1234",
 	}
@@ -724,6 +724,16 @@ func Test_ForwardingRedirectQueries(t *testing.T) {
 	}
 	if resp.StatusCode != http.StatusMovedPermanently {
 		t.Fatalf("failed to get expected StatusMovedPermanently for query, got %d", resp.StatusCode)
+	}
+
+	// Check leader failure case.
+	m.leaderAddr = ""
+	resp, err = client.Get(host + "/db/query?pretty&timings&q=SELECT%20%2A%20FROM%20foo")
+	if err != nil {
+		t.Fatalf("failed to make query forwarded request")
+	}
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("failed to get expected StatusServiceUnavailable for node with no leader, got %d", resp.StatusCode)
 	}
 }
 
@@ -774,6 +784,16 @@ func Test_ForwardingRedirectExecute(t *testing.T) {
 	}
 	if resp.StatusCode != http.StatusMovedPermanently {
 		t.Fatalf("failed to get expected StatusMovedPermanently for execute, got %d", resp.StatusCode)
+	}
+
+	// Check leader failure case.
+	m.leaderAddr = ""
+	resp, err = client.Post(host+"/db/execute", "application/json", strings.NewReader(`["Some SQL"]`))
+	if err != nil {
+		t.Fatalf("failed to make execute request")
+	}
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("failed to get expected StatusServiceUnavailable for node with no leader, got %d", resp.StatusCode)
 	}
 }
 
