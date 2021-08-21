@@ -86,9 +86,9 @@ func (c *Client) GetNodeAPIAddr(nodeAddr string) (string, error) {
 
 // Execute performs an Execute on a remote node.
 func (c *Client) Execute(er *command.ExecuteRequest, nodeAddr string, timeout time.Duration) ([]*command.ExecuteResult, error) {
-	conn, err := c.dialer.Dial(nodeAddr, c.timeout)
+	conn, err := c.dial(nodeAddr, c.timeout)
 	if err != nil {
-		return nil, fmt.Errorf("dial connection: %s", err)
+		return nil, err
 	}
 	defer conn.Close()
 
@@ -109,25 +109,31 @@ func (c *Client) Execute(er *command.ExecuteRequest, nodeAddr string, timeout ti
 	binary.LittleEndian.PutUint16(b[0:], uint16(len(p)))
 
 	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
+		handleConnError(conn)
 		return nil, err
 	}
 	_, err = conn.Write(b)
 	if err != nil {
+		handleConnError(conn)
 		return nil, err
 	}
 	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
+		handleConnError(conn)
 		return nil, err
 	}
 	_, err = conn.Write(p)
 	if err != nil {
+		handleConnError(conn)
 		return nil, err
 	}
 
 	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
+		handleConnError(conn)
 		return nil, err
 	}
 	b, err = ioutil.ReadAll(conn)
 	if err != nil {
+		handleConnError(conn)
 		return nil, err
 	}
 
@@ -145,9 +151,9 @@ func (c *Client) Execute(er *command.ExecuteRequest, nodeAddr string, timeout ti
 
 // Query performs an Query on a remote node.
 func (c *Client) Query(qr *command.QueryRequest, nodeAddr string, timeout time.Duration) ([]*command.QueryRows, error) {
-	conn, err := c.dialer.Dial(nodeAddr, c.timeout)
+	conn, err := c.dial(nodeAddr, c.timeout)
 	if err != nil {
-		return nil, fmt.Errorf("dial connection: %s", err)
+		return nil, err
 	}
 	defer conn.Close()
 
@@ -168,25 +174,31 @@ func (c *Client) Query(qr *command.QueryRequest, nodeAddr string, timeout time.D
 	binary.LittleEndian.PutUint16(b[0:], uint16(len(p)))
 
 	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
+		handleConnError(conn)
 		return nil, err
 	}
 	_, err = conn.Write(b)
 	if err != nil {
+		handleConnError(conn)
 		return nil, err
 	}
 	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
+		handleConnError(conn)
 		return nil, err
 	}
 	_, err = conn.Write(p)
 	if err != nil {
+		handleConnError(conn)
 		return nil, err
 	}
 
 	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
+		handleConnError(conn)
 		return nil, err
 	}
 	b, err = ioutil.ReadAll(conn)
 	if err != nil {
+		handleConnError(conn)
 		return nil, err
 	}
 
