@@ -46,6 +46,7 @@ func NewChannelPool(initialCap, maxCap int, factory Factory) (Pool, error) {
 			c.Close()
 			return nil, fmt.Errorf("factory is not able to fill the pool: %s", err)
 		}
+		atomic.AddInt64(&c.nOpenConns, 1)
 		c.conns <- conn
 	}
 

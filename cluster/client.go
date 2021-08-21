@@ -254,8 +254,8 @@ func (c *Client) Stats() (map[string]interface{}, error) {
 		poolStats[k] = s
 	}
 	return map[string]interface{}{
-		"timeout": c.timeout,
-		"pool":    poolStats,
+		"timeout":         c.timeout,
+		"conn_pool_stats": poolStats,
 	}, nil
 }
 

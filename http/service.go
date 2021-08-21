@@ -1002,11 +1002,21 @@ func (s *Service) checkNodesAPIAddr(nodes []*store.Server, timeout time.Duration
 		wg.Add(1)
 		go func(id, raftAddr string) {
 			defer wg.Done()
-			apiAddr, err := s.cluster.GetNodeAPIAddr(raftAddr)
-			if err == nil {
-				mu.Lock()
-				apiAddrs[id] = apiAddr
-				mu.Unlock()
+
+			localRaftAddr, err := s.store.LeaderAddr()
+			if err != nil {
+				return
+			}
+
+			if raftAddr == localRaftAddr {
+				apiAddrs[id] = localRaftAddr
+			} else {
+				apiAddr, err := s.cluster.GetNodeAPIAddr(raftAddr)
+				if err == nil {
+					mu.Lock()
+					apiAddrs[id] = apiAddr
+					mu.Unlock()
+				}
 			}
 		}(n.ID, n.Addr)
 	}
