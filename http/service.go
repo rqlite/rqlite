@@ -1009,7 +1009,9 @@ func (s *Service) checkNodesAPIAddr(nodes []*store.Server, timeout time.Duration
 			}
 
 			if raftAddr == localRaftAddr {
+				mu.Lock()
 				apiAddrs[id] = localRaftAddr
+				mu.Unlock()
 			} else {
 				apiAddr, err := s.cluster.GetNodeAPIAddr(raftAddr)
 				if err == nil {
