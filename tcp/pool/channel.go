@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"sync/atomic"
 )
 
 // channelPool implements the Pool interface based on buffered channels.
@@ -14,7 +15,8 @@ type channelPool struct {
 	conns chan net.Conn
 
 	// net.Conn generator
-	factory Factory
+	factory    Factory
+	nOpenConns int64
 }
 
 // Factory is a function to create new connections.
@@ -81,6 +83,7 @@ func (c *channelPool) Get() (net.Conn, error) {
 		if err != nil {
 			return nil, err
 		}
+		atomic.AddInt64(&c.nOpenConns, 1)
 
 		return c.wrapConn(conn), nil
 	}
@@ -98,6 +101,7 @@ func (c *channelPool) put(conn net.Conn) error {
 
 	if c.conns == nil {
 		// pool is closed, close passed connection
+		atomic.AddInt64(&c.nOpenConns, -1)
 		return conn.Close()
 	}
 
@@ -108,10 +112,13 @@ func (c *channelPool) put(conn net.Conn) error {
 		return nil
 	default:
 		// pool is full, close passed connection
+		atomic.AddInt64(&c.nOpenConns, -1)
+
 		return conn.Close()
 	}
 }
 
+// Close closes every connection in the pool.
 func (c *channelPool) Close() {
 	c.mu.Lock()
 	conns := c.conns
@@ -127,9 +134,21 @@ func (c *channelPool) Close() {
 	for conn := range conns {
 		conn.Close()
 	}
+	atomic.AddInt64(&c.nOpenConns, 0)
 }
 
+// Len() returns the number of idle connections.
 func (c *channelPool) Len() int {
 	conns, _ := c.getConnsAndFactory()
 	return len(conns)
+}
+
+// Stats returns stats for the pool.
+func (c *channelPool) Stats() (map[string]interface{}, error) {
+	conns, _ := c.getConnsAndFactory()
+	return map[string]interface{}{
+		"idle":                 len(conns),
+		"open_connections":     c.nOpenConns,
+		"max_open_connections": cap(conns),
+	}, nil
 }

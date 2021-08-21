@@ -25,4 +25,7 @@ type Pool interface {
 
 	// Len returns the current number of connections of the pool.
 	Len() int
+
+	// Stats returns stats about the pool.
+	Stats() (map[string]interface{}, error)
 }
