@@ -39,49 +39,11 @@ func NewClient(dl Dialer) *Client {
 
 // GetNodeAPIAddr retrieves the API Address for the node at nodeAddr
 func (c *Client) GetNodeAPIAddr(nodeAddr string) (string, error) {
-	var pl pool.Pool
-	var ok bool
-
-	c.mu.RLock()
-	pl, ok = c.pools[nodeAddr]
-	c.mu.RUnlock()
-
-	// Do we need a new pool for the given address?
-	if !ok {
-		if err := func() error {
-			c.mu.Lock()
-			defer c.mu.Unlock()
-			pl, ok = c.pools[nodeAddr]
-			if ok {
-				return nil // Pool was inserted just after we checked.
-			}
-
-			// New pool is needed for given address.
-			factory := func() (net.Conn, error) { return c.dialer.Dial(nodeAddr, c.timeout) }
-			p, err := pool.NewChannelPool(initialPoolSize, maxPoolCapacity, factory)
-			if err != nil {
-				return err
-			}
-			c.pools[nodeAddr] = p
-			pl = p
-			return nil
-		}(); err != nil {
-			return "", err
-		}
-	}
-
-	// Got pool, now get a connection.
-	conn, err := pl.Get()
+	conn, err := c.dial(nodeAddr, c.timeout)
 	if err != nil {
-		return "", fmt.Errorf("pool get: %s", err)
+		return "", err
 	}
 	defer conn.Close()
-
-	handleConnError := func(c net.Conn) {
-		if pc, ok := conn.(*pool.PoolConn); ok {
-			pc.MarkUnusable()
-		}
-	}
 
 	// Send the request
 	command := &Command{
@@ -245,4 +207,50 @@ func (c *Client) Stats() (map[string]interface{}, error) {
 	return map[string]interface{}{
 		"timeout": c.timeout,
 	}, nil
+}
+
+func (c *Client) dial(nodeAddr string, timeout time.Duration) (net.Conn, error) {
+	var pl pool.Pool
+	var ok bool
+
+	c.mu.RLock()
+	pl, ok = c.pools[nodeAddr]
+	c.mu.RUnlock()
+
+	// Do we need a new pool for the given address?
+	if !ok {
+		if err := func() error {
+			c.mu.Lock()
+			defer c.mu.Unlock()
+			pl, ok = c.pools[nodeAddr]
+			if ok {
+				return nil // Pool was inserted just after we checked.
+			}
+
+			// New pool is needed for given address.
+			factory := func() (net.Conn, error) { return c.dialer.Dial(nodeAddr, c.timeout) }
+			p, err := pool.NewChannelPool(initialPoolSize, maxPoolCapacity, factory)
+			if err != nil {
+				return err
+			}
+			c.pools[nodeAddr] = p
+			pl = p
+			return nil
+		}(); err != nil {
+			return nil, err
+		}
+	}
+
+	// Got pool, now get a connection.
+	conn, err := pl.Get()
+	if err != nil {
+		return nil, fmt.Errorf("pool get: %s", err)
+	}
+	return conn, nil
+}
+
+func handleConnError(conn net.Conn) {
+	if pc, ok := conn.(*pool.PoolConn); ok {
+		pc.MarkUnusable()
+	}
 }
