@@ -511,6 +511,8 @@ class TestEndToEnd(unittest.TestCase):
     for n in fs:
       self.assertEqual(l.APIProtoAddr(), n.redirect_addr())
 
+    # Kill the leader, wait for a new leader, and check that the
+    # redirect returns the new leader address.
     l.stop()
     n = self.cluster.wait_for_leader(node_exc=l)
     for f in self.cluster.followers():
