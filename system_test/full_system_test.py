@@ -136,7 +136,7 @@ class Node(object):
     r.raise_for_status()
     return r.json()
 
-  def is_leader(self, constraint_check=True):
+  def is_leader(self):
     '''
     is_leader returns whether this node is the cluster leader
     It also performs a check, to ensure the node nevers gives out
@@ -144,27 +144,15 @@ class Node(object):
     '''
 
     try:
-      isLeaderRaft = self.status()['store']['raft']['state'] == 'Leader'
-      isLeaderNodes = self.nodes()[self.node_id]['leader'] is True
+      return self.status()['store']['raft']['state'] == 'Leader'
     except requests.exceptions.ConnectionError:
       return False
-
-    if (isLeaderRaft != isLeaderNodes) and constraint_check:
-      raise AssertionError("conflicting states reported for leadership (raft: %s, nodes: %s)"
-        % (isLeaderRaft, isLeaderNodes))
-    return isLeaderNodes
 
   def is_follower(self):
     try:
-      isFollowerRaft = self.status()['store']['raft']['state'] == 'Follower'
-      isFollowersNodes = self.nodes()[self.node_id]['leader'] is False
+      return self.status()['store']['raft']['state'] == 'Follower'
     except requests.exceptions.ConnectionError:
       return False
-
-    if isFollowerRaft != isFollowersNodes:
-      raise AssertionError("conflicting states reported for followership (raft: %s, nodes: %s)"
-        % (isFollowerRaft, isFollowersNodes))
-    return isFollowersNodes
 
   def wait_for_leader(self, timeout=TIMEOUT):
     lr = None
@@ -289,6 +277,7 @@ class Node(object):
 
   def redirect_addr(self):
     r = requests.post(self._execute_url(redirect=True), data=json.dumps(['nonsense']), allow_redirects=False)
+    r.raise_for_status()
     if r.status_code == 301:
       return "%s://%s" % (urlparse(r.headers['Location']).scheme, urlparse(r.headers['Location']).netloc)
 
@@ -333,7 +322,7 @@ def deprovision_node(node):
 class Cluster(object):
   def __init__(self, nodes):
     self.nodes = nodes
-  def wait_for_leader(self, node_exc=None, timeout=TIMEOUT, constraint_check=True):
+  def wait_for_leader(self, node_exc=None, timeout=TIMEOUT):
     t = 0
     while True:
       if t > timeout:
@@ -341,7 +330,7 @@ class Cluster(object):
       for n in self.nodes:
         if node_exc is not None and n == node_exc:
           continue
-        if n.is_leader(constraint_check):
+        if n.is_leader():
           return n
       time.sleep(1)
       t+=1
@@ -682,10 +671,9 @@ class TestEndToEndNonVoterFollowsLeader(unittest.TestCase):
     j = n.query('SELECT * FROM foo')
     self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
 
-    # Kill leader, and then make more changes. Don't perform leader-constraint checks
-    # since the cluster is changing right now.
-    n0 = self.cluster.wait_for_leader(constraint_check=False).stop()
-    n1 = self.cluster.wait_for_leader(node_exc=n0, constraint_check=False)
+    # Kill leader, and then make more changes.
+    n0 = self.cluster.wait_for_leader().stop()
+    n1 = self.cluster.wait_for_leader(node_exc=n0)
     n1.wait_for_all_applied()
     j = n1.query('SELECT * FROM foo')
     self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
