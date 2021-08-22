@@ -434,8 +434,8 @@ func Test_SingleNodeNodes(t *testing.T) {
 	if n.Addr != node.RaftAddr {
 		t.Fatalf("node has wrong Raft address")
 	}
-	if n.APIAddr != fmt.Sprintf("http://%s", node.APIAddr) {
-		t.Fatalf("node has wrong API address")
+	if got, exp := n.APIAddr, fmt.Sprintf("http://%s", node.APIAddr); exp != got {
+		t.Fatalf("node has wrong API address, exp: %s got: %s", exp, got)
 	}
 	if !n.Leader {
 		t.Fatalf("node is not leader")
