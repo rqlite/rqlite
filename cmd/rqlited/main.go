@@ -308,9 +308,14 @@ func main() {
 	clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, nodeEncrypt, noNodeVerify)
 	clstrClient := cluster.NewClient(clstrDialer)
 	clstrClient.SetLocal(raftAdv, clstr)
-	if err := startHTTPService(str, clstrClient); err != nil {
+	httpServ, err := startHTTPService(str, clstrClient)
+	if err != nil {
 		log.Fatalf("failed to start HTTP server: %s", err.Error())
 	}
+
+	// Register remaining status providers.
+	httpServ.RegisterStatus("cluster", clstr)
+
 	log.Println("node is ready")
 
 	// Block until signalled.
@@ -378,11 +383,11 @@ func waitForConsensus(str *store.Store) error {
 	return nil
 }
 
-func startHTTPService(str *store.Store, cltr *cluster.Client) error {
+func startHTTPService(str *store.Store, cltr *cluster.Client) (*httpd.Service, error) {
 	// Get the credential store.
 	credStr, err := credentialStore()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Create HTTP server and load authentication information if required.
@@ -404,7 +409,7 @@ func startHTTPService(str *store.Store, cltr *cluster.Client) error {
 		"version":    cmd.Version,
 		"build_time": cmd.Buildtime,
 	}
-	return s.Start()
+	return s, s.Start()
 }
 
 // startNodeMux starts the TCP mux on the given listener, which should be already

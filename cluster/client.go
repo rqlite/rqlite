@@ -278,6 +278,7 @@ func (c *Client) Stats() (map[string]interface{}, error) {
 	}
 	return map[string]interface{}{
 		"timeout":         c.timeout,
+		"local_node_addr": c.localNodeAddr,
 		"conn_pool_stats": poolStats,
 	}, nil
 }
