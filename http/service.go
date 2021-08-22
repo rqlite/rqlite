@@ -26,6 +26,11 @@ import (
 	"github.com/rqlite/rqlite/store"
 )
 
+var (
+	// ErrLeaderNotFound is returned when a node cannot locate a leader
+	ErrLeaderNotFound = errors.New("leader not found")
+)
+
 // Database is the interface any queryable system must implement
 type Database interface {
 	// Execute executes a slice of queries, each of which is not expected
@@ -126,6 +131,7 @@ type Response struct {
 var stats *expvar.Map
 
 const (
+	numLeaderNotFound   = "leader_not_found"
 	numExecutions       = "executions"
 	numQueries          = "queries"
 	numRemoteExecutions = "remote_executions"
@@ -167,6 +173,7 @@ const (
 
 func init() {
 	stats = expvar.NewMap("http")
+	stats.Add(numLeaderNotFound, 0)
 	stats.Add(numExecutions, 0)
 	stats.Add(numQueries, 0)
 	stats.Add(numRemoteExecutions, 0)
@@ -375,7 +382,8 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 		if err == store.ErrNotLeader {
 			leaderAPIAddr := s.LeaderAPIAddr()
 			if leaderAPIAddr == "" {
-				http.Error(w, err.Error(), http.StatusServiceUnavailable)
+				stats.Add(numLeaderNotFound, 1)
+				http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
 				return
 			}
 
@@ -427,7 +435,8 @@ func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request) {
 		if err == store.ErrNotLeader {
 			leaderAPIAddr := s.LeaderAPIAddr()
 			if leaderAPIAddr == "" {
-				http.Error(w, err.Error(), http.StatusServiceUnavailable)
+				stats.Add(numLeaderNotFound, 1)
+				http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
 				return
 			}
 
@@ -470,7 +479,8 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
 		if err == store.ErrNotLeader {
 			leaderAPIAddr := s.LeaderAPIAddr()
 			if leaderAPIAddr == "" {
-				http.Error(w, err.Error(), http.StatusServiceUnavailable)
+				stats.Add(numLeaderNotFound, 1)
+				http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
 				return
 			}
 
@@ -522,7 +532,8 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 		if err == store.ErrNotLeader {
 			leaderAPIAddr := s.LeaderAPIAddr()
 			if leaderAPIAddr == "" {
-				http.Error(w, err.Error(), http.StatusServiceUnavailable)
+				stats.Add(numLeaderNotFound, 1)
+				http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
 				return
 			}
 
@@ -767,7 +778,8 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 		if redirect {
 			leaderAPIAddr := s.LeaderAPIAddr()
 			if leaderAPIAddr == "" {
-				http.Error(w, err.Error(), http.StatusServiceUnavailable)
+				stats.Add(numLeaderNotFound, 1)
+				http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
 				return
 			}
 			loc := s.FormRedirect(r, leaderAPIAddr)
@@ -778,6 +790,10 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 		addr, err := s.store.LeaderAddr()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		if addr == "" {
+			stats.Add(numLeaderNotFound, 1)
+			http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
 		}
 		results, resultsErr = s.cluster.Execute(er, addr, timeout)
 		stats.Add(numRemoteExecutions, 1)
@@ -849,7 +865,8 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 		if redirect {
 			leaderAPIAddr := s.LeaderAPIAddr()
 			if leaderAPIAddr == "" {
-				http.Error(w, err.Error(), http.StatusServiceUnavailable)
+				stats.Add(numLeaderNotFound, 1)
+				http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
 				return
 			}
 			loc := s.FormRedirect(r, leaderAPIAddr)
@@ -860,6 +877,10 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 		addr, err := s.store.LeaderAddr()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		if addr == "" {
+			stats.Add(numLeaderNotFound, 1)
+			http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
 		}
 		results, resultsErr = s.cluster.Query(qr, addr, timeout)
 		stats.Add(numRemoteQueries, 1)
