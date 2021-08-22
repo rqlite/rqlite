@@ -156,6 +156,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Ensure Raft adv address is set as per policy.
+	if raftAdv == "" {
+		raftAdv = raftAddr
+	}
+
 	dataPath := flag.Arg(0)
 
 	// Display logo.
@@ -265,10 +270,6 @@ func main() {
 	// Execute any requested join operation.
 	if len(joins) > 0 {
 		log.Println("join addresses are:", joins)
-		advAddr := raftAddr
-		if raftAdv != "" {
-			advAddr = raftAdv
-		}
 
 		joinDur, err := time.ParseDuration(joinInterval)
 		if err != nil {
@@ -288,7 +289,7 @@ func main() {
 			}
 		}
 
-		if j, err := cluster.Join(joinSrcIP, joins, str.ID(), advAddr, !raftNonVoter,
+		if j, err := cluster.Join(joinSrcIP, joins, str.ID(), raftAdv, !raftNonVoter,
 			joinAttempts, joinDur, &tlsConfig); err != nil {
 			log.Fatalf("failed to join cluster at %s: %s", joins, err.Error())
 		} else {
@@ -466,9 +467,6 @@ func clusterService(tn cluster.Transport, db cluster.Database) (*cluster.Service
 func idOrRaftAddr() string {
 	if nodeID != "" {
 		return nodeID
-	}
-	if raftAdv == "" {
-		return raftAddr
 	}
 	return raftAdv
 }
