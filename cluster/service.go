@@ -128,6 +128,19 @@ func (s *Service) GetAPIAddr() string {
 	return s.apiAddr
 }
 
+// GetNodeAPIURL returns fully-specified HTTP(S) API URL for the
+// node running this service.
+func (s *Service) GetNodeAPIURL() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	scheme := "http"
+	if s.https {
+		scheme = "https"
+	}
+	return fmt.Sprintf("%s://%s", scheme, s.apiAddr)
+}
+
 // Stats returns status of the Service.
 func (s *Service) Stats() (map[string]interface{}, error) {
 	st := map[string]interface{}{
@@ -176,20 +189,13 @@ func (s *Service) handleConn(conn net.Conn) {
 		switch c.Type {
 		case Command_COMMAND_TYPE_GET_NODE_API_URL:
 			stats.Add(numGetNodeAPIRequest, 1)
-
-			s.mu.RLock()
-			a := &Address{}
-			scheme := "http"
-			if s.https {
-				scheme = "https"
-			}
-			a.Url = fmt.Sprintf("%s://%s", scheme, s.apiAddr)
-			s.mu.RUnlock()
-
-			p, err = proto.Marshal(a)
+			p, err = proto.Marshal(&Address{
+				Url: s.GetNodeAPIURL(),
+			})
 			if err != nil {
 				conn.Close()
 			}
+
 			// Write length of Protobuf first, then write the actual Protobuf.
 			b = make([]byte, 4)
 			binary.LittleEndian.PutUint16(b[0:], uint16(len(p)))

@@ -75,10 +75,17 @@ func Test_NewServiceSetGetNodeAPIAddr(t *testing.T) {
 
 	s.EnableHTTPS(true)
 
+	// Test fetch via network.
 	addr, err = c.GetNodeAPIAddr(s.Addr())
 	if err != nil {
 		t.Fatalf("failed to get node API address: %s", err)
 	}
+	if addr != "https://foo" {
+		t.Fatalf("failed to get correct node API address, exp %s, got %s", "https://foo", addr)
+	}
+
+	// Test fetch via local call.
+	addr = s.GetNodeAPIURL()
 	if addr != "https://foo" {
 		t.Fatalf("failed to get correct node API address, exp %s, got %s", "https://foo", addr)
 	}
