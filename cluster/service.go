@@ -24,6 +24,9 @@ const (
 	numGetNodeAPIResponse = "num_get_node_api_resp"
 	numExecuteRequest     = "num_execute_req"
 	numQueryRequest       = "num_query_req"
+
+	// Client stats for this package.
+	numGetNodeAPIRequestLocal = "num_get_node_api_req_local"
 )
 
 const (
@@ -40,6 +43,7 @@ func init() {
 	stats.Add(numGetNodeAPIResponse, 0)
 	stats.Add(numExecuteRequest, 0)
 	stats.Add(numQueryRequest, 0)
+	stats.Add(numGetNodeAPIRequestLocal, 0)
 }
 
 // Dialer is the interface dialers must implement.

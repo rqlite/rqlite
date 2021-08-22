@@ -24,6 +24,10 @@ type Client struct {
 	dialer  Dialer
 	timeout time.Duration
 
+	lMu           sync.RWMutex
+	localNodeAddr string
+	localServ     *Service
+
 	mu    sync.RWMutex
 	pools map[string]pool.Pool
 }
@@ -37,8 +41,27 @@ func NewClient(dl Dialer) *Client {
 	}
 }
 
+// SetLocal informs the client instance of the node address for
+// the node using this client. Along with the Service instance
+// it allows this client to serve requests for this node locally
+// without the network hop.
+func (c *Client) SetLocal(nodeAddr string, serv *Service) {
+	c.lMu.Lock()
+	defer c.lMu.Unlock()
+	c.localNodeAddr = nodeAddr
+	c.localServ = serv
+}
+
 // GetNodeAPIAddr retrieves the API Address for the node at nodeAddr
 func (c *Client) GetNodeAPIAddr(nodeAddr string) (string, error) {
+	c.lMu.RLock()
+	defer c.lMu.RUnlock()
+	if c.localNodeAddr == nodeAddr && c.localServ != nil {
+		// Serve it locally!
+		stats.Add(numGetNodeAPIRequestLocal, 1)
+		return c.localServ.GetNodeAPIURL(), nil
+	}
+
 	conn, err := c.dial(nodeAddr, c.timeout)
 	if err != nil {
 		return "", err

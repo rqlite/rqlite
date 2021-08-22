@@ -95,6 +95,41 @@ func Test_NewServiceSetGetNodeAPIAddr(t *testing.T) {
 	}
 }
 
+func Test_NewServiceSetGetNodeAPIAddrLocal(t *testing.T) {
+	ml := mustNewMockTransport()
+	s := New(ml, mustNewMockDatabase())
+	if s == nil {
+		t.Fatalf("failed to create cluster service")
+	}
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open cluster service")
+	}
+
+	s.SetAPIAddr("foo")
+
+	// Check stats to confirm no local request yet.
+	if stats.Get(numGetNodeAPIRequestLocal).String() != "0" {
+		t.Fatalf("failed to confirm request served locally")
+	}
+
+	// Test by enabling local answering
+	c := NewClient(ml)
+	c.SetLocal(s.Addr(), s)
+	addr, err := c.GetNodeAPIAddr(s.Addr())
+	if err != nil {
+		t.Fatalf("failed to get node API address locally: %s", err)
+	}
+	if addr != "http://foo" {
+		t.Fatalf("failed to get correct node API address locally, exp %s, got %s", "http://foo", addr)
+	}
+
+	// Check stats to confirm local response.
+	if stats.Get(numGetNodeAPIRequestLocal).String() != "1" {
+		t.Fatalf("failed to confirm request served locally")
+	}
+}
+
 func Test_NewServiceSetGetNodeAPIAddrTLS(t *testing.T) {
 	ml := mustNewMockTLSTransport()
 	s := New(ml, mustNewMockDatabase())
