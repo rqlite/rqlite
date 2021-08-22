@@ -1,10 +1,15 @@
 ## 6.3.0 (unreleased)
+This release introduces transparent request forwarding, which simplifies interacting with rqlite clusters Client requests that must be served by the leader will no longer return HTTP 301, and will be forwarded transparently to the leader if necessary. Client software does not need to change to take advantage of this new functionality.
+
+Systems running earlier 6.x software can be upgraded to this release without doing any special, but all nodes in the new cluster must be running this release. This release cannot communicate with nodes running earlier 6.x software.
+
 ### New features
 
 - [PR #859](https://github.com/rqlite/rqlite/pull/859): Support transparent Execute and Query request forwarding. Fixes [issue #330](https://github.com/rqlite/rqlite/issues/330).
 
 ### Implementation changes and bug fixes
 - [PR #863](https://github.com/rqlite/rqlite/pull/863): Add gauge-like metric for Snapshot timings.
+- [PR #854](https://github.com/rqlite/rqlite/pull/864): Use a connection pool for internode communications.
 
 ## 6.2.0 (August 18th 2021)
 ### New features

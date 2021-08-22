@@ -406,6 +406,8 @@ func startHTTPService(str *store.Store, cltr *cluster.Client) error {
 	return s.Start()
 }
 
+// startNodeMux starts the TCP mux on the given listener, which should be already
+// bound to the relevant interface.
 func startNodeMux(ln net.Listener) (*tcp.Mux, error) {
 	var adv net.Addr
 	var err error
