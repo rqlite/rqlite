@@ -583,6 +583,9 @@ class TestRequestForwarding(unittest.TestCase):
       self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
       j = f.query('SELECT * FROM foo')
       self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
+      self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
+      j = f.query('SELECT * FROM foo', level="strong")
+      self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
 
 class TestEndToEndNonVoter(unittest.TestCase):
   def setUp(self):
