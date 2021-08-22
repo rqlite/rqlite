@@ -985,7 +985,7 @@ func (m *mockCredentialStore) HasAnyPerm(username string, perm ...string) bool {
 type mockStatuser struct {
 }
 
-func (m *mockStatuser) Stats() (interface{}, error) {
+func (m *mockStatuser) Stats() (map[string]interface{}, error) {
 	return nil, nil
 }
 
