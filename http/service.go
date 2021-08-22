@@ -98,7 +98,7 @@ type CredentialStore interface {
 
 // Statuser is the interface status providers must implement.
 type Statuser interface {
-	Stats() (interface{}, error)
+	Stats() (map[string]interface{}, error)
 }
 
 // DBResults stores either an Execute result or a Query result
@@ -569,6 +569,12 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	clusterStatus, err := s.cluster.Stats()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	rt := map[string]interface{}{
 		"GOARCH":        runtime.GOARCH,
 		"GOOS":          runtime.GOOS,
@@ -579,8 +585,9 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpStatus := map[string]interface{}{
-		"addr": s.Addr().String(),
-		"auth": prettyEnabled(s.credentialStore != nil),
+		"addr":    s.Addr().String(),
+		"auth":    prettyEnabled(s.credentialStore != nil),
+		"cluster": clusterStatus,
 	}
 
 	nodeStatus := map[string]interface{}{
@@ -588,16 +595,9 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 		"uptime":     time.Since(s.start).String(),
 	}
 
-	clusterStatus, err := s.cluster.Stats()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
 	// Build the status response.
 	status := map[string]interface{}{
 		"runtime": rt,
-		"cluster": clusterStatus,
 		"store":   storeStatus,
 		"http":    httpStatus,
 		"node":    nodeStatus,
