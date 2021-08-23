@@ -25,12 +25,9 @@ func Test_OpenStoreSingleNode(t *testing.T) {
 	}
 
 	s.WaitForLeader(10 * time.Second)
-	got, err := s.LeaderAddr()
+	_, err := s.LeaderAddr()
 	if err != nil {
 		t.Fatalf("failed to get leader address: %s", err.Error())
-	}
-	if exp := got; got != exp {
-		t.Fatalf("wrong leader address returned, got: %s, exp %s", got, exp)
 	}
 	id, err := s.LeaderID()
 	if err != nil {

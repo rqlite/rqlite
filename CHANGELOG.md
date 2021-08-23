@@ -10,6 +10,7 @@ Systems running earlier 6.x software can be upgraded to this release without doi
 - [PR #863](https://github.com/rqlite/rqlite/pull/863): Add gauge-like metric for Snapshot timings.
 - [PR #854](https://github.com/rqlite/rqlite/pull/864): Use a connection pool for internode communications.
 - [PR #867](https://github.com/rqlite/rqlite/pull/867): Add cluster status to Status output.
+- [PR #869](https://github.com/rqlite/rqlite/pull/869): Cluster client uses resolved address, and improved status output.
 
 ## 6.2.0 (August 18th 2021)
 ### New features

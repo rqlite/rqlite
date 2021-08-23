@@ -307,7 +307,9 @@ func main() {
 	// Start the HTTP API server.
 	clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, nodeEncrypt, noNodeVerify)
 	clstrClient := cluster.NewClient(clstrDialer)
-	clstrClient.SetLocal(raftAdv, clstr)
+	if err := clstrClient.SetLocal(raftAdv, clstr); err != nil {
+		log.Fatalf("failed to set cluster client local parameters: %s", err.Error())
+	}
 	httpServ, err := startHTTPService(str, clstrClient)
 	if err != nil {
 		log.Fatalf("failed to start HTTP server: %s", err.Error())

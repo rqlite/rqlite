@@ -585,9 +585,9 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpStatus := map[string]interface{}{
-		"addr":    s.Addr().String(),
-		"auth":    prettyEnabled(s.credentialStore != nil),
-		"cluster": clusterStatus,
+		"bind_addr": s.Addr().String(),
+		"auth":      prettyEnabled(s.credentialStore != nil),
+		"cluster":   clusterStatus,
 	}
 
 	nodeStatus := map[string]interface{}{
