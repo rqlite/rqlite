@@ -115,7 +115,9 @@ func Test_NewServiceSetGetNodeAPIAddrLocal(t *testing.T) {
 
 	// Test by enabling local answering
 	c := NewClient(ml)
-	c.SetLocal(s.Addr(), s)
+	if err := c.SetLocal(s.Addr(), s); err != nil {
+		t.Fatalf("failed to set cluster client local parameters: %s", err)
+	}
 	addr, err := c.GetNodeAPIAddr(s.Addr())
 	if err != nil {
 		t.Fatalf("failed to get node API address locally: %s", err)

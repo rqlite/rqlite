@@ -41,15 +41,21 @@ func NewClient(dl Dialer) *Client {
 	}
 }
 
-// SetLocal informs the client instance of the node address for
-// the node using this client. Along with the Service instance
-// it allows this client to serve requests for this node locally
-// without the network hop.
-func (c *Client) SetLocal(nodeAddr string, serv *Service) {
+// SetLocal informs the client instance of the node address for the node
+// using this client. Along with the Service instance it allows this
+// client to serve requests for this node locally without the network hop.
+// Because Raft resolves advertised addresses, this function must too.
+func (c *Client) SetLocal(nodeAddr string, serv *Service) error {
 	c.lMu.Lock()
 	defer c.lMu.Unlock()
-	c.localNodeAddr = nodeAddr
+
+	adv, err := net.ResolveTCPAddr("tcp", nodeAddr)
+	if err != nil {
+		return fmt.Errorf("failed to resolve advertise address %s: %s", nodeAddr, err.Error())
+	}
+	c.localNodeAddr = adv.String()
 	c.localServ = serv
+	return nil
 }
 
 // GetNodeAPIAddr retrieves the API Address for the node at nodeAddr
@@ -268,6 +274,15 @@ func (c *Client) Stats() (map[string]interface{}, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
+	stats := map[string]interface{}{
+		"timeout":         c.timeout,
+		"local_node_addr": c.localNodeAddr,
+	}
+
+	if (len(c.pools)) == 0 {
+		return stats, nil
+	}
+
 	poolStats := make(map[string]interface{}, len(c.pools))
 	for k, v := range c.pools {
 		s, err := v.Stats()
@@ -276,11 +291,8 @@ func (c *Client) Stats() (map[string]interface{}, error) {
 		}
 		poolStats[k] = s
 	}
-	return map[string]interface{}{
-		"timeout":         c.timeout,
-		"local_node_addr": c.localNodeAddr,
-		"conn_pool_stats": poolStats,
-	}, nil
+	stats["conn_pool_stats"] = poolStats
+	return stats, nil
 }
 
 func (c *Client) dial(nodeAddr string, timeout time.Duration) (net.Conn, error) {
