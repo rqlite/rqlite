@@ -160,8 +160,8 @@ func Test_MultiNodeCluster(t *testing.T) {
 	}
 }
 
-// Test_MultiNodeClusterAdv tests 3-node cluster with advertised addresses usage.
-func Test_MultiNodeClusterAdv(t *testing.T) {
+// Test_MultiNodeClusterAdv tests 3-node cluster with advertised Raft addresses usage.
+func Test_MultiNodeClusterRaftAdv(t *testing.T) {
 	ln1 := mustTCPListener("0.0.0.0:0")
 	ln2 := mustTCPListener("0.0.0.0:0")
 
@@ -196,20 +196,28 @@ func Test_MultiNodeClusterAdv(t *testing.T) {
 	}
 	go mux2.Serve()
 
+	// Start two nodes, and ensure a cluster can be formed.
 	node1 := mustNodeEncrypted(mustTempDir(), true, false, mux1, "1")
 	defer node1.Deprovision()
-	_, err = node1.WaitForLeader()
+	leader, err := node1.WaitForLeader()
 	if err != nil {
 		t.Fatalf("failed waiting for leader on node1: %s", err.Error())
 	}
+	if exp, got := advAddr1.String(), leader; exp != got {
+		t.Fatalf("node return wrong leader from leader, exp: %s, got %s", exp, got)
+	}
+
 	node2 := mustNodeEncrypted(mustTempDir(), false, false, mux2, "2")
 	defer node2.Deprovision()
 	if err := node2.Join(node1); err != nil {
 		t.Fatalf("node2 failed to join leader: %s", err.Error())
 	}
-	_, err = node2.WaitForLeader()
+	leader, err = node2.WaitForLeader()
 	if err != nil {
 		t.Fatalf("failed waiting for leader on node2: %s", err.Error())
+	}
+	if exp, got := advAddr1.String(), leader; exp != got {
+		t.Fatalf("node return wrong leader from follower, exp: %s, got %s", exp, got)
 	}
 }
 
