@@ -160,7 +160,7 @@ func Test_MultiNodeCluster(t *testing.T) {
 	}
 }
 
-// Test_MultiNodeClusterAdv tests 3-node cluster with advertised Raft addresses usage.
+// Test_MultiNodeClusterRaftAdv tests 3-node cluster with advertised Raft addresses usage.
 func Test_MultiNodeClusterRaftAdv(t *testing.T) {
 	ln1 := mustTCPListener("0.0.0.0:0")
 	defer ln1.Close()
