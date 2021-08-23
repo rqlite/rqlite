@@ -2,8 +2,11 @@ package system
 
 import (
 	"fmt"
+	"net"
 	"testing"
 	"time"
+
+	"github.com/rqlite/rqlite/tcp"
 )
 
 // Test_JoinLeaderNode tests a join operation between a leader and a new node.
@@ -154,6 +157,57 @@ func Test_MultiNodeCluster(t *testing.T) {
 		if r != tt.expected {
 			t.Fatalf(`test %d received wrong result "%s" got: %s exp: %s`, i, tt.stmt, r, tt.expected)
 		}
+	}
+}
+
+// Test_MultiNodeClusterAdv tests 3-node cluster with advertised addresses usage.
+func Test_MultiNodeClusterAdv(t *testing.T) {
+	ln1 := mustTCPListener("0.0.0.0:0")
+	ln2 := mustTCPListener("0.0.0.0:0")
+
+	advAddr := mustGetLocalIPv4Address()
+
+	_, port1, err := net.SplitHostPort(ln1.Addr().String())
+	if err != nil {
+		t.Fatalf("failed to get host and port: %s", err.Error())
+	}
+	_, port2, err := net.SplitHostPort(ln2.Addr().String())
+	if err != nil {
+		t.Fatalf("failed to get host and port: %s", err.Error())
+	}
+
+	advAddr1, err := net.ResolveTCPAddr("tcp", net.JoinHostPort(advAddr, port1))
+	if err != nil {
+		t.Fatalf("failed to resolve TCP address: %s", err.Error())
+	}
+	advAddr2, err := net.ResolveTCPAddr("tcp", net.JoinHostPort(advAddr, port2))
+	if err != nil {
+		t.Fatalf("failed to resolve TCP address: %s", err.Error())
+	}
+
+	mux1, err := tcp.NewMux(ln1, advAddr1)
+	if err != nil {
+		t.Fatalf("failed to create node-to-node mux: %s", err.Error())
+	}
+	mux2, err := tcp.NewMux(ln2, advAddr2)
+	if err != nil {
+		t.Fatalf("failed to create node-to-node mux: %s", err.Error())
+	}
+
+	node1 := mustNodeEncrypted(mustTempDir(), true, false, mux1, "1")
+	defer node1.Deprovision()
+	_, err = node1.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for leader on node1: %s", err.Error())
+	}
+	node2 := mustNodeEncrypted(mustTempDir(), false, false, mux2, "2")
+	defer node2.Deprovision()
+	if err := node2.Join(node1); err != nil {
+		t.Fatalf("node2 failed to join leader: %s", err.Error())
+	}
+	_, err = node2.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for leader on node2: %s", err.Error())
 	}
 }
 
