@@ -712,7 +712,7 @@ func (s *Store) Backup(leader bool, fmt BackupFormat, dst io.Writer) error {
 // Join joins a node, identified by id and located at addr, to this store.
 // The node must be ready to respond to Raft communications at that address.
 func (s *Store) Join(id, addr string, voter bool) error {
-	s.logger.Printf("received request to join node at %s", addr)
+	s.logger.Printf("received request from node with ID %s, at %s, to join this node", id, addr)
 	if s.raft.State() != raft.Leader {
 		return ErrNotLeader
 	}
@@ -759,7 +759,7 @@ func (s *Store) Join(id, addr string, voter bool) error {
 	}
 
 	stats.Add(numJoins, 1)
-	s.logger.Printf("node at %s joined successfully as %s", addr, prettyVoter(voter))
+	s.logger.Printf("node with ID %s, at %s, joined successfully as %s", id, addr, prettyVoter(voter))
 	return nil
 }
 

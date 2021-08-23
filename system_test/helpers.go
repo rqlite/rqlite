@@ -585,6 +585,29 @@ func mustNewOpenTLSMux(certFile, keyPath, addr string) *tcp.Mux {
 	return mux
 }
 
+func mustTCPListener(bind string) net.Listener {
+	l, err := net.Listen("tcp", bind)
+	if err != nil {
+		panic(err)
+	}
+	return l
+}
+
+func mustGetLocalIPv4Address() string {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		panic(fmt.Sprintf("failed to get interface addresses: %s", err.Error()))
+	}
+	for _, address := range addrs {
+		if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+			if ipnet.IP.To4() != nil {
+				return ipnet.IP.String()
+			}
+		}
+	}
+	panic("couldn't find a local IPv4 address")
+}
+
 func mustParseDuration(d string) time.Duration {
 	if dur, err := time.ParseDuration(d); err != nil {
 		panic("failed to parse duration")
