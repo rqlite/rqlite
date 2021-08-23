@@ -61,7 +61,7 @@ jobs:
       - image: circleci/golang:1.16
     steps:
         - checkout
-        - run: sudo apt-get update
+        - run: sudo pip install -U pip setuptools virtualenv
         - run: sudo apt-get install python-requests
         - run: go get -t -d -v ./...
         - run: go install ./...
