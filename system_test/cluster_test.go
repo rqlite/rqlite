@@ -189,10 +189,12 @@ func Test_MultiNodeClusterAdv(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create node-to-node mux: %s", err.Error())
 	}
+	go mux1.Serve()
 	mux2, err := tcp.NewMux(ln2, advAddr2)
 	if err != nil {
 		t.Fatalf("failed to create node-to-node mux: %s", err.Error())
 	}
+	go mux2.Serve()
 
 	node1 := mustNodeEncrypted(mustTempDir(), true, false, mux1, "1")
 	defer node1.Deprovision()
