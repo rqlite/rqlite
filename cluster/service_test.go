@@ -131,7 +131,7 @@ func Test_NewServiceSetGetNodeAPIAddrLocal(t *testing.T) {
 		t.Fatalf("failed to confirm request served locally")
 	}
 
-	// Ensure it still works when hostname passed it.
+	// Ensure it still works when hostname passed in.
 	_, port, err := net.SplitHostPort(s.Addr())
 	if err != nil {
 		t.Fatalf("failed to split host and port: %s", err)
