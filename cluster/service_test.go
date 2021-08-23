@@ -130,6 +130,28 @@ func Test_NewServiceSetGetNodeAPIAddrLocal(t *testing.T) {
 	if stats.Get(numGetNodeAPIRequestLocal).String() != "1" {
 		t.Fatalf("failed to confirm request served locally")
 	}
+
+	// Ensure it still works when hostname passed it.
+	_, port, err := net.SplitHostPort(s.Addr())
+	if err != nil {
+		t.Fatalf("failed to split host and port: %s", err)
+	}
+	if err := c.SetLocal(net.JoinHostPort("localhost", port), s); err != nil {
+		t.Fatalf("failed to set cluster client local parameters: %s", err)
+	}
+	addr, err = c.GetNodeAPIAddr(s.Addr())
+	if err != nil {
+		t.Fatalf("failed to get node API address locally: %s", err)
+	}
+	if addr != "http://foo" {
+		t.Fatalf("failed to get correct node API address locally, exp %s, got %s", "http://foo", addr)
+	}
+
+	// Check stats to confirm local response.
+	if stats.Get(numGetNodeAPIRequestLocal).String() != "2" {
+		t.Fatalf("failed to confirm request served locally")
+	}
+
 }
 
 func Test_NewServiceSetGetNodeAPIAddrTLS(t *testing.T) {
