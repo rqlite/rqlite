@@ -7,7 +7,7 @@ jobs:
   test:
     docker:
       # specify the version
-      - image: circleci/golang:1.16
+      - image: circleci/golang@sha256:bf91f089cecab7fcd329193022794e7d13c42ee4570b1ac2920875c1b948eb63
 
       # Specify service dependencies here if necessary
       # CircleCI maintains a library of pre-built images
@@ -31,7 +31,7 @@ jobs:
   race:
     docker:
       # specify the version
-      - image: circleci/golang:1.16
+      - image: circleci/golang@sha256:bf91f089cecab7fcd329193022794e7d13c42ee4570b1ac2920875c1b948eb63
 
       # Specify service dependencies here if necessary
       # CircleCI maintains a library of pre-built images
@@ -58,7 +58,7 @@ jobs:
   end_to_end:
     working_directory: /go/src/github.com/rqlite/rqlite
     docker:
-      - image: circleci/golang:1.16
+      - image: circleci/golang@sha256:bf91f089cecab7fcd329193022794e7d13c42ee4570b1ac2920875c1b948eb63
     steps:
         - checkout
         - run: sudo apt-get install python-requests
