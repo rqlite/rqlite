@@ -5,6 +5,7 @@ Systems running earlier 6.x software can be upgraded to this release without doi
 
 ### New features
 - [PR #859](https://github.com/rqlite/rqlite/pull/859): Support transparent Execute and Query request forwarding. Fixes [issue #330](https://github.com/rqlite/rqlite/issues/330).
+- [PR #873](https://github.com/rqlite/rqlite/pull/873): Support explicitly specifying SQLite on-disk file path.
 
 ### Implementation changes and bug fixes
 - [PR #863](https://github.com/rqlite/rqlite/pull/863): Add gauge-like metric for Snapshot timings.
