@@ -198,6 +198,7 @@ func main() {
 	}
 	dbConf := store.NewDBConfig(!onDisk)
 	dbConf.FKConstraints = fkConstraints
+	dbConf.OnDiskPath = onDiskPath
 
 	str := store.New(raftTn, &store.StoreConfig{
 		DBConf: dbConf,
