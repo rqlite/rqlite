@@ -226,6 +226,7 @@ func Test_SingleNodeExecuteQueryTx(t *testing.T) {
 	}
 }
 
+// Test_SingleNodeInMemFK tests that basic foreign-key related functionality works.
 func Test_SingleNodeInMemFK(t *testing.T) {
 	s := mustNewStoreFK(true)
 	defer os.RemoveAll(s.Path())
@@ -248,6 +249,41 @@ func Test_SingleNodeInMemFK(t *testing.T) {
 	res, err := s.Execute(executeRequestFromString("INSERT INTO bar(fooid) VALUES(1)", false, false))
 	if got, exp := asJSON(res), `[{"error":"FOREIGN KEY constraint failed"}]`; exp != got {
 		t.Fatalf("unexpected results for execute\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
+// Test_SingleNodeSQLitePath ensures that basic functionality works when the SQLite database path
+// is explicitly specificed.
+func Test_SingleNodeSQLitePath(t *testing.T) {
+	s := mustNewStoreSQLitePath()
+	defer os.RemoveAll(s.Path())
+
+	if err := s.Open(true); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	s.WaitForLeader(10 * time.Second)
+
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+	}, false, false)
+	_, err := s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	qr := queryRequestFromString("SELECT * FROM foo", false, false)
+	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+	r, err := s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 }
 
@@ -1191,14 +1227,15 @@ func Test_State(t *testing.T) {
 	}
 }
 
-func mustNewStoreAtPath(path string, inmem, fk bool) *Store {
+func mustNewStoreAtPaths(dataPath, sqlitePath string, inmem, fk bool) *Store {
 	cfg := NewDBConfig(inmem)
 	cfg.FKConstraints = fk
+	cfg.OnDiskPath = sqlitePath
 
 	s := New(mustMockLister("localhost:0"), &StoreConfig{
 		DBConf: cfg,
-		Dir:    path,
-		ID:     path, // Could be any unique string.
+		Dir:    dataPath,
+		ID:     dataPath, // Could be any unique string.
 	})
 	if s == nil {
 		panic("failed to create new store")
@@ -1207,11 +1244,15 @@ func mustNewStoreAtPath(path string, inmem, fk bool) *Store {
 }
 
 func mustNewStore(inmem bool) *Store {
-	return mustNewStoreAtPath(mustTempDir(), inmem, false)
+	return mustNewStoreAtPaths(mustTempDir(), "", inmem, false)
 }
 
 func mustNewStoreFK(inmem bool) *Store {
-	return mustNewStoreAtPath(mustTempDir(), inmem, true)
+	return mustNewStoreAtPaths(mustTempDir(), "", inmem, true)
+}
+
+func mustNewStoreSQLitePath() *Store {
+	return mustNewStoreAtPaths(mustTempDir(), filepath.Join(mustTempDir(), "explicit-path.db"), false, true)
 }
 
 type mockSnapshotSink struct {

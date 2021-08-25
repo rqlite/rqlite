@@ -185,12 +185,17 @@ func New(ln Listener, c *StoreConfig) *Store {
 		logger = log.New(os.Stderr, "[store] ", log.LstdFlags)
 	}
 
+	dbPath := filepath.Join(c.Dir, sqliteFile)
+	if c.DBConf.OnDiskPath != "" {
+		dbPath = c.DBConf.OnDiskPath
+	}
+
 	return &Store{
 		ln:            ln,
 		raftDir:       c.Dir,
 		raftID:        c.ID,
 		dbConf:        c.DBConf,
-		dbPath:        filepath.Join(c.Dir, sqliteFile),
+		dbPath:        dbPath,
 		reqMarshaller: command.NewRequestMarshaler(),
 		logger:        logger,
 		ApplyTimeout:  applyTimeout,
@@ -209,7 +214,7 @@ func (s *Store) Open(enableBootstrap bool) error {
 	if !s.dbConf.Memory {
 		dbType = "on-disk"
 	}
-	s.logger.Printf("configured for an %s database", dbType)
+	s.logger.Printf("configured for an %s database at %s", dbType, s.dbPath)
 
 	s.logger.Printf("ensuring directory at %s exists", s.raftDir)
 	err := os.MkdirAll(s.raftDir, 0755)

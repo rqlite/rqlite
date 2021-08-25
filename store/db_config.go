@@ -5,6 +5,9 @@ type DBConfig struct {
 	// Whether the database is in-memory only.
 	Memory bool `json:"memory"`
 
+	// SQLite on-disk path
+	OnDiskPath string `json:"on_disk_path,omitempty"`
+
 	// Enforce Foreign Key constraints
 	FKConstraints bool `json:"fk_constraints"`
 }
