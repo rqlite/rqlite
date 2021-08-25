@@ -1,8 +1,12 @@
 # Performance
 
+rqlite replicates SQLite for fault-tolerance. It does not replicate it for performance. In fact performance is reduced due to a standalone SQLite database due to nature of distributed systems. 
+
 rqlite performance -- defined as the number of database updates performed in a given period of time -- is primarily determined by two factors:
 - Disk performance
 - Network latency
+
+Depending on your machine (particularly its IO performance) and network, individual INSERT performance could be anything from 10 operations per second to more than 200 operations per second.
 
 ## Disk
 Disk performance is the single biggest determinant of rqlite performance. This is because every change to the system must go through the Raft subsystem, and the Raft subsystem calls `fsync()` after every write to its log. Raft does this to ensure that the change is safely persisted in permanent storage before applying those changes to the SQLite database. This is why rqlite runs with an in-memory database by default, as using as on-disk SQLite database would put even more load on the disk, reducing the disk throughput available to Raft.
@@ -16,6 +20,8 @@ There are a few ways to improve performance, but not all will be suitable for a 
 
 ## Batching
 The more SQLite statements you can include in a single request to a rqlite node, the better the system will perform. 
+
+By using the [bulk API](https://github.com/rqlite/rqlite/blob/master/DOC/BULK.md), transactions, or both, throughput will increase significantly, often by 2 orders of magnitude. This speed-up is due to the way Raft and SQLite work. So for high throughput, execute as many operations as possible within a single transaction.
 
 ## Use more powerful hardware
 Obviously running rqlite on better disks, better networks, or both, will improve performance.
