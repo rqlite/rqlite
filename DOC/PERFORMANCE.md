@@ -1,6 +1,6 @@
 # Performance
 
-rqlite replicates SQLite for fault-tolerance. It does not replicate it for performance. In fact performance is reduced due to a standalone SQLite database due to nature of distributed systems. 
+rqlite replicates SQLite for fault-tolerance. It does not replicate it for performance. In fact performance is reduced due to a standalone SQLite database due to the nature of distributed systems. _There is no such thing as a free lunch_.
 
 rqlite performance -- defined as the number of database updates performed in a given period of time -- is primarily determined by two factors:
 - Disk performance
@@ -12,7 +12,7 @@ Depending on your machine (particularly its IO performance) and network, individ
 Disk performance is the single biggest determinant of rqlite performance. This is because every change to the system must go through the Raft subsystem, and the Raft subsystem calls `fsync()` after every write to its log. Raft does this to ensure that the change is safely persisted in permanent storage before applying those changes to the SQLite database. This is why rqlite runs with an in-memory database by default, as using as on-disk SQLite database would put even more load on the disk, reducing the disk throughput available to Raft.
 
 ## Network
-When running a rqlite cluster, network latency is also a factor. This is because Raft must contact every node **twice** before a change is committed to the Raft log. Obviously the faster your network, the shorter time contact each node will take.
+When running a rqlite cluster, network latency is also a factor. This is because Raft must contact every node **twice** before a change is committed to the Raft log. Obviously the faster your network, the shorter the time to contact each node.
 
 # Improving Performance
 
@@ -31,11 +31,11 @@ It is possible to run rqlite entirely on-top of a memory-backed file system. Thi
 ```bash
 mount -t tmpfs -o size=512m tmpfs /mnt/ramdisk
 ```
-**This comes with risks, however**. The behavior of rqlite when a node fails, but the Raft log has not been permanently persisted, **is not defined**. But if your policy is to completely deprovision your rqlite node, or rqlite cluster, in the event of any node failure, this option might work for you. Testing shows that using rqlite with a memory-only file system can result in 100x improvement in performance.
+**This comes with risks, however**. The behavior of rqlite when a node fails, but committed entries the Raft log have not actually been permanently persisted, **is not defined**. But if your policy is to completely deprovision your rqlite node, or rqlite cluster, in the event of any node failure, this option may be of interest to you. Perhaps you always rebuild your rqlite cluster from a different source of data, so can recover an rqlite cluster regardless of its state. Testing shows that using rqlite with a memory-only file system can result in 100x improvement in performance.
 
 ## Improving read-write concurrency
-SQLite can offer better concurrent read and write support when using an on-disk database, compared to in-memory databases. But as explained above, using an on-disk SQLite database can significant impact performance. Of course, the database-update performance will be so much better with an in-memory database, that improving read-write concurrency may not be needed in practise.
+SQLite can offer better concurrent read and write support when using an on-disk database, compared to in-memory databases. But as explained above, using an on-disk SQLite database can significant impact performance. But since the database-update performance will be so much better with an in-memory database, improving read-write concurrency may not be needed in practise.
 
 However if you enable an on-disk SQLite database, but then place the SQLite database on a memory-backed file system, you can have the best of both worlds. You can dedicate your disk to the Raft log, but still get better read-write concurrency with SQLite.
 
-An alternative approach would be to place the SQLite on-disk database on a different disk, but this is unlikely to be as performant as an in-memory file system.
+An alternative approach would be to place the SQLite on-disk database on a disk different than that storing the Raft log, but this is unlikely to be as performant as an in-memory file system for the SQLite database.
