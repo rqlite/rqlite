@@ -1,6 +1,6 @@
 # Performance
 
-rqlite replicates SQLite for fault-tolerance. It does not replicate it for performance. In fact performance is reduced due to a standalone SQLite database due to the nature of distributed systems. _There is no such thing as a free lunch_.
+rqlite replicates SQLite for fault-tolerance. It does not replicate it for performance. In fact performance is reduced relative to a standalone SQLite database due to the nature of distributed systems. _There is no such thing as a free lunch_.
 
 rqlite performance -- defined as the number of database updates performed in a given period of time -- is primarily determined by two factors:
 - Disk performance
@@ -36,6 +36,6 @@ mount -t tmpfs -o size=512m tmpfs /mnt/ramdisk
 ## Improving read-write concurrency
 SQLite can offer better concurrent read and write support when using an on-disk database, compared to in-memory databases. But as explained above, using an on-disk SQLite database can significant impact performance. But since the database-update performance will be so much better with an in-memory database, improving read-write concurrency may not be needed in practise.
 
-However if you enable an on-disk SQLite database, but then place the SQLite database on a memory-backed file system, you can have the best of both worlds. You can dedicate your disk to the Raft log, but still get better read-write concurrency with SQLite.
+However if you enable an on-disk SQLite database, but then place the SQLite database on a memory-backed file system, you can have the best of both worlds. You can dedicate your disk to the Raft log, but still get better read-write concurrency with SQLite. You can specify the SQLite database file path via the `-on-disk-path` flag.
 
 An alternative approach would be to place the SQLite on-disk database on a disk different than that storing the Raft log, but this is unlikely to be as performant as an in-memory file system for the SQLite database.
