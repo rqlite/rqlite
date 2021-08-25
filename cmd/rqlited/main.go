@@ -111,7 +111,7 @@ func init() {
 	flag.BoolVar(&expvar, "expvar", true, "Serve expvar data on HTTP server")
 	flag.BoolVar(&pprofEnabled, "pprof", true, "Serve pprof data on HTTP server")
 	flag.BoolVar(&onDisk, "on-disk", false, "Use an on-disk SQLite database")
-	flag.StringVar(&onDiskPath, "on-disk-path", "", "Specify path for SQLite on-disk database file. If not set, use file in data directory")
+	flag.StringVar(&onDiskPath, "on-disk-path", "", "Path for SQLite on-disk database file. If not set, use file in data directory")
 	flag.BoolVar(&fkConstraints, "fk", false, "Enable SQLite foreign key constraints")
 	flag.BoolVar(&showVersion, "version", false, "Show version information and exit")
 	flag.BoolVar(&raftNonVoter, "raft-non-voter", false, "Configure as non-voting node")
