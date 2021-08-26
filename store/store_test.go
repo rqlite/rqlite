@@ -255,7 +255,7 @@ func Test_SingleNodeInMemFK(t *testing.T) {
 // Test_SingleNodeSQLitePath ensures that basic functionality works when the SQLite database path
 // is explicitly specificed.
 func Test_SingleNodeSQLitePath(t *testing.T) {
-	s := mustNewStoreSQLitePath()
+	s, path := mustNewStoreSQLitePath()
 	defer os.RemoveAll(s.Path())
 
 	if err := s.Open(true); err != nil {
@@ -285,6 +285,12 @@ func Test_SingleNodeSQLitePath(t *testing.T) {
 	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
+
+	// Confirm SQLite file was actually created at supplied path.
+	if !pathExists(path) {
+		t.Fatalf("SQLite file does not exist at %s", path)
+	}
+
 }
 
 func Test_SingleNodeBackupBinary(t *testing.T) {
@@ -1251,8 +1257,11 @@ func mustNewStoreFK(inmem bool) *Store {
 	return mustNewStoreAtPaths(mustTempDir(), "", inmem, true)
 }
 
-func mustNewStoreSQLitePath() *Store {
-	return mustNewStoreAtPaths(mustTempDir(), filepath.Join(mustTempDir(), "explicit-path.db"), false, true)
+func mustNewStoreSQLitePath() (*Store, string) {
+	dataDir := mustTempDir()
+	sqliteDir := mustTempDir()
+	sqlitePath := filepath.Join(sqliteDir, "explicit-path.db")
+	return mustNewStoreAtPaths(dataDir, sqlitePath, false, true), sqlitePath
 }
 
 type mockSnapshotSink struct {
