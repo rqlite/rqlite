@@ -296,13 +296,12 @@ func Test_MultiNodeClusterNodes(t *testing.T) {
 	if len(followers) != 2 {
 		t.Fatalf("got incorrect number of followers: %d", len(followers))
 	}
-	f0 := followers[0]
-
-	ns = nodes[f0.ID]
-	if ns.Addr != f0.RaftAddr {
+	f := followers[0]
+	ns = nodes[f.ID]
+	if ns.Addr != f.RaftAddr {
 		t.Fatalf("node has wrong Raft address for follower")
 	}
-	if ns.APIAddr != fmt.Sprintf("http://%s", f0.APIAddr) {
+	if ns.APIAddr != fmt.Sprintf("http://%s", f.APIAddr) {
 		t.Fatalf("node has wrong API address for follower")
 	}
 	if ns.Leader {
@@ -310,54 +309,6 @@ func Test_MultiNodeClusterNodes(t *testing.T) {
 	}
 	if !ns.Reachable {
 		t.Fatalf("node is not reachable")
-	}
-
-	// Kill a follower, ensure nodes/ output remains correct.
-	f0.Close(true)
-	f1 := followers[1]
-	nodes, err = node1.Nodes(false)
-	if err != nil {
-		t.Fatalf("failed to get nodes status: %s", err.Error())
-	}
-	fmt.Println(">>>>", f0.ID, asJSON(nodes))
-
-	ns, ok = nodes[leader.ID]
-	if !ok {
-		t.Fatalf("failed to find leader with ID %s in node status", leader.ID)
-	}
-	if !ns.Leader {
-		t.Fatalf("node is not leader")
-	}
-	if !ns.Reachable {
-		t.Fatalf("node is not reachable")
-	}
-
-	ns = nodes[f0.ID]
-	if ns.Addr != f0.RaftAddr {
-		t.Fatalf("node has wrong Raft address for follower")
-	}
-	if ns.APIAddr != fmt.Sprintf("http://%s", f0.APIAddr) {
-		t.Fatalf("node has wrong API address for follower")
-	}
-	if ns.Leader {
-		t.Fatalf("node is not a follower")
-	}
-	if ns.Reachable {
-		t.Fatalf("deprovisioned follower is reachable")
-	}
-
-	ns = nodes[f1.ID]
-	if ns.Addr != f1.RaftAddr {
-		t.Fatalf("node has wrong Raft address for follower")
-	}
-	if ns.APIAddr != fmt.Sprintf("http://%s", f1.APIAddr) {
-		t.Fatalf("node has wrong API address for follower")
-	}
-	if ns.Leader {
-		t.Fatalf("node is not a follower")
-	}
-	if !ns.Reachable {
-		t.Fatalf("follower is not reachable")
 	}
 }
 
