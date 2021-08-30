@@ -467,6 +467,27 @@ class TestEndToEnd(unittest.TestCase):
   def tearDown(self):
     self.cluster.deprovision()
 
+  def test_nodes(self):
+    '''Test that the nodes/ endpoint operates as expected'''
+    l = self.cluster.wait_for_leader()
+    fs = self.cluster.followers()
+    self.assertEqual(len(fs), 2)
+
+    nodes = l.nodes()
+    self.assertEqual(nodes[l.node_id]['leader'], True)
+    self.assertEqual(nodes[l.node_id]['reachable'], True)
+    self.assertEqual(nodes[l.node_id]['api_addr'], l.APIProtoAddr())
+    for n in [fs[0], fs[1]]:
+      self.assertEqual(nodes[n.node_id]['leader'], False)
+      self.assertEqual(nodes[n.node_id]['reachable'], True)
+      self.assertEqual(nodes[n.node_id]['api_addr'], n.APIProtoAddr())
+
+    fs[0].stop()
+    nodes = l.nodes()
+    self.assertEqual(nodes[fs[0].node_id]['reachable'], False)
+    self.assertEqual(nodes[fs[1].node_id]['reachable'], True)
+    self.assertEqual(nodes[l.node_id]['reachable'], True)
+
   def test_election(self):
     '''Test basic leader election'''
 
