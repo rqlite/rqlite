@@ -3,7 +3,7 @@
 - [PR #876](https://github.com/rqlite/rqlite/pull/876): Add round-trip time to each node to `nodes/` endpoint output.
 
 ## 6.3.0 (August 28th 2021)
-This release introduces transparent request forwarding, which simplifies interacting with rqlite clusters Client requests that must be served by the leader will no longer return HTTP 301, and will be forwarded transparently to the leader if necessary. Client software does not need to change to take advantage of this new functionality.
+This release introduces transparent request forwarding, which simplifies interacting with rqlite clusters. Client requests that must be served by the leader will no longer return HTTP 301, and will be forwarded transparently to the leader if necessary. Client software does not need to change to take advantage of this new functionality.
 
 Systems running earlier 6.x software can be upgraded to this release without doing any special, but all nodes in the new cluster must be running this release. This release cannot communicate with nodes running earlier 6.x software.
 
