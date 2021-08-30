@@ -1,13 +1,11 @@
 package system
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
 	"github.com/rqlite/rqlite/cluster"
 	"github.com/rqlite/rqlite/command"
-	"github.com/rqlite/rqlite/command/encoding"
 	"github.com/rqlite/rqlite/tcp"
 )
 
@@ -226,12 +224,4 @@ func queryRequestFromStrings(s []string) *command.QueryRequest {
 
 func mustNewDialer(header byte, remoteEncrypted, skipVerify bool) *tcp.Dialer {
 	return tcp.NewDialer(header, remoteEncrypted, skipVerify)
-}
-
-func asJSON(v interface{}) string {
-	b, err := encoding.JSONMarshal(v)
-	if err != nil {
-		panic(fmt.Sprintf("failed to JSON marshal value: %s", err.Error()))
-	}
-	return string(b)
 }

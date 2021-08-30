@@ -690,25 +690,27 @@ func (s *Service) handleNodes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	apiAddrs, err := s.checkNodesAPIAddr(filteredNodes, t)
+	nodesResp, err := s.checkNodes(filteredNodes, t)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	resp := make(map[string]struct {
-		APIAddr   string `json:"api_addr,omitempty"`
-		Addr      string `json:"addr,omitempty"`
-		Reachable bool   `json:"reachable"`
-		Leader    bool   `json:"leader"`
+		APIAddr   string  `json:"api_addr,omitempty"`
+		Addr      string  `json:"addr,omitempty"`
+		Reachable bool    `json:"reachable"`
+		Leader    bool    `json:"leader"`
+		Time      float64 `json:"time,omitempty"`
 	})
 
 	for _, n := range filteredNodes {
 		nn := resp[n.ID]
 		nn.Addr = n.Addr
 		nn.Leader = nn.Addr == lAddr
-		nn.APIAddr = apiAddrs[n.ID]
-		nn.Reachable = apiAddrs[n.ID] != ""
+		nn.APIAddr = nodesResp[n.ID].apiAddr
+		nn.Reachable = nodesResp[n.ID].reachable
+		nn.Time = nodesResp[n.ID].time.Seconds()
 		resp[n.ID] = nn
 	}
 
@@ -985,16 +987,21 @@ func (s *Service) LeaderAPIAddr() string {
 	return apiAddr
 }
 
-// checkNodesAPIAddr returns a map of node ID to API addresses, reachable
+type checkNodesResponse struct {
+	apiAddr   string
+	reachable bool
+	time      time.Duration
+}
+
+// checkNodes returns a map of node ID to node responsivness, reachable
 // being defined as node responds to a simple request over the network.
-func (s *Service) checkNodesAPIAddr(nodes []*store.Server, timeout time.Duration) (map[string]string, error) {
+func (s *Service) checkNodes(nodes []*store.Server, timeout time.Duration) (map[string]*checkNodesResponse, error) {
 	var wg sync.WaitGroup
 	var mu sync.Mutex
-	apiAddrs := make(map[string]string)
+	resp := make(map[string]*checkNodesResponse)
 
-	// Assume unreachable
 	for _, n := range nodes {
-		apiAddrs[n.ID] = ""
+		resp[n.ID] = &checkNodesResponse{}
 	}
 
 	// Now confirm.
@@ -1002,17 +1009,20 @@ func (s *Service) checkNodesAPIAddr(nodes []*store.Server, timeout time.Duration
 		wg.Add(1)
 		go func(id, raftAddr string) {
 			defer wg.Done()
+			start := time.Now()
 			apiAddr, err := s.cluster.GetNodeAPIAddr(raftAddr)
 			if err == nil {
 				mu.Lock()
-				apiAddrs[id] = apiAddr
+				resp[id].reachable = true
+				resp[id].apiAddr = apiAddr
+				resp[id].time = time.Since(start)
 				mu.Unlock()
 			}
 		}(n.ID, n.Addr)
 	}
 	wg.Wait()
 
-	return apiAddrs, nil
+	return resp, nil
 }
 
 // addBuildVersion adds the build version to the HTTP response.

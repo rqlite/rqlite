@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/rqlite/rqlite/cluster"
+	"github.com/rqlite/rqlite/command/encoding"
 	httpd "github.com/rqlite/rqlite/http"
 	"github.com/rqlite/rqlite/store"
 	"github.com/rqlite/rqlite/tcp"
@@ -38,6 +39,7 @@ type Node struct {
 	HTTPKeyPath  string
 	Store        *store.Store
 	Service      *httpd.Service
+	Cluster      *cluster.Service
 }
 
 // SameAs returns true if this node is the same as node o.
@@ -51,6 +53,7 @@ func (n *Node) Close(graceful bool) error {
 		return err
 	}
 	n.Service.Close()
+	n.Cluster.Close()
 	return nil
 }
 
@@ -58,6 +61,7 @@ func (n *Node) Close(graceful bool) error {
 func (n *Node) Deprovision() {
 	n.Store.Close(true)
 	n.Service.Close()
+	n.Cluster.Close()
 	os.RemoveAll(n.Dir)
 }
 
@@ -504,6 +508,7 @@ func mustNodeEncryptedOnDisk(dir string, enableSingle, httpEncrypt bool, mux *tc
 	if err := clstr.Open(); err != nil {
 		panic("failed to open Cluster service)")
 	}
+	node.Cluster = clstr
 
 	clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, false, true)
 	clstrClient := cluster.NewClient(clstrDialer)
@@ -614,6 +619,14 @@ func mustParseDuration(d string) time.Duration {
 	} else {
 		return dur
 	}
+}
+
+func asJSON(v interface{}) string {
+	b, err := encoding.JSONMarshal(v)
+	if err != nil {
+		panic(fmt.Sprintf("failed to JSON marshal value: %s", err.Error()))
+	}
+	return string(b)
 }
 
 func isJSON(s string) bool {
