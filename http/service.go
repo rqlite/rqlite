@@ -701,7 +701,7 @@ func (s *Service) handleNodes(w http.ResponseWriter, r *http.Request) {
 		Addr      string  `json:"addr,omitempty"`
 		Reachable bool    `json:"reachable"`
 		Leader    bool    `json:"leader"`
-		Time      float64 `json:"time"`
+		Time      float64 `json:"time,omitempty"`
 	})
 
 	for _, n := range filteredNodes {
