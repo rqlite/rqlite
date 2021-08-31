@@ -59,7 +59,7 @@ func (c *Client) SetLocal(nodeAddr string, serv *Service) error {
 }
 
 // GetNodeAPIAddr retrieves the API Address for the node at nodeAddr
-func (c *Client) GetNodeAPIAddr(nodeAddr string) (string, error) {
+func (c *Client) GetNodeAPIAddr(nodeAddr string, timeout time.Duration) (string, error) {
 	c.lMu.RLock()
 	defer c.lMu.RUnlock()
 	if c.localNodeAddr == nodeAddr && c.localServ != nil {
@@ -86,11 +86,18 @@ func (c *Client) GetNodeAPIAddr(nodeAddr string) (string, error) {
 	// Write length of Protobuf
 	b := make([]byte, 4)
 	binary.LittleEndian.PutUint16(b[0:], uint16(len(p)))
-
+	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
+		handleConnError(conn)
+		return "", err
+	}
 	_, err = conn.Write(b)
 	if err != nil {
 		handleConnError(conn)
 		return "", fmt.Errorf("write protobuf length: %s", err)
+	}
+	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
+		handleConnError(conn)
+		return "", err
 	}
 	_, err = conn.Write(p)
 	if err != nil {
@@ -107,6 +114,10 @@ func (c *Client) GetNodeAPIAddr(nodeAddr string) (string, error) {
 
 	// Read in the actual response.
 	p = make([]byte, sz)
+	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
+		handleConnError(conn)
+		return "", err
+	}
 	_, err = io.ReadFull(conn, p)
 	if err != nil {
 		return "", err
