@@ -528,14 +528,17 @@ class TestEndToEnd(unittest.TestCase):
     self.assertEqual(nodes[l.node_id]['leader'], True)
     self.assertEqual(nodes[l.node_id]['reachable'], True)
     self.assertEqual(nodes[l.node_id]['api_addr'], l.APIProtoAddr())
+    self.assertTrue(nodes[fs[0].node_id].has_key('time'))
     for n in [fs[0], fs[1]]:
       self.assertEqual(nodes[n.node_id]['leader'], False)
       self.assertEqual(nodes[n.node_id]['reachable'], True)
       self.assertEqual(nodes[n.node_id]['api_addr'], n.APIProtoAddr())
+      self.assertTrue(nodes[n.node_id].has_key('time'))
 
     fs[0].stop()
     nodes = l.nodes()
     self.assertEqual(nodes[fs[0].node_id]['reachable'], False)
+    self.assertTrue(nodes[fs[0].node_id].has_key('error'))
     self.assertEqual(nodes[fs[1].node_id]['reachable'], True)
     self.assertEqual(nodes[l.node_id]['reachable'], True)
 

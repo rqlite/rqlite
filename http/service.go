@@ -702,6 +702,7 @@ func (s *Service) handleNodes(w http.ResponseWriter, r *http.Request) {
 		Reachable bool    `json:"reachable"`
 		Leader    bool    `json:"leader"`
 		Time      float64 `json:"time,omitempty"`
+		Error     string  `json:"error,omitempty"`
 	})
 
 	for _, n := range filteredNodes {
@@ -711,6 +712,7 @@ func (s *Service) handleNodes(w http.ResponseWriter, r *http.Request) {
 		nn.APIAddr = nodesResp[n.ID].apiAddr
 		nn.Reachable = nodesResp[n.ID].reachable
 		nn.Time = nodesResp[n.ID].time.Seconds()
+		nn.Error = nodesResp[n.ID].error
 		resp[n.ID] = nn
 	}
 
@@ -991,6 +993,7 @@ type checkNodesResponse struct {
 	apiAddr   string
 	reachable bool
 	time      time.Duration
+	error     string
 }
 
 // checkNodes returns a map of node ID to node responsivness, reachable
@@ -1009,15 +1012,18 @@ func (s *Service) checkNodes(nodes []*store.Server, timeout time.Duration) (map[
 		wg.Add(1)
 		go func(id, raftAddr string) {
 			defer wg.Done()
+			mu.Lock()
+			defer mu.Unlock()
+
 			start := time.Now()
 			apiAddr, err := s.cluster.GetNodeAPIAddr(raftAddr)
-			if err == nil {
-				mu.Lock()
-				resp[id].reachable = true
-				resp[id].apiAddr = apiAddr
-				resp[id].time = time.Since(start)
-				mu.Unlock()
+			if err != nil {
+				resp[id].error = err.Error()
+				return
 			}
+			resp[id].reachable = true
+			resp[id].apiAddr = apiAddr
+			resp[id].time = time.Since(start)
 		}(n.ID, n.Addr)
 	}
 	wg.Wait()
