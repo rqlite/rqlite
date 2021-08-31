@@ -80,8 +80,9 @@ type queryResponse struct {
 	Time    float64 `json:"time"`
 }
 
-func queryWithClient(ctx *cli.Context, client *http.Client, argv *argT, timer bool, query string) error {
+func queryWithClient(ctx *cli.Context, client *http.Client, argv *argT, timer bool, consistency, query string) error {
 	queryStr := url.Values{}
+	queryStr.Set("level", consistency)
 	queryStr.Set("q", query)
 	if timer {
 		queryStr.Set("timings", "")
