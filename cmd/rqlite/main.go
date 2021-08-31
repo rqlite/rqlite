@@ -35,19 +35,20 @@ type argT struct {
 }
 
 var cliHelp = []string{
-	`.backup <file>            Write database backup to SQLite file`,
-	`.dump <file>              Dump the database in SQL text format to a file`,
-	`.expvar                   Show expvar (Go runtime) information for connected node`,
-	`.help                     Show this message`,
-	`.indexes                  Show names of all indexes`,
-	`.restore <file>           Restore the database from a SQLite dump file`,
-	`.nodes                    Show connection status of all nodes in cluster`,
-	`.schema                   Show CREATE statements for all tables`,
-	`.status                   Show status and diagnostic information for connected node`,
-	`.sysdump <file>           Dump system diagnostics to a file for offline analysis`,
-	`.tables                   List names of tables`,
-	`.timer on|off             Turn query timer on or off`,
-	`.remove <raft ID>         Remove a node from the cluster`,
+	`.backup <file>                      Write database backup to SQLite file`,
+	`.consistency [none|weak|strong]     Show or set read consistency level`,
+	`.dump <file>                        Dump the database in SQL text format to a file`,
+	`.expvar                             Show expvar (Go runtime) information for connected node`,
+	`.help                               Show this message`,
+	`.indexes                            Show names of all indexes`,
+	`.restore <file>                     Restore the database from a SQLite dump file`,
+	`.nodes                              Show connection status of all nodes in cluster`,
+	`.schema                             Show CREATE statements for all tables`,
+	`.status                             Show status and diagnostic information for connected node`,
+	`.sysdump <file>                     Dump system diagnostics to a file for offline analysis`,
+	`.tables                             List names of tables`,
+	`.timer on|off                       Turn query timer on or off`,
+	`.remove <raft ID>                   Remove a node from the cluster`,
 }
 
 func main() {
@@ -82,6 +83,7 @@ func main() {
 		fmt.Printf("Connected to rqlited version %s\n", version)
 
 		timer := false
+		consistency := "weak"
 		prefix := fmt.Sprintf("%s:%d>", argv.Host, argv.Port)
 		term, err := prompt.NewTerminal()
 		if err != nil {
@@ -112,12 +114,18 @@ func main() {
 			}
 			cmd = strings.ToUpper(cmd)
 			switch cmd {
+			case ".CONSISTENCY":
+				if index == -1 || index == len(line)-1 {
+					ctx.String("%s\n", consistency)
+					break
+				}
+				err = setConsistency(line[index+1:], &consistency)
 			case ".TABLES":
-				err = queryWithClient(ctx, client, argv, timer, `SELECT name FROM sqlite_master WHERE type="table"`)
+				err = queryWithClient(ctx, client, argv, timer, consistency, `SELECT name FROM sqlite_master WHERE type="table"`)
 			case ".INDEXES":
-				err = queryWithClient(ctx, client, argv, timer, `SELECT sql FROM sqlite_master WHERE type="index"`)
+				err = queryWithClient(ctx, client, argv, timer, consistency, `SELECT sql FROM sqlite_master WHERE type="index"`)
 			case ".SCHEMA":
-				err = queryWithClient(ctx, client, argv, timer, "SELECT sql FROM sqlite_master")
+				err = queryWithClient(ctx, client, argv, timer, consistency, `SELECT sql FROM sqlite_master`)
 			case ".TIMER":
 				err = toggleTimer(line[index+1:], &timer)
 			case ".STATUS":
@@ -157,7 +165,7 @@ func main() {
 			case ".QUIT", "QUIT", "EXIT":
 				break FOR_READ
 			case "SELECT", "PRAGMA":
-				err = queryWithClient(ctx, client, argv, timer, line)
+				err = queryWithClient(ctx, client, argv, timer, consistency, line)
 			default:
 				err = executeWithClient(ctx, client, argv, timer, line)
 			}
@@ -175,6 +183,14 @@ func toggleTimer(op string, flag *bool) error {
 		return fmt.Errorf("invalid option '%s'. Use 'on' or 'off' (default)", op)
 	}
 	*flag = (op == "on")
+	return nil
+}
+
+func setConsistency(r string, c *string) error {
+	if r != "strong" && r != "weak" && r != "none" {
+		return fmt.Errorf("invalid consistency '%s'. Use 'none', 'weak', or 'strong'", r)
+	}
+	*c = r
 	return nil
 }
 
