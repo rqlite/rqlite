@@ -5,6 +5,7 @@ import (
 	"net"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/rqlite/rqlite/tcp"
 	"github.com/rqlite/rqlite/testdata/x509"
@@ -28,7 +29,7 @@ func Test_NewServiceSetGetNodeAPIAddrMuxed(t *testing.T) {
 
 	c := NewClient(mustNewDialer(1, false, false))
 
-	addr, err := c.GetNodeAPIAddr(s.Addr())
+	addr, err := c.GetNodeAPIAddr(s.Addr(), 5*time.Second)
 	if err != nil {
 		t.Fatalf("failed to get node API address: %s", err)
 	}
@@ -62,7 +63,7 @@ func Test_NewServiceSetGetNodeAPIAddrMuxedTLS(t *testing.T) {
 
 	c := NewClient(mustNewDialer(1, true, true))
 
-	addr, err := c.GetNodeAPIAddr(s.Addr())
+	addr, err := c.GetNodeAPIAddr(s.Addr(), 5*time.Second)
 	if err != nil {
 		t.Fatalf("failed to get node API address: %s", err)
 	}

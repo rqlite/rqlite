@@ -72,7 +72,7 @@ type Store interface {
 // Cluster is the interface node API services must provide
 type Cluster interface {
 	// GetNodeAPIAddr returns the HTTP API URL for the node at the given Raft address.
-	GetNodeAPIAddr(nodeAddr string) (string, error)
+	GetNodeAPIAddr(nodeAddr string, timeout time.Duration) (string, error)
 
 	// Execute performs an Execute Request on a remote node.
 	Execute(er *command.ExecuteRequest, nodeAddr string, timeout time.Duration) ([]*command.ExecuteResult, error)
@@ -142,7 +142,7 @@ const (
 	numAuthOK           = "authOK"
 	numAuthFail         = "authFail"
 
-	// Default timeout for request forwarding
+	// Default timeout for cluster communications.
 	defaulTimeout = 30 * time.Second
 
 	// PermAll means all actions permitted.
@@ -981,7 +981,7 @@ func (s *Service) LeaderAPIAddr() string {
 		return ""
 	}
 
-	apiAddr, err := s.cluster.GetNodeAPIAddr(nodeAddr)
+	apiAddr, err := s.cluster.GetNodeAPIAddr(nodeAddr, defaulTimeout)
 
 	if err != nil {
 		return ""
@@ -1016,7 +1016,7 @@ func (s *Service) checkNodes(nodes []*store.Server, timeout time.Duration) (map[
 			defer mu.Unlock()
 
 			start := time.Now()
-			apiAddr, err := s.cluster.GetNodeAPIAddr(raftAddr)
+			apiAddr, err := s.cluster.GetNodeAPIAddr(raftAddr, defaulTimeout)
 			if err != nil {
 				resp[id].error = err.Error()
 				return
