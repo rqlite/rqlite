@@ -1,4 +1,7 @@
-## 6.3.1 (unreleased)
+## 6.4.0 (unreleased)
+### New features
+- [PR #878](https://github.com/rqlite/rqlite/pull/878): CLI supports setting read consistency level.
+
 ### Implementation changes and bug fixes
 - [PR #876](https://github.com/rqlite/rqlite/pull/876): Add round-trip time to each node to `nodes/` endpoint output.
 - [PR #877](https://github.com/rqlite/rqlite/pull/877): Add Error information to `nodes/` endpoint output.
