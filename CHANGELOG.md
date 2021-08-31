@@ -1,4 +1,4 @@
-## 6.4.0 (unreleased)
+## 6.4.0 (August 31st 2021)
 ### New features
 - [PR #878](https://github.com/rqlite/rqlite/pull/878): CLI supports setting read consistency level.
 
