@@ -1,4 +1,4 @@
-## 6.4.1 (unreleased)
+## 6.4.1 (August 31st 2021)
 ### Implementation changes and bug fixes
 - [PR #879](https://github.com/rqlite/rqlite/pull/879): Set timeout when fetching node API address.
 
