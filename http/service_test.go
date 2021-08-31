@@ -943,7 +943,7 @@ type mockClusterService struct {
 	queryFn   func(qr *command.QueryRequest, addr string, t time.Duration) ([]*command.QueryRows, error)
 }
 
-func (m *mockClusterService) GetNodeAPIAddr(a string) (string, error) {
+func (m *mockClusterService) GetNodeAPIAddr(a string, t time.Duration) (string, error) {
 	return m.apiAddr, nil
 }
 
