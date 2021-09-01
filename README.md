@@ -92,6 +92,8 @@ No.
 Since the Raft log is the authoritative store for all data, and it is stored on disk by each node, an in-memory database can be fully recreated on start-up from the information stored in the Raft log. Using an in-memory database does not put your data at risk.
 
 ## Limitations
+ * In-memory databases are currently limited to 2GiB (2147483648 bytes) in size. Future releases may support larger in-memory databases.
+
  * Only SQL statements that are [__deterministic__](https://www.sqlite.org/deterministic.html) are safe to use with rqlite, because statements are committed to the Raft log before they are sent to each node. In other words, rqlite performs _statement-based replication_. For example, the following statement could result in a different SQLite database under each node:
 ```
 INSERT INTO foo (n) VALUES(random());
