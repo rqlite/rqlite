@@ -1435,7 +1435,7 @@ func Test_1GiBInMemory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get size: %s", err.Error())
 	}
-	if sz <= 1073741824 {
+	if sz <= 1024*1024*1024 {
 		t.Fatalf("failed to create a database greater than 1 GiB in size: %d", sz)
 	}
 }
