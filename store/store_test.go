@@ -32,7 +32,7 @@ func Test_OpenStoreSingleNode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get leader address: %s", err.Error())
 	}
-	id, err := s.LeaderID()
+	id, err := waitForLeaderID(s, 10*time.Second)
 	if err != nil {
 		t.Fatalf("failed to retrieve leader ID: %s", err.Error())
 	}
@@ -620,7 +620,7 @@ func Test_MultiNodeJoinRemove(t *testing.T) {
 	if exp := s0.Addr(); got != exp {
 		t.Fatalf("wrong leader address returned, got: %s, exp %s", got, exp)
 	}
-	id, err := s1.LeaderID()
+	id, err := waitForLeaderID(s1, 10*time.Second)
 	if err != nil {
 		t.Fatalf("failed to retrieve leader ID: %s", err.Error())
 	}
@@ -696,7 +696,7 @@ func Test_MultiNodeJoinNonVoterRemove(t *testing.T) {
 	if exp := s0.Addr(); got != exp {
 		t.Fatalf("wrong leader address returned, got: %s, exp %s", got, exp)
 	}
-	id, err := s1.LeaderID()
+	id, err := waitForLeaderID(s1, 10*time.Second)
 	if err != nil {
 		t.Fatalf("failed to retrieve leader ID: %s", err.Error())
 	}
@@ -1415,6 +1415,31 @@ func queryRequestFromStrings(s []string, timings, tx bool) *command.QueryRequest
 			Transaction: tx,
 		},
 		Timings: timings,
+	}
+}
+
+// waitForLeaderID waits until the Store's LeaderID is set, or the timeout
+// expires. Because setting Leader ID requires Raft to set the cluster
+// configuration, it's not entirely deterministic when it will be set.
+func waitForLeaderID(s *Store, timeout time.Duration) (string, error) {
+	tck := time.NewTicker(100 * time.Millisecond)
+	defer tck.Stop()
+	tmr := time.NewTimer(timeout)
+	defer tmr.Stop()
+
+	for {
+		select {
+		case <-tck.C:
+			id, err := s.LeaderID()
+			if err != nil {
+				return "", err
+			}
+			if id != "" {
+				return id, nil
+			}
+		case <-tmr.C:
+			return "", fmt.Errorf("timeout expired")
+		}
 	}
 }
 
