@@ -12,6 +12,7 @@ import (
 
 	"github.com/rqlite/rqlite/command"
 	"github.com/rqlite/rqlite/command/encoding"
+	"github.com/rqlite/rqlite/db/testdata"
 	"github.com/rqlite/rqlite/testdata/chinook"
 )
 
@@ -1395,6 +1396,47 @@ func Test_DumpMemory(t *testing.T) {
 
 	if b.String() != chinook.DB {
 		t.Fatal("dumped database does not equal entered database")
+	}
+}
+
+// Test_1GiBInMemory tests that in-memory databases larger than 1GiB,
+// but smaller than 2GiB, can be created without issue.
+func Test_1GiBInMemory(t *testing.T) {
+	t.Parallel()
+	db := mustCreateInMemoryDatabase()
+	defer db.Close()
+
+	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, txt TEXT)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	stmt := fmt.Sprintf(`INSERT INTO foo(txt) VALUES("%s")`, text.Lorum)
+	for i := 0; i < 1715017; i++ {
+		r, err := db.ExecuteStringStmt(stmt)
+		if err != nil {
+			t.Fatalf("failed to Execute statement %s", err.Error())
+		}
+		if len(r) != 1 {
+			t.Fatalf("unexpected length for Execute results: %d", len(r))
+		}
+		if r[0].GetError() != "" {
+			t.Fatalf("failed to insert record: %s", r[0].GetError())
+		}
+	}
+
+	r, err := db.ExecuteStringStmt(stmt)
+	if err != nil {
+		t.Fatalf("failed to insert record %s", err.Error())
+	}
+	fmt.Println(r)
+
+	sz, err := db.Size()
+	if err != nil {
+		t.Fatalf("failed to get size: %s", err.Error())
+	}
+	if sz <= 1073741824 {
+		t.Fatalf("failed to create a database greater than 1 GiB in size: %d", sz)
 	}
 }
 
