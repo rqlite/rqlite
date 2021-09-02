@@ -1,4 +1,4 @@
-## 6.4.2 (unreleased)
+## 6.4.2 (September 1st 2021)
 ### Implementation changes and bug fixes
 - [PR #880](https://github.com/rqlite/rqlite/pull/880): Increase maximum in-memory database size to 2GiB, via upgraded dependencies.
 
