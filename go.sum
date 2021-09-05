@@ -249,6 +249,10 @@ github.com/rqlite/go-sqlite3 v1.21.0 h1:YTeeVH5olioCnR8WzdL1qcmM8lN5xfYZ++E2YGI3
 github.com/rqlite/go-sqlite3 v1.21.0/go.mod h1:ml55MVv28UP7V8zrxILd2EsrI6Wfsz76YSskpg08Ut4=
 github.com/rqlite/go-sqlite3 v1.22.0 h1:twqvKzylJXG62Qe0rcqdy5ClGhc0YRc2vvA3nEXwmes=
 github.com/rqlite/go-sqlite3 v1.22.0/go.mod h1:ml55MVv28UP7V8zrxILd2EsrI6Wfsz76YSskpg08Ut4=
+github.com/rqlite/raft-boltdb v0.0.0-20210905144332-4a1dce15011e h1:w0Iqx8E6ek9AtsZPRPT2XeOWE2ce8X1Ijtm1uyWIDrA=
+github.com/rqlite/raft-boltdb v0.0.0-20210905144332-4a1dce15011e/go.mod h1:X1tXZi6gr5ZI1OIBVZxYv9zCiXeLi9Znjiolz5BqNE8=
+github.com/rqlite/raft-boltdb v0.0.0-20210905150853-a32fad654b56 h1:+Yz+URskt+++ekvKiGWxKtfV9poY/JXtIvpadf8snv0=
+github.com/rqlite/raft-boltdb v0.0.0-20210905150853-a32fad654b56/go.mod h1:X1tXZi6gr5ZI1OIBVZxYv9zCiXeLi9Znjiolz5BqNE8=
 github.com/shopspring/decimal v0.0.0-20180709203117-cd690d0c9e24/go.mod h1:M+9NzErvs504Cn4c5DxATwIqPbtswREoFCre64PpcG4=
 github.com/sirupsen/logrus v1.2.0/go.mod h1:LxeOpSwHxABJmUn/MG1IvRgCAasNZTLOkJPxbbu5VWo=
 github.com/sirupsen/logrus v1.4.2/go.mod h1:tLMulIdttU9McNUspp0xgXVQah82FyeX6MwdIuYE2rE=
@@ -346,6 +350,8 @@ golang.org/x/sys v0.0.0-20210630005230-0f9fa26af87c h1:F1jZWGFhYfh0Ci55sIpILtKKK
 golang.org/x/sys v0.0.0-20210630005230-0f9fa26af87c/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/sys v0.0.0-20210831042530-f4d43177bf5e h1:XMgFehsDnnLGtjvjOfqWSUzt0alpTR1RSEuznObga2c=
 golang.org/x/sys v0.0.0-20210831042530-f4d43177bf5e/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
+golang.org/x/sys v0.0.0-20210903071746-97244b99971b h1:3Dq0eVHn0uaQJmPO+/aYPI/fRMqdrVDbu7MQcku54gg=
+golang.org/x/sys v0.0.0-20210903071746-97244b99971b/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/term v0.0.0-20201113234701-d7a72108b828 h1:htWEtQEuEVJ4tU/Ngx7Cd/4Q7e3A5Up1owgyBtVsTwk=
 golang.org/x/term v0.0.0-20201113234701-d7a72108b828/go.mod h1:Nr5EML6q2oocZ2LXRh80K7BxOlk5/8JxuGnuhpl+muw=
 golang.org/x/term v0.0.0-20201117132131-f5c789dd3221 h1:/ZHdbVpdR/jk3g30/d4yUL0JU9kksj8+F/bnQUVLGDM=

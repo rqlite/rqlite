@@ -23,9 +23,10 @@ require (
 	github.com/mkideal/log v1.0.0 // indirect
 	github.com/mkideal/pkg v0.1.3
 	github.com/rqlite/go-sqlite3 v1.22.0
+	github.com/rqlite/raft-boltdb v0.0.0-20210905150853-a32fad654b56
 	golang.org/x/crypto v0.0.0-20210817164053-32db794688a5
 	golang.org/x/net v0.0.0-20210226172049-e18ecbb05110
-	golang.org/x/sys v0.0.0-20210831042530-f4d43177bf5e // indirect
+	golang.org/x/sys v0.0.0-20210903071746-97244b99971b // indirect
 	golang.org/x/term v0.0.0-20210615171337-6886f2dfbf5b // indirect
 	google.golang.org/genproto v0.0.0-20200526211855-cb27e3aa2013 // indirect
 	google.golang.org/protobuf v1.27.1

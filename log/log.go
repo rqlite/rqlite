@@ -59,3 +59,7 @@ func (l *Log) LastCommandIndex() (uint64, error) {
 	}
 	return 0, nil
 }
+
+func (l *Log) Stats() raftboltdb.Stats {
+	return l.BoltStore.Stats()
+}
