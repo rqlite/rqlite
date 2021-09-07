@@ -1,6 +1,6 @@
 ## 6.4.3 (unreleased)
 ### Implementation changes and bug fixes
-[PR #882](https://github.com/rqlite/rqlite/pull/882): Some minor improvements related to on-disk SQLite use.
+- [PR #882](https://github.com/rqlite/rqlite/pull/882): Some minor improvements related to on-disk SQLite use.
 
 ## 6.4.2 (September 1st 2021)
 ### Implementation changes and bug fixes
