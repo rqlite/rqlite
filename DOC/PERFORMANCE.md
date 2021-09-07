@@ -41,4 +41,15 @@ However if you enable an on-disk SQLite database, but then place the SQLite data
 An alternative approach would be to place the SQLite on-disk database on a disk different than that storing the Raft log, but this is unlikely to be as performant as an in-memory file system for the SQLite database.
 
 # In-memory Database Limits
-In-memory databases are currently limited to 2GiB in size. One way to get around this limit is to use an on-disk database, by passing `-on-disk` to `rqlited`. But this may impact performance significantly, since disk is slower than memory. However by telling rqlite to place the SQLite database file on a memory-backed filesystem (as described above) you can use larger databases, and still have good performance. To control where rqlite places the SQLite database file, set `-on-disk-path` when launching `rqlited`.
+In-memory databases are currently limited to 2GiB in size. One way to get around this limit is to use an on-disk database, by passing `-on-disk` to `rqlited`. But this would impact performance significantly, since disk is slower than memory.
+
+However by telling rqlite to place the SQLite database file on a memory-backed filesystem you can use larger databases, and still have good performance. To control where rqlite places the SQLite database file, set `-on-disk-path` when launching `rqlited`. **Note that you should still place the `data` directory on an actual disk, to ensure your data is not lost if a node retarts.** 
+
+## Linux example
+An example of running rqlite with a SQLite file on a memory-backed file system, and keeping the data directory on persistent disk, is shown below. This example would allow up to a 4GB SQLite database.
+```bash
+# ~/node1 is assumed to be a path on persistent disk.
+mount -t tmpfs -o size=4096m tmpfs /mnt/ramdisk
+rqlited -on-disk -on-disk-path /mnt/ramdisk/db.sqlite ~/node1
+```
+
