@@ -210,11 +210,11 @@ func (s *Store) Open(enableBootstrap bool) error {
 	s.openT = time.Now()
 	s.logger.Printf("opening store with node ID %s", s.raftID)
 
-	dbType := "in-memory"
 	if !s.dbConf.Memory {
-		dbType = "on-disk"
+		s.logger.Printf("configured for an on-disk database at %s", s.dbPath)
+	} else {
+		s.logger.Printf("configured for an in-memory database")
 	}
-	s.logger.Printf("configured for an %s database at %s", dbType, s.dbPath)
 
 	s.logger.Printf("ensuring directory at %s exists", s.raftDir)
 	err := os.MkdirAll(s.raftDir, 0755)
