@@ -146,6 +146,11 @@ func main() {
 		os.Exit(0)
 	}
 
+	if onDiskPath != "" && !onDisk {
+		fmt.Fprintf(os.Stderr, "fatal: on-disk-path is set, but on-disk is not\n")
+		os.Exit(1)
+	}
+
 	// Ensure the data path is set.
 	if flag.NArg() < 1 {
 		fmt.Fprintf(os.Stderr, "fatal: no data directory set\n")
