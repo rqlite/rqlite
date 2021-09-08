@@ -236,8 +236,8 @@ func TestPoolConcurrent2(t *testing.T) {
 		}
 	}()
 
-	wg.Add(10)
 	for i := 0; i < 10; i++ {
+		wg.Add(1)
 		go func(i int) {
 			conn, _ := p.Get()
 			time.Sleep(time.Millisecond * time.Duration(rand.Intn(100)))
