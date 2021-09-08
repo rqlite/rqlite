@@ -632,12 +632,12 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
-	} else {
-		_, err = w.Write([]byte(b))
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+		return
+	}
+	_, err = w.Write([]byte(b))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 }
 
@@ -725,12 +725,12 @@ func (s *Service) handleNodes(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
-	} else {
-		_, err = w.Write([]byte(b))
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+		return
+	}
+	_, err = w.Write([]byte(b))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 }
 
@@ -794,10 +794,12 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 		addr, err := s.store.LeaderAddr()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 		}
 		if addr == "" {
 			stats.Add(numLeaderNotFound, 1)
 			http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+			return
 		}
 		results, resultsErr = s.cluster.Execute(er, addr, timeout)
 		stats.Add(numRemoteExecutions, 1)
@@ -881,10 +883,12 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 		addr, err := s.store.LeaderAddr()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 		}
 		if addr == "" {
 			stats.Add(numLeaderNotFound, 1)
 			http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+			return
 		}
 		results, resultsErr = s.cluster.Query(qr, addr, timeout)
 		stats.Add(numRemoteQueries, 1)
