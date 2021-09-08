@@ -1,5 +1,5 @@
 # Command Line Interface
-rqlite comes with a CLI, which makes it easier to interact with a rqlite system. It is installed in the same directory as the node binary `rqlited`. 
+rqlite comes with a CLI, which makes it easier to interact with a rqlite system. It is installed in the same directory as the node binary `rqlited`. Since rqlite is built on SQLite, you should consult the [SQLite query language documentation](https://www.sqlite.org/lang.html) for full details on what is supported.
 
 > **⚠ WARNING: Only enter one command at a time at CLI. Don't enter multiple commands at once, separated by ;**  
 > While it may work, mixing reads and writes to the database in a single CLI command results in undefined behavior.
