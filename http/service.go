@@ -677,7 +677,8 @@ func (s *Service) handleNodes(w http.ResponseWriter, r *http.Request) {
 	// Get nodes in the cluster, and possibly filter out non-voters.
 	nodes, err := s.store.Nodes()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("store nodes: %s", err.Error()),
+			http.StatusInternalServerError)
 		return
 	}
 
@@ -691,13 +692,15 @@ func (s *Service) handleNodes(w http.ResponseWriter, r *http.Request) {
 
 	lAddr, err := s.store.LeaderAddr()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("leader address: %s", err.Error()),
+			http.StatusInternalServerError)
 		return
 	}
 
 	nodesResp, err := s.checkNodes(filteredNodes, t)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("check nodes: %s", err.Error()),
+			http.StatusInternalServerError)
 		return
 	}
 
@@ -798,7 +801,8 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 
 		addr, err := s.store.LeaderAddr()
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, fmt.Sprintf("leader address: %s", err.Error()),
+				http.StatusInternalServerError)
 			return
 		}
 		if addr == "" {

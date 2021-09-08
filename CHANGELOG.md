@@ -1,3 +1,7 @@
+## 6.4.4 (unreleased)
+### Implementation changes and bug fixes
+- [PR #885](https://github.com/rqlite/rqlite/pull/885): Improved responses when `status/` returns HTTP 500.
+
 ## 6.4.3 (September 9th 2021)
 ### Implementation changes and bug fixes
 - [PR #882](https://github.com/rqlite/rqlite/pull/882): Some minor improvements related to on-disk SQLite use.
