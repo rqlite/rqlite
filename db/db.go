@@ -52,7 +52,7 @@ func init() {
 
 // DB is the SQL database.
 type DB struct {
-	path   string // Path to database file.
+	path   string // Path to database file, if running on-disk.
 	memory bool   // In-memory only.
 
 	rwDB *sql.DB // Database connection for database reads and writes.
@@ -624,8 +624,14 @@ func (db *DB) Copy(dstDB *DB) error {
 // an ordinary on-disk database file, the serialization is just a copy of the
 // disk file. For an in-memory database or a "TEMP" database, the serialization
 // is the same sequence of bytes which would be written to disk if that database
-// were backed up to disk.
+// were backed up to disk. This function must not be called while any transaction
+// is in progress.
 func (db *DB) Serialize() ([]byte, error) {
+	if !db.memory {
+		// Simply read and return the SQLite file.
+		return os.ReadFile(db.path)
+	}
+
 	conn, err := db.roDB.Conn(context.Background())
 	if err != nil {
 		return nil, err
