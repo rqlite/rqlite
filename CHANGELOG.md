@@ -2,6 +2,7 @@
 ### Implementation changes and bug fixes
 - [PR #882](https://github.com/rqlite/rqlite/pull/882): Some minor improvements related to on-disk SQLite use.
 - [PR #883](https://github.com/rqlite/rqlite/pull/883): Add missing returns after HTTP errors.
+- [PR #884](https://github.com/rqlite/rqlite/pull/884): Serialize on-disk databases by simply reading SQLite file.
 
 ## 6.4.2 (September 1st 2021)
 ### Implementation changes and bug fixes
