@@ -125,6 +125,8 @@ type Store struct {
 	dbPath string    // Path to underlying SQLite file, if not in-memory.
 	db     *sql.DB   // The underlying SQLite store.
 
+	queryTxMu sync.RWMutex
+
 	dbAppliedIndexMu sync.RWMutex
 	dbAppliedIndex   uint64
 
@@ -691,6 +693,13 @@ func (s *Store) Query(qr *command.QueryRequest) ([]*command.QueryRows, error) {
 		return nil, ErrStaleRead
 	}
 
+	if qr.Request.Transaction {
+		// Transaction requested during query, but not going through consensus. This means
+		// we need to block any database serialization during the query.
+		s.queryTxMu.RLock()
+		defer s.queryTxMu.RUnlock()
+	}
+
 	return s.db.Query(qr.Request, qr.Timings)
 }
 
@@ -940,6 +949,8 @@ func (s *Store) Apply(l *raft.Log) (e interface{}) {
 					// been applied, but it wouldn't have created the on-disk database in that
 					// case since there were commands in the log. This is the very last chance
 					// to do convert from in-memory to on-disk.
+					s.queryTxMu.Lock()
+					defer s.queryTxMu.Unlock()
 					b, _ := s.db.Serialize()
 					err := s.db.Close()
 					if err != nil {
@@ -1022,6 +1033,8 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 		logger: s.logger,
 	}
 
+	s.queryTxMu.Lock()
+	defer s.queryTxMu.Unlock()
 	fsm.database, _ = s.db.Serialize()
 	// The error code is not meaningful from Serialize(). The code needs to be able
 	// handle a nil byte slice being returned.
