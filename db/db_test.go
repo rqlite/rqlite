@@ -1492,7 +1492,9 @@ func Test_1GiBInMemory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to insert record %s", err.Error())
 	}
-	fmt.Println(r)
+	if exp, got := `[{"last_insert_id":1715018,"rows_affected":1}]`, asJSON(r); exp != got {
+		t.Fatalf("got incorrect response, exp: %s, got: %s", exp, got)
+	}
 
 	sz, err := db.Size()
 	if err != nil {
