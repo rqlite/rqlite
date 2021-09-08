@@ -826,10 +826,10 @@ func (s *Store) Noop(id string) error {
 	return nil
 }
 
-// createInMemory returns an in-memory database. If b is non-nil, then the
-// database will be initialized with the contents of b.
+// createInMemory returns an in-memory database. If b is non-nil and non-empty,
+// then the database will be initialized with the contents of b.
 func (s *Store) createInMemory(b []byte) (db *sql.DB, err error) {
-	if b == nil {
+	if b == nil || len(b) == 0 {
 		db, err = sql.OpenInMemory(s.dbConf.FKConstraints)
 	} else {
 		db, err = sql.DeserializeIntoMemory(b, s.dbConf.FKConstraints)
