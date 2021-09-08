@@ -123,17 +123,17 @@ class Node(object):
 
   def status(self):
     r = requests.get(self._status_url())
-    r.raise_for_status()
+    raise_for_status(r)
     return r.json()
 
   def nodes(self):
     r = requests.get(self._nodes_url())
-    r.raise_for_status()
+    raise_for_status(r)
     return r.json()
 
   def expvar(self):
     r = requests.get(self._expvar_url())
-    r.raise_for_status()
+    raise_for_status(r)
     return r.json()
 
   def is_leader(self):
@@ -245,7 +245,7 @@ class Node(object):
     if pretty:
       reqParams['pretty'] = "yes"
     r = requests.post(self._query_url(), params=reqParams, data=json.dumps(body))
-    r.raise_for_status()
+    raise_for_status(r)
     if text:
       return r.text
     return r.json()
@@ -258,26 +258,26 @@ class Node(object):
 
   def execute_raw(self, body):
     r = requests.post(self._execute_url(), data=body)
-    r.raise_for_status()
+    raise_for_status(r)
     return r.json()
 
   def backup(self, file):
     with open(file, 'w') as fd:
       r = requests.get(self._backup_url())
-      r.raise_for_status()
+      raise_for_status(r)
       fd.write(r.content)
 
   def restore(self, file):
     # This is the one API that doesn't expect JSON.
     conn = sqlite3.connect(file)
     r = requests.post(self._load_url(), data='\n'.join(conn.iterdump()))
-    r.raise_for_status()
+    raise_for_status(r)
     conn.close()
     return r.json()
 
   def redirect_addr(self):
     r = requests.post(self._execute_url(redirect=True), data=json.dumps(['nonsense']), allow_redirects=False)
-    r.raise_for_status()
+    raise_for_status(r)
     if r.status_code == 301:
       return "%s://%s" % (urlparse(r.headers['Location']).scheme, urlparse(r.headers['Location']).netloc)
 
@@ -308,6 +308,13 @@ class Node(object):
   def __del__(self):
     self.stdout_fd.close()
     self.stderr_fd.close()
+
+def raise_for_status(r):
+  try:
+    r.raise_for_status()
+  except requests.exceptions.HTTPError as e:
+    print(e)
+    print(r.text)
 
 def random_addr():
   s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

@@ -565,13 +565,15 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 
 	storeStatus, err := s.store.Stats()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("store stats: %s", err.Error()),
+			http.StatusInternalServerError)
 		return
 	}
 
 	clusterStatus, err := s.cluster.Stats()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("cluster stats: %s", err.Error()),
+			http.StatusInternalServerError)
 		return
 	}
 
@@ -616,7 +618,8 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 		for k, v := range s.statuses {
 			stat, err := v.Stats()
 			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+				http.Error(w, fmt.Sprintf("registered stats: %s", err.Error()),
+					http.StatusInternalServerError)
 				return
 			}
 			status[k] = stat
@@ -631,12 +634,14 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 		b, err = json.Marshal(status)
 	}
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("JSON marshal: %s", err.Error()),
+			http.StatusInternalServerError)
 		return
 	}
 	_, err = w.Write([]byte(b))
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("write: %s", err.Error()),
+			http.StatusInternalServerError)
 		return
 	}
 }
