@@ -1,6 +1,6 @@
 # rqlite
 
-`rqlite` is a command line tool for connecting to a rqlited node.
+`rqlite` is a command line tool for connecting to a rqlited node. Consult the [SQLite query language documentation](https://www.sqlite.org/lang.html) for full details on the supported SQL syntax.
 
 ## Build
 
