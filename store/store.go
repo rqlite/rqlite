@@ -1018,15 +1018,16 @@ func (s *Store) Database(leader bool) ([]byte, error) {
 	return s.db.Serialize()
 }
 
-// Snapshot returns a snapshot of the database. The caller must ensure that
-// no transaction is taking place during this call. Hashicorp Raft guarantees
-// that this function will not be called concurrently with Apply, as it states
-// Apply and Snapshot are always called from the same thread. This means there
-// is no need to synchronize this function with Execute(). However queries that
-// involve a transaction must be blocked.
+// Snapshot returns a snapshot of the database.
 //
-// http://sqlite.org/howtocorrupt.html states it is safe to do this
-// as long as no transaction is in progress.
+// The system must ensure that no transaction is taking place during this call.
+// Hashicorp Raft guarantees that this function will not be called concurrently
+// with Apply, as it states Apply() and Snapshot() are always called from the same
+// thread. This means there is no need to synchronize this function with Execute().
+// However queries that involve a transaction must be blocked.
+//
+// http://sqlite.org/howtocorrupt.html states it is safe to copy or serialize the
+// database as long as no transaction is in progress.
 func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 	fsm := &fsmSnapshot{
 		startT: time.Now(),
