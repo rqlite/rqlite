@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/raft"
-	"github.com/hashicorp/raft-boltdb"
+	"github.com/rqlite/raft-boltdb"
 )
 
 func Test_LogNewEmpty(t *testing.T) {
@@ -40,7 +40,6 @@ func Test_LogNewEmpty(t *testing.T) {
 	if lci != 0 {
 		t.Fatalf("got wrong value for last command index of not empty log: %d", lci)
 	}
-
 }
 
 func Test_LogNewExistNotEmpty(t *testing.T) {
@@ -222,6 +221,29 @@ func Test_LogLastCommandIndexNotExist(t *testing.T) {
 	}
 	if lci != 0 {
 		t.Fatalf("got wrong value for last command index of not empty log: %d", lci)
+	}
+}
+
+func Test_LogStats(t *testing.T) {
+	path := mustTempFile()
+	defer os.Remove(path)
+
+	// Write some entries directory to the BoltDB Raft store.
+	bs, err := raftboltdb.NewBoltStore(path)
+	if err != nil {
+		t.Fatalf("failed to create bolt store: %s", err)
+	}
+	for i := 4; i > 0; i-- {
+		if err := bs.StoreLog(&raft.Log{
+			Index: uint64(i),
+		}); err != nil {
+			t.Fatalf("failed to write entry to raft log: %s", err)
+		}
+	}
+
+	_ = bs.Stats()
+	if err := bs.Close(); err != nil {
+		t.Fatalf("failed to close bolt db: %s", err)
 	}
 }
 

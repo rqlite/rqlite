@@ -560,6 +560,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
+	raftStats["bolt"] = s.boltStore.Stats()
 
 	dirSz, err := dirSize(s.raftDir)
 	if err != nil {
