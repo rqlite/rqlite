@@ -1,6 +1,7 @@
 ## 6.4.4 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #885](https://github.com/rqlite/rqlite/pull/885): Improved responses on HTTP 500.
+- [PR #888](https://github.com/rqlite/rqlite/pull/888): Expose stats about BoltDB on the `status/` endpoint.
 
 ## 6.4.3 (September 8th 2021)
 ### Implementation changes and bug fixes
