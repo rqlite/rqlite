@@ -249,6 +249,8 @@ github.com/rqlite/go-sqlite3 v1.21.0 h1:YTeeVH5olioCnR8WzdL1qcmM8lN5xfYZ++E2YGI3
 github.com/rqlite/go-sqlite3 v1.21.0/go.mod h1:ml55MVv28UP7V8zrxILd2EsrI6Wfsz76YSskpg08Ut4=
 github.com/rqlite/go-sqlite3 v1.22.0 h1:twqvKzylJXG62Qe0rcqdy5ClGhc0YRc2vvA3nEXwmes=
 github.com/rqlite/go-sqlite3 v1.22.0/go.mod h1:ml55MVv28UP7V8zrxILd2EsrI6Wfsz76YSskpg08Ut4=
+github.com/rqlite/raft-boltdb v0.0.0-20210905150853-a32fad654b56 h1:+Yz+URskt+++ekvKiGWxKtfV9poY/JXtIvpadf8snv0=
+github.com/rqlite/raft-boltdb v0.0.0-20210905150853-a32fad654b56/go.mod h1:X1tXZi6gr5ZI1OIBVZxYv9zCiXeLi9Znjiolz5BqNE8=
 github.com/shopspring/decimal v0.0.0-20180709203117-cd690d0c9e24/go.mod h1:M+9NzErvs504Cn4c5DxATwIqPbtswREoFCre64PpcG4=
 github.com/sirupsen/logrus v1.2.0/go.mod h1:LxeOpSwHxABJmUn/MG1IvRgCAasNZTLOkJPxbbu5VWo=
 github.com/sirupsen/logrus v1.4.2/go.mod h1:tLMulIdttU9McNUspp0xgXVQah82FyeX6MwdIuYE2rE=
