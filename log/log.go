@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/hashicorp/raft"
-	"github.com/hashicorp/raft-boltdb"
+	"github.com/rqlite/raft-boltdb"
 )
 
 // Log is an object that can return information about the Raft log.
@@ -58,4 +58,9 @@ func (l *Log) LastCommandIndex() (uint64, error) {
 		}
 	}
 	return 0, nil
+}
+
+// Stats returns stats about the BoltDB database.
+func (l *Log) Stats() raftboltdb.Stats {
+	return l.BoltStore.Stats()
 }
