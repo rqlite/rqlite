@@ -586,6 +586,20 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 		"version":       runtime.Version(),
 	}
 
+	oss := map[string]interface{}{
+		"pid":       os.Getpid(),
+		"ppid":      os.Getppid(),
+		"page_size": os.Getpagesize(),
+	}
+	executable, err := os.Executable()
+	if err == nil {
+		oss["executable"] = executable
+	}
+	hostname, err := os.Hostname()
+	if err == nil {
+		oss["hostname"] = hostname
+	}
+
 	httpStatus := map[string]interface{}{
 		"bind_addr": s.Addr().String(),
 		"auth":      prettyEnabled(s.credentialStore != nil),
@@ -599,6 +613,7 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 
 	// Build the status response.
 	status := map[string]interface{}{
+		"os":      oss,
 		"runtime": rt,
 		"store":   storeStatus,
 		"http":    httpStatus,
