@@ -39,7 +39,7 @@ That said, it's always possible it's _too_ simple for your needs.
 The primary way to access the database is via the [HTTP API](https://github.com/rqlite/rqlite/blob/master/DOC/DATA_API.md). You can access it directly, or use a [client library](https://github.com/rqlite). For more casual use you can use the [command line tool](https://github.com/rqlite/rqlite/blob/master/DOC/CLI.md). It is also technically possible to [read the SQLite file directly](https://github.com/rqlite/rqlite/blob/master/DOC/FAQ.md#can-i-read-the-sqlite-file-directly), but it's not officially supported.
 
 ## Can any node execute a write request, and have the system "synchronize it all"?
-No, only the leader can make changes to the database. A client can _send_ a write-request to any node, and if that node is not the leader, the node will transparently forward the request to the leader, wait for a response, and then forward the response to the client.
+No, only the leader can make changes to the database. A client can _send_ a write-request to any node, and if that node is not the leader, the node will transparently forward the request to the leader, wait for a response, and then return the response to the client.
 
 ## Can I send a read request to any node in the cluster?
 Yes. If a read request must be serviced by the Leader, however, rqlite will transparently forward the request to the Leader, wait for the Leader to handle it, and return the results to the client.
