@@ -16,7 +16,7 @@ require (
 	github.com/mkideal/cli v0.2.7
 	github.com/mkideal/pkg v0.1.3
 	github.com/rqlite/go-sqlite3 v1.22.0
-	github.com/rqlite/raft-boltdb v0.0.0-20210909125202-124e0a496d7e
+	github.com/rqlite/raft-boltdb v0.0.0-20210909131733-595768e10065
 	golang.org/x/crypto v0.0.0-20210817164053-32db794688a5
 	golang.org/x/net v0.0.0-20210226172049-e18ecbb05110
 	golang.org/x/sys v0.0.0-20210908233432-aa78b53d3365 // indirect
