@@ -489,7 +489,7 @@ func mustNodeEncryptedOnDisk(dir string, enableSingle, httpEncrypt bool, mux *tc
 	if id == "" {
 		id = raftTn.Addr().String()
 	}
-	node.Store = store.New(raftTn, &store.StoreConfig{
+	node.Store = store.New(raftTn, &store.Config{
 		DBConf: dbConf,
 		Dir:    node.Dir,
 		ID:     id,

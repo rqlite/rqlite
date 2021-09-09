@@ -61,16 +61,16 @@ const (
 )
 
 const (
-	numSnaphots               = "num_snapshots"
-	numBackups                = "num_backups"
-	numRestores               = "num_restores"
-	numUncompressedCommands   = "num_uncompressed_commands"
-	numCompressedCommands     = "num_compressed_commands"
-	numJoins                  = "num_joins"
-	numIgnoredJoins           = "num_ignored_joins"
-	numRemovedBeforeJoins     = "num_removed_before_joins"
-	snapshot_create_duration  = "snapshot_create_duration"
-	snapshot_persist_duration = "snapshot_persist_duration"
+	numSnaphots             = "num_snapshots"
+	numBackups              = "num_backups"
+	numRestores             = "num_restores"
+	numUncompressedCommands = "num_uncompressed_commands"
+	numCompressedCommands   = "num_compressed_commands"
+	numJoins                = "num_joins"
+	numIgnoredJoins         = "num_ignored_joins"
+	numRemovedBeforeJoins   = "num_removed_before_joins"
+	snapshotCreateDuration  = "snapshot_create_duration"
+	snapshotPersistDuration = "snapshot_persist_duration"
 )
 
 // BackupFormat represents the format of database backup.
@@ -97,8 +97,8 @@ func init() {
 	stats.Add(numJoins, 0)
 	stats.Add(numIgnoredJoins, 0)
 	stats.Add(numRemovedBeforeJoins, 0)
-	stats.Add(snapshot_create_duration, 0)
-	stats.Add(snapshot_persist_duration, 0)
+	stats.Add(snapshotCreateDuration, 0)
+	stats.Add(snapshotPersistDuration, 0)
 }
 
 // ClusterState defines the possible Raft states the current node can be in
@@ -171,8 +171,8 @@ func IsNewNode(raftDir string) bool {
 	return !pathExists(filepath.Join(raftDir, raftDBPath))
 }
 
-// StoreConfig represents the configuration of the underlying Store.
-type StoreConfig struct {
+// Config represents the configuration of the underlying Store.
+type Config struct {
 	DBConf *DBConfig   // The DBConfig object for this Store.
 	Dir    string      // The working directory for raft.
 	Tn     Transport   // The underlying Transport for raft.
@@ -181,7 +181,7 @@ type StoreConfig struct {
 }
 
 // New returns a new Store.
-func New(ln Listener, c *StoreConfig) *Store {
+func New(ln Listener, c *Config) *Store {
 	logger := c.Logger
 	if logger == nil {
 		logger = log.New(os.Stderr, "[store] ", log.LstdFlags)
@@ -1043,7 +1043,7 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 
 	dur := time.Since(fsm.startT)
 	stats.Add(numSnaphots, 1)
-	stats.Get(snapshot_create_duration).(*expvar.Int).Set(dur.Milliseconds())
+	stats.Get(snapshotCreateDuration).(*expvar.Int).Set(dur.Milliseconds())
 	s.logger.Printf("node snapshot created in %s", dur)
 	return fsm, nil
 }
@@ -1174,7 +1174,7 @@ type fsmSnapshot struct {
 func (f *fsmSnapshot) Persist(sink raft.SnapshotSink) error {
 	defer func() {
 		dur := time.Since(f.startT)
-		stats.Get(snapshot_persist_duration).(*expvar.Int).Set(dur.Milliseconds())
+		stats.Get(snapshotPersistDuration).(*expvar.Int).Set(dur.Milliseconds())
 		f.logger.Printf("snapshot and persist took %s", dur)
 	}()
 

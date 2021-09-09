@@ -1295,7 +1295,7 @@ func mustNewStoreAtPaths(dataPath, sqlitePath string, inmem, fk bool) *Store {
 	cfg.FKConstraints = fk
 	cfg.OnDiskPath = sqlitePath
 
-	s := New(mustMockLister("localhost:0"), &StoreConfig{
+	s := New(mustMockLister("localhost:0"), &Config{
 		DBConf: cfg,
 		Dir:    dataPath,
 		ID:     dataPath, // Could be any unique string.

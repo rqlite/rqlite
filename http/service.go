@@ -1133,14 +1133,14 @@ func requestQueries(r *http.Request) ([]*command.Statement, error) {
 func createTLSConfig(certFile, keyFile, caCertFile string, tls1011 bool) (*tls.Config, error) {
 	var err error
 
-	var minTls = uint16(tls.VersionTLS12)
+	var minTLS = uint16(tls.VersionTLS12)
 	if tls1011 {
-		minTls = tls.VersionTLS10
+		minTLS = tls.VersionTLS10
 	}
 
 	config := &tls.Config{
 		NextProtos: []string{"h2", "http/1.1"},
-		MinVersion: minTls,
+		MinVersion: minTLS,
 	}
 	config.Certificates = make([]tls.Certificate, 1)
 	config.Certificates[0], err = tls.LoadX509KeyPair(certFile, keyFile)
