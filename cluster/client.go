@@ -347,7 +347,7 @@ func (c *Client) dial(nodeAddr string, timeout time.Duration) (net.Conn, error) 
 }
 
 func handleConnError(conn net.Conn) {
-	if pc, ok := conn.(*pool.PoolConn); ok {
+	if pc, ok := conn.(*pool.Conn); ok {
 		pc.MarkUnusable()
 	}
 }

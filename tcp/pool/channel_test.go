@@ -40,7 +40,7 @@ func TestPool_Get_Impl(t *testing.T) {
 		t.Errorf("Get error: %s", err)
 	}
 
-	_, ok := conn.(*PoolConn)
+	_, ok := conn.(*Conn)
 	if !ok {
 		t.Errorf("Conn is not of type poolConn")
 	}
@@ -135,7 +135,7 @@ func TestPool_PutUnusableConn(t *testing.T) {
 	}
 
 	conn, _ = p.Get()
-	if pc, ok := conn.(*PoolConn); !ok {
+	if pc, ok := conn.(*Conn); !ok {
 		t.Errorf("impossible")
 	} else {
 		pc.MarkUnusable()
