@@ -205,7 +205,7 @@ func main() {
 	dbConf.FKConstraints = fkConstraints
 	dbConf.OnDiskPath = onDiskPath
 
-	str := store.New(raftTn, &store.StoreConfig{
+	str := store.New(raftTn, &store.Config{
 		DBConf: dbConf,
 		Dir:    dataPath,
 		ID:     idOrRaftAddr(),
