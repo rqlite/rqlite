@@ -62,6 +62,14 @@ Welcome to the rqlite CLI. Enter ".help" for usage hints.
   leader: false
  ```
 
+ ## Readiness checks
+ rqlite nodes serve a "ready" status at `/readyz`. The endpoint will return `HTTP 200 OK` if the node is ready to respond to database requests and cluster management operations. An example access is shown below.
+
+ ```bash
+ $ curl localhost:4001/readyz
+[+]leader ok
+```
+
 ## expvar support
 rqlite also exports [expvar](http://godoc.org/pkg/expvar/) information. The standard expvar information, as well as some custom information, is exposed. This data can be retrieved like so (assuming the node is started in its default configuration):
 
