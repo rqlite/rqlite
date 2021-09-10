@@ -275,6 +275,20 @@ func main() {
 	}
 	log.Printf("Cluster TCP mux Listener registered with %d", cluster.MuxClusterHeader)
 
+	// Start the HTTP API server.
+	clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, nodeEncrypt, noNodeVerify)
+	clstrClient := cluster.NewClient(clstrDialer)
+	if err := clstrClient.SetLocal(raftAdv, clstr); err != nil {
+		log.Fatalf("failed to set cluster client local parameters: %s", err.Error())
+	}
+	httpServ, err := startHTTPService(str, clstrClient)
+	if err != nil {
+		log.Fatalf("failed to start HTTP server: %s", err.Error())
+	}
+
+	// Register remaining status providers.
+	httpServ.RegisterStatus("cluster", clstr)
+
 	// Execute any requested join operation.
 	if len(joins) > 0 {
 		log.Println("join addresses are:", joins)
@@ -311,21 +325,6 @@ func main() {
 		log.Fatalf(err.Error())
 	}
 	log.Println("store has reached consensus")
-
-	// Start the HTTP API server.
-	clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, nodeEncrypt, noNodeVerify)
-	clstrClient := cluster.NewClient(clstrDialer)
-	if err := clstrClient.SetLocal(raftAdv, clstr); err != nil {
-		log.Fatalf("failed to set cluster client local parameters: %s", err.Error())
-	}
-	httpServ, err := startHTTPService(str, clstrClient)
-	if err != nil {
-		log.Fatalf("failed to start HTTP server: %s", err.Error())
-	}
-
-	// Register remaining status providers.
-	httpServ.RegisterStatus("cluster", clstr)
-
 	log.Println("node is ready")
 
 	// Block until signalled.
