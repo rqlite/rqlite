@@ -158,7 +158,7 @@ const (
 	// PermStatus means user can retrieve node status.
 	PermStatus = "status"
 	// PermReady means user can retrieve ready status.
-	PermReady = "PermReady"
+	PermReady = "ready"
 	// PermBackup means user can backup node.
 	PermBackup = "backup"
 	// PermLoad means user can load a SQLite dump into a node.
