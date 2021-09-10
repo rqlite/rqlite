@@ -106,6 +106,10 @@ func (c *Client) GetNodeAPIAddr(nodeAddr string, timeout time.Duration) (string,
 	}
 
 	// Read length of response.
+	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
+		handleConnError(conn)
+		return "", err
+	}
 	_, err = io.ReadFull(conn, b)
 	if err != nil {
 		return "", err
@@ -175,12 +179,11 @@ func (c *Client) Execute(er *command.ExecuteRequest, nodeAddr string, timeout ti
 		return nil, err
 	}
 
+	// Read length of response.
 	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
 		handleConnError(conn)
 		return nil, err
 	}
-
-	// Read length of response.
 	_, err = io.ReadFull(conn, b)
 	if err != nil {
 		return nil, err
@@ -189,6 +192,10 @@ func (c *Client) Execute(er *command.ExecuteRequest, nodeAddr string, timeout ti
 
 	// Read in the actual response.
 	p = make([]byte, sz)
+	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
+		handleConnError(conn)
+		return nil, err
+	}
 	_, err = io.ReadFull(conn, p)
 	if err != nil {
 		return nil, err
