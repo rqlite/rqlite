@@ -157,6 +157,8 @@ const (
 	PermQuery = "query"
 	// PermStatus means user can retrieve node status.
 	PermStatus = "status"
+	// PermReady means user can retrieve ready status.
+	PermReady = "PermReady"
 	// PermBackup means user can backup node.
 	PermBackup = "backup"
 	// PermLoad means user can load a SQLite dump into a node.
@@ -316,6 +318,8 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.handleStatus(w, r)
 	case strings.HasPrefix(r.URL.Path, "/nodes"):
 		s.handleNodes(w, r)
+	case strings.HasPrefix(r.URL.Path, "/readyz"):
+		s.handleReadyz(w, r)
 	case r.URL.Path == "/debug/vars" && s.Expvar:
 		s.handleExpvar(w, r)
 	case strings.HasPrefix(r.URL.Path, "/debug/pprof") && s.Pprof:
@@ -755,6 +759,42 @@ func (s *Service) handleNodes(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+}
+
+// handleReadyz returns whether the node is ready.
+func (s *Service) handleReadyz(w http.ResponseWriter, r *http.Request) {
+	if !s.CheckRequestPerm(r, PermReady) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method != "GET" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	timeout, err := timeoutParam(r, defaultTimeout)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	lAddr, err := s.store.LeaderAddr()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("leader address: %s", err.Error()),
+			http.StatusInternalServerError)
+		return
+	}
+
+	if lAddr != "" {
+		if _, err := s.cluster.GetNodeAPIAddr(lAddr, timeout); err == nil {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("[+]leader ok"))
+			return
+		}
+	}
+
+	w.WriteHeader(http.StatusServiceUnavailable)
 }
 
 // handleExecute handles queries that modify the database.
