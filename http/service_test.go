@@ -412,6 +412,7 @@ func Test_401Routes_NoBasicAuth(t *testing.T) {
 		"/delete",
 		"/status",
 		"/nodes",
+		"/readyz",
 		"/debug/vars",
 		"/debug/pprof/cmdline",
 		"/debug/pprof/profile",
@@ -451,6 +452,7 @@ func Test_401Routes_BasicAuthBadPassword(t *testing.T) {
 		"/join",
 		"/status",
 		"/nodes",
+		"/readyz",
 		"/debug/vars",
 		"/debug/pprof/cmdline",
 		"/debug/pprof/profile",
@@ -495,6 +497,8 @@ func Test_401Routes_BasicAuthBadPerm(t *testing.T) {
 		"/db/load",
 		"/join",
 		"/status",
+		"/nodes",
+		"/readyz",
 		"/debug/vars",
 		"/debug/pprof/cmdline",
 		"/debug/pprof/profile",
@@ -669,6 +673,30 @@ func Test_Nodes(t *testing.T) {
 	client := &http.Client{}
 	host := fmt.Sprintf("http://%s", s.Addr().String())
 	resp, err := client.Get(host + "/nodes")
+	if err != nil {
+		t.Fatalf("failed to make nodes request")
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("failed to get expected StatusOK for nodes, got %d", resp.StatusCode)
+	}
+}
+
+func Test_Readyz(t *testing.T) {
+	m := &MockStore{
+		leaderAddr: "foo:1234",
+	}
+	c := &mockClusterService{
+		apiAddr: "https://bar:5678",
+	}
+	s := New("127.0.0.1:0", m, c, nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+	resp, err := client.Get(host + "/readyz")
 	if err != nil {
 		t.Fatalf("failed to make nodes request")
 	}
