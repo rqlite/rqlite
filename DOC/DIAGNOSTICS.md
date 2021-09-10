@@ -63,7 +63,7 @@ Welcome to the rqlite CLI. Enter ".help" for usage hints.
  ```
 
  ## Readiness checks
- rqlite nodes serve a "ready" status at `/readyz`. The endpoint will return `HTTP 200 OK` if the node is ready to respond to database requests. An example access is shown below.
+ rqlite nodes serve a "ready" status at `/readyz`. The endpoint will return `HTTP 200 OK` if the node is ready to respond to database requests and cluster management operations. An example access is shown below.
 
  ```bash
  $ curl localhost:4001/readyz
