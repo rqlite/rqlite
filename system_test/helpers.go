@@ -241,6 +241,17 @@ func (n *Node) Status() (string, error) {
 	return string(body), nil
 }
 
+// Ready returns the ready status for the node
+func (n *Node) Ready() (bool, error) {
+	v, _ := url.Parse("http://" + n.APIAddr + "/readyz")
+
+	resp, err := http.Get(v.String())
+	if err != nil {
+		return false, err
+	}
+	return resp.StatusCode == 200, nil
+}
+
 // Expvar returns the expvar output for node.
 func (n *Node) Expvar() (string, error) {
 	v, _ := url.Parse("http://" + n.APIAddr + "/debug/vars")

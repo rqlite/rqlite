@@ -1,4 +1,7 @@
-## 6.4.4 (unreleased)
+## 6.5.0 (unreleased)
+### New features
+- [PR #896](https://github.com/rqlite/rqlite/pull/896): Add `/readyz` endpoint for easy ready-to-respond checks.
+
 ### Implementation changes and bug fixes
 - [PR #885](https://github.com/rqlite/rqlite/pull/885): Improved responses on HTTP 500.
 - [PR #888](https://github.com/rqlite/rqlite/pull/888): Expose stats about BoltDB on the `status/` endpoint.
