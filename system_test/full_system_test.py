@@ -315,6 +315,7 @@ def raise_for_status(r):
   except requests.exceptions.HTTPError as e:
     print(e)
     print(r.text)
+    raise e
 
 def random_addr():
   s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
