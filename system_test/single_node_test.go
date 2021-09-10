@@ -32,6 +32,26 @@ func Test_SingleNodeBasicEndpoint(t *testing.T) {
 	if err != nil {
 		t.Fatalf(`failed to retrieve status for on-disk: %s`, err)
 	}
+
+	ready, err := node.Ready()
+	if err != nil {
+		t.Fatalf(`failed to retrieve readiness: %s`, err)
+	}
+	if !ready {
+		t.Fatalf("node is not ready")
+	}
+}
+
+func Test_SingleNodeNotReady(t *testing.T) {
+	node := mustNewNode(false)
+	defer node.Deprovision()
+	ready, err := node.Ready()
+	if err != nil {
+		t.Fatalf(`failed to retrieve readiness: %s`, err)
+	}
+	if ready {
+		t.Fatalf("node is ready when it should not be")
+	}
 }
 
 func Test_SingleNode(t *testing.T) {

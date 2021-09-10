@@ -131,6 +131,10 @@ class Node(object):
     raise_for_status(r)
     return r.json()
 
+  def ready(self):
+    r = requests.get(self._ready_url())
+    return r.status_code == 200
+
   def expvar(self):
     r = requests.get(self._expvar_url())
     raise_for_status(r)
@@ -164,6 +168,9 @@ class Node(object):
       time.sleep(1)
       t+=1
 
+    # Perform a check on readyness while we're here.
+    if self.ready() is not True:
+      raise Exception('leader is available but node reports not ready')
     return lr
 
   def db_applied_index(self):
@@ -285,6 +292,8 @@ class Node(object):
     return 'http://' + self.APIAddr() + '/status'
   def _nodes_url(self):
     return 'http://' + self.APIAddr() + '/nodes?nonvoters' # Getting all nodes back makes testing easier
+  def _ready_url(self):
+    return 'http://' + self.APIAddr() + '/readyz'
   def _expvar_url(self):
     return 'http://' + self.APIAddr() + '/debug/vars'
   def _query_url(self, redirect=False):
