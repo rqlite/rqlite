@@ -161,7 +161,7 @@ class Node(object):
   def wait_for_leader(self, timeout=TIMEOUT):
     lr = None
     t = 0
-    while lr == None or lr is '':
+    while lr == None or lr['addr'] == '':
       if t > timeout:
         raise Exception('timeout')
       lr = self.status()['store']['leader']
