@@ -143,7 +143,7 @@ const (
 	numAuthFail         = "authFail"
 
 	// Default timeout for cluster communications.
-	defaulTimeout = 30 * time.Second
+	defaultTimeout = 30 * time.Second
 
 	// PermAll means all actions permitted.
 	PermAll = "all"
@@ -677,7 +677,7 @@ func (s *Service) handleNodes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	t, err := timeout(r, time.Duration(1))
+	timeout, err := timeoutParam(r, defaultTimeout)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -712,7 +712,7 @@ func (s *Service) handleNodes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	nodesResp, err := s.checkNodes(filteredNodes, t)
+	nodesResp, err := s.checkNodes(filteredNodes, timeout)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("check nodes: %s", err.Error()),
 			http.StatusInternalServerError)
@@ -773,7 +773,7 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 
 	resp := NewResponse()
 
-	timeout, isTx, timings, redirect, err := reqParams(r, defaulTimeout)
+	timeout, isTx, timings, redirect, err := reqParams(r, defaultTimeout)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -855,7 +855,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 
 	resp := NewResponse()
 
-	timeout, isTx, timings, redirect, err := reqParams(r, defaulTimeout)
+	timeout, isTx, timings, redirect, err := reqParams(r, defaultTimeout)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -1009,7 +1009,7 @@ func (s *Service) LeaderAPIAddr() string {
 		return ""
 	}
 
-	apiAddr, err := s.cluster.GetNodeAPIAddr(nodeAddr, defaulTimeout)
+	apiAddr, err := s.cluster.GetNodeAPIAddr(nodeAddr, defaultTimeout)
 
 	if err != nil {
 		return ""
@@ -1044,7 +1044,7 @@ func (s *Service) checkNodes(nodes []*store.Server, timeout time.Duration) (map[
 			defer mu.Unlock()
 
 			start := time.Now()
-			apiAddr, err := s.cluster.GetNodeAPIAddr(raftAddr, defaulTimeout)
+			apiAddr, err := s.cluster.GetNodeAPIAddr(raftAddr, timeout)
 			if err != nil {
 				resp[id].error = err.Error()
 				return
@@ -1197,19 +1197,19 @@ func isRedirect(req *http.Request) (bool, error) {
 	return queryParam(req, "redirect")
 }
 
-// timeoutParam returns the value, if any, set for timeout. If not set,
-// it returns the value passed in as a default.
+// timeoutParam returns the value, if any, set for timeout. If not set, it
+// returns the value passed in as a default.
 func timeoutParam(req *http.Request, def time.Duration) (time.Duration, error) {
 	q := req.URL.Query()
 	timeout := strings.TrimSpace(q.Get("timeout"))
 	if timeout == "" {
 		return def, nil
 	}
-	d, err := time.ParseDuration(timeout)
+	t, err := time.ParseDuration(timeout)
 	if err != nil {
 		return 0, err
 	}
-	return d, nil
+	return t, nil
 }
 
 // isTx returns whether the HTTP request is requesting a transaction.
@@ -1252,21 +1252,6 @@ func nonVoters(req *http.Request) (bool, error) {
 // isTimings returns whether timings are requested.
 func isTimings(req *http.Request) (bool, error) {
 	return queryParam(req, "timings")
-}
-
-// timeout returns the timeout included in the query, or the given default
-func timeout(req *http.Request, d time.Duration) (time.Duration, error) {
-	q := req.URL.Query()
-	tStr := q.Get("timeout")
-	if tStr == "" {
-		return d, nil
-	}
-
-	t, err := time.ParseDuration(tStr)
-	if err != nil {
-		return d, nil
-	}
-	return t, nil
 }
 
 // level returns the requested consistency level for a query

@@ -37,6 +37,7 @@ runtime:
 ```bash
 curl localhost:4001/nodes?pretty
 curl localhost:4001/nodes?nonvoters&pretty  # Also check non-voting nodes.
+curl localhost:4001/nodes?timeout=5s  # Give up if all nodes don't respond within 5 seconds. Default is 30 seconds.
 ```
 
 You can also request the same nodes information via the CLI:
