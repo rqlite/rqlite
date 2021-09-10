@@ -854,6 +854,7 @@ func Test_timeoutQueryParam(t *testing.T) {
 	tests := []struct {
 		u   string
 		dur string
+		err bool
 	}{
 		{
 			u:   "http://localhost:4001/nodes?timeout=5s",
@@ -873,15 +874,19 @@ func Test_timeoutQueryParam(t *testing.T) {
 		},
 		{
 			u:   "http://localhost:4001/nodes?timeout=zdfjkh",
-			dur: defStr,
+			err: true,
 		},
 	}
 
 	for _, tt := range tests {
 		req.URL = mustURLParse(tt.u)
-		timeout, err := timeout(&req, def)
+		timeout, err := timeoutParam(&req, def)
 		if err != nil {
-			t.Fatalf("failed to get timeout: %s", err)
+			if tt.err {
+				// Error is expected, all is OK.
+				continue
+			}
+			t.Fatalf("failed to get timeout as expected: %s", err)
 		}
 		if timeout != mustParseDuration(tt.dur) {
 			t.Fatalf("got wrong timeout, expected %s, got %s", mustParseDuration(tt.dur), timeout)
