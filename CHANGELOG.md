@@ -7,7 +7,7 @@
 - [PR #888](https://github.com/rqlite/rqlite/pull/888): Expose stats about BoltDB on the `status/` endpoint.
 - [PR #889](https://github.com/rqlite/rqlite/pull/889): Add OS-level information to `status/` output.
 - [PR #892](https://github.com/rqlite/rqlite/pull/892): More Snapshot metrics.
-- [PR #894](https://github.com/rqlite/rqlite/pull/894): Support controlling timeout on nodes/ endpoint.
+- [PR #894](https://github.com/rqlite/rqlite/pull/894): Support timeout on `nodes/` endpoint.
 - [PR #895](https://github.com/rqlite/rqlite/pull/895): Start HTTP service before attempting any join operation.
 
 ## 6.4.3 (September 8th 2021)
