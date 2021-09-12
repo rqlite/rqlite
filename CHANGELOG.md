@@ -1,4 +1,4 @@
-## 6.5.0 (unreleased)
+## 6.5.0 (September 12th 2021)
 ### New features
 - [PR #896](https://github.com/rqlite/rqlite/pull/896): Add `/readyz` endpoint for easy ready-to-respond checks.
 
