@@ -109,7 +109,7 @@ func Test_MarshalQueryRows(t *testing.T) {
 	}
 
 	r.Values = []*command.Values{
-		&command.Values{Parameters: values},
+		{Parameters: values},
 	}
 
 	b, err = JSONMarshal(r)
@@ -179,7 +179,7 @@ func Test_MarshalQueryRowses(t *testing.T) {
 	}
 
 	r.Values = []*command.Values{
-		&command.Values{Parameters: values},
+		{Parameters: values},
 	}
 
 	b, err = JSONMarshal([]*command.QueryRows{r, r})

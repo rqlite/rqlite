@@ -27,7 +27,7 @@ func Test_ResponseJSONMarshal(t *testing.T) {
 	}
 
 	resp = NewResponse()
-	resp.Results.ExecuteResult = []*command.ExecuteResult{&command.ExecuteResult{
+	resp.Results.ExecuteResult = []*command.ExecuteResult{{
 		LastInsertId: 39,
 		RowsAffected: 45,
 		Time:         1234,
@@ -41,7 +41,7 @@ func Test_ResponseJSONMarshal(t *testing.T) {
 	}
 
 	resp = NewResponse()
-	resp.Results.QueryRows = []*command.QueryRows{&command.QueryRows{
+	resp.Results.QueryRows = []*command.QueryRows{{
 		Columns: []string{"id", "name"},
 		Types:   []string{"int", "string"},
 	}}
@@ -54,18 +54,18 @@ func Test_ResponseJSONMarshal(t *testing.T) {
 	}
 
 	resp = NewResponse()
-	resp.Results.QueryRows = []*command.QueryRows{&command.QueryRows{
+	resp.Results.QueryRows = []*command.QueryRows{{
 		Columns: []string{"id", "name"},
 		Types:   []string{"int", "string"},
 		Values: []*command.Values{
-			&command.Values{
+			{
 				Parameters: []*command.Parameter{
-					&command.Parameter{
+					{
 						Value: &command.Parameter_S{
 							S: "fiona",
 						},
 					},
-					&command.Parameter{
+					{
 						Value: &command.Parameter_I{
 							I: 5,
 						},
