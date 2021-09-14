@@ -8,30 +8,8 @@ You can find details on the design and implementation of rqlite from [these blog
 
 ## Node design
 The diagram below shows a high-level view of an rqlite node.
+![node-design](https://user-images.githubusercontent.com/536312/133258366-1f2fbc50-8493-4ba6-8d62-04c57e39eb6f.png)
 
-                 ┌ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┐     ┌ ─ ─ ─ ─ ┐
-                             Clients                    Other
-                 └ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┘     │  Nodes  │
-                                │                     ─ ─ ─ ─ ─
-                                │                        ▲
-                                │                        │
-                                │                        │
-                                ▼                        ▼
-                 ┌─────────────────────────────┐ ┌───────────────┐
-                 │           HTTP(S)           │ │      TCP      │
-                 └─────────────────────────────┘ └───────────────┘
-                 ┌───────────────────────────────────────────────┐
-                 │             Raft (hashicorp/raft)             │
-                 └───────────────────────────────────────────────┘
-                 ┌───────────────────────────────────────────────┐
-                 │               matt-n/go-sqlite3               │
-                 └───────────────────────────────────────────────┘
-                 ┌───────────────────────────────────────────────┐
-                 │                   sqlite3.c                   │
-                 └───────────────────────────────────────────────┘
-                 ┌───────────────────────────────────────────────┐
-                 │                 RAM or disk                   │
-                 └───────────────────────────────────────────────┘
 ## File system
 ### Raft
 The Raft layer always creates a file -- it creates the _Raft log_. The log stores the set of committed SQLite commands, in the order which they were executed. This log is authoritative record of every change that has happened to the system. It may also contain some read-only queries as entries, depending on read-consistency choices.
