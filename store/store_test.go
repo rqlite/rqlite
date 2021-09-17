@@ -643,9 +643,6 @@ func Test_SingleNodeRecoverNoChange(t *testing.T) {
 		t.Fatalf("incorrect count for number of recoveries")
 	}
 
-	raftID := s.ID()
-	raftAddr := s.Addr()
-
 	queryTest := func() {
 		qr := queryRequestFromString("SELECT * FROM foo", false, false)
 		qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
@@ -677,7 +674,7 @@ func Test_SingleNodeRecoverNoChange(t *testing.T) {
 	// Set up for Recovery during open
 	peersPath := filepath.Join(s.Path(), "/raft/peers.json")
 	peersInfo := filepath.Join(s.Path(), "/raft/peers.info")
-	mustWriteFile(peersPath, fmt.Sprintf("[{\"id\": \"%s\",\"address\": \"%s\"}]", raftID, raftAddr))
+	mustWriteFile(peersPath, `[{"id": "1","address": 127.0.0.1:41665"}]`) // Could be any values
 	if err := s.Open(true); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
