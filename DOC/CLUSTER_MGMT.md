@@ -112,11 +112,11 @@ _This section borrows heavily from the Consul documentation._
 
 In the event that multiple rqlite nodes are lost, causing a loss of quorum and a complete outage, partial recovery is possible using data on the remaining nodes in the cluster. There may be data loss in this situation because multiple servers were lost, so information about what's committed could be incomplete. The recovery process implicitly commits all outstanding Raft log entries, so it's also possible to commit data -- and therefore change the SQLite database -- that was uncommitted before the failure.
 
-You must also follow the recovery process if a cluster simply restarts, but all nodes (or a quorum) come up with different IP addresses. This can happen in certain deployment configurations.
+**You must also follow the recovery process if a cluster simply restarts, but all nodes (or a quorum of nodes) come up with different IP addresses. This can happen in certain deployment configurations.**
 
-To begin, stop all remaining nodes. You can attempt a graceful node-removal, but it will not work in most cases. Do not worry if the leave exits with an error. The cluster is in an unhealthy state, so this is expected.
+To begin, stop all remaining nodes. You can attempt a graceful node-removal, but it will not work in most cases. Do not worry if the remove operation results in an error. The cluster is in an unhealthy state, so this is expected.
 
-The next step is to go to the _data_ directory of each rqlite node. Inside that directory, there will be a `raft/` sub-directory. You need to create a `peers.json` file within that directory, which will contain the desired configuration of your rqlite cluster. This file should be formatted as a JSON array containing the node ID, address:port, and suffrage information of each rqlite node in the cluster. An example is shown below:
+The next step is to go to the _data_ directory of each rqlite node. Inside that directory, there will be a `raft/` sub-directory. You need to create a `peers.json` file within that directory, which will contain the desired configuration of your rqlite cluster. This file should be formatted as a JSON array containing the node ID, `address:port`, and suffrage information of each rqlite node in the cluster. An example is shown below:
 
 ```json
 [
@@ -138,4 +138,6 @@ The next step is to go to the _data_ directory of each rqlite node. Inside that 
 ]
 ```
 
-`id` specifies the node ID of the server. This can be found in the logs when the node starts up if it was auto-generated. `address` specifies the IP and port of the Raft address. `non_voter` controls whether the server is a read-only node. If omitted, it will default to false, which is typical for most rqlite nodes. Simply create entries for all nodes. You must confirm that nodes you do not include here have indeed failed and will not later rejoin the cluster. Ensure that this file is the same across all remaining rqlite nodes. At this point, you can restart your rqlite cluster.
+`id` specifies the node ID of the server. This can be found in the logs when the node starts up if it was auto-generated. `address` specifies the IP and port of the Raft address. `non_voter` controls whether the server is a read-only node. If omitted, it will default to false, which is typical for most rqlite nodes.
+
+Next simply create entries for all nodes. You must confirm that nodes you do not include here have indeed failed and will not later rejoin the cluster. Ensure that this file is the same across all remaining rqlite nodes. At this point, you can restart your rqlite cluster.
