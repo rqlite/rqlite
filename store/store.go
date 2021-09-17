@@ -49,6 +49,7 @@ var (
 const (
 	raftDBPath          = "raft.db" // Changing this will break backwards compatibility.
 	peersPath           = "raft/peers.json"
+	peersInfoPath       = "raft/peers.info"
 	retainSnapshotCount = 2
 	applyTimeout        = 10 * time.Second
 	openTimeout         = 120 * time.Second
@@ -122,8 +123,9 @@ const (
 
 // Store is a SQLite database, where all changes are made via Raft consensus.
 type Store struct {
-	raftDir   string
-	peersPath string
+	raftDir       string
+	peersPath     string
+	peersInfoPath string
 
 	raft   *raft.Raft // The consensus mechanism.
 	ln     Listener
@@ -204,6 +206,7 @@ func New(ln Listener, c *Config) *Store {
 		ln:            ln,
 		raftDir:       c.Dir,
 		peersPath:     filepath.Join(c.Dir, peersPath),
+		peersInfoPath: filepath.Join(c.Dir, peersInfoPath),
 		raftID:        c.ID,
 		dbConf:        c.DBConf,
 		dbPath:        dbPath,
@@ -281,8 +284,8 @@ func (s *Store) Open(enableBootstrap bool) error {
 		if err = RecoverNode(s.raftDir, s.logger, s.raftLog, s.raftStable, snapshots, s.raftTn, config); err != nil {
 			return fmt.Errorf("failed to recover node: %s", err.Error())
 		}
-		if err := os.Remove(s.peersPath); err != nil {
-			return fmt.Errorf("failed to delete %s after recovery: %s", s.peersPath, err.Error())
+		if err := os.Rename(s.peersPath, s.peersInfoPath); err != nil {
+			return fmt.Errorf("failed to move %s after recovery: %s", s.peersPath, err.Error())
 		}
 		s.logger.Printf("node recovered successfully using %s", s.peersPath)
 		stats.Add(numRecoveries, 1)
