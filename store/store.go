@@ -1097,6 +1097,18 @@ type fsmSnapshot struct {
 	database []byte
 }
 
+func newFSMSnapshot(db *sql.DB, logger *log.Logger) *fsmSnapshot {
+	fsm := &fsmSnapshot{
+		startT: time.Now(),
+		logger: logger,
+	}
+
+	// The error code is not meaningful from Serialize(). The code needs to be able
+	// handle a nil byte slice being returned.
+	fsm.database, _ = db.Serialize()
+	return fsm
+}
+
 // Persist writes the snapshot to the given sink.
 func (f *fsmSnapshot) Persist(sink raft.SnapshotSink) error {
 	defer func() {
@@ -1222,18 +1234,6 @@ func (s *Store) databaseTypePretty() string {
 
 // Release is a no-op.
 func (f *fsmSnapshot) Release() {}
-
-func newFSMSnapshot(db *sql.DB, logger *log.Logger) *fsmSnapshot {
-	fsm := &fsmSnapshot{
-		startT: time.Now(),
-		logger: logger,
-	}
-
-	// The error code is not meaningful from Serialize(). The code needs to be able
-	// handle a nil byte slice being returned.
-	fsm.database, _ = db.Serialize()
-	return fsm
-}
 
 func databaseFromSnapshot(rc io.ReadCloser) ([]byte, error) {
 	var uint64Size uint64
