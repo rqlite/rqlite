@@ -234,7 +234,7 @@ func (s *Store) Open(enableBootstrap bool) error {
 	}
 
 	s.logger.Printf("ensuring directory at %s exists", s.raftDir)
-	err := os.MkdirAll(s.raftDir, 0755)
+	err := os.MkdirAll(filepath.Dir(s.peersPath), 0755)
 	if err != nil {
 		return err
 	}
