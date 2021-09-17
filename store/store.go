@@ -276,7 +276,7 @@ func (s *Store) Open(enableBootstrap bool) error {
 
 	// Request to recover node?
 	if pathExists(s.peersPath) {
-		s.logger.Printf("%s exists, attempting node recovery", s.peersPath)
+		s.logger.Printf("attempting node recovery using %s", s.peersPath)
 		config, err := raft.ReadConfigJSON(s.peersPath)
 		if err != nil {
 			return fmt.Errorf("failed to read peers file: %s", err.Error())

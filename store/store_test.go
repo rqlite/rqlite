@@ -51,6 +51,37 @@ func Test_OpenStoreCloseSingleNode(t *testing.T) {
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+	}, false, false)
+	_, err := s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	if err := s.Close(true); err != nil {
+		t.Fatalf("failed to close single-node store: %s", err.Error())
+	}
+
+	// Reopen it and confirm data still there.
+	if err := s.Open(true); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+	qr := queryRequestFromString("SELECT * FROM foo", false, false)
+	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+	r, err := s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
 	if err := s.Close(true); err != nil {
 		t.Fatalf("failed to close single-node store: %s", err.Error())
 	}
@@ -582,7 +613,90 @@ func Test_SingleNodeLoadChinook(t *testing.T) {
 	if exp, got := `[[275]]`, asJSON(r[0].Values); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
+}
 
+// Test_SingleNodeRecoverNoChange tests a node recovery that doesn't
+// actually change anything.
+func Test_SingleNodeRecoverNoChange(t *testing.T) {
+	s := mustNewStore(true)
+	defer os.RemoveAll(s.Path())
+	if err := s.Open(true); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+	if stats.Get(numRecoveries).String() != "0" {
+		t.Fatalf("incorrect count for number of recoveries")
+	}
+
+	raftID := s.ID()
+	raftAddr := s.Addr()
+
+	queryTest := func() {
+		qr := queryRequestFromString("SELECT * FROM foo", false, false)
+		qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+		r, err := s.Query(qr)
+		if err != nil {
+			t.Fatalf("failed to query single node: %s", err.Error())
+		}
+		if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
+			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+		}
+		if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
+			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+		}
+	}
+
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+	}, false, false)
+	_, err := s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	queryTest()
+	if err := s.Close(true); err != nil {
+		t.Fatalf("failed to close single-node store: %s", err.Error())
+	}
+
+	// Set up for Recovery during open
+	peersPath := filepath.Join(s.Path(), "/raft/peers.json")
+	peersInfo := filepath.Join(s.Path(), "/raft/peers.info")
+	mustWriteFile(peersPath, fmt.Sprintf(`[{"id": "%s","address": "%s"}]`, raftID, raftAddr))
+	if err := s.Open(true); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+	if stats.Get(numRecoveries).String() != "1" {
+		t.Fatalf("incorrect count for number of recoveries")
+	}
+	queryTest()
+	if err := s.Close(true); err != nil {
+		t.Fatalf("failed to close single-node store: %s", err.Error())
+	}
+
+	if pathExists(peersPath) {
+		t.Fatalf("Peers JSON exists at %s", peersPath)
+	}
+	if !pathExists(peersInfo) {
+		t.Fatalf("Peers info does not exist at %s", peersInfo)
+	}
+
+	// No recovery should take place this time.
+	if err := s.Open(true); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+	if stats.Get(numRecoveries).String() != "1" {
+		t.Fatalf("incorrect count for number of recoveries")
+	}
+	queryTest()
 }
 
 func Test_MultiNodeJoinRemove(t *testing.T) {
@@ -1358,6 +1472,13 @@ func (m *mockListener) Accept() (net.Conn, error) { return m.ln.Accept() }
 func (m *mockListener) Close() error { return m.ln.Close() }
 
 func (m *mockListener) Addr() net.Addr { return m.ln.Addr() }
+
+func mustWriteFile(path, contents string) {
+	err := os.WriteFile(path, []byte(contents), 0644)
+	if err != nil {
+		panic("failed to write to file")
+	}
+}
 
 func mustTempDir() string {
 	var err error
