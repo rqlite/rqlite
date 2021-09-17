@@ -59,6 +59,12 @@ func Test_OpenStoreCloseSingleNode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
+
+	fsmIdx, err := s.WaitForAppliedFSM(5 * time.Second)
+	if err != nil {
+		t.Fatalf("failed to wait for fsmIndex: %s", err.Error())
+	}
+
 	if err := s.Close(true); err != nil {
 		t.Fatalf("failed to close single-node store: %s", err.Error())
 	}
@@ -70,6 +76,13 @@ func Test_OpenStoreCloseSingleNode(t *testing.T) {
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
+
+	// Wait until the log entries have been applied to the voting follower,
+	// and then query.
+	if _, err := s.WaitForFSMIndex(fsmIdx, 5*time.Second); err != nil {
+		t.Fatalf("error waiting for follower to apply index: %s:", err.Error())
+	}
+
 	qr := queryRequestFromString("SELECT * FROM foo", false, false)
 	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
 	r, err := s.Query(qr)
@@ -664,7 +677,7 @@ func Test_SingleNodeRecoverNoChange(t *testing.T) {
 	// Set up for Recovery during open
 	peersPath := filepath.Join(s.Path(), "/raft/peers.json")
 	peersInfo := filepath.Join(s.Path(), "/raft/peers.info")
-	mustWriteFile(peersPath, fmt.Sprintf(`[{"id": "%s","address": "%s"}]`, raftID, raftAddr))
+	mustWriteFile(peersPath, fmt.Sprintf("[{\"id\": \"%s\",\"address\": \"%s\"}]", raftID, raftAddr))
 	if err := s.Open(true); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
