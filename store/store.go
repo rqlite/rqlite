@@ -979,33 +979,11 @@ func (s *Store) Apply(l *raft.Log) (e interface{}) {
 		s.firstLogAppliedT = time.Now()
 	}
 
-	var c command.Command
-
-	if err := command.Unmarshal(l.Data, &c); err != nil {
-		panic(fmt.Sprintf("failed to unmarshal cluster command: %s", err.Error()))
-	}
-
-	switch c.Type {
-	case command.Command_COMMAND_TYPE_QUERY:
-		var qr command.QueryRequest
-		if err := command.UnmarshalSubCommand(&c, &qr); err != nil {
-			panic(fmt.Sprintf("failed to unmarshal query subcommand: %s", err.Error()))
-		}
-		r, err := s.db.Query(qr.Request, qr.Timings)
-		return &fsmQueryResponse{rows: r, error: err}
-	case command.Command_COMMAND_TYPE_EXECUTE:
-		var er command.ExecuteRequest
-		if err := command.UnmarshalSubCommand(&c, &er); err != nil {
-			panic(fmt.Sprintf("failed to unmarshal execute subcommand: %s", err.Error()))
-		}
-		r, err := s.db.Execute(er.Request, er.Timings)
-		return &fsmExecuteResponse{results: r, error: err}
-	case command.Command_COMMAND_TYPE_NOOP:
+	typ, r := applyCommand(l.Data, s.db)
+	if typ == command.Command_COMMAND_TYPE_NOOP {
 		s.numNoops++
-		return &fsmGenericResponse{}
-	default:
-		return &fsmGenericResponse{error: fmt.Errorf("unhandled command: %v", c.Type)}
 	}
+	return r
 }
 
 // Database returns a copy of the underlying database. The caller MUST
@@ -1034,17 +1012,9 @@ func (s *Store) Database(leader bool) ([]byte, error) {
 // http://sqlite.org/howtocorrupt.html states it is safe to copy or serialize the
 // database as long as no transaction is in progress.
 func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
-	fsm := &fsmSnapshot{
-		startT: time.Now(),
-		logger: s.logger,
-	}
-
 	s.queryTxMu.Lock()
 	defer s.queryTxMu.Unlock()
-	fsm.database, _ = s.db.Serialize()
-	// The error code is not meaningful from Serialize(). The code needs to be able
-	// handle a nil byte slice being returned.
-
+	fsm := newFSMSnapshot(s.db, s.logger)
 	dur := time.Since(fsm.startT)
 	stats.Add(numSnaphots, 1)
 	stats.Get(snapshotCreateDuration).(*expvar.Int).Set(dur.Milliseconds())
@@ -1059,60 +1029,12 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 // the log, it blocks all query requests.
 func (s *Store) Restore(rc io.ReadCloser) error {
 	startT := time.Now()
-
-	var uint64Size uint64
-	inc := int64(unsafe.Sizeof(uint64Size))
-
-	// Read all the data into RAM, since we have to decode known-length
-	// chunks of various forms.
-	var offset int64
-	b, err := ioutil.ReadAll(rc)
+	database, err := databaseFromSnapshot(rc)
 	if err != nil {
-		return fmt.Errorf("readall: %s", err)
+		return fmt.Errorf("restore failed: %s", err.Error())
 	}
-
-	// Get size of database, checking for compression.
-	compressed := false
-	sz, err := readUint64(b[offset : offset+inc])
-	if err != nil {
-		return fmt.Errorf("read compression check: %s", err)
-	}
-	offset = offset + inc
-
-	if sz == math.MaxUint64 {
-		compressed = true
-		// Database is actually compressed, read actual size next.
-		sz, err = readUint64(b[offset : offset+inc])
-		if err != nil {
-			return fmt.Errorf("read compressed size: %s", err)
-		}
-		offset = offset + inc
-	}
-
-	// Now read in the database file data, decompress if necessary, and restore.
-	var database []byte
-	if sz > 0 {
-		if compressed {
-			buf := new(bytes.Buffer)
-			gz, err := gzip.NewReader(bytes.NewReader(b[offset : offset+int64(sz)]))
-			if err != nil {
-				return err
-			}
-
-			if _, err := io.Copy(buf, gz); err != nil {
-				return fmt.Errorf("SQLite database decompress: %s", err)
-			}
-
-			if err := gz.Close(); err != nil {
-				return err
-			}
-			database = buf.Bytes()
-		} else {
-			database = b[offset : offset+int64(sz)]
-		}
-	} else {
+	if database == nil {
 		s.logger.Println("no database data present in restored snapshot")
-		database = nil
 	}
 
 	if err := s.db.Close(); err != nil {
@@ -1300,6 +1222,104 @@ func (s *Store) databaseTypePretty() string {
 
 // Release is a no-op.
 func (f *fsmSnapshot) Release() {}
+
+func newFSMSnapshot(db *sql.DB, logger *log.Logger) *fsmSnapshot {
+	fsm := &fsmSnapshot{
+		startT: time.Now(),
+		logger: logger,
+	}
+
+	// The error code is not meaningful from Serialize(). The code needs to be able
+	// handle a nil byte slice being returned.
+	fsm.database, _ = db.Serialize()
+	return fsm
+}
+
+func databaseFromSnapshot(rc io.ReadCloser) ([]byte, error) {
+	var uint64Size uint64
+	inc := int64(unsafe.Sizeof(uint64Size))
+
+	// Read all the data into RAM, since we have to decode known-length
+	// chunks of various forms.
+	var offset int64
+	b, err := ioutil.ReadAll(rc)
+	if err != nil {
+		return nil, fmt.Errorf("readall: %s", err)
+	}
+
+	// Get size of database, checking for compression.
+	compressed := false
+	sz, err := readUint64(b[offset : offset+inc])
+	if err != nil {
+		return nil, fmt.Errorf("read compression check: %s", err)
+	}
+	offset = offset + inc
+
+	if sz == math.MaxUint64 {
+		compressed = true
+		// Database is actually compressed, read actual size next.
+		sz, err = readUint64(b[offset : offset+inc])
+		if err != nil {
+			return nil, fmt.Errorf("read compressed size: %s", err)
+		}
+		offset = offset + inc
+	}
+
+	// Now read in the database file data, decompress if necessary, and restore.
+	var database []byte
+	if sz > 0 {
+		if compressed {
+			buf := new(bytes.Buffer)
+			gz, err := gzip.NewReader(bytes.NewReader(b[offset : offset+int64(sz)]))
+			if err != nil {
+				return nil, err
+			}
+
+			if _, err := io.Copy(buf, gz); err != nil {
+				return nil, fmt.Errorf("SQLite database decompress: %s", err)
+			}
+
+			if err := gz.Close(); err != nil {
+				return nil, err
+			}
+			database = buf.Bytes()
+		} else {
+			database = b[offset : offset+int64(sz)]
+		}
+	} else {
+		database = nil
+	}
+	return database, nil
+}
+
+func applyCommand(data []byte, db *sql.DB) (command.Command_Type, interface{}) {
+	var c command.Command
+
+	if err := command.Unmarshal(data, &c); err != nil {
+		panic(fmt.Sprintf("failed to unmarshal cluster command: %s", err.Error()))
+	}
+
+	switch c.Type {
+	case command.Command_COMMAND_TYPE_QUERY:
+		var qr command.QueryRequest
+		if err := command.UnmarshalSubCommand(&c, &qr); err != nil {
+			panic(fmt.Sprintf("failed to unmarshal query subcommand: %s", err.Error()))
+		}
+		r, err := db.Query(qr.Request, qr.Timings)
+		return c.Type, &fsmQueryResponse{rows: r, error: err}
+	case command.Command_COMMAND_TYPE_EXECUTE:
+		var er command.ExecuteRequest
+		if err := command.UnmarshalSubCommand(&c, &er); err != nil {
+			panic(fmt.Sprintf("failed to unmarshal execute subcommand: %s", err.Error()))
+		}
+		r, err := db.Execute(er.Request, er.Timings)
+		return c.Type, &fsmExecuteResponse{results: r, error: err}
+	case command.Command_COMMAND_TYPE_NOOP:
+		return c.Type, &fsmGenericResponse{}
+	default:
+		return c.Type, &fsmGenericResponse{error: fmt.Errorf("unhandled command: %v", c.Type)}
+	}
+}
 
 func readUint64(b []byte) (uint64, error) {
 	var sz uint64
