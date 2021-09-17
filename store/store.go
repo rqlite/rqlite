@@ -1263,7 +1263,7 @@ func (f *fsmSnapshot) Release() {}
 func RecoverNode(dataDir string, logger *log.Logger, logs raft.LogStore, stable raft.StableStore,
 	snaps raft.SnapshotStore, tn raft.Transport, conf raft.Configuration) error {
 	// Sanity check the Raft peer configuration.
-	if err := checkConfiguration(conf); err != nil {
+	if err := checkRaftConfiguration(conf); err != nil {
 		return err
 	}
 
@@ -1451,9 +1451,9 @@ func applyCommand(data []byte, db *sql.DB) (command.Command_Type, interface{}) {
 	}
 }
 
-// checkConfiguration tests a cluster membership configuration for common
+// checkRaftConfiguration tests a cluster membership configuration for common
 // errors.
-func checkConfiguration(configuration raft.Configuration) error {
+func checkRaftConfiguration(configuration raft.Configuration) error {
 	idSet := make(map[raft.ServerID]bool)
 	addressSet := make(map[raft.ServerAddress]bool)
 	var voters int
