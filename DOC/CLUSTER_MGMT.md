@@ -109,6 +109,7 @@ With a 5-node cluster, the cluster can tolerate the failure of 2 nodes. However 
 
 # Recovering a cluster after an outage
 _This section borrows heavily from the Consul documentation._
+
 In the event that multiple rqlite nodes are lost, causing a loss of quorum and a complete outage, partial recovery is possible using data on the remaining nodes in the cluster. There may be data loss in this situation because multiple servers were lost, so information about what's committed could be incomplete. The recovery process implicitly commits all outstanding Raft log entries, so it's also possible to commit data -- and therefore change the SQLite database -- that was uncommitted before the failure.
 
 You must also follow the recovery process if a cluster simply restarts, but all nodes (or a quorum) come up with different IP addresses. This can happen in certain deployment configurations.
