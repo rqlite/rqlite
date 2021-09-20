@@ -639,9 +639,6 @@ func Test_SingleNodeRecoverNoChange(t *testing.T) {
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
-	if stats.Get(numRecoveries).String() != "0" {
-		t.Fatalf("incorrect count for number of recoveries")
-	}
 
 	queryTest := func() {
 		qr := queryRequestFromString("SELECT * FROM foo", false, false)
@@ -682,9 +679,6 @@ func Test_SingleNodeRecoverNoChange(t *testing.T) {
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
-	if stats.Get(numRecoveries).String() != "1" {
-		t.Fatalf("incorrect count for number of recoveries")
-	}
 	queryTest()
 	if err := s.Close(true); err != nil {
 		t.Fatalf("failed to close single-node store: %s", err.Error())
@@ -704,10 +698,89 @@ func Test_SingleNodeRecoverNoChange(t *testing.T) {
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
-	if stats.Get(numRecoveries).String() != "1" {
-		t.Fatalf("incorrect count for number of recoveries")
-	}
 	queryTest()
+}
+
+// Test_SingleNodeRecoverNetworkChange tests a node recovery that
+// involves a changed-network address.
+func Test_SingleNodeRecoverNetworkChange(t *testing.T) {
+	s0 := mustNewStore(true)
+	defer os.RemoveAll(s0.Path())
+	if err := s0.Open(true); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	queryTest := func(s *Store) {
+		qr := queryRequestFromString("SELECT * FROM foo", false, false)
+		qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+		r, err := s.Query(qr)
+		if err != nil {
+			t.Fatalf("failed to query single node: %s", err.Error())
+		}
+		if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
+			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+		}
+		if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
+			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+		}
+	}
+
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+	}, false, false)
+	_, err := s0.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	queryTest(s0)
+	if err := s0.Close(true); err != nil {
+		t.Fatalf("failed to close single-node store: %s", err.Error())
+	}
+
+	// Create a new node, at the same path. Will presumably have a different
+	// Raft network address, since they are randomly assigned.
+	sR, srLn := mustNewStoreAtPathsLn(s0.Path(), "", true, false)
+	if IsNewNode(sR.Path()) {
+		t.Fatalf("store detected incorrectly as new")
+	}
+
+	// Set up for Recovery during open
+	peers := fmt.Sprintf(`[{"id": "%s","address": "%s"}]`, s0.ID(), srLn.Addr().String())
+	peersPath := filepath.Join(sR.Path(), "/raft/peers.json")
+	peersInfo := filepath.Join(sR.Path(), "/raft/peers.info")
+	mustWriteFile(peersPath, peers)
+	if err := sR.Open(true); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+
+	if _, err := sR.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader on recovered node: %s", err)
+	}
+
+	queryTest(sR)
+	if err := sR.Close(true); err != nil {
+		t.Fatalf("failed to close single-node recovered store: %s", err.Error())
+	}
+
+	if pathExists(peersPath) {
+		t.Fatalf("Peers JSON exists at %s", peersPath)
+	}
+	if !pathExists(peersInfo) {
+		t.Fatalf("Peers info does not exist at %s", peersInfo)
+	}
+
+	// No recovery should take place this time.
+	if err := sR.Open(true); err != nil {
+		t.Fatalf("failed to open single-node recovered store: %s", err.Error())
+	}
+	if _, err := sR.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+	queryTest(sR)
 }
 
 func Test_MultiNodeJoinRemove(t *testing.T) {
@@ -1415,12 +1488,13 @@ func Test_State(t *testing.T) {
 	}
 }
 
-func mustNewStoreAtPaths(dataPath, sqlitePath string, inmem, fk bool) *Store {
+func mustNewStoreAtPathsLn(dataPath, sqlitePath string, inmem, fk bool) (*Store, net.Listener) {
 	cfg := NewDBConfig(inmem)
 	cfg.FKConstraints = fk
 	cfg.OnDiskPath = sqlitePath
 
-	s := New(mustMockLister("localhost:0"), &Config{
+	ln := mustMockLister("localhost:0")
+	s := New(ln, &Config{
 		DBConf: cfg,
 		Dir:    dataPath,
 		ID:     dataPath, // Could be any unique string.
@@ -1428,6 +1502,11 @@ func mustNewStoreAtPaths(dataPath, sqlitePath string, inmem, fk bool) *Store {
 	if s == nil {
 		panic("failed to create new store")
 	}
+	return s, ln
+}
+
+func mustNewStoreAtPaths(dataPath, sqlitePath string, inmem, fk bool) *Store {
+	s, _ := mustNewStoreAtPathsLn(dataPath, sqlitePath, inmem, fk)
 	return s
 }
 

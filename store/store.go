@@ -1279,6 +1279,7 @@ func RecoverNode(dataDir string, logger *log.Logger, logs raft.LogStore, stable 
 	if err != nil {
 		return fmt.Errorf("failed to list snapshots: %v", err)
 	}
+	logger.Printf("recovery detected %d snapshots", len(snapshots))
 
 	var b []byte
 	for _, snapshot := range snapshots {
@@ -1329,6 +1330,8 @@ func RecoverNode(dataDir string, logger *log.Logger, logs raft.LogStore, stable 
 	if err != nil {
 		return fmt.Errorf("failed to find last log: %v", err)
 	}
+	logger.Printf("recovery snapshot index is %d, last index is %d", snapshotIndex, lastLogIndex)
+
 	for index := snapshotIndex + 1; index <= lastLogIndex; index++ {
 		var entry raft.Log
 		if err = logs.GetLog(index, &entry); err != nil {
@@ -1354,6 +1357,7 @@ func RecoverNode(dataDir string, logger *log.Logger, logs raft.LogStore, stable 
 	if err = sink.Close(); err != nil {
 		return fmt.Errorf("failed to finalize snapshot: %v", err)
 	}
+	logger.Printf("recovery snapshot created successfully")
 
 	// Compact the log so that we don't get bad interference from any
 	// configuration change log entries that might be there.
