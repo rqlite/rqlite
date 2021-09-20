@@ -672,9 +672,10 @@ func Test_SingleNodeRecoverNoChange(t *testing.T) {
 	}
 
 	// Set up for Recovery during open
+	peers := fmt.Sprintf(`[{"id": "%s","address": "%s"}]`, s.ID(), s.Addr())
 	peersPath := filepath.Join(s.Path(), "/raft/peers.json")
 	peersInfo := filepath.Join(s.Path(), "/raft/peers.info")
-	mustWriteFile(peersPath, `[{"id": "1","address": "127.0.0.1:41665"}]`) // Could be any values
+	mustWriteFile(peersPath, peers)
 	if err := s.Open(true); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
