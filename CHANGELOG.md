@@ -1,4 +1,4 @@
-## 6.6.0 (unreleased)
+## 6.6.0 (September 21st 2021)
 ### New features
 - [PR #898](https://github.com/rqlite/rqlite/pull/898): Support recovering clusters that have permanently lost quorum. Fixes [issue #897](https://github.com/rqlite/rqlite/issues/897).
 
