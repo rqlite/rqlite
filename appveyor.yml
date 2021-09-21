@@ -21,7 +21,8 @@ build_script:
   - go version
   - go get ./...
   - go build ./...
-  - go test ./...
+  - cd store
+  - go test -run Test_SingleNodeRecoverNetworkChange
 
 after_build:
   - 7z a rqlite-latest-win64.zip %GOPATH%\bin\rq*.exe
