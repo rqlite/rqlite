@@ -157,8 +157,6 @@ type Store struct {
 	appliedOnOpen        uint64    // Number of logs applied at open.
 	openT                time.Time // Timestamp when Store opens.
 
-	numNoops int // For whitebox testing
-
 	logger *log.Logger
 
 	ShutdownOnRemove   bool
@@ -171,6 +169,10 @@ type Store struct {
 	RaftLogLevel       string
 
 	numTrailingLogs uint64
+
+	// For whitebox testing
+	numNoops     int
+	numSnapshots int
 }
 
 // IsNewNode returns whether a node using raftDir would be a brand new node.
@@ -1037,6 +1039,10 @@ func (s *Store) Database(leader bool) ([]byte, error) {
 // http://sqlite.org/howtocorrupt.html states it is safe to copy or serialize the
 // database as long as no transaction is in progress.
 func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
+	defer func() {
+		s.numSnapshots++
+	}()
+
 	s.queryTxMu.Lock()
 	defer s.queryTxMu.Unlock()
 	fsm := newFSMSnapshot(s.db, s.logger)
@@ -1265,6 +1271,10 @@ func (f *fsmSnapshot) Release() {}
 // of the Hashicorp Raft library, but has been customized for rqlite use.
 func RecoverNode(dataDir string, logger *log.Logger, logs raft.LogStore, stable raft.StableStore,
 	snaps raft.SnapshotStore, tn raft.Transport, conf raft.Configuration) error {
+	logPrefix := logger.Prefix()
+	logger.SetPrefix(fmt.Sprintf("%s[recovery] ", logPrefix))
+	defer logger.SetPrefix(logPrefix)
+
 	// Sanity check the Raft peer configuration.
 	if err := checkRaftConfiguration(conf); err != nil {
 		return err
