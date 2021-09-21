@@ -642,14 +642,14 @@ class TestClusterRecovery(unittest.TestCase):
     addr5 = "127.0.0.1:10005"
 
     peers = [
-      {"id": "0", "address": addr3},
-      {"id": "1", "address": addr4},
-      {"id": "2", "address": addr5},
+      {"id": n0.node_id, "address": addr3},
+      {"id": n1.node_id, "address": addr4},
+      {"id": n2.node_id, "address": addr5},
     ]
 
-    n3 = Node(RQLITED_PATH, '0', dir=n0.dir, raft_addr=addr3)
-    n4 = Node(RQLITED_PATH, '1', dir=n1.dir, raft_addr=addr4)
-    n5 = Node(RQLITED_PATH, '2', dir=n2.dir, raft_addr=addr5)
+    n3 = Node(RQLITED_PATH, n0.node_id, dir=n0.dir, raft_addr=addr3)
+    n4 = Node(RQLITED_PATH, n1.node_id, dir=n1.dir, raft_addr=addr4)
+    n5 = Node(RQLITED_PATH, n2.node_id, dir=n2.dir, raft_addr=addr5)
     self.nodes = self.nodes + [n3, n4, n5]
 
     n3.set_peers(peers)
