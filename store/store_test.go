@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"net"
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -50,6 +52,50 @@ func Test_OpenStoreCloseSingleNode(t *testing.T) {
 	}
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
+	}
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+	}, false, false)
+	_, err := s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	fsmIdx, err := s.WaitForAppliedFSM(5 * time.Second)
+	if err != nil {
+		t.Fatalf("failed to wait for fsmIndex: %s", err.Error())
+	}
+
+	if err := s.Close(true); err != nil {
+		t.Fatalf("failed to close single-node store: %s", err.Error())
+	}
+
+	// Reopen it and confirm data still there.
+	if err := s.Open(true); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Wait until the log entries have been applied to the voting follower,
+	// and then query.
+	if _, err := s.WaitForFSMIndex(fsmIdx, 5*time.Second); err != nil {
+		t.Fatalf("error waiting for follower to apply index: %s:", err.Error())
+	}
+
+	qr := queryRequestFromString("SELECT * FROM foo", false, false)
+	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+	r, err := s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 	if err := s.Close(true); err != nil {
 		t.Fatalf("failed to close single-node store: %s", err.Error())
@@ -582,7 +628,242 @@ func Test_SingleNodeLoadChinook(t *testing.T) {
 	if exp, got := `[[275]]`, asJSON(r[0].Values); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
+}
 
+// Test_SingleNodeRecoverNoChange tests a node recovery that doesn't
+// actually change anything.
+func Test_SingleNodeRecoverNoChange(t *testing.T) {
+	s := mustNewStore(true)
+	defer os.RemoveAll(s.Path())
+	if err := s.Open(true); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	queryTest := func() {
+		qr := queryRequestFromString("SELECT * FROM foo", false, false)
+		qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+		r, err := s.Query(qr)
+		if err != nil {
+			t.Fatalf("failed to query single node: %s", err.Error())
+		}
+		if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
+			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+		}
+		if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
+			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+		}
+	}
+
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+	}, false, false)
+	_, err := s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	queryTest()
+	if err := s.Close(true); err != nil {
+		t.Fatalf("failed to close single-node store: %s", err.Error())
+	}
+
+	// Set up for Recovery during open
+	peers := fmt.Sprintf(`[{"id": "%s","address": "%s"}]`, s.ID(), s.Addr())
+	peersPath := filepath.Join(s.Path(), "/raft/peers.json")
+	peersInfo := filepath.Join(s.Path(), "/raft/peers.info")
+	mustWriteFile(peersPath, peers)
+	if err := s.Open(true); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+	queryTest()
+	if err := s.Close(true); err != nil {
+		t.Fatalf("failed to close single-node store: %s", err.Error())
+	}
+
+	if pathExists(peersPath) {
+		t.Fatalf("Peers JSON exists at %s", peersPath)
+	}
+	if !pathExists(peersInfo) {
+		t.Fatalf("Peers info does not exist at %s", peersInfo)
+	}
+}
+
+// Test_SingleNodeRecoverNetworkChange tests a node recovery that
+// involves a changed-network address.
+func Test_SingleNodeRecoverNetworkChange(t *testing.T) {
+	s0 := mustNewStore(true)
+	defer os.RemoveAll(s0.Path())
+	if err := s0.Open(true); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	queryTest := func(s *Store) {
+		qr := queryRequestFromString("SELECT * FROM foo", false, false)
+		qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+		r, err := s.Query(qr)
+		if err != nil {
+			t.Fatalf("failed to query single node: %s", err.Error())
+		}
+		if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
+			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+		}
+		if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
+			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+		}
+	}
+
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+	}, false, false)
+	_, err := s0.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	queryTest(s0)
+
+	id := s0.ID()
+	if err := s0.Close(true); err != nil {
+		t.Fatalf("failed to close single-node store: %s", err.Error())
+	}
+
+	// Create a new node, at the same path. Will presumably have a different
+	// Raft network address, since they are randomly assigned.
+	sR, srLn := mustNewStoreAtPathsLn(id, s0.Path(), "", true, false)
+	if IsNewNode(sR.Path()) {
+		t.Fatalf("store detected incorrectly as new")
+	}
+
+	// Set up for Recovery during open
+	peers := fmt.Sprintf(`[{"id": "%s","address": "%s"}]`, s0.ID(), srLn.Addr().String())
+	peersPath := filepath.Join(sR.Path(), "/raft/peers.json")
+	peersInfo := filepath.Join(sR.Path(), "/raft/peers.info")
+	mustWriteFile(peersPath, peers)
+	if err := sR.Open(true); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+
+	if _, err := sR.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader on recovered node: %s", err)
+	}
+
+	queryTest(sR)
+	if err := sR.Close(true); err != nil {
+		t.Fatalf("failed to close single-node recovered store: %s", err.Error())
+	}
+
+	if pathExists(peersPath) {
+		t.Fatalf("Peers JSON exists at %s", peersPath)
+	}
+	if !pathExists(peersInfo) {
+		t.Fatalf("Peers info does not exist at %s", peersInfo)
+	}
+}
+
+// Test_SingleNodeRecoverNetworkChangeSnapshot tests a node recovery that
+// involves a changed-network address, with snapshots underneath.
+func Test_SingleNodeRecoverNetworkChangeSnapshot(t *testing.T) {
+	s0 := mustNewStore(true)
+	defer os.RemoveAll(s0.Path())
+	s0.SnapshotThreshold = 4
+	s0.SnapshotInterval = 100 * time.Millisecond
+	if err := s0.Open(true); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	queryTest := func(s *Store, c int) {
+		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
+		qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+		r, err := s.Query(qr)
+		if err != nil {
+			t.Fatalf("failed to query single node: %s", err.Error())
+		}
+		if exp, got := `["COUNT(*)"]`, asJSON(r[0].Columns); exp != got {
+			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+		}
+		if exp, got := fmt.Sprintf(`[[%d]]`, c), asJSON(r[0].Values); exp != got {
+			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+		}
+	}
+
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+	}, false, false)
+	_, err := s0.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	queryTest(s0, 1)
+
+	for i := 0; i < 9; i++ {
+		er := executeRequestFromStrings([]string{
+			`INSERT INTO foo(name) VALUES("fiona")`,
+		}, false, false)
+		if _, err := s0.Execute(er); err != nil {
+			t.Fatalf("failed to execute on single node: %s", err.Error())
+		}
+	}
+	queryTest(s0, 10)
+
+	// Wait for a snapshot to take place.
+	for {
+		time.Sleep(100 * time.Millisecond)
+		s0.numSnapshotsMu.Lock()
+		ns := s0.numSnapshots
+		s0.numSnapshotsMu.Unlock()
+		if ns > 0 {
+			break
+		}
+	}
+
+	id := s0.ID()
+	if err := s0.Close(true); err != nil {
+		t.Fatalf("failed to close single-node store: %s", err.Error())
+	}
+
+	// Create a new node, at the same path. Will presumably have a different
+	// Raft network address, since they are randomly assigned.
+	sR, srLn := mustNewStoreAtPathsLn(id, s0.Path(), "", true, false)
+	if IsNewNode(sR.Path()) {
+		t.Fatalf("store detected incorrectly as new")
+	}
+
+	// Set up for Recovery during open
+	peers := fmt.Sprintf(`[{"id": "%s","address": "%s"}]`, id, srLn.Addr().String())
+	peersPath := filepath.Join(sR.Path(), "/raft/peers.json")
+	peersInfo := filepath.Join(sR.Path(), "/raft/peers.info")
+	mustWriteFile(peersPath, peers)
+	if err := sR.Open(true); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+
+	if _, err := sR.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader on recovered node: %s", err)
+	}
+	queryTest(sR, 10)
+	if err := sR.Close(true); err != nil {
+		t.Fatalf("failed to close single-node recovered store: %s", err.Error())
+	}
+
+	if pathExists(peersPath) {
+		t.Fatalf("Peers JSON exists at %s", peersPath)
+	}
+	if !pathExists(peersInfo) {
+		t.Fatalf("Peers info does not exist at %s", peersInfo)
+	}
 }
 
 func Test_MultiNodeJoinRemove(t *testing.T) {
@@ -1290,19 +1571,25 @@ func Test_State(t *testing.T) {
 	}
 }
 
-func mustNewStoreAtPaths(dataPath, sqlitePath string, inmem, fk bool) *Store {
+func mustNewStoreAtPathsLn(id, dataPath, sqlitePath string, inmem, fk bool) (*Store, net.Listener) {
 	cfg := NewDBConfig(inmem)
 	cfg.FKConstraints = fk
 	cfg.OnDiskPath = sqlitePath
 
-	s := New(mustMockLister("localhost:0"), &Config{
+	ln := mustMockLister("localhost:0")
+	s := New(ln, &Config{
 		DBConf: cfg,
 		Dir:    dataPath,
-		ID:     dataPath, // Could be any unique string.
+		ID:     id,
 	})
 	if s == nil {
 		panic("failed to create new store")
 	}
+	return s, ln
+}
+
+func mustNewStoreAtPaths(dataPath, sqlitePath string, inmem, fk bool) *Store {
+	s, _ := mustNewStoreAtPathsLn(randomString(), dataPath, sqlitePath, inmem, fk)
 	return s
 }
 
@@ -1358,6 +1645,13 @@ func (m *mockListener) Accept() (net.Conn, error) { return m.ln.Accept() }
 func (m *mockListener) Close() error { return m.ln.Close() }
 
 func (m *mockListener) Addr() net.Addr { return m.ln.Addr() }
+
+func mustWriteFile(path, contents string) {
+	err := os.WriteFile(path, []byte(contents), 0644)
+	if err != nil {
+		panic("failed to write to file")
+	}
+}
 
 func mustTempDir() string {
 	var err error
@@ -1449,6 +1743,17 @@ func asJSON(v interface{}) string {
 		panic(fmt.Sprintf("failed to JSON marshal value: %s", err.Error()))
 	}
 	return string(b)
+}
+
+func randomString() string {
+	var output strings.Builder
+	chars := "abcdedfghijklmnopqrstABCDEFGHIJKLMNOP"
+	for i := 0; i < 20; i++ {
+		random := rand.Intn(len(chars))
+		randomChar := chars[random]
+		output.WriteString(string(randomChar))
+	}
+	return output.String()
 }
 
 func testPoll(t *testing.T, f func() bool, p time.Duration, d time.Duration) {

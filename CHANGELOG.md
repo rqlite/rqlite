@@ -1,3 +1,7 @@
+## 6.6.0 (unreleased)
+### New features
+- [PR #898](https://github.com/rqlite/rqlite/pull/898): Support recovering clusters that have permanently lost quorum. Fixes [issue #897](https://github.com/rqlite/rqlite/issues/897).
+
 ## 6.5.0 (September 12th 2021)
 ### New features
 - [PR #896](https://github.com/rqlite/rqlite/pull/896): Add `/readyz` endpoint for easy ready-to-respond checks.

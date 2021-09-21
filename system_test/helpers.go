@@ -37,6 +37,7 @@ type Node struct {
 	NodeKeyPath  string
 	HTTPCertPath string
 	HTTPKeyPath  string
+	PeersPath    string
 	Store        *store.Store
 	Service      *httpd.Service
 	Cluster      *cluster.Service
@@ -468,7 +469,7 @@ func mustNewNodeEncrypted(enableSingle, httpEncrypt, nodeEncrypt bool) *Node {
 	if nodeEncrypt {
 		mux = mustNewOpenTLSMux(x509.CertFile(dir), x509.KeyFile(dir), "")
 	} else {
-		mux = mustNewOpenMux("")
+		mux, _ = mustNewOpenMux("")
 	}
 	go mux.Serve()
 
@@ -491,6 +492,7 @@ func mustNodeEncryptedOnDisk(dir string, enableSingle, httpEncrypt bool, mux *tc
 		NodeKeyPath:  nodeKeyPath,
 		HTTPCertPath: httpCertPath,
 		HTTPKeyPath:  httpKeyPath,
+		PeersPath:    filepath.Join(dir, "raft/peers.json"),
 	}
 
 	dbConf := store.NewDBConfig(!onDisk)
@@ -560,7 +562,7 @@ func mustTempDir() string {
 	return path
 }
 
-func mustNewOpenMux(addr string) *tcp.Mux {
+func mustNewOpenMux(addr string) (*tcp.Mux, net.Listener) {
 	if addr == "" {
 		addr = "localhost:0"
 	}
@@ -577,7 +579,7 @@ func mustNewOpenMux(addr string) *tcp.Mux {
 	}
 
 	go mux.Serve()
-	return mux
+	return mux, ln
 }
 
 func mustNewOpenTLSMux(certFile, keyPath, addr string) *tcp.Mux {
@@ -643,6 +645,13 @@ func asJSON(v interface{}) string {
 func isJSON(s string) bool {
 	var js map[string]interface{}
 	return json.Unmarshal([]byte(s), &js) == nil
+}
+
+func mustWriteFile(path, contents string) {
+	err := os.WriteFile(path, []byte(contents), 0644)
+	if err != nil {
+		panic("failed to write to file")
+	}
 }
 
 /* MIT License

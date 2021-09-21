@@ -106,3 +106,40 @@ The situation is similar for a 3-node cluster, in the sense that it can only tol
 Quorum of a 5-node cluster is 3.
 
 With a 5-node cluster, the cluster can tolerate the failure of 2 nodes. However if 3 nodes fail, at least one of those nodes must be restarted before you can make any change. If you remove a single node from a fully-functional 5-node cluster, quorum will be unchanged since you now have a 4-node cluster.
+
+# Recovering a cluster that has permanently lost quorum
+_This section borrows heavily from the Consul documentation._
+
+In the event that multiple rqlite nodes are lost, causing a loss of quorum and a complete outage, partial recovery is possible using data on the remaining nodes in the cluster. There may be data loss in this situation because multiple servers were lost, so information about what's committed could be incomplete. The recovery process implicitly commits all outstanding Raft log entries, so it's also possible to commit data -- and therefore change the SQLite database -- that was uncommitted before the failure.
+
+**You must also follow the recovery process if a cluster simply restarts, but all nodes (or a quorum of nodes) come up with different IP addresses. This can happen in certain deployment configurations.**
+
+To begin, stop all remaining nodes. You can attempt a graceful node-removal, but it will not work in most cases. Do not worry if the remove operation results in an error. The cluster is in an unhealthy state, so this is expected.
+
+The next step is to go to the _data_ directory of each rqlite node. Inside that directory, there will be a `raft/` sub-directory. You need to create a `peers.json` file within that directory, which will contain the desired configuration of your rqlite cluster. This file should be formatted as a JSON array containing the node ID, `address:port`, and suffrage information of each rqlite node in the cluster. An example is shown below:
+
+```json
+[
+  {
+    "id": "1",
+    "address": "10.1.0.1:8300",
+    "non_voter": false
+  },
+  {
+    "id": "2",
+    "address": "10.1.0.2:8300",
+    "non_voter": false
+  },
+  {
+    "id": "2",
+    "address": "10.1.0.3:8300",
+    "non_voter": false
+  }
+]
+```
+
+`id` specifies the node ID of the server, which must not be changed from its previous value. The ID for a given node can be found in the logs when the node starts up if it was auto-generated. `address` specifies the desired Raft IP and port for the node, which does not need to be the same as previously. `non_voter` controls whether the server is a read-only node. If omitted, it will default to false, which is typical for most rqlite nodes.
+
+Next simply create entries for all nodes. You must confirm that nodes you do not include here have indeed failed and will not later rejoin the cluster. Ensure that this file is the same across all remaining rqlite nodes. At this point, you can restart your rqlite cluster.
+
+Once recovery is completed, the `peers.json` file is renamed to `peers.info`. `peers.info` will not trigger further recoveries, and simply acts as a record for future reference. It may be deleted at anytime.

@@ -208,14 +208,14 @@ func DeserializeIntoMemory(b []byte, fkEnabled bool) (retDB *DB, retErr error) {
 
 	// tmpDB will still be using memory in Go space, so tmpDB needs to be explicitly
 	// copied to a new database, which we create now.
-	db, err := OpenInMemory(fkEnabled)
+	retDB, err = OpenInMemory(fkEnabled)
 	if err != nil {
 		return nil, fmt.Errorf("DeserializeIntoMemory: %s", err.Error())
 	}
 	defer func() {
 		// Don't leak a database if deserialization fails.
 		if retErr != nil {
-			db.Close()
+			retDB.Close()
 		}
 	}()
 
@@ -228,7 +228,7 @@ func DeserializeIntoMemory(b []byte, fkEnabled bool) (retDB *DB, retErr error) {
 		defer srcConn.Close()
 
 		// Now copy from tmp database to the database this function will return.
-		dbConn, err3 := db.rwDB.Conn(context.Background())
+		dbConn, err3 := retDB.rwDB.Conn(context.Background())
 		if err3 != nil {
 			return fmt.Errorf("DeserializeIntoMemory: %s", err.Error())
 		}
@@ -243,7 +243,7 @@ func DeserializeIntoMemory(b []byte, fkEnabled bool) (retDB *DB, retErr error) {
 		return nil, err
 	}
 
-	return db, nil
+	return retDB, nil
 }
 
 // Close closes the underlying database connection.
