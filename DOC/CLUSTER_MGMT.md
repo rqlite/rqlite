@@ -1,4 +1,12 @@
-# Cluster Guidelines
+# Contents
+* [General guidelines](#general-guidelines)
+* [Creating a cluster](#creating-a-cluster)
+* [Growing a cluster](#growing-a-cluster)
+* [Modifying a node's network addresses](#modifying-a-nodes-network-addresses)
+* [Removing or replacing a node](#recovering-a-cluster-that-has-permanently-lost-quorum)
+* [Dealing with failure](#dealing-with-failure)
+
+# General guidelines
 This document describes, in detail, how to create and manage a rqlite cluster.
 
 ## Practical cluster size
@@ -55,15 +63,10 @@ There is also a rqlite _Discovery Service_, allowing nodes to automatically conn
 ## Through the firewall
 On some networks, like AWS EC2 cloud, nodes may have an IP address that is not routable from outside the firewall. Instead these nodes are addressed using a different IP address. You can still form a rqlite cluster however -- check out [this tutorial](http://www.philipotoole.com/rqlite-v3-0-1-globally-replicating-sqlite/) for an example. The key thing is that you must set `-http-adv-addr` and `-raft-adv-addr` so a routable address is broadcast to other nodes.
 
-# Dealing with failure
-It is the nature of clustered systems that nodes can fail at anytime. Depending on the size of your cluster, it will tolerate various amounts of failure. With a 3-node cluster, it can tolerate the failure of a single node, including the leader.
-
-If an rqlite process crashes, it is safe to simply to restart it. The node will pick up any changes that happened on the cluster while it was down.
-
 # Growing a cluster
 You can grow a cluster, at anytime, simply by starting up a new node (pick a never before used node ID) and having it explicitly join with the leader as normal, or by passing it a discovery service ID. The new node will automatically pick up changes that have occurred on the cluster since the cluster first started.
 
-# Modifying a node's network addresses
+# Modifying a node's Raft network addresses
 It is possible to change a node's Raft address between restarts. Simply pass the new address on the command line. You must also, however, explicitly tell the node to join the cluster again, by passing `-join` to the node. In this case what the leader actually does is remove the previous record of the node, before adding a new record of the node. You can also change the HTTP API address of a node between restarts, but an explicit re-join is not required if just the HTTP API address changes.
 
 # Removing or replacing a node
@@ -107,7 +110,12 @@ Quorum of a 5-node cluster is 3.
 
 With a 5-node cluster, the cluster can tolerate the failure of 2 nodes. However if 3 nodes fail, at least one of those nodes must be restarted before you can make any change. If you remove a single node from a fully-functional 5-node cluster, quorum will be unchanged since you now have a 4-node cluster.
 
-# Recovering a cluster that has permanently lost quorum
+# Dealing with failure
+It is the nature of clustered systems that nodes can fail at anytime. Depending on the size of your cluster, it will tolerate various amounts of failure. With a 3-node cluster, it can tolerate the failure of a single node, including the leader.
+
+If an rqlite process crashes, it is safe to simply to restart it. The node will pick up any changes that happened on the cluster while it was down.
+
+## Recovering a cluster that has permanently lost quorum
 _This section borrows heavily from the Consul documentation._
 
 In the event that multiple rqlite nodes are lost, causing a loss of quorum and a complete outage, partial recovery is possible using data on the remaining nodes in the cluster. There may be data loss in this situation because multiple servers were lost, so information about what's committed could be incomplete. The recovery process implicitly commits all outstanding Raft log entries, so it's also possible to commit data -- and therefore change the SQLite database -- that was uncommitted before the failure.
