@@ -817,7 +817,10 @@ func Test_SingleNodeRecoverNetworkChangeSnapshot(t *testing.T) {
 	// Wait for a snapshot to take place.
 	for {
 		time.Sleep(100 * time.Millisecond)
-		if s0.numSnapshots > 0 {
+		s0.numSnapshotsMu.Lock()
+		ns := s0.numSnapshots
+		s0.numSnapshotsMu.Unlock()
+		if ns > 0 {
 			break
 		}
 	}

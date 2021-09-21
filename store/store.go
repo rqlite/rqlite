@@ -171,8 +171,9 @@ type Store struct {
 	numTrailingLogs uint64
 
 	// For whitebox testing
-	numNoops     int
-	numSnapshots int
+	numNoops       int
+	numSnapshotsMu sync.Mutex
+	numSnapshots   int
 }
 
 // IsNewNode returns whether a node using raftDir would be a brand new node.
@@ -1040,6 +1041,8 @@ func (s *Store) Database(leader bool) ([]byte, error) {
 // database as long as no transaction is in progress.
 func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 	defer func() {
+		s.numSnapshotsMu.Lock()
+		defer s.numSnapshotsMu.Unlock()
 		s.numSnapshots++
 	}()
 
