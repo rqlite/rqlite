@@ -131,7 +131,7 @@ The next step is to go to the _data_ directory of each rqlite node. Inside that 
     "non_voter": false
   },
   {
-    "id": "2",
+    "id": "3",
     "address": "10.1.0.3:8300",
     "non_voter": false
   }
