@@ -11,8 +11,8 @@ import (
 	"github.com/rqlite/rqlite/command/encoding"
 )
 
-const oneSec = 1 * time.Second
-const fiveSec = 5 * time.Second
+const shortWait = 1 * time.Second
+const longWait = 5 * time.Second
 
 func Test_ServiceExecute(t *testing.T) {
 	ln, mux := mustNewMux()
@@ -37,7 +37,7 @@ func Test_ServiceExecute(t *testing.T) {
 		}
 		return nil, errors.New("execute failed")
 	}
-	_, err := c.Execute(executeRequestFromString("some SQL"), s.Addr(), fiveSec)
+	_, err := c.Execute(executeRequestFromString("some SQL"), s.Addr(), longWait)
 	if err == nil {
 		t.Fatalf("client failed to report error")
 	}
@@ -55,7 +55,7 @@ func Test_ServiceExecute(t *testing.T) {
 		}
 		return []*command.ExecuteResult{result}, nil
 	}
-	res, err := c.Execute(executeRequestFromString("some SQL"), s.Addr(), fiveSec)
+	res, err := c.Execute(executeRequestFromString("some SQL"), s.Addr(), longWait)
 	if err != nil {
 		t.Fatalf("failed to execute query: %s", err.Error())
 	}
@@ -72,7 +72,7 @@ func Test_ServiceExecute(t *testing.T) {
 		}
 		return []*command.ExecuteResult{result}, nil
 	}
-	res, err = c.Execute(executeRequestFromString("some SQL"), s.Addr(), fiveSec)
+	res, err = c.Execute(executeRequestFromString("some SQL"), s.Addr(), longWait)
 	if err != nil {
 		t.Fatalf("failed to execute: %s", err.Error())
 	}
@@ -81,10 +81,10 @@ func Test_ServiceExecute(t *testing.T) {
 	}
 
 	db.executeFn = func(er *command.ExecuteRequest) ([]*command.ExecuteResult, error) {
-		time.Sleep(fiveSec)
+		time.Sleep(longWait)
 		return nil, nil
 	}
-	_, err = c.Execute(executeRequestFromString("some SQL"), s.Addr(), oneSec)
+	_, err = c.Execute(executeRequestFromString("some SQL"), s.Addr(), shortWait)
 	if err == nil {
 		t.Fatalf("failed to receive expected error")
 	}
@@ -124,7 +124,7 @@ func Test_ServiceQuery(t *testing.T) {
 		}
 		return nil, errors.New("query failed")
 	}
-	_, err := c.Query(queryRequestFromString("SELECT * FROM foo"), s.Addr(), fiveSec)
+	_, err := c.Query(queryRequestFromString("SELECT * FROM foo"), s.Addr(), longWait)
 	if err == nil {
 		t.Fatalf("client failed to report error")
 	}
@@ -142,7 +142,7 @@ func Test_ServiceQuery(t *testing.T) {
 		}
 		return []*command.QueryRows{rows}, nil
 	}
-	res, err := c.Query(queryRequestFromString("SELECT * FROM foo"), s.Addr(), fiveSec)
+	res, err := c.Query(queryRequestFromString("SELECT * FROM foo"), s.Addr(), longWait)
 	if err != nil {
 		t.Fatalf("failed to query: %s", err.Error())
 	}
@@ -159,7 +159,7 @@ func Test_ServiceQuery(t *testing.T) {
 		}
 		return []*command.QueryRows{rows}, nil
 	}
-	res, err = c.Query(queryRequestFromString("SELECT * FROM foo"), s.Addr(), fiveSec)
+	res, err = c.Query(queryRequestFromString("SELECT * FROM foo"), s.Addr(), longWait)
 	if err != nil {
 		t.Fatalf("failed to query: %s", err.Error())
 	}
@@ -168,10 +168,10 @@ func Test_ServiceQuery(t *testing.T) {
 	}
 
 	db.queryFn = func(er *command.QueryRequest) ([]*command.QueryRows, error) {
-		time.Sleep(fiveSec)
+		time.Sleep(longWait)
 		return nil, nil
 	}
-	_, err = c.Query(queryRequestFromString("some SQL"), s.Addr(), oneSec)
+	_, err = c.Query(queryRequestFromString("some SQL"), s.Addr(), shortWait)
 	if err == nil {
 		t.Fatalf("failed to receive expected error")
 	}
