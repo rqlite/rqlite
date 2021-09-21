@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"net"
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -728,13 +730,15 @@ func Test_SingleNodeRecoverNetworkChange(t *testing.T) {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
 	queryTest(s0)
+
+	id := s0.ID()
 	if err := s0.Close(true); err != nil {
 		t.Fatalf("failed to close single-node store: %s", err.Error())
 	}
 
 	// Create a new node, at the same path. Will presumably have a different
 	// Raft network address, since they are randomly assigned.
-	sR, srLn := mustNewStoreAtPathsLn(s0.Path(), "", true, false)
+	sR, srLn := mustNewStoreAtPathsLn(id, s0.Path(), "", true, false)
 	if IsNewNode(sR.Path()) {
 		t.Fatalf("store detected incorrectly as new")
 	}
@@ -825,19 +829,20 @@ func Test_SingleNodeRecoverNetworkChangeSnapshot(t *testing.T) {
 		}
 	}
 
+	id := s0.ID()
 	if err := s0.Close(true); err != nil {
 		t.Fatalf("failed to close single-node store: %s", err.Error())
 	}
 
 	// Create a new node, at the same path. Will presumably have a different
 	// Raft network address, since they are randomly assigned.
-	sR, srLn := mustNewStoreAtPathsLn(s0.Path(), "", true, false)
+	sR, srLn := mustNewStoreAtPathsLn(id, s0.Path(), "", true, false)
 	if IsNewNode(sR.Path()) {
 		t.Fatalf("store detected incorrectly as new")
 	}
 
 	// Set up for Recovery during open
-	peers := fmt.Sprintf(`[{"id": "%s","address": "%s"}]`, s0.ID(), srLn.Addr().String())
+	peers := fmt.Sprintf(`[{"id": "%s","address": "%s"}]`, id, srLn.Addr().String())
 	peersPath := filepath.Join(sR.Path(), "/raft/peers.json")
 	peersInfo := filepath.Join(sR.Path(), "/raft/peers.info")
 	mustWriteFile(peersPath, peers)
@@ -1566,7 +1571,7 @@ func Test_State(t *testing.T) {
 	}
 }
 
-func mustNewStoreAtPathsLn(dataPath, sqlitePath string, inmem, fk bool) (*Store, net.Listener) {
+func mustNewStoreAtPathsLn(id, dataPath, sqlitePath string, inmem, fk bool) (*Store, net.Listener) {
 	cfg := NewDBConfig(inmem)
 	cfg.FKConstraints = fk
 	cfg.OnDiskPath = sqlitePath
@@ -1575,7 +1580,7 @@ func mustNewStoreAtPathsLn(dataPath, sqlitePath string, inmem, fk bool) (*Store,
 	s := New(ln, &Config{
 		DBConf: cfg,
 		Dir:    dataPath,
-		ID:     dataPath, // Could be any unique string.
+		ID:     id,
 	})
 	if s == nil {
 		panic("failed to create new store")
@@ -1584,7 +1589,7 @@ func mustNewStoreAtPathsLn(dataPath, sqlitePath string, inmem, fk bool) (*Store,
 }
 
 func mustNewStoreAtPaths(dataPath, sqlitePath string, inmem, fk bool) *Store {
-	s, _ := mustNewStoreAtPathsLn(dataPath, sqlitePath, inmem, fk)
+	s, _ := mustNewStoreAtPathsLn(randomString(), dataPath, sqlitePath, inmem, fk)
 	return s
 }
 
@@ -1738,6 +1743,17 @@ func asJSON(v interface{}) string {
 		panic(fmt.Sprintf("failed to JSON marshal value: %s", err.Error()))
 	}
 	return string(b)
+}
+
+func randomString() string {
+	var output strings.Builder
+	chars := "abcdedfghijklmnopqrstABCDEFGHIJKLMNOP"
+	for i := 0; i < 20; i++ {
+		random := rand.Intn(len(chars))
+		randomChar := chars[random]
+		output.WriteString(string(randomChar))
+	}
+	return output.String()
 }
 
 func testPoll(t *testing.T, f func() bool, p time.Duration, d time.Duration) {
