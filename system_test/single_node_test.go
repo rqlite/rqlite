@@ -23,7 +23,8 @@ func Test_SingleNodeBasicEndpoint(t *testing.T) {
 	}
 
 	dir := mustTempDir()
-	mux := mustNewOpenMux("")
+	mux, ln := mustNewOpenMux("")
+	defer ln.Close()
 	node = mustNodeEncryptedOnDisk(dir, true, false, mux, "", false)
 	if _, err := node.WaitForLeader(); err != nil {
 		t.Fatalf("node never became leader")
@@ -403,7 +404,8 @@ func Test_SingleNodeRestart(t *testing.T) {
 		t.Fatalf("failed to copy node test directory: %s", err)
 	}
 
-	mux := mustNewOpenMux("")
+	mux, ln := mustNewOpenMux("")
+	defer ln.Close()
 
 	node := mustNodeEncrypted(destdir, true, false, mux, "node1")
 	defer node.Deprovision()
@@ -498,7 +500,8 @@ func Test_SingleNodeReopen(t *testing.T) {
 		t.Logf("running test %s, on-disk=%v", t.Name(), onDisk)
 
 		dir := mustTempDir()
-		mux := mustNewOpenMux("")
+		mux, ln := mustNewOpenMux("")
+		defer ln.Close()
 		node := mustNodeEncrypted(dir, true, false, mux, "")
 
 		if _, err := node.WaitForLeader(); err != nil {
@@ -538,7 +541,8 @@ func Test_SingleNodeNoopReopen(t *testing.T) {
 		t.Logf("running test %s, on-disk=%v", t.Name(), onDisk)
 
 		dir := mustTempDir()
-		mux := mustNewOpenMux("")
+		mux, ln := mustNewOpenMux("")
+		defer ln.Close()
 		node := mustNodeEncryptedOnDisk(dir, true, false, mux, "", false)
 
 		if _, err := node.WaitForLeader(); err != nil {
@@ -626,7 +630,8 @@ func Test_SingleNodeNoopSnapReopen(t *testing.T) {
 		t.Logf("running test %s, on-disk=%v", t.Name(), onDisk)
 
 		dir := mustTempDir()
-		mux := mustNewOpenMux("")
+		mux, ln := mustNewOpenMux("")
+		defer ln.Close()
 		node := mustNodeEncryptedOnDisk(dir, true, false, mux, "", onDisk)
 
 		if _, err := node.WaitForLeader(); err != nil {
@@ -719,7 +724,8 @@ func Test_SingleNodeNoopSnapLogsReopen(t *testing.T) {
 		t.Logf("running test %s, on-disk=%v", t.Name(), onDisk)
 
 		dir := mustTempDir()
-		mux := mustNewOpenMux("")
+		mux, ln := mustNewOpenMux("")
+		defer ln.Close()
 		node := mustNodeEncryptedOnDisk(dir, true, false, mux, "", onDisk)
 		raftAddr = node.RaftAddr
 		t.Logf("node listening for Raft on %s", raftAddr)

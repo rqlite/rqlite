@@ -469,7 +469,7 @@ func mustNewNodeEncrypted(enableSingle, httpEncrypt, nodeEncrypt bool) *Node {
 	if nodeEncrypt {
 		mux = mustNewOpenTLSMux(x509.CertFile(dir), x509.KeyFile(dir), "")
 	} else {
-		mux = mustNewOpenMux("")
+		mux, _ = mustNewOpenMux("")
 	}
 	go mux.Serve()
 
@@ -562,7 +562,7 @@ func mustTempDir() string {
 	return path
 }
 
-func mustNewOpenMux(addr string) *tcp.Mux {
+func mustNewOpenMux(addr string) (*tcp.Mux, net.Listener) {
 	if addr == "" {
 		addr = "localhost:0"
 	}
@@ -579,7 +579,7 @@ func mustNewOpenMux(addr string) *tcp.Mux {
 	}
 
 	go mux.Serve()
-	return mux
+	return mux, ln
 }
 
 func mustNewOpenTLSMux(certFile, keyPath, addr string) *tcp.Mux {

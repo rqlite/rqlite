@@ -809,20 +809,21 @@ func Test_MultiNodeClusterRecoverSingle(t *testing.T) {
 	// Create a single node using the node's data directory. It should fail because
 	// quorum can't be met. This isn't quite right since the Raft address is also
 	// changing, but it generally proves it doesn't come up.
-	mux := mustNewOpenMux("127.0.0.1:10000")
-	failedSingle := mustNodeEncrypted(node1.Dir, true, false, mux, node1.Store.ID())
+	mux0, ln0 := mustNewOpenMux("127.0.0.1:10000")
+	failedSingle := mustNodeEncrypted(node1.Dir, true, false, mux0, node1.Store.ID())
 	_, err = failedSingle.WaitForLeader()
 	if err == nil {
 		t.Fatalf("no error waiting for leader")
 	}
 	failedSingle.Close(true)
+	ln0.Close()
 
 	// Try again, this time injecting a single-node peers file.
-	mux = mustNewOpenMux("127.0.0.1:10001")
+	mux1, ln1 := mustNewOpenMux("127.0.0.1:10001")
 	peers := fmt.Sprintf(`[{"id": "%s","address": "%s"}]`, node1.Store.ID(), "127.0.0.1:10001")
 	mustWriteFile(node1.PeersPath, peers)
 
-	okSingle := mustNodeEncrypted(node1.Dir, true, false, mux, node1.Store.ID())
+	okSingle := mustNodeEncrypted(node1.Dir, true, false, mux1, node1.Store.ID())
 	_, err = okSingle.WaitForLeader()
 	if err != nil {
 		t.Fatalf("failed waiting for leader: %s", err.Error())
@@ -831,6 +832,7 @@ func Test_MultiNodeClusterRecoverSingle(t *testing.T) {
 		t.Fatalf("got incorrect results from recovered node: %s", rows)
 	}
 	okSingle.Close(true)
+	ln1.Close()
 }
 
 // Test_MultiNodeClusterRecoverFull tests recovery of a full 3-node cluster,
@@ -838,14 +840,14 @@ func Test_MultiNodeClusterRecoverSingle(t *testing.T) {
 func Test_MultiNodeClusterRecoverFull(t *testing.T) {
 	var err error
 
-	mux1 := mustNewOpenMux("127.0.0.1:10001")
+	mux1, ln1 := mustNewOpenMux("127.0.0.1:10001")
 	node1 := mustNodeEncrypted(mustTempDir(), true, false, mux1, "1")
 	_, err = node1.WaitForLeader()
 	if err != nil {
 		t.Fatalf("failed waiting for leader: %s", err.Error())
 	}
 
-	mux2 := mustNewOpenMux("127.0.0.1:10002")
+	mux2, ln2 := mustNewOpenMux("127.0.0.1:10002")
 	node2 := mustNodeEncrypted(mustTempDir(), false, false, mux2, "2")
 	if err := node2.Join(node1); err != nil {
 		t.Fatalf("node failed to join leader: %s", err.Error())
@@ -855,7 +857,7 @@ func Test_MultiNodeClusterRecoverFull(t *testing.T) {
 		t.Fatalf("failed waiting for leader: %s", err.Error())
 	}
 
-	mux3 := mustNewOpenMux("127.0.0.1:10003")
+	mux3, ln3 := mustNewOpenMux("127.0.0.1:10003")
 	node3 := mustNodeEncrypted(mustTempDir(), false, false, mux3, "3")
 	if err := node3.Join(node1); err != nil {
 		t.Fatalf("node failed to join leader: %s", err.Error())
@@ -879,12 +881,15 @@ func Test_MultiNodeClusterRecoverFull(t *testing.T) {
 	if err := node1.Close(true); err != nil {
 		t.Fatalf("failed to close node1: %s", err.Error())
 	}
+	ln1.Close()
 	if err := node2.Close(true); err != nil {
 		t.Fatalf("failed to close node2: %s", err.Error())
 	}
+	ln2.Close()
 	if err := node3.Close(true); err != nil {
 		t.Fatalf("failed to close node3: %s", err.Error())
 	}
+	ln3.Close()
 
 	// Restart cluster, each node with different Raft addresses.
 	peers := fmt.Sprintf(`[{"id": "%s","address": "%s"}, {"id": "%s","address": "%s"}, {"id": "%s","address": "%s"}]`,
@@ -896,17 +901,20 @@ func Test_MultiNodeClusterRecoverFull(t *testing.T) {
 	mustWriteFile(node2.PeersPath, peers)
 	mustWriteFile(node3.PeersPath, peers)
 
-	mux4 := mustNewOpenMux("127.0.0.1:11001")
+	mux4, ln4 := mustNewOpenMux("127.0.0.1:11001")
 	node4 := mustNodeEncrypted(node1.Dir, false, false, mux4, "1")
 	defer node4.Deprovision()
+	defer ln4.Close()
 
-	mux5 := mustNewOpenMux("127.0.0.1:11002")
+	mux5, ln5 := mustNewOpenMux("127.0.0.1:11002")
 	node5 := mustNodeEncrypted(node2.Dir, false, false, mux5, "2")
 	defer node5.Deprovision()
+	defer ln5.Close()
 
-	mux6 := mustNewOpenMux("127.0.0.1:11003")
+	mux6, ln6 := mustNewOpenMux("127.0.0.1:11003")
 	node6 := mustNodeEncrypted(node3.Dir, false, false, mux6, "3")
 	defer node6.Deprovision()
+	defer ln6.Close()
 
 	_, err = node6.WaitForLeader()
 	if err != nil {
