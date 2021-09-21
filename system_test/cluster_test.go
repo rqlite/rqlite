@@ -757,3 +757,78 @@ func Test_MultiNodeClusterWithNonVoter(t *testing.T) {
 		}
 	}
 }
+
+// Test_MultiNodeClusterRecover tests recovery of a single node from a 3-node cluster,
+// which no longer has quorum.
+func Test_MultiNodeClusterRecoverSingle(t *testing.T) {
+	node1 := mustNewLeaderNode()
+	defer node1.Deprovision()
+
+	if _, err := node1.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`); err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if _, err := node1.Execute(`INSERT INTO foo(id, name) VALUES(1, "fiona")`); err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if rows, _ := node1.Query(`SELECT COUNT(*) FROM foo`); rows != `{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[1]]}]}` {
+		t.Fatalf("got incorrect results from node: %s", rows)
+	}
+
+	// Join a second and third nodes, which will get database state via snapshots.
+	node2 := mustNewNode(false)
+	defer node2.Deprovision()
+	if err := node2.Join(node1); err != nil {
+		t.Fatalf("node failed to join leader: %s", err.Error())
+	}
+	_, err := node2.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for leader: %s", err.Error())
+	}
+
+	node3 := mustNewNode(false)
+	defer node3.Deprovision()
+	if err := node3.Join(node1); err != nil {
+		t.Fatalf("node failed to join leader: %s", err.Error())
+	}
+	_, err = node3.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for leader: %s", err.Error())
+	}
+
+	// Shutdown all nodes
+	if err := node1.Close(true); err != nil {
+		t.Fatalf("failed to close node1: %s", err.Error())
+	}
+	if err := node2.Close(true); err != nil {
+		t.Fatalf("failed to close node2: %s", err.Error())
+	}
+	if err := node3.Close(true); err != nil {
+		t.Fatalf("failed to close node3: %s", err.Error())
+	}
+
+	// Create a single node using the node's data directory. It should fail because
+	// quorum can't be met. This isn't quite right since the Raft address is also
+	// changing, but it generally proves it doesn't come up.
+	mux := mustNewOpenMux("127.0.0.1:10000")
+	failedSingle := mustNodeEncrypted(node1.Dir, true, false, mux, node1.Store.ID())
+	_, err = failedSingle.WaitForLeader()
+	if err == nil {
+		t.Fatalf("no error waiting for leader")
+	}
+	failedSingle.Close(true)
+
+	// Try again, this time injecting a single-node peers file.
+	mux = mustNewOpenMux("127.0.0.1:10001")
+	peers := fmt.Sprintf(`[{"id": "%s","address": "%s"}]`, node1.Store.ID(), "127.0.0.1:10001")
+	mustWriteFile(node1.PeersPath, peers)
+
+	okSingle := mustNodeEncrypted(node1.Dir, true, false, mux, node1.Store.ID())
+	_, err = okSingle.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for leader: %s", err.Error())
+	}
+	if rows, _ := okSingle.Query(`SELECT COUNT(*) FROM foo`); rows != `{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[1]]}]}` {
+		t.Fatalf("got incorrect results from recovered node: %s", rows)
+	}
+	okSingle.Close(true)
+}

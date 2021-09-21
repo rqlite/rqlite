@@ -37,6 +37,7 @@ type Node struct {
 	NodeKeyPath  string
 	HTTPCertPath string
 	HTTPKeyPath  string
+	PeersPath    string
 	Store        *store.Store
 	Service      *httpd.Service
 	Cluster      *cluster.Service
@@ -491,6 +492,7 @@ func mustNodeEncryptedOnDisk(dir string, enableSingle, httpEncrypt bool, mux *tc
 		NodeKeyPath:  nodeKeyPath,
 		HTTPCertPath: httpCertPath,
 		HTTPKeyPath:  httpKeyPath,
+		PeersPath:    filepath.Join(dir, "raft/peers.json"),
 	}
 
 	dbConf := store.NewDBConfig(!onDisk)
@@ -643,6 +645,13 @@ func asJSON(v interface{}) string {
 func isJSON(s string) bool {
 	var js map[string]interface{}
 	return json.Unmarshal([]byte(s), &js) == nil
+}
+
+func mustWriteFile(path, contents string) {
+	err := os.WriteFile(path, []byte(contents), 0644)
+	if err != nil {
+		panic("failed to write to file")
+	}
 }
 
 /* MIT License
