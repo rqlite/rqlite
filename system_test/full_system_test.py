@@ -40,7 +40,9 @@ class Node(object):
     if api_adv is None:
       api_adv = api_addr
 
+    self.dir = dir
     self.path = path
+    self.peers_path = os.path.join(self.dir, "raft/peers.json")
     self.node_id = node_id
     self.api_addr = api_addr
     self.api_adv = api_adv
@@ -49,7 +51,6 @@ class Node(object):
     self.raft_voter = raft_voter
     self.raft_snap_threshold = raft_snap_threshold
     self.raft_snap_int = raft_snap_int
-    self.dir = dir
     self.on_disk = on_disk
     self.process = None
     self.stdout_file = os.path.join(dir, 'rqlited.log')
@@ -164,7 +165,10 @@ class Node(object):
     while lr == None or lr['addr'] == '':
       if t > timeout:
         raise Exception('timeout')
-      lr = self.status()['store']['leader']
+      try:
+        lr = self.status()['store']['leader']
+      except requests.exceptions.ConnectionError:
+        pass
       time.sleep(1)
       t+=1
 
@@ -288,6 +292,11 @@ class Node(object):
     if r.status_code == 301:
       return "%s://%s" % (urlparse(r.headers['Location']).scheme, urlparse(r.headers['Location']).netloc)
 
+  def set_peers(self, peers):
+    f = open(self.peers_path, "w")
+    f.write(json.dumps(peers))
+    f.close()
+
   def _status_url(self):
     return 'http://' + self.APIAddr() + '/status'
   def _nodes_url(self):
@@ -333,7 +342,8 @@ def random_addr():
 
 def deprovision_node(node):
   node.stop()
-  shutil.rmtree(node.dir)
+  if os.path.isdir(node.dir):
+    shutil.rmtree(node.dir)
   node = None
 
 class Cluster(object):
@@ -351,6 +361,9 @@ class Cluster(object):
           return n
       time.sleep(1)
       t+=1
+  def stop(self):
+    for n in self.nodes:
+      n.stop()
   def followers(self):
     return [n for n in self.nodes if n.is_follower()]
   def deprovision(self):
@@ -593,6 +606,69 @@ class TestEndToEndAdvAddr(TestEndToEnd):
     n2.wait_for_leader()
 
     self.cluster = Cluster([n0, n1, n2])
+
+class TestClusterRecovery(unittest.TestCase):
+  '''Test that a cluster can recover after all Raft network addresses change'''
+  def test(self):
+    n0 = Node(RQLITED_PATH, '0')
+    n0.start()
+    n0.wait_for_leader()
+
+    n1 = Node(RQLITED_PATH, '1')
+    n1.start(join=n0.APIAddr())
+    n1.wait_for_leader()
+
+    n2 = Node(RQLITED_PATH, '2')
+    n2.start(join=n0.APIAddr())
+    n2.wait_for_leader()
+
+    self.nodes = [n0, n1, n2]
+
+    j = n0.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
+    self.assertEqual(str(j), "{u'results': [{}]}")
+    j = n0.execute('INSERT INTO foo(name) VALUES("fiona")')
+    fsmIdx = n0.wait_for_all_fsm()
+    self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
+    j = n0.query('SELECT * FROM foo')
+    self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
+
+    n0.stop()
+    n1.stop()
+    n2.stop()
+
+    # Create new cluster from existing data, but with new network addresses.
+    addr3 = "127.0.0.1:10003"
+    addr4 = "127.0.0.1:10004"
+    addr5 = "127.0.0.1:10005"
+
+    peers = [
+      {"id": "0", "address": addr3},
+      {"id": "1", "address": addr4},
+      {"id": "2", "address": addr5},
+    ]
+
+    n3 = Node(RQLITED_PATH, '0', dir=n0.dir, raft_addr=addr3)
+    n4 = Node(RQLITED_PATH, '1', dir=n1.dir, raft_addr=addr4)
+    n5 = Node(RQLITED_PATH, '2', dir=n2.dir, raft_addr=addr5)
+    self.nodes = self.nodes + [n3, n4, n5]
+
+    n3.set_peers(peers)
+    n4.set_peers(peers)
+    n5.set_peers(peers)
+
+    n3.start(wait=False)
+    n4.start(wait=False)
+    n5.start(wait=False)
+
+    # New cluster ok?
+    n3.wait_for_leader()
+
+    j = n3.query('SELECT * FROM foo')
+    self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
+
+  def tearDown(self):
+    for n in self.nodes:
+      deprovision_node(n)
 
 class TestRequestForwarding(unittest.TestCase):
   '''Test that followers transparently forward requests to leaders'''
