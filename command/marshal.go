@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"io/ioutil"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -158,16 +158,16 @@ func UnmarshalSubCommand(c *Command, m proto.Message) error {
 	if c.Compressed {
 		gz, err := gzip.NewReader(bytes.NewReader(b))
 		if err != nil {
-			fmt.Errorf("unmarshal sub gzip NewReader: %s", err)
+			return fmt.Errorf("unmarshal sub gzip NewReader: %s", err)
 		}
 
 		ub, err := ioutil.ReadAll(gz)
 		if err != nil {
-			fmt.Errorf("unmarshal sub gzip ReadAll: %s", err)
+			return fmt.Errorf("unmarshal sub gzip ReadAll: %s", err)
 		}
 
 		if err := gz.Close(); err != nil {
-			fmt.Errorf("unmarshal sub gzip Close: %s", err)
+			return fmt.Errorf("unmarshal sub gzip Close: %s", err)
 		}
 		b = ub
 	}

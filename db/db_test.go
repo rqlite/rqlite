@@ -12,7 +12,7 @@ import (
 
 	"github.com/rqlite/rqlite/command"
 	"github.com/rqlite/rqlite/command/encoding"
-	"github.com/rqlite/rqlite/db/testdata"
+	text "github.com/rqlite/rqlite/db/testdata"
 	"github.com/rqlite/rqlite/testdata/chinook"
 )
 
@@ -21,7 +21,7 @@ import (
  */
 
 func Test_DbFileCreation(t *testing.T) {
-	dir, err := ioutil.TempDir("", "rqlite-test-")
+	dir, _ := ioutil.TempDir("", "rqlite-test-")
 	defer os.RemoveAll(dir)
 	dbPath := path.Join(dir, "test_db")
 
@@ -1686,39 +1686,6 @@ func mustCreateInMemoryDatabaseFK() *DB {
 		panic("failed to open in-memory database with foreign key constraints")
 	}
 	return db
-}
-
-func mustWriteAndOpenDatabase(b []byte) (*DB, string) {
-	var err error
-	f := mustTempFile()
-	err = ioutil.WriteFile(f, b, 0660)
-	if err != nil {
-		panic("failed to write file")
-	}
-
-	db, err := Open(f, false)
-	if err != nil {
-		panic("failed to open database")
-	}
-	return db, f
-}
-
-// mustExecute executes a statement, and panics on failure. Used for statements
-// that should never fail, even taking into account test setup.
-func mustExecute(db *DB, stmt string) {
-	_, err := db.ExecuteStringStmt(stmt)
-	if err != nil {
-		panic(fmt.Sprintf("failed to execute statement: %s", err.Error()))
-	}
-}
-
-// mustQuery executes a statement, and panics on failure. Used for statements
-// that should never fail, even taking into account test setup.
-func mustQuery(db *DB, stmt string) {
-	_, err := db.QueryStringStmt(stmt)
-	if err != nil {
-		panic(fmt.Sprintf("failed to query: %s", err.Error()))
-	}
 }
 
 func asJSON(v interface{}) string {

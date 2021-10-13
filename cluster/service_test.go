@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"context"
 	"crypto/tls"
 	"net"
 	"os"
@@ -13,7 +14,7 @@ import (
 
 func Test_NewServiceOpenClose(t *testing.T) {
 	ml := mustNewMockTransport()
-	s := New(ml, mustNewMockDatabase())
+	s := New(context.TODO(), ml, mustNewMockDatabase())
 	if s == nil {
 		t.Fatalf("failed to create cluster service")
 	}
@@ -31,7 +32,7 @@ func Test_NewServiceOpenClose(t *testing.T) {
 
 func Test_NewServiceSetGetAPIAddr(t *testing.T) {
 	ml := mustNewMockTransport()
-	s := New(ml, mustNewMockDatabase())
+	s := New(context.TODO(), ml, mustNewMockDatabase())
 	if s == nil {
 		t.Fatalf("failed to create cluster service")
 	}
@@ -52,7 +53,7 @@ func Test_NewServiceSetGetAPIAddr(t *testing.T) {
 
 func Test_NewServiceSetGetNodeAPIAddr(t *testing.T) {
 	ml := mustNewMockTransport()
-	s := New(ml, mustNewMockDatabase())
+	s := New(context.TODO(), ml, mustNewMockDatabase())
 	if s == nil {
 		t.Fatalf("failed to create cluster service")
 	}
@@ -97,7 +98,7 @@ func Test_NewServiceSetGetNodeAPIAddr(t *testing.T) {
 
 func Test_NewServiceSetGetNodeAPIAddrLocal(t *testing.T) {
 	ml := mustNewMockTransport()
-	s := New(ml, mustNewMockDatabase())
+	s := New(context.TODO(), ml, mustNewMockDatabase())
 	if s == nil {
 		t.Fatalf("failed to create cluster service")
 	}
@@ -156,7 +157,7 @@ func Test_NewServiceSetGetNodeAPIAddrLocal(t *testing.T) {
 
 func Test_NewServiceSetGetNodeAPIAddrTLS(t *testing.T) {
 	ml := mustNewMockTLSTransport()
-	s := New(ml, mustNewMockDatabase())
+	s := New(context.TODO(), ml, mustNewMockDatabase())
 	if s == nil {
 		t.Fatalf("failed to create cluster service")
 	}

@@ -463,7 +463,7 @@ func (db *DB) Execute(req *command.Request, xTime bool) ([]*command.ExecuteResul
 		}
 		result.RowsAffected = ra
 		if xTime {
-			result.Time = time.Now().Sub(start).Seconds()
+			result.Time = time.Since(start).Seconds()
 		}
 		allResults = append(allResults, result)
 	}

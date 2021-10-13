@@ -2,6 +2,7 @@ package system
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -67,8 +68,8 @@ func (n *Node) Deprovision() {
 }
 
 // WaitForLeader blocks for up to 10 seconds until the node detects a leader.
-func (n *Node) WaitForLeader() (string, error) {
-	return n.Store.WaitForLeader(10 * time.Second)
+func (n *Node) WaitForLeader(ctx context.Context) (string, error) {
+	return n.Store.WaitForLeader(ctx, 10*time.Second)
 }
 
 // Execute executes a single statement against the node.
@@ -399,10 +400,11 @@ func (c Cluster) Followers() ([]*Node, error) {
 
 // RemoveNode removes the given node from the list of nodes representing
 // a cluster.
-func (c Cluster) RemoveNode(node *Node) {
-	for i, n := range c {
+func (c *Cluster) RemoveNode(node *Node) {
+	for i, n := range *c {
 		if n.RaftAddr == node.RaftAddr {
-			c = append(c[:i], c[i+1:]...)
+
+			*c = append((*c)[:i], (*c)[i+1:]...)
 			return
 		}
 	}
@@ -459,17 +461,17 @@ func DoJoinRequest(nodeAddr, raftID, raftAddr string, voter bool) (*http.Respons
 	return resp, nil
 }
 
-func mustNewNode(enableSingle bool) *Node {
-	return mustNewNodeEncrypted(enableSingle, false, false)
+func mustNewNode(ctx context.Context, enableSingle bool) *Node {
+	return mustNewNodeEncrypted(ctx, enableSingle, false, false)
 }
 
-func mustNewNodeEncrypted(enableSingle, httpEncrypt, nodeEncrypt bool) *Node {
+func mustNewNodeEncrypted(ctx context.Context, enableSingle, httpEncrypt, nodeEncrypt bool) *Node {
 	dir := mustTempDir()
 	var mux *tcp.Mux
 	if nodeEncrypt {
-		mux = mustNewOpenTLSMux(x509.CertFile(dir), x509.KeyFile(dir), "")
+		mux = mustNewOpenTLSMux(ctx, x509.CertFile(dir), x509.KeyFile(dir), "")
 	} else {
-		mux, _ = mustNewOpenMux("")
+		mux, _ = mustNewOpenMux(ctx, "")
 	}
 	go mux.Serve()
 
@@ -502,7 +504,7 @@ func mustNodeEncryptedOnDisk(dir string, enableSingle, httpEncrypt bool, mux *tc
 	if id == "" {
 		id = raftTn.Addr().String()
 	}
-	node.Store = store.New(raftTn, &store.Config{
+	node.Store = store.New(context.TODO(), raftTn, &store.Config{
 		DBConf: dbConf,
 		Dir:    node.Dir,
 		ID:     id,
@@ -517,7 +519,7 @@ func mustNodeEncryptedOnDisk(dir string, enableSingle, httpEncrypt bool, mux *tc
 	node.RaftAddr = node.Store.Addr()
 	node.ID = node.Store.ID()
 
-	clstr := cluster.New(mux.Listen(cluster.MuxClusterHeader), node.Store)
+	clstr := cluster.New(context.TODO(), mux.Listen(cluster.MuxClusterHeader), node.Store)
 	if err := clstr.Open(); err != nil {
 		panic("failed to open Cluster service)")
 	}
@@ -525,7 +527,7 @@ func mustNodeEncryptedOnDisk(dir string, enableSingle, httpEncrypt bool, mux *tc
 
 	clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, false, true)
 	clstrClient := cluster.NewClient(clstrDialer)
-	node.Service = httpd.New("localhost:0", node.Store, clstrClient, nil)
+	node.Service = httpd.New(context.TODO(), "localhost:0", node.Store, clstrClient, nil)
 	node.Service.Expvar = true
 	if httpEncrypt {
 		node.Service.CertFile = node.HTTPCertPath
@@ -544,9 +546,9 @@ func mustNodeEncryptedOnDisk(dir string, enableSingle, httpEncrypt bool, mux *tc
 	return node
 }
 
-func mustNewLeaderNode() *Node {
-	node := mustNewNode(true)
-	if _, err := node.WaitForLeader(); err != nil {
+func mustNewLeaderNode(ctx context.Context) *Node {
+	node := mustNewNode(ctx, true)
+	if _, err := node.WaitForLeader(ctx); err != nil {
 		node.Deprovision()
 		panic("node never became leader")
 	}
@@ -562,7 +564,7 @@ func mustTempDir() string {
 	return path
 }
 
-func mustNewOpenMux(addr string) (*tcp.Mux, net.Listener) {
+func mustNewOpenMux(ctx context.Context, addr string) (*tcp.Mux, net.Listener) {
 	if addr == "" {
 		addr = "localhost:0"
 	}
@@ -573,7 +575,7 @@ func mustNewOpenMux(addr string) (*tcp.Mux, net.Listener) {
 	}
 
 	var mux *tcp.Mux
-	mux, err = tcp.NewMux(ln, nil)
+	mux, err = tcp.NewMux(ctx, ln, nil)
 	if err != nil {
 		panic(fmt.Sprintf("failed to create node-to-node mux: %s", err.Error()))
 	}

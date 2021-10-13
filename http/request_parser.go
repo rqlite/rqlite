@@ -2,8 +2,8 @@ package http
 
 import (
 	"encoding/json"
-	"errors"
 
+	"github.com/pastelnetwork/gonode/common/errors"
 	"github.com/rqlite/rqlite/command"
 )
 

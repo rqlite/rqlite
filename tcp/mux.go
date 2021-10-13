@@ -1,6 +1,7 @@
 package tcp
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
@@ -97,7 +98,7 @@ type Mux struct {
 
 // NewMux returns a new instance of Mux for ln. If adv is nil,
 // then the addr of ln is used.
-func NewMux(ln net.Listener, adv net.Addr) (*Mux, error) {
+func NewMux(ctx context.Context, ln net.Listener, adv net.Addr) (*Mux, error) {
 	addr := adv
 	if addr == nil {
 		addr = ln.Addr()
@@ -114,8 +115,8 @@ func NewMux(ln net.Listener, adv net.Addr) (*Mux, error) {
 
 // NewTLSMux returns a new instance of Mux for ln, and encrypts all traffic
 // using TLS. If adv is nil, then the addr of ln is used.
-func NewTLSMux(ln net.Listener, adv net.Addr, cert, key, caCert string) (*Mux, error) {
-	mux, err := NewMux(ln, adv)
+func NewTLSMux(ctx context.Context, ln net.Listener, adv net.Addr, cert, key, caCert string) (*Mux, error) {
+	mux, err := NewMux(ctx, ln, adv)
 	if err != nil {
 		return nil, err
 	}
@@ -269,16 +270,6 @@ func (ln *listener) Close() error { return nil }
 
 // Addr always returns nil
 func (ln *listener) Addr() net.Addr { return nil }
-
-// newTLSListener returns a net listener which encrypts the traffic using TLS.
-func newTLSListener(ln net.Listener, certFile, keyFile, caCertFile string) (net.Listener, error) {
-	config, err := createTLSConfig(certFile, keyFile, caCertFile)
-	if err != nil {
-		return nil, err
-	}
-
-	return tls.NewListener(ln, config), nil
-}
 
 // createTLSConfig returns a TLS config from the given cert, key and optionally
 // Certificate Authority cert.

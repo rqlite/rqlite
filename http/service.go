@@ -3,15 +3,14 @@
 package http
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
-	"errors"
 	"expvar"
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"net"
 	"net/http"
 	"net/http/pprof"
@@ -21,6 +20,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pastelnetwork/gonode/common/errors"
+	"github.com/pastelnetwork/gonode/common/log"
 	"github.com/rqlite/rqlite/command"
 	"github.com/rqlite/rqlite/command/encoding"
 	"github.com/rqlite/rqlite/store"
@@ -67,6 +68,8 @@ type Store interface {
 
 	// Backup wites backup of the node state to dst
 	Backup(leader bool, f store.BackupFormat, dst io.Writer) error
+
+	TransferLeadership(serverID, serverAddr string) error
 }
 
 // Cluster is the interface node API services must provide
@@ -228,12 +231,12 @@ type Service struct {
 
 	BuildInfo map[string]interface{}
 
-	logger *log.Logger
+	ctx context.Context
 }
 
 // New returns an uninitialized HTTP service. If credentials is nil, then
 // the service performs no authentication and authorization checks.
-func New(addr string, store Store, cluster Cluster, credentials CredentialStore) *Service {
+func New(ctx context.Context, addr string, store Store, cluster Cluster, credentials CredentialStore) *Service {
 	return &Service{
 		addr:            addr,
 		store:           store,
@@ -241,7 +244,7 @@ func New(addr string, store Store, cluster Cluster, credentials CredentialStore)
 		start:           time.Now(),
 		statuses:        make(map[string]Statuser),
 		credentialStore: credentials,
-		logger:          log.New(os.Stderr, "[http] ", log.LstdFlags),
+		ctx:             ctx,
 	}
 }
 
@@ -267,17 +270,17 @@ func (s *Service) Start() error {
 		if err != nil {
 			return err
 		}
-		s.logger.Printf("secure HTTPS server enabled with cert %s, key %s", s.CertFile, s.KeyFile)
+		log.WithContext(s.ctx).Infof("secure HTTPS server enabled with cert %s, key %s", s.CertFile, s.KeyFile)
 	}
 	s.ln = ln
 
 	go func() {
 		err := server.Serve(s.ln)
 		if err != nil {
-			s.logger.Println("HTTP service Serve() returned:", err.Error())
+			log.WithContext(s.ctx).WithError(err).Error("HTTP service Serve() returned")
 		}
 	}()
-	s.logger.Println("service listening on", s.Addr())
+	log.WithContext(s.ctx).Infof("service listening on: %v", s.Addr())
 
 	return nil
 }
@@ -285,7 +288,6 @@ func (s *Service) Start() error {
 // Close closes the service.
 func (s *Service) Close() {
 	s.ln.Close()
-	return
 }
 
 // ServeHTTP allows Service to serve HTTP requests.
@@ -383,7 +385,7 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.store.Join(remoteID.(string), remoteAddr.(string), voter.(bool)); err != nil {
-		if err == store.ErrNotLeader {
+		if errors.Is(err, store.ErrNotLeader) {
 			leaderAPIAddr := s.LeaderAPIAddr()
 			if leaderAPIAddr == "" {
 				stats.Add(numLeaderNotFound, 1)
@@ -436,7 +438,7 @@ func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.store.Remove(remoteID); err != nil {
-		if err == store.ErrNotLeader {
+		if errors.Is(err, store.ErrNotLeader) {
 			leaderAPIAddr := s.LeaderAPIAddr()
 			if leaderAPIAddr == "" {
 				stats.Add(numLeaderNotFound, 1)
@@ -533,7 +535,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 
 	results, err := s.store.Execute(er)
 	if err != nil {
-		if err == store.ErrNotLeader {
+		if errors.Is(err, store.ErrNotLeader) {
 			leaderAPIAddr := s.LeaderAPIAddr()
 			if leaderAPIAddr == "" {
 				stats.Add(numLeaderNotFound, 1)
@@ -841,7 +843,7 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 	}
 
 	results, resultsErr := s.store.Execute(er)
-	if resultsErr != nil && resultsErr == store.ErrNotLeader {
+	if resultsErr != nil && errors.Is(resultsErr, store.ErrNotLeader) {
 		if redirect {
 			leaderAPIAddr := s.LeaderAPIAddr()
 			if leaderAPIAddr == "" {
@@ -931,7 +933,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 	}
 
 	results, resultsErr := s.store.Query(qr)
-	if resultsErr != nil && resultsErr == store.ErrNotLeader {
+	if resultsErr != nil && errors.Is(resultsErr, store.ErrNotLeader) {
 		if redirect {
 			leaderAPIAddr := s.LeaderAPIAddr()
 			if leaderAPIAddr == "" {
@@ -1143,7 +1145,7 @@ func (s *Service) writeResponse(w http.ResponseWriter, r *http.Request, j *Respo
 	}
 	_, err = w.Write(b)
 	if err != nil {
-		s.logger.Println("writing response failed:", err.Error())
+		log.WithContext(s.ctx).WithError(err).Error("writing response failed")
 	}
 }
 
@@ -1380,24 +1382,6 @@ func executeRequestFromStrings(s []string, timings, tx bool) *command.ExecuteReq
 
 	}
 	return &command.ExecuteRequest{
-		Request: &command.Request{
-			Statements:  stmts,
-			Transaction: tx,
-		},
-		Timings: timings,
-	}
-}
-
-// queryRequestFromStrings converts a slice of strings into a command.QueryRequest
-func queryRequestFromStrings(s []string, timings, tx bool) *command.QueryRequest {
-	stmts := make([]*command.Statement, len(s))
-	for i := range s {
-		stmts[i] = &command.Statement{
-			Sql: s[i],
-		}
-
-	}
-	return &command.QueryRequest{
 		Request: &command.Request{
 			Statements:  stmts,
 			Transaction: tx,

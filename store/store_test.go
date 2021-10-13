@@ -2,6 +2,7 @@ package store
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -26,7 +27,7 @@ func Test_OpenStoreSingleNode(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 
-	_, err := s.WaitForLeader(10 * time.Second)
+	_, err := s.WaitForLeader(context.TODO(), 10*time.Second)
 	if err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
@@ -50,7 +51,7 @@ func Test_OpenStoreCloseSingleNode(t *testing.T) {
 	if err := s.Open(true); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
-	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+	if _, err := s.WaitForLeader(context.TODO(), 10*time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 	er := executeRequestFromStrings([]string{
@@ -75,7 +76,7 @@ func Test_OpenStoreCloseSingleNode(t *testing.T) {
 	if err := s.Open(true); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
-	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+	if _, err := s.WaitForLeader(context.TODO(), 10*time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
@@ -110,7 +111,7 @@ func Test_SingleNodeInMemExecuteQuery(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
-	_, err := s.WaitForLeader(10 * time.Second)
+	_, err := s.WaitForLeader(context.TODO(), 10*time.Second)
 	if err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
@@ -147,7 +148,7 @@ func Test_SingleNodeInMemExecuteQueryFail(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
-	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+	if _, err := s.WaitForLeader(context.TODO(), 10*time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
@@ -171,7 +172,7 @@ func Test_SingleNodeFileExecuteQuery(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
-	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+	if _, err := s.WaitForLeader(context.TODO(), 10*time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
@@ -245,7 +246,7 @@ func Test_SingleNodeExecuteQueryTx(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
-	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+	if _, err := s.WaitForLeader(context.TODO(), 10*time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
@@ -295,7 +296,7 @@ func Test_SingleNodeInMemFK(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
-	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+	if _, err := s.WaitForLeader(context.TODO(), 10*time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
@@ -308,7 +309,7 @@ func Test_SingleNodeInMemFK(t *testing.T) {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
 
-	res, err := s.Execute(executeRequestFromString("INSERT INTO bar(fooid) VALUES(1)", false, false))
+	res, _ := s.Execute(executeRequestFromString("INSERT INTO bar(fooid) VALUES(1)", false, false))
 	if got, exp := asJSON(res), `[{"error":"FOREIGN KEY constraint failed"}]`; exp != got {
 		t.Fatalf("unexpected results for execute\nexp: %s\ngot: %s", exp, got)
 	}
@@ -324,7 +325,7 @@ func Test_SingleNodeSQLitePath(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
-	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+	if _, err := s.WaitForLeader(context.TODO(), 10*time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
@@ -367,7 +368,7 @@ func Test_SingleNodeBackupBinary(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
-	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+	if _, err := s.WaitForLeader(context.TODO(), 10*time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
@@ -382,9 +383,8 @@ COMMIT;
 		t.Fatalf("failed to load simple dump: %s", err.Error())
 	}
 
-	f, err := ioutil.TempFile("", "rqlite-baktest-")
+	f, _ := ioutil.TempFile("", "rqlite-baktest-")
 	defer os.Remove(f.Name())
-	s.logger.Printf("backup file is %s", f.Name())
 
 	if err := s.Backup(true, BackupBinary, f); err != nil {
 		t.Fatalf("Backup failed %s", err.Error())
@@ -417,7 +417,7 @@ func Test_SingleNodeBackupText(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
-	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+	if _, err := s.WaitForLeader(context.TODO(), 10*time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
@@ -432,9 +432,8 @@ COMMIT;
 		t.Fatalf("failed to load simple dump: %s", err.Error())
 	}
 
-	f, err := ioutil.TempFile("", "rqlite-baktest-")
+	f, _ := ioutil.TempFile("", "rqlite-baktest-")
 	defer os.Remove(f.Name())
-	s.logger.Printf("backup file is %s", f.Name())
 
 	if err := s.Backup(true, BackupSQL, f); err != nil {
 		t.Fatalf("Backup failed %s", err.Error())
@@ -458,7 +457,7 @@ func Test_SingleNodeLoad(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
-	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+	if _, err := s.WaitForLeader(context.TODO(), 10*time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
@@ -496,7 +495,7 @@ func Test_SingleNodeSingleCommandTrigger(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
-	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+	if _, err := s.WaitForLeader(context.TODO(), 10*time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
@@ -538,7 +537,7 @@ func Test_SingleNodeLoadNoStatements(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
-	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+	if _, err := s.WaitForLeader(context.TODO(), 10*time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
@@ -560,7 +559,7 @@ func Test_SingleNodeLoadEmpty(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
-	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+	if _, err := s.WaitForLeader(context.TODO(), 10*time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
@@ -579,7 +578,7 @@ func Test_SingleNodeLoadChinook(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
-	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+	if _, err := s.WaitForLeader(context.TODO(), 10*time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
@@ -638,7 +637,7 @@ func Test_SingleNodeRecoverNoChange(t *testing.T) {
 	if err := s.Open(true); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
-	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+	if _, err := s.WaitForLeader(context.TODO(), 10*time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
@@ -678,7 +677,7 @@ func Test_SingleNodeRecoverNoChange(t *testing.T) {
 	if err := s.Open(true); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
-	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+	if _, err := s.WaitForLeader(context.TODO(), 10*time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 	queryTest()
@@ -702,7 +701,7 @@ func Test_SingleNodeRecoverNetworkChange(t *testing.T) {
 	if err := s0.Open(true); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
-	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
+	if _, err := s0.WaitForLeader(context.TODO(), 10*time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
@@ -752,7 +751,7 @@ func Test_SingleNodeRecoverNetworkChange(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 
-	if _, err := sR.WaitForLeader(10 * time.Second); err != nil {
+	if _, err := sR.WaitForLeader(context.TODO(), 10*time.Second); err != nil {
 		t.Fatalf("Error waiting for leader on recovered node: %s", err)
 	}
 
@@ -779,7 +778,7 @@ func Test_SingleNodeRecoverNetworkChangeSnapshot(t *testing.T) {
 	if err := s0.Open(true); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
-	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
+	if _, err := s0.WaitForLeader(context.TODO(), 10*time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
@@ -850,7 +849,7 @@ func Test_SingleNodeRecoverNetworkChangeSnapshot(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 
-	if _, err := sR.WaitForLeader(10 * time.Second); err != nil {
+	if _, err := sR.WaitForLeader(context.TODO(), 10*time.Second); err != nil {
 		t.Fatalf("Error waiting for leader on recovered node: %s", err)
 	}
 	queryTest(sR, 10)
@@ -873,7 +872,7 @@ func Test_MultiNodeJoinRemove(t *testing.T) {
 		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
 	}
 	defer s0.Close(true)
-	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
+	if _, err := s0.WaitForLeader(context.TODO(), 10*time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
@@ -893,7 +892,7 @@ func Test_MultiNodeJoinRemove(t *testing.T) {
 		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
 	}
 
-	got, err := s1.WaitForLeader(10 * time.Second)
+	got, err := s1.WaitForLeader(context.TODO(), 10*time.Second)
 	if err != nil {
 		t.Fatalf("failed to get leader address on follower: %s", err.Error())
 	}
@@ -945,7 +944,7 @@ func Test_MultiNodeJoinNonVoterRemove(t *testing.T) {
 		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
 	}
 	defer s0.Close(true)
-	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
+	if _, err := s0.WaitForLeader(context.TODO(), 10*time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
@@ -965,7 +964,7 @@ func Test_MultiNodeJoinNonVoterRemove(t *testing.T) {
 		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
 	}
 
-	if _, err := s1.WaitForLeader(10 * time.Second); err != nil {
+	if _, err := s1.WaitForLeader(context.TODO(), 10*time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
@@ -1021,7 +1020,7 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
 	}
 	defer s0.Close(true)
-	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
+	if _, err := s0.WaitForLeader(context.TODO(), 10*time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
@@ -1105,7 +1104,7 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 
 	// Wait until the 3 log entries have been applied to the non-voting follower,
 	// and then query.
-	if err := s2.WaitForAppliedIndex(3, 5*time.Second); err != nil {
+	if err := s2.WaitForAppliedIndex(context.TODO(), 3, 5*time.Second); err != nil {
 		t.Fatalf("error waiting for follower to apply index: %s:", err.Error())
 	}
 
@@ -1139,7 +1138,7 @@ func Test_MultiNodeExecuteQueryFreshness(t *testing.T) {
 		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
 	}
 	defer s0.Close(true)
-	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
+	if _, err := s0.WaitForLeader(context.TODO(), 10*time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
@@ -1179,7 +1178,7 @@ func Test_MultiNodeExecuteQueryFreshness(t *testing.T) {
 
 	// Wait until the 3 log entries have been applied to the follower,
 	// and then query.
-	if err := s1.WaitForAppliedIndex(3, 5*time.Second); err != nil {
+	if err := s1.WaitForAppliedIndex(context.TODO(), 3, 5*time.Second); err != nil {
 		t.Fatalf("error waiting for follower to apply index: %s:", err.Error())
 	}
 
@@ -1269,7 +1268,7 @@ func Test_StoreLogTruncationMultinode(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s0.Close(true)
-	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
+	if _, err := s0.WaitForLeader(context.TODO(), 10*time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
@@ -1316,12 +1315,12 @@ func Test_StoreLogTruncationMultinode(t *testing.T) {
 	if err := s0.Join(s1.ID(), s1.Addr(), true); err != nil {
 		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
 	}
-	if _, err := s1.WaitForLeader(10 * time.Second); err != nil {
+	if _, err := s1.WaitForLeader(context.TODO(), 10*time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 	// Wait until the log entries have been applied to the follower,
 	// and then query.
-	if err := s1.WaitForAppliedIndex(8, 5*time.Second); err != nil {
+	if err := s1.WaitForAppliedIndex(context.TODO(), 8, 5*time.Second); err != nil {
 		t.Fatalf("error waiting for follower to apply index: %s:", err.Error())
 	}
 	qr := queryRequestFromString("SELECT count(*) FROM foo", false, true)
@@ -1346,7 +1345,7 @@ func Test_SingleNodeSnapshotOnDisk(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
-	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+	if _, err := s.WaitForLeader(context.TODO(), 10*time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
@@ -1410,7 +1409,7 @@ func Test_SingleNodeSnapshotInMem(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
-	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+	if _, err := s.WaitForLeader(context.TODO(), 10*time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
@@ -1491,7 +1490,7 @@ func Test_SingleNodeRestoreNoncompressed(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
-	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+	if _, err := s.WaitForLeader(context.TODO(), 10*time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
@@ -1524,7 +1523,7 @@ func Test_SingleNodeNoop(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s0.Close(true)
-	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
+	if _, err := s0.WaitForLeader(context.TODO(), 10*time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
@@ -1544,7 +1543,7 @@ func Test_IsLeader(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
-	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+	if _, err := s.WaitForLeader(context.TODO(), 10*time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
@@ -1561,7 +1560,7 @@ func Test_State(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
-	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+	if _, err := s.WaitForLeader(context.TODO(), 10*time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
@@ -1577,7 +1576,7 @@ func mustNewStoreAtPathsLn(id, dataPath, sqlitePath string, inmem, fk bool) (*St
 	cfg.OnDiskPath = sqlitePath
 
 	ln := mustMockLister("localhost:0")
-	s := New(ln, &Config{
+	s := New(context.TODO(), ln, &Config{
 		DBConf: cfg,
 		Dir:    dataPath,
 		ID:     id,
@@ -1618,10 +1617,6 @@ func (m *mockSnapshotSink) ID() string {
 
 func (m *mockSnapshotSink) Cancel() error {
 	return nil
-}
-
-type mockTransport struct {
-	ln net.Listener
 }
 
 type mockListener struct {

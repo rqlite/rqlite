@@ -1,10 +1,13 @@
 package command
 
 import (
-	"sync"
+	"context"
+	"fmt"
 	"testing"
 
-	"github.com/golang/protobuf/proto"
+	"github.com/pastelnetwork/gonode/common/errors"
+	"golang.org/x/sync/errgroup"
+	"google.golang.org/protobuf/proto"
 )
 
 func Test_NewRequestMarshaler(t *testing.T) {
@@ -230,21 +233,23 @@ func Test_MarshalCompressedConcurrent(t *testing.T) {
 		Freshness: 100,
 	}
 
-	var wg sync.WaitGroup
+	group, _ := errgroup.WithContext(context.Background())
 	for i := 0; i < 100; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		group.Go(func() error {
 			_, comp, err := rm.Marshal(r)
 			if err != nil {
-				t.Fatalf("failed to marshal QueryRequest: %s", err)
+				return fmt.Errorf("failed to marshal QueryRequest: %s", err)
 			}
 			if !comp {
-				t.Fatal("Marshaled QueryRequest wasn't compressed")
+				return errors.New("Marshaled QueryRequest wasn't compressed")
 			}
-		}()
+			return nil
+		})
 	}
-	wg.Wait()
+
+	if err := group.Wait(); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func Test_MarshalWontCompressSize(t *testing.T) {

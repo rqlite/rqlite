@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/raft"
-	"github.com/rqlite/raft-boltdb"
+	raftboltdb "github.com/hashicorp/raft-boltdb/v2"
 )
 
 func Test_LogNewEmpty(t *testing.T) {

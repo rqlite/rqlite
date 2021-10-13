@@ -1,6 +1,7 @@
 package disco
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -11,7 +12,7 @@ import (
 
 // Test_NewClient tests that a new disco client can be instantiated. Nothing more.
 func Test_NewClient(t *testing.T) {
-	c := New("https://discovery.rqlite.com")
+	c := New(context.TODO(), "https://discovery.rqlite.com")
 	if c == nil {
 		t.Fatal("failed to create new disco client")
 	}
@@ -31,7 +32,7 @@ func Test_ClientRegisterBadRequest(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	c := New(ts.URL)
+	c := New(context.TODO(), ts.URL)
 	_, err := c.Register("1234", "http://127.0.0.1")
 	if err == nil {
 		t.Fatalf("failed to receive error on 400 from server")
@@ -48,7 +49,7 @@ func Test_ClientRegisterNotFound(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	c := New(ts.URL)
+	c := New(context.TODO(), ts.URL)
 	_, err := c.Register("1234", "http://127.0.0.1")
 	if err == nil {
 		t.Fatalf("failed to receive error on 404 from server")
@@ -65,7 +66,7 @@ func Test_ClientRegisterForbidden(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	c := New(ts.URL)
+	c := New(context.TODO(), ts.URL)
 	_, err := c.Register("1234", "http://127.0.0.1")
 	if err == nil {
 		t.Fatalf("failed to receive error on 403 from server")
@@ -101,7 +102,7 @@ func Test_ClientRegisterRequestOK(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	c := New(ts.URL)
+	c := New(context.TODO(), ts.URL)
 	disco, err := c.Register("1234", "http://127.0.0.1")
 	if err != nil {
 		t.Fatalf("failed to register: %s", err.Error())
@@ -143,7 +144,7 @@ func Test_ClientRegisterRequestRedirectOK(t *testing.T) {
 		http.Redirect(w, r, ts1.URL+"/1234", http.StatusMovedPermanently)
 	}))
 
-	c := New(ts2.URL)
+	c := New(context.TODO(), ts2.URL)
 	disco, err := c.Register("1234", "http://127.0.0.1")
 	if err != nil {
 		t.Fatalf("failed to register: %s", err.Error())
@@ -163,7 +164,7 @@ func Test_ClientRegisterFollowerOK(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	c := New(ts.URL)
+	c := New(context.TODO(), ts.URL)
 	disco, err := c.Register("1234", "http://2.2.2.2")
 	if err != nil {
 		t.Fatalf("failed to register: %s", err.Error())
@@ -186,7 +187,7 @@ func Test_ClientRegisterFollowerMultiOK(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	c := New(ts.URL)
+	c := New(context.TODO(), ts.URL)
 	disco, err := c.Register("1234", "http://3.3.3.3")
 	if err != nil {
 		t.Fatalf("failed to register: %s", err.Error())
