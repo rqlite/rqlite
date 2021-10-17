@@ -1,6 +1,6 @@
 # Data API
 
-Each rqlite node exposes an HTTP API allowing data to be inserted into, and read back from, the database. Writes to the database must be sent to the `/db/execute` endpoint, and reads should be sent to the `/db/query` endpoint. _It is important to use the correct endpoint for the operation you wish to perform._
+Each rqlite node exposes an HTTP API allowing data to be inserted into, and read back from, the database. Any changes to the database  (`INSERT`, `UPDATE`, `DELETE`) **must** be sent to the `/db/execute` endpoint, and reads (`SELECT`) should be sent to the `/db/query` endpoint. _It is important to use the correct endpoint for the operation you wish to perform._
 
 The best way to understand the API is to work through the simple examples below. There are also [client libraries available](https://github.com/rqlite).
 
