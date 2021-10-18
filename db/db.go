@@ -527,6 +527,34 @@ func (db *DB) queryWithConn(req *command.Request, xTime bool, conn *sql.Conn) ([
 		rows := &command.QueryRows{}
 		start := time.Now()
 
+		// Do best-effort check that the statement won't try to change
+		// the database. As per the SQLite documentation, this will not
+		// cover 100% of possibilities, but should cover most.
+		var readOnly bool
+		f := func(driverConn interface{}) error {
+			c := driverConn.(*sqlite3.SQLiteConn)
+			drvStmt, err := c.Prepare(sql)
+			if err != nil {
+				return err
+			}
+			defer drvStmt.Close()
+			sqliteStmt := drvStmt.(*sqlite3.SQLiteStmt)
+			readOnly = sqliteStmt.Readonly()
+			return nil
+		}
+		if err := conn.Raw(f); err != nil {
+			stats.Add(numQueryErrors, 1)
+			rows.Error = err.Error()
+			allRows = append(allRows, rows)
+			continue
+		}
+		if !readOnly {
+			stats.Add(numQueryErrors, 1)
+			rows.Error = "attempt to change database via query operation"
+			allRows = append(allRows, rows)
+			continue
+		}
+
 		parameters, err := parametersToValues(stmt.Parameters)
 		if err != nil {
 			stats.Add(numQueryErrors, 1)
