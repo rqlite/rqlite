@@ -550,7 +550,7 @@ func (db *DB) queryWithConn(req *command.Request, xTime bool, conn *sql.Conn) ([
 		}
 		if !readOnly {
 			stats.Add(numQueryErrors, 1)
-			rows.Error = "attempt to change database via query operation"
+			rows.Error = "attempt to change database via query operation (are you using the wrong endpoint?)"
 			allRows = append(allRows, rows)
 			continue
 		}

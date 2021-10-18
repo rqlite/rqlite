@@ -688,7 +688,7 @@ func Test_WriteOnQueryOnDiskDatabase(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error attempting read-only write test: %s", err)
 	}
-	if exp, got := `[{"error":"attempt to write a readonly database"}]`, asJSON(ro); exp != got {
+	if exp, got := `[{"error":"attempt to change database via query operation (are you using the wrong endpoint?)"}]`, asJSON(ro); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
@@ -725,7 +725,7 @@ func Test_WriteOnQueryInMemDatabase(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error attempting read-only write test: %s", err)
 	}
-	if exp, got := `[{"error":"attempt to write a readonly database"}]`, asJSON(ro); exp != got {
+	if exp, got := `[{"error":"attempt to change database via query operation (are you using the wrong endpoint?)"}]`, asJSON(ro); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 	ro, err = db.QueryStringStmt(`SELECT COUNT(*) FROM foo`)
