@@ -1,3 +1,7 @@
+## 6.6.1 (unreleased)
+### Implementation changes and bug fixes
+- [PR #907](https://github.com/rqlite/rqlite/pull/907): Make it clearer when writes are sent to the wrong endpoint. See [issue #903](https://github.com/rqlite/rqlite/issues/903).
+
 ## 6.6.0 (September 21st 2021)
 ### New features
 - [PR #898](https://github.com/rqlite/rqlite/pull/898): Support recovering clusters that have permanently lost quorum. Fixes [issue #897](https://github.com/rqlite/rqlite/issues/897).
