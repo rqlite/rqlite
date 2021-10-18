@@ -531,7 +531,7 @@ func (db *DB) queryWithConn(req *command.Request, xTime bool, conn *sql.Conn) ([
 		// the database. As per the SQLite documentation, this will not
 		// cover 100% of possibilities, but should cover most.
 		var readOnly bool
-	        f := func(driverConn interface{}) error {
+		f := func(driverConn interface{}) error {
 			c := driverConn.(*sqlite3.SQLiteConn)
 			drvStmt, err := c.Prepare(sql)
 			if err != nil {
