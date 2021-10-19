@@ -1,4 +1,4 @@
-## 6.6.1 (unreleased)
+## 6.6.1 (October 19th 2021)
 ### Implementation changes and bug fixes
 - [PR #907](https://github.com/rqlite/rqlite/pull/907): Make it clearer when writes are sent to the wrong endpoint. See [issue #903](https://github.com/rqlite/rqlite/issues/903).
 
