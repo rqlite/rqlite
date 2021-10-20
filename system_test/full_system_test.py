@@ -950,6 +950,7 @@ class TestEndToEndSnapRestoreCluster(unittest.TestCase):
     self.n2.start(join=self.n0.APIAddr())
     self.n2.wait_for_leader()
 
+    # Force the Apply loop to run on the node, so fsm_index is updated.
     self.n0.execute('INSERT INTO foo(name) VALUES("fiona")')
 
     # Ensure those new nodes have the full correct state.
@@ -977,6 +978,7 @@ class TestEndToEndSnapRestoreCluster(unittest.TestCase):
     self.n2.start()
     self.n2.wait_for_leader()
 
+    # Force the Apply loop to run on the node, so fsm_index is updated.
     self.n0.execute('INSERT INTO foo(name) VALUES("fiona")')
 
     self.n2.wait_for_fsm_index(self.n0.fsm_index())

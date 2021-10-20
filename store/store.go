@@ -140,8 +140,10 @@ type Store struct {
 	dbAppliedIndexMu sync.RWMutex
 	dbAppliedIndex   uint64
 
+	// Latest log entry index actually reflected by the FSM. Due to Raft code
+	// this value is not updated after a Snapshot-restore.
+	fsmIndex   uint64
 	fsmIndexMu sync.RWMutex
-	fsmIndex   uint64 // Latest log entry index actually reflected by the FSM.
 
 	reqMarshaller *command.RequestMarshaler // Request marshaler for writing to log.
 	raftLog       raft.LogStore             // Persistent log store.
