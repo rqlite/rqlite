@@ -33,7 +33,7 @@ const logo = `
  | '__/ _  | | | __/ _ \   The lightweight, distributed
  | | | (_| | | | ||  __/   relational database.
  |_|  \__, |_|_|\__\___|
-         | |               www.rqlite.com
+         | |               www.rqlite.io
          |_|
 `
 
