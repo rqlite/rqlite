@@ -1,5 +1,5 @@
 ## 6.6.3 (October 20th 2021)
-This release is the first to statically link `libc`. While this does increase the size of binary, one of the main goals of rqlite is ease of deployment. With fully static linking, official releases will run on an even wider range of distributions.
+This release is the first to statically link `libc` for the Linux version of rqlite. While this does increase the size of binary, one of the main goals of rqlite is ease of deployment. With fully static linking, official releases will run on an even wider range of distributions.
 
 ### Implementation changes and bug fixes
 - [PR #911](https://github.com/rqlite/rqlite/pull/911): Statically link all requirements, including `libc`, for rqlite on Linux. macOS retains dynamically linking.
