@@ -954,6 +954,7 @@ class TestEndToEndSnapRestoreCluster(unittest.TestCase):
     # Restart killed node, check it has full state.
     self.n2.start()
     self.n2.wait_for_leader()
+    self.n2.wait_for_all_fsm()
     j = self.n2.query('SELECT count(*) FROM foo', level='none')
     self.assertEqual(str(j), "{u'results': [{u'values': [[400]], u'types': [u''], u'columns': [u'count(*)']}]}")
 
