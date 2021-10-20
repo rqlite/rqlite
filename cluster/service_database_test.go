@@ -1,9 +1,11 @@
 package cluster
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -185,6 +187,81 @@ func Test_ServiceQuery(t *testing.T) {
 	}
 	if err := s.Close(); err != nil {
 		t.Fatalf("failed to close cluster service")
+	}
+}
+
+// Test_ServiceQueryLarge ensures that query responses larger than 64K are
+// encoded and decoded correctly.
+func Test_ServiceQueryLarge(t *testing.T) {
+	ln, mux := mustNewMux()
+	go mux.Serve()
+	tn := mux.Listen(1) // Could be any byte value.
+	db := mustNewMockDatabase()
+	s := New(tn, db)
+	if s == nil {
+		t.Fatalf("failed to create cluster service")
+	}
+
+	c := NewClient(mustNewDialer(1, false, false))
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open cluster service: %s", err.Error())
+	}
+
+	var b strings.Builder
+	for i := 0; i < 100000; i++ {
+		b.WriteString("bar")
+	}
+	if b.Len() < 64000 {
+		t.Fatalf("failed to generate a large enough string for test")
+	}
+
+	// Ready for Query tests now.
+	db.queryFn = func(qr *command.QueryRequest) ([]*command.QueryRows, error) {
+		parameter := &command.Parameter{
+			Value: &command.Parameter_S{
+				S: b.String(),
+			},
+		}
+		value := &command.Values{
+			Parameters: []*command.Parameter{parameter},
+		}
+
+		rows := &command.QueryRows{
+			Columns: []string{"c1"},
+			Types:   []string{"t1"},
+			Values:  []*command.Values{value},
+		}
+		return []*command.QueryRows{rows}, nil
+	}
+	res, err := c.Query(queryRequestFromString("SELECT * FROM foo"), s.Addr(), longWait)
+	if err != nil {
+		t.Fatalf("failed to query: %s", err.Error())
+	}
+	if exp, got := fmt.Sprintf(`[{"columns":["c1"],"types":["t1"],"values":[["%s"]]}]`, b.String()), asJSON(res); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+
+	// Clean up resources.
+	if err := ln.Close(); err != nil {
+		t.Fatalf("failed to close Mux's listener: %s", err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatalf("failed to close cluster service")
+	}
+}
+
+// Test_BinaryEncoding_Backwards ensures that software earlier than v6.6.2
+// can communicate with v6.6.2+ releases. v6.6.2 increased the maximum size
+// of cluster responses.
+func Test_BinaryEncoding_Backwards(t *testing.T) {
+	// Simulate a 6.6.2 encoding a response size less than 16 bits.
+	b := make([]byte, 4)
+	binary.LittleEndian.PutUint32(b[0:], uint32(1234))
+
+	// Can older software decode it OK?
+	if binary.LittleEndian.Uint16(b[0:]) != 1234 {
+		t.Fatal("failed to read correct value")
 	}
 }
 
