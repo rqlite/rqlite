@@ -950,15 +950,16 @@ class TestEndToEndSnapRestoreCluster(unittest.TestCase):
     self.n2.start(join=self.n0.APIAddr())
     self.n2.wait_for_leader()
 
+    self.n0.execute('INSERT INTO foo(name) VALUES("fiona")')
 
     # Ensure those new nodes have the full correct state.
     self.n1.wait_for_fsm_index(self.n0.fsm_index())
     j = self.n1.query('SELECT count(*) FROM foo', level='none')
-    self.assertEqual(str(j), "{u'results': [{u'values': [[200]], u'types': [u''], u'columns': [u'count(*)']}]}")
+    self.assertEqual(str(j), "{u'results': [{u'values': [[201]], u'types': [u''], u'columns': [u'count(*)']}]}")
 
     self.n2.wait_for_fsm_index(self.n0.fsm_index())
     j = self.n2.query('SELECT count(*) FROM foo', level='none')
-    self.assertEqual(str(j), "{u'results': [{u'values': [[200]], u'types': [u''], u'columns': [u'count(*)']}]}")
+    self.assertEqual(str(j), "{u'results': [{u'values': [[201]], u'types': [u''], u'columns': [u'count(*)']}]}")
 
     # Kill one of the nodes, and make more changes, enough to trigger more snaps.
     self.n2.stop()
@@ -975,9 +976,12 @@ class TestEndToEndSnapRestoreCluster(unittest.TestCase):
     # Restart killed node, check it has full state.
     self.n2.start()
     self.n2.wait_for_leader()
+
+    self.n0.execute('INSERT INTO foo(name) VALUES("fiona")')
+
     self.n2.wait_for_fsm_index(self.n0.fsm_index())
     j = self.n2.query('SELECT count(*) FROM foo', level='none')
-    self.assertEqual(str(j), "{u'results': [{u'values': [[400]], u'types': [u''], u'columns': [u'count(*)']}]}")
+    self.assertEqual(str(j), "{u'results': [{u'values': [[402]], u'types': [u''], u'columns': [u'count(*)']}]}")
 
   def tearDown(self):
     deprovision_node(self.n0)
