@@ -61,9 +61,9 @@ jobs:
       - image: circleci/golang@sha256:bf91f089cecab7fcd329193022794e7d13c42ee4570b1ac2920875c1b948eb63
     steps:
         - checkout
-        - run: sudo apt-get install python-requests
+        - run: sudo apt-get install python-requests musl-dev musl-tools
         - run: go get -t -d -v ./...
-        - run: go install -tags osusergo,netgo,sqlite_omit_load_extension -ldflags="-extldflags=-static" ./...
+        - run: CGO_ENABLED=1 CC=musl-gcc go install -a -installsuffix cgo ./...
         - run:
             command: system_test/full_system_test.py
             environment:
