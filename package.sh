@@ -46,10 +46,12 @@ sudo apt-get -y install musl-dev musl-tools
 LINKER_PKG_PATH=github.com/rqlite/rqlite/cmd
 CGO_ENABLED=1 CC=musl-gcc go install -a -installsuffix cgo -ldflags="-X $LINKER_PKG_PATH.Version=$VERSION -X $LINKER_PKG_PATH.Branch=$branch -X $LINKER_PKG_PATH.Commit=$commit -X $LINKER_PKG_PATH.Buildtime=$buildtime" ./...
 
-ldd $GOPATH/bin/rqlited
-if [ $? -ne 1 ]; then
-	echo "Failed to confirm fully static linking"
-	exit 1
+if [ `uname` = "Linux" ]; then
+	ldd $GOPATH/bin/rqlited
+	if [ $? -ne 1 ]; then
+		echo "Failed to confirm fully static linking on Linux"
+		exit 1
+	fi
 fi
 
 release=`echo rqlite-$VERSION-$kernel-$machine | tr '[:upper:]' '[:lower:]'`
