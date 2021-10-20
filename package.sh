@@ -42,7 +42,13 @@ cd rqlite
 go get -d ./...
 
 LINKER_PKG_PATH=github.com/rqlite/rqlite/cmd
-go install -ldflags="-extldflags=-static -X $LINKER_PKG_PATH.Version=$VERSION -X $LINKER_PKG_PATH.Branch=$branch -X $LINKER_PKG_PATH.Commit=$commit -X $LINKER_PKG_PATH.Buildtime=$buildtime" ./...
+go install -tags osusergo,netgo,sqlite_omit_load_extension -ldflags="-extldflags=-static -X $LINKER_PKG_PATH.Version=$VERSION -X $LINKER_PKG_PATH.Branch=$branch -X $LINKER_PKG_PATH.Commit=$commit -X $LINKER_PKG_PATH.Buildtime=$buildtime" ./...
+
+ldd $GOPATH/bin/rqlited
+if [ $? -ne 1 ]; then
+	echo "Failed to confirm fully static linking"
+	exit 1
+fi
 
 release=`echo rqlite-$VERSION-$kernel-$machine | tr '[:upper:]' '[:lower:]'`
 release_pkg=${release}.tar.gz
