@@ -1,3 +1,7 @@
+## 6.6.2 (October 20th 2021)
+### Implementation changes and bug fixes
+- [PR #909](https://github.com/rqlite/rqlite/pull/909): Support intra-cluster responses up to 4MB in size. Fixes [issue #908](https://github.com/rqlite/rqlite/issues/908).
+
 ## 6.6.1 (October 19th 2021)
 ### Implementation changes and bug fixes
 - [PR #907](https://github.com/rqlite/rqlite/pull/907): Make it clearer when writes are sent to the wrong endpoint. See [issue #903](https://github.com/rqlite/rqlite/issues/903).
