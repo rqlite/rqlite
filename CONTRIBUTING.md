@@ -37,6 +37,9 @@ go install ./...
 $GOPATH/bin/rqlited ~/node.1
 ```
 
+### Linking behavior
+Note that the above commands build a dynamically-linked version of `rqlited`. When officially released, `rqlited` statically links all its requirements e.g. `libc`.
+
 ### Raspberry Pi
 The process outlined above will work for Linux, OSX, and Windows. For Raspberry Pi, check out [this issue](https://github.com/rqlite/rqlite/issues/340).
 
