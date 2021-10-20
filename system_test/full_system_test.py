@@ -205,7 +205,7 @@ class Node(object):
     t = 0
     while self.fsm_index() < index:
       if t > timeout:
-        raise Exception('timeout')
+        raise Exception('timeout, target index: %d, actual index: %d' % (index, self.fsm_index()))
       time.sleep(1)
       t+=1
     return self.fsm_index()
