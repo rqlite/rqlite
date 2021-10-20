@@ -47,6 +47,14 @@ if [ `uname` = "Linux" ]; then
 fi
 go install -tags osusergo,netgo,sqlite_omit_load_extension -ldflags="$STATIC -X $LINKER_PKG_PATH.Version=$VERSION -X $LINKER_PKG_PATH.Branch=$branch -X $LINKER_PKG_PATH.Commit=$commit -X $LINKER_PKG_PATH.Buildtime=$buildtime" ./...
 
+if [ `uname` = "Linux" ]; then
+	ldd $GOPATH/bin/rqlited
+	if [ $? -ne 1 ]; then
+		echo "Failed to confirm fully static linking on Linux"
+		exit 1
+	fi
+fi
+
 release=`echo rqlite-$VERSION-$kernel-$machine | tr '[:upper:]' '[:lower:]'`
 release_pkg=${release}.tar.gz
 mkdir $tmp_pkg/$release
