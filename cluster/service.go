@@ -233,7 +233,7 @@ func (s *Service) handleConn(conn net.Conn) {
 			}
 			// Write length of Protobuf first, then write the actual Protobuf.
 			b = make([]byte, 4)
-			binary.LittleEndian.PutUint16(b[0:], uint16(len(p)))
+			binary.LittleEndian.PutUint32(b[0:], uint32(len(p)))
 			conn.Write(b)
 			conn.Write(p)
 
@@ -263,7 +263,7 @@ func (s *Service) handleConn(conn net.Conn) {
 			}
 			// Write length of Protobuf first, then write the actual Protobuf.
 			b = make([]byte, 4)
-			binary.LittleEndian.PutUint16(b[0:], uint16(len(p)))
+			binary.LittleEndian.PutUint32(b[0:], uint32(len(p)))
 			conn.Write(b)
 			conn.Write(p)
 		}

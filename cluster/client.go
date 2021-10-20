@@ -188,7 +188,7 @@ func (c *Client) Execute(er *command.ExecuteRequest, nodeAddr string, timeout ti
 	if err != nil {
 		return nil, err
 	}
-	sz := binary.LittleEndian.Uint16(b[0:])
+	sz := binary.LittleEndian.Uint32(b[0:])
 
 	// Read in the actual response.
 	p = make([]byte, sz)
@@ -266,7 +266,7 @@ func (c *Client) Query(qr *command.QueryRequest, nodeAddr string, timeout time.D
 	if err != nil {
 		return nil, err
 	}
-	sz := binary.LittleEndian.Uint16(b[0:])
+	sz := binary.LittleEndian.Uint32(b[0:])
 
 	// Read in the actual response.
 	p = make([]byte, sz)
