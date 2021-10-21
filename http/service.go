@@ -288,6 +288,11 @@ func (s *Service) Close() {
 	return
 }
 
+// HTTPS returns whether this service is using HTTPS.
+func (s *Service) HTTPS() bool {
+	return s.CertFile != "" && s.KeyFile != ""
+}
+
 // ServeHTTP allows Service to serve HTTP requests.
 func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.addBuildVersion(w)

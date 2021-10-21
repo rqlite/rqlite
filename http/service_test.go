@@ -158,6 +158,9 @@ func Test_NewService(t *testing.T) {
 	if s == nil {
 		t.Fatalf("failed to create new service")
 	}
+	if s.HTTPS() {
+		t.Fatalf("expected service to report not HTTPS")
+	}
 }
 
 func Test_HasVersionHeader(t *testing.T) {
@@ -839,6 +842,9 @@ func Test_TLSServce(t *testing.T) {
 	}
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
+	}
+	if !s.HTTPS() {
+		t.Fatalf("expected service to report HTTPS")
 	}
 	defer s.Close()
 
