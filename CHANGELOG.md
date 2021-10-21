@@ -1,3 +1,7 @@
+## 6.6.5 (October 21st 2021)
+### Implementation changes and bug fixes
+- [PR #916](https://github.com/rqlite/rqlite/pull/916): More helpful log messages on start-up.
+
 ## 6.6.4 (October 21st 2021)
 ### Implementation changes and bug fixes
 - [PR #915](https://github.com/rqlite/rqlite/pull/915): Record compiler in logs and status output.
