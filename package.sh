@@ -10,6 +10,8 @@
 #
 #     sudo apt-get -y install musl-dev musl-tools
 
+REPO_URL="https://github.com/rqlite/rqlite"
+
 # copy_binaries <dst_path> <src_dir>
 copy_binaries () {
 	cp $2/rqlited $1
@@ -23,8 +25,6 @@ upload_asset () {
 	upload_url="https://uploads.github.com/repos/rqlite/rqlite/releases/$2/assets"
 	curl -v -H "Content-type: application/octet-stream" -H "Authorization: token $3" -XPOST $upload_url?name=$release_pkg_name --data-binary @$1
 }
-
-REPO_URL="https://github.com/rqlite/rqlite"
 
 if [ $# -lt 1 ]; then
     echo "$0 <version> [release_id api_token]"
@@ -66,21 +66,21 @@ git clone $REPO_URL
 cd rqlite
 go get -d ./...
 
-# Build vanilla release
+# Build release for this machine
 rm -f $GOPATH/bin/*
 if [ "$kernel" = "Linux" ]; then
 	STATIC="-extldflags=-static"
 fi
 CGO_ENABLED=1 go install -a -tags osusergo,netgo,sqlite_omit_load_extension -ldflags="$STATIC $LDFLAGS" ./...
 if [ "$kernel" = "Linux" ]; then
-	ldd $GOPATH/bin/rqlited 2>&1 >/dev/null
+	ldd $GOPATH/bin/rqlited >/dev/null 2>&1
 	if [ $? -ne 1 ]; then
 		echo "Failed to confirm fully static linking on Linux"
 		exit 1
 	fi
 fi
 
-# Package the vanilla release
+# Package the release for this machine
 release=`echo rqlite-$VERSION-$kernel-$machine | tr '[:upper:]' '[:lower:]'`
 tarball=${release}.tar.gz
 mkdir $tmp_pkg/$release
@@ -93,7 +93,7 @@ if [ -n "$API_TOKEN" ]; then
 fi
 
 if [ "$kernel" != "Linux" ]; then
-	# We're done
+	# Only build other versions when on Linux.
 	exit 0
 fi
 
