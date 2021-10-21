@@ -1,3 +1,7 @@
+## 6.6.6 (unreleased)
+### Implementation changes and bug fixes
+- [PR #917](https://github.com/rqlite/rqlite/pull/917): Redirect HTTP `/` to `/status`.
+
 ## 6.6.5 (October 21st 2021)
 ### Implementation changes and bug fixes
 - [PR #916](https://github.com/rqlite/rqlite/pull/916): More helpful log messages on start-up.
