@@ -327,11 +327,15 @@ func main() {
 	log.Println("store has reached consensus")
 
 	// Friendly final log message.
+	apiProto := "http"
+	if httpServ.HTTPS() {
+		apiProto = "https"
+	}
 	apiAdv := httpAddr
 	if httpAdv != "" {
 		apiAdv = httpAdv
 	}
-	log.Printf("node is ready, HTTP API available at %s", apiAdv)
+	log.Printf("node is ready, HTTP API available at %s://%s", apiProto, apiAdv)
 
 	// Block until signalled.
 	terminate := make(chan os.Signal, 1)

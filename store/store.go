@@ -392,7 +392,6 @@ func (s *Store) WaitForApplied(timeout time.Duration) error {
 	if timeout == 0 {
 		return nil
 	}
-	s.logger.Printf("waiting for up to %s for application of initial logs", timeout)
 	return s.WaitForAppliedIndex(s.raft.LastIndex(), timeout)
 }
 
