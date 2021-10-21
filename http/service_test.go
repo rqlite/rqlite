@@ -611,18 +611,18 @@ func Test_BackupFlagsNoLeaderOK(t *testing.T) {
 }
 
 func Test_RegisterStatus(t *testing.T) {
-	var stats *mockStatuser
+	var stats *mockStatusReporter
 	m := &MockStore{}
 	c := &mockClusterService{}
 
 	s := New("127.0.0.1:0", m, c, nil)
 
 	if err := s.RegisterStatus("foo", stats); err != nil {
-		t.Fatalf("failed to register statuser: %s", err.Error())
+		t.Fatalf("failed to register statusReporter: %s", err.Error())
 	}
 
 	if err := s.RegisterStatus("foo", stats); err == nil {
-		t.Fatal("successfully re-registered statuser")
+		t.Fatal("successfully re-registered statusReporter")
 	}
 }
 
@@ -1021,10 +1021,10 @@ func (m *mockCredentialStore) HasAnyPerm(username string, perm ...string) bool {
 	return m.HasPermOK
 }
 
-type mockStatuser struct {
+type mockStatusReporter struct {
 }
 
-func (m *mockStatuser) Stats() (map[string]interface{}, error) {
+func (m *mockStatusReporter) Stats() (map[string]interface{}, error) {
 	return nil, nil
 }
 

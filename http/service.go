@@ -96,8 +96,8 @@ type CredentialStore interface {
 	HasAnyPerm(username string, perm ...string) bool
 }
 
-// Statuser is the interface status providers must implement.
-type Statuser interface {
+// StatusReporter is the interface status providers must implement.
+type StatusReporter interface {
 	Stats() (map[string]interface{}, error)
 }
 
@@ -214,7 +214,7 @@ type Service struct {
 	lastBackup time.Time // Time of last successful backup.
 
 	statusMu sync.RWMutex
-	statuses map[string]Statuser
+	statuses map[string]StatusReporter
 
 	CACertFile string // Path to root X.509 certificate.
 	CertFile   string // Path to SSL certificate.
@@ -239,7 +239,7 @@ func New(addr string, store Store, cluster Cluster, credentials CredentialStore)
 		store:           store,
 		cluster:         cluster,
 		start:           time.Now(),
-		statuses:        make(map[string]Statuser),
+		statuses:        make(map[string]StatusReporter),
 		credentialStore: credentials,
 		logger:          log.New(os.Stderr, "[http] ", log.LstdFlags),
 	}
@@ -335,7 +335,7 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // RegisterStatus allows other modules to register status for serving over HTTP.
-func (s *Service) RegisterStatus(key string, stat Statuser) error {
+func (s *Service) RegisterStatus(key string, stat StatusReporter) error {
 	s.statusMu.Lock()
 	defer s.statusMu.Unlock()
 
@@ -635,7 +635,7 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 		status["build"] = s.BuildInfo
 	}
 
-	// Add any registered statusers.
+	// Add any registered StatusReporters.
 	func() {
 		s.statusMu.RLock()
 		defer s.statusMu.RUnlock()
