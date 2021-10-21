@@ -684,6 +684,43 @@ func Test_Nodes(t *testing.T) {
 	}
 }
 
+func Test_RootRedirectToStatus(t *testing.T) {
+	m := &MockStore{}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	client := &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	resp, err := client.Get(fmt.Sprintf("http://%s/", s.Addr().String()))
+	if err != nil {
+		t.Fatalf("failed to make root request")
+	}
+	if resp.StatusCode != http.StatusFound {
+		t.Fatalf("failed to get expected StatusFound for root, got %d", resp.StatusCode)
+	}
+	if resp.Header["Location"][0] != "/status" {
+		t.Fatalf("received incorrect redirect path")
+	}
+
+	resp, err = client.Get(fmt.Sprintf("http://%s", s.Addr().String()))
+	if err != nil {
+		t.Fatalf("failed to make root request")
+	}
+	if resp.StatusCode != http.StatusFound {
+		t.Fatalf("failed to get expected StatusFound for root, got %d", resp.StatusCode)
+	}
+	if resp.Header["Location"][0] != "/status" {
+		t.Fatalf("received incorrect redirect path")
+	}
+}
+
 func Test_Readyz(t *testing.T) {
 	m := &MockStore{
 		leaderAddr: "foo:1234",
