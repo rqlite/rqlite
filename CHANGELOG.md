@@ -1,3 +1,7 @@
+## 6.6.4 (October 21st 2021)
+### Implementation changes and bug fixes
+- [PR #915](https://github.com/rqlite/rqlite/pull/915): Record compiler in logs and status output.
+
 ## 6.6.3 (October 20th 2021)
 This release is the first to statically link `libc` for the Linux version of rqlite. While this does increase the size of binary, one of the main goals of rqlite is ease of deployment. With fully static linking, official releases will run on an even wider range of distributions.
 
