@@ -141,8 +141,8 @@ func main() {
 	flag.Parse()
 
 	if showVersion {
-		fmt.Printf("%s %s %s %s %s (commit %s, branch %s)\n",
-			name, cmd.Version, runtime.GOOS, runtime.GOARCH, runtime.Version(), cmd.Commit, cmd.Branch)
+		fmt.Printf("%s %s %s %s %s (commit %s, branch %s, compiler %s)\n",
+			name, cmd.Version, runtime.GOOS, runtime.GOARCH, runtime.Version(), cmd.Commit, cmd.Branch, runtime.Compiler)
 		os.Exit(0)
 	}
 
@@ -177,7 +177,7 @@ func main() {
 	log.SetFlags(log.LstdFlags)
 	log.SetOutput(os.Stderr)
 	log.SetPrefix(fmt.Sprintf("[%s] ", name))
-	log.Printf("%s starting, version %s, commit %s, branch %s", name, cmd.Version, cmd.Commit, cmd.Branch)
+	log.Printf("%s starting, version %s, commit %s, branch %s, compiler %s", name, cmd.Version, cmd.Commit, cmd.Branch, runtime.Compiler)
 	log.Printf("%s, target architecture is %s, operating system target is %s", runtime.Version(), runtime.GOARCH, runtime.GOOS)
 	log.Printf("launch command: %s", strings.Join(os.Args, " "))
 
@@ -416,6 +416,7 @@ func startHTTPService(str *store.Store, cltr *cluster.Client) (*httpd.Service, e
 		"commit":     cmd.Commit,
 		"branch":     cmd.Branch,
 		"version":    cmd.Version,
+		"compiler":   runtime.Compiler,
 		"build_time": cmd.Buildtime,
 	}
 	return s, s.Start()
