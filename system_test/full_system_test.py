@@ -18,8 +18,13 @@ import time
 import socket
 import sqlite3
 import sys
-from urlparse import urlparse
 import unittest
+
+# Help with Python3
+try:
+  from urlparse import urlparse
+except ImportError:
+  from urllib.parse import urlparse
 
 RQLITED_PATH = os.environ['RQLITED_PATH']
 TIMEOUT=10
@@ -32,9 +37,13 @@ class Node(object):
                raft_snap_threshold=8192, raft_snap_int="1s",
                dir=None, on_disk=False):
     if api_addr is None:
-      api_addr = random_addr()
+      s, addr = random_addr()
+      api_addr = addr
+      s.close()
     if raft_addr is None:
-      raft_addr = random_addr()
+      s, addr = random_addr()
+      raft_addr = addr
+      s.close()
     if dir is None:
       dir = tempfile.mkdtemp()
     if api_adv is None:
@@ -69,13 +78,21 @@ class Node(object):
   def scramble_network(self):
     if self.api_adv == self.api_addr:
       self.api_adv = None
-    self.api_addr = random_addr()
+
+    s, addr = random_addr()
+    self.api_addr = addr
+    s.close()
+
     if self.api_adv is None:
       self.api_adv = self.api_addr
 
     if self.raft_adv == self.raft_addr:
       self.raft_adv = None
-    self.raft_addr = random_addr()
+
+    s, addr = random_addr()
+    self.raft_addr = addr
+    s.close()
+
     if self.raft_adv is None:
       self.raft_adv = self.raft_addr
 
@@ -205,7 +222,7 @@ class Node(object):
     t = 0
     while self.fsm_index() < index:
       if t > timeout:
-        raise Exception('timeout')
+        raise Exception('timeout, target index: %d, actual index %d' % (index, self.fsm_index()))
       time.sleep(1)
       t+=1
     return self.fsm_index()
@@ -338,7 +355,7 @@ def raise_for_status(r):
 def random_addr():
   s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
   s.bind(('localhost', 0))
-  return ':'.join([s.getsockname()[0], str(s.getsockname()[1])])
+  return s, ':'.join([s.getsockname()[0], str(s.getsockname()[1])])
 
 def deprovision_node(node):
   node.stop()
@@ -933,11 +950,17 @@ class TestEndToEndSnapRestoreCluster(unittest.TestCase):
     self.n2.start(join=self.n0.APIAddr())
     self.n2.wait_for_leader()
 
+    # Force the Apply loop to run on the node, so fsm_index is updated.
+    self.n0.execute('INSERT INTO foo(name) VALUES("fiona")')
+
     # Ensure those new nodes have the full correct state.
+    self.n1.wait_for_fsm_index(self.n0.fsm_index())
     j = self.n1.query('SELECT count(*) FROM foo', level='none')
-    self.assertEqual(str(j), "{u'results': [{u'values': [[200]], u'types': [u''], u'columns': [u'count(*)']}]}")
+    self.assertEqual(str(j), "{u'results': [{u'values': [[201]], u'types': [u''], u'columns': [u'count(*)']}]}")
+
+    self.n2.wait_for_fsm_index(self.n0.fsm_index())
     j = self.n2.query('SELECT count(*) FROM foo', level='none')
-    self.assertEqual(str(j), "{u'results': [{u'values': [[200]], u'types': [u''], u'columns': [u'count(*)']}]}")
+    self.assertEqual(str(j), "{u'results': [{u'values': [[201]], u'types': [u''], u'columns': [u'count(*)']}]}")
 
     # Kill one of the nodes, and make more changes, enough to trigger more snaps.
     self.n2.stop()
@@ -954,9 +977,13 @@ class TestEndToEndSnapRestoreCluster(unittest.TestCase):
     # Restart killed node, check it has full state.
     self.n2.start()
     self.n2.wait_for_leader()
-    self.n2.wait_for_all_fsm()
+
+    # Force the Apply loop to run on the node, so fsm_index is updated.
+    self.n0.execute('INSERT INTO foo(name) VALUES("fiona")')
+
+    self.n2.wait_for_fsm_index(self.n0.fsm_index())
     j = self.n2.query('SELECT count(*) FROM foo', level='none')
-    self.assertEqual(str(j), "{u'results': [{u'values': [[400]], u'types': [u''], u'columns': [u'count(*)']}]}")
+    self.assertEqual(str(j), "{u'results': [{u'values': [[402]], u'types': [u''], u'columns': [u'count(*)']}]}")
 
   def tearDown(self):
     deprovision_node(self.n0)
