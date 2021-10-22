@@ -595,8 +595,12 @@ func (db *DB) queryWithConn(req *command.Request, xTime bool, conn *sql.Conn) ([
 			if err := rs.Scan(ptrs...); err != nil {
 				return nil, err
 			}
+			params, err := normalizeRowValues(dest, xTypes)
+			if err != nil {
+				return nil, err
+			}
 			rows.Values = append(rows.Values, &command.Values{
-				Parameters: normalizeRowValues(dest, xTypes),
+				Parameters: params,
 			})
 		}
 
@@ -878,7 +882,7 @@ func parametersToValues(parameters []*command.Parameter) ([]interface{}, error) 
 // Text values come over (from sqlite-go) as []byte instead of strings
 // for some reason, so we have explicitly convert (but only when type
 // is "text" so we don't affect BLOB types)
-func normalizeRowValues(row []interface{}, types []string) []*command.Parameter {
+func normalizeRowValues(row []interface{}, types []string) ([]*command.Parameter, error) {
 	values := make([]*command.Parameter, len(types))
 	for i, v := range row {
 		switch val := v.(type) {
@@ -919,9 +923,23 @@ func normalizeRowValues(row []interface{}, types []string) []*command.Parameter 
 					},
 				}
 			}
+		case time.Time:
+			rfc3339, err := val.MarshalText()
+			if err != nil {
+				return nil, err
+			}
+			values[i] = &command.Parameter{
+				Value: &command.Parameter_S{
+					S: string(rfc3339),
+				},
+			}
+		case nil:
+			continue
+		default:
+			return nil, fmt.Errorf("unhandled column type: %T %v", val, val)
 		}
 	}
-	return values
+	return values, nil
 }
 
 // isTextType returns whether the given type has a SQLite text affinity.

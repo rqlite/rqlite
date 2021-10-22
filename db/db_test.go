@@ -195,6 +195,48 @@ func Test_SQLiteMasterTable(t *testing.T) {
 	}
 }
 
+func Test_SQLiteTimeTypes(t *testing.T) {
+	db, path := mustCreateDatabase()
+	defer db.Close()
+	defer os.Remove(path)
+
+	_, err := db.ExecuteStringStmt("CREATE TABLE foo(d DATE, ts TIMESTAMP, dt DATETIME)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	_, err = db.ExecuteStringStmt(`INSERT INTO foo(d, ts, dt) VALUES("2004-02-14", "2004-02-14 07:15:00", "2021-10-22 19:39:32.016087")`)
+	if err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+
+	r, err := db.QueryStringStmt("SELECT d, ts, dt FROM foo")
+	if err != nil {
+		t.Fatalf("failed to query master table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["d","ts","dt"],"types":["date","timestamp","datetime"],"values":[["2004-02-14T00:00:00Z","2004-02-14T07:15:00Z","2021-10-22T19:39:32.016087Z"]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+}
+
+func Test_NotNULLField(t *testing.T) {
+	db, path := mustCreateDatabase()
+	defer db.Close()
+	defer os.Remove(path)
+
+	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	r, err := db.QueryStringStmt(`PRAGMA table_info("foo")`)
+	if err != nil {
+		t.Fatalf("failed to get PRAGMA table_info: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["cid","name","type","notnull","dflt_value","pk"],"types":["","","","","",""],"values":[[0,"id","INTEGER",1,null,1],[1,"name","TEXT",0,null,0]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+}
+
 func Test_LoadIntoMemory(t *testing.T) {
 	db, path := mustCreateDatabase()
 	defer db.Close()

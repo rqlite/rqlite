@@ -1,4 +1,7 @@
-## 6.6.6 (unreleased)
+## 6.7.0 (unreleased)
+### New features
+- [PR #918](https://github.com/rqlite/rqlite/pull/918): Add support for timestamp column types.
+
 ### Implementation changes and bug fixes
 - [PR #917](https://github.com/rqlite/rqlite/pull/917): Redirect HTTP `/` to `/status`.
 
