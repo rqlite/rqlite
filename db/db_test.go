@@ -214,7 +214,7 @@ func Test_SQLiteTimeTypes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query master table: %s", err.Error())
 	}
-	if exp, got := `[{"columns":["d","ts","dt"],"types":["date","timestamp","datetime"],"values":[["2004-02-14 00:00:00 +0000 UTC","2004-02-14 07:15:00 +0000 UTC","2021-10-22 19:39:32.016087 +0000 UTC"]]}]`, asJSON(r); exp != got {
+	if exp, got := `[{"columns":["d","ts","dt"],"types":["date","timestamp","datetime"],"values":[["2004-02-14T00:00:00Z","2004-02-14T07:15:00Z","2021-10-22T19:39:32.016087Z"]]}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
 }
