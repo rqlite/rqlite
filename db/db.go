@@ -919,6 +919,12 @@ func normalizeRowValues(row []interface{}, types []string) []*command.Parameter 
 					},
 				}
 			}
+		case time.Time:
+			values[i] = &command.Parameter{
+				Value: &command.Parameter_S{
+					S: val.String(),
+				},
+			}
 		}
 	}
 	return values
