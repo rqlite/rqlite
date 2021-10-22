@@ -4,6 +4,7 @@
 
 ### Implementation changes and bug fixes
 - [PR #917](https://github.com/rqlite/rqlite/pull/917): Redirect HTTP `/` to `/status`.
+- [PR #918](https://github.com/rqlite/rqlite/pull/918): Explicitly handle `nil` type in database layer.
 
 ## 6.6.5 (October 21st 2021)
 ### Implementation changes and bug fixes
