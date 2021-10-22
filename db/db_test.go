@@ -219,6 +219,24 @@ func Test_SQLiteTimeTypes(t *testing.T) {
 	}
 }
 
+func Test_NotNULLField(t *testing.T) {
+	db, path := mustCreateDatabase()
+	defer db.Close()
+	defer os.Remove(path)
+
+	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	r, err := db.QueryStringStmt(`PRAGMA table_info("foo")`)
+	if err != nil {
+		t.Fatalf("failed to get PRAGMA table_info: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["cid","name","type","notnull","dflt_value","pk"],"types":["","","","","",""],"values":[[0,"id","INTEGER",1,null,1],[1,"name","TEXT",0,null,0]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+}
+
 func Test_LoadIntoMemory(t *testing.T) {
 	db, path := mustCreateDatabase()
 	defer db.Close()

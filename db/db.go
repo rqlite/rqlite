@@ -933,8 +933,10 @@ func normalizeRowValues(row []interface{}, types []string) ([]*command.Parameter
 					S: string(rfc3339),
 				},
 			}
+		case nil:
+			continue
 		default:
-			return nil, fmt.Errorf("unhandled column type: %T", val)
+			return nil, fmt.Errorf("unhandled column type: %T %v", val, val)
 		}
 	}
 	return values, nil
