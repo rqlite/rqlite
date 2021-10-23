@@ -39,13 +39,15 @@ That said, it's always possible it's _too_ simple for your needs.
 The primary way to access the database is via the [HTTP API](https://github.com/rqlite/rqlite/blob/master/DOC/DATA_API.md). You can access it directly, or use a [client library](https://github.com/rqlite). For more casual use you can use the [command line tool](https://github.com/rqlite/rqlite/blob/master/DOC/CLI.md). It is also technically possible to [read the SQLite file directly](https://github.com/rqlite/rqlite/blob/master/DOC/FAQ.md#can-i-read-the-sqlite-file-directly), but it's not officially supported.
 
 ## Can any node execute a write request, and have the system "synchronize it all"?
-No, only the leader can make changes to the database. A client can _send_ a write-request to any node, and if that node is not the leader, the node will transparently forward the request to the leader, wait for a response, and then return the response to the client.
+The first thing to understand is that you can send your write-request to any node in the cluster, and rqlite will do the right thing automatically. You do not need to direct your write requests specifically to the leader.
+
+Under the covers however, only the leader can make changes to the database. If a client sends a write-request to a node that node is not the leader, the node will transparently forward the request to the leader, wait for a response, and then return the response to the client.
 
 ## Can I send a read request to any node in the cluster?
 Yes. If a read request must be serviced by the Leader, however, rqlite will transparently forward the request to the Leader, wait for the Leader to handle it, and return the results to the client.
 
 ## rqlite is distributed. Does that mean it can increase SQLite performance?
-Yes, but only for reads. It does not provide any scaling for writes, since all writes must go through the leader. **rqlite is distributed primarily for replication and fault tolerance, not for peformance**. In fact write performance is reduced relative to a standalone SQLite database, because of the round-trips between nodes.
+Yes, but only for reads. It does not provide any scaling for writes, since all writes must go through the leader. **rqlite is distributed primarily for replication and fault tolerance, not for peformance**. In fact write performance is reduced relative to a standalone SQLite database, because of the round-trips between nodes and the need to write to the Raft log.
 
 ## What is the best way to increase rqlite performance?
 The simplest way to increase performance is to use higher-performance disks and a lower-latency network. This is known as _scaling vertically_.
@@ -90,7 +92,7 @@ It supports [a form of transactions](https://github.com/rqlite/rqlite/blob/maste
 No, you must only change the database using the HTTP API. The moment you directly modify the SQLite file under any node (if running in _on-disk_ mode) the behavior of rqlite is undefined. In otherwords, you run the risk of breaking your cluster.
 
 ## Can I read the SQLite file directly?
-While not officially supported, if you run a node in _on-disk_ mode, you can read the SQLite file directly.
+If you run a node in _on-disk_ mode, you can read the SQLite file directly. However this mode of operation has not been deeply tested.
 
 ## Can I use rqlite to replicate my SQLite database to a second node?
 Not in a simple sense, no. rqlite is not a SQLite database replication tool. While each node does have a full copy of the SQLite database, rqlite is not simply about replicating that database.
