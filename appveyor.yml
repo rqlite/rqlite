@@ -18,9 +18,12 @@ install:
   - if %BUILD_ENV%==gnu  set MSYS=winsymlinks=lnk
 
 build_script:
+  - set LINKER_PKG_PATH=github.com/rqlite/rqlite/cmd
+  - set BRANCH=master
+  - set COMMIT=1234
   - go version
   - go get ./...
-  - go build ./...
+  - go build -ldflags="-X %LINKER_PKG_PATH%.Branch=%BRANCH% -X %LINKER_PKG_PATH%.Commit=%COMMIT%" ./...
   - go test ./...
 
 after_build:
