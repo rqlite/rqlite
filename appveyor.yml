@@ -20,9 +20,9 @@ install:
 build_script:
   - set LINKER_PKG_PATH=github.com/rqlite/rqlite/cmd
   - git rev-parse HEAD >commit.txt
-  - set /p COMMIT=commit.txt
+  - set /p COMMIT=< commit.txt
   - git rev-parse --abbrev-ref HEAD >branch.txt
-  - set /p BRANCH=branch.txt
+  - set /p BRANCH=< branch.txt
   - go version
   - go get ./...
   - go install -ldflags="-X %LINKER_PKG_PATH%.Branch=%BRANCH% -X %LINKER_PKG_PATH%.Commit=%COMMIT%" ./...
