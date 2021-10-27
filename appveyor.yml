@@ -21,8 +21,8 @@ build_script:
   - set LINKER_PKG_PATH=github.com/rqlite/rqlite/cmd
   - git rev-parse HEAD >commit.txt
   - set /p COMMIT=< commit.txt
-  - git branch --show-current
   - git branch --show-current >branch.txt
+  - type branch.txt
   - set /p BRANCH=< branch.txt
   - go version
   - go get ./...
