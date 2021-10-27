@@ -20,7 +20,7 @@ install:
 build_script:
   - set LINKER_PKG_PATH=github.com/rqlite/rqlite/cmd
   - FOR /F "tokens=*" %%g IN ('git rev-parse HEAD') do (SET COMMIT=%%g)
-  - FOR /F "tokens=*" %%g IN ('git branch --show-current') do (SET BRANCH=%%g)
+  - FOR /F "tokens=*" %%g IN ('git rev-parse --abbrev-ref HEAD') do (SET BRANCH=%%g)
   - go version
   - go get ./...
   - go install -ldflags="-X %LINKER_PKG_PATH%.Branch=%BRANCH% -X %LINKER_PKG_PATH%.Commit=%COMMIT%" ./...
