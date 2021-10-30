@@ -232,7 +232,7 @@ func (s *Store) Open(enableBootstrap bool) error {
 	if !s.dbConf.Memory {
 		s.logger.Printf("configured for an on-disk database at %s", s.dbPath)
 		parentDir := filepath.Dir(s.dbPath)
-		s.logger.Printf("ensuring directory for on-disk file exists at %s", parentDir)
+		s.logger.Printf("ensuring directory for on-disk database exists at %s", parentDir)
 		err := os.MkdirAll(parentDir, 0755)
 		if err != nil {
 			return err
