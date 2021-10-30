@@ -1,3 +1,7 @@
+## 6.7.1 (unreleased)
+### Implementation changes and bug fixes
+- [PR #920](https://github.com/rqlite/rqlite/pull/920): Minor log message fixes.
+
 ## 6.7.0 (October 22nd 2021)
 ### New features
 - [PR #918](https://github.com/rqlite/rqlite/pull/918): Add support for timestamp column types.
