@@ -246,7 +246,7 @@ func (s *Store) Open(enableBootstrap bool) error {
 	if err := os.MkdirAll(s.raftDir, 0755); err != nil {
 		return err
 	}
-	if err := os.MkdirAll(s.peersPath, 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(s.peersPath), 0755); err != nil {
 		return err
 	}
 
