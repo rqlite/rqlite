@@ -232,7 +232,7 @@ func (s *Store) Open(enableBootstrap bool) error {
 	if !s.dbConf.Memory {
 		s.logger.Printf("configured for an on-disk database at %s", s.dbPath)
 		parentDir := filepath.Dir(s.dbPath)
-		s.logger.Printf("ensuring directory at %s exists", parentDir)
+		s.logger.Printf("ensuring directory for on-disk database exists at %s", parentDir)
 		err := os.MkdirAll(parentDir, 0755)
 		if err != nil {
 			return err
@@ -241,9 +241,12 @@ func (s *Store) Open(enableBootstrap bool) error {
 		s.logger.Printf("configured for an in-memory database")
 	}
 
-	s.logger.Printf("ensuring directory at %s exists", s.raftDir)
-	err := os.MkdirAll(filepath.Dir(s.peersPath), 0755)
-	if err != nil {
+	// Create all the required Raft directories.
+	s.logger.Printf("ensuring directory for Raft exists at %s", s.raftDir)
+	if err := os.MkdirAll(s.raftDir, 0755); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(s.peersPath), 0755); err != nil {
 		return err
 	}
 
