@@ -241,9 +241,12 @@ func (s *Store) Open(enableBootstrap bool) error {
 		s.logger.Printf("configured for an in-memory database")
 	}
 
+	// Create all the required Raft directories.
 	s.logger.Printf("ensuring directory for Raft exists at %s", s.raftDir)
-	err := os.MkdirAll(s.raftDir, 0755)
-	if err != nil {
+	if err := os.MkdirAll(s.raftDir, 0755); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(s.peersPath, 0755); err != nil {
 		return err
 	}
 
