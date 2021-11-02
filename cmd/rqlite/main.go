@@ -41,6 +41,7 @@ var cliHelp = []string{
 	`.expvar                             Show expvar (Go runtime) information for connected node`,
 	`.help                               Show this message`,
 	`.indexes                            Show names of all indexes`,
+	`.ready                              Show ready status for connected node`,
 	`.restore <file>                     Restore the database from a SQLite dump file`,
 	`.nodes                              Show connection status of all nodes in cluster`,
 	`.schema                             Show CREATE statements for all tables`,
@@ -130,6 +131,8 @@ func main() {
 				err = toggleTimer(line[index+1:], &timer)
 			case ".STATUS":
 				err = status(ctx, cmd, line, argv)
+			case ".READY":
+				err = ready(ctx, client, argv)
 			case ".NODES":
 				err = nodes(ctx, cmd, line, argv)
 			case ".EXPVAR":
@@ -211,6 +214,39 @@ func help(ctx *cli.Context, cmd, line string, argv *argT) error {
 func status(ctx *cli.Context, cmd, line string, argv *argT) error {
 	url := fmt.Sprintf("%s://%s:%d/status", argv.Protocol, argv.Host, argv.Port)
 	return cliJSON(ctx, cmd, line, url, argv)
+}
+
+func ready(ctx *cli.Context, client *http.Client, argv *argT) error {
+	u := url.URL{
+		Scheme: argv.Protocol,
+		Host:   fmt.Sprintf("%s:%d", argv.Host, argv.Port),
+		Path:   fmt.Sprintf("%s/readyz", argv.Prefix),
+	}
+	urlStr := u.String()
+
+	req, err := http.NewRequest("GET", urlStr, nil)
+	if err != nil {
+		return err
+	}
+	if argv.Credentials != "" {
+		creds := strings.Split(argv.Credentials, ":")
+		if len(creds) != 2 {
+			return fmt.Errorf("invalid Basic Auth credentials format")
+		}
+		req.SetBasicAuth(creds[0], creds[1])
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode == 200 {
+		ctx.String("ready\n")
+	} else {
+		ctx.String("not ready\n")
+	}
+
+	return nil
 }
 
 func nodes(ctx *cli.Context, cmd, line string, argv *argT) error {
