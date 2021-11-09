@@ -362,7 +362,9 @@ func sendRequest(ctx *cli.Context, makeNewRequest func(string) (*http.Request, e
 }
 
 func parseResponse(response *[]byte, ret interface{}) error {
-	return json.Unmarshal(*response, ret)
+	decoder := json.NewDecoder(strings.NewReader(string(*response)))
+	decoder.UseNumber()
+	return decoder.Decode(ret)
 }
 
 // cliJSON fetches JSON from a URL, and displays it at the CLI.
