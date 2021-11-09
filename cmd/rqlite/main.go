@@ -478,7 +478,9 @@ func cliJSON(ctx *cli.Context, cmd, line, url string, argv *argT) error {
 	}
 
 	ret := make(map[string]interface{})
-	if err := json.Unmarshal(body, &ret); err != nil {
+	decoder := json.NewDecoder(strings.NewReader(string(body)))
+	decoder.UseNumber()
+	if err := decoder.Decode(&ret); err != nil {
 		return err
 	}
 
