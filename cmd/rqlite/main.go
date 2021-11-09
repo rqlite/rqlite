@@ -220,7 +220,7 @@ func ready(ctx *cli.Context, client *http.Client, argv *argT) error {
 	u := url.URL{
 		Scheme: argv.Protocol,
 		Host:   fmt.Sprintf("%s:%d", argv.Host, argv.Port),
-		Path:   fmt.Sprintf("%s/readyz", argv.Prefix),
+		Path:   fmt.Sprintf("%sreadyz", argv.Prefix),
 	}
 	urlStr := u.String()
 
