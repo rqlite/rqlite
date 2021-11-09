@@ -1,4 +1,4 @@
-## 6.8.0 (unreleased)
+## 6.8.0 (November 9th 2021)
 ### New features
 - [PR #921](https://github.com/rqlite/rqlite/pull/921): Support fetching `/readyz` via CLI.
 
