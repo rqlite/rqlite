@@ -4,6 +4,7 @@
 
 ### Implementation changes and bug fixes
 - [PR #920](https://github.com/rqlite/rqlite/pull/920): Minor log message fixes.
+- [PR #922](https://github.com/rqlite/rqlite/pull/922), [PR #924](https://github.com/rqlite/rqlite/pull/924): Fix display of numbers during JSON deserialization. Thanks @tiswong 
 
 ## 6.7.0 (October 22nd 2021)
 ### New features
