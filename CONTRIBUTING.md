@@ -23,7 +23,7 @@ cd rqlite/
 export GOPATH=$PWD
 mkdir -p src/github.com/rqlite
 cd src/github.com/rqlite
-git clone git@github.com:rqlite/rqlite.git
+git clone https://github.com/rqlite/rqlite.git
 cd rqlite
 go install ./...
 $GOPATH/bin/rqlited ~/node.1
