@@ -41,7 +41,7 @@ rqlited -disco-id 809d9ba6-f70b-11e6-9a5a-92819c00729a -http-addr 0.0.0.0:4001 -
 In this example, other nodes will contact this node at `host1:4001`.
 
 ## Caveats
-If a node is already part of a cluster, addresses returned by the Discovery Service are ignored.
+If a node is already part of a cluster, no attempt is made to contact the Discovery service, even if a Discovery ID is passed to a node at startup.
 
 ## Example
 Create a Discovery Service ID:
