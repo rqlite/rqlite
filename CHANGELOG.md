@@ -1,6 +1,7 @@
 ## 6.8.1 (unreleased)
 ### Implementation changes and bug fixes
 - [Fix URL](https://github.com/rqlite/rqlite/commit/d8e915e0be589b5cf1d593b80985e8247ba5f3d9) for `.ready` CLI command.
+- [PR #925](https://github.com/rqlite/rqlite/pull/925): Ignore disco ID if there is preexisting state. Fixes [issue #347](https://github.com/rqlite/rqlite/issues/347).
 
 ## 6.8.0 (November 9th 2021)
 ### New features
