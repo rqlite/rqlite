@@ -249,7 +249,7 @@ func main() {
 
 	// Determine join addresses
 	var joins []string
-	joins, err = determineJoinAddresses()
+	joins, err = determineJoinAddresses(isNew)
 	if err != nil {
 		log.Fatalf("unable to determine join addresses: %s", err.Error())
 	}
@@ -350,7 +350,7 @@ func main() {
 	log.Println("rqlite server stopped")
 }
 
-func determineJoinAddresses() ([]string, error) {
+func determineJoinAddresses(isNew bool) ([]string, error) {
 	apiAdv := httpAddr
 	if httpAdv != "" {
 		apiAdv = httpAdv
@@ -363,17 +363,21 @@ func determineJoinAddresses() ([]string, error) {
 	}
 
 	if discoID != "" {
-		log.Printf("registering with Discovery Service at %s with ID %s", discoURL, discoID)
-		c := disco.New(discoURL)
-		r, err := c.Register(discoID, apiAdv)
-		if err != nil {
-			return nil, err
-		}
-		log.Println("Discovery Service responded with nodes:", r.Nodes)
-		for _, a := range r.Nodes {
-			if a != apiAdv {
-				// Only other nodes can be joined.
-				addrs = append(addrs, a)
+		if !isNew {
+			log.Printf("node has preexisting state, ignoring Discovery ID %s", discoID)
+		} else {
+			log.Printf("registering with Discovery Service at %s with ID %s", discoURL, discoID)
+			c := disco.New(discoURL)
+			r, err := c.Register(discoID, apiAdv)
+			if err != nil {
+				return nil, err
+			}
+			log.Println("Discovery Service responded with nodes:", r.Nodes)
+			for _, a := range r.Nodes {
+				if a != apiAdv {
+					// Only other nodes can be joined.
+					addrs = append(addrs, a)
+				}
 			}
 		}
 	}
