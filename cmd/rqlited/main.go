@@ -373,16 +373,21 @@ func determineJoinAddresses(isNew bool) ([]string, error) {
 				return nil, err
 			}
 			log.Println("Discovery Service responded with nodes:", r.Nodes)
-			for _, a := range r.Nodes {
-				if a != apiAdv {
-					// Only other nodes can be joined.
-					addrs = append(addrs, a)
-				}
-			}
+			addrs = append(addrs, r.Nodes...)
 		}
 	}
 
-	return addrs, nil
+	// It won't work to attempt a self-join, so remove any such address.
+	var validAddrs []string
+	for i := range addrs {
+		if addrs[i] == apiAdv || addrs[i] == fmt.Sprintf("http://%s", apiAdv) {
+			log.Printf("ignoring join address %s equal to this node's address", addrs[i])
+			continue
+		}
+		validAddrs = append(validAddrs, addrs[i])
+	}
+
+	return validAddrs, nil
 }
 
 func waitForConsensus(str *store.Store) error {
