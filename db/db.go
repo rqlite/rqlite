@@ -75,7 +75,8 @@ type PoolStats struct {
 	MaxLifetimeClosed  int64         `json:"max_lifetime_closed"`
 }
 
-// Open opens a file-based database, creating it if it does not exist.
+// Open opens a file-based database, creating it if it does not exist. After this
+// function returns, an actual SQLite file will always exist.
 func Open(dbPath string, fkEnabled bool) (*DB, error) {
 	rwDSN := fmt.Sprintf("file:%s?_fk=%s", dbPath, strconv.FormatBool(fkEnabled))
 	rwDB, err := sql.Open("sqlite3", rwDSN)
