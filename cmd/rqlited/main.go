@@ -63,6 +63,7 @@ var expvar bool
 var pprofEnabled bool
 var onDisk bool
 var onDiskPath string
+var onDiskStartup bool
 var fkConstraints bool
 var raftLogLevel string
 var raftNonVoter bool
@@ -112,6 +113,7 @@ func init() {
 	flag.BoolVar(&pprofEnabled, "pprof", true, "Serve pprof data on HTTP server")
 	flag.BoolVar(&onDisk, "on-disk", false, "Use an on-disk SQLite database")
 	flag.StringVar(&onDiskPath, "on-disk-path", "", "Path for SQLite on-disk database file. If not set, use file in data directory")
+	flag.BoolVar(&onDiskStartup, "on-disk-memory-startup", false, "Do not initialize on-disk database in memory first at startup")
 	flag.BoolVar(&fkConstraints, "fk", false, "Enable SQLite foreign key constraints")
 	flag.BoolVar(&showVersion, "version", false, "Show version information and exit")
 	flag.BoolVar(&raftNonVoter, "raft-non-voter", false, "Configure as non-voting node")
@@ -212,6 +214,7 @@ func main() {
 	})
 
 	// Set optional parameters on store.
+	str.StartupOnDisk = onDiskStartup
 	str.SetRequestCompression(compressionBatch, compressionSize)
 	str.RaftLogLevel = raftLogLevel
 	str.ShutdownOnRemove = raftShutdownOnRemove

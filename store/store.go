@@ -161,6 +161,8 @@ type Store struct {
 
 	logger *log.Logger
 
+	StartupOnDisk bool // Do not use in-memory optimization for on-disk startup.
+
 	ShutdownOnRemove   bool
 	SnapshotThreshold  uint64
 	SnapshotInterval   time.Duration
@@ -231,6 +233,7 @@ func (s *Store) Open(enableBootstrap bool) error {
 
 	if !s.dbConf.Memory {
 		s.logger.Printf("configured for an on-disk database at %s", s.dbPath)
+		s.logger.Printf("on-disk database in-memory creation %s", enabledFromBool(!s.StartupOnDisk))
 		parentDir := filepath.Dir(s.dbPath)
 		s.logger.Printf("ensuring directory for on-disk database exists at %s", parentDir)
 		err := os.MkdirAll(parentDir, 0755)
@@ -308,8 +311,10 @@ func (s *Store) Open(enableBootstrap bool) error {
 
 	// If an on-disk database has been requested, and there are no snapshots, and
 	// there are no commands in the log, then this is the only opportunity to
-	// create that on-disk database file before Raft initializes.
-	if !s.dbConf.Memory && !s.snapsExistOnOpen && s.lastCommandIdxOnOpen == 0 {
+	// create that on-disk database file before Raft initializes. In addition this
+	// can also happen if the user explicitly disables the startup optimization of
+	// building the SQLite database in memory, before switching to disk.
+	if s.StartupOnDisk || (!s.dbConf.Memory && !s.snapsExistOnOpen && s.lastCommandIdxOnOpen == 0) {
 		s.db, err = s.createOnDisk(nil)
 		if err != nil {
 			return fmt.Errorf("failed to create on-disk database")
@@ -617,6 +622,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 			"node_id": leaderID,
 			"addr":    leaderAddr,
 		},
+		"startup_on_disk":    s.StartupOnDisk,
 		"apply_timeout":      s.ApplyTimeout.String(),
 		"heartbeat_timeout":  s.HeartbeatTimeout.String(),
 		"election_timeout":   s.ElectionTimeout.String(),
@@ -980,6 +986,8 @@ func (s *Store) Apply(l *raft.Log) (e interface{}) {
 				// Last command log applied. Time to switch to on-disk database?
 				if s.dbConf.Memory {
 					s.logger.Println("continuing use of in-memory database")
+				} else if s.onDiskCreated {
+					s.logger.Println("continuing use of on-disk database")
 				} else {
 					// Since we're here, it means that a) an on-disk database was requested
 					// *and* there were commands in the log. A snapshot may or may not have
@@ -1080,11 +1088,12 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 	}
 
 	var db *sql.DB
-	if !s.dbConf.Memory && s.lastCommandIdxOnOpen == 0 {
+	if s.StartupOnDisk || (!s.dbConf.Memory && s.lastCommandIdxOnOpen == 0) {
 		// A snapshot clearly exists (this function has been called) but there
 		// are no command entries in the log -- so Apply will not be called.
 		// Therefore this is the last opportunity to create the on-disk database
-		// before Raft starts.
+		// before Raft starts. This could also happen because the user has explicitly
+		// disabled the build-SQLited-atabase-in-memory-first optimization.
 		db, err = s.createOnDisk(b)
 		if err != nil {
 			return fmt.Errorf("open on-disk file during restore: %s", err)
