@@ -49,7 +49,7 @@ func openStoreCloseStartup(t *testing.T, s *Store) {
 	}
 
 	qr := queryRequestFromString("SELECT * FROM foo", false, false)
-	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
 	r, err := s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
@@ -78,7 +78,7 @@ func openStoreCloseStartup(t *testing.T, s *Store) {
 	// Insert new records to trigger a snapshot.
 	queryTest := func(s *Store, c int) {
 		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
-		qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+		qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
 		r, err := s.Query(qr)
 		if err != nil {
 			t.Fatalf("failed to query single node: %s", err.Error())
