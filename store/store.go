@@ -161,7 +161,13 @@ type Store struct {
 
 	logger *log.Logger
 
-	StartupOnDisk bool // Do not use in-memory optimization for on-disk startup.
+	// StartupOnDisk disables in-memory initialization of on-disk databases.
+	// Restarting a node with an on-disk database can be slow so, by default,
+	// rqlite creates on-disk databases in memory first, and then moves the
+	// database to disk before Raft starts. However this optimization can
+	// prevent nodes with very large (2GB+) databases from starting. This
+	// flag allows control of the optimization.
+	StartupOnDisk bool
 
 	ShutdownOnRemove   bool
 	SnapshotThreshold  uint64
@@ -989,11 +995,12 @@ func (s *Store) Apply(l *raft.Log) (e interface{}) {
 				} else if s.onDiskCreated {
 					s.logger.Println("continuing use of on-disk database")
 				} else {
-					// Since we're here, it means that a) an on-disk database was requested
-					// *and* there were commands in the log. A snapshot may or may not have
-					// been applied, but it wouldn't have created the on-disk database in that
-					// case since there were commands in the log. This is the very last chance
-					// to do convert from in-memory to on-disk.
+					// Since we're here, it means that a) an on-disk database was requested,
+					// b) in-memory creation of the on-disk database is enabled, and c) there
+					// were commands in the log. A snapshot may or may not have been applied,
+					// but it wouldn't have created the on-disk database in that case since
+					// there were commands in the log. This is the very last chance to convert
+					// from in-memory to on-disk.
 					s.queryTxMu.Lock()
 					defer s.queryTxMu.Unlock()
 					b, _ := s.db.Serialize()
@@ -1093,7 +1100,7 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 		// are no command entries in the log -- so Apply will not be called.
 		// Therefore this is the last opportunity to create the on-disk database
 		// before Raft starts. This could also happen because the user has explicitly
-		// disabled the build-SQLited-atabase-in-memory-first optimization.
+		// disabled the build-on-disk-database-in-memory-first optimization.
 		db, err = s.createOnDisk(b)
 		if err != nil {
 			return fmt.Errorf("open on-disk file during restore: %s", err)
