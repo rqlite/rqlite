@@ -134,7 +134,7 @@ func openStoreCloseStartup(t *testing.T, s *Store) {
 	}
 
 	qr = queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
-	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
 	r, err = s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
@@ -176,7 +176,7 @@ func openStoreCloseStartup(t *testing.T, s *Store) {
 		t.Fatalf("failed to wait for fsmIndex: %s", err.Error())
 	}
 
-		if err := s.Close(true); err != nil {
+	if err := s.Close(true); err != nil {
 		t.Fatalf("failed to close single-node store: %s", err.Error())
 	}
 	if err := s.Open(true); err != nil {
@@ -193,6 +193,7 @@ func openStoreCloseStartup(t *testing.T, s *Store) {
 	}
 
 	qr = queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
+	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
 	r, err = s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
@@ -205,9 +206,10 @@ func openStoreCloseStartup(t *testing.T, s *Store) {
 // Test_OpenStoreCloseStartupOnDiskSingleNode tests that the on-disk
 // optimization can be disabled in various scenarios.
 func Test_OpenStoreCloseStartupOnDiskSingleNode(t *testing.T) {
-	s := mustNewStore(false)
+	s, ln := mustNewStore(false)
 	s.StartupOnDisk = true
 	defer os.RemoveAll(s.Path())
+	defer ln.Close()
 
 	openStoreCloseStartup(t, s)
 }
@@ -215,9 +217,10 @@ func Test_OpenStoreCloseStartupOnDiskSingleNode(t *testing.T) {
 // Test_OpenStoreCloseStartupMemorySingleNode tests that the on-disk
 // optimization works fine.
 func Test_OpenStoreCloseStartupMemorySingleNode(t *testing.T) {
-	s := mustNewStore(false)
+	s, ln := mustNewStore(false)
 	s.StartupOnDisk = false
 	defer os.RemoveAll(s.Path())
+	defer ln.Close()
 
 	openStoreCloseStartup(t, s)
 }
@@ -225,8 +228,9 @@ func Test_OpenStoreCloseStartupMemorySingleNode(t *testing.T) {
 // Test_OpenStoreCloseStartupMemoryOnlySingleNode tests that in-memory
 // works fine during various restart scenarios.
 func Test_OpenStoreCloseStartupMemoryOnlySingleNode(t *testing.T) {
-	s := mustNewStore(true)
+	s, ln := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
+	defer ln.Close()
 
 	openStoreCloseStartup(t, s)
 }

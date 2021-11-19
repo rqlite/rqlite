@@ -19,8 +19,9 @@ import (
 )
 
 func Test_OpenStoreSingleNode(t *testing.T) {
-	s := mustNewStore(true)
+	s, ln := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
+	defer ln.Close()
 
 	if err := s.Open(true); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
@@ -44,8 +45,9 @@ func Test_OpenStoreSingleNode(t *testing.T) {
 }
 
 func Test_OpenStoreCloseSingleNode(t *testing.T) {
-	s := mustNewStore(true)
+	s, ln := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
+	defer ln.Close()
 
 	if err := s.Open(true); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
@@ -103,8 +105,9 @@ func Test_OpenStoreCloseSingleNode(t *testing.T) {
 }
 
 func Test_SingleNodeInMemExecuteQuery(t *testing.T) {
-	s := mustNewStore(true)
+	s, ln := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
+	defer ln.Close()
 
 	if err := s.Open(true); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
@@ -140,8 +143,9 @@ func Test_SingleNodeInMemExecuteQuery(t *testing.T) {
 
 // Test_SingleNodeInMemExecuteQueryFail ensures database level errors are presented by the store.
 func Test_SingleNodeInMemExecuteQueryFail(t *testing.T) {
-	s := mustNewStore(true)
+	s, ln := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
+	defer ln.Close()
 
 	if err := s.Open(true); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
@@ -164,8 +168,9 @@ func Test_SingleNodeInMemExecuteQueryFail(t *testing.T) {
 }
 
 func Test_SingleNodeFileExecuteQuery(t *testing.T) {
-	s := mustNewStore(false)
+	s, ln := mustNewStore(false)
 	defer os.RemoveAll(s.Path())
+	defer ln.Close()
 
 	if err := s.Open(true); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
@@ -238,8 +243,9 @@ func Test_SingleNodeFileExecuteQuery(t *testing.T) {
 }
 
 func Test_SingleNodeExecuteQueryTx(t *testing.T) {
-	s := mustNewStore(true)
+	s, ln := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
+	defer ln.Close()
 
 	if err := s.Open(true); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
@@ -288,8 +294,9 @@ func Test_SingleNodeExecuteQueryTx(t *testing.T) {
 
 // Test_SingleNodeInMemFK tests that basic foreign-key related functionality works.
 func Test_SingleNodeInMemFK(t *testing.T) {
-	s := mustNewStoreFK(true)
+	s, ln := mustNewStoreFK(true)
 	defer os.RemoveAll(s.Path())
+	defer ln.Close()
 
 	if err := s.Open(true); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
@@ -317,8 +324,9 @@ func Test_SingleNodeInMemFK(t *testing.T) {
 // Test_SingleNodeSQLitePath ensures that basic functionality works when the SQLite database path
 // is explicitly specificed.
 func Test_SingleNodeSQLitePath(t *testing.T) {
-	s, path := mustNewStoreSQLitePath()
+	s, ln, path := mustNewStoreSQLitePath()
 	defer os.RemoveAll(s.Path())
+	defer ln.Close()
 
 	if err := s.Open(true); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
@@ -360,8 +368,9 @@ func Test_SingleNodeSQLitePath(t *testing.T) {
 func Test_SingleNodeBackupBinary(t *testing.T) {
 	t.Parallel()
 
-	s := mustNewStore(false)
+	s, ln := mustNewStore(false)
 	defer os.RemoveAll(s.Path())
+	defer ln.Close()
 
 	if err := s.Open(true); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
@@ -410,8 +419,9 @@ COMMIT;
 func Test_SingleNodeBackupText(t *testing.T) {
 	t.Parallel()
 
-	s := mustNewStore(true)
+	s, ln := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
+	defer ln.Close()
 
 	if err := s.Open(true); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
@@ -451,8 +461,9 @@ COMMIT;
 }
 
 func Test_SingleNodeLoad(t *testing.T) {
-	s := mustNewStore(true)
+	s, ln := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
+	defer ln.Close()
 
 	if err := s.Open(true); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
@@ -489,8 +500,9 @@ COMMIT;
 }
 
 func Test_SingleNodeSingleCommandTrigger(t *testing.T) {
-	s := mustNewStore(true)
+	s, ln := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
+	defer ln.Close()
 
 	if err := s.Open(true); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
@@ -531,8 +543,9 @@ COMMIT;
 }
 
 func Test_SingleNodeLoadNoStatements(t *testing.T) {
-	s := mustNewStore(true)
+	s, ln := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
+	defer ln.Close()
 
 	if err := s.Open(true); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
@@ -553,8 +566,9 @@ COMMIT;
 }
 
 func Test_SingleNodeLoadEmpty(t *testing.T) {
-	s := mustNewStore(true)
+	s, ln := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
+	defer ln.Close()
 
 	if err := s.Open(true); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
@@ -572,8 +586,9 @@ func Test_SingleNodeLoadEmpty(t *testing.T) {
 }
 
 func Test_SingleNodeLoadChinook(t *testing.T) {
-	s := mustNewStore(true)
+	s, ln := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
+	defer ln.Close()
 
 	if err := s.Open(true); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
@@ -633,8 +648,9 @@ func Test_SingleNodeLoadChinook(t *testing.T) {
 // Test_SingleNodeRecoverNoChange tests a node recovery that doesn't
 // actually change anything.
 func Test_SingleNodeRecoverNoChange(t *testing.T) {
-	s := mustNewStore(true)
+	s, ln := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
+	defer ln.Close()
 	if err := s.Open(true); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
@@ -697,8 +713,9 @@ func Test_SingleNodeRecoverNoChange(t *testing.T) {
 // Test_SingleNodeRecoverNetworkChange tests a node recovery that
 // involves a changed-network address.
 func Test_SingleNodeRecoverNetworkChange(t *testing.T) {
-	s0 := mustNewStore(true)
+	s0, ln0 := mustNewStore(true)
 	defer os.RemoveAll(s0.Path())
+	defer ln0.Close()
 	if err := s0.Open(true); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
@@ -739,6 +756,7 @@ func Test_SingleNodeRecoverNetworkChange(t *testing.T) {
 	// Create a new node, at the same path. Will presumably have a different
 	// Raft network address, since they are randomly assigned.
 	sR, srLn := mustNewStoreAtPathsLn(id, s0.Path(), "", true, false)
+	defer srLn.Close()
 	if IsNewNode(sR.Path()) {
 		t.Fatalf("store detected incorrectly as new")
 	}
@@ -772,8 +790,9 @@ func Test_SingleNodeRecoverNetworkChange(t *testing.T) {
 // Test_SingleNodeRecoverNetworkChangeSnapshot tests a node recovery that
 // involves a changed-network address, with snapshots underneath.
 func Test_SingleNodeRecoverNetworkChangeSnapshot(t *testing.T) {
-	s0 := mustNewStore(true)
+	s0, ln0 := mustNewStore(true)
 	defer os.RemoveAll(s0.Path())
+	defer ln0.Close()
 	s0.SnapshotThreshold = 4
 	s0.SnapshotInterval = 100 * time.Millisecond
 	if err := s0.Open(true); err != nil {
@@ -867,8 +886,9 @@ func Test_SingleNodeRecoverNetworkChangeSnapshot(t *testing.T) {
 }
 
 func Test_MultiNodeJoinRemove(t *testing.T) {
-	s0 := mustNewStore(true)
+	s0, ln0 := mustNewStore(true)
 	defer os.RemoveAll(s0.Path())
+	defer ln0.Close()
 	if err := s0.Open(true); err != nil {
 		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
 	}
@@ -877,8 +897,9 @@ func Test_MultiNodeJoinRemove(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
-	s1 := mustNewStore(true)
+	s1, ln1 := mustNewStore(true)
 	defer os.RemoveAll(s1.Path())
+	defer ln1.Close()
 	if err := s1.Open(false); err != nil {
 		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
 	}
@@ -939,8 +960,9 @@ func Test_MultiNodeJoinRemove(t *testing.T) {
 }
 
 func Test_MultiNodeJoinNonVoterRemove(t *testing.T) {
-	s0 := mustNewStore(true)
+	s0, ln0 := mustNewStore(true)
 	defer os.RemoveAll(s0.Path())
+	defer ln0.Close()
 	if err := s0.Open(true); err != nil {
 		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
 	}
@@ -949,8 +971,9 @@ func Test_MultiNodeJoinNonVoterRemove(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
-	s1 := mustNewStore(true)
+	s1, ln1 := mustNewStore(true)
 	defer os.RemoveAll(s1.Path())
+	defer ln1.Close()
 	if err := s1.Open(false); err != nil {
 		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
 	}
@@ -1015,8 +1038,9 @@ func Test_MultiNodeJoinNonVoterRemove(t *testing.T) {
 }
 
 func Test_MultiNodeExecuteQuery(t *testing.T) {
-	s0 := mustNewStore(true)
+	s0, ln0 := mustNewStore(true)
 	defer os.RemoveAll(s0.Path())
+	defer ln0.Close()
 	if err := s0.Open(true); err != nil {
 		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
 	}
@@ -1025,15 +1049,17 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
-	s1 := mustNewStore(true)
+	s1, ln1 := mustNewStore(true)
 	defer os.RemoveAll(s1.Path())
+	defer ln1.Close()
 	if err := s1.Open(false); err != nil {
 		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
 	}
 	defer s1.Close(true)
 
-	s2 := mustNewStore(true)
+	s2, ln2 := mustNewStore(true)
 	defer os.RemoveAll(s2.Path())
+	defer ln2.Close()
 	if err := s2.Open(false); err != nil {
 		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
 	}
@@ -1133,8 +1159,9 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 }
 
 func Test_MultiNodeExecuteQueryFreshness(t *testing.T) {
-	s0 := mustNewStore(true)
+	s0, ln0 := mustNewStore(true)
 	defer os.RemoveAll(s0.Path())
+	defer ln0.Close()
 	if err := s0.Open(true); err != nil {
 		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
 	}
@@ -1143,8 +1170,9 @@ func Test_MultiNodeExecuteQueryFreshness(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
-	s1 := mustNewStore(true)
+	s1, ln1 := mustNewStore(true)
 	defer os.RemoveAll(s1.Path())
+	defer ln1.Close()
 	if err := s1.Open(false); err != nil {
 		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
 	}
@@ -1260,8 +1288,9 @@ func Test_MultiNodeExecuteQueryFreshness(t *testing.T) {
 }
 
 func Test_StoreLogTruncationMultinode(t *testing.T) {
-	s0 := mustNewStore(true)
+	s0, ln0 := mustNewStore(true)
 	defer os.RemoveAll(s0.Path())
+	defer ln0.Close()
 	s0.SnapshotThreshold = 4
 	s0.SnapshotInterval = 100 * time.Millisecond
 
@@ -1306,7 +1335,8 @@ func Test_StoreLogTruncationMultinode(t *testing.T) {
 
 	// Fire up new node and ensure it picks up all changes. This will
 	// involve getting a snapshot and truncated log.
-	s1 := mustNewStore(true)
+	s1, ln1 := mustNewStore(true)
+	defer ln1.Close()
 	if err := s1.Open(true); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
@@ -1339,8 +1369,9 @@ func Test_StoreLogTruncationMultinode(t *testing.T) {
 }
 
 func Test_SingleNodeSnapshotOnDisk(t *testing.T) {
-	s := mustNewStore(false)
+	s, ln := mustNewStore(false)
 	defer os.RemoveAll(s.Path())
+	defer ln.Close()
 
 	if err := s.Open(true); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
@@ -1403,8 +1434,9 @@ func Test_SingleNodeSnapshotOnDisk(t *testing.T) {
 }
 
 func Test_SingleNodeSnapshotInMem(t *testing.T) {
-	s := mustNewStore(true)
+	s, ln := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
+	defer ln.Close()
 
 	if err := s.Open(true); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
@@ -1484,8 +1516,9 @@ func Test_SingleNodeSnapshotInMem(t *testing.T) {
 }
 
 func Test_SingleNodeRestoreNoncompressed(t *testing.T) {
-	s := mustNewStore(false)
+	s, ln := mustNewStore(false)
 	defer os.RemoveAll(s.Path())
+	defer ln.Close()
 
 	if err := s.Open(true); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
@@ -1519,7 +1552,9 @@ func Test_SingleNodeRestoreNoncompressed(t *testing.T) {
 }
 
 func Test_SingleNodeNoop(t *testing.T) {
-	s0 := mustNewStore(true)
+	s0, ln0 := mustNewStore(true)
+	defer os.RemoveAll(s0.Path())
+	defer ln0.Close()
 	if err := s0.Open(true); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
@@ -1537,8 +1572,9 @@ func Test_SingleNodeNoop(t *testing.T) {
 }
 
 func Test_IsLeader(t *testing.T) {
-	s := mustNewStore(true)
+	s, ln := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
+	defer ln.Close()
 
 	if err := s.Open(true); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
@@ -1554,8 +1590,9 @@ func Test_IsLeader(t *testing.T) {
 }
 
 func Test_State(t *testing.T) {
-	s := mustNewStore(true)
+	s, ln := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
+	defer ln.Close()
 
 	if err := s.Open(true); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
@@ -1588,24 +1625,20 @@ func mustNewStoreAtPathsLn(id, dataPath, sqlitePath string, inmem, fk bool) (*St
 	return s, ln
 }
 
-func mustNewStoreAtPaths(dataPath, sqlitePath string, inmem, fk bool) *Store {
-	s, _ := mustNewStoreAtPathsLn(randomString(), dataPath, sqlitePath, inmem, fk)
-	return s
+func mustNewStore(inmem bool) (*Store, net.Listener) {
+	return mustNewStoreAtPathsLn(randomString(), mustTempDir(), "", inmem, false)
 }
 
-func mustNewStore(inmem bool) *Store {
-	return mustNewStoreAtPaths(mustTempDir(), "", inmem, false)
+func mustNewStoreFK(inmem bool) (*Store, net.Listener) {
+	return mustNewStoreAtPathsLn(randomString(), mustTempDir(), "", inmem, true)
 }
 
-func mustNewStoreFK(inmem bool) *Store {
-	return mustNewStoreAtPaths(mustTempDir(), "", inmem, true)
-}
-
-func mustNewStoreSQLitePath() (*Store, string) {
+func mustNewStoreSQLitePath() (*Store, net.Listener, string) {
 	dataDir := mustTempDir()
 	sqliteDir := mustTempDir()
 	sqlitePath := filepath.Join(sqliteDir, "explicit-path.db")
-	return mustNewStoreAtPaths(dataDir, sqlitePath, false, true), sqlitePath
+	s, ln := mustNewStoreAtPathsLn(randomString(), dataDir, sqlitePath, false, true)
+	return s, ln, sqlitePath
 }
 
 type mockSnapshotSink struct {
