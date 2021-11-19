@@ -1,3 +1,7 @@
+## 6.8.2 (unreleased)
+### Implementation changes and bug fixes
+- [PR #929](https://github.com/rqlite/rqlite/pull/929): Support disabling in-memory init of on-disk. Fixes [issue #928](https://github.com/rqlite/rqlite/issues/928).
+
 ## 6.8.1 (November 13th 2021)
 ### Implementation changes and bug fixes
 - [Fix URL](https://github.com/rqlite/rqlite/commit/d8e915e0be589b5cf1d593b80985e8247ba5f3d9) for `.ready` CLI command.
