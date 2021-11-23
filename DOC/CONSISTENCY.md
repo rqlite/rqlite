@@ -23,7 +23,7 @@ _Weak_ instructs the Leader to check that it is the Leader, before querying the 
 ## Strong
 If a query request is sent to a follower, and _strong_ consistency is specified, the Follower will transparently forward the request to the Leader. The Follower waits for the response from the Leader, and then returns that response to the client.
 
-To avoid even the issues associated with _weak_ consistency, rqlite also offers _strong_. In this mode, the Leader sends the query through the Raft consensus system, ensuring that the Leader **remains** the Leader at all times during query processing. However, this will involve the Leader contacting at least a quorum of nodes, and will therefore increase query response times.
+To avoid even the issues associated with _weak_ consistency, rqlite also offers _strong_. In this mode, the Leader sends the query through the Raft consensus system, ensuring that the Leader **remains** the Leader at all times during query processing. When using _strong_ you can be sure that the database reflects every change sent to it prior to the query. However, this will involve the Leader contacting at least a quorum of nodes, and will therefore increase query response times.
 
 # Which should I use?
 _Weak_ is probably sufficient for most applications, and is the default read consistency level. To explicitly select consistency, set the query param `level` to the desired level. However you should use _none_ with read-only nodes, unless you want those nodes to actually forward the query to the Leader.
