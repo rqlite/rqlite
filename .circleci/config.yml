@@ -52,6 +52,7 @@ jobs:
       - run: go get -v -t -d ./...
       - run:
           command: go test -timeout 20m -gcflags=all=-d=checkptr=0 -race ./...
+          no_output_timeout: 20m
           environment:
                 GORACE: "halt_on_error=1"
 
