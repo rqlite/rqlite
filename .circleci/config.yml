@@ -47,5 +47,4 @@ workflows:
   build_and_test:
     jobs:
       - test
-      - race
       - end_to_end
