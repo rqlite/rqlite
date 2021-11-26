@@ -28,6 +28,33 @@ jobs:
       - run: go vet
       - run: go test ./...
 
+  race:
+    docker:
+      # specify the version
+      - image: circleci/golang@sha256:bf91f089cecab7fcd329193022794e7d13c42ee4570b1ac2920875c1b948eb63
+
+      # Specify service dependencies here if necessary
+      # CircleCI maintains a library of pre-built images
+      # documented at https://circleci.com/docs/2.0/circleci-images/
+      # - image: circleci/postgres:9.4
+
+    #### TEMPLATE_NOTE: go expects specific checkout path representing url
+    #### expecting it in the form of
+    ####   /go/src/github.com/circleci/go-tool
+    ####   /go/src/bitbucket.org/circleci/go-tool
+    working_directory: /go/src/github.com/rqlite/rqlite
+    steps:
+      - checkout
+
+      # specify any bash command here prefixed with `run: `
+      # BoltDB, no longer maintained, has pointer issues. However it's run
+      # for years without actual issue so disabling the pointer tests
+      - run: go get -v -t -d ./...
+      - run:
+          command: go test -timeout 20m -gcflags=all=-d=checkptr=0 -race ./...
+          environment:
+                GORACE: "halt_on_error=1"
+
   end_to_end:
     working_directory: /go/src/github.com/rqlite/rqlite
     docker:
@@ -47,4 +74,5 @@ workflows:
   build_and_test:
     jobs:
       - test
+      - race
       - end_to_end
