@@ -1456,8 +1456,6 @@ func Test_SerializeInMemory(t *testing.T) {
 }
 
 func Test_Dump(t *testing.T) {
-	t.Parallel()
-
 	db, path := mustCreateDatabase()
 	defer db.Close()
 	defer os.Remove(path)
@@ -1478,8 +1476,6 @@ func Test_Dump(t *testing.T) {
 }
 
 func Test_DumpMemory(t *testing.T) {
-	t.Parallel()
-
 	db, path := mustCreateDatabase()
 	defer db.Close()
 	defer os.Remove(path)
@@ -1507,7 +1503,6 @@ func Test_DumpMemory(t *testing.T) {
 // Test_1GiBInMemory tests that in-memory databases larger than 1GiB,
 // but smaller than 2GiB, can be created without issue.
 func Test_1GiBInMemory(t *testing.T) {
-	t.Parallel()
 	db := mustCreateInMemoryDatabase()
 	defer db.Close()
 
@@ -1553,7 +1548,6 @@ func Test_1GiBInMemory(t *testing.T) {
 //
 // See https://github.com/mattn/go-sqlite3/issues/959#issuecomment-890283264
 func Test_ParallelOperationsInMemory(t *testing.T) {
-	t.Parallel()
 	db := mustCreateInMemoryDatabase()
 	defer db.Close()
 
