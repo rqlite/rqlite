@@ -40,7 +40,7 @@ _Setting `-node-id` isn't strictly necessary at this time, but highly recommende
 This single node automatically becomes the leader. You can pass `-h` to `rqlited` to list all configuration options.
 
 ### Docker
-`docker run -p4001:4001 rqlite/rqlite`.
+`docker run -p4001:4001 rqlite/rqlite`
 
 ### Homebrew
 `brew install rqlite`
