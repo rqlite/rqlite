@@ -1,4 +1,4 @@
-## 6.8.2 (unreleased)
+## 6.8.2 (December 2nd 2021)
 ### Implementation changes and bug fixes
 - [PR #929](https://github.com/rqlite/rqlite/pull/929): Support disabling in-memory initialization of on-disk databases. Fixes [issue #928](https://github.com/rqlite/rqlite/issues/928).
 
