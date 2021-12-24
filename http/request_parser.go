@@ -67,46 +67,67 @@ func ParseRequest(b []byte) ([]*command.Statement, error) {
 			continue
 		}
 
-		stmts[i].Parameters = make([]*command.Parameter, len(parameterized[i])-1)
-
+		stmts[i].Parameters = make([]*command.Parameter, 0)
 		for j := range parameterized[i][1:] {
-			switch v := parameterized[i][j+1].(type) {
-			case int:
-			case int64:
-				stmts[i].Parameters[j] = &command.Parameter{
-					Value: &command.Parameter_I{
-						I: v,
-					},
+			m, ok := parameterized[i][j+1].(map[string]interface{})
+			if ok {
+				for k, v := range m {
+					p, err := makeParameter(k, v)
+					if err != nil {
+						return nil, err
+					}
+					stmts[i].Parameters = append(stmts[i].Parameters, p)
 				}
-			case float64:
-				stmts[i].Parameters[j] = &command.Parameter{
-					Value: &command.Parameter_D{
-						D: v,
-					},
+			} else {
+				p, err := makeParameter("", parameterized[i][j+1])
+				if err != nil {
+					return nil, err
 				}
-			case bool:
-				stmts[i].Parameters[j] = &command.Parameter{
-					Value: &command.Parameter_B{
-						B: v,
-					},
-				}
-			case []byte:
-				stmts[i].Parameters[j] = &command.Parameter{
-					Value: &command.Parameter_Y{
-						Y: v,
-					},
-				}
-			case string:
-				stmts[i].Parameters[j] = &command.Parameter{
-					Value: &command.Parameter_S{
-						S: v,
-					},
-				}
-			default:
-				return nil, ErrUnsupportedType
+				stmts[i].Parameters = append(stmts[i].Parameters, p)
 			}
 		}
 	}
 	return stmts, nil
+}
 
+func makeParameter(name string, i interface{}) (*command.Parameter, error) {
+	switch v := i.(type) {
+	case int:
+	case int64:
+		return &command.Parameter{
+			Value: &command.Parameter_I{
+				I: v,
+			},
+			Name: name,
+		}, nil
+	case float64:
+		return &command.Parameter{
+			Value: &command.Parameter_D{
+				D: v,
+			},
+			Name: name,
+		}, nil
+	case bool:
+		return &command.Parameter{
+			Value: &command.Parameter_B{
+				B: v,
+			},
+			Name: name,
+		}, nil
+	case []byte:
+		return &command.Parameter{
+			Value: &command.Parameter_Y{
+				Y: v,
+			},
+			Name: name,
+		}, nil
+	case string:
+		return &command.Parameter{
+			Value: &command.Parameter_S{
+				S: v,
+			},
+			Name: name,
+		}, nil
+	}
+	return nil, ErrUnsupportedType
 }
