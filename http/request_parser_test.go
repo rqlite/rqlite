@@ -1,6 +1,7 @@
 package http
 
 import (
+	"encoding/json"
 	"fmt"
 	"testing"
 )
@@ -109,6 +110,27 @@ func Test_SingleParameterizedRequest(t *testing.T) {
 	}
 	if int(stmts[0].Parameters[1].GetD()) != p1 {
 		t.Fatalf("incorrect parameter, exp %d, got %d", p1, int(stmts[0].Parameters[1].GetI()))
+	}
+}
+
+func Test_SingleNamedParameterizedRequest(t *testing.T) {
+	s := "SELECT * FROM foo WHERE bar=:bar AND qux=:qux"
+	b := []byte(fmt.Sprintf(`[["%s", %s]]`, s, mustJSONMarshal(map[string]interface{}{"bar": 1, "qux": "some string"})))
+
+	stmts, err := ParseRequest(b)
+	if err != nil {
+		t.Fatalf("failed to parse request: %s", err.Error())
+	}
+
+	if len(stmts) != 1 {
+		t.Fatalf("incorrect number of statements returned: %d", len(stmts))
+	}
+	if stmts[0].Sql != s {
+		t.Fatalf("incorrect statement parsed, exp %s, got %s", s, stmts[0].Sql)
+	}
+
+	if len(stmts[0].Parameters) != 2 {
+		t.Fatalf("incorrect number of parameters returned: %d", len(stmts[0].Parameters))
 	}
 }
 
@@ -222,4 +244,12 @@ func Test_SingleInvalidTypeRequests(t *testing.T) {
 	if err != ErrInvalidRequest {
 		t.Fatal("got unexpected error for invalid request")
 	}
+}
+
+func mustJSONMarshal(v interface{}) []byte {
+	b, err := json.Marshal(v)
+	if err != nil {
+		panic("failed to JSON marshal value")
+	}
+	return b
 }
