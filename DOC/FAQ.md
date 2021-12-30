@@ -44,7 +44,7 @@ No. While it does use SQLite as its storage engine, you must only write to the d
 ## Can any node execute a write request, and have the system "synchronize it all"?
 The first thing to understand is that you can send your write-request to any node in the cluster, and rqlite will do the right thing automatically. You do not need to direct your write requests specifically to the leader.
 
-Under the covers however, only the leader can make changes to the database. If a client sends a write-request to a node that node is not the leader, the node will transparently forward the request to the leader, wait for a response, and then return the response to the client.
+Under the covers however, only the leader can make changes to the database. If a client sends a write-request to a node and that node is not the leader, the node will transparently forward the request to the leader, wait for a response, and then return the response to the client.
 
 ## Can I send a read request to any node in the cluster?
 Yes. If a read request must be serviced by the Leader, however, rqlite will transparently forward the request to the Leader, wait for the Leader to handle it, and return the results to the client.
