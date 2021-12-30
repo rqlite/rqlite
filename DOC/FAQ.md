@@ -3,6 +3,7 @@
 * [What exactly does rqlite do?](#what-exactly-does-rqlite-do)
 * [Why would I use this, versus some other replicated database?](#why-would-i-use-this-versus-some-other-replicated-database)
 * [How do I access the database?](#how-do-i-access-the-database)
+* [Is it a drop-in replacement for SQLite?](#is-it-a-drop-in-replacement-for-sqlite)
 * [Can any node execute a write request, and have the system "synchronize it all"?](#can-any-node-execute-a-write-request-and-have-the-system-synchronize-it-all)
 * [Can I send a read request to any node in the cluster?](#can-i-send-a-read-request-to-any-node-in-the-cluster)
 * [rqlite is distributed. Does that mean it can increase SQLite performance?](#rqlite-is-distributed-does-that-mean-it-can-increase-sqlite-performance)
@@ -15,7 +16,6 @@
 * [Is rqlite a good match for a network of nodes that come and go -- perhaps thousands of them?](#is-rqlite-a-good-match-for-a-network-of-nodes-that-come-and-go----perhaps-thousands-of-them)
 * [Can I use rqlite to broadcast changes to lots of other nodes -- perhaps hundreds -- as long as those nodes don't write data?](#can-i-use-rqlite-to-broadcast-changes-to-lots-of-other-nodes----perhaps-hundreds----as-long-as-those-nodes-dont-write-data)
 * [What if read-only nodes -- or clients accessing read-only nodes -- want to write data?](#what-if-read-only-nodes----or-clients-accessing-read-only-nodes----want-to-write-data)
-* [Is it a drop-in replacement for SQLite?](#is-it-a-drop-in-replacement-for-sqlite)
 * [Does rqlite support transactions?](#does-rqlite-support-transactions)
 * [Can I modify the SQLite file directly?](#can-i-modify-the-sqlite-file-directly)
 * [Can I read the SQLite file directly?](#can-i-read-the-sqlite-file-directly)
@@ -37,6 +37,9 @@ That said, it's always possible it's _too_ simple for your needs.
 
 ## How do I access the database?
 The primary way to access the database is via the [HTTP API](https://github.com/rqlite/rqlite/blob/master/DOC/DATA_API.md). You can access it directly, or use a [client library](https://github.com/rqlite). For more casual use you can use the [command line tool](https://github.com/rqlite/rqlite/blob/master/DOC/CLI.md). It is also technically possible to [read the SQLite file directly](https://github.com/rqlite/rqlite/blob/master/DOC/FAQ.md#can-i-read-the-sqlite-file-directly), but it's not officially supported.
+
+## Is it a drop-in replacement for SQLite?
+No. While it does use SQLite as its storage engine, you must only write to the database via the [HTTP API](https://github.com/rqlite/rqlite/blob/master/DOC/DATA_API.md). That said, since it basically exposes SQLite, all the power of that database is available. It is also possible that any system built on top of SQLite only needs small changes to work with rqlite.
 
 ## Can any node execute a write request, and have the system "synchronize it all"?
 The first thing to understand is that you can send your write-request to any node in the cluster, and rqlite will do the right thing automatically. You do not need to direct your write requests specifically to the leader.
@@ -81,9 +84,6 @@ Yes, try out [read-only nodes](https://github.com/rqlite/rqlite/blob/master/DOC/
 
 ## What if read-only nodes -- or clients accessing read-only nodes -- want to write data after all?
 Then they must do it by sending write requests to the leader node. But if they can reach the leader node, it is an effective way for one node at the edge to send a message to all other nodes (well, at least other nodes that are connected to the cluster at that time).
-
-## Is it a drop-in replacement for SQLite?
-No. While it does use SQLite as its storage engine, you must only write to the database via the [HTTP API](https://github.com/rqlite/rqlite/blob/master/DOC/DATA_API.md). That said, since it basically exposes SQLite, all the power of that database is available. It is also possible that any system built on top of SQLite only needs small changes to work with rqlite.
 
 ## Does rqlite support transactions?
 It supports [a form of transactions](https://github.com/rqlite/rqlite/blob/master/DOC/DATA_API.md#transactions). You can wrap a bulk update in a transaction such that all the statements in the bulk request will succeed, or none of them will. However the behaviour or rqlite is undefined if you send explicit `BEGIN`, `COMMIT`, or `ROLLBACK` statements. This is not because they won't work -- they will -- but if your node (or cluster) fails while a transaction is in progress, the system may be left in a hard-to-use state. So until rqlite can offer strict guarantees about its behaviour if it fails during a transaction, using `BEGIN`, `COMMIT`, and `ROLLBACK` is officially unsupported. Unfortunately this does mean that rqlite may not be suitable for some applications.
