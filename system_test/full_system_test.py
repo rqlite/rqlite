@@ -268,7 +268,7 @@ class Node(object):
     body = [statement]
     if params is not None:
       try:
-        body = [body + params]
+        body = body + params
       except TypeError:
         # Presumably not a list, so append as an object.
         body.append(params)
@@ -276,7 +276,7 @@ class Node(object):
     reqParams = {'level': level}
     if pretty:
       reqParams['pretty'] = "yes"
-    r = requests.post(self._query_url(), params=reqParams, data=json.dumps(body))
+    r = requests.post(self._query_url(), params=reqParams, data=json.dumps([body]))
     raise_for_status(r)
     if text:
       return r.text
@@ -285,8 +285,12 @@ class Node(object):
   def execute(self, statement, params=None):
     body = [statement]
     if params is not None:
-      body = [body + params]
-    return self.execute_raw(json.dumps(body))
+      try:
+        body = body + params
+      except TypeError:
+        # Presumably not a list, so append as an object.
+        body.append(params)
+    return self.execute_raw(json.dumps([body]))
 
   def execute_raw(self, body):
     r = requests.post(self._execute_url(), data=body)
