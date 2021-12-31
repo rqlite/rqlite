@@ -52,7 +52,7 @@ func Test_SingleSimpleInvalidRequest(t *testing.T) {
 	b := []byte(fmt.Sprintf(`["%s"`, s))
 
 	_, err := ParseRequest(b)
-	if err != ErrInvalidRequest {
+	if err != ErrInvalidJSON {
 		t.Fatal("got unexpected error for invalid request")
 	}
 }
@@ -215,7 +215,7 @@ func Test_SingleInvalidParameterizedRequest(t *testing.T) {
 	b := []byte(fmt.Sprintf(`[["%s", "%s", %d]`, s, p0, p1))
 
 	_, err := ParseRequest(b)
-	if err != ErrInvalidRequest {
+	if err != ErrInvalidJSON {
 		t.Fatal("got unexpected error for invalid request")
 	}
 }
@@ -224,14 +224,14 @@ func Test_MixedInvalidRequest(t *testing.T) {
 	b := []byte(`[["SELECT * FROM foo"], "SELECT * FROM bar"]`)
 
 	_, err := ParseRequest(b)
-	if err != ErrInvalidRequest {
+	if err != ErrInvalidJSON {
 		t.Fatal("got unexpected error for invalid request")
 	}
 }
 
 func Test_SingleInvalidTypeRequests(t *testing.T) {
 	_, err := ParseRequest([]byte(fmt.Sprintf(`[1]`)))
-	if err != ErrInvalidRequest {
+	if err != ErrInvalidJSON {
 		t.Fatal("got unexpected error for invalid request")
 	}
 
