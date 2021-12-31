@@ -267,7 +267,11 @@ class Node(object):
   def query(self, statement, params=None, level='weak', pretty=False, text=False):
     body = [statement]
     if params is not None:
-      body = [body + params]
+      try:
+        body = [body + params]
+      except TypeError:
+        # Presumably not a list, so append as an object.
+        body.append(params)
 
     reqParams = {'level': level}
     if pretty:
