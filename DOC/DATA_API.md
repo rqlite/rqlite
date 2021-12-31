@@ -97,7 +97,6 @@ curl -XPOST 'localhost:4001/db/query?pretty&timings' -H "Content-Type: applicati
     ["SELECT * FROM foo WHERE name=?", "fiona"]
 ]'
 ```
-Currently named parameters are not yet supported, only simple parameters that use `?`.
 
 ### Named Parameters
 Named parameters are also supported. To use this feature set the values using a dictionary, like so:
