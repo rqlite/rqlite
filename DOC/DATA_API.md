@@ -99,7 +99,8 @@ curl -XPOST 'localhost:4001/db/query?pretty&timings' -H "Content-Type: applicati
 ```
 
 ### Named Parameters
-Named parameters are also supported. To use this feature set the values using a dictionary, like so:
+Named parameters are also supported. To use this feature set the values using a dictionary like so:
+
 _Writing data_
 ```bash
 curl -XPOST 'localhost:4001/db/execute?pretty&timings' -H "Content-Type: application/json" -d '[
