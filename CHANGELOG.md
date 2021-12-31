@@ -1,4 +1,4 @@
-## 6.9.0 (unreleased)
+## 6.9.0 (December 31st 2021)
 ### New features
 - [PR #932](https://github.com/rqlite/rqlite/pull/932): Add support for named parameters. Fixes [issue #675](https://github.com/rqlite/rqlite/issues/675).
 
