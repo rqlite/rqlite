@@ -456,6 +456,21 @@ class TestSingleNode(unittest.TestCase):
     self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona', 20]], u'types': [u'integer', u'text', u'integer'], u'columns': [u'id', u'name', u'age']}]}")
     j = n.query('SELECT * from bar WHERE age=?', params=[20])
     self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona', 20]], u'types': [u'integer', u'text', u'integer'], u'columns': [u'id', u'name', u'age']}]}")
+    j = n.query('SELECT * from bar WHERE age=?', params=[21])
+    self.assertEqual(str(j), "{u'results': [{u'types': [u'integer', u'text', u'integer'], u'columns': [u'id', u'name', u'age']}]}")
+
+  def test_simple_named_parameterized_queries(self):
+    '''Test parameterized queries work as expected'''
+    n = self.cluster.wait_for_leader()
+    j = n.execute('CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT, age INTEGER)')
+    self.assertEqual(str(j), "{u'results': [{}]}")
+    j = n.execute('INSERT INTO bar(name, age) VALUES(?,?)', params=["fiona", 20])
+    applied = n.wait_for_all_fsm()
+    self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
+    j = n.query('SELECT * from bar')
+    self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona', 20]], u'types': [u'integer', u'text', u'integer'], u'columns': [u'id', u'name', u'age']}]}")
+    j = n.query('SELECT * from bar WHERE age=:age', params={"age": 20})
+    self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona', 20]], u'types': [u'integer', u'text', u'integer'], u'columns': [u'id', u'name', u'age']}]}")
 
   def test_simple_parameterized_mixed_queries(self):
     '''Test a mix of parameterized and non-parameterized queries work as expected'''
