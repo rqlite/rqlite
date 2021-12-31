@@ -925,6 +925,93 @@ func Test_SimpleParameterizedStatements(t *testing.T) {
 	}
 }
 
+func Test_SimpleNamedParameterizedStatements(t *testing.T) {
+	db, path := mustCreateDatabase()
+	defer db.Close()
+	defer os.Remove(path)
+
+	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, first TEXT, last TEXT)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	if _, err = db.ExecuteStringStmt(`INSERT INTO foo(first, last) VALUES("albert", "einstein")`); err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+	if _, err = db.ExecuteStringStmt(`INSERT INTO foo(first, last) VALUES("isaac", "newton")`); err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+	if _, err = db.ExecuteStringStmt(`INSERT INTO foo(first, last) VALUES("isaac", "asimov")`); err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+
+	rows, err := db.QueryStringStmt(`SELECT * FROM foo`)
+	if err != nil {
+		t.Fatalf("failed to query table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","first","last"],"types":["integer","text","text"],"values":[[1,"albert","einstein"],[2,"isaac","newton"],[3,"isaac","asimov"]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	req := &command.Request{
+		Statements: []*command.Statement{
+			{
+				Sql: "SELECT * FROM foo WHERE first=:first AND last=:last",
+				Parameters: []*command.Parameter{
+					{
+						Value: &command.Parameter_S{
+							S: "newton",
+						},
+						Name: "last",
+					},
+					{
+						Value: &command.Parameter_S{
+							S: "isaac",
+						},
+						Name: "first",
+					},
+				},
+			},
+		},
+	}
+	rn, err := db.Query(req, false)
+	if err != nil {
+		t.Fatalf("failed to query table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","first","last"],"types":["integer","text","text"],"values":[[2,"isaac","newton"]]}]`, asJSON(rn); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	req = &command.Request{
+		Statements: []*command.Statement{
+			{
+				Sql: "SELECT * FROM foo WHERE first=:first AND last=:last",
+				Parameters: []*command.Parameter{
+					{
+						Value: &command.Parameter_S{
+							S: "clarke",
+						},
+						Name: "last",
+					},
+					{
+						Value: &command.Parameter_S{
+							S: "isaac",
+						},
+						Name: "first",
+					},
+				},
+			},
+		},
+	}
+	rn, err = db.Query(req, false)
+	if err != nil {
+		t.Fatalf("failed to query table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","first","last"],"types":["integer","text","text"]}]`, asJSON(rn); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
 func Test_CommonTableExpressions(t *testing.T) {
 	db, path := mustCreateDatabase()
 	defer db.Close()

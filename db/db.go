@@ -863,15 +863,15 @@ func parametersToValues(parameters []*command.Parameter) ([]interface{}, error) 
 	for i := range parameters {
 		switch w := parameters[i].GetValue().(type) {
 		case *command.Parameter_I:
-			values[i] = w.I
+			values[i] = sql.Named(parameters[i].GetName(), w.I)
 		case *command.Parameter_D:
-			values[i] = w.D
+			values[i] = sql.Named(parameters[i].GetName(), w.D)
 		case *command.Parameter_B:
-			values[i] = w.B
+			values[i] = sql.Named(parameters[i].GetName(), w.B)
 		case *command.Parameter_Y:
-			values[i] = w.Y
+			values[i] = sql.Named(parameters[i].GetName(), w.Y)
 		case *command.Parameter_S:
-			values[i] = w.S
+			values[i] = sql.Named(parameters[i].GetName(), w.S)
 		default:
 			return nil, fmt.Errorf("unsupported type: %T", w)
 		}
