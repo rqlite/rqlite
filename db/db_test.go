@@ -941,8 +941,31 @@ func Test_SimpleNamedParameterizedStatements(t *testing.T) {
 	if _, err = db.ExecuteStringStmt(`INSERT INTO foo(first, last) VALUES("isaac", "newton")`); err != nil {
 		t.Fatalf("failed to insert record: %s", err.Error())
 	}
-	if _, err = db.ExecuteStringStmt(`INSERT INTO foo(first, last) VALUES("isaac", "asimov")`); err != nil {
-		t.Fatalf("failed to insert record: %s", err.Error())
+
+	req := &command.Request{
+		Statements: []*command.Statement{
+			{
+				Sql: "INSERT INTO foo(first, last) VALUES(:first, :last)",
+				Parameters: []*command.Parameter{
+					{
+						Value: &command.Parameter_S{
+							S: "isaac",
+						},
+						Name: "first",
+					},
+					{
+						Value: &command.Parameter_S{
+							S: "asimov",
+						},
+						Name: "last",
+					},
+				},
+			},
+		},
+	}
+	_, err = db.Execute(req, false)
+	if err != nil {
+		t.Fatalf("failed to insert parameterized statement: %s", err.Error())
 	}
 
 	rows, err := db.QueryStringStmt(`SELECT * FROM foo`)
@@ -953,7 +976,7 @@ func Test_SimpleNamedParameterizedStatements(t *testing.T) {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
-	req := &command.Request{
+	req = &command.Request{
 		Statements: []*command.Statement{
 			{
 				Sql: "SELECT * FROM foo WHERE first=:first AND last=:last",
