@@ -267,12 +267,16 @@ class Node(object):
   def query(self, statement, params=None, level='weak', pretty=False, text=False):
     body = [statement]
     if params is not None:
-      body = [body + params]
+      try:
+        body = body + params
+      except TypeError:
+        # Presumably not a list, so append as an object.
+        body.append(params)
 
     reqParams = {'level': level}
     if pretty:
       reqParams['pretty'] = "yes"
-    r = requests.post(self._query_url(), params=reqParams, data=json.dumps(body))
+    r = requests.post(self._query_url(), params=reqParams, data=json.dumps([body]))
     raise_for_status(r)
     if text:
       return r.text
@@ -281,8 +285,12 @@ class Node(object):
   def execute(self, statement, params=None):
     body = [statement]
     if params is not None:
-      body = [body + params]
-    return self.execute_raw(json.dumps(body))
+      try:
+        body = body + params
+      except TypeError:
+        # Presumably not a list, so append as an object.
+        body.append(params)
+    return self.execute_raw(json.dumps([body]))
 
   def execute_raw(self, body):
     r = requests.post(self._execute_url(), data=body)
@@ -455,6 +463,21 @@ class TestSingleNode(unittest.TestCase):
     j = n.query('SELECT * from bar')
     self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona', 20]], u'types': [u'integer', u'text', u'integer'], u'columns': [u'id', u'name', u'age']}]}")
     j = n.query('SELECT * from bar WHERE age=?', params=[20])
+    self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona', 20]], u'types': [u'integer', u'text', u'integer'], u'columns': [u'id', u'name', u'age']}]}")
+    j = n.query('SELECT * from bar WHERE age=?', params=[21])
+    self.assertEqual(str(j), "{u'results': [{u'types': [u'integer', u'text', u'integer'], u'columns': [u'id', u'name', u'age']}]}")
+
+  def test_simple_named_parameterized_queries(self):
+    '''Test named parameterized queries work as expected'''
+    n = self.cluster.wait_for_leader()
+    j = n.execute('CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT, age INTEGER)')
+    self.assertEqual(str(j), "{u'results': [{}]}")
+    j = n.execute('INSERT INTO bar(name, age) VALUES(?,?)', params=["fiona", 20])
+    applied = n.wait_for_all_fsm()
+    self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
+    j = n.query('SELECT * from bar')
+    self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona', 20]], u'types': [u'integer', u'text', u'integer'], u'columns': [u'id', u'name', u'age']}]}")
+    j = n.query('SELECT * from bar WHERE age=:age', params={"age": 20})
     self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona', 20]], u'types': [u'integer', u'text', u'integer'], u'columns': [u'id', u'name', u'age']}]}")
 
   def test_simple_parameterized_mixed_queries(self):
