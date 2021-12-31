@@ -11,6 +11,9 @@ var (
 	// ErrNoStatements is returned when a request is empty
 	ErrNoStatements = errors.New("no statements")
 
+	// ErrInvalidJSON is returned when a body is not valid JSON
+	ErrInvalidJSON = errors.New("invalid JSON body")
+
 	// ErrInvalidRequest is returned when a request cannot be parsed.
 	ErrInvalidRequest = errors.New("invalid request")
 
@@ -45,7 +48,7 @@ func ParseRequest(b []byte) ([]*command.Statement, error) {
 
 	// Next try parameterized form.
 	if err := json.Unmarshal(b, &parameterized); err != nil {
-		return nil, ErrInvalidRequest
+		return nil, ErrInvalidJSON
 	}
 	stmts := make([]*command.Statement, len(parameterized))
 
