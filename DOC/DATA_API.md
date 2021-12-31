@@ -99,6 +99,22 @@ curl -XPOST 'localhost:4001/db/query?pretty&timings' -H "Content-Type: applicati
 ```
 Currently named parameters are not yet supported, only simple parameters that use `?`.
 
+### Named Parameters
+Named parameters are also supported. To use this feature set the values using a dictionary, like so:
+_Writing data_
+```bash
+curl -XPOST 'localhost:4001/db/execute?pretty&timings' -H "Content-Type: application/json" -d '[
+    ["INSERT INTO foo(name, age) VALUES(:name, :age)", {"name": "fiona", "age": 20}]
+]'
+```
+_Reading data_
+```bash
+curl -XPOST 'localhost:4001/db/query?pretty&timings' -H "Content-Type: application/json" -d '[
+    ["SELECT * FROM foo WHERE name=:name", {"name": "fiona"}]
+]'
+```
+
+
 ## Transactions
 A **form** of transactions are supported. To execute statements within a transaction, add `transaction` to the URL. An example of the above operation executed within a transaction is shown below.
 
