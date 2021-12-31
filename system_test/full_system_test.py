@@ -464,7 +464,7 @@ class TestSingleNode(unittest.TestCase):
     self.assertEqual(str(j), "{u'results': [{u'types': [u'integer', u'text', u'integer'], u'columns': [u'id', u'name', u'age']}]}")
 
   def test_simple_named_parameterized_queries(self):
-    '''Test parameterized queries work as expected'''
+    '''Test named parameterized queries work as expected'''
     n = self.cluster.wait_for_leader()
     j = n.execute('CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT, age INTEGER)')
     self.assertEqual(str(j), "{u'results': [{}]}")

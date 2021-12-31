@@ -924,6 +924,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 	queries, err := requestQueries(r)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(err.Error()))
 		return
 	}
 
