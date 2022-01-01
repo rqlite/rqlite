@@ -433,7 +433,7 @@ func Remove(n *Node, addr string) error {
 	}
 
 	// Attempt to remove node from leader.
-	resp, err := http.Post("http://"+n.APIAddr+"/remove", "application-type/json", bytes.NewReader(b))
+	resp, err := http.Post("http://"+n.APIAddr+"/remove", "application/json", bytes.NewReader(b))
 	if err != nil {
 		return err
 	}
@@ -451,7 +451,7 @@ func DoJoinRequest(nodeAddr, raftID, raftAddr string, voter bool) (*http.Respons
 		return nil, err
 	}
 
-	resp, err := http.Post("http://"+nodeAddr+"/join", "application-type/json", bytes.NewReader(b))
+	resp, err := http.Post("http://"+nodeAddr+"/join", "application/json", bytes.NewReader(b))
 	if err != nil {
 		return nil, err
 	}

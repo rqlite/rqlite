@@ -1,3 +1,7 @@
+## 6.9.1 (unreleased)
+### Implementation changes and bug fixes
+- [PR #934](https://github.com/rqlite/rqlite/pull/934): Use correct MIME media type for JSON text. Fixes [issue #933](https://github.com/rqlite/rqlite/issues/933).
+
 ## 6.9.0 (December 31st 2021)
 ### New features
 - [PR #932](https://github.com/rqlite/rqlite/pull/932): Add support for named parameters. Fixes [issue #675](https://github.com/rqlite/rqlite/issues/675).

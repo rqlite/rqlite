@@ -94,7 +94,7 @@ func join(srcIP, joinAddr, id, addr string, voter bool, tlsConfig *tls.Config, l
 		}
 
 		// Attempt to join.
-		resp, err := client.Post(fullAddr, "application-type/json", bytes.NewReader(b))
+		resp, err := client.Post(fullAddr, "application/json", bytes.NewReader(b))
 		if err != nil {
 			return "", err
 		}

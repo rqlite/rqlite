@@ -58,7 +58,7 @@ func (c *Client) Register(id, addr string) (*Response, error) {
 		}
 
 		c.logger.Printf("discovery client attempting registration of %s at %s", addr, url)
-		resp, err := client.Post(url, "application-type/json", bytes.NewReader(b))
+		resp, err := client.Post(url, "application/json", bytes.NewReader(b))
 		if err != nil {
 			return nil, err
 		}
