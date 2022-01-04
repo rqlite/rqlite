@@ -12,7 +12,7 @@ You can also access the rqlite API directly, via a HTTP `GET` request to the end
 curl -s -XGET localhost:4001/db/backup -o bak.sqlite3
 ```
 
-In either case the generated file file can then be used to restore a node (or cluster) using the [restore API](https://github.com/rqlite/rqlite/blob/master/DOC/RESTORE_FROM_SQLITE.md).
+In either case the generated file can then be used to restore a node (or cluster) using the [restore API](https://github.com/rqlite/rqlite/blob/master/DOC/RESTORE_FROM_SQLITE.md).
 
 ## Generating a SQL text dump
 You can dump the database in SQL text format via the CLI as follows:

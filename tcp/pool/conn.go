@@ -5,7 +5,7 @@ import (
 	"sync"
 )
 
-// Conn is a wrapper around net.Conn to modify the the behavior of
+// Conn is a wrapper around net.Conn to modify the behavior of
 // net.Conn's Close() method.
 type Conn struct {
 	net.Conn
@@ -28,7 +28,7 @@ func (p *Conn) Close() error {
 	return p.c.put(p.Conn)
 }
 
-// MarkUnusable marks the connection not usable any more, to let the pool close it instead of returning it to pool.
+// MarkUnusable marks the connection not usable anymore, to let the pool close it instead of returning it to pool.
 func (p *Conn) MarkUnusable() {
 	p.mu.Lock()
 	p.unusable = true

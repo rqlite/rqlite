@@ -62,7 +62,7 @@ func main() {
 		}
 
 		if argv.Version {
-			ctx.String("Version %s, commmit %s, branch %s, built on %s\n", cmd.Version,
+			ctx.String("Version %s, commit %s, branch %s, built on %s\n", cmd.Version,
 				cmd.Commit, cmd.Branch, cmd.Buildtime)
 			return nil
 		}
@@ -141,25 +141,25 @@ func main() {
 				err = removeNode(client, line[index+1:], argv, timer)
 			case ".BACKUP":
 				if index == -1 || index == len(line)-1 {
-					err = fmt.Errorf("Please specify an output file for the backup")
+					err = fmt.Errorf("please specify an output file for the backup")
 					break
 				}
 				err = backup(ctx, line[index+1:], argv)
 			case ".RESTORE":
 				if index == -1 || index == len(line)-1 {
-					err = fmt.Errorf("Please specify an input file to restore from")
+					err = fmt.Errorf("please specify an input file to restore from")
 					break
 				}
 				err = restore(ctx, line[index+1:], argv)
 			case ".SYSDUMP":
 				if index == -1 || index == len(line)-1 {
-					err = fmt.Errorf("Please specify an output file for the sysdump")
+					err = fmt.Errorf("please specify an output file for the sysdump")
 					break
 				}
 				err = sysdump(ctx, line[index+1:], argv)
 			case ".DUMP":
 				if index == -1 || index == len(line)-1 {
-					err = fmt.Errorf("Please specify an output file for the SQL text")
+					err = fmt.Errorf("please specify an output file for the SQL text")
 					break
 				}
 				err = dump(ctx, line[index+1:], argv)

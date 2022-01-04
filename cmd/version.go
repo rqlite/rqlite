@@ -2,7 +2,7 @@ package cmd
 
 // These variables are populated via the Go linker.
 var (
-	// rqlite version
+	// Version of rqlite.
 	Version = "6"
 
 	// Commit this code was built at.
@@ -11,6 +11,6 @@ var (
 	// Branch the code was built from.
 	Branch = "unknown"
 
-	// Timestamp of build.
+	// Buildtime timestamp.
 	Buildtime = "unknown"
 )

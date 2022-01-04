@@ -27,8 +27,8 @@ func ParseRequest(b []byte) ([]*command.Statement, error) {
 		return nil, ErrNoStatements
 	}
 
-	simple := []string{}               // Represents a set of unparameterized queries
-	parameterized := [][]interface{}{} // Represents a set of parameterized queries
+	var simple []string               // Represents a set of unparameterized queries
+	var parameterized [][]interface{} // Represents a set of parameterized queries
 
 	// Try simple form first.
 	err := json.Unmarshal(b, &simple)

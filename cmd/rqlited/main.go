@@ -308,7 +308,7 @@ func main() {
 				log.Fatalf("ioutil.ReadFile failed: %s", err.Error())
 			}
 			tlsConfig.RootCAs = x509.NewCertPool()
-			ok := tlsConfig.RootCAs.AppendCertsFromPEM([]byte(asn1Data))
+			ok := tlsConfig.RootCAs.AppendCertsFromPEM(asn1Data)
 			if !ok {
 				log.Fatalf("failed to parse root CA certificate(s) in %q", x509CACert)
 			}
@@ -496,7 +496,7 @@ func clusterService(tn cluster.Transport, db cluster.Database) (*cluster.Service
 		apiAddr = httpAdv
 	}
 	c.SetAPIAddr(apiAddr)
-	c.EnableHTTPS(x509Cert != "" && x509Key != "") // Conditions met for a HTTPS API
+	c.EnableHTTPS(x509Cert != "" && x509Key != "") // Conditions met for an HTTPS API
 
 	if err := c.Open(); err != nil {
 		return nil, err

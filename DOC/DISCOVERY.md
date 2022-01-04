@@ -34,7 +34,7 @@ rqlited -disco-id 809d9ba6-f70b-11e6-9a5a-92819c00729a
 When any node registers using the ID, it is returned the current list of nodes that have registered using that ID. If the nodes is the first node to access the service using the ID, it will receive a list that contains just itself -- and will subsequently elect itself leader. Subsequent nodes will then receive a list with more than 1 entry. These nodes will use one of the join addresses in the list to join the cluster.
 
 ### Controlling the registered join address
-By default each node registers the address passed in via the `-http-addr` option. However if you instead set `-http-adv-addr` when starting a node, the node will instead register that address. This can be useful when telling a node to listen on all interfaces, but that is should be contacted at a specific address. For example:
+By default, each node registers the address passed in via the `-http-addr` option. However if you instead set `-http-adv-addr` when starting a node, the node will instead register that address. This can be useful when telling a node to listen on all interfaces, but that is should be contacted at a specific address. For example:
 ```shell
 rqlited -disco-id 809d9ba6-f70b-11e6-9a5a-92819c00729a -http-addr 0.0.0.0:4001 -http-adv-addr host1:4001
 ```
@@ -60,7 +60,7 @@ $ rqlited -disco-id b3da7185-725f-461c-b7a4-13f185bd5007 ~/node.1
 $ rqlited -http-addr localhost:4003 -raft-addr localhost:4004 -disco-id b3da7185-725f-461c-b7a4-13f185bd5007 ~/node.2
 $ rqlited -http-addr localhost:4005 -raft-addr localhost:4006 -disco-id b3da7185-725f-461c-b7a4-13f185bd5007 ~/node.3
 ```
-_This demonstration shows all 3 nodes running on the same host. In reality you probably wouldn't do this, and then you wouldn't need to select different -http-addr and -raft-addr ports for each rqlite node._
+_This demonstration shows all 3 nodes running on the same host. In reality, you probably wouldn't do this, and then you wouldn't need to select different -http-addr and -raft-addr ports for each rqlite node._
 
 ## Removing registered addresses
 If you need to remove an address from the list of registered addresses, perhaps because a node has permanently left a cluster, you can do this via the following command (be sure to pass all the options shown to `curl`):

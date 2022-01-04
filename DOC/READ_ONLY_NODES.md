@@ -15,4 +15,4 @@ Pass `-raft-non-voter=true` to `rqlited` to enable read-only mode.
 Read-only nodes join a cluster in the [same manner as a voting node. They can also be removed using the same operations](https://github.com/rqlite/rqlite/blob/master/DOC/CLUSTER_MGMT.md).
 
 ### Handling failure
-If a read-only node becomes unreachable, the leader will continually attempt to reconnect until the node becomes reachable again, or the node is removed from the cluster. This is exactly the same behaviour as when a voting node fails. However since read-only nodes do not vote, a failed read-only node will not prevent the cluster commiting changes via the Raft consensus mechanism.
+If a read-only node becomes unreachable, the leader will continually attempt to reconnect until the node becomes reachable again, or the node is removed from the cluster. This is exactly the same behaviour as when a voting node fails. However, since read-only nodes do not vote, a failed read-only node will not prevent the cluster commiting changes via the Raft consensus mechanism.

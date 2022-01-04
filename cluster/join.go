@@ -115,7 +115,7 @@ func join(srcIP, joinAddr, id, addr string, voter bool, tlsConfig *tls.Config, l
 			}
 			continue
 		case http.StatusBadRequest:
-			// One possible cause is that the target server is listening for HTTPS, but a HTTP
+			// One possible cause is that the target server is listening for HTTPS, but an HTTP
 			// attempt was made. Switch the protocol to HTTPS, and try again. This can happen
 			// when using the Disco service, since it doesn't record information about which
 			// protocol a registered node is actually using.

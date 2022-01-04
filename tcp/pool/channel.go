@@ -70,7 +70,7 @@ func (c *channelPool) Get() (net.Conn, error) {
 		return nil, ErrClosed
 	}
 
-	// wrap our connections with out custom net.Conn implementation (wrapConn
+	// wrap our connections without custom net.Conn implementation (wrapConn
 	// method) that puts the connection back to the pool if it's closed.
 	select {
 	case conn := <-conns:
@@ -138,7 +138,7 @@ func (c *channelPool) Close() {
 	atomic.AddInt64(&c.nOpenConns, 0)
 }
 
-// Len() returns the number of idle connections.
+// Len returns the number of idle connections.
 func (c *channelPool) Len() int {
 	conns, _ := c.getConnsAndFactory()
 	return len(conns)

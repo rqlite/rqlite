@@ -39,7 +39,7 @@ The response is of the form:
 The use of the URL param `pretty` is optional, and results in pretty-printed JSON responses. Time is measured in seconds. If you do not want timings, do not pass `timings` as a URL parameter.
 
 ## Querying Data
-Querying data is easy. For a single query simply perform a HTTP GET on the `/db/query` endpoint, setting the query statement as the query parameter `q`:
+Querying data is easy. For a single query simply perform an HTTP GET on the `/db/query` endpoint, setting the query statement as the query parameter `q`:
 
 ```bash
 curl -G 'localhost:4001/db/query?pretty&timings' --data-urlencode 'q=SELECT * FROM foo'

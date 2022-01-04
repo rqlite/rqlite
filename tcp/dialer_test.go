@@ -81,7 +81,7 @@ func Test_DialerHeaderTLSBadConnect(t *testing.T) {
 	defer os.Remove(key)
 	go s.Start(t)
 
-	// Connect to a TLS server with a unencrypted client, to make sure
+	// Connect to a TLS server with an unencrypted client, to make sure
 	// code can handle that misconfig.
 	d := NewDialer(56, false, false)
 	conn, err := d.Dial(s.Addr(), 5*time.Second)

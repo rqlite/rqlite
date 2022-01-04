@@ -44,7 +44,7 @@ func TestMux(t *testing.T) {
 			mux.Logger = log.New(ioutil.Discard, "", 0)
 		}
 		for i := uint8(0); i < n; i++ {
-			ln := mux.Listen(byte(i))
+			ln := mux.Listen(i)
 
 			wg.Add(1)
 			go func(i uint8, ln net.Listener) {
@@ -58,7 +58,7 @@ func TestMux(t *testing.T) {
 
 				// If there is no message or the header byte
 				// doesn't match then expect close.
-				if len(msg) == 0 || msg[0] != byte(i) {
+				if len(msg) == 0 || msg[0] != i {
 					if err == nil || err.Error() != "network connection closed" {
 						t.Fatalf("unexpected error: %s", err)
 					}
@@ -97,8 +97,8 @@ func TestMux(t *testing.T) {
 		_, err = io.ReadFull(conn, resp[:])
 
 		// If the message header is less than n then expect a response.
-		// Otherwise we should get an EOF because the mux closed.
-		if len(msg) > 0 && uint8(msg[0]) < n {
+		// Otherwise, we should get an EOF because the mux closed.
+		if len(msg) > 0 && msg[0] < n {
 			if string(resp[:]) != `OK` {
 				t.Fatalf("unexpected response: %s", resp[:])
 			}
