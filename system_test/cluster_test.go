@@ -185,7 +185,6 @@ func Test_MultiNodeClusterReady(t *testing.T) {
 
 	// Kill leader, node2 should no longer be ready.
 	node1.Deprovision()
-	time.Sleep(10 * time.Second)
 	ready, err = node2.Ready(false)
 	if err != nil {
 		t.Fatalf(`failed to retrieve readiness: %s`, err)
