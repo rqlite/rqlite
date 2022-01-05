@@ -183,7 +183,7 @@ func Test_MultiNodeClusterReady(t *testing.T) {
 		t.Fatalf("node is not ready when it should be")
 	}
 
-	// Kill leader, node2 should no longer be ready.
+	// Kill leader, node2 should no longer be ready since the leader should not reachable.
 	node1.Deprovision()
 	ready, err = node2.Ready(false)
 	if err != nil {

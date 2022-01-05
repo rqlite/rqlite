@@ -254,6 +254,7 @@ func (n *Node) Ready(noLeader bool) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	defer resp.Body.Close()
 	return resp.StatusCode == 200, nil
 }
 
