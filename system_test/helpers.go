@@ -243,8 +243,12 @@ func (n *Node) Status() (string, error) {
 }
 
 // Ready returns the ready status for the node
-func (n *Node) Ready() (bool, error) {
-	v, _ := url.Parse("http://" + n.APIAddr + "/readyz")
+func (n *Node) Ready(noLeader bool) (bool, error) {
+	u := "http://" + n.APIAddr + "/readyz"
+	if noLeader {
+		u = u + "?noleader"
+	}
+	v, _ := url.Parse(u)
 
 	resp, err := http.Get(v.String())
 	if err != nil {

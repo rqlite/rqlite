@@ -780,6 +780,19 @@ func (s *Service) handleReadyz(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Just a node check?
+	noLeader, err := noLeader(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if noLeader {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("[+]node ok"))
+		return
+	}
+
 	timeout, err := timeoutParam(r, defaultTimeout)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -796,6 +809,7 @@ func (s *Service) handleReadyz(w http.ResponseWriter, r *http.Request) {
 	if lAddr != "" {
 		if _, err := s.cluster.GetNodeAPIAddr(lAddr, timeout); err == nil {
 			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("[+]node ok\n"))
 			w.Write([]byte("[+]leader ok"))
 			return
 		}
@@ -1208,7 +1222,8 @@ func createTLSConfig(certFile, keyFile, caCertFile string, tls1011 bool) (*tls.C
 	return config, nil
 }
 
-// queryParam returns whether the given query param is present.
+// queryParam returns whether the given query param is present, ignoring
+// value set for it.
 func queryParam(req *http.Request, param string) (bool, error) {
 	err := req.ParseForm()
 	if err != nil {

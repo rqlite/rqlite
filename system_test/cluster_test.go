@@ -160,6 +160,51 @@ func Test_MultiNodeCluster(t *testing.T) {
 	}
 }
 
+// Test_MultiNodeClusterReady tests readyz/ endpoint in a cluster.
+func Test_MultiNodeClusterReady(t *testing.T) {
+	node1 := mustNewLeaderNode()
+
+	node2 := mustNewNode(false)
+	defer node2.Deprovision()
+	if err := node2.Join(node1); err != nil {
+		t.Fatalf("node failed to join leader: %s", err.Error())
+	}
+	_, err := node2.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for leader: %s", err.Error())
+	}
+
+	// Confirm node2 is ready.
+	ready, err := node2.Ready(false)
+	if err != nil {
+		t.Fatalf(`failed to retrieve readiness: %s`, err)
+	}
+	if !ready {
+		t.Fatalf("node is not ready when it should be")
+	}
+
+	// Kill leader, node2 should no longer be ready.
+	node1.Deprovision()
+	time.Sleep(10 * time.Second)
+	ready, err = node2.Ready(false)
+	if err != nil {
+		t.Fatalf(`failed to retrieve readiness: %s`, err)
+	}
+	if ready {
+		t.Fatalf("node is ready when it should not be")
+	}
+
+	// Re-run ready check, but don't check leader. Should be OK now.
+	ready, err = node2.Ready(true)
+	if err != nil {
+		t.Fatalf(`failed to retrieve readiness: %s`, err)
+	}
+	if !ready {
+		t.Fatalf("node is not ready when it should be")
+	}
+
+}
+
 // Test_MultiNodeClusterRaftAdv tests 3-node cluster with advertised Raft addresses usage.
 func Test_MultiNodeClusterRaftAdv(t *testing.T) {
 	ln1 := mustTCPListener("0.0.0.0:0")
