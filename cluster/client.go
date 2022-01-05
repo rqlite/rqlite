@@ -213,7 +213,7 @@ func (c *Client) Execute(er *command.ExecuteRequest, nodeAddr string, timeout ti
 	return a.Results, nil
 }
 
-// Query performs an Query on a remote node.
+// Query performs a Query on a remote node.
 func (c *Client) Query(qr *command.QueryRequest, nodeAddr string, timeout time.Duration) ([]*command.QueryRows, error) {
 	conn, err := c.dial(nodeAddr, c.timeout)
 	if err != nil {

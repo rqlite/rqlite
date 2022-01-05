@@ -278,7 +278,7 @@ func (db *DB) Stats() (map[string]interface{}, error) {
 		"compile_options": copts,
 		"mem_stats":       memStats,
 		"db_size":         dbSz,
-		"rw_dsn":          string(db.rwDSN),
+		"rw_dsn":          db.rwDSN,
 		"ro_dsn":          db.roDSN,
 		"conn_pool_stats": connPoolStats,
 	}
@@ -881,7 +881,7 @@ func parametersToValues(parameters []*command.Parameter) ([]interface{}, error) 
 
 // normalizeRowValues performs some normalization of values in the returned rows.
 // Text values come over (from sqlite-go) as []byte instead of strings
-// for some reason, so we have explicitly convert (but only when type
+// for some reason, so we have explicitly converted (but only when type
 // is "text" so we don't affect BLOB types)
 func normalizeRowValues(row []interface{}, types []string) ([]*command.Parameter, error) {
 	values := make([]*command.Parameter, len(types))

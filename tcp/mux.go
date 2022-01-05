@@ -297,7 +297,7 @@ func createTLSConfig(certFile, keyFile, caCertFile string) (*tls.Config, error) 
 			return nil, err
 		}
 		config.RootCAs = x509.NewCertPool()
-		ok := config.RootCAs.AppendCertsFromPEM([]byte(asn1Data))
+		ok := config.RootCAs.AppendCertsFromPEM(asn1Data)
 		if !ok {
 			return nil, fmt.Errorf("failed to parse root certificate(s) in %q", caCertFile)
 		}

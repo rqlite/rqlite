@@ -887,7 +887,7 @@ func Test_TLSServce(t *testing.T) {
 
 	url := fmt.Sprintf("https://%s", s.Addr().String())
 
-	// Test connecting with a HTTP client.
+	// Test connecting with an HTTP client.
 	tn := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
@@ -901,7 +901,7 @@ func Test_TLSServce(t *testing.T) {
 		t.Fatalf("incorrect build version present in HTTP response header, got: %s", v)
 	}
 
-	// Test connecting with a HTTP/2 client.
+	// Test connecting with an HTTP/2 client.
 	client = &http.Client{
 		Transport: &http2.Transport{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},

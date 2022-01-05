@@ -11,7 +11,7 @@ import (
 )
 
 const numAttempts int = 3
-const attemptInterval time.Duration = 5 * time.Second
+const attemptInterval = 5 * time.Second
 
 func Test_SingleJoinOK(t *testing.T) {
 	var body map[string]interface{}

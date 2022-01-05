@@ -664,7 +664,7 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 			http.StatusInternalServerError)
 		return
 	}
-	_, err = w.Write([]byte(b))
+	_, err = w.Write(b)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("write: %s", err.Error()),
 			http.StatusInternalServerError)
@@ -761,7 +761,7 @@ func (s *Service) handleNodes(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	_, err = w.Write([]byte(b))
+	_, err = w.Write(b)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -1200,7 +1200,7 @@ func createTLSConfig(certFile, keyFile, caCertFile string, tls1011 bool) (*tls.C
 			return nil, err
 		}
 		config.RootCAs = x509.NewCertPool()
-		ok := config.RootCAs.AppendCertsFromPEM([]byte(asn1Data))
+		ok := config.RootCAs.AppendCertsFromPEM(asn1Data)
 		if !ok {
 			return nil, fmt.Errorf("failed to parse root certificate(s) in %q", caCertFile)
 		}

@@ -36,14 +36,14 @@ mount -t tmpfs -o size=512m tmpfs /mnt/ramdisk
 ## Improving read-write concurrency
 SQLite can offer better concurrent read and write support when using an on-disk database, compared to in-memory databases. But as explained above, using an on-disk SQLite database can significant impact performance. But since the database-update performance will be so much better with an in-memory database, improving read-write concurrency may not be needed in practise.
 
-However if you enable an on-disk SQLite database, but then place the SQLite database on a memory-backed file system, you can have the best of both worlds. You can dedicate your disk to the Raft log, but still get better read-write concurrency with SQLite. You can specify the SQLite database file path via the `-on-disk-path` flag.
+However, if you enable an on-disk SQLite database, but then place the SQLite database on a memory-backed file system, you can have the best of both worlds. You can dedicate your disk to the Raft log, but still get better read-write concurrency with SQLite. You can specify the SQLite database file path via the `-on-disk-path` flag.
 
 An alternative approach would be to place the SQLite on-disk database on a disk different than that storing the Raft log, but this is unlikely to be as performant as an in-memory file system for the SQLite database.
 
 # In-memory Database Limits
 In-memory databases are currently limited to 2GiB in size. One way to get around this limit is to use an on-disk database, by passing `-on-disk` to `rqlited`. But this would impact performance significantly, since disk is slower than memory.
 
-However by telling rqlite to place the SQLite database file on a memory-backed filesystem you can use larger databases, and still have good performance. To control where rqlite places the SQLite database file, set `-on-disk-startup -on-disk-path` when launching `rqlited`. **Note that you should still place the `data` directory on an actual disk, to ensure your data is not lost if a node retarts.** 
+However, by telling rqlite to place the SQLite database file on a memory-backed filesystem you can use larger databases, and still have good performance. To control where rqlite places the SQLite database file, set `-on-disk-startup -on-disk-path` when launching `rqlited`. **Note that you should still place the `data` directory on an actual disk, to ensure your data is not lost if a node retarts.** 
 
 Setting `-on-disk-startup` is also important because it disables an optimization rqlite performs at startup, when using an on-disk SQLite database. rqlite, by default, initially builds any on-disk database in memory first, before moving it to disk. It does this to reduce startup times. But with databases larger than 2GiB, this optimization can cause rqlite to fail to start. To avoid this issue, you can disable this optimization via the flag.
 

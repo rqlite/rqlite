@@ -47,7 +47,7 @@ jobs:
       - checkout
 
       # specify any bash command here prefixed with `run: `
-      # BoltDB, no longer maintained, has pointer issues. However it's run
+      # BoltDB, no longer maintained, has pointer issues. However, it's run
       # for years without actual issue so disabling the pointer tests
       - run: go get -t -d ./...
       - run:

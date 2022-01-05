@@ -14,7 +14,7 @@ Firstly, you should understand the basic requirement for systems built on the [R
 
 Clusters of 3, 5, 7, or 9, nodes are most practical. Clusters of those sizes can tolerate failures of 1, 2, 3, and 4 nodes respectively.
 
-Clusters with a greater number of nodes start to become unweildy, due to the number of nodes that must be contacted before a database change can take place.
+Clusters with a greater number of nodes start to become unwieldy, due to the number of nodes that must be contacted before a database change can take place.
 
 ### Read-only nodes
 It is possible to run larger clusters if you just need nodes [from which you only need to read from](https://github.com/rqlite/rqlite/blob/master/DOC/READ_ONLY_NODES.md). When it comes to the Raft protocol, these nodes do not count towards `N`, since they do not [vote](https://raft.github.io/).
@@ -47,7 +47,7 @@ Once executed you now have a cluster of two nodes. Of course, for fault-toleranc
 ```bash
 host3:$ rqlited -node-id 3 -http-addr host3:4001 -raft-addr host3:4002 -join http://host1:4001 ~/node
 ```
-_When simply restarting a node, there is no further need to pass `-join`. However if a node does attempt to join a cluster it is already a member of, and neither its node ID or Raft network address has changed, then the cluster Leader will ignore the join request as there is nothing to do -- the joining node is already a fully-configured member of the cluster. However, if either the node ID or Raft network address of the joining node has changed, the cluster Leader will first automatically remove the joining node from the cluster configuration before processing the join request. For most applications this is an implementation detail which can be safely ignored, and cluster-joins are basically idempotent._
+_When simply restarting a node, there is no further need to pass `-join`. However, if a node does attempt to join a cluster it is already a member of, and neither its node ID or Raft network address has changed, then the cluster Leader will ignore the join request as there is nothing to do -- the joining node is already a fully-configured member of the cluster. However, if either the node ID or Raft network address of the joining node has changed, the cluster Leader will first automatically remove the joining node from the cluster configuration before processing the join request. For most applications this is an implementation detail which can be safely ignored, and cluster-joins are basically idempotent._
 
 You've now got a fault-tolerant, distributed, relational database. It can tolerate the failure of any node, even the leader, and remain operational.
 

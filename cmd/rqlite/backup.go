@@ -12,10 +12,6 @@ import (
 	"github.com/mkideal/cli"
 )
 
-type backupResponse struct {
-	BackupFile []byte
-}
-
 type restoreResponse struct {
 	Results []*Result `json:"results"`
 }

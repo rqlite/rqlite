@@ -32,7 +32,7 @@ runtime:
  ## Nodes API
  The _nodes_ API returns basic information for nodes in the cluster, as seen by the node receiving the _nodes_ request. The receiving node will also check whether it can actually connect to all other nodes in the cluster. This is an effective way to determine the cluster leader, and the leader's HTTP API address. It can also be used to check if the cluster is **basically** running -- if the other nodes are reachable, it probably is.
 
- By default the node only checks if _voting_ nodes are contactable.
+ By default, the node only checks if _voting_ nodes are contactable.
 
 ```bash
 curl localhost:4001/nodes?pretty

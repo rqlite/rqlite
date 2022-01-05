@@ -41,7 +41,7 @@ The response is of the form:
 A bulk update is contained within a single Raft log entry, so the network round-trips between nodes in the cluster are amortized over the bulk update. This should result in better throughput, if it is possible to use this kind of update.
 
 ### Atomicity
-Because a bulk operation is contained within a single Raft log entry, and only one Raft log entry is every processed at one time, a bulk operation will never be interleaved with other requests.
+Because a bulk operation is contained within a single Raft log entry, and only one Raft log entry is ever processed at one time, a bulk operation will never be interleaved with other requests.
 
 ### Transaction support
 You may still wish to set the `transaction` flag when issuing a bulk update. This ensures that if any error occurs while processing the bulk update, all changes will be rolled back.

@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// HTTPTester represents a HTTP transport tester.
+// HTTPTester represents an HTTP transport tester.
 type HTTPTester struct {
 	client http.Client
 	url    string

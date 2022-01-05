@@ -7,7 +7,7 @@ You can find details on the design and implementation of rqlite from [these blog
 - [Presentation](http://www.slideshare.net/PhilipOToole/rqlite-replicating-sqlite-via-raft-consensu) given at the [GoSF](http://www.meetup.com/golangsf/) [April 2016](http://www.meetup.com/golangsf/events/230127735/) Meetup.
 
 ## Node design
-The diagram below shows a high-level view of an rqlite node.
+The diagram below shows a high-level view of a rqlite node.
 ![node-design](https://user-images.githubusercontent.com/536312/133258366-1f2fbc50-8493-4ba6-8d62-04c57e39eb6f.png)
 
 ## File system
@@ -15,7 +15,7 @@ The diagram below shows a high-level view of an rqlite node.
 The Raft layer always creates a file -- it creates the _Raft log_. The log stores the set of committed SQLite commands, in the order which they were executed. This log is authoritative record of every change that has happened to the system. It may also contain some read-only queries as entries, depending on read-consistency choices.
 
 ### SQLite
-By default the SQLite layer doesn't create a file. Instead it creates the database in memory. rqlite can create the SQLite database on disk, if so configured at start-time, by passing `-on-disk` to `rqlited` at startup. Regardless of whether rqlite creates a database entirely in memory, or on disk, the SQLite database is completely recreated everytime `rqlited` starts, using the information stored in the Raft log.
+By default, the SQLite layer doesn't create a file. Instead, it creates the database in memory. rqlite can create the SQLite database on disk, if so configured at start-time, by passing `-on-disk` to `rqlited` at startup. Regardless of whether rqlite creates a database entirely in memory, or on disk, the SQLite database is completely recreated everytime `rqlited` starts, using the information stored in the Raft log.
 
 ## Log Compaction and Truncation
 rqlite automatically performs log compaction, so that disk usage due to the log remains bounded. After a configurable number of changes rqlite snapshots the SQLite database, and truncates the Raft log. This is a technical feature of the Raft consensus system, and most users of rqlite need not be concerned with this.

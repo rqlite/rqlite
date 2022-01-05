@@ -164,7 +164,7 @@ type Store struct {
 	// StartupOnDisk disables in-memory initialization of on-disk databases.
 	// Restarting a node with an on-disk database can be slow so, by default,
 	// rqlite creates on-disk databases in memory first, and then moves the
-	// database to disk before Raft starts. However this optimization can
+	// database to disk before Raft starts. However, this optimization can
 	// prevent nodes with very large (2GB+) databases from starting. This
 	// flag allows control of the optimization.
 	StartupOnDisk bool
@@ -186,7 +186,7 @@ type Store struct {
 	numSnapshots   int
 }
 
-// IsNewNode returns whether a node using raftDir would be a brand new node.
+// IsNewNode returns whether a node using raftDir would be a brand-new node.
 // It also means that the window this node joining a different cluster has passed.
 func IsNewNode(raftDir string) bool {
 	// If there is any pre-existing Raft state, then this node
@@ -317,7 +317,7 @@ func (s *Store) Open(enableBootstrap bool) error {
 
 	// If an on-disk database has been requested, and there are no snapshots, and
 	// there are no commands in the log, then this is the only opportunity to
-	// create that on-disk database file before Raft initializes. In addition this
+	// create that on-disk database file before Raft initializes. In addition, this
 	// can also happen if the user explicitly disables the startup optimization of
 	// building the SQLite database in memory, before switching to disk.
 	if s.StartupOnDisk || (!s.dbConf.Memory && !s.snapsExistOnOpen && s.lastCommandIdxOnOpen == 0) {
@@ -400,7 +400,7 @@ func (s *Store) WaitForInitialLogs(timeout time.Duration) error {
 	return s.WaitForApplied(timeout)
 }
 
-// WaitForApplied waits for all Raft log entries to to be applied to the
+// WaitForApplied waits for all Raft log entries to be applied to the
 // underlying database.
 func (s *Store) WaitForApplied(timeout time.Duration) error {
 	if timeout == 0 {
@@ -755,7 +755,7 @@ func (s *Store) Query(qr *command.QueryRequest) ([]*command.QueryRows, error) {
 // Backup writes a snapshot of the underlying database to dst
 //
 // If leader is true, this operation is performed with a read consistency
-// level equivalent to "weak". Otherwise no guarantees are made about the
+// level equivalent to "weak". Otherwise, no guarantees are made about the
 // read consistency level.
 func (s *Store) Backup(leader bool, fmt BackupFormat, dst io.Writer) error {
 	if leader && s.raft.State() != raft.Leader {
@@ -796,7 +796,7 @@ func (s *Store) Join(id, addr string, voter bool) error {
 		// If a node already exists with either the joining node's ID or address,
 		// that node may need to be removed from the config first.
 		if srv.ID == raft.ServerID(id) || srv.Address == raft.ServerAddress(addr) {
-			// However if *both* the ID and the address are the same, then no
+			// However, if *both* the ID and the address are the same, then no
 			// join is actually needed.
 			if srv.Address == raft.ServerAddress(addr) && srv.ID == raft.ServerID(id) {
 				stats.Add(numIgnoredJoins, 1)
@@ -845,7 +845,7 @@ func (s *Store) Remove(id string) error {
 }
 
 // Noop writes a noop command to the Raft log. A noop command simply
-// consumes a slot in the Raft log, but has no other affect on the
+// consumes a slot in the Raft log, but has no other effect on the
 // system.
 func (s *Store) Noop(id string) error {
 	n := &command.Noop{
@@ -888,7 +888,7 @@ func (s *Store) createInMemory(b []byte) (db *sql.DB, err error) {
 
 // createOnDisk opens an on-disk database file at the Store's configured path. If
 // b is non-nil, any preexisting file will first be overwritten with those contents.
-// Otherwise any pre-existing file will be removed before the database is opened.
+// Otherwise, any preexisting file will be removed before the database is opened.
 func (s *Store) createOnDisk(b []byte) (*sql.DB, error) {
 	if err := os.Remove(s.dbPath); err != nil && !os.IsNotExist(err) {
 		return nil, err
@@ -1036,7 +1036,7 @@ func (s *Store) Apply(l *raft.Log) (e interface{}) {
 // Database returns a copy of the underlying database. The caller MUST
 // ensure that no transaction is taking place during this call, or an error may
 // be returned. If leader is true, this operation is performed with a read
-// consistency level equivalent to "weak". Otherwise no guarantees are made
+// consistency level equivalent to "weak". Otherwise, no guarantees are made
 // about the read consistency level.
 //
 // http://sqlite.org/howtocorrupt.html states it is safe to do this
@@ -1054,7 +1054,7 @@ func (s *Store) Database(leader bool) ([]byte, error) {
 // Hashicorp Raft guarantees that this function will not be called concurrently
 // with Apply, as it states Apply() and Snapshot() are always called from the same
 // thread. This means there is no need to synchronize this function with Execute().
-// However queries that involve a transaction must be blocked.
+// However, queries that involve a transaction must be blocked.
 //
 // http://sqlite.org/howtocorrupt.html states it is safe to copy or serialize the
 // database as long as no transaction is in progress.
@@ -1098,7 +1098,7 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 	if s.StartupOnDisk || (!s.dbConf.Memory && s.lastCommandIdxOnOpen == 0) {
 		// A snapshot clearly exists (this function has been called) but there
 		// are no command entries in the log -- so Apply will not be called.
-		// Therefore this is the last opportunity to create the on-disk database
+		// Therefore, this is the last opportunity to create the on-disk database
 		// before Raft starts. This could also happen because the user has explicitly
 		// disabled the build-on-disk-database-in-memory-first optimization.
 		db, err = s.createOnDisk(b)
@@ -1193,7 +1193,7 @@ func newFSMSnapshot(db *sql.DB, logger *log.Logger) *fsmSnapshot {
 	}
 
 	// The error code is not meaningful from Serialize(). The code needs to be able
-	// handle a nil byte slice being returned.
+	// to handle a nil byte slice being returned.
 	fsm.database, _ = db.Serialize()
 	return fsm
 }
