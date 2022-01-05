@@ -11,6 +11,6 @@ var (
 	// Branch the code was built from.
 	Branch = "unknown"
 
-	// Buildtime timestamp.
+	// Buildtime is the timestamp when the build took place.
 	Buildtime = "unknown"
 )
