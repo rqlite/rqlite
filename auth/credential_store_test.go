@@ -41,6 +41,13 @@ func Test_AuthLoadSingle(t *testing.T) {
 		t.Fatalf("single credential not loaded correctly")
 	}
 
+	if store.Password("username1") != "password1" {
+		t.Fatalf("wrong password returned")
+	}
+	if store.Password("nonsense") != "" {
+		t.Fatalf("wrong password returned for nonexistent user")
+	}
+
 	if store.JoinAs != "" {
 		t.Fatalf("JoinAs user is incorrect: %s", store.JoinAs)
 	}

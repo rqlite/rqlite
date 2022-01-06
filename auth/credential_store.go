@@ -86,6 +86,15 @@ func (c *CredentialsStore) Check(username, password string) bool {
 		bcrypt.CompareHashAndPassword([]byte(pw), []byte(password)) == nil
 }
 
+// Password returns the password for the given user.
+func (c *CredentialsStore) Password(username string) string {
+	pw, ok := c.store[username]
+	if !ok {
+		return ""
+	}
+	return pw
+}
+
 // CheckRequest returns true if b contains a valid username and password.
 func (c *CredentialsStore) CheckRequest(b BasicAuther) bool {
 	username, password, ok := b.BasicAuth()
