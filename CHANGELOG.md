@@ -1,6 +1,7 @@
 ## 6.9.1 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #934](https://github.com/rqlite/rqlite/pull/934): Use correct MIME media type for JSON text. Fixes [issue #933](https://github.com/rqlite/rqlite/issues/933).
+- [PR #939](https://github.com/rqlite/rqlite/pull/939): Migrate end-to-end testing to Python 3.
 
 ## 6.9.0 (December 31st 2021)
 ### New features
