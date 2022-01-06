@@ -182,26 +182,6 @@ func Test_MultiNodeClusterReady(t *testing.T) {
 	if !ready {
 		t.Fatalf("node is not ready when it should be")
 	}
-
-	// Kill leader, node2 should no longer be ready since the leader should not reachable.
-	node1.Deprovision()
-	ready, err = node2.Ready(false)
-	if err != nil {
-		t.Fatalf(`failed to retrieve readiness: %s`, err)
-	}
-	if ready {
-		t.Fatalf("node is ready when it should not be")
-	}
-
-	// Re-run ready check, but don't check leader. Should be OK now.
-	ready, err = node2.Ready(true)
-	if err != nil {
-		t.Fatalf(`failed to retrieve readiness: %s`, err)
-	}
-	if !ready {
-		t.Fatalf("node is not ready when it should be")
-	}
-
 }
 
 // Test_MultiNodeClusterRaftAdv tests 3-node cluster with advertised Raft addresses usage.

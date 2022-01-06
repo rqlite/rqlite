@@ -3,6 +3,7 @@
 package http
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
@@ -203,8 +204,9 @@ func NewResponse() *Response {
 
 // Service provides HTTP service.
 type Service struct {
-	addr string       // Bind address of the HTTP service.
-	ln   net.Listener // Service listener
+	addr   string       // Bind address of the HTTP service.
+	ln     net.Listener // Service listener
+	server http.Server
 
 	store Store // The Raft-backed database store.
 
@@ -247,7 +249,7 @@ func New(addr string, store Store, cluster Cluster, credentials CredentialStore)
 
 // Start starts the service.
 func (s *Service) Start() error {
-	server := http.Server{
+	s.server = http.Server{
 		Handler: s,
 	}
 
@@ -272,7 +274,7 @@ func (s *Service) Start() error {
 	s.ln = ln
 
 	go func() {
-		err := server.Serve(s.ln)
+		err := s.server.Serve(s.ln)
 		if err != nil {
 			s.logger.Println("HTTP service Serve() returned:", err.Error())
 		}
@@ -285,6 +287,7 @@ func (s *Service) Start() error {
 // Close closes the service.
 func (s *Service) Close() {
 	s.ln.Close()
+	s.server.Shutdown(context.Background())
 	return
 }
 

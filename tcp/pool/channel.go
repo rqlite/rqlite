@@ -135,7 +135,7 @@ func (c *channelPool) Close() {
 	for conn := range conns {
 		conn.Close()
 	}
-	atomic.AddInt64(&c.nOpenConns, 0)
+	atomic.StoreInt64(&c.nOpenConns, 0)
 }
 
 // Len returns the number of idle connections.
