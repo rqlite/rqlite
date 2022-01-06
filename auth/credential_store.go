@@ -9,6 +9,10 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// AllUsers is the username that indicates all users, even anonymous users (requests without
+// any BasicAuth information).
+const AllUsers = "*"
+
 // BasicAuther is the interface an object must support to return basic auth information.
 type BasicAuther interface {
 	BasicAuth() (string, string, bool)
@@ -92,22 +96,26 @@ func (c *CredentialsStore) CheckRequest(b BasicAuther) bool {
 	return true
 }
 
-// HasPerm returns true if username has the given perm. It does not
-// perform any password checking.
+// HasPerm returns true if username has the given perm, either directly or
+// via AllUsers. It does not perform any password checking.
 func (c *CredentialsStore) HasPerm(username string, perm string) bool {
-	m, ok := c.perms[username]
-	if !ok {
-		return false
+	if m, ok := c.perms[username]; ok {
+		if _, ok := m[perm]; ok {
+			return true
+		}
 	}
 
-	if _, ok := m[perm]; !ok {
-		return false
+	if m, ok := c.perms[AllUsers]; ok {
+		if _, ok := m[perm]; ok {
+			return true
+		}
 	}
-	return true
+
+	return false
 }
 
-// HasAnyPerm returns true if username has at least one of the given perms.
-// It does not perform any password checking.
+// HasAnyPerm returns true if username has at least one of the given perms,
+// either directly, or via AllUsers. It does not perform any password checking.
 func (c *CredentialsStore) HasAnyPerm(username string, perm ...string) bool {
 	return func(p []string) bool {
 		for i := range p {
