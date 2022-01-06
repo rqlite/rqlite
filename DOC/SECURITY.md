@@ -86,3 +86,12 @@ Querying the node, as user _mary_.
 curl -G 'https://mary:secret2@localhost:4001/db/query?pretty&timings' \
 --data-urlencode 'q=SELECT * FROM foo'
 ```
+
+### Avoiding passwords at the command line
+The above example suffer from one shortcoming -- the password for user `bob` is entered at the command line. This is not ideal, as someone with access to the process table could learn the password. You can avoid this via the `-join-as` option, which will tell rqlite to retrieve the password from the configuration file.
+```bash
+rqlited -auth config.json -http-addr localhost:4003 -http-cert server.crt \
+-http-key key.pem -raft-addr :4004 -join https://localhost:4001 -join-as bob \
+-node-encrypt -node-cert node.crt -node-key node-key.pem -no-node-verify \
+~/node.2
+```

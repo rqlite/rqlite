@@ -34,6 +34,7 @@ class Node(object):
                raft_addr=None, raft_adv=None,
                raft_voter=True,
                raft_snap_threshold=8192, raft_snap_int="1s",
+               join_as=None,
                dir=None, on_disk=False):
     if api_addr is None:
       s, addr = random_addr()
@@ -59,6 +60,7 @@ class Node(object):
     self.raft_voter = raft_voter
     self.raft_snap_threshold = raft_snap_threshold
     self.raft_snap_int = raft_snap_int
+    self.join_as = join_as
     self.on_disk = on_disk
     self.process = None
     self.stdout_file = os.path.join(dir, 'rqlited.log')
@@ -114,6 +116,8 @@ class Node(object):
       command += ['-on-disk']
     if join is not None:
       command += ['-join', 'http://' + join]
+      if self.join_as is not None:
+        command += ['-join-as', self.join_as]
     command.append(self.dir)
 
     self.process = subprocess.Popen(command, stdout=self.stdout_fd, stderr=self.stderr_fd)
