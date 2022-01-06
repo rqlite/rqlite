@@ -6,7 +6,6 @@
 #
 #  python system_test/full_system_test.py Class.test
 
-from __future__ import print_function
 import tempfile
 import argparse
 import subprocess
@@ -20,14 +19,13 @@ import sqlite3
 import sys
 import unittest
 
-# Help with Python3
-try:
-  from urlparse import urlparse
-except ImportError:
-  from urllib.parse import urlparse
+from urllib.parse import urlparse
 
 RQLITED_PATH = os.environ['RQLITED_PATH']
 TIMEOUT=10
+
+def d_(s):
+    return eval(s.replace("'", "\""))
 
 class Node(object):
   def __init__(self, path, node_id,
@@ -357,7 +355,7 @@ def raise_for_status(r):
     r.raise_for_status()
   except requests.exceptions.HTTPError as e:
     print(e)
-    print(r.text)
+    print((r.text))
     raise e
 
 def random_addr():
@@ -598,17 +596,18 @@ class TestEndToEnd(unittest.TestCase):
     self.assertEqual(nodes[l.node_id]['leader'], True)
     self.assertEqual(nodes[l.node_id]['reachable'], True)
     self.assertEqual(nodes[l.node_id]['api_addr'], l.APIProtoAddr())
-    self.assertTrue(nodes[fs[0].node_id].has_key('time'))
+    self.assertTrue('time' in nodes[fs[0].node_id])
     for n in [fs[0], fs[1]]:
       self.assertEqual(nodes[n.node_id]['leader'], False)
       self.assertEqual(nodes[n.node_id]['reachable'], True)
       self.assertEqual(nodes[n.node_id]['api_addr'], n.APIProtoAddr())
-      self.assertTrue(nodes[n.node_id].has_key('time'))
+      self.assertTrue('time' in nodes[n.node_id])
+      self.assertTrue('time' in nodes[fs[0].node_id])
 
     fs[0].stop()
     nodes = l.nodes()
     self.assertEqual(nodes[fs[0].node_id]['reachable'], False)
-    self.assertTrue(nodes[fs[0].node_id].has_key('error'))
+    self.assertTrue('error' in nodes[fs[0].node_id])
     self.assertEqual(nodes[fs[1].node_id]['reachable'], True)
     self.assertEqual(nodes[l.node_id]['reachable'], True)
 
@@ -647,6 +646,7 @@ class TestEndToEndAdvAddr(TestEndToEnd):
 
     self.cluster = Cluster([n0, n1, n2])
 
+
 class TestClusterRecovery(unittest.TestCase):
   '''Test that a cluster can recover after all Raft network addresses change'''
   def test(self):
@@ -670,7 +670,7 @@ class TestClusterRecovery(unittest.TestCase):
     fsmIdx = n0.wait_for_all_fsm()
     self.assertEqual(str(j), "{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}")
     j = n0.query('SELECT * FROM foo')
-    self.assertEqual(str(j), "{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}")
+    self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
 
     n0.stop()
     n1.stop()
@@ -704,7 +704,7 @@ class TestClusterRecovery(unittest.TestCase):
     n3.wait_for_leader()
 
     j = n3.query('SELECT * FROM foo')
-    self.assertEqual(str(j), "{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}")
+    self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
 
   def tearDown(self):
     for n in self.nodes:
