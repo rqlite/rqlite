@@ -41,32 +41,15 @@ func Test_AuthLoadSingle(t *testing.T) {
 		t.Fatalf("single credential not loaded correctly")
 	}
 
-	if store.Password("username1") != "password1" {
+	var pw string
+	var ok bool
+	pw, ok = store.Password("username1")
+	if pw != "password1" || !ok {
 		t.Fatalf("wrong password returned")
 	}
-	if store.Password("nonsense") != "" {
-		t.Fatalf("wrong password returned for nonexistent user")
-	}
-
-	if store.JoinAs != "" {
-		t.Fatalf("JoinAs user is incorrect: %s", store.JoinAs)
-	}
-}
-
-func Test_AuthLoadSingleJoinAs(t *testing.T) {
-	const jsonStream = `
-		[
-			{"username": "username1", "password": "password1", "join_as": true}
-		]
-	`
-
-	store := NewCredentialsStore()
-	if err := store.Load(strings.NewReader(jsonStream)); err != nil {
-		t.Fatalf("failed to load single credential: %s", err.Error())
-	}
-
-	if store.JoinAs != "username1" {
-		t.Fatalf("JoinAs user is incorrect")
+	_, ok = store.Password("nonsense")
+	if ok {
+		t.Fatalf("password returned for nonexistent user")
 	}
 }
 
@@ -105,38 +88,6 @@ func Test_AuthLoadMultiple(t *testing.T) {
 	}
 	if check := store.Check("wrong", "wrong"); check {
 		t.Fatalf("multiple credential not loaded correctly")
-	}
-}
-
-func Test_AuthLoadMultipleJoinAs(t *testing.T) {
-	const jsonStream = `
-		[
-			{"username": "username1", "password": "password1"},
-			{"username": "username2", "password": "password2", "join_as": true}
-		]
-	`
-
-	store := NewCredentialsStore()
-	if err := store.Load(strings.NewReader(jsonStream)); err != nil {
-		t.Fatalf("failed to load multiple credentials: %s", err.Error())
-	}
-
-	if store.JoinAs != "username2" {
-		t.Fatalf("JoinAs user is incorrect")
-	}
-}
-
-func Test_AuthLoadMultipleJoinAsDuplicate(t *testing.T) {
-	const jsonStream = `
-		[
-			{"username": "username1", "password": "password1", "join_as": true},
-			{"username": "username2", "password": "password2", "join_as": true}
-		]
-	`
-
-	store := NewCredentialsStore()
-	if err := store.Load(strings.NewReader(jsonStream)); err == nil {
-		t.Fatalf("successfully loaded invalid credential store")
 	}
 }
 

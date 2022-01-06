@@ -53,6 +53,7 @@ var nodeID string
 var raftAddr string
 var raftAdv string
 var joinAddr string
+var joinAs string
 var joinAttempts int
 var joinInterval string
 var noVerify bool
@@ -105,6 +106,7 @@ func init() {
 	flag.StringVar(&raftAddr, "raft-addr", "localhost:4002", "Raft communication bind address")
 	flag.StringVar(&raftAdv, "raft-adv-addr", "", "Advertised Raft communication address. If not set, same as Raft bind")
 	flag.StringVar(&joinAddr, "join", "", "Comma-delimited list of nodes, through which a cluster can be joined (proto://host:port)")
+	flag.StringVar(&joinAs, "join-as", "", "Username in authentication file to join as. If not set, joins anonymously")
 	flag.IntVar(&joinAttempts, "join-attempts", 5, "Number of join attempts to make")
 	flag.StringVar(&joinInterval, "join-interval", "5s", "Period between join attempts")
 	flag.StringVar(&discoURL, "disco-url", "http://discovery.rqlite.com", "Set Discovery Service URL")
@@ -321,11 +323,14 @@ func main() {
 		}
 
 		// Add credentials to any join addresses, if necessary.
-		if credStr != nil && credStr.JoinAs != "" {
+		if credStr != nil && joinAs != "" {
 			var err error
-			password := credStr.Password(credStr.JoinAs)
+			pw, ok := credStr.Password(joinAs)
+			if !ok {
+				log.Fatalf("user %s does not exist in credential store", joinAs)
+			}
 			for i := range joins {
-				joins[i], err = cluster.AddUserInfo(joins[i], credStr.JoinAs, password)
+				joins[i], err = cluster.AddUserInfo(joins[i], joinAs, pw)
 				if err != nil {
 					log.Fatalf("failed to use credential store join_as: %s", err.Error())
 				}
