@@ -4,6 +4,7 @@ package auth
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 
 	"golang.org/x/crypto/bcrypt"
@@ -18,13 +19,15 @@ type BasicAuther interface {
 type Credential struct {
 	Username string   `json:"username,omitempty"`
 	Password string   `json:"password,omitempty"`
+	JoinAs   bool     `json:"join_as,omitempty"`
 	Perms    []string `json:"perms,omitempty"`
 }
 
 // CredentialsStore stores authentication and authorization information for all users.
 type CredentialsStore struct {
-	store map[string]string
-	perms map[string]map[string]bool
+	store  map[string]string
+	perms  map[string]map[string]bool
+	JoinAs string
 }
 
 // NewCredentialsStore returns a new instance of a CredentialStore.
@@ -52,6 +55,13 @@ func (c *CredentialsStore) Load(r io.Reader) error {
 		}
 		c.store[cred.Username] = cred.Password
 		c.perms[cred.Username] = make(map[string]bool, len(cred.Perms))
+		if cred.JoinAs {
+			if c.JoinAs != "" {
+				return errors.New("more than 1 user marked as join_as")
+			}
+			c.JoinAs = cred.Username
+		}
+
 		for _, p := range cred.Perms {
 			c.perms[cred.Username][p] = true
 		}
