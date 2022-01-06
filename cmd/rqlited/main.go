@@ -271,6 +271,12 @@ func main() {
 		log.Fatalf("failed to open store: %s", err.Error())
 	}
 
+	// Get any credential store.
+	credStr, err := credentialStore()
+	if err != nil {
+		log.Fatalf("failed to get credential store: %s", err.Error())
+	}
+
 	// Create cluster service now, so nodes will be able to learn information about each other.
 	clstr, err := clusterService(mux.Listen(cluster.MuxClusterHeader), str)
 	if err != nil {
@@ -284,7 +290,7 @@ func main() {
 	if err := clstrClient.SetLocal(raftAdv, clstr); err != nil {
 		log.Fatalf("failed to set cluster client local parameters: %s", err.Error())
 	}
-	httpServ, err := startHTTPService(str, clstrClient)
+	httpServ, err := startHTTPService(str, clstrClient, credStr)
 	if err != nil {
 		log.Fatalf("failed to start HTTP server: %s", err.Error())
 	}
@@ -312,6 +318,20 @@ func main() {
 			if !ok {
 				log.Fatalf("failed to parse root CA certificate(s) in %q", x509CACert)
 			}
+		}
+
+		// Add credentials to any join addresses, if necessary.
+		if credStr != nil && credStr.JoinAs != "" {
+			var err error
+			username := credStr.JoinAs
+			password := credStr.Password(username)
+			for i := range joins {
+				joins[i], err = cluster.AddUserInfo(joins[i], username, password)
+				if err != nil {
+					log.Fatalf("failed to user credential store join_as: %s", err.Error())
+				}
+			}
+			log.Println("added join_as identity from credential store")
 		}
 
 		if j, err := cluster.Join(joinSrcIP, joins, str.ID(), raftAdv, !raftNonVoter,
@@ -414,13 +434,7 @@ func waitForConsensus(str *store.Store) error {
 	return nil
 }
 
-func startHTTPService(str *store.Store, cltr *cluster.Client) (*httpd.Service, error) {
-	// Get the credential store.
-	credStr, err := credentialStore()
-	if err != nil {
-		return nil, err
-	}
-
+func startHTTPService(str *store.Store, cltr *cluster.Client, credStr *auth.CredentialsStore) (*httpd.Service, error) {
 	// Create HTTP server and load authentication information if required.
 	var s *httpd.Service
 	if credStr != nil {
