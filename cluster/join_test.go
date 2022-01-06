@@ -33,6 +33,14 @@ func Test_AddUserInfo(t *testing.T) {
 		t.Fatalf("wrong URL created, exp %s, got %s", exp, got)
 	}
 
+	u, err = AddUserInfo("http://example.com", "", "pass1")
+	if err != nil {
+		t.Fatalf("failed to add user info: %s", err.Error())
+	}
+	if exp, got := "http://example.com", u; exp != got {
+		t.Fatalf("wrong URL created, exp %s, got %s", exp, got)
+	}
+
 	u, err = AddUserInfo("http://user1:pass1@example.com", "user2", "pass2")
 	if err == nil {
 		t.Fatalf("failed to get expected error when UserInfo exists")

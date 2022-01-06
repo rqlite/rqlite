@@ -27,8 +27,14 @@ var (
 	ErrJoinFailed = errors.New("failed to join cluster")
 )
 
-// AddUserInfo adds username and password to the join address.
+// AddUserInfo adds username and password to the join address. If username is empty
+// joinAddr is returned unchanged. If joinAddr already contains a username, ErrUserInfoExists
+// is returned.
 func AddUserInfo(joinAddr, username, password string) (string, error) {
+	if username == "" {
+		return joinAddr, nil
+	}
+
 	u, err := url.Parse(joinAddr)
 	if err != nil {
 		return "", err
