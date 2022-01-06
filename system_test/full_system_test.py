@@ -6,9 +6,9 @@
 #
 #  python system_test/full_system_test.py Class.test
 
-from __future__ import print_function
 import tempfile
 import argparse
+import ast
 import subprocess
 import requests
 import json
@@ -20,14 +20,13 @@ import sqlite3
 import sys
 import unittest
 
-# Help with Python3
-try:
-  from urlparse import urlparse
-except ImportError:
-  from urllib.parse import urlparse
+from urllib.parse import urlparse
 
 RQLITED_PATH = os.environ['RQLITED_PATH']
 TIMEOUT=10
+
+def d_(s):
+    return ast.literal_eval(s.replace("'", "\""))
 
 class Node(object):
   def __init__(self, path, node_id,
@@ -298,7 +297,7 @@ class Node(object):
     return r.json()
 
   def backup(self, file):
-    with open(file, 'w') as fd:
+    with open(file, 'wb') as fd:
       r = requests.get(self._backup_url())
       raise_for_status(r)
       fd.write(r.content)
@@ -357,7 +356,7 @@ def raise_for_status(r):
     r.raise_for_status()
   except requests.exceptions.HTTPError as e:
     print(e)
-    print(r.text)
+    print((r.text))
     raise e
 
 def random_addr():
@@ -410,12 +409,12 @@ class TestSingleNode(unittest.TestCase):
     '''Test simple queries work as expected'''
     n = self.cluster.wait_for_leader()
     j = n.execute('CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
-    self.assertEqual(str(j), "{u'results': [{}]}")
+    self.assertEqual(j, d_("{'results': [{}]}"))
     j = n.execute('INSERT INTO bar(name) VALUES("fiona")')
     applied = n.wait_for_all_fsm()
-    self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
+    self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
     j = n.query('SELECT * from bar')
-    self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
+    self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
 
     # Ensure raw response from API is as expected.
     j = n.query('SELECT * from bar', text=True)
@@ -425,10 +424,10 @@ class TestSingleNode(unittest.TestCase):
     '''Test simple queries, requesting pretty output, work as expected'''
     n = self.cluster.wait_for_leader()
     j = n.execute('CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
-    self.assertEqual(str(j), "{u'results': [{}]}")
+    self.assertEqual(j, d_("{'results': [{}]}"))
     j = n.execute('INSERT INTO bar(name) VALUES("fiona")')
     applied = n.wait_for_all_fsm()
-    self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
+    self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
     j = n.query('SELECT * from bar', pretty=True, text=True)
     exp = '''{
     "results": [
@@ -456,35 +455,35 @@ class TestSingleNode(unittest.TestCase):
     '''Test parameterized queries work as expected'''
     n = self.cluster.wait_for_leader()
     j = n.execute('CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT, age INTEGER)')
-    self.assertEqual(str(j), "{u'results': [{}]}")
+    self.assertEqual(j, d_("{'results': [{}]}"))
     j = n.execute('INSERT INTO bar(name, age) VALUES(?,?)', params=["fiona", 20])
     applied = n.wait_for_all_fsm()
-    self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
+    self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
     j = n.query('SELECT * from bar')
-    self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona', 20]], u'types': [u'integer', u'text', u'integer'], u'columns': [u'id', u'name', u'age']}]}")
+    self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona', 20]], 'types': ['integer', 'text', 'integer'], 'columns': ['id', 'name', 'age']}]}"))
     j = n.query('SELECT * from bar WHERE age=?', params=[20])
-    self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona', 20]], u'types': [u'integer', u'text', u'integer'], u'columns': [u'id', u'name', u'age']}]}")
+    self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona', 20]], 'types': ['integer', 'text', 'integer'], 'columns': ['id', 'name', 'age']}]}"))
     j = n.query('SELECT * from bar WHERE age=?', params=[21])
-    self.assertEqual(str(j), "{u'results': [{u'types': [u'integer', u'text', u'integer'], u'columns': [u'id', u'name', u'age']}]}")
+    self.assertEqual(j, d_("{'results': [{'types': ['integer', 'text', 'integer'], 'columns': ['id', 'name', 'age']}]}"))
 
   def test_simple_named_parameterized_queries(self):
     '''Test named parameterized queries work as expected'''
     n = self.cluster.wait_for_leader()
     j = n.execute('CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT, age INTEGER)')
-    self.assertEqual(str(j), "{u'results': [{}]}")
+    self.assertEqual(j, d_("{'results': [{}]}"))
     j = n.execute('INSERT INTO bar(name, age) VALUES(?,?)', params=["fiona", 20])
     applied = n.wait_for_all_fsm()
-    self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
+    self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
     j = n.query('SELECT * from bar')
-    self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona', 20]], u'types': [u'integer', u'text', u'integer'], u'columns': [u'id', u'name', u'age']}]}")
+    self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona', 20]], 'types': ['integer', 'text', 'integer'], 'columns': ['id', 'name', 'age']}]}"))
     j = n.query('SELECT * from bar WHERE age=:age', params={"age": 20})
-    self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona', 20]], u'types': [u'integer', u'text', u'integer'], u'columns': [u'id', u'name', u'age']}]}")
+    self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona', 20]], 'types': ['integer', 'text', 'integer'], 'columns': ['id', 'name', 'age']}]}"))
 
   def test_simple_parameterized_mixed_queries(self):
     '''Test a mix of parameterized and non-parameterized queries work as expected'''
     n = self.cluster.wait_for_leader()
     j = n.execute('CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT, age INTEGER)')
-    self.assertEqual(str(j), "{u'results': [{}]}")
+    self.assertEqual(j, d_("{'results': [{}]}"))
 
     body = json.dumps([
         ["INSERT INTO bar(name, age) VALUES(?,?)", "fiona", 20],
@@ -492,17 +491,17 @@ class TestSingleNode(unittest.TestCase):
     ])
     j = n.execute_raw(body)
     applied = n.wait_for_all_fsm()
-    self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}, {u'last_insert_id': 2, u'rows_affected': 1}]}")
+    self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}, {'last_insert_id': 2, 'rows_affected': 1}]}"))
     j = n.query('SELECT * from bar')
-    self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona', 20], [2, u'sinead', 25]], u'types': [u'integer', u'text', u'integer'], u'columns': [u'id', u'name', u'age']}]}")
+    self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona', 20], [2, 'sinead', 25]], 'types': ['integer', 'text', 'integer'], 'columns': ['id', 'name', 'age']}]}"))
 
   def test_snapshot(self):
     ''' Test that a node peforms at least 1 snapshot'''
     n = self.cluster.wait_for_leader()
     j = n.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
-    self.assertEqual(str(j), "{u'results': [{}]}")
+    self.assertEqual(j, d_("{'results': [{}]}"))
     j = n.execute('INSERT INTO foo(name) VALUES("fiona")')
-    self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
+    self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
 
     applied = n.wait_for_all_fsm()
 
@@ -551,26 +550,26 @@ class TestEndToEnd(unittest.TestCase):
 
     n = self.cluster.wait_for_leader()
     j = n.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
-    self.assertEqual(str(j), "{u'results': [{}]}")
+    self.assertEqual(j, d_("{'results': [{}]}"))
     j = n.execute('INSERT INTO foo(name) VALUES("fiona")')
     fsmIdx = n.wait_for_all_fsm()
-    self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
+    self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
     j = n.query('SELECT * FROM foo')
-    self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
+    self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
 
     n0 = self.cluster.wait_for_leader().stop()
     n1 = self.cluster.wait_for_leader(node_exc=n0)
     n1.wait_for_fsm_index(fsmIdx)
     j = n1.query('SELECT * FROM foo')
-    self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
+    self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
     j = n1.execute('INSERT INTO foo(name) VALUES("declan")')
-    self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 2, u'rows_affected': 1}]}")
+    self.assertEqual(j, d_("{'results': [{'last_insert_id': 2, 'rows_affected': 1}]}"))
 
     n0.start()
     n0.wait_for_leader()
     n0.wait_for_fsm_index(n1.fsm_index())
     j = n0.query('SELECT * FROM foo', level='none')
-    self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona'], [2, u'declan']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
+    self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona'], [2, 'declan']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
 
   def test_leader_redirect(self):
     '''Test that followers supply the correct leader redirects (HTTP 301)'''
@@ -598,17 +597,18 @@ class TestEndToEnd(unittest.TestCase):
     self.assertEqual(nodes[l.node_id]['leader'], True)
     self.assertEqual(nodes[l.node_id]['reachable'], True)
     self.assertEqual(nodes[l.node_id]['api_addr'], l.APIProtoAddr())
-    self.assertTrue(nodes[fs[0].node_id].has_key('time'))
+    self.assertTrue('time' in nodes[fs[0].node_id])
     for n in [fs[0], fs[1]]:
       self.assertEqual(nodes[n.node_id]['leader'], False)
       self.assertEqual(nodes[n.node_id]['reachable'], True)
       self.assertEqual(nodes[n.node_id]['api_addr'], n.APIProtoAddr())
-      self.assertTrue(nodes[n.node_id].has_key('time'))
+      self.assertTrue('time' in nodes[n.node_id])
+      self.assertTrue('time' in nodes[fs[0].node_id])
 
     fs[0].stop()
     nodes = l.nodes()
     self.assertEqual(nodes[fs[0].node_id]['reachable'], False)
-    self.assertTrue(nodes[fs[0].node_id].has_key('error'))
+    self.assertTrue('error' in nodes[fs[0].node_id])
     self.assertEqual(nodes[fs[1].node_id]['reachable'], True)
     self.assertEqual(nodes[l.node_id]['reachable'], True)
 
@@ -647,6 +647,7 @@ class TestEndToEndAdvAddr(TestEndToEnd):
 
     self.cluster = Cluster([n0, n1, n2])
 
+
 class TestClusterRecovery(unittest.TestCase):
   '''Test that a cluster can recover after all Raft network addresses change'''
   def test(self):
@@ -665,12 +666,12 @@ class TestClusterRecovery(unittest.TestCase):
     self.nodes = [n0, n1, n2]
 
     j = n0.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
-    self.assertEqual(str(j), "{u'results': [{}]}")
+    self.assertEqual(j, d_("{'results': [{}]}"))
     j = n0.execute('INSERT INTO foo(name) VALUES("fiona")')
     fsmIdx = n0.wait_for_all_fsm()
-    self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
+    self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
     j = n0.query('SELECT * FROM foo')
-    self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
+    self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
 
     n0.stop()
     n1.stop()
@@ -704,7 +705,7 @@ class TestClusterRecovery(unittest.TestCase):
     n3.wait_for_leader()
 
     j = n3.query('SELECT * FROM foo')
-    self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
+    self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
 
   def tearDown(self):
     for n in self.nodes:
@@ -730,20 +731,20 @@ class TestRequestForwarding(unittest.TestCase):
   def test_execute_query_forward(self):
       l = self.cluster.wait_for_leader()
       j = l.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
-      self.assertEqual(str(j), "{u'results': [{}]}")
+      self.assertEqual(j, d_("{'results': [{}]}"))
 
       f = self.cluster.followers()[0]
       j = f.execute('INSERT INTO foo(name) VALUES("fiona")')
-      self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
+      self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
       fsmIdx = l.wait_for_all_fsm()
 
       j = l.query('SELECT * FROM foo')
-      self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
+      self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
       j = f.query('SELECT * FROM foo')
-      self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
-      self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
+      self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
+      self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
       j = f.query('SELECT * FROM foo', level="strong")
-      self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
+      self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
 
 class TestEndToEndNonVoter(unittest.TestCase):
   def setUp(self):
@@ -765,24 +766,24 @@ class TestEndToEndNonVoter(unittest.TestCase):
 
     # Insert some records via the leader
     j = self.leader.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
-    self.assertEqual(str(j), "{u'results': [{}]}")
+    self.assertEqual(j, d_("{'results': [{}]}"))
     j = self.leader.execute('INSERT INTO foo(name) VALUES("fiona")')
     self.leader.wait_for_all_fsm()
-    self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
+    self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
     j = self.leader.query('SELECT * FROM foo')
-    self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
+    self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
 
     # Stop non-voter and then insert some more records
     self.non_voter.stop()
     j = self.leader.execute('INSERT INTO foo(name) VALUES("declan")')
-    self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 2, u'rows_affected': 1}]}")
+    self.assertEqual(j, d_("{'results': [{'last_insert_id': 2, 'rows_affected': 1}]}"))
 
     # Restart non-voter and confirm it picks up changes
     self.non_voter.start()
     self.non_voter.wait_for_leader()
     self.non_voter.wait_for_fsm_index(self.leader.fsm_index())
     j = self.non_voter.query('SELECT * FROM foo', level='none')
-    self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona'], [2, u'declan']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
+    self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona'], [2, 'declan']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
 
   def test_leader_redirect(self):
     return
@@ -827,26 +828,26 @@ class TestEndToEndNonVoterFollowsLeader(unittest.TestCase):
 
     n = self.cluster.wait_for_leader()
     j = n.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
-    self.assertEqual(str(j), "{u'results': [{}]}")
+    self.assertEqual(j, d_("{'results': [{}]}"))
     j = n.execute('INSERT INTO foo(name) VALUES("fiona")')
     n.wait_for_all_fsm()
-    self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
+    self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
     j = n.query('SELECT * FROM foo')
-    self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
+    self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
 
     # Kill leader, and then make more changes.
     n0 = self.cluster.wait_for_leader().stop()
     n1 = self.cluster.wait_for_leader(node_exc=n0)
     n1.wait_for_all_applied()
     j = n1.query('SELECT * FROM foo')
-    self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
+    self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
     j = n1.execute('INSERT INTO foo(name) VALUES("declan")')
-    self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 2, u'rows_affected': 1}]}")
+    self.assertEqual(j, d_("{'results': [{'last_insert_id': 2, 'rows_affected': 1}]}"))
 
     # Confirm non-voter sees changes made through old and new leader.
     self.non_voter.wait_for_fsm_index(n1.fsm_index())
     j = self.non_voter.query('SELECT * FROM foo', level='none')
-    self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona'], [2, u'declan']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
+    self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona'], [2, 'declan']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
 
 class TestEndToEndBackupRestore(unittest.TestCase):
   def test_backup_restore(self):
@@ -864,16 +865,16 @@ class TestEndToEndBackupRestore(unittest.TestCase):
     conn = sqlite3.connect(self.db_file)
     rows = conn.execute('SELECT * FROM foo').fetchall()
     self.assertEqual(len(rows), 1)
-    self.assertEqual(rows[0], (1, u'fiona'))
+    self.assertEqual(rows[0], (1, 'fiona'))
     conn.close()
 
     self.node1 = Node(RQLITED_PATH, '1')
     self.node1.start()
     self.node1.wait_for_leader()
     j = self.node1.restore(self.db_file)
-    self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
+    self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
     j = self.node1.query('SELECT * FROM foo')
-    self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
+    self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
 
   def tearDown(self):
     if hasattr(self, 'node0'):
@@ -912,7 +913,7 @@ class TestEndToEndSnapRestoreSingle(unittest.TestCase):
 
     # Ensure node has the full correct state.
     j = self.n0.query('SELECT count(*) FROM foo', level='none')
-    self.assertEqual(str(j), "{u'results': [{u'values': [[200]], u'types': [u''], u'columns': [u'count(*)']}]}")
+    self.assertEqual(j, d_("{'results': [{'values': [[200]], 'types': [''], 'columns': ['count(*)']}]}"))
 
     # Restart node, and make sure it comes back with the correct state
     self.n0.stop()
@@ -922,7 +923,7 @@ class TestEndToEndSnapRestoreSingle(unittest.TestCase):
     self.assertEqual(self.n0.expvar()['store']['num_restores'], 1)
 
     j = self.n0.query('SELECT count(*) FROM foo', level='none')
-    self.assertEqual(str(j), "{u'results': [{u'values': [[200]], u'types': [u''], u'columns': [u'count(*)']}]}")
+    self.assertEqual(j, d_("{'results': [{'values': [[200]], 'types': [''], 'columns': ['count(*)']}]}"))
 
   def tearDown(self):
     deprovision_node(self.n0)
@@ -979,11 +980,11 @@ class TestEndToEndSnapRestoreCluster(unittest.TestCase):
     # Ensure those new nodes have the full correct state.
     self.n1.wait_for_fsm_index(self.n0.fsm_index())
     j = self.n1.query('SELECT count(*) FROM foo', level='none')
-    self.assertEqual(str(j), "{u'results': [{u'values': [[201]], u'types': [u''], u'columns': [u'count(*)']}]}")
+    self.assertEqual(j, d_("{'results': [{'values': [[201]], 'types': [''], 'columns': ['count(*)']}]}"))
 
     self.n2.wait_for_fsm_index(self.n0.fsm_index())
     j = self.n2.query('SELECT count(*) FROM foo', level='none')
-    self.assertEqual(str(j), "{u'results': [{u'values': [[201]], u'types': [u''], u'columns': [u'count(*)']}]}")
+    self.assertEqual(j, d_("{'results': [{'values': [[201]], 'types': [''], 'columns': ['count(*)']}]}"))
 
     # Kill one of the nodes, and make more changes, enough to trigger more snaps.
     self.n2.stop()
@@ -1006,7 +1007,7 @@ class TestEndToEndSnapRestoreCluster(unittest.TestCase):
 
     self.n2.wait_for_fsm_index(self.n0.fsm_index())
     j = self.n2.query('SELECT count(*) FROM foo', level='none')
-    self.assertEqual(str(j), "{u'results': [{u'values': [[402]], u'types': [u''], u'columns': [u'count(*)']}]}")
+    self.assertEqual(j, d_("{'results': [{'values': [[402]], 'types': [''], 'columns': ['count(*)']}]}"))
 
   def tearDown(self):
     deprovision_node(self.n0)
@@ -1058,24 +1059,24 @@ class TestJoinCatchup(unittest.TestCase):
     '''Test that a node rejoining without changing ID or address picks up changes'''
     n0 = self.cluster.wait_for_leader()
     j = n0.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
-    self.assertEqual(str(j), "{u'results': [{}]}")
+    self.assertEqual(j, d_("{'results': [{}]}"))
     j = n0.execute('INSERT INTO foo(name) VALUES("fiona")')
-    self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
+    self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
     j = n0.query('SELECT * FROM foo')
-    self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
+    self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
     applied = n0.wait_for_all_fsm()
 
     # Test that follower node has correct state in local database, and then kill the follower
     self.n1.wait_for_fsm_index(applied)
     j = self.n1.query('SELECT * FROM foo', level='none')
-    self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
+    self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
     self.n1.stop()
 
     # Insert a new record
     j = n0.execute('INSERT INTO foo(name) VALUES("fiona")')
-    self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 2, u'rows_affected': 1}]}")
+    self.assertEqual(j, d_("{'results': [{'last_insert_id': 2, 'rows_affected': 1}]}"))
     j = n0.query('SELECT COUNT(*) FROM foo')
-    self.assertEqual(str(j), "{u'results': [{u'values': [[2]], u'types': [u''], u'columns': [u'COUNT(*)']}]}")
+    self.assertEqual(j, d_("{'results': [{'values': [[2]], 'types': [''], 'columns': ['COUNT(*)']}]}"))
     applied = n0.wait_for_all_fsm()
 
     # Restart follower, explicity rejoin, and ensure it picks up new records
@@ -1084,30 +1085,30 @@ class TestJoinCatchup(unittest.TestCase):
     self.n1.wait_for_fsm_index(applied)
     self.assertEqual(n0.expvar()['store']['num_ignored_joins'], 1)
     j = self.n1.query('SELECT COUNT(*) FROM foo', level='none')
-    self.assertEqual(str(j), "{u'results': [{u'values': [[2]], u'types': [u''], u'columns': [u'COUNT(*)']}]}")
+    self.assertEqual(j, d_("{'results': [{'values': [[2]], 'types': [''], 'columns': ['COUNT(*)']}]}"))
 
   def test_change_addresses(self):
     '''Test that a node rejoining with new addresses works fine'''
     n0 = self.cluster.wait_for_leader()
     j = n0.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
-    self.assertEqual(str(j), "{u'results': [{}]}")
+    self.assertEqual(j, d_("{'results': [{}]}"))
     j = n0.execute('INSERT INTO foo(name) VALUES("fiona")')
-    self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 1, u'rows_affected': 1}]}")
+    self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
     j = n0.query('SELECT * FROM foo')
-    self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
+    self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
     applied = n0.wait_for_all_fsm()
 
     # Test that follower node has correct state in local database, and then kill the follower
     self.n1.wait_for_fsm_index(applied)
     j = self.n1.query('SELECT * FROM foo', level='none')
-    self.assertEqual(str(j), "{u'results': [{u'values': [[1, u'fiona']], u'types': [u'integer', u'text'], u'columns': [u'id', u'name']}]}")
+    self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
     self.n1.stop()
 
     # Insert a new record
     j = n0.execute('INSERT INTO foo(name) VALUES("fiona")')
-    self.assertEqual(str(j), "{u'results': [{u'last_insert_id': 2, u'rows_affected': 1}]}")
+    self.assertEqual(j, d_("{'results': [{'last_insert_id': 2, 'rows_affected': 1}]}"))
     j = n0.query('SELECT COUNT(*) FROM foo')
-    self.assertEqual(str(j), "{u'results': [{u'values': [[2]], u'types': [u''], u'columns': [u'COUNT(*)']}]}")
+    self.assertEqual(j, d_("{'results': [{'values': [[2]], 'types': [''], 'columns': ['COUNT(*)']}]}"))
     applied = n0.wait_for_all_fsm()
 
     # Restart follower with new network attributes, explicity rejoin, and ensure it picks up new records
@@ -1117,7 +1118,7 @@ class TestJoinCatchup(unittest.TestCase):
     self.assertEqual(n0.expvar()['store']['num_removed_before_joins'], 1)
     self.n1.wait_for_fsm_index(applied)
     j = self.n1.query('SELECT COUNT(*) FROM foo', level='none')
-    self.assertEqual(str(j), "{u'results': [{u'values': [[2]], u'types': [u''], u'columns': [u'COUNT(*)']}]}")
+    self.assertEqual(j, d_("{'results': [{'values': [[2]], 'types': [''], 'columns': ['COUNT(*)']}]}"))
 
 class TestRedirectedJoin(unittest.TestCase):
   def tearDown(self):
