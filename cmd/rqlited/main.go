@@ -323,10 +323,9 @@ func main() {
 		// Add credentials to any join addresses, if necessary.
 		if credStr != nil && credStr.JoinAs != "" {
 			var err error
-			username := credStr.JoinAs
 			password := credStr.Password(username)
 			for i := range joins {
-				joins[i], err = cluster.AddUserInfo(joins[i], username, password)
+				joins[i], err = cluster.AddUserInfo(joins[i], credStr.JoinAs, password)
 				if err != nil {
 					log.Fatalf("failed to use credential store join_as: %s", err.Error())
 				}

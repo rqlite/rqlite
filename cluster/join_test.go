@@ -47,6 +47,18 @@ func Test_AddUserInfo(t *testing.T) {
 	}
 }
 
+func Test_RemoveUserInfo(t *testing.T) {
+	if exp, got := "http://example.com", RemoveUserInfo("http://user1:pass1@example.com"); exp != got {
+		t.Fatalf("expected %s, got %s", exp, got)
+	}
+	if exp, got := "http://example.com", RemoveUserInfo("http://example.com"); exp != got {
+		t.Fatalf("expected %s, got %s", exp, got)
+	}
+	if exp, got := "nonsense", RemoveUserInfo("nonsense"); exp != got {
+		t.Fatalf("expected %s, got %s", exp, got)
+	}
+}
+
 func Test_SingleJoinOK(t *testing.T) {
 	var body map[string]interface{}
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

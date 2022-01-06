@@ -48,6 +48,16 @@ func AddUserInfo(joinAddr, username, password string) (string, error) {
 	return u.String(), nil
 }
 
+// RemoveUserInfo returns the joinAddr with any username and password removed.
+func RemoveUserInfo(joinAddr string) string {
+	u, err := url.Parse(joinAddr)
+	if err != nil {
+		return joinAddr
+	}
+	u.User = nil
+	return u.String()
+}
+
 // Join attempts to join the cluster at one of the addresses given in joinAddr.
 // It walks through joinAddr in order, and sets the node ID and Raft address of
 // the joining node as id addr respectively. It returns the endpoint successfully
