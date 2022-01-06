@@ -328,7 +328,7 @@ func main() {
 			for i := range joins {
 				joins[i], err = cluster.AddUserInfo(joins[i], username, password)
 				if err != nil {
-					log.Fatalf("failed to user credential store join_as: %s", err.Error())
+					log.Fatalf("failed to use credential store join_as: %s", err.Error())
 				}
 			}
 			log.Println("added join_as identity from credential store")
