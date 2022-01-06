@@ -8,6 +8,7 @@
 
 import tempfile
 import argparse
+import ast
 import subprocess
 import requests
 import json
@@ -25,7 +26,7 @@ RQLITED_PATH = os.environ['RQLITED_PATH']
 TIMEOUT=10
 
 def d_(s):
-    return eval(s.replace("'", "\""))
+    return ast.literal_eval(s.replace("'", "\""))
 
 class Node(object):
   def __init__(self, path, node_id,
