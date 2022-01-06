@@ -323,7 +323,7 @@ func main() {
 		// Add credentials to any join addresses, if necessary.
 		if credStr != nil && credStr.JoinAs != "" {
 			var err error
-			password := credStr.Password(username)
+			password := credStr.Password(credStr.JoinAs)
 			for i := range joins {
 				joins[i], err = cluster.AddUserInfo(joins[i], credStr.JoinAs, password)
 				if err != nil {
