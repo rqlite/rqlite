@@ -34,7 +34,7 @@ class Node(object):
                raft_addr=None, raft_adv=None,
                raft_voter=True,
                raft_snap_threshold=8192, raft_snap_int="1s",
-               join_as=None,
+               auth=None, join_as=None,
                dir=None, on_disk=False):
     if api_addr is None:
       s, addr = random_addr()
@@ -60,6 +60,7 @@ class Node(object):
     self.raft_voter = raft_voter
     self.raft_snap_threshold = raft_snap_threshold
     self.raft_snap_int = raft_snap_int
+    self.auth = auth
     self.join_as = join_as
     self.on_disk = on_disk
     self.process = None
@@ -114,6 +115,8 @@ class Node(object):
       command += ['-raft-adv-addr', self.raft_adv]
     if self.on_disk:
       command += ['-on-disk']
+    if self.auth is not None:
+      command += ['-auth', self.auth]
     if join is not None:
       command += ['-join', 'http://' + join]
       if self.join_as is not None:
@@ -651,6 +654,26 @@ class TestEndToEndAdvAddr(TestEndToEnd):
 
     self.cluster = Cluster([n0, n1, n2])
 
+class TestAuthJoin(unittest.TestCase):
+  '''Test that joining works with authentication'''
+
+  def test(self):
+    self.auth_file = tempfile.NamedTemporaryFile()
+    with open(self.auth_file.name, 'w') as f:
+      f.write('[{"username": "foo","password": "bar","perms": ["all"]}]')
+
+    n0 = Node(RQLITED_PATH, '0', auth=self.auth_file.name)
+    n0.start()
+    n0.wait_for_leader()
+
+    n1 = Node(RQLITED_PATH, '1', auth=self.auth_file.name)
+    n1.start(join=n0.APIAddr())
+    n1.wait_for_leader()
+
+    self.cluster = Cluster([n0, n1])
+
+  def tearDown(self):
+    self.cluster.deprovision()
 
 class TestClusterRecovery(unittest.TestCase):
   '''Test that a cluster can recover after all Raft network addresses change'''
