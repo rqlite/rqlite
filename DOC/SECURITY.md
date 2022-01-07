@@ -67,9 +67,9 @@ An example configuration file is shown below.
   }
 ]
 ```
-This configuration file sets authentication for three usernames, _bob_, _mary_, and `*`. It sets a password for thw first two.
+This configuration file sets authentication for three usernames, _bob_, _mary_, and `*`. It sets a password for the first two.
 
-This configuration also sets permissions for all usernames. _bob_ has permission to perform all operations, but _mary_ can only query the cluster, as well as backup the cluster. `*` is a special username, which indicates that all users -- even anonymous users (requests without any BasicAuth information) -- have permission to check the cluster status. This can be useful if you wish to leave certain operations open to all users.
+This configuration also sets permissions for all usernames. _bob_ has permission to perform all operations, but _mary_ can only query the cluster, as well as backup the cluster. `*` is a special username, which indicates that all users -- even anonymous users (requests without any BasicAuth information) -- have permission to check the cluster status. This can be useful if you wish to leave certain operations open to all accesses.
 
 ## Secure cluster example
 Starting a node with HTTPS enabled, node-to-node encryption, and with the above configuration file. It is assumed the HTTPS X.509 certificate and key are at the paths `server.crt` and `key.pem` respectively, and the node-to-node certificate and key are at `node.crt` and `node-key.pem`
