@@ -229,11 +229,11 @@ func New(ln Listener, c *Config) *Store {
 	}
 }
 
-// Open opens the Store. If enableBootstrap is set, then this node becomes a
+// Open opens the Store. If enableSingleNode is set, then this node becomes a
 // standalone node. If not set, then the calling layer must know that this
 // node has pre-existing state, or the calling layer will trigger a join
 // operation after opening the Store.
-func (s *Store) Open(enableBootstrap bool) error {
+func (s *Store) Open(enableSingleNode bool) error {
 	s.openT = time.Now()
 	s.logger.Printf("opening store with node ID %s", s.raftID)
 
@@ -342,8 +342,8 @@ func (s *Store) Open(enableBootstrap bool) error {
 		return fmt.Errorf("new raft: %s", err)
 	}
 
-	if enableBootstrap {
-		s.logger.Printf("executing new cluster bootstrap")
+	if enableSingleNode {
+		s.logger.Printf("executing single-node bootstrap")
 		configuration := raft.Configuration{
 			Servers: []raft.Server{
 				{
@@ -354,7 +354,7 @@ func (s *Store) Open(enableBootstrap bool) error {
 		}
 		ra.BootstrapCluster(configuration)
 	} else {
-		s.logger.Printf("no cluster bootstrap requested")
+		s.logger.Printf("single-node bootstrap not requested")
 	}
 
 	s.raft = ra
