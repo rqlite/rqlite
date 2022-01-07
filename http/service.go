@@ -1128,17 +1128,6 @@ func (s *Service) addBuildVersion(w http.ResponseWriter) {
 	w.Header().Add(VersionHTTPHeader, version)
 }
 
-// // checkCredentials returns if any authentication requirements
-// // have been successfully met.
-// func (s *Service) checkCredentials(r *http.Request) bool {
-// 	if s.credentialStore == nil {
-// 		return true
-// 	}
-
-// 	username, password, ok := r.BasicAuth()
-// 	return ok && s.credentialStore.Check(username, password)
-// }
-
 // writeResponse writes the given response to the given writer.
 func (s *Service) writeResponse(w http.ResponseWriter, r *http.Request, j *Response) {
 	var b []byte

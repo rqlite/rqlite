@@ -56,7 +56,6 @@ func (c *CredentialsStore) Load(r io.Reader) error {
 		}
 		c.store[cred.Username] = cred.Password
 		c.perms[cred.Username] = make(map[string]bool, len(cred.Perms))
-
 		for _, p := range cred.Perms {
 			c.perms[cred.Username][p] = true
 		}

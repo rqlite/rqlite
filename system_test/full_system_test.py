@@ -677,6 +677,7 @@ class TestAuthJoin(unittest.TestCase):
     self.cluster = Cluster([n0, n1, n2])
 
   def tearDown(self):
+    close(self.auth_file )
     self.cluster.deprovision()
 
 class TestClusterRecovery(unittest.TestCase):
