@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rqlite/rqlite/auth"
 	"github.com/rqlite/rqlite/command"
 	"github.com/rqlite/rqlite/command/encoding"
 	"github.com/rqlite/rqlite/store"
@@ -296,10 +297,6 @@ func (s *Service) HTTPS() bool {
 // ServeHTTP allows Service to serve HTTP requests.
 func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.addBuildVersion(w)
-	if !s.checkCredentials(r) {
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
 
 	switch {
 	case r.URL.Path == "/" || r.URL.Path == "":
@@ -1028,8 +1025,8 @@ func (s *Service) FormRedirect(r *http.Request, url string) string {
 	return fmt.Sprintf("%s%s%s", url, r.URL.Path, rq)
 }
 
-// CheckRequestPerm returns true if authentication is enabled and the user contained
-// in the BasicAuth request has either PermAll, or the given perm.
+// CheckRequestPerm checks if the request is authenticated and authorized
+// with the given Perm.
 func (s *Service) CheckRequestPerm(r *http.Request, perm string) (b bool) {
 	defer func() {
 		if b {
@@ -1038,14 +1035,29 @@ func (s *Service) CheckRequestPerm(r *http.Request, perm string) (b bool) {
 			stats.Add(numAuthFail, 1)
 		}
 	}()
+
+	// No credential store? Auth is not even enabled.
 	if s.credentialStore == nil {
 		return true
 	}
 
-	username, _, ok := r.BasicAuth()
+	// Is the required perm granted to all users, including anonymous users?
+	if s.credentialStore.HasAnyPerm(auth.AllUsers, perm, PermAll) {
+		return true
+	}
+
+	// At this point there needs to be BasicAuth information in the request.
+	username, password, ok := r.BasicAuth()
 	if !ok {
 		return false
 	}
+
+	// Are the BasicAuth creds good?
+	if !s.credentialStore.Check(username, password) {
+		return false
+	}
+
+	// Is the specified user authorized?
 	return s.credentialStore.HasAnyPerm(username, perm, PermAll)
 }
 
@@ -1114,17 +1126,6 @@ func (s *Service) addBuildVersion(w http.ResponseWriter) {
 		version = v
 	}
 	w.Header().Add(VersionHTTPHeader, version)
-}
-
-// checkCredentials returns if any authentication requirements
-// have been successfully met.
-func (s *Service) checkCredentials(r *http.Request) bool {
-	if s.credentialStore == nil {
-		return true
-	}
-
-	username, password, ok := r.BasicAuth()
-	return ok && s.credentialStore.Check(username, password)
 }
 
 // writeResponse writes the given response to the given writer.

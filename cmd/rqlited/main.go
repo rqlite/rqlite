@@ -53,6 +53,7 @@ var nodeID string
 var raftAddr string
 var raftAdv string
 var joinAddr string
+var joinAs string
 var joinAttempts int
 var joinInterval string
 var noVerify bool
@@ -105,6 +106,7 @@ func init() {
 	flag.StringVar(&raftAddr, "raft-addr", "localhost:4002", "Raft communication bind address")
 	flag.StringVar(&raftAdv, "raft-adv-addr", "", "Advertised Raft communication address. If not set, same as Raft bind")
 	flag.StringVar(&joinAddr, "join", "", "Comma-delimited list of nodes, through which a cluster can be joined (proto://host:port)")
+	flag.StringVar(&joinAs, "join-as", "", "Username in authentication file to join as. If not set, joins anonymously")
 	flag.IntVar(&joinAttempts, "join-attempts", 5, "Number of join attempts to make")
 	flag.StringVar(&joinInterval, "join-interval", "5s", "Period between join attempts")
 	flag.StringVar(&discoURL, "disco-url", "http://discovery.rqlite.com", "Set Discovery Service URL")
@@ -271,6 +273,12 @@ func main() {
 		log.Fatalf("failed to open store: %s", err.Error())
 	}
 
+	// Get any credential store.
+	credStr, err := credentialStore()
+	if err != nil {
+		log.Fatalf("failed to get credential store: %s", err.Error())
+	}
+
 	// Create cluster service now, so nodes will be able to learn information about each other.
 	clstr, err := clusterService(mux.Listen(cluster.MuxClusterHeader), str)
 	if err != nil {
@@ -284,7 +292,7 @@ func main() {
 	if err := clstrClient.SetLocal(raftAdv, clstr); err != nil {
 		log.Fatalf("failed to set cluster client local parameters: %s", err.Error())
 	}
-	httpServ, err := startHTTPService(str, clstrClient)
+	httpServ, err := startHTTPService(str, clstrClient, credStr)
 	if err != nil {
 		log.Fatalf("failed to start HTTP server: %s", err.Error())
 	}
@@ -312,6 +320,22 @@ func main() {
 			if !ok {
 				log.Fatalf("failed to parse root CA certificate(s) in %q", x509CACert)
 			}
+		}
+
+		// Add credentials to any join addresses, if necessary.
+		if credStr != nil && joinAs != "" {
+			var err error
+			pw, ok := credStr.Password(joinAs)
+			if !ok {
+				log.Fatalf("user %s does not exist in credential store", joinAs)
+			}
+			for i := range joins {
+				joins[i], err = cluster.AddUserInfo(joins[i], joinAs, pw)
+				if err != nil {
+					log.Fatalf("failed to use credential store join_as: %s", err.Error())
+				}
+			}
+			log.Println("added join_as identity from credential store")
 		}
 
 		if j, err := cluster.Join(joinSrcIP, joins, str.ID(), raftAdv, !raftNonVoter,
@@ -414,13 +438,7 @@ func waitForConsensus(str *store.Store) error {
 	return nil
 }
 
-func startHTTPService(str *store.Store, cltr *cluster.Client) (*httpd.Service, error) {
-	// Get the credential store.
-	credStr, err := credentialStore()
-	if err != nil {
-		return nil, err
-	}
-
+func startHTTPService(str *store.Store, cltr *cluster.Client, credStr *auth.CredentialsStore) (*httpd.Service, error) {
 	// Create HTTP server and load authentication information if required.
 	var s *httpd.Service
 	if credStr != nil {

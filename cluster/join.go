@@ -10,6 +10,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -18,9 +19,44 @@ import (
 )
 
 var (
+	// ErrUserInfoExists is returned when a join address already contains
+	// a username and a password.
+	ErrUserInfoExists = errors.New("userinfo exists")
+
 	// ErrJoinFailed is returned when a node fails to join a cluster
 	ErrJoinFailed = errors.New("failed to join cluster")
 )
+
+// AddUserInfo adds username and password to the join address. If username is empty
+// joinAddr is returned unchanged. If joinAddr already contains a username, ErrUserInfoExists
+// is returned.
+func AddUserInfo(joinAddr, username, password string) (string, error) {
+	if username == "" {
+		return joinAddr, nil
+	}
+
+	u, err := url.Parse(joinAddr)
+	if err != nil {
+		return "", err
+	}
+
+	if u.User != nil && u.User.Username() != "" {
+		return "", ErrUserInfoExists
+	}
+
+	u.User = url.UserPassword(username, password)
+	return u.String(), nil
+}
+
+// RemoveUserInfo returns the joinAddr with any username and password removed.
+func RemoveUserInfo(joinAddr string) string {
+	u, err := url.Parse(joinAddr)
+	if err != nil {
+		return joinAddr
+	}
+	u.User = nil
+	return u.String()
+}
 
 // Join attempts to join the cluster at one of the addresses given in joinAddr.
 // It walks through joinAddr in order, and sets the node ID and Raft address of

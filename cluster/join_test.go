@@ -13,6 +13,52 @@ import (
 const numAttempts int = 3
 const attemptInterval = 5 * time.Second
 
+func Test_AddUserInfo(t *testing.T) {
+	var u string
+	var err error
+
+	u, err = AddUserInfo("http://example.com", "user1", "pass1")
+	if err != nil {
+		t.Fatalf("failed to add user info: %s", err.Error())
+	}
+	if exp, got := "http://user1:pass1@example.com", u; exp != got {
+		t.Fatalf("wrong URL created, exp %s, got %s", exp, got)
+	}
+
+	u, err = AddUserInfo("http://example.com", "user1", "")
+	if err != nil {
+		t.Fatalf("failed to add user info: %s", err.Error())
+	}
+	if exp, got := "http://user1:@example.com", u; exp != got {
+		t.Fatalf("wrong URL created, exp %s, got %s", exp, got)
+	}
+
+	u, err = AddUserInfo("http://example.com", "", "pass1")
+	if err != nil {
+		t.Fatalf("failed to add user info: %s", err.Error())
+	}
+	if exp, got := "http://example.com", u; exp != got {
+		t.Fatalf("wrong URL created, exp %s, got %s", exp, got)
+	}
+
+	u, err = AddUserInfo("http://user1:pass1@example.com", "user2", "pass2")
+	if err == nil {
+		t.Fatalf("failed to get expected error when UserInfo exists")
+	}
+}
+
+func Test_RemoveUserInfo(t *testing.T) {
+	if exp, got := "http://example.com", RemoveUserInfo("http://user1:pass1@example.com"); exp != got {
+		t.Fatalf("expected %s, got %s", exp, got)
+	}
+	if exp, got := "http://example.com", RemoveUserInfo("http://example.com"); exp != got {
+		t.Fatalf("expected %s, got %s", exp, got)
+	}
+	if exp, got := "nonsense", RemoveUserInfo("nonsense"); exp != got {
+		t.Fatalf("expected %s, got %s", exp, got)
+	}
+}
+
 func Test_SingleJoinOK(t *testing.T) {
 	var body map[string]interface{}
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
