@@ -350,7 +350,7 @@ func Test_AuthPermsAllUsers(t *testing.T) {
 			},
 			{
 				"username": "*",
-				"perms": ["bar"]
+				"perms": ["bar", "abc"]
 			}
 		]
 	`
@@ -373,10 +373,16 @@ func Test_AuthPermsAllUsers(t *testing.T) {
 	if perm := store.HasPerm(AllUsers, "bar"); !perm {
 		t.Fatalf("* does not have bar perm")
 	}
+	if perm := store.HasPerm(AllUsers, "abc"); !perm {
+		t.Fatalf("* does not have abc perm")
+	}
 	if perm := store.HasPerm(AllUsers, "foo"); perm {
 		t.Fatalf("* has foo perm")
 	}
 	if perm := store.HasPerm("username1", "bar"); !perm {
 		t.Fatalf("username1 does not have bar perm via *")
+	}
+	if perm := store.HasPerm("username1", "abc"); !perm {
+		t.Fatalf("username1 does not have abc perm via *")
 	}
 }

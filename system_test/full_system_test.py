@@ -660,7 +660,7 @@ class TestAuthJoin(unittest.TestCase):
   def test(self):
     self.auth_file = tempfile.NamedTemporaryFile()
     with open(self.auth_file.name, 'w') as f:
-      f.write('[{"username": "foo","password": "bar","perms": ["all"]}]')
+      f.write('[{"username": "foo","password": "bar","perms": ["all"]}, {"username": "*", "perms": ["status", "ready"]}]')
 
     n0 = Node(RQLITED_PATH, '0', auth=self.auth_file.name)
     n0.start()
@@ -668,9 +668,13 @@ class TestAuthJoin(unittest.TestCase):
 
     n1 = Node(RQLITED_PATH, '1', auth=self.auth_file.name)
     n1.start(join=n0.APIAddr())
-    n1.wait_for_leader()
+    self.assertRaises(Exception, n1.wait_for_leader) # Join should fail due to lack of auth.
 
-    self.cluster = Cluster([n0, n1])
+    n2 = Node(RQLITED_PATH, '2', auth=self.auth_file.name, join_as="foo")
+    n2.start(join=n0.APIAddr())
+    n2.wait_for_leader()
+
+    self.cluster = Cluster([n0, n1, n2])
 
   def tearDown(self):
     self.cluster.deprovision()
