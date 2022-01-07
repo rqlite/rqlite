@@ -362,7 +362,14 @@ func main() {
 	if httpAdv != "" {
 		apiAdv = httpAdv
 	}
+
+	// Tell the user the node is ready, giving some advice on how to connect.
 	log.Printf("node is ready, HTTP API available at %s://%s", apiProto, apiAdv)
+	h, p, err := net.SplitHostPort(apiAdv)
+	if err != nil {
+		log.Fatalf("advertised address is not valid: %s", err.Error())
+	}
+	log.Printf("connect using the command-line tool via 'rqlite -H %s -P %s'", h, p)
 
 	// Block until signalled.
 	terminate := make(chan os.Signal, 1)
