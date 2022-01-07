@@ -412,7 +412,7 @@ func Test_401Routes_NoBasicAuth(t *testing.T) {
 		"/db/backup",
 		"/db/load",
 		"/join",
-		"/delete",
+		"/remove",
 		"/status",
 		"/nodes",
 		"/readyz",
