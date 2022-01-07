@@ -1,4 +1,10 @@
-## 6.9.1 (unreleased)
+## 6.10.0 (unreleased)
+This release enhances the authentication and authorization system, making it more convenient to use. It also fixes some minor bugs, and migrates the end-to-end test suite to Python 3.
+
+### New features
+- [PR #940](https://github.com/rqlite/rqlite/pull/940): Support specifying the user to join a cluster with, via `-join-as`.
+- [PR #940](https://github.com/rqlite/rqlite/pull/940): Add support for pseudo username `*` to authentication configuration, providing more control over access.
+
 ### Implementation changes and bug fixes
 - [PR #934](https://github.com/rqlite/rqlite/pull/934): Use correct MIME media type for JSON text. Fixes [issue #933](https://github.com/rqlite/rqlite/issues/933).
 - [PR #939](https://github.com/rqlite/rqlite/pull/939): Migrate end-to-end testing to Python 3.
