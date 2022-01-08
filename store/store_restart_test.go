@@ -10,8 +10,11 @@ import (
 )
 
 func openStoreCloseStartup(t *testing.T, s *Store) {
-	if err := s.Open(true); err != nil {
+	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
 	}
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
@@ -35,7 +38,7 @@ func openStoreCloseStartup(t *testing.T, s *Store) {
 	}
 
 	// Reopen it and confirm data still there.
-	if err := s.Open(true); err != nil {
+	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
@@ -68,7 +71,7 @@ func openStoreCloseStartup(t *testing.T, s *Store) {
 	// Tweak snapshot params to force a snap to take place.
 	s.SnapshotThreshold = 4
 	s.SnapshotInterval = 100 * time.Millisecond
-	if err := s.Open(true); err != nil {
+	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
@@ -120,7 +123,7 @@ func openStoreCloseStartup(t *testing.T, s *Store) {
 	if err := s.Close(true); err != nil {
 		t.Fatalf("failed to close single-node store: %s", err.Error())
 	}
-	if err := s.Open(true); err != nil {
+	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
@@ -152,7 +155,7 @@ func openStoreCloseStartup(t *testing.T, s *Store) {
 	s.SnapshotThreshold = 8192
 	s.SnapshotInterval = 100 * time.Second
 
-	if err := s.Open(true); err != nil {
+	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
@@ -179,7 +182,7 @@ func openStoreCloseStartup(t *testing.T, s *Store) {
 	if err := s.Close(true); err != nil {
 		t.Fatalf("failed to close single-node store: %s", err.Error())
 	}
-	if err := s.Open(true); err != nil {
+	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
