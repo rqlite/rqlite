@@ -187,7 +187,7 @@ type Store struct {
 }
 
 // IsNewNode returns whether a node using raftDir would be a brand-new node.
-// It also means that the window this node joining a different cluster has passed.
+// It also means that the window for this node joining a different cluster has passed.
 func IsNewNode(raftDir string) bool {
 	// If there is any pre-existing Raft state, then this node
 	// has already been created.
@@ -229,11 +229,8 @@ func New(ln Listener, c *Config) *Store {
 	}
 }
 
-// Open opens the Store. If enableBootstrap is set, then this node becomes a
-// standalone node. If not set, then the calling layer must know that this
-// node has pre-existing state, or the calling layer will trigger a join
-// operation after opening the Store.
-func (s *Store) Open(enableBootstrap bool) error {
+// Open opens the Store.
+func (s *Store) Open() error {
 	s.openT = time.Now()
 	s.logger.Printf("opening store with node ID %s", s.raftID)
 
@@ -341,23 +338,24 @@ func (s *Store) Open(enableBootstrap bool) error {
 	if err != nil {
 		return fmt.Errorf("new raft: %s", err)
 	}
-
-	if enableBootstrap {
-		s.logger.Printf("executing new cluster bootstrap")
-		configuration := raft.Configuration{
-			Servers: []raft.Server{
-				{
-					ID:      config.LocalID,
-					Address: s.raftTn.LocalAddr(),
-				},
-			},
-		}
-		ra.BootstrapCluster(configuration)
-	} else {
-		s.logger.Printf("no cluster bootstrap requested")
-	}
-
 	s.raft = ra
+
+	return nil
+}
+
+// Bootstrap executes a cluster bootstrap on this node, using the given
+// Servers as the configuration.
+func (s *Store) Bootstrap(servers ...*Server) error {
+	raftServers := make([]raft.Server, len(servers))
+	for i := range servers {
+		raftServers[i] = raft.Server{
+			ID:      raft.ServerID(servers[i].ID),
+			Address: raft.ServerAddress(servers[i].Addr),
+		}
+	}
+	s.raft.BootstrapCluster(raft.Configuration{
+		Servers: raftServers,
+	})
 
 	return nil
 }
