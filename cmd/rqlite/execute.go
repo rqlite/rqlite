@@ -26,35 +26,22 @@ type executeResponse struct {
 	Time    float64   `json:"time,omitempty"`
 }
 
-func executeWithClient(ctx *cli.Context, client *http.Client, argv *argT, timer bool, stmt string) error {
+func executeWithClient(ctx *cli.Context, client *cl.Client, timer bool, stmt string) error {
 	queryStr := url.Values{}
 	if timer {
 		queryStr.Set("timings", "")
 	}
 	u := url.URL{
-		Scheme: argv.Protocol,
-		Host:   fmt.Sprintf("%s:%d", argv.Host, argv.Port),
-		Path:   fmt.Sprintf("%sdb/execute", argv.Prefix),
+		Path: fmt.Sprintf("%sdb/execute", client.Prefix),
 	}
 
 	requestData := strings.NewReader(makeJSONBody(stmt))
-
-	hosts := make([]string, 0)
-
-	if argv.Hosts == "" {
-		// fallback to the Host:Port pair
-		hosts = append(hosts, fmt.Sprintf("%s:%d", argv.Host, argv.Port))
-	} else {
-		hosts = append(hosts, strings.Split(argv.Hosts, ",")...)
-	}
-
-	recoveringClient := cl.NewClient(client, hosts, cl.WithScheme(argv.Protocol), cl.WithBasicAuth(argv.Credentials))
 
 	if _, err := requestData.Seek(0, io.SeekStart); err != nil {
 		return err
 	}
 
-	resp, err := recoveringClient.Execute(u, requestData)
+	resp, err := client.Execute(u, requestData)
 
 	if err != nil {
 		return err

@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
+	httpcl "github.com/rqlite/rqlite/http"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -24,15 +25,15 @@ const maxRedirect = 21
 
 type argT struct {
 	cli.Helper
-	Hosts       string `cli:"hosts" usage:"comma separated list of 'host:port' pairs to connect to"`
-	Protocol    string `cli:"s,scheme" usage:"protocol scheme (http or https)" dft:"http"`
-	Host        string `cli:"H,host" usage:"rqlited host address" dft:"127.0.0.1"`
-	Port        uint16 `cli:"p,port" usage:"rqlited host port" dft:"4001"`
-	Prefix      string `cli:"P,prefix" usage:"rqlited HTTP URL prefix" dft:"/"`
-	Insecure    bool   `cli:"i,insecure" usage:"do not verify rqlited HTTPS certificate" dft:"false"`
-	CACert      string `cli:"c,ca-cert" usage:"path to trusted X.509 root CA certificate"`
-	Credentials string `cli:"u,user" usage:"set basic auth credentials in form username:password"`
-	Version     bool   `cli:"v,version" usage:"display CLI version"`
+	Alternatives string `cli:"a,alternatives" usage:"comma separated list of 'host:port' pairs to use as fallback"`
+	Protocol     string `cli:"s,scheme" usage:"protocol scheme (http or https)" dft:"http"`
+	Host         string `cli:"H,host" usage:"rqlited host address" dft:"127.0.0.1"`
+	Port         uint16 `cli:"p,port" usage:"rqlited host port" dft:"4001"`
+	Prefix       string `cli:"P,prefix" usage:"rqlited HTTP URL prefix" dft:"/"`
+	Insecure     bool   `cli:"i,insecure" usage:"do not verify rqlited HTTPS certificate" dft:"false"`
+	CACert       string `cli:"c,ca-cert" usage:"path to trusted X.509 root CA certificate"`
+	Credentials  string `cli:"u,user" usage:"set basic auth credentials in form username:password"`
+	Version      bool   `cli:"v,version" usage:"display CLI version"`
 }
 
 var cliHelp = []string{
@@ -94,6 +95,12 @@ func main() {
 		}
 		term.Close()
 
+		hosts := createHostList(argv)
+		recoveringClient := httpcl.NewClient(client, hosts,
+			httpcl.WithScheme(argv.Protocol),
+			httpcl.WithBasicAuth(argv.Credentials),
+			httpcl.WithPrefix(argv.Prefix))
+
 	FOR_READ:
 		for {
 			term.Reopen()
@@ -123,11 +130,11 @@ func main() {
 				}
 				err = setConsistency(line[index+1:], &consistency)
 			case ".TABLES":
-				err = queryWithClient(ctx, client, argv, timer, consistency, `SELECT name FROM sqlite_master WHERE type="table"`)
+				err = queryWithClient(ctx, recoveringClient, timer, consistency, `SELECT name FROM sqlite_master WHERE type="table"`)
 			case ".INDEXES":
-				err = queryWithClient(ctx, client, argv, timer, consistency, `SELECT sql FROM sqlite_master WHERE type="index"`)
+				err = queryWithClient(ctx, recoveringClient, timer, consistency, `SELECT sql FROM sqlite_master WHERE type="index"`)
 			case ".SCHEMA":
-				err = queryWithClient(ctx, client, argv, timer, consistency, `SELECT sql FROM sqlite_master`)
+				err = queryWithClient(ctx, recoveringClient, timer, consistency, `SELECT sql FROM sqlite_master`)
 			case ".TIMER":
 				err = toggleTimer(line[index+1:], &timer)
 			case ".STATUS":
@@ -169,12 +176,18 @@ func main() {
 			case ".QUIT", "QUIT", "EXIT":
 				break FOR_READ
 			case "SELECT", "PRAGMA":
-				err = queryWithClient(ctx, client, argv, timer, consistency, line)
+				err = queryWithClient(ctx, recoveringClient, timer, consistency, line)
 			default:
-				err = executeWithClient(ctx, client, argv, timer, line)
+				err = executeWithClient(ctx, recoveringClient, timer, line)
 			}
 			if err != nil {
-				ctx.String("%s %v\n", ctx.Color().Red("ERR!"), err)
+				// if a previous request was executed on a different host, make that change
+				// visible to the user.
+				if hcerr, ok := err.(*httpcl.HostChangedError); ok {
+					prefix = fmt.Sprintf("%s>", hcerr.NewHost)
+				} else {
+					ctx.String("%s %v\n", ctx.Color().Red("ERR!"), err)
+				}
 			}
 		}
 		ctx.String("bye~\n")
@@ -554,4 +567,11 @@ func urlsToWriter(urls []string, w io.Writer, argv *argT) error {
 	}
 
 	return nil
+}
+
+func createHostList(argv *argT) []string {
+	var hosts = make([]string, 0)
+	hosts = append(hosts, fmt.Sprintf("%s:%d", argv.Host, argv.Port))
+	hosts = append(hosts, strings.Split(argv.Alternatives, ",")...)
+	return hosts
 }

@@ -2,14 +2,12 @@ package main
 
 import (
 	"fmt"
+	"github.com/mkideal/cli"
+	"github.com/mkideal/pkg/textutil"
 	cl "github.com/rqlite/rqlite/http"
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"strings"
-
-	"github.com/mkideal/cli"
-	"github.com/mkideal/pkg/textutil"
 )
 
 // Rows represents query result
@@ -81,7 +79,7 @@ type queryResponse struct {
 	Time    float64 `json:"time"`
 }
 
-func queryWithClient(ctx *cli.Context, client *http.Client, argv *argT, timer bool, consistency, query string) error {
+func queryWithClient(ctx *cli.Context, client *cl.Client, timer bool, consistency, query string) error {
 	queryStr := url.Values{}
 	queryStr.Set("level", consistency)
 	queryStr.Set("q", query)
@@ -89,23 +87,11 @@ func queryWithClient(ctx *cli.Context, client *http.Client, argv *argT, timer bo
 		queryStr.Set("timings", "")
 	}
 	u := url.URL{
-		Scheme:   argv.Protocol,
-		Host:     fmt.Sprintf("%s:%d", argv.Host, argv.Port),
-		Path:     fmt.Sprintf("%sdb/query", argv.Prefix),
+		Path:     fmt.Sprintf("%sdb/query", client.Prefix),
 		RawQuery: queryStr.Encode(),
 	}
 
-	var hosts = make([]string, 0)
-	if argv.Hosts == "" {
-		// fallback to the Host:Port pair
-		hosts = append(hosts, fmt.Sprintf("%s:%d", argv.Host, argv.Port))
-	} else {
-		hosts = append(hosts, strings.Split(argv.Hosts, ",")...)
-	}
-
-	recoveringClient := cl.NewClient(client, hosts, cl.WithScheme(argv.Protocol), cl.WithBasicAuth(argv.Credentials))
-
-	resp, err := recoveringClient.Query(u)
+	resp, err := client.Query(u)
 	if err != nil {
 		return err
 	}

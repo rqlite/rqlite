@@ -16,6 +16,16 @@ var ErrNoAvailableHost = fmt.Errorf("no host available to perform the request")
 // ErrTooManyRedirects indicates that the client exceeded the maximum number of redirects
 var ErrTooManyRedirects = fmt.Errorf("maximum leader redirect limit exceeded")
 
+// HostChangedError indicates that the underlying request was executed on a different host
+// different from the caller anticipated
+type HostChangedError struct {
+	NewHost string
+}
+
+func (he *HostChangedError) Error() string {
+	return fmt.Sprintf("HostChanedErr: new host is '%s'", he.NewHost)
+}
+
 type ConfigFunc func(*Client)
 
 // Client is a wrapper around stock http.Client that adds "retry on another host" behaviour
@@ -30,6 +40,7 @@ type Client struct {
 	*http.Client
 	scheme string
 	hosts  []string
+	Prefix string
 
 	// creds stores the http basic authentication username and password
 	creds  string
@@ -46,6 +57,7 @@ func NewClient(client *http.Client, hosts []string, configFuncs ...ConfigFunc) *
 		hosts:       hosts,
 		scheme:      "http",
 		maxRedirect: 21,
+		Prefix:      "/",
 		logger:      log.New(os.Stderr, "[client]", log.LstdFlags),
 	}
 
@@ -60,6 +72,12 @@ func NewClient(client *http.Client, hosts []string, configFuncs ...ConfigFunc) *
 func WithScheme(scheme string) ConfigFunc {
 	return func(client *Client) {
 		client.scheme = scheme
+	}
+}
+
+func WithPrefix(prefix string) ConfigFunc {
+	return func(client *Client) {
+		client.Prefix = prefix
 	}
 }
 
@@ -97,6 +115,12 @@ func (c *Client) execRequest(method string, url url.URL, body io.Reader) (*http.
 		// If the status code is anything beside "service unavailable"
 		// we should propagate the error back to the caller
 		if resp != nil && resp.StatusCode != http.StatusServiceUnavailable {
+			// if the number of tried hosts is greater than 0, that means that the host
+			// has changed, and the caller should be notified about this.
+			if triedHosts > 0 {
+				return resp, &HostChangedError{NewHost: host}
+			}
+
 			return resp, nil
 		}
 

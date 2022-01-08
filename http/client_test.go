@@ -35,6 +35,10 @@ func TestClient_QueryWhenAllAvailable(t *testing.T) {
 	if client.currentHost != 0 {
 		t.Errorf("expected to only forward requests to the first host")
 	}
+
+	if res.StatusCode != http.StatusOK {
+		t.Errorf("unexpected status code, expected '200' got '%d'", res.StatusCode)
+	}
 }
 
 func TestClient_QueryWhenSomeAreAvailable(t *testing.T) {
@@ -58,12 +62,26 @@ func TestClient_QueryWhenSomeAreAvailable(t *testing.T) {
 	})
 	defer res.Body.Close()
 
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
+	if err == nil {
+		t.Errorf("expected error")
+	}
+
+	hcer, ok := err.(*HostChangedError)
+
+	if !ok {
+		t.Errorf("unexpected error occurred: %v", err)
+	}
+
+	if hcer.NewHost != u2.Host {
+		t.Errorf("unexpected responding host")
 	}
 
 	if client.currentHost != 1 {
 		t.Errorf("expected to move on to the following host")
+	}
+
+	if res.StatusCode != http.StatusOK {
+		t.Errorf("unexpected status code, expected '200' got '%d'", res.StatusCode)
 	}
 }
 
