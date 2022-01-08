@@ -2,6 +2,7 @@
 ### Implementation changes and bug fixes
 - [PR #945](https://github.com/rqlite/rqlite/pull/945): Minor refactor of Store creation.
 - [PR #946](https://github.com/rqlite/rqlite/pull/946): Use actual duration types for duration `rqlited` command line flags.
+- [PR #944](https://github.com/rqlite/rqlite/pull/944): Refactor how nodes bootstrap.
 
 ## 6.10.0 (January 7th 2022)
 This release enhances the authentication and authorization system, making it more convenient to use. It also fixes some minor bugs, and migrates the end-to-end test suite to Python 3.
