@@ -206,7 +206,6 @@ func main() {
 		log.Fatalf("failed to create store: %s", err.Error())
 	}
 
-	var enableBootstrap bool
 	if isNew {
 		log.Printf("no preexisting node state detected in %s, node may be bootstrapping", dataPath)
 	} else {
