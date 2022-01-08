@@ -303,12 +303,6 @@ func main() {
 		}
 	}
 
-	// Wait until the store is in full consensus.
-	if err := waitForConsensus(str); err != nil {
-		log.Fatalf(err.Error())
-	}
-	log.Println("store has reached consensus")
-
 	// Friendly final log message.
 	apiProto := "http"
 	if httpServ.HTTPS() {
@@ -320,7 +314,7 @@ func main() {
 	}
 
 	// Tell the user the node is ready, giving some advice on how to connect.
-	log.Printf("node is ready, HTTP API available at %s://%s", apiProto, apiAdv)
+	log.Printf("node HTTP API available at %s://%s", apiProto, apiAdv)
 	h, p, err := net.SplitHostPort(apiAdv)
 	if err != nil {
 		log.Fatalf("advertised address is not valid: %s", err.Error())
@@ -378,23 +372,6 @@ func determineJoinAddresses(isNew bool) ([]string, error) {
 	}
 
 	return validAddrs, nil
-}
-
-func waitForConsensus(str *store.Store) error {
-	if _, err := str.WaitForLeader(raftOpenTimeout); err != nil {
-		if raftWaitForLeader {
-			return fmt.Errorf("leader did not appear within timeout: %s", err.Error())
-		}
-		log.Println("ignoring error while waiting for leader")
-	}
-	if raftOpenTimeout != 0 {
-		if err := str.WaitForInitialLogs(raftOpenTimeout); err != nil {
-			return fmt.Errorf("log was not fully applied within timeout: %s", err.Error())
-		}
-	} else {
-		log.Println("not waiting for logs to be applied")
-	}
-	return nil
 }
 
 func createStore(ln *tcp.Layer, dataPath string) (*store.Store, bool, error) {
