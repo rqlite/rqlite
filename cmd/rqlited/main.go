@@ -243,11 +243,9 @@ func main() {
 	}
 
 	// Any prexisting node state?
-	var enableBootstrap bool
 	isNew := store.IsNewNode(dataPath)
 	if isNew {
 		log.Printf("no preexisting node state detected in %s, node may be bootstrapping", dataPath)
-		enableBootstrap = true // New node, so we may be bootstrapping
 	} else {
 		log.Printf("preexisting node state detected in %s", dataPath)
 	}
@@ -259,17 +257,8 @@ func main() {
 		log.Fatalf("unable to determine join addresses: %s", err.Error())
 	}
 
-	// Supplying join addresses means bootstrapping a new cluster won't
-	// be required.
-	if len(joins) > 0 {
-		enableBootstrap = false
-		log.Println("join addresses specified, node is not bootstrapping")
-	} else {
-		log.Println("no join addresses set")
-	}
-
 	// Now, open store.
-	if err := str.Open(enableBootstrap); err != nil {
+	if err := str.Open(); err != nil {
 		log.Fatalf("failed to open store: %s", err.Error())
 	}
 
@@ -344,7 +333,12 @@ func main() {
 		} else {
 			log.Println("successfully joined cluster at", j)
 		}
-
+	} else if isNew {
+		// No prexisting state, and no joins to do. Node needs bootstrap itself.
+		log.Println("bootstraping single new node")
+		if err := str.Bootstrap(store.NewServer(str.ID(), str.Addr(), true)); err != nil {
+			log.Fatalf("failed to bootstrap single new node: %s", err.Error())
+		}
 	}
 
 	// Wait until the store is in full consensus.

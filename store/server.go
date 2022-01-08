@@ -7,6 +7,19 @@ type Server struct {
 	Suffrage string `json:"suffrage,omitempty"`
 }
 
+// NewServer returns an initialized Server.
+func NewServer(id, addr string, voter bool) *Server {
+	v := "voter"
+	if !voter {
+		v = "Nonvoter"
+	}
+	return &Server{
+		ID:       id,
+		Addr:     addr,
+		Suffrage: v,
+	}
+}
+
 // Servers is a set of Servers.
 type Servers []*Server
 
