@@ -1,4 +1,4 @@
-## 6.10.0 (unreleased)
+## 6.10.0 (January 7th 2022)
 This release enhances the authentication and authorization system, making it more convenient to use. It also fixes some minor bugs, and migrates the end-to-end test suite to Python 3.
 
 ### New features
