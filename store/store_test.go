@@ -23,8 +23,11 @@ func Test_OpenStoreSingleNode(t *testing.T) {
 	defer os.RemoveAll(s.Path())
 	defer ln.Close()
 
-	if err := s.Open(true); err != nil {
+	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
 	}
 
 	_, err := s.WaitForLeader(10 * time.Second)
@@ -49,8 +52,11 @@ func Test_OpenStoreCloseSingleNode(t *testing.T) {
 	defer os.RemoveAll(s.Path())
 	defer ln.Close()
 
-	if err := s.Open(true); err != nil {
+	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
 	}
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
@@ -74,7 +80,7 @@ func Test_OpenStoreCloseSingleNode(t *testing.T) {
 	}
 
 	// Reopen it and confirm data still there.
-	if err := s.Open(true); err != nil {
+	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
@@ -109,8 +115,11 @@ func Test_SingleNodeInMemExecuteQuery(t *testing.T) {
 	defer os.RemoveAll(s.Path())
 	defer ln.Close()
 
-	if err := s.Open(true); err != nil {
+	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
 	_, err := s.WaitForLeader(10 * time.Second)
@@ -147,8 +156,11 @@ func Test_SingleNodeInMemExecuteQueryFail(t *testing.T) {
 	defer os.RemoveAll(s.Path())
 	defer ln.Close()
 
-	if err := s.Open(true); err != nil {
+	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
@@ -172,8 +184,11 @@ func Test_SingleNodeFileExecuteQuery(t *testing.T) {
 	defer os.RemoveAll(s.Path())
 	defer ln.Close()
 
-	if err := s.Open(true); err != nil {
+	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
@@ -247,8 +262,11 @@ func Test_SingleNodeExecuteQueryTx(t *testing.T) {
 	defer os.RemoveAll(s.Path())
 	defer ln.Close()
 
-	if err := s.Open(true); err != nil {
+	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
@@ -298,8 +316,11 @@ func Test_SingleNodeInMemFK(t *testing.T) {
 	defer os.RemoveAll(s.Path())
 	defer ln.Close()
 
-	if err := s.Open(true); err != nil {
+	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
@@ -328,10 +349,13 @@ func Test_SingleNodeSQLitePath(t *testing.T) {
 	defer os.RemoveAll(s.Path())
 	defer ln.Close()
 
-	if err := s.Open(true); err != nil {
+	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
@@ -372,8 +396,11 @@ func Test_SingleNodeBackupBinary(t *testing.T) {
 	defer os.RemoveAll(s.Path())
 	defer ln.Close()
 
-	if err := s.Open(true); err != nil {
+	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
@@ -423,8 +450,11 @@ func Test_SingleNodeBackupText(t *testing.T) {
 	defer os.RemoveAll(s.Path())
 	defer ln.Close()
 
-	if err := s.Open(true); err != nil {
+	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
@@ -465,8 +495,11 @@ func Test_SingleNodeLoad(t *testing.T) {
 	defer os.RemoveAll(s.Path())
 	defer ln.Close()
 
-	if err := s.Open(true); err != nil {
+	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
@@ -504,8 +537,11 @@ func Test_SingleNodeSingleCommandTrigger(t *testing.T) {
 	defer os.RemoveAll(s.Path())
 	defer ln.Close()
 
-	if err := s.Open(true); err != nil {
+	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
@@ -547,8 +583,11 @@ func Test_SingleNodeLoadNoStatements(t *testing.T) {
 	defer os.RemoveAll(s.Path())
 	defer ln.Close()
 
-	if err := s.Open(true); err != nil {
+	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
@@ -570,8 +609,11 @@ func Test_SingleNodeLoadEmpty(t *testing.T) {
 	defer os.RemoveAll(s.Path())
 	defer ln.Close()
 
-	if err := s.Open(true); err != nil {
+	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
@@ -590,8 +632,11 @@ func Test_SingleNodeLoadChinook(t *testing.T) {
 	defer os.RemoveAll(s.Path())
 	defer ln.Close()
 
-	if err := s.Open(true); err != nil {
+	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
@@ -651,8 +696,11 @@ func Test_SingleNodeRecoverNoChange(t *testing.T) {
 	s, ln := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
 	defer ln.Close()
-	if err := s.Open(true); err != nil {
+	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
 	}
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
@@ -691,7 +739,7 @@ func Test_SingleNodeRecoverNoChange(t *testing.T) {
 	peersPath := filepath.Join(s.Path(), "/raft/peers.json")
 	peersInfo := filepath.Join(s.Path(), "/raft/peers.info")
 	mustWriteFile(peersPath, peers)
-	if err := s.Open(true); err != nil {
+	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
@@ -716,8 +764,11 @@ func Test_SingleNodeRecoverNetworkChange(t *testing.T) {
 	s0, ln0 := mustNewStore(true)
 	defer os.RemoveAll(s0.Path())
 	defer ln0.Close()
-	if err := s0.Open(true); err != nil {
+	if err := s0.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s0.Bootstrap(NewServer(s0.ID(), s0.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
 	}
 	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
@@ -766,7 +817,7 @@ func Test_SingleNodeRecoverNetworkChange(t *testing.T) {
 	peersPath := filepath.Join(sR.Path(), "/raft/peers.json")
 	peersInfo := filepath.Join(sR.Path(), "/raft/peers.info")
 	mustWriteFile(peersPath, peers)
-	if err := sR.Open(true); err != nil {
+	if err := sR.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 
@@ -795,8 +846,11 @@ func Test_SingleNodeRecoverNetworkChangeSnapshot(t *testing.T) {
 	defer ln0.Close()
 	s0.SnapshotThreshold = 4
 	s0.SnapshotInterval = 100 * time.Millisecond
-	if err := s0.Open(true); err != nil {
+	if err := s0.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s0.Bootstrap(NewServer(s0.ID(), s0.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
 	}
 	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
@@ -865,7 +919,7 @@ func Test_SingleNodeRecoverNetworkChangeSnapshot(t *testing.T) {
 	peersPath := filepath.Join(sR.Path(), "/raft/peers.json")
 	peersInfo := filepath.Join(sR.Path(), "/raft/peers.info")
 	mustWriteFile(peersPath, peers)
-	if err := sR.Open(true); err != nil {
+	if err := sR.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 
@@ -889,10 +943,13 @@ func Test_MultiNodeJoinRemove(t *testing.T) {
 	s0, ln0 := mustNewStore(true)
 	defer os.RemoveAll(s0.Path())
 	defer ln0.Close()
-	if err := s0.Open(true); err != nil {
-		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
+	if err := s0.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s0.Close(true)
+	if err := s0.Bootstrap(NewServer(s0.ID(), s0.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
 	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
@@ -900,10 +957,13 @@ func Test_MultiNodeJoinRemove(t *testing.T) {
 	s1, ln1 := mustNewStore(true)
 	defer os.RemoveAll(s1.Path())
 	defer ln1.Close()
-	if err := s1.Open(false); err != nil {
-		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
+	if err := s1.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s1.Close(true)
+	if err := s1.Bootstrap(NewServer(s1.ID(), s1.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
 
 	// Get sorted list of cluster nodes.
 	storeNodes := []string{s0.ID(), s1.ID()}
@@ -963,10 +1023,13 @@ func Test_MultiNodeJoinNonVoterRemove(t *testing.T) {
 	s0, ln0 := mustNewStore(true)
 	defer os.RemoveAll(s0.Path())
 	defer ln0.Close()
-	if err := s0.Open(true); err != nil {
-		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
+	if err := s0.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s0.Close(true)
+	if err := s0.Bootstrap(NewServer(s0.ID(), s0.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
 	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
@@ -974,8 +1037,8 @@ func Test_MultiNodeJoinNonVoterRemove(t *testing.T) {
 	s1, ln1 := mustNewStore(true)
 	defer os.RemoveAll(s1.Path())
 	defer ln1.Close()
-	if err := s1.Open(false); err != nil {
-		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
+	if err := s1.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s1.Close(true)
 
@@ -1041,10 +1104,13 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 	s0, ln0 := mustNewStore(true)
 	defer os.RemoveAll(s0.Path())
 	defer ln0.Close()
-	if err := s0.Open(true); err != nil {
-		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
+	if err := s0.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s0.Close(true)
+	if err := s0.Bootstrap(NewServer(s0.ID(), s0.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
 	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
@@ -1052,7 +1118,7 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 	s1, ln1 := mustNewStore(true)
 	defer os.RemoveAll(s1.Path())
 	defer ln1.Close()
-	if err := s1.Open(false); err != nil {
+	if err := s1.Open(); err != nil {
 		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
 	}
 	defer s1.Close(true)
@@ -1060,7 +1126,7 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 	s2, ln2 := mustNewStore(true)
 	defer os.RemoveAll(s2.Path())
 	defer ln2.Close()
-	if err := s2.Open(false); err != nil {
+	if err := s2.Open(); err != nil {
 		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
 	}
 	defer s2.Close(true)
@@ -1162,10 +1228,13 @@ func Test_MultiNodeExecuteQueryFreshness(t *testing.T) {
 	s0, ln0 := mustNewStore(true)
 	defer os.RemoveAll(s0.Path())
 	defer ln0.Close()
-	if err := s0.Open(true); err != nil {
-		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
+	if err := s0.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s0.Close(true)
+	if err := s0.Bootstrap(NewServer(s0.ID(), s0.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
 	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
@@ -1173,7 +1242,7 @@ func Test_MultiNodeExecuteQueryFreshness(t *testing.T) {
 	s1, ln1 := mustNewStore(true)
 	defer os.RemoveAll(s1.Path())
 	defer ln1.Close()
-	if err := s1.Open(false); err != nil {
+	if err := s1.Open(); err != nil {
 		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
 	}
 	defer s1.Close(true)
@@ -1294,10 +1363,13 @@ func Test_StoreLogTruncationMultinode(t *testing.T) {
 	s0.SnapshotThreshold = 4
 	s0.SnapshotInterval = 100 * time.Millisecond
 
-	if err := s0.Open(true); err != nil {
+	if err := s0.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s0.Close(true)
+	if err := s0.Bootstrap(NewServer(s0.ID(), s0.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
 	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
@@ -1337,7 +1409,7 @@ func Test_StoreLogTruncationMultinode(t *testing.T) {
 	// involve getting a snapshot and truncated log.
 	s1, ln1 := mustNewStore(true)
 	defer ln1.Close()
-	if err := s1.Open(true); err != nil {
+	if err := s1.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s1.Close(true)
@@ -1373,10 +1445,13 @@ func Test_SingleNodeSnapshotOnDisk(t *testing.T) {
 	defer os.RemoveAll(s.Path())
 	defer ln.Close()
 
-	if err := s.Open(true); err != nil {
+	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
@@ -1438,10 +1513,13 @@ func Test_SingleNodeSnapshotInMem(t *testing.T) {
 	defer os.RemoveAll(s.Path())
 	defer ln.Close()
 
-	if err := s.Open(true); err != nil {
+	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
@@ -1520,10 +1598,13 @@ func Test_SingleNodeRestoreNoncompressed(t *testing.T) {
 	defer os.RemoveAll(s.Path())
 	defer ln.Close()
 
-	if err := s.Open(true); err != nil {
+	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
@@ -1552,22 +1633,25 @@ func Test_SingleNodeRestoreNoncompressed(t *testing.T) {
 }
 
 func Test_SingleNodeNoop(t *testing.T) {
-	s0, ln0 := mustNewStore(true)
-	defer os.RemoveAll(s0.Path())
-	defer ln0.Close()
-	if err := s0.Open(true); err != nil {
+	s, ln := mustNewStore(true)
+	defer os.RemoveAll(s.Path())
+	defer ln.Close()
+	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
-	defer s0.Close(true)
-	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
+	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
-	if err := s0.Noop("1"); err != nil {
+	if err := s.Noop("1"); err != nil {
 		t.Fatalf("failed to write noop command: %s", err.Error())
 	}
-	if s0.numNoops != 1 {
-		t.Fatalf("noop count is wrong, got: %d", s0.numNoops)
+	if s.numNoops != 1 {
+		t.Fatalf("noop count is wrong, got: %d", s.numNoops)
 	}
 }
 
@@ -1576,10 +1660,13 @@ func Test_IsLeader(t *testing.T) {
 	defer os.RemoveAll(s.Path())
 	defer ln.Close()
 
-	if err := s.Open(true); err != nil {
+	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
@@ -1594,10 +1681,13 @@ func Test_State(t *testing.T) {
 	defer os.RemoveAll(s.Path())
 	defer ln.Close()
 
-	if err := s.Open(true); err != nil {
+	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}

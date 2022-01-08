@@ -510,10 +510,17 @@ func mustNodeEncryptedOnDisk(dir string, enableSingle, httpEncrypt bool, mux *tc
 	node.Store.SnapshotThreshold = 100
 	node.Store.SnapshotInterval = SnapshotInterval
 
-	if err := node.Store.Open(enableSingle); err != nil {
+	if err := node.Store.Open(); err != nil {
 		node.Deprovision()
 		panic(fmt.Sprintf("failed to open store: %s", err.Error()))
 	}
+	if enableSingle {
+		if err := node.Store.Bootstrap(store.NewServer(node.Store.ID(), node.Store.Addr(), true)); err != nil {
+			node.Deprovision()
+			panic(fmt.Sprintf("failed to bootstrap store: %s", err.Error()))
+		}
+	}
+
 	node.RaftAddr = node.Store.Addr()
 	node.ID = node.Store.ID()
 

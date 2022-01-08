@@ -206,10 +206,8 @@ func main() {
 		log.Fatalf("failed to create store: %s", err.Error())
 	}
 
-	var enableBootstrap bool
 	if isNew {
 		log.Printf("no preexisting node state detected in %s, node may be bootstrapping", dataPath)
-		enableBootstrap = true // New node, so we may be bootstrapping
 	} else {
 		log.Printf("preexisting node state detected in %s", dataPath)
 	}
@@ -221,17 +219,8 @@ func main() {
 		log.Fatalf("unable to determine join addresses: %s", err.Error())
 	}
 
-	// Supplying join addresses means bootstrapping a new cluster won't
-	// be required.
-	if len(joins) > 0 {
-		enableBootstrap = false
-		log.Println("join addresses specified, node is not bootstrapping")
-	} else {
-		log.Println("no join addresses set")
-	}
-
 	// Now, open store.
-	if err := str.Open(enableBootstrap); err != nil {
+	if err := str.Open(); err != nil {
 		log.Fatalf("failed to open store: %s", err.Error())
 	}
 
@@ -306,14 +295,13 @@ func main() {
 		} else {
 			log.Println("successfully joined cluster at", j)
 		}
-
+	} else if isNew {
+		// No prexisting state, and no joins to do. Node needs bootstrap itself.
+		log.Println("bootstraping single new node")
+		if err := str.Bootstrap(store.NewServer(str.ID(), str.Addr(), true)); err != nil {
+			log.Fatalf("failed to bootstrap single new node: %s", err.Error())
+		}
 	}
-
-	// Wait until the store is in full consensus.
-	if err := waitForConsensus(str); err != nil {
-		log.Fatalf(err.Error())
-	}
-	log.Println("store has reached consensus")
 
 	// Friendly final log message.
 	apiProto := "http"
@@ -326,7 +314,7 @@ func main() {
 	}
 
 	// Tell the user the node is ready, giving some advice on how to connect.
-	log.Printf("node is ready, HTTP API available at %s://%s", apiProto, apiAdv)
+	log.Printf("node HTTP API available at %s://%s", apiProto, apiAdv)
 	h, p, err := net.SplitHostPort(apiAdv)
 	if err != nil {
 		log.Fatalf("advertised address is not valid: %s", err.Error())
@@ -384,23 +372,6 @@ func determineJoinAddresses(isNew bool) ([]string, error) {
 	}
 
 	return validAddrs, nil
-}
-
-func waitForConsensus(str *store.Store) error {
-	if _, err := str.WaitForLeader(raftOpenTimeout); err != nil {
-		if raftWaitForLeader {
-			return fmt.Errorf("leader did not appear within timeout: %s", err.Error())
-		}
-		log.Println("ignoring error while waiting for leader")
-	}
-	if raftOpenTimeout != 0 {
-		if err := str.WaitForInitialLogs(raftOpenTimeout); err != nil {
-			return fmt.Errorf("log was not fully applied within timeout: %s", err.Error())
-		}
-	} else {
-		log.Println("not waiting for logs to be applied")
-	}
-	return nil
 }
 
 func createStore(ln *tcp.Layer, dataPath string) (*store.Store, bool, error) {
