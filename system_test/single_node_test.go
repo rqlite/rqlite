@@ -10,6 +10,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/rqlite/rqlite/store"
 )
 
 func Test_SingleNodeBasicEndpoint(t *testing.T) {
@@ -555,8 +557,11 @@ func Test_SingleNodeReopen(t *testing.T) {
 			t.Fatalf("failed to close node")
 		}
 
-		if err := node.Store.Open(true); err != nil {
+		if err := node.Store.Open(); err != nil {
 			t.Fatalf("failed to re-open store: %s", err)
+		}
+		if err := node.Store.Bootstrap(store.NewServer(node.Store.ID(), node.Store.Addr(), true)); err != nil {
+			t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
 		}
 		if err := node.Service.Start(); err != nil {
 			t.Fatalf("failed to restart service: %s", err)
@@ -600,8 +605,11 @@ func Test_SingleNodeNoopReopen(t *testing.T) {
 			t.Fatalf("failed to close node")
 		}
 
-		if err := node.Store.Open(true); err != nil {
+		if err := node.Store.Open(); err != nil {
 			t.Fatalf("failed to re-open store: %s", err)
+		}
+		if err := node.Store.Bootstrap(store.NewServer(node.Store.ID(), node.Store.Addr(), true)); err != nil {
+			t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
 		}
 		if err := node.Service.Start(); err != nil {
 			t.Fatalf("failed to restart service: %s", err)
@@ -694,8 +702,11 @@ func Test_SingleNodeNoopSnapReopen(t *testing.T) {
 			t.Fatalf("failed to close node")
 		}
 
-		if err := node.Store.Open(true); err != nil {
+		if err := node.Store.Open(); err != nil {
 			t.Fatalf("failed to re-open store: %s", err)
+		}
+		if err := node.Store.Bootstrap(store.NewServer(node.Store.ID(), node.Store.Addr(), true)); err != nil {
+			t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
 		}
 		if err := node.Service.Start(); err != nil {
 			t.Fatalf("failed to restart service: %s", err)
@@ -795,7 +806,7 @@ func Test_SingleNodeNoopSnapLogsReopen(t *testing.T) {
 			t.Fatalf("failed to close node")
 		}
 
-		if err := node.Store.Open(true); err != nil {
+		if err := node.Store.Open(); err != nil {
 			t.Fatalf("failed to re-open store: %s", err)
 		}
 		if err := node.Service.Start(); err != nil {
