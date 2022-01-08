@@ -24,6 +24,7 @@ const maxRedirect = 21
 
 type argT struct {
 	cli.Helper
+	Hosts       string `cli:"hosts" usage:"comma separated list of 'host:port' pairs to connect to"`
 	Protocol    string `cli:"s,scheme" usage:"protocol scheme (http or https)" dft:"http"`
 	Host        string `cli:"H,host" usage:"rqlited host address" dft:"127.0.0.1"`
 	Port        uint16 `cli:"p,port" usage:"rqlited host port" dft:"4001"`

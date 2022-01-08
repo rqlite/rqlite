@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	cl "github.com/rqlite/rqlite/http"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -93,70 +94,55 @@ func queryWithClient(ctx *cli.Context, client *http.Client, argv *argT, timer bo
 		Path:     fmt.Sprintf("%sdb/query", argv.Prefix),
 		RawQuery: queryStr.Encode(),
 	}
-	urlStr := u.String()
 
-	nRedirect := 0
-	for {
-		req, err := http.NewRequest("GET", urlStr, nil)
-		if err != nil {
-			return err
-		}
-		if argv.Credentials != "" {
-			creds := strings.Split(argv.Credentials, ":")
-			if len(creds) != 2 {
-				return fmt.Errorf("invalid Basic Auth credentials format")
-			}
-			req.SetBasicAuth(creds[0], creds[1])
-		}
-
-		resp, err := client.Do(req)
-		if err != nil {
-			return err
-		}
-		response, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			return err
-		}
-		resp.Body.Close()
-
-		if resp.StatusCode == http.StatusUnauthorized {
-			return fmt.Errorf("unauthorized")
-		}
-
-		if resp.StatusCode == http.StatusMovedPermanently {
-			nRedirect++
-			if nRedirect > maxRedirect {
-				return fmt.Errorf("maximum leader redirect limit exceeded")
-			}
-			urlStr = resp.Header["Location"][0]
-			continue
-		}
-
-		if resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("server responded with %s: %s", resp.Status, response)
-		}
-
-		// Parse response and write results
-		ret := &queryResponse{}
-		if err := parseResponse(&response, &ret); err != nil {
-			return err
-		}
-		if ret.Error != "" {
-			return fmt.Errorf(ret.Error)
-		}
-		if len(ret.Results) != 1 {
-			return fmt.Errorf("unexpected results length: %d", len(ret.Results))
-		}
-
-		result := ret.Results[0]
-		if err := result.validate(); err != nil {
-			return err
-		}
-		textutil.WriteTable(ctx, result, headerRender)
-
-		if timer {
-			fmt.Printf("Run Time: %f seconds\n", result.Time)
-		}
-		return nil
+	var hosts = make([]string, 0)
+	if argv.Hosts == "" {
+		// fallback to the Host:Port pair
+		hosts = append(hosts, fmt.Sprintf("%s:%d", argv.Host, argv.Port))
+	} else {
+		hosts = append(hosts, strings.Split(argv.Hosts, ",")...)
 	}
+
+	recoveringClient := cl.NewClient(client, hosts, cl.WithScheme(argv.Protocol), cl.WithBasicAuth(argv.Credentials))
+
+	resp, err := recoveringClient.Query(u)
+	if err != nil {
+		return err
+	}
+	response, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+
+	if resp.StatusCode == http.StatusUnauthorized {
+		return fmt.Errorf("unauthorized")
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("server responded with %s: %s", resp.Status, response)
+	}
+
+	// Parse response and write results
+	ret := &queryResponse{}
+	if err := parseResponse(&response, &ret); err != nil {
+		return err
+	}
+	if ret.Error != "" {
+		return fmt.Errorf(ret.Error)
+	}
+	if len(ret.Results) != 1 {
+		return fmt.Errorf("unexpected results length: %d", len(ret.Results))
+	}
+
+	result := ret.Results[0]
+	if err := result.validate(); err != nil {
+		return err
+	}
+	textutil.WriteTable(ctx, result, headerRender)
+
+	if timer {
+		fmt.Printf("Run Time: %f seconds\n", result.Time)
+	}
+	return nil
 }
