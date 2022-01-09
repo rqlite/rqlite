@@ -2,12 +2,13 @@ package main
 
 import (
 	"fmt"
-	"github.com/mkideal/cli"
-	"github.com/mkideal/pkg/textutil"
-	cl "github.com/rqlite/rqlite/http"
 	"io/ioutil"
 	"net/http"
 	"net/url"
+
+	"github.com/mkideal/cli"
+	"github.com/mkideal/pkg/textutil"
+	cl "github.com/rqlite/rqlite/cmd/rqlite/http"
 )
 
 // Rows represents query result

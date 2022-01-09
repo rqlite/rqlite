@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/mkideal/cli"
-	cl "github.com/rqlite/rqlite/http"
+	cl "github.com/rqlite/rqlite/cmd/rqlite/http"
 )
 
 // Result represents execute result

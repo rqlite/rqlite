@@ -6,7 +6,6 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
-	httpcl "github.com/rqlite/rqlite/http"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -19,6 +18,7 @@ import (
 	"github.com/Bowery/prompt"
 	"github.com/mkideal/cli"
 	"github.com/rqlite/rqlite/cmd"
+	httpcl "github.com/rqlite/rqlite/cmd/rqlite/http"
 )
 
 const maxRedirect = 21
@@ -69,13 +69,13 @@ func main() {
 			return nil
 		}
 
-		client, err := getHTTPClient(argv)
+		httpClient, err := getHTTPClient(argv)
 		if err != nil {
 			ctx.String("%s %v\n", ctx.Color().Red("ERR!"), err)
 			return nil
 		}
 
-		version, err := getVersionWithClient(client, argv)
+		version, err := getVersionWithClient(httpClient, argv)
 		if err != nil {
 			ctx.String("%s %v\n", ctx.Color().Red("ERR!"), err)
 			return nil
@@ -96,7 +96,7 @@ func main() {
 		term.Close()
 
 		hosts := createHostList(argv)
-		recoveringClient := httpcl.NewClient(client, hosts,
+		client := httpcl.NewClient(httpClient, hosts,
 			httpcl.WithScheme(argv.Protocol),
 			httpcl.WithBasicAuth(argv.Credentials),
 			httpcl.WithPrefix(argv.Prefix))
@@ -130,23 +130,23 @@ func main() {
 				}
 				err = setConsistency(line[index+1:], &consistency)
 			case ".TABLES":
-				err = queryWithClient(ctx, recoveringClient, timer, consistency, `SELECT name FROM sqlite_master WHERE type="table"`)
+				err = queryWithClient(ctx, client, timer, consistency, `SELECT name FROM sqlite_master WHERE type="table"`)
 			case ".INDEXES":
-				err = queryWithClient(ctx, recoveringClient, timer, consistency, `SELECT sql FROM sqlite_master WHERE type="index"`)
+				err = queryWithClient(ctx, client, timer, consistency, `SELECT sql FROM sqlite_master WHERE type="index"`)
 			case ".SCHEMA":
-				err = queryWithClient(ctx, recoveringClient, timer, consistency, `SELECT sql FROM sqlite_master`)
+				err = queryWithClient(ctx, client, timer, consistency, `SELECT sql FROM sqlite_master`)
 			case ".TIMER":
 				err = toggleTimer(line[index+1:], &timer)
 			case ".STATUS":
 				err = status(ctx, cmd, line, argv)
 			case ".READY":
-				err = ready(ctx, client, argv)
+				err = ready(ctx, httpClient, argv)
 			case ".NODES":
 				err = nodes(ctx, cmd, line, argv)
 			case ".EXPVAR":
 				err = expvar(ctx, cmd, line, argv)
 			case ".REMOVE":
-				err = removeNode(client, line[index+1:], argv, timer)
+				err = removeNode(httpClient, line[index+1:], argv, timer)
 			case ".BACKUP":
 				if index == -1 || index == len(line)-1 {
 					err = fmt.Errorf("please specify an output file for the backup")
@@ -176,9 +176,9 @@ func main() {
 			case ".QUIT", "QUIT", "EXIT":
 				break FOR_READ
 			case "SELECT", "PRAGMA":
-				err = queryWithClient(ctx, recoveringClient, timer, consistency, line)
+				err = queryWithClient(ctx, client, timer, consistency, line)
 			default:
-				err = executeWithClient(ctx, recoveringClient, timer, line)
+				err = executeWithClient(ctx, client, timer, line)
 			}
 			if err != nil {
 				// if a previous request was executed on a different host, make that change
