@@ -67,7 +67,9 @@ On some networks, like AWS EC2 cloud, nodes may have an IP address that is not r
 You can grow a cluster, at anytime, simply by starting up a new node (pick a never before used node ID) and having it explicitly join with the leader as normal, or by passing it a discovery service ID. The new node will automatically pick up changes that have occurred on the cluster since the cluster first started.
 
 # Modifying a node's Raft network addresses
-It is possible to change a node's Raft address between restarts. Simply pass the new address on the command line. You must also, however, explicitly tell the node to join the cluster again, by passing `-join` to the node. In this case what the leader actually does is remove the previous record of the node, before adding a new record of the node. You can also change the HTTP API address of a node between restarts, but an explicit re-join is not required if just the HTTP API address changes.
+It is possible to change a node's Raft address between restarts. Simply pass the new address on the command line. **You must also, however, explicitly tell the node to join the cluster again, by passing `-join` to the node**. In this case what the leader actually does is remove the previous record of the node, before adding a new record of the node. You can also change the HTTP API address of a node between restarts, but an explicit re-join is not required if just the HTTP API address changes.
+
+**Note that this process only works if your cluster has, in addition to the node with the changing address, a quorum (at least) of nodes up running**. If your cluster does not meet this requirement, see the section titled _Dealing with failure_.
 
 # Removing or replacing a node
 If a node fails completely and is not coming back, or if you shut down a node because you wish to deprovision it, its record should also be removed from the cluster. To remove the record of a node from a cluster, execute the following command at the rqlite CLI:
