@@ -42,7 +42,6 @@ func executeWithClient(ctx *cli.Context, client *cl.Client, timer bool, stmt str
 	}
 
 	resp, err := client.Execute(u, requestData)
-
 	if err != nil {
 		return err
 	}

@@ -62,8 +62,10 @@ func TestClient_QueryWhenSomeAreAvailable(t *testing.T) {
 	})
 	defer res.Body.Close()
 
+	// If the request succeeds after chaning hosts, it should be reflected in the returned error
+	// as HostChangedError
 	if err == nil {
-		t.Errorf("expected error")
+		t.Errorf("Expected HostChangedError got nil instead")
 	}
 
 	hcer, ok := err.(*HostChangedError)

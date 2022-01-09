@@ -23,7 +23,7 @@ type HostChangedError struct {
 }
 
 func (he *HostChangedError) Error() string {
-	return fmt.Sprintf("HostChanedErr: new host is '%s'", he.NewHost)
+	return fmt.Sprintf("HostChangedErr: new host is '%s'", he.NewHost)
 }
 
 type ConfigFunc func(*Client)
@@ -68,7 +68,7 @@ func NewClient(client *http.Client, hosts []string, configFuncs ...ConfigFunc) *
 	return cl
 }
 
-// WithScheme changes the default scheme used i.e "http"
+// WithScheme changes the default scheme used i.e "http".
 func WithScheme(scheme string) ConfigFunc {
 	return func(client *Client) {
 		client.scheme = scheme
@@ -81,24 +81,26 @@ func WithPrefix(prefix string) ConfigFunc {
 	}
 }
 
-// WithLogger changes the default logger to the one provided
+// WithLogger changes the default logger to the one provided.
 func WithLogger(logger *log.Logger) ConfigFunc {
 	return func(client *Client) {
 		client.logger = logger
 	}
 }
 
-// WithBasicAuth adds basic authentication behaviour to the client's request
+// WithBasicAuth adds basic authentication behaviour to the client's request.
 func WithBasicAuth(creds string) ConfigFunc {
 	return func(client *Client) {
 		client.creds = creds
 	}
 }
 
+// Query sends GET requests to one of the hosts known to the client.
 func (c *Client) Query(url url.URL) (*http.Response, error) {
 	return c.execRequest(http.MethodGet, url, nil)
 }
 
+// Execute sends POST requests to one of the hosts known to the client
 func (c *Client) Execute(url url.URL, body io.Reader) (*http.Response, error) {
 	return c.execRequest(http.MethodPost, url, body)
 }
