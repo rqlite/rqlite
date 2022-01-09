@@ -2,7 +2,7 @@
 * [General guidelines](#general-guidelines)
 * [Creating a cluster](#creating-a-cluster)
 * [Growing a cluster](#growing-a-cluster)
-* [Modifying a node's network addresses](#modifying-a-nodes-raft-network-addresses)
+* [Modifying a node's Raft network addresses](#modifying-a-nodes-raft-network-addresses)
 * [Removing or replacing a node](#removing-or-replacing-a-node)
 * [Dealing with failure](#dealing-with-failure)
 
