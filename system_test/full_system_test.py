@@ -145,6 +145,11 @@ class Node(object):
     self.process = None
     return self
 
+  def pid(self):
+    if self.process is None:
+      return None
+    return self.process.pid
+
   def status(self):
     r = requests.get(self._status_url())
     raise_for_status(r)
@@ -392,11 +397,19 @@ class Cluster(object):
           return n
       time.sleep(1)
       t+=1
+  def start(self):
+    for n in self.nodes:
+      n.start()
   def stop(self):
     for n in self.nodes:
       n.stop()
   def followers(self):
     return [n for n in self.nodes if n.is_follower()]
+  def pids(self):
+    '''
+    Return a sorted list of all rqlited PIDs in the cluster.
+    '''
+    return sorted([n.pid() for n in self.nodes])
   def deprovision(self):
     for n in self.nodes:
       deprovision_node(n)
@@ -551,6 +564,18 @@ class TestEndToEnd(unittest.TestCase):
     self.cluster.wait_for_leader(node_exc=n)
     n.start()
     n.wait_for_leader()
+
+  def test_full_restart(self):
+    '''Test that a cluster can perform a full restart successfully'''
+    self.cluster.wait_for_leader()
+    pids = self.cluster.pids()
+
+    self.cluster.stop()
+    self.cluster.start()
+    self.cluster.wait_for_leader()
+    # Guard against any error in testing, by confirming that restarting the cluster
+    # actually resulted in new rqlite processes.
+    self.assertNotEqual(pids, self.cluster.pids())
 
   def test_execute_fail_rejoin(self):
     '''Test that a node that fails can rejoin the cluster, and picks up changes'''
