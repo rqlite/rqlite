@@ -25,4 +25,4 @@ Package rqlite is a lightweight, distributed relational database built on SQLite
 
 rqlite gives you the functionality of a rock solid, fault-tolerant, replicated relational database, but with very easy installation, deployment, and operation. With it you've got a lightweight and reliable distributed store for relational data. You could use rqlite as part of a larger system, as a central store for some critical relational data, without having to run a heavier solution like MySQL.
 */
-package rqlite
+package rqlited
