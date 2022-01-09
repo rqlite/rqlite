@@ -83,7 +83,9 @@ You can also make a direct call to the HTTP API to remove a node:
 ```
 curl -XDELETE http://localhost:4001/remove -d '{"id": "<node raft ID>"}'
 ```
-assuming `localhost` is the address of the cluster leader. If you do not do this the leader will continually attempt to communicate with that node. Note that the cluster must be functional -- there must still be an operational leader -- for this removal to be successful. If, after a node failure, a given cluster does not have a quorum of nodes still running, you must bring back the failed node. Any attempt to remove it will fail as there will be no leader to respond to the failure request
+assuming `localhost` is the address of the cluster leader. If you do not do this the leader will continually attempt to communicate with that node. **Note that the cluster must be functional -- there must still be an operational leader -- for this removal to be successful**. If, after a node failure, a given cluster does not have a quorum of nodes still running, you must bring back the failed node. Any attempt to remove it will fail as there will be no leader to respond to the failure request.
+
+If you cannot bring sufficient nodes back online such that the cluster can elect a leader, follow the instructions in the section titled _Dealing with failure_.
 
 ## Examples
 _Quorum is defined as (N/2)+1 where N is the size of the cluster._
