@@ -206,12 +206,6 @@ func main() {
 		log.Fatalf("failed to create store: %s", err.Error())
 	}
 
-	if isNew {
-		log.Printf("no preexisting node state detected in %s, node may be bootstrapping", dataPath)
-	} else {
-		log.Printf("preexisting node state detected in %s", dataPath)
-	}
-
 	// Determine join addresses
 	var joins []string
 	joins, err = determineJoinAddresses(isNew)
@@ -403,7 +397,14 @@ func createStore(ln *tcp.Layer, dataPath string) (*store.Store, bool, error) {
 	str.ElectionTimeout = raftElectionTimeout
 	str.ApplyTimeout = raftApplyTimeout
 
-	return str, store.IsNewNode(dataPath), nil
+	isNew := store.IsNewNode(dataPath)
+	if isNew {
+		log.Printf("no preexisting node state detected in %s, node may be bootstrapping", dataPath)
+	} else {
+		log.Printf("preexisting node state detected in %s", dataPath)
+	}
+
+	return str, isNew, nil
 }
 
 func startHTTPService(str *store.Store, cltr *cluster.Client, credStr *auth.CredentialsStore) (*httpd.Service, error) {
