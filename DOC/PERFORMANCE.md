@@ -42,7 +42,7 @@ An alternative approach would be to place the SQLite on-disk database on a disk 
 
 # In-memory Database Limits
 
-> :warning: **rqlite was not designed for very large datasets**: While there are no hardcoded limits in the rqlite software, the nature of Raft means that the entire SQLite database is periodically copied to disk, and occassionally copied, in full, between nodes. Your hardware may not be able to process those large data operations successfully. You should test your system carefully when working with multi-GB databases.
+> :warning: **rqlite was not designed for very large datasets**: While there are no hardcoded limits in the rqlite software, the nature of Raft means that the entire SQLite database is periodically copied to disk, and occasionally copied, in full, between nodes. Your hardware may not be able to process those large data operations successfully. You should test your system carefully when working with multi-GB databases.
 
 In-memory databases are currently limited to 2GiB in size. One way to get around this limit is to use an on-disk database, by passing `-on-disk` to `rqlited`. But this would impact performance significantly, since disk is slower than memory.
 
