@@ -43,9 +43,8 @@ func TestClient_QueryWhenAllAvailable(t *testing.T) {
 
 func TestClient_QueryWhenSomeAreAvailable(t *testing.T) {
 	node1 := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		writer.WriteHeader(http.StatusServiceUnavailable)
+		writer.WriteHeader(http.StatusOK)
 	}))
-	defer node1.Close()
 
 	node2 := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusOK)
@@ -53,6 +52,9 @@ func TestClient_QueryWhenSomeAreAvailable(t *testing.T) {
 	defer node2.Close()
 
 	httpClient := http.DefaultClient
+
+	// Shutting down one of the hosts making it unavailable
+	node1.Close()
 
 	u1, _ := url.Parse(node1.URL)
 	u2, _ := url.Parse(node2.URL)
@@ -62,10 +64,10 @@ func TestClient_QueryWhenSomeAreAvailable(t *testing.T) {
 	})
 	defer res.Body.Close()
 
-	// If the request succeeds after chaning hosts, it should be reflected in the returned error
+	// If the request succeeds after changing hosts, it should be reflected in the returned error
 	// as HostChangedError
 	if err == nil {
-		t.Errorf("Expected HostChangedError got nil instead")
+		t.Errorf("expected HostChangedError got nil instead")
 	}
 
 	hcer, ok := err.(*HostChangedError)
@@ -89,27 +91,25 @@ func TestClient_QueryWhenSomeAreAvailable(t *testing.T) {
 
 func TestClient_QueryWhenAllUnavailable(t *testing.T) {
 	node1 := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		writer.WriteHeader(http.StatusServiceUnavailable)
+		writer.WriteHeader(http.StatusOK)
 	}))
-	defer node1.Close()
 
 	node2 := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		writer.WriteHeader(http.StatusServiceUnavailable)
+		writer.WriteHeader(http.StatusOK)
 	}))
-	defer node2.Close()
 
 	httpClient := http.DefaultClient
 
 	u1, _ := url.Parse(node1.URL)
 	u2, _ := url.Parse(node2.URL)
+
+	// Shutting down both nodes, both of them now are unavailable
+	node1.Close()
+	node2.Close()
 	client := NewClient(httpClient, []string{u1.Host, u2.Host})
 	_, err := client.Query(url.URL{
 		Path: "/",
 	})
-
-	if err == nil {
-		t.Errorf("expected error")
-	}
 
 	if err != ErrNoAvailableHost {
 		t.Errorf("Expected %v, got: %v", ErrNoAvailableHost, err)

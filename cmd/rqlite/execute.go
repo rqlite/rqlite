@@ -51,10 +51,6 @@ func executeWithClient(ctx *cli.Context, client *cl.Client, timer bool, stmt str
 	}
 	resp.Body.Close()
 
-	if resp.StatusCode == http.StatusUnauthorized {
-		return fmt.Errorf("unauthorized")
-	}
-
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("server responded with %s: %s", resp.Status, response)
 	}

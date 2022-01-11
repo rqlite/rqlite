@@ -28,14 +28,17 @@ func (he *HostChangedError) Error() string {
 
 type ConfigFunc func(*Client)
 
-// Client is a wrapper around stock http.Client that adds "retry on another host" behaviour
+// Client is a wrapper around stock `http.Client` that adds "retry on another host" behaviour
 // based on the supplied configuration.
 //
-// Errors that occur while performing requests are returned as they are, and the predicate to determine whether to check
-// another host or not is the request returning an `http.StatusServiceUnavailable`.
+// The client will fall back and try other nodes when the current node is unavailable, and would stop trying
+// after exhausting the list of supplied hosts.
+//
 // Note:
 //
 // This type is not goroutine safe.
+// A node is considered unavailable if the client is not reachable via the network.
+// TODO: make the unavailability condition for the client more dynamic.
 type Client struct {
 	*http.Client
 	scheme string
@@ -51,6 +54,8 @@ type Client struct {
 	maxRedirect int
 }
 
+// NewClient creates a default client that sends `execute` and query `requests` against the
+// rqlited nodes supplied via `hosts` argument.
 func NewClient(client *http.Client, hosts []string, configFuncs ...ConfigFunc) *Client {
 	cl := &Client{
 		Client:      client,
@@ -58,7 +63,7 @@ func NewClient(client *http.Client, hosts []string, configFuncs ...ConfigFunc) *
 		scheme:      "http",
 		maxRedirect: 21,
 		Prefix:      "/",
-		logger:      log.New(os.Stderr, "[client]", log.LstdFlags),
+		logger:      log.New(os.Stderr, "[client] ", log.LstdFlags),
 	}
 
 	for _, f := range configFuncs {
@@ -75,6 +80,8 @@ func WithScheme(scheme string) ConfigFunc {
 	}
 }
 
+// WithPrefix sets the prefix to be used when issuing HTTP requests against one of
+// the rqlited nodes.
 func WithPrefix(prefix string) ConfigFunc {
 	return func(client *Client) {
 		client.Prefix = prefix
@@ -114,15 +121,11 @@ func (c *Client) execRequest(method string, url url.URL, body io.Reader) (*http.
 		urlStr := url.String()
 		resp, err := c.requestFollowRedirect(method, urlStr, body)
 
-		// If the status code is anything beside "service unavailable"
-		// we should propagate the error back to the caller
-		if resp != nil && resp.StatusCode != http.StatusServiceUnavailable {
-			// if the number of tried hosts is greater than 0, that means that the host
-			// has changed, and the caller should be notified about this.
+		// Found a responsive node
+		if err == nil {
 			if triedHosts > 0 {
 				return resp, &HostChangedError{NewHost: host}
 			}
-
 			return resp, nil
 		}
 
