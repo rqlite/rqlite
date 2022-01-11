@@ -52,6 +52,7 @@ An example of running rqlite with a SQLite file on a memory-backed file system, 
 ```bash
 # ~/node1 is assumed to be a path on persistent disk.
 mount -t tmpfs -o size=4096m tmpfs /mnt/ramdisk
-rqlited -on-disk -on-disk-startup -on-disk-path -/mnt/ramdisk/node1/db.sqlite data
+rqlited -on-disk -on-disk-startup -on-disk-path /mnt/ramdisk/node1/db.sqlite /path_to_persistent_disk/data
 ```
+where `/path_to_persistent_disk/data` is a directory path on your persistent disk.
 
