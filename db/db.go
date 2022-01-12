@@ -960,6 +960,8 @@ func isTextType(t string) bool {
 func randomString() string {
 	var output strings.Builder
 	chars := "abcdedfghijklmnopqrstABCDEFGHIJKLMNOP"
+
+	rand.Seed(time.Now().UnixNano())
 	for i := 0; i < 20; i++ {
 		random := rand.Intn(len(chars))
 		randomChar := chars[random]
