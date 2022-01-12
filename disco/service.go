@@ -2,6 +2,7 @@ package disco
 
 import (
 	"fmt"
+	"time"
 
 	consul "github.com/rqlite/rqlite-disco-clients/consul"
 	etcd "github.com/rqlite/rqlite-disco-clients/etcd"

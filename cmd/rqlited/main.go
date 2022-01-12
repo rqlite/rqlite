@@ -20,6 +20,7 @@ import (
 	"github.com/rqlite/rqlite/auth"
 	"github.com/rqlite/rqlite/cluster"
 	"github.com/rqlite/rqlite/cmd"
+	"github.com/rqlite/rqlite/disco"
 	httpd "github.com/rqlite/rqlite/http"
 	"github.com/rqlite/rqlite/store"
 	"github.com/rqlite/rqlite/tcp"
@@ -109,9 +110,9 @@ func init() {
 	flag.StringVar(&joinAs, "join-as", "", "Username in authentication file to join as. If not set, joins anonymously")
 	flag.IntVar(&joinAttempts, "join-attempts", 5, "Number of join attempts to make")
 	flag.StringVar(&joinInterval, "join-interval", "5s", "Period between join attempts")
-	flag.StringVar(&discoMode, "clustering-mode", "", "Choose cluster discovery service. If not set, not used")
-	flag.StringVar(&discoKey, "clustering-key", "rqlite", "Key prefix for cluster discovery service")
-	flag.StringVar(&discoConfig, "clustering-config", "", "Set path to cluster discovery config file")
+	flag.StringVar(&discoMode, "disco-mode", "", "Choose cluster discovery service. If not set, not used")
+	flag.StringVar(&discoKey, "disco-key", "rqlite", "Key prefix for cluster discovery service")
+	flag.StringVar(&discoConfig, "disco-config", "", "Set path to cluster discovery config file")
 	flag.BoolVar(&expvar, "expvar", true, "Serve expvar data on HTTP server")
 	flag.BoolVar(&pprofEnabled, "pprof", true, "Serve pprof data on HTTP server")
 	flag.BoolVar(&onDisk, "on-disk", false, "Use an on-disk SQLite database")
