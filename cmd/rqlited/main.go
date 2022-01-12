@@ -20,7 +20,6 @@ import (
 	"github.com/rqlite/rqlite/auth"
 	"github.com/rqlite/rqlite/cluster"
 	"github.com/rqlite/rqlite/cmd"
-	"github.com/rqlite/rqlite/disco"
 	httpd "github.com/rqlite/rqlite/http"
 	"github.com/rqlite/rqlite/store"
 	"github.com/rqlite/rqlite/tcp"
@@ -58,8 +57,9 @@ var joinAttempts int
 var joinInterval string
 var noVerify bool
 var noNodeVerify bool
-var discoURL string
-var discoID string
+var discoMode string
+var discoKey string
+var discoConfig string
 var expvar bool
 var pprofEnabled bool
 var onDisk bool
@@ -109,8 +109,9 @@ func init() {
 	flag.StringVar(&joinAs, "join-as", "", "Username in authentication file to join as. If not set, joins anonymously")
 	flag.IntVar(&joinAttempts, "join-attempts", 5, "Number of join attempts to make")
 	flag.StringVar(&joinInterval, "join-interval", "5s", "Period between join attempts")
-	flag.StringVar(&discoURL, "disco-url", "http://discovery.rqlite.com", "Set Discovery Service URL")
-	flag.StringVar(&discoID, "disco-id", "", "Set Discovery ID. If not set, Discovery Service not used")
+	flag.StringVar(&discoMode, "clustering-mode", "", "Choose cluster discovery service. If not set, not used")
+	flag.StringVar(&discoKey, "clustering-key", "rqlite", "Key prefix for cluster discovery service")
+	flag.StringVar(&discoConfig, "clustering-config", "", "Set path to cluster discovery config file")
 	flag.BoolVar(&expvar, "expvar", true, "Serve expvar data on HTTP server")
 	flag.BoolVar(&pprofEnabled, "pprof", true, "Serve pprof data on HTTP server")
 	flag.BoolVar(&onDisk, "on-disk", false, "Use an on-disk SQLite database")
@@ -290,10 +291,19 @@ func main() {
 			log.Println("successfully joined cluster at", j)
 		}
 	} else if isNew {
-		// No prexisting state, and no joins to do. Node needs bootstrap itself.
-		log.Println("bootstraping single new node")
-		if err := str.Bootstrap(store.NewServer(str.ID(), str.Addr(), true)); err != nil {
-			log.Fatalf("failed to bootstrap single new node: %s", err.Error())
+		// No prexisting state, and no joins to do. Node needs to bootsrap itself,
+		// or use autoclustering service.
+		if discoMode != "" {
+			discoService, err := disco.New(discoMode)
+			if err != nil {
+				log.Fatalf("failed to enable discovery: %s", err.Error())
+			}
+
+		} else {
+			log.Println("bootstraping single new node")
+			if err := str.Bootstrap(store.NewServer(str.ID(), str.Addr(), true)); err != nil {
+				log.Fatalf("failed to bootstrap single new node: %s", err.Error())
+			}
 		}
 	}
 
@@ -338,21 +348,6 @@ func determineJoinAddresses(isNew bool) ([]string, error) {
 	if joinAddr != "" {
 		// Explicit join addresses are first priority.
 		addrs = strings.Split(joinAddr, ",")
-	}
-
-	if discoID != "" {
-		if !isNew {
-			log.Printf("node has preexisting state, ignoring Discovery ID %s", discoID)
-		} else {
-			log.Printf("registering with Discovery Service at %s with ID %s", discoURL, discoID)
-			c := disco.New(discoURL)
-			r, err := c.Register(discoID, apiAdv)
-			if err != nil {
-				return nil, err
-			}
-			log.Println("Discovery Service responded with nodes:", r.Nodes)
-			addrs = append(addrs, r.Nodes...)
-		}
 	}
 
 	// It won't work to attempt a self-join, so remove any such address.
