@@ -42,6 +42,8 @@ This single node automatically becomes the leader. You can pass `-h` to `rqlited
 ### Docker
 `docker run -p4001:4001 rqlite/rqlite`
 
+Check out the [rqlite Docker page](https://hub.docker.com/r/rqlite/rqlite/) for more details on running nodes via Docker.
+
 ### Homebrew
 `brew install rqlite`
 
