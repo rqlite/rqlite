@@ -39,6 +39,7 @@ var DBVersion string
 var stats *expvar.Map
 
 func init() {
+	rand.Seed(time.Now().UnixNano())
 	DBVersion, _, _ = sqlite3.Version()
 	stats = expvar.NewMap("db")
 	stats.Add(numExecutions, 0)
@@ -47,7 +48,6 @@ func init() {
 	stats.Add(numQueryErrors, 0)
 	stats.Add(numETx, 0)
 	stats.Add(numQTx, 0)
-
 }
 
 // DB is the SQL database.
@@ -961,7 +961,6 @@ func randomString() string {
 	var output strings.Builder
 	chars := "abcdedfghijklmnopqrstABCDEFGHIJKLMNOP"
 
-	rand.Seed(time.Now().UnixNano())
 	for i := 0; i < 20; i++ {
 		random := rand.Intn(len(chars))
 		randomChar := chars[random]
