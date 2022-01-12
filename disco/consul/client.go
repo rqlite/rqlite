@@ -47,7 +47,6 @@ func (c *Client) GetLeader() (id string, apiAddr string, addr string, ok bool, e
 		e = err
 		return
 	}
-
 	return n.ID, n.APIAddr, n.Addr, true, nil
 }
 
@@ -82,5 +81,9 @@ func (c *Client) SetLeader(id, apiAddr, addr string) error {
 	if err != nil {
 		return err
 	}
+	return nil
+}
+
+func (c *Client) Close() error {
 	return nil
 }

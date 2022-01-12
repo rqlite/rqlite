@@ -4,6 +4,7 @@ import (
 	"math/rand"
 	"strings"
 	"testing"
+	"time"
 )
 
 func Test_NewClient(t *testing.T) {
@@ -82,6 +83,7 @@ func Test_InitializeLeaderConflict(t *testing.T) {
 }
 
 func randomString() string {
+	rand.Seed(time.Now().UnixNano())
 	var output strings.Builder
 	chars := "abcdedfghijklmnopqrstABCDEFGHIJKLMNOP"
 	for i := 0; i < 10; i++ {
