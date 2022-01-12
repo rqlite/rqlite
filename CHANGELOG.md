@@ -4,6 +4,7 @@
 - [PR #946](https://github.com/rqlite/rqlite/pull/946): Use actual duration types for duration `rqlited` command line flags.
 - [PR #944](https://github.com/rqlite/rqlite/pull/944): Refactor how nodes bootstrap.
 - [PR #954](https://github.com/rqlite/rqlite/pull/954): Much better random file names.
+- [PR #956](https://github.com/rqlite/rqlite/pull/956): Actually return errors from command marshaling code.
 
 ## 6.10.0 (January 7th 2022)
 This release enhances the authentication and authorization system, making it more convenient to use. It also fixes some minor bugs, and migrates the end-to-end test suite to Python 3.
