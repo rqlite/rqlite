@@ -18,6 +18,10 @@ import (
 	"github.com/rqlite/rqlite/testdata/chinook"
 )
 
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
+
 func Test_OpenStoreSingleNode(t *testing.T) {
 	s, ln := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
@@ -1872,7 +1876,6 @@ func randomString() string {
 	var output strings.Builder
 	chars := "abcdedfghijklmnopqrstABCDEFGHIJKLMNOP"
 
-	rand.Seed(time.Now().UnixNano())
 	for i := 0; i < 20; i++ {
 		random := rand.Intn(len(chars))
 		randomChar := chars[random]
