@@ -702,7 +702,7 @@ class TestConsulClustering(unittest.TestCase):
   def test(self):
     disco_key = random_string(10)
 
-    n0 = Node(RQLITED_PATH, '0', api_addr='localhost:4001', raft_addr="localhost:4002")
+    n0 = Node(RQLITED_PATH, '0')
     n0.start(disco_mode='consul', disco_key=disco_key)
     n0.wait_for_leader()
     self.assertEqual(n0.disco_mode(), 'consul')
@@ -714,7 +714,7 @@ class TestConsulClustering(unittest.TestCase):
     j = n0.query('SELECT * FROM foo')
     self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
 
-    n1 = Node(RQLITED_PATH, '1', api_addr='localhost:4003', raft_addr="localhost:4004")
+    n1 = Node(RQLITED_PATH, '1')
     n1.start(disco_mode='consul',  disco_key=disco_key)
     n1.wait_for_leader()
     self.assertEqual(n1.disco_mode(), 'consul')
@@ -730,7 +730,7 @@ class TestEtcdClustering(unittest.TestCase):
   def test(self):
     disco_key = random_string(10)
 
-    n0 = Node(RQLITED_PATH, '0', api_addr='localhost:4001', raft_addr="localhost:4002")
+    n0 = Node(RQLITED_PATH, '0')
     n0.start(disco_mode='etcd', disco_key=disco_key)
     n0.wait_for_leader()
     self.assertEqual(n0.disco_mode(), 'etcd')
@@ -742,7 +742,7 @@ class TestEtcdClustering(unittest.TestCase):
     j = n0.query('SELECT * FROM foo')
     self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
 
-    n1 = Node(RQLITED_PATH, '1', api_addr='localhost:4003', raft_addr="localhost:4004")
+    n1 = Node(RQLITED_PATH, '1')
     n1.start(disco_mode='etcd', disco_key=disco_key)
     n1.wait_for_leader()
     self.assertEqual(n1.disco_mode(), 'etcd')
