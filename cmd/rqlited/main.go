@@ -310,7 +310,7 @@ func main() {
 		}
 	} else if discoMode != "" {
 		// No join addresses, but a disco service was selected. So use that.
-		log.Printf("discovery mode %s selected", discoMode)
+		log.Printf("discovery mode: %s", discoMode)
 		discoService, err := createDiscoService(discoMode, discoKey, discoConfig, str)
 		if err != nil {
 			log.Fatalf("failed to start discovery service: %s", err.Error())

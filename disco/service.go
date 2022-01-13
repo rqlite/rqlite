@@ -32,13 +32,11 @@ func NewService(c Client) *Service {
 // it can use to join the cluster, or c) an unrecoverable error occurs.
 func (s *Service) Register(id, apiAddr, addr string) (bool, string, error) {
 	for {
-		cID, cAPIAddr, cAddr, ok, err := s.c.GetLeader()
+		_, cAPIAddr, _, ok, err := s.c.GetLeader()
 		if err != nil {
 			s.logger.Printf("failed to get leader: %s", err.Error())
 		}
 		if ok {
-			s.logger.Printf("node %s (Raft address %s) detected node at %s as Leader",
-				cID, cAddr, cAPIAddr)
 			return false, cAPIAddr, nil
 		}
 
@@ -47,7 +45,6 @@ func (s *Service) Register(id, apiAddr, addr string) (bool, string, error) {
 			s.logger.Printf("failed to initialize as Leader: %s", err.Error())
 		}
 		if ok {
-			s.logger.Printf("node %s registered as Leader", id)
 			return true, apiAddr, nil
 		}
 
