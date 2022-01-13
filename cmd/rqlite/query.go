@@ -5,10 +5,10 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"strings"
 
 	"github.com/mkideal/cli"
 	"github.com/mkideal/pkg/textutil"
+	cl "github.com/rqlite/rqlite/cmd/rqlite/http"
 )
 
 // Rows represents query result
@@ -80,7 +80,7 @@ type queryResponse struct {
 	Time    float64 `json:"time"`
 }
 
-func queryWithClient(ctx *cli.Context, client *http.Client, argv *argT, timer bool, consistency, query string) error {
+func queryWithClient(ctx *cli.Context, client *cl.Client, timer bool, consistency, query string) error {
 	queryStr := url.Values{}
 	queryStr.Set("level", consistency)
 	queryStr.Set("q", query)
@@ -88,75 +88,54 @@ func queryWithClient(ctx *cli.Context, client *http.Client, argv *argT, timer bo
 		queryStr.Set("timings", "")
 	}
 	u := url.URL{
-		Scheme:   argv.Protocol,
-		Host:     fmt.Sprintf("%s:%d", argv.Host, argv.Port),
-		Path:     fmt.Sprintf("%sdb/query", argv.Prefix),
+		Path:     fmt.Sprintf("%sdb/query", client.Prefix),
 		RawQuery: queryStr.Encode(),
 	}
-	urlStr := u.String()
 
-	nRedirect := 0
-	for {
-		req, err := http.NewRequest("GET", urlStr, nil)
-		if err != nil {
+	resp, err := client.Query(u)
+
+	var hcr error
+	if err != nil {
+		// If the error is HostChangedError, it should be propagated back to the caller to handle
+		// accordingly (change prompt display), but we should still assume that the request succeeded on some
+		// host and not treat it as an error.
+		err, ok := err.(*cl.HostChangedError)
+		if !ok {
 			return err
 		}
-		if argv.Credentials != "" {
-			creds := strings.Split(argv.Credentials, ":")
-			if len(creds) != 2 {
-				return fmt.Errorf("invalid Basic Auth credentials format")
-			}
-			req.SetBasicAuth(creds[0], creds[1])
-		}
-
-		resp, err := client.Do(req)
-		if err != nil {
-			return err
-		}
-		response, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			return err
-		}
-		resp.Body.Close()
-
-		if resp.StatusCode == http.StatusUnauthorized {
-			return fmt.Errorf("unauthorized")
-		}
-
-		if resp.StatusCode == http.StatusMovedPermanently {
-			nRedirect++
-			if nRedirect > maxRedirect {
-				return fmt.Errorf("maximum leader redirect limit exceeded")
-			}
-			urlStr = resp.Header["Location"][0]
-			continue
-		}
-
-		if resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("server responded with %s: %s", resp.Status, response)
-		}
-
-		// Parse response and write results
-		ret := &queryResponse{}
-		if err := parseResponse(&response, &ret); err != nil {
-			return err
-		}
-		if ret.Error != "" {
-			return fmt.Errorf(ret.Error)
-		}
-		if len(ret.Results) != 1 {
-			return fmt.Errorf("unexpected results length: %d", len(ret.Results))
-		}
-
-		result := ret.Results[0]
-		if err := result.validate(); err != nil {
-			return err
-		}
-		textutil.WriteTable(ctx, result, headerRender)
-
-		if timer {
-			fmt.Printf("Run Time: %f seconds\n", result.Time)
-		}
-		return nil
+		hcr = err
 	}
+
+	response, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("server responded with %s: %s", resp.Status, response)
+	}
+
+	// Parse response and write results
+	ret := &queryResponse{}
+	if err := parseResponse(&response, &ret); err != nil {
+		return err
+	}
+	if ret.Error != "" {
+		return fmt.Errorf(ret.Error)
+	}
+	if len(ret.Results) != 1 {
+		return fmt.Errorf("unexpected results length: %d", len(ret.Results))
+	}
+
+	result := ret.Results[0]
+	if err := result.validate(); err != nil {
+		return err
+	}
+	textutil.WriteTable(ctx, result, headerRender)
+
+	if timer {
+		fmt.Printf("Run Time: %f seconds\n", result.Time)
+	}
+	return hcr
 }
