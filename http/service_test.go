@@ -22,8 +22,8 @@ import (
 func Test_ResponseJSONMarshal(t *testing.T) {
 	resp := NewResponse()
 	_, err := json.Marshal(resp)
-	if err == nil {
-		t.Fatalf("no error JSON marshaling invalid Response")
+	if err != nil {
+		t.Fatalf("error JSON marshaling empty Response: %s", err.Error())
 	}
 
 	resp = NewResponse()
