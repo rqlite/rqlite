@@ -7,6 +7,10 @@
 ### New features
 - [PR #957](https://github.com/rqlite/rqlite/pull/957): Support autoclustering via [Consul](https://www.consul.io/) and [etcd](https://etcd.io/).
 
+## 6.10.2 (January 13th 2022)
+### Implementation changes and bug fixes
+- [PR #959](https://github.com/rqlite/rqlite/pull/959): Return clearer error if no database results set.
+
 ## 6.10.1 (January 13th 2022)
 ### Implementation changes and bug fixes
 - [PR #945](https://github.com/rqlite/rqlite/pull/945): Minor refactor of Store creation.
