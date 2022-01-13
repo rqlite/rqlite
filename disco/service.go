@@ -1,11 +1,8 @@
 package disco
 
 import (
-	"fmt"
-	"time"
-
-	consul "github.com/rqlite/rqlite-disco-clients/consul"
-	etcd "github.com/rqlite/rqlite-disco-clients/etcd"
+	"log"
+	"os"
 )
 
 type Client interface {
@@ -16,50 +13,21 @@ type Client interface {
 
 type Service struct {
 	c Client
+
+	logger *log.Logger
 }
 
-func New(t, key, cfgPath string) (*Service, error) {
-	var c Client
-
-	if t == "consul" {
-		cfg, err := consul.NewConfigFromFile(cfgPath)
-		if err != nil {
-			return nil, err
-		}
-
-		c, err = consul.New(key, cfg)
-		if err != nil {
-			return nil, err
-		}
-	} else if t == "etcd" {
-		cfg, err := etcd.NewConfigFromFile(cfgPath)
-		if err != nil {
-			return nil, err
-		}
-
-		c, err = etcd.New(key, cfg)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		return nil, fmt.Errorf("invalid disco service: %s", t)
-	}
-
+func NewService(c Client) *Service {
 	return &Service{
-		c: c,
-	}, nil
+		c:      c,
+		logger: log.New(os.Stderr, "[disco] ", log.LstdFlags),
+	}
 }
 
-func (s *Service) Run() {
-	for {
-		time.Sleep(5 * time.Second)
-		id, apiAddr, addr, ok, err := s.c.GetLeader()
-		if err != nil {
-			continue
-		}
+func (s *Service) Register() error {
+	return nil
+}
 
-		if !ok {
+func (s *Service) StartReporting() {
 
-		}
-	}
 }

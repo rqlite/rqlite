@@ -17,6 +17,8 @@ import (
 	"strings"
 	"time"
 
+	consul "github.com/rqlite/rqlite-disco-clients/consul"
+	etcd "github.com/rqlite/rqlite-disco-clients/etcd"
 	"github.com/rqlite/rqlite/auth"
 	"github.com/rqlite/rqlite/cluster"
 	"github.com/rqlite/rqlite/cmd"
@@ -291,20 +293,21 @@ func main() {
 		} else {
 			log.Println("successfully joined cluster at", j)
 		}
-	} else if isNew {
-		// No prexisting state, and no joins to do. Node needs to bootsrap itself,
-		// or use autoclustering service.
-		if discoMode != "" {
-			discoService, err := disco.New(discoMode)
-			if err != nil {
-				log.Fatalf("failed to enable discovery: %s", err.Error())
+	} else if discoMode != "" {
+		discoService, err := createDiscoService(discoMode, discoKey, discoConfig, str)
+		if err != nil {
+			log.Fatalf("failed to start discovery service: %s", err.Error())
+		}
+		if isNew {
+			if discoService.Register(); err != nil {
+				log.Fatalf("failed to register with discovery service: %s", err.Error())
 			}
-
-		} else {
-			log.Println("bootstraping single new node")
-			if err := str.Bootstrap(store.NewServer(str.ID(), str.Addr(), true)); err != nil {
-				log.Fatalf("failed to bootstrap single new node: %s", err.Error())
-			}
+		}
+		go discoService.StartReporting()
+	} else {
+		log.Println("bootstraping single new node")
+		if err := str.Bootstrap(store.NewServer(str.ID(), str.Addr(), true)); err != nil {
+			log.Fatalf("failed to bootstrap single new node: %s", err.Error())
 		}
 	}
 
@@ -401,6 +404,35 @@ func createStore(ln *tcp.Layer, dataPath string) (*store.Store, bool, error) {
 	}
 
 	return str, isNew, nil
+}
+
+func createDiscoService(discoMode, discoKey, discoConfig string, str *store.Store) (*disco.Service, error) {
+	var c disco.Client
+	if discoMode == "consul" {
+		cfg, err := consul.NewConfigFromFile(discoConfig)
+		if err != nil {
+			return nil, err
+		}
+
+		c, err = consul.New(discoKey, cfg)
+		if err != nil {
+			return nil, err
+		}
+	} else if discoMode == "etcd" {
+		cfg, err := etcd.NewConfigFromFile(discoConfig)
+		if err != nil {
+			return nil, err
+		}
+
+		c, err = etcd.New(discoKey, cfg)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		return nil, fmt.Errorf("invalid disco service: %s", discoMode)
+	}
+
+	return disco.NewService(c), nil
 }
 
 func startHTTPService(str *store.Store, cltr *cluster.Client, credStr *auth.CredentialsStore) (*httpd.Service, error) {
