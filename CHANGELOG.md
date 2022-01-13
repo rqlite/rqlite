@@ -1,4 +1,4 @@
-## 6.10.1 (unreleased)
+## 6.10.1 (January 13th 2022)
 ### Implementation changes and bug fixes
 - [PR #945](https://github.com/rqlite/rqlite/pull/945): Minor refactor of Store creation.
 - [PR #946](https://github.com/rqlite/rqlite/pull/946): Use actual duration types for duration `rqlited` command line flags.
