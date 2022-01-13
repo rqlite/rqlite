@@ -346,6 +346,7 @@ func main() {
 		go discoService.StartReporting(nodeID, apiURL, raftAdv, func() bool {
 			return str.IsLeader()
 		})
+		httpServ.RegisterStatus("disco", discoService)
 	} else if isNew {
 		// Brand new node, told to bootstrap itself. So do it.
 		log.Println("bootstraping single new node")

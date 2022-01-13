@@ -1,8 +1,10 @@
 package disco
 
 import (
+	"fmt"
 	"log"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -10,20 +12,24 @@ type Client interface {
 	GetLeader() (id string, apiAddr string, addr string, ok bool, e error)
 	InitializeLeader(id, apiAddr, addr string) (bool, error)
 	SetLeader(id, apiAddr, addr string) error
+	fmt.Stringer
 }
 
 type Service struct {
-	Delay time.Duration
+	UpdateInterval time.Duration
 
 	c      Client
 	logger *log.Logger
+
+	mu          sync.Mutex
+	lastContact time.Time
 }
 
 func NewService(c Client) *Service {
 	return &Service{
-		Delay:  5 * time.Second,
-		c:      c,
-		logger: log.New(os.Stderr, "[disco] ", log.LstdFlags),
+		UpdateInterval: 5 * time.Second,
+		c:              c,
+		logger:         log.New(os.Stderr, "[disco] ", log.LstdFlags),
 	}
 }
 
@@ -37,6 +43,7 @@ func (s *Service) Register(id, apiAddr, addr string) (bool, string, error) {
 			s.logger.Printf("failed to get leader: %s", err.Error())
 		}
 		if ok {
+			s.updateContact(time.Now())
 			return false, cAPIAddr, nil
 		}
 
@@ -45,10 +52,11 @@ func (s *Service) Register(id, apiAddr, addr string) (bool, string, error) {
 			s.logger.Printf("failed to initialize as Leader: %s", err.Error())
 		}
 		if ok {
+			s.updateContact(time.Now())
 			return true, apiAddr, nil
 		}
 
-		time.Sleep(s.Delay)
+		time.Sleep(s.UpdateInterval)
 	}
 }
 
@@ -61,7 +69,26 @@ func (s *Service) StartReporting(id, apiAddr, addr string, f func() bool) {
 				s.logger.Printf("failed to update discovery service with Leader details: %s",
 					err.Error())
 			}
+			s.updateContact(time.Now())
 		}
-		time.Sleep(s.Delay * 2)
+		time.Sleep(s.UpdateInterval * 2)
 	}
+}
+
+// Stats returns diagnostic information on the disco service.
+func (s *Service) Stats() (map[string]interface{}, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return map[string]interface{}{
+		"name":            s.c.String(),
+		"update_interval": s.UpdateInterval,
+		"last_contact":    s.lastContact,
+	}, nil
+}
+
+func (s *Service) updateContact(t time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.lastContact = t
 }

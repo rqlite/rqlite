@@ -21,7 +21,7 @@ require (
 	github.com/mkideal/pkg v0.1.3
 	github.com/rqlite/go-sqlite3 v1.22.0
 	github.com/rqlite/raft-boltdb v0.0.0-20211018013422-771de01086ce
-	github.com/rqlite/rqlite-disco-clients v0.0.0-20220113043209-97d11d103545
+	github.com/rqlite/rqlite-disco-clients v0.0.0-20220113135309-4c570e5d9efb
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.7.0 // indirect
 	go.uber.org/zap v1.20.0 // indirect
