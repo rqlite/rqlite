@@ -57,7 +57,7 @@ var raftAdv string
 var joinAddr string
 var joinAs string
 var joinAttempts int
-var joinInterval string
+var joinInterval time.Duration
 var noVerify bool
 var noNodeVerify bool
 var discoMode string
@@ -111,7 +111,7 @@ func init() {
 	flag.StringVar(&joinAddr, "join", "", "Comma-delimited list of nodes, through which a cluster can be joined (proto://host:port)")
 	flag.StringVar(&joinAs, "join-as", "", "Username in authentication file to join as. If not set, joins anonymously")
 	flag.IntVar(&joinAttempts, "join-attempts", 5, "Number of join attempts to make")
-	flag.StringVar(&joinInterval, "join-interval", "5s", "Period between join attempts")
+	flag.DurationVar(&joinInterval, "join-interval", 5*time.Second, "Period between join attempts")
 	flag.StringVar(&discoMode, "disco-mode", "", "Choose cluster discovery service. If not set, not used")
 	flag.StringVar(&discoKey, "disco-key", "rqlite", "Key prefix for cluster discovery service")
 	flag.StringVar(&discoConfig, "disco-config", "", "Set path to cluster discovery config file")
@@ -246,72 +246,7 @@ func main() {
 		log.Fatalf("failed to start HTTP server: %s", err.Error())
 	}
 
-	// Register remaining status providers.
-	httpServ.RegisterStatus("cluster", clstr)
-
-	// Execute any requested join operation.
-	if len(joins) > 0 {
-		log.Println("join addresses are:", joins)
-
-		joinDur, err := time.ParseDuration(joinInterval)
-		if err != nil {
-			log.Fatalf("failed to parse Join interval %s: %s", joinInterval, err.Error())
-		}
-
-		tlsConfig := tls.Config{InsecureSkipVerify: noVerify}
-		if x509CACert != "" {
-			asn1Data, err := ioutil.ReadFile(x509CACert)
-			if err != nil {
-				log.Fatalf("ioutil.ReadFile failed: %s", err.Error())
-			}
-			tlsConfig.RootCAs = x509.NewCertPool()
-			ok := tlsConfig.RootCAs.AppendCertsFromPEM(asn1Data)
-			if !ok {
-				log.Fatalf("failed to parse root CA certificate(s) in %q", x509CACert)
-			}
-		}
-
-		// Add credentials to any join addresses, if necessary.
-		if credStr != nil && joinAs != "" {
-			var err error
-			pw, ok := credStr.Password(joinAs)
-			if !ok {
-				log.Fatalf("user %s does not exist in credential store", joinAs)
-			}
-			for i := range joins {
-				joins[i], err = cluster.AddUserInfo(joins[i], joinAs, pw)
-				if err != nil {
-					log.Fatalf("failed to use credential store join_as: %s", err.Error())
-				}
-			}
-			log.Println("added join_as identity from credential store")
-		}
-
-		if j, err := cluster.Join(joinSrcIP, joins, str.ID(), raftAdv, !raftNonVoter,
-			joinAttempts, joinDur, &tlsConfig); err != nil {
-			log.Fatalf("failed to join cluster at %s: %s", joins, err.Error())
-		} else {
-			log.Println("successfully joined cluster at", j)
-		}
-	} else if discoMode != "" {
-		discoService, err := createDiscoService(discoMode, discoKey, discoConfig, str)
-		if err != nil {
-			log.Fatalf("failed to start discovery service: %s", err.Error())
-		}
-		if isNew {
-			if discoService.Register(); err != nil {
-				log.Fatalf("failed to register with discovery service: %s", err.Error())
-			}
-		}
-		go discoService.StartReporting()
-	} else {
-		log.Println("bootstraping single new node")
-		if err := str.Bootstrap(store.NewServer(str.ID(), str.Addr(), true)); err != nil {
-			log.Fatalf("failed to bootstrap single new node: %s", err.Error())
-		}
-	}
-
-	// Friendly final log message.
+	// Form full advertised API URL
 	apiProto := "http"
 	if httpServ.HTTPS() {
 		apiProto = "https"
@@ -320,14 +255,104 @@ func main() {
 	if httpAdv != "" {
 		apiAdv = httpAdv
 	}
+	apiURL := fmt.Sprintf("%s://%s", apiProto, apiAdv)
 
-	// Tell the user the node is ready, giving some advice on how to connect.
-	log.Printf("node HTTP API available at %s://%s", apiProto, apiAdv)
+	// Tell the user the node is ready for HTTP, giving some advice on how to connect.
+	log.Printf("node HTTP API available at %s", apiURL)
 	h, p, err := net.SplitHostPort(apiAdv)
 	if err != nil {
 		log.Fatalf("advertised address is not valid: %s", err.Error())
 	}
 	log.Printf("connect using the command-line tool via 'rqlite -H %s -P %s'", h, p)
+
+	// Register remaining status providers.
+	httpServ.RegisterStatus("cluster", clstr)
+
+	tlsConfig := tls.Config{InsecureSkipVerify: noVerify}
+	if x509CACert != "" {
+		asn1Data, err := ioutil.ReadFile(x509CACert)
+		if err != nil {
+			log.Fatalf("ioutil.ReadFile failed: %s", err.Error())
+		}
+		tlsConfig.RootCAs = x509.NewCertPool()
+		ok := tlsConfig.RootCAs.AppendCertsFromPEM(asn1Data)
+		if !ok {
+			log.Fatalf("failed to parse root CA certificate(s) in %q", x509CACert)
+		}
+	}
+
+	// Add credentials to any join addresses, if necessary.
+	if credStr != nil && joinAs != "" {
+		var err error
+		pw, ok := credStr.Password(joinAs)
+		if !ok {
+			log.Fatalf("user %s does not exist in credential store", joinAs)
+		}
+		for i := range joins {
+			joins[i], err = cluster.AddUserInfo(joins[i], joinAs, pw)
+			if err != nil {
+				log.Fatalf("failed to use credential store join_as: %s", err.Error())
+			}
+		}
+		log.Println("added join_as identity from credential store")
+	}
+
+	// Create the cluster!
+	if len(joins) > 0 {
+		// Explicit join addresses supplied, so use them.
+		log.Println("explicit join addresses are:", joins)
+
+		if j, err := cluster.Join(joinSrcIP, joins, str.ID(), raftAdv, !raftNonVoter,
+			joinAttempts, joinInterval, &tlsConfig); err != nil {
+			log.Fatalf("failed to join cluster at %s: %s", joins, err.Error())
+		} else {
+			log.Println("successfully joined cluster at", j)
+		}
+	} else if discoMode != "" {
+		// No join addresses, but a disco service was selected. So use that.
+		log.Printf("discovery mode %s selected", discoMode)
+		discoService, err := createDiscoService(discoMode, discoKey, discoConfig, str)
+		if err != nil {
+			log.Fatalf("failed to start discovery service: %s", err.Error())
+		}
+
+		nodes, err := str.Nodes()
+		if err != nil {
+			log.Fatalf("failed to check nodes: %s", err.Error())
+		}
+		if len(nodes) == 0 { // IsNew() is too strict.
+			log.Println("no preexisting nodes, registering with discovery service")
+			leader, addr, err := discoService.Register(nodeID, apiURL, raftAdv)
+			if err != nil {
+				log.Fatalf("failed to register with discovery service: %s", err.Error())
+			}
+			if leader {
+				log.Println("node registered as leader using discovery service")
+				if err := str.Bootstrap(store.NewServer(str.ID(), str.Addr(), true)); err != nil {
+					log.Fatalf("failed to bootstrap single new node: %s", err.Error())
+				}
+			} else {
+				log.Printf("discovery service returned %s as join address", addr)
+				if j, err := cluster.Join(joinSrcIP, []string{addr}, str.ID(), raftAdv, !raftNonVoter,
+					joinAttempts, joinInterval, &tlsConfig); err != nil {
+					log.Fatalf("failed to join cluster at %s: %s", addr, err.Error())
+				} else {
+					log.Println("successfully joined cluster at", j)
+				}
+			}
+		} else {
+			log.Println("preexisting node configuration detected, not registering with discovery service")
+		}
+		go discoService.StartReporting(nodeID, apiURL, raftAdv, func() bool {
+			return str.IsLeader()
+		})
+	} else if isNew {
+		// Brand new node, told to bootstrap itself. So do it.
+		log.Println("bootstraping single new node")
+		if err := str.Bootstrap(store.NewServer(str.ID(), str.Addr(), true)); err != nil {
+			log.Fatalf("failed to bootstrap single new node: %s", err.Error())
+		}
+	}
 
 	// Block until signalled.
 	terminate := make(chan os.Signal, 1)
@@ -408,10 +433,15 @@ func createStore(ln *tcp.Layer, dataPath string) (*store.Store, bool, error) {
 
 func createDiscoService(discoMode, discoKey, discoConfig string, str *store.Store) (*disco.Service, error) {
 	var c disco.Client
+	var err error
+
 	if discoMode == "consul" {
-		cfg, err := consul.NewConfigFromFile(discoConfig)
-		if err != nil {
-			return nil, err
+		var cfg *consul.Config
+		if discoConfig != "" {
+			cfg, err = consul.NewConfigFromFile(discoConfig)
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		c, err = consul.New(discoKey, cfg)
@@ -419,9 +449,12 @@ func createDiscoService(discoMode, discoKey, discoConfig string, str *store.Stor
 			return nil, err
 		}
 	} else if discoMode == "etcd" {
-		cfg, err := etcd.NewConfigFromFile(discoConfig)
-		if err != nil {
-			return nil, err
+		var cfg *etcd.Config
+		if discoConfig != "" {
+			cfg, err = etcd.NewConfigFromFile(discoConfig)
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		c, err = etcd.New(discoKey, cfg)
