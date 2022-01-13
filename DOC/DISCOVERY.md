@@ -1,6 +1,8 @@
 # rqlite Cluster Discovery Service
 _For full details on how the Discovery Service is implemented using AWS Lambda and DynamoDB check out [this blog post](http://www.philipotoole.com/building-a-cluster-discovery-service-with-aws-lambda-and-dynamodb/)._
 
+> :warning: **rqlite 7.0 and later does not support the legacy Discovery service.** If you wish to use the legacy Discovery service, you must run rqlite 6.x or earlier.
+
 To form a rqlite cluster, the joining node must be supplied with the network address of some other node in the cluster. This requirement -- that one must know the network address of other nodes to join a cluster -- can be inconvenient in various environments. For example, if you do not know which network addresses will be assigned ahead of time, creating a cluster for the first time requires the following steps:
 
  * First start one node and specify its network address.

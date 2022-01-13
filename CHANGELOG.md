@@ -1,4 +1,9 @@
 ## 7.0.0 (unreleased)
+- new autoclustering service, high-level description how to use it.
+- Disco-related command line options have changed. Old options no longer valid.
+- legacy discovery is now not supported by 7.0.0. If you need it, use older software. Legacy disco might be put back in though.
+- no special upgrading needed, unless you used disco service before.
+
 ### New features
 - [PR #957](https://github.com/rqlite/rqlite/pull/957): Support autoclustering via [Consul](https://www.consul.io/) and [etcd](https://etcd.io/).
 
