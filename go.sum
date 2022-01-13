@@ -248,6 +248,8 @@ github.com/rqlite/raft-boltdb v0.0.0-20211018013422-771de01086ce h1:sVlzmCJiaM0L
 github.com/rqlite/raft-boltdb v0.0.0-20211018013422-771de01086ce/go.mod h1:mc+WNDHyskdViYAoPnaMXEBnSKBmoUgiEZjrlAj6G34=
 github.com/rqlite/rqlite-disco-clients v0.0.0-20220112194126-2a9aac7a62a1 h1:ye3vlrrgGhF4vdqScSmvbm0Fwyp6qc1ReToXoRQiJ5w=
 github.com/rqlite/rqlite-disco-clients v0.0.0-20220112194126-2a9aac7a62a1/go.mod h1:pym85nj6JnCI7rM9RxTZ4cubkTQyyg7uLwVydso9B80=
+github.com/rqlite/rqlite-disco-clients v0.0.0-20220113043209-97d11d103545 h1:mMa/ghf9nJitp8/+4eIziE7yyCO9FTUEa83H8/AX1Bc=
+github.com/rqlite/rqlite-disco-clients v0.0.0-20220113043209-97d11d103545/go.mod h1:pym85nj6JnCI7rM9RxTZ4cubkTQyyg7uLwVydso9B80=
 github.com/ryanuber/columnize v0.0.0-20160712163229-9b3edd62028f/go.mod h1:sm1tb6uqfes/u+d4ooFouqFdy9/2g9QGwK3SQygK0Ts=
 github.com/sean-/seed v0.0.0-20170313163322-e2103e2c3529 h1:nn5Wsu0esKSJiIVhscUtVbo7ada43DJhG55ua/hjS5I=
 github.com/sean-/seed v0.0.0-20170313163322-e2103e2c3529/go.mod h1:DxrIzT+xaE7yg65j358z/aeFdxmN0P9QXhEzd20vsDc=
