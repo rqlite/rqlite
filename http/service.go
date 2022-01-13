@@ -115,7 +115,7 @@ func (d *DBResults) MarshalJSON() ([]byte, error) {
 	} else if d.QueryRows != nil {
 		return encoding.JSONMarshal(d.QueryRows)
 	}
-	return nil, fmt.Errorf("no DB results set")
+	return json.Marshal(make([]interface{}, 0)) // Any empty list.
 }
 
 // Response represents a response from the HTTP service.
