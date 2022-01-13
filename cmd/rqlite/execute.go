@@ -42,9 +42,19 @@ func executeWithClient(ctx *cli.Context, client *cl.Client, timer bool, stmt str
 	}
 
 	resp, err := client.Execute(u, requestData)
+
+	var hcr error
 	if err != nil {
-		return err
+		// If the error is HostChangedError, it should be propagated back to the caller to handle
+		// accordingly (change prompt display), but we should still assume that the request succeeded on some
+		// host and not treat it as an error.
+		err, ok := err.(*cl.HostChangedError)
+		if !ok {
+			return err
+		}
+		hcr = err
 	}
+
 	response, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return err
@@ -86,5 +96,5 @@ func executeWithClient(ctx *cli.Context, client *cl.Client, timer bool, stmt str
 	if timer {
 		fmt.Printf("Run Time: %f seconds\n", result.Time)
 	}
-	return nil
+	return hcr
 }
