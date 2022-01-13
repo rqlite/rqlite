@@ -246,10 +246,6 @@ github.com/rqlite/go-sqlite3 v1.22.0 h1:twqvKzylJXG62Qe0rcqdy5ClGhc0YRc2vvA3nEXw
 github.com/rqlite/go-sqlite3 v1.22.0/go.mod h1:ml55MVv28UP7V8zrxILd2EsrI6Wfsz76YSskpg08Ut4=
 github.com/rqlite/raft-boltdb v0.0.0-20211018013422-771de01086ce h1:sVlzmCJiaM0LGK3blAHOD/43QxJZ8bLCDcsqZRatnFE=
 github.com/rqlite/raft-boltdb v0.0.0-20211018013422-771de01086ce/go.mod h1:mc+WNDHyskdViYAoPnaMXEBnSKBmoUgiEZjrlAj6G34=
-github.com/rqlite/rqlite-disco-clients v0.0.0-20220112194126-2a9aac7a62a1 h1:ye3vlrrgGhF4vdqScSmvbm0Fwyp6qc1ReToXoRQiJ5w=
-github.com/rqlite/rqlite-disco-clients v0.0.0-20220112194126-2a9aac7a62a1/go.mod h1:pym85nj6JnCI7rM9RxTZ4cubkTQyyg7uLwVydso9B80=
-github.com/rqlite/rqlite-disco-clients v0.0.0-20220113043209-97d11d103545 h1:mMa/ghf9nJitp8/+4eIziE7yyCO9FTUEa83H8/AX1Bc=
-github.com/rqlite/rqlite-disco-clients v0.0.0-20220113043209-97d11d103545/go.mod h1:pym85nj6JnCI7rM9RxTZ4cubkTQyyg7uLwVydso9B80=
 github.com/rqlite/rqlite-disco-clients v0.0.0-20220113135309-4c570e5d9efb h1:C1quEjPbXSOFmlnbtIetua23ZZ+D09r1b91+cBQ5kDU=
 github.com/rqlite/rqlite-disco-clients v0.0.0-20220113135309-4c570e5d9efb/go.mod h1:pym85nj6JnCI7rM9RxTZ4cubkTQyyg7uLwVydso9B80=
 github.com/ryanuber/columnize v0.0.0-20160712163229-9b3edd62028f/go.mod h1:sm1tb6uqfes/u+d4ooFouqFdy9/2g9QGwK3SQygK0Ts=
