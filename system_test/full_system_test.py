@@ -13,10 +13,12 @@ import subprocess
 import requests
 import json
 import os
+import random
 import shutil
 import time
 import socket
 import sqlite3
+import string
 import sys
 import unittest
 
@@ -27,6 +29,10 @@ TIMEOUT=10
 
 def d_(s):
     return ast.literal_eval(s.replace("'", "\""))
+
+def random_string(n):
+  letters = string.ascii_lowercase
+  return ''.join(random.choice(letters) for i in range(n))
 
 class Node(object):
   def __init__(self, path, node_id,
@@ -62,6 +68,7 @@ class Node(object):
     self.raft_snap_int = raft_snap_int
     self.auth = auth
     self.join_as = join_as
+    self.disco_key = random_string(10)
     self.on_disk = on_disk
     self.process = None
     self.stdout_file = os.path.join(dir, 'rqlited.log')
@@ -98,7 +105,7 @@ class Node(object):
     if self.raft_adv is None:
       self.raft_adv = self.raft_addr
 
-  def start(self, join=None, wait=True, timeout=TIMEOUT):
+  def start(self, join=None, disco_mode=None, disco_key=None, wait=True, timeout=TIMEOUT):
     if self.process is not None:
       return
 
@@ -121,6 +128,11 @@ class Node(object):
       command += ['-join', 'http://' + join]
       if self.join_as is not None:
         command += ['-join-as', self.join_as]
+    if disco_mode is not None:
+      dk = disco_key
+      if dk is None:
+        dk = self.disco_key
+      command += ['-disco-mode', disco_mode, '-disco-key', dk]
     command.append(self.dir)
 
     self.process = subprocess.Popen(command, stdout=self.stdout_fd, stderr=self.stderr_fd)
@@ -186,6 +198,12 @@ class Node(object):
       return self.status()['store']['raft']['state'] == 'Follower'
     except requests.exceptions.ConnectionError:
       return False
+
+  def disco_mode(self):
+    try:
+      return self.status()['disco']['name']
+    except requests.exceptions.ConnectionError:
+      return ''
 
   def wait_for_leader(self, timeout=TIMEOUT):
     lr = None
@@ -678,6 +696,56 @@ class TestEndToEndAdvAddr(TestEndToEnd):
     n2.wait_for_leader()
 
     self.cluster = Cluster([n0, n1, n2])
+
+class TestConsulClustering(unittest.TestCase):
+  def test(self):
+    n0 = Node(RQLITED_PATH, '0', api_addr='localhost:4001', raft_addr="localhost:4002")
+    n0.start(disco_mode='consul')
+    n0.wait_for_leader()
+    self.assertEqual(n0.disco_mode(), 'consul')
+
+    j = n0.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
+    self.assertEqual(j, d_("{'results': [{}]}"))
+    j = n0.execute('INSERT INTO foo(name) VALUES("fiona")')
+    n0.wait_for_all_fsm()
+    j = n0.query('SELECT * FROM foo')
+    self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
+
+    n1 = Node(RQLITED_PATH, '1', api_addr='localhost:4003', raft_addr="localhost:4004")
+    n1.start(disco_mode='consul', disco_key=n0.disco_key)
+    n1.wait_for_leader()
+    self.assertEqual(n1.disco_mode(), 'consul')
+
+    j = n1.query('SELECT * FROM foo', level='none')
+    self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
+
+    deprovision_node(n0)
+    deprovision_node(n1)
+
+class TestEtcdClustering(unittest.TestCase):
+  def test(self):
+    n0 = Node(RQLITED_PATH, '0', api_addr='localhost:4001', raft_addr="localhost:4002")
+    n0.start(disco_mode='etcd')
+    n0.wait_for_leader()
+    self.assertEqual(n0.disco_mode(), 'etcd')
+
+    j = n0.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
+    self.assertEqual(j, d_("{'results': [{}]}"))
+    j = n0.execute('INSERT INTO foo(name) VALUES("fiona")')
+    n0.wait_for_all_fsm()
+    j = n0.query('SELECT * FROM foo')
+    self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
+
+    n1 = Node(RQLITED_PATH, '1', api_addr='localhost:4003', raft_addr="localhost:4004")
+    n1.start(disco_mode='etcd', disco_key=n0.disco_key)
+    n1.wait_for_leader()
+    self.assertEqual(n1.disco_mode(), 'etcd')
+
+    j = n1.query('SELECT * FROM foo', level='none')
+    self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
+
+    deprovision_node(n0)
+    deprovision_node(n1)
 
 class TestAuthJoin(unittest.TestCase):
   '''Test that joining works with authentication'''
