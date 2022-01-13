@@ -1,3 +1,7 @@
+## 6.10.2 (January 13th 2022)
+### Implementation changes and bug fixes
+- [PR #959](https://github.com/rqlite/rqlite/pull/959): Return clearer error if no database results set.
+
 ## 6.10.1 (January 13th 2022)
 ### Implementation changes and bug fixes
 - [PR #945](https://github.com/rqlite/rqlite/pull/945): Minor refactor of Store creation.
