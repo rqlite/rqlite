@@ -15,6 +15,7 @@ type Client interface {
 	fmt.Stringer
 }
 
+// Service represents a Discovery Service instance.
 type Service struct {
 	UpdateInterval time.Duration
 
@@ -25,6 +26,7 @@ type Service struct {
 	lastContact time.Time
 }
 
+// NewService returns an instantiated Discovery Service.
 func NewService(c Client) *Service {
 	return &Service{
 		UpdateInterval: 5 * time.Second,
