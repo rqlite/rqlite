@@ -21,9 +21,12 @@ import (
 
 func Test_ResponseJSONMarshal(t *testing.T) {
 	resp := NewResponse()
-	_, err := json.Marshal(resp)
+	b, err := json.Marshal(resp)
 	if err != nil {
 		t.Fatalf("error JSON marshaling empty Response: %s", err.Error())
+	}
+	if exp, got := `{"results":[]}`, string(b); exp != got {
+		t.Fatalf("Incorrect marshal, exp: %s, got: %s", exp, got)
 	}
 
 	resp = NewResponse()
@@ -32,7 +35,7 @@ func Test_ResponseJSONMarshal(t *testing.T) {
 		RowsAffected: 45,
 		Time:         1234,
 	}}
-	b, err := json.Marshal(resp)
+	b, err = json.Marshal(resp)
 	if err != nil {
 		t.Fatalf("failed to JSON marshal empty Response: %s", err)
 	}
