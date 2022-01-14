@@ -327,7 +327,7 @@ func main() {
 				for {
 					log.Printf("discovery service returned %s as join address", addr)
 					if j, err := cluster.Join(joinSrcIP, []string{addr}, str.ID(), raftAdv, !raftNonVoter,
-						1, time.Second, &tlsConfig); err != nil {
+						joinAttempts, joinInterval, &tlsConfig); err != nil {
 						log.Printf("failed to join cluster at %s: %s", addr, err.Error())
 
 						time.Sleep(time.Second)

@@ -40,8 +40,7 @@ class Node(object):
                raft_addr=None, raft_adv=None,
                raft_voter=True,
                raft_snap_threshold=8192, raft_snap_int="1s",
-               auth=None, join_as=None,
-               dir=None, on_disk=False):
+               auth=None, dir=None, on_disk=False):
     if api_addr is None:
       s, addr = random_addr()
       api_addr = addr
@@ -67,7 +66,6 @@ class Node(object):
     self.raft_snap_threshold = raft_snap_threshold
     self.raft_snap_int = raft_snap_int
     self.auth = auth
-    self.join_as = join_as
     self.disco_key = random_string(10)
     self.on_disk = on_disk
     self.process = None
@@ -105,7 +103,8 @@ class Node(object):
     if self.raft_adv is None:
       self.raft_adv = self.raft_addr
 
-  def start(self, join=None, disco_mode=None, disco_key=None, wait=True, timeout=TIMEOUT):
+  def start(self, join=None, join_as=None, join_attempts=None, join_interval=None,
+    disco_mode=None, disco_key=None, wait=True, timeout=TIMEOUT):
     if self.process is not None:
       return
 
@@ -126,8 +125,12 @@ class Node(object):
       command += ['-auth', self.auth]
     if join is not None:
       command += ['-join', 'http://' + join]
-      if self.join_as is not None:
-        command += ['-join-as', self.join_as]
+    if join_as is not None:
+       command += ['-join-as', join_as]
+    if join_attempts is not None:
+       command += ['-join-attempts', str(join_attempts)]
+    if join_interval is not None:
+       command += ['-join-interval', join_interval]
     if disco_mode is not None:
       dk = disco_key
       if dk is None:
@@ -715,7 +718,7 @@ class TestAutoClustering(unittest.TestCase):
 
     # Add second node, make sure it joins the cluster fine.
     n1 = Node(RQLITED_PATH, '1')
-    n1.start(disco_mode=mode,  disco_key=disco_key)
+    n1.start(disco_mode=mode, disco_key=disco_key)
     n1.wait_for_leader()
     self.assertEqual(n1.disco_mode(), mode)
     j = n1.query('SELECT * FROM foo', level='none')
@@ -723,7 +726,7 @@ class TestAutoClustering(unittest.TestCase):
 
     # Now a third.
     n2 = Node(RQLITED_PATH, '2')
-    n2.start(disco_mode=mode,  disco_key=disco_key)
+    n2.start(disco_mode=mode, disco_key=disco_key)
     n2.wait_for_leader()
     self.assertEqual(n2.disco_mode(), mode)
     j = n2.query('SELECT * FROM foo', level='none')
@@ -733,8 +736,10 @@ class TestAutoClustering(unittest.TestCase):
     deprovision_node(n0)
 
     # Add a fourth node, it should join fine using updated leadership details.
+    # Use quick retries, as we know the leader information may be changing while
+    # the node is coming up.
     n3 = Node(RQLITED_PATH, '3')
-    n3.start(disco_mode=mode,  disco_key=disco_key)
+    n3.start(disco_mode=mode, disco_key=disco_key, join_interval='1s', join_attempts=1)
     n3.wait_for_leader()
     self.assertEqual(n3.disco_mode(), mode)
     j = n3.query('SELECT * FROM foo', level='none')
@@ -768,8 +773,8 @@ class TestAuthJoin(unittest.TestCase):
     n1.start(join=n0.APIAddr())
     self.assertRaises(Exception, n1.wait_for_leader) # Join should fail due to lack of auth.
 
-    n2 = Node(RQLITED_PATH, '2', auth=self.auth_file.name, join_as="foo")
-    n2.start(join=n0.APIAddr())
+    n2 = Node(RQLITED_PATH, '2', auth=self.auth_file.name)
+    n2.start(join=n0.APIAddr(), join_as="foo")
     n2.wait_for_leader()
 
     self.cluster = Cluster([n0, n1, n2])
