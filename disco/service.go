@@ -3,10 +3,15 @@ package disco
 import (
 	"fmt"
 	"log"
+	"math/rand"
 	"os"
 	"sync"
 	"time"
 )
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
 
 const (
 	leaderChanLen = 5 // Support any fast back-to-back leadership changes.
@@ -45,7 +50,7 @@ func NewService(c Client, s Store) *Service {
 		c: c,
 		s: s,
 
-		UpdateInterval: 5 * time.Second,
+		UpdateInterval: 3 * time.Second,
 		logger:         log.New(os.Stderr, "[disco] ", log.LstdFlags),
 	}
 }
@@ -73,7 +78,7 @@ func (s *Service) Register(id, apiAddr, addr string) (bool, string, error) {
 			return true, apiAddr, nil
 		}
 
-		time.Sleep(s.UpdateInterval)
+		time.Sleep(jitter(s.UpdateInterval))
 	}
 }
 
@@ -83,7 +88,7 @@ func (s *Service) Register(id, apiAddr, addr string) (bool, string, error) {
 // to deal with any intermittent issues that caused Leadership information
 /// to go stale.
 func (s *Service) StartReporting(id, apiAddr, addr string) {
-	ticker := time.NewTicker(6 * s.UpdateInterval)
+	ticker := time.NewTicker(10 * s.UpdateInterval)
 	obCh := make(chan struct{}, leaderChanLen)
 	s.s.RegisterLeaderChange(obCh)
 
@@ -126,4 +131,8 @@ func (s *Service) updateContact(t time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.lastContact = t
+}
+
+func jitter(duration time.Duration) time.Duration {
+	return duration + time.Duration(rand.Float64()*float64(duration))
 }
