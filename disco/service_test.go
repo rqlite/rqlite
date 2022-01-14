@@ -25,7 +25,7 @@ func Test_RegisterGetLeaderOK(t *testing.T) {
 	c := &mockStore{}
 
 	s := NewService(m, c)
-	s.UpdateInterval = 10 * time.Millisecond
+	s.RegisterInterval = 10 * time.Millisecond
 
 	ok, addr, err := s.Register("1", "localhost:4001", "localhost:4002")
 	if err != nil {
@@ -53,7 +53,7 @@ func Test_RegisterInitializeLeader(t *testing.T) {
 	c := &mockStore{}
 
 	s := NewService(m, c)
-	s.UpdateInterval = 10 * time.Millisecond
+	s.RegisterInterval = 10 * time.Millisecond
 
 	ok, addr, err := s.Register("1", "localhost:4001", "localhost:4002")
 	if err != nil {
@@ -85,7 +85,7 @@ func Test_StartReportingTimer(t *testing.T) {
 	}
 
 	s := NewService(m, c)
-	s.UpdateInterval = 10 * time.Millisecond
+	s.ReportInterval = 10 * time.Millisecond
 
 	go s.StartReporting("1", "localhost:4001", "localhost:4002")
 	wg.Wait()
@@ -113,7 +113,7 @@ func Test_StartReportingChange(t *testing.T) {
 	}
 
 	s := NewService(m, c)
-	s.UpdateInterval = 10 * time.Minute
+	s.ReportInterval = 10 * time.Minute
 	done := s.StartReporting("1", "localhost:4001", "localhost:4002")
 
 	ch <- struct{}{}

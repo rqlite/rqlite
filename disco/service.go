@@ -33,7 +33,8 @@ type Store interface {
 
 // Service represents a Discovery Service instance.
 type Service struct {
-	UpdateInterval time.Duration
+	RegisterInterval time.Duration
+	ReportInterval   time.Duration
 
 	c Client
 	s Store
@@ -50,8 +51,9 @@ func NewService(c Client, s Store) *Service {
 		c: c,
 		s: s,
 
-		UpdateInterval: 3 * time.Second,
-		logger:         log.New(os.Stderr, "[disco] ", log.LstdFlags),
+		RegisterInterval: 3 * time.Second,
+		ReportInterval:   30 * time.Second,
+		logger:           log.New(os.Stderr, "[disco] ", log.LstdFlags),
 	}
 }
 
@@ -77,7 +79,7 @@ func (s *Service) Register(id, apiAddr, addr string) (bool, string, error) {
 			return true, apiAddr, nil
 		}
 
-		time.Sleep(jitter(s.UpdateInterval))
+		time.Sleep(jitter(s.RegisterInterval))
 	}
 }
 
@@ -87,7 +89,7 @@ func (s *Service) Register(id, apiAddr, addr string) (bool, string, error) {
 // to deal with any intermittent issues that caused Leadership information
 /// to go stale.
 func (s *Service) StartReporting(id, apiAddr, addr string) chan struct{} {
-	ticker := time.NewTicker(10 * s.UpdateInterval)
+	ticker := time.NewTicker(10 * s.ReportInterval)
 	obCh := make(chan struct{}, leaderChanLen)
 	s.s.RegisterLeaderChange(obCh)
 
@@ -127,9 +129,10 @@ func (s *Service) Stats() (map[string]interface{}, error) {
 	defer s.mu.Unlock()
 
 	return map[string]interface{}{
-		"name":            s.c.String(),
-		"update_interval": s.UpdateInterval,
-		"last_contact":    s.lastContact,
+		"name":              s.c.String(),
+		"register_interval": s.RegisterInterval,
+		"report_interval":   s.ReportInterval,
+		"last_contact":      s.lastContact,
 	}, nil
 }
 
