@@ -244,6 +244,10 @@ func New(ln Listener, c *Config) *Store {
 
 // Open opens the Store.
 func (s *Store) Open() error {
+	if s.open {
+		return fmt.Errorf("store already open")
+	}
+
 	s.openT = time.Now()
 	s.logger.Printf("opening store with node ID %s", s.raftID)
 
