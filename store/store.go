@@ -76,6 +76,8 @@ const (
 	snapshotPersistDuration  = "snapshot_persist_duration"
 	snapshotDBSerializedSize = "snapshot_db_serialized_size"
 	snapshotDBOnDiskSize     = "snapshot_db_ondisk_size"
+	leaderChangesObserved    = "leader_changes_observed"
+	leaderChangesDropped     = "leader_changes_dropped"
 )
 
 // BackupFormat represents the format of database backup.
@@ -107,6 +109,8 @@ func init() {
 	stats.Add(snapshotPersistDuration, 0)
 	stats.Add(snapshotDBSerializedSize, 0)
 	stats.Add(snapshotDBOnDiskSize, 0)
+	stats.Add(leaderChangesObserved, 0)
+	stats.Add(leaderChangesDropped, 0)
 }
 
 // ClusterState defines the possible Raft states the current node can be in
@@ -123,6 +127,7 @@ const (
 
 // Store is a SQLite database, where all changes are made via Raft consensus.
 type Store struct {
+	open          bool
 	raftDir       string
 	peersPath     string
 	peersInfoPath string
@@ -149,6 +154,13 @@ type Store struct {
 	raftLog       raft.LogStore             // Persistent log store.
 	raftStable    raft.StableStore          // Persistent k-v store.
 	boltStore     *rlog.Log                 // Physical store.
+
+	// Leader change observer
+	leaderObserversMu sync.RWMutex
+	leaderObservers   []chan<- struct{}
+	observerDone      chan struct{}
+	observerChan      chan raft.Observation
+	observer          *raft.Observer
 
 	onDiskCreated        bool      // On disk database actually created?
 	snapsExistOnOpen     bool      // Any snaps present when store opens?
@@ -216,21 +228,26 @@ func New(ln Listener, c *Config) *Store {
 	}
 
 	return &Store{
-		ln:            ln,
-		raftDir:       c.Dir,
-		peersPath:     filepath.Join(c.Dir, peersPath),
-		peersInfoPath: filepath.Join(c.Dir, peersInfoPath),
-		raftID:        c.ID,
-		dbConf:        c.DBConf,
-		dbPath:        dbPath,
-		reqMarshaller: command.NewRequestMarshaler(),
-		logger:        logger,
-		ApplyTimeout:  applyTimeout,
+		ln:              ln,
+		raftDir:         c.Dir,
+		peersPath:       filepath.Join(c.Dir, peersPath),
+		peersInfoPath:   filepath.Join(c.Dir, peersInfoPath),
+		raftID:          c.ID,
+		dbConf:          c.DBConf,
+		dbPath:          dbPath,
+		leaderObservers: make([]chan<- struct{}, 0),
+		reqMarshaller:   command.NewRequestMarshaler(),
+		logger:          logger,
+		ApplyTimeout:    applyTimeout,
 	}
 }
 
 // Open opens the Store.
 func (s *Store) Open() error {
+	if s.open {
+		return fmt.Errorf("store already open")
+	}
+
 	s.openT = time.Now()
 	s.logger.Printf("opening store with node ID %s", s.raftID)
 
@@ -340,6 +357,19 @@ func (s *Store) Open() error {
 	}
 	s.raft = ra
 
+	// Open the observer channels.
+	s.observerDone = make(chan struct{}, 1)
+	s.observerChan = make(chan raft.Observation)
+	s.observer = raft.NewObserver(s.observerChan, false, func(o *raft.Observation) bool {
+		_, ok := o.Data.(raft.LeaderObservation)
+		return ok
+	})
+
+	// Register and listen for leader changes.
+	s.raft.RegisterObserver(s.observer)
+	go s.observe()
+
+	s.open = true
 	return nil
 }
 
@@ -362,6 +392,12 @@ func (s *Store) Bootstrap(servers ...*Server) error {
 
 // Close closes the store. If wait is true, waits for a graceful shutdown.
 func (s *Store) Close(wait bool) error {
+	if !s.open {
+		// Protect against closing already-closed resource, such as channels.
+		return nil
+	}
+
+	close(s.observerDone)
 	f := s.raft.Shutdown()
 	if wait {
 		if e := f.(raft.Future); e.Error() != nil {
@@ -375,6 +411,8 @@ func (s *Store) Close(wait bool) error {
 	if err := s.boltStore.Close(); err != nil {
 		return err
 	}
+
+	s.open = false
 	return nil
 }
 
@@ -1131,6 +1169,32 @@ func (s *Store) RegisterObserver(o *raft.Observer) {
 // DeregisterObserver deregisters an observer of Raft events
 func (s *Store) DeregisterObserver(o *raft.Observer) {
 	s.raft.DeregisterObserver(o)
+}
+
+// RegisterLeaderChange registers channel which will receive a
+// signal when this node detects that the Leader changes.
+func (s *Store) RegisterLeaderChange(c chan<- struct{}) {
+	s.leaderObserversMu.Lock()
+	defer s.leaderObserversMu.Unlock()
+	s.leaderObservers = append(s.leaderObservers, c)
+}
+
+func (s *Store) observe() {
+	select {
+	case <-s.observerChan:
+		s.leaderObserversMu.RLock()
+		for i := range s.leaderObservers {
+			select {
+			case s.leaderObservers[i] <- struct{}{}:
+				stats.Add(leaderChangesObserved, 1)
+			default:
+				stats.Add(leaderChangesDropped, 1)
+			}
+		}
+		s.leaderObserversMu.RUnlock()
+	case <-s.observerDone:
+		return
+	}
 }
 
 // logSize returns the size of the Raft log on disk.

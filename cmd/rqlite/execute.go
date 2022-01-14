@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/mkideal/cli"
+	cl "github.com/rqlite/rqlite/cmd/rqlite/http"
 )
 
 // Result represents execute result
@@ -25,96 +26,75 @@ type executeResponse struct {
 	Time    float64   `json:"time,omitempty"`
 }
 
-func executeWithClient(ctx *cli.Context, client *http.Client, argv *argT, timer bool, stmt string) error {
+func executeWithClient(ctx *cli.Context, client *cl.Client, timer bool, stmt string) error {
 	queryStr := url.Values{}
 	if timer {
 		queryStr.Set("timings", "")
 	}
 	u := url.URL{
-		Scheme: argv.Protocol,
-		Host:   fmt.Sprintf("%s:%d", argv.Host, argv.Port),
-		Path:   fmt.Sprintf("%sdb/execute", argv.Prefix),
+		Path: fmt.Sprintf("%sdb/execute", client.Prefix),
 	}
-	urlStr := u.String()
 
 	requestData := strings.NewReader(makeJSONBody(stmt))
 
-	nRedirect := 0
-	for {
-		if _, err := requestData.Seek(0, io.SeekStart); err != nil {
+	if _, err := requestData.Seek(0, io.SeekStart); err != nil {
+		return err
+	}
+
+	resp, err := client.Execute(u, requestData)
+
+	var hcr error
+	if err != nil {
+		// If the error is HostChangedError, it should be propagated back to the caller to handle
+		// accordingly (change prompt display), but we should still assume that the request succeeded on some
+		// host and not treat it as an error.
+		err, ok := err.(*cl.HostChangedError)
+		if !ok {
 			return err
 		}
+		hcr = err
+	}
 
-		req, err := http.NewRequest("POST", urlStr, requestData)
-		if err != nil {
-			return err
-		}
-		if argv.Credentials != "" {
-			creds := strings.Split(argv.Credentials, ":")
-			if len(creds) != 2 {
-				return fmt.Errorf("invalid Basic Auth credentials format")
-			}
-			req.SetBasicAuth(creds[0], creds[1])
-		}
+	response, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
 
-		resp, err := client.Do(req)
-		if err != nil {
-			return err
-		}
-		response, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			return err
-		}
-		resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("server responded with %s: %s", resp.Status, response)
+	}
 
-		if resp.StatusCode == http.StatusUnauthorized {
-			return fmt.Errorf("unauthorized")
-		}
+	// Parse response and write results
+	ret := &executeResponse{}
+	if err := parseResponse(&response, &ret); err != nil {
+		return err
+	}
+	if ret.Error != "" {
+		return fmt.Errorf(ret.Error)
+	}
+	if len(ret.Results) != 1 {
+		return fmt.Errorf("unexpected results length: %d", len(ret.Results))
+	}
 
-		if resp.StatusCode == http.StatusMovedPermanently {
-			nRedirect++
-			if nRedirect > maxRedirect {
-				return fmt.Errorf("maximum leader redirect limit exceeded")
-			}
-			urlStr = resp.Header["Location"][0]
-			continue
-		}
-
-		if resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("server responded with %s: %s", resp.Status, response)
-		}
-
-		// Parse response and write results
-		ret := &executeResponse{}
-		if err := parseResponse(&response, &ret); err != nil {
-			return err
-		}
-		if ret.Error != "" {
-			return fmt.Errorf(ret.Error)
-		}
-		if len(ret.Results) != 1 {
-			return fmt.Errorf("unexpected results length: %d", len(ret.Results))
-		}
-
-		result := ret.Results[0]
-		if result.Error != "" {
-			ctx.String("Error: %s\n", result.Error)
-			return nil
-		}
-
-		rowString := "row"
-		if result.RowsAffected > 1 {
-			rowString = "rows"
-		}
-		if timer {
-			ctx.String("%d %s affected (%f sec)\n", result.RowsAffected, rowString, result.Time)
-		} else {
-			ctx.String("%d %s affected\n", result.RowsAffected, rowString)
-		}
-
-		if timer {
-			fmt.Printf("Run Time: %f seconds\n", result.Time)
-		}
+	result := ret.Results[0]
+	if result.Error != "" {
+		ctx.String("Error: %s\n", result.Error)
 		return nil
 	}
+
+	rowString := "row"
+	if result.RowsAffected > 1 {
+		rowString = "rows"
+	}
+	if timer {
+		ctx.String("%d %s affected (%f sec)\n", result.RowsAffected, rowString, result.Time)
+	} else {
+		ctx.String("%d %s affected\n", result.RowsAffected, rowString)
+	}
+
+	if timer {
+		fmt.Printf("Run Time: %f seconds\n", result.Time)
+	}
+	return hcr
 }
