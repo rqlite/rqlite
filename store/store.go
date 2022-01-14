@@ -159,9 +159,11 @@ type Store struct {
 	// Leader change observer
 	leaderObserversMu sync.RWMutex
 	leaderObservers   []chan<- struct{}
+	observerClose     chan struct{}
 	observerDone      chan struct{}
 	observerChan      chan raft.Observation
 	observer          *raft.Observer
+	observerWg        sync.WaitGroup
 
 	onDiskCreated        bool      // On disk database actually created?
 	snapsExistOnOpen     bool      // Any snaps present when store opens?
@@ -367,7 +369,7 @@ func (s *Store) Open() error {
 
 	// Register and listen for leader changes.
 	s.raft.RegisterObserver(s.observer)
-	s.observerDone = s.observe()
+	s.observerClose, s.observerDone = s.observe()
 
 	s.open = true
 	return nil
@@ -397,7 +399,9 @@ func (s *Store) Close(wait bool) error {
 		return nil
 	}
 
-	close(s.observerDone)
+	close(s.observerClose)
+	<-s.observerDone
+
 	f := s.raft.Shutdown()
 	if wait {
 		if e := f.(raft.Future); e.Error() != nil {
@@ -1183,9 +1187,12 @@ func (s *Store) RegisterLeaderChange(c chan<- struct{}) {
 	s.leaderObservers = append(s.leaderObservers, c)
 }
 
-func (s *Store) observe() chan struct{} {
-	done := make(chan struct{})
+func (s *Store) observe() (closeCh, doneCh chan struct{}) {
+	closeCh = make(chan struct{})
+	doneCh = make(chan struct{})
+
 	go func() {
+		defer close(doneCh)
 		for {
 			select {
 			case <-s.observerChan:
@@ -1199,12 +1206,12 @@ func (s *Store) observe() chan struct{} {
 					}
 				}
 				s.leaderObserversMu.RUnlock()
-			case <-done:
+			case <-closeCh:
 				return
 			}
 		}
 	}()
-	return done
+	return closeCh, doneCh
 }
 
 // logSize returns the size of the Raft log on disk.
