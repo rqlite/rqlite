@@ -26,7 +26,9 @@ type Store interface {
 type Service struct {
 	UpdateInterval time.Duration
 
-	c      Client
+	c Client
+	s Store
+
 	logger *log.Logger
 
 	mu          sync.Mutex
@@ -34,10 +36,12 @@ type Service struct {
 }
 
 // NewService returns an instantiated Discovery Service.
-func NewService(c Client) *Service {
+func NewService(c Client, s Store) *Service {
 	return &Service{
+		c: c,
+		s: s,
+
 		UpdateInterval: 5 * time.Second,
-		c:              c,
 		logger:         log.New(os.Stderr, "[disco] ", log.LstdFlags),
 	}
 }
@@ -70,17 +74,35 @@ func (s *Service) Register(id, apiAddr, addr string) (bool, string, error) {
 }
 
 // StartReporting reports the details of this node to the discovery service,
-// if, and only if, this node is the leader.
-func (s *Service) StartReporting(id, apiAddr, addr string, f func() bool) {
-	for {
-		if f() {
+// if, and only if, this node is the leader. The service will report
+// anytime a leadership change is detected. It also does it periodically
+// to deal with any intermittent issues that caused Leadership information
+/// to go stale.
+func (s *Service) StartReporting(id, apiAddr, addr string) {
+	ticker := time.NewTicker(6 * s.UpdateInterval)
+	obCh := make(chan struct{})
+	s.s.RegisterLeaderChange(obCh)
+
+	update := func(changed bool) {
+		if s.s.IsLeader() {
 			if err := s.c.SetLeader(id, apiAddr, addr); err != nil {
 				s.logger.Printf("failed to update discovery service with Leader details: %s",
 					err.Error())
 			}
+			if changed {
+				s.logger.Println("updated Leader due to leadership change")
+			}
 			s.updateContact(time.Now())
 		}
-		time.Sleep(s.UpdateInterval * 2)
+	}
+
+	for {
+		select {
+		case <-ticker.C:
+			update(false)
+		case <-obCh:
+			update(true)
+		}
 	}
 }
 
