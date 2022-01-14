@@ -114,6 +114,49 @@ func Test_OpenStoreCloseSingleNode(t *testing.T) {
 	}
 }
 
+func Test_StoreLeaderObservation(t *testing.T) {
+	s, ln := mustNewStore(true)
+	defer s.Close(true)
+	defer os.RemoveAll(s.Path())
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+
+	ch1 := make(chan struct{})
+	ch2 := make(chan struct{})
+	countCh := make(chan int, 2)
+	s.RegisterLeaderChange(ch1)
+	s.RegisterLeaderChange(ch2)
+
+	go func() {
+		<-ch1
+		countCh <- 1
+	}()
+	go func() {
+		<-ch2
+		countCh <- 2
+	}()
+
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+
+	count := 0
+	for {
+		select {
+		case <-countCh:
+			count++
+			if count == 2 {
+				return
+			}
+		case <-time.After(10 * time.Second):
+			t.Fatalf("timeout waiting for all observations")
+		}
+	}
+}
+
 func Test_SingleNodeInMemExecuteQuery(t *testing.T) {
 	s, ln := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
