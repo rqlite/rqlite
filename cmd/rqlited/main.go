@@ -324,12 +324,22 @@ func main() {
 					log.Fatalf("failed to bootstrap single new node: %s", err.Error())
 				}
 			} else {
-				log.Printf("discovery service returned %s as join address", addr)
-				if j, err := cluster.Join(joinSrcIP, []string{addr}, str.ID(), raftAdv, !raftNonVoter,
-					joinAttempts, joinInterval, &tlsConfig); err != nil {
-					log.Fatalf("failed to join cluster at %s: %s", addr, err.Error())
-				} else {
-					log.Println("successfully joined cluster at", j)
+				for {
+					log.Printf("discovery service returned %s as join address", addr)
+					if j, err := cluster.Join(joinSrcIP, []string{addr}, str.ID(), raftAdv, !raftNonVoter,
+						1, time.Second, &tlsConfig); err != nil {
+						log.Printf("failed to join cluster at %s: %s", addr, err.Error())
+
+						time.Sleep(time.Second)
+						_, addr, err = discoService.Register(nodeID, apiURL, raftAdv)
+						if err != nil {
+							log.Printf("failed to get updated leader: %s", err.Error())
+						}
+						continue
+					} else {
+						log.Println("successfully joined cluster at", j)
+						break
+					}
 				}
 			}
 		} else {

@@ -697,15 +697,14 @@ class TestEndToEndAdvAddr(TestEndToEnd):
 
     self.cluster = Cluster([n0, n1, n2])
 
-class TestConsulClustering(unittest.TestCase):
-  '''Test clustering via Consul'''
-  def test(self):
+class TestAutoClustering(unittest.TestCase):
+  def autocluster(self, mode):
     disco_key = random_string(10)
 
     n0 = Node(RQLITED_PATH, '0')
-    n0.start(disco_mode='consul', disco_key=disco_key)
+    n0.start(disco_mode=mode, disco_key=disco_key)
     n0.wait_for_leader()
-    self.assertEqual(n0.disco_mode(), 'consul')
+    self.assertEqual(n0.disco_mode(), mode)
 
     j = n0.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
     self.assertEqual(j, d_("{'results': [{}]}"))
@@ -714,44 +713,44 @@ class TestConsulClustering(unittest.TestCase):
     j = n0.query('SELECT * FROM foo')
     self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
 
+    # Add second node, make sure it joins the cluster fine.
     n1 = Node(RQLITED_PATH, '1')
-    n1.start(disco_mode='consul',  disco_key=disco_key)
+    n1.start(disco_mode=mode,  disco_key=disco_key)
     n1.wait_for_leader()
-    self.assertEqual(n1.disco_mode(), 'consul')
-
+    self.assertEqual(n1.disco_mode(), mode)
     j = n1.query('SELECT * FROM foo', level='none')
     self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
 
-    deprovision_node(n0)
-    deprovision_node(n1)
-
-class TestEtcdClustering(unittest.TestCase):
-  '''Test clustering via etcd'''
-  def test(self):
-    disco_key = random_string(10)
-
-    n0 = Node(RQLITED_PATH, '0')
-    n0.start(disco_mode='etcd', disco_key=disco_key)
-    n0.wait_for_leader()
-    self.assertEqual(n0.disco_mode(), 'etcd')
-
-    j = n0.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
-    self.assertEqual(j, d_("{'results': [{}]}"))
-    j = n0.execute('INSERT INTO foo(name) VALUES("fiona")')
-    n0.wait_for_all_fsm()
-    j = n0.query('SELECT * FROM foo')
+    # Now a third.
+    n2 = Node(RQLITED_PATH, '2')
+    n2.start(disco_mode=mode,  disco_key=disco_key)
+    n2.wait_for_leader()
+    self.assertEqual(n2.disco_mode(), mode)
+    j = n2.query('SELECT * FROM foo', level='none')
     self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
 
-    n1 = Node(RQLITED_PATH, '1')
-    n1.start(disco_mode='etcd', disco_key=disco_key)
-    n1.wait_for_leader()
-    self.assertEqual(n1.disco_mode(), 'etcd')
+    # Now, kill the leader, which should trigger a different node to report leadership.
+    deprovision_node(n0)
 
-    j = n1.query('SELECT * FROM foo', level='none')
+    # Add a fourth node, it should join fine using updated leadership details.
+    n3 = Node(RQLITED_PATH, '3')
+    n3.start(disco_mode=mode,  disco_key=disco_key)
+    n3.wait_for_leader()
+    self.assertEqual(n3.disco_mode(), mode)
+    j = n3.query('SELECT * FROM foo', level='none')
     self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
 
-    deprovision_node(n0)
     deprovision_node(n1)
+    deprovision_node(n2)
+    deprovision_node(n3)
+
+  def test_consul(self):
+    '''Test clustering via Consul'''
+    self.autocluster('consul')
+
+  def test_etcd(self):
+    '''Test clustering via Etcd'''
+    self.autocluster('etcd')
 
 class TestAuthJoin(unittest.TestCase):
   '''Test that joining works with authentication'''
