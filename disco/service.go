@@ -65,7 +65,6 @@ func (s *Service) Register(id, apiAddr, addr string) (bool, string, error) {
 			s.logger.Printf("failed to get leader: %s", err.Error())
 		}
 		if ok {
-			s.updateContact(time.Now())
 			return false, cAPIAddr, nil
 		}
 
