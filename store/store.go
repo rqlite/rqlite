@@ -127,6 +127,7 @@ const (
 
 // Store is a SQLite database, where all changes are made via Raft consensus.
 type Store struct {
+	open          bool
 	raftDir       string
 	peersPath     string
 	peersInfoPath string
@@ -226,12 +227,6 @@ func New(ln Listener, c *Config) *Store {
 		dbPath = c.DBConf.OnDiskPath
 	}
 
-	observerChan := make(chan raft.Observation)
-	observer := raft.NewObserver(observerChan, false, func(o *raft.Observation) bool {
-		_, ok := o.Data.(raft.LeaderObservation)
-		return ok
-	})
-
 	return &Store{
 		ln:              ln,
 		raftDir:         c.Dir,
@@ -241,9 +236,6 @@ func New(ln Listener, c *Config) *Store {
 		dbConf:          c.DBConf,
 		dbPath:          dbPath,
 		leaderObservers: make([]chan<- struct{}, 0),
-		observerDone:    make(chan struct{}, 1),
-		observerChan:    observerChan,
-		observer:        observer,
 		reqMarshaller:   command.NewRequestMarshaler(),
 		logger:          logger,
 		ApplyTimeout:    applyTimeout,
@@ -361,10 +353,19 @@ func (s *Store) Open() error {
 	}
 	s.raft = ra
 
+	// Open the observer channels.
+	s.observerDone = make(chan struct{}, 1)
+	s.observerChan = make(chan raft.Observation)
+	s.observer = raft.NewObserver(s.observerChan, false, func(o *raft.Observation) bool {
+		_, ok := o.Data.(raft.LeaderObservation)
+		return ok
+	})
+
 	// Register and listen for leader changes.
 	s.raft.RegisterObserver(s.observer)
 	go s.observe()
 
+	s.open = true
 	return nil
 }
 
@@ -387,6 +388,11 @@ func (s *Store) Bootstrap(servers ...*Server) error {
 
 // Close closes the store. If wait is true, waits for a graceful shutdown.
 func (s *Store) Close(wait bool) error {
+	if !s.open {
+		// Protect against closing already-closed resource, such as channels.
+		return nil
+	}
+
 	close(s.observerDone)
 	f := s.raft.Shutdown()
 	if wait {
@@ -401,6 +407,8 @@ func (s *Store) Close(wait bool) error {
 	if err := s.boltStore.Close(); err != nil {
 		return err
 	}
+
+	s.open = false
 	return nil
 }
 

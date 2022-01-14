@@ -59,6 +59,10 @@ func Test_OpenStoreCloseSingleNode(t *testing.T) {
 	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
+	if !s.open {
+		t.Fatalf("store not marked as open")
+	}
+
 	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
 		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
 	}
@@ -81,6 +85,9 @@ func Test_OpenStoreCloseSingleNode(t *testing.T) {
 
 	if err := s.Close(true); err != nil {
 		t.Fatalf("failed to close single-node store: %s", err.Error())
+	}
+	if s.open {
+		t.Fatalf("store still marked as open")
 	}
 
 	// Reopen it and confirm data still there.
