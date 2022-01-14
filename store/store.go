@@ -246,7 +246,13 @@ func New(ln Listener, c *Config) *Store {
 }
 
 // Open opens the Store.
-func (s *Store) Open() error {
+func (s *Store) Open() (retErr error) {
+	defer func() {
+		if retErr == nil {
+			s.open = true
+		}
+	}()
+
 	if s.open {
 		return fmt.Errorf("store already open")
 	}
@@ -371,12 +377,11 @@ func (s *Store) Open() error {
 	s.raft.RegisterObserver(s.observer)
 	s.observerClose, s.observerDone = s.observe()
 
-	s.open = true
 	return nil
 }
 
 // Bootstrap executes a cluster bootstrap on this node, using the given
-// Serves as the configuration.
+// Servers as the configuration.
 func (s *Store) Bootstrap(servers ...*Server) error {
 	raftServers := make([]raft.Server, len(servers))
 	for i := range servers {
@@ -393,7 +398,12 @@ func (s *Store) Bootstrap(servers ...*Server) error {
 }
 
 // Close closes the store. If wait is true, waits for a graceful shutdown.
-func (s *Store) Close(wait bool) error {
+func (s *Store) Close(wait bool) (retErr error) {
+	defer func() {
+		if retErr == nil {
+			s.open = false
+		}
+	}()
 	if !s.open {
 		// Protect against closing already-closed resource, such as channels.
 		return nil
@@ -416,7 +426,6 @@ func (s *Store) Close(wait bool) error {
 		return err
 	}
 
-	s.open = false
 	return nil
 }
 
@@ -1179,8 +1188,8 @@ func (s *Store) DeregisterObserver(o *raft.Observer) {
 	s.raft.DeregisterObserver(o)
 }
 
-// RegisterLeaderChange registers channel which will receive a
-// signal when this node detects that the Leader changes.
+// RegisterLeaderChange registers the given channel which will
+// receive a signal when this node detects that the Leader changes.
 func (s *Store) RegisterLeaderChange(c chan<- struct{}) {
 	s.leaderObserversMu.Lock()
 	defer s.leaderObserversMu.Unlock()
