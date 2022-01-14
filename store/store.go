@@ -359,7 +359,6 @@ func (s *Store) Open() error {
 	s.raft = ra
 
 	// Open the observer channels.
-	s.observerDone = make(chan struct{})
 	s.observerChan = make(chan raft.Observation, observerChanLen)
 	s.observer = raft.NewObserver(s.observerChan, false, func(o *raft.Observation) bool {
 		_, ok := o.Data.(raft.LeaderObservation)
@@ -368,7 +367,7 @@ func (s *Store) Open() error {
 
 	// Register and listen for leader changes.
 	s.raft.RegisterObserver(s.observer)
-	go s.observe()
+	s.observerDone = s.observe()
 
 	s.open = true
 	return nil
@@ -1184,24 +1183,28 @@ func (s *Store) RegisterLeaderChange(c chan<- struct{}) {
 	s.leaderObservers = append(s.leaderObservers, c)
 }
 
-func (s *Store) observe() {
-	for {
-		select {
-		case <-s.observerChan:
-			s.leaderObserversMu.RLock()
-			for i := range s.leaderObservers {
-				select {
-				case s.leaderObservers[i] <- struct{}{}:
-					stats.Add(leaderChangesObserved, 1)
-				default:
-					stats.Add(leaderChangesDropped, 1)
+func (s *Store) observe() chan struct{} {
+	done := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-s.observerChan:
+				s.leaderObserversMu.RLock()
+				for i := range s.leaderObservers {
+					select {
+					case s.leaderObservers[i] <- struct{}{}:
+						stats.Add(leaderChangesObserved, 1)
+					default:
+						stats.Add(leaderChangesDropped, 1)
+					}
 				}
+				s.leaderObserversMu.RUnlock()
+			case <-done:
+				return
 			}
-			s.leaderObserversMu.RUnlock()
-		case <-s.observerDone:
-			return
 		}
-	}
+	}()
+	return done
 }
 
 // logSize returns the size of the Raft log on disk.
