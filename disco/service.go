@@ -86,7 +86,7 @@ func (s *Service) Register(id, apiAddr, addr string) (bool, string, error) {
 // anytime a leadership change is detected. It also does it periodically
 // to deal with any intermittent issues that caused Leadership information
 /// to go stale.
-func (s *Service) StartReporting(id, apiAddr, addr string) {
+func (s *Service) StartReporting(id, apiAddr, addr string) chan struct{} {
 	ticker := time.NewTicker(10 * s.UpdateInterval)
 	obCh := make(chan struct{}, leaderChanLen)
 	s.s.RegisterLeaderChange(obCh)
@@ -98,20 +98,27 @@ func (s *Service) StartReporting(id, apiAddr, addr string) {
 					err.Error())
 			}
 			if changed {
-				s.logger.Println("updated Leader due to leadership change")
+				s.logger.Printf("updated Leader API address to %s due to leadership change",
+					apiAddr)
 			}
 			s.updateContact(time.Now())
 		}
 	}
 
-	for {
-		select {
-		case <-ticker.C:
-			update(false)
-		case <-obCh:
-			update(true)
+	done := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				update(false)
+			case <-obCh:
+				update(true)
+			case <-done:
+				return
+			}
 		}
-	}
+	}()
+	return done
 }
 
 // Stats returns diagnostic information on the disco service.

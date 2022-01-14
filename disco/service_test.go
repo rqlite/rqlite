@@ -1,12 +1,13 @@
 package disco
 
 import (
+	"sync"
 	"testing"
 	"time"
 )
 
 func Test_NewServce(t *testing.T) {
-	s := NewService(&mockClient{})
+	s := NewService(&mockClient{}, &mockStore{})
 	if s == nil {
 		t.Fatalf("service is nil")
 	}
@@ -21,8 +22,9 @@ func Test_RegisterGetLeaderOK(t *testing.T) {
 		t.Fatalf("Leader initialized unexpectedly")
 		return false, nil
 	}
+	c := &mockStore{}
 
-	s := NewService(m)
+	s := NewService(m, c)
 	s.UpdateInterval = 10 * time.Millisecond
 
 	ok, addr, err := s.Register("1", "localhost:4001", "localhost:4002")
@@ -48,8 +50,9 @@ func Test_RegisterInitializeLeader(t *testing.T) {
 		}
 		return true, nil
 	}
+	c := &mockStore{}
 
-	s := NewService(m)
+	s := NewService(m, c)
 	s.UpdateInterval = 10 * time.Millisecond
 
 	ok, addr, err := s.Register("1", "localhost:4001", "localhost:4002")
@@ -64,10 +67,64 @@ func Test_RegisterInitializeLeader(t *testing.T) {
 	}
 }
 
+func Test_StartReportingTimer(t *testing.T) {
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	m := &mockClient{}
+	m.setLeaderFn = func(id, apiAddr, addr string) error {
+		defer wg.Done()
+		if id != "1" || apiAddr != "localhost:4001" || addr != "localhost:4002" {
+			t.Fatalf("wrong values passed to SetLeader")
+		}
+		return nil
+	}
+	c := &mockStore{}
+	c.isLeaderFn = func() bool {
+		return true
+	}
+
+	s := NewService(m, c)
+	s.UpdateInterval = 10 * time.Millisecond
+
+	go s.StartReporting("1", "localhost:4001", "localhost:4002")
+	wg.Wait()
+}
+
+func Test_StartReportingChange(t *testing.T) {
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	m := &mockClient{}
+	m.setLeaderFn = func(id, apiAddr, addr string) error {
+		defer wg.Done()
+		if id != "1" || apiAddr != "localhost:4001" || addr != "localhost:4002" {
+			t.Fatalf("wrong values passed to SetLeader")
+		}
+		return nil
+	}
+	c := &mockStore{}
+	c.isLeaderFn = func() bool {
+		return true
+	}
+	var ch chan<- struct{}
+	c.registerLeaderChangeFn = func(c chan<- struct{}) {
+		ch = c
+	}
+
+	s := NewService(m, c)
+	s.UpdateInterval = 10 * time.Minute
+	done := s.StartReporting("1", "localhost:4001", "localhost:4002")
+
+	ch <- struct{}{}
+	wg.Wait()
+	close(done)
+}
+
 type mockClient struct {
 	getLeaderFn        func() (id string, apiAddr string, addr string, ok bool, e error)
 	initializeLeaderFn func(id, apiAddr, addr string) (bool, error)
-	setLeaderFN        func(id, apiAddr, addr string) error
+	setLeaderFn        func(id, apiAddr, addr string) error
 }
 
 func (m *mockClient) GetLeader() (id string, apiAddr string, addr string, ok bool, e error) {
@@ -85,12 +142,30 @@ func (m *mockClient) InitializeLeader(id, apiAddr, addr string) (bool, error) {
 }
 
 func (m *mockClient) SetLeader(id, apiAddr, addr string) error {
-	if m.setLeaderFN != nil {
-		return m.setLeaderFN(id, apiAddr, addr)
+	if m.setLeaderFn != nil {
+		return m.setLeaderFn(id, apiAddr, addr)
 	}
 	return nil
 }
 
 func (m *mockClient) String() string {
 	return "mock"
+}
+
+type mockStore struct {
+	isLeaderFn             func() bool
+	registerLeaderChangeFn func(c chan<- struct{})
+}
+
+func (m *mockStore) IsLeader() bool {
+	if m.isLeaderFn != nil {
+		return m.isLeaderFn()
+	}
+	return false
+}
+
+func (m *mockStore) RegisterLeaderChange(c chan<- struct{}) {
+	if m.registerLeaderChangeFn != nil {
+		m.registerLeaderChangeFn(c)
+	}
 }
