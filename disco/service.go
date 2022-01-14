@@ -8,11 +8,18 @@ import (
 	"time"
 )
 
+// Client is the interface discovery clients must implement.
 type Client interface {
 	GetLeader() (id string, apiAddr string, addr string, ok bool, e error)
 	InitializeLeader(id, apiAddr, addr string) (bool, error)
 	SetLeader(id, apiAddr, addr string) error
 	fmt.Stringer
+}
+
+// Store is the interface the consensus system must implement.
+type Store interface {
+	IsLeader() bool
+	RegisterLeaderChange(c chan<- struct{})
 }
 
 // Service represents a Discovery Service instance.
