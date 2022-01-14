@@ -8,6 +8,10 @@ import (
 	"time"
 )
 
+const (
+	leaderChanLen = 5 // Support any fast back-to-back leadership changes.
+)
+
 // Client is the interface discovery clients must implement.
 type Client interface {
 	GetLeader() (id string, apiAddr string, addr string, ok bool, e error)
@@ -80,7 +84,7 @@ func (s *Service) Register(id, apiAddr, addr string) (bool, string, error) {
 /// to go stale.
 func (s *Service) StartReporting(id, apiAddr, addr string) {
 	ticker := time.NewTicker(6 * s.UpdateInterval)
-	obCh := make(chan struct{})
+	obCh := make(chan struct{}, leaderChanLen)
 	s.s.RegisterLeaderChange(obCh)
 
 	update := func(changed bool) {

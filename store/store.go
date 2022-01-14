@@ -60,6 +60,7 @@ const (
 	connectionTimeout   = 10 * time.Second
 	raftLogCacheSize    = 512
 	trailingScale       = 1.25
+	observerChanLen     = 5 // Support any fast back-to-back leadership changes.
 )
 
 const (
@@ -358,8 +359,8 @@ func (s *Store) Open() error {
 	s.raft = ra
 
 	// Open the observer channels.
-	s.observerDone = make(chan struct{}, 1)
-	s.observerChan = make(chan raft.Observation)
+	s.observerDone = make(chan struct{})
+	s.observerChan = make(chan raft.Observation, observerChanLen)
 	s.observer = raft.NewObserver(s.observerChan, false, func(o *raft.Observation) bool {
 		_, ok := o.Data.(raft.LeaderObservation)
 		return ok
@@ -374,7 +375,7 @@ func (s *Store) Open() error {
 }
 
 // Bootstrap executes a cluster bootstrap on this node, using the given
-// Servers as the configuration.
+// Serves as the configuration.
 func (s *Store) Bootstrap(servers ...*Server) error {
 	raftServers := make([]raft.Server, len(servers))
 	for i := range servers {
@@ -663,6 +664,10 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		"leader": map[string]string{
 			"node_id": leaderID,
 			"addr":    leaderAddr,
+		},
+		"observer": map[string]uint64{
+			"observed": s.observer.GetNumObserved(),
+			"dropped":  s.observer.GetNumDropped(),
 		},
 		"startup_on_disk":    s.StartupOnDisk,
 		"apply_timeout":      s.ApplyTimeout.String(),
@@ -1180,20 +1185,22 @@ func (s *Store) RegisterLeaderChange(c chan<- struct{}) {
 }
 
 func (s *Store) observe() {
-	select {
-	case <-s.observerChan:
-		s.leaderObserversMu.RLock()
-		for i := range s.leaderObservers {
-			select {
-			case s.leaderObservers[i] <- struct{}{}:
-				stats.Add(leaderChangesObserved, 1)
-			default:
-				stats.Add(leaderChangesDropped, 1)
+	for {
+		select {
+		case <-s.observerChan:
+			s.leaderObserversMu.RLock()
+			for i := range s.leaderObservers {
+				select {
+				case s.leaderObservers[i] <- struct{}{}:
+					stats.Add(leaderChangesObserved, 1)
+				default:
+					stats.Add(leaderChangesDropped, 1)
+				}
 			}
+			s.leaderObserversMu.RUnlock()
+		case <-s.observerDone:
+			return
 		}
-		s.leaderObserversMu.RUnlock()
-	case <-s.observerDone:
-		return
 	}
 }
 

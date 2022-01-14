@@ -257,14 +257,6 @@ func main() {
 	}
 	apiURL := fmt.Sprintf("%s://%s", apiProto, apiAdv)
 
-	// Tell the user the node is ready for HTTP, giving some advice on how to connect.
-	log.Printf("node HTTP API available at %s", apiURL)
-	h, p, err := net.SplitHostPort(apiAdv)
-	if err != nil {
-		log.Fatalf("advertised address is not valid: %s", err.Error())
-	}
-	log.Printf("connect using the command-line tool via 'rqlite -H %s -P %s'", h, p)
-
 	// Register remaining status providers.
 	httpServ.RegisterStatus("cluster", clstr)
 
@@ -343,9 +335,7 @@ func main() {
 		} else {
 			log.Println("preexisting node configuration detected, not registering with discovery service")
 		}
-		go discoService.StartReporting(nodeID, apiURL, raftAdv, func() bool {
-			return str.IsLeader()
-		})
+		go discoService.StartReporting(nodeID, apiURL, raftAdv)
 		httpServ.RegisterStatus("disco", discoService)
 	} else if isNew {
 		// Brand new node, told to bootstrap itself. So do it.
@@ -354,6 +344,14 @@ func main() {
 			log.Fatalf("failed to bootstrap single new node: %s", err.Error())
 		}
 	}
+
+	// Tell the user the node is ready for HTTP, giving some advice on how to connect.
+	log.Printf("node HTTP API available at %s", apiURL)
+	h, p, err := net.SplitHostPort(apiAdv)
+	if err != nil {
+		log.Fatalf("advertised address is not valid: %s", err.Error())
+	}
+	log.Printf("connect using the command-line tool via 'rqlite -H %s -P %s'", h, p)
 
 	// Block until signalled.
 	terminate := make(chan os.Signal, 1)
@@ -466,7 +464,7 @@ func createDiscoService(discoMode, discoKey, discoConfig string, str *store.Stor
 		return nil, fmt.Errorf("invalid disco service: %s", discoMode)
 	}
 
-	return disco.NewService(c), nil
+	return disco.NewService(c, str), nil
 }
 
 func startHTTPService(str *store.Store, cltr *cluster.Client, credStr *auth.CredentialsStore) (*httpd.Service, error) {
