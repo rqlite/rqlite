@@ -74,10 +74,10 @@ func Test_StartReportingTimer(t *testing.T) {
 
 	m := &mockClient{}
 	m.setLeaderFn = func(id, apiAddr, addr string) error {
-		defer func() { calledCh <- struct{}{} }()
 		if id != "1" || apiAddr != "localhost:4001" || addr != "localhost:4002" {
 			t.Fatalf("wrong values passed to SetLeader")
 		}
+		calledCh <- struct{}{}
 		return nil
 	}
 	c := &mockStore{}
