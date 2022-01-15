@@ -13,7 +13,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
-	"runtime/pprof"
 	"strings"
 	"time"
 
@@ -91,6 +90,10 @@ const desc = `rqlite is a lightweight, distributed relational database, which us
 storage engine. It provides an easy-to-use, fault-tolerant store for relational data.`
 
 func init() {
+	log.SetFlags(log.LstdFlags)
+	log.SetOutput(os.Stderr)
+	log.SetPrefix(fmt.Sprintf("[%s] ", name))
+
 	flag.StringVar(&nodeID, "node-id", "", "Unique name for node. If not set, set to Raft address")
 	flag.StringVar(&httpAddr, "http-addr", "localhost:4001", "HTTP server bind address. For HTTPS, set X.509 cert and key")
 	flag.StringVar(&httpAdv, "http-adv-addr", "", "Advertised HTTP address. If not set, same as HTTP server")
@@ -182,9 +185,6 @@ func main() {
 	fmt.Println(logo)
 
 	// Configure logging and pump out initial message.
-	log.SetFlags(log.LstdFlags)
-	log.SetOutput(os.Stderr)
-	log.SetPrefix(fmt.Sprintf("[%s] ", name))
 	log.Printf("%s starting, version %s, commit %s, branch %s, compiler %s", name, cmd.Version, cmd.Commit, cmd.Branch, runtime.Compiler)
 	log.Printf("%s, target architecture is %s, operating system target is %s", runtime.Version(), runtime.GOARCH, runtime.GOOS)
 	log.Printf("launch command: %s", strings.Join(os.Args, " "))
@@ -611,47 +611,4 @@ func idOrRaftAddr() string {
 		return nodeID
 	}
 	return raftAdv
-}
-
-// prof stores the file locations of active profiles.
-var prof struct {
-	cpu *os.File
-	mem *os.File
-}
-
-// startProfile initializes the CPU and memory profile, if specified.
-func startProfile(cpuprofile, memprofile string) {
-	if cpuprofile != "" {
-		f, err := os.Create(cpuprofile)
-		if err != nil {
-			log.Fatalf("failed to create CPU profile file at %s: %s", cpuprofile, err.Error())
-		}
-		log.Printf("writing CPU profile to: %s\n", cpuprofile)
-		prof.cpu = f
-		pprof.StartCPUProfile(prof.cpu)
-	}
-
-	if memprofile != "" {
-		f, err := os.Create(memprofile)
-		if err != nil {
-			log.Fatalf("failed to create memory profile file at %s: %s", cpuprofile, err.Error())
-		}
-		log.Printf("writing memory profile to: %s\n", memprofile)
-		prof.mem = f
-		runtime.MemProfileRate = 4096
-	}
-}
-
-// stopProfile closes the CPU and memory profiles if they are running.
-func stopProfile() {
-	if prof.cpu != nil {
-		pprof.StopCPUProfile()
-		prof.cpu.Close()
-		log.Println("CPU profiling stopped")
-	}
-	if prof.mem != nil {
-		pprof.Lookup("heap").WriteTo(prof.mem, 0)
-		prof.mem.Close()
-		log.Println("memory profiling stopped")
-	}
 }
