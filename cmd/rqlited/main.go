@@ -273,22 +273,6 @@ func main() {
 		}
 	}
 
-	// Add credentials to any join addresses, if necessary.
-	if credStr != nil && joinAs != "" {
-		var err error
-		pw, ok := credStr.Password(joinAs)
-		if !ok {
-			log.Fatalf("user %s does not exist in credential store", joinAs)
-		}
-		for i := range joins {
-			joins[i], err = cluster.AddUserInfo(joins[i], joinAs, pw)
-			if err != nil {
-				log.Fatalf("failed to use credential store join_as: %s", err.Error())
-			}
-		}
-		log.Println("added join_as identity from credential store")
-	}
-
 	// Create the cluster!
 	cfg := &createConfig{
 		apiURL:    apiURL,
@@ -512,7 +496,6 @@ func clusterService(tn cluster.Transport, db cluster.Database) (*cluster.Service
 type createConfig struct {
 	apiURL    string
 	joins     []string
-	joinSrcIP string
 	tlsConfig *tls.Config
 	hasPeers  bool
 	isNew     bool
@@ -532,6 +515,10 @@ func createCluster(cfg *createConfig, str *store.Store, httpServ *httpd.Service,
 	if len(cfg.joins) > 0 {
 		// Explicit join addresses supplied, so use them.
 		log.Println("explicit join addresses are:", cfg.joins)
+
+		if err := addJoinCreds(cfg.joins, joinAs, credStr); err != nil {
+			return fmt.Errorf("failed too add auth creds: %s", err.Error())
+		}
 
 		j, err := cluster.Join(joinSrcIP, cfg.joins, str.ID(), raftAdv, !raftNonVoter,
 			joinAttempts, joinInterval, cfg.tlsConfig)
@@ -569,6 +556,10 @@ func createCluster(cfg *createConfig, str *store.Store, httpServ *httpd.Service,
 		} else {
 			for {
 				log.Printf("discovery service returned %s as join address", addr)
+				if err := addJoinCreds([]string{addr}, joinAs, credStr); err != nil {
+					return fmt.Errorf("failed too add auth creds: %s", err.Error())
+				}
+
 				if j, err := cluster.Join(joinSrcIP, []string{addr}, str.ID(), raftAdv, !raftNonVoter,
 					joinAttempts, joinInterval, cfg.tlsConfig); err != nil {
 					log.Printf("failed to join cluster at %s: %s", addr, err.Error())
@@ -591,6 +582,27 @@ func createCluster(cfg *createConfig, str *store.Store, httpServ *httpd.Service,
 
 	go discoService.StartReporting(nodeID, cfg.apiURL, raftAdv)
 	httpServ.RegisterStatus("disco", discoService)
+	return nil
+}
+
+// addJoinCreds adds credentials to any join addresses, if necessary.
+func addJoinCreds(joins []string, joinAs string, credStr *auth.CredentialsStore) error {
+	if credStr == nil || joinAs == "" {
+		return nil
+	}
+
+	pw, ok := credStr.Password(joinAs)
+	if !ok {
+		return fmt.Errorf("user %s does not exist in credential store", joinAs)
+	}
+
+	var err error
+	for i := range joins {
+		joins[i], err = cluster.AddUserInfo(joins[i], joinAs, pw)
+		if err != nil {
+			return fmt.Errorf("failed to use credential store join_as: %s", err.Error())
+		}
+	}
 	return nil
 }
 
