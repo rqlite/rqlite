@@ -68,12 +68,13 @@ func Test_RegisterInitializeLeader(t *testing.T) {
 }
 
 func Test_StartReportingTimer(t *testing.T) {
-	var wg sync.WaitGroup
-	wg.Add(1)
+	// WaitGroups won't work because we don't know how many times
+	// setLeaderFn will be called.
+	calledCh := make(chan struct{}, 10)
 
 	m := &mockClient{}
 	m.setLeaderFn = func(id, apiAddr, addr string) error {
-		defer wg.Done()
+		defer func() { calledCh <- struct{}{} }()
 		if id != "1" || apiAddr != "localhost:4001" || addr != "localhost:4002" {
 			t.Fatalf("wrong values passed to SetLeader")
 		}
@@ -88,13 +89,11 @@ func Test_StartReportingTimer(t *testing.T) {
 	s.ReportInterval = 10 * time.Millisecond
 
 	go s.StartReporting("1", "localhost:4001", "localhost:4002")
-	wg.Wait()
+	<-calledCh
 }
 
 func Test_StartReportingChange(t *testing.T) {
 	var wg sync.WaitGroup
-	wg.Add(1)
-
 	m := &mockClient{}
 	m.setLeaderFn = func(id, apiAddr, addr string) error {
 		defer wg.Done()
@@ -112,10 +111,12 @@ func Test_StartReportingChange(t *testing.T) {
 		ch = c
 	}
 
+	wg.Add(1)
 	s := NewService(m, c)
-	s.ReportInterval = 10 * time.Minute
+	s.ReportInterval = 10 * time.Minute // Nothing will happen due to timer.
 	done := s.StartReporting("1", "localhost:4001", "localhost:4002")
 
+	// Signal a leadership change.
 	ch <- struct{}{}
 	wg.Wait()
 	close(done)
