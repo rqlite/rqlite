@@ -290,69 +290,17 @@ func main() {
 	}
 
 	// Create the cluster!
-	if len(joins) > 0 {
-		// Explicit join addresses supplied, so use them.
-		log.Println("explicit join addresses are:", joins)
-
-		if j, err := cluster.Join(joinSrcIP, joins, str.ID(), raftAdv, !raftNonVoter,
-			joinAttempts, joinInterval, &tlsConfig); err != nil {
-			log.Fatalf("failed to join cluster at %s: %s", joins, err.Error())
-		} else {
-			log.Println("successfully joined cluster at", j)
-		}
-	} else if discoMode != "" {
-		// No join addresses, but a disco service was selected. So use that.
-		log.Printf("discovery mode: %s", discoMode)
-		discoService, err := createDiscoService(discoMode, discoKey, discoConfig, str)
-		if err != nil {
-			log.Fatalf("failed to start discovery service: %s", err.Error())
-		}
-
-		nodes, err := str.Nodes()
-		if err != nil {
-			log.Fatalf("failed to check nodes: %s", err.Error())
-		}
-		if len(nodes) == 0 { // IsNew() is too strict.
-			log.Println("no preexisting nodes, registering with discovery service")
-			leader, addr, err := discoService.Register(nodeID, apiURL, raftAdv)
-			if err != nil {
-				log.Fatalf("failed to register with discovery service: %s", err.Error())
-			}
-			if leader {
-				log.Println("node registered as leader using discovery service")
-				if err := str.Bootstrap(store.NewServer(str.ID(), str.Addr(), true)); err != nil {
-					log.Fatalf("failed to bootstrap single new node: %s", err.Error())
-				}
-			} else {
-				for {
-					log.Printf("discovery service returned %s as join address", addr)
-					if j, err := cluster.Join(joinSrcIP, []string{addr}, str.ID(), raftAdv, !raftNonVoter,
-						joinAttempts, joinInterval, &tlsConfig); err != nil {
-						log.Printf("failed to join cluster at %s: %s", addr, err.Error())
-
-						time.Sleep(time.Second)
-						_, addr, err = discoService.Register(nodeID, apiURL, raftAdv)
-						if err != nil {
-							log.Printf("failed to get updated leader: %s", err.Error())
-						}
-						continue
-					} else {
-						log.Println("successfully joined cluster at", j)
-						break
-					}
-				}
-			}
-		} else {
-			log.Println("preexisting node configuration detected, not registering with discovery service")
-		}
-		go discoService.StartReporting(nodeID, apiURL, raftAdv)
-		httpServ.RegisterStatus("disco", discoService)
-	} else if isNew {
-		// Brand new node, told to bootstrap itself. So do it.
-		log.Println("bootstraping single new node")
-		if err := str.Bootstrap(store.NewServer(str.ID(), str.Addr(), true)); err != nil {
-			log.Fatalf("failed to bootstrap single new node: %s", err.Error())
-		}
+	cfg := &createConfig{
+		apiURL:    apiURL,
+		joins:     joins,
+		tlsConfig: &tlsConfig,
+		isNew:     isNew,
+	}
+	if nodes, err := str.Nodes(); err != nil {
+		cfg.hasPeers = len(nodes) > 0
+	}
+	if err := createCluster(cfg, str, httpServ, credStr); err != nil {
+		log.Fatalf("clustering failure: %s", err.Error())
 	}
 
 	// Tell the user the node is ready for HTTP, giving some advice on how to connect.
@@ -559,6 +507,91 @@ func clusterService(tn cluster.Transport, db cluster.Database) (*cluster.Service
 		return nil, err
 	}
 	return c, nil
+}
+
+type createConfig struct {
+	apiURL    string
+	joins     []string
+	joinSrcIP string
+	tlsConfig *tls.Config
+	hasPeers  bool
+	isNew     bool
+}
+
+func createCluster(cfg *createConfig, str *store.Store, httpServ *httpd.Service,
+	credStr *auth.CredentialsStore) error {
+	if len(cfg.joins) == 0 && discoMode == "" && cfg.isNew {
+		// Brand new node, told to bootstrap itself. So do it.
+		log.Println("bootstraping single new node")
+		if err := str.Bootstrap(store.NewServer(str.ID(), str.Addr(), true)); err != nil {
+			return fmt.Errorf("failed to bootstrap single new node: %s", err.Error())
+		}
+		return nil
+	}
+
+	if len(cfg.joins) > 0 {
+		// Explicit join addresses supplied, so use them.
+		log.Println("explicit join addresses are:", cfg.joins)
+
+		j, err := cluster.Join(joinSrcIP, cfg.joins, str.ID(), raftAdv, !raftNonVoter,
+			joinAttempts, joinInterval, cfg.tlsConfig)
+		if err != nil {
+			return fmt.Errorf("failed to join cluster at %s: %s", cfg.joins, err.Error())
+		}
+		log.Println("successfully joined cluster at", j)
+		return nil
+	}
+
+	if discoMode == "" {
+		// No more clustering techniques to try. Node will just sit, probably using
+		// existing Raft state.
+		return nil
+	}
+
+	log.Printf("discovery mode: %s", discoMode)
+	discoService, err := createDiscoService(discoMode, discoKey, discoConfig, str)
+	if err != nil {
+		return fmt.Errorf("failed to start discovery service: %s", err.Error())
+	}
+
+	if !cfg.hasPeers {
+		log.Println("no preexisting nodes, registering with discovery service")
+
+		leader, addr, err := discoService.Register(str.ID(), cfg.apiURL, raftAdv)
+		if err != nil {
+			return fmt.Errorf("failed to register with discovery service: %s", err.Error())
+		}
+		if leader {
+			log.Println("node registered as leader using discovery service")
+			if err := str.Bootstrap(store.NewServer(str.ID(), str.Addr(), true)); err != nil {
+				return fmt.Errorf("failed to bootstrap single new node: %s", err.Error())
+			}
+		} else {
+			for {
+				log.Printf("discovery service returned %s as join address", addr)
+				if j, err := cluster.Join(joinSrcIP, []string{addr}, str.ID(), raftAdv, !raftNonVoter,
+					joinAttempts, joinInterval, cfg.tlsConfig); err != nil {
+					log.Printf("failed to join cluster at %s: %s", addr, err.Error())
+
+					time.Sleep(time.Second)
+					_, addr, err = discoService.Register(str.ID(), cfg.apiURL, raftAdv)
+					if err != nil {
+						log.Printf("failed to get updated leader: %s", err.Error())
+					}
+					continue
+				} else {
+					log.Println("successfully joined cluster at", j)
+					break
+				}
+			}
+		}
+	} else {
+		log.Println("preexisting node configuration detected, not registering with discovery service")
+	}
+
+	go discoService.StartReporting(nodeID, cfg.apiURL, raftAdv)
+	httpServ.RegisterStatus("disco", discoService)
+	return nil
 }
 
 func idOrRaftAddr() string {
