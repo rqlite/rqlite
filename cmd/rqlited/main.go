@@ -140,10 +140,8 @@ func main() {
 
 	// Create the cluster!
 	createCfg := &createConfig{
-		apiURL:    cfg.HTTPURL(),
 		joins:     joins,
 		tlsConfig: &tlsConfig,
-		isNew:     isNew,
 	}
 	if nodes, err := str.Nodes(); err != nil {
 		createCfg.hasPeers = len(nodes) > 0
@@ -343,16 +341,14 @@ func clusterService(cfg *Config, tn cluster.Transport, db cluster.Database) (*cl
 }
 
 type createConfig struct {
-	apiURL    string
 	joins     []string
 	tlsConfig *tls.Config
 	hasPeers  bool
-	isNew     bool
 }
 
 func createCluster(cfg *Config, createCfg *createConfig, str *store.Store, httpServ *httpd.Service,
 	credStr *auth.CredentialsStore) error {
-	if len(createCfg.joins) == 0 && cfg.DiscoMode == "" && createCfg.isNew {
+	if len(createCfg.joins) == 0 && cfg.DiscoMode == "" && createCfg.hasPeers {
 		// Brand new node, told to bootstrap itself. So do it.
 		log.Println("bootstraping single new node")
 		if err := str.Bootstrap(store.NewServer(str.ID(), str.Addr(), true)); err != nil {
