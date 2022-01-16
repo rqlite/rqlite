@@ -5,65 +5,167 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"strings"
 	"time"
 )
 
+// Config represents the configuration as set by command-line flags.
+// All variables will be set, unless explicit noted.
 type Config struct {
-	DataPath               string
-	HTTPAddr               string
-	HTTPAdv                string
-	TLS1011                bool
-	AuthFile               string
-	X509CACert             string
-	X509Cert               string
-	X509Key                string
-	NodeEncrypt            bool
-	NodeX509CACert         string
-	NodeX509Cert           string
-	NodeX509Key            string
-	NodeID                 string
-	RaftAddr               string
-	RaftAdv                string
-	JoinSrcIP              string
-	JoinAddr               string
-	JoinAs                 string
-	JoinAttempts           int
-	JoinInterval           time.Duration
-	NoVerify               bool
-	NoNodeVerify           bool
-	DiscoMode              string
-	DiscoKey               string
-	DiscoConfig            string
-	Expvar                 bool
-	PprofEnabled           bool
-	OnDisk                 bool
-	OnDiskPath             string
-	OnDiskStartup          bool
-	FKConstraints          bool
-	RaftLogLevel           string
-	RaftNonVoter           bool
-	RaftSnapThreshold      uint64
-	RaftSnapInterval       time.Duration
+	// DataPath is path to node data. Always set.
+	DataPath string
+
+	// HTTPAddr is the bind network address for the HTTP Server.
+	// It never includes a trailing HTTP or HTTPS.
+	HTTPAddr string
+
+	// HTTPAdv is the advertised HTTP server network.
+	HTTPAdv string
+
+	// TLS1011 indicates whether the node should support deprecated
+	// encryption standards.
+	TLS1011 bool
+
+	// AuthFile is the path to the authentication file. May not be set.
+	AuthFile string
+
+	// X509CACert is the path the root-CA certficate file for when this
+	// node contacts other nodes' HTTP servers. May not be set.
+	X509CACert string
+
+	// X509Cert is the path to the X509 cert for the HTTP server. May not be set.
+	X509Cert string
+
+	// X509Key is the path to the private key for the HTTP server. May not be set.
+	X509Key string
+
+	// NodeEncrypt indicates whether node encryption should be enabled.
+	NodeEncrypt bool
+
+	// NodeX509CACert is the path the root-CA certficate file for when this
+	// node contacts other nodes' Raft servers. May not be set.
+	NodeX509CACert string
+
+	// NodeX509Cert is the path to the X509 cert for the Raft server. May not be set.
+	NodeX509Cert string
+
+	// NodeX509Key is the path to the X509 key for the Raft server. May not be set.
+	NodeX509Key string
+
+	// NodeID is the Raft ID for the node.
+	NodeID string
+
+	// RaftAddr is the bind network address for the Raft server.
+	RaftAddr string
+
+	// RaftAdv is the advertised Raft server address.
+	RaftAdv string
+
+	// JoinSrcIP sets the source IP address during Join request. May not be set.
+	JoinSrcIP string
+
+	// JoinAddr is the list addresses to use for a join attempt. Each address
+	// will include the proto (HTTP or HTTPS) and will never include the node's
+	// own HTTP server address. May not be set.
+	JoinAddr string
+
+	// JoinAs sets the user join attempts should be performed as. May not be set.
+	JoinAs string
+
+	// JoinAttempts is the number of times a node should attempt to join using a
+	// given address.
+	JoinAttempts int
+
+	// JoinInterval is the time between retrying failed join operations.
+	JoinInterval time.Duration
+
+	// NoHTTPVerify disables checking other nodes' HTTP X509 certs for validity.
+	NoHTTPVerify bool
+
+	// NoNodeVerify disables checking other nodes' Node X509 certs for validity.
+	NoNodeVerify bool
+
+	// DisoMode sets the discovery mode. May not be set.
+	DiscoMode string
+
+	// DiscoKey sets the discovery prefix key.
+	DiscoKey string
+
+	// DiscoConfig sets the path to any discovery configuration file. May not be set.
+	DiscoConfig string
+
+	// Expvar enables go/expvar information. Defaults to true.
+	Expvar bool
+
+	// PprofEnabled enables Go PProf information. Defaults to true.
+	PprofEnabled bool
+
+	// OnDisk enables on-disk mode.
+	OnDisk bool
+
+	// OnDiskPath sets the path to the SQLite file. May not be set.
+	OnDiskPath string
+
+	// OnDiskStartup disables the in-memory on-disk startup optimization.
+	OnDiskStartup bool
+
+	// FKConstraints enables SQLite foreign key constraints.
+	FKConstraints bool
+
+	// RaftLogLevel sets the minimum logging level for the Raft subsystem.
+	RaftLogLevel string
+
+	// RaftNonVoter controls whether this node is a voting, read-only node.
+	RaftNonVoter bool
+
+	// RaftSnapThreshold is the number of outstanding log entries that trigger snapshot.
+	RaftSnapThreshold uint64
+
+	// RaftSnapInterval sets the threshold check interval.
+	RaftSnapInterval time.Duration
+
+	// RaftLeaderLeaseTimeout sets the leader lease timeout.
 	RaftLeaderLeaseTimeout time.Duration
-	RaftHeartbeatTimeout   time.Duration
-	RaftElectionTimeout    time.Duration
-	RaftApplyTimeout       time.Duration
-	RaftOpenTimeout        time.Duration
-	RaftWaitForLeader      bool
-	RaftShutdownOnRemove   bool
-	CompressionSize        int
-	CompressionBatch       int
-	ShowVersion            bool
-	CPUProfile             string
-	MemProfile             string
+
+	// RaftHeartbeatTimeout sets the heartbeast timeout.
+	RaftHeartbeatTimeout time.Duration
+
+	// RaftElectionTimeout sets the election timeout.
+	RaftElectionTimeout time.Duration
+
+	// RaftApplyTimeout sets the Log-apply timeout.
+	RaftApplyTimeout time.Duration
+
+	// RaftOpenTimeout sets the Raft store open timeout.
+	RaftOpenTimeout time.Duration
+
+	// RaftShutdownOnRemove sets whether Raft should be shutdown if the node is removed
+	RaftShutdownOnRemove bool
+
+	// CompressionSize sets request query size for compression attempt
+	CompressionSize int
+
+	// CompressionBatch sets request batch threshold for compression attempt.
+	CompressionBatch int
+
+	// ShowVersion instructs the node to show version information and exit.
+	ShowVersion bool
+
+	// CPUProfile enables CPU profiling.
+	CPUProfile string
+
+	//MemProfile enables memory profiling.
+	MemProfile string
 }
 
+// BuildInfo is build information for display at command line.
 type BuildInfo struct {
 	Version string
 	Commit  string
 	Branch  string
 }
 
+// ParseFlags parses the command line, and returns the configuration.
 func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	if flag.Parsed() {
 		return nil, fmt.Errorf("command-line flags already parsed")
@@ -71,13 +173,13 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	config := Config{}
 
 	flag.StringVar(&config.NodeID, "node-id", "", "Unique name for node. If not set, set to advertised Raft address")
-	flag.StringVar(&config.HTTPAddr, "http-addr", "localhost:4001", "HTTP server bind address. For HTTPS, set X.509 cert and key")
+	flag.StringVar(&config.HTTPAddr, "http-addr", "localhost:4001", "HTTP server bind address. To enable HTTPS, set X.509 cert and key")
 	flag.StringVar(&config.HTTPAdv, "http-adv-addr", "", "Advertised HTTP address. If not set, same as HTTP server bind")
 	flag.BoolVar(&config.TLS1011, "tls1011", false, "Support deprecated TLS versions 1.0 and 1.1")
 	flag.StringVar(&config.X509CACert, "http-ca-cert", "", "Path to root X.509 certificate for HTTP endpoint")
 	flag.StringVar(&config.X509Cert, "http-cert", "", "Path to X.509 certificate for HTTP endpoint")
 	flag.StringVar(&config.X509Key, "http-key", "", "Path to X.509 private key for HTTP endpoint")
-	flag.BoolVar(&config.NoVerify, "http-no-verify", false, "Skip verification of remote HTTPS cert when joining cluster")
+	flag.BoolVar(&config.NoHTTPVerify, "http-no-verify", false, "Skip verification of remote HTTPS cert when joining cluster")
 	flag.BoolVar(&config.NodeEncrypt, "node-encrypt", false, "Enable node-to-node encryption")
 	flag.StringVar(&config.NodeX509CACert, "node-ca-cert", "", "Path to root X.509 certificate for node-to-node encryption")
 	flag.StringVar(&config.NodeX509Cert, "node-cert", "cert.pem", "Path to X.509 certificate for node-to-node encryption")
@@ -106,7 +208,6 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	flag.DurationVar(&config.RaftElectionTimeout, "raft-election-timeout", time.Second, "Raft election timeout")
 	flag.DurationVar(&config.RaftApplyTimeout, "raft-apply-timeout", 10*time.Second, "Raft apply timeout")
 	flag.DurationVar(&config.RaftOpenTimeout, "raft-open-timeout", 120*time.Second, "Time for initial Raft logs to be applied. Use 0s duration to skip wait")
-	flag.BoolVar(&config.RaftWaitForLeader, "raft-leader-wait", true, "Node waits for a leader before answering requests")
 	flag.Uint64Var(&config.RaftSnapThreshold, "raft-snap", 8192, "Number of outstanding log entries that trigger snapshot")
 	flag.DurationVar(&config.RaftSnapInterval, "raft-snap-int", 30*time.Second, "Snapshot threshold check interval")
 	flag.DurationVar(&config.RaftLeaderLeaseTimeout, "raft-leader-lease-timeout", 0, "Raft leader lease timeout. Use 0s for Raft default")
@@ -121,29 +222,27 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 		fmt.Fprintf(os.Stderr, "Usage: %s [flags] <data directory>\n", name)
 		flag.PrintDefaults()
 	}
+	flag.Parse()
 
 	if config.ShowVersion {
-		fmt.Printf("%s %s %s %s %s (commit %s, branch %s, compiler %s)\n",
+		msg := fmt.Sprintf("%s %s %s %s %s (commit %s, branch %s, compiler %s)\n",
 			name, build.Version, runtime.GOOS, runtime.GOARCH, runtime.Version(), build.Commit, build.Branch, runtime.Compiler)
-		os.Exit(0)
+		errorExit(0, msg)
 	}
 
 	if config.OnDiskPath != "" && !config.OnDisk {
-		fmt.Fprintf(os.Stderr, "fatal: on-disk-path is set, but on-disk is not\n")
-		os.Exit(1)
+		errorExit(1, "fatal: on-disk-path is set, but on-disk is not\n")
 	}
 
 	// Ensure the data path is set.
 	if flag.NArg() < 1 {
-		fmt.Fprintf(os.Stderr, "fatal: no data directory set\n")
-		os.Exit(1)
+		errorExit(1, "fatal: no data directory set\n")
 	}
 	config.DataPath = flag.Arg(0)
 
 	// Ensure no args come after the data directory.
 	if flag.NArg() > 1 {
-		fmt.Fprintf(os.Stderr, "fatal: arguments after data directory are not accepted\n")
-		os.Exit(1)
+		errorExit(1, "fatal: arguments after data directory are not accepted\n")
 	}
 
 	// Enforce policies regarding addresses
@@ -154,11 +253,20 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 		config.HTTPAdv = config.HTTPAddr
 	}
 
+	if strings.HasPrefix(strings.ToLower(config.HTTPAddr), "http") ||
+		strings.HasPrefix(strings.ToLower(config.HTTPAdv), "http") {
+		errorExit(1, "fatal: HTTP options should not include protocol (http:// or https://)\n")
+	}
+
 	// Node ID policy
 	if config.NodeID == "" {
 		config.NodeID = config.RaftAdv
 	}
 
-	flag.Parse()
 	return &config, nil
+}
+
+func errorExit(code int, msg string) {
+	fmt.Fprintf(os.Stderr, msg)
+	os.Exit(code)
 }

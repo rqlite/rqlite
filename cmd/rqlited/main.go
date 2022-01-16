@@ -48,7 +48,11 @@ func init() {
 }
 
 func main() {
-	cfg, err := ParseFlags(name, desc, nil) // XX
+	cfg, err := ParseFlags(name, desc, &BuildInfo{
+		Version: cmd.Version,
+		Commit:  cmd.Commit,
+		Branch:  cmd.Branch,
+	})
 	if err != nil {
 		log.Fatalf("failed to parse command-line flags: %s", err.Error())
 	}
@@ -84,7 +88,7 @@ func main() {
 
 	// Determine join addresses
 	var joins []string
-	joins, err = determineJoinAddresses(cfg, isNew)
+	joins, err = determineJoinAddresses(cfg)
 	if err != nil {
 		log.Fatalf("unable to determine join addresses: %s", err.Error())
 	}
@@ -132,7 +136,7 @@ func main() {
 	// Register remaining status providers.
 	httpServ.RegisterStatus("cluster", clstr)
 
-	tlsConfig := tls.Config{InsecureSkipVerify: cfg.NoVerify}
+	tlsConfig := tls.Config{InsecureSkipVerify: cfg.NoHTTPVerify}
 	if cfg.X509CACert != "" {
 		asn1Data, err := ioutil.ReadFile(cfg.X509CACert)
 		if err != nil {
@@ -180,20 +184,19 @@ func main() {
 	log.Println("rqlite server stopped")
 }
 
-func determineJoinAddresses(cfg *Config, isNew bool) ([]string, error) {
+func determineJoinAddresses(cfg *Config) ([]string, error) {
 	var addrs []string
 	if cfg.JoinAddr != "" {
-		// Explicit join addresses are first priority.
 		addrs = strings.Split(cfg.JoinAddr, ",")
 	}
 
 	// It won't work to attempt a self-join, so remove any such address.
 	var validAddrs []string
 	for i := range addrs {
-		// if addrs[i] == cfg.HTTPAdv || addrs[i] == fmt.Sprintf("http://%s", apiAdv) {
-		// 	log.Printf("ignoring join address %s equal to this node's address", addrs[i])
-		// 	continue
-		// }
+		if addrs[i] == cfg.HTTPAdv || addrs[i] == cfg.HTTPAddr {
+			log.Printf("ignoring join address %s equal to this node's address", addrs[i])
+			continue
+		}
 		validAddrs = append(validAddrs, addrs[i])
 	}
 

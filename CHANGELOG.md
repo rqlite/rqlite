@@ -4,6 +4,7 @@
 - legacy discovery is now not supported by 7.0.0. If you need it, use older software. Legacy disco might be put back in though.
 - no special upgrading needed, unless you used disco service before.
 - CLI command line params changed, to be simpler.
+- RaftWaitForLeader removed. Use /readyz
 
 ### New features
 - [PR #957](https://github.com/rqlite/rqlite/pull/957): Support autoclustering via [Consul](https://www.consul.io/) and [etcd](https://etcd.io/).
