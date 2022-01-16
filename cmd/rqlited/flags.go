@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"net"
 	"os"
 	"runtime"
 	"strings"
@@ -158,6 +159,16 @@ type Config struct {
 	MemProfile string
 }
 
+// HTTPURL returns the fully-formed, advertised HTTP API address for this config, including
+// protocol, host and port.
+func (c *Config) HTTPURL() string {
+	apiProto := "http"
+	if c.X509Cert != "" {
+		apiProto = "https"
+	}
+	return fmt.Sprintf("%s://%s", apiProto, c.HTTPAdv)
+}
+
 // BuildInfo is build information for display at command line.
 type BuildInfo struct {
 	Version string
@@ -253,9 +264,22 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 		config.HTTPAdv = config.HTTPAddr
 	}
 
+	// Perfom some address validity checks.
 	if strings.HasPrefix(strings.ToLower(config.HTTPAddr), "http") ||
 		strings.HasPrefix(strings.ToLower(config.HTTPAdv), "http") {
 		errorExit(1, "fatal: HTTP options should not include protocol (http:// or https://)\n")
+	}
+	if _, _, err := net.SplitHostPort(config.HTTPAddr); err != nil {
+		errorExit(1, "HTTP bind address not valid")
+	}
+	if _, _, err := net.SplitHostPort(config.HTTPAdv); err != nil {
+		errorExit(1, "HTTP advertised address not valid")
+	}
+	if _, _, err := net.SplitHostPort(config.RaftAddr); err != nil {
+		errorExit(1, "Raft bind address not valid")
+	}
+	if _, _, err := net.SplitHostPort(config.RaftAdv); err != nil {
+		errorExit(1, "Raft advertised address not valid")
 	}
 
 	// Node ID policy

@@ -122,17 +122,6 @@ func main() {
 		log.Fatalf("failed to start HTTP server: %s", err.Error())
 	}
 
-	// Form full advertised API URL
-	apiProto := "http"
-	if httpServ.HTTPS() {
-		apiProto = "https"
-	}
-	apiAdv := cfg.HTTPAddr
-	if cfg.HTTPAdv != "" {
-		apiAdv = cfg.HTTPAdv
-	}
-	apiURL := fmt.Sprintf("%s://%s", apiProto, apiAdv)
-
 	// Register remaining status providers.
 	httpServ.RegisterStatus("cluster", clstr)
 
@@ -151,7 +140,7 @@ func main() {
 
 	// Create the cluster!
 	createCfg := &createConfig{
-		apiURL:    apiURL,
+		apiURL:    cfg.HTTPURL(),
 		joins:     joins,
 		tlsConfig: &tlsConfig,
 		isNew:     isNew,
@@ -164,11 +153,8 @@ func main() {
 	}
 
 	// Tell the user the node is ready for HTTP, giving some advice on how to connect.
-	log.Printf("node HTTP API available at %s", apiURL)
-	h, p, err := net.SplitHostPort(apiAdv)
-	if err != nil {
-		log.Fatalf("advertised address is not valid: %s", err.Error())
-	}
+	log.Printf("node HTTP API available at %s", cfg.HTTPURL())
+	h, p, _ := net.SplitHostPort(cfg.HTTPAdv)
 	log.Printf("connect using the command-line tool via 'rqlite -H %s -P %s'", h, p)
 
 	// Block until signalled.
