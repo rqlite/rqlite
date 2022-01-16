@@ -81,7 +81,7 @@ func main() {
 	log.Printf("Raft TCP mux Listener registered with %d", cluster.MuxRaftHeader)
 
 	// Create the store.
-	str, isNew, err := createStore(cfg, raftTn)
+	str, err := createStore(cfg, raftTn)
 	if err != nil {
 		log.Fatalf("failed to create store: %s", err.Error())
 	}
@@ -139,14 +139,11 @@ func main() {
 	}
 
 	// Create the cluster!
-	createCfg := &createConfig{
-		joins:     joins,
-		tlsConfig: &tlsConfig,
+	nodes, err := str.Nodes()
+	if err != nil {
+		log.Fatalf("failed to get nodes %s", err.Error())
 	}
-	if nodes, err := str.Nodes(); err != nil {
-		createCfg.hasPeers = len(nodes) > 0
-	}
-	if err := createCluster(cfg, createCfg, str, httpServ, credStr); err != nil {
+	if err := createCluster(cfg, joins, &tlsConfig, len(nodes) > 0, str, httpServ, credStr); err != nil {
 		log.Fatalf("clustering failure: %s", err.Error())
 	}
 
@@ -187,10 +184,10 @@ func determineJoinAddresses(cfg *Config) ([]string, error) {
 	return validAddrs, nil
 }
 
-func createStore(cfg *Config, ln *tcp.Layer) (*store.Store, bool, error) {
+func createStore(cfg *Config, ln *tcp.Layer) (*store.Store, error) {
 	dataPath, err := filepath.Abs(cfg.DataPath)
 	if err != nil {
-		return nil, false, fmt.Errorf("failed to determine absolute data path: %s", err.Error())
+		return nil, fmt.Errorf("failed to determine absolute data path: %s", err.Error())
 	}
 	dbConf := store.NewDBConfig(!cfg.OnDisk)
 	dbConf.OnDiskPath = cfg.OnDiskPath
@@ -221,7 +218,7 @@ func createStore(cfg *Config, ln *tcp.Layer) (*store.Store, bool, error) {
 		log.Printf("preexisting node state detected in %s", dataPath)
 	}
 
-	return str, isNew, nil
+	return str, nil
 }
 
 func createDiscoService(cfg *Config, str *store.Store) (*disco.Service, error) {
@@ -340,15 +337,9 @@ func clusterService(cfg *Config, tn cluster.Transport, db cluster.Database) (*cl
 	return c, nil
 }
 
-type createConfig struct {
-	joins     []string
-	tlsConfig *tls.Config
-	hasPeers  bool
-}
-
-func createCluster(cfg *Config, createCfg *createConfig, str *store.Store, httpServ *httpd.Service,
-	credStr *auth.CredentialsStore) error {
-	if len(createCfg.joins) == 0 && cfg.DiscoMode == "" && createCfg.hasPeers {
+func createCluster(cfg *Config, joins []string, tlsConfig *tls.Config, hasPeers bool, str *store.Store,
+	httpServ *httpd.Service, credStr *auth.CredentialsStore) error {
+	if len(joins) == 0 && cfg.DiscoMode == "" && hasPeers {
 		// Brand new node, told to bootstrap itself. So do it.
 		log.Println("bootstraping single new node")
 		if err := str.Bootstrap(store.NewServer(str.ID(), str.Addr(), true)); err != nil {
@@ -357,18 +348,18 @@ func createCluster(cfg *Config, createCfg *createConfig, str *store.Store, httpS
 		return nil
 	}
 
-	if len(createCfg.joins) > 0 {
+	if len(joins) > 0 {
 		// Explicit join addresses supplied, so use them.
-		log.Println("explicit join addresses are:", createCfg.joins)
+		log.Println("explicit join addresses are:", joins)
 
-		if err := addJoinCreds(createCfg.joins, cfg.JoinAs, credStr); err != nil {
+		if err := addJoinCreds(joins, cfg.JoinAs, credStr); err != nil {
 			return fmt.Errorf("failed too add auth creds: %s", err.Error())
 		}
 
-		j, err := cluster.Join(cfg.JoinSrcIP, createCfg.joins, str.ID(), cfg.RaftAdv, !cfg.RaftNonVoter,
-			cfg.JoinAttempts, cfg.JoinInterval, createCfg.tlsConfig)
+		j, err := cluster.Join(cfg.JoinSrcIP, joins, str.ID(), cfg.RaftAdv, !cfg.RaftNonVoter,
+			cfg.JoinAttempts, cfg.JoinInterval, tlsConfig)
 		if err != nil {
-			return fmt.Errorf("failed to join cluster at %s: %s", createCfg.joins, err.Error())
+			return fmt.Errorf("failed to join cluster at %s: %s", joins, err.Error())
 		}
 		log.Println("successfully joined cluster at", j)
 		return nil
@@ -386,10 +377,10 @@ func createCluster(cfg *Config, createCfg *createConfig, str *store.Store, httpS
 		return fmt.Errorf("failed to start discovery service: %s", err.Error())
 	}
 
-	if !createCfg.hasPeers {
+	if !hasPeers {
 		log.Println("no preexisting nodes, registering with discovery service")
 
-		leader, addr, err := discoService.Register(str.ID(), createCfg.apiURL, cfg.RaftAdv)
+		leader, addr, err := discoService.Register(str.ID(), cfg.HTTPURL(), cfg.RaftAdv)
 		if err != nil {
 			return fmt.Errorf("failed to register with discovery service: %s", err.Error())
 		}
@@ -406,11 +397,11 @@ func createCluster(cfg *Config, createCfg *createConfig, str *store.Store, httpS
 				}
 
 				if j, err := cluster.Join(cfg.JoinSrcIP, []string{addr}, str.ID(), cfg.RaftAdv, !cfg.RaftNonVoter,
-					cfg.JoinAttempts, cfg.JoinInterval, createCfg.tlsConfig); err != nil {
+					cfg.JoinAttempts, cfg.JoinInterval, tlsConfig); err != nil {
 					log.Printf("failed to join cluster at %s: %s", addr, err.Error())
 
 					time.Sleep(time.Second)
-					_, addr, err = discoService.Register(str.ID(), createCfg.apiURL, cfg.RaftAdv)
+					_, addr, err = discoService.Register(str.ID(), cfg.HTTPURL(), cfg.RaftAdv)
 					if err != nil {
 						log.Printf("failed to get updated leader: %s", err.Error())
 					}
@@ -425,7 +416,7 @@ func createCluster(cfg *Config, createCfg *createConfig, str *store.Store, httpS
 		log.Println("preexisting node configuration detected, not registering with discovery service")
 	}
 
-	go discoService.StartReporting(cfg.NodeID, createCfg.apiURL, cfg.RaftAdv)
+	go discoService.StartReporting(cfg.NodeID, cfg.HTTPURL(), cfg.RaftAdv)
 	httpServ.RegisterStatus("disco", discoService)
 	return nil
 }
