@@ -1,10 +1,13 @@
 ## 7.0.0 (unreleased)
-- new autoclustering service, high-level description how to use it.
-- Disco-related command line options have changed. Old options no longer valid.
-- legacy discovery is now not supported by 7.0.0. If you need it, use older software. Legacy disco might be put back in though.
-- no special upgrading needed, unless you used disco service before.
-- CLI command line params changed, to be simpler.
-- RaftWaitForLeader removed. Use /readyz
+This release introduces new node-discovery integration with [Consul](https://www.consul.io/) and [etcd](https://etcd.io/). By using one of those systems with rqlite, automatic clustering of rqlite is much easier when one of those systems is available. The legacy Discovery mode is not supported by release 7.0, but may be supported in a future release. So for now if you wish to continue using legacy Discovery, you will need to run rqlite 6.x, or earlier.
+
+See the [new documentation](https://github.com/rqlite/rqlite/blob/master/DOC/CLUSTER_DISOVERY.md) for full details on using Consul and etcd.
+
+### Upgrading
+There are some other small changes in release 7.0, but most users of rqlite can upgrade to 7.0 without doing anything special -- simply download and run the 7.0 release.
+- The disco-related command-line arguments have changed, to support Consul and etcd. If you wish to continue to use legacy discovery, you can't upgrade to 7.0 -- or consider using Consul or etcd for node-discovery.
+- The command-line argument `-RaftWaitForLeader` has been removed. If you need to wait for a node to have a Leader, you should poll the `/readyz` endpoint.
+- The CLI command-line arguments for passing the rqlite host and port have changed. A single command-line argument `-H` now takes a comman-delimited list of fully-qualified HTTP endpoints.
 
 ### New features
 - [PR #957](https://github.com/rqlite/rqlite/pull/957): Support autoclustering via [Consul](https://www.consul.io/) and [etcd](https://etcd.io/).
