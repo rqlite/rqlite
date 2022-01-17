@@ -7,6 +7,15 @@ import (
 	"testing"
 )
 
+func TestClient_InvalidHost(t *testing.T) {
+	if _, err := NewClient(http.DefaultClient, []string{"127.0.0.1:4001"}); err == nil {
+		t.Fatalf(`expected "%s" when creating client with invalid host`, ErrProtocolNotSpecified)
+	}
+	if _, err := NewClient(http.DefaultClient, []string{"http://127.0.0.1", "127.0.0.1:4001"}); err == nil {
+		t.Fatalf(`expected "%s" when creating client with invalid host`, ErrProtocolNotSpecified)
+	}
+}
+
 func TestClient_QueryWhenAllAvailable(t *testing.T) {
 	node1 := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusOK)
@@ -20,9 +29,10 @@ func TestClient_QueryWhenAllAvailable(t *testing.T) {
 
 	httpClient := http.DefaultClient
 
-	u1, _ := url.Parse(node1.URL)
-	u2, _ := url.Parse(node2.URL)
-	client := NewClient(httpClient, []string{u1.Host, u2.Host})
+	client, err := NewClient(httpClient, []string{node1.URL, node2.URL})
+	if err != nil {
+		t.Fatalf("failed to create client: %s", err.Error())
+	}
 	res, err := client.Query(url.URL{
 		Path: "/",
 	})
@@ -56,9 +66,10 @@ func TestClient_QueryWhenSomeAreAvailable(t *testing.T) {
 	// Shutting down one of the hosts making it unavailable
 	node1.Close()
 
-	u1, _ := url.Parse(node1.URL)
-	u2, _ := url.Parse(node2.URL)
-	client := NewClient(httpClient, []string{u1.Host, u2.Host})
+	client, err := NewClient(httpClient, []string{node1.URL, node2.URL})
+	if err != nil {
+		t.Fatalf("failed to create client: %s", err.Error())
+	}
 	res, err := client.Query(url.URL{
 		Path: "/",
 	})
@@ -76,7 +87,7 @@ func TestClient_QueryWhenSomeAreAvailable(t *testing.T) {
 		t.Errorf("unexpected error occurred: %v", err)
 	}
 
-	if hcer.NewHost != u2.Host {
+	if hcer.NewHost != node2.URL {
 		t.Errorf("unexpected responding host")
 	}
 
@@ -100,14 +111,14 @@ func TestClient_QueryWhenAllUnavailable(t *testing.T) {
 
 	httpClient := http.DefaultClient
 
-	u1, _ := url.Parse(node1.URL)
-	u2, _ := url.Parse(node2.URL)
-
 	// Shutting down both nodes, both of them now are unavailable
 	node1.Close()
 	node2.Close()
-	client := NewClient(httpClient, []string{u1.Host, u2.Host})
-	_, err := client.Query(url.URL{
+	client, err := NewClient(httpClient, []string{node1.URL, node2.URL})
+	if err != nil {
+		t.Fatalf("failed to create client: %s", err.Error())
+	}
+	_, err = client.Query(url.URL{
 		Path: "/",
 	})
 
@@ -146,9 +157,10 @@ func TestClient_BasicAuthIsForwarded(t *testing.T) {
 
 	httpClient := http.DefaultClient
 
-	u1, _ := url.Parse(node1.URL)
-	u2, _ := url.Parse(node2.URL)
-	client := NewClient(httpClient, []string{u1.Host, u2.Host}, WithBasicAuth("john:wrongpassword"))
+	client, err := NewClient(httpClient, []string{node1.URL, node2.URL}, WithBasicAuth("john:wrongpassword"))
+	if err != nil {
+		t.Fatalf("failed to create client: %s", err.Error())
+	}
 
 	res, err := client.Query(url.URL{
 		Path: "/",

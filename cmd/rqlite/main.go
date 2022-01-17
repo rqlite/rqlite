@@ -25,15 +25,12 @@ const maxRedirect = 21
 
 type argT struct {
 	cli.Helper
-	Alternatives string `cli:"a,alternatives" usage:"comma separated list of 'host:port' pairs to use as fallback"`
-	Protocol     string `cli:"s,scheme" usage:"protocol scheme (http or https)" dft:"http"`
-	Host         string `cli:"H,host" usage:"rqlited host address" dft:"127.0.0.1"`
-	Port         uint16 `cli:"p,port" usage:"rqlited host port" dft:"4001"`
-	Prefix       string `cli:"P,prefix" usage:"rqlited HTTP URL prefix" dft:"/"`
-	Insecure     bool   `cli:"i,insecure" usage:"do not verify rqlited HTTPS certificate" dft:"false"`
-	CACert       string `cli:"c,ca-cert" usage:"path to trusted X.509 root CA certificate"`
-	Credentials  string `cli:"u,user" usage:"set basic auth credentials in form username:password"`
-	Version      bool   `cli:"v,version" usage:"display CLI version"`
+	Hosts       string `cli:"h,hosts" usage:"comma-separated list rqlited host URLs" dft:"http://127.0.0.1:4001"`
+	Prefix      string `cli:"p,prefix" usage:"rqlited HTTP URL prefix" dft:"/"`
+	Insecure    bool   `cli:"i,insecure" usage:"do not verify rqlited HTTPS certificate" dft:"false"`
+	CACert      string `cli:"c,ca-cert" usage:"path to trusted X.509 root CA certificate"`
+	Credentials string `cli:"u,user" usage:"set basic auth credentials in form username:password"`
+	Version     bool   `cli:"v,version" usage:"display CLI version"`
 }
 
 var cliHelp = []string{
@@ -570,8 +567,5 @@ func urlsToWriter(urls []string, w io.Writer, argv *argT) error {
 }
 
 func createHostList(argv *argT) []string {
-	var hosts = make([]string, 0)
-	hosts = append(hosts, fmt.Sprintf("%s:%d", argv.Host, argv.Port))
-	hosts = append(hosts, strings.Split(argv.Alternatives, ",")...)
-	return hosts
+	return strings.Split(argv.Hosts, ",")
 }
