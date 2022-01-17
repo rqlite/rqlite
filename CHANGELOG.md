@@ -13,6 +13,10 @@ There are some other small changes in release 7.0, but most users of rqlite can 
 - [PR #957](https://github.com/rqlite/rqlite/pull/957): Support autoclustering via [Consul](https://www.consul.io/) and [etcd](https://etcd.io/).
 - [PR #947](https://github.com/rqlite/rqlite/pull/947): CLI takes list of hosts, so it can try another node if first node is unresponsive. Fixes [issue #157](https://github.com/rqlite/rqlite/issues/157). Thanks @chermehdi
 
+### Implementation changes and bug fixes
+- [PR #957](https://github.com/rqlite/rqlite/pull/957): Refactor `rqlited` command-line argument code.
+
+
 ## 6.10.2 (January 13th 2022)
 ### Implementation changes and bug fixes
 - [PR #959](https://github.com/rqlite/rqlite/pull/959): Return clearer error if no database results set.
