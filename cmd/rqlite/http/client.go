@@ -110,15 +110,27 @@ func WithBasicAuth(creds string) ConfigFunc {
 
 // Query sends GET requests to one of the hosts known to the client.
 func (c *Client) Query(url url.URL) (*http.Response, error) {
-	return c.execRequest(http.MethodGet, url, nil)
+	return c.doRequest(http.MethodGet, url, nil)
 }
 
 // Execute sends POST requests to one of the hosts known to the client
 func (c *Client) Execute(url url.URL, body io.Reader) (*http.Response, error) {
-	return c.execRequest(http.MethodPost, url, body)
+	return c.doRequest(http.MethodPost, url, body)
 }
 
-func (c *Client) execRequest(method string, relativeURL url.URL, body io.Reader) (*http.Response, error) {
+func (c *Client) Backup(url url.URL) (*http.Response, error) {
+	return nil, nil
+}
+
+func (c *Client) Restore(url url.URL) (*http.Response, error) {
+	return nil, nil
+}
+
+func (c *Client) Dump() (*http.Response, error) {
+	return nil, nil
+}
+
+func (c *Client) doRequest(method string, relativeURL url.URL, body io.Reader) (*http.Response, error) {
 	triedHosts := 0
 	for triedHosts < len(c.hosts) {
 		host := c.hosts[c.currentHost]
