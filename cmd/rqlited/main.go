@@ -339,7 +339,7 @@ func clusterService(cfg *Config, tn cluster.Transport, db cluster.Database) (*cl
 
 func createCluster(cfg *Config, joins []string, tlsConfig *tls.Config, hasPeers bool, str *store.Store,
 	httpServ *httpd.Service, credStr *auth.CredentialsStore) error {
-	if len(joins) == 0 && cfg.DiscoMode == "" && hasPeers {
+	if len(joins) == 0 && cfg.DiscoMode == "" && !hasPeers {
 		// Brand new node, told to bootstrap itself. So do it.
 		log.Println("bootstraping single new node")
 		if err := str.Bootstrap(store.NewServer(str.ID(), str.Addr(), true)); err != nil {
