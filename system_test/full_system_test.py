@@ -34,6 +34,11 @@ def random_string(n):
   letters = string.ascii_lowercase
   return ''.join(random.choice(letters) for i in range(n))
 
+def write_random_file(data):
+  f = tempfile.NamedTemporaryFile()
+  f.write(data)
+  return f
+
 class Node(object):
   def __init__(self, path, node_id,
                api_addr=None, api_adv=None,
@@ -752,13 +757,51 @@ class TestAutoClustering(unittest.TestCase):
     deprovision_node(n2)
     deprovision_node(n3)
 
+  def autocluster_config(self, mode, config):
+    disco_key = random_string(10)
+
+    n0 = Node(RQLITED_PATH, '0')
+    n0.start(disco_mode=mode, disco_key=disco_key, disco_config=config)
+    n0.wait_for_leader()
+    self.assertEqual(n0.disco_mode(), mode)
+
+    j = n0.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
+    self.assertEqual(j, d_("{'results': [{}]}"))
+    j = n0.execute('INSERT INTO foo(name) VALUES("fiona")')
+    n0.wait_for_all_fsm()
+    j = n0.query('SELECT * FROM foo')
+    self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
+
+    # Add second node, make sure it joins the cluster fine.
+    n1 = Node(RQLITED_PATH, '1')
+    n1.start(disco_mode=mode, disco_key=disco_key, disco_config=config)
+    n1.wait_for_leader()
+    self.assertEqual(n1.disco_mode(), mode)
+    j = n1.query('SELECT * FROM foo', level='none')
+    self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
+
+    deprovision_node(n1)
+    deprovision_node(n2)
+
   def test_consul(self):
-    '''Test clustering via Consul'''
+    '''Test clustering via Consul and that leadership change is observed'''
     self.autocluster('consul')
 
   def test_etcd(self):
-    '''Test clustering via Etcd'''
+    '''Test clustering via Etcd and that leadership change is observed'''
     self.autocluster('etcd')
+
+  def test_consul_config(self):
+    '''Test clustering via Consul with explicit file-based config'''
+    f = write_random_file('{"address": "localhost:8500"}')
+    self.autocluster_config('consul', f.name)
+    f.close()
+
+  def test_etcd_config(self):
+    '''Test clustering via Etcd with explicit file-based config'''
+    f = write_random_file('{"endpoints": ["localhost:2379"]}')
+    self.autocluster_config('etcd')
+    f.close()
 
 class TestAuthJoin(unittest.TestCase):
   '''Test that joining works with authentication'''
