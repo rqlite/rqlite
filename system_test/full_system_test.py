@@ -35,9 +35,10 @@ def random_string(n):
   return ''.join(random.choice(letters) for i in range(n))
 
 def write_random_file(data):
-  f = tempfile.NamedTemporaryFile()
+  f = tempfile.NamedTemporaryFile('w', delete=False)
   f.write(data)
-  return f
+  f.close()
+  return f.name
 
 class Node(object):
   def __init__(self, path, node_id,
@@ -794,13 +795,13 @@ class TestAutoClustering(unittest.TestCase):
     '''Test clustering via Consul with explicit file-based config'''
     f = write_random_file('{"address": "localhost:8500"}')
     self.autocluster_config('consul', f.name)
-    f.close()
+    os.remove(f.name)
 
   def test_etcd_config(self):
     '''Test clustering via Etcd with explicit file-based config'''
     f = write_random_file('{"endpoints": ["localhost:2379"]}')
-    self.autocluster_config('etcd')
-    f.close()
+    self.autocluster_config('etcd', f.name)
+    os.remove(f.name)
 
 class TestAuthJoin(unittest.TestCase):
   '''Test that joining works with authentication'''
