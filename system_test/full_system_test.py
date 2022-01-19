@@ -793,15 +793,15 @@ class TestAutoClustering(unittest.TestCase):
 
   def test_consul_config(self):
     '''Test clustering via Consul with explicit file-based config'''
-    f = write_random_file('{"address": "localhost:8500"}')
-    self.autocluster_config('consul', f.name)
-    os.remove(f.name)
+    filename = write_random_file('{"address": "localhost:8500"}')
+    self.autocluster_config('consul', filename)
+    os.remove(filename)
 
   def test_etcd_config(self):
     '''Test clustering via Etcd with explicit file-based config'''
-    f = write_random_file('{"endpoints": ["localhost:2379"]}')
-    self.autocluster_config('etcd', f.name)
-    os.remove(f.name)
+    filename = write_random_file('{"endpoints": ["localhost:2379"]}')
+    self.autocluster_config('etcd', filename)
+    os.remove(filename)
 
 class TestAuthJoin(unittest.TestCase):
   '''Test that joining works with authentication'''
