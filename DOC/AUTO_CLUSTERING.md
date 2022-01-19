@@ -12,25 +12,30 @@ This document describes how to use [Consul](https://www.consul.io/) and [etcd](h
 ## Quickstart
 
 ### Consul
-Let's assume your Consul cluster is running at `http://example.com:8500`. Let's also assume that you going to run 3 rqlite nodes, each node on a different machine. Launch your rqlite nodes as follows:
+Let's assume your Consul cluster is running at `http://example.com:8500`. Let's also assume that you are going to run 3 rqlite nodes, each node on a different machine. Launch your rqlite nodes as follows:
 
 Node 1:
 ```bash
 rqlited -http-addr=$IP1:$HTTP_PORT -raft-addr=$IP1:$RAFT_PORT \
-	-disco-mode=consul -disco-config '{"address": "localhost:8500"}' data
+-disco-mode=consul -disco-config '{"address": "localhost:8500"}' data
 ```
 Node 2:
 ```bash
 rqlited -http-addr=$IP2:$HTTP_PORT -raft-addr=$IP2:$RAFT_PORT \
-	-disco-mode=consul -disco-config '{"address": "localhost:8500"}' data
+-disco-mode=consul -disco-config '{"address": "localhost:8500"}' data
 ```
 Node 3:
 ```bash
 rqlited -http-addr=$IP3:$HTTP_PORT -raft-addr=$IP3:$RAFT_PORT \
-	-disco-mode=consul -disco-config '{"address": "localhost:8500"}' data
+-disco-mode=consul -disco-config '{"address": "localhost:8500"}' data
 ```
 
-These three nodes will automatically find each other, elect a Leader, and cluster. Furthermore, the cluster Leader will continually update Consul with its address. This means other nodes can be launched later and automatically join the cluster, even if the Leader changes.
+These three nodes will automatically find each other, and cluster. You can start the nodes in any order and at anytime. Furthermore, the cluster Leader will continually update Consul with its address. This means other nodes can be launched later and automatically join the cluster, even if the Leader changes.
+
+It's even easier with Docker, as you can launch every node as follows:
+```bash
+docker run rqlite/rqlite -disco-mode=consul -disco-config '{"address": "localhost:8500"}'
+```
 
 ### etcd
 Autoclustering with etcd is very similar. Let's assume etcd is available at `localhost:2379`.
@@ -38,17 +43,17 @@ Autoclustering with etcd is very similar. Let's assume etcd is available at `loc
 Node 1:
 ```bash
 rqlited -http-addr=$IP1:$HTTP_PORT -raft-addr=$IP1:$RAFT_PORT \
-	-disco-mode=etcd -disco-config '{endpoints: ["localhost:2379"]}' data
+	-disco-mode=etcd -disco-config '{"endpoints": ["localhost:2379"]}' data
 ```
 Node 2:
 ```bash
 rqlited -http-addr=$IP2:$HTTP_PORT -raft-addr=$IP2:$RAFT_PORT \
-	-disco-mode=etcd -disco-config '{endpoints: ["localhost:2379"]}' data
+	-disco-mode=etcd -disco-config '{"endpoints": ["localhost:2379"]}' data
 ```
 Node 3:
 ```bash
 rqlited -http-addr=$IP3:$HTTP_PORT -raft-addr=$IP3:$RAFT_PORT \
-	-disco-mode=etcd -disco-config '{endpoints: ["localhost:2379"]}' data
+	-disco-mode=etcd -disco-config '{"endpoints": ["localhost:2379"]}' data
 ```
  Like with Consul autoclustering, the cluster Leader will continually report its address to ectd.
 
