@@ -2,6 +2,7 @@ This document describes how to use [Consul](https://www.consul.io/) and [etcd](h
 
 # Contents
 * [Quickstart](#quickstart)
+  * [Consul](#consul)
 * [More details](more-details)
 
 # Quickstart
