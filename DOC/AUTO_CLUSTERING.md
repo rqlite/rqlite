@@ -6,10 +6,10 @@ This document describes how to use [Consul](https://www.consul.io/) and [etcd](h
   * [Consul](#consul)
   * [etcd](#etcd)
 * [More details](more-details)
-
-## Quickstart
   * [Controlling configuration](#controlling-configuration)
   * [Running multiple different clusters](#running-multiple-different-clusters)
+
+## Quickstart
 
 ### Consul
 Let's assume your Consul cluster is running at `http://example.com:8500`. Let's also assume that you going to run 3 rqlite nodes, each node on a different machine. Launch your rqlite nodes as follows:
