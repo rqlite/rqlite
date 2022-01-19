@@ -45,7 +45,7 @@ class Node(object):
                raft_addr=None, raft_adv=None,
                raft_voter=True,
                raft_snap_threshold=8192, raft_snap_int="1s",
-               disco_config=None, auth=None, dir=None, on_disk=False):
+               auth=None, dir=None, on_disk=False):
     if api_addr is None:
       s, addr = random_addr()
       api_addr = addr
@@ -72,7 +72,6 @@ class Node(object):
     self.raft_snap_int = raft_snap_int
     self.auth = auth
     self.disco_key = random_string(10)
-    self.disco_config=disco_config
     self.on_disk = on_disk
     self.process = None
     self.stdout_file = os.path.join(dir, 'rqlited.log')
@@ -110,7 +109,7 @@ class Node(object):
       self.raft_adv = self.raft_addr
 
   def start(self, join=None, join_as=None, join_attempts=None, join_interval=None,
-    disco_mode=None, disco_key=None, wait=True, timeout=TIMEOUT):
+    disco_mode=None, disco_key=None, disco_config=None, wait=True, timeout=TIMEOUT):
     if self.process is not None:
       return
 
@@ -142,8 +141,8 @@ class Node(object):
       if dk is None:
         dk = self.disco_key
       command += ['-disco-mode', disco_mode, '-disco-key', dk]
-      if self.disco_config is not None:
-        command += ['disco-config', self.disco_config]
+      if disco_config is not None:
+        command += ['disco-config', disco_config]
     command.append(self.dir)
 
     self.process = subprocess.Popen(command, stdout=self.stdout_fd, stderr=self.stderr_fd)
