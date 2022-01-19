@@ -4,8 +4,8 @@ This release introduces new node-discovery integration with [Consul](https://www
 See the [new documentation](https://github.com/rqlite/rqlite/blob/master/DOC/AUTO_CLUSTERING.md) for full details on using Consul and etcd.
 
 ### Upgrading
-There are some other small changes in release 7.0, but most users of rqlite can upgrade to 7.0 without doing anything special -- simply download and run the 7.0 release.
-- The disco-related command-line arguments have changed, to support Consul and etcd. If you wish to continue to use legacy Discovery, you can't upgrade to 7.0 -- or consider using Consul or etcd for node-discovery.
+There are some breaking changes in release 7.0, but most users of rqlite can upgrade to 7.0 without doing anything special -- simply download and run the 7.0 release.
+- The disco-related command-line arguments have changed to support Consul and etcd. If you wish to continue to use legacy Discovery, you can't upgrade to 7.0 -- or consider using Consul or etcd for node-discovery.
 - The command-line argument `-RaftWaitForLeader` has been removed. If you need to wait for a node to have a Leader, you should poll the `/readyz` endpoint.
 - The CLI command-line arguments for passing the rqlite host and port have changed. A single command-line argument `-H` now takes a comman-delimited list of fully-qualified HTTP endpoints.
 
