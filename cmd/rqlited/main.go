@@ -2,9 +2,11 @@
 package main
 
 import (
+	"bytes"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"net"
@@ -224,11 +226,23 @@ func createStore(cfg *Config, ln *tcp.Layer) (*store.Store, error) {
 func createDiscoService(cfg *Config, str *store.Store) (*disco.Service, error) {
 	var c disco.Client
 	var err error
+	var reader io.Reader
+
+	if cfg.DiscoConfig != "" {
+		// Open config file. If opening fails, assume the config is a JSON string.
+		cfgFile, err := os.Open(cfg.DiscoConfig)
+		if err != nil {
+			reader = bytes.NewReader([]byte(cfg.DiscoConfig))
+		} else {
+			reader = cfgFile
+			defer cfgFile.Close()
+		}
+	}
 
 	if cfg.DiscoMode == "consul" {
 		var consulCfg *consul.Config
-		if cfg.DiscoConfig != "" {
-			consulCfg, err = consul.NewConfigFromFile(cfg.DiscoConfig)
+		if reader != nil {
+			consulCfg, err = consul.NewConfigFromReader(reader)
 			if err != nil {
 				return nil, err
 			}
@@ -240,8 +254,8 @@ func createDiscoService(cfg *Config, str *store.Store) (*disco.Service, error) {
 		}
 	} else if cfg.DiscoMode == "etcd" {
 		var etcdCfg *etcd.Config
-		if cfg.DiscoConfig != "" {
-			etcdCfg, err = etcd.NewConfigFromFile(cfg.DiscoConfig)
+		if reader != nil {
+			etcdCfg, err = etcd.NewConfigFromReader(reader)
 			if err != nil {
 				return nil, err
 			}
