@@ -19,17 +19,17 @@ Let's assume your Consul cluster is running at `http://example.com:8500`. Let's 
 Node 1:
 ```bash
 rqlited -http-addr=$IP1:$HTTP_PORT -raft-addr=$IP1:$RAFT_PORT \
--disco-mode consul -disco-config '{"address": "localhost:8500"}' data
+-disco-mode consul -disco-config '{"address": "example.com:8500"}' data
 ```
 Node 2:
 ```bash
 rqlited -http-addr=$IP2:$HTTP_PORT -raft-addr=$IP2:$RAFT_PORT \
--disco-mode consul -disco-config '{"address": "localhost:8500"}' data
+-disco-mode consul -disco-config '{"address": "example.com:8500"}' data
 ```
 Node 3:
 ```bash
 rqlited -http-addr=$IP3:$HTTP_PORT -raft-addr=$IP3:$RAFT_PORT \
--disco-mode consul -disco-config '{"address": "localhost:8500"}' data
+-disco-mode consul -disco-config '{"address": "example.com:8500"}' data
 ```
 
 These three nodes will automatically find each other, and cluster. You can start the nodes in any order and at anytime. Furthermore, the cluster Leader will continually update Consul with its address. This means other nodes can be launched later and automatically join the cluster, even if the Leader changes.
@@ -37,32 +37,32 @@ These three nodes will automatically find each other, and cluster. You can start
 #### Docker
 It's even easier with Docker, as you can launch every node identically:
 ```bash
-docker run rqlite/rqlite -disco-mode=consul -disco-config '{"address": "localhost:8500"}'
+docker run rqlite/rqlite -disco-mode=consul -disco-config '{"address": "example.com:8500"}'
 ```
 
 ### etcd
-Autoclustering with etcd is very similar. Let's assume etcd is available at `localhost:2379`.
+Autoclustering with etcd is very similar. Let's assume etcd is available at `example.com:2379`.
 
 Node 1:
 ```bash
 rqlited -http-addr=$IP1:$HTTP_PORT -raft-addr=$IP1:$RAFT_PORT \
-	-disco-mode etcd -disco-config '{"endpoints": ["localhost:2379"]}' data
+	-disco-mode etcd -disco-config '{"endpoints": ["example.com:2379"]}' data
 ```
 Node 2:
 ```bash
 rqlited -http-addr=$IP2:$HTTP_PORT -raft-addr=$IP2:$RAFT_PORT \
-	-disco-mode etcd -disco-config '{"endpoints": ["localhost:2379"]}' data
+	-disco-mode etcd -disco-config '{"endpoints": ["example.com:2379"]}' data
 ```
 Node 3:
 ```bash
 rqlited -http-addr=$IP3:$HTTP_PORT -raft-addr=$IP3:$RAFT_PORT \
-	-disco-mode etcd -disco-config '{"endpoints": ["localhost:2379"]}' data
+	-disco-mode etcd -disco-config '{"endpoints": ["example.com:2379"]}' data
 ```
  Like with Consul autoclustering, the cluster Leader will continually report its address to etcd.
 
  #### Docker
 ```bash
-docker run rqlite/rqlite -disco-mode=etcd -disco-config '{"endpoints": ["localhost:2379"]}'
+docker run rqlite/rqlite -disco-mode=etcd -disco-config '{"endpoints": ["example.com:2379"]}'
 ```
 
 ## More Details
