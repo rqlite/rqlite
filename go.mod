@@ -6,7 +6,6 @@ require (
 	github.com/Bowery/prompt v0.0.0-20190916142128-fa8279994f75
 	github.com/armon/go-metrics v0.3.10 // indirect
 	github.com/fatih/color v1.13.0 // indirect
-	github.com/golang/protobuf v1.5.2
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-hclog v1.1.0 // indirect
 	github.com/hashicorp/go-immutable-radix v1.3.1 // indirect
@@ -21,7 +20,7 @@ require (
 	github.com/mkideal/pkg v0.1.3
 	github.com/rqlite/go-sqlite3 v1.22.0
 	github.com/rqlite/raft-boltdb v0.0.0-20211018013422-771de01086ce
-	github.com/rqlite/rqlite-disco-clients v0.0.0-20220119143504-8b316f2862ba
+	github.com/rqlite/rqlite-disco-clients v0.0.0-20220119185651-ab01e15666dd
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.7.0 // indirect
 	go.uber.org/zap v1.20.0 // indirect
