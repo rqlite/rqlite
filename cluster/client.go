@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/rqlite/rqlite/command"
 	"github.com/rqlite/rqlite/tcp/pool"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
