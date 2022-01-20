@@ -143,6 +143,7 @@ func Nodes(id, dir string) ([]*Server, error) {
 
 	raftCfg := raft.DefaultConfig()
 	raftCfg.LocalID = raft.ServerID(id)
+	// Just create dummy objects which implement the tn, fsm, etc interfaces. See if that works.
 	cfg, err := raft.GetConfiguration(raftCfg, nil, boltStore,
 		raftStable, nil, nil)
 	if err != nil {
