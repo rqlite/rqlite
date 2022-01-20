@@ -126,6 +126,43 @@ const (
 	Unknown
 )
 
+// IsNewNode returns whether a node using raftDir would be a brand-new node.
+// It also means that the window for this node joining a different cluster has passed.
+func IsNewNode(raftDir string) bool {
+	// If there is any pre-existing Raft state, then this node
+	// has already been created.
+	return !pathExists(filepath.Join(raftDir, raftDBPath))
+}
+
+func Nodes(id, dir string) ([]*Server, error) {
+	boltStore, err := rlog.NewLog(filepath.Join(dir, raftDBPath))
+	if err != nil {
+		return nil, fmt.Errorf("new log store: %s", err)
+	}
+	raftStable := boltStore
+
+	raftCfg := raft.DefaultConfig()
+	raftCfg.LocalID = raft.ServerID(id)
+	cfg, err := raft.GetConfiguration(raftCfg, nil, boltStore,
+		raftStable, nil, nil)
+	if err != nil {
+		return nil, fmt.Errorf("GetConfiguration: %s", err)
+	}
+
+	rs := cfg.Servers
+	servers := make([]*Server, len(rs))
+	for i := range rs {
+		servers[i] = &Server{
+			ID:       string(rs[i].ID),
+			Addr:     string(rs[i].Address),
+			Suffrage: rs[i].Suffrage.String(),
+		}
+	}
+
+	sort.Sort(Servers(servers))
+	return servers, nil
+}
+
 // Store is a SQLite database, where all changes are made via Raft consensus.
 type Store struct {
 	open          bool
@@ -199,14 +236,6 @@ type Store struct {
 	numNoops       int
 	numSnapshotsMu sync.Mutex
 	numSnapshots   int
-}
-
-// IsNewNode returns whether a node using raftDir would be a brand-new node.
-// It also means that the window for this node joining a different cluster has passed.
-func IsNewNode(raftDir string) bool {
-	// If there is any pre-existing Raft state, then this node
-	// has already been created.
-	return !pathExists(filepath.Join(raftDir, raftDBPath))
 }
 
 // Config represents the configuration of the underlying Store.

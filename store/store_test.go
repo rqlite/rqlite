@@ -993,6 +993,62 @@ func Test_SingleNodeRecoverNetworkChangeSnapshot(t *testing.T) {
 	}
 }
 
+func Test_MultiNodeGetNodesNoStore(t *testing.T) {
+	s0, ln0 := mustNewStore(true)
+	defer os.RemoveAll(s0.Path())
+	defer ln0.Close()
+	if err := s0.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s0.Close(true)
+	if err := s0.Bootstrap(NewServer(s0.ID(), s0.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	s1, ln1 := mustNewStore(true)
+	defer os.RemoveAll(s1.Path())
+	defer ln1.Close()
+	if err := s1.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s1.Close(true)
+	if err := s1.Bootstrap(NewServer(s1.ID(), s1.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+
+	// Get sorted list of cluster nodes.
+	storeNodes := []string{s0.ID(), s1.ID()}
+	sort.StringSlice(storeNodes).Sort()
+
+	// Join the second node to the first.
+	if err := s0.Join(s1.ID(), s1.Addr(), true); err != nil {
+		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
+	}
+
+	got, err := s1.WaitForLeader(10 * time.Second)
+	if err != nil {
+		t.Fatalf("failed to get leader address on follower: %s", err.Error())
+	}
+	// Check leader state on follower.
+	if exp := s0.Addr(); got != exp {
+		t.Fatalf("wrong leader address returned, got: %s, exp %s", got, exp)
+	}
+
+	// Close all Stores now, otherwise testing will block due to BoltDB.
+	s0.Close(true)
+	s1.Close(true)
+
+	// Test top-level function function for getting Nodes.
+	_, err = Nodes("1", s0.Path())
+	if err != nil {
+		t.Fatalf("failed to get nodes at top level: %s", err.Error())
+	}
+
+}
+
 func Test_MultiNodeJoinRemove(t *testing.T) {
 	s0, ln0 := mustNewStore(true)
 	defer os.RemoveAll(s0.Path())
