@@ -143,7 +143,7 @@ class Node(object):
         dk = self.disco_key
       command += ['-disco-mode', disco_mode, '-disco-key', dk]
       if disco_config is not None:
-        command += ['disco-config', disco_config]
+        command += ['-disco-config', disco_config]
     command.append(self.dir)
 
     self.process = subprocess.Popen(command, stdout=self.stdout_fd, stderr=self.stderr_fd)
@@ -780,8 +780,8 @@ class TestAutoClustering(unittest.TestCase):
     j = n1.query('SELECT * FROM foo', level='none')
     self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
 
+    deprovision_node(n0)
     deprovision_node(n1)
-    deprovision_node(n2)
 
   def test_consul(self):
     '''Test clustering via Consul and that leadership change is observed'''
