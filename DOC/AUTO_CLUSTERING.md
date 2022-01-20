@@ -1,6 +1,8 @@
 # Automatic clustering via node-discovery
 This document describes how to use [Consul](https://www.consul.io/) and [etcd](https://etcd.io/) to automatically form rqlite clusters. 
 
+> :warning: **This functionality was introduced in version 7.x. It does not exist in earlier releases.**
+
 ## Contents
 * [Quickstart](#quickstart)
   * [Consul](#consul)

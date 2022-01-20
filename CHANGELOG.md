@@ -15,7 +15,6 @@ There are some breaking changes in release 7.0, but most users of rqlite can upg
 ### Implementation changes and bug fixes
 - [PR #957](https://github.com/rqlite/rqlite/pull/957): Refactor `rqlited` command-line argument code.
 
-
 ## 6.10.2 (January 13th 2022)
 ### Implementation changes and bug fixes
 - [PR #959](https://github.com/rqlite/rqlite/pull/959): Return clearer error if no database results set.
