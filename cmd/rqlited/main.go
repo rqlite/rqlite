@@ -2,10 +2,11 @@
 package main
 
 import (
+	"bytes"
 	"crypto/tls"
 	"crypto/x509"
-	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"net"
@@ -13,10 +14,11 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
-	"runtime/pprof"
 	"strings"
 	"time"
 
+	consul "github.com/rqlite/rqlite-disco-clients/consul"
+	etcd "github.com/rqlite/rqlite-disco-clients/etcd"
 	"github.com/rqlite/rqlite/auth"
 	"github.com/rqlite/rqlite/cluster"
 	"github.com/rqlite/rqlite/cmd"
@@ -37,163 +39,43 @@ const logo = `
          |_|
 `
 
-var httpAddr string
-var httpAdv string
-var joinSrcIP string
-var tls1011 bool
-var authFile string
-var x509CACert string
-var x509Cert string
-var x509Key string
-var nodeEncrypt bool
-var nodeX509CACert string
-var nodeX509Cert string
-var nodeX509Key string
-var nodeID string
-var raftAddr string
-var raftAdv string
-var joinAddr string
-var joinAs string
-var joinAttempts int
-var joinInterval string
-var noVerify bool
-var noNodeVerify bool
-var discoURL string
-var discoID string
-var expvar bool
-var pprofEnabled bool
-var onDisk bool
-var onDiskPath string
-var onDiskStartup bool
-var fkConstraints bool
-var raftLogLevel string
-var raftNonVoter bool
-var raftSnapThreshold uint64
-var raftSnapInterval time.Duration
-var raftLeaderLeaseTimeout time.Duration
-var raftHeartbeatTimeout time.Duration
-var raftElectionTimeout time.Duration
-var raftApplyTimeout time.Duration
-var raftOpenTimeout time.Duration
-var raftWaitForLeader bool
-var raftShutdownOnRemove bool
-var compressionSize int
-var compressionBatch int
-var showVersion bool
-var cpuProfile string
-var memProfile string
-
 const name = `rqlited`
 const desc = `rqlite is a lightweight, distributed relational database, which uses SQLite as its
 storage engine. It provides an easy-to-use, fault-tolerant store for relational data.`
 
 func init() {
-	flag.StringVar(&nodeID, "node-id", "", "Unique name for node. If not set, set to Raft address")
-	flag.StringVar(&httpAddr, "http-addr", "localhost:4001", "HTTP server bind address. For HTTPS, set X.509 cert and key")
-	flag.StringVar(&httpAdv, "http-adv-addr", "", "Advertised HTTP address. If not set, same as HTTP server")
-	flag.StringVar(&joinSrcIP, "join-source-ip", "", "Set source IP address during Join request")
-	flag.BoolVar(&tls1011, "tls1011", false, "Support deprecated TLS versions 1.0 and 1.1")
-	flag.StringVar(&x509CACert, "http-ca-cert", "", "Path to root X.509 certificate for HTTP endpoint")
-	flag.StringVar(&x509Cert, "http-cert", "", "Path to X.509 certificate for HTTP endpoint")
-	flag.StringVar(&x509Key, "http-key", "", "Path to X.509 private key for HTTP endpoint")
-	flag.BoolVar(&noVerify, "http-no-verify", false, "Skip verification of remote HTTPS cert when joining cluster")
-	flag.BoolVar(&nodeEncrypt, "node-encrypt", false, "Enable node-to-node encryption")
-	flag.StringVar(&nodeX509CACert, "node-ca-cert", "", "Path to root X.509 certificate for node-to-node encryption")
-	flag.StringVar(&nodeX509Cert, "node-cert", "cert.pem", "Path to X.509 certificate for node-to-node encryption")
-	flag.StringVar(&nodeX509Key, "node-key", "key.pem", "Path to X.509 private key for node-to-node encryption")
-	flag.BoolVar(&noNodeVerify, "node-no-verify", false, "Skip verification of a remote node cert")
-	flag.StringVar(&authFile, "auth", "", "Path to authentication and authorization file. If not set, not enabled")
-	flag.StringVar(&raftAddr, "raft-addr", "localhost:4002", "Raft communication bind address")
-	flag.StringVar(&raftAdv, "raft-adv-addr", "", "Advertised Raft communication address. If not set, same as Raft bind")
-	flag.StringVar(&joinAddr, "join", "", "Comma-delimited list of nodes, through which a cluster can be joined (proto://host:port)")
-	flag.StringVar(&joinAs, "join-as", "", "Username in authentication file to join as. If not set, joins anonymously")
-	flag.IntVar(&joinAttempts, "join-attempts", 5, "Number of join attempts to make")
-	flag.StringVar(&joinInterval, "join-interval", "5s", "Period between join attempts")
-	flag.StringVar(&discoURL, "disco-url", "http://discovery.rqlite.com", "Set Discovery Service URL")
-	flag.StringVar(&discoID, "disco-id", "", "Set Discovery ID. If not set, Discovery Service not used")
-	flag.BoolVar(&expvar, "expvar", true, "Serve expvar data on HTTP server")
-	flag.BoolVar(&pprofEnabled, "pprof", true, "Serve pprof data on HTTP server")
-	flag.BoolVar(&onDisk, "on-disk", false, "Use an on-disk SQLite database")
-	flag.StringVar(&onDiskPath, "on-disk-path", "", "Path for SQLite on-disk database file. If not set, use file in data directory")
-	flag.BoolVar(&onDiskStartup, "on-disk-startup", false, "Do not initialize on-disk database in memory first at startup")
-	flag.BoolVar(&fkConstraints, "fk", false, "Enable SQLite foreign key constraints")
-	flag.BoolVar(&showVersion, "version", false, "Show version information and exit")
-	flag.BoolVar(&raftNonVoter, "raft-non-voter", false, "Configure as non-voting node")
-	flag.DurationVar(&raftHeartbeatTimeout, "raft-timeout", time.Second, "Raft heartbeat timeout")
-	flag.DurationVar(&raftElectionTimeout, "raft-election-timeout", time.Second, "Raft election timeout")
-	flag.DurationVar(&raftApplyTimeout, "raft-apply-timeout", 10*time.Second, "Raft apply timeout")
-	flag.DurationVar(&raftOpenTimeout, "raft-open-timeout", 120*time.Second, "Time for initial Raft logs to be applied. Use 0s duration to skip wait")
-	flag.BoolVar(&raftWaitForLeader, "raft-leader-wait", true, "Node waits for a leader before answering requests")
-	flag.Uint64Var(&raftSnapThreshold, "raft-snap", 8192, "Number of outstanding log entries that trigger snapshot")
-	flag.DurationVar(&raftSnapInterval, "raft-snap-int", 30*time.Second, "Snapshot threshold check interval")
-	flag.DurationVar(&raftLeaderLeaseTimeout, "raft-leader-lease-timeout", 0, "Raft leader lease timeout. Use 0s for Raft default")
-	flag.BoolVar(&raftShutdownOnRemove, "raft-remove-shutdown", false, "Shutdown Raft if node removed")
-	flag.StringVar(&raftLogLevel, "raft-log-level", "INFO", "Minimum log level for Raft module")
-	flag.IntVar(&compressionSize, "compression-size", 150, "Request query size for compression attempt")
-	flag.IntVar(&compressionBatch, "compression-batch", 5, "Request batch threshold for compression attempt")
-	flag.StringVar(&cpuProfile, "cpu-profile", "", "Path to file for CPU profiling information")
-	flag.StringVar(&memProfile, "mem-profile", "", "Path to file for memory profiling information")
-
-	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "\n%s\n\n", desc)
-		fmt.Fprintf(os.Stderr, "Usage: %s [flags] <data directory>\n", name)
-		flag.PrintDefaults()
-	}
+	log.SetFlags(log.LstdFlags)
+	log.SetOutput(os.Stderr)
+	log.SetPrefix(fmt.Sprintf("[%s] ", name))
 }
 
 func main() {
-	flag.Parse()
-
-	if showVersion {
-		fmt.Printf("%s %s %s %s %s (commit %s, branch %s, compiler %s)\n",
-			name, cmd.Version, runtime.GOOS, runtime.GOARCH, runtime.Version(), cmd.Commit, cmd.Branch, runtime.Compiler)
-		os.Exit(0)
+	cfg, err := ParseFlags(name, desc, &BuildInfo{
+		Version: cmd.Version,
+		Commit:  cmd.Commit,
+		Branch:  cmd.Branch,
+	})
+	if err != nil {
+		log.Fatalf("failed to parse command-line flags: %s", err.Error())
 	}
-
-	if onDiskPath != "" && !onDisk {
-		fmt.Fprintf(os.Stderr, "fatal: on-disk-path is set, but on-disk is not\n")
-		os.Exit(1)
-	}
-
-	// Ensure the data path is set.
-	if flag.NArg() < 1 {
-		fmt.Fprintf(os.Stderr, "fatal: no data directory set\n")
-		os.Exit(1)
-	}
-
-	// Ensure no args come after the data directory.
-	if flag.NArg() > 1 {
-		fmt.Fprintf(os.Stderr, "fatal: arguments after data directory are not accepted\n")
-		os.Exit(1)
-	}
-
-	// Ensure Raft adv address is set as per policy.
-	if raftAdv == "" {
-		raftAdv = raftAddr
-	}
-
-	dataPath := flag.Arg(0)
 
 	// Display logo.
 	fmt.Println(logo)
 
 	// Configure logging and pump out initial message.
-	log.SetFlags(log.LstdFlags)
-	log.SetOutput(os.Stderr)
-	log.SetPrefix(fmt.Sprintf("[%s] ", name))
 	log.Printf("%s starting, version %s, commit %s, branch %s, compiler %s", name, cmd.Version, cmd.Commit, cmd.Branch, runtime.Compiler)
 	log.Printf("%s, target architecture is %s, operating system target is %s", runtime.Version(), runtime.GOARCH, runtime.GOOS)
 	log.Printf("launch command: %s", strings.Join(os.Args, " "))
 
 	// Start requested profiling.
-	startProfile(cpuProfile, memProfile)
+	startProfile(cfg.CPUProfile, cfg.MemProfile)
 
 	// Create internode network mux and configure.
-	muxLn, err := net.Listen("tcp", raftAddr)
+	muxLn, err := net.Listen("tcp", cfg.RaftAddr)
 	if err != nil {
-		log.Fatalf("failed to listen on %s: %s", raftAddr, err.Error())
+		log.Fatalf("failed to listen on %s: %s", cfg.RaftAddr, err.Error())
 	}
-	mux, err := startNodeMux(muxLn)
+	mux, err := startNodeMux(cfg, muxLn)
 	if err != nil {
 		log.Fatalf("failed to start node mux: %s", err.Error())
 	}
@@ -201,14 +83,14 @@ func main() {
 	log.Printf("Raft TCP mux Listener registered with %d", cluster.MuxRaftHeader)
 
 	// Create the store.
-	str, isNew, err := createStore(raftTn, dataPath)
+	str, err := createStore(cfg, raftTn)
 	if err != nil {
 		log.Fatalf("failed to create store: %s", err.Error())
 	}
 
 	// Determine join addresses
 	var joins []string
-	joins, err = determineJoinAddresses(isNew)
+	joins, err = determineJoinAddresses(cfg)
 	if err != nil {
 		log.Fatalf("unable to determine join addresses: %s", err.Error())
 	}
@@ -219,25 +101,25 @@ func main() {
 	}
 
 	// Get any credential store.
-	credStr, err := credentialStore()
+	credStr, err := credentialStore(cfg)
 	if err != nil {
 		log.Fatalf("failed to get credential store: %s", err.Error())
 	}
 
 	// Create cluster service now, so nodes will be able to learn information about each other.
-	clstr, err := clusterService(mux.Listen(cluster.MuxClusterHeader), str)
+	clstr, err := clusterService(cfg, mux.Listen(cluster.MuxClusterHeader), str)
 	if err != nil {
 		log.Fatalf("failed to create cluster service: %s", err.Error())
 	}
 	log.Printf("Cluster TCP mux Listener registered with %d", cluster.MuxClusterHeader)
 
 	// Start the HTTP API server.
-	clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, nodeEncrypt, noNodeVerify)
+	clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, cfg.NodeEncrypt, cfg.NoNodeVerify)
 	clstrClient := cluster.NewClient(clstrDialer)
-	if err := clstrClient.SetLocal(raftAdv, clstr); err != nil {
+	if err := clstrClient.SetLocal(cfg.RaftAdv, clstr); err != nil {
 		log.Fatalf("failed to set cluster client local parameters: %s", err.Error())
 	}
-	httpServ, err := startHTTPService(str, clstrClient, credStr)
+	httpServ, err := startHTTPService(cfg, str, clstrClient, credStr)
 	if err != nil {
 		log.Fatalf("failed to start HTTP server: %s", err.Error())
 	}
@@ -245,74 +127,31 @@ func main() {
 	// Register remaining status providers.
 	httpServ.RegisterStatus("cluster", clstr)
 
-	// Execute any requested join operation.
-	if len(joins) > 0 {
-		log.Println("join addresses are:", joins)
-
-		joinDur, err := time.ParseDuration(joinInterval)
+	tlsConfig := tls.Config{InsecureSkipVerify: cfg.NoHTTPVerify}
+	if cfg.X509CACert != "" {
+		asn1Data, err := ioutil.ReadFile(cfg.X509CACert)
 		if err != nil {
-			log.Fatalf("failed to parse Join interval %s: %s", joinInterval, err.Error())
+			log.Fatalf("ioutil.ReadFile failed: %s", err.Error())
 		}
-
-		tlsConfig := tls.Config{InsecureSkipVerify: noVerify}
-		if x509CACert != "" {
-			asn1Data, err := ioutil.ReadFile(x509CACert)
-			if err != nil {
-				log.Fatalf("ioutil.ReadFile failed: %s", err.Error())
-			}
-			tlsConfig.RootCAs = x509.NewCertPool()
-			ok := tlsConfig.RootCAs.AppendCertsFromPEM(asn1Data)
-			if !ok {
-				log.Fatalf("failed to parse root CA certificate(s) in %q", x509CACert)
-			}
-		}
-
-		// Add credentials to any join addresses, if necessary.
-		if credStr != nil && joinAs != "" {
-			var err error
-			pw, ok := credStr.Password(joinAs)
-			if !ok {
-				log.Fatalf("user %s does not exist in credential store", joinAs)
-			}
-			for i := range joins {
-				joins[i], err = cluster.AddUserInfo(joins[i], joinAs, pw)
-				if err != nil {
-					log.Fatalf("failed to use credential store join_as: %s", err.Error())
-				}
-			}
-			log.Println("added join_as identity from credential store")
-		}
-
-		if j, err := cluster.Join(joinSrcIP, joins, str.ID(), raftAdv, !raftNonVoter,
-			joinAttempts, joinDur, &tlsConfig); err != nil {
-			log.Fatalf("failed to join cluster at %s: %s", joins, err.Error())
-		} else {
-			log.Println("successfully joined cluster at", j)
-		}
-	} else if isNew {
-		// No prexisting state, and no joins to do. Node needs bootstrap itself.
-		log.Println("bootstraping single new node")
-		if err := str.Bootstrap(store.NewServer(str.ID(), str.Addr(), true)); err != nil {
-			log.Fatalf("failed to bootstrap single new node: %s", err.Error())
+		tlsConfig.RootCAs = x509.NewCertPool()
+		ok := tlsConfig.RootCAs.AppendCertsFromPEM(asn1Data)
+		if !ok {
+			log.Fatalf("failed to parse root CA certificate(s) in %q", cfg.X509CACert)
 		}
 	}
 
-	// Friendly final log message.
-	apiProto := "http"
-	if httpServ.HTTPS() {
-		apiProto = "https"
-	}
-	apiAdv := httpAddr
-	if httpAdv != "" {
-		apiAdv = httpAdv
-	}
-
-	// Tell the user the node is ready, giving some advice on how to connect.
-	log.Printf("node HTTP API available at %s://%s", apiProto, apiAdv)
-	h, p, err := net.SplitHostPort(apiAdv)
+	// Create the cluster!
+	nodes, err := str.Nodes()
 	if err != nil {
-		log.Fatalf("advertised address is not valid: %s", err.Error())
+		log.Fatalf("failed to get nodes %s", err.Error())
 	}
+	if err := createCluster(cfg, joins, &tlsConfig, len(nodes) > 0, str, httpServ, credStr); err != nil {
+		log.Fatalf("clustering failure: %s", err.Error())
+	}
+
+	// Tell the user the node is ready for HTTP, giving some advice on how to connect.
+	log.Printf("node HTTP API available at %s", cfg.HTTPURL())
+	h, p, _ := net.SplitHostPort(cfg.HTTPAdv)
 	log.Printf("connect using the command-line tool via 'rqlite -H %s -P %s'", h, p)
 
 	// Block until signalled.
@@ -328,37 +167,16 @@ func main() {
 	log.Println("rqlite server stopped")
 }
 
-func determineJoinAddresses(isNew bool) ([]string, error) {
-	apiAdv := httpAddr
-	if httpAdv != "" {
-		apiAdv = httpAdv
-	}
-
+func determineJoinAddresses(cfg *Config) ([]string, error) {
 	var addrs []string
-	if joinAddr != "" {
-		// Explicit join addresses are first priority.
-		addrs = strings.Split(joinAddr, ",")
-	}
-
-	if discoID != "" {
-		if !isNew {
-			log.Printf("node has preexisting state, ignoring Discovery ID %s", discoID)
-		} else {
-			log.Printf("registering with Discovery Service at %s with ID %s", discoURL, discoID)
-			c := disco.New(discoURL)
-			r, err := c.Register(discoID, apiAdv)
-			if err != nil {
-				return nil, err
-			}
-			log.Println("Discovery Service responded with nodes:", r.Nodes)
-			addrs = append(addrs, r.Nodes...)
-		}
+	if cfg.JoinAddr != "" {
+		addrs = strings.Split(cfg.JoinAddr, ",")
 	}
 
 	// It won't work to attempt a self-join, so remove any such address.
 	var validAddrs []string
 	for i := range addrs {
-		if addrs[i] == apiAdv || addrs[i] == fmt.Sprintf("http://%s", apiAdv) {
+		if addrs[i] == cfg.HTTPAdv || addrs[i] == cfg.HTTPAddr {
 			log.Printf("ignoring join address %s equal to this node's address", addrs[i])
 			continue
 		}
@@ -368,34 +186,32 @@ func determineJoinAddresses(isNew bool) ([]string, error) {
 	return validAddrs, nil
 }
 
-func createStore(ln *tcp.Layer, dataPath string) (*store.Store, bool, error) {
-	var err error
-
-	dataPath, err = filepath.Abs(dataPath)
+func createStore(cfg *Config, ln *tcp.Layer) (*store.Store, error) {
+	dataPath, err := filepath.Abs(cfg.DataPath)
 	if err != nil {
-		return nil, false, fmt.Errorf("failed to determine absolute data path: %s", err.Error())
+		return nil, fmt.Errorf("failed to determine absolute data path: %s", err.Error())
 	}
-	dbConf := store.NewDBConfig(!onDisk)
-	dbConf.FKConstraints = fkConstraints
-	dbConf.OnDiskPath = onDiskPath
+	dbConf := store.NewDBConfig(!cfg.OnDisk)
+	dbConf.OnDiskPath = cfg.OnDiskPath
+	dbConf.FKConstraints = cfg.FKConstraints
 
 	str := store.New(ln, &store.Config{
 		DBConf: dbConf,
-		Dir:    dataPath,
-		ID:     idOrRaftAddr(),
+		Dir:    cfg.DataPath,
+		ID:     cfg.NodeID,
 	})
 
 	// Set optional parameters on store.
-	str.StartupOnDisk = onDiskStartup
-	str.SetRequestCompression(compressionBatch, compressionSize)
-	str.RaftLogLevel = raftLogLevel
-	str.ShutdownOnRemove = raftShutdownOnRemove
-	str.SnapshotThreshold = raftSnapThreshold
-	str.SnapshotInterval = raftSnapInterval
-	str.LeaderLeaseTimeout = raftLeaderLeaseTimeout
-	str.HeartbeatTimeout = raftHeartbeatTimeout
-	str.ElectionTimeout = raftElectionTimeout
-	str.ApplyTimeout = raftApplyTimeout
+	str.StartupOnDisk = cfg.OnDiskStartup
+	str.SetRequestCompression(cfg.CompressionBatch, cfg.CompressionSize)
+	str.RaftLogLevel = cfg.RaftLogLevel
+	str.ShutdownOnRemove = cfg.RaftShutdownOnRemove
+	str.SnapshotThreshold = cfg.RaftSnapThreshold
+	str.SnapshotInterval = cfg.RaftSnapInterval
+	str.LeaderLeaseTimeout = cfg.RaftLeaderLeaseTimeout
+	str.HeartbeatTimeout = cfg.RaftHeartbeatTimeout
+	str.ElectionTimeout = cfg.RaftElectionTimeout
+	str.ApplyTimeout = cfg.RaftApplyTimeout
 
 	isNew := store.IsNewNode(dataPath)
 	if isNew {
@@ -404,23 +220,72 @@ func createStore(ln *tcp.Layer, dataPath string) (*store.Store, bool, error) {
 		log.Printf("preexisting node state detected in %s", dataPath)
 	}
 
-	return str, isNew, nil
+	return str, nil
 }
 
-func startHTTPService(str *store.Store, cltr *cluster.Client, credStr *auth.CredentialsStore) (*httpd.Service, error) {
+func createDiscoService(cfg *Config, str *store.Store) (*disco.Service, error) {
+	var c disco.Client
+	var err error
+	var reader io.Reader
+
+	if cfg.DiscoConfig != "" {
+		// Open config file. If opening fails, assume the config is a JSON string.
+		cfgFile, err := os.Open(cfg.DiscoConfig)
+		if err != nil {
+			reader = bytes.NewReader([]byte(cfg.DiscoConfig))
+		} else {
+			reader = cfgFile
+			defer cfgFile.Close()
+		}
+	}
+
+	if cfg.DiscoMode == "consul" {
+		var consulCfg *consul.Config
+		if reader != nil {
+			consulCfg, err = consul.NewConfigFromReader(reader)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		c, err = consul.New(cfg.DiscoKey, consulCfg)
+		if err != nil {
+			return nil, err
+		}
+	} else if cfg.DiscoMode == "etcd" {
+		var etcdCfg *etcd.Config
+		if reader != nil {
+			etcdCfg, err = etcd.NewConfigFromReader(reader)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		c, err = etcd.New(cfg.DiscoKey, etcdCfg)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		return nil, fmt.Errorf("invalid disco service: %s", cfg.DiscoMode)
+	}
+
+	return disco.NewService(c, str), nil
+}
+
+func startHTTPService(cfg *Config, str *store.Store, cltr *cluster.Client, credStr *auth.CredentialsStore) (*httpd.Service, error) {
 	// Create HTTP server and load authentication information if required.
 	var s *httpd.Service
 	if credStr != nil {
-		s = httpd.New(httpAddr, str, cltr, credStr)
+		s = httpd.New(cfg.HTTPAddr, str, cltr, credStr)
 	} else {
-		s = httpd.New(httpAddr, str, cltr, nil)
+		s = httpd.New(cfg.HTTPAddr, str, cltr, nil)
 	}
 
-	s.CertFile = x509Cert
-	s.KeyFile = x509Key
-	s.TLS1011 = tls1011
-	s.Expvar = expvar
-	s.Pprof = pprofEnabled
+	s.CertFile = cfg.X509Cert
+	s.KeyFile = cfg.X509Key
+	s.TLS1011 = cfg.TLS1011
+	s.Expvar = cfg.Expvar
+	s.Pprof = cfg.PprofEnabled
 	s.BuildInfo = map[string]interface{}{
 		"commit":     cmd.Commit,
 		"branch":     cmd.Branch,
@@ -433,40 +298,39 @@ func startHTTPService(str *store.Store, cltr *cluster.Client, credStr *auth.Cred
 
 // startNodeMux starts the TCP mux on the given listener, which should be already
 // bound to the relevant interface.
-func startNodeMux(ln net.Listener) (*tcp.Mux, error) {
+func startNodeMux(cfg *Config, ln net.Listener) (*tcp.Mux, error) {
 	var adv net.Addr
 	var err error
-	if raftAdv != "" {
-		adv, err = net.ResolveTCPAddr("tcp", raftAdv)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve advertise address %s: %s", raftAdv, err.Error())
-		}
+
+	adv, err = net.ResolveTCPAddr("tcp", cfg.RaftAdv)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve advertise address %s: %s", cfg.RaftAdv, err.Error())
 	}
 
 	var mux *tcp.Mux
-	if nodeEncrypt {
-		log.Printf("enabling node-to-node encryption with cert: %s, key: %s", nodeX509Cert, nodeX509Key)
-		mux, err = tcp.NewTLSMux(ln, adv, nodeX509Cert, nodeX509Key, nodeX509CACert)
+	if cfg.NodeEncrypt {
+		log.Printf("enabling node-to-node encryption with cert: %s, key: %s", cfg.NodeX509Cert, cfg.NodeX509Key)
+		mux, err = tcp.NewTLSMux(ln, adv, cfg.NodeX509Cert, cfg.NodeX509Key, cfg.NodeX509CACert)
 	} else {
 		mux, err = tcp.NewMux(ln, adv)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to create node-to-node mux: %s", err.Error())
 	}
-	mux.InsecureSkipVerify = noNodeVerify
+	mux.InsecureSkipVerify = cfg.NoNodeVerify
 	go mux.Serve()
 
 	return mux, nil
 }
 
-func credentialStore() (*auth.CredentialsStore, error) {
-	if authFile == "" {
+func credentialStore(cfg *Config) (*auth.CredentialsStore, error) {
+	if cfg.AuthFile == "" {
 		return nil, nil
 	}
 
-	f, err := os.Open(authFile)
+	f, err := os.Open(cfg.AuthFile)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open authentication file %s: %s", authFile, err.Error())
+		return nil, fmt.Errorf("failed to open authentication file %s: %s", cfg.AuthFile, err.Error())
 	}
 
 	cs := auth.NewCredentialsStore()
@@ -476,14 +340,10 @@ func credentialStore() (*auth.CredentialsStore, error) {
 	return cs, nil
 }
 
-func clusterService(tn cluster.Transport, db cluster.Database) (*cluster.Service, error) {
+func clusterService(cfg *Config, tn cluster.Transport, db cluster.Database) (*cluster.Service, error) {
 	c := cluster.New(tn, db)
-	apiAddr := httpAddr
-	if httpAdv != "" {
-		apiAddr = httpAdv
-	}
-	c.SetAPIAddr(apiAddr)
-	c.EnableHTTPS(x509Cert != "" && x509Key != "") // Conditions met for an HTTPS API
+	c.SetAPIAddr(cfg.HTTPAdv)
+	c.EnableHTTPS(cfg.X509Cert != "" && cfg.X509Key != "") // Conditions met for an HTTPS API
 
 	if err := c.Open(); err != nil {
 		return nil, err
@@ -491,52 +351,107 @@ func clusterService(tn cluster.Transport, db cluster.Database) (*cluster.Service
 	return c, nil
 }
 
-func idOrRaftAddr() string {
-	if nodeID != "" {
-		return nodeID
-	}
-	return raftAdv
-}
-
-// prof stores the file locations of active profiles.
-var prof struct {
-	cpu *os.File
-	mem *os.File
-}
-
-// startProfile initializes the CPU and memory profile, if specified.
-func startProfile(cpuprofile, memprofile string) {
-	if cpuprofile != "" {
-		f, err := os.Create(cpuprofile)
-		if err != nil {
-			log.Fatalf("failed to create CPU profile file at %s: %s", cpuprofile, err.Error())
+func createCluster(cfg *Config, joins []string, tlsConfig *tls.Config, hasPeers bool, str *store.Store,
+	httpServ *httpd.Service, credStr *auth.CredentialsStore) error {
+	if len(joins) == 0 && cfg.DiscoMode == "" && !hasPeers {
+		// Brand new node, told to bootstrap itself. So do it.
+		log.Println("bootstraping single new node")
+		if err := str.Bootstrap(store.NewServer(str.ID(), str.Addr(), true)); err != nil {
+			return fmt.Errorf("failed to bootstrap single new node: %s", err.Error())
 		}
-		log.Printf("writing CPU profile to: %s\n", cpuprofile)
-		prof.cpu = f
-		pprof.StartCPUProfile(prof.cpu)
+		return nil
 	}
 
-	if memprofile != "" {
-		f, err := os.Create(memprofile)
-		if err != nil {
-			log.Fatalf("failed to create memory profile file at %s: %s", cpuprofile, err.Error())
+	if len(joins) > 0 {
+		// Explicit join addresses supplied, so use them.
+		log.Println("explicit join addresses are:", joins)
+
+		if err := addJoinCreds(joins, cfg.JoinAs, credStr); err != nil {
+			return fmt.Errorf("failed too add auth creds: %s", err.Error())
 		}
-		log.Printf("writing memory profile to: %s\n", memprofile)
-		prof.mem = f
-		runtime.MemProfileRate = 4096
+
+		j, err := cluster.Join(cfg.JoinSrcIP, joins, str.ID(), cfg.RaftAdv, !cfg.RaftNonVoter,
+			cfg.JoinAttempts, cfg.JoinInterval, tlsConfig)
+		if err != nil {
+			return fmt.Errorf("failed to join cluster at %s: %s", joins, err.Error())
+		}
+		log.Println("successfully joined cluster at", j)
+		return nil
 	}
+
+	if cfg.DiscoMode == "" {
+		// No more clustering techniques to try. Node will just sit, probably using
+		// existing Raft state.
+		return nil
+	}
+
+	log.Printf("discovery mode: %s", cfg.DiscoMode)
+	discoService, err := createDiscoService(cfg, str)
+	if err != nil {
+		return fmt.Errorf("failed to start discovery service: %s", err.Error())
+	}
+
+	if !hasPeers {
+		log.Println("no preexisting nodes, registering with discovery service")
+
+		leader, addr, err := discoService.Register(str.ID(), cfg.HTTPURL(), cfg.RaftAdv)
+		if err != nil {
+			return fmt.Errorf("failed to register with discovery service: %s", err.Error())
+		}
+		if leader {
+			log.Println("node registered as leader using discovery service")
+			if err := str.Bootstrap(store.NewServer(str.ID(), str.Addr(), true)); err != nil {
+				return fmt.Errorf("failed to bootstrap single new node: %s", err.Error())
+			}
+		} else {
+			for {
+				log.Printf("discovery service returned %s as join address", addr)
+				if err := addJoinCreds([]string{addr}, cfg.JoinAs, credStr); err != nil {
+					return fmt.Errorf("failed too add auth creds: %s", err.Error())
+				}
+
+				if j, err := cluster.Join(cfg.JoinSrcIP, []string{addr}, str.ID(), cfg.RaftAdv, !cfg.RaftNonVoter,
+					cfg.JoinAttempts, cfg.JoinInterval, tlsConfig); err != nil {
+					log.Printf("failed to join cluster at %s: %s", addr, err.Error())
+
+					time.Sleep(time.Second)
+					_, addr, err = discoService.Register(str.ID(), cfg.HTTPURL(), cfg.RaftAdv)
+					if err != nil {
+						log.Printf("failed to get updated leader: %s", err.Error())
+					}
+					continue
+				} else {
+					log.Println("successfully joined cluster at", j)
+					break
+				}
+			}
+		}
+	} else {
+		log.Println("preexisting node configuration detected, not registering with discovery service")
+	}
+
+	go discoService.StartReporting(cfg.NodeID, cfg.HTTPURL(), cfg.RaftAdv)
+	httpServ.RegisterStatus("disco", discoService)
+	return nil
 }
 
-// stopProfile closes the CPU and memory profiles if they are running.
-func stopProfile() {
-	if prof.cpu != nil {
-		pprof.StopCPUProfile()
-		prof.cpu.Close()
-		log.Println("CPU profiling stopped")
+// addJoinCreds adds credentials to any join addresses, if necessary.
+func addJoinCreds(joins []string, joinAs string, credStr *auth.CredentialsStore) error {
+	if credStr == nil || joinAs == "" {
+		return nil
 	}
-	if prof.mem != nil {
-		pprof.Lookup("heap").WriteTo(prof.mem, 0)
-		prof.mem.Close()
-		log.Println("memory profiling stopped")
+
+	pw, ok := credStr.Password(joinAs)
+	if !ok {
+		return fmt.Errorf("user %s does not exist in credential store", joinAs)
 	}
+
+	var err error
+	for i := range joins {
+		joins[i], err = cluster.AddUserInfo(joins[i], joinAs, pw)
+		if err != nil {
+			return fmt.Errorf("failed to use credential store join_as: %s", err.Error())
+		}
+	}
+	return nil
 }

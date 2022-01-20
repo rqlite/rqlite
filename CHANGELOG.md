@@ -1,3 +1,20 @@
+## 7.0.0 (unreleased)
+This release introduces new node-discovery integration with [Consul](https://www.consul.io/) and [etcd](https://etcd.io/). By using one of those systems with rqlite, automatic clustering of rqlite is much easier. The [legacy Discovery mode](https://github.com/rqlite/rqlite/blob/master/DOC/DISCOVERY.md) is not supported by release 7.0, but may be supported in a future release. So, for now, if you wish to continue using legacy Discovery, you will need to run rqlite 6.x, or earlier.
+
+See the [new documentation](https://github.com/rqlite/rqlite/blob/master/DOC/AUTO_CLUSTERING.md) for full details on using Consul and etcd.
+
+### Upgrading
+There are some breaking changes in release 7.0, but most users of rqlite can upgrade to 7.0 without doing anything special -- simply download and run the 7.0 release.
+- The disco-related command-line arguments have changed to support Consul and etcd. If you wish to continue to use legacy Discovery, you can't upgrade to 7.0 -- or consider using Consul or etcd for node-discovery.
+- The command-line argument `-RaftWaitForLeader` has been removed. If you need to wait for a node to have a Leader, you should poll the `/readyz` endpoint.
+
+### New features
+- [PR #957](https://github.com/rqlite/rqlite/pull/957): Support autoclustering via [Consul](https://www.consul.io/) and [etcd](https://etcd.io/).
+- [PR #947](https://github.com/rqlite/rqlite/pull/947): CLI takes list of hosts, so it can try another node if first node is unresponsive. Fixes [issue #157](https://github.com/rqlite/rqlite/issues/157). Thanks @chermehdi
+
+### Implementation changes and bug fixes
+- [PR #957](https://github.com/rqlite/rqlite/pull/957): Refactor `rqlited` command-line argument code.
+
 ## 6.10.2 (January 13th 2022)
 ### Implementation changes and bug fixes
 - [PR #959](https://github.com/rqlite/rqlite/pull/959): Return clearer error if no database results set.
