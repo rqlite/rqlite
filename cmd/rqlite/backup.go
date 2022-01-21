@@ -1,15 +1,13 @@
 package main
 
 import (
-	"bytes"
-	"crypto/tls"
 	"fmt"
-	"io/ioutil"
-	"net/http"
+	"io"
 	"net/url"
-	"strings"
+	"os"
 
 	"github.com/mkideal/cli"
+	cl "github.com/rqlite/rqlite/cmd/rqlite/http"
 )
 
 type restoreResponse struct {
@@ -28,28 +26,23 @@ type statusResponse struct {
 	Store *store `json:"store"`
 }
 
-func makeBackupRequest(urlStr string) (*http.Request, error) {
-	req, err := http.NewRequest("GET", urlStr, nil)
-	if err != nil {
-		return nil, err
-	}
-	return req, nil
-}
-
-func backup(ctx *cli.Context, filename string, argv *argT) error {
+func backupWithClient(ctx *cli.Context, client *cl.Client, filename string) error {
 	queryStr := url.Values{}
 	u := url.URL{
-		Scheme:   argv.Protocol,
-		Host:     fmt.Sprintf("%s:%d", argv.Host, argv.Port),
-		Path:     fmt.Sprintf("%sdb/backup", argv.Prefix),
+		Path:     fmt.Sprintf("%sdb/backup", client.Prefix),
 		RawQuery: queryStr.Encode(),
 	}
-	response, err := sendRequest(ctx, makeBackupRequest, u.String(), argv)
+	response, err := client.Backup(u)
 	if err != nil {
 		return err
 	}
 
-	err = ioutil.WriteFile(filename, *response, 0644)
+	f, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = io.Copy(f, response.Body)
 	if err != nil {
 		return err
 	}
@@ -58,21 +51,24 @@ func backup(ctx *cli.Context, filename string, argv *argT) error {
 	return nil
 }
 
-func dump(ctx *cli.Context, filename string, argv *argT) error {
+func dumpWithClient(ctx *cli.Context, client *cl.Client, filename string) error {
 	queryStr := url.Values{}
 	queryStr.Set("fmt", "sql")
 	u := url.URL{
-		Scheme:   argv.Protocol,
-		Host:     fmt.Sprintf("%s:%d", argv.Host, argv.Port),
-		Path:     fmt.Sprintf("%sdb/backup", argv.Prefix),
+		Path:     fmt.Sprintf("%sdb/backup", client.Prefix),
 		RawQuery: queryStr.Encode(),
 	}
-	response, err := sendRequest(ctx, makeBackupRequest, u.String(), argv)
+	response, err := client.Backup(u)
 	if err != nil {
 		return err
 	}
 
-	err = ioutil.WriteFile(filename, *response, 0644)
+	f, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = io.Copy(f, response.Body)
 	if err != nil {
 		return err
 	}
@@ -81,85 +77,29 @@ func dump(ctx *cli.Context, filename string, argv *argT) error {
 	return nil
 }
 
-func makeRestoreRequest(b []byte) func(string) (*http.Request, error) {
-	return func(urlStr string) (*http.Request, error) {
-		req, err := http.NewRequest("POST", urlStr, bytes.NewReader(b))
-		req.Header["Content-type"] = []string{"text/plain"}
-		if err != nil {
-			return nil, err
-		}
-		return req, nil
-	}
-}
-
-func restore(ctx *cli.Context, filename string, argv *argT) error {
-	statusURL := fmt.Sprintf("%s://%s:%d/status", argv.Protocol, argv.Host, argv.Port)
-	client := http.Client{Transport: &http.Transport{
-		Proxy:           http.ProxyFromEnvironment,
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: argv.Insecure},
-	}}
-
-	req, err := http.NewRequest("GET", statusURL, nil)
+func restoreWithClient(ctx *cli.Context, client *cl.Client, filename string) error {
+	restoreFile, err := os.Open(filename)
 	if err != nil {
 		return err
-	}
-	if argv.Credentials != "" {
-		creds := strings.Split(argv.Credentials, ":")
-		if len(creds) != 2 {
-			return fmt.Errorf("invalid Basic Auth credentials format")
-		}
-		req.SetBasicAuth(creds[0], creds[1])
-	}
-
-	statusResp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer statusResp.Body.Close()
-
-	if statusResp.StatusCode == http.StatusUnauthorized {
-		return fmt.Errorf("unauthorized")
-	}
-
-	body, err := ioutil.ReadAll(statusResp.Body)
-	if err != nil {
-		return err
-	}
-	statusRet := &statusResponse{}
-	if err := parseResponse(&body, &statusRet); err != nil {
-		return err
-	}
-	if statusRet.Store == nil {
-		return fmt.Errorf("unexpected server response: store status not found")
-	}
-
-	restoreFile, err := ioutil.ReadFile(filename)
-	if err != nil {
-		return err
-	}
-
-	// It is cheaper to append the actual pragma command to the restore file
-	fkEnabled := statusRet.Store.SqliteStatus.FkConstraint == "enabled"
-	if fkEnabled {
-		restoreFile = append(restoreFile, []byte("PRAGMA foreign_keys=ON;")...)
-	} else {
-		restoreFile = append(restoreFile, []byte("PRAGMA foreign_keys=OFF;")...)
 	}
 
 	queryStr := url.Values{}
 	restoreURL := url.URL{
-		Scheme:   argv.Protocol,
-		Host:     fmt.Sprintf("%s:%d", argv.Host, argv.Port),
-		Path:     fmt.Sprintf("%sdb/load", argv.Prefix),
+		Path:     fmt.Sprintf("%sdb/load", client.Prefix),
 		RawQuery: queryStr.Encode(),
 	}
-	response, err := sendRequest(ctx, makeRestoreRequest(restoreFile), restoreURL.String(), argv)
+	resp, err := client.Restore(restoreURL, restoreFile)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	response, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}
 
 	restoreRet := &restoreResponse{}
-	if err := parseResponse(response, &restoreRet); err != nil {
+	if err := parseResponse(&response, &restoreRet); err != nil {
 		return err
 	}
 	if len(restoreRet.Results) < 1 {

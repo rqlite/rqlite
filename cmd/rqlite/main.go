@@ -84,7 +84,7 @@ func main() {
 
 		timer := false
 		consistency := "weak"
-		prefix := fmt.Sprintf("%s:%d>", argv.Host, argv.Port)
+		prefix := fmt.Sprintf("%s:%d>", "HOST", 666)
 		term, err := prompt.NewTerminal()
 		if err != nil {
 			ctx.String("%s %v\n", ctx.Color().Red("ERR!"), err)
@@ -93,10 +93,13 @@ func main() {
 		term.Close()
 
 		hosts := createHostList(argv)
-		client := httpcl.NewClient(httpClient, hosts,
-			httpcl.WithScheme(argv.Protocol),
+		client, err := httpcl.NewClient(httpClient, hosts,
 			httpcl.WithBasicAuth(argv.Credentials),
 			httpcl.WithPrefix(argv.Prefix))
+		if err != nil {
+			ctx.String("%s %v\n", ctx.Color().Red("ERR!"), err)
+			return nil
+		}
 
 	FOR_READ:
 		for {
@@ -149,13 +152,13 @@ func main() {
 					err = fmt.Errorf("please specify an output file for the backup")
 					break
 				}
-				err = backup(ctx, line[index+1:], argv)
+				err = backupWithClient(ctx, client, line[index+1:])
 			case ".RESTORE":
 				if index == -1 || index == len(line)-1 {
 					err = fmt.Errorf("please specify an input file to restore from")
 					break
 				}
-				err = restore(ctx, line[index+1:], argv)
+				err = restoreWithClient(ctx, client, line[index+1:])
 			case ".SYSDUMP":
 				if index == -1 || index == len(line)-1 {
 					err = fmt.Errorf("please specify an output file for the sysdump")
@@ -167,7 +170,7 @@ func main() {
 					err = fmt.Errorf("please specify an output file for the SQL text")
 					break
 				}
-				err = dump(ctx, line[index+1:], argv)
+				err = dumpWithClient(ctx, client, line[index+1:])
 			case ".HELP":
 				err = help(ctx, cmd, line, argv)
 			case ".QUIT", "QUIT", "EXIT":

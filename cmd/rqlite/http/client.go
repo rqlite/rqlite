@@ -119,15 +119,11 @@ func (c *Client) Execute(url url.URL, body io.Reader) (*http.Response, error) {
 }
 
 func (c *Client) Backup(url url.URL) (*http.Response, error) {
-	return nil, nil
+	return c.doRequest(http.MethodGet, url, nil)
 }
 
-func (c *Client) Restore(url url.URL) (*http.Response, error) {
-	return nil, nil
-}
-
-func (c *Client) Dump() (*http.Response, error) {
-	return nil, nil
+func (c *Client) Restore(url url.URL, data io.Reader) (*http.Response, error) {
+	return c.doRequest(http.MethodPost, url, data)
 }
 
 func (c *Client) doRequest(method string, relativeURL url.URL, body io.Reader) (*http.Response, error) {

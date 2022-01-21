@@ -54,12 +54,12 @@ func executeWithClient(ctx *cli.Context, client *cl.Client, timer bool, stmt str
 		}
 		hcr = err
 	}
+	defer resp.Body.Close()
 
 	response, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}
-	resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("server responded with %s: %s", resp.Status, response)
