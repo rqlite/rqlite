@@ -205,7 +205,7 @@ func createStore(cfg *Config, ln *tcp.Layer) (*store.Store, error) {
 	str.StartupOnDisk = cfg.OnDiskStartup
 	str.SetRequestCompression(cfg.CompressionBatch, cfg.CompressionSize)
 	str.RaftLogLevel = cfg.RaftLogLevel
-	str.RaftNoFreeListSync = cfg.RaftNoFreelistSync
+	str.NoFreeListSync = cfg.RaftNoFreelistSync
 	str.ShutdownOnRemove = cfg.RaftShutdownOnRemove
 	str.SnapshotThreshold = cfg.RaftSnapThreshold
 	str.SnapshotInterval = cfg.RaftSnapInterval
