@@ -13,7 +13,7 @@ func Test_LogNewEmpty(t *testing.T) {
 	path := mustTempFile()
 	defer os.Remove(path)
 
-	l, err := NewLog(path)
+	l, err := New(path)
 	if err != nil {
 		t.Fatalf("failed to create log: %s", err)
 	}
@@ -62,7 +62,7 @@ func Test_LogNewExistNotEmpty(t *testing.T) {
 		t.Fatalf("failed to close bolt db: %s", err)
 	}
 
-	l, err := NewLog(path)
+	l, err := New(path)
 	if err != nil {
 		t.Fatalf("failed to create new log: %s", err)
 	}
@@ -107,7 +107,7 @@ func Test_LogNewExistNotEmpty(t *testing.T) {
 		t.Fatalf("failed to close bolt db: %s", err)
 	}
 
-	l, err = NewLog(path)
+	l, err = New(path)
 	if err != nil {
 		t.Fatalf("failed to create new log: %s", err)
 	}
@@ -165,7 +165,7 @@ func Test_LogLastCommandIndexNotExist(t *testing.T) {
 		t.Fatalf("failed to close bolt db: %s", err)
 	}
 
-	l, err := NewLog(path)
+	l, err := New(path)
 	if err != nil {
 		t.Fatalf("failed to create new log: %s", err)
 	}
@@ -210,7 +210,7 @@ func Test_LogLastCommandIndexNotExist(t *testing.T) {
 		t.Fatalf("failed to close bolt db: %s", err)
 	}
 
-	l, err = NewLog(path)
+	l, err = New(path)
 	if err != nil {
 		t.Fatalf("failed to create new log: %s", err)
 	}
