@@ -18,7 +18,7 @@ There are also some other breaking changes in release 7.0, related to command-li
 - [PR #957](https://github.com/rqlite/rqlite/pull/957): Refactor `rqlited` command-line argument code.
 - [PR #965](https://github.com/rqlite/rqlite/pull/965): Stop using deprecated protobuf package.
 - [PR #967](https://github.com/rqlite/rqlite/pull/967): Replace BoltDB with etcd's fork, [bbolt](https://pkg.go.dev/go.etcd.io/bbolt).
-- [PR #968](https://github.com/rqlite/rqlite/pull/968): Control whether bbolt sync freelist to disk.
+- [PR #968](https://github.com/rqlite/rqlite/pull/968): Control whether bbolt syncs freelist to disk.
 
 ## 6.10.2 (January 13th 2022)
 ### Implementation changes and bug fixes
