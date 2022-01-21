@@ -4,7 +4,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 )
 
 func Test_NewRequestMarshaler(t *testing.T) {

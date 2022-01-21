@@ -3,7 +3,7 @@ package cmd
 // These variables are populated via the Go linker.
 var (
 	// Version of rqlite.
-	Version = "6"
+	Version = "7"
 
 	// Commit this code was built at.
 	Commit = "unknown"

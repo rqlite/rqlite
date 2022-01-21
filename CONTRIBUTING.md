@@ -48,8 +48,7 @@ _This step is not necessary unless you are making changes to protobuf definition
 
 Ensure you have the required tools installed, and that `GOPATH` is set.
 ```bash
-go get -u github.com/golang/protobuf/protoc-gen-go
-go install github.com/golang/protobuf/protoc-gen-go
+go install google.golang.org/protobuf/cmd/protoc-gen-go
 export GOBIN=$GOPATH/bin
 export PATH=$PATH:$GOBIN
 export DEST_DIR=$GOPATH/src

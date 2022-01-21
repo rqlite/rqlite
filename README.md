@@ -21,7 +21,7 @@ rqlite uses [Raft](https://raft.github.io/) to achieve consensus across all the 
 - Fully replicated production-grade SQL database.
 - [Production-grade](https://github.com/hashicorp/raft) distributed consensus system.
 - An easy-to-use [HTTP(S) API](https://github.com/rqlite/rqlite/blob/master/DOC/DATA_API.md). A [command-line interface is also available](https://github.com/rqlite/rqlite/tree/master/cmd/rqlite), as are various [client libraries](https://github.com/rqlite).
-- [Discovery Service support](https://github.com/rqlite/rqlite/blob/master/DOC/DISCOVERY.md), allowing clusters to be dynamically created.
+- [Node-discovery and automatic clustering via Consul and etcd](https://github.com/rqlite/rqlite/blob/master/DOC/AUTO_CLUSTERING.md), allowing clusters to be dynamically created.
 - [Extensive security and encryption support](https://github.com/rqlite/rqlite/blob/master/DOC/SECURITY.md), including node-to-node encryption.
 - Choice of [read consistency levels](https://github.com/rqlite/rqlite/blob/master/DOC/CONSISTENCY.md).
 - Optional [read-only (non-voting) nodes](https://github.com/rqlite/rqlite/blob/master/DOC/READ_ONLY_NODES.md), which can add read scalability to the system.
@@ -57,8 +57,8 @@ _This demonstration shows all 3 nodes running on the same host. In reality you p
 
 With just these few steps you've now got a fault-tolerant, distributed relational database. For full details on creating and managing real clusters, including running read-only nodes, check out [this documentation](https://github.com/rqlite/rqlite/blob/master/DOC/CLUSTER_MGMT.md).
 
-#### Cluster Discovery
-There is also a rqlite _Discovery Service_, allowing nodes to automatically connect and form a cluster. This can be much more convenient, allowing clusters to be dynamically created. Check out [the documentation](https://github.com/rqlite/rqlite/blob/master/DOC/DISCOVERY.md) for more details.
+#### Node Discovery and Automatic Clustering
+rqlite can use either [Consul](https://www.consul.io/) or [etcd](https://etcd.io/) for node discovery, allowing nodes to automatically connect and form a cluster. This can be much more convenient, allowing clusters to be dynamically created. Check out [the documentation](https://github.com/rqlite/rqlite/blob/master/DOC/AUTO_CLUSTERING.md) for more details.
 
 ### Inserting records
 Let's insert some records via the [rqlite CLI](https://github.com/rqlite/rqlite/blob/master/DOC/CLI.md), using standard SQLite commands. Once inserted, these records will be replicated across the cluster, in a durable and fault-tolerant manner. Your 3-node cluster can suffer the failure of a single node without any loss of functionality or data.

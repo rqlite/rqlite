@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/rqlite/rqlite/command"
+	"google.golang.org/protobuf/proto"
 )
 
 // stats captures stats for the Cluster service.

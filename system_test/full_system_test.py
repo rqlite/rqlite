@@ -13,10 +13,12 @@ import subprocess
 import requests
 import json
 import os
+import random
 import shutil
 import time
 import socket
 import sqlite3
+import string
 import sys
 import unittest
 
@@ -28,14 +30,23 @@ TIMEOUT=10
 def d_(s):
     return ast.literal_eval(s.replace("'", "\""))
 
+def random_string(n):
+  letters = string.ascii_lowercase
+  return ''.join(random.choice(letters) for i in range(n))
+
+def write_random_file(data):
+  f = tempfile.NamedTemporaryFile('w', delete=False)
+  f.write(data)
+  f.close()
+  return f.name
+
 class Node(object):
   def __init__(self, path, node_id,
                api_addr=None, api_adv=None,
                raft_addr=None, raft_adv=None,
                raft_voter=True,
                raft_snap_threshold=8192, raft_snap_int="1s",
-               auth=None, join_as=None,
-               dir=None, on_disk=False):
+               auth=None, dir=None, on_disk=False):
     if api_addr is None:
       s, addr = random_addr()
       api_addr = addr
@@ -61,7 +72,7 @@ class Node(object):
     self.raft_snap_threshold = raft_snap_threshold
     self.raft_snap_int = raft_snap_int
     self.auth = auth
-    self.join_as = join_as
+    self.disco_key = random_string(10)
     self.on_disk = on_disk
     self.process = None
     self.stdout_file = os.path.join(dir, 'rqlited.log')
@@ -98,7 +109,8 @@ class Node(object):
     if self.raft_adv is None:
       self.raft_adv = self.raft_addr
 
-  def start(self, join=None, wait=True, timeout=TIMEOUT):
+  def start(self, join=None, join_as=None, join_attempts=None, join_interval=None,
+    disco_mode=None, disco_key=None, disco_config=None, wait=True, timeout=TIMEOUT):
     if self.process is not None:
       return
 
@@ -119,8 +131,19 @@ class Node(object):
       command += ['-auth', self.auth]
     if join is not None:
       command += ['-join', 'http://' + join]
-      if self.join_as is not None:
-        command += ['-join-as', self.join_as]
+    if join_as is not None:
+       command += ['-join-as', join_as]
+    if join_attempts is not None:
+       command += ['-join-attempts', str(join_attempts)]
+    if join_interval is not None:
+       command += ['-join-interval', join_interval]
+    if disco_mode is not None:
+      dk = disco_key
+      if dk is None:
+        dk = self.disco_key
+      command += ['-disco-mode', disco_mode, '-disco-key', dk]
+      if disco_config is not None:
+        command += ['-disco-config', disco_config]
     command.append(self.dir)
 
     self.process = subprocess.Popen(command, stdout=self.stdout_fd, stderr=self.stderr_fd)
@@ -186,6 +209,12 @@ class Node(object):
       return self.status()['store']['raft']['state'] == 'Follower'
     except requests.exceptions.ConnectionError:
       return False
+
+  def disco_mode(self):
+    try:
+      return self.status()['disco']['name']
+    except requests.exceptions.ConnectionError:
+      return ''
 
   def wait_for_leader(self, timeout=TIMEOUT):
     lr = None
@@ -679,6 +708,101 @@ class TestEndToEndAdvAddr(TestEndToEnd):
 
     self.cluster = Cluster([n0, n1, n2])
 
+class TestAutoClustering(unittest.TestCase):
+  def autocluster(self, mode):
+    disco_key = random_string(10)
+
+    n0 = Node(RQLITED_PATH, '0')
+    n0.start(disco_mode=mode, disco_key=disco_key)
+    n0.wait_for_leader()
+    self.assertEqual(n0.disco_mode(), mode)
+
+    j = n0.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
+    self.assertEqual(j, d_("{'results': [{}]}"))
+    j = n0.execute('INSERT INTO foo(name) VALUES("fiona")')
+    n0.wait_for_all_fsm()
+    j = n0.query('SELECT * FROM foo')
+    self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
+
+    # Add second node, make sure it joins the cluster fine.
+    n1 = Node(RQLITED_PATH, '1')
+    n1.start(disco_mode=mode, disco_key=disco_key)
+    n1.wait_for_leader()
+    self.assertEqual(n1.disco_mode(), mode)
+    j = n1.query('SELECT * FROM foo', level='none')
+    self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
+
+    # Now a third.
+    n2 = Node(RQLITED_PATH, '2')
+    n2.start(disco_mode=mode, disco_key=disco_key)
+    n2.wait_for_leader()
+    self.assertEqual(n2.disco_mode(), mode)
+    j = n2.query('SELECT * FROM foo', level='none')
+    self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
+
+    # Now, kill the leader, which should trigger a different node to report leadership.
+    deprovision_node(n0)
+
+    # Add a fourth node, it should join fine using updated leadership details.
+    # Use quick retries, as we know the leader information may be changing while
+    # the node is coming up.
+    n3 = Node(RQLITED_PATH, '3')
+    n3.start(disco_mode=mode, disco_key=disco_key, join_interval='1s', join_attempts=1)
+    n3.wait_for_leader()
+    self.assertEqual(n3.disco_mode(), mode)
+    j = n3.query('SELECT * FROM foo', level='none')
+    self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
+
+    deprovision_node(n1)
+    deprovision_node(n2)
+    deprovision_node(n3)
+
+  def autocluster_config(self, mode, config):
+    disco_key = random_string(10)
+
+    n0 = Node(RQLITED_PATH, '0')
+    n0.start(disco_mode=mode, disco_key=disco_key, disco_config=config)
+    n0.wait_for_leader()
+    self.assertEqual(n0.disco_mode(), mode)
+
+    j = n0.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
+    self.assertEqual(j, d_("{'results': [{}]}"))
+    j = n0.execute('INSERT INTO foo(name) VALUES("fiona")')
+    n0.wait_for_all_fsm()
+    j = n0.query('SELECT * FROM foo')
+    self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
+
+    # Add second node, make sure it joins the cluster fine.
+    n1 = Node(RQLITED_PATH, '1')
+    n1.start(disco_mode=mode, disco_key=disco_key, disco_config=config)
+    n1.wait_for_leader()
+    self.assertEqual(n1.disco_mode(), mode)
+    j = n1.query('SELECT * FROM foo', level='none')
+    self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
+
+    deprovision_node(n0)
+    deprovision_node(n1)
+
+  def test_consul(self):
+    '''Test clustering via Consul and that leadership change is observed'''
+    self.autocluster('consul')
+
+  def test_etcd(self):
+    '''Test clustering via Etcd and that leadership change is observed'''
+    self.autocluster('etcd')
+
+  def test_consul_config(self):
+    '''Test clustering via Consul with explicit file-based config'''
+    filename = write_random_file('{"address": "localhost:8500"}')
+    self.autocluster_config('consul', filename)
+    os.remove(filename)
+
+  def test_etcd_config(self):
+    '''Test clustering via Etcd with explicit file-based config'''
+    filename = write_random_file('{"endpoints": ["localhost:2379"]}')
+    self.autocluster_config('etcd', filename)
+    os.remove(filename)
+
 class TestAuthJoin(unittest.TestCase):
   '''Test that joining works with authentication'''
 
@@ -695,8 +819,8 @@ class TestAuthJoin(unittest.TestCase):
     n1.start(join=n0.APIAddr())
     self.assertRaises(Exception, n1.wait_for_leader) # Join should fail due to lack of auth.
 
-    n2 = Node(RQLITED_PATH, '2', auth=self.auth_file.name, join_as="foo")
-    n2.start(join=n0.APIAddr())
+    n2 = Node(RQLITED_PATH, '2', auth=self.auth_file.name)
+    n2.start(join=n0.APIAddr(), join_as="foo")
     n2.wait_for_leader()
 
     self.cluster = Cluster([n0, n1, n2])
