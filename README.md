@@ -35,7 +35,6 @@ The quickest way to get running on macOS and Linux is to download a pre-built re
 ```bash
 rqlited -node-id 1 ~/node.1
 ```
-_Setting `-node-id` isn't strictly necessary at this time, but highly recommended. It makes cluster management much clearer._
 
 This single node automatically becomes the leader. You can pass `-h` to `rqlited` to list all configuration options.
 

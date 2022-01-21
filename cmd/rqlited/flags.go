@@ -53,7 +53,7 @@ type Config struct {
 	// NodeX509Key is the path to the X509 key for the Raft server. May not be set.
 	NodeX509Key string
 
-	// NodeID is the Raft ID for the node.
+	// NodeID is the Raft ID for the node. Always set.
 	NodeID string
 
 	// RaftAddr is the bind network address for the Raft server.
@@ -188,7 +188,7 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	}
 	config := Config{}
 
-	flag.StringVar(&config.NodeID, "node-id", "", "Unique name for node. If not set, set to advertised Raft address")
+	flag.StringVar(&config.NodeID, "node-id", "", "Unique identifier for node. Required.")
 	flag.StringVar(&config.HTTPAddr, "http-addr", "localhost:4001", "HTTP server bind address. To enable HTTPS, set X.509 cert and key")
 	flag.StringVar(&config.HTTPAdv, "http-adv-addr", "", "Advertised HTTP address. If not set, same as HTTP server bind")
 	flag.BoolVar(&config.TLS1011, "tls1011", false, "Support deprecated TLS versions 1.0 and 1.1")
@@ -236,7 +236,7 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	flag.StringVar(&config.MemProfile, "mem-profile", "", "Path to file for memory profiling information")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "\n%s\n\n", desc)
-		fmt.Fprintf(os.Stderr, "Usage: %s [flags] <data directory>\n", name)
+		fmt.Fprintf(os.Stderr, "Usage: %s [flags] -node-id <id> <data directory>\n", name)
 		flag.PrintDefaults()
 	}
 	flag.Parse()
@@ -251,7 +251,10 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 		errorExit(1, "fatal: on-disk-path is set, but on-disk is not\n")
 	}
 
-	// Ensure the data path is set.
+	// Ensure the required arguments are set.
+	if config.NodeID == "" {
+		errorExit(1, "fatal: no node ID set. Set it with -node-id.\n")
+	}
 	if flag.NArg() < 1 {
 		errorExit(1, "fatal: no data directory set\n")
 	}
@@ -286,11 +289,6 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	}
 	if _, _, err := net.SplitHostPort(config.RaftAdv); err != nil {
 		errorExit(1, "Raft advertised address not valid")
-	}
-
-	// Node ID policy
-	if config.NodeID == "" {
-		config.NodeID = config.RaftAdv
 	}
 
 	return &config, nil

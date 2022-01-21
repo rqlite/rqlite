@@ -37,7 +37,7 @@ host1:$ rqlited -node-id 1 -http-addr host1:4001 -raft-addr host1:4002 ~/node
 ```
 With this command a single node is started, listening for API requests on port 4001 and listening on port 4002 for intra-cluster communication and cluster-join requests from other nodes. Note that the addresses passed to `-http-addr` and `-raft-addr` must be reachable from other nodes so that nodes can find each other over the network -- these addresses will be broadcast to other nodes during the _Join_ operation. If a node needs to bind to one address, but broadcast a different address, you must set `-http-adv-addr` and `-raft-adv-addr`.
 
-`-node-id` can be any string, as long as it's unique for the cluster. It also shouldn't change, once chosen for this node. The network addresses can change however. This node stores its state at `~/node`.
+`-node-id` can be any string, as long as it's unique for the cluster. It also shouldn't change, once chosen for this node. The network addresses can change however, though if the Raft address changes you should explicitly tell node to rejoin the cluster. This node stores its state at `~/node`.
 
 To join a second node to this leader, execute the following command on _host2_:
 ```bash
@@ -54,7 +54,7 @@ _When simply restarting a node, there is no further need to pass `-join`. Howeve
 You've now got a fault-tolerant, distributed, relational database. It can tolerate the failure of any node, even the leader, and remain operational.
 
 ## Node IDs
-You can set the Node ID (`-node-id`) to anything you wish, as long as it's unique for each node.
+You can set the Node ID (`-node-id`) to any non-empty string you like, as long as it's unique for each node in the cluster.
 
 ## Listening on all interfaces
 You can pass `0.0.0.0` to both `-http-addr` and `-raft-addr` if you wish a node to listen on all interfaces. You must still pass an explicit network address to `-join` however. In this case you'll also want to set `-http-adv-addr` and `-raft-adv-addr` to the actual interface addresses, so other nodes learn the correct network address to use to reach the node listening on `0.0.0.0`.
