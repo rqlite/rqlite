@@ -143,6 +143,9 @@ type Config struct {
 	// RaftShutdownOnRemove sets whether Raft should be shutdown if the node is removed
 	RaftShutdownOnRemove bool
 
+	// RaftNoFreelistSync disables syncing Raft database freelist to disk
+	RaftNoFreelistSync bool
+
 	// CompressionSize sets request query size for compression attempt
 	CompressionSize int
 
@@ -223,6 +226,7 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	flag.DurationVar(&config.RaftSnapInterval, "raft-snap-int", 30*time.Second, "Snapshot threshold check interval")
 	flag.DurationVar(&config.RaftLeaderLeaseTimeout, "raft-leader-lease-timeout", 0, "Raft leader lease timeout. Use 0s for Raft default")
 	flag.BoolVar(&config.RaftShutdownOnRemove, "raft-remove-shutdown", false, "Shutdown Raft if node removed")
+	flag.BoolVar(&config.RaftNoFreelistSync, "raft-no-freelist-sync", false, "Do not syncing Raft database freelist to sync")
 	flag.StringVar(&config.RaftLogLevel, "raft-log-level", "INFO", "Minimum log level for Raft module")
 	flag.IntVar(&config.CompressionSize, "compression-size", 150, "Request query size for compression attempt")
 	flag.IntVar(&config.CompressionBatch, "compression-batch", 5, "Request batch threshold for compression attempt")
