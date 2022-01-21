@@ -192,6 +192,7 @@ type Store struct {
 	ElectionTimeout    time.Duration
 	ApplyTimeout       time.Duration
 	RaftLogLevel       string
+	NoFreeListSync     bool
 
 	numTrailingLogs uint64
 
@@ -304,7 +305,7 @@ func (s *Store) Open() (retErr error) {
 	s.snapsExistOnOpen = len(snaps) > 0
 
 	// Create the log store and stable store.
-	s.boltStore, err = rlog.New(filepath.Join(s.raftDir, raftDBPath))
+	s.boltStore, err = rlog.New(filepath.Join(s.raftDir, raftDBPath), s.NoFreeListSync)
 	if err != nil {
 		return fmt.Errorf("new log store: %s", err)
 	}
@@ -687,6 +688,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		"election_timeout":   s.ElectionTimeout.String(),
 		"snapshot_threshold": s.SnapshotThreshold,
 		"snapshot_interval":  s.SnapshotInterval,
+		"no_freelist_sync":   s.NoFreeListSync,
 		"trailing_logs":      s.numTrailingLogs,
 		"request_marshaler":  s.reqMarshaller.Stats(),
 		"nodes":              nodes,

@@ -14,10 +14,15 @@ type Log struct {
 }
 
 // New returns an instantiated Log object.
-func New(path string) (*Log, error) {
-	bs, err := raftboltdb.NewBoltStore(path)
+func New(path string, noFreelistSync bool) (*Log, error) {
+	bs, err := raftboltdb.New(raftboltdb.Options{
+		BoltOptions: &bbolt.Options{
+			NoFreelistSync: noFreelistSync,
+		},
+		Path: path,
+	})
 	if err != nil {
-		return nil, fmt.Errorf("new bolt store: %s", err)
+		return nil, fmt.Errorf("new bbolt store: %s", err)
 	}
 	return &Log{bs}, nil
 }
