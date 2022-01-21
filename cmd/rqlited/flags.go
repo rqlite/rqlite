@@ -160,7 +160,7 @@ type Config struct {
 	// CPUProfile enables CPU profiling.
 	CPUProfile string
 
-	//MemProfile enables memory profiling.
+	// MemProfile enables memory profiling.
 	MemProfile string
 }
 
