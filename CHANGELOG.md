@@ -4,7 +4,9 @@ This release introduces new node-discovery integration with [Consul](https://www
 See the [new documentation](https://github.com/rqlite/rqlite/blob/master/DOC/AUTO_CLUSTERING.md) for full details on using Consul and etcd.
 
 ### Upgrading
-There are some breaking changes in release 7.0, but most users of rqlite can upgrade to 7.0 without doing anything special -- simply download and run the 7.0 release.
+This release uses a new database for the Raft system. As a result **rqlite 7.0 is not compatible with earlier releases**. To upgrade from an earlier version to this release you should backup your existing Leader node, and restore the database dump into a new 7.0 cluster.
+
+There are also some other breaking changes in release 7.0, related to command-line arguments:
 - The disco-related command-line arguments have changed to support Consul and etcd. If you wish to continue to use legacy Discovery, you can't upgrade to 7.0 -- or consider using Consul or etcd for node-discovery.
 - The command-line argument `-RaftWaitForLeader` has been removed. If you need to wait for a node to have a Leader, you should poll the `/readyz` endpoint.
 
@@ -15,6 +17,7 @@ There are some breaking changes in release 7.0, but most users of rqlite can upg
 ### Implementation changes and bug fixes
 - [PR #957](https://github.com/rqlite/rqlite/pull/957): Refactor `rqlited` command-line argument code.
 - [PR #965](https://github.com/rqlite/rqlite/pull/965): Stop using deprecated protobuf package.
+- [PR #967](https://github.com/rqlite/rqlite/pull/967): Replace BoltDB with etcd's fork, [bbolt](https://pkg.go.dev/go.etcd.io/bbolt).
 
 ## 6.10.2 (January 13th 2022)
 ### Implementation changes and bug fixes
