@@ -4,7 +4,8 @@ import (
 	"fmt"
 
 	"github.com/hashicorp/raft"
-	"github.com/rqlite/raft-boltdb"
+	"github.com/hashicorp/raft-boltdb/v2"
+	"go.etcd.io/bbolt"
 )
 
 // Log is an object that can return information about the Raft log.
@@ -12,8 +13,8 @@ type Log struct {
 	*raftboltdb.BoltStore
 }
 
-// NewLog returns an instantiated Log object.
-func NewLog(path string) (*Log, error) {
+// New returns an instantiated Log object.
+func New(path string) (*Log, error) {
 	bs, err := raftboltdb.NewBoltStore(path)
 	if err != nil {
 		return nil, fmt.Errorf("new bolt store: %s", err)
@@ -60,7 +61,7 @@ func (l *Log) LastCommandIndex() (uint64, error) {
 	return 0, nil
 }
 
-// Stats returns stats about the BoltDB database.
-func (l *Log) Stats() raftboltdb.Stats {
+// Stats returns stats about the BBoltDB database.
+func (l *Log) Stats() bbolt.Stats {
 	return l.BoltStore.Stats()
 }

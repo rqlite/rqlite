@@ -304,7 +304,7 @@ func (s *Store) Open() (retErr error) {
 	s.snapsExistOnOpen = len(snaps) > 0
 
 	// Create the log store and stable store.
-	s.boltStore, err = rlog.NewLog(filepath.Join(s.raftDir, raftDBPath))
+	s.boltStore, err = rlog.New(filepath.Join(s.raftDir, raftDBPath))
 	if err != nil {
 		return fmt.Errorf("new log store: %s", err)
 	}
