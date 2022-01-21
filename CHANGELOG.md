@@ -20,6 +20,7 @@ There are also some breaking changes in release 7.0, related to command-line arg
 - [PR #965](https://github.com/rqlite/rqlite/pull/965): Stop using deprecated protobuf package.
 - [PR #967](https://github.com/rqlite/rqlite/pull/967): Replace BoltDB with etcd's fork, [bbolt](https://pkg.go.dev/go.etcd.io/bbolt).
 - [PR #968](https://github.com/rqlite/rqlite/pull/968): Control whether bbolt syncs freelist to disk.
+- [PR #969](https://github.com/rqlite/rqlite/pull/969): Setting node ID at startup is now required.
 
 ## 6.10.2 (January 13th 2022)
 ### Implementation changes and bug fixes
