@@ -143,7 +143,9 @@ type Config struct {
 	// RaftShutdownOnRemove sets whether Raft should be shutdown if the node is removed
 	RaftShutdownOnRemove bool
 
-	// RaftNoFreelistSync disables syncing Raft database freelist to disk
+	// RaftNoFreelistSync disables syncing Raft database freelist to disk. When true,
+	// it improves the database write performance under normal operation, but requires
+	// a full database re-sync during recovery.
 	RaftNoFreelistSync bool
 
 	// CompressionSize sets request query size for compression attempt
