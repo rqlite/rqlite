@@ -709,6 +709,9 @@ class TestEndToEndAdvAddr(TestEndToEnd):
     self.cluster = Cluster([n0, n1, n2])
 
 class TestAutoClustering(unittest.TestCase):
+  DiscoModeConsulKV = "consul-kv"
+  DiscoModeEtcdKV = "etcd-kv"
+
   def autocluster(self, mode):
     disco_key = random_string(10)
 
@@ -785,22 +788,22 @@ class TestAutoClustering(unittest.TestCase):
 
   def test_consul(self):
     '''Test clustering via Consul and that leadership change is observed'''
-    self.autocluster('consul')
+    self.autocluster(TestAutoClustering.DiscoModeConsulKV)
 
   def test_etcd(self):
     '''Test clustering via Etcd and that leadership change is observed'''
-    self.autocluster('etcd')
+    self.autocluster(TestAutoClustering.DiscoModeEtcdKV)
 
   def test_consul_config(self):
     '''Test clustering via Consul with explicit file-based config'''
     filename = write_random_file('{"address": "localhost:8500"}')
-    self.autocluster_config('consul', filename)
+    self.autocluster_config(TestAutoClustering.DiscoModeConsulKV, filename)
     os.remove(filename)
 
   def test_etcd_config(self):
     '''Test clustering via Etcd with explicit file-based config'''
     filename = write_random_file('{"endpoints": ["localhost:2379"]}')
-    self.autocluster_config('etcd', filename)
+    self.autocluster_config(TestAutoClustering.DiscoModeEtcdKV, filename)
     os.remove(filename)
 
 class TestAuthJoin(unittest.TestCase):
