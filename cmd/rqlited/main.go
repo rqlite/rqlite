@@ -240,7 +240,7 @@ func createDiscoService(cfg *Config, str *store.Store) (*disco.Service, error) {
 		}
 	}
 
-	if cfg.DiscoMode == "consul" {
+	if cfg.DiscoMode == DiscoModeConsulKV {
 		var consulCfg *consul.Config
 		if reader != nil {
 			consulCfg, err = consul.NewConfigFromReader(reader)
@@ -253,7 +253,7 @@ func createDiscoService(cfg *Config, str *store.Store) (*disco.Service, error) {
 		if err != nil {
 			return nil, err
 		}
-	} else if cfg.DiscoMode == "etcd" {
+	} else if cfg.DiscoMode == DiscoModeEtcdKV {
 		var etcdCfg *etcd.Config
 		if reader != nil {
 			etcdCfg, err = etcd.NewConfigFromReader(reader)

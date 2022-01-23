@@ -10,6 +10,12 @@ import (
 	"time"
 )
 
+const (
+	DiscoModeNone     = ""
+	DiscoModeConsulKV = "consul-kv"
+	DiscoModeEtcdKV   = "etcd-kv"
+)
+
 // Config represents the configuration as set by command-line flags.
 // All variables will be set, unless explicit noted.
 type Config struct {
@@ -286,6 +292,17 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	}
 	if _, _, err := net.SplitHostPort(config.RaftAdv); err != nil {
 		errorExit(1, "Raft advertised address not valid")
+	}
+
+	// Valid disco mode?
+	switch config.DiscoMode {
+	case "":
+	case DiscoModeConsulKV:
+	case DiscoModeEtcdKV:
+		break
+	default:
+		errorExit(1, fmt.Sprintf("fatal: invalid disco mode, choose %s or %s\n",
+			DiscoModeConsulKV, DiscoModeEtcdKV))
 	}
 
 	// Node ID policy
