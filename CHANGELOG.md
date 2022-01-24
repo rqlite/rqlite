@@ -11,7 +11,7 @@ There are also some breaking changes in release 7.0, related to command-line arg
 - The command-line argument `-RaftWaitForLeader` has been removed. If you need to wait for a node to have a Leader, you should poll the `/readyz` endpoint.
 
 ### New features
-- [PR #957](https://github.com/rqlite/rqlite/pull/957): Support autoclustering via [Consul](https://www.consul.io/) and [etcd](https://etcd.io/).
+- [PR #957](https://github.com/rqlite/rqlite/pull/957): Support autoclustering via use [Consul](https://www.consul.io/) and [etcd](https://etcd.io/) KV stores.
 - [PR #947](https://github.com/rqlite/rqlite/pull/947): CLI takes list of hosts, so it can try another node if first node is unresponsive. Fixes [issue #157](https://github.com/rqlite/rqlite/issues/157). Thanks @chermehdi
 
 ### Implementation changes and bug fixes
