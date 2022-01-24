@@ -37,7 +37,7 @@ These three nodes will automatically find each other, and cluster. You can start
 #### Docker
 It's even easier with Docker, as you can launch every node identically:
 ```bash
-docker run rqlite/rqlite -disco-mode=consul -disco-config '{"address": "example.com:8500"}'
+docker run rqlite/rqlite -disco-mode=consul-kv -disco-config '{"address": "example.com:8500"}'
 ```
 
 ### etcd
@@ -62,7 +62,7 @@ rqlited -http-addr=$IP3:$HTTP_PORT -raft-addr=$IP3:$RAFT_PORT \
 
  #### Docker
 ```bash
-docker run rqlite/rqlite -disco-mode=etcd -disco-config '{"endpoints": ["example.com:2379"]}'
+docker run rqlite/rqlite -disco-mode=etcd-kv -disco-config '{"endpoints": ["example.com:2379"]}'
 ```
 
 ## More Details
@@ -76,4 +76,4 @@ For both Consul and etcd, `-disco-confg` can either be an actual JSON string, or
 If you wish a single Consul or etcd system to support multiple rqlite clusters, then set the `-disco-key` command line argument to a different value for each cluster.
 
 ### Design
-When using either Consul or Ectd for automatic clustering, rqlite uses the key-value functionality of each system. In each case the Leader atomically sets its HTTP URL, allowing other nodes to discover it. To prevent multiple nodes updating the Leader key at once, nodes uses a check-and-set operation, only updating the Leader key if it's value has not changed since it was last read by the node.
+When using either Consul or Ectd for automatic clustering, rqlite uses the key-value store of each system. In each case the Leader atomically sets its HTTP URL, allowing other nodes to discover it. To prevent multiple nodes updating the Leader key at once, nodes uses a check-and-set operation, only updating the Leader key if it's value has not changed since it was last read by the node.
