@@ -15,7 +15,10 @@ $> rqlite -h
 Options:
 
   -h, --help
-      display help
+      display help information
+
+  -a, --alternatives
+      comma separated list of 'host:port' pairs to use as fallback
 
   -s, --scheme[=http]
       protocol scheme (http or https)
@@ -29,8 +32,17 @@ Options:
   -P, --prefix[=/]
       rqlited HTTP URL prefix
 
-  i,  --insecure[=false]
+  -i, --insecure[=false]
       do not verify rqlited HTTPS certificate
+
+  -c, --ca-cert
+      path to trusted X.509 root CA certificate
+
+  -u, --user
+      set basic auth credentials in form username:password
+
+  -v, --version
+      display CLI version
 ```
 
 ## Example
