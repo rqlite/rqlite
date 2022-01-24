@@ -2,11 +2,9 @@
 
 `rqlite` is a command line tool for connecting to a rqlited node. Consult the [SQLite query language documentation](https://www.sqlite.org/lang.html) for full details on the supported SQL syntax.
 
-## Build
-
-```sh
-go build -o rqlite
-```
+- [Usage](#usage)
+- [Example](#example)
+- [Build](#example)
 
 ## Usage
 
@@ -46,9 +44,9 @@ Options:
 ```
 
 ## Example
-
+Connecting to a host running locally:
 ```sh
-$ ./rqlite
+$ rqlite
 127.0.0.1:4001> CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)
 0 row affected (0.000362 sec)
 127.0.0.1:4001> .tables
@@ -74,3 +72,15 @@ $ ./rqlite
 127.0.0.1:4001> quit
 bye~
 ```
+Connecting to a host running somewhere else on the network:
+```
+$ rqlite -H localhost -p 8493
+locahost:8493>
+```
+
+## Build
+
+```sh
+go build -o rqlite
+```
+
