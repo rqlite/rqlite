@@ -152,7 +152,7 @@ func main() {
 	// Tell the user the node is ready for HTTP, giving some advice on how to connect.
 	log.Printf("node HTTP API available at %s", cfg.HTTPURL())
 	h, p, _ := net.SplitHostPort(cfg.HTTPAdv)
-	log.Printf("connect using the command-line tool via 'rqlite -H %s -P %s'", h, p)
+	log.Printf("connect using the command-line tool via 'rqlite -H %s -p %s'", h, p)
 
 	// Block until signalled.
 	terminate := make(chan os.Signal, 1)
