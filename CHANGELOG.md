@@ -1,4 +1,4 @@
-## 7.0.0 (unreleased)
+## 7.0.0 (January 25th 2022)
 This release introduces new node-discovery integration with [Consul](https://www.consul.io/) and [etcd](https://etcd.io/). By using one of those systems with rqlite, automatic clustering of rqlite is much easier. The [legacy Discovery mode](https://github.com/rqlite/rqlite/blob/master/DOC/DISCOVERY.md) is not supported by release 7.0, but may be supported in a future release. So, for now, if you wish to continue using legacy Discovery, you will need to run rqlite 6.x, or earlier.
 
 See the [new documentation](https://github.com/rqlite/rqlite/blob/master/DOC/AUTO_CLUSTERING.md) for full details on using Consul and etcd.
