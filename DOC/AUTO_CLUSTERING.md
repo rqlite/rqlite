@@ -69,6 +69,8 @@ docker run rqlite/rqlite -disco-mode=etcd-kv -disco-config '{"endpoints": ["exam
 ### Controlling configuration
 For both Consul and etcd, `-disco-confg` can either be an actual JSON string, or a path to a file containing a JSON-formatted configuration. The former option may be more convenient if the configuration you need to supply is very short, as in the example above.
 
+The example above demonstrates a simple configuration, and most real deployments will require more configuration information for Consul and etcd. For example, your Consul system might be reachable over HTTPS. To more fully configure rqlite for Discovery, consult the relevant configuration specification below. You must create a JSON-formatted file which matches that described in the source code.
+
 - [Full Consul configuration description](https://github.com/rqlite/rqlite-disco-clients/blob/main/consul/config.go)
 - [Full etcd configuration description](https://github.com/rqlite/rqlite-disco-clients/blob/main/etcd/config.go)
 
