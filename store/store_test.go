@@ -1073,6 +1073,83 @@ func Test_MultiNodeJoinRemove(t *testing.T) {
 	}
 }
 
+func Test_MultiNodeStoreNotifyBootstrap(t *testing.T) {
+	s0, ln0 := mustNewStore(true)
+	defer os.RemoveAll(s0.Path())
+	defer ln0.Close()
+	if err := s0.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s0.Close(true)
+
+	s1, ln1 := mustNewStore(true)
+	defer os.RemoveAll(s1.Path())
+	defer ln1.Close()
+	if err := s1.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s1.Close(true)
+
+	s2, ln2 := mustNewStore(true)
+	defer os.RemoveAll(s2.Path())
+	defer ln2.Close()
+	if err := s2.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s2.Close(true)
+
+	s0.BootstrapExpect = 3
+	if err := s0.Notify(s0.ID(), ln0.Addr().String()); err != nil {
+		t.Fatalf("failed to notify store: %s", err.Error())
+	}
+	if err := s0.Notify(s1.ID(), ln1.Addr().String()); err != nil {
+		t.Fatalf("failed to notify store: %s", err.Error())
+	}
+	if err := s0.Notify(s2.ID(), ln2.Addr().String()); err != nil {
+		t.Fatalf("failed to notify store: %s", err.Error())
+	}
+
+	// Check that the cluster bootstrapped properly.
+	leader0, err := s0.WaitForLeader(10 * time.Second)
+	if err != nil {
+		t.Fatalf("failed to get leader: %s", err.Error())
+	}
+	nodes, err := s0.Nodes()
+	if err != nil {
+		t.Fatalf("failed to get nodes: %s", err.Error())
+	}
+	if len(nodes) != 3 {
+		t.Fatalf("size of bootstrapped cluster is not correct")
+	}
+	leader1, err := s1.WaitForLeader(10 * time.Second)
+	if err != nil {
+		t.Fatalf("failed to get leader: %s", err.Error())
+	}
+	nodes, err = s1.Nodes()
+	if err != nil {
+		t.Fatalf("failed to get nodes: %s", err.Error())
+	}
+	if len(nodes) != 3 {
+		t.Fatalf("size of bootstrapped cluster is not correct")
+	}
+	leader2, err := s2.WaitForLeader(10 * time.Second)
+	if err != nil {
+		t.Fatalf("failed to get leader: %s", err.Error())
+	}
+	nodes, err = s2.Nodes()
+	if err != nil {
+		t.Fatalf("failed to get nodes: %s", err.Error())
+	}
+	if len(nodes) != 3 {
+		t.Fatalf("size of bootstrapped cluster is not correct")
+	}
+
+	if leader0 == leader1 && leader0 == leader2 {
+		return
+	}
+	t.Fatalf("leader not the same on each node")
+}
+
 func Test_MultiNodeJoinNonVoterRemove(t *testing.T) {
 	s0, ln0 := mustNewStore(true)
 	defer os.RemoveAll(s0.Path())

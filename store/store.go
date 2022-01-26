@@ -176,6 +176,11 @@ type Store struct {
 
 	logger *log.Logger
 
+	notifyMu        sync.Mutex
+	BootstrapExpect int
+	bootstrapped    bool
+	notifiedNodes   []*Server
+
 	// StartupOnDisk disables in-memory initialization of on-disk databases.
 	// Restarting a node with an on-disk database can be slow so, by default,
 	// rqlite creates on-disk databases in memory first, and then moves the
@@ -242,6 +247,7 @@ func New(ln Listener, c *Config) *Store {
 		leaderObservers: make([]chan<- struct{}, 0),
 		reqMarshaller:   command.NewRequestMarshaler(),
 		logger:          logger,
+		notifiedNodes:   make([]*Server, 0),
 		ApplyTimeout:    applyTimeout,
 	}
 }
@@ -830,6 +836,41 @@ func (s *Store) Backup(leader bool, fmt BackupFormat, dst io.Writer) error {
 	}
 
 	stats.Add(numBackups, 1)
+	return nil
+}
+
+// Notify notifies this Store that a node is ready for bootstrapping at the
+// given address. Once the number of known nodes reaches the expected level
+// bootstrapping will be attempted using this Store. "Expected level" includes
+// this node, so this node must self-notify.
+func (s *Store) Notify(id, addr string) error {
+	s.notifyMu.Lock()
+	defer s.notifyMu.Unlock()
+
+	if s.BootstrapExpect == 0 || s.bootstrapped {
+		return nil
+	}
+
+	s.notifiedNodes = append(s.notifiedNodes, &Server{id, addr, "voter"})
+	if len(s.notifiedNodes) < s.BootstrapExpect {
+		return nil
+	}
+
+	raftServers := make([]raft.Server, len(s.notifiedNodes))
+	for i := range s.notifiedNodes {
+		raftServers[i] = raft.Server{
+			ID:      raft.ServerID(s.notifiedNodes[i].ID),
+			Address: raft.ServerAddress(s.notifiedNodes[i].Addr),
+		}
+	}
+
+	bf := s.raft.BootstrapCluster(raft.Configuration{
+		Servers: raftServers,
+	}).(raft.Future)
+	if bf.Error() != nil {
+		return bf.Error()
+	}
+	s.bootstrapped = true
 	return nil
 }
 
