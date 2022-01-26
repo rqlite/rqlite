@@ -1,4 +1,4 @@
-## 7.0.1 (unreleased)
+## 7.0.1 (January 26th 2022)
 ### Implementation changes and bug fixes
 - [PR #957](https://github.com/rqlite/rqlite/pull/971): Correct rqlite command line options in log message.
 - [PR #973](https://github.com/rqlite/rqlite/pull/973): Use correct JSON field name for Consul disco scheme
