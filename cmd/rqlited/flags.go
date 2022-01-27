@@ -328,7 +328,6 @@ func errorExit(code int, msg string) {
 	if code != 0 {
 		fmt.Fprintf(os.Stderr, "fatal: ")
 	}
-	fmt.Fprintf(os.Stderr, msg)
-	fmt.Fprintf(os.Stderr, "\n")
+	fmt.Fprintf(os.Stderr, fmt.Sprintf("%s\n", msg))
 	os.Exit(code)
 }
