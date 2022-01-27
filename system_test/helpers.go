@@ -186,6 +186,19 @@ func (n *Node) JoinAsNonVoter(leader *Node) error {
 	return nil
 }
 
+// Notify notifies this node of the existence of another node
+func (n *Node) Notify(id, raftAddr string) error {
+	resp, err := DoNotify(n.APIAddr, id, raftAddr)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("failed to notify node: %s", resp.Status)
+	}
+	defer resp.Body.Close()
+	return nil
+}
+
 // NodesStatus is the Go type /nodes endpoint response is marshaled into.
 type NodesStatus map[string]struct {
 	APIAddr   string `json:"api_addr,omitempty"`
@@ -452,6 +465,21 @@ func DoJoinRequest(nodeAddr, raftID, raftAddr string, voter bool) (*http.Respons
 	}
 
 	resp, err := http.Post("http://"+nodeAddr+"/join", "application/json", bytes.NewReader(b))
+	if err != nil {
+		return nil, err
+	}
+
+	return resp, nil
+}
+
+// DoNotify notifies the node at nodeAddr about node with ID, and Raft address of raftAddr.
+func DoNotify(nodeAddr, id, raftAddr string) (*http.Response, error) {
+	b, err := json.Marshal(map[string]interface{}{"id": id, "addr": raftAddr})
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := http.Post("http://"+nodeAddr+"/notify", "application/json", bytes.NewReader(b))
 	if err != nil {
 		return nil, err
 	}

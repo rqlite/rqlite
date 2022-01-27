@@ -179,7 +179,7 @@ type Store struct {
 	notifyMu        sync.Mutex
 	BootstrapExpect int
 	bootstrapped    bool
-	notifiedNodes   []*Server
+	notifyingNodes  map[string]*Server
 
 	// StartupOnDisk disables in-memory initialization of on-disk databases.
 	// Restarting a node with an on-disk database can be slow so, by default,
@@ -247,7 +247,7 @@ func New(ln Listener, c *Config) *Store {
 		leaderObservers: make([]chan<- struct{}, 0),
 		reqMarshaller:   command.NewRequestMarshaler(),
 		logger:          logger,
-		notifiedNodes:   make([]*Server, 0),
+		notifyingNodes:  make(map[string]*Server),
 		ApplyTimeout:    applyTimeout,
 	}
 }
@@ -842,7 +842,8 @@ func (s *Store) Backup(leader bool, fmt BackupFormat, dst io.Writer) error {
 // Notify notifies this Store that a node is ready for bootstrapping at the
 // given address. Once the number of known nodes reaches the expected level
 // bootstrapping will be attempted using this Store. "Expected level" includes
-// this node, so this node must self-notify.
+// this node, so this node must self-notify to ensure the cluster bootstraps
+// with the *advertised Raft address* which the Store doesn't know about.
 func (s *Store) Notify(id, addr string) error {
 	s.notifyMu.Lock()
 	defer s.notifyMu.Unlock()
@@ -851,17 +852,20 @@ func (s *Store) Notify(id, addr string) error {
 		return nil
 	}
 
-	s.notifiedNodes = append(s.notifiedNodes, &Server{id, addr, "voter"})
-	if len(s.notifiedNodes) < s.BootstrapExpect {
+	if _, ok := s.notifyingNodes[id]; ok {
+		return nil
+	}
+	s.notifyingNodes[id] = &Server{id, addr, "voter"}
+	if len(s.notifyingNodes) < s.BootstrapExpect {
 		return nil
 	}
 
-	raftServers := make([]raft.Server, len(s.notifiedNodes))
-	for i := range s.notifiedNodes {
-		raftServers[i] = raft.Server{
-			ID:      raft.ServerID(s.notifiedNodes[i].ID),
-			Address: raft.ServerAddress(s.notifiedNodes[i].Addr),
-		}
+	raftServers := make([]raft.Server, 0)
+	for _, n := range s.notifyingNodes {
+		raftServers = append(raftServers, raft.Server{
+			ID:      raft.ServerID(n.ID),
+			Address: raft.ServerAddress(n.Addr),
+		})
 	}
 
 	s.logger.Printf("reached expected bootstrap count of %d, starting cluster bootstrap",

@@ -3,6 +3,7 @@ package system
 import (
 	"fmt"
 	"net"
+	"sync"
 	"testing"
 	"time"
 
@@ -69,6 +70,144 @@ func Test_MultiNodeCluster(t *testing.T) {
 	// Get the new leader, in case it changed.
 	c = Cluster{node1, node2, node3}
 	leader, err = c.Leader()
+	if err != nil {
+		t.Fatalf("failed to find cluster leader: %s", err.Error())
+	}
+
+	// Run queries against cluster.
+	tests := []struct {
+		stmt     string
+		expected string
+		execute  bool
+	}{
+		{
+			stmt:     `CREATE TABLE foo (id integer not null primary key, name text)`,
+			expected: `{"results":[{}]}`,
+			execute:  true,
+		},
+		{
+			stmt:     `INSERT INTO foo(name) VALUES("fiona")`,
+			expected: `{"results":[{"last_insert_id":1,"rows_affected":1}]}`,
+			execute:  true,
+		},
+		{
+			stmt:     `SELECT * FROM foo`,
+			expected: `{"results":[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]}`,
+			execute:  false,
+		},
+	}
+
+	for i, tt := range tests {
+		var r string
+		var err error
+		if tt.execute {
+			r, err = leader.Execute(tt.stmt)
+		} else {
+			r, err = leader.Query(tt.stmt)
+		}
+		if err != nil {
+			t.Fatalf(`test %d failed "%s": %s`, i, tt.stmt, err.Error())
+		}
+		if r != tt.expected {
+			t.Fatalf(`test %d received wrong result "%s" got: %s exp: %s`, i, tt.stmt, r, tt.expected)
+		}
+	}
+
+	// Kill the leader and wait for the new leader.
+	leader.Deprovision()
+	c.RemoveNode(leader)
+	leader, err = c.WaitForNewLeader(leader)
+	if err != nil {
+		t.Fatalf("failed to find new cluster leader after killing leader: %s", err.Error())
+	}
+
+	// Run queries against the now 2-node cluster.
+	tests = []struct {
+		stmt     string
+		expected string
+		execute  bool
+	}{
+		{
+			stmt:     `CREATE TABLE foo (id integer not null primary key, name text)`,
+			expected: `{"results":[{"error":"table foo already exists"}]}`,
+			execute:  true,
+		},
+		{
+			stmt:     `INSERT INTO foo(name) VALUES("sinead")`,
+			expected: `{"results":[{"last_insert_id":2,"rows_affected":1}]}`,
+			execute:  true,
+		},
+		{
+			stmt:     `SELECT * FROM foo`,
+			expected: `{"results":[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"],[2,"sinead"]]}]}`,
+			execute:  false,
+		},
+	}
+
+	for i, tt := range tests {
+		var r string
+		var err error
+		if tt.execute {
+			r, err = leader.Execute(tt.stmt)
+		} else {
+			r, err = leader.Query(tt.stmt)
+		}
+		if err != nil {
+			t.Fatalf(`test %d failed "%s": %s`, i, tt.stmt, err.Error())
+		}
+		if r != tt.expected {
+			t.Fatalf(`test %d received wrong result "%s" got: %s exp: %s`, i, tt.stmt, r, tt.expected)
+		}
+	}
+}
+
+// Test_MultiNodeCluster tests formation of a 3-node cluster via bootstraping,
+// and its operation.
+func Test_MultiNodeClusterBootstrap(t *testing.T) {
+	node1 := mustNewNode(false)
+	node1.Store.BootstrapExpect = 3
+	defer node1.Deprovision()
+
+	node2 := mustNewNode(false)
+	node2.Store.BootstrapExpect = 3
+	defer node2.Deprovision()
+
+	node3 := mustNewNode(false)
+	node3.Store.BootstrapExpect = 3
+	defer node3.Deprovision()
+
+	// Have all nodes start a bootstrap basically in parallel,
+	// ensure only 1 leader actually gets elected.
+	var wg sync.WaitGroup
+	wg.Add(3)
+	go func() {
+		node1.Notify(node1.ID, node1.RaftAddr)
+		node1.Notify(node2.ID, node2.RaftAddr)
+		node1.Notify(node3.ID, node3.RaftAddr)
+		wg.Done()
+	}()
+	go func() {
+		node2.Notify(node1.ID, node1.RaftAddr)
+		node2.Notify(node2.ID, node2.RaftAddr)
+		node2.Notify(node3.ID, node3.RaftAddr)
+		wg.Done()
+	}()
+	go func() {
+		node3.Notify(node1.ID, node1.RaftAddr)
+		node3.Notify(node2.ID, node2.RaftAddr)
+		node3.Notify(node3.ID, node3.RaftAddr)
+		wg.Done()
+	}()
+	wg.Wait()
+
+	// Wait for leader election
+	_, err := node1.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for a leader: %s", err.Error())
+	}
+
+	c := Cluster{node1, node2, node3}
+	leader, err := c.Leader()
 	if err != nil {
 		t.Fatalf("failed to find cluster leader: %s", err.Error())
 	}
