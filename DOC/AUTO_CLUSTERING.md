@@ -1,7 +1,5 @@
 # Automatic clustering
-This document describes various ways to automatically form rqlite clusters, particularly useful for when you want to automate your deployment of rqlite.
-
-This document describes how to use [Consul](https://www.consul.io/) and [etcd](https://etcd.io/) to automatically form rqlite clusters. 
+This document describes various ways to automatically form rqlite clusters, which is particularly useful for when you want to automate your deployment of rqlite.
 
 > :warning: **This functionality was introduced in version 7.x. It does not exist in earlier releases.**
 
@@ -38,7 +36,7 @@ rqlited -http-addr=$IP3:$HTTP_PORT -raft-addr=$IP3:$RAFT_PORT \
 -bootstrap-expect 3 -join http://$IP1:HTTP_PORT,http://$IP2:HTTP_PORT,http://$IP2:HTTP_PORT data
 ```
 
-`-bootstrap-expect` should be set to the number of nodes that must be available before the bootstrapping process will commence, in this case 3. You also set `-join` to the address of all 3 nodes in the cluster.
+`-bootstrap-expect` should be set to the number of nodes that must be available before the bootstrapping process will commence, in this case 3. You also set `-join` to the HTTP URL of all 3 nodes in the cluster.
 
 After the cluster has formed, you can launch more nodes with the same options. A node will always attempt to first perform a normal cluster-join using the given join addresses, before trying the bootstrap approach.
 
@@ -113,4 +111,4 @@ If you wish a single Consul or etcd system to support multiple rqlite clusters, 
 ## Design
 When using Automatic Bootstrapping, each node notifies all other nodes of its existence. The first node to have a record of enough nodes (set by `-boostrap-expect`) forms the cluster. Only one node can ever form a cluster, any node that attempts to do so later will fail, and instead become Followers in the new cluster.
 
-When using either Consul or etcd for automatic clustering, rqlite uses the key-value store of each system. In each case the Leader atomically sets its HTTP URL, allowing other nodes to discover it. To prevent multiple nodes updating the Leader key at once, nodes uses a check-and-set operation, only updating the Leader key if it's value has not changed since it was last read by the node.
+When using either Consul or etcd for automatic clustering, rqlite uses the key-value store of each system. In each case the Leader atomically sets its HTTP URL, allowing other nodes to discover it. To prevent multiple nodes updating the Leader key at once, nodes uses a check-and-set operation, only updating the Leader key if it's value has not changed since it was last read by the node. See [this blog post](https://www.philipotoole.com/rqlite-7-0-designing-node-discovery-and-automatic-clustering/) for more details on the design.
