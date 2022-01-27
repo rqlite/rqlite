@@ -849,6 +849,7 @@ func (s *Store) Notify(id, addr string) error {
 	defer s.notifyMu.Unlock()
 
 	if s.BootstrapExpect == 0 || s.bootstrapped || s.raft.Leader() != "" {
+		// There is no reason this node will bootstrap.
 		return nil
 	}
 
