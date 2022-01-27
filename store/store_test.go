@@ -1102,6 +1102,9 @@ func Test_MultiNodeStoreNotifyBootstrap(t *testing.T) {
 	if err := s0.Notify(s0.ID(), ln0.Addr().String()); err != nil {
 		t.Fatalf("failed to notify store: %s", err.Error())
 	}
+	if err := s0.Notify(s0.ID(), ln0.Addr().String()); err != nil {
+		t.Fatalf("failed to notify store -- not idempotent: %s", err.Error())
+	}
 	if err := s0.Notify(s1.ID(), ln1.Addr().String()); err != nil {
 		t.Fatalf("failed to notify store: %s", err.Error())
 	}
