@@ -848,7 +848,7 @@ func (s *Store) Notify(id, addr string) error {
 	s.notifyMu.Lock()
 	defer s.notifyMu.Unlock()
 
-	if s.BootstrapExpect == 0 || s.bootstrapped {
+	if s.BootstrapExpect == 0 || s.bootstrapped || s.raft.Leader() != "" {
 		return nil
 	}
 

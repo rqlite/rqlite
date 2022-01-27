@@ -1151,6 +1151,12 @@ func Test_MultiNodeStoreNotifyBootstrap(t *testing.T) {
 		return
 	}
 	t.Fatalf("leader not the same on each node")
+
+	// Calling Notify() on a node that is part of a cluster should
+	// be a no-op.
+	if err := s0.Notify(s1.ID(), ln1.Addr().String()); err != nil {
+		t.Fatalf("failed to notify store that is part of cluster: %s", err.Error())
+	}
 }
 
 func Test_MultiNodeJoinNonVoterRemove(t *testing.T) {
