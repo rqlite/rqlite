@@ -36,7 +36,7 @@ rqlited -http-addr=$IP3:$HTTP_PORT -raft-addr=$IP3:$RAFT_PORT \
 -bootstrap-expect 3 -join http://$IP1:HTTP_PORT,http://$IP2:HTTP_PORT,http://$IP2:HTTP_PORT data
 ```
 
-`-bootstrap-expect` should be set to the number of nodes that must be available before the bootstrapping process will commence, in this case 3. You also set `-join` to the HTTP URL of all 3 nodes in the cluster.
+`-bootstrap-expect` should be set to the number of nodes that must be available before the bootstrapping process will commence, in this case 3. You also set `-join` to the HTTP URL of all 3 nodes in the cluster. It's also required that each launch command has the same values for `-bootstrap-expect` and `-join`.
 
 After the cluster has formed, you can launch more nodes with the same options. A node will always attempt to first perform a normal cluster-join using the given join addresses, before trying the bootstrap approach.
 

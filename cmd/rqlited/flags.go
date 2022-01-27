@@ -257,19 +257,19 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 		errorExit(0, msg)
 	}
 
-	if config.OnDiskPath != "" && !config.OnDisk {
-		errorExit(1, "fatal: on-disk-path is set, but on-disk is not\n")
-	}
-
 	// Ensure the data path is set.
 	if flag.NArg() < 1 {
-		errorExit(1, "fatal: no data directory set\n")
+		errorExit(1, "no data directory set")
 	}
 	config.DataPath = flag.Arg(0)
 
 	// Ensure no args come after the data directory.
 	if flag.NArg() > 1 {
-		errorExit(1, "fatal: arguments after data directory are not accepted\n")
+		errorExit(1, "arguments after data directory are not accepted")
+	}
+
+	if config.OnDiskPath != "" && !config.OnDisk {
+		errorExit(1, "on-disk-path is set, but on-disk is not")
 	}
 
 	// Enforce policies regarding addresses
@@ -283,7 +283,7 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	// Perfom some address validity checks.
 	if strings.HasPrefix(strings.ToLower(config.HTTPAddr), "http") ||
 		strings.HasPrefix(strings.ToLower(config.HTTPAdv), "http") {
-		errorExit(1, "fatal: HTTP options should not include protocol (http:// or https://)\n")
+		errorExit(1, "HTTP options should not include protocol (http:// or https://)")
 	}
 	if _, _, err := net.SplitHostPort(config.HTTPAddr); err != nil {
 		errorExit(1, "HTTP bind address not valid")
@@ -292,25 +292,27 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 		errorExit(1, "HTTP advertised address not valid")
 	}
 	if _, _, err := net.SplitHostPort(config.RaftAddr); err != nil {
-		errorExit(1, "Raft bind address not valid")
+		errorExit(1, "raft bind address not valid")
 	}
 	if _, _, err := net.SplitHostPort(config.RaftAdv); err != nil {
-		errorExit(1, "Raft advertised address not valid")
+		errorExit(1, "raft advertised address not valid")
 	}
 
 	// Enforce bootstrapping policies
 	if config.BootstrapExpect > 0 && config.RaftNonVoter {
-		errorExit(1, "Bootstrapping only applicable to voting nodes")
+		errorExit(1, "bootstrapping only applicable to voting nodes")
 	}
 
 	// Valid disco mode?
 	switch config.DiscoMode {
 	case "":
-	case DiscoModeConsulKV:
-	case DiscoModeEtcdKV:
-		break
+	case DiscoModeEtcdKV, DiscoModeConsulKV:
+		if config.BootstrapExpect > 0 {
+			errorExit(1, fmt.Sprintf("bootstrapping not applicable when using %s",
+				config.DiscoMode))
+		}
 	default:
-		errorExit(1, fmt.Sprintf("fatal: invalid disco mode, choose %s or %s\n",
+		errorExit(1, fmt.Sprintf("invalid disco mode, choose %s or %s",
 			DiscoModeConsulKV, DiscoModeEtcdKV))
 	}
 
@@ -323,6 +325,10 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 }
 
 func errorExit(code int, msg string) {
+	if code != 0 {
+		fmt.Fprintf(os.Stderr, "fatal: ")
+	}
 	fmt.Fprintf(os.Stderr, msg)
+	fmt.Fprintf(os.Stderr, "\n")
 	os.Exit(code)
 }
