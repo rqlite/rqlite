@@ -167,13 +167,15 @@ func main() {
 	log.Println("rqlite server stopped")
 }
 
+// determineJoinAddresses returns the join addresses supplied at the command-line.
+// removing any occurence of this nodes HTTP address.
 func determineJoinAddresses(cfg *Config) ([]string, error) {
 	var addrs []string
 	if cfg.JoinAddr != "" {
 		addrs = strings.Split(cfg.JoinAddr, ",")
 	}
 
-	// It won't work to attempt a self-join, so remove any such address.
+	// It won't work to attempt an explicit self-join, so remove any such address.
 	var validAddrs []string
 	for i := range addrs {
 		if addrs[i] == cfg.HTTPAdv || addrs[i] == cfg.HTTPAddr {
@@ -213,6 +215,7 @@ func createStore(cfg *Config, ln *tcp.Layer) (*store.Store, error) {
 	str.HeartbeatTimeout = cfg.RaftHeartbeatTimeout
 	str.ElectionTimeout = cfg.RaftElectionTimeout
 	str.ApplyTimeout = cfg.RaftApplyTimeout
+	str.BootstrapExpect = cfg.BootstrapExpect
 
 	isNew := store.IsNewNode(dataPath)
 	if isNew {
@@ -364,20 +367,35 @@ func createCluster(cfg *Config, joins []string, tlsConfig *tls.Config, hasPeers 
 	}
 
 	if len(joins) > 0 {
-		// Explicit join addresses supplied, so use them.
-		log.Println("explicit join addresses are:", joins)
+		if cfg.BootstrapExpect == 0 {
+			// Explicit join operation requested, so do it.
+			log.Println("explicit join addresses are:", joins)
 
-		if err := addJoinCreds(joins, cfg.JoinAs, credStr); err != nil {
-			return fmt.Errorf("failed too add auth creds: %s", err.Error())
+			if err := addJoinCreds(joins, cfg.JoinAs, credStr); err != nil {
+				return fmt.Errorf("failed too add auth creds: %s", err.Error())
+			}
+
+			j, err := cluster.Join(cfg.JoinSrcIP, joins, str.ID(), cfg.RaftAdv, !cfg.RaftNonVoter,
+				cfg.JoinAttempts, cfg.JoinInterval, tlsConfig)
+			if err != nil {
+				return fmt.Errorf("failed to join cluster at %s: %s", joins, err.Error())
+			}
+			log.Println("successfully joined cluster at", j, cfg.RaftAdv, cfg.JoinAttempts,
+				cfg.JoinInterval, tlsConfig)
+			return nil
 		}
 
-		j, err := cluster.Join(cfg.JoinSrcIP, joins, str.ID(), cfg.RaftAdv, !cfg.RaftNonVoter,
-			cfg.JoinAttempts, cfg.JoinInterval, tlsConfig)
-		if err != nil {
-			return fmt.Errorf("failed to join cluster at %s: %s", joins, err.Error())
+		// Must self-notify when bootstrapping
+		if hasPeers {
+			log.Println("preexisting node configuration detected, ignoring bootstrap request")
+			return nil
 		}
-		log.Println("successfully joined cluster at", j)
-		return nil
+		notifies := append(joins, cfg.HTTPAdv)
+		log.Println("Bootstrap addresses are:", notifies)
+		// Bootstrapping join, so notify every node -- including this one -- that this
+		// node is ready for a Bootstrap.
+		return cluster.Notify(notifies, str.ID(), cfg.RaftAdv, cfg.JoinAttempts,
+			cfg.JoinInterval, tlsConfig)
 	}
 
 	if cfg.DiscoMode == "" {

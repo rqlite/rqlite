@@ -54,6 +54,9 @@ type Store interface {
 	// Join joins the node with the given ID, reachable at addr, to this node.
 	Join(id, addr string, voter bool) error
 
+	// Notify notifies this node that a node is available at addr.
+	Notify(id, addr string) error
+
 	// Remove removes the node, specified by id, from the cluster.
 	Remove(id string) error
 
@@ -140,6 +143,7 @@ const (
 	numBackups          = "backups"
 	numLoad             = "loads"
 	numJoins            = "joins"
+	numNotifies         = "notifies"
 	numAuthOK           = "authOK"
 	numAuthFail         = "authFail"
 
@@ -184,6 +188,7 @@ func init() {
 	stats.Add(numBackups, 0)
 	stats.Add(numLoad, 0)
 	stats.Add(numJoins, 0)
+	stats.Add(numNotifies, 0)
 	stats.Add(numAuthOK, 0)
 	stats.Add(numAuthFail, 0)
 }
@@ -316,6 +321,9 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case strings.HasPrefix(r.URL.Path, "/join"):
 		stats.Add(numJoins, 1)
 		s.handleJoin(w, r)
+	case strings.HasPrefix(r.URL.Path, "/notify"):
+		stats.Add(numNotifies, 1)
+		s.handleNotify(w, r)
 	case strings.HasPrefix(r.URL.Path, "/remove"):
 		s.handleRemove(w, r)
 	case strings.HasPrefix(r.URL.Path, "/status"):
@@ -402,6 +410,46 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+}
+
+// handleNotify handles node-notify requests from other nodes.
+func (s *Service) handleNotify(w http.ResponseWriter, r *http.Request) {
+	if !s.CheckRequestPerm(r, PermJoin) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	b, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	md := map[string]interface{}{}
+	if err := json.Unmarshal(b, &md); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	remoteID, ok := md["id"]
+	if !ok {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	remoteAddr, ok := md["addr"]
+	if !ok {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	if err := s.store.Notify(remoteID.(string), remoteAddr.(string)); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
 

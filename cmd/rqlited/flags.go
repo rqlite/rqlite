@@ -86,6 +86,9 @@ type Config struct {
 	// JoinInterval is the time between retrying failed join operations.
 	JoinInterval time.Duration
 
+	// BootstrapExpect is the minimum number of nodes required for a bootstrap.
+	BootstrapExpect int
+
 	// NoHTTPVerify disables checking other nodes' HTTP X509 certs for validity.
 	NoHTTPVerify bool
 
@@ -215,6 +218,7 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	flag.StringVar(&config.JoinAs, "join-as", "", "Username in authentication file to join as. If not set, joins anonymously")
 	flag.IntVar(&config.JoinAttempts, "join-attempts", 5, "Number of join attempts to make")
 	flag.DurationVar(&config.JoinInterval, "join-interval", 5*time.Second, "Period between join attempts")
+	flag.IntVar(&config.BootstrapExpect, "bootstrap-expect", 0, "Minimum number of nodes required for a bootstrap")
 	flag.StringVar(&config.DiscoMode, "disco-mode", "", "Choose cluster discovery service. If not set, not used")
 	flag.StringVar(&config.DiscoKey, "disco-key", "rqlite", "Key prefix for cluster discovery service")
 	flag.StringVar(&config.DiscoConfig, "disco-config", "", "Set path to cluster discovery config file")
@@ -292,6 +296,11 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	}
 	if _, _, err := net.SplitHostPort(config.RaftAdv); err != nil {
 		errorExit(1, "Raft advertised address not valid")
+	}
+
+	// Enforce bootstrapping policies
+	if config.BootstrapExpect > 0 && config.RaftNonVoter {
+		errorExit(1, "Bootstrapping only applicable to voting nodes")
 	}
 
 	// Valid disco mode?

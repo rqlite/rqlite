@@ -864,11 +864,15 @@ func (s *Store) Notify(id, addr string) error {
 		}
 	}
 
+	s.logger.Printf("reached expected bootstrap count of %d, starting cluster bootstrap",
+		s.BootstrapExpect)
 	bf := s.raft.BootstrapCluster(raft.Configuration{
 		Servers: raftServers,
 	}).(raft.Future)
 	if bf.Error() != nil {
-		return bf.Error()
+		s.logger.Printf("cluster bootstrap failed: %s", bf.Error())
+	} else {
+		s.logger.Printf("cluster bootstrap successful")
 	}
 	s.bootstrapped = true
 	return nil
