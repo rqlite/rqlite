@@ -355,6 +355,14 @@ func Test_405Routes(t *testing.T) {
 		t.Fatalf("failed to get expected 405, got %d", resp.StatusCode)
 	}
 
+	resp, err = client.Get(host + "/notify")
+	if err != nil {
+		t.Fatalf("failed to make request")
+	}
+	if resp.StatusCode != 405 {
+		t.Fatalf("failed to get expected 405, got %d", resp.StatusCode)
+	}
+
 	resp, err = client.Post(host+"/db/backup", "", nil)
 	if err != nil {
 		t.Fatalf("failed to make request")
@@ -415,6 +423,7 @@ func Test_401Routes_NoBasicAuth(t *testing.T) {
 		"/db/backup",
 		"/db/load",
 		"/join",
+		"/notify",
 		"/remove",
 		"/status",
 		"/nodes",
@@ -456,6 +465,7 @@ func Test_401Routes_BasicAuthBadPassword(t *testing.T) {
 		"/db/backup",
 		"/db/load",
 		"/join",
+		"/notify",
 		"/status",
 		"/nodes",
 		"/readyz",
@@ -502,6 +512,7 @@ func Test_401Routes_BasicAuthBadPerm(t *testing.T) {
 		"/db/backup",
 		"/db/load",
 		"/join",
+		"/notify",
 		"/status",
 		"/nodes",
 		"/readyz",
@@ -990,6 +1001,10 @@ func (m *MockStore) Query(qr *command.QueryRequest) ([]*command.QueryRows, error
 }
 
 func (m *MockStore) Join(id, addr string, voter bool) error {
+	return nil
+}
+
+func (m *MockStore) Notify(id, addr string) error {
 	return nil
 }
 
