@@ -124,6 +124,9 @@ func NewAddressProviderString(ss []string) AddressProvider {
 	return &stringAddressProvider{ss}
 }
 
+// jitter adds a little bit of randomness to a given duration. This is
+// useful to prevent nodes across the cluster performing certain operations
+// all at the same time.
 func jitter(duration time.Duration) time.Duration {
 	return duration + time.Duration(rand.Float64()*float64(duration))
 }
