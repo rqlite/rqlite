@@ -380,10 +380,10 @@ func Test_MultiNodeClusterBootstrapLaterJoin(t *testing.T) {
 		t.Fatalf("failed waiting for a leader: %s", err.Error())
 	}
 
-	if got, exp := node1Leader, node2Leader; got != exp {
+	if got, exp := node2Leader, node1Leader; got != exp {
 		t.Fatalf("leader mismatch between node 1 and node 2, got %s, exp %s", got, exp)
 	}
-	if got, exp := node1Leader, node3Leader; got != exp {
+	if got, exp := node3Leader, node1Leader; got != exp {
 		t.Fatalf("leader mismatch between node 1 and node 3, got %s, exp %s", got, exp)
 	}
 
