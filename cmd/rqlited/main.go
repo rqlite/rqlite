@@ -379,8 +379,7 @@ func createCluster(cfg *Config, joins []string, tlsConfig *tls.Config, hasPeers 
 			if err != nil {
 				return fmt.Errorf("failed to join cluster: %s", err.Error())
 			}
-			log.Println("successfully joined cluster at", httpd.RemoveBasicAuth(j), cfg.RaftAdv,
-				cfg.JoinAttempts, cfg.JoinInterval, tlsConfig)
+			log.Println("successfully joined cluster at", httpd.RemoveBasicAuth(j))
 			return nil
 		}
 
