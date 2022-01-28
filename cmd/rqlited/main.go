@@ -377,10 +377,10 @@ func createCluster(cfg *Config, joins []string, tlsConfig *tls.Config, hasPeers 
 			j, err := cluster.Join(cfg.JoinSrcIP, joins, str.ID(), cfg.RaftAdv, !cfg.RaftNonVoter,
 				cfg.JoinAttempts, cfg.JoinInterval, tlsConfig)
 			if err != nil {
-				return fmt.Errorf("failed to join cluster at %s: %s", joins, err.Error())
+				return fmt.Errorf("failed to join cluster: %s", err.Error())
 			}
-			log.Println("successfully joined cluster at", j, cfg.RaftAdv, cfg.JoinAttempts,
-				cfg.JoinInterval, tlsConfig)
+			log.Println("successfully joined cluster at", httpd.RemoveBasicAuth(j), cfg.RaftAdv,
+				cfg.JoinAttempts, cfg.JoinInterval, tlsConfig)
 			return nil
 		}
 

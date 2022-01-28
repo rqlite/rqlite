@@ -1204,8 +1204,10 @@ class TestEndToEndSnapRestoreCluster(unittest.TestCase):
     self.n2.start()
     self.n2.wait_for_leader()
 
-    # Force the Apply loop to run on the node, so fsm_index is updated.
+    # Force the Apply loop to run on the node twice, so fsm_index is updated on n2 to a point
+    # where the SQLite database on n2 is updated.
     self.n0.execute('INSERT INTO foo(name) VALUES("fiona")')
+    self.n2.query('SELECT count(*) FROM foo', level='strong')
 
     self.n2.wait_for_fsm_index(self.n0.fsm_index())
     j = self.n2.query('SELECT count(*) FROM foo', level='none')
