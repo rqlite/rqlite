@@ -1,5 +1,5 @@
 # Automatic clustering
-This document describes various ways to automatically form rqlite clusters, which is particularly useful for when you want to automate your deployment of rqlite.
+This document describes various ways to dynamically form rqlite clusters, which is particularly useful for automating your deployment of rqlite.
 
 > :warning: **This functionality was introduced in version 7.x. It does not exist in earlier releases.**
 
@@ -16,7 +16,7 @@ This document describes various ways to automatically form rqlite clusters, whic
 ## Quickstart
 
 ### Automatic Boostrapping
-While manually creating a cluster is simple, it does suffer one drawback -- you must start one node first and with different options, so it can become the Leader. _Automatic Bootstrapping_, in constrast, allows you to start all the nodes at once, and in a very similar manner. You just need to know the network addresses of the nodes ahead of time.
+While [manually creating a cluster](https://github.com/rqlite/rqlite/blob/master/DOC/CLUSTER_MGMT.md) is simple, it does suffer one drawback -- you must start one node first and with different options, so it can become the Leader. _Automatic Bootstrapping_, in constrast, allows you to start all the nodes at once, and in a very similar manner. You just need to know the network addresses of the nodes ahead of time.
 
 For simplicity, let's assume you want to run a 3-node rqlite cluster. To bootstrap the cluster, use the `-bootstrap-expect` option like so:
 
@@ -40,8 +40,15 @@ rqlited -http-addr=$IP3:$HTTP_PORT -raft-addr=$IP3:$RAFT_PORT \
 
 After the cluster has formed, you can launch more nodes with the same options. A node will always attempt to first perform a normal cluster-join using the given join addresses, before trying the bootstrap approach.
 
+#### Docker
+With Docker you can launch every node identically:
+```bash
+docker run rqlite/rqlite -bootstrap-expect 3 -join http://$IP1:HTTP_PORT,http://$IP2:HTTP_PORT,http://$IP2:HTTP_PORT
+```
+where `$IP[1-3]` are the expected network addresses of the containers.
+
 ### Consul
-This approach makes use of the key-value store offered by [Consul](https://www.consul.io/). The advantage of this approach is that you do need to know the network addresses of the nodes ahead of time.
+Another approach uses [Consul](https://www.consul.io/) to coordinate clustering. The advantage of this approach is that you do need to know the network addresses of the nodes ahead of time.
 
 Let's assume your Consul cluster is running at `http://example.com:8500`. Let's also assume that you are going to run 3 rqlite nodes, each node on a different machine. Launch your rqlite nodes as follows:
 
@@ -70,7 +77,7 @@ docker run rqlite/rqlite -disco-mode=consul-kv -disco-config '{"address": "examp
 ```
 
 ### etcd
-This approach makes use of the key-value store offered by [etcd](https://etcd.io/). Autoclustering with etcd is very similar to Consul. Like when you use Consul, the advantage of this approach is that you do need to know the network addresses of the nodes ahead of time.
+A third approach uses [etcd](https://www.etcd.io/) to coordinate clustering. Autoclustering with etcd is very similar to Consul. Like when you use Consul, the advantage of this approach is that you do need to know the network addresses of the nodes ahead of time.
 
 Let's assume etcd is available at `example.com:2379`.
 
