@@ -2,6 +2,8 @@ package system
 
 import (
 	"bytes"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -19,7 +21,7 @@ import (
 	httpd "github.com/rqlite/rqlite/http"
 	"github.com/rqlite/rqlite/store"
 	"github.com/rqlite/rqlite/tcp"
-	"github.com/rqlite/rqlite/testdata/x509"
+	rX509 "github.com/rqlite/rqlite/testdata/x509"
 )
 
 const (
@@ -37,6 +39,7 @@ type Node struct {
 	NodeKeyPath  string
 	HTTPCertPath string
 	HTTPKeyPath  string
+	TLSConfig    *tls.Config
 	PeersPath    string
 	Store        *store.Store
 	Service      *httpd.Service
@@ -495,7 +498,7 @@ func mustNewNodeEncrypted(enableSingle, httpEncrypt, nodeEncrypt bool) *Node {
 	dir := mustTempDir()
 	var mux *tcp.Mux
 	if nodeEncrypt {
-		mux = mustNewOpenTLSMux(x509.CertFile(dir), x509.KeyFile(dir), "")
+		mux = mustNewOpenTLSMux(rX509.CertFile(dir), rX509.KeyFile(dir), "")
 	} else {
 		mux, _ = mustNewOpenMux("")
 	}
@@ -509,8 +512,8 @@ func mustNodeEncrypted(dir string, enableSingle, httpEncrypt bool, mux *tcp.Mux,
 }
 
 func mustNodeEncryptedOnDisk(dir string, enableSingle, httpEncrypt bool, mux *tcp.Mux, nodeID string, onDisk bool) *Node {
-	nodeCertPath := x509.CertFile(dir)
-	nodeKeyPath := x509.KeyFile(dir)
+	nodeCertPath := rX509.CertFile(dir)
+	nodeKeyPath := rX509.KeyFile(dir)
 	httpCertPath := nodeCertPath
 	httpKeyPath := nodeKeyPath
 
@@ -520,6 +523,7 @@ func mustNodeEncryptedOnDisk(dir string, enableSingle, httpEncrypt bool, mux *tc
 		NodeKeyPath:  nodeKeyPath,
 		HTTPCertPath: httpCertPath,
 		HTTPKeyPath:  httpKeyPath,
+		TLSConfig:    mustCreateTLSConfig(nodeCertPath, nodeKeyPath, ""),
 		PeersPath:    filepath.Join(dir, "raft/peers.json"),
 	}
 
@@ -687,6 +691,34 @@ func mustWriteFile(path, contents string) {
 	if err != nil {
 		panic("failed to write to file")
 	}
+}
+
+// mustCreateTLSConfig returns a TLS config from the given cert, key and optionally
+// Certificate Authority cert. Config doesn't verify certs.
+func mustCreateTLSConfig(certFile, keyFile, caCertFile string) *tls.Config {
+	var err error
+	config := &tls.Config{
+		InsecureSkipVerify: true,
+	}
+	config.Certificates = make([]tls.Certificate, 1)
+	config.Certificates[0], err = tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	if caCertFile != "" {
+		asn1Data, err := ioutil.ReadFile(caCertFile)
+		if err != nil {
+			panic(err.Error())
+		}
+		config.RootCAs = x509.NewCertPool()
+		ok := config.RootCAs.AppendCertsFromPEM(asn1Data)
+		if !ok {
+			panic(err.Error())
+		}
+	}
+
+	return config
 }
 
 /* MIT License

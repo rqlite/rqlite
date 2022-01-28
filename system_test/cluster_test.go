@@ -410,6 +410,104 @@ func Test_MultiNodeClusterBootstrapLaterJoin(t *testing.T) {
 	}
 }
 
+// Test_MultiNodeClusterBootstrapLaterJoinHTTPS tests formation of a 3-node cluster which
+// uses HTTP and TLS,then checking a 4th node can join later with the bootstap parameters.
+func Test_MultiNodeClusterBootstrapLaterJoinHTTPS(t *testing.T) {
+	node1 := mustNewNodeEncrypted(false, true, true)
+	node1.Store.BootstrapExpect = 3
+	defer node1.Deprovision()
+
+	node2 := mustNewNodeEncrypted(false, true, true)
+	node2.Store.BootstrapExpect = 3
+	defer node2.Deprovision()
+
+	node3 := mustNewNodeEncrypted(false, true, true)
+	node3.Store.BootstrapExpect = 3
+	defer node3.Deprovision()
+
+	provider := cluster.NewAddressProviderString(
+		[]string{node1.APIAddr, node2.APIAddr, node3.APIAddr})
+	node1Bs := cluster.NewBootstrapper(provider, 3, nil)
+	node1Bs.Interval = time.Second
+	node2Bs := cluster.NewBootstrapper(provider, 3, nil)
+	node2Bs.Interval = time.Second
+	node3Bs := cluster.NewBootstrapper(provider, 3, nil)
+	node3Bs.Interval = time.Second
+
+	// Have all nodes start a bootstrap basically in parallel,
+	// ensure only 1 leader actually gets elected.
+	var wg sync.WaitGroup
+	wg.Add(3)
+	go func() {
+		done := func() bool {
+			addr, _ := node1.Store.LeaderAddr()
+			return addr != ""
+		}
+		node1Bs.Boot(node1.ID, node1.RaftAddr, done, 10*time.Second)
+		wg.Done()
+	}()
+	go func() {
+		done := func() bool {
+			addr, _ := node2.Store.LeaderAddr()
+			return addr != ""
+		}
+		node2Bs.Boot(node2.ID, node2.RaftAddr, done, 10*time.Second)
+		wg.Done()
+	}()
+	go func() {
+		done := func() bool {
+			addr, _ := node3.Store.LeaderAddr()
+			return addr != ""
+		}
+		node3Bs.Boot(node3.ID, node3.RaftAddr, done, 10*time.Second)
+		wg.Done()
+	}()
+	wg.Wait()
+
+	// Check leaders
+	node1Leader, err := node1.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for a leader: %s", err.Error())
+	}
+	node2Leader, err := node2.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for a leader: %s", err.Error())
+	}
+	node3Leader, err := node3.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for a leader: %s", err.Error())
+	}
+
+	if got, exp := node2Leader, node1Leader; got != exp {
+		t.Fatalf("leader mismatch between node 1 and node 2, got %s, exp %s", got, exp)
+	}
+	if got, exp := node3Leader, node1Leader; got != exp {
+		t.Fatalf("leader mismatch between node 1 and node 3, got %s, exp %s", got, exp)
+	}
+
+	// Ensure a 4th node can join cluster with exactly same launch
+	// params. Under the cover it should just do a join.
+	node4 := mustNewNodeEncrypted(false, true, true)
+	node4.Store.BootstrapExpect = 3
+	defer node3.Deprovision()
+	node4Bs := cluster.NewBootstrapper(provider, 3, nil)
+	node4Bs.Interval = time.Second
+	done := func() bool {
+		addr, _ := node4.Store.LeaderAddr()
+		return addr != ""
+	}
+	if err := node4Bs.Boot(node4.ID, node4.RaftAddr, done, 10*time.Second); err != nil {
+		t.Fatalf("node 4 failed to boot")
+	}
+	node4Leader, err := node4.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for a leader: %s", err.Error())
+	}
+	if got, exp := node4Leader, node1Leader; got != exp {
+		t.Fatalf("leader mismatch between node 4 and node 1, got %s, exp %s", got, exp)
+	}
+}
+
 // Test_MultiNodeClusterRaftAdv tests 3-node cluster with advertised Raft addresses usage.
 func Test_MultiNodeClusterRaftAdv(t *testing.T) {
 	ln1 := mustTCPListener("0.0.0.0:0")
