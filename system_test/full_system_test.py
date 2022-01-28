@@ -723,8 +723,14 @@ class TestBootstrapping(unittest.TestCase):
 
     self.assertEqual(n0.wait_for_leader(), n1.wait_for_leader())
 
+    # Ensure a third node can join later, with same launch params.
+    n2 = Node(RQLITED_PATH, '1', boostrap_expect=2)
+    n2.start(join=','.join([n0.APIProtoAddr(), n1.APIProtoAddr()]))
+    self.assertEqual(n2.wait_for_leader(), n1.wait_for_leader())
+
     deprovision_node(n0)
     deprovision_node(n1)
+    deprovision_node(n2)
 
 class TestAutoClustering(unittest.TestCase):
   DiscoModeConsulKV = "consul-kv"
