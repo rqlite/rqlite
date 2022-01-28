@@ -15,6 +15,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/pprof"
+	"net/url"
 	"os"
 	"runtime"
 	"strings"
@@ -30,6 +31,10 @@ import (
 var (
 	// ErrLeaderNotFound is returned when a node cannot locate a leader
 	ErrLeaderNotFound = errors.New("leader not found")
+
+	// ErrUserInfoExists is returned when a join address already contains
+	// a username and a password.
+	ErrUserInfoExists = errors.New("userinfo exists")
 )
 
 // Database is the interface any queryable system must implement
@@ -53,6 +58,9 @@ type Store interface {
 
 	// Join joins the node with the given ID, reachable at addr, to this node.
 	Join(id, addr string, voter bool) error
+
+	// Notify notifies this node that a node is available at addr.
+	Notify(id, addr string) error
 
 	// Remove removes the node, specified by id, from the cluster.
 	Remove(id string) error
@@ -140,6 +148,7 @@ const (
 	numBackups          = "backups"
 	numLoad             = "loads"
 	numJoins            = "joins"
+	numNotifies         = "notifies"
 	numAuthOK           = "authOK"
 	numAuthFail         = "authFail"
 
@@ -184,6 +193,7 @@ func init() {
 	stats.Add(numBackups, 0)
 	stats.Add(numLoad, 0)
 	stats.Add(numJoins, 0)
+	stats.Add(numNotifies, 0)
 	stats.Add(numAuthOK, 0)
 	stats.Add(numAuthFail, 0)
 }
@@ -316,6 +326,9 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case strings.HasPrefix(r.URL.Path, "/join"):
 		stats.Add(numJoins, 1)
 		s.handleJoin(w, r)
+	case strings.HasPrefix(r.URL.Path, "/notify"):
+		stats.Add(numNotifies, 1)
+		s.handleNotify(w, r)
 	case strings.HasPrefix(r.URL.Path, "/remove"):
 		s.handleRemove(w, r)
 	case strings.HasPrefix(r.URL.Path, "/status"):
@@ -402,6 +415,46 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+}
+
+// handleNotify handles node-notify requests from other nodes.
+func (s *Service) handleNotify(w http.ResponseWriter, r *http.Request) {
+	if !s.CheckRequestPerm(r, PermJoin) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	b, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	md := map[string]interface{}{}
+	if err := json.Unmarshal(b, &md); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	remoteID, ok := md["id"]
+	if !ok {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	remoteAddr, ok := md["addr"]
+	if !ok {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	if err := s.store.Notify(remoteID.(string), remoteAddr.(string)); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
 
@@ -1376,6 +1429,38 @@ func EnsureHTTPS(addr string) string {
 // CheckHTTPS returns true if the given URL uses HTTPS.
 func CheckHTTPS(addr string) bool {
 	return strings.HasPrefix(addr, "https://")
+}
+
+// AddBasicAuth adds username and password to the join address. If username is empty
+// joinAddr is returned unchanged. If joinAddr already contains a username, ErrUserInfoExists
+// is returned.
+func AddBasicAuth(joinAddr, username, password string) (string, error) {
+	if username == "" {
+		return joinAddr, nil
+	}
+
+	u, err := url.Parse(joinAddr)
+	if err != nil {
+		return "", err
+	}
+
+	if u.User != nil && u.User.Username() != "" {
+		return "", ErrUserInfoExists
+	}
+
+	u.User = url.UserPassword(username, password)
+	return u.String(), nil
+}
+
+// RemoveBasicAuth returns a copy of the given URL, with any basic auth information
+// removed.
+func RemoveBasicAuth(u string) string {
+	uu, err := url.Parse(u)
+	if err != nil {
+		return u
+	}
+	uu.User = nil
+	return uu.String()
 }
 
 // queryRequestFromStrings converts a slice of strings into a command.QueryRequest

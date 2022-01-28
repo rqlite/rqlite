@@ -176,6 +176,11 @@ type Store struct {
 
 	logger *log.Logger
 
+	notifyMu        sync.Mutex
+	BootstrapExpect int
+	bootstrapped    bool
+	notifyingNodes  map[string]*Server
+
 	// StartupOnDisk disables in-memory initialization of on-disk databases.
 	// Restarting a node with an on-disk database can be slow so, by default,
 	// rqlite creates on-disk databases in memory first, and then moves the
@@ -242,6 +247,7 @@ func New(ln Listener, c *Config) *Store {
 		leaderObservers: make([]chan<- struct{}, 0),
 		reqMarshaller:   command.NewRequestMarshaler(),
 		logger:          logger,
+		notifyingNodes:  make(map[string]*Server),
 		ApplyTimeout:    applyTimeout,
 	}
 }
@@ -830,6 +836,50 @@ func (s *Store) Backup(leader bool, fmt BackupFormat, dst io.Writer) error {
 	}
 
 	stats.Add(numBackups, 1)
+	return nil
+}
+
+// Notify notifies this Store that a node is ready for bootstrapping at the
+// given address. Once the number of known nodes reaches the expected level
+// bootstrapping will be attempted using this Store. "Expected level" includes
+// this node, so this node must self-notify to ensure the cluster bootstraps
+// with the *advertised Raft address* which the Store doesn't know about.
+func (s *Store) Notify(id, addr string) error {
+	s.notifyMu.Lock()
+	defer s.notifyMu.Unlock()
+
+	if s.BootstrapExpect == 0 || s.bootstrapped || s.raft.Leader() != "" {
+		// There is no reason this node will bootstrap.
+		return nil
+	}
+
+	if _, ok := s.notifyingNodes[id]; ok {
+		return nil
+	}
+	s.notifyingNodes[id] = &Server{id, addr, "voter"}
+	if len(s.notifyingNodes) < s.BootstrapExpect {
+		return nil
+	}
+
+	raftServers := make([]raft.Server, 0)
+	for _, n := range s.notifyingNodes {
+		raftServers = append(raftServers, raft.Server{
+			ID:      raft.ServerID(n.ID),
+			Address: raft.ServerAddress(n.Addr),
+		})
+	}
+
+	s.logger.Printf("reached expected bootstrap count of %d, starting cluster bootstrap",
+		s.BootstrapExpect)
+	bf := s.raft.BootstrapCluster(raft.Configuration{
+		Servers: raftServers,
+	}).(raft.Future)
+	if bf.Error() != nil {
+		s.logger.Printf("cluster bootstrap failed: %s", bf.Error())
+	} else {
+		s.logger.Printf("cluster bootstrap successful")
+	}
+	s.bootstrapped = true
 	return nil
 }
 

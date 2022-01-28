@@ -2,6 +2,8 @@ package system
 
 import (
 	"bytes"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -19,7 +21,7 @@ import (
 	httpd "github.com/rqlite/rqlite/http"
 	"github.com/rqlite/rqlite/store"
 	"github.com/rqlite/rqlite/tcp"
-	"github.com/rqlite/rqlite/testdata/x509"
+	rX509 "github.com/rqlite/rqlite/testdata/x509"
 )
 
 const (
@@ -37,6 +39,7 @@ type Node struct {
 	NodeKeyPath  string
 	HTTPCertPath string
 	HTTPKeyPath  string
+	TLSConfig    *tls.Config
 	PeersPath    string
 	Store        *store.Store
 	Service      *httpd.Service
@@ -181,6 +184,19 @@ func (n *Node) JoinAsNonVoter(leader *Node) error {
 	}
 	if resp.StatusCode != 200 {
 		return fmt.Errorf("failed to join as non-voter, leader returned: %s", resp.Status)
+	}
+	defer resp.Body.Close()
+	return nil
+}
+
+// Notify notifies this node of the existence of another node
+func (n *Node) Notify(id, raftAddr string) error {
+	resp, err := DoNotify(n.APIAddr, id, raftAddr)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("failed to notify node: %s", resp.Status)
 	}
 	defer resp.Body.Close()
 	return nil
@@ -459,6 +475,21 @@ func DoJoinRequest(nodeAddr, raftID, raftAddr string, voter bool) (*http.Respons
 	return resp, nil
 }
 
+// DoNotify notifies the node at nodeAddr about node with ID, and Raft address of raftAddr.
+func DoNotify(nodeAddr, id, raftAddr string) (*http.Response, error) {
+	b, err := json.Marshal(map[string]interface{}{"id": id, "addr": raftAddr})
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := http.Post("http://"+nodeAddr+"/notify", "application/json", bytes.NewReader(b))
+	if err != nil {
+		return nil, err
+	}
+
+	return resp, nil
+}
+
 func mustNewNode(enableSingle bool) *Node {
 	return mustNewNodeEncrypted(enableSingle, false, false)
 }
@@ -467,7 +498,7 @@ func mustNewNodeEncrypted(enableSingle, httpEncrypt, nodeEncrypt bool) *Node {
 	dir := mustTempDir()
 	var mux *tcp.Mux
 	if nodeEncrypt {
-		mux = mustNewOpenTLSMux(x509.CertFile(dir), x509.KeyFile(dir), "")
+		mux = mustNewOpenTLSMux(rX509.CertFile(dir), rX509.KeyFile(dir), "")
 	} else {
 		mux, _ = mustNewOpenMux("")
 	}
@@ -481,8 +512,8 @@ func mustNodeEncrypted(dir string, enableSingle, httpEncrypt bool, mux *tcp.Mux,
 }
 
 func mustNodeEncryptedOnDisk(dir string, enableSingle, httpEncrypt bool, mux *tcp.Mux, nodeID string, onDisk bool) *Node {
-	nodeCertPath := x509.CertFile(dir)
-	nodeKeyPath := x509.KeyFile(dir)
+	nodeCertPath := rX509.CertFile(dir)
+	nodeKeyPath := rX509.KeyFile(dir)
 	httpCertPath := nodeCertPath
 	httpKeyPath := nodeKeyPath
 
@@ -492,6 +523,7 @@ func mustNodeEncryptedOnDisk(dir string, enableSingle, httpEncrypt bool, mux *tc
 		NodeKeyPath:  nodeKeyPath,
 		HTTPCertPath: httpCertPath,
 		HTTPKeyPath:  httpKeyPath,
+		TLSConfig:    mustCreateTLSConfig(nodeCertPath, nodeKeyPath, ""),
 		PeersPath:    filepath.Join(dir, "raft/peers.json"),
 	}
 
@@ -659,6 +691,34 @@ func mustWriteFile(path, contents string) {
 	if err != nil {
 		panic("failed to write to file")
 	}
+}
+
+// mustCreateTLSConfig returns a TLS config from the given cert, key and optionally
+// Certificate Authority cert. Config doesn't verify certs.
+func mustCreateTLSConfig(certFile, keyFile, caCertFile string) *tls.Config {
+	var err error
+	config := &tls.Config{
+		InsecureSkipVerify: true,
+	}
+	config.Certificates = make([]tls.Certificate, 1)
+	config.Certificates[0], err = tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	if caCertFile != "" {
+		asn1Data, err := ioutil.ReadFile(caCertFile)
+		if err != nil {
+			panic(err.Error())
+		}
+		config.RootCAs = x509.NewCertPool()
+		ok := config.RootCAs.AppendCertsFromPEM(asn1Data)
+		if !ok {
+			panic(err.Error())
+		}
+	}
+
+	return config
 }
 
 /* MIT License

@@ -86,6 +86,12 @@ type Config struct {
 	// JoinInterval is the time between retrying failed join operations.
 	JoinInterval time.Duration
 
+	// BootstrapExpect is the minimum number of nodes required for a bootstrap.
+	BootstrapExpect int
+
+	// BootstrapExpectTimeout is the maximum time a bootstrap operation can take.
+	BootstrapExpectTimeout time.Duration
+
 	// NoHTTPVerify disables checking other nodes' HTTP X509 certs for validity.
 	NoHTTPVerify bool
 
@@ -142,9 +148,6 @@ type Config struct {
 
 	// RaftApplyTimeout sets the Log-apply timeout.
 	RaftApplyTimeout time.Duration
-
-	// RaftOpenTimeout sets the Raft store open timeout.
-	RaftOpenTimeout time.Duration
 
 	// RaftShutdownOnRemove sets whether Raft should be shutdown if the node is removed
 	RaftShutdownOnRemove bool
@@ -215,6 +218,8 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	flag.StringVar(&config.JoinAs, "join-as", "", "Username in authentication file to join as. If not set, joins anonymously")
 	flag.IntVar(&config.JoinAttempts, "join-attempts", 5, "Number of join attempts to make")
 	flag.DurationVar(&config.JoinInterval, "join-interval", 5*time.Second, "Period between join attempts")
+	flag.IntVar(&config.BootstrapExpect, "bootstrap-expect", 0, "Minimum number of nodes required for a bootstrap")
+	flag.DurationVar(&config.BootstrapExpectTimeout, "bootstrap-expect-timeout", 60*time.Second, "Maximum time for bootstrap process")
 	flag.StringVar(&config.DiscoMode, "disco-mode", "", "Choose cluster discovery service. If not set, not used")
 	flag.StringVar(&config.DiscoKey, "disco-key", "rqlite", "Key prefix for cluster discovery service")
 	flag.StringVar(&config.DiscoConfig, "disco-config", "", "Set path to cluster discovery config file")
@@ -229,7 +234,6 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	flag.DurationVar(&config.RaftHeartbeatTimeout, "raft-timeout", time.Second, "Raft heartbeat timeout")
 	flag.DurationVar(&config.RaftElectionTimeout, "raft-election-timeout", time.Second, "Raft election timeout")
 	flag.DurationVar(&config.RaftApplyTimeout, "raft-apply-timeout", 10*time.Second, "Raft apply timeout")
-	flag.DurationVar(&config.RaftOpenTimeout, "raft-open-timeout", 120*time.Second, "Time for initial Raft logs to be applied. Use 0s duration to skip wait")
 	flag.Uint64Var(&config.RaftSnapThreshold, "raft-snap", 8192, "Number of outstanding log entries that trigger snapshot")
 	flag.DurationVar(&config.RaftSnapInterval, "raft-snap-int", 30*time.Second, "Snapshot threshold check interval")
 	flag.DurationVar(&config.RaftLeaderLeaseTimeout, "raft-leader-lease-timeout", 0, "Raft leader lease timeout. Use 0s for Raft default")
@@ -253,19 +257,19 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 		errorExit(0, msg)
 	}
 
-	if config.OnDiskPath != "" && !config.OnDisk {
-		errorExit(1, "fatal: on-disk-path is set, but on-disk is not\n")
-	}
-
 	// Ensure the data path is set.
 	if flag.NArg() < 1 {
-		errorExit(1, "fatal: no data directory set\n")
+		errorExit(1, "no data directory set")
 	}
 	config.DataPath = flag.Arg(0)
 
 	// Ensure no args come after the data directory.
 	if flag.NArg() > 1 {
-		errorExit(1, "fatal: arguments after data directory are not accepted\n")
+		errorExit(1, "arguments after data directory are not accepted")
+	}
+
+	if config.OnDiskPath != "" && !config.OnDisk {
+		errorExit(1, "on-disk-path is set, but on-disk is not")
 	}
 
 	// Enforce policies regarding addresses
@@ -279,7 +283,7 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	// Perfom some address validity checks.
 	if strings.HasPrefix(strings.ToLower(config.HTTPAddr), "http") ||
 		strings.HasPrefix(strings.ToLower(config.HTTPAdv), "http") {
-		errorExit(1, "fatal: HTTP options should not include protocol (http:// or https://)\n")
+		errorExit(1, "HTTP options should not include protocol (http:// or https://)")
 	}
 	if _, _, err := net.SplitHostPort(config.HTTPAddr); err != nil {
 		errorExit(1, "HTTP bind address not valid")
@@ -288,20 +292,27 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 		errorExit(1, "HTTP advertised address not valid")
 	}
 	if _, _, err := net.SplitHostPort(config.RaftAddr); err != nil {
-		errorExit(1, "Raft bind address not valid")
+		errorExit(1, "raft bind address not valid")
 	}
 	if _, _, err := net.SplitHostPort(config.RaftAdv); err != nil {
-		errorExit(1, "Raft advertised address not valid")
+		errorExit(1, "raft advertised address not valid")
+	}
+
+	// Enforce bootstrapping policies
+	if config.BootstrapExpect > 0 && config.RaftNonVoter {
+		errorExit(1, "bootstrapping only applicable to voting nodes")
 	}
 
 	// Valid disco mode?
 	switch config.DiscoMode {
 	case "":
-	case DiscoModeConsulKV:
-	case DiscoModeEtcdKV:
-		break
+	case DiscoModeEtcdKV, DiscoModeConsulKV:
+		if config.BootstrapExpect > 0 {
+			errorExit(1, fmt.Sprintf("bootstrapping not applicable when using %s",
+				config.DiscoMode))
+		}
 	default:
-		errorExit(1, fmt.Sprintf("fatal: invalid disco mode, choose %s or %s\n",
+		errorExit(1, fmt.Sprintf("invalid disco mode, choose %s or %s",
 			DiscoModeConsulKV, DiscoModeEtcdKV))
 	}
 
@@ -314,6 +325,9 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 }
 
 func errorExit(code int, msg string) {
-	fmt.Fprintf(os.Stderr, msg)
+	if code != 0 {
+		fmt.Fprintf(os.Stderr, "fatal: ")
+	}
+	fmt.Fprintf(os.Stderr, fmt.Sprintf("%s\n", msg))
 	os.Exit(code)
 }

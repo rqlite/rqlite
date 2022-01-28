@@ -3,9 +3,11 @@ package system
 import (
 	"fmt"
 	"net"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/rqlite/rqlite/cluster"
 	"github.com/rqlite/rqlite/tcp"
 )
 
@@ -157,6 +159,352 @@ func Test_MultiNodeCluster(t *testing.T) {
 		if r != tt.expected {
 			t.Fatalf(`test %d received wrong result "%s" got: %s exp: %s`, i, tt.stmt, r, tt.expected)
 		}
+	}
+}
+
+// Test_MultiNodeClusterBootstrap tests formation of a 3-node cluster via bootstraping,
+// and its operation.
+func Test_MultiNodeClusterBootstrap(t *testing.T) {
+	node1 := mustNewNode(false)
+	node1.Store.BootstrapExpect = 3
+	defer node1.Deprovision()
+
+	node2 := mustNewNode(false)
+	node2.Store.BootstrapExpect = 3
+	defer node2.Deprovision()
+
+	node3 := mustNewNode(false)
+	node3.Store.BootstrapExpect = 3
+	defer node3.Deprovision()
+
+	provider := cluster.NewAddressProviderString(
+		[]string{node1.APIAddr, node2.APIAddr, node3.APIAddr})
+	node1Bs := cluster.NewBootstrapper(provider, 3, nil)
+	node2Bs := cluster.NewBootstrapper(provider, 3, nil)
+	node3Bs := cluster.NewBootstrapper(provider, 3, nil)
+
+	// Have all nodes start a bootstrap basically in parallel,
+	// ensure only 1 leader actually gets elected.
+	var wg sync.WaitGroup
+	wg.Add(3)
+	go func() {
+		done := func() bool {
+			addr, _ := node1.Store.LeaderAddr()
+			return addr != ""
+		}
+		node1Bs.Boot(node1.ID, node1.RaftAddr, done, 10*time.Second)
+		wg.Done()
+	}()
+	go func() {
+		done := func() bool {
+			addr, _ := node2.Store.LeaderAddr()
+			return addr != ""
+		}
+		node2Bs.Boot(node2.ID, node2.RaftAddr, done, 10*time.Second)
+		wg.Done()
+	}()
+	go func() {
+		done := func() bool {
+			addr, _ := node3.Store.LeaderAddr()
+			return addr != ""
+		}
+		node3Bs.Boot(node3.ID, node3.RaftAddr, done, 10*time.Second)
+		wg.Done()
+	}()
+	wg.Wait()
+
+	// Wait for leader election
+	_, err := node1.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for a leader: %s", err.Error())
+	}
+
+	c := Cluster{node1, node2, node3}
+	leader, err := c.Leader()
+	if err != nil {
+		t.Fatalf("failed to find cluster leader: %s", err.Error())
+	}
+
+	// Run queries against cluster.
+	tests := []struct {
+		stmt     string
+		expected string
+		execute  bool
+	}{
+		{
+			stmt:     `CREATE TABLE foo (id integer not null primary key, name text)`,
+			expected: `{"results":[{}]}`,
+			execute:  true,
+		},
+		{
+			stmt:     `INSERT INTO foo(name) VALUES("fiona")`,
+			expected: `{"results":[{"last_insert_id":1,"rows_affected":1}]}`,
+			execute:  true,
+		},
+		{
+			stmt:     `SELECT * FROM foo`,
+			expected: `{"results":[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]}`,
+			execute:  false,
+		},
+	}
+
+	for i, tt := range tests {
+		var r string
+		var err error
+		if tt.execute {
+			r, err = leader.Execute(tt.stmt)
+		} else {
+			r, err = leader.Query(tt.stmt)
+		}
+		if err != nil {
+			t.Fatalf(`test %d failed "%s": %s`, i, tt.stmt, err.Error())
+		}
+		if r != tt.expected {
+			t.Fatalf(`test %d received wrong result "%s" got: %s exp: %s`, i, tt.stmt, r, tt.expected)
+		}
+	}
+
+	// Kill the leader and wait for the new leader.
+	leader.Deprovision()
+	c.RemoveNode(leader)
+	leader, err = c.WaitForNewLeader(leader)
+	if err != nil {
+		t.Fatalf("failed to find new cluster leader after killing leader: %s", err.Error())
+	}
+
+	// Run queries against the now 2-node cluster.
+	tests = []struct {
+		stmt     string
+		expected string
+		execute  bool
+	}{
+		{
+			stmt:     `CREATE TABLE foo (id integer not null primary key, name text)`,
+			expected: `{"results":[{"error":"table foo already exists"}]}`,
+			execute:  true,
+		},
+		{
+			stmt:     `INSERT INTO foo(name) VALUES("sinead")`,
+			expected: `{"results":[{"last_insert_id":2,"rows_affected":1}]}`,
+			execute:  true,
+		},
+		{
+			stmt:     `SELECT * FROM foo`,
+			expected: `{"results":[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"],[2,"sinead"]]}]}`,
+			execute:  false,
+		},
+	}
+
+	for i, tt := range tests {
+		var r string
+		var err error
+		if tt.execute {
+			r, err = leader.Execute(tt.stmt)
+		} else {
+			r, err = leader.Query(tt.stmt)
+		}
+		if err != nil {
+			t.Fatalf(`test %d failed "%s": %s`, i, tt.stmt, err.Error())
+		}
+		if r != tt.expected {
+			t.Fatalf(`test %d received wrong result "%s" got: %s exp: %s`, i, tt.stmt, r, tt.expected)
+		}
+	}
+}
+
+// Test_MultiNodeClusterBootstrapLaterJoin tests formation of a 3-node cluster and
+// then checking a 4th node can join later with the bootstap parameters.
+func Test_MultiNodeClusterBootstrapLaterJoin(t *testing.T) {
+	node1 := mustNewNode(false)
+	node1.Store.BootstrapExpect = 3
+	defer node1.Deprovision()
+
+	node2 := mustNewNode(false)
+	node2.Store.BootstrapExpect = 3
+	defer node2.Deprovision()
+
+	node3 := mustNewNode(false)
+	node3.Store.BootstrapExpect = 3
+	defer node3.Deprovision()
+
+	provider := cluster.NewAddressProviderString(
+		[]string{node1.APIAddr, node2.APIAddr, node3.APIAddr})
+	node1Bs := cluster.NewBootstrapper(provider, 3, nil)
+	node1Bs.Interval = time.Second
+	node2Bs := cluster.NewBootstrapper(provider, 3, nil)
+	node2Bs.Interval = time.Second
+	node3Bs := cluster.NewBootstrapper(provider, 3, nil)
+	node3Bs.Interval = time.Second
+
+	// Have all nodes start a bootstrap basically in parallel,
+	// ensure only 1 leader actually gets elected.
+	var wg sync.WaitGroup
+	wg.Add(3)
+	go func() {
+		done := func() bool {
+			addr, _ := node1.Store.LeaderAddr()
+			return addr != ""
+		}
+		node1Bs.Boot(node1.ID, node1.RaftAddr, done, 10*time.Second)
+		wg.Done()
+	}()
+	go func() {
+		done := func() bool {
+			addr, _ := node2.Store.LeaderAddr()
+			return addr != ""
+		}
+		node2Bs.Boot(node2.ID, node2.RaftAddr, done, 10*time.Second)
+		wg.Done()
+	}()
+	go func() {
+		done := func() bool {
+			addr, _ := node3.Store.LeaderAddr()
+			return addr != ""
+		}
+		node3Bs.Boot(node3.ID, node3.RaftAddr, done, 10*time.Second)
+		wg.Done()
+	}()
+	wg.Wait()
+
+	// Check leaders
+	node1Leader, err := node1.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for a leader: %s", err.Error())
+	}
+	node2Leader, err := node2.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for a leader: %s", err.Error())
+	}
+	node3Leader, err := node3.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for a leader: %s", err.Error())
+	}
+
+	if got, exp := node2Leader, node1Leader; got != exp {
+		t.Fatalf("leader mismatch between node 1 and node 2, got %s, exp %s", got, exp)
+	}
+	if got, exp := node3Leader, node1Leader; got != exp {
+		t.Fatalf("leader mismatch between node 1 and node 3, got %s, exp %s", got, exp)
+	}
+
+	// Ensure a 4th node can join cluster with exactly same launch
+	// params. Under the cover it should just do a join.
+	node4 := mustNewNode(false)
+	node4.Store.BootstrapExpect = 3
+	defer node3.Deprovision()
+	node4Bs := cluster.NewBootstrapper(provider, 3, nil)
+	node4Bs.Interval = time.Second
+	done := func() bool {
+		addr, _ := node4.Store.LeaderAddr()
+		return addr != ""
+	}
+	if err := node4Bs.Boot(node4.ID, node4.RaftAddr, done, 10*time.Second); err != nil {
+		t.Fatalf("node 4 failed to boot")
+	}
+	node4Leader, err := node4.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for a leader: %s", err.Error())
+	}
+	if got, exp := node4Leader, node1Leader; got != exp {
+		t.Fatalf("leader mismatch between node 4 and node 1, got %s, exp %s", got, exp)
+	}
+}
+
+// Test_MultiNodeClusterBootstrapLaterJoinHTTPS tests formation of a 3-node cluster which
+// uses HTTP and TLS,then checking a 4th node can join later with the bootstap parameters.
+func Test_MultiNodeClusterBootstrapLaterJoinHTTPS(t *testing.T) {
+	node1 := mustNewNodeEncrypted(false, true, true)
+	node1.Store.BootstrapExpect = 3
+	defer node1.Deprovision()
+
+	node2 := mustNewNodeEncrypted(false, true, true)
+	node2.Store.BootstrapExpect = 3
+	defer node2.Deprovision()
+
+	node3 := mustNewNodeEncrypted(false, true, true)
+	node3.Store.BootstrapExpect = 3
+	defer node3.Deprovision()
+
+	provider := cluster.NewAddressProviderString(
+		[]string{node1.APIAddr, node2.APIAddr, node3.APIAddr})
+	node1Bs := cluster.NewBootstrapper(provider, 3, nil)
+	node1Bs.Interval = time.Second
+	node2Bs := cluster.NewBootstrapper(provider, 3, nil)
+	node2Bs.Interval = time.Second
+	node3Bs := cluster.NewBootstrapper(provider, 3, nil)
+	node3Bs.Interval = time.Second
+
+	// Have all nodes start a bootstrap basically in parallel,
+	// ensure only 1 leader actually gets elected.
+	var wg sync.WaitGroup
+	wg.Add(3)
+	go func() {
+		done := func() bool {
+			addr, _ := node1.Store.LeaderAddr()
+			return addr != ""
+		}
+		node1Bs.Boot(node1.ID, node1.RaftAddr, done, 10*time.Second)
+		wg.Done()
+	}()
+	go func() {
+		done := func() bool {
+			addr, _ := node2.Store.LeaderAddr()
+			return addr != ""
+		}
+		node2Bs.Boot(node2.ID, node2.RaftAddr, done, 10*time.Second)
+		wg.Done()
+	}()
+	go func() {
+		done := func() bool {
+			addr, _ := node3.Store.LeaderAddr()
+			return addr != ""
+		}
+		node3Bs.Boot(node3.ID, node3.RaftAddr, done, 10*time.Second)
+		wg.Done()
+	}()
+	wg.Wait()
+
+	// Check leaders
+	node1Leader, err := node1.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for a leader: %s", err.Error())
+	}
+	node2Leader, err := node2.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for a leader: %s", err.Error())
+	}
+	node3Leader, err := node3.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for a leader: %s", err.Error())
+	}
+
+	if got, exp := node2Leader, node1Leader; got != exp {
+		t.Fatalf("leader mismatch between node 1 and node 2, got %s, exp %s", got, exp)
+	}
+	if got, exp := node3Leader, node1Leader; got != exp {
+		t.Fatalf("leader mismatch between node 1 and node 3, got %s, exp %s", got, exp)
+	}
+
+	// Ensure a 4th node can join cluster with exactly same launch
+	// params. Under the cover it should just do a join.
+	node4 := mustNewNodeEncrypted(false, true, true)
+	node4.Store.BootstrapExpect = 3
+	defer node3.Deprovision()
+	node4Bs := cluster.NewBootstrapper(provider, 3, nil)
+	node4Bs.Interval = time.Second
+	done := func() bool {
+		addr, _ := node4.Store.LeaderAddr()
+		return addr != ""
+	}
+	if err := node4Bs.Boot(node4.ID, node4.RaftAddr, done, 10*time.Second); err != nil {
+		t.Fatalf("node 4 failed to boot")
+	}
+	node4Leader, err := node4.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for a leader: %s", err.Error())
+	}
+	if got, exp := node4Leader, node1Leader; got != exp {
+		t.Fatalf("leader mismatch between node 4 and node 1, got %s, exp %s", got, exp)
 	}
 }
 

@@ -43,6 +43,7 @@ def write_random_file(data):
 class Node(object):
   def __init__(self, path, node_id,
                api_addr=None, api_adv=None,
+               boostrap_expect=0,
                raft_addr=None, raft_adv=None,
                raft_voter=True,
                raft_snap_threshold=8192, raft_snap_int="1s",
@@ -66,6 +67,7 @@ class Node(object):
     self.node_id = node_id
     self.api_addr = api_addr
     self.api_adv = api_adv
+    self.boostrap_expect = boostrap_expect
     self.raft_addr = raft_addr
     self.raft_adv = raft_adv
     self.raft_voter = raft_voter
@@ -117,6 +119,7 @@ class Node(object):
     command = [self.path,
                '-node-id', self.node_id,
                '-http-addr', self.api_addr,
+               '-bootstrap-expect', str(self.boostrap_expect),
                '-raft-addr', self.raft_addr,
                '-raft-snap', str(self.raft_snap_threshold),
                '-raft-snap-int', self.raft_snap_int,
@@ -130,7 +133,9 @@ class Node(object):
     if self.auth is not None:
       command += ['-auth', self.auth]
     if join is not None:
-      command += ['-join', 'http://' + join]
+      if join.startswith('http://') is False:
+        join = 'http://' + join
+      command += ['-join', join]
     if join_as is not None:
        command += ['-join-as', join_as]
     if join_attempts is not None:
@@ -708,6 +713,25 @@ class TestEndToEndAdvAddr(TestEndToEnd):
 
     self.cluster = Cluster([n0, n1, n2])
 
+class TestBootstrapping(unittest.TestCase):
+  '''Test simple bootstrapping works via -bootstrap-expect'''
+  def test(self):
+    n0 = Node(RQLITED_PATH, '0', boostrap_expect=2)
+    n1 = Node(RQLITED_PATH, '1', boostrap_expect=2)
+    n0.start(join=','.join([n0.APIProtoAddr(), n1.APIProtoAddr()]))
+    n1.start(join=','.join([n0.APIProtoAddr(), n1.APIProtoAddr()]))
+
+    self.assertEqual(n0.wait_for_leader(), n1.wait_for_leader())
+
+    # Ensure a third node can join later, with same launch params.
+    n2 = Node(RQLITED_PATH, '1', boostrap_expect=2)
+    n2.start(join=','.join([n0.APIProtoAddr(), n1.APIProtoAddr()]))
+    self.assertEqual(n2.wait_for_leader(), n1.wait_for_leader())
+
+    deprovision_node(n0)
+    deprovision_node(n1)
+    deprovision_node(n2)
+
 class TestAutoClustering(unittest.TestCase):
   DiscoModeConsulKV = "consul-kv"
   DiscoModeEtcdKV = "etcd-kv"
@@ -1186,8 +1210,10 @@ class TestEndToEndSnapRestoreCluster(unittest.TestCase):
     self.n2.start()
     self.n2.wait_for_leader()
 
-    # Force the Apply loop to run on the node, so fsm_index is updated.
+    # Force the Apply loop to run on the node twice, so fsm_index is updated on n2 to a point
+    # where the SQLite database on n2 is updated.
     self.n0.execute('INSERT INTO foo(name) VALUES("fiona")')
+    self.n2.query('SELECT count(*) FROM foo', level='strong')
 
     self.n2.wait_for_fsm_index(self.n0.fsm_index())
     j = self.n2.query('SELECT count(*) FROM foo', level='none')
