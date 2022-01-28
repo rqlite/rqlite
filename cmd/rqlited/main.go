@@ -372,7 +372,7 @@ func createCluster(cfg *Config, joins []string, tlsConfig *tls.Config, hasPeers 
 			log.Println("explicit join addresses are:", joins)
 
 			if err := addJoinCreds(joins, cfg.JoinAs, credStr); err != nil {
-				return fmt.Errorf("failed too add auth creds: %s", err.Error())
+				return fmt.Errorf("failed to add BasicAuth creds: %s", err.Error())
 			}
 			j, err := cluster.Join(cfg.JoinSrcIP, joins, str.ID(), cfg.RaftAdv, !cfg.RaftNonVoter,
 				cfg.JoinAttempts, cfg.JoinInterval, tlsConfig)
@@ -392,7 +392,7 @@ func createCluster(cfg *Config, joins []string, tlsConfig *tls.Config, hasPeers 
 		targets := append(joins, cfg.HTTPAdv)
 		log.Println("bootstrap addresses are:", targets)
 		if err := addJoinCreds(targets, cfg.JoinAs, credStr); err != nil {
-			return fmt.Errorf("failed too add auth creds: %s", err.Error())
+			return fmt.Errorf("failed to add BasicAuth creds: %s", err.Error())
 		}
 		bs := cluster.NewBootstrapper(cluster.NewAddressProviderString(targets),
 			cfg.BootstrapExpect, tlsConfig)
