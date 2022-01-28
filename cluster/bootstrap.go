@@ -137,7 +137,7 @@ func (b *Bootstrapper) notify(targets []string, id, raftAddr string) error {
 		// Check for protocol scheme, and insert default if necessary.
 		fullTarget := httpd.NormalizeAddr(fmt.Sprintf("%s/notify", t))
 
-	NodeLoop:
+	TargetLoop:
 		for {
 			resp, err := client.Post(fullTarget, "application/json", bytes.NewReader(buf))
 			if err != nil {
@@ -148,7 +148,7 @@ func (b *Bootstrapper) notify(targets []string, id, raftAddr string) error {
 			resp.Body.Close()
 			switch resp.StatusCode {
 			case http.StatusOK:
-				break NodeLoop
+				break TargetLoop
 			case http.StatusBadRequest:
 				// One possible cause is that the target server is listening for HTTPS, but
 				// an HTTP attempt was made. Switch the protocol to HTTPS, and try again.
@@ -178,6 +178,7 @@ func (s *stringAddressProvider) Lookup() ([]string, error) {
 	return s.ss, nil
 }
 
+// NewAddressProviderString wraps an AddressProvider around a string slice.
 func NewAddressProviderString(ss []string) AddressProvider {
 	return &stringAddressProvider{ss}
 }
