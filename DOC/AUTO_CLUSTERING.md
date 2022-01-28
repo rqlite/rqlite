@@ -15,7 +15,7 @@ This document describes various ways to dynamically form rqlite clusters, which 
 
 ## Quickstart
 
-### Automatic Boostrapping
+### Automatic Bootstrapping
 While [manually creating a cluster](https://github.com/rqlite/rqlite/blob/master/DOC/CLUSTER_MGMT.md) is simple, it does suffer one drawback -- you must start one node first and with different options, so it can become the Leader. _Automatic Bootstrapping_, in constrast, allows you to start all the nodes at once, and in a very similar manner. You just need to know the network addresses of the nodes ahead of time.
 
 For simplicity, let's assume you want to run a 3-node rqlite cluster. To bootstrap the cluster, use the `-bootstrap-expect` option like so:
