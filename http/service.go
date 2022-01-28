@@ -851,7 +851,8 @@ func (s *Service) handleReadyz(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.WriteHeader(http.StatusServiceUnavailable)
+	http.Error(w, fmt.Sprintf("no leader: %s", err.Error()),
+		http.StatusServiceUnavailable)
 }
 
 // handleExecute handles queries that modify the database.
