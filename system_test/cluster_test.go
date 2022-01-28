@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rqlite/rqlite/cluster"
 	"github.com/rqlite/rqlite/tcp"
 )
 
@@ -176,26 +177,38 @@ func Test_MultiNodeClusterBootstrap(t *testing.T) {
 	node3.Store.BootstrapExpect = 3
 	defer node3.Deprovision()
 
+	provider := cluster.NewAddressProviderString(
+		[]string{node1.APIAddr, node2.APIAddr, node3.APIAddr})
+	node1Bs := cluster.NewBootstrapper(provider, 3, nil)
+	node2Bs := cluster.NewBootstrapper(provider, 3, nil)
+	node3Bs := cluster.NewBootstrapper(provider, 3, nil)
+
 	// Have all nodes start a bootstrap basically in parallel,
 	// ensure only 1 leader actually gets elected.
 	var wg sync.WaitGroup
 	wg.Add(3)
 	go func() {
-		node1.Notify(node1.ID, node1.RaftAddr)
-		node1.Notify(node2.ID, node2.RaftAddr)
-		node1.Notify(node3.ID, node3.RaftAddr)
+		done := func() bool {
+			addr, _ := node1.Store.LeaderAddr()
+			return addr != ""
+		}
+		node1Bs.Boot(node1.ID, node1.RaftAddr, done, 10*time.Second)
 		wg.Done()
 	}()
 	go func() {
-		node2.Notify(node1.ID, node1.RaftAddr)
-		node2.Notify(node2.ID, node2.RaftAddr)
-		node2.Notify(node3.ID, node3.RaftAddr)
+		done := func() bool {
+			addr, _ := node2.Store.LeaderAddr()
+			return addr != ""
+		}
+		node2Bs.Boot(node2.ID, node2.RaftAddr, done, 10*time.Second)
 		wg.Done()
 	}()
 	go func() {
-		node3.Notify(node1.ID, node1.RaftAddr)
-		node3.Notify(node2.ID, node2.RaftAddr)
-		node3.Notify(node3.ID, node3.RaftAddr)
+		done := func() bool {
+			addr, _ := node3.Store.LeaderAddr()
+			return addr != ""
+		}
+		node3Bs.Boot(node3.ID, node3.RaftAddr, done, 10*time.Second)
 		wg.Done()
 	}()
 	wg.Wait()
