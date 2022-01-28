@@ -474,7 +474,7 @@ func addJoinCreds(joins []string, joinAs string, credStr *auth.CredentialsStore)
 
 	var err error
 	for i := range joins {
-		joins[i], err = cluster.AddUserInfo(joins[i], joinAs, pw)
+		joins[i], err = httpd.AddBasicAuth(joins[i], joinAs, pw)
 		if err != nil {
 			return fmt.Errorf("failed to use credential store join_as: %s", err.Error())
 		}

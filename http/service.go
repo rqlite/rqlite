@@ -15,6 +15,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/pprof"
+	"net/url"
 	"os"
 	"runtime"
 	"strings"
@@ -30,6 +31,10 @@ import (
 var (
 	// ErrLeaderNotFound is returned when a node cannot locate a leader
 	ErrLeaderNotFound = errors.New("leader not found")
+
+	// ErrUserInfoExists is returned when a join address already contains
+	// a username and a password.
+	ErrUserInfoExists = errors.New("userinfo exists")
 )
 
 // Database is the interface any queryable system must implement
@@ -1424,6 +1429,38 @@ func EnsureHTTPS(addr string) string {
 // CheckHTTPS returns true if the given URL uses HTTPS.
 func CheckHTTPS(addr string) bool {
 	return strings.HasPrefix(addr, "https://")
+}
+
+// AddBasicAuth adds username and password to the join address. If username is empty
+// joinAddr is returned unchanged. If joinAddr already contains a username, ErrUserInfoExists
+// is returned.
+func AddBasicAuth(joinAddr, username, password string) (string, error) {
+	if username == "" {
+		return joinAddr, nil
+	}
+
+	u, err := url.Parse(joinAddr)
+	if err != nil {
+		return "", err
+	}
+
+	if u.User != nil && u.User.Username() != "" {
+		return "", ErrUserInfoExists
+	}
+
+	u.User = url.UserPassword(username, password)
+	return u.String(), nil
+}
+
+// RemoveBasicAuth returns a copy of the given URL, with any basic auth information
+// removed.
+func RemoveBasicAuth(u string) string {
+	uu, err := url.Parse(u)
+	if err != nil {
+		return u
+	}
+	uu.User = nil
+	return uu.String()
 }
 
 // queryRequestFromStrings converts a slice of strings into a command.QueryRequest

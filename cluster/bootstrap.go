@@ -99,7 +99,8 @@ func (b *Bootstrapper) Boot(id, raftAddr string, done func() bool, timeout time.
 
 			// Try an explicit join.
 			if j, err := Join("", targets, id, raftAddr, true, 1, 0, b.tlsConfig); err == nil {
-				b.logger.Printf("succeeded directly joining cluster via node at %s", j)
+				b.logger.Printf("succeeded directly joining cluster via node at %s",
+					httpd.RemoveBasicAuth(j))
 				return nil
 			}
 
@@ -155,11 +156,13 @@ func (b *Bootstrapper) notify(targets []string, id, raftAddr string) error {
 				// record information about which protocol a registered node is actually using.
 				if strings.HasPrefix(fullTarget, "https://") {
 					// It's already HTTPS, give up.
-					return fmt.Errorf("failed to notify node: %s", resp.Status)
+					return fmt.Errorf("failed to notify node at %s: %s",
+						httpd.RemoveBasicAuth(fullTarget), resp.Status)
 				}
 				fullTarget = httpd.EnsureHTTPS(fullTarget)
 			default:
-				return fmt.Errorf("failed to notify node: %s", resp.Status)
+				return fmt.Errorf("failed to notify node at %s: %s",
+					httpd.RemoveBasicAuth(fullTarget), resp.Status)
 			}
 
 		}

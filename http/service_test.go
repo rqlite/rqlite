@@ -154,6 +154,74 @@ func Test_EnsureHTTPS(t *testing.T) {
 	}
 }
 
+func Test_AddBasicAuth(t *testing.T) {
+	var u string
+	var err error
+
+	u, err = AddBasicAuth("http://example.com", "user1", "pass1")
+	if err != nil {
+		t.Fatalf("failed to add user info: %s", err.Error())
+	}
+	if exp, got := "http://user1:pass1@example.com", u; exp != got {
+		t.Fatalf("wrong URL created, exp %s, got %s", exp, got)
+	}
+
+	u, err = AddBasicAuth("http://example.com", "user1", "")
+	if err != nil {
+		t.Fatalf("failed to add user info: %s", err.Error())
+	}
+	if exp, got := "http://user1:@example.com", u; exp != got {
+		t.Fatalf("wrong URL created, exp %s, got %s", exp, got)
+	}
+
+	u, err = AddBasicAuth("http://example.com", "", "pass1")
+	if err != nil {
+		t.Fatalf("failed to add user info: %s", err.Error())
+	}
+	if exp, got := "http://example.com", u; exp != got {
+		t.Fatalf("wrong URL created, exp %s, got %s", exp, got)
+	}
+
+	u, err = AddBasicAuth("http://user1:pass1@example.com", "user2", "pass2")
+	if err == nil {
+		t.Fatalf("failed to get expected error when UserInfo exists")
+	}
+}
+
+func Test_RemoveBasicAuth(t *testing.T) {
+	tests := []struct {
+		orig    string
+		removed string
+	}{
+		{
+			orig:    "localhost",
+			removed: "localhost",
+		},
+		{
+			orig:    "http://localhost:4001",
+			removed: "http://localhost:4001",
+		},
+		{
+			orig:    "https://foo:bar@localhost",
+			removed: "https://localhost",
+		},
+		{
+			orig:    "https://foo:bar@localhost:4001",
+			removed: "https://localhost:4001",
+		},
+		{
+			orig:    "http://foo:bar@localhost:4001/path",
+			removed: "http://localhost:4001/path",
+		},
+	}
+
+	for _, tt := range tests {
+		if e := RemoveBasicAuth(tt.orig); e != tt.removed {
+			t.Fatalf("%s BasicAuth not removed correctly, exp %s, got %s", tt.orig, tt.removed, e)
+		}
+	}
+}
+
 func Test_NewService(t *testing.T) {
 	m := &MockStore{}
 	c := &mockClusterService{}
