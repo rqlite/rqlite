@@ -222,7 +222,7 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	flag.IntVar(&config.JoinAttempts, "join-attempts", 5, "Number of join attempts to make")
 	flag.DurationVar(&config.JoinInterval, "join-interval", 5*time.Second, "Period between join attempts")
 	flag.IntVar(&config.BootstrapExpect, "bootstrap-expect", 0, "Minimum number of nodes required for a bootstrap")
-	flag.DurationVar(&config.BootstrapExpectTimeout, "bootstrap-expect-timeout", "60s", "Maximum time for bootstrap process")
+	flag.DurationVar(&config.BootstrapExpectTimeout, "bootstrap-expect-timeout", 60*time.Second, "Maximum time for bootstrap process")
 	flag.StringVar(&config.DiscoMode, "disco-mode", "", "Choose cluster discovery service. If not set, not used")
 	flag.StringVar(&config.DiscoKey, "disco-key", "rqlite", "Key prefix for cluster discovery service")
 	flag.StringVar(&config.DiscoConfig, "disco-config", "", "Set path to cluster discovery config file")
