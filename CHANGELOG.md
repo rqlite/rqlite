@@ -1,3 +1,9 @@
+## 7.1.0 (unreleased)
+This release introduces a new automatic clustering approach, known as _Bootstrapping_, which allows rqlite clusters to form without assistance from an external system such as Consul. This can be very useful for certain deployment scenarios. See the [documentation](https://github.com/rqlite/rqlite/blob/master/DOC/AUTO_CLUSTERING.md) for full details on using the new Bootstrapping mode. Special thanks to [Nathan Ferch](https://github.com/nferch) for his advice regarding the design and development of this feature.
+
+### New features
+- [PR #974](https://github.com/rqlite/rqlite/pull/974): Add support for automatically bootstrapping clusters from just rqlite nodes.
+
 ## 7.0.1 (January 26th 2022)
 ### Implementation changes and bug fixes
 - [PR #957](https://github.com/rqlite/rqlite/pull/971): Correct rqlite command line options in log message.
