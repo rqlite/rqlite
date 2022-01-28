@@ -115,8 +115,6 @@ func (b *Bootstrapper) Boot(id, raftAddr string, done func() bool, timeout time.
 			}
 		}
 	}
-
-	return nil
 }
 
 func (b *Bootstrapper) notify(targets []string, id, raftAddr string) error {

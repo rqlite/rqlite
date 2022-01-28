@@ -402,7 +402,7 @@ func createCluster(cfg *Config, joins []string, tlsConfig *tls.Config, hasPeers 
 			leader, _ := str.LeaderAddr()
 			return leader != ""
 		}
-		return bs.Boot(str.ID(), cfg.RaftAdv, done, 60*time.Second)
+		return bs.Boot(str.ID(), cfg.RaftAdv, done, cfg.BootstrapExpectTimeout)
 	}
 
 	if cfg.DiscoMode == "" {
