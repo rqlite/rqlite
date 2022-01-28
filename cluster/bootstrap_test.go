@@ -2,11 +2,13 @@ package cluster
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
 	"testing"
+	"time"
 )
 
 func Test_AddressProviderString(t *testing.T) {
@@ -22,20 +24,57 @@ func Test_AddressProviderString(t *testing.T) {
 }
 
 func Test_NewBootstrapper(t *testing.T) {
-	bs := NewBootstrapper(nil, 1, 1, 0, nil)
+	bs := NewBootstrapper(nil, 1, nil)
 	if bs == nil {
 		t.Fatalf("failed to create a simple Bootstrapper")
 	}
 }
 
-func Test_BootstrapperBootSingleNotify(t *testing.T) {
-	var body map[string]interface{}
+func Test_BootstrapperBootDoneImmediately(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" {
-			t.Fatalf("Client did not use POST")
-		}
-		w.WriteHeader(http.StatusOK)
+		t.Fatalf("client made HTTP request")
+	}))
 
+	done := func() bool {
+		return true
+	}
+	p := NewAddressProviderString([]string{ts.URL})
+	bs := NewBootstrapper(p, 1, nil)
+	if err := bs.Boot("node1", "192.168.1.1:1234", done, 10*time.Second); err != nil {
+		t.Fatalf("failed to boot: %s", err)
+	}
+}
+
+func Test_BootstrapperBootTimeout(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+
+	done := func() bool {
+		return false
+	}
+	p := NewAddressProviderString([]string{ts.URL})
+	bs := NewBootstrapper(p, 1, nil)
+	bs.Interval = time.Second
+	err := bs.Boot("node1", "192.168.1.1:1234", done, 5*time.Second)
+	if err == nil {
+		t.Fatalf("no error returned from timed-out boot")
+	}
+	if !errors.Is(err, ErrBootTimeout) {
+		t.Fatalf("wrong error returned")
+	}
+}
+
+func Test_BootstrapperBootSingleNotify(t *testing.T) {
+	tsNotified := false
+	var body map[string]string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/join" {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+
+		tsNotified = true
 		b, err := io.ReadAll(r.Body)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
@@ -48,38 +87,83 @@ func Test_BootstrapperBootSingleNotify(t *testing.T) {
 		}
 	}))
 
+	n := -1
+	done := func() bool {
+		n++
+		if n == 5 {
+			return true
+		}
+		return false
+	}
+
 	p := NewAddressProviderString([]string{ts.URL})
-	bs := NewBootstrapper(p, 1, 1, 0, nil)
-	if err := bs.Boot("node1", "192.168.1.1:1234"); err != nil {
+	bs := NewBootstrapper(p, 1, nil)
+	bs.Interval = time.Second
+
+	err := bs.Boot("node1", "192.168.1.1:1234", done, 60*time.Second)
+	if err != nil {
 		t.Fatalf("failed to boot: %s", err)
 	}
 
-	if got, exp := body["id"].(string), "node1"; got != exp {
+	if tsNotified != true {
+		t.Fatalf("notify target not contacted")
+	}
+
+	if got, exp := body["id"], "node1"; got != exp {
 		t.Fatalf("wrong node ID supplied, exp %s, got %s", exp, got)
 	}
-	if got, exp := body["addr"].(string), "192.168.1.1:1234"; got != exp {
+	if got, exp := body["addr"], "192.168.1.1:1234"; got != exp {
 		t.Fatalf("wrong address supplied, exp %s, got %s", exp, got)
 	}
+
 }
 
 func Test_BootstrapperBootMultiNotify(t *testing.T) {
+	ts1Join := false
 	ts1Notified := false
 	ts1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/join" {
+			ts1Join = true
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
 		ts1Notified = true
 	}))
 
+	ts2Join := false
 	ts2Notified := false
 	ts2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/join" {
+			ts2Join = true
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
 		ts2Notified = true
 	}))
 
+	n := -1
+	done := func() bool {
+		n++
+		if n == 5 {
+			return true
+		}
+		return false
+	}
+
 	p := NewAddressProviderString([]string{ts1.URL, ts2.URL})
-	bs := NewBootstrapper(p, 1, 1, 0, nil)
-	if err := bs.Boot("node1", "192.168.1.1:1234"); err != nil {
+	bs := NewBootstrapper(p, 2, nil)
+	bs.Interval = time.Second
+
+	err := bs.Boot("node1", "192.168.1.1:1234", done, 60*time.Second)
+	if err != nil {
 		t.Fatalf("failed to boot: %s", err)
 	}
 
+	if ts1Join != true || ts2Join != true {
+		t.Fatalf("all join targets not contacted")
+	}
+
 	if ts1Notified != true || ts2Notified != true {
-		t.Fatalf("all notify targets not accessed")
+		t.Fatalf("all notify targets not contacted")
 	}
 }

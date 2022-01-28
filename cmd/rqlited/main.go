@@ -367,14 +367,13 @@ func createCluster(cfg *Config, joins []string, tlsConfig *tls.Config, hasPeers 
 	}
 
 	if len(joins) > 0 {
-		if err := addJoinCreds(joins, cfg.JoinAs, credStr); err != nil {
-			return fmt.Errorf("failed too add auth creds: %s", err.Error())
-		}
-
 		if cfg.BootstrapExpect == 0 {
 			// Explicit join operation requested, so do it.
 			log.Println("explicit join addresses are:", joins)
 
+			if err := addJoinCreds(joins, cfg.JoinAs, credStr); err != nil {
+				return fmt.Errorf("failed too add auth creds: %s", err.Error())
+			}
 			j, err := cluster.Join(cfg.JoinSrcIP, joins, str.ID(), cfg.RaftAdv, !cfg.RaftNonVoter,
 				cfg.JoinAttempts, cfg.JoinInterval, tlsConfig)
 			if err != nil {
@@ -385,17 +384,25 @@ func createCluster(cfg *Config, joins []string, tlsConfig *tls.Config, hasPeers 
 			return nil
 		}
 
-		// Must self-notify when bootstrapping
 		if hasPeers {
 			log.Println("preexisting node configuration detected, ignoring bootstrap request")
 			return nil
 		}
-		notifies := append(joins, cfg.HTTPAdv)
-		log.Println("bootstrap addresses are:", notifies)
-		// Bootstrapping join, so notify every node -- including this one -- that this
-		// node is ready for a Bootstrap.
-		return cluster.Notify(notifies, str.ID(), cfg.RaftAdv, cfg.JoinAttempts,
-			cfg.JoinInterval, tlsConfig)
+
+		// Must self-notify when bootstrapping
+		targets := append(joins, cfg.HTTPAdv)
+		log.Println("bootstrap addresses are:", targets)
+		if err := addJoinCreds(targets, cfg.JoinAs, credStr); err != nil {
+			return fmt.Errorf("failed too add auth creds: %s", err.Error())
+		}
+		bs := cluster.NewBootstrapper(cluster.NewAddressProviderString(targets),
+			cfg.BootstrapExpect, tlsConfig)
+
+		done := func() bool {
+			leader, _ := str.LeaderAddr()
+			return leader != ""
+		}
+		return bs.Boot(str.ID(), cfg.RaftAdv, done, 60*time.Second)
 	}
 
 	if cfg.DiscoMode == "" {

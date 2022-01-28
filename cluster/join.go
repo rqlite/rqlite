@@ -76,7 +76,7 @@ func Join(srcIP string, joinAddr []string, id, addr string, voter bool, numAttem
 
 	for i := 0; i < numAttempts; i++ {
 		for _, a := range joinAddr {
-			j, err = contact("join", srcIP, a, id, addr, voter, tlsConfig, logger)
+			j, err = join(srcIP, a, id, addr, voter, tlsConfig, logger)
 			if err == nil {
 				// Success!
 				return j, nil
@@ -89,35 +89,7 @@ func Join(srcIP string, joinAddr []string, id, addr string, voter bool, numAttem
 	return "", ErrJoinFailed
 }
 
-// Notify notifies each given node of the presence of this node.
-func Notify(nodeAddr []string, id, addr string, numAttempts int,
-	attemptInterval time.Duration, tlsConfig *tls.Config) error {
-	var err error
-	logger := log.New(os.Stderr, "[cluster-notify] ", log.LstdFlags)
-	if tlsConfig == nil {
-		tlsConfig = &tls.Config{InsecureSkipVerify: true}
-	}
-
-	for _, a := range nodeAddr {
-		n := 1
-		for {
-			_, err = contact("notify", "", a, id, addr, true, tlsConfig, logger)
-			if err == nil {
-				break
-			}
-			logger.Printf("failed to notify node at %s: %s, sleeping %s before retry", a, err.Error(), attemptInterval)
-			if n > numAttempts {
-				logger.Printf("failed to notify node at %s, after %d attempts", a, numAttempts)
-				return ErrNotifyFailed
-			}
-			time.Sleep(attemptInterval)
-			n++
-		}
-	}
-	return nil
-}
-
-func contact(path, srcIP, joinAddr, id, addr string, voter bool, tlsConfig *tls.Config, logger *log.Logger) (string, error) {
+func join(srcIP, joinAddr, id, addr string, voter bool, tlsConfig *tls.Config, logger *log.Logger) (string, error) {
 	if id == "" {
 		return "", fmt.Errorf("node ID not set")
 	}
@@ -138,7 +110,7 @@ func contact(path, srcIP, joinAddr, id, addr string, voter bool, tlsConfig *tls.
 	}
 
 	// Check for protocol scheme, and insert default if necessary.
-	fullAddr := httpd.NormalizeAddr(fmt.Sprintf("%s/%s", joinAddr, path))
+	fullAddr := httpd.NormalizeAddr(fmt.Sprintf("%s/join", joinAddr))
 
 	// Create and configure the client to connect to the other node.
 	tr := &http.Transport{
@@ -160,7 +132,7 @@ func contact(path, srcIP, joinAddr, id, addr string, voter bool, tlsConfig *tls.
 			return "", err
 		}
 
-		// Attempt to contact.
+		// Attempt to join.
 		resp, err := client.Post(fullAddr, "application/json", bytes.NewReader(b))
 		if err != nil {
 			return "", err
@@ -178,26 +150,24 @@ func contact(path, srcIP, joinAddr, id, addr string, voter bool, tlsConfig *tls.
 		case http.StatusMovedPermanently:
 			fullAddr = resp.Header.Get("location")
 			if fullAddr == "" {
-				return "", fmt.Errorf("failed to contact (%s), invalid redirect received", path)
+				return "", fmt.Errorf("failed to join, invalid redirect received")
 			}
 			continue
 		case http.StatusBadRequest:
 			// One possible cause is that the target server is listening for HTTPS, but an HTTP
 			// attempt was made. Switch the protocol to HTTPS, and try again. This can happen
-			// when using various disco approaches, since it doesn't record information about which
+			// when using the Disco service, since it doesn't record information about which
 			// protocol a registered node is actually using.
 			if strings.HasPrefix(fullAddr, "https://") {
 				// It's already HTTPS, give up.
-				return "", fmt.Errorf("failed to contact (%s), node returned: %s: (%s)", path,
-					resp.Status, string(b))
+				return "", fmt.Errorf("failed to join, node returned: %s: (%s)", resp.Status, string(b))
 			}
 
 			logger.Print("join via HTTP failed, trying via HTTPS")
 			fullAddr = httpd.EnsureHTTPS(fullAddr)
 			continue
 		default:
-			return "", fmt.Errorf("failed to contact (%s), node returned: %s: (%s)", path,
-				resp.Status, string(b))
+			return "", fmt.Errorf("failed to join, node returned: %s: (%s)", resp.Status, string(b))
 		}
 	}
 }
