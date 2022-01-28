@@ -149,9 +149,6 @@ type Config struct {
 	// RaftApplyTimeout sets the Log-apply timeout.
 	RaftApplyTimeout time.Duration
 
-	// RaftOpenTimeout sets the Raft store open timeout.
-	RaftOpenTimeout time.Duration
-
 	// RaftShutdownOnRemove sets whether Raft should be shutdown if the node is removed
 	RaftShutdownOnRemove bool
 
@@ -237,7 +234,6 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	flag.DurationVar(&config.RaftHeartbeatTimeout, "raft-timeout", time.Second, "Raft heartbeat timeout")
 	flag.DurationVar(&config.RaftElectionTimeout, "raft-election-timeout", time.Second, "Raft election timeout")
 	flag.DurationVar(&config.RaftApplyTimeout, "raft-apply-timeout", 10*time.Second, "Raft apply timeout")
-	flag.DurationVar(&config.RaftOpenTimeout, "raft-open-timeout", 120*time.Second, "Time for initial Raft logs to be applied. Use 0s duration to skip wait")
 	flag.Uint64Var(&config.RaftSnapThreshold, "raft-snap", 8192, "Number of outstanding log entries that trigger snapshot")
 	flag.DurationVar(&config.RaftSnapInterval, "raft-snap-int", 30*time.Second, "Snapshot threshold check interval")
 	flag.DurationVar(&config.RaftLeaderLeaseTimeout, "raft-leader-lease-timeout", 0, "Raft leader lease timeout. Use 0s for Raft default")
