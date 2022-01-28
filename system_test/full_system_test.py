@@ -716,17 +716,24 @@ class TestEndToEndAdvAddr(TestEndToEnd):
 class TestBootstrapping(unittest.TestCase):
   '''Test simple bootstrapping works via -bootstrap-expect'''
   def test(self):
-    n0 = Node(RQLITED_PATH, '0', boostrap_expect=2)
-    n1 = Node(RQLITED_PATH, '1', boostrap_expect=2)
-    n0.start(join=','.join([n0.APIProtoAddr(), n1.APIProtoAddr()]))
-    n1.start(join=','.join([n0.APIProtoAddr(), n1.APIProtoAddr()]))
+    n0 = Node(RQLITED_PATH, '0', boostrap_expect=3)
+    n1 = Node(RQLITED_PATH, '1', boostrap_expect=3)
+    n2 = Node(RQLITED_PATH, '2', boostrap_expect=3)
+
+    n0.start(join=','.join([n0.APIProtoAddr(), n1.APIProtoAddr(), n2.APIProtoAddr()]))
+    n1.start(join=','.join([n0.APIProtoAddr(), n1.APIProtoAddr(), n2.APIProtoAddr()]))
+    n2.start(join=','.join([n0.APIProtoAddr(), n1.APIProtoAddr(), n2.APIProtoAddr()]))
 
     self.assertEqual(n0.wait_for_leader(), n1.wait_for_leader())
+    self.assertEqual(n0.wait_for_leader(), n2.wait_for_leader())
 
-    # Ensure a third node can join later, with same launch params.
-    n2 = Node(RQLITED_PATH, '1', boostrap_expect=2)
-    n2.start(join=','.join([n0.APIProtoAddr(), n1.APIProtoAddr()]))
-    self.assertEqual(n2.wait_for_leader(), n1.wait_for_leader())
+    # Ensure a 4th node can join later, with same launch params.
+    n3 = Node(RQLITED_PATH, '1', boostrap_expect=3)
+    n3.start(join=','.join([n0.APIProtoAddr(), n1.APIProtoAddr(), n2.APIProtoAddr()]))
+
+    n3.wait_for_leader()
+
+    self.assertEqual(n3.wait_for_leader(), n0.wait_for_leader())
 
     deprovision_node(n0)
     deprovision_node(n1)

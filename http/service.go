@@ -844,14 +844,18 @@ func (s *Service) handleReadyz(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if lAddr != "" {
-		if _, err := s.cluster.GetNodeAPIAddr(lAddr, timeout); err == nil {
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("[+]leader ok"))
+		_, err = s.cluster.GetNodeAPIAddr(lAddr, timeout)
+		if err != nil {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			w.Write([]byte(fmt.Sprintf("[+]leader not contactable: %s", err.Error())))
 			return
 		}
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("[+]leader ok"))
+		return
 	}
-
 	w.WriteHeader(http.StatusServiceUnavailable)
+	w.Write([]byte("[+]leader does not exist"))
 }
 
 // handleExecute handles queries that modify the database.
