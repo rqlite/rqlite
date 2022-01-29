@@ -1,9 +1,11 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"runtime"
 	"strings"
@@ -163,14 +165,95 @@ type Config struct {
 	// CompressionBatch sets request batch threshold for compression attempt.
 	CompressionBatch int
 
-	// ShowVersion instructs the node to show version information and exit.
-	ShowVersion bool
-
 	// CPUProfile enables CPU profiling.
 	CPUProfile string
 
 	// MemProfile enables memory profiling.
 	MemProfile string
+}
+
+// Validate checks the configuration for internal consistency, and activates
+// important rqlite policies. It must be called at least once on a Config
+// object before the Config object is used. It is OK to call more than
+// once.
+func (c *Config) Validate() error {
+	if c.OnDiskPath != "" && !c.OnDisk {
+		return errors.New("-on-disk-path is set, but -on-disk is not")
+	}
+
+	// Enforce policies regarding addresses
+	if c.RaftAdv == "" {
+		c.RaftAdv = c.RaftAddr
+	}
+	if c.HTTPAdv == "" {
+		c.HTTPAdv = c.HTTPAddr
+	}
+
+	// Node ID policy
+	if c.NodeID == "" {
+		c.NodeID = c.RaftAdv
+	}
+
+	// Perfom some address validity checks.
+	if strings.HasPrefix(strings.ToLower(c.HTTPAddr), "http") ||
+		strings.HasPrefix(strings.ToLower(c.HTTPAdv), "http") {
+		return errors.New("HTTP options should not include protocol (http:// or https://)")
+	}
+	if _, _, err := net.SplitHostPort(c.HTTPAddr); err != nil {
+		return errors.New("HTTP bind address not valid")
+	}
+	if _, _, err := net.SplitHostPort(c.HTTPAdv); err != nil {
+		return errors.New("HTTP advertised address not valid")
+	}
+	if _, _, err := net.SplitHostPort(c.RaftAddr); err != nil {
+		return errors.New("raft bind address not valid")
+	}
+	if _, _, err := net.SplitHostPort(c.RaftAdv); err != nil {
+		return errors.New("raft advertised address not valid")
+	}
+
+	// Enforce bootstrapping policies
+	if c.BootstrapExpect > 0 && c.RaftNonVoter {
+		return errors.New("bootstrapping only applicable to voting nodes")
+	}
+
+	// Join addresses OK?
+	if c.JoinAddr != "" {
+		addrs := strings.Split(c.JoinAddr, ",")
+		for i := range addrs {
+			u, err := url.Parse(addrs[i])
+			if err != nil {
+				return fmt.Errorf("%s is an invalid join adddress", addrs[i])
+			}
+			if c.BootstrapExpect == 0 {
+				if u.Host == c.HTTPAdv || addrs[i] == c.HTTPAddr {
+					return errors.New("node cannot join with itself unless bootstrapping")
+				}
+			}
+		}
+	}
+
+	// Valid disco mode?
+	switch c.DiscoMode {
+	case "":
+	case DiscoModeEtcdKV, DiscoModeConsulKV:
+		if c.BootstrapExpect > 0 {
+			return fmt.Errorf("bootstrapping not applicable when using %s", c.DiscoMode)
+		}
+	default:
+		return fmt.Errorf("disco mode must be %s or %s", DiscoModeConsulKV, DiscoModeEtcdKV)
+	}
+
+	return nil
+}
+
+// JoinAddresses returns the join addresses set at the command line. Returns nil
+// if no join addresses were set.
+func (c *Config) JoinAddresses() []string {
+	if c.JoinAddr == "" {
+		return nil
+	}
+	return strings.Split(c.JoinAddr, ",")
 }
 
 // HTTPURL returns the fully-formed, advertised HTTP API address for this config, including
@@ -195,7 +278,8 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	if flag.Parsed() {
 		return nil, fmt.Errorf("command-line flags already parsed")
 	}
-	config := Config{}
+	config := &Config{}
+	showVersion := false
 
 	flag.StringVar(&config.NodeID, "node-id", "", "Unique name for node. If not set, set to advertised Raft address")
 	flag.StringVar(&config.HTTPAddr, "http-addr", "localhost:4001", "HTTP server bind address. To enable HTTPS, set X.509 cert and key")
@@ -229,7 +313,7 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	flag.StringVar(&config.OnDiskPath, "on-disk-path", "", "Path for SQLite on-disk database file. If not set, use file in data directory")
 	flag.BoolVar(&config.OnDiskStartup, "on-disk-startup", false, "Do not initialize on-disk database in memory first at startup")
 	flag.BoolVar(&config.FKConstraints, "fk", false, "Enable SQLite foreign key constraints")
-	flag.BoolVar(&config.ShowVersion, "version", false, "Show version information and exit")
+	flag.BoolVar(&showVersion, "version", false, "Show version information and exit")
 	flag.BoolVar(&config.RaftNonVoter, "raft-non-voter", false, "Configure as non-voting node")
 	flag.DurationVar(&config.RaftHeartbeatTimeout, "raft-timeout", time.Second, "Raft heartbeat timeout")
 	flag.DurationVar(&config.RaftElectionTimeout, "raft-election-timeout", time.Second, "Raft election timeout")
@@ -251,8 +335,8 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	}
 	flag.Parse()
 
-	if config.ShowVersion {
-		msg := fmt.Sprintf("%s %s %s %s %s (commit %s, branch %s, compiler %s)\n",
+	if showVersion {
+		msg := fmt.Sprintf("%s %s %s %s %s (commit %s, branch %s, compiler %s)",
 			name, build.Version, runtime.GOOS, runtime.GOARCH, runtime.Version(), build.Commit, build.Branch, runtime.Compiler)
 		errorExit(0, msg)
 	}
@@ -268,60 +352,10 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 		errorExit(1, "arguments after data directory are not accepted")
 	}
 
-	if config.OnDiskPath != "" && !config.OnDisk {
-		errorExit(1, "on-disk-path is set, but on-disk is not")
+	if err := config.Validate(); err != nil {
+		errorExit(1, err.Error())
 	}
-
-	// Enforce policies regarding addresses
-	if config.RaftAdv == "" {
-		config.RaftAdv = config.RaftAddr
-	}
-	if config.HTTPAdv == "" {
-		config.HTTPAdv = config.HTTPAddr
-	}
-
-	// Perfom some address validity checks.
-	if strings.HasPrefix(strings.ToLower(config.HTTPAddr), "http") ||
-		strings.HasPrefix(strings.ToLower(config.HTTPAdv), "http") {
-		errorExit(1, "HTTP options should not include protocol (http:// or https://)")
-	}
-	if _, _, err := net.SplitHostPort(config.HTTPAddr); err != nil {
-		errorExit(1, "HTTP bind address not valid")
-	}
-	if _, _, err := net.SplitHostPort(config.HTTPAdv); err != nil {
-		errorExit(1, "HTTP advertised address not valid")
-	}
-	if _, _, err := net.SplitHostPort(config.RaftAddr); err != nil {
-		errorExit(1, "raft bind address not valid")
-	}
-	if _, _, err := net.SplitHostPort(config.RaftAdv); err != nil {
-		errorExit(1, "raft advertised address not valid")
-	}
-
-	// Enforce bootstrapping policies
-	if config.BootstrapExpect > 0 && config.RaftNonVoter {
-		errorExit(1, "bootstrapping only applicable to voting nodes")
-	}
-
-	// Valid disco mode?
-	switch config.DiscoMode {
-	case "":
-	case DiscoModeEtcdKV, DiscoModeConsulKV:
-		if config.BootstrapExpect > 0 {
-			errorExit(1, fmt.Sprintf("bootstrapping not applicable when using %s",
-				config.DiscoMode))
-		}
-	default:
-		errorExit(1, fmt.Sprintf("invalid disco mode, choose %s or %s",
-			DiscoModeConsulKV, DiscoModeEtcdKV))
-	}
-
-	// Node ID policy
-	if config.NodeID == "" {
-		config.NodeID = config.RaftAdv
-	}
-
-	return &config, nil
+	return config, nil
 }
 
 func errorExit(code int, msg string) {
