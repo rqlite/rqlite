@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -91,7 +92,7 @@ func (b *Bootstrapper) Boot(id, raftAddr string, done func() bool, timeout time.
 
 			targets, err := b.provider.Lookup()
 			if err != nil {
-				b.logger.Printf("provider loopup failed %s", err.Error())
+				b.logger.Printf("provider lookup failed %s", err.Error())
 			}
 			if len(targets) < b.expect {
 				continue
@@ -181,6 +182,30 @@ func (s *stringAddressProvider) Lookup() ([]string, error) {
 // NewAddressProviderString wraps an AddressProvider around a string slice.
 func NewAddressProviderString(ss []string) AddressProvider {
 	return &stringAddressProvider{ss}
+}
+
+type hostAddressProvider struct {
+	host string
+	port int
+}
+
+// NewAddressProviderHost returns an AddressProvider which will provide
+// the IP addresses for the given host. port is the port to connect
+// to on any host.
+func NewAddressProviderHost(host string, port int) AddressProvider {
+	return &hostAddressProvider{host, port}
+}
+
+func (h *hostAddressProvider) Lookup() ([]string, error) {
+	ips, err := net.LookupIP(h.host)
+	if err != nil {
+		return nil, err
+	}
+	addrs := make([]string, len(ips))
+	for i := range ips {
+		addrs[i] = fmt.Sprintf("%s:%d", ips[i].String(), h.port)
+	}
+	return addrs, nil
 }
 
 // jitter adds a little bit of randomness to a given duration. This is

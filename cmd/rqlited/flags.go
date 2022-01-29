@@ -11,9 +11,10 @@ import (
 )
 
 const (
-	DiscoModeNone     = ""
-	DiscoModeConsulKV = "consul-kv"
-	DiscoModeEtcdKV   = "etcd-kv"
+	DiscoModeNone          = ""
+	DiscoModeConsulKV      = "consul-kv"
+	DiscoModeEtcdKV        = "etcd-kv"
+	DiscoModeServiceLookup = "service-lookup"
 )
 
 // Config represents the configuration as set by command-line flags.
@@ -311,9 +312,14 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 			errorExit(1, fmt.Sprintf("bootstrapping not applicable when using %s",
 				config.DiscoMode))
 		}
+	case DiscoModeServiceLookup:
+		if config.BootstrapExpect <= 0 {
+			errorExit(1, fmt.Sprintf("-bootstrap-expect must be greater than 0 when using %s",
+				config.DiscoMode))
+		}
 	default:
-		errorExit(1, fmt.Sprintf("invalid disco mode, choose %s or %s",
-			DiscoModeConsulKV, DiscoModeEtcdKV))
+		errorExit(1, fmt.Sprintf("invalid disco mode %s, choose %s, %s, or %s",
+			config.DiscoMode, DiscoModeConsulKV, DiscoModeEtcdKV, DiscoModeServiceLookup))
 	}
 
 	// Node ID policy

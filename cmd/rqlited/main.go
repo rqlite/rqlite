@@ -409,8 +409,23 @@ func createCluster(cfg *Config, joins []string, tlsConfig *tls.Config, hasPeers 
 		// existing Raft state.
 		return nil
 	}
-
 	log.Printf("discovery mode: %s", cfg.DiscoMode)
+
+	// Service-lookup disco is special.
+	if cfg.DiscoMode == DiscoModeServiceLookup {
+		if hasPeers {
+			log.Println("preexisting node configuration detected, ignoring %s", DiscoModeServiceLookup)
+			return nil
+		}
+		bs := cluster.NewBootstrapper(cluster.NewAddressProviderHost("rqlite-headless-svc", 4001),
+			cfg.BootstrapExpect, tlsConfig)
+		done := func() bool {
+			leader, _ := str.LeaderAddr()
+			return leader != ""
+		}
+		return bs.Boot(str.ID(), cfg.RaftAdv, done, cfg.BootstrapExpectTimeout)
+	}
+
 	discoService, err := createDiscoService(cfg, str)
 	if err != nil {
 		return fmt.Errorf("failed to start discovery service: %s", err.Error())
