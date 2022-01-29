@@ -414,7 +414,7 @@ func createCluster(cfg *Config, joins []string, tlsConfig *tls.Config, hasPeers 
 	// Service-lookup disco is special.
 	if cfg.DiscoMode == DiscoModeServiceLookup {
 		if hasPeers {
-			log.Println("preexisting node configuration detected, ignoring %s", DiscoModeServiceLookup)
+			log.Printf("preexisting node configuration detected, ignoring %s", DiscoModeServiceLookup)
 			return nil
 		}
 		bs := cluster.NewBootstrapper(cluster.NewAddressProviderHost("rqlite-headless-svc", 4001),
