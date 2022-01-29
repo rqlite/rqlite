@@ -88,13 +88,6 @@ func main() {
 		log.Fatalf("failed to create store: %s", err.Error())
 	}
 
-	// Determine join addresses
-	var joins []string
-	joins, err = determineJoinAddresses(cfg)
-	if err != nil {
-		log.Fatalf("unable to determine join addresses: %s", err.Error())
-	}
-
 	// Now, open store.
 	if err := str.Open(); err != nil {
 		log.Fatalf("failed to open store: %s", err.Error())
@@ -145,7 +138,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to get nodes %s", err.Error())
 	}
-	if err := createCluster(cfg, joins, &tlsConfig, len(nodes) > 0, str, httpServ, credStr); err != nil {
+	if err := createCluster(cfg, &tlsConfig, len(nodes) > 0, str, httpServ, credStr); err != nil {
 		log.Fatalf("clustering failure: %s", err.Error())
 	}
 
@@ -165,27 +158,6 @@ func main() {
 	muxLn.Close()
 	stopProfile()
 	log.Println("rqlite server stopped")
-}
-
-// determineJoinAddresses returns the join addresses supplied at the command-line.
-// removing any occurence of this nodes HTTP address.
-func determineJoinAddresses(cfg *Config) ([]string, error) {
-	var addrs []string
-	if cfg.JoinAddr != "" {
-		addrs = strings.Split(cfg.JoinAddr, ",")
-	}
-
-	// It won't work to attempt an explicit self-join, so remove any such address.
-	var validAddrs []string
-	for i := range addrs {
-		if addrs[i] == cfg.HTTPAdv || addrs[i] == cfg.HTTPAddr {
-			log.Printf("ignoring join address %s equal to this node's address", addrs[i])
-			continue
-		}
-		validAddrs = append(validAddrs, addrs[i])
-	}
-
-	return validAddrs, nil
 }
 
 func createStore(cfg *Config, ln *tcp.Layer) (*store.Store, error) {
@@ -355,9 +327,10 @@ func clusterService(cfg *Config, tn cluster.Transport, db cluster.Database) (*cl
 	return c, nil
 }
 
-func createCluster(cfg *Config, joins []string, tlsConfig *tls.Config, hasPeers bool, str *store.Store,
+func createCluster(cfg *Config, tlsConfig *tls.Config, hasPeers bool, str *store.Store,
 	httpServ *httpd.Service, credStr *auth.CredentialsStore) error {
-	if len(joins) == 0 && cfg.DiscoMode == "" && !hasPeers {
+	joins := cfg.JoinAddresses()
+	if joins == nil && cfg.DiscoMode == "" && !hasPeers {
 		// Brand new node, told to bootstrap itself. So do it.
 		log.Println("bootstraping single new node")
 		if err := str.Bootstrap(store.NewServer(str.ID(), str.Addr(), true)); err != nil {
@@ -366,11 +339,9 @@ func createCluster(cfg *Config, joins []string, tlsConfig *tls.Config, hasPeers 
 		return nil
 	}
 
-	if len(joins) > 0 {
+	if joins != nil {
 		if cfg.BootstrapExpect == 0 {
 			// Explicit join operation requested, so do it.
-			log.Println("explicit join addresses are:", joins)
-
 			if err := addJoinCreds(joins, cfg.JoinAs, credStr); err != nil {
 				return fmt.Errorf("failed to add BasicAuth creds: %s", err.Error())
 			}
@@ -388,13 +359,10 @@ func createCluster(cfg *Config, joins []string, tlsConfig *tls.Config, hasPeers 
 			return nil
 		}
 
-		// Must self-notify when bootstrapping
-		targets := append(joins, cfg.HTTPAdv)
-		log.Println("bootstrap addresses are:", targets)
-		if err := addJoinCreds(targets, cfg.JoinAs, credStr); err != nil {
+		if err := addJoinCreds(joins, cfg.JoinAs, credStr); err != nil {
 			return fmt.Errorf("failed to add BasicAuth creds: %s", err.Error())
 		}
-		bs := cluster.NewBootstrapper(cluster.NewAddressProviderString(targets),
+		bs := cluster.NewBootstrapper(cluster.NewAddressProviderString(joins),
 			cfg.BootstrapExpect, tlsConfig)
 
 		done := func() bool {
