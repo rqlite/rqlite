@@ -2,6 +2,7 @@ package store
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -990,6 +991,32 @@ func Test_SingleNodeRecoverNetworkChangeSnapshot(t *testing.T) {
 	}
 	if !pathExists(peersInfo) {
 		t.Fatalf("Peers info does not exist at %s", peersInfo)
+	}
+}
+
+func Test_SingleNodeSelfJoinFail(t *testing.T) {
+	s0, ln0 := mustNewStore(true)
+	defer os.RemoveAll(s0.Path())
+	defer ln0.Close()
+	if err := s0.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s0.Close(true)
+
+	if err := s0.Bootstrap(NewServer(s0.ID(), s0.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Self-join should fail.
+	err := s0.Join(s0.ID(), s0.Addr(), true)
+	if err == nil {
+		t.Fatalf("failed to receive error for self-join")
+	}
+	if !errors.Is(err, ErrSelfJoin) {
+		t.Fatalf("received wrong error for self-join attempt: %s", err)
 	}
 }
 
