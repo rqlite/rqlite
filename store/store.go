@@ -890,6 +890,10 @@ func (s *Store) Join(id, addr string, voter bool) error {
 	if s.raft.State() != raft.Leader {
 		return ErrNotLeader
 	}
+	if id == s.raftID {
+		s.logger.Printf("ignoring join-request with same ID as this node")
+		return nil
+	}
 
 	configFuture := s.raft.GetConfiguration()
 	if err := configFuture.Error(); err != nil {
