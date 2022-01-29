@@ -33,6 +33,10 @@ var (
 	// operation.
 	ErrNotLeader = errors.New("not leader")
 
+	// ErrSelfJoin is returned when a join-request is received from a node
+	// with the same Raft ID as this node.
+	ErrSelfJoin = errors.New("self-join attempted")
+
 	// ErrStaleRead is returned if the executing the query would violate the
 	// requested freshness.
 	ErrStaleRead = errors.New("stale read")
@@ -889,6 +893,9 @@ func (s *Store) Join(id, addr string, voter bool) error {
 	s.logger.Printf("received request from node with ID %s, at %s, to join this node", id, addr)
 	if s.raft.State() != raft.Leader {
 		return ErrNotLeader
+	}
+	if id == s.raftID {
+		return ErrSelfJoin
 	}
 
 	configFuture := s.raft.GetConfiguration()

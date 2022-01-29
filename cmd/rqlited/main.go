@@ -2,7 +2,6 @@
 package main
 
 import (
-	"bytes"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
@@ -23,6 +22,7 @@ import (
 	"github.com/rqlite/rqlite/cluster"
 	"github.com/rqlite/rqlite/cmd"
 	"github.com/rqlite/rqlite/disco"
+	"github.com/rqlite/rqlite/disco/lookup"
 	httpd "github.com/rqlite/rqlite/http"
 	"github.com/rqlite/rqlite/store"
 	"github.com/rqlite/rqlite/tcp"
@@ -88,13 +88,6 @@ func main() {
 		log.Fatalf("failed to create store: %s", err.Error())
 	}
 
-	// Determine join addresses
-	var joins []string
-	joins, err = determineJoinAddresses(cfg)
-	if err != nil {
-		log.Fatalf("unable to determine join addresses: %s", err.Error())
-	}
-
 	// Now, open store.
 	if err := str.Open(); err != nil {
 		log.Fatalf("failed to open store: %s", err.Error())
@@ -145,7 +138,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to get nodes %s", err.Error())
 	}
-	if err := createCluster(cfg, joins, &tlsConfig, len(nodes) > 0, str, httpServ, credStr); err != nil {
+	if err := createCluster(cfg, &tlsConfig, len(nodes) > 0, str, httpServ, credStr); err != nil {
 		log.Fatalf("clustering failure: %s", err.Error())
 	}
 
@@ -165,27 +158,6 @@ func main() {
 	muxLn.Close()
 	stopProfile()
 	log.Println("rqlite server stopped")
-}
-
-// determineJoinAddresses returns the join addresses supplied at the command-line.
-// removing any occurence of this nodes HTTP address.
-func determineJoinAddresses(cfg *Config) ([]string, error) {
-	var addrs []string
-	if cfg.JoinAddr != "" {
-		addrs = strings.Split(cfg.JoinAddr, ",")
-	}
-
-	// It won't work to attempt an explicit self-join, so remove any such address.
-	var validAddrs []string
-	for i := range addrs {
-		if addrs[i] == cfg.HTTPAdv || addrs[i] == cfg.HTTPAddr {
-			log.Printf("ignoring join address %s equal to this node's address", addrs[i])
-			continue
-		}
-		validAddrs = append(validAddrs, addrs[i])
-	}
-
-	return validAddrs, nil
 }
 
 func createStore(cfg *Config, ln *tcp.Layer) (*store.Store, error) {
@@ -230,26 +202,19 @@ func createStore(cfg *Config, ln *tcp.Layer) (*store.Store, error) {
 func createDiscoService(cfg *Config, str *store.Store) (*disco.Service, error) {
 	var c disco.Client
 	var err error
-	var reader io.Reader
+	var rc io.ReadCloser
 
-	if cfg.DiscoConfig != "" {
-		// Open config file. If opening fails, assume the config is a JSON string.
-		cfgFile, err := os.Open(cfg.DiscoConfig)
-		if err != nil {
-			reader = bytes.NewReader([]byte(cfg.DiscoConfig))
-		} else {
-			reader = cfgFile
-			defer cfgFile.Close()
-		}
+	rc = cfg.DiscoConfigReader()
+	if rc == nil {
+		return nil, fmt.Errorf("no disco config available")
 	}
+	defer rc.Close()
 
 	if cfg.DiscoMode == DiscoModeConsulKV {
 		var consulCfg *consul.Config
-		if reader != nil {
-			consulCfg, err = consul.NewConfigFromReader(reader)
-			if err != nil {
-				return nil, err
-			}
+		consulCfg, err = consul.NewConfigFromReader(rc)
+		if err != nil {
+			return nil, err
 		}
 
 		c, err = consul.New(cfg.DiscoKey, consulCfg)
@@ -258,11 +223,9 @@ func createDiscoService(cfg *Config, str *store.Store) (*disco.Service, error) {
 		}
 	} else if cfg.DiscoMode == DiscoModeEtcdKV {
 		var etcdCfg *etcd.Config
-		if reader != nil {
-			etcdCfg, err = etcd.NewConfigFromReader(reader)
-			if err != nil {
-				return nil, err
-			}
+		etcdCfg, err = etcd.NewConfigFromReader(rc)
+		if err != nil {
+			return nil, err
 		}
 
 		c, err = etcd.New(cfg.DiscoKey, etcdCfg)
@@ -355,9 +318,10 @@ func clusterService(cfg *Config, tn cluster.Transport, db cluster.Database) (*cl
 	return c, nil
 }
 
-func createCluster(cfg *Config, joins []string, tlsConfig *tls.Config, hasPeers bool, str *store.Store,
+func createCluster(cfg *Config, tlsConfig *tls.Config, hasPeers bool, str *store.Store,
 	httpServ *httpd.Service, credStr *auth.CredentialsStore) error {
-	if len(joins) == 0 && cfg.DiscoMode == "" && !hasPeers {
+	joins := cfg.JoinAddresses()
+	if joins == nil && cfg.DiscoMode == "" && !hasPeers {
 		// Brand new node, told to bootstrap itself. So do it.
 		log.Println("bootstraping single new node")
 		if err := str.Bootstrap(store.NewServer(str.ID(), str.Addr(), true)); err != nil {
@@ -366,11 +330,9 @@ func createCluster(cfg *Config, joins []string, tlsConfig *tls.Config, hasPeers 
 		return nil
 	}
 
-	if len(joins) > 0 {
+	if joins != nil {
 		if cfg.BootstrapExpect == 0 {
 			// Explicit join operation requested, so do it.
-			log.Println("explicit join addresses are:", joins)
-
 			if err := addJoinCreds(joins, cfg.JoinAs, credStr); err != nil {
 				return fmt.Errorf("failed to add BasicAuth creds: %s", err.Error())
 			}
@@ -388,13 +350,10 @@ func createCluster(cfg *Config, joins []string, tlsConfig *tls.Config, hasPeers 
 			return nil
 		}
 
-		// Must self-notify when bootstrapping
-		targets := append(joins, cfg.HTTPAdv)
-		log.Println("bootstrap addresses are:", targets)
-		if err := addJoinCreds(targets, cfg.JoinAs, credStr); err != nil {
+		if err := addJoinCreds(joins, cfg.JoinAs, credStr); err != nil {
 			return fmt.Errorf("failed to add BasicAuth creds: %s", err.Error())
 		}
-		bs := cluster.NewBootstrapper(cluster.NewAddressProviderString(targets),
+		bs := cluster.NewBootstrapper(cluster.NewAddressProviderString(joins),
 			cfg.BootstrapExpect, tlsConfig)
 
 		done := func() bool {
@@ -411,13 +370,24 @@ func createCluster(cfg *Config, joins []string, tlsConfig *tls.Config, hasPeers 
 	}
 	log.Printf("discovery mode: %s", cfg.DiscoMode)
 
-	// Service-lookup disco is special.
-	if cfg.DiscoMode == DiscoModeServiceLookup {
+	// Lookup disco is special.
+	if cfg.DiscoMode == DiscoModeLookup {
 		if hasPeers {
-			log.Printf("preexisting node configuration detected, ignoring %s", DiscoModeServiceLookup)
+			log.Printf("preexisting node configuration detected, ignoring %s", cfg.DiscoMode)
 			return nil
 		}
-		bs := cluster.NewBootstrapper(cluster.NewAddressProviderHost("rqlite-headless-svc", 4001),
+
+		rc := cfg.DiscoConfigReader()
+		if rc == nil {
+			return fmt.Errorf("no disco config available")
+		}
+		defer rc.Close()
+		lkCfg, err := lookup.NewConfigFromReader(rc)
+		if err != nil {
+			return fmt.Errorf("failed to load %s configuration: %s", cfg.DiscoMode, err.Error())
+		}
+
+		bs := cluster.NewBootstrapper(cluster.NewAddressProviderHost(lkCfg.Name, lkCfg.Port),
 			cfg.BootstrapExpect, tlsConfig)
 		done := func() bool {
 			leader, _ := str.LeaderAddr()
