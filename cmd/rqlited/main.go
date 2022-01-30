@@ -370,8 +370,8 @@ func createCluster(cfg *Config, tlsConfig *tls.Config, hasPeers bool, str *store
 	}
 	log.Printf("discovery mode: %s", cfg.DiscoMode)
 
-	// Lookup disco is special.
-	if cfg.DiscoMode == DiscoModeLookup {
+	// DNS disco is special.
+	if cfg.DiscoMode == DiscoModeDNS {
 		if hasPeers {
 			log.Printf("preexisting node configuration detected, ignoring %s", cfg.DiscoMode)
 			return nil
