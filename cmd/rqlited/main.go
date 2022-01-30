@@ -17,12 +17,12 @@ import (
 	"time"
 
 	consul "github.com/rqlite/rqlite-disco-clients/consul"
+	"github.com/rqlite/rqlite-disco-clients/dns"
 	etcd "github.com/rqlite/rqlite-disco-clients/etcd"
 	"github.com/rqlite/rqlite/auth"
 	"github.com/rqlite/rqlite/cluster"
 	"github.com/rqlite/rqlite/cmd"
 	"github.com/rqlite/rqlite/disco"
-	"github.com/rqlite/rqlite/disco/lookup"
 	httpd "github.com/rqlite/rqlite/http"
 	"github.com/rqlite/rqlite/store"
 	"github.com/rqlite/rqlite/tcp"
@@ -205,11 +205,11 @@ func createDiscoService(cfg *Config, str *store.Store) (*disco.Service, error) {
 	var rc io.ReadCloser
 
 	rc = cfg.DiscoConfigReader()
-	if rc == nil {
-		return nil, fmt.Errorf("no disco config available")
-	}
-	defer rc.Close()
-
+	defer func() {
+		if rc != nil {
+			rc.Close()
+		}
+	}()
 	if cfg.DiscoMode == DiscoModeConsulKV {
 		var consulCfg *consul.Config
 		consulCfg, err = consul.NewConfigFromReader(rc)
@@ -376,19 +376,19 @@ func createCluster(cfg *Config, tlsConfig *tls.Config, hasPeers bool, str *store
 			log.Printf("preexisting node configuration detected, ignoring %s", cfg.DiscoMode)
 			return nil
 		}
-
 		rc := cfg.DiscoConfigReader()
-		if rc == nil {
-			return fmt.Errorf("no disco config available")
-		}
-		defer rc.Close()
-		lkCfg, err := lookup.NewConfigFromReader(rc)
+		defer func() {
+			if rc != nil {
+				rc.Close()
+			}
+		}()
+		dnsCfg, err := dns.NewConfigFromReader(rc)
 		if err != nil {
-			return fmt.Errorf("failed to load %s configuration: %s", cfg.DiscoMode, err.Error())
+			return fmt.Errorf("error reading DNS configuration: %s", err.Error())
 		}
+		dnsClient := dns.New(dnsCfg)
 
-		bs := cluster.NewBootstrapper(cluster.NewAddressProviderHost(lkCfg.Name, lkCfg.Port),
-			cfg.BootstrapExpect, tlsConfig)
+		bs := cluster.NewBootstrapper(dnsClient, cfg.BootstrapExpect, tlsConfig)
 		done := func() bool {
 			leader, _ := str.LeaderAddr()
 			return leader != ""
