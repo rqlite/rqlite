@@ -279,6 +279,9 @@ func (c *Config) HTTPURL() string {
 // config was supplied, it returns nil.
 func (c *Config) DiscoConfigReader() io.ReadCloser {
 	var rc io.ReadCloser
+	if c.DiscoConfig == "" {
+		return nil
+	}
 
 	// Open config file. If opening fails, assume string is the literal config.
 	cfgFile, err := os.Open(c.DiscoConfig)
