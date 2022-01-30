@@ -54,6 +54,7 @@ You can also use the Domain Name System (DNS) to bootstrap a cluster. This is si
 rqlited -node-id $ID1  -http-addr=$IP1:$HTTP_PORT -raft-addr=$IP1:$RAFT_PORT \
 -disco-mode=dns -bootstrap-expect 3 data
 ```
+You would launch two other nodes similarly.
 
 ### Consul
 Another approach uses [Consul](https://www.consul.io/) to coordinate clustering. The advantage of this approach is that you do need to know the network addresses of the nodes ahead of time.
