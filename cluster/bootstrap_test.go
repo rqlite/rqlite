@@ -23,14 +23,6 @@ func Test_AddressProviderString(t *testing.T) {
 	}
 }
 
-func Test_AddressProviderHost(t *testing.T) {
-	p := NewAddressProviderHost("localhost")
-	_, err := p.Lookup()
-	if err != nil {
-		t.Fatalf("failed to lookup addresses: %s", err.Error())
-	}
-}
-
 func Test_NewBootstrapper(t *testing.T) {
 	bs := NewBootstrapper(nil, 1, nil)
 	if bs == nil {
