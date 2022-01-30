@@ -129,7 +129,7 @@ func (s *Service) Stats() (map[string]interface{}, error) {
 	defer s.mu.Unlock()
 
 	return map[string]interface{}{
-		"name":              s.c.String(),
+		"mode":              s.c.String(),
 		"register_interval": s.RegisterInterval,
 		"report_interval":   s.ReportInterval,
 		"last_contact":      s.lastContact,
