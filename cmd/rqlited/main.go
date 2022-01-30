@@ -214,23 +214,23 @@ func createDiscoService(cfg *Config, str *store.Store) (*disco.Service, error) {
 		var consulCfg *consul.Config
 		consulCfg, err = consul.NewConfigFromReader(rc)
 		if err != nil {
-			return nil, fmt.Errorf("create Consul config: %s", err.Error)
+			return nil, fmt.Errorf("create Consul config: %s", err.Error())
 		}
 
 		c, err = consul.New(cfg.DiscoKey, consulCfg)
 		if err != nil {
-			return nil, fmt.Errorf("create Consul client: %s", err.Error)
+			return nil, fmt.Errorf("create Consul client: %s", err.Error())
 		}
 	} else if cfg.DiscoMode == DiscoModeEtcdKV {
 		var etcdCfg *etcd.Config
 		etcdCfg, err = etcd.NewConfigFromReader(rc)
 		if err != nil {
-			return nil, fmt.Errorf("create etcd config: %s", err.Error)
+			return nil, fmt.Errorf("create etcd config: %s", err.Error())
 		}
 
 		c, err = etcd.New(cfg.DiscoKey, etcdCfg)
 		if err != nil {
-			return nil, fmt.Errorf("create etcd client: %s", err.Error)
+			return nil, fmt.Errorf("create etcd client: %s", err.Error())
 		}
 	} else {
 		return nil, fmt.Errorf("invalid disco service: %s", cfg.DiscoMode)
