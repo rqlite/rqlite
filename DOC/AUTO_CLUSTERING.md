@@ -6,6 +6,7 @@ This document describes various ways to dynamically form rqlite clusters, which 
 ## Contents
 * [Quickstart](#quickstart)
   * [Automatic Boostrapping](#automatic-bootstrapping)
+  * [Using DNS for Bootstrapping](#using-dns-for-bootstrapping)
   * [Consul](#consul)
   * [etcd](#etcd)
 * [More details](more-details)
@@ -22,17 +23,17 @@ For simplicity, let's assume you want to run a 3-node rqlite cluster. To bootstr
 
 Node 1:
 ```bash
-rqlited -http-addr=$IP1:$HTTP_PORT -raft-addr=$IP1:$RAFT_PORT \
+rqlited -node-id $ID1 -http-addr=$IP1:$HTTP_PORT -raft-addr=$IP1:$RAFT_PORT \
 -bootstrap-expect 3 -join http://$IP1:HTTP_PORT,http://$IP2:HTTP_PORT,http://$IP2:HTTP_PORT data
 ```
 Node 2:
 ```bash
-rqlited -http-addr=$IP2:$HTTP_PORT -raft-addr=$IP2:$RAFT_PORT \
+rqlited -node-id $ID2 -http-addr=$IP2:$HTTP_PORT -raft-addr=$IP2:$RAFT_PORT \
 -bootstrap-expect 3 -join http://$IP1:HTTP_PORT,http://$IP2:HTTP_PORT,http://$IP2:HTTP_PORT data
 ```
 Node 3:
 ```bash
-rqlited -http-addr=$IP3:$HTTP_PORT -raft-addr=$IP3:$RAFT_PORT \
+rqlited -node-id $ID3 -http-addr=$IP3:$HTTP_PORT -raft-addr=$IP3:$RAFT_PORT \
 -bootstrap-expect 3 -join http://$IP1:HTTP_PORT,http://$IP2:HTTP_PORT,http://$IP2:HTTP_PORT data
 ```
 
@@ -47,6 +48,13 @@ docker run rqlite/rqlite -bootstrap-expect 3 -join http://$IP1:HTTP_PORT,http://
 ```
 where `$IP[1-3]` are the expected network addresses of the containers.
 
+### Using DNS for Bootstrapping
+You can also use the Domain Name System (DNS) to bootstrap a cluster. This is similar to automatic clustering, but doesn't require you to specify the network addresses ahead of time. To launch a node using DNS boostrap, execute the following command:
+```bash
+rqlited -node-id $ID1  -http-addr=$IP1:$HTTP_PORT -raft-addr=$IP1:$RAFT_PORT \
+-disco-mode=dns -bootstrap-expect 3 data
+```
+
 ### Consul
 Another approach uses [Consul](https://www.consul.io/) to coordinate clustering. The advantage of this approach is that you do need to know the network addresses of the nodes ahead of time.
 
@@ -54,17 +62,17 @@ Let's assume your Consul cluster is running at `http://example.com:8500`. Let's 
 
 Node 1:
 ```bash
-rqlited -http-addr=$IP1:$HTTP_PORT -raft-addr=$IP1:$RAFT_PORT \
+rqlited -node-id $ID1 -http-addr=$IP1:$HTTP_PORT -raft-addr=$IP1:$RAFT_PORT \
 -disco-mode consul-kv -disco-config '{"address": "example.com:8500"}' data
 ```
 Node 2:
 ```bash
-rqlited -http-addr=$IP2:$HTTP_PORT -raft-addr=$IP2:$RAFT_PORT \
+rqlited -node-id $ID2 -http-addr=$IP2:$HTTP_PORT -raft-addr=$IP2:$RAFT_PORT \
 -disco-mode consul-kv -disco-config '{"address": "example.com:8500"}' data
 ```
 Node 3:
 ```bash
-rqlited -http-addr=$IP3:$HTTP_PORT -raft-addr=$IP3:$RAFT_PORT \
+rqlited -node-id $ID3 -http-addr=$IP3:$HTTP_PORT -raft-addr=$IP3:$RAFT_PORT \
 -disco-mode consul-kv -disco-config '{"address": "example.com:8500"}' data
 ```
 
@@ -83,17 +91,17 @@ Let's assume etcd is available at `example.com:2379`.
 
 Node 1:
 ```bash
-rqlited -http-addr=$IP1:$HTTP_PORT -raft-addr=$IP1:$RAFT_PORT \
+rqlited -node-id $ID1 -http-addr=$IP1:$HTTP_PORT -raft-addr=$IP1:$RAFT_PORT \
 	-disco-mode etcd-kv -disco-config '{"endpoints": ["example.com:2379"]}' data
 ```
 Node 2:
 ```bash
-rqlited -http-addr=$IP2:$HTTP_PORT -raft-addr=$IP2:$RAFT_PORT \
+rqlited -node-id $ID2 -http-addr=$IP2:$HTTP_PORT -raft-addr=$IP2:$RAFT_PORT \
 	-disco-mode etcd-kv -disco-config '{"endpoints": ["example.com:2379"]}' data
 ```
 Node 3:
 ```bash
-rqlited -http-addr=$IP3:$HTTP_PORT -raft-addr=$IP3:$RAFT_PORT \
+rqlited -node-id $ID3 -http-addr=$IP3:$HTTP_PORT -raft-addr=$IP3:$RAFT_PORT \
 	-disco-mode etcd-kv -disco-config '{"endpoints": ["example.com:2379"]}' data
 ```
  Like with Consul autoclustering, the cluster Leader will continually report its address to etcd.
