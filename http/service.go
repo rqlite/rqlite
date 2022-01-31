@@ -668,8 +668,9 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	nodeStatus := map[string]interface{}{
-		"start_time": s.start,
-		"uptime":     time.Since(s.start).String(),
+		"start_time":   s.start,
+		"current_time": time.Now(),
+		"uptime":       time.Since(s.start).String(),
 	}
 
 	// Build the status response.
