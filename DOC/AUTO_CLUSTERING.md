@@ -11,7 +11,7 @@ This document describes various ways to dynamically form rqlite clusters, which 
   * [etcd](#etcd)
 * [Next steps](#next-steps)
   * [Customizing your configuration](#customizing-your-configuration)
-  * [Running multiple different clusters](#running-multiple-different-clusters)
+    * [Running multiple different clusters](#running-multiple-different-clusters)
 * [Design](design)
 
 ## Quickstart
