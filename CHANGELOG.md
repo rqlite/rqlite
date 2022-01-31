@@ -2,7 +2,7 @@
 This release introduces supported for [DNS-based](https://www.cloudflare.com/learning/dns/what-is-dns/) autoclustering. rqlite can now lookup a DNS record for specified host, and use the network addresses returned to bootstrap the cluster. This can make it much easier to create rqlite clusters using the kinds of Service-Discovery mechanisms you find on Consul and Kubernetes, which are often based on DNS. See the [documentation](https://github.com/rqlite/rqlite/blob/master/DOC/AUTO_CLUSTERING.md) for full details on using DNS-based autoclustering.
 
 ## New features
-- [PR #979](https://github.com/rqlite/rqlite/pull/979): Add support for DNS-based autoclustering.
+- [PR #979](https://github.com/rqlite/rqlite/pull/979): Add support for DNS-based autoclustering. Fixes [issue #554](https://github.com/rqlite/rqlite/issues/554).
 
 ### Implementation changes and bug fixes
 - [PR #976](https://github.com/rqlite/rqlite/pull/976): Improve `/readyz` response.
