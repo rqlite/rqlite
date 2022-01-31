@@ -3,6 +3,7 @@ This release introduces supported for [DNS-based](https://www.cloudflare.com/lea
 
 ## New features
 - [PR #979](https://github.com/rqlite/rqlite/pull/979): Add support for DNS-based autoclustering.
+- [PR #985](https://github.com/rqlite/rqlite/pull/985): Add support for DNS SRV-based autoclustering.
 
 ### Implementation changes and bug fixes
 - [PR #976](https://github.com/rqlite/rqlite/pull/976): Improve `/readyz` response.
