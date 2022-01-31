@@ -120,11 +120,6 @@ func Test_BootstrapperBootSingleNotify(t *testing.T) {
 func Test_BootstrapperBootSingleNotifyAuth(t *testing.T) {
 	tsNotified := false
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/join" {
-			w.WriteHeader(http.StatusServiceUnavailable)
-			return
-		}
-
 		username, password, ok := r.BasicAuth()
 		if !ok {
 			t.Fatalf("request did not have Basic Auth credentials")
@@ -133,6 +128,10 @@ func Test_BootstrapperBootSingleNotifyAuth(t *testing.T) {
 			t.Fatalf("bad Basic Auth credentials received (%s, %s", username, password)
 		}
 
+		if r.URL.Path == "/join" {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
 		tsNotified = true
 	}))
 
