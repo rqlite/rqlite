@@ -67,9 +67,16 @@ Welcome to the rqlite CLI. Enter ".help" for usage hints.
 
  ```bash
  $ curl localhost:4001/readyz
+[+]node ok
 [+]leader ok
 ```
 Note that a subsequent request to the cluster may still fail even if `/readyz` returns `HTTP 200 OK`. This is because there is a window of time (determined by the Raft-related timings configured at start-up) when a node may still be able to contact the Leader, but the Leader has not yet detected that the cluster cannot reach consensus due to failed Followers. This window of time is quite small (less than 1 second) by default, however.
+
+If you wish to check if the node is running, and responding to HTTP requests, regardless of Leader status, add `noleader` to the URL. This form may be more useful for automated deployments, which simply need to know if the node is responsive.
+ ```bash
+ $ curl localhost:4001/readyz?noleader
+[+]node ok
+```
 
 ## expvar support
 rqlite also exports [expvar](http://godoc.org/pkg/expvar/) information. The standard expvar information, as well as some custom information, is exposed. This data can be retrieved like so (assuming the node is started in its default configuration):
