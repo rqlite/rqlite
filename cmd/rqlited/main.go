@@ -331,37 +331,49 @@ func createCluster(cfg *Config, tlsConfig *tls.Config, hasPeers bool, str *store
 		return nil
 	}
 
-	if joins != nil {
-		if cfg.BootstrapExpect == 0 {
-			// Explicit join operation requested, so do it.
-			if err := addJoinCreds(joins, cfg.JoinAs, credStr); err != nil {
-				return fmt.Errorf("failed to add BasicAuth creds: %s", err.Error())
-			}
-			j, err := cluster.Join(cfg.JoinSrcIP, joins, str.ID(), cfg.RaftAdv, !cfg.RaftNonVoter,
-				cfg.JoinAttempts, cfg.JoinInterval, tlsConfig)
-			if err != nil {
-				return fmt.Errorf("failed to join cluster: %s", err.Error())
-			}
-			log.Println("successfully joined cluster at", httpd.RemoveBasicAuth(j))
-			return nil
+	// Prepare the Joiner
+	joiner := cluster.NewJoiner(cfg.JoinSrcIP, cfg.JoinAttempts, cfg.JoinInterval, tlsConfig)
+	if cfg.JoinAs != "" {
+		pw, ok := credStr.Password(cfg.JoinAs)
+		if !ok {
+			return fmt.Errorf("user %s does not exist in credential store", cfg.JoinAs)
 		}
+		joiner.SetBasicAuth(cfg.JoinAs, pw)
+	}
 
+	// Prepare defintion of being part of a cluster.
+	isClustered := func() bool {
+		leader, _ := str.LeaderAddr()
+		return leader != ""
+	}
+
+	if joins != nil && cfg.BootstrapExpect == 0 {
+		// Explicit join operation requested, so do it.
+		j, err := joiner.Do(joins, str.ID(), cfg.RaftAdv, !cfg.RaftNonVoter)
+		if err != nil {
+			return fmt.Errorf("failed to join cluster: %s", err.Error())
+		}
+		log.Println("successfully joined cluster at", j)
+		return nil
+	}
+
+	if joins != nil && cfg.BootstrapExpect > 0 {
+		// Bootstrap with explicit join addresses requests.
 		if hasPeers {
 			log.Println("preexisting node configuration detected, ignoring bootstrap request")
 			return nil
 		}
 
-		if err := addJoinCreds(joins, cfg.JoinAs, credStr); err != nil {
-			return fmt.Errorf("failed to add BasicAuth creds: %s", err.Error())
-		}
 		bs := cluster.NewBootstrapper(cluster.NewAddressProviderString(joins),
 			cfg.BootstrapExpect, tlsConfig)
-
-		done := func() bool {
-			leader, _ := str.LeaderAddr()
-			return leader != ""
+		if cfg.JoinAs != "" {
+			pw, ok := credStr.Password(cfg.JoinAs)
+			if !ok {
+				return fmt.Errorf("user %s does not exist in credential store", cfg.JoinAs)
+			}
+			bs.SetBasicAuth(cfg.JoinAs, pw)
 		}
-		return bs.Boot(str.ID(), cfg.RaftAdv, done, cfg.BootstrapExpectTimeout)
+		return bs.Boot(str.ID(), cfg.RaftAdv, isClustered, cfg.BootstrapExpectTimeout)
 	}
 
 	if cfg.DiscoMode == "" {
@@ -369,10 +381,10 @@ func createCluster(cfg *Config, tlsConfig *tls.Config, hasPeers bool, str *store
 		// existing Raft state.
 		return nil
 	}
-	log.Printf("discovery mode: %s", cfg.DiscoMode)
 
-	// DNS-based discovery involves a few different options.
-	if cfg.DiscoMode == DiscoModeDNS || cfg.DiscoMode == DiscoModeDNSSRV {
+	log.Printf("discovery mode: %s", cfg.DiscoMode)
+	switch cfg.DiscoMode {
+	case DiscoModeDNS, DiscoModeDNSSRV:
 		if hasPeers {
 			log.Printf("preexisting node configuration detected, ignoring %s", cfg.DiscoMode)
 			return nil
@@ -404,14 +416,17 @@ func createCluster(cfg *Config, tlsConfig *tls.Config, hasPeers bool, str *store
 		}
 
 		bs := cluster.NewBootstrapper(provider, cfg.BootstrapExpect, tlsConfig)
-		done := func() bool {
-			leader, _ := str.LeaderAddr()
-			return leader != ""
+		if cfg.JoinAs != "" {
+			pw, ok := credStr.Password(cfg.JoinAs)
+			if !ok {
+				return fmt.Errorf("user %s does not exist in credential store", cfg.JoinAs)
+			}
+			bs.SetBasicAuth(cfg.JoinAs, pw)
 		}
 		httpServ.RegisterStatus("disco", provider)
+		return bs.Boot(str.ID(), cfg.RaftAdv, isClustered, cfg.BootstrapExpectTimeout)
 
-		return bs.Boot(str.ID(), cfg.RaftAdv, done, cfg.BootstrapExpectTimeout)
-	} else {
+	case DiscoModeEtcdKV, DiscoModeConsulKV:
 		discoService, err := createDiscoService(cfg, str)
 		if err != nil {
 			return fmt.Errorf("failed to start discovery service: %s", err.Error())
@@ -432,12 +447,7 @@ func createCluster(cfg *Config, tlsConfig *tls.Config, hasPeers bool, str *store
 			} else {
 				for {
 					log.Printf("discovery service returned %s as join address", addr)
-					if err := addJoinCreds([]string{addr}, cfg.JoinAs, credStr); err != nil {
-						return fmt.Errorf("failed too add auth creds: %s", err.Error())
-					}
-
-					if j, err := cluster.Join(cfg.JoinSrcIP, []string{addr}, str.ID(), cfg.RaftAdv, !cfg.RaftNonVoter,
-						cfg.JoinAttempts, cfg.JoinInterval, tlsConfig); err != nil {
+					if j, err := joiner.Do([]string{addr}, str.ID(), cfg.RaftAdv, !cfg.RaftNonVoter); err != nil {
 						log.Printf("failed to join cluster at %s: %s", addr, err.Error())
 
 						time.Sleep(time.Second)
@@ -455,30 +465,11 @@ func createCluster(cfg *Config, tlsConfig *tls.Config, hasPeers bool, str *store
 		} else {
 			log.Println("preexisting node configuration detected, not registering with discovery service")
 		}
-
 		go discoService.StartReporting(cfg.NodeID, cfg.HTTPURL(), cfg.RaftAdv)
 		httpServ.RegisterStatus("disco", discoService)
-	}
-	return nil
-}
 
-// addJoinCreds adds credentials to any join addresses, if necessary.
-func addJoinCreds(joins []string, joinAs string, credStr *auth.CredentialsStore) error {
-	if credStr == nil || joinAs == "" {
-		return nil
-	}
-
-	pw, ok := credStr.Password(joinAs)
-	if !ok {
-		return fmt.Errorf("user %s does not exist in credential store", joinAs)
-	}
-
-	var err error
-	for i := range joins {
-		joins[i], err = httpd.AddBasicAuth(joins[i], joinAs, pw)
-		if err != nil {
-			return fmt.Errorf("failed to use credential store join_as: %s", err.Error())
-		}
+	default:
+		return fmt.Errorf("invalid disco mode %s", cfg.DiscoMode)
 	}
 	return nil
 }

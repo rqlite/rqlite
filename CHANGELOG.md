@@ -12,6 +12,7 @@ This release introduces supported for [DNS-based](https://www.cloudflare.com/lea
 - [PR #981](https://github.com/rqlite/rqlite/pull/981): Add curent time to node `/status` output.
 - [PR #982](https://github.com/rqlite/rqlite/pull/982): `/readyz` can skip leader check via `noleader` query param.
 - [PR #984](https://github.com/rqlite/rqlite/pull/984): Count number of `/status` and `/readyz` requests via expvar.
+- [PR #986](https://github.com/rqlite/rqlite/pull/986): Refactor join code with new Joiner type.
 
 ## 7.1.0 (January 28th 2022)
 This release introduces a new automatic clustering approach, known as _Bootstrapping_, which allows rqlite clusters to form without assistance from an external system such as Consul. This can be very useful for certain deployment scenarios. See the [documentation](https://github.com/rqlite/rqlite/blob/master/DOC/AUTO_CLUSTERING.md) for full details on using the new Bootstrapping mode. Special thanks to [Nathan Ferch](https://github.com/nferch) for his advice regarding the design and development of this feature.

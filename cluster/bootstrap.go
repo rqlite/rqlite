@@ -38,6 +38,11 @@ type Bootstrapper struct {
 	expect    int
 	tlsConfig *tls.Config
 
+	joiner *Joiner
+
+	username string
+	password string
+
 	logger   *log.Logger
 	Interval time.Duration
 }
@@ -48,6 +53,7 @@ func NewBootstrapper(p AddressProvider, expect int, tlsConfig *tls.Config) *Boot
 		provider:  p,
 		expect:    expect,
 		tlsConfig: &tls.Config{InsecureSkipVerify: true},
+		joiner:    NewJoiner("", 1, 0, tlsConfig),
 		logger:    log.New(os.Stderr, "[cluster-bootstrap] ", log.LstdFlags),
 		Interval:  jitter(5 * time.Second),
 	}
@@ -55,6 +61,11 @@ func NewBootstrapper(p AddressProvider, expect int, tlsConfig *tls.Config) *Boot
 		bs.tlsConfig = tlsConfig
 	}
 	return bs
+}
+
+// SetBasicAuth sets Basic Auth credentials for any bootstrap attempt.
+func (b *Bootstrapper) SetBasicAuth(username, password string) {
+	b.username, b.password = username, password
 }
 
 // Boot performs the bootstrapping process for this node. This means it will
@@ -98,9 +109,9 @@ func (b *Bootstrapper) Boot(id, raftAddr string, done func() bool, timeout time.
 			}
 
 			// Try an explicit join.
-			if j, err := Join("", targets, id, raftAddr, true, 1, 0, b.tlsConfig); err == nil {
-				b.logger.Printf("succeeded directly joining cluster via node at %s",
-					httpd.RemoveBasicAuth(j))
+			b.joiner.SetBasicAuth(b.username, b.password)
+			if j, err := b.joiner.Do(targets, id, raftAddr, true); err == nil {
+				b.logger.Printf("succeeded directly joining cluster via node at %s", j)
 				return nil
 			}
 
@@ -139,11 +150,18 @@ func (b *Bootstrapper) notify(targets []string, id, raftAddr string) error {
 
 	TargetLoop:
 		for {
-			resp, err := client.Post(fullTarget, "application/json", bytes.NewReader(buf))
+			req, err := http.NewRequest("POST", fullTarget, bytes.NewReader(buf))
 			if err != nil {
 				return err
-				// time.Sleep(bs.joinInterval) // need to count loops....? Or this just does one loop?
-				// continue
+			}
+			if b.username != "" && b.password != "" {
+				req.SetBasicAuth(b.username, b.password)
+			}
+			req.Header.Add("Content-Type", "application/json")
+
+			resp, err := client.Do(req)
+			if err != nil {
+				return err
 			}
 			resp.Body.Close()
 			switch resp.StatusCode {
@@ -156,8 +174,7 @@ func (b *Bootstrapper) notify(targets []string, id, raftAddr string) error {
 				// record information about which protocol a registered node is actually using.
 				if strings.HasPrefix(fullTarget, "https://") {
 					// It's already HTTPS, give up.
-					return fmt.Errorf("failed to notify node at %s: %s",
-						httpd.RemoveBasicAuth(fullTarget), resp.Status)
+					return fmt.Errorf("failed to notify node at %s: %s", fullTarget, resp.Status)
 				}
 				fullTarget = httpd.EnsureHTTPS(fullTarget)
 			default:

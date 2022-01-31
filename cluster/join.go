@@ -18,6 +18,12 @@ import (
 )
 
 var (
+	// ErrInvalidRedirect is returned when a node returns an invalid HTTP redirect.
+	ErrInvalidRedirect = errors.New("invalid redirect received")
+
+	// ErrNodeIDRequired is returned a join request doesn't supply a node ID
+	ErrNodeIDRequired = errors.New("node required")
+
 	// ErrJoinFailed is returned when a node fails to join a cluster
 	ErrJoinFailed = errors.New("failed to join cluster")
 
@@ -25,39 +31,26 @@ var (
 	ErrNotifyFailed = errors.New("failed to notify node")
 )
 
-// Join attempts to join the cluster at one of the addresses given in joinAddr.
-// It walks through joinAddr in order, and sets the node ID and Raft address of
-// the joining node as id addr respectively. It returns the endpoint successfully
-// used to join the cluster.
-func Join(srcIP string, joinAddr []string, id, addr string, voter bool, numAttempts int,
-	attemptInterval time.Duration, tlsConfig *tls.Config) (string, error) {
-	var err error
-	var j string
-	logger := log.New(os.Stderr, "[cluster-join] ", log.LstdFlags)
-	if tlsConfig == nil {
-		tlsConfig = &tls.Config{InsecureSkipVerify: true}
-	}
+// Joiner executes a node-join operation.
+type Joiner struct {
+	srcIP           string
+	numAttempts     int
+	attemptInterval time.Duration
+	tlsConfig       *tls.Config
 
-	for i := 0; i < numAttempts; i++ {
-		for _, a := range joinAddr {
-			j, err = join(srcIP, a, id, addr, voter, tlsConfig, logger)
-			if err == nil {
-				// Success!
-				return j, nil
-			}
-		}
-		logger.Printf("failed to join cluster at %s: %s, sleeping %s before retry", joinAddr, err.Error(), attemptInterval)
-		time.Sleep(attemptInterval)
-	}
-	logger.Printf("failed to join cluster at %s, after %d attempts", joinAddr, numAttempts)
-	return "", ErrJoinFailed
+	username string
+	password string
+
+	client *http.Client
+
+	logger *log.Logger
 }
 
-func join(srcIP, joinAddr, id, addr string, voter bool, tlsConfig *tls.Config, logger *log.Logger) (string, error) {
-	if id == "" {
-		return "", fmt.Errorf("node ID not set")
-	}
-	// The specified source IP is optional
+// NewJoiner returns an instantiated Joiner.
+func NewJoiner(srcIP string, numAttempts int, attemptInterval time.Duration,
+	tlsCfg *tls.Config) *Joiner {
+
+	// Source IP is optional
 	var dialer *net.Dialer
 	dialer = &net.Dialer{}
 	if srcIP != "" {
@@ -67,6 +60,60 @@ func join(srcIP, joinAddr, id, addr string, voter bool, tlsConfig *tls.Config, l
 		}
 		dialer = &net.Dialer{LocalAddr: netAddr}
 	}
+
+	joiner := &Joiner{
+		srcIP:           srcIP,
+		numAttempts:     numAttempts,
+		attemptInterval: attemptInterval,
+		tlsConfig:       tlsCfg,
+		logger:          log.New(os.Stderr, "[cluster-join] ", log.LstdFlags),
+	}
+	if joiner.tlsConfig == nil {
+		joiner.tlsConfig = &tls.Config{InsecureSkipVerify: true}
+	}
+
+	// Create and configure the client to connect to the other node.
+	tr := &http.Transport{
+		TLSClientConfig: joiner.tlsConfig,
+		Dial:            dialer.Dial,
+	}
+	joiner.client = &http.Client{Transport: tr}
+	joiner.client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+
+	return joiner
+}
+
+// SetBasicAuth sets Basic Auth credentials for any join attempt.
+func (j *Joiner) SetBasicAuth(username, password string) {
+	j.username, j.password = username, password
+}
+
+// Do makes the actual join request.
+func (j *Joiner) Do(joinAddrs []string, id, addr string, voter bool) (string, error) {
+	if id == "" {
+		return "", ErrNodeIDRequired
+	}
+
+	var err error
+	var joinee string
+	for i := 0; i < j.numAttempts; i++ {
+		for _, a := range joinAddrs {
+			joinee, err = j.join(a, id, addr, voter)
+			if err == nil {
+				// Success!
+				return joinee, nil
+			}
+		}
+		j.logger.Printf("failed to join cluster at %s: %s, sleeping %s before retry", joinAddrs, err.Error(), j.attemptInterval)
+		time.Sleep(j.attemptInterval)
+	}
+	j.logger.Printf("failed to join cluster at %s, after %d attempts", joinAddrs, j.numAttempts)
+	return "", ErrJoinFailed
+}
+
+func (j *Joiner) join(joinAddr, id, addr string, voter bool) (string, error) {
 	// Join using IP address, as that is what Hashicorp Raft works in.
 	resv, err := net.ResolveTCPAddr("tcp", addr)
 	if err != nil {
@@ -75,16 +122,6 @@ func join(srcIP, joinAddr, id, addr string, voter bool, tlsConfig *tls.Config, l
 
 	// Check for protocol scheme, and insert default if necessary.
 	fullAddr := httpd.NormalizeAddr(fmt.Sprintf("%s/join", joinAddr))
-
-	// Create and configure the client to connect to the other node.
-	tr := &http.Transport{
-		TLSClientConfig: tlsConfig,
-		Dial:            dialer.Dial,
-	}
-	client := &http.Client{Transport: tr}
-	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-		return http.ErrUseLastResponse
-	}
 
 	for {
 		b, err := json.Marshal(map[string]interface{}{
@@ -97,7 +134,15 @@ func join(srcIP, joinAddr, id, addr string, voter bool, tlsConfig *tls.Config, l
 		}
 
 		// Attempt to join.
-		resp, err := client.Post(fullAddr, "application/json", bytes.NewReader(b))
+		req, err := http.NewRequest("POST", fullAddr, bytes.NewReader(b))
+		if err != nil {
+			return "", err
+		}
+		if j.username != "" && j.password != "" {
+			req.SetBasicAuth(j.username, j.password)
+		}
+		req.Header.Add("Content-Type", "application/json")
+		resp, err := j.client.Do(req)
 		if err != nil {
 			return "", err
 		}
@@ -114,7 +159,7 @@ func join(srcIP, joinAddr, id, addr string, voter bool, tlsConfig *tls.Config, l
 		case http.StatusMovedPermanently:
 			fullAddr = resp.Header.Get("location")
 			if fullAddr == "" {
-				return "", fmt.Errorf("failed to join, invalid redirect received")
+				return "", ErrInvalidRedirect
 			}
 			continue
 		case http.StatusBadRequest:
@@ -127,7 +172,7 @@ func join(srcIP, joinAddr, id, addr string, voter bool, tlsConfig *tls.Config, l
 				return "", fmt.Errorf("failed to join, node returned: %s: (%s)", resp.Status, string(b))
 			}
 
-			logger.Print("join via HTTP failed, trying via HTTPS")
+			j.logger.Print("join via HTTP failed, trying via HTTPS")
 			fullAddr = httpd.EnsureHTTPS(fullAddr)
 			continue
 		default:
