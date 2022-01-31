@@ -362,6 +362,13 @@ func createCluster(cfg *Config, tlsConfig *tls.Config, hasPeers bool, str *store
 		}
 		bs := cluster.NewBootstrapper(cluster.NewAddressProviderString(joins),
 			cfg.BootstrapExpect, tlsConfig)
+		if cfg.JoinAs != "" {
+			pw, ok := credStr.Password(cfg.JoinAs)
+			if !ok {
+				return fmt.Errorf("user %s does not exist in credential store", cfg.JoinAs)
+			}
+			bs.SetBasicAuth(cfg.JoinAs, pw)
+		}
 
 		done := func() bool {
 			leader, _ := str.LeaderAddr()
@@ -410,6 +417,13 @@ func createCluster(cfg *Config, tlsConfig *tls.Config, hasPeers bool, str *store
 		}
 
 		bs := cluster.NewBootstrapper(provider, cfg.BootstrapExpect, tlsConfig)
+		if cfg.JoinAs != "" {
+			pw, ok := credStr.Password(cfg.JoinAs)
+			if !ok {
+				return fmt.Errorf("user %s does not exist in credential store", cfg.JoinAs)
+			}
+			bs.SetBasicAuth(cfg.JoinAs, pw)
+		}
 		done := func() bool {
 			leader, _ := str.LeaderAddr()
 			return leader != ""
@@ -459,27 +473,6 @@ func createCluster(cfg *Config, tlsConfig *tls.Config, hasPeers bool, str *store
 
 		go discoService.StartReporting(cfg.NodeID, cfg.HTTPURL(), cfg.RaftAdv)
 		httpServ.RegisterStatus("disco", discoService)
-	}
-	return nil
-}
-
-// addJoinCreds adds credentials to any join addresses, if necessary.
-func addJoinCreds(joins []string, joinAs string, credStr *auth.CredentialsStore) error {
-	if credStr == nil || joinAs == "" {
-		return nil
-	}
-
-	pw, ok := credStr.Password(joinAs)
-	if !ok {
-		return fmt.Errorf("user %s does not exist in credential store", joinAs)
-	}
-
-	var err error
-	for i := range joins {
-		joins[i], err = httpd.AddBasicAuth(joins[i], joinAs, pw)
-		if err != nil {
-			return fmt.Errorf("failed to use credential store join_as: %s", err.Error())
-		}
 	}
 	return nil
 }
