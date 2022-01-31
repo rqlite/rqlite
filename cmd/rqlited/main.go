@@ -341,17 +341,18 @@ func createCluster(cfg *Config, tlsConfig *tls.Config, hasPeers bool, str *store
 		joiner.SetBasicAuth(cfg.JoinAs, pw)
 	}
 
-	if joins != nil {
-		if cfg.BootstrapExpect == 0 {
-			// Explicit join operation requested, so do it.
-			j, err := joiner.Do(joins, str.ID(), cfg.RaftAdv, !cfg.RaftNonVoter)
-			if err != nil {
-				return fmt.Errorf("failed to join cluster: %s", err.Error())
-			}
-			log.Println("successfully joined cluster at", httpd.RemoveBasicAuth(j))
-			return nil
+	if joins != nil && cfg.BootstrapExpect == 0 {
+		// Explicit join operation requested, so do it.
+		j, err := joiner.Do(joins, str.ID(), cfg.RaftAdv, !cfg.RaftNonVoter)
+		if err != nil {
+			return fmt.Errorf("failed to join cluster: %s", err.Error())
 		}
+		log.Println("successfully joined cluster at", httpd.RemoveBasicAuth(j))
+		return nil
+	}
 
+	if joins != nil && cfg.BootstrapExpect > 0 {
+		// Bootstrap with explicit join addresses requests.
 		if hasPeers {
 			log.Println("preexisting node configuration detected, ignoring bootstrap request")
 			return nil
@@ -379,10 +380,10 @@ func createCluster(cfg *Config, tlsConfig *tls.Config, hasPeers bool, str *store
 		// existing Raft state.
 		return nil
 	}
-	log.Printf("discovery mode: %s", cfg.DiscoMode)
 
-	// DNS-based discovery involves a few different options.
-	if cfg.DiscoMode == DiscoModeDNS || cfg.DiscoMode == DiscoModeDNSSRV {
+	log.Printf("discovery mode: %s", cfg.DiscoMode)
+	switch cfg.DiscoMode {
+	case DiscoModeDNS, DiscoModeDNSSRV:
 		if hasPeers {
 			log.Printf("preexisting node configuration detected, ignoring %s", cfg.DiscoMode)
 			return nil
@@ -426,9 +427,9 @@ func createCluster(cfg *Config, tlsConfig *tls.Config, hasPeers bool, str *store
 			return leader != ""
 		}
 		httpServ.RegisterStatus("disco", provider)
-
 		return bs.Boot(str.ID(), cfg.RaftAdv, done, cfg.BootstrapExpectTimeout)
-	} else {
+
+	case DiscoModeEtcdKV, DiscoModeConsulKV:
 		discoService, err := createDiscoService(cfg, str)
 		if err != nil {
 			return fmt.Errorf("failed to start discovery service: %s", err.Error())
@@ -467,9 +468,11 @@ func createCluster(cfg *Config, tlsConfig *tls.Config, hasPeers bool, str *store
 		} else {
 			log.Println("preexisting node configuration detected, not registering with discovery service")
 		}
-
 		go discoService.StartReporting(cfg.NodeID, cfg.HTTPURL(), cfg.RaftAdv)
 		httpServ.RegisterStatus("disco", discoService)
+
+	default:
+		return fmt.Errorf("invalid disco mode %s", cfg.DiscoMode)
 	}
 	return nil
 }
