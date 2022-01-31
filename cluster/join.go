@@ -61,27 +61,27 @@ func NewJoiner(srcIP string, numAttempts int, attemptInterval time.Duration,
 		dialer = &net.Dialer{LocalAddr: netAddr}
 	}
 
-	// Create and configure the client to connect to the other node.
-	tr := &http.Transport{
-		TLSClientConfig: tlsCfg,
-		Dial:            dialer.Dial,
-	}
-	client := &http.Client{Transport: tr}
-	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-		return http.ErrUseLastResponse
-	}
-
 	joiner := &Joiner{
 		srcIP:           srcIP,
 		numAttempts:     numAttempts,
 		attemptInterval: attemptInterval,
 		tlsConfig:       tlsCfg,
-		client:          client,
 		logger:          log.New(os.Stderr, "[cluster-join] ", log.LstdFlags),
 	}
 	if joiner.tlsConfig == nil {
 		joiner.tlsConfig = &tls.Config{InsecureSkipVerify: true}
 	}
+
+	// Create and configure the client to connect to the other node.
+	tr := &http.Transport{
+		TLSClientConfig: joiner.tlsConfig,
+		Dial:            dialer.Dial,
+	}
+	joiner.client = &http.Client{Transport: tr}
+	joiner.client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+
 	return joiner
 }
 
