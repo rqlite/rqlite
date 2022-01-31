@@ -7,6 +7,7 @@ This document describes various ways to dynamically form rqlite clusters, which 
 * [Quickstart](#quickstart)
   * [Automatic Boostrapping](#automatic-bootstrapping)
   * [Using DNS for Bootstrapping](#using-dns-for-bootstrapping)
+    * [DNS SRV](#dns-srv)
   * [Consul](#consul)
   * [etcd](#etcd)
 * [Next steps](#next-steps)
@@ -56,7 +57,15 @@ To launch a node using DNS boostrap, execute the following command:
 rqlited -node-id $ID1  -http-addr=$IP1:4001 -raft-addr=$IP1:4002 \
 -disco-mode=dns -bootstrap-expect 3 data
 ```
-You would launch two other nodes similarly.
+You would launch other nodes similarly.
+
+#### DNS SRV
+Using [DNS SRV](https://www.cloudflare.com/learning/dns/dns-records/dns-srv-record/) gives you more control over the rqlite node address details returned by DNS, including the HTTP port each node is listening on. This means that unlike using just simple DNS records, each rqlite node can be listening on a different HTTP port. Simple DNS records are probably good enough for most situations, however.
+```bash
+rqlited -node-id $ID1  -http-addr=$IP1:4001 -raft-addr=$IP1:4002 \
+-disco-mode=dns-srv -bootstrap-expect 3 data
+```
+You would launch other nodes similarly.
 
 ### Consul
 Another approach uses [Consul](https://www.consul.io/) to coordinate clustering. The advantage of this approach is that you do need to know the network addresses of the nodes ahead of time.
@@ -123,6 +132,7 @@ The example above demonstrates a simple configuration, and most real deployments
 - [Full Consul configuration description](https://github.com/rqlite/rqlite-disco-clients/blob/main/consul/config.go)
 - [Full etcd configuration description](https://github.com/rqlite/rqlite-disco-clients/blob/main/etcd/config.go)
 - [Full DNS configuration description](https://github.com/rqlite/rqlite-disco-clients/blob/main/dns/config.go)
+- [Full DNS SRV configuration description](https://github.com/rqlite/rqlite-disco-clients/blob/main/dnssrv/config.go)
 
 #### Running multiple different clusters
 If you wish a single Consul or etcd system to support multiple rqlite clusters, then set the `-disco-key` command line argument to a different value for each cluster.
