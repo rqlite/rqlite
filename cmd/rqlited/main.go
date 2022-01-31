@@ -357,9 +357,6 @@ func createCluster(cfg *Config, tlsConfig *tls.Config, hasPeers bool, str *store
 			return nil
 		}
 
-		if err := addJoinCreds(joins, cfg.JoinAs, credStr); err != nil {
-			return fmt.Errorf("failed to add BasicAuth creds: %s", err.Error())
-		}
 		bs := cluster.NewBootstrapper(cluster.NewAddressProviderString(joins),
 			cfg.BootstrapExpect, tlsConfig)
 		if cfg.JoinAs != "" {
