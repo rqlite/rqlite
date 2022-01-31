@@ -1,4 +1,6 @@
-## 7.1.1 (unreleased)
+## 7.2.0 (unreleased)
+## New features
+- [PR #979](https://github.com/rqlite/rqlite/pull/979): Add support for DNS-based autoclustering.
 
 ### Implementation changes and bug fixes
 - [PR #976](https://github.com/rqlite/rqlite/pull/976): Improve `readyz/` response.
