@@ -18,6 +18,7 @@ import (
 
 	consul "github.com/rqlite/rqlite-disco-clients/consul"
 	"github.com/rqlite/rqlite-disco-clients/dns"
+	"github.com/rqlite/rqlite-disco-clients/dnssrv"
 	etcd "github.com/rqlite/rqlite-disco-clients/etcd"
 	"github.com/rqlite/rqlite/auth"
 	"github.com/rqlite/rqlite/cluster"
@@ -370,8 +371,8 @@ func createCluster(cfg *Config, tlsConfig *tls.Config, hasPeers bool, str *store
 	}
 	log.Printf("discovery mode: %s", cfg.DiscoMode)
 
-	// DNS disco is special.
-	if cfg.DiscoMode == DiscoModeDNS {
+	// DNS-based discovery involves a few different options.
+	if cfg.DiscoMode == DiscoModeDNS || cfg.DiscoMode == DiscoModeDNSSRV {
 		if hasPeers {
 			log.Printf("preexisting node configuration detected, ignoring %s", cfg.DiscoMode)
 			return nil
@@ -382,19 +383,33 @@ func createCluster(cfg *Config, tlsConfig *tls.Config, hasPeers bool, str *store
 				rc.Close()
 			}
 		}()
-		dnsCfg, err := dns.NewConfigFromReader(rc)
-		if err != nil {
-			return fmt.Errorf("error reading DNS configuration: %s", err.Error())
-		}
-		dnsClient := dns.New(dnsCfg)
 
-		bs := cluster.NewBootstrapper(dnsClient, cfg.BootstrapExpect, tlsConfig)
+		var provider interface {
+			cluster.AddressProvider
+			httpd.StatusReporter
+		}
+		if cfg.DiscoMode == DiscoModeDNS {
+			dnsCfg, err := dns.NewConfigFromReader(rc)
+			if err != nil {
+				return fmt.Errorf("error reading DNS configuration: %s", err.Error())
+			}
+			provider = dns.New(dnsCfg)
+
+		} else {
+			dnssrvCfg, err := dnssrv.NewConfigFromReader(rc)
+			if err != nil {
+				return fmt.Errorf("error reading DNS configuration: %s", err.Error())
+			}
+			provider = dnssrv.New(dnssrvCfg)
+		}
+
+		bs := cluster.NewBootstrapper(provider, cfg.BootstrapExpect, tlsConfig)
 		done := func() bool {
 			leader, _ := str.LeaderAddr()
 			return leader != ""
 		}
+		httpServ.RegisterStatus("disco", provider)
 
-		httpServ.RegisterStatus("disco", dnsClient)
 		return bs.Boot(str.ID(), cfg.RaftAdv, done, cfg.BootstrapExpectTimeout)
 	} else {
 		discoService, err := createDiscoService(cfg, str)

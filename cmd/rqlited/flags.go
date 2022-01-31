@@ -19,6 +19,7 @@ const (
 	DiscoModeConsulKV = "consul-kv"
 	DiscoModeEtcdKV   = "etcd-kv"
 	DiscoModeDNS      = "dns"
+	DiscoModeDNSSRV   = "dns-srv"
 )
 
 // Config represents the configuration as set by command-line flags.
@@ -243,7 +244,7 @@ func (c *Config) Validate() error {
 		if c.BootstrapExpect > 0 {
 			return fmt.Errorf("bootstrapping not applicable when using %s", c.DiscoMode)
 		}
-	case DiscoModeDNS:
+	case DiscoModeDNS, DiscoModeDNSSRV:
 		if c.BootstrapExpect == 0 {
 			return fmt.Errorf("bootstrap-expect value required when using %s", c.DiscoMode)
 		}
