@@ -341,13 +341,19 @@ func createCluster(cfg *Config, tlsConfig *tls.Config, hasPeers bool, str *store
 		joiner.SetBasicAuth(cfg.JoinAs, pw)
 	}
 
+	// Prepare defintion of being part of a cluster.
+	isClustered := func() bool {
+		leader, _ := str.LeaderAddr()
+		return leader != ""
+	}
+
 	if joins != nil && cfg.BootstrapExpect == 0 {
 		// Explicit join operation requested, so do it.
 		j, err := joiner.Do(joins, str.ID(), cfg.RaftAdv, !cfg.RaftNonVoter)
 		if err != nil {
 			return fmt.Errorf("failed to join cluster: %s", err.Error())
 		}
-		log.Println("successfully joined cluster at", httpd.RemoveBasicAuth(j))
+		log.Println("successfully joined cluster at", j)
 		return nil
 	}
 
@@ -367,12 +373,7 @@ func createCluster(cfg *Config, tlsConfig *tls.Config, hasPeers bool, str *store
 			}
 			bs.SetBasicAuth(cfg.JoinAs, pw)
 		}
-
-		done := func() bool {
-			leader, _ := str.LeaderAddr()
-			return leader != ""
-		}
-		return bs.Boot(str.ID(), cfg.RaftAdv, done, cfg.BootstrapExpectTimeout)
+		return bs.Boot(str.ID(), cfg.RaftAdv, isClustered, cfg.BootstrapExpectTimeout)
 	}
 
 	if cfg.DiscoMode == "" {
@@ -422,12 +423,8 @@ func createCluster(cfg *Config, tlsConfig *tls.Config, hasPeers bool, str *store
 			}
 			bs.SetBasicAuth(cfg.JoinAs, pw)
 		}
-		done := func() bool {
-			leader, _ := str.LeaderAddr()
-			return leader != ""
-		}
 		httpServ.RegisterStatus("disco", provider)
-		return bs.Boot(str.ID(), cfg.RaftAdv, done, cfg.BootstrapExpectTimeout)
+		return bs.Boot(str.ID(), cfg.RaftAdv, isClustered, cfg.BootstrapExpectTimeout)
 
 	case DiscoModeEtcdKV, DiscoModeConsulKV:
 		discoService, err := createDiscoService(cfg, str)
