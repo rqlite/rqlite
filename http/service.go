@@ -830,6 +830,18 @@ func (s *Service) handleReadyz(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	noLeader, err := noLeader(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if noLeader {
+		// Simply handling the HTTP request is enough.
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("[+]node ok"))
+		return
+	}
+
 	timeout, err := timeoutParam(r, defaultTimeout)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -847,15 +859,15 @@ func (s *Service) handleReadyz(w http.ResponseWriter, r *http.Request) {
 		_, err = s.cluster.GetNodeAPIAddr(lAddr, timeout)
 		if err != nil {
 			w.WriteHeader(http.StatusServiceUnavailable)
-			w.Write([]byte(fmt.Sprintf("[+]leader not contactable: %s", err.Error())))
+			w.Write([]byte(fmt.Sprintf("[+]node ok\n[+]leader not contactable: %s", err.Error())))
 			return
 		}
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("[+]leader ok"))
+		w.Write([]byte("[+]node ok\n[+]leader ok"))
 		return
 	}
 	w.WriteHeader(http.StatusServiceUnavailable)
-	w.Write([]byte("[+]leader does not exist"))
+	w.Write([]byte("[+]node ok\n[+]leader does not exist"))
 }
 
 // handleExecute handles queries that modify the database.
