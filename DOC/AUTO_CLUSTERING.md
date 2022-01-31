@@ -60,7 +60,7 @@ rqlited -node-id $ID1  -http-addr=$IP1:4001 -raft-addr=$IP1:4002 \
 You would launch other nodes similarly.
 
 #### DNS SRV
-Using [DNS SRV](https://www.cloudflare.com/learning/dns/dns-records/dns-srv-record/) gives you more control over the rqlite node address details, including the HTTP port each node is listenting on. Unlike using just simple DNS records, each rqlite node can be listening on a different HTTP port. Simple DNS records are probably good enough for most situations.
+Using [DNS SRV](https://www.cloudflare.com/learning/dns/dns-records/dns-srv-record/) gives you more control over the rqlite node address details returned by DNS, including the HTTP port each node is listening on. This means that unlike using just simple DNS records, each rqlite node can be listening on a different HTTP port. Simple DNS records are probably good enough for most situations, however.
 ```bash
 rqlited -node-id $ID1  -http-addr=$IP1:4001 -raft-addr=$IP1:4002 \
 -disco-mode=dns-srv -bootstrap-expect 3 data

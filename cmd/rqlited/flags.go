@@ -249,8 +249,8 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("bootstrap-expect value required when using %s", c.DiscoMode)
 		}
 	default:
-		return fmt.Errorf("disco mode must be %s, %s, or %s",
-			DiscoModeConsulKV, DiscoModeEtcdKV, DiscoModeDNS)
+		return fmt.Errorf("disco mode must be one of %s, %s, %s, or %s",
+			DiscoModeConsulKV, DiscoModeEtcdKV, DiscoModeDNS, DiscoModeDNSSRV)
 	}
 
 	return nil
