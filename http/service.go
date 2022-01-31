@@ -145,6 +145,8 @@ const (
 	numQueries          = "queries"
 	numRemoteExecutions = "remote_executions"
 	numRemoteQueries    = "remote_queries"
+	numReadyz           = "num_readyz"
+	numStatus           = "num_status"
 	numBackups          = "backups"
 	numLoad             = "loads"
 	numJoins            = "joins"
@@ -190,6 +192,8 @@ func init() {
 	stats.Add(numQueries, 0)
 	stats.Add(numRemoteExecutions, 0)
 	stats.Add(numRemoteQueries, 0)
+	stats.Add(numReadyz, 0)
+	stats.Add(numStatus, 0)
 	stats.Add(numBackups, 0)
 	stats.Add(numLoad, 0)
 	stats.Add(numJoins, 0)
@@ -332,10 +336,12 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case strings.HasPrefix(r.URL.Path, "/remove"):
 		s.handleRemove(w, r)
 	case strings.HasPrefix(r.URL.Path, "/status"):
+		stats.Add(numStatus, 1)
 		s.handleStatus(w, r)
 	case strings.HasPrefix(r.URL.Path, "/nodes"):
 		s.handleNodes(w, r)
 	case strings.HasPrefix(r.URL.Path, "/readyz"):
+		stats.Add(numReadyz, 1)
 		s.handleReadyz(w, r)
 	case r.URL.Path == "/debug/vars" && s.Expvar:
 		s.handleExpvar(w, r)
