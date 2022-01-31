@@ -9,7 +9,7 @@ This document describes various ways to dynamically form rqlite clusters, which 
   * [Using DNS for Bootstrapping](#using-dns-for-bootstrapping)
   * [Consul](#consul)
   * [etcd](#etcd)
-* [More details](more-details)
+* [Next steps](next-steps)
   * [Controlling Consul and etcd configuration](#controlling-consul-and-etcd-configuration)
   * [Running multiple different clusters](#running-multiple-different-clusters)
 * [Design](design)
@@ -114,7 +114,7 @@ rqlited -node-id $ID3 -http-addr=$IP3:4001 -raft-addr=$IP3:4002 \
 docker run rqlite/rqlite -disco-mode=etcd-kv -disco-config '{"endpoints": ["example.com:2379"]}'
 ```
 
-## More Details
+## Next Steps
 ### Controlling Discovery configuration
 For detailed control over Discovery configuration `-disco-confg` can either be an actual JSON string, or a path to a file containing a JSON-formatted configuration. The former option may be more convenient if the configuration you need to supply is very short, as in the example above.
 
