@@ -115,7 +115,49 @@ func Test_BootstrapperBootSingleNotify(t *testing.T) {
 	if got, exp := body["addr"], "192.168.1.1:1234"; got != exp {
 		t.Fatalf("wrong address supplied, exp %s, got %s", exp, got)
 	}
+}
 
+func Test_BootstrapperBootSingleNotifyAuth(t *testing.T) {
+	tsNotified := false
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/join" {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+
+		username, password, ok := r.BasicAuth()
+		if !ok {
+			t.Fatalf("request did not have Basic Auth credentials")
+		}
+		if username != "username1" || password != "password1" {
+			t.Fatalf("bad Basic Auth credentials received (%s, %s", username, password)
+		}
+
+		tsNotified = true
+	}))
+
+	n := -1
+	done := func() bool {
+		n++
+		if n == 5 {
+			return true
+		}
+		return false
+	}
+
+	p := NewAddressProviderString([]string{ts.URL})
+	bs := NewBootstrapper(p, 1, nil)
+	bs.SetBasicAuth("username1", "password1")
+	bs.Interval = time.Second
+
+	err := bs.Boot("node1", "192.168.1.1:1234", done, 60*time.Second)
+	if err != nil {
+		t.Fatalf("failed to boot: %s", err)
+	}
+
+	if tsNotified != true {
+		t.Fatalf("notify target not contacted")
+	}
 }
 
 func Test_BootstrapperBootMultiNotify(t *testing.T) {
