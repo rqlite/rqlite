@@ -188,8 +188,8 @@ class Node(object):
     raise_for_status(r)
     return r.json()
 
-  def ready(self):
-    r = requests.get(self._ready_url())
+  def ready(self, noleader=False):
+    r = requests.get(self._ready_url(noleader))
     return r.status_code == 200
 
   def expvar(self):
@@ -371,8 +371,11 @@ class Node(object):
     return 'http://' + self.APIAddr() + '/status'
   def _nodes_url(self):
     return 'http://' + self.APIAddr() + '/nodes?nonvoters' # Getting all nodes back makes testing easier
-  def _ready_url(self):
-    return 'http://' + self.APIAddr() + '/readyz'
+  def _ready_url(self, noleader=False):
+    nl = ""
+    if noleader:
+      nl = "?noleader"
+    return 'http://' + self.APIAddr() + '/readyz' + nl
   def _expvar_url(self):
     return 'http://' + self.APIAddr() + '/debug/vars'
   def _query_url(self, redirect=False):
@@ -570,6 +573,16 @@ class TestSingleNode(unittest.TestCase):
         raise Exception('timeout', nSnaps)
       time.sleep(1)
       t+=1
+
+class TestSingleNodeReadyz(unittest.TestCase):
+  def test(self):
+    ''' Test /readyz behaves correctly'''
+    n0 = Node(RQLITED_PATH, '0',  raft_snap_threshold=2, raft_snap_int="1s")
+    n0.start(join="http://nonsense")
+    self.assertEqual(False, n0.ready())
+    self.assertEqual(True, n0.ready(noleader=True))
+    self.assertEqual(False, n0.ready(noleader=False))
+    deprovision_node(n0)
 
 class TestEndToEnd(unittest.TestCase):
   def setUp(self):
