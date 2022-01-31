@@ -91,7 +91,7 @@ func (b *Bootstrapper) Boot(id, raftAddr string, done func() bool, timeout time.
 
 			targets, err := b.provider.Lookup()
 			if err != nil {
-				b.logger.Printf("provider loopup failed %s", err.Error())
+				b.logger.Printf("provider lookup failed %s", err.Error())
 			}
 			if len(targets) < b.expect {
 				continue

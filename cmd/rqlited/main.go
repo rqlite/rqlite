@@ -2,7 +2,6 @@
 package main
 
 import (
-	"bytes"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
@@ -18,6 +17,7 @@ import (
 	"time"
 
 	consul "github.com/rqlite/rqlite-disco-clients/consul"
+	"github.com/rqlite/rqlite-disco-clients/dns"
 	etcd "github.com/rqlite/rqlite-disco-clients/etcd"
 	"github.com/rqlite/rqlite/auth"
 	"github.com/rqlite/rqlite/cluster"
@@ -202,44 +202,35 @@ func createStore(cfg *Config, ln *tcp.Layer) (*store.Store, error) {
 func createDiscoService(cfg *Config, str *store.Store) (*disco.Service, error) {
 	var c disco.Client
 	var err error
-	var reader io.Reader
+	var rc io.ReadCloser
 
-	if cfg.DiscoConfig != "" {
-		// Open config file. If opening fails, assume the config is a JSON string.
-		cfgFile, err := os.Open(cfg.DiscoConfig)
-		if err != nil {
-			reader = bytes.NewReader([]byte(cfg.DiscoConfig))
-		} else {
-			reader = cfgFile
-			defer cfgFile.Close()
+	rc = cfg.DiscoConfigReader()
+	defer func() {
+		if rc != nil {
+			rc.Close()
 		}
-	}
-
+	}()
 	if cfg.DiscoMode == DiscoModeConsulKV {
 		var consulCfg *consul.Config
-		if reader != nil {
-			consulCfg, err = consul.NewConfigFromReader(reader)
-			if err != nil {
-				return nil, err
-			}
+		consulCfg, err = consul.NewConfigFromReader(rc)
+		if err != nil {
+			return nil, fmt.Errorf("create Consul config: %s", err.Error())
 		}
 
 		c, err = consul.New(cfg.DiscoKey, consulCfg)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("create Consul client: %s", err.Error())
 		}
 	} else if cfg.DiscoMode == DiscoModeEtcdKV {
 		var etcdCfg *etcd.Config
-		if reader != nil {
-			etcdCfg, err = etcd.NewConfigFromReader(reader)
-			if err != nil {
-				return nil, err
-			}
+		etcdCfg, err = etcd.NewConfigFromReader(rc)
+		if err != nil {
+			return nil, fmt.Errorf("create etcd config: %s", err.Error())
 		}
 
 		c, err = etcd.New(cfg.DiscoKey, etcdCfg)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("create etcd client: %s", err.Error())
 		}
 	} else {
 		return nil, fmt.Errorf("invalid disco service: %s", cfg.DiscoMode)
@@ -377,54 +368,82 @@ func createCluster(cfg *Config, tlsConfig *tls.Config, hasPeers bool, str *store
 		// existing Raft state.
 		return nil
 	}
-
 	log.Printf("discovery mode: %s", cfg.DiscoMode)
-	discoService, err := createDiscoService(cfg, str)
-	if err != nil {
-		return fmt.Errorf("failed to start discovery service: %s", err.Error())
-	}
 
-	if !hasPeers {
-		log.Println("no preexisting nodes, registering with discovery service")
-
-		leader, addr, err := discoService.Register(str.ID(), cfg.HTTPURL(), cfg.RaftAdv)
-		if err != nil {
-			return fmt.Errorf("failed to register with discovery service: %s", err.Error())
+	// DNS disco is special.
+	if cfg.DiscoMode == DiscoModeDNS {
+		if hasPeers {
+			log.Printf("preexisting node configuration detected, ignoring %s", cfg.DiscoMode)
+			return nil
 		}
-		if leader {
-			log.Println("node registered as leader using discovery service")
-			if err := str.Bootstrap(store.NewServer(str.ID(), str.Addr(), true)); err != nil {
-				return fmt.Errorf("failed to bootstrap single new node: %s", err.Error())
+		rc := cfg.DiscoConfigReader()
+		defer func() {
+			if rc != nil {
+				rc.Close()
+			}
+		}()
+		dnsCfg, err := dns.NewConfigFromReader(rc)
+		if err != nil {
+			return fmt.Errorf("error reading DNS configuration: %s", err.Error())
+		}
+		dnsClient := dns.New(dnsCfg)
+
+		bs := cluster.NewBootstrapper(dnsClient, cfg.BootstrapExpect, tlsConfig)
+		done := func() bool {
+			leader, _ := str.LeaderAddr()
+			return leader != ""
+		}
+
+		httpServ.RegisterStatus("disco", dnsClient)
+		return bs.Boot(str.ID(), cfg.RaftAdv, done, cfg.BootstrapExpectTimeout)
+	} else {
+		discoService, err := createDiscoService(cfg, str)
+		if err != nil {
+			return fmt.Errorf("failed to start discovery service: %s", err.Error())
+		}
+
+		if !hasPeers {
+			log.Println("no preexisting nodes, registering with discovery service")
+
+			leader, addr, err := discoService.Register(str.ID(), cfg.HTTPURL(), cfg.RaftAdv)
+			if err != nil {
+				return fmt.Errorf("failed to register with discovery service: %s", err.Error())
+			}
+			if leader {
+				log.Println("node registered as leader using discovery service")
+				if err := str.Bootstrap(store.NewServer(str.ID(), str.Addr(), true)); err != nil {
+					return fmt.Errorf("failed to bootstrap single new node: %s", err.Error())
+				}
+			} else {
+				for {
+					log.Printf("discovery service returned %s as join address", addr)
+					if err := addJoinCreds([]string{addr}, cfg.JoinAs, credStr); err != nil {
+						return fmt.Errorf("failed too add auth creds: %s", err.Error())
+					}
+
+					if j, err := cluster.Join(cfg.JoinSrcIP, []string{addr}, str.ID(), cfg.RaftAdv, !cfg.RaftNonVoter,
+						cfg.JoinAttempts, cfg.JoinInterval, tlsConfig); err != nil {
+						log.Printf("failed to join cluster at %s: %s", addr, err.Error())
+
+						time.Sleep(time.Second)
+						_, addr, err = discoService.Register(str.ID(), cfg.HTTPURL(), cfg.RaftAdv)
+						if err != nil {
+							log.Printf("failed to get updated leader: %s", err.Error())
+						}
+						continue
+					} else {
+						log.Println("successfully joined cluster at", j)
+						break
+					}
+				}
 			}
 		} else {
-			for {
-				log.Printf("discovery service returned %s as join address", addr)
-				if err := addJoinCreds([]string{addr}, cfg.JoinAs, credStr); err != nil {
-					return fmt.Errorf("failed too add auth creds: %s", err.Error())
-				}
-
-				if j, err := cluster.Join(cfg.JoinSrcIP, []string{addr}, str.ID(), cfg.RaftAdv, !cfg.RaftNonVoter,
-					cfg.JoinAttempts, cfg.JoinInterval, tlsConfig); err != nil {
-					log.Printf("failed to join cluster at %s: %s", addr, err.Error())
-
-					time.Sleep(time.Second)
-					_, addr, err = discoService.Register(str.ID(), cfg.HTTPURL(), cfg.RaftAdv)
-					if err != nil {
-						log.Printf("failed to get updated leader: %s", err.Error())
-					}
-					continue
-				} else {
-					log.Println("successfully joined cluster at", j)
-					break
-				}
-			}
+			log.Println("preexisting node configuration detected, not registering with discovery service")
 		}
-	} else {
-		log.Println("preexisting node configuration detected, not registering with discovery service")
-	}
 
-	go discoService.StartReporting(cfg.NodeID, cfg.HTTPURL(), cfg.RaftAdv)
-	httpServ.RegisterStatus("disco", discoService)
+		go discoService.StartReporting(cfg.NodeID, cfg.HTTPURL(), cfg.RaftAdv)
+		httpServ.RegisterStatus("disco", discoService)
+	}
 	return nil
 }
 

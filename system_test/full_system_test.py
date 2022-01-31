@@ -217,7 +217,7 @@ class Node(object):
 
   def disco_mode(self):
     try:
-      return self.status()['disco']['name']
+      return self.status()['disco']['mode']
     except requests.exceptions.ConnectionError:
       return ''
 

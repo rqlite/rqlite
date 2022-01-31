@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"net"
 	"net/url"
 	"os"
@@ -16,6 +18,7 @@ const (
 	DiscoModeNone     = ""
 	DiscoModeConsulKV = "consul-kv"
 	DiscoModeEtcdKV   = "etcd-kv"
+	DiscoModeDNS      = "dns"
 )
 
 // Config represents the configuration as set by command-line flags.
@@ -240,8 +243,13 @@ func (c *Config) Validate() error {
 		if c.BootstrapExpect > 0 {
 			return fmt.Errorf("bootstrapping not applicable when using %s", c.DiscoMode)
 		}
+	case DiscoModeDNS:
+		if c.BootstrapExpect == 0 {
+			return fmt.Errorf("bootstrap-expect value required when using %s", c.DiscoMode)
+		}
 	default:
-		return fmt.Errorf("disco mode must be %s or %s", DiscoModeConsulKV, DiscoModeEtcdKV)
+		return fmt.Errorf("disco mode must be %s, %s, or %s",
+			DiscoModeConsulKV, DiscoModeEtcdKV, DiscoModeDNS)
 	}
 
 	return nil
@@ -264,6 +272,25 @@ func (c *Config) HTTPURL() string {
 		apiProto = "https"
 	}
 	return fmt.Sprintf("%s://%s", apiProto, c.HTTPAdv)
+}
+
+// DiscoConfigReader returns a ReadCloser providing access to the Disco config.
+// The caller must call close on the ReadCloser when finished with it. If no
+// config was supplied, it returns nil.
+func (c *Config) DiscoConfigReader() io.ReadCloser {
+	var rc io.ReadCloser
+	if c.DiscoConfig == "" {
+		return nil
+	}
+
+	// Open config file. If opening fails, assume string is the literal config.
+	cfgFile, err := os.Open(c.DiscoConfig)
+	if err != nil {
+		rc = io.NopCloser(bytes.NewReader([]byte(c.DiscoConfig)))
+	} else {
+		rc = cfgFile
+	}
+	return rc
 }
 
 // BuildInfo is build information for display at command line.
