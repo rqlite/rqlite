@@ -38,6 +38,8 @@ type Bootstrapper struct {
 	expect    int
 	tlsConfig *tls.Config
 
+	joiner *Joiner
+
 	logger   *log.Logger
 	Interval time.Duration
 }
@@ -48,6 +50,7 @@ func NewBootstrapper(p AddressProvider, expect int, tlsConfig *tls.Config) *Boot
 		provider:  p,
 		expect:    expect,
 		tlsConfig: &tls.Config{InsecureSkipVerify: true},
+		joiner:    NewJoiner("", 1, 0, tlsConfig),
 		logger:    log.New(os.Stderr, "[cluster-bootstrap] ", log.LstdFlags),
 		Interval:  jitter(5 * time.Second),
 	}
@@ -98,7 +101,7 @@ func (b *Bootstrapper) Boot(id, raftAddr string, done func() bool, timeout time.
 			}
 
 			// Try an explicit join.
-			if j, err := Join("", targets, id, raftAddr, true, 1, 0, b.tlsConfig); err == nil {
+			if j, err := b.joiner.Do(targets, id, raftAddr, true); err == nil {
 				b.logger.Printf("succeeded directly joining cluster via node at %s",
 					httpd.RemoveBasicAuth(j))
 				return nil
@@ -142,8 +145,6 @@ func (b *Bootstrapper) notify(targets []string, id, raftAddr string) error {
 			resp, err := client.Post(fullTarget, "application/json", bytes.NewReader(buf))
 			if err != nil {
 				return err
-				// time.Sleep(bs.joinInterval) // need to count loops....? Or this just does one loop?
-				// continue
 			}
 			resp.Body.Close()
 			switch resp.StatusCode {

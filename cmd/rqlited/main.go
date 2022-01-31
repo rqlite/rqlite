@@ -331,14 +331,20 @@ func createCluster(cfg *Config, tlsConfig *tls.Config, hasPeers bool, str *store
 		return nil
 	}
 
+	// Prepare the Joiner
+	joiner := cluster.NewJoiner(cfg.JoinSrcIP, cfg.JoinAttempts, cfg.JoinInterval, tlsConfig)
+	if cfg.JoinAs != "" {
+		pw, ok := credStr.Password(cfg.JoinAs)
+		if !ok {
+			return fmt.Errorf("user %s does not exist in credential store", cfg.JoinAs)
+		}
+		joiner.SetBasicAuth(cfg.JoinAs, pw)
+	}
+
 	if joins != nil {
 		if cfg.BootstrapExpect == 0 {
 			// Explicit join operation requested, so do it.
-			if err := addJoinCreds(joins, cfg.JoinAs, credStr); err != nil {
-				return fmt.Errorf("failed to add BasicAuth creds: %s", err.Error())
-			}
-			j, err := cluster.Join(cfg.JoinSrcIP, joins, str.ID(), cfg.RaftAdv, !cfg.RaftNonVoter,
-				cfg.JoinAttempts, cfg.JoinInterval, tlsConfig)
+			j, err := joiner.Do(joins, str.ID(), cfg.RaftAdv, !cfg.RaftNonVoter)
 			if err != nil {
 				return fmt.Errorf("failed to join cluster: %s", err.Error())
 			}
@@ -432,12 +438,7 @@ func createCluster(cfg *Config, tlsConfig *tls.Config, hasPeers bool, str *store
 			} else {
 				for {
 					log.Printf("discovery service returned %s as join address", addr)
-					if err := addJoinCreds([]string{addr}, cfg.JoinAs, credStr); err != nil {
-						return fmt.Errorf("failed too add auth creds: %s", err.Error())
-					}
-
-					if j, err := cluster.Join(cfg.JoinSrcIP, []string{addr}, str.ID(), cfg.RaftAdv, !cfg.RaftNonVoter,
-						cfg.JoinAttempts, cfg.JoinInterval, tlsConfig); err != nil {
+					if j, err := joiner.Do([]string{addr}, str.ID(), cfg.RaftAdv, !cfg.RaftNonVoter); err != nil {
 						log.Printf("failed to join cluster at %s: %s", addr, err.Error())
 
 						time.Sleep(time.Second)
