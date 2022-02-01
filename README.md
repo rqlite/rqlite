@@ -58,7 +58,7 @@ _This demonstration shows all 3 nodes running on the same host. In reality you p
 With just these few steps you've now got a fault-tolerant, distributed relational database. For full details on creating and managing real clusters, including running read-only nodes, check out [this documentation](https://github.com/rqlite/rqlite/blob/master/DOC/CLUSTER_MGMT.md).
 
 #### Node Discovery and Automatic Clustering
-rqlite can use either [Consul](https://www.consul.io/) or [etcd](https://etcd.io/) for node discovery, allowing nodes to automatically connect and form a cluster. This can be much more convenient, allowing clusters to be dynamically created. Check out [the documentation](https://github.com/rqlite/rqlite/blob/master/DOC/AUTO_CLUSTERING.md) for more details.
+rqlite can use [Consul](https://www.consul.io/), [etcd](https://etcd.io/), DNS, and Kubernetes, for node discovery. This allows nodes to automatically connect and form a cluster. This can be much more convenient, allowing clusters to be dynamically created. Check out [the documentation](https://github.com/rqlite/rqlite/blob/master/DOC/AUTO_CLUSTERING.md) for more details.
 
 ### Inserting records
 Let's insert some records via the [rqlite CLI](https://github.com/rqlite/rqlite/blob/master/DOC/CLI.md), using standard SQLite commands. Once inserted, these records will be replicated across the cluster, in a durable and fault-tolerant manner. Your 3-node cluster can suffer the failure of a single node without any loss of functionality or data.
