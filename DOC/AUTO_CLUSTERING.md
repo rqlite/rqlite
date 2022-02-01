@@ -8,6 +8,7 @@ This document describes various ways to dynamically form rqlite clusters, which 
   * [Automatic Boostrapping](#automatic-bootstrapping)
   * [Using DNS for Bootstrapping](#using-dns-for-bootstrapping)
     * [DNS SRV](#dns-srv)
+    * [Kubernetes](#kubernetes)
   * [Consul](#consul)
   * [etcd](#etcd)
 * [Next steps](#next-steps)
@@ -50,7 +51,7 @@ docker run rqlite/rqlite -bootstrap-expect 3 -join http://$IP1:4001,http://$IP2:
 where `$IP[1-3]` are the expected network addresses of the containers.
 
 ### Using DNS for Bootstrapping
-You can also use the Domain Name System (DNS) to bootstrap a cluster. This is similar to automatic clustering, but doesn't require you to specify the network addresses at the command line. Instead you create a DNS record for the host `rqlite`, with an [A Record](https://www.cloudflare.com/learning/dns/dns-records/dns-a-record/) for each rqlite node's HTTP IP address.
+You can also use the Domain Name System (DNS) to bootstrap a cluster. This is similar to automatic clustering, but doesn't require you to specify the network addresses at the command line. Instead you create a DNS record for the host `rqlite`, with an [A Record](https://www.cloudflare.com/learning/dns/dns-records/dns-a-record/) for each rqlite node's HTTP IP address. 
 
 To launch a node using DNS boostrap, execute the following command:
 ```bash
@@ -66,6 +67,24 @@ rqlited -node-id $ID1  -http-addr=$IP1:4001 -raft-addr=$IP1:4002 \
 -disco-mode=dns-srv -bootstrap-expect 3 data
 ```
 You would launch other nodes similarly.
+
+#### Kubernetes
+DNS-based approaches can be quite useful for many deployment scenarios. A [Kubernetes _Headless Service_](https://kubernetes.io/docs/concepts/services-networking/service/#headless-services), for example, creates the right DNS configuration automatically, allowing you to bootstrap a service using a Headless Service. The following, very simple, Headless Service definition would mean the hostname `rqlite` would resolve to the IP addresses of all rqlite Pods that were part of this service.
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: rqlite
+spec:
+  clusterIP: None 
+  selector:
+    app: rqlite
+  ports:
+    - protocol: TCP
+      port: 4001
+      targetPort: 4001
+```
+This is just an example. A real Kubernetes deployment will also require [Persistent Volumes](https://kubernetes.io/docs/concepts/storage/persistent-volumes/) and (most likely) a [StatefulSet](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/).
 
 ### Consul
 Another approach uses [Consul](https://www.consul.io/) to coordinate clustering. The advantage of this approach is that you do need to know the network addresses of the nodes ahead of time.
