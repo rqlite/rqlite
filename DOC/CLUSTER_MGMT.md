@@ -27,7 +27,7 @@ Specifically, a majority is defined as `(N/2)+1` where `N` is the number of node
 So a 4-node cluster is no more fault-tolerant than a 3-node cluster, so running a 4-node cluster provides no advantage over a 3-node cluster. Only a 5-node cluster can tolerate the failure of 2 nodes. An analogous argument applies to 5-node vs. 6-node clusters, and so on.
 
 # Creating a cluster
-_This section describes manually creating a cluster. If you wish rqlite nodes to automatically find other, and form a cluster, check out [auto-clustering with Consul and etcd](https://github.com/rqlite/rqlite/blob/master/DOC/AUTO_CLUSTERING.md)._
+_This section describes manually creating a cluster. If you wish rqlite nodes to automatically find other, and form a cluster, check out [auto-clustering](https://github.com/rqlite/rqlite/blob/master/DOC/AUTO_CLUSTERING.md)._
 
 Let's say you have 3 host machines, _host1_, _host2_, and _host3_, and that each of these hostnames resolves to an IP address reachable from the other hosts. Instead of hostnames you can use the IP address directly if you wish.
 
