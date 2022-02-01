@@ -69,7 +69,7 @@ rqlited -node-id $ID1  -http-addr=$IP1:4001 -raft-addr=$IP1:4002 \
 You would launch other nodes similarly.
 
 #### Kubernetes
-DNS-based approaches can be quite useful for many deployment scenarios. A [Kubernetes _Headless Service_](https://kubernetes.io/docs/concepts/services-networking/service/#headless-services), for example, creates the right DNS configuration automatically, allowing you to bootstrap a service using a Headless Service. The following, very simple, Headless Service definition would mean the hostname `rqlite` would resolve to the IP addresses of all rqlite Pods that were part of this service.
+DNS-based approaches can be quite useful for many deployment scenarios, in particular systems like Kubernetes and Consul. A [Kubernetes _Headless Service_](https://kubernetes.io/docs/concepts/services-networking/service/#headless-services), for example, creates the right DNS configuration automatically, allowing you to bootstrap a service using a Headless Service. The following, very simple, Headless Service definition would mean the hostname `rqlite` would resolve to the IP addresses of all rqlite Pods that were part of this service.
 ```yaml
 apiVersion: v1
 kind: Service
