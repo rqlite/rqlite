@@ -142,4 +142,4 @@ When using Automatic Bootstrapping, each node notifies all other nodes of its ex
 
 When using either Consul or etcd for automatic clustering, rqlite uses the key-value store of each system. In each case the Leader atomically sets its HTTP URL, allowing other nodes to discover it. To prevent multiple nodes updating the Leader key at once, nodes uses a check-and-set operation, only updating the Leader key if it's value has not changed since it was last read by the node. See [this blog post](https://www.philipotoole.com/rqlite-7-0-designing-node-discovery-and-automatic-clustering/) for more details on the design.
 
-For DNS-based discovery, the rqlite nodes simply resolve the hostname, and uses the returned network addresses, once the number of returned addresses is at least as great as the `-bootstrap-expect` value.
+For DNS-based discovery, the rqlite nodes simply resolve the hostname, and use the returned network addresses, once the number of returned addresses is at least as great as the `-bootstrap-expect` value. Clustering then proceeds as though the network addresses were passed at the command line via `-join`.
