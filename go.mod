@@ -21,12 +21,12 @@ require (
 	github.com/mkideal/pkg v0.1.3
 	github.com/rqlite/go-sqlite3 v1.23.0
 	github.com/rqlite/raft-boltdb v0.0.0-20211018013422-771de01086ce
-	github.com/rqlite/rqlite-disco-clients v0.0.0-20220131060406-a38fe9412050
+	github.com/rqlite/rqlite-disco-clients v0.0.0-20220131224204-89526395d510
 	go.etcd.io/bbolt v1.3.6
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.7.0 // indirect
 	go.uber.org/zap v1.20.0 // indirect
-	golang.org/x/crypto v0.0.0-20220128200615-198e4374d7ed
+	golang.org/x/crypto v0.0.0-20220131195533-30dcbda58838
 	golang.org/x/net v0.0.0-20220127200216-cd36cc0744dd
 	golang.org/x/sys v0.0.0-20220128215802-99c3d69c2c27 // indirect
 	google.golang.org/genproto v0.0.0-20220126215142-9970aeb2e350 // indirect
