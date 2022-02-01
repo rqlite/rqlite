@@ -1067,6 +1067,7 @@ class TestEndToEndNonVoterFollowsLeader(unittest.TestCase):
     n0 = self.cluster.wait_for_leader().stop()
     n1 = self.cluster.wait_for_leader(node_exc=n0)
     n1.wait_for_all_applied()
+    n1.query('SELECT count(*) FROM foo', level='strong') ## Send one more operation through log before query.
     j = n1.query('SELECT * FROM foo')
     self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
     j = n1.execute('INSERT INTO foo(name) VALUES("declan")')
