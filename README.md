@@ -26,7 +26,7 @@ rqlite uses [Raft](https://raft.github.io/) to achieve consensus across all the 
 - Choice of [read consistency levels](https://github.com/rqlite/rqlite/blob/master/DOC/CONSISTENCY.md).
 - Optional [read-only (non-voting) nodes](https://github.com/rqlite/rqlite/blob/master/DOC/READ_ONLY_NODES.md), which can add read scalability to the system.
 - A form of transaction support.
-- Hot backups.
+- Hot [backups](https://github.com/rqlite/rqlite/blob/master/DOC/BACKUPS.md), as well as [load directly from SQLite](https://github.com/rqlite/rqlite/blob/master/DOC/RESTORE_FROM_SQLITE.md).
 
 ## Quick Start
 _Detailed documentation [is available](https://github.com/rqlite/rqlite/tree/master/DOC). You may also wish to check out the [rqlite Google Group](https://groups.google.com/forum/#!forum/rqlite)._
