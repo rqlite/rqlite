@@ -50,6 +50,8 @@ docker run rqlite/rqlite -bootstrap-expect 3 -join http://$IP1:4001,http://$IP2:
 ```
 where `$IP[1-3]` are the expected network addresses of the containers.
 
+__________________________
+
 ### Using DNS for Bootstrapping
 You can also use the Domain Name System (DNS) to bootstrap a cluster. This is similar to automatic clustering, but doesn't require you to specify the network addresses at the command line. Instead you create a DNS record for the host `rqlite`, with an [A Record](https://www.cloudflare.com/learning/dns/dns-records/dns-a-record/) for each rqlite node's HTTP IP address. 
 
@@ -88,6 +90,8 @@ spec:
 ```
 This is just an example. A real Kubernetes deployment will also require [Persistent Volumes](https://kubernetes.io/docs/concepts/storage/persistent-volumes/) and (most likely) a [StatefulSet](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/).
 
+__________________________
+
 ### Consul
 Another approach uses [Consul](https://www.consul.io/) to coordinate clustering. The advantage of this approach is that you do need to know the network addresses of the nodes ahead of time.
 
@@ -116,6 +120,7 @@ It's even easier with Docker, as you can launch every node almost identically:
 ```bash
 docker run rqlite/rqlite -disco-mode=consul-kv -disco-config '{"address": "example.com:8500"}'
 ```
+__________________________
 
 ### etcd
 A third approach uses [etcd](https://www.etcd.io/) to coordinate clustering. Autoclustering with etcd is very similar to Consul. Like when you use Consul, the advantage of this approach is that you do need to know the network addresses of the nodes ahead of time.
@@ -146,9 +151,9 @@ docker run rqlite/rqlite -disco-mode=etcd-kv -disco-config '{"endpoints": ["exam
 
 ## Next Steps
 ### Customizing your configuration
-For detailed control over Discovery configuration `-disco-confg` can either be an actual JSON string, or a path to a file containing a JSON-formatted configuration. The former option may be more convenient if the configuration you need to supply is very short, as in the example above.
+For detailed control over Discovery configuration `-disco-confg` can either be an actual JSON string, or a path to a file containing a JSON-formatted configuration. The former option may be more convenient if the configuration you need to supply is very short, as in the examples above.
 
-The example above demonstrates a simple configuration, and most real deployments may require detailed configuration. For example, your Consul system might be reachable over HTTPS. To more fully configure rqlite for Discovery, consult the relevant configuration specification below. You must create a JSON-formatted file which matches that described in the source code.
+The examples above demonstrates simple configurations, and most real deployments may require mroe detailed configuration. For example, your Consul system might be reachable over HTTPS. To more fully configure rqlite for Discovery, consult the relevant configuration specification below. You must create a JSON-formatted configuration which matches that described in the source code.
 
 - [Full Consul configuration description](https://github.com/rqlite/rqlite-disco-clients/blob/main/consul/config.go)
 - [Full etcd configuration description](https://github.com/rqlite/rqlite-disco-clients/blob/main/etcd/config.go)
@@ -156,7 +161,7 @@ The example above demonstrates a simple configuration, and most real deployments
 - [Full DNS SRV configuration description](https://github.com/rqlite/rqlite-disco-clients/blob/main/dnssrv/config.go)
 
 #### Running multiple different clusters
-If you wish a single Consul or etcd system to support multiple rqlite clusters, then set the `-disco-key` command line argument to a different value for each cluster.
+If you wish a single Consul or etcd key-value system to support multiple rqlite clusters, then set the `-disco-key` command line argument to a different value for each cluster. To run multiple rqlite clusters with DNS, use a different domain name per cluster.
 
 ## Design
 When using Automatic Bootstrapping, each node notifies all other nodes of its existence. The first node to have a record of enough nodes (set by `-boostrap-expect`) forms the cluster. Only one node can ever form a cluster, any node that attempts to do so later will fail, and instead become Followers in the new cluster.
