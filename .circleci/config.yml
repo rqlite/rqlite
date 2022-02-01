@@ -73,6 +73,14 @@ jobs:
             environment:
                 RQLITED_PATH: /go/bin/rqlited
 
+  kubernetes_integration:
+    working_directory: /go/src/github.com/rqlite/rqlite
+    steps:
+      #- checkout
+      #- run: go install ./...
+      - run: curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+      - run: sudo install minikube-linux-amd64 /usr/local/bin/minikube
+
 workflows:
   version: 2
   build_and_test:
