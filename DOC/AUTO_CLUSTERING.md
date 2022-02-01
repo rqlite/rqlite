@@ -13,7 +13,7 @@ This document describes various ways to dynamically form rqlite clusters, which 
 * [Next steps](#next-steps)
   * [Customizing your configuration](#customizing-your-configuration)
     * [Running multiple different clusters](#running-multiple-different-clusters)
-* [Design](design)
+* [Design](#design)
 
 ## Quickstart
 
