@@ -1,11 +1,24 @@
 package store
 
 import (
+	"fmt"
 	"net"
 	"time"
 
 	"github.com/hashicorp/raft"
 )
+
+type hAddr struct {
+	addr string
+}
+
+func (h *hAddr) Network() string {
+	return "tcp"
+}
+
+func (h *hAddr) String() string {
+	return h.addr
+}
 
 // Listener is the interface expected by the Store for Transports.
 type Listener interface {
@@ -42,5 +55,6 @@ func (t *Transport) Close() error {
 
 // Addr returns the binding address of the transport.
 func (t *Transport) Addr() net.Addr {
-	return t.ln.Addr()
+	_, port, _ := net.SplitHostPort(t.ln.Addr().String())
+	return &hAddr{fmt.Sprintf("localhost:%s", port)}
 }
