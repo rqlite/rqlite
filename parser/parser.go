@@ -18,5 +18,26 @@ func ReplaceRandom(s string, f func() uint64) string {
 	} else {
 		n = rand.Uint64()
 	}
+
+	state := 0
+
+	for {
+
+	}
+	builder := strings.Builder
+	for i := range s {
+		c := s[i]
+		if c == '\'' {
+			if singleQuoted {
+				singleQuoted = false
+			}
+		}
+		if c == '"' {
+			if doubleQuoted {
+				doubleQuoted = false
+			}
+		}
+
+	}
 	return strings.ReplaceAll(s, "random()", strconv.Itoa(int(n)))
 }

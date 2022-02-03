@@ -99,7 +99,7 @@ Since the Raft log is the authoritative store for all data, and it is stored on 
 ## Limitations
  * In-memory databases are currently limited to 2GiB (2147483648 bytes) in size. You can learn more about possible ways to get around this limit in the [documentation](https://github.com/rqlite/rqlite/blob/master/DOC/PERFORMANCE.md#in-memory-database-limits).
 
- * Some [__non-deterministic__ functions](https://www.sqlite.org/deterministic.html) are safe to use with rqlite, because rqlite replaces the non-determinstic function with a suitable value before writigng the SQL statement to the Raft log, and then sending the statement to each node. The following non-deterministic SQLite functions are safe to use with rqlite:
+ * Some [__non-deterministic__ functions](https://www.sqlite.org/deterministic.html) are safe to use with rqlite, because rqlite replaces the non-determinstic function with a suitable value before writing the SQL statement to the Raft log. This ensures that each node executes exactly the same SQL statement. The following non-deterministic SQLite functions are safe to use with rqlite:
 
     * `random()`
 

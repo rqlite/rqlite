@@ -56,8 +56,16 @@ WHERE x=1234`,
 		// 	out: `SELECT FROM foo WHERE x="'random()'",
 		// },
 		// {
+		// 	in:  `SELECT FROM foo WHERE x="\"random()"`,
+		// 	out: `SELECT FROM foo WHERE x="\"random()"`,
+		// },
+		// {
 		// 	in:  "SELECT FROM foo WHERE x=RAnDOM()",
 		// 	out: "SELECT FROM foo WHERE x=1234",
+		// },
+		// {
+		// 	in:  "SELECT FROM foo WHERE x=RAnDOM() AND y=999",
+		// 	out: "SELECT FROM foo WHERE x=1234 AND y=999",
 		// },
 		// {
 		// 	in:  "SELECT FROM foo WHERE x=RAnDOM()",
