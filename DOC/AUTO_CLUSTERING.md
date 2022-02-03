@@ -58,7 +58,7 @@ You can also use the Domain Name System (DNS) to bootstrap a cluster. This is si
 To launch a node using DNS boostrap, execute the following (example) command:
 ```bash
 rqlited -node-id $ID1  -http-addr=$IP1:4001 -raft-addr=$IP1:4002 \
--disco-mode=dns -disco-config='{"name": "rqlite.local"}' -bootstrap-expect 3 data
+-disco-mode=dns -disco-config='{"name":"rqlite.local"}' -bootstrap-expect 3 data
 ```
 You would launch other nodes similarly.
 
@@ -68,7 +68,7 @@ Using [DNS SRV](https://www.cloudflare.com/learning/dns/dns-records/dns-srv-reco
 To launch a node using DNS SRV boostrap, execute the following (example) command:
 ```bash
 rqlited -node-id $ID1  -http-addr=$IP1:4001 -raft-addr=$IP1:4002 \
--disco-mode=dns-srv -disco-config='{"name": "rqlite.local", "service": "rqlite-svc"}' -bootstrap-expect 3 data
+-disco-mode=dns-srv -disco-config='{"name":"rqlite.local","service":"rqlite-svc"}' -bootstrap-expect 3 data
 ```
 You would launch other nodes similarly.
 
@@ -100,17 +100,17 @@ Let's assume your Consul cluster is running at `http://example.com:8500`. Let's 
 Node 1:
 ```bash
 rqlited -node-id $ID1 -http-addr=$IP1:4001 -raft-addr=$IP1:4002 \
--disco-mode consul-kv -disco-config '{"address": "example.com:8500"}' data
+-disco-mode consul-kv -disco-config '{"address":"example.com:8500"}' data
 ```
 Node 2:
 ```bash
 rqlited -node-id $ID2 -http-addr=$IP2:4001 -raft-addr=$IP2:4002 \
--disco-mode consul-kv -disco-config '{"address": "example.com:8500"}' data
+-disco-mode consul-kv -disco-config '{"address":"example.com:8500"}' data
 ```
 Node 3:
 ```bash
 rqlited -node-id $ID3 -http-addr=$IP3:4001 -raft-addr=$IP3:4002 \
--disco-mode consul-kv -disco-config '{"address": "example.com:8500"}' data
+-disco-mode consul-kv -disco-config '{"address":"example.com:8500"}' data
 ```
 
 These three nodes will automatically find each other, and cluster. You can start the nodes in any order and at anytime. Furthermore, the cluster Leader will continually update Consul with its address. This means other nodes can be launched later and automatically join the cluster, even if the Leader changes.
@@ -118,7 +118,7 @@ These three nodes will automatically find each other, and cluster. You can start
 #### Docker
 It's even easier with Docker, as you can launch every node almost identically:
 ```bash
-docker run rqlite/rqlite -disco-mode=consul-kv -disco-config '{"address": "example.com:8500"}'
+docker run rqlite/rqlite -disco-mode=consul-kv -disco-config '{"address":"example.com:8500"}'
 ```
 __________________________
 
@@ -130,23 +130,23 @@ Let's assume etcd is available at `example.com:2379`.
 Node 1:
 ```bash
 rqlited -node-id $ID1 -http-addr=$IP1:4001 -raft-addr=$IP1:4002 \
-	-disco-mode etcd-kv -disco-config '{"endpoints": ["example.com:2379"]}' data
+	-disco-mode etcd-kv -disco-config '{"endpoints":["example.com:2379"]}' data
 ```
 Node 2:
 ```bash
 rqlited -node-id $ID2 -http-addr=$IP2:4001 -raft-addr=$IP2:4002 \
-	-disco-mode etcd-kv -disco-config '{"endpoints": ["example.com:2379"]}' data
+	-disco-mode etcd-kv -disco-config '{"endpoints":["example.com:2379"]}' data
 ```
 Node 3:
 ```bash
 rqlited -node-id $ID3 -http-addr=$IP3:4001 -raft-addr=$IP3:4002 \
-	-disco-mode etcd-kv -disco-config '{"endpoints": ["example.com:2379"]}' data
+	-disco-mode etcd-kv -disco-config '{"endpoints":["example.com:2379"]}' data
 ```
  Like with Consul autoclustering, the cluster Leader will continually report its address to etcd.
 
  #### Docker
 ```bash
-docker run rqlite/rqlite -disco-mode=etcd-kv -disco-config '{"endpoints": ["example.com:2379"]}'
+docker run rqlite/rqlite -disco-mode=etcd-kv -disco-config '{"endpoints":["example.com:2379"]}'
 ```
 
 ## Next Steps
