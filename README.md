@@ -103,7 +103,7 @@ Since the Raft log is the authoritative store for all data, and it is stored on 
 
     * `random()`
 
- Other non-deterministic functions are not yet supported.
+   Other non-deterministic functions are not yet supported.
 
  * This has not been extensively tested, but you can directly read the SQLite file under any node at anytime, assuming you run in "on-disk" mode. However there is no guarantee that the SQLite file reflects all the changes that have taken place on the cluster unless you are sure the host node itself has received and applied all changes.
  * In case it isn't obvious, rqlite does not replicate any changes made directly to any underlying SQLite file, when run in "on disk" mode. **If you change the SQLite file directly, you may cause rqlite to fail**. Only modify the database via the HTTP API.
