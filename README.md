@@ -101,7 +101,7 @@ Since the Raft log is the authoritative store for all data, and it is stored on 
 
  * Some [__non-deterministic__ functions](https://www.sqlite.org/deterministic.html) are safe to use with rqlite, because rqlite replaces the non-determinstic function with a suitable value before writigng the SQL statement to the Raft log, and then sending the statement to each node. The following non-deterministic SQLite functions are safe to use with rqlite:
 
- - `random()`
+    * `random()`
 
  Other non-deterministic functions are not yet supported.
 
