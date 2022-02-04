@@ -46,6 +46,13 @@ spec:
         ports:
         - containerPort: 4001
           name: rqlite
+        readinessProbe:
+          httpGet:
+            scheme: HTTP
+            path: /readyz?noleader
+            port: 4001
+          initialDelaySeconds: 10
+          periodSeconds: 5
         volumeMounts:
         - name: rqlite-file
           mountPath: /rqlite/file
