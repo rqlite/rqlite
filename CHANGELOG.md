@@ -1,4 +1,8 @@
-## 7.2.1 (unreleased)
+## 8.0.0 (unreleased)
+With this release rqlite networking is based on hostnames only, if hostnames are passed to it at the command line. Hostnames are no longer resolved into network addresses internally by rqlite, and only the low-level networking layers will do so. This allows rqlite to operate correctly even when cluster node IP addresses change, as long as the hostnames remain the same. This is common in deployment environments such as Kubernetes, particularly when using [StatefulSets](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/).
+
+Upgrading an earlier cluster to this release is possible, simply by explicitly setting the IP address of each node at the command line. Alternatively, simply [backup your previous node](https://github.com/rqlite/rqlite/blob/master/DOC/BACKUPS.md) and [restore it](https://github.com/rqlite/rqlite/blob/master/DOC/RESTORE_FROM_SQLITE.md) into a new 8.0 cluster. **In any event, backing up your data is always recommended before any upgrade takes place.**
+
 ### Implementation changes and bug fixes
 - [PR #993](https://github.com/rqlite/rqlite/pull/993): Don't resolve network addresses. Fixes [issue #595](https://github.com/rqlite/rqlite/issues/695), and [issue #774](https://github.com/rqlite/rqlite/issues/744), and [issue #991](https://github.com/rqlite/rqlite/issues/991).
 
