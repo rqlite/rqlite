@@ -66,6 +66,8 @@ spec:
         requests:
           storage: 1Gi
 ```
+Apply this configuration to your Kubernetes system, and a 3-node rqlite cluster will be created.
+
 Note the `args` passed to rqlite. The arguments tell rqlite to use `dns` discovery mode, and to resolve the DNS name `rqlite-svc` to find the IP addresses of other nodes in the cluster. Furthermore it tells rqlite to wait until three nodes are available (counting itself as one of those nodes) before attempting to form a cluster.
 
 ## Scaling the cluster
