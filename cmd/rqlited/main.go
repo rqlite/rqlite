@@ -275,7 +275,9 @@ func startNodeMux(cfg *Config, ln net.Listener) (*tcp.Mux, error) {
 		log.Printf("enabling node-to-node encryption with cert: %s, key: %s", cfg.NodeX509Cert, cfg.NodeX509Key)
 		mux, err = tcp.NewTLSMux(ln, adv, cfg.NodeX509Cert, cfg.NodeX509Key, cfg.NodeX509CACert)
 	} else {
-		mux, err = tcp.NewMux(ln, tcp.NameAddress{cfg.RaftAdv})
+		mux, err = tcp.NewMux(ln, tcp.NameAddress{
+			Address: cfg.RaftAdv,
+		})
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to create node-to-node mux: %s", err.Error())
