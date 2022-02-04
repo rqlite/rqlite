@@ -260,6 +260,12 @@ class Node(object):
   def num_join_requests(self):
     return int(self.expvar()['http']['joins'])
 
+  def num_snapshots(self):
+    return int(self.expvar()['store']['num_snapshots'])
+
+  def num_restores(self):
+    return int(self.expvar()['store']['num_restores'])
+
   def wait_for_fsm_index(self, index, timeout=TIMEOUT):
     '''
     Wait until the given index has been applied to the state machine.
@@ -308,6 +314,19 @@ class Node(object):
       time.sleep(1)
       t+=1
     return self.fsm_index()
+
+  def wait_for_restores(self, num, timeout=TIMEOUT):
+    '''
+    Wait until the number of snapshot-restores on this node reach
+    the given value.
+    '''
+    t = 0
+    while self.num_restores() != num:
+      if t > timeout:
+        raise Exception('wait_for_restores timeout wanted %d, got %d' % (num, self.num_restores()))
+      time.sleep(1)
+      t+=1
+    return self.num_restores()
 
   def query(self, statement, params=None, level='weak', pretty=False, text=False):
     body = [statement]
@@ -566,7 +585,7 @@ class TestSingleNode(unittest.TestCase):
     timeout = 10
     t = 0
     while True:
-      nSnaps = n.expvar()['store']['num_snapshots']
+      nSnaps = n.num_snapshots()
       if nSnaps > 0:
         return
       if t > timeout:
@@ -1170,7 +1189,7 @@ class TestEndToEndSnapRestoreCluster(unittest.TestCase):
     while True:
       if t > timeout:
         raise Exception('timeout')
-      if self.n0.expvar()['store']['num_snapshots'] is n:
+      if self.n0.num_snapshots() is n:
         break
       time.sleep(1)
       t+=1
@@ -1236,9 +1255,17 @@ class TestEndToEndSnapRestoreCluster(unittest.TestCase):
     self.n0.execute('INSERT INTO foo(name) VALUES("fiona")')
     self.n2.query('SELECT count(*) FROM foo', level='strong')
 
-    self.n2.wait_for_fsm_index(self.n0.fsm_index())
-    j = self.n2.query('SELECT count(*) FROM foo', level='none')
-    self.assertEqual(j, d_("{'results': [{'values': [[402]], 'types': [''], 'columns': ['count(*)']}]}"))
+    # Snapshot testing is tricky, as it's so timing-based -- and therefore hard to predict.
+    # So adopt a polling approach.
+    t = 0
+    while True:
+      if t > TIMEOUT:
+        raise Exception('timeout waiting for n2 to have all data')
+      j = self.n2.query('SELECT count(*) FROM foo', level='none')
+      if j == d_("{'results': [{'values': [[402]], 'types': [''], 'columns': ['count(*)']}]}"):
+        break
+      time.Sleep(1)
+      t+=1
 
   def tearDown(self):
     deprovision_node(self.n0)
