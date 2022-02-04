@@ -20,7 +20,7 @@ spec:
 ```
 Apply the configuration above to your Kubernetes deployment. It will create a DNS entry `rqlite-svc`, which will resolve to the IP addresses of any Pods with the tag `rqlite`.
 
-### Create a StatefuiSet
+### Create a StatefulSet
 For an rqlite cluster to function properly in a production environment, the rqlite nodes require a persistent network identifier and storage. This is what a StatefulSet can provide. The example belows shows you how to configure a 3-node rqlite cluster.
 ```yaml
 apiVersion: apps/v1
