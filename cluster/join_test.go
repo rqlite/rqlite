@@ -38,7 +38,7 @@ func Test_SingleJoinOK(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	joiner := NewJoiner("127.0.0.1", numAttempts, attemptInterval, nil)
+	joiner := NewJoiner("127.0.0.1", numAttempts, attemptInterval, nil, false)
 
 	j, err := joiner.Do([]string{ts.URL}, "id0", "127.0.0.1:9090", false)
 	if err != nil {
@@ -88,7 +88,7 @@ func Test_SingleJoinOKBasicAuth(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	joiner := NewJoiner("127.0.0.1", numAttempts, attemptInterval, nil)
+	joiner := NewJoiner("127.0.0.1", numAttempts, attemptInterval, nil, false)
 	joiner.SetBasicAuth("user1", "password1")
 
 	j, err := joiner.Do([]string{ts.URL}, "id0", "127.0.0.1:9090", false)
@@ -115,7 +115,7 @@ func Test_SingleJoinZeroAttempts(t *testing.T) {
 		t.Fatalf("handler should not have been called")
 	}))
 
-	joiner := NewJoiner("127.0.0.1", 0, attemptInterval, nil)
+	joiner := NewJoiner("127.0.0.1", 0, attemptInterval, nil, false)
 	_, err := joiner.Do([]string{ts.URL}, "id0", "127.0.0.1:9090", false)
 	if err != ErrJoinFailed {
 		t.Fatalf("Incorrect error returned when zero attempts specified")
@@ -128,7 +128,7 @@ func Test_SingleJoinFail(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	joiner := NewJoiner("", 0, attemptInterval, nil)
+	joiner := NewJoiner("", 0, attemptInterval, nil, false)
 	_, err := joiner.Do([]string{ts.URL}, "id0", "127.0.0.1:9090", true)
 	if err == nil {
 		t.Fatalf("expected error when joining bad node")
@@ -143,7 +143,7 @@ func Test_DoubleJoinOK(t *testing.T) {
 	}))
 	defer ts2.Close()
 
-	joiner := NewJoiner("127.0.0.1", numAttempts, attemptInterval, nil)
+	joiner := NewJoiner("127.0.0.1", numAttempts, attemptInterval, nil, false)
 
 	j, err := joiner.Do([]string{ts1.URL, ts2.URL}, "id0", "127.0.0.1:9090", true)
 	if err != nil {
@@ -163,7 +163,7 @@ func Test_DoubleJoinOKSecondNode(t *testing.T) {
 	}))
 	defer ts2.Close()
 
-	joiner := NewJoiner("", numAttempts, attemptInterval, nil)
+	joiner := NewJoiner("", numAttempts, attemptInterval, nil, false)
 
 	j, err := joiner.Do([]string{ts1.URL, ts2.URL}, "id0", "127.0.0.1:9090", true)
 	if err != nil {
@@ -185,7 +185,7 @@ func Test_DoubleJoinOKSecondNodeRedirect(t *testing.T) {
 	}))
 	defer ts2.Close()
 
-	joiner := NewJoiner("127.0.0.1", numAttempts, attemptInterval, nil)
+	joiner := NewJoiner("127.0.0.1", numAttempts, attemptInterval, nil, false)
 
 	j, err := joiner.Do([]string{ts2.URL}, "id0", "127.0.0.1:9090", true)
 	if err != nil {
