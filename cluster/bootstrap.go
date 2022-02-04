@@ -48,12 +48,12 @@ type Bootstrapper struct {
 }
 
 // NewBootstrapper returns an instance of a Bootstrapper.
-func NewBootstrapper(p AddressProvider, expect int, tlsConfig *tls.Config) *Bootstrapper {
+func NewBootstrapper(p AddressProvider, expect int, tlsConfig *tls.Config, resolve bool) *Bootstrapper {
 	bs := &Bootstrapper{
 		provider:  p,
 		expect:    expect,
 		tlsConfig: &tls.Config{InsecureSkipVerify: true},
-		joiner:    NewJoiner("", 1, 0, tlsConfig),
+		joiner:    NewJoiner("", 1, 0, tlsConfig, resolve),
 		logger:    log.New(os.Stderr, "[cluster-bootstrap] ", log.LstdFlags),
 		Interval:  jitter(5 * time.Second),
 	}

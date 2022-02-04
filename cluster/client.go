@@ -49,11 +49,7 @@ func (c *Client) SetLocal(nodeAddr string, serv *Service) error {
 	c.lMu.Lock()
 	defer c.lMu.Unlock()
 
-	adv, err := net.ResolveTCPAddr("tcp", nodeAddr)
-	if err != nil {
-		return fmt.Errorf("failed to resolve advertise address %s: %s", nodeAddr, err.Error())
-	}
-	c.localNodeAddr = adv.String()
+	c.localNodeAddr = nodeAddr
 	c.localServ = serv
 	return nil
 }

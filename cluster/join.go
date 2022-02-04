@@ -37,6 +37,7 @@ type Joiner struct {
 	numAttempts     int
 	attemptInterval time.Duration
 	tlsConfig       *tls.Config
+	resolve         bool
 
 	username string
 	password string
@@ -48,7 +49,7 @@ type Joiner struct {
 
 // NewJoiner returns an instantiated Joiner.
 func NewJoiner(srcIP string, numAttempts int, attemptInterval time.Duration,
-	tlsCfg *tls.Config) *Joiner {
+	tlsCfg *tls.Config, resolve bool) *Joiner {
 
 	// Source IP is optional
 	var dialer *net.Dialer
@@ -66,6 +67,7 @@ func NewJoiner(srcIP string, numAttempts int, attemptInterval time.Duration,
 		numAttempts:     numAttempts,
 		attemptInterval: attemptInterval,
 		tlsConfig:       tlsCfg,
+		resolve:         resolve,
 		logger:          log.New(os.Stderr, "[cluster-join] ", log.LstdFlags),
 	}
 	if joiner.tlsConfig == nil {
@@ -114,14 +116,17 @@ func (j *Joiner) Do(joinAddrs []string, id, addr string, voter bool) (string, er
 }
 
 func (j *Joiner) join(joinAddr, id, addr string, voter bool) (string, error) {
-	// Join using IP address, as that is what Hashicorp Raft works in.
-	// resv, err := net.ResolveTCPAddr("tcp", addr)
-	// if err != nil {
-	// 	return "", err
-	// }
+	resvAddr := joinAddr
+	if j.resolve {
+		resv, err := net.ResolveTCPAddr("tcp", addr)
+		if err != nil {
+			return "", err
+		}
+		resvAddr = resv.String()
+	}
 
 	// Check for protocol scheme, and insert default if necessary.
-	fullAddr := httpd.NormalizeAddr(fmt.Sprintf("%s/join", joinAddr))
+	fullAddr := httpd.NormalizeAddr(fmt.Sprintf("%s/join", resvAddr))
 
 	for {
 		b, err := json.Marshal(map[string]interface{}{

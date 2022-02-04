@@ -270,9 +270,13 @@ func startNodeMux(cfg *Config, ln net.Listener) (*tcp.Mux, error) {
 	var adv net.Addr
 	var err error
 
-	adv, err = net.ResolveTCPAddr("tcp", cfg.RaftAdv)
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve advertise address %s: %s", cfg.RaftAdv, err.Error())
+	if !cfg.Hostnames {
+		adv, err = net.ResolveTCPAddr("tcp", cfg.RaftAdv)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve advertise address %s: %s", cfg.RaftAdv, err.Error())
+		}
+	} else {
+		adv = tcp.NameAddress{cfg.RaftAdv}
 	}
 
 	var mux *tcp.Mux
@@ -332,7 +336,7 @@ func createCluster(cfg *Config, tlsConfig *tls.Config, hasPeers bool, str *store
 	}
 
 	// Prepare the Joiner
-	joiner := cluster.NewJoiner(cfg.JoinSrcIP, cfg.JoinAttempts, cfg.JoinInterval, tlsConfig)
+	joiner := cluster.NewJoiner(cfg.JoinSrcIP, cfg.JoinAttempts, cfg.JoinInterval, tlsConfig, false)
 	if cfg.JoinAs != "" {
 		pw, ok := credStr.Password(cfg.JoinAs)
 		if !ok {
@@ -365,7 +369,7 @@ func createCluster(cfg *Config, tlsConfig *tls.Config, hasPeers bool, str *store
 		}
 
 		bs := cluster.NewBootstrapper(cluster.NewAddressProviderString(joins),
-			cfg.BootstrapExpect, tlsConfig)
+			cfg.BootstrapExpect, tlsConfig, !cfg.Hostnames)
 		if cfg.JoinAs != "" {
 			pw, ok := credStr.Password(cfg.JoinAs)
 			if !ok {
@@ -415,7 +419,7 @@ func createCluster(cfg *Config, tlsConfig *tls.Config, hasPeers bool, str *store
 			provider = dnssrv.New(dnssrvCfg)
 		}
 
-		bs := cluster.NewBootstrapper(provider, cfg.BootstrapExpect, tlsConfig)
+		bs := cluster.NewBootstrapper(provider, cfg.BootstrapExpect, tlsConfig, !cfg.Hostnames)
 		if cfg.JoinAs != "" {
 			pw, ok := credStr.Password(cfg.JoinAs)
 			if !ok {

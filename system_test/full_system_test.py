@@ -47,6 +47,7 @@ class Node(object):
                raft_addr=None, raft_adv=None,
                raft_voter=True,
                raft_snap_threshold=8192, raft_snap_int="1s",
+               hostnames=False,
                auth=None, dir=None, on_disk=False):
     if api_addr is None:
       s, addr = random_addr()
@@ -73,6 +74,7 @@ class Node(object):
     self.raft_voter = raft_voter
     self.raft_snap_threshold = raft_snap_threshold
     self.raft_snap_int = raft_snap_int
+    self.hostnames=hostnames
     self.auth = auth
     self.disco_key = random_string(10)
     self.on_disk = on_disk
@@ -128,6 +130,8 @@ class Node(object):
       command += ['-http-adv-addr', self.api_adv]
     if self.raft_adv is not None:
       command += ['-raft-adv-addr', self.raft_adv]
+    if self.hostnames:
+      command += ['-hostnames']
     if self.on_disk:
       command += ['-on-disk']
     if self.auth is not None:

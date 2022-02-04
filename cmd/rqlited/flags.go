@@ -74,6 +74,9 @@ type Config struct {
 	// RaftAdv is the advertised Raft server address.
 	RaftAdv string
 
+	// Hostnames tells rqlite to use hostnames only for networking
+	Hostnames bool
+
 	// JoinSrcIP sets the source IP address during Join request. May not be set.
 	JoinSrcIP string
 
@@ -325,6 +328,7 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	flag.StringVar(&config.AuthFile, "auth", "", "Path to authentication and authorization file. If not set, not enabled")
 	flag.StringVar(&config.RaftAddr, "raft-addr", "localhost:4002", "Raft communication bind address")
 	flag.StringVar(&config.RaftAdv, "raft-adv-addr", "", "Advertised Raft communication address. If not set, same as Raft bind")
+	flag.BoolVar(&config.Hostnames, "hostnames", false, "Use hostnames for all communications")
 	flag.StringVar(&config.JoinSrcIP, "join-source-ip", "", "Set source IP address during Join request")
 	flag.StringVar(&config.JoinAddr, "join", "", "Comma-delimited list of nodes, through which a cluster can be joined (proto://host:port)")
 	flag.StringVar(&config.JoinAs, "join-as", "", "Username in authentication file to join as. If not set, joins anonymously")
