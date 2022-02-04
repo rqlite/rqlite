@@ -31,7 +31,7 @@ spec:
   selector:
     matchLabels:
       app: rqlite # has to match .spec.template.metadata.labels
-  serviceName: "rqlite-svc"
+  serviceName: rqlite-svc
   replicas: 3 # by default is 1
   template:
     metadata:
@@ -51,7 +51,7 @@ spec:
             scheme: HTTP
             path: /readyz?noleader
             port: 4001
-          initialDelaySeconds: 10
+          initialDelaySeconds: 1
           periodSeconds: 5
         volumeMounts:
         - name: rqlite-file
