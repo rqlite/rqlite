@@ -69,4 +69,6 @@ spec:
 Note the `args` passed to rqlite. The arguments tell rqlite to use `dns` discovery mode, and to resolve the DNS name `rqlite-svc` to find the IP addresses of other nodes in the cluster. Furthermore it tells rqlite to wait until three nodes are available (counting itself as one of those nodes) before attempting to form a cluster.
 
 ## Scaling the cluster
-You can grow the cluster at anytime, simply by increasing the replica count. Shrinking the cluster, however, will require some manual intervention. As well change the `replicas` value, you also need to [explicitly remove](https://github.com/rqlite/rqlite/blob/master/DOC/CLUSTER_MGMT.md#removing-or-replacing-a-node) the deprovisioned nodes, or the Leader will continually attempt to contact those nodes.
+You can grow the cluster at anytime, simply by increasing the replica count. Shrinking the cluster, however, will require some manual intervention. As well reducing the `replicas` value, you also need to [explicitly remove](https://github.com/rqlite/rqlite/blob/master/DOC/CLUSTER_MGMT.md#removing-or-replacing-a-node) the deprovisioned nodes, or the Leader will continually attempt to contact those nodes.
+
+> :warning: **Be careful not to shrink the cluster such that there is no longer a quorum of nodes available. If you do this you will render your cluster unusable, and need to perform a manual recovery.** The manual recovery process is [fully documented](https://github.com/rqlite/rqlite/blob/master/DOC/CLUSTER_MGMT.md#dealing-with-failure).

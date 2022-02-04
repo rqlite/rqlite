@@ -126,7 +126,7 @@ _This section borrows heavily from the Consul documentation._
 
 In the event that multiple rqlite nodes are lost, causing a loss of quorum and a complete outage, partial recovery is possible using data on the remaining nodes in the cluster. There may be data loss in this situation because multiple servers were lost, so information about what's committed could be incomplete. The recovery process implicitly commits all outstanding Raft log entries, so it's also possible to commit data -- and therefore change the SQLite database -- that was uncommitted before the failure.
 
-**You must also follow the recovery process if a cluster simply restarts, but all nodes (or a quorum of nodes) come up with different Raft IP addresses. This can happen in certain deployment configurations.**
+**You may also need to follow the recovery process if a cluster simply restarts, but all nodes (or a quorum of nodes) come up with different network identitiers. This can happen in certain deployment configurations.**
 
 To begin, stop all remaining nodes. You can attempt a graceful node-removal, but it will not work in most cases. Do not worry if the remove operation results in an error. The cluster is in an unhealthy state, so this is expected.
 
@@ -152,7 +152,7 @@ The next step is to go to the _data_ directory of each rqlite node. Inside that 
 ]
 ```
 
-`id` specifies the node ID of the server, which must not be changed from its previous value. The ID for a given node can be found in the logs when the node starts up if it was auto-generated. `address` specifies the desired Raft IP and port for the node, which does not need to be the same as previously. `non_voter` controls whether the server is a read-only node. If omitted, it will default to false, which is typical for most rqlite nodes.
+`id` specifies the node ID of the server, which must not be changed from its previous value. The ID for a given node can be found in the logs when the node starts up if it was auto-generated. `address` specifies the desired Raft IP and port for the node, which does not need to be the same as previously. You can use hostnames instead of IP addresses if you prefer. `non_voter` controls whether the server is a read-only node. If omitted, it will default to false, which is typical for most rqlite nodes.
 
 Next simply create entries for all nodes. You must confirm that nodes you do not include here have indeed failed and will not later rejoin the cluster. Ensure that this file is the same across all remaining rqlite nodes. At this point, you can restart your rqlite cluster.
 
