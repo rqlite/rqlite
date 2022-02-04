@@ -114,19 +114,13 @@ func (j *Joiner) Do(joinAddrs []string, id, addr string, voter bool) (string, er
 }
 
 func (j *Joiner) join(joinAddr, id, addr string, voter bool) (string, error) {
-	// Join using IP address, as that is what Hashicorp Raft works in.
-	resv, err := net.ResolveTCPAddr("tcp", addr)
-	if err != nil {
-		return "", err
-	}
-
 	// Check for protocol scheme, and insert default if necessary.
 	fullAddr := httpd.NormalizeAddr(fmt.Sprintf("%s/join", joinAddr))
 
 	for {
 		b, err := json.Marshal(map[string]interface{}{
 			"id":    id,
-			"addr":  resv.String(),
+			"addr":  addr,
 			"voter": voter,
 		})
 		if err != nil {

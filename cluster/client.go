@@ -44,16 +44,10 @@ func NewClient(dl Dialer) *Client {
 // SetLocal informs the client instance of the node address for the node
 // using this client. Along with the Service instance it allows this
 // client to serve requests for this node locally without the network hop.
-// Because Raft resolves advertised addresses, this function must too.
 func (c *Client) SetLocal(nodeAddr string, serv *Service) error {
 	c.lMu.Lock()
 	defer c.lMu.Unlock()
-
-	adv, err := net.ResolveTCPAddr("tcp", nodeAddr)
-	if err != nil {
-		return fmt.Errorf("failed to resolve advertise address %s: %s", nodeAddr, err.Error())
-	}
-	c.localNodeAddr = adv.String()
+	c.localNodeAddr = nodeAddr
 	c.localServ = serv
 	return nil
 }

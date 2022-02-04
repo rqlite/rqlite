@@ -1,3 +1,11 @@
+## 8.0.0 (unreleased)
+With this release rqlite networking is based on hostnames only, if hostnames are passed to it at the command line. Hostnames are no longer resolved into network addresses internally by rqlite, and only the low-level networking layers will do so. This allows rqlite to operate correctly even when cluster node IP addresses change, as long as the hostnames remain the same. This is common in deployment environments such as Kubernetes, particularly when using [StatefulSets](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/).
+
+Upgrading an earlier cluster to this release is possible, simply by explicitly setting the IP address of each node at the command line. Alternatively, simply [backup your previous node](https://github.com/rqlite/rqlite/blob/master/DOC/BACKUPS.md) and [restore it](https://github.com/rqlite/rqlite/blob/master/DOC/RESTORE_FROM_SQLITE.md) into a new 8.0 cluster. **In any event, backing up your data is always recommended before any upgrade takes place.**
+
+### Implementation changes and bug fixes
+- [PR #993](https://github.com/rqlite/rqlite/pull/993): Don't resolve network addresses. Fixes [issue #695](https://github.com/rqlite/rqlite/issues/695), and [issue #774](https://github.com/rqlite/rqlite/issues/744), and [issue #991](https://github.com/rqlite/rqlite/issues/991).
+
 ## 7.2.0 (February 1st 2022)
 This release introduces supported for [DNS-based](https://www.cloudflare.com/learning/dns/what-is-dns/) and [DNS SRV -based](https://www.cloudflare.com/learning/dns/dns-records/dns-srv-record/) autoclustering. rqlite can now lookup a DNS record for specified host, and use the network addresses returned to bootstrap the cluster. This can make it much easier to create rqlite clusters using the kinds of Service-Discovery mechanisms you find on Consul and Kubernetes, which are often based on DNS. See the [documentation](https://github.com/rqlite/rqlite/blob/master/DOC/AUTO_CLUSTERING.md) for full details on using DNS-based autoclustering.
 

@@ -270,17 +270,14 @@ func startNodeMux(cfg *Config, ln net.Listener) (*tcp.Mux, error) {
 	var adv net.Addr
 	var err error
 
-	adv, err = net.ResolveTCPAddr("tcp", cfg.RaftAdv)
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve advertise address %s: %s", cfg.RaftAdv, err.Error())
-	}
-
 	var mux *tcp.Mux
 	if cfg.NodeEncrypt {
 		log.Printf("enabling node-to-node encryption with cert: %s, key: %s", cfg.NodeX509Cert, cfg.NodeX509Key)
 		mux, err = tcp.NewTLSMux(ln, adv, cfg.NodeX509Cert, cfg.NodeX509Key, cfg.NodeX509CACert)
 	} else {
-		mux, err = tcp.NewMux(ln, adv)
+		mux, err = tcp.NewMux(ln, tcp.NameAddress{
+			Address: cfg.RaftAdv,
+		})
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to create node-to-node mux: %s", err.Error())
@@ -325,7 +322,7 @@ func createCluster(cfg *Config, tlsConfig *tls.Config, hasPeers bool, str *store
 	if joins == nil && cfg.DiscoMode == "" && !hasPeers {
 		// Brand new node, told to bootstrap itself. So do it.
 		log.Println("bootstraping single new node")
-		if err := str.Bootstrap(store.NewServer(str.ID(), str.Addr(), true)); err != nil {
+		if err := str.Bootstrap(store.NewServer(str.ID(), cfg.RaftAdv, true)); err != nil {
 			return fmt.Errorf("failed to bootstrap single new node: %s", err.Error())
 		}
 		return nil
