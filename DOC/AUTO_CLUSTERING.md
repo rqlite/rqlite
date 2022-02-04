@@ -8,7 +8,7 @@ This document describes various ways to dynamically form rqlite clusters, which 
   * [Automatic Boostrapping](#automatic-bootstrapping)
   * [Using DNS for Bootstrapping](#using-dns-for-bootstrapping)
     * [DNS SRV](#dns-srv)
-    * [Kubernetes](#kubernetes)
+  * [Kubernetes](#kubernetes)
   * [Consul](#consul)
   * [etcd](#etcd)
 * [Next steps](#next-steps)
@@ -71,25 +71,10 @@ rqlited -node-id $ID1  -http-addr=$IP1:4001 -raft-addr=$IP1:4002 \
 -disco-mode=dns-srv -disco-config='{"name":"rqlite.local","service":"rqlite-svc"}' -bootstrap-expect 3 data
 ```
 You would launch other nodes similarly.
+__________________________
 
-#### Kubernetes
-DNS-based approaches can be quite useful for many deployment scenarios, in particular systems like Kubernetes and Consul. A [Kubernetes _Headless Service_](https://kubernetes.io/docs/concepts/services-networking/service/#headless-services), for example, creates the right DNS configuration automatically, allowing you to bootstrap a service using a Headless Service. The following, very simple, Headless Service definition would mean the hostname `rqlite-svc` would resolve to the IP addresses of all rqlite Pods that were part of this service. This means you would pass `-disco-mode=dns -disco-config='{"name": "rqlite-svc"}'` to every rqlite node.
-```yaml
-apiVersion: v1
-kind: Service
-metadata:
-  name: rqlite-svc
-spec:
-  clusterIP: None 
-  selector:
-    app: rqlite
-  ports:
-    - protocol: TCP
-      port: 4001
-      targetPort: 4001
-```
-This is just an example. A real Kubernetes deployment will also require [Persistent Volumes](https://kubernetes.io/docs/concepts/storage/persistent-volumes/) and (most likely) a [StatefulSet](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/).
-
+### Kubernetes
+DNS-based approaches can be quite useful for many deployment scenarios, in particular systems like Kubernetes. To learn how to deploy rqlite on Kubernetes, check the [Kubernetes deployment guide](https://github.com/rqlite/rqlite/blob/master/DOC/KUBERNETES.md).
 __________________________
 
 ### Consul
