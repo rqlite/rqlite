@@ -1,3 +1,7 @@
+## 7.2.1 (unreleased)
+### Implementation changes and bug fixes
+- [PR #993](https://github.com/rqlite/rqlite/pull/993): Don't resolve network addresses. Fixes [issue #595](https://github.com/rqlite/rqlite/issues/695), and [issue #774](https://github.com/rqlite/rqlite/issues/744), and [issue #991](https://github.com/rqlite/rqlite/issues/991).
+
 ## 7.2.0 (February 1st 2022)
 This release introduces supported for [DNS-based](https://www.cloudflare.com/learning/dns/what-is-dns/) and [DNS SRV -based](https://www.cloudflare.com/learning/dns/dns-records/dns-srv-record/) autoclustering. rqlite can now lookup a DNS record for specified host, and use the network addresses returned to bootstrap the cluster. This can make it much easier to create rqlite clusters using the kinds of Service-Discovery mechanisms you find on Consul and Kubernetes, which are often based on DNS. See the [documentation](https://github.com/rqlite/rqlite/blob/master/DOC/AUTO_CLUSTERING.md) for full details on using DNS-based autoclustering.
 
