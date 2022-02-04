@@ -25,7 +25,7 @@ import unittest
 from urllib.parse import urlparse
 
 RQLITED_PATH = os.environ['RQLITED_PATH']
-TIMEOUT=10
+TIMEOUT=20
 
 def d_(s):
     return ast.literal_eval(s.replace("'", "\""))
@@ -155,7 +155,7 @@ class Node(object):
     t = 0
     while wait:
       if t > timeout:
-        raise Exception('timeout')
+        raise Exception('rqlite process failed to start within %d seconds' % timeout)
       try:
         self.status()
       except requests.exceptions.ConnectionError:
@@ -226,7 +226,7 @@ class Node(object):
     t = 0
     while lr == None or lr['addr'] == '':
       if t > timeout:
-        raise Exception('timeout')
+        raise Exception('rqlite node failed to detect leader within %d seconds' % timeout)
       try:
         lr = self.status()['store']['leader']
       except requests.exceptions.ConnectionError:
@@ -279,7 +279,7 @@ class Node(object):
     t = 0
     while self.commit_index() < index:
       if t > timeout:
-        raise Exception('timeout')
+        raise Exception('wait_for_commit_index timeout')
       time.sleep(1)
       t+=1
     return self.commit_index()
@@ -291,7 +291,7 @@ class Node(object):
     t = 0
     while self.commit_index() != self.applied_index():
       if t > timeout:
-        raise Exception('timeout')
+        raise Exception('wait_for_all_applied timeout')
       time.sleep(1)
       t+=1
     return self.applied_index()
@@ -304,7 +304,7 @@ class Node(object):
     t = 0
     while self.fsm_index() != self.db_applied_index():
       if t > timeout:
-        raise Exception('timeout')
+        raise Exception('wait_for_all_fsm timeout')
       time.sleep(1)
       t+=1
     return self.fsm_index()
