@@ -25,18 +25,18 @@ For simplicity, let's assume you want to run a 3-node rqlite cluster. To bootstr
 
 Node 1:
 ```bash
-rqlited -node-id $ID1 -http-addr=$IP1:4001 -raft-addr=$IP1:4002 \
--bootstrap-expect 3 -join http://$IP1:4001,http://$IP2:4001,http://$IP2:4001 data
+rqlited -node-id $ID1 -http-addr=$HOST1:4001 -raft-addr=$HOST1:4002 \
+-bootstrap-expect 3 -join http://$HOST1:4001,http://$HOST2:4001,http://$HOST3:4001 data
 ```
 Node 2:
 ```bash
-rqlited -node-id $ID2 -http-addr=$IP2:4001 -raft-addr=$IP2:4002 \
--bootstrap-expect 3 -join http://$IP1:4001,http://$IP2:4001,http://$IP2:4001 data
+rqlited -node-id $ID2 -http-addr=$HOST2:4001 -raft-addr=$HOST2:4002 \
+-bootstrap-expect 3 -join http://$HOST1:4001,http://$HOST2:4001,http://$HOST3:4001 data
 ```
 Node 3:
 ```bash
-rqlited -node-id $ID3 -http-addr=$IP3:4001 -raft-addr=$IP3:4002 \
--bootstrap-expect 3 -join http://$IP1:4001,http://$IP2:4001,http://$IP2:4001 data
+rqlited -node-id $ID3 -http-addr=$HOST3:4001 -raft-addr=$HOST3:4002 \
+-bootstrap-expect 3 -join http://$HOST1:4001,http://$HOST2:4001,http://$HOST3:4001 data
 ```
 
 `-bootstrap-expect` should be set to the number of nodes that must be available before the bootstrapping process will commence, in this case 3. You also set `-join` to the HTTP URL of all 3 nodes in the cluster. **It's also required that each launch command has the same values for `-bootstrap-expect` and `-join`.**
@@ -46,9 +46,9 @@ After the cluster has formed, you can launch more nodes with the same options. A
 #### Docker
 With Docker you can launch every node identically:
 ```bash
-docker run rqlite/rqlite -bootstrap-expect 3 -join http://$IP1:4001,http://$IP2:4001,http://$IP2:4001
+docker run rqlite/rqlite -bootstrap-expect 3 -join http://$HOST1:4001,http://$HOST2:4001,http://$HOST3:4001
 ```
-where `$IP[1-3]` are the expected network addresses of the containers.
+where `$HOST[1-3]` are the expected network addresses of the containers.
 
 __________________________
 
@@ -57,7 +57,7 @@ You can also use the Domain Name System (DNS) to bootstrap a cluster. This is si
 
 To launch a node using DNS boostrap, execute the following (example) command:
 ```bash
-rqlited -node-id $ID1  -http-addr=$IP1:4001 -raft-addr=$IP1:4002 \
+rqlited -node-id $ID1  -http-addr=$HOST1:4001 -raft-addr=$HOST1:4002 \
 -disco-mode=dns -disco-config='{"name":"rqlite.local"}' -bootstrap-expect 3 data
 ```
 You would launch other nodes similarly.
@@ -67,7 +67,7 @@ Using [DNS SRV](https://www.cloudflare.com/learning/dns/dns-records/dns-srv-reco
 
 To launch a node using DNS SRV boostrap, execute the following (example) command:
 ```bash
-rqlited -node-id $ID1  -http-addr=$IP1:4001 -raft-addr=$IP1:4002 \
+rqlited -node-id $ID1  -http-addr=$HOST1:4001 -raft-addr=$HOST1:4002 \
 -disco-mode=dns-srv -disco-config='{"name":"rqlite.local","service":"rqlite-svc"}' -bootstrap-expect 3 data
 ```
 You would launch other nodes similarly.
@@ -84,17 +84,17 @@ Let's assume your Consul cluster is running at `http://example.com:8500`. Let's 
 
 Node 1:
 ```bash
-rqlited -node-id $ID1 -http-addr=$IP1:4001 -raft-addr=$IP1:4002 \
+rqlited -node-id $ID1 -http-addr=$HOST1:4001 -raft-addr=$HOST1:4002 \
 -disco-mode consul-kv -disco-config '{"address":"example.com:8500"}' data
 ```
 Node 2:
 ```bash
-rqlited -node-id $ID2 -http-addr=$IP2:4001 -raft-addr=$IP2:4002 \
+rqlited -node-id $ID2 -http-addr=$HOST2:4001 -raft-addr=$HOST2:4002 \
 -disco-mode consul-kv -disco-config '{"address":"example.com:8500"}' data
 ```
 Node 3:
 ```bash
-rqlited -node-id $ID3 -http-addr=$IP3:4001 -raft-addr=$IP3:4002 \
+rqlited -node-id $ID3 -http-addr=$HOST3:4001 -raft-addr=$HOST3:4002 \
 -disco-mode consul-kv -disco-config '{"address":"example.com:8500"}' data
 ```
 
@@ -114,17 +114,17 @@ Let's assume etcd is available at `example.com:2379`.
 
 Node 1:
 ```bash
-rqlited -node-id $ID1 -http-addr=$IP1:4001 -raft-addr=$IP1:4002 \
+rqlited -node-id $ID1 -http-addr=$HOST1:4001 -raft-addr=$HOST1:4002 \
 	-disco-mode etcd-kv -disco-config '{"endpoints":["example.com:2379"]}' data
 ```
 Node 2:
 ```bash
-rqlited -node-id $ID2 -http-addr=$IP2:4001 -raft-addr=$IP2:4002 \
+rqlited -node-id $ID2 -http-addr=$HOST2:4001 -raft-addr=$HOST2:4002 \
 	-disco-mode etcd-kv -disco-config '{"endpoints":["example.com:2379"]}' data
 ```
 Node 3:
 ```bash
-rqlited -node-id $ID3 -http-addr=$IP3:4001 -raft-addr=$IP3:4002 \
+rqlited -node-id $ID3 -http-addr=$HOST3:4001 -raft-addr=$HOST3:4002 \
 	-disco-mode etcd-kv -disco-config '{"endpoints":["example.com:2379"]}' data
 ```
  Like with Consul autoclustering, the cluster Leader will continually report its address to etcd.
