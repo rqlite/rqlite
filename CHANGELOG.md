@@ -1,7 +1,5 @@
-## 7.3.0-rc (February 4th 2022)
-_This is a release candidate._
-
-With this release rqlite networking is based on hostnames only, if hostnames are passed to it at the command line. Hostnames are no longer resolved into network addresses internally by rqlite, and only the low-level networking layers will do so. This allows rqlite to operate correctly even when cluster node IP addresses change, as long as the hostnames remain the same. This is common in deployment environments such as Kubernetes, particularly when using [StatefulSets](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/).
+## 7.3.0 (February 5th 2022)
+With this release rqlite networking is based on whatever network identifiers are passed in at launch. If hostnames are passed they are no longer resolved into IP addresses internally by rqlite, and only the low-level networking layers will do so. This allows rqlite to operate correctly even when cluster node IP addresses change, as long as the hostnames remain the same. This is common in deployment environments such as Kubernetes, particularly when using [StatefulSets](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/).
 
 Upgrading an earlier cluster to this release is possible, simply by explicitly setting the IP address of each node at the command line. Alternatively, simply [backup your previous node](https://github.com/rqlite/rqlite/blob/master/DOC/BACKUPS.md) and [restore it](https://github.com/rqlite/rqlite/blob/master/DOC/RESTORE_FROM_SQLITE.md) into a new 8.0 cluster. **In any event, backing up your data is always recommended before any upgrade takes place.**
 
