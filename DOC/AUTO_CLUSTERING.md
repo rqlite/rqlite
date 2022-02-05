@@ -78,7 +78,7 @@ DNS-based approaches can be quite useful for many deployment scenarios, in parti
 __________________________
 
 ### Consul
-Another approach uses [Consul](https://www.consul.io/) to coordinate clustering. The advantage of this approach is that you do need to know the network addresses of the nodes ahead of time.
+Another approach uses [Consul](https://www.consul.io/) to coordinate clustering. The advantage of this approach is that you do not need to know the network addresses of the nodes ahead of time.
 
 Let's assume your Consul cluster is running at `http://example.com:8500`. Let's also assume that you are going to run 3 rqlite nodes, each node on a different machine. Launch your rqlite nodes as follows:
 
@@ -108,7 +108,7 @@ docker run rqlite/rqlite -disco-mode=consul-kv -disco-config '{"address":"exampl
 __________________________
 
 ### etcd
-A third approach uses [etcd](https://www.etcd.io/) to coordinate clustering. Autoclustering with etcd is very similar to Consul. Like when you use Consul, the advantage of this approach is that you do need to know the network addresses of the nodes ahead of time.
+A third approach uses [etcd](https://www.etcd.io/) to coordinate clustering. Autoclustering with etcd is very similar to Consul. Like when you use Consul, the advantage of this approach is that you do not need to know the network addresses of the nodes ahead of time.
 
 Let's assume etcd is available at `example.com:2379`.
 
