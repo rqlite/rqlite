@@ -53,7 +53,7 @@ where `$HOST[1-3]` are the expected network addresses of the containers.
 __________________________
 
 ### Using DNS for Bootstrapping
-You can also use the Domain Name System (DNS) to bootstrap a cluster. This is similar to automatic clustering, but doesn't require you to specify the network addresses at the command line. Instead you create a DNS record for the host `rqlite`, with an [A Record](https://www.cloudflare.com/learning/dns/dns-records/dns-a-record/) for each rqlite node's HTTP IP address. 
+You can also use the Domain Name System (DNS) to bootstrap a cluster. This is similar to automatic clustering, but doesn't require you to specify the network addresses at the command line. Instead you create a DNS record for the host `rqlite.local`, with an [A Record](https://www.cloudflare.com/learning/dns/dns-records/dns-a-record/) for each rqlite node's HTTP IP address. 
 
 To launch a node using DNS boostrap, execute the following (example) command:
 ```bash
@@ -70,7 +70,7 @@ To launch a node using DNS SRV boostrap, execute the following (example) command
 rqlited -node-id $ID1  -http-addr=$HOST1:4001 -raft-addr=$HOST1:4002 \
 -disco-mode=dns-srv -disco-config='{"name":"rqlite.local","service":"rqlite-svc"}' -bootstrap-expect 3 data
 ```
-You would launch other nodes similarly.
+You would launch other nodes similarly. In the example above rqlite will lookup SRV records at _rqlite-svc._tcp.rqlite.local
 __________________________
 
 ### Kubernetes
