@@ -1264,7 +1264,7 @@ class TestEndToEndSnapRestoreCluster(unittest.TestCase):
       j = self.n2.query('SELECT count(*) FROM foo', level='none')
       if j == d_("{'results': [{'values': [[402]], 'types': [''], 'columns': ['count(*)']}]}"):
         break
-      time.Sleep(1)
+      time.sleep(1)
       t+=1
 
   def tearDown(self):
