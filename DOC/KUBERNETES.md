@@ -3,7 +3,7 @@ This document provides an example of how to run rqlite as a Kubernetes [Stateful
 
 ## Creating a cluster 
 ### Create a Headless Service
-The first thing to do is to create a [Kubernetes _Headless Service_](https://kubernetes.io/docs/concepts/services-networking/service/#headless-services). The Headless service creates the required DNS entries, which allows the rqlite nodes to find each other, and automatically bootstrap a new cluster.
+The first thing to do is to create a [Kubernetes _Headless Service_](https://kubernetes.io/docs/concepts/services-networking/service/#headless-services). The Headless service creates the required DNS entries, which allows the rqlite nodes to find each other, and automatically bootstrap a new cluster. 
 ```yaml
 apiVersion: v1
 kind: Service
@@ -19,6 +19,10 @@ spec:
       targetPort: 4001
 ```
 Apply the configuration above to your Kubernetes deployment. It will create a DNS entry `rqlite-svc`, which will resolve to the IP addresses of any Pods with the tag `rqlite`.
+```bash
+kubectl apply -f headless-service.yaml
+```
+where the file `headless-service.yaml` contains the configuration shown above.
 
 ### Create a StatefulSet
 For a rqlite cluster to function properly in a production environment, the rqlite nodes require a persistent network identifier and storage. This is what a StatefulSet can provide. The example belows shows you how to configure a 3-node rqlite cluster.
@@ -67,6 +71,10 @@ spec:
           storage: 1Gi
 ```
 Apply this configuration to your Kubernetes system, and a 3-node rqlite cluster will be created.
+```bash
+kubectl apply -f stateful-set.yaml
+```
+where the file `stateful-set.yaml` contains the configuration shown above.
 
 Note the `args` passed to rqlite. The arguments tell rqlite to use `dns` discovery mode, and to resolve the DNS name `rqlite-svc` to find the IP addresses of other nodes in the cluster. Furthermore it tells rqlite to wait until three nodes are available (counting itself as one of those nodes) before attempting to form a cluster.
 
