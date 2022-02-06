@@ -1,3 +1,7 @@
+## 7.3.1 (February 6th 2022)
+### Implementation changes and bug fixes
+- [PR #998](https://github.com/rqlite/rqlite/pull/998): Node TLS mux needs to use advertised Raft address.
+
 ## 7.3.0 (February 5th 2022)
 With this release rqlite networking is based on whatever network identifiers are passed in at launch. If hostnames are passed they are no longer resolved into IP addresses internally by rqlite, and only the low-level networking layers will do so. This allows rqlite to operate correctly even when cluster node IP addresses change, as long as the hostnames remain the same. This is common in deployment environments such as Kubernetes, particularly when using [StatefulSets](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/).
 
