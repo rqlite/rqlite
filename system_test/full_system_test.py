@@ -846,6 +846,23 @@ class TestEndToEndEncryptedNode(TestEndToEnd):
     n2.wait_for_leader()
 
     self.cluster = Cluster([n0, n1, n2])
+
+class TestSingleNodeEncryptedNoVerify(unittest.TestCase):
+  def test(self):
+    ''' Test that a joining node will not operate if remote cert can't be trusted'''
+    certFile = write_random_file(x509cert)
+    keyFile = write_random_file(x509key)
+
+    n0 = Node(RQLITED_PATH, '0', node_cert=certFile, node_key=keyFile, node_no_verify=False)
+    n0.start()
+    n0.wait_for_leader()
+
+    n1 = Node(RQLITED_PATH, '1', node_cert=certFile, node_key=keyFile, node_no_verify=False)
+    n1.start(join=n0.APIAddr())
+    self.assertRaises(Exception, n1.wait_for_leader) # Join should fail due to bad cert.
+
+    deprovision_node(n0)
+    deprovision_node(n1)
     
 class TestEndToEndAdvAddr(TestEndToEnd):
   def setUp(self):

@@ -105,7 +105,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to create cluster service: %s", err.Error())
 	}
-	log.Printf("Cluster TCP mux Listener registered with %d", cluster.MuxClusterHeader)
+	log.Printf("cluster TCP mux Listener registered with %d", cluster.MuxClusterHeader)
 
 	// Start the HTTP API server.
 	clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, cfg.NodeEncrypt, cfg.NoNodeVerify)
