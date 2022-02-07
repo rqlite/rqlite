@@ -192,7 +192,7 @@ func (mux *Mux) handleConn(conn net.Conn) {
 	// Set a read deadline so connections with no data don't timeout.
 	if err := conn.SetReadDeadline(time.Now().Add(mux.Timeout)); err != nil {
 		conn.Close()
-		mux.Logger.Printf("tcp.Mux: cannot set read deadline: %s", err)
+		mux.Logger.Printf("cannot set read deadline: %s", err)
 		return
 	}
 
@@ -200,14 +200,14 @@ func (mux *Mux) handleConn(conn net.Conn) {
 	var typ [1]byte
 	if _, err := io.ReadFull(conn, typ[:]); err != nil {
 		conn.Close()
-		mux.Logger.Printf("tcp.Mux: cannot read header byte: %s", err)
+		mux.Logger.Printf("cannot read header byte: %s", err)
 		return
 	}
 
 	// Reset read deadline and let the listener handle that.
 	if err := conn.SetReadDeadline(time.Time{}); err != nil {
 		conn.Close()
-		mux.Logger.Printf("tcp.Mux: cannot reset set read deadline: %s", err)
+		mux.Logger.Printf("cannot reset set read deadline: %s", err)
 		return
 	}
 
@@ -216,7 +216,7 @@ func (mux *Mux) handleConn(conn net.Conn) {
 	if handler == nil {
 		conn.Close()
 		stats.Add(numUnregisteredHandlers, 1)
-		mux.Logger.Printf("tcp.Mux: handler not registered for request from %s: %d (unsupported protocol?)",
+		mux.Logger.Printf("handler not registered for request from %s: %d (unsupported protocol?)",
 			conn.RemoteAddr().String(), typ[0])
 		return
 	}
