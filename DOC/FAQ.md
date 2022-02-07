@@ -4,6 +4,7 @@
 * [Why would I use this, versus some other distributed database?](#why-would-i-use-this-versus-some-other-distributed-database)
 * [How do I access the database?](#how-do-i-access-the-database)
 * [Is it a drop-in replacement for SQLite?](#is-it-a-drop-in-replacement-for-sqlite)
+* [How do I deploy rqlite on Kubernetes?](#how-do-i-deploy-rqlite-on-kubernetes)
 * [Can any node execute a write request, and have the system "synchronize it all"?](#can-any-node-execute-a-write-request-and-have-the-system-synchronize-it-all)
 * [Can I send a read request to any node in the cluster?](#can-i-send-a-read-request-to-any-node-in-the-cluster)
 * [rqlite is distributed. Does that mean it can increase SQLite performance?](#rqlite-is-distributed-does-that-mean-it-can-increase-sqlite-performance)
@@ -31,7 +32,7 @@ rqlite is about replicating a set of data, which has been written to it using SQ
 On top of that, rqlite provides strong guarantees about what state any copy of that data is in, with respect to a special node called the _leader_. That is where Raft comes in. It prevents divergent copies of the data, and ensures there is an "authoritative" copy of that data at all times.
 
 ## Why would I use this, versus some other distributed database?
-rqlite is very simple to deploy, run, and manage. It's lightweight. It's a single binary you can drop anywhere on a machine, and just start it. This makes it very convenient. It takes literally seconds to configure and form a cluster. With rqlite you have complete control over your database infrastructure, and the data it stores.
+rqlite is very simple to deploy, run, and manage. It's lightweight. It's a single binary you can drop anywhere on a machine, and just start it. This makes it very convenient. It takes literally seconds [to configure and form a cluster](https://github.com/rqlite/rqlite/blob/master/DOC/CLUSTER_MGMT.md), which provides you with fault-tolerance and high-availability. With rqlite you have complete control over your database infrastructure, and the data it stores.
 
 That said, it's always possible it's _too_ simple for your needs.
 
@@ -40,6 +41,9 @@ The primary way to access the database is via the [HTTP API](https://github.com/
 
 ## Is it a drop-in replacement for SQLite?
 No. While it does use SQLite as its storage engine, you must only write to the database via the [HTTP API](https://github.com/rqlite/rqlite/blob/master/DOC/DATA_API.md). That said, since it basically exposes SQLite, all the power of that database is available. It is also possible that any system built on top of SQLite only needs small changes to work with rqlite.
+
+## How do I deploy rqlite on Kubernetes?
+Check out the [Kubernetes deployment guide](https://github.com/rqlite/rqlite/blob/master/DOC/KUBERNETES.md).
 
 ## Can any node execute a write request, and have the system "synchronize it all"?
 The first thing to understand is that you can send your write-request to any node in the cluster, and rqlite will do the right thing automatically. You do not need to direct your write requests specifically to the leader.
