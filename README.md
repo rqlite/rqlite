@@ -1,6 +1,6 @@
 <img src="DOC/logo-text.png" height=100></img>
 
-[![Circle CI](https://circleci.com/gh/rqlite/rqlite/tree/master.svg?style=svg)](https://circleci.com/gh/rqlite/rqlite/tree/master) [![appveyor](https://ci.appveyor.com/api/projects/status/github/rqlite/rqlite?branch=master&svg=true)](https://ci.appveyor.com/project/otoolep/rqlite) [![Go Report Card](https://goreportcard.com/badge/github.com/rqlite/rqlite)](https://goreportcard.com/report/github.com/rqlite/rqlite) [![Release](https://img.shields.io/github/release/rqlite/rqlite.svg)](https://github.com/rqlite/rqlite/releases) [![Docker](https://img.shields.io/docker/pulls/rqlite/rqlite?style=plastic)](https://hub.docker.com/r/rqlite/rqlite/) [![Google Group](https://img.shields.io/badge/Google%20Group--blue.svg)](https://groups.google.com/group/rqlite) [<img src="https://raw.githubusercontent.com/rqlite/rqlite/master/DOC/slack-purple.png" alt="drawing" width="60"/>](https://join.slack.com/t/rqlite/shared_invite/zt-13670osxx-yLWA1AQS0xZ4jTR1ar5Taw)
+[![Circle CI](https://circleci.com/gh/rqlite/rqlite/tree/master.svg?style=svg)](https://circleci.com/gh/rqlite/rqlite/tree/master) [![appveyor](https://ci.appveyor.com/api/projects/status/github/rqlite/rqlite?branch=master&svg=true)](https://ci.appveyor.com/project/otoolep/rqlite) [![Go Report Card](https://goreportcard.com/badge/github.com/rqlite/rqlite)](https://goreportcard.com/report/github.com/rqlite/rqlite) [![Release](https://img.shields.io/github/release/rqlite/rqlite.svg)](https://github.com/rqlite/rqlite/releases) [![Docker](https://img.shields.io/docker/pulls/rqlite/rqlite?style=plastic)](https://hub.docker.com/r/rqlite/rqlite/) [![Google Group](https://img.shields.io/badge/Google%20Group--blue.svg)](https://groups.google.com/group/rqlite) [<img src="https://raw.githubusercontent.com/rqlite/rqlite/master/DOC/slack-purple.png" alt="drawing" width="60"/>](https://www.philipotoole.com/join-rqlite-slack)
 
 *rqlite* is an easy-to-use, lightweight, distributed relational database, which uses [SQLite](https://www.sqlite.org/) as its storage engine. rqlite is simple to deploy, operating it is very straightforward, and its clustering capabilities provide you with fault-tolerance and high-availability. [rqlite is available for Linux, macOS, and Microsoft Windows](https://github.com/rqlite/rqlite/releases).
 
@@ -29,7 +29,7 @@ rqlite uses [Raft](https://raft.github.io/) to achieve consensus across all the 
 - Hot [backups](https://github.com/rqlite/rqlite/blob/master/DOC/BACKUPS.md), as well as [load directly from SQLite](https://github.com/rqlite/rqlite/blob/master/DOC/RESTORE_FROM_SQLITE.md).
 
 ## Quick Start
-_Detailed documentation [is available](https://github.com/rqlite/rqlite/tree/master/DOC). Check out the [rqlite Google Group](https://groups.google.com/forum/#!forum/rqlite)_ and join the [rqlite Slack channel](https://join.slack.com/t/rqlite/shared_invite/zt-13670osxx-yLWA1AQS0xZ4jTR1ar5Taw)_.
+_Detailed documentation [is available](https://github.com/rqlite/rqlite/tree/master/DOC). Check out the [rqlite Google Group](https://groups.google.com/forum/#!forum/rqlite)_ and join the [rqlite Slack channel](https://www.philipotoole.com/join-rqlite-slack)_.
 
 The quickest way to get running on macOS and Linux is to download a pre-built release binary. You can find these binaries on the [Github releases page](https://github.com/rqlite/rqlite/releases). If you prefer Windows you can download the latest build [here](https://ci.appveyor.com/api/projects/otoolep/rqlite/artifacts/rqlite-latest-win64.zip?branch=master). Once installed, you can start a single rqlite node like so:
 ```bash
@@ -117,7 +117,7 @@ Learn how to hot backup your rqlite cluster [here](https://github.com/rqlite/rql
 You can learn about securing access, and restricting users' access, to rqlite [here](https://github.com/rqlite/rqlite/blob/master/DOC/SECURITY.md).
 
 ## rqlite Slack Channel
-Join the [Slack channel]((https://join.slack.com/t/rqlite/shared_invite/zt-13670osxx-yLWA1AQS0xZ4jTR1ar5Taw)) to learn more about rqlite.
+Join the [Slack channel]((https://www.philipotoole.com/join-rqlite-slack)) to learn more about rqlite.
 
 ## Google Group
 There is a [Google Group](https://groups.google.com/forum/#!forum/rqlite) dedicated to discussion of rqlite.
