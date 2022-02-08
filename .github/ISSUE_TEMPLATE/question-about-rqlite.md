@@ -6,9 +6,10 @@ labels: ''
 assignees: ''
 
 ---
-Before you ask a question here about rqlite, consider instead posting your question to the rqlite Google Group. That way you can benefit from that larger community's expertise.
+Before you ask a question here about rqlite, consider instead posting your question to Slack or the rqlite Google Group. That way you can benefit from that larger community's expertise.
 
-https://groups.google.com/g/rqlite
+- https://rqlite.slack.com (join directly at https://www.philipotoole.com/join-rqlite-slack)
+- https://groups.google.com/g/rqlite
 
 You can also start a discussion on the rqlite GitHub discussion page.
 
