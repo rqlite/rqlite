@@ -29,7 +29,7 @@ rqlite uses [Raft](https://raft.github.io/) to achieve consensus across all the 
 - Hot [backups](https://github.com/rqlite/rqlite/blob/master/DOC/BACKUPS.md), as well as [load directly from SQLite](https://github.com/rqlite/rqlite/blob/master/DOC/RESTORE_FROM_SQLITE.md).
 
 ## Quick Start
-_Detailed documentation [is available](https://github.com/rqlite/rqlite/tree/master/DOC). You may also wish to check out the [rqlite Google Group](https://groups.google.com/forum/#!forum/rqlite)._
+_Detailed documentation [is available](https://github.com/rqlite/rqlite/tree/master/DOC). Check out the [rqlite Google Group](https://groups.google.com/forum/#!forum/rqlite)_ and join the [rqlite Slack channel](https://join.slack.com/t/rqlite/shared_invite/zt-13670osxx-yLWA1AQS0xZ4jTR1ar5Taw)_.
 
 The quickest way to get running on macOS and Linux is to download a pre-built release binary. You can find these binaries on the [Github releases page](https://github.com/rqlite/rqlite/releases). If you prefer Windows you can download the latest build [here](https://ci.appveyor.com/api/projects/otoolep/rqlite/artifacts/rqlite-latest-win64.zip?branch=master). Once installed, you can start a single rqlite node like so:
 ```bash
@@ -115,6 +115,9 @@ Learn how to hot backup your rqlite cluster [here](https://github.com/rqlite/rql
 
 ## Security
 You can learn about securing access, and restricting users' access, to rqlite [here](https://github.com/rqlite/rqlite/blob/master/DOC/SECURITY.md).
+
+## rqlite Slack Channel
+Join the [Slack channel]((https://join.slack.com/t/rqlite/shared_invite/zt-13670osxx-yLWA1AQS0xZ4jTR1ar5Taw)) to learn more about rqlite.
 
 ## Google Group
 There is a [Google Group](https://groups.google.com/forum/#!forum/rqlite) dedicated to discussion of rqlite.
