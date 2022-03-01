@@ -929,6 +929,7 @@ class TestBootstrapping(unittest.TestCase):
     deprovision_node(n0)
     deprovision_node(n1)
     deprovision_node(n2)
+    deprovision_node(n3)
 
 class TestAutoClustering(unittest.TestCase):
   DiscoModeConsulKV = "consul-kv"
