@@ -1,6 +1,7 @@
 package encoding
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 
@@ -91,16 +92,32 @@ func NewValuesFromQueryValues(dest [][]interface{}, v []*command.Values) error {
 
 // JSONMarshal serializes Execute and Query results to JSON API format.
 func JSONMarshal(i interface{}) ([]byte, error) {
-	return jsonMarshal(i, json.Marshal)
+	return jsonMarshal(i, noEscapeEncode)
 }
 
 // JSONMarshalIndent serializes Execute and Query results to JSON API format,
 // but also applies indent to the output.
 func JSONMarshalIndent(i interface{}, prefix, indent string) ([]byte, error) {
 	f := func(i interface{}) ([]byte, error) {
-		return json.MarshalIndent(i, prefix, indent)
+		b, err := noEscapeEncode(i)
+		if err != nil {
+			return nil, err
+		}
+		var out bytes.Buffer
+		json.Indent(&out, b, prefix, indent)
+		return out.Bytes(), nil
 	}
 	return jsonMarshal(i, f)
+}
+
+func noEscapeEncode(i interface{}) ([]byte, error) {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(i); err != nil {
+		return nil, err
+	}
+	return bytes.TrimRight(buf.Bytes(), "\n"), nil
 }
 
 func jsonMarshal(i interface{}, f func(i interface{}) ([]byte, error)) ([]byte, error) {
