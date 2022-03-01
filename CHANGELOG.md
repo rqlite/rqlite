@@ -1,7 +1,7 @@
-## 7.3.2 (unreleased)
+## 7.3.2 (March 1st 2022)
 ### Implementation changes and bug fixes
 - [PR #999](https://github.com/rqlite/rqlite/pull/999): Add end-to-end encrypted node test.
-- [PR #1008](https://github.com/rqlite/rqlite/pull/1008): Upgrade to SQLite 3.38.0. Fixes [issue #1005](https://github.com/rqlite/rqlite/issues/1005)
+- [PR #1008](https://github.com/rqlite/rqlite/pull/1008): Upgrade to SQLite 3.38.0. Fixes [issue #1005](https://github.com/rqlite/rqlite/issues/1005).
 - [PR #1009](https://github.com/rqlite/rqlite/pull/1009): Don't HTML escape JSON output.
 
 ## 7.3.1 (February 6th 2022)
