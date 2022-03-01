@@ -1,6 +1,7 @@
 ## 7.3.2 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #999](https://github.com/rqlite/rqlite/pull/999): Add end-to-end encrypted node test.
+- [PR ](https://github.com/rqlite/rqlite/pull/1008): Upgrade to SQLite 3.38.0. Fixes [issue #1005](https://github.com/rqlite/rqlite/issues/1005)
 
 ## 7.3.1 (February 6th 2022)
 Fixes an issue in the 7.3.0 release that prevented clusters, which used TLS for internode communications, from operating correctly. All deployments using TLS should be upgraded to this version.
