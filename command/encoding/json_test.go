@@ -6,6 +6,20 @@ import (
 	"github.com/rqlite/rqlite/command"
 )
 
+func Test_JSONNoEscaping(t *testing.T) {
+	m := map[string]string{
+		"a": "b",
+		"c": "d ->> e",
+	}
+	b, err := JSONMarshal(m)
+	if err != nil {
+		t.Fatalf("failed to marshal simple map: %s", err.Error())
+	}
+	if exp, got := `{"a":"b","c":"d ->> e"}`, string(b); exp != got {
+		t.Fatalf("incorrect marshal result: exp %s, got %s", exp, got)
+	}
+}
+
 // Test_MarshalExecuteResult tests JSON marshaling of an ExecuteResult
 func Test_MarshalExecuteResult(t *testing.T) {
 	var b []byte
