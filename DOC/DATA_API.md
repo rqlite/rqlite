@@ -5,7 +5,7 @@ Each rqlite node exposes an HTTP API allowing data to be inserted into, and read
 The best way to understand the API is to work through the simple examples below. There are also [client libraries available](https://github.com/rqlite).
 
 ## Writing Data
-To write data successfully to the database, you must create at least 1 table. To do this perform a HTTP POST on the `/db/execute` endpoint on any rqlite node. Encapsulate the `CREATE TABLE` SQL command in a JSON array, and put it in the body of the request. An example via [curl](http://curl.haxx.se/):
+To write data successfully to the database, you must create at least 1 table. To do this perform a HTTP POST on the `/db/execute` endpoint on any rqlite node. Encapsulate the `CREATE TABLE` SQL command in a JSON array, and put it in the body of the request. An example via [curl](https://curl.haxx.se/):
 
 ```bash
 curl -XPOST 'localhost:4001/db/execute?pretty&timings' -H "Content-Type: application/json" -d '[

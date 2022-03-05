@@ -13,7 +13,7 @@ So, if possible, configure the network such that the Raft port on each node is o
 
 If the IP addresses (or subnets) of rqlite clients is also known, it may also be possible to limit access to the HTTP API from those addresses only.
 
-AWS EC2 [Security Groups](http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-network-security.html), for example, support all this functionality. So if running rqlite in the AWS EC2 cloud you can implement this level of security at the network level.
+AWS EC2 [Security Groups](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-network-security.html), for example, support all this functionality. So if running rqlite in the AWS EC2 cloud you can implement this level of security at the network level.
 
 ## HTTPS API
 rqlite supports HTTPS access, ensuring that all communication between clients and a cluster is encrypted. 
