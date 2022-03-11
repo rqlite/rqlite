@@ -53,7 +53,8 @@ The response is of the form:
         {
             "columns": [
                 "id",
-                "name"
+                "name",
+                "age"
             ],
             "types": [
                 "integer",
