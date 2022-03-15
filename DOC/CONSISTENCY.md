@@ -18,7 +18,7 @@ If you decide to deploy [read-only nodes](https://github.com/rqlite/rqlite/blob/
 ## Weak
 If a query request is sent to a follower, and _weak_ consistency is specified, the Follower will transparently forward the request to the Leader. The Follower waits for the response from the Leader, and then returns that response to the client.
 
-_Weak_ instructs the Leader to check that it is the Leader, before querying the local SQLite file. Checking Leader state only involves checking state local to the Leader, so is still very fast. There is, however, a very small window of time (milliseconds by default) during which the node may return stale data. This is because after the Leader check, but before the local SQLite database is read, another node could be elected Leader and make changes to the cluster. As result the node may not be quite up-to-date with the rest of cluster.
+_Weak_ instructs the Leader to check that it is the Leader, before querying the local SQLite file. Checking Leader state only involves checking state local to the Leader, so is still very fast. There is, however, a very small window of time (milliseconds by default) during which the node may return stale data. This is because after the local Leader check, but before the local SQLite database is read, another node could be elected Leader and make changes to the cluster. As result the node may not be quite up-to-date with the rest of cluster.
 
 ## Strong
 If a query request is sent to a follower, and _strong_ consistency is specified, the Follower will transparently forward the request to the Leader. The Follower waits for the response from the Leader, and then returns that response to the client.
@@ -32,9 +32,21 @@ _Weak_ is probably sufficient for most applications, and is the default read con
 Examples of enabling each read consistency level for a simple query is shown below.
 
 ```bash
+# Query the node, telling it simply to read the SQLite database directly. No guarantees on how old the data is.
+# In fact the node may not even be connected to the cluster.
 curl -G 'localhost:4001/db/query?level=none' --data-urlencode 'q=SELECT * FROM foo'
+
+# Query the node, telling it simply to read the SQLite database directly. The read request will be successful
+# only if the node has heard from the leader no more than 1 second ago.
 curl -G 'localhost:4001/db/query?level=none&freshness=1s' --data-urlencode 'q=SELECT * FROM foo'
+
+# Default query options. The read request will be successful only if the node believes its the leader. 
 curl -G 'localhost:4001/db/query?level=weak' --data-urlencode 'q=SELECT * FROM foo'
-curl -G 'localhost:4001/db/query' --data-urlencode 'q=SELECT * FROM foo' # Same as weak
+
+# Default query options. The read request will be successful only if the node believes it is the leader. Same as weak.
+curl -G 'localhost:4001/db/query' --data-urlencode 'q=SELECT * FROM foo'
+
+# The read request will be successful only if the node maintained cluster leadership during
+# the entirety of query processing.
 curl -G 'localhost:4001/db/query?level=strong' --data-urlencode 'q=SELECT * FROM foo'
 ```
