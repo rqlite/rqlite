@@ -32,7 +32,7 @@ rqlite is about replicating a set of data, which has been written to it using SQ
 On top of that, rqlite provides strong guarantees about what state any copy of that data is in, with respect to a special node called the _leader_. That is where Raft comes in. It prevents divergent copies of the data, and ensures there is an "authoritative" copy of that data at all times.
 
 ## Why would I use this, versus some other distributed database?
-rqlite is very simple to deploy, run, and manage. It's lightweight. It's a single binary you can drop anywhere on a machine, and just start it. This makes it very convenient. It takes literally seconds [to configure and form a cluster](https://github.com/rqlite/rqlite/blob/master/DOC/CLUSTER_MGMT.md), which provides you with fault-tolerance and high-availability. With rqlite you have complete control over your database infrastructure, and the data it stores.
+**rqlite is very simple to deploy, run, and manage** -- in fact, simplicity-of-operation is a key design goal. It's also lightweight and easy to query. It's a single binary you can drop anywhere on a machine, and just start it, which makes it very convenient. It takes literally seconds [to configure and form a cluster](https://github.com/rqlite/rqlite/blob/master/DOC/CLUSTER_MGMT.md), which provides you with fault-tolerance and high-availability. With rqlite you have complete control over your database infrastructure, and the data it stores.
 
 That said, it's always possible it's _too_ simple for your needs.
 
