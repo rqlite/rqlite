@@ -1,3 +1,6 @@
+## 7.3.3 (unreleased)
+- [PR #1015](https://github.com/rqlite/rqlite/pull/1015): go mod (dependencies) updates.
+
 ## 7.3.2 (March 1st 2022)
 ### Implementation changes and bug fixes
 - [PR #999](https://github.com/rqlite/rqlite/pull/999): Add end-to-end encrypted node test.
