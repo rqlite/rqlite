@@ -79,7 +79,7 @@ If you wish to check if the node is running, and responding to HTTP requests, re
 ```
 
 ## expvar support
-rqlite also exports [expvar](https://pkg.go.dev/expvar) information. The standard expvar information, as well as some custom information, is exposed. This data can be retrieved like so (assuming the node is started in its default configuration):
+rqlite also exports [expvar](https://pkg.go.dev/expvar) information, which are mostly counters of various rqlite activity. The standard expvar information, as well as some custom information, is exposed. This data can be retrieved like so (assuming the node is started in its default configuration):
 
 ```bash
 curl localhost:4001/debug/vars
