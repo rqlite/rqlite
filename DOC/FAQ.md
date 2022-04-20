@@ -3,6 +3,7 @@
 * [What exactly does rqlite do?](#what-exactly-does-rqlite-do)
 * [Why would I use this, versus some other distributed database?](#why-would-i-use-this-versus-some-other-distributed-database)
 * [How do I access the database?](#how-do-i-access-the-database)
+* [How do I monitor rqlite?](#how-do-i-monitor-rqlite)
 * [Is it a drop-in replacement for SQLite?](#is-it-a-drop-in-replacement-for-sqlite)
 * [How do I deploy rqlite on Kubernetes?](#how-do-i-deploy-rqlite-on-kubernetes)
 * [Can any node execute a write request, and have the system "synchronize it all"?](#can-any-node-execute-a-write-request-and-have-the-system-synchronize-it-all)
@@ -38,6 +39,9 @@ That said, it's always possible it's _too_ simple for your needs.
 
 ## How do I access the database?
 The primary way to access the database is via the [HTTP API](https://github.com/rqlite/rqlite/blob/master/DOC/DATA_API.md). You can access it directly, or use a [client library](https://github.com/rqlite). For more casual use you can use the [command line tool](https://github.com/rqlite/rqlite/blob/master/DOC/CLI.md). It is also technically possible to [read the SQLite file directly](https://github.com/rqlite/rqlite/blob/master/DOC/FAQ.md#can-i-read-the-sqlite-file-directly), but it's not officially supported.
+
+## How do I monitor rqlite?
+Check out the [monitoring documentation](https://github.com/rqlite/rqlite/blob/master/DOC/DIAGNOSTICS.md).
 
 ## Is it a drop-in replacement for SQLite?
 No. While it does use SQLite as its storage engine, you must only write to the database via the [HTTP API](https://github.com/rqlite/rqlite/blob/master/DOC/DATA_API.md). That said, since it basically exposes SQLite, all the power of that database is available. It is also possible that any system built on top of SQLite only needs small changes to work with rqlite.
