@@ -37,8 +37,7 @@ const logo = `
  | | | (_| | | | ||  __/   relational database.
  |_|  \__, |_|_|\__\___|
          | |               www.rqlite.io
-         |_|
-`
+         |_|`
 
 const name = `rqlited`
 const desc = `rqlite is a lightweight, distributed relational database, which uses SQLite as its
@@ -61,7 +60,7 @@ func main() {
 	}
 
 	// Display logo.
-	fmt.Println(logo)
+	fmt.Println(logo, "\n")
 
 	// Configure logging and pump out initial message.
 	log.Printf("%s starting, version %s, commit %s, branch %s, compiler %s", name, cmd.Version, cmd.Commit, cmd.Branch, runtime.Compiler)
