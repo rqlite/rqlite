@@ -32,6 +32,9 @@ func Test_DbFileCreation(t *testing.T) {
 	if db == nil {
 		t.Fatal("database is nil")
 	}
+	if db.InMemory() {
+		t.Fatal("on-disk database marked as in-memory")
+	}
 
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 		t.Fatalf("%s does not exist after open", dbPath)
@@ -96,6 +99,10 @@ func Test_TableCreation(t *testing.T) {
 func Test_TableCreationInMemory(t *testing.T) {
 	db := mustCreateInMemoryDatabase()
 	defer db.Close()
+
+	if !db.InMemory() {
+		t.Fatal("in-memory database marked as not in-memory")
+	}
 
 	r, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
 	if err != nil {

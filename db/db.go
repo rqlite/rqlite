@@ -318,6 +318,11 @@ func (db *DB) FileSize() (int64, error) {
 	return fi.Size(), nil
 }
 
+// InMemory returns whether this database is in-memory.
+func (db *DB) InMemory() bool {
+	return db.memory
+}
+
 // CompileOptions returns the SQLite compilation options.
 func (db *DB) CompileOptions() ([]string, error) {
 	res, err := db.QueryStringStmt("PRAGMA compile_options")
