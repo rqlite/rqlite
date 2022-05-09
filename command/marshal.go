@@ -151,6 +151,17 @@ func UnmarshalNoop(b []byte, c *Noop) error {
 	return proto.Unmarshal(b, c)
 }
 
+// MarshalLoadRequest marshals a LoadRequest command
+func MarshalLoadRequest(lr *LoadRequest) ([]byte, error) {
+	// XXX Compress the SQLIte data!
+	return proto.Marshal(lr)
+}
+
+// UnmarshalLoadRequest unmarshals a LoadRequest command
+func UnmarshalLoadRequest(b []byte, lr *LoadRequest) error {
+	return proto.Unmarshal(b, lr)
+}
+
 // UnmarshalSubCommand unmarshalls a sub command m. It assumes that
 // m is the correct type.
 func UnmarshalSubCommand(c *Command, m proto.Message) error {

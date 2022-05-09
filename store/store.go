@@ -70,6 +70,7 @@ const (
 const (
 	numSnaphots              = "num_snapshots"
 	numBackups               = "num_backups"
+	numLoads                 = "num_loads"
 	numRestores              = "num_restores"
 	numRecoveries            = "num_recoveries"
 	numUncompressedCommands  = "num_uncompressed_commands"
@@ -843,6 +844,40 @@ func (s *Store) Backup(leader bool, fmt BackupFormat, dst io.Writer) error {
 	return nil
 }
 
+func (s *Store) Load(lr *command.LoadRequest) error {
+	startT := time.Now()
+
+	b, err := command.MarshalLoadRequest(lr)
+	if err != nil {
+		return err
+	}
+
+	c := &command.Command{
+		Type:       command.Command_COMMAND_TYPE_LOAD,
+		SubCommand: b,
+	}
+
+	b, err = command.Marshal(c)
+	if err != nil {
+		return err
+	}
+
+	af := s.raft.Apply(b, s.ApplyTimeout).(raft.ApplyFuture)
+	if af.Error() != nil {
+		if af.Error() == raft.ErrNotLeader {
+			return ErrNotLeader
+		}
+		return af.Error()
+	}
+
+	s.dbAppliedIndexMu.Lock()
+	s.dbAppliedIndex = af.Index()
+	s.dbAppliedIndexMu.Unlock()
+	stats.Add(numLoads, 1)
+	s.logger.Printf("node loaded in %s", time.Since(startT))
+	return af.Error()
+}
+
 // Notify notifies this Store that a node is ready for bootstrapping at the
 // given address. Once the number of known nodes reaches the expected level
 // bootstrapping will be attempted using this Store. "Expected level" includes
@@ -1112,7 +1147,7 @@ func (s *Store) Apply(l *raft.Log) (e interface{}) {
 		s.firstLogAppliedT = time.Now()
 	}
 
-	typ, r := applyCommand(l.Data, s.db)
+	typ, r := applyCommand(l.Data, &s.db)
 	if typ == command.Command_COMMAND_TYPE_NOOP {
 		s.numNoops++
 	}
@@ -1492,7 +1527,7 @@ func RecoverNode(dataDir string, logger *log.Logger, logs raft.LogStore, stable 
 			return fmt.Errorf("failed to get log at index %d: %v", index, err)
 		}
 		if entry.Type == raft.LogCommand {
-			applyCommand(entry.Data, db)
+			applyCommand(entry.Data, &db)
 		}
 		lastIndex = entry.Index
 		lastTerm = entry.Term
@@ -1583,8 +1618,9 @@ func dbBytesFromSnapshot(rc io.ReadCloser) ([]byte, error) {
 	return database, nil
 }
 
-func applyCommand(data []byte, db *sql.DB) (command.Command_Type, interface{}) {
+func applyCommand(data []byte, pDB **sql.DB) (command.Command_Type, interface{}) {
 	var c command.Command
+	db := *pDB
 
 	if err := command.Unmarshal(data, &c); err != nil {
 		panic(fmt.Sprintf("failed to unmarshal cluster command: %s", err.Error()))
@@ -1605,6 +1641,32 @@ func applyCommand(data []byte, db *sql.DB) (command.Command_Type, interface{}) {
 		}
 		r, err := db.Execute(er.Request, er.Timings)
 		return c.Type, &fsmExecuteResponse{results: r, error: err}
+	case command.Command_COMMAND_TYPE_LOAD:
+		var lr command.LoadRequest
+		if err := command.UnmarshalLoadRequest(c.SubCommand, &lr); err != nil {
+			panic(fmt.Sprintf("failed to unmarshal load subcommand: %s", err.Error()))
+		}
+
+		var newDB *sql.DB
+		var err error
+		if db.InMemory() {
+			newDB, err = createInMemory(lr.Data, db.FKEnabled())
+			if err != nil {
+				return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to create in-memory database: %s", err)}
+			}
+		} else {
+			newDB, err = createOnDisk(lr.Data, db.Path(), db.FKEnabled())
+			if err != nil {
+				return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to create on-disk database: %s", err)}
+			}
+		}
+
+		// Swap the underlying database to the new one.
+		if err := db.Close(); err != nil {
+			return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to close post-load database: %s", err)}
+		}
+		*pDB = newDB
+		return c.Type, &fsmGenericResponse{}
 	case command.Command_COMMAND_TYPE_NOOP:
 		return c.Type, &fsmGenericResponse{}
 	default:
