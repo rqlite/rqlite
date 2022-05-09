@@ -355,7 +355,7 @@ func (s *Store) Open() (retErr error) {
 	// can also happen if the user explicitly disables the startup optimization of
 	// building the SQLite database in memory, before switching to disk.
 	if s.StartupOnDisk || (!s.dbConf.Memory && !s.snapsExistOnOpen && s.lastCommandIdxOnOpen == 0) {
-		s.db, err = s.createOnDisk(nil)
+		s.db, err = createOnDisk(nil, s.dbPath, s.dbConf.FKConstraints)
 		if err != nil {
 			return fmt.Errorf("failed to create on-disk database")
 		}
@@ -363,7 +363,7 @@ func (s *Store) Open() (retErr error) {
 		s.logger.Printf("created on-disk database at open")
 	} else {
 		// We need an in-memory database, at least for bootstrapping purposes.
-		s.db, err = s.createInMemory(nil)
+		s.db, err = createInMemory(nil, s.dbConf.FKConstraints)
 		if err != nil {
 			return fmt.Errorf("failed to create in-memory database")
 		}
@@ -987,32 +987,6 @@ func (s *Store) Noop(id string) error {
 	return nil
 }
 
-// createInMemory returns an in-memory database. If b is non-nil and non-empty,
-// then the database will be initialized with the contents of b.
-func (s *Store) createInMemory(b []byte) (db *sql.DB, err error) {
-	if b == nil || len(b) == 0 {
-		db, err = sql.OpenInMemory(s.dbConf.FKConstraints)
-	} else {
-		db, err = sql.DeserializeIntoMemory(b, s.dbConf.FKConstraints)
-	}
-	return
-}
-
-// createOnDisk opens an on-disk database file at the Store's configured path. If
-// b is non-nil, any preexisting file will first be overwritten with those contents.
-// Otherwise, any preexisting file will be removed before the database is opened.
-func (s *Store) createOnDisk(b []byte) (*sql.DB, error) {
-	if err := os.Remove(s.dbPath); err != nil && !os.IsNotExist(err) {
-		return nil, err
-	}
-	if b != nil {
-		if err := ioutil.WriteFile(s.dbPath, b, 0660); err != nil {
-			return nil, err
-		}
-	}
-	return sql.Open(s.dbPath, s.dbConf.FKConstraints)
-}
-
 // setLogInfo records some key indexs about the log.
 func (s *Store) setLogInfo() error {
 	var err error
@@ -1122,7 +1096,7 @@ func (s *Store) Apply(l *raft.Log) (e interface{}) {
 						return
 					}
 					// Open a new on-disk database.
-					s.db, err = s.createOnDisk(b)
+					s.db, err = createOnDisk(b, s.dbPath, s.dbConf.FKConstraints)
 					if err != nil {
 						e = &fsmGenericResponse{error: fmt.Errorf("open on-disk failed: %s", err)}
 						return
@@ -1213,7 +1187,7 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 		// Therefore, this is the last opportunity to create the on-disk database
 		// before Raft starts. This could also happen because the user has explicitly
 		// disabled the build-on-disk-database-in-memory-first optimization.
-		db, err = s.createOnDisk(b)
+		db, err = createOnDisk(b, s.dbPath, s.dbConf.FKConstraints)
 		if err != nil {
 			return fmt.Errorf("open on-disk file during restore: %s", err)
 		}
@@ -1225,7 +1199,7 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 		// command entries in the log. So by sticking with an in-memory database
 		// those entries will be applied in the fastest possible manner. We will
 		// defer creation of any database on disk until the Apply function.
-		db, err = s.createInMemory(b)
+		db, err = createInMemory(b, s.dbConf.FKConstraints)
 		if err != nil {
 			return fmt.Errorf("createInMemory: %s", err)
 		}
@@ -1667,6 +1641,32 @@ func checkRaftConfiguration(configuration raft.Configuration) error {
 		return fmt.Errorf("need at least one voter in configuration: %v", configuration)
 	}
 	return nil
+}
+
+// createInMemory returns an in-memory database. If b is non-nil and non-empty,
+// then the database will be initialized with the contents of b.
+func createInMemory(b []byte, fkConstraints bool) (db *sql.DB, err error) {
+	if b == nil || len(b) == 0 {
+		db, err = sql.OpenInMemory(fkConstraints)
+	} else {
+		db, err = sql.DeserializeIntoMemory(b, fkConstraints)
+	}
+	return
+}
+
+// createOnDisk opens an on-disk database file at the Store's configured path. If
+// b is non-nil, any preexisting file will first be overwritten with those contents.
+// Otherwise, any preexisting file will be removed before the database is opened.
+func createOnDisk(b []byte, path string, fkConstraints bool) (*sql.DB, error) {
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+	if b != nil {
+		if err := ioutil.WriteFile(path, b, 0660); err != nil {
+			return nil, err
+		}
+	}
+	return sql.Open(path, fkConstraints)
 }
 
 func readUint64(b []byte) (uint64, error) {
