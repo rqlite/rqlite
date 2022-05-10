@@ -89,23 +89,15 @@ func (m *RequestMarshaler) Marshal(r Requester) ([]byte, bool, error) {
 
 	if compress {
 		// Let's try compression.
-		var buf bytes.Buffer
-		gzw, err := gzip.NewWriterLevel(&buf, gzip.BestCompression)
+		gzData, err := gzCompress(b)
 		if err != nil {
-			return nil, false, fmt.Errorf("gzip new writer: %s", err)
-		}
-
-		if _, err := gzw.Write(b); err != nil {
-			return nil, false, fmt.Errorf("gzip Write: %s", err)
-		}
-		if err := gzw.Close(); err != nil {
-			return nil, false, fmt.Errorf("gzip Close: %s", err)
+			return nil, false, err
 		}
 
 		// Is compression better?
-		if ubz > len(buf.Bytes()) || m.ForceCompression {
+		if ubz > len(gzData) || m.ForceCompression {
 			// Yes! Let's keep it.
-			b = buf.Bytes()
+			b = gzData
 			stats.Add(numCompressedRequests, 1)
 			stats.Add(numCompressedBytes, int64(len(b)))
 		} else {
@@ -153,13 +145,25 @@ func UnmarshalNoop(b []byte, c *Noop) error {
 
 // MarshalLoadRequest marshals a LoadRequest command
 func MarshalLoadRequest(lr *LoadRequest) ([]byte, error) {
-	// XXX Compress the SQLIte data!
+	b, err := gzCompress(lr.Data)
+	if err != nil {
+		return nil, err
+	}
+	lr.Data = b
 	return proto.Marshal(lr)
 }
 
 // UnmarshalLoadRequest unmarshals a LoadRequest command
 func UnmarshalLoadRequest(b []byte, lr *LoadRequest) error {
-	return proto.Unmarshal(b, lr)
+	if err := proto.Unmarshal(b, lr); err != nil {
+		return err
+	}
+	u, err := gzUncompress(lr.Data)
+	if err != nil {
+		return err
+	}
+	lr.Data = u
+	return nil
 }
 
 // UnmarshalSubCommand unmarshalls a sub command m. It assumes that
@@ -167,24 +171,49 @@ func UnmarshalLoadRequest(b []byte, lr *LoadRequest) error {
 func UnmarshalSubCommand(c *Command, m proto.Message) error {
 	b := c.SubCommand
 	if c.Compressed {
-		gz, err := gzip.NewReader(bytes.NewReader(b))
+		var err error
+		b, err = gzUncompress(b)
 		if err != nil {
-			return fmt.Errorf("unmarshal sub gzip NewReader: %s", err)
+			return fmt.Errorf("unmarshal sub uncompress: %s", err)
 		}
-
-		ub, err := ioutil.ReadAll(gz)
-		if err != nil {
-			return fmt.Errorf("unmarshal sub gzip ReadAll: %s", err)
-		}
-
-		if err := gz.Close(); err != nil {
-			return fmt.Errorf("unmarshal sub gzip Close: %s", err)
-		}
-		b = ub
 	}
 
 	if err := proto.Unmarshal(b, m); err != nil {
 		return fmt.Errorf("proto unmarshal: %s", err)
 	}
 	return nil
+}
+
+// gzCompress compresses the given byte slice.
+func gzCompress(b []byte) ([]byte, error) {
+	var buf bytes.Buffer
+	gzw, err := gzip.NewWriterLevel(&buf, gzip.BestCompression)
+	if err != nil {
+		return nil, fmt.Errorf("gzip new writer: %s", err)
+	}
+
+	if _, err := gzw.Write(b); err != nil {
+		return nil, fmt.Errorf("gzip Write: %s", err)
+	}
+	if err := gzw.Close(); err != nil {
+		return nil, fmt.Errorf("gzip Close: %s", err)
+	}
+	return buf.Bytes(), nil
+}
+
+func gzUncompress(b []byte) ([]byte, error) {
+	gz, err := gzip.NewReader(bytes.NewReader(b))
+	if err != nil {
+		return nil, fmt.Errorf("unmarshal gzip NewReader: %s", err)
+	}
+
+	ub, err := ioutil.ReadAll(gz)
+	if err != nil {
+		return nil, fmt.Errorf("unmarshal gzip ReadAll: %s", err)
+	}
+
+	if err := gz.Close(); err != nil {
+		return nil, fmt.Errorf("unmarshal gzip Close: %s", err)
+	}
+	return ub, nil
 }
