@@ -1,4 +1,7 @@
-## 7.3.3 (unreleased)
+## 7.4.0 (unreleased)
+## New features
+- [PR #1017](https://github.com/rqlite/rqlite/pull/1017): Support restoring from SQLite data files. Fixes [issue #1005](https://github.com/rqlite/rqlite/issues/1016).
+### Implementation changes and bug fixes
 - [PR #1015](https://github.com/rqlite/rqlite/pull/1015): go mod (dependencies) updates.
 
 ## 7.3.2 (March 1st 2022)
