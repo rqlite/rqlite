@@ -593,18 +593,8 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body.Close()
 
-	format, err := fmtParam(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	if strings.ToLower(format) == "binary" {
-		if !validateSQLiteFile(b) {
-			http.Error(w, "invalid SQLite database file", http.StatusBadRequest)
-			return
-		}
-
+	if validSQLiteFile(b) {
+		s.logger.Printf("SQLite database file detected as load data")
 		lr := &command.LoadRequest{
 			Data: b,
 		}
@@ -613,7 +603,6 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		s.writeResponse(w, r, resp)
 	} else {
 		// No JSON structure expected for this API.
 		queries := []string{string(b)}
@@ -638,8 +627,8 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 			resp.Results.ExecuteResult = results
 		}
 		resp.end = time.Now()
-		s.writeResponse(w, r, resp)
 	}
+	s.writeResponse(w, r, resp)
 }
 
 // handleStatus returns status on the system.
@@ -1550,6 +1539,6 @@ func queryRequestFromStrings(s []string, timings, tx bool) *command.QueryRequest
 
 // validateSQLiteFile checks that the supplied data looks like a SQLite database
 // file. See https://www.sqlite.org/fileformat.html
-func validateSQLiteFile(b []byte) bool {
+func validSQLiteFile(b []byte) bool {
 	return string(b[0:13]) == "SQLite format"
 }

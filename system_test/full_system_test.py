@@ -472,13 +472,13 @@ class Node(object):
     # This is the one API that doesn't expect JSON.
     if fmt != "binary":
       conn = sqlite3.connect(file)
-      r = requests.post(self._load_url(fmt), data='\n'.join(conn.iterdump()))
+      r = requests.post(self._load_url(), data='\n'.join(conn.iterdump()))
       raise_for_status(r)
       conn.close()
     else:
       with open(file, 'rb') as f:
         data = f.read()
-      r = requests.post(self._load_url(fmt), data=data, headers={'Content-Type': 'application/octet-stream'})
+      r = requests.post(self._load_url(), data=data, headers={'Content-Type': 'application/octet-stream'})
       raise_for_status(r)
     return r.json()
 
@@ -516,11 +516,8 @@ class Node(object):
     return 'http://' + self.APIAddr() + '/db/execute' + rd
   def _backup_url(self):
     return 'http://' + self.APIAddr() + '/db/backup'
-  def _load_url(self, fmt=None):
-    f = ""
-    if fmt is not None:
-      f = '?fmt=%s' % (fmt)
-    return 'http://' + self.APIAddr() + '/db/load' + f
+  def _load_url(self):
+    return 'http://' + self.APIAddr() + '/db/load'
   def __eq__(self, other):
     return self.node_id == other.node_id
   def __str__(self):
