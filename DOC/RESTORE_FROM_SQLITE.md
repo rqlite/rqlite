@@ -31,32 +31,6 @@ database restored successfully
 | 1  | fiona |
 +----+-------+
 ```
-### HTTP
- _Be sure to set the Content-type header as shown._
- 
-```bash
-~ $ sqlite3 restore.sqlite
-SQLite version 3.14.1 2016-08-11 18:53:32
-Enter ".help" for usage hints.
-sqlite> CREATE TABLE foo (id integer not null primary key, name text);
-sqlite> INSERT INTO "foo" VALUES(1,'fiona');
-sqlite>
-~ $ echo '.dump' | sqlite3 restore.sqlite > restore.dump # Convert SQLite database file to set of SQL commands.
-~ $ curl -XPOST localhost:4001/db/load -H "Content-type: text/plain" --data-binary @restore.dump
-```
-
-Let's connect to the node, and check that the data has been loaded correctly.
-```bash
-$ rqlite
-127.0.0.1:4001> SELECT * FROM foo
-+----+-------+
-| id | name  |
-+----+-------+
-| 1  | fiona |
-+----+-------+
-```
-
-**Note that you must convert the SQLite file (in the above examples the file named `restore.sqlite`) to the list of SQL commands**. You cannot restore using the actual SQLite database file.
 
 ## Caveats
 The behavior of the restore operation when data already exists on the cluster is undefined -- you should only restore to a cluster that has no data, or a brand-new cluster. Also, please **note that SQLite dump files normally contain a command to disable Foreign Key constraints**. If you are running with Foreign Key Constraints enabled, and wish to re-enable this, this is the one time you should explicitly re-enable those constraints via the following `curl` command:

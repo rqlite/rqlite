@@ -468,12 +468,18 @@ class Node(object):
       raise_for_status(r)
       fd.write(r.content)
 
-  def restore(self, file):
+  def restore(self, file, fmt=None):
     # This is the one API that doesn't expect JSON.
-    conn = sqlite3.connect(file)
-    r = requests.post(self._load_url(), data='\n'.join(conn.iterdump()))
-    raise_for_status(r)
-    conn.close()
+    if fmt != "binary":
+      conn = sqlite3.connect(file)
+      r = requests.post(self._load_url(fmt), data='\n'.join(conn.iterdump()))
+      raise_for_status(r)
+      conn.close()
+    else:
+      with open(file, 'rb') as f:
+        data = f.read()
+      r = requests.post(self._load_url(fmt), data=data, headers={'Content-Type': 'application/octet-stream'})
+      raise_for_status(r)
     return r.json()
 
   def redirect_addr(self):
@@ -1285,6 +1291,14 @@ class TestEndToEndBackupRestore(unittest.TestCase):
     j = self.node1.restore(self.db_file)
     self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
     j = self.node1.query('SELECT * FROM foo')
+    self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
+
+    self.node2 = Node(RQLITED_PATH, '1')
+    self.node2.start()
+    self.node2.wait_for_leader()
+    j = self.node2.restore(self.db_file, fmt='binary')
+    self.assertEqual(j, d_("{'results': []}"))
+    j = self.node2.query('SELECT * FROM foo')
     self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
 
   def tearDown(self):
