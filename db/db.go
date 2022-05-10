@@ -52,8 +52,9 @@ func init() {
 
 // DB is the SQL database.
 type DB struct {
-	path   string // Path to database file, if running on-disk.
-	memory bool   // In-memory only.
+	path      string // Path to database file, if running on-disk.
+	memory    bool   // In-memory only.
+	fkEnabled bool   // Foreign key constraints enabled
 
 	rwDB *sql.DB // Database connection for database reads and writes.
 	roDB *sql.DB // Database connection database reads.
@@ -107,11 +108,12 @@ func Open(dbPath string, fkEnabled bool) (*DB, error) {
 	roDB.SetConnMaxLifetime(0)
 
 	return &DB{
-		path:  dbPath,
-		rwDB:  rwDB,
-		roDB:  roDB,
-		rwDSN: rwDSN,
-		roDSN: roDSN,
+		path:      dbPath,
+		fkEnabled: fkEnabled,
+		rwDB:      rwDB,
+		roDB:      roDB,
+		rwDSN:     rwDSN,
+		roDSN:     roDSN,
 	}, nil
 }
 
@@ -158,11 +160,13 @@ func OpenInMemory(fkEnabled bool) (*DB, error) {
 	}
 
 	return &DB{
-		memory: true,
-		rwDB:   rwDB,
-		roDB:   roDB,
-		rwDSN:  rwDSN,
-		roDSN:  roDSN,
+		memory:    true,
+		path:      ":memory:",
+		fkEnabled: fkEnabled,
+		rwDB:      rwDB,
+		roDB:      roDB,
+		rwDSN:     rwDSN,
+		roDSN:     roDSN,
 	}, nil
 }
 
@@ -215,7 +219,7 @@ func DeserializeIntoMemory(b []byte, fkEnabled bool) (retDB *DB, retErr error) {
 	}
 	defer func() {
 		// Don't leak a database if deserialization fails.
-		if retErr != nil {
+		if retDB != nil && retErr != nil {
 			retDB.Close()
 		}
 	}()
@@ -283,10 +287,8 @@ func (db *DB) Stats() (map[string]interface{}, error) {
 		"conn_pool_stats": connPoolStats,
 	}
 
-	if db.memory {
-		stats["path"] = ":memory:"
-	} else {
-		stats["path"] = db.path
+	stats["path"] = db.path
+	if !db.memory {
 		if stats["size"], err = db.FileSize(); err != nil {
 			return nil, err
 		}
@@ -316,6 +318,21 @@ func (db *DB) FileSize() (int64, error) {
 		return 0, err
 	}
 	return fi.Size(), nil
+}
+
+// InMemory returns whether this database is in-memory.
+func (db *DB) InMemory() bool {
+	return db.memory
+}
+
+// FKEnabled returns whether Foreign Key constraints are enabled.
+func (db *DB) FKEnabled() bool {
+	return db.fkEnabled
+}
+
+// Path returns the path of this database.
+func (db *DB) Path() string {
+	return db.path
 }
 
 // CompileOptions returns the SQLite compilation options.

@@ -32,6 +32,15 @@ func Test_DbFileCreation(t *testing.T) {
 	if db == nil {
 		t.Fatal("database is nil")
 	}
+	if db.InMemory() {
+		t.Fatal("on-disk database marked as in-memory")
+	}
+	if db.FKEnabled() {
+		t.Fatal("FK constraints marked as enabled")
+	}
+	if db.Path() != dbPath {
+		t.Fatal("database path is incorrect")
+	}
 
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 		t.Fatalf("%s does not exist after open", dbPath)
@@ -97,6 +106,10 @@ func Test_TableCreationInMemory(t *testing.T) {
 	db := mustCreateInMemoryDatabase()
 	defer db.Close()
 
+	if !db.InMemory() {
+		t.Fatal("in-memory database marked as not in-memory")
+	}
+
 	r, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -150,6 +163,9 @@ func Test_TableCreationInMemoryFK(t *testing.T) {
 	// Now, do same testing with FK constraints enabled.
 	dbFK := mustCreateInMemoryDatabaseFK()
 	defer dbFK.Close()
+	if !dbFK.FKEnabled() {
+		t.Fatal("FK constraints not marked as enabled")
+	}
 
 	r, err = dbFK.ExecuteStringStmt(createTableFoo)
 	if err != nil {

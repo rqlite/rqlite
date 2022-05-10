@@ -60,6 +60,10 @@ message ExecuteResult {
 	double time = 4;
 }
 
+message LoadRequest {
+	bytes data = 1;
+}
+
 message Noop {
 	string id = 1;
 }
@@ -70,6 +74,7 @@ message Command {
         COMMAND_TYPE_QUERY = 1;
         COMMAND_TYPE_EXECUTE = 2;
         COMMAND_TYPE_NOOP = 3;
+        COMMAND_TYPE_LOAD = 4;
     }
     Type type = 1;
     bytes sub_command = 2;

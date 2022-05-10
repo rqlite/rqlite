@@ -50,6 +50,9 @@ type Database interface {
 	// is true, then all queries will take place while a read transaction
 	// is held on the database.
 	Query(qr *command.QueryRequest) ([]*command.QueryRows, error)
+
+	// Load loads a SQLite file into the system
+	Load(lr *command.LoadRequest) error
 }
 
 // Store is the interface the Raft-based database must implement.
@@ -590,30 +593,53 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body.Close()
 
-	// No JSON structure expected for this API.
-	queries := []string{string(b)}
-	er := executeRequestFromStrings(queries, timings, false)
-
-	results, err := s.store.Execute(er)
+	format, err := fmtParam(r)
 	if err != nil {
-		if err == store.ErrNotLeader {
-			leaderAPIAddr := s.LeaderAPIAddr()
-			if leaderAPIAddr == "" {
-				stats.Add(numLeaderNotFound, 1)
-				http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
-				return
-			}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
-			redirect := s.FormRedirect(r, leaderAPIAddr)
-			http.Redirect(w, r, redirect, http.StatusMovedPermanently)
+	if strings.ToLower(format) == "binary" {
+		if !validateSQLiteFile(b) {
+			http.Error(w, "invalid SQLite database file", http.StatusBadRequest)
 			return
 		}
-		resp.Error = err.Error()
+
+		lr := &command.LoadRequest{
+			Data: b,
+		}
+		err := s.store.Load(lr)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		s.writeResponse(w, r, resp)
 	} else {
-		resp.Results.ExecuteResult = results
+		// No JSON structure expected for this API.
+		queries := []string{string(b)}
+		er := executeRequestFromStrings(queries, timings, false)
+
+		results, err := s.store.Execute(er)
+		if err != nil {
+			if err == store.ErrNotLeader {
+				leaderAPIAddr := s.LeaderAPIAddr()
+				if leaderAPIAddr == "" {
+					stats.Add(numLeaderNotFound, 1)
+					http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+					return
+				}
+
+				redirect := s.FormRedirect(r, leaderAPIAddr)
+				http.Redirect(w, r, redirect, http.StatusMovedPermanently)
+				return
+			}
+			resp.Error = err.Error()
+		} else {
+			resp.Results.ExecuteResult = results
+		}
+		resp.end = time.Now()
+		s.writeResponse(w, r, resp)
 	}
-	resp.end = time.Now()
-	s.writeResponse(w, r, resp)
 }
 
 // handleStatus returns status on the system.
@@ -1520,4 +1546,10 @@ func queryRequestFromStrings(s []string, timings, tx bool) *command.QueryRequest
 		},
 		Timings: timings,
 	}
+}
+
+// validateSQLiteFile checks that the supplied data looks like a SQLite database
+// file. See https://www.sqlite.org/fileformat.html
+func validateSQLiteFile(b []byte) bool {
+	return string(b[0:13]) == "SQLite format"
 }
