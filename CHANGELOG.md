@@ -1,4 +1,5 @@
-## 7.4.0 (unreleased)
+## 7.4.0 (May 10th 2022)
+With this release rqlite supports restoring a node from an actual SQLite file, which is very much faster than restoring using the SQL dump representation of the same SQLite database.
 ## New features
 - [PR #1017](https://github.com/rqlite/rqlite/pull/1017), [PR #1018](https://github.com/rqlite/rqlite/pull/1018): Support restoring from SQLite data files. Fixes [issue #1005](https://github.com/rqlite/rqlite/issues/1016).
 ### Implementation changes and bug fixes
