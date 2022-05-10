@@ -63,6 +63,7 @@ jobs:
       - image: gcr.io/etcd-development/etcd:v3.5.1
     steps:
         - checkout
+        - run: sudo apt-get update
         - run: sudo apt-get install python3
         - run: sudo apt install python3-pip
         - run: python3 -m pip install requests
