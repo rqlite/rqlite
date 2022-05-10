@@ -145,25 +145,20 @@ func UnmarshalNoop(b []byte, c *Noop) error {
 
 // MarshalLoadRequest marshals a LoadRequest command
 func MarshalLoadRequest(lr *LoadRequest) ([]byte, error) {
-	b, err := gzCompress(lr.Data)
+	b, err := proto.Marshal(lr)
 	if err != nil {
 		return nil, err
 	}
-	lr.Data = b
-	return proto.Marshal(lr)
+	return gzCompress(b)
 }
 
 // UnmarshalLoadRequest unmarshals a LoadRequest command
 func UnmarshalLoadRequest(b []byte, lr *LoadRequest) error {
-	if err := proto.Unmarshal(b, lr); err != nil {
-		return err
-	}
-	u, err := gzUncompress(lr.Data)
+	u, err := gzUncompress(b)
 	if err != nil {
 		return err
 	}
-	lr.Data = u
-	return nil
+	return proto.Unmarshal(u, lr)
 }
 
 // UnmarshalSubCommand unmarshalls a sub command m. It assumes that
