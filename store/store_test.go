@@ -441,7 +441,6 @@ func Test_SingleNodeSQLitePath(t *testing.T) {
 	if !pathExists(path) {
 		t.Fatalf("SQLite file does not exist at %s", path)
 	}
-
 }
 
 func Test_SingleNodeBackupBinary(t *testing.T) {
@@ -545,48 +544,6 @@ COMMIT;
 	}
 }
 
-func Test_SingleNodeLoad(t *testing.T) {
-	s, ln := mustNewStore(true)
-	defer os.RemoveAll(s.Path())
-	defer ln.Close()
-
-	if err := s.Open(); err != nil {
-		t.Fatalf("failed to open single-node store: %s", err.Error())
-	}
-	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
-		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
-	}
-	defer s.Close(true)
-	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
-		t.Fatalf("Error waiting for leader: %s", err)
-	}
-
-	dump := `PRAGMA foreign_keys=OFF;
-BEGIN TRANSACTION;
-CREATE TABLE foo (id integer not null primary key, name text);
-INSERT INTO "foo" VALUES(1,'fiona');
-COMMIT;
-`
-	_, err := s.Execute(executeRequestFromString(dump, false, false))
-	if err != nil {
-		t.Fatalf("failed to load simple dump: %s", err.Error())
-	}
-
-	// Check that data were loaded correctly.
-	qr := queryRequestFromString("SELECT * FROM foo", false, true)
-	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
-	r, err := s.Query(qr)
-	if err != nil {
-		t.Fatalf("failed to query single node: %s", err.Error())
-	}
-	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-	}
-	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-	}
-}
-
 func Test_SingleNodeSingleCommandTrigger(t *testing.T) {
 	s, ln := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
@@ -633,7 +590,49 @@ COMMIT;
 	}
 }
 
-func Test_SingleNodeLoadNoStatements(t *testing.T) {
+func Test_SingleNodeLoadText(t *testing.T) {
+	s, ln := mustNewStore(true)
+	defer os.RemoveAll(s.Path())
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	dump := `PRAGMA foreign_keys=OFF;
+BEGIN TRANSACTION;
+CREATE TABLE foo (id integer not null primary key, name text);
+INSERT INTO "foo" VALUES(1,'fiona');
+COMMIT;
+`
+	_, err := s.Execute(executeRequestFromString(dump, false, false))
+	if err != nil {
+		t.Fatalf("failed to load simple dump: %s", err.Error())
+	}
+
+	// Check that data were loaded correctly.
+	qr := queryRequestFromString("SELECT * FROM foo", false, true)
+	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	r, err := s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
+func Test_SingleNodeLoadTextNoStatements(t *testing.T) {
 	s, ln := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
 	defer ln.Close()
@@ -659,7 +658,7 @@ COMMIT;
 	}
 }
 
-func Test_SingleNodeLoadEmpty(t *testing.T) {
+func Test_SingleNodeLoadTextEmpty(t *testing.T) {
 	s, ln := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
 	defer ln.Close()
@@ -682,7 +681,7 @@ func Test_SingleNodeLoadEmpty(t *testing.T) {
 	}
 }
 
-func Test_SingleNodeLoadChinook(t *testing.T) {
+func Test_SingleNodeLoadTextChinook(t *testing.T) {
 	s, ln := mustNewStore(true)
 	defer os.RemoveAll(s.Path())
 	defer ln.Close()
@@ -741,6 +740,54 @@ func Test_SingleNodeLoadChinook(t *testing.T) {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 	if exp, got := `[[275]]`, asJSON(r[0].Values); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
+func Test_SingleNodeLoadBinary(t *testing.T) {
+	s, ln := mustNewStore(true)
+	defer os.RemoveAll(s.Path())
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	err := s.Load(loadRequestFromFile(filepath.Join("testdata", "load.sqlite")))
+	if err != nil {
+		t.Fatalf("failed to load SQLite file: %s", err.Error())
+	}
+
+	// Check that data were loaded correctly.
+	qr := queryRequestFromString("SELECT * FROM foo WHERE id=2", false, true)
+	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	r, err := s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[2,"fiona"]]`, asJSON(r[0].Values); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	qr = queryRequestFromString("SELECT count(*) FROM foo", false, true)
+	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	r, err = s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `["count(*)"]`, asJSON(r[0].Columns); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[3]]`, asJSON(r[0].Values); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 }
@@ -1943,6 +1990,14 @@ func mustWriteFile(path, contents string) {
 	}
 }
 
+func mustReadFile(path string) []byte {
+	b, err := ioutil.ReadFile(path)
+	if err != nil {
+		panic("failed to read file")
+	}
+	return b
+}
+
 func mustTempDir() string {
 	var err error
 	path, err := ioutil.TempDir("", "rqlilte-test-")
@@ -1999,6 +2054,12 @@ func queryRequestFromStrings(s []string, timings, tx bool) *command.QueryRequest
 			Transaction: tx,
 		},
 		Timings: timings,
+	}
+}
+
+func loadRequestFromFile(path string) *command.LoadRequest {
+	return &command.LoadRequest{
+		Data: mustReadFile(path),
 	}
 }
 

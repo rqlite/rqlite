@@ -1068,6 +1068,10 @@ func (m *MockStore) Query(qr *command.QueryRequest) ([]*command.QueryRows, error
 	return nil, nil
 }
 
+func (m *MockStore) Load(lr *command.LoadRequest) error {
+	return nil
+}
+
 func (m *MockStore) Join(id, addr string, voter bool) error {
 	return nil
 }

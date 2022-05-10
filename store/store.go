@@ -844,6 +844,8 @@ func (s *Store) Backup(leader bool, fmt BackupFormat, dst io.Writer) error {
 	return nil
 }
 
+// Loads an entire SQLite file into the database, sending the request
+// through the Raft log.
 func (s *Store) Load(lr *command.LoadRequest) error {
 	startT := time.Now()
 
