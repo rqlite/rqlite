@@ -219,7 +219,7 @@ func DeserializeIntoMemory(b []byte, fkEnabled bool) (retDB *DB, retErr error) {
 	}
 	defer func() {
 		// Don't leak a database if deserialization fails.
-		if retErr != nil {
+		if retDB != nil && retErr != nil {
 			retDB.Close()
 		}
 	}()

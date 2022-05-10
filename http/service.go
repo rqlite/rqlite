@@ -593,13 +593,18 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body.Close()
 
-	fmt, err := fmtParam(r)
+	format, err := fmtParam(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	if strings.ToLower(fmt) == "binary" {
+	if strings.ToLower(format) == "binary" {
+		if !validateSQLiteFile(b) {
+			http.Error(w, "invalid SQLite database file", http.StatusBadRequest)
+			return
+		}
+
 		lr := &command.LoadRequest{
 			Data: b,
 		}
@@ -1541,4 +1546,10 @@ func queryRequestFromStrings(s []string, timings, tx bool) *command.QueryRequest
 		},
 		Timings: timings,
 	}
+}
+
+// validateSQLiteFile checks that the supplied data looks like a SQLite database
+// file. See https://www.sqlite.org/fileformat.html
+func validateSQLiteFile(b []byte) bool {
+	return string(b[0:13]) == "SQLite format"
 }

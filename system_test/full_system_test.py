@@ -510,8 +510,11 @@ class Node(object):
     return 'http://' + self.APIAddr() + '/db/execute' + rd
   def _backup_url(self):
     return 'http://' + self.APIAddr() + '/db/backup'
-  def _load_url(self):
-    return 'http://' + self.APIAddr() + '/db/load'
+  def _load_url(self, fmt=None):
+    f = ""
+    if fmt is not None:
+      f = '?fmt=%s' % (fmt)
+    return 'http://' + self.APIAddr() + '/db/load' + f
   def __eq__(self, other):
     return self.node_id == other.node_id
   def __str__(self):
