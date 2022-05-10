@@ -121,6 +121,6 @@ dqlite is library, written in C, that you need to integrate with your own softwa
 rqlite and dqlite are completely separate projects, and rqlite does not use dqlite. In fact, rqlite was created before dqlite.
 
 ## How is it different than litestream?
-[Litestream](https://github.com/benbjohnson/litestream) adds reliability to a system using SQLite by periodically backing-up the SQLite database to somethiing like AWS S3. If you lose the node running your SQLite database, you must restore it from your backup. Litestream does this in a very elegant way, and doesn't change how applications interact with SQLite.
+[Litestream](https://github.com/benbjohnson/litestream) adds reliability to a system using SQLite by periodically backing-up the SQLite database to something like AWS S3. If you lose the node running your SQLite database, you must restore it from your backup. Litestream does this in a very elegant way, and doesn't change how applications interact with SQLite.
 
 rqlite, in contrast, adds reliability **and** high-availability via clustering. This means that any application talking to rqlite shouldn't notice if a node fails because other nodes in the cluster automatically take over. rqlite also offers very strict guarantees about the state of the SQLite database. rqlite is not a drop-in replacement for SQLite, however.
