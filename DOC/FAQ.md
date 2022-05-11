@@ -26,7 +26,7 @@
 * [Do concurrent writes block each other?](#do-concurrent-writes-block-each-other)
 * [Do concurrent reads block each other?](#do-concurrent-reads-block-each-other)
 * [How is it different than dqlite?](#how-is-it-different-than-dqlite)
-* [How is it different than litestream?](#How-is-it-different-than-litestream)
+* [How is it different than Litestream?](#How-is-it-different-than-litestream)
 
 ## What exactly does rqlite do?
 rqlite is about replicating a set of data, which has been written to it using SQL. The data is replicated for fault tolerance because your data is so important that you want multiple copies distributed in different places, you want be able to query your data even if some machines fail, or both. These different places could be different machines on a rack, or different machines, each in different buildings, or even different machines, [each on different continents](https://www.philipotoole.com/rqlite-v3-0-1-globally-replicating-sqlite/).
