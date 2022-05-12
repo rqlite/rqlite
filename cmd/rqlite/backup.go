@@ -172,8 +172,10 @@ func restore(ctx *cli.Context, filename string, argv *argT) error {
 	if err := parseResponse(response, &restoreRet); err != nil {
 		return err
 	}
-	if !validSQLiteFile(restoreFile) && len(restoreRet.Results) < 1 {
-		return fmt.Errorf("unexpected results length: %d", len(restoreRet.Results))
+	if !validSQLiteFile(restoreFile) {
+		if len(restoreRet.Results) < 1 {
+			return fmt.Errorf("unexpected results length: %d", len(restoreRet.Results))
+		}
 		if resultError := restoreRet.Results[0].Error; resultError != "" {
 			ctx.String("Error: %s\n", resultError)
 			return nil
