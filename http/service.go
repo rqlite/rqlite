@@ -1540,5 +1540,5 @@ func queryRequestFromStrings(s []string, timings, tx bool) *command.QueryRequest
 // validateSQLiteFile checks that the supplied data looks like a SQLite database
 // file. See https://www.sqlite.org/fileformat.html
 func validSQLiteFile(b []byte) bool {
-	return string(b[0:13]) == "SQLite format"
+	return len(b) > 13 && string(b[0:13]) == "SQLite format"
 }
