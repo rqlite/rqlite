@@ -37,7 +37,7 @@ $ rqlite
 ```
 
 ### rqlite CLI
-Note that the CLI currently only supports loading from a SQLite dump file.
+The CLI supports loading from a SQLite database file or dump file. Below shows an example of loading from the former.
 ```
 ~ $ sqlite3 restore.sqlite
 SQLite version 3.22.0 2018-01-22 18:45:57
@@ -45,16 +45,13 @@ Enter ".help" for usage hints.
 sqlite> CREATE TABLE foo (id integer not null primary key, name text);
 sqlite> INSERT INTO "foo" VALUES(1,'fiona');
 sqlite> 
-~ $ echo '.dump' | sqlite3 restore.sqlite > restore.dump # Convert SQLite database file to set of SQL commands
 ~ $ ./rqlite 
 Welcome to the rqlite CLI. Enter ".help" for usage hints.
 127.0.0.1:4001> .schema
 +-----+
 | sql |
 +-----+
-127.0.0.1:4001> .restore restore.dump
-last inserted ID: 1
-rows affected: 1
+127.0.0.1:4001> .restore restore.sqlite
 database restored successfully
 127.0.0.1:4001> select * from foo
 +----+-------+

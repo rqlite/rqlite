@@ -44,7 +44,7 @@ var cliHelp = []string{
 	`.help                               Show this message`,
 	`.indexes                            Show names of all indexes`,
 	`.ready                              Show ready status for connected node`,
-	`.restore <file>                     Restore the database from a SQLite dump file`,
+	`.restore <file>                     Restore the database from a SQLite database file or dump file`,
 	`.nodes                              Show connection status of all nodes in cluster`,
 	`.schema                             Show CREATE statements for all tables`,
 	`.status                             Show status and diagnostic information for connected node`,

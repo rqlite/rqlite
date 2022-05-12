@@ -81,10 +81,18 @@ func dump(ctx *cli.Context, filename string, argv *argT) error {
 	return nil
 }
 
+func validSQLiteFile(b []byte) bool {
+	return len(b) > 13 && string(b[0:13]) == "SQLite format"
+}
+
 func makeRestoreRequest(b []byte) func(string) (*http.Request, error) {
+	header := "text/plain"
+	if validSQLiteFile(b) {
+		header = "application/octet-stream"
+	}
 	return func(urlStr string) (*http.Request, error) {
 		req, err := http.NewRequest("POST", urlStr, bytes.NewReader(b))
-		req.Header["Content-type"] = []string{"text/plain"}
+		req.Header["Content-type"] = []string{header}
 		if err != nil {
 			return nil, err
 		}
@@ -138,12 +146,14 @@ func restore(ctx *cli.Context, filename string, argv *argT) error {
 		return err
 	}
 
-	// It is cheaper to append the actual pragma command to the restore file
-	fkEnabled := statusRet.Store.SqliteStatus.FkConstraint == "enabled"
-	if fkEnabled {
-		restoreFile = append(restoreFile, []byte("PRAGMA foreign_keys=ON;")...)
-	} else {
-		restoreFile = append(restoreFile, []byte("PRAGMA foreign_keys=OFF;")...)
+	if !validSQLiteFile(restoreFile) {
+		// It is cheaper to append the actual pragma command to the restore file
+		fkEnabled := statusRet.Store.SqliteStatus.FkConstraint == "enabled"
+		if fkEnabled {
+			restoreFile = append(restoreFile, []byte("PRAGMA foreign_keys=ON;")...)
+		} else {
+			restoreFile = append(restoreFile, []byte("PRAGMA foreign_keys=OFF;")...)
+		}
 	}
 
 	queryStr := url.Values{}
@@ -162,16 +172,18 @@ func restore(ctx *cli.Context, filename string, argv *argT) error {
 	if err := parseResponse(response, &restoreRet); err != nil {
 		return err
 	}
-	if len(restoreRet.Results) < 1 {
-		return fmt.Errorf("unexpected results length: %d", len(restoreRet.Results))
-	}
-	if resultError := restoreRet.Results[0].Error; resultError != "" {
-		ctx.String("Error: %s\n", resultError)
-		return nil
+	if !validSQLiteFile(restoreFile) {
+		if len(restoreRet.Results) < 1 {
+			return fmt.Errorf("unexpected results length: %d", len(restoreRet.Results))
+		}
+		if resultError := restoreRet.Results[0].Error; resultError != "" {
+			ctx.String("Error: %s\n", resultError)
+			return nil
+		}
+		ctx.String("last inserted ID: %d\n", restoreRet.Results[0].LastInsertID)
+		ctx.String("rows affected: %d\n", restoreRet.Results[0].RowsAffected)
 	}
 
-	ctx.String("last inserted ID: %d\n", restoreRet.Results[0].LastInsertID)
-	ctx.String("rows affected: %d\n", restoreRet.Results[0].RowsAffected)
 	ctx.String("database restored successfully\n")
 	return nil
 }
