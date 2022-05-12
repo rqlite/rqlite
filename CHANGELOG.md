@@ -1,6 +1,10 @@
+## 7.5.0 (unreleased)
+### New features
+- [PR #1019](https://github.com/rqlite/rqlite/pull/1019): CLI supports restoring from SQLite database files.
+
 ## 7.4.0 (May 10th 2022)
 With this release rqlite supports restoring a node from an actual SQLite file, which is very much faster than restoring using the SQL dump representation of the same SQLite database.
-## New features
+### New features
 - [PR #1017](https://github.com/rqlite/rqlite/pull/1017), [PR #1018](https://github.com/rqlite/rqlite/pull/1018): Support restoring from SQLite data files. Fixes [issue #1005](https://github.com/rqlite/rqlite/issues/1016).
 ### Implementation changes and bug fixes
 - [PR #1015](https://github.com/rqlite/rqlite/pull/1015): go mod (dependencies) updates.
@@ -27,7 +31,7 @@ Upgrading an earlier cluster to this release is possible, simply by explicitly s
 ## 7.2.0 (February 1st 2022)
 This release introduces supported for [DNS-based](https://www.cloudflare.com/learning/dns/what-is-dns/) and [DNS SRV -based](https://www.cloudflare.com/learning/dns/dns-records/dns-srv-record/) autoclustering. rqlite can now lookup a DNS record for specified host, and use the network addresses returned to bootstrap the cluster. This can make it much easier to create rqlite clusters using the kinds of Service-Discovery mechanisms you find on Consul and Kubernetes, which are often based on DNS. See the [documentation](https://github.com/rqlite/rqlite/blob/master/DOC/AUTO_CLUSTERING.md) for full details on using DNS-based autoclustering.
 
-## New features
+### New features
 - [PR #979](https://github.com/rqlite/rqlite/pull/979): Add support for DNS-based autoclustering. Fixes [issue #554](https://github.com/rqlite/rqlite/issues/554)
 - [PR #985](https://github.com/rqlite/rqlite/pull/985): Add support for DNS SRV -based autoclustering. Fixes [issue #554](https://github.com/rqlite/rqlite/issues/554)
 
