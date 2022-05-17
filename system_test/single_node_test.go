@@ -333,6 +333,44 @@ func Test_SingleNodeParameterizedNamed(t *testing.T) {
 	}
 }
 
+func Test_SingleNodeQueued(t *testing.T) {
+	node := mustNewLeaderNode()
+	defer node.Deprovision()
+
+	_, err := node.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`)
+	if err != nil {
+		t.Fatalf(`CREATE TABLE failed: %s`, err.Error())
+	}
+
+	qWrites := []string{
+		`INSERT INTO foo(name) VALUES("fiona")`,
+		`INSERT INTO foo(name) VALUES("fiona")`,
+		`INSERT INTO foo(name) VALUES("fiona")`,
+	}
+	_, err = node.ExecuteQueuedMulti(qWrites)
+	if err != nil {
+		t.Fatalf(`queued write failed: %s`, err.Error())
+	}
+
+	ticker := time.NewTicker(10 * time.Millisecond)
+	timer := time.NewTimer(5 * time.Second)
+	for {
+		select {
+		case <-ticker.C:
+			r, err := node.Query(`SELECT COUNT(*) FROM foo`)
+			if err != nil {
+				t.Fatalf(`query failed: %s`, err.Error())
+			}
+			if r == `{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[3]]}]}` {
+				return
+			}
+		case <-timer.C:
+			t.Fatalf("timed out waiting for queued writes")
+
+		}
+	}
+}
+
 // Test_SingleNodeSQLInjection demonstrates that using the non-parameterized API is vulnerable to
 // SQL injection attacks.
 func Test_SingleNodeSQLInjection(t *testing.T) {

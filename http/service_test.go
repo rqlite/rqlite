@@ -486,6 +486,7 @@ func Test_401Routes_NoBasicAuth(t *testing.T) {
 	client := &http.Client{}
 
 	for _, path := range []string{
+		"/db/execute/queue/_default",
 		"/db/execute",
 		"/db/query",
 		"/db/backup",
@@ -528,6 +529,7 @@ func Test_401Routes_BasicAuthBadPassword(t *testing.T) {
 	client := &http.Client{}
 
 	for _, path := range []string{
+		"/db/execute/queue/_default",
 		"/db/execute",
 		"/db/query",
 		"/db/backup",
@@ -575,6 +577,7 @@ func Test_401Routes_BasicAuthBadPerm(t *testing.T) {
 	client := &http.Client{}
 
 	for _, path := range []string{
+		"/db/execute/queue/_default",
 		"/db/execute",
 		"/db/query",
 		"/db/backup",

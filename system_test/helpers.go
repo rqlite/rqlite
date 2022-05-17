@@ -88,7 +88,7 @@ func (n *Node) ExecuteMulti(stmts []string) (string, error) {
 	return n.postExecute(string(j))
 }
 
-// ExecuteParameterized executes a single paramterized query against the ndoe
+// ExecuteParameterized executes a single paramterized query against the node
 func (n *Node) ExecuteParameterized(stmt []interface{}) (string, error) {
 	m := make([][]interface{}, 1)
 	m[0] = stmt
@@ -98,6 +98,15 @@ func (n *Node) ExecuteParameterized(stmt []interface{}) (string, error) {
 		return "", err
 	}
 	return n.postExecute(string(j))
+}
+
+// ExecuteQueuedMulti sends multiple statements to the node's Execute queue
+func (n *Node) ExecuteQueuedMulti(stmts []string) (string, error) {
+	j, err := json.Marshal(stmts)
+	if err != nil {
+		return "", err
+	}
+	return n.postExecuteQueued(string(j))
 }
 
 // Query runs a single query against the node.
@@ -310,6 +319,19 @@ func (n *Node) ConfirmRedirect(host string) bool {
 
 func (n *Node) postExecute(stmt string) (string, error) {
 	resp, err := http.Post("http://"+n.APIAddr+"/db/execute", "application/json", strings.NewReader(stmt))
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	return string(body), nil
+}
+
+func (n *Node) postExecuteQueued(stmt string) (string, error) {
+	resp, err := http.Post("http://"+n.APIAddr+"/db/execute/queue/_default", "application/json", strings.NewReader(stmt))
 	if err != nil {
 		return "", err
 	}
