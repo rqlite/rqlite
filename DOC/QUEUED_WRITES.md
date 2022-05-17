@@ -1,5 +1,5 @@
 # Queued Writes API
-> :warning: **This functionality was introduced in version 7.5. It does not exist in earlier releases.**
+> :warning: **This functionality was introduced in release 7.5.0. It does not exist in earlier releases.**
 
 rqlite exposes a special API, which will queue up write-requests and execute them in bulk. This allows clients to send multiple distinct requests to a rqlite node, and have rqlite automatically do the batching and bulk insert for the client, without the client doing any extra work. This functionality is best illustrated by an example, showing two requests being queued.
 ```bash
