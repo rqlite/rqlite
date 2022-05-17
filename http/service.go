@@ -332,7 +332,7 @@ func (s *Service) Start() error {
 func (s *Service) Close() {
 	s.stmtQueue.Close()
 	select {
-	case <-s.closeCh:
+	case <-s.queueDone:
 	default:
 		close(s.closeCh)
 	}
