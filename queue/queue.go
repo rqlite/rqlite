@@ -76,7 +76,7 @@ func (q *Queue) run() {
 	timer := time.NewTimer(q.timeout)
 	timer.Stop()
 
-	writeFn := func(stmts []*command.Statement) {
+	writeFn := func() {
 		newStmts := make([]*command.Statement, len(stmts))
 		copy(newStmts, stmts)
 		q.sendCh <- newStmts
@@ -93,12 +93,12 @@ func (q *Queue) run() {
 				timer.Reset(q.timeout)
 			}
 			if len(stmts) >= q.batchSize {
-				writeFn(stmts)
+				writeFn()
 			}
 		case <-timer.C:
-			writeFn(stmts)
+			writeFn()
 		case <-q.flush:
-			writeFn(stmts)
+			writeFn()
 		case <-q.done:
 			timer.Stop()
 			return
