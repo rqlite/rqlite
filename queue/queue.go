@@ -6,6 +6,7 @@ import (
 	"github.com/rqlite/rqlite/command"
 )
 
+// Queue is a batching queue with a timeout.
 type Queue struct {
 	maxSize   int
 	batchSize int
@@ -20,6 +21,7 @@ type Queue struct {
 	flush  chan struct{}
 }
 
+// New returns a instance of a Queue
 func New(maxSize, batchSize int, t time.Duration) *Queue {
 	q := &Queue{
 		maxSize:   maxSize,
@@ -37,8 +39,7 @@ func New(maxSize, batchSize int, t time.Duration) *Queue {
 	return q
 }
 
-// Requests or ExecuteRequests? Gotta be requests, and merge inside single ER. Maybe just
-// needs to be Statements
+// Write queues a request.
 func (q *Queue) Write(stmt *command.Statement) error {
 	if stmt == nil {
 		return nil
@@ -47,17 +48,20 @@ func (q *Queue) Write(stmt *command.Statement) error {
 	return nil
 }
 
+// Flush flushes the queue
 func (q *Queue) Flush() error {
 	q.flush <- struct{}{}
 	return nil
 }
 
+// Close closes the queue. A closed queue should not be used.
 func (q *Queue) Close() error {
 	close(q.done)
 	<-q.closed
 	return nil
 }
 
+// Depth returns the number of queue requests
 func (q *Queue) Depth() int {
 	return len(q.batchCh)
 }
