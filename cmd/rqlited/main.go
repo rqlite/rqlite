@@ -255,6 +255,9 @@ func startHTTPService(cfg *Config, str *store.Store, cltr *cluster.Client, credS
 	s.TLS1011 = cfg.TLS1011
 	s.Expvar = cfg.Expvar
 	s.Pprof = cfg.PprofEnabled
+	s.DefaultQueueCap = cfg.WriteQueueCap
+	s.DefaultQueueBatchSz = cfg.WriteQueueBatchSz
+	s.DefaultQueueTimeout = cfg.WriteQueueTimeout
 	s.BuildInfo = map[string]interface{}{
 		"commit":     cmd.Commit,
 		"branch":     cmd.Branch,

@@ -180,6 +180,76 @@ func Test_MultiNodeClusterRequestForwardOK(t *testing.T) {
 	}
 }
 
+// Test_MultiNodeClusterQueuedRequestForwardOK tests that queued writes are forwarded
+// correctly.
+func Test_MultiNodeClusterQueuedRequestForwardOK(t *testing.T) {
+	node1 := mustNewLeaderNode()
+	defer node1.Deprovision()
+
+	node2 := mustNewNode(false)
+	defer node2.Deprovision()
+	if err := node2.Join(node1); err != nil {
+		t.Fatalf("node failed to join leader: %s", err.Error())
+	}
+	_, err := node2.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for leader: %s", err.Error())
+	}
+
+	// Get the new leader, in case it changed.
+	c := Cluster{node1, node2}
+	leader, err := c.Leader()
+	if err != nil {
+		t.Fatalf("failed to find cluster leader: %s", err.Error())
+	}
+
+	// Create table and confirm its existence.
+	res, err := leader.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if exp, got := `{"results":[{}]}`, res; exp != got {
+		t.Fatalf("got incorrect response from follower exp: %s, got: %s", exp, got)
+	}
+	rows, err := leader.Query(`SELECT COUNT(*) FROM foo`)
+	if err != nil {
+		t.Fatalf("failed to query for count: %s", err.Error())
+	}
+	if exp, got := `{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[0]]}]}`, rows; exp != got {
+		t.Fatalf("got incorrect response from follower exp: %s, got: %s", exp, got)
+	}
+
+	// Write a request to a follower's queue, checking it's eventually sent to the leader.
+	followers, err := c.Followers()
+	if err != nil {
+		t.Fatalf("failed to get followers: %s", err.Error())
+	}
+	if len(followers) != 1 {
+		t.Fatalf("got incorrect number of followers: %d", len(followers))
+	}
+	res, err = followers[0].ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`)
+	if err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+
+	ticker := time.NewTicker(10 * time.Millisecond)
+	timer := time.NewTimer(5 * time.Second)
+	for {
+		select {
+		case <-ticker.C:
+			r, err := leader.Query(`SELECT COUNT(*) FROM foo`)
+			if err != nil {
+				t.Fatalf("failed to query for count: %s", err.Error())
+			}
+			if r == `{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[1]]}]}` {
+				return
+			}
+		case <-timer.C:
+			t.Fatalf("timed out waiting for queued writes")
+		}
+	}
+}
+
 func executeRequestFromString(s string) *command.ExecuteRequest {
 	return executeRequestFromStrings([]string{s})
 }

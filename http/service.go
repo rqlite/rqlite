@@ -25,6 +25,7 @@ import (
 	"github.com/rqlite/rqlite/auth"
 	"github.com/rqlite/rqlite/command"
 	"github.com/rqlite/rqlite/command/encoding"
+	"github.com/rqlite/rqlite/queue"
 	"github.com/rqlite/rqlite/store"
 )
 
@@ -143,19 +144,22 @@ type Response struct {
 var stats *expvar.Map
 
 const (
-	numLeaderNotFound   = "leader_not_found"
-	numExecutions       = "executions"
-	numQueries          = "queries"
-	numRemoteExecutions = "remote_executions"
-	numRemoteQueries    = "remote_queries"
-	numReadyz           = "num_readyz"
-	numStatus           = "num_status"
-	numBackups          = "backups"
-	numLoad             = "loads"
-	numJoins            = "joins"
-	numNotifies         = "notifies"
-	numAuthOK           = "authOK"
-	numAuthFail         = "authFail"
+	numLeaderNotFound         = "leader_not_found"
+	numExecutions             = "executions"
+	numQueuedExecutions       = "queued_executions"
+	numQueuedExecutionsOK     = "queued_executions_ok"
+	numQueuedExecutionsFailed = "queued_executions_failed"
+	numQueries                = "queries"
+	numRemoteExecutions       = "remote_executions"
+	numRemoteQueries          = "remote_queries"
+	numReadyz                 = "num_readyz"
+	numStatus                 = "num_status"
+	numBackups                = "backups"
+	numLoad                   = "loads"
+	numJoins                  = "joins"
+	numNotifies               = "notifies"
+	numAuthOK                 = "authOK"
+	numAuthFail               = "authFail"
 
 	// Default timeout for cluster communications.
 	defaultTimeout = 30 * time.Second
@@ -192,6 +196,9 @@ func init() {
 	stats = expvar.NewMap("http")
 	stats.Add(numLeaderNotFound, 0)
 	stats.Add(numExecutions, 0)
+	stats.Add(numQueuedExecutions, 0)
+	stats.Add(numQueuedExecutionsOK, 0)
+	stats.Add(numQueuedExecutionsFailed, 0)
 	stats.Add(numQueries, 0)
 	stats.Add(numRemoteExecutions, 0)
 	stats.Add(numRemoteQueries, 0)
@@ -221,10 +228,14 @@ func NewResponse() *Response {
 
 // Service provides HTTP service.
 type Service struct {
-	addr string       // Bind address of the HTTP service.
-	ln   net.Listener // Service listener
+	closeCh chan struct{}
+	addr    string       // Bind address of the HTTP service.
+	ln      net.Listener // Service listener
 
 	store Store // The Raft-backed database store.
+
+	queueDone chan struct{}
+	stmtQueue *queue.Queue // Queue for queued executes
 
 	cluster Cluster // The Cluster service.
 
@@ -238,6 +249,10 @@ type Service struct {
 	CertFile   string // Path to SSL certificate.
 	KeyFile    string // Path to SSL private key.
 	TLS1011    bool   // Whether older, deprecated TLS should be supported.
+
+	DefaultQueueCap     int
+	DefaultQueueBatchSz int
+	DefaultQueueTimeout time.Duration
 
 	credentialStore CredentialStore
 
@@ -253,13 +268,16 @@ type Service struct {
 // the service performs no authentication and authorization checks.
 func New(addr string, store Store, cluster Cluster, credentials CredentialStore) *Service {
 	return &Service{
-		addr:            addr,
-		store:           store,
-		cluster:         cluster,
-		start:           time.Now(),
-		statuses:        make(map[string]StatusReporter),
-		credentialStore: credentials,
-		logger:          log.New(os.Stderr, "[http] ", log.LstdFlags),
+		addr:                addr,
+		store:               store,
+		DefaultQueueCap:     1024,
+		DefaultQueueBatchSz: 128,
+		DefaultQueueTimeout: 100 * time.Millisecond,
+		cluster:             cluster,
+		start:               time.Now(),
+		statuses:            make(map[string]StatusReporter),
+		credentialStore:     credentials,
+		logger:              log.New(os.Stderr, "[http] ", log.LstdFlags),
 	}
 }
 
@@ -289,6 +307,14 @@ func (s *Service) Start() error {
 	}
 	s.ln = ln
 
+	s.closeCh = make(chan struct{})
+	s.queueDone = make(chan struct{})
+
+	s.stmtQueue = queue.New(s.DefaultQueueCap, s.DefaultQueueBatchSz, s.DefaultQueueTimeout)
+	go s.runQueue()
+	s.logger.Printf("execute queue processing started with capacity %d, batch size %d, timeout %s",
+		s.DefaultQueueCap, s.DefaultQueueBatchSz, s.DefaultQueueTimeout.String())
+
 	go func() {
 		err := server.Serve(s.ln)
 		if err != nil {
@@ -302,6 +328,15 @@ func (s *Service) Start() error {
 
 // Close closes the service.
 func (s *Service) Close() {
+	s.stmtQueue.Close()
+
+	select {
+	case <-s.queueDone:
+	default:
+		close(s.closeCh)
+	}
+	<-s.queueDone
+
 	s.ln.Close()
 	return
 }
@@ -318,6 +353,9 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.URL.Path == "/" || r.URL.Path == "":
 		http.Redirect(w, r, "/status", http.StatusFound)
+	case strings.HasPrefix(r.URL.Path, "/db/execute/queue/_default"):
+		stats.Add(numQueuedExecutions, 1)
+		s.handleQueuedExecute(w, r)
 	case strings.HasPrefix(r.URL.Path, "/db/execute"):
 		stats.Add(numExecutions, 1)
 		s.handleExecute(w, r)
@@ -682,10 +720,20 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 		oss["hostname"] = hostname
 	}
 
+	qs, err := s.stmtQueue.Stats()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("queue stats: %s", err.Error()),
+			http.StatusInternalServerError)
+		return
+	}
+	queueStats := map[string]interface{}{
+		"_default": qs,
+	}
 	httpStatus := map[string]interface{}{
 		"bind_addr": s.Addr().String(),
 		"auth":      prettyEnabled(s.credentialStore != nil),
 		"cluster":   clusterStatus,
+		"queue":     queueStats,
 	}
 
 	nodeStatus := map[string]interface{}{
@@ -890,6 +938,61 @@ func (s *Service) handleReadyz(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusServiceUnavailable)
 	w.Write([]byte("[+]node ok\n[+]leader does not exist"))
+}
+
+// handleQueuedExecute handles queued queries that modify the database.
+func (s *Service) handleQueuedExecute(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+	if !s.CheckRequestPerm(r, PermExecute) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Perform a leader check, unless disabled. This prevents generating queued writes on
+	// a node that does not appear to be connected to a cluster (even a single-node cluster).
+	noLeader, err := noLeader(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if !noLeader {
+		addr, err := s.store.LeaderAddr()
+		if err != nil || addr == "" {
+			stats.Add(numLeaderNotFound, 1)
+			http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+			return
+		}
+	}
+
+	resp := NewResponse()
+
+	b, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	r.Body.Close()
+
+	stmts, err := ParseRequest(b)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	for i := range stmts {
+		if err := s.stmtQueue.Write(stmts[i]); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	s.writeResponse(w, r, resp)
+	return
 }
 
 // handleExecute handles queries that modify the database.
@@ -1165,6 +1268,48 @@ func (s *Service) LeaderAPIAddr() string {
 		return ""
 	}
 	return apiAddr
+}
+
+func (s *Service) runQueue() {
+	defer close(s.queueDone)
+	retryDelay := time.Second
+
+	var err error
+	for {
+		select {
+		case <-s.closeCh:
+			return
+		case stmts := <-s.stmtQueue.C:
+			er := &command.ExecuteRequest{
+				Request: &command.Request{
+					Statements: stmts,
+				},
+			}
+			for {
+				_, err = s.store.Execute(er)
+				if err != nil {
+					if err == store.ErrNotLeader {
+						addr, err := s.store.LeaderAddr()
+						if err != nil || addr == "" {
+							s.logger.Println("execute queue can't find leader")
+							stats.Add(numQueuedExecutionsFailed, 1)
+							time.Sleep(retryDelay)
+							continue
+						}
+						_, err = s.cluster.Execute(er, addr, defaultTimeout)
+						if err != nil {
+							s.logger.Printf("execute queue write failed: %s", err.Error())
+							time.Sleep(retryDelay)
+							continue
+						}
+						stats.Add(numRemoteExecutions, 1)
+					}
+				}
+				stats.Add(numQueuedExecutionsOK, 1)
+				break
+			}
+		}
+	}
 }
 
 type checkNodesResponse struct {
