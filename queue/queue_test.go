@@ -64,6 +64,9 @@ func Test_NewQueueWriteBatchSizeMulti(t *testing.T) {
 		if len(stmts) != 5 {
 			t.Fatalf("received wrong length slice")
 		}
+		if q.numTimeouts != 0 {
+			t.Fatalf("queue timeout expired?")
+		}
 	case <-time.NewTimer(5 * time.Second).C:
 		t.Fatalf("timed out waiting for first statements")
 	}
@@ -78,6 +81,9 @@ func Test_NewQueueWriteBatchSizeMulti(t *testing.T) {
 	case stmts := <-q.C:
 		if len(stmts) < 5 {
 			t.Fatalf("received too-short slice")
+		}
+		if q.numTimeouts != 0 {
+			t.Fatalf("queue timeout expired?")
 		}
 	case <-time.NewTimer(5 * time.Second).C:
 		t.Fatalf("timed out waiting for second statements")
@@ -99,6 +105,9 @@ func Test_NewQueueWriteTimeout(t *testing.T) {
 		}
 		if stmts[0].Sql != "SELECT * FROM foo" {
 			t.Fatalf("received wrong SQL")
+		}
+		if q.numTimeouts != 1 {
+			t.Fatalf("queue timeout didn't expire")
 		}
 	case <-time.NewTimer(5 * time.Second).C:
 		t.Fatalf("timed out waiting for statement")
@@ -122,6 +131,9 @@ func Test_NewQueueWriteTimeoutMulti(t *testing.T) {
 		if stmts[0].Sql != "SELECT * FROM foo" {
 			t.Fatalf("received wrong SQL")
 		}
+		if q.numTimeouts != 1 {
+			t.Fatalf("queue timeout didn't expire")
+		}
 	case <-time.NewTimer(5 * time.Second).C:
 		t.Fatalf("timed out waiting for first statement")
 	}
@@ -137,6 +149,9 @@ func Test_NewQueueWriteTimeoutMulti(t *testing.T) {
 		if stmts[0].Sql != "SELECT * FROM foo" {
 			t.Fatalf("received wrong SQL")
 		}
+		if q.numTimeouts != 2 {
+			t.Fatalf("queue timeout didn't expire")
+		}
 	case <-time.NewTimer(5 * time.Second).C:
 		t.Fatalf("timed out waiting for second statement")
 	}
@@ -145,7 +160,7 @@ func Test_NewQueueWriteTimeoutMulti(t *testing.T) {
 // Test_NewQueueWriteTimeoutBatch ensures that timer expiring
 // followed by a batch, works fine.
 func Test_NewQueueWriteTimeoutBatch(t *testing.T) {
-	q := New(1024, 2, 2*time.Second)
+	q := New(1024, 2, 1*time.Second)
 	defer q.Close()
 
 	if err := q.Write(testStmt); err != nil {
@@ -160,6 +175,9 @@ func Test_NewQueueWriteTimeoutBatch(t *testing.T) {
 		if stmts[0].Sql != "SELECT * FROM foo" {
 			t.Fatalf("received wrong SQL")
 		}
+		if q.numTimeouts != 1 {
+			t.Fatalf("queue timeout didn't expire")
+		}
 	case <-time.NewTimer(5 * time.Second).C:
 		t.Fatalf("timed out waiting for statement")
 	}
@@ -172,14 +190,17 @@ func Test_NewQueueWriteTimeoutBatch(t *testing.T) {
 	}
 	select {
 	case stmts := <-q.C:
+		// Should happen before the timeout expires.
 		if len(stmts) != 2 {
 			t.Fatalf("received wrong length slice")
 		}
 		if stmts[0].Sql != "SELECT * FROM foo" {
 			t.Fatalf("received wrong SQL")
 		}
-	case <-time.NewTimer(500 * time.Millisecond).C:
-		// Should happen before the timeout expires.
+		if q.numTimeouts != 1 {
+			t.Fatalf("queue timeout expired?")
+		}
+	case <-time.NewTimer(5 * time.Second).C:
 		t.Fatalf("timed out waiting for statement")
 	}
 }

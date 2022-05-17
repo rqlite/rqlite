@@ -19,6 +19,9 @@ type Queue struct {
 	done   chan struct{}
 	closed chan struct{}
 	flush  chan struct{}
+
+	// Whitebox unit-testing
+	numTimeouts int
 }
 
 // New returns a instance of a Queue
@@ -96,6 +99,7 @@ func (q *Queue) run() {
 				writeFn()
 			}
 		case <-timer.C:
+			q.numTimeouts++
 			writeFn()
 		case <-q.flush:
 			writeFn()
