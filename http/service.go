@@ -722,10 +722,20 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 		oss["hostname"] = hostname
 	}
 
+	qs, err := s.stmtQueue.Stats()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("cluster stats: %s", err.Error()),
+			http.StatusInternalServerError)
+		return
+	}
+	queueStats := map[string]interface{}{
+		"_default": qs,
+	}
 	httpStatus := map[string]interface{}{
 		"bind_addr": s.Addr().String(),
 		"auth":      prettyEnabled(s.credentialStore != nil),
 		"cluster":   clusterStatus,
+		"queue":     queueStats,
 	}
 
 	nodeStatus := map[string]interface{}{

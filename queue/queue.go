@@ -73,6 +73,15 @@ func (q *Queue) Depth() int {
 	return len(q.batchCh)
 }
 
+// Stats returns stats on this queue.
+func (q *Queue) Stats() (map[string]interface{}, error) {
+	return map[string]interface{}{
+		"max_size":   q.maxSize,
+		"batch_size": q.batchSize,
+		"timeout":    q.timeout,
+	}, nil
+}
+
 func (q *Queue) run() {
 	defer close(q.closed)
 	var stmts []*command.Statement
