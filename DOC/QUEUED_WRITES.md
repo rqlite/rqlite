@@ -13,7 +13,7 @@ curl -XPOST 'localhost:4001/db/execute?queue' -H "Content-Type: application/json
 ```
 Setting the URL query parameter `queue` enables queue mode, adding the request data to an internal queue.
 
-rqlite will merge queued requests, and execute them as though they had been both contained in a single request. For the same reason that using the [Bulk API](https://github.com/rqlite/rqlite/blob/master/DOC/BULK.md) results in much higher write performance, using the _Queued Writes_ API will also result in much higher write performance.
+rqlite will merge queued requests, and execute them as though they had been both contained in a single request. The net result is as if the client wrote a single Bulk request (assuming the queue timeout doesn't expire and result in the queue doing more that one Bulk update). For the same reason that using the [Bulk API](https://github.com/rqlite/rqlite/blob/master/DOC/BULK.md) results in much higher write performance, using the _Queued Writes_ API will also result in much higher write performance.
 
 The behaviour of the queue rqlite uses to batch the requests is configurable at rqlite launch time. Pass `-h` to `rqlited` to see the queue defaults, and list all configuration options.
 
