@@ -190,8 +190,6 @@ const (
 	// node (by node Raft address) actually served the request if
 	// it wasn't served by this node.
 	ServedByHTTPHeader = "X-RQLITE-SERVED-BY"
-
-	noTimeout = 0
 )
 
 func init() {
@@ -724,7 +722,7 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 
 	qs, err := s.stmtQueue.Stats()
 	if err != nil {
-		http.Error(w, fmt.Sprintf("cluster stats: %s", err.Error()),
+		http.Error(w, fmt.Sprintf("queue stats: %s", err.Error()),
 			http.StatusInternalServerError)
 		return
 	}
