@@ -13,7 +13,7 @@ curl -XPOST 'localhost:4001/db/execute/queue/_default' -H "Content-Type: applica
 ```
 rqlite will merge these requests, and execute them as though they had been both contained in a single request. For the same reason that using the [Bulk API](https://github.com/rqlite/rqlite/blob/master/DOC/BULK.md) results in much higher write performance, using the _Queued Writes_ API will also result in much higher write performance.
 
-The behaviour of the queue rqlite uses to batch the requests is configurable at rqlite launch time. Pass `-h` to `rqlited` to list all configuration options.
+The behaviour of the queue rqlite uses to batch the requests is configurable at rqlite launch time. Pass `-h` to `rqlited` to see the queue defaults, and list all configuration options.
 
 ## Caveats
 Because the API returns immediately after queuing the requests **but before the data is commited to the SQLite database** there is a risk of data loss in the event the node crashes before queued data is persisted.
