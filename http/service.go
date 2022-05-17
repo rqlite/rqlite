@@ -938,6 +938,22 @@ func (s *Service) handleQueuedExecute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Perform a leader check, unless disabled. This prevents generating queued writes on
+	// a node that does not appear to be connected to a cluster (even a single-node cluster).
+	noLeader, err := noLeader(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if !noLeader {
+		addr, err := s.store.LeaderAddr()
+		if err != nil || addr == "" {
+			stats.Add(numLeaderNotFound, 1)
+			http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+			return
+		}
+	}
+
 	resp := NewResponse()
 
 	b, err := ioutil.ReadAll(r.Body)
@@ -953,8 +969,10 @@ func (s *Service) handleQueuedExecute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for i := range stmts {
-		// XXX errors! check them
-		s.stmtQueue.Write(stmts[i])
+		if err := s.stmtQueue.Write(stmts[i]); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 
 	s.writeResponse(w, r, resp)
@@ -1238,7 +1256,9 @@ func (s *Service) LeaderAPIAddr() string {
 
 func (s *Service) runQueue() {
 	defer close(s.queueDone)
+	retryDelay := time.Second
 
+	var err error
 	for {
 		select {
 		case <-s.closeCh:
@@ -1250,27 +1270,27 @@ func (s *Service) runQueue() {
 				},
 			}
 			for {
-				_, resultsErr := s.store.Execute(er)
-				if resultsErr != nil && resultsErr == store.ErrNotLeader {
-					addr, err := s.store.LeaderAddr()
-					if err == nil && addr != "" {
-						_, resultsErr = s.cluster.Execute(er, addr, noTimeout)
-						if resultsErr == nil {
-							stats.Add(numRemoteExecutions, 1)
-							stats.Add(numQueuedExecutionsOK, 1)
-							break
-						} else {
+				_, err = s.store.Execute(er)
+				if err != nil {
+					if err == store.ErrNotLeader {
+						addr, err := s.store.LeaderAddr()
+						if err != nil || addr == "" {
+							s.logger.Println("execute queue can't find leader")
 							stats.Add(numQueuedExecutionsFailed, 1)
+							time.Sleep(retryDelay)
+							continue
 						}
+						_, err = s.cluster.Execute(er, addr, noTimeout)
+						if err != nil {
+							s.logger.Printf("execute queue write failed: %s", err.Error())
+							time.Sleep(retryDelay)
+							continue
+						}
+						stats.Add(numRemoteExecutions, 1)
 					}
 				}
-				if resultsErr != nil {
-					stats.Add(numQueuedExecutionsFailed, 1)
-					break
-				} else {
-					stats.Add(numQueuedExecutionsOK, 1)
-
-				}
+				stats.Add(numQueuedExecutionsOK, 1)
+				break
 			}
 		}
 	}
