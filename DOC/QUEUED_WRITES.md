@@ -18,7 +18,7 @@ rqlite will merge queued requests, and execute them as though they had been both
 The behaviour of the queue rqlite uses to batch the requests is configurable at rqlite launch time. Pass `-h` to `rqlited` to see the queue defaults, and list all configuration options.
 
 ## Caveats
-Because the API returns immediately after queuing the requests **but before the data is commited to the SQLite database** there is a risk of data loss in the event the node crashes before queued data is persisted.
+Because the API returns immediately after queuing the requests **but before the data is commited to the Raft log and SQLite database** there is a risk of data loss in the event the node crashes before queued data is persisted.
 
 Like most databases there is a trade-off to be made between write-performance and durability. In addition, when the API returns `HTTP 200 OK`, that simply acknowledges that the data has been queued correctly. It does not indicate that the SQL statements will actually be applied successfully to the database. Be sure to check the node's logs if you have any concerns about failed queued writes.
 
