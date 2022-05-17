@@ -252,6 +252,10 @@ type Service struct {
 	KeyFile    string // Path to SSL private key.
 	TLS1011    bool   // Whether older, deprecated TLS should be supported.
 
+	DefaultQueueCap     int
+	DefaultQueueBatchSz int
+	DefaultQueueTimeout time.Duration
+
 	credentialStore CredentialStore
 
 	Expvar bool
@@ -266,16 +270,18 @@ type Service struct {
 // the service performs no authentication and authorization checks.
 func New(addr string, store Store, cluster Cluster, credentials CredentialStore) *Service {
 	return &Service{
-		closeCh:         make(chan struct{}),
-		addr:            addr,
-		store:           store,
-		queueDone:       make(chan struct{}),
-		stmtQueue:       queue.New(1024, 64, 100*time.Millisecond),
-		cluster:         cluster,
-		start:           time.Now(),
-		statuses:        make(map[string]StatusReporter),
-		credentialStore: credentials,
-		logger:          log.New(os.Stderr, "[http] ", log.LstdFlags),
+		closeCh:             make(chan struct{}),
+		addr:                addr,
+		store:               store,
+		queueDone:           make(chan struct{}),
+		DefaultQueueCap:     1024,
+		DefaultQueueBatchSz: 128,
+		DefaultQueueTimeout: 100 * time.Millisecond,
+		cluster:             cluster,
+		start:               time.Now(),
+		statuses:            make(map[string]StatusReporter),
+		credentialStore:     credentials,
+		logger:              log.New(os.Stderr, "[http] ", log.LstdFlags),
 	}
 }
 
@@ -305,8 +311,10 @@ func (s *Service) Start() error {
 	}
 	s.ln = ln
 
+	s.stmtQueue = queue.New(s.DefaultQueueCap, s.DefaultQueueBatchSz, s.DefaultQueueTimeout)
 	go s.runQueue()
-	s.logger.Println("execute queue processing started")
+	s.logger.Printf("execute queue processing started with capacity %d, batch size %d, timeout %s",
+		s.DefaultQueueCap, s.DefaultQueueBatchSz, s.DefaultQueueTimeout.String())
 
 	go func() {
 		err := server.Serve(s.ln)
@@ -321,6 +329,8 @@ func (s *Service) Start() error {
 
 // Close closes the service.
 func (s *Service) Close() {
+	s.stmtQueue.Close()
+
 	close(s.closeCh)
 	<-s.queueDone
 
