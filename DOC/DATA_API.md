@@ -198,7 +198,10 @@ $ curl -v -G 'localhost:4003/db/query?pretty&timings&redirect' --data-urlencode 
 * Connection #0 to host localhost left intact
 ```
 
+## Queued Writes API
+You can learn about the Queued Writes API [here](https://github.com/rqlite/rqlite/blob/master/DOC/QUEUED_WRITES.md).
+
 ## Bulk API
-You can learn about the bulk API [here](https://github.com/rqlite/rqlite/blob/master/DOC/BULK.md).
+You can learn about the Bulk API [here](https://github.com/rqlite/rqlite/blob/master/DOC/BULK.md).
 
 
