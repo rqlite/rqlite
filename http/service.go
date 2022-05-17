@@ -25,6 +25,7 @@ import (
 	"github.com/rqlite/rqlite/auth"
 	"github.com/rqlite/rqlite/command"
 	"github.com/rqlite/rqlite/command/encoding"
+	"github.com/rqlite/rqlite/queue"
 	"github.com/rqlite/rqlite/store"
 )
 
@@ -145,6 +146,7 @@ var stats *expvar.Map
 const (
 	numLeaderNotFound   = "leader_not_found"
 	numExecutions       = "executions"
+	numQueuedExecutions = "queued_executions"
 	numQueries          = "queries"
 	numRemoteExecutions = "remote_executions"
 	numRemoteQueries    = "remote_queries"
@@ -226,6 +228,8 @@ type Service struct {
 
 	store Store // The Raft-backed database store.
 
+	stmtQueue *queue.Queue // Queue for queued executes
+
 	cluster Cluster // The Cluster service.
 
 	start      time.Time // Start up time.
@@ -255,6 +259,7 @@ func New(addr string, store Store, cluster Cluster, credentials CredentialStore)
 	return &Service{
 		addr:            addr,
 		store:           store,
+		stmtQueue:       queue.New(1024, 64, 100*time.Millisecond),
 		cluster:         cluster,
 		start:           time.Now(),
 		statuses:        make(map[string]StatusReporter),
@@ -318,6 +323,9 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.URL.Path == "/" || r.URL.Path == "":
 		http.Redirect(w, r, "/status", http.StatusFound)
+	case strings.HasPrefix(r.URL.Path, "/db/execute/queue/_default"):
+		stats.Add(numQueuedExecutions, 1)
+		s.handleQueuedExecute(w, r)
 	case strings.HasPrefix(r.URL.Path, "/db/execute"):
 		stats.Add(numExecutions, 1)
 		s.handleExecute(w, r)
@@ -890,6 +898,43 @@ func (s *Service) handleReadyz(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusServiceUnavailable)
 	w.Write([]byte("[+]node ok\n[+]leader does not exist"))
+}
+
+// handleQueuedExecute handles queued queries that modify the database.
+func (s *Service) handleQueuedExecute(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+	if !s.CheckRequestPerm(r, PermExecute) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	resp := NewResponse()
+
+	b, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	r.Body.Close()
+
+	stmts, err := ParseRequest(b)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	for i := range stmts {
+		// XXX errors! check them
+		s.stmtQueue.Write(stmts[i])
+	}
+
+	s.writeResponse(w, r, resp)
+	return
 }
 
 // handleExecute handles queries that modify the database.
