@@ -253,6 +253,7 @@ type Service struct {
 	DefaultQueueCap     int
 	DefaultQueueBatchSz int
 	DefaultQueueTimeout time.Duration
+	DefaultQueueTx      bool
 
 	credentialStore CredentialStore
 
@@ -1282,7 +1283,8 @@ func (s *Service) runQueue() {
 		case stmts := <-s.stmtQueue.C:
 			er := &command.ExecuteRequest{
 				Request: &command.Request{
-					Statements: stmts,
+					Statements:  stmts,
+					Transaction: s.DefaultQueueTx,
 				},
 			}
 			for {
