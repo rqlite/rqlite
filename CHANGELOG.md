@@ -1,6 +1,7 @@
 ## 7.5.0 (unreleased)
 ### New features
 - [PR #1019](https://github.com/rqlite/rqlite/pull/1019): CLI supports restoring from SQLite database files.
+- [PR #1024](https://github.com/rqlite/rqlite/pull/1024): Add support for Queued Writes. Fixes [issue #1020](https://github.com/rqlite/rqlite/issues/1020).
 
 ## 7.4.0 (May 10th 2022)
 With this release rqlite supports restoring a node from an actual SQLite file, which is very much faster than restoring using the SQL dump representation of the same SQLite database.
