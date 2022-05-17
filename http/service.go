@@ -330,10 +330,7 @@ func (s *Service) Start() error {
 // Close closes the service.
 func (s *Service) Close() {
 	s.stmtQueue.Close()
-
 	close(s.closeCh)
-	<-s.queueDone
-
 	s.ln.Close()
 	return
 }
