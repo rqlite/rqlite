@@ -462,6 +462,18 @@ class Node(object):
     raise_for_status(r)
     return r.json()
 
+  def execute_queued(self, statement, params=None, queue='_default'):
+    body = [statement]
+    if params is not None:
+      try:
+        body = body + params
+      except TypeError:
+        # Presumably not a list, so append as an object.
+        body.append(params)
+    r = requests.post(self._execute_queued_url(queue), data=json.dumps([body]))
+    raise_for_status(r)
+    return r.json()
+
   def backup(self, file):
     with open(file, 'wb') as fd:
       r = requests.get(self._backup_url())
@@ -514,6 +526,8 @@ class Node(object):
     if redirect:
       rd = "?redirect"
     return 'http://' + self.APIAddr() + '/db/execute' + rd
+  def _execute_queued_url(self, queue):
+    return 'http://' + self.APIAddr() + '/db/execute/queue/' + queue
   def _backup_url(self):
     return 'http://' + self.APIAddr() + '/db/backup'
   def _load_url(self):
@@ -1158,6 +1172,31 @@ class TestRequestForwarding(unittest.TestCase):
       self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
       j = f.query('SELECT * FROM foo', level="strong")
       self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
+
+  def test_execute_queued_forward(self):
+      l = self.cluster.wait_for_leader()
+      j = l.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
+      self.assertEqual(j, d_("{'results': [{}]}"))
+
+      f = self.cluster.followers()[0]
+      j = f.execute('INSERT INTO foo(name) VALUES("fiona")')
+      self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
+      fsmIdx = l.wait_for_all_fsm()
+
+      j = f.execute_queued('INSERT INTO foo(name) VALUES("declan")')
+      self.assertEqual(j, d_("{'results': []}"))
+
+      # Wait for queued write to happen.
+      timeout = 10
+      t = 0
+      while True:
+        j = l.query('SELECT * FROM foo')
+        if j == d_("{'results': [{'values': [[1, 'fiona'], [2, 'declan']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"):
+          break
+        if t > timeout:
+          raise Exception('timeout', nSnaps)
+        time.sleep(1)
+        t+=1
 
 class TestEndToEndNonVoter(unittest.TestCase):
   def setUp(self):
