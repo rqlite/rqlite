@@ -219,7 +219,7 @@ func Test_MultiNodeClusterQueuedRequestForwardOK(t *testing.T) {
 		t.Fatalf("got incorrect response from follower exp: %s, got: %s", exp, got)
 	}
 
-	// Write a request to a follower's queue, checking it's eventually sent to leader.
+	// Write a request to a follower's queue, checking it's eventually sent to the leader.
 	followers, err := c.Followers()
 	if err != nil {
 		t.Fatalf("failed to get followers: %s", err.Error())
