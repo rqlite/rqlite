@@ -173,6 +173,9 @@ type Config struct {
 	// Execute queues, if a batch size has not been reached.
 	WriteQueueTimeout time.Duration
 
+	// WriteQueueTx controls whether writes from the queue are done within a transaction.
+	WriteQueueTx bool
+
 	// CompressionSize sets request query size for compression attempt
 	CompressionSize int
 
@@ -364,6 +367,7 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	flag.StringVar(&config.RaftLogLevel, "raft-log-level", "INFO", "Minimum log level for Raft module")
 	flag.IntVar(&config.WriteQueueCap, "write-queue-capacity", 1024, "Write queue capacity")
 	flag.IntVar(&config.WriteQueueBatchSz, "write-queue-batch-size", 64, "Write queue batch size")
+	flag.BoolVar(&config.WriteQueueTx, "write-queue-tx", false, "Use a transaction when writing from queue")
 	flag.DurationVar(&config.WriteQueueTimeout, "write-queue-timeout", 100*time.Millisecond, "Write queue timeout")
 	flag.IntVar(&config.CompressionSize, "compression-size", 150, "Request query size for compression attempt")
 	flag.IntVar(&config.CompressionBatch, "compression-batch", 5, "Request batch threshold for compression attempt")

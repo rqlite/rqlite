@@ -462,7 +462,7 @@ class Node(object):
     raise_for_status(r)
     return r.json()
 
-  def execute_queued(self, statement, params=None, queue='_default'):
+  def execute_queued(self, statement, params=None):
     body = [statement]
     if params is not None:
       try:
@@ -470,7 +470,7 @@ class Node(object):
       except TypeError:
         # Presumably not a list, so append as an object.
         body.append(params)
-    r = requests.post(self._execute_queued_url(queue), data=json.dumps([body]))
+    r = requests.post(self._execute_queued_url(), data=json.dumps([body]))
     raise_for_status(r)
     return r.json()
 
@@ -526,8 +526,8 @@ class Node(object):
     if redirect:
       rd = "?redirect"
     return 'http://' + self.APIAddr() + '/db/execute' + rd
-  def _execute_queued_url(self, queue):
-    return 'http://' + self.APIAddr() + '/db/execute/queue/' + queue
+  def _execute_queued_url(self):
+    return 'http://' + self.APIAddr() + '/db/execute?queue'
   def _backup_url(self):
     return 'http://' + self.APIAddr() + '/db/backup'
   def _load_url(self):

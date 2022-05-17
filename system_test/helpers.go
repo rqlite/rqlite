@@ -336,7 +336,7 @@ func (n *Node) postExecute(stmt string) (string, error) {
 }
 
 func (n *Node) postExecuteQueued(stmt string) (string, error) {
-	resp, err := http.Post("http://"+n.APIAddr+"/db/execute/queue/_default", "application/json", strings.NewReader(stmt))
+	resp, err := http.Post("http://"+n.APIAddr+"/db/execute?queue", "application/json", strings.NewReader(stmt))
 	if err != nil {
 		return "", err
 	}

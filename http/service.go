@@ -253,6 +253,7 @@ type Service struct {
 	DefaultQueueCap     int
 	DefaultQueueBatchSz int
 	DefaultQueueTimeout time.Duration
+	DefaultQueueTx      bool
 
 	credentialStore CredentialStore
 
@@ -353,9 +354,6 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.URL.Path == "/" || r.URL.Path == "":
 		http.Redirect(w, r, "/status", http.StatusFound)
-	case strings.HasPrefix(r.URL.Path, "/db/execute/queue/_default"):
-		stats.Add(numQueuedExecutions, 1)
-		s.handleQueuedExecute(w, r)
 	case strings.HasPrefix(r.URL.Path, "/db/execute"):
 		stats.Add(numExecutions, 1)
 		s.handleExecute(w, r)
@@ -940,8 +938,7 @@ func (s *Service) handleReadyz(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("[+]node ok\n[+]leader does not exist"))
 }
 
-// handleQueuedExecute handles queued queries that modify the database.
-func (s *Service) handleQueuedExecute(w http.ResponseWriter, r *http.Request) {
+func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 
 	if !s.CheckRequestPerm(r, PermExecute) {
@@ -954,6 +951,22 @@ func (s *Service) handleQueuedExecute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	queue, err := isQueue(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if queue {
+		stats.Add(numQueuedExecutions, 1)
+		s.queuedExecute(w, r)
+	} else {
+		s.execute(w, r)
+	}
+}
+
+// queuedExecute handles queued queries that modify the database.
+func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request) {
 	// Perform a leader check, unless disabled. This prevents generating queued writes on
 	// a node that does not appear to be connected to a cluster (even a single-node cluster).
 	noLeader, err := noLeader(r)
@@ -995,20 +1008,8 @@ func (s *Service) handleQueuedExecute(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
-// handleExecute handles queries that modify the database.
-func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-
-	if !s.CheckRequestPerm(r, PermExecute) {
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-
-	if r.Method != "POST" {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
+// execute handles queries that modify the database.
+func (s *Service) execute(w http.ResponseWriter, r *http.Request) {
 	resp := NewResponse()
 
 	timeout, isTx, timings, redirect, err := reqParams(r, defaultTimeout)
@@ -1282,7 +1283,8 @@ func (s *Service) runQueue() {
 		case stmts := <-s.stmtQueue.C:
 			er := &command.ExecuteRequest{
 				Request: &command.Request{
-					Statements: stmts,
+					Statements:  stmts,
+					Transaction: s.DefaultQueueTx,
 				},
 			}
 			for {
@@ -1499,6 +1501,11 @@ func timeoutParam(req *http.Request, def time.Duration) (time.Duration, error) {
 // isTx returns whether the HTTP request is requesting a transaction.
 func isTx(req *http.Request) (bool, error) {
 	return queryParam(req, "transaction")
+}
+
+// isQueue returns whether the HTTP request is requesting a queue.
+func isQueue(req *http.Request) (bool, error) {
+	return queryParam(req, "queue")
 }
 
 // reqParams is a convenience function to get a bunch of query params
