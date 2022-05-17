@@ -15,10 +15,11 @@ Setting the URL query parameter `queue` enables queue mode, adding the request d
 
 rqlite will merge queued requests, and execute them as though they had been both contained in a single request. The net result is as if the client wrote a single Bulk request (assuming the queue timeout doesn't expire and result in the queue doing more that one Bulk update). For the same reason that using the [Bulk API](https://github.com/rqlite/rqlite/blob/master/DOC/BULK.md) results in much higher write performance, using the _Queued Writes_ API will also result in much higher write performance.
 
-The behaviour of the queue rqlite uses to batch the requests is configurable at rqlite launch time. Pass `-h` to `rqlited` to see the queue defaults, and list all configuration options.
+The behaviour of the queue rqlite uses to batch the requests is configurable at rqlite launch time. Pass `-h` to `rqlited` to see the queue defaults, and list all command-line options.
 
 ## Caveats
 Because the API returns immediately after queuing the requests **but before the data is commited to the Raft log and SQLite database** there is a risk of data loss in the event the node crashes before queued data is persisted.
 
 Like most databases there is a trade-off to be made between write-performance and durability. In addition, when the API returns `HTTP 200 OK`, that simply acknowledges that the data has been queued correctly. It does not indicate that the SQL statements will actually be applied successfully to the database. Be sure to check the node's logs if you have any concerns about failed queued writes.
 
+By default, writes from the queue are not performed within a transaction. If you wish to change this, it must be set at launch time via the command line option `-write-queue-tx`.
