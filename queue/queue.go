@@ -56,8 +56,12 @@ func (q *Queue) Flush() error {
 
 // Close closes the queue. A closed queue should not be used.
 func (q *Queue) Close() error {
-	close(q.done)
-	<-q.closed
+	select {
+	case <-q.done:
+	default:
+		close(q.done)
+		<-q.closed
+	}
 	return nil
 }
 
