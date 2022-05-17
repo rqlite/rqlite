@@ -232,14 +232,21 @@ func Test_MultiNodeClusterQueuedRequestForwardOK(t *testing.T) {
 		t.Fatalf("failed to insert record: %s", err.Error())
 	}
 
-	time.Sleep(1 * time.Second)
-
-	rows, err = leader.Query(`SELECT COUNT(*) FROM foo`)
-	if err != nil {
-		t.Fatalf("failed to query for count: %s", err.Error())
-	}
-	if exp, got := `{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[1]]}]}`, rows; exp != got {
-		t.Fatalf("got incorrect response from follower exp: %s, got: %s", exp, got)
+	ticker := time.NewTicker(10 * time.Millisecond)
+	timer := time.NewTimer(5 * time.Second)
+	for {
+		select {
+		case <-ticker.C:
+			r, err := leader.Query(`SELECT COUNT(*) FROM foo`)
+			if err != nil {
+				t.Fatalf("failed to query for count: %s", err.Error())
+			}
+			if r == `{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[1]]}]}` {
+				return
+			}
+		case <-timer.C:
+			t.Fatalf("timed out waiting for queued writes")
+		}
 	}
 }
 
