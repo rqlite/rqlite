@@ -100,6 +100,11 @@ func (n *Node) ExecuteParameterized(stmt []interface{}) (string, error) {
 	return n.postExecute(string(j))
 }
 
+// ExecuteQueued sends a single statement to the node's Execute queue
+func (n *Node) ExecuteQueued(stmt string) (string, error) {
+	return n.ExecuteQueuedMulti([]string{stmt})
+}
+
 // ExecuteQueuedMulti sends multiple statements to the node's Execute queue
 func (n *Node) ExecuteQueuedMulti(stmts []string) (string, error) {
 	j, err := json.Marshal(stmts)

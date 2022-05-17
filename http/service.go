@@ -1285,7 +1285,7 @@ func (s *Service) runQueue() {
 							time.Sleep(retryDelay)
 							continue
 						}
-						_, err = s.cluster.Execute(er, addr, noTimeout)
+						_, err = s.cluster.Execute(er, addr, defaultTimeout)
 						if err != nil {
 							s.logger.Printf("execute queue write failed: %s", err.Error())
 							time.Sleep(retryDelay)
