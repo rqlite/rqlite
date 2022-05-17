@@ -1,7 +1,6 @@
 package queue
 
 import (
-	"sync"
 	"testing"
 	"time"
 
@@ -13,7 +12,7 @@ var testStmt = &command.Statement{
 }
 
 func Test_NewQueue(t *testing.T) {
-	q := New(1, 1, 100*time.Millisecond, nil)
+	q := New(1, 1, 100*time.Millisecond)
 	if q == nil {
 		t.Fatalf("failed to create new Queue")
 	}
@@ -21,8 +20,7 @@ func Test_NewQueue(t *testing.T) {
 }
 
 func Test_NewQueueWriteNil(t *testing.T) {
-	m := &MockExecer{}
-	q := New(1, 1, 60*time.Second, m)
+	q := New(1, 1, 60*time.Second)
 	defer q.Close()
 
 	if err := q.Write(nil); err != nil {
@@ -30,93 +28,79 @@ func Test_NewQueueWriteNil(t *testing.T) {
 	}
 }
 
-func Test_NewQueueWriteBatchSize(t *testing.T) {
-	m := &MockExecer{}
-	q := New(1024, 1, 60*time.Second, m)
+func Test_NewQueueWriteBatchSizeSingle(t *testing.T) {
+	q := New(1024, 1, 60*time.Second)
 	defer q.Close()
-
-	var wg sync.WaitGroup
-	var numExecs int
-	wg.Add(1)
-	m.execFn = func(er *command.ExecuteRequest) ([]*command.ExecuteResult, error) {
-		wg.Done()
-		numExecs++
-		return nil, nil
-	}
 
 	if err := q.Write(testStmt); err != nil {
 		t.Fatalf("failed to write: %s", err.Error())
 	}
-	wg.Wait()
 
-	if exp, got := 1, numExecs; exp != got {
-		t.Fatalf("exec not called correct number of times, exp %d got %d", exp, got)
+	select {
+	case stmts := <-q.C:
+		if len(stmts) != 1 {
+			t.Fatalf("received wrong length slice")
+		}
+		if stmts[0].Sql != "SELECT * FROM foo" {
+			t.Fatalf("received wrong SQL")
+		}
+	case <-time.NewTimer(5 * time.Second).C:
+		t.Fatalf("timed out waiting for statement")
 	}
 }
 
-func Test_NewQueueWriteFlush(t *testing.T) {
-	m := &MockExecer{}
-	q := New(1024, 10, 60*time.Second, m)
+func Test_NewQueueWriteBatchSizeMulti(t *testing.T) {
+	q := New(1024, 5, 60*time.Second)
 	defer q.Close()
 
-	var wg sync.WaitGroup
-	var numExecs int
-	wg.Add(1)
-	m.execFn = func(er *command.ExecuteRequest) ([]*command.ExecuteResult, error) {
-		wg.Done()
-		numExecs++
-		return nil, nil
+	// Write a batch size and wait for it.
+	for i := 0; i < 5; i++ {
+		if err := q.Write(testStmt); err != nil {
+			t.Fatalf("failed to write: %s", err.Error())
+		}
+	}
+	select {
+	case stmts := <-q.C:
+		if len(stmts) != 5 {
+			t.Fatalf("received wrong length slice")
+		}
+	case <-time.NewTimer(5 * time.Second).C:
+		t.Fatalf("timed out waiting for first statements")
 	}
 
-	if err := q.Write(testStmt); err != nil {
-		t.Fatalf("failed to write: %s", err.Error())
+	// Write one more than a batch size, should still get a batch.
+	for i := 0; i < 6; i++ {
+		if err := q.Write(testStmt); err != nil {
+			t.Fatalf("failed to write: %s", err.Error())
+		}
 	}
-
-	time.Sleep(1 * time.Second)
-
-	if err := q.Flush(); err != nil {
-		t.Fatalf("failed to flush: %s", err.Error())
-	}
-	wg.Wait()
-
-	if exp, got := 1, numExecs; exp != got {
-		t.Fatalf("exec not called correct number of times, exp %d got %d", exp, got)
+	select {
+	case stmts := <-q.C:
+		if len(stmts) < 5 {
+			t.Fatalf("received too-short slice")
+		}
+	case <-time.NewTimer(5 * time.Second).C:
+		t.Fatalf("timed out waiting for second statements")
 	}
 }
 
 func Test_NewQueueWriteTimeout(t *testing.T) {
-	m := &MockExecer{}
-	q := New(1024, 10, 1*time.Second, m)
+	q := New(1024, 10, 1*time.Second)
 	defer q.Close()
-
-	var wg sync.WaitGroup
-	var numExecs int
-	wg.Add(1)
-	m.execFn = func(er *command.ExecuteRequest) ([]*command.ExecuteResult, error) {
-		wg.Done()
-		numExecs++
-		return nil, nil
-	}
 
 	if err := q.Write(testStmt); err != nil {
 		t.Fatalf("failed to write: %s", err.Error())
 	}
 
-	time.Sleep(time.Second)
-
-	wg.Wait()
-	if exp, got := 1, numExecs; exp != got {
-		t.Fatalf("exec not called correct number of times, exp %d got %d", exp, got)
+	select {
+	case stmts := <-q.C:
+		if len(stmts) != 1 {
+			t.Fatalf("received wrong length slice")
+		}
+		if stmts[0].Sql != "SELECT * FROM foo" {
+			t.Fatalf("received wrong SQL")
+		}
+	case <-time.NewTimer(5 * time.Second).C:
+		t.Fatalf("timed out waiting for statement")
 	}
-}
-
-type MockExecer struct {
-	execFn func(er *command.ExecuteRequest) ([]*command.ExecuteResult, error)
-}
-
-func (m *MockExecer) Execute(er *command.ExecuteRequest) ([]*command.ExecuteResult, error) {
-	if m.execFn != nil {
-		return m.execFn(er)
-	}
-	return nil, nil
 }

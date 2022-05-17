@@ -6,35 +6,33 @@ import (
 	"github.com/rqlite/rqlite/command"
 )
 
-type Execer interface {
-	Execute(er *command.ExecuteRequest) ([]*command.ExecuteResult, error)
-}
-
 type Queue struct {
 	maxSize   int
 	batchSize int
 	timeout   time.Duration
-	store     Execer
 
-	c chan *command.Statement
+	batchCh chan *command.Statement
+	sendCh  chan []*command.Statement
+	C       <-chan []*command.Statement
 
 	done   chan struct{}
 	closed chan struct{}
 	flush  chan struct{}
 }
 
-func New(maxSize, batchSize int, t time.Duration, e Execer) *Queue {
+func New(maxSize, batchSize int, t time.Duration) *Queue {
 	q := &Queue{
 		maxSize:   maxSize,
 		batchSize: batchSize,
 		timeout:   t,
-		store:     e,
-		c:         make(chan *command.Statement, maxSize),
+		batchCh:   make(chan *command.Statement, maxSize),
+		sendCh:    make(chan []*command.Statement, maxSize),
 		done:      make(chan struct{}),
 		closed:    make(chan struct{}),
 		flush:     make(chan struct{}),
 	}
 
+	q.C = q.sendCh
 	go q.run()
 	return q
 }
@@ -45,7 +43,7 @@ func (q *Queue) Write(stmt *command.Statement) error {
 	if stmt == nil {
 		return nil
 	}
-	q.c <- stmt
+	q.batchCh <- stmt
 	return nil
 }
 
@@ -61,7 +59,7 @@ func (q *Queue) Close() error {
 }
 
 func (q *Queue) Depth() int {
-	return len(q.c)
+	return len(q.batchCh)
 }
 
 func (q *Queue) run() {
@@ -71,19 +69,22 @@ func (q *Queue) run() {
 	timer.Stop()
 
 	writeFn := func(stmts []*command.Statement) {
-		q.exec(stmts)
+		newStmts := make([]*command.Statement, len(stmts))
+		copy(newStmts, stmts)
+		q.sendCh <- newStmts
+
 		stmts = nil
 		timer.Stop()
 	}
 
 	for {
 		select {
-		case s := <-q.c:
+		case s := <-q.batchCh:
 			stmts = append(stmts, s)
 			if len(stmts) == 1 {
 				timer.Reset(q.timeout)
 			}
-			if len(stmts) == q.batchSize {
+			if len(stmts) >= q.batchSize {
 				writeFn(stmts)
 			}
 		case <-timer.C:
@@ -95,21 +96,4 @@ func (q *Queue) run() {
 			return
 		}
 	}
-}
-
-func (q *Queue) exec(stmts []*command.Statement) error {
-	if stmts == nil || len(stmts) == 0 {
-		return nil
-	}
-
-	er := &command.ExecuteRequest{
-		Request: &command.Request{
-			Statements: stmts,
-		},
-	}
-
-	// Doesn't handle leader-redirect, transparent forwarding, etc.
-	// Would need a "wrapped" store which handles it.
-	_, err := q.store.Execute(er)
-	return err
 }
