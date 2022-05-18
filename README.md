@@ -23,7 +23,7 @@ rqlite uses [Raft](https://raft.github.io/) to achieve consensus across all the 
 - An easy-to-use [HTTP(S) API](https://github.com/rqlite/rqlite/blob/master/DOC/DATA_API.md). A [command-line interface is also available](https://github.com/rqlite/rqlite/tree/master/cmd/rqlite), as are various [client libraries](https://github.com/rqlite).
 - Multiple options for [node-discovery and automatic clustering, including integration with Kubernetes, Consul, etcd and DNS](https://github.com/rqlite/rqlite/blob/master/DOC/AUTO_CLUSTERING.md), allowing clusters to be dynamically created.
 - [Extensive security and encryption support](https://github.com/rqlite/rqlite/blob/master/DOC/SECURITY.md), including node-to-node encryption.
-- Choice of [read consistency levels](https://github.com/rqlite/rqlite/blob/master/DOC/CONSISTENCY.md).
+- Choice of [read consistency levels](https://github.com/rqlite/rqlite/blob/master/DOC/CONSISTENCY.md), and support for choosing [write performance over durability](https://github.com/rqlite/rqlite/blob/master/DOC/QUEUED_WRITES.md).
 - Optional [read-only (non-voting) nodes](https://github.com/rqlite/rqlite/blob/master/DOC/READ_ONLY_NODES.md), which can add read scalability to the system.
 - A form of transaction support.
 - Hot [backups](https://github.com/rqlite/rqlite/blob/master/DOC/BACKUPS.md), as well as [load directly from SQLite](https://github.com/rqlite/rqlite/blob/master/DOC/RESTORE_FROM_SQLITE.md).
