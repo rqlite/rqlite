@@ -1186,15 +1186,18 @@ class TestRequestForwarding(unittest.TestCase):
       j = f.execute_queued('INSERT INTO foo(name) VALUES("declan")')
       self.assertEqual(j, d_("{'results': []}"))
 
+      j = f.execute_queued('INSERT INTO foo(name) VALUES(?)', params=["aoife"])
+      self.assertEqual(j, d_("{'results': []}"))
+
       # Wait for queued write to happen.
       timeout = 10
       t = 0
       while True:
         j = l.query('SELECT * FROM foo')
-        if j == d_("{'results': [{'values': [[1, 'fiona'], [2, 'declan']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"):
+        if j == d_("{'results': [{'values': [[1, 'fiona'], [2, 'declan'], [3, 'aoife']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"):
           break
         if t > timeout:
-          raise Exception('timeout', nSnaps)
+          raise Exception('timeout')
         time.sleep(1)
         t+=1
 
