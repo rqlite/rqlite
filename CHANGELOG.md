@@ -5,6 +5,7 @@
 
 ### Implementation changes and bug fixes
 - [PR #1027](https://github.com/rqlite/rqlite/pull/1027): go mod (dependencies) updates, including upgrading SQLite to 3.38.5.
+- [PR #1030](https://github.com/rqlite/rqlite/pull/1030): Handle more connection errors. Fixes [issue #1029](https://github.com/rqlite/rqlite/issues/1029).
 
 ## 7.4.0 (May 10th 2022)
 With this release rqlite supports restoring a node from an actual SQLite file, which is very much faster than restoring using the SQL dump representation of the same SQLite database.
