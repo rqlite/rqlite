@@ -180,6 +180,7 @@ func (c *Client) Execute(er *command.ExecuteRequest, nodeAddr string, timeout ti
 	}
 	_, err = io.ReadFull(conn, b)
 	if err != nil {
+		handleConnError(conn)
 		return nil, err
 	}
 	sz := binary.LittleEndian.Uint32(b[0:])
@@ -192,6 +193,7 @@ func (c *Client) Execute(er *command.ExecuteRequest, nodeAddr string, timeout ti
 	}
 	_, err = io.ReadFull(conn, p)
 	if err != nil {
+		handleConnError(conn)
 		return nil, err
 	}
 
