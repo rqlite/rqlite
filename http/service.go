@@ -1035,7 +1035,7 @@ func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request) {
 
 	stmts, err := ParseRequest(b)
 	if err != nil {
-		if !wait || errors.Is(err, ErrNoStatements) {
+		if errors.Is(err, ErrNoStatements) && !wait {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
