@@ -284,6 +284,9 @@ type Service struct {
 	DefaultQueueTimeout time.Duration
 	DefaultQueueTx      bool
 
+	seqNumMu sync.Mutex
+	seqNum   int64 // Last sequence number written OK.
+
 	credentialStore CredentialStore
 
 	Expvar bool
@@ -753,6 +756,9 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 			http.StatusInternalServerError)
 		return
 	}
+	s.seqNumMu.Lock()
+	qs["sequence_number"] = s.seqNum
+	s.seqNumMu.Unlock()
 	queueStats := map[string]interface{}{
 		"_default": qs,
 	}
@@ -1366,6 +1372,10 @@ func (s *Service) runQueue() {
 						stats.Add(numRemoteExecutions, 1)
 					}
 				}
+				s.seqNumMu.Lock()
+				s.seqNum = req.SequenceNumber
+				s.seqNumMu.Unlock()
+
 				req.Close()
 				stats.Add(numQueuedExecutionsOK, 1)
 				break
