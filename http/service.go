@@ -1020,6 +1020,12 @@ func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	wait, err := isWait(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	b, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -1029,14 +1035,10 @@ func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request) {
 
 	stmts, err := ParseRequest(b)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	wait, err := isWait(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+		if errors.Is(err, ErrNoStatements) && !wait {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 	}
 
 	timeout, err := timeoutParam(r, defaultTimeout)
@@ -1353,25 +1355,29 @@ func (s *Service) runQueue() {
 				},
 			}
 			for {
-				_, err = s.store.Execute(er)
-				if err != nil {
-					if err == store.ErrNotLeader {
-						addr, err := s.store.LeaderAddr()
-						if err != nil || addr == "" {
-							s.logger.Printf("execute queue can't find leader for sequence number %d",
-								req.SequenceNumber)
-							stats.Add(numQueuedExecutionsFailed, 1)
-							time.Sleep(retryDelay)
-							continue
+				// Nil statements are valid, as clients may want to just send
+				// a "checkpoint" through the queue.
+				if er.Request.Statements != nil {
+					_, err = s.store.Execute(er)
+					if err != nil {
+						if err == store.ErrNotLeader {
+							addr, err := s.store.LeaderAddr()
+							if err != nil || addr == "" {
+								s.logger.Printf("execute queue can't find leader for sequence number %d",
+									req.SequenceNumber)
+								stats.Add(numQueuedExecutionsFailed, 1)
+								time.Sleep(retryDelay)
+								continue
+							}
+							_, err = s.cluster.Execute(er, addr, defaultTimeout)
+							if err != nil {
+								s.logger.Printf("execute queue write failed for sequence number %d: %s",
+									req.SequenceNumber, err.Error())
+								time.Sleep(retryDelay)
+								continue
+							}
+							stats.Add(numRemoteExecutions, 1)
 						}
-						_, err = s.cluster.Execute(er, addr, defaultTimeout)
-						if err != nil {
-							s.logger.Printf("execute queue write failed for sequence number %d: %s",
-								req.SequenceNumber, err.Error())
-							time.Sleep(retryDelay)
-							continue
-						}
-						stats.Add(numRemoteExecutions, 1)
 					}
 				}
 				s.seqNumMu.Lock()

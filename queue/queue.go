@@ -40,7 +40,6 @@ func mergeQueued(qs []*queuedStatements) *Request {
 		if o == nil {
 			o = &Request{
 				SequenceNumber: qs[i].SequenceNumber,
-				Statements:     make([]*command.Statement, 0),
 				flushChans:     make([]FlushChannel, 0),
 			}
 		} else {

@@ -466,6 +466,65 @@ LOOP2:
 	}
 }
 
+func Test_SingleNodeQueuedEmptyNil(t *testing.T) {
+	node := mustNewLeaderNode()
+	defer node.Deprovision()
+
+	_, err := node.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`)
+	if err != nil {
+		t.Fatalf(`CREATE TABLE failed: %s`, err.Error())
+	}
+
+	qWrites := []string{
+		`INSERT INTO foo(name) VALUES("fiona")`,
+		`INSERT INTO foo(name) VALUES("fiona")`,
+		`INSERT INTO foo(name) VALUES("fiona")`,
+	}
+	resp, err := node.ExecuteQueuedMulti(qWrites, false)
+	if err != nil {
+		t.Fatalf(`queued write failed: %s`, err.Error())
+	}
+	if !QueuedResponseRegex.MatchString(resp) {
+		t.Fatalf("queued response is not valid: %s", resp)
+	}
+
+	// Waiting for a queue write to complete means we should get the correct
+	// results immediately. But don't add any statements.
+	resp, err = node.ExecuteQueuedMulti([]string{}, true)
+	if err != nil {
+		t.Fatalf(`queued empty write failed: %s`, err.Error())
+	}
+	if !QueuedResponseRegex.MatchString(resp) {
+		t.Fatalf("queued response is not valid: %s", resp)
+	}
+	r, err := node.Query(`SELECT COUNT(*) FROM foo`)
+	if got, exp := r, `{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[3]]}]}`; got != exp {
+		t.Fatalf("incorrect results, exp: %s, got: %s", exp, got)
+	}
+
+	resp, err = node.ExecuteQueuedMulti(qWrites, false)
+	if err != nil {
+		t.Fatalf(`queued write failed: %s`, err.Error())
+	}
+	if !QueuedResponseRegex.MatchString(resp) {
+		t.Fatalf("queued response is not valid: %s", resp)
+	}
+
+	// Waiting for a queue write to complete means we should get the correct
+	// results immediately. But don't add any statements.
+	resp, err = node.ExecuteQueuedMulti(nil, true)
+	if err != nil {
+		t.Fatalf(`queued nil write failed: %s`, err.Error())
+	}
+	if !QueuedResponseRegex.MatchString(resp) {
+		t.Fatalf("queued response is not valid: %s", resp)
+	}
+	r, err = node.Query(`SELECT COUNT(*) FROM foo`)
+	if got, exp := r, `{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[6]]}]}`; got != exp {
+		t.Fatalf("incorrect results, exp: %s, got: %s", exp, got)
+	}
+}
+
 // Test_SingleNodeSQLInjection demonstrates that using the non-parameterized API is vulnerable to
 // SQL injection attacks.
 func Test_SingleNodeSQLInjection(t *testing.T) {
