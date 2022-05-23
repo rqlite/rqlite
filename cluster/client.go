@@ -106,6 +106,7 @@ func (c *Client) GetNodeAPIAddr(nodeAddr string, timeout time.Duration) (string,
 	}
 	_, err = io.ReadFull(conn, b)
 	if err != nil {
+		handleConnError(conn)
 		return "", err
 	}
 	sz := binary.LittleEndian.Uint16(b[0:])
@@ -118,6 +119,7 @@ func (c *Client) GetNodeAPIAddr(nodeAddr string, timeout time.Duration) (string,
 	}
 	_, err = io.ReadFull(conn, p)
 	if err != nil {
+		handleConnError(conn)
 		return "", err
 	}
 
@@ -260,6 +262,7 @@ func (c *Client) Query(qr *command.QueryRequest, nodeAddr string, timeout time.D
 	// Read length of response.
 	_, err = io.ReadFull(conn, b)
 	if err != nil {
+		handleConnError(conn)
 		return nil, err
 	}
 	sz := binary.LittleEndian.Uint32(b[0:])
@@ -268,6 +271,7 @@ func (c *Client) Query(qr *command.QueryRequest, nodeAddr string, timeout time.D
 	p = make([]byte, sz)
 	_, err = io.ReadFull(conn, p)
 	if err != nil {
+		handleConnError(conn)
 		return nil, err
 	}
 
