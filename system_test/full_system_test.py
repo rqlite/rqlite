@@ -14,6 +14,7 @@ import requests
 import json
 import os
 import random
+import re
 import shutil
 import time
 import socket
@@ -112,8 +113,13 @@ bJVERP8/VAJ61TDQJq+Il95fzKe4yTA3dDHnO+EG5W2eCsawTK4Ze5XAWqomgdew
 62D3AkJQiflLfJL8zTFph1FZXLOm
 -----END PRIVATE KEY-----'''
 
+seqRe = re.compile("^{'sequence_number': \d+}$")
+
 def d_(s):
     return ast.literal_eval(s.replace("'", "\""))
+
+def is_sequence_number(r):
+  return seqRe.match(r)
 
 def random_string(n):
   letters = string.ascii_lowercase
@@ -1184,10 +1190,10 @@ class TestRequestForwarding(unittest.TestCase):
       fsmIdx = l.wait_for_all_fsm()
 
       j = f.execute_queued('INSERT INTO foo(name) VALUES("declan")')
-      self.assertEqual(j, d_("{'results': []}"))
+      self.assertTrue(is_sequence_number(str(j)))
 
       j = f.execute_queued('INSERT INTO foo(name) VALUES(?)', params=["aoife"])
-      self.assertEqual(j, d_("{'results': []}"))
+      self.assertTrue(is_sequence_number(str(j)))
 
       # Wait for queued write to happen.
       timeout = 10
