@@ -1220,15 +1220,17 @@ class TestRequestForwarding(unittest.TestCase):
       self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
       fsmIdx = l.wait_for_all_fsm()
 
-      j = f.execute_queued('INSERT INTO foo(name) VALUES("declan")')
-      self.assertTrue(is_sequence_number(str(j)))
+      # Load up the queue!
+      for i in range(0,2000):
+        j = f.execute_queued('INSERT INTO foo(name) VALUES("declan")')
+        self.assertTrue(is_sequence_number(str(j)))
 
       j = f.execute_queued('INSERT INTO foo(name) VALUES(?)', wait=True, params=["aoife"])
       self.assertTrue(is_sequence_number(str(j)))
 
       # Data should be ready immediately, since we waited.
       j = l.query('SELECT COUNT(*) FROM foo')
-      self.assertEqual(j, d_("{'results': [{'columns': ['COUNT(*)'], 'types': [''], 'values': [[3]]}]}"))
+      self.assertEqual(j, d_("{'results': [{'columns': ['COUNT(*)'], 'types': [''], 'values': [[2002]]}]}"))
 
 class TestEndToEndNonVoter(unittest.TestCase):
   def setUp(self):
