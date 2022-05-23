@@ -14,6 +14,7 @@ var (
 	testStmtQux        = &command.Statement{Sql: "SELECT * FROM qux"}
 	testStmtsFoo       = []*command.Statement{testStmtFoo}
 	testStmtsBar       = []*command.Statement{testStmtBar}
+	testStmtsNilFoo    = []*command.Statement{nil, testStmtFoo}
 	testStmtsFooBar    = []*command.Statement{testStmtFoo, testStmtBar}
 	testStmtsFooBarFoo = []*command.Statement{testStmtFoo, testStmtBar, testStmtFoo}
 	flushChan1         = make(FlushChannel)
@@ -29,6 +30,19 @@ func Test_MergeQueuedStatements(t *testing.T) {
 		qs  []*queuedStatements
 		exp *Request
 	}{
+		{
+			qs: []*queuedStatements{
+				{1, nil, flushChan1},
+			},
+			exp: &Request{1, nil, []FlushChannel{flushChan1}},
+		},
+		{
+			qs: []*queuedStatements{
+				{1, nil, flushChan1},
+				{2, testStmtsFoo, nil},
+			},
+			exp: &Request{2, testStmtsFoo, []FlushChannel{flushChan1}},
+		},
 		{
 			qs: []*queuedStatements{
 				{1, testStmtsFoo, nil},
@@ -172,6 +186,28 @@ func Test_NewQueueWriteBatchSizeDouble(t *testing.T) {
 	}
 }
 
+func Test_NewQueueWriteNilAndOne(t *testing.T) {
+	q := New(1024, 2, 60*time.Second)
+	defer q.Close()
+
+	if _, err := q.Write(nil, nil); err != nil {
+		t.Fatalf("failed to write nil: %s", err.Error())
+	}
+	if _, err := q.Write(testStmtsFoo, nil); err != nil {
+		t.Fatalf("failed to write: %s", err.Error())
+	}
+
+	select {
+	case req := <-q.C:
+		if exp, got := 2, len(req.Statements); exp != got {
+			t.Fatalf("received wrong length slice, exp %d, got %d", exp, got)
+		}
+		req.Close()
+	case <-time.NewTimer(5 * time.Second).C:
+		t.Fatalf("timed out waiting for statement")
+	}
+}
+
 func Test_NewQueueWriteBatchSizeSingleChan(t *testing.T) {
 	q := New(1024, 1, 60*time.Second)
 	defer q.Close()
@@ -188,6 +224,34 @@ func Test_NewQueueWriteBatchSizeSingleChan(t *testing.T) {
 		}
 		if req.Statements[0].Sql != "SELECT * FROM foo" {
 			t.Fatalf("received wrong SQL")
+		}
+		req.Close()
+	case <-time.NewTimer(5 * time.Second).C:
+		t.Fatalf("timed out waiting for statement")
+	}
+
+	select {
+	case <-fc:
+		// nothing to do.
+	default:
+		// Not closed, something is wrong.
+		t.Fatalf("flush channel not closed")
+	}
+}
+
+func Test_NewQueueWriteNilSingleChan(t *testing.T) {
+	q := New(1024, 1, 60*time.Second)
+	defer q.Close()
+
+	fc := make(FlushChannel)
+	if _, err := q.Write(nil, fc); err != nil {
+		t.Fatalf("failed to write nil: %s", err.Error())
+	}
+
+	select {
+	case req := <-q.C:
+		if req.Statements != nil {
+			t.Fatalf("statements slice is not nil")
 		}
 		req.Close()
 	case <-time.NewTimer(5 * time.Second).C:
