@@ -192,6 +192,7 @@ const (
 	numQueuedExecutions       = "queued_executions"
 	numQueuedExecutionsOK     = "queued_executions_ok"
 	numQueuedExecutionsFailed = "queued_executions_failed"
+	numQueuedExecutionsWait   = "queued_executions_wait"
 	numQueries                = "queries"
 	numRemoteExecutions       = "remote_executions"
 	numRemoteQueries          = "remote_queries"
@@ -242,6 +243,7 @@ func init() {
 	stats.Add(numQueuedExecutions, 0)
 	stats.Add(numQueuedExecutionsOK, 0)
 	stats.Add(numQueuedExecutionsFailed, 0)
+	stats.Add(numQueuedExecutionsWait, 0)
 	stats.Add(numQueries, 0)
 	stats.Add(numRemoteExecutions, 0)
 	stats.Add(numRemoteQueries, 0)
@@ -1049,6 +1051,7 @@ func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request) {
 
 	var fc queue.FlushChannel
 	if wait {
+		stats.Add(numQueuedExecutionsWait, 1)
 		fc = make(queue.FlushChannel, 0)
 	}
 
