@@ -1358,7 +1358,7 @@ func (s *Service) runQueue() {
 					if err == store.ErrNotLeader {
 						addr, err := s.store.LeaderAddr()
 						if err != nil || addr == "" {
-							s.logger.Println("execute queue can't find leader for sequence number %d",
+							s.logger.Printf("execute queue can't find leader for sequence number %d",
 								req.SequenceNumber)
 							stats.Add(numQueuedExecutionsFailed, 1)
 							time.Sleep(retryDelay)
