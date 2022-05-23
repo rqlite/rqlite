@@ -253,6 +253,9 @@ func Test_NewQueueWriteNilSingleChan(t *testing.T) {
 		if req.Statements != nil {
 			t.Fatalf("statements slice is not nil")
 		}
+		if len(req.flushChans) != 1 && req.flushChans[0] != fc {
+			t.Fatalf("flush chans is not correct")
+		}
 		req.Close()
 	case <-time.NewTimer(5 * time.Second).C:
 		t.Fatalf("timed out waiting for statement")
