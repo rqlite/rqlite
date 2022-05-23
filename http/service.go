@@ -120,6 +120,7 @@ type DBResults struct {
 	QueryRows     []*command.QueryRows
 }
 
+// Responser is the interface response objects must implement.
 type Responser interface {
 	SetTime()
 }
@@ -158,12 +159,8 @@ func NewResponse() *Response {
 	}
 }
 
-func NewQueueResponse() *QueueResponse {
-	return &QueueResponse{
-		start: time.Now(),
-	}
-}
-
+// QueueResponse represents a response from the HTTP service when performing a
+// queued write.
 type QueueResponse struct {
 	SequenceNum int64   `json:"sequence_number,omitempty"`
 	Error       string  `json:"error,omitempty"`
@@ -177,6 +174,13 @@ type QueueResponse struct {
 // in the serialized JSON version.
 func (q *QueueResponse) SetTime() {
 	q.Time = q.end.Sub(q.start).Seconds()
+}
+
+// NewQueueResponse returns a new instance of QueuedResponse.
+func NewQueueResponse() *QueueResponse {
+	return &QueueResponse{
+		start: time.Now(),
+	}
 }
 
 // stats captures stats for the HTTP service.
