@@ -227,7 +227,7 @@ func Test_MultiNodeClusterQueuedRequestForwardOK(t *testing.T) {
 	if len(followers) != 1 {
 		t.Fatalf("got incorrect number of followers: %d", len(followers))
 	}
-	res, err = followers[0].ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`)
+	res, err = followers[0].ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, false)
 	if err != nil {
 		t.Fatalf("failed to insert record: %s", err.Error())
 	}

@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -27,6 +28,11 @@ import (
 const (
 	// SnapshotInterval is the period between snapshot checks
 	SnapshotInterval = time.Second
+)
+
+var (
+	// QueuedResponseRegex is the regex for matching Queued Write responses
+	QueuedResponseRegex = regexp.MustCompile(`^{"sequence_number":\d+}$`)
 )
 
 // Node represents a node under test.
@@ -101,17 +107,17 @@ func (n *Node) ExecuteParameterized(stmt []interface{}) (string, error) {
 }
 
 // ExecuteQueued sends a single statement to the node's Execute queue
-func (n *Node) ExecuteQueued(stmt string) (string, error) {
-	return n.ExecuteQueuedMulti([]string{stmt})
+func (n *Node) ExecuteQueued(stmt string, wait bool) (string, error) {
+	return n.ExecuteQueuedMulti([]string{stmt}, wait)
 }
 
 // ExecuteQueuedMulti sends multiple statements to the node's Execute queue
-func (n *Node) ExecuteQueuedMulti(stmts []string) (string, error) {
+func (n *Node) ExecuteQueuedMulti(stmts []string, wait bool) (string, error) {
 	j, err := json.Marshal(stmts)
 	if err != nil {
 		return "", err
 	}
-	return n.postExecuteQueued(string(j))
+	return n.postExecuteQueued(string(j), wait)
 }
 
 // Query runs a single query against the node.
@@ -335,8 +341,13 @@ func (n *Node) postExecute(stmt string) (string, error) {
 	return string(body), nil
 }
 
-func (n *Node) postExecuteQueued(stmt string) (string, error) {
-	resp, err := http.Post("http://"+n.APIAddr+"/db/execute?queue", "application/json", strings.NewReader(stmt))
+func (n *Node) postExecuteQueued(stmt string, wait bool) (string, error) {
+	u := "/db/execute?queue"
+	if wait {
+		u = u + "&wait"
+	}
+
+	resp, err := http.Post("http://"+n.APIAddr+u, "application/json", strings.NewReader(stmt))
 	if err != nil {
 		return "", err
 	}

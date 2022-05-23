@@ -14,6 +14,7 @@ import requests
 import json
 import os
 import random
+import re
 import shutil
 import time
 import socket
@@ -112,8 +113,13 @@ bJVERP8/VAJ61TDQJq+Il95fzKe4yTA3dDHnO+EG5W2eCsawTK4Ze5XAWqomgdew
 62D3AkJQiflLfJL8zTFph1FZXLOm
 -----END PRIVATE KEY-----'''
 
+seqRe = re.compile("^{'sequence_number': \d+}$")
+
 def d_(s):
     return ast.literal_eval(s.replace("'", "\""))
+
+def is_sequence_number(r):
+  return seqRe.match(r)
 
 def random_string(n):
   letters = string.ascii_lowercase
@@ -462,7 +468,7 @@ class Node(object):
     raise_for_status(r)
     return r.json()
 
-  def execute_queued(self, statement, params=None):
+  def execute_queued(self, statement, wait=False, params=None):
     body = [statement]
     if params is not None:
       try:
@@ -470,7 +476,7 @@ class Node(object):
       except TypeError:
         # Presumably not a list, so append as an object.
         body.append(params)
-    r = requests.post(self._execute_queued_url(), data=json.dumps([body]))
+    r = requests.post(self._execute_queued_url(wait), data=json.dumps([body]))
     raise_for_status(r)
     return r.json()
 
@@ -526,8 +532,11 @@ class Node(object):
     if redirect:
       rd = "?redirect"
     return 'http://' + self.APIAddr() + '/db/execute' + rd
-  def _execute_queued_url(self):
-    return 'http://' + self.APIAddr() + '/db/execute?queue'
+  def _execute_queued_url(self, wait=False):
+    u = '/db/execute?queue'
+    if wait:
+      u = u + '&wait'
+    return 'http://' + self.APIAddr() + u
   def _backup_url(self):
     return 'http://' + self.APIAddr() + '/db/backup'
   def _load_url(self):
@@ -1184,10 +1193,10 @@ class TestRequestForwarding(unittest.TestCase):
       fsmIdx = l.wait_for_all_fsm()
 
       j = f.execute_queued('INSERT INTO foo(name) VALUES("declan")')
-      self.assertEqual(j, d_("{'results': []}"))
+      self.assertTrue(is_sequence_number(str(j)))
 
       j = f.execute_queued('INSERT INTO foo(name) VALUES(?)', params=["aoife"])
-      self.assertEqual(j, d_("{'results': []}"))
+      self.assertTrue(is_sequence_number(str(j)))
 
       # Wait for queued write to happen.
       timeout = 10
@@ -1200,6 +1209,28 @@ class TestRequestForwarding(unittest.TestCase):
           raise Exception('timeout')
         time.sleep(1)
         t+=1
+
+  def test_execute_queued_forward_wait(self):
+      l = self.cluster.wait_for_leader()
+      j = l.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
+      self.assertEqual(j, d_("{'results': [{}]}"))
+
+      f = self.cluster.followers()[0]
+      j = f.execute('INSERT INTO foo(name) VALUES("fiona")')
+      self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
+      fsmIdx = l.wait_for_all_fsm()
+
+      # Load up the queue!
+      for i in range(0,2000):
+        j = f.execute_queued('INSERT INTO foo(name) VALUES("declan")')
+        self.assertTrue(is_sequence_number(str(j)))
+
+      j = f.execute_queued('INSERT INTO foo(name) VALUES(?)', wait=True, params=["aoife"])
+      self.assertTrue(is_sequence_number(str(j)))
+
+      # Data should be ready immediately, since we waited.
+      j = l.query('SELECT COUNT(*) FROM foo')
+      self.assertEqual(j, d_("{'results': [{'columns': ['COUNT(*)'], 'types': [''], 'values': [[2002]]}]}"))
 
 class TestEndToEndNonVoter(unittest.TestCase):
   def setUp(self):

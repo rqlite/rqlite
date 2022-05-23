@@ -1,14 +1,101 @@
 package queue
 
 import (
+	"reflect"
 	"testing"
 	"time"
 
 	"github.com/rqlite/rqlite/command"
 )
 
-var testStmt = &command.Statement{
-	Sql: "SELECT * FROM foo",
+var (
+	testStmtFoo        = &command.Statement{Sql: "SELECT * FROM foo"}
+	testStmtBar        = &command.Statement{Sql: "SELECT * FROM bar"}
+	testStmtQux        = &command.Statement{Sql: "SELECT * FROM qux"}
+	testStmtsFoo       = []*command.Statement{testStmtFoo}
+	testStmtsBar       = []*command.Statement{testStmtBar}
+	testStmtsFooBar    = []*command.Statement{testStmtFoo, testStmtBar}
+	testStmtsFooBarFoo = []*command.Statement{testStmtFoo, testStmtBar, testStmtFoo}
+	flushChan1         = make(FlushChannel)
+	flushChan2         = make(FlushChannel)
+)
+
+func Test_MergeQueuedStatements(t *testing.T) {
+	if mergeQueued(nil) != nil {
+		t.Fatalf("merging of nil failed")
+	}
+
+	tests := []struct {
+		qs  []*queuedStatements
+		exp *Request
+	}{
+		{
+			qs: []*queuedStatements{
+				{1, testStmtsFoo, nil},
+			},
+			exp: &Request{1, testStmtsFoo, nil},
+		},
+		{
+			qs: []*queuedStatements{
+				{1, testStmtsFoo, nil},
+				{2, testStmtsBar, nil},
+			},
+			exp: &Request{2, testStmtsFooBar, nil},
+		},
+		{
+			qs: []*queuedStatements{
+				{1, testStmtsFooBar, nil},
+				{2, testStmtsFoo, nil},
+			},
+			exp: &Request{2, testStmtsFooBarFoo, nil},
+		},
+		{
+			qs: []*queuedStatements{
+				{1, testStmtsFooBar, nil},
+				{2, testStmtsFoo, nil},
+			},
+			exp: &Request{2, testStmtsFooBarFoo, nil},
+		},
+		{
+			qs: []*queuedStatements{
+				{1, testStmtsFooBar, flushChan1},
+				{2, testStmtsFoo, flushChan2},
+			},
+			exp: &Request{2, testStmtsFooBarFoo, []FlushChannel{flushChan1, flushChan2}},
+		},
+		{
+			qs: []*queuedStatements{
+				{1, testStmtsFooBar, nil},
+				{2, testStmtsFoo, flushChan2},
+			},
+			exp: &Request{2, testStmtsFooBarFoo, []FlushChannel{flushChan2}},
+		},
+		{
+			qs: []*queuedStatements{
+				{2, testStmtsFooBar, nil},
+				{1, testStmtsFoo, flushChan2},
+			},
+			exp: &Request{2, testStmtsFooBarFoo, []FlushChannel{flushChan2}},
+		},
+	}
+
+	for i, tt := range tests {
+		r := mergeQueued(tt.qs)
+		if got, exp := r.SequenceNumber, tt.exp.SequenceNumber; got != exp {
+			t.Fatalf("incorrect sequence number for test %d, exp %d, got %d", i, exp, got)
+		}
+		if !reflect.DeepEqual(r.Statements, tt.exp.Statements) {
+			t.Fatalf("statements don't match for test %d", i)
+		}
+		if len(r.flushChans) != len(tt.exp.flushChans) {
+			t.Fatalf("incorrect number of flush channels for test %d", i)
+			for i := range r.flushChans {
+				if r.flushChans[i] != tt.exp.flushChans[i] {
+					t.Fatalf("wrong channel for test %d", i)
+				}
+			}
+		}
+	}
 }
 
 func Test_NewQueue(t *testing.T) {
@@ -23,7 +110,7 @@ func Test_NewQueueWriteNil(t *testing.T) {
 	q := New(1, 1, 60*time.Second)
 	defer q.Close()
 
-	if err := q.Write(nil); err != nil {
+	if _, err := q.Write(nil, nil); err != nil {
 		t.Fatalf("failing to write nil: %s", err.Error())
 	}
 }
@@ -32,20 +119,87 @@ func Test_NewQueueWriteBatchSizeSingle(t *testing.T) {
 	q := New(1024, 1, 60*time.Second)
 	defer q.Close()
 
-	if err := q.Write(testStmt); err != nil {
+	if _, err := q.Write(testStmtsFoo, nil); err != nil {
 		t.Fatalf("failed to write: %s", err.Error())
 	}
 
 	select {
-	case stmts := <-q.C:
-		if len(stmts) != 1 {
-			t.Fatalf("received wrong length slice")
+	case req := <-q.C:
+		if exp, got := 1, len(req.Statements); exp != got {
+			t.Fatalf("received wrong length slice, exp %d, got %d", exp, got)
 		}
-		if stmts[0].Sql != "SELECT * FROM foo" {
+		if req.Statements[0].Sql != "SELECT * FROM foo" {
 			t.Fatalf("received wrong SQL")
 		}
 	case <-time.NewTimer(5 * time.Second).C:
 		t.Fatalf("timed out waiting for statement")
+	}
+}
+
+func Test_NewQueueWriteBatchSizeDouble(t *testing.T) {
+	q := New(1024, 1, 60*time.Second)
+	defer q.Close()
+
+	if _, err := q.Write(testStmtsFoo, nil); err != nil {
+		t.Fatalf("failed to write: %s", err.Error())
+	}
+	if _, err := q.Write(testStmtsBar, nil); err != nil {
+		t.Fatalf("failed to write: %s", err.Error())
+	}
+
+	// Just test that I get a batch size, each time.
+	select {
+	case req := <-q.C:
+		if exp, got := 1, len(req.Statements); exp != got {
+			t.Fatalf("received wrong length slice, exp %d, got %d", exp, got)
+		}
+		if req.Statements[0].Sql != "SELECT * FROM foo" {
+			t.Fatalf("received wrong SQL")
+		}
+	case <-time.NewTimer(5 * time.Second).C:
+		t.Fatalf("timed out waiting for statement")
+	}
+	select {
+	case req := <-q.C:
+		if exp, got := 1, len(req.Statements); exp != got {
+			t.Fatalf("received wrong length slice, exp %d, got %d", exp, got)
+		}
+		if req.Statements[0].Sql != "SELECT * FROM bar" {
+			t.Fatalf("received wrong SQL")
+		}
+	case <-time.NewTimer(5 * time.Second).C:
+		t.Fatalf("timed out waiting for statement")
+	}
+}
+
+func Test_NewQueueWriteBatchSizeSingleChan(t *testing.T) {
+	q := New(1024, 1, 60*time.Second)
+	defer q.Close()
+
+	fc := make(FlushChannel)
+	if _, err := q.Write(testStmtsFoo, fc); err != nil {
+		t.Fatalf("failed to write: %s", err.Error())
+	}
+
+	select {
+	case req := <-q.C:
+		if exp, got := 1, len(req.Statements); exp != got {
+			t.Fatalf("received wrong length slice, exp %d, got %d", exp, got)
+		}
+		if req.Statements[0].Sql != "SELECT * FROM foo" {
+			t.Fatalf("received wrong SQL")
+		}
+		req.Close()
+	case <-time.NewTimer(5 * time.Second).C:
+		t.Fatalf("timed out waiting for statement")
+	}
+
+	select {
+	case <-fc:
+		// nothing to do.
+	default:
+		// Not closed, something is wrong.
+		t.Fatalf("flush channel not closed")
 	}
 }
 
@@ -55,13 +209,13 @@ func Test_NewQueueWriteBatchSizeMulti(t *testing.T) {
 
 	// Write a batch size and wait for it.
 	for i := 0; i < 5; i++ {
-		if err := q.Write(testStmt); err != nil {
+		if _, err := q.Write(testStmtsFoo, nil); err != nil {
 			t.Fatalf("failed to write: %s", err.Error())
 		}
 	}
 	select {
-	case stmts := <-q.C:
-		if len(stmts) != 5 {
+	case req := <-q.C:
+		if len(req.Statements) != 5 {
 			t.Fatalf("received wrong length slice")
 		}
 		if q.numTimeouts != 0 {
@@ -73,13 +227,13 @@ func Test_NewQueueWriteBatchSizeMulti(t *testing.T) {
 
 	// Write one more than a batch size, should still get a batch.
 	for i := 0; i < 6; i++ {
-		if err := q.Write(testStmt); err != nil {
+		if _, err := q.Write(testStmtsBar, nil); err != nil {
 			t.Fatalf("failed to write: %s", err.Error())
 		}
 	}
 	select {
-	case stmts := <-q.C:
-		if len(stmts) < 5 {
+	case req := <-q.C:
+		if len(req.Statements) < 5 {
 			t.Fatalf("received too-short slice")
 		}
 		if q.numTimeouts != 0 {
@@ -94,16 +248,16 @@ func Test_NewQueueWriteTimeout(t *testing.T) {
 	q := New(1024, 10, 1*time.Second)
 	defer q.Close()
 
-	if err := q.Write(testStmt); err != nil {
+	if _, err := q.Write(testStmtsFoo, nil); err != nil {
 		t.Fatalf("failed to write: %s", err.Error())
 	}
 
 	select {
-	case stmts := <-q.C:
-		if len(stmts) != 1 {
+	case req := <-q.C:
+		if len(req.Statements) != 1 {
 			t.Fatalf("received wrong length slice")
 		}
-		if stmts[0].Sql != "SELECT * FROM foo" {
+		if req.Statements[0].Sql != "SELECT * FROM foo" {
 			t.Fatalf("received wrong SQL")
 		}
 		if q.numTimeouts != 1 {
@@ -120,15 +274,15 @@ func Test_NewQueueWriteTimeoutMulti(t *testing.T) {
 	q := New(1024, 10, 1*time.Second)
 	defer q.Close()
 
-	if err := q.Write(testStmt); err != nil {
+	if _, err := q.Write(testStmtsFoo, nil); err != nil {
 		t.Fatalf("failed to write: %s", err.Error())
 	}
 	select {
-	case stmts := <-q.C:
-		if len(stmts) != 1 {
+	case req := <-q.C:
+		if len(req.Statements) != 1 {
 			t.Fatalf("received wrong length slice")
 		}
-		if stmts[0].Sql != "SELECT * FROM foo" {
+		if req.Statements[0].Sql != "SELECT * FROM foo" {
 			t.Fatalf("received wrong SQL")
 		}
 		if q.numTimeouts != 1 {
@@ -138,15 +292,15 @@ func Test_NewQueueWriteTimeoutMulti(t *testing.T) {
 		t.Fatalf("timed out waiting for first statement")
 	}
 
-	if err := q.Write(testStmt); err != nil {
+	if _, err := q.Write(testStmtsFoo, nil); err != nil {
 		t.Fatalf("failed to write: %s", err.Error())
 	}
 	select {
-	case stmts := <-q.C:
-		if len(stmts) != 1 {
+	case req := <-q.C:
+		if len(req.Statements) != 1 {
 			t.Fatalf("received wrong length slice")
 		}
-		if stmts[0].Sql != "SELECT * FROM foo" {
+		if req.Statements[0].Sql != "SELECT * FROM foo" {
 			t.Fatalf("received wrong SQL")
 		}
 		if q.numTimeouts != 2 {
@@ -163,16 +317,16 @@ func Test_NewQueueWriteTimeoutBatch(t *testing.T) {
 	q := New(1024, 2, 1*time.Second)
 	defer q.Close()
 
-	if err := q.Write(testStmt); err != nil {
+	if _, err := q.Write(testStmtsFoo, nil); err != nil {
 		t.Fatalf("failed to write: %s", err.Error())
 	}
 
 	select {
-	case stmts := <-q.C:
-		if len(stmts) != 1 {
+	case req := <-q.C:
+		if len(req.Statements) != 1 {
 			t.Fatalf("received wrong length slice")
 		}
-		if stmts[0].Sql != "SELECT * FROM foo" {
+		if req.Statements[0].Sql != "SELECT * FROM foo" {
 			t.Fatalf("received wrong SQL")
 		}
 		if q.numTimeouts != 1 {
@@ -182,19 +336,19 @@ func Test_NewQueueWriteTimeoutBatch(t *testing.T) {
 		t.Fatalf("timed out waiting for statement")
 	}
 
-	if err := q.Write(testStmt); err != nil {
+	if _, err := q.Write(testStmtsFoo, nil); err != nil {
 		t.Fatalf("failed to write: %s", err.Error())
 	}
-	if err := q.Write(testStmt); err != nil {
+	if _, err := q.Write(testStmtsFoo, nil); err != nil {
 		t.Fatalf("failed to write: %s", err.Error())
 	}
 	select {
-	case stmts := <-q.C:
+	case req := <-q.C:
 		// Should happen before the timeout expires.
-		if len(stmts) != 2 {
+		if len(req.Statements) != 2 {
 			t.Fatalf("received wrong length slice")
 		}
-		if stmts[0].Sql != "SELECT * FROM foo" {
+		if req.Statements[0].Sql != "SELECT * FROM foo" {
 			t.Fatalf("received wrong SQL")
 		}
 		if q.numTimeouts != 1 {

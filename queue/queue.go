@@ -1,10 +1,60 @@
 package queue
 
 import (
+	"sync"
 	"time"
 
 	"github.com/rqlite/rqlite/command"
 )
+
+// FlushChannel is the type passed to the Queue, if caller wants
+// to know when a specific set of statements has been processed.
+type FlushChannel chan bool
+
+// Request represents a batch of statements to be processed.
+type Request struct {
+	SequenceNumber int64
+	Statements     []*command.Statement
+	flushChans     []FlushChannel
+}
+
+// Close closes a request, closing any associated flush channels.
+func (r *Request) Close() {
+	for _, c := range r.flushChans {
+		close(c)
+	}
+}
+
+type queuedStatements struct {
+	SequenceNumber int64
+	Statements     []*command.Statement
+	flushChan      FlushChannel
+}
+
+func mergeQueued(qs []*queuedStatements) *Request {
+	if qs == nil {
+		return nil
+	}
+	var o *Request
+	for i := range qs {
+		if o == nil {
+			o = &Request{
+				SequenceNumber: qs[i].SequenceNumber,
+				Statements:     make([]*command.Statement, 0),
+				flushChans:     make([]FlushChannel, 0),
+			}
+		} else {
+			if o.SequenceNumber < qs[i].SequenceNumber {
+				o.SequenceNumber = qs[i].SequenceNumber
+			}
+		}
+		o.Statements = append(o.Statements, qs[i].Statements...)
+		if qs[i].flushChan != nil {
+			o.flushChans = append(o.flushChans, qs[i].flushChan)
+		}
+	}
+	return o
+}
 
 // Queue is a batching queue with a timeout.
 type Queue struct {
@@ -12,13 +62,17 @@ type Queue struct {
 	batchSize int
 	timeout   time.Duration
 
-	batchCh chan *command.Statement
-	sendCh  chan []*command.Statement
-	C       <-chan []*command.Statement
+	batchCh chan *queuedStatements
+
+	sendCh chan *Request
+	C      <-chan *Request
 
 	done   chan struct{}
 	closed chan struct{}
 	flush  chan struct{}
+
+	seqMu  sync.Mutex
+	seqNum int64
 
 	// Whitebox unit-testing
 	numTimeouts int
@@ -30,11 +84,12 @@ func New(maxSize, batchSize int, t time.Duration) *Queue {
 		maxSize:   maxSize,
 		batchSize: batchSize,
 		timeout:   t,
-		batchCh:   make(chan *command.Statement, maxSize),
-		sendCh:    make(chan []*command.Statement, maxSize),
+		batchCh:   make(chan *queuedStatements, maxSize),
+		sendCh:    make(chan *Request, 1),
 		done:      make(chan struct{}),
 		closed:    make(chan struct{}),
 		flush:     make(chan struct{}),
+		seqNum:    time.Now().UnixNano(),
 	}
 
 	q.C = q.sendCh
@@ -42,13 +97,24 @@ func New(maxSize, batchSize int, t time.Duration) *Queue {
 	return q
 }
 
-// Write queues a request.
-func (q *Queue) Write(stmt *command.Statement) error {
-	if stmt == nil {
-		return nil
+// Write queues a request, and returns a monotonically incrementing
+// sequence number associated with the slice of statements. If one
+// slice has a larger sequence number than a number, the former slice
+// will always be commited to Raft before the latter slice.
+//
+// c is an optional channel. If non-nil, it will be closed when the Request
+// containing these statements is closed.
+func (q *Queue) Write(stmts []*command.Statement, c FlushChannel) (int64, error) {
+	q.seqMu.Lock()
+	defer q.seqMu.Unlock()
+	q.seqNum++
+
+	q.batchCh <- &queuedStatements{
+		SequenceNumber: q.seqNum,
+		Statements:     stmts,
+		flushChan:      c,
 	}
-	q.batchCh <- stmt
-	return nil
+	return q.seqNum, nil
 }
 
 // Flush flushes the queue
@@ -68,7 +134,7 @@ func (q *Queue) Close() error {
 	return nil
 }
 
-// Depth returns the number of queue requests
+// Depth returns the number of queued requests
 func (q *Queue) Depth() int {
 	return len(q.batchCh)
 }
@@ -84,27 +150,25 @@ func (q *Queue) Stats() (map[string]interface{}, error) {
 
 func (q *Queue) run() {
 	defer close(q.closed)
-	var stmts []*command.Statement
+
+	queuedStmts := make([]*queuedStatements, 0)
 	timer := time.NewTimer(q.timeout)
 	timer.Stop()
 
 	writeFn := func() {
-		newStmts := make([]*command.Statement, len(stmts))
-		copy(newStmts, stmts)
-		q.sendCh <- newStmts
-
-		stmts = nil
+		q.sendCh <- mergeQueued(queuedStmts)
+		queuedStmts = nil
 		timer.Stop()
 	}
 
 	for {
 		select {
 		case s := <-q.batchCh:
-			stmts = append(stmts, s)
-			if len(stmts) == 1 {
+			queuedStmts = append(queuedStmts, s)
+			if len(queuedStmts) == 1 {
 				timer.Reset(q.timeout)
 			}
-			if len(stmts) >= q.batchSize {
+			if len(queuedStmts) == q.batchSize {
 				writeFn()
 			}
 		case <-timer.C:

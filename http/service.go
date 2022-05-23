@@ -120,6 +120,11 @@ type DBResults struct {
 	QueryRows     []*command.QueryRows
 }
 
+// Responser is the interface response objects must implement.
+type Responser interface {
+	SetTime()
+}
+
 // MarshalJSON implements the JSON Marshaler interface.
 func (d *DBResults) MarshalJSON() ([]byte, error) {
 	if d.ExecuteResult != nil {
@@ -138,6 +143,44 @@ type Response struct {
 
 	start time.Time
 	end   time.Time
+}
+
+// SetTime sets the Time attribute of the response. This way it will be present
+// in the serialized JSON version.
+func (r *Response) SetTime() {
+	r.Time = r.end.Sub(r.start).Seconds()
+}
+
+// NewResponse returns a new instance of response.
+func NewResponse() *Response {
+	return &Response{
+		Results: &DBResults{},
+		start:   time.Now(),
+	}
+}
+
+// QueueResponse represents a response from the HTTP service when performing a
+// queued write.
+type QueueResponse struct {
+	SequenceNum int64   `json:"sequence_number,omitempty"`
+	Error       string  `json:"error,omitempty"`
+	Time        float64 `json:"time,omitempty"`
+
+	start time.Time
+	end   time.Time
+}
+
+// SetTime sets the Time attribute of the response. This way it will be present
+// in the serialized JSON version.
+func (q *QueueResponse) SetTime() {
+	q.Time = q.end.Sub(q.start).Seconds()
+}
+
+// NewQueueResponse returns a new instance of QueuedResponse.
+func NewQueueResponse() *QueueResponse {
+	return &QueueResponse{
+		start: time.Now(),
+	}
 }
 
 // stats captures stats for the HTTP service.
@@ -212,20 +255,6 @@ func init() {
 	stats.Add(numAuthFail, 0)
 }
 
-// SetTime sets the Time attribute of the response. This way it will be present
-// in the serialized JSON version.
-func (r *Response) SetTime() {
-	r.Time = r.end.Sub(r.start).Seconds()
-}
-
-// NewResponse returns a new instance of response.
-func NewResponse() *Response {
-	return &Response{
-		Results: &DBResults{},
-		start:   time.Now(),
-	}
-}
-
 // Service provides HTTP service.
 type Service struct {
 	closeCh chan struct{}
@@ -254,6 +283,9 @@ type Service struct {
 	DefaultQueueBatchSz int
 	DefaultQueueTimeout time.Duration
 	DefaultQueueTx      bool
+
+	seqNumMu sync.Mutex
+	seqNum   int64 // Last sequence number written OK.
 
 	credentialStore CredentialStore
 
@@ -724,6 +756,9 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 			http.StatusInternalServerError)
 		return
 	}
+	s.seqNumMu.Lock()
+	qs["sequence_number"] = s.seqNum
+	s.seqNumMu.Unlock()
 	queueStats := map[string]interface{}{
 		"_default": qs,
 	}
@@ -967,6 +1002,8 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 
 // queuedExecute handles queued queries that modify the database.
 func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request) {
+	resp := NewQueueResponse()
+
 	// Perform a leader check, unless disabled. This prevents generating queued writes on
 	// a node that does not appear to be connected to a cluster (even a single-node cluster).
 	noLeader, err := noLeader(r)
@@ -983,8 +1020,6 @@ func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	resp := NewResponse()
-
 	b, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -997,13 +1032,43 @@ func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	for i := range stmts {
-		if err := s.stmtQueue.Write(stmts[i]); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+
+	wait, err := isWait(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	timeout, err := timeoutParam(r, defaultTimeout)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	var fc queue.FlushChannel
+	if wait {
+		fc = make(queue.FlushChannel, 0)
+	}
+
+	seqNum, err := s.stmtQueue.Write(stmts, fc)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	resp.SequenceNum = seqNum
+
+	if wait {
+		// Wait for the flush channel to close, or timeout.
+		select {
+		case <-fc:
+			break
+		case <-time.NewTimer(timeout).C:
+			http.Error(w, "timeout", http.StatusRequestTimeout)
 			return
 		}
 	}
 
+	resp.end = time.Now()
 	s.writeResponse(w, r, resp)
 	return
 }
@@ -1280,10 +1345,10 @@ func (s *Service) runQueue() {
 		select {
 		case <-s.closeCh:
 			return
-		case stmts := <-s.stmtQueue.C:
+		case req := <-s.stmtQueue.C:
 			er := &command.ExecuteRequest{
 				Request: &command.Request{
-					Statements:  stmts,
+					Statements:  req.Statements,
 					Transaction: s.DefaultQueueTx,
 				},
 			}
@@ -1293,20 +1358,27 @@ func (s *Service) runQueue() {
 					if err == store.ErrNotLeader {
 						addr, err := s.store.LeaderAddr()
 						if err != nil || addr == "" {
-							s.logger.Println("execute queue can't find leader")
+							s.logger.Printf("execute queue can't find leader for sequence number %d",
+								req.SequenceNumber)
 							stats.Add(numQueuedExecutionsFailed, 1)
 							time.Sleep(retryDelay)
 							continue
 						}
 						_, err = s.cluster.Execute(er, addr, defaultTimeout)
 						if err != nil {
-							s.logger.Printf("execute queue write failed: %s", err.Error())
+							s.logger.Printf("execute queue write failed for sequence number %d: %s",
+								req.SequenceNumber, err.Error())
 							time.Sleep(retryDelay)
 							continue
 						}
 						stats.Add(numRemoteExecutions, 1)
 					}
 				}
+				s.seqNumMu.Lock()
+				s.seqNum = req.SequenceNumber
+				s.seqNumMu.Unlock()
+
+				req.Close()
 				stats.Add(numQueuedExecutionsOK, 1)
 				break
 			}
@@ -1367,7 +1439,7 @@ func (s *Service) addBuildVersion(w http.ResponseWriter) {
 }
 
 // writeResponse writes the given response to the given writer.
-func (s *Service) writeResponse(w http.ResponseWriter, r *http.Request, j *Response) {
+func (s *Service) writeResponse(w http.ResponseWriter, r *http.Request, j Responser) {
 	var b []byte
 	var err error
 	pretty, _ := isPretty(r)
@@ -1543,6 +1615,11 @@ func nonVoters(req *http.Request) (bool, error) {
 // isTimings returns whether timings are requested.
 func isTimings(req *http.Request) (bool, error) {
 	return queryParam(req, "timings")
+}
+
+// isWait returns whether a wait operation is requested.
+func isWait(req *http.Request) (bool, error) {
+	return queryParam(req, "wait")
 }
 
 // level returns the requested consistency level for a query
