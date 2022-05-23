@@ -22,7 +22,7 @@ $
 ```
 Setting the URL query parameter `queue` enables queuing mode, adding the request data to an internal queue whch rqlite manages for you. 
 
-rqlite will merge the requests, once a batch-size of them has been queued on the node, and execute them as though they had been both contained in a single request. The net result is as if the client wrote a single Bulk request (assuming the queue timeout doesn't expire and result in the queue doing more that one Bulk update). For the same reason that using the [Bulk API](https://github.com/rqlite/rqlite/blob/master/DOC/BULK.md) results in much higher write performance, using the _Queued Writes_ API will also result in much higher write performance.
+rqlite will merge the requests, once a batch-size of them has been queued on the node, and execute them as though they had been both contained in a single request. The net result is as if the client wrote a single Bulk request containing all three `INSERT` statements. For the same reason that using the [Bulk API](https://github.com/rqlite/rqlite/blob/master/DOC/BULK.md) results in much higher write performance, using the _Queued Writes_ API will also result in much higher write performance.
 
 Each response includes a monotonically-increasing `sequence_number`, which allows you to track when this request is actually persisted to the Raft log. The `/status` [diagnostics](https://github.com/rqlite/rqlite/blob/master/DOC/DIAGNOSTICS.md) endpoint includes the sequence number of the latest request successfully written to Raft.
 
