@@ -389,6 +389,83 @@ LOOP:
 	}
 }
 
+// Test_SingleNodeQueuedBadStmt tests that a single bad SQL statement has the right outcome.
+func Test_SingleNodeQueuedBadStmt(t *testing.T) {
+	node := mustNewLeaderNode()
+	defer node.Deprovision()
+	node.Service.DefaultQueueTx = false
+
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+
+	_, err := node.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`)
+	if err != nil {
+		t.Fatalf(`CREATE TABLE failed: %s`, err.Error())
+	}
+
+	qWrites := []string{
+		`INSERT INTO foo(name) VALUES("fiona")`,
+		`INSERT INTO nonsense`,
+		`INSERT INTO foo(name) VALUES("fiona")`,
+	}
+	resp, err := node.ExecuteQueuedMulti(qWrites, false)
+	if err != nil {
+		t.Fatalf(`queued write failed: %s`, err.Error())
+	}
+	if !QueuedResponseRegex.MatchString(resp) {
+		t.Fatalf("queued response is not valid: %s", resp)
+	}
+
+	timer := time.NewTimer(5 * time.Second)
+	defer timer.Stop()
+
+LOOP1:
+	for {
+		select {
+		case <-ticker.C:
+			r, err := node.Query(`SELECT COUNT(*) FROM foo`)
+			if err != nil {
+				t.Fatalf(`query failed: %s`, err.Error())
+			}
+			if r == `{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[2]]}]}` {
+				break LOOP1
+			}
+		case <-timer.C:
+			t.Fatalf("timed out waiting for queued writes")
+
+		}
+	}
+
+	// Enable transactions, so that the next request shouldn't change the data
+	// due to the single bad statement.
+	node.Service.DefaultQueueTx = true
+	resp, err = node.ExecuteQueuedMulti(qWrites, false)
+	if err != nil {
+		t.Fatalf(`queued write failed: %s`, err.Error())
+	}
+	if !QueuedResponseRegex.MatchString(resp) {
+		t.Fatalf("queued response is not valid: %s", resp)
+	}
+
+	timer.Reset(5 * time.Second)
+LOOP2:
+	for {
+		select {
+		case <-ticker.C:
+			r, err := node.Query(`SELECT COUNT(*) FROM foo`)
+			if err != nil {
+				t.Fatalf(`query failed: %s`, err.Error())
+			}
+			if r == `{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[2]]}]}` {
+				break LOOP2
+			}
+		case <-timer.C:
+			t.Fatalf("timed out waiting for queued writes")
+
+		}
+	}
+}
+
 // Test_SingleNodeSQLInjection demonstrates that using the non-parameterized API is vulnerable to
 // SQL injection attacks.
 func Test_SingleNodeSQLInjection(t *testing.T) {
