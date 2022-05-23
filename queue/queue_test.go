@@ -199,7 +199,7 @@ func Test_NewQueueWriteNilAndOne(t *testing.T) {
 
 	select {
 	case req := <-q.C:
-		if exp, got := 2, len(req.Statements); exp != got {
+		if exp, got := 1, len(req.Statements); exp != got {
 			t.Fatalf("received wrong length slice, exp %d, got %d", exp, got)
 		}
 		req.Close()
