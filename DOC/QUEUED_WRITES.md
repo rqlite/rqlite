@@ -1,21 +1,42 @@
 # Queued Writes API
 > :warning: **This functionality was introduced in release 7.5.0. It does not exist in earlier releases.**
 
+## Usage
+
 rqlite exposes a special API, which will queue up write-requests and execute them asynchronously. This allows clients to send multiple distinct requests to a rqlite node, and have rqlite automatically do the batching and bulk insert for the client, without the client doing any extra work. This functionality is best illustrated by an example, showing two requests being queued.
 ```bash
-curl -XPOST 'localhost:4001/db/execute?queue' -H "Content-Type: application/json" -d '[
+$ curl -XPOST 'localhost:4001/db/execute?queue' -H "Content-Type: application/json" -d '[
     ["INSERT INTO foo(name) VALUES(?)", "fiona"],
     ["INSERT INTO foo(name) VALUES(?)", "sinead"]
 ]'
-curl -XPOST 'localhost:4001/db/execute?queue' -H "Content-Type: application/json" -d '[
+{
+    "sequence_number": 1653314298877648934
+}
+$ curl -XPOST 'localhost:4001/db/execute?queue' -H "Content-Type: application/json" -d '[
     ["INSERT INTO foo(name) VALUES(?)", "declan"]
 ]'
+{
+    "sequence_number": 1653314298877649973
+}
+$
 ```
-Setting the URL query parameter `queue` enables queuing mode, adding the request data to an internal queue whch rqlite manages for you.
+Setting the URL query parameter `queue` enables queuing mode, adding the request data to an internal queue whch rqlite manages for you. 
 
 rqlite will merge queued requests, and execute them as though they had been both contained in a single request. The net result is as if the client wrote a single Bulk request (assuming the queue timeout doesn't expire and result in the queue doing more that one Bulk update). For the same reason that using the [Bulk API](https://github.com/rqlite/rqlite/blob/master/DOC/BULK.md) results in much higher write performance, using the _Queued Writes_ API will also result in much higher write performance.
 
-The behaviour of the queue rqlite uses to batch the requests is configurable at rqlite launch time. You can change the minimum number of SQL statements that must be present in the queue before they are written, as well as a timeout after which whatever is in the queue will be written regardless of queue size. Pass `-h` to `rqlited` to see the queue defaults, and list all command-line options.
+Each response includes a monotonically-increasing `sequence_number`, which allows you to track when this request is actually persisted to the Raft log. The `/status` [diagnostics](https://github.com/rqlite/rqlite/blob/master/DOC/DIAGNOSTICS.md) endpoint includes the sequence number of the latest request successfully written to Raft.
+
+### Waiting for a queue to flush
+You can explicitly tell the request to wait until the queue has persisted all pending requests. To do this, add the parameter `wait` to the request like so:
+```bash
+$ curl -XPOST 'localhost:4001/db/execute?queue&wait&timeout=10s' -H "Content-Type: application/json" -d '[
+    ["INSERT INTO foo(name) VALUES(?)", "bob"]
+]'
+```
+This example also shows setting a timeout. If the queue has not empted after this time, the request will return with an error. If not set, the time out is set to 30 seconds.
+
+### Configuring queue behaviour
+The behaviour of the queue rqlite uses to batch the requests is configurable at rqlite launch time. You can change the minimum number of requests that must be present in the queue before they are written, as well as a timeout after which whatever is in the queue will be written regardless of queue size. Pass `-h` to `rqlited` to see the queue defaults, and list all command-line options.
 
 ## Caveats
 Like most databases there is a trade-off to be made between write-performance and durability, but for some applications these trade-offs are worth it.
