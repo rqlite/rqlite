@@ -347,7 +347,7 @@ func Test_SingleNodeQueued(t *testing.T) {
 		`INSERT INTO foo(name) VALUES("fiona")`,
 		`INSERT INTO foo(name) VALUES("fiona")`,
 	}
-	resp, err := node.ExecuteQueuedMulti(qWrites)
+	resp, err := node.ExecuteQueuedMulti(qWrites, false)
 	if err != nil {
 		t.Fatalf(`queued write failed: %s`, err.Error())
 	}
@@ -357,6 +357,7 @@ func Test_SingleNodeQueued(t *testing.T) {
 
 	ticker := time.NewTicker(10 * time.Millisecond)
 	timer := time.NewTimer(5 * time.Second)
+LOOP:
 	for {
 		select {
 		case <-ticker.C:
@@ -365,12 +366,26 @@ func Test_SingleNodeQueued(t *testing.T) {
 				t.Fatalf(`query failed: %s`, err.Error())
 			}
 			if r == `{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[3]]}]}` {
-				return
+				break LOOP
 			}
 		case <-timer.C:
 			t.Fatalf("timed out waiting for queued writes")
 
 		}
+	}
+
+	// Waiting for a queue write to complete means we should get the correct
+	// results immediately.
+	resp, err = node.ExecuteQueuedMulti(qWrites, true)
+	if err != nil {
+		t.Fatalf(`queued write failed: %s`, err.Error())
+	}
+	if !QueuedResponseRegex.MatchString(resp) {
+		t.Fatalf("queued response is not valid: %s", resp)
+	}
+	r, err := node.Query(`SELECT COUNT(*) FROM foo`)
+	if got, exp := r, `{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[6]]}]}`; got != exp {
+		t.Fatalf("incorrect results, exp: %s, got: %s", exp, got)
 	}
 }
 

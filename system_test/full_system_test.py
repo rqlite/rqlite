@@ -536,7 +536,7 @@ class Node(object):
     u = '/db/execute?queue'
     if wait:
       u = u + '&wait'
-    return 'http://' + self.APIAddr() + '/db/execute?queue'
+    return 'http://' + self.APIAddr() + u
   def _backup_url(self):
     return 'http://' + self.APIAddr() + '/db/backup'
   def _load_url(self):
