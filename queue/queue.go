@@ -168,7 +168,7 @@ func (q *Queue) run() {
 			if len(queuedStmts) == 1 {
 				timer.Reset(q.timeout)
 			}
-			if len(queuedStmts) >= q.batchSize {
+			if len(queuedStmts) == q.batchSize {
 				writeFn()
 			}
 		case <-timer.C:
