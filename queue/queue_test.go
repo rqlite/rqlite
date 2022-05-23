@@ -136,6 +136,42 @@ func Test_NewQueueWriteBatchSizeSingle(t *testing.T) {
 	}
 }
 
+func Test_NewQueueWriteBatchSizeDouble(t *testing.T) {
+	q := New(1024, 1, 60*time.Second)
+	defer q.Close()
+
+	if _, err := q.Write(testStmtsFoo, nil); err != nil {
+		t.Fatalf("failed to write: %s", err.Error())
+	}
+	if _, err := q.Write(testStmtsBar, nil); err != nil {
+		t.Fatalf("failed to write: %s", err.Error())
+	}
+
+	// Just test that I get a batch size, each time.
+	select {
+	case req := <-q.C:
+		if exp, got := 1, len(req.Statements); exp != got {
+			t.Fatalf("received wrong length slice, exp %d, got %d", exp, got)
+		}
+		if req.Statements[0].Sql != "SELECT * FROM foo" {
+			t.Fatalf("received wrong SQL")
+		}
+	case <-time.NewTimer(5 * time.Second).C:
+		t.Fatalf("timed out waiting for statement")
+	}
+	select {
+	case req := <-q.C:
+		if exp, got := 1, len(req.Statements); exp != got {
+			t.Fatalf("received wrong length slice, exp %d, got %d", exp, got)
+		}
+		if req.Statements[0].Sql != "SELECT * FROM bar" {
+			t.Fatalf("received wrong SQL")
+		}
+	case <-time.NewTimer(5 * time.Second).C:
+		t.Fatalf("timed out waiting for statement")
+	}
+}
+
 func Test_NewQueueWriteBatchSizeSingleChan(t *testing.T) {
 	q := New(1024, 1, 60*time.Second)
 	defer q.Close()
