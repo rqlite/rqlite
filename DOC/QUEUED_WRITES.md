@@ -1,4 +1,4 @@
-# Queued Writes API
+# Queued Writes
 > :warning: **This functionality was introduced in release 7.5.0. It does not exist in earlier releases.**
 
 ## Usage
