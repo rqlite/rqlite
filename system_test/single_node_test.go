@@ -347,9 +347,12 @@ func Test_SingleNodeQueued(t *testing.T) {
 		`INSERT INTO foo(name) VALUES("fiona")`,
 		`INSERT INTO foo(name) VALUES("fiona")`,
 	}
-	_, err = node.ExecuteQueuedMulti(qWrites)
+	resp, err := node.ExecuteQueuedMulti(qWrites)
 	if err != nil {
 		t.Fatalf(`queued write failed: %s`, err.Error())
+	}
+	if !QueuedResponseRegex.MatchString(resp) {
+		t.Fatalf("queued response is not valid: %s", resp)
 	}
 
 	ticker := time.NewTicker(10 * time.Millisecond)

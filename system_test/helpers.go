@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -27,6 +28,11 @@ import (
 const (
 	// SnapshotInterval is the period between snapshot checks
 	SnapshotInterval = time.Second
+)
+
+var (
+	// QueuedResponseRegex is the regex for matching Queued Write responses
+	QueuedResponseRegex = regexp.MustCompile(`^{"sequence_number":\d+}$`)
 )
 
 // Node represents a node under test.
