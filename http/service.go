@@ -137,9 +137,10 @@ func (d *DBResults) MarshalJSON() ([]byte, error) {
 
 // Response represents a response from the HTTP service.
 type Response struct {
-	Results *DBResults `json:"results,omitempty"`
-	Error   string     `json:"error,omitempty"`
-	Time    float64    `json:"time,omitempty"`
+	Results     *DBResults `json:"results,omitempty"`
+	Error       string     `json:"error,omitempty"`
+	Time        float64    `json:"time,omitempty"`
+	SequenceNum int64      `json:"sequence_number,omitempty"`
 
 	start time.Time
 	end   time.Time
@@ -156,30 +157,6 @@ func NewResponse() *Response {
 	return &Response{
 		Results: &DBResults{},
 		start:   time.Now(),
-	}
-}
-
-// QueueResponse represents a response from the HTTP service when performing a
-// queued write.
-type QueueResponse struct {
-	SequenceNum int64   `json:"sequence_number,omitempty"`
-	Error       string  `json:"error,omitempty"`
-	Time        float64 `json:"time,omitempty"`
-
-	start time.Time
-	end   time.Time
-}
-
-// SetTime sets the Time attribute of the response. This way it will be present
-// in the serialized JSON version.
-func (q *QueueResponse) SetTime() {
-	q.Time = q.end.Sub(q.start).Seconds()
-}
-
-// NewQueueResponse returns a new instance of QueuedResponse.
-func NewQueueResponse() *QueueResponse {
-	return &QueueResponse{
-		start: time.Now(),
 	}
 }
 
@@ -1004,7 +981,7 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 
 // queuedExecute handles queued queries that modify the database.
 func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request) {
-	resp := NewQueueResponse()
+	resp := NewResponse()
 
 	// Perform a leader check, unless disabled. This prevents generating queued writes on
 	// a node that does not appear to be connected to a cluster (even a single-node cluster).
