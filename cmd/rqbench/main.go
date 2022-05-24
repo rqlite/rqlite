@@ -14,6 +14,7 @@ var numReqs int
 var batchSz int
 var modPrint int
 var tx bool
+var qw bool
 var tp string
 var path string
 var oneshot string
@@ -27,6 +28,7 @@ func init() {
 	flag.IntVar(&batchSz, "b", 1, "Statements per request")
 	flag.IntVar(&modPrint, "m", 0, "Print progress every m requests")
 	flag.BoolVar(&tx, "x", false, "Use explicit transaction per request")
+	flag.BoolVar(&qw, "q", false, "Use queued writes")
 	flag.StringVar(&tp, "t", "http", "Transport to use")
 	flag.StringVar(&path, "p", "/db/execute", "Endpoint to use")
 	flag.StringVar(&oneshot, "o", "", "One-shot execute statement to preload")
@@ -64,7 +66,12 @@ func main() {
 		}
 	}
 
-	tester := NewHTTPTester(addr, path)
+	var tester Tester
+	tester = NewHTTPTester(addr, path)
+	if qw {
+		fmt.Println("using queued write tester")
+		tester = NewQueuedHTTPTester(addr, path)
+	}
 	if err := tester.Prepare(stmt, batchSz, tx); err != nil {
 		fmt.Println("failed to prepare test:", err.Error())
 		os.Exit(1)
@@ -83,8 +90,10 @@ func main() {
 
 // Tester is the interface test executors must implement.
 type Tester interface {
+	fmt.Stringer
 	Prepare(stmt string, bSz int, tx bool) error
 	Once() (time.Duration, error)
+	Close() error
 }
 
 func run(t Tester, n int) (time.Duration, error) {
@@ -101,5 +110,5 @@ func run(t Tester, n int) (time.Duration, error) {
 			fmt.Printf("%d requests completed in %s\n", i, d)
 		}
 	}
-	return dur, nil
+	return dur, t.Close()
 }
