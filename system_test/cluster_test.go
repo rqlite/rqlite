@@ -745,7 +745,7 @@ func Test_MultiNodeClusterQueuedWrites(t *testing.T) {
 	}()
 	wg.Wait()
 
-	exp := fmt.Sprintf(`{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[%d]]}]}`, 5 * writesPerLoop)
+	exp := fmt.Sprintf(`{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[%d]]}]}`, 5*writesPerLoop)
 	got, err := node1.Query(`SELECT COUNT(*) FROM foo`)
 	if err != nil {
 		t.Fatalf("failed to query follower node: %s", err.Error())
