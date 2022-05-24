@@ -62,7 +62,7 @@ Yes. If a read request must be serviced by the Leader, however, rqlite will tran
 Yes, but only for reads. It does not provide any scaling for writes, since all writes must go through the leader. **rqlite is distributed primarily for replication and fault tolerance, not for peformance**. In fact write performance is reduced relative to a standalone SQLite database, because of the round-trips between nodes and the need to write to the Raft log.
 
 ## What is the best way to increase rqlite performance?
-The simplest way to increase performance is to use higher-performance disks and a lower-latency network. This is known as _scaling vertically_.
+The simplest way to increase performance is to use higher-performance disks and a lower-latency network. This is known as _scaling vertically_. You could also consider using [Queued Writes](https://github.com/rqlite/rqlite/blob/master/DOC/QUEUED_WRITES.md), or [Bulk Updates](https://github.com/rqlite/rqlite/blob/master/DOC/BULK.md) if you wish to improve write performance specifically.
 
 ## Where does rqlite fit into the CAP theorem?
 The [CAP theorem](https://en.wikipedia.org/wiki/CAP_theorem) states that it is impossible for a distributed database to provide consistency, availability, and partition tolerance simulataneously -- that, in the face of a network partition, the database can be available or consistent, but not both.
