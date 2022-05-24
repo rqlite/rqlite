@@ -1,7 +1,10 @@
 ## 7.5.0 (unreleased)
+This release adds a new, higher-performance, option for writing to the database, known as Queued Writes. This allows users to trade off durability for high-performance writes to the database. See the [documentation](https://github.com/rqlite/rqlite/blob/master/DOC/QUEUED_WRITES.md) for full details.
+
 ### New features
 - [PR #1019](https://github.com/rqlite/rqlite/pull/1019): CLI supports restoring from SQLite database files.
 - [PR #1024](https://github.com/rqlite/rqlite/pull/1024), [PR #1025](https://github.com/rqlite/rqlite/pull/1025), [PR #1031](https://github.com/rqlite/rqlite/pull/1031), [PR #1033](https://github.com/rqlite/rqlite/pull/1033): Add support for Queued Writes. Fixes [issue #1020](https://github.com/rqlite/rqlite/issues/1020).
+- [PR #1036](https://github.com/rqlite/rqlite/pull/1036): rqbench supports queued writes.
 
 ### Implementation changes and bug fixes
 - [PR #1027](https://github.com/rqlite/rqlite/pull/1027): go mod (dependencies) updates, including upgrading SQLite to 3.38.5.
