@@ -32,9 +32,6 @@ type queuedStatements struct {
 }
 
 func mergeQueued(qs []*queuedStatements) *Request {
-	if qs == nil {
-		return nil
-	}
 	var o *Request
 	for i := range qs {
 		if o == nil {
@@ -155,9 +152,15 @@ func (q *Queue) run() {
 	timer.Stop()
 
 	writeFn := func() {
+		timer.Stop()
+		if queuedStmts == nil {
+			// Batch size was met, but timer expired before it could be
+			// stopped, so this function was called again. Possibly.
+			return
+		}
+
 		q.sendCh <- mergeQueued(queuedStmts)
 		queuedStmts = nil
-		timer.Stop()
 	}
 
 	for {
