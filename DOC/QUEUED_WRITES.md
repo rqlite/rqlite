@@ -10,12 +10,14 @@ $ curl -XPOST 'localhost:4001/db/execute?queue' -H "Content-Type: application/js
     ["INSERT INTO foo(name) VALUES(?)", "sinead"]
 ]'
 {
+    "results": [],
     "sequence_number": 1653314298877648934
 }
 $ curl -XPOST 'localhost:4001/db/execute?queue' -H "Content-Type: application/json" -d '[
     ["INSERT INTO foo(name) VALUES(?)", "declan"]
 ]'
 {
+    "results": [],
     "sequence_number": 1653314298877649973
 }
 $
