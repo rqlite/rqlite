@@ -691,11 +691,12 @@ func Test_MultiNodeClusterQueuedWrites(t *testing.T) {
 	}
 
 	// Write data to the cluster, via various methods and nodes.
+	writesPerLoop := 500
 	var wg sync.WaitGroup
 	wg.Add(5)
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 100; i++ {
+		for i := 0; i < writesPerLoop; i++ {
 			if _, err := node1.Execute(`INSERT INTO foo(name) VALUES("fiona")`); err != nil {
 				t.Fatalf("failed to create table: %s", err.Error())
 			}
@@ -703,7 +704,7 @@ func Test_MultiNodeClusterQueuedWrites(t *testing.T) {
 	}()
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 100; i++ {
+		for i := 0; i < writesPerLoop; i++ {
 			if _, err := node2.Execute(`INSERT INTO foo(name) VALUES("fiona")`); err != nil {
 				t.Fatalf("failed to create table: %s", err.Error())
 			}
@@ -711,7 +712,7 @@ func Test_MultiNodeClusterQueuedWrites(t *testing.T) {
 	}()
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 99; i++ {
+		for i := 0; i < writesPerLoop-1; i++ {
 			if _, err := node2.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, false); err != nil {
 				t.Fatalf("failed to create table: %s", err.Error())
 			}
@@ -722,7 +723,7 @@ func Test_MultiNodeClusterQueuedWrites(t *testing.T) {
 	}()
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 99; i++ {
+		for i := 0; i < writesPerLoop-1; i++ {
 			if _, err := node3.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, false); err != nil {
 				t.Fatalf("failed to create table: %s", err.Error())
 			}
@@ -733,7 +734,7 @@ func Test_MultiNodeClusterQueuedWrites(t *testing.T) {
 	}()
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 99; i++ {
+		for i := 0; i < writesPerLoop-1; i++ {
 			if _, err := node3.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, false); err != nil {
 				t.Fatalf("failed to create table: %s", err.Error())
 			}
@@ -744,12 +745,12 @@ func Test_MultiNodeClusterQueuedWrites(t *testing.T) {
 	}()
 	wg.Wait()
 
-	r, err := node1.Query(`SELECT COUNT(*) FROM foo`)
+	exp := fmt.Sprintf(`{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[%d]]}]}`, 5*writesPerLoop)
+	got, err := node1.Query(`SELECT COUNT(*) FROM foo`)
 	if err != nil {
 		t.Fatalf("failed to query follower node: %s", err.Error())
 	}
-
-	if got, exp := r, `{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[500]]}]}`; got != exp {
+	if got != exp {
 		t.Fatalf("incorrect count, got %s, exp %s", got, exp)
 	}
 }
