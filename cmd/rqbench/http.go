@@ -73,3 +73,8 @@ func (h *HTTPTester) Once() (time.Duration, error) {
 
 	return dur, nil
 }
+
+// Close closes the tester
+func (h *HTTPTester) Close() error {
+	return nil
+}
