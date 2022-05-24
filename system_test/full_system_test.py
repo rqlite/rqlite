@@ -113,7 +113,7 @@ bJVERP8/VAJ61TDQJq+Il95fzKe4yTA3dDHnO+EG5W2eCsawTK4Ze5XAWqomgdew
 62D3AkJQiflLfJL8zTFph1FZXLOm
 -----END PRIVATE KEY-----'''
 
-seqRe = re.compile("^{'sequence_number': \d+}$")
+seqRe = re.compile("^{'results': \[\], 'sequence_number': \d+}$")
 
 def d_(s):
     return ast.literal_eval(s.replace("'", "\""))

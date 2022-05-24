@@ -32,7 +32,7 @@ const (
 
 var (
 	// QueuedResponseRegex is the regex for matching Queued Write responses
-	QueuedResponseRegex = regexp.MustCompile(`^{"sequence_number":\d+}$`)
+	QueuedResponseRegex = regexp.MustCompile(`^{"results":\[\],"sequence_number":\d+}$`)
 )
 
 // Node represents a node under test.
