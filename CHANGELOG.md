@@ -1,4 +1,4 @@
-## 7.5.0 (unreleased)
+## 7.5.0 (May 26th 2022)
 This release adds a new, higher-performance, option for writing to the database, known as Queued Writes. This allows users to trade off durability for high-performance writes to the database. See the [documentation](https://github.com/rqlite/rqlite/blob/master/DOC/QUEUED_WRITES.md) for full details.
 
 ### New features
