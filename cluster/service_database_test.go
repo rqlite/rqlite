@@ -26,7 +26,7 @@ func Test_ServiceExecute(t *testing.T) {
 		t.Fatalf("failed to create cluster service")
 	}
 
-	c := NewClient(mustNewDialer(1, false, false))
+	c := NewClient(mustNewDialer(1, false, false), 30*time.Second)
 
 	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open cluster service: %s", err.Error())
@@ -113,7 +113,7 @@ func Test_ServiceQuery(t *testing.T) {
 		t.Fatalf("failed to create cluster service")
 	}
 
-	c := NewClient(mustNewDialer(1, false, false))
+	c := NewClient(mustNewDialer(1, false, false), 30*time.Second)
 
 	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open cluster service: %s", err.Error())
@@ -202,7 +202,7 @@ func Test_ServiceQueryLarge(t *testing.T) {
 		t.Fatalf("failed to create cluster service")
 	}
 
-	c := NewClient(mustNewDialer(1, false, false))
+	c := NewClient(mustNewDialer(1, false, false), 30*time.Second)
 
 	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open cluster service: %s", err.Error())

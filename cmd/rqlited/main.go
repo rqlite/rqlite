@@ -110,7 +110,7 @@ func main() {
 
 	// Start the HTTP API server.
 	clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, cfg.NodeEncrypt, cfg.NoNodeVerify)
-	clstrClient := cluster.NewClient(clstrDialer)
+	clstrClient := cluster.NewClient(clstrDialer, cfg.ClusterConnectTimeout)
 	if err := clstrClient.SetLocal(cfg.RaftAdv, clstr); err != nil {
 		log.Fatalf("failed to set cluster client local parameters: %s", err.Error())
 	}
