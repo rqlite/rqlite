@@ -1,4 +1,4 @@
-## 7.5.1 (unreleased)
+## 7.5.1 (June 13th 2022)
 - [PR #1043](https://github.com/rqlite/rqlite/pull/1043): Allow cluster-connect timeout to be configurable. Fixes [issue #1042](https://github.com/rqlite/rqlite/issues/1042).
 
 ## 7.5.0 (May 26th 2022)
