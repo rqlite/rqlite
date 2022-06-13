@@ -1,3 +1,6 @@
+## 7.5.1 (unreleased)
+- [PR #1043](https://github.com/rqlite/rqlite/pull/1043): Allow cluster-connect timeout to be configurable. Fixes [issue #1042](https://github.com/rqlite/rqlite/issues/1042).
+
 ## 7.5.0 (May 26th 2022)
 This release adds a new, higher-performance, option for writing to the database, known as Queued Writes. This allows users to trade off durability for high-performance writes to the database. See the [documentation](https://github.com/rqlite/rqlite/blob/master/DOC/QUEUED_WRITES.md) for full details.
 
