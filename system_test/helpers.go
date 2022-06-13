@@ -601,7 +601,7 @@ func mustNodeEncryptedOnDisk(dir string, enableSingle, httpEncrypt bool, mux *tc
 	node.Cluster = clstr
 
 	clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, false, true)
-	clstrClient := cluster.NewClient(clstrDialer)
+	clstrClient := cluster.NewClient(clstrDialer, 30*time.Second)
 	node.Service = httpd.New("localhost:0", node.Store, clstrClient, nil)
 	node.Service.Expvar = true
 	if httpEncrypt {

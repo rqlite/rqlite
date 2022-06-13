@@ -21,7 +21,7 @@ func Test_StoreClientSideBySide(t *testing.T) {
 		t.Fatalf("failed to get leader Raft address: %s", err.Error())
 	}
 
-	client := cluster.NewClient(mustNewDialer(cluster.MuxClusterHeader, false, false))
+	client := cluster.NewClient(mustNewDialer(cluster.MuxClusterHeader, false, false), 30*time.Second)
 
 	res, err := node.Store.Execute(executeRequestFromString("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"))
 	if err != nil {

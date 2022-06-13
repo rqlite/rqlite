@@ -163,6 +163,10 @@ type Config struct {
 	// a full database re-sync during recovery.
 	RaftNoFreelistSync bool
 
+	// ClusterConnectTimeout sets the timeout when initially connecting to another node in
+	// the cluster, for non-Raft communications.
+	ClusterConnectTimeout time.Duration
+
 	// WriteQueueCap is the default capacity of Execute queues
 	WriteQueueCap int
 
@@ -365,6 +369,7 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	flag.BoolVar(&config.RaftShutdownOnRemove, "raft-remove-shutdown", false, "Shutdown Raft if node removed")
 	flag.BoolVar(&config.RaftNoFreelistSync, "raft-no-freelist-sync", false, "Do not sync Raft log database freelist to disk")
 	flag.StringVar(&config.RaftLogLevel, "raft-log-level", "INFO", "Minimum log level for Raft module")
+	flag.DurationVar(&config.ClusterConnectTimeout, "cluster-connect-timeout", 30*time.Second, "Timeout for initial connection to other nodes")
 	flag.IntVar(&config.WriteQueueCap, "write-queue-capacity", 128, "Write queue capacity")
 	flag.IntVar(&config.WriteQueueBatchSz, "write-queue-batch-size", 16, "Write queue batch size")
 	flag.DurationVar(&config.WriteQueueTimeout, "write-queue-timeout", 50*time.Millisecond, "Write queue timeout")

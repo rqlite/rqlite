@@ -64,7 +64,7 @@ func Test_NewServiceSetGetNodeAPIAddr(t *testing.T) {
 	s.SetAPIAddr("foo")
 
 	// Test by connecting to itself.
-	c := NewClient(ml)
+	c := NewClient(ml, 30*time.Second)
 	addr, err := c.GetNodeAPIAddr(s.Addr(), 5*time.Second)
 	if err != nil {
 		t.Fatalf("failed to get node API address: %s", err)
@@ -114,7 +114,7 @@ func Test_NewServiceSetGetNodeAPIAddrLocal(t *testing.T) {
 	}
 
 	// Test by enabling local answering
-	c := NewClient(ml)
+	c := NewClient(ml, 30*time.Second)
 	if err := c.SetLocal(s.Addr(), s); err != nil {
 		t.Fatalf("failed to set cluster client local parameters: %s", err)
 	}
@@ -146,7 +146,7 @@ func Test_NewServiceSetGetNodeAPIAddrTLS(t *testing.T) {
 	s.SetAPIAddr("foo")
 
 	// Test by connecting to itself.
-	c := NewClient(ml)
+	c := NewClient(ml, 30*time.Second)
 	addr, err := c.GetNodeAPIAddr(s.Addr(), 5*time.Second)
 	if err != nil {
 		t.Fatalf("failed to get node API address: %s", err)

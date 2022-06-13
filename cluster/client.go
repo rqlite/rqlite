@@ -33,10 +33,10 @@ type Client struct {
 }
 
 // NewClient returns a client instance for talking to a remote node.
-func NewClient(dl Dialer) *Client {
+func NewClient(dl Dialer, t time.Duration) *Client {
 	return &Client{
 		dialer:  dl,
-		timeout: 30 * time.Second,
+		timeout: t,
 		pools:   make(map[string]pool.Pool),
 	}
 }

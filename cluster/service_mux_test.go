@@ -27,7 +27,7 @@ func Test_NewServiceSetGetNodeAPIAddrMuxed(t *testing.T) {
 
 	s.SetAPIAddr("foo")
 
-	c := NewClient(mustNewDialer(1, false, false))
+	c := NewClient(mustNewDialer(1, false, false), 30*time.Second)
 
 	addr, err := c.GetNodeAPIAddr(s.Addr(), 5*time.Second)
 	if err != nil {
@@ -61,7 +61,7 @@ func Test_NewServiceSetGetNodeAPIAddrMuxedTLS(t *testing.T) {
 
 	s.SetAPIAddr("foo")
 
-	c := NewClient(mustNewDialer(1, true, true))
+	c := NewClient(mustNewDialer(1, true, true), 30*time.Second)
 
 	addr, err := c.GetNodeAPIAddr(s.Addr(), 5*time.Second)
 	if err != nil {
