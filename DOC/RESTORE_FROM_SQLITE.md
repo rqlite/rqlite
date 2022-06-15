@@ -1,4 +1,4 @@
-# Restoring from a SQLite dump file
+# Restoring directly from SQLite
 
 rqlite supports loading a node directly from two sources, either of which can be used to restore from an existing [node backup](https://github.com/rqlite/rqlite/blob/master/DOC/BACKUPS.md):
 - An actual SQLite database file. This is the fastest way to initialize a rqlite node from an existing SQLite database.
