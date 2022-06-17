@@ -1,0 +1,79 @@
+package command
+
+import (
+	"regexp"
+	"testing"
+)
+
+func Test_NoRewrites(t *testing.T) {
+	for _, str := range []string{
+		`INSERT INTO "names" VALUES (1, 'bob', '123-45-678')`,
+		`INSERT INTO "names" VALUES (RANDOM(), 'bob', '123-45-678')`,
+		`SELECT title FROM albums ORDER BY RANDOM()`,
+	} {
+
+		stmts := []*Statement{
+			{
+				Sql: str,
+			},
+		}
+		if err := Rewrite(stmts, false); err != nil {
+			t.Fatalf("failed to not rewrite: %s", err)
+		}
+		if stmts[0].Sql != str {
+			t.Fatalf("SQL is modified: %s", stmts[0].Sql)
+		}
+	}
+}
+
+func Test_NoRewritesMulti(t *testing.T) {
+	stmts := []*Statement{
+		{
+			Sql: `INSERT INTO "names" VALUES (1, 'bob', '123-45-678')`,
+		},
+		{
+			Sql: `INSERT INTO "names" VALUES (RANDOM(), 'bob', '123-45-678')`,
+		},
+		{
+			Sql: `SELECT title FROM albums ORDER BY RANDOM()`,
+		},
+	}
+	if err := Rewrite(stmts, false); err != nil {
+		t.Fatalf("failed to not rewrite: %s", err)
+	}
+	if len(stmts) != 3 {
+		t.Fatalf("returned stmts is wrong length: %d", len(stmts))
+	}
+	if stmts[0].Sql != `INSERT INTO "names" VALUES (1, 'bob', '123-45-678')` {
+		t.Fatalf("SQL is modified: %s", stmts[0].Sql)
+	}
+	if stmts[1].Sql != `INSERT INTO "names" VALUES (RANDOM(), 'bob', '123-45-678')` {
+		t.Fatalf("SQL is modified: %s", stmts[0].Sql)
+	}
+	if stmts[2].Sql != `SELECT title FROM albums ORDER BY RANDOM()` {
+		t.Fatalf("SQL is modified: %s", stmts[0].Sql)
+	}
+}
+
+func Test_Rewrites(t *testing.T) {
+	testSQLs := []string{
+		`INSERT INTO "names" VALUES (1, 'bob', '123-45-678')`, `INSERT INTO "names" VALUES \(1, 'bob', '123-45-678'\)`,
+		`INSERT INTO "names" VALUES (RANDOM(), 'bob', '123-45-678')`, `INSERT INTO "names" VALUES \(-?[0-9]+\), 'bob', '123-45-678'\)`,
+		// `SELECT title FROM albums ORDER BY RANDOM()`,
+	}
+	for i := 0; i < len(testSQLs)-1; i += 2 {
+		stmts := []*Statement{
+			{
+				Sql: testSQLs[i],
+			},
+		}
+		if err := Rewrite(stmts, true); err != nil {
+			t.Fatalf("failed to not rewrite: %s", err)
+		}
+
+		match := regexp.MustCompile(testSQLs[i+1])
+		if !match.MatchString(testSQLs[i]) {
+			t.Fatalf("test %d failed, %s does not regex-match with %s", i, testSQLs[i], testSQLs[i+1])
+		}
+	}
+}
