@@ -6,7 +6,7 @@ Even though serving queries does not require Raft consensus (because the databas
  * The node, while still part of the cluster, has fallen behind the Leader in terms of updates to its underlying database.
  * The node is no longer part of the cluster, and has stopped receiving Raft log updates.
 
-This is why rqlite offers selectable read consistency levels of _none_, _weak_, and _strong_. Each is explained below.
+This is why rqlite offers selectable read consistency levels of _none_, _weak_, and _strong_. Each is explained below, and examples of each are shown at the end of this document.
 
 ## None
 With _none_, the node simply queries its local SQLite database, and does not care if it's a Leader or Follower. This offers the fastest query response, but suffers from the potential issues listed above.
@@ -38,7 +38,7 @@ Examples of enabling each read consistency level for a simple query is shown bel
 curl -G 'localhost:4001/db/query?level=none' --data-urlencode 'q=SELECT * FROM foo'
 
 # Query the node, telling it simply to read the SQLite database directly. The read request will be successful
-# only if the node has heard from the leader no more than 1 second ago.
+# only if the node last heard from the leader no more than 1 second ago.
 curl -G 'localhost:4001/db/query?level=none&freshness=1s' --data-urlencode 'q=SELECT * FROM foo'
 
 # Default query options. The read request will be successful only if the node believes its the leader. 
