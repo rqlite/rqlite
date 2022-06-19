@@ -60,6 +60,7 @@ func Test_Rewrites(t *testing.T) {
 		`INSERT INTO "names" VALUES (1, 'bob', '123-45-678')`, `INSERT INTO "names" VALUES \(1, 'bob', '123-45-678'\)`,
 		`INSERT INTO "names" VALUES (RANDOM(), 'bob', '123-45-678')`, `INSERT INTO "names" VALUES \(-?[0-9]+, 'bob', '123-45-678'\)`,
 		`SELECT title FROM albums ORDER BY RANDOM()`, `SELECT "title" FROM "albums" ORDER BY RANDOM\(\)`,
+		`SELECT RANDOM()`, `SELECT -?[0-9]+`,
 	}
 	for i := 0; i < len(testSQLs)-1; i += 2 {
 		stmts := []*Statement{
