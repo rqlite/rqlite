@@ -1079,8 +1079,7 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request) {
 	}
 	if !noRwRandom {
 		if err := command.Rewrite(stmts, true); err != nil {
-			http.Error(w, fmt.Sprintf("SQL rewrite: %s", err.Error()),
-				http.StatusInternalServerError)
+			http.Error(w, fmt.Sprintf("SQL rewrite: %s", err.Error()), http.StatusBadRequest)
 			return
 		}
 	}
@@ -1175,8 +1174,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 
 	if !noRwRandom {
 		if err := command.Rewrite(queries, true); err != nil {
-			http.Error(w, fmt.Sprintf("SQL rewrite: %s", err.Error()),
-				http.StatusInternalServerError)
+			http.Error(w, fmt.Sprintf("SQL rewrite: %s", err.Error()), http.StatusBadRequest)
 			return
 		}
 	}
