@@ -58,8 +58,8 @@ func Test_NoRewritesMulti(t *testing.T) {
 func Test_Rewrites(t *testing.T) {
 	testSQLs := []string{
 		`INSERT INTO "names" VALUES (1, 'bob', '123-45-678')`, `INSERT INTO "names" VALUES \(1, 'bob', '123-45-678'\)`,
-		`INSERT INTO "names" VALUES (RANDOM(), 'bob', '123-45-678')`, `INSERT INTO "names" VALUES \(-?[0-9]+\), 'bob', '123-45-678'\)`,
-		// `SELECT title FROM albums ORDER BY RANDOM()`,
+		`INSERT INTO "names" VALUES (RANDOM(), 'bob', '123-45-678')`, `INSERT INTO "names" VALUES \(-?[0-9]+, 'bob', '123-45-678'\)`,
+		`SELECT title FROM albums ORDER BY RANDOM()`, `SELECT "title" FROM "albums" ORDER BY RANDOM\(\)`,
 	}
 	for i := 0; i < len(testSQLs)-1; i += 2 {
 		stmts := []*Statement{
@@ -72,8 +72,8 @@ func Test_Rewrites(t *testing.T) {
 		}
 
 		match := regexp.MustCompile(testSQLs[i+1])
-		if !match.MatchString(testSQLs[i]) {
-			t.Fatalf("test %d failed, %s does not regex-match with %s", i, testSQLs[i], testSQLs[i+1])
+		if !match.MatchString(stmts[0].Sql) {
+			t.Fatalf("test %d failed, %s (rewritten as %s) does not regex-match with %s", i, testSQLs[i], stmts[0].Sql, testSQLs[i+1])
 		}
 	}
 }
