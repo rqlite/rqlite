@@ -333,6 +333,31 @@ func Test_SingleNodeParameterizedNamed(t *testing.T) {
 	}
 }
 
+func Test_SingleNodeRewriteRandom(t *testing.T) {
+	node := mustNewLeaderNode()
+	defer node.Deprovision()
+
+	_, err := node.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`)
+	if err != nil {
+		t.Fatalf(`CREATE TABLE failed: %s`, err.Error())
+	}
+
+	resp, err := node.ExecuteRewriteRandom(`INSERT INTO foo(id, name) VALUES(RANDOM(), "fiona")`)
+	if err != nil {
+		t.Fatalf(`queued write failed: %s`, err.Error())
+	}
+	if resp != `{"results":[{"last_insert_id":1,"rows_affected":1}]}` {
+		t.Fatalf("test received wrong result got %s", resp)
+	}
+	r, err := node.Query("SELECT * FROM foo")
+	if err != nil {
+		t.Fatalf("failed to count records: %s", err.Error())
+	}
+	if r != `{"results":[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]}` {
+		t.Fatalf("test received wrong result got %s", r)
+	}
+}
+
 func Test_SingleNodeQueued(t *testing.T) {
 	node := mustNewLeaderNode()
 	defer node.Deprovision()
