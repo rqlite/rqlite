@@ -803,8 +803,8 @@ func (s *Store) Query(qr *command.QueryRequest) ([]*command.QueryRows, error) {
 		return nil, ErrNotLeader
 	}
 
-	if qr.Level == command.QueryRequest_QUERY_REQUEST_LEVEL_NONE && qr.Freshness > 0 &&
-		time.Since(s.raft.LastContact()).Nanoseconds() > qr.Freshness {
+	if s.raft.State() != raft.Leader && qr.Level == command.QueryRequest_QUERY_REQUEST_LEVEL_NONE &&
+		qr.Freshness > 0 && time.Since(s.raft.LastContact()).Nanoseconds() > qr.Freshness {
 		return nil, ErrStaleRead
 	}
 
