@@ -1475,6 +1475,7 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 	}
 }
 
+// Test_SingleNodeExecuteQueryFreshness tests that freshness is ignored on the Leader.
 func Test_SingleNodeExecuteQueryFreshness(t *testing.T) {
 	s0, ln0 := mustNewStore(true)
 	defer os.RemoveAll(s0.Path())
@@ -1505,7 +1506,7 @@ func Test_SingleNodeExecuteQueryFreshness(t *testing.T) {
 	}
 	qr := queryRequestFromString("SELECT * FROM foo", false, false)
 	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
-	qr.Freshness = mustParseDuration("100h").Nanoseconds()
+	qr.Freshness = mustParseDuration("1ns").Nanoseconds()
 	r, err := s0.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query leader node: %s", err.Error())
