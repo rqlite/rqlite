@@ -1,4 +1,9 @@
+## 7.5.2 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1049](https://github.com/rqlite/rqlite/pull/1049): Ignore freshness when serving queries on Leader. Fixes [issue #1048](https://github.com/rqlite/rqlite/issues/1048). Thanks to @Tjstretchalot for the bug report.
+
 ## 7.5.1 (June 13th 2022)
+### Implementation changes and bug fixes
 - [PR #1043](https://github.com/rqlite/rqlite/pull/1043): Allow cluster-connect timeout to be configurable. Fixes [issue #1042](https://github.com/rqlite/rqlite/issues/1042).
 
 ## 7.5.0 (May 26th 2022)
