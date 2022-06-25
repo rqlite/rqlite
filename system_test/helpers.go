@@ -85,6 +85,8 @@ func (n *Node) Execute(stmt string) (string, error) {
 	return n.ExecuteMulti([]string{stmt})
 }
 
+// ExecuteRewriteRandom executes a single statement against the node, rewriting any
+// RANDOM() functions first.
 func (n *Node) ExecuteRewriteRandom(stmt string) (string, error) {
 	j, err := json.Marshal([]string{stmt})
 	if err != nil {
