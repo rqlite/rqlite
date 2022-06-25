@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sync"
 	"testing"
 	"time"
@@ -346,15 +347,10 @@ func Test_SingleNodeRewriteRandom(t *testing.T) {
 	if err != nil {
 		t.Fatalf(`queued write failed: %s`, err.Error())
 	}
-	if resp != `{"results":[{"last_insert_id":1,"rows_affected":1}]}` {
+
+	match := regexp.MustCompile(`{"results":[{"last_insert_id":\-?[0-9]+,"rows_affected":1}]}`)
+	if !match.MatchString(resp) {
 		t.Fatalf("test received wrong result got %s", resp)
-	}
-	r, err := node.Query("SELECT * FROM foo")
-	if err != nil {
-		t.Fatalf("failed to count records: %s", err.Error())
-	}
-	if r != `{"results":[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]}` {
-		t.Fatalf("test received wrong result got %s", r)
 	}
 }
 
