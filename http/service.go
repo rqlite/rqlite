@@ -1019,6 +1019,15 @@ func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	noRewriteRandom, err := noRewriteRandom(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := command.Rewrite(stmts, !noRewriteRandom); err != nil {
+		http.Error(w, fmt.Sprintf("SQL rewrite: %s", err.Error()), http.StatusBadRequest)
+		return
+	}
 
 	timeout, err := timeoutParam(r, defaultTimeout)
 	if err != nil {
@@ -1059,7 +1068,7 @@ func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request) {
 func (s *Service) execute(w http.ResponseWriter, r *http.Request) {
 	resp := NewResponse()
 
-	timeout, isTx, timings, redirect, rwRandom, err := reqParams(r, defaultTimeout)
+	timeout, isTx, timings, redirect, noRewriteRandom, err := reqParams(r, defaultTimeout)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -1077,7 +1086,7 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if err := command.Rewrite(stmts, rwRandom); err != nil {
+	if err := command.Rewrite(stmts, !noRewriteRandom); err != nil {
 		http.Error(w, fmt.Sprintf("SQL rewrite: %s", err.Error()), http.StatusBadRequest)
 		return
 	}
@@ -1577,7 +1586,7 @@ func isQueue(req *http.Request) (bool, error) {
 
 // reqParams is a convenience function to get a bunch of query params
 // in one function call.
-func reqParams(req *http.Request, def time.Duration) (timeout time.Duration, tx, timings, redirect, rwRandom bool, err error) {
+func reqParams(req *http.Request, def time.Duration) (timeout time.Duration, tx, timings, redirect, noRwRandom bool, err error) {
 	timeout, err = timeoutParam(req, def)
 	if err != nil {
 		return 0, false, false, false, true, err
@@ -1594,11 +1603,11 @@ func reqParams(req *http.Request, def time.Duration) (timeout time.Duration, tx,
 	if err != nil {
 		return 0, false, false, false, true, err
 	}
-	rwRandom, err = rewriteRandom(req)
+	noRwRandom, err = noRewriteRandom(req)
 	if err != nil {
 		return 0, false, false, false, true, err
 	}
-	return timeout, tx, timings, redirect, rwRandom, nil
+	return timeout, tx, timings, redirect, noRwRandom, nil
 }
 
 // noLeader returns whether processing should skip the leader check.
@@ -1621,9 +1630,9 @@ func isWait(req *http.Request) (bool, error) {
 	return queryParam(req, "wait")
 }
 
-// rewriteRandom returns whether a rewrite of RANDOM is requested.
-func rewriteRandom(req *http.Request) (bool, error) {
-	return queryParam(req, "rwrandom")
+// noRewriteRandom returns whether a rewrite of RANDOM is disabled.
+func noRewriteRandom(req *http.Request) (bool, error) {
+	return queryParam(req, "norwrandom")
 }
 
 // level returns the requested consistency level for a query
