@@ -182,25 +182,6 @@ const (
 	// Default timeout for cluster communications.
 	defaultTimeout = 30 * time.Second
 
-	// PermAll means all actions permitted.
-	PermAll = "all"
-	// PermJoin means user is permitted to join cluster.
-	PermJoin = "join"
-	// PermRemove means user is permitted to remove a node.
-	PermRemove = "remove"
-	// PermExecute means user can access execute endpoint.
-	PermExecute = "execute"
-	// PermQuery means user can access query endpoint
-	PermQuery = "query"
-	// PermStatus means user can retrieve node status.
-	PermStatus = "status"
-	// PermReady means user can retrieve ready status.
-	PermReady = "ready"
-	// PermBackup means user can backup node.
-	PermBackup = "backup"
-	// PermLoad means user can load a SQLite dump into a node.
-	PermLoad = "load"
-
 	// VersionHTTPHeader is the HTTP header key for the version.
 	VersionHTTPHeader = "X-RQLITE-VERSION"
 
@@ -414,7 +395,7 @@ func (s *Service) RegisterStatus(key string, stat StatusReporter) error {
 
 // handleJoin handles cluster-join requests from other nodes.
 func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
-	if !s.CheckRequestPerm(r, PermJoin) {
+	if !s.CheckRequestPerm(r, auth.PermJoin) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
@@ -473,7 +454,7 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 
 // handleNotify handles node-notify requests from other nodes.
 func (s *Service) handleNotify(w http.ResponseWriter, r *http.Request) {
-	if !s.CheckRequestPerm(r, PermJoin) {
+	if !s.CheckRequestPerm(r, auth.PermJoin) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
@@ -513,7 +494,7 @@ func (s *Service) handleNotify(w http.ResponseWriter, r *http.Request) {
 
 // handleRemove handles cluster-remove requests.
 func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request) {
-	if !s.CheckRequestPerm(r, PermRemove) {
+	if !s.CheckRequestPerm(r, auth.PermRemove) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
@@ -566,7 +547,7 @@ func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request) {
 
 // handleBackup returns the consistent database snapshot.
 func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
-	if !s.CheckRequestPerm(r, PermBackup) {
+	if !s.CheckRequestPerm(r, auth.PermBackup) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
@@ -612,7 +593,7 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
 // handleLoad loads the state contained in a .dump output. This API is different
 // from others in that it expects a raw file, not wrapped in any kind of JSON.
 func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
-	if !s.CheckRequestPerm(r, PermLoad) {
+	if !s.CheckRequestPerm(r, auth.PermLoad) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
@@ -679,7 +660,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 
-	if !s.CheckRequestPerm(r, PermStatus) {
+	if !s.CheckRequestPerm(r, auth.PermStatus) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
@@ -807,7 +788,7 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 func (s *Service) handleNodes(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 
-	if !s.CheckRequestPerm(r, PermStatus) {
+	if !s.CheckRequestPerm(r, auth.PermStatus) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
@@ -899,7 +880,7 @@ func (s *Service) handleNodes(w http.ResponseWriter, r *http.Request) {
 
 // handleReadyz returns whether the node is ready.
 func (s *Service) handleReadyz(w http.ResponseWriter, r *http.Request) {
-	if !s.CheckRequestPerm(r, PermReady) {
+	if !s.CheckRequestPerm(r, auth.PermReady) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
@@ -952,7 +933,7 @@ func (s *Service) handleReadyz(w http.ResponseWriter, r *http.Request) {
 func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 
-	if !s.CheckRequestPerm(r, PermExecute) {
+	if !s.CheckRequestPerm(r, auth.PermExecute) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
@@ -1126,7 +1107,7 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request) {
 func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 
-	if !s.CheckRequestPerm(r, PermQuery) {
+	if !s.CheckRequestPerm(r, auth.PermQuery) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
@@ -1214,7 +1195,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 // handleExpvar serves registered expvar information over HTTP.
 func (s *Service) handleExpvar(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	if !s.CheckRequestPerm(r, PermStatus) {
+	if !s.CheckRequestPerm(r, auth.PermStatus) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
@@ -1233,7 +1214,7 @@ func (s *Service) handleExpvar(w http.ResponseWriter, r *http.Request) {
 
 // handlePprof serves pprof information over HTTP.
 func (s *Service) handlePprof(w http.ResponseWriter, r *http.Request) {
-	if !s.CheckRequestPerm(r, PermStatus) {
+	if !s.CheckRequestPerm(r, auth.PermStatus) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
@@ -1281,7 +1262,7 @@ func (s *Service) CheckRequestPerm(r *http.Request, perm string) (b bool) {
 	}
 
 	// Is the required perm granted to all users, including anonymous users?
-	if s.credentialStore.HasAnyPerm(auth.AllUsers, perm, PermAll) {
+	if s.credentialStore.HasAnyPerm(auth.AllUsers, perm, auth.PermAll) {
 		return true
 	}
 
@@ -1297,7 +1278,7 @@ func (s *Service) CheckRequestPerm(r *http.Request, perm string) (b bool) {
 	}
 
 	// Is the specified user authorized?
-	return s.credentialStore.HasAnyPerm(username, perm, PermAll)
+	return s.credentialStore.HasAnyPerm(username, perm, auth.PermAll)
 }
 
 // LeaderAPIAddr returns the API address of the leader, as known by this node.
