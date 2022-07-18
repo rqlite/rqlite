@@ -9,9 +9,30 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// AllUsers is the username that indicates all users, even anonymous users (requests without
-// any BasicAuth information).
-const AllUsers = "*"
+const (
+	// AllUsers is the username that indicates all users, even anonymous users (requests without
+	// any BasicAuth information).
+	AllUsers = "*"
+
+	// PermAll means all actions permitted.
+	PermAll = "all"
+	// PermJoin means user is permitted to join cluster.
+	PermJoin = "join"
+	// PermRemove means user is permitted to remove a node.
+	PermRemove = "remove"
+	// PermExecute means user can access execute endpoint.
+	PermExecute = "execute"
+	// PermQuery means user can access query endpoint
+	PermQuery = "query"
+	// PermStatus means user can retrieve node status.
+	PermStatus = "status"
+	// PermReady means user can retrieve ready status.
+	PermReady = "ready"
+	// PermBackup means user can backup node.
+	PermBackup = "backup"
+	// PermLoad means user can load a SQLite dump into a node.
+	PermLoad = "load"
+)
 
 // BasicAuther is the interface an object must support to return basic auth information.
 type BasicAuther interface {
