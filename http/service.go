@@ -102,9 +102,6 @@ type CredentialStore interface {
 	// Check returns whether username and password are a valid combination.
 	Check(username, password string) bool
 
-	// HasPerm returns whether username has the given perm.
-	HasPerm(username string, perm string) bool
-
 	// HasAnyPerm returns whether username has any of the given perms.
 	HasAnyPerm(username string, perm ...string) bool
 }
