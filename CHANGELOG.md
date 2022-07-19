@@ -1,4 +1,7 @@
-## 7.5.2 (unreleased)
+## 7.6.0 (unreleased)
+### New features
+- [PR #1055](https://github.com/rqlite/rqlite/pull/1055): Add new `join-read-only` permission.
+
 ### Implementation changes and bug fixes
 - [PR #1049](https://github.com/rqlite/rqlite/pull/1049): Ignore freshness when serving queries on Leader. Fixes [issue #1048](https://github.com/rqlite/rqlite/issues/1048). Thanks to @Tjstretchalot for the bug report.
 
