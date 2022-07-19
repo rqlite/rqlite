@@ -147,6 +147,35 @@ func (c *CredentialsStore) HasAnyPerm(username string, perm ...string) bool {
 	}(perm)
 }
 
+// AA authenticates and checks authorization for the given username and password
+// for the given perm. If the credential store is nil, then this function always
+// returns true. If AllUsers have the given perm, authentication is not done.
+// Only then are the credentials checked, and then the perm checked.
+func (c *CredentialsStore) AA(username, password, perm string) bool {
+	// No credential store? Auth is not even enabled.
+	if c == nil {
+		return true
+	}
+
+	// Is the required perm granted to all users, including anonymous users?
+	if c.HasAnyPerm(AllUsers, perm, PermAll) {
+		return true
+	}
+
+	// At this point a username needs to have been supplied
+	if username == "" {
+		return false
+	}
+
+	// Are the creds good?
+	if !c.Check(username, password) {
+		return false
+	}
+
+	// Is the specified user authorized?
+	return c.HasAnyPerm(username, perm, PermAll)
+}
+
 // HasPermRequest returns true if the username returned by b has the givem perm.
 // It does not perform any password checking, but if there is no username
 // in the request, it returns false.
