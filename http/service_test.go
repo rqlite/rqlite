@@ -470,7 +470,7 @@ func Test_400Routes(t *testing.T) {
 }
 
 func Test_401Routes_NoBasicAuth(t *testing.T) {
-	c := &mockCredentialStore{CheckOK: false, HasPermOK: false}
+	c := &mockCredentialStore{HasPermOK: false}
 
 	m := &MockStore{}
 	n := &mockClusterService{}
@@ -512,7 +512,7 @@ func Test_401Routes_NoBasicAuth(t *testing.T) {
 }
 
 func Test_401Routes_BasicAuthBadPassword(t *testing.T) {
-	c := &mockCredentialStore{CheckOK: false, HasPermOK: false}
+	c := &mockCredentialStore{HasPermOK: false}
 
 	m := &MockStore{}
 	n := &mockClusterService{}
@@ -559,7 +559,7 @@ func Test_401Routes_BasicAuthBadPassword(t *testing.T) {
 }
 
 func Test_401Routes_BasicAuthBadPerm(t *testing.T) {
-	c := &mockCredentialStore{CheckOK: true, HasPermOK: false}
+	c := &mockCredentialStore{HasPermOK: false}
 
 	m := &MockStore{}
 	n := &mockClusterService{}
@@ -1128,7 +1128,6 @@ func (m *mockClusterService) Query(qr *command.QueryRequest, addr string, t time
 }
 
 type mockCredentialStore struct {
-	CheckOK   bool
 	HasPermOK bool
 }
 
@@ -1136,19 +1135,11 @@ func (m *mockCredentialStore) AA(username, password, perm string) bool {
 	if m == nil {
 		return true
 	}
-	return m.CheckOK
-}
-
-func (m *mockCredentialStore) HasPerm(username, perm string) bool {
 	return m.HasPermOK
 }
 
 func (m *mockClusterService) Stats() (map[string]interface{}, error) {
 	return nil, nil
-}
-
-func (m *mockCredentialStore) HasAnyPerm(username string, perm ...string) bool {
-	return m.HasPermOK
 }
 
 type mockStatusReporter struct {
