@@ -99,11 +99,8 @@ type Cluster interface {
 
 // CredentialStore is the interface credential stores must support.
 type CredentialStore interface {
-	// Check returns whether username and password are a valid combination.
-	Check(username, password string) bool
-
-	// HasAnyPerm returns whether username has any of the given perms.
-	HasAnyPerm(username string, perm ...string) bool
+	// AA authenticates and checks authorization for the given perm.
+	AA(username, password, perm string) bool
 }
 
 // StatusReporter is the interface status providers must implement.
@@ -1256,29 +1253,12 @@ func (s *Service) CheckRequestPerm(r *http.Request, perm string) (b bool) {
 		}
 	}()
 
-	// No credential store? Auth is not even enabled.
-	if s.credentialStore == nil {
-		return true
-	}
-
-	// Is the required perm granted to all users, including anonymous users?
-	if s.credentialStore.HasAnyPerm(auth.AllUsers, perm, auth.PermAll) {
-		return true
-	}
-
-	// At this point there needs to be BasicAuth information in the request.
 	username, password, ok := r.BasicAuth()
 	if !ok {
-		return false
+		username = ""
 	}
 
-	// Are the BasicAuth creds good?
-	if !s.credentialStore.Check(username, password) {
-		return false
-	}
-
-	// Is the specified user authorized?
-	return s.credentialStore.HasAnyPerm(username, perm, auth.PermAll)
+	return s.credentialStore.AA(username, password, perm)
 }
 
 // LeaderAPIAddr returns the API address of the leader, as known by this node.

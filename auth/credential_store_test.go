@@ -192,6 +192,75 @@ func Test_AuthPermsLoadSingle(t *testing.T) {
 	}
 }
 
+func Test_AuthPermsAANilStore(t *testing.T) {
+	var store *CredentialsStore
+	if !store.AA("username1", "password1", "foo") {
+		t.Fatalf("nil store didn't authorize")
+	}
+}
+
+func Test_AuthPermsAA(t *testing.T) {
+	const jsonStream = `
+		[
+			{
+				"username": "username1",
+				"password": "password1",
+				"perms": ["foo", "bar"]
+			},
+			{
+				"username": "username2",
+				"password": "password2",
+				"perms": ["baz"]
+			},
+			{
+				"username": "*",
+				"perms": ["qux"]
+			}
+		]
+	`
+
+	store := NewCredentialsStore()
+	if err := store.Load(strings.NewReader(jsonStream)); err != nil {
+		t.Fatalf("failed to load single credential: %s", err.Error())
+	}
+
+	if store.AA("nonexistent", "password1", "foo") {
+		t.Fatalf("nonexistent authenticated and authorized for foo")
+	}
+	if !store.AA("nonexistent", "password1", "qux") {
+		t.Fatalf("nonexistent not authenticated and authorized for qux")
+	}
+
+	if !store.AA("username1", "password1", "foo") {
+		t.Fatalf("username1 not authenticated and authorized for foo")
+	}
+	if !store.AA("username1", "password1", "bar") {
+		t.Fatalf("username1 not authenticated and authorized for bar")
+	}
+	if !store.AA("username1", "password1", "qux") {
+		t.Fatalf("username1 not authenticated and authorized for qux")
+	}
+	if store.AA("username1", "password2", "bar") {
+		t.Fatalf("username1 was authenticated and authorized for bar using wrong password")
+	}
+	if store.AA("username1", "password1", "quz") {
+		t.Fatalf("username1 was authenticated and authorized for quz")
+	}
+
+	if !store.AA("username2", "password2", "baz") {
+		t.Fatalf("username2 not authenticated and authorized for baz")
+	}
+	if !store.AA("username2", "password2", "qux") {
+		t.Fatalf("username2 not authenticated and authorized for qux")
+	}
+	if store.AA("username2", "password2", "bar") {
+		t.Fatalf("username2 was authenticated and authorized for bar using wrong password")
+	}
+	if store.AA("username2", "password2", "quz") {
+		t.Fatalf("username2 was authenticated and authorized for quz")
+	}
+}
+
 func Test_AuthLoadHashedSingleRequest(t *testing.T) {
 	const jsonStream = `
 		[
