@@ -430,8 +430,8 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 		voter = true
 	}
 
-	if voter.(bool) && !!s.CheckRequestPerm(r, auth.PermJoin) {
-		http.Error(w, "joining as voter not allowed", http.StatusServiceUnavailable)
+	if voter.(bool) && !s.CheckRequestPerm(r, auth.PermJoin) {
+		http.Error(w, "joining as voter not allowed", http.StatusUnauthorized)
 		return
 	}
 
