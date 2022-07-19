@@ -607,10 +607,49 @@ func Test_401Routes_BasicAuthBadPerm(t *testing.T) {
 
 func Test_401Join(t *testing.T) {
 	jf := func(_, _, perm string) bool {
-		if perm == "join-read-only" {
-			return true
-		}
-		return false
+		return perm == "join" || perm == "join-read-only"
+	}
+	c := &mockCredentialStore{aaFunc: jf}
+
+	m := &MockStore{}
+	n := &mockClusterService{}
+	s := New("127.0.0.1:0", m, n, c)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+
+	resp, err := client.Post(host+"/join", "application/json", strings.NewReader(`{"id": "1", "addr":":4001", "voter": true}`))
+	if err != nil {
+		t.Fatalf("failed to make join request")
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("failed to get expected StatusOK for join, got %d", resp.StatusCode)
+	}
+
+	resp, err = client.Post(host+"/join", "application/json", strings.NewReader(`{"id": "1", "addr":":4001"}`))
+	if err != nil {
+		t.Fatalf("failed to make join request")
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("failed to get expected StatusOK for join, got %d", resp.StatusCode)
+	}
+
+	resp, err = client.Post(host+"/join", "application/json", strings.NewReader(`{"id": "1", "addr":":4001", "voter": false}`))
+	if err != nil {
+		t.Fatalf("failed to make join request")
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("failed to get expected StatusOK for non-voter join, got %d", resp.StatusCode)
+	}
+}
+
+func Test_401JoinReadOnly(t *testing.T) {
+	jf := func(_, _, perm string) bool {
+		return perm == "join-read-only"
 	}
 	c := &mockCredentialStore{aaFunc: jf}
 
@@ -648,8 +687,6 @@ func Test_401Join(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("failed to get expected StatusOK for non-voter join, got %d", resp.StatusCode)
 	}
-
-	return
 }
 
 func Test_BackupOK(t *testing.T) {
