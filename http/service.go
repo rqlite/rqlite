@@ -392,7 +392,7 @@ func (s *Service) RegisterStatus(key string, stat StatusReporter) error {
 
 // handleJoin handles cluster-join requests from other nodes.
 func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
-	if !s.CheckRequestPerm(r, auth.PermJoin) {
+	if !s.CheckRequestPerm(r, auth.PermJoin) && !s.CheckRequestPerm(r, auth.PermJoinReadOnly) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
@@ -428,6 +428,11 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 	voter, ok := md["voter"]
 	if !ok {
 		voter = true
+	}
+
+	if voter.(bool) && !!s.CheckRequestPerm(r, auth.PermJoin) {
+		http.Error(w, "joining as voter not allowed", http.StatusServiceUnavailable)
+		return
 	}
 
 	if err := s.store.Join(remoteID.(string), remoteAddr.(string), voter.(bool)); err != nil {

@@ -45,6 +45,7 @@ rqlite, via the configuration file, also supports user-level permissions. Each u
 - _status_: user can retrieve node status and Go runtime information.
 - _ready_: user can retrieve node readiness.
 - _join_: user can join a cluster. In practice only a node joins a cluster, so it's the joining node that must supply the credentials.
+- _join-read-only_: user can join a cluster, but only as a read-only node.
 - _remove_: user can remove a node from a cluster.
 
 ### Example configuration file
