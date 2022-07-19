@@ -1253,6 +1253,11 @@ func (s *Service) CheckRequestPerm(r *http.Request, perm string) (b bool) {
 		}
 	}()
 
+	// No auth store set, so no checking required.
+	if s.credentialStore == nil {
+		return true
+	}
+
 	username, password, ok := r.BasicAuth()
 	if !ok {
 		username = ""
