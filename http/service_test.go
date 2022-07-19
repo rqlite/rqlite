@@ -1132,7 +1132,10 @@ type mockCredentialStore struct {
 	HasPermOK bool
 }
 
-func (m *mockCredentialStore) Check(username, password string) bool {
+func (m *mockCredentialStore) AA(username, password, perm string) bool {
+	if m == nil {
+		return true
+	}
 	return m.CheckOK
 }
 
