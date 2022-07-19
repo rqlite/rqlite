@@ -1,4 +1,4 @@
-## 7.6.0 (unreleased)
+## 7.6.0 (July 19th 2022)
 ### New features
 - [PR #1055](https://github.com/rqlite/rqlite/pull/1055): Add new `join-read-only` permission.
 
