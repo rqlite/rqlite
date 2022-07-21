@@ -38,6 +38,11 @@ var (
 	ErrUserInfoExists = errors.New("userinfo exists")
 )
 
+const (
+	NO_USERNAME  = ""
+	NO_PASSSWORD = ""
+)
+
 // Database is the interface any queryable system must implement
 type Database interface {
 	// Execute executes a slice of queries, each of which is not expected
@@ -1323,7 +1328,7 @@ func (s *Service) runQueue() {
 								time.Sleep(retryDelay)
 								continue
 							}
-							_, err = s.cluster.Execute(er, addr, "", "", defaultTimeout)
+							_, err = s.cluster.Execute(er, addr, NO_USERNAME, NO_PASSSWORD, defaultTimeout)
 							if err != nil {
 								s.logger.Printf("execute queue write failed for sequence number %d: %s",
 									req.SequenceNumber, err.Error())
