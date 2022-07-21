@@ -132,8 +132,10 @@ func (c *Client) GetNodeAPIAddr(nodeAddr string, timeout time.Duration) (string,
 	return a.Url, nil
 }
 
-// Execute performs an Execute on a remote node.
-func (c *Client) Execute(er *command.ExecuteRequest, nodeAddr string, timeout time.Duration) ([]*command.ExecuteResult, error) {
+// Execute performs an Execute on a remote node. If username is an empty string
+// no credential information will be included in the Execute request to the
+// remote node.
+func (c *Client) Execute(er *command.ExecuteRequest, nodeAddr, username, password string, timeout time.Duration) ([]*command.ExecuteResult, error) {
 	conn, err := c.dial(nodeAddr, c.timeout)
 	if err != nil {
 		return nil, err
@@ -147,6 +149,14 @@ func (c *Client) Execute(er *command.ExecuteRequest, nodeAddr string, timeout ti
 			ExecuteRequest: er,
 		},
 	}
+
+	if username != "" {
+		command.Credentials = &Credentials{
+			Username: username,
+			Password: password,
+		}
+	}
+
 	p, err := proto.Marshal(command)
 	if err != nil {
 		return nil, fmt.Errorf("command marshal: %s", err)

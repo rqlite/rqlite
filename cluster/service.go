@@ -63,6 +63,12 @@ type Database interface {
 	Query(qr *command.QueryRequest) ([]*command.QueryRows, error)
 }
 
+// CredentialStore is the interface credential stores must support.
+type CredentialStore interface {
+	// AA authenticates and checks authorization for the given perm.
+	AA(username, password, perm string) bool
+}
+
 // Transport is the interface the network layer must provide.
 type Transport interface {
 	net.Listener
@@ -75,6 +81,8 @@ type Service struct {
 	addr net.Addr  // Address on which this service is listening
 
 	db Database // The queryable system.
+
+	credentialStore CredentialStore
 
 	mu      sync.RWMutex
 	https   bool   // Serving HTTPS?

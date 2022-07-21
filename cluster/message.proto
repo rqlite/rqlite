@@ -5,6 +5,11 @@ import "command/command.proto";
 
 option go_package = "github.com/rqlite/rqlite/cluster";
 
+message Credentials {
+    string username = 1;
+    string password = 2;
+}
+
 message Address {
 	string url = 1;
 }
@@ -22,6 +27,8 @@ message Command {
         command.ExecuteRequest execute_request = 2;
         command.QueryRequest query_request = 3;
     }
+
+    Credentials credentials = 4;
 }
 
 message CommandExecuteResponse {

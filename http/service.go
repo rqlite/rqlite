@@ -88,7 +88,7 @@ type Cluster interface {
 	GetNodeAPIAddr(nodeAddr string, timeout time.Duration) (string, error)
 
 	// Execute performs an Execute Request on a remote node.
-	Execute(er *command.ExecuteRequest, nodeAddr string, timeout time.Duration) ([]*command.ExecuteResult, error)
+	Execute(er *command.ExecuteRequest, nodeAddr, username, password string, timeout time.Duration) ([]*command.ExecuteResult, error)
 
 	// Query performs an Query Request on a remote node.
 	Query(qr *command.QueryRequest, nodeAddr string, timeout time.Duration) ([]*command.QueryRows, error)
@@ -1091,7 +1091,13 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
 			return
 		}
-		results, resultsErr = s.cluster.Execute(er, addr, timeout)
+
+		username, password, ok := r.BasicAuth()
+		if !ok {
+			username = ""
+		}
+
+		results, resultsErr = s.cluster.Execute(er, addr, username, password, timeout)
 		stats.Add(numRemoteExecutions, 1)
 		w.Header().Add(ServedByHTTPHeader, addr)
 	}
@@ -1317,7 +1323,7 @@ func (s *Service) runQueue() {
 								time.Sleep(retryDelay)
 								continue
 							}
-							_, err = s.cluster.Execute(er, addr, defaultTimeout)
+							_, err = s.cluster.Execute(er, addr, "", "", defaultTimeout)
 							if err != nil {
 								s.logger.Printf("execute queue write failed for sequence number %d: %s",
 									req.SequenceNumber, err.Error())
