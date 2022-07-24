@@ -13,7 +13,7 @@ import (
 
 func Test_NewServiceOpenClose(t *testing.T) {
 	ml := mustNewMockTransport()
-	s := New(ml, mustNewMockDatabase())
+	s := New(ml, mustNewMockDatabase(), mustNewMockCredentialStore())
 	if s == nil {
 		t.Fatalf("failed to create cluster service")
 	}
@@ -31,7 +31,7 @@ func Test_NewServiceOpenClose(t *testing.T) {
 
 func Test_NewServiceSetGetAPIAddr(t *testing.T) {
 	ml := mustNewMockTransport()
-	s := New(ml, mustNewMockDatabase())
+	s := New(ml, mustNewMockDatabase(), mustNewMockCredentialStore())
 	if s == nil {
 		t.Fatalf("failed to create cluster service")
 	}
@@ -52,7 +52,7 @@ func Test_NewServiceSetGetAPIAddr(t *testing.T) {
 
 func Test_NewServiceSetGetNodeAPIAddr(t *testing.T) {
 	ml := mustNewMockTransport()
-	s := New(ml, mustNewMockDatabase())
+	s := New(ml, mustNewMockDatabase(), mustNewMockCredentialStore())
 	if s == nil {
 		t.Fatalf("failed to create cluster service")
 	}
@@ -97,7 +97,7 @@ func Test_NewServiceSetGetNodeAPIAddr(t *testing.T) {
 
 func Test_NewServiceSetGetNodeAPIAddrLocal(t *testing.T) {
 	ml := mustNewMockTransport()
-	s := New(ml, mustNewMockDatabase())
+	s := New(ml, mustNewMockDatabase(), mustNewMockCredentialStore())
 	if s == nil {
 		t.Fatalf("failed to create cluster service")
 	}
@@ -134,7 +134,7 @@ func Test_NewServiceSetGetNodeAPIAddrLocal(t *testing.T) {
 
 func Test_NewServiceSetGetNodeAPIAddrTLS(t *testing.T) {
 	ml := mustNewMockTLSTransport()
-	s := New(ml, mustNewMockDatabase())
+	s := New(ml, mustNewMockDatabase(), mustNewMockCredentialStore())
 	if s == nil {
 		t.Fatalf("failed to create cluster service")
 	}
@@ -257,4 +257,24 @@ func mustCreateTLSConfig() *tls.Config {
 	}
 
 	return config
+}
+
+type mockCredentialStore struct {
+	HasPermOK bool
+	aaFunc    func(username, password, perm string) bool
+}
+
+func (m *mockCredentialStore) AA(username, password, perm string) bool {
+	if m == nil {
+		return true
+	}
+
+	if m.aaFunc != nil {
+		return m.aaFunc(username, password, perm)
+	}
+	return m.HasPermOK
+}
+
+func mustNewMockCredentialStore() *mockCredentialStore {
+	return &mockCredentialStore{HasPermOK: true}
 }

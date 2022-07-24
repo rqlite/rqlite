@@ -16,7 +16,7 @@ func Test_NewServiceSetGetNodeAPIAddrMuxed(t *testing.T) {
 	go mux.Serve()
 	tn := mux.Listen(1) // Could be any byte value.
 
-	s := New(tn, mustNewMockDatabase())
+	s := New(tn, mustNewMockDatabase(), mustNewMockCredentialStore())
 	if s == nil {
 		t.Fatalf("failed to create cluster service")
 	}
@@ -50,7 +50,7 @@ func Test_NewServiceSetGetNodeAPIAddrMuxedTLS(t *testing.T) {
 	go mux.Serve()
 	tn := mux.Listen(1) // Could be any byte value.
 
-	s := New(tn, mustNewMockDatabase())
+	s := New(tn, mustNewMockDatabase(), mustNewMockCredentialStore())
 	if s == nil {
 		t.Fatalf("failed to create cluster service")
 	}

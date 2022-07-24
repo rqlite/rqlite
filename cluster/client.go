@@ -135,7 +135,7 @@ func (c *Client) GetNodeAPIAddr(nodeAddr string, timeout time.Duration) (string,
 // Execute performs an Execute on a remote node. If username is an empty string
 // no credential information will be included in the Execute request to the
 // remote node.
-func (c *Client) Execute(er *command.ExecuteRequest, nodeAddr, username, password string, timeout time.Duration) ([]*command.ExecuteResult, error) {
+func (c *Client) Execute(er *command.ExecuteRequest, nodeAddr string, username string, password string, timeout time.Duration) ([]*command.ExecuteResult, error) {
 	conn, err := c.dial(nodeAddr, c.timeout)
 	if err != nil {
 		return nil, err
@@ -156,6 +156,8 @@ func (c *Client) Execute(er *command.ExecuteRequest, nodeAddr, username, passwor
 			Password: password,
 		}
 	}
+	fmt.Println("here")
+	fmt.Println(command)
 
 	p, err := proto.Marshal(command)
 	if err != nil {

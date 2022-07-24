@@ -21,7 +21,8 @@ func Test_ServiceExecute(t *testing.T) {
 	go mux.Serve()
 	tn := mux.Listen(1) // Could be any byte value.
 	db := mustNewMockDatabase()
-	s := New(tn, db)
+	cred := mustNewMockCredentialStore()
+	s := New(tn, db, cred)
 	if s == nil {
 		t.Fatalf("failed to create cluster service")
 	}
@@ -39,7 +40,7 @@ func Test_ServiceExecute(t *testing.T) {
 		}
 		return nil, errors.New("execute failed")
 	}
-	_, err := c.Execute(executeRequestFromString("some SQL"), s.Addr(), longWait)
+	_, err := c.Execute(executeRequestFromString("some SQL"), s.Addr(), "", "", longWait)
 	if err == nil {
 		t.Fatalf("client failed to report error")
 	}
@@ -57,7 +58,7 @@ func Test_ServiceExecute(t *testing.T) {
 		}
 		return []*command.ExecuteResult{result}, nil
 	}
-	res, err := c.Execute(executeRequestFromString("some SQL"), s.Addr(), longWait)
+	res, err := c.Execute(executeRequestFromString("some SQL"), s.Addr(), "", "", longWait)
 	if err != nil {
 		t.Fatalf("failed to execute query: %s", err.Error())
 	}
@@ -74,7 +75,7 @@ func Test_ServiceExecute(t *testing.T) {
 		}
 		return []*command.ExecuteResult{result}, nil
 	}
-	res, err = c.Execute(executeRequestFromString("some SQL"), s.Addr(), longWait)
+	res, err = c.Execute(executeRequestFromString("some SQL"), s.Addr(), "", "", longWait)
 	if err != nil {
 		t.Fatalf("failed to execute: %s", err.Error())
 	}
@@ -86,7 +87,7 @@ func Test_ServiceExecute(t *testing.T) {
 		time.Sleep(longWait)
 		return nil, nil
 	}
-	_, err = c.Execute(executeRequestFromString("some SQL"), s.Addr(), shortWait)
+	_, err = c.Execute(executeRequestFromString("some SQL"), s.Addr(), "", "", shortWait)
 	if err == nil {
 		t.Fatalf("failed to receive expected error")
 	}
@@ -108,7 +109,8 @@ func Test_ServiceQuery(t *testing.T) {
 	go mux.Serve()
 	tn := mux.Listen(1) // Could be any byte value.
 	db := mustNewMockDatabase()
-	s := New(tn, db)
+	cred := mustNewMockCredentialStore()
+	s := New(tn, db, cred)
 	if s == nil {
 		t.Fatalf("failed to create cluster service")
 	}
@@ -197,7 +199,8 @@ func Test_ServiceQueryLarge(t *testing.T) {
 	go mux.Serve()
 	tn := mux.Listen(1) // Could be any byte value.
 	db := mustNewMockDatabase()
-	s := New(tn, db)
+	cred := mustNewMockCredentialStore()
+	s := New(tn, db, cred)
 	if s == nil {
 		t.Fatalf("failed to create cluster service")
 	}

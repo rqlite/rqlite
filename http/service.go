@@ -93,7 +93,7 @@ type Cluster interface {
 	GetNodeAPIAddr(nodeAddr string, timeout time.Duration) (string, error)
 
 	// Execute performs an Execute Request on a remote node.
-	Execute(er *command.ExecuteRequest, nodeAddr, username, password string, timeout time.Duration) ([]*command.ExecuteResult, error)
+	Execute(er *command.ExecuteRequest, nodeAddr string, username string, password string, timeout time.Duration) ([]*command.ExecuteResult, error)
 
 	// Query performs an Query Request on a remote node.
 	Query(qr *command.QueryRequest, nodeAddr string, timeout time.Duration) ([]*command.QueryRows, error)

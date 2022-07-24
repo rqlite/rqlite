@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rqlite/rqlite/auth"
 	"github.com/rqlite/rqlite/command"
 	"google.golang.org/protobuf/proto"
 )
@@ -92,12 +93,13 @@ type Service struct {
 }
 
 // New returns a new instance of the cluster service
-func New(tn Transport, db Database) *Service {
+func New(tn Transport, db Database, credentialStore CredentialStore) *Service {
 	return &Service{
-		tn:     tn,
-		addr:   tn.Addr(),
-		db:     db,
-		logger: log.New(os.Stderr, "[cluster] ", log.LstdFlags),
+		tn:              tn,
+		addr:            tn.Addr(),
+		db:              db,
+		logger:          log.New(os.Stderr, "[cluster] ", log.LstdFlags),
+		credentialStore: credentialStore,
 	}
 }
 
@@ -175,6 +177,23 @@ func (s *Service) serve() error {
 	}
 }
 
+func (s *Service) checkCommandPerm(c *Command, perm string) bool {
+	if s.credentialStore == nil {
+		return true
+	}
+
+	var username string
+	var password string
+	if c.Credentials == nil {
+		username = ""
+		password = ""
+	} else {
+		username = c.Credentials.GetUsername()
+		password = c.Credentials.GetPassword()
+	}
+	return s.credentialStore.AA(username, password, perm)
+}
+
 func (s *Service) handleConn(conn net.Conn) {
 	defer conn.Close()
 
@@ -219,9 +238,10 @@ func (s *Service) handleConn(conn net.Conn) {
 			stats.Add(numExecuteRequest, 1)
 
 			resp := &CommandExecuteResponse{}
-
 			er := c.GetExecuteRequest()
-			if er == nil {
+			if !s.checkCommandPerm(c, auth.PermExecute) {
+				resp.Error = "Unauthorized"
+			} else if er == nil {
 				resp.Error = "ExecuteRequest is nil"
 			} else {
 				res, err := s.db.Execute(er)

@@ -30,7 +30,7 @@ func Test_StoreClientSideBySide(t *testing.T) {
 	if exp, got := "[{}]", asJSON(res); exp != got {
 		t.Fatalf("unexpected results, expt %s, got %s", exp, got)
 	}
-	res, err = client.Execute(executeRequestFromString("CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"), leaderAddr, shortWait)
+	res, err = client.Execute(executeRequestFromString("CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"), leaderAddr, "blah", "", shortWait)
 	if err != nil {
 		t.Fatalf("failed to execute via remote: %s", err.Error())
 	}
@@ -45,7 +45,7 @@ func Test_StoreClientSideBySide(t *testing.T) {
 	if exp, got := `[{"last_insert_id":1,"rows_affected":1}]`, asJSON(res); exp != got {
 		t.Fatalf("unexpected results, expt %s, got %s", exp, got)
 	}
-	res, err = client.Execute(executeRequestFromString(`INSERT INTO bar(name) VALUES("fiona")`), leaderAddr, shortWait)
+	res, err = client.Execute(executeRequestFromString(`INSERT INTO bar(name) VALUES("fiona")`), leaderAddr, "blah", "", shortWait)
 	if err != nil {
 		t.Fatalf("failed to execute via remote: %s", err.Error())
 	}
