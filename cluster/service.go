@@ -182,12 +182,9 @@ func (s *Service) checkCommandPerm(c *Command, perm string) bool {
 		return true
 	}
 
-	var username string
-	var password string
-	if c.Credentials == nil {
-		username = ""
-		password = ""
-	} else {
+	username := ""
+	password := ""
+	if c.Credentials != nil {
 		username = c.Credentials.GetUsername()
 		password = c.Credentials.GetPassword()
 	}

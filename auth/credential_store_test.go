@@ -227,8 +227,17 @@ func Test_AuthPermsAA(t *testing.T) {
 	if store.AA("nonexistent", "password1", "foo") {
 		t.Fatalf("nonexistent authenticated and authorized for foo")
 	}
+
 	if !store.AA("nonexistent", "password1", "qux") {
 		t.Fatalf("nonexistent not authenticated and authorized for qux")
+	}
+
+	// explicit check of anonymous user
+	if !store.AA("", "", "qux") {
+		t.Fatalf("anonymous incorrectly not authorized")
+	}
+	if store.AA("", "", "foo") {
+		t.Fatalf("anonymous incorrectly authorized")
 	}
 
 	if !store.AA("username1", "password1", "foo") {
