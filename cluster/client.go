@@ -156,8 +156,6 @@ func (c *Client) Execute(er *command.ExecuteRequest, nodeAddr string, username s
 			Password: password,
 		}
 	}
-	fmt.Println("here")
-	fmt.Println(command)
 
 	p, err := proto.Marshal(command)
 	if err != nil {
