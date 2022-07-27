@@ -1104,7 +1104,7 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request) {
 
 		results, resultsErr = s.cluster.Execute(er, addr, username, password, timeout)
 		if resultsErr != nil && resultsErr.Error() == "Unauthorized" {
-			http.Error(w, ErrLeaderNotFound.Error(), http.StatusUnauthorized)
+			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
 		stats.Add(numRemoteExecutions, 1)
