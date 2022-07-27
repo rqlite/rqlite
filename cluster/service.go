@@ -268,7 +268,9 @@ func (s *Service) handleConn(conn net.Conn) {
 			resp := &CommandQueryResponse{}
 
 			qr := c.GetQueryRequest()
-			if qr == nil {
+			if !s.checkCommandPerm(c, auth.PermQuery) {
+				resp.Error = "Unauthorized"
+			} else if qr == nil {
 				resp.Error = "QueryRequest is nil"
 			} else {
 				res, err := s.db.Query(qr)

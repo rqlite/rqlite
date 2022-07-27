@@ -1205,7 +1205,7 @@ func (m *mockClusterService) Execute(er *command.ExecuteRequest, addr string, us
 	return nil, nil
 }
 
-func (m *mockClusterService) Query(qr *command.QueryRequest, addr string, t time.Duration) ([]*command.QueryRows, error) {
+func (m *mockClusterService) Query(qr *command.QueryRequest, addr string, username string, password string, t time.Duration) ([]*command.QueryRows, error) {
 	if m.queryFn != nil {
 		return m.queryFn(qr, addr, t)
 	}

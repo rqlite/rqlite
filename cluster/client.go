@@ -222,7 +222,7 @@ func (c *Client) Execute(er *command.ExecuteRequest, nodeAddr string, username s
 }
 
 // Query performs a Query on a remote node.
-func (c *Client) Query(qr *command.QueryRequest, nodeAddr string, timeout time.Duration) ([]*command.QueryRows, error) {
+func (c *Client) Query(qr *command.QueryRequest, nodeAddr string, username string, password string, timeout time.Duration) ([]*command.QueryRows, error) {
 	conn, err := c.dial(nodeAddr, c.timeout)
 	if err != nil {
 		return nil, err
@@ -235,6 +235,13 @@ func (c *Client) Query(qr *command.QueryRequest, nodeAddr string, timeout time.D
 		Request: &Command_QueryRequest{
 			QueryRequest: qr,
 		},
+	}
+
+	if username != "" {
+		command.Credentials = &Credentials{
+			Username: username,
+			Password: password,
+		}
 	}
 	p, err := proto.Marshal(command)
 	if err != nil {

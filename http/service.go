@@ -96,7 +96,7 @@ type Cluster interface {
 	Execute(er *command.ExecuteRequest, nodeAddr string, username string, password string, timeout time.Duration) ([]*command.ExecuteResult, error)
 
 	// Query performs an Query Request on a remote node.
-	Query(qr *command.QueryRequest, nodeAddr string, timeout time.Duration) ([]*command.QueryRows, error)
+	Query(qr *command.QueryRequest, nodeAddr string, username string, password string, timeout time.Duration) ([]*command.QueryRows, error)
 
 	// Stats returns stats on the Cluster.
 	Stats() (map[string]interface{}, error)
@@ -1195,7 +1195,15 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
 			return
 		}
-		results, resultsErr = s.cluster.Query(qr, addr, timeout)
+		username, password, ok := r.BasicAuth()
+		if !ok {
+			username = ""
+		}
+		results, resultsErr = s.cluster.Query(qr, addr, username, password, timeout)
+		if resultsErr != nil && resultsErr.Error() == "Unauthorized" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
 		stats.Add(numRemoteQueries, 1)
 		w.Header().Add(ServedByHTTPHeader, addr)
 	}

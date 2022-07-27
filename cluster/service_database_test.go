@@ -16,6 +16,11 @@ import (
 const shortWait = 1 * time.Second
 const longWait = 5 * time.Second
 
+const (
+	NO_USERNAME = ""
+	NO_PASSWORD = ""
+)
+
 func Test_ServiceExecute(t *testing.T) {
 	ln, mux := mustNewMux()
 	go mux.Serve()
@@ -40,7 +45,7 @@ func Test_ServiceExecute(t *testing.T) {
 		}
 		return nil, errors.New("execute failed")
 	}
-	_, err := c.Execute(executeRequestFromString("some SQL"), s.Addr(), "", "", longWait)
+	_, err := c.Execute(executeRequestFromString("some SQL"), s.Addr(), NO_USERNAME, NO_PASSWORD, longWait)
 	if err == nil {
 		t.Fatalf("client failed to report error")
 	}
@@ -58,7 +63,7 @@ func Test_ServiceExecute(t *testing.T) {
 		}
 		return []*command.ExecuteResult{result}, nil
 	}
-	res, err := c.Execute(executeRequestFromString("some SQL"), s.Addr(), "", "", longWait)
+	res, err := c.Execute(executeRequestFromString("some SQL"), s.Addr(), NO_USERNAME, NO_PASSWORD, longWait)
 	if err != nil {
 		t.Fatalf("failed to execute query: %s", err.Error())
 	}
@@ -75,7 +80,7 @@ func Test_ServiceExecute(t *testing.T) {
 		}
 		return []*command.ExecuteResult{result}, nil
 	}
-	res, err = c.Execute(executeRequestFromString("some SQL"), s.Addr(), "", "", longWait)
+	res, err = c.Execute(executeRequestFromString("some SQL"), s.Addr(), NO_USERNAME, NO_PASSWORD, longWait)
 	if err != nil {
 		t.Fatalf("failed to execute: %s", err.Error())
 	}
@@ -128,7 +133,7 @@ func Test_ServiceQuery(t *testing.T) {
 		}
 		return nil, errors.New("query failed")
 	}
-	_, err := c.Query(queryRequestFromString("SELECT * FROM foo"), s.Addr(), longWait)
+	_, err := c.Query(queryRequestFromString("SELECT * FROM foo"), s.Addr(), NO_USERNAME, NO_PASSWORD, longWait)
 	if err == nil {
 		t.Fatalf("client failed to report error")
 	}
@@ -146,7 +151,7 @@ func Test_ServiceQuery(t *testing.T) {
 		}
 		return []*command.QueryRows{rows}, nil
 	}
-	res, err := c.Query(queryRequestFromString("SELECT * FROM foo"), s.Addr(), longWait)
+	res, err := c.Query(queryRequestFromString("SELECT * FROM foo"), s.Addr(), NO_USERNAME, NO_PASSWORD, longWait)
 	if err != nil {
 		t.Fatalf("failed to query: %s", err.Error())
 	}
@@ -163,7 +168,7 @@ func Test_ServiceQuery(t *testing.T) {
 		}
 		return []*command.QueryRows{rows}, nil
 	}
-	res, err = c.Query(queryRequestFromString("SELECT * FROM foo"), s.Addr(), longWait)
+	res, err = c.Query(queryRequestFromString("SELECT * FROM foo"), s.Addr(), NO_USERNAME, NO_PASSWORD, longWait)
 	if err != nil {
 		t.Fatalf("failed to query: %s", err.Error())
 	}
@@ -175,7 +180,7 @@ func Test_ServiceQuery(t *testing.T) {
 		time.Sleep(longWait)
 		return nil, nil
 	}
-	_, err = c.Query(queryRequestFromString("some SQL"), s.Addr(), shortWait)
+	_, err = c.Query(queryRequestFromString("some SQL"), s.Addr(), NO_USERNAME, NO_PASSWORD, shortWait)
 	if err == nil {
 		t.Fatalf("failed to receive expected error")
 	}
@@ -237,7 +242,7 @@ func Test_ServiceQueryLarge(t *testing.T) {
 		}
 		return []*command.QueryRows{rows}, nil
 	}
-	res, err := c.Query(queryRequestFromString("SELECT * FROM foo"), s.Addr(), longWait)
+	res, err := c.Query(queryRequestFromString("SELECT * FROM foo"), s.Addr(), NO_USERNAME, NO_PASSWORD, longWait)
 	if err != nil {
 		t.Fatalf("failed to query: %s", err.Error())
 	}
