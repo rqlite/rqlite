@@ -1,7 +1,7 @@
 # Restoring directly from SQLite
 
 rqlite supports loading a node directly from two sources, either of which can be used to restore from an existing [node backup](https://github.com/rqlite/rqlite/blob/master/DOC/BACKUPS.md):
-- An actual SQLite database file. This is the fastest way to initialize a rqlite node from an existing SQLite database. Even large SQLite databases can be loaded into rqlite in a matter of seconds. This the recommended way to initialize your rqlite node from SQLi.te
+- An actual SQLite database file. This is the fastest way to initialize a rqlite node from an existing SQLite database. Even large SQLite databases can be loaded into rqlite in a matter of seconds. This the recommended way to initialize your rqlite node from existing SQLite data.
 - SQL statements in text format. This is another convenient manner to initialize a system from an existing SQLite database (or other database). **But if your source database is large, it can be quite slow.** If you find the restore times to be too long, you should first load the SQL statements directly into a SQLite database, and then restore rqlite using the resulting SQLite database file. 
 
 ## Examples
