@@ -35,7 +35,7 @@ $ curl -XPOST 'localhost:4001/db/execute?queue&wait&timeout=10s' -H "Content-Typ
     ["INSERT INTO foo(name) VALUES(?)", "bob"]
 ]'
 ```
-This example also shows setting a timeout. If the queue has not empted after this time, the request will return with an error. If not set, the time out is set to 30 seconds.
+This example also shows setting a timeout. If the queue has not emptied after this time, the request will return with an error. If not set, the time out is set to 30 seconds.
 
 ### Configuring queue behaviour
 The behaviour of the queue rqlite uses to batch the requests is configurable at rqlite launch time. You can change the minimum number of requests that must be present in the queue before they are written, as well as a timeout after which whatever is in the queue will be written regardless of queue size. Pass `-h` to `rqlited` to see the queue defaults, and list all command-line options.
