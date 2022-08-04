@@ -236,14 +236,23 @@ func (s *Service) handleConn(conn net.Conn) {
 
 			resp := &CommandExecuteResponse{}
 			er := c.GetExecuteRequest()
-			if !s.checkCommandPerm(c, auth.PermExecute) {
-				resp.Error = "Unauthorized"
-			} else if er == nil {
-				resp.Error = "ExecuteRequest is nil"
+			if er == nil {
+				resp.Error = &ResultsError{
+					Type:  ResultsError_RESULTS_ERROR_NIL_QUERY_REQUEST,
+					Error: "Query Request is nil",
+				}
+			} else if !s.checkCommandPerm(c, auth.PermExecute) {
+				resp.Error = &ResultsError{
+					Type:  ResultsError_RESULTS_ERROR_UNAUTHORIZED,
+					Error: "Unauthorized",
+				}
 			} else {
 				res, err := s.db.Execute(er)
 				if err != nil {
-					resp.Error = err.Error()
+					resp.Error = &ResultsError{
+						Type:  ResultsError_RESULTS_ERROR_UNSPECIFIED,
+						Error: err.Error(),
+					}
 				} else {
 					resp.Results = make([]*command.ExecuteResult, len(res))
 					for i := range res {
@@ -268,14 +277,23 @@ func (s *Service) handleConn(conn net.Conn) {
 			resp := &CommandQueryResponse{}
 
 			qr := c.GetQueryRequest()
-			if !s.checkCommandPerm(c, auth.PermQuery) {
-				resp.Error = "Unauthorized"
-			} else if qr == nil {
-				resp.Error = "QueryRequest is nil"
+			if qr == nil {
+				resp.Error = &ResultsError{
+					Type:  ResultsError_RESULTS_ERROR_NIL_QUERY_REQUEST,
+					Error: "Query Request is nil",
+				}
+			} else if !s.checkCommandPerm(c, auth.PermQuery) {
+				resp.Error = &ResultsError{
+					Type:  ResultsError_RESULTS_ERROR_UNAUTHORIZED,
+					Error: "Unauthorized",
+				}
 			} else {
 				res, err := s.db.Query(qr)
 				if err != nil {
-					resp.Error = err.Error()
+					resp.Error = &ResultsError{
+						Type:  ResultsError_RESULTS_ERROR_UNSPECIFIED,
+						Error: err.Error(),
+					}
 				} else {
 					resp.Rows = make([]*command.QueryRows, len(res))
 					for i := range res {

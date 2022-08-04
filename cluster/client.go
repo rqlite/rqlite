@@ -215,8 +215,8 @@ func (c *Client) Execute(er *command.ExecuteRequest, nodeAddr string, username s
 		return nil, err
 	}
 
-	if a.Error != "" {
-		return nil, errors.New(a.Error)
+	if a.Error != nil {
+		return nil, errors.New(a.Error.GetError())
 	}
 	return a.Results, nil
 }
@@ -298,8 +298,8 @@ func (c *Client) Query(qr *command.QueryRequest, nodeAddr string, username strin
 		return nil, err
 	}
 
-	if a.Error != "" {
-		return nil, errors.New(a.Error)
+	if a.Error != nil {
+		return nil, errors.New(a.Error.GetError())
 	}
 	return a.Rows, nil
 }

@@ -245,7 +245,7 @@ func Test_NewServiceTestExecuteQueryAuth(t *testing.T) {
 	}
 	_, err = cl.Query(qr, s.Addr(), "alice", "secret1", 5*time.Second)
 	if err == nil {
-		t.Fatal("bob improperly authorized to execute")
+		t.Fatal("alice improperly authorized to query")
 	}
 }
 

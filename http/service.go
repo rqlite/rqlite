@@ -43,6 +43,11 @@ const (
 	NO_PASSSWORD = ""
 )
 
+type ResultsError interface {
+	Error() string
+	IsAuthorized() bool
+}
+
 // Database is the interface any queryable system must implement
 type Database interface {
 	// Execute executes a slice of queries, each of which is not expected
