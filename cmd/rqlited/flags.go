@@ -20,6 +20,11 @@ const (
 	DiscoModeEtcdKV   = "etcd-kv"
 	DiscoModeDNS      = "dns"
 	DiscoModeDNSSRV   = "dns-srv"
+
+	HTTPAddrFlag    = "http-addr"
+	HTTPAdvAddrFlag = "http-adv-addr"
+	RaftAddrFlag    = "raft-addr"
+	RaftAdvAddrFlag = "raft-adv-addr"
 )
 
 // Config represents the configuration as set by command-line flags.
@@ -223,14 +228,27 @@ func (c *Config) Validate() error {
 	if _, _, err := net.SplitHostPort(c.HTTPAddr); err != nil {
 		return errors.New("HTTP bind address not valid")
 	}
-	if _, _, err := net.SplitHostPort(c.HTTPAdv); err != nil {
-		return errors.New("HTTP advertised address not valid")
+
+	hadv, _, err := net.SplitHostPort(c.HTTPAdv)
+	if err != nil {
+		return errors.New("HTTP advertised HTTP address not valid")
 	}
+	if addr := net.ParseIP(hadv); addr != nil && addr.IsUnspecified() {
+		return fmt.Errorf("advertised HTTP address is not routable, specify it via -%s or -%s",
+			HTTPAddrFlag, HTTPAdvAddrFlag)
+	}
+
 	if _, _, err := net.SplitHostPort(c.RaftAddr); err != nil {
 		return errors.New("raft bind address not valid")
 	}
-	if _, _, err := net.SplitHostPort(c.RaftAdv); err != nil {
+
+	radv, _, err := net.SplitHostPort(c.RaftAdv)
+	if err != nil {
 		return errors.New("raft advertised address not valid")
+	}
+	if addr := net.ParseIP(radv); addr != nil && addr.IsUnspecified() {
+		return fmt.Errorf("advertised Raft address is not routable, specify it via -%s or -%s",
+			RaftAddrFlag, RaftAdvAddrFlag)
 	}
 
 	// Enforce bootstrapping policies
@@ -327,8 +345,8 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	showVersion := false
 
 	flag.StringVar(&config.NodeID, "node-id", "", "Unique name for node. If not set, set to advertised Raft address")
-	flag.StringVar(&config.HTTPAddr, "http-addr", "localhost:4001", "HTTP server bind address. To enable HTTPS, set X.509 cert and key")
-	flag.StringVar(&config.HTTPAdv, "http-adv-addr", "", "Advertised HTTP address. If not set, same as HTTP server bind")
+	flag.StringVar(&config.HTTPAddr, HTTPAddrFlag, "localhost:4001", "HTTP server bind address. To enable HTTPS, set X.509 cert and key")
+	flag.StringVar(&config.HTTPAdv, HTTPAdvAddrFlag, "", "Advertised HTTP address. If not set, same as HTTP server bind")
 	flag.BoolVar(&config.TLS1011, "tls1011", false, "Support deprecated TLS versions 1.0 and 1.1")
 	flag.StringVar(&config.X509CACert, "http-ca-cert", "", "Path to root X.509 certificate for HTTP endpoint")
 	flag.StringVar(&config.X509Cert, "http-cert", "", "Path to X.509 certificate for HTTP endpoint")
@@ -340,8 +358,8 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	flag.StringVar(&config.NodeX509Key, "node-key", "key.pem", "Path to X.509 private key for node-to-node encryption")
 	flag.BoolVar(&config.NoNodeVerify, "node-no-verify", false, "Skip verification of a remote node cert")
 	flag.StringVar(&config.AuthFile, "auth", "", "Path to authentication and authorization file. If not set, not enabled")
-	flag.StringVar(&config.RaftAddr, "raft-addr", "localhost:4002", "Raft communication bind address")
-	flag.StringVar(&config.RaftAdv, "raft-adv-addr", "", "Advertised Raft communication address. If not set, same as Raft bind")
+	flag.StringVar(&config.RaftAddr, RaftAddrFlag, "localhost:4002", "Raft communication bind address")
+	flag.StringVar(&config.RaftAdv, RaftAdvAddrFlag, "", "Advertised Raft communication address. If not set, same as Raft bind")
 	flag.StringVar(&config.JoinSrcIP, "join-source-ip", "", "Set source IP address during Join request")
 	flag.StringVar(&config.JoinAddr, "join", "", "Comma-delimited list of nodes, through which a cluster can be joined (proto://host:port)")
 	flag.StringVar(&config.JoinAs, "join-as", "", "Username in authentication file to join as. If not set, joins anonymously")
