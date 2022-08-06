@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	httpd "github.com/rqlite/rqlite/http"
+	rurl "github.com/rqlite/rqlite/http/url"
 )
 
 var (
@@ -115,7 +115,7 @@ func (j *Joiner) Do(joinAddrs []string, id, addr string, voter bool) (string, er
 
 func (j *Joiner) join(joinAddr, id, addr string, voter bool) (string, error) {
 	// Check for protocol scheme, and insert default if necessary.
-	fullAddr := httpd.NormalizeAddr(fmt.Sprintf("%s/join", joinAddr))
+	fullAddr := rurl.NormalizeAddr(fmt.Sprintf("%s/join", joinAddr))
 
 	for {
 		b, err := json.Marshal(map[string]interface{}{
@@ -167,7 +167,7 @@ func (j *Joiner) join(joinAddr, id, addr string, voter bool) (string, error) {
 			}
 
 			j.logger.Print("join via HTTP failed, trying via HTTPS")
-			fullAddr = httpd.EnsureHTTPS(fullAddr)
+			fullAddr = rurl.EnsureHTTPS(fullAddr)
 			continue
 		default:
 			return "", fmt.Errorf("failed to join, node returned: %s: (%s)", resp.Status, string(b))
