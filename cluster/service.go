@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rqlite/rqlite/auth"
 	"github.com/rqlite/rqlite/command"
 	"google.golang.org/protobuf/proto"
 )
@@ -63,6 +64,12 @@ type Database interface {
 	Query(qr *command.QueryRequest) ([]*command.QueryRows, error)
 }
 
+// CredentialStore is the interface credential stores must support.
+type CredentialStore interface {
+	// AA authenticates and checks authorization for the given perm.
+	AA(username, password, perm string) bool
+}
+
 // Transport is the interface the network layer must provide.
 type Transport interface {
 	net.Listener
@@ -76,6 +83,8 @@ type Service struct {
 
 	db Database // The queryable system.
 
+	credentialStore CredentialStore
+
 	mu      sync.RWMutex
 	https   bool   // Serving HTTPS?
 	apiAddr string // host:port this node serves the HTTP API.
@@ -84,12 +93,13 @@ type Service struct {
 }
 
 // New returns a new instance of the cluster service
-func New(tn Transport, db Database) *Service {
+func New(tn Transport, db Database, credentialStore CredentialStore) *Service {
 	return &Service{
-		tn:     tn,
-		addr:   tn.Addr(),
-		db:     db,
-		logger: log.New(os.Stderr, "[cluster] ", log.LstdFlags),
+		tn:              tn,
+		addr:            tn.Addr(),
+		db:              db,
+		logger:          log.New(os.Stderr, "[cluster] ", log.LstdFlags),
+		credentialStore: credentialStore,
 	}
 }
 
@@ -167,6 +177,20 @@ func (s *Service) serve() error {
 	}
 }
 
+func (s *Service) checkCommandPerm(c *Command, perm string) bool {
+	if s.credentialStore == nil {
+		return true
+	}
+
+	username := ""
+	password := ""
+	if c.Credentials != nil {
+		username = c.Credentials.GetUsername()
+		password = c.Credentials.GetPassword()
+	}
+	return s.credentialStore.AA(username, password, perm)
+}
+
 func (s *Service) handleConn(conn net.Conn) {
 	defer conn.Close()
 
@@ -211,14 +235,24 @@ func (s *Service) handleConn(conn net.Conn) {
 			stats.Add(numExecuteRequest, 1)
 
 			resp := &CommandExecuteResponse{}
-
 			er := c.GetExecuteRequest()
 			if er == nil {
-				resp.Error = "ExecuteRequest is nil"
+				resp.Error = &ResultsError{
+					Type:  ResultsError_RESULTS_ERROR_NIL_QUERY_REQUEST,
+					Error: "Query Request is nil",
+				}
+			} else if !s.checkCommandPerm(c, auth.PermExecute) {
+				resp.Error = &ResultsError{
+					Type:  ResultsError_RESULTS_ERROR_UNAUTHORIZED,
+					Error: "Unauthorized",
+				}
 			} else {
 				res, err := s.db.Execute(er)
 				if err != nil {
-					resp.Error = err.Error()
+					resp.Error = &ResultsError{
+						Type:  ResultsError_RESULTS_ERROR_UNSPECIFIED,
+						Error: err.Error(),
+					}
 				} else {
 					resp.Results = make([]*command.ExecuteResult, len(res))
 					for i := range res {
@@ -244,11 +278,22 @@ func (s *Service) handleConn(conn net.Conn) {
 
 			qr := c.GetQueryRequest()
 			if qr == nil {
-				resp.Error = "QueryRequest is nil"
+				resp.Error = &ResultsError{
+					Type:  ResultsError_RESULTS_ERROR_NIL_QUERY_REQUEST,
+					Error: "Query Request is nil",
+				}
+			} else if !s.checkCommandPerm(c, auth.PermQuery) {
+				resp.Error = &ResultsError{
+					Type:  ResultsError_RESULTS_ERROR_UNAUTHORIZED,
+					Error: "Unauthorized",
+				}
 			} else {
 				res, err := s.db.Query(qr)
 				if err != nil {
-					resp.Error = err.Error()
+					resp.Error = &ResultsError{
+						Type:  ResultsError_RESULTS_ERROR_UNSPECIFIED,
+						Error: err.Error(),
+					}
 				} else {
 					resp.Rows = make([]*command.QueryRows, len(res))
 					for i := range res {

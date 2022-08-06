@@ -5,6 +5,11 @@ import "command/command.proto";
 
 option go_package = "github.com/rqlite/rqlite/cluster";
 
+message Credentials {
+    string username = 1;
+    string password = 2;
+}
+
 message Address {
 	string url = 1;
 }
@@ -22,14 +27,26 @@ message Command {
         command.ExecuteRequest execute_request = 2;
         command.QueryRequest query_request = 3;
     }
+
+    Credentials credentials = 4;
+}
+
+message ResultsError {
+    enum Type {
+        RESULTS_ERROR_UNSPECIFIED = 0;
+        RESULTS_ERROR_UNAUTHORIZED = 1;
+        RESULTS_ERROR_NIL_QUERY_REQUEST =2;
+    }
+    Type type = 1;
+    string error = 2;
 }
 
 message CommandExecuteResponse {
-	string error = 1;
+	ResultsError error = 1;
 	repeated command.ExecuteResult results = 2;
 }
 
 message CommandQueryResponse {
-	string error = 1;
+	ResultsError error = 1;
 	repeated command.QueryRows rows = 2;
 }

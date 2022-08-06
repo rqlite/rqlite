@@ -223,9 +223,10 @@ func Test_RemoveBasicAuth(t *testing.T) {
 }
 
 func Test_NewService(t *testing.T) {
-	m := &MockStore{}
-	c := &mockClusterService{}
-	s := New("127.0.0.1:0", m, c, nil)
+	store := &MockStore{}
+	cluster := &mockClusterService{}
+	cred := &mockCredentialStore{HasPermOK: true}
+	s := New("127.0.0.1:0", store, cluster, cred)
 	if s == nil {
 		t.Fatalf("failed to create new service")
 	}
@@ -1197,14 +1198,14 @@ func (m *mockClusterService) GetNodeAPIAddr(a string, t time.Duration) (string, 
 	return m.apiAddr, nil
 }
 
-func (m *mockClusterService) Execute(er *command.ExecuteRequest, addr string, t time.Duration) ([]*command.ExecuteResult, error) {
+func (m *mockClusterService) Execute(er *command.ExecuteRequest, addr string, username string, password string, t time.Duration) ([]*command.ExecuteResult, error) {
 	if m.executeFn != nil {
 		return m.executeFn(er, addr, t)
 	}
 	return nil, nil
 }
 
-func (m *mockClusterService) Query(qr *command.QueryRequest, addr string, t time.Duration) ([]*command.QueryRows, error) {
+func (m *mockClusterService) Query(qr *command.QueryRequest, addr string, username string, password string, t time.Duration) ([]*command.QueryRows, error) {
 	if m.queryFn != nil {
 		return m.queryFn(qr, addr, t)
 	}

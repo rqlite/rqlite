@@ -38,6 +38,16 @@ var (
 	ErrUserInfoExists = errors.New("userinfo exists")
 )
 
+const (
+	NO_USERNAME  = ""
+	NO_PASSSWORD = ""
+)
+
+type ResultsError interface {
+	Error() string
+	IsAuthorized() bool
+}
+
 // Database is the interface any queryable system must implement
 type Database interface {
 	// Execute executes a slice of queries, each of which is not expected
@@ -88,10 +98,10 @@ type Cluster interface {
 	GetNodeAPIAddr(nodeAddr string, timeout time.Duration) (string, error)
 
 	// Execute performs an Execute Request on a remote node.
-	Execute(er *command.ExecuteRequest, nodeAddr string, timeout time.Duration) ([]*command.ExecuteResult, error)
+	Execute(er *command.ExecuteRequest, nodeAddr string, username string, password string, timeout time.Duration) ([]*command.ExecuteResult, error)
 
 	// Query performs an Query Request on a remote node.
-	Query(qr *command.QueryRequest, nodeAddr string, timeout time.Duration) ([]*command.QueryRows, error)
+	Query(qr *command.QueryRequest, nodeAddr string, username string, password string, timeout time.Duration) ([]*command.QueryRows, error)
 
 	// Stats returns stats on the Cluster.
 	Stats() (map[string]interface{}, error)
@@ -1091,7 +1101,17 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
 			return
 		}
-		results, resultsErr = s.cluster.Execute(er, addr, timeout)
+
+		username, password, ok := r.BasicAuth()
+		if !ok {
+			username = ""
+		}
+
+		results, resultsErr = s.cluster.Execute(er, addr, username, password, timeout)
+		if resultsErr != nil && resultsErr.Error() == "Unauthorized" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
 		stats.Add(numRemoteExecutions, 1)
 		w.Header().Add(ServedByHTTPHeader, addr)
 	}
@@ -1180,7 +1200,15 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
 			return
 		}
-		results, resultsErr = s.cluster.Query(qr, addr, timeout)
+		username, password, ok := r.BasicAuth()
+		if !ok {
+			username = ""
+		}
+		results, resultsErr = s.cluster.Query(qr, addr, username, password, timeout)
+		if resultsErr != nil && resultsErr.Error() == "Unauthorized" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
 		stats.Add(numRemoteQueries, 1)
 		w.Header().Add(ServedByHTTPHeader, addr)
 	}
@@ -1317,7 +1345,7 @@ func (s *Service) runQueue() {
 								time.Sleep(retryDelay)
 								continue
 							}
-							_, err = s.cluster.Execute(er, addr, defaultTimeout)
+							_, err = s.cluster.Execute(er, addr, NO_USERNAME, NO_PASSSWORD, defaultTimeout)
 							if err != nil {
 								s.logger.Printf("execute queue write failed for sequence number %d: %s",
 									req.SequenceNumber, err.Error())
