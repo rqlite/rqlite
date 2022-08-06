@@ -1108,7 +1108,7 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request) {
 		}
 
 		results, resultsErr = s.cluster.Execute(er, addr, username, password, timeout)
-		if resultsErr != nil && resultsErr.Error() == "Unauthorized" {
+		if resultsErr != nil && resultsErr.Error() == "unauthorized" {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
@@ -1205,7 +1205,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 			username = ""
 		}
 		results, resultsErr = s.cluster.Query(qr, addr, username, password, timeout)
-		if resultsErr != nil && resultsErr.Error() == "Unauthorized" {
+		if resultsErr != nil && resultsErr.Error() == "unauthorized" {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
