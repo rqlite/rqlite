@@ -234,8 +234,8 @@ func (c *Config) Validate() error {
 		return errors.New("HTTP advertised HTTP address not valid")
 	}
 	if addr := net.ParseIP(hadv); addr != nil && addr.IsUnspecified() {
-		return fmt.Errorf("advertised HTTP address is not routable, specify it via -%s or -%s",
-			HTTPAddrFlag, HTTPAdvAddrFlag)
+		return fmt.Errorf("advertised HTTP address is not routable (%s), specify it via -%s or -%s",
+			hadv, HTTPAddrFlag, HTTPAdvAddrFlag)
 	}
 
 	if _, _, err := net.SplitHostPort(c.RaftAddr); err != nil {
@@ -247,8 +247,8 @@ func (c *Config) Validate() error {
 		return errors.New("raft advertised address not valid")
 	}
 	if addr := net.ParseIP(radv); addr != nil && addr.IsUnspecified() {
-		return fmt.Errorf("advertised Raft address is not routable, specify it via -%s or -%s",
-			RaftAddrFlag, RaftAdvAddrFlag)
+		return fmt.Errorf("advertised Raft address is not routable (%s), specify it via -%s or -%s",
+			radv, RaftAddrFlag, RaftAdvAddrFlag)
 	}
 
 	// Enforce bootstrapping policies
