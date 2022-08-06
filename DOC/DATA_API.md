@@ -154,7 +154,7 @@ _This section assumes a basic familiarity with the Raft protocol. A simple intro
 
 To make best use of the rqlite API, there are some important details to know.
 
-With any rqlite cluster, all write-requests must be serviced by the cluster Leader -- this is due to the way the Raft consensus protocol works. If a client sends a write request to a Follower, the Follower transparently forwards the request to the Leader. The Follower waits for the response from the Leader, and returns it to the client.
+With any rqlite cluster, all write-requests must be serviced by the cluster Leader -- this is due to the way the Raft consensus protocol works. If a client sends a write request to a Follower (or read-only, non-voting, node), the Follower transparently forwards the request to the Leader. The Follower waits for the response from the Leader, and returns it to the client. Any credential information included in the original HTTP request to the Follower is included with the forwarded request (assuming that permission checking also passes first on the Follower), and permission checking is performed on the Leader.
 
 Queries, by default, are also serviced by the cluster Leader. Like write-requests, Followers will, by default, transparently forward queries to the Leader, and respond to the client after receiving the response from the Leader. However, depending on the [read-consistency](https://github.com/rqlite/rqlite/blob/master/DOC/CONSISTENCY.md) specified with the request, if a Follower received the query request it may serve that request directly and not contact the Leader. Which read-consistency level makes sense depends on your application.
 
