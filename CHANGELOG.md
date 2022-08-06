@@ -1,3 +1,8 @@
+## 7.6.1 (unreleased)
+
+### Implementation changes and bug fixes
+- [PR #1058](https://github.com/rqlite/rqlite/pull/1058): `rqlited` terminates if passed unroutable advertised Raft or HTTP addresses.
+
 ## 7.6.0 (July 19th 2022)
 ### New features
 - [PR #1055](https://github.com/rqlite/rqlite/pull/1055): Add new `join-read-only` permission.
