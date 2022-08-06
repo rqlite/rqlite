@@ -193,26 +193,34 @@ func Test_NewServiceTestExecuteQueryAuthNoCredentials(t *testing.T) {
 		t.Fatalf("failed to set cluster client local parameters: %s", err)
 	}
 	er := &command.ExecuteRequest{}
-	_, err := cl.Execute(er, s.Addr(), NO_USERNAME, NO_PASSWORD, 5*time.Second)
+	_, err := cl.Execute(er, s.Addr(), nil, 5*time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
 	qr := &command.QueryRequest{}
-	_, err = cl.Query(qr, s.Addr(), NO_USERNAME, NO_PASSWORD, 5*time.Second)
+	_, err = cl.Query(qr, s.Addr(), nil, 5*time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 
+// Test_NewServiceTestExecuteQueryAuth tests that for a cluster with a credential
+// store, configured users with execute permissions can execute and users with
+// query permissions can query, and can't if they don't have those permissions.
 func Test_NewServiceTestExecuteQueryAuth(t *testing.T) {
 	ml := mustNewMockTransport()
 	db := mustNewMockDatabase()
 
-	// Test that for a cluster with a credential store configed
-	// users with execute permissions can execute and users with
-	// query permissions can query and can't if they don't have those
-	// permissions
-	c := mustNewMockCredentialStoreBob()
+	f := func(username string, password string, perm string) bool {
+		if username == "alice" && password == "secret1" && perm == "execute" {
+			return true
+		} else if username == "bob" && password == "secret1" && perm == "query" {
+			return true
+		}
+		return false
+	}
+	c := &mockCredentialStore{aaFunc: f}
+
 	s := New(ml, db, c)
 	if s == nil {
 		t.Fatalf("failed to create cluster service")
@@ -227,22 +235,22 @@ func Test_NewServiceTestExecuteQueryAuth(t *testing.T) {
 		t.Fatalf("failed to set cluster client local parameters: %s", err)
 	}
 	er := &command.ExecuteRequest{}
-	_, err := cl.Execute(er, s.Addr(), "alice", "secret1", 5*time.Second)
+	_, err := cl.Execute(er, s.Addr(), makeCredentials("alice", "secret1"), 5*time.Second)
 	if err != nil {
 		t.Fatal("alice improperly unauthorized to execute")
 	}
-	_, err = cl.Execute(er, s.Addr(), "bob", "secret1", 5*time.Second)
+	_, err = cl.Execute(er, s.Addr(), makeCredentials("bob", "secret1"), 5*time.Second)
 	if err == nil {
 		t.Fatal("bob improperly authorized to execute")
 	}
 	qr := &command.QueryRequest{}
-	_, err = cl.Query(qr, s.Addr(), "bob", "secret1", 5*time.Second)
-	if err != nil {
+	_, err = cl.Query(qr, s.Addr(), makeCredentials("bob", "secret1"), 5*time.Second)
+	if err != nil && err.Error() != "unauthorized" {
 		fmt.Println(err)
 		t.Fatal("bob improperly unauthorized to query")
 	}
-	_, err = cl.Query(qr, s.Addr(), "alice", "secret1", 5*time.Second)
-	if err == nil {
+	_, err = cl.Query(qr, s.Addr(), makeCredentials("alice", "secret1"), 5*time.Second)
+	if err != nil && err.Error() != "unauthorized" {
 		t.Fatal("alice improperly authorized to query")
 	}
 }
@@ -362,15 +370,9 @@ func mustNewMockCredentialStore() *mockCredentialStore {
 	return &mockCredentialStore{HasPermOK: true}
 }
 
-func mustNewMockCredentialStoreBob() *mockCredentialStore {
-	f := func(username string, password string, perm string) bool {
-		fmt.Println(username, password, perm)
-		if username == "alice" && password == "secret1" && perm == "execute" {
-			return true
-		} else if username == "bob" && password == "secret1" && perm == "query" {
-			return true
-		}
-		return false
+func makeCredentials(username, password string) *Credentials {
+	return &Credentials{
+		Username: username,
+		Password: password,
 	}
-	return &mockCredentialStore{aaFunc: f}
 }
