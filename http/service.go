@@ -1109,7 +1109,7 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request) {
 
 		results, resultsErr = s.cluster.Execute(er, addr, username, password, timeout)
 		if resultsErr != nil && resultsErr.Error() == "unauthorized" {
-			w.WriteHeader(http.StatusUnauthorized)
+			http.Error(w, "remote execute not authorized", http.StatusUnauthorized)
 			return
 		}
 		stats.Add(numRemoteExecutions, 1)
@@ -1206,7 +1206,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 		}
 		results, resultsErr = s.cluster.Query(qr, addr, username, password, timeout)
 		if resultsErr != nil && resultsErr.Error() == "unauthorized" {
-			w.WriteHeader(http.StatusUnauthorized)
+			http.Error(w, "remote query not authorized", http.StatusUnauthorized)
 			return
 		}
 		stats.Add(numRemoteQueries, 1)
