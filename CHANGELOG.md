@@ -1,4 +1,4 @@
-## 7.6.1 (unreleased)
+## 7.6.1 (August 7th 2022)
 
 ### Implementation changes and bug fixes
 - [PR #1058](https://github.com/rqlite/rqlite/pull/1058): `rqlited` terminates if passed unroutable advertised Raft or HTTP addresses.
