@@ -120,6 +120,10 @@ mkdir $tmp_musl_pkg/$release
 copy_binaries $tmp_musl_pkg/$release $GOPATH/bin
 ( cd $tmp_musl_pkg; tar cvfz $tarball $release )
 
+if [ -n "$API_TOKEN" ]; then
+    upload_asset $tmp_musl_pkg/$tarball $RELEASE_ID $API_TOKEN
+ fi
+
 ################################################################################
 # Build version for ARM64
 rm -f $GOPATH/bin/*
@@ -132,6 +136,10 @@ tarball=${release}.tar.gz
 mkdir $tmp_linux_arm64_pkg/$release
 copy_binaries $tmp_linux_arm64_pkg/$release $GOPATH/bin/linux_arm64
 ( cd $tmp_linux_arm64_pkg; tar cvfz $tarball $release )
+
+if [ -n "$API_TOKEN" ]; then
+    upload_asset $tmp_linux_arm64_pkg/$tarball $RELEASE_ID $API_TOKEN
+fi
 
 ################################################################################
 # Build version for ARM32
@@ -146,11 +154,7 @@ mkdir $tmp_linux_arm_pkg/$release
 copy_binaries $tmp_linux_arm_pkg/$release $GOPATH/bin/linux_arm
 ( cd $tmp_linux_arm_pkg; tar cvfz $tarball $release )
 
-################################################################################
-# Upload if passed an API token
 if [ -n "$API_TOKEN" ]; then
-    upload_asset $tmp_musl_pkg/$tarball $RELEASE_ID $API_TOKEN
-    upload_asset $tmp_linux_arm64_pkg/$tarball $RELEASE_ID $API_TOKEN
     upload_asset $tmp_linux_arm_pkg/$tarball $RELEASE_ID $API_TOKEN
 fi
 
