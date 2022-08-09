@@ -102,12 +102,12 @@ func Test_MergeQueuedStatements(t *testing.T) {
 			t.Fatalf("statements don't match for test %d", i)
 		}
 		if len(r.flushChans) != len(tt.exp.flushChans) {
-			for i := range r.flushChans {
-				if r.flushChans[i] != tt.exp.flushChans[i] {
-					t.Errorf("wrong channel for test %d", i)
-				}
-			}
 			t.Fatalf("incorrect number of flush channels for test %d", i)
+		}
+		for i := range r.flushChans {
+			if r.flushChans[i] != tt.exp.flushChans[i] {
+				t.Fatalf("wrong channel for test %d", i)
+			}
 		}
 	}
 }

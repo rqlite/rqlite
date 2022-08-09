@@ -1258,17 +1258,15 @@ func Test_MultiNodeStoreNotifyBootstrap(t *testing.T) {
 		t.Fatalf("size of bootstrapped cluster is not correct")
 	}
 
-	if leader0 == leader1 && leader0 == leader2 {
-		return
+	if leader0 != leader1 || leader0 != leader2 {
+		t.Fatalf("leader not the same on each node")
 	}
 
 	// Calling Notify() on a node that is part of a cluster should
 	// be a no-op.
 	if err := s0.Notify(s1.ID(), ln1.Addr().String()); err != nil {
-		t.Errorf("failed to notify store that is part of cluster: %s", err.Error())
+		t.Fatalf("failed to notify store that is part of cluster: %s", err.Error())
 	}
-
-	t.Fatalf("leader not the same on each node")
 }
 
 func Test_MultiNodeJoinNonVoterRemove(t *testing.T) {
