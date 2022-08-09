@@ -1258,9 +1258,7 @@ func Test_MultiNodeStoreNotifyBootstrap(t *testing.T) {
 		t.Fatalf("size of bootstrapped cluster is not correct")
 	}
 
-	if leader0 == leader1 && leader0 == leader2 {
-		return
-	} else {
+	if leader0 != leader1 || leader0 != leader2 {
 		t.Fatalf("leader not the same on each node")
 	}
 
