@@ -70,7 +70,7 @@ To launch a node using DNS SRV boostrap, execute the following (example) command
 rqlited -node-id $ID1  -http-addr=$HOST1:4001 -raft-addr=$HOST1:4002 \
 -disco-mode=dns-srv -disco-config='{"name":"rqlite.local","service":"rqlite-svc"}' -bootstrap-expect 3 data
 ```
-You would launch other nodes similarly. In the example above rqlite will lookup SRV records at _rqlite-svc._tcp.rqlite.local
+You would launch other nodes similarly. In the example above rqlite will lookup SRV records at `_rqlite-svc._tcp.rqlite.local`
 __________________________
 
 ### Kubernetes
