@@ -3,7 +3,7 @@
 
 ## Usage
 
-rqlite exposes a special API flag, which will queue up write-requests and execute them asynchronously. This allows clients to send multiple distinct requests to a rqlite node, and have rqlite automatically do the batching and bulk insert for the client, without the client doing any extra work. The net result is as if the client wrote a single Bulk request containing all three `INSERT` statements. For the same reason that using the [Bulk API](https://github.com/rqlite/rqlite/blob/master/DOC/BULK.md) results in much higher write performance, **using the _Queued Writes_ API will also result in much higher write performance**.
+rqlite exposes a special API flag, which will queue up write-requests and execute them asynchronously. This allows clients to send multiple distinct requests to a rqlite node, and have rqlite automatically do the batching and bulk insert for the client, without the client doing any extra work. The net result is as if the client wrote a single Bulk request containing all the queued statements. For the same reason that using the [Bulk API](https://github.com/rqlite/rqlite/blob/master/DOC/BULK.md) results in much higher write performance, **using the _Queued Writes_ API will also result in much higher write performance**.
 
 This functionality is best illustrated by an example, showing two requests being queued.
 ```bash
