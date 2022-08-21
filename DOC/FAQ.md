@@ -72,7 +72,9 @@ The [CAP theorem](https://en.wikipedia.org/wiki/CAP_theorem) states that it is i
 Raft is a Consistency-Partition (CP) protocol. This means that if a rqlite cluster is partitioned, only the side of the cluster that contains a majority of the nodes will be available. The other side of the cluster will not respond to writes. However the side that remains available will return consistent results, and when the partition is healed, consistent results will continue to be returned.
 
 ## Does rqlite require consensus be reached before a write is accepted?
-Yes, this is an intrinsic part of the Raft protocol. How long it takes to reach consensus depends primarily on your network. It will take two rounds trips from a leader to a quorum of nodes, though each of those nodes is contacted in parallel.
+Yes, this is an intrinsic part of the Raft protocol. How long it takes to reach [consensus](https://computersciencewiki.org/index.php/Distributed_consensus) depends primarily on your network. It will take two rounds trips from a leader to a quorum of nodes, though each of those nodes is contacted in parallel.
+
+There is one exception however, when rqlite does not wait for consensus. You can use [Queued Writes](https://github.com/rqlite/rqlite/blob/master/DOC/QUEUED_WRITES.md), which trades off durability for performance.
 
 ## How does a client detect a cluster partition?
 If the client is on the same side of the partition as a quorum of nodes, there will be no real problem, and any writes should succeed. However if the client is on the other side of the partition, one of two things will happen. The client may be redirected to the leader, but will then (presumably) fail to contact the leader due to the partition, and experience a timeout. Alternatively the client may receive a `no leader` error.
