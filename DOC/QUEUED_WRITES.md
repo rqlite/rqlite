@@ -3,7 +3,9 @@
 
 ## Usage
 
-rqlite exposes a special API flag, which will queue up write-requests and execute them asynchronously. This allows clients to send multiple distinct requests to a rqlite node, and have rqlite automatically do the batching and bulk insert for the client, without the client doing any extra work. This functionality is best illustrated by an example, showing two requests being queued.
+rqlite exposes a special API flag, which will queue up write-requests and execute them asynchronously. This allows clients to send multiple distinct requests to a rqlite node, and have rqlite automatically do the batching and bulk insert for the client, without the client doing any extra work. The net result is as if the client wrote a single Bulk request containing all three `INSERT` statements. For the same reason that using the [Bulk API](https://github.com/rqlite/rqlite/blob/master/DOC/BULK.md) results in much higher write performance, **using the _Queued Writes_ API will also result in much higher write performance**.
+
+This functionality is best illustrated by an example, showing two requests being queued.
 ```bash
 $ curl -XPOST 'localhost:4001/db/execute?queue' -H "Content-Type: application/json" -d '[
     ["INSERT INTO foo(name) VALUES(?)", "fiona"],
@@ -24,7 +26,7 @@ $
 ```
 Setting the URL query parameter `queue` enables queuing mode, adding the request data to an internal queue whch rqlite manages for you. 
 
-rqlite will merge the requests, once a batch-size of them has been queued on the node, and execute them as though they had been both contained in a single request. The net result is as if the client wrote a single Bulk request containing all three `INSERT` statements. For the same reason that using the [Bulk API](https://github.com/rqlite/rqlite/blob/master/DOC/BULK.md) results in much higher write performance, using the _Queued Writes_ API will also result in much higher write performance.
+rqlite will merge the requests, once a batch-size of them has been queued on the node, and execute them as though they had been both contained in a single request. 
 
 Each response includes a monotonically-increasing `sequence_number`, which allows you to track when this request is actually persisted to the Raft log. The `/status` [diagnostics](https://github.com/rqlite/rqlite/blob/master/DOC/DIAGNOSTICS.md) endpoint includes the sequence number of the latest request successfully written to Raft.
 
