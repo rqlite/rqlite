@@ -23,6 +23,7 @@ jobs:
       - checkout
 
       # specify any bash command here prefixed with `run: `
+      - run: go version
       - run: go get -v -t -d ./...
       - run: bash gofmt.sh
       - run: go vet -testinggoroutine=false ./...
@@ -49,6 +50,7 @@ jobs:
       # specify any bash command here prefixed with `run: `
       # BoltDB, no longer maintained, has pointer issues. However, it's run
       # for years without actual issue so disabling the pointer tests
+      - run: go version
       - run: go get -t -d ./...
       - run:
           command: go test -v -timeout 20m -gcflags=all=-d=checkptr=0 -race ./...
@@ -67,6 +69,7 @@ jobs:
         - run: sudo apt-get install python3
         - run: sudo apt install python3-pip
         - run: python3 -m pip install requests
+        - run: go version
         - run: go get -t -d -v ./...
         - run: go install -tags osusergo,netgo,sqlite_omit_load_extension -ldflags="-extldflags=-static" ./...
         - run:

@@ -1258,10 +1258,9 @@ func Test_MultiNodeStoreNotifyBootstrap(t *testing.T) {
 		t.Fatalf("size of bootstrapped cluster is not correct")
 	}
 
-	if leader0 == leader1 && leader0 == leader2 {
-		return
+	if leader0 != leader1 || leader0 != leader2 {
+		t.Fatalf("leader not the same on each node")
 	}
-	t.Fatalf("leader not the same on each node")
 
 	// Calling Notify() on a node that is part of a cluster should
 	// be a no-op.
@@ -1466,6 +1465,50 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 	r, err = s1.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query non-voting node: %s", err.Error())
+	}
+	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
+// Test_SingleNodeExecuteQueryFreshness tests that freshness is ignored on the Leader.
+func Test_SingleNodeExecuteQueryFreshness(t *testing.T) {
+	s0, ln0 := mustNewStore(true)
+	defer os.RemoveAll(s0.Path())
+	defer ln0.Close()
+	if err := s0.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s0.Close(true)
+	if err := s0.Bootstrap(NewServer(s0.ID(), s0.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+	}, false, false)
+	_, err := s0.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	_, err = s0.WaitForAppliedFSM(5 * time.Second)
+	if err != nil {
+		t.Fatalf("failed to wait for fsmIndex: %s", err.Error())
+	}
+	qr := queryRequestFromString("SELECT * FROM foo", false, false)
+	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+	qr.Freshness = mustParseDuration("1ns").Nanoseconds()
+	r, err := s0.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query leader node: %s", err.Error())
 	}
 	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)

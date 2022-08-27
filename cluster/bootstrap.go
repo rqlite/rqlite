@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	httpd "github.com/rqlite/rqlite/http"
+	rurl "github.com/rqlite/rqlite/http/url"
 )
 
 func init() {
@@ -146,7 +146,7 @@ func (b *Bootstrapper) notify(targets []string, id, raftAddr string) error {
 
 	for _, t := range targets {
 		// Check for protocol scheme, and insert default if necessary.
-		fullTarget := httpd.NormalizeAddr(fmt.Sprintf("%s/notify", t))
+		fullTarget := rurl.NormalizeAddr(fmt.Sprintf("%s/notify", t))
 
 	TargetLoop:
 		for {
@@ -176,10 +176,10 @@ func (b *Bootstrapper) notify(targets []string, id, raftAddr string) error {
 					// It's already HTTPS, give up.
 					return fmt.Errorf("failed to notify node at %s: %s", fullTarget, resp.Status)
 				}
-				fullTarget = httpd.EnsureHTTPS(fullTarget)
+				fullTarget = rurl.EnsureHTTPS(fullTarget)
 			default:
 				return fmt.Errorf("failed to notify node at %s: %s",
-					httpd.RemoveBasicAuth(fullTarget), resp.Status)
+					rurl.RemoveBasicAuth(fullTarget), resp.Status)
 			}
 
 		}

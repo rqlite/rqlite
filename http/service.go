@@ -15,7 +15,6 @@ import (
 	"net"
 	"net/http"
 	"net/http/pprof"
-	"net/url"
 	"os"
 	"runtime"
 	"strings"
@@ -23,6 +22,7 @@ import (
 	"time"
 
 	"github.com/rqlite/rqlite/auth"
+	"github.com/rqlite/rqlite/cluster"
 	"github.com/rqlite/rqlite/command"
 	"github.com/rqlite/rqlite/command/encoding"
 	"github.com/rqlite/rqlite/queue"
@@ -32,11 +32,12 @@ import (
 var (
 	// ErrLeaderNotFound is returned when a node cannot locate a leader
 	ErrLeaderNotFound = errors.New("leader not found")
-
-	// ErrUserInfoExists is returned when a join address already contains
-	// a username and a password.
-	ErrUserInfoExists = errors.New("userinfo exists")
 )
+
+type ResultsError interface {
+	Error() string
+	IsAuthorized() bool
+}
 
 // Database is the interface any queryable system must implement
 type Database interface {
@@ -88,10 +89,10 @@ type Cluster interface {
 	GetNodeAPIAddr(nodeAddr string, timeout time.Duration) (string, error)
 
 	// Execute performs an Execute Request on a remote node.
-	Execute(er *command.ExecuteRequest, nodeAddr string, timeout time.Duration) ([]*command.ExecuteResult, error)
+	Execute(er *command.ExecuteRequest, nodeAddr string, creds *cluster.Credentials, timeout time.Duration) ([]*command.ExecuteResult, error)
 
 	// Query performs an Query Request on a remote node.
-	Query(qr *command.QueryRequest, nodeAddr string, timeout time.Duration) ([]*command.QueryRows, error)
+	Query(qr *command.QueryRequest, nodeAddr string, creds *cluster.Credentials, timeout time.Duration) ([]*command.QueryRows, error)
 
 	// Stats returns stats on the Cluster.
 	Stats() (map[string]interface{}, error)
@@ -99,14 +100,8 @@ type Cluster interface {
 
 // CredentialStore is the interface credential stores must support.
 type CredentialStore interface {
-	// Check returns whether username and password are a valid combination.
-	Check(username, password string) bool
-
-	// HasPerm returns whether username has the given perm.
-	HasPerm(username string, perm string) bool
-
-	// HasAnyPerm returns whether username has any of the given perms.
-	HasAnyPerm(username string, perm ...string) bool
+	// AA authenticates and checks authorization for the given perm.
+	AA(username, password, perm string) bool
 }
 
 // StatusReporter is the interface status providers must implement.
@@ -184,25 +179,6 @@ const (
 
 	// Default timeout for cluster communications.
 	defaultTimeout = 30 * time.Second
-
-	// PermAll means all actions permitted.
-	PermAll = "all"
-	// PermJoin means user is permitted to join cluster.
-	PermJoin = "join"
-	// PermRemove means user is permitted to remove a node.
-	PermRemove = "remove"
-	// PermExecute means user can access execute endpoint.
-	PermExecute = "execute"
-	// PermQuery means user can access query endpoint
-	PermQuery = "query"
-	// PermStatus means user can retrieve node status.
-	PermStatus = "status"
-	// PermReady means user can retrieve ready status.
-	PermReady = "ready"
-	// PermBackup means user can backup node.
-	PermBackup = "backup"
-	// PermLoad means user can load a SQLite dump into a node.
-	PermLoad = "load"
 
 	// VersionHTTPHeader is the HTTP header key for the version.
 	VersionHTTPHeader = "X-RQLITE-VERSION"
@@ -417,7 +393,7 @@ func (s *Service) RegisterStatus(key string, stat StatusReporter) error {
 
 // handleJoin handles cluster-join requests from other nodes.
 func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
-	if !s.CheckRequestPerm(r, PermJoin) {
+	if !s.CheckRequestPerm(r, auth.PermJoin) && !s.CheckRequestPerm(r, auth.PermJoinReadOnly) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
@@ -455,6 +431,11 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 		voter = true
 	}
 
+	if voter.(bool) && !s.CheckRequestPerm(r, auth.PermJoin) {
+		http.Error(w, "joining as voter not allowed", http.StatusUnauthorized)
+		return
+	}
+
 	if err := s.store.Join(remoteID.(string), remoteAddr.(string), voter.(bool)); err != nil {
 		if err == store.ErrNotLeader {
 			leaderAPIAddr := s.LeaderAPIAddr()
@@ -476,7 +457,7 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 
 // handleNotify handles node-notify requests from other nodes.
 func (s *Service) handleNotify(w http.ResponseWriter, r *http.Request) {
-	if !s.CheckRequestPerm(r, PermJoin) {
+	if !s.CheckRequestPerm(r, auth.PermJoin) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
@@ -516,7 +497,7 @@ func (s *Service) handleNotify(w http.ResponseWriter, r *http.Request) {
 
 // handleRemove handles cluster-remove requests.
 func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request) {
-	if !s.CheckRequestPerm(r, PermRemove) {
+	if !s.CheckRequestPerm(r, auth.PermRemove) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
@@ -569,7 +550,7 @@ func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request) {
 
 // handleBackup returns the consistent database snapshot.
 func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
-	if !s.CheckRequestPerm(r, PermBackup) {
+	if !s.CheckRequestPerm(r, auth.PermBackup) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
@@ -615,7 +596,7 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
 // handleLoad loads the state contained in a .dump output. This API is different
 // from others in that it expects a raw file, not wrapped in any kind of JSON.
 func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
-	if !s.CheckRequestPerm(r, PermLoad) {
+	if !s.CheckRequestPerm(r, auth.PermLoad) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
@@ -682,7 +663,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 
-	if !s.CheckRequestPerm(r, PermStatus) {
+	if !s.CheckRequestPerm(r, auth.PermStatus) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
@@ -810,7 +791,7 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 func (s *Service) handleNodes(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 
-	if !s.CheckRequestPerm(r, PermStatus) {
+	if !s.CheckRequestPerm(r, auth.PermStatus) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
@@ -902,7 +883,7 @@ func (s *Service) handleNodes(w http.ResponseWriter, r *http.Request) {
 
 // handleReadyz returns whether the node is ready.
 func (s *Service) handleReadyz(w http.ResponseWriter, r *http.Request) {
-	if !s.CheckRequestPerm(r, PermReady) {
+	if !s.CheckRequestPerm(r, auth.PermReady) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
@@ -955,7 +936,7 @@ func (s *Service) handleReadyz(w http.ResponseWriter, r *http.Request) {
 func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 
-	if !s.CheckRequestPerm(r, PermExecute) {
+	if !s.CheckRequestPerm(r, auth.PermExecute) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
@@ -1124,7 +1105,17 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
 			return
 		}
-		results, resultsErr = s.cluster.Execute(er, addr, timeout)
+
+		username, password, ok := r.BasicAuth()
+		if !ok {
+			username = ""
+		}
+
+		results, resultsErr = s.cluster.Execute(er, addr, makeCredentials(username, password), timeout)
+		if resultsErr != nil && resultsErr.Error() == "unauthorized" {
+			http.Error(w, "remote execute not authorized", http.StatusUnauthorized)
+			return
+		}
 		stats.Add(numRemoteExecutions, 1)
 		w.Header().Add(ServedByHTTPHeader, addr)
 	}
@@ -1142,7 +1133,7 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request) {
 func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 
-	if !s.CheckRequestPerm(r, PermQuery) {
+	if !s.CheckRequestPerm(r, auth.PermQuery) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
@@ -1218,7 +1209,15 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
 			return
 		}
-		results, resultsErr = s.cluster.Query(qr, addr, timeout)
+		username, password, ok := r.BasicAuth()
+		if !ok {
+			username = ""
+		}
+		results, resultsErr = s.cluster.Query(qr, addr, makeCredentials(username, password), timeout)
+		if resultsErr != nil && resultsErr.Error() == "unauthorized" {
+			http.Error(w, "remote query not authorized", http.StatusUnauthorized)
+			return
+		}
 		stats.Add(numRemoteQueries, 1)
 		w.Header().Add(ServedByHTTPHeader, addr)
 	}
@@ -1235,7 +1234,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 // handleExpvar serves registered expvar information over HTTP.
 func (s *Service) handleExpvar(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	if !s.CheckRequestPerm(r, PermStatus) {
+	if !s.CheckRequestPerm(r, auth.PermStatus) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
@@ -1254,7 +1253,7 @@ func (s *Service) handleExpvar(w http.ResponseWriter, r *http.Request) {
 
 // handlePprof serves pprof information over HTTP.
 func (s *Service) handlePprof(w http.ResponseWriter, r *http.Request) {
-	if !s.CheckRequestPerm(r, PermStatus) {
+	if !s.CheckRequestPerm(r, auth.PermStatus) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
@@ -1296,29 +1295,17 @@ func (s *Service) CheckRequestPerm(r *http.Request, perm string) (b bool) {
 		}
 	}()
 
-	// No credential store? Auth is not even enabled.
+	// No auth store set, so no checking required.
 	if s.credentialStore == nil {
 		return true
 	}
 
-	// Is the required perm granted to all users, including anonymous users?
-	if s.credentialStore.HasAnyPerm(auth.AllUsers, perm, PermAll) {
-		return true
-	}
-
-	// At this point there needs to be BasicAuth information in the request.
 	username, password, ok := r.BasicAuth()
 	if !ok {
-		return false
+		username = ""
 	}
 
-	// Are the BasicAuth creds good?
-	if !s.credentialStore.Check(username, password) {
-		return false
-	}
-
-	// Is the specified user authorized?
-	return s.credentialStore.HasAnyPerm(username, perm, PermAll)
+	return s.credentialStore.AA(username, password, perm)
 }
 
 // LeaderAPIAddr returns the API address of the leader, as known by this node.
@@ -1367,7 +1354,7 @@ func (s *Service) runQueue() {
 								time.Sleep(retryDelay)
 								continue
 							}
-							_, err = s.cluster.Execute(er, addr, defaultTimeout)
+							_, err = s.cluster.Execute(er, addr, nil, defaultTimeout)
 							if err != nil {
 								s.logger.Printf("execute queue write failed for sequence number %d: %s",
 									req.SequenceNumber, err.Error())
@@ -1689,60 +1676,6 @@ func prettyEnabled(e bool) string {
 	return "disabled"
 }
 
-// NormalizeAddr ensures that the given URL has a HTTP protocol prefix.
-// If none is supplied, it prefixes the URL with "http://".
-func NormalizeAddr(addr string) string {
-	if !strings.HasPrefix(addr, "http://") && !strings.HasPrefix(addr, "https://") {
-		return fmt.Sprintf("http://%s", addr)
-	}
-	return addr
-}
-
-// EnsureHTTPS modifies the given URL, ensuring it is using the HTTPS protocol.
-func EnsureHTTPS(addr string) string {
-	if !strings.HasPrefix(addr, "http://") && !strings.HasPrefix(addr, "https://") {
-		return fmt.Sprintf("https://%s", addr)
-	}
-	return strings.Replace(addr, "http://", "https://", 1)
-}
-
-// CheckHTTPS returns true if the given URL uses HTTPS.
-func CheckHTTPS(addr string) bool {
-	return strings.HasPrefix(addr, "https://")
-}
-
-// AddBasicAuth adds username and password to the join address. If username is empty
-// joinAddr is returned unchanged. If joinAddr already contains a username, ErrUserInfoExists
-// is returned.
-func AddBasicAuth(joinAddr, username, password string) (string, error) {
-	if username == "" {
-		return joinAddr, nil
-	}
-
-	u, err := url.Parse(joinAddr)
-	if err != nil {
-		return "", err
-	}
-
-	if u.User != nil && u.User.Username() != "" {
-		return "", ErrUserInfoExists
-	}
-
-	u.User = url.UserPassword(username, password)
-	return u.String(), nil
-}
-
-// RemoveBasicAuth returns a copy of the given URL, with any basic auth information
-// removed.
-func RemoveBasicAuth(u string) string {
-	uu, err := url.Parse(u)
-	if err != nil {
-		return u
-	}
-	uu.User = nil
-	return uu.String()
-}
-
 // queryRequestFromStrings converts a slice of strings into a command.QueryRequest
 func executeRequestFromStrings(s []string, timings, tx bool) *command.ExecuteRequest {
 	stmts := make([]*command.Statement, len(s))
@@ -1783,4 +1716,11 @@ func queryRequestFromStrings(s []string, timings, tx bool) *command.QueryRequest
 // file. See https://www.sqlite.org/fileformat.html
 func validSQLiteFile(b []byte) bool {
 	return len(b) > 13 && string(b[0:13]) == "SQLite format"
+}
+
+func makeCredentials(username, password string) *cluster.Credentials {
+	return &cluster.Credentials{
+		Username: username,
+		Password: password,
+	}
 }

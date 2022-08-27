@@ -9,9 +9,32 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// AllUsers is the username that indicates all users, even anonymous users (requests without
-// any BasicAuth information).
-const AllUsers = "*"
+const (
+	// AllUsers is the username that indicates all users, even anonymous users (requests without
+	// any BasicAuth information).
+	AllUsers = "*"
+
+	// PermAll means all actions permitted.
+	PermAll = "all"
+	// PermJoin means user is permitted to join cluster.
+	PermJoin = "join"
+	// PermJoinReadOnly means user is permitted to join the cluster only as a read-only node
+	PermJoinReadOnly = "join-read-only"
+	// PermRemove means user is permitted to remove a node.
+	PermRemove = "remove"
+	// PermExecute means user can access execute endpoint.
+	PermExecute = "execute"
+	// PermQuery means user can access query endpoint
+	PermQuery = "query"
+	// PermStatus means user can retrieve node status.
+	PermStatus = "status"
+	// PermReady means user can retrieve ready status.
+	PermReady = "ready"
+	// PermBackup means user can backup node.
+	PermBackup = "backup"
+	// PermLoad means user can load a SQLite dump into a node.
+	PermLoad = "load"
+)
 
 // BasicAuther is the interface an object must support to return basic auth information.
 type BasicAuther interface {
@@ -124,6 +147,35 @@ func (c *CredentialsStore) HasAnyPerm(username string, perm ...string) bool {
 		}
 		return false
 	}(perm)
+}
+
+// AA authenticates and checks authorization for the given username and password
+// for the given perm. If the credential store is nil, then this function always
+// returns true. If AllUsers have the given perm, authentication is not done.
+// Only then are the credentials checked, and then the perm checked.
+func (c *CredentialsStore) AA(username, password, perm string) bool {
+	// No credential store? Auth is not even enabled.
+	if c == nil {
+		return true
+	}
+
+	// Is the required perm granted to all users, including anonymous users?
+	if c.HasAnyPerm(AllUsers, perm, PermAll) {
+		return true
+	}
+
+	// At this point a username needs to have been supplied
+	if username == "" {
+		return false
+	}
+
+	// Are the creds good?
+	if !c.Check(username, password) {
+		return false
+	}
+
+	// Is the specified user authorized?
+	return c.HasAnyPerm(username, perm, PermAll)
 }
 
 // HasPermRequest returns true if the username returned by b has the givem perm.

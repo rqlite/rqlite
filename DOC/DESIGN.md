@@ -2,6 +2,7 @@
 You can find details on the design and implementation of rqlite from [these blog posts](https://www.philipotoole.com/tag/rqlite/) (in particular [this post](https://www.philipotoole.com/replicating-sqlite-using-raft-consensus/) and [this post](https://www.philipotoole.com/rqlite-replicated-sqlite-with-new-raft-consensus-and-api/)).
 
 ## Design Presentations
+- [Presentation](https://docs.google.com/presentation/d/1E0MpQbUA6JOP2GjA60CNN0ER8fia0TP6kdJ41U9Jdy4/edit#slide=id.p) given to Hacker Nights NYC, March 2022.
 - [Presentation]( https://www.philipotoole.com/2021-rqlite-cmu-tech-talk) given to the [Carnegie Mellon Database Group](https://db.cs.cmu.edu/), [September 2021](https://db.cs.cmu.edu/events/vaccination-2021-rqlite-the-distributed-database-built-on-raft-and-sqlite-philip-otoole/). There is also a [video recording](https://www.youtube.com/watch?v=JLlIAWjvHxM) of the talk.
 - [Presentation](https://docs.google.com/presentation/d/1lSNrZJUbAGD-ZsfD8B6_VPLVjq5zb7SlJMzDblq2yzU/edit?usp=sharing) given to the University of Pittsburgh, April 2018.
 - [Presentation](https://www.slideshare.net/PhilipOToole/rqlite-replicating-sqlite-via-raft-consensu) given at the [GoSF](https://www.meetup.com/golangsf/) [April 2016](https://www.meetup.com/golangsf/events/230127735/) Meetup.

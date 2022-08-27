@@ -132,8 +132,10 @@ func (c *Client) GetNodeAPIAddr(nodeAddr string, timeout time.Duration) (string,
 	return a.Url, nil
 }
 
-// Execute performs an Execute on a remote node.
-func (c *Client) Execute(er *command.ExecuteRequest, nodeAddr string, timeout time.Duration) ([]*command.ExecuteResult, error) {
+// Execute performs an Execute on a remote node. If username is an empty string
+// no credential information will be included in the Execute request to the
+// remote node.
+func (c *Client) Execute(er *command.ExecuteRequest, nodeAddr string, creds *Credentials, timeout time.Duration) ([]*command.ExecuteResult, error) {
 	conn, err := c.dial(nodeAddr, c.timeout)
 	if err != nil {
 		return nil, err
@@ -146,7 +148,9 @@ func (c *Client) Execute(er *command.ExecuteRequest, nodeAddr string, timeout ti
 		Request: &Command_ExecuteRequest{
 			ExecuteRequest: er,
 		},
+		Credentials: creds,
 	}
+
 	p, err := proto.Marshal(command)
 	if err != nil {
 		return nil, fmt.Errorf("command marshal: %s", err)
@@ -212,7 +216,7 @@ func (c *Client) Execute(er *command.ExecuteRequest, nodeAddr string, timeout ti
 }
 
 // Query performs a Query on a remote node.
-func (c *Client) Query(qr *command.QueryRequest, nodeAddr string, timeout time.Duration) ([]*command.QueryRows, error) {
+func (c *Client) Query(qr *command.QueryRequest, nodeAddr string, creds *Credentials, timeout time.Duration) ([]*command.QueryRows, error) {
 	conn, err := c.dial(nodeAddr, c.timeout)
 	if err != nil {
 		return nil, err
@@ -225,7 +229,9 @@ func (c *Client) Query(qr *command.QueryRequest, nodeAddr string, timeout time.D
 		Request: &Command_QueryRequest{
 			QueryRequest: qr,
 		},
+		Credentials: creds,
 	}
+
 	p, err := proto.Marshal(command)
 	if err != nil {
 		return nil, fmt.Errorf("command marshal: %s", err)

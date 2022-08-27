@@ -51,12 +51,14 @@ No. While it does use SQLite as its storage engine, you must only write to the d
 Check out the [Kubernetes deployment guide](https://github.com/rqlite/rqlite/blob/master/DOC/KUBERNETES.md).
 
 ## Can any node execute a write request, and have the system "synchronize it all"?
-The first thing to understand is that you can send your write-request to any node in the cluster, and rqlite will do the right thing automatically. You do not need to direct your write requests specifically to the leader.
+The first thing to understand is that you can send your write-request to any node in the cluster, and rqlite will do the right thing automatically. You do not need to direct your write requests specifically to the Leader node.
 
-Under the covers however, only the leader can make changes to the database. If a client sends a write-request to a node and that node is not the leader, the node will transparently forward the request to the leader, wait for a response, and then return the response to the client.
+Under the covers however, only the Leader can make changes to the database. If a client sends a write-request to a node and that node is not the Leader, the node will transparently forward the request to the Leader, wait for a response, and then return the response to the client. If the node receiving the write cannot contact the Leader, the write will fail and return an error to the client.
 
 ## Can I send a read request to any node in the cluster?
-Yes. If a read request must be serviced by the Leader, however, rqlite will transparently forward the request to the Leader, wait for the Leader to handle it, and return the results to the client.
+Yes. If a read request must be serviced by the Leader, however, rqlite will transparently forward the request to the Leader, wait for the Leader to handle it, and return the results to the client. If the node receiving the write cannot contact the Leader, the write will fail and return an error to the client.
+
+Some reads, depending on the requested [_read consistency_](https://github.com/rqlite/rqlite/blob/master/DOC/CONSISTENCY.md), do not need to serviced by the Leader, and in that case the node can service the read regardless of whether it contact the Leader or not.
 
 ## rqlite is distributed. Does that mean it can increase SQLite performance?
 Yes, but only for reads. It does not provide any scaling for writes, since all writes must go through the leader. **rqlite is distributed primarily for replication and fault tolerance, not for peformance**. In fact write performance is reduced relative to a standalone SQLite database, because of the round-trips between nodes and the need to write to the Raft log.
@@ -70,7 +72,9 @@ The [CAP theorem](https://en.wikipedia.org/wiki/CAP_theorem) states that it is i
 Raft is a Consistency-Partition (CP) protocol. This means that if a rqlite cluster is partitioned, only the side of the cluster that contains a majority of the nodes will be available. The other side of the cluster will not respond to writes. However the side that remains available will return consistent results, and when the partition is healed, consistent results will continue to be returned.
 
 ## Does rqlite require consensus be reached before a write is accepted?
-Yes, this is an intrinsic part of the Raft protocol. How long it takes to reach consensus depends primarily on your network. It will take two rounds trips from a leader to a quorum of nodes, though each of those nodes is contacted in parallel.
+Yes, this is an intrinsic part of the Raft protocol. How long it takes to reach [consensus](https://computersciencewiki.org/index.php/Distributed_consensus) depends primarily on your network. It will take two rounds trips from a leader to a quorum of nodes, though each of those nodes is contacted in parallel.
+
+There is one exception however, when rqlite does not wait for consensus. You can use [Queued Writes](https://github.com/rqlite/rqlite/blob/master/DOC/QUEUED_WRITES.md), which trades off durability for performance.
 
 ## How does a client detect a cluster partition?
 If the client is on the same side of the partition as a quorum of nodes, there will be no real problem, and any writes should succeed. However if the client is on the other side of the partition, one of two things will happen. The client may be redirected to the leader, but will then (presumably) fail to contact the leader due to the partition, and experience a timeout. Alternatively the client may receive a `no leader` error.

@@ -1,4 +1,18 @@
+## 7.6.1 (August 7th 2022)
+
+### Implementation changes and bug fixes
+- [PR #1058](https://github.com/rqlite/rqlite/pull/1058): `rqlited` terminates if passed unroutable advertised Raft or HTTP addresses.
+- [PR #1057](https://github.com/rqlite/rqlite/pull/1057), [PR #1059](https://github.com/rqlite/rqlite/pull/1059): Perform credential checking with intra-cluster communications. Fixes [issue #1051](https://github.com/rqlite/rqlite/issues/1051). Thanks @ngharrington
+
+## 7.6.0 (July 19th 2022)
+### New features
+- [PR #1055](https://github.com/rqlite/rqlite/pull/1055): Add new `join-read-only` permission.
+
+### Implementation changes and bug fixes
+- [PR #1049](https://github.com/rqlite/rqlite/pull/1049): Ignore freshness when serving queries on Leader. Fixes [issue #1048](https://github.com/rqlite/rqlite/issues/1048). Thanks to @Tjstretchalot for the bug report.
+
 ## 7.5.1 (June 13th 2022)
+### Implementation changes and bug fixes
 - [PR #1043](https://github.com/rqlite/rqlite/pull/1043): Allow cluster-connect timeout to be configurable. Fixes [issue #1042](https://github.com/rqlite/rqlite/issues/1042).
 
 ## 7.5.0 (May 26th 2022)

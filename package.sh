@@ -9,6 +9,11 @@
 # To install musl tools run:
 #
 #     sudo apt-get -y install musl-dev musl-tools
+#
+# To install ARM and ARM64 tools run:
+#
+#     sudo apt-get -y install gcc make gcc-arm-linux-gnueabi binutils-arm-linux-gnueabi
+#     sudo apt-get -y install gcc make gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
 
 REPO_URL="https://github.com/rqlite/rqlite"
 
@@ -39,9 +44,13 @@ API_TOKEN=$3
 tmp_build=`mktemp -d`
 tmp_pkg=`mktemp -d`
 tmp_musl_pkg=`mktemp -d`
+tmp_linux_arm64_pkg=`mktemp -d`
+tmp_linux_arm_pkg=`mktemp -d`
 echo "$tmp_build created for build process."
 echo "$tmp_pkg created for packaging process."
 echo "$tmp_musl_pkg created for musl packaging process."
+echo "$tmp_linux_arm64_pkg created for Linux ARM64 packaging process."
+echo "$tmp_linux_arm_pkg created for Linux ARM packaging process."
 
 # Get common build parameters
 kernel=`uname -s`
@@ -80,7 +89,8 @@ if [ "$kernel" = "Linux" ]; then
 	fi
 fi
 
-# Package the release for this machine
+################################################################################
+# Package the release native for this machine
 release=`echo rqlite-$VERSION-$kernel-$machine | tr '[:upper:]' '[:lower:]'`
 tarball=${release}.tar.gz
 mkdir $tmp_pkg/$release
@@ -97,6 +107,7 @@ if [ "$kernel" != "Linux" ]; then
 	exit 0
 fi
 
+################################################################################
 # Build version for Docker use
 rm -f $GOPATH/bin/*
 cd $tmp_build/src/github.com/rqlite/rqlite
@@ -109,8 +120,41 @@ mkdir $tmp_musl_pkg/$release
 copy_binaries $tmp_musl_pkg/$release $GOPATH/bin
 ( cd $tmp_musl_pkg; tar cvfz $tarball $release )
 
-# Upload if passed an API token
 if [ -n "$API_TOKEN" ]; then
     upload_asset $tmp_musl_pkg/$tarball $RELEASE_ID $API_TOKEN
+ fi
+
+################################################################################
+# Build version for ARM64
+rm -f $GOPATH/bin/*
+cd $tmp_build/src/github.com/rqlite/rqlite
+CGO_ENABLED=1 GOARCH=arm64 CC=aarch64-linux-gnu-gcc go install -a -tags sqlite_omit_load_extension -ldflags="$LDFLAGS" ./...
+
+# Package the ARM64 release
+release=`echo rqlite-$VERSION-$kernel-arm64 | tr '[:upper:]' '[:lower:]'`
+tarball=${release}.tar.gz
+mkdir $tmp_linux_arm64_pkg/$release
+copy_binaries $tmp_linux_arm64_pkg/$release $GOPATH/bin/linux_arm64
+( cd $tmp_linux_arm64_pkg; tar cvfz $tarball $release )
+
+if [ -n "$API_TOKEN" ]; then
+    upload_asset $tmp_linux_arm64_pkg/$tarball $RELEASE_ID $API_TOKEN
+fi
+
+################################################################################
+# Build version for ARM32
+rm -f $GOPATH/bin/*
+cd $tmp_build/src/github.com/rqlite/rqlite
+CGO_ENABLED=1 GOARCH=arm CC=arm-linux-gnueabi-gcc go install -a -tags sqlite_omit_load_extension -ldflags="$LDFLAGS" ./...
+
+# Package the ARM32 release
+release=`echo rqlite-$VERSION-$kernel-arm | tr '[:upper:]' '[:lower:]'`
+tarball=${release}.tar.gz
+mkdir $tmp_linux_arm_pkg/$release
+copy_binaries $tmp_linux_arm_pkg/$release $GOPATH/bin/linux_arm
+( cd $tmp_linux_arm_pkg; tar cvfz $tarball $release )
+
+if [ -n "$API_TOKEN" ]; then
+    upload_asset $tmp_linux_arm_pkg/$tarball $RELEASE_ID $API_TOKEN
 fi
 

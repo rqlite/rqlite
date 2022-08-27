@@ -617,7 +617,7 @@ func mustNodeEncryptedOnDisk(dir string, enableSingle, httpEncrypt bool, mux *tc
 	node.RaftAddr = node.Store.Addr()
 	node.ID = node.Store.ID()
 
-	clstr := cluster.New(mux.Listen(cluster.MuxClusterHeader), node.Store)
+	clstr := cluster.New(mux.Listen(cluster.MuxClusterHeader), node.Store, mustNewMockCredentialStore())
 	if err := clstr.Open(); err != nil {
 		panic("failed to open Cluster service)")
 	}
@@ -905,4 +905,24 @@ func copyDir(src string, dst string) (err error) {
 	}
 
 	return
+}
+
+type mockCredentialStore struct {
+	HasPermOK bool
+	aaFunc    func(username, password, perm string) bool
+}
+
+func (m *mockCredentialStore) AA(username, password, perm string) bool {
+	if m == nil {
+		return true
+	}
+
+	if m.aaFunc != nil {
+		return m.aaFunc(username, password, perm)
+	}
+	return m.HasPermOK
+}
+
+func mustNewMockCredentialStore() *mockCredentialStore {
+	return &mockCredentialStore{HasPermOK: true}
 }
