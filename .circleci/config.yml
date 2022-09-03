@@ -56,7 +56,7 @@ jobs:
 
   end_to_end:
     docker:
-      - image: ccimg/go:1.19.0
+      - image: cimg/go:1.19.0
       - image: consul
       - image: gcr.io/etcd-development/etcd:v3.5.1
     steps:
