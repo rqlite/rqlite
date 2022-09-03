@@ -1363,14 +1363,6 @@ class TestEndToEndBackupRestore(unittest.TestCase):
     j = self.node1.query('SELECT * FROM foo')
     self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
 
-    self.node2 = Node(RQLITED_PATH, '1')
-    self.node2.start()
-    self.node2.wait_for_leader()
-    j = self.node2.restore(self.db_file, fmt='binary')
-    self.assertEqual(j, d_("{'results': []}"))
-    j = self.node2.query('SELECT * FROM foo')
-    self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
-
   def tearDown(self):
     if hasattr(self, 'node0'):
       deprovision_node(self.node0)
