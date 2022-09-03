@@ -1,3 +1,8 @@
+## 7.6.2 (unreleased)
+
+### Implementation changes and bug fixes
+- [PR #1064](https://github.com/rqlite/rqlite/pull/1064): Upgrade dependencies, and move to requiring Go 1.18 (or later) for building.
+
 ## 7.6.1 (August 7th 2022)
 
 ### Implementation changes and bug fixes

@@ -7,7 +7,7 @@ jobs:
   test:
     docker:
       # specify the version
-      - image: cimg/go:1.19.0
+      - image: cimg/go:1.18.0
 
       # Specify service dependencies here if necessary
       # CircleCI maintains a library of pre-built images
@@ -18,7 +18,6 @@ jobs:
     #### expecting it in the form of
     ####   /go/src/github.com/circleci/go-tool
     ####   /go/src/bitbucket.org/circleci/go-tool
-    working_directory: /go/src/github.com/rqlite/rqlite
     steps:
       - checkout
 
@@ -32,8 +31,7 @@ jobs:
   race:
     docker:
       # specify the version
-      - image: cimg/go:1.19.0
-
+      - image: cimg/go:1.18.0
       # Specify service dependencies here if necessary
       # CircleCI maintains a library of pre-built images
       # documented at https://circleci.com/docs/2.0/circleci-images/
@@ -43,7 +41,6 @@ jobs:
     #### expecting it in the form of
     ####   /go/src/github.com/circleci/go-tool
     ####   /go/src/bitbucket.org/circleci/go-tool
-    working_directory: /go/src/github.com/rqlite/rqlite
     steps:
       - checkout
 
@@ -58,9 +55,8 @@ jobs:
                 GORACE: "halt_on_error=1"
 
   end_to_end:
-    working_directory: /go/src/github.com/rqlite/rqlite
     docker:
-      - image: cimg/go:1.19.0
+      - image: cimg/go:1.18.0
       - image: consul
       - image: gcr.io/etcd-development/etcd:v3.5.1
     steps:
@@ -75,7 +71,7 @@ jobs:
         - run:
             command: python3 system_test/full_system_test.py
             environment:
-                RQLITED_PATH: /go/bin/rqlited
+                RQLITED_PATH: /home/circleci/go/bin/rqlited
 
 workflows:
   version: 2

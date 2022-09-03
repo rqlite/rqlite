@@ -23,11 +23,14 @@ func Rewrite(stmts []*Statement, r bool) error {
 			return err
 		}
 
-		s, err = rw.Do(s)
+		s, f, err := rw.Do(s)
 		if err != nil {
 			return err
 		}
-		stmts[i].Sql = s.String()
+		if f {
+			// Only replace the incoming statement if the rewriter did anything.
+			stmts[i].Sql = s.String()
+		}
 	}
 	return nil
 }

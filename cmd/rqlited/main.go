@@ -343,7 +343,7 @@ func createCluster(cfg *Config, tlsConfig *tls.Config, hasPeers bool, str *store
 		joiner.SetBasicAuth(cfg.JoinAs, pw)
 	}
 
-	// Prepare defintion of being part of a cluster.
+	// Prepare definition of being part of a cluster.
 	isClustered := func() bool {
 		leader, _ := str.LeaderAddr()
 		return leader != ""
