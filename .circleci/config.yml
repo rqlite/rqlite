@@ -71,7 +71,7 @@ jobs:
         - run:
             command: python3 system_test/full_system_test.py
             environment:
-                RQLITED_PATH: /go/bin/rqlited
+                RQLITED_PATH: /home/circleci/go/bin/rqlited
 
 workflows:
   version: 2
