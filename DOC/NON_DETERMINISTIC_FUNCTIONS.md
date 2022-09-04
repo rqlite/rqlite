@@ -3,7 +3,7 @@
 ## Understanding the problem
 rqlite peforms _statement-based replication_. This means that every SQL statement is stored in the Raft log exactly in the form it was received. Each rqlite node then reads the Raft log and applies the SQL statements it finds there to its own local copy of SQLite.
 
-But if a SQL statement contains a non-deterministic function, this type of replication can result in different SQLite data under each node -- which is not meant to happen. For example, the following statement could result in a different SQLite database under each node:
+But if a SQL statement contains a [non-deterministic function](https://www.sqlite.org/deterministic.html), this type of replication can result in different SQLite data under each node -- which is not meant to happen. For example, the following statement could result in a different SQLite database under each node:
 ```
 INSERT INTO foo (n) VALUES(random());
 ```
