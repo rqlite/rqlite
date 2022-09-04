@@ -162,6 +162,65 @@ func Test_MultiNodeCluster(t *testing.T) {
 	}
 }
 
+// Test_MultiNodeClusterRANDOM tests operation of RANDOM() SQL rewriting. It checks that a rewritten
+// statement is sent to follower.
+func Test_MultiNodeClusterRANDOM(t *testing.T) {
+	node1 := mustNewLeaderNode()
+	defer node1.Deprovision()
+
+	node2 := mustNewNode(false)
+	defer node2.Deprovision()
+	if err := node2.Join(node1); err != nil {
+		t.Fatalf("node failed to join leader: %s", err.Error())
+	}
+	_, err := node2.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for leader: %s", err.Error())
+	}
+
+	// Get the new leader, in case it changed.
+	c := Cluster{node1, node2}
+	leader, err := c.Leader()
+	if err != nil {
+		t.Fatalf("failed to find cluster leader: %s", err.Error())
+	}
+
+	_, err = leader.Execute("CREATE TABLE foo (id integer not null primary key, name text)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	_, err = leader.Execute(`INSERT INTO foo(id, name) VALUES(RANDOM(), "sinead")`)
+	if err != nil {
+		t.Fatalf("failed to INSERT record: %s", err.Error())
+	}
+	r, err := leader.Query("SELECT COUNT(*) FROM foo")
+	if err != nil {
+		t.Fatalf("failed to query for count: %s", err.Error())
+	}
+	if got, exp := r, `{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[1]]}]}`; got != exp {
+		t.Fatalf("wrong query results, exp %s, got %s", exp, got)
+	}
+
+	// Send a few Noops through to ensure SQLite database has been updated on each node.
+	for i := 0; i < 5; i++ {
+		node1.Noop("some_id")
+	}
+
+	// Check that row is *exactly* the same on each node. This could only happen if RANDOM was
+	// rewritten by the Leader before committing to the Raft log.
+	r1, err := node1.QueryNoneConsistency("SELECT * FROM foo")
+	if err != nil {
+		t.Fatalf("failed to query node 1: %s", err.Error())
+	}
+	r2, err := node2.QueryNoneConsistency("SELECT * FROM foo")
+	if err != nil {
+		t.Fatalf("failed to query node 2: %s", err.Error())
+	}
+	if r1 != r2 {
+		t.Fatalf("node 1 and node 2 do not have the same data (%s %s)", r1, r2)
+	}
+}
+
 // Test_MultiNodeClusterBootstrap tests formation of a 3-node cluster via bootstraping,
 // and its operation.
 func Test_MultiNodeClusterBootstrap(t *testing.T) {

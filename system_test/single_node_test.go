@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sync"
 	"testing"
 	"time"
@@ -330,6 +331,26 @@ func Test_SingleNodeParameterizedNamed(t *testing.T) {
 		if r != tt.expected {
 			t.Fatalf(`test %d received wrong result "%s" got: %s exp: %s`, i, tt.stmt, r, tt.expected)
 		}
+	}
+}
+
+func Test_SingleNodeRewriteRandom(t *testing.T) {
+	node := mustNewLeaderNode()
+	defer node.Deprovision()
+
+	_, err := node.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`)
+	if err != nil {
+		t.Fatalf(`CREATE TABLE failed: %s`, err.Error())
+	}
+
+	resp, err := node.Execute(`INSERT INTO foo(id, name) VALUES(RANDOM(), "fiona")`)
+	if err != nil {
+		t.Fatalf(`queued write failed: %s`, err.Error())
+	}
+
+	match := regexp.MustCompile(`{"results":[{"last_insert_id":\-?[0-9]+,"rows_affected":1}]}`)
+	if !match.MatchString(resp) {
+		t.Fatalf("test received wrong result got %s", resp)
 	}
 }
 

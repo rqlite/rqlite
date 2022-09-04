@@ -1,4 +1,6 @@
-## 7.6.2 (unreleased)
+## 7.7.0 (unreleased)
+### New features
+- [PR #1046](https://github.com/rqlite/rqlite/pull/1046): Add rewriting of SQLite `RANDOM()` so statements with this function are safe to use.
 
 ### Implementation changes and bug fixes
 - [PR #1064](https://github.com/rqlite/rqlite/pull/1064): Upgrade dependencies, and move to requiring Go 1.18 (or later) for building.

@@ -1000,6 +1000,15 @@ func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	noRewriteRandom, err := noRewriteRandom(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := command.Rewrite(stmts, !noRewriteRandom); err != nil {
+		http.Error(w, fmt.Sprintf("SQL rewrite: %s", err.Error()), http.StatusInternalServerError)
+		return
+	}
 
 	timeout, err := timeoutParam(r, defaultTimeout)
 	if err != nil {
@@ -1040,7 +1049,7 @@ func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request) {
 func (s *Service) execute(w http.ResponseWriter, r *http.Request) {
 	resp := NewResponse()
 
-	timeout, isTx, timings, redirect, err := reqParams(r, defaultTimeout)
+	timeout, isTx, timings, redirect, noRewriteRandom, err := reqParams(r, defaultTimeout)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -1056,6 +1065,10 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request) {
 	stmts, err := ParseRequest(b)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := command.Rewrite(stmts, !noRewriteRandom); err != nil {
+		http.Error(w, fmt.Sprintf("SQL rewrite: %s", err.Error()), http.StatusInternalServerError)
 		return
 	}
 
@@ -1132,7 +1145,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 
 	resp := NewResponse()
 
-	timeout, isTx, timings, redirect, err := reqParams(r, defaultTimeout)
+	timeout, isTx, timings, redirect, noRewriteRandom, err := reqParams(r, defaultTimeout)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -1155,6 +1168,15 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
+	}
+
+	// No point rewriting queries if they don't go through the Raft log, since they
+	// will never be replayed from the log anyway.
+	if lvl == command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG {
+		if err := command.Rewrite(queries, noRewriteRandom); err != nil {
+			http.Error(w, fmt.Sprintf("SQL rewrite: %s", err.Error()), http.StatusInternalServerError)
+			return
+		}
 	}
 
 	qr := &command.QueryRequest{
@@ -1555,24 +1577,28 @@ func isQueue(req *http.Request) (bool, error) {
 
 // reqParams is a convenience function to get a bunch of query params
 // in one function call.
-func reqParams(req *http.Request, def time.Duration) (timeout time.Duration, tx, timings, redirect bool, err error) {
+func reqParams(req *http.Request, def time.Duration) (timeout time.Duration, tx, timings, redirect, noRwRandom bool, err error) {
 	timeout, err = timeoutParam(req, def)
 	if err != nil {
-		return 0, false, false, false, err
+		return 0, false, false, false, true, err
 	}
 	tx, err = isTx(req)
 	if err != nil {
-		return 0, false, false, false, err
+		return 0, false, false, false, true, err
 	}
 	timings, err = isTimings(req)
 	if err != nil {
-		return 0, false, false, false, err
+		return 0, false, false, false, true, err
 	}
 	redirect, err = isRedirect(req)
 	if err != nil {
-		return 0, false, false, false, err
+		return 0, false, false, false, true, err
 	}
-	return timeout, tx, timings, redirect, nil
+	noRwRandom, err = noRewriteRandom(req)
+	if err != nil {
+		return 0, false, false, false, true, err
+	}
+	return timeout, tx, timings, redirect, noRwRandom, nil
 }
 
 // noLeader returns whether processing should skip the leader check.
@@ -1593,6 +1619,11 @@ func isTimings(req *http.Request) (bool, error) {
 // isWait returns whether a wait operation is requested.
 func isWait(req *http.Request) (bool, error) {
 	return queryParam(req, "wait")
+}
+
+// noRewriteRandom returns whether a rewrite of RANDOM is disabled.
+func noRewriteRandom(req *http.Request) (bool, error) {
+	return queryParam(req, "norwrandom")
 }
 
 // level returns the requested consistency level for a query
