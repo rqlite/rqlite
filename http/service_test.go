@@ -870,7 +870,7 @@ func Test_ForwardingRedirectExecute(t *testing.T) {
 	}
 	host := fmt.Sprintf("http://%s", s.Addr().String())
 
-	resp, err := client.Post(host+"/db/execute", "application/json", strings.NewReader(`["SELECT * FROM foo"]`))
+	resp, err := client.Post(host+"/db/execute", "application/json", strings.NewReader(`["Some SQL"]`))
 	if err != nil {
 		t.Fatalf("failed to make execute request")
 	}
@@ -878,7 +878,7 @@ func Test_ForwardingRedirectExecute(t *testing.T) {
 		t.Fatalf("failed to get expected StatusOK for execute, got %d", resp.StatusCode)
 	}
 
-	resp, err = client.Post(host+"/db/execute?redirect", "application/json", strings.NewReader(`["SELECT * FROM foo"]`))
+	resp, err = client.Post(host+"/db/execute?redirect", "application/json", strings.NewReader(`["Some SQL"]`))
 	if err != nil {
 		t.Fatalf("failed to make redirected execute request: %s", err)
 	}
@@ -888,7 +888,7 @@ func Test_ForwardingRedirectExecute(t *testing.T) {
 
 	// Check leader failure case.
 	m.leaderAddr = ""
-	resp, err = client.Post(host+"/db/execute", "application/json", strings.NewReader(`["SELECT * FROM foo"]`))
+	resp, err = client.Post(host+"/db/execute", "application/json", strings.NewReader(`["Some SQL"]`))
 	if err != nil {
 		t.Fatalf("failed to make execute request")
 	}
