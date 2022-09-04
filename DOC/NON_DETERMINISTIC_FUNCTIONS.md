@@ -25,10 +25,10 @@ An rqlite node addresses this issue by _rewriting_ received SQL statements that 
 ### `RANDOM()`
 > :warning: **This functionality was introduced in version 7.7.0. It does not exist in earlier releases.**
 
-Any SQL statement containing `RANDOM()` is rewritten under any of the following circumstances:
+Any SQL statement containing `RANDOM()` is rewritten following these resuls:
 - the statement is part of a write-request i.e. the request is sent to the `/db/execute` HTTP API.
 - the statement is part of a read-request i.e. the request is sent to the `/db/query` HTTP API **and** the read-request is made with _strong_ read consistency.
-- `RANDOM()` is not used as an `ORDER BY` qualifier.
+- if `RANDOM()` is used as an `ORDER BY` qualifier it is not rewritten.
 
 `RANDOM()` is replaced with a random integer between -9223372036854775808 and +9223372036854775807 by the rqlite node that first receives the SQL statement.
 
