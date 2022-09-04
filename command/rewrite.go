@@ -22,12 +22,10 @@ func Rewrite(stmts []*Statement, r bool) error {
 		// there was no error, or if the rewriter did anything. If the statement
 		// is bad SQLite syntax, let SQLite deal with it -- and let its error
 		// be returned. Those errors will probably be clearer.
-
 		s, err := sql.NewParser(strings.NewReader(stmts[i].Sql)).ParseStatement()
 		if err != nil {
 			continue
 		}
-
 		s, f, err := rw.Do(s)
 		if err != nil || !f {
 			continue
