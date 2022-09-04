@@ -30,7 +30,7 @@ Any SQL statement containing `RANDOM()` is rewritten under any of the following 
 - the statement is part of a read-request i.e. the request is sent to the `/db/execute` HTTP API **and** the read-request is made with _strong_ read consistency.
 - `RANDOM()` is not used as an `ORDER BY` qualifier.
 
-`RANDOM()` is replaced with a random integer between -9223372036854775808 and +9223372036854775807.
+`RANDOM()` is replaced with a random integer between -9223372036854775808 and +9223372036854775807 by the rqlite node that first receives the SQL statement.
 
 #### Examples
 ```bash
