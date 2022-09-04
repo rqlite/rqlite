@@ -18,7 +18,7 @@ INSERT INTO foo (n) VALUES(random());
 This is because `RANDOM()` is evaluated by each node independently, and `RANDOM()` will almost certainly return a different value on each node.
 
 ## How rqlite solves this problem
-An rqlite node addresses this issue by _rewriting_ received SQL statements that contain certain non-deterministic functions, before sending the statement to any other node.
+An rqlite node addresses this issue by _rewriting_ received SQL statements that contain certain non-deterministic functions, evaluating the non-determinstic factor, before sending the rewritten statement to any other node.
 
 ## What does rqlite rewrite?
 
