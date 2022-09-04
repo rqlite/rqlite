@@ -10,7 +10,7 @@ INSERT INTO foo (n) VALUES(random());
 This is because `RANDOM()` is evaluated by each node independently, and `RANDOM()` will almost certainly return a different value on each node.
 
 ## How rqlite solves this problem
-rqlite addresses this issue by _rewriting_ SQL statements that contain certain non-deterministic functions, before sending the statement is sent to any other node.
+An rqlite node addresses this issue by _rewriting_ received SQL statements that contain certain non-deterministic functions, before sending the statement to any other node.
 
 ## What does rqlite rewrite?
 
@@ -26,20 +26,26 @@ Any SQL statement containing `RANDOM()` is rewritten under any of the following 
 
 #### Examples
 ```bash
+# Will be rewritten
 curl -XPOST 'localhost:4001/db/execute' -H "Content-Type: application/json" -d '[
     "INSERT INTO foo(id, age) VALUES(1234, RANDOM())"
-]' # Will be rewritten
+]'
+
+# RANDOM() rewriting explicitly disabled at request-time
 curl -XPOST 'localhost:4001/db/execute?norwrandom' -H "Content-Type: application/json" -d '[
     "INSERT INTO foo(id, age) VALUES(1234, RANDOM())"
-]' # RANDOM() rewriting explicitly disabled at request-time
-curl -G 'localhost:4001/db/query' --data-urlencode 'q=SELECT * FROM foo WHERE id = RANDOM()' # Not rewritten
-curl -G 'localhost:4001/db/query?level=strong' --data-urlencode 'q=SELECT * FROM foo WHERE id = RANDOM()' # Rewritten
+]' 
 
+# Not rewritten
+curl -G 'localhost:4001/db/query' --data-urlencode 'q=SELECT * FROM foo WHERE id = RANDOM()'
+
+# Rewritten
+curl -G 'localhost:4001/db/query?level=strong' --data-urlencode 'q=SELECT * FROM foo WHERE id = RANDOM()'
 ```
 
-If you wish to disable all rewriting of `RANDOM()`, set 
-
 ### Date and time functions
-rqlite does not yet rewrite date and time functions that are non-deterministic in nature. A example of such a function is `INSERT INTO datetime_text (d1, d2) VALUES(datetime('now'),datetime('now', 'localtime'))`. Using such functions will result in undefined behavior.
+rqlite does not yet rewrite [SQLite date and time functions](https://www.sqlite.org/lang_datefunc.html) that are non-deterministic in nature. A example of such a function is
 
-Date and time functions that use absolute values will work without issue.
+`INSERT INTO datetime_text (d1, d2) VALUES(datetime('now'),datetime('now', 'localtime'))`
+
+Using such functions will result in undefined behavior. Date and time functions that use absolute values will work without issue.
