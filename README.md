@@ -101,10 +101,8 @@ Since the Raft log is the authoritative store for all data, and it is stored on 
 ## Limitations
  * In-memory databases are currently limited to 2GiB (2147483648 bytes) in size. You can learn more about possible ways to get around this limit in the [documentation](https://github.com/rqlite/rqlite/blob/master/DOC/PERFORMANCE.md#in-memory-database-limits).
 
- * Only SQL statements that are [__deterministic__](https://www.sqlite.org/deterministic.html) are safe to use with rqlite, because statements are committed to the Raft log before they are sent to each node. In other words, rqlite performs _statement-based replication_. For example, the following statement could result in a different SQLite database under each node:
-```
-INSERT INTO foo (n) VALUES(random());
-```
+ * Because rqlite peforms _statement-based replication_ certain [_non-deterministic functions_](https://www.sqlite.org/deterministic.html), e.g. `RANDOM()`, are rewritten by rqlite before being passed to the Raft system and SQLite. To learn more about rqlite's support for non-deterministic functions, check out the [documentation]((https://github.com/rqlite/rqlite/blob/master/DOC/NON_DETERMINISTIC_FUNCTIONS.md).
+
  * This has not been extensively tested, but you can directly read the SQLite file under any node at anytime, assuming you run in "on-disk" mode. However there is no guarantee that the SQLite file reflects all the changes that have taken place on the cluster unless you are sure the host node itself has received and applied all changes.
  * In case it isn't obvious, rqlite does not replicate any changes made directly to any underlying SQLite file, when run in "on disk" mode. **If you change the SQLite file directly, you may cause rqlite to fail**. Only modify the database via the HTTP API.
  * SQLite dot-commands such as `.schema` or `.tables` are not directly supported by the API, but the [rqlite CLI](https://github.com/rqlite/rqlite/blob/master/DOC/CLI.md) supports some very similar functionality. This is because those commands are features of the `sqlite3` command, not SQLite itself.
