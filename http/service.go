@@ -1006,7 +1006,7 @@ func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := command.Rewrite(stmts, !noRewriteRandom); err != nil {
-		http.Error(w, fmt.Sprintf("SQL rewrite: %s", err.Error()), http.StatusBadRequest)
+		http.Error(w, fmt.Sprintf("SQL rewrite: %s", err.Error()), http.StatusInternalServerError)
 		return
 	}
 
@@ -1068,7 +1068,7 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := command.Rewrite(stmts, !noRewriteRandom); err != nil {
-		http.Error(w, fmt.Sprintf("SQL rewrite: %s", err.Error()), http.StatusBadRequest)
+		http.Error(w, fmt.Sprintf("SQL rewrite: %s", err.Error()), http.StatusInternalServerError)
 		return
 	}
 
@@ -1171,7 +1171,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := command.Rewrite(queries, rwRandom); err != nil {
-		http.Error(w, fmt.Sprintf("SQL rewrite: %s", err.Error()), http.StatusBadRequest)
+		http.Error(w, fmt.Sprintf("SQL rewrite: %s", err.Error()), http.StatusInternalServerError)
 		return
 	}
 

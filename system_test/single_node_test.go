@@ -343,7 +343,7 @@ func Test_SingleNodeRewriteRandom(t *testing.T) {
 		t.Fatalf(`CREATE TABLE failed: %s`, err.Error())
 	}
 
-	resp, err := node.ExecuteRewriteRandom(`INSERT INTO foo(id, name) VALUES(RANDOM(), "fiona")`)
+	resp, err := node.Execute(`INSERT INTO foo(id, name) VALUES(RANDOM(), "fiona")`)
 	if err != nil {
 		t.Fatalf(`queued write failed: %s`, err.Error())
 	}

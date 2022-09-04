@@ -85,16 +85,6 @@ func (n *Node) Execute(stmt string) (string, error) {
 	return n.ExecuteMulti([]string{stmt})
 }
 
-// ExecuteRewriteRandom executes a single statement against the node, rewriting any
-// RANDOM() functions first.
-func (n *Node) ExecuteRewriteRandom(stmt string) (string, error) {
-	j, err := json.Marshal([]string{stmt})
-	if err != nil {
-		return "", err
-	}
-	return n.postExecuteRewriteRandom(string(j))
-}
-
 // ExecuteMulti executes multiple statements against the node.
 func (n *Node) ExecuteMulti(stmts []string) (string, error) {
 	j, err := json.Marshal(stmts)
@@ -340,19 +330,6 @@ func (n *Node) ConfirmRedirect(host string) bool {
 
 func (n *Node) postExecute(stmt string) (string, error) {
 	resp, err := http.Post("http://"+n.APIAddr+"/db/execute", "application/json", strings.NewReader(stmt))
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-	return string(body), nil
-}
-
-func (n *Node) postExecuteRewriteRandom(stmt string) (string, error) {
-	resp, err := http.Post("http://"+n.APIAddr+"/db/execute?rwrandom", "application/json", strings.NewReader(stmt))
 	if err != nil {
 		return "", err
 	}

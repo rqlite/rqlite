@@ -18,20 +18,22 @@ func Rewrite(stmts []*Statement, r bool) error {
 	}
 
 	for i := range stmts {
+		// Only replace the incoming statement with a rewritten version if
+		// there was no error, or if the rewriter did anything. If the statement
+		// is bad SQLite syntax, let SQLite deal with it -- and let its error
+		// be returned. Those errors will probably be clearer.
+
 		s, err := sql.NewParser(strings.NewReader(stmts[i].Sql)).ParseStatement()
 		if err != nil {
-			return err
+			continue
 		}
 
 		s, f, err := rw.Do(s)
-
-		// Only replace the incoming statement if there was no error or if the
-		// rewriter did anything. If the statement is bad SQLite syntax, let
-		// SQLite deal with it -- and get back its error. Those errors will
-		// probably be clearer.
-		if err == nil && f {
-			stmts[i].Sql = s.String()
+		if err != nil || !f {
+			continue
 		}
+
+		stmts[i].Sql = s.String()
 	}
 	return nil
 }
