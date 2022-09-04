@@ -49,3 +49,6 @@ rqlite does not yet rewrite [SQLite date and time functions](https://www.sqlite.
 `INSERT INTO datetime_text (d1, d2) VALUES(datetime('now'),datetime('now', 'localtime'))`
 
 Using such functions will result in undefined behavior. Date and time functions that use absolute values will work without issue.
+
+## Credits
+Many thanks to [Ben Johnson](https://github.com/benbjohnson) who wrote the SQLite parser used by rqlite.
