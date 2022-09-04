@@ -24,11 +24,12 @@ func Rewrite(stmts []*Statement, r bool) error {
 		}
 
 		s, f, err := rw.Do(s)
-		if err != nil {
-			return err
-		}
-		if f {
-			// Only replace the incoming statement if the rewriter did anything.
+
+		// Only replace the incoming statement if there was no error or if the
+		// rewriter did anything. If the statement is bad SQLite syntax, let
+		// SQLite deal with it -- and get back its error. Those errors will
+		// probably be clearer.
+		if err == nil && f {
 			stmts[i].Sql = s.String()
 		}
 	}
