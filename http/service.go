@@ -1170,9 +1170,13 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := command.Rewrite(queries, rwRandom); err != nil {
-		http.Error(w, fmt.Sprintf("SQL rewrite: %s", err.Error()), http.StatusInternalServerError)
-		return
+	// No point rewriting queries if they don't go through the Raft log, since they
+	// will never be replayed from the log anyway.
+	if lvl == command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG {
+		if err := command.Rewrite(queries, rwRandom); err != nil {
+			http.Error(w, fmt.Sprintf("SQL rewrite: %s", err.Error()), http.StatusInternalServerError)
+			return
+		}
 	}
 
 	qr := &command.QueryRequest{
