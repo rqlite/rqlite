@@ -1,4 +1,4 @@
-# rqlite and non-deterministic functions
+# rqlite and Non-deterministic Functions
 
 ## Understanding the problem
 rqlite peforms _statement-based replication_. This means that every SQL statement is stored in the Raft log exactly in the form it was received. Each rqlite node then reads the Raft log and applies the SQL statements it finds there to its own local copy of SQLite.
