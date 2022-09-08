@@ -32,7 +32,7 @@ rqlite uses [Raft](https://raft.github.io/) to achieve consensus across all the 
 ## Quick Start
 _Detailed documentation [is available](https://github.com/rqlite/rqlite/tree/master/DOC). Check out the [rqlite Google Group](https://groups.google.com/forum/#!forum/rqlite) and join the [rqlite Slack channel](https://www.philipotoole.com/join-rqlite-slack)_.
 
-The quickest way to get running on macOS and Linux is to download a pre-built release binary. You can find these binaries on the [Github releases page](https://github.com/rqlite/rqlite/releases). If you prefer Windows you can download the latest build [here](https://ci.appveyor.com/api/projects/otoolep/rqlite/artifacts/rqlite-latest-win64.zip?branch=master). Once installed, you can start a single rqlite node like so:
+The quickest way to get running on macOS and Linux is to download a pre-built release binary. You can find these binaries on the [Github releases page](https://github.com/rqlite/rqlite/releases). Once installed, you can start a single rqlite node like so:
 ```bash
 rqlited -node-id 1 ~/node.1
 ```
