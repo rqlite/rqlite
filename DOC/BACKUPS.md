@@ -9,8 +9,9 @@ This command will write the SQLite database file to `bak.sqlite3`.
 
 You can also access the rqlite API directly, via a HTTP `GET` request to the endpoint `/db/backup`. For example, using `curl`, and assuming the node is listening on `localhost:4001`, you could retrieve a backup as follows:
 ```bash
-curl -s -XGET localhost:4001/db/backup -o bak.sqlite3
+curl -s -L -XGET localhost:4001/db/backup -o bak.sqlite3
 ```
+Note that if the node is not the Leader, a HTTP 301 response will be returned with the Leader's address.
 
 In either case the generated file can then be used to restore a node (or cluster) using the [restore API](https://github.com/rqlite/rqlite/blob/master/DOC/RESTORE_FROM_SQLITE.md).
 
@@ -22,7 +23,7 @@ SQL text file written successfully
 ```
 The API can also be accessed directly:
 ```bash
-curl -s -XGET localhost:4001/db/backup?fmt=sql -o bak.sql
+curl -s -L -XGET localhost:4001/db/backup?fmt=sql -o bak.sql
 ```
 
 ## Backup isolation level
