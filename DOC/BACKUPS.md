@@ -11,7 +11,7 @@ You can also access the rqlite API directly, via a HTTP `GET` request to the end
 ```bash
 curl -s -L -XGET localhost:4001/db/backup -o bak.sqlite3
 ```
-Note that if the node is not the Leader, a HTTP 301 response will be returned with the Leader's address.
+Note that if the node is not the Leader, a HTTP 301 response will be returned with the Leader's address. The `curl` command above will automatically follow the Leader, due to the presence of the option `-L`.
 
 In either case the generated file can then be used to restore a node (or cluster) using the [restore API](https://github.com/rqlite/rqlite/blob/master/DOC/RESTORE_FROM_SQLITE.md).
 
