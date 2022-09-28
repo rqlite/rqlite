@@ -52,7 +52,7 @@ curl -G 'localhost:4001/db/query?level=strong' --data-urlencode 'q=SELECT * FROM
 ```
 
 ### Date and time functions
-rqlite does not yet rewrite [SQLite date and time functions](https://www.sqlite.org/lang_datefunc.html) that are non-deterministic in nature. A example of such a function is
+rqlite does not yet rewrite [SQLite date and time functions](https://www.sqlite.org/lang_datefunc.html) that are non-deterministic in nature, but will in an upcoming release. A example of a non-deterministic time function is
 
 `INSERT INTO datetime_text (d1, d2) VALUES(datetime('now'),datetime('now', 'localtime'))`
 
