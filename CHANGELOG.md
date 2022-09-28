@@ -1,4 +1,4 @@
-## 7.7.0 (unreleased)
+## 7.7.0 (September 28th 2022)
 ### New features
 - [PR #1046](https://github.com/rqlite/rqlite/pull/1046): Add rewriting of SQLite `RANDOM()` so statements with this function are safe to use.
 
