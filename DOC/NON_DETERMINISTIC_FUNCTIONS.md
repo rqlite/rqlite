@@ -25,7 +25,7 @@ An rqlite node addresses this issue by _rewriting_ received SQL statements that 
 ### `RANDOM()`
 > :warning: **This functionality was introduced in version 7.7.0. It does not exist in earlier releases.**
 
-Any SQL statement containing `RANDOM()` is rewritten following these resuls:
+Any SQL statement containing `RANDOM()` is rewritten following these rules:
 - the statement is part of a write-request i.e. the request is sent to the `/db/execute` HTTP API.
 - the statement is part of a read-request i.e. the request is sent to the `/db/query` HTTP API **and** the read-request is made with _strong_ read consistency.
 - if `RANDOM()` is used as an `ORDER BY` qualifier it is not rewritten.
