@@ -29,6 +29,7 @@ Any SQL statement containing `RANDOM()` is rewritten following these rules:
 - the statement is part of a write-request i.e. the request is sent to the `/db/execute` HTTP API.
 - the statement is part of a read-request i.e. the request is sent to the `/db/query` HTTP API **and** the read-request is made with _strong_ read consistency.
 - if `RANDOM()` is used as an `ORDER BY` qualifier it is not rewritten.
+- the HTTP request containing the SQL statement does not have the query parameter `norwrandom` present.
 
 `RANDOM()` is replaced with a random integer between -9223372036854775808 and +9223372036854775807 by the rqlite node that first receives the SQL statement.
 
