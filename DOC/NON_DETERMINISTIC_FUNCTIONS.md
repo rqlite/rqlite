@@ -9,7 +9,7 @@
 * [Credits](#credits)
 
 ## Understanding the problem
-rqlite peforms _statement-based replication_. This means that every SQL statement is stored in the Raft log exactly in the form it was received. Each rqlite node then reads the Raft log and applies the SQL statements it finds there to its own local copy of SQLite.
+rqlite peforms _statement-based replication_. This means that every SQL statement is usually stored in the Raft log exactly in the form it was received. Each rqlite node then reads the Raft log and applies the SQL statements it finds there to its own local copy of SQLite.
 
 But if a SQL statement contains a [non-deterministic function](https://www.sqlite.org/deterministic.html), this type of replication can result in different SQLite data under each node -- which is not meant to happen. For example, the following statement could result in a different SQLite database under each node:
 ```
@@ -18,7 +18,7 @@ INSERT INTO foo (n) VALUES(random());
 This is because `RANDOM()` is evaluated by each node independently, and `RANDOM()` will almost certainly return a different value on each node.
 
 ## How rqlite solves this problem
-An rqlite node addresses this issue by _rewriting_ received SQL statements that contain certain non-deterministic functions, evaluating the non-determinstic factor, before sending the rewritten statement to any other node.
+An rqlite node addresses this issue by _rewriting_ received SQL statements that contain certain non-deterministic functions, evaluating the non-determinstic factor, before writing the statement to the Raft log. The rewritten statement is then applied to the SQLite database as usual.
 
 ## What does rqlite rewrite?
 
