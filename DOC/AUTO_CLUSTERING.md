@@ -19,23 +19,23 @@ This document describes various ways to dynamically form rqlite clusters, which 
 ## Quickstart
 
 ### Automatic Bootstrapping
-While [manually creating a cluster](https://github.com/rqlite/rqlite/blob/master/DOC/CLUSTER_MGMT.md) is simple, it does suffer one drawback -- you must start one node first and with different options, so it can become the Leader. _Automatic Bootstrapping_, in constrast, allows you to start all the nodes at once, and in a very similar manner. You just need to know the network addresses of the nodes ahead of time.
+While [manually creating a cluster](https://github.com/rqlite/rqlite/blob/master/DOC/CLUSTER_MGMT.md) is simple, it does suffer one drawback -- you must start one node first and with different options, so it can become the Leader. _Automatic Bootstrapping_, in constrast, allows you to start all the nodes at once, and in a very similar manner. **You just need to know the network addresses of the nodes ahead of time**.
 
-For simplicity, let's assume you want to run a 3-node rqlite cluster. To bootstrap the cluster, use the `-bootstrap-expect` option like so:
+For simplicity, let's assume you want to run a 3-node rqlite cluster. The network addresses of the nodes are `$HOST1`, `$HOST2`, and `$HOST3`. To bootstrap the cluster, use the `-bootstrap-expect` option like so:
 
 Node 1:
 ```bash
-rqlited -node-id $ID1 -http-addr=$HOST1:4001 -raft-addr=$HOST1:4002 \
+rqlited -node-id 1 -http-addr=$HOST1:4001 -raft-addr=$HOST1:4002 \
 -bootstrap-expect 3 -join http://$HOST1:4001,http://$HOST2:4001,http://$HOST3:4001 data
 ```
 Node 2:
 ```bash
-rqlited -node-id $ID2 -http-addr=$HOST2:4001 -raft-addr=$HOST2:4002 \
+rqlited -node-id 2 -http-addr=$HOST2:4001 -raft-addr=$HOST2:4002 \
 -bootstrap-expect 3 -join http://$HOST1:4001,http://$HOST2:4001,http://$HOST3:4001 data
 ```
 Node 3:
 ```bash
-rqlited -node-id $ID3 -http-addr=$HOST3:4001 -raft-addr=$HOST3:4002 \
+rqlited -node-id 3 -http-addr=$HOST3:4001 -raft-addr=$HOST3:4002 \
 -bootstrap-expect 3 -join http://$HOST1:4001,http://$HOST2:4001,http://$HOST3:4001 data
 ```
 
@@ -53,24 +53,24 @@ where `$HOST[1-3]` are the expected network addresses of the containers.
 __________________________
 
 ### Using DNS for Bootstrapping
-You can also use the Domain Name System (DNS) to bootstrap a cluster. This is similar to automatic clustering, but doesn't require you to specify the network addresses at the command line. Instead you create a DNS record for the host `rqlite.local`, with an [A Record](https://www.cloudflare.com/learning/dns/dns-records/dns-a-record/) for each rqlite node's HTTP IP address. 
+You can also use the Domain Name System (DNS) to bootstrap a cluster. This is similar to automatic clustering, but doesn't require you to specify the network addresses of other nodes at the command line. Instead you create a DNS record for the host `rqlite.local`, with an [A Record](https://www.cloudflare.com/learning/dns/dns-records/dns-a-record/) for each rqlite node's HTTP IP address. 
 
-To launch a node using DNS boostrap, execute the following (example) command:
+To launch a node with node ID `$ID` and network address `$HOST`, using DNS for cluster boostrap, execute the following (example) command:
 ```bash
-rqlited -node-id $ID1  -http-addr=$HOST1:4001 -raft-addr=$HOST1:4002 \
+rqlited -node-id $ID -http-addr=$HOST:4001 -raft-addr=$HOST:4002 \
 -disco-mode=dns -disco-config='{"name":"rqlite.local"}' -bootstrap-expect 3 data
 ```
-You would launch other nodes similarly.
+You would launch other nodes similarly, setting `$ID` and `$HOST` as required for each node.
 
 #### DNS SRV
 Using [DNS SRV](https://www.cloudflare.com/learning/dns/dns-records/dns-srv-record/) gives you more control over the rqlite node address details returned by DNS, including the HTTP port each node is listening on. This means that unlike using just simple DNS records, each rqlite node can be listening on a different HTTP port. Simple DNS records are probably good enough for most situations, however.
 
 To launch a node using DNS SRV boostrap, execute the following (example) command:
 ```bash
-rqlited -node-id $ID1  -http-addr=$HOST1:4001 -raft-addr=$HOST1:4002 \
+rqlited -node-id $ID  -http-addr=$HOST:4001 -raft-addr=$HOST:4002 \
 -disco-mode=dns-srv -disco-config='{"name":"rqlite.local","service":"rqlite-svc"}' -bootstrap-expect 3 data
 ```
-You would launch other nodes similarly. In the example above rqlite will lookup SRV records at `_rqlite-svc._tcp.rqlite.local`
+You would launch other nodes similarly, setting `$ID` and `$HOST` as required for each node. You would launch other nodes similarly. In the example above rqlite will lookup SRV records at `_rqlite-svc._tcp.rqlite.local`
 __________________________
 
 ### Kubernetes
@@ -78,7 +78,7 @@ DNS-based approaches can be quite useful for many deployment scenarios, in parti
 __________________________
 
 ### Consul
-Another approach uses [Consul](https://www.consul.io/) to coordinate clustering. The advantage of this approach is that you do not need to know the network addresses of the nodes ahead of time.
+Another approach uses [Consul](https://www.consul.io/) to coordinate clustering. The advantage of this approach is that you do not need to know the network addresses of all nodes ahead of time.
 
 Let's assume your Consul cluster is running at `http://example.com:8500`. Let's also assume that you are going to run 3 rqlite nodes, each node on a different machine. Launch your rqlite nodes as follows:
 
@@ -108,7 +108,7 @@ docker run rqlite/rqlite -disco-mode=consul-kv -disco-config '{"address":"exampl
 __________________________
 
 ### etcd
-A third approach uses [etcd](https://www.etcd.io/) to coordinate clustering. Autoclustering with etcd is very similar to Consul. Like when you use Consul, the advantage of this approach is that you do not need to know the network addresses of the nodes ahead of time.
+A third approach uses [etcd](https://www.etcd.io/) to coordinate clustering. Autoclustering with etcd is very similar to Consul. Like when you use Consul, the advantage of this approach is that you do not need to know the network addresses of all the nodes ahead of time.
 
 Let's assume etcd is available at `example.com:2379`.
 
