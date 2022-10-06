@@ -83,7 +83,7 @@ Bringing up a second node on the same host, joining it to the first node. This a
 ```bash
 rqlited -auth config.json -http-addr localhost:4003 -http-cert server.crt \
 -http-key key.pem -raft-addr :4004 -join https://bob:secret1@localhost:4001 \
--node-encrypt -node-cert node.crt -node-key node-key.pem -no-node-verify \
+-node-encrypt -node-cert node.crt -node-key node-key.pem -node-no-verify \
 ~/node.2
 ```
 Querying the node, as user _mary_.
@@ -97,6 +97,6 @@ The above example suffer from one shortcoming -- the password for user `bob` is 
 ```bash
 rqlited -auth config.json -http-addr localhost:4003 -http-cert server.crt \
 -http-key key.pem -raft-addr :4004 -join https://localhost:4001 -join-as bob \
--node-encrypt -node-cert node.crt -node-key node-key.pem -no-node-verify \
+-node-encrypt -node-cert node.crt -node-key node-key.pem -node-no-verify \
 ~/node.2
 ```
