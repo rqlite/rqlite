@@ -26,7 +26,7 @@ $
 ```
 Setting the URL query parameter `queue` enables queuing mode, adding the request data to an internal queue whch rqlite manages for you. 
 
-rqlite will merge the requests, once a batch-size of them has been queued on the node, and execute them as though they had been both contained in a single request. 
+rqlite will merge the requests, once a batch-size of them has been queued on the node or a configurable timeout expires, and execute them as though they had been both contained in a single request. 
 
 Each response includes a monotonically-increasing `sequence_number`, which allows you to track when this request is actually persisted to the Raft log. The `/status` [diagnostics](https://github.com/rqlite/rqlite/blob/master/DOC/DIAGNOSTICS.md) endpoint includes the sequence number of the latest request successfully written to Raft.
 
@@ -40,7 +40,7 @@ $ curl -XPOST 'localhost:4001/db/execute?queue&wait&timeout=10s' -H "Content-Typ
 This example also shows setting a timeout. If the queue has not emptied after this time, the request will return with an error. If not set, the time out is set to 30 seconds.
 
 ### Configuring queue behaviour
-The behaviour of the queue rqlite uses to batch the requests is configurable at rqlite launch time. You can change the minimum number of requests that must be present in the queue before they are written, as well as a timeout after which whatever is in the queue will be written regardless of queue size. Pass `-h` to `rqlited` to see the queue defaults, and list all command-line options.
+The behaviour of the queue rqlite uses to batch the requests is configurable at rqlite launch time. You can change the minimum number of requests that must be present in the queue before they are written, as well as the timeout after which whatever is in the queue will be written regardless of queue size. Pass `-h` to `rqlited` to see the queue defaults, and list all command-line options.
 
 ## Caveats
 Like most databases there is a trade-off to be made between write-performance and durability, but for some applications these trade-offs are worth it.
