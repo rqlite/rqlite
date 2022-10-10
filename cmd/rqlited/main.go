@@ -82,7 +82,7 @@ func main() {
 		log.Fatalf("failed to start node mux: %s", err.Error())
 	}
 	raftTn := mux.Listen(cluster.MuxRaftHeader)
-	log.Printf("Raft TCP mux Listener registered with %d", cluster.MuxRaftHeader)
+	log.Printf("Raft TCP mux Listener registered with byte header %d", cluster.MuxRaftHeader)
 
 	// Create the store.
 	str, err := createStore(cfg, raftTn)
@@ -106,7 +106,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to create cluster service: %s", err.Error())
 	}
-	log.Printf("cluster TCP mux Listener registered with %d", cluster.MuxClusterHeader)
+	log.Printf("cluster TCP mux Listener registered with byte header %d", cluster.MuxClusterHeader)
 
 	// Start the HTTP API server.
 	clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, cfg.NodeEncrypt, cfg.NoNodeVerify)
