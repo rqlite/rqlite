@@ -1,4 +1,4 @@
-## 7.7.1 (unreleased)
+## 7.7.1 (October 13th 2022)
 ### Implementation changes and bug fixes
 - [PR #1074](https://github.com/rqlite/rqlite/pull/1074): Support nil as a paramterized value. Fixes [issue #1073](https://github.com/rqlite/rqlite/issues/1073)
 
