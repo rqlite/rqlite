@@ -131,6 +131,8 @@ func makeParameter(name string, i interface{}) (*command.Parameter, error) {
 			},
 			Name: name,
 		}, nil
+	case nil:
+		return nil, nil
 	}
 	return nil, ErrUnsupportedType
 }
