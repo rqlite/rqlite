@@ -1,3 +1,7 @@
+## 7.7.2 (October 14th 2022)
+### Implementation changes and bug fixes
+- [PR #1075](https://github.com/rqlite/rqlite/pull/1075): Upgrade to latest SQL parser. Fixes [issue #1072](https://github.com/rqlite/rqlite/issues/1072)
+
 ## 7.7.1 (October 13th 2022)
 ### Implementation changes and bug fixes
 - [PR #1074](https://github.com/rqlite/rqlite/pull/1074): Support `NULL` as a paramterized value. Fixes [issue #1073](https://github.com/rqlite/rqlite/issues/1073)
