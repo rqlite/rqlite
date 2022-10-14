@@ -1,4 +1,3 @@
-
 #  CircleCI 2.0 configuration file
 #
 # Check https://circleci.com/docs/2.0/language-go/ for more details
@@ -8,7 +7,6 @@ jobs:
     docker:
       # specify the version
       - image: cimg/go:1.18.0
-
       # Specify service dependencies here if necessary
       # CircleCI maintains a library of pre-built images
       # documented at https://circleci.com/docs/2.0/circleci-images/
@@ -27,6 +25,8 @@ jobs:
       - run: bash gofmt.sh
       - run: go vet -testinggoroutine=false ./...
       - run: go test ./...
+    # The resource_class feature allows configuring CPU and RAM resources for each job. Different resource classes are available for different executors. https://circleci.com/docs/2.0/configuration-reference/#resourceclass
+    resource_class: large
 
   race:
     docker:
@@ -52,7 +52,7 @@ jobs:
       - run:
           command: go test -v -timeout 20m -gcflags=all=-d=checkptr=0 -race ./...
           environment:
-                GORACE: "halt_on_error=1"
+            GORACE: "halt_on_error=1"
 
   end_to_end:
     docker:
@@ -60,18 +60,19 @@ jobs:
       - image: consul
       - image: gcr.io/etcd-development/etcd:v3.5.1
     steps:
-        - checkout
-        - run: sudo apt-get update
-        - run: sudo apt-get install python3
-        - run: sudo apt install python3-pip
-        - run: python3 -m pip install requests
-        - run: go version
-        - run: go get -t -d -v ./...
-        - run: go install -tags osusergo,netgo,sqlite_omit_load_extension -ldflags="-extldflags=-static" ./...
-        - run:
-            command: python3 system_test/full_system_test.py
-            environment:
-                RQLITED_PATH: /home/circleci/go/bin/rqlited
+      - checkout
+      - run: sudo apt-get update
+      - run: sudo apt-get install python3
+      - run: sudo apt install python3-pip
+      - run: python3 -m pip install requests
+      - run: go version
+      - run: go get -t -d -v ./...
+      - run: go install -tags osusergo,netgo,sqlite_omit_load_extension
+          -ldflags="-extldflags=-static" ./...
+      - run:
+          command: python3 system_test/full_system_test.py
+          environment:
+            RQLITED_PATH: /home/circleci/go/bin/rqlited
 
 workflows:
   version: 2
