@@ -59,5 +59,8 @@ rqlite does not yet rewrite [SQLite date and time functions](https://www.sqlite.
 
 Using such functions will result in undefined behavior. Date and time functions that use absolute values will work without issue.
 
+#### CURRENT_TIME*
+Using `CURRENT_TIMESTAMP`, `CURRENT_TIME`, and `CURRENT_DATE` can also be problematic, depending on your use case.
+
 ## Credits
 Many thanks to [Ben Johnson](https://github.com/benbjohnson) who wrote the SQLite parser used by rqlite.
