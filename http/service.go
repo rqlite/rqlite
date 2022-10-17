@@ -918,19 +918,20 @@ func (s *Service) handleReadyz(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if lAddr != "" {
-		_, err = s.cluster.GetNodeAPIAddr(lAddr, timeout)
-		if err != nil {
-			w.WriteHeader(http.StatusServiceUnavailable)
-			w.Write([]byte(fmt.Sprintf("[+]node ok\n[+]leader not contactable: %s", err.Error())))
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("[+]node ok\n[+]leader ok"))
+	if lAddr == "" {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		w.Write([]byte("[+]node ok\n[+]leader does not exist"))
 		return
 	}
-	w.WriteHeader(http.StatusServiceUnavailable)
-	w.Write([]byte("[+]node ok\n[+]leader does not exist"))
+
+	_, err = s.cluster.GetNodeAPIAddr(lAddr, timeout)
+	if err != nil {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		w.Write([]byte(fmt.Sprintf("[+]node ok\n[+]leader not contactable: %s", err.Error())))
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("[+]node ok\n[+]leader ok"))
 }
 
 func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
