@@ -3,7 +3,7 @@ This document provides an example of how to run rqlite as a Kubernetes [Stateful
 
 ## Creating a cluster 
 ### Create a Headless Service
-The first thing to do is to create a [Kubernetes _Headless Service_](https://kubernetes.io/docs/concepts/services-networking/service/#headless-services). The Headless service creates the required DNS entries, which allows the rqlite nodes to find each other, and automatically bootstrap a new cluster. 
+The first thing to do is to create two [Kubernetes _Headless Services_](https://kubernetes.io/docs/concepts/services-networking/service/#headless-services). The first service allows the nodes to cluster, the second service is for clients which needs to talk to the cluster. In each case the Headless service creates the required DNS entries, with the difference that the second service will only contain network addresses for those rqlite nodes that are ready to receive traffic.
 ```yaml
 apiVersion: v1
 kind: Service
@@ -11,6 +11,20 @@ metadata:
   name: rqlite-svc
 spec:
   clusterIP: None 
+  selector:
+    app: rqlite
+  ports:
+    - protocol: TCP
+      port: 4001
+      targetPort: 4001
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rqlite-svc-internal
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: True
   selector:
     app: rqlite
   ports:
@@ -37,6 +51,7 @@ spec:
       app: rqlite # has to match .spec.template.metadata.labels
   serviceName: rqlite-svc
   replicas: 3 # by default is 1
+  podManagementPolicy: "Parallel"
   template:
     metadata:
       labels:
@@ -53,7 +68,7 @@ spec:
         readinessProbe:
           httpGet:
             scheme: HTTP
-            path: /readyz?noleader
+            path: /readyz
             port: 4001
           initialDelaySeconds: 1
           periodSeconds: 5
