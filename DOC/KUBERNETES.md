@@ -61,7 +61,7 @@ spec:
       containers:
       - name: rqlite
         image: rqlite/rqlite
-        args: ["-disco-mode=dns","-disco-config={\"name\":\"rqlite-svc\"}","-bootstrap-expect","3"]
+        args: ["-disco-mode=dns","-disco-config={\"name\":\"rqlite-svc-internal\"}","-bootstrap-expect","3"]
         ports:
         - containerPort: 4001
           name: rqlite
