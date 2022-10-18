@@ -55,7 +55,7 @@ func NewBootstrapper(p AddressProvider, expect int, tlsConfig *tls.Config) *Boot
 		tlsConfig: &tls.Config{InsecureSkipVerify: true},
 		joiner:    NewJoiner("", 1, 0, tlsConfig),
 		logger:    log.New(os.Stderr, "[cluster-bootstrap] ", log.LstdFlags),
-		Interval:  jitter(5 * time.Second),
+		Interval:  jitter(2 * time.Second),
 	}
 	if tlsConfig != nil {
 		bs.tlsConfig = tlsConfig
