@@ -32,7 +32,7 @@ spec:
       port: 4001
       targetPort: 4001
 ```
-Apply the configuration above to your Kubernetes deployment. It will create a DNS entry `rqlite-svc`, which will resolve to the IP addresses of any Pods with the tag `rqlite`.
+Apply the configuration above to your Kubernetes deployment. It will create a DNS entries for `rqlite-svc` and `rqlite-svc-internal`, which will resolve to the IP addresses of any Pods with the tag `rqlite`.
 ```bash
 kubectl apply -f headless-service.yaml
 ```
@@ -49,7 +49,7 @@ spec:
   selector:
     matchLabels:
       app: rqlite # has to match .spec.template.metadata.labels
-  serviceName: rqlite-svc
+  serviceName: rqlite-svc-internal
   replicas: 3 # by default is 1
   podManagementPolicy: "Parallel"
   template:
