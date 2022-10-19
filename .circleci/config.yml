@@ -73,6 +73,8 @@ jobs:
           command: python3 system_test/full_system_test.py
           environment:
             RQLITED_PATH: /home/circleci/go/bin/rqlited
+    # The resource_class feature allows configuring CPU and RAM resources for each job. Different resource classes are available for different executors. https://circleci.com/docs/2.0/configuration-reference/#resourceclass
+    resource_class: large
 
 workflows:
   version: 2
