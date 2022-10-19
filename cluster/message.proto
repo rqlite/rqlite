@@ -20,6 +20,7 @@ message Command {
         COMMAND_TYPE_GET_NODE_API_URL = 1;
         COMMAND_TYPE_EXECUTE = 2;
         COMMAND_TYPE_QUERY = 3;
+        COMMAND_TYPE_GET_BACKUP = 4;
     }
     Type type = 1;
 
@@ -39,4 +40,7 @@ message CommandExecuteResponse {
 message CommandQueryResponse {
 	string error = 1;
 	repeated command.QueryRows rows = 2;
+}
+
+message CommandBackupResponse {
 }

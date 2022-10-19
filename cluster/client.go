@@ -293,6 +293,57 @@ func (c *Client) Query(qr *command.QueryRequest, nodeAddr string, creds *Credent
 	return a.Rows, nil
 }
 
+// BackupTo retrieves a backup from a remote node and writes to the io.Writer
+func (c *Client) BackupTo(nodeAddr string, creds *Credentials, timeout time.Duration, w io.Writer) error {
+	conn, err := c.dial(nodeAddr, c.timeout)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	// Send the request
+	command := &Command{
+		Type: Command_COMMAND_TYPE_GET_BACKUP,
+	}
+	p, err := proto.Marshal(command)
+	if err != nil {
+		return fmt.Errorf("command marshal: %s", err)
+	}
+
+	// Write length of Protobuf
+	b := make([]byte, 4)
+	binary.LittleEndian.PutUint16(b[0:], uint16(len(p)))
+	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
+		handleConnError(conn)
+		return err
+	}
+	_, err = conn.Write(b)
+	if err != nil {
+		handleConnError(conn)
+		return fmt.Errorf("write protobuf length: %s", err)
+	}
+	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
+		handleConnError(conn)
+		return err
+	}
+	_, err = conn.Write(p)
+	if err != nil {
+		handleConnError(conn)
+		return fmt.Errorf("write protobuf: %s", err)
+	}
+
+	// Read the backup and write to the writer
+	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
+		handleConnError(conn)
+		return err
+	}
+
+	if _, err := io.Copy(w, conn); err != nil {
+		return fmt.Errorf("backup copy: %s", err)
+	}
+	return nil
+}
+
 // Stats returns stats on the Client instance
 func (c *Client) Stats() (map[string]interface{}, error) {
 	c.mu.RLock()

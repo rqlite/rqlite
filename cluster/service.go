@@ -25,6 +25,7 @@ const (
 	numGetNodeAPIResponse = "num_get_node_api_resp"
 	numExecuteRequest     = "num_execute_req"
 	numQueryRequest       = "num_query_req"
+	numBackupRequest      = "num_backup_req"
 
 	// Client stats for this package.
 	numGetNodeAPIRequestLocal = "num_get_node_api_req_local"
@@ -44,6 +45,7 @@ func init() {
 	stats.Add(numGetNodeAPIResponse, 0)
 	stats.Add(numExecuteRequest, 0)
 	stats.Add(numQueryRequest, 0)
+	stats.Add(numBackupRequest, 0)
 	stats.Add(numGetNodeAPIRequestLocal, 0)
 }
 
@@ -62,6 +64,8 @@ type Database interface {
 
 	// Query executes a slice of queries, each of which returns rows.
 	Query(qr *command.QueryRequest) ([]*command.QueryRows, error)
+
+	Backup(leader bool, fmt BackupFormat, dst io.Writer) error
 }
 
 // CredentialStore is the interface credential stores must support.
@@ -293,6 +297,10 @@ func (s *Service) handleConn(conn net.Conn) {
 			binary.LittleEndian.PutUint32(b[0:], uint32(len(p)))
 			conn.Write(b)
 			conn.Write(p)
+
+		case Command_COMMAND_TYPE_GET_BACKUP:
+			stats.Add(numBackupRequest, 1)
+			err := s.Backup(true)
 		}
 	}
 }
