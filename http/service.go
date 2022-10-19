@@ -80,7 +80,7 @@ type Store interface {
 	Nodes() ([]*store.Server, error)
 
 	// Backup wites backup of the node state to dst
-	Backup(leader bool, f store.BackupFormat, dst io.Writer) error
+	Backup(br *command.BackupRequest, dst io.Writer) error
 }
 
 // Cluster is the interface node API services must provide
@@ -572,7 +572,12 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = s.store.Backup(!noLeader, bf, w)
+	br := &command.BackupRequest{
+		Format: bf,
+		Leader: !noLeader,
+	}
+
+	err = s.store.Backup(br, w)
 	if err != nil {
 		if err == store.ErrNotLeader {
 			leaderAPIAddr := s.LeaderAPIAddr()
@@ -1661,17 +1666,17 @@ func freshness(req *http.Request) (time.Duration, error) {
 
 // backupFormat returns the request backup format, setting the response header
 // accordingly.
-func backupFormat(w http.ResponseWriter, r *http.Request) (store.BackupFormat, error) {
+func backupFormat(w http.ResponseWriter, r *http.Request) (command.BackupRequest_Format, error) {
 	fmt, err := fmtParam(r)
 	if err != nil {
-		return store.BackupBinary, err
+		return command.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY, err
 	}
 	if fmt == "sql" {
 		w.Header().Set("Content-Type", "application/sql")
-		return store.BackupSQL, nil
+		return command.BackupRequest_BACKUP_REQUEST_FORMAT_SQL, nil
 	}
 	w.Header().Set("Content-Type", "application/octet-stream")
-	return store.BackupBinary, nil
+	return command.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY, nil
 }
 
 func prettyEnabled(e bool) string {

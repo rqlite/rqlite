@@ -86,17 +86,6 @@ const (
 	leaderChangesDropped     = "leader_changes_dropped"
 )
 
-// BackupFormat represents the format of database backup.
-type BackupFormat int
-
-const (
-	// BackupSQL is the plaintext SQL command format.
-	BackupSQL BackupFormat = iota
-
-	// BackupBinary is a SQLite file backup format.
-	BackupBinary
-)
-
 // stats captures stats for the Store.
 var stats *expvar.Map
 
@@ -820,19 +809,18 @@ func (s *Store) Query(qr *command.QueryRequest) ([]*command.QueryRows, error) {
 
 // Backup writes a snapshot of the underlying database to dst
 //
-// If leader is true, this operation is performed with a read consistency
-// level equivalent to "weak". Otherwise, no guarantees are made about the
-// read consistency level.
-func (s *Store) Backup(leader bool, fmt BackupFormat, dst io.Writer) error {
-	if leader && s.raft.State() != raft.Leader {
+// If Leader is true for the request, this operation is performed with a read consistency
+// level equivalent to "weak". Otherwise, no guarantees are made about the read consistency level.
+func (s *Store) Backup(br *command.BackupRequest, dst io.Writer) error {
+	if br.Leader && s.raft.State() != raft.Leader {
 		return ErrNotLeader
 	}
 
-	if fmt == BackupBinary {
-		if err := s.database(leader, dst); err != nil {
+	if br.Format == command.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY {
+		if err := s.database(br.Leader, dst); err != nil {
 			return err
 		}
-	} else if fmt == BackupSQL {
+	} else if br.Format == command.BackupRequest_BACKUP_REQUEST_FORMAT_SQL {
 		if err := s.db.Dump(dst); err != nil {
 			return err
 		}

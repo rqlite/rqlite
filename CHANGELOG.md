@@ -1,3 +1,8 @@
+## 7.8.0 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1079](https://github.com/rqlite/rqlite/pull/1079): Use a Protobuf model for Backup requests.
+- [PR #1078](https://github.com/rqlite/rqlite/pull/1078): Decrease bootstrap polling interval from 5 seconds to 2 seconds.
+
 ## 7.7.2 (October 14th 2022)
 ### Implementation changes and bug fixes
 - [PR #1075](https://github.com/rqlite/rqlite/pull/1075): Upgrade to latest SQL parser. Fixes [issue #1072](https://github.com/rqlite/rqlite/issues/1072)
