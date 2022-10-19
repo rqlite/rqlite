@@ -2,15 +2,31 @@
 This document provides an example of how to run rqlite as a Kubernetes [StatefulSet](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/).
 
 ## Creating a cluster 
-### Create a Headless Service
-The first thing to do is to create a [Kubernetes _Headless Service_](https://kubernetes.io/docs/concepts/services-networking/service/#headless-services). The Headless service creates the required DNS entries, which allows the rqlite nodes to find each other, and automatically bootstrap a new cluster. 
+### Create Services
+The first thing to do is to create some [Kubernetes _Services_](https://kubernetes.io/docs/concepts/services-networking/service). The first service, `rqlite-svc-internal`, is [_Headless_](https://kubernetes.io/docs/concepts/services-networking/service/#headless-services) and allows the nodes to cluster automatically. The second service is for clients which needs to talk to the cluster, and will get a Cluster IP address which those clients can use to talk to the rqlite syste.
+
+A key difference between `rqlite-svc-internal` and `rqlite-svc` is that the second will only contain Pods that are ready to serve traffic. This makes it most suitable for use by end-users of rqlite.
+
 ```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: rqlite-svc-internal
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: True
+  selector:
+    app: rqlite
+  ports:
+    - protocol: TCP
+      port: 4001
+      targetPort: 4001
+---
 apiVersion: v1
 kind: Service
 metadata:
   name: rqlite-svc
 spec:
-  clusterIP: None 
   selector:
     app: rqlite
   ports:
@@ -18,14 +34,15 @@ spec:
       port: 4001
       targetPort: 4001
 ```
-Apply the configuration above to your Kubernetes deployment. It will create a DNS entry `rqlite-svc`, which will resolve to the IP addresses of any Pods with the tag `rqlite`.
+Apply the configuration above to your Kubernetes deployment. It will create a DNS entries for `rqlite-svc` and `rqlite-svc-internal`, which will resolve to the IP addresses of any Pods with the tag `rqlite`.
+
 ```bash
 kubectl apply -f headless-service.yaml
 ```
 where the file `headless-service.yaml` contains the configuration shown above.
 
 ### Create a StatefulSet
-For a rqlite cluster to function properly in a production environment, the rqlite nodes require a persistent network identifier and storage. This is what a StatefulSet can provide. The example belows shows you how to configure a 3-node rqlite cluster.
+For a rqlite cluster to function properly in a production environment, the rqlite nodes require a persistent network identifier and storage. This is what a _StatefulSet_ can provide. The example belows shows you how to configure a 3-node rqlite cluster.
 ```yaml
 apiVersion: apps/v1
 kind: StatefulSet
@@ -35,8 +52,9 @@ spec:
   selector:
     matchLabels:
       app: rqlite # has to match .spec.template.metadata.labels
-  serviceName: rqlite-svc
+  serviceName: rqlite-svc-internal
   replicas: 3 # by default is 1
+  podManagementPolicy: "Parallel"
   template:
     metadata:
       labels:
@@ -46,14 +64,14 @@ spec:
       containers:
       - name: rqlite
         image: rqlite/rqlite
-        args: ["-disco-mode=dns","-disco-config={\"name\":\"rqlite-svc\"}","-bootstrap-expect","3"]
+        args: ["-disco-mode=dns","-disco-config={\"name\":\"rqlite-svc-internal\"}","-bootstrap-expect","3", "-join-interval=1s", "-join-attempts=120"]
         ports:
         - containerPort: 4001
           name: rqlite
         readinessProbe:
           httpGet:
             scheme: HTTP
-            path: /readyz?noleader
+            path: /readyz
             port: 4001
           initialDelaySeconds: 1
           periodSeconds: 5
