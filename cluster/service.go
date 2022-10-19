@@ -65,7 +65,8 @@ type Database interface {
 	// Query executes a slice of queries, each of which returns rows.
 	Query(qr *command.QueryRequest) ([]*command.QueryRows, error)
 
-	Backup(leader bool, fmt BackupFormat, dst io.Writer) error
+	// Backup writes a backup of the database to the writer.
+	Backup(br *command.BackupRequest, dst io.Writer) error
 }
 
 // CredentialStore is the interface credential stores must support.
@@ -298,9 +299,35 @@ func (s *Service) handleConn(conn net.Conn) {
 			conn.Write(b)
 			conn.Write(p)
 
-		case Command_COMMAND_TYPE_GET_BACKUP:
+		case Command_COMMAND_TYPE_BACKUP:
 			stats.Add(numBackupRequest, 1)
-			err := s.Backup(true)
+
+			resp := &CommandBackupResponse{}
+
+			br := c.GetBackupRequest()
+			if br == nil {
+				resp.Error = "BackupRequest is nil"
+			} else if !s.checkCommandPerm(c, auth.PermBackup) {
+				resp.Error = "unauthorized"
+			}
+
+			p, err = proto.Marshal(resp)
+			if err != nil {
+				// Close????? XXX
+				return
+			}
+			// Write length of Protobuf first, then write the actual Protobuf.
+			b = make([]byte, 4)
+			binary.LittleEndian.PutUint32(b[0:], uint32(len(p)))
+			conn.Write(b)
+			conn.Write(p)
+
+			if resp.Error == "" {
+				// Finally, just stream the backup data itself (and hope for the best!)
+				s.db.Backup(br, conn)
+			}
+
+			//Close() to signal end of data? XXX
 		}
 	}
 }

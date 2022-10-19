@@ -303,7 +303,7 @@ func (c *Client) BackupTo(nodeAddr string, creds *Credentials, timeout time.Dura
 
 	// Send the request
 	command := &Command{
-		Type: Command_COMMAND_TYPE_GET_BACKUP,
+		Type: Command_COMMAND_TYPE_BACKUP,
 	}
 	p, err := proto.Marshal(command)
 	if err != nil {

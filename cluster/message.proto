@@ -20,13 +20,14 @@ message Command {
         COMMAND_TYPE_GET_NODE_API_URL = 1;
         COMMAND_TYPE_EXECUTE = 2;
         COMMAND_TYPE_QUERY = 3;
-        COMMAND_TYPE_GET_BACKUP = 4;
+        COMMAND_TYPE_BACKUP = 4;
     }
     Type type = 1;
 
     oneof request {
         command.ExecuteRequest execute_request = 2;
         command.QueryRequest query_request = 3;
+        command.BackupRequest backup_request = 5;
     }
 
     Credentials credentials = 4;
@@ -43,4 +44,5 @@ message CommandQueryResponse {
 }
 
 message CommandBackupResponse {
+    string error = 1;
 }
