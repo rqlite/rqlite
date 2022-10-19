@@ -3,9 +3,9 @@ This document provides an example of how to run rqlite as a Kubernetes [Stateful
 
 ## Creating a cluster 
 ### Create Services
-The first thing to do is to create some [Kubernetes _Headless Services_](https://kubernetes.io/docs/concepts/services-networking/service/#headless-services). The first service, `rqlite-svc-internal`, allows the nodes to cluster automatically. The second service is for clients which needs to talk to the cluster. It is also configured as a Headless service, but can be another type of service as needed.
+The first thing to do is to create some [Kubernetes _Services_](https://kubernetes.io/docs/concepts/services-networking/service). The first service, `rqlite-svc-internal`, is [_Headless_](https://kubernetes.io/docs/concepts/services-networking/service/#headless-services) and allows the nodes to cluster automatically. The second service is for clients which needs to talk to the cluster, and will get a Cluster IP address which those clients can use to talk to the rqlite syste.
 
-The key difference between `rqlite-svc-internal` and `rqlite-svc` is that the second will only contain Pods that are ready to serve traffic. This makes it most suitable for use by end-users of rqlite.
+A key difference between `rqlite-svc-internal` and `rqlite-svc` is that the second will only contain Pods that are ready to serve traffic. This makes it most suitable for use by end-users of rqlite.
 
 ```yaml
 apiVersion: v1
@@ -27,7 +27,6 @@ kind: Service
 metadata:
   name: rqlite-svc
 spec:
-  clusterIP: None
   selector:
     app: rqlite
   ports:
