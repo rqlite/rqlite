@@ -564,7 +564,7 @@ func Test_BackupOK(t *testing.T) {
 	}
 	defer s.Close()
 
-	m.backupFn = func(leader bool, f store.BackupFormat, dst io.Writer) error {
+	m.backupFn = func(br *command.BackupRequest, dst io.Writer) error {
 		return nil
 	}
 
@@ -592,7 +592,7 @@ func Test_BackupFlagsNoLeader(t *testing.T) {
 	}
 	defer s.Close()
 
-	m.backupFn = func(leader bool, f store.BackupFormat, dst io.Writer) error {
+	m.backupFn = func(br *command.BackupRequest, dst io.Writer) error {
 		return store.ErrNotLeader
 	}
 
@@ -624,8 +624,8 @@ func Test_BackupFlagsNoLeaderOK(t *testing.T) {
 	}
 	defer s.Close()
 
-	m.backupFn = func(leader bool, f store.BackupFormat, dst io.Writer) error {
-		if !leader {
+	m.backupFn = func(br *command.BackupRequest, dst io.Writer) error {
+		if !br.Leader {
 			return nil
 		}
 		return store.ErrNotLeader
@@ -1000,7 +1000,7 @@ func Test_timeoutQueryParam(t *testing.T) {
 type MockStore struct {
 	executeFn  func(er *command.ExecuteRequest) ([]*command.ExecuteResult, error)
 	queryFn    func(qr *command.QueryRequest) ([]*command.QueryRows, error)
-	backupFn   func(leader bool, f store.BackupFormat, dst io.Writer) error
+	backupFn   func(br *command.BackupRequest, dst io.Writer) error
 	leaderAddr string
 }
 
@@ -1046,11 +1046,11 @@ func (m *MockStore) Nodes() ([]*store.Server, error) {
 	return nil, nil
 }
 
-func (m *MockStore) Backup(leader bool, f store.BackupFormat, w io.Writer) error {
+func (m *MockStore) Backup(br *command.BackupRequest, w io.Writer) error {
 	if m.backupFn == nil {
 		return nil
 	}
-	return m.backupFn(leader, f, w)
+	return m.backupFn(br, w)
 }
 
 type mockClusterService struct {

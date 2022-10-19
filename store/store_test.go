@@ -476,7 +476,7 @@ COMMIT;
 	defer os.Remove(f.Name())
 	s.logger.Printf("backup file is %s", f.Name())
 
-	if err := s.Backup(true, BackupBinary, f); err != nil {
+	if err := s.Backup(backupRequestBinary(true), f); err != nil {
 		t.Fatalf("Backup failed %s", err.Error())
 	}
 
@@ -530,7 +530,7 @@ COMMIT;
 	defer os.Remove(f.Name())
 	s.logger.Printf("backup file is %s", f.Name())
 
-	if err := s.Backup(true, BackupSQL, f); err != nil {
+	if err := s.Backup(backupRequestSQL(true), f); err != nil {
 		t.Fatalf("Backup failed %s", err.Error())
 	}
 
@@ -2134,6 +2134,20 @@ func queryRequestFromStrings(s []string, timings, tx bool) *command.QueryRequest
 			Transaction: tx,
 		},
 		Timings: timings,
+	}
+}
+
+func backupRequestSQL(leader bool) *command.BackupRequest {
+	return &command.BackupRequest{
+		Format: command.BackupRequest_BACKUP_REQUEST_FORMAT_SQL,
+		Leader: leader,
+	}
+}
+
+func backupRequestBinary(leader bool) *command.BackupRequest {
+	return &command.BackupRequest{
+		Format: command.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY,
+		Leader: leader,
 	}
 }
 
