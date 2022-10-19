@@ -3,7 +3,7 @@ This document provides an example of how to run rqlite as a Kubernetes [Stateful
 
 ## Creating a cluster 
 ### Create Services
-The first thing to do is to create two [Kubernetes _Services_](https://kubernetes.io/docs/concepts/services-networking/service). The first service, `rqlite-svc-internal`, is [_Headless_](https://kubernetes.io/docs/concepts/services-networking/service/#headless-services) and allows the nodes to cluster automatically. The second service is for clients which needs to talk to the cluster, and will get a Cluster IP address which those clients can use to talk to the rqlite syste.
+The first thing to do is to create two [Kubernetes _Services_](https://kubernetes.io/docs/concepts/services-networking/service). The first service, `rqlite-svc-internal`, is [_Headless_](https://kubernetes.io/docs/concepts/services-networking/service/#headless-services) and allows the nodes to find each other and cluster automatically. It shouldn't be used by rqlite clients. It is the second service, `rqlite-svc`, which is for clients to talk to the cluster -- this service will get a Cluster IP address which those clients can connect to.
 
 A key difference between `rqlite-svc-internal` and `rqlite-svc` is that the second will only contain Pods that are ready to serve traffic. This makes it most suitable for use by end-users of rqlite.
 
@@ -34,7 +34,7 @@ spec:
       port: 4001
       targetPort: 4001
 ```
-Apply the configuration above to your Kubernetes deployment. It will create a DNS entries for `rqlite-svc` and `rqlite-svc-internal`, which will resolve to the IP addresses of any Pods with the tag `rqlite`.
+Apply the configuration above to your Kubernetes deployment.
 
 ```bash
 kubectl apply -f headless-service.yaml
@@ -94,7 +94,7 @@ kubectl apply -f stateful-set.yaml
 ```
 where the file `stateful-set.yaml` contains the configuration shown above.
 
-Note the `args` passed to rqlite. The arguments tell rqlite to use `dns` discovery mode, and to resolve the DNS name `rqlite-svc` to find the IP addresses of other nodes in the cluster. Furthermore it tells rqlite to wait until three nodes are available (counting itself as one of those nodes) before attempting to form a cluster.
+Note the `args` passed to rqlite. The arguments tell rqlite to use `dns` discovery mode, and to resolve the DNS name `rqlite-svc-internal` to find the IP addresses of other nodes in the cluster. Furthermore it tells rqlite to wait until three nodes are available (counting itself as one of those nodes) before attempting to form a cluster.
 
 ## Scaling the cluster
 You can grow the cluster at anytime, simply by increasing the replica count. Shrinking the cluster, however, will require some manual intervention. As well reducing the `replicas` value, you also need to [explicitly remove](https://github.com/rqlite/rqlite/blob/master/DOC/CLUSTER_MGMT.md#removing-or-replacing-a-node) the deprovisioned nodes, or the Leader will continually attempt to contact those nodes.
