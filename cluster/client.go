@@ -293,8 +293,8 @@ func (c *Client) Query(qr *command.QueryRequest, nodeAddr string, creds *Credent
 	return a.Rows, nil
 }
 
-// BackupTo retrieves a backup from a remote node and writes to the io.Writer
-func (c *Client) BackupTo(nodeAddr string, creds *Credentials, timeout time.Duration, w io.Writer) error {
+// Backup retrieves a backup from a remote node and writes to the io.Writer
+func (c *Client) Backup(nodeAddr string, creds *Credentials, timeout time.Duration, w io.Writer) error {
 	conn, err := c.dial(nodeAddr, c.timeout)
 	if err != nil {
 		return err
