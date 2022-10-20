@@ -1,4 +1,6 @@
-## 7.8.0 (unreleased)
+## 7.8.0 (October 20th 2022)
+This release makes it more convenient to retrieve a backup. Now any node can provide a backup of the underlying SQLite database. For this to work however, all nodes in your cluster must be running 7.8.0 (or later).
+
 ### New features
 - [PR #1081](https://github.com/rqlite/rqlite/pull/1081): Transparently forward Backup requests to Leaders.
 
