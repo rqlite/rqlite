@@ -376,7 +376,7 @@ func (c *Client) Backup(br *command.BackupRequest, nodeAddr string, creds *Crede
 	}
 
 	if resp.Error != "" {
-		return fmt.Errorf("backup response: %s", resp.Error)
+		return errors.New(resp.Error)
 	}
 
 	if _, err := w.Write(resp.Data); err != nil {

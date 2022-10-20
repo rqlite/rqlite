@@ -94,6 +94,9 @@ type Cluster interface {
 	// Query performs an Query Request on a remote node.
 	Query(qr *command.QueryRequest, nodeAddr string, creds *cluster.Credentials, timeout time.Duration) ([]*command.QueryRows, error)
 
+	// Backup retrieves a backup from a remote node and writes to the io.Writer
+	Backup(br *command.BackupRequest, nodeAddr string, creds *cluster.Credentials, timeout time.Duration, w io.Writer) error
+
 	// Stats returns stats on the Cluster.
 	Stats() (map[string]interface{}, error)
 }
@@ -168,6 +171,7 @@ const (
 	numQueries                = "queries"
 	numRemoteExecutions       = "remote_executions"
 	numRemoteQueries          = "remote_queries"
+	numRemoteBackups          = "remote_backups"
 	numReadyz                 = "num_readyz"
 	numStatus                 = "num_status"
 	numBackups                = "backups"
@@ -200,6 +204,7 @@ func init() {
 	stats.Add(numQueries, 0)
 	stats.Add(numRemoteExecutions, 0)
 	stats.Add(numRemoteQueries, 0)
+	stats.Add(numRemoteBackups, 0)
 	stats.Add(numReadyz, 0)
 	stats.Add(numStatus, 0)
 	stats.Add(numBackups, 0)
@@ -565,30 +570,69 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	redirect, err := isRedirect(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
-	bf, err := backupFormat(w, r)
+	format, err := backupFormat(w, r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	timeout, err := timeoutParam(r, defaultTimeout)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	br := &command.BackupRequest{
-		Format: bf,
+		Format: format,
 		Leader: !noLeader,
 	}
 
 	err = s.store.Backup(br, w)
 	if err != nil {
 		if err == store.ErrNotLeader {
-			leaderAPIAddr := s.LeaderAPIAddr()
-			if leaderAPIAddr == "" {
+			if redirect {
+				leaderAPIAddr := s.LeaderAPIAddr()
+				if leaderAPIAddr == "" {
+					stats.Add(numLeaderNotFound, 1)
+					http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+					return
+				}
+
+				redirect := s.FormRedirect(r, leaderAPIAddr)
+				http.Redirect(w, r, redirect, http.StatusMovedPermanently)
+				return
+			}
+
+			addr, err := s.store.LeaderAddr()
+			if err != nil {
+				http.Error(w, fmt.Sprintf("leader address: %s", err.Error()),
+					http.StatusInternalServerError)
+				return
+			}
+			if addr == "" {
 				stats.Add(numLeaderNotFound, 1)
 				http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
 				return
 			}
 
-			redirect := s.FormRedirect(r, leaderAPIAddr)
-			http.Redirect(w, r, redirect, http.StatusMovedPermanently)
+			username, password, ok := r.BasicAuth()
+			if !ok {
+				username = ""
+			}
+
+			backupErr := s.cluster.Backup(br, addr, makeCredentials(username, password), timeout, w)
+			if backupErr != nil && backupErr.Error() == "unauthorized" {
+				http.Error(w, "remote backup not authorized", http.StatusUnauthorized)
+				return
+			}
+			stats.Add(numRemoteBackups, 1)
+			w.Header().Add(ServedByHTTPHeader, addr)
 			return
 		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
