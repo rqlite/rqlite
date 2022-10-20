@@ -45,4 +45,5 @@ message CommandQueryResponse {
 
 message CommandBackupResponse {
     string error = 1;
+    bytes data = 2;
 }

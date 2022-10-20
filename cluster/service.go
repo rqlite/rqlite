@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"bytes"
 	"encoding/binary"
 	"expvar"
 	"fmt"
@@ -309,25 +310,26 @@ func (s *Service) handleConn(conn net.Conn) {
 				resp.Error = "BackupRequest is nil"
 			} else if !s.checkCommandPerm(c, auth.PermBackup) {
 				resp.Error = "unauthorized"
-			}
+			} else {
+				buf := new(bytes.Buffer)
+				if err := s.db.Backup(br, buf); err != nil {
+					resp.Error = err.Error()
+				} else {
+					resp.Data = buf.Bytes()
+				}
 
+			}
 			p, err = proto.Marshal(resp)
 			if err != nil {
-				// Close????? XXX
+				conn.Close()
 				return
 			}
+
 			// Write length of Protobuf first, then write the actual Protobuf.
 			b = make([]byte, 4)
 			binary.LittleEndian.PutUint32(b[0:], uint32(len(p)))
 			conn.Write(b)
 			conn.Write(p)
-
-			if resp.Error == "" {
-				// Finally, just stream the backup data itself (and hope for the best!)
-				s.db.Backup(br, conn)
-			}
-
-			//Close() to signal end of data? XXX
 		}
 	}
 }

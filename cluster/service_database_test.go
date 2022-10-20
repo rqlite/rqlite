@@ -1,9 +1,11 @@
 package cluster
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"testing"
@@ -258,6 +260,52 @@ func Test_ServiceQueryLarge(t *testing.T) {
 	}
 }
 
+func Test_ServiceBackup(t *testing.T) {
+	ln, mux := mustNewMux()
+	go mux.Serve()
+	tn := mux.Listen(1) // Could be any byte value.
+	db := mustNewMockDatabase()
+	cred := mustNewMockCredentialStore()
+	s := New(tn, db, cred)
+	if s == nil {
+		t.Fatalf("failed to create cluster service")
+	}
+
+	c := NewClient(mustNewDialer(1, false, false), 30*time.Second)
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open cluster service: %s", err.Error())
+	}
+
+	// Ready for Backup tests now.
+	testData := []byte("this is SQLite data")
+	db.backupFn = func(br *command.BackupRequest, dst io.Writer) error {
+		if br.Format != command.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY {
+			t.Fatalf("wrong backup format requested")
+		}
+		dst.Write(testData)
+		return nil
+	}
+
+	buf := new(bytes.Buffer)
+	err := c.Backup(backupRequestBinary(true), s.Addr(), NO_CREDS, longWait, buf)
+	if err != nil {
+		t.Fatalf("failed to backup database: %s", err.Error())
+	}
+
+	if bytes.Compare(buf.Bytes(), testData) != 0 {
+		t.Fatalf("backup data is not as expected, exp: %s, got: %s", testData, buf.Bytes())
+	}
+
+	// Clean up resources.
+	if err := ln.Close(); err != nil {
+		t.Fatalf("failed to close Mux's listener: %s", err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatalf("failed to close cluster service")
+	}
+}
+
 // Test_BinaryEncoding_Backwards ensures that software earlier than v6.6.2
 // can communicate with v6.6.2+ releases. v6.6.2 increased the maximum size
 // of cluster responses.
@@ -311,6 +359,20 @@ func queryRequestFromStrings(s []string) *command.QueryRequest {
 			Transaction: false,
 		},
 		Timings: false,
+	}
+}
+
+func backupRequestSQL(leader bool) *command.BackupRequest {
+	return &command.BackupRequest{
+		Format: command.BackupRequest_BACKUP_REQUEST_FORMAT_SQL,
+		Leader: leader,
+	}
+}
+
+func backupRequestBinary(leader bool) *command.BackupRequest {
+	return &command.BackupRequest{
+		Format: command.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY,
+		Leader: leader,
 	}
 }
 

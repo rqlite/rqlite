@@ -294,7 +294,7 @@ func (c *Client) Query(qr *command.QueryRequest, nodeAddr string, creds *Credent
 }
 
 // Backup retrieves a backup from a remote node and writes to the io.Writer
-func (c *Client) Backup(nodeAddr string, creds *Credentials, timeout time.Duration, w io.Writer) error {
+func (c *Client) Backup(br *command.BackupRequest, nodeAddr string, creds *Credentials, timeout time.Duration, w io.Writer) error {
 	conn, err := c.dial(nodeAddr, c.timeout)
 	if err != nil {
 		return err
@@ -304,6 +304,10 @@ func (c *Client) Backup(nodeAddr string, creds *Credentials, timeout time.Durati
 	// Send the request
 	command := &Command{
 		Type: Command_COMMAND_TYPE_BACKUP,
+		Request: &Command_BackupRequest{
+			BackupRequest: br,
+		},
+		Credentials: creds,
 	}
 	p, err := proto.Marshal(command)
 	if err != nil {
@@ -322,6 +326,8 @@ func (c *Client) Backup(nodeAddr string, creds *Credentials, timeout time.Durati
 		handleConnError(conn)
 		return fmt.Errorf("write protobuf length: %s", err)
 	}
+
+	// Now write backup request proto itself.
 	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
 		handleConnError(conn)
 		return err
@@ -332,14 +338,40 @@ func (c *Client) Backup(nodeAddr string, creds *Credentials, timeout time.Durati
 		return fmt.Errorf("write protobuf: %s", err)
 	}
 
-	// Read the backup and write to the writer
+	// Read the backup response
 	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
 		handleConnError(conn)
 		return err
 	}
 
-	if _, err := io.Copy(w, conn); err != nil {
-		return fmt.Errorf("backup copy: %s", err)
+	// Read length of response.
+	_, err = io.ReadFull(conn, b)
+	if err != nil {
+		handleConnError(conn)
+		return err
+	}
+	sz := binary.LittleEndian.Uint32(b[0:])
+
+	// Read in the actual response.
+	p = make([]byte, sz)
+	_, err = io.ReadFull(conn, p)
+	if err != nil {
+		handleConnError(conn)
+		return err
+	}
+
+	resp := &CommandBackupResponse{}
+	err = proto.Unmarshal(p, resp)
+	if err != nil {
+		return err
+	}
+
+	if resp.Error != "" {
+		return fmt.Errorf("backup response: %s", resp.Error)
+	}
+
+	if _, err := w.Write(resp.Data); err != nil {
+		return fmt.Errorf("backup write: %s", err)
 	}
 	return nil
 }
