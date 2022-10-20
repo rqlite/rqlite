@@ -1,6 +1,8 @@
 package cluster
 
 import (
+	"bytes"
+	"compress/gzip"
 	"encoding/binary"
 	"expvar"
 	"fmt"
@@ -25,6 +27,7 @@ const (
 	numGetNodeAPIResponse = "num_get_node_api_resp"
 	numExecuteRequest     = "num_execute_req"
 	numQueryRequest       = "num_query_req"
+	numBackupRequest      = "num_backup_req"
 
 	// Client stats for this package.
 	numGetNodeAPIRequestLocal = "num_get_node_api_req_local"
@@ -44,6 +47,7 @@ func init() {
 	stats.Add(numGetNodeAPIResponse, 0)
 	stats.Add(numExecuteRequest, 0)
 	stats.Add(numQueryRequest, 0)
+	stats.Add(numBackupRequest, 0)
 	stats.Add(numGetNodeAPIRequestLocal, 0)
 }
 
@@ -62,6 +66,9 @@ type Database interface {
 
 	// Query executes a slice of queries, each of which returns rows.
 	Query(qr *command.QueryRequest) ([]*command.QueryRows, error)
+
+	// Backup writes a backup of the database to the writer.
+	Backup(br *command.BackupRequest, dst io.Writer) error
 }
 
 // CredentialStore is the interface credential stores must support.
@@ -293,6 +300,60 @@ func (s *Service) handleConn(conn net.Conn) {
 			binary.LittleEndian.PutUint32(b[0:], uint32(len(p)))
 			conn.Write(b)
 			conn.Write(p)
+
+		case Command_COMMAND_TYPE_BACKUP:
+			stats.Add(numBackupRequest, 1)
+
+			resp := &CommandBackupResponse{}
+
+			br := c.GetBackupRequest()
+			if br == nil {
+				resp.Error = "BackupRequest is nil"
+			} else if !s.checkCommandPerm(c, auth.PermBackup) {
+				resp.Error = "unauthorized"
+			} else {
+				buf := new(bytes.Buffer)
+				if err := s.db.Backup(br, buf); err != nil {
+					resp.Error = err.Error()
+				} else {
+					resp.Data = buf.Bytes()
+				}
+			}
+			p, err = proto.Marshal(resp)
+			if err != nil {
+				conn.Close()
+				return
+			}
+
+			// Compress the backup for less space on the wire between nodes.
+			p, err = gzCompress(p)
+			if err != nil {
+				conn.Close()
+				return
+			}
+
+			// Write length of Protobuf first, then write the actual Protobuf.
+			b = make([]byte, 4)
+			binary.LittleEndian.PutUint32(b[0:], uint32(len(p)))
+			conn.Write(b)
+			conn.Write(p)
 		}
 	}
+}
+
+// gzCompress compresses the given byte slice.
+func gzCompress(b []byte) ([]byte, error) {
+	var buf bytes.Buffer
+	gzw, err := gzip.NewWriterLevel(&buf, gzip.BestCompression)
+	if err != nil {
+		return nil, fmt.Errorf("gzip new writer: %s", err)
+	}
+
+	if _, err := gzw.Write(b); err != nil {
+		return nil, fmt.Errorf("gzip Write: %s", err)
+	}
+	if err := gzw.Close(); err != nil {
+		return nil, fmt.Errorf("gzip Close: %s", err)
+	}
+	return buf.Bytes(), nil
 }

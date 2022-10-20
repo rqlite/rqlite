@@ -1,4 +1,7 @@
 ## 7.8.0 (unreleased)
+### New features
+- [PR #1081](https://github.com/rqlite/rqlite/pull/1081): Transparently forward Backup requests to Leaders.
+
 ### Implementation changes and bug fixes
 - [PR #1079](https://github.com/rqlite/rqlite/pull/1079): Use a Protobuf model for Backup requests.
 - [PR #1078](https://github.com/rqlite/rqlite/pull/1078): Decrease bootstrap polling interval from 5 seconds to 2 seconds.

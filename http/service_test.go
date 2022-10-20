@@ -579,7 +579,7 @@ func Test_BackupOK(t *testing.T) {
 	}
 }
 
-func Test_BackupFlagsNoLeader(t *testing.T) {
+func Test_BackupFlagsNoLeaderRedirect(t *testing.T) {
 	m := &MockStore{}
 	c := &mockClusterService{
 		apiAddr: "http://1.2.3.4:999",
@@ -602,12 +602,57 @@ func Test_BackupFlagsNoLeader(t *testing.T) {
 	}
 
 	host := fmt.Sprintf("http://%s", s.Addr().String())
-	resp, err := client.Get(host + "/db/backup")
+	resp, err := client.Get(host + "/db/backup?redirect")
 	if err != nil {
 		t.Fatalf("failed to make backup request: %s", err.Error())
 	}
 	if resp.StatusCode != http.StatusMovedPermanently {
 		t.Fatalf("failed to get expected StatusServiceUnavailable for backup, got %d", resp.StatusCode)
+	}
+}
+
+func Test_BackupFlagsNoLeaderRemoteFetch(t *testing.T) {
+	m := &MockStore{
+		leaderAddr: "foo:1234",
+	}
+	c := &mockClusterService{
+		apiAddr: "http://1.2.3.4:999",
+	}
+
+	s := New("127.0.0.1:0", m, c, nil)
+
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	m.backupFn = func(br *command.BackupRequest, dst io.Writer) error {
+		return store.ErrNotLeader
+	}
+
+	backupData := "this is SQLite data"
+	c.backupFn = func(br *command.BackupRequest, addr string, t time.Duration, w io.Writer) error {
+		w.Write([]byte(backupData))
+		return nil
+	}
+
+	client := &http.Client{}
+	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+	resp, err := client.Get(host + "/db/backup")
+	if err != nil {
+		t.Fatalf("failed to make backup request: %s", err.Error())
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("failed to get expected StatusOK for remote backup fetch, got %d", resp.StatusCode)
+	}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if exp, got := backupData, string(body); exp != got {
+		t.Fatalf("received incorrect backup data, exp: %s, got: %s", exp, got)
 	}
 }
 
@@ -1057,6 +1102,7 @@ type mockClusterService struct {
 	apiAddr   string
 	executeFn func(er *command.ExecuteRequest, addr string, t time.Duration) ([]*command.ExecuteResult, error)
 	queryFn   func(qr *command.QueryRequest, addr string, t time.Duration) ([]*command.QueryRows, error)
+	backupFn  func(br *command.BackupRequest, addr string, t time.Duration, w io.Writer) error
 }
 
 func (m *mockClusterService) GetNodeAPIAddr(a string, t time.Duration) (string, error) {
@@ -1075,6 +1121,13 @@ func (m *mockClusterService) Query(qr *command.QueryRequest, addr string, creds 
 		return m.queryFn(qr, addr, t)
 	}
 	return nil, nil
+}
+
+func (m *mockClusterService) Backup(br *command.BackupRequest, addr string, creds *cluster.Credentials, t time.Duration, w io.Writer) error {
+	if m.backupFn != nil {
+		return m.backupFn(br, addr, t, w)
+	}
+	return nil
 }
 
 type mockCredentialStore struct {

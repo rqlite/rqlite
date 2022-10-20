@@ -1357,13 +1357,18 @@ class TestEndToEndBackupRestore(unittest.TestCase):
     fd, self.db_file = tempfile.mkstemp()
     os.close(fd)
 
+    # Create a two-node cluster.
     self.node0 = Node(RQLITED_PATH, '0')
     self.node0.start()
     self.node0.wait_for_leader()
     self.node0.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
     self.node0.execute('INSERT INTO foo(name) VALUES("fiona")')
     self.node0.wait_for_all_fsm()
+    self.node1 = Node(RQLITED_PATH, '1')
+    self.node1.start(join=self.node0.APIAddr())
+    self.node1.wait_for_leader()
 
+    # Get a backup from the first node and check it.
     self.node0.backup(self.db_file)
     conn = sqlite3.connect(self.db_file)
     rows = conn.execute('SELECT * FROM foo').fetchall()
@@ -1371,12 +1376,21 @@ class TestEndToEndBackupRestore(unittest.TestCase):
     self.assertEqual(rows[0], (1, 'fiona'))
     conn.close()
 
-    self.node1 = Node(RQLITED_PATH, '1')
-    self.node1.start()
-    self.node1.wait_for_leader()
-    j = self.node1.restore(self.db_file)
+    # Get a backup from the other node and check it too.
+    self.node1.backup(self.db_file)
+    conn = sqlite3.connect(self.db_file)
+    rows = conn.execute('SELECT * FROM foo').fetchall()
+    self.assertEqual(len(rows), 1)
+    self.assertEqual(rows[0], (1, 'fiona'))
+    conn.close()
+
+    # Load file into a brand new node, check the data is right.
+    self.node2 = Node(RQLITED_PATH, '1')
+    self.node2.start()
+    self.node2.wait_for_leader()
+    j = self.node2.restore(self.db_file)
     self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
-    j = self.node1.query('SELECT * FROM foo')
+    j = self.node2.query('SELECT * FROM foo')
     self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
 
   def tearDown(self):
@@ -1384,6 +1398,8 @@ class TestEndToEndBackupRestore(unittest.TestCase):
       deprovision_node(self.node0)
     if hasattr(self, 'node1'):
       deprovision_node(self.node1)
+    if hasattr(self, 'node2'):
+      deprovision_node(self.node2)
     os.remove(self.db_file)
 
 class TestEndToEndSnapRestoreSingle(unittest.TestCase):

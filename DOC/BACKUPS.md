@@ -9,9 +9,11 @@ This command will write the SQLite database file to `bak.sqlite3`.
 
 You can also access the rqlite API directly, via a HTTP `GET` request to the endpoint `/db/backup`. For example, using `curl`, and assuming the node is listening on `localhost:4001`, you could retrieve a backup as follows:
 ```bash
-curl -s -L -XGET localhost:4001/db/backup -o bak.sqlite3
+curl -s -XGET localhost:4001/db/backup -o bak.sqlite3
 ```
-Note that if the node is not the Leader, a HTTP 301 response will be returned with the Leader's address. The `curl` command above will automatically follow the Leader, due to the presence of the option `-L`.
+Note that if the node is not the Leader, the node will transparently forward the request to Leader, wait for the backup data from the Leader, and return it to the client. If, instead, you want a backup of SQLite database of the actual node that receives the request, add `noleader` to the URL as a query parameter.
+
+If you do not wish a Follower to transparently forward a backup request to a Leader, add `redirect` to the URL as a query parameter. In that case if a Follower receives a backup request the Follower will respond with [HTTP 301 Moved Permanently](https://en.wikipedia.org/wiki/HTTP_301) and include the address of the Leader as the `Location` header in the response. It is then up the clients to re-issue the command to the Leader.
 
 In either case the generated file can then be used to restore a node (or cluster) using the [restore API](https://github.com/rqlite/rqlite/blob/master/DOC/RESTORE_FROM_SQLITE.md).
 
@@ -27,6 +29,6 @@ curl -s -L -XGET localhost:4001/db/backup?fmt=sql -o bak.sql
 ```
 
 ## Backup isolation level
-The isolation offered by backups is `READ COMMITTED`. This means that any changes due to transactions to the database, that take place during the backup, will be reflected immediately once the transaction is committed, but not before.
+The isolation offered by binary backups is `READ COMMITTED`. This means that any changes due to transactions to the database, that take place during the backup, will be reflected immediately once the transaction is committed, but not before.
 
 See the [SQLite documentation](https://www.sqlite.org/isolation.html) for more details.

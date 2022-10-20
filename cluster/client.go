@@ -1,6 +1,8 @@
 package cluster
 
 import (
+	"bytes"
+	"compress/gzip"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -293,6 +295,96 @@ func (c *Client) Query(qr *command.QueryRequest, nodeAddr string, creds *Credent
 	return a.Rows, nil
 }
 
+// Backup retrieves a backup from a remote node and writes to the io.Writer
+func (c *Client) Backup(br *command.BackupRequest, nodeAddr string, creds *Credentials, timeout time.Duration, w io.Writer) error {
+	conn, err := c.dial(nodeAddr, c.timeout)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	// Send the request
+	command := &Command{
+		Type: Command_COMMAND_TYPE_BACKUP,
+		Request: &Command_BackupRequest{
+			BackupRequest: br,
+		},
+		Credentials: creds,
+	}
+	p, err := proto.Marshal(command)
+	if err != nil {
+		return fmt.Errorf("command marshal: %s", err)
+	}
+
+	// Write length of Protobuf
+	b := make([]byte, 4)
+	binary.LittleEndian.PutUint16(b[0:], uint16(len(p)))
+	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
+		handleConnError(conn)
+		return err
+	}
+	_, err = conn.Write(b)
+	if err != nil {
+		handleConnError(conn)
+		return fmt.Errorf("write protobuf length: %s", err)
+	}
+
+	// Now write backup request proto itself.
+	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
+		handleConnError(conn)
+		return err
+	}
+	_, err = conn.Write(p)
+	if err != nil {
+		handleConnError(conn)
+		return fmt.Errorf("write protobuf: %s", err)
+	}
+
+	// Read the backup response
+	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
+		handleConnError(conn)
+		return err
+	}
+
+	// Read length of response.
+	_, err = io.ReadFull(conn, b)
+	if err != nil {
+		handleConnError(conn)
+		return err
+	}
+	sz := binary.LittleEndian.Uint32(b[0:])
+
+	// Read in the actual response.
+	p = make([]byte, sz)
+	_, err = io.ReadFull(conn, p)
+	if err != nil {
+		handleConnError(conn)
+		return err
+	}
+
+	// Decompress....
+	p, err = gzUncompress(p)
+	if err != nil {
+		handleConnError(conn)
+		return fmt.Errorf("backup decompress: %s", err)
+	}
+
+	resp := &CommandBackupResponse{}
+	err = proto.Unmarshal(p, resp)
+	if err != nil {
+		return fmt.Errorf("backup unmarshal: %s", err)
+	}
+
+	if resp.Error != "" {
+		return errors.New(resp.Error)
+	}
+
+	if _, err := w.Write(resp.Data); err != nil {
+		return fmt.Errorf("backup write: %s", err)
+	}
+	return nil
+}
+
 // Stats returns stats on the Client instance
 func (c *Client) Stats() (map[string]interface{}, error) {
 	c.mu.RLock()
@@ -363,4 +455,21 @@ func handleConnError(conn net.Conn) {
 	if pc, ok := conn.(*pool.Conn); ok {
 		pc.MarkUnusable()
 	}
+}
+
+func gzUncompress(b []byte) ([]byte, error) {
+	gz, err := gzip.NewReader(bytes.NewReader(b))
+	if err != nil {
+		return nil, fmt.Errorf("unmarshal gzip NewReader: %s", err)
+	}
+
+	ub, err := io.ReadAll(gz)
+	if err != nil {
+		return nil, fmt.Errorf("unmarshal gzip ReadAll: %s", err)
+	}
+
+	if err := gz.Close(); err != nil {
+		return nil, fmt.Errorf("unmarshal gzip Close: %s", err)
+	}
+	return ub, nil
 }
