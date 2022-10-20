@@ -474,7 +474,7 @@ COMMIT;
 
 	f, err := ioutil.TempFile("", "rqlite-baktest-")
 	defer os.Remove(f.Name())
-	s.logger.Printf("backup file is %s", f.Name())
+	t.Logf("backup file is %s", f.Name())
 
 	if err := s.Backup(backupRequestBinary(true), f); err != nil {
 		t.Fatalf("Backup failed %s", err.Error())
