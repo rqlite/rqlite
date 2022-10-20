@@ -25,7 +25,7 @@ SQL text file written successfully
 ```
 The API can also be accessed directly:
 ```bash
-curl -s -L -XGET localhost:4001/db/backup?fmt=sql -o bak.sql
+curl -s -XGET localhost:4001/db/backup?fmt=sql -o bak.sql
 ```
 
 ## Backup isolation level
