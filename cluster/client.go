@@ -1,6 +1,8 @@
 package cluster
 
 import (
+	"bytes"
+	"compress/gzip"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -360,6 +362,13 @@ func (c *Client) Backup(br *command.BackupRequest, nodeAddr string, creds *Crede
 		return err
 	}
 
+	// Decompress....
+	p, err = gzUncompress(p)
+	if err != nil {
+		handleConnError(conn)
+		return err
+	}
+
 	resp := &CommandBackupResponse{}
 	err = proto.Unmarshal(p, resp)
 	if err != nil {
@@ -446,4 +455,21 @@ func handleConnError(conn net.Conn) {
 	if pc, ok := conn.(*pool.Conn); ok {
 		pc.MarkUnusable()
 	}
+}
+
+func gzUncompress(b []byte) ([]byte, error) {
+	gz, err := gzip.NewReader(bytes.NewReader(b))
+	if err != nil {
+		return nil, fmt.Errorf("unmarshal gzip NewReader: %s", err)
+	}
+
+	ub, err := io.ReadAll(gz)
+	if err != nil {
+		return nil, fmt.Errorf("unmarshal gzip ReadAll: %s", err)
+	}
+
+	if err := gz.Close(); err != nil {
+		return nil, fmt.Errorf("unmarshal gzip Close: %s", err)
+	}
+	return ub, nil
 }

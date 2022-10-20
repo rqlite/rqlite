@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/binary"
 	"expvar"
 	"fmt"
@@ -317,9 +318,15 @@ func (s *Service) handleConn(conn net.Conn) {
 				} else {
 					resp.Data = buf.Bytes()
 				}
-
 			}
 			p, err = proto.Marshal(resp)
+			if err != nil {
+				conn.Close()
+				return
+			}
+
+			// Compress the backup.
+			p, err = gzCompress(p)
 			if err != nil {
 				conn.Close()
 				return
@@ -332,4 +339,21 @@ func (s *Service) handleConn(conn net.Conn) {
 			conn.Write(p)
 		}
 	}
+}
+
+// gzCompress compresses the given byte slice.
+func gzCompress(b []byte) ([]byte, error) {
+	var buf bytes.Buffer
+	gzw, err := gzip.NewWriterLevel(&buf, gzip.BestCompression)
+	if err != nil {
+		return nil, fmt.Errorf("gzip new writer: %s", err)
+	}
+
+	if _, err := gzw.Write(b); err != nil {
+		return nil, fmt.Errorf("gzip Write: %s", err)
+	}
+	if err := gzw.Close(); err != nil {
+		return nil, fmt.Errorf("gzip Close: %s", err)
+	}
+	return buf.Bytes(), nil
 }
