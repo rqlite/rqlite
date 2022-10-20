@@ -674,8 +674,8 @@ func (db *DB) Copy(dstDB *DB) error {
 // an ordinary on-disk database file, the serialization is just a copy of the
 // disk file. For an in-memory database or a "TEMP" database, the serialization
 // is the same sequence of bytes which would be written to disk if that database
-// were backed up to disk. This function must not be called while any transaction
-// is in progress.
+// were backed up to disk. This function must not be called while any writes
+// are happening to the database.
 func (db *DB) Serialize() ([]byte, error) {
 	if !db.memory {
 		// Simply read and return the SQLite file.
