@@ -605,7 +605,6 @@ class TestSingleNode(unittest.TestCase):
     n0 = Node(RQLITED_PATH, '0',  raft_snap_threshold=2, raft_snap_int="1s")
     n0.start()
     n0.wait_for_leader()
-
     self.cluster = Cluster([n0])
 
   def tearDown(self):
@@ -738,6 +737,13 @@ class TestSingleNode(unittest.TestCase):
         raise Exception('timeout', nSnaps)
       time.sleep(1)
       t+=1
+
+class TestSingleNodeOnDisk(TestSingleNode):
+  def setUp(self):
+    n0 = Node(RQLITED_PATH, '0',  raft_snap_threshold=2, raft_snap_int="1s", on_disk=True)
+    n0.start()
+    n0.wait_for_leader()
+    self.cluster = Cluster([n0])
 
 class TestSingleNodeReadyz(unittest.TestCase):
   def test(self):
@@ -1466,7 +1472,6 @@ class TestEndToEndSnapRestoreCluster(unittest.TestCase):
       t+=1
 
   def test_join_with_snap(self):
-
     '''Check that a node joins a cluster correctly via a snapshot'''
     self.n0 = Node(RQLITED_PATH, '0',  raft_snap_threshold=100, raft_snap_int="1s")
     self.n0.start()
