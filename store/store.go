@@ -825,6 +825,7 @@ func (s *Store) Backup(br *command.BackupRequest, dst io.Writer) error {
 		if err := f.Close(); err != nil {
 			return err
 		}
+		defer os.Remove(f.Name())
 
 		if err := s.db.Backup(f.Name()); err != nil {
 			return err
@@ -834,7 +835,6 @@ func (s *Store) Backup(br *command.BackupRequest, dst io.Writer) error {
 		if err != nil {
 			return err
 		}
-		defer os.Remove(f.Name())
 		defer of.Close()
 
 		_, err = io.Copy(dst, of)
