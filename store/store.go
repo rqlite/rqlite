@@ -810,26 +810,47 @@ func (s *Store) Query(qr *command.QueryRequest) ([]*command.QueryRows, error) {
 // Backup writes a snapshot of the underlying database to dst
 //
 // If Leader is true for the request, this operation is performed with a read consistency
-// level equivalent to "weak". Otherwise, no guarantees are made about the read consistency level.
-func (s *Store) Backup(br *command.BackupRequest, dst io.Writer) error {
+// level equivalent to "weak". Otherwise, no guarantees are made about the read consistency
+// level. This function is safe to call while the database is being changed.
+func (s *Store) Backup(br *command.BackupRequest, dst io.Writer) (retErr error) {
+	startT := time.Now()
+	defer func() {
+		if retErr == nil {
+			stats.Add(numBackups, 1)
+			s.logger.Printf("database backed up in %s", time.Since(startT))
+		}
+	}()
+
 	if br.Leader && s.raft.State() != raft.Leader {
 		return ErrNotLeader
 	}
 
 	if br.Format == command.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY {
-		if err := s.database(br.Leader, dst); err != nil {
+		f, err := ioutil.TempFile("", "rqlilte-snap-")
+		if err != nil {
 			return err
 		}
-	} else if br.Format == command.BackupRequest_BACKUP_REQUEST_FORMAT_SQL {
-		if err := s.db.Dump(dst); err != nil {
+		if err := f.Close(); err != nil {
 			return err
 		}
-	} else {
-		return ErrInvalidBackupFormat
-	}
+		defer os.Remove(f.Name())
 
-	stats.Add(numBackups, 1)
-	return nil
+		if err := s.db.Backup(f.Name()); err != nil {
+			return err
+		}
+
+		of, err := os.Open(f.Name())
+		if err != nil {
+			return err
+		}
+		defer of.Close()
+
+		_, err = io.Copy(dst, of)
+		return err
+	} else if br.Format == command.BackupRequest_BACKUP_REQUEST_FORMAT_SQL {
+		return s.db.Dump(dst)
+	}
+	return ErrInvalidBackupFormat
 }
 
 // Loads an entire SQLite file into the database, sending the request
@@ -1151,7 +1172,7 @@ func (s *Store) Apply(l *raft.Log) (e interface{}) {
 // about the read consistency level.
 //
 // http://sqlite.org/howtocorrupt.html states it is safe to do this
-// as long as no transaction is in progress.
+// as long as the database is not written to during the call.
 func (s *Store) Database(leader bool) ([]byte, error) {
 	if leader && s.raft.State() != raft.Leader {
 		return nil, ErrNotLeader
@@ -1168,7 +1189,7 @@ func (s *Store) Database(leader bool) ([]byte, error) {
 // However, queries that involve a transaction must be blocked.
 //
 // http://sqlite.org/howtocorrupt.html states it is safe to copy or serialize the
-// database as long as no transaction is in progress.
+// database as long as no writes to the database are in progress.
 func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 	defer func() {
 		s.numSnapshotsMu.Lock()
@@ -1288,34 +1309,6 @@ func (s *Store) logSize() (int64, error) {
 		return 0, err
 	}
 	return fi.Size(), nil
-}
-
-// Database copies contents of the underlying SQLite database to dst
-func (s *Store) database(leader bool, dst io.Writer) error {
-	if leader && s.raft.State() != raft.Leader {
-		return ErrNotLeader
-	}
-
-	f, err := ioutil.TempFile("", "rqlilte-snap-")
-	if err != nil {
-		return err
-	}
-	if err := f.Close(); err != nil {
-		return err
-	}
-
-	if err := s.db.Backup(f.Name()); err != nil {
-		return err
-	}
-
-	of, err := os.Open(f.Name())
-	if err != nil {
-		return err
-	}
-	defer of.Close()
-
-	_, err = io.Copy(dst, of)
-	return err
 }
 
 func (s *Store) databaseTypePretty() string {
