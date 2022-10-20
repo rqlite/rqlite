@@ -11,6 +11,8 @@ assignees: ''
 
 **Are you using Docker or Kubernetes to run your system?**
 
+**Are you running a single node or a cluster?**
+
 **What did you do?**
 
 **What did you expect to happen?**
