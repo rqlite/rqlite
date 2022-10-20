@@ -9,6 +9,8 @@ assignees: ''
 
 **What version are you running?**
 
+**Are you using Docker or Kubernetes to run your system?**
+
 **What did you do?**
 
 **What did you expect to happen?**
