@@ -325,7 +325,7 @@ func (s *Service) handleConn(conn net.Conn) {
 				return
 			}
 
-			// Compress the backup.
+			// Compress the backup for less space on the wire between nodes.
 			p, err = gzCompress(p)
 			if err != nil {
 				conn.Close()

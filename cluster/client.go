@@ -366,13 +366,13 @@ func (c *Client) Backup(br *command.BackupRequest, nodeAddr string, creds *Crede
 	p, err = gzUncompress(p)
 	if err != nil {
 		handleConnError(conn)
-		return err
+		return fmt.Errorf("backup decompress: %s", err)
 	}
 
 	resp := &CommandBackupResponse{}
 	err = proto.Unmarshal(p, resp)
 	if err != nil {
-		return err
+		return fmt.Errorf("backup unmarshal: %s", err)
 	}
 
 	if resp.Error != "" {
