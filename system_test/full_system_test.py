@@ -748,7 +748,7 @@ class TestSingleNodeOnDisk(TestSingleNode):
 class TestSingleNodeReadyz(unittest.TestCase):
   def test(self):
     ''' Test /readyz behaves correctly'''
-    n0 = Node(RQLITED_PATH, '0',  raft_snap_threshold=2, raft_snap_int="1s")
+    n0 = Node(RQLITED_PATH, '0')
     n0.start(join="http://nonsense")
     self.assertEqual(False, n0.ready())
     self.assertEqual(True, n0.ready(noleader=True))
