@@ -1,3 +1,8 @@
+## 7.9.0 (unreleased)
+
+### Implementation changes and bug fixes
+- [PR #1085](https://github.com/rqlite/rqlite/pull/1085): Improved logs during joining.
+
 ## 7.8.0 (October 20th 2022)
 This release makes it more convenient to retrieve a backup. Now any node can provide a backup of the underlying SQLite database. For this to work however, all nodes in your cluster must be running 7.8.0 (or later). Otherwse 7.8.0 is fully compatible with earlier release, so a rolling upgrade process is an option.
 
