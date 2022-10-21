@@ -108,8 +108,7 @@ func (j *Joiner) Do(joinAddrs []string, id, addr string, voter bool) (string, er
 		}
 		if i+1 < j.numAttempts {
 			// This logic message only make sense if performing more than 1 join-attempt.
-			j.logger.Printf("failed to join cluster at %s: %s, sleeping %s before retry",
-				joinAddrs, err.Error(), j.attemptInterval)
+			j.logger.Printf("failed to join cluster at %s, sleeping %s before retry", joinAddrs, j.attemptInterval)
 			time.Sleep(j.attemptInterval)
 		}
 	}
