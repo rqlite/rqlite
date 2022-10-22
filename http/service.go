@@ -94,8 +94,11 @@ type Cluster interface {
 	// Query performs an Query Request on a remote node.
 	Query(qr *command.QueryRequest, nodeAddr string, creds *cluster.Credentials, timeout time.Duration) ([]*command.QueryRows, error)
 
-	// Backup retrieves a backup from a remote node and writes to the io.Writer
+	// Backup retrieves a backup from a remote node and writes to the io.Writer.
 	Backup(br *command.BackupRequest, nodeAddr string, creds *cluster.Credentials, timeout time.Duration, w io.Writer) error
+
+	// Load loads a SQLite database into the node.
+	Load(lr *command.LoadRequest, nodeAddr string, creds *cluster.Credentials, timeout time.Duration) error
 
 	// Stats returns stats on the Cluster.
 	Stats() (map[string]interface{}, error)
@@ -172,6 +175,7 @@ const (
 	numRemoteExecutions       = "remote_executions"
 	numRemoteQueries          = "remote_queries"
 	numRemoteBackups          = "remote_backups"
+	numRemoteLoads            = "remote_loads"
 	numReadyz                 = "num_readyz"
 	numStatus                 = "num_status"
 	numBackups                = "backups"
@@ -205,6 +209,7 @@ func init() {
 	stats.Add(numRemoteExecutions, 0)
 	stats.Add(numRemoteQueries, 0)
 	stats.Add(numRemoteBackups, 0)
+	stats.Add(numRemoteLoads, 0)
 	stats.Add(numReadyz, 0)
 	stats.Add(numStatus, 0)
 	stats.Add(numBackups, 0)
@@ -663,6 +668,18 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	timeout, err := timeoutParam(r, defaultTimeout)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	redirect, err := isRedirect(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	b, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -677,6 +694,47 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 		}
 		err := s.store.Load(lr)
 		if err != nil {
+			if err == store.ErrNotLeader {
+				if redirect {
+					leaderAPIAddr := s.LeaderAPIAddr()
+					if leaderAPIAddr == "" {
+						stats.Add(numLeaderNotFound, 1)
+						http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+						return
+					}
+
+					redirect := s.FormRedirect(r, leaderAPIAddr)
+					http.Redirect(w, r, redirect, http.StatusMovedPermanently)
+					return
+				}
+
+				addr, err := s.store.LeaderAddr()
+				if err != nil {
+					http.Error(w, fmt.Sprintf("leader address: %s", err.Error()),
+						http.StatusInternalServerError)
+					return
+				}
+				if addr == "" {
+					stats.Add(numLeaderNotFound, 1)
+					http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+					return
+				}
+
+				username, password, ok := r.BasicAuth()
+				if !ok {
+					username = ""
+				}
+
+				loadErr := s.cluster.Load(lr, addr, makeCredentials(username, password), timeout)
+				if loadErr != nil && loadErr.Error() == "unauthorized" {
+					http.Error(w, "remote load not authorized", http.StatusUnauthorized)
+					return
+				}
+				stats.Add(numRemoteLoads, 1)
+				w.Header().Add(ServedByHTTPHeader, addr)
+				return
+			}
+
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}

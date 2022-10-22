@@ -21,6 +21,7 @@ message Command {
         COMMAND_TYPE_EXECUTE = 2;
         COMMAND_TYPE_QUERY = 3;
         COMMAND_TYPE_BACKUP = 4;
+        COMMAND_TYPE_LOAD = 5;
     }
     Type type = 1;
 
@@ -28,6 +29,7 @@ message Command {
         command.ExecuteRequest execute_request = 2;
         command.QueryRequest query_request = 3;
         command.BackupRequest backup_request = 5;
+        command.LoadRequest load_request = 6;
     }
 
     Credentials credentials = 4;
@@ -46,4 +48,8 @@ message CommandQueryResponse {
 message CommandBackupResponse {
     string error = 1;
     bytes data = 2;
+}
+
+message CommandLoadResponse {
+    string error = 1;
 }

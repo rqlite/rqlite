@@ -1,6 +1,7 @@
 package http
 
 import (
+	"bytes"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -687,6 +689,75 @@ func Test_BackupFlagsNoLeaderOK(t *testing.T) {
 	}
 }
 
+func Test_LoadOK(t *testing.T) {
+	m := &MockStore{}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+	resp, err := client.Post(host+"/db/load", "application/octet-stream", strings.NewReader("SELECT"))
+	if err != nil {
+		t.Fatalf("failed to make load request")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("failed to get expected StatusOK for load, got %d", resp.StatusCode)
+	}
+}
+
+func Test_LoadFlagsNoLeader(t *testing.T) {
+	m := &MockStore{
+		leaderAddr: "foo:1234",
+	}
+	c := &mockClusterService{
+		apiAddr: "http://1.2.3.4:999",
+	}
+
+	s := New("127.0.0.1:0", m, c, nil)
+
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	testData, err := os.ReadFile("testdata/load.db")
+	if err != nil {
+		t.Fatalf("failed to load test SQLite data")
+	}
+
+	m.loadFn = func(br *command.LoadRequest) error {
+		return store.ErrNotLeader
+	}
+
+	clusterLoadCalled := false
+	c.loadFn = func(lr *command.LoadRequest, nodeAddr string, timeout time.Duration) error {
+		clusterLoadCalled = true
+		if bytes.Compare(lr.Data, testData) != 0 {
+			t.Fatalf("wrong data passed to cluster load")
+		}
+		return nil
+	}
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+	resp, err := client.Post(host+"/db/load", "application/octet-stream", bytes.NewReader(testData))
+	if err != nil {
+		t.Fatalf("failed to make load request")
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("failed to get expected StatusOK for load, got %d", resp.StatusCode)
+	}
+
+	if !clusterLoadCalled {
+		t.Fatalf("cluster load was not called")
+	}
+}
+
 func Test_RegisterStatus(t *testing.T) {
 	var stats *mockStatusReporter
 	m := &MockStore{}
@@ -1046,6 +1117,7 @@ type MockStore struct {
 	executeFn  func(er *command.ExecuteRequest) ([]*command.ExecuteResult, error)
 	queryFn    func(qr *command.QueryRequest) ([]*command.QueryRows, error)
 	backupFn   func(br *command.BackupRequest, dst io.Writer) error
+	loadFn     func(lr *command.LoadRequest) error
 	leaderAddr string
 }
 
@@ -1061,10 +1133,6 @@ func (m *MockStore) Query(qr *command.QueryRequest) ([]*command.QueryRows, error
 		return m.queryFn(qr)
 	}
 	return nil, nil
-}
-
-func (m *MockStore) Load(lr *command.LoadRequest) error {
-	return nil
 }
 
 func (m *MockStore) Join(id, addr string, voter bool) error {
@@ -1098,11 +1166,19 @@ func (m *MockStore) Backup(br *command.BackupRequest, w io.Writer) error {
 	return m.backupFn(br, w)
 }
 
+func (m *MockStore) Load(lr *command.LoadRequest) error {
+	if m.loadFn != nil {
+		return m.loadFn(lr)
+	}
+	return nil
+}
+
 type mockClusterService struct {
 	apiAddr   string
 	executeFn func(er *command.ExecuteRequest, addr string, t time.Duration) ([]*command.ExecuteResult, error)
 	queryFn   func(qr *command.QueryRequest, addr string, t time.Duration) ([]*command.QueryRows, error)
 	backupFn  func(br *command.BackupRequest, addr string, t time.Duration, w io.Writer) error
+	loadFn    func(lr *command.LoadRequest, addr string, t time.Duration) error
 }
 
 func (m *mockClusterService) GetNodeAPIAddr(a string, t time.Duration) (string, error) {
@@ -1126,6 +1202,13 @@ func (m *mockClusterService) Query(qr *command.QueryRequest, addr string, creds 
 func (m *mockClusterService) Backup(br *command.BackupRequest, addr string, creds *cluster.Credentials, t time.Duration, w io.Writer) error {
 	if m.backupFn != nil {
 		return m.backupFn(br, addr, t, w)
+	}
+	return nil
+}
+
+func (m *mockClusterService) Load(lr *command.LoadRequest, addr string, creds *cluster.Credentials, t time.Duration) error {
+	if m.loadFn != nil {
+		return m.loadFn(lr, addr, t)
 	}
 	return nil
 }

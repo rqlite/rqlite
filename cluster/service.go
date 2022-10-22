@@ -28,6 +28,7 @@ const (
 	numExecuteRequest     = "num_execute_req"
 	numQueryRequest       = "num_query_req"
 	numBackupRequest      = "num_backup_req"
+	numLoadRequest        = "num_backup_req"
 
 	// Client stats for this package.
 	numGetNodeAPIRequestLocal = "num_get_node_api_req_local"
@@ -48,6 +49,7 @@ func init() {
 	stats.Add(numExecuteRequest, 0)
 	stats.Add(numQueryRequest, 0)
 	stats.Add(numBackupRequest, 0)
+	stats.Add(numLoadRequest, 0)
 	stats.Add(numGetNodeAPIRequestLocal, 0)
 }
 
@@ -69,6 +71,9 @@ type Database interface {
 
 	// Backup writes a backup of the database to the writer.
 	Backup(br *command.BackupRequest, dst io.Writer) error
+
+	// Loads an entire SQLite file into the database
+	Load(lr *command.LoadRequest) error
 }
 
 // CredentialStore is the interface credential stores must support.
@@ -332,6 +337,32 @@ func (s *Service) handleConn(conn net.Conn) {
 				return
 			}
 
+			// Write length of Protobuf first, then write the actual Protobuf.
+			b = make([]byte, 4)
+			binary.LittleEndian.PutUint32(b[0:], uint32(len(p)))
+			conn.Write(b)
+			conn.Write(p)
+
+		case Command_COMMAND_TYPE_LOAD:
+			stats.Add(numLoadRequest, 1)
+
+			resp := &CommandLoadResponse{}
+
+			lr := c.GetLoadRequest()
+			if lr == nil {
+				resp.Error = "LoadRequest is nil"
+			} else if !s.checkCommandPerm(c, auth.PermLoad) {
+				resp.Error = "unauthorized"
+			} else {
+				if err := s.db.Load(lr); err != nil {
+					resp.Error = err.Error()
+				}
+			}
+
+			p, err = proto.Marshal(resp)
+			if err != nil {
+				return
+			}
 			// Write length of Protobuf first, then write the actual Protobuf.
 			b = make([]byte, 4)
 			binary.LittleEndian.PutUint32(b[0:], uint32(len(p)))
