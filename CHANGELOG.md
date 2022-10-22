@@ -1,4 +1,6 @@
 ## 7.9.0 (unreleased)
+This release makes it more convenient to load SQLite files directly into rqlite, as any node can now process the request. For this to work however, all nodes in your cluster must be running 7.9.0 (or later). Otherwse 7.9.0 is fully compatible with earlier release, so a rolling upgrade process is an option.
+
 ### New features
 - [PR #1084](https://github.com/rqlite/rqlite/pull/1084): Transparently forward SQLite data Restore requests to Leaders.
 
