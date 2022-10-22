@@ -1103,6 +1103,7 @@ type mockClusterService struct {
 	executeFn func(er *command.ExecuteRequest, addr string, t time.Duration) ([]*command.ExecuteResult, error)
 	queryFn   func(qr *command.QueryRequest, addr string, t time.Duration) ([]*command.QueryRows, error)
 	backupFn  func(br *command.BackupRequest, addr string, t time.Duration, w io.Writer) error
+	loadFn    func(lr *command.LoadRequest, addr string, t time.Duration) error
 }
 
 func (m *mockClusterService) GetNodeAPIAddr(a string, t time.Duration) (string, error) {
@@ -1126,6 +1127,13 @@ func (m *mockClusterService) Query(qr *command.QueryRequest, addr string, creds 
 func (m *mockClusterService) Backup(br *command.BackupRequest, addr string, creds *cluster.Credentials, t time.Duration, w io.Writer) error {
 	if m.backupFn != nil {
 		return m.backupFn(br, addr, t, w)
+	}
+	return nil
+}
+
+func (m *mockClusterService) Load(lr *command.LoadRequest, addr string, creds *cluster.Credentials, t time.Duration) error {
+	if m.loadFn != nil {
+		return m.loadFn(lr, addr, t)
 	}
 	return nil
 }

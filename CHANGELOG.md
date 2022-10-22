@@ -1,4 +1,6 @@
 ## 7.9.0 (unreleased)
+### New features
+- [PR #1084](https://github.com/rqlite/rqlite/pull/1084): Transparently forward SQLite data Restore requests to Leaders.
 
 ### Implementation changes and bug fixes
 - [PR #1085](https://github.com/rqlite/rqlite/pull/1085): Improved logs during joining.
