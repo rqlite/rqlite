@@ -493,12 +493,12 @@ class Node(object):
       r = requests.post(self._load_url(), data='\n'.join(conn.iterdump()))
       raise_for_status(r)
       conn.close()
+      return r.json()
     else:
       with open(file, 'rb') as f:
         data = f.read()
       r = requests.post(self._load_url(), data=data, headers={'Content-Type': 'application/octet-stream'})
       raise_for_status(r)
-    return r.json()
 
   def redirect_addr(self):
     r = requests.post(self._execute_url(redirect=True), data=json.dumps(['nonsense']), allow_redirects=False)
@@ -1390,13 +1390,27 @@ class TestEndToEndBackupRestore(unittest.TestCase):
     self.assertEqual(rows[0], (1, 'fiona'))
     conn.close()
 
-    # Load file into a brand new node, check the data is right.
-    self.node2 = Node(RQLITED_PATH, '1')
+    # Load file into a brand new single node, check the data is right.
+    self.node2 = Node(RQLITED_PATH, '3')
     self.node2.start()
     self.node2.wait_for_leader()
     j = self.node2.restore(self.db_file)
     self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
     j = self.node2.query('SELECT * FROM foo')
+    self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
+
+    # Start another 2-node cluster, load data via follower and check.
+    self.node3 = Node(RQLITED_PATH, '3')
+    self.node3.start()
+    self.node3.wait_for_leader()
+    self.node4 = Node(RQLITED_PATH, '4')
+    self.node4.start(join=self.node0.APIAddr())
+    self.node4.wait_for_leader()
+    self.assertTrue(self.node3.is_leader())
+
+    self.node4.restore(self.db_file, fmt='binary')
+    self.node3.wait_for_all_fsm()
+    j = self.node3.query('SELECT * FROM foo')
     self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
 
   def tearDown(self):
@@ -1406,6 +1420,10 @@ class TestEndToEndBackupRestore(unittest.TestCase):
       deprovision_node(self.node1)
     if hasattr(self, 'node2'):
       deprovision_node(self.node2)
+    if hasattr(self, 'node3'):
+      deprovision_node(self.node3)
+    if hasattr(self, 'node4'):
+      deprovision_node(self.node4)
     os.remove(self.db_file)
 
 class TestEndToEndSnapRestoreSingle(unittest.TestCase):
