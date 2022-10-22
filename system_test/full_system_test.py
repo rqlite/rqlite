@@ -748,7 +748,7 @@ class TestSingleNodeOnDisk(TestSingleNode):
 class TestSingleNodeReadyz(unittest.TestCase):
   def test(self):
     ''' Test /readyz behaves correctly'''
-    n0 = Node(RQLITED_PATH, '0',  raft_snap_threshold=2, raft_snap_int="1s")
+    n0 = Node(RQLITED_PATH, '0')
     n0.start(join="http://nonsense")
     self.assertEqual(False, n0.ready())
     self.assertEqual(True, n0.ready(noleader=True))
@@ -970,7 +970,7 @@ class TestBootstrapping(unittest.TestCase):
     self.assertEqual(n0.wait_for_leader(), n2.wait_for_leader())
 
     # Ensure a 4th node can join later, with same launch params.
-    n3 = Node(RQLITED_PATH, '1', boostrap_expect=3)
+    n3 = Node(RQLITED_PATH, '4', boostrap_expect=3)
     n3.start(join=','.join([n0.APIProtoAddr(), n1.APIProtoAddr(), n2.APIProtoAddr()]))
 
     n3.wait_for_leader()
