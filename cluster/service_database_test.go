@@ -306,6 +306,46 @@ func Test_ServiceBackup(t *testing.T) {
 	}
 }
 
+func Test_ServiceLoad(t *testing.T) {
+	ln, mux := mustNewMux()
+	go mux.Serve()
+	tn := mux.Listen(1) // Could be any byte value.
+	db := mustNewMockDatabase()
+	cred := mustNewMockCredentialStore()
+	s := New(tn, db, cred)
+	if s == nil {
+		t.Fatalf("failed to create cluster service")
+	}
+
+	c := NewClient(mustNewDialer(1, false, false), 30*time.Second)
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open cluster service: %s", err.Error())
+	}
+
+	// Ready for Load tests now.
+	testData := []byte("this is SQLite data")
+	db.loadFn = func(lr *command.LoadRequest) error {
+		if bytes.Compare(lr.Data, testData) != 0 {
+			t.Fatalf("load data is not as expected, exp: %s, got: %s", testData, lr.Data)
+		}
+		return nil
+	}
+
+	err := c.Load(loadRequest(testData), s.Addr(), NO_CREDS, longWait)
+	if err != nil {
+		t.Fatalf("failed to load database: %s", err.Error())
+	}
+
+	// Clean up resources.
+	if err := ln.Close(); err != nil {
+		t.Fatalf("failed to close Mux's listener: %s", err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatalf("failed to close cluster service")
+	}
+}
+
 // Test_BinaryEncoding_Backwards ensures that software earlier than v6.6.2
 // can communicate with v6.6.2+ releases. v6.6.2 increased the maximum size
 // of cluster responses.
@@ -373,6 +413,12 @@ func backupRequestBinary(leader bool) *command.BackupRequest {
 	return &command.BackupRequest{
 		Format: command.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY,
 		Leader: leader,
+	}
+}
+
+func loadRequest(b []byte) *command.LoadRequest {
+	return &command.LoadRequest{
+		Data: b,
 	}
 }
 

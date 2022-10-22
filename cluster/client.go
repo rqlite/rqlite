@@ -385,6 +385,87 @@ func (c *Client) Backup(br *command.BackupRequest, nodeAddr string, creds *Crede
 	return nil
 }
 
+// Load loads a SQLite file into the database.
+func (c *Client) Load(lr *command.LoadRequest, nodeAddr string, creds *Credentials, timeout time.Duration) error {
+	conn, err := c.dial(nodeAddr, c.timeout)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	// Create the request.
+	command := &Command{
+		Type: Command_COMMAND_TYPE_LOAD,
+		Request: &Command_LoadRequest{
+			LoadRequest: lr,
+		},
+		Credentials: creds,
+	}
+
+	p, err := proto.Marshal(command)
+	if err != nil {
+		return fmt.Errorf("command marshal: %s", err)
+	}
+
+	// Write length of Protobuf
+	b := make([]byte, 4)
+	binary.LittleEndian.PutUint16(b[0:], uint16(len(p)))
+
+	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
+		handleConnError(conn)
+		return err
+	}
+	_, err = conn.Write(b)
+	if err != nil {
+		handleConnError(conn)
+		return err
+	}
+	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
+		handleConnError(conn)
+		return err
+	}
+	_, err = conn.Write(p)
+	if err != nil {
+		handleConnError(conn)
+		return err
+	}
+
+	// Read length of response.
+	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
+		handleConnError(conn)
+		return err
+	}
+	_, err = io.ReadFull(conn, b)
+	if err != nil {
+		handleConnError(conn)
+		return err
+	}
+	sz := binary.LittleEndian.Uint32(b[0:])
+
+	// Read in the actual response.
+	p = make([]byte, sz)
+	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
+		handleConnError(conn)
+		return err
+	}
+	_, err = io.ReadFull(conn, p)
+	if err != nil {
+		handleConnError(conn)
+		return err
+	}
+
+	a := &CommandLoadResponse{}
+	err = proto.Unmarshal(p, a)
+	if err != nil {
+		return err
+	}
+
+	if a.Error != "" {
+		return errors.New(a.Error)
+	}
+	return nil
+}
+
 // Stats returns stats on the Client instance
 func (c *Client) Stats() (map[string]interface{}, error) {
 	c.mu.RLock()
