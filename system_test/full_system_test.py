@@ -1404,7 +1404,7 @@ class TestEndToEndBackupRestore(unittest.TestCase):
     self.node3.start()
     self.node3.wait_for_leader()
     self.node4 = Node(RQLITED_PATH, '4')
-    self.node4.start(join=self.node0.APIAddr())
+    self.node4.start(join=self.node3.APIAddr())
     self.node4.wait_for_leader()
     self.assertTrue(self.node3.is_leader())
 
