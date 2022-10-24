@@ -860,6 +860,7 @@ func (s *Store) Load(lr *command.LoadRequest) error {
 
 	b, err := command.MarshalLoadRequest(lr)
 	if err != nil {
+		s.logger.Printf("load failed during load-request marshalling %s", err.Error())
 		return err
 	}
 
@@ -878,6 +879,7 @@ func (s *Store) Load(lr *command.LoadRequest) error {
 		if af.Error() == raft.ErrNotLeader {
 			return ErrNotLeader
 		}
+		s.logger.Printf("load failed during Apply: %s", af.Error())
 		return af.Error()
 	}
 
