@@ -490,7 +490,7 @@ func Test_401Join(t *testing.T) {
 	client := &http.Client{}
 	host := fmt.Sprintf("http://%s", s.Addr().String())
 
-	resp, err := client.Post(host+"/join", "application/json", strings.NewReader(`{"id": "1", "addr":":4001", "voter": true}`))
+	resp, err := client.Post(host+"/join", "application/json", strings.NewReader(`{"id": "1", "addr":"localhost:4001", "voter": true}`))
 	if err != nil {
 		t.Fatalf("failed to make join request")
 	}
@@ -498,7 +498,7 @@ func Test_401Join(t *testing.T) {
 		t.Fatalf("failed to get expected StatusOK for join, got %d", resp.StatusCode)
 	}
 
-	resp, err = client.Post(host+"/join", "application/json", strings.NewReader(`{"id": "1", "addr":":4001"}`))
+	resp, err = client.Post(host+"/join", "application/json", strings.NewReader(`{"id": "1", "addr":"localhost:4001"}`))
 	if err != nil {
 		t.Fatalf("failed to make join request")
 	}
@@ -506,7 +506,7 @@ func Test_401Join(t *testing.T) {
 		t.Fatalf("failed to get expected StatusOK for join, got %d", resp.StatusCode)
 	}
 
-	resp, err = client.Post(host+"/join", "application/json", strings.NewReader(`{"id": "1", "addr":":4001", "voter": false}`))
+	resp, err = client.Post(host+"/join", "application/json", strings.NewReader(`{"id": "1", "addr":"localhost:4001", "voter": false}`))
 	if err != nil {
 		t.Fatalf("failed to make join request")
 	}
@@ -532,7 +532,7 @@ func Test_401JoinReadOnly(t *testing.T) {
 	client := &http.Client{}
 	host := fmt.Sprintf("http://%s", s.Addr().String())
 
-	resp, err := client.Post(host+"/join", "application/json", strings.NewReader(`{"id": "1", "addr":":4001", "voter": true}`))
+	resp, err := client.Post(host+"/join", "application/json", strings.NewReader(`{"id": "1", "addr":"localhost:4001", "voter": true}`))
 	if err != nil {
 		t.Fatalf("failed to make join request")
 	}
@@ -540,7 +540,7 @@ func Test_401JoinReadOnly(t *testing.T) {
 		t.Fatalf("failed to get expected StatusUnauthorized for join, got %d", resp.StatusCode)
 	}
 
-	resp, err = client.Post(host+"/join", "application/json", strings.NewReader(`{"id": "1", "addr":":4001"}`))
+	resp, err = client.Post(host+"/join", "application/json", strings.NewReader(`{"id": "1", "addr":"localhost:4001"}`))
 	if err != nil {
 		t.Fatalf("failed to make join request")
 	}
@@ -548,7 +548,7 @@ func Test_401JoinReadOnly(t *testing.T) {
 		t.Fatalf("failed to get expected StatusUnauthorized for join, got %d", resp.StatusCode)
 	}
 
-	resp, err = client.Post(host+"/join", "application/json", strings.NewReader(`{"id": "1", "addr":":4001", "voter": false}`))
+	resp, err = client.Post(host+"/join", "application/json", strings.NewReader(`{"id": "1", "addr":"localhost:4001", "voter": false}`))
 	if err != nil {
 		t.Fatalf("failed to make join request")
 	}
@@ -772,6 +772,59 @@ func Test_LoadFlagsNoLeader(t *testing.T) {
 	if exp, got := `{"results":[]}`, string(body); exp != got {
 		t.Fatalf("incorrect response body, exp: %s, got %s", exp, got)
 	}
+}
+
+func Test_NotifyLocalhost(t *testing.T) {
+	m := &MockStore{}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+	resp, err := client.Post(host+"/notify", "application/json", mustMarshalNotifyMap("id1", "localhost"))
+	if err != nil {
+		t.Fatalf("failed to make load request")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("failed to get expected StatusOK for notify, got %d", resp.StatusCode)
+	}
+}
+
+func Test_NotifyNoResolve(t *testing.T) {
+	m := &MockStore{}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+	resp, err := client.Post(host+"/notify", "application/json", mustMarshalNotifyMap("id1", "nonsense-domain:4444"))
+	if err != nil {
+		t.Fatalf("failed to make load request")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("failed to get expected StatusOK for load, got %d", resp.StatusCode)
+	}
+}
+
+func mustMarshalNotifyMap(id, addr string) io.Reader {
+	buf, err := json.Marshal(map[string]interface{}{
+		"id":   id,
+		"addr": addr,
+	})
+	if err != nil {
+		panic("failed to marshal notify map")
+	}
+	return bytes.NewReader(buf)
 }
 
 func Test_RegisterStatus(t *testing.T) {
