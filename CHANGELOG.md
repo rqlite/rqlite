@@ -2,7 +2,7 @@
 This release addresses a shortcoming in inter-node communications. Nodes now consistently encode the length of those communications using 8-byte values. **If any node in a cluster is upgraded to this release, then all nodes in that cluster should be**. 
 
 ### Implementation changes and bug fixes
-- [PR #1089](https://github.com/rqlite/rqlite/pull/1089): Move to 8-byte Protobuf lengths for cluster communications.
+- [PR #1089](https://github.com/rqlite/rqlite/pull/1089): Move to 8-byte Protobuf lengths for cluster communications. Fixes [issue #1088](https://github.com/rqlite/rqlite/issues/1088).
 - [PR #1090](https://github.com/rqlite/rqlite/pull/1090): Correct error handling for remote load and backup failures.
 
 ## 7.9.1 (October 23rd 2022)
