@@ -337,7 +337,7 @@ func (s *Service) handleConn(conn net.Conn) {
 				resp.Error = "unauthorized"
 			} else {
 				if err := s.db.Load(lr); err != nil {
-					resp.Error = err.Error()
+					resp.Error = fmt.Sprintf("remote node failed to load: %s", err.Error())
 				}
 			}
 

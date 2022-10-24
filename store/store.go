@@ -885,7 +885,7 @@ func (s *Store) Load(lr *command.LoadRequest) error {
 	s.dbAppliedIndex = af.Index()
 	s.dbAppliedIndexMu.Unlock()
 	stats.Add(numLoads, 1)
-	s.logger.Printf("node loaded in %s", time.Since(startT))
+	s.logger.Printf("node loaded with in %s (%d bytes)", time.Since(startT), len(b))
 	return af.Error()
 }
 
