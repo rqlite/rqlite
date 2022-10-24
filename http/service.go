@@ -693,50 +693,49 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 			Data: b,
 		}
 		err := s.store.Load(lr)
-		if err != nil {
-			if err == store.ErrNotLeader {
-				if redirect {
-					leaderAPIAddr := s.LeaderAPIAddr()
-					if leaderAPIAddr == "" {
-						stats.Add(numLeaderNotFound, 1)
-						http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
-						return
-					}
-
-					redirect := s.FormRedirect(r, leaderAPIAddr)
-					http.Redirect(w, r, redirect, http.StatusMovedPermanently)
-					return
-				}
-
-				addr, err := s.store.LeaderAddr()
-				if err != nil {
-					http.Error(w, fmt.Sprintf("leader address: %s", err.Error()),
-						http.StatusInternalServerError)
-					return
-				}
-				if addr == "" {
+		if err != nil && err != store.ErrNotLeader {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		} else if err != nil && err == store.ErrNotLeader {
+			if redirect {
+				leaderAPIAddr := s.LeaderAPIAddr()
+				if leaderAPIAddr == "" {
 					stats.Add(numLeaderNotFound, 1)
 					http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
 					return
 				}
 
-				username, password, ok := r.BasicAuth()
-				if !ok {
-					username = ""
-				}
-
-				loadErr := s.cluster.Load(lr, addr, makeCredentials(username, password), timeout)
-				if loadErr != nil && loadErr.Error() == "unauthorized" {
-					http.Error(w, "remote load not authorized", http.StatusUnauthorized)
-					return
-				}
-				stats.Add(numRemoteLoads, 1)
-				w.Header().Add(ServedByHTTPHeader, addr)
+				redirect := s.FormRedirect(r, leaderAPIAddr)
+				http.Redirect(w, r, redirect, http.StatusMovedPermanently)
 				return
 			}
 
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
+			addr, err := s.store.LeaderAddr()
+			if err != nil {
+				http.Error(w, fmt.Sprintf("leader address: %s", err.Error()),
+					http.StatusInternalServerError)
+				return
+			}
+			if addr == "" {
+				stats.Add(numLeaderNotFound, 1)
+				http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+				return
+			}
+
+			username, password, ok := r.BasicAuth()
+			if !ok {
+				username = ""
+			}
+
+			loadErr := s.cluster.Load(lr, addr, makeCredentials(username, password), timeout)
+			if loadErr != nil && loadErr.Error() == "unauthorized" {
+				http.Error(w, "remote load not authorized", http.StatusUnauthorized)
+				return
+			}
+			stats.Add(numRemoteLoads, 1)
+			w.Header().Add(ServedByHTTPHeader, addr)
+			// Allow this if block to exit, so response remains as before request
+			// forwarding was put in place.
 		}
 	} else {
 		// No JSON structure expected for this API.

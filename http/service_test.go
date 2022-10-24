@@ -708,6 +708,13 @@ func Test_LoadOK(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("failed to get expected StatusOK for load, got %d", resp.StatusCode)
 	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("failed to read response body: %s", err.Error())
+	}
+	if exp, got := `{"results":[]}`, string(body); exp != got {
+		t.Fatalf("incorrect response body, exp: %s, got %s", exp, got)
+	}
 }
 
 func Test_LoadFlagsNoLeader(t *testing.T) {
@@ -749,12 +756,21 @@ func Test_LoadFlagsNoLeader(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to make load request")
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("failed to get expected StatusOK for load, got %d", resp.StatusCode)
 	}
 
 	if !clusterLoadCalled {
 		t.Fatalf("cluster load was not called")
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("failed to read response body: %s", err.Error())
+	}
+	if exp, got := `{"results":[]}`, string(body); exp != got {
+		t.Fatalf("incorrect response body, exp: %s, got %s", exp, got)
 	}
 }
 
