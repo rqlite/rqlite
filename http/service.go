@@ -660,13 +660,17 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
 				username = ""
 			}
 
+			w.Header().Add(ServedByHTTPHeader, addr)
 			backupErr := s.cluster.Backup(br, addr, makeCredentials(username, password), timeout, w)
-			if backupErr != nil && backupErr.Error() == "unauthorized" {
-				http.Error(w, "remote backup not authorized", http.StatusUnauthorized)
+			if backupErr != nil {
+				if backupErr.Error() == "unauthorized" {
+					http.Error(w, "remote backup not authorized", http.StatusUnauthorized)
+					return
+				}
+				http.Error(w, backupErr.Error(), http.StatusInternalServerError)
 				return
 			}
 			stats.Add(numRemoteBackups, 1)
-			w.Header().Add(ServedByHTTPHeader, addr)
 			return
 		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -756,13 +760,17 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 				username = ""
 			}
 
+			w.Header().Add(ServedByHTTPHeader, addr)
 			loadErr := s.cluster.Load(lr, addr, makeCredentials(username, password), timeout)
-			if loadErr != nil && loadErr.Error() == "unauthorized" {
-				http.Error(w, "remote load not authorized", http.StatusUnauthorized)
+			if loadErr != nil {
+				if loadErr.Error() == "unauthorized" {
+					http.Error(w, "remote load not authorized", http.StatusUnauthorized)
+					return
+				}
+				http.Error(w, loadErr.Error(), http.StatusInternalServerError)
 				return
 			}
 			stats.Add(numRemoteLoads, 1)
-			w.Header().Add(ServedByHTTPHeader, addr)
 			// Allow this if block to exit, so response remains as before request
 			// forwarding was put in place.
 		}
@@ -1247,13 +1255,13 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request) {
 			username = ""
 		}
 
+		w.Header().Add(ServedByHTTPHeader, addr)
 		results, resultsErr = s.cluster.Execute(er, addr, makeCredentials(username, password), timeout)
 		if resultsErr != nil && resultsErr.Error() == "unauthorized" {
 			http.Error(w, "remote execute not authorized", http.StatusUnauthorized)
 			return
 		}
 		stats.Add(numRemoteExecutions, 1)
-		w.Header().Add(ServedByHTTPHeader, addr)
 	}
 
 	if resultsErr != nil {
@@ -1353,13 +1361,14 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 		if !ok {
 			username = ""
 		}
+
+		w.Header().Add(ServedByHTTPHeader, addr)
 		results, resultsErr = s.cluster.Query(qr, addr, makeCredentials(username, password), timeout)
 		if resultsErr != nil && resultsErr.Error() == "unauthorized" {
 			http.Error(w, "remote query not authorized", http.StatusUnauthorized)
 			return
 		}
 		stats.Add(numRemoteQueries, 1)
-		w.Header().Add(ServedByHTTPHeader, addr)
 	}
 
 	if resultsErr != nil {
