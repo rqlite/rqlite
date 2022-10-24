@@ -345,14 +345,17 @@ func writeCommand(conn net.Conn, c *Command, timeout time.Duration) error {
 	binary.LittleEndian.PutUint64(b[0:], uint64(len(p)))
 	_, err = conn.Write(b)
 	if err != nil {
-		return err
+		return fmt.Errorf("write length: %s", err)
 	}
 	// Write actual protobuf.
 	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
 		return err
 	}
 	_, err = conn.Write(p)
-	return err
+	if err != nil {
+		return fmt.Errorf("write protobuf bytes: %s", err)
+	}
+	return nil
 }
 
 func readResponse(conn net.Conn, timeout time.Duration) ([]byte, error) {
@@ -363,7 +366,7 @@ func readResponse(conn net.Conn, timeout time.Duration) ([]byte, error) {
 	b := make([]byte, protoBufferLengthSize)
 	_, err := io.ReadFull(conn, b)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read protobuf length: %s", err)
 	}
 	sz := binary.LittleEndian.Uint64(b[0:])
 
@@ -374,7 +377,7 @@ func readResponse(conn net.Conn, timeout time.Duration) ([]byte, error) {
 	}
 	_, err = io.ReadFull(conn, p)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read protobuf bytes: %s", err)
 	}
 	return p, nil
 }

@@ -207,12 +207,12 @@ func (s *Service) handleConn(conn net.Conn) {
 	defer conn.Close()
 
 	for {
-		b := make([]byte, 4)
+		b := make([]byte, protoBufferLengthSize)
 		_, err := io.ReadFull(conn, b)
 		if err != nil {
 			return
 		}
-		sz := binary.LittleEndian.Uint16(b[0:])
+		sz := binary.LittleEndian.Uint64(b[0:])
 
 		p := make([]byte, sz)
 		_, err = io.ReadFull(conn, p)
@@ -235,12 +235,7 @@ func (s *Service) handleConn(conn net.Conn) {
 			if err != nil {
 				conn.Close()
 			}
-
-			// Write length of Protobuf first, then write the actual Protobuf.
-			b = make([]byte, 4)
-			binary.LittleEndian.PutUint16(b[0:], uint16(len(p)))
-			conn.Write(b)
-			conn.Write(p)
+			writeBytesWithLength(conn, p)
 			stats.Add(numGetNodeAPIResponse, 1)
 
 		case Command_COMMAND_TYPE_EXECUTE:
@@ -268,11 +263,7 @@ func (s *Service) handleConn(conn net.Conn) {
 			if err != nil {
 				return
 			}
-			// Write length of Protobuf first, then write the actual Protobuf.
-			b = make([]byte, 4)
-			binary.LittleEndian.PutUint32(b[0:], uint32(len(p)))
-			conn.Write(b)
-			conn.Write(p)
+			writeBytesWithLength(conn, p)
 
 		case Command_COMMAND_TYPE_QUERY:
 			stats.Add(numQueryRequest, 1)
@@ -300,11 +291,7 @@ func (s *Service) handleConn(conn net.Conn) {
 			if err != nil {
 				return
 			}
-			// Write length of Protobuf first, then write the actual Protobuf.
-			b = make([]byte, 4)
-			binary.LittleEndian.PutUint32(b[0:], uint32(len(p)))
-			conn.Write(b)
-			conn.Write(p)
+			writeBytesWithLength(conn, p)
 
 		case Command_COMMAND_TYPE_BACKUP:
 			stats.Add(numBackupRequest, 1)
@@ -336,12 +323,7 @@ func (s *Service) handleConn(conn net.Conn) {
 				conn.Close()
 				return
 			}
-
-			// Write length of Protobuf first, then write the actual Protobuf.
-			b = make([]byte, 4)
-			binary.LittleEndian.PutUint32(b[0:], uint32(len(p)))
-			conn.Write(b)
-			conn.Write(p)
+			writeBytesWithLength(conn, p)
 
 		case Command_COMMAND_TYPE_LOAD:
 			stats.Add(numLoadRequest, 1)
@@ -363,13 +345,16 @@ func (s *Service) handleConn(conn net.Conn) {
 			if err != nil {
 				return
 			}
-			// Write length of Protobuf first, then write the actual Protobuf.
-			b = make([]byte, 4)
-			binary.LittleEndian.PutUint32(b[0:], uint32(len(p)))
-			conn.Write(b)
-			conn.Write(p)
+			writeBytesWithLength(conn, p)
 		}
 	}
+}
+
+func writeBytesWithLength(conn net.Conn, p []byte) {
+	b := make([]byte, protoBufferLengthSize)
+	binary.LittleEndian.PutUint64(b[0:], uint64(len(p)))
+	conn.Write(b)
+	conn.Write(p)
 }
 
 // gzCompress compresses the given byte slice.
