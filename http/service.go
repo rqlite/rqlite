@@ -424,13 +424,13 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	remoteID, ok := md["id"]
+	rID, ok := md["id"]
 	if !ok {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	remoteAddr, ok := md["addr"]
+	rAddr, ok := md["addr"]
 	if !ok {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -440,13 +440,28 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		voter = true
 	}
-
 	if voter.(bool) && !s.CheckRequestPerm(r, auth.PermJoin) {
 		http.Error(w, "joining as voter not allowed", http.StatusUnauthorized)
 		return
 	}
 
-	if err := s.store.Join(remoteID.(string), remoteAddr.(string), voter.(bool)); err != nil {
+	remoteID, remoteAddr := rID.(string), rAddr.(string)
+
+	s.logger.Printf("received join request from node with ID %s at %s",
+		remoteID, remoteAddr)
+
+	// Confirm that this node can resolve the remote address. This can happen due
+	// to incomplete DNS records across the underlying infrastructure. If it can't
+	// then don't consider this join attempt successful -- so the joining node
+	// will presumably try again.
+	if addr, err := resolvableAddress(remoteAddr); err != nil {
+		s.logger.Printf("failed to resolve %s (%s) while handling join request", addr, err)
+		http.Error(w, fmt.Sprintf("can't resolve %s (%s)", addr, err.Error()),
+			http.StatusServiceUnavailable)
+		return
+	}
+
+	if err := s.store.Join(remoteID, remoteAddr, voter.(bool)); err != nil {
 		if err == store.ErrNotLeader {
 			leaderAPIAddr := s.LeaderAPIAddr()
 			if leaderAPIAddr == "" {
@@ -499,6 +514,9 @@ func (s *Service) handleNotify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	remoteID, remoteAddr := rID.(string), rAddr.(string)
+
+	s.logger.Printf("received notify request from node with ID %s at %s",
+		remoteID, remoteAddr)
 
 	// Confirm that this node can resolve the remote address. This can happen due
 	// to incomplete DNS records across the underlying infrastructure. If it can't

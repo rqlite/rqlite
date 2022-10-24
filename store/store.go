@@ -929,7 +929,7 @@ func (s *Store) Notify(id, addr string) error {
 	if bf.Error() != nil {
 		s.logger.Printf("cluster bootstrap failed: %s", bf.Error())
 	} else {
-		s.logger.Printf("cluster bootstrap successful")
+		s.logger.Printf("cluster bootstrap successful, servers: %s", raftServers)
 	}
 	s.bootstrapped = true
 	return nil
@@ -938,7 +938,6 @@ func (s *Store) Notify(id, addr string) error {
 // Join joins a node, identified by id and located at addr, to this store.
 // The node must be ready to respond to Raft communications at that address.
 func (s *Store) Join(id, addr string, voter bool) error {
-	s.logger.Printf("received request from node with ID %s, at %s, to join this node", id, addr)
 	if s.raft.State() != raft.Leader {
 		return ErrNotLeader
 	}
