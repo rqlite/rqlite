@@ -336,8 +336,14 @@ func (s *Service) handleConn(conn net.Conn) {
 			} else if !s.checkCommandPerm(c, auth.PermLoad) {
 				resp.Error = "unauthorized"
 			} else {
-				if err := s.db.Load(lr); err != nil {
-					resp.Error = fmt.Sprintf("remote node failed to load: %s", err.Error())
+				// Decompress data which came from the remote node.
+				lr.Data, err = gzUncompress(lr.Data)
+				if err != nil {
+					resp.Error = fmt.Sprintf("remote node failed to decompress load: %s", err.Error())
+				} else {
+					if err := s.db.Load(lr); err != nil {
+						resp.Error = fmt.Sprintf("remote node failed to load: %s", err.Error())
+					}
 				}
 			}
 
@@ -372,4 +378,21 @@ func gzCompress(b []byte) ([]byte, error) {
 		return nil, fmt.Errorf("gzip Close: %s", err)
 	}
 	return buf.Bytes(), nil
+}
+
+func gzUncompress(b []byte) ([]byte, error) {
+	gz, err := gzip.NewReader(bytes.NewReader(b))
+	if err != nil {
+		return nil, fmt.Errorf("unmarshal gzip NewReader: %s", err)
+	}
+
+	ub, err := io.ReadAll(gz)
+	if err != nil {
+		return nil, fmt.Errorf("unmarshal gzip ReadAll: %s", err)
+	}
+
+	if err := gz.Close(); err != nil {
+		return nil, fmt.Errorf("unmarshal gzip Close: %s", err)
+	}
+	return ub, nil
 }

@@ -1,8 +1,6 @@
 package cluster
 
 import (
-	"bytes"
-	"compress/gzip"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -234,6 +232,12 @@ func (c *Client) Load(lr *command.LoadRequest, nodeAddr string, creds *Credentia
 	}
 	defer conn.Close()
 
+	// Compress the SQLite data in the LoadRequest to minimize space on the wire.
+	lr.Data, err = gzCompress(lr.Data)
+	if err != nil {
+		return err
+	}
+
 	// Create the request.
 	command := &Command{
 		Type: Command_COMMAND_TYPE_LOAD,
@@ -386,21 +390,4 @@ func handleConnError(conn net.Conn) {
 	if pc, ok := conn.(*pool.Conn); ok {
 		pc.MarkUnusable()
 	}
-}
-
-func gzUncompress(b []byte) ([]byte, error) {
-	gz, err := gzip.NewReader(bytes.NewReader(b))
-	if err != nil {
-		return nil, fmt.Errorf("unmarshal gzip NewReader: %s", err)
-	}
-
-	ub, err := io.ReadAll(gz)
-	if err != nil {
-		return nil, fmt.Errorf("unmarshal gzip ReadAll: %s", err)
-	}
-
-	if err := gz.Close(); err != nil {
-		return nil, fmt.Errorf("unmarshal gzip Close: %s", err)
-	}
-	return ub, nil
 }
