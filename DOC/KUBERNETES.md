@@ -73,8 +73,16 @@ spec:
             scheme: HTTP
             path: /readyz
             port: 4001
-          initialDelaySeconds: 1
+          initialDelaySeconds: 15
           periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            scheme: HTTP
+            path: /readyz?noleader
+            port: rqlite
+          initialDelaySeconds: 15
+          timeoutSeconds: 5
+          failureThreshold: 3
         volumeMounts:
         - name: rqlite-file
           mountPath: /rqlite/file
