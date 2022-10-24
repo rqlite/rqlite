@@ -28,7 +28,7 @@ const (
 	numExecuteRequest     = "num_execute_req"
 	numQueryRequest       = "num_query_req"
 	numBackupRequest      = "num_backup_req"
-	numLoadRequest        = "num_backup_req"
+	numLoadRequest        = "num_load_req"
 
 	// Client stats for this package.
 	numGetNodeAPIRequestLocal = "num_get_node_api_req_local"
