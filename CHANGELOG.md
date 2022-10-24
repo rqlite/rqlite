@@ -1,4 +1,4 @@
-## 7.9.1 (unreleased)
+## 7.9.1 (October 23rd 2022)
 ### Implementation changes and bug fixes
 - [PR #1086](https://github.com/rqlite/rqlite/pull/1086): Restoring via follower should have same HTTP response body.
 - [PR #1087](https://github.com/rqlite/rqlite/pull/1087): Notified and joined node checks address resolution.
