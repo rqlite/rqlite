@@ -1,7 +1,7 @@
 ## 7.9.1 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #1086](https://github.com/rqlite/rqlite/pull/1086): Restoring via follower should have same HTTP response body.
-- [PR #1087](https://github.com/rqlite/rqlite/pull/1087): Notified node checks address resolution.
+- [PR #1087](https://github.com/rqlite/rqlite/pull/1087): Notified and joined node checks address resolution.
 
 ## 7.9.0 (October 22nd 2022)
 This release makes it more convenient to load SQLite files directly into rqlite, as any node can now process the request. For this to work however, all nodes in your cluster must be running 7.9.0 (or later). Otherwse 7.9.0 is fully compatible with earlier release, so a rolling upgrade process is an option.
