@@ -119,7 +119,8 @@ func (b *Bootstrapper) Boot(id, raftAddr string, done func() bool, timeout time.
 			// one yet.
 			if !notifySuccess {
 				if err := b.notify(targets, id, raftAddr); err != nil {
-					b.logger.Printf("failed to notify all targets: %s (will retry)", targets)
+					b.logger.Printf("failed to notify all targets: %s (%s, will retry)", targets,
+						err.Error())
 				} else {
 					b.logger.Printf("succeeded notifying all targets: %s", targets)
 					notifySuccess = true
@@ -161,11 +162,13 @@ func (b *Bootstrapper) notify(targets []string, id, raftAddr string) error {
 
 			resp, err := client.Do(req)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to post notification to node at %s: %s",
+					rurl.RemoveBasicAuth(fullTarget), err)
 			}
 			resp.Body.Close()
 			switch resp.StatusCode {
 			case http.StatusOK:
+				b.logger.Printf("succeeded notifying target: %s", rurl.RemoveBasicAuth(fullTarget))
 				break TargetLoop
 			case http.StatusBadRequest:
 				// One possible cause is that the target server is listening for HTTPS, but

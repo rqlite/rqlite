@@ -806,7 +806,7 @@ func Test_NotifyNoResolve(t *testing.T) {
 
 	client := &http.Client{}
 	host := fmt.Sprintf("http://%s", s.Addr().String())
-	resp, err := client.Post(host+"/notify", "application/json", mustMarshalNotifyMap("id1", "nonsense-domain"))
+	resp, err := client.Post(host+"/notify", "application/json", mustMarshalNotifyMap("id1", "nonsense-domain:4444"))
 	if err != nil {
 		t.Fatalf("failed to make load request")
 	}

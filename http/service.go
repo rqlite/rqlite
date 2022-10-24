@@ -504,9 +504,11 @@ func (s *Service) handleNotify(w http.ResponseWriter, r *http.Request) {
 	// to incomplete DNS records across the underlying infrastructure. If it can't
 	// then don't consider this notify attempt successful -- so the notifying node
 	// will presumably try again.
-	if _, err = net.LookupHost(remoteAddr); err != nil {
-		http.Error(w, fmt.Sprintf("can't resolve %s (%s)", remoteAddr, err.Error()),
+	if addr, err := resolvableAddress(remoteAddr); err != nil {
+		s.logger.Printf("failed to resolve %s (%s) while handling notify request", addr, err)
+		http.Error(w, fmt.Sprintf("can't resolve %s (%s)", addr, err.Error()),
 			http.StatusServiceUnavailable)
+		return
 	}
 
 	if err := s.store.Notify(remoteID, remoteAddr); err != nil {
@@ -1836,6 +1838,16 @@ func queryRequestFromStrings(s []string, timings, tx bool) *command.QueryRequest
 // file. See https://www.sqlite.org/fileformat.html
 func validSQLiteFile(b []byte) bool {
 	return len(b) > 13 && string(b[0:13]) == "SQLite format"
+}
+
+func resolvableAddress(addr string) (string, error) {
+	h, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		// Just try the given address directly.
+		h = addr
+	}
+	_, err = net.LookupHost(h)
+	return h, err
 }
 
 func makeCredentials(username, password string) *cluster.Credentials {
