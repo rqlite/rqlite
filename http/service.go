@@ -665,9 +665,9 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
 			if backupErr != nil {
 				if backupErr.Error() == "unauthorized" {
 					http.Error(w, "remote backup not authorized", http.StatusUnauthorized)
-					return
+				} else {
+					http.Error(w, backupErr.Error(), http.StatusInternalServerError)
 				}
-				http.Error(w, backupErr.Error(), http.StatusInternalServerError)
 				return
 			}
 			stats.Add(numRemoteBackups, 1)
@@ -765,9 +765,9 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 			if loadErr != nil {
 				if loadErr.Error() == "unauthorized" {
 					http.Error(w, "remote load not authorized", http.StatusUnauthorized)
-					return
+				} else {
+					http.Error(w, loadErr.Error(), http.StatusInternalServerError)
 				}
-				http.Error(w, loadErr.Error(), http.StatusInternalServerError)
 				return
 			}
 			stats.Add(numRemoteLoads, 1)
