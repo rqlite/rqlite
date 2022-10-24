@@ -488,19 +488,28 @@ func (s *Service) handleNotify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	remoteID, ok := md["id"]
+	rID, ok := md["id"]
 	if !ok {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-
-	remoteAddr, ok := md["addr"]
+	rAddr, ok := md["addr"]
 	if !ok {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+	remoteID, remoteAddr := rID.(string), rAddr.(string)
 
-	if err := s.store.Notify(remoteID.(string), remoteAddr.(string)); err != nil {
+	// Confirm that this node can resolve the remote address. This can happen due
+	// to incomplete DNS records across the underlying infrastructure. If it can't
+	// then don't consider this notify attempt successful -- so the notifying node
+	// will presumably try again.
+	if _, err = net.LookupHost(remoteAddr); err != nil {
+		http.Error(w, fmt.Sprintf("can't resolve %s (%s)", remoteAddr, err.Error()),
+			http.StatusServiceUnavailable)
+	}
+
+	if err := s.store.Notify(remoteID, remoteAddr); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }

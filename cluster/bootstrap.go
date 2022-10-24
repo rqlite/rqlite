@@ -119,9 +119,9 @@ func (b *Bootstrapper) Boot(id, raftAddr string, done func() bool, timeout time.
 			// one yet.
 			if !notifySuccess {
 				if err := b.notify(targets, id, raftAddr); err != nil {
-					b.logger.Printf("failed to notify %s, retrying", targets)
+					b.logger.Printf("failed to notify all targets: %s (will retry)", targets)
 				} else {
-					b.logger.Printf("succeeded notifying %s", targets)
+					b.logger.Printf("succeeded notifying all targets: %s", targets)
 					notifySuccess = true
 				}
 			}
@@ -174,7 +174,8 @@ func (b *Bootstrapper) notify(targets []string, id, raftAddr string) error {
 				// record information about which protocol a registered node is actually using.
 				if strings.HasPrefix(fullTarget, "https://") {
 					// It's already HTTPS, give up.
-					return fmt.Errorf("failed to notify node at %s: %s", fullTarget, resp.Status)
+					return fmt.Errorf("failed to notify node at %s: %s", rurl.RemoveBasicAuth(fullTarget),
+						resp.Status)
 				}
 				fullTarget = rurl.EnsureHTTPS(fullTarget)
 			default:

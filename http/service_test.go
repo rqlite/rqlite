@@ -758,6 +758,59 @@ func Test_LoadFlagsNoLeader(t *testing.T) {
 	}
 }
 
+func Test_NotifyLocalhost(t *testing.T) {
+	m := &MockStore{}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+	resp, err := client.Post(host+"/notify", "application/json", mustMarshalNotifyMap("id1", "localhost"))
+	if err != nil {
+		t.Fatalf("failed to make load request")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("failed to get expected StatusOK for notify, got %d", resp.StatusCode)
+	}
+}
+
+func Test_NotifyNoResolve(t *testing.T) {
+	m := &MockStore{}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+	resp, err := client.Post(host+"/notify", "application/json", mustMarshalNotifyMap("id1", "nonsense-domain"))
+	if err != nil {
+		t.Fatalf("failed to make load request")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("failed to get expected StatusOK for load, got %d", resp.StatusCode)
+	}
+}
+
+func mustMarshalNotifyMap(id, addr string) io.Reader {
+	buf, err := json.Marshal(map[string]interface{}{
+		"id":   id,
+		"addr": addr,
+	})
+	if err != nil {
+		panic("failed to marshal notify map")
+	}
+	return bytes.NewReader(buf)
+}
+
 func Test_RegisterStatus(t *testing.T) {
 	var stats *mockStatusReporter
 	m := &MockStore{}

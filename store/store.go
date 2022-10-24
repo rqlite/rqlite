@@ -894,6 +894,8 @@ func (s *Store) Load(lr *command.LoadRequest) error {
 // bootstrapping will be attempted using this Store. "Expected level" includes
 // this node, so this node must self-notify to ensure the cluster bootstraps
 // with the *advertised Raft address* which the Store doesn't know about.
+//
+// Notifying is idempotent. A node may repeatedly notify the Store without issue.
 func (s *Store) Notify(id, addr string) error {
 	s.notifyMu.Lock()
 	defer s.notifyMu.Unlock()
