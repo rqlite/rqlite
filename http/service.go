@@ -662,8 +662,12 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
 
 			w.Header().Add(ServedByHTTPHeader, addr)
 			backupErr := s.cluster.Backup(br, addr, makeCredentials(username, password), timeout, w)
-			if backupErr != nil && backupErr.Error() == "unauthorized" {
-				http.Error(w, "remote backup not authorized", http.StatusUnauthorized)
+			if backupErr != nil {
+				if backupErr.Error() == "unauthorized" {
+					http.Error(w, "remote backup not authorized", http.StatusUnauthorized)
+					return
+				}
+				http.Error(w, backupErr.Error(), http.StatusInternalServerError)
 				return
 			}
 			stats.Add(numRemoteBackups, 1)
