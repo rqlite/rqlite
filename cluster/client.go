@@ -19,6 +19,8 @@ import (
 const (
 	initialPoolSize = 4
 	maxPoolCapacity = 64
+
+	protoBufferLengthSize = 8
 )
 
 // Client allows communicating with a remote node.
@@ -339,8 +341,8 @@ func writeCommand(conn net.Conn, c *Command, timeout time.Duration) error {
 	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
 		return err
 	}
-	b := make([]byte, 4)
-	binary.LittleEndian.PutUint16(b[0:], uint16(len(p)))
+	b := make([]byte, protoBufferLengthSize)
+	binary.LittleEndian.PutUint64(b[0:], uint64(len(p)))
 	_, err = conn.Write(b)
 	if err != nil {
 		return err
@@ -358,12 +360,12 @@ func readResponse(conn net.Conn, timeout time.Duration) ([]byte, error) {
 	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
 		return nil, err
 	}
-	b := make([]byte, 4)
+	b := make([]byte, protoBufferLengthSize)
 	_, err := io.ReadFull(conn, b)
 	if err != nil {
 		return nil, err
 	}
-	sz := binary.LittleEndian.Uint32(b[0:])
+	sz := binary.LittleEndian.Uint64(b[0:])
 
 	// Read in the actual response.
 	p := make([]byte, sz)
