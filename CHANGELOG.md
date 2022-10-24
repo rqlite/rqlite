@@ -3,6 +3,7 @@ This release addresses a shortcoming in inter-node communications. Nodes now con
 
 ### Implementation changes and bug fixes
 - [PR #1089](https://github.com/rqlite/rqlite/pull/1089): Move to 8-byte Protobuf lengths for cluster communications.
+- [PR #1090](https://github.com/rqlite/rqlite/pull/1090): Correct error handling for remote load and backup failures.
 
 ## 7.9.1 (October 23rd 2022)
 ### Implementation changes and bug fixes
