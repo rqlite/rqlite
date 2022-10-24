@@ -1,5 +1,5 @@
 ## 7.9.2 (unreleased)
-This release addresses a shortcoming in inter-node communications, ensuring that Protobufs up to 2^64 bytes in size can be communicated correctly. **If any node is upgraded to this release, then all nodes should be**. However this change only affects transparently-forwarded queries, loads, and restores, so a rolling upgrade is an option (as long as there is no such traffic during the upgrade -- if there is, clients may receive an error during the upgrade process).
+This release addresses a shortcoming in inter-node communications, ensuring that Protobufs up to 2^64 bytes in size can be transmitted correctly. **If any node is upgraded to this release, then all nodes should be**. However this change only affects transparently-forwarded queries, loads, and restores, so a rolling upgrade is an option (as long as there is no such traffic during the upgrade -- if there is, clients may receive an error during the upgrade process).
 
 ### Implementation changes and bug fixes
 - [PR #1089](https://github.com/rqlite/rqlite/pull/1089): Move to 8-byte Protobuf lengths for cluster communications.
