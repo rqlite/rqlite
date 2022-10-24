@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -97,7 +96,7 @@ func Test_ServiceExecute(t *testing.T) {
 	if err == nil {
 		t.Fatalf("failed to receive expected error")
 	}
-	if !errors.Is(err, os.ErrDeadlineExceeded) {
+	if !strings.Contains(err.Error(), "i/o timeout") {
 		t.Fatalf("failed to receive expected error, got: %T %s", err, err)
 	}
 
@@ -185,7 +184,7 @@ func Test_ServiceQuery(t *testing.T) {
 	if err == nil {
 		t.Fatalf("failed to receive expected error")
 	}
-	if !errors.Is(err, os.ErrDeadlineExceeded) {
+	if !strings.Contains(err.Error(), "i/o timeout") {
 		t.Fatalf("failed to receive expected error, got: %T %s", err, err)
 	}
 
