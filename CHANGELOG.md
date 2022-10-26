@@ -1,3 +1,7 @@
+## 7.9.3 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1094](https://github.com/rqlite/rqlite/pull/1094): Update packages to resolve CVE-2022-32149 and CVE-2022-27664. Thanks @sgalsaleh
+
 ## 7.9.2 (October 24th 2022)
 This release addresses a shortcoming in inter-node communications. Nodes now consistently encode the length of those communications using 8-byte values. **If any node in a cluster is upgraded to this release, then all nodes in that cluster should be**. 
 
