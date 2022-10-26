@@ -25,6 +25,7 @@ func init() {
 
 func Test_OpenStoreSingleNode(t *testing.T) {
 	s, ln := mustNewStore(t, true)
+	defer s.Close(true)
 	defer ln.Close()
 
 	if err := s.Open(); err != nil {
