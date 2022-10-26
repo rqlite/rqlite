@@ -1139,7 +1139,7 @@ func Test_TLSServce(t *testing.T) {
 	m := &MockStore{}
 	c := &mockClusterService{}
 	var s *Service
-	tempDir := mustTempDir()
+	tempDir := t.TempDir()
 
 	s = New("127.0.0.1:0", m, c, nil)
 	s.CertFile = x509.CertFile(tempDir)
@@ -1368,15 +1368,6 @@ func mustNewHTTPRequest(url string) *http.Request {
 		panic("failed to create HTTP request for testing")
 	}
 	return req
-}
-
-func mustTempDir() string {
-	var err error
-	path, err := ioutil.TempDir("", "rqlilte-system-test-")
-	if err != nil {
-		panic("failed to create temp dir")
-	}
-	return path
 }
 
 func mustURLParse(s string) *url.URL {
