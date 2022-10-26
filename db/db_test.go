@@ -21,8 +21,7 @@ import (
  */
 
 func Test_DbFileCreation(t *testing.T) {
-	dir, err := ioutil.TempDir("", "rqlite-test-")
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 	dbPath := path.Join(dir, "test_db")
 
 	db, err := Open(dbPath, false)
