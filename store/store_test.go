@@ -1806,6 +1806,7 @@ func Test_SingleNodeSnapshotInMem(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create snapshot file: %s", err.Error())
 	}
+	defer snapFile.Close()
 	sink := &mockSnapshotSink{snapFile}
 	if err := f.Persist(sink); err != nil {
 		t.Fatalf("failed to persist snapshot to disk: %s", err.Error())
@@ -1816,6 +1817,7 @@ func Test_SingleNodeSnapshotInMem(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open snapshot file: %s", err.Error())
 	}
+	defer snapFile.Close()
 	if err := s.Restore(snapFile); err != nil {
 		t.Fatalf("failed to restore snapshot from disk: %s", err.Error())
 	}
