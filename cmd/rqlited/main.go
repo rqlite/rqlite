@@ -23,6 +23,7 @@ import (
 	"github.com/rqlite/rqlite/auth"
 	"github.com/rqlite/rqlite/cluster"
 	"github.com/rqlite/rqlite/cmd"
+	"github.com/rqlite/rqlite/db"
 	"github.com/rqlite/rqlite/disco"
 	httpd "github.com/rqlite/rqlite/http"
 	"github.com/rqlite/rqlite/store"
@@ -53,9 +54,10 @@ func init() {
 
 func main() {
 	cfg, err := ParseFlags(name, desc, &BuildInfo{
-		Version: cmd.Version,
-		Commit:  cmd.Commit,
-		Branch:  cmd.Branch,
+		Version:       cmd.Version,
+		Commit:        cmd.Commit,
+		Branch:        cmd.Branch,
+		SQLiteVersion: db.DBVersion,
 	})
 	if err != nil {
 		log.Fatalf("failed to parse command-line flags: %s", err.Error())
@@ -65,8 +67,10 @@ func main() {
 	fmt.Printf(logo)
 
 	// Configure logging and pump out initial message.
-	log.Printf("%s starting, version %s, commit %s, branch %s, compiler %s", name, cmd.Version, cmd.Commit, cmd.Branch, runtime.Compiler)
-	log.Printf("%s, target architecture is %s, operating system target is %s", runtime.Version(), runtime.GOARCH, runtime.GOOS)
+	log.Printf("%s starting, version %s, SQLite %s, commit %s, branch %s, compiler %s", name, cmd.Version,
+		db.DBVersion, cmd.Commit, cmd.Branch, runtime.Compiler)
+	log.Printf("%s, target architecture is %s, operating system target is %s", runtime.Version(),
+		runtime.GOARCH, runtime.GOOS)
 	log.Printf("launch command: %s", strings.Join(os.Args, " "))
 
 	// Start requested profiling.
