@@ -1,4 +1,7 @@
-## 7.9.3 (unreleased)
+## 7.10.0 (unreleased)
+### New features
+- [PR #1096](https://github.com/rqlite/rqlite/pull/1096): Upgrade to SQLite 3.39.4.
+
 ### Implementation changes and bug fixes
 - [PR #1094](https://github.com/rqlite/rqlite/pull/1094): Update packages to resolve CVE-2022-32149 and CVE-2022-27664. Thanks @sgalsaleh
 - [PR #1095](https://github.com/rqlite/rqlite/pull/1095): Log, and add to version output, the SQLite release
