@@ -331,9 +331,10 @@ func (c *Config) DiscoConfigReader() io.ReadCloser {
 
 // BuildInfo is build information for display at command line.
 type BuildInfo struct {
-	Version string
-	Commit  string
-	Branch  string
+	Version       string
+	Commit        string
+	Branch        string
+	SQLiteVersion string
 }
 
 // ParseFlags parses the command line, and returns the configuration.
@@ -404,8 +405,9 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	flag.Parse()
 
 	if showVersion {
-		msg := fmt.Sprintf("%s %s %s %s %s (commit %s, branch %s, compiler %s)",
-			name, build.Version, runtime.GOOS, runtime.GOARCH, runtime.Version(), build.Commit, build.Branch, runtime.Compiler)
+		msg := fmt.Sprintf("%s %s %s %s %s sqlite%s (commit %s, branch %s, compiler %s)",
+			name, build.Version, runtime.GOOS, runtime.GOARCH, runtime.Version(), build.SQLiteVersion,
+			build.Commit, build.Branch, runtime.Compiler)
 		errorExit(0, msg)
 	}
 
