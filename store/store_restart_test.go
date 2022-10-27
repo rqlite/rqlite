@@ -2,7 +2,6 @@ package store
 
 import (
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
@@ -185,6 +184,7 @@ func openStoreCloseStartup(t *testing.T, s *Store) {
 	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
+	defer s.Close(true)
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
@@ -209,9 +209,8 @@ func openStoreCloseStartup(t *testing.T, s *Store) {
 // Test_OpenStoreCloseStartupOnDiskSingleNode tests that the on-disk
 // optimization can be disabled in various scenarios.
 func Test_OpenStoreCloseStartupOnDiskSingleNode(t *testing.T) {
-	s, ln := mustNewStore(false)
+	s, ln := mustNewStore(t, false)
 	s.StartupOnDisk = true
-	defer os.RemoveAll(s.Path())
 	defer ln.Close()
 
 	openStoreCloseStartup(t, s)
@@ -220,9 +219,8 @@ func Test_OpenStoreCloseStartupOnDiskSingleNode(t *testing.T) {
 // Test_OpenStoreCloseStartupMemorySingleNode tests that the on-disk
 // optimization works fine.
 func Test_OpenStoreCloseStartupMemorySingleNode(t *testing.T) {
-	s, ln := mustNewStore(false)
+	s, ln := mustNewStore(t, false)
 	s.StartupOnDisk = false
-	defer os.RemoveAll(s.Path())
 	defer ln.Close()
 
 	openStoreCloseStartup(t, s)
@@ -231,8 +229,7 @@ func Test_OpenStoreCloseStartupMemorySingleNode(t *testing.T) {
 // Test_OpenStoreCloseStartupMemoryOnlySingleNode tests that in-memory
 // works fine during various restart scenarios.
 func Test_OpenStoreCloseStartupMemoryOnlySingleNode(t *testing.T) {
-	s, ln := mustNewStore(true)
-	defer os.RemoveAll(s.Path())
+	s, ln := mustNewStore(t, true)
 	defer ln.Close()
 
 	openStoreCloseStartup(t, s)
