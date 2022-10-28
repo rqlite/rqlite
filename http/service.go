@@ -959,8 +959,11 @@ func (s *Service) handleNodes(w http.ResponseWriter, r *http.Request) {
 	// Get nodes in the cluster, and possibly filter out non-voters.
 	nodes, err := s.store.Nodes()
 	if err != nil {
-		http.Error(w, fmt.Sprintf("store nodes: %s", err.Error()),
-			http.StatusInternalServerError)
+		statusCode := http.StatusInternalServerError
+		if err == store.ErrNotOpen {
+			statusCode = http.StatusServiceUnavailable
+		}
+		http.Error(w, fmt.Sprintf("store nodes: %s", err.Error()), statusCode)
 		return
 	}
 
