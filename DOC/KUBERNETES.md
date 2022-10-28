@@ -7,7 +7,7 @@ The first thing to do is to create two [Kubernetes _Services_](https://kubernete
 
 A key difference between `rqlite-svc-internal` and `rqlite-svc` is that the second will only contain Pods that are ready to serve traffic. This makes it most suitable for use by end-users of rqlite.
 ```bash
-curl -s https://raw.githubusercontent.com/rqlite/kubernetes-configuration/master/service.yaml -O rqlite-service.yaml
+curl -s https://raw.githubusercontent.com/rqlite/kubernetes-configuration/master/service.yaml -o rqlite-service.yaml
 kubectl apply -f rqlite-service.yaml
 ```
 
