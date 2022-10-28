@@ -284,6 +284,21 @@ func Test_MultiNodeClusterBootstrap(t *testing.T) {
 		t.Fatalf("failed to find cluster leader: %s", err.Error())
 	}
 
+	// Ensure each node has the same leader!
+	leaderAddr, err := leader.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed to find cluster leader: %s", err.Error())
+	}
+	for i, n := range []*Node{node1, node2, node3} {
+		addr, err := n.WaitForLeader()
+		if err != nil {
+			t.Fatalf("failed waiting for a leader on node %d: %s", i, err.Error())
+		}
+		if exp, got := leaderAddr, addr; exp != got {
+			t.Fatalf("node %d has wrong leader, exp %s, got %s", i, exp, got)
+		}
+	}
+
 	// Run queries against cluster.
 	tests := []struct {
 		stmt     string
