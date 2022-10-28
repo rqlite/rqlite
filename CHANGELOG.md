@@ -1,3 +1,8 @@
+## 7.10.1 (unreleased)
+
+### Implementation changes and bug fixes
+- [PR #1097](https://github.com/rqlite/rqlite/pull/1097): Start HTTP server as soon as possible after launch.
+
 ## 7.10.0 (October 26th 2022)
 ### New features
 - [PR #1096](https://github.com/rqlite/rqlite/pull/1096): Upgrade to SQLite 3.39.4.
