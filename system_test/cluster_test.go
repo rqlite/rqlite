@@ -238,9 +238,9 @@ func Test_MultiNodeClusterBootstrap(t *testing.T) {
 
 	provider := cluster.NewAddressProviderString(
 		[]string{node1.APIAddr, node2.APIAddr, node3.APIAddr})
-	node1Bs := cluster.NewBootstrapper(provider, 3, nil)
-	node2Bs := cluster.NewBootstrapper(provider, 3, nil)
-	node3Bs := cluster.NewBootstrapper(provider, 3, nil)
+	node1Bs := cluster.NewBootstrapper(provider, nil)
+	node2Bs := cluster.NewBootstrapper(provider, nil)
+	node3Bs := cluster.NewBootstrapper(provider, nil)
 
 	// Have all nodes start a bootstrap basically in parallel,
 	// ensure only 1 leader actually gets elected.
@@ -388,11 +388,11 @@ func Test_MultiNodeClusterBootstrapLaterJoin(t *testing.T) {
 
 	provider := cluster.NewAddressProviderString(
 		[]string{node1.APIAddr, node2.APIAddr, node3.APIAddr})
-	node1Bs := cluster.NewBootstrapper(provider, 3, nil)
+	node1Bs := cluster.NewBootstrapper(provider, nil)
 	node1Bs.Interval = time.Second
-	node2Bs := cluster.NewBootstrapper(provider, 3, nil)
+	node2Bs := cluster.NewBootstrapper(provider, nil)
 	node2Bs.Interval = time.Second
-	node3Bs := cluster.NewBootstrapper(provider, 3, nil)
+	node3Bs := cluster.NewBootstrapper(provider, nil)
 	node3Bs.Interval = time.Second
 
 	// Have all nodes start a bootstrap basically in parallel,
@@ -451,7 +451,7 @@ func Test_MultiNodeClusterBootstrapLaterJoin(t *testing.T) {
 	node4 := mustNewNode(false)
 	node4.Store.BootstrapExpect = 3
 	defer node3.Deprovision()
-	node4Bs := cluster.NewBootstrapper(provider, 3, nil)
+	node4Bs := cluster.NewBootstrapper(provider, nil)
 	node4Bs.Interval = time.Second
 	done := func() bool {
 		addr, _ := node4.Store.LeaderAddr()
@@ -486,11 +486,11 @@ func Test_MultiNodeClusterBootstrapLaterJoinHTTPS(t *testing.T) {
 
 	provider := cluster.NewAddressProviderString(
 		[]string{node1.APIAddr, node2.APIAddr, node3.APIAddr})
-	node1Bs := cluster.NewBootstrapper(provider, 3, nil)
+	node1Bs := cluster.NewBootstrapper(provider, nil)
 	node1Bs.Interval = time.Second
-	node2Bs := cluster.NewBootstrapper(provider, 3, nil)
+	node2Bs := cluster.NewBootstrapper(provider, nil)
 	node2Bs.Interval = time.Second
-	node3Bs := cluster.NewBootstrapper(provider, 3, nil)
+	node3Bs := cluster.NewBootstrapper(provider, nil)
 	node3Bs.Interval = time.Second
 
 	// Have all nodes start a bootstrap basically in parallel,
@@ -549,7 +549,7 @@ func Test_MultiNodeClusterBootstrapLaterJoinHTTPS(t *testing.T) {
 	node4 := mustNewNodeEncrypted(false, true, true)
 	node4.Store.BootstrapExpect = 3
 	defer node3.Deprovision()
-	node4Bs := cluster.NewBootstrapper(provider, 3, nil)
+	node4Bs := cluster.NewBootstrapper(provider, nil)
 	node4Bs.Interval = time.Second
 	done := func() bool {
 		addr, _ := node4.Store.LeaderAddr()
