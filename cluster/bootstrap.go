@@ -106,7 +106,8 @@ func (b *Bootstrapper) Boot(id, raftAddr string, done func() bool, timeout time.
 				continue
 			}
 
-			// Try an explicit join.
+			// Try an explicit join first. Joining an existing cluster is always given priority
+			// over trying to form a new cluster.
 			b.joiner.SetBasicAuth(b.username, b.password)
 			if j, err := b.joiner.Do(targets, id, raftAddr, true); err == nil {
 				b.logger.Printf("succeeded directly joining cluster via node at %s", j)
