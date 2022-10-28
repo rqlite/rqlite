@@ -373,8 +373,7 @@ func createCluster(cfg *Config, tlsConfig *tls.Config, hasPeers bool, str *store
 			return nil
 		}
 
-		bs := cluster.NewBootstrapper(cluster.NewAddressProviderString(joins),
-			cfg.BootstrapExpect, tlsConfig)
+		bs := cluster.NewBootstrapper(cluster.NewAddressProviderString(joins), tlsConfig)
 		if cfg.JoinAs != "" {
 			pw, ok := credStr.Password(cfg.JoinAs)
 			if !ok {
@@ -424,7 +423,7 @@ func createCluster(cfg *Config, tlsConfig *tls.Config, hasPeers bool, str *store
 			provider = dnssrv.New(dnssrvCfg)
 		}
 
-		bs := cluster.NewBootstrapper(provider, cfg.BootstrapExpect, tlsConfig)
+		bs := cluster.NewBootstrapper(provider, tlsConfig)
 		if cfg.JoinAs != "" {
 			pw, ok := credStr.Password(cfg.JoinAs)
 			if !ok {
