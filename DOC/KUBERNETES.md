@@ -21,6 +21,14 @@ kubectl apply -f rqlite-3-nodes.yaml
 Note the `args` passed to rqlite in the YAML file. The arguments tell rqlite to use `dns` discovery mode, and to resolve the DNS name `rqlite-svc-internal` to find the IP addresses of other nodes in the cluster. Furthermore it tells rqlite to wait until three nodes are available (counting itself as one of those nodes) before attempting to form a cluster.
 
 ## Scaling the cluster
-You can grow the cluster at anytime, simply by setting the replica count to the desired cluster size. Shrinking the cluster, however, will require some manual intervention. As well reducing `replicas`, you will also need to [explicitly remove](https://github.com/rqlite/rqlite/blob/master/DOC/CLUSTER_MGMT.md#removing-or-replacing-a-node) the deprovisioned nodes, or the Leader will continually attempt to contact those nodes.
+You can grow the cluster at anytime, simply by setting the replica count to the desired cluster size. For example, to grow the above cluster to 9 nodes, you would issue the following command:
+```bash
+kubectl scale statefulsets rqlite --replicas=9
+```
+You could also increase the `replicas` count in `rqlite-3-nodes.yaml` and reapply the file. Note that you do **not** need to change the value of `bootstrap-expect`. If you do, you may trigger Kubernetes to restart the previously launched Pods, during the scaling process. `bootstrap-expect` only needs to be set to the desired size of your cluster on the very first time you launch it.
+
+> :warning: **It is important that your rqlite cluster is healthy and fully functional before scaling up. It is also critical that DNS is working properly too.** If this is not the case, some of the new nodes may become standalone single-node clusters, as they will be unavailable to connect to the Leader. 
+
+Shrinking the cluster, however, will require some manual intervention. As well reducing `replicas`, you will also need to [explicitly remove](https://github.com/rqlite/rqlite/blob/master/DOC/CLUSTER_MGMT.md#removing-or-replacing-a-node) the deprovisioned nodes, or the Leader will continually attempt to contact those nodes. 
 
 > :warning: **Be careful that you don't reduce the replica count such that there is no longer a quorum of nodes available. If you do this you will render your cluster unusable, and need to perform a manual recovery.** The manual recovery process is [fully documented](https://github.com/rqlite/rqlite/blob/master/DOC/CLUSTER_MGMT.md#dealing-with-failure).
