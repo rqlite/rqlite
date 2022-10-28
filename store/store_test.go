@@ -36,6 +36,10 @@ func Test_StoreSingleNodeNotOpen(t *testing.T) {
 		t.Fatalf("non-empty Leader return for non-open store: %s", a)
 	}
 
+	if _, err := s.Stats(); err != nil {
+		t.Fatalf("stats fetch returned error for non-open store: %s", err)
+	}
+
 	// Check key methods handle being called when Store is not open.
 
 	if err := s.Join("id", "localhost", true); err != ErrNotOpen {
@@ -45,9 +49,6 @@ func Test_StoreSingleNodeNotOpen(t *testing.T) {
 		t.Fatalf("wrong error received for non-open store: %s", err)
 	}
 	if err := s.Remove("id"); err != ErrNotOpen {
-		t.Fatalf("wrong error received for non-open store: %s", err)
-	}
-	if _, err := s.Stats(); err != ErrNotOpen {
 		t.Fatalf("wrong error received for non-open store: %s", err)
 	}
 	if _, err := s.Nodes(); err != ErrNotOpen {
