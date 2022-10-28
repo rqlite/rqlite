@@ -76,12 +76,6 @@ func main() {
 	// Start requested profiling.
 	startProfile(cfg.CPUProfile, cfg.MemProfile)
 
-	// Get any credential store.
-	credStr, err := credentialStore(cfg)
-	if err != nil {
-		log.Fatalf("failed to get credential store: %s", err.Error())
-	}
-
 	// Create internode network mux and configure.
 	muxLn, err := net.Listen("tcp", cfg.RaftAddr)
 	if err != nil {
@@ -98,6 +92,12 @@ func main() {
 	str, err := createStore(cfg, raftTn)
 	if err != nil {
 		log.Fatalf("failed to create store: %s", err.Error())
+	}
+
+	// Get any credential store.
+	credStr, err := credentialStore(cfg)
+	if err != nil {
+		log.Fatalf("failed to get credential store: %s", err.Error())
 	}
 
 	// Create cluster service now, so nodes will be able to learn information about each other.
