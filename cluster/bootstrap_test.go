@@ -24,7 +24,7 @@ func Test_AddressProviderString(t *testing.T) {
 }
 
 func Test_NewBootstrapper(t *testing.T) {
-	bs := NewBootstrapper(nil, 1, nil)
+	bs := NewBootstrapper(nil, nil)
 	if bs == nil {
 		t.Fatalf("failed to create a simple Bootstrapper")
 	}
@@ -39,7 +39,7 @@ func Test_BootstrapperBootDoneImmediately(t *testing.T) {
 		return true
 	}
 	p := NewAddressProviderString([]string{ts.URL})
-	bs := NewBootstrapper(p, 1, nil)
+	bs := NewBootstrapper(p, nil)
 	if err := bs.Boot("node1", "192.168.1.1:1234", done, 10*time.Second); err != nil {
 		t.Fatalf("failed to boot: %s", err)
 	}
@@ -54,7 +54,7 @@ func Test_BootstrapperBootTimeout(t *testing.T) {
 		return false
 	}
 	p := NewAddressProviderString([]string{ts.URL})
-	bs := NewBootstrapper(p, 1, nil)
+	bs := NewBootstrapper(p, nil)
 	bs.Interval = time.Second
 	err := bs.Boot("node1", "192.168.1.1:1234", done, 5*time.Second)
 	if err == nil {
@@ -97,7 +97,7 @@ func Test_BootstrapperBootSingleNotify(t *testing.T) {
 	}
 
 	p := NewAddressProviderString([]string{ts.URL})
-	bs := NewBootstrapper(p, 1, nil)
+	bs := NewBootstrapper(p, nil)
 	bs.Interval = time.Second
 
 	err := bs.Boot("node1", "192.168.1.1:1234", done, 60*time.Second)
@@ -145,7 +145,7 @@ func Test_BootstrapperBootSingleNotifyAuth(t *testing.T) {
 	}
 
 	p := NewAddressProviderString([]string{ts.URL})
-	bs := NewBootstrapper(p, 1, nil)
+	bs := NewBootstrapper(p, nil)
 	bs.SetBasicAuth("username1", "password1")
 	bs.Interval = time.Second
 
@@ -192,7 +192,7 @@ func Test_BootstrapperBootMultiNotify(t *testing.T) {
 	}
 
 	p := NewAddressProviderString([]string{ts1.URL, ts2.URL})
-	bs := NewBootstrapper(p, 2, nil)
+	bs := NewBootstrapper(p, nil)
 	bs.Interval = time.Second
 
 	err := bs.Boot("node1", "192.168.1.1:1234", done, 60*time.Second)
