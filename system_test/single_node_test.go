@@ -46,7 +46,7 @@ func Test_SingleNodeBasicEndpoint(t *testing.T) {
 	}
 }
 
-func Test_SingleNodeNotReady(t *testing.T) {
+func Test_SingleNodeNotReadyLive(t *testing.T) {
 	node := mustNewNode(false)
 	defer node.Deprovision()
 	ready, err := node.Ready()
@@ -55,6 +55,25 @@ func Test_SingleNodeNotReady(t *testing.T) {
 	}
 	if ready {
 		t.Fatalf("node is ready when it should not be")
+	}
+
+	liveness, err := node.Liveness()
+	if err != nil {
+		t.Fatalf(`failed to retrieve liveness: %s`, err)
+	}
+	if !liveness {
+		t.Fatalf("node is not live when it should not be")
+	}
+
+	// Confirm that hitting various endpoints with a non-ready node
+	// is OK.
+	_, err = node.Nodes(false)
+	if err != nil {
+		t.Fatalf(`failed to retrieve Nodes: %s`, err)
+	}
+	_, err = node.Status()
+	if err != nil {
+		t.Fatalf(`failed to retrieve status: %s`, err)
 	}
 }
 

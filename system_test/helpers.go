@@ -289,6 +289,18 @@ func (n *Node) Ready() (bool, error) {
 	return resp.StatusCode == 200, nil
 }
 
+// Liveness returns the viveness status for the node, primarily
+// for use by Kubernetes.
+func (n *Node) Liveness() (bool, error) {
+	v, _ := url.Parse("http://" + n.APIAddr + "/readyz?noleader")
+
+	resp, err := http.Get(v.String())
+	if err != nil {
+		return false, err
+	}
+	return resp.StatusCode == 200, nil
+}
+
 // Expvar returns the expvar output for node.
 func (n *Node) Expvar() (string, error) {
 	v, _ := url.Parse("http://" + n.APIAddr + "/debug/vars")
