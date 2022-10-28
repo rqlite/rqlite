@@ -75,6 +75,7 @@ spec:
             port: 4001
           initialDelaySeconds: 15
           periodSeconds: 5
+          timeoutSeconds: 2
         livenessProbe:
           httpGet:
             scheme: HTTP
