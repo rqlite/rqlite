@@ -25,7 +25,7 @@ You can grow the cluster at anytime, simply by setting the replica count to the 
 ```bash
 kubectl scale statefulsets rqlite --replicas=9
 ```
-You could also increase the `replicas` count in `rqlite-3-nodes.yaml` and reapply the file. Note that you do **not** need to change the value of `bootstrap-expect`. If you do, you may trigger Kubernetes to restart the previously launched Pods, during the scaling process. `bootstrap-expect` only needs to be set to the desired size of your cluster on the very first time you launch it.
+You could also increase the `replicas` count in `rqlite-3-nodes.yaml` and reapply the file. Note that you do **not** need to change the value of `bootstrap-expect`. If you do, you may trigger Kubernetes to restart the previously launched Pods during the scaling process. `bootstrap-expect` only needs to be set to the desired size of your cluster on the very first time you launch it.
 
 > :warning: **It is important that your rqlite cluster is healthy and fully functional before scaling up. It is also critical that DNS is working properly too.** If this is not the case, some of the new nodes may become standalone single-node clusters, as they will be unavailable to connect to the Leader. 
 
