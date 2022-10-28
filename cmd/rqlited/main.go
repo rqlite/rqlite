@@ -76,6 +76,12 @@ func main() {
 	// Start requested profiling.
 	startProfile(cfg.CPUProfile, cfg.MemProfile)
 
+	// Get any credential store.
+	credStr, err := credentialStore(cfg)
+	if err != nil {
+		log.Fatalf("failed to get credential store: %s", err.Error())
+	}
+
 	// Create internode network mux and configure.
 	muxLn, err := net.Listen("tcp", cfg.RaftAddr)
 	if err != nil {
@@ -94,17 +100,6 @@ func main() {
 		log.Fatalf("failed to create store: %s", err.Error())
 	}
 
-	// Now, open store.
-	if err := str.Open(); err != nil {
-		log.Fatalf("failed to open store: %s", err.Error())
-	}
-
-	// Get any credential store.
-	credStr, err := credentialStore(cfg)
-	if err != nil {
-		log.Fatalf("failed to get credential store: %s", err.Error())
-	}
-
 	// Create cluster service now, so nodes will be able to learn information about each other.
 	clstr, err := clusterService(cfg, mux.Listen(cluster.MuxClusterHeader), str, credStr)
 	if err != nil {
@@ -112,7 +107,9 @@ func main() {
 	}
 	log.Printf("cluster TCP mux Listener registered with byte header %d", cluster.MuxClusterHeader)
 
-	// Start the HTTP API server.
+	// We want to start the HTTP server as soon as possible, so the node is responsive and external
+	// systems can see that it's running. We still have to open the Store though, so the node won't
+	// be able to do much until that happens however.
 	clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, cfg.NodeEncrypt, cfg.NoNodeVerify)
 	clstrClient := cluster.NewClient(clstrDialer, cfg.ClusterConnectTimeout)
 	if err := clstrClient.SetLocal(cfg.RaftAdv, clstr); err != nil {
@@ -121,6 +118,12 @@ func main() {
 	httpServ, err := startHTTPService(cfg, str, clstrClient, credStr)
 	if err != nil {
 		log.Fatalf("failed to start HTTP server: %s", err.Error())
+	}
+	log.Printf("HTTP server started")
+
+	// Now, open store. How long this takes does depend on how much data is being stored by rqlite.
+	if err := str.Open(); err != nil {
+		log.Fatalf("failed to open store: %s", err.Error())
 	}
 
 	// Register remaining status providers.
