@@ -2,7 +2,7 @@
 
 ### Implementation changes and bug fixes
 - [PR #1097](https://github.com/rqlite/rqlite/pull/1097): Start HTTP server as soon as possible after launch.
-- [PR #1098](https://github.com/rqlite/rqlite/pull/1098): Bootstrapper doesn't need to know bootstrap-expect.
+- [PR #1098](https://github.com/rqlite/rqlite/pull/1098): Bootstrapper doesn't need to know the bootstrap-expect value.
 
 ## 7.10.0 (October 26th 2022)
 ### New features
