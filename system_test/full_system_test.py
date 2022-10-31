@@ -329,12 +329,13 @@ class Node(object):
     except requests.exceptions.ConnectionError:
       return ''
 
-  def wait_for_leader(self, timeout=TIMEOUT):
+  def wait_for_leader(self, timeout=TIMEOUT, log=True):
     lr = None
     t = 0
     while lr == None or lr['addr'] == '':
       if t > timeout:
-        self.dump_log("dumping log due to timeout waiting for leader")
+        if log:
+          self.dump_log("dumping log due to timeout waiting for leader")
         raise Exception('rqlite node failed to detect leader within %d seconds' % timeout)
       try:
         lr = self.status()['store']['leader']
@@ -347,6 +348,13 @@ class Node(object):
     if self.ready() is not True:
       raise Exception('leader is available but node reports not ready')
     return lr
+
+  def expect_leader_fail(self, timeout=TIMEOUT):
+    try:
+      self.wait_for_leader(self, timeout, log=False)
+    except:
+      return True
+    return false
 
   def db_applied_index(self):
     return int(self.status()['store']['db_applied_index'])
@@ -1103,7 +1111,7 @@ class TestAuthJoin(unittest.TestCase):
 
     n1 = Node(RQLITED_PATH, '1', auth=self.auth_file.name)
     n1.start(join=n0.APIAddr())
-    self.assertRaises(Exception, n1.wait_for_leader) # Join should fail due to lack of auth.
+    self.assertTrue(n1.expect_leader_fail()) # Join should fail due to lack of auth.
 
     n2 = Node(RQLITED_PATH, '2', auth=self.auth_file.name)
     n2.start(join=n0.APIAddr(), join_as="foo")
