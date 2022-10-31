@@ -1,11 +1,13 @@
 # Running rqlite on Kubernetes
-This document provides an example of how to run rqlite as a Kubernetes [StatefulSet](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/). The [source for the configuration below is available in the Kubernetes Configuration repo](https://github.com/rqlite/kubernetes-configuration).
+This document provides an example of how to run rqlite as a Kubernetes [StatefulSet](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/). [Full source for the configuration described below available in the Kubernetes Configuration repo](https://github.com/rqlite/kubernetes-configuration).
 
 ## Creating a cluster 
 ### Create Services
 The first thing to do is to create two [Kubernetes _Services_](https://kubernetes.io/docs/concepts/services-networking/service). The first service, `rqlite-svc-internal`, is [_Headless_](https://kubernetes.io/docs/concepts/services-networking/service/#headless-services) and allows the nodes to find each other and cluster automatically. It shouldn't be used by rqlite clients. It is the second service, `rqlite-svc`, that is for clients to talk to the cluster -- this service will get a Cluster IP address which those clients can connect to.
 
-A key difference between `rqlite-svc-internal` and `rqlite-svc` is that the second will only contain Pods that are ready to serve traffic. This makes it most suitable for use by end-users of rqlite.
+A key difference between `rqlite-svc-internal` and `rqlite-svc` is that the second will only contain Pods that are ready to serve traffic. This makes it most suitable for use by end-users of rqlite. In otherwords you should communicate with your cluster using the hostname `rqlite-svc`.
+
+Download and apply the service configuration like so:
 ```bash
 curl -s https://raw.githubusercontent.com/rqlite/kubernetes-configuration/master/service.yaml -o rqlite-service.yaml
 kubectl apply -f rqlite-service.yaml
@@ -13,6 +15,8 @@ kubectl apply -f rqlite-service.yaml
 
 ### Create a StatefulSet
 For a rqlite cluster to function properly in a production environment, the rqlite nodes require a persistent network identifier and storage. This is what a _StatefulSet_ can provide. Retrieve the Stateful set configuration, apply it, and a 3-node rqlite cluster will be created.
+
+Download and apply the Statefulset configuration like so:
 ```bash
 curl -s https://raw.githubusercontent.com/rqlite/kubernetes-configuration/master/statefulset-3-node.yaml -o rqlite-3-nodes.yaml
 kubectl apply -f rqlite-3-nodes.yaml
