@@ -40,6 +40,7 @@ var cliHelp = []string{
 	`.backup <file>                      Write database backup to SQLite file`,
 	`.consistency [none|weak|strong]     Show or set read consistency level`,
 	`.dump <file>                        Dump the database in SQL text format to a file`,
+	`.exit                               Exit this program`,
 	`.expvar                             Show expvar (Go runtime) information for connected node`,
 	`.help                               Show this message`,
 	`.indexes                            Show names of all indexes`,
@@ -173,7 +174,7 @@ func main() {
 				err = dump(ctx, line[index+1:], argv)
 			case ".HELP":
 				err = help(ctx, cmd, line, argv)
-			case ".QUIT", "QUIT", "EXIT":
+			case ".QUIT", "QUIT", "EXIT", ".EXIT":
 				break FOR_READ
 			case "SELECT", "PRAGMA":
 				err = queryWithClient(ctx, client, timer, consistency, line)
