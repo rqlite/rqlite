@@ -1,5 +1,5 @@
 # Running rqlite on Kubernetes
-This document provides an example of how to run rqlite as a Kubernetes [StatefulSet](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/). [Full source for the configuration described below available in the Kubernetes Configuration repo](https://github.com/rqlite/kubernetes-configuration).
+This document provides an example of how to run rqlite as a Kubernetes [StatefulSet](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/). Full source for the configuration described below is available in the [rqlite Kubernetes Configuration repo](https://github.com/rqlite/kubernetes-configuration).
 
 ## Creating a cluster 
 ### Create Services
