@@ -39,19 +39,19 @@ $ rqlite
 ### rqlite CLI
 The CLI supports loading from a SQLite database file or SQL text file. The CLI will automatically detect the type of data being used for the restore operation. Below shows an example of loading from the former.
 ```
-~ $ sqlite3 restore.sqlite
+~ $ sqlite3 mydb.sqlite
 SQLite version 3.22.0 2018-01-22 18:45:57
 Enter ".help" for usage hints.
 sqlite> CREATE TABLE foo (id integer not null primary key, name text);
 sqlite> INSERT INTO "foo" VALUES(1,'fiona');
-sqlite> 
+sqlite> .exit
 ~ $ ./rqlite 
 Welcome to the rqlite CLI. Enter ".help" for usage hints.
 127.0.0.1:4001> .schema
 +-----+
 | sql |
 +-----+
-127.0.0.1:4001> .restore restore.sqlite
+127.0.0.1:4001> .restore mydb.sqlite
 database restored successfully
 127.0.0.1:4001> select * from foo
 +----+-------+
