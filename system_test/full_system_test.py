@@ -262,6 +262,7 @@ class Node(object):
     t = 0
     while wait:
       if t > timeout:
+        self.dump_log("dumping log due to timeout during start")
         raise Exception('rqlite process failed to start within %d seconds' % timeout)
       try:
         self.status()
@@ -510,6 +511,13 @@ class Node(object):
     f = open(self.peers_path, "w")
     f.write(json.dumps(peers))
     f.close()
+
+  def dump_log(self, msg):
+    print(msg)
+    self.stderr_fd.close()
+    f = open(self.stderr_file, 'r')
+    for l in f.readlines():
+          print(l.strip())
 
   def _status_url(self):
     return 'http://' + self.APIAddr() + '/status'
