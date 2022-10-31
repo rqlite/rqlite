@@ -334,10 +334,11 @@ class Node(object):
     t = 0
     while lr == None or lr['addr'] == '':
       if t > timeout:
+        self.dump_log("dumping log due to timeout waiting for leader")
         raise Exception('rqlite node failed to detect leader within %d seconds' % timeout)
       try:
         lr = self.status()['store']['leader']
-      except requests.exceptions.ConnectionError:
+      except (KeyError, requests.exceptions.ConnectionError):
         pass
       time.sleep(1)
       t+=1
