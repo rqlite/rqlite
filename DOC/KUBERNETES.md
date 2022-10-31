@@ -14,9 +14,9 @@ kubectl apply -f rqlite-service.yaml
 ```
 
 ### Create a StatefulSet
-For a rqlite cluster to function properly in a production environment, the rqlite nodes require a persistent network identifier and storage. This is what a _StatefulSet_ can provide. Retrieve the Stateful set configuration, apply it, and a 3-node rqlite cluster will be created.
+For a rqlite cluster to function properly in a production environment, the rqlite nodes require a persistent network identifier and storage. This is what a _StatefulSet_ can provide.
 
-Download and apply the Statefulset configuration like so:
+Retrieve the Stateful set configuration, apply it, and a 3-node rqlite cluster will be created:
 ```bash
 curl -s https://raw.githubusercontent.com/rqlite/kubernetes-configuration/master/statefulset-3-node.yaml -o rqlite-3-nodes.yaml
 kubectl apply -f rqlite-3-nodes.yaml
