@@ -10,11 +10,11 @@
 This document describes, in detail, how to create and manage a rqlite cluster.
 
 ## Practical cluster size
-Firstly, you should understand the basic requirement for systems built on the [Raft protocol](https://raft.github.io/). For a cluster of `N` nodes in size to remain operational, at least `(N/2)+1` nodes must be up and running, and be in contact with each other.  
+Firstly, you should understand the basic requirement for systems built on the [Raft protocol](https://raft.github.io/). For a cluster of `N` nodes in size to remain operational, at least `(N/2)+1` nodes must be up and running, and be in contact with each other. For a single-node system (N=1) then (obviously) that single node must be running. For a 3-node cluster (N=3) at least 2 nodes must be running. For N=5, at least 3 nodes should be running, and so on.
 
 Clusters of 3, 5, 7, or 9, nodes are most practical. Clusters of those sizes can tolerate failures of 1, 2, 3, and 4 nodes respectively.
 
-Clusters with a greater number of nodes start to become unwieldy, due to the number of nodes that must be contacted before a database change can take place.
+Clusters with a greater number of nodes start to become unwieldy, due to the number of nodes that must be contacted before a database change can take place. There is no intrinsic limit to the number of nodes comprising a cluster, but the operational overload can increase with little benefit.
 
 ### Read-only nodes
 It is possible to run larger clusters if you just need nodes [from which you only need to read from](https://github.com/rqlite/rqlite/blob/master/DOC/READ_ONLY_NODES.md). When it comes to the Raft protocol, these nodes do not count towards `N`, since they do not [vote](https://raft.github.io/).
