@@ -40,7 +40,7 @@ var cliHelp = []string{
 	`.backup <file>                      Write database backup to SQLite file`,
 	`.consistency [none|weak|strong]     Show or set read consistency level`,
 	`.dump <file>                        Dump the database in SQL text format to a file`,
-	`.exit                               Exit this program`
+	`.exit                               Exit this program`,
 	`.expvar                             Show expvar (Go runtime) information for connected node`,
 	`.help                               Show this message`,
 	`.indexes                            Show names of all indexes`,
