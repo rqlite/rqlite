@@ -174,7 +174,7 @@ func main() {
 				err = dump(ctx, line[index+1:], argv)
 			case ".HELP":
 				err = help(ctx, cmd, line, argv)
-			case ".QUIT", "QUIT", ".EXIT":
+			case ".QUIT", "QUIT", "EXIT", ".EXIT":
 				break FOR_READ
 			case "SELECT", "PRAGMA":
 				err = queryWithClient(ctx, client, timer, consistency, line)
