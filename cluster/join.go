@@ -104,6 +104,8 @@ func (j *Joiner) Do(joinAddrs []string, id, addr string, voter bool) (string, er
 			if err == nil {
 				// Success!
 				return joinee, nil
+			} else {
+				j.logger.Printf("failed to join via node at %s: %s", a, err)
 			}
 		}
 		if i+1 < j.numAttempts {
@@ -166,14 +168,14 @@ func (j *Joiner) join(joinAddr, id, addr string, voter bool) (string, error) {
 			// protocol a registered node is actually using.
 			if strings.HasPrefix(fullAddr, "https://") {
 				// It's already HTTPS, give up.
-				return "", fmt.Errorf("failed to join, node returned: %s: (%s)", resp.Status, string(b))
+				return "", fmt.Errorf("%s: (%s)", resp.Status, string(b))
 			}
 
 			j.logger.Print("join via HTTP failed, trying via HTTPS")
 			fullAddr = rurl.EnsureHTTPS(fullAddr)
 			continue
 		default:
-			return "", fmt.Errorf("failed to join, node returned: %s: (%s)", resp.Status, string(b))
+			return "", fmt.Errorf("%s: (%s)", resp.Status, string(b))
 		}
 	}
 }
