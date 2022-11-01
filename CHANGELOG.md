@@ -4,6 +4,7 @@
 - [PR #1097](https://github.com/rqlite/rqlite/pull/1097), [PR #1110](https://github.com/rqlite/rqlite/pull/1100): Start HTTP server as soon as possible after launch.
 - [PR #1098](https://github.com/rqlite/rqlite/pull/1098): Bootstrapper doesn't need to know the bootstrap-expect value.
 - [PR #1099](https://github.com/rqlite/rqlite/pull/1099): Add explicit `.exit` option to CLI.
+- [PR #1102](https://github.com/rqlite/rqlite/pull/1102): Use BasicAuth redaction functionality from the standard library.
 
 ## 7.10.0 (October 26th 2022)
 ### New features
