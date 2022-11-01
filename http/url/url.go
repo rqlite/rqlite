@@ -56,13 +56,12 @@ func AddBasicAuth(joinAddr, username, password string) (string, error) {
 	return u.String(), nil
 }
 
-// RemoveBasicAuth returns a copy of the given URL, with any basic auth information
-// removed.
+// RemoveBasicAuth returns a copy of the given URL, with any basic auth password
+// redacted.
 func RemoveBasicAuth(u string) string {
 	uu, err := url.Parse(u)
 	if err != nil {
 		return u
 	}
-	uu.User = nil
-	return uu.String()
+	return uu.Redacted()
 }

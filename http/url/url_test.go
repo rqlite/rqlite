@@ -121,15 +121,15 @@ func Test_RemoveBasicAuth(t *testing.T) {
 		},
 		{
 			orig:    "https://foo:bar@localhost",
-			removed: "https://localhost",
+			removed: "https://foo:xxxxx@localhost",
 		},
 		{
 			orig:    "https://foo:bar@localhost:4001",
-			removed: "https://localhost:4001",
+			removed: "https://foo:xxxxx@localhost:4001",
 		},
 		{
 			orig:    "http://foo:bar@localhost:4001/path",
-			removed: "http://localhost:4001/path",
+			removed: "http://foo:xxxxx@localhost:4001/path",
 		},
 	}
 
