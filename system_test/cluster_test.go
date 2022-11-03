@@ -772,7 +772,7 @@ func Test_MultiNodeClusterQueuedWrites(t *testing.T) {
 		defer wg.Done()
 		for i := 0; i < writesPerLoop; i++ {
 			if _, err := node1.Execute(`INSERT INTO foo(name) VALUES("fiona")`); err != nil {
-				t.Fatalf("failed to create table: %s", err.Error())
+				t.Logf("failed to insert records: %s", err.Error())
 			}
 		}
 	}()
@@ -780,7 +780,7 @@ func Test_MultiNodeClusterQueuedWrites(t *testing.T) {
 		defer wg.Done()
 		for i := 0; i < writesPerLoop; i++ {
 			if _, err := node2.Execute(`INSERT INTO foo(name) VALUES("fiona")`); err != nil {
-				t.Fatalf("failed to create table: %s", err.Error())
+				t.Logf("failed to insert records: %s", err.Error())
 			}
 		}
 	}()
@@ -788,38 +788,99 @@ func Test_MultiNodeClusterQueuedWrites(t *testing.T) {
 		defer wg.Done()
 		for i := 0; i < writesPerLoop-1; i++ {
 			if _, err := node2.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, false); err != nil {
-				t.Fatalf("failed to create table: %s", err.Error())
+				t.Logf("failed to insert records: %s", err.Error())
 			}
 		}
 		if _, err := node2.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, true); err != nil {
-			t.Fatalf("failed to create table: %s", err.Error())
+			t.Logf("failed to insert records: %s", err.Error())
 		}
 	}()
 	go func() {
 		defer wg.Done()
 		for i := 0; i < writesPerLoop-1; i++ {
 			if _, err := node3.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, false); err != nil {
-				t.Fatalf("failed to create table: %s", err.Error())
+				t.Logf("failed to insert records: %s", err.Error())
 			}
 		}
 		if _, err := node3.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, true); err != nil {
-			t.Fatalf("failed to create table: %s", err.Error())
+			t.Logf("failed to insert records: %s", err.Error())
 		}
 	}()
 	go func() {
 		defer wg.Done()
 		for i := 0; i < writesPerLoop-1; i++ {
 			if _, err := node3.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, false); err != nil {
-				t.Fatalf("failed to create table: %s", err.Error())
+				t.Logf("failed to insert records: %s", err.Error())
 			}
 		}
 		if _, err := node3.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, true); err != nil {
-			t.Fatalf("failed to create table: %s", err.Error())
+			t.Logf("failed to insert records: %s", err.Error())
 		}
 	}()
 	wg.Wait()
 
 	exp := fmt.Sprintf(`{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[%d]]}]}`, 5*writesPerLoop)
+	got, err := node1.Query(`SELECT COUNT(*) FROM foo`)
+	if err != nil {
+		t.Fatalf("failed to query follower node: %s", err.Error())
+	}
+	if got != exp {
+		t.Fatalf("incorrect count, got %s, exp %s", got, exp)
+	}
+}
+
+// Test_MultiNodeClusterLargeQueuedWrites tests writing to a cluster using
+// many large concurrent Queued Writes operations.
+func Test_MultiNodeClusterLargeQueuedWrites(t *testing.T) {
+	node1 := mustNewLeaderNode()
+	defer node1.Deprovision()
+
+	if _, err := node1.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`); err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	// Join a second and third nodes
+	node2 := mustNewNode(false)
+	defer node2.Deprovision()
+	if err := node2.Join(node1); err != nil {
+		t.Fatalf("node failed to join leader: %s", err.Error())
+	}
+	_, err := node2.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for leader: %s", err.Error())
+	}
+	node3 := mustNewNode(false)
+	defer node3.Deprovision()
+	if err := node3.Join(node1); err != nil {
+		t.Fatalf("node failed to join leader: %s", err.Error())
+	}
+	_, err = node3.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for leader: %s", err.Error())
+	}
+
+	// Write data to the cluster, via various nodes.
+	nodesUnderTest := []*Node{node3, node1, node2, node1, node2, node3, node1, node3, node2}
+	writesPerNode := 10000
+
+	var wg sync.WaitGroup
+	wg.Add(len(nodesUnderTest))
+	for _, n := range nodesUnderTest {
+		go func(nt *Node) {
+			defer wg.Done()
+			for i := 0; i < writesPerNode-1; i++ {
+				if _, err := nt.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, false); err != nil {
+					t.Logf("failed to insert records: %s", err.Error())
+				}
+			}
+			if _, err := nt.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, true); err != nil {
+				t.Logf("failed to insert records: %s", err.Error())
+			}
+		}(n)
+	}
+	wg.Wait()
+
+	exp := fmt.Sprintf(`{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[%d]]}]}`, len(nodesUnderTest)*writesPerNode)
 	got, err := node1.Query(`SELECT COUNT(*) FROM foo`)
 	if err != nil {
 		t.Fatalf("failed to query follower node: %s", err.Error())
