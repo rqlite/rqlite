@@ -830,7 +830,7 @@ func Test_MultiNodeClusterQueuedWrites(t *testing.T) {
 }
 
 // Test_MultiNodeClusterLargeQueuedWrites tests writing to a cluster using
-// many large Queued Writes operations.
+// many large concurrent Queued Writes operations.
 func Test_MultiNodeClusterLargeQueuedWrites(t *testing.T) {
 	node1 := mustNewLeaderNode()
 	defer node1.Deprovision()
@@ -860,7 +860,7 @@ func Test_MultiNodeClusterLargeQueuedWrites(t *testing.T) {
 	}
 
 	// Write data to the cluster, via various nodes.
-	nodesUnderTest := []*Node{node3, node1, node2, node1, node2, node3, node1, node3}
+	nodesUnderTest := []*Node{node3, node1, node2, node1, node2, node3, node1, node3, node2}
 	writesPerNode := 10000
 
 	var wg sync.WaitGroup
@@ -878,7 +878,6 @@ func Test_MultiNodeClusterLargeQueuedWrites(t *testing.T) {
 			}
 		}()
 	}
-
 	wg.Wait()
 
 	exp := fmt.Sprintf(`{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[%d]]}]}`, len(nodesUnderTest)*writesPerNode)
