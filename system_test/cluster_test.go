@@ -772,7 +772,7 @@ func Test_MultiNodeClusterQueuedWrites(t *testing.T) {
 		defer wg.Done()
 		for i := 0; i < writesPerLoop; i++ {
 			if _, err := node1.Execute(`INSERT INTO foo(name) VALUES("fiona")`); err != nil {
-				t.Fatalf("failed to create table: %s", err.Error())
+				t.Fatalf("failed to insert records: %s", err.Error())
 			}
 		}
 	}()
@@ -780,7 +780,7 @@ func Test_MultiNodeClusterQueuedWrites(t *testing.T) {
 		defer wg.Done()
 		for i := 0; i < writesPerLoop; i++ {
 			if _, err := node2.Execute(`INSERT INTO foo(name) VALUES("fiona")`); err != nil {
-				t.Fatalf("failed to create table: %s", err.Error())
+				t.Fatalf("failed to insert records: %s", err.Error())
 			}
 		}
 	}()
@@ -788,33 +788,33 @@ func Test_MultiNodeClusterQueuedWrites(t *testing.T) {
 		defer wg.Done()
 		for i := 0; i < writesPerLoop-1; i++ {
 			if _, err := node2.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, false); err != nil {
-				t.Fatalf("failed to create table: %s", err.Error())
+				t.Fatalf("failed to insert records: %s", err.Error())
 			}
 		}
 		if _, err := node2.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, true); err != nil {
-			t.Fatalf("failed to create table: %s", err.Error())
+			t.Fatalf("failed to insert records: %s", err.Error())
 		}
 	}()
 	go func() {
 		defer wg.Done()
 		for i := 0; i < writesPerLoop-1; i++ {
 			if _, err := node3.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, false); err != nil {
-				t.Fatalf("failed to create table: %s", err.Error())
+				t.Fatalf("failed to insert records: %s", err.Error())
 			}
 		}
 		if _, err := node3.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, true); err != nil {
-			t.Fatalf("failed to create table: %s", err.Error())
+			t.Fatalf("failed to insert records: %s", err.Error())
 		}
 	}()
 	go func() {
 		defer wg.Done()
 		for i := 0; i < writesPerLoop-1; i++ {
 			if _, err := node3.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, false); err != nil {
-				t.Fatalf("failed to create table: %s", err.Error())
+				t.Fatalf("failed to insert records: %s", err.Error())
 			}
 		}
 		if _, err := node3.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, true); err != nil {
-			t.Fatalf("failed to create table: %s", err.Error())
+			t.Fatalf("failed to insert records: %s", err.Error())
 		}
 	}()
 	wg.Wait()
@@ -870,11 +870,11 @@ func Test_MultiNodeClusterLargeQueuedWrites(t *testing.T) {
 			defer wg.Done()
 			for i := 0; i < writesPerNode-1; i++ {
 				if _, err := nt.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, false); err != nil {
-					t.Fatalf("failed to create table: %s", err.Error())
+					t.Fatalf("failed to insert records: %s", err.Error())
 				}
 			}
 			if _, err := nt.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, true); err != nil {
-				t.Fatalf("failed to create table: %s", err.Error())
+				t.Fatalf("failed to insert records: %s", err.Error())
 			}
 		}(n)
 	}
