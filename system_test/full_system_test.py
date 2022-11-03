@@ -803,14 +803,14 @@ class TestEndToEnd(unittest.TestCase):
   def test_full_restart(self):
     '''Test that a cluster can perform a full restart successfully'''
     self.cluster.wait_for_leader()
-    pids = self.cluster.pids()
+    pids = set(self.cluster.pids())
 
     self.cluster.stop()
     self.cluster.start()
     self.cluster.wait_for_leader()
     # Guard against any error in testing, by confirming that restarting the cluster
-    # actually resulted in new rqlite processes.
-    self.assertNotEqual(pids, self.cluster.pids())
+    # actually resulted in all new rqlited processes.
+    self.assertTrue(pids.isdisjoint(set(self.cluster.pids())))
 
   def test_execute_fail_rejoin(self):
     '''Test that a node that fails can rejoin the cluster, and picks up changes'''
