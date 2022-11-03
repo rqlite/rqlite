@@ -829,6 +829,120 @@ func Test_MultiNodeClusterQueuedWrites(t *testing.T) {
 	}
 }
 
+// Test_MultiNodeClusterLargeQueuedWrites tests writing to a cluster using
+// many large Queued Writes operations.
+func Test_MultiNodeClusterLargeQueuedWrites(t *testing.T) {
+	node1 := mustNewLeaderNode()
+	defer node1.Deprovision()
+
+	if _, err := node1.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`); err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	// Join a second and third nodes
+	node2 := mustNewNode(false)
+	defer node2.Deprovision()
+	if err := node2.Join(node1); err != nil {
+		t.Fatalf("node failed to join leader: %s", err.Error())
+	}
+	_, err := node2.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for leader: %s", err.Error())
+	}
+	node3 := mustNewNode(false)
+	defer node3.Deprovision()
+	if err := node3.Join(node1); err != nil {
+		t.Fatalf("node failed to join leader: %s", err.Error())
+	}
+	_, err = node3.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for leader: %s", err.Error())
+	}
+
+	// Write data to the cluster, via various nodes.
+	writesPerWriter := 10000
+	numWriters := 6
+
+	var wg sync.WaitGroup
+	wg.Add(numWriters)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < writesPerWriter-1; i++ {
+			if _, err := node1.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, false); err != nil {
+				t.Fatalf("failed to create table: %s", err.Error())
+			}
+		}
+		if _, err := node1.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, true); err != nil {
+			t.Fatalf("failed to create table: %s", err.Error())
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := 0; i < writesPerWriter-1; i++ {
+			if _, err := node1.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, false); err != nil {
+				t.Fatalf("failed to create table: %s", err.Error())
+			}
+		}
+		if _, err := node1.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, true); err != nil {
+			t.Fatalf("failed to create table: %s", err.Error())
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := 0; i < writesPerWriter-1; i++ {
+			if _, err := node2.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, false); err != nil {
+				t.Fatalf("failed to create table: %s", err.Error())
+			}
+		}
+		if _, err := node2.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, true); err != nil {
+			t.Fatalf("failed to create table: %s", err.Error())
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := 0; i < writesPerWriter-1; i++ {
+			if _, err := node2.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, false); err != nil {
+				t.Fatalf("failed to create table: %s", err.Error())
+			}
+		}
+		if _, err := node2.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, true); err != nil {
+			t.Fatalf("failed to create table: %s", err.Error())
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := 0; i < writesPerWriter-1; i++ {
+			if _, err := node3.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, false); err != nil {
+				t.Fatalf("failed to create table: %s", err.Error())
+			}
+		}
+		if _, err := node3.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, true); err != nil {
+			t.Fatalf("failed to create table: %s", err.Error())
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := 0; i < writesPerWriter-1; i++ {
+			if _, err := node3.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, false); err != nil {
+				t.Fatalf("failed to create table: %s", err.Error())
+			}
+		}
+		if _, err := node3.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, true); err != nil {
+			t.Fatalf("failed to create table: %s", err.Error())
+		}
+	}()
+	wg.Wait()
+
+	exp := fmt.Sprintf(`{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[%d]]}]}`, numWriters*writesPerWriter)
+	got, err := node1.Query(`SELECT COUNT(*) FROM foo`)
+	if err != nil {
+		t.Fatalf("failed to query follower node: %s", err.Error())
+	}
+	if got != exp {
+		t.Fatalf("incorrect count, got %s, exp %s", got, exp)
+	}
+}
+
 // Test_MultiNodeClusterNodesNonVoter checks nodes/ endpoint with a non-voting node.
 func Test_MultiNodeClusterNodesNonVoter(t *testing.T) {
 	node1 := mustNewLeaderNode()
