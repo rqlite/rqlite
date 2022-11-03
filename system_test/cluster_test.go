@@ -873,7 +873,7 @@ func Test_MultiNodeClusterLargeQueuedWrites(t *testing.T) {
 					t.Fatalf("failed to create table: %s", err.Error())
 				}
 			}
-			if _, err := n.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, true); err != nil {
+			if _, err := nt.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, true); err != nil {
 				t.Fatalf("failed to create table: %s", err.Error())
 			}
 		}(n)
