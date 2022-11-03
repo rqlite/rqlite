@@ -126,7 +126,7 @@ func (e *echoServer) Start(t *testing.T) {
 			}
 			_, err = c.Write(buf)
 			if err != nil {
-				t.Fatalf("failed to write byte: %s", err.Error())
+				t.Logf("failed to write byte: %s", err.Error())
 			}
 			c.Close()
 		}(conn)
