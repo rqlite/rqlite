@@ -866,17 +866,17 @@ func Test_MultiNodeClusterLargeQueuedWrites(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(len(nodesUnderTest))
 	for _, n := range nodesUnderTest {
-		go func() {
+		go func(nt *Node) {
 			defer wg.Done()
 			for i := 0; i < writesPerNode-1; i++ {
-				if _, err := n.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, false); err != nil {
+				if _, err := nt.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, false); err != nil {
 					t.Fatalf("failed to create table: %s", err.Error())
 				}
 			}
 			if _, err := n.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, true); err != nil {
 				t.Fatalf("failed to create table: %s", err.Error())
 			}
-		}()
+		}(n)
 	}
 	wg.Wait()
 
