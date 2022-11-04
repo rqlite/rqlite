@@ -141,19 +141,29 @@ class Node(object):
                http_cert=None, http_key=None, http_no_verify=False,
                node_cert=None, node_key=None, node_no_verify=False,
                auth=None, dir=None, on_disk=False):
+    
+    s_api = None
+    s_raft = None
     if api_addr is None:
-      s, addr = random_addr()
+      s_api, addr = random_addr()
       api_addr = addr
-      s.close()
     if raft_addr is None:
-      s, addr = random_addr()
+      s_raft, addr = random_addr()
       raft_addr = addr
-      s.close()
-    if dir is None:
-      dir = tempfile.mkdtemp()
+    
+    # Only now close any sockets used to get random addresses, so there is
+    # no chance a randomly selected address would get re-used by the HTTP
+    # system and Raft system.
+    if s_api is not None:
+        s_api.close()
+    if s_raft is not None:
+        s_raft.close()
+        
     if api_adv is None:
       api_adv = api_addr
-
+        
+    if dir is None:
+      dir = tempfile.mkdtemp()
     self.dir = dir
     self.path = path
     self.peers_path = os.path.join(self.dir, "raft/peers.json")
