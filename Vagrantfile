@@ -9,13 +9,13 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   config.vm.define "rqlite" do |rqlite|
     config.vm.network "private_network", ip: "192.168.200.10"
     config.vm.provision :shell, :path => "vagrant_setup.sh"
-    config.vm.provision :shell, :inline => "rqlited ~/node.1 &"
+    config.vm.provision :shell, :inline => "rqlited -node-id 1 ~/node.1 &"
 
     if not ENV['CLUSTER_SIZE'].nil?
       port = 4001
       (2..ENV['CLUSTER_SIZE'].to_i).each do |i|
         port = port + 1
-        config.vm.provision :shell, :inline => "rqlited -join localhost:4001 -raft-addr localhost:#{port} ~/node.#{i} &"
+        config.vm.provision :shell, :inline => "rqlited -node-id #{i} -join localhost:4001 -raft-addr localhost:#{port} ~/node.#{i} &"
       end
     end
 
