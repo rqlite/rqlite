@@ -713,9 +713,98 @@ func Test_SingleNodeNoSQLInjection(t *testing.T) {
 	}
 }
 
-func Test_SingleNodeRestart(t *testing.T) {
+// Test_SingleNodeUpgrade6_0_0 tests upgrade from a simple 6.0.0 system.
+func Test_SingleNodeUpgrade6_0_0(t *testing.T) {
 	// Deprovision of a node deletes the node's dir, so make a copy first.
 	srcdir := filepath.Join("testdata", "v6.0.0-data")
+	destdir := mustTempDir()
+	if err := os.Remove(destdir); err != nil {
+		t.Fatalf("failed to remove dest dir: %s", err)
+	}
+	if err := copyDir(srcdir, destdir); err != nil {
+		t.Fatalf("failed to copy node test directory: %s", err)
+	}
+
+	mux, ln := mustNewOpenMux("")
+	defer ln.Close()
+
+	node := mustNodeEncrypted(destdir, true, false, mux, "node1")
+	defer node.Deprovision()
+	if _, err := node.WaitForLeader(); err != nil {
+		t.Fatal("node never became leader")
+	}
+
+	// Let's wait a few seconds to be sure logs are applied.
+	n := 0
+	for {
+		time.Sleep(1 * time.Second)
+
+		r, err := node.QueryNoneConsistency(`SELECT COUNT(*) FROM foo`)
+		if err != nil {
+			t.Fatalf("query failed: %s", err)
+		}
+
+		expected := `{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[20]]}]}`
+		if r != expected {
+			if n == 10 {
+				t.Fatalf(`query received wrong result, got: %s exp: %s`, r, expected)
+			}
+		} else {
+			break // Test successful!
+		}
+
+		n++
+	}
+}
+
+// Test_SingleNodeUpgrade7_0_0 tests upgrade from a simple 7.0.0 system.
+func Test_SingleNodeUpgrade7_0_0(t *testing.T) {
+	// Deprovision of a node deletes the node's dir, so make a copy first.
+	srcdir := filepath.Join("testdata", "v7.0.0-data")
+	destdir := mustTempDir()
+	if err := os.Remove(destdir); err != nil {
+		t.Fatalf("failed to remove dest dir: %s", err)
+	}
+	if err := copyDir(srcdir, destdir); err != nil {
+		t.Fatalf("failed to copy node test directory: %s", err)
+	}
+
+	mux, ln := mustNewOpenMux("")
+	defer ln.Close()
+
+	node := mustNodeEncrypted(destdir, true, false, mux, "node1")
+	defer node.Deprovision()
+	if _, err := node.WaitForLeader(); err != nil {
+		t.Fatal("node never became leader")
+	}
+
+	// Let's wait a few seconds to be sure logs are applied.
+	n := 0
+	for {
+		time.Sleep(1 * time.Second)
+
+		r, err := node.QueryNoneConsistency(`SELECT COUNT(*) FROM foo`)
+		if err != nil {
+			t.Fatalf("query failed: %s", err)
+		}
+
+		expected := `{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[20]]}]}`
+		if r != expected {
+			if n == 10 {
+				t.Fatalf(`query received wrong result, got: %s exp: %s`, r, expected)
+			}
+		} else {
+			break // Test successful!
+		}
+
+		n++
+	}
+}
+
+// Test_SingleNodeUpgrade7_9_2 tests upgrade from a simple 7.9.2 system.
+func Test_SingleNodeUpgrade7_9_2(t *testing.T) {
+	// Deprovision of a node deletes the node's dir, so make a copy first.
+	srcdir := filepath.Join("testdata", "v7.9.2-data")
 	destdir := mustTempDir()
 	if err := os.Remove(destdir); err != nil {
 		t.Fatalf("failed to remove dest dir: %s", err)
