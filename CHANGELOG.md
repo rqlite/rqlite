@@ -5,6 +5,7 @@
 - [PR #1098](https://github.com/rqlite/rqlite/pull/1098): Bootstrapper doesn't need to know the bootstrap-expect value.
 - [PR #1099](https://github.com/rqlite/rqlite/pull/1099): Add explicit `.exit` option to CLI.
 - [PR #1102](https://github.com/rqlite/rqlite/pull/1102): Use BasicAuth redaction functionality from the standard library.
+- [PR #1108](https://github.com/rqlite/rqlite/pull/1108): Add more upgrade testing.
 
 ## 7.10.0 (October 26th 2022)
 ### New features
