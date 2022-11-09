@@ -1,7 +1,6 @@
 package db
 
 import (
-	"fmt"
 	"testing"
 )
 
@@ -30,11 +29,18 @@ func Test_TableCreationInMemoryFTSLoad(t *testing.T) {
 		}
 	}()
 
+	n := 1
 	for {
 		res, err := db.QueryStringStmt("SELECT COUNT(*) FROM logs")
 		if err != nil {
-			t.Fatalf("failed to query empty table: %s", err.Error())
+			t.Fatalf("failed to query table: %s", err.Error())
 		}
-		fmt.Println(res)
+		if exp, got := 1, len(res); exp != got {
+			t.Fatalf("wrong number of rows returned, exp %d, got %d", exp, got)
+		}
+		if res[0].Error != "" {
+			t.Fatalf("query rows has an error after %d queries: %s", n, res[0].Error)
+		}
+		n++
 	}
 }
