@@ -22,7 +22,7 @@ func Test_TableCreationInMemoryLoad(t *testing.T) {
 
 	go func() {
 		for {
-			r, err = db.ExecuteStringStmt(`INSERT INTO logs(entry) VALUES("13.66.139.0 - - [19/Dec/2020:13:57:26 +0100] GET /index.php?option=com_phocagallery&view=category&id=1:almhuette-raith&Itemid=53 HTTP/1.1 200 32653 - Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm) -")`)
+			r, err = db.ExecuteStringStmt(`INSERT INTO logs(entry) VALUES("hello")`)
 			if err != nil {
 				return
 			}
