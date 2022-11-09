@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-func Test_TableCreationInMemoryFTSLoad(t *testing.T) {
+func Test_TableCreationInMemoryLoad(t *testing.T) {
 	db := mustCreateInMemoryDatabase()
 	defer db.Close()
 
@@ -12,7 +12,7 @@ func Test_TableCreationInMemoryFTSLoad(t *testing.T) {
 		t.Fatal("in-memory database marked as not in-memory")
 	}
 
-	r, err := db.ExecuteStringStmt("CREATE VIRTUAL TABLE logs USING fts4(entry)")
+	r, err := db.ExecuteStringStmt("CREATE TABLE logs (entry TEXT)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
