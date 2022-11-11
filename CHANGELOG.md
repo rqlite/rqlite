@@ -1,4 +1,4 @@
-## 7.10.1 (unreleased)
+## 7.10.1 (November 11th 2022)
 
 ### Implementation changes and bug fixes
 - [PR #1097](https://github.com/rqlite/rqlite/pull/1097), [PR #1110](https://github.com/rqlite/rqlite/pull/1100): Start HTTP server as soon as possible after launch.
