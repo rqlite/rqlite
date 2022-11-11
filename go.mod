@@ -5,7 +5,7 @@ go 1.16
 require (
 	github.com/Bowery/prompt v0.0.0-20190916142128-fa8279994f75
 	github.com/armon/go-metrics v0.4.1 // indirect
-	github.com/coreos/go-systemd/v22 v22.4.0 // indirect
+	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
 	github.com/hashicorp/consul/api v1.15.3 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-hclog v1.3.1 // indirect
@@ -22,15 +22,15 @@ require (
 	github.com/rqlite/go-sqlite3 v1.26.0
 	github.com/rqlite/raft-boltdb v0.0.0-20211018013422-771de01086ce
 	github.com/rqlite/rqlite-disco-clients v0.0.0-20220328160918-ec33ecd01491
-	github.com/rqlite/sql v0.0.0-20221014131952-f097350d117d
+	github.com/rqlite/sql v0.0.0-20221103124402-8f9ff0ceb8f0
 	go.etcd.io/bbolt v1.3.6
 	go.etcd.io/etcd/client/v3 v3.5.5 // indirect
 	go.uber.org/atomic v1.10.0 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
 	go.uber.org/zap v1.23.0 // indirect
-	golang.org/x/crypto v0.1.0
-	golang.org/x/net v0.1.0
-	google.golang.org/genproto v0.0.0-20221025140454-527a21cfbd71 // indirect
+	golang.org/x/crypto v0.2.0
+	golang.org/x/net v0.2.0
+	google.golang.org/genproto v0.0.0-20221109142239-94d6d90a7d66 // indirect
 	google.golang.org/protobuf v1.28.1
 )
 
