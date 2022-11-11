@@ -64,8 +64,9 @@ kernel=`uname -s`
 buildtime=`date +%Y-%m-%dT%T%z`
 
 # Prepare common linker flags
+STRIP_SYMBOLS="-s"
 LINKER_PKG_PATH=github.com/rqlite/rqlite/cmd
-LDFLAGS="-X $LINKER_PKG_PATH.Version=$VERSION -X $LINKER_PKG_PATH.Branch=$branch -X $LINKER_PKG_PATH.Commit=$commit -X $LINKER_PKG_PATH.Buildtime=$buildtime"
+LDFLAGS="-$STRIP_SYMBOLS -X $LINKER_PKG_PATH.Version=$VERSION -X $LINKER_PKG_PATH.Branch=$branch -X $LINKER_PKG_PATH.Commit=$commit -X $LINKER_PKG_PATH.Buildtime=$buildtime"
 
 # Prepare the source code
 mkdir -p $tmp_build/src/github.com/rqlite
