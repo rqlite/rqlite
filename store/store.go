@@ -88,6 +88,8 @@ const (
 	snapshotDBOnDiskSize     = "snapshot_db_ondisk_size"
 	leaderChangesObserved    = "leader_changes_observed"
 	leaderChangesDropped     = "leader_changes_dropped"
+	nodesReapedOK            = "nodes_reaped_ok"
+	nodesReapedFailed        = "nodes_reaped_failed"
 )
 
 // stats captures stats for the Store.
@@ -110,6 +112,8 @@ func init() {
 	stats.Add(snapshotDBOnDiskSize, 0)
 	stats.Add(leaderChangesObserved, 0)
 	stats.Add(leaderChangesDropped, 0)
+	stats.Add(nodesReapedOK, 0)
+	stats.Add(nodesReapedFailed, 0)
 }
 
 // ClusterState defines the possible Raft states the current node can be in
@@ -1367,8 +1371,10 @@ func (s *Store) observe() (closeCh, doneCh chan struct{}) {
 							pn = "non-voting node"
 						}
 						if err := s.remove(id); err != nil {
+							stats.Add(nodesReapedFailed, 1)
 							s.logger.Printf("failed to reap %s %s: %s", pn, id, err.Error())
 						} else {
+							stats.Add(nodesReapedOK, 1)
 							s.logger.Printf("successfully reaped %s %s", pn, id)
 						}
 					}
