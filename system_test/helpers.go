@@ -230,6 +230,16 @@ type NodesStatus map[string]struct {
 	Leader    bool   `json:"leader,omitempty"`
 }
 
+// HasAddr returns whether any node in the NodeStatus has the given Raft address.
+func (n NodesStatus) HasAddr(addr string) bool {
+	for i := range n {
+		if n[i].Addr == addr {
+			return true
+		}
+	}
+	return false
+}
+
 // Nodes returns the sNodes endpoint output for node.
 func (n *Node) Nodes(includeNonVoters bool) (NodesStatus, error) {
 	v, _ := url.Parse("http://" + n.APIAddr + "/nodes")
@@ -914,4 +924,24 @@ func (m *mockCredentialStore) AA(username, password, perm string) bool {
 
 func mustNewMockCredentialStore() *mockCredentialStore {
 	return &mockCredentialStore{HasPermOK: true}
+}
+
+// trueOrTimeout returns true if the given function returns true
+// within the timeout. Returns false otherwise.
+func trueOrTimeout(fn func() bool, dur time.Duration) bool {
+	timer := time.NewTimer(dur)
+	defer timer.Stop()
+	ticker := time.NewTicker(1000 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-timer.C:
+			return false
+		case <-ticker.C:
+			if fn() {
+				return true
+			}
+		}
+	}
 }

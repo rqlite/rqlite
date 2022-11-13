@@ -1503,3 +1503,107 @@ func Test_MultiNodeClusterRecoverFull(t *testing.T) {
 		t.Fatalf("got incorrect results from recovered node: %s", rows)
 	}
 }
+
+// Test_MultiNodeClusterReapNodes tests that unreachable nodes are reaped.
+func Test_MultiNodeClusterReapNodes(t *testing.T) {
+	cfgStoreFn := func(n *Node) {
+		n.Store.ReapNodes = true
+		n.Store.ReapTimeout = time.Second
+		n.Store.ReapReadOnlyTimeout = time.Second
+	}
+
+	node1 := mustNewLeaderNode()
+	defer node1.Deprovision()
+	cfgStoreFn(node1)
+	_, err := node1.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for leader: %s", err.Error())
+	}
+
+	node2 := mustNewNode(false)
+	defer node2.Deprovision()
+	cfgStoreFn(node2)
+	if err := node2.Join(node1); err != nil {
+		t.Fatalf("node failed to join leader: %s", err.Error())
+	}
+	_, err = node2.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for leader: %s", err.Error())
+	}
+
+	// Get the new leader, in case it changed.
+	c := Cluster{node1, node2}
+	leader, err := c.Leader()
+	if err != nil {
+		t.Fatalf("failed to find cluster leader: %s", err.Error())
+	}
+
+	node3 := mustNewNode(false)
+	defer node3.Deprovision()
+	cfgStoreFn(node3)
+	if err := node3.Join(leader); err != nil {
+		t.Fatalf("node failed to join leader: %s", err.Error())
+	}
+	_, err = node3.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for leader: %s", err.Error())
+	}
+
+	// Get the new leader, in case it changed.
+	c = Cluster{node1, node2, node3}
+	leader, err = c.Leader()
+	if err != nil {
+		t.Fatalf("failed to find cluster leader: %s", err.Error())
+	}
+
+	nonVoter := mustNewNode(false)
+	defer nonVoter.Deprovision()
+	cfgStoreFn(nonVoter)
+	if err := nonVoter.JoinAsNonVoter(leader); err != nil {
+		t.Fatalf("non-voting node failed to join leader: %s", err.Error())
+	}
+	_, err = nonVoter.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for leader: %s", err.Error())
+	}
+	c = Cluster{node1, node2, node3, nonVoter}
+
+	// Confirm non-voter node is in the the cluster config.
+	nodes, err := leader.Nodes(true)
+	if err != nil {
+		t.Fatalf("failed to get nodes: %s", err.Error())
+	}
+	if !nodes.HasAddr(nonVoter.RaftAddr) {
+		t.Fatalf("nodes do not contain non-voter node")
+	}
+
+	// Kill non-voter node, confirm it's removed.
+	nonVoter.Deprovision()
+	tFn := func() bool {
+		nodes, _ = leader.Nodes(true)
+		return !nodes.HasAddr(nonVoter.RaftAddr)
+	}
+	if !trueOrTimeout(tFn, 20*time.Second) {
+		t.Fatalf("timed out waiting for non-voting node to be reaped")
+	}
+
+	// Confirm voting node is in the the cluster config.
+	nodes, err = leader.Nodes(true)
+	if err != nil {
+		t.Fatalf("failed to get nodes: %s", err.Error())
+	}
+	if !nodes.HasAddr(node3.RaftAddr) {
+		t.Fatalf("nodes do not contain non-voter node")
+	}
+
+	// Kill voting node, confirm it's removed.
+	node3.Deprovision()
+	tFn = func() bool {
+		nodes, _ = leader.Nodes(true)
+		return !nodes.HasAddr(node3.RaftAddr)
+	}
+
+	if !trueOrTimeout(tFn, 20*time.Second) {
+		t.Fatalf("timed out waiting for voting node to be reaped")
+	}
+}
