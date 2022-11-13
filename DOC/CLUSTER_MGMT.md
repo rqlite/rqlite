@@ -96,7 +96,7 @@ Enable reaping, instructing rqlite to reap non-reachable voting nodes after 2 da
 ```bash
 rqlited -node-id 1 -raft-reap-nodes -raft-reap-node-timeout=48h -raft-reap-read-only-node-timeout=4h data
 ```
-For reaping to work properly you **must** set these flags on **every** voting node in the cluster -- in otherwords, every node that could potentially become the Leader.
+For reaping to work properly you **must** set these flags on **every** voting node in the cluster -- in otherwords, every node that could potentially become the Leader. To effectively disable reaping for one type of node, but not the other, simply set the relevant timeout to a very long time.
 
 # Dealing with failure
 It is the nature of clustered systems that nodes can fail at anytime. Depending on the size of your cluster, it will tolerate various amounts of failure. With a 3-node cluster, it can tolerate the failure of a single node, including the leader.
