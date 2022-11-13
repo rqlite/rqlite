@@ -86,38 +86,6 @@ assuming `localhost` is the address of the cluster leader. If you do not do this
 
 If you cannot bring sufficient nodes back online such that the cluster can elect a leader, follow the instructions in the section titled _Dealing with failure_.
 
-## Examples
-_Quorum is defined as (N/2)+1 where N is the size of the cluster._
-
-### 2-node cluster 
-Quorum of a 2-node cluster is 2.
-
-If 1 node fails, quorum can no longer reached. The failing node must be recovered, as the failed node cannot be removed, and a new node cannot be added to the cluster to takes its place. This is why you shouldn't run 2-node clusters, except for testing purposes. In general it doesn't make much sense to run clusters with even-number of nodes at all.
-
-If you remove a single node from a fully-functional 2-node cluster, quorum will be reduced to 1 since you will be left with a 1-node cluster.
-
-### 3-node cluster
-Quorum of a 3-node cluster is 2.
-
-If 1 node fails, the cluster can still reach quorum. Remove the failing node, or restart it. If you remove the node, quorum remains at 2. You should add a new node to get the cluster back to 3 nodes in size. If 2 nodes fail, the cluster will not be able to reach quorum. You must instead restart at least one of the nodes.
-
-If you remove a single node from a fully-functional 3-node cluster, quorum will be unchanged since you now have a 2-node cluster.
-
-### 4-node cluster
-Quorum of a 4-node cluster is 3.
-
-The situation is similar for a 3-node cluster, in the sense that it can only tolerate the failure of a single node. If you remove a single node from a fully-functional 4-node cluster, quorum will decrease to 2 you now have a 3-node cluster.
-
-### 5-node cluster
-Quorum of a 5-node cluster is 3.
-
-With a 5-node cluster, the cluster can tolerate the failure of 2 nodes. However if 3 nodes fail, at least one of those nodes must be restarted before you can make any change. If you remove a single node from a fully-functional 5-node cluster, quorum will be unchanged since you now have a 4-node cluster.
-
-# Dealing with failure
-It is the nature of clustered systems that nodes can fail at anytime. Depending on the size of your cluster, it will tolerate various amounts of failure. With a 3-node cluster, it can tolerate the failure of a single node, including the leader.
-
-If an rqlite process crashes, it is safe to simply to restart it. The node will pick up any changes that happened on the cluster while it was down.
-
 ## Automatically removing failed nodes
 > :warning: **This functionality was introduced in version 7.11.0. It does not exist in earlier releases.**
 
@@ -129,6 +97,11 @@ Enable reaping, instructing rqlite to reap non-reachable voting nodes after 2 da
 rqlited -node-id 1 -raft-reap-nodes -raft-reap-node-timeout=72h -raft-reap-read-only-node-timeout=4h data
 ```
 For reaping to work properly you **must** set these flags on **every** voting node in the cluster -- in otherwords, every node that could potentially become the Leader.
+
+# Dealing with failure
+It is the nature of clustered systems that nodes can fail at anytime. Depending on the size of your cluster, it will tolerate various amounts of failure. With a 3-node cluster, it can tolerate the failure of a single node, including the leader.
+
+If an rqlite process crashes, it is safe to simply to restart it. The node will pick up any changes that happened on the cluster while it was down.
 
 ## Recovering a cluster that has permanently lost quorum
 _This section borrows heavily from the Consul documentation._
@@ -168,3 +141,30 @@ Below is an example, of bringing a 3-node cluster back online.
 Next simply create entries for all the nodes you plan to bring up (in the example above that's 3 nodes). You must confirm that nodes you don't include here have indeed failed and will not later rejoin the cluster. Ensure that this file is the same across all remaining rqlite nodes. At this point, you can restart your rqlite cluster. In the example above, this means you'd start 3 nodes.
 
 Once recovery is completed, the `peers.json` file is renamed to `peers.info`. `peers.info` will not trigger further recoveries, and simply acts as a record for future reference. It may be deleted at anytime.
+
+# Example Cluster Sizes
+_Quorum is defined as (N/2)+1 where N is the size of the cluster._
+
+## 2-node cluster
+Quorum of a 2-node cluster is 2.
+
+If 1 node fails, quorum can no longer reached. The failing node must be recovered, as the failed node cannot be removed, and a new node cannot be added to the cluster to takes its place. This is why you shouldn't run 2-node clusters, except for testing purposes. In general it doesn't make much sense to run clusters with even-number of nodes at all.
+
+If you remove a single node from a fully-functional 2-node cluster, quorum will be reduced to 1 since you will be left with a 1-node cluster.
+
+## 3-node cluster
+Quorum of a 3-node cluster is 2.
+
+If 1 node fails, the cluster can still reach quorum. Remove the failing node, or restart it. If you remove the node, quorum remains at 2. You should add a new node to get the cluster back to 3 nodes in size. If 2 nodes fail, the cluster will not be able to reach quorum. You must instead restart at least one of the nodes.
+
+If you remove a single node from a fully-functional 3-node cluster, quorum will be unchanged since you now have a 2-node cluster.
+
+## 4-node cluster
+Quorum of a 4-node cluster is 3.
+
+The situation is similar for a 3-node cluster, in the sense that it can only tolerate the failure of a single node. If you remove a single node from a fully-functional 4-node cluster, quorum will decrease to 2 you now have a 3-node cluster.
+
+## 5-node cluster
+Quorum of a 5-node cluster is 3.
+
+With a 5-node cluster, the cluster can tolerate the failure of 2 nodes. However if 3 nodes fail, at least one of those nodes must be restarted before you can make any change. If you remove a single node from a fully-functional 5-node cluster, quorum will be unchanged since you now have a 4-node cluster.
