@@ -94,7 +94,7 @@ rqlite supports automatically removing both voting and non-voting (read-only) no
 ### Example configuration
 Enable reaping, instructing rqlite to reap non-reachable voting nodes after 2 days, and non-reachable read-only nodes after 4 hours.
 ```bash
-rqlited -node-id 1 -raft-reap-nodes -raft-reap-node-timeout=72h -raft-reap-read-only-node-timeout=4h data
+rqlited -node-id 1 -raft-reap-nodes -raft-reap-node-timeout=48h -raft-reap-read-only-node-timeout=4h data
 ```
 For reaping to work properly you **must** set these flags on **every** voting node in the cluster -- in otherwords, every node that could potentially become the Leader.
 
