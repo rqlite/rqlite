@@ -119,7 +119,16 @@ It is the nature of clustered systems that nodes can fail at anytime. Depending 
 If an rqlite process crashes, it is safe to simply to restart it. The node will pick up any changes that happened on the cluster while it was down.
 
 ## Automatically removing failed nodes
+> :warning: **This functionality was introduced in version 7.11.0. It does not exist in earlier releases.**
+
 rqlite supports automatically removing both non-reachable voting and non-voting (read-only) nodes. A non-reachable node is defined as a node that the Leader cannot heartbeat with. To enable reaping set `-raft-reap-nodes` when launching `rqlited`. The reaping timeout for each type of node can be set independently, but defaults to 72 hours. It is recommended that this is set to at least double the maximum expected recoverable outage time for a node or network partition for nodes. Note that the timeout clock is reset if a cluster elects a new Leader.
+
+### Example configuration
+Enable reaping, instructing rqlite to reap non-reachable voting nodes after 2 days, and non-reachable read-only nodes after 4 hours.
+```bash
+rqlited -node-id 1 -raft-reap-nodes -raft-reap-node-timeout=72h -raft-reap-read-only-node-timeout=4h data
+```
+For reaping to work properly you **must** set these flags on **every** voting node in the cluster -- in otherwords, every node that could potentially become the Leader.
 
 ## Recovering a cluster that has permanently lost quorum
 _This section borrows heavily from the Consul documentation._
