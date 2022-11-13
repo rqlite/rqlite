@@ -1,3 +1,7 @@
+## 7.11.0 (unreleased)
+### New features
+- [PR #1114](https://github.com/rqlite/rqlite/pull/1114): Support automatically removing non-reachable nodes after a configurable period. Fixes [issue #728](https://github.com/rqlite/rqlite/issues/728)
+
 ## 7.10.1 (November 11th 2022)
 
 ### Implementation changes and bug fixes
