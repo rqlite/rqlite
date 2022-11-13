@@ -68,7 +68,7 @@ const (
 	connectionTimeout   = 10 * time.Second
 	raftLogCacheSize    = 512
 	trailingScale       = 1.25
-	observerChanLen     = 5 // Support any fast back-to-back leadership changes.
+	observerChanLen     = 50
 )
 
 const (
