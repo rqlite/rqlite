@@ -60,7 +60,7 @@ const (
 	retainSnapshotCount = 2
 	applyTimeout        = 10 * time.Second
 	openTimeout         = 120 * time.Second
-	reapTimeout         = 48 * time.Hour
+	reapTimeout         = 72 * time.Hour
 	sqliteFile          = "db.sqlite"
 	leaderWaitDelay     = 100 * time.Millisecond
 	appliedWaitDelay    = 100 * time.Millisecond
