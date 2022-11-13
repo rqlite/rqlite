@@ -151,7 +151,7 @@ type Config struct {
 	// RaftLeaderLeaseTimeout sets the leader lease timeout.
 	RaftLeaderLeaseTimeout time.Duration
 
-	// RaftHeartbeatTimeout sets the heartbeast timeout.
+	// RaftHeartbeatTimeout sets the heartbeat timeout.
 	RaftHeartbeatTimeout time.Duration
 
 	// RaftElectionTimeout sets the election timeout.
