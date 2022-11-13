@@ -60,6 +60,7 @@ const (
 	retainSnapshotCount = 2
 	applyTimeout        = 10 * time.Second
 	openTimeout         = 120 * time.Second
+	reapTimeout         = 48 * time.Hour
 	sqliteFile          = "db.sqlite"
 	leaderWaitDelay     = 100 * time.Millisecond
 	appliedWaitDelay    = 100 * time.Millisecond
@@ -153,7 +154,7 @@ type Store struct {
 	raftStable    raft.StableStore          // Persistent k-v store.
 	boltStore     *rlog.Log                 // Physical store.
 
-	// Leader change observer
+	// Raft changes observer
 	leaderObserversMu sync.RWMutex
 	leaderObservers   []chan<- struct{}
 	observerClose     chan struct{}
@@ -196,6 +197,11 @@ type Store struct {
 	RaftLogLevel       string
 	NoFreeListSync     bool
 
+	// Node-reaping configuration
+	ReapNodes           bool
+	ReapTimeout         time.Duration
+	ReapReadOnlyTimeout time.Duration
+
 	numTrailingLogs uint64
 
 	// For whitebox testing
@@ -234,18 +240,20 @@ func New(ln Listener, c *Config) *Store {
 	}
 
 	return &Store{
-		ln:              ln,
-		raftDir:         c.Dir,
-		peersPath:       filepath.Join(c.Dir, peersPath),
-		peersInfoPath:   filepath.Join(c.Dir, peersInfoPath),
-		raftID:          c.ID,
-		dbConf:          c.DBConf,
-		dbPath:          dbPath,
-		leaderObservers: make([]chan<- struct{}, 0),
-		reqMarshaller:   command.NewRequestMarshaler(),
-		logger:          logger,
-		notifyingNodes:  make(map[string]*Server),
-		ApplyTimeout:    applyTimeout,
+		ln:                  ln,
+		raftDir:             c.Dir,
+		peersPath:           filepath.Join(c.Dir, peersPath),
+		peersInfoPath:       filepath.Join(c.Dir, peersInfoPath),
+		raftID:              c.ID,
+		dbConf:              c.DBConf,
+		dbPath:              dbPath,
+		leaderObservers:     make([]chan<- struct{}, 0),
+		reqMarshaller:       command.NewRequestMarshaler(),
+		logger:              logger,
+		notifyingNodes:      make(map[string]*Server),
+		ApplyTimeout:        applyTimeout,
+		ReapTimeout:         reapTimeout,
+		ReapReadOnlyTimeout: reapTimeout,
 	}
 }
 
@@ -373,8 +381,9 @@ func (s *Store) Open() (retErr error) {
 	// Open the observer channels.
 	s.observerChan = make(chan raft.Observation, observerChanLen)
 	s.observer = raft.NewObserver(s.observerChan, false, func(o *raft.Observation) bool {
-		_, ok := o.Data.(raft.LeaderObservation)
-		return ok
+		_, isLeaderChange := o.Data.(raft.LeaderObservation)
+		_, isFailedHeartBeat := o.Data.(raft.FailedHeartbeatObservation)
+		return isLeaderChange || (isFailedHeartBeat && s.ReapNodes)
 	})
 
 	// Register and listen for leader changes.
@@ -700,20 +709,23 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 			"observed": s.observer.GetNumObserved(),
 			"dropped":  s.observer.GetNumDropped(),
 		},
-		"startup_on_disk":    s.StartupOnDisk,
-		"apply_timeout":      s.ApplyTimeout.String(),
-		"heartbeat_timeout":  s.HeartbeatTimeout.String(),
-		"election_timeout":   s.ElectionTimeout.String(),
-		"snapshot_threshold": s.SnapshotThreshold,
-		"snapshot_interval":  s.SnapshotInterval,
-		"no_freelist_sync":   s.NoFreeListSync,
-		"trailing_logs":      s.numTrailingLogs,
-		"request_marshaler":  s.reqMarshaller.Stats(),
-		"nodes":              nodes,
-		"dir":                s.raftDir,
-		"dir_size":           dirSz,
-		"sqlite3":            dbStatus,
-		"db_conf":            s.dbConf,
+		"startup_on_disk":        s.StartupOnDisk,
+		"apply_timeout":          s.ApplyTimeout.String(),
+		"heartbeat_timeout":      s.HeartbeatTimeout.String(),
+		"election_timeout":       s.ElectionTimeout.String(),
+		"snapshot_threshold":     s.SnapshotThreshold,
+		"snapshot_interval":      s.SnapshotInterval,
+		"reap_nodes":             s.ReapNodes,
+		"reap_timeout":           s.ReapTimeout,
+		"reap_read_only_timeout": s.ReapReadOnlyTimeout,
+		"no_freelist_sync":       s.NoFreeListSync,
+		"trailing_logs":          s.numTrailingLogs,
+		"request_marshaler":      s.reqMarshaller.Stats(),
+		"nodes":                  nodes,
+		"dir":                    s.raftDir,
+		"dir_size":               dirSz,
+		"sqlite3":                dbStatus,
+		"db_conf":                s.dbConf,
 	}
 	return status, nil
 }
@@ -1332,17 +1344,47 @@ func (s *Store) observe() (closeCh, doneCh chan struct{}) {
 		defer close(doneCh)
 		for {
 			select {
-			case <-s.observerChan:
-				s.leaderObserversMu.RLock()
-				for i := range s.leaderObservers {
-					select {
-					case s.leaderObservers[i] <- struct{}{}:
-						stats.Add(leaderChangesObserved, 1)
-					default:
-						stats.Add(leaderChangesDropped, 1)
+			case o := <-s.observerChan:
+				switch signal := o.Data.(type) {
+				case raft.FailedHeartbeatObservation:
+					nodes, err := s.Nodes()
+					if err != nil {
+						s.logger.Printf("failed to get nodes configuration during reap check: %s", err.Error())
 					}
+
+					id := string(signal.PeerID)
+					dur := time.Since(signal.LastContact)
+
+					isReadOnly, found := IsReadOnly(nodes, id)
+					if !found {
+						s.logger.Printf("node %s is not present in configuration", id)
+						break
+					}
+
+					if (isReadOnly && dur > s.ReapReadOnlyTimeout) || (!isReadOnly && dur > s.ReapTimeout) {
+						pn := "voting node"
+						if isReadOnly {
+							pn = "non-voting node"
+						}
+						if err := s.remove(id); err != nil {
+							s.logger.Printf("failed to reap %s %s: %s", pn, id, err.Error())
+						} else {
+							s.logger.Printf("successfully reaped %s %s", pn, id)
+						}
+					}
+				case raft.LeaderObservation:
+					s.leaderObserversMu.RLock()
+					for i := range s.leaderObservers {
+						select {
+						case s.leaderObservers[i] <- struct{}{}:
+							stats.Add(leaderChangesObserved, 1)
+						default:
+							stats.Add(leaderChangesDropped, 1)
+						}
+					}
+					s.leaderObserversMu.RUnlock()
 				}
-				s.leaderObserversMu.RUnlock()
+
 			case <-closeCh:
 				return
 			}

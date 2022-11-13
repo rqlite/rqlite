@@ -168,6 +168,17 @@ type Config struct {
 	// a full database re-sync during recovery.
 	RaftNoFreelistSync bool
 
+	// RaftReapNodes enables reaping of non-reachable nodes.
+	RaftReapNodes bool
+
+	// RaftReapNodeTimeout sets the duration after which a non-reachable voting node is
+	// reaped i.e. removed from the cluster.
+	RaftReapNodeTimeout time.Duration
+
+	// RaftReapReadOnlyNodeTimeout sets the duration after which a non-reachable non-voting node is
+	// reaped i.e. removed from the cluster.
+	RaftReapReadOnlyNodeTimeout time.Duration
+
 	// ClusterConnectTimeout sets the timeout when initially connecting to another node in
 	// the cluster, for non-Raft communications.
 	ClusterConnectTimeout time.Duration
@@ -388,6 +399,9 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	flag.BoolVar(&config.RaftShutdownOnRemove, "raft-remove-shutdown", false, "Shutdown Raft if node removed")
 	flag.BoolVar(&config.RaftNoFreelistSync, "raft-no-freelist-sync", false, "Do not sync Raft log database freelist to disk")
 	flag.StringVar(&config.RaftLogLevel, "raft-log-level", "INFO", "Minimum log level for Raft module")
+	flag.BoolVar(&config.RaftReapNodes, "raft-reap-nodes", false, "Enable reaping of non-reachable nodes")
+	flag.DurationVar(&config.RaftReapNodeTimeout, "raft-reap-node-timeout", 48*time.Hour, "Time after which a nonreachable voting node will be reaped")
+	flag.DurationVar(&config.RaftReapReadOnlyNodeTimeout, "raft-reap-read-only-node-timeout", 48*time.Hour, "Time after which a non-reachable non-voting node will be reaped")
 	flag.DurationVar(&config.ClusterConnectTimeout, "cluster-connect-timeout", 30*time.Second, "Timeout for initial connection to other nodes")
 	flag.IntVar(&config.WriteQueueCap, "write-queue-capacity", 1024, "Write queue capacity")
 	flag.IntVar(&config.WriteQueueBatchSz, "write-queue-batch-size", 128, "Write queue batch size")
