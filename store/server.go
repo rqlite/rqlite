@@ -33,8 +33,13 @@ func (s Servers) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 func IsReadOnly(servers []*Server, id string) (readOnly bool, found bool) {
 	readOnly = false
 	found = false
+
+	if servers == nil || id == "" {
+		return
+	}
+
 	for _, n := range servers {
-		if n.ID == id {
+		if n != nil && n.ID == id {
 			readOnly = n.Suffrage == "Nonvoter"
 			found = true
 			return
