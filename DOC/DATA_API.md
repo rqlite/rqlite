@@ -93,6 +93,7 @@ Response:
 {
     "results": [
         {
+            "types": {"id": "integer", "age": "integer", "name": "text"},
             "rows": [
                 { "id": 1, "age": 20, "name": "fiona"},
                 { "id": 2, "age": 25, "name": "declan"}
