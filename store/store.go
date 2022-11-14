@@ -1355,11 +1355,11 @@ func (s *Store) observe() (closeCh, doneCh chan struct{}) {
 					if err != nil {
 						s.logger.Printf("failed to get nodes configuration during reap check: %s", err.Error())
 					}
-
+					servers := Servers(nodes)
 					id := string(signal.PeerID)
 					dur := time.Since(signal.LastContact)
 
-					isReadOnly, found := IsReadOnly(nodes, id)
+					isReadOnly, found := servers.IsReadOnly(id)
 					if !found {
 						s.logger.Printf("node %s is not present in configuration", id)
 						break
