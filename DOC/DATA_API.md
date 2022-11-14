@@ -83,7 +83,7 @@ curl -XPOST 'localhost:4001/db/query?pretty&timings' -H "Content-Type: applicati
 ```
 The response will be in the same form as when the query is made via HTTP GET.
 
-### Associative response
+### Associative response form
 A second form of response can also be requested, by adding `associative` as a query parameter:
 ```bash
 curl -G 'localhost:4001/db/query?pretty&timings&associative' --data-urlencode 'q=SELECT * FROM foo'
