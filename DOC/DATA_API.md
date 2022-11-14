@@ -45,7 +45,7 @@ Querying data is easy. For a single query simply perform an HTTP GET on the `/db
 curl -G 'localhost:4001/db/query?pretty&timings' --data-urlencode 'q=SELECT * FROM foo'
 ```
 
-The response is of the form:
+The **default** response is of the form:
 
 ```json
 {
@@ -82,6 +82,36 @@ curl -XPOST 'localhost:4001/db/query?pretty&timings' -H "Content-Type: applicati
 ]'
 ```
 The response will be in the same form as when the query is made via HTTP GET.
+
+### Associative response
+A second form of response can also be requested, by adding `associative` as a query parameter:
+```bash
+curl -G 'localhost:4001/db/query?pretty&timings&associative' --data-urlencode 'q=SELECT * FROM foo'
+```
+Respond:
+```json
+{
+    "results": [
+        {
+            "rows": [
+                {
+                    "age": 20,
+                    "id": 1,
+                    "name": "fiona"
+                },
+                {
+                    "age": 25,
+                    "id": 2,
+                    "name": "declan"
+                }
+            ],
+            "time": 0.000173061
+        }
+    ],
+    "time": 0.000185964
+}
+```
+This form will have a map per row returned, with each column name as a key. This form can be more convenient for clients, depending on the application.
 
 ## Parameterized Statements
 While the "raw" API described above can be convenient and simple to use, it is vulnerable to [SQL Injection attacks](https://owasp.org/www-community/attacks/SQL_Injection). To protect against this issue, rqlite also supports [SQLite parameterized statements](https://www.sqlite.org/lang_expr.html#varparam), for both read and writes. To use this feature, send the SQL statement and values as distinct elements within a new JSON array, as follows:
