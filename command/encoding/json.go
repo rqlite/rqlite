@@ -3,9 +3,16 @@ package encoding
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/rqlite/rqlite/command"
+)
+
+var (
+	// ErrTypesColumnsLengthViolation is returned when a results
+	// object doesn't have the same number of types and columns
+	ErrTypesColumnsLengthViolation = errors.New("types and columns are different lengths")
 )
 
 // Result represents the outcome of an operation that changes rows.
@@ -27,7 +34,7 @@ type Rows struct {
 
 // AssociativeRows represents the outcome of an operation that returns query data.
 type AssociativeRows struct {
-	Types []string                 `json:"types,omitempty"`
+	Types map[string]string        `json:"types,omitempty"`
 	Rows  []map[string]interface{} `json:"rows,omitempty"`
 	Error string                   `json:"error,omitempty"`
 	Time  float64                  `json:"time,omitempty"`
@@ -45,6 +52,10 @@ func NewResultFromExecuteResult(e *command.ExecuteResult) (*Result, error) {
 
 // NewRowsFromQueryRows returns an API Rows object from a QueryRows
 func NewRowsFromQueryRows(q *command.QueryRows) (*Rows, error) {
+	if len(q.Columns) != len(q.Types) {
+		return nil, ErrTypesColumnsLengthViolation
+	}
+
 	values := make([][]interface{}, len(q.Values))
 	if err := NewValuesFromQueryValues(values, q.Values); err != nil {
 		return nil, err
@@ -60,6 +71,10 @@ func NewRowsFromQueryRows(q *command.QueryRows) (*Rows, error) {
 
 // NewAssociativeRowsFromQueryRows returns an associative API object from a QueryRows
 func NewAssociativeRowsFromQueryRows(q *command.QueryRows) (*AssociativeRows, error) {
+	if len(q.Columns) != len(q.Types) {
+		return nil, ErrTypesColumnsLengthViolation
+	}
+
 	values := make([][]interface{}, len(q.Values))
 	if err := NewValuesFromQueryValues(values, q.Values); err != nil {
 		return nil, err
@@ -74,7 +89,13 @@ func NewAssociativeRowsFromQueryRows(q *command.QueryRows) (*AssociativeRows, er
 		rows[i] = m
 	}
 
+	types := make(map[string]string)
+	for i := range q.Types {
+		types[q.Columns[i]] = q.Types[i]
+	}
+
 	return &AssociativeRows{
+		Types: types,
 		Rows:  rows,
 		Error: q.Error,
 		Time:  q.Time,
