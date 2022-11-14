@@ -422,7 +422,8 @@ func loadRequest(b []byte) *command.LoadRequest {
 }
 
 func asJSON(v interface{}) string {
-	b, err := encoding.JSONMarshal(v)
+	enc := encoding.Encoder{}
+	b, err := enc.JSONMarshal(v)
 	if err != nil {
 		panic(fmt.Sprintf("failed to JSON marshal value: %s", err.Error()))
 	}

@@ -25,6 +25,14 @@ type Rows struct {
 	Time    float64         `json:"time,omitempty"`
 }
 
+// AssociativeRows represents the outcome of an operation that returns query data.
+type AssociativeRows struct {
+	Types []string                 `json:"types,omitempty"`
+	Rows  []map[string]interface{} `json:"rows,omitempty"`
+	Error string                   `json:"error,omitempty"`
+	Time  float64                  `json:"time,omitempty"`
+}
+
 // NewResultFromExecuteResult returns an API Result object from an ExecuteResult.
 func NewResultFromExecuteResult(e *command.ExecuteResult) (*Result, error) {
 	return &Result{
@@ -47,6 +55,29 @@ func NewRowsFromQueryRows(q *command.QueryRows) (*Rows, error) {
 		Values:  values,
 		Error:   q.Error,
 		Time:    q.Time,
+	}, nil
+}
+
+// NewAssociativeRowsFromQueryRows returns an associative API object from a QueryRows
+func NewAssociativeRowsFromQueryRows(q *command.QueryRows) (*AssociativeRows, error) {
+	values := make([][]interface{}, len(q.Values))
+	if err := NewValuesFromQueryValues(values, q.Values); err != nil {
+		return nil, err
+	}
+
+	rows := make([]map[string]interface{}, len(values))
+	for i := range rows {
+		m := make(map[string]interface{})
+		for ii, c := range q.Columns {
+			m[c] = values[i][ii]
+		}
+		rows[i] = m
+	}
+
+	return &AssociativeRows{
+		Rows:  rows,
+		Error: q.Error,
+		Time:  q.Time,
 	}, nil
 }
 
@@ -90,14 +121,18 @@ func NewValuesFromQueryValues(dest [][]interface{}, v []*command.Values) error {
 	return nil
 }
 
-// JSONMarshal serializes Execute and Query results to JSON API format.
-func JSONMarshal(i interface{}) ([]byte, error) {
-	return jsonMarshal(i, noEscapeEncode)
+// Encoder is used to JSON marshal ExecuteResults and QueryRows
+type Encoder struct {
+	Associative bool
 }
 
-// JSONMarshalIndent serializes Execute and Query results to JSON API format,
-// but also applies indent to the output.
-func JSONMarshalIndent(i interface{}, prefix, indent string) ([]byte, error) {
+// JSONMarshal implements the marshal interface
+func (e *Encoder) JSONMarshal(i interface{}) ([]byte, error) {
+	return jsonMarshal(i, noEscapeEncode, e.Associative)
+}
+
+// JSONMarshalIndent implements the marshal indent interface
+func (e *Encoder) JSONMarshalIndent(i interface{}, prefix, indent string) ([]byte, error) {
 	f := func(i interface{}) ([]byte, error) {
 		b, err := noEscapeEncode(i)
 		if err != nil {
@@ -107,7 +142,7 @@ func JSONMarshalIndent(i interface{}, prefix, indent string) ([]byte, error) {
 		json.Indent(&out, b, prefix, indent)
 		return out.Bytes(), nil
 	}
-	return jsonMarshal(i, f)
+	return jsonMarshal(i, f, e.Associative)
 }
 
 func noEscapeEncode(i interface{}) ([]byte, error) {
@@ -120,7 +155,7 @@ func noEscapeEncode(i interface{}) ([]byte, error) {
 	return bytes.TrimRight(buf.Bytes(), "\n"), nil
 }
 
-func jsonMarshal(i interface{}, f func(i interface{}) ([]byte, error)) ([]byte, error) {
+func jsonMarshal(i interface{}, f func(i interface{}) ([]byte, error), assoc bool) ([]byte, error) {
 	switch v := i.(type) {
 	case *command.ExecuteResult:
 		r, err := NewResultFromExecuteResult(v)
@@ -139,21 +174,41 @@ func jsonMarshal(i interface{}, f func(i interface{}) ([]byte, error)) ([]byte, 
 		}
 		return f(results)
 	case *command.QueryRows:
-		r, err := NewRowsFromQueryRows(v)
-		if err != nil {
-			return nil, err
-		}
-		return f(r)
-	case []*command.QueryRows:
-		var err error
-		rows := make([]*Rows, len(v))
-		for j := range v {
-			rows[j], err = NewRowsFromQueryRows(v[j])
+		if assoc {
+			r, err := NewAssociativeRowsFromQueryRows(v)
 			if err != nil {
 				return nil, err
 			}
+			return f(r)
+		} else {
+			r, err := NewRowsFromQueryRows(v)
+			if err != nil {
+				return nil, err
+			}
+			return f(r)
 		}
-		return f(rows)
+	case []*command.QueryRows:
+		var err error
+
+		if assoc {
+			rows := make([]*AssociativeRows, len(v))
+			for j := range v {
+				rows[j], err = NewAssociativeRowsFromQueryRows(v[j])
+				if err != nil {
+					return nil, err
+				}
+			}
+			return f(rows)
+		} else {
+			rows := make([]*Rows, len(v))
+			for j := range v {
+				rows[j], err = NewRowsFromQueryRows(v[j])
+				if err != nil {
+					return nil, err
+				}
+			}
+			return f(rows)
+		}
 	case []*command.Values:
 		values := make([][]interface{}, len(v))
 		if err := NewValuesFromQueryValues(values, v); err != nil {

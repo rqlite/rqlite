@@ -455,7 +455,7 @@ class Node(object):
       t+=1
     return self.num_restores()
 
-  def query(self, statement, params=None, level='weak', pretty=False, text=False):
+  def query(self, statement, params=None, level='weak', pretty=False, text=False, associative=False):
     body = [statement]
     if params is not None:
       try:
@@ -467,6 +467,8 @@ class Node(object):
     reqParams = {'level': level}
     if pretty:
       reqParams['pretty'] = "yes"
+    if associative:
+      reqParams['associative'] = "yes"
     r = requests.post(self._query_url(), params=reqParams, data=json.dumps([body]))
     raise_for_status(r)
     if text:
@@ -651,6 +653,10 @@ class TestSingleNode(unittest.TestCase):
     # Ensure raw response from API is as expected.
     j = n.query('SELECT * from bar', text=True)
     self.assertEqual(str(j), '{"results":[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]}')
+
+    # Ensure raw associative response from API is as expected.
+    j = n.query('SELECT * from bar', text=True, associative=True)
+    self.assertEqual(str(j), '{"results":[{"rows":[{"id":1,"name":"fiona"}]}]}')
 
   def test_simple_raw_queries_pretty(self):
     '''Test simple queries, requesting pretty output, work as expected'''

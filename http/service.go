@@ -119,6 +119,8 @@ type StatusReporter interface {
 type DBResults struct {
 	ExecuteResult []*command.ExecuteResult
 	QueryRows     []*command.QueryRows
+
+	AssociativeJSON bool // Render in associative form
 }
 
 // Responser is the interface response objects must implement.
@@ -128,10 +130,14 @@ type Responser interface {
 
 // MarshalJSON implements the JSON Marshaler interface.
 func (d *DBResults) MarshalJSON() ([]byte, error) {
+	enc := encoding.Encoder{
+		Associative: d.AssociativeJSON,
+	}
+
 	if d.ExecuteResult != nil {
-		return encoding.JSONMarshal(d.ExecuteResult)
+		return enc.JSONMarshal(d.ExecuteResult)
 	} else if d.QueryRows != nil {
-		return encoding.JSONMarshal(d.QueryRows)
+		return enc.JSONMarshal(d.QueryRows)
 	}
 	return json.Marshal(make([]interface{}, 0))
 }
@@ -1290,8 +1296,6 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := NewResponse()
-
 	timeout, isTx, timings, redirect, noRewriteRandom, err := reqParams(r, defaultTimeout)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -1305,6 +1309,12 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 	}
 
 	frsh, err := freshness(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	assoc, err := isAssociative(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -1325,6 +1335,9 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+
+	resp := NewResponse()
+	resp.Results.AssociativeJSON = assoc
 
 	qr := &command.QueryRequest{
 		Request: &command.Request{
@@ -1767,6 +1780,10 @@ func isTimings(req *http.Request) (bool, error) {
 // isWait returns whether a wait operation is requested.
 func isWait(req *http.Request) (bool, error) {
 	return queryParam(req, "wait")
+}
+
+func isAssociative(req *http.Request) (bool, error) {
+	return queryParam(req, "associative")
 }
 
 // noRewriteRandom returns whether a rewrite of RANDOM is disabled.
