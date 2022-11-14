@@ -97,6 +97,30 @@ func Test_MarshalExecuteResults(t *testing.T) {
 	}
 }
 
+// Test_MarshalQueryRowsError tests error cases
+func Test_MarshalQueryRowsError(t *testing.T) {
+	var err error
+	var r *command.QueryRows
+	enc := Encoder{}
+
+	r = &command.QueryRows{
+		Columns: []string{"c1", "c2"},
+		Types:   []string{"int", "float", "string"},
+		Time:    6789,
+	}
+
+	_, err = enc.JSONMarshal(r)
+	if err != ErrTypesColumnsLengthViolation {
+		t.Fatalf("succeeded marshaling QueryRows: %s", err)
+	}
+
+	enc.Associative = true
+	_, err = enc.JSONMarshal(r)
+	if err != ErrTypesColumnsLengthViolation {
+		t.Fatalf("succeeded marshaling QueryRows (associative): %s", err)
+	}
+}
+
 // Test_MarshalQueryRows tests JSON marshaling of a QueryRows
 func Test_MarshalQueryRows(t *testing.T) {
 	var b []byte
@@ -207,7 +231,7 @@ func Test_MarshalQueryAssociativeRows(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to marshal QueryRows: %s", err.Error())
 	}
-	if exp, got := `{"rows":[{"c1":123,"c2":678,"c3":"fiona"}],"time":6789}`, string(b); exp != got {
+	if exp, got := `{"types":{"c1":"int","c2":"float","c3":"string"},"rows":[{"c1":123,"c2":678,"c3":"fiona"}],"time":6789}`, string(b); exp != got {
 		t.Fatalf("failed to marshal QueryRows: exp %s, got %s", exp, got)
 	}
 
@@ -216,6 +240,11 @@ func Test_MarshalQueryAssociativeRows(t *testing.T) {
 		t.Fatalf("failed to marshal QueryRows: %s", err.Error())
 	}
 	exp := `{
+    "types": {
+        "c1": "int",
+        "c2": "float",
+        "c3": "string"
+    },
     "rows": [
         {
             "c1": 123,
@@ -312,7 +341,7 @@ func Test_MarshalQueryAssociativeRowses(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to marshal QueryRows: %s", err.Error())
 	}
-	if exp, got := `[{"rows":[{"c1":123,"c2":678,"c3":"fiona"}],"time":6789},{"rows":[{"c1":123,"c2":678,"c3":"fiona"}],"time":6789}]`, string(b); exp != got {
+	if exp, got := `[{"types":{"c1":"int","c2":"float","c3":"string"},"rows":[{"c1":123,"c2":678,"c3":"fiona"}],"time":6789},{"types":{"c1":"int","c2":"float","c3":"string"},"rows":[{"c1":123,"c2":678,"c3":"fiona"}],"time":6789}]`, string(b); exp != got {
 		t.Fatalf("failed to marshal QueryRows: exp %s, got %s", exp, got)
 	}
 }

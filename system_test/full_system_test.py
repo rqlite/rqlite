@@ -644,19 +644,26 @@ class TestSingleNode(unittest.TestCase):
     n = self.cluster.wait_for_leader()
     j = n.execute('CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
     self.assertEqual(j, d_("{'results': [{}]}"))
+
     j = n.execute('INSERT INTO bar(name) VALUES("fiona")')
     applied = n.wait_for_all_fsm()
     self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
     j = n.query('SELECT * from bar')
     self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
 
+    j = n.execute('INSERT INTO bar(name) VALUES("declan")')
+    applied = n.wait_for_all_fsm()
+    self.assertEqual(j, d_("{'results': [{'last_insert_id': 2, 'rows_affected': 1}]}"))
+    j = n.query('SELECT * from bar where id=2')
+    self.assertEqual(j, d_("{'results': [{'values': [[2, 'declan']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
+
     # Ensure raw response from API is as expected.
     j = n.query('SELECT * from bar', text=True)
-    self.assertEqual(str(j), '{"results":[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]}')
+    self.assertEqual(str(j), '{"results":[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"],[2,"declan"]]}]}')
 
     # Ensure raw associative response from API is as expected.
     j = n.query('SELECT * from bar', text=True, associative=True)
-    self.assertEqual(str(j), '{"results":[{"rows":[{"id":1,"name":"fiona"}]}]}')
+    self.assertEqual(str(j), '{"results":[{"types":{"id":"integer","name":"text"},"rows":[{"id":1,"name":"fiona"},{"id":2,"name":"declan"}]}]}')
 
   def test_simple_raw_queries_pretty(self):
     '''Test simple queries, requesting pretty output, work as expected'''
