@@ -88,7 +88,7 @@ A second form of response can also be requested, by adding `associative` as a qu
 ```bash
 curl -G 'localhost:4001/db/query?pretty&timings&associative' --data-urlencode 'q=SELECT * FROM foo'
 ```
-Respond:
+Response:
 ```json
 {
     "results": [
