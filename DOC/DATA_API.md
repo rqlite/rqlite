@@ -94,16 +94,8 @@ Response:
     "results": [
         {
             "rows": [
-                {
-                    "age": 20,
-                    "id": 1,
-                    "name": "fiona"
-                },
-                {
-                    "age": 25,
-                    "id": 2,
-                    "name": "declan"
-                }
+                { "id": 1, "age": 20, "name": "fiona"},
+                { "id": 2, "age": 25, "name": "declan"}
             ],
             "time": 0.000173061
         }
