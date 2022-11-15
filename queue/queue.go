@@ -140,7 +140,7 @@ func (q *Queue) Stats() (map[string]interface{}, error) {
 	return map[string]interface{}{
 		"max_size":   q.maxSize,
 		"batch_size": q.batchSize,
-		"timeout":    q.timeout,
+		"timeout":    q.timeout.String(),
 	}, nil
 }
 

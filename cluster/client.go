@@ -271,7 +271,7 @@ func (c *Client) Stats() (map[string]interface{}, error) {
 	defer c.mu.RUnlock()
 
 	stats := map[string]interface{}{
-		"timeout":         c.timeout,
+		"timeout":         c.timeout.String(),
 		"local_node_addr": c.localNodeAddr,
 	}
 
