@@ -60,7 +60,6 @@ const (
 	retainSnapshotCount = 2
 	applyTimeout        = 10 * time.Second
 	openTimeout         = 120 * time.Second
-	reapTimeout         = 72 * time.Hour
 	sqliteFile          = "db.sqlite"
 	leaderWaitDelay     = 100 * time.Millisecond
 	appliedWaitDelay    = 100 * time.Millisecond
@@ -245,20 +244,18 @@ func New(ln Listener, c *Config) *Store {
 	}
 
 	return &Store{
-		ln:                  ln,
-		raftDir:             c.Dir,
-		peersPath:           filepath.Join(c.Dir, peersPath),
-		peersInfoPath:       filepath.Join(c.Dir, peersInfoPath),
-		raftID:              c.ID,
-		dbConf:              c.DBConf,
-		dbPath:              dbPath,
-		leaderObservers:     make([]chan<- struct{}, 0),
-		reqMarshaller:       command.NewRequestMarshaler(),
-		logger:              logger,
-		notifyingNodes:      make(map[string]*Server),
-		ApplyTimeout:        applyTimeout,
-		ReapTimeout:         reapTimeout,
-		ReapReadOnlyTimeout: reapTimeout,
+		ln:              ln,
+		raftDir:         c.Dir,
+		peersPath:       filepath.Join(c.Dir, peersPath),
+		peersInfoPath:   filepath.Join(c.Dir, peersInfoPath),
+		raftID:          c.ID,
+		dbConf:          c.DBConf,
+		dbPath:          dbPath,
+		leaderObservers: make([]chan<- struct{}, 0),
+		reqMarshaller:   command.NewRequestMarshaler(),
+		logger:          logger,
+		notifyingNodes:  make(map[string]*Server),
+		ApplyTimeout:    applyTimeout,
 	}
 }
 

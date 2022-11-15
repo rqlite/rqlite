@@ -1652,3 +1652,119 @@ func Test_MultiNodeClusterNoReap(t *testing.T) {
 		t.Fatalf("didn't time out waiting for node to be removed")
 	}
 }
+
+// Test_MultiNodeClusterNoReapZero tests that unreachable nodes are reaped.
+func Test_MultiNodeClusterNoReapZero(t *testing.T) {
+	cfgStoreFn := func(n *Node) {
+		n.Store.ReapTimeout = 0
+	}
+
+	node1 := mustNewLeaderNode()
+	defer node1.Deprovision()
+	cfgStoreFn(node1)
+	_, err := node1.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for leader: %s", err.Error())
+	}
+
+	node2 := mustNewNode(false)
+	defer node2.Deprovision()
+	cfgStoreFn(node2)
+	if err := node2.Join(node1); err != nil {
+		t.Fatalf("node failed to join leader: %s", err.Error())
+	}
+	_, err = node2.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for leader: %s", err.Error())
+	}
+
+	// Get the new leader, in case it changed.
+	c := Cluster{node1, node2}
+	leader, err := c.Leader()
+	if err != nil {
+		t.Fatalf("failed to find cluster leader: %s", err.Error())
+	}
+
+	node3 := mustNewNode(false)
+	defer node3.Deprovision()
+	cfgStoreFn(node3)
+	if err := node3.Join(leader); err != nil {
+		t.Fatalf("node failed to join leader: %s", err.Error())
+	}
+	_, err = node3.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for leader: %s", err.Error())
+	}
+
+	// Get the new leader, in case it changed.
+	c = Cluster{node1, node2, node3}
+	leader, err = c.Leader()
+	if err != nil {
+		t.Fatalf("failed to find cluster leader: %s", err.Error())
+	}
+
+	// Confirm voting node is in the the cluster config.
+	nodes, err := leader.Nodes(true)
+	if err != nil {
+		t.Fatalf("failed to get nodes: %s", err.Error())
+	}
+	if !nodes.HasAddr(node3.RaftAddr) {
+		t.Fatalf("nodes do not contain non-voter node")
+	}
+
+	// Kill voting node, confirm it's not reaped.
+	node3.Deprovision()
+	tFn := func() bool {
+		nodes, _ = leader.Nodes(true)
+		return !nodes.HasAddr(node3.RaftAddr)
+	}
+
+	if trueOrTimeout(tFn, 10*time.Second) {
+		t.Fatalf("didn't time out waiting for node to be removed")
+	}
+}
+
+// Test_MultiNodeClusterNoReapReadOnlyZero tests that a node is not incorrectly reaped.
+func Test_MultiNodeClusterNoReapReadOnlyZero(t *testing.T) {
+	cfgStoreFn := func(n *Node) {
+		n.Store.ReapReadOnlyTimeout = 0
+	}
+
+	node1 := mustNewLeaderNode()
+	defer node1.Deprovision()
+	cfgStoreFn(node1)
+	_, err := node1.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for leader: %s", err.Error())
+	}
+
+	nonVoter := mustNewNode(false)
+	defer nonVoter.Deprovision()
+	cfgStoreFn(nonVoter)
+	if err := nonVoter.JoinAsNonVoter(node1); err != nil {
+		t.Fatalf("non-voting node failed to join leader: %s", err.Error())
+	}
+	_, err = nonVoter.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for leader: %s", err.Error())
+	}
+
+	// Confirm non-voter node is in the the cluster config.
+	nodes, err := node1.Nodes(true)
+	if err != nil {
+		t.Fatalf("failed to get nodes: %s", err.Error())
+	}
+	if !nodes.HasAddr(nonVoter.RaftAddr) {
+		t.Fatalf("nodes do not contain non-voter node")
+	}
+
+	// Kill non-voter node, confirm it's not removed.
+	nonVoter.Deprovision()
+	tFn := func() bool {
+		nodes, _ = node1.Nodes(true)
+		return !nodes.HasAddr(nonVoter.RaftAddr)
+	}
+	if trueOrTimeout(tFn, 10*time.Second) {
+		t.Fatalf("didn't time out waiting for node to be removed")
+	}
+}
