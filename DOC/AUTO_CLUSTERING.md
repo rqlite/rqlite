@@ -98,7 +98,7 @@ rqlited -node-id $ID3 -http-addr=$HOST3:4001 -raft-addr=$HOST3:4002 \
 -disco-mode consul-kv -disco-config '{"address":"example.com:8500"}' data
 ```
 
-These three nodes will automatically find each other, and cluster. You can start the nodes in any order and at anytime. Furthermore, the cluster Leader will continually update Consul with its address. This means other nodes can be launched later and automatically join the cluster, even if the Leader changes.
+These three nodes will automatically find each other, and cluster. You can start the nodes in any order and at anytime. Furthermore, the cluster Leader will continually update Consul with its address. This means other nodes can be launched later and automatically join the cluster, even if the Leader changes. Refer to the [_Next Steps_](#next-steps) documentation below for further details on Consul configuration.
 
 #### Docker
 It's even easier with Docker, as you can launch every node almost identically:
@@ -127,7 +127,7 @@ Node 3:
 rqlited -node-id $ID3 -http-addr=$HOST3:4001 -raft-addr=$HOST3:4002 \
 	-disco-mode etcd-kv -disco-config '{"endpoints":["example.com:2379"]}' data
 ```
- Like with Consul autoclustering, the cluster Leader will continually report its address to etcd.
+ Like with Consul autoclustering, the cluster Leader will continually report its address to etcd.  Refer to the [_Next Steps_](#next-steps) documentation below for further details on etcd configuration.
 
  #### Docker
 ```bash
