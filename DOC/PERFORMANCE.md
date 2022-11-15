@@ -47,11 +47,11 @@ An alternative approach would be to place the SQLite on-disk database on a disk 
 
 > :warning: **rqlite was not designed for very large datasets**: While there are no hardcoded limits in the rqlite software, the nature of Raft means that the entire SQLite database is periodically copied to disk, and occasionally copied, in full, between nodes. Your hardware may not be able to process those large data operations successfully. You should test your system carefully when working with multi-GB databases.
 
-In-memory databases are currently limited to 2GiB in size. One way to get around this limit is to use an on-disk database, by passing `-on-disk` to `rqlited`. But this could impact write-performance significantly, since disk is slower than memory. If you switch to on-disk SQLite, and find write-performance suffers, there are a couple of ways to address this. One option is to place the Raft log on one disk, and the SQLite database on a different disk.
+In-memory SQLite databases (the default configuration) are currently limited to 2GiB in size. One way to get around this limit is to use an on-disk database, by passing `-on-disk` to `rqlited`. But this could impact write-performance significantly, since disk is slower than memory. If you switch to on-disk SQLite, and find write-performance suffers, there are a couple of ways to address this. One option is to place the Raft log on one disk, and the SQLite database on a different disk.
 
 Another option is to run rqlite in on-disk mode but place the SQLite database file on a memory-backed filesystem. That way you can use larger databases, and still have performance similar to running with an in-memory SQLite database.
 
-In either case to control where rqlite places the SQLite database file, set `-on-disk-startup` and `-on-disk-path` when launching `rqlited`. **Note that you should still place the `data` directory on an actual disk, to ensure your data is not lost if a node retarts.** 
+In either case to control where rqlite places the SQLite database file, set `-on-disk-startup` and `-on-disk-path` when launching `rqlited`. **Note that you should still place the `data` directory on an actual disk, so that the Raft log is always on a physical disk, to ensure your data is not lost if a node retarts.** 
 
 ## Linux example
 An example of running rqlite with a SQLite file on a memory-backed file system, and keeping the data directory on persistent disk, is shown below. The data directory is where the Raft log is stored. The example below would allow up to a 4GB SQLite database.
