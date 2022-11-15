@@ -91,14 +91,14 @@ If you cannot bring sufficient nodes back online such that the cluster can elect
 
 rqlite supports automatically removing both voting (the default type) and non-voting (read-only) nodes that have been non-reachable for a configurable period of time. A non-reachable node is defined as a node that the Leader cannot heartbeat with. To enable reaping of voting nodes set `-raft-reap-node-timeout` to a non-zero time interval. Likewise, to enable reaping of non-voting (read-only) nodes set `-raft-reap-read-only-node-timeout`.
 
-It is recommended that this is set to at least double the maximum expected recoverable outage time for a node or network partition for nodes. Note that the timeout clock is reset if a cluster elects a new Leader.
+It is recommended that these values be set conservatively, especially for voting nodes. Setting them too low may mean you don't account for the normal kinds of network outages and tempoary failures that can affect distributed systems such as rqlite. Note that the timeout clock is reset if a cluster elects a new Leader.
 
 ### Example configuration
-Tnstruct rqlite to reap non-reachable voting nodes after 2 days, and non-reachable read-only nodes after 30 minutes.
+Instruct rqlite to reap non-reachable voting nodes after 2 days, and non-reachable read-only nodes after 30 minutes:
 ```bash
 rqlited -node-id 1 -raft-reap-node-timeout=48h -raft-reap-read-only-node-timeout=30m data
 ```
-For reaping to work consistently you **must** set these flags on **every** voting node in the cluster -- in otherwords, every node that could potentially become the Leader.
+For reaping to work consistently you **must** set these flags on **every** voting node in the cluster -- in otherwords, every node that could potentially become the Leader. You can also set the flags on read-only nodes, but they will simply be silently ignored.
 
 # Dealing with failure
 It is the nature of clustered systems that nodes can fail at anytime. Depending on the size of your cluster, it will tolerate various amounts of failure. With a 3-node cluster, it can tolerate the failure of a single node, including the leader.
