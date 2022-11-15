@@ -197,7 +197,6 @@ func createStore(cfg *Config, ln *tcp.Layer) (*store.Store, error) {
 	str.ElectionTimeout = cfg.RaftElectionTimeout
 	str.ApplyTimeout = cfg.RaftApplyTimeout
 	str.BootstrapExpect = cfg.BootstrapExpect
-	str.ReapNodes = cfg.RaftReapNodes
 	str.ReapTimeout = cfg.RaftReapNodeTimeout
 	str.ReapReadOnlyTimeout = cfg.RaftReapReadOnlyNodeTimeout
 

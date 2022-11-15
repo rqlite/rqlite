@@ -202,7 +202,6 @@ type Store struct {
 	NoFreeListSync     bool
 
 	// Node-reaping configuration
-	ReapNodes           bool
 	ReapTimeout         time.Duration
 	ReapReadOnlyTimeout time.Duration
 
@@ -387,7 +386,7 @@ func (s *Store) Open() (retErr error) {
 	s.observer = raft.NewObserver(s.observerChan, false, func(o *raft.Observation) bool {
 		_, isLeaderChange := o.Data.(raft.LeaderObservation)
 		_, isFailedHeartBeat := o.Data.(raft.FailedHeartbeatObservation)
-		return isLeaderChange || (isFailedHeartBeat && s.ReapNodes)
+		return isLeaderChange || isFailedHeartBeat
 	})
 
 	// Register and listen for leader changes.
@@ -719,7 +718,6 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		"election_timeout":       s.ElectionTimeout.String(),
 		"snapshot_threshold":     s.SnapshotThreshold,
 		"snapshot_interval":      s.SnapshotInterval,
-		"reap_nodes":             s.ReapNodes,
 		"reap_timeout":           s.ReapTimeout,
 		"reap_read_only_timeout": s.ReapReadOnlyTimeout,
 		"no_freelist_sync":       s.NoFreeListSync,
@@ -1365,7 +1363,8 @@ func (s *Store) observe() (closeCh, doneCh chan struct{}) {
 						break
 					}
 
-					if (isReadOnly && dur > s.ReapReadOnlyTimeout) || (!isReadOnly && dur > s.ReapTimeout) {
+					if (isReadOnly && s.ReapReadOnlyTimeout > 0 && dur > s.ReapReadOnlyTimeout) ||
+						(!isReadOnly && s.ReapTimeout > 0 && dur > s.ReapTimeout) {
 						pn := "voting node"
 						if isReadOnly {
 							pn = "non-voting node"
