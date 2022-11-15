@@ -421,6 +421,19 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 		errorExit(0, msg)
 	}
 
+	// Ensure, if set explicitly, that reap times are not too low.
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "raft-reap-node-timeout" || f.Name == "raft-reap-read-only-node-timeout" {
+			d, err := time.ParseDuration(f.Value.String())
+			if err != nil {
+				errorExit(1, fmt.Sprintf("failed to parse duration: %s", err.Error()))
+			}
+			if d <= 0 {
+				errorExit(1, fmt.Sprintf("-%s must be greater than 0", f.Name))
+			}
+		}
+	})
+
 	// Ensure the data path is set.
 	if flag.NArg() < 1 {
 		errorExit(1, "no data directory set")
