@@ -1,4 +1,4 @@
-## 7.11.0 (unreleased)
+## 7.11.0 (November 15th 2022)
 ### New features
 - [PR #1114](https://github.com/rqlite/rqlite/pull/1114), [PR #1118](https://github.com/rqlite/rqlite/pull/1118): Support automatically removing non-reachable nodes after a configurable period. Fixes [issue #728](https://github.com/rqlite/rqlite/issues/728).
 - [PR #1116](https://github.com/rqlite/rqlite/pull/1116), [PR #1117](https://github.com/rqlite/rqlite/pull/1117): Support associative form for query responses. Fixes [issue #1115](https://github.com/rqlite/rqlite/issues/1115).
