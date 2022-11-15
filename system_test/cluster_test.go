@@ -1507,7 +1507,6 @@ func Test_MultiNodeClusterRecoverFull(t *testing.T) {
 // Test_MultiNodeClusterReapNodes tests that unreachable nodes are reaped.
 func Test_MultiNodeClusterReapNodes(t *testing.T) {
 	cfgStoreFn := func(n *Node) {
-		n.Store.ReapNodes = true
 		n.Store.ReapTimeout = time.Second
 		n.Store.ReapReadOnlyTimeout = time.Second
 	}
@@ -1612,7 +1611,6 @@ func Test_MultiNodeClusterReapNodes(t *testing.T) {
 // its time.
 func Test_MultiNodeClusterNoReap(t *testing.T) {
 	cfgStoreFn := func(n *Node) {
-		n.Store.ReapNodes = true
 		n.Store.ReapReadOnlyTimeout = 120 * time.Second
 	}
 
