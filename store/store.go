@@ -60,7 +60,6 @@ const (
 	retainSnapshotCount = 2
 	applyTimeout        = 10 * time.Second
 	openTimeout         = 120 * time.Second
-	reapTimeout         = 72 * time.Hour
 	sqliteFile          = "db.sqlite"
 	leaderWaitDelay     = 100 * time.Millisecond
 	appliedWaitDelay    = 100 * time.Millisecond
@@ -88,6 +87,7 @@ const (
 	snapshotDBOnDiskSize     = "snapshot_db_ondisk_size"
 	leaderChangesObserved    = "leader_changes_observed"
 	leaderChangesDropped     = "leader_changes_dropped"
+	failedHeartbeatObserved  = "failed_heartbeat_observed"
 	nodesReapedOK            = "nodes_reaped_ok"
 	nodesReapedFailed        = "nodes_reaped_failed"
 )
@@ -112,6 +112,7 @@ func init() {
 	stats.Add(snapshotDBOnDiskSize, 0)
 	stats.Add(leaderChangesObserved, 0)
 	stats.Add(leaderChangesDropped, 0)
+	stats.Add(failedHeartbeatObserved, 0)
 	stats.Add(nodesReapedOK, 0)
 	stats.Add(nodesReapedFailed, 0)
 }
@@ -202,7 +203,6 @@ type Store struct {
 	NoFreeListSync     bool
 
 	// Node-reaping configuration
-	ReapNodes           bool
 	ReapTimeout         time.Duration
 	ReapReadOnlyTimeout time.Duration
 
@@ -244,20 +244,18 @@ func New(ln Listener, c *Config) *Store {
 	}
 
 	return &Store{
-		ln:                  ln,
-		raftDir:             c.Dir,
-		peersPath:           filepath.Join(c.Dir, peersPath),
-		peersInfoPath:       filepath.Join(c.Dir, peersInfoPath),
-		raftID:              c.ID,
-		dbConf:              c.DBConf,
-		dbPath:              dbPath,
-		leaderObservers:     make([]chan<- struct{}, 0),
-		reqMarshaller:       command.NewRequestMarshaler(),
-		logger:              logger,
-		notifyingNodes:      make(map[string]*Server),
-		ApplyTimeout:        applyTimeout,
-		ReapTimeout:         reapTimeout,
-		ReapReadOnlyTimeout: reapTimeout,
+		ln:              ln,
+		raftDir:         c.Dir,
+		peersPath:       filepath.Join(c.Dir, peersPath),
+		peersInfoPath:   filepath.Join(c.Dir, peersInfoPath),
+		raftID:          c.ID,
+		dbConf:          c.DBConf,
+		dbPath:          dbPath,
+		leaderObservers: make([]chan<- struct{}, 0),
+		reqMarshaller:   command.NewRequestMarshaler(),
+		logger:          logger,
+		notifyingNodes:  make(map[string]*Server),
+		ApplyTimeout:    applyTimeout,
 	}
 }
 
@@ -387,7 +385,7 @@ func (s *Store) Open() (retErr error) {
 	s.observer = raft.NewObserver(s.observerChan, false, func(o *raft.Observation) bool {
 		_, isLeaderChange := o.Data.(raft.LeaderObservation)
 		_, isFailedHeartBeat := o.Data.(raft.FailedHeartbeatObservation)
-		return isLeaderChange || (isFailedHeartBeat && s.ReapNodes)
+		return isLeaderChange || isFailedHeartBeat
 	})
 
 	// Register and listen for leader changes.
@@ -718,10 +716,9 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		"heartbeat_timeout":      s.HeartbeatTimeout.String(),
 		"election_timeout":       s.ElectionTimeout.String(),
 		"snapshot_threshold":     s.SnapshotThreshold,
-		"snapshot_interval":      s.SnapshotInterval,
-		"reap_nodes":             s.ReapNodes,
-		"reap_timeout":           s.ReapTimeout,
-		"reap_read_only_timeout": s.ReapReadOnlyTimeout,
+		"snapshot_interval":      s.SnapshotInterval.String(),
+		"reap_timeout":           s.ReapTimeout.String(),
+		"reap_read_only_timeout": s.ReapReadOnlyTimeout.String(),
 		"no_freelist_sync":       s.NoFreeListSync,
 		"trailing_logs":          s.numTrailingLogs,
 		"request_marshaler":      s.reqMarshaller.Stats(),
@@ -1351,6 +1348,8 @@ func (s *Store) observe() (closeCh, doneCh chan struct{}) {
 			case o := <-s.observerChan:
 				switch signal := o.Data.(type) {
 				case raft.FailedHeartbeatObservation:
+					stats.Add(failedHeartbeatObserved, 1)
+
 					nodes, err := s.Nodes()
 					if err != nil {
 						s.logger.Printf("failed to get nodes configuration during reap check: %s", err.Error())
@@ -1365,7 +1364,8 @@ func (s *Store) observe() (closeCh, doneCh chan struct{}) {
 						break
 					}
 
-					if (isReadOnly && dur > s.ReapReadOnlyTimeout) || (!isReadOnly && dur > s.ReapTimeout) {
+					if (isReadOnly && s.ReapReadOnlyTimeout > 0 && dur > s.ReapReadOnlyTimeout) ||
+						(!isReadOnly && s.ReapTimeout > 0 && dur > s.ReapTimeout) {
 						pn := "voting node"
 						if isReadOnly {
 							pn = "non-voting node"
