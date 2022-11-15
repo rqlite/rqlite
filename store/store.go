@@ -88,6 +88,7 @@ const (
 	snapshotDBOnDiskSize     = "snapshot_db_ondisk_size"
 	leaderChangesObserved    = "leader_changes_observed"
 	leaderChangesDropped     = "leader_changes_dropped"
+	failedHeartbeatObserved  = "failed_heartbeat_observed"
 	nodesReapedOK            = "nodes_reaped_ok"
 	nodesReapedFailed        = "nodes_reaped_failed"
 )
@@ -112,6 +113,7 @@ func init() {
 	stats.Add(snapshotDBOnDiskSize, 0)
 	stats.Add(leaderChangesObserved, 0)
 	stats.Add(leaderChangesDropped, 0)
+	stats.Add(failedHeartbeatObserved, 0)
 	stats.Add(nodesReapedOK, 0)
 	stats.Add(nodesReapedFailed, 0)
 }
@@ -1349,6 +1351,8 @@ func (s *Store) observe() (closeCh, doneCh chan struct{}) {
 			case o := <-s.observerChan:
 				switch signal := o.Data.(type) {
 				case raft.FailedHeartbeatObservation:
+					stats.Add(failedHeartbeatObserved, 1)
+
 					nodes, err := s.Nodes()
 					if err != nil {
 						s.logger.Printf("failed to get nodes configuration during reap check: %s", err.Error())
