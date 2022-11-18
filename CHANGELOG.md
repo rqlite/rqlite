@@ -1,3 +1,7 @@
+## 7.11.1 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1120](https://github.com/rqlite/rqlite/pull/1120): go mod updates.
+
 ## 7.11.0 (November 15th 2022)
 ### New features
 - [PR #1114](https://github.com/rqlite/rqlite/pull/1114), [PR #1118](https://github.com/rqlite/rqlite/pull/1118): Support automatically removing non-reachable nodes after a configurable period. Fixes [issue #728](https://github.com/rqlite/rqlite/issues/728).
