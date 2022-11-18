@@ -689,18 +689,14 @@ func (db *DB) Serialize() ([]byte, error) {
 	defer conn.Close()
 
 	var b []byte
-	f := func(driverConn interface{}) error {
-		c := driverConn.(*sqlite3.SQLiteConn)
-		b = c.Serialize("")
-		if b == nil {
-			return fmt.Errorf("failed to serialize database")
-		}
-		return nil
+	if err := conn.Raw(func(raw interface{}) error {
+		var err error
+		b, err = raw.(*sqlite3.SQLiteConn).Serialize("")
+		return err
+	}); err != nil {
+		return nil, fmt.Errorf("failed to serialize database: %s", err.Error())
 	}
 
-	if err := conn.Raw(f); err != nil {
-		return nil, err
-	}
 	return b, nil
 }
 
