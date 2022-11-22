@@ -48,7 +48,7 @@ func Test_StoreSingleNodeNotOpen(t *testing.T) {
 	if err := s.Notify("id", "localhost"); err != ErrNotOpen {
 		t.Fatalf("wrong error received for non-open store: %s", err)
 	}
-	if err := s.Remove("id"); err != ErrNotOpen {
+	if err := s.Remove(nil); err != ErrNotOpen {
 		t.Fatalf("wrong error received for non-open store: %s", err)
 	}
 	if _, err := s.Nodes(); err != ErrNotOpen {
@@ -1192,7 +1192,7 @@ func Test_MultiNodeJoinRemove(t *testing.T) {
 	}
 
 	// Remove a node.
-	if err := s0.Remove(s1.ID()); err != nil {
+	if err := s0.Remove(removeNodeRequest(s1.ID())); err != nil {
 		t.Fatalf("failed to remove %s from cluster: %s", s1.ID(), err.Error())
 	}
 
@@ -1353,7 +1353,7 @@ func Test_MultiNodeJoinNonVoterRemove(t *testing.T) {
 	}
 
 	// Remove the non-voter.
-	if err := s0.Remove(s1.ID()); err != nil {
+	if err := s0.Remove(removeNodeRequest(s1.ID())); err != nil {
 		t.Fatalf("failed to remove %s from cluster: %s", s1.ID(), err.Error())
 	}
 
@@ -2153,6 +2153,12 @@ func backupRequestBinary(leader bool) *command.BackupRequest {
 func loadRequestFromFile(path string) *command.LoadRequest {
 	return &command.LoadRequest{
 		Data: mustReadFile(path),
+	}
+}
+
+func removeNodeRequest(id string) *command.RemoveNodeRequest {
+	return &command.RemoveNodeRequest{
+		Id: id,
 	}
 }
 

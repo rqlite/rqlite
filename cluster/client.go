@@ -265,6 +265,45 @@ func (c *Client) Load(lr *command.LoadRequest, nodeAddr string, creds *Credentia
 	return nil
 }
 
+// RemoveNode removes a node from the cluster
+func (c *Client) RemoveNode(rn *command.RemoveNodeRequest, nodeAddr string, creds *Credentials, timeout time.Duration) error {
+	conn, err := c.dial(nodeAddr, c.timeout)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	// Create the request.
+	command := &Command{
+		Type: Command_COMMAND_TYPE_REMOVE_NODE,
+		Request: &Command_RemoveNodeRequest{
+			RemoveNodeRequest: rn,
+		},
+		Credentials: creds,
+	}
+	if err := writeCommand(conn, command, timeout); err != nil {
+		handleConnError(conn)
+		return err
+	}
+
+	p, err := readResponse(conn, timeout)
+	if err != nil {
+		handleConnError(conn)
+		return err
+	}
+
+	a := &CommandRemoveNodeResponse{}
+	err = proto.Unmarshal(p, a)
+	if err != nil {
+		return err
+	}
+
+	if a.Error != "" {
+		return errors.New(a.Error)
+	}
+	return nil
+}
+
 // Stats returns stats on the Client instance
 func (c *Client) Stats() (map[string]interface{}, error) {
 	c.mu.RLock()

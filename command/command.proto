@@ -74,6 +74,10 @@ message LoadRequest {
 	bytes data = 1;
 }
 
+message RemoveNodeRequest {
+	string id = 1;
+}
+
 message Noop {
 	string id = 1;
 }

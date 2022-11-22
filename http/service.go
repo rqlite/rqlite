@@ -67,8 +67,8 @@ type Store interface {
 	// Notify notifies this node that a node is available at addr.
 	Notify(id, addr string) error
 
-	// Remove removes the node, specified by id, from the cluster.
-	Remove(id string) error
+	// RemoveNode removes the node from the cluster.
+	Remove(rn *command.RemoveNodeRequest) error
 
 	// LeaderAddr returns the Raft address of the leader of the cluster.
 	LeaderAddr() (string, error)
@@ -99,6 +99,9 @@ type Cluster interface {
 
 	// Load loads a SQLite database into the node.
 	Load(lr *command.LoadRequest, nodeAddr string, creds *cluster.Credentials, timeout time.Duration) error
+
+	// RemoveNode removes a node from the cluster.
+	RemoveNode(rn *command.RemoveNodeRequest, nodeAddr string, creds *cluster.Credentials, timeout time.Duration) error
 
 	// Stats returns stats on the Cluster.
 	Stats() (map[string]interface{}, error)
@@ -182,6 +185,7 @@ const (
 	numRemoteQueries          = "remote_queries"
 	numRemoteBackups          = "remote_backups"
 	numRemoteLoads            = "remote_loads"
+	numRemoteRemoveNode       = "remte_remove_node"
 	numReadyz                 = "num_readyz"
 	numStatus                 = "num_status"
 	numBackups                = "backups"
@@ -216,6 +220,7 @@ func init() {
 	stats.Add(numRemoteQueries, 0)
 	stats.Add(numRemoteBackups, 0)
 	stats.Add(numRemoteLoads, 0)
+	stats.Add(numRemoteRemoveNode, 0)
 	stats.Add(numReadyz, 0)
 	stats.Add(numStatus, 0)
 	stats.Add(numBackups, 0)
@@ -552,6 +557,12 @@ func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	redirect, err := isRedirect(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	b, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -574,20 +585,62 @@ func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.store.Remove(remoteID); err != nil {
+	timeout, err := timeoutParam(r, defaultTimeout)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	rn := &command.RemoveNodeRequest{
+		Id: remoteID,
+	}
+
+	err = s.store.Remove(rn)
+	if err != nil {
 		if err == store.ErrNotLeader {
-			leaderAPIAddr := s.LeaderAPIAddr()
-			if leaderAPIAddr == "" {
+			if redirect {
+				leaderAPIAddr := s.LeaderAPIAddr()
+				if leaderAPIAddr == "" {
+					stats.Add(numLeaderNotFound, 1)
+					http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+					return
+				}
+
+				redirect := s.FormRedirect(r, leaderAPIAddr)
+				http.Redirect(w, r, redirect, http.StatusMovedPermanently)
+				return
+			}
+
+			addr, err := s.store.LeaderAddr()
+			if err != nil {
+				http.Error(w, fmt.Sprintf("leader address: %s", err.Error()),
+					http.StatusInternalServerError)
+				return
+			}
+			if addr == "" {
 				stats.Add(numLeaderNotFound, 1)
 				http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
 				return
 			}
 
-			redirect := s.FormRedirect(r, leaderAPIAddr)
-			http.Redirect(w, r, redirect, http.StatusMovedPermanently)
+			username, password, ok := r.BasicAuth()
+			if !ok {
+				username = ""
+			}
+
+			w.Header().Add(ServedByHTTPHeader, addr)
+			removeErr := s.cluster.RemoveNode(rn, addr, makeCredentials(username, password), timeout)
+			if removeErr != nil {
+				if removeErr.Error() == "unauthorized" {
+					http.Error(w, "remote remove node not authorized", http.StatusUnauthorized)
+				} else {
+					http.Error(w, removeErr.Error(), http.StatusInternalServerError)
+				}
+				return
+			}
+			stats.Add(numRemoteRemoveNode, 1)
 			return
 		}
-
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

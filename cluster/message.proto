@@ -22,6 +22,7 @@ message Command {
         COMMAND_TYPE_QUERY = 3;
         COMMAND_TYPE_BACKUP = 4;
         COMMAND_TYPE_LOAD = 5;
+        COMMAND_TYPE_REMOVE_NODE = 6;
     }
     Type type = 1;
 
@@ -30,6 +31,7 @@ message Command {
         command.QueryRequest query_request = 3;
         command.BackupRequest backup_request = 5;
         command.LoadRequest load_request = 6;
+        command.RemoveNodeRequest remove_node_request = 7;
     }
 
     Credentials credentials = 4;
@@ -51,5 +53,9 @@ message CommandBackupResponse {
 }
 
 message CommandLoadResponse {
+    string error = 1;
+}
+
+message CommandRemoveNodeResponse {
     string error = 1;
 }
