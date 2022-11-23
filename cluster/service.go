@@ -78,6 +78,7 @@ type Database interface {
 	Load(lr *command.LoadRequest) error
 }
 
+// Manager is the interface node-management systems must implement
 type Manager interface {
 	// Remove removes the node, given by id, from the cluster
 	Remove(rn *command.RemoveNodeRequest) error
