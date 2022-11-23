@@ -1,4 +1,7 @@
-## 7.11.1 (unreleased)
+## 7.12.0 (unreleased)
+### New features
+- [PR #1121](https://github.com/rqlite/rqlite/pull/1121): Transparently forward node-removal requests to Leader.
+
 ### Implementation changes and bug fixes
 - [PR #1120](https://github.com/rqlite/rqlite/pull/1120): go mod updates.
 
