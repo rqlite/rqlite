@@ -1456,10 +1456,14 @@ func (s *Service) handleExpvar(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
+	key := keyParam(r)
 
 	fmt.Fprintf(w, "{\n")
 	first := true
 	expvar.Do(func(kv expvar.KeyValue) {
+		if key != "" && key != kv.Key {
+			return
+		}
 		if !first {
 			fmt.Fprintf(w, ",\n")
 		}
@@ -1745,6 +1749,11 @@ func stmtParam(req *http.Request) (string, error) {
 	q := req.URL.Query()
 	stmt := strings.TrimSpace(q.Get("q"))
 	return stmt, nil
+}
+
+func keyParam(req *http.Request) string {
+	q := req.URL.Query()
+	return strings.TrimSpace(q.Get("key"))
 }
 
 // fmtParam returns the value for URL param 'fmt', if present.
