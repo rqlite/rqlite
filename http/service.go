@@ -211,6 +211,11 @@ const (
 
 func init() {
 	stats = expvar.NewMap("http")
+	ResetStats()
+}
+
+// ResetStats resets the expvar stats for this module. Mostly for test purposes.
+func ResetStats() {
 	stats.Add(numLeaderNotFound, 0)
 	stats.Add(numExecutions, 0)
 	stats.Add(numQueuedExecutions, 0)

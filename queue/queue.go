@@ -18,6 +18,11 @@ const (
 
 func init() {
 	stats = expvar.NewMap("queue")
+	ResetStats()
+}
+
+// ResetStats resets the expvar stats for this module. Mostly for test purposes.
+func ResetStats() {
 	stats.Add(numStatementsRx, 0)
 	stats.Add(numStatementsTx, 0)
 }
