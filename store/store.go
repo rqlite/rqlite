@@ -1057,7 +1057,6 @@ func (s *Store) Remove(rn *command.RemoveNodeRequest) error {
 
 	s.logger.Printf("received request to remove node %s", id)
 	if err := s.remove(id); err != nil {
-		s.logger.Printf("failed to remove node %s: %s", id, err.Error())
 		return err
 	}
 
