@@ -743,7 +743,7 @@ func Test_MultiNodeClusterQueuedWrites(t *testing.T) {
 	node1 := mustNewLeaderNode()
 	defer node1.Deprovision()
 
-	if _, err := node1.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`); err != nil {
+	if _, err := node1.Execute(`CREATE TABLE qqux (id integer not null primary key, name text)`); err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
 
@@ -774,7 +774,7 @@ func Test_MultiNodeClusterQueuedWrites(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for i := 0; i < writesPerLoop; i++ {
-			if _, err := node1.Execute(`INSERT INTO foo(name) VALUES("fiona")`); err != nil {
+			if _, err := node1.Execute(`INSERT INTO qqux(name) VALUES("fiona")`); err != nil {
 				t.Logf("failed to insert records: %s", err.Error())
 			}
 		}
@@ -782,7 +782,7 @@ func Test_MultiNodeClusterQueuedWrites(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for i := 0; i < writesPerLoop; i++ {
-			if _, err := node2.Execute(`INSERT INTO foo(name) VALUES("fiona")`); err != nil {
+			if _, err := node2.Execute(`INSERT INTO qqux(name) VALUES("fiona")`); err != nil {
 				t.Logf("failed to insert records: %s", err.Error())
 			}
 		}
@@ -790,40 +790,40 @@ func Test_MultiNodeClusterQueuedWrites(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for i := 0; i < writesPerLoop-1; i++ {
-			if _, err := node2.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, false); err != nil {
+			if _, err := node2.ExecuteQueued(`INSERT INTO qqux(name) VALUES("fiona")`, false); err != nil {
 				t.Logf("failed to insert records: %s", err.Error())
 			}
 		}
-		if _, err := node2.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, true); err != nil {
+		if _, err := node2.ExecuteQueued(`INSERT INTO qqux(name) VALUES("fiona")`, true); err != nil {
 			t.Logf("failed to insert records: %s", err.Error())
 		}
 	}()
 	go func() {
 		defer wg.Done()
 		for i := 0; i < writesPerLoop-1; i++ {
-			if _, err := node3.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, false); err != nil {
+			if _, err := node3.ExecuteQueued(`INSERT INTO qqux(name) VALUES("fiona")`, false); err != nil {
 				t.Logf("failed to insert records: %s", err.Error())
 			}
 		}
-		if _, err := node3.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, true); err != nil {
+		if _, err := node3.ExecuteQueued(`INSERT INTO qqux(name) VALUES("fiona")`, true); err != nil {
 			t.Logf("failed to insert records: %s", err.Error())
 		}
 	}()
 	go func() {
 		defer wg.Done()
 		for i := 0; i < writesPerLoop-1; i++ {
-			if _, err := node3.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, false); err != nil {
+			if _, err := node3.ExecuteQueued(`INSERT INTO qqux(name) VALUES("fiona")`, false); err != nil {
 				t.Logf("failed to insert records: %s", err.Error())
 			}
 		}
-		if _, err := node3.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, true); err != nil {
+		if _, err := node3.ExecuteQueued(`INSERT INTO qqux(name) VALUES("fiona")`, true); err != nil {
 			t.Logf("failed to insert records: %s", err.Error())
 		}
 	}()
 	wg.Wait()
 
 	exp := fmt.Sprintf(`{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[%d]]}]}`, 5*writesPerLoop)
-	got, err := node1.Query(`SELECT COUNT(*) FROM foo`)
+	got, err := node1.Query(`SELECT COUNT(*) FROM qqux`)
 	if err != nil {
 		t.Fatalf("failed to query follower node: %s", err.Error())
 	}
