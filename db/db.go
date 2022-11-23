@@ -47,12 +47,13 @@ func init() {
 
 // ResetStats resets the expvar stats for this module. Mostly for test purposes.
 func ResetStats() {
-	stats.Set(numExecutions, 0)
-	stats.Set(numExecutionErrors, 0)
-	stats.Set(numQueries, 0)
-	stats.Set(numQueryErrors, 0)
-	stats.Set(numETx, 0)
-	stats.Set(numQTx, 0)
+	stats.Init()
+	stats.Add(numExecutions, 0)
+	stats.Add(numExecutionErrors, 0)
+	stats.Add(numQueries, 0)
+	stats.Add(numQueryErrors, 0)
+	stats.Add(numETx, 0)
+	stats.Add(numQTx, 0)
 }
 
 // DB is the SQL database.

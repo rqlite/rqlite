@@ -23,8 +23,9 @@ func init() {
 
 // ResetStats resets the expvar stats for this module. Mostly for test purposes.
 func ResetStats() {
-	stats.Set(numStatementsRx, 0)
-	stats.Set(numStatementsTx, 0)
+	stats.Init()
+	stats.Add(numStatementsRx, 0)
+	stats.Add(numStatementsTx, 0)
 }
 
 // FlushChannel is the type passed to the Queue, if caller wants
