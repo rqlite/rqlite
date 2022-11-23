@@ -106,7 +106,17 @@ memstats:
   Mallocs: 8950
   HeapSys: 2.588672e+06
   StackInuse: 557056
-  LastGC: 0...
+  LastGC: 0.....
+127.0.0.1:4001> .expvar http
+http:
+  queries: 0
+  queued_executions: 0
+  queued_executions_failed: 0
+  queued_executions_ok: 0
+  remote_backups: 0
+  authOK: 4
+  leader_not_found: 0
+  loads: 0.....
  ```
 
 ## pprof support
