@@ -159,8 +159,10 @@ func (q *Queue) run() {
 			return
 		}
 
-		q.sendCh <- mergeQueued(queuedStmts)
+		// Ensure the function doesn't keep access to the slice after send.
+		qsToSend := queuedStmts
 		queuedStmts = nil
+		q.sendCh <- mergeQueued(qsToSend)
 	}
 
 	for {
