@@ -1,10 +1,11 @@
 ## 7.12.0 (unreleased)
 ### New features
 - [PR #1121](https://github.com/rqlite/rqlite/pull/1121): Transparently forward node-removal requests to Leader.
+- [PR #1122](https://github.com/rqlite/rqlite/pull/1122): Support fetching a subset of expvar information.
 
 ### Implementation changes and bug fixes
 - [PR #1120](https://github.com/rqlite/rqlite/pull/1120): go mod updates.
-- [PR #1122](https://github.com/rqlite/rqlite/pull/1122): Fix potential race condition with Queued Writes.
+- [PR #1122](https://github.com/rqlite/rqlite/pull/1122): Add instrumentation for Queued Writes debugging.
 
 ## 7.11.0 (November 15th 2022)
 ### New features
