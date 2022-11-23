@@ -4,6 +4,7 @@
 
 ### Implementation changes and bug fixes
 - [PR #1120](https://github.com/rqlite/rqlite/pull/1120): go mod updates.
+- [PR #1122](https://github.com/rqlite/rqlite/pull/1122): Fix potential race condition with Queued Writes.
 
 ## 7.11.0 (November 15th 2022)
 ### New features
