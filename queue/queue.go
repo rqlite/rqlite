@@ -1,11 +1,26 @@
 package queue
 
 import (
+	"expvar"
 	"sync"
 	"time"
 
 	"github.com/rqlite/rqlite/command"
 )
+
+// stats captures stats for the Queue.
+var stats *expvar.Map
+
+const (
+	numStatementsRx = "statements_rx"
+	numStatementsTx = "statements_tx"
+)
+
+func init() {
+	stats = expvar.NewMap("queue")
+	stats.Add(numStatementsRx, 0)
+	stats.Add(numStatementsTx, 0)
+}
 
 // FlushChannel is the type passed to the Queue, if caller wants
 // to know when a specific set of statements has been processed.
@@ -105,6 +120,7 @@ func (q *Queue) Write(stmts []*command.Statement, c FlushChannel) (int64, error)
 	defer q.seqMu.Unlock()
 	q.seqNum++
 
+	stats.Add(numStatementsRx, int64(len(stmts)))
 	q.batchCh <- &queuedStatements{
 		SequenceNumber: q.seqNum,
 		Statements:     stmts,
@@ -159,10 +175,12 @@ func (q *Queue) run() {
 			return
 		}
 
-		// Ensure the function doesn't keep access to the slice after send.
-		qsToSend := queuedStmts
+		// mergeQueued returns a new object, ownership will pass
+		// implicitly to the other side of sendCh.
+		req := mergeQueued(queuedStmts)
+		stats.Add(numStatementsTx, int64(len(req.Statements)))
+		q.sendCh <- req
 		queuedStmts = nil
-		q.sendCh <- mergeQueued(qsToSend)
 	}
 
 	for {

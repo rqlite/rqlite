@@ -180,6 +180,8 @@ const (
 	numQueuedExecutionsOK     = "queued_executions_ok"
 	numQueuedExecutionsFailed = "queued_executions_failed"
 	numQueuedExecutionsWait   = "queued_executions_wait"
+	numQueuedStatementsRx     = "queued_statements_rx"
+	numQueuedStatementsTx     = "queued_statements_tx"
 	numQueries                = "queries"
 	numRemoteExecutions       = "remote_executions"
 	numRemoteQueries          = "remote_queries"
@@ -215,6 +217,8 @@ func init() {
 	stats.Add(numQueuedExecutionsOK, 0)
 	stats.Add(numQueuedExecutionsFailed, 0)
 	stats.Add(numQueuedExecutionsWait, 0)
+	stats.Add(numQueuedStatementsRx, 0)
+	stats.Add(numQueuedStatementsTx, 0)
 	stats.Add(numQueries, 0)
 	stats.Add(numRemoteExecutions, 0)
 	stats.Add(numRemoteQueries, 0)
@@ -1233,6 +1237,7 @@ func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	stats.Add(numQueuedStatementsTx, int64(len(stmts)))
 	resp.SequenceNum = seqNum
 
 	if wait {
@@ -1561,6 +1566,7 @@ func (s *Service) runQueue() {
 					Transaction: s.DefaultQueueTx,
 				},
 			}
+			stats.Add(numQueuedStatementsRx, int64(len(req.Statements)))
 			for {
 				// Nil statements are valid, as clients may want to just send
 				// a "checkpoint" through the queue.

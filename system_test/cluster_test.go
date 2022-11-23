@@ -886,7 +886,10 @@ func Test_MultiNodeClusterLargeQueuedWrites(t *testing.T) {
 		t.Fatalf("failed to query follower node: %s", err.Error())
 	}
 	if got != exp {
-		t.Fatalf("incorrect count, got %s, exp %s", got, exp)
+		t.Fatalf("incorrect count, got %s, exp %s\n %s %s %s\n %s %s %s", got, exp,
+			mustGetExpvarKey(node1, "queue"), mustGetExpvarKey(node2, "queue"), mustGetExpvarKey(node3, "queue"),
+			mustGetExpvarKey(node1, "http"), mustGetExpvarKey(node2, "http"), mustGetExpvarKey(node3, "http"),
+		)
 	}
 }
 
