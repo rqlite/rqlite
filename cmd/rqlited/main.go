@@ -101,7 +101,7 @@ func main() {
 	}
 
 	// Create cluster service now, so nodes will be able to learn information about each other.
-	clstr, err := clusterService(cfg, mux.Listen(cluster.MuxClusterHeader), str, credStr)
+	clstr, err := clusterService(cfg, mux.Listen(cluster.MuxClusterHeader), str, str, credStr)
 	if err != nil {
 		log.Fatalf("failed to create cluster service: %s", err.Error())
 	}
@@ -319,8 +319,8 @@ func credentialStore(cfg *Config) (*auth.CredentialsStore, error) {
 	return cs, nil
 }
 
-func clusterService(cfg *Config, tn cluster.Transport, db cluster.Database, credStr *auth.CredentialsStore) (*cluster.Service, error) {
-	c := cluster.New(tn, db, credStr)
+func clusterService(cfg *Config, tn cluster.Transport, db cluster.Database, mgr cluster.Manager, credStr *auth.CredentialsStore) (*cluster.Service, error) {
+	c := cluster.New(tn, db, mgr, credStr)
 	c.SetAPIAddr(cfg.HTTPAdv)
 	c.EnableHTTPS(cfg.X509Cert != "" && cfg.X509Key != "") // Conditions met for an HTTPS API
 

@@ -1265,7 +1265,7 @@ func (m *MockStore) Notify(id, addr string) error {
 	return nil
 }
 
-func (m *MockStore) Remove(id string) error {
+func (m *MockStore) Remove(rn *command.RemoveNodeRequest) error {
 	return nil
 }
 
@@ -1296,11 +1296,12 @@ func (m *MockStore) Load(lr *command.LoadRequest) error {
 }
 
 type mockClusterService struct {
-	apiAddr   string
-	executeFn func(er *command.ExecuteRequest, addr string, t time.Duration) ([]*command.ExecuteResult, error)
-	queryFn   func(qr *command.QueryRequest, addr string, t time.Duration) ([]*command.QueryRows, error)
-	backupFn  func(br *command.BackupRequest, addr string, t time.Duration, w io.Writer) error
-	loadFn    func(lr *command.LoadRequest, addr string, t time.Duration) error
+	apiAddr      string
+	executeFn    func(er *command.ExecuteRequest, addr string, t time.Duration) ([]*command.ExecuteResult, error)
+	queryFn      func(qr *command.QueryRequest, addr string, t time.Duration) ([]*command.QueryRows, error)
+	backupFn     func(br *command.BackupRequest, addr string, t time.Duration, w io.Writer) error
+	loadFn       func(lr *command.LoadRequest, addr string, t time.Duration) error
+	removeNodeFn func(rn *command.RemoveNodeRequest, nodeAddr string, t time.Duration) error
 }
 
 func (m *mockClusterService) GetNodeAPIAddr(a string, t time.Duration) (string, error) {
@@ -1331,6 +1332,13 @@ func (m *mockClusterService) Backup(br *command.BackupRequest, addr string, cred
 func (m *mockClusterService) Load(lr *command.LoadRequest, addr string, creds *cluster.Credentials, t time.Duration) error {
 	if m.loadFn != nil {
 		return m.loadFn(lr, addr, t)
+	}
+	return nil
+}
+
+func (m *mockClusterService) RemoveNode(rn *command.RemoveNodeRequest, addr string, creds *cluster.Credentials, t time.Duration) error {
+	if m.removeNodeFn != nil {
+		return m.removeNodeFn(rn, addr, t)
 	}
 	return nil
 }

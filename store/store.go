@@ -1048,15 +1048,15 @@ func (s *Store) Join(id, addr string, voter bool) error {
 	return nil
 }
 
-// Remove removes a node from the store, specified by ID.
-func (s *Store) Remove(id string) error {
+// Remove removes a node from the store.
+func (s *Store) Remove(rn *command.RemoveNodeRequest) error {
 	if !s.open {
 		return ErrNotOpen
 	}
+	id := rn.Id
 
 	s.logger.Printf("received request to remove node %s", id)
 	if err := s.remove(id); err != nil {
-		s.logger.Printf("failed to remove node %s: %s", id, err.Error())
 		return err
 	}
 

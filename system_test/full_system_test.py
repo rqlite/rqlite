@@ -508,6 +508,11 @@ class Node(object):
       raise_for_status(r)
       fd.write(r.content)
 
+  def remove_node(self, id):
+    body = {"id": id}
+    r = requests.delete(self._remove_url(), data=json.dumps(body))
+    raise_for_status(r)
+
   def restore(self, file, fmt=None):
     # This is the one API that doesn't expect JSON.
     if fmt != "binary":
@@ -570,6 +575,8 @@ class Node(object):
     return 'http://' + self.APIAddr() + '/db/backup'
   def _load_url(self):
     return 'http://' + self.APIAddr() + '/db/load'
+  def _remove_url(self):
+    return 'http://' + self.APIAddr() + '/remove'
   def __eq__(self, other):
     return self.node_id == other.node_id
   def __str__(self):
@@ -902,6 +909,33 @@ class TestEndToEnd(unittest.TestCase):
     self.assertEqual(nodes[fs[1].node_id]['reachable'], True)
     self.assertEqual(nodes[l.node_id]['reachable'], True)
 
+  def test_remove_node_via_leader(self):
+    '''Test that removing a node via the leader works'''
+    l = self.cluster.wait_for_leader()
+    fs = self.cluster.followers()
+
+    # Validate state of cluster.
+    self.assertEqual(len(fs), 2)
+    nodes = l.nodes()
+    self.assertEqual(len(nodes), 3)
+
+    l.remove_node(fs[0].node_id)
+    nodes = l.nodes()
+    self.assertEqual(len(nodes), 2)
+
+  def test_remove_node_via_follower(self):
+    '''Test that removing a node via a follower works'''
+    l = self.cluster.wait_for_leader()
+    fs = self.cluster.followers()
+
+    # Validate state of cluster.
+    self.assertEqual(len(fs), 2)
+    nodes = l.nodes()
+    self.assertEqual(len(nodes), 3)
+
+    fs[0].remove_node(fs[1].node_id)
+    nodes = l.nodes()
+    self.assertEqual(len(nodes), 2)
 
 class TestEndToEndOnDisk(TestEndToEnd):
   def setUp(self):

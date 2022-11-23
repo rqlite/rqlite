@@ -26,8 +26,9 @@ func Test_ServiceExecute(t *testing.T) {
 	go mux.Serve()
 	tn := mux.Listen(1) // Could be any byte value.
 	db := mustNewMockDatabase()
+	mgr := mustNewMockManager()
 	cred := mustNewMockCredentialStore()
-	s := New(tn, db, cred)
+	s := New(tn, db, mgr, cred)
 	if s == nil {
 		t.Fatalf("failed to create cluster service")
 	}
@@ -115,7 +116,8 @@ func Test_ServiceQuery(t *testing.T) {
 	tn := mux.Listen(1) // Could be any byte value.
 	db := mustNewMockDatabase()
 	cred := mustNewMockCredentialStore()
-	s := New(tn, db, cred)
+	mgr := mustNewMockManager()
+	s := New(tn, db, mgr, cred)
 	if s == nil {
 		t.Fatalf("failed to create cluster service")
 	}
@@ -204,8 +206,9 @@ func Test_ServiceQueryLarge(t *testing.T) {
 	go mux.Serve()
 	tn := mux.Listen(1) // Could be any byte value.
 	db := mustNewMockDatabase()
+	mgr := mustNewMockManager()
 	cred := mustNewMockCredentialStore()
-	s := New(tn, db, cred)
+	s := New(tn, db, mgr, cred)
 	if s == nil {
 		t.Fatalf("failed to create cluster service")
 	}
@@ -264,8 +267,9 @@ func Test_ServiceBackup(t *testing.T) {
 	go mux.Serve()
 	tn := mux.Listen(1) // Could be any byte value.
 	db := mustNewMockDatabase()
+	mgr := mustNewMockManager()
 	cred := mustNewMockCredentialStore()
-	s := New(tn, db, cred)
+	s := New(tn, db, mgr, cred)
 	if s == nil {
 		t.Fatalf("failed to create cluster service")
 	}
@@ -310,8 +314,9 @@ func Test_ServiceLoad(t *testing.T) {
 	go mux.Serve()
 	tn := mux.Listen(1) // Could be any byte value.
 	db := mustNewMockDatabase()
+	mgr := mustNewMockManager()
 	cred := mustNewMockCredentialStore()
-	s := New(tn, db, cred)
+	s := New(tn, db, mgr, cred)
 	if s == nil {
 		t.Fatalf("failed to create cluster service")
 	}
@@ -323,8 +328,10 @@ func Test_ServiceLoad(t *testing.T) {
 	}
 
 	// Ready for Load tests now.
+	called := false
 	testData := []byte("this is SQLite data")
 	db.loadFn = func(lr *command.LoadRequest) error {
+		called = true
 		if bytes.Compare(lr.Data, testData) != 0 {
 			t.Fatalf("load data is not as expected, exp: %s, got: %s", testData, lr.Data)
 		}
@@ -334,6 +341,56 @@ func Test_ServiceLoad(t *testing.T) {
 	err := c.Load(loadRequest(testData), s.Addr(), NO_CREDS, longWait)
 	if err != nil {
 		t.Fatalf("failed to load database: %s", err.Error())
+	}
+
+	if !called {
+		t.Fatal("load not called on database")
+	}
+
+	// Clean up resources.
+	if err := ln.Close(); err != nil {
+		t.Fatalf("failed to close Mux's listener: %s", err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatalf("failed to close cluster service")
+	}
+}
+
+func Test_ServiceRemoveNode(t *testing.T) {
+	ln, mux := mustNewMux()
+	go mux.Serve()
+	tn := mux.Listen(1) // Could be any byte value.
+	db := mustNewMockDatabase()
+	mgr := mustNewMockManager()
+	cred := mustNewMockCredentialStore()
+	s := New(tn, db, mgr, cred)
+	if s == nil {
+		t.Fatalf("failed to create cluster service")
+	}
+
+	c := NewClient(mustNewDialer(1, false, false), 30*time.Second)
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open cluster service: %s", err.Error())
+	}
+
+	expNodeID := "node_1"
+	called := false
+	mgr.removeNodeFn = func(rn *command.RemoveNodeRequest) error {
+		called = true
+		if rn.Id != expNodeID {
+			t.Fatalf("node ID is wrong, exp: %s, got %s", expNodeID, rn.Id)
+		}
+		return nil
+	}
+
+	err := c.RemoveNode(removeNodeRequest(expNodeID), s.Addr(), NO_CREDS, longWait)
+	if err != nil {
+		t.Fatalf("failed to remove node: %s", err.Error())
+	}
+
+	if !called {
+		t.Fatal("RemoveNode not called on manager")
 	}
 
 	// Clean up resources.
@@ -418,6 +475,12 @@ func backupRequestBinary(leader bool) *command.BackupRequest {
 func loadRequest(b []byte) *command.LoadRequest {
 	return &command.LoadRequest{
 		Data: b,
+	}
+}
+
+func removeNodeRequest(id string) *command.RemoveNodeRequest {
+	return &command.RemoveNodeRequest{
+		Id: id,
 	}
 }
 

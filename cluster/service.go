@@ -29,6 +29,7 @@ const (
 	numQueryRequest       = "num_query_req"
 	numBackupRequest      = "num_backup_req"
 	numLoadRequest        = "num_load_req"
+	numRemoveNodeRequest  = "num_remove_node_req"
 
 	// Client stats for this package.
 	numGetNodeAPIRequestLocal = "num_get_node_api_req_local"
@@ -50,6 +51,7 @@ func init() {
 	stats.Add(numQueryRequest, 0)
 	stats.Add(numBackupRequest, 0)
 	stats.Add(numLoadRequest, 0)
+	stats.Add(numRemoveNodeRequest, 0)
 	stats.Add(numGetNodeAPIRequestLocal, 0)
 }
 
@@ -76,6 +78,12 @@ type Database interface {
 	Load(lr *command.LoadRequest) error
 }
 
+// Manager is the interface node-management systems must implement
+type Manager interface {
+	// Remove removes the node, given by id, from the cluster
+	Remove(rn *command.RemoveNodeRequest) error
+}
+
 // CredentialStore is the interface credential stores must support.
 type CredentialStore interface {
 	// AA authenticates and checks authorization for the given perm.
@@ -93,7 +101,8 @@ type Service struct {
 	tn   Transport // Network layer this service uses
 	addr net.Addr  // Address on which this service is listening
 
-	db Database // The queryable system.
+	db  Database // The queryable system.
+	mgr Manager  // The cluster management system.
 
 	credentialStore CredentialStore
 
@@ -105,11 +114,12 @@ type Service struct {
 }
 
 // New returns a new instance of the cluster service
-func New(tn Transport, db Database, credentialStore CredentialStore) *Service {
+func New(tn Transport, db Database, m Manager, credentialStore CredentialStore) *Service {
 	return &Service{
 		tn:              tn,
 		addr:            tn.Addr(),
 		db:              db,
+		mgr:             m,
 		logger:          log.New(os.Stderr, "[cluster] ", log.LstdFlags),
 		credentialStore: credentialStore,
 	}
@@ -344,6 +354,27 @@ func (s *Service) handleConn(conn net.Conn) {
 			p, err = proto.Marshal(resp)
 			if err != nil {
 				return
+			}
+			writeBytesWithLength(conn, p)
+
+		case Command_COMMAND_TYPE_REMOVE_NODE:
+			stats.Add(numRemoveNodeRequest, 1)
+			resp := &CommandRemoveNodeResponse{}
+
+			rn := c.GetRemoveNodeRequest()
+			if rn == nil {
+				resp.Error = "LoadRequest is nil"
+			} else if !s.checkCommandPerm(c, auth.PermRemove) {
+				resp.Error = "unauthorized"
+			} else {
+				if err := s.mgr.Remove(rn); err != nil {
+					resp.Error = err.Error()
+				}
+			}
+
+			p, err = proto.Marshal(resp)
+			if err != nil {
+				conn.Close()
 			}
 			writeBytesWithLength(conn, p)
 		}
