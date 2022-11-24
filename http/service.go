@@ -1563,7 +1563,7 @@ func (s *Service) LeaderAPIAddr() string {
 
 func (s *Service) runQueue() {
 	defer close(s.queueDone)
-	//retryDelay := time.Second
+	retryDelay := time.Second
 
 	var err error
 	for {
@@ -1592,8 +1592,8 @@ func (s *Service) runQueue() {
 								stats.Add(numQueuedExecutionsNoLeader, 1)
 								s.logger.Printf("execute queue can't find leader for sequence number %d on node %s",
 									req.SequenceNumber, s.Addr().String())
-								//time.Sleep(retryDelay)
-								//continue
+								time.Sleep(retryDelay)
+								continue
 								break
 							}
 

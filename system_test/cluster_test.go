@@ -904,9 +904,9 @@ func Test_MultiNodeClusterLargeQueuedWrites(t *testing.T) {
 		)
 	}
 
-	a, b := http.QueueStats()
-	if a != 0 || b != 0 {
-		t.Fatalf("test results are OK, but a is %d and b is %d", a, b)
+	_, b := http.QueueStats()
+	if b != 0 {
+		t.Fatalf("test results are OK, but b is %d", b)
 	}
 }
 
