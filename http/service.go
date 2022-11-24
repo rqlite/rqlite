@@ -1590,8 +1590,8 @@ func (s *Service) runQueue() {
 							addr, err := s.store.LeaderAddr()
 							if err != nil || addr == "" {
 								stats.Add(numQueuedExecutionsNoLeader, 1)
-								s.logger.Printf("execute queue can't find leader for sequence number %d",
-									req.SequenceNumber)
+								s.logger.Printf("execute queue can't find leader for sequence number %d on node %s",
+									req.SequenceNumber, s.Addr().String())
 								time.Sleep(retryDelay)
 								continue
 							}
@@ -1602,7 +1602,7 @@ func (s *Service) runQueue() {
 							if err != nil {
 								stats.Add(numQueuedExecutionsFailed, 1)
 								s.logger.Printf("execute queue write failed for sequence number %d on node %s: %s",
-									req.SequenceNumber, s.addr, err.Error())
+									req.SequenceNumber, s.Addr().String(), err.Error())
 								time.Sleep(retryDelay)
 								continue
 							}
