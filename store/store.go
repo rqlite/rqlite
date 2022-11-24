@@ -740,8 +740,6 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 
 // Execute executes queries that return no rows, but do modify the database.
 func (s *Store) Execute(ex *command.ExecuteRequest) ([]*command.ExecuteResult, error) {
-	stats.Add(numExecutions, int64(len(ex.Request.Statements)))
-
 	if !s.open {
 		return nil, ErrNotOpen
 	}
@@ -749,6 +747,8 @@ func (s *Store) Execute(ex *command.ExecuteRequest) ([]*command.ExecuteResult, e
 	if s.raft.State() != raft.Leader {
 		return nil, ErrNotLeader
 	}
+	stats.Add(numExecutions, int64(len(ex.Request.Statements)))
+
 	return s.execute(ex)
 }
 
