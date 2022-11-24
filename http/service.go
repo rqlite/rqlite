@@ -1604,6 +1604,7 @@ func (s *Service) runQueue() {
 								s.logger.Printf("execute queue write failed for sequence number %d on node %s: %s",
 									req.SequenceNumber, s.Addr().String(), err.Error())
 								if err.Error() != "not leader" {
+									s.logger.Printf("unhandled error: %s", err.Error())
 									stats.Add(numQueuedExecutionsFailed, 1)
 									break
 								}
