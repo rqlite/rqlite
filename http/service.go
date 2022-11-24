@@ -1571,6 +1571,7 @@ func (s *Service) runQueue() {
 					Statements:  req.Statements,
 					Transaction: s.DefaultQueueTx,
 				},
+				Num: int64(len(req.Statements)),
 			}
 			stats.Add(numQueuedStatementsRx, int64(len(req.Statements)))
 			for {

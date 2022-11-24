@@ -50,7 +50,8 @@ message QueryRows {
 
 message ExecuteRequest {
 	Request request = 1;
-	bool timings = 2;	
+	bool timings = 2;
+	int64 num = 3;
 }
 
 message ExecuteResult {

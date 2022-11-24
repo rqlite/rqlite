@@ -748,6 +748,9 @@ func (s *Store) Execute(ex *command.ExecuteRequest) ([]*command.ExecuteResult, e
 		return nil, ErrNotLeader
 	}
 	stats.Add(numExecutions, int64(len(ex.Request.Statements)))
+	if ex.Num != int64(len(ex.Request.Statements)) {
+		panic("NUMBER IN WRONG!")
+	}
 
 	return s.execute(ex)
 }
