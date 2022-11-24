@@ -1563,7 +1563,7 @@ func (s *Service) LeaderAPIAddr() string {
 
 func (s *Service) runQueue() {
 	defer close(s.queueDone)
-	retryDelay := time.Second
+	//retryDelay := time.Second
 
 	var err error
 	for {
@@ -1592,8 +1592,9 @@ func (s *Service) runQueue() {
 								stats.Add(numQueuedExecutionsNoLeader, 1)
 								s.logger.Printf("execute queue can't find leader for sequence number %d on node %s",
 									req.SequenceNumber, s.Addr().String())
-								time.Sleep(retryDelay)
-								continue
+								//time.Sleep(retryDelay)
+								//continue
+								break
 							}
 
 							// Send the request to the leader.
@@ -1603,8 +1604,9 @@ func (s *Service) runQueue() {
 								stats.Add(numQueuedExecutionsFailed, 1)
 								s.logger.Printf("execute queue write failed for sequence number %d on node %s: %s",
 									req.SequenceNumber, s.Addr().String(), err.Error())
-								time.Sleep(retryDelay)
-								continue
+								//time.Sleep(retryDelay)
+								//continue
+								break
 							}
 							stats.Add(numRemoteExecutions, 1)
 						}
@@ -1620,6 +1622,12 @@ func (s *Service) runQueue() {
 			}
 		}
 	}
+}
+
+func QueueStats() (int64, int64) {
+	a := stats.Get(numQueuedExecutionsNoLeader).(*expvar.Int).Value()
+	b := stats.Get(numQueuedExecutionsFailed).(*expvar.Int).Value()
+	return a, b
 }
 
 type checkNodesResponse struct {

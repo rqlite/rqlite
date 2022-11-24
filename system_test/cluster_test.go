@@ -903,6 +903,11 @@ func Test_MultiNodeClusterLargeQueuedWrites(t *testing.T) {
 			mustGetExpvarKey(node1, "store"), mustGetExpvarKey(node2, "store"), mustGetExpvarKey(node3, "store"),
 		)
 	}
+
+	a, b := http.QueueStats()
+	if a != 0 || b != 0 {
+		t.Fatalf("test results are OK, but a is %d and b is %d", a, b)
+	}
 }
 
 // Test_MultiNodeClusterNodesNonVoter checks nodes/ endpoint with a non-voting node.
