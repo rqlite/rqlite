@@ -1294,6 +1294,7 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request) {
 			Transaction: isTx,
 			Statements:  stmts,
 		},
+		Num:     len(stmts),
 		Timings: timings,
 	}
 
