@@ -1595,6 +1595,8 @@ func (s *Service) runQueue() {
 								time.Sleep(retryDelay)
 								continue
 							}
+
+							// Send the request to the leader.
 							stats.Add(numExecuteCalls, 1)
 							_, err = s.cluster.Execute(er, addr, nil, defaultTimeout)
 							if err != nil {
