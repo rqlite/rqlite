@@ -71,6 +71,7 @@ const (
 )
 
 const (
+	numExecutions            = "executions"
 	numSnaphots              = "num_snapshots"
 	numBackups               = "num_backups"
 	numLoads                 = "num_loads"
@@ -97,6 +98,12 @@ var stats *expvar.Map
 
 func init() {
 	stats = expvar.NewMap("store")
+	ResetStats()
+}
+
+func ResetStats() {
+	stats.Init()
+	stats.Add(numExecutions, 0)
 	stats.Add(numSnaphots, 0)
 	stats.Add(numBackups, 0)
 	stats.Add(numRestores, 0)
@@ -733,6 +740,8 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 
 // Execute executes queries that return no rows, but do modify the database.
 func (s *Store) Execute(ex *command.ExecuteRequest) ([]*command.ExecuteResult, error) {
+	stats.Add(numExecutions, int64(len(ex.Request.Statements)))
+
 	if !s.open {
 		return nil, ErrNotOpen
 	}

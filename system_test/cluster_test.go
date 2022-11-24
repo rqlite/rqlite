@@ -11,6 +11,7 @@ import (
 	"github.com/rqlite/rqlite/db"
 	"github.com/rqlite/rqlite/http"
 	"github.com/rqlite/rqlite/queue"
+	"github.com/rqlite/rqlite/store"
 	"github.com/rqlite/rqlite/tcp"
 )
 
@@ -836,6 +837,7 @@ func Test_MultiNodeClusterQueuedWrites(t *testing.T) {
 // many large concurrent Queued Writes operations.
 func Test_MultiNodeClusterLargeQueuedWrites(t *testing.T) {
 	http.ResetStats()
+	store.ResetStats()
 	db.ResetStats()
 	queue.ResetStats()
 
@@ -893,10 +895,11 @@ func Test_MultiNodeClusterLargeQueuedWrites(t *testing.T) {
 		t.Fatalf("failed to query follower node: %s", err.Error())
 	}
 	if got != exp {
-		t.Fatalf("incorrect count, got %s, exp %s\n %s %s %s\n %s %s %s\n %s %s %s", got, exp,
+		t.Fatalf("incorrect count, got %s, exp %s\n %s %s %s\n %s %s %s\n %s %s %s\n%s %s %s", got, exp,
 			mustGetExpvarKey(node1, "queue"), mustGetExpvarKey(node2, "queue"), mustGetExpvarKey(node3, "queue"),
 			mustGetExpvarKey(node1, "http"), mustGetExpvarKey(node2, "http"), mustGetExpvarKey(node3, "http"),
 			mustGetExpvarKey(node1, "db"), mustGetExpvarKey(node2, "db"), mustGetExpvarKey(node3, "db"),
+			mustGetExpvarKey(node1, "store"), mustGetExpvarKey(node2, "store"), mustGetExpvarKey(node3, "store"),
 		)
 	}
 }
