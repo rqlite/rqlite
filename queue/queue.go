@@ -14,6 +14,8 @@ var stats *expvar.Map
 const (
 	numStatementsRx = "statements_rx"
 	numStatementsTx = "statements_tx"
+	numTimeout      = "num_timeout"
+	numFlush        = "num_flush"
 )
 
 func init() {
@@ -26,6 +28,8 @@ func ResetStats() {
 	stats.Init()
 	stats.Add(numStatementsRx, 0)
 	stats.Add(numStatementsTx, 0)
+	stats.Add(numTimeout, 0)
+	stats.Add(numFlush, 0)
 }
 
 // FlushChannel is the type passed to the Queue, if caller wants
@@ -201,8 +205,10 @@ func (q *Queue) run() {
 			}
 		case <-timer.C:
 			q.numTimeouts++
+			stats.Add(numTimeout, 1)
 			writeFn()
 		case <-q.flush:
+			stats.Add(numFlush, 1)
 			writeFn()
 		case <-q.done:
 			timer.Stop()
