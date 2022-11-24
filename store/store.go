@@ -749,7 +749,7 @@ func (s *Store) Execute(ex *command.ExecuteRequest) ([]*command.ExecuteResult, e
 	}
 	stats.Add(numExecutions, int64(len(ex.Request.Statements)))
 	if ex.Num != int64(len(ex.Request.Statements)) {
-		panic("NUMBER IN WRONG!")
+		panic(fmt.Sprintf("Number is wrong, exp %d, got %d", ex.Num, int64(len(ex.Request.Statements))))
 	}
 
 	return s.execute(ex)
