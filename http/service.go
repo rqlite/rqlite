@@ -175,6 +175,7 @@ var stats *expvar.Map
 
 const (
 	numLeaderNotFound         = "leader_not_found"
+	numExecuteCalls           = "num_execute_calls"
 	numExecutions             = "executions"
 	numQueuedExecutions       = "queued_executions"
 	numQueuedExecutionsOK     = "queued_executions_ok"
@@ -218,6 +219,7 @@ func init() {
 func ResetStats() {
 	stats.Init()
 	stats.Add(numLeaderNotFound, 0)
+	stats.Add(numExecuteCalls, 0)
 	stats.Add(numExecutions, 0)
 	stats.Add(numQueuedExecutions, 0)
 	stats.Add(numQueuedExecutionsOK, 0)
@@ -1580,6 +1582,7 @@ func (s *Service) runQueue() {
 				// a "checkpoint" through the queue.
 				if er.Request.Statements != nil {
 					_, err = s.store.Execute(er)
+					stats.Add(numExecuteCalls, 1)
 					if err != nil {
 						if err == store.ErrNotLeader {
 							addr, err := s.store.LeaderAddr()
@@ -1590,6 +1593,7 @@ func (s *Service) runQueue() {
 								time.Sleep(retryDelay)
 								continue
 							}
+							stats.Add(numExecuteCalls, 1)
 							_, err = s.cluster.Execute(er, addr, nil, defaultTimeout)
 							if err != nil {
 								s.logger.Printf("execute queue write failed for sequence number %d: %s",

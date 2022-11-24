@@ -71,6 +71,7 @@ const (
 )
 
 const (
+	numExecuteCalls          = "num_execute_calls"
 	numExecutions            = "executions"
 	numSnaphots              = "num_snapshots"
 	numBackups               = "num_backups"
@@ -103,6 +104,7 @@ func init() {
 
 func ResetStats() {
 	stats.Init()
+	stats.Add(numExecuteCalls, 0)
 	stats.Add(numExecutions, 0)
 	stats.Add(numSnaphots, 0)
 	stats.Add(numBackups, 0)
@@ -740,6 +742,8 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 
 // Execute executes queries that return no rows, but do modify the database.
 func (s *Store) Execute(ex *command.ExecuteRequest) ([]*command.ExecuteResult, error) {
+	stats.Add(numExecuteCalls, 1)
+
 	if !s.open {
 		return nil, ErrNotOpen
 	}
