@@ -1601,11 +1601,14 @@ func (s *Service) runQueue() {
 							stats.Add(numExecuteCalls, 1)
 							_, err = s.cluster.Execute(er, addr, nil, defaultTimeout)
 							if err != nil {
-								stats.Add(numQueuedExecutionsFailed, 1)
 								s.logger.Printf("execute queue write failed for sequence number %d on node %s: %s",
 									req.SequenceNumber, s.Addr().String(), err.Error())
-								//time.Sleep(retryDelay)
-								//continue
+								if err.Error() != "not leader" {
+									stats.Add(numQueuedExecutionsFailed, 1)
+									break
+								}
+								time.Sleep(retryDelay)
+								continue
 								break
 							}
 							stats.Add(numRemoteExecutions, 1)
