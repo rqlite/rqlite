@@ -1456,10 +1456,14 @@ func (s *Service) handleExpvar(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
+	key := keyParam(r)
 
 	fmt.Fprintf(w, "{\n")
 	first := true
 	expvar.Do(func(kv expvar.KeyValue) {
+		if key != "" && key != kv.Key {
+			return
+		}
 		if !first {
 			fmt.Fprintf(w, ",\n")
 		}
@@ -1762,6 +1766,11 @@ func isPretty(req *http.Request) (bool, error) {
 // redirect to the leader, if necessary.
 func isRedirect(req *http.Request) (bool, error) {
 	return queryParam(req, "redirect")
+}
+
+func keyParam(req *http.Request) string {
+	q := req.URL.Query()
+	return strings.TrimSpace(q.Get("key"))
 }
 
 // timeoutParam returns the value, if any, set for timeout. If not set, it

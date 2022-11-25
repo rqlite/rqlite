@@ -313,7 +313,12 @@ func (n *Node) Liveness() (bool, error) {
 
 // Expvar returns the expvar output for node.
 func (n *Node) Expvar() (string, error) {
-	v, _ := url.Parse("http://" + n.APIAddr + "/debug/vars")
+	return n.ExpvarKey("")
+}
+
+// ExpvarKey returns the expvar output, for a given key, for a node.
+func (n *Node) ExpvarKey(k string) (string, error) {
+	v, _ := url.Parse("http://" + n.APIAddr + "/debug/vars?key=" + k)
 
 	resp, err := http.Get(v.String())
 	if err != nil {
