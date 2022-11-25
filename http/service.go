@@ -174,27 +174,30 @@ func NewResponse() *Response {
 var stats *expvar.Map
 
 const (
-	numLeaderNotFound           = "leader_not_found"
-	numExecutions               = "executions"
-	numQueuedExecutions         = "queued_executions"
-	numQueuedExecutionsOK       = "queued_executions_ok"
-	numQueuedExecutionsNoLeader = "queued_executions_no_leader"
-	numQueuedExecutionsFailed   = "queued_executions_failed"
-	numQueuedExecutionsWait     = "queued_executions_wait"
-	numQueries                  = "queries"
-	numRemoteExecutions         = "remote_executions"
-	numRemoteQueries            = "remote_queries"
-	numRemoteBackups            = "remote_backups"
-	numRemoteLoads              = "remote_loads"
-	numRemoteRemoveNode         = "remte_remove_node"
-	numReadyz                   = "num_readyz"
-	numStatus                   = "num_status"
-	numBackups                  = "backups"
-	numLoad                     = "loads"
-	numJoins                    = "joins"
-	numNotifies                 = "notifies"
-	numAuthOK                   = "authOK"
-	numAuthFail                 = "authFail"
+	numLeaderNotFound                 = "leader_not_found"
+	numExecutions                     = "executions"
+	numQueuedExecutions               = "queued_executions"
+	numQueuedExecutionsOK             = "queued_executions_ok"
+	numQueuedExecutionsNoLeader       = "queued_executions_no_leader"
+	numQueuedExecutionsFailed         = "queued_executions_failed"
+	numQueuedExecutionsWait           = "queued_executions_wait"
+	numQueuedExecutionsLeadershipLost = "queued_executions_leadership_lost"
+	numQueuedExecutionsNotLeader      = "queued_executions_not_leader"
+	numQueuedExecutionsUnknownError   = "queued_executions_unknown_error"
+	numQueries                        = "queries"
+	numRemoteExecutions               = "remote_executions"
+	numRemoteQueries                  = "remote_queries"
+	numRemoteBackups                  = "remote_backups"
+	numRemoteLoads                    = "remote_loads"
+	numRemoteRemoveNode               = "remte_remove_node"
+	numReadyz                         = "num_readyz"
+	numStatus                         = "num_status"
+	numBackups                        = "backups"
+	numLoad                           = "loads"
+	numJoins                          = "joins"
+	numNotifies                       = "notifies"
+	numAuthOK                         = "authOK"
+	numAuthFail                       = "authFail"
 
 	// Default timeout for cluster communications.
 	defaultTimeout = 30 * time.Second
@@ -223,6 +226,9 @@ func ResetStats() {
 	stats.Add(numQueuedExecutionsNoLeader, 0)
 	stats.Add(numQueuedExecutionsFailed, 0)
 	stats.Add(numQueuedExecutionsWait, 0)
+	stats.Add(numQueuedExecutionsLeadershipLost, 0)
+	stats.Add(numQueuedExecutionsNotLeader, 0)
+	stats.Add(numQueuedExecutionsUnknownError, 0)
 	stats.Add(numQueries, 0)
 	stats.Add(numRemoteExecutions, 0)
 	stats.Add(numRemoteQueries, 0)
@@ -1591,6 +1597,14 @@ func (s *Service) runQueue() {
 							if err != nil {
 								s.logger.Printf("execute queue write failed for sequence number %d on node %s: %s",
 									req.SequenceNumber, s.Addr().String(), err.Error())
+								switch err.Error() {
+								case "leadership lost while committing log":
+									stats.Add(numQueuedExecutionsLeadershipLost, 1)
+								case "not leader":
+									stats.Add(numQueuedExecutionsNotLeader, 1)
+								default:
+									stats.Add(numQueuedExecutionsUnknownError, 1)
+								}
 							} else {
 								// Success!
 								stats.Add(numRemoteExecutions, 1)
