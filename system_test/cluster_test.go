@@ -1782,3 +1782,5 @@ func mustGetExpvarKey(n *Node, k string) string {
 	if err != nil {
 		panic(err.Error())
 	}
+	return j
+}
