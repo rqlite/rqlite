@@ -1605,8 +1605,8 @@ func (s *Service) runQueue() {
 						} else {
 							_, err = s.cluster.Execute(er, addr, nil, defaultTimeout)
 							if err != nil {
-								s.logger.Printf("remote execute queue write failed for sequence number %d on node %s: %s",
-									req.SequenceNumber, s.Addr().String(), err.Error())
+								s.logger.Printf("remote execute queue write (%d statements) failed for sequence number %d on node %s to node %s: %s",
+									len(er.Request.Statements), req.SequenceNumber, s.Addr().String(), addr, err.Error())
 								switch err.Error() {
 								case "leadership lost while committing log":
 									stats.Add(numQueuedExecutionsLeadershipLost+na, 1)
@@ -1614,8 +1614,8 @@ func (s *Service) runQueue() {
 									break
 								case "not leader":
 									stats.Add(numQueuedExecutionsNotLeader+na, 1)
-									stats.Add(numQueuedExecutionsNotLeaderStmts+na, int64(len(er.Request.Statements)))
-									break
+									// stats.Add(numQueuedExecutionsNotLeaderStmts+na, int64(len(er.Request.Statements)))
+									// break
 								default:
 									stats.Add(numQueuedExecutionsUnknownError+na, 1)
 								}
