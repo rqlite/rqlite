@@ -8,6 +8,10 @@ import (
 	"time"
 
 	"github.com/rqlite/rqlite/cluster"
+	"github.com/rqlite/rqlite/db"
+	"github.com/rqlite/rqlite/http"
+	"github.com/rqlite/rqlite/queue"
+	"github.com/rqlite/rqlite/store"
 	"github.com/rqlite/rqlite/tcp"
 )
 
@@ -835,9 +839,14 @@ func Test_MultiNodeClusterLargeQueuedWrites(t *testing.T) {
 	node1 := mustNewLeaderNode()
 	defer node1.Deprovision()
 
-	if _, err := node1.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`); err != nil {
+	if _, err := node1.Execute(`CREATE TABLE qbaz (id integer not null primary key, name text)`); err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
+
+	http.ResetStats()
+	store.ResetStats()
+	db.ResetStats()
+	queue.ResetStats()
 
 	// Join a second and third nodes
 	node2 := mustNewNode(false)
@@ -869,11 +878,11 @@ func Test_MultiNodeClusterLargeQueuedWrites(t *testing.T) {
 		go func(nt *Node) {
 			defer wg.Done()
 			for i := 0; i < writesPerNode-1; i++ {
-				if _, err := nt.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, false); err != nil {
+				if _, err := nt.ExecuteQueued(`INSERT INTO qbaz(name) VALUES("fiona")`, false); err != nil {
 					t.Logf("failed to insert records: %s", err.Error())
 				}
 			}
-			if _, err := nt.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, true); err != nil {
+			if _, err := nt.ExecuteQueued(`INSERT INTO qbaz(name) VALUES("fiona")`, true); err != nil {
 				t.Logf("failed to insert records: %s", err.Error())
 			}
 		}(n)
@@ -881,12 +890,17 @@ func Test_MultiNodeClusterLargeQueuedWrites(t *testing.T) {
 	wg.Wait()
 
 	exp := fmt.Sprintf(`{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[%d]]}]}`, len(nodesUnderTest)*writesPerNode)
-	got, err := node1.Query(`SELECT COUNT(*) FROM foo`)
+	got, err := node1.Query(`SELECT COUNT(*) FROM qbaz`)
 	if err != nil {
 		t.Fatalf("failed to query follower node: %s", err.Error())
 	}
 	if got != exp {
-		t.Fatalf("incorrect count, got %s, exp %s", got, exp)
+		t.Fatalf("incorrect count, got %s, exp %s\n %s %s %s\n %s %s %s\n %s %s %s\n%s %s %s", got, exp,
+			mustGetExpvarKey(node1, "queue"), mustGetExpvarKey(node2, "queue"), mustGetExpvarKey(node3, "queue"),
+			mustGetExpvarKey(node1, "http"), mustGetExpvarKey(node2, "http"), mustGetExpvarKey(node3, "http"),
+			mustGetExpvarKey(node1, "db"), mustGetExpvarKey(node2, "db"), mustGetExpvarKey(node3, "db"),
+			mustGetExpvarKey(node1, "store"), mustGetExpvarKey(node2, "store"), mustGetExpvarKey(node3, "store"),
+		)
 	}
 }
 
