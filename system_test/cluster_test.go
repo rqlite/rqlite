@@ -1768,3 +1768,17 @@ func Test_MultiNodeClusterNoReapReadOnlyZero(t *testing.T) {
 		t.Fatalf("didn't time out waiting for node to be removed")
 	}
 }
+
+func mustGetExpvar(n *Node) string {
+	j, err := n.Expvar()
+	if err != nil {
+		panic(err.Error())
+	}
+	return j
+}
+
+func mustGetExpvarKey(n *Node, k string) string {
+	j, err := n.ExpvarKey(k)
+	if err != nil {
+		panic(err.Error())
+	}
