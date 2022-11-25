@@ -184,6 +184,7 @@ const (
 	numQueuedExecutionsLeadershipLost      = "queued_executions_leadership_lost"
 	numQueuedExecutionsLeadershipLostStmts = "queued_executions_leadership_lost_stmts"
 	numQueuedExecutionsNotLeader           = "queued_executions_not_leader"
+	numQueuedExecutionsNotLeaderStmts      = "queued_executions_not_leader_stmts"
 	numQueuedExecutionsUnknownError        = "queued_executions_unknown_error"
 	numQueries                             = "queries"
 	numRemoteExecutions                    = "remote_executions"
@@ -230,6 +231,7 @@ func ResetStats() {
 	stats.Add(numQueuedExecutionsLeadershipLost, 0)
 	stats.Add(numQueuedExecutionsLeadershipLostStmts, 0)
 	stats.Add(numQueuedExecutionsNotLeader, 0)
+	stats.Add(numQueuedExecutionsNotLeaderStmts, 0)
 	stats.Add(numQueuedExecutionsUnknownError, 0)
 	stats.Add(numQueries, 0)
 	stats.Add(numRemoteExecutions, 0)
@@ -1603,8 +1605,11 @@ func (s *Service) runQueue() {
 								case "leadership lost while committing log":
 									stats.Add(numQueuedExecutionsLeadershipLost, 1)
 									stats.Add(numQueuedExecutionsLeadershipLostStmts, int64(len(er.Request.Statements)))
+									break
 								case "not leader":
 									stats.Add(numQueuedExecutionsNotLeader, 1)
+									stats.Add(numQueuedExecutionsNotLeaderStmts, int64(len(er.Request.Statements)))
+									break
 								default:
 									stats.Add(numQueuedExecutionsUnknownError, 1)
 								}
