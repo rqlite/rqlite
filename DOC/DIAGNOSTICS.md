@@ -85,6 +85,7 @@ rqlite also exports [expvar](https://pkg.go.dev/expvar) information, which are m
 ```bash
 curl localhost:4001/debug/vars
 ```
+You can optionally set the query parmameter `key` if you wish to retrieve just a subsection of the expvar output e.g. the URL `localhost:4001/debug/vars?key=http` will return just HTTP information.
 
 You can also request the same expvar information via the CLI:
 ```
