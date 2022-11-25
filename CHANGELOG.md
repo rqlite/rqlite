@@ -6,6 +6,7 @@
 ### Implementation changes and bug fixes
 - [PR #1120](https://github.com/rqlite/rqlite/pull/1120): go mod updates.
 - [PR #1126](https://github.com/rqlite/rqlite/pull/1126): Add Queue instrumentation.
+- [PR #1127](https://github.com/rqlite/rqlite/pull/1127): Clearer Queue Writes loop logic.
 
 ## 7.11.0 (November 15th 2022)
 ### New features
