@@ -42,6 +42,12 @@ func init() {
 	rand.Seed(time.Now().UnixNano())
 	DBVersion, _, _ = sqlite3.Version()
 	stats = expvar.NewMap("db")
+	ResetStats()
+}
+
+// ResetStats resets the expvar stats for this module. Mostly for test purposes.
+func ResetStats() {
+	stats.Init()
 	stats.Add(numExecutions, 0)
 	stats.Add(numExecutionErrors, 0)
 	stats.Add(numQueries, 0)

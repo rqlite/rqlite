@@ -97,6 +97,11 @@ var stats *expvar.Map
 
 func init() {
 	stats = expvar.NewMap("store")
+	ResetStats()
+}
+
+// ResetStats resets the expvar stats for this module. Mostly for test purposes.
+func ResetStats() {
 	stats.Add(numSnaphots, 0)
 	stats.Add(numBackups, 0)
 	stats.Add(numRestores, 0)
