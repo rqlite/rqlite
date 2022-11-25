@@ -1577,14 +1577,14 @@ func (s *Service) runQueue() {
 					if err == store.ErrNotLeader {
 						addr, err := s.store.LeaderAddr()
 						if err != nil || addr == "" {
-							s.logger.Printf("execute queue can't find leader for sequence number %d",
-								req.SequenceNumber)
+							s.logger.Printf("execute queue can't find leader for sequence number %d on node %s",
+								req.SequenceNumber, s.Addr().String())
 							stats.Add(numQueuedExecutionsNoLeader, 1)
 						} else {
 							_, err = s.cluster.Execute(er, addr, nil, defaultTimeout)
 							if err != nil {
-								s.logger.Printf("execute queue write failed for sequence number %d: %s",
-									req.SequenceNumber, err.Error())
+								s.logger.Printf("execute queue write failed for sequence number %d on node %s: %s",
+									req.SequenceNumber, s.Addr().String(), err.Error())
 							} else {
 								// Success!
 								stats.Add(numRemoteExecutions, 1)
