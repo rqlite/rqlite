@@ -178,6 +178,7 @@ const (
 	numExecutions                          = "executions"
 	numQueuedExecutions                    = "queued_executions"
 	numQueuedExecutionsOK                  = "queued_executions_ok"
+	numQueuedStmtsRx                       = "queued_stmts_rx"
 	numQueuedExecutionsNoLeader            = "queued_executions_no_leader"
 	numQueuedExecutionsFailed              = "queued_executions_failed"
 	numQueuedExecutionsWait                = "queued_executions_wait"
@@ -225,6 +226,7 @@ func ResetStats() {
 	stats.Add(numExecutions, 0)
 	stats.Add(numQueuedExecutions, 0)
 	stats.Add(numQueuedExecutionsOK, 0)
+	stats.Add(numQueuedStmtsRx, 0)
 	stats.Add(numQueuedExecutionsNoLeader, 0)
 	stats.Add(numQueuedExecutionsFailed, 0)
 	stats.Add(numQueuedExecutionsWait, 0)
@@ -1567,6 +1569,8 @@ func (s *Service) runQueue() {
 	defer close(s.queueDone)
 	retryDelay := time.Second
 
+	na := s.Addr().String()
+
 	var err error
 	for {
 		select {
@@ -1579,6 +1583,8 @@ func (s *Service) runQueue() {
 					Transaction: s.DefaultQueueTx,
 				},
 			}
+
+			stats.Add(numQueuedStmtsRx+na, int64(len(req.Statements)))
 
 			// Nil statements are valid, as clients may want to just send
 			// a "checkpoint" through the queue.
@@ -1595,7 +1601,7 @@ func (s *Service) runQueue() {
 						if err != nil || addr == "" {
 							s.logger.Printf("execute queue can't find leader for sequence number %d on node %s",
 								req.SequenceNumber, s.Addr().String())
-							stats.Add(numQueuedExecutionsNoLeader, 1)
+							stats.Add(numQueuedExecutionsNoLeader+na, 1)
 						} else {
 							_, err = s.cluster.Execute(er, addr, nil, defaultTimeout)
 							if err != nil {
@@ -1603,15 +1609,15 @@ func (s *Service) runQueue() {
 									req.SequenceNumber, s.Addr().String(), err.Error())
 								switch err.Error() {
 								case "leadership lost while committing log":
-									stats.Add(numQueuedExecutionsLeadershipLost, 1)
-									stats.Add(numQueuedExecutionsLeadershipLostStmts, int64(len(er.Request.Statements)))
+									stats.Add(numQueuedExecutionsLeadershipLost+na, 1)
+									stats.Add(numQueuedExecutionsLeadershipLostStmts+na, int64(len(er.Request.Statements)))
 									break
 								case "not leader":
-									stats.Add(numQueuedExecutionsNotLeader, 1)
-									stats.Add(numQueuedExecutionsNotLeaderStmts, int64(len(er.Request.Statements)))
+									stats.Add(numQueuedExecutionsNotLeader+na, 1)
+									stats.Add(numQueuedExecutionsNotLeaderStmts+na, int64(len(er.Request.Statements)))
 									break
 								default:
-									stats.Add(numQueuedExecutionsUnknownError, 1)
+									stats.Add(numQueuedExecutionsUnknownError+na, 1)
 								}
 							} else {
 								// Success!
