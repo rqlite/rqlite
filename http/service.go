@@ -184,6 +184,7 @@ const (
 	numQueuedExecutionsWait     = "queued_executions_wait"
 	numQueuedStatementsRx       = "queued_statements_rx"
 	numQueuedStatementsTx       = "queued_statements_tx"
+	numQueuedStatementsDropped  = "queued_statements_dropped"
 	numQueries                  = "queries"
 	numRemoteExecutions         = "remote_executions"
 	numRemoteQueries            = "remote_queries"
@@ -229,6 +230,7 @@ func ResetStats() {
 	stats.Add(numQueuedExecutionsWait, 0)
 	stats.Add(numQueuedStatementsRx, 0)
 	stats.Add(numQueuedStatementsTx, 0)
+	stats.Add(numQueuedStatementsDropped, 0)
 	stats.Add(numQueries, 0)
 	stats.Add(numRemoteExecutions, 0)
 	stats.Add(numRemoteQueries, 0)
@@ -1579,10 +1581,12 @@ func (s *Service) runQueue() {
 				Num: int64(len(req.Statements)),
 			}
 			stats.Add(numQueuedStatementsRx, int64(len(req.Statements)))
-			for {
-				// Nil statements are valid, as clients may want to just send
-				// a "checkpoint" through the queue.
-				if er.Request.Statements != nil {
+
+			// Nil statements are valid, as clients may want to just send
+			// a "checkpoint" through the queue.
+			if er.Request.Statements != nil {
+				// Loop to handle potential retries.
+				for {
 					_, err = s.store.Execute(er)
 					stats.Add(numExecuteCalls, 1)
 					if err != nil {
@@ -1594,7 +1598,6 @@ func (s *Service) runQueue() {
 									req.SequenceNumber, s.Addr().String())
 								time.Sleep(retryDelay)
 								continue
-								break
 							}
 
 							// Send the request to the leader.
@@ -1606,24 +1609,24 @@ func (s *Service) runQueue() {
 								if err.Error() != "not leader" {
 									s.logger.Printf("unhandled error on node %s, dropping %d: %s", s.Addr().String(), int64(len(req.Statements)), err.Error())
 									stats.Add(numQueuedExecutionsFailed, 1)
+									stats.Add(numQueuedStatementsDropped, int64(len(req.Statements)))
 									break
 								}
 								time.Sleep(retryDelay)
 								continue
-								break
 							}
 							stats.Add(numRemoteExecutions, 1)
 						}
 					}
 				}
-				s.seqNumMu.Lock()
-				s.seqNum = req.SequenceNumber
-				s.seqNumMu.Unlock()
-
-				req.Close()
-				stats.Add(numQueuedExecutionsOK, 1)
-				break
 			}
+
+			// Processing the queue request has completed.
+			stats.Add(numQueuedExecutionsOK, 1)
+			s.seqNumMu.Lock()
+			s.seqNum = req.SequenceNumber
+			s.seqNumMu.Unlock()
+			req.Close()
 		}
 	}
 }
