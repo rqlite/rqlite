@@ -798,6 +798,8 @@ func (s *Store) Query(qr *command.QueryRequest) ([]*command.QueryRows, error) {
 			return nil, ErrNotLeader
 		}
 
+		s.logger.Printf("processing STRONG query request on node %s", s.Addr())
+
 		b, compressed, err := s.reqMarshaller.Marshal(qr)
 		if err != nil {
 			return nil, err
