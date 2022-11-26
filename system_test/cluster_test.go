@@ -890,7 +890,7 @@ func Test_MultiNodeClusterLargeQueuedWrites(t *testing.T) {
 	wg.Wait()
 
 	exp := fmt.Sprintf(`{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[%d]]}]}`, len(nodesUnderTest)*writesPerNode)
-	got, err := node1.Query(`SELECT COUNT(*) FROM qbaz`)
+	got, err := node1.QueryStrongConsistency(`SELECT COUNT(*) FROM qbaz`)
 	if err != nil {
 		t.Fatalf("failed to query follower node: %s", err.Error())
 	}

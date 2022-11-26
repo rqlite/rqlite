@@ -1614,8 +1614,8 @@ func (s *Service) runQueue() {
 									break
 								case "not leader":
 									stats.Add(numQueuedExecutionsNotLeader+na, 1)
-									// stats.Add(numQueuedExecutionsNotLeaderStmts+na, int64(len(er.Request.Statements)))
-									// break
+									stats.Add(numQueuedExecutionsNotLeaderStmts+na, int64(len(er.Request.Statements)))
+									break
 								default:
 									stats.Add(numQueuedExecutionsUnknownError+na, 1)
 								}
