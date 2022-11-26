@@ -71,6 +71,7 @@ const (
 )
 
 const (
+	numExecutes              = "num_executes"
 	numSnaphots              = "num_snapshots"
 	numBackups               = "num_backups"
 	numLoads                 = "num_loads"
@@ -102,6 +103,7 @@ func init() {
 
 // ResetStats resets the expvar stats for this module. Mostly for test purposes.
 func ResetStats() {
+	stats.Add(numExecutes, 0)
 	stats.Add(numSnaphots, 0)
 	stats.Add(numBackups, 0)
 	stats.Add(numRestores, 0)
@@ -740,6 +742,8 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 
 // Execute executes queries that return no rows, but do modify the database.
 func (s *Store) Execute(ex *command.ExecuteRequest) ([]*command.ExecuteResult, error) {
+	stats.Add(numExecutes+s.Addr(), int64(len(ex.Request.Statements)))
+
 	if !s.open {
 		return nil, ErrNotOpen
 	}
@@ -779,6 +783,8 @@ func (s *Store) execute(ex *command.ExecuteRequest) ([]*command.ExecuteResult, e
 		}
 		return nil, af.Error()
 	}
+
+	stats.Add(numExecutes+"_OK_"+s.Addr(), int64(len(ex.Request.Statements)))
 
 	s.dbAppliedIndexMu.Lock()
 	s.dbAppliedIndex = af.Index()
