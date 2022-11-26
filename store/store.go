@@ -376,6 +376,8 @@ func (s *Store) Open() (retErr error) {
 			return fmt.Errorf("failed to create in-memory database")
 		}
 		s.logger.Printf("created in-memory database at open")
+		s.db.ID = s.Addr()
+		s.logger.Printf("set database ID to %s", s.db.ID)
 	}
 
 	// Instantiate the Raft system.

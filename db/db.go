@@ -67,6 +67,8 @@ type DB struct {
 
 	rwDSN string // DSN used for read-write connection
 	roDSN string // DSN used for read-only connections
+
+	ID string
 }
 
 // PoolStats represents connection pool statistics
@@ -393,7 +395,7 @@ func (db *DB) ExecuteStringStmt(query string) ([]*command.ExecuteResult, error) 
 
 // Execute executes queries that modify the database.
 func (db *DB) Execute(req *command.Request, xTime bool) ([]*command.ExecuteResult, error) {
-	stats.Add(numExecutions, int64(len(req.Statements)))
+	stats.Add(numExecutions+db.ID, int64(len(req.Statements)))
 
 	conn, err := db.rwDB.Conn(context.Background())
 	if err != nil {
