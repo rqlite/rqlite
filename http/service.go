@@ -186,7 +186,7 @@ const (
 	numRemoteQueries            = "remote_queries"
 	numRemoteBackups            = "remote_backups"
 	numRemoteLoads              = "remote_loads"
-	numRemoteRemoveNode         = "remte_remove_node"
+	numRemoteRemoveNode         = "remote_remove_node"
 	numReadyz                   = "num_readyz"
 	numStatus                   = "num_status"
 	numBackups                  = "backups"
