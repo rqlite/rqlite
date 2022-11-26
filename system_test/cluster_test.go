@@ -839,15 +839,6 @@ func Test_MultiNodeClusterLargeQueuedWrites(t *testing.T) {
 	node1 := mustNewLeaderNode()
 	defer node1.Deprovision()
 
-	if _, err := node1.Execute(`CREATE TABLE qbaz (id integer not null primary key, name text)`); err != nil {
-		t.Fatalf("failed to create table: %s", err.Error())
-	}
-
-	http.ResetStats()
-	store.ResetStats()
-	db.ResetStats()
-	queue.ResetStats()
-
 	// Join a second and third nodes
 	node2 := mustNewNode(false)
 	defer node2.Deprovision()
@@ -867,6 +858,15 @@ func Test_MultiNodeClusterLargeQueuedWrites(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed waiting for leader: %s", err.Error())
 	}
+
+	if _, err := node1.Execute(`CREATE TABLE qbaz (id integer not null primary key, name text)`); err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	http.ResetStats()
+	store.ResetStats()
+	db.ResetStats()
+	queue.ResetStats()
 
 	// Write data to the cluster, via various nodes.
 	nodesUnderTest := []*Node{node3, node1, node2, node1, node2, node3, node1, node3, node2}
