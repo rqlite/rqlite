@@ -902,6 +902,16 @@ func Test_MultiNodeClusterLargeQueuedWrites(t *testing.T) {
 			mustGetExpvarKey(node1, "store"), mustGetExpvarKey(node2, "store"), mustGetExpvarKey(node3, "store"),
 		)
 	}
+
+	a, b := http.QueueStats()
+	if a != 0 || b != 0 {
+		t.Fatalf("test is OK but errors, got %s, exp %s\n %s %s %s\n %s %s %s\n %s %s %s\n%s %s %s", got, exp,
+			mustGetExpvarKey(node1, "queue"), mustGetExpvarKey(node2, "queue"), mustGetExpvarKey(node3, "queue"),
+			mustGetExpvarKey(node1, "http"), mustGetExpvarKey(node2, "http"), mustGetExpvarKey(node3, "http"),
+			mustGetExpvarKey(node1, "db"), mustGetExpvarKey(node2, "db"), mustGetExpvarKey(node3, "db"),
+			mustGetExpvarKey(node1, "store"), mustGetExpvarKey(node2, "store"), mustGetExpvarKey(node3, "store"),
+		)
+	}
 }
 
 // Test_MultiNodeClusterNodesNonVoter checks nodes/ endpoint with a non-voting node.

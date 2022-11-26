@@ -1645,6 +1645,12 @@ func (s *Service) runQueue() {
 	}
 }
 
+func QueueStats() (int64, int64) {
+	a := stats.Get(numQueuedExecutionsNoLeader).(*expvar.Int).Value()
+	b := stats.Get(numQueuedExecutionsFailed).(*expvar.Int).Value()
+	return a, b
+}
+
 type checkNodesResponse struct {
 	apiAddr   string
 	reachable bool
