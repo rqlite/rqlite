@@ -1611,15 +1611,15 @@ func (s *Service) runQueue() {
 									len(er.Request.Statements), req.SequenceNumber, s.Addr().String(), addr, err.Error())
 								switch err.Error() {
 								case "leadership lost while committing log":
-									stats.Add(numQueuedExecutionsLeadershipLost+na, 1)
-									stats.Add(numQueuedExecutionsLeadershipLostStmts+na, int64(len(er.Request.Statements)))
+									stats.Add(numQueuedExecutionsLeadershipLost+"Remote"+na, 1)
+									stats.Add(numQueuedExecutionsLeadershipLostStmts+"Remote"+na, int64(len(er.Request.Statements)))
 									break
 								case "not leader":
-									stats.Add(numQueuedExecutionsNotLeader+na, 1)
-									stats.Add(numQueuedExecutionsNotLeaderStmts+na, int64(len(er.Request.Statements)))
+									stats.Add(numQueuedExecutionsNotLeader+"Remote"+na, 1)
+									stats.Add(numQueuedExecutionsNotLeaderStmts+"Remote"+na, int64(len(er.Request.Statements)))
 									break
 								default:
-									stats.Add(numQueuedExecutionsUnknownError+na, 1)
+									stats.Add(numQueuedExecutionsUnknownError+"Remote"+na, 1)
 								}
 							} else {
 								// Success!
@@ -1631,6 +1631,8 @@ func (s *Service) runQueue() {
 					} else {
 						s.logger.Printf("local execute queue write failed for sequence number %d on node %s: %s",
 							req.SequenceNumber, s.Addr().String(), err.Error())
+						stats.Add(numQueuedExecutionsLeadershipLostStmts+"Local"+na, int64(len(er.Request.Statements)))
+						break
 					}
 
 					stats.Add(numQueuedExecutionsFailed, 1)
