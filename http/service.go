@@ -1633,7 +1633,6 @@ func (s *Service) runQueue() {
 						s.logger.Printf("local execute queue write failed for sequence number %d on node %s: %s",
 							req.SequenceNumber, s.Addr().String(), err.Error())
 						stats.Add(numQueuedExecutionsLeadershipLostStmts+"Local"+na, int64(len(er.Request.Statements)))
-						continue
 					}
 
 					stats.Add(numQueuedExecutionsFailed, 1)
