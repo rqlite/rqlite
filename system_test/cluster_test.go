@@ -863,6 +863,8 @@ func Test_MultiNodeClusterLargeQueuedWrites(t *testing.T) {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
 
+	time.Sleep(5 * time.Second) // Wait for everything to settle.
+
 	http.ResetStats()
 	store.ResetStats()
 	db.ResetStats()
