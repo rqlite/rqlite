@@ -1589,12 +1589,13 @@ func (s *Service) runQueue() {
 			// Nil statements are valid, as clients may want to just send
 			// a "checkpoint" through the queue.
 			if er.Request.Statements != nil {
+			STATEMENT_DONE:
 				for {
 					_, err = s.store.Execute(er)
 					if err == nil {
 						stats.Add(numQueuedExecutions+"LocalOKStmts"+na, int64(len(er.Request.Statements)))
 						// Success!
-						break
+						break STATEMENT_DONE
 					}
 					stats.Add(numQueuedExecutions+"LocalFailedStmts"+na, int64(len(er.Request.Statements)))
 
@@ -1613,11 +1614,11 @@ func (s *Service) runQueue() {
 								case "leadership lost while committing log":
 									stats.Add(numQueuedExecutionsLeadershipLost+"Remote"+na, 1)
 									stats.Add(numQueuedExecutionsLeadershipLostStmts+"Remote"+na, int64(len(er.Request.Statements)))
-									break
+									break STATEMENT_DONE
 								case "not leader":
 									stats.Add(numQueuedExecutionsNotLeader+"Remote"+na, 1)
 									stats.Add(numQueuedExecutionsNotLeaderStmts+"Remote"+na, int64(len(er.Request.Statements)))
-									break
+									break STATEMENT_DONE
 								default:
 									stats.Add(numQueuedExecutionsUnknownError+"Remote"+na, 1)
 								}
@@ -1625,14 +1626,14 @@ func (s *Service) runQueue() {
 								// Success!
 								stats.Add(numQueuedExecutions+"RemoteOKStmts"+na, int64(len(er.Request.Statements)))
 								stats.Add(numRemoteExecutions+na, 1)
-								break
+								break STATEMENT_DONE
 							}
 						}
 					} else {
 						s.logger.Printf("local execute queue write failed for sequence number %d on node %s: %s",
 							req.SequenceNumber, s.Addr().String(), err.Error())
 						stats.Add(numQueuedExecutionsLeadershipLostStmts+"Local"+na, int64(len(er.Request.Statements)))
-						break
+						break STATEMENT_DONE
 					}
 
 					stats.Add(numQueuedExecutionsFailed, 1)
