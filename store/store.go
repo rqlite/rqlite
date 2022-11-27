@@ -754,7 +754,13 @@ func (s *Store) Execute(ex *command.ExecuteRequest) ([]*command.ExecuteResult, e
 	return s.execute(ex)
 }
 
-func (s *Store) execute(ex *command.ExecuteRequest) ([]*command.ExecuteResult, error) {
+func (s *Store) execute(ex *command.ExecuteRequest) (er []*command.ExecuteResult, retErr error) {
+	defer func() {
+		if retErr != nil {
+			stats.Add(numExecutes+"_Failed_"+s.Addr(), int64(len(ex.Request.Statements)))
+		}
+	}()
+
 	b, compressed, err := s.reqMarshaller.Marshal(ex)
 	if err != nil {
 		return nil, err

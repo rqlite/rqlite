@@ -1592,9 +1592,11 @@ func (s *Service) runQueue() {
 				for {
 					_, err = s.store.Execute(er)
 					if err == nil {
+						stats.Add(numQueuedExecutions+"LocalOK"+na, 1)
 						// Success!
 						break
 					}
+					stats.Add(numQueuedExecutions+"LocalFailed"+na, 1)
 
 					if err == store.ErrNotLeader {
 						addr, err := s.store.LeaderAddr()
@@ -1621,7 +1623,8 @@ func (s *Service) runQueue() {
 								}
 							} else {
 								// Success!
-								stats.Add(numRemoteExecutions, 1)
+								stats.Add(numQueuedExecutions+"RemoteOK"+na, 1)
+								stats.Add(numRemoteExecutions+na, 1)
 								break
 							}
 						}
