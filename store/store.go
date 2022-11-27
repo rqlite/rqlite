@@ -748,9 +748,9 @@ func (s *Store) Execute(ex *command.ExecuteRequest) ([]*command.ExecuteResult, e
 		return nil, ErrNotOpen
 	}
 
-	if s.raft.State() != raft.Leader {
-		return nil, ErrNotLeader
-	}
+	// if s.raft.State() != raft.Leader {
+	// 	return nil, ErrNotLeader
+	// }
 	return s.execute(ex)
 }
 
