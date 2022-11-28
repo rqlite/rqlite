@@ -891,6 +891,11 @@ func Test_MultiNodeClusterLargeQueuedWrites(t *testing.T) {
 	}
 	wg.Wait()
 
+	_, err = node1.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for leader post INSERTs: %s", err.Error())
+	}
+
 	exp := fmt.Sprintf(`{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[%d]]}]}`, len(nodesUnderTest)*writesPerNode)
 	got, err := node1.QueryStrongConsistency(`SELECT COUNT(*) FROM qbaz`)
 	if err != nil {
