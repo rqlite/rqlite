@@ -1608,7 +1608,7 @@ func (s *Service) runQueue() {
 							s.logger.Printf("execute queue can't find leader for sequence number %d on node %s",
 								req.SequenceNumber, s.Addr().String())
 							stats.Add(numQueuedExecutionsNoLeader+na, 1)
-							stats.Add(numQueuedExecutionsNoLeader+"LocalStmts"+na, nt64(len(er.Request.Statements)))
+							stats.Add(numQueuedExecutionsNoLeader+"LocalStmts"+na, int64(len(er.Request.Statements)))
 						} else {
 							_, err = s.cluster.Execute(er, addr, nil, defaultTimeout)
 							if err != nil {
