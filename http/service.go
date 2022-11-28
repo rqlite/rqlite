@@ -178,6 +178,8 @@ const (
 	numExecutions               = "executions"
 	numQueuedExecutions         = "queued_executions"
 	numQueuedExecutionsOK       = "queued_executions_ok"
+	numQueuedExecutionsStmtsRx  = "queued_executions_num_stmts_rx"
+	numQueuedExecutionsStmtsTx  = "queued_executions_num_stmts_tx"
 	numQueuedExecutionsNoLeader = "queued_executions_no_leader"
 	numQueuedExecutionsFailed   = "queued_executions_failed"
 	numQueuedExecutionsWait     = "queued_executions_wait"
@@ -220,6 +222,8 @@ func ResetStats() {
 	stats.Add(numExecutions, 0)
 	stats.Add(numQueuedExecutions, 0)
 	stats.Add(numQueuedExecutionsOK, 0)
+	stats.Add(numQueuedExecutionsStmtsRx, 0)
+	stats.Add(numQueuedExecutionsStmtsTx, 0)
 	stats.Add(numQueuedExecutionsNoLeader, 0)
 	stats.Add(numQueuedExecutionsFailed, 0)
 	stats.Add(numQueuedExecutionsWait, 0)
@@ -1569,6 +1573,7 @@ func (s *Service) runQueue() {
 					Transaction: s.DefaultQueueTx,
 				},
 			}
+			stats.Add(numQueuedExecutionsStmtsRx, int64(len(req.Statements)))
 
 			// Nil statements are valid, as clients may want to just send
 			// a "checkpoint" through the queue.
@@ -1609,6 +1614,7 @@ func (s *Service) runQueue() {
 			s.seqNum = req.SequenceNumber
 			s.seqNumMu.Unlock()
 			req.Close()
+			stats.Add(numQueuedExecutionsStmtsTx, int64(len(req.Statements)))
 			stats.Add(numQueuedExecutionsOK, 1)
 		}
 	}
