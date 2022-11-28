@@ -182,6 +182,7 @@ const (
 	numQueuedExecutionsNoLeader            = "queued_executions_no_leader"
 	numQueuedExecutionsFailed              = "queued_executions_failed"
 	numQueuedExecutionsWait                = "queued_executions_wait"
+	numQueuedExecutionsLostStmts           = "queued_executions_lost_stmts"
 	numQueuedExecutionsLeadershipLost      = "queued_executions_leadership_lost"
 	numQueuedExecutionsLeadershipLostStmts = "queued_executions_leadership_lost_stmts"
 	numQueuedExecutionsNotLeader           = "queued_executions_not_leader"
@@ -230,6 +231,7 @@ func ResetStats() {
 	stats.Add(numQueuedExecutionsNoLeader, 0)
 	stats.Add(numQueuedExecutionsFailed, 0)
 	stats.Add(numQueuedExecutionsWait, 0)
+	stats.Add(numQueuedExecutionsLostStmts, 0)
 	stats.Add(numQueuedExecutionsLeadershipLost, 0)
 	stats.Add(numQueuedExecutionsLeadershipLostStmts, 0)
 	stats.Add(numQueuedExecutionsNotLeader, 0)
@@ -1589,13 +1591,14 @@ func (s *Service) runQueue() {
 			// Nil statements are valid, as clients may want to just send
 			// a "checkpoint" through the queue.
 			if er.Request.Statements != nil {
+
 			STATEMENT_DONE:
 				for {
 					_, err = s.store.Execute(er)
 					if err == nil {
-						stats.Add(numQueuedExecutions+"LocalOKStmts"+na, int64(len(er.Request.Statements)))
 						// Success!
-						break STATEMENT_DONE
+						stats.Add(numQueuedExecutions+"LocalOKStmts"+na, int64(len(er.Request.Statements)))
+						break STATEMENT_DONE // This should always do since since it's success!
 					}
 					stats.Add(numQueuedExecutions+"LocalFailedStmts"+na, int64(len(er.Request.Statements)))
 
@@ -1605,6 +1608,7 @@ func (s *Service) runQueue() {
 							s.logger.Printf("execute queue can't find leader for sequence number %d on node %s",
 								req.SequenceNumber, s.Addr().String())
 							stats.Add(numQueuedExecutionsNoLeader+na, 1)
+							stats.Add(numQueuedExecutionsNoLeader+"LocalStmts"+na, nt64(len(er.Request.Statements)))
 						} else {
 							_, err = s.cluster.Execute(er, addr, nil, defaultTimeout)
 							if err != nil {
@@ -1614,19 +1618,22 @@ func (s *Service) runQueue() {
 								case "leadership lost while committing log":
 									stats.Add(numQueuedExecutionsLeadershipLost+"Remote"+na, 1)
 									stats.Add(numQueuedExecutionsLeadershipLostStmts+"Remote"+na, int64(len(er.Request.Statements)))
+									stats.Add(numQueuedExecutionsLostStmts, int64(len(er.Request.Statements)))
 									break STATEMENT_DONE
 								case "not leader":
 									stats.Add(numQueuedExecutionsNotLeader+"Remote"+na, 1)
 									stats.Add(numQueuedExecutionsNotLeaderStmts+"Remote"+na, int64(len(er.Request.Statements)))
+									stats.Add(numQueuedExecutionsLostStmts, int64(len(er.Request.Statements)))
 									break STATEMENT_DONE
 								default:
 									stats.Add(numQueuedExecutionsUnknownError+"Remote"+na, 1)
+									stats.Add(numQueuedExecutionsLostStmts, int64(len(er.Request.Statements)))
 								}
 							} else {
 								// Success!
 								stats.Add(numQueuedExecutions+"RemoteOKStmts"+na, int64(len(er.Request.Statements)))
 								stats.Add(numRemoteExecutions+na, 1)
-								break STATEMENT_DONE
+								break STATEMENT_DONE // This should always do since since it's success!
 							}
 						}
 					} else {
@@ -1638,6 +1645,7 @@ func (s *Service) runQueue() {
 					stats.Add(numQueuedExecutionsFailed, 1)
 					time.Sleep(retryDelay)
 				}
+				// End of STATEMENT_DONE
 			}
 
 			// Perform post-write processing.
