@@ -3,6 +3,8 @@ package http
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"strings"
 
 	"github.com/rqlite/rqlite/command"
 )
@@ -20,6 +22,32 @@ var (
 	// ErrUnsupportedType is returned when a request contains an unsupported type.
 	ErrUnsupportedType = errors.New("unsupported type")
 )
+
+type ConflictPolicy string
+
+func (cp *ConflictPolicy) Unmarshal(b []byte) error {
+	var c string
+	if err := json.Unmarshal(b, &c); err != nil {
+		return err
+	}
+	cU := strings.ToUpper(c)
+	if cU == "IGNORE" || cU == "REPLACE" || cU == "FAIL" {
+		*cp = ConflictPolicy(cU)
+	}
+	return fmt.Errorf("invalid conflict")
+}
+
+type AssociativeRequest struct {
+	Table    string                         `json:"table"`
+	Conflict ConflictPolicy                 `json:"conflict,omitempty"`
+	Rows     []map[string]command.Parameter `json:"rows"`
+}
+
+func (ar *AssociativeRequest) Statement() *command.Statement {
+	var s strings.Builder
+
+	s.WriteString("INSERT into %s (", ar.Table)
+}
 
 // ParseRequest generates a set of Statements for a given byte slice.
 func ParseRequest(b []byte) ([]*command.Statement, error) {
