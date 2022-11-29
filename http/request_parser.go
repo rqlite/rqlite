@@ -31,23 +31,26 @@ func (cp *ConflictPolicy) Unmarshal(b []byte) error {
 		return err
 	}
 	cU := strings.ToUpper(c)
+	fmt.Println(">>>>>>>", c, cU)
 	if cU == "IGNORE" || cU == "REPLACE" || cU == "FAIL" {
 		*cp = ConflictPolicy(cU)
+		panic("XXXX")
+		return nil
 	}
 	return fmt.Errorf("invalid conflict")
 }
 
 type AssociativeRequest struct {
-	Table    string                         `json:"table"`
-	Conflict ConflictPolicy                 `json:"conflict,omitempty"`
-	Rows     []map[string]command.Parameter `json:"rows"`
+	Table    string                   `json:"table"`
+	Conflict ConflictPolicy           `json:"conflict,omitempty"`
+	Rows     []map[string]interface{} `json:"rows"`
 }
 
-func (ar *AssociativeRequest) Statement() *command.Statement {
-	var s strings.Builder
+// func (ar *AssociativeRequest) Statement() *command.Statement {
+// 	var s strings.Builder
 
-	s.WriteString("INSERT into %s (", ar.Table)
-}
+// 	s.WriteString("INSERT into %s (", ar.Table)
+// }
 
 // ParseRequest generates a set of Statements for a given byte slice.
 func ParseRequest(b []byte) ([]*command.Statement, error) {
