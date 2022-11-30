@@ -25,16 +25,14 @@ var (
 
 type ConflictPolicy string
 
-func (cp *ConflictPolicy) Unmarshal(b []byte) error {
+func (cp *ConflictPolicy) UnmarshalJSON(b []byte) error {
 	var c string
 	if err := json.Unmarshal(b, &c); err != nil {
 		return err
 	}
 	cU := strings.ToUpper(c)
-	fmt.Println(">>>>>>>", c, cU)
 	if cU == "IGNORE" || cU == "REPLACE" || cU == "FAIL" {
 		*cp = ConflictPolicy(cU)
-		panic("XXXX")
 		return nil
 	}
 	return fmt.Errorf("invalid conflict")

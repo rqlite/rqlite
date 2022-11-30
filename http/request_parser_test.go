@@ -249,18 +249,26 @@ func Test_SingleInvalidParameterizedRequest(t *testing.T) {
 	}
 }
 
-func Test_ParseAssociativeRequest(t *testing.T) {
+func Test_ParseAssociativeRequestOK(t *testing.T) {
 	tests := []struct {
 		j   string
 		exp AssociativeRequest
 	}{
 		{
-			j: `{"table": "foo", "conflict": "ignore", "rows": [{"id": 1, "name": "fiona"}]}`,
-			exp: AssociativeRequest{
-				Table:    "foo",
-				Conflict: "ignore",
-				Rows:     []map[string]interface{}{{"id": 1, "name": "fiona"}},
-			},
+			j:   `{"table": "foo", "conflict": "ignore", "rows": [{"name": "fiona"}]}`,
+			exp: AssociativeRequest{Table: "foo", Conflict: "IGNORE", Rows: []map[string]interface{}{{"name": "fiona"}}},
+		},
+		{
+			j:   `{"table": "foo", "conflict": "fail", "rows": [{"name": "fiona"}]}`,
+			exp: AssociativeRequest{Table: "foo", Conflict: "FAIL", Rows: []map[string]interface{}{{"name": "fiona"}}},
+		},
+		{
+			j:   `{"table": "foo", "conflict": "replace", "rows": [{"name": "fiona"}]}`,
+			exp: AssociativeRequest{Table: "foo", Conflict: "REPLACE", Rows: []map[string]interface{}{{"name": "fiona"}}},
+		},
+		{
+			j:   `{"table": "foo", "conflict": "ignore", "rows": [{"first": "bob", "last": "smith"}]}`,
+			exp: AssociativeRequest{Table: "foo", Conflict: "IGNORE", Rows: []map[string]interface{}{{"first": "bob", "last": "smith"}}},
 		},
 	}
 
