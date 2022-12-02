@@ -1130,6 +1130,46 @@ func Test_SingleNodeSelfJoinFail(t *testing.T) {
 	}
 }
 
+func Test_SingleNodeStepdown(t *testing.T) {
+	s, ln := mustNewStore(t, true)
+	defer ln.Close()
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Tell leader to step down. Should fail as there is no other node available.
+	if err := s.Stepdown(true); err == nil {
+		t.Fatalf("single node stepped down OK")
+	}
+}
+
+func Test_SingleNodeStepdownNoWaitOK(t *testing.T) {
+	s, ln := mustNewStore(t, true)
+	defer ln.Close()
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Tell leader to step down without waiting.
+	if err := s.Stepdown(false); err != nil {
+		t.Fatalf("single node reported error stepping down even when told not to wait")
+	}
+}
+
 func Test_MultiNodeJoinRemove(t *testing.T) {
 	s0, ln0 := mustNewStore(t, true)
 	defer ln0.Close()
@@ -1366,6 +1406,63 @@ func Test_MultiNodeJoinNonVoterRemove(t *testing.T) {
 	}
 	if s0.ID() != nodes[0].ID {
 		t.Fatalf("cluster does not have correct nodes post remove")
+	}
+}
+
+func Test_MultiNodeStepdown(t *testing.T) {
+	s0, ln0 := mustNewStore(t, true)
+	defer ln0.Close()
+	if err := s0.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s0.Close(true)
+	if err := s0.Bootstrap(NewServer(s0.ID(), s0.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	s1, ln1 := mustNewStore(t, true)
+	defer ln1.Close()
+	if err := s1.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s1.Close(true)
+
+	s2, ln2 := mustNewStore(t, true)
+	defer ln2.Close()
+	if err := s2.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s2.Close(true)
+
+	// Form the 3-node cluster
+	if err := s0.Join(s1.ID(), s1.Addr(), true); err != nil {
+		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
+	}
+	if _, err := s1.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+	if err := s0.Join(s2.ID(), s2.Addr(), false); err != nil {
+		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
+	}
+	if _, err := s2.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Tell leader to step down. After this finishes there should be a new Leader.
+	if err := s0.Stepdown(true); err != nil {
+		t.Fatalf("leader failed to step down: %s", err.Error())
+	}
+
+	// Check for new leader.
+	nl, err := s2.WaitForLeader(10 * time.Second)
+	if err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+	if nl == s0.Addr() {
+		t.Fatalf("leader address not changed, was %s, is %s", s0.Addr(), nl)
 	}
 }
 

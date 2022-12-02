@@ -163,12 +163,17 @@ func main() {
 	<-terminate
 
 	if cfg.RaftStepdownOnShutdown {
-		if str.IsLeader() {
+		isLeader := str.IsLeader()
+		if isLeader {
 			// Don't log a confusing message if not (probably) Leader
-			log.Printf("explicitly stepping down before shutdown")
+			log.Printf("stepping down as Leader before shutdown")
 		}
 		// Perform a stepdown, ignore any errors.
 		str.Stepdown(true)
+		addr, _ := str.LeaderAddr()
+		if isLeader && addr != "" {
+			log.Printf("node at %d is now Leader")
+		}
 	}
 	if err := str.Close(true); err != nil {
 		log.Printf("failed to close store: %s", err.Error())
