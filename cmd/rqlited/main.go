@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"time"
 
 	consul "github.com/rqlite/rqlite-disco-clients/consul"
@@ -158,8 +159,17 @@ func main() {
 
 	// Block until signalled.
 	terminate := make(chan os.Signal, 1)
-	signal.Notify(terminate, os.Interrupt)
+	signal.Notify(terminate, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	<-terminate
+
+	if (cfg.RaftStepdownOnShutdown) {
+		if str.IsLeader() {
+			// Don't log a confusing message if not (probably) Leader
+			log.Printf("explicitly stepping down before shutdown")
+		}
+		// Perform a stepdown, ignore any errors.
+		str.Stepdown(true)
+	}
 	if err := str.Close(true); err != nil {
 		log.Printf("failed to close store: %s", err.Error())
 	}
