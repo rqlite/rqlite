@@ -1,3 +1,7 @@
+## 7.12.1 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1136](https://github.com/rqlite/rqlite/pull/1136): Stop HTTP server gracefully on node shutdown.
+
 ## 7.12.0 (December 1st 2022)
 ### New features
 - [PR #1121](https://github.com/rqlite/rqlite/pull/1121): Transparently forward node-removal requests to Leader.
