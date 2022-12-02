@@ -417,6 +417,16 @@ func (s *Store) Bootstrap(servers ...*Server) error {
 	return nil
 }
 
+// Stepdown forces this node to relinquish leadership to another node in
+// the cluster. If this node is not the leader an error will be returned.
+func (s *Store) Stepdown(wait bool) error {
+	f := s.raft.LeadershipTransfer()
+	if !wait {
+		return nil
+	}
+	return f.(raft.Future).Error()
+}
+
 // Close closes the store. If wait is true, waits for a graceful shutdown.
 func (s *Store) Close(wait bool) (retErr error) {
 	defer func() {
