@@ -165,7 +165,7 @@ func main() {
 	if cfg.RaftStepdownOnShutdown {
 		if str.IsLeader() {
 			// Don't log a confusing message if not (probably) Leader
-			log.Printf("explicitly stepping down before shutdown")
+			log.Printf("stepping down as Leader before shutdown")
 		}
 		// Perform a stepdown, ignore any errors.
 		str.Stepdown(true)
