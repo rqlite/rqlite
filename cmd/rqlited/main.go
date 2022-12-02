@@ -162,7 +162,7 @@ func main() {
 	signal.Notify(terminate, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	<-terminate
 
-	if (cfg.RaftStepdownOnShutdown) {
+	if cfg.RaftStepdownOnShutdown {
 		if str.IsLeader() {
 			// Don't log a confusing message if not (probably) Leader
 			log.Printf("explicitly stepping down before shutdown")
