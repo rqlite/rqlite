@@ -170,6 +170,8 @@ func main() {
 		// Perform a stepdown, ignore any errors.
 		str.Stepdown(true)
 	}
+
+	httpServ.Close()
 	if err := str.Close(true); err != nil {
 		log.Printf("failed to close store: %s", err.Error())
 	}

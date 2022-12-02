@@ -3,6 +3,7 @@
 package http
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
@@ -245,9 +246,10 @@ func ResetStats() {
 
 // Service provides HTTP service.
 type Service struct {
-	closeCh chan struct{}
-	addr    string       // Bind address of the HTTP service.
-	ln      net.Listener // Service listener
+	httpServer http.Server
+	closeCh    chan struct{}
+	addr       string       // Bind address of the HTTP service.
+	ln         net.Listener // Service listener
 
 	store Store // The Raft-backed database store.
 
@@ -304,7 +306,7 @@ func New(addr string, store Store, cluster Cluster, credentials CredentialStore)
 
 // Start starts the service.
 func (s *Service) Start() error {
-	server := http.Server{
+	s.httpServer = http.Server{
 		Handler: s,
 	}
 
@@ -337,9 +339,9 @@ func (s *Service) Start() error {
 		s.DefaultQueueCap, s.DefaultQueueBatchSz, s.DefaultQueueTimeout.String())
 
 	go func() {
-		err := server.Serve(s.ln)
+		err := s.httpServer.Serve(s.ln)
 		if err != nil {
-			s.logger.Println("HTTP service Serve() returned:", err.Error())
+			s.logger.Println("HTTP service stopped:", err.Error())
 		}
 	}()
 	s.logger.Println("service listening on", s.Addr())
@@ -349,8 +351,9 @@ func (s *Service) Start() error {
 
 // Close closes the service.
 func (s *Service) Close() {
-	s.stmtQueue.Close()
+	s.httpServer.Shutdown(context.Background())
 
+	s.stmtQueue.Close()
 	select {
 	case <-s.queueDone:
 	default:
