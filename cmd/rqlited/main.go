@@ -369,6 +369,10 @@ func createCluster(cfg *Config, tlsConfig *tls.Config, hasPeers bool, str *store
 	}
 
 	if joins != nil && cfg.BootstrapExpect == 0 {
+		if hasPeers {
+			log.Println("preexisting node configuration detected, ignoring explicit join request")
+			return nil
+		}
 		// Explicit join operation requested, so do it.
 		j, err := joiner.Do(joins, str.ID(), cfg.RaftAdv, !cfg.RaftNonVoter)
 		if err != nil {
@@ -379,12 +383,12 @@ func createCluster(cfg *Config, tlsConfig *tls.Config, hasPeers bool, str *store
 	}
 
 	if joins != nil && cfg.BootstrapExpect > 0 {
-		// Bootstrap with explicit join addresses requests.
 		if hasPeers {
 			log.Println("preexisting node configuration detected, ignoring bootstrap request")
 			return nil
 		}
 
+		// Bootstrap with explicit join addresses requests.
 		bs := cluster.NewBootstrapper(cluster.NewAddressProviderString(joins), tlsConfig)
 		if cfg.JoinAs != "" {
 			pw, ok := credStr.Password(cfg.JoinAs)
@@ -406,7 +410,7 @@ func createCluster(cfg *Config, tlsConfig *tls.Config, hasPeers bool, str *store
 	switch cfg.DiscoMode {
 	case DiscoModeDNS, DiscoModeDNSSRV:
 		if hasPeers {
-			log.Printf("preexisting node configuration detected, ignoring %s", cfg.DiscoMode)
+			log.Printf("preexisting node configuration detected, ignoring %s option", cfg.DiscoMode)
 			return nil
 		}
 		rc := cfg.DiscoConfigReader()
