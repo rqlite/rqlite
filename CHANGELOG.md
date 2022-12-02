@@ -1,3 +1,7 @@
+## 7.12.1 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1135](https://github.com/rqlite/rqlite/pull/1135): Ignore explicit join request if there is preexisting state.
+
 ## 7.12.0 (December 1st 2022)
 ### New features
 - [PR #1121](https://github.com/rqlite/rqlite/pull/1121): Transparently forward node-removal requests to Leader.
