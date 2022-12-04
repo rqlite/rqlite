@@ -2,7 +2,6 @@ package store
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -1105,7 +1104,7 @@ func Test_SingleNodeRecoverNetworkChangeSnapshot(t *testing.T) {
 	}
 }
 
-func Test_SingleNodeSelfJoinFail(t *testing.T) {
+func Test_SingleNodeSelfJoinNoChangeOK(t *testing.T) {
 	s0, ln0 := mustNewStore(t, true)
 	defer ln0.Close()
 	if err := s0.Open(); err != nil {
@@ -1120,13 +1119,13 @@ func Test_SingleNodeSelfJoinFail(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
-	// Self-join should fail.
+	// Self-join should not be a problem. It should just be ignored.
 	err := s0.Join(s0.ID(), s0.Addr(), true)
-	if err == nil {
-		t.Fatalf("failed to receive error for self-join")
+	if err != nil {
+		t.Fatalf("received error for non-changing self-join")
 	}
-	if !errors.Is(err, ErrSelfJoin) {
-		t.Fatalf("received wrong error for self-join attempt: %s", err)
+	if got, exp := s0.numIgnoredJoins, 1; got != exp {
+		t.Fatalf("wrong number of ignored joins, exp %d, got %d", exp, got)
 	}
 }
 
