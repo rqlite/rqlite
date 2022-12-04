@@ -371,10 +371,6 @@ func createCluster(cfg *Config, tlsConfig *tls.Config, hasPeers bool, str *store
 	}
 
 	if joins != nil && cfg.BootstrapExpect == 0 {
-		if hasPeers {
-			log.Println("preexisting node configuration detected, ignoring explicit join request")
-			return nil
-		}
 		// Explicit join operation requested, so do it.
 		j, err := joiner.Do(joins, str.ID(), cfg.RaftAdv, !cfg.RaftNonVoter)
 		if err != nil {
