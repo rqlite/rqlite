@@ -15,6 +15,53 @@ func (t *testBasicAuther) BasicAuth() (string, string, bool) {
 	return t.username, t.password, t.ok
 }
 
+func Test_HashCache(t *testing.T) {
+	hc := NewHashCache()
+
+	if hc.Check("user", "hash1") {
+		t.Fatalf("hash cache check OK for empty cache")
+	}
+	if hc.Check("user", "") {
+		t.Fatalf("hash cache check OK for empty cache")
+	}
+	if hc.Check("", "") {
+		t.Fatalf("hash cache check OK for empty cache")
+	}
+
+	hc.Store("user1", "hash1")
+	if !hc.Check("user1", "hash1") {
+		t.Fatalf("hash cache check not OK for user1")
+	}
+	if hc.Check("user", "hash1") {
+		t.Fatalf("hash cache check OK for bad user")
+	}
+
+	hc.Store("user1", "hash2")
+	if !hc.Check("user1", "hash1") {
+		t.Fatalf("hash cache check not OK for user1")
+	}
+	if !hc.Check("user1", "hash2") {
+		t.Fatalf("hash cache check not OK for user1")
+	}
+
+	hc.Store("user3", "hash3")
+	if !hc.Check("user1", "hash1") {
+		t.Fatalf("hash cache check not OK for user1")
+	}
+	if !hc.Check("user1", "hash2") {
+		t.Fatalf("hash cache check not OK for user1")
+	}
+	if hc.Check("user", "hash1") {
+		t.Fatalf("hash cache check OK for bad user")
+	}
+	if !hc.Check("user3", "hash3") {
+		t.Fatalf("hash cache check not OK for user3")
+	}
+	if hc.Check("user3", "hash1") {
+		t.Fatalf("hash cache check OK for user3, with bad hash")
+	}
+}
+
 func Test_AuthLoadSingle(t *testing.T) {
 	const jsonStream = `
 		[
