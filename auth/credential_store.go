@@ -148,8 +148,9 @@ func (c *CredentialsStore) Check(username, password string) bool {
 		return true
 	}
 
-	// Maybe the given a password is a hash -- check if the hash is good
-	// for the given user.
+	// Maybe the given password is a hash -- check if the hash is good
+	// for the given user. We use a cache to avoid recomputing a value we
+	// previously computed (at substantial compute cost).
 	if c.UseCache && c.hashCache.Check(username, password) {
 		return true
 	}
