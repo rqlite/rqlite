@@ -309,6 +309,16 @@ func Test_AuthLoadHashedSingleRequest(t *testing.T) {
 		password: "wrong",
 		ok:       true,
 	}
+	b5 := &testBasicAuther{
+		username: "username1",
+		password: "password2",
+		ok:       true,
+	}
+	b6 := &testBasicAuther{
+		username: "username2",
+		password: "password1",
+		ok:       true,
+	}
 
 	if check := store.CheckRequest(b1); !check {
 		t.Fatalf("username1 (b1) credential not checked correctly via request")
@@ -321,6 +331,12 @@ func Test_AuthLoadHashedSingleRequest(t *testing.T) {
 	}
 	if check := store.CheckRequest(b4); check {
 		t.Fatalf("username2 (b4) credential not checked correctly via request")
+	}
+	if check := store.CheckRequest(b5); check {
+		t.Fatalf("username2 (b5) credential not checked correctly via request")
+	}
+	if check := store.CheckRequest(b6); check {
+		t.Fatalf("username2 (b5) credential not checked correctly via request")
 	}
 }
 
