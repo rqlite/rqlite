@@ -1829,6 +1829,49 @@ func Test_JSON1(t *testing.T) {
 	}
 }
 
+// Test_TableCreationInMemoryLoadRaw tests for https://sqlite.org/forum/forumpost/d443fb0730
+func Test_TableCreationInMemoryLoadRaw(t *testing.T) {
+	db := mustCreateInMemoryDatabase()
+	defer db.Close()
+
+	_, err := db.ExecuteStringStmt("CREATE TABLE logs (entry TEXT)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	done := make(chan struct{})
+	defer close(done)
+
+	// Insert some records continually, as fast as possible. Do it from a goroutine.
+	go func() {
+		for {
+			select {
+			case <-done:
+				return
+			default:
+				_, err := db.ExecuteStringStmt(`INSERT INTO logs(entry) VALUES("hello")`)
+				if err != nil {
+					return
+				}
+			}
+		}
+	}()
+
+	// Get the count over and over again.
+	n := 0
+	for i := 0; i < 10000; i++ {
+		n++
+		rows, err := db.QueryStringStmt(`SELECT COUNT(*) FROM logs`)
+		if err != nil {
+			t.Fatalf("failed to query for count: %s", err)
+		}
+
+		if rows[0].Error != "" {
+			t.Fatalf("rows had error after %d queries: %s", i, rows[0].Error)
+		}
+	}
+}
+
 func mustCreateDatabase() (*DB, string) {
 	var err error
 	f := mustTempFile()
