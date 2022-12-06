@@ -4,6 +4,7 @@
 - [PR #1136](https://github.com/rqlite/rqlite/pull/1136): Stop HTTP server gracefully on node shutdown.
 - [f6c4b17](https://github.com/rqlite/rqlite/commit/f6c4b17a727809696f952a018b2262681932f521): By default, Leader node will stepdown if that node is shutting down.
 - [PR #1139](https://github.com/rqlite/rqlite/pull/1139): Cache hashed passwords. Fixes [issue #1138](https://github.com/rqlite/rqlite/issues/1138).
+- [PR #1140](https://github.com/rqlite/rqlite/pull/1140): Use SQLite code with fixed locking. [issue #1138](https://github.com/rqlite/rqlite/issues/1103).
 
 ## 7.12.0 (December 1st 2022)
 ### New features
