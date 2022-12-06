@@ -1858,9 +1858,7 @@ func Test_TableCreationInMemoryLoadRaw(t *testing.T) {
 	}()
 
 	// Get the count over and over again.
-	n := 0
-	for i := 0; i < 10000; i++ {
-		n++
+	for i := 0; i < 5000; i++ {
 		rows, err := db.QueryStringStmt(`SELECT COUNT(*) FROM logs`)
 		if err != nil {
 			t.Fatalf("failed to query for count: %s", err)
