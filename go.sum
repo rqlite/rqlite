@@ -700,6 +700,8 @@ github.com/rogpeppe/fastuuid v1.2.0/go.mod h1:jVj6XXZzXRy/MSR5jhDC/2q6DgLz+nrA6L
 github.com/rogpeppe/go-internal v1.3.0/go.mod h1:M8bDsm7K2OlrFYOpmOWEs/qY81heoFRclV5y23lUDJ4=
 github.com/rqlite/go-sqlite3 v1.27.0 h1:p+TMKJ4s0SmLh+WG4bd7SQgzp8H1f+x1jep0UI4McQU=
 github.com/rqlite/go-sqlite3 v1.27.0/go.mod h1:nd4ooHtz396nqTudi+5u7stMN8EEkHjceyUARVYOceY=
+github.com/rqlite/go-sqlite3 v1.27.1 h1:BZMF7lB7kflMgWbULsM8TpKHM9vzcINEknbe0YC6Ti0=
+github.com/rqlite/go-sqlite3 v1.27.1/go.mod h1:nd4ooHtz396nqTudi+5u7stMN8EEkHjceyUARVYOceY=
 github.com/rqlite/raft-boltdb v0.0.0-20211018013422-771de01086ce h1:sVlzmCJiaM0LGK3blAHOD/43QxJZ8bLCDcsqZRatnFE=
 github.com/rqlite/raft-boltdb v0.0.0-20211018013422-771de01086ce/go.mod h1:mc+WNDHyskdViYAoPnaMXEBnSKBmoUgiEZjrlAj6G34=
 github.com/rqlite/rqlite-disco-clients v0.0.0-20220328160918-ec33ecd01491 h1:EtnrSIl+hdibyxb8ykdU9BFxqKUH4c4trKWLwNQD2vM=
