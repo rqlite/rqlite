@@ -1,4 +1,4 @@
-## 7.12.1 (unreleased)
+## 7.12.1 (December 7th 2022)
 ### Implementation changes and bug fixes
 - [PR #1135](https://github.com/rqlite/rqlite/pull/1135): Silently ignore self-joins if nothing has changed on the joining node.
 - [PR #1136](https://github.com/rqlite/rqlite/pull/1136): Stop HTTP server gracefully on node shutdown.
