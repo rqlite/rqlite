@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -108,6 +109,9 @@ func main() {
 			line, err := term.Basic(prefix, false)
 			term.Close()
 			if err != nil {
+				if errors.Is(err, prompt.ErrEOF) {
+					break FOR_READ
+				}
 				return err
 			}
 
