@@ -31,6 +31,10 @@ func Test_Dedupe(t *testing.T) {
 			exp:  []string{"foo"},
 		},
 		{
+			orig: []string{"foo", "foo", "foo", "bar", "bar", "bar"},
+			exp:  []string{"foo", "bar"},
+		},
+		{
 			orig: []string{"foo", "bar", "foo", "foo"},
 			exp:  []string{"foo", "bar", "foo"},
 		},
