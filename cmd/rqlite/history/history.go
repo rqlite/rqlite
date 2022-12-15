@@ -10,6 +10,7 @@ import (
 
 const MaxHistSize = 100
 
+// Size returns the max number of commands that should be stored in history.
 func Size() int {
 	maxSize := MaxHistSize
 	maxSizeStr := os.Getenv("RQLITE_HISTFILESIZE")
@@ -22,6 +23,7 @@ func Size() int {
 	return maxSize
 }
 
+// Dedupe returns a copy of the slice with contigous dupes removed.
 func Dedupe(s []string) []string {
 	if s == nil {
 		return nil
@@ -36,6 +38,8 @@ func Dedupe(s []string) []string {
 	return o
 }
 
+// Filter returns a copy of the slice with empty and whitespace-only elements
+// removed.
 func Filter(s []string) []string {
 	if s == nil {
 		return nil
@@ -50,6 +54,7 @@ func Filter(s []string) []string {
 	return o
 }
 
+// Read reads the command history from the reader.
 func Read(r io.Reader) ([]string, error) {
 	if r == nil {
 		return nil, nil
@@ -64,6 +69,7 @@ func Read(r io.Reader) ([]string, error) {
 	return Filter(cmds), scanner.Err()
 }
 
+// Write writes the command history to the writer.
 func Write(j []string, maxSz int, w io.Writer) error {
 	if len(j) == 0 {
 		return nil

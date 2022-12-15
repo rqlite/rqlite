@@ -23,6 +23,7 @@ func setHidden(path string) error {
 	return nil
 }
 
+// Reader returns a reader of the history file.
 func Reader() io.ReadCloser {
 	hdir, err := os.UserHomeDir()
 	if err != nil {
@@ -36,6 +37,7 @@ func Reader() io.ReadCloser {
 	return f
 }
 
+// Writer returns a writer for the history file.
 func Writer() io.WriteCloser {
 	hdir, err := os.UserHomeDir()
 	if err != nil {
