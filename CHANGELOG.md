@@ -1,4 +1,4 @@
-## 7.13.0 (unreleased)
+## 7.13.0 (December 15th 2022)
 ### New features
 - [PR #1141](https://github.com/rqlite/rqlite/pull/1141): Store and load CLI history across sessions.
 
