@@ -1,6 +1,6 @@
-package history
+//go:build !windows
 
-// This file would be for linux, file_linux.go. Also create file_windows.go
+package history
 
 import (
 	"io"
@@ -8,19 +8,15 @@ import (
 	"path/filepath"
 )
 
-func Reader() io.ReadCloser {
-	file := os.Getenv("RQLITE_HISTFILE")
-	if file == "" {
-		file = "rqlite_history"
-	}
+const historyFile = ".rqlite_history"
 
+func Reader() io.ReadCloser {
 	hdir, err := os.UserHomeDir()
 	if err != nil {
 		return nil
 	}
 
-	// Call OS-specific function actually
-	f, err := os.Open(filepath.Join(hdir, file))
+	f, err := os.Open(filepath.Join(hdir, historyFile))
 	if err != nil {
 		return nil
 	}
@@ -28,18 +24,12 @@ func Reader() io.ReadCloser {
 }
 
 func Writer() io.WriteCloser {
-	file := os.Getenv("RQLITE_HISTFILE")
-	if file == "" {
-		file = "rqlite_history"
-	}
-
 	hdir, err := os.UserHomeDir()
 	if err != nil {
 		return nil
 	}
 
-	// Call OS-specific function actually
-	f, err := os.OpenFile(filepath.Join(hdir, file), os.O_RDWR|os.O_CREATE, 0755)
+	f, err := os.OpenFile(filepath.Join(hdir, historyFile), os.O_RDWR|os.O_CREATE, 0755)
 	if err != nil {
 		return nil
 	}
