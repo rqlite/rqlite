@@ -199,6 +199,18 @@ func Test_Write(t *testing.T) {
 			w:   new(bytes.Buffer),
 			exp: "SELECT *\nINSERT INTO\nUPDATE\nDELETE",
 		},
+		{
+			h:   []string{"SELECT *", "INSERT INTO", "INSERT INTO", "UPDATE", "", "DELETE"},
+			sz:  2,
+			w:   new(bytes.Buffer),
+			exp: "UPDATE\nDELETE",
+		},
+		{
+			h:   []string{"SELECT *", "INSERT INTO", "INSERT INTO", "UPDATE", "", "DELETE"},
+			sz:  0,
+			w:   new(bytes.Buffer),
+			exp: "",
+		},
 	} {
 		if err := Write(tt.h, tt.sz, tt.w); err != nil {
 			t.Fatalf("test %d failed, got error: %s", i, err.Error())
