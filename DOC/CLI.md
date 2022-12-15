@@ -33,3 +33,6 @@ $ rqlite
 bye~
 ```
 You can connect the CLI to any node in a cluster, and it will automatically forward its requests to the leader if needed. Pass `-h` to `rqlite` to learn more.
+
+## History
+Command history is stored and reload between sessions, in a hidden file in the user's home directory named `.rqlite_history`. By default 100 previous commands are stored, though the value can be explicitly set via the environment variable `RQLITE_HISTFILESIZE`.

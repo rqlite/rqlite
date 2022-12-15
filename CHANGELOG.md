@@ -1,3 +1,7 @@
+## 7.13.0 (unreleased)
+### New features
+- [PR #1141](https://github.com/rqlite/rqlite/pull/1141): Store and load CLI history across sessions.
+
 ## 7.12.1 (December 7th 2022)
 ### Implementation changes and bug fixes
 - [PR #1135](https://github.com/rqlite/rqlite/pull/1135): Silently ignore self-joins if nothing has changed on the joining node.
