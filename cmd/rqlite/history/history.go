@@ -5,9 +5,22 @@ import (
 	"io"
 	"os"
 	"strconv"
+	"strings"
 )
 
 const MaxHistSize = 100
+
+func Size() int {
+	maxSize := MaxHistSize
+	maxSizeStr := os.Getenv("RQLITE_HISTFILESIZE")
+	if maxSizeStr != "" {
+		sz, err := strconv.Atoi(maxSizeStr)
+		if err == nil && maxSize > 0 {
+			maxSize = sz
+		}
+	}
+	return maxSize
+}
 
 func Dedupe(s []string) []string {
 	if s == nil {
@@ -23,16 +36,18 @@ func Dedupe(s []string) []string {
 	return o
 }
 
-func FileSize() int {
-	maxSize := MaxHistSize
-	maxSizeStr := os.Getenv("RQLITE_HISTFILESIZE")
-	if maxSizeStr != "" {
-		sz, err := strconv.Atoi(maxSizeStr)
-		if err == nil && maxSize > 0 {
-			maxSize = sz
-		}
+func Filter(s []string) []string {
+	if s == nil {
+		return nil
 	}
-	return maxSize
+	o := make([]string, 0, len(s))
+	for si := 0; si < len(s); si++ {
+		if s[si] == "" || len(strings.Fields(s[si])) == 0 {
+			continue
+		}
+		o = append(o, s[si])
+	}
+	return o
 }
 
 func Read(r io.Reader) ([]string, error) {
@@ -40,13 +55,13 @@ func Read(r io.Reader) ([]string, error) {
 		return nil, nil
 	}
 
-	var cmds []string
+	cmds := make([]string, 0)
 	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
 		cmds = append(cmds, scanner.Text())
 	}
 
-	return cmds, scanner.Err()
+	return Filter(cmds), scanner.Err()
 }
 
 func Write(j []string, maxSz int, w io.Writer) error {
@@ -58,24 +73,9 @@ func Write(j []string, maxSz int, w io.Writer) error {
 		return nil
 	}
 
-	// Cut start off slice is bigger, but before or after dupes?
-	if len(j) > maxSz {
-		j = j[len(j)-maxSz:]
-	}
-
-	i := 0
-	var k []string
-	for {
-		k = append(k, j[i])
-
-		for {
-			if i < len(j)-1 && j[i] == j[i+1] {
-				i++
-				continue
-			} else if i == len(j) {
-
-			}
-		}
+	k := Filter(Dedupe(j))
+	if len(k) > maxSz {
+		k = k[len(k)-maxSz:]
 	}
 
 	for i := 0; i < len(k)-1; i++ {

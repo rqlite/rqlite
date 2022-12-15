@@ -19,6 +19,7 @@ import (
 	"github.com/Bowery/prompt"
 	"github.com/mkideal/cli"
 	"github.com/rqlite/rqlite/cmd"
+	"github.com/rqlite/rqlite/cmd/rqlite/history"
 	httpcl "github.com/rqlite/rqlite/cmd/rqlite/http"
 )
 
@@ -96,6 +97,16 @@ func main() {
 			return nil
 		}
 		term.Close()
+
+		// Set up command history.
+		hr := history.Reader()
+		if hr != nil {
+			histCmds, err := history.Read(hr)
+			if err == nil {
+				term.History = histCmds
+			}
+			hr.Close()
+		}
 
 		hosts := createHostList(argv)
 		client := httpcl.NewClient(httpClient, hosts,
@@ -194,6 +205,12 @@ func main() {
 					ctx.String("%s %v\n", ctx.Color().Red("ERR!"), err)
 				}
 			}
+		}
+
+		hw := history.Writer()
+		if hw != nil {
+			history.Write(term.History, history.Size(), hw)
+			hw.Close()
 		}
 		ctx.String("bye~\n")
 		return nil
