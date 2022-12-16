@@ -10,6 +10,7 @@ import (
 	"github.com/rqlite/rqlite/cluster"
 	"github.com/rqlite/rqlite/db"
 	"github.com/rqlite/rqlite/http"
+	"github.com/rqlite/rqlite/queue"
 	"github.com/rqlite/rqlite/store"
 	"github.com/rqlite/rqlite/tcp"
 )
@@ -838,6 +839,7 @@ func Test_MultiNodeClusterLargeQueuedWrites(t *testing.T) {
 	store.ResetStats()
 	db.ResetStats()
 	http.ResetStats()
+	queue.ResetStats()
 
 	node1 := mustNewLeaderNode()
 	defer node1.Deprovision()
