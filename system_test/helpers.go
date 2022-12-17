@@ -122,39 +122,17 @@ func (n *Node) ExecuteQueuedMulti(stmts []string, wait bool) (string, error) {
 
 // Query runs a single query against the node.
 func (n *Node) Query(stmt string) (string, error) {
-	v, _ := url.Parse("http://" + n.APIAddr + "/db/query")
-	v.RawQuery = url.Values{"q": []string{stmt}}.Encode()
-
-	resp, err := http.Get(v.String())
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-	return string(body), nil
+	return n.query(stmt, "weak")
 }
 
 // QueryNoneConsistency runs a single query against the node, with no read consistency.
 func (n *Node) QueryNoneConsistency(stmt string) (string, error) {
-	v, _ := url.Parse("http://" + n.APIAddr + "/db/query")
-	v.RawQuery = url.Values{
-		"q":     []string{stmt},
-		"level": []string{"none"},
-	}.Encode()
+	return n.query(stmt, "none")
+}
 
-	resp, err := http.Get(v.String())
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-	return string(body), nil
+// QueryStrongConsistency runs a single query against the node, with Strong read consistency.
+func (n *Node) QueryStrongConsistency(stmt string) (string, error) {
+	return n.query(stmt, "strong")
 }
 
 // QueryMulti runs multiple queries against the node.
@@ -375,6 +353,25 @@ func (n *Node) postExecuteQueued(stmt string, wait bool) (string, error) {
 	}
 
 	resp, err := http.Post("http://"+n.APIAddr+u, "application/json", strings.NewReader(stmt))
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	return string(body), nil
+}
+
+func (n *Node) query(stmt, consistency string) (string, error) {
+	v, _ := url.Parse("http://" + n.APIAddr + "/db/query")
+	v.RawQuery = url.Values{
+		"q":     []string{stmt},
+		"level": []string{consistency},
+	}.Encode()
+
+	resp, err := http.Get(v.String())
 	if err != nil {
 		return "", err
 	}
