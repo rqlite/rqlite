@@ -601,7 +601,7 @@ func mustNodeEncryptedOnDisk(dir string, enableSingle, httpEncrypt bool, mux *tc
 		Dir:    node.Dir,
 		ID:     id,
 	})
-	node.Store.SnapshotThreshold = 1000000
+	node.Store.SnapshotThreshold = 100
 	node.Store.SnapshotInterval = SnapshotInterval
 
 	if err := node.Store.Open(); err != nil {
