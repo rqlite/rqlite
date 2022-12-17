@@ -1231,7 +1231,7 @@ func (s *Store) Apply(l *raft.Log) (e interface{}) {
 		s.firstLogAppliedT = time.Now()
 	}
 
-	typ, r := applyCommand(l.Data, &s.db)
+	typ, r := applyCommand(s.raftID, l.Data, &s.db)
 	if typ == command.Command_COMMAND_TYPE_NOOP {
 		s.numNoops++
 	}
@@ -1618,7 +1618,7 @@ func RecoverNode(dataDir string, logger *log.Logger, logs raft.LogStore, stable 
 			return fmt.Errorf("failed to get log at index %d: %v", index, err)
 		}
 		if entry.Type == raft.LogCommand {
-			applyCommand(entry.Data, &db)
+			applyCommand("", entry.Data, &db)
 		}
 		lastIndex = entry.Index
 		lastTerm = entry.Term
@@ -1709,7 +1709,7 @@ func dbBytesFromSnapshot(rc io.ReadCloser) ([]byte, error) {
 	return database, nil
 }
 
-func applyCommand(data []byte, pDB **sql.DB) (command.Command_Type, interface{}) {
+func applyCommand(id string, data []byte, pDB **sql.DB) (command.Command_Type, interface{}) {
 	var c command.Command
 	db := *pDB
 
@@ -1730,6 +1730,7 @@ func applyCommand(data []byte, pDB **sql.DB) (command.Command_Type, interface{})
 		if err := command.UnmarshalSubCommand(&c, &er); err != nil {
 			panic(fmt.Sprintf("failed to unmarshal execute subcommand: %s", err.Error()))
 		}
+		stats.Add("num_execute_stmts_"+id, int64(len(er.Request.Statements)))
 		r, err := db.Execute(er.Request, er.Timings)
 		return c.Type, &fsmExecuteResponse{results: r, error: err}
 	case command.Command_COMMAND_TYPE_LOAD:
