@@ -836,11 +836,6 @@ func Test_MultiNodeClusterQueuedWrites(t *testing.T) {
 // Test_MultiNodeClusterLargeQueuedWrites tests writing to a cluster using
 // many large concurrent Queued Writes operations.
 func Test_MultiNodeClusterLargeQueuedWrites(t *testing.T) {
-	store.ResetStats()
-	db.ResetStats()
-	http.ResetStats()
-	queue.ResetStats()
-
 	node1 := mustNewLeaderNode()
 	defer node1.Deprovision()
 
@@ -867,6 +862,12 @@ func Test_MultiNodeClusterLargeQueuedWrites(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed waiting for leader: %s", err.Error())
 	}
+	
+	time.Sleep(5*time.Second)
+	store.ResetStats()
+	db.ResetStats()
+	http.ResetStats()
+	queue.ResetStats()
 
 	// Write data to the cluster, via various nodes.
 	nodesUnderTest := []*Node{node3, node1, node2, node1, node2, node3, node1, node3, node2}
@@ -888,6 +889,9 @@ func Test_MultiNodeClusterLargeQueuedWrites(t *testing.T) {
 		}(n)
 	}
 	wg.Wait()
+	
+	// Just be sure every node has picked up the changes.
+	time.Sleep(10* time.Second)
 
 	exp := fmt.Sprintf(`{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[%d]]}]}`, len(nodesUnderTest)*writesPerNode)
 	got, err := node1.QueryStrongConsistency(`SELECT COUNT(*) FROM foo`)
