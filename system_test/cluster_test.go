@@ -890,11 +890,20 @@ func Test_MultiNodeClusterLargeQueuedWrites(t *testing.T) {
 	wg.Wait()
 
 	exp := fmt.Sprintf(`{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[%d]]}]}`, len(nodesUnderTest)*writesPerNode)
-	got, err := node1.Query(`SELECT COUNT(*) FROM foo`)
+	got, err := node1.QueryStrongConsistency(`SELECT COUNT(*) FROM foo`)
 	if err != nil {
-		t.Fatalf("failed to query follower node: %s", err.Error())
+		t.Fatalf("failed to query node: %s", err.Error())
 	}
 	if got != exp {
+		fmt.Println("===============================================================================")
+		fmt.Println("NODE 1")
+		fmt.Printf("%s %s %s %s\n", mustGetExpvarKey(node1, "queue"), mustGetExpvarKey(node1, "http"), mustGetExpvarKey(node1, "store"), mustGetExpvarKey(node1, "db"))
+		fmt.Println("===============================================================================")
+		fmt.Println("NODE 2")
+		fmt.Printf("%s %s %s %s\n", mustGetExpvarKey(node2, "queue"), mustGetExpvarKey(node2, "http"), mustGetExpvarKey(node2, "store"), mustGetExpvarKey(node2, "db"))
+		fmt.Println("===============================================================================")
+		fmt.Println("NODE 3")
+		fmt.Printf("%s %s %s %s\n", mustGetExpvarKey(node3, "queue"), mustGetExpvarKey(node3, "http"), mustGetExpvarKey(node3, "store"), mustGetExpvarKey(node3, "db"))
 		t.Fatalf("incorrect count, got %s, exp %s", got, exp)
 	}
 }
