@@ -111,7 +111,7 @@ Since the Raft log is the authoritative store for all data, and it is stored on 
 For reliable operation, particularly in production, it's important to monitor rqlite. You can learn how to check rqlite status and diagnostics [here](https://rqlite.io/docs/guides/monitoring-rqlite/).
 
 ## Backup and restore
-Learn how to hot backup your rqlite cluster [here](https://github.com/rqlite/rqlite/blob/master/DOC/BACKUPS.md). You can also load data [directly from a SQLite file](https://rqlite.io/docs/guides/backup/).
+Learn how to hot backup your rqlite cluster [here](https://rqlite.io/docs/guides/backup/). You can also load data [directly from a SQLite file](https://rqlite.io/docs/guides/backup/).
 
 ## Security
 You can learn about securing access, and restricting users' access, to rqlite [here](https://rqlite.io/docs/guides/security/).
