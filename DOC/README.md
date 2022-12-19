@@ -1,5 +1,4 @@
 # rqlite documentation
-Detailed documentation on the design, implementation, and operation of rqlite.
+These docs are no longer updated, and remain here for legacy reference.
 
-## Google Group
-The [rqlite Google Group](https://groups.google.com/forum/#!forum/rqlite) is also another source of information.
+Visit [rqlite.io](https://rqlite.io) for the latest documentation.
