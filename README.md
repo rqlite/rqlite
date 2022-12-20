@@ -19,11 +19,11 @@ You could use rqlite as part of a larger system, as a central store for some cri
 Finally, if you're interested in understanding how distributed systems actually work, **rqlite is a good example to study**. Much thought has gone into its [design](https://rqlite.io/docs/design/) and implementation, with clear separation between the various components, including storage, distributed consensus, and API.
 
 ### How?
-rqlite uses [Raft](https://raft.github.io/) to achieve consensus across all the instances of the SQLite databases, ensuring that every change made to the system is made to a quorum of SQLite databases, or none at all. You can learn more about the design [here](https://github.com/rqlite/rqlite/blob/master/DOC/DESIGN.md).
+rqlite uses [Raft](https://raft.github.io/) to achieve consensus across all the instances of the SQLite databases, ensuring that every change made to the system is made to a quorum of SQLite databases, or none at all. You can learn more about the design [here](https://rqlite.io/docs/design/).
 
 ### Key features
 - Trivially easy to deploy, with no need to separately install SQLite.
-- Super-simple to use, with a straightforward [HTTP API](https://rqlite.io/docs/api/). A [command-line interface is also available](https://github.com/rqlite/rqlite/tree/master/cmd/rqlite), as are various [client libraries](https://github.com/rqlite).
+- Super-simple to use, with a straightforward [HTTP API](https://rqlite.io/docs/api/). A [command-line interface is also available](https://rqlite.io/docs/cli/), as are various [client libraries](https://github.com/rqlite).
 - Fully replicated production-grade SQL database, with full access to SQLite [full-text search](https://www.sqlite.org/fts3.html) and [JSON document support](https://www.sqlite.org/json1.html).
 - Multiple options for [node-discovery and automatic clustering, including integration with Kubernetes, Consul, etcd and DNS](https://rqlite.io/docs/clustering/automatic-clustering/), allowing clusters to be dynamically created.
 - [Extensive security and encryption support](https://rqlite.io/docs/guides/security/), including node-to-node encryption.
@@ -34,7 +34,7 @@ rqlite uses [Raft](https://raft.github.io/) to achieve consensus across all the 
 
 ## Quick Start
 
-The quickest way to get running is to download a pre-built release binary, available on the [Github releases page](https://github.com/rqlite/rqlite/releases). Once installed, you can start a single rqlite node like so:
+The quickest way to get running is to download a pre-built release binary, available on the [GitHub releases page](https://github.com/rqlite/rqlite/releases). Once installed, you can start a single rqlite node like so:
 ```bash
 rqlited -node-id 1 ~/node.1
 ```
@@ -89,7 +89,7 @@ Since the Raft log is the authoritative store for all data, and it is stored on 
 
  * This has not been extensively tested, but you can directly read the SQLite file under any node at anytime, assuming you run in "on-disk" mode. However there is no guarantee that the SQLite file reflects all the changes that have taken place on the cluster unless you are sure the host node itself has received and applied all changes.
  * In case it isn't obvious, rqlite does not replicate any changes made directly to any underlying SQLite file, when run in "on disk" mode. **If you change the SQLite file directly, you may cause rqlite to fail**. Only modify the database via the HTTP API.
- * SQLite dot-commands such as `.schema` or `.tables` are not directly supported by the API, but the [rqlite CLI](https://github.com/rqlite/rqlite/blob/master/DOC/CLI.md) supports some very similar functionality. This is because those commands are features of the `sqlite3` command, not SQLite itself.
+ * SQLite dot-commands such as `.schema` or `.tables` are not directly supported by the API, but the [rqlite CLI](https://rqlite.io/docs/cli/) supports some very similar functionality. This is because those commands are features of the `sqlite3` command, not SQLite itself.
 
 ## Pronunciation?
 How do I pronounce rqlite? For what it's worth I try to pronounce it "ree-qwell-lite". But it seems most people, including me, often pronouce it "R Q lite".
