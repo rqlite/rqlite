@@ -1580,7 +1580,7 @@ func (s *Service) runQueue() {
 	defer close(s.queueDone)
 	retryDelay := time.Second
 
-	skipLeadershipLost := true
+	skipLeadershipLost := false
 
 	var err error
 	for {
