@@ -898,7 +898,7 @@ func Test_MultiNodeClusterLargeQueuedWrites(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query node: %s", err.Error())
 	}
-	if got != exp || http.LL() != 0 {
+	if got == exp && http.LL() != 0 {
 		fmt.Println("===============================================================================")
 		fmt.Println("NODE 1")
 		fmt.Printf("%s %s %s %s\n", mustGetExpvarKey(node1, "queue"), mustGetExpvarKey(node1, "http"), mustGetExpvarKey(node1, "store"), mustGetExpvarKey(node1, "db"))
