@@ -254,10 +254,6 @@ func ResetStats() {
 	// statsAdd(s.Addr().String(), numNotifies, 0)
 	// statsAdd(s.Addr().String(), numAuthOK, 0)
 	// statsAdd(s.Addr().String(), numAuthFail, 0)
-
-	stats.Do(func(kv expvar.KeyValue) {
-		stats.Set(kv.Key, 0)
-	})
 }
 
 // Service provides HTTP service.
