@@ -226,32 +226,32 @@ func statsAdd(k, m string, i int64) {
 // ResetStats resets the expvar stats for this module. Mostly for test purposes.
 func ResetStats() {
 	stats.Init()
-	// statsAdd(s.addr, numLeaderNotFound, 0)
-	// statsAdd(s.addr, numExecutions, 0)
-	// statsAdd(s.addr, numQueuedExecutions, 0)
-	// statsAdd(s.addr, numQueuedExecutionsOK, 0)
-	// statsAdd(s.addr, numQueuedExecutionsStmtsRx, 0)
-	// statsAdd(s.addr, numQueuedExecutionsStmtsTx, 0)
-	// statsAdd(s.addr, numQueuedExecutionsNoLeader, 0)
-	// statsAdd(s.addr, numQueuedExecutionsNotLeader, 0)
-	// statsAdd(s.addr, numQueuedExecutionsLeadershipLost, 0)
-	// statsAdd(s.addr, numQueuedExecutionsUnknownError, 0)
-	// statsAdd(s.addr, numQueuedExecutionsFailed, 0)
-	// statsAdd(s.addr, numQueuedExecutionsWait, 0)
-	// statsAdd(s.addr, numQueries, 0)
-	// statsAdd(s.addr, numRemoteExecutions, 0)
-	// statsAdd(s.addr, numRemoteQueries, 0)
-	// statsAdd(s.addr, numRemoteBackups, 0)
-	// statsAdd(s.addr, numRemoteLoads, 0)
-	// statsAdd(s.addr, numRemoteRemoveNode, 0)
-	// statsAdd(s.addr, numReadyz, 0)
-	// statsAdd(s.addr, numStatus, 0)
-	// statsAdd(s.addr, numBackups, 0)
-	// statsAdd(s.addr, numLoad, 0)
-	// statsAdd(s.addr, numJoins, 0)
-	// statsAdd(s.addr, numNotifies, 0)
-	// statsAdd(s.addr, numAuthOK, 0)
-	// statsAdd(s.addr, numAuthFail, 0)
+	// statsAdd(s.Addr().String(), numLeaderNotFound, 0)
+	// statsAdd(s.Addr().String(), numExecutions, 0)
+	// statsAdd(s.Addr().String(), numQueuedExecutions, 0)
+	// statsAdd(s.Addr().String(), numQueuedExecutionsOK, 0)
+	// statsAdd(s.Addr().String(), numQueuedExecutionsStmtsRx, 0)
+	// statsAdd(s.Addr().String(), numQueuedExecutionsStmtsTx, 0)
+	// statsAdd(s.Addr().String(), numQueuedExecutionsNoLeader, 0)
+	// statsAdd(s.Addr().String(), numQueuedExecutionsNotLeader, 0)
+	// statsAdd(s.Addr().String(), numQueuedExecutionsLeadershipLost, 0)
+	// statsAdd(s.Addr().String(), numQueuedExecutionsUnknownError, 0)
+	// statsAdd(s.Addr().String(), numQueuedExecutionsFailed, 0)
+	// statsAdd(s.Addr().String(), numQueuedExecutionsWait, 0)
+	// statsAdd(s.Addr().String(), numQueries, 0)
+	// statsAdd(s.Addr().String(), numRemoteExecutions, 0)
+	// statsAdd(s.Addr().String(), numRemoteQueries, 0)
+	// statsAdd(s.Addr().String(), numRemoteBackups, 0)
+	// statsAdd(s.Addr().String(), numRemoteLoads, 0)
+	// statsAdd(s.Addr().String(), numRemoteRemoveNode, 0)
+	// statsAdd(s.Addr().String(), numReadyz, 0)
+	// statsAdd(s.Addr().String(), numStatus, 0)
+	// statsAdd(s.Addr().String(), numBackups, 0)
+	// statsAdd(s.Addr().String(), numLoad, 0)
+	// statsAdd(s.Addr().String(), numJoins, 0)
+	// statsAdd(s.Addr().String(), numNotifies, 0)
+	// statsAdd(s.Addr().String(), numAuthOK, 0)
+	// statsAdd(s.Addr().String(), numAuthFail, 0)
 }
 
 // Service provides HTTP service.
@@ -388,32 +388,32 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case r.URL.Path == "/" || r.URL.Path == "":
 		http.Redirect(w, r, "/status", http.StatusFound)
 	case strings.HasPrefix(r.URL.Path, "/db/execute"):
-		statsAdd(s.addr, numExecutions, 1)
+		statsAdd(s.Addr().String(), numExecutions, 1)
 		s.handleExecute(w, r)
 	case strings.HasPrefix(r.URL.Path, "/db/query"):
-		statsAdd(s.addr, numQueries, 1)
+		statsAdd(s.Addr().String(), numQueries, 1)
 		s.handleQuery(w, r)
 	case strings.HasPrefix(r.URL.Path, "/db/backup"):
-		statsAdd(s.addr, numBackups, 1)
+		statsAdd(s.Addr().String(), numBackups, 1)
 		s.handleBackup(w, r)
 	case strings.HasPrefix(r.URL.Path, "/db/load"):
-		statsAdd(s.addr, numLoad, 1)
+		statsAdd(s.Addr().String(), numLoad, 1)
 		s.handleLoad(w, r)
 	case strings.HasPrefix(r.URL.Path, "/join"):
-		statsAdd(s.addr, numJoins, 1)
+		statsAdd(s.Addr().String(), numJoins, 1)
 		s.handleJoin(w, r)
 	case strings.HasPrefix(r.URL.Path, "/notify"):
-		statsAdd(s.addr, numNotifies, 1)
+		statsAdd(s.Addr().String(), numNotifies, 1)
 		s.handleNotify(w, r)
 	case strings.HasPrefix(r.URL.Path, "/remove"):
 		s.handleRemove(w, r)
 	case strings.HasPrefix(r.URL.Path, "/status"):
-		statsAdd(s.addr, numStatus, 1)
+		statsAdd(s.Addr().String(), numStatus, 1)
 		s.handleStatus(w, r)
 	case strings.HasPrefix(r.URL.Path, "/nodes"):
 		s.handleNodes(w, r)
 	case strings.HasPrefix(r.URL.Path, "/readyz"):
-		statsAdd(s.addr, numReadyz, 1)
+		statsAdd(s.Addr().String(), numReadyz, 1)
 		s.handleReadyz(w, r)
 	case r.URL.Path == "/debug/vars" && s.Expvar:
 		s.handleExpvar(w, r)
@@ -501,7 +501,7 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 		if err == store.ErrNotLeader {
 			leaderAPIAddr := s.LeaderAPIAddr()
 			if leaderAPIAddr == "" {
-				statsAdd(s.addr, numLeaderNotFound, 1)
+				statsAdd(s.Addr().String(), numLeaderNotFound, 1)
 				http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
 				return
 			}
@@ -626,7 +626,7 @@ func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request) {
 			if redirect {
 				leaderAPIAddr := s.LeaderAPIAddr()
 				if leaderAPIAddr == "" {
-					statsAdd(s.addr, numLeaderNotFound, 1)
+					statsAdd(s.Addr().String(), numLeaderNotFound, 1)
 					http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
 					return
 				}
@@ -643,7 +643,7 @@ func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if addr == "" {
-				statsAdd(s.addr, numLeaderNotFound, 1)
+				statsAdd(s.Addr().String(), numLeaderNotFound, 1)
 				http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
 				return
 			}
@@ -663,7 +663,7 @@ func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request) {
 				}
 				return
 			}
-			statsAdd(s.addr, numRemoteRemoveNode, 1)
+			statsAdd(s.Addr().String(), numRemoteRemoveNode, 1)
 			return
 		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -717,7 +717,7 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
 			if redirect {
 				leaderAPIAddr := s.LeaderAPIAddr()
 				if leaderAPIAddr == "" {
-					statsAdd(s.addr, numLeaderNotFound, 1)
+					statsAdd(s.Addr().String(), numLeaderNotFound, 1)
 					http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
 					return
 				}
@@ -734,7 +734,7 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if addr == "" {
-				statsAdd(s.addr, numLeaderNotFound, 1)
+				statsAdd(s.Addr().String(), numLeaderNotFound, 1)
 				http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
 				return
 			}
@@ -754,7 +754,7 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
 				}
 				return
 			}
-			statsAdd(s.addr, numRemoteBackups, 1)
+			statsAdd(s.Addr().String(), numRemoteBackups, 1)
 			return
 		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -817,7 +817,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 			if redirect {
 				leaderAPIAddr := s.LeaderAPIAddr()
 				if leaderAPIAddr == "" {
-					statsAdd(s.addr, numLeaderNotFound, 1)
+					statsAdd(s.Addr().String(), numLeaderNotFound, 1)
 					http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
 					return
 				}
@@ -834,7 +834,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if addr == "" {
-				statsAdd(s.addr, numLeaderNotFound, 1)
+				statsAdd(s.Addr().String(), numLeaderNotFound, 1)
 				http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
 				return
 			}
@@ -854,7 +854,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 				}
 				return
 			}
-			statsAdd(s.addr, numRemoteLoads, 1)
+			statsAdd(s.Addr().String(), numRemoteLoads, 1)
 			// Allow this if block to exit, so response remains as before request
 			// forwarding was put in place.
 		}
@@ -868,7 +868,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 			if err == store.ErrNotLeader {
 				leaderAPIAddr := s.LeaderAPIAddr()
 				if leaderAPIAddr == "" {
-					statsAdd(s.addr, numLeaderNotFound, 1)
+					statsAdd(s.Addr().String(), numLeaderNotFound, 1)
 					http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
 					return
 				}
@@ -1184,7 +1184,7 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if queue {
-		statsAdd(s.addr, numQueuedExecutions, 1)
+		statsAdd(s.Addr().String(), numQueuedExecutions, 1)
 		s.queuedExecute(w, r)
 	} else {
 		s.execute(w, r)
@@ -1205,7 +1205,7 @@ func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request) {
 	if !noLeader {
 		addr, err := s.store.LeaderAddr()
 		if err != nil || addr == "" {
-			statsAdd(s.addr, numLeaderNotFound, 1)
+			statsAdd(s.Addr().String(), numLeaderNotFound, 1)
 			http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
 			return
 		}
@@ -1249,7 +1249,7 @@ func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request) {
 
 	var fc queue.FlushChannel
 	if wait {
-		statsAdd(s.addr, numQueuedExecutionsWait, 1)
+		statsAdd(s.Addr().String(), numQueuedExecutionsWait, 1)
 		fc = make(queue.FlushChannel, 0)
 	}
 
@@ -1316,7 +1316,7 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request) {
 		if redirect {
 			leaderAPIAddr := s.LeaderAPIAddr()
 			if leaderAPIAddr == "" {
-				statsAdd(s.addr, numLeaderNotFound, 1)
+				statsAdd(s.Addr().String(), numLeaderNotFound, 1)
 				http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
 				return
 			}
@@ -1332,7 +1332,7 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if addr == "" {
-			statsAdd(s.addr, numLeaderNotFound, 1)
+			statsAdd(s.Addr().String(), numLeaderNotFound, 1)
 			http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
 			return
 		}
@@ -1348,7 +1348,7 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "remote execute not authorized", http.StatusUnauthorized)
 			return
 		}
-		statsAdd(s.addr, numRemoteExecutions, 1)
+		statsAdd(s.Addr().String(), numRemoteExecutions, 1)
 	}
 
 	if resultsErr != nil {
@@ -1432,7 +1432,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 		if redirect {
 			leaderAPIAddr := s.LeaderAPIAddr()
 			if leaderAPIAddr == "" {
-				statsAdd(s.addr, numLeaderNotFound, 1)
+				statsAdd(s.Addr().String(), numLeaderNotFound, 1)
 				http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
 				return
 			}
@@ -1447,7 +1447,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if addr == "" {
-			statsAdd(s.addr, numLeaderNotFound, 1)
+			statsAdd(s.Addr().String(), numLeaderNotFound, 1)
 			http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
 			return
 		}
@@ -1462,7 +1462,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "remote query not authorized", http.StatusUnauthorized)
 			return
 		}
-		statsAdd(s.addr, numRemoteQueries, 1)
+		statsAdd(s.Addr().String(), numRemoteQueries, 1)
 	}
 
 	if resultsErr != nil {
@@ -1536,9 +1536,9 @@ func (s *Service) FormRedirect(r *http.Request, url string) string {
 func (s *Service) CheckRequestPerm(r *http.Request, perm string) (b bool) {
 	defer func() {
 		if b {
-			statsAdd(s.addr, numAuthOK, 1)
+			statsAdd(s.Addr().String(), numAuthOK, 1)
 		} else {
-			statsAdd(s.addr, numAuthFail, 1)
+			statsAdd(s.Addr().String(), numAuthFail, 1)
 		}
 	}()
 
@@ -1586,7 +1586,7 @@ func (s *Service) runQueue() {
 					Transaction: s.DefaultQueueTx,
 				},
 			}
-			statsAdd(s.addr, numQueuedExecutionsStmtsRx, int64(len(req.Statements)))
+			statsAdd(s.Addr().String(), numQueuedExecutionsStmtsRx, int64(len(req.Statements)))
 
 			// Nil statements are valid, as clients may want to just send
 			// a "checkpoint" through the queue.
@@ -1603,28 +1603,28 @@ func (s *Service) runQueue() {
 						if err != nil || addr == "" {
 							s.logger.Printf("execute queue can't find leader for sequence number %d on node %s",
 								req.SequenceNumber, s.Addr().String())
-							statsAdd(s.addr, numQueuedExecutionsNoLeader, 1)
+							statsAdd(s.Addr().String(), numQueuedExecutionsNoLeader, 1)
 						} else {
 							_, err = s.cluster.Execute(er, addr, nil, defaultTimeout)
 							if err != nil {
 								s.logger.Printf("execute queue write failed for sequence number %d on node %s: %s",
 									req.SequenceNumber, s.Addr().String(), err.Error())
 								if err.Error() == "leadership lost while committing log" {
-									statsAdd(s.addr, numQueuedExecutionsLeadershipLost, 1)
+									statsAdd(s.Addr().String(), numQueuedExecutionsLeadershipLost, 1)
 								} else if err.Error() == "not leader" {
-									statsAdd(s.addr, numQueuedExecutionsNotLeader, 1)
+									statsAdd(s.Addr().String(), numQueuedExecutionsNotLeader, 1)
 								} else {
-									statsAdd(s.addr, numQueuedExecutionsUnknownError, 1)
+									statsAdd(s.Addr().String(), numQueuedExecutionsUnknownError, 1)
 								}
 							} else {
 								// Success!
-								statsAdd(s.addr, numRemoteExecutions, 1)
+								statsAdd(s.Addr().String(), numRemoteExecutions, 1)
 								break
 							}
 						}
 					}
 
-					statsAdd(s.addr, numQueuedExecutionsFailed, 1)
+					statsAdd(s.Addr().String(), numQueuedExecutionsFailed, 1)
 					time.Sleep(retryDelay)
 				}
 			}
@@ -1634,8 +1634,8 @@ func (s *Service) runQueue() {
 			s.seqNum = req.SequenceNumber
 			s.seqNumMu.Unlock()
 			req.Close()
-			statsAdd(s.addr, numQueuedExecutionsStmtsTx, int64(len(req.Statements)))
-			statsAdd(s.addr, numQueuedExecutionsOK, 1)
+			statsAdd(s.Addr().String(), numQueuedExecutionsStmtsTx, int64(len(req.Statements)))
+			statsAdd(s.Addr().String(), numQueuedExecutionsOK, 1)
 		}
 	}
 }
