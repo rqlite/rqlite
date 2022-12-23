@@ -236,7 +236,7 @@ func ResetStats() {
 	// statsAdd(s.Addr().String(), numQueuedExecutionsStmtsTx, 0)
 	// statsAdd(s.Addr().String(), numQueuedExecutionsNoLeader, 0)
 	// statsAdd(s.Addr().String(), numQueuedExecutionsNotLeader, 0)
-	statsAdd(s.Addr().String(), numQueuedExecutionsLeadershipLost, 0)
+	stats.Add(numQueuedExecutionsLeadershipLost, 0)
 	// statsAdd(s.Addr().String(), numQueuedExecutionsUnknownError, 0)
 	// statsAdd(s.Addr().String(), numQueuedExecutionsFailed, 0)
 	// statsAdd(s.Addr().String(), numQueuedExecutionsWait, 0)
