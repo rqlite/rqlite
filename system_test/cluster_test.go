@@ -862,8 +862,8 @@ func Test_MultiNodeClusterLargeQueuedWrites(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed waiting for leader: %s", err.Error())
 	}
-	
-	time.Sleep(5*time.Second)
+
+	time.Sleep(5 * time.Second)
 	store.ResetStats()
 	db.ResetStats()
 	http.ResetStats()
@@ -889,16 +889,16 @@ func Test_MultiNodeClusterLargeQueuedWrites(t *testing.T) {
 		}(n)
 	}
 	wg.Wait()
-	
+
 	// Just be sure every node has picked up the changes.
-	time.Sleep(10* time.Second)
+	time.Sleep(10 * time.Second)
 
 	exp := fmt.Sprintf(`{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[%d]]}]}`, len(nodesUnderTest)*writesPerNode)
 	got, err := node1.QueryStrongConsistency(`SELECT COUNT(*) FROM foo`)
 	if err != nil {
 		t.Fatalf("failed to query node: %s", err.Error())
 	}
-	if got != exp {
+	if got != exp || http.LL() != 0 {
 		fmt.Println("===============================================================================")
 		fmt.Println("NODE 1")
 		fmt.Printf("%s %s %s %s\n", mustGetExpvarKey(node1, "queue"), mustGetExpvarKey(node1, "http"), mustGetExpvarKey(node1, "store"), mustGetExpvarKey(node1, "db"))

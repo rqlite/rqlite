@@ -1572,9 +1572,15 @@ func (s *Service) LeaderAPIAddr() string {
 	return apiAddr
 }
 
+func LL() int64 {
+	return stats.Get(numQueuedExecutionsLeadershipLost).(*expvar.Int).Value()
+}
+
 func (s *Service) runQueue() {
 	defer close(s.queueDone)
 	retryDelay := time.Second
+
+	skipLeadershipLost := true
 
 	var err error
 	for {
@@ -1614,6 +1620,11 @@ func (s *Service) runQueue() {
 								if err.Error() == "leadership lost while committing log" {
 									statsAdd(s.Addr().String(), numQueuedExecutionsLeadershipLost, 1)
 									statsAdd(s.Addr().String(), numQueuedExecutionsLeadershipLostStmts, int64(len(req.Statements)))
+
+									if !skipLeadershipLost {
+										stats.Add(numQueuedExecutionsLeadershipLost, 1)
+										break
+									}
 
 								} else if err.Error() == "not leader" {
 									statsAdd(s.Addr().String(), numQueuedExecutionsNotLeader, 1)
