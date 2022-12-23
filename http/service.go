@@ -175,32 +175,34 @@ func NewResponse() *Response {
 var stats *expvar.Map
 
 const (
-	numLeaderNotFound                 = "leader_not_found"
-	numExecutions                     = "executions"
-	numQueuedExecutions               = "queued_executions"
-	numQueuedExecutionsOK             = "queued_executions_ok"
-	numQueuedExecutionsStmtsRx        = "queued_executions_num_stmts_rx"
-	numQueuedExecutionsStmtsTx        = "queued_executions_num_stmts_tx"
-	numQueuedExecutionsNoLeader       = "queued_executions_no_leader"
-	numQueuedExecutionsNotLeader      = "queued_executions_not_leader"
-	numQueuedExecutionsLeadershipLost = "queued_executions_leadership_lost"
-	numQueuedExecutionsUnknownError   = "queued_executions_unknown_error"
-	numQueuedExecutionsFailed         = "queued_executions_failed"
-	numQueuedExecutionsWait           = "queued_executions_wait"
-	numQueries                        = "queries"
-	numRemoteExecutions               = "remote_executions"
-	numRemoteQueries                  = "remote_queries"
-	numRemoteBackups                  = "remote_backups"
-	numRemoteLoads                    = "remote_loads"
-	numRemoteRemoveNode               = "remote_remove_node"
-	numReadyz                         = "num_readyz"
-	numStatus                         = "num_status"
-	numBackups                        = "backups"
-	numLoad                           = "loads"
-	numJoins                          = "joins"
-	numNotifies                       = "notifies"
-	numAuthOK                         = "authOK"
-	numAuthFail                       = "authFail"
+	numLeaderNotFound                      = "leader_not_found"
+	numExecutions                          = "executions"
+	numQueuedExecutions                    = "queued_executions"
+	numQueuedExecutionsOK                  = "queued_executions_ok"
+	numQueuedExecutionsStmtsRx             = "queued_executions_num_stmts_rx"
+	numQueuedExecutionsStmtsTx             = "queued_executions_num_stmts_tx"
+	numQueuedExecutionsNoLeader            = "queued_executions_no_leader"
+	numQueuedExecutionsNotLeader           = "queued_executions_not_leader"
+	numQueuedExecutionsNotLeaderStmts      = "queued_executions_not_leader_stmts"
+	numQueuedExecutionsLeadershipLost      = "queued_executions_leadership_lost"
+	numQueuedExecutionsLeadershipLostStmts = "queued_executions_leadership_lost_stmts"
+	numQueuedExecutionsUnknownError        = "queued_executions_unknown_error"
+	numQueuedExecutionsFailed              = "queued_executions_failed"
+	numQueuedExecutionsWait                = "queued_executions_wait"
+	numQueries                             = "queries"
+	numRemoteExecutions                    = "remote_executions"
+	numRemoteQueries                       = "remote_queries"
+	numRemoteBackups                       = "remote_backups"
+	numRemoteLoads                         = "remote_loads"
+	numRemoteRemoveNode                    = "remote_remove_node"
+	numReadyz                              = "num_readyz"
+	numStatus                              = "num_status"
+	numBackups                             = "backups"
+	numLoad                                = "loads"
+	numJoins                               = "joins"
+	numNotifies                            = "notifies"
+	numAuthOK                              = "authOK"
+	numAuthFail                            = "authFail"
 
 	// Default timeout for cluster communications.
 	defaultTimeout = 30 * time.Second
@@ -252,6 +254,10 @@ func ResetStats() {
 	// statsAdd(s.Addr().String(), numNotifies, 0)
 	// statsAdd(s.Addr().String(), numAuthOK, 0)
 	// statsAdd(s.Addr().String(), numAuthFail, 0)
+
+	stats.Do(func(kv expvar.KeyValue) {
+		stats.Set(kv.Key, 0)
+	})
 }
 
 // Service provides HTTP service.
@@ -1611,8 +1617,11 @@ func (s *Service) runQueue() {
 									req.SequenceNumber, s.Addr().String(), err.Error())
 								if err.Error() == "leadership lost while committing log" {
 									statsAdd(s.Addr().String(), numQueuedExecutionsLeadershipLost, 1)
+									statsAdd(s.Addr().String(), numQueuedExecutionsLeadershipLostStmts, int64(len(req.Statements)))
+
 								} else if err.Error() == "not leader" {
 									statsAdd(s.Addr().String(), numQueuedExecutionsNotLeader, 1)
+									statsAdd(s.Addr().String(), numQueuedExecutionsNotLeaderStmts, int64(len(req.Statements)))
 								} else {
 									statsAdd(s.Addr().String(), numQueuedExecutionsUnknownError, 1)
 								}
