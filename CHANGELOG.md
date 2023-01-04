@@ -1,6 +1,6 @@
 ## 7.13.1 (unreleased)
 ### Implementation changes and bug fixes
-- [PR #1146](https://github.com/rqlite/rqlite/pull/1146): Delete history file if RQLITE_HISTFILESIZE is zero.
+- [PR #1146](https://github.com/rqlite/rqlite/pull/1146): Delete history file if RQLITE_HISTFILESIZE is zero. Fixes [issue #1145](https://github.com/rqlite/rqlite/issues/1145). Thanks @jamielinux
 
 ## 7.13.0 (December 15th 2022)
 ### New features
