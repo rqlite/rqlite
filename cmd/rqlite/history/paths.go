@@ -16,7 +16,7 @@ func Path() (string, error) {
 	return filepath.Join(hdir, historyFile), nil
 }
 
-// Delete performs a best-effort removal of the history file.
+// Delete deletes the history file.
 func Delete() error {
 	p, err := Path()
 	if err != nil {
