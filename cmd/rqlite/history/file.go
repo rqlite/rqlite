@@ -14,7 +14,7 @@ const historyFile = ".rqlite_history"
 func Path() (string, error) {
 	hdir, err := os.UserHomeDir()
 	if err != nil {
-		return "", nil
+		return "", err
 	}
 	return filepath.Join(hdir, historyFile), nil
 }
