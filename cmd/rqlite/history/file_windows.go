@@ -45,6 +45,6 @@ func Writer() io.WriteCloser {
 	if err != nil {
 		return nil
 	}
-	setHidden(p) // best effort
+	//setHidden(p) // best effort
 	return f
 }
