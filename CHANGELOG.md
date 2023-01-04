@@ -1,3 +1,7 @@
+## 7.13.1 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1146](https://github.com/rqlite/rqlite/pull/1146): Delete history file if RQLITE_HISTFILESIZE is zero.
+
 ## 7.13.0 (December 15th 2022)
 ### New features
 - [PR #1141](https://github.com/rqlite/rqlite/pull/1141): Store and load CLI history across sessions.
