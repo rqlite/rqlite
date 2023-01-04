@@ -1,6 +1,8 @@
 package history
 
 import (
+	"errors"
+	"io/fs"
 	"os"
 	"testing"
 )
@@ -27,9 +29,8 @@ func Test_Delete(t *testing.T) {
 }
 
 func exists(path string) bool {
-	info, err := os.Stat(path)
-	if os.IsNotExist(err) {
-		return false
+	if _, err := os.Stat(path); err != nil {
+		return !errors.Is(err, fs.ErrNotExist)
 	}
-	return !info.IsDir()
+	return true
 }
