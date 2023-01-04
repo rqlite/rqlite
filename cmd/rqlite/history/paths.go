@@ -17,10 +17,10 @@ func Path() (string, error) {
 }
 
 // Delete performs a best-effort removal of the history file.
-func Delete() {
+func Delete() error {
 	p, err := Path()
 	if err != nil {
-		return
+		return err
 	}
-	os.Remove(p)
+	return os.Remove(p)
 }

@@ -22,7 +22,9 @@ func Test_Delete(t *testing.T) {
 		t.Fatal("history file does not exist")
 	}
 
-	Delete()
+	if err := Delete(); err != nil {
+		t.Fatalf("failed to delete history file: %s", err.Error())
+	}
 	if exists(p) {
 		t.Fatal("history file exists after deletion")
 	}
