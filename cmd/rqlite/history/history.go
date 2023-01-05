@@ -83,7 +83,7 @@ func Write(j []string, maxSz int, w io.Writer) error {
 		return nil
 	}
 
-	k := Filter(Dedupe(j))
+	k := Dedupe(Filter(j))
 	if len(k) == 0 {
 		return nil
 	}
