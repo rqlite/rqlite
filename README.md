@@ -19,7 +19,7 @@ You could use rqlite as part of a larger system, as a central store for some cri
 Finally, if you're interested in understanding how distributed systems actually work, **rqlite is a good example to study**. Much thought has gone into its [design](https://rqlite.io/docs/design/) and implementation, with clear separation between the various components, including storage, distributed consensus, and API.
 
 ### How?
-rqlite uses [Raft](https://raft.github.io/) to achieve consensus across all the instances of the SQLite databases, ensuring that every change made to the system is made to a quorum of SQLite databases, or none at all. You can learn more about the design [here](https://rqlite.io/docs/design/).
+rqlite uses [Raft](https://raft.github.io/) to achieve consensus across all the instances of the SQLite databases, ensuring that every change made to the system is made to a quorum of SQLite databases, or none at all.
 
 ### Key features
 - Trivially easy to deploy, with no need to separately install SQLite.
@@ -79,8 +79,6 @@ $ rqlite
 | 1  | fiona |
 +----+-------+
 ```
-
-Since the Raft log is the authoritative store for all data, and it is stored on disk by each node, an in-memory database can be fully recreated on start-up from the information stored in the Raft log. Using an in-memory database does not put your data at risk.
 
 ## Limitations
  * In-memory databases are currently limited to 2GiB (2147483648 bytes) in size. You can learn more about possible ways to get around this limit in the [documentation](https://rqlite.io/docs/guides/performance/#in-memory-database-limits).
