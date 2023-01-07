@@ -1,4 +1,6 @@
 # Securing rqlite
+> :warning: **This page is no longer maintained. Visit [rqlite.io](https://www.rqlite.io) for the latest docs.**
+
 rqlite can be secured in various way, and with different levels of control.
 
 ## File system security

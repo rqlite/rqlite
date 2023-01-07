@@ -1,4 +1,5 @@
 # PRAGMA Directives
+> :warning: **This page is no longer maintained. Visit [rqlite.io](https://www.rqlite.io) for the latest docs.**
 
 You can issue [`PRAGMA`](https://www.sqlite.org/pragma.html) directives to rqlite, and they will be passed to the underlying SQLite database. Certain `PRAGMA` directives, which alter the operation of the SQLite database, may not make sense in the context of rqlite (since rqlite does not given direct control over its connections to the SQLite database). Furthermore some `PRAGMA` directives may even break rqlite. If you have questions about a specific `PRAGMA` directive, the [rqlite Google Group](https://groups.google.com/group/rqlite) is a good place to start the discussion.
 

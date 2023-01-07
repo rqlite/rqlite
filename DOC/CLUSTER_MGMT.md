@@ -1,4 +1,6 @@
 # Contents
+> :warning: **This page is no longer maintained. Visit [rqlite.io](https://www.rqlite.io) for the latest docs.**
+
 * [General guidelines](#general-guidelines)
 * [Creating a cluster](#creating-a-cluster)
 * [Growing a cluster](#growing-a-cluster)

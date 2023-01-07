@@ -1,4 +1,5 @@
 # Restoring directly from SQLite
+> :warning: **This page is no longer maintained. Visit [rqlite.io](https://www.rqlite.io) for the latest docs.**
 
 rqlite supports loading a node directly from two sources, either of which can be used to initialize your system from preexisting SQLite data, or to restore from an existing [node backup](https://github.com/rqlite/rqlite/blob/master/DOC/BACKUPS.md):
 - An actual SQLite database file. This is the fastest way to initialize a rqlite node from an existing SQLite database. Even large SQLite databases can be loaded into rqlite in a matter of seconds. This the recommended way to initialize your rqlite node from existing SQLite data. In addition any preexisting SQLite database is completely overwritten by this type of load operation, so it's safe to perform regardless of any data already loaded into your rqlite cluster. Finally, this type of load request can be sent to any node. The receiving node will transparently forward the request to the Leader as needed, and return the response of the Leader to the client. If you would prefer to be explicitly redirected to the Leader, add `redirect` as a URL query parameter.
