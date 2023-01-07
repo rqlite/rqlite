@@ -1,3 +1,2 @@
 # Running rqlite on Kubernetes
-
-For full details consult the Kubernetes guide on [rqlite.io](https://rqlite.io/docs/guides/kubernetes/).
+See the [official Kubernetes guide for rqlite](https://rqlite.io/docs/guides/kubernetes/).
