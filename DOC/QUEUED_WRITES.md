@@ -1,5 +1,5 @@
 # Queued Writes
-> :warning: **This functionality was introduced in release 7.5.0. It does not exist in earlier releases.**
+> :warning: **This page is no longer updated. Visit [rqlite.io](https://www.rqlite.io) for the latest docs.**
 
 ## Usage
 

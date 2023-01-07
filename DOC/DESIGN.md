@@ -1,4 +1,6 @@
 # rqlite
+> :warning: **This page is no longer updated. Visit [rqlite.io](https://www.rqlite.io) for the latest docs.**
+
 You can find details on the design and implementation of rqlite from [these blog posts](https://www.philipotoole.com/tag/rqlite/) (in particular [this post](https://www.philipotoole.com/replicating-sqlite-using-raft-consensus/) and [this post](https://www.philipotoole.com/rqlite-replicated-sqlite-with-new-raft-consensus-and-api/)).
 
 ## Design Presentations

@@ -1,4 +1,5 @@
 # rqlite and Non-deterministic Functions
+> :warning: **This page is no longer updated. Visit [rqlite.io](https://www.rqlite.io) for the latest docs.**
 
 ## Contents
 * [Understanding the problem](#understanding-the-problem)

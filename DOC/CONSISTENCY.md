@@ -1,4 +1,6 @@
 # Read Consistency
+> :warning: **This page is no longer updated. Visit [rqlite.io](https://www.rqlite.io) for the latest docs.**
+
 _rqlite has been run through Jepsen-style testing. You can read about it [here](https://github.com/wildarch/jepsen.rqlite/blob/main/doc/blog.md)._
 
 Even though serving queries does not require Raft consensus (because the database is not changed), [queries should generally be served by the Leader](https://github.com/rqlite/rqlite/issues/5). Why is this? Because, without this check, queries on a node could return results that are out-of-date i.e. _stale_.  This could happen for one, or both, of the following two reasons:
