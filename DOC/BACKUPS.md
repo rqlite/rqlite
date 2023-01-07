@@ -1,5 +1,5 @@
 # Backups
-> :warning: **This page is no longer updated. Visit [rqlite.io](https://www.rqlite.io) for the latest docs.**
+> :warning: **This page is no longer maintained. Visit [rqlite.io](https://www.rqlite.io) for the latest docs.**
 
 rqlite supports hot backing up a node. You can retrieve and write a copy of the underlying SQLite database to a file via the CLI:
 ```

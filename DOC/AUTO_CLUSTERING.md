@@ -1,5 +1,5 @@
 # Automatic clustering
-> :warning: **This page is no longer updated. Visit [rqlite.io](https://www.rqlite.io) for the latest docs.**
+> :warning: **This page is no longer maintained. Visit [rqlite.io](https://www.rqlite.io) for the latest docs.**
 
 This document describes various ways to dynamically form rqlite clusters, which is particularly useful for automating your deployment of rqlite.
 

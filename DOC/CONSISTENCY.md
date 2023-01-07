@@ -1,5 +1,5 @@
 # Read Consistency
-> :warning: **This page is no longer updated. Visit [rqlite.io](https://www.rqlite.io) for the latest docs.**
+> :warning: **This page is no longer maintained. Visit [rqlite.io](https://www.rqlite.io) for the latest docs.**
 
 _rqlite has been run through Jepsen-style testing. You can read about it [here](https://github.com/wildarch/jepsen.rqlite/blob/main/doc/blog.md)._
 

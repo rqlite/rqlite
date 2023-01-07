@@ -1,5 +1,5 @@
 # Command Line Interface
-> :warning: **This page is no longer updated. Visit [rqlite.io](https://www.rqlite.io) for the latest docs.**
+> :warning: **This page is no longer maintained. Visit [rqlite.io](https://www.rqlite.io) for the latest docs.**
 
 rqlite comes with a CLI, which makes it easier to interact with a rqlite system. It is installed in the same directory as the node binary `rqlited`. Since rqlite is built on SQLite, you should consult the [SQLite query language documentation](https://www.sqlite.org/lang.html) for full details on what is supported.
 

@@ -1,5 +1,5 @@
 # FAQ
-> :warning: **This page is no longer updated. Visit [rqlite.io](https://www.rqlite.io) for the latest docs.**
+> :warning: **This page is no longer maintained. Visit [rqlite.io](https://www.rqlite.io) for the latest docs.**
 
 * [What exactly does rqlite do?](#what-exactly-does-rqlite-do)
 * [Why would I use this, versus some other distributed database?](#why-would-i-use-this-versus-some-other-distributed-database)

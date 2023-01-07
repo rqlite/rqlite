@@ -1,5 +1,5 @@
 # Bulk API
-> :warning: **This page is no longer updated. Visit [rqlite.io](https://www.rqlite.io) for the latest docs.**
+> :warning: **This page is no longer maintained. Visit [rqlite.io](https://www.rqlite.io) for the latest docs.**
 
 The bulk API allows multiple updates or queries to be executed in a single request. Both non-paramterized and parameterized requests are supported by the Bulk API. The API does not support mixing the parameterized and non-parameterized form in a single request.
 
