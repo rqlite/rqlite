@@ -1,0 +1,11 @@
+services:
+  rqlite:
+    image: rqlite/rqlite
+  rqman:
+    image: rqman
+    environment:
+      - RQMAN_USERNAME=admin
+      - RQMAN_PASSWORD=admin
+      - RQLITE_HOST=http://rqlite:4001
+    ports:
+      - 3000:3000
