@@ -1,6 +1,6 @@
 ## 7.13.2 (unreleased)
 ### Implementation changes and bug fixes
-- [PR #1156](https://github.com/rqlite/rqlite/pull/1156): Better error message when rqlite shell can't connect to node
+- [PR #1156](https://github.com/rqlite/rqlite/pull/1156): Better error message when rqlite shell can't connect to a node
 
 ## 7.13.1 (January 6th 2023)
 ### Implementation changes and bug fixes
