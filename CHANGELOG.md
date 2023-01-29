@@ -1,3 +1,7 @@
+## 7.13.2 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1156](https://github.com/rqlite/rqlite/pull/1156): Better error message when rqlite shell can't connect to node
+
 ## 7.13.1 (January 6th 2023)
 ### Implementation changes and bug fixes
 - [PR #1146](https://github.com/rqlite/rqlite/pull/1146): Delete history file if `RQLITE_HISTFILESIZE` environment variable is zero. Fixes [issue #1145](https://github.com/rqlite/rqlite/issues/1145). Thanks @jamielinux
