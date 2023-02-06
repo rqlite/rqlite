@@ -1,6 +1,7 @@
 ## 7.13.2 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #1156](https://github.com/rqlite/rqlite/pull/1156): Better error message when rqlite shell can't connect to a node.
+- [PR #1158](https://github.com/rqlite/rqlite/pull/1158): Move to Go 1.20 and `go mods` updates.
 
 ## 7.13.1 (January 6th 2023)
 ### Implementation changes and bug fixes
