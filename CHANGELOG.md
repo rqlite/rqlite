@@ -1,4 +1,4 @@
-## 7.13.2 (unreleased)
+## 7.13.2 (February 23rd 2023)
 ### Implementation changes and bug fixes
 - [PR #1156](https://github.com/rqlite/rqlite/pull/1156): Better error message when rqlite shell can't connect to a node.
 - [PR #1162](https://github.com/rqlite/rqlite/pull/1162): Fix Consul-based discovery issue when using TLS.
