@@ -87,7 +87,7 @@ func (s *Service) Register(id, apiAddr, addr string) (bool, string, error) {
 // if, and only if, this node is the leader. The service will report
 // anytime a leadership change is detected. It also does it periodically
 // to deal with any intermittent issues that caused Leadership information
-/// to go stale.
+// to go stale.
 func (s *Service) StartReporting(id, apiAddr, addr string) chan struct{} {
 	ticker := time.NewTicker(10 * s.ReportInterval)
 	obCh := make(chan struct{}, leaderChanLen)
