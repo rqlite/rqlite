@@ -4,14 +4,10 @@ go 1.16
 
 require (
 	github.com/Bowery/prompt v0.0.0-20190916142128-fa8279994f75
-	github.com/armon/go-metrics v0.4.1 // indirect
 	github.com/coreos/go-semver v0.3.1 // indirect
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
-	github.com/fatih/color v1.14.1 // indirect
 	github.com/hashicorp/consul/api v1.19.1 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
-	github.com/hashicorp/go-hclog v1.4.0 // indirect
-	github.com/hashicorp/go-immutable-radix v1.3.1 // indirect
 	github.com/hashicorp/go-msgpack v1.1.5 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hashicorp/raft v1.3.11
@@ -21,7 +17,7 @@ require (
 	github.com/mkideal/cli v0.2.7
 	github.com/mkideal/pkg v0.1.3
 	github.com/rqlite/go-sqlite3 v1.27.1
-	github.com/rqlite/raft-boltdb v0.0.0-20211018013422-771de01086ce
+	github.com/rqlite/raft-boltdb v0.0.0-20230223205721-b72e0bf63c4d
 	github.com/rqlite/rqlite-disco-clients v0.0.0-20230223142702-e7b84b86c5e1
 	github.com/rqlite/sql v0.0.0-20221103124402-8f9ff0ceb8f0
 	go.etcd.io/bbolt v1.3.7
