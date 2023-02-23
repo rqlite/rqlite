@@ -191,6 +191,7 @@ type Command struct {
 
 	Type Command_Type `protobuf:"varint,1,opt,name=type,proto3,enum=cluster.Command_Type" json:"type,omitempty"`
 	// Types that are assignable to Request:
+	//
 	//	*Command_ExecuteRequest
 	//	*Command_QueryRequest
 	//	*Command_BackupRequest
