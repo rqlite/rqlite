@@ -1,6 +1,6 @@
 ## 7.14.0 (unreleased)
 ### New features
-- [PR #1168](https://github.com/rqlite/rqlite/pull/1168): Support for setting Access-Control-Allow-Origin. Fixes [issue #687](https://github.com/rqlite/rqlite/issues/687).
+- [PR #1168](https://github.com/rqlite/rqlite/pull/1168): Support for setting Access-Control-Allow-Origin header in HTTP responses. Fixes [issue #687](https://github.com/rqlite/rqlite/issues/687).
 
 ## 7.13.2 (February 23rd 2023)
 ### Implementation changes and bug fixes
