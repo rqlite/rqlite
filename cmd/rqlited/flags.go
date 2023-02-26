@@ -40,6 +40,9 @@ type Config struct {
 	// HTTPAdv is the advertised HTTP server network.
 	HTTPAdv string
 
+	// HTTPAllowOrigin is the value to set for Access-Control-Allow-Origin HTTP header.
+	HTTPAllowOrigin string
+
 	// TLS1011 indicates whether the node should support deprecated
 	// encryption standards.
 	TLS1011 bool
@@ -359,6 +362,7 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	flag.StringVar(&config.NodeID, "node-id", "", "Unique name for node. If not set, set to advertised Raft address")
 	flag.StringVar(&config.HTTPAddr, HTTPAddrFlag, "localhost:4001", "HTTP server bind address. To enable HTTPS, set X.509 cert and key")
 	flag.StringVar(&config.HTTPAdv, HTTPAdvAddrFlag, "", "Advertised HTTP address. If not set, same as HTTP server bind")
+	flag.StringVar(&config.HTTPAllowOrigin, "http-allow-origin", "", "Value to set for Access-Control-Allow-Origin HTTP header")
 	flag.BoolVar(&config.TLS1011, "tls1011", false, "Support deprecated TLS versions 1.0 and 1.1")
 	flag.StringVar(&config.X509CACert, "http-ca-cert", "", "Path to root X.509 certificate for HTTP endpoint")
 	flag.StringVar(&config.X509Cert, "http-cert", "", "Path to X.509 certificate for HTTP endpoint")

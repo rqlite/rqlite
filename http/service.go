@@ -212,6 +212,9 @@ const (
 	// node (by node Raft address) actually served the request if
 	// it wasn't served by this node.
 	ServedByHTTPHeader = "X-RQLITE-SERVED-BY"
+
+	// AllowOriginHeader is for CORS support
+	AllowOriginHeader = "Access-Control-Allow-Origin"
 )
 
 func init() {
@@ -274,6 +277,8 @@ type Service struct {
 	CertFile   string // Path to SSL certificate.
 	KeyFile    string // Path to SSL private key.
 	TLS1011    bool   // Whether older, deprecated TLS should be supported.
+
+	AllowOrigin string // Value to set for Access-Control-Allow-Origin
 
 	DefaultQueueCap     int
 	DefaultQueueBatchSz int
@@ -379,6 +384,7 @@ func (s *Service) HTTPS() bool {
 // ServeHTTP allows Service to serve HTTP requests.
 func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.addBuildVersion(w)
+	s.addAllowOrigin(w)
 
 	switch {
 	case r.URL.Path == "/" || r.URL.Path == "":
@@ -1686,6 +1692,13 @@ func (s *Service) addBuildVersion(w http.ResponseWriter) {
 		version = v
 	}
 	w.Header().Add(VersionHTTPHeader, version)
+}
+
+// addAllowOrigin adds Access-Control-Allow-Origin header to the HTTP response.
+func (s *Service) addAllowOrigin(w http.ResponseWriter) {
+	if s.AllowOrigin != "" {
+		w.Header().Add(AllowOriginHeader, s.AllowOrigin)
+	}
 }
 
 // writeResponse writes the given response to the given writer.
