@@ -1,13 +1,13 @@
 package tcp
 
 import (
-	"crypto/tls"
 	"errors"
 	"net"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/rqlite/rqlite/tcp/tls"
 	"github.com/rqlite/rqlite/testdata/x509"
 )
 
@@ -149,12 +149,11 @@ func mustNewEchoServerTLS() (*echoServer, string, string) {
 	cert := x509.CertFile("")
 	key := x509.KeyFile("")
 
-	tlsConfig, err := createTLSConfig(cert, key, "")
+	l, err := tls.NewListener(ln, cert, key, "")
 	if err != nil {
-		panic("failed to create TLS config")
+		panic("failed to create new TLS Listener")
 	}
-
 	return &echoServer{
-		ln: tls.NewListener(ln, tlsConfig),
+		ln: l,
 	}, cert, key
 }

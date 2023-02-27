@@ -2,18 +2,18 @@ package tcp
 
 import (
 	"crypto/tls"
-	"crypto/x509"
 	"errors"
 	"expvar"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net"
 	"os"
 	"strconv"
 	"sync"
 	"time"
+
+	rtls "github.com/rqlite/rqlite/tcp/tls"
 )
 
 const (
@@ -120,7 +120,7 @@ func NewTLSMux(ln net.Listener, adv net.Addr, cert, key, caCert string) (*Mux, e
 		return nil, err
 	}
 
-	mux.tlsConfig, err = createTLSConfig(cert, key, caCert)
+	mux.tlsConfig, err = rtls.CreateConfig(cert, key, caCert, false)
 	if err != nil {
 		return nil, err
 	}
@@ -269,39 +269,3 @@ func (ln *listener) Close() error { return nil }
 
 // Addr always returns nil
 func (ln *listener) Addr() net.Addr { return nil }
-
-// newTLSListener returns a net listener which encrypts the traffic using TLS.
-func newTLSListener(ln net.Listener, certFile, keyFile, caCertFile string) (net.Listener, error) {
-	config, err := createTLSConfig(certFile, keyFile, caCertFile)
-	if err != nil {
-		return nil, err
-	}
-
-	return tls.NewListener(ln, config), nil
-}
-
-// createTLSConfig returns a TLS config from the given cert, key and optionally
-// Certificate Authority cert.
-func createTLSConfig(certFile, keyFile, caCertFile string) (*tls.Config, error) {
-	var err error
-	config := &tls.Config{}
-	config.Certificates = make([]tls.Certificate, 1)
-	config.Certificates[0], err = tls.LoadX509KeyPair(certFile, keyFile)
-	if err != nil {
-		return nil, err
-	}
-
-	if caCertFile != "" {
-		asn1Data, err := ioutil.ReadFile(caCertFile)
-		if err != nil {
-			return nil, err
-		}
-		config.RootCAs = x509.NewCertPool()
-		ok := config.RootCAs.AppendCertsFromPEM(asn1Data)
-		if !ok {
-			return nil, fmt.Errorf("failed to parse root certificate(s) in %q", caCertFile)
-		}
-	}
-
-	return config, nil
-}
