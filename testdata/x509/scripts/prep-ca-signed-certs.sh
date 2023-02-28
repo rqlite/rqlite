@@ -18,7 +18,7 @@ openssl req -new -newkey rsa:1024 -nodes -keyout $TMPDIR/server.key.pem -out $TM
 # Review the CSR via `openssl req -in client.csr.pem -text -noout`
 openssl req -new -newkey rsa:1024 -nodes -keyout $TMPDIR/client.key.pem -out $TMPDIR/client.csr.pem -subj "/C=US/ST=Pennsylvania/L=Mars/O=rqlite /OU=IT Department/CN=client.rqlite.io"
 
-# Prep the "certificate authority" to process the CSR.
+# Prep the "certificate authority" to process the CSRs.
 echo "[ ca ]
 default_ca = ca_default
 [ ca_default ]
@@ -48,13 +48,13 @@ mkdir $TMPDIR/ca.db.certs
 touch $TMPDIR/ca.db.index
 echo "1234" > $TMPDIR/ca.db.serial
 
-# Process the CSR
+# Process the CSRs, and generate the server and client certificates.
+openssl ca -config $CACONF -batch -out $TMPDIR/server.cert.pem -infiles $TMPDIR/server.csr.pem
 openssl ca -config $CACONF -batch -out $TMPDIR/client.cert.pem -infiles $TMPDIR/client.csr.pem
 
 echo "CA root private key: $TMPDIR/root.key.pem"
-echo "CA root public cert: $TMPDIR/root.cert.pem"
+echo "CA root cert: $TMPDIR/root.cert.pem"
 echo "Server private key: $TMPDIR/server.key.pem"
 echo "Server cert signed by root CA: $TMPDIR/server.cert.pem"
 echo "Client private key: $TMPDIR/client.key.pem"
 echo "Client cert signed by root CA: $TMPDIR/client.cert.pem"
-
