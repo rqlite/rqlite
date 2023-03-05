@@ -106,8 +106,9 @@ func TestGenerateCASignedCert(t *testing.T) {
 	}
 
 	// verify the certificate is valid for the correct key usage
-	if parsedCert.KeyUsage != (x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature) {
-		t.Fatalf("certificate has incorrect key usage, exp %v, got %v", x509.KeyUsageKeyEncipherment|x509.KeyUsageDigitalSignature, parsedCert.KeyUsage)
+	expUsage := x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature
+	if parsedCert.KeyUsage != expUsage {
+		t.Fatalf("certificate has incorrect key usage, exp %v, got %v", expUsage, parsedCert.KeyUsage)
 	}
 
 	// verify the certificate is valid for the correct extended key usage
@@ -121,7 +122,7 @@ func TestGenerateCASignedCert(t *testing.T) {
 	}
 }
 
-// mustGenerateCACert generates a new CA certificate and private key. It is used for testing only.
+// mustGenerateCACert generates a new CA certificate and private key.
 func mustGenerateCACert(name pkix.Name) (*x509.Certificate, *rsa.PrivateKey) {
 	certPEM, keyPEM, err := GenerateCACert(name, 0, time.Hour, 2048)
 	if err != nil {
