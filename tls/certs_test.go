@@ -5,7 +5,6 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
-	"io/ioutil"
 	"testing"
 	"time"
 )
@@ -62,9 +61,6 @@ func TestGenerateCASignedCert(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	// write certPEM and keyPEM to files
-	ioutil.WriteFile("cert.pem", certPEM, 0644)
 
 	cert, _ := pem.Decode(certPEM)
 	if cert == nil {

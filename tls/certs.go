@@ -10,8 +10,7 @@ import (
 	"time"
 )
 
-// GenerateCACert generates a new CA certificate and returns the cert and key. The function
-// takes in a subject, a validity period, and a key size.
+// GenerateCACert generates a new CA certificate and returns the cert and key as PEM-encoded bytes.
 func GenerateCACert(subject pkix.Name, validFrom, validFor time.Duration, keySize int) ([]byte, []byte, error) {
 	// generate a new private key
 	key, err := rsa.GenerateKey(rand.Reader, keySize)
@@ -44,9 +43,9 @@ func GenerateCACert(subject pkix.Name, validFrom, validFor time.Duration, keySiz
 	return certPEM, keyPEM, nil
 }
 
-// function that generates a new x509 certificate and returns the cert and key. The function
-// should take in a subject, a validity period, and a key size. It should optionally take in
-// a parent certificate and key. If a parent certificate and key are provided, the new
+// GenerateCert generates a new x509 certificate and returns the cert and key as PEM-encoded bytes.
+// The function should take in a subject, a validity period, and a key size. It should optionally
+// take in a parent certificate and key. If a parent certificate and key are provided, the new
 // certificate should be signed by the parent. If no parent certificate and key are provided,
 // the new certificate should be self-signed.
 func GenerateCert(subject pkix.Name, validFor time.Duration, keySize int, parent *x509.Certificate, parentKey interface{}) ([]byte, []byte, error) {
