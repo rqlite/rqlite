@@ -100,18 +100,18 @@ func Test_TLSServiceSecure(t *testing.T) {
 
 	url := fmt.Sprintf("https://%s", s.Addr().String())
 
-	// Test connecting with an HTTP client.
+	// Create a TLS Config which verfies server cert, and trusts the CA cert.
 	tlsConfig := &tls.Config{InsecureSkipVerify: false}
 	tlsConfig.RootCAs = x509.NewCertPool()
 	ok := tlsConfig.RootCAs.AppendCertsFromPEM(cert)
 	if !ok {
 		t.Fatalf("failed to parse CA certificate(s) for client verification in %q", cert)
 	}
-	tn := &http.Transport{
-		TLSClientConfig: tlsConfig,
-	}
-	client := &http.Client{Transport: tn}
 
+	// Test connecting with an HTTP1.1 client.
+	client := &http.Client{Transport: &http.Transport{
+		TLSClientConfig: tlsConfig,
+	}}
 	resp, err := client.Get(url)
 	if err != nil {
 		t.Fatalf("failed to make HTTP request: %s", err)
@@ -124,7 +124,7 @@ func Test_TLSServiceSecure(t *testing.T) {
 	// Test connecting with an HTTP/2 client.
 	client = &http.Client{
 		Transport: &http2.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: false},
+			TLSClientConfig: tlsConfig,
 		},
 	}
 	resp, err = client.Get(url)
