@@ -112,6 +112,46 @@ func TestGenerateCASignedCert(t *testing.T) {
 	}
 }
 
+func TestGenerateSelfSignedCert(t *testing.T) {
+	certPEM, keyPEM, err := GenerateSelfSignedCert(pkix.Name{CommonName: "rqlite"}, 365*24*time.Hour, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// decode the certificate and private key
+	certBlock, _ := pem.Decode(certPEM)
+	if certBlock == nil {
+		t.Fatal("failed to decode certificate PEM")
+	}
+	keyBlock, _ := pem.Decode(keyPEM)
+	if keyBlock == nil {
+		t.Fatal("failed to decode private key PEM")
+	}
+
+	// parse the certificate and private key
+	cert, err := x509.ParseCertificate(certBlock.Bytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, err := x509.ParsePKCS1PrivateKey(keyBlock.Bytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// verify the certificate
+	if err := cert.CheckSignatureFrom(cert); err != nil {
+		t.Fatal(err)
+	}
+
+	// verify the private key
+	if err := cert.CheckSignature(cert.SignatureAlgorithm, cert.RawTBSCertificate, cert.Signature); err != nil {
+		t.Fatal(err)
+	}
+	if err := key.Validate(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // mustGenerateCACert generates a new CA certificate and private key.
 func mustGenerateCACert(name pkix.Name) (*x509.Certificate, *rsa.PrivateKey) {
 	certPEM, keyPEM, err := GenerateCACert(name, 0, time.Hour, 2048)

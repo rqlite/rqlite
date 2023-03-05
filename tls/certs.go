@@ -7,6 +7,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"math/big"
+	"net"
 	"time"
 )
 
@@ -72,6 +73,76 @@ func GenerateCert(subject pkix.Name, validFor time.Duration, keySize int, parent
 		signerKey = key
 	}
 	cert, err := x509.CreateCertificate(rand.Reader, &template, signerCert, &key.PublicKey, signerKey)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// encode the certificate and private key
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cert})
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
+
+	return certPEM, keyPEM, nil
+}
+
+// GenerateSelfSignedCert generates a new self-signed certificate and
+// returns the cert and key as PEM-encoded bytes.
+func GenerateSelfSignedCert(subject pkix.Name, validFor time.Duration, keySize int) ([]byte, []byte, error) {
+	// generate a new private key
+	key, err := rsa.GenerateKey(rand.Reader, keySize)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// generate a new certificate
+	template := x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               subject,
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().Add(validFor),
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		IsCA:                  true,
+		BasicConstraintsValid: true,
+	}
+
+	// Add IP SAN to the certificate
+	//template.IPAddresses = append(template.IPAddresses, net.ParseIP("127.0.0.1"))
+
+	cert, err := x509.CreateCertificate(rand.Reader, &template, &template, &key.PublicKey, key)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// encode the certificate and private key
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cert})
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
+
+	return certPEM, keyPEM, nil
+}
+
+// GenerateSelfSignedCertIPSAN generates a new self-signed certificate and
+// returns the cert and key as PEM-encoded bytes.
+func GenerateSelfSignedCertIPSAN(subject pkix.Name, validFor time.Duration, keySize int, san net.IP) ([]byte, []byte, error) {
+	// generate a new private key
+	key, err := rsa.GenerateKey(rand.Reader, keySize)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// generate a new certificate
+	template := x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               subject,
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().Add(validFor),
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		IsCA:                  true,
+		BasicConstraintsValid: true,
+	}
+	template.IPAddresses = append(template.IPAddresses, san)
+
+	cert, err := x509.CreateCertificate(rand.Reader, &template, &template, &key.PublicKey, key)
 	if err != nil {
 		return nil, nil, err
 	}
