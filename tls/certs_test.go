@@ -11,7 +11,6 @@ import (
 )
 
 // TestGenerateCACert tests the GenerateCACert function.
-// write a test for GenerateCACert
 func TestGenerateCACert(t *testing.T) {
 	// generate a new CA certificate
 	certPEM, keyPEM, err := GenerateCACert(pkix.Name{CommonName: "rqlite.io"}, 0, time.Hour, 2048)
@@ -92,7 +91,6 @@ func TestGenerateCASignedCert(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// verify the certificate is valid for the correct duration
 	if parsedCert.NotBefore.After(time.Now()) {
 		t.Fatal("certificate is not valid yet")
 	}
@@ -100,23 +98,19 @@ func TestGenerateCASignedCert(t *testing.T) {
 		t.Fatal("certificate is expired")
 	}
 
-	// verify the certificate is valid for the correct subject
 	if parsedCert.Subject.CommonName != "test" {
 		t.Fatal("certificate has incorrect subject")
 	}
 
-	// verify the certificate is valid for the correct key usage
 	expUsage := x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature
 	if parsedCert.KeyUsage != expUsage {
 		t.Fatalf("certificate has incorrect key usage, exp %v, got %v", expUsage, parsedCert.KeyUsage)
 	}
 
-	// verify the certificate is valid for the correct extended key usage
 	if len(parsedCert.ExtKeyUsage) != 1 || parsedCert.ExtKeyUsage[0] != x509.ExtKeyUsageServerAuth {
 		t.Fatal("certificate has incorrect extended key usage")
 	}
 
-	// verify the certificate is valid for the correct basic constraints
 	if parsedCert.IsCA {
 		t.Fatal("certificate has incorrect basic constraints")
 	}
