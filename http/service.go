@@ -270,10 +270,10 @@ type Service struct {
 	statusMu sync.RWMutex
 	statuses map[string]StatusReporter
 
-	CACertFile string // Path to root X.509 certificate.
-	CertFile   string // Path to SSL certificate.
-	KeyFile    string // Path to SSL private key.
-	TLS1011    bool   // Whether older, deprecated TLS should be supported.
+	ClientCACertFile string // Path to x509 CA certificate used to verify client certificates.
+	CertFile         string // Path to server's own x509 certificate.
+	KeyFile          string // Path to server's own x509 private key.
+	TLS1011          bool   // Whether older, deprecated TLS should be supported.
 
 	DefaultQueueCap     int
 	DefaultQueueBatchSz int
@@ -324,7 +324,7 @@ func (s *Service) Start() error {
 			return err
 		}
 	} else {
-		config, err := createTLSConfig(s.CertFile, s.KeyFile, s.CACertFile, s.TLS1011)
+		config, err := createTLSConfig(s.CertFile, s.KeyFile, s.ClientCACertFile, s.TLS1011)
 		if err != nil {
 			return err
 		}
@@ -1738,7 +1738,7 @@ func requestQueries(r *http.Request) ([]*command.Statement, error) {
 }
 
 // createTLSConfig returns a TLS config from the given cert and key.
-func createTLSConfig(certFile, keyFile, caCertFile string, tls1011 bool) (*tls.Config, error) {
+func createTLSConfig(certFile, keyFile, clientCACertFile string, tls1011 bool) (*tls.Config, error) {
 	var err error
 
 	var minTLS = uint16(tls.VersionTLS12)
@@ -1755,15 +1755,15 @@ func createTLSConfig(certFile, keyFile, caCertFile string, tls1011 bool) (*tls.C
 	if err != nil {
 		return nil, err
 	}
-	if caCertFile != "" {
-		asn1Data, err := ioutil.ReadFile(caCertFile)
+	if clientCACertFile != "" {
+		asn1Data, err := ioutil.ReadFile(clientCACertFile)
 		if err != nil {
 			return nil, err
 		}
 		config.RootCAs = x509.NewCertPool()
 		ok := config.RootCAs.AppendCertsFromPEM(asn1Data)
 		if !ok {
-			return nil, fmt.Errorf("failed to parse root certificate(s) in %q", caCertFile)
+			return nil, fmt.Errorf("failed to parse CA certificate(s) for client verification in %q", clientCACertFile)
 		}
 	}
 	return config, nil
