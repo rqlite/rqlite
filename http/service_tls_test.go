@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/pem"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -134,6 +135,36 @@ func Test_TLSServiceSecure(t *testing.T) {
 
 	if v := resp.Header.Get("X-RQLITE-VERSION"); v != "the version" {
 		t.Fatalf("incorrect build version present in HTTP/2 response header, got: %s", v)
+	}
+}
+
+func Test_TLSServiceSecureMutual(t *testing.T) {
+	// Generate a CA cert and key.
+	caCertPEM, caKeyPEM, err := rtls.GenerateCACert(pkix.Name{CommonName: "ca.rqlite.io"}, time.Hour, 2048)
+	if err != nil {
+		t.Fatalf("failed to generate CA cert: %s", err)
+	}
+
+	caCert, _ := pem.Decode(caCertPEM)
+	if caCert == nil {
+		panic("failed to decode certificate")
+	}
+
+	caKey, _ := pem.Decode(caKeyPEM)
+	if caKey == nil {
+		panic("failed to decode key")
+	}
+
+	// Create a cert singed by the CA for the server
+	certServer, keyServer, err := rtls.GenerateCert(pkix.Name{CommonName: "rqlite.io"}, time.Hour, 2048, caCert, caKey)
+	if err != nil {
+		t.Fatalf("failed to generate server cert: %s", err)
+	}
+
+	// Create a cert signed by the CA for the client
+	certClient, keyClient, err := rtls.GenerateCert(pkix.Name{CommonName: "client.rqlite.io"}, time.Hour, 2048, caCert, caKey)
+	if err != nil {
+		t.Fatalf("failed to generate client cert: %s", err)
 	}
 }
 
