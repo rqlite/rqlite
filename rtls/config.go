@@ -1,3 +1,5 @@
+// rtls is for creating TLS configurations for use by servers and clients.
+
 package rtls
 
 import (
