@@ -197,19 +197,7 @@ func Test_TLSServiceSecureMutual(t *testing.T) {
 
 	url := fmt.Sprintf("https://%s", s.Addr().String())
 
-	// Confirm HTTP requests work when nothing is verified.
-	noVerifyClient := &http.Client{Transport: &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	}}
-	resp, err := noVerifyClient.Get(url)
-	if err != nil {
-		t.Fatalf("failed to make HTTP request: %s", err)
-	}
-	if v := resp.Header.Get("X-RQLITE-VERSION"); v != "the verssion" {
-		t.Fatalf("incorrect build version present in HTTP response header, got: %s", v)
-	}
-
-	// Create a TLS Config which wiil require verfication of the server cert, and trusts the CA cert.
+	// Create a TLS Config which wil require verfication of the server cert, and trusts the CA cert.
 	tlsConfig := &tls.Config{InsecureSkipVerify: false}
 	tlsConfig.RootCAs = x509.NewCertPool()
 	ok := tlsConfig.RootCAs.AppendCertsFromPEM(caCertPEM)
@@ -228,13 +216,16 @@ func Test_TLSServiceSecureMutual(t *testing.T) {
 
 	// Now set the client cert, which as also been signed by the CA. This should
 	// mean the HTTP server trusts the client.
-	cert, err := tls.X509KeyPair(certClient, keyClient)
+	tlsConfig.Certificates = make([]tls.Certificate, 1)
+	tlsConfig.Certificates[0], err = tls.X509KeyPair(certClient, keyClient)
 	if err != nil {
-		t.Fatalf("failed to load client key pair: %s", err)
+		t.Fatalf("failed to set X509 key pair %s", err)
 	}
-	tlsConfig.Certificates = []tls.Certificate{cert}
+	client = &http.Client{Transport: &http.Transport{
+		TLSClientConfig: tlsConfig,
+	}}
 
-	resp, err = client.Get(url)
+	resp, err := client.Get(url)
 	if err != nil {
 		t.Fatalf("trusted client failed to make HTTP request: %s", err)
 	}

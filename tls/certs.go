@@ -26,7 +26,7 @@ func GenerateCACert(subject pkix.Name, validFor time.Duration, keySize int) ([]b
 		NotBefore:             time.Now(),
 		NotAfter:              time.Now().Add(validFor),
 		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
 		IsCA:                  true,
 		BasicConstraintsValid: true,
 	}
@@ -63,7 +63,7 @@ func GenerateCert(subject pkix.Name, validFor time.Duration, keySize int, parent
 		NotBefore:    time.Now(),
 		NotAfter:     time.Now().Add(validFor),
 		KeyUsage:     x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
-		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
 	}
 
 	signerCert := parent
@@ -98,8 +98,10 @@ func GenerateCertIPSAN(subject pkix.Name, validFor time.Duration, keySize int, p
 		NotBefore:    time.Now(),
 		NotAfter:     time.Now().Add(validFor),
 		KeyUsage:     x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
-		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
 	}
+
+	// generate cert template for new certificate suitable for client verification
 
 	// Add IP SAN to the certificate
 	template.IPAddresses = append(template.IPAddresses, san)
