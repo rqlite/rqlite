@@ -2,18 +2,18 @@ package tcp
 
 import (
 	"crypto/tls"
-	"crypto/x509"
 	"errors"
 	"expvar"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net"
 	"os"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/rqlite/rqlite/rtls"
 )
 
 const (
@@ -115,13 +115,13 @@ func NewMux(ln net.Listener, adv net.Addr) (*Mux, error) {
 
 // NewTLSMux returns a new instance of Mux for ln, and encrypts all traffic
 // using TLS. If adv is nil, then the addr of ln is used.
-func NewTLSMux(ln net.Listener, adv net.Addr, cert, key, caCert string) (*Mux, error) {
+func NewTLSMux(ln net.Listener, adv net.Addr, cert, key, caCert string, insecure bool) (*Mux, error) {
 	mux, err := NewMux(ln, adv)
 	if err != nil {
 		return nil, err
 	}
 
-	mux.tlsConfig, err = createTLSConfig(cert, key, caCert)
+	mux.tlsConfig, err = rtls.CreateServerConfig(cert, key, caCert, insecure, false)
 	if err != nil {
 		return nil, err
 	}
@@ -270,40 +270,3 @@ func (ln *listener) Close() error { return nil }
 
 // Addr always returns nil
 func (ln *listener) Addr() net.Addr { return nil }
-
-// newTLSListener returns a net listener which encrypts the traffic using TLS.
-func newTLSListener(ln net.Listener, certFile, keyFile, caCertFile string) (net.Listener, error) {
-	config, err := createTLSConfig(certFile, keyFile, caCertFile)
-	if err != nil {
-		return nil, err
-	}
-
-	return tls.NewListener(ln, config), nil
-}
-
-// createTLSConfig returns a TLS config from the given cert, key and optionally
-// Certificate Authority cert for verifying client certificates.
-func createTLSConfig(certFile, keyFile, caCertFile string) (*tls.Config, error) {
-	var err error
-	config := &tls.Config{}
-	config.Certificates = make([]tls.Certificate, 1)
-	config.Certificates[0], err = tls.LoadX509KeyPair(certFile, keyFile)
-	if err != nil {
-		return nil, err
-	}
-
-	if caCertFile != "" {
-		asn1Data, err := ioutil.ReadFile(caCertFile)
-		if err != nil {
-			return nil, err
-		}
-		config.ClientCAs = x509.NewCertPool()
-		ok := config.ClientCAs.AppendCertsFromPEM(asn1Data)
-		if !ok {
-			return nil, fmt.Errorf("failed to parse Client Auth CA certificate in %q", caCertFile)
-		}
-		config.ClientAuth = tls.RequireAndVerifyClientCert
-	}
-
-	return config, nil
-}

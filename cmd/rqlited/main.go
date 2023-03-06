@@ -3,10 +3,8 @@ package main
 
 import (
 	"crypto/tls"
-	"crypto/x509"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net"
 	"os"
@@ -27,6 +25,7 @@ import (
 	"github.com/rqlite/rqlite/db"
 	"github.com/rqlite/rqlite/disco"
 	httpd "github.com/rqlite/rqlite/http"
+	"github.com/rqlite/rqlite/rtls"
 	"github.com/rqlite/rqlite/store"
 	"github.com/rqlite/rqlite/tcp"
 )
@@ -130,28 +129,10 @@ func main() {
 	// Register remaining status providers.
 	httpServ.RegisterStatus("cluster", clstr)
 
-	tlsConfig := tls.Config{InsecureSkipVerify: cfg.NoHTTPVerify}
-	if cfg.X509CACert != "" {
-		asn1Data, err := ioutil.ReadFile(cfg.X509CACert)
-		if err != nil {
-			log.Fatalf("ioutil.ReadFile failed: %s", err.Error())
-		}
-		tlsConfig.RootCAs = x509.NewCertPool()
-		ok := tlsConfig.RootCAs.AppendCertsFromPEM(asn1Data)
-		if !ok {
-			log.Fatalf("failed to parse root CA certificate(s) in %q", cfg.X509CACert)
-		}
-	}
-	if cfg.X509CertClient != "" {
-		asn1Data, err := ioutil.ReadFile(cfg.X509CertClient)
-		if err != nil {
-			log.Fatalf("ioutil.ReadFile failed: %s", err.Error())
-		}
-		tlsConfig.Certificates = make([]tls.Certificate, 1)
-		tlsConfig.Certificates[0], err = tls.X509KeyPair(asn1Data, []byte(cfg.X509KeyClient))
-		if err != nil {
-			log.Fatalf("tls.X509KeyPair failed: %s", err.Error())
-		}
+	tlsConfig, err := rtls.CreateClientConfig(cfg.X509CertClient, cfg.X509KeyClient, cfg.X509CACert,
+		cfg.NoHTTPVerify, cfg.TLS1011)
+	if err != nil {
+		log.Fatalf("failed to create TLS client config for cluster: %s", err.Error())
 	}
 
 	// Create the cluster!
@@ -159,7 +140,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to get nodes %s", err.Error())
 	}
-	if err := createCluster(cfg, &tlsConfig, len(nodes) > 0, str, httpServ, credStr); err != nil {
+	if err := createCluster(cfg, tlsConfig, len(nodes) > 0, str, httpServ, credStr); err != nil {
 		log.Fatalf("clustering failure: %s", err.Error())
 	}
 

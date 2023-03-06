@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rqlite/rqlite/rtls"
 	"github.com/rqlite/rqlite/testdata/x509"
 )
 
@@ -149,7 +150,7 @@ func mustNewEchoServerTLS() (*echoServer, string, string) {
 	cert := x509.CertFile("")
 	key := x509.KeyFile("")
 
-	tlsConfig, err := createTLSConfig(cert, key, "")
+	tlsConfig, err := rtls.CreateServerConfig(cert, key, "", true, false)
 	if err != nil {
 		panic("failed to create TLS config")
 	}

@@ -5,7 +5,6 @@ package http
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"expvar"
@@ -27,6 +26,7 @@ import (
 	"github.com/rqlite/rqlite/command"
 	"github.com/rqlite/rqlite/command/encoding"
 	"github.com/rqlite/rqlite/queue"
+	"github.com/rqlite/rqlite/rtls"
 	"github.com/rqlite/rqlite/store"
 )
 
@@ -274,6 +274,7 @@ type Service struct {
 	CertFile         string // Path to server's own x509 certificate.
 	KeyFile          string // Path to server's own x509 private key.
 	TLS1011          bool   // Whether older, deprecated TLS should be supported.
+	ClientVerify     bool   // Whether client certificates should be verified.
 
 	DefaultQueueCap     int
 	DefaultQueueBatchSz int
@@ -324,7 +325,7 @@ func (s *Service) Start() error {
 			return err
 		}
 	} else {
-		config, err := createTLSConfig(s.CertFile, s.KeyFile, s.ClientCACertFile, s.TLS1011)
+		config, err := rtls.CreateServerConfig(s.CertFile, s.KeyFile, s.ClientCACertFile, s.ClientVerify, s.TLS1011)
 		if err != nil {
 			return err
 		}
@@ -1735,39 +1736,6 @@ func requestQueries(r *http.Request) ([]*command.Statement, error) {
 	r.Body.Close()
 
 	return ParseRequest(b)
-}
-
-// createTLSConfig returns a TLS config from the given cert and key.
-func createTLSConfig(certFile, keyFile, clientCACertFile string, tls1011 bool) (*tls.Config, error) {
-	var err error
-
-	var minTLS = uint16(tls.VersionTLS12)
-	if tls1011 {
-		minTLS = tls.VersionTLS10
-	}
-
-	config := &tls.Config{
-		NextProtos: []string{"h2", "http/1.1"},
-		MinVersion: minTLS,
-	}
-	config.Certificates = make([]tls.Certificate, 1)
-	config.Certificates[0], err = tls.LoadX509KeyPair(certFile, keyFile)
-	if err != nil {
-		return nil, err
-	}
-	if clientCACertFile != "" {
-		asn1Data, err := ioutil.ReadFile(clientCACertFile)
-		if err != nil {
-			return nil, err
-		}
-		config.ClientCAs = x509.NewCertPool()
-		ok := config.ClientCAs.AppendCertsFromPEM(asn1Data)
-		if !ok {
-			return nil, fmt.Errorf("failed to load CA certificate(s) for client verification in %q", clientCACertFile)
-		}
-		config.ClientAuth = tls.RequireAndVerifyClientCert
-	}
-	return config, nil
 }
 
 // queryParam returns whether the given query param is present.
