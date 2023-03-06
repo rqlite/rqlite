@@ -91,7 +91,7 @@ type Mux struct {
 	x509Key string
 
 	// Whether to skip verification of other nodes' certificates.
-	InsecureSkipVerify bool
+	insecureSkipVerify bool
 
 	tlsConfig *tls.Config
 }
@@ -131,6 +131,7 @@ func NewTLSMux(ln net.Listener, adv net.Addr, cert, key, caCert string, insecure
 	mux.x509CACert = caCert
 	mux.x509Cert = cert
 	mux.x509Key = key
+	mux.insecureSkipVerify = insecure
 
 	return mux, nil
 }
@@ -180,7 +181,7 @@ func (mux *Mux) Stats() (interface{}, error) {
 		s["certificate"] = mux.x509Cert
 		s["key"] = mux.x509Key
 		s["ca_certificate"] = mux.x509CACert
-		s["skip_verify"] = strconv.FormatBool(mux.InsecureSkipVerify)
+		s["skip_verify"] = strconv.FormatBool(mux.insecureSkipVerify)
 	}
 
 	return s, nil
@@ -246,7 +247,7 @@ func (mux *Mux) Listen(header byte) *Layer {
 		nodeX509CACert: mux.x509CACert,
 		tlsConfig:      mux.tlsConfig,
 	}
-	layer.dialer = NewDialer(header, mux.remoteEncrypted, mux.InsecureSkipVerify)
+	layer.dialer = NewDialer(header, mux.remoteEncrypted, mux.insecureSkipVerify)
 
 	return layer
 }

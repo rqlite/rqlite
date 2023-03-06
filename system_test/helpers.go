@@ -694,11 +694,10 @@ func mustNewOpenTLSMux(certFile, keyPath, addr string) *tcp.Mux {
 	}
 
 	var mux *tcp.Mux
-	mux, err = tcp.NewTLSMux(ln, nil, certFile, keyPath, "")
+	mux, err = tcp.NewTLSMux(ln, nil, certFile, keyPath, "", true)
 	if err != nil {
 		panic(fmt.Sprintf("failed to create node-to-node mux: %s", err.Error()))
 	}
-	mux.InsecureSkipVerify = true
 
 	go mux.Serve()
 	return mux

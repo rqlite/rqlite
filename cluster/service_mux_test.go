@@ -104,11 +104,10 @@ func mustNewTLSMux() (net.Listener, *tcp.Mux) {
 	key := x509.KeyFile("")
 	defer os.Remove(key)
 
-	mux, err := tcp.NewTLSMux(ln, nil, cert, key, "")
+	mux, err := tcp.NewTLSMux(ln, nil, cert, key, "", true)
 	if err != nil {
 		panic(fmt.Sprintf("failed to create TLS mux: %s", err))
 	}
-	mux.InsecureSkipVerify = true
 
 	return ln, mux
 }

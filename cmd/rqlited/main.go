@@ -293,14 +293,13 @@ func startNodeMux(cfg *Config, ln net.Listener) (*tcp.Mux, error) {
 	var mux *tcp.Mux
 	if cfg.NodeEncrypt {
 		log.Printf("enabling node-to-node encryption with cert: %s, key: %s", cfg.NodeX509Cert, cfg.NodeX509Key)
-		mux, err = tcp.NewTLSMux(ln, adv, cfg.NodeX509Cert, cfg.NodeX509Key, cfg.NodeX509CACert)
+		mux, err = tcp.NewTLSMux(ln, adv, cfg.NodeX509Cert, cfg.NodeX509Key, cfg.NodeX509CACert, cfg.NoNodeVerify)
 	} else {
 		mux, err = tcp.NewMux(ln, adv)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to create node-to-node mux: %s", err.Error())
 	}
-	mux.InsecureSkipVerify = cfg.NoNodeVerify
 	go mux.Serve()
 
 	return mux, nil
