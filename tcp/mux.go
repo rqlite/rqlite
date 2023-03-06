@@ -80,13 +80,14 @@ type Mux struct {
 	// Out-of-band error logger
 	Logger *log.Logger
 
-	// Path to root X.509 certificate.
+	// Path to x509 certifcate authority for this service. If set, then this
+	// be used to verify the identity of other nodes that connect to this node.
 	x509CACert string
 
-	// Path to X509 certificate
+	// Path to X509 certificate for this service.
 	x509Cert string
 
-	// Path to X509 key.
+	// Path to X509 key for this service.
 	x509Key string
 
 	// Whether to skip verification of other nodes' certificates.
@@ -281,7 +282,7 @@ func newTLSListener(ln net.Listener, certFile, keyFile, caCertFile string) (net.
 }
 
 // createTLSConfig returns a TLS config from the given cert, key and optionally
-// Certificate Authority cert.
+// Certificate Authority cert for verifying client certificates.
 func createTLSConfig(certFile, keyFile, caCertFile string) (*tls.Config, error) {
 	var err error
 	config := &tls.Config{}
@@ -296,11 +297,12 @@ func createTLSConfig(certFile, keyFile, caCertFile string) (*tls.Config, error) 
 		if err != nil {
 			return nil, err
 		}
-		config.RootCAs = x509.NewCertPool()
-		ok := config.RootCAs.AppendCertsFromPEM(asn1Data)
+		config.ClientCAs = x509.NewCertPool()
+		ok := config.ClientCAs.AppendCertsFromPEM(asn1Data)
 		if !ok {
-			return nil, fmt.Errorf("failed to parse root certificate(s) in %q", caCertFile)
+			return nil, fmt.Errorf("failed to parse Client Auth CA certificate in %q", caCertFile)
 		}
+		config.ClientAuth = tls.RequireAndVerifyClientCert
 	}
 
 	return config, nil
