@@ -1,7 +1,7 @@
-package tls
+package rtls
 
 import (
-	gtls "crypto/tls"
+	"crypto/tls"
 	"crypto/x509"
 	"fmt"
 	"io/ioutil"
@@ -14,21 +14,12 @@ import (
 // server . If noverify is true, the client will not verify the server's certificate. If
 // tls1011 is true, the client will accept TLS 1.0 or 1.1. Otherwise, it will require TLS 1.2
 // or higher.
-func CreateClientConfig(certFile, keyFile, caCertFile string, noverify, tls1011 bool) (*gtls.Config, error) {
+func CreateClientConfig(certFile, keyFile, caCertFile string, noverify, tls1011 bool) (*tls.Config, error) {
 	var err error
 
-	var minTLS = uint16(gtls.VersionTLS12)
-	if tls1011 {
-		minTLS = gtls.VersionTLS10
-	}
-
-	config := &gtls.Config{
-		InsecureSkipVerify: noverify,
-		NextProtos:         []string{"h2", "http/1.1"},
-		MinVersion:         minTLS,
-	}
-	config.Certificates = make([]gtls.Certificate, 1)
-	config.Certificates[0], err = gtls.LoadX509KeyPair(certFile, keyFile)
+	config := createBaseTLSConfig(noverify, tls1011)
+	config.Certificates = make([]tls.Certificate, 1)
+	config.Certificates[0], err = tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
 		return nil, err
 	}
@@ -42,7 +33,6 @@ func CreateClientConfig(certFile, keyFile, caCertFile string, noverify, tls1011 
 		if !ok {
 			return nil, fmt.Errorf("failed to load CA certificate(s) for server verification in %q", caCertFile)
 		}
-		config.ClientAuth = gtls.RequireAndVerifyClientCert
 	}
 	return config, nil
 }
@@ -54,21 +44,12 @@ func CreateClientConfig(certFile, keyFile, caCertFile string, noverify, tls1011 
 // client. If noverify is true, the server will not verify the client's certificate. If
 // tls1011 is true, the server will accept TLS 1.0 or 1.1. Otherwise, it will require TLS 1.2
 // or higher.
-func CreateServerConfig(certFile, keyFile, caCertFile string, noverify, tls1011 bool) (*gtls.Config, error) {
+func CreateServerConfig(certFile, keyFile, caCertFile string, noverify, tls1011 bool) (*tls.Config, error) {
 	var err error
 
-	var minTLS = uint16(gtls.VersionTLS12)
-	if tls1011 {
-		minTLS = gtls.VersionTLS10
-	}
-
-	config := &gtls.Config{
-		InsecureSkipVerify: noverify,
-		NextProtos:         []string{"h2", "http/1.1"},
-		MinVersion:         minTLS,
-	}
-	config.Certificates = make([]gtls.Certificate, 1)
-	config.Certificates[0], err = gtls.LoadX509KeyPair(certFile, keyFile)
+	config := createBaseTLSConfig(noverify, tls1011)
+	config.Certificates = make([]tls.Certificate, 1)
+	config.Certificates[0], err = tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +63,20 @@ func CreateServerConfig(certFile, keyFile, caCertFile string, noverify, tls1011 
 		if !ok {
 			return nil, fmt.Errorf("failed to load CA certificate(s) for client verification in %q", caCertFile)
 		}
-		config.ClientAuth = gtls.RequireAndVerifyClientCert
+		config.ClientAuth = tls.RequireAndVerifyClientCert
 	}
 	return config, nil
+}
+
+func createBaseTLSConfig(noverify, tls1011 bool) *tls.Config {
+	var minTLS = uint16(tls.VersionTLS12)
+	if tls1011 {
+		minTLS = tls.VersionTLS10
+	}
+
+	return &tls.Config{
+		InsecureSkipVerify: noverify,
+		NextProtos:         []string{"h2", "http/1.1"},
+		MinVersion:         minTLS,
+	}
 }
