@@ -5,12 +5,12 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"net"
 	"testing"
 	"time"
 )
 
-// TestGenerateCACert tests the GenerateCACert function.
-func TestGenerateCACert(t *testing.T) {
+func Test_GenerateCACert(t *testing.T) {
 	// generate a new CA certificate
 	certPEM, keyPEM, err := GenerateCACert(pkix.Name{CommonName: "rqlite.io"}, 0, time.Hour, 2048)
 	if err != nil {
@@ -53,7 +53,7 @@ func TestGenerateCACert(t *testing.T) {
 	}
 }
 
-func TestGenerateCASignedCert(t *testing.T) {
+func Test_GenerateCASignedCert(t *testing.T) {
 	caCert, caKey := mustGenerateCACert(pkix.Name{CommonName: "ca.rqlite"})
 
 	// generate a new certificate signed by the CA
@@ -112,7 +112,66 @@ func TestGenerateCASignedCert(t *testing.T) {
 	}
 }
 
-func TestGenerateSelfSignedCert(t *testing.T) {
+func Test_GenerateCASignedCertIPSAN(t *testing.T) {
+	caCert, caKey := mustGenerateCACert(pkix.Name{CommonName: "ca.rqlite"})
+
+	// generate a new certificate signed by the CA
+	certPEM, keyPEM, err := GenerateCertIPSAN(pkix.Name{CommonName: "rqlite"}, 365*24*time.Hour, 2048, caCert, caKey, net.ParseIP("127.0.0.1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cert, _ := pem.Decode(certPEM)
+	if cert == nil {
+		t.Fatal("failed to decode certificate")
+	}
+	key, _ := pem.Decode(keyPEM)
+	if keyPEM == nil {
+		t.Fatal("failed to decode key")
+	}
+
+	// parse the certificate and private key
+	parsedCert, err := x509.ParseCertificate(cert.Bytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = x509.ParsePKCS1PrivateKey(key.Bytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// verify the certificate is signed by the CA
+	if err := parsedCert.CheckSignatureFrom(caCert); err != nil {
+		t.Fatal(err)
+	}
+
+	if parsedCert.NotBefore.After(time.Now()) {
+		t.Fatal("certificate is not valid yet")
+	}
+
+	if parsedCert.NotAfter.Before(time.Now()) {
+		t.Fatal("certificate is expired")
+	}
+
+	if parsedCert.Subject.CommonName != "rqlite" {
+		t.Fatal("certificate has incorrect subject")
+	}
+
+	expUsage := x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature
+	if parsedCert.KeyUsage != expUsage {
+		t.Fatalf("certificate has incorrect key usage, exp %v, got %v", expUsage, parsedCert.KeyUsage)
+	}
+
+	if len(parsedCert.ExtKeyUsage) != 1 || parsedCert.ExtKeyUsage[0] != x509.ExtKeyUsageServerAuth {
+		t.Fatal("certificate has incorrect extended key usage")
+	}
+
+	if len(parsedCert.IPAddresses) != 1 || !parsedCert.IPAddresses[0].Equal(net.ParseIP("127.0.0.1")) {
+		t.Fatal("certificate has incorrect IP SAN")
+	}
+}
+
+func Test_GenerateSelfSignedCert(t *testing.T) {
 	certPEM, keyPEM, err := GenerateSelfSignedCert(pkix.Name{CommonName: "rqlite"}, 365*24*time.Hour, 2048)
 	if err != nil {
 		t.Fatal(err)

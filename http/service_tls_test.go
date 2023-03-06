@@ -147,24 +147,88 @@ func Test_TLSServiceSecureMutual(t *testing.T) {
 
 	caCert, _ := pem.Decode(caCertPEM)
 	if caCert == nil {
-		panic("failed to decode certificate")
+		t.Fatal("failed to decode certificate")
 	}
 
 	caKey, _ := pem.Decode(caKeyPEM)
 	if caKey == nil {
-		panic("failed to decode key")
+		t.Fatal("failed to decode key")
 	}
 
-	// Create a cert singed by the CA for the server
-	certServer, keyServer, err := rtls.GenerateCert(pkix.Name{CommonName: "rqlite.io"}, time.Hour, 2048, caCert, caKey)
+	// parse the certificate and private key
+	parsedCACert, err := x509.ParseCertificate(caCert.Bytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsedCAKey, err := x509.ParsePKCS1PrivateKey(caKey.Bytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a cert signed by the CA for the server
+	certServer, keyServer, err := rtls.GenerateCertIPSAN(pkix.Name{CommonName: "server.rqlite.io"}, time.Hour, 2048, parsedCACert, parsedCAKey, net.ParseIP("127.0.0.1"))
 	if err != nil {
 		t.Fatalf("failed to generate server cert: %s", err)
 	}
 
 	// Create a cert signed by the CA for the client
-	certClient, keyClient, err := rtls.GenerateCert(pkix.Name{CommonName: "client.rqlite.io"}, time.Hour, 2048, caCert, caKey)
+	certClient, keyClient, err := rtls.GenerateCertIPSAN(pkix.Name{CommonName: "client.rqlite.io"}, time.Hour, 2048, parsedCACert, parsedCAKey, net.ParseIP("127.0.0.1"))
 	if err != nil {
 		t.Fatalf("failed to generate client cert: %s", err)
+	}
+
+	m := &MockStore{}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, nil)
+	s.CertFile = mustWriteTempFile(certServer)
+	defer os.Remove(s.CertFile)
+	s.KeyFile = mustWriteTempFile(keyServer)
+	defer os.Remove(s.KeyFile)
+	s.ClientCACertFile = mustWriteTempFile(caCertPEM) // Enables client verification by HTTP server
+	defer os.Remove(s.ClientCACertFile)
+	s.BuildInfo = map[string]interface{}{
+		"version": "the version",
+	}
+
+	// Start the HTTP server
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	// Create a TLS Config which wiil require verfication of the server cert, and trusts the CA cert.
+	tlsConfig := &tls.Config{InsecureSkipVerify: false}
+	tlsConfig.RootCAs = x509.NewCertPool()
+	ok := tlsConfig.RootCAs.AppendCertsFromPEM(caCertPEM)
+	if !ok {
+		t.Fatalf("failed to parse CA certificate(s) for client verification in %q", caCertPEM)
+	}
+
+	client := &http.Client{Transport: &http.Transport{
+		TLSClientConfig: tlsConfig,
+	}}
+
+	url := fmt.Sprintf("https://%s", s.Addr().String())
+	_, err = client.Get(url)
+	if err == nil {
+		t.Fatalf("made successful HTTP request by untrusted client")
+	}
+
+	// Now set the client cert, which as also been signed by the CA. This should
+	// mean the HTTP server trusts the client.
+	cert, err := tls.X509KeyPair(certClient, keyClient)
+	if err != nil {
+		t.Fatalf("failed to load client key pair: %s", err)
+	}
+	tlsConfig.Certificates = []tls.Certificate{cert}
+
+	resp, err := client.Get(url)
+	if err != nil {
+		t.Fatalf("trusted client failed to make HTTP request: %s", err)
+	}
+
+	if v := resp.Header.Get("X-RQLITE-VERSION"); v != "the version" {
+		t.Fatalf("incorrect build version present in HTTP response header, got: %s", v)
 	}
 }
 
