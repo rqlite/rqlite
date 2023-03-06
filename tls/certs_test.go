@@ -12,7 +12,7 @@ import (
 
 func Test_GenerateCACert(t *testing.T) {
 	// generate a new CA certificate
-	certPEM, keyPEM, err := GenerateCACert(pkix.Name{CommonName: "rqlite.io"}, 0, time.Hour, 2048)
+	certPEM, keyPEM, err := GenerateCACert(pkix.Name{CommonName: "rqlite.io"}, time.Hour, 2048)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +103,9 @@ func Test_GenerateCASignedCert(t *testing.T) {
 		t.Fatalf("certificate has incorrect key usage, exp %v, got %v", expUsage, parsedCert.KeyUsage)
 	}
 
-	if len(parsedCert.ExtKeyUsage) != 1 || parsedCert.ExtKeyUsage[0] != x509.ExtKeyUsageServerAuth {
+	if len(parsedCert.ExtKeyUsage) != 2 ||
+		parsedCert.ExtKeyUsage[0] != x509.ExtKeyUsageServerAuth ||
+		parsedCert.ExtKeyUsage[1] != x509.ExtKeyUsageClientAuth {
 		t.Fatal("certificate has incorrect extended key usage")
 	}
 
@@ -162,7 +164,9 @@ func Test_GenerateCASignedCertIPSAN(t *testing.T) {
 		t.Fatalf("certificate has incorrect key usage, exp %v, got %v", expUsage, parsedCert.KeyUsage)
 	}
 
-	if len(parsedCert.ExtKeyUsage) != 1 || parsedCert.ExtKeyUsage[0] != x509.ExtKeyUsageServerAuth {
+	if len(parsedCert.ExtKeyUsage) != 2 ||
+		parsedCert.ExtKeyUsage[0] != x509.ExtKeyUsageServerAuth ||
+		parsedCert.ExtKeyUsage[1] != x509.ExtKeyUsageClientAuth {
 		t.Fatal("certificate has incorrect extended key usage")
 	}
 
@@ -213,7 +217,7 @@ func Test_GenerateSelfSignedCert(t *testing.T) {
 
 // mustGenerateCACert generates a new CA certificate and private key.
 func mustGenerateCACert(name pkix.Name) (*x509.Certificate, *rsa.PrivateKey) {
-	certPEM, keyPEM, err := GenerateCACert(name, 0, time.Hour, 2048)
+	certPEM, keyPEM, err := GenerateCACert(name, time.Hour, 2048)
 	if err != nil {
 		panic(err)
 	}
