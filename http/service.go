@@ -1760,11 +1760,12 @@ func createTLSConfig(certFile, keyFile, clientCACertFile string, tls1011 bool) (
 		if err != nil {
 			return nil, err
 		}
-		config.RootCAs = x509.NewCertPool()
-		ok := config.RootCAs.AppendCertsFromPEM(asn1Data)
+		config.ClientCAs = x509.NewCertPool()
+		ok := config.ClientCAs.AppendCertsFromPEM(asn1Data)
 		if !ok {
-			return nil, fmt.Errorf("failed to parse CA certificate(s) for client verification in %q", clientCACertFile)
+			return nil, fmt.Errorf("failed to load CA certificate(s) for client verification in %q", clientCACertFile)
 		}
+		config.ClientAuth = tls.RequireAndVerifyClientCert
 	}
 	return config, nil
 }
