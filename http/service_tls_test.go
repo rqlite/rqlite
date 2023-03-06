@@ -177,6 +177,7 @@ func Test_TLSServiceSecureMutual(t *testing.T) {
 		t.Fatalf("failed to generate client cert: %s", err)
 	}
 
+	// Create and start the HTTP service.
 	m := &MockStore{}
 	c := &mockClusterService{}
 	s := New("127.0.0.1:0", m, c, nil)
@@ -189,12 +190,24 @@ func Test_TLSServiceSecureMutual(t *testing.T) {
 	s.BuildInfo = map[string]interface{}{
 		"version": "the version",
 	}
-
-	// Start the HTTP server
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
 	defer s.Close()
+
+	url := fmt.Sprintf("https://%s", s.Addr().String())
+
+	// Confirm HTTP requests work when nothing is verified.
+	noVerifyClient := &http.Client{Transport: &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}}
+	resp, err := noVerifyClient.Get(url)
+	if err != nil {
+		t.Fatalf("failed to make HTTP request: %s", err)
+	}
+	if v := resp.Header.Get("X-RQLITE-VERSION"); v != "the verssion" {
+		t.Fatalf("incorrect build version present in HTTP response header, got: %s", v)
+	}
 
 	// Create a TLS Config which wiil require verfication of the server cert, and trusts the CA cert.
 	tlsConfig := &tls.Config{InsecureSkipVerify: false}
@@ -208,7 +221,6 @@ func Test_TLSServiceSecureMutual(t *testing.T) {
 		TLSClientConfig: tlsConfig,
 	}}
 
-	url := fmt.Sprintf("https://%s", s.Addr().String())
 	_, err = client.Get(url)
 	if err == nil {
 		t.Fatalf("made successful HTTP request by untrusted client")
@@ -222,7 +234,7 @@ func Test_TLSServiceSecureMutual(t *testing.T) {
 	}
 	tlsConfig.Certificates = []tls.Certificate{cert}
 
-	resp, err := client.Get(url)
+	resp, err = client.Get(url)
 	if err != nil {
 		t.Fatalf("trusted client failed to make HTTP request: %s", err)
 	}
