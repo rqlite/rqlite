@@ -1,4 +1,4 @@
-package tls
+package rtls
 
 import (
 	"crypto/rsa"
