@@ -57,6 +57,14 @@ type Config struct {
 	// X509Key is the path to the private key for the HTTP server. May not be set.
 	X509Key string
 
+	// X509CertClient is the path to the X509 cert for this node for use when it joins
+	// with other nodes over HTTPS and those nodes require client certificates. May not be set.
+	X509CertClient string
+
+	// X509KeyClient is the path to the private key for this node for use when it joins
+	// with other nodes over HTTPS and those nodes require client certificates. May not be set.
+	X509KeyClient string
+
 	// NodeEncrypt indicates whether node encryption should be enabled.
 	NodeEncrypt bool
 
@@ -69,6 +77,14 @@ type Config struct {
 
 	// NodeX509Key is the path to the X509 key for the Raft server. May not be set.
 	NodeX509Key string
+
+	// NodeX509CertClient is the path to the X509 cert for this node for use when it connects to
+	// other nodes over TLS and those nodes require client certificates. May not be set.
+	NodeX509CertClient string
+
+	// NodeX509KeyClient is the path to the private key for this node for use when it connects to
+	// with other nodes over TLS and those nodes require client certificates. May not be set.
+	NodeX509KeyClient string
 
 	// NodeID is the Raft ID for the node.
 	NodeID string
@@ -361,13 +377,17 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	flag.StringVar(&config.HTTPAdv, HTTPAdvAddrFlag, "", "Advertised HTTP address. If not set, same as HTTP server bind")
 	flag.BoolVar(&config.TLS1011, "tls1011", false, "Support deprecated TLS versions 1.0 and 1.1")
 	flag.StringVar(&config.X509CACert, "http-ca-cert", "", "Path to X.509 CA certificate for HTTPS")
-	flag.StringVar(&config.X509Cert, "http-cert", "", "Path to HTTPS X.509 certificate for this server")
-	flag.StringVar(&config.X509Key, "http-key", "", "Path to HTTPS X.509 private key for this server")
+	flag.StringVar(&config.X509Cert, "http-cert", "", "Path to HTTPS X.509 certificate for this node")
+	flag.StringVar(&config.X509Key, "http-key", "", "Path to HTTPS X.509 private key for this node")
+	flag.StringVar(&config.X509CertClient, "http-cert-client", "", "Path to HTTPS X.509 certificate for this node when joining other nodes")
+	flag.StringVar(&config.X509KeyClient, "http-key-client", "", "Path to HTTPS X.509 private key for this node when joining other nodes")
 	flag.BoolVar(&config.NoHTTPVerify, "http-no-verify", false, "Skip verification of remote HTTPS cert when joining cluster")
 	flag.BoolVar(&config.NodeEncrypt, "node-encrypt", false, "Enable node-to-node encryption")
 	flag.StringVar(&config.NodeX509CACert, "node-ca-cert", "", "Path to X.509 CA certificate for node-to-node encryption")
-	flag.StringVar(&config.NodeX509Cert, "node-cert", "cert.pem", "Path to node-to-node X.509 certificate for this server")
-	flag.StringVar(&config.NodeX509Key, "node-key", "key.pem", "Path to node-to-node X.509 private key for this server")
+	flag.StringVar(&config.NodeX509Cert, "node-cert", "cert.pem", "Path to node-to-node X.509 certificate for this node")
+	flag.StringVar(&config.NodeX509Key, "node-key", "key.pem", "Path to node-to-node X.509 private key for this node")
+	flag.StringVar(&config.NodeX509CertClient, "node-cert-client", "", "Path to node-to-node X.509 certificate for this node when connecting to other nodes")
+	flag.StringVar(&config.NodeX509KeyClient, "node-key-client", "", "Path to node-to-node X.509 private key for this node when connecting to other nodes")
 	flag.BoolVar(&config.NoNodeVerify, "node-no-verify", false, "Skip verification of a remote node cert")
 	flag.StringVar(&config.AuthFile, "auth", "", "Path to authentication and authorization file. If not set, not enabled")
 	flag.StringVar(&config.RaftAddr, RaftAddrFlag, "localhost:4002", "Raft communication bind address")

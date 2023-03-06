@@ -142,6 +142,17 @@ func main() {
 			log.Fatalf("failed to parse root CA certificate(s) in %q", cfg.X509CACert)
 		}
 	}
+	if cfg.X509CertClient != "" {
+		asn1Data, err := ioutil.ReadFile(cfg.X509CertClient)
+		if err != nil {
+			log.Fatalf("ioutil.ReadFile failed: %s", err.Error())
+		}
+		tlsConfig.Certificates = make([]tls.Certificate, 1)
+		tlsConfig.Certificates[0], err = tls.X509KeyPair(asn1Data, []byte(cfg.X509KeyClient))
+		if err != nil {
+			log.Fatalf("tls.X509KeyPair failed: %s", err.Error())
+		}
+	}
 
 	// Create the cluster!
 	nodes, err := str.Nodes()
