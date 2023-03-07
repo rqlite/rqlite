@@ -13,14 +13,14 @@ import (
 )
 
 func Test_NewDialer(t *testing.T) {
-	d := NewDialer(1, false, false)
+	d := NewDialer(1, nil)
 	if d == nil {
 		t.Fatal("failed to create a dialer")
 	}
 }
 
 func Test_DialerNoConnect(t *testing.T) {
-	d := NewDialer(87, false, false)
+	d := NewDialer(87, nil)
 	_, err := d.Dial("127.0.0.1:0", 5*time.Second)
 	if err == nil {
 		t.Fatalf("no error connecting to bad address")
@@ -32,7 +32,7 @@ func Test_DialerHeader(t *testing.T) {
 	defer s.Close()
 	go s.Start(t)
 
-	d := NewDialer(64, false, false)
+	d := NewDialer(64, nil)
 	conn, err := d.Dial(s.Addr(), 10*time.Second)
 	if err != nil {
 		t.Fatalf("failed to dial echo server: %s", err.Error())
@@ -84,7 +84,7 @@ func Test_DialerHeaderTLSBadConnect(t *testing.T) {
 
 	// Connect to a TLS server with an unencrypted client, to make sure
 	// code can handle that misconfig.
-	d := NewDialer(56, false, false)
+	d := NewDialer(56, nil)
 	conn, err := d.Dial(s.Addr(), 5*time.Second)
 	if err != nil {
 		t.Fatalf("failed to dial TLS echo server: %s", err.Error())

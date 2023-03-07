@@ -110,7 +110,15 @@ func main() {
 	// We want to start the HTTP server as soon as possible, so the node is responsive and external
 	// systems can see that it's running. We still have to open the Store though, so the node won't
 	// be able to do much until that happens however.
-	clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, cfg.NodeEncrypt, cfg.NoNodeVerify)
+	var dialerTLSConfig *tls.Config
+	if cfg.NodeEncrypt {
+		dialerTLSConfig, err = rtls.CreateClientConfig(cfg.NodeX509CertClient, cfg.NodeX509KeyClient,
+			cfg.NodeX509CACert, cfg.NoNodeVerify, cfg.TLS1011)
+		if err != nil {
+			log.Fatalf("failed to create TLS config for cluster dialer: %s", err.Error())
+		}
+	}
+	clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, dialerTLSConfig)
 	clstrClient := cluster.NewClient(clstrDialer, cfg.ClusterConnectTimeout)
 	if err := clstrClient.SetLocal(cfg.RaftAdv, clstr); err != nil {
 		log.Fatalf("failed to set cluster client local parameters: %s", err.Error())
@@ -129,10 +137,13 @@ func main() {
 	// Register remaining status providers.
 	httpServ.RegisterStatus("cluster", clstr)
 
-	tlsConfig, err := rtls.CreateClientConfig(cfg.X509CertClient, cfg.X509KeyClient, cfg.X509CACert,
-		cfg.NoHTTPVerify, cfg.TLS1011)
-	if err != nil {
-		log.Fatalf("failed to create TLS client config for cluster: %s", err.Error())
+	var clstrTLSConfig *tls.Config
+	if cfg.X509CertClient != "" || cfg.X509CACert != "" {
+		clstrTLSConfig, err = rtls.CreateClientConfig(cfg.X509CertClient, cfg.X509KeyClient, cfg.X509CACert,
+			cfg.NoHTTPVerify, cfg.TLS1011)
+		if err != nil {
+			log.Fatalf("failed to create TLS client config for cluster: %s", err.Error())
+		}
 	}
 
 	// Create the cluster!
@@ -140,7 +151,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to get nodes %s", err.Error())
 	}
-	if err := createCluster(cfg, tlsConfig, len(nodes) > 0, str, httpServ, credStr); err != nil {
+	if err := createCluster(cfg, clstrTLSConfig, len(nodes) > 0, str, httpServ, credStr); err != nil {
 		log.Fatalf("clustering failure: %s", err.Error())
 	}
 
@@ -263,6 +274,7 @@ func startHTTPService(cfg *Config, str *store.Store, cltr *cluster.Client, credS
 		s = httpd.New(cfg.HTTPAddr, str, cltr, nil)
 	}
 
+	s.ClientCACertFile = cfg.X509CACert
 	s.CertFile = cfg.X509Cert
 	s.KeyFile = cfg.X509Key
 	s.TLS1011 = cfg.TLS1011
@@ -294,7 +306,8 @@ func startNodeMux(cfg *Config, ln net.Listener) (*tcp.Mux, error) {
 	var mux *tcp.Mux
 	if cfg.NodeEncrypt {
 		log.Printf("enabling node-to-node encryption with cert: %s, key: %s", cfg.NodeX509Cert, cfg.NodeX509Key)
-		mux, err = tcp.NewTLSMux(ln, adv, cfg.NodeX509Cert, cfg.NodeX509Key, cfg.NodeX509CACert, cfg.NoNodeVerify)
+		mux, err = tcp.NewTLSMux(ln, adv, cfg.NodeX509Cert, cfg.NodeX509Key,
+			cfg.NodeX509CertClient, cfg.NodeX509KeyClient, cfg.NodeX509CACert, cfg.NoNodeVerify)
 	} else {
 		mux, err = tcp.NewMux(ln, adv)
 	}

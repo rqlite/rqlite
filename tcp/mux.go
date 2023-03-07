@@ -36,16 +36,16 @@ func init() {
 }
 
 // Layer represents the connection between nodes. It can be both used to
-// make connections to other nodes, and receive connections from other
-// nodes.
+// make connections to other nodes (client), and receive connections from other
+// nodes (server)
 type Layer struct {
 	ln   net.Listener
 	addr net.Addr
 
 	dialer *Dialer
 
-	nodeX509CACert string
-	tlsConfig      *tls.Config
+	tlsServerConfig *tls.Config
+	tlsClientConfig *tls.Config
 }
 
 // Dial creates a new network connection.
@@ -80,20 +80,8 @@ type Mux struct {
 	// Out-of-band error logger
 	Logger *log.Logger
 
-	// Path to x509 certifcate authority for this service. If set, then this
-	// be used to verify the identity of other nodes that connect to this node.
-	x509CACert string
-
-	// Path to X509 certificate for this service.
-	x509Cert string
-
-	// Path to X509 key for this service.
-	x509Key string
-
-	// Whether to skip verification of other nodes' certificates.
-	insecureSkipVerify bool
-
-	tlsConfig *tls.Config
+	serverTLSConfig *tls.Config
+	clientTLSConfig *tls.Config
 }
 
 // NewMux returns a new instance of Mux for ln. If adv is nil,
@@ -115,23 +103,24 @@ func NewMux(ln net.Listener, adv net.Addr) (*Mux, error) {
 
 // NewTLSMux returns a new instance of Mux for ln, and encrypts all traffic
 // using TLS. If adv is nil, then the addr of ln is used.
-func NewTLSMux(ln net.Listener, adv net.Addr, cert, key, caCert string, insecure bool) (*Mux, error) {
+func NewTLSMux(ln net.Listener, adv net.Addr, cert, key, clientCert, clientKey, caCert string, insecure bool) (*Mux, error) {
 	mux, err := NewMux(ln, adv)
 	if err != nil {
 		return nil, err
 	}
 
-	mux.tlsConfig, err = rtls.CreateServerConfig(cert, key, caCert, insecure, false)
+	mux.serverTLSConfig, err = rtls.CreateServerConfig(cert, key, caCert, insecure, false)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("cannot create Server TLS config: %s", err)
 	}
 
-	mux.ln = tls.NewListener(ln, mux.tlsConfig)
+	mux.clientTLSConfig, err = rtls.CreateClientConfig(clientCert, clientKey, caCert, insecure, false)
+	if err != nil {
+		return nil, fmt.Errorf("cannot create Client TLS config: %s", err)
+	}
+
+	mux.ln = tls.NewListener(ln, mux.serverTLSConfig)
 	mux.remoteEncrypted = true
-	mux.x509CACert = caCert
-	mux.x509Cert = cert
-	mux.x509Key = key
-	mux.insecureSkipVerify = insecure
 
 	return mux, nil
 }
@@ -139,7 +128,7 @@ func NewTLSMux(ln net.Listener, adv net.Addr, cert, key, caCert string, insecure
 // Serve handles connections from ln and multiplexes then across registered listener.
 func (mux *Mux) Serve() error {
 	tlsStr := ""
-	if mux.tlsConfig != nil {
+	if mux.serverTLSConfig != nil {
 		tlsStr = "TLS "
 	}
 	mux.Logger.Printf("%smux serving on %s, advertising %s", tlsStr, mux.ln.Addr().String(), mux.addr)
@@ -175,13 +164,6 @@ func (mux *Mux) Stats() (interface{}, error) {
 		"addr":      mux.addr.String(),
 		"timeout":   mux.Timeout.String(),
 		"encrypted": strconv.FormatBool(mux.remoteEncrypted),
-	}
-
-	if mux.remoteEncrypted {
-		s["certificate"] = mux.x509Cert
-		s["key"] = mux.x509Key
-		s["ca_certificate"] = mux.x509CACert
-		s["skip_verify"] = strconv.FormatBool(mux.insecureSkipVerify)
 	}
 
 	return s, nil
@@ -242,12 +224,12 @@ func (mux *Mux) Listen(header byte) *Layer {
 	mux.m[header] = ln
 
 	layer := &Layer{
-		ln:             ln,
-		addr:           mux.addr,
-		nodeX509CACert: mux.x509CACert,
-		tlsConfig:      mux.tlsConfig,
+		ln:              ln,
+		addr:            mux.addr,
+		tlsServerConfig: mux.serverTLSConfig,
+		tlsClientConfig: mux.clientTLSConfig,
 	}
-	layer.dialer = NewDialer(header, mux.remoteEncrypted, mux.insecureSkipVerify)
+	layer.dialer = NewDialer(header, mux.clientTLSConfig)
 
 	return layer
 }

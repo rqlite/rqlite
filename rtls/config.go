@@ -20,10 +20,12 @@ func CreateClientConfig(certFile, keyFile, caCertFile string, noverify, tls1011 
 	var err error
 
 	config := createBaseTLSConfig(noverify, tls1011)
-	config.Certificates = make([]tls.Certificate, 1)
-	config.Certificates[0], err = tls.LoadX509KeyPair(certFile, keyFile)
-	if err != nil {
-		return nil, err
+	if certFile != "" && keyFile != "" {
+		config.Certificates = make([]tls.Certificate, 1)
+		config.Certificates[0], err = tls.LoadX509KeyPair(certFile, keyFile)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if caCertFile != "" {
 		asn1Data, err := ioutil.ReadFile(caCertFile)
