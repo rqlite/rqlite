@@ -274,7 +274,7 @@ type Service struct {
 	CertFile         string // Path to server's own x509 certificate.
 	KeyFile          string // Path to server's own x509 private key.
 	TLS1011          bool   // Whether older, deprecated TLS should be supported.
-	ClientVerify     bool   // Whether client certificates should be verified.
+	ClientNoVerify   bool   // Whether client certificates should not be verified.
 
 	DefaultQueueCap     int
 	DefaultQueueBatchSz int
@@ -325,7 +325,7 @@ func (s *Service) Start() error {
 			return err
 		}
 	} else {
-		config, err := rtls.CreateServerConfig(s.CertFile, s.KeyFile, s.ClientCACertFile, s.ClientVerify, s.TLS1011)
+		config, err := rtls.CreateServerConfig(s.CertFile, s.KeyFile, s.ClientCACertFile, s.ClientNoVerify, s.TLS1011)
 		if err != nil {
 			return err
 		}

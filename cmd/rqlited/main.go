@@ -266,6 +266,7 @@ func startHTTPService(cfg *Config, str *store.Store, cltr *cluster.Client, credS
 	s.CertFile = cfg.X509Cert
 	s.KeyFile = cfg.X509Key
 	s.TLS1011 = cfg.TLS1011
+	s.ClientNoVerify = cfg.NoHTTPVerify
 	s.Expvar = cfg.Expvar
 	s.Pprof = cfg.PprofEnabled
 	s.DefaultQueueCap = cfg.WriteQueueCap

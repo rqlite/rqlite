@@ -47,8 +47,8 @@ type Config struct {
 	// AuthFile is the path to the authentication file. May not be set.
 	AuthFile string
 
-	// X509CACert is the path the root-CA certficate file for when this
-	// node contacts other nodes' HTTP servers. May not be set.
+	// X509CACert is the path to the CA certficate file for when this node verifies
+	// other certificates for any HTTP communications. May not be set.
 	X509CACert string
 
 	// X509Cert is the path to the X509 cert for the HTTP server. May not be set.
@@ -68,8 +68,8 @@ type Config struct {
 	// NodeEncrypt indicates whether node encryption should be enabled.
 	NodeEncrypt bool
 
-	// NodeX509CACert is the path the root-CA certficate file for when this
-	// node contacts other nodes' Raft servers. May not be set.
+	// NodeX509CACert is the path to the CA certficate file for when this node verifies
+	// other certificates for any inter-node communications. May not be set.
 	NodeX509CACert string
 
 	// NodeX509Cert is the path to the X509 cert for the Raft server. May not be set.
