@@ -57,7 +57,11 @@ func Test_DialerHeaderTLS(t *testing.T) {
 	defer os.Remove(key)
 	go s.Start(t)
 
-	d := NewDialer(23, true, true)
+	tlsConfig, err := rtls.CreateClientConfig("", "", "", true, false)
+	if err != nil {
+		t.Fatalf("failed to create TLS config: %s", err.Error())
+	}
+	d := NewDialer(23, tlsConfig)
 	conn, err := d.Dial(s.Addr(), 5*time.Second)
 	if err != nil {
 		t.Fatalf("failed to dial TLS echo server: %s", err.Error())
