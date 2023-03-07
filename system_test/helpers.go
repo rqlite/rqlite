@@ -624,7 +624,7 @@ func mustNodeEncryptedOnDisk(dir string, enableSingle, httpEncrypt bool, mux *tc
 	}
 	node.Cluster = clstr
 
-	clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, false, true)
+	clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, nil)
 	clstrClient := cluster.NewClient(clstrDialer, 30*time.Second)
 	node.Service = httpd.New("localhost:0", node.Store, clstrClient, nil)
 	node.Service.Expvar = true
@@ -694,7 +694,7 @@ func mustNewOpenTLSMux(certFile, keyPath, addr string) *tcp.Mux {
 	}
 
 	var mux *tcp.Mux
-	mux, err = tcp.NewTLSMux(ln, nil, certFile, keyPath, "", true)
+	mux, err = tcp.NewTLSMux(ln, nil, certFile, keyPath, "", "", "", true)
 	if err != nil {
 		panic(fmt.Sprintf("failed to create node-to-node mux: %s", err.Error()))
 	}
