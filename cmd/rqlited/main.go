@@ -111,8 +111,8 @@ func main() {
 	// systems can see that it's running. We still have to open the Store though, so the node won't
 	// be able to do much until that happens however.
 	var dialerTLSConfig *tls.Config
-	if cfg.NodeX509CertClient != "" {
-		dialerTLSConfig, err = rtls.CreateClientConfig(cfg.NodeX509CertClient, cfg.NodeX509KeyClient,
+	if cfg.NodeX509Cert != "" || cfg.NodeX509CACert != "" {
+		dialerTLSConfig, err = rtls.CreateClientConfig(cfg.NodeX509Cert, cfg.NodeX509Key,
 			cfg.NodeX509CACert, cfg.NoNodeVerify, cfg.TLS1011)
 		if err != nil {
 			log.Fatalf("failed to create TLS config for cluster dialer: %s", err.Error())
@@ -138,8 +138,8 @@ func main() {
 	httpServ.RegisterStatus("cluster", clstr)
 
 	var clstrTLSConfig *tls.Config
-	if cfg.X509CertClient != "" || cfg.X509CACert != "" {
-		clstrTLSConfig, err = rtls.CreateClientConfig(cfg.X509CertClient, cfg.X509KeyClient, cfg.X509CACert,
+	if cfg.X509Cert != "" || cfg.X509CACert != "" {
+		clstrTLSConfig, err = rtls.CreateClientConfig(cfg.X509Cert, cfg.X509Key, cfg.X509CACert,
 			cfg.NoHTTPVerify, cfg.TLS1011)
 		if err != nil {
 			log.Fatalf("failed to create TLS client config for cluster: %s", err.Error())
@@ -306,8 +306,7 @@ func startNodeMux(cfg *Config, ln net.Listener) (*tcp.Mux, error) {
 	var mux *tcp.Mux
 	if cfg.NodeX509Cert != "" {
 		log.Printf("enabling node-to-node encryption with cert: %s, key: %s", cfg.NodeX509Cert, cfg.NodeX509Key)
-		mux, err = tcp.NewTLSMux(ln, adv, cfg.NodeX509Cert, cfg.NodeX509Key,
-			cfg.NodeX509CertClient, cfg.NoNodeVerify)
+		mux, err = tcp.NewTLSMux(ln, adv, cfg.NodeX509Cert, cfg.NodeX509Key, cfg.NodeX509CACert, cfg.NoNodeVerify)
 	} else {
 		mux, err = tcp.NewMux(ln, adv)
 	}
