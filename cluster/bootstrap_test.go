@@ -91,10 +91,7 @@ func Test_BootstrapperBootSingleNotify(t *testing.T) {
 	n := -1
 	done := func() bool {
 		n++
-		if n == 5 {
-			return true
-		}
-		return false
+		return n == 5
 	}
 
 	p := NewAddressProviderString([]string{ts.URL})
@@ -146,10 +143,7 @@ func Test_BootstrapperBootSingleNotifyHTTPS(t *testing.T) {
 	n := -1
 	done := func() bool {
 		n++
-		if n == 5 {
-			return true
-		}
-		return false
+		return n == 5
 	}
 
 	p := NewAddressProviderString([]string{ts.URL})
@@ -194,10 +188,7 @@ func Test_BootstrapperBootSingleNotifyAuth(t *testing.T) {
 	n := -1
 	done := func() bool {
 		n++
-		if n == 5 {
-			return true
-		}
-		return false
+		return n == 5
 	}
 
 	p := NewAddressProviderString([]string{ts.URL})
@@ -241,10 +232,7 @@ func Test_BootstrapperBootMultiNotify(t *testing.T) {
 	n := -1
 	done := func() bool {
 		n++
-		if n == 5 {
-			return true
-		}
-		return false
+		return n == 5
 	}
 
 	p := NewAddressProviderString([]string{ts1.URL, ts2.URL})
