@@ -111,7 +111,7 @@ func main() {
 	// systems can see that it's running. We still have to open the Store though, so the node won't
 	// be able to do much until that happens however.
 	var dialerTLSConfig *tls.Config
-	if cfg.NodeEncrypt {
+	if cfg.NodeX509CertClient != "" {
 		dialerTLSConfig, err = rtls.CreateClientConfig(cfg.NodeX509CertClient, cfg.NodeX509KeyClient,
 			cfg.NodeX509CACert, cfg.NoNodeVerify, cfg.TLS1011)
 		if err != nil {
@@ -304,10 +304,10 @@ func startNodeMux(cfg *Config, ln net.Listener) (*tcp.Mux, error) {
 	}
 
 	var mux *tcp.Mux
-	if cfg.NodeEncrypt {
+	if cfg.NodeX509Cert != "" {
 		log.Printf("enabling node-to-node encryption with cert: %s, key: %s", cfg.NodeX509Cert, cfg.NodeX509Key)
 		mux, err = tcp.NewTLSMux(ln, adv, cfg.NodeX509Cert, cfg.NodeX509Key,
-			cfg.NodeX509CertClient, cfg.NodeX509KeyClient, cfg.NodeX509CACert, cfg.NoNodeVerify)
+			cfg.NodeX509CertClient, cfg.NoNodeVerify)
 	} else {
 		mux, err = tcp.NewMux(ln, adv)
 	}

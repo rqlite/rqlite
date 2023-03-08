@@ -382,7 +382,7 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	flag.StringVar(&config.X509CertClient, "http-cert-client", "", "Path to client X.509 certificate for this node when joining a cluster")
 	flag.StringVar(&config.X509KeyClient, "http-key-client", "", "Path to client X.509 private key for this node when joining a cluster")
 	flag.BoolVar(&config.NoHTTPVerify, "http-no-verify", false, "Skip verification of remote HTTPS cert when joining cluster, or receiving client certificates")
-	flag.BoolVar(&config.NodeEncrypt, "node-encrypt", false, "Enable node-to-node encryption")
+	flag.BoolVar(&config.NodeEncrypt, "node-encrypt", false, "Ignored, controlled node-to-node encryption via node cert and key")
 	flag.StringVar(&config.NodeX509CACert, "node-ca-cert", "", "Path to X.509 CA certificate for node-to-node encryption")
 	flag.StringVar(&config.NodeX509Cert, "node-cert", "cert.pem", "Path to server X.509 certificate for internode communication")
 	flag.StringVar(&config.NodeX509Key, "node-key", "key.pem", "Path to server X.509 private key for internode communication")

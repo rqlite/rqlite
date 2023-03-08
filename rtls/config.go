@@ -9,6 +9,41 @@ import (
 	"io/ioutil"
 )
 
+// CreateClientConfig creates a TLS configuration for use by a system that does both
+// client and server authentication using the same cert, key, and CA cert.
+func CreateConfig(certFile, keyFile, caCertFile string, noverify, tls1011 bool) (*tls.Config, error) {
+	var err error
+	config := createBaseTLSConfig(noverify, tls1011)
+
+	// load the certificate and key
+	if certFile != "" && keyFile != "" {
+		config.Certificates = make([]tls.Certificate, 1)
+		config.Certificates[0], err = tls.LoadX509KeyPair(certFile, keyFile)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// load the CA certificate file, if provided, as the root CA and client CA
+	if caCertFile != "" {
+		asn1Data, err := ioutil.ReadFile(caCertFile)
+		if err != nil {
+			return nil, err
+		}
+		config.RootCAs = x509.NewCertPool()
+		ok := config.RootCAs.AppendCertsFromPEM(asn1Data)
+		if !ok {
+			return nil, fmt.Errorf("failed to load CA certificate(s) for server verification in %q", caCertFile)
+		}
+		config.ClientCAs = x509.NewCertPool()
+		ok = config.ClientCAs.AppendCertsFromPEM(asn1Data)
+		if !ok {
+			return nil, fmt.Errorf("failed to load CA certificate(s) for client verification in %q", caCertFile)
+		}
+	}
+	return config, nil
+}
+
 // CreateClientConfig creates a new tls.Config for use by a client. The certFile and keyFile
 // parameters are the paths to the client's certificate and key files, which will be used to
 // authenticate the client to the server. The caCertFile parameter is the path to the CA

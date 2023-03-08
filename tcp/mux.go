@@ -9,7 +9,6 @@ import (
 	"log"
 	"net"
 	"os"
-	"strconv"
 	"sync"
 	"time"
 
@@ -39,13 +38,9 @@ func init() {
 // make connections to other nodes (client), and receive connections from other
 // nodes (server)
 type Layer struct {
-	ln   net.Listener
-	addr net.Addr
-
+	ln     net.Listener
+	addr   net.Addr
 	dialer *Dialer
-
-	tlsServerConfig *tls.Config
-	tlsClientConfig *tls.Config
 }
 
 // Dial creates a new network connection.
@@ -72,16 +67,13 @@ type Mux struct {
 
 	wg sync.WaitGroup
 
-	remoteEncrypted bool
-
 	// The amount of time to wait for the first header byte.
 	Timeout time.Duration
 
 	// Out-of-band error logger
 	Logger *log.Logger
 
-	serverTLSConfig *tls.Config
-	clientTLSConfig *tls.Config
+	tlsConfig *tls.Config
 }
 
 // NewMux returns a new instance of Mux for ln. If adv is nil,
@@ -103,24 +95,18 @@ func NewMux(ln net.Listener, adv net.Addr) (*Mux, error) {
 
 // NewTLSMux returns a new instance of Mux for ln, and encrypts all traffic
 // using TLS. If adv is nil, then the addr of ln is used.
-func NewTLSMux(ln net.Listener, adv net.Addr, cert, key, clientCert, clientKey, caCert string, insecure bool) (*Mux, error) {
+func NewTLSMux(ln net.Listener, adv net.Addr, cert, key, caCert string, insecure bool) (*Mux, error) {
 	mux, err := NewMux(ln, adv)
 	if err != nil {
 		return nil, err
 	}
 
-	mux.serverTLSConfig, err = rtls.CreateServerConfig(cert, key, caCert, insecure, false)
+	mux.tlsConfig, err = rtls.CreateConfig(cert, key, caCert, insecure, false)
 	if err != nil {
-		return nil, fmt.Errorf("cannot create Server TLS config: %s", err)
+		return nil, fmt.Errorf("cannot create TLS config: %s", err)
 	}
 
-	mux.clientTLSConfig, err = rtls.CreateClientConfig(clientCert, clientKey, caCert, insecure, false)
-	if err != nil {
-		return nil, fmt.Errorf("cannot create Client TLS config: %s", err)
-	}
-
-	mux.ln = tls.NewListener(ln, mux.serverTLSConfig)
-	mux.remoteEncrypted = true
+	mux.ln = tls.NewListener(ln, mux.tlsConfig)
 
 	return mux, nil
 }
@@ -128,7 +114,7 @@ func NewTLSMux(ln net.Listener, adv net.Addr, cert, key, clientCert, clientKey, 
 // Serve handles connections from ln and multiplexes then across registered listener.
 func (mux *Mux) Serve() error {
 	tlsStr := ""
-	if mux.serverTLSConfig != nil {
+	if mux.tlsConfig != nil {
 		tlsStr = "TLS "
 	}
 	mux.Logger.Printf("%smux serving on %s, advertising %s", tlsStr, mux.ln.Addr().String(), mux.addr)
@@ -161,9 +147,8 @@ func (mux *Mux) Serve() error {
 // Stats returns status of the mux.
 func (mux *Mux) Stats() (interface{}, error) {
 	s := map[string]string{
-		"addr":      mux.addr.String(),
-		"timeout":   mux.Timeout.String(),
-		"encrypted": strconv.FormatBool(mux.remoteEncrypted),
+		"addr":    mux.addr.String(),
+		"timeout": mux.Timeout.String(),
 	}
 
 	return s, nil
@@ -224,12 +209,10 @@ func (mux *Mux) Listen(header byte) *Layer {
 	mux.m[header] = ln
 
 	layer := &Layer{
-		ln:              ln,
-		addr:            mux.addr,
-		tlsServerConfig: mux.serverTLSConfig,
-		tlsClientConfig: mux.clientTLSConfig,
+		ln:   ln,
+		addr: mux.addr,
 	}
-	layer.dialer = NewDialer(header, mux.clientTLSConfig)
+	layer.dialer = NewDialer(header, mux.tlsConfig)
 
 	return layer
 }

@@ -25,14 +25,15 @@ type Dialer struct {
 func (d *Dialer) Dial(addr string, timeout time.Duration) (conn net.Conn, retErr error) {
 	dialer := &net.Dialer{Timeout: timeout}
 
-	if d.tlsConfig != nil {
-		conn, retErr = tls.DialWithDialer(dialer, "tcp", addr, d.tlsConfig)
-	} else {
+	if d.tlsConfig == nil {
 		conn, retErr = dialer.Dial("tcp", addr)
+	} else {
+		conn, retErr = tls.DialWithDialer(dialer, "tcp", addr, d.tlsConfig)
 	}
 	if retErr != nil {
 		return nil, retErr
 	}
+
 	defer func() {
 		if retErr != nil {
 			conn.Close()
