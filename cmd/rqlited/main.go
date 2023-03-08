@@ -4,7 +4,6 @@ package main
 import (
 	"crypto/tls"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"os"
@@ -107,6 +106,8 @@ func main() {
 	}
 	log.Printf("cluster TCP mux Listener registered with byte header %d", cluster.MuxClusterHeader)
 
+	// Create the HTTP service.
+	//
 	// We want to start the HTTP server as soon as possible, so the node is responsive and external
 	// systems can see that it's running. We still have to open the Store though, so the node won't
 	// be able to do much until that happens however.
@@ -228,9 +229,8 @@ func createStore(cfg *Config, ln *tcp.Layer) (*store.Store, error) {
 func createDiscoService(cfg *Config, str *store.Store) (*disco.Service, error) {
 	var c disco.Client
 	var err error
-	var rc io.ReadCloser
 
-	rc = cfg.DiscoConfigReader()
+	rc := cfg.DiscoConfigReader()
 	defer func() {
 		if rc != nil {
 			rc.Close()
