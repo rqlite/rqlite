@@ -4,7 +4,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
-	"io/ioutil"
+	"os"
 	"testing"
 	"time"
 )
@@ -171,7 +171,7 @@ func Test_CreateClientConfig(t *testing.T) {
 // path to the file. If there is an error, it panics. The file will be automatically
 // deleted when the test ends.
 func mustWriteTempFile(t *testing.T, b []byte) string {
-	f, err := ioutil.TempFile(t.TempDir(), "rqlite-test")
+	f, err := os.CreateTemp(t.TempDir(), "rqlite-test")
 	if err != nil {
 		panic("failed to create temp file")
 	}

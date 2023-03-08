@@ -6,7 +6,6 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"os"
@@ -26,10 +25,8 @@ func Test_TLSServiceInsecure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to generate self-signed cert: %s", err)
 	}
-	s.CertFile = mustWriteTempFile(cert)
-	defer os.Remove(s.CertFile)
-	s.KeyFile = mustWriteTempFile(key)
-	defer os.Remove(s.KeyFile)
+	s.CertFile = mustWriteTempFile(t, cert)
+	s.KeyFile = mustWriteTempFile(t, key)
 
 	s.BuildInfo = map[string]interface{}{
 		"version": "the version",
@@ -83,10 +80,8 @@ func Test_TLSServiceSecure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to generate self-signed cert: %s", err)
 	}
-	s.CertFile = mustWriteTempFile(cert)
-	defer os.Remove(s.CertFile)
-	s.KeyFile = mustWriteTempFile(key)
-	defer os.Remove(s.KeyFile)
+	s.CertFile = mustWriteTempFile(t, cert)
+	s.KeyFile = mustWriteTempFile(t, key)
 
 	s.BuildInfo = map[string]interface{}{
 		"version": "the version",
@@ -181,12 +176,9 @@ func Test_TLSServiceSecureMutual(t *testing.T) {
 	m := &MockStore{}
 	c := &mockClusterService{}
 	s := New("127.0.0.1:0", m, c, nil)
-	s.CertFile = mustWriteTempFile(certServer)
-	defer os.Remove(s.CertFile)
-	s.KeyFile = mustWriteTempFile(keyServer)
-	defer os.Remove(s.KeyFile)
-	s.CACertFile = mustWriteTempFile(caCertPEM) // Enables client verification by HTTP server
-	defer os.Remove(s.CACertFile)
+	s.CertFile = mustWriteTempFile(t, certServer)
+	s.KeyFile = mustWriteTempFile(t, keyServer)
+	s.CACertFile = mustWriteTempFile(t, caCertPEM) // Enables client verification by HTTP server
 	s.BuildInfo = map[string]interface{}{
 		"version": "the version",
 	}
@@ -237,9 +229,10 @@ func Test_TLSServiceSecureMutual(t *testing.T) {
 }
 
 // mustWriteTempFile writes the given bytes to a temporary file, and returns the
-// path to the file. If there is an error, it panics.
-func mustWriteTempFile(b []byte) string {
-	f, err := ioutil.TempFile("", "rqlite-test")
+// path to the file. If there is an error, it panics. The file will be automatically
+// deleted when the test ends.
+func mustWriteTempFile(t *testing.T, b []byte) string {
+	f, err := os.CreateTemp(t.TempDir(), "rqlite-test")
 	if err != nil {
 		panic("failed to create temp file")
 	}
