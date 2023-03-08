@@ -26,7 +26,7 @@ rqlite uses [Raft](https://raft.github.io/) to achieve consensus across all the 
 - Super-simple to use, with a straightforward [HTTP API](https://rqlite.io/docs/api/). A [command-line interface is also available](https://rqlite.io/docs/cli/), as are various [client libraries](https://github.com/rqlite).
 - Fully replicated production-grade SQL database, with full access to SQLite [full-text search](https://www.sqlite.org/fts3.html) and [JSON document support](https://www.sqlite.org/json1.html).
 - Multiple options for [node-discovery and automatic clustering, including integration with Kubernetes, Consul, etcd and DNS](https://rqlite.io/docs/clustering/automatic-clustering/), allowing clusters to be dynamically created.
-- [Extensive security and encryption support](https://rqlite.io/docs/guides/security/), including node-to-node encryption.
+- [Extensive security and encryption support](https://rqlite.io/docs/guides/security/), including support for node-to-node encryption and mutual TLS.
 - Choice of [read consistency levels](https://rqlite.io/docs/api/read-consistency/), and support for choosing [write performance over durability](https://rqlite.io/docs/api/queued-writes/).
 - Optional [read-only (non-voting) nodes](https://rqlite.io/docs/clustering/read-only-nodes/), which can add read scalability to the system.
 - A form of transaction support.

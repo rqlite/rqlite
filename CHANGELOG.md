@@ -1,3 +1,9 @@
+## 7.14.0 (unreleased)
+This release sees the addition of mutual TLS support, and corrects some implementation issues.
+
+### New features
+- [PR #1171](https://github.com/rqlite/rqlite/pull/1171): Support mutual TLS for both HTTP connections and inter-node traffic. See [issue #1167](https://github.com/rqlite/rqlite/issues/1167). Thanks @otto-dev
+
 ## 7.13.2 (February 23rd 2023)
 ### Implementation changes and bug fixes
 - [PR #1156](https://github.com/rqlite/rqlite/pull/1156): Better error message when rqlite shell can't connect to a node.
