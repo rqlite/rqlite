@@ -282,7 +282,17 @@ func startNodeMux(cfg *Config, ln net.Listener) (*tcp.Mux, error) {
 
 	var mux *tcp.Mux
 	if cfg.NodeX509Cert != "" {
-		log.Printf("enabling node-to-node encryption with cert: %s, key: %s", cfg.NodeX509Cert, cfg.NodeX509Key)
+		var b strings.Builder
+		b.WriteString(fmt.Sprintf("enabling node-to-node encryption with cert: %s, key: %s", cfg.NodeX509Cert, cfg.NodeX509Key))
+		if cfg.NodeX509CACert != "" {
+			b.WriteString(fmt.Sprintf(", CA cert %s", cfg.NodeX509CACert))
+		}
+		if cfg.NoNodeVerify {
+			b.WriteString(", client verification disabled")
+		} else {
+			b.WriteString(", client verification enabled")
+		}
+		log.Println(b.String())
 		mux, err = tcp.NewTLSMux(ln, adv, cfg.NodeX509Cert, cfg.NodeX509Key, cfg.NodeX509CACert, cfg.NoNodeVerify)
 	} else {
 		mux, err = tcp.NewMux(ln, adv)
