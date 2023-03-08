@@ -10,7 +10,10 @@ import (
 )
 
 // CreateClientConfig creates a TLS configuration for use by a system that does both
-// client and server authentication using the same cert, key, and CA cert.
+// client and server authentication using the same cert, key, and CA cert. If noverify
+// is true, the client will not verify the server's certificate and the server will not
+// verify the client's certificate. If tls1011 is true, the client will accept TLS 1.0
+// or 1.1. Otherwise, it will require TLS 1.2 or higher.
 func CreateConfig(certFile, keyFile, caCertFile string, noverify, tls1011 bool) (*tls.Config, error) {
 	var err error
 	config := createBaseTLSConfig(noverify, tls1011)
