@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -233,6 +232,9 @@ func Test_404Routes_ExpvarPprofDisabled(t *testing.T) {
 		"/debug/pprof/symbol",
 	} {
 		req, err := http.NewRequest("GET", host+path, nil)
+		if err != nil {
+			t.Fatalf("failed to create request: %s", err.Error())
+		}
 		resp, err := client.Do(req)
 		if err != nil {
 			t.Fatalf("failed to make request: %s", err.Error())
@@ -648,7 +650,10 @@ func Test_BackupFlagsNoLeaderRemoteFetch(t *testing.T) {
 		t.Fatalf("failed to get expected StatusOK for remote backup fetch, got %d", resp.StatusCode)
 	}
 	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("failed to read response body: %s", err.Error())
+	}
 	if exp, got := backupData, string(body); exp != got {
 		t.Fatalf("received incorrect backup data, exp: %s, got: %s", exp, got)
 	}
@@ -740,7 +745,7 @@ func Test_LoadFlagsNoLeader(t *testing.T) {
 	clusterLoadCalled := false
 	c.loadFn = func(lr *command.LoadRequest, nodeAddr string, timeout time.Duration) error {
 		clusterLoadCalled = true
-		if bytes.Compare(lr.Data, testData) != 0 {
+		if !bytes.Equal(lr.Data, testData) {
 			t.Fatalf("wrong data passed to cluster load")
 		}
 		return nil
@@ -1336,13 +1341,4 @@ func mustParseDuration(d string) time.Duration {
 	} else {
 		return dur
 	}
-}
-
-func mustReadResponseBody(resp *http.Response) string {
-	response, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		panic("failed to ReadAll response body")
-	}
-	resp.Body.Close()
-	return string(response)
 }

@@ -10,7 +10,6 @@ import (
 	"expvar"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -381,7 +380,6 @@ func (s *Service) Close() {
 	<-s.queueDone
 
 	s.ln.Close()
-	return
 }
 
 // HTTPS returns whether this service is using HTTPS.
@@ -458,7 +456,7 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	b, err := ioutil.ReadAll(r.Body)
+	b, err := io.ReadAll(r.Body)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -537,7 +535,7 @@ func (s *Service) handleNotify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	b, err := ioutil.ReadAll(r.Body)
+	b, err := io.ReadAll(r.Body)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -597,7 +595,7 @@ func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	b, err := ioutil.ReadAll(r.Body)
+	b, err := io.ReadAll(r.Body)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -806,7 +804,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	b, err := ioutil.ReadAll(r.Body)
+	b, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -1227,7 +1225,7 @@ func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	b, err := ioutil.ReadAll(r.Body)
+	b, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -1260,7 +1258,7 @@ func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request) {
 	var fc queue.FlushChannel
 	if wait {
 		stats.Add(numQueuedExecutionsWait, 1)
-		fc = make(queue.FlushChannel, 0)
+		fc = make(queue.FlushChannel)
 	}
 
 	seqNum, err := s.stmtQueue.Write(stmts, fc)
@@ -1283,7 +1281,6 @@ func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request) {
 
 	resp.end = time.Now()
 	s.writeResponse(w, r, resp)
-	return
 }
 
 // execute handles queries that modify the database.
@@ -1296,7 +1293,7 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	b, err := ioutil.ReadAll(r.Body)
+	b, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -1757,7 +1754,7 @@ func requestQueries(r *http.Request) ([]*command.Statement, error) {
 		}, nil
 	}
 
-	b, err := ioutil.ReadAll(r.Body)
+	b, err := io.ReadAll(r.Body)
 	if err != nil {
 		return nil, errors.New("bad query POST request")
 	}
@@ -1951,24 +1948,6 @@ func executeRequestFromStrings(s []string, timings, tx bool) *command.ExecuteReq
 
 	}
 	return &command.ExecuteRequest{
-		Request: &command.Request{
-			Statements:  stmts,
-			Transaction: tx,
-		},
-		Timings: timings,
-	}
-}
-
-// queryRequestFromStrings converts a slice of strings into a command.QueryRequest
-func queryRequestFromStrings(s []string, timings, tx bool) *command.QueryRequest {
-	stmts := make([]*command.Statement, len(s))
-	for i := range s {
-		stmts[i] = &command.Statement{
-			Sql: s[i],
-		}
-
-	}
-	return &command.QueryRequest{
 		Request: &command.Request{
 			Statements:  stmts,
 			Transaction: tx,

@@ -14,13 +14,13 @@ func Test_NilRequest(t *testing.T) {
 }
 
 func Test_EmptyRequests(t *testing.T) {
-	b := []byte(fmt.Sprintf(`[]`))
+	b := []byte(`[]`)
 	_, err := ParseRequest(b)
 	if err != ErrNoStatements {
 		t.Fatalf("empty simple request did not result in correct error")
 	}
 
-	b = []byte(fmt.Sprintf(`[[]]`))
+	b = []byte(`[[]]`)
 	_, err = ParseRequest(b)
 	if err != ErrNoStatements {
 		t.Fatalf("empty parameterized request did not result in correct error")
@@ -258,17 +258,17 @@ func Test_MixedInvalidRequest(t *testing.T) {
 }
 
 func Test_SingleInvalidTypeRequests(t *testing.T) {
-	_, err := ParseRequest([]byte(fmt.Sprintf(`[1]`)))
+	_, err := ParseRequest([]byte(`[1]`))
 	if err != ErrInvalidJSON {
 		t.Fatal("got unexpected error for invalid request")
 	}
 
-	_, err = ParseRequest([]byte(fmt.Sprintf(`[[1]]`)))
+	_, err = ParseRequest([]byte(`[[1]]`))
 	if err != ErrInvalidRequest {
 		t.Fatal("got unexpected error for invalid request")
 	}
 
-	_, err = ParseRequest([]byte(fmt.Sprintf(`[[1, "x", 2]]`)))
+	_, err = ParseRequest([]byte(`[[1, "x", 2]]`))
 	if err != ErrInvalidRequest {
 		t.Fatal("got unexpected error for invalid request")
 	}
