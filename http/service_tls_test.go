@@ -185,11 +185,12 @@ func Test_TLSServiceSecureMutual(t *testing.T) {
 	defer os.Remove(s.CertFile)
 	s.KeyFile = mustWriteTempFile(keyServer)
 	defer os.Remove(s.KeyFile)
-	s.ClientCACertFile = mustWriteTempFile(caCertPEM) // Enables client verification by HTTP server
-	defer os.Remove(s.ClientCACertFile)
+	s.CACertFile = mustWriteTempFile(caCertPEM) // Enables client verification by HTTP server
+	defer os.Remove(s.CACertFile)
 	s.BuildInfo = map[string]interface{}{
 		"version": "the version",
 	}
+	s.ClientVerify = true
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}

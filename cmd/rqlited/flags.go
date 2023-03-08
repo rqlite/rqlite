@@ -57,6 +57,12 @@ type Config struct {
 	// HTTPx509Key is the path to the private key for the HTTP server. May not be set.
 	HTTPx509Key string
 
+	// NoHTTPVerify disables checking other nodes' server HTTP X509 certs for validity.
+	NoHTTPVerify bool
+
+	// HTTPVerifyClient indicates whether the HTTP server should verify client certificates.
+	HTTPVerifyClient bool
+
 	// NodeEncrypt indicates whether node encryption should be enabled.
 	NodeEncrypt bool
 
@@ -69,6 +75,9 @@ type Config struct {
 
 	// NodeX509Key is the path to the X509 key for the Raft server. May not be set.
 	NodeX509Key string
+
+	// NoNodeVerify disables checking other nodes' Node X509 certs for validity.
+	NoNodeVerify bool
 
 	// NodeID is the Raft ID for the node.
 	NodeID string
@@ -102,12 +111,6 @@ type Config struct {
 
 	// BootstrapExpectTimeout is the maximum time a bootstrap operation can take.
 	BootstrapExpectTimeout time.Duration
-
-	// NoHTTPVerify disables checking other nodes' HTTP X509 certs for validity.
-	NoHTTPVerify bool
-
-	// NoNodeVerify disables checking other nodes' Node X509 certs for validity.
-	NoNodeVerify bool
 
 	// DisoMode sets the discovery mode. May not be set.
 	DiscoMode string
@@ -370,7 +373,8 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	flag.StringVar(&config.HTTPx509CACert, "http-ca-cert", "", "Path to X.509 CA certificate for HTTPS")
 	flag.StringVar(&config.HTTPx509Cert, "http-cert", "", "Path to HTTPS X.509 certificate")
 	flag.StringVar(&config.HTTPx509Key, "http-key", "", "Path to HTTPS X.509 private key")
-	flag.BoolVar(&config.NoHTTPVerify, "http-no-verify", false, "Skip verification of remote HTTPS cert when joining cluster, or receiving client certificates")
+	flag.BoolVar(&config.NoHTTPVerify, "http-no-verify", false, "Skip verification of remote node's HTTPS cert when joining a cluster")
+	flag.BoolVar(&config.HTTPVerifyClient, "http-verify-client", false, "Verify client certificates when mutual TLS is enabled for HTTPS")
 	flag.BoolVar(&config.NodeEncrypt, "node-encrypt", false, "Ignored, control node-to-node encryption by setting node cert and key")
 	flag.StringVar(&config.NodeX509CACert, "node-ca-cert", "", "Path to X.509 CA certificate for node-to-node encryption")
 	flag.StringVar(&config.NodeX509Cert, "node-cert", "", "Path to X.509 certificate for node-to-node encryption")

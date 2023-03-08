@@ -270,12 +270,12 @@ type Service struct {
 	statusMu sync.RWMutex
 	statuses map[string]StatusReporter
 
-	CACertFile     string // Path to x509 CA certificate used to verify certificates.
-	CertFile       string // Path to server's own x509 certificate.
-	KeyFile        string // Path to server's own x509 private key.
-	TLS1011        bool   // Whether older, deprecated TLS should be supported.
-	ClientNoVerify bool   // Whether client certificates should not be verified.
-	tlsConfig      *tls.Config
+	CACertFile   string // Path to x509 CA certificate used to verify certificates.
+	CertFile     string // Path to server's own x509 certificate.
+	KeyFile      string // Path to server's own x509 private key.
+	TLS1011      bool   // Whether older, deprecated TLS should be supported.
+	ClientVerify bool   // Whether client certificates should verified.
+	tlsConfig    *tls.Config
 
 	DefaultQueueCap     int
 	DefaultQueueBatchSz int
@@ -326,7 +326,7 @@ func (s *Service) Start() error {
 			return err
 		}
 	} else {
-		s.tlsConfig, err = rtls.CreateServerConfig(s.CertFile, s.KeyFile, s.CACertFile, s.ClientNoVerify, s.TLS1011)
+		s.tlsConfig, err = rtls.CreateServerConfig(s.CertFile, s.KeyFile, s.CACertFile, !s.ClientVerify, s.TLS1011)
 		if err != nil {
 			return err
 		}
@@ -334,7 +334,18 @@ func (s *Service) Start() error {
 		if err != nil {
 			return err
 		}
-		s.logger.Printf("secure HTTPS server enabled with cert %s, key %s", s.CertFile, s.KeyFile)
+		var b strings.Builder
+		b.WriteString(fmt.Sprintf("secure HTTPS server enabled with cert %s, key %s", s.CertFile, s.KeyFile))
+		if s.CACertFile != "" {
+			b.WriteString(fmt.Sprintf(", CA cert %s", s.CACertFile))
+		}
+		if s.ClientVerify {
+			b.WriteString(", client verification enabled")
+		} else {
+			b.WriteString(", client verification disabled")
+		}
+		// print the message
+		s.logger.Println(b.String())
 	}
 	s.ln = ln
 
