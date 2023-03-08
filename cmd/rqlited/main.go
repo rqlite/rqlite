@@ -64,7 +64,7 @@ func main() {
 	}
 
 	// Display logo.
-	fmt.Printf(logo)
+	fmt.Print(logo)
 
 	// Configure logging and pump out initial message.
 	log.Printf("%s starting, version %s, SQLite %s, commit %s, branch %s, compiler %s", name, cmd.Version,
