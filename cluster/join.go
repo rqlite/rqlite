@@ -74,8 +74,9 @@ func NewJoiner(srcIP string, numAttempts int, attemptInterval time.Duration,
 
 	// Create and configure the client to connect to the other node.
 	tr := &http.Transport{
-		TLSClientConfig: joiner.tlsConfig,
-		Dial:            dialer.Dial,
+		TLSClientConfig:   joiner.tlsConfig,
+		Dial:              dialer.Dial,
+		ForceAttemptHTTP2: true,
 	}
 	joiner.client = &http.Client{Transport: tr}
 	joiner.client.CheckRedirect = func(req *http.Request, via []*http.Request) error {

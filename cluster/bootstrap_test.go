@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"io"
@@ -86,6 +87,61 @@ func Test_BootstrapperBootSingleNotify(t *testing.T) {
 			return
 		}
 	}))
+
+	n := -1
+	done := func() bool {
+		n++
+		if n == 5 {
+			return true
+		}
+		return false
+	}
+
+	p := NewAddressProviderString([]string{ts.URL})
+	bs := NewBootstrapper(p, nil)
+	bs.Interval = time.Second
+
+	err := bs.Boot("node1", "192.168.1.1:1234", done, 60*time.Second)
+	if err != nil {
+		t.Fatalf("failed to boot: %s", err)
+	}
+
+	if tsNotified != true {
+		t.Fatalf("notify target not contacted")
+	}
+
+	if got, exp := body["id"], "node1"; got != exp {
+		t.Fatalf("wrong node ID supplied, exp %s, got %s", exp, got)
+	}
+	if got, exp := body["addr"], "192.168.1.1:1234"; got != exp {
+		t.Fatalf("wrong address supplied, exp %s, got %s", exp, got)
+	}
+}
+
+func Test_BootstrapperBootSingleNotifyHTTPS(t *testing.T) {
+	tsNotified := false
+	var body map[string]string
+	ts := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/join" {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		tsNotified = true
+		b, err := io.ReadAll(r.Body)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		if err := json.Unmarshal(b, &body); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+	}))
+
+	ts.TLS = &tls.Config{NextProtos: []string{"h2", "http/1.1"}}
+	ts.StartTLS()
+	defer ts.Close()
 
 	n := -1
 	done := func() bool {
