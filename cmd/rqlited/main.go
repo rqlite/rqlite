@@ -100,7 +100,7 @@ func main() {
 	}
 
 	// Create cluster service now, so nodes will be able to learn information about each other.
-	clstr, err := clusterService(cfg, mux.Listen(cluster.MuxClusterHeader), str, str, credStr)
+	clstrServ, err := clusterService(cfg, mux.Listen(cluster.MuxClusterHeader), str, str, credStr)
 	if err != nil {
 		log.Fatalf("failed to create cluster service: %s", err.Error())
 	}
@@ -111,18 +111,9 @@ func main() {
 	// We want to start the HTTP server as soon as possible, so the node is responsive and external
 	// systems can see that it's running. We still have to open the Store though, so the node won't
 	// be able to do much until that happens however.
-	var dialerTLSConfig *tls.Config
-	if cfg.NodeX509Cert != "" || cfg.NodeX509CACert != "" {
-		dialerTLSConfig, err = rtls.CreateClientConfig(cfg.NodeX509Cert, cfg.NodeX509Key,
-			cfg.NodeX509CACert, cfg.NoNodeVerify, cfg.TLS1011)
-		if err != nil {
-			log.Fatalf("failed to create TLS config for cluster dialer: %s", err.Error())
-		}
-	}
-	clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, dialerTLSConfig)
-	clstrClient := cluster.NewClient(clstrDialer, cfg.ClusterConnectTimeout)
-	if err := clstrClient.SetLocal(cfg.RaftAdv, clstr); err != nil {
-		log.Fatalf("failed to set cluster client local parameters: %s", err.Error())
+	clstrClient, err := createClusterClient(cfg, clstrServ)
+	if err != nil {
+		log.Fatalf("failed to create cluster client: %s", err.Error())
 	}
 	httpServ, err := startHTTPService(cfg, str, clstrClient, credStr)
 	if err != nil {
@@ -136,23 +127,14 @@ func main() {
 	}
 
 	// Register remaining status providers.
-	httpServ.RegisterStatus("cluster", clstr)
-
-	var clstrTLSConfig *tls.Config
-	if cfg.HTTPx509Cert != "" || cfg.HTTPx509CACert != "" {
-		clstrTLSConfig, err = rtls.CreateClientConfig(cfg.HTTPx509Cert, cfg.HTTPx509Key, cfg.HTTPx509CACert,
-			cfg.NoHTTPVerify, cfg.TLS1011)
-		if err != nil {
-			log.Fatalf("failed to create TLS client config for cluster: %s", err.Error())
-		}
-	}
+	httpServ.RegisterStatus("cluster", clstrServ)
 
 	// Create the cluster!
 	nodes, err := str.Nodes()
 	if err != nil {
 		log.Fatalf("failed to get nodes %s", err.Error())
 	}
-	if err := createCluster(cfg, clstrTLSConfig, len(nodes) > 0, str, httpServ, credStr); err != nil {
+	if err := createCluster(cfg, len(nodes) > 0, str, httpServ, credStr); err != nil {
 		log.Fatalf("clustering failure: %s", err.Error())
 	}
 
@@ -179,7 +161,7 @@ func main() {
 	if err := str.Close(true); err != nil {
 		log.Printf("failed to close store: %s", err.Error())
 	}
-	clstr.Close()
+	clstrServ.Close()
 	muxLn.Close()
 	stopProfile()
 	log.Println("rqlite server stopped")
@@ -266,15 +248,10 @@ func createDiscoService(cfg *Config, str *store.Store) (*disco.Service, error) {
 }
 
 func startHTTPService(cfg *Config, str *store.Store, cltr *cluster.Client, credStr *auth.CredentialsStore) (*httpd.Service, error) {
-	// Create HTTP server and load authentication information if required.
-	var s *httpd.Service
-	if credStr != nil {
-		s = httpd.New(cfg.HTTPAddr, str, cltr, credStr)
-	} else {
-		s = httpd.New(cfg.HTTPAddr, str, cltr, nil)
-	}
+	// Create HTTP server and load authentication information.
+	s := httpd.New(cfg.HTTPAddr, str, cltr, credStr)
 
-	s.ClientCACertFile = cfg.HTTPx509CACert
+	s.CACertFile = cfg.HTTPx509CACert
 	s.CertFile = cfg.HTTPx509Cert
 	s.KeyFile = cfg.HTTPx509Key
 	s.TLS1011 = cfg.TLS1011
@@ -346,8 +323,36 @@ func clusterService(cfg *Config, tn cluster.Transport, db cluster.Database, mgr 
 	return c, nil
 }
 
-func createCluster(cfg *Config, tlsConfig *tls.Config, hasPeers bool, str *store.Store,
+func createClusterClient(cfg *Config, clstr *cluster.Service) (*cluster.Client, error) {
+	var dialerTLSConfig *tls.Config
+	var err error
+	if cfg.NodeX509Cert != "" || cfg.NodeX509CACert != "" {
+		dialerTLSConfig, err = rtls.CreateClientConfig(cfg.NodeX509Cert, cfg.NodeX509Key,
+			cfg.NodeX509CACert, cfg.NoNodeVerify, cfg.TLS1011)
+		if err != nil {
+			log.Fatalf("failed to create TLS config for cluster dialer: %s", err.Error())
+		}
+	}
+	clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, dialerTLSConfig)
+	clstrClient := cluster.NewClient(clstrDialer, cfg.ClusterConnectTimeout)
+	if err := clstrClient.SetLocal(cfg.RaftAdv, clstr); err != nil {
+		log.Fatalf("failed to set cluster client local parameters: %s", err.Error())
+	}
+	return clstrClient, nil
+}
+
+func createCluster(cfg *Config, hasPeers bool, str *store.Store,
 	httpServ *httpd.Service, credStr *auth.CredentialsStore) error {
+	var tlsConfig *tls.Config
+	var err error
+	if cfg.HTTPx509Cert != "" || cfg.HTTPx509CACert != "" {
+		tlsConfig, err = rtls.CreateClientConfig(cfg.HTTPx509Cert, cfg.HTTPx509Key, cfg.HTTPx509CACert,
+			cfg.NoHTTPVerify, cfg.TLS1011)
+		if err != nil {
+			return fmt.Errorf("failed to create TLS client config for cluster: %s", err.Error())
+		}
+	}
+
 	joins := cfg.JoinAddresses()
 	if joins == nil && cfg.DiscoMode == "" && !hasPeers {
 		// Brand new node, told to bootstrap itself. So do it.

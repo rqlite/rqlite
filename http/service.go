@@ -270,11 +270,12 @@ type Service struct {
 	statusMu sync.RWMutex
 	statuses map[string]StatusReporter
 
-	ClientCACertFile string // Path to x509 CA certificate used to verify client certificates.
-	CertFile         string // Path to server's own x509 certificate.
-	KeyFile          string // Path to server's own x509 private key.
-	TLS1011          bool   // Whether older, deprecated TLS should be supported.
-	ClientNoVerify   bool   // Whether client certificates should not be verified.
+	CACertFile     string // Path to x509 CA certificate used to verify certificates.
+	CertFile       string // Path to server's own x509 certificate.
+	KeyFile        string // Path to server's own x509 private key.
+	TLS1011        bool   // Whether older, deprecated TLS should be supported.
+	ClientNoVerify bool   // Whether client certificates should not be verified.
+	tlsConfig      *tls.Config
 
 	DefaultQueueCap     int
 	DefaultQueueBatchSz int
@@ -325,11 +326,11 @@ func (s *Service) Start() error {
 			return err
 		}
 	} else {
-		config, err := rtls.CreateServerConfig(s.CertFile, s.KeyFile, s.ClientCACertFile, s.ClientNoVerify, s.TLS1011)
+		s.tlsConfig, err = rtls.CreateServerConfig(s.CertFile, s.KeyFile, s.CACertFile, s.ClientNoVerify, s.TLS1011)
 		if err != nil {
 			return err
 		}
-		ln, err = tls.Listen("tcp", s.addr, config)
+		ln, err = tls.Listen("tcp", s.addr, s.tlsConfig)
 		if err != nil {
 			return err
 		}
@@ -951,6 +952,7 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 		"auth":      prettyEnabled(s.credentialStore != nil),
 		"cluster":   clusterStatus,
 		"queue":     queueStats,
+		"tls":       s.tlsStats(),
 	}
 
 	nodeStatus := map[string]interface{}{
@@ -1687,6 +1689,21 @@ func (s *Service) addBuildVersion(w http.ResponseWriter) {
 		version = v
 	}
 	w.Header().Add(VersionHTTPHeader, version)
+}
+
+// tlsStats returns the TLS stats for the service.
+func (s *Service) tlsStats() map[string]interface{} {
+	m := map[string]interface{}{
+		"enabled": prettyEnabled(s.tlsConfig != nil),
+	}
+	if s.tlsConfig != nil {
+		m["client_auth"] = s.tlsConfig.ClientAuth.String()
+		m["cert_file"] = s.CertFile
+		m["key_file"] = s.KeyFile
+		m["ca_file"] = s.CACertFile
+		m["next_protos"] = s.tlsConfig.NextProtos
+	}
+	return m
 }
 
 // writeResponse writes the given response to the given writer.

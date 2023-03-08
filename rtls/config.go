@@ -41,15 +41,18 @@ func CreateConfig(certFile, keyFile, caCertFile string, noverify, tls1011 bool) 
 			return nil, fmt.Errorf("failed to load CA certificate(s) for client verification in %q", caCertFile)
 		}
 	}
+	if !noverify {
+		config.ClientAuth = tls.RequireAndVerifyClientCert
+	}
 	return config, nil
 }
 
 // CreateClientConfig creates a new tls.Config for use by a client. The certFile and keyFile
 // parameters are the paths to the client's certificate and key files, which will be used to
-// authenticate the client to the server. The caCertFile parameter is the path to the CA
-// certificate file, which the client will use to verify any certificate presented by the
-// server . If noverify is true, the client will not verify the server's certificate. If
-// tls1011 is true, the client will accept TLS 1.0 or 1.1. Otherwise, it will require TLS 1.2
+// authenticate the client to the server if mutual TLS is active. The caCertFile parameter
+// is the path to the CA certificate file, which the client will use to verify any certificate
+// presented by the server. If noverify is true, the client will not verify the server's certificate.
+// If tls1011 is true, the client will accept TLS 1.0 or 1.1. Otherwise, it will require TLS 1.2
 // or higher.
 func CreateClientConfig(certFile, keyFile, caCertFile string, noverify, tls1011 bool) (*tls.Config, error) {
 	var err error
@@ -86,7 +89,7 @@ func CreateClientConfig(certFile, keyFile, caCertFile string, noverify, tls1011 
 func CreateServerConfig(certFile, keyFile, caCertFile string, noverify, tls1011 bool) (*tls.Config, error) {
 	var err error
 
-	config := createBaseTLSConfig(noverify, tls1011)
+	config := createBaseTLSConfig(false, tls1011)
 	config.Certificates = make([]tls.Certificate, 1)
 	config.Certificates[0], err = tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
@@ -102,6 +105,8 @@ func CreateServerConfig(certFile, keyFile, caCertFile string, noverify, tls1011 
 		if !ok {
 			return nil, fmt.Errorf("failed to load CA certificate(s) for client verification in %q", caCertFile)
 		}
+	}
+	if !noverify {
 		config.ClientAuth = tls.RequireAndVerifyClientCert
 	}
 	return config, nil
