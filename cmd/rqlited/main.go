@@ -138,8 +138,8 @@ func main() {
 	httpServ.RegisterStatus("cluster", clstr)
 
 	var clstrTLSConfig *tls.Config
-	if cfg.HTTPX509Cert != "" || cfg.HTTPX509CACert != "" {
-		clstrTLSConfig, err = rtls.CreateClientConfig(cfg.HTTPX509Cert, cfg.HTTPX509Key, cfg.HTTPX509CACert,
+	if cfg.HTTPx509Cert != "" || cfg.HTTPx509CACert != "" {
+		clstrTLSConfig, err = rtls.CreateClientConfig(cfg.HTTPx509Cert, cfg.HTTPx509Key, cfg.HTTPx509CACert,
 			cfg.NoHTTPVerify, cfg.TLS1011)
 		if err != nil {
 			log.Fatalf("failed to create TLS client config for cluster: %s", err.Error())
@@ -274,9 +274,9 @@ func startHTTPService(cfg *Config, str *store.Store, cltr *cluster.Client, credS
 		s = httpd.New(cfg.HTTPAddr, str, cltr, nil)
 	}
 
-	s.ClientCACertFile = cfg.HTTPX509CACert
-	s.CertFile = cfg.HTTPX509Cert
-	s.KeyFile = cfg.HTTPX509Key
+	s.ClientCACertFile = cfg.HTTPx509CACert
+	s.CertFile = cfg.HTTPx509Cert
+	s.KeyFile = cfg.HTTPx509Key
 	s.TLS1011 = cfg.TLS1011
 	s.ClientNoVerify = cfg.NoHTTPVerify
 	s.Expvar = cfg.Expvar
@@ -338,7 +338,7 @@ func credentialStore(cfg *Config) (*auth.CredentialsStore, error) {
 func clusterService(cfg *Config, tn cluster.Transport, db cluster.Database, mgr cluster.Manager, credStr *auth.CredentialsStore) (*cluster.Service, error) {
 	c := cluster.New(tn, db, mgr, credStr)
 	c.SetAPIAddr(cfg.HTTPAdv)
-	c.EnableHTTPS(cfg.HTTPX509Cert != "" && cfg.HTTPX509Key != "") // Conditions met for an HTTPS API
+	c.EnableHTTPS(cfg.HTTPx509Cert != "" && cfg.HTTPx509Key != "") // Conditions met for an HTTPS API
 
 	if err := c.Open(); err != nil {
 		return nil, err

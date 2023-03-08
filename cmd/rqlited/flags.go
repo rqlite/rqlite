@@ -47,15 +47,15 @@ type Config struct {
 	// AuthFile is the path to the authentication file. May not be set.
 	AuthFile string
 
-	// HTTPX509CACert is the path to the CA certficate file for when this node verifies
+	// HTTPx509CACert is the path to the CA certficate file for when this node verifies
 	// other certificates for any HTTP communications. May not be set.
-	HTTPX509CACert string
+	HTTPx509CACert string
 
-	// HTTPX509Cert is the path to the X509 cert for the HTTP server. May not be set.
-	HTTPX509Cert string
+	// HTTPx509Cert is the path to the X509 cert for the HTTP server. May not be set.
+	HTTPx509Cert string
 
-	// HTTPX509Key is the path to the private key for the HTTP server. May not be set.
-	HTTPX509Key string
+	// HTTPx509Key is the path to the private key for the HTTP server. May not be set.
+	HTTPx509Key string
 
 	// NodeEncrypt indicates whether node encryption should be enabled.
 	NodeEncrypt bool
@@ -221,7 +221,7 @@ func (c *Config) Validate() error {
 	if !bothUnsetSet(c.NodeX509Cert, c.NodeX509Key) {
 		return errors.New("either both -node-x509-cert and -node-x509-key must be set, or neither")
 	}
-	if !bothUnsetSet(c.HTTPX509Cert, c.HTTPX509Key) {
+	if !bothUnsetSet(c.HTTPx509Cert, c.HTTPx509Key) {
 		return errors.New("either both -x509-cert and -x509-key must be set, or neither")
 	}
 
@@ -322,7 +322,7 @@ func (c *Config) JoinAddresses() []string {
 // protocol, host and port.
 func (c *Config) HTTPURL() string {
 	apiProto := "http"
-	if c.HTTPX509Cert != "" {
+	if c.HTTPx509Cert != "" {
 		apiProto = "https"
 	}
 	return fmt.Sprintf("%s://%s", apiProto, c.HTTPAdv)
@@ -367,9 +367,9 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	flag.StringVar(&config.HTTPAddr, HTTPAddrFlag, "localhost:4001", "HTTP server bind address. To enable HTTPS, set X.509 cert and key")
 	flag.StringVar(&config.HTTPAdv, HTTPAdvAddrFlag, "", "Advertised HTTP address. If not set, same as HTTP server bind")
 	flag.BoolVar(&config.TLS1011, "tls1011", false, "Support deprecated TLS versions 1.0 and 1.1")
-	flag.StringVar(&config.HTTPX509CACert, "http-ca-cert", "", "Path to X.509 CA certificate for HTTPS")
-	flag.StringVar(&config.HTTPX509Cert, "http-cert", "", "Path to HTTPS X.509 certificate")
-	flag.StringVar(&config.HTTPX509Key, "http-key", "", "Path to HTTPS X.509 private key")
+	flag.StringVar(&config.HTTPx509CACert, "http-ca-cert", "", "Path to X.509 CA certificate for HTTPS")
+	flag.StringVar(&config.HTTPx509Cert, "http-cert", "", "Path to HTTPS X.509 certificate")
+	flag.StringVar(&config.HTTPx509Key, "http-key", "", "Path to HTTPS X.509 private key")
 	flag.BoolVar(&config.NoHTTPVerify, "http-no-verify", false, "Skip verification of remote HTTPS cert when joining cluster, or receiving client certificates")
 	flag.BoolVar(&config.NodeEncrypt, "node-encrypt", false, "Ignored, control node-to-node encryption by setting node cert and key")
 	flag.StringVar(&config.NodeX509CACert, "node-ca-cert", "", "Path to X.509 CA certificate for node-to-node encryption")
