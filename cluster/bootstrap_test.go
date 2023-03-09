@@ -10,6 +10,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/rqlite/rqlite/rtls"
 )
 
 func Test_AddressProviderString(t *testing.T) {
@@ -123,6 +125,10 @@ func Test_BootstrapperBootSingleNotifyHTTPS(t *testing.T) {
 			w.WriteHeader(http.StatusServiceUnavailable)
 			return
 		}
+
+		if r.URL.Path != "/notify" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
 		tsNotified = true
 		b, err := io.ReadAll(r.Body)
 		if err != nil {
@@ -135,10 +141,9 @@ func Test_BootstrapperBootSingleNotifyHTTPS(t *testing.T) {
 			return
 		}
 	}))
-
+	defer ts.Close()
 	ts.TLS = &tls.Config{NextProtos: []string{"h2", "http/1.1"}}
 	ts.StartTLS()
-	defer ts.Close()
 
 	n := -1
 	done := func() bool {
@@ -146,11 +151,16 @@ func Test_BootstrapperBootSingleNotifyHTTPS(t *testing.T) {
 		return n == 5
 	}
 
+	tlsConfig, err := rtls.CreateClientConfig("", "", "", true, false)
+	if err != nil {
+		t.Fatalf("failed to create TLS config: %s", err)
+	}
+
 	p := NewAddressProviderString([]string{ts.URL})
-	bs := NewBootstrapper(p, nil)
+	bs := NewBootstrapper(p, tlsConfig)
 	bs.Interval = time.Second
 
-	err := bs.Boot("node1", "192.168.1.1:1234", done, 60*time.Second)
+	err = bs.Boot("node1", "192.168.1.1:1234", done, 60*time.Second)
 	if err != nil {
 		t.Fatalf("failed to boot: %s", err)
 	}
