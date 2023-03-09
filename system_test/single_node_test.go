@@ -467,6 +467,9 @@ LOOP:
 		t.Fatalf("queued response is not valid: %s", resp)
 	}
 	r, err := node.Query(`SELECT COUNT(*) FROM foo`)
+	if err != nil {
+		t.Fatalf(`query failed: %s`, err.Error())
+	}
 	if got, exp := r, `{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[6]]}]}`; got != exp {
 		t.Fatalf("incorrect results, exp: %s, got: %s", exp, got)
 	}
@@ -581,6 +584,9 @@ func Test_SingleNodeQueuedEmptyNil(t *testing.T) {
 		t.Fatalf("queued response is not valid: %s", resp)
 	}
 	r, err := node.Query(`SELECT COUNT(*) FROM foo`)
+	if err != nil {
+		t.Fatalf(`query failed: %s`, err.Error())
+	}
 	if got, exp := r, `{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[3]]}]}`; got != exp {
 		t.Fatalf("incorrect results, exp: %s, got: %s", exp, got)
 	}
@@ -603,6 +609,9 @@ func Test_SingleNodeQueuedEmptyNil(t *testing.T) {
 		t.Fatalf("queued response is not valid: %s", resp)
 	}
 	r, err = node.Query(`SELECT COUNT(*) FROM foo`)
+	if err != nil {
+		t.Fatalf(`query failed: %s`, err.Error())
+	}
 	if got, exp := r, `{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[6]]}]}`; got != exp {
 		t.Fatalf("incorrect results, exp: %s, got: %s", exp, got)
 	}
