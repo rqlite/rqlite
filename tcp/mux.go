@@ -2,18 +2,17 @@ package tcp
 
 import (
 	"crypto/tls"
-	"crypto/x509"
 	"errors"
 	"expvar"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net"
 	"os"
-	"strconv"
 	"sync"
 	"time"
+
+	"github.com/rqlite/rqlite/rtls"
 )
 
 const (
@@ -36,16 +35,12 @@ func init() {
 }
 
 // Layer represents the connection between nodes. It can be both used to
-// make connections to other nodes, and receive connections from other
-// nodes.
+// make connections to other nodes (client), and receive connections from other
+// nodes (server)
 type Layer struct {
-	ln   net.Listener
-	addr net.Addr
-
+	ln     net.Listener
+	addr   net.Addr
 	dialer *Dialer
-
-	nodeX509CACert string
-	tlsConfig      *tls.Config
 }
 
 // Dial creates a new network connection.
@@ -72,25 +67,11 @@ type Mux struct {
 
 	wg sync.WaitGroup
 
-	remoteEncrypted bool
-
 	// The amount of time to wait for the first header byte.
 	Timeout time.Duration
 
 	// Out-of-band error logger
 	Logger *log.Logger
-
-	// Path to root X.509 certificate.
-	x509CACert string
-
-	// Path to X509 certificate
-	x509Cert string
-
-	// Path to X509 key.
-	x509Key string
-
-	// Whether to skip verification of other nodes' certificates.
-	InsecureSkipVerify bool
 
 	tlsConfig *tls.Config
 }
@@ -113,23 +94,21 @@ func NewMux(ln net.Listener, adv net.Addr) (*Mux, error) {
 }
 
 // NewTLSMux returns a new instance of Mux for ln, and encrypts all traffic
-// using TLS. If adv is nil, then the addr of ln is used.
-func NewTLSMux(ln net.Listener, adv net.Addr, cert, key, caCert string) (*Mux, error) {
+// using TLS. If adv is nil, then the addr of ln is used. If insecure is true,
+// then the server will not verify the client's certificate. If mutual is true,
+// then the server will require the client to present a trusted certificate.
+func NewTLSMux(ln net.Listener, adv net.Addr, cert, key, caCert string, insecure, mutual bool) (*Mux, error) {
 	mux, err := NewMux(ln, adv)
 	if err != nil {
 		return nil, err
 	}
 
-	mux.tlsConfig, err = createTLSConfig(cert, key, caCert)
+	mux.tlsConfig, err = rtls.CreateConfig(cert, key, caCert, insecure, mutual, false)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("cannot create TLS config: %s", err)
 	}
 
 	mux.ln = tls.NewListener(ln, mux.tlsConfig)
-	mux.remoteEncrypted = true
-	mux.x509CACert = caCert
-	mux.x509Cert = cert
-	mux.x509Key = key
 
 	return mux, nil
 }
@@ -170,16 +149,8 @@ func (mux *Mux) Serve() error {
 // Stats returns status of the mux.
 func (mux *Mux) Stats() (interface{}, error) {
 	s := map[string]string{
-		"addr":      mux.addr.String(),
-		"timeout":   mux.Timeout.String(),
-		"encrypted": strconv.FormatBool(mux.remoteEncrypted),
-	}
-
-	if mux.remoteEncrypted {
-		s["certificate"] = mux.x509Cert
-		s["key"] = mux.x509Key
-		s["ca_certificate"] = mux.x509CACert
-		s["skip_verify"] = strconv.FormatBool(mux.InsecureSkipVerify)
+		"addr":    mux.addr.String(),
+		"timeout": mux.Timeout.String(),
 	}
 
 	return s, nil
@@ -240,12 +211,10 @@ func (mux *Mux) Listen(header byte) *Layer {
 	mux.m[header] = ln
 
 	layer := &Layer{
-		ln:             ln,
-		addr:           mux.addr,
-		nodeX509CACert: mux.x509CACert,
-		tlsConfig:      mux.tlsConfig,
+		ln:   ln,
+		addr: mux.addr,
 	}
-	layer.dialer = NewDialer(header, mux.remoteEncrypted, mux.InsecureSkipVerify)
+	layer.dialer = NewDialer(header, mux.tlsConfig)
 
 	return layer
 }
@@ -269,39 +238,3 @@ func (ln *listener) Close() error { return nil }
 
 // Addr always returns nil
 func (ln *listener) Addr() net.Addr { return nil }
-
-// newTLSListener returns a net listener which encrypts the traffic using TLS.
-func newTLSListener(ln net.Listener, certFile, keyFile, caCertFile string) (net.Listener, error) {
-	config, err := createTLSConfig(certFile, keyFile, caCertFile)
-	if err != nil {
-		return nil, err
-	}
-
-	return tls.NewListener(ln, config), nil
-}
-
-// createTLSConfig returns a TLS config from the given cert, key and optionally
-// Certificate Authority cert.
-func createTLSConfig(certFile, keyFile, caCertFile string) (*tls.Config, error) {
-	var err error
-	config := &tls.Config{}
-	config.Certificates = make([]tls.Certificate, 1)
-	config.Certificates[0], err = tls.LoadX509KeyPair(certFile, keyFile)
-	if err != nil {
-		return nil, err
-	}
-
-	if caCertFile != "" {
-		asn1Data, err := ioutil.ReadFile(caCertFile)
-		if err != nil {
-			return nil, err
-		}
-		config.RootCAs = x509.NewCertPool()
-		ok := config.RootCAs.AppendCertsFromPEM(asn1Data)
-		if !ok {
-			return nil, fmt.Errorf("failed to parse root certificate(s) in %q", caCertFile)
-		}
-	}
-
-	return config, nil
-}

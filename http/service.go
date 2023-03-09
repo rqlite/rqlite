@@ -5,13 +5,11 @@ package http
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"expvar"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -27,6 +25,7 @@ import (
 	"github.com/rqlite/rqlite/command"
 	"github.com/rqlite/rqlite/command/encoding"
 	"github.com/rqlite/rqlite/queue"
+	"github.com/rqlite/rqlite/rtls"
 	"github.com/rqlite/rqlite/store"
 )
 
@@ -270,10 +269,12 @@ type Service struct {
 	statusMu sync.RWMutex
 	statuses map[string]StatusReporter
 
-	CACertFile string // Path to root X.509 certificate.
-	CertFile   string // Path to SSL certificate.
-	KeyFile    string // Path to SSL private key.
-	TLS1011    bool   // Whether older, deprecated TLS should be supported.
+	CACertFile   string // Path to x509 CA certificate used to verify certificates.
+	CertFile     string // Path to server's own x509 certificate.
+	KeyFile      string // Path to server's own x509 private key.
+	TLS1011      bool   // Whether older, deprecated TLS should be supported.
+	ClientVerify bool   // Whether client certificates should verified.
+	tlsConfig    *tls.Config
 
 	DefaultQueueCap     int
 	DefaultQueueBatchSz int
@@ -324,15 +325,26 @@ func (s *Service) Start() error {
 			return err
 		}
 	} else {
-		config, err := createTLSConfig(s.CertFile, s.KeyFile, s.CACertFile, s.TLS1011)
+		s.tlsConfig, err = rtls.CreateServerConfig(s.CertFile, s.KeyFile, s.CACertFile, !s.ClientVerify, s.TLS1011)
 		if err != nil {
 			return err
 		}
-		ln, err = tls.Listen("tcp", s.addr, config)
+		ln, err = tls.Listen("tcp", s.addr, s.tlsConfig)
 		if err != nil {
 			return err
 		}
-		s.logger.Printf("secure HTTPS server enabled with cert %s, key %s", s.CertFile, s.KeyFile)
+		var b strings.Builder
+		b.WriteString(fmt.Sprintf("secure HTTPS server enabled with cert %s, key %s", s.CertFile, s.KeyFile))
+		if s.CACertFile != "" {
+			b.WriteString(fmt.Sprintf(", CA cert %s", s.CACertFile))
+		}
+		if s.ClientVerify {
+			b.WriteString(", mutual TLS enabled")
+		} else {
+			b.WriteString(", mutual disabled")
+		}
+		// print the message
+		s.logger.Println(b.String())
 	}
 	s.ln = ln
 
@@ -368,7 +380,6 @@ func (s *Service) Close() {
 	<-s.queueDone
 
 	s.ln.Close()
-	return
 }
 
 // HTTPS returns whether this service is using HTTPS.
@@ -445,7 +456,7 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	b, err := ioutil.ReadAll(r.Body)
+	b, err := io.ReadAll(r.Body)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -524,7 +535,7 @@ func (s *Service) handleNotify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	b, err := ioutil.ReadAll(r.Body)
+	b, err := io.ReadAll(r.Body)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -584,7 +595,7 @@ func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	b, err := ioutil.ReadAll(r.Body)
+	b, err := io.ReadAll(r.Body)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -793,7 +804,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	b, err := ioutil.ReadAll(r.Body)
+	b, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -950,6 +961,7 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 		"auth":      prettyEnabled(s.credentialStore != nil),
 		"cluster":   clusterStatus,
 		"queue":     queueStats,
+		"tls":       s.tlsStats(),
 	}
 
 	nodeStatus := map[string]interface{}{
@@ -1213,7 +1225,7 @@ func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	b, err := ioutil.ReadAll(r.Body)
+	b, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -1246,7 +1258,7 @@ func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request) {
 	var fc queue.FlushChannel
 	if wait {
 		stats.Add(numQueuedExecutionsWait, 1)
-		fc = make(queue.FlushChannel, 0)
+		fc = make(queue.FlushChannel)
 	}
 
 	seqNum, err := s.stmtQueue.Write(stmts, fc)
@@ -1269,7 +1281,6 @@ func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request) {
 
 	resp.end = time.Now()
 	s.writeResponse(w, r, resp)
-	return
 }
 
 // execute handles queries that modify the database.
@@ -1282,7 +1293,7 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	b, err := ioutil.ReadAll(r.Body)
+	b, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -1688,6 +1699,21 @@ func (s *Service) addBuildVersion(w http.ResponseWriter) {
 	w.Header().Add(VersionHTTPHeader, version)
 }
 
+// tlsStats returns the TLS stats for the service.
+func (s *Service) tlsStats() map[string]interface{} {
+	m := map[string]interface{}{
+		"enabled": prettyEnabled(s.tlsConfig != nil),
+	}
+	if s.tlsConfig != nil {
+		m["client_auth"] = s.tlsConfig.ClientAuth.String()
+		m["cert_file"] = s.CertFile
+		m["key_file"] = s.KeyFile
+		m["ca_file"] = s.CACertFile
+		m["next_protos"] = s.tlsConfig.NextProtos
+	}
+	return m
+}
+
 // writeResponse writes the given response to the given writer.
 func (s *Service) writeResponse(w http.ResponseWriter, r *http.Request, j Responser) {
 	var b []byte
@@ -1728,45 +1754,13 @@ func requestQueries(r *http.Request) ([]*command.Statement, error) {
 		}, nil
 	}
 
-	b, err := ioutil.ReadAll(r.Body)
+	b, err := io.ReadAll(r.Body)
 	if err != nil {
 		return nil, errors.New("bad query POST request")
 	}
 	r.Body.Close()
 
 	return ParseRequest(b)
-}
-
-// createTLSConfig returns a TLS config from the given cert and key.
-func createTLSConfig(certFile, keyFile, caCertFile string, tls1011 bool) (*tls.Config, error) {
-	var err error
-
-	var minTLS = uint16(tls.VersionTLS12)
-	if tls1011 {
-		minTLS = tls.VersionTLS10
-	}
-
-	config := &tls.Config{
-		NextProtos: []string{"h2", "http/1.1"},
-		MinVersion: minTLS,
-	}
-	config.Certificates = make([]tls.Certificate, 1)
-	config.Certificates[0], err = tls.LoadX509KeyPair(certFile, keyFile)
-	if err != nil {
-		return nil, err
-	}
-	if caCertFile != "" {
-		asn1Data, err := ioutil.ReadFile(caCertFile)
-		if err != nil {
-			return nil, err
-		}
-		config.RootCAs = x509.NewCertPool()
-		ok := config.RootCAs.AppendCertsFromPEM(asn1Data)
-		if !ok {
-			return nil, fmt.Errorf("failed to parse root certificate(s) in %q", caCertFile)
-		}
-	}
-	return config, nil
 }
 
 // queryParam returns whether the given query param is present.
@@ -1954,24 +1948,6 @@ func executeRequestFromStrings(s []string, timings, tx bool) *command.ExecuteReq
 
 	}
 	return &command.ExecuteRequest{
-		Request: &command.Request{
-			Statements:  stmts,
-			Transaction: tx,
-		},
-		Timings: timings,
-	}
-}
-
-// queryRequestFromStrings converts a slice of strings into a command.QueryRequest
-func queryRequestFromStrings(s []string, timings, tx bool) *command.QueryRequest {
-	stmts := make([]*command.Statement, len(s))
-	for i := range s {
-		stmts[i] = &command.Statement{
-			Sql: s[i],
-		}
-
-	}
-	return &command.QueryRequest{
 		Request: &command.Request{
 			Statements:  stmts,
 			Transaction: tx,

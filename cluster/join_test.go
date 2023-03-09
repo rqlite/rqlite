@@ -1,13 +1,16 @@
 package cluster
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/rqlite/rqlite/rtls"
 )
 
 const numAttempts int = 3
@@ -25,7 +28,7 @@ func Test_SingleJoinOK(t *testing.T) {
 			t.Fatalf("incorrect Content-Type set")
 		}
 
-		b, err := ioutil.ReadAll(r.Body)
+		b, err := io.ReadAll(r.Body)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			return
@@ -39,6 +42,58 @@ func Test_SingleJoinOK(t *testing.T) {
 	defer ts.Close()
 
 	joiner := NewJoiner("127.0.0.1", numAttempts, attemptInterval, nil)
+
+	j, err := joiner.Do([]string{ts.URL}, "id0", "127.0.0.1:9090", false)
+	if err != nil {
+		t.Fatalf("failed to join a single node: %s", err.Error())
+	}
+	if j != ts.URL+"/join" {
+		t.Fatalf("node joined using wrong endpoint, exp: %s, got: %s", j, ts.URL)
+	}
+
+	if got, exp := body["id"].(string), "id0"; got != exp {
+		t.Fatalf("wrong node ID supplied, exp %s, got %s", exp, got)
+	}
+	if got, exp := body["addr"].(string), "127.0.0.1:9090"; got != exp {
+		t.Fatalf("wrong address supplied, exp %s, got %s", exp, got)
+	}
+	if got, exp := body["voter"].(bool), false; got != exp {
+		t.Fatalf("wrong voter state supplied, exp %v, got %v", exp, got)
+	}
+}
+
+func Test_SingleJoinHTTPSOK(t *testing.T) {
+	var body map[string]interface{}
+	ts := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			t.Fatalf("Client did not use POST")
+		}
+		w.WriteHeader(http.StatusOK)
+
+		if r.Header["Content-Type"][0] != "application/json" {
+			t.Fatalf("incorrect Content-Type set")
+		}
+
+		b, err := io.ReadAll(r.Body)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		if err := json.Unmarshal(b, &body); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+	}))
+	defer ts.Close()
+	ts.TLS = &tls.Config{NextProtos: []string{"h2", "http/1.1"}}
+	ts.StartTLS()
+
+	tlsConfig, err := rtls.CreateClientConfig("", "", "", true, false)
+	if err != nil {
+		t.Fatalf("failed to create TLS config: %s", err.Error())
+	}
+	joiner := NewJoiner("127.0.0.1", numAttempts, attemptInterval, tlsConfig)
 
 	j, err := joiner.Do([]string{ts.URL}, "id0", "127.0.0.1:9090", false)
 	if err != nil {
@@ -75,7 +130,7 @@ func Test_SingleJoinOKBasicAuth(t *testing.T) {
 			t.Fatalf("bad Basic Auth credentials received (%s, %s", username, password)
 		}
 
-		b, err := ioutil.ReadAll(r.Body)
+		b, err := io.ReadAll(r.Body)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			return

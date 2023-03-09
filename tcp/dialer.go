@@ -8,36 +8,32 @@ import (
 )
 
 // NewDialer returns an initialized Dialer
-func NewDialer(header byte, remoteEncrypted, skipVerify bool) *Dialer {
+func NewDialer(header byte, tlsConfig *tls.Config) *Dialer {
 	return &Dialer{
-		header:          header,
-		remoteEncrypted: remoteEncrypted,
-		skipVerify:      skipVerify,
+		header:    header,
+		tlsConfig: tlsConfig,
 	}
 }
 
 // Dialer supports dialing a cluster service.
 type Dialer struct {
-	header          byte
-	remoteEncrypted bool
-	skipVerify      bool
+	header    byte
+	tlsConfig *tls.Config
 }
 
 // Dial dials the cluster service at the given addr and returns a connection.
 func (d *Dialer) Dial(addr string, timeout time.Duration) (conn net.Conn, retErr error) {
 	dialer := &net.Dialer{Timeout: timeout}
 
-	if d.remoteEncrypted {
-		conf := &tls.Config{
-			InsecureSkipVerify: d.skipVerify,
-		}
-		conn, retErr = tls.DialWithDialer(dialer, "tcp", addr, conf)
-	} else {
+	if d.tlsConfig == nil {
 		conn, retErr = dialer.Dial("tcp", addr)
+	} else {
+		conn, retErr = tls.DialWithDialer(dialer, "tcp", addr, d.tlsConfig)
 	}
 	if retErr != nil {
 		return nil, retErr
 	}
+
 	defer func() {
 		if retErr != nil {
 			conn.Close()

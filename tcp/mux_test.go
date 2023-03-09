@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto/tls"
 	"io"
-	"io/ioutil"
 	"log"
 	"net"
 	"os"
@@ -41,7 +40,7 @@ func TestMux(t *testing.T) {
 		}
 		mux.Timeout = 200 * time.Millisecond
 		if !testing.Verbose() {
-			mux.Logger = log.New(ioutil.Discard, "", 0)
+			mux.Logger = log.New(io.Discard, "", 0)
 		}
 		for i := uint8(0); i < n; i++ {
 			ln := mux.Listen(i)
@@ -140,7 +139,7 @@ func TestMux_Advertise(t *testing.T) {
 	}
 	mux.Timeout = 200 * time.Millisecond
 	if !testing.Verbose() {
-		mux.Logger = log.New(ioutil.Discard, "", 0)
+		mux.Logger = log.New(io.Discard, "", 0)
 	}
 
 	layer := mux.Listen(1)
@@ -177,7 +176,7 @@ func TestTLSMux(t *testing.T) {
 	key := x509.KeyFile("")
 	defer os.Remove(key)
 
-	mux, err := NewTLSMux(tcpListener, nil, cert, key, "")
+	mux, err := NewTLSMux(tcpListener, nil, cert, key, "", true, false)
 	if err != nil {
 		t.Fatalf("failed to create mux: %s", err.Error())
 	}
@@ -200,7 +199,7 @@ func TestTLSMux(t *testing.T) {
 func TestTLSMux_Fail(t *testing.T) {
 	tcpListener := mustTCPListener("127.0.0.1:0")
 	defer tcpListener.Close()
-	_, err := NewTLSMux(tcpListener, nil, "xxxx", "yyyy", "")
+	_, err := NewTLSMux(tcpListener, nil, "xxxx", "yyyy", "", true, false)
 	if err == nil {
 		t.Fatalf("created mux unexpectedly with bad resources")
 	}

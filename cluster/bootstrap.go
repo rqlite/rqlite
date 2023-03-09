@@ -50,13 +50,10 @@ type Bootstrapper struct {
 func NewBootstrapper(p AddressProvider, tlsConfig *tls.Config) *Bootstrapper {
 	bs := &Bootstrapper{
 		provider:  p,
-		tlsConfig: &tls.Config{InsecureSkipVerify: true},
+		tlsConfig: tlsConfig,
 		joiner:    NewJoiner("", 1, 0, tlsConfig),
 		logger:    log.New(os.Stderr, "[cluster-bootstrap] ", log.LstdFlags),
 		Interval:  2 * time.Second,
-	}
-	if tlsConfig != nil {
-		bs.tlsConfig = tlsConfig
 	}
 	return bs
 }
@@ -118,7 +115,7 @@ func (b *Bootstrapper) Boot(id, raftAddr string, done func() bool, timeout time.
 			// in the targets list. This could be because none of the nodes are contactable,
 			// or none of the nodes are in a functioning cluster with a leader. That means that
 			// this node could be part of a set nodes that are bootstrapping to form a cluster
-			// de novo. For that to happen it needs to now let the otehr nodes know it is here.
+			// de novo. For that to happen it needs to now let the other nodes know it is here.
 			// If this is a new cluster, some node will then reach the bootstrap-expect value,
 			// form the cluster, beating all other nodes to it.
 			if err := b.notify(targets, id, raftAddr); err != nil {
@@ -134,7 +131,8 @@ func (b *Bootstrapper) Boot(id, raftAddr string, done func() bool, timeout time.
 func (b *Bootstrapper) notify(targets []string, id, raftAddr string) error {
 	// Create and configure the client to connect to the other node.
 	tr := &http.Transport{
-		TLSClientConfig: b.tlsConfig,
+		TLSClientConfig:   b.tlsConfig,
+		ForceAttemptHTTP2: true,
 	}
 	client := &http.Client{Transport: tr}
 
