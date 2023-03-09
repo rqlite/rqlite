@@ -79,6 +79,10 @@ type Config struct {
 	// NoNodeVerify disables checking other nodes' Node X509 certs for validity.
 	NoNodeVerify bool
 
+	// NodeVerifyClient indicates whether a node should verify client certificates from
+	// other nodes.
+	NodeVerifyClient bool
+
 	// NodeID is the Raft ID for the node.
 	NodeID string
 
@@ -380,6 +384,7 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	flag.StringVar(&config.NodeX509Cert, "node-cert", "", "Path to X.509 certificate for node-to-node mutual authentication and encryption")
 	flag.StringVar(&config.NodeX509Key, "node-key", "", "Path to X.509 private key for node-to-node mutual authentication and encryption")
 	flag.BoolVar(&config.NoNodeVerify, "node-no-verify", false, "Skip verification of any node-node certificate")
+	flag.BoolVar(&config.NodeVerifyClient, "node-verify-client", false, "Enable mutual TLS for node-to-node communication")
 	flag.StringVar(&config.AuthFile, "auth", "", "Path to authentication and authorization file. If not set, not enabled")
 	flag.StringVar(&config.RaftAddr, RaftAddrFlag, "localhost:4002", "Raft communication bind address")
 	flag.StringVar(&config.RaftAdv, RaftAdvAddrFlag, "", "Advertised Raft communication address. If not set, same as Raft bind")

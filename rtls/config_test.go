@@ -25,13 +25,16 @@ func Test_CreateConfig(t *testing.T) {
 	}
 	caCertFile := mustWriteTempFile(t, caCertPEM)
 
-	// create a config with no client verification
-	config, err := CreateConfig(certFile, keyFile, caCertFile, true, false)
+	// create a config with no server or client verification
+	config, err := CreateConfig(certFile, keyFile, caCertFile, true, false, false)
 	if err != nil {
 		t.Fatalf("failed to create config: %v", err)
 	}
 	if config.ClientAuth != tls.NoClientCert {
 		t.Fatalf("expected ClientAuth to be NoClientCert, got %v", config.ClientAuth)
+	}
+	if !config.InsecureSkipVerify {
+		t.Fatalf("expected InsecureSkipVerify to be true, got false")
 	}
 
 	// Check that the certificate is loaded correctly
@@ -65,13 +68,28 @@ func Test_CreateConfig(t *testing.T) {
 		t.Fatalf("expected client CA to be %v, got %v", caCertPool, config.ClientCAs)
 	}
 
-	// create a config with client verification
-	config, err = CreateConfig(certFile, keyFile, "", false, false)
+	// create a config with server cert verification only
+	config, err = CreateConfig(certFile, keyFile, caCertFile, false, false, false)
+	if err != nil {
+		t.Fatalf("failed to create config: %v", err)
+	}
+	if config.ClientAuth != tls.NoClientCert {
+		t.Fatalf("expected ClientAuth to be NoClientCert, got %v", config.ClientAuth)
+	}
+	if config.InsecureSkipVerify {
+		t.Fatalf("expected InsecureSkipVerify to be false, got true")
+	}
+
+	// create a config with both server and client verification
+	config, err = CreateConfig(certFile, keyFile, "", false, true, false)
 	if err != nil {
 		t.Fatalf("failed to create config: %v", err)
 	}
 	if config.ClientAuth != tls.RequireAndVerifyClientCert {
 		t.Fatalf("expected ClientAuth to be RequireAndVerifyClientCert, got %v", config.ClientAuth)
+	}
+	if config.InsecureSkipVerify {
+		t.Fatalf("expected InsecureSkipVerify to be false, got true")
 	}
 }
 

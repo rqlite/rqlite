@@ -339,9 +339,9 @@ func (s *Service) Start() error {
 			b.WriteString(fmt.Sprintf(", CA cert %s", s.CACertFile))
 		}
 		if s.ClientVerify {
-			b.WriteString(", client verification enabled")
+			b.WriteString(", mutual TLS enabled")
 		} else {
-			b.WriteString(", client verification disabled")
+			b.WriteString(", mutual disabled")
 		}
 		// print the message
 		s.logger.Println(b.String())
