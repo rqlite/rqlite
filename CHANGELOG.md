@@ -1,3 +1,7 @@
+## 7.14.1 (unreleased)
+## Implementation changes and bug fixes
+- [PR #1174](https://github.com/rqlite/rqlite/pull/1174): Fix command-line help for x509 resources.
+
 ## 7.14.0 (March 8th 2023)
 This release sees the addition of mutual TLS support, and corrects some other issues related to the use of TLS and Certificate Authority configuration.
 
