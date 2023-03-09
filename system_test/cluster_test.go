@@ -121,7 +121,7 @@ func Test_MultiNodeCluster(t *testing.T) {
 
 	// Kill the leader and wait for the new leader.
 	leader.Deprovision()
-	c.RemoveNode(leader)
+	c = c.RemoveNode(leader)
 	leader, err = c.WaitForNewLeader(leader)
 	if err != nil {
 		t.Fatalf("failed to find new cluster leader after killing leader: %s", err.Error())
@@ -345,7 +345,7 @@ func Test_MultiNodeClusterBootstrap(t *testing.T) {
 
 	// Kill the leader and wait for the new leader.
 	leader.Deprovision()
-	c.RemoveNode(leader)
+	c = c.RemoveNode(leader)
 	leader, err = c.WaitForNewLeader(leader)
 	if err != nil {
 		t.Fatalf("failed to find new cluster leader after killing leader: %s", err.Error())
@@ -1064,7 +1064,7 @@ func Test_MultiNodeClusterNodeEncrypted(t *testing.T) {
 
 	// Kill the leader and wait for the new leader.
 	leader.Deprovision()
-	c.RemoveNode(leader)
+	c = c.RemoveNode(leader)
 	leader, err = c.WaitForNewLeader(leader)
 	if err != nil {
 		t.Fatalf("failed to find new cluster leader after killing leader: %s", err.Error())
@@ -1183,7 +1183,7 @@ func Test_MultiNodeClusterSnapshot(t *testing.T) {
 
 	// Kill original node.
 	node1.Deprovision()
-	c.RemoveNode(node1)
+	c = c.RemoveNode(node1)
 	var leader *Node
 	leader, err = c.WaitForNewLeader(node1)
 	if err != nil {
@@ -1305,7 +1305,7 @@ func Test_MultiNodeClusterWithNonVoter(t *testing.T) {
 
 	// Kill the leader and wait for the new leader.
 	leader.Deprovision()
-	c.RemoveNode(leader)
+	c = c.RemoveNode(leader)
 	leader, err = c.WaitForNewLeader(leader)
 	if err != nil {
 		t.Fatalf("failed to find new cluster leader after killing leader: %s", err.Error())
@@ -1580,7 +1580,6 @@ func Test_MultiNodeClusterReapNodes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed waiting for leader: %s", err.Error())
 	}
-	c = Cluster{node1, node2, node3, nonVoter}
 
 	// Confirm non-voter node is in the the cluster config.
 	nodes, err := leader.Nodes(true)
@@ -1782,20 +1781,4 @@ func Test_MultiNodeClusterNoReapReadOnlyZero(t *testing.T) {
 	if trueOrTimeout(tFn, 10*time.Second) {
 		t.Fatalf("didn't time out waiting for node to be removed")
 	}
-}
-
-func mustGetExpvar(n *Node) string {
-	j, err := n.Expvar()
-	if err != nil {
-		panic(err.Error())
-	}
-	return j
-}
-
-func mustGetExpvarKey(n *Node, k string) string {
-	j, err := n.ExpvarKey(k)
-	if err != nil {
-		panic(err.Error())
-	}
-	return j
 }

@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
+	"io/fs"
 	"net"
 	"net/http"
 	"net/url"
@@ -235,7 +235,7 @@ func (n *Node) Nodes(includeNonVoters bool) (NodesStatus, error) {
 		return nil, fmt.Errorf("nodes endpoint returned: %s", resp.Status)
 	}
 	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -259,7 +259,7 @@ func (n *Node) Status() (string, error) {
 		return "", fmt.Errorf("status endpoint returned: %s", resp.Status)
 	}
 	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
 	}
@@ -306,7 +306,7 @@ func (n *Node) ExpvarKey(k string) (string, error) {
 		return "", fmt.Errorf("expvar endpoint returned: %s", resp.Status)
 	}
 	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
 	}
@@ -339,7 +339,7 @@ func (n *Node) postExecute(stmt string) (string, error) {
 		return "", err
 	}
 	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
 	}
@@ -357,7 +357,7 @@ func (n *Node) postExecuteQueued(stmt string, wait bool) (string, error) {
 		return "", err
 	}
 	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
 	}
@@ -376,7 +376,7 @@ func (n *Node) query(stmt, consistency string) (string, error) {
 		return "", err
 	}
 	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
 	}
@@ -389,7 +389,7 @@ func (n *Node) postQuery(stmt string) (string, error) {
 		return "", err
 	}
 	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
 	}
@@ -413,7 +413,7 @@ func PostExecuteStmtMulti(apiAddr string, stmts []string) (string, error) {
 		return "", err
 	}
 	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
 	}
@@ -477,13 +477,15 @@ func (c Cluster) Followers() ([]*Node, error) {
 
 // RemoveNode removes the given node from the list of nodes representing
 // a cluster.
-func (c Cluster) RemoveNode(node *Node) {
+func (c Cluster) RemoveNode(node *Node) Cluster {
+	nodes := []*Node{}
 	for i, n := range c {
 		if n.RaftAddr == node.RaftAddr {
-			c = append(c[:i], c[i+1:]...)
-			return
+			continue
 		}
+		nodes = append(nodes, c[i])
 	}
+	return nodes
 }
 
 // FindNodeByRaftAddr returns the node with the given Raft address.
@@ -656,7 +658,7 @@ func mustNewLeaderNode() *Node {
 
 func mustTempDir() string {
 	var err error
-	path, err := ioutil.TempDir("", "rqlilte-system-test-")
+	path, err := os.MkdirTemp("", "rqlilte-system-test-")
 	if err != nil {
 		panic("failed to create temp dir")
 	}
@@ -769,7 +771,7 @@ func mustCreateTLSConfig(certFile, keyFile, caCertFile string) *tls.Config {
 	}
 
 	if caCertFile != "" {
-		asn1Data, err := ioutil.ReadFile(caCertFile)
+		asn1Data, err := os.ReadFile(caCertFile)
 		if err != nil {
 			panic(err.Error())
 		}
@@ -878,7 +880,7 @@ func copyDir(src string, dst string) (err error) {
 		return
 	}
 
-	entries, err := ioutil.ReadDir(src)
+	entries, err := os.ReadDir(src)
 	if err != nil {
 		return
 	}
@@ -894,7 +896,7 @@ func copyDir(src string, dst string) (err error) {
 			}
 		} else {
 			// Skip symlinks.
-			if entry.Mode()&os.ModeSymlink != 0 {
+			if entry.Type()&fs.ModeSymlink != 0 {
 				continue
 			}
 
