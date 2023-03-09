@@ -25,6 +25,11 @@ const (
 	HTTPAdvAddrFlag = "http-adv-addr"
 	RaftAddrFlag    = "raft-addr"
 	RaftAdvAddrFlag = "raft-adv-addr"
+
+	HTTPx509CertFlag = "http-cert"
+	HTTPx509KeyFlag  = "http-key"
+	NodeX509CertFlag = "node-cert"
+	NodeX509KeyFlag  = "node-key"
 )
 
 // Config represents the configuration as set by command-line flags.
@@ -225,11 +230,12 @@ func (c *Config) Validate() error {
 		return errors.New("-on-disk-path is set, but -on-disk is not")
 	}
 
-	if !bothUnsetSet(c.NodeX509Cert, c.NodeX509Key) {
-		return errors.New("either both -node-x509-cert and -node-x509-key must be set, or neither")
-	}
 	if !bothUnsetSet(c.HTTPx509Cert, c.HTTPx509Key) {
-		return errors.New("either both -x509-cert and -x509-key must be set, or neither")
+		return fmt.Errorf("either both -%s and -%s must be set, or neither", HTTPx509CertFlag, HTTPx509KeyFlag)
+	}
+	if !bothUnsetSet(c.NodeX509Cert, c.NodeX509Key) {
+		return fmt.Errorf("either both -%s and -%s must be set, or neither", NodeX509CertFlag, NodeX509KeyFlag)
+
 	}
 
 	// Enforce policies regarding addresses
@@ -375,14 +381,14 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	flag.StringVar(&config.HTTPAdv, HTTPAdvAddrFlag, "", "Advertised HTTP address. If not set, same as HTTP server bind")
 	flag.BoolVar(&config.TLS1011, "tls1011", false, "Support deprecated TLS versions 1.0 and 1.1")
 	flag.StringVar(&config.HTTPx509CACert, "http-ca-cert", "", "Path to X.509 CA certificate for HTTPS")
-	flag.StringVar(&config.HTTPx509Cert, "http-cert", "", "Path to HTTPS X.509 certificate")
-	flag.StringVar(&config.HTTPx509Key, "http-key", "", "Path to HTTPS X.509 private key")
+	flag.StringVar(&config.HTTPx509Cert, HTTPx509CertFlag, "", "Path to HTTPS X.509 certificate")
+	flag.StringVar(&config.HTTPx509Key, HTTPx509KeyFlag, "", "Path to HTTPS X.509 private key")
 	flag.BoolVar(&config.NoHTTPVerify, "http-no-verify", false, "Skip verification of remote node's HTTPS certificate when joining a cluster")
 	flag.BoolVar(&config.HTTPVerifyClient, "http-verify-client", false, "Enable mutual TLS for HTTPS")
 	flag.BoolVar(&config.NodeEncrypt, "node-encrypt", false, "Ignored, control node-to-node encryption by setting node certificate and key")
 	flag.StringVar(&config.NodeX509CACert, "node-ca-cert", "", "Path to X.509 CA certificate for node-to-node encryption")
-	flag.StringVar(&config.NodeX509Cert, "node-cert", "", "Path to X.509 certificate for node-to-node mutual authentication and encryption")
-	flag.StringVar(&config.NodeX509Key, "node-key", "", "Path to X.509 private key for node-to-node mutual authentication and encryption")
+	flag.StringVar(&config.NodeX509Cert, NodeX509CertFlag, "", "Path to X.509 certificate for node-to-node mutual authentication and encryption")
+	flag.StringVar(&config.NodeX509Key, NodeX509KeyFlag, "", "Path to X.509 private key for node-to-node mutual authentication and encryption")
 	flag.BoolVar(&config.NoNodeVerify, "node-no-verify", false, "Skip verification of any node-node certificate")
 	flag.BoolVar(&config.NodeVerifyClient, "node-verify-client", false, "Enable mutual TLS for node-to-node communication")
 	flag.StringVar(&config.AuthFile, "auth", "", "Path to authentication and authorization file. If not set, not enabled")
