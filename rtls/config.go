@@ -29,7 +29,7 @@ func CreateConfig(certFile, keyFile, caCertFile string, noverify, tls1011 bool) 
 
 	// load the CA certificate file, if provided, as the root CA and client CA
 	if caCertFile != "" {
-		asn1Data, err := ioutil.ReadFile(caCertFile)
+		asn1Data, err := os.ReadFile(caCertFile)
 		if err != nil {
 			return nil, err
 		}
@@ -69,7 +69,7 @@ func CreateClientConfig(certFile, keyFile, caCertFile string, noverify, tls1011 
 		}
 	}
 	if caCertFile != "" {
-		asn1Data, err := ioutil.ReadFile(caCertFile)
+		asn1Data, err := os.ReadFile(caCertFile)
 		if err != nil {
 			return nil, err
 		}
@@ -99,7 +99,7 @@ func CreateServerConfig(certFile, keyFile, caCertFile string, noverify, tls1011 
 		return nil, err
 	}
 	if caCertFile != "" {
-		asn1Data, err := ioutil.ReadFile(caCertFile)
+		asn1Data, err := os.ReadFile(caCertFile)
 		if err != nil {
 			return nil, err
 		}

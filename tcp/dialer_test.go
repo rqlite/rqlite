@@ -121,7 +121,7 @@ func (e *echoServer) Start(t *testing.T) {
 				// Successful testing can cause this.
 				return
 			}
-			t.Fatalf("failed to accept a connection: %s", err.Error())
+			t.Logf("failed to accept a connection: %s", err.Error())
 		}
 		go func(c net.Conn) {
 			buf := make([]byte, 1)

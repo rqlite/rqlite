@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -148,7 +148,7 @@ func (j *Joiner) join(joinAddr, id, addr string, voter bool) (string, error) {
 		}
 		defer resp.Body.Close()
 
-		b, err = ioutil.ReadAll(resp.Body)
+		b, err = io.ReadAll(resp.Body)
 		if err != nil {
 			return "", err
 		}

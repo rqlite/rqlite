@@ -4,7 +4,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -28,7 +28,7 @@ func Test_SingleJoinOK(t *testing.T) {
 			t.Fatalf("incorrect Content-Type set")
 		}
 
-		b, err := ioutil.ReadAll(r.Body)
+		b, err := io.ReadAll(r.Body)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			return
@@ -74,7 +74,7 @@ func Test_SingleJoinHTTPSOK(t *testing.T) {
 			t.Fatalf("incorrect Content-Type set")
 		}
 
-		b, err := ioutil.ReadAll(r.Body)
+		b, err := io.ReadAll(r.Body)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			return
@@ -130,7 +130,7 @@ func Test_SingleJoinOKBasicAuth(t *testing.T) {
 			t.Fatalf("bad Basic Auth credentials received (%s, %s", username, password)
 		}
 
-		b, err := ioutil.ReadAll(r.Body)
+		b, err := io.ReadAll(r.Body)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			return

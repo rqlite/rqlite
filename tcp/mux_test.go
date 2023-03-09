@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto/tls"
 	"io"
-	"io/ioutil"
 	"log"
 	"net"
 	"os"
@@ -41,7 +40,7 @@ func TestMux(t *testing.T) {
 		}
 		mux.Timeout = 200 * time.Millisecond
 		if !testing.Verbose() {
-			mux.Logger = log.New(ioutil.Discard, "", 0)
+			mux.Logger = log.New(io.Discard, "", 0)
 		}
 		for i := uint8(0); i < n; i++ {
 			ln := mux.Listen(i)
@@ -140,7 +139,7 @@ func TestMux_Advertise(t *testing.T) {
 	}
 	mux.Timeout = 200 * time.Millisecond
 	if !testing.Verbose() {
-		mux.Logger = log.New(ioutil.Discard, "", 0)
+		mux.Logger = log.New(io.Discard, "", 0)
 	}
 
 	layer := mux.Listen(1)
