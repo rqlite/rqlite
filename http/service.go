@@ -27,6 +27,7 @@ import (
 	"github.com/rqlite/rqlite/queue"
 	"github.com/rqlite/rqlite/rtls"
 	"github.com/rqlite/rqlite/store"
+	"github.com/rs/cors"
 )
 
 var (
@@ -313,8 +314,16 @@ func New(addr string, store Store, cluster Cluster, credentials CredentialStore)
 
 // Start starts the service.
 func (s *Service) Start() error {
+
+	c := cors.New(cors.Options{
+		AllowedOrigins:   []string{"foo.com"},
+		AllowedMethods:   []string{http.MethodGet, http.MethodPost, http.MethodDelete},
+		AllowCredentials: true,
+	})
+	handler := c.Handler(s)
+
 	s.httpServer = http.Server{
-		Handler: s,
+		Handler: handler,
 	}
 
 	var ln net.Listener

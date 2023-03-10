@@ -931,6 +931,8 @@ github.com/rqlite/rqlite-disco-clients v0.0.0-20230223142702-e7b84b86c5e1 h1:Vpk
 github.com/rqlite/rqlite-disco-clients v0.0.0-20230223142702-e7b84b86c5e1/go.mod h1:pym85nj6JnCI7rM9RxTZ4cubkTQyyg7uLwVydso9B80=
 github.com/rqlite/sql v0.0.0-20221103124402-8f9ff0ceb8f0 h1:C8DZB5okjhCSd7zvkOM+zxGz7S6ulUFIL34bpkqFk+0=
 github.com/rqlite/sql v0.0.0-20221103124402-8f9ff0ceb8f0/go.mod h1:ib9zVtNgRKiGuoMyUqqL5aNpk+r+++YlyiVIkclVqPg=
+github.com/rs/cors v1.8.3 h1:O+qNyWn7Z+F9M0ILBHgMVPuB1xTOucVd5gtaYyXBpRo=
+github.com/rs/cors v1.8.3/go.mod h1:XyqrcTp5zjWr1wsJ8PIRZssZ8b/WMcMf71DJnit4EMU=
 github.com/ruudk/golang-pdf417 v0.0.0-20181029194003-1af4ab5afa58/go.mod h1:6lfFZQK844Gfx8o5WFuvpxWRwnSoipWe/p622j1v06w=
 github.com/ruudk/golang-pdf417 v0.0.0-20201230142125-a7e3863a1245/go.mod h1:pQAZKsJ8yyVxGRWYNEm9oFB8ieLgKFnamEyDmSA0BRk=
 github.com/ryanuber/columnize v0.0.0-20160712163229-9b3edd62028f/go.mod h1:sm1tb6uqfes/u+d4ooFouqFdy9/2g9QGwK3SQygK0Ts=

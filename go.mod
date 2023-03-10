@@ -21,6 +21,7 @@ require (
 	github.com/rqlite/raft-boltdb v0.0.0-20230223205721-b72e0bf63c4d
 	github.com/rqlite/rqlite-disco-clients v0.0.0-20230223142702-e7b84b86c5e1
 	github.com/rqlite/sql v0.0.0-20221103124402-8f9ff0ceb8f0
+	github.com/rs/cors v1.8.3 // indirect
 	go.etcd.io/bbolt v1.3.7
 	go.etcd.io/etcd/client/v3 v3.5.7 // indirect
 	go.uber.org/atomic v1.10.0 // indirect
