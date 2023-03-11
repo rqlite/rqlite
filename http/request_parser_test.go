@@ -3,6 +3,7 @@ package http
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"testing"
 )
 
@@ -245,6 +246,43 @@ func Test_SingleInvalidParameterizedRequest(t *testing.T) {
 	_, err := ParseRequest(b)
 	if err != ErrInvalidJSON {
 		t.Fatal("got unexpected error for invalid request")
+	}
+}
+
+func Test_ParseAssociativeRequestOK(t *testing.T) {
+	tests := []struct {
+		j   string
+		exp AssociativeRequest
+	}{
+		{
+			j:   `{"table": "foo", "conflict": "ignore", "rows": [{"name": "fiona"}]}`,
+			exp: AssociativeRequest{Table: "foo", Conflict: "IGNORE", Rows: []map[string]interface{}{{"name": "fiona"}}},
+		},
+		{
+			j:   `{"table": "foo", "conflict": "fail", "rows": [{"name": "fiona"}]}`,
+			exp: AssociativeRequest{Table: "foo", Conflict: "FAIL", Rows: []map[string]interface{}{{"name": "fiona"}}},
+		},
+		{
+			j:   `{"table": "foo", "conflict": "replace", "rows": [{"name": "fiona"}]}`,
+			exp: AssociativeRequest{Table: "foo", Conflict: "REPLACE", Rows: []map[string]interface{}{{"name": "fiona"}}},
+		},
+		{
+			j:   `{"table": "foo", "conflict": "ignore", "rows": [{"first": "bob", "last": "smith"}]}`,
+			exp: AssociativeRequest{Table: "foo", Conflict: "IGNORE", Rows: []map[string]interface{}{{"first": "bob", "last": "smith"}}},
+		},
+	}
+
+	for i, tt := range tests {
+		b := []byte(tt.j)
+		var ar AssociativeRequest
+
+		err := json.Unmarshal(b, &ar)
+		if err != nil {
+			t.Fatalf("failed to parse: %s", err)
+		}
+		if !reflect.DeepEqual(ar, tt.exp) {
+			t.Fatalf("test %d failed, exp %v, got %v", i, tt.exp, ar)
+		}
 	}
 }
 
