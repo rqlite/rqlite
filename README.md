@@ -80,8 +80,6 @@ $ rqlite
 +----+-------+
 ```
 
-Since the Raft log is the authoritative store for all data, and it is stored on disk by each node, an in-memory database can be fully recreated on start-up from the information stored in the Raft log. Using an in-memory database does not put your data at risk.
-
 ## Limitations
  * In-memory databases are currently limited to 2GiB (2147483648 bytes) in size. You can learn more about possible ways to get around this limit in the [documentation](https://rqlite.io/docs/guides/performance/#in-memory-database-limits).
 
