@@ -59,7 +59,7 @@ _This demonstration shows all 3 nodes running on the same host. In reality you p
 With just these few steps you've now got a fault-tolerant, distributed relational database. For full details on creating and managing real clusters, including running read-only nodes, check out [this documentation](https://rqlite.io/docs/clustering/).
 
 ### Inserting records
-Let's insert some records via the [rqlite CLI](https://rqlite.io/docs/cli/), using standard SQLite commands. Once inserted, these records will be replicated across the cluster, in a durable and fault-tolerant manner. Your 3-node cluster can suffer the failure of a single node without any loss of functionality or data.
+Let's insert some records via the [rqlite CLI](https://rqlite.io/docs/cli/), using standard SQLite commands. Once inserted, these records will be replicated across the cluster, in a durable and fault-tolerant manner.
 ```
 $ rqlite
 127.0.0.1:4001> CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)
