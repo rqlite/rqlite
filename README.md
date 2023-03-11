@@ -49,7 +49,7 @@ Check out the [rqlite Docker page](https://hub.docker.com/r/rqlite/rqlite/) for 
 `brew install rqlite`
 
 ### Forming a cluster
-While not strictly necessary to run rqlite, running multiple nodes means you'll have a fault-tolerant cluster. Start two more nodes, allowing the cluster to tolerate failure of a single node, like so:
+While not strictly necessary to run rqlite, running multiple nodes means you'll have a fault-tolerant cluster. Start two more nodes, allowing the cluster to tolerate the failure of a single node, like so:
 ```bash
 rqlited -node-id 2 -http-addr localhost:4003 -raft-addr localhost:4004 -join http://localhost:4001 ~/node.2
 rqlited -node-id 3 -http-addr localhost:4005 -raft-addr localhost:4006 -join http://localhost:4001 ~/node.3
