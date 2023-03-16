@@ -314,16 +314,14 @@ func New(addr string, store Store, cluster Cluster, credentials CredentialStore)
 
 // Start starts the service.
 func (s *Service) Start() error {
-
 	c := cors.New(cors.Options{
 		AllowedOrigins:   []string{"foo.com"},
 		AllowedMethods:   []string{http.MethodGet, http.MethodPost, http.MethodDelete},
 		AllowCredentials: true,
 	})
-	handler := c.Handler(s)
 
 	s.httpServer = http.Server{
-		Handler: handler,
+		Handler: c.Handler(s),
 	}
 
 	var ln net.Listener
