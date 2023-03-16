@@ -17,7 +17,7 @@ import {
 import { FC, PropsWithChildren, useState } from "react";
 import { useRouter } from "next/router";
 import { useConfig } from "hooks/useConfig";
-import { ArrowDropDown, Clear, ControlPoint, Info } from "@mui/icons-material";
+import { ArrowDropDown, Clear, ControlPoint } from "@mui/icons-material";
 import AccountFormModal from "./AccountFormModal";
 import { isEmpty } from "lodash";
 

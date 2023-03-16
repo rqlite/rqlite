@@ -20,7 +20,7 @@ httpClient.interceptors.request.use(function (config) {
     config.headers = config.headers ?? {};
     const authHeader = btoa(username + ":" + password);
     (config.headers as any)["Authorization"] = `Basic ${authHeader}`;
-    // (config.headers as any)["X-Rqlite-Authorization"] = `Basic ${authHeader}`;
+    (config.headers as any)["X-Rqlite-Authorization"] = `Basic ${authHeader}`;
   }
   return config;
 });

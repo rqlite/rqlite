@@ -1,7 +1,7 @@
 import { QueryResults } from "@/types/rqlite";
 import { cloneDeep } from "lodash";
 import { useEffect, useState } from "react";
-import { useLocalStorage } from "usehooks-ts";
+import { useSessionStorage } from "usehooks-ts";
 
 interface IConfig {
   accounts: {
@@ -16,7 +16,7 @@ interface IConfig {
 const CONFIG_KEY = "@@RQMAN_CONFIG";
 
 export const getConfig = () => {
-  const config = localStorage.getItem(CONFIG_KEY);
+  const config = sessionStorage.getItem(CONFIG_KEY);
   if (config) {
     return JSON.parse(config) as IConfig;
   }
@@ -34,10 +34,10 @@ const defaultConfig: IConfig = {
 
 export const useConfig = () => {
   const [config, setConfig] = useState<IConfig>(defaultConfig);
-  const [_config, _setConfig] = useLocalStorage<IConfig>(CONFIG_KEY, defaultConfig);
+  const [_config, _setConfig] = useSessionStorage<IConfig>(CONFIG_KEY, defaultConfig);
 
   // Prevent SSR mismatch:
-  // useLocalStorage returns default value on server side.
+  // useSessionStorage returns default value on server side.
   useEffect(() => {
     setConfig(_config);
   }, [_config])
