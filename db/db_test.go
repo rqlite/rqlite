@@ -984,6 +984,48 @@ func Test_SimpleTwoParameterizedStatements(t *testing.T) {
 	}
 }
 
+func Test_SimpleNilParameterizedStatements(t *testing.T) {
+	db, path := mustCreateDatabase()
+	defer db.Close()
+	defer os.Remove(path)
+
+	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, first TEXT, last TEXT)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	req := &command.Request{
+		Statements: []*command.Statement{
+			{
+				Sql: "INSERT INTO foo(first, last) VALUES(?, ?)",
+				Parameters: []*command.Parameter{
+					{
+						Value: &command.Parameter_S{
+							S: "bob",
+						},
+					},
+					{
+						Value: nil,
+					},
+				},
+			},
+		},
+	}
+
+	_, err = db.Execute(req, false)
+	if err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+
+	r, err := db.QueryStringStmt(`SELECT * FROM foo`)
+	if err != nil {
+		t.Fatalf("failed to query table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","first","last"],"types":["integer","text","text"],"values":[[1,"bob",null]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
 func Test_SimpleNamedParameterizedStatements(t *testing.T) {
 	db, path := mustCreateDatabase()
 	defer db.Close()
