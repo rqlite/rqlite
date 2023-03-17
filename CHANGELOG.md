@@ -1,7 +1,7 @@
 ## 7.14.1 (March 17th 2023)
 ## Implementation changes and bug fixes
 - [PR #1174](https://github.com/rqlite/rqlite/pull/1174): Fix command-line help for x509 resources.
-- [PR #1178](https://github.com/rqlite/rqlite/pull/1178): Fix parsing of Named Parameters with nil as value. Fixes [issue #1177](https://github.com/rqlite/rqlite/issues/1177). Thanks @wellescastro
+- [PR #1178](https://github.com/rqlite/rqlite/pull/1178): Fix parsing of Named Parameters with `NULL` as value. Fixes [issue #1177](https://github.com/rqlite/rqlite/issues/1177). Thanks @wellescastro
 
 ## 7.14.0 (March 8th 2023)
 This release sees the addition of mutual TLS support, and corrects some other issues related to the use of TLS and Certificate Authority configuration.
