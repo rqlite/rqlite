@@ -1,3 +1,7 @@
+## 7.14.2 (unreleased)
+## Implementation changes and bug fixes
+- [PR #1179](https://github.com/rqlite/rqlite/pull/1179): go mod updates.
+
 ## 7.14.1 (March 17th 2023)
 ## Implementation changes and bug fixes
 - [PR #1174](https://github.com/rqlite/rqlite/pull/1174): Fix command-line help for x509 resources.
