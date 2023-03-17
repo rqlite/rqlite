@@ -1,4 +1,4 @@
-## 7.14.1 (unreleased)
+## 7.14.1 (March 17th 2023)
 ## Implementation changes and bug fixes
 - [PR #1174](https://github.com/rqlite/rqlite/pull/1174): Fix command-line help for x509 resources.
 - [PR #1178](https://github.com/rqlite/rqlite/pull/1178): Fix parsing of Named Parameters will nil as value. Fixes [issue #1177](https://github.com/rqlite/rqlite/issues/1177). Thanks @wellescastro
