@@ -3,6 +3,7 @@ package http
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"testing"
 )
 
@@ -159,6 +160,74 @@ func Test_SingleNamedParameterizedRequest(t *testing.T) {
 
 	if len(stmts[0].Parameters) != 2 {
 		t.Fatalf("incorrect number of parameters returned: %d", len(stmts[0].Parameters))
+	}
+
+	// build a map of the parameters for easier comparison
+	params := make(map[string]interface{})
+	for _, p := range stmts[0].Parameters {
+		// if the name is "bar" then get an int64, or if it's "qux" then get a string,
+		// otherwise fail the test
+		if p.GetName() == "bar" {
+			params[p.GetName()] = p.GetD()
+		} else if p.GetName() == "qux" {
+			params[p.GetName()] = p.GetS()
+		} else {
+			t.Fatalf("unexpected parameter name: %s", p.GetName())
+		}
+	}
+
+	exp := map[string]interface{}{
+		"bar": float64(1),
+		"qux": "some string",
+	}
+
+	if !reflect.DeepEqual(exp, params) {
+		t.Fatalf("incorrect parameters, exp %s, got %s", exp, params)
+	}
+}
+
+func Test_SingleNamedParameterizedRequestNils(t *testing.T) {
+	s := "SELECT * FROM foo WHERE bar=:bar AND qux=:qux"
+	b := []byte(fmt.Sprintf(`[["%s", %s]]`, s, mustJSONMarshal(map[string]interface{}{"bar": 1, "qux": "some string", "baz": nil})))
+
+	stmts, err := ParseRequest(b)
+	if err != nil {
+		t.Fatalf("failed to parse request: %s", err.Error())
+	}
+
+	if len(stmts) != 1 {
+		t.Fatalf("incorrect number of statements returned: %d", len(stmts))
+	}
+	if stmts[0].Sql != s {
+		t.Fatalf("incorrect statement parsed, exp %s, got %s", s, stmts[0].Sql)
+	}
+
+	if len(stmts[0].Parameters) != 3 {
+		t.Fatalf("incorrect number of parameters returned: %d", len(stmts[0].Parameters))
+	}
+
+	// build a map of the parameters for easier comparison
+	params := make(map[string]interface{})
+	for _, p := range stmts[0].Parameters {
+		if p.GetName() == "bar" {
+			params[p.GetName()] = p.GetD()
+		} else if p.GetName() == "qux" {
+			params[p.GetName()] = p.GetS()
+		} else if p.GetName() == "baz" {
+			params[p.GetName()] = p.GetValue()
+		} else {
+			t.Fatalf("unexpected parameter name: %s", p.GetName())
+		}
+	}
+
+	exp := map[string]interface{}{
+		"bar": float64(1),
+		"qux": "some string",
+		"baz": nil,
+	}
+
+	if !reflect.DeepEqual(exp, params) {
+		t.Fatalf("incorrect parameters, exp %s, got %s", exp, params)
 	}
 }
 
