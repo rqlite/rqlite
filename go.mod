@@ -6,6 +6,7 @@ require (
 	github.com/Bowery/prompt v0.0.0-20190916142128-fa8279994f75
 	github.com/coreos/go-semver v0.3.1 // indirect
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
+	github.com/fatih/color v1.15.0 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/hashicorp/consul/api v1.20.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
@@ -29,7 +30,7 @@ require (
 	golang.org/x/crypto v0.7.0
 	golang.org/x/net v0.8.0
 	google.golang.org/genproto v0.0.0-20230306155012-7f2fa6fef1f4 // indirect
-	google.golang.org/protobuf v1.29.0
+	google.golang.org/protobuf v1.30.0
 )
 
 replace golang.org/x/text => golang.org/x/text v0.3.8
