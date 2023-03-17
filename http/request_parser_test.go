@@ -165,8 +165,6 @@ func Test_SingleNamedParameterizedRequest(t *testing.T) {
 	// build a map of the parameters for easier comparison
 	params := make(map[string]interface{})
 	for _, p := range stmts[0].Parameters {
-		// if the name is "bar" then get an int64, or if it's "qux" then get a string,
-		// otherwise fail the test
 		if p.GetName() == "bar" {
 			params[p.GetName()] = p.GetD()
 		} else if p.GetName() == "qux" {
