@@ -927,18 +927,31 @@ func Test_MultiNodeClusterNodesNonVoter(t *testing.T) {
 		t.Fatalf("failed to find cluster leader: %s", err.Error())
 	}
 
-	node3 := mustNewNode(false)
-	defer node3.Deprovision()
-	if err := node3.JoinAsNonVoter(leader); err != nil {
+	nonVoter := mustNewNode(false)
+	defer nonVoter.Deprovision()
+	if err := nonVoter.JoinAsNonVoter(leader); err != nil {
 		t.Fatalf("node failed to join leader: %s", err.Error())
 	}
-	_, err = node3.WaitForLeader()
+	_, err = nonVoter.WaitForLeader()
 	if err != nil {
 		t.Fatalf("failed waiting for leader: %s", err.Error())
 	}
 
+	// Check that the voter statuses are correct
+	checkVoterStatus := func(node *Node, exp bool) {
+		v, err := node.IsVoter()
+		if err != nil {
+			t.Fatalf("failed to get voter status: %s", err.Error())
+		}
+		if v != exp {
+			t.Fatalf("incorrect voter status, got %v, exp %v", v, exp)
+		}
+	}
+	checkVoterStatus(leader, true)
+	checkVoterStatus(nonVoter, false)
+
 	// Get the new leader, in case it changed.
-	c = Cluster{node1, node2, node3}
+	c = Cluster{node1, node2, nonVoter}
 	_, err = c.Leader()
 	if err != nil {
 		t.Fatalf("failed to find cluster leader: %s", err.Error())

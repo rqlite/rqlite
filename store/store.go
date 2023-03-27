@@ -511,6 +511,24 @@ func (s *Store) IsLeader() bool {
 	return s.raft.State() == raft.Leader
 }
 
+// IsVoter returns true if the current node is a voter in the cluster.
+func (s *Store) IsVoter() (bool, error) {
+	cfg := s.raft.GetConfiguration()
+	if err := cfg.Error(); err != nil {
+		return false, err
+	}
+	if len(cfg.Configuration().Servers) == 0 {
+		return false, nil
+	}
+
+	for _, srv := range cfg.Configuration().Servers {
+		if srv.ID == raft.ServerID(s.raftID) {
+			return srv.Suffrage == raft.Voter, nil
+		}
+	}
+	return false, fmt.Errorf("this node (id=%s) not found in configuration", s.raftID)
+}
+
 // State returns the current node's Raft state
 func (s *Store) State() ClusterState {
 	state := s.raft.State()
@@ -695,6 +713,10 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		}
 	}
 	raftStats["log_size"], err = s.logSize()
+	if err != nil {
+		return nil, err
+	}
+	raftStats["voter"], err = s.IsVoter()
 	if err != nil {
 		return nil, err
 	}
@@ -1044,7 +1066,6 @@ func (s *Store) Join(id, addr string, voter bool) error {
 	if voter {
 		f = s.raft.AddVoter(raft.ServerID(id), raft.ServerAddress(addr), 0, 0)
 	} else {
-
 		f = s.raft.AddNonvoter(raft.ServerID(id), raft.ServerAddress(addr), 0, 0)
 	}
 	if e := f.(raft.Future); e.Error() != nil {

@@ -2,6 +2,7 @@
 ## Implementation changes and bug fixes
 - [PR #1179](https://github.com/rqlite/rqlite/pull/1179): go mod updates.
 - [PR #1180](https://github.com/rqlite/rqlite/pull/1180): Support large numbers in requests.
+- [PR #1186](https://github.com/rqlite/rqlite/pull/1186): Improve read-only node management. Fixes [issue #1182](https://github.com/rqlite/rqlite/issues/1182).
 
 ## 7.14.1 (March 17th 2023)
 ## Implementation changes and bug fixes
