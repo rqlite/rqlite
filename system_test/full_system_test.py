@@ -1340,7 +1340,8 @@ class TestEndToEndNonVoter(unittest.TestCase):
   def test_execute_fail_rejoin(self):
     '''Test that a non-voter that fails can rejoin the cluster, and pick up changes'''
 
-    # Confirm that the non-voter is not a voter
+    # Confirm that voting status reporting is correct
+    self.assertTrue(self.leader.is_voter())
     self.assertFalse(self.non_voter.is_voter())
 
     # Insert some records via the leader
