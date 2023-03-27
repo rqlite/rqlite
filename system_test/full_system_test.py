@@ -319,13 +319,22 @@ class Node(object):
     '''
     is_leader returns whether this node is the cluster leader
     '''
-    return self.status()['store']['raft']['state'] == 'Leader'
+    try:
+      return self.status()['store']['raft']['state'] == 'Leader'
+    except requests.exceptions.ConnectionError:
+      return False
 
   def is_follower(self):
-    return self.status()['store']['raft']['state'] == 'Follower'
+    try:
+      return self.status()['store']['raft']['state'] == 'Follower'
+    except requests.exceptions.ConnectionError:
+      return False
 
   def is_voter(self):
-    return self.status()['store']['raft']['voter'] == True
+    try:
+      return self.status()['store']['raft']['voter'] == True
+    except requests.exceptions.ConnectionError:
+      return False
 
   def disco_mode(self):
     try:
