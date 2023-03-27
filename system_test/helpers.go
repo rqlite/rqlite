@@ -266,6 +266,34 @@ func (n *Node) Status() (string, error) {
 	return string(body), nil
 }
 
+// IsVoter returns whether the node is a voter or not.
+func (n *Node) IsVoter() (bool, error) {
+	statusJSON, err := n.Status()
+	if err != nil {
+		return false, err
+	}
+	// Marshal the status into a JSON object
+	var status map[string]interface{}
+	err = json.Unmarshal([]byte(statusJSON), &status)
+	if err != nil {
+		return false, err
+	}
+
+	strStatus, ok := status["store"].(map[string]interface{})
+	if !ok {
+		return false, fmt.Errorf("store status not found")
+	}
+	raftStatus, ok := strStatus["raft"].(map[string]interface{})
+	if !ok {
+		return false, fmt.Errorf("raft status not found")
+	}
+	voter, ok := raftStatus["voter"].(bool)
+	if !ok {
+		return false, fmt.Errorf("voter status not found")
+	}
+	return voter, nil
+}
+
 // Ready returns the ready status for the node
 func (n *Node) Ready() (bool, error) {
 	v, _ := url.Parse("http://" + n.APIAddr + "/readyz")
