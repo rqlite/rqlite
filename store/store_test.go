@@ -2075,6 +2075,30 @@ func Test_IsLeader(t *testing.T) {
 	}
 }
 
+func Test_IsVoter(t *testing.T) {
+	s, ln := mustNewStore(t, true)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	v, err := s.IsVoter()
+	if err != nil {
+		t.Fatalf("failed to check if single node is a voter: %s", err.Error())
+	}
+	if !v {
+		t.Fatalf("single node is not a voter!")
+	}
+}
+
 func Test_State(t *testing.T) {
 	s, ln := mustNewStore(t, true)
 	defer ln.Close()

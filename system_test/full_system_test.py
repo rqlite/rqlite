@@ -318,8 +318,6 @@ class Node(object):
   def is_leader(self):
     '''
     is_leader returns whether this node is the cluster leader
-    It also performs a check, to ensure the node nevers gives out
-    conflicting information about leader state.
     '''
 
     try:
