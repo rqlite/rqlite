@@ -146,7 +146,7 @@ func (b *Bootstrapper) notify(targets []string, id, raftAddr string) error {
 
 	for _, t := range targets {
 		// Check for protocol scheme, and insert default if necessary.
-		fullTarget := rurl.NormalizeAddr(fmt.Sprintf("%s/notify", t))
+		fullTarget := rurl.NormalizeAddr(fmt.Sprintf("%s/notify", t), []string{"http://", "https://"})
 
 	TargetLoop:
 		for {

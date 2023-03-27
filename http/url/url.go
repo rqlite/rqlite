@@ -13,13 +13,15 @@ var (
 	ErrUserInfoExists = errors.New("userinfo exists")
 )
 
-// NormalizeAddr ensures that the given URL has a HTTP protocol prefix.
-// If none is supplied, it prefixes the URL with "http://".
-func NormalizeAddr(addr string) string {
-	if !strings.HasPrefix(addr, "http://") && !strings.HasPrefix(addr, "https://") {
-		return fmt.Sprintf("http://%s", addr)
+// NormalizeAddr ensures that the given address is prefixed with a supported protocol.
+// If addr is not prefixed with a supported protocol, prefix it with http://
+func NormalizeAddr(addr string, supported []string) string {
+	for _, s := range supported {
+		if strings.HasPrefix(addr, s) {
+			return addr
+		}
 	}
-	return addr
+	return fmt.Sprintf("http://%s", addr)
 }
 
 // EnsureHTTPS modifies the given URL, ensuring it is using the HTTPS protocol.
