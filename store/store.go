@@ -511,22 +511,20 @@ func (s *Store) IsLeader() bool {
 	return s.raft.State() == raft.Leader
 }
 
-// IsVoter returns true if the current node is a voter in the cluster.
+// IsVoter returns true if the current node is a voter in the cluster. If there
+// is no reference to the current node in the current cluster configuration then
+// false will also be returned.
 func (s *Store) IsVoter() (bool, error) {
 	cfg := s.raft.GetConfiguration()
 	if err := cfg.Error(); err != nil {
 		return false, err
 	}
-	if len(cfg.Configuration().Servers) == 0 {
-		return false, nil
-	}
-
 	for _, srv := range cfg.Configuration().Servers {
 		if srv.ID == raft.ServerID(s.raftID) {
 			return srv.Suffrage == raft.Voter, nil
 		}
 	}
-	return false, fmt.Errorf("this node (id=%s) not found in configuration", s.raftID)
+	return false, nil
 }
 
 // State returns the current node's Raft state
