@@ -367,6 +367,10 @@ func createCluster(cfg *Config, hasPeers bool, str *store.Store,
 
 	joins := cfg.JoinAddresses()
 	if joins == nil && cfg.DiscoMode == "" && !hasPeers {
+		if cfg.RaftNonVoter {
+			return fmt.Errorf("cannot create a new non-voting node without joining it to an existing cluster")
+		}
+
 		// Brand new node, told to bootstrap itself. So do it.
 		log.Println("bootstraping single new node")
 		if err := str.Bootstrap(store.NewServer(str.ID(), cfg.RaftAdv, true)); err != nil {
