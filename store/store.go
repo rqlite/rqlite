@@ -517,6 +517,10 @@ func (s *Store) IsVoter() (bool, error) {
 	if err := cfg.Error(); err != nil {
 		return false, err
 	}
+	if len(cfg.Configuration().Servers) == 0 {
+		return false, nil
+	}
+
 	for _, srv := range cfg.Configuration().Servers {
 		if srv.ID == raft.ServerID(s.raftID) {
 			return srv.Suffrage == raft.Voter, nil

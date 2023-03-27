@@ -255,13 +255,14 @@ func (n *Node) Status() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if resp.StatusCode != 200 {
-		return "", fmt.Errorf("status endpoint returned: %s", resp.Status)
-	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to read status response: %w", err)
+	}
+	if resp.StatusCode != 200 {
+		return "", fmt.Errorf("status endpoint returned: %s (%s)", resp.Status,
+			strings.TrimSuffix(string(body), "\n"))
 	}
 	return string(body), nil
 }
