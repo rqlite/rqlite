@@ -62,7 +62,7 @@ type Store interface {
 	Database
 
 	// Join joins the node with the given ID, reachable at addr, to this node.
-	Join(id, addr string, voter bool) error
+	Join(jr *command.JoinRequest) error
 
 	// Notify notifies this node that a node is available at addr.
 	Notify(id, addr string) error
@@ -504,7 +504,12 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.store.Join(remoteID, remoteAddr, voter.(bool)); err != nil {
+	jr := &command.JoinRequest{
+		Id:      remoteID,
+		Address: remoteAddr,
+		Voter:   voter.(bool),
+	}
+	if err := s.store.Join(jr); err != nil {
 		if err == store.ErrNotLeader {
 			leaderAPIAddr := s.LeaderAPIAddr()
 			if leaderAPIAddr == "" {

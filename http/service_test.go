@@ -1206,7 +1206,7 @@ func (m *MockStore) Query(qr *command.QueryRequest) ([]*command.QueryRows, error
 	return nil, nil
 }
 
-func (m *MockStore) Join(id, addr string, voter bool) error {
+func (m *MockStore) Join(jr *command.JoinRequest) error {
 	return nil
 }
 
