@@ -6,7 +6,7 @@ jobs:
   test:
     docker:
       # specify the version
-      - image: cimg/go:1.18.0
+      - image: cimg/go:1.20.0
       # Specify service dependencies here if necessary
       # CircleCI maintains a library of pre-built images
       # documented at https://circleci.com/docs/2.0/circleci-images/
@@ -31,7 +31,7 @@ jobs:
   race:
     docker:
       # specify the version
-      - image: cimg/go:1.18.0
+      - image: cimg/go:1.20.0
       # Specify service dependencies here if necessary
       # CircleCI maintains a library of pre-built images
       # documented at https://circleci.com/docs/2.0/circleci-images/
@@ -56,7 +56,7 @@ jobs:
 
   end_to_end:
     docker:
-      - image: cimg/go:1.18.0
+      - image: cimg/go:1.20.0
       - image: consul
       - image: gcr.io/etcd-development/etcd:v3.5.1
     steps:

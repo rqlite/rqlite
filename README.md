@@ -26,7 +26,7 @@ rqlite uses [Raft](https://raft.github.io/) to achieve consensus across all the 
 - Super-simple to use, with a straightforward [HTTP API](https://rqlite.io/docs/api/). A [command-line interface is also available](https://rqlite.io/docs/cli/), as are various [client libraries](https://github.com/rqlite).
 - Fully replicated production-grade SQL database, with full access to SQLite [full-text search](https://www.sqlite.org/fts3.html) and [JSON document support](https://www.sqlite.org/json1.html).
 - Multiple options for [node-discovery and automatic clustering, including integration with Kubernetes, Consul, etcd and DNS](https://rqlite.io/docs/clustering/automatic-clustering/), allowing clusters to be dynamically created.
-- [Extensive security and encryption support](https://rqlite.io/docs/guides/security/), including node-to-node encryption.
+- [Extensive security and encryption support](https://rqlite.io/docs/guides/security/), including support for node-to-node encryption and mutual TLS.
 - Choice of [read consistency levels](https://rqlite.io/docs/api/read-consistency/), and support for choosing [write performance over durability](https://rqlite.io/docs/api/queued-writes/).
 - Optional [read-only (non-voting) nodes](https://rqlite.io/docs/clustering/read-only-nodes/), which can add read scalability to the system.
 - A form of transaction support.
@@ -49,7 +49,7 @@ Check out the [rqlite Docker page](https://hub.docker.com/r/rqlite/rqlite/) for 
 `brew install rqlite`
 
 ### Forming a cluster
-While not strictly necessary to run rqlite, running multiple nodes means you'll have a fault-tolerant cluster. Start two more nodes, allowing the cluster to tolerate failure of a single node, like so:
+While not strictly necessary to run rqlite, running multiple nodes means you'll have a fault-tolerant cluster. Start two more nodes, allowing the cluster to tolerate the failure of a single node, like so:
 ```bash
 rqlited -node-id 2 -http-addr localhost:4003 -raft-addr localhost:4004 -join http://localhost:4001 ~/node.2
 rqlited -node-id 3 -http-addr localhost:4005 -raft-addr localhost:4006 -join http://localhost:4001 ~/node.3
@@ -59,7 +59,7 @@ _This demonstration shows all 3 nodes running on the same host. In reality you p
 With just these few steps you've now got a fault-tolerant, distributed relational database. For full details on creating and managing real clusters, including running read-only nodes, check out [this documentation](https://rqlite.io/docs/clustering/).
 
 ### Inserting records
-Let's insert some records via the [rqlite CLI](https://rqlite.io/docs/cli/), using standard SQLite commands. Once inserted, these records will be replicated across the cluster, in a durable and fault-tolerant manner. Your 3-node cluster can suffer the failure of a single node without any loss of functionality or data.
+Let's insert some records via the [rqlite CLI](https://rqlite.io/docs/cli/), using standard SQLite commands. Once inserted, these records will be replicated across the cluster, in a durable and fault-tolerant manner.
 ```
 $ rqlite
 127.0.0.1:4001> CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)
@@ -79,8 +79,6 @@ $ rqlite
 | 1  | fiona |
 +----+-------+
 ```
-
-Since the Raft log is the authoritative store for all data, and it is stored on disk by each node, an in-memory database can be fully recreated on start-up from the information stored in the Raft log. Using an in-memory database does not put your data at risk.
 
 ## Limitations
  * In-memory databases are currently limited to 2GiB (2147483648 bytes) in size. You can learn more about possible ways to get around this limit in the [documentation](https://rqlite.io/docs/guides/performance/#in-memory-database-limits).

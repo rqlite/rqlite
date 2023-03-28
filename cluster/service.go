@@ -263,9 +263,7 @@ func (s *Service) handleConn(conn net.Conn) {
 					resp.Error = err.Error()
 				} else {
 					resp.Results = make([]*command.ExecuteResult, len(res))
-					for i := range res {
-						resp.Results[i] = res[i]
-					}
+					copy(resp.Results, res)
 				}
 			}
 
@@ -291,9 +289,7 @@ func (s *Service) handleConn(conn net.Conn) {
 					resp.Error = err.Error()
 				} else {
 					resp.Rows = make([]*command.QueryRows, len(res))
-					for i := range res {
-						resp.Rows[i] = res[i]
-					}
+					copy(resp.Rows, res)
 				}
 			}
 

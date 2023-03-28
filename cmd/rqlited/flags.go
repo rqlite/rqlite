@@ -25,6 +25,11 @@ const (
 	HTTPAdvAddrFlag = "http-adv-addr"
 	RaftAddrFlag    = "raft-addr"
 	RaftAdvAddrFlag = "raft-adv-addr"
+
+	HTTPx509CertFlag = "http-cert"
+	HTTPx509KeyFlag  = "http-key"
+	NodeX509CertFlag = "node-cert"
+	NodeX509KeyFlag  = "node-key"
 )
 
 // Config represents the configuration as set by command-line flags.
@@ -47,21 +52,27 @@ type Config struct {
 	// AuthFile is the path to the authentication file. May not be set.
 	AuthFile string
 
-	// X509CACert is the path the root-CA certficate file for when this
-	// node contacts other nodes' HTTP servers. May not be set.
-	X509CACert string
+	// HTTPx509CACert is the path to the CA certficate file for when this node verifies
+	// other certificates for any HTTP communications. May not be set.
+	HTTPx509CACert string
 
-	// X509Cert is the path to the X509 cert for the HTTP server. May not be set.
-	X509Cert string
+	// HTTPx509Cert is the path to the X509 cert for the HTTP server. May not be set.
+	HTTPx509Cert string
 
-	// X509Key is the path to the private key for the HTTP server. May not be set.
-	X509Key string
+	// HTTPx509Key is the path to the private key for the HTTP server. May not be set.
+	HTTPx509Key string
+
+	// NoHTTPVerify disables checking other nodes' server HTTP X509 certs for validity.
+	NoHTTPVerify bool
+
+	// HTTPVerifyClient indicates whether the HTTP server should verify client certificates.
+	HTTPVerifyClient bool
 
 	// NodeEncrypt indicates whether node encryption should be enabled.
 	NodeEncrypt bool
 
-	// NodeX509CACert is the path the root-CA certficate file for when this
-	// node contacts other nodes' Raft servers. May not be set.
+	// NodeX509CACert is the path to the CA certficate file for when this node verifies
+	// other certificates for any inter-node communications. May not be set.
 	NodeX509CACert string
 
 	// NodeX509Cert is the path to the X509 cert for the Raft server. May not be set.
@@ -69,6 +80,13 @@ type Config struct {
 
 	// NodeX509Key is the path to the X509 key for the Raft server. May not be set.
 	NodeX509Key string
+
+	// NoNodeVerify disables checking other nodes' Node X509 certs for validity.
+	NoNodeVerify bool
+
+	// NodeVerifyClient indicates whether a node should verify client certificates from
+	// other nodes.
+	NodeVerifyClient bool
 
 	// NodeID is the Raft ID for the node.
 	NodeID string
@@ -102,12 +120,6 @@ type Config struct {
 
 	// BootstrapExpectTimeout is the maximum time a bootstrap operation can take.
 	BootstrapExpectTimeout time.Duration
-
-	// NoHTTPVerify disables checking other nodes' HTTP X509 certs for validity.
-	NoHTTPVerify bool
-
-	// NoNodeVerify disables checking other nodes' Node X509 certs for validity.
-	NoNodeVerify bool
 
 	// DisoMode sets the discovery mode. May not be set.
 	DiscoMode string
@@ -218,6 +230,14 @@ func (c *Config) Validate() error {
 		return errors.New("-on-disk-path is set, but -on-disk is not")
 	}
 
+	if !bothUnsetSet(c.HTTPx509Cert, c.HTTPx509Key) {
+		return fmt.Errorf("either both -%s and -%s must be set, or neither", HTTPx509CertFlag, HTTPx509KeyFlag)
+	}
+	if !bothUnsetSet(c.NodeX509Cert, c.NodeX509Key) {
+		return fmt.Errorf("either both -%s and -%s must be set, or neither", NodeX509CertFlag, NodeX509KeyFlag)
+
+	}
+
 	// Enforce policies regarding addresses
 	if c.RaftAdv == "" {
 		c.RaftAdv = c.RaftAddr
@@ -315,7 +335,7 @@ func (c *Config) JoinAddresses() []string {
 // protocol, host and port.
 func (c *Config) HTTPURL() string {
 	apiProto := "http"
-	if c.X509Cert != "" {
+	if c.HTTPx509Cert != "" {
 		apiProto = "https"
 	}
 	return fmt.Sprintf("%s://%s", apiProto, c.HTTPAdv)
@@ -357,18 +377,20 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	showVersion := false
 
 	flag.StringVar(&config.NodeID, "node-id", "", "Unique name for node. If not set, set to advertised Raft address")
-	flag.StringVar(&config.HTTPAddr, HTTPAddrFlag, "localhost:4001", "HTTP server bind address. To enable HTTPS, set X.509 cert and key")
+	flag.StringVar(&config.HTTPAddr, HTTPAddrFlag, "localhost:4001", "HTTP server bind address. To enable HTTPS, set X.509 certificate and key")
 	flag.StringVar(&config.HTTPAdv, HTTPAdvAddrFlag, "", "Advertised HTTP address. If not set, same as HTTP server bind")
 	flag.BoolVar(&config.TLS1011, "tls1011", false, "Support deprecated TLS versions 1.0 and 1.1")
-	flag.StringVar(&config.X509CACert, "http-ca-cert", "", "Path to root X.509 certificate for HTTP endpoint")
-	flag.StringVar(&config.X509Cert, "http-cert", "", "Path to X.509 certificate for HTTP endpoint")
-	flag.StringVar(&config.X509Key, "http-key", "", "Path to X.509 private key for HTTP endpoint")
-	flag.BoolVar(&config.NoHTTPVerify, "http-no-verify", false, "Skip verification of remote HTTPS cert when joining cluster")
-	flag.BoolVar(&config.NodeEncrypt, "node-encrypt", false, "Enable node-to-node encryption")
-	flag.StringVar(&config.NodeX509CACert, "node-ca-cert", "", "Path to root X.509 certificate for node-to-node encryption")
-	flag.StringVar(&config.NodeX509Cert, "node-cert", "cert.pem", "Path to X.509 certificate for node-to-node encryption")
-	flag.StringVar(&config.NodeX509Key, "node-key", "key.pem", "Path to X.509 private key for node-to-node encryption")
-	flag.BoolVar(&config.NoNodeVerify, "node-no-verify", false, "Skip verification of a remote node cert")
+	flag.StringVar(&config.HTTPx509CACert, "http-ca-cert", "", "Path to X.509 CA certificate for HTTPS")
+	flag.StringVar(&config.HTTPx509Cert, HTTPx509CertFlag, "", "Path to HTTPS X.509 certificate")
+	flag.StringVar(&config.HTTPx509Key, HTTPx509KeyFlag, "", "Path to HTTPS X.509 private key")
+	flag.BoolVar(&config.NoHTTPVerify, "http-no-verify", false, "Skip verification of remote node's HTTPS certificate when joining a cluster")
+	flag.BoolVar(&config.HTTPVerifyClient, "http-verify-client", false, "Enable mutual TLS for HTTPS")
+	flag.BoolVar(&config.NodeEncrypt, "node-encrypt", false, "Ignored, control node-to-node encryption by setting node certificate and key")
+	flag.StringVar(&config.NodeX509CACert, "node-ca-cert", "", "Path to X.509 CA certificate for node-to-node encryption")
+	flag.StringVar(&config.NodeX509Cert, NodeX509CertFlag, "", "Path to X.509 certificate for node-to-node mutual authentication and encryption")
+	flag.StringVar(&config.NodeX509Key, NodeX509KeyFlag, "", "Path to X.509 private key for node-to-node mutual authentication and encryption")
+	flag.BoolVar(&config.NoNodeVerify, "node-no-verify", false, "Skip verification of any node-node certificate")
+	flag.BoolVar(&config.NodeVerifyClient, "node-verify-client", false, "Enable mutual TLS for node-to-node communication")
 	flag.StringVar(&config.AuthFile, "auth", "", "Path to authentication and authorization file. If not set, not enabled")
 	flag.StringVar(&config.RaftAddr, RaftAddrFlag, "localhost:4002", "Raft communication bind address")
 	flag.StringVar(&config.RaftAdv, RaftAdvAddrFlag, "", "Advertised Raft communication address. If not set, same as Raft bind")
@@ -459,6 +481,11 @@ func errorExit(code int, msg string) {
 	if code != 0 {
 		fmt.Fprintf(os.Stderr, "fatal: ")
 	}
-	fmt.Fprintf(os.Stderr, fmt.Sprintf("%s\n", msg))
+	fmt.Fprintf(os.Stderr, "%s\n", msg)
 	os.Exit(code)
+}
+
+// bothUnsetSet returns true if both a and b are unset, or both are set.
+func bothUnsetSet(a, b string) bool {
+	return (a == "" && b == "") || (a != "" && b != "")
 }

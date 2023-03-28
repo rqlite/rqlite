@@ -1,8 +1,10 @@
 package http
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	"github.com/rqlite/rqlite/command"
 )
@@ -47,7 +49,9 @@ func ParseRequest(b []byte) ([]*command.Statement, error) {
 	}
 
 	// Next try parameterized form.
-	if err := json.Unmarshal(b, &parameterized); err != nil {
+	dec := json.NewDecoder(bytes.NewReader(b))
+	dec.UseNumber()
+	if err := dec.Decode(&parameterized); err != nil {
 		return nil, ErrInvalidJSON
 	}
 	stmts := make([]*command.Statement, len(parameterized))
@@ -94,6 +98,21 @@ func ParseRequest(b []byte) ([]*command.Statement, error) {
 }
 
 func makeParameter(name string, i interface{}) (*command.Parameter, error) {
+	// Check if the value is a JSON number, and if so, convert it to an int64 or float64.
+	// Then let the switch statement below handle it.
+	if num, ok := i.(json.Number); ok {
+		i64, err := num.Int64()
+		if err == nil {
+			i = i64
+		} else {
+			f64, err := num.Float64()
+			if err != nil {
+				return nil, fmt.Errorf("invalid number %s", num.String())
+			}
+			i = f64
+		}
+	}
+
 	switch v := i.(type) {
 	case int:
 	case int64:
@@ -132,7 +151,10 @@ func makeParameter(name string, i interface{}) (*command.Parameter, error) {
 			Name: name,
 		}, nil
 	case nil:
-		return nil, nil
+		return &command.Parameter{
+			Value: nil,
+			Name:  name,
+		}, nil
 	}
 	return nil, ErrUnsupportedType
 }

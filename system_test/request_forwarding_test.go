@@ -1,11 +1,14 @@
 package system
 
 import (
+	"crypto/tls"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/rqlite/rqlite/cluster"
 	"github.com/rqlite/rqlite/command"
+	"github.com/rqlite/rqlite/rtls"
 	"github.com/rqlite/rqlite/tcp"
 )
 
@@ -234,7 +237,7 @@ func Test_MultiNodeClusterQueuedRequestForwardOK(t *testing.T) {
 	if len(followers) != 1 {
 		t.Fatalf("got incorrect number of followers: %d", len(followers))
 	}
-	res, err = followers[0].ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, false)
+	_, err = followers[0].ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, false)
 	if err != nil {
 		t.Fatalf("failed to insert record: %s", err.Error())
 	}
@@ -300,5 +303,13 @@ func queryRequestFromStrings(s []string) *command.QueryRequest {
 }
 
 func mustNewDialer(header byte, remoteEncrypted, skipVerify bool) *tcp.Dialer {
-	return tcp.NewDialer(header, remoteEncrypted, skipVerify)
+	var tlsConfig *tls.Config
+	var err error
+	if remoteEncrypted {
+		tlsConfig, err = rtls.CreateClientConfig("", "", "", skipVerify, false)
+		if err != nil {
+			panic(fmt.Sprintf("failed to create client TLS config: %s", err))
+		}
+	}
+	return tcp.NewDialer(header, tlsConfig)
 }

@@ -318,10 +318,7 @@ class Node(object):
   def is_leader(self):
     '''
     is_leader returns whether this node is the cluster leader
-    It also performs a check, to ensure the node nevers gives out
-    conflicting information about leader state.
     '''
-
     try:
       return self.status()['store']['raft']['state'] == 'Leader'
     except requests.exceptions.ConnectionError:
@@ -330,6 +327,12 @@ class Node(object):
   def is_follower(self):
     try:
       return self.status()['store']['raft']['state'] == 'Follower'
+    except requests.exceptions.ConnectionError:
+      return False
+
+  def is_voter(self):
+    try:
+      return self.status()['store']['raft']['voter'] == True
     except requests.exceptions.ConnectionError:
       return False
 
@@ -1345,6 +1348,10 @@ class TestEndToEndNonVoter(unittest.TestCase):
 
   def test_execute_fail_rejoin(self):
     '''Test that a non-voter that fails can rejoin the cluster, and pick up changes'''
+
+    # Confirm that voting status reporting is correct
+    self.assertTrue(self.leader.is_voter())
+    self.assertFalse(self.non_voter.is_voter())
 
     # Insert some records via the leader
     j = self.leader.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')

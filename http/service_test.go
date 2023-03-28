@@ -2,11 +2,9 @@ package http
 
 import (
 	"bytes"
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -17,9 +15,6 @@ import (
 	"github.com/rqlite/rqlite/cluster"
 	"github.com/rqlite/rqlite/command"
 	"github.com/rqlite/rqlite/store"
-	"github.com/rqlite/rqlite/testdata/x509"
-
-	"golang.org/x/net/http2"
 )
 
 func Test_ResponseJSONMarshal(t *testing.T) {
@@ -237,6 +232,9 @@ func Test_404Routes_ExpvarPprofDisabled(t *testing.T) {
 		"/debug/pprof/symbol",
 	} {
 		req, err := http.NewRequest("GET", host+path, nil)
+		if err != nil {
+			t.Fatalf("failed to create request: %s", err.Error())
+		}
 		resp, err := client.Do(req)
 		if err != nil {
 			t.Fatalf("failed to make request: %s", err.Error())
@@ -652,7 +650,10 @@ func Test_BackupFlagsNoLeaderRemoteFetch(t *testing.T) {
 		t.Fatalf("failed to get expected StatusOK for remote backup fetch, got %d", resp.StatusCode)
 	}
 	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("failed to read response body: %s", err.Error())
+	}
 	if exp, got := backupData, string(body); exp != got {
 		t.Fatalf("received incorrect backup data, exp: %s, got: %s", exp, got)
 	}
@@ -744,7 +745,7 @@ func Test_LoadFlagsNoLeader(t *testing.T) {
 	clusterLoadCalled := false
 	c.loadFn = func(lr *command.LoadRequest, nodeAddr string, timeout time.Duration) error {
 		clusterLoadCalled = true
-		if bytes.Compare(lr.Data, testData) != 0 {
+		if !bytes.Equal(lr.Data, testData) {
 			t.Fatalf("wrong data passed to cluster load")
 		}
 		return nil
@@ -1135,58 +1136,6 @@ func Test_ForwardingRedirectExecute(t *testing.T) {
 	}
 }
 
-func Test_TLSServce(t *testing.T) {
-	m := &MockStore{}
-	c := &mockClusterService{}
-	var s *Service
-	tempDir := t.TempDir()
-
-	s = New("127.0.0.1:0", m, c, nil)
-	s.CertFile = x509.CertFile(tempDir)
-	s.KeyFile = x509.KeyFile(tempDir)
-	s.BuildInfo = map[string]interface{}{
-		"version": "the version",
-	}
-	if err := s.Start(); err != nil {
-		t.Fatalf("failed to start service")
-	}
-	if !s.HTTPS() {
-		t.Fatalf("expected service to report HTTPS")
-	}
-	defer s.Close()
-
-	url := fmt.Sprintf("https://%s", s.Addr().String())
-
-	// Test connecting with an HTTP client.
-	tn := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	}
-	client := &http.Client{Transport: tn}
-	resp, err := client.Get(url)
-	if err != nil {
-		t.Fatalf("failed to make HTTP request: %s", err)
-	}
-
-	if v := resp.Header.Get("X-RQLITE-VERSION"); v != "the version" {
-		t.Fatalf("incorrect build version present in HTTP response header, got: %s", v)
-	}
-
-	// Test connecting with an HTTP/2 client.
-	client = &http.Client{
-		Transport: &http2.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		},
-	}
-	resp, err = client.Get(url)
-	if err != nil {
-		t.Fatalf("failed to make HTTP/2 request: %s", err)
-	}
-
-	if v := resp.Header.Get("X-RQLITE-VERSION"); v != "the version" {
-		t.Fatalf("incorrect build version present in HTTP/2 response header, got: %s", v)
-	}
-}
-
 func Test_timeoutQueryParam(t *testing.T) {
 	var req http.Request
 
@@ -1392,13 +1341,4 @@ func mustParseDuration(d string) time.Duration {
 	} else {
 		return dur
 	}
-}
-
-func mustReadResponseBody(resp *http.Response) string {
-	response, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		panic("failed to ReadAll response body")
-	}
-	resp.Body.Close()
-	return string(response)
 }

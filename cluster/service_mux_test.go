@@ -1,12 +1,14 @@
 package cluster
 
 import (
+	"crypto/tls"
 	"fmt"
 	"net"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/rqlite/rqlite/rtls"
 	"github.com/rqlite/rqlite/tcp"
 	"github.com/rqlite/rqlite/testdata/x509"
 )
@@ -104,15 +106,22 @@ func mustNewTLSMux() (net.Listener, *tcp.Mux) {
 	key := x509.KeyFile("")
 	defer os.Remove(key)
 
-	mux, err := tcp.NewTLSMux(ln, nil, cert, key, "")
+	mux, err := tcp.NewTLSMux(ln, nil, cert, key, "", true, false)
 	if err != nil {
 		panic(fmt.Sprintf("failed to create TLS mux: %s", err))
 	}
-	mux.InsecureSkipVerify = true
 
 	return ln, mux
 }
 
 func mustNewDialer(header byte, remoteEncrypted, skipVerify bool) *tcp.Dialer {
-	return tcp.NewDialer(header, remoteEncrypted, skipVerify)
+	var tlsConfig *tls.Config
+	var err error
+	if remoteEncrypted {
+		tlsConfig, err = rtls.CreateClientConfig("", "", "", skipVerify, false)
+		if err != nil {
+			panic(fmt.Sprintf("failed to create client TLS config: %s", err))
+		}
+	}
+	return tcp.NewDialer(header, tlsConfig)
 }

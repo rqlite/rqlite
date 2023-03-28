@@ -8,18 +8,19 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rqlite/rqlite/rtls"
 	"github.com/rqlite/rqlite/testdata/x509"
 )
 
 func Test_NewDialer(t *testing.T) {
-	d := NewDialer(1, false, false)
+	d := NewDialer(1, nil)
 	if d == nil {
 		t.Fatal("failed to create a dialer")
 	}
 }
 
 func Test_DialerNoConnect(t *testing.T) {
-	d := NewDialer(87, false, false)
+	d := NewDialer(87, nil)
 	_, err := d.Dial("127.0.0.1:0", 5*time.Second)
 	if err == nil {
 		t.Fatalf("no error connecting to bad address")
@@ -31,7 +32,7 @@ func Test_DialerHeader(t *testing.T) {
 	defer s.Close()
 	go s.Start(t)
 
-	d := NewDialer(64, false, false)
+	d := NewDialer(64, nil)
 	conn, err := d.Dial(s.Addr(), 10*time.Second)
 	if err != nil {
 		t.Fatalf("failed to dial echo server: %s", err.Error())
@@ -56,7 +57,11 @@ func Test_DialerHeaderTLS(t *testing.T) {
 	defer os.Remove(key)
 	go s.Start(t)
 
-	d := NewDialer(23, true, true)
+	tlsConfig, err := rtls.CreateClientConfig("", "", "", true, false)
+	if err != nil {
+		t.Fatalf("failed to create TLS config: %s", err.Error())
+	}
+	d := NewDialer(23, tlsConfig)
 	conn, err := d.Dial(s.Addr(), 5*time.Second)
 	if err != nil {
 		t.Fatalf("failed to dial TLS echo server: %s", err.Error())
@@ -83,7 +88,7 @@ func Test_DialerHeaderTLSBadConnect(t *testing.T) {
 
 	// Connect to a TLS server with an unencrypted client, to make sure
 	// code can handle that misconfig.
-	d := NewDialer(56, false, false)
+	d := NewDialer(56, nil)
 	conn, err := d.Dial(s.Addr(), 5*time.Second)
 	if err != nil {
 		t.Fatalf("failed to dial TLS echo server: %s", err.Error())
@@ -116,7 +121,7 @@ func (e *echoServer) Start(t *testing.T) {
 				// Successful testing can cause this.
 				return
 			}
-			t.Fatalf("failed to accept a connection: %s", err.Error())
+			t.Logf("failed to accept a connection: %s", err.Error())
 		}
 		go func(c net.Conn) {
 			buf := make([]byte, 1)
@@ -149,7 +154,7 @@ func mustNewEchoServerTLS() (*echoServer, string, string) {
 	cert := x509.CertFile("")
 	key := x509.KeyFile("")
 
-	tlsConfig, err := createTLSConfig(cert, key, "")
+	tlsConfig, err := rtls.CreateServerConfig(cert, key, "", true, false)
 	if err != nil {
 		panic("failed to create TLS config")
 	}

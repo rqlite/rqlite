@@ -3,6 +3,8 @@ package http
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
+	"strconv"
 	"testing"
 )
 
@@ -14,13 +16,13 @@ func Test_NilRequest(t *testing.T) {
 }
 
 func Test_EmptyRequests(t *testing.T) {
-	b := []byte(fmt.Sprintf(`[]`))
+	b := []byte(`[]`)
 	_, err := ParseRequest(b)
 	if err != ErrNoStatements {
 		t.Fatalf("empty simple request did not result in correct error")
 	}
 
-	b = []byte(fmt.Sprintf(`[[]]`))
+	b = []byte(`[[]]`)
 	_, err = ParseRequest(b)
 	if err != ErrNoStatements {
 		t.Fatalf("empty parameterized request did not result in correct error")
@@ -108,7 +110,36 @@ func Test_SingleParameterizedRequest(t *testing.T) {
 	if stmts[0].Parameters[0].GetS() != p0 {
 		t.Fatalf("incorrect parameter, exp %s, got %s", p0, stmts[0].Parameters[0])
 	}
-	if int(stmts[0].Parameters[1].GetD()) != p1 {
+	if stmts[0].Parameters[1].GetI() != int64(p1) {
+		t.Fatalf("incorrect parameter, exp %d, got %d", p1, int(stmts[0].Parameters[1].GetI()))
+	}
+}
+
+func Test_SingleParameterizedRequestLargeNumber(t *testing.T) {
+	s := "SELECT * FROM ? WHERE bar=?"
+	p0 := "FOO"
+	p1 := int64(1676555296046783000)
+	b := []byte(fmt.Sprintf(`[["%s", "%s", %d]]`, s, p0, p1))
+
+	stmts, err := ParseRequest(b)
+	if err != nil {
+		t.Fatalf("failed to parse request: %s", err.Error())
+	}
+
+	if len(stmts) != 1 {
+		t.Fatalf("incorrect number of statements returned: %d", len(stmts))
+	}
+	if stmts[0].Sql != s {
+		t.Fatalf("incorrect statement parsed, exp %s, got %s", s, stmts[0].Sql)
+	}
+
+	if len(stmts[0].Parameters) != 2 {
+		t.Fatalf("incorrect number of parameters returned: %d", len(stmts[0].Parameters))
+	}
+	if stmts[0].Parameters[0].GetS() != p0 {
+		t.Fatalf("incorrect parameter, exp %s, got %s", p0, stmts[0].Parameters[0])
+	}
+	if (stmts[0].Parameters[1].GetI()) != p1 {
 		t.Fatalf("incorrect parameter, exp %d, got %d", p1, int(stmts[0].Parameters[1].GetI()))
 	}
 }
@@ -142,8 +173,14 @@ func Test_SingleParameterizedRequestNull(t *testing.T) {
 }
 
 func Test_SingleNamedParameterizedRequest(t *testing.T) {
+	if _, err := strconv.ParseInt(string("1.23"), 10, 64); err == nil {
+		// Just be sure that strconv.ParseInt fails on float, since
+		// the internal implementation of ParseRequest relies on it.
+		t.Fatal("strconv.ParseInt should fail on float")
+	}
+
 	s := "SELECT * FROM foo WHERE bar=:bar AND qux=:qux"
-	b := []byte(fmt.Sprintf(`[["%s", %s]]`, s, mustJSONMarshal(map[string]interface{}{"bar": 1, "qux": "some string"})))
+	b := []byte(fmt.Sprintf(`[["%s", %s]]`, s, mustJSONMarshal(map[string]interface{}{"bar": 3, "qux": "some string", "baz": 3.1457})))
 
 	stmts, err := ParseRequest(b)
 	if err != nil {
@@ -157,8 +194,77 @@ func Test_SingleNamedParameterizedRequest(t *testing.T) {
 		t.Fatalf("incorrect statement parsed, exp %s, got %s", s, stmts[0].Sql)
 	}
 
-	if len(stmts[0].Parameters) != 2 {
+	if len(stmts[0].Parameters) != 3 {
 		t.Fatalf("incorrect number of parameters returned: %d", len(stmts[0].Parameters))
+	}
+
+	// build a map of the parameters for easier comparison
+	params := make(map[string]interface{})
+	for _, p := range stmts[0].Parameters {
+		if p.GetName() == "bar" {
+			params[p.GetName()] = p.GetI()
+		} else if p.GetName() == "qux" {
+			params[p.GetName()] = p.GetS()
+		} else if p.GetName() == "baz" {
+			params[p.GetName()] = p.GetD()
+		} else {
+			t.Fatalf("unexpected parameter name: %s", p.GetName())
+		}
+	}
+
+	exp := map[string]interface{}{
+		"bar": int64(3),
+		"qux": "some string",
+		"baz": 3.1457,
+	}
+
+	if !reflect.DeepEqual(exp, params) {
+		t.Fatalf("incorrect parameters, exp %s, got %s", exp, params)
+	}
+}
+
+func Test_SingleNamedParameterizedRequestNils(t *testing.T) {
+	s := "SELECT * FROM foo WHERE bar=:bar AND qux=:qux"
+	b := []byte(fmt.Sprintf(`[["%s", %s]]`, s, mustJSONMarshal(map[string]interface{}{"bar": 666, "qux": "some string", "baz": nil})))
+
+	stmts, err := ParseRequest(b)
+	if err != nil {
+		t.Fatalf("failed to parse request: %s", err.Error())
+	}
+
+	if len(stmts) != 1 {
+		t.Fatalf("incorrect number of statements returned: %d", len(stmts))
+	}
+	if stmts[0].Sql != s {
+		t.Fatalf("incorrect statement parsed, exp %s, got %s", s, stmts[0].Sql)
+	}
+
+	if len(stmts[0].Parameters) != 3 {
+		t.Fatalf("incorrect number of parameters returned: %d", len(stmts[0].Parameters))
+	}
+
+	// build a map of the parameters for easier comparison
+	params := make(map[string]interface{})
+	for _, p := range stmts[0].Parameters {
+		if p.GetName() == "bar" {
+			params[p.GetName()] = p.GetI()
+		} else if p.GetName() == "qux" {
+			params[p.GetName()] = p.GetS()
+		} else if p.GetName() == "baz" {
+			params[p.GetName()] = p.GetValue()
+		} else {
+			t.Fatalf("unexpected parameter name: %s", p.GetName())
+		}
+	}
+
+	exp := map[string]interface{}{
+		"bar": int64(666),
+		"qux": "some string",
+		"baz": nil,
+	}
+
+	if !reflect.DeepEqual(exp, params) {
+		t.Fatalf("incorrect parameters, exp %s, got %s", exp, params)
 	}
 }
 
@@ -258,17 +364,17 @@ func Test_MixedInvalidRequest(t *testing.T) {
 }
 
 func Test_SingleInvalidTypeRequests(t *testing.T) {
-	_, err := ParseRequest([]byte(fmt.Sprintf(`[1]`)))
+	_, err := ParseRequest([]byte(`[1]`))
 	if err != ErrInvalidJSON {
 		t.Fatal("got unexpected error for invalid request")
 	}
 
-	_, err = ParseRequest([]byte(fmt.Sprintf(`[[1]]`)))
+	_, err = ParseRequest([]byte(`[[1]]`))
 	if err != ErrInvalidRequest {
 		t.Fatal("got unexpected error for invalid request")
 	}
 
-	_, err = ParseRequest([]byte(fmt.Sprintf(`[[1, "x", 2]]`)))
+	_, err = ParseRequest([]byte(`[[1, "x", 2]]`))
 	if err != ErrInvalidRequest {
 		t.Fatal("got unexpected error for invalid request")
 	}

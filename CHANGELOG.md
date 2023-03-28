@@ -1,3 +1,29 @@
+## 7.14.2 (unreleased)
+## Implementation changes and bug fixes
+- [PR #1179](https://github.com/rqlite/rqlite/pull/1179): go mod updates.
+- [PR #1180](https://github.com/rqlite/rqlite/pull/1180): Support large numbers in requests.
+- [PR #1186](https://github.com/rqlite/rqlite/pull/1186): Improve read-only (non-voting) node management. Fixes [issue #1182](https://github.com/rqlite/rqlite/issues/1182).
+
+## 7.14.1 (March 17th 2023)
+## Implementation changes and bug fixes
+- [PR #1174](https://github.com/rqlite/rqlite/pull/1174): Fix command-line help for x509 resources.
+- [PR #1178](https://github.com/rqlite/rqlite/pull/1178): Fix parsing of Named Parameters with `NULL` as value. Fixes [issue #1177](https://github.com/rqlite/rqlite/issues/1177). Thanks @wellescastro
+
+## 7.14.0 (March 8th 2023)
+This release sees the addition of mutual TLS support, and corrects some other issues related to the use of TLS and Certificate Authority configuration.
+
+### New features
+- [PR #1171](https://github.com/rqlite/rqlite/pull/1171): Support mutual TLS for both HTTP connections and inter-node traffic. See [issue #1167](https://github.com/rqlite/rqlite/issues/1167). Thanks @otto-dev
+
+### Implementation changes and bug fixes
+- [PR #1173](https://github.com/rqlite/rqlite/pull/1173): go mod updates.
+
+## 7.13.2 (February 23rd 2023)
+### Implementation changes and bug fixes
+- [PR #1156](https://github.com/rqlite/rqlite/pull/1156): Better error message when rqlite shell can't connect to a node.
+- [PR #1162](https://github.com/rqlite/rqlite/pull/1162): Fix Consul-based discovery issue when using TLS.
+- [PR #1163](https://github.com/rqlite/rqlite/pull/1163): go mod updates.
+
 ## 7.13.1 (January 6th 2023)
 ### Implementation changes and bug fixes
 - [PR #1146](https://github.com/rqlite/rqlite/pull/1146): Delete history file if `RQLITE_HISTFILESIZE` environment variable is zero. Fixes [issue #1145](https://github.com/rqlite/rqlite/issues/1145). Thanks @jamielinux

@@ -14,6 +14,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/Bowery/prompt"
@@ -80,7 +81,12 @@ func main() {
 
 		version, err := getVersionWithClient(httpClient, argv)
 		if err != nil {
-			ctx.String("%s %v\n", ctx.Color().Red("ERR!"), err)
+			msg := err.Error()
+			if errors.Is(err, syscall.ECONNREFUSED) {
+				msg = fmt.Sprintf("Unable to connect to rqlited at %s://%s:%d - is it running?",
+					argv.Protocol, argv.Host, argv.Port)
+			}
+			ctx.String("%s %v\n", ctx.Color().Red("ERR!"), msg)
 			return nil
 		}
 

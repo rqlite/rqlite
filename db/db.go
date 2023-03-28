@@ -892,7 +892,7 @@ func parametersToValues(parameters []*command.Parameter) ([]interface{}, error) 
 		case *command.Parameter_S:
 			values[i] = sql.Named(parameters[i].GetName(), w.S)
 		case nil:
-			values[i] = nil
+			values[i] = sql.Named(parameters[i].GetName(), nil)
 		default:
 			return nil, fmt.Errorf("unsupported type: %T", w)
 		}
