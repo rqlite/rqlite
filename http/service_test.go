@@ -1210,7 +1210,7 @@ func (m *MockStore) Join(jr *command.JoinRequest) error {
 	return nil
 }
 
-func (m *MockStore) Notify(id, addr string) error {
+func (m *MockStore) Notify(nr *command.NotifyRequest) error {
 	return nil
 }
 

@@ -65,7 +65,7 @@ type Store interface {
 	Join(jr *command.JoinRequest) error
 
 	// Notify notifies this node that a node is available at addr.
-	Notify(id, addr string) error
+	Notify(nr *command.NotifyRequest) error
 
 	// RemoveNode removes the node from the cluster.
 	Remove(rn *command.RemoveNodeRequest) error
@@ -577,7 +577,10 @@ func (s *Service) handleNotify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.store.Notify(remoteID, remoteAddr); err != nil {
+	if err := s.store.Notify(&command.NotifyRequest{
+		Id:      remoteID,
+		Address: remoteAddr,
+	}); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }

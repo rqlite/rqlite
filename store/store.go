@@ -978,7 +978,7 @@ func (s *Store) Load(lr *command.LoadRequest) error {
 // with the *advertised Raft address* which the Store doesn't know about.
 //
 // Notifying is idempotent. A node may repeatedly notify the Store without issue.
-func (s *Store) Notify(id, addr string) error {
+func (s *Store) Notify(nr *command.NotifyRequest) error {
 	if !s.open {
 		return ErrNotOpen
 	}
@@ -991,10 +991,10 @@ func (s *Store) Notify(id, addr string) error {
 		return nil
 	}
 
-	if _, ok := s.notifyingNodes[id]; ok {
+	if _, ok := s.notifyingNodes[nr.Id]; ok {
 		return nil
 	}
-	s.notifyingNodes[id] = &Server{id, addr, "voter"}
+	s.notifyingNodes[nr.Id] = &Server{nr.Id, nr.Address, "voter"}
 	if len(s.notifyingNodes) < s.BootstrapExpect {
 		return nil
 	}
