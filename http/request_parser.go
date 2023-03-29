@@ -114,8 +114,7 @@ func makeParameter(name string, i interface{}) (*command.Parameter, error) {
 	}
 
 	switch v := i.(type) {
-	case int:
-	case int64:
+	case int, int64:
 		return &command.Parameter{
 			Value: &command.Parameter_I{
 				I: v,
