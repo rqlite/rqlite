@@ -5,6 +5,7 @@
 - [PR #1186](https://github.com/rqlite/rqlite/pull/1186): Improve read-only (non-voting) node management. Fixes [issue #1182](https://github.com/rqlite/rqlite/issues/1182).
 - [PR #1189](https://github.com/rqlite/rqlite/pull/1189): Migrate to a Protobuf data model for Join Requests.
 - [PR #1190](https://github.com/rqlite/rqlite/pull/1190): Migrate to a Protobuf data model for Notify Requests.
+- [PR #1191](https://github.com/rqlite/rqlite/pull/1191): Support notification for bootstrapping over the Raft connection.
 
 ## 7.14.1 (March 17th 2023)
 ## Implementation changes and bug fixes
