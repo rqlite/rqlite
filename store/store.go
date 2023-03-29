@@ -1023,7 +1023,7 @@ func (s *Store) Notify(id, addr string) error {
 
 // Join joins a node, identified by id and located at addr, to this store.
 // The node must be ready to respond to Raft communications at that address.
-func (s *Store) Join(id, addr string, voter bool) error {
+func (s *Store) Join(jr *command.JoinRequest) error {
 	if !s.open {
 		return ErrNotOpen
 	}
@@ -1031,6 +1031,10 @@ func (s *Store) Join(id, addr string, voter bool) error {
 	if s.raft.State() != raft.Leader {
 		return ErrNotLeader
 	}
+
+	id := jr.Id
+	addr := jr.Address
+	voter := jr.Voter
 
 	configFuture := s.raft.GetConfiguration()
 	if err := configFuture.Error(); err != nil {

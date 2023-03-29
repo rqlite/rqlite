@@ -41,7 +41,7 @@ func Test_StoreSingleNodeNotOpen(t *testing.T) {
 
 	// Check key methods handle being called when Store is not open.
 
-	if err := s.Join("id", "localhost", true); err != ErrNotOpen {
+	if err := s.Join(joinRequest("id", "localhost", true)); err != ErrNotOpen {
 		t.Fatalf("wrong error received for non-open store: %s", err)
 	}
 	if err := s.Notify("id", "localhost"); err != ErrNotOpen {
@@ -1120,7 +1120,7 @@ func Test_SingleNodeSelfJoinNoChangeOK(t *testing.T) {
 	}
 
 	// Self-join should not be a problem. It should just be ignored.
-	err := s0.Join(s0.ID(), s0.Addr(), true)
+	err := s0.Join(joinRequest(s0.ID(), s0.Addr(), true))
 	if err != nil {
 		t.Fatalf("received error for non-changing self-join")
 	}
@@ -1198,7 +1198,7 @@ func Test_MultiNodeJoinRemove(t *testing.T) {
 	sort.StringSlice(storeNodes).Sort()
 
 	// Join the second node to the first.
-	if err := s0.Join(s1.ID(), s1.Addr(), true); err != nil {
+	if err := s0.Join(joinRequest(s1.ID(), s1.Addr(), true)); err != nil {
 		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
 	}
 
@@ -1276,13 +1276,13 @@ func Test_MultiNodeStepdown(t *testing.T) {
 	defer s2.Close(true)
 
 	// Form the 3-node cluster
-	if err := s0.Join(s1.ID(), s1.Addr(), true); err != nil {
+	if err := s0.Join(joinRequest(s1.ID(), s1.Addr(), true)); err != nil {
 		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
 	}
 	if _, err := s1.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
-	if err := s0.Join(s2.ID(), s2.Addr(), false); err != nil {
+	if err := s0.Join(joinRequest(s2.ID(), s2.Addr(), true)); err != nil {
 		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
 	}
 	if _, err := s2.WaitForLeader(10 * time.Second); err != nil {
@@ -1412,7 +1412,7 @@ func Test_MultiNodeJoinNonVoterRemove(t *testing.T) {
 	sort.StringSlice(storeNodes).Sort()
 
 	// Join the second node to the first.
-	if err := s0.Join(s1.ID(), s1.Addr(), false); err != nil {
+	if err := s0.Join(joinRequest(s1.ID(), s1.Addr(), false)); err != nil {
 		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
 	}
 
@@ -1494,12 +1494,12 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 	defer s2.Close(true)
 
 	// Join the second node to the first as a voting node.
-	if err := s0.Join(s1.ID(), s1.Addr(), true); err != nil {
+	if err := s0.Join(joinRequest(s1.ID(), s1.Addr(), true)); err != nil {
 		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
 	}
 
 	// Join the third node to the first as a non-voting node.
-	if err := s0.Join(s2.ID(), s2.Addr(), false); err != nil {
+	if err := s0.Join(joinRequest(s2.ID(), s2.Addr(), false)); err != nil {
 		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
 	}
 
@@ -1651,7 +1651,7 @@ func Test_MultiNodeExecuteQueryFreshness(t *testing.T) {
 	defer s1.Close(true)
 
 	// Join the second node to the first.
-	if err := s0.Join(s1.ID(), s1.Addr(), true); err != nil {
+	if err := s0.Join(joinRequest(s1.ID(), s1.Addr(), true)); err != nil {
 		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
 	}
 
@@ -1817,7 +1817,7 @@ func Test_StoreLogTruncationMultinode(t *testing.T) {
 	defer s1.Close(true)
 
 	// Join the second node to the first.
-	if err := s0.Join(s1.ID(), s1.Addr(), true); err != nil {
+	if err := s0.Join(joinRequest(s1.ID(), s1.Addr(), true)); err != nil {
 		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
 	}
 	if _, err := s1.WaitForLeader(10 * time.Second); err != nil {
@@ -2273,6 +2273,14 @@ func backupRequestBinary(leader bool) *command.BackupRequest {
 func loadRequestFromFile(path string) *command.LoadRequest {
 	return &command.LoadRequest{
 		Data: mustReadFile(path),
+	}
+}
+
+func joinRequest(id, addr string, voter bool) *command.JoinRequest {
+	return &command.JoinRequest{
+		Id:      id,
+		Address: addr,
+		Voter:   voter,
 	}
 }
 

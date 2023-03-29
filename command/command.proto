@@ -74,6 +74,12 @@ message LoadRequest {
 	bytes data = 1;
 }
 
+message JoinRequest {
+	string id = 1;
+	string address = 2;
+	bool voter = 3;
+}
+
 message RemoveNodeRequest {
 	string id = 1;
 }
@@ -89,6 +95,7 @@ message Command {
         COMMAND_TYPE_EXECUTE = 2;
         COMMAND_TYPE_NOOP = 3;
         COMMAND_TYPE_LOAD = 4;
+        COMMAND_TYPE_JOIN = 5;
     }
     Type type = 1;
     bytes sub_command = 2;
