@@ -4,6 +4,7 @@
 - [PR #1180](https://github.com/rqlite/rqlite/pull/1180): Support large numbers in requests.
 - [PR #1186](https://github.com/rqlite/rqlite/pull/1186): Improve read-only (non-voting) node management. Fixes [issue #1182](https://github.com/rqlite/rqlite/issues/1182).
 - [PR #1189](https://github.com/rqlite/rqlite/pull/1189): Migrate to a Protobuf data model for Join Requests.
+- [PR #1190](https://github.com/rqlite/rqlite/pull/1190): Migrate to a Protobuf data model for Notify Requests.
 
 ## 7.14.1 (March 17th 2023)
 ## Implementation changes and bug fixes

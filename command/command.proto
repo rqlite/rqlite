@@ -80,6 +80,11 @@ message JoinRequest {
 	bool voter = 3;
 }
 
+message NotifyRequest {
+	string id = 1;
+	string address = 2;
+}
+
 message RemoveNodeRequest {
 	string id = 1;
 }

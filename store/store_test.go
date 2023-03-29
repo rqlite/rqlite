@@ -44,7 +44,7 @@ func Test_StoreSingleNodeNotOpen(t *testing.T) {
 	if err := s.Join(joinRequest("id", "localhost", true)); err != ErrNotOpen {
 		t.Fatalf("wrong error received for non-open store: %s", err)
 	}
-	if err := s.Notify("id", "localhost"); err != ErrNotOpen {
+	if err := s.Notify(notifyRequest("id", "localhost")); err != ErrNotOpen {
 		t.Fatalf("wrong error received for non-open store: %s", err)
 	}
 	if err := s.Remove(nil); err != ErrNotOpen {
@@ -1327,16 +1327,16 @@ func Test_MultiNodeStoreNotifyBootstrap(t *testing.T) {
 	defer s2.Close(true)
 
 	s0.BootstrapExpect = 3
-	if err := s0.Notify(s0.ID(), ln0.Addr().String()); err != nil {
+	if err := s0.Notify(notifyRequest(s0.ID(), ln0.Addr().String())); err != nil {
 		t.Fatalf("failed to notify store: %s", err.Error())
 	}
-	if err := s0.Notify(s0.ID(), ln0.Addr().String()); err != nil {
+	if err := s0.Notify(notifyRequest(s0.ID(), ln0.Addr().String())); err != nil {
 		t.Fatalf("failed to notify store -- not idempotent: %s", err.Error())
 	}
-	if err := s0.Notify(s1.ID(), ln1.Addr().String()); err != nil {
+	if err := s0.Notify(notifyRequest(s1.ID(), ln1.Addr().String())); err != nil {
 		t.Fatalf("failed to notify store: %s", err.Error())
 	}
-	if err := s0.Notify(s2.ID(), ln2.Addr().String()); err != nil {
+	if err := s0.Notify(notifyRequest(s2.ID(), ln2.Addr().String())); err != nil {
 		t.Fatalf("failed to notify store: %s", err.Error())
 	}
 
@@ -1381,7 +1381,7 @@ func Test_MultiNodeStoreNotifyBootstrap(t *testing.T) {
 
 	// Calling Notify() on a node that is part of a cluster should
 	// be a no-op.
-	if err := s0.Notify(s1.ID(), ln1.Addr().String()); err != nil {
+	if err := s0.Notify(notifyRequest(s1.ID(), ln1.Addr().String())); err != nil {
 		t.Fatalf("failed to notify store that is part of cluster: %s", err.Error())
 	}
 }
@@ -2281,6 +2281,13 @@ func joinRequest(id, addr string, voter bool) *command.JoinRequest {
 		Id:      id,
 		Address: addr,
 		Voter:   voter,
+	}
+}
+
+func notifyRequest(id, addr string) *command.NotifyRequest {
+	return &command.NotifyRequest{
+		Id:      id,
+		Address: addr,
 	}
 }
 
