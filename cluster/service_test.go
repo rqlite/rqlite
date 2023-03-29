@@ -97,6 +97,82 @@ func Test_NewServiceSetGetNodeAPIAddr(t *testing.T) {
 	}
 }
 
+func Test_NewServiceNotify(t *testing.T) {
+	ml := mustNewMockTransport()
+	mm := mustNewMockManager()
+	mm.notifyFn = func(n *command.NotifyRequest) error {
+		if n.Id != "foo" {
+			t.Fatalf("failed to get correct node ID, exp %s, got %s", "foo", n.Id)
+		}
+		if n.Address != "localhost" {
+			t.Fatalf("failed to get correct node address, exp %s, got %s", "localhost", n.Address)
+		}
+		return nil
+	}
+
+	s := New(ml, mustNewMockDatabase(), mm, mustNewMockCredentialStore())
+	if s == nil {
+		t.Fatalf("failed to create cluster service")
+	}
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open cluster service")
+	}
+
+	// Create a notify request.
+	nr := &command.NotifyRequest{
+		Id:      "foo",
+		Address: "localhost",
+	}
+
+	// Test by connecting to itself.
+	c := NewClient(ml, 30*time.Second)
+	err := c.Notify(nr, s.Addr(), 5*time.Second)
+	if err != nil {
+		t.Fatalf("failed to notify node: %s", err)
+	}
+
+	if err := s.Close(); err != nil {
+		t.Fatalf("failed to close cluster service")
+	}
+}
+
+func Test_NewServiceRemoveNode(t *testing.T) {
+	ml := mustNewMockTransport()
+	mm := mustNewMockManager()
+	mm.removeNodeFn = func(rr *command.RemoveNodeRequest) error {
+		if rr.Id != "foo" {
+			t.Fatalf("failed to get correct node ID, exp %s, got %s", "foo", rr.Id)
+		}
+		return nil
+	}
+
+	s := New(ml, mustNewMockDatabase(), mm, mustNewMockCredentialStore())
+	if s == nil {
+		t.Fatalf("failed to create cluster service")
+	}
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open cluster service")
+	}
+
+	// Create a remove request.
+	rr := &command.RemoveNodeRequest{
+		Id: "foo",
+	}
+
+	// Test by connecting to itself.
+	c := NewClient(ml, 30*time.Second)
+	err := c.RemoveNode(rr, s.Addr(), nil, 5*time.Second)
+	if err != nil {
+		t.Fatalf("failed to remove node: %s", err)
+	}
+
+	if err := s.Close(); err != nil {
+		t.Fatalf("failed to close cluster service")
+	}
+}
+
 func Test_NewServiceSetGetNodeAPIAddrLocal(t *testing.T) {
 	ml := mustNewMockTransport()
 	s := New(ml, mustNewMockDatabase(), mustNewMockManager(), mustNewMockCredentialStore())
@@ -351,6 +427,7 @@ func mustNewMockDatabase() *mockDatabase {
 
 type MockManager struct {
 	removeNodeFn func(rn *command.RemoveNodeRequest) error
+	notifyFn     func(n *command.NotifyRequest) error
 }
 
 func (m *MockManager) Remove(rn *command.RemoveNodeRequest) error {
@@ -358,6 +435,13 @@ func (m *MockManager) Remove(rn *command.RemoveNodeRequest) error {
 		return nil
 	}
 	return m.removeNodeFn(rn)
+}
+
+func (m *MockManager) Notify(n *command.NotifyRequest) error {
+	if m.notifyFn == nil {
+		return nil
+	}
+	return m.notifyFn(n)
 }
 
 func mustNewMockManager() *MockManager {
