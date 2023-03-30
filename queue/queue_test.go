@@ -120,6 +120,17 @@ func Test_NewQueue(t *testing.T) {
 	defer q.Close()
 }
 
+func Test_NewQueueClosedWrite(t *testing.T) {
+	q := New(1, 1, 100*time.Millisecond)
+	if q == nil {
+		t.Fatalf("failed to create new Queue")
+	}
+	q.Close()
+	if _, err := q.Write(testStmtsFoo, nil); err == nil {
+		t.Fatalf("failed to detect closed queue")
+	}
+}
+
 func Test_NewQueueWriteNil(t *testing.T) {
 	q := New(1, 1, 60*time.Second)
 	defer q.Close()
