@@ -138,13 +138,22 @@ func (b *Bootstrapper) Boot(id, raftAddr string, done func() bool, timeout time.
 }
 
 func (b *Bootstrapper) notify(targets []*url.URL, id, raftAddr string) error {
+	// Need to think about error handling. One or both? Which results in
+	// an error back to the caller?
 	for _, t := range targets {
 		if strings.ToLower(t.Scheme) == "raft" {
-			//b.notifyRaft(t, id, raftAddr)
+			b.notifyRaft(t, id, raftAddr)
 		} else {
 			b.notifyHTTP(t, id, raftAddr)
 		}
 	}
+	return nil
+}
+
+// notifyRaft is used to notify a remote node of this node's presence by contacting
+// the remote node via its Raft address.
+func (b *Bootstrapper) notifyRaft(u *url.URL, id, raftAddr string) error {
+	// Pull the host out of the URL and use it to connect to the remote node.
 	return nil
 }
 
