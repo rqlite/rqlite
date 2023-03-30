@@ -184,7 +184,7 @@ func (q *Queue) run() {
 		req := mergeQueued(queuedStmts)
 		q.sendCh <- req
 		stats.Add(numStatementsTx, int64(len(req.Statements)))
-		queuedStmts = nil
+		queuedStmts = queuedStmts[:0] // Better on the GC than setting to nil.
 	}
 
 	for {
