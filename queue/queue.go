@@ -174,23 +174,17 @@ func (q *Queue) run() {
 	defer close(q.closed)
 
 	queuedStmts := make([]*queuedStatements, 0)
-	timer := time.NewTimer(q.timeout)
-	timer.Stop()
+	// Create an initial timer, in the stopped state.
+	timer := time.NewTimer(0)
+	<-timer.C
 
 	writeFn := func() {
-		timer.Stop()
-		if queuedStmts == nil {
-			// Batch size was met, but timer expired before it could be
-			// stopped, so this function was called again. Possibly.
-			return
-		}
-
 		// mergeQueued returns a new object, ownership will pass
 		// implicitly to the other side of sendCh.
 		req := mergeQueued(queuedStmts)
 		q.sendCh <- req
 		stats.Add(numStatementsTx, int64(len(req.Statements)))
-		queuedStmts = nil
+		queuedStmts = queuedStmts[:0] // Better on the GC than setting to nil.
 	}
 
 	for {
@@ -198,9 +192,14 @@ func (q *Queue) run() {
 		case s := <-q.batchCh:
 			queuedStmts = append(queuedStmts, s)
 			if len(queuedStmts) == 1 {
+				// First item in queue, start the timer so that if
+				// we don't get in a batch, we'll still write.
 				timer.Reset(q.timeout)
 			}
 			if len(queuedStmts) == q.batchSize {
+				if !timer.Stop() {
+					<-timer.C
+				}
 				writeFn()
 			}
 		case <-timer.C:
@@ -209,6 +208,9 @@ func (q *Queue) run() {
 			writeFn()
 		case <-q.flush:
 			stats.Add(numFlush, 1)
+			if !timer.Stop() {
+				<-timer.C
+			}
 			writeFn()
 		case <-q.done:
 			timer.Stop()

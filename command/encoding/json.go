@@ -176,7 +176,9 @@ func noEscapeEncode(i interface{}) ([]byte, error) {
 	return bytes.TrimRight(buf.Bytes(), "\n"), nil
 }
 
-func jsonMarshal(i interface{}, f func(i interface{}) ([]byte, error), assoc bool) ([]byte, error) {
+type marshalFunc func(i interface{}) ([]byte, error)
+
+func jsonMarshal(i interface{}, f marshalFunc, assoc bool) ([]byte, error) {
 	switch v := i.(type) {
 	case *command.ExecuteResult:
 		r, err := NewResultFromExecuteResult(v)
