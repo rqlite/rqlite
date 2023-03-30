@@ -25,7 +25,7 @@ var (
 
 // ParseRequest generates a set of Statements for a given byte slice.
 func ParseRequest(b []byte) ([]*command.Statement, error) {
-	if b == nil {
+	if len(b) == 0 {
 		return nil, ErrNoStatements
 	}
 
@@ -115,6 +115,12 @@ func makeParameter(name string, i interface{}) (*command.Parameter, error) {
 
 	switch v := i.(type) {
 	case int:
+		return &command.Parameter{
+			Value: &command.Parameter_I{
+				I: int64(v),
+			},
+			Name: name,
+		}, nil
 	case int64:
 		return &command.Parameter{
 			Value: &command.Parameter_I{
