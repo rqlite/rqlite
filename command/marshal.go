@@ -65,7 +65,7 @@ func NewRequestMarshaler() *RequestMarshaler {
 // Marshal marshals a Requester object, returning a byte slice, a bool
 // indicating whether the contents are compressed, or an error.
 func (m *RequestMarshaler) Marshal(r Requester) ([]byte, bool, error) {
-	stats.Add(numRequests, 0)
+	stats.Add(numRequests, 1)
 	compress := false
 
 	stmts := r.GetRequest().GetStatements()
