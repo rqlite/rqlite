@@ -234,14 +234,14 @@ func DeserializeIntoMemory(b []byte, fkEnabled bool) (retDB *DB, retErr error) {
 		srcConn := driverConn.(*sqlite3.SQLiteConn)
 		err2 := srcConn.Deserialize(b, "")
 		if err2 != nil {
-			return fmt.Errorf("DeserializeIntoMemory: %s", err.Error())
+			return fmt.Errorf("DeserializeIntoMemory: %s", err2.Error())
 		}
 		defer srcConn.Close()
 
 		// Now copy from tmp database to the database this function will return.
 		dbConn, err3 := retDB.rwDB.Conn(context.Background())
 		if err3 != nil {
-			return fmt.Errorf("DeserializeIntoMemory: %s", err.Error())
+			return fmt.Errorf("DeserializeIntoMemory: %s", err3.Error())
 		}
 		defer dbConn.Close()
 
