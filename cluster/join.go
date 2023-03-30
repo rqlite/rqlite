@@ -51,8 +51,7 @@ func NewJoiner(srcIP string, numAttempts int, attemptInterval time.Duration,
 	tlsCfg *tls.Config) *Joiner {
 
 	// Source IP is optional
-	var dialer *net.Dialer
-	dialer = &net.Dialer{}
+	dialer := &net.Dialer{}
 	if srcIP != "" {
 		netAddr := &net.TCPAddr{
 			IP:   net.ParseIP(srcIP),
