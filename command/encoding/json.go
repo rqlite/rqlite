@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sync"
 
 	"github.com/rqlite/rqlite/command"
 )
@@ -167,20 +166,9 @@ func (e *Encoder) JSONMarshalIndent(i interface{}, prefix, indent string) ([]byt
 	return jsonMarshal(i, f, e.Associative)
 }
 
-// Use a buffer pool to reduce allocations.
-var bufferPool = sync.Pool{
-	New: func() interface{} {
-		return new(bytes.Buffer)
-	},
-}
-
 func noEscapeEncode(i interface{}) ([]byte, error) {
-	buf := bufferPool.Get().(*bytes.Buffer)
-	defer func() {
-		buf.Reset()
-		bufferPool.Put(buf)
-	}()
-	enc := json.NewEncoder(buf)
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
 	enc.SetEscapeHTML(false)
 	if err := enc.Encode(i); err != nil {
 		return nil, err
