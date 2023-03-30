@@ -208,6 +208,9 @@ func (q *Queue) run() {
 			writeFn()
 		case <-q.flush:
 			stats.Add(numFlush, 1)
+			if !timer.Stop() {
+				<-timer.C
+			}
 			writeFn()
 		case <-q.done:
 			timer.Stop()
