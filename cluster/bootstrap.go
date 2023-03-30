@@ -54,6 +54,7 @@ func NewBootstrapper(p AddressProvider, httpTLSConfig *tls.Config) *Bootstrapper
 				TLSClientConfig:   httpTLSConfig,
 				ForceAttemptHTTP2: true,
 			},
+			Timeout: 10 * time.Second,
 		},
 		joiner:   NewJoiner("", 1, 0, httpTLSConfig),
 		logger:   log.New(os.Stderr, "[cluster-bootstrap] ", log.LstdFlags),
@@ -188,32 +189,32 @@ func (b *Bootstrapper) notifyHTTP(u *url.URL, id, raftAddr string) error {
 		req.SetBasicAuth(b.username, b.password)
 	}
 	req.Header.Add("Content-Type", "application/json")
-
-	resp, err := b.httpClient.Do(req)
-	if err != nil {
-		return err
-	}
-	resp.Body.Close()
-	switch resp.StatusCode {
-	case http.StatusOK:
-		b.logger.Printf("succeeded notifying target: %s", nURL.Redacted())
-		return nil
-	case http.StatusBadRequest:
-		// One possible cause is that the target server is listening for HTTPS, but
-		// an HTTP attempt was made. Switch the protocol to HTTPS, and try again.
-		// This can happen when using various disco systems, since disco doesn't always
-		// record information about which protocol a registered node is actually using.
-		if nURL.Scheme == "https" {
-			// It's already HTTPS, give up.
-			return fmt.Errorf("failed to notify node at %s even after with HTTPS: %s",
+	for {
+		resp, err := b.httpClient.Do(req)
+		if err != nil {
+			return err
+		}
+		resp.Body.Close()
+		switch resp.StatusCode {
+		case http.StatusOK:
+			b.logger.Printf("succeeded notifying target: %s", nURL.Redacted())
+			return nil
+		case http.StatusBadRequest:
+			// One possible cause is that the target server is listening for HTTPS, but
+			// an HTTP attempt was made. Switch the protocol to HTTPS, and try again.
+			// This can happen when using various disco systems, since disco doesn't always
+			// record information about which protocol a registered node is actually using.
+			if nURL.Scheme == "https" {
+				// It's already HTTPS, give up.
+				return fmt.Errorf("failed to notify node at %s even after with HTTPS: %s",
+					nURL.Redacted(), resp.Status)
+			}
+			nURL.Scheme = "https"
+		default:
+			return fmt.Errorf("failed to notify node at %s: %s",
 				nURL.Redacted(), resp.Status)
 		}
-		nURL.Scheme = "https"
-	default:
-		return fmt.Errorf("failed to notify node at %s: %s",
-			nURL.Redacted(), resp.Status)
 	}
-	return nil
 }
 
 func stringsToURLs(ss []string) ([]*url.URL, error) {

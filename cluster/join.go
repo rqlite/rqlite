@@ -77,7 +77,7 @@ func NewJoiner(srcIP string, numAttempts int, attemptInterval time.Duration,
 		Dial:              dialer.Dial,
 		ForceAttemptHTTP2: true,
 	}
-	joiner.client = &http.Client{Transport: tr}
+	joiner.client = &http.Client{Transport: tr, Timeout: 10 * time.Second}
 	joiner.client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
 	}
