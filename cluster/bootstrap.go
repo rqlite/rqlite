@@ -9,11 +9,10 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
-
-	rurl "github.com/rqlite/rqlite/http/url"
 )
 
 func init() {
@@ -34,8 +33,8 @@ type AddressProvider interface {
 
 // Bootstrapper performs a bootstrap of this node.
 type Bootstrapper struct {
-	provider  AddressProvider
-	tlsConfig *tls.Config
+	provider   AddressProvider
+	httpClient *http.Client
 
 	joiner *Joiner
 
@@ -47,13 +46,18 @@ type Bootstrapper struct {
 }
 
 // NewBootstrapper returns an instance of a Bootstrapper.
-func NewBootstrapper(p AddressProvider, tlsConfig *tls.Config) *Bootstrapper {
+func NewBootstrapper(p AddressProvider, httpTLSConfig *tls.Config) *Bootstrapper {
 	bs := &Bootstrapper{
-		provider:  p,
-		tlsConfig: tlsConfig,
-		joiner:    NewJoiner("", 1, 0, tlsConfig),
-		logger:    log.New(os.Stderr, "[cluster-bootstrap] ", log.LstdFlags),
-		Interval:  2 * time.Second,
+		provider: p,
+		httpClient: &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig:   httpTLSConfig,
+				ForceAttemptHTTP2: true,
+			},
+		},
+		joiner:   NewJoiner("", 1, 0, httpTLSConfig),
+		logger:   log.New(os.Stderr, "[cluster-bootstrap] ", log.LstdFlags),
+		Interval: 2 * time.Second,
 	}
 	return bs
 }
@@ -61,6 +65,7 @@ func NewBootstrapper(p AddressProvider, tlsConfig *tls.Config) *Bootstrapper {
 // SetBasicAuth sets Basic Auth credentials for any bootstrap attempt.
 func (b *Bootstrapper) SetBasicAuth(username, password string) {
 	b.username, b.password = username, password
+	b.joiner.SetBasicAuth(b.username, b.password)
 }
 
 // Boot performs the bootstrapping process for this node. This means it will
@@ -105,7 +110,6 @@ func (b *Bootstrapper) Boot(id, raftAddr string, done func() bool, timeout time.
 
 			// Try an explicit join first. Joining an existing cluster is always given priority
 			// over trying to form a new cluster.
-			b.joiner.SetBasicAuth(b.username, b.password)
 			if j, err := b.joiner.Do(targets, id, raftAddr, true); err == nil {
 				b.logger.Printf("succeeded directly joining cluster via node at %s", j)
 				return nil
@@ -118,7 +122,12 @@ func (b *Bootstrapper) Boot(id, raftAddr string, done func() bool, timeout time.
 			// de novo. For that to happen it needs to now let the other nodes know it is here.
 			// If this is a new cluster, some node will then reach the bootstrap-expect value,
 			// form the cluster, beating all other nodes to it.
-			if err := b.notify(targets, id, raftAddr); err != nil {
+			urls, err := stringsToURLs(targets)
+			if err != nil {
+				b.logger.Printf("failed to convert targets to URLs: %s", err.Error())
+				continue
+			}
+			if err := b.notify(urls, id, raftAddr); err != nil {
 				b.logger.Printf("failed to notify all targets: %s (%s, will retry)", targets,
 					err.Error())
 			} else {
@@ -128,13 +137,31 @@ func (b *Bootstrapper) Boot(id, raftAddr string, done func() bool, timeout time.
 	}
 }
 
-func (b *Bootstrapper) notify(targets []string, id, raftAddr string) error {
-	// Create and configure the client to connect to the other node.
-	tr := &http.Transport{
-		TLSClientConfig:   b.tlsConfig,
-		ForceAttemptHTTP2: true,
+func (b *Bootstrapper) notify(targets []*url.URL, id, raftAddr string) error {
+	for _, t := range targets {
+		if strings.ToLower(t.Scheme) == "raft" {
+			//b.notifyRaft(t, id, raftAddr)
+		} else {
+			b.notifyHTTP(t, id, raftAddr)
+		}
 	}
-	client := &http.Client{Transport: tr}
+	return nil
+}
+
+// notifyHTTP is used to notify a remote node of this node's presence. It
+// does this by making an HTTP POST request to the /notify endpoint on the
+// target node. If no scheme is specified in the URL, it will first try to
+// use HTTP, and if that fails, it will try HTTPS. If HTTPS fails, the
+// error is returned.
+func (b *Bootstrapper) notifyHTTP(u *url.URL, id, raftAddr string) error {
+	nURL := &url.URL{
+		Scheme: u.Scheme,
+		Host:   u.Host,
+		Path:   "/notify",
+	}
+	if nURL.Scheme == "" {
+		nURL.Scheme = "http"
+	}
 
 	buf, err := json.Marshal(map[string]interface{}{
 		"id":   id,
@@ -144,50 +171,52 @@ func (b *Bootstrapper) notify(targets []string, id, raftAddr string) error {
 		return err
 	}
 
-	for _, t := range targets {
-		// Check for protocol scheme, and insert default if necessary.
-		fullTarget := rurl.NormalizeAddr(fmt.Sprintf("%s/notify", t))
+	req, err := http.NewRequest("POST", nURL.String(), bytes.NewReader(buf))
+	if err != nil {
+		return err
+	}
+	if b.username != "" && b.password != "" {
+		req.SetBasicAuth(b.username, b.password)
+	}
+	req.Header.Add("Content-Type", "application/json")
 
-	TargetLoop:
-		for {
-			req, err := http.NewRequest("POST", fullTarget, bytes.NewReader(buf))
-			if err != nil {
-				return err
-			}
-			if b.username != "" && b.password != "" {
-				req.SetBasicAuth(b.username, b.password)
-			}
-			req.Header.Add("Content-Type", "application/json")
-
-			resp, err := client.Do(req)
-			if err != nil {
-				return fmt.Errorf("failed to post notification to node at %s: %s",
-					rurl.RemoveBasicAuth(fullTarget), err)
-			}
-			resp.Body.Close()
-			switch resp.StatusCode {
-			case http.StatusOK:
-				b.logger.Printf("succeeded notifying target: %s", rurl.RemoveBasicAuth(fullTarget))
-				break TargetLoop
-			case http.StatusBadRequest:
-				// One possible cause is that the target server is listening for HTTPS, but
-				// an HTTP attempt was made. Switch the protocol to HTTPS, and try again.
-				// This can happen when using various disco approaches, since it doesn't
-				// record information about which protocol a registered node is actually using.
-				if strings.HasPrefix(fullTarget, "https://") {
-					// It's already HTTPS, give up.
-					return fmt.Errorf("failed to notify node at %s: %s", rurl.RemoveBasicAuth(fullTarget),
-						resp.Status)
-				}
-				fullTarget = rurl.EnsureHTTPS(fullTarget)
-			default:
-				return fmt.Errorf("failed to notify node at %s: %s",
-					rurl.RemoveBasicAuth(fullTarget), resp.Status)
-			}
-
+	resp, err := b.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	switch resp.StatusCode {
+	case http.StatusOK:
+		b.logger.Printf("succeeded notifying target: %s", nURL.Redacted())
+		return nil
+	case http.StatusBadRequest:
+		// One possible cause is that the target server is listening for HTTPS, but
+		// an HTTP attempt was made. Switch the protocol to HTTPS, and try again.
+		// This can happen when using various disco systems, since disco doesn't always
+		// record information about which protocol a registered node is actually using.
+		if nURL.Scheme == "https" {
+			// It's already HTTPS, give up.
+			return fmt.Errorf("failed to notify node at %s even after with HTTPS: %s",
+				nURL.Redacted(), resp.Status)
 		}
+		nURL.Scheme = "https"
+	default:
+		return fmt.Errorf("failed to notify node at %s: %s",
+			nURL.Redacted(), resp.Status)
 	}
 	return nil
+}
+
+func stringsToURLs(ss []string) ([]*url.URL, error) {
+	urls := make([]*url.URL, 0, len(ss))
+	for _, s := range ss {
+		u, err := url.Parse(s)
+		if err != nil {
+			return nil, err
+		}
+		urls = append(urls, u)
+	}
+	return urls, nil
 }
 
 type stringAddressProvider struct {
