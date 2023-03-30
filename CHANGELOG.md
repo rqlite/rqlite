@@ -1,5 +1,5 @@
 ## 7.14.2 (unreleased)
-This release is the first to includes various bug fixes and optimizations thanks to running much of the code through [Chat GPT-4](https://openai.com/product/gpt-4), much of which are not explicitly listed in the [CHANGELOG](https://github.com/rqlite/rqlite/edit/master/CHANGELOG.md), but you can check the commit history for details. Future releases of rqlite will probably include more such changes.
+This release is the first to includes various bug fixes and optimizations thanks to running much of the code through [Chat GPT-4](https://openai.com/product/gpt-4), most of which are not explicitly listed in the [CHANGELOG](https://github.com/rqlite/rqlite/edit/master/CHANGELOG.md), but you can check the commit history for details. Future releases of rqlite will probably include more such changes.
 ## Implementation changes and bug fixes
 - [PR #1179](https://github.com/rqlite/rqlite/pull/1179): go mod updates.
 - [PR #1180](https://github.com/rqlite/rqlite/pull/1180): Support large numbers in requests.
