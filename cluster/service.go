@@ -222,8 +222,8 @@ func (s *Service) checkCommandPerm(c *Command, perm string) bool {
 func (s *Service) handleConn(conn net.Conn) {
 	defer conn.Close()
 
+	b := make([]byte, protoBufferLengthSize)
 	for {
-		b := make([]byte, protoBufferLengthSize)
 		_, err := io.ReadFull(conn, b)
 		if err != nil {
 			return

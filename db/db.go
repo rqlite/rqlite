@@ -909,6 +909,11 @@ func normalizeRowValues(row []interface{}, types []string) ([]*command.Parameter
 	for i, v := range row {
 		switch val := v.(type) {
 		case int:
+			values[i] = &command.Parameter{
+				Value: &command.Parameter_I{
+					I: int64(val)},
+				Name: "",
+			}
 		case int64:
 			values[i] = &command.Parameter{
 				Value: &command.Parameter_I{
@@ -985,7 +990,7 @@ func randomString() string {
 	for i := 0; i < 20; i++ {
 		random := rand.Intn(len(chars))
 		randomChar := chars[random]
-		output.WriteString(string(randomChar))
+		output.WriteByte(randomChar)
 	}
 	return output.String()
 }
