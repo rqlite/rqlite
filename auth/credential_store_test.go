@@ -521,9 +521,9 @@ func Test_AuthPermsAllUsers(t *testing.T) {
 		t.Fatalf("* has foo perm")
 	}
 	if perm := store.HasPerm("username1", "bar"); !perm {
-		t.Fatalf("username1 does not have bar perm via *")
+		t.Fatalf("username1 should have bar perm via *")
 	}
 	if perm := store.HasPerm("username1", "abc"); !perm {
-		t.Fatalf("username1 does not have abc perm via *")
+		t.Fatalf("username1 should have abc perm via *")
 	}
 }
