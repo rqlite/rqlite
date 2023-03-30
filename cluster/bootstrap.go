@@ -181,15 +181,16 @@ func (b *Bootstrapper) notifyHTTP(u *url.URL, id, raftAddr string) error {
 		return err
 	}
 
-	req, err := http.NewRequest("POST", nURL.String(), bytes.NewReader(buf))
-	if err != nil {
-		return err
-	}
-	if b.username != "" && b.password != "" {
-		req.SetBasicAuth(b.username, b.password)
-	}
-	req.Header.Add("Content-Type", "application/json")
 	for {
+		req, err := http.NewRequest("POST", nURL.String(), bytes.NewReader(buf))
+		if err != nil {
+			return err
+		}
+		if b.username != "" && b.password != "" {
+			req.SetBasicAuth(b.username, b.password)
+		}
+		req.Header.Add("Content-Type", "application/json")
+
 		resp, err := b.httpClient.Do(req)
 		if err != nil {
 			return err
