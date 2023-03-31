@@ -110,7 +110,7 @@ func queryWithClient(ctx *cli.Context, client *cl.Client, timer bool, consistenc
 	if err != nil {
 		return err
 	}
-	resp.Body.Close()
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("server responded with %s: %s", resp.Status, response)
