@@ -1,8 +1,89 @@
 package url
 
 import (
+	"net/url"
 	"testing"
 )
+
+// write a unit test for StringsToURLs
+func Test_StringsToURLs(t *testing.T) {
+	tests := []struct {
+		ss   []string
+		urls []*url.URL
+	}{
+		{
+			ss:   nil,
+			urls: []*url.URL{},
+		},
+		{
+			ss:   []string{},
+			urls: []*url.URL{},
+		},
+		{
+			ss: []string{"http://localhost:4001"},
+			urls: []*url.URL{
+				{Scheme: "http", Host: "localhost:4001"},
+			},
+		},
+		{
+			ss: []string{"http://localhost:4001/"},
+			urls: []*url.URL{
+				{Scheme: "http", Host: "localhost:4001", Path: "/"},
+			},
+		},
+		{
+			ss: []string{"https://localhost:4001"},
+			urls: []*url.URL{
+				{Scheme: "https", Host: "localhost:4001"},
+			},
+		},
+		{
+			ss: []string{"localhost:4001"},
+			urls: []*url.URL{
+				{Scheme: "http", Host: "localhost:4001"},
+			},
+		},
+		{
+			ss: []string{"localhost"},
+			urls: []*url.URL{
+				{Scheme: "http", Host: "localhost"},
+			},
+		},
+		{
+			ss: []string{"localhost", "localhost:4001"},
+			urls: []*url.URL{
+				{Scheme: "http", Host: "localhost"},
+				{Scheme: "http", Host: "localhost:4001"},
+			},
+		},
+		{
+			ss: []string{"localhost", "localhost:4001", "https://localhost:4001"},
+			urls: []*url.URL{
+				{Scheme: "http", Host: "localhost"},
+				{Scheme: "http", Host: "localhost:4001"},
+				{Scheme: "https", Host: "localhost:4001"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		urls, err := StringsToURLs(tt.ss)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(urls) != len(tt.urls) {
+			t.Fatalf("length mismatch: want %v, got %v", len(tt.urls), len(urls))
+		}
+		for i, u := range urls {
+			if u.Scheme != tt.urls[i].Scheme {
+				t.Fatalf("scheme mismatch: want %v, got %v", tt.urls[i].Scheme, u.Scheme)
+			}
+			if u.Host != tt.urls[i].Host {
+				t.Fatalf("host mismatch: want %v, got %v", tt.urls[i].Host, u.Host)
+			}
+		}
+	}
+}
 
 func Test_NormalizeAddr(t *testing.T) {
 	tests := []struct {

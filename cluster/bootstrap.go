@@ -13,6 +13,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	rurl "github.com/rqlite/rqlite/http/url"
 )
 
 func init() {
@@ -123,7 +125,7 @@ func (b *Bootstrapper) Boot(id, raftAddr string, done func() bool, timeout time.
 			// de novo. For that to happen it needs to now let the other nodes know it is here.
 			// If this is a new cluster, some node will then reach the bootstrap-expect value,
 			// form the cluster, beating all other nodes to it.
-			urls, err := stringsToURLs(targets)
+			urls, err := rurl.StringsToURLs(targets)
 			if err != nil {
 				b.logger.Printf("failed to convert targets to URLs: %s", err.Error())
 				continue
@@ -213,22 +215,6 @@ func (b *Bootstrapper) notifyHTTP(u *url.URL, id, raftAddr string) error {
 				nURL.Redacted(), resp.Status)
 		}
 	}
-}
-
-func stringsToURLs(ss []string) ([]*url.URL, error) {
-	urls := make([]*url.URL, 0, len(ss))
-	for _, s := range ss {
-		if !strings.Contains(s, "://") {
-			s = "http://" + s
-		}
-
-		u, err := url.Parse(s)
-		if err != nil {
-			return nil, err
-		}
-		urls = append(urls, u)
-	}
-	return urls, nil
 }
 
 type stringAddressProvider struct {

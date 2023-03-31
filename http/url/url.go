@@ -13,6 +13,24 @@ var (
 	ErrUserInfoExists = errors.New("userinfo exists")
 )
 
+// StringsToURLs converts a slice of strings to a slice of URLs. If the
+// string does not contain a protocol, it is assumed to be HTTP.
+func StringsToURLs(ss []string) ([]*url.URL, error) {
+	urls := make([]*url.URL, 0, len(ss))
+	for _, s := range ss {
+		if !strings.Contains(s, "://") {
+			s = "http://" + s
+		}
+
+		u, err := url.Parse(s)
+		if err != nil {
+			return nil, err
+		}
+		urls = append(urls, u)
+	}
+	return urls, nil
+}
+
 // NormalizeAddr ensures that the given URL has a HTTP protocol prefix.
 // If none is supplied, it prefixes the URL with "http://".
 func NormalizeAddr(addr string) string {
