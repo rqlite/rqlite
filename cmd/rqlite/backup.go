@@ -92,7 +92,7 @@ func makeRestoreRequest(b []byte) func(string) (*http.Request, error) {
 	}
 	return func(urlStr string) (*http.Request, error) {
 		req, err := http.NewRequest("POST", urlStr, bytes.NewReader(b))
-		req.Header["Content-type"] = []string{header}
+		req.Header.Set("Content-Type", header)
 		if err != nil {
 			return nil, err
 		}
