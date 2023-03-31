@@ -169,9 +169,6 @@ func (b *Bootstrapper) notifyHTTP(u *url.URL, id, raftAddr string) error {
 		Host:   u.Host,
 		Path:   "/notify",
 	}
-	if nURL.Scheme == "" {
-		nURL.Scheme = "http"
-	}
 
 	buf, err := json.Marshal(map[string]interface{}{
 		"id":   id,
@@ -221,6 +218,10 @@ func (b *Bootstrapper) notifyHTTP(u *url.URL, id, raftAddr string) error {
 func stringsToURLs(ss []string) ([]*url.URL, error) {
 	urls := make([]*url.URL, 0, len(ss))
 	for _, s := range ss {
+		if !strings.Contains(s, "://") {
+			s = "http://" + s
+		}
+
 		u, err := url.Parse(s)
 		if err != nil {
 			return nil, err
