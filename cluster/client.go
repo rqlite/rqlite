@@ -58,13 +58,6 @@ func (c *Client) SetLocal(nodeAddr string, serv *Service) error {
 	return nil
 }
 
-// SetInitialPoolSize sets the size of the connection pool for a given node. For it
-// to take effect, it must be called before any RPC is made via the client.
-// If not called, the default pool size is used.
-func (c *Client) SetInitialPoolSize(sz int) {
-	c.poolInitialSz = sz
-}
-
 // GetNodeAPIAddr retrieves the API Address for the node at nodeAddr
 func (c *Client) GetNodeAPIAddr(nodeAddr string, timeout time.Duration) (string, error) {
 	c.lMu.RLock()
@@ -75,13 +68,11 @@ func (c *Client) GetNodeAPIAddr(nodeAddr string, timeout time.Duration) (string,
 		return c.localServ.GetNodeAPIURL(), nil
 	}
 
-	fmt.Println(">>>>GetNodeAPIAddr calling dial")
 	conn, err := c.dial(nodeAddr, c.timeout)
 	if err != nil {
 		return "", err
 	}
 	defer conn.Close()
-	fmt.Println(">>>>GetNodeAPIAddr dial got conn back, local addr: ", conn.LocalAddr(), ", remote addr: ", conn.RemoteAddr())
 
 	// Send the request
 	command := &Command{
