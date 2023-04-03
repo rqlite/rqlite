@@ -28,7 +28,7 @@ func Test_ClientGetNodeAPIAddr(t *testing.T) {
 			t.Fatalf("unexpected command type: %d", c.Type)
 		}
 		p, err = proto.Marshal(&Address{
-			Url: "http://localhost:8080",
+			Url: "http://localhost:1234",
 		})
 		if err != nil {
 			conn.Close()
@@ -43,7 +43,7 @@ func Test_ClientGetNodeAPIAddr(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	exp, got := "http://localhost:8080", addr
+	exp, got := "http://localhost:1234", addr
 	if exp != got {
 		t.Fatalf("unexpected addr, got %s, exp: %s", got, exp)
 	}
@@ -53,7 +53,7 @@ func readCommand(t *testing.T, conn net.Conn) *Command {
 	b := make([]byte, protoBufferLengthSize)
 	_, err := io.ReadFull(conn, b)
 	if err != nil {
-		t.Fatalf("failed to command size: %s", err)
+		t.Fatalf("failed to read command size: %s", err)
 	}
 	sz := binary.LittleEndian.Uint64(b[0:])
 	p := make([]byte, sz)
