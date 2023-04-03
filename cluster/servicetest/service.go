@@ -1,6 +1,9 @@
 package servicetest
 
-import "net"
+import (
+	"fmt"
+	"net"
+)
 
 // Service represents a test service.
 type Service struct {
@@ -48,6 +51,7 @@ func (s *Service) serve() error {
 }
 
 func (s *Service) handleConn(conn net.Conn) {
+	fmt.Printf(">>>>handleConn called, remote addr: %s, local addr: %s", conn.RemoteAddr(), conn.LocalAddr())
 	if s.Handler != nil {
 		s.Handler(conn)
 	}
