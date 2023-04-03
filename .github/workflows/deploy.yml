@@ -25,3 +25,4 @@ jobs:
           tags: |
             nerdyshawn/rqlite:latest
             nerdyshawn/rqlite:{{ github.sha }}
+
