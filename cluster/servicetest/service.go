@@ -8,7 +8,9 @@ type Service struct {
 	Handler  func(net.Conn)
 }
 
-// NewService returns a new instance of Service.
+// NewService returns a new instance of the service that runs on
+// a node, which responds to internode (Raft) communication. It is
+// used to simulate a remote node in a cluster.
 func NewService() *Service {
 	ln, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
