@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rqlite/rqlite/cluster/servicetest"
+	"github.com/rqlite/rqlite/command"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -139,6 +140,52 @@ func Test_ClientQuery(t *testing.T) {
 	c := NewClient(&simpleDialer{}, 0)
 	_, err := c.Query(queryRequestFromString("SELECT * FROM foo"),
 		srv.Addr(), nil, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if handlerSuccess != 1 {
+		t.Fatalf("unexpected handler success count, got %d, exp: 1", handlerSuccess)
+	}
+}
+
+func Test_ClientRemoveNode(t *testing.T) {
+	srv := servicetest.NewService()
+	handlerSuccess := 0
+	srv.Handler = func(conn net.Conn) {
+		var p []byte
+		var err error
+		c := readCommand(conn)
+		if c == nil {
+			// Error on connection, so give up, as normal
+			// test exit can cause that too.
+			return
+		}
+		if c.Type != Command_COMMAND_TYPE_REMOVE_NODE {
+			t.Fatalf("unexpected command type: %d", c.Type)
+		}
+		rnr := c.GetRemoveNodeRequest()
+		if rnr == nil {
+			t.Fatal("expected remove node request, got nil")
+		}
+		if rnr.Id != "node1" {
+			t.Fatalf("unexpected node id, got %s", rnr.Id)
+		}
+
+		p, err = proto.Marshal(&CommandRemoveNodeResponse{})
+		if err != nil {
+			conn.Close()
+		}
+		writeBytesWithLength(conn, p)
+		handlerSuccess++
+	}
+	srv.Start()
+	defer srv.Close()
+
+	c := NewClient(&simpleDialer{}, 0)
+	req := &command.RemoveNodeRequest{
+		Id: "node1",
+	}
+	err := c.RemoveNode(req, srv.Addr(), nil, time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
