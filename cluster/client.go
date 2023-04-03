@@ -32,16 +32,18 @@ type Client struct {
 	localNodeAddr string
 	localServ     *Service
 
-	mu    sync.RWMutex
-	pools map[string]pool.Pool
+	mu            sync.RWMutex
+	poolInitialSz int
+	pools         map[string]pool.Pool
 }
 
 // NewClient returns a client instance for talking to a remote node.
 func NewClient(dl Dialer, t time.Duration) *Client {
 	return &Client{
-		dialer:  dl,
-		timeout: t,
-		pools:   make(map[string]pool.Pool),
+		dialer:        dl,
+		timeout:       t,
+		poolInitialSz: initialPoolSize,
+		pools:         make(map[string]pool.Pool),
 	}
 }
 
@@ -56,6 +58,13 @@ func (c *Client) SetLocal(nodeAddr string, serv *Service) error {
 	return nil
 }
 
+// SetInitialPoolSize sets the size of the connection pool for a given node. For it
+// to take effect, it must be called before any RPC is made via the client.
+// If not called, the default pool size is used.
+func (c *Client) SetInitialPoolSize(sz int) {
+	c.poolInitialSz = sz
+}
+
 // GetNodeAPIAddr retrieves the API Address for the node at nodeAddr
 func (c *Client) GetNodeAPIAddr(nodeAddr string, timeout time.Duration) (string, error) {
 	c.lMu.RLock()
@@ -66,11 +75,13 @@ func (c *Client) GetNodeAPIAddr(nodeAddr string, timeout time.Duration) (string,
 		return c.localServ.GetNodeAPIURL(), nil
 	}
 
+	fmt.Println(">>>>GetNodeAPIAddr calling dial")
 	conn, err := c.dial(nodeAddr, c.timeout)
 	if err != nil {
 		return "", err
 	}
 	defer conn.Close()
+	fmt.Println(">>>>GetNodeAPIAddr dial got conn back, local addr: ", conn.LocalAddr(), ", remote addr: ", conn.RemoteAddr())
 
 	// Send the request
 	command := &Command{
@@ -350,7 +361,7 @@ func (c *Client) dial(nodeAddr string, timeout time.Duration) (net.Conn, error) 
 
 			// New pool is needed for given address.
 			factory := func() (net.Conn, error) { return c.dialer.Dial(nodeAddr, c.timeout) }
-			p, err := pool.NewChannelPool(initialPoolSize, maxPoolCapacity, factory)
+			p, err := pool.NewChannelPool(c.poolInitialSz, maxPoolCapacity, factory)
 			if err != nil {
 				return err
 			}

@@ -44,6 +44,7 @@ func Test_ClientGetNodeAPIAddr(t *testing.T) {
 	defer srv.Close()
 
 	c := NewClient(&simpleDialer{}, 0)
+	c.SetInitialPoolSize(1)
 	addr, err := c.GetNodeAPIAddr(srv.Addr(), time.Second)
 	if err != nil {
 		t.Fatal(err)
@@ -83,5 +84,11 @@ type simpleDialer struct {
 }
 
 func (s *simpleDialer) Dial(address string, timeout time.Duration) (net.Conn, error) {
-	return net.Dial("tcp", address)
+	conn, err := net.Dial("tcp", address)
+	if err != nil {
+		fmt.Println(">>>>>> simpleDialer.Dial: ", err)
+		return nil, err
+	}
+	fmt.Println(">>>>>> simpleDialer.Dial OK, conn local address ", conn.LocalAddr())
+	return conn, nil
 }
