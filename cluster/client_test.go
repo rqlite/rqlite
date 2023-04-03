@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"io"
 	"net"
+	"sync"
 	"testing"
 	"time"
 
@@ -21,7 +22,9 @@ func Test_NewClient(t *testing.T) {
 
 func Test_ClientGetNodeAPIAddr(t *testing.T) {
 	srv := servicetest.NewService()
-	handlerSuccess := 0
+
+	var wg sync.WaitGroup
+	wg.Add(1)
 	srv.Handler = func(conn net.Conn) {
 		var p []byte
 		var err error
@@ -41,7 +44,7 @@ func Test_ClientGetNodeAPIAddr(t *testing.T) {
 			conn.Close()
 		}
 		writeBytesWithLength(conn, p)
-		handlerSuccess++
+		wg.Done()
 	}
 	srv.Start()
 	defer srv.Close()
@@ -51,9 +54,7 @@ func Test_ClientGetNodeAPIAddr(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if handlerSuccess != 1 {
-		t.Fatalf("unexpected handler success count, got %d, exp: 1", handlerSuccess)
-	}
+	wg.Wait()
 	exp, got := "http://localhost:1234", addr
 	if exp != got {
 		t.Fatalf("unexpected addr, got %s, exp: %s", got, exp)
@@ -62,7 +63,9 @@ func Test_ClientGetNodeAPIAddr(t *testing.T) {
 
 func Test_ClientExecute(t *testing.T) {
 	srv := servicetest.NewService()
-	handlerSuccess := 0
+
+	var wg sync.WaitGroup
+	wg.Add(1)
 	srv.Handler = func(conn net.Conn) {
 		var p []byte
 		var err error
@@ -88,7 +91,7 @@ func Test_ClientExecute(t *testing.T) {
 			conn.Close()
 		}
 		writeBytesWithLength(conn, p)
-		handlerSuccess++
+		wg.Done()
 	}
 	srv.Start()
 	defer srv.Close()
@@ -99,14 +102,14 @@ func Test_ClientExecute(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if handlerSuccess != 1 {
-		t.Fatalf("unexpected handler success count, got %d, exp: 1", handlerSuccess)
-	}
+	wg.Wait()
 }
 
 func Test_ClientQuery(t *testing.T) {
 	srv := servicetest.NewService()
-	handlerSuccess := 0
+
+	var wg sync.WaitGroup
+	wg.Add(1)
 	srv.Handler = func(conn net.Conn) {
 		var p []byte
 		var err error
@@ -132,7 +135,7 @@ func Test_ClientQuery(t *testing.T) {
 			conn.Close()
 		}
 		writeBytesWithLength(conn, p)
-		handlerSuccess++
+		wg.Done()
 	}
 	srv.Start()
 	defer srv.Close()
@@ -143,9 +146,7 @@ func Test_ClientQuery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if handlerSuccess != 1 {
-		t.Fatalf("unexpected handler success count, got %d, exp: 1", handlerSuccess)
-	}
+	wg.Wait()
 }
 
 func Test_ClientRemoveNode(t *testing.T) {
