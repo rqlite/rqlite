@@ -20,6 +20,7 @@ func Test_NewClient(t *testing.T) {
 }
 
 func Test_ClientGetNodeAPIAddr(t *testing.T) {
+	fmt.Println(">>>>Test_ClientGetNodeAPIAddr called")
 	srv := servicetest.NewService()
 	srv.Handler = func(conn net.Conn) {
 		var p []byte
@@ -51,6 +52,7 @@ func Test_ClientGetNodeAPIAddr(t *testing.T) {
 	if exp != got {
 		t.Fatalf("unexpected addr, got %s, exp: %s", got, exp)
 	}
+	fmt.Println(">>>>Test_ClientGetNodeAPIAddr finished")
 }
 
 func readCommand(conn net.Conn) *Command {
