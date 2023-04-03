@@ -24,5 +24,5 @@ jobs:
           platforms: linux/amd64,linux/arm64,linux/arm/v7
           tags: |
             nerdyshawn/rqlite:latest
-            nerdyshawn/rqlite:{{ github.sha }}
+            nerdyshawn/rqlite:${{ github.sha }}
 
