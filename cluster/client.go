@@ -32,16 +32,18 @@ type Client struct {
 	localNodeAddr string
 	localServ     *Service
 
-	mu    sync.RWMutex
-	pools map[string]pool.Pool
+	mu            sync.RWMutex
+	poolInitialSz int
+	pools         map[string]pool.Pool
 }
 
 // NewClient returns a client instance for talking to a remote node.
 func NewClient(dl Dialer, t time.Duration) *Client {
 	return &Client{
-		dialer:  dl,
-		timeout: t,
-		pools:   make(map[string]pool.Pool),
+		dialer:        dl,
+		timeout:       t,
+		poolInitialSz: initialPoolSize,
+		pools:         make(map[string]pool.Pool),
 	}
 }
 
@@ -350,7 +352,7 @@ func (c *Client) dial(nodeAddr string, timeout time.Duration) (net.Conn, error) 
 
 			// New pool is needed for given address.
 			factory := func() (net.Conn, error) { return c.dialer.Dial(nodeAddr, c.timeout) }
-			p, err := pool.NewChannelPool(initialPoolSize, maxPoolCapacity, factory)
+			p, err := pool.NewChannelPool(c.poolInitialSz, maxPoolCapacity, factory)
 			if err != nil {
 				return err
 			}
