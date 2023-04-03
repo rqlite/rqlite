@@ -2,11 +2,13 @@ package servicetest
 
 import "net"
 
+// Service represents a test service.
 type Service struct {
 	Listener net.Listener
 	Handler  func(net.Conn)
 }
 
+// NewService returns a new instance of Service.
 func NewService() *Service {
 	ln, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
@@ -17,14 +19,17 @@ func NewService() *Service {
 	}
 }
 
-func (s *Service) Start() error {
-	return s.serve()
+// Start starts the service.
+func (s *Service) Start() {
+	go s.serve()
 }
 
+// Addr returns the address of the service.
 func (s *Service) Addr() string {
 	return s.Listener.Addr().String()
 }
 
+// Close closes the service.
 func (s *Service) Close() error {
 	return s.Listener.Close()
 }
