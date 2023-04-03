@@ -59,6 +59,96 @@ func Test_ClientGetNodeAPIAddr(t *testing.T) {
 	}
 }
 
+func Test_ClientExecute(t *testing.T) {
+	srv := servicetest.NewService()
+	handlerSuccess := 0
+	srv.Handler = func(conn net.Conn) {
+		var p []byte
+		var err error
+		c := readCommand(conn)
+		if c == nil {
+			// Error on connection, so give up, as normal
+			// test exit can cause that too.
+			return
+		}
+		if c.Type != Command_COMMAND_TYPE_EXECUTE {
+			t.Fatalf("unexpected command type: %d", c.Type)
+		}
+		er := c.GetExecuteRequest()
+		if er == nil {
+			t.Fatal("expected execute request, got nil")
+		}
+		if er.Request.Statements[0].Sql != "INSERT INTO foo (id) VALUES (1)" {
+			t.Fatalf("unexpected statement, got %s", er.Request.Statements[0])
+		}
+
+		p, err = proto.Marshal(&CommandExecuteResponse{})
+		if err != nil {
+			conn.Close()
+		}
+		writeBytesWithLength(conn, p)
+		handlerSuccess++
+	}
+	srv.Start()
+	defer srv.Close()
+
+	c := NewClient(&simpleDialer{}, 0)
+	res, err := c.Execute(executeRequestFromString("INSERT INTO foo (id) VALUES (1)"),
+		srv.Addr(), nil, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if handlerSuccess != 1 {
+		t.Fatalf("unexpected handler success count, got %d, exp: 1", handlerSuccess)
+	}
+	_ = res
+}
+
+func Test_ClientQuery(t *testing.T) {
+	srv := servicetest.NewService()
+	handlerSuccess := 0
+	srv.Handler = func(conn net.Conn) {
+		var p []byte
+		var err error
+		c := readCommand(conn)
+		if c == nil {
+			// Error on connection, so give up, as normal
+			// test exit can cause that too.
+			return
+		}
+		if c.Type != Command_COMMAND_TYPE_QUERY {
+			t.Fatalf("unexpected command type: %d", c.Type)
+		}
+		qr := c.GetQueryRequest()
+		if qr == nil {
+			t.Fatal("expected query request, got nil")
+		}
+		if qr.Request.Statements[0].Sql != "SELECT * FROM foo" {
+			t.Fatalf("unexpected statement, got %s", qr.Request.Statements[0])
+		}
+
+		p, err = proto.Marshal(&CommandQueryResponse{})
+		if err != nil {
+			conn.Close()
+		}
+		writeBytesWithLength(conn, p)
+		handlerSuccess++
+	}
+	srv.Start()
+	defer srv.Close()
+
+	c := NewClient(&simpleDialer{}, 0)
+	res, err := c.Query(queryRequestFromString("SELECT * FROM foo"),
+		srv.Addr(), nil, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if handlerSuccess != 1 {
+		t.Fatalf("unexpected handler success count, got %d, exp: 1", handlerSuccess)
+	}
+	_ = res
+}
+
 func readCommand(conn net.Conn) *Command {
 	b := make([]byte, protoBufferLengthSize)
 	_, err := io.ReadFull(conn, b)
