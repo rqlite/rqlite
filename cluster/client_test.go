@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"encoding/binary"
+	"fmt"
 	"io"
 	"net"
 	"testing"
@@ -53,20 +54,24 @@ func Test_ClientGetNodeAPIAddr(t *testing.T) {
 }
 
 func readCommand(conn net.Conn) *Command {
+	fmt.Println(">>>>readCommmand called")
 	b := make([]byte, protoBufferLengthSize)
 	_, err := io.ReadFull(conn, b)
 	if err != nil {
+		fmt.Println(">>>>>> readCommand1: ", err)
 		return nil
 	}
 	sz := binary.LittleEndian.Uint64(b[0:])
 	p := make([]byte, sz)
 	_, err = io.ReadFull(conn, p)
 	if err != nil {
+		fmt.Println(">>>>>> readCommand2: ", err)
 		return nil
 	}
 	c := &Command{}
 	err = proto.Unmarshal(p, c)
 	if err != nil {
+		fmt.Println(">>>>>> readCommand3: ", err)
 		return nil
 	}
 	return c
