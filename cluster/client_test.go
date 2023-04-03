@@ -23,7 +23,10 @@ func Test_ClientGetNodeAPIAddr(t *testing.T) {
 	srv.Handler = func(conn net.Conn) {
 		var p []byte
 		var err error
-		c := readCommand(t, conn)
+		c := readCommand(conn)
+		if c == nil {
+			t.Fatal("expected command, got nil")
+		}
 		if c.Type != Command_COMMAND_TYPE_GET_NODE_API_URL {
 			t.Fatalf("unexpected command type: %d", c.Type)
 		}
@@ -49,22 +52,22 @@ func Test_ClientGetNodeAPIAddr(t *testing.T) {
 	}
 }
 
-func readCommand(t *testing.T, conn net.Conn) *Command {
+func readCommand(conn net.Conn) *Command {
 	b := make([]byte, protoBufferLengthSize)
 	_, err := io.ReadFull(conn, b)
 	if err != nil {
-		t.Fatalf("failed to read command size: %s", err)
+		return nil
 	}
 	sz := binary.LittleEndian.Uint64(b[0:])
 	p := make([]byte, sz)
 	_, err = io.ReadFull(conn, p)
 	if err != nil {
-		t.Fatalf("failed to read command bytes: %s", err)
+		return nil
 	}
 	c := &Command{}
 	err = proto.Unmarshal(p, c)
 	if err != nil {
-		t.Fatalf("failed to unmarshal command: %s", err)
+		return nil
 	}
 	return c
 }
