@@ -160,7 +160,6 @@ func Test_ClientRemoveNode(t *testing.T) {
 			conn.Close()
 		}
 		writeBytesWithLength(conn, p)
-		wg.Done()
 	}
 	srv.Start()
 	defer srv.Close()
