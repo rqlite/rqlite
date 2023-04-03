@@ -93,7 +93,7 @@ func Test_ClientExecute(t *testing.T) {
 	defer srv.Close()
 
 	c := NewClient(&simpleDialer{}, 0)
-	res, err := c.Execute(executeRequestFromString("INSERT INTO foo (id) VALUES (1)"),
+	_, err := c.Execute(executeRequestFromString("INSERT INTO foo (id) VALUES (1)"),
 		srv.Addr(), nil, time.Second)
 	if err != nil {
 		t.Fatal(err)
@@ -101,7 +101,6 @@ func Test_ClientExecute(t *testing.T) {
 	if handlerSuccess != 1 {
 		t.Fatalf("unexpected handler success count, got %d, exp: 1", handlerSuccess)
 	}
-	_ = res
 }
 
 func Test_ClientQuery(t *testing.T) {
@@ -138,7 +137,7 @@ func Test_ClientQuery(t *testing.T) {
 	defer srv.Close()
 
 	c := NewClient(&simpleDialer{}, 0)
-	res, err := c.Query(queryRequestFromString("SELECT * FROM foo"),
+	_, err := c.Query(queryRequestFromString("SELECT * FROM foo"),
 		srv.Addr(), nil, time.Second)
 	if err != nil {
 		t.Fatal(err)
@@ -146,7 +145,6 @@ func Test_ClientQuery(t *testing.T) {
 	if handlerSuccess != 1 {
 		t.Fatalf("unexpected handler success count, got %d, exp: 1", handlerSuccess)
 	}
-	_ = res
 }
 
 func readCommand(conn net.Conn) *Command {
