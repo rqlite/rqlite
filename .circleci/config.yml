@@ -2,6 +2,16 @@
 # Check https://circleci.com/docs/2.0/language-go/ for more details
 version: 2
 jobs:
+  lint:
+    docker:
+      - image: cimg/go:1.20.0
+    steps:
+      - checkout
+      - run: go version
+      - run: test -z "$(gofmt -l . | tee /dev/stderr)"
+      - run: go vet ./...
+    resource_class: large
+
   test:
     docker:
       - image: cimg/go:1.20.0
@@ -10,14 +20,11 @@ jobs:
       - restore_cache:
           keys:
             - go-mod-v4-{{ checksum "go.sum" }}
-      - run: go version
       - run: go get -v -t -d ./...
       - save_cache:
           key: go-mod-v4-{{ checksum "go.sum" }}
           paths:
             - "/home/circleci/go/pkg/mod"
-      - run: test -z "$(gofmt -l . | tee /dev/stderr)"
-      - run: go vet ./...
       - run: go test -failfast ./...
     resource_class: large
 
@@ -29,7 +36,6 @@ jobs:
       - restore_cache:
           keys:
             - go-mod-v4-{{ checksum "go.sum" }}
-      - run: go version
       - run: go get -t -d ./...
       - run:
           command: go test -failfast -timeout 20m -race $(go list ./... | sed -n 'n;p')
@@ -44,7 +50,6 @@ jobs:
       - restore_cache:
           keys:
             - go-mod-v4-{{ checksum "go.sum" }}
-      - run: go version
       - run: go get -t -d ./...
       - run:
           command: go test -failfast -timeout 20m -race $(go list ./... | sed -n 'p;n')
@@ -167,6 +172,7 @@ workflows:
   version: 2
   build_and_test:
     jobs:
+      - lint
       - test
       - race_even
       - race_odd
