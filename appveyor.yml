@@ -25,7 +25,7 @@ build_script:
   - go install -ldflags="-X %LINKER_PKG_PATH%.Branch=%APPVEYOR_REPO_BRANCH% -X %LINKER_PKG_PATH%.Commit=%APPVEYOR_REPO_COMMIT%" ./...
 
 after_build:
-  - 7z a rqlite-latest-win64.zip %GOPATH%\bin\rq*.exe
+  - 7z a rqlite-%APPVEYOR_REPO_BRANCH%-latest-win64.zip %GOPATH%\bin\rq*.exe
 
 artifacts:
   - path: rqlite-%APPVEYOR_REPO_BRANCH%-latest-win64.zip
