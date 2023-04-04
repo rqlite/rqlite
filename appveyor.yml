@@ -28,5 +28,5 @@ after_build:
   - 7z a rqlite-latest-win64.zip %GOPATH%\bin\rq*.exe
 
 artifacts:
-  - path: rqlite-%APPVEYOR_REPO_BRANCH%-latest-win64.zip
+  - path: rqlite-latest-win64.zip
     name: rqlite for Windows x64
