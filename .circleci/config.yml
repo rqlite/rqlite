@@ -149,8 +149,8 @@ jobs:
     resource_class: large
 
   windows_test:
-    machine:
-      image: 'windows-server-2019-vs2019:stable'
+    executor:
+      name: win/default
     steps:
       - checkout
       - run:
