@@ -148,6 +148,20 @@ jobs:
             RQLITED_PATH: /home/circleci/go/bin/rqlited
     resource_class: large
 
+  windows_test:
+    executor:
+      name: windows/default
+      size: "medium"
+    steps:
+      - checkout
+      - run: choco install golang
+      - run: choco install python
+      - run: choco install git
+      - run: refreshenv
+      - run: go version
+      - run: go get -v -t -d ./...
+      - run: go test -failfast ./...
+
 workflows:
   version: 2
   build_and_test:
@@ -159,3 +173,4 @@ workflows:
       - end_to_end_multi_adv
       - end_to_end_joining
       - end_to_end_autoclustering
+      - windows_test
