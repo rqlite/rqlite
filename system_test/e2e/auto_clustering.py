@@ -16,9 +16,9 @@ RQLITED_PATH = os.environ['RQLITED_PATH']
 class TestBootstrapping(unittest.TestCase):
   '''Test simple bootstrapping works via -bootstrap-expect'''
   def test(self):
-    n0 = Node(RQLITED_PATH, '0', boostrap_expect=3)
-    n1 = Node(RQLITED_PATH, '1', boostrap_expect=3)
-    n2 = Node(RQLITED_PATH, '2', boostrap_expect=3)
+    n0 = Node(RQLITED_PATH, '0', bootstrap_expect=3)
+    n1 = Node(RQLITED_PATH, '1', bootstrap_expect=3)
+    n2 = Node(RQLITED_PATH, '2', bootstrap_expect=3)
 
     n0.start(join=','.join([n0.APIProtoAddr(), n1.APIProtoAddr(), n2.APIProtoAddr()]))
     n1.start(join=','.join([n0.APIProtoAddr(), n1.APIProtoAddr(), n2.APIProtoAddr()]))
@@ -28,7 +28,7 @@ class TestBootstrapping(unittest.TestCase):
     self.assertEqual(n0.wait_for_leader(), n2.wait_for_leader())
 
     # Ensure a 4th node can join later, with same launch params.
-    n3 = Node(RQLITED_PATH, '4', boostrap_expect=3)
+    n3 = Node(RQLITED_PATH, '4', bootstrap_expect=3)
     n3.start(join=','.join([n0.APIProtoAddr(), n1.APIProtoAddr(), n2.APIProtoAddr()]))
 
     n3.wait_for_leader()
