@@ -167,7 +167,6 @@ type Store struct {
 	observerDone      chan struct{}
 	observerChan      chan raft.Observation
 	observer          *raft.Observer
-	observerWg        sync.WaitGroup
 
 	onDiskCreated        bool      // On disk database actually created?
 	snapsExistOnOpen     bool      // Any snaps present when store opens?
@@ -1442,13 +1441,6 @@ func (s *Store) logSize() (int64, error) {
 	return fi.Size(), nil
 }
 
-func (s *Store) databaseTypePretty() string {
-	if s.dbConf.Memory {
-		return "in-memory"
-	}
-	return "on-disk"
-}
-
 type fsmSnapshot struct {
 	startT time.Time
 	logger *log.Logger
@@ -1613,7 +1605,7 @@ func RecoverNode(dataDir string, logger *log.Logger, logs raft.LogStore, stable 
 	// Now, create an in-memory database for temporary use, so we can generate new
 	// snapshots later.
 	var db *sql.DB
-	if b == nil || len(b) == 0 {
+	if len(b) == 0 {
 		db, err = sql.OpenInMemory(false)
 	} else {
 		db, err = sql.DeserializeIntoMemory(b, false)
@@ -1822,7 +1814,7 @@ func checkRaftConfiguration(configuration raft.Configuration) error {
 // createInMemory returns an in-memory database. If b is non-nil and non-empty,
 // then the database will be initialized with the contents of b.
 func createInMemory(b []byte, fkConstraints bool) (db *sql.DB, err error) {
-	if b == nil || len(b) == 0 {
+	if len(b) == 0 {
 		db, err = sql.OpenInMemory(fkConstraints)
 	} else {
 		db, err = sql.DeserializeIntoMemory(b, fkConstraints)
