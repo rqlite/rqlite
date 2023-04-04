@@ -15,7 +15,7 @@ jobs:
       - save_cache:
           key: go-mod-v1-{{ checksum "go.sum" }}
           paths:
-            - "/go/pkg/mod"
+            - "/home/circleci/go/pkg/mod"
       - run: test -z "$(gofmt -l . | tee /dev/stderr)"
       - run: go vet ./...
       - run: go test -failfast ./...
@@ -34,7 +34,7 @@ jobs:
       - save_cache:
           key: go-mod-v1-{{ checksum "go.sum" }}
           paths:
-            - "/go/pkg/mod"
+            - "/home/circleci/go/pkg/mod"
       - run:
           command: go test -failfast -timeout 20m -gcflags=all=-d=checkptr=0 -race ./...
           environment:
@@ -59,7 +59,7 @@ jobs:
       - save_cache:
           key: go-mod-v1-{{ checksum "go.sum" }}
           paths:
-            - "/go/pkg/mod"
+            - "/home/circleci/go/pkg/mod"
       - run: go install -tags osusergo,netgo,sqlite_omit_load_extension
           -ldflags="-extldflags=-static" ./...
       - run:
