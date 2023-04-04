@@ -1,56 +1,38 @@
-#  CircleCI 2.0 configuration file
-#
+# CircleCI 2.0 configuration file
 # Check https://circleci.com/docs/2.0/language-go/ for more details
 version: 2
 jobs:
   test:
     docker:
-      # specify the version
       - image: cimg/go:1.20.0
-      # Specify service dependencies here if necessary
-      # CircleCI maintains a library of pre-built images
-      # documented at https://circleci.com/docs/2.0/circleci-images/
-      # - image: circleci/postgres:9.4
-
-    #### TEMPLATE_NOTE: go expects specific checkout path representing url
-    #### expecting it in the form of
-    ####   /go/src/github.com/circleci/go-tool
-    ####   /go/src/bitbucket.org/circleci/go-tool
     steps:
       - checkout
-
-      # specify any bash command here prefixed with `run: `
+      - restore_cache:
+          keys:
+            - go-mod-v4-{{ checksum "go.sum" }}
       - run: go version
       - run: go get -v -t -d ./...
-      - run: bash gofmt.sh
+      - save_cache:
+          key: go-mod-v4-{{ checksum "go.sum" }}
+          paths:
+            - "/home/circleci/go/pkg/mod"
+      - run: test -z "$(gofmt -l . | tee /dev/stderr)"
       - run: go vet ./...
       - run: go test -failfast ./...
-    # The resource_class feature allows configuring CPU and RAM resources for each job. Different resource classes are available for different executors. https://circleci.com/docs/2.0/configuration-reference/#resourceclass
     resource_class: large
 
   race:
     docker:
-      # specify the version
       - image: cimg/go:1.20.0
-      # Specify service dependencies here if necessary
-      # CircleCI maintains a library of pre-built images
-      # documented at https://circleci.com/docs/2.0/circleci-images/
-      # - image: circleci/postgres:9.4
-
-    #### TEMPLATE_NOTE: go expects specific checkout path representing url
-    #### expecting it in the form of
-    ####   /go/src/github.com/circleci/go-tool
-    ####   /go/src/bitbucket.org/circleci/go-tool
     steps:
       - checkout
-
-      # specify any bash command here prefixed with `run: `
-      # BoltDB, no longer maintained, has pointer issues. However, it's run
-      # for years without actual issue so disabling the pointer tests
+      - restore_cache:
+          keys:
+            - go-mod-v4-{{ checksum "go.sum" }}
       - run: go version
       - run: go get -t -d ./...
       - run:
-          command: go test -failfast -timeout 20m -gcflags=all=-d=checkptr=0 -race ./...
+          command: go test -failfast -timeout 20m -race ./...
           environment:
             GORACE: "halt_on_error=1"
 
@@ -61,6 +43,9 @@ jobs:
       - image: gcr.io/etcd-development/etcd:v3.5.1
     steps:
       - checkout
+      - restore_cache:
+          keys:
+            - go-mod-v4-{{ checksum "go.sum" }}
       - run: sudo apt-get update
       - run: sudo apt-get install python3
       - run: sudo apt install python3-pip
@@ -73,7 +58,6 @@ jobs:
           command: python3 system_test/full_system_test.py
           environment:
             RQLITED_PATH: /home/circleci/go/bin/rqlited
-    # The resource_class feature allows configuring CPU and RAM resources for each job. Different resource classes are available for different executors. https://circleci.com/docs/2.0/configuration-reference/#resourceclass
     resource_class: large
 
 workflows:
