@@ -51,7 +51,7 @@ def random_addr():
 class Node(object):
   def __init__(self, path, node_id,
                api_addr=None, api_adv=None,
-               boostrap_expect=0,
+               bootstrap_expect=0,
                raft_addr=None, raft_adv=None,
                raft_voter=True,
                raft_snap_threshold=8192, raft_snap_int="1s",
@@ -87,7 +87,7 @@ class Node(object):
     self.node_id = node_id
     self.api_addr = api_addr
     self.api_adv = api_adv
-    self.boostrap_expect = boostrap_expect
+    self.bootstrap_expect = bootstrap_expect
     self.raft_addr = raft_addr
     self.raft_adv = raft_adv
     self.raft_voter = raft_voter

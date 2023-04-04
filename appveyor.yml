@@ -1,8 +1,8 @@
 os: Visual Studio 2019
 
-stack: go 1.16
+stack: go 1.20
 
-version: 6.{build}
+version: 7.{build}
 
 platform: x64
 
@@ -28,5 +28,5 @@ after_build:
   - 7z a rqlite-latest-win64.zip %GOPATH%\bin\rq*.exe
 
 artifacts:
-  - path: rqlite-latest-win64.zip
+  - path: rqlite-%APPVEYOR_REPO_BRANCH%-latest-win64.zip
     name: rqlite for Windows x64
