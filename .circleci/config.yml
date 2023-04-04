@@ -9,7 +9,7 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - go-mod-v1-{{ checksum "go.sum" }}
+            - go-mod-v2-{{ checksum "go.sum" }}
       - run: go version
       - run: go get -v -t -d ./...
       - save_cache:
@@ -32,7 +32,7 @@ jobs:
       - run: go version
       - run: go get -t -d ./...
       - save_cache:
-          key: go-mod-v1-{{ checksum "go.sum" }}
+          key: go-mod-v2-{{ checksum "go.sum" }}
           paths:
             - "/home/circleci/go/pkg/mod"
       - run:
@@ -57,7 +57,7 @@ jobs:
       - run: go version
       - run: go get -t -d -v ./...
       - save_cache:
-          key: go-mod-v1-{{ checksum "go.sum" }}
+          key: go-mod-v2-{{ checksum "go.sum" }}
           paths:
             - "/home/circleci/go/pkg/mod"
       - run: go install -tags osusergo,netgo,sqlite_omit_load_extension
