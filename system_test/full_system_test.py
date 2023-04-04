@@ -367,7 +367,7 @@ class Node(object):
       self.wait_for_leader(self, timeout, log=False)
     except:
       return True
-    return false
+    return False
 
   def db_applied_index(self):
     return int(self.status()['store']['db_applied_index'])
