@@ -156,13 +156,6 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Install Go, Python, and Git
-          command: |
-            choco install golang --no-progress
-            choco install python --no-progress
-            choco install git --no-progress
-            refreshenv
-      - run:
           name: Go version and build
           command: |
             go version
