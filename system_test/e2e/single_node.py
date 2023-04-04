@@ -1,4 +1,10 @@
 #!/usr/bin/env python
+#
+# End-to-end testing using actual rqlited binary.
+#
+# To run a specific test, execute
+#
+#  python system_test/full_system_test.py Class.test
 
 import json
 import os
