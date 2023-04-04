@@ -421,7 +421,7 @@ func (s *Store) Stepdown(wait bool) error {
 	if !wait {
 		return nil
 	}
-	return f.(raft.Future).Error()
+	return f.Error()
 }
 
 // Close closes the store. If wait is true, waits for a graceful shutdown.
@@ -441,8 +441,8 @@ func (s *Store) Close(wait bool) (retErr error) {
 
 	f := s.raft.Shutdown()
 	if wait {
-		if e := f.(raft.Future); e.Error() != nil {
-			return e.Error()
+		if f.Error() != nil {
+			return f.Error()
 		}
 	}
 	// Only shutdown Bolt and SQLite when Raft is done.
@@ -797,7 +797,7 @@ func (s *Store) execute(ex *command.ExecuteRequest) ([]*command.ExecuteResult, e
 		return nil, err
 	}
 
-	af := s.raft.Apply(b, s.ApplyTimeout).(raft.ApplyFuture)
+	af := s.raft.Apply(b, s.ApplyTimeout)
 	if af.Error() != nil {
 		if af.Error() == raft.ErrNotLeader {
 			return nil, ErrNotLeader
@@ -844,7 +844,7 @@ func (s *Store) Query(qr *command.QueryRequest) ([]*command.QueryRows, error) {
 			return nil, err
 		}
 
-		af := s.raft.Apply(b, s.ApplyTimeout).(raft.ApplyFuture)
+		af := s.raft.Apply(b, s.ApplyTimeout)
 		if af.Error() != nil {
 			if af.Error() == raft.ErrNotLeader {
 				return nil, ErrNotLeader
@@ -953,7 +953,7 @@ func (s *Store) Load(lr *command.LoadRequest) error {
 		return err
 	}
 
-	af := s.raft.Apply(b, s.ApplyTimeout).(raft.ApplyFuture)
+	af := s.raft.Apply(b, s.ApplyTimeout)
 	if af.Error() != nil {
 		if af.Error() == raft.ErrNotLeader {
 			return ErrNotLeader
@@ -1010,7 +1010,7 @@ func (s *Store) Notify(nr *command.NotifyRequest) error {
 		s.BootstrapExpect)
 	bf := s.raft.BootstrapCluster(raft.Configuration{
 		Servers: raftServers,
-	}).(raft.Future)
+	})
 	if bf.Error() != nil {
 		s.logger.Printf("cluster bootstrap failed: %s", bf.Error())
 	} else {
@@ -1118,7 +1118,7 @@ func (s *Store) Noop(id string) error {
 		return err
 	}
 
-	af := s.raft.Apply(bc, s.ApplyTimeout).(raft.ApplyFuture)
+	af := s.raft.Apply(bc, s.ApplyTimeout)
 	if af.Error() != nil {
 		if af.Error() == raft.ErrNotLeader {
 			return ErrNotLeader
