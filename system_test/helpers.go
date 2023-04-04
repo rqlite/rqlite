@@ -508,11 +508,10 @@ func (c Cluster) Followers() ([]*Node, error) {
 // a cluster.
 func (c Cluster) RemoveNode(node *Node) Cluster {
 	nodes := []*Node{}
-	for i, n := range c {
-		if n.RaftAddr == node.RaftAddr {
-			continue
+	for _, n := range c {
+		if n.RaftAddr != node.RaftAddr {
+			nodes = append(nodes, n)
 		}
-		nodes = append(nodes, c[i])
 	}
 	return nodes
 }
