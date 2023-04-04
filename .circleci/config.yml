@@ -9,11 +9,11 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - go-mod-v3-{{ checksum "go.sum" }}
+            - go-mod-v4-{{ checksum "go.sum" }}
       - run: go version
       - run: go get -v -t -d ./...
       - save_cache:
-          key: go-mod-v1-{{ checksum "go.sum" }}
+          key: go-mod-v4-{{ checksum "go.sum" }}
           paths:
             - "/home/circleci/go/pkg/mod"
       - run: test -z "$(gofmt -l . | tee /dev/stderr)"
@@ -28,13 +28,9 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - go-mod-v2-{{ checksum "go.sum" }}
+            - go-mod-v4-{{ checksum "go.sum" }}
       - run: go version
       - run: go get -t -d ./...
-      - save_cache:
-          key: go-mod-v3-{{ checksum "go.sum" }}
-          paths:
-            - "/home/circleci/go/pkg/mod"
       - run:
           command: go test -failfast -timeout 20m -gcflags=all=-d=checkptr=0 -race ./...
           environment:
@@ -49,17 +45,13 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - go-mod-v1-{{ checksum "go.sum" }}
+            - go-mod-v4-{{ checksum "go.sum" }}
       - run: sudo apt-get update
       - run: sudo apt-get install python3
       - run: sudo apt install python3-pip
       - run: python3 -m pip install requests
       - run: go version
       - run: go get -t -d -v ./...
-      - save_cache:
-          key: go-mod-v3-{{ checksum "go.sum" }}
-          paths:
-            - "/home/circleci/go/pkg/mod"
       - run: go install -tags osusergo,netgo,sqlite_omit_load_extension
           -ldflags="-extldflags=-static" ./...
       - run:
