@@ -186,46 +186,6 @@ class TestEndToEndEncryptedNode(TestEndToEnd):
     n2.wait_for_leader()
 
     self.cluster = Cluster([n0, n1, n2])
-    
-class TestEndToEndAdvAddr(TestEndToEnd):
-  def setUp(self):
-    n0 = Node(RQLITED_PATH, '0',
-              api_addr="0.0.0.0:4001", api_adv="localhost:4001",
-              raft_addr="0.0.0.0:4002", raft_adv="localhost:4002")
-    n0.start()
-    n0.wait_for_leader()
-
-    n1 = Node(RQLITED_PATH, '1')
-    n1.start(join=n0.APIAddr())
-    n1.wait_for_leader()
-
-    n2 = Node(RQLITED_PATH, '2')
-    n2.start(join=n0.APIAddr())
-    n2.wait_for_leader()
-
-    self.cluster = Cluster([n0, n1, n2])
-
-class TestEndToEndAdvAddrEncryptedNode(TestEndToEnd):
-  def setUp(self):
-    certFile = write_random_file(x509cert)
-    keyFile = write_random_file(x509key)
-
-    n0 = Node(RQLITED_PATH, '0',
-              api_addr="0.0.0.0:4001", api_adv="localhost:4001",
-              raft_addr="0.0.0.0:4002", raft_adv="localhost:4002",
-               node_cert=certFile, node_key=keyFile, node_no_verify=True)
-    n0.start()
-    n0.wait_for_leader()
-
-    n1 = Node(RQLITED_PATH, '1', node_cert=certFile, node_key=keyFile, node_no_verify=True)
-    n1.start(join=n0.APIAddr())
-    n1.wait_for_leader()
-
-    n2 = Node(RQLITED_PATH, '2', node_cert=certFile, node_key=keyFile, node_no_verify=True)
-    n2.start(join=n0.APIAddr())
-    n2.wait_for_leader()
-
-    self.cluster = Cluster([n0, n1, n2])
 
 class TestClusterRecovery(unittest.TestCase):
   '''Test that a cluster can recover after all Raft network addresses change'''

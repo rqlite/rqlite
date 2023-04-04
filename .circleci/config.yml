@@ -102,6 +102,28 @@ jobs:
             RQLITED_PATH: /home/circleci/go/bin/rqlited
     resource_class: large
 
+  end_to_end_multi_adv:
+    docker:
+      - image: cimg/go:1.20.0
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - go-mod-v4-{{ checksum "go.sum" }}
+      - run: sudo apt-get update
+      - run: sudo apt-get install python3
+      - run: sudo apt install python3-pip
+      - run: python3 -m pip install requests
+      - run: go version
+      - run: go get -t -d -v ./...
+      - run: go install -tags osusergo,netgo,sqlite_omit_load_extension
+          -ldflags="-extldflags=-static" ./...
+      - run:
+          command: python3 system_test/e2e/multi_node_adv.py
+          environment:
+            RQLITED_PATH: /home/circleci/go/bin/rqlited
+    resource_class: large
+
   end_to_end_autoclustering:
     docker:
       - image: cimg/go:1.20.0
@@ -134,5 +156,6 @@ workflows:
       - race
       - end_to_end_single
       - end_to_end_multi
+      - end_to_end_multi_adv
       - end_to_end_joining
       - end_to_end_autoclustering
