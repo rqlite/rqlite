@@ -21,7 +21,7 @@ jobs:
       - run: go test -failfast ./...
     resource_class: large
 
-  race:
+  race_odd:
     docker:
       - image: cimg/go:1.20.0
     steps:
@@ -32,7 +32,22 @@ jobs:
       - run: go version
       - run: go get -t -d ./...
       - run:
-          command: go test -failfast -timeout 20m -race ./...
+          command: go test -failfast -timeout 20m -race $(go list ./... | sed -n 'n;p')
+          environment:
+            GORACE: "halt_on_error=1"
+
+  race_even:
+    docker:
+      - image: cimg/go:1.20.0
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - go-mod-v4-{{ checksum "go.sum" }}
+      - run: go version
+      - run: go get -t -d ./...
+      - run:
+          command: go test -failfast -timeout 20m -race $(go list ./... | sed -n 'p;n')
           environment:
             GORACE: "halt_on_error=1"
 
@@ -153,7 +168,8 @@ workflows:
   build_and_test:
     jobs:
       - test
-      - race
+      - race_even
+      - race_odd
       - end_to_end_single
       - end_to_end_multi
       - end_to_end_multi_adv
