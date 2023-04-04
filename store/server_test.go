@@ -5,42 +5,62 @@ import (
 )
 
 func Test_IsReadOnly(t *testing.T) {
-	var servers Servers
-
-	if _, found := servers.IsReadOnly("1"); found {
-		t.Fatalf("found should be false")
+	testCases := []struct {
+		name          string
+		servers       Servers
+		nodeID        string
+		expectedRO    bool
+		expectedFound bool
+	}{
+		{
+			name:          "EmptyServers",
+			servers:       nil,
+			nodeID:        "1",
+			expectedRO:    false,
+			expectedFound: false,
+		},
+		{
+			name:          "EmptyNodeID",
+			servers:       Servers(make([]*Server, 1)),
+			nodeID:        "",
+			expectedRO:    false,
+			expectedFound: false,
+		},
+		{
+			name: "NonExistentNode",
+			servers: Servers([]*Server{
+				{ID: "node1", Addr: "localhost:4002", Suffrage: "Voter"},
+			}),
+			nodeID:        "node2",
+			expectedRO:    false,
+			expectedFound: false,
+		},
+		{
+			name: "ExistingVoterNode",
+			servers: Servers([]*Server{
+				{ID: "node1", Addr: "localhost:4002", Suffrage: "Voter"},
+			}),
+			nodeID:        "node1",
+			expectedRO:    false,
+			expectedFound: true,
+		},
+		{
+			name: "ExistingNonvoterNode",
+			servers: Servers([]*Server{
+				{ID: "node1", Addr: "localhost:4002", Suffrage: "Nonvoter"},
+			}),
+			nodeID:        "node1",
+			expectedRO:    true,
+			expectedFound: true,
+		},
 	}
 
-	nodes := make([]*Server, 1)
-	servers = Servers(nodes)
-	if _, found := servers.IsReadOnly(""); found {
-		t.Fatalf("found should be false")
-	}
-	if _, found := servers.IsReadOnly("node1"); found {
-		t.Fatalf("found should be false")
-	}
-	nodes[0] = &Server{
-		ID:       "node1",
-		Addr:     "localhost:4002",
-		Suffrage: "Voter",
-	}
-	if ro, found := servers.IsReadOnly("node1"); ro || !found {
-		t.Fatalf("IsReadOnly returned ro: %t, found: %t", ro, found)
-	}
-	nodes[0] = &Server{
-		ID:       "node1",
-		Addr:     "localhost:4002",
-		Suffrage: "Voter",
-	}
-	if ro, found := servers.IsReadOnly("node2"); found {
-		t.Fatalf("IsReadOnly returned ro: %t, found: %t", ro, found)
-	}
-	nodes[0] = &Server{
-		ID:       "node1",
-		Addr:     "localhost:4002",
-		Suffrage: "Nonvoter",
-	}
-	if ro, found := servers.IsReadOnly("node1"); !ro || !found {
-		t.Fatalf("servers.IsReadOnly returned ro: %t, found: %t", ro, found)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ro, found := tc.servers.IsReadOnly(tc.nodeID)
+			if ro != tc.expectedRO || found != tc.expectedFound {
+				t.Fatalf("IsReadOnly for %s returned ro: %t, found: %t, expected ro: %t, expected found: %t", tc.name, ro, found, tc.expectedRO, tc.expectedFound)
+			}
+		})
 	}
 }

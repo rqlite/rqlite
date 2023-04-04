@@ -62,6 +62,32 @@ func Test_HashCache(t *testing.T) {
 	}
 }
 
+func Test_AuthLoadEmpty(t *testing.T) {
+	const jsonStream = `[]`
+
+	store := NewCredentialsStore()
+	if err := store.Load(strings.NewReader(jsonStream)); err != nil {
+		t.Fatalf("failed to load empty JSON: %s", err.Error())
+	}
+}
+
+func Test_AuthLoadMalformed(t *testing.T) {
+	const jsonStream = `
+		[
+			{
+				"username": "username1",
+				"password": "password1",
+				"perms": ["foo", "bar"
+			}
+		]
+	`
+
+	store := NewCredentialsStore()
+	if err := store.Load(strings.NewReader(jsonStream)); err == nil {
+		t.Fatalf("expected error for malformed JSON input")
+	}
+}
+
 func Test_AuthLoadSingle(t *testing.T) {
 	const jsonStream = `
 		[
@@ -521,9 +547,9 @@ func Test_AuthPermsAllUsers(t *testing.T) {
 		t.Fatalf("* has foo perm")
 	}
 	if perm := store.HasPerm("username1", "bar"); !perm {
-		t.Fatalf("username1 does not have bar perm via *")
+		t.Fatalf("username1 should have bar perm via *")
 	}
 	if perm := store.HasPerm("username1", "abc"); !perm {
-		t.Fatalf("username1 does not have abc perm via *")
+		t.Fatalf("username1 should have abc perm via *")
 	}
 }

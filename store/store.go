@@ -167,7 +167,6 @@ type Store struct {
 	observerDone      chan struct{}
 	observerChan      chan raft.Observation
 	observer          *raft.Observer
-	observerWg        sync.WaitGroup
 
 	onDiskCreated        bool      // On disk database actually created?
 	snapsExistOnOpen     bool      // Any snaps present when store opens?
@@ -422,7 +421,7 @@ func (s *Store) Stepdown(wait bool) error {
 	if !wait {
 		return nil
 	}
-	return f.(raft.Future).Error()
+	return f.Error()
 }
 
 // Close closes the store. If wait is true, waits for a graceful shutdown.
@@ -442,8 +441,8 @@ func (s *Store) Close(wait bool) (retErr error) {
 
 	f := s.raft.Shutdown()
 	if wait {
-		if e := f.(raft.Future); e.Error() != nil {
-			return e.Error()
+		if f.Error() != nil {
+			return f.Error()
 		}
 	}
 	// Only shutdown Bolt and SQLite when Raft is done.
@@ -798,7 +797,7 @@ func (s *Store) execute(ex *command.ExecuteRequest) ([]*command.ExecuteResult, e
 		return nil, err
 	}
 
-	af := s.raft.Apply(b, s.ApplyTimeout).(raft.ApplyFuture)
+	af := s.raft.Apply(b, s.ApplyTimeout)
 	if af.Error() != nil {
 		if af.Error() == raft.ErrNotLeader {
 			return nil, ErrNotLeader
@@ -845,7 +844,7 @@ func (s *Store) Query(qr *command.QueryRequest) ([]*command.QueryRows, error) {
 			return nil, err
 		}
 
-		af := s.raft.Apply(b, s.ApplyTimeout).(raft.ApplyFuture)
+		af := s.raft.Apply(b, s.ApplyTimeout)
 		if af.Error() != nil {
 			if af.Error() == raft.ErrNotLeader {
 				return nil, ErrNotLeader
@@ -954,7 +953,7 @@ func (s *Store) Load(lr *command.LoadRequest) error {
 		return err
 	}
 
-	af := s.raft.Apply(b, s.ApplyTimeout).(raft.ApplyFuture)
+	af := s.raft.Apply(b, s.ApplyTimeout)
 	if af.Error() != nil {
 		if af.Error() == raft.ErrNotLeader {
 			return ErrNotLeader
@@ -1011,7 +1010,7 @@ func (s *Store) Notify(nr *command.NotifyRequest) error {
 		s.BootstrapExpect)
 	bf := s.raft.BootstrapCluster(raft.Configuration{
 		Servers: raftServers,
-	}).(raft.Future)
+	})
 	if bf.Error() != nil {
 		s.logger.Printf("cluster bootstrap failed: %s", bf.Error())
 	} else {
@@ -1119,7 +1118,7 @@ func (s *Store) Noop(id string) error {
 		return err
 	}
 
-	af := s.raft.Apply(bc, s.ApplyTimeout).(raft.ApplyFuture)
+	af := s.raft.Apply(bc, s.ApplyTimeout)
 	if af.Error() != nil {
 		if af.Error() == raft.ErrNotLeader {
 			return ErrNotLeader
@@ -1442,13 +1441,6 @@ func (s *Store) logSize() (int64, error) {
 	return fi.Size(), nil
 }
 
-func (s *Store) databaseTypePretty() string {
-	if s.dbConf.Memory {
-		return "in-memory"
-	}
-	return "on-disk"
-}
-
 type fsmSnapshot struct {
 	startT time.Time
 	logger *log.Logger
@@ -1613,7 +1605,7 @@ func RecoverNode(dataDir string, logger *log.Logger, logs raft.LogStore, stable 
 	// Now, create an in-memory database for temporary use, so we can generate new
 	// snapshots later.
 	var db *sql.DB
-	if b == nil || len(b) == 0 {
+	if len(b) == 0 {
 		db, err = sql.OpenInMemory(false)
 	} else {
 		db, err = sql.DeserializeIntoMemory(b, false)
@@ -1822,7 +1814,7 @@ func checkRaftConfiguration(configuration raft.Configuration) error {
 // createInMemory returns an in-memory database. If b is non-nil and non-empty,
 // then the database will be initialized with the contents of b.
 func createInMemory(b []byte, fkConstraints bool) (db *sql.DB, err error) {
-	if b == nil || len(b) == 0 {
+	if len(b) == 0 {
 		db, err = sql.OpenInMemory(fkConstraints)
 	} else {
 		db, err = sql.DeserializeIntoMemory(b, fkConstraints)
@@ -1886,6 +1878,11 @@ func dirSize(path string) (int64, error) {
 	var size int64
 	err := filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
 		if err != nil {
+			// If the file doesn't exist, we can ignore it. Snapshot files might
+			// disappear during walking.
+			if os.IsNotExist(err) {
+				return nil
+			}
 			return err
 		}
 		if !info.IsDir() {

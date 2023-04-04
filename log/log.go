@@ -13,7 +13,12 @@ type Log struct {
 	*raftboltdb.BoltStore
 }
 
-// New returns an instantiated Log object.
+// New returns an instantiated Log object that provides access to the Raft log
+// stored in a BoltDB database. It takes a path to the database file and a
+// boolean flag to enable/disable the freelist sync. If the flag is set to true,
+// the freelist will not be synced to disk, which can improve write performance
+// but may increase the risk of data loss in the event of a crash or power loss.
+// Returns an error if the BoltDB store cannot be created.
 func New(path string, noFreelistSync bool) (*Log, error) {
 	bs, err := raftboltdb.New(raftboltdb.Options{
 		BoltOptions: &bbolt.Options{
@@ -46,7 +51,7 @@ func (l *Log) Indexes() (uint64, uint64, error) {
 func (l *Log) LastCommandIndex() (uint64, error) {
 	fi, li, err := l.Indexes()
 	if err != nil {
-		return 0, fmt.Errorf("get indexes: %s", err)
+		return 0, fmt.Errorf("failed to get indexes: %s", err)
 	}
 
 	// Check for empty log.
@@ -57,7 +62,7 @@ func (l *Log) LastCommandIndex() (uint64, error) {
 	var rl raft.Log
 	for i := li; i >= fi; i-- {
 		if err := l.GetLog(i, &rl); err != nil {
-			return 0, fmt.Errorf("get log at index %d: %s", i, err)
+			return 0, fmt.Errorf("failed to get log at index %d: %s", i, err)
 		}
 		if rl.Type == raft.LogCommand {
 			return i, nil

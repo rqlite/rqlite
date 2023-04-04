@@ -66,9 +66,9 @@ type headerRenderStyle struct {
 
 func (render headerRenderStyle) CellRender(row, col int, cell string, cw *textutil.ColorWriter) {
 	if row != 0 {
-		fmt.Fprintf(cw, cell)
+		fmt.Fprint(cw, cell)
 	} else {
-		fmt.Fprintf(cw, cw.Color.Cyan(cell))
+		fmt.Fprint(cw, cw.Color.Cyan(cell))
 	}
 }
 
@@ -110,7 +110,7 @@ func queryWithClient(ctx *cli.Context, client *cl.Client, timer bool, consistenc
 	if err != nil {
 		return err
 	}
-	resp.Body.Close()
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("server responded with %s: %s", resp.Status, response)
