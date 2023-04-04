@@ -149,16 +149,23 @@ jobs:
     resource_class: large
 
   windows_test:
-    executor: windows/default
+    machine:
+      image: 'windows-server-2019-vs2019:stable'
     steps:
       - checkout
-      - run: choco install golang
-      - run: choco install python
-      - run: choco install git
-      - run: refreshenv
-      - run: go version
-      - run: go get -v -t -d ./...
-      - run: go test -failfast ./...
+      - run:
+          name: Install Go, Python, and Git
+          command: |
+            choco install golang --no-progress
+            choco install python --no-progress
+            choco install git --no-progress
+            refreshenv
+      - run:
+          name: Go version and build
+          command: |
+            go version
+            go get -v -t -d ./...
+            go test -failfast ./...
 
 workflows:
   version: 2
