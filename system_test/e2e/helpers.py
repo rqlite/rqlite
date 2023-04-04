@@ -145,7 +145,7 @@ class Node(object):
     command = [self.path,
                '-node-id', self.node_id,
                '-http-addr', self.api_addr,
-               '-bootstrap-expect', str(self.boostrap_expect),
+               '-bootstrap-expect', str(self.bootstrap_expect),
                '-raft-addr', self.raft_addr,
                '-raft-snap', str(self.raft_snap_threshold),
                '-raft-snap-int', self.raft_snap_int,
