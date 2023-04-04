@@ -6,6 +6,8 @@ jobs:
     docker:
       - image: cimg/go:1.20.0
     steps:
+      # Don't do a restore_cache here, so we regularly check that the Go
+      # modules are actually fetchable.
       - checkout
       - run: go version
       - run: test -z "$(gofmt -l . | tee /dev/stderr)"
