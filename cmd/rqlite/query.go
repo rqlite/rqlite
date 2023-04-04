@@ -66,9 +66,9 @@ type headerRenderStyle struct {
 
 func (render headerRenderStyle) CellRender(row, col int, cell string, cw *textutil.ColorWriter) {
 	if row != 0 {
-		fmt.Fprintf(cw, cell)
+		fmt.Fprint(cw, cell)
 	} else {
-		fmt.Fprintf(cw, cw.Color.Cyan(cell))
+		fmt.Fprint(cw, cw.Color.Cyan(cell))
 	}
 }
 

@@ -251,7 +251,7 @@ func makeJSONBody(line string) string {
 
 func help(ctx *cli.Context, cmd, line string, argv *argT) error {
 	sort.Strings(cliHelp)
-	fmt.Printf(strings.Join(cliHelp, "\n"))
+	fmt.Print(strings.Join(cliHelp, "\n"))
 	return nil
 }
 
@@ -473,13 +473,13 @@ func cliJSON(ctx *cli.Context, cmd, line, url string, argv *argT) error {
 			if v == nil {
 				continue
 			}
-			switch v.(type) {
+			switch w := v.(type) {
 			case map[string]interface{}:
 				for i := 0; i < indent; i++ {
 					fmt.Print(indentation)
 				}
 				fmt.Printf("%s:\n", k)
-				pprint(indent+1, v.(map[string]interface{}))
+				pprint(indent+1, w)
 			default:
 				for i := 0; i < indent; i++ {
 					fmt.Print(indentation)
