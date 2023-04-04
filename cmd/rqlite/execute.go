@@ -87,12 +87,12 @@ func executeWithClient(ctx *cli.Context, client *cl.Client, timer bool, stmt str
 	if result.RowsAffected > 1 {
 		rowString = "rows"
 	}
-        if timer {
-	        ctx.String("%d %s affected (%f sec)\n", result.RowsAffected, rowString, result.Time)
-	        fmt.Printf("Run Time: %f seconds\n", result.Time) // Move this line inside the if timer block
-        } else {
-	        ctx.String("%d %s affected\n", result.RowsAffected, rowString)
-        }
+	if timer {
+		ctx.String("%d %s affected (%f sec)\n", result.RowsAffected, rowString, result.Time)
+		fmt.Printf("Run Time: %f seconds\n", result.Time) // Move this line inside the if timer block
+	} else {
+		ctx.String("%d %s affected\n", result.RowsAffected, rowString)
+	}
 
 	return hcr
 }
