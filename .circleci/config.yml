@@ -149,8 +149,7 @@ jobs:
     resource_class: large
 
   windows_test:
-    executor:
-      name: windows/default
+    executor: windows/default
     steps:
       - checkout
       - run: choco install golang
