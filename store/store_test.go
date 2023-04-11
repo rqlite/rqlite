@@ -864,6 +864,65 @@ COMMIT;
 	}
 }
 
+func Test_SingleNodeLoadAbortOnError(t *testing.T) {
+	t.Parallel()
+
+	s, ln := mustNewStore(true)
+	defer os.RemoveAll(s.Path())
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	s.WaitForLeader(10 * time.Second)
+
+	dump := `PRAGMA foreign_keys=OFF;
+BEGIN TRANSACTION;
+CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT);
+COMMIT;
+`
+	r, err := s.Execute(executeRequestFromString(dump, false, false))
+	if err != nil {
+		t.Fatalf("failed to load commands: %s", err.Error())
+	}
+	if r[0].Error != "" {
+		t.Fatalf("error received creating table: %s", r[0].Error)
+	}
+
+	r, err = s.Execute(executeRequestFromString(dump, false, false))
+	if err != nil {
+		t.Fatalf("failed to load commands: %s", err.Error())
+	}
+	if r[0].Error != "table foo already exists" {
+		t.Fatalf("received wrong error message: %s", r[0].Error)
+	}
+
+	r, err = s.Execute(executeRequestFromString(dump, false, false))
+	if err != nil {
+		t.Fatalf("failed to load commands: %s", err.Error())
+	}
+	if r[0].Error != "cannot start a transaction within a transaction" {
+		t.Fatalf("received wrong error message: %s", r[0].Error)
+	}
+
+	r, err = s.ExecuteOrAbort(&ExecuteRequest{[]string{dump}, false, false})
+	if err != nil {
+		t.Fatalf("failed to load commands: %s", err.Error())
+	}
+	if r[0].Error != "cannot start a transaction within a transaction" {
+		t.Fatalf("received wrong error message: %s", r[0].Error)
+	}
+
+	r, err = s.Execute(executeRequestFromString(dump, false, false))
+	if err != nil {
+		t.Fatalf("failed to load commands: %s", err.Error())
+	}
+	if r[0].Error != "table foo already exists" {
+		t.Fatalf("received wrong error message: %s", r[0].Error)
+	}
+}
+
 // Test_SingleNodeRecoverNoChange tests a node recovery that doesn't
 // actually change anything.
 func Test_SingleNodeRecoverNoChange(t *testing.T) {

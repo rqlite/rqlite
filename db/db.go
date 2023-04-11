@@ -805,6 +805,21 @@ func (db *DB) Dump(w io.Writer) error {
 	return nil
 }
 
+// TransactionActive returns whether a transaction is currently active
+// i.e. if the database is NOT in autocommit mode.
+func (db *DB) TransactionActive() bool {
+	return !db.sqlite3conn.AutoCommit()
+}
+
+// AbortTransaction aborts -- rolls back -- any active transaction. Calling code
+// should know exactly what it is doing if it decides to call this function. It
+// can be used to clean up any dangling state that may result from certain
+// error scenarios.
+func (db *DB) AbortTransaction() error {
+	_, err := db.Execute([]string{`ROLLBACK`}, false, false)
+	return err
+}
+
 func (db *DB) memStats() (map[string]int64, error) {
 	ms := make(map[string]int64)
 	for _, p := range []string{
