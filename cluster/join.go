@@ -10,6 +10,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -91,7 +92,7 @@ func (j *Joiner) SetBasicAuth(username, password string) {
 }
 
 // Do makes the actual join request.
-func (j *Joiner) Do(joinAddrs []string, id, addr string, voter bool) (string, error) {
+func (j *Joiner) Do(joinAddrs []*url.URL, id, addr string, voter bool) (string, error) {
 	if id == "" {
 		return "", ErrNodeIDRequired
 	}
@@ -118,9 +119,9 @@ func (j *Joiner) Do(joinAddrs []string, id, addr string, voter bool) (string, er
 	return "", ErrJoinFailed
 }
 
-func (j *Joiner) join(joinAddr, id, addr string, voter bool) (string, error) {
+func (j *Joiner) join(joinAddr *url.URL, id, addr string, voter bool) (string, error) {
 	// Check for protocol scheme, and insert default if necessary.
-	fullAddr := rurl.NormalizeAddr(fmt.Sprintf("%s/join", joinAddr))
+	fullAddr := rurl.NormalizeAddr(fmt.Sprintf("%s/join", joinAddr.String()))
 
 	for {
 		b, err := json.Marshal(map[string]interface{}{

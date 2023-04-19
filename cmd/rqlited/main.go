@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -365,7 +366,10 @@ func createCluster(cfg *Config, hasPeers bool, str *store.Store,
 		}
 	}
 
-	joins := cfg.JoinAddresses()
+	joins, err := cfg.JoinAddresses()
+	if err != nil {
+		return fmt.Errorf("failed to retrieve join addresses: %s", err.Error())
+	}
 	if joins == nil && cfg.DiscoMode == "" && !hasPeers {
 		if cfg.RaftNonVoter {
 			return fmt.Errorf("cannot create a new non-voting node without joining it to an existing cluster")
@@ -412,7 +416,7 @@ func createCluster(cfg *Config, hasPeers bool, str *store.Store,
 		}
 
 		// Bootstrap with explicit join addresses requests.
-		bs := cluster.NewBootstrapper(cluster.NewAddressProviderString(joins), tlsConfig)
+		bs := cluster.NewBootstrapper(cluster.NewAddressProviderURLs(joins), tlsConfig)
 		if cfg.JoinAs != "" {
 			pw, ok := credStr.Password(cfg.JoinAs)
 			if !ok {
@@ -486,6 +490,10 @@ func createCluster(cfg *Config, hasPeers bool, str *store.Store,
 			if err != nil {
 				return fmt.Errorf("failed to register with discovery service: %s", err.Error())
 			}
+			addrURL, err := url.Parse(addr)
+			if err != nil {
+				return fmt.Errorf("failed to parse discovery service address as a URL: %s", err.Error())
+			}
 			if leader {
 				log.Println("node registered as leader using discovery service")
 				if err := str.Bootstrap(store.NewServer(str.ID(), str.Addr(), true)); err != nil {
@@ -494,7 +502,7 @@ func createCluster(cfg *Config, hasPeers bool, str *store.Store,
 			} else {
 				for {
 					log.Printf("discovery service returned %s as join address", addr)
-					if j, err := joiner.Do([]string{addr}, str.ID(), cfg.RaftAdv, !cfg.RaftNonVoter); err != nil {
+					if j, err := joiner.Do([]*url.URL{addrURL}, str.ID(), cfg.RaftAdv, !cfg.RaftNonVoter); err != nil {
 						log.Printf("failed to join cluster at %s: %s", addr, err.Error())
 
 						time.Sleep(time.Second)

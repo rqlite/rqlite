@@ -323,11 +323,24 @@ func (c *Config) Validate() error {
 
 // JoinAddresses returns the join addresses set at the command line. Returns nil
 // if no join addresses were set.
-func (c *Config) JoinAddresses() []string {
+func (c *Config) JoinAddresses() ([]*url.URL, error) {
 	if c.JoinAddr == "" {
-		return nil
+		return nil, nil
 	}
-	return strings.Split(c.JoinAddr, ",")
+	addrs := strings.Split(c.JoinAddr, ",")
+	var urls []*url.URL
+	for i := range addrs {
+		u, err := url.Parse(addrs[i])
+		if err != nil {
+			return nil, err
+		}
+		if !inList(u.Scheme, []string{"", "http", "https", "raft"}) {
+			return nil, fmt.Errorf("invalid protocol %s in join address %s", u.Scheme, addrs[i])
+		}
+		u.Scheme = strings.ToLower(u.Scheme)
+		urls = append(urls, u)
+	}
+	return urls, nil
 }
 
 // HTTPURL returns the fully-formed, advertised HTTP API address for this config, including
@@ -487,4 +500,14 @@ func errorExit(code int, msg string) {
 // bothUnsetSet returns true if both a and b are unset, or both are set.
 func bothUnsetSet(a, b string) bool {
 	return (a == "" && b == "") || (a != "" && b != "")
+}
+
+// inList returns true if the given string is in the given list
+func inList(s string, list []string) bool {
+	for _, v := range list {
+		if s == v {
+			return true
+		}
+	}
+	return false
 }

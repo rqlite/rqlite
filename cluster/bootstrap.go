@@ -106,14 +106,23 @@ func (b *Bootstrapper) Boot(id, raftAddr string, done func() bool, timeout time.
 			if err != nil {
 				b.logger.Printf("provider lookup failed %s", err.Error())
 			}
-
-			if len(targets) == 0 {
+			// convert targets to URLs
+			var targetURLs []*url.URL
+			for _, t := range targets {
+				u, err := url.Parse(t)
+				if err != nil {
+					b.logger.Printf("failed to parse target %s: %s", t, err.Error())
+					continue
+				}
+				targetURLs = append(targetURLs, u)
+			}
+			if len(targetURLs) == 0 {
 				continue
 			}
 
 			// Try an explicit join first. Joining an existing cluster is always given priority
 			// over trying to form a new cluster.
-			if j, err := b.joiner.Do(targets, id, raftAddr, true); err == nil {
+			if j, err := b.joiner.Do(targetURLs, id, raftAddr, true); err == nil {
 				b.logger.Printf("succeeded directly joining cluster via node at %s", j)
 				return nil
 			}
@@ -227,6 +236,15 @@ func (s *stringAddressProvider) Lookup() ([]string, error) {
 
 // NewAddressProviderString wraps an AddressProvider around a string slice.
 func NewAddressProviderString(ss []string) AddressProvider {
+	return &stringAddressProvider{ss}
+}
+
+// NewAddressProviderURLs wraps an AddressProvider around a URL slice.
+func NewAddressProviderURLs(us []*url.URL) AddressProvider {
+	ss := make([]string, len(us))
+	for i, u := range us {
+		ss[i] = u.String()
+	}
 	return &stringAddressProvider{ss}
 }
 

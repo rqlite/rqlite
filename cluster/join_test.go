@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 
@@ -43,7 +44,7 @@ func Test_SingleJoinOK(t *testing.T) {
 
 	joiner := NewJoiner("127.0.0.1", numAttempts, attemptInterval, nil)
 
-	j, err := joiner.Do([]string{ts.URL}, "id0", "127.0.0.1:9090", false)
+	j, err := joiner.Do(mustCreateURLSlice(ts.URL), "id0", "127.0.0.1:9090", false)
 	if err != nil {
 		t.Fatalf("failed to join a single node: %s", err.Error())
 	}
@@ -95,7 +96,7 @@ func Test_SingleJoinHTTPSOK(t *testing.T) {
 	}
 	joiner := NewJoiner("127.0.0.1", numAttempts, attemptInterval, tlsConfig)
 
-	j, err := joiner.Do([]string{ts.URL}, "id0", "127.0.0.1:9090", false)
+	j, err := joiner.Do(mustCreateURLSlice(ts.URL), "id0", "127.0.0.1:9090", false)
 	if err != nil {
 		t.Fatalf("failed to join a single node: %s", err.Error())
 	}
@@ -146,7 +147,7 @@ func Test_SingleJoinOKBasicAuth(t *testing.T) {
 	joiner := NewJoiner("127.0.0.1", numAttempts, attemptInterval, nil)
 	joiner.SetBasicAuth("user1", "password1")
 
-	j, err := joiner.Do([]string{ts.URL}, "id0", "127.0.0.1:9090", false)
+	j, err := joiner.Do(mustCreateURLSlice(ts.URL), "id0", "127.0.0.1:9090", false)
 	if err != nil {
 		t.Fatalf("failed to join a single node: %s", err.Error())
 	}
@@ -171,7 +172,7 @@ func Test_SingleJoinZeroAttempts(t *testing.T) {
 	}))
 
 	joiner := NewJoiner("127.0.0.1", 0, attemptInterval, nil)
-	_, err := joiner.Do([]string{ts.URL}, "id0", "127.0.0.1:9090", false)
+	_, err := joiner.Do(mustCreateURLSlice(ts.URL), "id0", "127.0.0.1:9090", false)
 	if err != ErrJoinFailed {
 		t.Fatalf("Incorrect error returned when zero attempts specified")
 	}
@@ -184,7 +185,7 @@ func Test_SingleJoinFail(t *testing.T) {
 	defer ts.Close()
 
 	joiner := NewJoiner("", 0, attemptInterval, nil)
-	_, err := joiner.Do([]string{ts.URL}, "id0", "127.0.0.1:9090", true)
+	_, err := joiner.Do(mustCreateURLSlice(ts.URL), "id0", "127.0.0.1:9090", true)
 	if err == nil {
 		t.Fatalf("expected error when joining bad node")
 	}
@@ -200,7 +201,7 @@ func Test_DoubleJoinOK(t *testing.T) {
 
 	joiner := NewJoiner("127.0.0.1", numAttempts, attemptInterval, nil)
 
-	j, err := joiner.Do([]string{ts1.URL, ts2.URL}, "id0", "127.0.0.1:9090", true)
+	j, err := joiner.Do(mustCreateURLSlice(ts1.URL, ts2.URL), "id0", "127.0.0.1:9090", true)
 	if err != nil {
 		t.Fatalf("failed to join a single node: %s", err.Error())
 	}
@@ -220,7 +221,7 @@ func Test_DoubleJoinOKSecondNode(t *testing.T) {
 
 	joiner := NewJoiner("", numAttempts, attemptInterval, nil)
 
-	j, err := joiner.Do([]string{ts1.URL, ts2.URL}, "id0", "127.0.0.1:9090", true)
+	j, err := joiner.Do(mustCreateURLSlice(ts1.URL, ts2.URL), "id0", "127.0.0.1:9090", true)
 	if err != nil {
 		t.Fatalf("failed to join a single node: %s", err.Error())
 	}
@@ -242,11 +243,27 @@ func Test_DoubleJoinOKSecondNodeRedirect(t *testing.T) {
 
 	joiner := NewJoiner("127.0.0.1", numAttempts, attemptInterval, nil)
 
-	j, err := joiner.Do([]string{ts2.URL}, "id0", "127.0.0.1:9090", true)
+	j, err := joiner.Do(mustCreateURLSlice(ts2.URL), "id0", "127.0.0.1:9090", true)
 	if err != nil {
 		t.Fatalf("failed to join a single node: %s", err.Error())
 	}
 	if j != redirectAddr {
 		t.Fatalf("node joined using wrong endpoint, exp: %s, got: %s", redirectAddr, j)
 	}
+}
+
+func mustCreateURLSlice(s ...string) []*url.URL {
+	var urls []*url.URL
+	for _, u := range s {
+		urls = append(urls, mustParseURL(u))
+	}
+	return urls
+}
+
+func mustParseURL(s string) *url.URL {
+	u, err := url.Parse(s)
+	if err != nil {
+		panic(err)
+	}
+	return u
 }
