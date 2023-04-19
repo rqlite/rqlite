@@ -101,8 +101,7 @@ type Config struct {
 	JoinSrcIP string
 
 	// JoinAddr is the list addresses to use for a join attempt. Each address
-	// will include the proto (HTTP or HTTPS) and will never include the node's
-	// own HTTP server address. May not be set.
+	// will include the proto (HTTP or HTTPS). May not be set.
 	JoinAddr string
 
 	// JoinAs sets the user join attempts should be performed as. May not be set.
