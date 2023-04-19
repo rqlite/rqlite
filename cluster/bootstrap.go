@@ -13,8 +13,6 @@ import (
 	"os"
 	"strings"
 	"time"
-
-	rurl "github.com/rqlite/rqlite/http/url"
 )
 
 func init() {
@@ -134,12 +132,7 @@ func (b *Bootstrapper) Boot(id, raftAddr string, done func() bool, timeout time.
 			// de novo. For that to happen it needs to now let the other nodes know it is here.
 			// If this is a new cluster, some node will then reach the bootstrap-expect value,
 			// form the cluster, beating all other nodes to it.
-			urls, err := rurl.StringsToURLs(targets)
-			if err != nil {
-				b.logger.Printf("failed to convert targets to URLs: %s", err.Error())
-				continue
-			}
-			if err := b.notify(urls, id, raftAddr); err != nil {
+			if err := b.notify(targetURLs, id, raftAddr); err != nil {
 				b.logger.Printf("failed to notify all targets: %s (%s, will retry)", targets,
 					err.Error())
 			} else {
