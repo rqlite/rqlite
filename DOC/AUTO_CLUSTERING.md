@@ -7,7 +7,7 @@ This document describes various ways to dynamically form rqlite clusters, which 
 
 ## Contents
 * [Quickstart](#quickstart)
-  * [Automatic Boostrapping](#automatic-bootstrapping)
+  * [Automatic Bootstrapping](#automatic-bootstrapping)
   * [Using DNS for Bootstrapping](#using-dns-for-bootstrapping)
     * [DNS SRV](#dns-srv)
   * [Kubernetes](#kubernetes)
@@ -57,7 +57,7 @@ __________________________
 ### Using DNS for Bootstrapping
 You can also use the Domain Name System (DNS) to bootstrap a cluster. This is similar to automatic clustering, but doesn't require you to specify the network addresses of other nodes at the command line. Instead you create a DNS record for the host `rqlite.local`, with an [A Record](https://www.cloudflare.com/learning/dns/dns-records/dns-a-record/) for each rqlite node's IP address. 
 
-To launch a node with node ID `$ID` and network address `$HOST`, using DNS for cluster boostrap, execute the following (example) command:
+To launch a node with node ID `$ID` and network address `$HOST`, using DNS for cluster bootstrap, execute the following (example) command:
 ```bash
 rqlited -node-id $ID -http-addr=$HOST:4001 -raft-addr=$HOST:4002 \
 -disco-mode=dns -disco-config='{"name":"rqlite.local"}' -bootstrap-expect 3 data
@@ -67,7 +67,7 @@ You would launch other nodes similarly, setting `$ID` and `$HOST` as required fo
 #### DNS SRV
 Using [DNS SRV](https://www.cloudflare.com/learning/dns/dns-records/dns-srv-record/) gives you more control over the rqlite node address details returned by DNS, including the HTTP port each node is listening on. This means that unlike using just simple DNS records, each rqlite node can be listening on a different HTTP port. Simple DNS records are probably good enough for most situations, however.
 
-To launch a node using DNS SRV boostrap, execute the following (example) command:
+To launch a node using DNS SRV bootstrap, execute the following (example) command:
 ```bash
 rqlited -node-id $ID  -http-addr=$HOST:4001 -raft-addr=$HOST:4002 \
 -disco-mode=dns-srv -disco-config='{"name":"rqlite.local","service":"rqlite-svc"}' -bootstrap-expect 3 data
@@ -151,7 +151,7 @@ The examples above demonstrates simple configurations, and most real deployments
 If you wish a single Consul or etcd key-value system to support multiple rqlite clusters, then set the `-disco-key` command line argument to a different value for each cluster. To run multiple rqlite clusters with DNS, use a different domain name per cluster.
 
 ## Design
-When using Automatic Bootstrapping, each node notifies all other nodes of its existence. The first node to have a record of enough nodes (set by `-boostrap-expect`) forms the cluster. Only one node can bootstrap the cluster, any other node that attempts to do so later will fail, and instead become a Follower in the new cluster.
+When using Automatic Bootstrapping, each node notifies all other nodes of its existence. The first node to have a record of enough nodes (set by `-bootstrap-expect`) forms the cluster. Only one node can bootstrap the cluster, any other node that attempts to do so later will fail, and instead become a Follower in the new cluster.
 
 When using either Consul or etcd for automatic clustering, rqlite uses the key-value store of each system. In each case the Leader atomically sets its HTTP URL, allowing other nodes to discover it. To prevent multiple nodes updating the Leader key at once, nodes uses a check-and-set operation, only updating the Leader key if it's value has not changed since it was last read by the node. See [this blog post](https://www.philipotoole.com/rqlite-7-0-designing-node-discovery-and-automatic-clustering/) for more details on the design.
 

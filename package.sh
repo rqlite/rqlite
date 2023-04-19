@@ -15,9 +15,6 @@
 #     sudo apt-get -y install gcc make gcc-arm-linux-gnueabi binutils-arm-linux-gnueabi
 #     sudo apt-get -y install gcc make gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
 
-set -e
-set -u
-
 REPO_URL="https://github.com/rqlite/rqlite"
 
 # copy_binaries <dst_path> <src_dir>
