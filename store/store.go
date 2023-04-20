@@ -1839,7 +1839,7 @@ func createOnDisk(b []byte, path string, fkConstraints bool) (*sql.DB, error) {
 		return nil, err
 	}
 	if b != nil {
-		if err := ioutil.WriteFile(path, b, 0660); err != nil {
+		if err := ioutil.WriteFile(path, b, os.FileMode(os.O_RDWR)); err != nil {
 			return nil, err
 		}
 	}
