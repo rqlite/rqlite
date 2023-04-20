@@ -1,3 +1,7 @@
+## 7.14.3 (unreleased)
+## Implementation changes and bug fixes
+- [PR #1218](https://github.com/rqlite/rqlite/pull/1218): Check for more possible errors in peers.json. Thanks @Tjstretchalot
+
 ## 7.14.2 (April 7th 2023)
 This release is the first to includes various bug fixes and optimizations thanks to running much of the code through [Chat GPT-4](https://openai.com/product/gpt-4), most of which are not explicitly listed in the [CHANGELOG](https://github.com/rqlite/rqlite/edit/master/CHANGELOG.md), but you can check the commit history for details. Future releases of rqlite will probably include more such changes.
 ## Implementation changes and bug fixes
@@ -7,6 +11,7 @@ This release is the first to includes various bug fixes and optimizations thanks
 - [PR #1189](https://github.com/rqlite/rqlite/pull/1189): Migrate to a Protobuf data model for Join Requests.
 - [PR #1190](https://github.com/rqlite/rqlite/pull/1190): Migrate to a Protobuf data model for Notify Requests.
 - [PR #1207](https://github.com/rqlite/rqlite/pull/1207): Decompose end-to-end testing into distinct CircleCI jobs.
+- [PR #1218](https://github.com/rqlite/rqlite/pull/1218): Check for more possible errors in peers.json. Thanks @Tjstretchalot
 
 ## 7.14.1 (March 17th 2023)
 ## Implementation changes and bug fixes

@@ -14,10 +14,12 @@ import (
 	"io/ioutil"
 	"log"
 	"math"
+	"net"
 	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 	"unsafe"
@@ -1792,6 +1794,13 @@ func checkRaftConfiguration(configuration raft.Configuration) error {
 		}
 		if server.Address == "" {
 			return fmt.Errorf("empty address in configuration: %v", server)
+		}
+		if strings.Contains(string(server.Address), "://") {
+			return fmt.Errorf("protocol specified in address: %v", server.Address)
+		}
+		_, _, err := net.SplitHostPort(string(server.Address))
+		if err != nil {
+			return fmt.Errorf("invalid address in configuration: %v", server.Address)
 		}
 		if idSet[server.ID] {
 			return fmt.Errorf("found duplicate ID in configuration: %v", server.ID)
