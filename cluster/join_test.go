@@ -43,7 +43,27 @@ func Test_SingleJoinOK(t *testing.T) {
 
 	joiner := NewJoiner("127.0.0.1", numAttempts, attemptInterval, nil)
 
+	// Ensure joining with protocol prefix works.
 	j, err := joiner.Do([]string{ts.URL}, "id0", "127.0.0.1:9090", false)
+	if err != nil {
+		t.Fatalf("failed to join a single node: %s", err.Error())
+	}
+	if j != ts.URL+"/join" {
+		t.Fatalf("node joined using wrong endpoint, exp: %s, got: %s", j, ts.URL)
+	}
+
+	if got, exp := body["id"].(string), "id0"; got != exp {
+		t.Fatalf("wrong node ID supplied, exp %s, got %s", exp, got)
+	}
+	if got, exp := body["addr"].(string), "127.0.0.1:9090"; got != exp {
+		t.Fatalf("wrong address supplied, exp %s, got %s", exp, got)
+	}
+	if got, exp := body["voter"].(bool), false; got != exp {
+		t.Fatalf("wrong voter state supplied, exp %v, got %v", exp, got)
+	}
+
+	// Ensure joining without protocol prefix works.
+	j, err = joiner.Do([]string{ts.Listener.Addr().String()}, "id0", "127.0.0.1:9090", false)
 	if err != nil {
 		t.Fatalf("failed to join a single node: %s", err.Error())
 	}
@@ -95,7 +115,27 @@ func Test_SingleJoinHTTPSOK(t *testing.T) {
 	}
 	joiner := NewJoiner("127.0.0.1", numAttempts, attemptInterval, tlsConfig)
 
+	// Ensure joining with protocol prefix works.
 	j, err := joiner.Do([]string{ts.URL}, "id0", "127.0.0.1:9090", false)
+	if err != nil {
+		t.Fatalf("failed to join a single node: %s", err.Error())
+	}
+	if j != ts.URL+"/join" {
+		t.Fatalf("node joined using wrong endpoint, exp: %s, got: %s", j, ts.URL)
+	}
+
+	if got, exp := body["id"].(string), "id0"; got != exp {
+		t.Fatalf("wrong node ID supplied, exp %s, got %s", exp, got)
+	}
+	if got, exp := body["addr"].(string), "127.0.0.1:9090"; got != exp {
+		t.Fatalf("wrong address supplied, exp %s, got %s", exp, got)
+	}
+	if got, exp := body["voter"].(bool), false; got != exp {
+		t.Fatalf("wrong voter state supplied, exp %v, got %v", exp, got)
+	}
+
+	// Ensure joining without protocol prefix works.
+	j, err = joiner.Do([]string{ts.Listener.Addr().String()}, "id0", "127.0.0.1:9090", false)
 	if err != nil {
 		t.Fatalf("failed to join a single node: %s", err.Error())
 	}
@@ -200,7 +240,17 @@ func Test_DoubleJoinOK(t *testing.T) {
 
 	joiner := NewJoiner("127.0.0.1", numAttempts, attemptInterval, nil)
 
+	// Ensure joining with protocol prefix works.
 	j, err := joiner.Do([]string{ts1.URL, ts2.URL}, "id0", "127.0.0.1:9090", true)
+	if err != nil {
+		t.Fatalf("failed to join a single node: %s", err.Error())
+	}
+	if j != ts1.URL+"/join" {
+		t.Fatalf("node joined using wrong endpoint, exp: %s, got: %s", j, ts1.URL)
+	}
+
+	// Ensure joining without protocol prefix works.
+	j, err = joiner.Do([]string{ts1.Listener.Addr().String(), ts2.Listener.Addr().String()}, "id0", "127.0.0.1:9090", true)
 	if err != nil {
 		t.Fatalf("failed to join a single node: %s", err.Error())
 	}
@@ -220,7 +270,17 @@ func Test_DoubleJoinOKSecondNode(t *testing.T) {
 
 	joiner := NewJoiner("", numAttempts, attemptInterval, nil)
 
+	// Ensure joining with protocol prefix works.
 	j, err := joiner.Do([]string{ts1.URL, ts2.URL}, "id0", "127.0.0.1:9090", true)
+	if err != nil {
+		t.Fatalf("failed to join a single node: %s", err.Error())
+	}
+	if j != ts2.URL+"/join" {
+		t.Fatalf("node joined using wrong endpoint, exp: %s, got: %s", j, ts2.URL)
+	}
+
+	// Ensure joining without protocol prefix works.
+	j, err = joiner.Do([]string{ts1.Listener.Addr().String(), ts2.Listener.Addr().String()}, "id0", "127.0.0.1:9090", true)
 	if err != nil {
 		t.Fatalf("failed to join a single node: %s", err.Error())
 	}
@@ -242,7 +302,17 @@ func Test_DoubleJoinOKSecondNodeRedirect(t *testing.T) {
 
 	joiner := NewJoiner("127.0.0.1", numAttempts, attemptInterval, nil)
 
+	// Ensure joining with protocol prefix works.
 	j, err := joiner.Do([]string{ts2.URL}, "id0", "127.0.0.1:9090", true)
+	if err != nil {
+		t.Fatalf("failed to join a single node: %s", err.Error())
+	}
+	if j != redirectAddr {
+		t.Fatalf("node joined using wrong endpoint, exp: %s, got: %s", redirectAddr, j)
+	}
+
+	// Ensure joining without protocol prefix works.
+	j, err = joiner.Do([]string{ts2.Listener.Addr().String()}, "id0", "127.0.0.1:9090", true)
 	if err != nil {
 		t.Fatalf("failed to join a single node: %s", err.Error())
 	}
