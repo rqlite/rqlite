@@ -30,6 +30,7 @@ const (
 	numBackupRequest      = "num_backup_req"
 	numLoadRequest        = "num_load_req"
 	numRemoveNodeRequest  = "num_remove_node_req"
+	numNotifyRequest      = "num_notify_req"
 
 	// Client stats for this package.
 	numGetNodeAPIRequestLocal = "num_get_node_api_req_local"
@@ -53,6 +54,7 @@ func init() {
 	stats.Add(numLoadRequest, 0)
 	stats.Add(numRemoveNodeRequest, 0)
 	stats.Add(numGetNodeAPIRequestLocal, 0)
+	stats.Add(numNotifyRequest, 0)
 }
 
 // Dialer is the interface dialers must implement.
@@ -82,6 +84,10 @@ type Database interface {
 type Manager interface {
 	// Remove removes the node, given by id, from the cluster
 	Remove(rn *command.RemoveNodeRequest) error
+
+	// Notify notifies this node that a remote node is ready
+	// for bootstrapping.
+	Notify(n *command.NotifyRequest) error
 }
 
 // CredentialStore is the interface credential stores must support.
@@ -364,6 +370,25 @@ func (s *Service) handleConn(conn net.Conn) {
 				resp.Error = "unauthorized"
 			} else {
 				if err := s.mgr.Remove(rn); err != nil {
+					resp.Error = err.Error()
+				}
+			}
+
+			p, err = proto.Marshal(resp)
+			if err != nil {
+				conn.Close()
+			}
+			writeBytesWithLength(conn, p)
+
+		case Command_COMMAND_TYPE_NOTIFY:
+			stats.Add(numNotifyRequest, 1)
+			resp := &CommandNotifyResponse{}
+
+			nr := c.GetNotifyRequest()
+			if nr == nil {
+				resp.Error = "NotifyRequest is nil"
+			} else {
+				if err := s.mgr.Notify(nr); err != nil {
 					resp.Error = err.Error()
 				}
 			}

@@ -306,6 +306,44 @@ func (c *Client) RemoveNode(rn *command.RemoveNodeRequest, nodeAddr string, cred
 	return nil
 }
 
+// Notify notifies a remote node that this node is ready to bootstrap.
+func (c *Client) Notify(nr *command.NotifyRequest, nodeAddr string, timeout time.Duration) error {
+	conn, err := c.dial(nodeAddr, c.timeout)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	// Create the request.
+	command := &Command{
+		Type: Command_COMMAND_TYPE_NOTIFY,
+		Request: &Command_NotifyRequest{
+			NotifyRequest: nr,
+		},
+	}
+	if err := writeCommand(conn, command, timeout); err != nil {
+		handleConnError(conn)
+		return err
+	}
+
+	p, err := readResponse(conn, timeout)
+	if err != nil {
+		handleConnError(conn)
+		return err
+	}
+
+	a := &CommandNotifyResponse{}
+	err = proto.Unmarshal(p, a)
+	if err != nil {
+		return err
+	}
+
+	if a.Error != "" {
+		return errors.New(a.Error)
+	}
+	return nil
+}
+
 // Stats returns stats on the Client instance
 func (c *Client) Stats() (map[string]interface{}, error) {
 	c.mu.RLock()
