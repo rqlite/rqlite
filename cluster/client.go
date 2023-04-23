@@ -92,7 +92,7 @@ func (c *Client) GetNodeAPIAddr(nodeAddr string, timeout time.Duration) (string,
 	a := &Address{}
 	err = proto.Unmarshal(p, a)
 	if err != nil {
-		return "", fmt.Errorf("protobuf unmarshal: %s", err)
+		return "", fmt.Errorf("protobuf unmarshal: %w", err)
 	}
 
 	return a.Url, nil
@@ -209,13 +209,13 @@ func (c *Client) Backup(br *command.BackupRequest, nodeAddr string, creds *Crede
 	p, err = gzUncompress(p)
 	if err != nil {
 		handleConnError(conn)
-		return fmt.Errorf("backup decompress: %s", err)
+		return fmt.Errorf("backup decompress: %w", err)
 	}
 
 	resp := &CommandBackupResponse{}
 	err = proto.Unmarshal(p, resp)
 	if err != nil {
-		return fmt.Errorf("backup unmarshal: %s", err)
+		return fmt.Errorf("backup unmarshal: %w", err)
 	}
 
 	if resp.Error != "" {
@@ -223,7 +223,7 @@ func (c *Client) Backup(br *command.BackupRequest, nodeAddr string, creds *Crede
 	}
 
 	if _, err := w.Write(resp.Data); err != nil {
-		return fmt.Errorf("backup write: %s", err)
+		return fmt.Errorf("backup write: %w", err)
 	}
 	return nil
 }
@@ -444,7 +444,7 @@ func (c *Client) dial(nodeAddr string, timeout time.Duration) (net.Conn, error) 
 	// Got pool, now get a connection.
 	conn, err := pl.Get()
 	if err != nil {
-		return nil, fmt.Errorf("pool get: %s", err)
+		return nil, fmt.Errorf("pool get: %w", err)
 	}
 	return conn, nil
 }
@@ -452,7 +452,7 @@ func (c *Client) dial(nodeAddr string, timeout time.Duration) (net.Conn, error) 
 func writeCommand(conn net.Conn, c *Command, timeout time.Duration) error {
 	p, err := proto.Marshal(c)
 	if err != nil {
-		return fmt.Errorf("command marshal: %s", err)
+		return fmt.Errorf("command marshal: %w", err)
 	}
 
 	// Write length of Protobuf
@@ -463,7 +463,7 @@ func writeCommand(conn net.Conn, c *Command, timeout time.Duration) error {
 	binary.LittleEndian.PutUint64(b[0:], uint64(len(p)))
 	_, err = conn.Write(b)
 	if err != nil {
-		return fmt.Errorf("write length: %s", err)
+		return fmt.Errorf("write length: %w", err)
 	}
 	// Write actual protobuf.
 	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
@@ -471,7 +471,7 @@ func writeCommand(conn net.Conn, c *Command, timeout time.Duration) error {
 	}
 	_, err = conn.Write(p)
 	if err != nil {
-		return fmt.Errorf("write protobuf bytes: %s", err)
+		return fmt.Errorf("write protobuf bytes: %w", err)
 	}
 	return nil
 }
@@ -484,7 +484,7 @@ func readResponse(conn net.Conn, timeout time.Duration) ([]byte, error) {
 	b := make([]byte, protoBufferLengthSize)
 	_, err := io.ReadFull(conn, b)
 	if err != nil {
-		return nil, fmt.Errorf("read protobuf length: %s", err)
+		return nil, fmt.Errorf("read protobuf length: %w", err)
 	}
 	sz := binary.LittleEndian.Uint64(b[0:])
 
@@ -495,7 +495,7 @@ func readResponse(conn net.Conn, timeout time.Duration) ([]byte, error) {
 	}
 	_, err = io.ReadFull(conn, p)
 	if err != nil {
-		return nil, fmt.Errorf("read protobuf bytes: %s", err)
+		return nil, fmt.Errorf("read protobuf bytes: %w", err)
 	}
 	return p, nil
 }
@@ -509,16 +509,16 @@ func handleConnError(conn net.Conn) {
 func gzUncompress(b []byte) ([]byte, error) {
 	gz, err := gzip.NewReader(bytes.NewReader(b))
 	if err != nil {
-		return nil, fmt.Errorf("unmarshal gzip NewReader: %s", err)
+		return nil, fmt.Errorf("unmarshal gzip NewReader: %w", err)
 	}
 
 	ub, err := io.ReadAll(gz)
 	if err != nil {
-		return nil, fmt.Errorf("unmarshal gzip ReadAll: %s", err)
+		return nil, fmt.Errorf("unmarshal gzip ReadAll: %w", err)
 	}
 
 	if err := gz.Close(); err != nil {
-		return nil, fmt.Errorf("unmarshal gzip Close: %s", err)
+		return nil, fmt.Errorf("unmarshal gzip Close: %w", err)
 	}
 	return ub, nil
 }
