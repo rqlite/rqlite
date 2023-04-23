@@ -31,6 +31,7 @@ const (
 	numLoadRequest        = "num_load_req"
 	numRemoveNodeRequest  = "num_remove_node_req"
 	numNotifyRequest      = "num_notify_req"
+	numJoinRequest        = "num_join_req"
 
 	// Client stats for this package.
 	numGetNodeAPIRequestLocal = "num_get_node_api_req_local"
@@ -55,6 +56,7 @@ func init() {
 	stats.Add(numRemoveNodeRequest, 0)
 	stats.Add(numGetNodeAPIRequestLocal, 0)
 	stats.Add(numNotifyRequest, 0)
+	stats.Add(numJoinRequest, 0)
 }
 
 // Dialer is the interface dialers must implement.
@@ -88,6 +90,9 @@ type Manager interface {
 	// Notify notifies this node that a remote node is ready
 	// for bootstrapping.
 	Notify(n *command.NotifyRequest) error
+
+	// Join joins a remote node to the cluster.
+	Join(n *command.JoinRequest) error
 }
 
 // CredentialStore is the interface credential stores must support.
@@ -389,6 +394,25 @@ func (s *Service) handleConn(conn net.Conn) {
 				resp.Error = "NotifyRequest is nil"
 			} else {
 				if err := s.mgr.Notify(nr); err != nil {
+					resp.Error = err.Error()
+				}
+			}
+
+			p, err = proto.Marshal(resp)
+			if err != nil {
+				conn.Close()
+			}
+			writeBytesWithLength(conn, p)
+
+		case Command_COMMAND_TYPE_JOIN:
+			stats.Add(numJoinRequest, 1)
+			resp := &CommandJoinResponse{}
+
+			jr := c.GetJoinRequest()
+			if jr == nil {
+				resp.Error = "NotifyRequest is nil"
+			} else {
+				if err := s.mgr.Join(jr); err != nil {
 					resp.Error = err.Error()
 				}
 			}

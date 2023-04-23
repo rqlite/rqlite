@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -261,7 +262,11 @@ func Test_NewServiceTestExecuteQueryAuth(t *testing.T) {
 func Test_NewServiceNotify(t *testing.T) {
 	ml := mustNewMockTransport()
 	mm := mustNewMockManager()
+	var wg sync.WaitGroup
+
+	wg.Add(1)
 	mm.notifyFn = func(n *command.NotifyRequest) error {
+		defer wg.Done()
 		if n.Id != "foo" {
 			t.Fatalf("failed to get correct node ID, exp %s, got %s", "foo", n.Id)
 		}
@@ -296,6 +301,60 @@ func Test_NewServiceNotify(t *testing.T) {
 	if err := s.Close(); err != nil {
 		t.Fatalf("failed to close cluster service")
 	}
+
+	// Ensure that the notify function was called.
+	wg.Wait()
+}
+
+func Test_NewServiceJoin(t *testing.T) {
+	ml := mustNewMockTransport()
+	mm := mustNewMockManager()
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+	mm.joinFn = func(j *command.JoinRequest) error {
+		defer wg.Done()
+		if j.Id != "foo" {
+			t.Fatalf("failed to get correct node ID, exp %s, got %s", "foo", j.Id)
+		}
+		if j.Address != "localhost" {
+			t.Fatalf("failed to get correct node address, exp %s, got %s", "localhost", j.Address)
+		}
+		if !j.Voter {
+			t.Fatalf("failed to get correct voter setting, exp %t, got %t", true, j.Voter)
+		}
+		return nil
+	}
+
+	s := New(ml, mustNewMockDatabase(), mm, mustNewMockCredentialStore())
+	if s == nil {
+		t.Fatalf("failed to create cluster service")
+	}
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open cluster service")
+	}
+
+	// Create a Join request.
+	jr := &command.JoinRequest{
+		Id:      "foo",
+		Address: "localhost",
+		Voter:   true,
+	}
+
+	// Test by connecting to itself.
+	c := NewClient(ml, 30*time.Second)
+	err := c.Join(jr, s.Addr(), 5*time.Second)
+	if err != nil {
+		t.Fatalf("failed to notify node: %s", err)
+	}
+
+	if err := s.Close(); err != nil {
+		t.Fatalf("failed to close cluster service")
+	}
+
+	// Ensure the join function was called.
+	wg.Wait()
 }
 
 type mockTransport struct {
@@ -392,6 +451,7 @@ func mustNewMockDatabase() *mockDatabase {
 type MockManager struct {
 	removeNodeFn func(rn *command.RemoveNodeRequest) error
 	notifyFn     func(n *command.NotifyRequest) error
+	joinFn       func(j *command.JoinRequest) error
 }
 
 func (m *MockManager) Remove(rn *command.RemoveNodeRequest) error {
@@ -406,6 +466,13 @@ func (m *MockManager) Notify(n *command.NotifyRequest) error {
 		return nil
 	}
 	return m.notifyFn(n)
+}
+
+func (m *MockManager) Join(j *command.JoinRequest) error {
+	if m.joinFn == nil {
+		return nil
+	}
+	return m.joinFn(j)
 }
 
 func mustNewMockManager() *MockManager {
