@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -261,7 +262,11 @@ func Test_NewServiceTestExecuteQueryAuth(t *testing.T) {
 func Test_NewServiceNotify(t *testing.T) {
 	ml := mustNewMockTransport()
 	mm := mustNewMockManager()
+	var wg sync.WaitGroup
+
+	wg.Add(1)
 	mm.notifyFn = func(n *command.NotifyRequest) error {
+		defer wg.Done()
 		if n.Id != "foo" {
 			t.Fatalf("failed to get correct node ID, exp %s, got %s", "foo", n.Id)
 		}
@@ -296,12 +301,19 @@ func Test_NewServiceNotify(t *testing.T) {
 	if err := s.Close(); err != nil {
 		t.Fatalf("failed to close cluster service")
 	}
+
+	// Ensure that the notify function was called.
+	wg.Wait()
 }
 
 func Test_NewServiceJoin(t *testing.T) {
 	ml := mustNewMockTransport()
 	mm := mustNewMockManager()
+	var wg sync.WaitGroup
+
+	wg.Add(1)
 	mm.joinFn = func(j *command.JoinRequest) error {
+		defer wg.Done()
 		if j.Id != "foo" {
 			t.Fatalf("failed to get correct node ID, exp %s, got %s", "foo", j.Id)
 		}
@@ -340,6 +352,9 @@ func Test_NewServiceJoin(t *testing.T) {
 	if err := s.Close(); err != nil {
 		t.Fatalf("failed to close cluster service")
 	}
+
+	// Ensure the join function was called.
+	wg.Wait()
 }
 
 type mockTransport struct {
@@ -436,7 +451,7 @@ func mustNewMockDatabase() *mockDatabase {
 type MockManager struct {
 	removeNodeFn func(rn *command.RemoveNodeRequest) error
 	notifyFn     func(n *command.NotifyRequest) error
-	joinFn       func(n *command.JoinRequest) error
+	joinFn       func(j *command.JoinRequest) error
 }
 
 func (m *MockManager) Remove(rn *command.RemoveNodeRequest) error {
@@ -453,11 +468,11 @@ func (m *MockManager) Notify(n *command.NotifyRequest) error {
 	return m.notifyFn(n)
 }
 
-func (m *MockManager) Join(n *command.JoinRequest) error {
+func (m *MockManager) Join(j *command.JoinRequest) error {
 	if m.joinFn == nil {
 		return nil
 	}
-	return m.joinFn(n)
+	return m.joinFn(j)
 }
 
 func mustNewMockManager() *MockManager {

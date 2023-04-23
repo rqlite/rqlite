@@ -91,8 +91,7 @@ type Manager interface {
 	// for bootstrapping.
 	Notify(n *command.NotifyRequest) error
 
-	// Join notifies this node that a remote node is ready
-	// to join the cluster.
+	// Join joins a remote node to the cluster.
 	Join(n *command.JoinRequest) error
 }
 
