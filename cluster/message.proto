@@ -24,6 +24,7 @@ message Command {
         COMMAND_TYPE_LOAD = 5;
         COMMAND_TYPE_REMOVE_NODE = 6;
         COMMAND_TYPE_NOTIFY = 7;
+        COMMAND_TYPE_JOIN = 8;
     }
     Type type = 1;
 
@@ -34,6 +35,7 @@ message Command {
         command.LoadRequest load_request = 6;
         command.RemoveNodeRequest remove_node_request = 7;
         command.NotifyRequest notify_request = 8;
+        command.JoinRequest join_request = 9;
     }
 
     Credentials credentials = 4;
@@ -63,5 +65,9 @@ message CommandRemoveNodeResponse {
 }
 
 message CommandNotifyResponse {
+    string error = 1;
+}
+
+message CommandJoinResponse {
     string error = 1;
 }

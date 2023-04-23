@@ -344,6 +344,45 @@ func (c *Client) Notify(nr *command.NotifyRequest, nodeAddr string, timeout time
 	return nil
 }
 
+// Join joins a this node to a cluster
+func (c *Client) Join(jr *command.JoinRequest, nodeAddr string, timeout time.Duration) error {
+	conn, err := c.dial(nodeAddr, c.timeout)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	// Create the request.
+	command := &Command{
+		Type: Command_COMMAND_TYPE_JOIN,
+		Request: &Command_JoinRequest{
+			JoinRequest: jr,
+		},
+	}
+
+	if err := writeCommand(conn, command, timeout); err != nil {
+		handleConnError(conn)
+		return err
+	}
+
+	p, err := readResponse(conn, timeout)
+	if err != nil {
+		handleConnError(conn)
+		return err
+	}
+
+	a := &CommandJoinResponse{}
+	err = proto.Unmarshal(p, a)
+	if err != nil {
+		return err
+	}
+
+	if a.Error != "" {
+		return errors.New(a.Error)
+	}
+	return nil
+}
+
 // Stats returns stats on the Client instance
 func (c *Client) Stats() (map[string]interface{}, error) {
 	c.mu.RLock()
