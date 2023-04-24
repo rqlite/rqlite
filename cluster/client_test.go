@@ -174,6 +174,100 @@ func Test_ClientRemoveNode(t *testing.T) {
 	}
 }
 
+func Test_ClientNotify(t *testing.T) {
+	srv := servicetest.NewService()
+	srv.Handler = func(conn net.Conn) {
+		var p []byte
+		var err error
+		c := readCommand(conn)
+		if c == nil {
+			// Error on connection, so give up, as normal
+			// test exit can cause that too.
+			return
+		}
+		if c.Type != Command_COMMAND_TYPE_NOTIFY {
+			t.Fatalf("unexpected command type: %d", c.Type)
+		}
+		nr := c.GetNotifyRequest()
+		if nr == nil {
+			t.Fatal("expected notify node request, got nil")
+		}
+		if nr.Id != "node1" {
+			t.Fatalf("unexpected node id, got %s", nr.Id)
+		}
+		if nr.Address != "localhost:1234" {
+			t.Fatalf("unexpected node address, got %s", nr.Address)
+		}
+
+		p, err = proto.Marshal(&CommandNotifyResponse{})
+		if err != nil {
+			conn.Close()
+		}
+		writeBytesWithLength(conn, p)
+	}
+	srv.Start()
+	defer srv.Close()
+
+	c := NewClient(&simpleDialer{}, 0)
+	req := &command.NotifyRequest{
+		Id:      "node1",
+		Address: "localhost:1234",
+	}
+	err := c.Notify(req, srv.Addr(), time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func Test_ClientJoin(t *testing.T) {
+	srv := servicetest.NewService()
+	srv.Handler = func(conn net.Conn) {
+		var p []byte
+		var err error
+		c := readCommand(conn)
+		if c == nil {
+			// Error on connection, so give up, as normal
+			// test exit can cause that too.
+			return
+		}
+		if c.Type != Command_COMMAND_TYPE_JOIN {
+			t.Fatalf("unexpected command type: %d", c.Type)
+		}
+		nr := c.GetJoinRequest()
+		if nr == nil {
+			t.Fatal("expected notify node request, got nil")
+		}
+		if nr.Id != "node1" {
+			t.Fatalf("unexpected node id, got %s", nr.Id)
+		}
+		if nr.Address != "localhost:1234" {
+			t.Fatalf("unexpected address, got %s", nr.Address)
+		}
+		if !nr.Voter {
+			t.Fatalf("unexpected voter, got %v", nr.Voter)
+		}
+
+		p, err = proto.Marshal(&CommandJoinResponse{})
+		if err != nil {
+			conn.Close()
+		}
+		writeBytesWithLength(conn, p)
+	}
+	srv.Start()
+	defer srv.Close()
+
+	c := NewClient(&simpleDialer{}, 0)
+	req := &command.JoinRequest{
+		Id:      "node1",
+		Address: "localhost:1234",
+		Voter:   true,
+	}
+	err := c.Join(req, srv.Addr(), time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func readCommand(conn net.Conn) *Command {
 	b := make([]byte, protoBufferLengthSize)
 	_, err := io.ReadFull(conn, b)
