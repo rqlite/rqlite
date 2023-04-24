@@ -16,7 +16,7 @@ import (
 const numAttempts int = 3
 const attemptInterval = 1 * time.Second
 
-func Test_SingleJoinOK(t *testing.T) {
+func Test_SingleJoinOKviaHTTP(t *testing.T) {
 	var body map[string]interface{}
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
@@ -82,7 +82,7 @@ func Test_SingleJoinOK(t *testing.T) {
 	}
 }
 
-func Test_SingleJoinHTTPSOK(t *testing.T) {
+func Test_SingleJoinOKviaHTTPS(t *testing.T) {
 	var body map[string]interface{}
 	ts := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
@@ -154,7 +154,7 @@ func Test_SingleJoinHTTPSOK(t *testing.T) {
 	}
 }
 
-func Test_SingleJoinOKBasicAuth(t *testing.T) {
+func Test_SingleJoinOKviaHTTPWithBasicAuth(t *testing.T) {
 	var body map[string]interface{}
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
@@ -205,7 +205,7 @@ func Test_SingleJoinOKBasicAuth(t *testing.T) {
 	}
 }
 
-func Test_SingleJoinZeroAttempts(t *testing.T) {
+func Test_SingleJoinZeroAttemptsviaHTTP(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatalf("handler should not have been called")
 	}))
@@ -217,7 +217,7 @@ func Test_SingleJoinZeroAttempts(t *testing.T) {
 	}
 }
 
-func Test_SingleJoinFail(t *testing.T) {
+func Test_SingleJoinFailViaHTTP(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 	}))
@@ -230,7 +230,7 @@ func Test_SingleJoinFail(t *testing.T) {
 	}
 }
 
-func Test_DoubleJoinOK(t *testing.T) {
+func Test_DoubleJoinOKViaHTTP(t *testing.T) {
 	ts1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 	}))
 	defer ts1.Close()
@@ -259,7 +259,7 @@ func Test_DoubleJoinOK(t *testing.T) {
 	}
 }
 
-func Test_DoubleJoinOKSecondNode(t *testing.T) {
+func Test_DoubleJoinOKSecondNodeViaHTTP(t *testing.T) {
 	ts1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 	}))
@@ -289,7 +289,7 @@ func Test_DoubleJoinOKSecondNode(t *testing.T) {
 	}
 }
 
-func Test_DoubleJoinOKSecondNodeRedirect(t *testing.T) {
+func Test_DoubleJoinOKSecondNodeHTTPRedirect(t *testing.T) {
 	ts1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 	}))
 	defer ts1.Close()
