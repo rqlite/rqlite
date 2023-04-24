@@ -119,6 +119,15 @@ func (j *Joiner) Do(joinAddrs []string, id, addr string, voter bool) (string, er
 }
 
 func (j *Joiner) join(joinAddr, id, addr string, voter bool) (string, error) {
+	if strings.HasPrefix(joinAddr, "http") || strings.HasPrefix(joinAddr, "https") {
+		return j.joinHTTP(joinAddr, id, addr, voter)
+	} else if strings.HasPrefix(joinAddr, "raft") {
+		return j.joinRaft(joinAddr, id, addr, voter)
+	}
+	return "", fmt.Errorf("invalid join protocol: %s", joinAddr)
+}
+
+func (j *Joiner) joinHTTP(joinAddr, id, addr string, voter bool) (string, error) {
 	fullAddr := fmt.Sprintf("%s/join", joinAddr)
 	reqBody, err := json.Marshal(map[string]interface{}{
 		"id":    id,
@@ -174,6 +183,10 @@ func (j *Joiner) join(joinAddr, id, addr string, voter bool) (string, error) {
 			return "", fmt.Errorf("%s: (%s)", resp.Status, string(respB))
 		}
 	}
+}
+
+func (j *Joiner) joinRaft(joinAddr, id, addr string, voter bool) (string, error) {
+	return "", nil
 }
 
 func normalizeAddrs(addrs []string) []string {
