@@ -5,12 +5,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
+	"github.com/rqlite/rqlite/cluster/servicetest"
 	"github.com/rqlite/rqlite/rtls"
+	"github.com/rqlite/rqlite/tcp"
+	"google.golang.org/protobuf/proto"
 )
 
 const numAttempts int = 3
@@ -41,7 +45,7 @@ func Test_SingleJoinOKviaHTTP(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	joiner := NewJoiner("127.0.0.1", numAttempts, attemptInterval, nil)
+	joiner := NewJoiner("127.0.0.1", numAttempts, attemptInterval, nil, nil)
 
 	// Ensure joining with protocol prefix works.
 	j, err := joiner.Do([]string{ts.URL}, "id0", "127.0.0.1:9090", false)
@@ -113,7 +117,7 @@ func Test_SingleJoinOKviaHTTPS(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create TLS config: %s", err.Error())
 	}
-	joiner := NewJoiner("127.0.0.1", numAttempts, attemptInterval, tlsConfig)
+	joiner := NewJoiner("127.0.0.1", numAttempts, attemptInterval, tlsConfig, nil)
 
 	// Ensure joining with protocol prefix works.
 	j, err := joiner.Do([]string{ts.URL}, "id0", "127.0.0.1:9090", false)
@@ -154,6 +158,41 @@ func Test_SingleJoinOKviaHTTPS(t *testing.T) {
 	}
 }
 
+func Test_SingleJoinOKviaRaft(t *testing.T) {
+	srv := servicetest.NewService()
+	srv.Handler = func(conn net.Conn) {
+		fmt.Println("in testing handler")
+		var p []byte
+		var err error
+		c := readCommand(conn)
+		if c == nil {
+			// Error on connection, so give up, as normal
+			// test exit can cause that too.
+			return
+		}
+		if c.Type != Command_COMMAND_TYPE_JOIN {
+			t.Fatalf("unexpected command type: %d", c.Type)
+		}
+		jr := c.GetJoinRequest()
+		if jr == nil {
+			t.Fatal("expected query request, got nil")
+		}
+		p, err = proto.Marshal(&CommandJoinResponse{})
+		if err != nil {
+			conn.Close()
+		}
+		writeBytesWithLength(conn, p)
+	}
+	srv.Start()
+	defer srv.Close()
+
+	joiner := NewJoiner("127.0.0.1", numAttempts, attemptInterval, nil, mustCreateClient())
+	_, err := joiner.Do([]string{srv.Addr()}, "id0", "127.0.0.1:9090", false)
+	if err != nil {
+		t.Fatalf("failed to join a single node: %s", err.Error())
+	}
+}
+
 func Test_SingleJoinOKviaHTTPWithBasicAuth(t *testing.T) {
 	var body map[string]interface{}
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -183,7 +222,7 @@ func Test_SingleJoinOKviaHTTPWithBasicAuth(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	joiner := NewJoiner("127.0.0.1", numAttempts, attemptInterval, nil)
+	joiner := NewJoiner("127.0.0.1", numAttempts, attemptInterval, nil, nil)
 	joiner.SetBasicAuth("user1", "password1")
 
 	j, err := joiner.Do([]string{ts.URL}, "id0", "127.0.0.1:9090", false)
@@ -210,7 +249,7 @@ func Test_SingleJoinZeroAttemptsviaHTTP(t *testing.T) {
 		t.Fatalf("handler should not have been called")
 	}))
 
-	joiner := NewJoiner("127.0.0.1", 0, attemptInterval, nil)
+	joiner := NewJoiner("127.0.0.1", 0, attemptInterval, nil, nil)
 	_, err := joiner.Do([]string{ts.URL}, "id0", "127.0.0.1:9090", false)
 	if err != ErrJoinFailed {
 		t.Fatalf("Incorrect error returned when zero attempts specified")
@@ -223,7 +262,7 @@ func Test_SingleJoinFailViaHTTP(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	joiner := NewJoiner("", 0, attemptInterval, nil)
+	joiner := NewJoiner("", 0, attemptInterval, nil, nil)
 	_, err := joiner.Do([]string{ts.URL}, "id0", "127.0.0.1:9090", true)
 	if err == nil {
 		t.Fatalf("expected error when joining bad node")
@@ -238,7 +277,7 @@ func Test_DoubleJoinOKViaHTTP(t *testing.T) {
 	}))
 	defer ts2.Close()
 
-	joiner := NewJoiner("127.0.0.1", numAttempts, attemptInterval, nil)
+	joiner := NewJoiner("127.0.0.1", numAttempts, attemptInterval, nil, nil)
 
 	// Ensure joining with protocol prefix works.
 	j, err := joiner.Do([]string{ts1.URL, ts2.URL}, "id0", "127.0.0.1:9090", true)
@@ -268,7 +307,7 @@ func Test_DoubleJoinOKSecondNodeViaHTTP(t *testing.T) {
 	}))
 	defer ts2.Close()
 
-	joiner := NewJoiner("", numAttempts, attemptInterval, nil)
+	joiner := NewJoiner("", numAttempts, attemptInterval, nil, nil)
 
 	// Ensure joining with protocol prefix works.
 	j, err := joiner.Do([]string{ts1.URL, ts2.URL}, "id0", "127.0.0.1:9090", true)
@@ -300,7 +339,7 @@ func Test_DoubleJoinOKSecondNodeHTTPRedirect(t *testing.T) {
 	}))
 	defer ts2.Close()
 
-	joiner := NewJoiner("127.0.0.1", numAttempts, attemptInterval, nil)
+	joiner := NewJoiner("127.0.0.1", numAttempts, attemptInterval, nil, nil)
 
 	// Ensure joining with protocol prefix works.
 	j, err := joiner.Do([]string{ts2.URL}, "id0", "127.0.0.1:9090", true)
@@ -319,4 +358,8 @@ func Test_DoubleJoinOKSecondNodeHTTPRedirect(t *testing.T) {
 	if j != redirectAddr {
 		t.Fatalf("node joined using wrong endpoint, exp: %s, got: %s", redirectAddr, j)
 	}
+}
+
+func mustCreateClient() *Client {
+	return NewClient(tcp.NewDialer(MuxClusterHeader, nil), 5*time.Second)
 }

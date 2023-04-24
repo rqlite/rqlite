@@ -41,18 +41,18 @@ type Joiner struct {
 	numAttempts     int
 	attemptInterval time.Duration
 	httpTLSCfg      *tls.Config
-	nodeClient      *Client
 
 	username string
 	password string
 
-	client *http.Client
+	httpClient *http.Client
+	nodeClient *Client
 
 	logger *log.Logger
 }
 
 // NewJoiner returns an instantiated Joiner.
-func NewJoiner(srcIP string, numAttempts int, attemptInterval time.Duration, httpTLSCfg *tls.Config) *Joiner {
+func NewJoiner(srcIP string, numAttempts int, attemptInterval time.Duration, httpTLSCfg *tls.Config, nodeClient *Client) *Joiner {
 	if httpTLSCfg == nil {
 		httpTLSCfg = &tls.Config{InsecureSkipVerify: true}
 	}
@@ -72,6 +72,7 @@ func NewJoiner(srcIP string, numAttempts int, attemptInterval time.Duration, htt
 		numAttempts:     numAttempts,
 		attemptInterval: attemptInterval,
 		httpTLSCfg:      httpTLSCfg,
+		nodeClient:      nodeClient,
 		logger:          log.New(os.Stderr, "[cluster-join] ", log.LstdFlags),
 	}
 
@@ -81,8 +82,8 @@ func NewJoiner(srcIP string, numAttempts int, attemptInterval time.Duration, htt
 		Dial:              dialer.Dial,
 		ForceAttemptHTTP2: true,
 	}
-	joiner.client = &http.Client{Transport: tr}
-	joiner.client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+	joiner.httpClient = &http.Client{Transport: tr}
+	joiner.httpClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
 	}
 
@@ -159,7 +160,7 @@ func (j *Joiner) joinHTTP(joinAddr, id, addr string, voter bool) (string, error)
 		var respB []byte
 		err = func() error {
 			req.Header.Add("Content-Type", "application/json")
-			resp, err = j.client.Do(req)
+			resp, err = j.httpClient.Do(req)
 			if err != nil {
 				return err
 			}

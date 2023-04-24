@@ -51,7 +51,7 @@ func NewBootstrapper(p AddressProvider, tlsConfig *tls.Config) *Bootstrapper {
 	bs := &Bootstrapper{
 		provider:  p,
 		tlsConfig: tlsConfig,
-		joiner:    NewJoiner("", 1, 0, tlsConfig),
+		joiner:    NewJoiner("", 1, 0, tlsConfig, nil),
 		logger:    log.New(os.Stderr, "[cluster-bootstrap] ", log.LstdFlags),
 		Interval:  2 * time.Second,
 	}

@@ -380,7 +380,7 @@ func createCluster(cfg *Config, hasPeers bool, str *store.Store,
 	}
 
 	// Prepare the Joiner
-	joiner := cluster.NewJoiner(cfg.JoinSrcIP, cfg.JoinAttempts, cfg.JoinInterval, httpTLSConfig)
+	joiner := cluster.NewJoiner(cfg.JoinSrcIP, cfg.JoinAttempts, cfg.JoinInterval, httpTLSConfig, nil)
 	if cfg.JoinAs != "" {
 		pw, ok := credStr.Password(cfg.JoinAs)
 		if !ok {
