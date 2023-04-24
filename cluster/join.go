@@ -10,9 +10,12 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/rqlite/rqlite/command"
 )
 
 var (
@@ -35,6 +38,7 @@ type Joiner struct {
 	numAttempts     int
 	attemptInterval time.Duration
 	httpTLSCfg      *tls.Config
+	nodeClient      *Client
 
 	username string
 	password string
@@ -186,7 +190,17 @@ func (j *Joiner) joinHTTP(joinAddr, id, addr string, voter bool) (string, error)
 }
 
 func (j *Joiner) joinRaft(joinAddr, id, addr string, voter bool) (string, error) {
-	return "", nil
+	u, err := url.Parse(joinAddr)
+	if err != nil {
+		return "", err
+	}
+
+	jr := &command.JoinRequest{
+		Id:      id,
+		Address: addr,
+		Voter:   voter,
+	}
+	return joinAddr, j.nodeClient.Join(jr, u.Host, 10*time.Second)
 }
 
 func normalizeAddrs(addrs []string) []string {
