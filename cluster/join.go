@@ -30,6 +30,9 @@ var (
 
 	// ErrNotifyFailed is returned when a node fails to notify another node
 	ErrNotifyFailed = errors.New("failed to notify node")
+
+	// ErrNodeClientRequired is returned when a node client is required, but not supplied
+	ErrNodeClientRequired = errors.New("node client required")
 )
 
 // Joiner executes a node-join operation.
@@ -190,6 +193,9 @@ func (j *Joiner) joinHTTP(joinAddr, id, addr string, voter bool) (string, error)
 }
 
 func (j *Joiner) joinRaft(joinAddr, id, addr string, voter bool) (string, error) {
+	if j.nodeClient == nil {
+		return "", ErrNodeClientRequired
+	}
 	u, err := url.Parse(joinAddr)
 	if err != nil {
 		return "", err
