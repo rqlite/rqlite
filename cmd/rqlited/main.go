@@ -355,10 +355,10 @@ func createClusterClient(cfg *Config, clstr *cluster.Service) (*cluster.Client, 
 
 func createCluster(cfg *Config, hasPeers bool, str *store.Store,
 	httpServ *httpd.Service, credStr *auth.CredentialsStore) error {
-	var tlsConfig *tls.Config
+	var httpTLSConfig *tls.Config
 	var err error
 	if cfg.HTTPx509Cert != "" || cfg.HTTPx509CACert != "" {
-		tlsConfig, err = rtls.CreateClientConfig(cfg.HTTPx509Cert, cfg.HTTPx509Key, cfg.HTTPx509CACert,
+		httpTLSConfig, err = rtls.CreateClientConfig(cfg.HTTPx509Cert, cfg.HTTPx509Key, cfg.HTTPx509CACert,
 			cfg.NoHTTPVerify, cfg.TLS1011)
 		if err != nil {
 			return fmt.Errorf("failed to create TLS client config for cluster: %s", err.Error())
@@ -380,7 +380,7 @@ func createCluster(cfg *Config, hasPeers bool, str *store.Store,
 	}
 
 	// Prepare the Joiner
-	joiner := cluster.NewJoiner(cfg.JoinSrcIP, cfg.JoinAttempts, cfg.JoinInterval, tlsConfig)
+	joiner := cluster.NewJoiner(cfg.JoinSrcIP, cfg.JoinAttempts, cfg.JoinInterval, httpTLSConfig)
 	if cfg.JoinAs != "" {
 		pw, ok := credStr.Password(cfg.JoinAs)
 		if !ok {
@@ -412,7 +412,7 @@ func createCluster(cfg *Config, hasPeers bool, str *store.Store,
 		}
 
 		// Bootstrap with explicit join addresses requests.
-		bs := cluster.NewBootstrapper(cluster.NewAddressProviderString(joins), tlsConfig)
+		bs := cluster.NewBootstrapper(cluster.NewAddressProviderString(joins), httpTLSConfig)
 		if cfg.JoinAs != "" {
 			pw, ok := credStr.Password(cfg.JoinAs)
 			if !ok {
@@ -462,7 +462,7 @@ func createCluster(cfg *Config, hasPeers bool, str *store.Store,
 			provider = dnssrv.New(dnssrvCfg)
 		}
 
-		bs := cluster.NewBootstrapper(provider, tlsConfig)
+		bs := cluster.NewBootstrapper(provider, httpTLSConfig)
 		if cfg.JoinAs != "" {
 			pw, ok := credStr.Password(cfg.JoinAs)
 			if !ok {

@@ -34,7 +34,7 @@ type Joiner struct {
 	srcIP           string
 	numAttempts     int
 	attemptInterval time.Duration
-	tlsConfig       *tls.Config
+	httpTLSCfg      *tls.Config
 
 	username string
 	password string
@@ -45,9 +45,9 @@ type Joiner struct {
 }
 
 // NewJoiner returns an instantiated Joiner.
-func NewJoiner(srcIP string, numAttempts int, attemptInterval time.Duration, tlsCfg *tls.Config) *Joiner {
-	if tlsCfg == nil {
-		tlsCfg = &tls.Config{InsecureSkipVerify: true}
+func NewJoiner(srcIP string, numAttempts int, attemptInterval time.Duration, httpTLSCfg *tls.Config) *Joiner {
+	if httpTLSCfg == nil {
+		httpTLSCfg = &tls.Config{InsecureSkipVerify: true}
 	}
 
 	// Source IP is optional
@@ -64,13 +64,13 @@ func NewJoiner(srcIP string, numAttempts int, attemptInterval time.Duration, tls
 		srcIP:           srcIP,
 		numAttempts:     numAttempts,
 		attemptInterval: attemptInterval,
-		tlsConfig:       tlsCfg,
+		httpTLSCfg:      httpTLSCfg,
 		logger:          log.New(os.Stderr, "[cluster-join] ", log.LstdFlags),
 	}
 
 	// Create and configure the client to connect to the other node.
 	tr := &http.Transport{
-		TLSClientConfig:   joiner.tlsConfig,
+		TLSClientConfig:   joiner.httpTLSCfg,
 		Dial:              dialer.Dial,
 		ForceAttemptHTTP2: true,
 	}
