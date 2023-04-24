@@ -211,6 +211,7 @@ func normalizeAddrs(addrs []string) []string {
 		} else {
 			a = append(a, fmt.Sprintf("http://%s", addr))
 			a = append(a, fmt.Sprintf("https://%s", addr))
+			a = append(a, fmt.Sprintf("raft://%s", addr))
 		}
 	}
 	return a
