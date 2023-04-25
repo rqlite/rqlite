@@ -112,9 +112,8 @@ func (j *Joiner) Do(joinAddrs []string, id, addr string, voter bool) (string, er
 			if err == nil {
 				// Success!
 				return joinee, nil
-			} else {
-				j.logger.Printf("failed to join via node at %s: %s", a, err)
 			}
+			j.logger.Printf("failed to join via node at %s: %s", a, err)
 		}
 		if i+1 < j.numAttempts {
 			// This logic message only make sense if performing more than 1 join-attempt.

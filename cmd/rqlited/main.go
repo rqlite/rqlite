@@ -318,7 +318,7 @@ func credentialStore(cfg *Config) (*auth.CredentialsStore, error) {
 	}
 
 	cs := auth.NewCredentialsStore()
-	if cs.Load(f); err != nil {
+	if err := cs.Load(f); err != nil {
 		return nil, err
 	}
 	return cs, nil
