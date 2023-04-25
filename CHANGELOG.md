@@ -1,4 +1,4 @@
-## 7.14.3 (unreleased)
+## 7.14.3 (April 25th 2023)
 ## Implementation changes and bug fixes
 - [PR #1218](https://github.com/rqlite/rqlite/pull/1218): Check for more possible errors in peers.json. Thanks @Tjstretchalot
 - [PR #1220](https://github.com/rqlite/rqlite/pull/1220): Support Notify over Raft connection.
