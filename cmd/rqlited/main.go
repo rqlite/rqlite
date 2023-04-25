@@ -106,15 +106,18 @@ func main() {
 	}
 	log.Printf("cluster TCP mux Listener registered with byte header %d", cluster.MuxClusterHeader)
 
+	// Create the cluster client, which is used to communicate with other nodes in the cluster
+	// via the Raft network connection.
+	clstrClient, err := createClusterClient(cfg, clstrServ)
+	if err != nil {
+		log.Fatalf("failed to create cluster client: %s", err.Error())
+	}
+
 	// Create the HTTP service.
 	//
 	// We want to start the HTTP server as soon as possible, so the node is responsive and external
 	// systems can see that it's running. We still have to open the Store though, so the node won't
 	// be able to do much until that happens however.
-	clstrClient, err := createClusterClient(cfg, clstrServ)
-	if err != nil {
-		log.Fatalf("failed to create cluster client: %s", err.Error())
-	}
 	httpServ, err := startHTTPService(cfg, str, clstrClient, credStr)
 	if err != nil {
 		log.Fatalf("failed to start HTTP server: %s", err.Error())
@@ -130,7 +133,7 @@ func main() {
 	httpServ.RegisterStatus("cluster", clstrServ)
 
 	// Prepare the cluster-joiner
-	joiner, err := createJoiner(cfg, credStr)
+	joiner, err := createJoiner(cfg, clstrClient, credStr)
 	if err != nil {
 		log.Fatalf("failed to create cluster joiner: %s", err.Error())
 	}
@@ -330,12 +333,12 @@ func credentialStore(cfg *Config) (*auth.CredentialsStore, error) {
 	return cs, nil
 }
 
-func createJoiner(cfg *Config, credStr *auth.CredentialsStore) (*cluster.Joiner, error) {
+func createJoiner(cfg *Config, client *cluster.Client, credStr *auth.CredentialsStore) (*cluster.Joiner, error) {
 	tlsConfig, err := createHTTPTLSConfig(cfg)
 	if err != nil {
 		return nil, err
 	}
-	joiner := cluster.NewJoiner(cfg.JoinSrcIP, cfg.JoinAttempts, cfg.JoinInterval, tlsConfig, nil)
+	joiner := cluster.NewJoiner(cfg.JoinSrcIP, cfg.JoinAttempts, cfg.JoinInterval, tlsConfig, client)
 	if cfg.JoinAs != "" {
 		pw, ok := credStr.Password(cfg.JoinAs)
 		if !ok {
