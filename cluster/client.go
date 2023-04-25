@@ -21,6 +21,13 @@ const (
 	maxPoolCapacity = 64
 
 	protoBufferLengthSize = 8
+	maxResponseSize       = 1024 * 1024 * 1024 * 1024 // 1TB
+	maxJoinResponseSize   = 128
+)
+
+var (
+	// ErrResponseTooLarge is returned when a response is too large to be read.
+	ErrResponseTooLarge = errors.New("response too large")
 )
 
 // Client allows communicating with a remote node.
@@ -365,7 +372,7 @@ func (c *Client) Join(jr *command.JoinRequest, nodeAddr string, timeout time.Dur
 		return err
 	}
 
-	p, err := readResponse(conn, timeout)
+	p, err := readResponseWithLimit(conn, timeout, maxJoinResponseSize)
 	if err != nil {
 		handleConnError(conn)
 		return err
@@ -477,6 +484,10 @@ func writeCommand(conn net.Conn, c *Command, timeout time.Duration) error {
 }
 
 func readResponse(conn net.Conn, timeout time.Duration) ([]byte, error) {
+	return readResponseWithLimit(conn, timeout, maxResponseSize)
+}
+
+func readResponseWithLimit(conn net.Conn, timeout time.Duration, limit int) ([]byte, error) {
 	// Read length of incoming response.
 	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
 		return nil, err
@@ -487,6 +498,9 @@ func readResponse(conn net.Conn, timeout time.Duration) ([]byte, error) {
 		return nil, fmt.Errorf("read protobuf length: %w", err)
 	}
 	sz := binary.LittleEndian.Uint64(b[0:])
+	if int(sz) > limit {
+		return nil, ErrResponseTooLarge
+	}
 
 	// Read in the actual response.
 	p := make([]byte, sz)

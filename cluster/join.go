@@ -206,7 +206,13 @@ func (j *Joiner) joinRaft(joinAddr, id, addr string, voter bool) (string, error)
 		Address: addr,
 		Voter:   voter,
 	}
-	return joinAddr, j.nodeClient.Join(jr, u.Host, 10*time.Second)
+	err = j.nodeClient.Join(jr, u.Host, 10*time.Second)
+	if err != nil {
+		if errors.Is(err, ErrResponseTooLarge) {
+			return "", fmt.Errorf("%w -- are you trying to join via the HTTP(S) port?", ErrResponseTooLarge)
+		}
+	}
+	return joinAddr, err
 }
 
 func normalizeAddrs(addrs []string) []string {
