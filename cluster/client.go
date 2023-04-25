@@ -23,6 +23,7 @@ const (
 	protoBufferLengthSize = 8
 	maxResponseSize       = 1024 * 1024 * 1024 * 1024 // 1TB
 	maxJoinResponseSize   = 128
+	maxNotifyResponseSize = 128
 )
 
 var (
@@ -333,7 +334,7 @@ func (c *Client) Notify(nr *command.NotifyRequest, nodeAddr string, timeout time
 		return err
 	}
 
-	p, err := readResponse(conn, timeout)
+	p, err := readResponseWithLimit(conn, timeout, maxNotifyResponseSize)
 	if err != nil {
 		handleConnError(conn)
 		return err
