@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -67,6 +68,7 @@ func Test_SingleJoinOKviaHTTP(t *testing.T) {
 	}
 
 	// Ensure joining without protocol prefix works.
+	body = nil
 	j, err = joiner.Do([]string{ts.Listener.Addr().String()}, "id0", "127.0.0.1:9090", false)
 	if err != nil {
 		t.Fatalf("failed to join a single node: %s", err.Error())
@@ -139,6 +141,7 @@ func Test_SingleJoinOKviaHTTPS(t *testing.T) {
 	}
 
 	// Ensure joining without protocol prefix works.
+	body = nil
 	j, err = joiner.Do([]string{ts.Listener.Addr().String()}, "id0", "127.0.0.1:9090", false)
 	if err != nil {
 		t.Fatalf("failed to join a single node: %s", err.Error())
@@ -160,7 +163,11 @@ func Test_SingleJoinOKviaHTTPS(t *testing.T) {
 
 func Test_SingleJoinOKviaRaft(t *testing.T) {
 	srv := servicetest.NewService()
+
+	var wg sync.WaitGroup
+	wg.Add(2)
 	srv.Handler = func(conn net.Conn) {
+		defer wg.Done()
 		var p []byte
 		var err error
 		c := readCommand(conn)
@@ -185,11 +192,22 @@ func Test_SingleJoinOKviaRaft(t *testing.T) {
 	srv.Start()
 	defer srv.Close()
 
+	// Ensure joining with protocol prefix works.
 	joiner := NewJoiner("127.0.0.1", numAttempts, attemptInterval, nil, mustCreateClient())
-	_, err := joiner.Do([]string{srv.Addr()}, "id0", "127.0.0.1:9090", false)
+	_, err := joiner.Do([]string{"raft://" + srv.Addr()}, "id0", "127.0.0.1:9090", false)
 	if err != nil {
 		t.Fatalf("failed to join a single node: %s", err.Error())
 	}
+
+	// Ensure joining without protocol prefix works.
+	joiner = NewJoiner("127.0.0.1", numAttempts, attemptInterval, nil, mustCreateClient())
+	_, err = joiner.Do([]string{srv.Addr()}, "id0", "127.0.0.1:9090", false)
+	if err != nil {
+		t.Fatalf("failed to join a single node: %s", err.Error())
+	}
+
+	// Block until the join request has been processed twice.
+	wg.Wait()
 }
 
 func Test_SingleJoinOKviaHTTPWithBasicAuth(t *testing.T) {
