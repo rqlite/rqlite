@@ -129,12 +129,18 @@ func main() {
 	// Register remaining status providers.
 	httpServ.RegisterStatus("cluster", clstrServ)
 
+	// Prepare the cluster-joiner
+	joiner, err := createJoiner(cfg, credStr)
+	if err != nil {
+		log.Fatalf("failed to create cluster joiner: %s", err.Error())
+	}
+
 	// Create the cluster!
 	nodes, err := str.Nodes()
 	if err != nil {
 		log.Fatalf("failed to get nodes %s", err.Error())
 	}
-	if err := createCluster(cfg, len(nodes) > 0, str, httpServ, credStr); err != nil {
+	if err := createCluster(cfg, len(nodes) > 0, joiner, str, httpServ, credStr); err != nil {
 		log.Fatalf("clustering failure: %s", err.Error())
 	}
 
@@ -324,6 +330,22 @@ func credentialStore(cfg *Config) (*auth.CredentialsStore, error) {
 	return cs, nil
 }
 
+func createJoiner(cfg *Config, credStr *auth.CredentialsStore) (*cluster.Joiner, error) {
+	tlsConfig, err := createHTTPTLSConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
+	joiner := cluster.NewJoiner(cfg.JoinSrcIP, cfg.JoinAttempts, cfg.JoinInterval, tlsConfig, nil)
+	if cfg.JoinAs != "" {
+		pw, ok := credStr.Password(cfg.JoinAs)
+		if !ok {
+			return nil, fmt.Errorf("user %s does not exist in credential store", cfg.JoinAs)
+		}
+		joiner.SetBasicAuth(cfg.JoinAs, pw)
+	}
+	return joiner, nil
+}
+
 func clusterService(cfg *Config, tn cluster.Transport, db cluster.Database, mgr cluster.Manager, credStr *auth.CredentialsStore) (*cluster.Service, error) {
 	c := cluster.New(tn, db, mgr, credStr)
 	c.SetAPIAddr(cfg.HTTPAdv)
@@ -353,16 +375,10 @@ func createClusterClient(cfg *Config, clstr *cluster.Service) (*cluster.Client, 
 	return clstrClient, nil
 }
 
-func createCluster(cfg *Config, hasPeers bool, str *store.Store,
-	httpServ *httpd.Service, credStr *auth.CredentialsStore) error {
-	var httpTLSConfig *tls.Config
-	var err error
-	if cfg.HTTPx509Cert != "" || cfg.HTTPx509CACert != "" {
-		httpTLSConfig, err = rtls.CreateClientConfig(cfg.HTTPx509Cert, cfg.HTTPx509Key, cfg.HTTPx509CACert,
-			cfg.NoHTTPVerify, cfg.TLS1011)
-		if err != nil {
-			return fmt.Errorf("failed to create TLS client config for cluster: %s", err.Error())
-		}
+func createCluster(cfg *Config, hasPeers bool, joiner *cluster.Joiner, str *store.Store, httpServ *httpd.Service, credStr *auth.CredentialsStore) error {
+	httpTLSConfig, err := createHTTPTLSConfig(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to create TLS client config for cluster: %s", err.Error())
 	}
 
 	joins := cfg.JoinAddresses()
@@ -377,16 +393,6 @@ func createCluster(cfg *Config, hasPeers bool, str *store.Store,
 			return fmt.Errorf("failed to bootstrap single new node: %s", err.Error())
 		}
 		return nil
-	}
-
-	// Prepare the Joiner
-	joiner := cluster.NewJoiner(cfg.JoinSrcIP, cfg.JoinAttempts, cfg.JoinInterval, httpTLSConfig, nil)
-	if cfg.JoinAs != "" {
-		pw, ok := credStr.Password(cfg.JoinAs)
-		if !ok {
-			return fmt.Errorf("user %s does not exist in credential store", cfg.JoinAs)
-		}
-		joiner.SetBasicAuth(cfg.JoinAs, pw)
 	}
 
 	// Prepare definition of being part of a cluster.
@@ -519,4 +525,12 @@ func createCluster(cfg *Config, hasPeers bool, str *store.Store,
 		return fmt.Errorf("invalid disco mode %s", cfg.DiscoMode)
 	}
 	return nil
+}
+
+func createHTTPTLSConfig(cfg *Config) (*tls.Config, error) {
+	if cfg.HTTPx509Cert == "" && cfg.HTTPx509CACert == "" {
+		return nil, nil
+	}
+	return rtls.CreateClientConfig(cfg.HTTPx509Cert, cfg.HTTPx509Key, cfg.HTTPx509CACert,
+		cfg.NoHTTPVerify, cfg.TLS1011)
 }
