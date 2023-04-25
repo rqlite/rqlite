@@ -1,6 +1,7 @@
 package servicetest
 
 import (
+	"io"
 	"net"
 )
 
@@ -50,6 +51,12 @@ func (s *Service) serve() error {
 }
 
 func (s *Service) handleConn(conn net.Conn) {
+	// Since it's simulated, we don't care about the type.
+	// Just read it, drop the byte, and unconditionally pass
+	// on the connection to the handler.
+	var typ [1]byte
+	io.ReadFull(conn, typ[:])
+
 	if s.Handler != nil {
 		s.Handler(conn)
 	}

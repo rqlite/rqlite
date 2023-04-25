@@ -127,10 +127,10 @@ func (j *Joiner) Do(joinAddrs []string, id, addr string, voter bool) (string, er
 }
 
 func (j *Joiner) join(joinAddr, id, addr string, voter bool) (string, error) {
-	if strings.HasPrefix(joinAddr, "http") || strings.HasPrefix(joinAddr, "https") {
-		return j.joinHTTP(joinAddr, id, addr, voter)
-	} else if strings.HasPrefix(joinAddr, "raft") {
+	if strings.HasPrefix(joinAddr, "raft") {
 		return j.joinRaft(joinAddr, id, addr, voter)
+	} else if strings.HasPrefix(joinAddr, "http") || strings.HasPrefix(joinAddr, "https") {
+		return j.joinHTTP(joinAddr, id, addr, voter)
 	}
 	return "", fmt.Errorf("invalid join protocol: %s", joinAddr)
 }
@@ -216,9 +216,9 @@ func normalizeAddrs(addrs []string) []string {
 		if strings.Contains(addr, "://") {
 			a = append(a, addr)
 		} else {
+			a = append(a, fmt.Sprintf("raft://%s", addr))
 			a = append(a, fmt.Sprintf("http://%s", addr))
 			a = append(a, fmt.Sprintf("https://%s", addr))
-			a = append(a, fmt.Sprintf("raft://%s", addr))
 		}
 	}
 	return a

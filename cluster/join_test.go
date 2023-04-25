@@ -161,7 +161,6 @@ func Test_SingleJoinOKviaHTTPS(t *testing.T) {
 func Test_SingleJoinOKviaRaft(t *testing.T) {
 	srv := servicetest.NewService()
 	srv.Handler = func(conn net.Conn) {
-		fmt.Println("in testing handler")
 		var p []byte
 		var err error
 		c := readCommand(conn)
