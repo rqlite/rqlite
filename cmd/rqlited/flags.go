@@ -287,7 +287,7 @@ func (c *Config) Validate() error {
 		return errors.New("bootstrapping only applicable to voting nodes")
 	}
 
-	// Join addresses OK?
+	// Join parameters OK?
 	if c.JoinAddr != "" {
 		addrs := strings.Split(c.JoinAddr, ",")
 		for i := range addrs {
@@ -301,6 +301,9 @@ func (c *Config) Validate() error {
 				}
 			}
 		}
+	}
+	if c.JoinSrcIP != "" && net.ParseIP(c.JoinSrcIP) == nil {
+		return fmt.Errorf("invalid join source IP address: %s", c.JoinSrcIP)
 	}
 
 	// Valid disco mode?
@@ -394,7 +397,7 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	flag.StringVar(&config.AuthFile, "auth", "", "Path to authentication and authorization file. If not set, not enabled")
 	flag.StringVar(&config.RaftAddr, RaftAddrFlag, "localhost:4002", "Raft communication bind address")
 	flag.StringVar(&config.RaftAdv, RaftAdvAddrFlag, "", "Advertised Raft communication address. If not set, same as Raft bind")
-	flag.StringVar(&config.JoinSrcIP, "join-source-ip", "", "Set source IP address during Join request")
+	flag.StringVar(&config.JoinSrcIP, "join-source-ip", "", "Set source IP address during HTTP Join request")
 	flag.StringVar(&config.JoinAddr, "join", "", "Comma-delimited list of nodes, through which a cluster can be joined (proto://host:port)")
 	flag.StringVar(&config.JoinAs, "join-as", "", "Username in authentication file to join as. If not set, joins anonymously")
 	flag.IntVar(&config.JoinAttempts, "join-attempts", 5, "Number of join attempts to make")
