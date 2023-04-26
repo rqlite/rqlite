@@ -66,7 +66,7 @@ func (s *S3Client) Upload(ctx context.Context, reader io.Reader) error {
 		Body:   reader,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to upload to S3: %w", err)
+		return fmt.Errorf("failed to upload to %s: %w", s, err)
 	}
 
 	return nil
