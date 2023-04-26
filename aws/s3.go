@@ -11,6 +11,10 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 )
 
+type uploader interface {
+	UploadWithContext(ctx aws.Context, input *s3manager.UploadInput, opts ...func(*s3manager.Uploader)) (*s3manager.UploadOutput, error)
+}
+
 // S3Client is a client for uploading data to S3.
 type S3Client struct {
 	region    string
@@ -18,6 +22,8 @@ type S3Client struct {
 	secretKey string
 	bucket    string
 	key       string
+
+	uploader uploader // for testing via dependency injection
 }
 
 // NewS3Client returns an instance of an S3Client.
@@ -46,7 +52,13 @@ func (s *S3Client) Upload(ctx context.Context, reader io.Reader) error {
 		return fmt.Errorf("failed to create S3 session: %w", err)
 	}
 
-	uploader := s3manager.NewUploader(sess)
+	// If an uploader was not provided, use a real S3 uploader.
+	var uploader uploader
+	if s.uploader == nil {
+		uploader = s3manager.NewUploader(sess)
+	} else {
+		uploader = s.uploader
+	}
 
 	_, err = uploader.UploadWithContext(ctx, &s3manager.UploadInput{
 		Bucket: aws.String(s.bucket),
