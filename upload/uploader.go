@@ -25,7 +25,7 @@ type DataProvider interface {
 var stats *expvar.Map
 
 const (
-	numUploadsOKKey  = "num_uploads_ok"
+	numUploadsOK     = "num_uploads_ok"
 	numUploadsFail   = "num_uploads_fail"
 	totalUploadBytes = "total_upload_bytes"
 	lastUploadBytes  = "last_upload_bytes"
@@ -39,7 +39,7 @@ func init() {
 // ResetStats resets the expvar stats for this module. Mostly for test purposes.
 func ResetStats() {
 	stats.Init()
-	stats.Add(numUploadsOKKey, 0)
+	stats.Add(numUploadsOK, 0)
 	stats.Add(numUploadsFail, 0)
 	stats.Add(totalUploadBytes, 0)
 	stats.Add(lastUploadBytes, 0)
@@ -106,7 +106,7 @@ func (u *Uploader) upload(ctx context.Context) error {
 	if err != nil {
 		stats.Add(numUploadsFail, 1)
 	} else {
-		stats.Add(numUploadsOKKey, 1)
+		stats.Add(numUploadsOK, 1)
 		stats.Add(totalUploadBytes, cr.count)
 		stats.Get(lastUploadBytes).(*expvar.Int).Set(cr.count)
 		u.lastUploadTime = time.Now()
