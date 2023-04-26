@@ -1,5 +1,5 @@
 ## 7.14.3 (April 25th 2023)
-## Implementation changes and bug fixes
+### Implementation changes and bug fixes
 - [PR #1218](https://github.com/rqlite/rqlite/pull/1218): Check for more possible errors in peers.json. Thanks @Tjstretchalot
 - [PR #1220](https://github.com/rqlite/rqlite/pull/1220): Support Notify over Raft connection.
 - [PR #1221](https://github.com/rqlite/rqlite/pull/1221): Support Join over Raft connection.
@@ -9,7 +9,7 @@
 
 ## 7.14.2 (April 7th 2023)
 This release is the first to includes various bug fixes and optimizations thanks to running much of the code through [Chat GPT-4](https://openai.com/product/gpt-4), most of which are not explicitly listed in the [CHANGELOG](https://github.com/rqlite/rqlite/edit/master/CHANGELOG.md), but you can check the commit history for details. Future releases of rqlite will probably include more such changes.
-## Implementation changes and bug fixes
+### Implementation changes and bug fixes
 - [PR #1179](https://github.com/rqlite/rqlite/pull/1179): go mod updates.
 - [PR #1180](https://github.com/rqlite/rqlite/pull/1180): Support large numbers in requests.
 - [PR #1186](https://github.com/rqlite/rqlite/pull/1186): Improve read-only (non-voting) node management. Fixes [issue #1182](https://github.com/rqlite/rqlite/issues/1182).
@@ -19,7 +19,7 @@ This release is the first to includes various bug fixes and optimizations thanks
 - [PR #1218](https://github.com/rqlite/rqlite/pull/1218): Check for more possible errors in peers.json. Thanks @Tjstretchalot
 
 ## 7.14.1 (March 17th 2023)
-## Implementation changes and bug fixes
+### Implementation changes and bug fixes
 - [PR #1174](https://github.com/rqlite/rqlite/pull/1174): Fix command-line help for x509 resources.
 - [PR #1178](https://github.com/rqlite/rqlite/pull/1178): Fix parsing of Named Parameters with `NULL` as value. Fixes [issue #1177](https://github.com/rqlite/rqlite/issues/1177). Thanks @wellescastro
 
