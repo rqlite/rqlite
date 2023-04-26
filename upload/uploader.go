@@ -16,9 +16,12 @@ type StorageClient interface {
 	fmt.Stringer
 }
 
-// DataProvider is an interface for providing data to be uploaded.
+// DataProvider is an interface for providing data to be uploaded. The Uploader
+// service will call Provide() to get a reader for the data to be uploaded. Once
+// the upload completes the reader will be closed, regardless of whether the
+// upload succeeded or failed.
 type DataProvider interface {
-	Provide() (io.Reader, error)
+	Provide() (io.ReadCloser, error)
 }
 
 // stats captures stats for the Uploader service.
@@ -95,12 +98,13 @@ func (u *Uploader) Stats() (map[string]interface{}, error) {
 }
 
 func (u *Uploader) upload(ctx context.Context) error {
-	reader, err := u.dataProvider.Provide()
+	rc, err := u.dataProvider.Provide()
 	if err != nil {
 		return err
 	}
+	defer rc.Close()
 
-	cr := &countingReader{reader: reader}
+	cr := &countingReader{reader: rc}
 	startTime := time.Now()
 	err = u.storageClient.Upload(ctx, cr)
 	if err != nil {

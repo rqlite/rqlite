@@ -56,16 +56,16 @@ func Test_UploaderSingleUpload(t *testing.T) {
 
 	// Check the metrics.
 	if exp, got := int64(1), stats.Get(numUploadsOK).(*expvar.Int); exp != got.Value() {
-		t.Errorf("expected numUploadsOKKey to be %d, got %d", exp, got)
+		t.Errorf("expected numUploadsOK to be %d, got %d", exp, got)
 	}
 	if exp, got := int64(0), stats.Get(numUploadsFail).(*expvar.Int); exp != got.Value() {
-		t.Errorf("expected numUploadsOKKey to be %d, got %d", exp, got)
+		t.Errorf("expected numUploadsFail to be %d, got %d", exp, got)
 	}
 	if exp, got := int64(len("my upload data")), stats.Get(totalUploadBytes).(*expvar.Int); exp != got.Value() {
-		t.Errorf("expected numUploadsOKKey to be %d, got %d", exp, got)
+		t.Errorf("expected totalUploadBytes to be %d, got %d", exp, got)
 	}
 	if exp, got := int64(len("my upload data")), stats.Get(lastUploadBytes).(*expvar.Int); exp != got.Value() {
-		t.Errorf("expected numUploadsOKKey to be %d, got %d", exp, got)
+		t.Errorf("expected lastUploadBytes to be %d, got %d", exp, got)
 	}
 }
 
@@ -99,16 +99,16 @@ func Test_UploaderDoubleUpload(t *testing.T) {
 
 	// Check the metrics.
 	if exp, got := int64(2), stats.Get(numUploadsOK).(*expvar.Int); exp != got.Value() {
-		t.Errorf("expected numUploadsOKKey to be %d, got %d", exp, got)
+		t.Errorf("expected numUploadsOK to be %d, got %d", exp, got)
 	}
 	if exp, got := int64(0), stats.Get(numUploadsFail).(*expvar.Int); exp != got.Value() {
-		t.Errorf("expected numUploadsOKKey to be %d, got %d", exp, got)
+		t.Errorf("expected numUploadsFail to be %d, got %d", exp, got)
 	}
 	if exp, got := int64(2*len("my upload data")), stats.Get(totalUploadBytes).(*expvar.Int); exp != got.Value() {
-		t.Errorf("expected numUploadsOKKey to be %d, got %d", exp, got)
+		t.Errorf("expected totalUploadBytes to be %d, got %d", exp, got)
 	}
 	if exp, got := int64(len("my upload data")), stats.Get(lastUploadBytes).(*expvar.Int); exp != got.Value() {
-		t.Errorf("expected numUploadsOKKey to be %d, got %d", exp, got)
+		t.Errorf("expected lastUploadBytes to be %d, got %d", exp, got)
 	}
 }
 
@@ -148,16 +148,16 @@ func Test_UploaderFailThenOK(t *testing.T) {
 
 	// Check the metrics.
 	if exp, got := int64(1), stats.Get(numUploadsOK).(*expvar.Int); exp != got.Value() {
-		t.Errorf("expected numUploadsOKKey to be %d, got %d", exp, got)
+		t.Errorf("expected numUploadsOK to be %d, got %d", exp, got)
 	}
 	if exp, got := int64(1), stats.Get(numUploadsFail).(*expvar.Int); exp != got.Value() {
-		t.Errorf("expected numUploadsOKKey to be %d, got %d", exp, got)
+		t.Errorf("expected numUploadsFail to be %d, got %d", exp, got)
 	}
 	if exp, got := int64(len("my upload data")), stats.Get(totalUploadBytes).(*expvar.Int); exp != got.Value() {
-		t.Errorf("expected numUploadsOKKey to be %d, got %d", exp, got)
+		t.Errorf("expected totalUploadBytes to be %d, got %d", exp, got)
 	}
 	if exp, got := int64(len("my upload data")), stats.Get(lastUploadBytes).(*expvar.Int); exp != got.Value() {
-		t.Errorf("expected numUploadsOKKey to be %d, got %d", exp, got)
+		t.Errorf("expected lastUploadBytes to be %d, got %d", exp, got)
 	}
 }
 
@@ -256,9 +256,9 @@ type mockDataProvider struct {
 	err  error
 }
 
-func (mp *mockDataProvider) Provide() (io.Reader, error) {
+func (mp *mockDataProvider) Provide() (io.ReadCloser, error) {
 	if mp.err != nil {
 		return nil, mp.err
 	}
-	return strings.NewReader(mp.data), nil
+	return io.NopCloser(strings.NewReader(mp.data)), nil
 }
