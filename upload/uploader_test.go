@@ -46,7 +46,7 @@ func Test_UploaderSingleUpload(t *testing.T) {
 	uploader := NewUploader(sc, dp, 100*time.Millisecond)
 	ctx, cancel := context.WithCancel(context.Background())
 
-	go uploader.Start(ctx)
+	go uploader.Start(ctx, nil)
 	wg.Wait()
 	cancel()
 
@@ -89,7 +89,7 @@ func Test_UploaderDoubleUpload(t *testing.T) {
 	uploader := NewUploader(sc, dp, 100*time.Millisecond)
 	ctx, cancel := context.WithCancel(context.Background())
 
-	go uploader.Start(ctx)
+	go uploader.Start(ctx, nil)
 	wg.Wait()
 	cancel()
 
@@ -138,7 +138,7 @@ func Test_UploaderFailThenOK(t *testing.T) {
 	uploader := NewUploader(sc, dp, 100*time.Millisecond)
 	ctx, cancel := context.WithCancel(context.Background())
 
-	go uploader.Start(ctx)
+	go uploader.Start(ctx, nil)
 	wg.Wait()
 	cancel()
 
@@ -185,7 +185,7 @@ func Test_UploaderOKThenFail(t *testing.T) {
 	uploader := NewUploader(sc, dp, 100*time.Millisecond)
 	ctx, cancel := context.WithCancel(context.Background())
 
-	go uploader.Start(ctx)
+	go uploader.Start(ctx, nil)
 	wg.Wait()
 	cancel()
 
@@ -207,12 +207,56 @@ func Test_UploaderContextCancellation(t *testing.T) {
 	uploader := NewUploader(sc, dp, time.Second)
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
 
-	go uploader.Start(ctx)
+	go uploader.Start(ctx, nil)
 	<-ctx.Done()
 	cancel()
 
 	if exp, got := int32(0), atomic.LoadInt32(&uploadCount); exp != got {
 		t.Errorf("expected uploadCount to be %d, got %d", exp, got)
+	}
+}
+
+func Test_UploaderEnabledFalse(t *testing.T) {
+	ResetStats()
+
+	sc := &mockStorageClient{}
+	dp := &mockDataProvider{data: "my upload data"}
+	uploader := NewUploader(sc, dp, 100*time.Millisecond)
+	ctx, cancel := context.WithCancel(context.Background())
+
+	go uploader.Start(ctx, func() bool { return false })
+	time.Sleep(time.Second)
+	defer cancel()
+
+	if exp, got := int64(0), stats.Get(numUploadsOK).(*expvar.Int); exp != got.Value() {
+		t.Errorf("expected numUploadsOK to be %d, got %d", exp, got)
+	}
+}
+
+func Test_UploaderEnabledTrue(t *testing.T) {
+	var uploadedData []byte
+	var err error
+	ResetStats()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	sc := &mockStorageClient{
+		uploadFn: func(ctx context.Context, reader io.Reader) error {
+			defer wg.Done()
+			uploadedData, err = io.ReadAll(reader)
+			return err
+		},
+	}
+	dp := &mockDataProvider{data: "my upload data"}
+	uploader := NewUploader(sc, dp, 100*time.Millisecond)
+	ctx, cancel := context.WithCancel(context.Background())
+
+	go uploader.Start(ctx, func() bool { return true })
+	defer cancel()
+
+	wg.Wait()
+	if exp, got := string(uploadedData), "my upload data"; exp != got {
+		t.Errorf("expected uploadedData to be %s, got %s", exp, got)
 	}
 }
 

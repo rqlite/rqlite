@@ -70,7 +70,7 @@ func NewUploader(storageClient StorageClient, dataProvider DataProvider, interva
 }
 
 // Start starts the Uploader service.
-func (u *Uploader) Start(ctx context.Context) {
+func (u *Uploader) Start(ctx context.Context, enabled func() bool) {
 	ticker := time.NewTicker(u.interval)
 	defer ticker.Stop()
 
@@ -79,6 +79,9 @@ func (u *Uploader) Start(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			if enabled != nil && !enabled() {
+				continue
+			}
 			if err := u.upload(ctx); err != nil {
 				u.logger.Printf("failed to upload to %s: %v", u.storageClient, err)
 			}
