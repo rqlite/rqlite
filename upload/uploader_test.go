@@ -6,6 +6,7 @@ import (
 	"io"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -142,6 +143,48 @@ func Test_UploaderOKThenFail(t *testing.T) {
 
 	if exp, got := string(uploadedData), "my upload data"; exp != got {
 		t.Errorf("expected uploadedData to be %s, got %s", exp, got)
+	}
+}
+
+func Test_UploaderContextCancellation(t *testing.T) {
+	var uploadCount int32
+
+	sc := &mockStorageClient{
+		uploadFn: func(ctx context.Context, reader io.Reader) error {
+			atomic.AddInt32(&uploadCount, 1)
+			return nil
+		},
+	}
+	dp := &mockDataProvider{data: "my upload data"}
+	uploader := NewUploader(sc, dp, time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
+
+	go uploader.Start(ctx)
+	<-ctx.Done()
+	cancel()
+
+	if exp, got := int32(0), atomic.LoadInt32(&uploadCount); exp != got {
+		t.Errorf("expected uploadCount to be %d, got %d", exp, got)
+	}
+}
+
+func Test_UploaderStats(t *testing.T) {
+	sc := &mockStorageClient{}
+	dp := &mockDataProvider{data: "my upload data"}
+	interval := 100 * time.Millisecond
+	uploader := NewUploader(sc, dp, interval)
+
+	stats, err := uploader.Stats()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if exp, got := sc.String(), stats["upload_destination"]; exp != got {
+		t.Errorf("expected upload_destination to be %s, got %s", exp, got)
+	}
+
+	if exp, got := interval.String(), stats["upload_interval"]; exp != got {
+		t.Errorf("expected upload_interval to be %s, got %s", exp, got)
 	}
 }
 

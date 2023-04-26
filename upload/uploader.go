@@ -102,7 +102,7 @@ func (u *Uploader) upload(ctx context.Context) error {
 
 	cr := &countingReader{reader: reader}
 	startTime := time.Now()
-	err = u.storageClient.Upload(context.Background(), cr)
+	err = u.storageClient.Upload(ctx, cr)
 	if err != nil {
 		stats.Add(numUploadsFail, 1)
 	} else {
