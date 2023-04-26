@@ -28,6 +28,7 @@ import (
 	"github.com/rqlite/rqlite/command"
 	sql "github.com/rqlite/rqlite/db"
 	rlog "github.com/rqlite/rqlite/log"
+	"github.com/rqlite/rqlite/upload"
 )
 
 var (
@@ -70,6 +71,7 @@ const (
 
 const (
 	numSnaphots              = "num_snapshots"
+	numProvides              = "num_provides"
 	numBackups               = "num_backups"
 	numLoads                 = "num_loads"
 	numRestores              = "num_restores"
@@ -101,6 +103,7 @@ func init() {
 // ResetStats resets the expvar stats for this module. Mostly for test purposes.
 func ResetStats() {
 	stats.Add(numSnaphots, 0)
+	stats.Add(numProvides, 0)
 	stats.Add(numBackups, 0)
 	stats.Add(numRestores, 0)
 	stats.Add(numRecoveries, 0)
@@ -903,7 +906,7 @@ func (s *Store) Backup(br *command.BackupRequest, dst io.Writer) (retErr error) 
 	}
 
 	if br.Format == command.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY {
-		f, err := ioutil.TempFile("", "rqlilte-snap-")
+		f, err := os.CreateTemp("", "rqlite-snap-")
 		if err != nil {
 			return err
 		}
@@ -928,6 +931,34 @@ func (s *Store) Backup(br *command.BackupRequest, dst io.Writer) (retErr error) 
 		return s.db.Dump(dst)
 	}
 	return ErrInvalidBackupFormat
+}
+
+// Provide implements the uploader Provider interface, allowing the
+// Store to be used as a DataProvider for an uploader. It returns
+// a io.ReadCloser that can be used to read a copy of the entire database.
+func (s *Store) Provide() (io.ReadCloser, error) {
+	if !s.open {
+		return nil, ErrNotOpen
+	}
+
+	tempFile, err := os.CreateTemp("", "rqlite-upload-")
+	if err != nil {
+		return nil, err
+	}
+	if err := tempFile.Close(); err != nil {
+		return nil, err
+	}
+
+	if err := s.db.Backup(tempFile.Name()); err != nil {
+		return nil, err
+	}
+
+	fd, err := upload.NewAutoDeleteFile(tempFile.Name())
+	if err != nil {
+		return nil, err
+	}
+	stats.Add(numProvides, 1)
+	return fd, nil
 }
 
 // Loads an entire SQLite file into the database, sending the request
