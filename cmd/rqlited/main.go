@@ -2,8 +2,10 @@
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net"
 	"os"
@@ -19,6 +21,7 @@ import (
 	"github.com/rqlite/rqlite-disco-clients/dnssrv"
 	etcd "github.com/rqlite/rqlite-disco-clients/etcd"
 	"github.com/rqlite/rqlite/auth"
+	"github.com/rqlite/rqlite/aws"
 	"github.com/rqlite/rqlite/cluster"
 	"github.com/rqlite/rqlite/cmd"
 	"github.com/rqlite/rqlite/db"
@@ -27,6 +30,7 @@ import (
 	"github.com/rqlite/rqlite/rtls"
 	"github.com/rqlite/rqlite/store"
 	"github.com/rqlite/rqlite/tcp"
+	"github.com/rqlite/rqlite/upload"
 )
 
 const logo = `
@@ -149,6 +153,16 @@ func main() {
 	h, p, _ := net.SplitHostPort(cfg.HTTPAdv)
 	log.Printf("connect using the command-line tool via 'rqlite -H %s -p %s'", h, p)
 
+	// Start any requested auto-backups
+	ctx, backupSrvCancel := context.WithCancel(context.Background())
+	backupSrv, err := startAutoBackups(ctx, cfg, str)
+	if err != nil {
+		log.Fatalf("failed to start auto-backups: %s", err.Error())
+	}
+	if backupSrv != nil {
+		httpServ.RegisterStatus("auto_backups", backupSrv)
+	}
+
 	// Block until signalled.
 	terminate := make(chan os.Signal, 1)
 	signal.Notify(terminate, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
@@ -163,6 +177,7 @@ func main() {
 		str.Stepdown(true)
 	}
 
+	backupSrvCancel()
 	httpServ.Close()
 	if err := str.Close(true); err != nil {
 		log.Printf("failed to close store: %s", err.Error())
@@ -171,6 +186,32 @@ func main() {
 	muxLn.Close()
 	stopProfile()
 	log.Println("rqlite server stopped")
+}
+
+func startAutoBackups(ctx context.Context, cfg *Config, str *store.Store) (*upload.Uploader, error) {
+	if cfg.AutoBackupFile == "" {
+		return nil, nil
+	}
+
+	f, err := os.Open(cfg.AutoBackupFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open auto-backup file: %s", err.Error())
+	}
+	defer f.Close()
+
+	b, err := ioutil.ReadAll(f)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read auto-backup file: %s", err.Error())
+	}
+
+	uCfg, s3cfg, err := upload.Unmarshal(b)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse auto-backup file: %s", err.Error())
+	}
+	sc := aws.NewS3Client(s3cfg.Region, s3cfg.AccessKeyID, s3cfg.SecretAccessKey, s3cfg.Bucket, s3cfg.Path)
+	u := upload.NewUploader(sc, str, time.Duration(uCfg.Interval))
+	go u.Start(ctx, nil)
+	return u, nil
 }
 
 func createStore(cfg *Config, ln *tcp.Layer) (*store.Store, error) {
