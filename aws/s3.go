@@ -8,11 +8,16 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 )
 
 type uploader interface {
 	UploadWithContext(ctx aws.Context, input *s3manager.UploadInput, opts ...func(*s3manager.Uploader)) (*s3manager.UploadOutput, error)
+}
+
+type downloader interface {
+	DownloadWithContext(ctx aws.Context, w io.WriterAt, input *s3.GetObjectInput, opts ...func(*s3manager.Downloader)) (n int64, err error)
 }
 
 // S3Client is a client for uploading data to S3.
@@ -67,6 +72,29 @@ func (s *S3Client) Upload(ctx context.Context, reader io.Reader) error {
 	})
 	if err != nil {
 		return fmt.Errorf("failed to upload to %s: %w", s, err)
+	}
+
+	return nil
+}
+
+// Download downloads data from S3.
+func (s *S3Client) Download(ctx context.Context, writer io.WriterAt) error {
+	sess, err := session.NewSession(&aws.Config{
+		Region:      aws.String(s.region),
+		Credentials: credentials.NewStaticCredentials(s.accessKey, s.secretKey, ""),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create S3 session: %w", err)
+	}
+
+	downloader := s3manager.NewDownloader(sess)
+
+	_, err = downloader.DownloadWithContext(ctx, writer, &s3.GetObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(s.key),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to download from %s: %w", s, err)
 	}
 
 	return nil
