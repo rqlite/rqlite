@@ -57,7 +57,7 @@ class Node(object):
                raft_snap_threshold=8192, raft_snap_int="1s",
                http_cert=None, http_key=None, http_no_verify=False,
                node_cert=None, node_key=None, node_no_verify=False,
-               auth=None, dir=None, on_disk=False):
+               auth=None, auto_backup=None, dir=None, on_disk=False):
     
     s_api = None
     s_raft = None
@@ -100,6 +100,7 @@ class Node(object):
     self.node_key = node_key
     self.node_no_verify = node_no_verify
     self.auth = auth
+    self.auto_backup = auto_backup
     self.disco_key = random_string(10)
     self.on_disk = on_disk
     self.process = None
@@ -166,6 +167,8 @@ class Node(object):
       command += ['-on-disk']
     if self.auth is not None:
       command += ['-auth', self.auth]
+    if self.auto_backup is not None:
+      command += ['-auto-backup', self.auto_backup]
     if join is not None:
       if join.startswith('http://') is False:
         join = 'http://' + join
