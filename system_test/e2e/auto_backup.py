@@ -79,7 +79,7 @@ class TestAutoBackupS3(unittest.TestCase):
     cfg = write_random_file(json.dumps(auto_backup_cfg))
 
     # Create a node, enable automatic backups, and start it. Then
-    # create a table and insert a row.
+    # create a table and insert a row. Wait for a backup to happen.
     node = Node(RQLITED_PATH, '0', auto_backup=cfg)
     node.start()
     node.wait_for_leader()
