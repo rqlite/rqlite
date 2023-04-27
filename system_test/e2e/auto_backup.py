@@ -96,7 +96,7 @@ class TestAutoBackupS3(unittest.TestCase):
     os.environ['AWS_SECRET_ACCESS_KEY'] = os.environ['RQLITE_S3_SECRET_ACCESS_KEY']
 
     backupData = download_s3_object('rqlite-testing-circleci', path)
-    backupFile = write_random_file(backupData)
+    backupFile = write_random_file(backupData, mode='wb')
     conn = sqlite3.connect(backupFile)
     c = conn.cursor()
     c.execute('SELECT * FROM foo')

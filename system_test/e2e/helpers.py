@@ -29,8 +29,8 @@ def random_string(n):
   letters = string.ascii_lowercase
   return ''.join(random.choice(letters) for i in range(n))
 
-def write_random_file(data):
-  f = tempfile.NamedTemporaryFile('w', delete=False)
+def write_random_file(data, mode='w'):
+  f = tempfile.NamedTemporaryFile(mode, delete=False)
   f.write(data)
   f.close()
   return f.name
