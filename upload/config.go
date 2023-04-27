@@ -72,11 +72,11 @@ func (s *StorageType) UnmarshalJSON(b []byte) error {
 
 // Config is the config file format for the upload service
 type Config struct {
-	Version  int             `json:"version"`
-	Type     StorageType     `json:"type"`
-	Compress bool            `json:"compress,omitempty"`
-	Interval Duration        `json:"interval"`
-	Sub      json.RawMessage `json:"sub"`
+	Version    int             `json:"version"`
+	Type       StorageType     `json:"type"`
+	NoCompress bool            `json:"no_compress,omitempty"`
+	Interval   Duration        `json:"interval"`
+	Sub        json.RawMessage `json:"sub"`
 }
 
 // S3Config is the subconfig for the S3 storage type

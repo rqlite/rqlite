@@ -21,7 +21,7 @@ func TestUnmarshal(t *testing.T) {
 			{
 				"version": 1,
 				"type": "s3",
-				"compress": true,
+				"no_compress": true,
 				"interval": "24h",
 				"sub": {
 					"access_key_id": "test_id",
@@ -33,10 +33,10 @@ func TestUnmarshal(t *testing.T) {
 			}
 			`),
 			expectedCfg: &Config{
-				Version:  1,
-				Type:     "s3",
-				Compress: true,
-				Interval: 24 * Duration(time.Hour),
+				Version:    1,
+				Type:       "s3",
+				NoCompress: true,
+				Interval:   24 * Duration(time.Hour),
 			},
 			expectedS3: &S3Config{
 				AccessKeyID:     "test_id",
@@ -53,7 +53,7 @@ func TestUnmarshal(t *testing.T) {
 			{
 				"version": 2,
 				"type": "s3",
-				"compress": true,
+				"no_compress": false,
 				"interval": "24h",
 				"sub": {
 					"access_key_id": "test_id",
@@ -73,7 +73,7 @@ func TestUnmarshal(t *testing.T) {
 			{
 				"version": 1,
 				"type": "unsupported",
-				"compress": true,
+				"no_compress": true,
 				"interval": "24h",
 				"sub": {
 					"access_key_id": "test_id",
@@ -117,6 +117,6 @@ func compareConfig(a, b *Config) bool {
 	}
 	return a.Version == b.Version &&
 		a.Type == b.Type &&
-		a.Compress == b.Compress &&
+		a.NoCompress == b.NoCompress &&
 		a.Interval == b.Interval
 }
