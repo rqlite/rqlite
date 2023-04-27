@@ -102,7 +102,7 @@ class TestAutoBackupS3(unittest.TestCase):
     c.execute('SELECT * FROM foo')
     rows = c.fetchall()
     self.assertEqual(len(rows), 1)
-    self.assertEqual(rows[0][1], 'fidona')
+    self.assertEqual(rows[0][1], 'fiona')
     conn.close()
 
     # Remove the backup file and S3 object
