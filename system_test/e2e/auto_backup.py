@@ -38,7 +38,7 @@ class TestAutoBackupS3(unittest.TestCase):
          "secret_access_key": os.environ['RQLITE_S3_SECRET_ACCESS_KEY'],
          "region": "us-west-2",
          "bucket": "rqlite-testing-circleci",
-         "path": "%s/db.sqlite3" % path
+         "path": path
       }
     }
 
