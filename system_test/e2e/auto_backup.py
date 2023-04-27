@@ -16,7 +16,7 @@ RQLITED_PATH = os.environ['RQLITED_PATH']
 class TestAutoBackupS3(unittest.TestCase):
   '''Test that automatic backups to AWS S3 work'''
   def test(self):
-    if os.environ['RQLITE_S3_ACCESS_KEY'] is not None and os.environ['RQLITE_S3_SECRET_KEY'] is not None:
+    if os.environ['RQLITE_S3_ACCESS_KEY'] is not None and os.environ['RQLITE_S3_SECRET_ACCESS_KEY'] is not None:
       print("Running test because environment variables are set")
     else:
       print("Skipping test because environment variables are not set")
