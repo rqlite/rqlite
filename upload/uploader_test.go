@@ -49,6 +49,7 @@ func Test_UploaderSingleUpload(t *testing.T) {
 	go uploader.Start(ctx, nil)
 	wg.Wait()
 	cancel()
+	<-ctx.Done()
 
 	if exp, got := string(uploadedData), "my upload data"; exp != got {
 		t.Errorf("expected uploadedData to be %s, got %s", exp, got)
@@ -92,6 +93,7 @@ func Test_UploaderDoubleUpload(t *testing.T) {
 	go uploader.Start(ctx, nil)
 	wg.Wait()
 	cancel()
+	<-ctx.Done()
 
 	if exp, got := string(uploadedData), "my upload data"; exp != got {
 		t.Errorf("expected uploadedData to be %s, got %s", exp, got)
@@ -141,6 +143,7 @@ func Test_UploaderFailThenOK(t *testing.T) {
 	go uploader.Start(ctx, nil)
 	wg.Wait()
 	cancel()
+	<-ctx.Done()
 
 	if exp, got := string(uploadedData), "my upload data"; exp != got {
 		t.Errorf("expected uploadedData to be %s, got %s", exp, got)
@@ -188,6 +191,7 @@ func Test_UploaderOKThenFail(t *testing.T) {
 	go uploader.Start(ctx, nil)
 	wg.Wait()
 	cancel()
+	<-ctx.Done()
 
 	if exp, got := string(uploadedData), "my upload data"; exp != got {
 		t.Errorf("expected uploadedData to be %s, got %s", exp, got)
@@ -210,6 +214,7 @@ func Test_UploaderContextCancellation(t *testing.T) {
 	go uploader.Start(ctx, nil)
 	<-ctx.Done()
 	cancel()
+	<-ctx.Done()
 
 	if exp, got := int32(0), atomic.LoadInt32(&uploadCount); exp != got {
 		t.Errorf("expected uploadCount to be %d, got %d", exp, got)
