@@ -52,7 +52,7 @@ class TestAutoBackupS3(unittest.TestCase):
     node.execute('INSERT INTO foo(name) VALUES("fiona")')
     node.wait_for_all_fsm()
 
-    time.Sleep(10)
+    time.sleep(10)
 
     deprovision_node(node)
     os.remove(cfg)
