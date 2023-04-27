@@ -1,6 +1,8 @@
 package upload
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"expvar"
 	"fmt"
@@ -123,6 +125,62 @@ func (u *Uploader) upload(ctx context.Context) error {
 	}
 	return err
 }
+
+type GZIPReader struct {
+	src         io.Reader
+	gw          *gzip.Writer
+	buffer      *bytes.Buffer
+	compressed  *bytes.Buffer
+	chunkSize   int64
+}
+
+func NewGZIPReader(src io.Reader, chunkSize int64) *GZIPReader {
+	buffer := new(bytes.Buffer)
+	gw := gzip.NewWriter(buffer)
+
+	return &GZIPReader{
+		src:         src,
+		gw:          gw,
+		buffer:      buffer,
+		compressed:  new(bytes.Buffer),
+		chunkSize:   chunkSize,
+	}
+}
+
+func (g *GZIPReader) compressChunk() error {
+	g.buffer.Reset()
+
+	_, err := io.CopyN(g.gw, g.src, g.chunkSize)
+	if err != nil && err != io.EOF {
+		return fmt.Errorf("error copying data to gzip writer: %w", err)
+	}
+
+	if err := g.gw.Flush(); err != nil {
+		return fmt.Errorf("error flushing gzip writer: %w", err)
+	}
+
+	_, err = io.Copy(g.compressed, g.buffer)
+	return err
+}
+
+func (g *GZIPReader) Read(p []byte) (int, error) {
+	for g.compressed.Len() < len(p) {
+		err := g.compressChunk()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return 0, err
+		}
+	}
+
+	return g.compressed.Read(p)
+}
+
+func (g *GZIPReader) Close() error {
+	return g.gw.Close()
+}
+
 
 type countingReader struct {
 	reader io.Reader
