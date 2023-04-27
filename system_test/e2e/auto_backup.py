@@ -44,6 +44,10 @@ class TestAutoBackupS3(unittest.TestCase):
 
     cfg = write_random_file(str(auto_backup_cfg))
 
+    file1 = open(cfg, "r")
+    print(file1.read())
+    file1.close()
+
     node = Node(RQLITED_PATH, '0', auto_backup=cfg)
     node.start()
     node.wait_for_leader()
