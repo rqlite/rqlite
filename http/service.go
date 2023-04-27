@@ -432,12 +432,18 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // RegisterStatus allows other modules to register status for serving over HTTP.
+// If stat is nil, the key is removed.
 func (s *Service) RegisterStatus(key string, stat StatusReporter) error {
 	s.statusMu.Lock()
 	defer s.statusMu.Unlock()
 
 	if _, ok := s.statuses[key]; ok {
 		return fmt.Errorf("status already registered with key %s", key)
+	}
+
+	if stat == nil {
+		delete(s.statuses, key)
+		return nil
 	}
 	s.statuses[key] = stat
 

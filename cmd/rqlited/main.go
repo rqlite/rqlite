@@ -159,9 +159,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to start auto-backups: %s", err.Error())
 	}
-	if backupSrv != nil {
-		httpServ.RegisterStatus("auto_backups", backupSrv)
-	}
+	httpServ.RegisterStatus("auto_backups", backupSrv)
 
 	// Block until signalled.
 	terminate := make(chan os.Signal, 1)
