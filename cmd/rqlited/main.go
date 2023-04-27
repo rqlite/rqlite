@@ -47,7 +47,9 @@ const logo = `
 
 const name = `rqlited`
 const desc = `rqlite is a lightweight, distributed relational database, which uses SQLite as its
-storage engine. It provides an easy-to-use, fault-tolerant store for relational data.`
+storage engine. It provides an easy-to-use, fault-tolerant store for relational data.
+
+Visit https://www.rqlite.io to learn more.`
 
 func init() {
 	log.SetFlags(log.LstdFlags)

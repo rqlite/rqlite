@@ -436,8 +436,8 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	flag.IntVar(&config.WriteQueueBatchSz, "write-queue-batch-size", 128, "Write queue batch size")
 	flag.DurationVar(&config.WriteQueueTimeout, "write-queue-timeout", 50*time.Millisecond, "Write queue timeout")
 	flag.BoolVar(&config.WriteQueueTx, "write-queue-tx", false, "Use a transaction when writing from queue")
-	flag.IntVar(&config.CompressionSize, "compression-size", 150, "Request query size for compression attempt")
-	flag.IntVar(&config.CompressionBatch, "compression-batch", 5, "Request batch threshold for compression attempt")
+	flag.IntVar(&config.CompressionSize, "compression-size", 150, "Request query size for Raft log compression attempt")
+	flag.IntVar(&config.CompressionBatch, "compression-batch", 5, "Request batch threshold for Raft log compression attempt")
 	flag.StringVar(&config.CPUProfile, "cpu-profile", "", "Path to file for CPU profiling information")
 	flag.StringVar(&config.MemProfile, "mem-profile", "", "Path to file for memory profiling information")
 	flag.Usage = func() {
