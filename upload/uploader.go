@@ -127,11 +127,11 @@ func (u *Uploader) upload(ctx context.Context) error {
 }
 
 type GZIPReader struct {
-	src         io.Reader
-	gw          *gzip.Writer
-	buffer      *bytes.Buffer
-	compressed  *bytes.Buffer
-	chunkSize   int64
+	src        io.Reader
+	gw         *gzip.Writer
+	buffer     *bytes.Buffer
+	compressed *bytes.Buffer
+	chunkSize  int64
 }
 
 func NewGZIPReader(src io.Reader, chunkSize int64) *GZIPReader {
@@ -139,11 +139,11 @@ func NewGZIPReader(src io.Reader, chunkSize int64) *GZIPReader {
 	gw := gzip.NewWriter(buffer)
 
 	return &GZIPReader{
-		src:         src,
-		gw:          gw,
-		buffer:      buffer,
-		compressed:  new(bytes.Buffer),
-		chunkSize:   chunkSize,
+		src:        src,
+		gw:         gw,
+		buffer:     buffer,
+		compressed: new(bytes.Buffer),
+		chunkSize:  chunkSize,
 	}
 }
 
@@ -180,7 +180,6 @@ func (g *GZIPReader) Read(p []byte) (int, error) {
 func (g *GZIPReader) Close() error {
 	return g.gw.Close()
 }
-
 
 type countingReader struct {
 	reader io.Reader
