@@ -71,12 +71,14 @@ func NewUploader(storageClient StorageClient, dataProvider DataProvider, interva
 
 // Start starts the Uploader service.
 func (u *Uploader) Start(ctx context.Context, enabled func() bool) {
+	u.logger.Printf("starting upload to %s every %s", u.storageClient, u.interval)
 	ticker := time.NewTicker(u.interval)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ctx.Done():
+			u.logger.Println("upload service shutting down")
 			return
 		case <-ticker.C:
 			if enabled != nil && !enabled() {
