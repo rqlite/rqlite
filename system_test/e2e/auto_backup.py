@@ -7,6 +7,7 @@
 #  python system_test/full_system_test.py Class.test
 
 import os
+import json
 import unittest
 import random
 import string
@@ -42,11 +43,7 @@ class TestAutoBackupS3(unittest.TestCase):
       }
     }
 
-    cfg = write_random_file(str(auto_backup_cfg))
-
-    file1 = open(cfg, "r")
-    print(file1.read())
-    file1.close()
+    cfg = write_random_file(json.dumps(auto_backup_cfg))
 
     node = Node(RQLITED_PATH, '0', auto_backup=cfg)
     node.start()
@@ -59,6 +56,9 @@ class TestAutoBackupS3(unittest.TestCase):
 
     deprovision_node(node)
     os.remove(cfg)
+
+    os.environ['AWS_ACCESS_KEY_ID'] = os.environ['RQLITE_S3_ACCESS_KEY']
+    os.environ['AWS_SECRET_ACCESS_KEY'] = os.environ['RQLITE_S3_SECRET_ACCESS_KEY']
 
 
 if __name__ == "__main__":
