@@ -48,6 +48,37 @@ func TestUnmarshal(t *testing.T) {
 			expectedErr: nil,
 		},
 		{
+			name: "ValidS3ConfigNoptionalFields",
+			input: []byte(`
+                        {
+                                "version": 1,
+                                "type": "s3",
+                                "interval": "24h",
+                                "sub": {
+                                        "access_key_id": "test_id",
+                                        "secret_access_key": "test_secret",
+                                        "region": "us-west-2",
+                                        "bucket": "test_bucket",
+                                        "path": "test/path"
+                                }
+                        }
+                        `),
+			expectedCfg: &Config{
+				Version:    1,
+				Type:       "s3",
+				NoCompress: false,
+				Interval:   24 * Duration(time.Hour),
+			},
+			expectedS3: &S3Config{
+				AccessKeyID:     "test_id",
+				SecretAccessKey: "test_secret",
+				Region:          "us-west-2",
+				Bucket:          "test_bucket",
+				Path:            "test/path",
+			},
+			expectedErr: nil,
+		},
+		{
 			name: "InvalidVersion",
 			input: []byte(`
 			{
