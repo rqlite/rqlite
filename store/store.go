@@ -936,6 +936,7 @@ func (s *Store) Backup(br *command.BackupRequest, dst io.Writer) (retErr error) 
 // Provide implements the uploader Provider interface, allowing the
 // Store to be used as a DataProvider for an uploader. It returns
 // a io.ReadCloser that can be used to read a copy of the entire database.
+// When the ReadCloser is closed, the resources backing it are cleaned up.
 func (s *Store) Provide() (io.ReadCloser, error) {
 	if !s.open {
 		return nil, ErrNotOpen
