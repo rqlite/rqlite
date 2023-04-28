@@ -72,7 +72,11 @@ func NewUploader(storageClient StorageClient, dataProvider DataProvider, interva
 }
 
 // Start starts the Uploader service.
-func (u *Uploader) Start(ctx context.Context, enabled func() bool) {
+func (u *Uploader) Start(ctx context.Context, isUploadEnabled func() bool) {
+	if isUploadEnabled == nil {
+		isUploadEnabled = func() bool { return true }
+	}
+
 	u.logger.Printf("starting upload to %s every %s", u.storageClient, u.interval)
 	ticker := time.NewTicker(u.interval)
 	defer ticker.Stop()
@@ -83,7 +87,7 @@ func (u *Uploader) Start(ctx context.Context, enabled func() bool) {
 			u.logger.Println("upload service shutting down")
 			return
 		case <-ticker.C:
-			if enabled != nil && !enabled() {
+			if !isUploadEnabled() {
 				continue
 			}
 			if err := u.upload(ctx); err != nil {

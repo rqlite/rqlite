@@ -49,12 +49,9 @@ func (s *S3Client) String() string {
 
 // Upload uploads data to S3.
 func (s *S3Client) Upload(ctx context.Context, reader io.Reader) error {
-	sess, err := session.NewSession(&aws.Config{
-		Region:      aws.String(s.region),
-		Credentials: credentials.NewStaticCredentials(s.accessKey, s.secretKey, ""),
-	})
+	sess, err := s.createSession()
 	if err != nil {
-		return fmt.Errorf("failed to create S3 session: %w", err)
+		return err
 	}
 
 	// If an uploader was not provided, use a real S3 uploader.
@@ -71,7 +68,7 @@ func (s *S3Client) Upload(ctx context.Context, reader io.Reader) error {
 		Body:   reader,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to upload to %s: %w", s, err)
+		return fmt.Errorf("failed to upload to %v: %w", s, err)
 	}
 
 	return nil
@@ -79,12 +76,9 @@ func (s *S3Client) Upload(ctx context.Context, reader io.Reader) error {
 
 // Download downloads data from S3.
 func (s *S3Client) Download(ctx context.Context, writer io.WriterAt) error {
-	sess, err := session.NewSession(&aws.Config{
-		Region:      aws.String(s.region),
-		Credentials: credentials.NewStaticCredentials(s.accessKey, s.secretKey, ""),
-	})
+	sess, err := s.createSession()
 	if err != nil {
-		return fmt.Errorf("failed to create S3 session: %w", err)
+		return err
 	}
 
 	downloader := s3manager.NewDownloader(sess)
@@ -94,8 +88,19 @@ func (s *S3Client) Download(ctx context.Context, writer io.WriterAt) error {
 		Key:    aws.String(s.key),
 	})
 	if err != nil {
-		return fmt.Errorf("failed to download from %s: %w", s, err)
+		return fmt.Errorf("failed to download from %v: %w", s, err)
 	}
 
 	return nil
+}
+
+func (s *S3Client) createSession() (*session.Session, error) {
+	sess, err := session.NewSession(&aws.Config{
+		Region:      aws.String(s.region),
+		Credentials: credentials.NewStaticCredentials(s.accessKey, s.secretKey, ""),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create S3 session: %w", err)
+	}
+	return sess, nil
 }
