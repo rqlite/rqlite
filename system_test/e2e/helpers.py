@@ -22,6 +22,9 @@ seqRe = re.compile("^{'results': \[\], 'sequence_number': \d+}$")
 def d_(s):
     return ast.literal_eval(s.replace("'", "\""))
 
+def env_present(name):
+  return name in os.environ and os.environ[name] != ""
+
 def is_sequence_number(r):
   return seqRe.match(r)
 
