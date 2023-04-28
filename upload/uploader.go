@@ -28,10 +28,11 @@ type DataProvider interface {
 var stats *expvar.Map
 
 const (
-	numUploadsOK     = "num_uploads_ok"
-	numUploadsFail   = "num_uploads_fail"
-	totalUploadBytes = "total_upload_bytes"
-	lastUploadBytes  = "last_upload_bytes"
+	numUploadsOK      = "num_uploads_ok"
+	numUploadsFail    = "num_uploads_fail"
+	numUploadsSkipped = "num_uploads_skipped"
+	totalUploadBytes  = "total_upload_bytes"
+	lastUploadBytes   = "last_upload_bytes"
 
 	UploadCompress   = true
 	UploadNoCompress = false
@@ -47,6 +48,7 @@ func ResetStats() {
 	stats.Init()
 	stats.Add(numUploadsOK, 0)
 	stats.Add(numUploadsFail, 0)
+	stats.Add(numUploadsSkipped, 0)
 	stats.Add(totalUploadBytes, 0)
 	stats.Add(lastUploadBytes, 0)
 }
@@ -61,6 +63,12 @@ type Uploader struct {
 	logger             *log.Logger
 	lastUploadTime     time.Time
 	lastUploadDuration time.Duration
+
+	lastSum SHA256Sum
+
+	// disableSumCheck is used for testing purposes to disable the check that
+	// prevents uploading the same data twice.
+	disableSumCheck bool
 }
 
 // NewUploader creates a new Uploader service.
@@ -91,6 +99,10 @@ func (u *Uploader) Start(ctx context.Context, isUploadEnabled func() bool) {
 			return
 		case <-ticker.C:
 			if !isUploadEnabled() {
+				// Reset the lastSum so that the next time we're enabled upload will
+				// happen. We do this to be conservative, as we don't know what was
+				// happening while upload was disabled.
+				u.lastSum = nil
 				continue
 			}
 			if err := u.upload(ctx); err != nil {
@@ -122,6 +134,21 @@ func (u *Uploader) upload(ctx context.Context) error {
 
 	if err := u.dataProvider.Provide(tmpfile); err != nil {
 		return err
+	}
+
+	var sum SHA256Sum
+	if !u.disableSumCheck {
+		// Get the SHA256 sum of the file. If it is the same as the last one, then
+		// there is no need to upload the file.
+		sum, err = FileSHA256(tmpfile)
+		if err != nil {
+			return err
+		}
+
+		if sum.Equals(u.lastSum) {
+			stats.Add(numUploadsSkipped, 1)
+			return nil
+		}
 	}
 
 	// Re-open the file for reading.
@@ -166,6 +193,7 @@ func (u *Uploader) upload(ctx context.Context) error {
 	if err != nil {
 		stats.Add(numUploadsFail, 1)
 	} else {
+		u.lastSum = sum
 		stats.Add(numUploadsOK, 1)
 		stats.Add(totalUploadBytes, cr.count)
 		stats.Get(lastUploadBytes).(*expvar.Int).Set(cr.count)

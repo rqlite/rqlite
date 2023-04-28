@@ -110,6 +110,7 @@ func Test_UploaderDoubleUpload(t *testing.T) {
 	}
 	dp := &mockDataProvider{data: "my upload data"}
 	uploader := NewUploader(sc, dp, 100*time.Millisecond, UploadNoCompress)
+	uploader.disableSumCheck = true // Force upload of the same data
 	ctx, cancel := context.WithCancel(context.Background())
 
 	go uploader.Start(ctx, nil)
@@ -180,6 +181,7 @@ func Test_UploaderOKThenFail(t *testing.T) {
 	}
 	dp := &mockDataProvider{data: "my upload data"}
 	uploader := NewUploader(sc, dp, 100*time.Millisecond, UploadNoCompress)
+	uploader.disableSumCheck = true // Disable because we want to upload twice.
 	ctx, cancel := context.WithCancel(context.Background())
 
 	go uploader.Start(ctx, nil)
