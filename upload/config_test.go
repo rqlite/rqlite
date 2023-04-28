@@ -1,11 +1,76 @@
 package upload
 
 import (
+	"bytes"
 	"errors"
+	"io/ioutil"
+	"os"
 	"reflect"
 	"testing"
 	"time"
 )
+
+func Test_ReadConfigFile(t *testing.T) {
+	t.Run("valid config file", func(t *testing.T) {
+		// Create a temporary config file
+		tempFile, err := ioutil.TempFile("", "upload_config")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer os.Remove(tempFile.Name())
+
+		content := []byte("key=value")
+		if _, err := tempFile.Write(content); err != nil {
+			t.Fatal(err)
+		}
+		tempFile.Close()
+
+		data, err := ReadConfigFile(tempFile.Name())
+		if err != nil {
+			t.Fatalf("Expected no error, got %v", err)
+		}
+		if !bytes.Equal(data, content) {
+			t.Fatalf("Expected %v, got %v", content, data)
+		}
+	})
+
+	t.Run("non-existent file", func(t *testing.T) {
+		_, err := ReadConfigFile("nonexistentfile")
+		if !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("Expected os.ErrNotExist, got %v", err)
+		}
+	})
+
+	t.Run("file with environment variables", func(t *testing.T) {
+		// Set an environment variable
+		if err := os.Setenv("TEST_VAR", "test_value"); err != nil {
+			t.Fatal(err)
+		}
+		defer os.Unsetenv("TEST_VAR")
+
+		// Create a temporary config file with an environment variable
+		tempFile, err := ioutil.TempFile("", "upload_config")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer os.Remove(tempFile.Name())
+
+		content := []byte("key=$TEST_VAR")
+		if _, err := tempFile.Write(content); err != nil {
+			t.Fatal(err)
+		}
+		tempFile.Close()
+
+		data, err := ReadConfigFile(tempFile.Name())
+		if err != nil {
+			t.Fatalf("Expected no error, got %v", err)
+		}
+		expectedContent := []byte("key=test_value")
+		if !bytes.Equal(data, expectedContent) {
+			t.Fatalf("Expected %v, got %v", expectedContent, data)
+		}
+	})
+}
 
 func TestUnmarshal(t *testing.T) {
 	testCases := []struct {
