@@ -1,3 +1,7 @@
+## 7.15.0 (unreleased)
+### New features
+- [PR #11229](https://github.com/rqlite/rqlite/pull/1229): Add support for autoamtic backups to AWS S3.
+
 ## 7.14.3 (April 25th 2023)
 ## Implementation changes and bug fixes
 - [PR #1218](https://github.com/rqlite/rqlite/pull/1218): Check for more possible errors in peers.json. Thanks @Tjstretchalot
