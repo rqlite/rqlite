@@ -70,6 +70,40 @@ func Test_ReadConfigFile(t *testing.T) {
 			t.Fatalf("Expected %v, got %v", expectedContent, data)
 		}
 	})
+
+	t.Run("longer file with environment variables", func(t *testing.T) {
+		// Set an environment variable
+		if err := os.Setenv("TEST_VAR1", "test_value"); err != nil {
+			t.Fatal(err)
+		}
+		defer os.Unsetenv("TEST_VAR1")
+
+		// Create a temporary config file with an environment variable
+		tempFile, err := ioutil.TempFile("", "upload_config")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer os.Remove(tempFile.Name())
+
+		content := []byte(`
+key1=$TEST_VAR1
+key2=TEST_VAR2`)
+		if _, err := tempFile.Write(content); err != nil {
+			t.Fatal(err)
+		}
+		tempFile.Close()
+
+		data, err := ReadConfigFile(tempFile.Name())
+		if err != nil {
+			t.Fatalf("Expected no error, got %v", err)
+		}
+		expectedContent := []byte(`
+key1=test_value
+key2=TEST_VAR2`)
+		if !bytes.Equal(data, expectedContent) {
+			t.Fatalf("Expected %v, got %v", expectedContent, data)
+		}
+	})
 }
 
 func TestUnmarshal(t *testing.T) {
