@@ -111,7 +111,8 @@ class TestAutoBackupS3(unittest.TestCase):
     node.start()
     node.wait_for_leader()
     node.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
-    node.execute('INSERT INTO foo(name) VALUES("fiona")')
+    for i in range(1000):
+      node.execute('INSERT INTO foo(name) VALUES("fiona")')
     node.wait_for_all_fsm()
     time.sleep(5)
 
@@ -122,10 +123,10 @@ class TestAutoBackupS3(unittest.TestCase):
     backup_file = gunzip_file(compressed_backup_file)
     conn = sqlite3.connect(backup_file)
     c = conn.cursor()
-    c.execute('SELECT * FROM foo')
+    c.execute('SELECT count(*) FROM foo WHERE name="fiona"')
     rows = c.fetchall()
     self.assertEqual(len(rows), 1)
-    self.assertEqual(rows[0][1], 'fiona')
+    self.assertEqual(rows[0][0], 1000)
     conn.close()
 
     deprovision_node(node)
