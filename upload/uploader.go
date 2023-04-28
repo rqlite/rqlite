@@ -1,7 +1,6 @@
 package upload
 
 import (
-	"bytes"
 	"compress/gzip"
 	"context"
 	"expvar"
@@ -19,11 +18,10 @@ type StorageClient interface {
 }
 
 // DataProvider is an interface for providing data to be uploaded. The Uploader
-// service will call Provide() to get a reader for the data to be uploaded. Once
-// the upload completes the reader will be closed, regardless of whether the
-// upload succeeded or failed.
+// service will call Provide() to have the data-for-upload to be written to the
+// to the file specified by path.
 type DataProvider interface {
-	Provide() (io.ReadCloser, error)
+	Provide(path string) error
 }
 
 // stats captures stats for the Uploader service.
@@ -115,17 +113,34 @@ func (u *Uploader) Stats() (map[string]interface{}, error) {
 }
 
 func (u *Uploader) upload(ctx context.Context) error {
-	rc, err := u.dataProvider.Provide()
+	// create a temporary file to hold the data to be uploaded
+	tmpfile, err := tempFilename()
 	if err != nil {
 		return err
 	}
-	defer rc.Close()
+	defer os.Remove(tmpfile)
 
-	r := rc.(io.Reader)
+	if err := u.dataProvider.Provide(tmpfile); err != nil {
+		return err
+	}
+
+	// Re-open the file for reading.
+	uncompressedF, err := os.Open(tmpfile)
+	if err != nil {
+		return err
+	}
+	defer uncompressedF.Close()
+
+	r := io.Reader(uncompressedF)
 	if u.compress {
-		buffer := new(bytes.Buffer)
-		gw := gzip.NewWriter(buffer)
-		_, err = io.Copy(gw, rc)
+		compressedF, err := os.CreateTemp("", "rqlite-upload")
+		if err != nil {
+			return err
+		}
+		defer os.Remove(compressedF.Name())
+
+		gw := gzip.NewWriter(compressedF)
+		_, err = io.Copy(gw, uncompressedF)
 		if err != nil {
 			return err
 		}
@@ -133,7 +148,16 @@ func (u *Uploader) upload(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		r = buffer
+		if err := compressedF.Close(); err != nil {
+			return err
+		}
+
+		compressedF, err = os.Open(compressedF.Name())
+		if err != nil {
+			return err
+		}
+		defer compressedF.Close()
+		r = io.Reader(compressedF)
 	}
 
 	cr := &countingReader{reader: r}
@@ -160,4 +184,13 @@ func (c *countingReader) Read(p []byte) (int, error) {
 	n, err := c.reader.Read(p)
 	c.count += int64(n)
 	return n, err
+}
+
+func tempFilename() (string, error) {
+	f, err := os.CreateTemp("", "rqlite-upload")
+	if err != nil {
+		return "", err
+	}
+	f.Close()
+	return f.Name(), nil
 }

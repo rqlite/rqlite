@@ -6,7 +6,7 @@ import (
 	"expvar"
 	"fmt"
 	"io"
-	"strings"
+	"os"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -299,9 +299,9 @@ type mockDataProvider struct {
 	err  error
 }
 
-func (mp *mockDataProvider) Provide() (io.ReadCloser, error) {
+func (mp *mockDataProvider) Provide(path string) error {
 	if mp.err != nil {
-		return nil, mp.err
+		return mp.err
 	}
-	return io.NopCloser(strings.NewReader(mp.data)), nil
+	return os.WriteFile(path, []byte(mp.data), 0644)
 }
