@@ -73,7 +73,8 @@ jobs:
       - run: go version
       - run: go get -t -d -v ./...
       - run: go install -tags osusergo,netgo,sqlite_omit_load_extension
-          -ldflags="-extldflags=-static" ./...
+          -ldflags="-s -extldflags=-static" ./...
+      - run: ls -alh /home/circleci/go/bin/rqlited
       - run:
           command: python3 system_test/e2e/single_node.py
           environment:
