@@ -3,7 +3,6 @@ package store
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"math/rand"
 	"net"
@@ -906,21 +905,11 @@ func Test_SingleNodeProvide(t *testing.T) {
 				t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 			}
 
-			rc, err := s0.Provide()
+			tempFile := mustCreateTempFile()
+			defer os.Remove(tempFile)
+			err = s0.Provide(tempFile)
 			if err != nil {
 				t.Fatalf("store failed to provide: %s", err.Error())
-			}
-
-			f, err := os.CreateTemp("", "rqlite-store-test")
-			if err != nil {
-				t.Fatalf("failed to create temp file: %s", err.Error())
-			}
-			defer os.Remove(f.Name())
-			defer f.Close()
-
-			_, err = io.Copy(f, rc)
-			if err != nil {
-				t.Fatalf("failed to copy data from store: %s", err.Error())
 			}
 
 			// Load the provided data into a new store and check it.
@@ -938,7 +927,7 @@ func Test_SingleNodeProvide(t *testing.T) {
 				t.Fatalf("Error waiting for leader: %s", err)
 			}
 
-			err = s1.Load(loadRequestFromFile(f.Name()))
+			err = s1.Load(loadRequestFromFile(tempFile))
 			if err != nil {
 				t.Fatalf("failed to load provided SQLite data: %s", err.Error())
 			}
@@ -973,7 +962,9 @@ func Test_SingleNodeInMemProvideNoData(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
-	_, err := s.Provide()
+	tmpFile := mustCreateTempFile()
+	defer os.Remove(tmpFile)
+	err := s.Provide(tmpFile)
 	if err != nil {
 		t.Fatalf("store failed to provide: %s", err.Error())
 	}
@@ -2307,6 +2298,15 @@ func (m *mockListener) Accept() (net.Conn, error) { return m.ln.Accept() }
 func (m *mockListener) Close() error { return m.ln.Close() }
 
 func (m *mockListener) Addr() net.Addr { return m.ln.Addr() }
+
+func mustCreateTempFile() string {
+	f, err := os.CreateTemp("", "rqlite-temp")
+	if err != nil {
+		panic("failed to create temporary file")
+	}
+	f.Close()
+	return f.Name()
+}
 
 func mustWriteFile(path, contents string) {
 	err := os.WriteFile(path, []byte(contents), 0644)
