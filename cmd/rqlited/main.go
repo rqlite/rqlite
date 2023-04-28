@@ -204,7 +204,7 @@ func startAutoBackups(ctx context.Context, cfg *Config, str *store.Store) (*uplo
 		return nil, fmt.Errorf("failed to parse auto-backup file: %s", err.Error())
 	}
 	sc := aws.NewS3Client(s3cfg.Region, s3cfg.AccessKeyID, s3cfg.SecretAccessKey, s3cfg.Bucket, s3cfg.Path)
-	u := upload.NewUploader(sc, str, time.Duration(uCfg.Interval))
+	u := upload.NewUploader(sc, str, time.Duration(uCfg.Interval), !uCfg.NoCompress)
 	go u.Start(ctx, nil)
 	return u, nil
 }

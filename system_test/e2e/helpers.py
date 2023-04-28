@@ -2,6 +2,7 @@
 
 import tempfile
 import ast
+import gzip
 import subprocess
 import requests
 import json
@@ -24,6 +25,11 @@ def d_(s):
 
 def env_present(name):
   return name in os.environ and os.environ[name] != ""
+
+def gunzip_file(path):
+  with gzip.open(path, 'rb') as f:
+    file_content = f.read()
+  return write_random_file(file_content, mode='wb')
 
 def is_sequence_number(r):
   return seqRe.match(r)

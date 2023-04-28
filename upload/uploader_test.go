@@ -1,6 +1,7 @@
 package upload
 
 import (
+	"compress/gzip"
 	"context"
 	"expvar"
 	"fmt"
@@ -16,7 +17,7 @@ func Test_NewUploader(t *testing.T) {
 	storageClient := &mockStorageClient{}
 	dataProvider := &mockDataProvider{}
 	interval := time.Second
-	uploader := NewUploader(storageClient, dataProvider, interval)
+	uploader := NewUploader(storageClient, dataProvider, interval, UploadNoCompress)
 	if uploader.storageClient != storageClient {
 		t.Errorf("expected storageClient to be %v, got %v", storageClient, uploader.storageClient)
 	}
@@ -43,7 +44,7 @@ func Test_UploaderSingleUpload(t *testing.T) {
 		},
 	}
 	dp := &mockDataProvider{data: "my upload data"}
-	uploader := NewUploader(sc, dp, 100*time.Millisecond)
+	uploader := NewUploader(sc, dp, 100*time.Millisecond, UploadNoCompress)
 	ctx, cancel := context.WithCancel(context.Background())
 
 	go uploader.Start(ctx, nil)
@@ -51,7 +52,7 @@ func Test_UploaderSingleUpload(t *testing.T) {
 	cancel()
 	<-ctx.Done()
 
-	if exp, got := string(uploadedData), "my upload data"; exp != got {
+	if exp, got := "my upload data", string(uploadedData); exp != got {
 		t.Errorf("expected uploadedData to be %s, got %s", exp, got)
 	}
 
@@ -67,6 +68,49 @@ func Test_UploaderSingleUpload(t *testing.T) {
 	}
 	if exp, got := int64(len("my upload data")), stats.Get(lastUploadBytes).(*expvar.Int); exp != got.Value() {
 		t.Errorf("expected lastUploadBytes to be %d, got %d", exp, got)
+	}
+}
+
+func Test_UploaderSingleUploadCompress(t *testing.T) {
+	ResetStats()
+	var uploadedData []byte
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	sc := &mockStorageClient{
+		uploadFn: func(ctx context.Context, reader io.Reader) error {
+			defer wg.Done()
+
+			// Wrap a gzip reader about the reader.
+			gzReader, err := gzip.NewReader(reader)
+			if err != nil {
+				return err
+			}
+			defer gzReader.Close()
+
+			uploadedData, err = io.ReadAll(gzReader)
+			return err
+		},
+	}
+	dp := &mockDataProvider{data: "my upload data"}
+	uploader := NewUploader(sc, dp, 100*time.Millisecond, UploadCompress)
+	ctx, cancel := context.WithCancel(context.Background())
+
+	go uploader.Start(ctx, nil)
+	wg.Wait()
+	cancel()
+	<-ctx.Done()
+
+	if exp, got := "my upload data", string(uploadedData); exp != got {
+		t.Errorf("expected uploadedData to be %s, got %s", exp, got)
+	}
+
+	// Check the metrics.
+	if exp, got := int64(1), stats.Get(numUploadsOK).(*expvar.Int); exp != got.Value() {
+		t.Errorf("expected numUploadsOK to be %d, got %d", exp, got)
+	}
+	if exp, got := int64(0), stats.Get(numUploadsFail).(*expvar.Int); exp != got.Value() {
+		t.Errorf("expected numUploadsFail to be %d, got %d", exp, got)
 	}
 }
 
@@ -87,7 +131,7 @@ func Test_UploaderDoubleUpload(t *testing.T) {
 		},
 	}
 	dp := &mockDataProvider{data: "my upload data"}
-	uploader := NewUploader(sc, dp, 100*time.Millisecond)
+	uploader := NewUploader(sc, dp, 100*time.Millisecond, UploadNoCompress)
 	ctx, cancel := context.WithCancel(context.Background())
 
 	go uploader.Start(ctx, nil)
@@ -95,7 +139,7 @@ func Test_UploaderDoubleUpload(t *testing.T) {
 	cancel()
 	<-ctx.Done()
 
-	if exp, got := string(uploadedData), "my upload data"; exp != got {
+	if exp, got := "my upload data", string(uploadedData); exp != got {
 		t.Errorf("expected uploadedData to be %s, got %s", exp, got)
 	}
 
@@ -137,7 +181,7 @@ func Test_UploaderFailThenOK(t *testing.T) {
 		},
 	}
 	dp := &mockDataProvider{data: "my upload data"}
-	uploader := NewUploader(sc, dp, 100*time.Millisecond)
+	uploader := NewUploader(sc, dp, 100*time.Millisecond, UploadNoCompress)
 	ctx, cancel := context.WithCancel(context.Background())
 
 	go uploader.Start(ctx, nil)
@@ -145,7 +189,7 @@ func Test_UploaderFailThenOK(t *testing.T) {
 	cancel()
 	<-ctx.Done()
 
-	if exp, got := string(uploadedData), "my upload data"; exp != got {
+	if exp, got := "my upload data", string(uploadedData); exp != got {
 		t.Errorf("expected uploadedData to be %s, got %s", exp, got)
 	}
 
@@ -185,7 +229,7 @@ func Test_UploaderOKThenFail(t *testing.T) {
 		},
 	}
 	dp := &mockDataProvider{data: "my upload data"}
-	uploader := NewUploader(sc, dp, 100*time.Millisecond)
+	uploader := NewUploader(sc, dp, 100*time.Millisecond, UploadNoCompress)
 	ctx, cancel := context.WithCancel(context.Background())
 
 	go uploader.Start(ctx, nil)
@@ -193,7 +237,7 @@ func Test_UploaderOKThenFail(t *testing.T) {
 	cancel()
 	<-ctx.Done()
 
-	if exp, got := string(uploadedData), "my upload data"; exp != got {
+	if exp, got := "my upload data", string(uploadedData); exp != got {
 		t.Errorf("expected uploadedData to be %s, got %s", exp, got)
 	}
 }
@@ -208,7 +252,7 @@ func Test_UploaderContextCancellation(t *testing.T) {
 		},
 	}
 	dp := &mockDataProvider{data: "my upload data"}
-	uploader := NewUploader(sc, dp, time.Second)
+	uploader := NewUploader(sc, dp, time.Second, UploadNoCompress)
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
 
 	go uploader.Start(ctx, nil)
@@ -226,7 +270,7 @@ func Test_UploaderEnabledFalse(t *testing.T) {
 
 	sc := &mockStorageClient{}
 	dp := &mockDataProvider{data: "my upload data"}
-	uploader := NewUploader(sc, dp, 100*time.Millisecond)
+	uploader := NewUploader(sc, dp, 100*time.Millisecond, false)
 	ctx, cancel := context.WithCancel(context.Background())
 
 	go uploader.Start(ctx, func() bool { return false })
@@ -253,7 +297,7 @@ func Test_UploaderEnabledTrue(t *testing.T) {
 		},
 	}
 	dp := &mockDataProvider{data: "my upload data"}
-	uploader := NewUploader(sc, dp, 100*time.Millisecond)
+	uploader := NewUploader(sc, dp, 100*time.Millisecond, UploadNoCompress)
 	ctx, cancel := context.WithCancel(context.Background())
 
 	go uploader.Start(ctx, func() bool { return true })
@@ -269,7 +313,7 @@ func Test_UploaderStats(t *testing.T) {
 	sc := &mockStorageClient{}
 	dp := &mockDataProvider{data: "my upload data"}
 	interval := 100 * time.Millisecond
-	uploader := NewUploader(sc, dp, interval)
+	uploader := NewUploader(sc, dp, interval, UploadNoCompress)
 
 	stats, err := uploader.Stats()
 	if err != nil {
