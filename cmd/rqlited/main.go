@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net"
 	"os"
@@ -195,13 +194,7 @@ func startAutoBackups(ctx context.Context, cfg *Config, str *store.Store) (*uplo
 		return nil, nil
 	}
 
-	f, err := os.Open(cfg.AutoBackupFile)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open auto-backup file: %s", err.Error())
-	}
-	defer f.Close()
-
-	b, err := ioutil.ReadAll(f)
+	b, err := upload.ReadConfigFile(cfg.AutoBackupFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read auto-backup file: %s", err.Error())
 	}

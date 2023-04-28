@@ -3,6 +3,8 @@ package upload
 import (
 	"encoding/json"
 	"errors"
+	"io/ioutil"
+	"os"
 	"time"
 )
 
@@ -106,4 +108,22 @@ func Unmarshal(data []byte) (*Config, *S3Config, error) {
 		return nil, nil, err
 	}
 	return cfg, s3cfg, nil
+}
+
+// ReadConfigFile reads the config file and returns the data. It also expands
+// any environment variables in the config file.
+func ReadConfigFile(filename string) ([]byte, error) {
+	f, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	data, err := ioutil.ReadAll(f)
+	if err != nil {
+		return nil, err
+	}
+
+	data = []byte(os.ExpandEnv(string(data)))
+	return data, nil
 }
