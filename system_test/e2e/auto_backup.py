@@ -15,6 +15,9 @@ import time
 from helpers import Node, deprovision_node, write_random_file, random_string, env_present
 from s3 import download_s3_object, delete_s3_object
 
+S3_BUCKET = 'rqlite-testing-circleci'
+S3_BUCKET_REGION = 'us-west-2'
+
 RQLITED_PATH = os.environ['RQLITED_PATH']
 
 class TestAutoBackupS3(unittest.TestCase):
@@ -38,8 +41,8 @@ class TestAutoBackupS3(unittest.TestCase):
       "sub" : {
          "access_key_id": self.access_key_id,
          "secret_access_key": self.secret_access_key_id,
-         "region": "us-west-2",
-         "bucket": "rqlite-testing-circleci",
+         "region": S3_BUCKET_REGION,
+         "bucket": S3_BUCKET,
          "path": self.path
       }
     }
@@ -57,7 +60,7 @@ class TestAutoBackupS3(unittest.TestCase):
 
     # Download the backup file from S3 and check it.
     backup_data = download_s3_object(self.access_key_id, self.secret_access_key_id,
-                                     'rqlite-testing-circleci', self.path)
+                                     S3_BUCKET, self.path)
     self.backup_file = write_random_file(backup_data, mode='wb')
     conn = sqlite3.connect(self.backup_file)
     c = conn.cursor()
@@ -75,7 +78,7 @@ class TestAutoBackupS3(unittest.TestCase):
     if self.backup_file is not None:
       os.remove(self.backup_file)
     delete_s3_object(self.access_key_id, self.secret_access_key_id,
-                     'rqlite-testing-circleci', self.path)
+                     S3_BUCKET, self.path)
 
 
 if __name__ == "__main__":
