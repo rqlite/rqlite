@@ -1,6 +1,6 @@
 ## 7.15.1 (April 29th 2023)
 ### Implementation changes and bug fixes
-- [PR #1233](https://github.com/rqlite/rqlite/pull/1233): Close file handle after upload
+- [PR #1233](https://github.com/rqlite/rqlite/pull/1233): Close file handle after upload.
 
 ## 7.15.0 (April 28th 2023)
 ### New features
