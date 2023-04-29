@@ -1,14 +1,23 @@
-## 7.14.3 (unreleased)
-## Implementation changes and bug fixes
+## 7.15.1 (April 29th 2023)
+### Implementation changes and bug fixes
+- [PR #1233](https://github.com/rqlite/rqlite/pull/1233): Close file handle after upload.
+
+## 7.15.0 (April 28th 2023)
+### New features
+- [PR #1229](https://github.com/rqlite/rqlite/pull/1229), [PR #1232](https://github.com/rqlite/rqlite/pull/1232): Add support for automatic backups to AWS S3. Many thanks to [VOXO](https://voxo.co/) for funding this development.
+
+## 7.14.3 (April 25th 2023)
+### Implementation changes and bug fixes
 - [PR #1218](https://github.com/rqlite/rqlite/pull/1218): Check for more possible errors in peers.json. Thanks @Tjstretchalot
 - [PR #1220](https://github.com/rqlite/rqlite/pull/1220): Support Notify over Raft connection.
 - [PR #1221](https://github.com/rqlite/rqlite/pull/1221): Support Join over Raft connection.
 - [PR #1222](https://github.com/rqlite/rqlite/pull/1222): Joiner expands all targets to include protocols.
 - [PR #1224](https://github.com/rqlite/rqlite/pull/1224): Fix credentials load error checking. Thanks @phmx
+- [PR #1227](https://github.com/rqlite/rqlite/pull/1227): Upgrade dependencies, including moving to [Hashicorp Raft 1.5](https://github.com/hashicorp/raft/pull/541).
 
 ## 7.14.2 (April 7th 2023)
 This release is the first to includes various bug fixes and optimizations thanks to running much of the code through [Chat GPT-4](https://openai.com/product/gpt-4), most of which are not explicitly listed in the [CHANGELOG](https://github.com/rqlite/rqlite/edit/master/CHANGELOG.md), but you can check the commit history for details. Future releases of rqlite will probably include more such changes.
-## Implementation changes and bug fixes
+### Implementation changes and bug fixes
 - [PR #1179](https://github.com/rqlite/rqlite/pull/1179): go mod updates.
 - [PR #1180](https://github.com/rqlite/rqlite/pull/1180): Support large numbers in requests.
 - [PR #1186](https://github.com/rqlite/rqlite/pull/1186): Improve read-only (non-voting) node management. Fixes [issue #1182](https://github.com/rqlite/rqlite/issues/1182).
@@ -18,7 +27,7 @@ This release is the first to includes various bug fixes and optimizations thanks
 - [PR #1218](https://github.com/rqlite/rqlite/pull/1218): Check for more possible errors in peers.json. Thanks @Tjstretchalot
 
 ## 7.14.1 (March 17th 2023)
-## Implementation changes and bug fixes
+### Implementation changes and bug fixes
 - [PR #1174](https://github.com/rqlite/rqlite/pull/1174): Fix command-line help for x509 resources.
 - [PR #1178](https://github.com/rqlite/rqlite/pull/1178): Fix parsing of Named Parameters with `NULL` as value. Fixes [issue #1177](https://github.com/rqlite/rqlite/issues/1177). Thanks @wellescastro
 

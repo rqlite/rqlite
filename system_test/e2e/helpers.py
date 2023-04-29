@@ -2,6 +2,7 @@
 
 import tempfile
 import ast
+import gzip
 import subprocess
 import requests
 import json
@@ -22,6 +23,14 @@ seqRe = re.compile("^{'results': \[\], 'sequence_number': \d+}$")
 def d_(s):
     return ast.literal_eval(s.replace("'", "\""))
 
+def env_present(name):
+  return name in os.environ and os.environ[name] != ""
+
+def gunzip_file(path):
+  with gzip.open(path, 'rb') as f:
+    file_content = f.read()
+  return write_random_file(file_content, mode='wb')
+
 def is_sequence_number(r):
   return seqRe.match(r)
 
@@ -29,8 +38,8 @@ def random_string(n):
   letters = string.ascii_lowercase
   return ''.join(random.choice(letters) for i in range(n))
 
-def write_random_file(data):
-  f = tempfile.NamedTemporaryFile('w', delete=False)
+def write_random_file(data, mode='w'):
+  f = tempfile.NamedTemporaryFile(mode, delete=False)
   f.write(data)
   f.close()
   return f.name
@@ -57,7 +66,7 @@ class Node(object):
                raft_snap_threshold=8192, raft_snap_int="1s",
                http_cert=None, http_key=None, http_no_verify=False,
                node_cert=None, node_key=None, node_no_verify=False,
-               auth=None, dir=None, on_disk=False):
+               auth=None, auto_backup=None, dir=None, on_disk=False):
     
     s_api = None
     s_raft = None
@@ -100,6 +109,7 @@ class Node(object):
     self.node_key = node_key
     self.node_no_verify = node_no_verify
     self.auth = auth
+    self.auto_backup = auto_backup
     self.disco_key = random_string(10)
     self.on_disk = on_disk
     self.process = None
@@ -166,6 +176,8 @@ class Node(object):
       command += ['-on-disk']
     if self.auth is not None:
       command += ['-auth', self.auth]
+    if self.auto_backup is not None:
+      command += ['-auto-backup', self.auto_backup]
     if join is not None:
       if join.startswith('http://') is False:
         join = 'http://' + join

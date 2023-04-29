@@ -70,6 +70,7 @@ const (
 
 const (
 	numSnaphots              = "num_snapshots"
+	numProvides              = "num_provides"
 	numBackups               = "num_backups"
 	numLoads                 = "num_loads"
 	numRestores              = "num_restores"
@@ -101,6 +102,7 @@ func init() {
 // ResetStats resets the expvar stats for this module. Mostly for test purposes.
 func ResetStats() {
 	stats.Add(numSnaphots, 0)
+	stats.Add(numProvides, 0)
 	stats.Add(numBackups, 0)
 	stats.Add(numRestores, 0)
 	stats.Add(numRecoveries, 0)
@@ -903,7 +905,7 @@ func (s *Store) Backup(br *command.BackupRequest, dst io.Writer) (retErr error) 
 	}
 
 	if br.Format == command.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY {
-		f, err := ioutil.TempFile("", "rqlilte-snap-")
+		f, err := os.CreateTemp("", "rqlite-snap-")
 		if err != nil {
 			return err
 		}
@@ -928,6 +930,16 @@ func (s *Store) Backup(br *command.BackupRequest, dst io.Writer) (retErr error) 
 		return s.db.Dump(dst)
 	}
 	return ErrInvalidBackupFormat
+}
+
+// Provide implements the uploader Provider interface, allowing the
+// Store to be used as a DataProvider for an uploader.
+func (s *Store) Provide(path string) error {
+	if err := s.db.Backup(path); err != nil {
+		return err
+	}
+	stats.Add(numProvides, 1)
+	return nil
 }
 
 // Loads an entire SQLite file into the database, sending the request
