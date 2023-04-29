@@ -7,7 +7,7 @@
 - [Website](https://www.rqlite.io)
 - [Developer guide](https://www.rqlite.io/docs/api)
 
-rqlite is simple to deploy, operating it is very straightforward, and its clustering capabilities provide you with fault-tolerance and high-availability. [rqlite is available for Linux, macOS, and Microsoft Windows](https://github.com/rqlite/rqlite/releases).
+rqlite is simple to deploy, operating and accessing it is very straightforward, and its clustering capabilities provide you with fault-tolerance and high-availability. [rqlite is available for Linux, macOS, and Microsoft Windows](https://github.com/rqlite/rqlite/releases).
 
 _Check out the [rqlite FAQ](https://rqlite.io/docs/faq)_.
 
