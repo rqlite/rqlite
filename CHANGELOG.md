@@ -1,3 +1,7 @@
+## 7.15.1 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1233](https://github.com/rqlite/rqlite/pull/1233): Close file handle after upload
+
 ## 7.15.0 (April 28th 2023)
 ### New features
 - [PR #1229](https://github.com/rqlite/rqlite/pull/1229), [PR #1232](https://github.com/rqlite/rqlite/pull/1232): Add support for automatic backups to AWS S3. Many thanks to [VOXO](https://voxo.co/) for funding this development.

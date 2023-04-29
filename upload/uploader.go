@@ -153,6 +153,7 @@ func (u *Uploader) upload(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	defer fd.Close()
 
 	cr := &countingReader{reader: fd}
 	startTime := time.Now()
