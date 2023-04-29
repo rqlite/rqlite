@@ -17,6 +17,17 @@
 
 REPO_URL="https://github.com/rqlite/rqlite"
 
+function is_semver() {
+  local version_string="$1"
+  local semver_pattern='^v([0-9]+)\.([0-9]+)\.([0-9]+)$'
+
+  if [[ $version_string =~ $semver_pattern ]]; then
+    return 0
+  else
+    return 1
+  fi
+}
+
 # copy_binaries <dst_path> <src_dir>
 copy_binaries () {
 	cp $2/rqlited $1
@@ -40,6 +51,11 @@ fi
 VERSION=$1
 RELEASE_ID=$2
 API_TOKEN=$3
+
+if ! is_semver "$VERSION"; then
+	echo "Version $VERSION is not a valid semver version"
+	exit 1
+fi
 
 # Create work directories
 tmp_build=`mktemp -d`
