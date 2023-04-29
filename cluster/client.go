@@ -21,9 +21,9 @@ const (
 	maxPoolCapacity = 64
 
 	protoBufferLengthSize = 8
-	maxResponseSize       = 1024 * 1024 * 1024 * 1024 // 1TB
-	maxJoinResponseSize   = 128
-	maxNotifyResponseSize = 128
+	maxResponseSize       = uint64(1024 * 1024 * 1024 * 1024) // 1TB
+	maxJoinResponseSize   = uint64(128)
+	maxNotifyResponseSize = uint64(128)
 )
 
 var (
@@ -488,7 +488,7 @@ func readResponse(conn net.Conn, timeout time.Duration) ([]byte, error) {
 	return readResponseWithLimit(conn, timeout, maxResponseSize)
 }
 
-func readResponseWithLimit(conn net.Conn, timeout time.Duration, limit int) ([]byte, error) {
+func readResponseWithLimit(conn net.Conn, timeout time.Duration, limit uint64) ([]byte, error) {
 	// Read length of incoming response.
 	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
 		return nil, err
@@ -499,7 +499,7 @@ func readResponseWithLimit(conn net.Conn, timeout time.Duration, limit int) ([]b
 		return nil, fmt.Errorf("read protobuf length: %w", err)
 	}
 	sz := binary.LittleEndian.Uint64(b[0:])
-	if int(sz) > limit {
+	if sz > limit {
 		return nil, ErrResponseTooLarge
 	}
 
