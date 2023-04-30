@@ -503,6 +503,8 @@ func createCluster(cfg *Config, hasPeers bool, joiner *cluster.Joiner, str *stor
 		if err != nil {
 			return fmt.Errorf("failed to start discovery service: %s", err.Error())
 		}
+		// Safe to start reporting before doing registration. If the node hasn't bootstrapped
+		// yet, or isn't leader, reporting will just be a no-op until something changes.
 		go discoService.StartReporting(cfg.NodeID, cfg.HTTPURL(), cfg.RaftAdv)
 		httpServ.RegisterStatus("disco", discoService)
 
