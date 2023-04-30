@@ -503,42 +503,43 @@ func createCluster(cfg *Config, hasPeers bool, joiner *cluster.Joiner, str *stor
 		if err != nil {
 			return fmt.Errorf("failed to start discovery service: %s", err.Error())
 		}
-
-		if !hasPeers {
-			log.Println("no preexisting nodes, registering with discovery service")
-
-			leader, addr, err := discoService.Register(str.ID(), cfg.HTTPURL(), cfg.RaftAdv)
-			if err != nil {
-				return fmt.Errorf("failed to register with discovery service: %s", err.Error())
-			}
-			if leader {
-				log.Println("node registered as leader using discovery service")
-				if err := str.Bootstrap(store.NewServer(str.ID(), str.Addr(), true)); err != nil {
-					return fmt.Errorf("failed to bootstrap single new node: %s", err.Error())
-				}
-			} else {
-				for {
-					log.Printf("discovery service returned %s as join address", addr)
-					if j, err := joiner.Do([]string{addr}, str.ID(), cfg.RaftAdv, !cfg.RaftNonVoter); err != nil {
-						log.Printf("failed to join cluster at %s: %s", addr, err.Error())
-
-						time.Sleep(time.Second)
-						_, addr, err = discoService.Register(str.ID(), cfg.HTTPURL(), cfg.RaftAdv)
-						if err != nil {
-							log.Printf("failed to get updated leader: %s", err.Error())
-						}
-						continue
-					} else {
-						log.Println("successfully joined cluster at", j)
-						break
-					}
-				}
-			}
-		} else {
-			log.Println("preexisting node configuration detected, not registering with discovery service")
-		}
 		go discoService.StartReporting(cfg.NodeID, cfg.HTTPURL(), cfg.RaftAdv)
 		httpServ.RegisterStatus("disco", discoService)
+
+		if hasPeers {
+			log.Printf("preexisting node configuration detected, not registering with discovery service")
+			return nil
+		}
+
+		log.Println("no preexisting nodes, registering with discovery service")
+
+		leader, addr, err := discoService.Register(str.ID(), cfg.HTTPURL(), cfg.RaftAdv)
+		if err != nil {
+			return fmt.Errorf("failed to register with discovery service: %s", err.Error())
+		}
+		if leader {
+			log.Println("node registered as leader using discovery service")
+			if err := str.Bootstrap(store.NewServer(str.ID(), str.Addr(), true)); err != nil {
+				return fmt.Errorf("failed to bootstrap single new node: %s", err.Error())
+			}
+		} else {
+			for {
+				log.Printf("discovery service returned %s as join address", addr)
+				if j, err := joiner.Do([]string{addr}, str.ID(), cfg.RaftAdv, !cfg.RaftNonVoter); err != nil {
+					log.Printf("failed to join cluster at %s: %s", addr, err.Error())
+
+					time.Sleep(time.Second)
+					_, addr, err = discoService.Register(str.ID(), cfg.HTTPURL(), cfg.RaftAdv)
+					if err != nil {
+						log.Printf("failed to get updated leader: %s", err.Error())
+					}
+					continue
+				} else {
+					log.Println("successfully joined cluster at", j)
+					break
+				}
+			}
+		}
 
 	default:
 		return fmt.Errorf("invalid disco mode %s", cfg.DiscoMode)
