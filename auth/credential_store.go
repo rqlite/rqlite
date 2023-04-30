@@ -5,6 +5,7 @@ package auth
 import (
 	"encoding/json"
 	"io"
+	"os"
 	"sync"
 
 	"golang.org/x/crypto/bcrypt"
@@ -103,6 +104,18 @@ func NewCredentialsStore() *CredentialsStore {
 		hashCache: NewHashCache(),
 		UseCache:  true,
 	}
+}
+
+// NewCredentialsStoreFromFile returns a new instance of a CredentialStore loaded from a file.
+func NewCredentialsStoreFromFile(path string) (*CredentialsStore, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	c := NewCredentialsStore()
+	return c, c.Load(f)
 }
 
 // Load loads credential information from a reader.
