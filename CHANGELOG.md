@@ -1,3 +1,7 @@
+## 7.15.2 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1239](https://github.com/rqlite/rqlite/pull/1239): Remove erroneous scaling factor from etcd and Consul reporting service.
+
 ## 7.15.1 (April 29th 2023)
 ### Implementation changes and bug fixes
 - [PR #1233](https://github.com/rqlite/rqlite/pull/1233): Close file handle after upload.
