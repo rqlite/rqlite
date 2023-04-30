@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -232,6 +233,12 @@ func (c *Config) Validate() error {
 	if c.OnDiskPath != "" && !c.OnDisk {
 		return errors.New("-on-disk-path is set, but -on-disk is not")
 	}
+
+	dataPath, err := filepath.Abs(c.DataPath)
+	if err != nil {
+		return fmt.Errorf("failed to determine absolute data path: %s", err.Error())
+	}
+	c.DataPath = dataPath
 
 	if !bothUnsetSet(c.HTTPx509Cert, c.HTTPx509Key) {
 		return fmt.Errorf("either both -%s and -%s must be set, or neither", HTTPx509CertFlag, HTTPx509KeyFlag)

@@ -9,7 +9,6 @@ import (
 	"net"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"syscall"
@@ -210,10 +209,6 @@ func startAutoBackups(ctx context.Context, cfg *Config, str *store.Store) (*uplo
 }
 
 func createStore(cfg *Config, ln *tcp.Layer) (*store.Store, error) {
-	dataPath, err := filepath.Abs(cfg.DataPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to determine absolute data path: %s", err.Error())
-	}
 	dbConf := store.NewDBConfig(!cfg.OnDisk)
 	dbConf.OnDiskPath = cfg.OnDiskPath
 	dbConf.FKConstraints = cfg.FKConstraints
@@ -240,11 +235,10 @@ func createStore(cfg *Config, ln *tcp.Layer) (*store.Store, error) {
 	str.ReapTimeout = cfg.RaftReapNodeTimeout
 	str.ReapReadOnlyTimeout = cfg.RaftReapReadOnlyNodeTimeout
 
-	isNew := store.IsNewNode(dataPath)
-	if isNew {
-		log.Printf("no preexisting node state detected in %s, node may be bootstrapping", dataPath)
+	if store.IsNewNode(cfg.DataPath) {
+		log.Printf("no preexisting node state detected in %s, node may be bootstrapping", cfg.DataPath)
 	} else {
-		log.Printf("preexisting node state detected in %s", dataPath)
+		log.Printf("preexisting node state detected in %s", cfg.DataPath)
 	}
 
 	return str, nil
@@ -353,17 +347,7 @@ func credentialStore(cfg *Config) (*auth.CredentialsStore, error) {
 	if cfg.AuthFile == "" {
 		return nil, nil
 	}
-
-	f, err := os.Open(cfg.AuthFile)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open authentication file %s: %s", cfg.AuthFile, err.Error())
-	}
-
-	cs := auth.NewCredentialsStore()
-	if err := cs.Load(f); err != nil {
-		return nil, err
-	}
-	return cs, nil
+	return auth.NewCredentialsStoreFromFile(cfg.AuthFile)
 }
 
 func createJoiner(cfg *Config, credStr *auth.CredentialsStore) (*cluster.Joiner, error) {
@@ -386,7 +370,6 @@ func clusterService(cfg *Config, tn cluster.Transport, db cluster.Database, mgr 
 	c := cluster.New(tn, db, mgr, credStr)
 	c.SetAPIAddr(cfg.HTTPAdv)
 	c.EnableHTTPS(cfg.HTTPx509Cert != "" && cfg.HTTPx509Key != "") // Conditions met for an HTTPS API
-
 	if err := c.Open(); err != nil {
 		return nil, err
 	}
@@ -400,13 +383,13 @@ func createClusterClient(cfg *Config, clstr *cluster.Service) (*cluster.Client, 
 		dialerTLSConfig, err = rtls.CreateClientConfig(cfg.NodeX509Cert, cfg.NodeX509Key,
 			cfg.NodeX509CACert, cfg.NoNodeVerify, cfg.TLS1011)
 		if err != nil {
-			log.Fatalf("failed to create TLS config for cluster dialer: %s", err.Error())
+			return nil, fmt.Errorf("failed to create TLS config for cluster dialer: %s", err.Error())
 		}
 	}
 	clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, dialerTLSConfig)
 	clstrClient := cluster.NewClient(clstrDialer, cfg.ClusterConnectTimeout)
 	if err := clstrClient.SetLocal(cfg.RaftAdv, clstr); err != nil {
-		log.Fatalf("failed to set cluster client local parameters: %s", err.Error())
+		return nil, fmt.Errorf("failed to set cluster client local parameters: %s", err.Error())
 	}
 	return clstrClient, nil
 }
