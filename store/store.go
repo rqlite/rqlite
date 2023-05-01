@@ -34,6 +34,9 @@ var (
 	// ErrNotOpen is returned when a Store is not open.
 	ErrNotOpen = errors.New("store not open")
 
+	// ErrNotReady is returned when a Store is not ready to accept requests.
+	ErrNotReady = errors.New("store not ready")
+
 	// ErrNotLeader is returned when a node attempts to execute a leader-only
 	// operation.
 	ErrNotLeader = errors.New("not leader")
@@ -783,6 +786,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 			"node_id": leaderID,
 			"addr":    leaderAddr,
 		},
+		"ready": s.Ready(),
 		"observer": map[string]uint64{
 			"observed": s.observer.GetNumObserved(),
 			"dropped":  s.observer.GetNumDropped(),
@@ -811,6 +815,10 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 func (s *Store) Execute(ex *command.ExecuteRequest) ([]*command.ExecuteResult, error) {
 	if !s.open {
 		return nil, ErrNotOpen
+	}
+
+	if !s.Ready() {
+		return nil, ErrNotReady
 	}
 
 	if s.raft.State() != raft.Leader {
@@ -860,6 +868,10 @@ func (s *Store) execute(ex *command.ExecuteRequest) ([]*command.ExecuteResult, e
 func (s *Store) Query(qr *command.QueryRequest) ([]*command.QueryRows, error) {
 	if !s.open {
 		return nil, ErrNotOpen
+	}
+
+	if !s.Ready() {
+		return nil, ErrNotReady
 	}
 
 	if qr.Level == command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG {
@@ -932,6 +944,10 @@ func (s *Store) Backup(br *command.BackupRequest, dst io.Writer) (retErr error) 
 		return ErrNotOpen
 	}
 
+	if !s.Ready() {
+		return ErrNotReady
+	}
+
 	startT := time.Now()
 	defer func() {
 		if retErr == nil {
@@ -987,6 +1003,10 @@ func (s *Store) Provide(path string) error {
 func (s *Store) Load(lr *command.LoadRequest) error {
 	if !s.open {
 		return ErrNotOpen
+	}
+
+	if !s.Ready() {
+		return ErrNotReady
 	}
 
 	startT := time.Now()
