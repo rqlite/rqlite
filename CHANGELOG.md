@@ -2,6 +2,7 @@
 ### Implementation changes and bug fixes
 - [PR #1239](https://github.com/rqlite/rqlite/pull/1239): Remove erroneous scaling factor from etcd and Consul reporting service.
 - [PR #1240](https://github.com/rqlite/rqlite/pull/1240): Add support for controlling and reading Store readiness.
+- [PR #1241](https://github.com/rqlite/rqlite/pull/1241): Check Store is ready in key places.
 
 ## 7.15.1 (April 29th 2023)
 ### Implementation changes and bug fixes
