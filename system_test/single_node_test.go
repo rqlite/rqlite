@@ -44,6 +44,19 @@ func Test_SingleNodeBasicEndpoint(t *testing.T) {
 	if !ready {
 		t.Fatalf("node is not ready")
 	}
+
+	// Test that registering a ready channel affects readiness as expected.
+	ch := make(chan struct{})
+	node.Store.RegisterReadyChannel(ch)
+	ready, err = node.Ready()
+	if err != nil {
+		t.Fatalf(`failed to retrieve readiness: %s`, err)
+	}
+	if ready {
+		t.Fatalf("node is ready when registered ready channel not yet closed")
+	}
+	close(ch)
+	testPoll(t, node.Ready, 100*time.Millisecond, 5*time.Second)
 }
 
 func Test_SingleNodeNotReadyLive(t *testing.T) {
@@ -1179,6 +1192,28 @@ func Test_SingleNodeNoopSnapLogsReopen(t *testing.T) {
 		onDisk = !onDisk
 		if onDisk == false {
 			break
+		}
+	}
+}
+
+func testPoll(t *testing.T, f func() (bool, error), p time.Duration, d time.Duration) {
+	tck := time.NewTicker(p)
+	defer tck.Stop()
+	tmr := time.NewTimer(d)
+	defer tmr.Stop()
+
+	for {
+		select {
+		case <-tck.C:
+			b, err := f()
+			if err != nil {
+				continue
+			}
+			if b {
+				return
+			}
+		case <-tmr.C:
+			t.Fatalf("timeout expired: %s", t.Name())
 		}
 	}
 }

@@ -1014,6 +1014,16 @@ func Test_Readyz(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("failed to get expected StatusOK for nodes, got %d", resp.StatusCode)
 	}
+
+	m.notReady = true
+	resp, err = client.Get(host + "/readyz")
+	if err != nil {
+		t.Fatalf("failed to make nodes request")
+	}
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("failed to get expected StatusServiceUnavailable for nodes, got %d", resp.StatusCode)
+	}
+
 }
 
 func Test_ForwardingRedirectQuery(t *testing.T) {
@@ -1190,6 +1200,7 @@ type MockStore struct {
 	backupFn   func(br *command.BackupRequest, dst io.Writer) error
 	loadFn     func(lr *command.LoadRequest) error
 	leaderAddr string
+	notReady   bool // Default value is true, easier to test.
 }
 
 func (m *MockStore) Execute(er *command.ExecuteRequest) ([]*command.ExecuteResult, error) {
@@ -1220,6 +1231,10 @@ func (m *MockStore) Remove(rn *command.RemoveNodeRequest) error {
 
 func (m *MockStore) LeaderAddr() (string, error) {
 	return m.leaderAddr, nil
+}
+
+func (m *MockStore) Ready() bool {
+	return !m.notReady
 }
 
 func (m *MockStore) Stats() (map[string]interface{}, error) {

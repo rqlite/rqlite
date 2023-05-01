@@ -456,14 +456,16 @@ func (s *Store) Ready() bool {
 		return false
 	}
 
-	s.readyChansMu.Lock()
-	defer s.readyChansMu.Unlock()
-	if s.numClosedReadyChannels != len(s.readyChans) {
-		return false
-	}
-	s.readyChans = nil
-	s.numClosedReadyChannels = 0
-	return true
+	return func() bool {
+		s.readyChansMu.Lock()
+		defer s.readyChansMu.Unlock()
+		if s.numClosedReadyChannels != len(s.readyChans) {
+			return false
+		}
+		s.readyChans = nil
+		s.numClosedReadyChannels = 0
+		return true
+	}()
 }
 
 // Close closes the store. If wait is true, waits for a graceful shutdown.
