@@ -28,8 +28,9 @@ type S3Client struct {
 	bucket    string
 	key       string
 
-	uploader   uploader   // for testing via dependency injection
-	downloader downloader // for testing via dependency injection
+	// These fields are used for testing via dependency injection.
+	uploader   uploader
+	downloader downloader
 }
 
 // NewS3Client returns an instance of an S3Client.
