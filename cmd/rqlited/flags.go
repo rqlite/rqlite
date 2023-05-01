@@ -312,6 +312,9 @@ func (c *Config) Validate() error {
 				if u.Host == c.HTTPAdv || addrs[i] == c.HTTPAddr {
 					return errors.New("node cannot join with itself unless bootstrapping")
 				}
+				if c.AutoRestoreFile != "" {
+					return errors.New("auto-restoring cannot be used when joining a cluster")
+				}
 			}
 		}
 	}
