@@ -208,6 +208,47 @@ func Test_StoreLeaderObservation(t *testing.T) {
 	}
 }
 
+func Test_StoreReady(t *testing.T) {
+	s, ln := mustNewStore(t, true)
+	defer s.Close(true)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	_, err := s.WaitForLeader(10 * time.Second)
+	if err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	if !s.Ready() {
+		t.Fatalf("store not marked as ready even though Leader is set")
+	}
+
+	ch1 := make(chan struct{})
+	s.RegisterReadyChannel(ch1)
+	if s.Ready() {
+		t.Fatalf("store marked as ready even though registered channel is open")
+	}
+	close(ch1)
+	testPoll(t, s.Ready, 100*time.Millisecond, 2*time.Second)
+
+	ch2 := make(chan struct{})
+	s.RegisterReadyChannel(ch2)
+	ch3 := make(chan struct{})
+	s.RegisterReadyChannel(ch3)
+	if s.Ready() {
+		t.Fatalf("store marked as ready even though registered channels are open")
+	}
+	close(ch2)
+	close(ch3)
+	testPoll(t, s.Ready, 100*time.Millisecond, 2*time.Second)
+}
+
 func Test_SingleNodeInMemExecuteQuery(t *testing.T) {
 	s, ln := mustNewStore(t, true)
 	defer ln.Close()

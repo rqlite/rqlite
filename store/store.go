@@ -154,6 +154,11 @@ type Store struct {
 	dbAppliedIndexMu sync.RWMutex
 	dbAppliedIndex   uint64
 
+	// Channels that must be closed for the Store to be considered ready.
+	readyChans             []<-chan struct{}
+	numClosedReadyChannels int
+	readyChansMu           sync.Mutex
+
 	// Latest log entry index actually reflected by the FSM. Due to Raft code
 	// this value is not updated after a Snapshot-restore.
 	fsmIndex   uint64
@@ -426,6 +431,41 @@ func (s *Store) Stepdown(wait bool) error {
 		return nil
 	}
 	return f.Error()
+}
+
+// RegisterReadyChannel registers a channel that must be closed before the
+// store is considered "ready" to serve requests.
+func (s *Store) RegisterReadyChannel(ch <-chan struct{}) {
+	s.readyChansMu.Lock()
+	defer s.readyChansMu.Unlock()
+	s.readyChans = append(s.readyChans, ch)
+	go func() {
+		<-ch
+		s.readyChansMu.Lock()
+		s.numClosedReadyChannels++
+		s.readyChansMu.Unlock()
+	}()
+}
+
+// Ready returns true if the store is ready to serve requests. Ready is
+// defined as having no open channels registered via RegisterReadyChannel
+// and having a Leader.
+func (s *Store) Ready() bool {
+	l, err := s.LeaderAddr()
+	if err != nil || l == "" {
+		return false
+	}
+
+	return func() bool {
+		s.readyChansMu.Lock()
+		defer s.readyChansMu.Unlock()
+		if s.numClosedReadyChannels != len(s.readyChans) {
+			return false
+		}
+		s.readyChans = nil
+		s.numClosedReadyChannels = 0
+		return true
+	}()
 }
 
 // Close closes the store. If wait is true, waits for a graceful shutdown.

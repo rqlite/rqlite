@@ -73,6 +73,9 @@ type Store interface {
 	// LeaderAddr returns the Raft address of the leader of the cluster.
 	LeaderAddr() (string, error)
 
+	// Ready returns whether the Store is ready to service requests.
+	Ready() bool
+
 	// Stats returns stats on the Store.
 	Stats() (map[string]interface{}, error)
 
@@ -1176,8 +1179,15 @@ func (s *Service) handleReadyz(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(fmt.Sprintf("[+]node ok\n[+]leader not contactable: %s", err.Error())))
 		return
 	}
+
+	if !s.store.Ready() {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		w.Write([]byte("[+]node ok\n[+]leader ok\n[+]store not ready"))
+		return
+	}
+
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("[+]node ok\n[+]leader ok"))
+	w.Write([]byte("[+]node ok\n[+]leader ok\n[+]store ok"))
 }
 
 func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
