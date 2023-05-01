@@ -870,13 +870,13 @@ func (s *Store) Query(qr *command.QueryRequest) ([]*command.QueryRows, error) {
 		return nil, ErrNotOpen
 	}
 
-	if !s.Ready() {
-		return nil, ErrNotReady
-	}
-
 	if qr.Level == command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG {
 		if s.raft.State() != raft.Leader {
 			return nil, ErrNotLeader
+		}
+
+		if !s.Ready() {
+			return nil, ErrNotReady
 		}
 
 		b, compressed, err := s.reqMarshaller.Marshal(qr)
@@ -942,10 +942,6 @@ func (s *Store) Query(qr *command.QueryRequest) ([]*command.QueryRows, error) {
 func (s *Store) Backup(br *command.BackupRequest, dst io.Writer) (retErr error) {
 	if !s.open {
 		return ErrNotOpen
-	}
-
-	if !s.Ready() {
-		return ErrNotReady
 	}
 
 	startT := time.Now()
