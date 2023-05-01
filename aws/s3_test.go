@@ -1,6 +1,7 @@
 package aws
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"strings"
@@ -42,6 +43,8 @@ func TestS3ClientUploadOK(t *testing.T) {
 	secretKey := "your-secret-key"
 	bucket := "your-bucket"
 	key := "your/key/path"
+	expectedData := "test data"
+	uploadedData := new(bytes.Buffer)
 
 	mockUploader := &mockUploader{
 		uploadFn: func(ctx aws.Context, input *s3manager.UploadInput, opts ...func(*s3manager.Uploader)) (*s3manager.UploadOutput, error) {
@@ -53,6 +56,10 @@ func TestS3ClientUploadOK(t *testing.T) {
 			}
 			if input.Body == nil {
 				t.Errorf("expected body to be non-nil")
+			}
+			_, err := uploadedData.ReadFrom(input.Body)
+			if err != nil {
+				t.Errorf("error reading from input body: %v", err)
 			}
 			return &s3manager.UploadOutput{}, nil
 		},
@@ -71,6 +78,9 @@ func TestS3ClientUploadOK(t *testing.T) {
 	err := client.Upload(context.Background(), reader)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
+	}
+	if uploadedData.String() != expectedData {
+		t.Errorf("expected uploaded data to be %q, got %q", expectedData, uploadedData.String())
 	}
 }
 
