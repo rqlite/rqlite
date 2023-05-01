@@ -56,6 +56,9 @@ type Config struct {
 	// AutoBackupFile is the path to the auto-backup file. May not be set.
 	AutoBackupFile string
 
+	// AutoRestoreFile is the path to the auto-restore file. May not be set.
+	AutoRestoreFile string
+
 	// HTTPx509CACert is the path to the CA certficate file for when this node verifies
 	// other certificates for any HTTP communications. May not be set.
 	HTTPx509CACert string
@@ -406,6 +409,7 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	flag.BoolVar(&config.NodeVerifyClient, "node-verify-client", false, "Enable mutual TLS for node-to-node communication")
 	flag.StringVar(&config.AuthFile, "auth", "", "Path to authentication and authorization file. If not set, not enabled")
 	flag.StringVar(&config.AutoBackupFile, "auto-backup", "", "Path to automatic backup configuration file. If not set, not enabled")
+	flag.StringVar(&config.AutoRestoreFile, "auto-restore", "", "Path to automatic restore configuration file. If not set, not enabled")
 	flag.StringVar(&config.RaftAddr, RaftAddrFlag, "localhost:4002", "Raft communication bind address")
 	flag.StringVar(&config.RaftAdv, RaftAdvAddrFlag, "", "Advertised Raft communication address. If not set, same as Raft bind")
 	flag.StringVar(&config.JoinSrcIP, "join-source-ip", "", "Set source IP address during HTTP Join request")
