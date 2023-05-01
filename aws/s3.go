@@ -28,7 +28,8 @@ type S3Client struct {
 	bucket    string
 	key       string
 
-	uploader uploader // for testing via dependency injection
+	uploader   uploader   // for testing via dependency injection
+	downloader downloader // for testing via dependency injection
 }
 
 // NewS3Client returns an instance of an S3Client.
@@ -81,7 +82,13 @@ func (s *S3Client) Download(ctx context.Context, writer io.WriterAt) error {
 		return err
 	}
 
-	downloader := s3manager.NewDownloader(sess)
+	// If a downloader was not provided, use a real S3 downloader.
+	var downloader downloader
+	if s.downloader == nil {
+		downloader = s3manager.NewDownloader(sess)
+	} else {
+		downloader = s.downloader
+	}
 
 	_, err = downloader.DownloadWithContext(ctx, writer, &s3.GetObjectInput{
 		Bucket: aws.String(s.bucket),
