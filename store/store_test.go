@@ -940,6 +940,37 @@ func Test_SingleNodeAutoRestore(t *testing.T) {
 	}
 }
 
+func Test_SingleNodeSetRestoreFailStoreOpen(t *testing.T) {
+	s, ln := mustNewStore(t, true)
+	defer ln.Close()
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+
+	path := mustCopyFileToTempFile(filepath.Join("testdata", "load.sqlite"))
+	defer os.Remove(path)
+	if err := s.SetRestorePath(path); err == nil {
+		t.Fatalf("expected error setting restore path on open store")
+	}
+}
+
+func Test_SingleNodeSetRestoreFailBadFile(t *testing.T) {
+	s, ln := mustNewStore(t, true)
+	defer ln.Close()
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+
+	path := mustCreateTempFile()
+	defer os.Remove(path)
+	os.WriteFile(path, []byte("not valid SQLite data"), 0644)
+	if err := s.SetRestorePath(path); err == nil {
+		t.Fatalf("expected error setting restore path with invalid file")
+	}
+}
+
 func Test_SingleNodeProvide(t *testing.T) {
 	for _, inmem := range []bool{
 		true,

@@ -286,8 +286,9 @@ func New(ln Listener, c *Config) *Store {
 
 // SetRestorePath sets the path to a file containing a copy of a
 // SQLite database. This database will be loaded if and when the
-// node becomes the Leader for the first time. This function
-// should only be called before Open().
+// node becomes the Leader for the first time only. The Store will
+// also delete the file when it's finished with it. This function
+// should only be called before the Store is opened.
 func (s *Store) SetRestorePath(path string) error {
 	if s.open {
 		return ErrOpen
