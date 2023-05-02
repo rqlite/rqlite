@@ -905,6 +905,40 @@ COMMIT;
 	}
 }
 
+func Test_SingleNodeAutoRestore(t *testing.T) {
+	s, ln := mustNewStore(t, true)
+	defer ln.Close()
+
+	path := mustCopyFileToTempFile(filepath.Join("testdata", "load.sqlite"))
+	if err := s.SetRestorePath(path); err != nil {
+		t.Fatalf("failed to set restore path: %s", err.Error())
+	}
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	testPoll(t, s.Ready, 100*time.Millisecond, 2*time.Second)
+	qr := queryRequestFromString("SELECT * FROM foo WHERE id=2", false, true)
+	r, err := s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[2,"fiona"]]`, asJSON(r[0].Values); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
 func Test_SingleNodeProvide(t *testing.T) {
 	for _, inmem := range []bool{
 		true,
@@ -2362,6 +2396,12 @@ func mustReadFile(path string) []byte {
 		panic("failed to read file")
 	}
 	return b
+}
+
+func mustCopyFileToTempFile(path string) string {
+	f := mustCreateTempFile()
+	mustWriteFile(f, string(mustReadFile(path)))
+	return f
 }
 
 func mustParseDuration(t string) time.Duration {

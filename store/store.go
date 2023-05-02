@@ -26,6 +26,7 @@ import (
 
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/command"
+	"github.com/rqlite/rqlite/db"
 	sql "github.com/rqlite/rqlite/db"
 	rlog "github.com/rqlite/rqlite/log"
 )
@@ -33,6 +34,9 @@ import (
 var (
 	// ErrNotOpen is returned when a Store is not open.
 	ErrNotOpen = errors.New("store not open")
+
+	// ErrOpen is returned when a Store is already open.
+	ErrOpen = errors.New("store already open")
 
 	// ErrNotReady is returned when a Store is not ready to accept requests.
 	ErrNotReady = errors.New("store not ready")
@@ -69,7 +73,6 @@ const (
 	raftLogCacheSize    = 512
 	trailingScale       = 1.25
 	observerChanLen     = 50
-	selfLeaderChanLen   = 5
 )
 
 const (
@@ -145,6 +148,9 @@ type Store struct {
 	peersPath     string
 	peersInfoPath string
 
+	restorePath   string
+	restoreDoneCh chan struct{}
+
 	raft   *raft.Raft // The consensus mechanism.
 	ln     Listener
 	raftTn *raft.NetworkTransport
@@ -180,9 +186,6 @@ type Store struct {
 	observerDone      chan struct{}
 	observerChan      chan raft.Observation
 	observer          *raft.Observer
-	selfLeaderChan    chan struct{}
-	selfLeaderClose   chan struct{}
-	selfLeaderDone    chan struct{}
 
 	onDiskCreated        bool      // On disk database actually created?
 	snapsExistOnOpen     bool      // Any snaps present when store opens?
@@ -265,6 +268,7 @@ func New(ln Listener, c *Config) *Store {
 		raftDir:         c.Dir,
 		peersPath:       filepath.Join(c.Dir, peersPath),
 		peersInfoPath:   filepath.Join(c.Dir, peersInfoPath),
+		restoreDoneCh:   make(chan struct{}),
 		raftID:          c.ID,
 		dbConf:          c.DBConf,
 		dbPath:          dbPath,
@@ -276,6 +280,23 @@ func New(ln Listener, c *Config) *Store {
 	}
 }
 
+// SetRestorePath sets the path to a file containing a copy of a
+// SQLite database. This database will be loaded if and when the
+// node becomes the Leader for the first time. This function
+// should only be called before Open().
+func (s *Store) SetRestorePath(path string) error {
+	if s.open {
+		return ErrOpen
+	}
+
+	if !db.IsValidSQLiteFile(path) {
+		return fmt.Errorf("file %s is not a valid SQLite file", path)
+	}
+	s.RegisterReadyChannel(s.restoreDoneCh)
+	s.restorePath = path
+	return nil
+}
+
 // Open opens the Store.
 func (s *Store) Open() (retErr error) {
 	defer func() {
@@ -285,7 +306,7 @@ func (s *Store) Open() (retErr error) {
 	}()
 
 	if s.open {
-		return fmt.Errorf("store already open")
+		return ErrOpen
 	}
 
 	s.openT = time.Now()
@@ -398,7 +419,6 @@ func (s *Store) Open() (retErr error) {
 	s.raft = ra
 
 	// Open the observer channels.
-	s.selfLeaderChan = make(chan struct{}, selfLeaderChanLen)
 	s.observerChan = make(chan raft.Observation, observerChanLen)
 	s.observer = raft.NewObserver(s.observerChan, false, func(o *raft.Observation) bool {
 		_, isLeaderChange := o.Data.(raft.LeaderObservation)
@@ -409,7 +429,6 @@ func (s *Store) Open() (retErr error) {
 	// Register and listen for leader changes.
 	s.raft.RegisterObserver(s.observer)
 	s.observerClose, s.observerDone = s.observe()
-	s.selfLeaderClose, s.selfLeaderDone = s.observeSelfLeader()
 
 	return nil
 }
@@ -491,8 +510,6 @@ func (s *Store) Close(wait bool) (retErr error) {
 
 	close(s.observerClose)
 	<-s.observerDone
-	close(s.selfLeaderClose)
-	<-s.selfLeaderDone
 
 	f := s.raft.Shutdown()
 	if wait {
@@ -1013,6 +1030,16 @@ func (s *Store) Load(lr *command.LoadRequest) error {
 		return ErrNotReady
 	}
 
+	if err := s.load(lr); err != nil {
+		return err
+	}
+	stats.Add(numLoads, 1)
+	return nil
+}
+
+// load loads an entire SQLite file into the database, and is for internal use
+// only. It does not check for readiness, and does not update statistics.
+func (s *Store) load(lr *command.LoadRequest) error {
 	startT := time.Now()
 
 	b, err := command.MarshalLoadRequest(lr)
@@ -1043,9 +1070,9 @@ func (s *Store) Load(lr *command.LoadRequest) error {
 	s.dbAppliedIndexMu.Lock()
 	s.dbAppliedIndex = af.Index()
 	s.dbAppliedIndexMu.Unlock()
-	stats.Add(numLoads, 1)
-	s.logger.Printf("node loaded with in %s (%d bytes)", time.Since(startT), len(b))
-	return af.Error()
+	s.logger.Printf("node loaded in %s (%d bytes)", time.Since(startT), len(b))
+
+	return nil
 }
 
 // Notify notifies this Store that a node is ready for bootstrapping at the
@@ -1500,9 +1527,7 @@ func (s *Store) observe() (closeCh, doneCh chan struct{}) {
 						}
 					}
 					s.leaderObserversMu.RUnlock()
-					if signal.LeaderID == raft.ServerID(s.raftID) {
-						s.selfLeaderChan <- struct{}{}
-					}
+					s.selfLeaderChange(signal.LeaderID == raft.ServerID(s.raftID))
 				}
 
 			case <-closeCh:
@@ -1513,22 +1538,45 @@ func (s *Store) observe() (closeCh, doneCh chan struct{}) {
 	return closeCh, doneCh
 }
 
-func (s *Store) observeSelfLeader() (closeCh, doneCh chan struct{}) {
-	closeCh = make(chan struct{})
-	doneCh = make(chan struct{})
-
-	go func() {
-		defer close(doneCh)
-		for {
-			select {
-			case <-s.selfLeaderChan:
-				s.logger.Printf("this node is now the leader")
-			case <-closeCh:
-				return
-			}
-		}
+// selfLeaderChange is called when this node detects that its leadership
+// status has changed.
+func (s *Store) selfLeaderChange(leader bool) {
+	if s.restorePath == "" {
+		return
+	}
+	defer func() {
+		// Whatever happens, this is one-shot attempt to perform a restore
+		os.Remove(s.restorePath)
+		s.restorePath = ""
+		close(s.restoreDoneCh)
 	}()
-	return closeCh, doneCh
+
+	if !leader {
+		// Another node became leader, this node shouldn't do a restore
+		return
+	}
+
+	// This node became leader, let's do a restore
+	s.logger.Printf("node is now Leader, restoring from %s", s.restorePath)
+	f, err := os.Open(s.restorePath)
+	if err != nil {
+		s.logger.Printf("failed to open restore path %s: %s", s.restorePath, err.Error())
+		return
+	}
+	b, err := io.ReadAll(f)
+	if err != nil {
+		s.logger.Printf("failed to read restore path %s: %s", s.restorePath, err.Error())
+		return
+	}
+	lr := &command.LoadRequest{
+		Data: b,
+	}
+	err = s.load(lr)
+	if err != nil {
+		s.logger.Printf("failed to load store from %s: %s", s.restorePath, err.Error())
+		return
+	}
+	s.logger.Printf("node auto-restored successfully from %s", s.restorePath)
 }
 
 // logSize returns the size of the Raft log on disk.
