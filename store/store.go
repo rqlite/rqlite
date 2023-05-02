@@ -110,6 +110,7 @@ func init() {
 
 // ResetStats resets the expvar stats for this module. Mostly for test purposes.
 func ResetStats() {
+	stats.Init()
 	stats.Add(numSnaphots, 0)
 	stats.Add(numProvides, 0)
 	stats.Add(numBackups, 0)
