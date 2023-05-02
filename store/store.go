@@ -288,8 +288,11 @@ func New(ln Listener, c *Config) *Store {
 // SetRestorePath sets the path to a file containing a copy of a
 // SQLite database. This database will be loaded if and when the
 // node becomes the Leader for the first time only. The Store will
-// also delete the file when it's finished with it. This function
-// should only be called before the Store is opened.
+// also delete the file when it's finished with it.
+//
+// This function should only be called before the Store is opened
+// and setting the restore path means the Store will not report
+// itself as ready until a restore has been attempted.
 func (s *Store) SetRestorePath(path string) error {
 	if s.open {
 		return ErrOpen
@@ -1416,7 +1419,7 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 
 // Restore restores the node to a previous state. The Hashicorp docs state this
 // will not be called concurrently with Apply(), so synchronization with Execute()
-// is not necessary.To prevent problems during queries, which may not go through
+// is not necessary. To prevent problems during queries, which may not go through
 // the log, it blocks all query requests.
 func (s *Store) Restore(rc io.ReadCloser) error {
 	startT := time.Now()
