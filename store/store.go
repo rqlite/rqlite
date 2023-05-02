@@ -1552,7 +1552,11 @@ func (s *Store) selfLeaderChange(leader bool) {
 	}
 	defer func() {
 		// Whatever happens, this is a one-shot attempt to perform a restore
-		os.Remove(s.restorePath)
+		err := os.Remove(s.restorePath)
+		if err != nil {
+			s.logger.Printf("failed to remove restore path after restore %s: %s",
+				s.restorePath, err.Error())
+		}
 		s.restorePath = ""
 		close(s.restoreDoneCh)
 	}()
