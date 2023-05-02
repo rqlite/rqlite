@@ -1578,6 +1578,7 @@ func Test_MultiNodeStoreNotifyBootstrap(t *testing.T) {
 // bootstrap correctly when each node is supplied with an auto-restore
 // file. Only one node should do able to restore from the file.
 func Test_MultiNodeStoreAutoRestoreBootstrap(t *testing.T) {
+	ResetStats()
 	s0, ln0 := mustNewStore(t, true)
 	defer ln0.Close()
 	s1, ln1 := mustNewStore(t, true)
