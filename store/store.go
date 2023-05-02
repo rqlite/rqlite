@@ -83,6 +83,7 @@ const (
 	numRestores              = "num_restores"
 	numAutoRestores          = "num_auto_restores"
 	numAutoRestoresSkipped   = "num_auto_restores_skipped"
+	numAutoRestoresFailed    = "num_auto_restores_failed"
 	numRecoveries            = "num_recoveries"
 	numUncompressedCommands  = "num_uncompressed_commands"
 	numCompressedCommands    = "num_compressed_commands"
@@ -118,6 +119,7 @@ func ResetStats() {
 	stats.Add(numRecoveries, 0)
 	stats.Add(numAutoRestores, 0)
 	stats.Add(numAutoRestoresSkipped, 0)
+	stats.Add(numAutoRestoresFailed, 0)
 	stats.Add(numUncompressedCommands, 0)
 	stats.Add(numCompressedCommands, 0)
 	stats.Add(numJoins, 0)
@@ -1550,49 +1552,48 @@ func (s *Store) observe() (closeCh, doneCh chan struct{}) {
 // selfLeaderChange is called when this node detects that its leadership
 // status has changed.
 func (s *Store) selfLeaderChange(leader bool) {
-	if s.restorePath == "" {
-		return
-	}
-	defer func() {
-		// Whatever happens, this is a one-shot attempt to perform a restore
-		err := os.Remove(s.restorePath)
-		if err != nil {
-			s.logger.Printf("failed to remove restore path after restore %s: %s",
-				s.restorePath, err.Error())
+	if s.restorePath != "" {
+		defer func() {
+			// Whatever happens, this is a one-shot attempt to perform a restore
+			err := os.Remove(s.restorePath)
+			if err != nil {
+				s.logger.Printf("failed to remove restore path after restore %s: %s",
+					s.restorePath, err.Error())
+			}
+			s.restorePath = ""
+			close(s.restoreDoneCh)
+		}()
+
+		if !leader {
+			s.logger.Printf("different node became leader, not performing auto-restore")
+			stats.Add(numAutoRestoresSkipped, 1)
+		} else {
+			s.logger.Printf("this node is now leader, auto-restoring from %s", s.restorePath)
+			if err := s.installRestore(); err != nil {
+				s.logger.Printf("failed to auto-restore from %s: %s", s.restorePath, err.Error())
+				stats.Add(numAutoRestoresFailed, 1)
+				return
+			}
+			stats.Add(numAutoRestores, 1)
+			s.logger.Printf("node auto-restored successfully from %s", s.restorePath)
 		}
-		s.restorePath = ""
-		close(s.restoreDoneCh)
-	}()
-
-	if !leader {
-		s.logger.Printf("different node became Leader, not performing auto-restore")
-		stats.Add(numAutoRestoresSkipped, 1)
-		return
 	}
+}
 
-	// This node became leader, let's do a restore
-	s.logger.Printf("node is now Leader, auto-restoring from %s", s.restorePath)
+func (s *Store) installRestore() error {
 	f, err := os.Open(s.restorePath)
 	if err != nil {
-		s.logger.Printf("failed to open restore path %s: %s", s.restorePath, err.Error())
-		return
+		return err
 	}
 	defer f.Close()
 	b, err := io.ReadAll(f)
 	if err != nil {
-		s.logger.Printf("failed to read restore path %s: %s", s.restorePath, err.Error())
-		return
+		return err
 	}
 	lr := &command.LoadRequest{
 		Data: b,
 	}
-	err = s.load(lr)
-	if err != nil {
-		s.logger.Printf("failed to load store from %s: %s", s.restorePath, err.Error())
-		return
-	}
-	stats.Add(numAutoRestores, 1)
-	s.logger.Printf("node auto-restored successfully from %s", s.restorePath)
+	return s.load(lr)
 }
 
 // logSize returns the size of the Raft log on disk.
