@@ -1574,6 +1574,7 @@ func (s *Store) selfLeaderChange(leader bool) {
 		s.logger.Printf("failed to open restore path %s: %s", s.restorePath, err.Error())
 		return
 	}
+	defer f.Close()
 	b, err := io.ReadAll(f)
 	if err != nil {
 		s.logger.Printf("failed to read restore path %s: %s", s.restorePath, err.Error())
