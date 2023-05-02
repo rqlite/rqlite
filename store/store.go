@@ -69,6 +69,7 @@ const (
 	raftLogCacheSize    = 512
 	trailingScale       = 1.25
 	observerChanLen     = 50
+	selfLeaderChanLen   = 5
 )
 
 const (
@@ -179,6 +180,9 @@ type Store struct {
 	observerDone      chan struct{}
 	observerChan      chan raft.Observation
 	observer          *raft.Observer
+	selfLeaderChan    chan struct{}
+	selfLeaderClose   chan struct{}
+	selfLeaderDone    chan struct{}
 
 	onDiskCreated        bool      // On disk database actually created?
 	snapsExistOnOpen     bool      // Any snaps present when store opens?
@@ -394,6 +398,7 @@ func (s *Store) Open() (retErr error) {
 	s.raft = ra
 
 	// Open the observer channels.
+	s.selfLeaderChan = make(chan struct{}, selfLeaderChanLen)
 	s.observerChan = make(chan raft.Observation, observerChanLen)
 	s.observer = raft.NewObserver(s.observerChan, false, func(o *raft.Observation) bool {
 		_, isLeaderChange := o.Data.(raft.LeaderObservation)
@@ -404,6 +409,7 @@ func (s *Store) Open() (retErr error) {
 	// Register and listen for leader changes.
 	s.raft.RegisterObserver(s.observer)
 	s.observerClose, s.observerDone = s.observe()
+	s.selfLeaderClose, s.selfLeaderDone = s.observeSelfLeader()
 
 	return nil
 }
@@ -485,6 +491,8 @@ func (s *Store) Close(wait bool) (retErr error) {
 
 	close(s.observerClose)
 	<-s.observerDone
+	close(s.selfLeaderClose)
+	<-s.selfLeaderDone
 
 	f := s.raft.Shutdown()
 	if wait {
@@ -1492,8 +1500,29 @@ func (s *Store) observe() (closeCh, doneCh chan struct{}) {
 						}
 					}
 					s.leaderObserversMu.RUnlock()
+					if signal.LeaderID == raft.ServerID(s.raftID) {
+						s.selfLeaderChan <- struct{}{}
+					}
 				}
 
+			case <-closeCh:
+				return
+			}
+		}
+	}()
+	return closeCh, doneCh
+}
+
+func (s *Store) observeSelfLeader() (closeCh, doneCh chan struct{}) {
+	closeCh = make(chan struct{})
+	doneCh = make(chan struct{})
+
+	go func() {
+		defer close(doneCh)
+		for {
+			select {
+			case <-s.selfLeaderChan:
+				s.logger.Printf("this node is now the leader")
 			case <-closeCh:
 				return
 			}
