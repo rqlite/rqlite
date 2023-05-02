@@ -1641,7 +1641,7 @@ func Test_MultiNodeStoreAutoRestoreBootstrap(t *testing.T) {
 
 	// Give the follower some time to catch up.
 	f := func() bool {
-		qr = queryRequestFromString("SELECT * FROM foo WHERE id=2", false, false)
+		qr := queryRequestFromString("SELECT * FROM foo WHERE id=2", false, false)
 		qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
 		r, err = s1.Query(qr)
 		if err != nil {
