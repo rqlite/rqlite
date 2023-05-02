@@ -1551,7 +1551,7 @@ func (s *Store) selfLeaderChange(leader bool) {
 		return
 	}
 	defer func() {
-		// Whatever happens, this is one-shot attempt to perform a restore
+		// Whatever happens, this is a one-shot attempt to perform a restore
 		os.Remove(s.restorePath)
 		s.restorePath = ""
 		close(s.restoreDoneCh)
