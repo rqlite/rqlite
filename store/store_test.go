@@ -1683,11 +1683,13 @@ func Test_MultiNodeStoreAutoRestoreBootstrap(t *testing.T) {
 		t.Fatalf("an auto-restore file was not removed")
 	}
 
-	if stats.Get(numAutoRestores).(*expvar.Int).Value() != 1 {
-		t.Fatalf("numAutoRestore is incorrect")
+	numAuto := stats.Get(numAutoRestores).(*expvar.Int).Value()
+	numAutoSkipped := stats.Get(numAutoRestoresSkipped).(*expvar.Int).Value()
+	if exp, got := int64(1), numAuto; exp != got {
+		t.Fatalf("unexpected number of auto-restores\nexp: %d\ngot: %d", exp, got)
 	}
-	if stats.Get(numAutoRestoresSkipped).(*expvar.Int).Value() != 2 {
-		t.Fatalf("numAutoRestoresSkipped is incorrect")
+	if exp, got := int64(2), numAutoSkipped; exp != got {
+		t.Fatalf("unexpected number of auto-restores skipped\nexp: %d\ngot: %d", exp, got)
 	}
 }
 
