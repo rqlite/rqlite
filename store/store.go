@@ -1552,12 +1552,12 @@ func (s *Store) selfLeaderChange(leader bool) {
 	}()
 
 	if !leader {
-		// Another node became leader, this node shouldn't do a restore
+		s.logger.Printf("different node became Leader, not performing auto-restore")
 		return
 	}
 
 	// This node became leader, let's do a restore
-	s.logger.Printf("node is now Leader, restoring from %s", s.restorePath)
+	s.logger.Printf("node is now Leader, auto-restoring from %s", s.restorePath)
 	f, err := os.Open(s.restorePath)
 	if err != nil {
 		s.logger.Printf("failed to open restore path %s: %s", s.restorePath, err.Error())

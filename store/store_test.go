@@ -1573,6 +1573,96 @@ func Test_MultiNodeStoreNotifyBootstrap(t *testing.T) {
 	}
 }
 
+// Test_MultiNodeStoreAutoRestoreBootstrap tests that a cluster will
+// bootstrap correctly when each node is supplied with an auto-restore
+// file. Only one node should do able to restore from the file.
+func Test_MultiNodeStoreAutoRestoreBootstrap(t *testing.T) {
+	s0, ln0 := mustNewStore(t, true)
+	defer ln0.Close()
+	s1, ln1 := mustNewStore(t, true)
+	defer ln1.Close()
+	s2, ln2 := mustNewStore(t, true)
+	defer ln2.Close()
+
+	path0 := mustCopyFileToTempFile(filepath.Join("testdata", "load.sqlite"))
+	path1 := mustCopyFileToTempFile(filepath.Join("testdata", "load.sqlite"))
+	path2 := mustCopyFileToTempFile(filepath.Join("testdata", "load.sqlite"))
+
+	s0.SetRestorePath(path0)
+	s1.SetRestorePath(path1)
+	s2.SetRestorePath(path2)
+
+	if err := s0.Open(); err != nil {
+		t.Fatalf("failed to open store 0: %s", err.Error())
+	}
+	defer s0.Close(true)
+
+	if err := s1.Open(); err != nil {
+		t.Fatalf("failed to open store 1: %s", err.Error())
+	}
+	defer s1.Close(true)
+
+	if err := s2.Open(); err != nil {
+		t.Fatalf("failed to open store 2: %s", err.Error())
+	}
+	defer s2.Close(true)
+
+	// Trigger a bootstrap.
+	s0.BootstrapExpect = 3
+	if err := s0.Notify(notifyRequest(s0.ID(), ln0.Addr().String())); err != nil {
+		t.Fatalf("failed to notify store: %s", err.Error())
+	}
+	if err := s0.Notify(notifyRequest(s1.ID(), ln1.Addr().String())); err != nil {
+		t.Fatalf("failed to notify store: %s", err.Error())
+	}
+	if err := s0.Notify(notifyRequest(s2.ID(), ln2.Addr().String())); err != nil {
+		t.Fatalf("failed to notify store: %s", err.Error())
+	}
+
+	// Wait for the cluster to bootstrap.
+	_, err := s0.WaitForLeader(10 * time.Second)
+	if err != nil {
+		t.Fatalf("failed to get leader: %s", err.Error())
+	}
+
+	// Check the data.
+	testPoll(t, s0.Ready, 100*time.Millisecond, 2*time.Second)
+	qr := queryRequestFromString("SELECT * FROM foo WHERE id=2", false, true)
+	r, err := s0.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[2,"fiona"]]`, asJSON(r[0].Values); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	// Give the follower some time to catch up.
+	f := func() bool {
+		qr = queryRequestFromString("SELECT * FROM foo WHERE id=2", false, false)
+		qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+		r, err = s1.Query(qr)
+		if err != nil {
+			return false
+		}
+		if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
+			return false
+		}
+		if exp, got := `[[2,"fiona"]]`, asJSON(r[0].Values); exp != got {
+			return false
+		}
+		return true
+	}
+	testPoll(t, f, 100*time.Millisecond, 2*time.Second)
+
+	if pathExists(path0) || pathExists(path1) || pathExists(path2) {
+		t.Fatalf("an auto-restore file was not removed")
+	}
+
+}
+
 func Test_MultiNodeJoinNonVoterRemove(t *testing.T) {
 	s0, ln0 := mustNewStore(t, true)
 	defer ln0.Close()
