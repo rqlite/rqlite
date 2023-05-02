@@ -81,6 +81,8 @@ const (
 	numBackups               = "num_backups"
 	numLoads                 = "num_loads"
 	numRestores              = "num_restores"
+	numAutoRestores          = "num_auto_restores"
+	numAutoRestoresSkipped   = "num_auto_restores_skipped"
 	numRecoveries            = "num_recoveries"
 	numUncompressedCommands  = "num_uncompressed_commands"
 	numCompressedCommands    = "num_compressed_commands"
@@ -113,6 +115,8 @@ func ResetStats() {
 	stats.Add(numBackups, 0)
 	stats.Add(numRestores, 0)
 	stats.Add(numRecoveries, 0)
+	stats.Add(numAutoRestores, 0)
+	stats.Add(numAutoRestoresSkipped, 0)
 	stats.Add(numUncompressedCommands, 0)
 	stats.Add(numCompressedCommands, 0)
 	stats.Add(numJoins, 0)
@@ -1553,6 +1557,7 @@ func (s *Store) selfLeaderChange(leader bool) {
 
 	if !leader {
 		s.logger.Printf("different node became Leader, not performing auto-restore")
+		stats.Add(numAutoRestoresSkipped, 1)
 		return
 	}
 
@@ -1576,6 +1581,7 @@ func (s *Store) selfLeaderChange(leader bool) {
 		s.logger.Printf("failed to load store from %s: %s", s.restorePath, err.Error())
 		return
 	}
+	stats.Add(numAutoRestores, 1)
 	s.logger.Printf("node auto-restored successfully from %s", s.restorePath)
 }
 

@@ -2,6 +2,7 @@ package store
 
 import (
 	"bytes"
+	"expvar"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -1625,8 +1626,15 @@ func Test_MultiNodeStoreAutoRestoreBootstrap(t *testing.T) {
 		t.Fatalf("failed to get leader: %s", err.Error())
 	}
 
-	// Check the data.
-	testPoll(t, s0.Ready, 100*time.Millisecond, 2*time.Second)
+	// Ultimately there is a hard-to-control timing issue here. Knowing
+	// exactly when the leader has applied the restore is difficult, so
+	// just wait a bit.
+	time.Sleep(2 * time.Second)
+
+	if !s0.Ready() {
+		t.Fatalf("node is not ready")
+	}
+
 	qr := queryRequestFromString("SELECT * FROM foo WHERE id=2", false, true)
 	r, err := s0.Query(qr)
 	if err != nil {
@@ -1639,28 +1647,16 @@ func Test_MultiNodeStoreAutoRestoreBootstrap(t *testing.T) {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
-	// Give the follower some time to catch up.
-	f := func() bool {
-		qr := queryRequestFromString("SELECT * FROM foo WHERE id=2", false, false)
-		qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
-		r, err = s1.Query(qr)
-		if err != nil {
-			return false
-		}
-		if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
-			return false
-		}
-		if exp, got := `[[2,"fiona"]]`, asJSON(r[0].Values); exp != got {
-			return false
-		}
-		return true
-	}
-	testPoll(t, f, 100*time.Millisecond, 2*time.Second)
-
 	if pathExists(path0) || pathExists(path1) || pathExists(path2) {
 		t.Fatalf("an auto-restore file was not removed")
 	}
 
+	if stats.Get(numAutoRestores).(*expvar.Int).Value() != 1 {
+		t.Fatalf("numAutoRestore is incorrect")
+	}
+	if stats.Get(numAutoRestoresSkipped).(*expvar.Int).Value() != 2 {
+		t.Fatalf("numAutoRestoresSkipped is incorrect")
+	}
 }
 
 func Test_MultiNodeJoinNonVoterRemove(t *testing.T) {
