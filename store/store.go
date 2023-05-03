@@ -26,6 +26,7 @@ import (
 
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/command"
+	"github.com/rqlite/rqlite/db"
 	sql "github.com/rqlite/rqlite/db"
 	rlog "github.com/rqlite/rqlite/log"
 )
@@ -33,6 +34,9 @@ import (
 var (
 	// ErrNotOpen is returned when a Store is not open.
 	ErrNotOpen = errors.New("store not open")
+
+	// ErrOpen is returned when a Store is already open.
+	ErrOpen = errors.New("store already open")
 
 	// ErrNotReady is returned when a Store is not ready to accept requests.
 	ErrNotReady = errors.New("store not ready")
@@ -77,6 +81,9 @@ const (
 	numBackups               = "num_backups"
 	numLoads                 = "num_loads"
 	numRestores              = "num_restores"
+	numAutoRestores          = "num_auto_restores"
+	numAutoRestoresSkipped   = "num_auto_restores_skipped"
+	numAutoRestoresFailed    = "num_auto_restores_failed"
 	numRecoveries            = "num_recoveries"
 	numUncompressedCommands  = "num_uncompressed_commands"
 	numCompressedCommands    = "num_compressed_commands"
@@ -104,11 +111,15 @@ func init() {
 
 // ResetStats resets the expvar stats for this module. Mostly for test purposes.
 func ResetStats() {
+	stats.Init()
 	stats.Add(numSnaphots, 0)
 	stats.Add(numProvides, 0)
 	stats.Add(numBackups, 0)
 	stats.Add(numRestores, 0)
 	stats.Add(numRecoveries, 0)
+	stats.Add(numAutoRestores, 0)
+	stats.Add(numAutoRestoresSkipped, 0)
+	stats.Add(numAutoRestoresFailed, 0)
 	stats.Add(numUncompressedCommands, 0)
 	stats.Add(numCompressedCommands, 0)
 	stats.Add(numJoins, 0)
@@ -143,6 +154,9 @@ type Store struct {
 	raftDir       string
 	peersPath     string
 	peersInfoPath string
+
+	restorePath   string
+	restoreDoneCh chan struct{}
 
 	raft   *raft.Raft // The consensus mechanism.
 	ln     Listener
@@ -261,6 +275,7 @@ func New(ln Listener, c *Config) *Store {
 		raftDir:         c.Dir,
 		peersPath:       filepath.Join(c.Dir, peersPath),
 		peersInfoPath:   filepath.Join(c.Dir, peersInfoPath),
+		restoreDoneCh:   make(chan struct{}),
 		raftID:          c.ID,
 		dbConf:          c.DBConf,
 		dbPath:          dbPath,
@@ -272,6 +287,27 @@ func New(ln Listener, c *Config) *Store {
 	}
 }
 
+// SetRestorePath sets the path to a file containing a copy of a
+// SQLite database. This database will be loaded if and when the
+// node becomes the Leader for the first time only. The Store will
+// also delete the file when it's finished with it.
+//
+// This function should only be called before the Store is opened
+// and setting the restore path means the Store will not report
+// itself as ready until a restore has been attempted.
+func (s *Store) SetRestorePath(path string) error {
+	if s.open {
+		return ErrOpen
+	}
+
+	if !db.IsValidSQLiteFile(path) {
+		return fmt.Errorf("file %s is not a valid SQLite file", path)
+	}
+	s.RegisterReadyChannel(s.restoreDoneCh)
+	s.restorePath = path
+	return nil
+}
+
 // Open opens the Store.
 func (s *Store) Open() (retErr error) {
 	defer func() {
@@ -281,7 +317,7 @@ func (s *Store) Open() (retErr error) {
 	}()
 
 	if s.open {
-		return fmt.Errorf("store already open")
+		return ErrOpen
 	}
 
 	s.openT = time.Now()
@@ -1005,6 +1041,16 @@ func (s *Store) Load(lr *command.LoadRequest) error {
 		return ErrNotReady
 	}
 
+	if err := s.load(lr); err != nil {
+		return err
+	}
+	stats.Add(numLoads, 1)
+	return nil
+}
+
+// load loads an entire SQLite file into the database, and is for internal use
+// only. It does not check for readiness, and does not update statistics.
+func (s *Store) load(lr *command.LoadRequest) error {
 	startT := time.Now()
 
 	b, err := command.MarshalLoadRequest(lr)
@@ -1035,9 +1081,9 @@ func (s *Store) Load(lr *command.LoadRequest) error {
 	s.dbAppliedIndexMu.Lock()
 	s.dbAppliedIndex = af.Index()
 	s.dbAppliedIndexMu.Unlock()
-	stats.Add(numLoads, 1)
-	s.logger.Printf("node loaded with in %s (%d bytes)", time.Since(startT), len(b))
-	return af.Error()
+	s.logger.Printf("node loaded in %s (%d bytes)", time.Since(startT), len(b))
+
+	return nil
 }
 
 // Notify notifies this Store that a node is ready for bootstrapping at the
@@ -1375,7 +1421,7 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 
 // Restore restores the node to a previous state. The Hashicorp docs state this
 // will not be called concurrently with Apply(), so synchronization with Execute()
-// is not necessary.To prevent problems during queries, which may not go through
+// is not necessary. To prevent problems during queries, which may not go through
 // the log, it blocks all query requests.
 func (s *Store) Restore(rc io.ReadCloser) error {
 	startT := time.Now()
@@ -1492,6 +1538,7 @@ func (s *Store) observe() (closeCh, doneCh chan struct{}) {
 						}
 					}
 					s.leaderObserversMu.RUnlock()
+					s.selfLeaderChange(signal.LeaderID == raft.ServerID(s.raftID))
 				}
 
 			case <-closeCh:
@@ -1500,6 +1547,53 @@ func (s *Store) observe() (closeCh, doneCh chan struct{}) {
 		}
 	}()
 	return closeCh, doneCh
+}
+
+// selfLeaderChange is called when this node detects that its leadership
+// status has changed.
+func (s *Store) selfLeaderChange(leader bool) {
+	if s.restorePath != "" {
+		defer func() {
+			// Whatever happens, this is a one-shot attempt to perform a restore
+			err := os.Remove(s.restorePath)
+			if err != nil {
+				s.logger.Printf("failed to remove restore path after restore %s: %s",
+					s.restorePath, err.Error())
+			}
+			s.restorePath = ""
+			close(s.restoreDoneCh)
+		}()
+
+		if !leader {
+			s.logger.Printf("different node became leader, not performing auto-restore")
+			stats.Add(numAutoRestoresSkipped, 1)
+		} else {
+			s.logger.Printf("this node is now leader, auto-restoring from %s", s.restorePath)
+			if err := s.installRestore(); err != nil {
+				s.logger.Printf("failed to auto-restore from %s: %s", s.restorePath, err.Error())
+				stats.Add(numAutoRestoresFailed, 1)
+				return
+			}
+			stats.Add(numAutoRestores, 1)
+			s.logger.Printf("node auto-restored successfully from %s", s.restorePath)
+		}
+	}
+}
+
+func (s *Store) installRestore() error {
+	f, err := os.Open(s.restorePath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	b, err := io.ReadAll(f)
+	if err != nil {
+		return err
+	}
+	lr := &command.LoadRequest{
+		Data: b,
+	}
+	return s.load(lr)
 }
 
 // logSize returns the size of the Raft log on disk.

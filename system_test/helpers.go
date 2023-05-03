@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"testing"
 	"time"
 
 	"github.com/rqlite/rqlite/cluster"
@@ -693,6 +694,15 @@ func mustTempDir() string {
 	return path
 }
 
+func mustTempFile() string {
+	f, err := os.CreateTemp("", "rqlite-system-test-")
+	if err != nil {
+		panic("failed to create temp file")
+	}
+	f.Close()
+	return f.Name()
+}
+
 func mustNewOpenMux(addr string) (*tcp.Mux, net.Listener) {
 	if addr == "" {
 		addr = "localhost:0"
@@ -974,6 +984,28 @@ func trueOrTimeout(fn func() bool, dur time.Duration) bool {
 			if fn() {
 				return true
 			}
+		}
+	}
+}
+
+func testPoll(t *testing.T, f func() (bool, error), p time.Duration, timeout time.Duration) {
+	tck := time.NewTicker(p)
+	defer tck.Stop()
+	tmr := time.NewTimer(timeout)
+	defer tmr.Stop()
+
+	for {
+		select {
+		case <-tck.C:
+			b, err := f()
+			if err != nil {
+				continue
+			}
+			if b {
+				return
+			}
+		case <-tmr.C:
+			t.Fatalf("timeout expired: %s", t.Name())
 		}
 	}
 }

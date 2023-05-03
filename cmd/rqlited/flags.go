@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"time"
@@ -51,20 +52,23 @@ type Config struct {
 	TLS1011 bool
 
 	// AuthFile is the path to the authentication file. May not be set.
-	AuthFile string
+	AuthFile string `filepath:"true"`
 
 	// AutoBackupFile is the path to the auto-backup file. May not be set.
-	AutoBackupFile string
+	AutoBackupFile string `filepath:"true"`
+
+	// AutoRestoreFile is the path to the auto-restore file. May not be set.
+	AutoRestoreFile string `filepath:"true"`
 
 	// HTTPx509CACert is the path to the CA certficate file for when this node verifies
 	// other certificates for any HTTP communications. May not be set.
-	HTTPx509CACert string
+	HTTPx509CACert string `filepath:"true"`
 
 	// HTTPx509Cert is the path to the X509 cert for the HTTP server. May not be set.
-	HTTPx509Cert string
+	HTTPx509Cert string `filepath:"true"`
 
 	// HTTPx509Key is the path to the private key for the HTTP server. May not be set.
-	HTTPx509Key string
+	HTTPx509Key string `filepath:"true"`
 
 	// NoHTTPVerify disables checking other nodes' server HTTP X509 certs for validity.
 	NoHTTPVerify bool
@@ -77,13 +81,13 @@ type Config struct {
 
 	// NodeX509CACert is the path to the CA certficate file for when this node verifies
 	// other certificates for any inter-node communications. May not be set.
-	NodeX509CACert string
+	NodeX509CACert string `filepath:"true"`
 
 	// NodeX509Cert is the path to the X509 cert for the Raft server. May not be set.
-	NodeX509Cert string
+	NodeX509Cert string `filepath:"true"`
 
 	// NodeX509Key is the path to the X509 key for the Raft server. May not be set.
-	NodeX509Key string
+	NodeX509Key string `filepath:"true"`
 
 	// NoNodeVerify disables checking other nodes' Node X509 certs for validity.
 	NoNodeVerify bool
@@ -240,6 +244,11 @@ func (c *Config) Validate() error {
 	}
 	c.DataPath = dataPath
 
+	err = c.CheckFilePaths()
+	if err != nil {
+		return err
+	}
+
 	if !bothUnsetSet(c.HTTPx509Cert, c.HTTPx509Key) {
 		return fmt.Errorf("either both -%s and -%s must be set, or neither", HTTPx509CertFlag, HTTPx509KeyFlag)
 	}
@@ -309,6 +318,9 @@ func (c *Config) Validate() error {
 				if u.Host == c.HTTPAdv || addrs[i] == c.HTTPAddr {
 					return errors.New("node cannot join with itself unless bootstrapping")
 				}
+				if c.AutoRestoreFile != "" {
+					return errors.New("auto-restoring cannot be used when joining a cluster")
+				}
 			}
 		}
 	}
@@ -373,6 +385,34 @@ func (c *Config) DiscoConfigReader() io.ReadCloser {
 	return rc
 }
 
+// CheckFilePaths checks that all file paths in the config exist.
+// Empy filepaths are ignored.
+func (c *Config) CheckFilePaths() error {
+	v := reflect.ValueOf(c).Elem()
+
+	// Iterate through the fields of the struct
+	for i := 0; i < v.NumField(); i++ {
+		field := v.Type().Field(i)
+		fieldValue := v.Field(i)
+
+		if fieldValue.Kind() != reflect.String {
+			continue
+		}
+
+		if tagValue, ok := field.Tag.Lookup("filepath"); ok && tagValue == "true" {
+			filePath := fieldValue.String()
+			if filePath == "" {
+				continue
+			}
+			_, err := os.Stat(filePath)
+			if os.IsNotExist(err) {
+				return fmt.Errorf("%s does not exist", filePath)
+			}
+		}
+	}
+	return nil
+}
+
 // BuildInfo is build information for display at command line.
 type BuildInfo struct {
 	Version       string
@@ -406,6 +446,7 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	flag.BoolVar(&config.NodeVerifyClient, "node-verify-client", false, "Enable mutual TLS for node-to-node communication")
 	flag.StringVar(&config.AuthFile, "auth", "", "Path to authentication and authorization file. If not set, not enabled")
 	flag.StringVar(&config.AutoBackupFile, "auto-backup", "", "Path to automatic backup configuration file. If not set, not enabled")
+	flag.StringVar(&config.AutoRestoreFile, "auto-restore", "", "Path to automatic restore configuration file. If not set, not enabled")
 	flag.StringVar(&config.RaftAddr, RaftAddrFlag, "localhost:4002", "Raft communication bind address")
 	flag.StringVar(&config.RaftAdv, RaftAdvAddrFlag, "", "Advertised Raft communication address. If not set, same as Raft bind")
 	flag.StringVar(&config.JoinSrcIP, "join-source-ip", "", "Set source IP address during HTTP Join request")

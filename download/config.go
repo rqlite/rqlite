@@ -1,4 +1,4 @@
-package upload
+package download
 
 import (
 	"encoding/json"
@@ -76,11 +76,10 @@ func (s *StorageType) UnmarshalJSON(b []byte) error {
 
 // Config is the config file format for the upload service
 type Config struct {
-	Version    int             `json:"version"`
-	Type       StorageType     `json:"type"`
-	NoCompress bool            `json:"no_compress,omitempty"`
-	Interval   Duration        `json:"interval"`
-	Sub        json.RawMessage `json:"sub"`
+	Version int             `json:"version"`
+	Type    StorageType     `json:"type"`
+	Timeout Duration        `json:"timeout,omitempty"`
+	Sub     json.RawMessage `json:"sub"`
 }
 
 // Unmarshal unmarshals the config file and returns the config and subconfig
@@ -93,6 +92,10 @@ func Unmarshal(data []byte) (*Config, *aws.S3Config, error) {
 
 	if cfg.Version > version {
 		return nil, nil, ErrInvalidVersion
+	}
+
+	if cfg.Timeout == 0 {
+		cfg.Timeout = Duration(30 * time.Second)
 	}
 
 	s3cfg := &aws.S3Config{}

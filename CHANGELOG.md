@@ -1,4 +1,7 @@
-## 7.15.2 (unreleased)
+## 7.16.0 (unreleased)
+### New features
+- [PR #1243](https://github.com/rqlite/rqlite/pull/1243): Support automatically restoring from AWS S3.
+
 ### Implementation changes and bug fixes
 - [PR #1239](https://github.com/rqlite/rqlite/pull/1239): Remove erroneous scaling factor from etcd and Consul reporting service.
 - [PR #1240](https://github.com/rqlite/rqlite/pull/1240): Add support for controlling and reading Store readiness.

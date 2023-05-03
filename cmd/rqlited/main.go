@@ -24,6 +24,7 @@ import (
 	"github.com/rqlite/rqlite/cmd"
 	"github.com/rqlite/rqlite/db"
 	"github.com/rqlite/rqlite/disco"
+	"github.com/rqlite/rqlite/download"
 	httpd "github.com/rqlite/rqlite/http"
 	"github.com/rqlite/rqlite/rtls"
 	"github.com/rqlite/rqlite/store"
@@ -65,9 +66,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to parse command-line flags: %s", err.Error())
 	}
-
-	// Display logo.
 	fmt.Print(logo)
+
+	mainCtx, mainCancel := context.WithCancel(context.Background())
+	defer mainCancel()
 
 	// Configure logging and pump out initial message.
 	log.Printf("%s starting, version %s, SQLite %s, commit %s, branch %s, compiler %s", name, cmd.Version,
@@ -95,6 +97,22 @@ func main() {
 	str, err := createStore(cfg, raftTn)
 	if err != nil {
 		log.Fatalf("failed to create store: %s", err.Error())
+	}
+
+	// Install the auto-restore file, if necessary.
+	if cfg.AutoRestoreFile != "" {
+		log.Printf("auto-restore requested, initiating download")
+
+		start := time.Now()
+		path, err := downloadRestoreFile(mainCtx, cfg.AutoRestoreFile)
+		if err != nil {
+			log.Fatalf("failed to download auto-restore file: %s", err.Error())
+		}
+		log.Printf("auto-restore file downloaded in %s", time.Since(start))
+
+		if err := str.SetRestorePath(path); err != nil {
+			log.Fatalf("failed to preload auto-restore data: %s", err.Error())
+		}
 	}
 
 	// Get any credential store.
@@ -154,8 +172,8 @@ func main() {
 	log.Printf("connect using the command-line tool via 'rqlite -H %s -p %s'", h, p)
 
 	// Start any requested auto-backups
-	ctx, backupSrvCancel := context.WithCancel(context.Background())
-	backupSrv, err := startAutoBackups(ctx, cfg, str)
+	backupSrvStx, backupSrvCancel := context.WithCancel(mainCtx)
+	backupSrv, err := startAutoBackups(backupSrvStx, cfg, str)
 	if err != nil {
 		log.Fatalf("failed to start auto-backups: %s", err.Error())
 	}
@@ -206,6 +224,43 @@ func startAutoBackups(ctx context.Context, cfg *Config, str *store.Store) (*uplo
 	u := upload.NewUploader(sc, str, time.Duration(uCfg.Interval), !uCfg.NoCompress)
 	go u.Start(ctx, nil)
 	return u, nil
+}
+
+func downloadRestoreFile(ctx context.Context, cfgPath string) (path string, err error) {
+	var f *os.File
+	defer func() {
+		if err != nil {
+			if f != nil {
+				f.Close()
+			}
+			os.Remove(f.Name())
+		}
+	}()
+
+	b, err := download.ReadConfigFile(cfgPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read auto-restore file: %s", err.Error())
+	}
+
+	dCfg, s3cfg, err := download.Unmarshal(b)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse auto-restore file: %s", err.Error())
+	}
+	sc := aws.NewS3Client(s3cfg.Region, s3cfg.AccessKeyID, s3cfg.SecretAccessKey, s3cfg.Bucket, s3cfg.Path)
+	d := download.NewDownloader(sc)
+
+	// Create a temporary file to download to.
+	f, err = os.CreateTemp("", "rqlite-restore")
+	if err != nil {
+		return "", fmt.Errorf("failed to create temporary file: %s", err.Error())
+	}
+	defer f.Close()
+
+	if err := d.Do(ctx, f, time.Duration(dCfg.Timeout)); err != nil {
+		return "", fmt.Errorf("failed to download auto-restore file: %s", err.Error())
+	}
+
+	return f.Name(), nil
 }
 
 func createStore(cfg *Config, ln *tcp.Layer) (*store.Store, error) {

@@ -2,6 +2,7 @@ package store
 
 import (
 	"bytes"
+	"expvar"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -905,6 +906,71 @@ COMMIT;
 	}
 }
 
+func Test_SingleNodeAutoRestore(t *testing.T) {
+	s, ln := mustNewStore(t, true)
+	defer ln.Close()
+
+	path := mustCopyFileToTempFile(filepath.Join("testdata", "load.sqlite"))
+	if err := s.SetRestorePath(path); err != nil {
+		t.Fatalf("failed to set restore path: %s", err.Error())
+	}
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	testPoll(t, s.Ready, 100*time.Millisecond, 2*time.Second)
+	qr := queryRequestFromString("SELECT * FROM foo WHERE id=2", false, true)
+	r, err := s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[2,"fiona"]]`, asJSON(r[0].Values); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
+func Test_SingleNodeSetRestoreFailStoreOpen(t *testing.T) {
+	s, ln := mustNewStore(t, true)
+	defer ln.Close()
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+
+	path := mustCopyFileToTempFile(filepath.Join("testdata", "load.sqlite"))
+	defer os.Remove(path)
+	if err := s.SetRestorePath(path); err == nil {
+		t.Fatalf("expected error setting restore path on open store")
+	}
+}
+
+func Test_SingleNodeSetRestoreFailBadFile(t *testing.T) {
+	s, ln := mustNewStore(t, true)
+	defer ln.Close()
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+
+	path := mustCreateTempFile()
+	defer os.Remove(path)
+	os.WriteFile(path, []byte("not valid SQLite data"), 0644)
+	if err := s.SetRestorePath(path); err == nil {
+		t.Fatalf("expected error setting restore path with invalid file")
+	}
+}
+
 func Test_SingleNodeProvide(t *testing.T) {
 	for _, inmem := range []bool{
 		true,
@@ -1536,6 +1602,94 @@ func Test_MultiNodeStoreNotifyBootstrap(t *testing.T) {
 	// be a no-op.
 	if err := s0.Notify(notifyRequest(s1.ID(), ln1.Addr().String())); err != nil {
 		t.Fatalf("failed to notify store that is part of cluster: %s", err.Error())
+	}
+}
+
+// Test_MultiNodeStoreAutoRestoreBootstrap tests that a cluster will
+// bootstrap correctly when each node is supplied with an auto-restore
+// file. Only one node should do able to restore from the file.
+func Test_MultiNodeStoreAutoRestoreBootstrap(t *testing.T) {
+	ResetStats()
+	s0, ln0 := mustNewStore(t, true)
+	defer ln0.Close()
+	s1, ln1 := mustNewStore(t, true)
+	defer ln1.Close()
+	s2, ln2 := mustNewStore(t, true)
+	defer ln2.Close()
+
+	path0 := mustCopyFileToTempFile(filepath.Join("testdata", "load.sqlite"))
+	path1 := mustCopyFileToTempFile(filepath.Join("testdata", "load.sqlite"))
+	path2 := mustCopyFileToTempFile(filepath.Join("testdata", "load.sqlite"))
+
+	s0.SetRestorePath(path0)
+	s1.SetRestorePath(path1)
+	s2.SetRestorePath(path2)
+
+	if err := s0.Open(); err != nil {
+		t.Fatalf("failed to open store 0: %s", err.Error())
+	}
+	defer s0.Close(true)
+
+	if err := s1.Open(); err != nil {
+		t.Fatalf("failed to open store 1: %s", err.Error())
+	}
+	defer s1.Close(true)
+
+	if err := s2.Open(); err != nil {
+		t.Fatalf("failed to open store 2: %s", err.Error())
+	}
+	defer s2.Close(true)
+
+	// Trigger a bootstrap.
+	s0.BootstrapExpect = 3
+	if err := s0.Notify(notifyRequest(s0.ID(), ln0.Addr().String())); err != nil {
+		t.Fatalf("failed to notify store: %s", err.Error())
+	}
+	if err := s0.Notify(notifyRequest(s1.ID(), ln1.Addr().String())); err != nil {
+		t.Fatalf("failed to notify store: %s", err.Error())
+	}
+	if err := s0.Notify(notifyRequest(s2.ID(), ln2.Addr().String())); err != nil {
+		t.Fatalf("failed to notify store: %s", err.Error())
+	}
+
+	// Wait for the cluster to bootstrap.
+	_, err := s0.WaitForLeader(10 * time.Second)
+	if err != nil {
+		t.Fatalf("failed to get leader: %s", err.Error())
+	}
+
+	// Ultimately there is a hard-to-control timing issue here. Knowing
+	// exactly when the leader has applied the restore is difficult, so
+	// just wait a bit.
+	time.Sleep(2 * time.Second)
+
+	if !s0.Ready() {
+		t.Fatalf("node is not ready")
+	}
+
+	qr := queryRequestFromString("SELECT * FROM foo WHERE id=2", false, true)
+	r, err := s0.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[2,"fiona"]]`, asJSON(r[0].Values); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	if pathExists(path0) || pathExists(path1) || pathExists(path2) {
+		t.Fatalf("an auto-restore file was not removed")
+	}
+
+	numAuto := stats.Get(numAutoRestores).(*expvar.Int).Value()
+	numAutoSkipped := stats.Get(numAutoRestoresSkipped).(*expvar.Int).Value()
+	if exp, got := int64(1), numAuto; exp != got {
+		t.Fatalf("unexpected number of auto-restores\nexp: %d\ngot: %d", exp, got)
+	}
+	if exp, got := int64(2), numAutoSkipped; exp != got {
+		t.Fatalf("unexpected number of auto-restores skipped\nexp: %d\ngot: %d", exp, got)
 	}
 }
 
@@ -2362,6 +2516,12 @@ func mustReadFile(path string) []byte {
 		panic("failed to read file")
 	}
 	return b
+}
+
+func mustCopyFileToTempFile(path string) string {
+	f := mustCreateTempFile()
+	mustWriteFile(f, string(mustReadFile(path)))
+	return f
 }
 
 func mustParseDuration(t string) time.Duration {

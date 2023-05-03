@@ -31,12 +31,22 @@ def gunzip_file(path):
     file_content = f.read()
   return write_random_file(file_content, mode='wb')
 
+def gzip_compress(input_file, output_file):
+    with open(input_file, 'rb') as f_in:
+        with gzip.open(output_file, 'wb') as f_out:
+            shutil.copyfileobj(f_in, f_out)
+
 def is_sequence_number(r):
   return seqRe.match(r)
 
 def random_string(n):
   letters = string.ascii_lowercase
   return ''.join(random.choice(letters) for i in range(n))
+
+def temp_file():
+  f = tempfile.NamedTemporaryFile(delete=False)
+  f.close()
+  return f.name
 
 def write_random_file(data, mode='w'):
   f = tempfile.NamedTemporaryFile(mode, delete=False)
@@ -66,7 +76,8 @@ class Node(object):
                raft_snap_threshold=8192, raft_snap_int="1s",
                http_cert=None, http_key=None, http_no_verify=False,
                node_cert=None, node_key=None, node_no_verify=False,
-               auth=None, auto_backup=None, dir=None, on_disk=False):
+               auth=None, auto_backup=None, auto_restore=None,
+               dir=None, on_disk=False):
     
     s_api = None
     s_raft = None
@@ -110,6 +121,7 @@ class Node(object):
     self.node_no_verify = node_no_verify
     self.auth = auth
     self.auto_backup = auto_backup
+    self.auto_restore = auto_restore
     self.disco_key = random_string(10)
     self.on_disk = on_disk
     self.process = None
@@ -178,6 +190,8 @@ class Node(object):
       command += ['-auth', self.auth]
     if self.auto_backup is not None:
       command += ['-auto-backup', self.auto_backup]
+    if self.auto_restore is not None:
+      command += ['-auto-restore', self.auto_restore]
     if join is not None:
       if join.startswith('http://') is False:
         join = 'http://' + join
@@ -271,7 +285,7 @@ class Node(object):
     except requests.exceptions.ConnectionError:
       return ''
 
-  def wait_for_leader(self, timeout=TIMEOUT, log=True):
+  def wait_for_leader(self, timeout=TIMEOUT, log=True, ready=True):
     lr = None
     t = 0
     while lr == None or lr['addr'] == '':
@@ -287,9 +301,18 @@ class Node(object):
       t+=1
 
     # Perform a check on readyness while we're here.
-    if self.ready() is not True:
+    if ready and (self.ready() is not True):
       raise Exception('leader is available but node reports not ready')
     return lr
+
+  def wait_for_ready(self, timeout=TIMEOUT):
+    t = 0
+    while t < timeout:
+      if self.ready():
+        return
+      time.sleep(1)
+      t+=1
+    raise Exception('rqlite node failed to become ready within %d seconds' % timeout)
 
   def expect_leader_fail(self, timeout=TIMEOUT):
     try:

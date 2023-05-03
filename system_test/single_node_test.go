@@ -12,7 +12,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rqlite/rqlite/cluster"
+	httpd "github.com/rqlite/rqlite/http"
 	"github.com/rqlite/rqlite/store"
+	"github.com/rqlite/rqlite/tcp"
 )
 
 func Test_SingleNodeBasicEndpoint(t *testing.T) {
@@ -1196,24 +1199,68 @@ func Test_SingleNodeNoopSnapLogsReopen(t *testing.T) {
 	}
 }
 
-func testPoll(t *testing.T, f func() (bool, error), p time.Duration, d time.Duration) {
-	tck := time.NewTicker(p)
-	defer tck.Stop()
-	tmr := time.NewTimer(d)
-	defer tmr.Stop()
+func Test_SingleNodeAutoRestore(t *testing.T) {
+	dir := mustTempDir()
+	node := &Node{
+		Dir:       dir,
+		PeersPath: filepath.Join(dir, "raft/peers.json"),
+	}
+	defer node.Deprovision()
 
-	for {
-		select {
-		case <-tck.C:
-			b, err := f()
-			if err != nil {
-				continue
-			}
-			if b {
-				return
-			}
-		case <-tmr.C:
-			t.Fatalf("timeout expired: %s", t.Name())
-		}
+	mux, _ := mustNewOpenMux("")
+	go mux.Serve()
+
+	raftTn := mux.Listen(cluster.MuxRaftHeader)
+	node.Store = store.New(raftTn, &store.Config{
+		DBConf: store.NewDBConfig(true),
+		Dir:    node.Dir,
+		ID:     raftTn.Addr().String(),
+	})
+
+	restoreFile := mustTempFile()
+	copyFile(filepath.Join("testdata", "auto-restore.sqlite"), restoreFile)
+	if err := node.Store.SetRestorePath(restoreFile); err != nil {
+		t.Fatalf("failed to set restore path: %s", err.Error())
+	}
+
+	if err := node.Store.Open(); err != nil {
+		t.Fatalf("failed to open store: %s", err.Error())
+	}
+	if err := node.Store.Bootstrap(store.NewServer(node.Store.ID(), node.Store.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap store: %s", err.Error())
+	}
+	node.RaftAddr = node.Store.Addr()
+	node.ID = node.Store.ID()
+
+	clstr := cluster.New(mux.Listen(cluster.MuxClusterHeader), node.Store, node.Store, mustNewMockCredentialStore())
+	if err := clstr.Open(); err != nil {
+		t.Fatalf("failed to open Cluster service: %s", err.Error())
+	}
+	node.Cluster = clstr
+
+	clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, nil)
+	clstrClient := cluster.NewClient(clstrDialer, 30*time.Second)
+	node.Service = httpd.New("localhost:0", node.Store, clstrClient, nil)
+	node.Service.Expvar = true
+
+	if err := node.Service.Start(); err != nil {
+		t.Fatalf("failed to start HTTP server: %s", err.Error())
+	}
+	node.APIAddr = node.Service.Addr().String()
+
+	// Finally, set API address in Cluster service
+	clstr.SetAPIAddr(node.APIAddr)
+
+	if _, err := node.WaitForLeader(); err != nil {
+		t.Fatalf("node never became leader")
+	}
+	testPoll(t, node.Ready, 100*time.Millisecond, 5*time.Second)
+
+	r, err := node.Query("SELECT * FROM foo WHERE id=2")
+	if err != nil {
+		t.Fatalf("failed to execute query: %s", err.Error())
+	}
+	if r != `{"results":[{"columns":["id","name"],"types":["integer","text"],"values":[[2,"fiona"]]}]}` {
+		t.Fatalf("test received wrong result got %s", r)
 	}
 }

@@ -82,6 +82,28 @@ type PoolStats struct {
 	MaxLifetimeClosed  int64         `json:"max_lifetime_closed"`
 }
 
+// IsValidSQLiteFile checks that the supplied path looks like a SQLite file.
+func IsValidSQLiteFile(path string) bool {
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+
+	b := make([]byte, 16)
+	if _, err := f.Read(b); err != nil {
+		return false
+	}
+
+	return IsValidSQLiteData(b)
+}
+
+// IsValidSQLiteData checks that the supplied data looks like a SQLite data.
+// See https://www.sqlite.org/fileformat.html
+func IsValidSQLiteData(b []byte) bool {
+	return len(b) > 13 && string(b[0:13]) == "SQLite format"
+}
+
 // Open opens a file-based database, creating it if it does not exist. After this
 // function returns, an actual SQLite file will always exist.
 func Open(dbPath string, fkEnabled bool) (*DB, error) {

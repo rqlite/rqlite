@@ -24,6 +24,7 @@ import (
 	"github.com/rqlite/rqlite/cluster"
 	"github.com/rqlite/rqlite/command"
 	"github.com/rqlite/rqlite/command/encoding"
+	"github.com/rqlite/rqlite/db"
 	"github.com/rqlite/rqlite/queue"
 	"github.com/rqlite/rqlite/rtls"
 	"github.com/rqlite/rqlite/store"
@@ -822,7 +823,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body.Close()
 
-	if validSQLiteFile(b) {
+	if db.IsValidSQLiteData(b) {
 		s.logger.Printf("SQLite database file detected as load data")
 		lr := &command.LoadRequest{
 			Data: b,
@@ -1972,12 +1973,6 @@ func executeRequestFromStrings(s []string, timings, tx bool) *command.ExecuteReq
 		},
 		Timings: timings,
 	}
-}
-
-// validateSQLiteFile checks that the supplied data looks like a SQLite database
-// file. See https://www.sqlite.org/fileformat.html
-func validSQLiteFile(b []byte) bool {
-	return len(b) > 13 && string(b[0:13]) == "SQLite format"
 }
 
 func resolvableAddress(addr string) (string, error) {
