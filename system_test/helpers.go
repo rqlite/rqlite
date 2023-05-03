@@ -693,6 +693,15 @@ func mustTempDir() string {
 	return path
 }
 
+func mustTempFile() string {
+	f, err := os.CreateTemp("", "rqlite-system-test-")
+	if err != nil {
+		panic("failed to create temp file")
+	}
+	f.Close()
+	return f.Name()
+}
+
 func mustNewOpenMux(addr string) (*tcp.Mux, net.Listener) {
 	if addr == "" {
 		addr = "localhost:0"
