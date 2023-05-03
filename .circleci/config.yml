@@ -170,7 +170,7 @@ jobs:
             RQLITED_PATH: /home/circleci/go/bin/rqlited
     resource_class: large
 
-  end_to_end_auto_backup:
+  end_to_end_auto_state:
     docker:
       - image: cimg/go:1.20.0
     steps:
@@ -187,7 +187,7 @@ jobs:
       - run: go install -tags osusergo,netgo,sqlite_omit_load_extension
           -ldflags="-extldflags=-static" ./...
       - run:
-          command: python3 system_test/e2e/auto_backup.py
+          command: python3 system_test/e2e/auto_state.py
           environment:
             RQLITED_PATH: /home/circleci/go/bin/rqlited
     resource_class: large
@@ -205,4 +205,4 @@ workflows:
       - end_to_end_multi_adv
       - end_to_end_joining
       - end_to_end_autoclustering
-      - end_to_end_auto_backup
+      - end_to_end_auto_state
