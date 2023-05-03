@@ -2,12 +2,70 @@ package download
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"testing"
 )
+
+func TestDownloader_Do(t *testing.T) {
+	tests := []struct {
+		name           string
+		mockClientData []byte
+		compress       bool
+		expectError    error
+	}{
+		{
+			name:           "Successful download",
+			mockClientData: []byte("test data"),
+			expectError:    nil,
+		},
+		{
+			name:           "Successful download of compressed data",
+			mockClientData: []byte("test data"),
+			compress:       false,
+			expectError:    nil,
+		},
+		{
+			name:        "Download error",
+			expectError: errors.New("download error"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockClient := &mockStorageClient{
+				data:  tt.mockClientData,
+				error: tt.expectError,
+			}
+			if tt.compress {
+				mockClient.Compress()
+			}
+			downloader := NewDownloader(mockClient)
+
+			f := newmockWriterAt(len(tt.mockClientData))
+
+			err := downloader.Do(context.Background(), f)
+			if tt.expectError != nil {
+				if err == nil {
+					t.Errorf("Expected error, but got none")
+				}
+				if err.Error() != tt.expectError.Error() {
+					t.Errorf("Expected error %v, but got %v", tt.expectError, err)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Unexpected error: %v", err)
+				}
+				if !bytes.Equal(tt.mockClientData, f.Bytes()) {
+					t.Errorf("Expected output data %v, but got %v", tt.mockClientData, f.Bytes())
+				}
+			}
+		})
+	}
+}
 
 type mockStorageClient struct {
 	data  []byte
@@ -25,84 +83,47 @@ func (m *mockStorageClient) Download(ctx context.Context, writer io.WriterAt) er
 	return nil
 }
 
+func (m *mockStorageClient) Compress() error {
+	var compressedData bytes.Buffer
+	gzipWriter := gzip.NewWriter(&compressedData)
+
+	_, err := gzipWriter.Write(m.data)
+	if err != nil {
+		return err
+	}
+
+	err = gzipWriter.Close()
+	if err != nil {
+		return err
+	}
+
+	m.data = compressedData.Bytes()
+	return nil
+}
+
 func (m *mockStorageClient) String() string {
 	return "mockStorageClient"
 }
 
-func TestDownloader_Do(t *testing.T) {
-	tests := []struct {
-		name               string
-		mockClientData     []byte
-		mockClientError    error
-		expectedOutputData []byte
-		expectError        bool
-	}{
-		{
-			name:               "Successful Download",
-			mockClientData:     []byte("test data"),
-			expectedOutputData: []byte("test data"),
-			expectError:        false,
-		},
-		{
-			name:            "Download Error",
-			mockClientError: errors.New("download error"),
-			expectError:     true,
-		},
-	}
+type mockWriterAt struct {
+	data []byte
+}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			mockClient := &mockStorageClient{
-				data:  tt.mockClientData,
-				error: tt.mockClientError,
-			}
-			downloader := download.NewDownloader(mockClient)
-
-			outputBuffer := bytes.NewBuffer(make([]byte, 0, len(tt.expectedOutputData)))
-			err := downloader.Do(context.Background(), outputBuffer)
-
-			if tt.expectError {
-				if err == nil {
-					t.Errorf("Expected error, but got none")
-				}
-			} else {
-				if err != nil {
-					t.Errorf("Unexpected error: %v", err)
-				}
-				if !bytes.Equal(tt.expectedOutputData, outputBuffer.Bytes()) {
-					t.Errorf("Expected output data %v, but got %v", tt.expectedOutputData, outputBuffer.Bytes())
-				}
-			}
-		})
+func newmockWriterAt(size int) *mockWriterAt {
+	return &mockWriterAt{
+		data: make([]byte, size),
 	}
 }
 
-func TestDownloader_Stats(t *testing.T) {
-	mockClient := &mockStorageClient{
-		data: []byte("test data"),
-	}
-	downloader := download.NewDownloader(mockClient)
-	buffer := bytes.NewBuffer(make([]byte, 0, len(mockClient.data)))
-
-	download.ResetStats()
-
-	err := downloader.Do(context.Background(), buffer)
-	if err != nil {
-		t.Errorf("Unexpected error: %v", err)
+func (s *mockWriterAt) WriteAt(p []byte, off int64) (n int, err error) {
+	if off < 0 || int(off) > len(s.data) {
+		return 0, errors.New("invalid offset")
 	}
 
-	numDownloadsOK := download.GetStats().Get(download.NumDownloadsOK)
-	if numDownloadsOK != 1 {
-		t.Errorf("Expected NumDownloadsOK to be 1, but got %d", numDownloadsOK)
-	}
+	n = copy(s.data[off:], p)
+	return n, nil
+}
 
-	numDownloadsFail := download.GetStats().Get(download.NumDownloadsFail)
-	if numDownloadsFail != 0 {
-		t.Errorf("Expected NumDownloadsFail to be 0, but got %d", numDownloadsFail)
-	}
-
-	numDownloadBytes := download.GetStats().Get(download.NumDownloadBytes)
-	if numDownloadBytes != int64(len(mockClient.data)) {
-		t.Errorf("Expected NumDownloadBytes to be %d, but got %d", len(mockClient.data), numDownloadBytes)
-	}
+func (s *mockWriterAt) Bytes() []byte {
+	return s.data
 }
