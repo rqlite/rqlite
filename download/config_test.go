@@ -165,7 +165,7 @@ func TestUnmarshal(t *testing.T) {
 			expectedCfg: &Config{
 				Version: 1,
 				Type:    "s3",
-				Timeout: Duration(time.Minute),
+				Timeout: Duration(30 * time.Second),
 			},
 			expectedS3: &aws.S3Config{
 				AccessKeyID:     "test_id",

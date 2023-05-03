@@ -78,7 +78,7 @@ func (s *StorageType) UnmarshalJSON(b []byte) error {
 type Config struct {
 	Version int             `json:"version"`
 	Type    StorageType     `json:"type"`
-	Timeout Duration        `json:"timeout"`
+	Timeout Duration        `json:"timeout,omitempty"`
 	Sub     json.RawMessage `json:"sub"`
 }
 
@@ -92,6 +92,10 @@ func Unmarshal(data []byte) (*Config, *aws.S3Config, error) {
 
 	if cfg.Version > version {
 		return nil, nil, ErrInvalidVersion
+	}
+
+	if cfg.Timeout == 0 {
+		cfg.Timeout = Duration(30 * time.Second)
 	}
 
 	s3cfg := &aws.S3Config{}
