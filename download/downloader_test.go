@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"testing"
+	"time"
 )
 
 func TestDownloader_Do(t *testing.T) {
@@ -25,7 +26,7 @@ func TestDownloader_Do(t *testing.T) {
 		{
 			name:           "Successful download of compressed data",
 			mockClientData: []byte("test data"),
-			compress:       false,
+			compress:       true,
 			expectError:    nil,
 		},
 		{
@@ -45,9 +46,8 @@ func TestDownloader_Do(t *testing.T) {
 			}
 			downloader := NewDownloader(mockClient)
 
-			f := newmockWriterAt(len(tt.mockClientData))
-
-			err := downloader.Do(context.Background(), f)
+			f := new(bytes.Buffer)
+			err := downloader.Do(context.Background(), f, 5*time.Second)
 			if tt.expectError != nil {
 				if err == nil {
 					t.Errorf("Expected error, but got none")
@@ -103,27 +103,4 @@ func (m *mockStorageClient) Compress() error {
 
 func (m *mockStorageClient) String() string {
 	return "mockStorageClient"
-}
-
-type mockWriterAt struct {
-	data []byte
-}
-
-func newmockWriterAt(size int) *mockWriterAt {
-	return &mockWriterAt{
-		data: make([]byte, size),
-	}
-}
-
-func (s *mockWriterAt) WriteAt(p []byte, off int64) (n int, err error) {
-	if off < 0 || int(off) > len(s.data) {
-		return 0, errors.New("invalid offset")
-	}
-
-	n = copy(s.data[off:], p)
-	return n, nil
-}
-
-func (s *mockWriterAt) Bytes() []byte {
-	return s.data
 }
