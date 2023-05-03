@@ -1264,25 +1264,3 @@ func Test_SingleNodeAutoRestore(t *testing.T) {
 		t.Fatalf("test received wrong result got %s", r)
 	}
 }
-
-func testPoll(t *testing.T, f func() (bool, error), p time.Duration, d time.Duration) {
-	tck := time.NewTicker(p)
-	defer tck.Stop()
-	tmr := time.NewTimer(d)
-	defer tmr.Stop()
-
-	for {
-		select {
-		case <-tck.C:
-			b, err := f()
-			if err != nil {
-				continue
-			}
-			if b {
-				return
-			}
-		case <-tmr.C:
-			t.Fatalf("timeout expired: %s", t.Name())
-		}
-	}
-}
