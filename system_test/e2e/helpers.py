@@ -31,6 +31,11 @@ def gunzip_file(path):
     file_content = f.read()
   return write_random_file(file_content, mode='wb')
 
+def gzip_compress(input_file, output_file):
+    with open(input_file, 'rb') as f_in:
+        with gzip.open(output_file, 'wb') as f_out:
+            shutil.copyfileobj(f_in, f_out)
+
 def is_sequence_number(r):
   return seqRe.match(r)
 

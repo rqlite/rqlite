@@ -6,7 +6,7 @@ import unittest
 import sqlite3
 import time
 
-from helpers import Node, deprovision_node, write_random_file, random_string, env_present, gunzip_file, temp_file, d_
+from helpers import Node, deprovision_node, write_random_file, random_string, env_present, gunzip_file, gzip_compress, temp_file, d_
 from s3 import download_s3_object, delete_s3_object, upload_s3_object
 
 S3_BUCKET = 'rqlite-testing-circleci'
@@ -32,16 +32,15 @@ class TestAutoRestoreS3(unittest.TestCase):
     node = None
     cfg = None
     path = None
-    backup_file = None
 
     access_key_id = os.environ['RQLITE_S3_ACCESS_KEY']
     secret_access_key_id = os.environ['RQLITE_S3_SECRET_ACCESS_KEY']
 
     # Upload a test SQLite file to S3.
     tmp_file = self.create_sqlite_file()
+
     path = "restore/"+random_string(32)
     upload_s3_object(access_key_id, secret_access_key_id, S3_BUCKET, path, tmp_file)
-    os.remove(tmp_file)
 
     # Create the auto-restore config file
     auto_restore_cfg = {
@@ -65,6 +64,52 @@ class TestAutoRestoreS3(unittest.TestCase):
 
     deprovision_node(node)
     os.remove(cfg)
+    os.remove(tmp_file)
+    delete_s3_object(access_key_id, secret_access_key_id, S3_BUCKET, path)
+
+  @unittest.skipUnless(env_present('RQLITE_S3_ACCESS_KEY'), "S3 credentials not available")
+  def test_compressed(self):
+    '''Test that automatic restores from AWS S3 work with compressed data'''
+
+    node = None
+    cfg = None
+    path = None
+
+    access_key_id = os.environ['RQLITE_S3_ACCESS_KEY']
+    secret_access_key_id = os.environ['RQLITE_S3_SECRET_ACCESS_KEY']
+
+    # Upload a test SQLite file to S3.
+    tmp_file = self.create_sqlite_file()
+    compressed_tmp_file = temp_file()
+    gzip_compress(tmp_file, compressed_tmp_file)
+
+    path = "restore/"+random_string(32)
+    upload_s3_object(access_key_id, secret_access_key_id, S3_BUCKET, path, compressed_tmp_file)
+
+    # Create the auto-restore config file
+    auto_restore_cfg = {
+      "version": 1,
+      "type": "s3",
+      "sub" : {
+         "access_key_id": access_key_id,
+         "secret_access_key": secret_access_key_id,
+         "region": S3_BUCKET_REGION,
+         "bucket": S3_BUCKET,
+         "path": path
+      }
+    }
+    cfg = write_random_file(json.dumps(auto_restore_cfg))
+
+    node = Node(RQLITED_PATH, '0', auto_restore=cfg)
+    node.start()
+    node.wait_for_ready()
+    j = node.query('SELECT * FROM foo')
+    self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
+
+    deprovision_node(node)
+    os.remove(cfg)
+    os.remove(tmp_file)
+    os.remove(compressed_tmp_file)
     delete_s3_object(access_key_id, secret_access_key_id, S3_BUCKET, path)
 
 class TestAutoBackupS3(unittest.TestCase):
