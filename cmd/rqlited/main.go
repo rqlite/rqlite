@@ -208,6 +208,19 @@ func startAutoBackups(ctx context.Context, cfg *Config, str *store.Store) (*uplo
 	return u, nil
 }
 
+func downloadRestoreFile(path string) (string, error) {
+	// Parse the file
+	// Get the config
+	// Get the s3 config
+	// Get the s3 client
+	// Download the file
+	// Check if it's compressed
+	// Decompress if needed, delete compressed file
+	// Return the path to the file
+
+	return "", nil
+}
+
 func createStore(cfg *Config, ln *tcp.Layer) (*store.Store, error) {
 	dbConf := store.NewDBConfig(!cfg.OnDisk)
 	dbConf.OnDiskPath = cfg.OnDiskPath
@@ -237,6 +250,19 @@ func createStore(cfg *Config, ln *tcp.Layer) (*store.Store, error) {
 
 	if store.IsNewNode(cfg.DataPath) {
 		log.Printf("no preexisting node state detected in %s, node may be bootstrapping", cfg.DataPath)
+		if cfg.AutoRestoreFile != "" {
+			log.Printf("auto-restore file request, initiating download")
+
+			start := time.Now()
+			path, err := downloadRestoreFile(cfg.AutoRestoreFile)
+			if err != nil {
+				return nil, fmt.Errorf("failed to download restore file: %s", err.Error())
+			}
+			log.Printf("auto-restore file downloaded in %s", time.Since(start))
+			if err := str.SetRestorePath(path); err != nil {
+				return nil, fmt.Errorf("failed set restore path: %s", err.Error())
+			}
+		}
 	} else {
 		log.Printf("preexisting node state detected in %s", cfg.DataPath)
 	}
