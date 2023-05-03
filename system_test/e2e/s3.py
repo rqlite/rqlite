@@ -16,10 +16,6 @@ def delete_s3_object(access_key_id, secret_access_key_id, bucket_name, object_ke
 def download_s3_object(access_key_id, secret_access_key_id, bucket_name, object_key):
     """
     Download an object from an S3 bucket.
-
-    Args:
-        bucket_name (str): The name of the S3 bucket.
-        object_key (str): The key of the object to download.
     """
     os.environ['AWS_ACCESS_KEY_ID'] = access_key_id
     os.environ['AWS_SECRET_ACCESS_KEY'] = secret_access_key_id
@@ -31,11 +27,6 @@ def download_s3_object(access_key_id, secret_access_key_id, bucket_name, object_
 def upload_s3_object(access_key_id, secret_access_key_id, bucket_name, object_key, file_path):
     """
     Upload an object to an S3 bucket.
-
-    Args:
-        bucket_name (str): The name of the S3 bucket.
-        object_key (str): The key of the object to upload.
-        data (str): The data to upload.
     """
     os.environ['AWS_ACCESS_KEY_ID'] = access_key_id
     os.environ['AWS_SECRET_ACCESS_KEY'] = secret_access_key_id
