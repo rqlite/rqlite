@@ -147,12 +147,11 @@ func TestUnmarshal(t *testing.T) {
 			expectedErr: nil,
 		},
 		{
-			name: "ValidS3ConfigNoptionalFields",
+			name: "ValidS3ConfigNoOptionalFields",
 			input: []byte(`
                         {
                                 "version": 1,
                                 "type": "s3",
-                                "timeout": "1m",
                                 "sub": {
                                         "access_key_id": "test_id",
                                         "secret_access_key": "test_secret",

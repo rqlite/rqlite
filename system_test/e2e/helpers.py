@@ -38,6 +38,11 @@ def random_string(n):
   letters = string.ascii_lowercase
   return ''.join(random.choice(letters) for i in range(n))
 
+def temp_file():
+  f = tempfile.NamedTemporaryFile(delete=False)
+  f.close()
+  return f.name
+
 def write_random_file(data, mode='w'):
   f = tempfile.NamedTemporaryFile(mode, delete=False)
   f.write(data)
@@ -275,7 +280,7 @@ class Node(object):
     except requests.exceptions.ConnectionError:
       return ''
 
-  def wait_for_leader(self, timeout=TIMEOUT, log=True):
+  def wait_for_leader(self, timeout=TIMEOUT, log=True, ready=True):
     lr = None
     t = 0
     while lr == None or lr['addr'] == '':
@@ -291,9 +296,18 @@ class Node(object):
       t+=1
 
     # Perform a check on readyness while we're here.
-    if self.ready() is not True:
+    if ready and (self.ready() is not True):
       raise Exception('leader is available but node reports not ready')
     return lr
+
+  def wait_for_ready(self, timeout=TIMEOUT):
+    t = 0
+    while t < timeout:
+      if self.ready():
+        return
+      time.sleep(1)
+      t+=1
+    raise Exception('rqlite node failed to become ready within %d seconds' % timeout)
 
   def expect_leader_fail(self, timeout=TIMEOUT):
     try:
