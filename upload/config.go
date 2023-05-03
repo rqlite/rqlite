@@ -6,6 +6,8 @@ import (
 	"io/ioutil"
 	"os"
 	"time"
+
+	"github.com/rqlite/rqlite/aws"
 )
 
 const (
@@ -81,17 +83,8 @@ type Config struct {
 	Sub        json.RawMessage `json:"sub"`
 }
 
-// S3Config is the subconfig for the S3 storage type
-type S3Config struct {
-	AccessKeyID     string `json:"access_key_id"`
-	SecretAccessKey string `json:"secret_access_key"`
-	Region          string `json:"region"`
-	Bucket          string `json:"bucket"`
-	Path            string `json:"path"`
-}
-
 // Unmarshal unmarshals the config file and returns the config and subconfig
-func Unmarshal(data []byte) (*Config, *S3Config, error) {
+func Unmarshal(data []byte) (*Config, *aws.S3Config, error) {
 	cfg := &Config{}
 	err := json.Unmarshal(data, cfg)
 	if err != nil {
@@ -102,7 +95,7 @@ func Unmarshal(data []byte) (*Config, *S3Config, error) {
 		return nil, nil, ErrInvalidVersion
 	}
 
-	s3cfg := &S3Config{}
+	s3cfg := &aws.S3Config{}
 	err = json.Unmarshal(cfg.Sub, s3cfg)
 	if err != nil {
 		return nil, nil, err

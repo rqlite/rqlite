@@ -12,12 +12,13 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 )
 
-type uploader interface {
-	UploadWithContext(ctx aws.Context, input *s3manager.UploadInput, opts ...func(*s3manager.Uploader)) (*s3manager.UploadOutput, error)
-}
-
-type downloader interface {
-	DownloadWithContext(ctx aws.Context, w io.WriterAt, input *s3.GetObjectInput, opts ...func(*s3manager.Downloader)) (n int64, err error)
+// S3Config is the subconfig for the S3 storage type
+type S3Config struct {
+	AccessKeyID     string `json:"access_key_id"`
+	SecretAccessKey string `json:"secret_access_key"`
+	Region          string `json:"region"`
+	Bucket          string `json:"bucket"`
+	Path            string `json:"path"`
 }
 
 // S3Client is a client for uploading data to S3.
@@ -111,4 +112,12 @@ func (s *S3Client) createSession() (*session.Session, error) {
 		return nil, fmt.Errorf("failed to create S3 session: %w", err)
 	}
 	return sess, nil
+}
+
+type uploader interface {
+	UploadWithContext(ctx aws.Context, input *s3manager.UploadInput, opts ...func(*s3manager.Uploader)) (*s3manager.UploadOutput, error)
+}
+
+type downloader interface {
+	DownloadWithContext(ctx aws.Context, w io.WriterAt, input *s3.GetObjectInput, opts ...func(*s3manager.Downloader)) (n int64, err error)
 }

@@ -8,6 +8,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/rqlite/rqlite/aws"
 )
 
 func Test_ReadConfigFile(t *testing.T) {
@@ -111,7 +113,7 @@ func TestUnmarshal(t *testing.T) {
 		name        string
 		input       []byte
 		expectedCfg *Config
-		expectedS3  *S3Config
+		expectedS3  *aws.S3Config
 		expectedErr error
 	}{
 		{
@@ -137,7 +139,7 @@ func TestUnmarshal(t *testing.T) {
 				NoCompress: true,
 				Interval:   24 * Duration(time.Hour),
 			},
-			expectedS3: &S3Config{
+			expectedS3: &aws.S3Config{
 				AccessKeyID:     "test_id",
 				SecretAccessKey: "test_secret",
 				Region:          "us-west-2",
@@ -168,7 +170,7 @@ func TestUnmarshal(t *testing.T) {
 				NoCompress: false,
 				Interval:   24 * Duration(time.Hour),
 			},
-			expectedS3: &S3Config{
+			expectedS3: &aws.S3Config{
 				AccessKeyID:     "test_id",
 				SecretAccessKey: "test_secret",
 				Region:          "us-west-2",
