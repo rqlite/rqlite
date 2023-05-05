@@ -19,17 +19,17 @@ import (
 	"github.com/rqlite/rqlite-disco-clients/dnssrv"
 	etcd "github.com/rqlite/rqlite-disco-clients/etcd"
 	"github.com/rqlite/rqlite/auth"
+	"github.com/rqlite/rqlite/autostate/download"
+	"github.com/rqlite/rqlite/autostate/upload"
 	"github.com/rqlite/rqlite/aws"
 	"github.com/rqlite/rqlite/cluster"
 	"github.com/rqlite/rqlite/cmd"
 	"github.com/rqlite/rqlite/db"
 	"github.com/rqlite/rqlite/disco"
-	"github.com/rqlite/rqlite/download"
 	httpd "github.com/rqlite/rqlite/http"
 	"github.com/rqlite/rqlite/rtls"
 	"github.com/rqlite/rqlite/store"
 	"github.com/rqlite/rqlite/tcp"
-	"github.com/rqlite/rqlite/upload"
 )
 
 const logo = `
