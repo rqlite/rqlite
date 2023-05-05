@@ -76,10 +76,11 @@ func (s *StorageType) UnmarshalJSON(b []byte) error {
 
 // Config is the config file format for the upload service
 type Config struct {
-	Version int             `json:"version"`
-	Type    StorageType     `json:"type"`
-	Timeout Duration        `json:"timeout,omitempty"`
-	Sub     json.RawMessage `json:"sub"`
+	Version           int             `json:"version"`
+	Type              StorageType     `json:"type"`
+	Timeout           Duration        `json:"timeout,omitempty"`
+	ContinueOnFailure bool            `json:"continue_on_failure,omitempty"`
+	Sub               json.RawMessage `json:"sub"`
 }
 
 // Unmarshal unmarshals the config file and returns the config and subconfig
