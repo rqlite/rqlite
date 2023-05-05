@@ -14,15 +14,17 @@ import (
 
 // S3Config is the subconfig for the S3 storage type
 type S3Config struct {
+	Endpoint        string `json:"endpoint,omitempty"`
+	Region          string `json:"region"`
 	AccessKeyID     string `json:"access_key_id"`
 	SecretAccessKey string `json:"secret_access_key"`
-	Region          string `json:"region"`
 	Bucket          string `json:"bucket"`
 	Path            string `json:"path"`
 }
 
 // S3Client is a client for uploading data to S3.
 type S3Client struct {
+	endpoint  string
 	region    string
 	accessKey string
 	secretKey string
@@ -35,8 +37,9 @@ type S3Client struct {
 }
 
 // NewS3Client returns an instance of an S3Client.
-func NewS3Client(region, accessKey, secretKey, bucket, key string) *S3Client {
+func NewS3Client(endpoint, region, accessKey, secretKey, bucket, key string) *S3Client {
 	return &S3Client{
+		endpoint:  endpoint,
 		region:    region,
 		accessKey: accessKey,
 		secretKey: secretKey,
@@ -105,6 +108,7 @@ func (s *S3Client) Download(ctx context.Context, writer io.WriterAt) error {
 
 func (s *S3Client) createSession() (*session.Session, error) {
 	sess, err := session.NewSession(&aws.Config{
+		Endpoint:    aws.String(s.endpoint),
 		Region:      aws.String(s.region),
 		Credentials: credentials.NewStaticCredentials(s.accessKey, s.secretKey, ""),
 	})
