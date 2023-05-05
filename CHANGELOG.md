@@ -2,6 +2,7 @@
 ### New features
 - [PR #1243](https://github.com/rqlite/rqlite/pull/1243): Support automatically restoring from AWS S3.
 - [PR #1244](https://github.com/rqlite/rqlite/pull/1244): Disco configs now support Environment variable expansion.
+- [PR #1245](https://github.com/rqlite/rqlite/pull/1245): Support continuing on failure to download from AWS S3.
 
 ### Implementation changes and bug fixes
 - [PR #1239](https://github.com/rqlite/rqlite/pull/1239): Remove erroneous scaling factor from etcd and Consul reporting service.
