@@ -32,6 +32,7 @@ const (
 	numRemoveNodeRequest  = "num_remove_node_req"
 	numNotifyRequest      = "num_notify_req"
 	numJoinRequest        = "num_join_req"
+	numClientRetries      = "num_client_retries"
 
 	// Client stats for this package.
 	numGetNodeAPIRequestLocal = "num_get_node_api_req_local"
@@ -57,6 +58,7 @@ func init() {
 	stats.Add(numGetNodeAPIRequestLocal, 0)
 	stats.Add(numNotifyRequest, 0)
 	stats.Add(numJoinRequest, 0)
+	stats.Add(numClientRetries, 0)
 }
 
 // Dialer is the interface dialers must implement.

@@ -19,6 +19,7 @@ import (
 const (
 	initialPoolSize = 4
 	maxPoolCapacity = 64
+	maxRetries      = 8
 
 	protoBufferLengthSize = 8
 )
@@ -38,6 +39,11 @@ type Client struct {
 }
 
 // NewClient returns a client instance for talking to a remote node.
+// Clients will retry certain commands if they fail, to allow for
+// remote node restarts. Cluster management operations such as joining
+// and removing nodes are not retried, to make it clear to the operator
+// that the operation failed. In addition, higher-level code will
+// usually retry these operations.
 func NewClient(dl Dialer, t time.Duration) *Client {
 	return &Client{
 		dialer:        dl,
@@ -68,24 +74,11 @@ func (c *Client) GetNodeAPIAddr(nodeAddr string, timeout time.Duration) (string,
 		return c.localServ.GetNodeAPIURL(), nil
 	}
 
-	conn, err := c.dial(nodeAddr, c.timeout)
-	if err != nil {
-		return "", err
-	}
-	defer conn.Close()
-
-	// Send the request
 	command := &Command{
 		Type: Command_COMMAND_TYPE_GET_NODE_API_URL,
 	}
-	if err := writeCommand(conn, command, timeout); err != nil {
-		handleConnError(conn)
-		return "", err
-	}
-
-	p, err := readResponse(conn, timeout)
+	p, err := c.retry(command, nodeAddr, timeout)
 	if err != nil {
-		handleConnError(conn)
 		return "", err
 	}
 
@@ -102,13 +95,6 @@ func (c *Client) GetNodeAPIAddr(nodeAddr string, timeout time.Duration) (string,
 // no credential information will be included in the Execute request to the
 // remote node.
 func (c *Client) Execute(er *command.ExecuteRequest, nodeAddr string, creds *Credentials, timeout time.Duration) ([]*command.ExecuteResult, error) {
-	conn, err := c.dial(nodeAddr, c.timeout)
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Close()
-
-	// Create the request.
 	command := &Command{
 		Type: Command_COMMAND_TYPE_EXECUTE,
 		Request: &Command_ExecuteRequest{
@@ -116,14 +102,8 @@ func (c *Client) Execute(er *command.ExecuteRequest, nodeAddr string, creds *Cre
 		},
 		Credentials: creds,
 	}
-	if err := writeCommand(conn, command, timeout); err != nil {
-		handleConnError(conn)
-		return nil, err
-	}
-
-	p, err := readResponse(conn, timeout)
+	p, err := c.retry(command, nodeAddr, timeout)
 	if err != nil {
-		handleConnError(conn)
 		return nil, err
 	}
 
@@ -141,13 +121,6 @@ func (c *Client) Execute(er *command.ExecuteRequest, nodeAddr string, creds *Cre
 
 // Query performs a Query on a remote node.
 func (c *Client) Query(qr *command.QueryRequest, nodeAddr string, creds *Credentials, timeout time.Duration) ([]*command.QueryRows, error) {
-	conn, err := c.dial(nodeAddr, c.timeout)
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Close()
-
-	// Create the request.
 	command := &Command{
 		Type: Command_COMMAND_TYPE_QUERY,
 		Request: &Command_QueryRequest{
@@ -155,14 +128,8 @@ func (c *Client) Query(qr *command.QueryRequest, nodeAddr string, creds *Credent
 		},
 		Credentials: creds,
 	}
-	if err := writeCommand(conn, command, timeout); err != nil {
-		handleConnError(conn)
-		return nil, err
-	}
-
-	p, err := readResponse(conn, timeout)
+	p, err := c.retry(command, nodeAddr, timeout)
 	if err != nil {
-		handleConnError(conn)
 		return nil, err
 	}
 
@@ -180,13 +147,6 @@ func (c *Client) Query(qr *command.QueryRequest, nodeAddr string, creds *Credent
 
 // Backup retrieves a backup from a remote node and writes to the io.Writer
 func (c *Client) Backup(br *command.BackupRequest, nodeAddr string, creds *Credentials, timeout time.Duration, w io.Writer) error {
-	conn, err := c.dial(nodeAddr, c.timeout)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-
-	// Send the request
 	command := &Command{
 		Type: Command_COMMAND_TYPE_BACKUP,
 		Request: &Command_BackupRequest{
@@ -194,21 +154,14 @@ func (c *Client) Backup(br *command.BackupRequest, nodeAddr string, creds *Crede
 		},
 		Credentials: creds,
 	}
-	if err := writeCommand(conn, command, timeout); err != nil {
-		handleConnError(conn)
-		return err
-	}
-
-	p, err := readResponse(conn, timeout)
+	p, err := c.retry(command, nodeAddr, timeout)
 	if err != nil {
-		handleConnError(conn)
 		return err
 	}
 
 	// Decompress....
 	p, err = gzUncompress(p)
 	if err != nil {
-		handleConnError(conn)
 		return fmt.Errorf("backup decompress: %w", err)
 	}
 
@@ -230,13 +183,6 @@ func (c *Client) Backup(br *command.BackupRequest, nodeAddr string, creds *Crede
 
 // Load loads a SQLite file into the database.
 func (c *Client) Load(lr *command.LoadRequest, nodeAddr string, creds *Credentials, timeout time.Duration) error {
-	conn, err := c.dial(nodeAddr, c.timeout)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-
-	// Create the request.
 	command := &Command{
 		Type: Command_COMMAND_TYPE_LOAD,
 		Request: &Command_LoadRequest{
@@ -244,14 +190,8 @@ func (c *Client) Load(lr *command.LoadRequest, nodeAddr string, creds *Credentia
 		},
 		Credentials: creds,
 	}
-	if err := writeCommand(conn, command, timeout); err != nil {
-		handleConnError(conn)
-		return err
-	}
-
-	p, err := readResponse(conn, timeout)
+	p, err := c.retry(command, nodeAddr, timeout)
 	if err != nil {
-		handleConnError(conn)
 		return err
 	}
 
@@ -447,6 +387,45 @@ func (c *Client) dial(nodeAddr string, timeout time.Duration) (net.Conn, error) 
 		return nil, fmt.Errorf("pool get: %w", err)
 	}
 	return conn, nil
+}
+
+// retry retries a command on a remote node. It does this so we churn through connections
+// in the pool if we hit an error, as the remote node may have restarted and the pool's
+// connections are now stale.
+func (c *Client) retry(command *Command, nodeAddr string, timeout time.Duration) ([]byte, error) {
+	var p []byte
+	var errOuter error
+	var nRetries int
+	for {
+		p, errOuter = func() ([]byte, error) {
+			conn, errInner := c.dial(nodeAddr, c.timeout)
+			if errInner != nil {
+				return nil, errInner
+			}
+			defer conn.Close()
+
+			if errInner = writeCommand(conn, command, timeout); errInner != nil {
+				handleConnError(conn)
+				return nil, errInner
+			}
+
+			b, errInner := readResponse(conn, timeout)
+			if errInner != nil {
+				handleConnError(conn)
+				return nil, errInner
+			}
+			return b, nil
+		}()
+		if errOuter == nil {
+			break
+		}
+		nRetries++
+		stats.Add(numClientRetries, 1)
+		if nRetries > maxRetries {
+			return nil, errOuter
+		}
+	}
+	return p, nil
 }
 
 func writeCommand(conn net.Conn, c *Command, timeout time.Duration) error {

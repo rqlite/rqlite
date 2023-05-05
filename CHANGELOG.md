@@ -10,6 +10,7 @@
 - [PR #1240](https://github.com/rqlite/rqlite/pull/1240): Add support for controlling and reading Store readiness.
 - [PR #1241](https://github.com/rqlite/rqlite/pull/1241): Check Store is ready in key places.
 - [PR #1248](https://github.com/rqlite/rqlite/pull/1248): Refactor autobackup and autorestore.
+- [PR #1249](https://github.com/rqlite/rqlite/pull/1249): Retry certain cluster-client operations.
 
 ## 7.15.1 (April 29th 2023)
 ### Implementation changes and bug fixes
