@@ -14,7 +14,7 @@ import (
 )
 
 func Test_NewS3Client(t *testing.T) {
-	c := NewS3Client("region1", "access", "secret", "bucket2", "key3")
+	c := NewS3Client("endpoint1", "region1", "access", "secret", "bucket2", "key3")
 	if c.region != "region1" {
 		t.Fatalf("expected region to be %q, got %q", "region1", c.region)
 	}
@@ -33,13 +33,14 @@ func Test_NewS3Client(t *testing.T) {
 }
 
 func Test_S3Client_String(t *testing.T) {
-	c := NewS3Client("region1", "access", "secret", "bucket2", "key3")
+	c := NewS3Client("endpoint1", "region1", "access", "secret", "bucket2", "key3")
 	if c.String() != "s3://bucket2/key3" {
 		t.Fatalf("expected String() to be %q, got %q", "s3://bucket2/key3", c.String())
 	}
 }
 
 func TestS3ClientUploadOK(t *testing.T) {
+	endpoint := "https://my-custom-s3-endpoint.com"
 	region := "us-west-2"
 	accessKey := "your-access-key"
 	secretKey := "your-secret-key"
@@ -68,6 +69,7 @@ func TestS3ClientUploadOK(t *testing.T) {
 	}
 
 	client := &S3Client{
+		endpoint:  endpoint,
 		region:    region,
 		accessKey: accessKey,
 		secretKey: secretKey,
@@ -162,6 +164,7 @@ func TestS3ClientDownloadOK(t *testing.T) {
 }
 
 func TestS3ClientDownloadFail(t *testing.T) {
+	endpoint := "https://my-custom-s3-endpoint.com"
 	region := "us-west-2"
 	accessKey := "your-access-key"
 	secretKey := "your-secret-key"
@@ -175,6 +178,7 @@ func TestS3ClientDownloadFail(t *testing.T) {
 	}
 
 	client := &S3Client{
+		endpoint:   endpoint,
 		region:     region,
 		accessKey:  accessKey,
 		secretKey:  secretKey,

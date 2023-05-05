@@ -228,7 +228,8 @@ func startAutoBackups(ctx context.Context, cfg *Config, str *store.Store) (*uplo
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse auto-backup file: %s", err.Error())
 	}
-	sc := aws.NewS3Client(s3cfg.Region, s3cfg.AccessKeyID, s3cfg.SecretAccessKey, s3cfg.Bucket, s3cfg.Path)
+	sc := aws.NewS3Client(s3cfg.Endpoint, s3cfg.Region, s3cfg.AccessKeyID, s3cfg.SecretAccessKey,
+		s3cfg.Bucket, s3cfg.Path)
 	u := upload.NewUploader(sc, str, time.Duration(uCfg.Interval), !uCfg.NoCompress)
 	go u.Start(ctx, nil)
 	return u, nil
@@ -258,7 +259,8 @@ func downloadRestoreFile(ctx context.Context, cfgPath string) (path string, errO
 	if err != nil {
 		return "", false, fmt.Errorf("failed to parse auto-restore file: %s", err.Error())
 	}
-	sc := aws.NewS3Client(s3cfg.Region, s3cfg.AccessKeyID, s3cfg.SecretAccessKey, s3cfg.Bucket, s3cfg.Path)
+	sc := aws.NewS3Client(s3cfg.Endpoint, s3cfg.Region, s3cfg.AccessKeyID, s3cfg.SecretAccessKey,
+		s3cfg.Bucket, s3cfg.Path)
 	d := download.NewDownloader(sc)
 
 	// Create a temporary file to download to.
