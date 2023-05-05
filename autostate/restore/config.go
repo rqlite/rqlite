@@ -1,4 +1,4 @@
-package download
+package restore
 
 import (
 	"encoding/json"

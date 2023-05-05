@@ -1,4 +1,4 @@
-package download
+package backup
 
 import (
 	"bytes"
@@ -123,7 +123,8 @@ func TestUnmarshal(t *testing.T) {
 			{
 				"version": 1,
 				"type": "s3",
-				"timeout": "30s",
+				"no_compress": true,
+				"interval": "24h",
 				"sub": {
 					"access_key_id": "test_id",
 					"secret_access_key": "test_secret",
@@ -134,10 +135,10 @@ func TestUnmarshal(t *testing.T) {
 			}
 			`),
 			expectedCfg: &Config{
-				Version:           1,
-				Type:              "s3",
-				Timeout:           30 * autostate.Duration(time.Second),
-				ContinueOnFailure: false,
+				Version:    1,
+				Type:       "s3",
+				NoCompress: true,
+				Interval:   24 * autostate.Duration(time.Hour),
 			},
 			expectedS3: &aws.S3Config{
 				AccessKeyID:     "test_id",
@@ -149,12 +150,12 @@ func TestUnmarshal(t *testing.T) {
 			expectedErr: nil,
 		},
 		{
-			name: "ValidS3ConfigNoOptionalFields",
+			name: "ValidS3ConfigNoptionalFields",
 			input: []byte(`
                         {
                                 "version": 1,
                                 "type": "s3",
-								"continue_on_failure": true,
+                                "interval": "24h",
                                 "sub": {
                                         "access_key_id": "test_id",
                                         "secret_access_key": "test_secret",
@@ -165,10 +166,10 @@ func TestUnmarshal(t *testing.T) {
                         }
                         `),
 			expectedCfg: &Config{
-				Version:           1,
-				Type:              "s3",
-				Timeout:           autostate.Duration(30 * time.Second),
-				ContinueOnFailure: true,
+				Version:    1,
+				Type:       "s3",
+				NoCompress: false,
+				Interval:   24 * autostate.Duration(time.Hour),
 			},
 			expectedS3: &aws.S3Config{
 				AccessKeyID:     "test_id",
@@ -185,7 +186,8 @@ func TestUnmarshal(t *testing.T) {
 			{
 				"version": 2,
 				"type": "s3",
-				"timeout": "5m",
+				"no_compress": false,
+				"interval": "24h",
 				"sub": {
 					"access_key_id": "test_id",
 					"secret_access_key": "test_secret",
@@ -204,7 +206,8 @@ func TestUnmarshal(t *testing.T) {
 			{
 				"version": 1,
 				"type": "unsupported",
-				"timeout": "24h",
+				"no_compress": true,
+				"interval": "24h",
 				"sub": {
 					"access_key_id": "test_id",
 					"secret_access_key": "test_secret",
@@ -247,5 +250,6 @@ func compareConfig(a, b *Config) bool {
 	}
 	return a.Version == b.Version &&
 		a.Type == b.Type &&
-		a.Timeout == b.Timeout
+		a.NoCompress == b.NoCompress &&
+		a.Interval == b.Interval
 }
