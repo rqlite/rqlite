@@ -30,7 +30,7 @@ rqlite uses [Raft](https://raft.github.io/) to achieve consensus across all the 
 - Choice of [read consistency levels](https://rqlite.io/docs/api/read-consistency/), and support for choosing [write performance over durability](https://rqlite.io/docs/api/queued-writes/).
 - Optional [read-only (non-voting) nodes](https://rqlite.io/docs/clustering/read-only-nodes/), which can add read scalability to the system.
 - A form of transaction support.
-- Hot [backups](https://rqlite.io/docs/guides/backup/), including [automatic backups to AWS S3](https://rqlite.io/docs/guides/backup/#automatic-backups), as well as [restore directly from SQLite](https://rqlite.io/docs/guides/restore/).
+- Hot [backups](https://rqlite.io/docs/guides/backup/), including [automatic backups to AWS S3](https://rqlite.io/docs/guides/backup/#automatic-backups), as well as [restore directly from SQLite](https://rqlite.io/docs/guides/restore/) and AWS S3.
 
 ## Quick Start
 
