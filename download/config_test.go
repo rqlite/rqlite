@@ -133,10 +133,10 @@ func TestUnmarshal(t *testing.T) {
 			}
 			`),
 			expectedCfg: &Config{
-				Version:       1,
-				Type:          "s3",
-				Timeout:       30 * Duration(time.Second),
-				ExitOnFailure: false,
+				Version:           1,
+				Type:              "s3",
+				Timeout:           30 * Duration(time.Second),
+				ContinueOnFailure: false,
 			},
 			expectedS3: &aws.S3Config{
 				AccessKeyID:     "test_id",
@@ -153,7 +153,7 @@ func TestUnmarshal(t *testing.T) {
                         {
                                 "version": 1,
                                 "type": "s3",
-								"exit_on_failure": true,
+								"continue_on_failure": true,
                                 "sub": {
                                         "access_key_id": "test_id",
                                         "secret_access_key": "test_secret",
@@ -164,10 +164,10 @@ func TestUnmarshal(t *testing.T) {
                         }
                         `),
 			expectedCfg: &Config{
-				Version:       1,
-				Type:          "s3",
-				Timeout:       Duration(30 * time.Second),
-				ExitOnFailure: true,
+				Version:           1,
+				Type:              "s3",
+				Timeout:           Duration(30 * time.Second),
+				ContinueOnFailure: true,
 			},
 			expectedS3: &aws.S3Config{
 				AccessKeyID:     "test_id",
