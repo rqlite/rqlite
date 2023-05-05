@@ -1,4 +1,4 @@
-package upload
+package backup
 
 import (
 	"compress/gzip"

@@ -6,6 +6,9 @@
 - [PR #1246](https://github.com/rqlite/rqlite/pull/1246): Add support for custom S3 endpoint.
 
 ### Implementation changes and bug fixes
+- [PR #1248](https://github.com/rqlite/rqlite/pull/1248): Refactor autobackup and autorestore.
+
+### Implementation changes and bug fixes
 - [PR #1239](https://github.com/rqlite/rqlite/pull/1239): Remove erroneous scaling factor from etcd and Consul reporting service.
 - [PR #1240](https://github.com/rqlite/rqlite/pull/1240): Add support for controlling and reading Store readiness.
 - [PR #1241](https://github.com/rqlite/rqlite/pull/1241): Check Store is ready in key places.

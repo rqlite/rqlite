@@ -1,4 +1,4 @@
-package upload
+package backup
 
 import (
 	"bytes"
@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rqlite/rqlite/auto"
 	"github.com/rqlite/rqlite/aws"
 )
 
@@ -137,7 +138,7 @@ func TestUnmarshal(t *testing.T) {
 				Version:    1,
 				Type:       "s3",
 				NoCompress: true,
-				Interval:   24 * Duration(time.Hour),
+				Interval:   24 * auto.Duration(time.Hour),
 			},
 			expectedS3: &aws.S3Config{
 				AccessKeyID:     "test_id",
@@ -168,7 +169,7 @@ func TestUnmarshal(t *testing.T) {
 				Version:    1,
 				Type:       "s3",
 				NoCompress: false,
-				Interval:   24 * Duration(time.Hour),
+				Interval:   24 * auto.Duration(time.Hour),
 			},
 			expectedS3: &aws.S3Config{
 				AccessKeyID:     "test_id",
@@ -197,7 +198,7 @@ func TestUnmarshal(t *testing.T) {
 			}			`),
 			expectedCfg: nil,
 			expectedS3:  nil,
-			expectedErr: ErrInvalidVersion,
+			expectedErr: auto.ErrInvalidVersion,
 		},
 		{
 			name: "UnsupportedType",
@@ -217,7 +218,7 @@ func TestUnmarshal(t *testing.T) {
 			}			`),
 			expectedCfg: nil,
 			expectedS3:  nil,
-			expectedErr: ErrUnsupportedStorageType,
+			expectedErr: auto.ErrUnsupportedStorageType,
 		},
 	}
 

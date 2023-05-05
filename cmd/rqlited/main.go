@@ -19,17 +19,17 @@ import (
 	"github.com/rqlite/rqlite-disco-clients/dnssrv"
 	etcd "github.com/rqlite/rqlite-disco-clients/etcd"
 	"github.com/rqlite/rqlite/auth"
+	"github.com/rqlite/rqlite/auto/backup"
+	"github.com/rqlite/rqlite/auto/restore"
 	"github.com/rqlite/rqlite/aws"
 	"github.com/rqlite/rqlite/cluster"
 	"github.com/rqlite/rqlite/cmd"
 	"github.com/rqlite/rqlite/db"
 	"github.com/rqlite/rqlite/disco"
-	"github.com/rqlite/rqlite/download"
 	httpd "github.com/rqlite/rqlite/http"
 	"github.com/rqlite/rqlite/rtls"
 	"github.com/rqlite/rqlite/store"
 	"github.com/rqlite/rqlite/tcp"
-	"github.com/rqlite/rqlite/upload"
 )
 
 const logo = `
@@ -214,23 +214,23 @@ func main() {
 	log.Println("rqlite server stopped")
 }
 
-func startAutoBackups(ctx context.Context, cfg *Config, str *store.Store) (*upload.Uploader, error) {
+func startAutoBackups(ctx context.Context, cfg *Config, str *store.Store) (*backup.Uploader, error) {
 	if cfg.AutoBackupFile == "" {
 		return nil, nil
 	}
 
-	b, err := upload.ReadConfigFile(cfg.AutoBackupFile)
+	b, err := backup.ReadConfigFile(cfg.AutoBackupFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read auto-backup file: %s", err.Error())
 	}
 
-	uCfg, s3cfg, err := upload.Unmarshal(b)
+	uCfg, s3cfg, err := backup.Unmarshal(b)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse auto-backup file: %s", err.Error())
 	}
 	sc := aws.NewS3Client(s3cfg.Endpoint, s3cfg.Region, s3cfg.AccessKeyID, s3cfg.SecretAccessKey,
 		s3cfg.Bucket, s3cfg.Path)
-	u := upload.NewUploader(sc, str, time.Duration(uCfg.Interval), !uCfg.NoCompress)
+	u := backup.NewUploader(sc, str, time.Duration(uCfg.Interval), !uCfg.NoCompress)
 	go u.Start(ctx, nil)
 	return u, nil
 }
@@ -250,18 +250,18 @@ func downloadRestoreFile(ctx context.Context, cfgPath string) (path string, errO
 		}
 	}()
 
-	b, err := download.ReadConfigFile(cfgPath)
+	b, err := restore.ReadConfigFile(cfgPath)
 	if err != nil {
 		return "", false, fmt.Errorf("failed to read auto-restore file: %s", err.Error())
 	}
 
-	dCfg, s3cfg, err := download.Unmarshal(b)
+	dCfg, s3cfg, err := restore.Unmarshal(b)
 	if err != nil {
 		return "", false, fmt.Errorf("failed to parse auto-restore file: %s", err.Error())
 	}
 	sc := aws.NewS3Client(s3cfg.Endpoint, s3cfg.Region, s3cfg.AccessKeyID, s3cfg.SecretAccessKey,
 		s3cfg.Bucket, s3cfg.Path)
-	d := download.NewDownloader(sc)
+	d := restore.NewDownloader(sc)
 
 	// Create a temporary file to download to.
 	f, err = os.CreateTemp("", "rqlite-restore")
