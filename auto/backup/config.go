@@ -5,17 +5,17 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/rqlite/rqlite/autostate"
+	"github.com/rqlite/rqlite/auto"
 	"github.com/rqlite/rqlite/aws"
 )
 
 // Config is the config file format for the upload service
 type Config struct {
-	Version    int                   `json:"version"`
-	Type       autostate.StorageType `json:"type"`
-	NoCompress bool                  `json:"no_compress,omitempty"`
-	Interval   autostate.Duration    `json:"interval"`
-	Sub        json.RawMessage       `json:"sub"`
+	Version    int              `json:"version"`
+	Type       auto.StorageType `json:"type"`
+	NoCompress bool             `json:"no_compress,omitempty"`
+	Interval   auto.Duration    `json:"interval"`
+	Sub        json.RawMessage  `json:"sub"`
 }
 
 // Unmarshal unmarshals the config file and returns the config and subconfig
@@ -26,8 +26,8 @@ func Unmarshal(data []byte) (*Config, *aws.S3Config, error) {
 		return nil, nil, err
 	}
 
-	if cfg.Version > autostate.Version {
-		return nil, nil, autostate.ErrInvalidVersion
+	if cfg.Version > auto.Version {
+		return nil, nil, auto.ErrInvalidVersion
 	}
 
 	s3cfg := &aws.S3Config{}

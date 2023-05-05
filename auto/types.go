@@ -1,4 +1,4 @@
-package autostate
+package auto
 
 import (
 	"encoding/json"

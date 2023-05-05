@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rqlite/rqlite/autostate"
+	"github.com/rqlite/rqlite/auto"
 	"github.com/rqlite/rqlite/aws"
 )
 
@@ -136,7 +136,7 @@ func TestUnmarshal(t *testing.T) {
 			expectedCfg: &Config{
 				Version:           1,
 				Type:              "s3",
-				Timeout:           30 * autostate.Duration(time.Second),
+				Timeout:           30 * auto.Duration(time.Second),
 				ContinueOnFailure: false,
 			},
 			expectedS3: &aws.S3Config{
@@ -167,7 +167,7 @@ func TestUnmarshal(t *testing.T) {
 			expectedCfg: &Config{
 				Version:           1,
 				Type:              "s3",
-				Timeout:           autostate.Duration(30 * time.Second),
+				Timeout:           auto.Duration(30 * time.Second),
 				ContinueOnFailure: true,
 			},
 			expectedS3: &aws.S3Config{
@@ -196,7 +196,7 @@ func TestUnmarshal(t *testing.T) {
 			}			`),
 			expectedCfg: nil,
 			expectedS3:  nil,
-			expectedErr: autostate.ErrInvalidVersion,
+			expectedErr: auto.ErrInvalidVersion,
 		},
 		{
 			name: "UnsupportedType",
@@ -215,7 +215,7 @@ func TestUnmarshal(t *testing.T) {
 			}			`),
 			expectedCfg: nil,
 			expectedS3:  nil,
-			expectedErr: autostate.ErrUnsupportedStorageType,
+			expectedErr: auto.ErrUnsupportedStorageType,
 		},
 	}
 
