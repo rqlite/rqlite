@@ -106,10 +106,13 @@ func main() {
 		start := time.Now()
 		path, errOK, err := downloadRestoreFile(mainCtx, cfg.AutoRestoreFile)
 		if err != nil {
+			var b strings.Builder
+			b.WriteString(fmt.Sprintf("failed to download auto-restore file: %s", err.Error()))
 			if errOK {
-				log.Printf("failed to download auto-restore file: %s", err.Error())
+				b.WriteString(", continuing with node startup anyway")
+				log.Print(b.String())
 			} else {
-				log.Fatalf("failed to download auto-restore file: %s", err.Error())
+				log.Fatal(b.String())
 			}
 		} else {
 			log.Printf("auto-restore file downloaded in %s", time.Since(start))
