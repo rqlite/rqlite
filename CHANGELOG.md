@@ -1,4 +1,4 @@
-## 7.16.0 (unreleased)
+## 7.16.0 (May 5th 2023)
 ### New features
 - [PR #1243](https://github.com/rqlite/rqlite/pull/1243): Support automatically restoring from AWS S3.
 - [PR #1244](https://github.com/rqlite/rqlite/pull/1244): Disco configs now support Environment variable expansion.
