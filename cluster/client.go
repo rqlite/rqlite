@@ -394,17 +394,17 @@ func (c *Client) dial(nodeAddr string, timeout time.Duration) (net.Conn, error) 
 // connections are now stale.
 func (c *Client) retry(command *Command, nodeAddr string, timeout time.Duration) ([]byte, error) {
 	var p []byte
-	var err error
+	var errOuter error
 	var nRetries int
 	for {
-		p, err = func() ([]byte, error) {
+		p, errOuter = func() ([]byte, error) {
 			conn, errInner := c.dial(nodeAddr, c.timeout)
 			if errInner != nil {
 				return nil, errInner
 			}
 			defer conn.Close()
 
-			if errInner = writeCommand(conn, command, timeout); err != nil {
+			if errInner = writeCommand(conn, command, timeout); errInner != nil {
 				handleConnError(conn)
 				return nil, errInner
 			}
@@ -416,13 +416,13 @@ func (c *Client) retry(command *Command, nodeAddr string, timeout time.Duration)
 			}
 			return b, nil
 		}()
-		if err == nil {
+		if errOuter == nil {
 			break
 		}
 		nRetries++
 		stats.Add(numClientRetries, 1)
 		if nRetries > maxRetries {
-			return nil, err
+			return nil, errOuter
 		}
 	}
 	return p, nil
