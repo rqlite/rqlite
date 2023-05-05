@@ -1,6 +1,7 @@
 ## 7.16.0 (unreleased)
 ### New features
 - [PR #1243](https://github.com/rqlite/rqlite/pull/1243): Support automatically restoring from AWS S3.
+- [PR #1244](https://github.com/rqlite/rqlite/pull/1244): Disco configs now support Environment variable expansion.
 
 ### Implementation changes and bug fixes
 - [PR #1239](https://github.com/rqlite/rqlite/pull/1239): Remove erroneous scaling factor from etcd and Consul reporting service.
