@@ -183,6 +183,9 @@ type Config struct {
 	// RaftShutdownOnRemove sets whether Raft should be shutdown if the node is removed
 	RaftShutdownOnRemove bool
 
+	// RaftClusterRemoveOnShutdown sets whether the node should remove itself from the cluster on shutdown
+	RaftClusterRemoveOnShutdown bool
+
 	// RaftStepdownOnShutdown sets whether Leadership should be relinquished on shutdown
 	RaftStepdownOnShutdown bool
 
@@ -475,6 +478,7 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	flag.DurationVar(&config.RaftLeaderLeaseTimeout, "raft-leader-lease-timeout", 0, "Raft leader lease timeout. Use 0s for Raft default")
 	flag.BoolVar(&config.RaftStepdownOnShutdown, "raft-shutdown-stepdown", true, "Stepdown as leader before shutting down. Enabled by default")
 	flag.BoolVar(&config.RaftShutdownOnRemove, "raft-remove-shutdown", false, "Shutdown Raft if node removed")
+	flag.BoolVar(&config.RaftClusterRemoveOnShutdown, "raft-cluster-remove-shutodwn", false, "Node removes itself from cluster on shutdown")
 	flag.BoolVar(&config.RaftNoFreelistSync, "raft-no-freelist-sync", false, "Do not sync Raft log database freelist to disk")
 	flag.StringVar(&config.RaftLogLevel, "raft-log-level", "INFO", "Minimum log level for Raft module")
 	flag.DurationVar(&config.RaftReapNodeTimeout, "raft-reap-node-timeout", 0*time.Hour, "Time after which a non-reachable voting node will be reaped. If not set, no reaping takes place")
