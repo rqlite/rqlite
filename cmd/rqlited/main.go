@@ -194,6 +194,10 @@ func main() {
 	signal.Notify(terminate, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	<-terminate
 
+	// Stop the HTTP server first, so clients get notification as soon as
+	// possible that the node is going away.
+	httpServ.Close()
+
 	if cfg.RaftStepdownOnShutdown {
 		if str.IsLeader() {
 			// Don't log a confusing message if not (probably) Leader
@@ -204,7 +208,6 @@ func main() {
 	}
 
 	backupSrvCancel()
-	httpServ.Close()
 	if err := str.Close(true); err != nil {
 		log.Printf("failed to close store: %s", err.Error())
 	}
