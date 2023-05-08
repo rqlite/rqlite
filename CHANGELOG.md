@@ -1,4 +1,7 @@
-## 7.16.1 (unreleased)
+## 7.17.0 (unreleased)
+### New features
+- [PR #1253](https://github.com/rqlite/rqlite/pull/1253): Node can remove itself from cluster automatically when shutting down.
+
 ### Implementation changes and bug fixes
 - [PR #1252](https://github.com/rqlite/rqlite/pull/1252): Stop the HTTP server first on shutdown.
 
