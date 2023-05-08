@@ -74,6 +74,7 @@ class Node(object):
                raft_addr=None, raft_adv=None,
                raft_voter=True,
                raft_snap_threshold=8192, raft_snap_int="1s",
+               raft_cluster_remove_shutdown=False,
                http_cert=None, http_key=None, http_no_verify=False,
                node_cert=None, node_key=None, node_no_verify=False,
                auth=None, auto_backup=None, auto_restore=None,
@@ -113,6 +114,7 @@ class Node(object):
     self.raft_voter = raft_voter
     self.raft_snap_threshold = raft_snap_threshold
     self.raft_snap_int = raft_snap_int
+    self.raft_cluster_remove_shutdown = raft_cluster_remove_shutdown
     self.http_cert = http_cert
     self.http_key = http_key
     self.http_no_verify = http_no_verify
@@ -171,6 +173,7 @@ class Node(object):
                '-raft-addr', self.raft_addr,
                '-raft-snap', str(self.raft_snap_threshold),
                '-raft-snap-int', self.raft_snap_int,
+               '-raft-cluster-remove-shutdown=%s' % str(self.raft_cluster_remove_shutdown).lower(),
                '-raft-non-voter=%s' % str(not self.raft_voter).lower()]
     if self.api_adv is not None:
       command += ['-http-adv-addr', self.api_adv]
@@ -226,10 +229,13 @@ class Node(object):
         break
     return self
 
-  def stop(self):
+  def stop(self, graceful=False):
     if self.process is None:
       return
-    self.process.kill()
+    if graceful:
+      self.process.terminate()
+    else:
+      self.process.kill()
     self.process.wait()
     self.process = None
     return self
