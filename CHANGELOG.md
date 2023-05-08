@@ -1,3 +1,7 @@
+## 7.16.1 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1252](https://github.com/rqlite/rqlite/pull/1252): Stop the HTTP server first on shutdown.
+
 ## 7.16.0 (May 5th 2023)
 ### New features
 - [PR #1243](https://github.com/rqlite/rqlite/pull/1243): Support automatically restoring from AWS S3. Thanks to [VOXO](https://voxo.co/) for funding this development.

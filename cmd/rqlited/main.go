@@ -195,6 +195,10 @@ func main() {
 	signal.Notify(terminate, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	<-terminate
 
+	// Stop the HTTP server first, so clients get notification as soon as
+	// possible that the node is going away.
+	httpServ.Close()
+
 	if cfg.RaftClusterRemoveOnShutdown {
 		if err := removeSelf(cfg, str, clstrClient); err != nil {
 			log.Printf("failed to remove self from cluster: %s", err.Error())
@@ -213,7 +217,6 @@ func main() {
 	}
 
 	backupSrvCancel()
-	httpServ.Close()
 	if err := str.Close(true); err != nil {
 		log.Printf("failed to close store: %s", err.Error())
 	}
