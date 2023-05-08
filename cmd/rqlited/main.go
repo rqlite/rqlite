@@ -24,6 +24,7 @@ import (
 	"github.com/rqlite/rqlite/aws"
 	"github.com/rqlite/rqlite/cluster"
 	"github.com/rqlite/rqlite/cmd"
+	"github.com/rqlite/rqlite/command"
 	"github.com/rqlite/rqlite/db"
 	"github.com/rqlite/rqlite/disco"
 	httpd "github.com/rqlite/rqlite/http"
@@ -197,6 +198,14 @@ func main() {
 	// Stop the HTTP server first, so clients get notification as soon as
 	// possible that the node is going away.
 	httpServ.Close()
+
+	if cfg.RaftClusterRemoveOnShutdown {
+		if err := removeSelf(cfg, str, clstrClient); err != nil {
+			log.Printf("failed to remove self from cluster: %s", err.Error())
+		} else {
+			log.Printf("removed self successfully from cluster")
+		}
+	}
 
 	if cfg.RaftStepdownOnShutdown {
 		if str.IsLeader() {
@@ -627,4 +636,16 @@ func createHTTPTLSConfig(cfg *Config) (*tls.Config, error) {
 	}
 	return rtls.CreateClientConfig(cfg.HTTPx509Cert, cfg.HTTPx509Key, cfg.HTTPx509CACert,
 		cfg.NoHTTPVerify, cfg.TLS1011)
+}
+
+func removeSelf(cfg *Config, str *store.Store, client *cluster.Client) error {
+	rn := &command.RemoveNodeRequest{
+		Id: cfg.NodeID,
+	}
+	laddr, err := str.LeaderAddr()
+	if err != nil {
+		log.Fatalf("failed to get leader address: %s", err.Error())
+	}
+
+	return client.RemoveNode(rn, laddr, nil, 30*time.Second)
 }

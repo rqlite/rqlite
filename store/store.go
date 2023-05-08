@@ -647,8 +647,8 @@ func (s *Store) LeaderAddr() (string, error) {
 	if !s.open {
 		return "", nil
 	}
-
-	return string(s.raft.Leader()), nil
+	addr, _ := s.raft.LeaderWithID()
+	return string(addr), nil
 }
 
 // LeaderID returns the node ID of the Raft leader. Returns a
