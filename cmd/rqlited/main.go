@@ -201,9 +201,9 @@ func main() {
 
 	if cfg.RaftClusterRemoveOnShutdown {
 		if err := removeSelf(cfg, str, clstrClient); err != nil {
-			log.Printf("failed to remove self from cluster: %s", err.Error())
+			log.Printf("failed to remove this node from cluster before shutdown: %s", err.Error())
 		} else {
-			log.Printf("removed self successfully from cluster")
+			log.Printf("removed this node successfully from cluster before shutdown")
 		}
 	}
 
@@ -644,7 +644,7 @@ func removeSelf(cfg *Config, str *store.Store, client *cluster.Client) error {
 	}
 	laddr, err := str.LeaderAddr()
 	if err != nil {
-		log.Fatalf("failed to get leader address: %s", err.Error())
+		return fmt.Errorf("failed to get leader address: %s", err.Error())
 	}
 
 	return client.RemoveNode(rn, laddr, nil, 30*time.Second)
