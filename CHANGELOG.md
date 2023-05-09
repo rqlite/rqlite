@@ -1,4 +1,4 @@
-## 7.17.0 (unreleased)
+## 7.17.0 (May 9th 2023)
 ### New features
 - [PR #1253](https://github.com/rqlite/rqlite/pull/1253): Node optionally removes itself from cluster automatically when gracefully shutting down.
 
