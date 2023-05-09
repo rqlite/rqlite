@@ -1264,19 +1264,11 @@ func (s *Store) setLogInfo() error {
 
 // remove removes the node, with the given ID, from the cluster.
 func (s *Store) remove(id string) error {
-	if s.raft.State() != raft.Leader {
+	f := s.raft.RemoveServer(raft.ServerID(id), 0, 0)
+	if f.Error() != nil && f.Error() == raft.ErrNotLeader {
 		return ErrNotLeader
 	}
-
-	f := s.raft.RemoveServer(raft.ServerID(id), 0, 0)
-	if f.Error() != nil {
-		if f.Error() == raft.ErrNotLeader {
-			return ErrNotLeader
-		}
-		return f.Error()
-	}
-
-	return nil
+	return f.Error()
 }
 
 // raftConfig returns a new Raft config for the store.
