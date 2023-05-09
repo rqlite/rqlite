@@ -6,6 +6,7 @@
 - [PR #1252](https://github.com/rqlite/rqlite/pull/1252): Stop the HTTP server first on shutdown.
 
 ## 7.16.0 (May 5th 2023)
+This release introduces the ability for a node to automatically recover from a backup in AWS S3. See the [documentation](https://rqlite.io/docs/guides/backup/#restoring-from-cloud-storage) for full details.
 ### New features
 - [PR #1243](https://github.com/rqlite/rqlite/pull/1243): Support automatically restoring from AWS S3. Thanks to [VOXO](https://voxo.co/) for funding this development.
 - [PR #1244](https://github.com/rqlite/rqlite/pull/1244): Disco configs now support Environment variable expansion.
