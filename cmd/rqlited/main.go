@@ -639,13 +639,12 @@ func createHTTPTLSConfig(cfg *Config) (*tls.Config, error) {
 }
 
 func removeSelf(cfg *Config, str *store.Store, client *cluster.Client) error {
-	rn := &command.RemoveNodeRequest{
-		Id: cfg.NodeID,
-	}
 	laddr, err := str.LeaderAddr()
 	if err != nil {
 		return fmt.Errorf("failed to get leader address: %s", err.Error())
 	}
-
+	rn := &command.RemoveNodeRequest{
+		Id: cfg.NodeID,
+	}
 	return client.RemoveNode(rn, laddr, nil, 30*time.Second)
 }
