@@ -57,8 +57,8 @@ class TestEndToEnd(unittest.TestCase):
     # actually resulted in all new rqlited processes.
     self.assertTrue(pids.isdisjoint(set(self.cluster.pids())))
 
-  def test_execute_fail_rejoin(self):
-    '''Test that a node that fails can rejoin the cluster, and picks up changes'''
+  def test_execute_fail_restart(self):
+    '''Test that a node that fails picks up changes after restarting'''
 
     n = self.cluster.wait_for_leader()
     j = n.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
