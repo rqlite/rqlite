@@ -60,6 +60,18 @@ message ExecuteResult {
 	double time = 4;
 }
 
+message ExecuteQueryRequest {
+	Request request = 1;
+	bool timings = 2;
+	enum Level {
+		QUERY_REQUEST_LEVEL_NONE = 0;
+		QUERY_REQUEST_LEVEL_WEAK = 1;
+		QUERY_REQUEST_LEVEL_STRONG = 2;
+	}
+	Level level = 3;
+	int64 freshness = 4;
+}
+
 message BackupRequest {
 	enum Format {
 		BACKUP_REQUEST_FORMAT_NONE = 0;
