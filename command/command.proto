@@ -72,6 +72,13 @@ message ExecuteQueryRequest {
 	int64 freshness = 4;
 }
 
+message ExecuteQueryResponse {
+	oneof result {
+		QueryRows q = 1;
+		ExecuteResult e = 2;
+	}
+}
+
 message BackupRequest {
 	enum Format {
 		BACKUP_REQUEST_FORMAT_NONE = 0;

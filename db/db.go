@@ -416,13 +416,16 @@ func (db *DB) ExecuteStringStmt(query string) ([]*command.ExecuteResult, error) 
 // Execute executes queries that modify the database.
 func (db *DB) Execute(req *command.Request, xTime bool) ([]*command.ExecuteResult, error) {
 	stats.Add(numExecutions, int64(len(req.Statements)))
-
 	conn, err := db.rwDB.Conn(context.Background())
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Close()
+	return db.executeWithConn(req, xTime, conn)
+}
 
+func (db *DB) executeWithConn(req *command.Request, xTime bool, conn *sql.Conn) ([]*command.ExecuteResult, error) {
+	var err error
 	type Execer interface {
 		ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
 	}
@@ -509,7 +512,7 @@ func (db *DB) Execute(req *command.Request, xTime bool) ([]*command.ExecuteResul
 		}
 		result.RowsAffected = ra
 		if xTime {
-			result.Time = time.Now().Sub(start).Seconds()
+			result.Time = time.Since(start).Seconds()
 		}
 		allResults = append(allResults, result)
 	}
@@ -659,7 +662,7 @@ func (db *DB) queryWithConn(req *command.Request, xTime bool, conn *sql.Conn) ([
 		}
 
 		if xTime {
-			rows.Time = time.Now().Sub(start).Seconds()
+			rows.Time = time.Since(start).Seconds()
 		}
 
 		rows.Columns = columns
@@ -671,6 +674,10 @@ func (db *DB) queryWithConn(req *command.Request, xTime bool, conn *sql.Conn) ([
 		err = tx.Commit()
 	}
 	return allRows, err
+}
+
+func (db *DB) Request(req *command.ExecuteQueryRequest, xTime bool) ([]*command.ExecuteQueryResponse, error) {
+	return nil, nil
 }
 
 // Backup writes a consistent snapshot of the database to the given file.
