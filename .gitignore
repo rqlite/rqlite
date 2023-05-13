@@ -28,7 +28,7 @@ _test
 *.swp
 
 # Temporary data files
-cmd/rqlited/data
+cmd/rqlited/data*
 
 # Notes
 TODO
