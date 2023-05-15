@@ -579,19 +579,8 @@ func (db *DB) queryWithConn(req *command.Request, xTime bool, conn *sql.Conn) ([
 		// Do best-effort check that the statement won't try to change
 		// the database. As per the SQLite documentation, this will not
 		// cover 100% of possibilities, but should cover most.
-		var readOnly bool
-		f := func(driverConn interface{}) error {
-			c := driverConn.(*sqlite3.SQLiteConn)
-			drvStmt, err := c.Prepare(sql)
-			if err != nil {
-				return err
-			}
-			defer drvStmt.Close()
-			sqliteStmt := drvStmt.(*sqlite3.SQLiteStmt)
-			readOnly = sqliteStmt.Readonly()
-			return nil
-		}
-		if err := conn.Raw(f); err != nil {
+		readOnly, err := db.StmtReadOnly(sql)
+		if err != nil {
 			stats.Add(numQueryErrors, 1)
 			rows.Error = err.Error()
 			allRows = append(allRows, rows)
@@ -832,6 +821,32 @@ func (db *DB) Dump(w io.Writer) error {
 	}
 
 	return nil
+}
+
+// StmtReadOnly returns whether the given SQL statement is read-only.
+func (db *DB) StmtReadOnly(sql string) (bool, error) {
+	var readOnly bool
+	f := func(driverConn interface{}) error {
+		c := driverConn.(*sqlite3.SQLiteConn)
+		drvStmt, err := c.Prepare(sql)
+		if err != nil {
+			return err
+		}
+		defer drvStmt.Close()
+		sqliteStmt := drvStmt.(*sqlite3.SQLiteStmt)
+		readOnly = sqliteStmt.Readonly()
+		return nil
+	}
+
+	conn, err := db.roDB.Conn(context.Background())
+	if err != nil {
+		return false, err
+	}
+	defer conn.Close()
+	if err := conn.Raw(f); err != nil {
+		return false, err
+	}
+	return readOnly, nil
 }
 
 func (db *DB) memStats() (map[string]int64, error) {
