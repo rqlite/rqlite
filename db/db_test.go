@@ -2003,6 +2003,11 @@ func Test_StmtReadOnly(t *testing.T) {
 		err      error
 	}{
 		{
+			name: "CREATE TABLE statement",
+			sql:  "CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)",
+			err:  errors.New(`table foo already exists`),
+		},
+		{
 			name:     "CREATE TABLE statement",
 			sql:      "CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT)",
 			readOnly: false,
