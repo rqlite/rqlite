@@ -970,6 +970,60 @@ func (s *Store) Query(qr *command.QueryRequest) ([]*command.QueryRows, error) {
 	return s.db.Query(qr.Request, qr.Timings)
 }
 
+// Request processes a request that may contain both Executes and Queries.
+func (s *Store) Request(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, error) {
+	if !s.open {
+		return nil, ErrNotOpen
+	}
+
+	if s.RequiresLeader(eqr) && s.raft.State() != raft.Leader {
+		return nil, ErrNotLeader
+	}
+
+	if eqr.Level == command.ExecuteQueryRequest_QUERY_REQUEST_LEVEL_STRONG {
+		if !s.Ready() {
+			return nil, ErrNotReady
+		}
+
+		b, compressed, err := s.reqMarshaller.Marshal(eqr)
+		if err != nil {
+			return nil, err
+		}
+		if compressed {
+			stats.Add(numCompressedCommands, 1)
+		} else {
+			stats.Add(numUncompressedCommands, 1)
+		}
+
+		c := &command.Command{
+			Type:       command.Command_COMMAND_TYPE_EXECUTE_QUERY,
+			SubCommand: b,
+			Compressed: compressed,
+		}
+
+		b, err = command.Marshal(c)
+		if err != nil {
+			return nil, err
+		}
+
+		af := s.raft.Apply(b, s.ApplyTimeout)
+		if af.Error() != nil {
+			if af.Error() == raft.ErrNotLeader {
+				return nil, ErrNotLeader
+			}
+			return nil, af.Error()
+		}
+
+		s.dbAppliedIndexMu.Lock()
+		s.dbAppliedIndex = af.Index()
+		s.dbAppliedIndexMu.Unlock()
+		r := af.Response().(*fsmExecuteQueryResponse)
+		return r.results, r.error
+	}
+
+	return nil, nil
+}
+
 // Backup writes a snapshot of the underlying database to dst
 //
 // If Leader is true for the request, this operation is performed with a read consistency
@@ -1244,6 +1298,26 @@ func (s *Store) Noop(id string) error {
 	return nil
 }
 
+// RequiresLeader returns whether the given ExecuteQueryRequest must be
+// processed on the cluster Leader.
+func (s *Store) RequiresLeader(eqr *command.ExecuteQueryRequest) bool {
+	if eqr.Level != command.ExecuteQueryRequest_QUERY_REQUEST_LEVEL_NONE {
+		return true
+	}
+
+	for _, stmt := range eqr.Request.Statements {
+		sql := stmt.Sql
+		if sql == "" {
+			continue
+		}
+		ro, err := s.db.StmtReadOnly(sql)
+		if !ro || err != nil {
+			return true
+		}
+	}
+	return false
+}
+
 // setLogInfo records some key indexs about the log.
 func (s *Store) setLogInfo() error {
 	var err error
@@ -1303,6 +1377,11 @@ type fsmExecuteResponse struct {
 type fsmQueryResponse struct {
 	rows  []*command.QueryRows
 	error error
+}
+
+type fsmExecuteQueryResponse struct {
+	results []*command.ExecuteQueryResponse
+	error   error
 }
 
 type fsmGenericResponse struct {
