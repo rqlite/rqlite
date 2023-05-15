@@ -663,7 +663,52 @@ func (db *DB) queryWithConn(req *command.Request, xTime bool, conn *sql.Conn) ([
 }
 
 func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQueryResponse, error) {
-	return nil, nil
+	// Handle Txs. XXX
+
+	eqResponse := make([]*command.ExecuteQueryResponse, len(req.Statements))
+	for i, stmt := range req.Statements {
+		ss := stmt.Sql
+		if ss == "" {
+			continue
+		}
+
+		ro, err := db.StmtReadOnly(ss)
+		if err != nil {
+			return nil, err // assume this is an actual error, not, say, syntax XXX CHECK IT
+		}
+
+		if ro {
+			rows, err := db.QueryStringStmt(ss)
+			if err != nil {
+				rows = []*command.QueryRows{
+					{
+						Error: err.Error(),
+					},
+				}
+			}
+			eqResponse[i] = &command.ExecuteQueryResponse{
+				Result: &command.ExecuteQueryResponse_Q{
+					Q: rows[0],
+				},
+			}
+		} else {
+			result, err := db.ExecuteStringStmt(ss)
+			if err != nil {
+				result = []*command.ExecuteResult{
+					{
+						Error: err.Error(),
+					},
+				}
+			}
+			eqResponse[i] = &command.ExecuteQueryResponse{
+				Result: &command.ExecuteQueryResponse_E{
+					E: result[0],
+				},
+			}
+		}
+	}
+
+	return eqResponse, nil
 }
 
 // Backup writes a consistent snapshot of the database to the given file.
