@@ -864,14 +864,9 @@ func (s *Store) Execute(ex *command.ExecuteRequest) ([]*command.ExecuteResult, e
 }
 
 func (s *Store) execute(ex *command.ExecuteRequest) ([]*command.ExecuteResult, error) {
-	b, compressed, err := s.reqMarshaller.Marshal(ex)
+	b, compressed, err := s.tryCompress(ex)
 	if err != nil {
 		return nil, err
-	}
-	if compressed {
-		stats.Add(numCompressedCommands, 1)
-	} else {
-		stats.Add(numUncompressedCommands, 1)
 	}
 
 	c := &command.Command{
@@ -915,16 +910,10 @@ func (s *Store) Query(qr *command.QueryRequest) ([]*command.QueryRows, error) {
 			return nil, ErrNotReady
 		}
 
-		b, compressed, err := s.reqMarshaller.Marshal(qr)
+		b, compressed, err := s.tryCompress(qr)
 		if err != nil {
 			return nil, err
 		}
-		if compressed {
-			stats.Add(numCompressedCommands, 1)
-		} else {
-			stats.Add(numUncompressedCommands, 1)
-		}
-
 		c := &command.Command{
 			Type:       command.Command_COMMAND_TYPE_QUERY,
 			SubCommand: b,
@@ -976,52 +965,53 @@ func (s *Store) Request(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQue
 		return nil, ErrNotOpen
 	}
 
-	if s.RequiresLeader(eqr) && s.raft.State() != raft.Leader {
+	if !s.RequiresLeader(eqr) {
+		if eqr.Request.Transaction {
+			// Transaction requested during query, but not going through consensus. This means
+			// we need to block any database serialization during the query.
+			s.queryTxMu.RLock()
+			defer s.queryTxMu.RUnlock()
+		}
+		return s.db.Request(eqr.Request, eqr.Timings)
+	}
+
+	if s.raft.State() != raft.Leader {
 		return nil, ErrNotLeader
 	}
 
-	if eqr.Level == command.ExecuteQueryRequest_QUERY_REQUEST_LEVEL_STRONG {
-		if !s.Ready() {
-			return nil, ErrNotReady
-		}
-
-		b, compressed, err := s.reqMarshaller.Marshal(eqr)
-		if err != nil {
-			return nil, err
-		}
-		if compressed {
-			stats.Add(numCompressedCommands, 1)
-		} else {
-			stats.Add(numUncompressedCommands, 1)
-		}
-
-		c := &command.Command{
-			Type:       command.Command_COMMAND_TYPE_EXECUTE_QUERY,
-			SubCommand: b,
-			Compressed: compressed,
-		}
-
-		b, err = command.Marshal(c)
-		if err != nil {
-			return nil, err
-		}
-
-		af := s.raft.Apply(b, s.ApplyTimeout)
-		if af.Error() != nil {
-			if af.Error() == raft.ErrNotLeader {
-				return nil, ErrNotLeader
-			}
-			return nil, af.Error()
-		}
-
-		s.dbAppliedIndexMu.Lock()
-		s.dbAppliedIndex = af.Index()
-		s.dbAppliedIndexMu.Unlock()
-		r := af.Response().(*fsmExecuteQueryResponse)
-		return r.results, r.error
+	if !s.Ready() {
+		return nil, ErrNotReady
 	}
 
-	return nil, nil
+	b, compressed, err := s.tryCompress(eqr)
+	if err != nil {
+		return nil, err
+	}
+
+	c := &command.Command{
+		Type:       command.Command_COMMAND_TYPE_EXECUTE_QUERY,
+		SubCommand: b,
+		Compressed: compressed,
+	}
+
+	b, err = command.Marshal(c)
+	if err != nil {
+		return nil, err
+	}
+
+	af := s.raft.Apply(b, s.ApplyTimeout)
+	if af.Error() != nil {
+		if af.Error() == raft.ErrNotLeader {
+			return nil, ErrNotLeader
+		}
+		return nil, af.Error()
+	}
+
+	s.dbAppliedIndexMu.Lock()
+	s.dbAppliedIndex = af.Index()
+	s.dbAppliedIndexMu.Unlock()
+	r := af.Response().(*fsmExecuteQueryResponse)
+	return r.results, r.error
 }
 
 // Backup writes a snapshot of the underlying database to dst
@@ -1674,6 +1664,24 @@ func (s *Store) logSize() (int64, error) {
 		return 0, err
 	}
 	return fi.Size(), nil
+}
+
+// tryCompress attempts to compress the given command. If the command is
+// successfully compressed, the compressed byte slice is returned, along with
+// a boolean true. If the command cannot be compressed, the uncompressed byte
+// slice is returned, along with a boolean false. The stats are updated
+// accordingly.
+func (s *Store) tryCompress(rq command.Requester) ([]byte, bool, error) {
+	b, compressed, err := s.reqMarshaller.Marshal(rq)
+	if err != nil {
+		return nil, false, err
+	}
+	if compressed {
+		stats.Add(numCompressedCommands, 1)
+	} else {
+		stats.Add(numUncompressedCommands, 1)
+	}
+	return b, compressed, nil
 }
 
 type fsmSnapshot struct {

@@ -662,7 +662,7 @@ func (db *DB) queryWithConn(req *command.Request, xTime bool, conn *sql.Conn) ([
 	return allRows, err
 }
 
-func (db *DB) Request(req *command.ExecuteQueryRequest, xTime bool) ([]*command.ExecuteQueryResponse, error) {
+func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQueryResponse, error) {
 	return nil, nil
 }
 
