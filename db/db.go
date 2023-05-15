@@ -678,7 +678,7 @@ func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQuery
 		}
 
 		if ro {
-			rows, err := db.QueryStringStmt(ss)
+			rows, err := db.QueryStringStmt(ss) /// HANG ON!!! THIS WON"T WORK -- named parameters etc!!!
 			if err != nil {
 				rows = []*command.QueryRows{
 					{
@@ -692,7 +692,7 @@ func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQuery
 				},
 			}
 		} else {
-			result, err := db.ExecuteStringStmt(ss)
+			result, err := db.ExecuteStringStmt(ss) // WON'T WORK EITHER!
 			if err != nil {
 				result = []*command.ExecuteResult{
 					{
