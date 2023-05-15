@@ -2018,6 +2018,11 @@ func Test_StmtReadOnly(t *testing.T) {
 			ro:   true,
 		},
 		{
+			name: "SELECT statement",
+			sql:  "SELECT * FROM non_existent_table",
+			err:  errors.New(`no such table: non_existent_table`),
+		},
+		{
 			name: "INSERT statement",
 			sql:  "INSERT INTO foo VALUES (1, 'test')",
 			ro:   false,
