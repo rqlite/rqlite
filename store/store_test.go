@@ -2406,6 +2406,124 @@ func Test_IsVoter(t *testing.T) {
 	}
 }
 
+func Test_RequiresLeader(t *testing.T) {
+	s, ln := mustNewStore(t, true)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	er := executeRequestFromString(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		false, false)
+	_, err := s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	tests := []struct {
+		name     string
+		stmts    []string
+		lvl      command.ExecuteQueryRequest_Level
+		requires bool
+	}{
+		{
+			name:     "Empty SQL",
+			stmts:    []string{""},
+			requires: false,
+		},
+		{
+			name:     "Junk SQL",
+			stmts:    []string{"asdkflj asgkdj"},
+			requires: true,
+		},
+		{
+			name:     "CREATE TABLE statement, already exists",
+			stmts:    []string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"},
+			requires: true,
+		},
+		{
+			name:     "CREATE TABLE statement, does not exists",
+			stmts:    []string{"CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"},
+			requires: true,
+		},
+		{
+			name:     "Single INSERT",
+			stmts:    []string{"INSERT INTO foo(id, name) VALUES(1, 'fiona')"},
+			requires: true,
+		},
+		{
+			name:     "Single INSERT, non-existent table",
+			stmts:    []string{"INSERT INTO qux(id, name) VALUES(1, 'fiona')"},
+			requires: true,
+		},
+		{
+			name:     "Single SELECT with implicit NONE",
+			stmts:    []string{"SELECT * FROM foo"},
+			requires: false,
+		},
+		{
+			name:     "Single SELECT with NONE",
+			stmts:    []string{"SELECT * FROM foo"},
+			lvl:      command.ExecuteQueryRequest_QUERY_REQUEST_LEVEL_NONE,
+			requires: false,
+		},
+		{
+			name:     "Single SELECT from non-existent table with NONE",
+			stmts:    []string{"SELECT * FROM qux"},
+			lvl:      command.ExecuteQueryRequest_QUERY_REQUEST_LEVEL_NONE,
+			requires: true,
+		},
+		{
+			name:     "Double SELECT with NONE",
+			stmts:    []string{"SELECT * FROM foo", "SELECT * FROM foo WHERE id = 1"},
+			lvl:      command.ExecuteQueryRequest_QUERY_REQUEST_LEVEL_NONE,
+			requires: false,
+		},
+		{
+			name:     "Single SELECT with STRONG",
+			stmts:    []string{"SELECT * FROM foo"},
+			lvl:      command.ExecuteQueryRequest_QUERY_REQUEST_LEVEL_STRONG,
+			requires: true,
+		},
+		{
+			name:     "Single SELECT with WEAK",
+			stmts:    []string{"SELECT * FROM foo"},
+			lvl:      command.ExecuteQueryRequest_QUERY_REQUEST_LEVEL_WEAK,
+			requires: true,
+		},
+		{
+			name:     "Mix queries and executes with NONE",
+			stmts:    []string{"SELECT * FROM foo", "INSERT INTO foo(id, name) VALUES(1, 'fiona')"},
+			lvl:      command.ExecuteQueryRequest_QUERY_REQUEST_LEVEL_NONE,
+			requires: true,
+		},
+		{
+			name:     "Mix queries and executes with WEAK",
+			stmts:    []string{"SELECT * FROM foo", "INSERT INTO foo(id, name) VALUES(1, 'fiona')"},
+			lvl:      command.ExecuteQueryRequest_QUERY_REQUEST_LEVEL_WEAK,
+			requires: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			requires := s.RequiresLeader(executeQueryRequestFromStrings(tt.stmts, tt.lvl, false, false))
+			if requires != tt.requires {
+				t.Fatalf(" test %s failed, unexpected requires: expected %v, got %v", tt.name, tt.requires, requires)
+			}
+		})
+	}
+
+}
+
 func Test_State(t *testing.T) {
 	s, ln := mustNewStore(t, true)
 	defer ln.Close()
@@ -2536,7 +2654,7 @@ func executeRequestFromString(s string, timings, tx bool) *command.ExecuteReques
 	return executeRequestFromStrings([]string{s}, timings, tx)
 }
 
-// queryRequestFromStrings converts a slice of strings into a command.ExecuteRequest
+// executeRequestFromStrings converts a slice of strings into a command.ExecuteRequest
 func executeRequestFromStrings(s []string, timings, tx bool) *command.ExecuteRequest {
 	stmts := make([]*command.Statement, len(s))
 	for i := range s {
@@ -2571,6 +2689,23 @@ func queryRequestFromStrings(s []string, timings, tx bool) *command.QueryRequest
 			Transaction: tx,
 		},
 		Timings: timings,
+	}
+}
+
+func executeQueryRequestFromStrings(s []string, lvl command.ExecuteQueryRequest_Level, timings, tx bool) *command.ExecuteQueryRequest {
+	stmts := make([]*command.Statement, len(s))
+	for i := range s {
+		stmts[i] = &command.Statement{
+			Sql: s[i],
+		}
+	}
+	return &command.ExecuteQueryRequest{
+		Request: &command.Request{
+			Statements:  stmts,
+			Transaction: tx,
+		},
+		Timings: timings,
+		Level:   lvl,
 	}
 }
 
