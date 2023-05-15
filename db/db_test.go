@@ -1997,10 +1997,10 @@ func Test_StmtReadOnly(t *testing.T) {
 	}
 
 	tests := []struct {
-		name     string
-		sql      string
-		readOnly bool
-		err      error
+		name string
+		sql  string
+		ro   bool
+		err  error
 	}{
 		{
 			name: "CREATE TABLE statement",
@@ -2008,59 +2008,59 @@ func Test_StmtReadOnly(t *testing.T) {
 			err:  errors.New(`table foo already exists`),
 		},
 		{
-			name:     "CREATE TABLE statement",
-			sql:      "CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT)",
-			readOnly: false,
+			name: "CREATE TABLE statement",
+			sql:  "CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT)",
+			ro:   false,
 		},
 		{
-			name:     "SELECT statement",
-			sql:      "SELECT * FROM foo",
-			readOnly: true,
+			name: "SELECT statement",
+			sql:  "SELECT * FROM foo",
+			ro:   true,
 		},
 		{
-			name:     "INSERT statement",
-			sql:      "INSERT INTO foo VALUES (1, 'test')",
-			readOnly: false,
+			name: "INSERT statement",
+			sql:  "INSERT INTO foo VALUES (1, 'test')",
+			ro:   false,
 		},
 		{
-			name:     "UPDATE statement",
-			sql:      "UPDATE foo SET name='test' WHERE id=1",
-			readOnly: false,
+			name: "UPDATE statement",
+			sql:  "UPDATE foo SET name='test' WHERE id=1",
+			ro:   false,
 		},
 		{
-			name:     "DELETE statement",
-			sql:      "DELETE FROM foo WHERE id=1",
-			readOnly: false,
+			name: "DELETE statement",
+			sql:  "DELETE FROM foo WHERE id=1",
+			ro:   false,
 		},
 		{
-			name:     "SELECT statement with positional parameters",
-			sql:      "SELECT * FROM foo WHERE id = ?",
-			readOnly: true,
+			name: "SELECT statement with positional parameters",
+			sql:  "SELECT * FROM foo WHERE id = ?",
+			ro:   true,
 		},
 		{
-			name:     "SELECT statement with named parameters",
-			sql:      "SELECT * FROM foo WHERE id = @id AND name = @name",
-			readOnly: true,
+			name: "SELECT statement with named parameters",
+			sql:  "SELECT * FROM foo WHERE id = @id AND name = @name",
+			ro:   true,
 		},
 		{
-			name:     "INSERT statement with positional parameters",
-			sql:      "INSERT INTO foo VALUES (?, ?)",
-			readOnly: false,
+			name: "INSERT statement with positional parameters",
+			sql:  "INSERT INTO foo VALUES (?, ?)",
+			ro:   false,
 		},
 		{
-			name:     "INSERT statement with named parameters",
-			sql:      "INSERT INTO foo VALUES (@id, @name)",
-			readOnly: false,
+			name: "INSERT statement with named parameters",
+			sql:  "INSERT INTO foo VALUES (@id, @name)",
+			ro:   false,
 		},
 		{
-			name:     "WITH clause, read-only",
-			sql:      "WITH bar AS (SELECT * FROM foo WHERE id = ?) SELECT * FROM bar",
-			readOnly: true,
+			name: "WITH clause, read-only",
+			sql:  "WITH bar AS (SELECT * FROM foo WHERE id = ?) SELECT * FROM bar",
+			ro:   true,
 		},
 		{
-			name:     "WITH clause, not read-only",
-			sql:      "WITH bar AS (SELECT * FROM foo WHERE id = ?) DELETE FROM foo WHERE id IN (SELECT id FROM bar)",
-			readOnly: false,
+			name: "WITH clause, not read-only",
+			sql:  "WITH bar AS (SELECT * FROM foo WHERE id = ?) DELETE FROM foo WHERE id IN (SELECT id FROM bar)",
+			ro:   false,
 		},
 		{
 			name: "Invalid statement",
@@ -2083,8 +2083,8 @@ func Test_StmtReadOnly(t *testing.T) {
 			}
 
 			// Check if result is as expected
-			if readOnly != tt.readOnly {
-				t.Fatalf("unexpected readOnly: expected %v, got %v", tt.readOnly, readOnly)
+			if readOnly != tt.ro {
+				t.Fatalf("unexpected readOnly: expected %v, got %v", tt.ro, readOnly)
 			}
 		})
 	}
