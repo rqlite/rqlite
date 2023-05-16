@@ -26,7 +26,6 @@ import (
 
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/command"
-	"github.com/rqlite/rqlite/db"
 	sql "github.com/rqlite/rqlite/db"
 	rlog "github.com/rqlite/rqlite/log"
 )
@@ -300,7 +299,7 @@ func (s *Store) SetRestorePath(path string) error {
 		return ErrOpen
 	}
 
-	if !db.IsValidSQLiteFile(path) {
+	if !sql.IsValidSQLiteFile(path) {
 		return fmt.Errorf("file %s is not a valid SQLite file", path)
 	}
 	s.RegisterReadyChannel(s.restoreDoneCh)
