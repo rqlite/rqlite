@@ -474,36 +474,36 @@ func Test_SingleNodeInMemRequest(t *testing.T) {
 	}
 
 	tests := []struct {
-		queryRequest []string
-		expected     string
-		associative  bool
+		stmts       []string
+		expected    string
+		associative bool
 	}{
 		{
-			queryRequest: []string{},
-			expected:     `[]`,
+			stmts:    []string{},
+			expected: `[]`,
 		},
 		{
-			queryRequest: []string{
+			stmts: []string{
 				`SELECT * FROM foo`,
 			},
 			expected: `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`,
 		},
 		{
-			queryRequest: []string{
+			stmts: []string{
 				`SELECT * FROM foo`,
 				`INSERT INTO foo(id, name) VALUES(66, "declan")`,
 			},
 			expected: `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]},{"last_insert_id":66,"rows_affected":1}]`,
 		},
 		{
-			queryRequest: []string{
+			stmts: []string{
 				`INSERT INTO foo(id, name) VALUES(77, "fiona")`,
 				`SELECT COUNT(*) FROM foo`,
 			},
 			expected: `[{"last_insert_id":77,"rows_affected":1},{"columns":["COUNT(*)"],"types":[""],"values":[[3]]}]`,
 		},
 		{
-			queryRequest: []string{
+			stmts: []string{
 				`INSERT INTO foo(id, name) VALUES(88, "fiona")`,
 				`nonsense SQL`,
 				`SELECT COUNT(*) FROM foo WHERE name='fiona'`,
@@ -515,7 +515,7 @@ func Test_SingleNodeInMemRequest(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		eqr := executeQueryRequestFromStrings(tt.queryRequest, command.ExecuteQueryRequest_QUERY_REQUEST_LEVEL_WEAK, false, false)
+		eqr := executeQueryRequestFromStrings(tt.stmts, command.ExecuteQueryRequest_QUERY_REQUEST_LEVEL_WEAK, false, false)
 
 		r, err := s.Request(eqr)
 		if err != nil {
@@ -530,6 +530,80 @@ func Test_SingleNodeInMemRequest(t *testing.T) {
 			exp, got = tt.expected, asJSON(r)
 		}
 		if exp != got {
+			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+		}
+	}
+}
+
+// More Store.Request tests needed: tx fail, unique constraint fail, binding parameters, named params.
+
+func Test_SingleNodeInMemRequestTx(t *testing.T) {
+	s, ln := mustNewStore(t, true)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	_, err := s.WaitForLeader(10 * time.Second)
+	if err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+	}, false, false)
+	_, err = s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	tests := []struct {
+		stmts    []string
+		expected string
+		tx       bool
+	}{
+		{
+			stmts:    []string{},
+			expected: `[]`,
+		},
+		{
+			stmts: []string{
+				`INSERT INTO foo(id, name) VALUES(1, "declan")`,
+				`SELECT * FROM foo`,
+			},
+			expected: `[{"last_insert_id":1,"rows_affected":1},{"columns":["id","name"],"types":["integer","text"],"values":[[1,"declan"]]}]`,
+		},
+		{
+			stmts: []string{
+				`INSERT INTO foo(id, name) VALUES(2, "fiona")`,
+				`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+				`SELECT COUNT(*) FROM foo`,
+			},
+			expected: `[{"last_insert_id":2,"rows_affected":1},{"error":"UNIQUE constraint failed: foo.id"},{"columns":["COUNT(*)"],"types":[""],"values":[[2]]}]`,
+			tx:       true,
+		},
+		{
+			// Since the above transaction should be rolled back, there will be only one row in the table.
+			stmts: []string{
+				`SELECT COUNT(*) FROM foo`,
+			},
+			expected: `[{"columns":["COUNT(*)"],"types":[""],"values":[[1]]}]`,
+		},
+	}
+
+	for _, tt := range tests {
+		eqr := executeQueryRequestFromStrings(tt.stmts, command.ExecuteQueryRequest_QUERY_REQUEST_LEVEL_WEAK, false, tt.tx)
+
+		r, err := s.Request(eqr)
+		if err != nil {
+			t.Fatalf("failed to execute request on single node: %s", err.Error())
+		}
+
+		if exp, got := tt.expected, asJSON(r); exp != got {
 			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 		}
 	}
