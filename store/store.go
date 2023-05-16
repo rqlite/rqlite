@@ -1990,6 +1990,13 @@ func applyCommand(data []byte, pDB **sql.DB) (command.Command_Type, interface{})
 		}
 		r, err := db.Execute(er.Request, er.Timings)
 		return c.Type, &fsmExecuteResponse{results: r, error: err}
+	case command.Command_COMMAND_TYPE_EXECUTE_QUERY:
+		var eqr command.ExecuteQueryRequest
+		if err := command.UnmarshalSubCommand(&c, &eqr); err != nil {
+			panic(fmt.Sprintf("failed to unmarshal execute-query subcommand: %s", err.Error()))
+		}
+		r, err := db.Request(eqr.Request, eqr.Timings)
+		return c.Type, &fsmExecuteQueryResponse{results: r, error: err}
 	case command.Command_COMMAND_TYPE_LOAD:
 		var lr command.LoadRequest
 		if err := command.UnmarshalLoadRequest(c.SubCommand, &lr); err != nil {
