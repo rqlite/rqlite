@@ -1149,6 +1149,70 @@ func Test_ForwardingRedirectExecute(t *testing.T) {
 	}
 }
 
+func Test_ForwardingRedirectExecuteQuery(t *testing.T) {
+	m := &MockStore{
+		leaderAddr: "foo:1234",
+	}
+	m.requestFn = func(er *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, error) {
+		return nil, store.ErrNotLeader
+	}
+
+	c := &mockClusterService{
+		apiAddr: "https://bar:5678",
+	}
+	c.requestFn = func(er *command.ExecuteQueryRequest, addr string, timeout time.Duration) ([]*command.ExecuteQueryResponse, error) {
+		resp := &command.ExecuteQueryResponse{
+			Result: &command.ExecuteQueryResponse_E{
+				E: &command.ExecuteResult{
+					LastInsertId: 1234,
+					RowsAffected: 5678,
+				},
+			},
+		}
+		return []*command.ExecuteQueryResponse{resp}, nil
+	}
+
+	s := New("127.0.0.1:0", m, c, nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	// Check ExecuteQuery.
+	client := &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+
+	resp, err := client.Post(host+"/db/request", "application/json", strings.NewReader(`["Some SQL"]`))
+	if err != nil {
+		t.Fatalf("failed to make ExecuteQuery request")
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("failed to get expected StatusOK for ExecuteQuery, got %d", resp.StatusCode)
+	}
+
+	resp, err = client.Post(host+"/db/request?redirect", "application/json", strings.NewReader(`["Some SQL"]`))
+	if err != nil {
+		t.Fatalf("failed to make redirected ExecuteQuery request: %s", err)
+	}
+	if resp.StatusCode != http.StatusMovedPermanently {
+		t.Fatalf("failed to get expected StatusMovedPermanently for execute, got %d", resp.StatusCode)
+	}
+
+	// Check leader failure case.
+	m.leaderAddr = ""
+	resp, err = client.Post(host+"/db/request", "application/json", strings.NewReader(`["Some SQL"]`))
+	if err != nil {
+		t.Fatalf("failed to make ExecuteQuery request")
+	}
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("failed to get expected StatusServiceUnavailable for node with no leader, got %d", resp.StatusCode)
+	}
+}
+
 func Test_timeoutQueryParam(t *testing.T) {
 	var req http.Request
 
