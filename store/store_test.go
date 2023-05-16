@@ -516,7 +516,6 @@ func Test_SingleNodeInMemRequest(t *testing.T) {
 
 	for _, tt := range tests {
 		eqr := executeQueryRequestFromStrings(tt.stmts, command.ExecuteQueryRequest_QUERY_REQUEST_LEVEL_WEAK, false, false)
-
 		r, err := s.Request(eqr)
 		if err != nil {
 			t.Fatalf("failed to execute request on single node: %s", err.Error())
@@ -534,8 +533,6 @@ func Test_SingleNodeInMemRequest(t *testing.T) {
 		}
 	}
 }
-
-// More Store.Request tests needed: tx fail, unique constraint fail, binding parameters, named params.
 
 func Test_SingleNodeInMemRequestTx(t *testing.T) {
 	s, ln := mustNewStore(t, true)
@@ -597,8 +594,89 @@ func Test_SingleNodeInMemRequestTx(t *testing.T) {
 
 	for _, tt := range tests {
 		eqr := executeQueryRequestFromStrings(tt.stmts, command.ExecuteQueryRequest_QUERY_REQUEST_LEVEL_WEAK, false, tt.tx)
-
 		r, err := s.Request(eqr)
+		if err != nil {
+			t.Fatalf("failed to execute request on single node: %s", err.Error())
+		}
+
+		if exp, got := tt.expected, asJSON(r); exp != got {
+			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+		}
+	}
+}
+
+func Test_SingleNodeInMemRequestParameters(t *testing.T) {
+	s, ln := mustNewStore(t, true)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	_, err := s.WaitForLeader(10 * time.Second)
+	if err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+	}, false, false)
+	_, err = s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	tests := []struct {
+		request  *command.ExecuteQueryRequest
+		expected string
+	}{
+		{
+			request: &command.ExecuteQueryRequest{
+				Request: &command.Request{
+					Statements: []*command.Statement{
+						{
+							Sql: "SELECT * FROM foo WHERE id = ?",
+							Parameters: []*command.Parameter{
+								{
+									Value: &command.Parameter_I{
+										I: 1,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`,
+		},
+		{
+			request: &command.ExecuteQueryRequest{
+				Request: &command.Request{
+					Statements: []*command.Statement{
+						{
+							Sql: "SELECT id FROM foo WHERE name = :qux",
+							Parameters: []*command.Parameter{
+								{
+									Value: &command.Parameter_S{
+										S: "fiona",
+									},
+									Name: "qux",
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: `[{"columns":["id"],"types":["integer"],"values":[[1]]}]`,
+		},
+	}
+
+	for _, tt := range tests {
+		r, err := s.Request(tt.request)
 		if err != nil {
 			t.Fatalf("failed to execute request on single node: %s", err.Error())
 		}
