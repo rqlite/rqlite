@@ -191,8 +191,10 @@ const (
 	numQueuedExecutionsFailed         = "queued_executions_failed"
 	numQueuedExecutionsWait           = "queued_executions_wait"
 	numQueries                        = "queries"
+	numRequests                       = "requests"
 	numRemoteExecutions               = "remote_executions"
 	numRemoteQueries                  = "remote_queries"
+	numRemoteRequests                 = "remote_requests"
 	numRemoteBackups                  = "remote_backups"
 	numRemoteLoads                    = "remote_loads"
 	numRemoteRemoveNode               = "remote_remove_node"
@@ -238,8 +240,10 @@ func ResetStats() {
 	stats.Add(numQueuedExecutionsFailed, 0)
 	stats.Add(numQueuedExecutionsWait, 0)
 	stats.Add(numQueries, 0)
+	stats.Add(numRequests, 0)
 	stats.Add(numRemoteExecutions, 0)
 	stats.Add(numRemoteQueries, 0)
+	stats.Add(numRemoteRequests, 0)
 	stats.Add(numRemoteBackups, 0)
 	stats.Add(numRemoteLoads, 0)
 	stats.Add(numRemoteRemoveNode, 0)
@@ -404,6 +408,9 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case strings.HasPrefix(r.URL.Path, "/db/query"):
 		stats.Add(numQueries, 1)
 		s.handleQuery(w, r)
+	case strings.HasPrefix(r.URL.Path, "/db/request"):
+		stats.Add(numRequests, 1)
+		s.handleRequest(w, r)
 	case strings.HasPrefix(r.URL.Path, "/db/backup"):
 		stats.Add(numBackups, 1)
 		s.handleBackup(w, r)
@@ -1500,6 +1507,16 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 	s.writeResponse(w, r, resp)
 }
 
+func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+	if !s.CheckRequestPermAll(r, auth.PermQuery, auth.PermExecute) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	return
+}
+
 // handleExpvar serves registered expvar information over HTTP.
 func (s *Service) handleExpvar(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -1579,6 +1596,35 @@ func (s *Service) CheckRequestPerm(r *http.Request, perm string) (b bool) {
 	}
 
 	return s.credentialStore.AA(username, password, perm)
+}
+
+// CheckRequestPermAll checksif the request is authenticated and authorized
+// with all the given Perms.
+func (s *Service) CheckRequestPermAll(r *http.Request, perms ...string) (b bool) {
+	defer func() {
+		if b {
+			stats.Add(numAuthOK, 1)
+		} else {
+			stats.Add(numAuthFail, 1)
+		}
+	}()
+
+	// No auth store set, so no checking required.
+	if s.credentialStore == nil {
+		return true
+	}
+
+	username, password, ok := r.BasicAuth()
+	if !ok {
+		username = ""
+	}
+
+	for _, perm := range perms {
+		if !s.credentialStore.AA(username, password, perm) {
+			return false
+		}
+	}
+	return true
 }
 
 // LeaderAPIAddr returns the API address of the leader, as known by this node.
