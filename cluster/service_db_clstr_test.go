@@ -458,6 +458,24 @@ func queryRequestFromStrings(s []string) *command.QueryRequest {
 	}
 }
 
+func executeQueryRequestFromString(s string) *command.ExecuteQueryRequest {
+	return executeQueryRequestFromStrings([]string{s})
+}
+
+func executeQueryRequestFromStrings(s []string) *command.ExecuteQueryRequest {
+	stmts := make([]*command.Statement, len(s))
+	for i := range s {
+		stmts[i] = &command.Statement{
+			Sql: s[i],
+		}
+	}
+	return &command.ExecuteQueryRequest{
+		Request: &command.Request{
+			Statements: stmts,
+		},
+	}
+}
+
 func backupRequestBinary(leader bool) *command.BackupRequest {
 	return &command.BackupRequest{
 		Format: command.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY,

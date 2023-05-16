@@ -27,6 +27,7 @@ const (
 	numGetNodeAPIResponse = "num_get_node_api_resp"
 	numExecuteRequest     = "num_execute_req"
 	numQueryRequest       = "num_query_req"
+	numRequestRequest     = "num_request_req"
 	numBackupRequest      = "num_backup_req"
 	numLoadRequest        = "num_load_req"
 	numRemoveNodeRequest  = "num_remove_node_req"
@@ -52,6 +53,7 @@ func init() {
 	stats.Add(numGetNodeAPIResponse, 0)
 	stats.Add(numExecuteRequest, 0)
 	stats.Add(numQueryRequest, 0)
+	stats.Add(numRequestRequest, 0)
 	stats.Add(numBackupRequest, 0)
 	stats.Add(numLoadRequest, 0)
 	stats.Add(numRemoveNodeRequest, 0)
@@ -76,6 +78,9 @@ type Database interface {
 
 	// Query executes a slice of queries, each of which returns rows.
 	Query(qr *command.QueryRequest) ([]*command.QueryRows, error)
+
+	// Request processes a request that can both executes and queries.
+	Request(rr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, error)
 
 	// Backup writes a backup of the database to the writer.
 	Backup(br *command.BackupRequest, dst io.Writer) error
@@ -226,6 +231,25 @@ func (s *Service) checkCommandPerm(c *Command, perm string) bool {
 	return s.credentialStore.AA(username, password, perm)
 }
 
+func (s *Service) checkCommandPermAll(c *Command, perms ...string) bool {
+	if s.credentialStore == nil {
+		return true
+	}
+
+	username := ""
+	password := ""
+	if c.Credentials != nil {
+		username = c.Credentials.GetUsername()
+		password = c.Credentials.GetPassword()
+	}
+	for _, perm := range perms {
+		if !s.credentialStore.AA(username, password, perm) {
+			return false
+		}
+	}
+	return true
+}
+
 func (s *Service) handleConn(conn net.Conn) {
 	defer conn.Close()
 
@@ -303,6 +327,32 @@ func (s *Service) handleConn(conn net.Conn) {
 				} else {
 					resp.Rows = make([]*command.QueryRows, len(res))
 					copy(resp.Rows, res)
+				}
+			}
+
+			p, err = proto.Marshal(resp)
+			if err != nil {
+				return
+			}
+			writeBytesWithLength(conn, p)
+
+		case Command_COMMAND_TYPE_REQUEST:
+			stats.Add(numRequestRequest, 1)
+
+			resp := &CommandRequestResponse{}
+
+			rr := c.GetExecuteQueryRequest()
+			if rr == nil {
+				resp.Error = "RequestRequest is nil"
+			} else if !s.checkCommandPermAll(c, auth.PermQuery, auth.PermExecute) {
+				resp.Error = "unauthorized"
+			} else {
+				res, err := s.db.Request(rr)
+				if err != nil {
+					resp.Error = err.Error()
+				} else {
+					resp.Response = make([]*command.ExecuteQueryResponse, len(res))
+					copy(resp.Response, res)
 				}
 			}
 
