@@ -682,6 +682,18 @@ func (db *DB) queryStmtWithConn(stmt *command.Statement, xTime bool, q queryer) 
 	return rows, nil
 }
 
+// RequestStringStmts processes a request that can contain both executes and queries.
+func (db *DB) RequestStringStmts(stmts []string) ([]*command.ExecuteQueryResponse, error) {
+	req := &command.Request{}
+	for _, q := range stmts {
+		req.Statements = append(req.Statements, &command.Statement{
+			Sql: q,
+		})
+	}
+	return db.Request(req, false)
+}
+
+// Request processes a request that can contain both executes and queries.
 func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQueryResponse, error) {
 	conn, err := db.rwDB.Conn(context.Background())
 	if err != nil {
@@ -691,7 +703,6 @@ func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQuery
 
 	var queryer queryer
 	var execer execer
-
 	if req.Transaction { //// XXX MORE transaction work needed here
 		stats.Add(numETx, 1)
 		tx, err := conn.BeginTx(context.Background(), nil)

@@ -1164,6 +1164,77 @@ func Test_SimpleNamedParameterizedStatements(t *testing.T) {
 	}
 }
 
+func Test_SimpleRequest(t *testing.T) {
+	db, path := mustCreateDatabase()
+	defer db.Close()
+	defer os.Remove(path)
+
+	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, first TEXT, last TEXT)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	// create table-driven tests
+	tests := []struct {
+		name  string
+		stmts []string
+		exp   string
+	}{
+		{
+			name: "insert",
+			stmts: []string{
+				`INSERT INTO foo(first, last) VALUES("albert", "einstein")`,
+				`INSERT INTO foo(first, last) VALUES("isaac", "newton")`,
+			},
+			exp: `[{"last_insert_id":1,"rows_affected":1},{"last_insert_id":2,"rows_affected":1}]`,
+		},
+		{
+			name: "select",
+			stmts: []string{
+				`SELECT * FROM foo`,
+			},
+			exp: `[{"columns":["id","first","last"],"types":["integer","text","text"],"values":[[1,"albert","einstein"],[2,"isaac","newton"]]}]`,
+		},
+		{
+			name: "update",
+			stmts: []string{
+				`UPDATE foo SET first="isaac", last="asimov" WHERE id=2`,
+			},
+			exp: `[{"last_insert_id":2,"rows_affected":1}]`,
+		},
+		{
+			name: "insert and select",
+			stmts: []string{
+				`INSERT INTO foo(first, last) VALUES("richard", "feynman")`,
+				`SELECT COUNT(*) FROM foo`,
+				`SELECT last FROM foo WHERE first="richard"`,
+			},
+			exp: `[{"last_insert_id":3,"rows_affected":1},{"columns":["COUNT(*)"],"types":[""],"values":[[3]]},{"columns":["last"],"types":["text"],"values":[["feynman"]]}]`,
+		},
+		{
+			name: "insert and select non-existent table",
+			stmts: []string{
+				`INSERT INTO foo(first, last) VALUES("paul", "dirac")`,
+				`SELECT COUNT(*) FROM foo`,
+				`SELECT * FROM bar`,
+			},
+			exp: `[{"last_insert_id":4,"rows_affected":1},{"columns":["COUNT(*)"],"types":[""],"values":[[4]]},{"error":"no such table: bar"}]`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r, err := db.RequestStringStmts(tt.stmts)
+			if err != nil {
+				t.Fatalf("failed to request empty statements: %s", err.Error())
+			}
+			if exp, got := tt.exp, asJSON(r); exp != got {
+				t.Fatalf(`Test "%s" failed, unexpected results for request exp: %s got: %s`, tt.name, exp, got)
+			}
+		})
+	}
+}
+
 func Test_CommonTableExpressions(t *testing.T) {
 	db, path := mustCreateDatabase()
 	defer db.Close()
