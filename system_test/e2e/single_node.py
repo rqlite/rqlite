@@ -157,6 +157,8 @@ class TestSingleNode(unittest.TestCase):
     self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}, {'last_insert_id': 2, 'rows_affected': 1}]}"))
     j = n.request('SELECT * from bar')
     self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona', 20], [2, 'sinead', 25]], 'types': ['integer', 'text', 'integer'], 'columns': ['id', 'name', 'age']}]}"))
+    j = n.request('SELECT * from bar', associative=True)
+    self.assertEqual(j, d_("{'results': [{'types': {'age': 'integer', 'id': 'integer', 'name': 'text'}, 'rows': [{'age': 20, 'id': 1, 'name': 'fiona'}, {'age': 25, 'id': 2, 'name': 'sinead'}]}]}"))
 
   def test_snapshot(self):
     ''' Test that a node peforms at least 1 snapshot'''
