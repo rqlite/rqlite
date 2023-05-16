@@ -481,6 +481,11 @@ class Node(object):
     raise_for_status(r)
     return r.json()
 
+  def request_raw(self, body):
+    r = requests.post(self._request_url(), data=body)
+    raise_for_status(r)
+    return r.json()
+
   def backup(self, file):
     with open(file, 'wb') as fd:
       r = requests.get(self._backup_url())
