@@ -219,7 +219,7 @@ func Test_MultiNodeClusterRequestForwardOK(t *testing.T) {
 		t.Fatalf("got incorrect response from follower exp: %s, got: %s", exp, got)
 	}
 
-	res, err = leader.Execute(`INSERT INTO foo(name) VALUES("fiona")`)
+	res, err = followers[1].Request(`INSERT INTO foo(name) VALUES("fiona")`)
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
@@ -227,11 +227,19 @@ func Test_MultiNodeClusterRequestForwardOK(t *testing.T) {
 		t.Fatalf("got incorrect response from follower exp: %s, got: %s", exp, got)
 	}
 
+	res, err = leader.Execute(`INSERT INTO foo(name) VALUES("fiona")`)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if exp, got := `{"results":[{"last_insert_id":3,"rows_affected":1}]}`, res; exp != got {
+		t.Fatalf("got incorrect response from follower exp: %s, got: %s", exp, got)
+	}
+
 	rows, err := followers[0].Query(`SELECT COUNT(*) FROM foo`)
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
-	if exp, got := `{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[2]]}]}`, rows; exp != got {
+	if exp, got := `{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[3]]}]}`, rows; exp != got {
 		t.Fatalf("got incorrect response from follower exp: %s, got: %s", exp, got)
 	}
 }
