@@ -354,6 +354,7 @@ func Test_401Routes_NoBasicAuth(t *testing.T) {
 	for _, path := range []string{
 		"/db/execute",
 		"/db/query",
+		"/db/request",
 		"/db/backup",
 		"/db/load",
 		"/join",
@@ -396,6 +397,7 @@ func Test_401Routes_BasicAuthBadPassword(t *testing.T) {
 	for _, path := range []string{
 		"/db/execute",
 		"/db/query",
+		"/db/request",
 		"/db/backup",
 		"/db/load",
 		"/join",
@@ -444,6 +446,7 @@ func Test_401Routes_BasicAuthBadPerm(t *testing.T) {
 		"/db/execute",
 		"/db/query",
 		"/db/backup",
+		"/db/request",
 		"/db/load",
 		"/join",
 		"/notify",
