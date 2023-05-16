@@ -1,3 +1,6 @@
+## 7.18.0 (unreleased)
+- [PR 1256](https://github.com/rqlite/rqlite/pull/1256): Support a _Unified Endpoint_, which can accept both read and write requests. Fixes [issue #263](https://github.com/rqlite/rqlite/issues/263).
+
 ## 7.17.0 (May 9th 2023)
 ### New features
 - [PR #1253](https://github.com/rqlite/rqlite/pull/1253): Node optionally removes itself from the cluster automatically when gracefully shutting down. See the [documentation](https://rqlite.io/docs/clustering/general-guidelines/#removing-a-node-automatically-on-shutdown) for full details.
