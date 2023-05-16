@@ -212,3 +212,16 @@ func gzUncompress(b []byte) ([]byte, error) {
 	}
 	return ub, nil
 }
+
+func MapConsistencyLevel(in QueryRequest_Level) ExecuteQueryRequest_Level {
+	switch in {
+	case QueryRequest_QUERY_REQUEST_LEVEL_NONE:
+		return ExecuteQueryRequest_QUERY_REQUEST_LEVEL_NONE
+	case QueryRequest_QUERY_REQUEST_LEVEL_WEAK:
+		return ExecuteQueryRequest_QUERY_REQUEST_LEVEL_WEAK
+	case QueryRequest_QUERY_REQUEST_LEVEL_STRONG:
+		return ExecuteQueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	default:
+		return ExecuteQueryRequest_QUERY_REQUEST_LEVEL_WEAK
+	}
+}

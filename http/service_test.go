@@ -1200,6 +1200,7 @@ func Test_timeoutQueryParam(t *testing.T) {
 type MockStore struct {
 	executeFn  func(er *command.ExecuteRequest) ([]*command.ExecuteResult, error)
 	queryFn    func(qr *command.QueryRequest) ([]*command.QueryRows, error)
+	requestFn  func(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, error)
 	backupFn   func(br *command.BackupRequest, dst io.Writer) error
 	loadFn     func(lr *command.LoadRequest) error
 	leaderAddr string
@@ -1216,6 +1217,13 @@ func (m *MockStore) Execute(er *command.ExecuteRequest) ([]*command.ExecuteResul
 func (m *MockStore) Query(qr *command.QueryRequest) ([]*command.QueryRows, error) {
 	if m.queryFn != nil {
 		return m.queryFn(qr)
+	}
+	return nil, nil
+}
+
+func (m *MockStore) Request(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, error) {
+	if m.requestFn != nil {
+		return m.requestFn(eqr)
 	}
 	return nil, nil
 }
@@ -1266,6 +1274,7 @@ type mockClusterService struct {
 	apiAddr      string
 	executeFn    func(er *command.ExecuteRequest, addr string, t time.Duration) ([]*command.ExecuteResult, error)
 	queryFn      func(qr *command.QueryRequest, addr string, t time.Duration) ([]*command.QueryRows, error)
+	requestFn    func(eqr *command.ExecuteQueryRequest, nodeAddr string, timeout time.Duration) ([]*command.ExecuteQueryResponse, error)
 	backupFn     func(br *command.BackupRequest, addr string, t time.Duration, w io.Writer) error
 	loadFn       func(lr *command.LoadRequest, addr string, t time.Duration) error
 	removeNodeFn func(rn *command.RemoveNodeRequest, nodeAddr string, t time.Duration) error
@@ -1285,6 +1294,13 @@ func (m *mockClusterService) Execute(er *command.ExecuteRequest, addr string, cr
 func (m *mockClusterService) Query(qr *command.QueryRequest, addr string, creds *cluster.Credentials, t time.Duration) ([]*command.QueryRows, error) {
 	if m.queryFn != nil {
 		return m.queryFn(qr, addr, t)
+	}
+	return nil, nil
+}
+
+func (m *mockClusterService) Request(eqr *command.ExecuteQueryRequest, nodeAddr string, creds *cluster.Credentials, timeout time.Duration) ([]*command.ExecuteQueryResponse, error) {
+	if m.requestFn != nil {
+		return m.requestFn(eqr, nodeAddr, timeout)
 	}
 	return nil, nil
 }
