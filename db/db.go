@@ -424,13 +424,14 @@ func (db *DB) Execute(req *command.Request, xTime bool) ([]*command.ExecuteResul
 	return db.executeWithConn(req, xTime, conn)
 }
 
+type execer interface {
+	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
+}
+
 func (db *DB) executeWithConn(req *command.Request, xTime bool, conn *sql.Conn) ([]*command.ExecuteResult, error) {
 	var err error
-	type Execer interface {
-		ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
-	}
 
-	var execer Execer
+	var execer execer
 	var tx *sql.Tx
 	if req.Transaction {
 		stats.Add(numETx, 1)
@@ -471,48 +472,12 @@ func (db *DB) executeWithConn(req *command.Request, xTime bool, conn *sql.Conn) 
 			continue
 		}
 
-		result := &command.ExecuteResult{}
-		start := time.Now()
-
-		parameters, err := parametersToValues(stmt.Parameters)
+		result, err := db.executeStmtWithConn(stmt, xTime, execer)
 		if err != nil {
 			if handleError(result, err) {
 				continue
 			}
 			break
-		}
-
-		r, err := execer.ExecContext(context.Background(), ss, parameters...)
-		if err != nil {
-			if handleError(result, err) {
-				continue
-			}
-			break
-		}
-
-		if r == nil {
-			continue
-		}
-
-		lid, err := r.LastInsertId()
-		if err != nil {
-			if handleError(result, err) {
-				continue
-			}
-			break
-		}
-		result.LastInsertId = lid
-
-		ra, err := r.RowsAffected()
-		if err != nil {
-			if handleError(result, err) {
-				continue
-			}
-			break
-		}
-		result.RowsAffected = ra
-		if xTime {
-			result.Time = time.Since(start).Seconds()
 		}
 		allResults = append(allResults, result)
 	}
@@ -521,6 +486,45 @@ func (db *DB) executeWithConn(req *command.Request, xTime bool, conn *sql.Conn) 
 		err = tx.Commit()
 	}
 	return allResults, err
+}
+
+func (db *DB) executeStmtWithConn(stmt *command.Statement, xTime bool, e execer) (*command.ExecuteResult, error) {
+	result := &command.ExecuteResult{}
+	start := time.Now()
+
+	parameters, err := parametersToValues(stmt.Parameters)
+	if err != nil {
+		result.Error = err.Error()
+		return result, nil
+	}
+
+	r, err := e.ExecContext(context.Background(), stmt.Sql, parameters...)
+	if err != nil {
+		result.Error = err.Error()
+		return result, err
+	}
+
+	if r == nil {
+		return result, nil
+	}
+
+	lid, err := r.LastInsertId()
+	if err != nil {
+		result.Error = err.Error()
+		return result, err
+	}
+	result.LastInsertId = lid
+
+	ra, err := r.RowsAffected()
+	if err != nil {
+		result.Error = err.Error()
+		return result, err
+	}
+	result.RowsAffected = ra
+	if xTime {
+		result.Time = time.Since(start).Seconds()
+	}
+	return result, nil
 }
 
 // QueryStringStmt executes a single query that return rows, but don't modify database.
@@ -679,14 +683,28 @@ func (db *DB) queryStmtWithConn(stmt *command.Statement, xTime bool, q queryer) 
 }
 
 func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQueryResponse, error) {
-	// Handle Txs. XXX
-
-	// Get the connection
 	conn, err := db.rwDB.Conn(context.Background())
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Close()
+
+	var queryer queryer
+	var execer execer
+
+	if req.Transaction { //// XXX MORE transaction work needed here
+		stats.Add(numETx, 1)
+		tx, err := conn.BeginTx(context.Background(), nil)
+		if err != nil {
+			return nil, err
+		}
+		defer tx.Rollback() // Will be ignored if tx is committed
+		queryer = tx
+		execer = tx
+	} else {
+		queryer = conn
+		execer = conn
+	}
 
 	eqResponse := make([]*command.ExecuteQueryResponse, len(req.Statements))
 	for i, stmt := range req.Statements {
@@ -708,33 +726,27 @@ func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQuery
 		}
 
 		if ro {
-			rows, err := db.QueryStringStmt(ss) /// HANG ON!!! THIS WON"T WORK -- named parameters etc!!!
-
-			rows, err = db.queryWithConn(nil, false, conn)
+			rows, err := db.queryStmtWithConn(stmt, xTime, queryer)
 			if err != nil {
-				rows = []*command.QueryRows{
-					{
-						Error: err.Error(),
-					},
+				rows = &command.QueryRows{
+					Error: err.Error(),
 				}
 			}
 			eqResponse[i] = &command.ExecuteQueryResponse{
 				Result: &command.ExecuteQueryResponse_Q{
-					Q: rows[0],
+					Q: rows,
 				},
 			}
 		} else {
-			result, err := db.ExecuteStringStmt(ss) // WON'T WORK EITHER!
+			result, err := db.executeStmtWithConn(stmt, xTime, execer)
 			if err != nil {
-				result = []*command.ExecuteResult{
-					{
-						Error: err.Error(),
-					},
+				result = &command.ExecuteResult{
+					Error: err.Error(),
 				}
 			}
 			eqResponse[i] = &command.ExecuteQueryResponse{
 				Result: &command.ExecuteQueryResponse_E{
-					E: result[0],
+					E: result,
 				},
 			}
 		}
