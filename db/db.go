@@ -570,8 +570,8 @@ func (db *DB) queryWithConn(req *command.Request, xTime bool, conn *sql.Conn) ([
 			continue
 		}
 
-		rows := &command.QueryRows{}
-		start := time.Now()
+		var rows *command.QueryRows
+		var err error
 
 		// Do best-effort check that the statement won't try to change
 		// the database. As per the SQLite documentation, this will not
@@ -590,80 +590,28 @@ func (db *DB) queryWithConn(req *command.Request, xTime bool, conn *sql.Conn) ([
 		}
 		if err := conn.Raw(f); err != nil {
 			stats.Add(numQueryErrors, 1)
-			rows.Error = err.Error()
+			rows = &command.QueryRows{
+				Error: err.Error(),
+			}
 			allRows = append(allRows, rows)
 			continue
 		}
 		if !readOnly {
 			stats.Add(numQueryErrors, 1)
-			rows.Error = "attempt to change database via query operation"
+			rows = &command.QueryRows{
+				Error: "attempt to change database via query operation",
+			}
 			allRows = append(allRows, rows)
 			continue
 		}
 
-		parameters, err := parametersToValues(stmt.Parameters)
+		rows, err = db.queryStmtWithConn(stmt, xTime, queryer)
 		if err != nil {
 			stats.Add(numQueryErrors, 1)
-			rows.Error = err.Error()
-			allRows = append(allRows, rows)
-			continue
-		}
-
-		rs, err := queryer.QueryContext(context.Background(), sql, parameters...)
-		if err != nil {
-			stats.Add(numQueryErrors, 1)
-			rows.Error = err.Error()
-			allRows = append(allRows, rows)
-			continue
-		}
-		defer rs.Close()
-
-		columns, err := rs.Columns()
-		if err != nil {
-			return nil, err
-		}
-
-		types, err := rs.ColumnTypes()
-		if err != nil {
-			return nil, err
-		}
-		xTypes := make([]string, len(types))
-		for i := range types {
-			xTypes[i] = strings.ToLower(types[i].DatabaseTypeName())
-		}
-
-		for rs.Next() {
-			dest := make([]interface{}, len(columns))
-			ptrs := make([]interface{}, len(dest))
-			for i := range ptrs {
-				ptrs[i] = &dest[i]
+			rows = &command.QueryRows{
+				Error: err.Error(),
 			}
-			if err := rs.Scan(ptrs...); err != nil {
-				return nil, err
-			}
-			params, err := normalizeRowValues(dest, xTypes)
-			if err != nil {
-				return nil, err
-			}
-			rows.Values = append(rows.Values, &command.Values{
-				Parameters: params,
-			})
 		}
-
-		// Check for errors from iterating over rows.
-		if err := rs.Err(); err != nil {
-			stats.Add(numQueryErrors, 1)
-			rows.Error = err.Error()
-			allRows = append(allRows, rows)
-			continue
-		}
-
-		if xTime {
-			rows.Time = time.Now().Sub(start).Seconds()
-		}
-
-		rows.Columns = columns
-		rows.Types = xTypes
 		allRows = append(allRows, rows)
 	}
 
@@ -671,6 +619,77 @@ func (db *DB) queryWithConn(req *command.Request, xTime bool, conn *sql.Conn) ([
 		err = tx.Commit()
 	}
 	return allRows, err
+}
+
+type queryer interface {
+	QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error)
+}
+
+func (db *DB) queryStmtWithConn(stmt *command.Statement, xTime bool, q queryer) (*command.QueryRows, error) {
+	rows := &command.QueryRows{}
+	start := time.Now()
+
+	parameters, err := parametersToValues(stmt.Parameters)
+	if err != nil {
+		stats.Add(numQueryErrors, 1)
+		rows.Error = err.Error()
+		return rows, nil
+	}
+
+	rs, err := q.QueryContext(context.Background(), stmt.Sql, parameters...)
+	if err != nil {
+		stats.Add(numQueryErrors, 1)
+		rows.Error = err.Error()
+		return rows, nil
+	}
+	defer rs.Close()
+
+	columns, err := rs.Columns()
+	if err != nil {
+		return nil, err
+	}
+
+	types, err := rs.ColumnTypes()
+	if err != nil {
+		return nil, err
+	}
+	xTypes := make([]string, len(types))
+	for i := range types {
+		xTypes[i] = strings.ToLower(types[i].DatabaseTypeName())
+	}
+
+	for rs.Next() {
+		dest := make([]interface{}, len(columns))
+		ptrs := make([]interface{}, len(dest))
+		for i := range ptrs {
+			ptrs[i] = &dest[i]
+		}
+		if err := rs.Scan(ptrs...); err != nil {
+			return nil, err
+		}
+		params, err := normalizeRowValues(dest, xTypes)
+		if err != nil {
+			return nil, err
+		}
+		rows.Values = append(rows.Values, &command.Values{
+			Parameters: params,
+		})
+	}
+
+	// Check for errors from iterating over rows.
+	if err := rs.Err(); err != nil {
+		stats.Add(numQueryErrors, 1)
+		rows.Error = err.Error()
+		return rows, nil
+	}
+
+	if xTime {
+		rows.Time = time.Since(start).Seconds()
+	}
+
+	rows.Columns = columns
+	rows.Types = xTypes
+	return rows, nil
 }
 
 // Backup writes a consistent snapshot of the database to the given file.
