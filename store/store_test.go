@@ -446,6 +446,95 @@ func Test_SingleNodeExecuteQueryTx(t *testing.T) {
 	}
 }
 
+// Test_SingleNodeInMemRequest tests simple requests that contain both
+// queries and execute statements.
+func Test_SingleNodeInMemRequest(t *testing.T) {
+	s, ln := mustNewStore(t, true)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	_, err := s.WaitForLeader(10 * time.Second)
+	if err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+	}, false, false)
+	_, err = s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	tests := []struct {
+		queryRequest []string
+		expected     string
+		associative  bool
+	}{
+		{
+			queryRequest: []string{},
+			expected:     `[]`,
+		},
+		{
+			queryRequest: []string{
+				`SELECT * FROM foo`,
+			},
+			expected: `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`,
+		},
+		{
+			queryRequest: []string{
+				`SELECT * FROM foo`,
+				`INSERT INTO foo(id, name) VALUES(66, "declan")`,
+			},
+			expected: `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]},{"last_insert_id":66,"rows_affected":1}]`,
+		},
+		{
+			queryRequest: []string{
+				`INSERT INTO foo(id, name) VALUES(77, "fiona")`,
+				`SELECT COUNT(*) FROM foo`,
+			},
+			expected: `[{"last_insert_id":77,"rows_affected":1},{"columns":["COUNT(*)"],"types":[""],"values":[[3]]}]`,
+		},
+		{
+			queryRequest: []string{
+				`INSERT INTO foo(id, name) VALUES(88, "fiona")`,
+				`nonsense SQL`,
+				`SELECT COUNT(*) FROM foo WHERE name='fiona'`,
+				`SELECT * FROM foo WHERE name='declan'`,
+			},
+			expected:    `[{"last_insert_id":88,"rows_affected":1},{"error":"near \"nonsense\": syntax error"},{"types":{"COUNT(*)":""},"rows":[{"COUNT(*)":3}]},{"types":{"id":"integer","name":"text"},"rows":[{"id":66,"name":"declan"}]}]`,
+			associative: true,
+		},
+	}
+
+	for _, tt := range tests {
+		eqr := executeQueryRequestFromStrings(tt.queryRequest, command.ExecuteQueryRequest_QUERY_REQUEST_LEVEL_WEAK, false, false)
+
+		r, err := s.Request(eqr)
+		if err != nil {
+			t.Fatalf("failed to execute request on single node: %s", err.Error())
+		}
+
+		var exp string
+		var got string
+		if tt.associative {
+			exp, got = tt.expected, asJSONAssociative(r)
+		} else {
+			exp, got = tt.expected, asJSON(r)
+		}
+		if exp != got {
+			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+		}
+	}
+}
+
 // Test_SingleNodeInMemFK tests that basic foreign-key related functionality works.
 func Test_SingleNodeInMemFK(t *testing.T) {
 	s, ln := mustNewStoreFK(t, true)
@@ -2777,6 +2866,17 @@ func waitForLeaderID(s *Store, timeout time.Duration) (string, error) {
 
 func asJSON(v interface{}) string {
 	enc := encoding.Encoder{}
+	b, err := enc.JSONMarshal(v)
+	if err != nil {
+		panic(fmt.Sprintf("failed to JSON marshal value: %s", err.Error()))
+	}
+	return string(b)
+}
+
+func asJSONAssociative(v interface{}) string {
+	enc := encoding.Encoder{
+		Associative: true,
+	}
 	b, err := enc.JSONMarshal(v)
 	if err != nil {
 		panic(fmt.Sprintf("failed to JSON marshal value: %s", err.Error()))
