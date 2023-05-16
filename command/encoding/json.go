@@ -27,6 +27,15 @@ type ResultRows struct {
 	Time         float64         `json:"time,omitempty"`
 }
 
+type AssociativeResultRows struct {
+	LastInsertID int64                    `json:"last_insert_id,omitempty"`
+	RowsAffected int64                    `json:"rows_affected,omitempty"`
+	Types        map[string]string        `json:"types,omitempty"`
+	Rows         []map[string]interface{} `json:"rows,omitempty"`
+	Error        string                   `json:"error,omitempty"`
+	Time         float64                  `json:"time,omitempty"`
+}
+
 // Result represents the outcome of an operation that changes rows.
 type Result struct {
 	LastInsertID int64   `json:"last_insert_id,omitempty"`
@@ -81,6 +90,51 @@ func NewResultRowsFromExecuteQueryResponse(e *command.ExecuteQueryResponse) (*Re
 			Time:    qr.Time,
 		}, nil
 	}
+	return nil, errors.New("no ExecuteResult or QueryRows")
+}
+
+func NewAssociativeResultRowsFromExecuteQueryResponse(e *command.ExecuteQueryResponse) (*AssociativeResultRows, error) {
+	er := e.GetE()
+	qr := e.GetQ()
+
+	if er != nil {
+		return &AssociativeResultRows{
+			LastInsertID: er.LastInsertId,
+			RowsAffected: er.RowsAffected,
+			Error:        er.Error,
+			Time:         er.Time,
+		}, nil
+	} else if qr != nil {
+		if len(qr.Columns) != len(qr.Types) {
+			return nil, ErrTypesColumnsLengthViolation
+		}
+		values := make([][]interface{}, len(qr.Values))
+		if err := NewValuesFromQueryValues(values, qr.Values); err != nil {
+			return nil, err
+		}
+
+		rows := make([]map[string]interface{}, len(values))
+		for i := range rows {
+			m := make(map[string]interface{})
+			for ii, c := range qr.Columns {
+				m[c] = values[i][ii]
+			}
+			rows[i] = m
+		}
+
+		types := make(map[string]string)
+		for i := range qr.Types {
+			types[qr.Columns[i]] = qr.Types[i]
+		}
+
+		return &AssociativeResultRows{
+			Types: types,
+			Rows:  rows,
+			Error: qr.Error,
+			Time:  qr.Time,
+		}, nil
+	}
+
 	return nil, errors.New("no ExecuteResult or QueryRows")
 }
 
@@ -284,15 +338,27 @@ func jsonMarshal(i interface{}, f marshalFunc, assoc bool) ([]byte, error) {
 			return f(rows)
 		}
 	case []*command.ExecuteQueryResponse:
-		res := make([]*ResultRows, len(v))
-		for j := range v {
-			r, err := NewResultRowsFromExecuteQueryResponse(v[j])
-			if err != nil {
-				return nil, err
+		if assoc {
+			res := make([]*AssociativeResultRows, len(v))
+			for j := range v {
+				r, err := NewAssociativeResultRowsFromExecuteQueryResponse(v[j])
+				if err != nil {
+					return nil, err
+				}
+				res[j] = r
 			}
-			res[j] = r
+			return f(res)
+		} else {
+			res := make([]*ResultRows, len(v))
+			for j := range v {
+				r, err := NewResultRowsFromExecuteQueryResponse(v[j])
+				if err != nil {
+					return nil, err
+				}
+				res[j] = r
+			}
+			return f(res)
 		}
-		return f(res)
 	case []*command.Values:
 		values := make([][]interface{}, len(v))
 		if err := NewValuesFromQueryValues(values, v); err != nil {
