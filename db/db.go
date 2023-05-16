@@ -662,8 +662,19 @@ func (db *DB) queryWithConn(req *command.Request, xTime bool, conn *sql.Conn) ([
 	return allRows, err
 }
 
+func (db *DB) queryStmtWithConn(stmt *command.Statement, conn *sql.Conn) ([]*command.QueryRows, error) {
+	return nil, nil
+}
+
 func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQueryResponse, error) {
 	// Handle Txs. XXX
+
+	// Get the connection
+	conn, err := db.rwDB.Conn(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
 
 	eqResponse := make([]*command.ExecuteQueryResponse, len(req.Statements))
 	for i, stmt := range req.Statements {
@@ -674,11 +685,20 @@ func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQuery
 
 		ro, err := db.StmtReadOnly(ss)
 		if err != nil {
-			return nil, err // assume this is an actual error, not, say, syntax XXX CHECK IT
+			eqResponse[i] = &command.ExecuteQueryResponse{
+				Result: &command.ExecuteQueryResponse_Q{
+					Q: &command.QueryRows{
+						Error: err.Error(),
+					},
+				},
+			}
+			continue
 		}
 
 		if ro {
 			rows, err := db.QueryStringStmt(ss) /// HANG ON!!! THIS WON"T WORK -- named parameters etc!!!
+
+			rows, err = db.queryWithConn(nil, false, conn)
 			if err != nil {
 				rows = []*command.QueryRows{
 					{
