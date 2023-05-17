@@ -31,7 +31,7 @@ type AssociativeResultRows struct {
 	LastInsertID int64                    `json:"last_insert_id,omitempty"`
 	RowsAffected int64                    `json:"rows_affected,omitempty"`
 	Types        map[string]string        `json:"types,omitempty"`
-	Rows         []map[string]interface{} `json:"rows,omitempty"`
+	Rows         []map[string]interface{} `json:"rows"`
 	Error        string                   `json:"error,omitempty"`
 	Time         float64                  `json:"time,omitempty"`
 }
