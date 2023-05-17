@@ -156,6 +156,55 @@ func Test_SingleNode(t *testing.T) {
 	}
 }
 
+func Test_SingleNodeRequest(t *testing.T) {
+	node := mustNewLeaderNode()
+	defer node.Deprovision()
+
+	tests := []struct {
+		stmt     string
+		expected string
+	}{
+		{
+			stmt:     `CREATE TABLE foo (id integer not null primary key, name text)`,
+			expected: `{"results":[{}]}`,
+		},
+		{
+			stmt:     `INSERT INTO foo(name) VALUES("fiona")`,
+			expected: `{"results":[{"last_insert_id":1,"rows_affected":1}]}`,
+		},
+		{
+			stmt:     `INSERT INTO bar(name) VALUES("fiona")`,
+			expected: `{"results":[{"error":"no such table: bar"}]}`,
+		},
+		{
+			stmt:     `INSERT blah blah`,
+			expected: `{"results":[{"error":"near \"blah\": syntax error"}]}`,
+		},
+		{
+			stmt:     `SELECT * FROM foo`,
+			expected: `{"results":[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]}`,
+		},
+		{
+			stmt:     `DROP TABLE bar`,
+			expected: `{"results":[{"error":"no such table: bar"}]}`,
+		},
+		{
+			stmt:     `DROP TABLE foo`,
+			expected: `{"results":[{"last_insert_id":1,"rows_affected":1}]}`,
+		},
+	}
+
+	for i, tt := range tests {
+		r, err := node.Request(tt.stmt)
+		if err != nil {
+			t.Fatalf(`test %d failed "%s": %s`, i, tt.stmt, err.Error())
+		}
+		if r != tt.expected {
+			t.Fatalf(`test %d received wrong result "%s" got: %s exp: %s`, i, tt.stmt, r, tt.expected)
+		}
+	}
+}
+
 func Test_SingleNodeMulti(t *testing.T) {
 	node := mustNewLeaderNode()
 	defer node.Deprovision()
@@ -317,6 +366,39 @@ func Test_SingleNodeParameterized(t *testing.T) {
 		} else {
 			r, err = node.QueryParameterized(tt.stmt)
 		}
+		if err != nil {
+			t.Fatalf(`test %d failed "%s": %s`, i, tt.stmt, err.Error())
+		}
+		if r != tt.expected {
+			t.Fatalf(`test %d received wrong result "%s" got: %s exp: %s`, i, tt.stmt, r, tt.expected)
+		}
+	}
+}
+
+func Test_SingleNodeRequestParameterized(t *testing.T) {
+	node := mustNewLeaderNode()
+	defer node.Deprovision()
+
+	tests := []struct {
+		stmt     []interface{}
+		expected string
+	}{
+		{
+			stmt:     []interface{}{"CREATE TABLE foo (id integer not null primary key, name text, age integer)"},
+			expected: `{"results":[{}]}`,
+		},
+		{
+			stmt:     []interface{}{"INSERT INTO foo(name, age) VALUES(?, ?)", "fiona", 20},
+			expected: `{"results":[{"last_insert_id":1,"rows_affected":1}]}`,
+		},
+		{
+			stmt:     []interface{}{"SELECT * FROM foo WHERE NAME=?", "fiona"},
+			expected: `{"results":[{"columns":["id","name","age"],"types":["integer","text","integer"],"values":[[1,"fiona",20]]}]}`,
+		},
+	}
+
+	for i, tt := range tests {
+		r, err := node.RequestMultiParameterized(tt.stmt)
 		if err != nil {
 			t.Fatalf(`test %d failed "%s": %s`, i, tt.stmt, err.Error())
 		}

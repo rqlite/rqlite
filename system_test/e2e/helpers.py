@@ -463,6 +463,29 @@ class Node(object):
     raise_for_status(r)
     return r.json()
 
+  def request(self, statement, params=None, level='weak', pretty=False, associative=False):
+    body = [statement]
+    if params is not None:
+      try:
+        body = body + params
+      except TypeError:
+        # Presumably not a list, so append as an object.
+        body.append(params)
+
+    reqParams = {'level': level}
+    if pretty:
+      reqParams['pretty'] = "yes"
+    if associative:
+      reqParams['associative'] = "yes"
+    r = requests.post(self._request_url(), params=reqParams, data=json.dumps([body]))
+    raise_for_status(r)
+    return r.json()
+
+  def request_raw(self, body):
+    r = requests.post(self._request_url(), data=body)
+    raise_for_status(r)
+    return r.json()
+
   def backup(self, file):
     with open(file, 'wb') as fd:
       r = requests.get(self._backup_url())
@@ -532,6 +555,11 @@ class Node(object):
     if wait:
       u = u + '&wait'
     return 'http://' + self.APIAddr() + u
+  def _request_url(self, redirect=False):
+    rd = ""
+    if redirect:
+      rd = "?redirect"
+    return 'http://' + self.APIAddr() + '/db/request' + rd
   def _backup_url(self):
     return 'http://' + self.APIAddr() + '/db/backup'
   def _load_url(self):

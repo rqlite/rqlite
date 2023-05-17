@@ -133,6 +133,45 @@ func Test_ClientQuery(t *testing.T) {
 	}
 }
 
+func Test_ClientRequest(t *testing.T) {
+	srv := servicetest.NewService()
+	srv.Handler = func(conn net.Conn) {
+		var p []byte
+		var err error
+		c := readCommand(conn)
+		if c == nil {
+			// Error on connection, so give up, as normal
+			// test exit can cause that too.
+			return
+		}
+		if c.Type != Command_COMMAND_TYPE_REQUEST {
+			t.Fatalf("unexpected command type: %d", c.Type)
+		}
+		er := c.GetExecuteQueryRequest()
+		if er == nil {
+			t.Fatal("expected execute query request, got nil")
+		}
+		if er.Request.Statements[0].Sql != "SELECT * FROM foo" {
+			t.Fatalf("unexpected statement, got %s", er.Request.Statements[0])
+		}
+
+		p, err = proto.Marshal(&CommandRequestResponse{})
+		if err != nil {
+			conn.Close()
+		}
+		writeBytesWithLength(conn, p)
+	}
+	srv.Start()
+	defer srv.Close()
+
+	c := NewClient(&simpleDialer{}, 0)
+	_, err := c.Request(executeQueryRequestFromString("SELECT * FROM foo"),
+		srv.Addr(), nil, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func Test_ClientRemoveNode(t *testing.T) {
 	srv := servicetest.NewService()
 	srv.Handler = func(conn net.Conn) {

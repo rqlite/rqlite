@@ -157,6 +157,32 @@ func (n *Node) QueryParameterized(stmt []interface{}) (string, error) {
 	return n.postQuery(string(j))
 }
 
+// Request runs a single request against the node.
+func (n *Node) Request(stmt string) (string, error) {
+	return n.RequestMulti([]string{stmt})
+}
+
+// RequestMulti runs multiple statements in a single request against the node.
+func (n *Node) RequestMulti(stmts []string) (string, error) {
+	j, err := json.Marshal(stmts)
+	if err != nil {
+		return "", err
+	}
+	return n.postRequest(string(j))
+}
+
+// RequestMultiParameterized runs a single paramterized request against the node
+func (n *Node) RequestMultiParameterized(stmt []interface{}) (string, error) {
+	m := make([][]interface{}, 1)
+	m[0] = stmt
+
+	j, err := json.Marshal(m)
+	if err != nil {
+		return "", err
+	}
+	return n.postRequest(string(j))
+}
+
 // Noop inserts a noop command into the Store's Raft log.
 func (n *Node) Noop(id string) error {
 	return n.Store.Noop(id)
@@ -415,6 +441,19 @@ func (n *Node) query(stmt, consistency string) (string, error) {
 
 func (n *Node) postQuery(stmt string) (string, error) {
 	resp, err := http.Post("http://"+n.APIAddr+"/db/query", "application/json", strings.NewReader(stmt))
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	return string(body), nil
+}
+
+func (n *Node) postRequest(stmt string) (string, error) {
+	resp, err := http.Post("http://"+n.APIAddr+"/db/request", "application/json", strings.NewReader(stmt))
 	if err != nil {
 		return "", err
 	}

@@ -412,6 +412,7 @@ func mustNewMockTLSTransport() *mockTransport {
 type mockDatabase struct {
 	executeFn func(er *command.ExecuteRequest) ([]*command.ExecuteResult, error)
 	queryFn   func(qr *command.QueryRequest) ([]*command.QueryRows, error)
+	requestFn func(rr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, error)
 	backupFn  func(br *command.BackupRequest, dst io.Writer) error
 	loadFn    func(lr *command.LoadRequest) error
 }
@@ -422,6 +423,13 @@ func (m *mockDatabase) Execute(er *command.ExecuteRequest) ([]*command.ExecuteRe
 
 func (m *mockDatabase) Query(qr *command.QueryRequest) ([]*command.QueryRows, error) {
 	return m.queryFn(qr)
+}
+
+func (m *mockDatabase) Request(rr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, error) {
+	if m.requestFn == nil {
+		return []*command.ExecuteQueryResponse{}, nil
+	}
+	return m.requestFn(rr)
 }
 
 func (m *mockDatabase) Backup(br *command.BackupRequest, dst io.Writer) error {

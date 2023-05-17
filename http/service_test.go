@@ -354,6 +354,7 @@ func Test_401Routes_NoBasicAuth(t *testing.T) {
 	for _, path := range []string{
 		"/db/execute",
 		"/db/query",
+		"/db/request",
 		"/db/backup",
 		"/db/load",
 		"/join",
@@ -396,6 +397,7 @@ func Test_401Routes_BasicAuthBadPassword(t *testing.T) {
 	for _, path := range []string{
 		"/db/execute",
 		"/db/query",
+		"/db/request",
 		"/db/backup",
 		"/db/load",
 		"/join",
@@ -444,6 +446,7 @@ func Test_401Routes_BasicAuthBadPerm(t *testing.T) {
 		"/db/execute",
 		"/db/query",
 		"/db/backup",
+		"/db/request",
 		"/db/load",
 		"/join",
 		"/notify",
@@ -1146,6 +1149,70 @@ func Test_ForwardingRedirectExecute(t *testing.T) {
 	}
 }
 
+func Test_ForwardingRedirectExecuteQuery(t *testing.T) {
+	m := &MockStore{
+		leaderAddr: "foo:1234",
+	}
+	m.requestFn = func(er *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, error) {
+		return nil, store.ErrNotLeader
+	}
+
+	c := &mockClusterService{
+		apiAddr: "https://bar:5678",
+	}
+	c.requestFn = func(er *command.ExecuteQueryRequest, addr string, timeout time.Duration) ([]*command.ExecuteQueryResponse, error) {
+		resp := &command.ExecuteQueryResponse{
+			Result: &command.ExecuteQueryResponse_E{
+				E: &command.ExecuteResult{
+					LastInsertId: 1234,
+					RowsAffected: 5678,
+				},
+			},
+		}
+		return []*command.ExecuteQueryResponse{resp}, nil
+	}
+
+	s := New("127.0.0.1:0", m, c, nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	// Check ExecuteQuery.
+	client := &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+
+	resp, err := client.Post(host+"/db/request", "application/json", strings.NewReader(`["Some SQL"]`))
+	if err != nil {
+		t.Fatalf("failed to make ExecuteQuery request")
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("failed to get expected StatusOK for ExecuteQuery, got %d", resp.StatusCode)
+	}
+
+	resp, err = client.Post(host+"/db/request?redirect", "application/json", strings.NewReader(`["Some SQL"]`))
+	if err != nil {
+		t.Fatalf("failed to make redirected ExecuteQuery request: %s", err)
+	}
+	if resp.StatusCode != http.StatusMovedPermanently {
+		t.Fatalf("failed to get expected StatusMovedPermanently for execute, got %d", resp.StatusCode)
+	}
+
+	// Check leader failure case.
+	m.leaderAddr = ""
+	resp, err = client.Post(host+"/db/request", "application/json", strings.NewReader(`["Some SQL"]`))
+	if err != nil {
+		t.Fatalf("failed to make ExecuteQuery request")
+	}
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("failed to get expected StatusServiceUnavailable for node with no leader, got %d", resp.StatusCode)
+	}
+}
+
 func Test_timeoutQueryParam(t *testing.T) {
 	var req http.Request
 
@@ -1197,6 +1264,7 @@ func Test_timeoutQueryParam(t *testing.T) {
 type MockStore struct {
 	executeFn  func(er *command.ExecuteRequest) ([]*command.ExecuteResult, error)
 	queryFn    func(qr *command.QueryRequest) ([]*command.QueryRows, error)
+	requestFn  func(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, error)
 	backupFn   func(br *command.BackupRequest, dst io.Writer) error
 	loadFn     func(lr *command.LoadRequest) error
 	leaderAddr string
@@ -1213,6 +1281,13 @@ func (m *MockStore) Execute(er *command.ExecuteRequest) ([]*command.ExecuteResul
 func (m *MockStore) Query(qr *command.QueryRequest) ([]*command.QueryRows, error) {
 	if m.queryFn != nil {
 		return m.queryFn(qr)
+	}
+	return nil, nil
+}
+
+func (m *MockStore) Request(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, error) {
+	if m.requestFn != nil {
+		return m.requestFn(eqr)
 	}
 	return nil, nil
 }
@@ -1263,6 +1338,7 @@ type mockClusterService struct {
 	apiAddr      string
 	executeFn    func(er *command.ExecuteRequest, addr string, t time.Duration) ([]*command.ExecuteResult, error)
 	queryFn      func(qr *command.QueryRequest, addr string, t time.Duration) ([]*command.QueryRows, error)
+	requestFn    func(eqr *command.ExecuteQueryRequest, nodeAddr string, timeout time.Duration) ([]*command.ExecuteQueryResponse, error)
 	backupFn     func(br *command.BackupRequest, addr string, t time.Duration, w io.Writer) error
 	loadFn       func(lr *command.LoadRequest, addr string, t time.Duration) error
 	removeNodeFn func(rn *command.RemoveNodeRequest, nodeAddr string, t time.Duration) error
@@ -1282,6 +1358,13 @@ func (m *mockClusterService) Execute(er *command.ExecuteRequest, addr string, cr
 func (m *mockClusterService) Query(qr *command.QueryRequest, addr string, creds *cluster.Credentials, t time.Duration) ([]*command.QueryRows, error) {
 	if m.queryFn != nil {
 		return m.queryFn(qr, addr, t)
+	}
+	return nil, nil
+}
+
+func (m *mockClusterService) Request(eqr *command.ExecuteQueryRequest, nodeAddr string, creds *cluster.Credentials, timeout time.Duration) ([]*command.ExecuteQueryResponse, error) {
+	if m.requestFn != nil {
+		return m.requestFn(eqr, nodeAddr, timeout)
 	}
 	return nil, nil
 }

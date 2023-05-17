@@ -25,6 +25,7 @@ message Command {
         COMMAND_TYPE_REMOVE_NODE = 6;
         COMMAND_TYPE_NOTIFY = 7;
         COMMAND_TYPE_JOIN = 8;
+        COMMAND_TYPE_REQUEST = 9;
     }
     Type type = 1;
 
@@ -36,6 +37,7 @@ message Command {
         command.RemoveNodeRequest remove_node_request = 7;
         command.NotifyRequest notify_request = 8;
         command.JoinRequest join_request = 9;
+        command.ExecuteQueryRequest execute_query_request = 10;
     }
 
     Credentials credentials = 4;
@@ -49,6 +51,11 @@ message CommandExecuteResponse {
 message CommandQueryResponse {
 	string error = 1;
 	repeated command.QueryRows rows = 2;
+}
+
+message CommandRequestResponse {
+    string error = 1;
+    repeated command.ExecuteQueryResponse response = 2;
 }
 
 message CommandBackupResponse {

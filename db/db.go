@@ -21,15 +21,14 @@ import (
 const bkDelay = 250
 
 const (
-	onDiskMaxOpenConns = 32
-	onDiskMaxIdleTime  = 120 * time.Second
-
 	numExecutions      = "executions"
 	numExecutionErrors = "execution_errors"
 	numQueries         = "queries"
 	numQueryErrors     = "query_errors"
+	numRequests        = "requests"
 	numETx             = "execute_transactions"
 	numQTx             = "query_transactions"
+	numRTx             = "request_transactions"
 )
 
 // DBVersion is the SQLite version.
@@ -52,8 +51,10 @@ func ResetStats() {
 	stats.Add(numExecutionErrors, 0)
 	stats.Add(numQueries, 0)
 	stats.Add(numQueryErrors, 0)
+	stats.Add(numRequests, 0)
 	stats.Add(numETx, 0)
 	stats.Add(numQTx, 0)
+	stats.Add(numRTx, 0)
 }
 
 // DB is the SQL database.
@@ -416,18 +417,22 @@ func (db *DB) ExecuteStringStmt(query string) ([]*command.ExecuteResult, error) 
 // Execute executes queries that modify the database.
 func (db *DB) Execute(req *command.Request, xTime bool) ([]*command.ExecuteResult, error) {
 	stats.Add(numExecutions, int64(len(req.Statements)))
-
 	conn, err := db.rwDB.Conn(context.Background())
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Close()
+	return db.executeWithConn(req, xTime, conn)
+}
 
-	type Execer interface {
-		ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
-	}
+type execer interface {
+	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
+}
 
-	var execer Execer
+func (db *DB) executeWithConn(req *command.Request, xTime bool, conn *sql.Conn) ([]*command.ExecuteResult, error) {
+	var err error
+
+	var execer execer
 	var tx *sql.Tx
 	if req.Transaction {
 		stats.Add(numETx, 1)
@@ -468,48 +473,12 @@ func (db *DB) Execute(req *command.Request, xTime bool) ([]*command.ExecuteResul
 			continue
 		}
 
-		result := &command.ExecuteResult{}
-		start := time.Now()
-
-		parameters, err := parametersToValues(stmt.Parameters)
+		result, err := db.executeStmtWithConn(stmt, xTime, execer)
 		if err != nil {
 			if handleError(result, err) {
 				continue
 			}
 			break
-		}
-
-		r, err := execer.ExecContext(context.Background(), ss, parameters...)
-		if err != nil {
-			if handleError(result, err) {
-				continue
-			}
-			break
-		}
-
-		if r == nil {
-			continue
-		}
-
-		lid, err := r.LastInsertId()
-		if err != nil {
-			if handleError(result, err) {
-				continue
-			}
-			break
-		}
-		result.LastInsertId = lid
-
-		ra, err := r.RowsAffected()
-		if err != nil {
-			if handleError(result, err) {
-				continue
-			}
-			break
-		}
-		result.RowsAffected = ra
-		if xTime {
-			result.Time = time.Now().Sub(start).Seconds()
 		}
 		allResults = append(allResults, result)
 	}
@@ -518,6 +487,45 @@ func (db *DB) Execute(req *command.Request, xTime bool) ([]*command.ExecuteResul
 		err = tx.Commit()
 	}
 	return allResults, err
+}
+
+func (db *DB) executeStmtWithConn(stmt *command.Statement, xTime bool, e execer) (*command.ExecuteResult, error) {
+	result := &command.ExecuteResult{}
+	start := time.Now()
+
+	parameters, err := parametersToValues(stmt.Parameters)
+	if err != nil {
+		result.Error = err.Error()
+		return result, nil
+	}
+
+	r, err := e.ExecContext(context.Background(), stmt.Sql, parameters...)
+	if err != nil {
+		result.Error = err.Error()
+		return result, err
+	}
+
+	if r == nil {
+		return result, nil
+	}
+
+	lid, err := r.LastInsertId()
+	if err != nil {
+		result.Error = err.Error()
+		return result, err
+	}
+	result.LastInsertId = lid
+
+	ra, err := r.RowsAffected()
+	if err != nil {
+		result.Error = err.Error()
+		return result, err
+	}
+	result.RowsAffected = ra
+	if xTime {
+		result.Time = time.Since(start).Seconds()
+	}
+	return result, nil
 }
 
 // QueryStringStmt executes a single query that return rows, but don't modify database.
@@ -543,13 +551,14 @@ func (db *DB) Query(req *command.Request, xTime bool) ([]*command.QueryRows, err
 	return db.queryWithConn(req, xTime, conn)
 }
 
+type queryer interface {
+	QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error)
+}
+
 func (db *DB) queryWithConn(req *command.Request, xTime bool, conn *sql.Conn) ([]*command.QueryRows, error) {
 	var err error
-	type Queryer interface {
-		QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error)
-	}
 
-	var queryer Queryer
+	var queryer queryer
 	var tx *sql.Tx
 	if req.Transaction {
 		stats.Add(numQTx, 1)
@@ -570,100 +579,34 @@ func (db *DB) queryWithConn(req *command.Request, xTime bool, conn *sql.Conn) ([
 			continue
 		}
 
-		rows := &command.QueryRows{}
-		start := time.Now()
+		var rows *command.QueryRows
+		var err error
 
-		// Do best-effort check that the statement won't try to change
-		// the database. As per the SQLite documentation, this will not
-		// cover 100% of possibilities, but should cover most.
-		var readOnly bool
-		f := func(driverConn interface{}) error {
-			c := driverConn.(*sqlite3.SQLiteConn)
-			drvStmt, err := c.Prepare(sql)
-			if err != nil {
-				return err
-			}
-			defer drvStmt.Close()
-			sqliteStmt := drvStmt.(*sqlite3.SQLiteStmt)
-			readOnly = sqliteStmt.Readonly()
-			return nil
-		}
-		if err := conn.Raw(f); err != nil {
+		readOnly, err := db.StmtReadOnly(sql)
+		if err != nil {
 			stats.Add(numQueryErrors, 1)
-			rows.Error = err.Error()
+			rows = &command.QueryRows{
+				Error: err.Error(),
+			}
 			allRows = append(allRows, rows)
 			continue
 		}
 		if !readOnly {
 			stats.Add(numQueryErrors, 1)
-			rows.Error = "attempt to change database via query operation"
+			rows = &command.QueryRows{
+				Error: "attempt to change database via query operation",
+			}
 			allRows = append(allRows, rows)
 			continue
 		}
 
-		parameters, err := parametersToValues(stmt.Parameters)
+		rows, err = db.queryStmtWithConn(stmt, xTime, queryer)
 		if err != nil {
 			stats.Add(numQueryErrors, 1)
-			rows.Error = err.Error()
-			allRows = append(allRows, rows)
-			continue
-		}
-
-		rs, err := queryer.QueryContext(context.Background(), sql, parameters...)
-		if err != nil {
-			stats.Add(numQueryErrors, 1)
-			rows.Error = err.Error()
-			allRows = append(allRows, rows)
-			continue
-		}
-		defer rs.Close()
-
-		columns, err := rs.Columns()
-		if err != nil {
-			return nil, err
-		}
-
-		types, err := rs.ColumnTypes()
-		if err != nil {
-			return nil, err
-		}
-		xTypes := make([]string, len(types))
-		for i := range types {
-			xTypes[i] = strings.ToLower(types[i].DatabaseTypeName())
-		}
-
-		for rs.Next() {
-			dest := make([]interface{}, len(columns))
-			ptrs := make([]interface{}, len(dest))
-			for i := range ptrs {
-				ptrs[i] = &dest[i]
+			rows = &command.QueryRows{
+				Error: err.Error(),
 			}
-			if err := rs.Scan(ptrs...); err != nil {
-				return nil, err
-			}
-			params, err := normalizeRowValues(dest, xTypes)
-			if err != nil {
-				return nil, err
-			}
-			rows.Values = append(rows.Values, &command.Values{
-				Parameters: params,
-			})
 		}
-
-		// Check for errors from iterating over rows.
-		if err := rs.Err(); err != nil {
-			stats.Add(numQueryErrors, 1)
-			rows.Error = err.Error()
-			allRows = append(allRows, rows)
-			continue
-		}
-
-		if xTime {
-			rows.Time = time.Now().Sub(start).Seconds()
-		}
-
-		rows.Columns = columns
-		rows.Types = xTypes
 		allRows = append(allRows, rows)
 	}
 
@@ -671,6 +614,161 @@ func (db *DB) queryWithConn(req *command.Request, xTime bool, conn *sql.Conn) ([
 		err = tx.Commit()
 	}
 	return allRows, err
+}
+
+func (db *DB) queryStmtWithConn(stmt *command.Statement, xTime bool, q queryer) (*command.QueryRows, error) {
+	rows := &command.QueryRows{}
+	start := time.Now()
+
+	parameters, err := parametersToValues(stmt.Parameters)
+	if err != nil {
+		stats.Add(numQueryErrors, 1)
+		rows.Error = err.Error()
+		return rows, nil
+	}
+
+	rs, err := q.QueryContext(context.Background(), stmt.Sql, parameters...)
+	if err != nil {
+		stats.Add(numQueryErrors, 1)
+		rows.Error = err.Error()
+		return rows, nil
+	}
+	defer rs.Close()
+
+	columns, err := rs.Columns()
+	if err != nil {
+		return nil, err
+	}
+
+	types, err := rs.ColumnTypes()
+	if err != nil {
+		return nil, err
+	}
+	xTypes := make([]string, len(types))
+	for i := range types {
+		xTypes[i] = strings.ToLower(types[i].DatabaseTypeName())
+	}
+
+	for rs.Next() {
+		dest := make([]interface{}, len(columns))
+		ptrs := make([]interface{}, len(dest))
+		for i := range ptrs {
+			ptrs[i] = &dest[i]
+		}
+		if err := rs.Scan(ptrs...); err != nil {
+			return nil, err
+		}
+		params, err := normalizeRowValues(dest, xTypes)
+		if err != nil {
+			return nil, err
+		}
+		rows.Values = append(rows.Values, &command.Values{
+			Parameters: params,
+		})
+	}
+
+	// Check for errors from iterating over rows.
+	if err := rs.Err(); err != nil {
+		stats.Add(numQueryErrors, 1)
+		rows.Error = err.Error()
+		return rows, nil
+	}
+
+	if xTime {
+		rows.Time = time.Since(start).Seconds()
+	}
+
+	rows.Columns = columns
+	rows.Types = xTypes
+	return rows, nil
+}
+
+// RequestStringStmts processes a request that can contain both executes and queries.
+func (db *DB) RequestStringStmts(stmts []string) ([]*command.ExecuteQueryResponse, error) {
+	req := &command.Request{}
+	for _, q := range stmts {
+		req.Statements = append(req.Statements, &command.Statement{
+			Sql: q,
+		})
+	}
+	return db.Request(req, false)
+}
+
+// Request processes a request that can contain both executes and queries.
+func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQueryResponse, error) {
+	stats.Add(numRequests, int64(len(req.Statements)))
+	conn, err := db.rwDB.Conn(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	var queryer queryer
+	var execer execer
+	var tx *sql.Tx
+	if req.Transaction {
+		stats.Add(numRTx, 1)
+		tx, err = conn.BeginTx(context.Background(), nil)
+		if err != nil {
+			return nil, err
+		}
+		defer tx.Rollback() // Will be ignored if tx is committed
+		queryer = tx
+		execer = tx
+	} else {
+		queryer = conn
+		execer = conn
+	}
+
+	// abortOnError indicates whether the caller should continue
+	// processing or break.
+	abortOnError := func(err error) bool {
+		if err != nil && tx != nil {
+			tx.Rollback()
+			tx = nil
+			return true
+		}
+		return false
+	}
+
+	var eqResponse []*command.ExecuteQueryResponse
+	for _, stmt := range req.Statements {
+		ss := stmt.Sql
+		if ss == "" {
+			continue
+		}
+
+		ro, err := db.StmtReadOnly(ss)
+		if err != nil {
+			eqResponse = append(eqResponse, &command.ExecuteQueryResponse{
+				Result: &command.ExecuteQueryResponse_Q{
+					Q: &command.QueryRows{
+						Error: err.Error(),
+					},
+				},
+			})
+			continue
+		}
+
+		if ro {
+			rows, opErr := db.queryStmtWithConn(stmt, xTime, queryer)
+			eqResponse = append(eqResponse, createEQQueryResponse(rows, opErr))
+			if abortOnError(opErr) {
+				break
+			}
+		} else {
+			result, opErr := db.executeStmtWithConn(stmt, xTime, execer)
+			eqResponse = append(eqResponse, createEQExecuteResponse(result, opErr))
+			if abortOnError(opErr) {
+				break
+			}
+		}
+	}
+
+	if tx != nil {
+		err = tx.Commit()
+	}
+	return eqResponse, err
 }
 
 // Backup writes a consistent snapshot of the database to the given file.
@@ -827,6 +925,34 @@ func (db *DB) Dump(w io.Writer) error {
 	return nil
 }
 
+// StmtReadOnly returns whether the given SQL statement is read-only.
+// As per https://www.sqlite.org/c3ref/stmt_readonly.html, this function
+// may not return 100% correct results, but should cover most scenarios.
+func (db *DB) StmtReadOnly(sql string) (bool, error) {
+	var readOnly bool
+	f := func(driverConn interface{}) error {
+		c := driverConn.(*sqlite3.SQLiteConn)
+		drvStmt, err := c.Prepare(sql)
+		if err != nil {
+			return err
+		}
+		defer drvStmt.Close()
+		sqliteStmt := drvStmt.(*sqlite3.SQLiteStmt)
+		readOnly = sqliteStmt.Readonly()
+		return nil
+	}
+
+	conn, err := db.roDB.Conn(context.Background())
+	if err != nil {
+		return false, err
+	}
+	defer conn.Close()
+	if err := conn.Raw(f); err != nil {
+		return false, err
+	}
+	return readOnly, nil
+}
+
 func (db *DB) memStats() (map[string]int64, error) {
 	ms := make(map[string]int64)
 	for _, p := range []string{
@@ -845,6 +971,40 @@ func (db *DB) memStats() (map[string]int64, error) {
 		ms[p] = res[0].Values[0].Parameters[0].GetI()
 	}
 	return ms, nil
+}
+
+func createEQQueryResponse(rows *command.QueryRows, err error) *command.ExecuteQueryResponse {
+	if err != nil {
+		return &command.ExecuteQueryResponse{
+			Result: &command.ExecuteQueryResponse_Q{
+				Q: &command.QueryRows{
+					Error: err.Error(),
+				},
+			},
+		}
+	}
+	return &command.ExecuteQueryResponse{
+		Result: &command.ExecuteQueryResponse_Q{
+			Q: rows,
+		},
+	}
+}
+
+func createEQExecuteResponse(execResult *command.ExecuteResult, err error) *command.ExecuteQueryResponse {
+	if err != nil {
+		return &command.ExecuteQueryResponse{
+			Result: &command.ExecuteQueryResponse_E{
+				E: &command.ExecuteResult{
+					Error: err.Error(),
+				},
+			},
+		}
+	}
+	return &command.ExecuteQueryResponse{
+		Result: &command.ExecuteQueryResponse_E{
+			E: execResult,
+		},
+	}
 }
 
 func copyDatabase(dst *DB, src *DB) error {

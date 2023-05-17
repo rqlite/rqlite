@@ -142,6 +142,24 @@ class TestSingleNode(unittest.TestCase):
     j = n.query('SELECT * from bar')
     self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona', 20], [2, 'sinead', 25]], 'types': ['integer', 'text', 'integer'], 'columns': ['id', 'name', 'age']}]}"))
 
+  def test_simple_parameterized_mixed_queries_via_request(self):
+    '''Test a mix of parameterized and non-parameterized queries work as expected with unified endpoint'''
+    n = self.cluster.wait_for_leader()
+    j = n.execute('CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT, age INTEGER)')
+    self.assertEqual(j, d_("{'results': [{}]}"))
+
+    body = json.dumps([
+        ["INSERT INTO bar(name, age) VALUES(?,?)", "fiona", 20],
+        ['INSERT INTO bar(name, age) VALUES("sinead", 25)']
+    ])
+    j = n.request_raw(body)
+    applied = n.wait_for_all_fsm()
+    self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}, {'last_insert_id': 2, 'rows_affected': 1}]}"))
+    j = n.request('SELECT * from bar')
+    self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona', 20], [2, 'sinead', 25]], 'types': ['integer', 'text', 'integer'], 'columns': ['id', 'name', 'age']}]}"))
+    j = n.request('SELECT * from bar', associative=True)
+    self.assertEqual(j, d_("{'results': [{'types': {'age': 'integer', 'id': 'integer', 'name': 'text'}, 'rows': [{'age': 20, 'id': 1, 'name': 'fiona'}, {'age': 25, 'id': 2, 'name': 'sinead'}]}]}"))
+
   def test_snapshot(self):
     ''' Test that a node peforms at least 1 snapshot'''
     n = self.cluster.wait_for_leader()

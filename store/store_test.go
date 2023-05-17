@@ -446,6 +446,247 @@ func Test_SingleNodeExecuteQueryTx(t *testing.T) {
 	}
 }
 
+// Test_SingleNodeInMemRequest tests simple requests that contain both
+// queries and execute statements.
+func Test_SingleNodeInMemRequest(t *testing.T) {
+	s, ln := mustNewStore(t, true)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	_, err := s.WaitForLeader(10 * time.Second)
+	if err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+	}, false, false)
+	_, err = s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	tests := []struct {
+		stmts       []string
+		expected    string
+		associative bool
+	}{
+		{
+			stmts:    []string{},
+			expected: `[]`,
+		},
+		{
+			stmts: []string{
+				`SELECT * FROM foo`,
+			},
+			expected: `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`,
+		},
+		{
+			stmts: []string{
+				`SELECT * FROM foo`,
+				`INSERT INTO foo(id, name) VALUES(66, "declan")`,
+			},
+			expected: `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]},{"last_insert_id":66,"rows_affected":1}]`,
+		},
+		{
+			stmts: []string{
+				`INSERT INTO foo(id, name) VALUES(77, "fiona")`,
+				`SELECT COUNT(*) FROM foo`,
+			},
+			expected: `[{"last_insert_id":77,"rows_affected":1},{"columns":["COUNT(*)"],"types":[""],"values":[[3]]}]`,
+		},
+		{
+			stmts: []string{
+				`INSERT INTO foo(id, name) VALUES(88, "fiona")`,
+				`nonsense SQL`,
+				`SELECT COUNT(*) FROM foo WHERE name='fiona'`,
+				`SELECT * FROM foo WHERE name='declan'`,
+			},
+			expected:    `[{"last_insert_id":88,"rows_affected":1},{"error":"near \"nonsense\": syntax error"},{"types":{"COUNT(*)":""},"rows":[{"COUNT(*)":3}]},{"types":{"id":"integer","name":"text"},"rows":[{"id":66,"name":"declan"}]}]`,
+			associative: true,
+		},
+	}
+
+	for _, tt := range tests {
+		eqr := executeQueryRequestFromStrings(tt.stmts, command.ExecuteQueryRequest_QUERY_REQUEST_LEVEL_WEAK, false, false)
+		r, err := s.Request(eqr)
+		if err != nil {
+			t.Fatalf("failed to execute request on single node: %s", err.Error())
+		}
+
+		var exp string
+		var got string
+		if tt.associative {
+			exp, got = tt.expected, asJSONAssociative(r)
+		} else {
+			exp, got = tt.expected, asJSON(r)
+		}
+		if exp != got {
+			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+		}
+	}
+}
+
+func Test_SingleNodeInMemRequestTx(t *testing.T) {
+	s, ln := mustNewStore(t, true)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	_, err := s.WaitForLeader(10 * time.Second)
+	if err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+	}, false, false)
+	_, err = s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	tests := []struct {
+		stmts    []string
+		expected string
+		tx       bool
+	}{
+		{
+			stmts:    []string{},
+			expected: `[]`,
+		},
+		{
+			stmts: []string{
+				`INSERT INTO foo(id, name) VALUES(1, "declan")`,
+				`SELECT * FROM foo`,
+			},
+			expected: `[{"last_insert_id":1,"rows_affected":1},{"columns":["id","name"],"types":["integer","text"],"values":[[1,"declan"]]}]`,
+		},
+		{
+			stmts: []string{
+				`INSERT INTO foo(id, name) VALUES(2, "fiona")`,
+				`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+				`SELECT COUNT(*) FROM foo`,
+			},
+			expected: `[{"last_insert_id":2,"rows_affected":1},{"error":"UNIQUE constraint failed: foo.id"}]`,
+			tx:       true,
+		},
+		{
+			// Since the above transaction should be rolled back, there will be only one row in the table.
+			stmts: []string{
+				`SELECT COUNT(*) FROM foo`,
+			},
+			expected: `[{"columns":["COUNT(*)"],"types":[""],"values":[[1]]}]`,
+		},
+	}
+
+	for _, tt := range tests {
+		eqr := executeQueryRequestFromStrings(tt.stmts, command.ExecuteQueryRequest_QUERY_REQUEST_LEVEL_WEAK, false, tt.tx)
+		r, err := s.Request(eqr)
+		if err != nil {
+			t.Fatalf("failed to execute request on single node: %s", err.Error())
+		}
+
+		if exp, got := tt.expected, asJSON(r); exp != got {
+			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+		}
+	}
+}
+
+func Test_SingleNodeInMemRequestParameters(t *testing.T) {
+	s, ln := mustNewStore(t, true)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	_, err := s.WaitForLeader(10 * time.Second)
+	if err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+	}, false, false)
+	_, err = s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	tests := []struct {
+		request  *command.ExecuteQueryRequest
+		expected string
+	}{
+		{
+			request: &command.ExecuteQueryRequest{
+				Request: &command.Request{
+					Statements: []*command.Statement{
+						{
+							Sql: "SELECT * FROM foo WHERE id = ?",
+							Parameters: []*command.Parameter{
+								{
+									Value: &command.Parameter_I{
+										I: 1,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`,
+		},
+		{
+			request: &command.ExecuteQueryRequest{
+				Request: &command.Request{
+					Statements: []*command.Statement{
+						{
+							Sql: "SELECT id FROM foo WHERE name = :qux",
+							Parameters: []*command.Parameter{
+								{
+									Value: &command.Parameter_S{
+										S: "fiona",
+									},
+									Name: "qux",
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: `[{"columns":["id"],"types":["integer"],"values":[[1]]}]`,
+		},
+	}
+
+	for _, tt := range tests {
+		r, err := s.Request(tt.request)
+		if err != nil {
+			t.Fatalf("failed to execute request on single node: %s", err.Error())
+		}
+
+		if exp, got := tt.expected, asJSON(r); exp != got {
+			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+		}
+	}
+}
+
 // Test_SingleNodeInMemFK tests that basic foreign-key related functionality works.
 func Test_SingleNodeInMemFK(t *testing.T) {
 	s, ln := mustNewStoreFK(t, true)
@@ -2406,6 +2647,124 @@ func Test_IsVoter(t *testing.T) {
 	}
 }
 
+func Test_RequiresLeader(t *testing.T) {
+	s, ln := mustNewStore(t, true)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	er := executeRequestFromString(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		false, false)
+	_, err := s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	tests := []struct {
+		name     string
+		stmts    []string
+		lvl      command.ExecuteQueryRequest_Level
+		requires bool
+	}{
+		{
+			name:     "Empty SQL",
+			stmts:    []string{""},
+			requires: false,
+		},
+		{
+			name:     "Junk SQL",
+			stmts:    []string{"asdkflj asgkdj"},
+			requires: true,
+		},
+		{
+			name:     "CREATE TABLE statement, already exists",
+			stmts:    []string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"},
+			requires: true,
+		},
+		{
+			name:     "CREATE TABLE statement, does not exists",
+			stmts:    []string{"CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"},
+			requires: true,
+		},
+		{
+			name:     "Single INSERT",
+			stmts:    []string{"INSERT INTO foo(id, name) VALUES(1, 'fiona')"},
+			requires: true,
+		},
+		{
+			name:     "Single INSERT, non-existent table",
+			stmts:    []string{"INSERT INTO qux(id, name) VALUES(1, 'fiona')"},
+			requires: true,
+		},
+		{
+			name:     "Single SELECT with implicit NONE",
+			stmts:    []string{"SELECT * FROM foo"},
+			requires: false,
+		},
+		{
+			name:     "Single SELECT with NONE",
+			stmts:    []string{"SELECT * FROM foo"},
+			lvl:      command.ExecuteQueryRequest_QUERY_REQUEST_LEVEL_NONE,
+			requires: false,
+		},
+		{
+			name:     "Single SELECT from non-existent table with NONE",
+			stmts:    []string{"SELECT * FROM qux"},
+			lvl:      command.ExecuteQueryRequest_QUERY_REQUEST_LEVEL_NONE,
+			requires: true,
+		},
+		{
+			name:     "Double SELECT with NONE",
+			stmts:    []string{"SELECT * FROM foo", "SELECT * FROM foo WHERE id = 1"},
+			lvl:      command.ExecuteQueryRequest_QUERY_REQUEST_LEVEL_NONE,
+			requires: false,
+		},
+		{
+			name:     "Single SELECT with STRONG",
+			stmts:    []string{"SELECT * FROM foo"},
+			lvl:      command.ExecuteQueryRequest_QUERY_REQUEST_LEVEL_STRONG,
+			requires: true,
+		},
+		{
+			name:     "Single SELECT with WEAK",
+			stmts:    []string{"SELECT * FROM foo"},
+			lvl:      command.ExecuteQueryRequest_QUERY_REQUEST_LEVEL_WEAK,
+			requires: true,
+		},
+		{
+			name:     "Mix queries and executes with NONE",
+			stmts:    []string{"SELECT * FROM foo", "INSERT INTO foo(id, name) VALUES(1, 'fiona')"},
+			lvl:      command.ExecuteQueryRequest_QUERY_REQUEST_LEVEL_NONE,
+			requires: true,
+		},
+		{
+			name:     "Mix queries and executes with WEAK",
+			stmts:    []string{"SELECT * FROM foo", "INSERT INTO foo(id, name) VALUES(1, 'fiona')"},
+			lvl:      command.ExecuteQueryRequest_QUERY_REQUEST_LEVEL_WEAK,
+			requires: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			requires := s.RequiresLeader(executeQueryRequestFromStrings(tt.stmts, tt.lvl, false, false))
+			if requires != tt.requires {
+				t.Fatalf(" test %s failed, unexpected requires: expected %v, got %v", tt.name, tt.requires, requires)
+			}
+		})
+	}
+
+}
+
 func Test_State(t *testing.T) {
 	s, ln := mustNewStore(t, true)
 	defer ln.Close()
@@ -2536,7 +2895,7 @@ func executeRequestFromString(s string, timings, tx bool) *command.ExecuteReques
 	return executeRequestFromStrings([]string{s}, timings, tx)
 }
 
-// queryRequestFromStrings converts a slice of strings into a command.ExecuteRequest
+// executeRequestFromStrings converts a slice of strings into a command.ExecuteRequest
 func executeRequestFromStrings(s []string, timings, tx bool) *command.ExecuteRequest {
 	stmts := make([]*command.Statement, len(s))
 	for i := range s {
@@ -2571,6 +2930,23 @@ func queryRequestFromStrings(s []string, timings, tx bool) *command.QueryRequest
 			Transaction: tx,
 		},
 		Timings: timings,
+	}
+}
+
+func executeQueryRequestFromStrings(s []string, lvl command.ExecuteQueryRequest_Level, timings, tx bool) *command.ExecuteQueryRequest {
+	stmts := make([]*command.Statement, len(s))
+	for i := range s {
+		stmts[i] = &command.Statement{
+			Sql: s[i],
+		}
+	}
+	return &command.ExecuteQueryRequest{
+		Request: &command.Request{
+			Statements:  stmts,
+			Transaction: tx,
+		},
+		Timings: timings,
+		Level:   lvl,
 	}
 }
 
@@ -2642,6 +3018,17 @@ func waitForLeaderID(s *Store, timeout time.Duration) (string, error) {
 
 func asJSON(v interface{}) string {
 	enc := encoding.Encoder{}
+	b, err := enc.JSONMarshal(v)
+	if err != nil {
+		panic(fmt.Sprintf("failed to JSON marshal value: %s", err.Error()))
+	}
+	return string(b)
+}
+
+func asJSONAssociative(v interface{}) string {
+	enc := encoding.Encoder{
+		Associative: true,
+	}
 	b, err := enc.JSONMarshal(v)
 	if err != nil {
 		panic(fmt.Sprintf("failed to JSON marshal value: %s", err.Error()))

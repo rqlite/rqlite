@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -747,7 +748,7 @@ func Test_SimplePragmaTableInfo(t *testing.T) {
 	}
 }
 
-func Test_WriteOnQueryOnDiskDatabase(t *testing.T) {
+func Test_WriteOnQueryOnDiskDatabaseShouldFail(t *testing.T) {
 	db, path := mustCreateDatabase()
 	defer db.Close()
 	defer os.Remove(path)
@@ -785,7 +786,7 @@ func Test_WriteOnQueryOnDiskDatabase(t *testing.T) {
 	}
 }
 
-func Test_WriteOnQueryInMemDatabase(t *testing.T) {
+func Test_WriteOnQueryInMemDatabaseShouldFail(t *testing.T) {
 	db := mustCreateInMemoryDatabase()
 	defer db.Close()
 
@@ -1163,6 +1164,110 @@ func Test_SimpleNamedParameterizedStatements(t *testing.T) {
 	}
 }
 
+func Test_SimpleRequest(t *testing.T) {
+	db, path := mustCreateDatabase()
+	defer db.Close()
+	defer os.Remove(path)
+
+	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, first TEXT, last TEXT)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	// create table-driven tests
+	tests := []struct {
+		name  string
+		stmts []string
+		exp   string
+	}{
+		{
+			name: "insert",
+			stmts: []string{
+				`INSERT INTO foo(first, last) VALUES("albert", "einstein")`,
+				`INSERT INTO foo(first, last) VALUES("isaac", "newton")`,
+			},
+			exp: `[{"last_insert_id":1,"rows_affected":1},{"last_insert_id":2,"rows_affected":1}]`,
+		},
+		{
+			name: "select",
+			stmts: []string{
+				`SELECT * FROM foo`,
+			},
+			exp: `[{"columns":["id","first","last"],"types":["integer","text","text"],"values":[[1,"albert","einstein"],[2,"isaac","newton"]]}]`,
+		},
+		{
+			name: "update",
+			stmts: []string{
+				`UPDATE foo SET first="isaac", last="asimov" WHERE id=2`,
+			},
+			exp: `[{"last_insert_id":2,"rows_affected":1}]`,
+		},
+		{
+			name: "insert and select",
+			stmts: []string{
+				`INSERT INTO foo(first, last) VALUES("richard", "feynman")`,
+				`SELECT COUNT(*) FROM foo`,
+				`SELECT last FROM foo WHERE first="richard"`,
+			},
+			exp: `[{"last_insert_id":3,"rows_affected":1},{"columns":["COUNT(*)"],"types":[""],"values":[[3]]},{"columns":["last"],"types":["text"],"values":[["feynman"]]}]`,
+		},
+		{
+			name: "insert and select non-existent table",
+			stmts: []string{
+				`INSERT INTO foo(first, last) VALUES("paul", "dirac")`,
+				`SELECT COUNT(*) FROM foo`,
+				`SELECT * FROM bar`,
+			},
+			exp: `[{"last_insert_id":4,"rows_affected":1},{"columns":["COUNT(*)"],"types":[""],"values":[[4]]},{"error":"no such table: bar"}]`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r, err := db.RequestStringStmts(tt.stmts)
+			if err != nil {
+				t.Fatalf("failed to request empty statements: %s", err.Error())
+			}
+			if exp, got := tt.exp, asJSON(r); exp != got {
+				t.Fatalf(`Test "%s" failed, unexpected results for request exp: %s got: %s`, tt.name, exp, got)
+			}
+		})
+	}
+}
+
+// Test_SimpleRequestTx tests that a transaction is rolled back when an error occurs, and that
+// subsequent statements after the failed statement are not processed.
+func Test_SimpleRequestTx(t *testing.T) {
+	db, path := mustCreateDatabase()
+	defer db.Close()
+	defer os.Remove(path)
+
+	mustExecute(db, `CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`)
+	mustExecute(db, `INSERT INTO foo(id, name) VALUES(1, "fiona")`)
+
+	request := &command.Request{
+		Statements: []*command.Statement{
+			{
+				Sql: `INSERT INTO foo(id, name) VALUES(2, "declan")`,
+			},
+			{
+				Sql: `INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+			},
+			{
+				Sql: `INSERT INTO foo(id, name) VALUES(3, "dana")`,
+			},
+		},
+		Transaction: true,
+	}
+	r, err := db.Request(request, false)
+	if err != nil {
+		t.Fatalf("failed to make request: %s", err.Error())
+	}
+	if exp, got := `[{"last_insert_id":2,"rows_affected":1},{"error":"UNIQUE constraint failed: foo.id"}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for request\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
 func Test_CommonTableExpressions(t *testing.T) {
 	db, path := mustCreateDatabase()
 	defer db.Close()
@@ -1250,6 +1355,9 @@ func Test_ConnectionIsolation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error executing insertion into table: %s", err.Error())
 	}
+	if exp, got := `[{"last_insert_id":1,"rows_affected":1}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for execute, expected %s, got %s", exp, got)
+	}
 
 	q, err := db.QueryStringStmt("SELECT * FROM foo")
 	if err != nil {
@@ -1259,7 +1367,7 @@ func Test_ConnectionIsolation(t *testing.T) {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
 
-	r, err = db.ExecuteStringStmt("COMMIT")
+	_, err = db.ExecuteStringStmt("COMMIT")
 	if err != nil {
 		t.Fatalf("error executing insertion into table: %s", err.Error())
 	}
@@ -1295,7 +1403,7 @@ func Test_ConnectionIsolationMemory(t *testing.T) {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
 
-	r, err = db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("fiona")`)
+	_, err = db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("fiona")`)
 	if err != nil {
 		t.Fatalf("error executing insertion into table: %s", err.Error())
 	}
@@ -1983,6 +2091,117 @@ func Test_TableCreationInMemoryLoadRaw(t *testing.T) {
 	}
 }
 
+func Test_StmtReadOnly(t *testing.T) {
+	db := mustCreateInMemoryDatabase()
+	defer db.Close()
+
+	r, err := db.ExecuteStringStmt(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if exp, got := `[{}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	tests := []struct {
+		name string
+		sql  string
+		ro   bool
+		err  error
+	}{
+		{
+			name: "CREATE TABLE statement",
+			sql:  "CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)",
+			err:  errors.New(`table foo already exists`),
+		},
+		{
+			name: "CREATE TABLE statement",
+			sql:  "CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT)",
+			ro:   false,
+		},
+		{
+			name: "SELECT statement",
+			sql:  "SELECT * FROM foo",
+			ro:   true,
+		},
+		{
+			name: "SELECT statement",
+			sql:  "SELECT * FROM non_existent_table",
+			err:  errors.New(`no such table: non_existent_table`),
+		},
+		{
+			name: "INSERT statement",
+			sql:  "INSERT INTO foo VALUES (1, 'test')",
+			ro:   false,
+		},
+		{
+			name: "UPDATE statement",
+			sql:  "UPDATE foo SET name='test' WHERE id=1",
+			ro:   false,
+		},
+		{
+			name: "DELETE statement",
+			sql:  "DELETE FROM foo WHERE id=1",
+			ro:   false,
+		},
+		{
+			name: "SELECT statement with positional parameters",
+			sql:  "SELECT * FROM foo WHERE id = ?",
+			ro:   true,
+		},
+		{
+			name: "SELECT statement with named parameters",
+			sql:  "SELECT * FROM foo WHERE id = @id AND name = @name",
+			ro:   true,
+		},
+		{
+			name: "INSERT statement with positional parameters",
+			sql:  "INSERT INTO foo VALUES (?, ?)",
+			ro:   false,
+		},
+		{
+			name: "INSERT statement with named parameters",
+			sql:  "INSERT INTO foo VALUES (@id, @name)",
+			ro:   false,
+		},
+		{
+			name: "WITH clause, read-only",
+			sql:  "WITH bar AS (SELECT * FROM foo WHERE id = ?) SELECT * FROM bar",
+			ro:   true,
+		},
+		{
+			name: "WITH clause, not read-only",
+			sql:  "WITH bar AS (SELECT * FROM foo WHERE id = ?) DELETE FROM foo WHERE id IN (SELECT id FROM bar)",
+			ro:   false,
+		},
+		{
+			name: "Invalid statement",
+			sql:  "INVALID SQL STATEMENT",
+			err:  errors.New(`near "INVALID": syntax error`),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			readOnly, err := db.StmtReadOnly(tt.sql)
+
+			// Check if error is as expected
+			if err != nil && tt.err == nil {
+				t.Fatalf("unexpected error: got %v", err)
+			} else if err == nil && tt.err != nil {
+				t.Fatalf("expected error: got nil")
+			} else if err != nil && tt.err != nil && err.Error() != tt.err.Error() {
+				t.Fatalf("unexpected error: expected %v, got %v", tt.err, err)
+			}
+
+			// Check if result is as expected
+			if readOnly != tt.ro {
+				t.Fatalf("unexpected readOnly: expected %v, got %v", tt.ro, readOnly)
+			}
+		})
+	}
+}
+
 func mustCreateDatabase() (*DB, string) {
 	var err error
 	f := mustTempFile()
@@ -2010,36 +2229,15 @@ func mustCreateInMemoryDatabaseFK() *DB {
 	return db
 }
 
-func mustWriteAndOpenDatabase(b []byte) (*DB, string) {
-	var err error
-	f := mustTempFile()
-	err = ioutil.WriteFile(f, b, 0660)
-	if err != nil {
-		panic("failed to write file")
-	}
-
-	db, err := Open(f, false)
-	if err != nil {
-		panic("failed to open database")
-	}
-	return db, f
-}
-
 // mustExecute executes a statement, and panics on failure. Used for statements
 // that should never fail, even taking into account test setup.
 func mustExecute(db *DB, stmt string) {
-	_, err := db.ExecuteStringStmt(stmt)
+	r, err := db.ExecuteStringStmt(stmt)
 	if err != nil {
 		panic(fmt.Sprintf("failed to execute statement: %s", err.Error()))
 	}
-}
-
-// mustQuery executes a statement, and panics on failure. Used for statements
-// that should never fail, even taking into account test setup.
-func mustQuery(db *DB, stmt string) {
-	_, err := db.QueryStringStmt(stmt)
-	if err != nil {
-		panic(fmt.Sprintf("failed to query: %s", err.Error()))
+	if r[0].Error != "" {
+		panic(fmt.Sprintf("failed to execute statement: %s", r[0].Error))
 	}
 }
 

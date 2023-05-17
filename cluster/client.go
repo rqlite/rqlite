@@ -145,6 +145,32 @@ func (c *Client) Query(qr *command.QueryRequest, nodeAddr string, creds *Credent
 	return a.Rows, nil
 }
 
+// Request performs an ExecuteQuery on a remote node.
+func (c *Client) Request(r *command.ExecuteQueryRequest, nodeAddr string, creds *Credentials, timeout time.Duration) ([]*command.ExecuteQueryResponse, error) {
+	command := &Command{
+		Type: Command_COMMAND_TYPE_REQUEST,
+		Request: &Command_ExecuteQueryRequest{
+			ExecuteQueryRequest: r,
+		},
+		Credentials: creds,
+	}
+	p, err := c.retry(command, nodeAddr, timeout)
+	if err != nil {
+		return nil, err
+	}
+
+	a := &CommandRequestResponse{}
+	err = proto.Unmarshal(p, a)
+	if err != nil {
+		return nil, err
+	}
+
+	if a.Error != "" {
+		return nil, errors.New(a.Error)
+	}
+	return a.Response, nil
+}
+
 // Backup retrieves a backup from a remote node and writes to the io.Writer
 func (c *Client) Backup(br *command.BackupRequest, nodeAddr string, creds *Credentials, timeout time.Duration, w io.Writer) error {
 	command := &Command{
