@@ -966,7 +966,7 @@ func (s *Store) Request(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQue
 
 	if !s.RequiresLeader(eqr) {
 		if eqr.Level == command.ExecuteQueryRequest_QUERY_REQUEST_LEVEL_NONE && eqr.Freshness > 0 &&
-		time.Since(s.raft.LastContact()).Nanoseconds() > eqr.Freshness {
+			time.Since(s.raft.LastContact()).Nanoseconds() > eqr.Freshness {
 			return nil, ErrStaleRead
 		}
 		if eqr.Request.Transaction {
