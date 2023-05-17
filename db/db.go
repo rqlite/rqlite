@@ -30,6 +30,7 @@ const (
 	numQueryErrors     = "query_errors"
 	numETx             = "execute_transactions"
 	numQTx             = "query_transactions"
+	numRTx             = "request_transactions"
 )
 
 // DBVersion is the SQLite version.
@@ -54,6 +55,7 @@ func ResetStats() {
 	stats.Add(numQueryErrors, 0)
 	stats.Add(numETx, 0)
 	stats.Add(numQTx, 0)
+	stats.Add(numRTx, 0)
 }
 
 // DB is the SQL database.
@@ -703,9 +705,10 @@ func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQuery
 
 	var queryer queryer
 	var execer execer
-	if req.Transaction { //// XXX MORE transaction work needed here
-		stats.Add(numETx, 1)
-		tx, err := conn.BeginTx(context.Background(), nil)
+	var tx *sql.Tx
+	if req.Transaction {
+		stats.Add(numRTx, 1)
+		tx, err = conn.BeginTx(context.Background(), nil)
 		if err != nil {
 			return nil, err
 		}
@@ -717,8 +720,19 @@ func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQuery
 		execer = conn
 	}
 
-	eqResponse := make([]*command.ExecuteQueryResponse, len(req.Statements))
-	for i, stmt := range req.Statements {
+	// continueOnError sets the error field on the given result. It returns
+	// whether the caller should continue processing or break.
+	continueOnError := func(err error) bool {
+		if err != nil && tx != nil {
+			tx.Rollback()
+			tx = nil
+			return false
+		}
+		return true
+	}
+
+	var eqResponse []*command.ExecuteQueryResponse
+	for _, stmt := range req.Statements {
 		ss := stmt.Sql
 		if ss == "" {
 			continue
@@ -726,44 +740,35 @@ func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQuery
 
 		ro, err := db.StmtReadOnly(ss)
 		if err != nil {
-			eqResponse[i] = &command.ExecuteQueryResponse{
+			eqResponse = append(eqResponse, &command.ExecuteQueryResponse{
 				Result: &command.ExecuteQueryResponse_Q{
 					Q: &command.QueryRows{
 						Error: err.Error(),
 					},
 				},
-			}
+			})
 			continue
 		}
 
 		if ro {
-			rows, err := db.queryStmtWithConn(stmt, xTime, queryer)
-			if err != nil {
-				rows = &command.QueryRows{
-					Error: err.Error(),
-				}
-			}
-			eqResponse[i] = &command.ExecuteQueryResponse{
-				Result: &command.ExecuteQueryResponse_Q{
-					Q: rows,
-				},
+			rows, opErr := db.queryStmtWithConn(stmt, xTime, queryer)
+			eqResponse = append(eqResponse, createEQQueryResponse(rows, opErr))
+			if !continueOnError(opErr) {
+				break
 			}
 		} else {
-			result, err := db.executeStmtWithConn(stmt, xTime, execer)
-			if err != nil {
-				result = &command.ExecuteResult{
-					Error: err.Error(),
-				}
-			}
-			eqResponse[i] = &command.ExecuteQueryResponse{
-				Result: &command.ExecuteQueryResponse_E{
-					E: result,
-				},
+			result, opErr := db.executeStmtWithConn(stmt, xTime, execer)
+			eqResponse = append(eqResponse, createEQExecuteResponse(result, opErr))
+			if !continueOnError(opErr) {
+				break
 			}
 		}
 	}
 
-	return eqResponse, nil
+	if tx != nil {
+		err = tx.Commit()
+	}
+	return eqResponse, err
 }
 
 // Backup writes a consistent snapshot of the database to the given file.
@@ -966,6 +971,40 @@ func (db *DB) memStats() (map[string]int64, error) {
 		ms[p] = res[0].Values[0].Parameters[0].GetI()
 	}
 	return ms, nil
+}
+
+func createEQQueryResponse(rows *command.QueryRows, err error) *command.ExecuteQueryResponse {
+	if err != nil {
+		return &command.ExecuteQueryResponse{
+			Result: &command.ExecuteQueryResponse_Q{
+				Q: &command.QueryRows{
+					Error: err.Error(),
+				},
+			},
+		}
+	}
+	return &command.ExecuteQueryResponse{
+		Result: &command.ExecuteQueryResponse_Q{
+			Q: rows,
+		},
+	}
+}
+
+func createEQExecuteResponse(execResult *command.ExecuteResult, err error) *command.ExecuteQueryResponse {
+	if err != nil {
+		return &command.ExecuteQueryResponse{
+			Result: &command.ExecuteQueryResponse_E{
+				E: &command.ExecuteResult{
+					Error: err.Error(),
+				},
+			},
+		}
+	}
+	return &command.ExecuteQueryResponse{
+		Result: &command.ExecuteQueryResponse_E{
+			E: execResult,
+		},
+	}
 }
 
 func copyDatabase(dst *DB, src *DB) error {

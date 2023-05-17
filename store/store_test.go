@@ -580,7 +580,7 @@ func Test_SingleNodeInMemRequestTx(t *testing.T) {
 				`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 				`SELECT COUNT(*) FROM foo`,
 			},
-			expected: `[{"last_insert_id":2,"rows_affected":1},{"error":"UNIQUE constraint failed: foo.id"},{"columns":["COUNT(*)"],"types":[""],"values":[[2]]}]`,
+			expected: `[{"last_insert_id":2,"rows_affected":1},{"error":"UNIQUE constraint failed: foo.id"}]`,
 			tx:       true,
 		},
 		{

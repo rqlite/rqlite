@@ -1235,6 +1235,39 @@ func Test_SimpleRequest(t *testing.T) {
 	}
 }
 
+// Test_SimpleRequestTx tests that a transaction is rolled back when an error occurs, and that
+// subsequent statements after the failed statement are not processed.
+func Test_SimpleRequestTx(t *testing.T) {
+	db, path := mustCreateDatabase()
+	defer db.Close()
+	defer os.Remove(path)
+
+	mustExecute(db, `CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`)
+	mustExecute(db, `INSERT INTO foo(id, name) VALUES(1, "fiona")`)
+
+	request := &command.Request{
+		Statements: []*command.Statement{
+			{
+				Sql: `INSERT INTO foo(id, name) VALUES(2, "declan")`,
+			},
+			{
+				Sql: `INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+			},
+			{
+				Sql: `INSERT INTO foo(id, name) VALUES(3, "dana")`,
+			},
+		},
+		Transaction: true,
+	}
+	r, err := db.Request(request, false)
+	if err != nil {
+		t.Fatalf("failed to make request: %s", err.Error())
+	}
+	if exp, got := `[{"last_insert_id":2,"rows_affected":1},{"error":"UNIQUE constraint failed: foo.id"}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for request\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
 func Test_CommonTableExpressions(t *testing.T) {
 	db, path := mustCreateDatabase()
 	defer db.Close()
@@ -2211,9 +2244,12 @@ func mustWriteAndOpenDatabase(b []byte) (*DB, string) {
 // mustExecute executes a statement, and panics on failure. Used for statements
 // that should never fail, even taking into account test setup.
 func mustExecute(db *DB, stmt string) {
-	_, err := db.ExecuteStringStmt(stmt)
+	r, err := db.ExecuteStringStmt(stmt)
 	if err != nil {
 		panic(fmt.Sprintf("failed to execute statement: %s", err.Error()))
+	}
+	if r[0].Error != "" {
+		panic(fmt.Sprintf("failed to execute statement: %s", r[0].Error))
 	}
 }
 
