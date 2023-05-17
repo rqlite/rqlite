@@ -1355,6 +1355,9 @@ func Test_ConnectionIsolation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error executing insertion into table: %s", err.Error())
 	}
+	if exp, got := `[{"last_insert_id":1,"rows_affected":1}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for execute, expected %s, got %s", exp, got)
+	}
 
 	q, err := db.QueryStringStmt("SELECT * FROM foo")
 	if err != nil {
@@ -1364,7 +1367,7 @@ func Test_ConnectionIsolation(t *testing.T) {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
 
-	r, err = db.ExecuteStringStmt("COMMIT")
+	_, err = db.ExecuteStringStmt("COMMIT")
 	if err != nil {
 		t.Fatalf("error executing insertion into table: %s", err.Error())
 	}
@@ -1400,7 +1403,7 @@ func Test_ConnectionIsolationMemory(t *testing.T) {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
 
-	r, err = db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("fiona")`)
+	_, err = db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("fiona")`)
 	if err != nil {
 		t.Fatalf("error executing insertion into table: %s", err.Error())
 	}
@@ -2226,21 +2229,6 @@ func mustCreateInMemoryDatabaseFK() *DB {
 	return db
 }
 
-func mustWriteAndOpenDatabase(b []byte) (*DB, string) {
-	var err error
-	f := mustTempFile()
-	err = ioutil.WriteFile(f, b, 0660)
-	if err != nil {
-		panic("failed to write file")
-	}
-
-	db, err := Open(f, false)
-	if err != nil {
-		panic("failed to open database")
-	}
-	return db, f
-}
-
 // mustExecute executes a statement, and panics on failure. Used for statements
 // that should never fail, even taking into account test setup.
 func mustExecute(db *DB, stmt string) {
@@ -2250,15 +2238,6 @@ func mustExecute(db *DB, stmt string) {
 	}
 	if r[0].Error != "" {
 		panic(fmt.Sprintf("failed to execute statement: %s", r[0].Error))
-	}
-}
-
-// mustQuery executes a statement, and panics on failure. Used for statements
-// that should never fail, even taking into account test setup.
-func mustQuery(db *DB, stmt string) {
-	_, err := db.QueryStringStmt(stmt)
-	if err != nil {
-		panic(fmt.Sprintf("failed to query: %s", err.Error()))
 	}
 }
 

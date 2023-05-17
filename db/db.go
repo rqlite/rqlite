@@ -21,13 +21,11 @@ import (
 const bkDelay = 250
 
 const (
-	onDiskMaxOpenConns = 32
-	onDiskMaxIdleTime  = 120 * time.Second
-
 	numExecutions      = "executions"
 	numExecutionErrors = "execution_errors"
 	numQueries         = "queries"
 	numQueryErrors     = "query_errors"
+	numRequests        = "requests"
 	numETx             = "execute_transactions"
 	numQTx             = "query_transactions"
 	numRTx             = "request_transactions"
@@ -53,6 +51,7 @@ func ResetStats() {
 	stats.Add(numExecutionErrors, 0)
 	stats.Add(numQueries, 0)
 	stats.Add(numQueryErrors, 0)
+	stats.Add(numRequests, 0)
 	stats.Add(numETx, 0)
 	stats.Add(numQTx, 0)
 	stats.Add(numRTx, 0)
@@ -697,6 +696,7 @@ func (db *DB) RequestStringStmts(stmts []string) ([]*command.ExecuteQueryRespons
 
 // Request processes a request that can contain both executes and queries.
 func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQueryResponse, error) {
+	stats.Add(numRequests, int64(len(req.Statements)))
 	conn, err := db.rwDB.Conn(context.Background())
 	if err != nil {
 		return nil, err
@@ -720,15 +720,15 @@ func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQuery
 		execer = conn
 	}
 
-	// continueOnError sets the error field on the given result. It returns
-	// whether the caller should continue processing or break.
-	continueOnError := func(err error) bool {
+	// abortOnError indicates whether the caller should continue
+	// processing or break.
+	abortOnError := func(err error) bool {
 		if err != nil && tx != nil {
 			tx.Rollback()
 			tx = nil
-			return false
+			return true
 		}
-		return true
+		return false
 	}
 
 	var eqResponse []*command.ExecuteQueryResponse
@@ -753,13 +753,13 @@ func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQuery
 		if ro {
 			rows, opErr := db.queryStmtWithConn(stmt, xTime, queryer)
 			eqResponse = append(eqResponse, createEQQueryResponse(rows, opErr))
-			if !continueOnError(opErr) {
+			if abortOnError(opErr) {
 				break
 			}
 		} else {
 			result, opErr := db.executeStmtWithConn(stmt, xTime, execer)
 			eqResponse = append(eqResponse, createEQExecuteResponse(result, opErr))
-			if !continueOnError(opErr) {
+			if abortOnError(opErr) {
 				break
 			}
 		}
