@@ -1,4 +1,8 @@
 ## 7.18.0 (unreleased)
+This release adds a new HTTP endpoint, located at `/db/request`. This endpoint accepts both read and write requests, including mixing both together in a single request. When requests are sent to this endpoint, rqlite will automatically perform the correct operation for each SQL statement in the request. This endpoint may be more convenient for some use cases, and means that client code doesn't have to decide on whether it should send requests to `/db/execute` or `/db/query`. 
+
+7.18.0 also includes some small improvements to [diagnostics and instrumentation](https://rqlite.io/docs/guides/monitoring-rqlite/).
+
 ### New features
 - [PR #1256](https://github.com/rqlite/rqlite/pull/1256), [PR #1258](https://github.com/rqlite/rqlite/pull/1258), [PR #1260](https://github.com/rqlite/rqlite/pull/1260), [PR #1261](https://github.com/rqlite/rqlite/pull/1261): Support a _Unified Endpoint_, which can accept both read and write requests. Fixes [issue #263](https://github.com/rqlite/rqlite/issues/263).
 
