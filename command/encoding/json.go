@@ -40,7 +40,7 @@ type AssociativeRows struct {
 	Time  float64                  `json:"time,omitempty"`
 }
 
-// NewResultRowsFromExecuteQueryResponse returns an API ResultRows object from an
+// NewResultRowsFromExecuteQueryResponse returns an API object from an
 // ExecuteQueryResponse.
 func NewResultRowsFromExecuteQueryResponse(e *command.ExecuteQueryResponse) (interface{}, error) {
 	if er := e.GetE(); er != nil {
