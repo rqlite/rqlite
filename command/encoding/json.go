@@ -47,6 +47,10 @@ func NewResultRowsFromExecuteQueryResponse(e *command.ExecuteQueryResponse) (int
 		return NewResultFromExecuteResult(er)
 	} else if qr := e.GetQ(); qr != nil {
 		return NewRowsFromQueryRows(qr)
+	} else if err := e.GetError(); err != "" {
+		return map[string]string{
+			"error": err,
+		}, nil
 	}
 	return nil, errors.New("no ExecuteResult or QueryRows")
 }
@@ -56,6 +60,10 @@ func NewAssociativeResultRowsFromExecuteQueryResponse(e *command.ExecuteQueryRes
 		return NewResultFromExecuteResult(er)
 	} else if qr := e.GetQ(); qr != nil {
 		return NewAssociativeRowsFromQueryRows(qr)
+	} else if err := e.GetError(); err != "" {
+		return map[string]string{
+			"error": err,
+		}, nil
 	}
 	return nil, errors.New("no ExecuteResult or QueryRows")
 }
