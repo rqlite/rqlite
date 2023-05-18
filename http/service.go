@@ -1344,7 +1344,7 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	stats.Add(numExecuteStmtsRx(len(stmts))
+	stats.Add(numExecuteStmtsRx, len(stmts))
 	if err := command.Rewrite(stmts, !noRewriteRandom); err != nil {
 		http.Error(w, fmt.Sprintf("SQL rewrite: %s", err.Error()), http.StatusInternalServerError)
 		return
