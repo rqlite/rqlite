@@ -1,6 +1,6 @@
 ## 7.18.0 (unreleased)
 ### New features
-- [PR 1256](https://github.com/rqlite/rqlite/pull/1256), [PR 1258](https://github.com/rqlite/rqlite/pull/1258): Support a _Unified Endpoint_, which can accept both read and write requests. Fixes [issue #263](https://github.com/rqlite/rqlite/issues/263).
+- [PR #1256](https://github.com/rqlite/rqlite/pull/1256), [PR #1258](https://github.com/rqlite/rqlite/pull/1258), [PR #1260](https://github.com/rqlite/rqlite/pull/1260): Support a _Unified Endpoint_, which can accept both read and write requests. Fixes [issue #263](https://github.com/rqlite/rqlite/issues/263).
 
 ## 7.17.0 (May 9th 2023)
 ### New features

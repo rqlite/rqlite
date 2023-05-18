@@ -76,6 +76,7 @@ message ExecuteQueryResponse {
 	oneof result {
 		QueryRows q = 1;
 		ExecuteResult e = 2;
+		string error = 3;
 	}
 }
 

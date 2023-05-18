@@ -410,10 +410,8 @@ func Test_MarshalExecuteQueryResponse(t *testing.T) {
 					},
 				},
 				{
-					Result: &command.ExecuteQueryResponse_E{
-						E: &command.ExecuteResult{
-							Error: "unique constraint failed",
-						},
+					Result: &command.ExecuteQueryResponse_Error{
+						Error: "unique constraint failed",
 					},
 				},
 				{
@@ -481,7 +479,7 @@ func Test_MarshalExecuteQueryAssociativeResponse(t *testing.T) {
 					},
 				},
 			},
-			expected: `[{"last_insert_id":123,"rows_affected":456}]`,
+			expected: `[{"last_insert_id":123,"rows_affected":456,"rows":null}]`,
 		},
 		{
 			name: "Test with QueryRows",
@@ -525,10 +523,8 @@ func Test_MarshalExecuteQueryAssociativeResponse(t *testing.T) {
 					},
 				},
 				{
-					Result: &command.ExecuteQueryResponse_E{
-						E: &command.ExecuteResult{
-							Error: "unique constraint failed",
-						},
+					Result: &command.ExecuteQueryResponse_Error{
+						Error: "unique constraint failed",
 					},
 				},
 				{
@@ -556,7 +552,7 @@ func Test_MarshalExecuteQueryAssociativeResponse(t *testing.T) {
 					},
 				},
 			},
-			expected: `[{"last_insert_id":123,"rows_affected":456},{"error":"unique constraint failed"},{"types":{"column1":"int","column2":"text"},"rows":[{"column1":456,"column2":"declan"}]}]`,
+			expected: `[{"last_insert_id":123,"rows_affected":456,"rows":null},{"error":"unique constraint failed"},{"types":{"column1":"int","column2":"text"},"rows":[{"column1":456,"column2":"declan"}]}]`,
 		},
 	}
 
