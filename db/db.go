@@ -741,10 +741,8 @@ func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQuery
 		ro, err := db.StmtReadOnly(ss)
 		if err != nil {
 			eqResponse = append(eqResponse, &command.ExecuteQueryResponse{
-				Result: &command.ExecuteQueryResponse_Q{
-					Q: &command.QueryRows{
-						Error: err.Error(),
-					},
+				Result: &command.ExecuteQueryResponse_Error{
+					Error: err.Error(),
 				},
 			})
 			continue

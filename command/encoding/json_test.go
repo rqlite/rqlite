@@ -410,10 +410,8 @@ func Test_MarshalExecuteQueryResponse(t *testing.T) {
 					},
 				},
 				{
-					Result: &command.ExecuteQueryResponse_E{
-						E: &command.ExecuteResult{
-							Error: "unique constraint failed",
-						},
+					Result: &command.ExecuteQueryResponse_Error{
+						Error: "unique constraint failed",
 					},
 				},
 				{
