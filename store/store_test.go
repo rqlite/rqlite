@@ -2305,6 +2305,26 @@ func Test_MultiNodeExecuteQueryFreshness(t *testing.T) {
 	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
+
+	// Check Stale-read detection works with Requests too.
+	eqr := executeQueryRequestFromString("SELECT * FROM foo", command.ExecuteQueryRequest_QUERY_REQUEST_LEVEL_NONE,
+		false, false)
+	eqr.Freshness = mustParseDuration("1ns").Nanoseconds()
+	_, err = s1.Request(eqr)
+	if err == nil {
+		t.Fatalf("freshness violating request didn't return an error")
+	}
+	if err != ErrStaleRead {
+		t.Fatalf("freshness violating request returned wrong error: %s", err.Error())
+	}
+	eqr.Freshness = 0
+	eqresp, err := s1.Request(eqr)
+	if err != nil {
+		t.Fatalf("inactive freshness violating request returned an error")
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(eqresp); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
 }
 
 func Test_StoreLogTruncationMultinode(t *testing.T) {
@@ -2931,6 +2951,10 @@ func queryRequestFromStrings(s []string, timings, tx bool) *command.QueryRequest
 		},
 		Timings: timings,
 	}
+}
+
+func executeQueryRequestFromString(s string, lvl command.ExecuteQueryRequest_Level, timings, tx bool) *command.ExecuteQueryRequest {
+	return executeQueryRequestFromStrings([]string{s}, lvl, timings, tx)
 }
 
 func executeQueryRequestFromStrings(s []string, lvl command.ExecuteQueryRequest_Level, timings, tx bool) *command.ExecuteQueryRequest {
