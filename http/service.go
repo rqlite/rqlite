@@ -191,6 +191,7 @@ var stats *expvar.Map
 const (
 	numLeaderNotFound                 = "leader_not_found"
 	numExecutions                     = "executions"
+	numExecuteStmtsRx                 = "execute_stmts_rx"
 	numQueuedExecutions               = "queued_executions"
 	numQueuedExecutionsOK             = "queued_executions_ok"
 	numQueuedExecutionsStmtsRx        = "queued_executions_num_stmts_rx"
@@ -240,6 +241,7 @@ func ResetStats() {
 	stats.Init()
 	stats.Add(numLeaderNotFound, 0)
 	stats.Add(numExecutions, 0)
+	stats.Add(numExecuteStmtsRx, 0)
 	stats.Add(numQueuedExecutions, 0)
 	stats.Add(numQueuedExecutionsOK, 0)
 	stats.Add(numQueuedExecutionsStmtsRx, 0)
@@ -1342,6 +1344,7 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	stats.Add(numExecuteStmtsRx(len(stmts))
 	if err := command.Rewrite(stmts, !noRewriteRandom); err != nil {
 		http.Error(w, fmt.Sprintf("SQL rewrite: %s", err.Error()), http.StatusInternalServerError)
 		return
