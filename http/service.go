@@ -203,7 +203,9 @@ const (
 	numQueuedExecutionsFailed         = "queued_executions_failed"
 	numQueuedExecutionsWait           = "queued_executions_wait"
 	numQueries                        = "queries"
+	numQueryStmtsRx                   = "query_stmts_rx"
 	numRequests                       = "requests"
+	numRequestStmtsRx                 = "request_stmts_rx"
 	numRemoteExecutions               = "remote_executions"
 	numRemoteQueries                  = "remote_queries"
 	numRemoteRequests                 = "remote_requests"
@@ -253,7 +255,9 @@ func ResetStats() {
 	stats.Add(numQueuedExecutionsFailed, 0)
 	stats.Add(numQueuedExecutionsWait, 0)
 	stats.Add(numQueries, 0)
+	stats.Add(numQueryStmtsRx, 0)
 	stats.Add(numRequests, 0)
+	stats.Add(numRequestStmtsRx, 0)
 	stats.Add(numRemoteExecutions, 0)
 	stats.Add(numRemoteQueries, 0)
 	stats.Add(numRemoteRequests, 0)
@@ -1433,6 +1437,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	stats.Add(numQueryStmtsRx, int64(len(queries))
 
 	// No point rewriting queries if they don't go through the Raft log, since they
 	// will never be replayed from the log anyway.
@@ -1534,6 +1539,7 @@ func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	stats.Add(numRequestStmtsRx, int64(len(stmts))
 
 	if err := command.Rewrite(stmts, noRewriteRandom); err != nil {
 		http.Error(w, fmt.Sprintf("SQL rewrite: %s", err.Error()), http.StatusInternalServerError)
