@@ -35,7 +35,7 @@ type Rows struct {
 // AssociativeRows represents the outcome of an operation that returns query data.
 type AssociativeRows struct {
 	Types map[string]string        `json:"types,omitempty"`
-	Rows  []map[string]interface{} `json:"rows,omitempty"`
+	Rows  []map[string]interface{} `json:"rows"`
 	Error string                   `json:"error,omitempty"`
 	Time  float64                  `json:"time,omitempty"`
 }
