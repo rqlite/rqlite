@@ -15,27 +15,6 @@ var (
 	ErrTypesColumnsLengthViolation = errors.New("types and columns are different lengths")
 )
 
-// ResultRows represents the outcome of an operation that might change rows or
-// return query data.
-type ResultRows struct {
-	LastInsertID int64           `json:"last_insert_id,omitempty"`
-	RowsAffected int64           `json:"rows_affected,omitempty"`
-	Columns      []string        `json:"columns,omitempty"`
-	Types        []string        `json:"types,omitempty"`
-	Values       [][]interface{} `json:"values,omitempty"`
-	Error        string          `json:"error,omitempty"`
-	Time         float64         `json:"time,omitempty"`
-}
-
-type AssociativeResultRows struct {
-	LastInsertID int64                    `json:"last_insert_id,omitempty"`
-	RowsAffected int64                    `json:"rows_affected,omitempty"`
-	Types        map[string]string        `json:"types,omitempty"`
-	Rows         []map[string]interface{} `json:"rows,omitempty"`
-	Error        string                   `json:"error,omitempty"`
-	Time         float64                  `json:"time,omitempty"`
-}
-
 // Result represents the outcome of an operation that changes rows.
 type Result struct {
 	LastInsertID int64   `json:"last_insert_id,omitempty"`
@@ -63,78 +42,21 @@ type AssociativeRows struct {
 
 // NewResultRowsFromExecuteQueryResponse returns an API ResultRows object from an
 // ExecuteQueryResponse.
-func NewResultRowsFromExecuteQueryResponse(e *command.ExecuteQueryResponse) (*ResultRows, error) {
-	er := e.GetE()
-	qr := e.GetQ()
-
-	if er != nil {
-		return &ResultRows{
-			LastInsertID: er.LastInsertId,
-			RowsAffected: er.RowsAffected,
-			Error:        er.Error,
-			Time:         er.Time,
-		}, nil
-	} else if qr != nil {
-		if len(qr.Columns) != len(qr.Types) {
-			return nil, ErrTypesColumnsLengthViolation
-		}
-		values := make([][]interface{}, len(qr.Values))
-		if err := NewValuesFromQueryValues(values, qr.Values); err != nil {
-			return nil, err
-		}
-		return &ResultRows{
-			Columns: qr.Columns,
-			Types:   qr.Types,
-			Values:  values,
-			Error:   qr.Error,
-			Time:    qr.Time,
-		}, nil
+func NewResultRowsFromExecuteQueryResponse(e *command.ExecuteQueryResponse) (interface{}, error) {
+	if er := e.GetE(); er != nil {
+		return NewResultFromExecuteResult(er)
+	} else if qr := e.GetQ(); qr != nil {
+		return NewRowsFromQueryRows(qr)
 	}
 	return nil, errors.New("no ExecuteResult or QueryRows")
 }
 
-func NewAssociativeResultRowsFromExecuteQueryResponse(e *command.ExecuteQueryResponse) (*AssociativeResultRows, error) {
-	er := e.GetE()
-	qr := e.GetQ()
-
-	if er != nil {
-		return &AssociativeResultRows{
-			LastInsertID: er.LastInsertId,
-			RowsAffected: er.RowsAffected,
-			Error:        er.Error,
-			Time:         er.Time,
-		}, nil
-	} else if qr != nil {
-		if len(qr.Columns) != len(qr.Types) {
-			return nil, ErrTypesColumnsLengthViolation
-		}
-		values := make([][]interface{}, len(qr.Values))
-		if err := NewValuesFromQueryValues(values, qr.Values); err != nil {
-			return nil, err
-		}
-
-		rows := make([]map[string]interface{}, len(values))
-		for i := range rows {
-			m := make(map[string]interface{})
-			for ii, c := range qr.Columns {
-				m[c] = values[i][ii]
-			}
-			rows[i] = m
-		}
-
-		types := make(map[string]string)
-		for i := range qr.Types {
-			types[qr.Columns[i]] = qr.Types[i]
-		}
-
-		return &AssociativeResultRows{
-			Types: types,
-			Rows:  rows,
-			Error: qr.Error,
-			Time:  qr.Time,
-		}, nil
+func NewAssociativeResultRowsFromExecuteQueryResponse(e *command.ExecuteQueryResponse) (interface{}, error) {
+	if er := e.GetE(); er != nil {
+		return NewResultFromExecuteResult(er)
+	} else if qr := e.GetQ(); qr != nil {
+		return NewAssociativeRowsFromQueryRows(qr)
 	}
-
 	return nil, errors.New("no ExecuteResult or QueryRows")
 }
 
@@ -339,7 +261,7 @@ func jsonMarshal(i interface{}, f marshalFunc, assoc bool) ([]byte, error) {
 		}
 	case []*command.ExecuteQueryResponse:
 		if assoc {
-			res := make([]*AssociativeResultRows, len(v))
+			res := make([]interface{}, len(v))
 			for j := range v {
 				r, err := NewAssociativeResultRowsFromExecuteQueryResponse(v[j])
 				if err != nil {
@@ -349,7 +271,7 @@ func jsonMarshal(i interface{}, f marshalFunc, assoc bool) ([]byte, error) {
 			}
 			return f(res)
 		} else {
-			res := make([]*ResultRows, len(v))
+			res := make([]interface{}, len(v))
 			for j := range v {
 				r, err := NewResultRowsFromExecuteQueryResponse(v[j])
 				if err != nil {
