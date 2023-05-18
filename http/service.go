@@ -262,8 +262,11 @@ func ResetStats() {
 	stats.Add(numRequests, 0)
 	stats.Add(numRequestStmtsRx, 0)
 	stats.Add(numRemoteExecutions, 0)
+	stats.Add(numRemoteExecutionsFailed, 0)
 	stats.Add(numRemoteQueries, 0)
+	stats.Add(numRemoteQueriesFailed, 0)
 	stats.Add(numRemoteRequests, 0)
+	stats.Add(numRemoteRequestsFailed, 0)
 	stats.Add(numRemoteBackups, 0)
 	stats.Add(numRemoteLoads, 0)
 	stats.Add(numRemoteRemoveNode, 0)
@@ -1398,9 +1401,12 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request) {
 
 		w.Header().Add(ServedByHTTPHeader, addr)
 		results, resultsErr = s.cluster.Execute(er, addr, makeCredentials(username, password), timeout)
-		if resultsErr != nil && resultsErr.Error() == "unauthorized" {
-			http.Error(w, "remote execute not authorized", http.StatusUnauthorized)
-			return
+		if resultsErr != nil {
+                        stats.Add(numRemoteExecutionsFailed, 1)
+                        if resultsErr.Error() == "unauthorized" {
+				http.Error(w, "remote execute not authorized", http.StatusUnauthorized)
+				return
+			}
 		}
 		stats.Add(numRemoteExecutions, 1)
 	}
@@ -1495,9 +1501,12 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 
 		w.Header().Add(ServedByHTTPHeader, addr)
 		results, resultsErr = s.cluster.Query(qr, addr, makeCredentials(username, password), timeout)
-		if resultsErr != nil && resultsErr.Error() == "unauthorized" {
-			http.Error(w, "remote query not authorized", http.StatusUnauthorized)
-			return
+		if resultsErr != nil {
+			stats.Add(numRemoteQueriesFailed, 1)
+			if resultsErr.Error() == "unauthorized" {
+				http.Error(w, "remote query not authorized", http.StatusUnauthorized)
+				return
+			}
 		}
 		stats.Add(numRemoteQueries, 1)
 	}
@@ -1593,9 +1602,12 @@ func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request) {
 
 		w.Header().Add(ServedByHTTPHeader, addr)
 		results, resultErr = s.cluster.Request(eqr, addr, makeCredentials(username, password), timeout)
-		if resultErr != nil && resultErr.Error() == "unauthorized" {
-			http.Error(w, "remote request not authorized", http.StatusUnauthorized)
-			return
+		if resultErr != nil {
+			stats.Add(numRemoteRequestsFailed, 1)
+			if resultErr.Error() == "unauthorized" {
+				http.Error(w, "remote request not authorized", http.StatusUnauthorized)
+				return
+			}
 		}
 		stats.Add(numRemoteRequests, 1)
 	}
