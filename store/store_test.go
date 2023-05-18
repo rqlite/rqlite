@@ -2276,7 +2276,7 @@ func Test_MultiNodeExecuteQueryFreshness(t *testing.T) {
 		t.Fatalf("freshness violating query didn't return an error")
 	}
 	if err != ErrStaleRead {
-		t.Fatalf("freshness violating query didn't returned wrong error: %s", err.Error())
+		t.Fatalf("freshness violating query returned wrong error: %s", err.Error())
 	}
 
 	// Freshness of 0 is ignored.
