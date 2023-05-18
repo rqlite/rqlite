@@ -40,6 +40,14 @@ type AssociativeRows struct {
 	Time  float64                  `json:"time,omitempty"`
 }
 
+// ResultWithRows represents the outcome of an operation that changes rows, but also
+// includes an nil rows object, so clients can distinguish between a query and execute
+// result.
+type ResultWithRows struct {
+	Result
+	Rows []map[string]interface{} `json:"rows"`
+}
+
 // NewResultRowsFromExecuteQueryResponse returns an API object from an
 // ExecuteQueryResponse.
 func NewResultRowsFromExecuteQueryResponse(e *command.ExecuteQueryResponse) (interface{}, error) {
@@ -52,12 +60,18 @@ func NewResultRowsFromExecuteQueryResponse(e *command.ExecuteQueryResponse) (int
 			"error": err,
 		}, nil
 	}
-	return nil, errors.New("no ExecuteResult or QueryRows")
+	return nil, errors.New("no ExecuteResult, QueryRows, or Error")
 }
 
 func NewAssociativeResultRowsFromExecuteQueryResponse(e *command.ExecuteQueryResponse) (interface{}, error) {
 	if er := e.GetE(); er != nil {
-		return NewResultFromExecuteResult(er)
+		r, err := NewResultFromExecuteResult(er)
+		if err != nil {
+			return nil, err
+		}
+		return &ResultWithRows{
+			Result: *r,
+		}, nil
 	} else if qr := e.GetQ(); qr != nil {
 		return NewAssociativeRowsFromQueryRows(qr)
 	} else if err := e.GetError(); err != "" {
@@ -65,7 +79,7 @@ func NewAssociativeResultRowsFromExecuteQueryResponse(e *command.ExecuteQueryRes
 			"error": err,
 		}, nil
 	}
-	return nil, errors.New("no ExecuteResult or QueryRows")
+	return nil, errors.New("no ExecuteResult, QueryRows, or Error")
 }
 
 // NewResultFromExecuteResult returns an API Result object from an ExecuteResult.
