@@ -438,8 +438,17 @@ func Test_MarshalExecuteQueryResponse(t *testing.T) {
 						},
 					},
 				},
+				{
+					Result: &command.ExecuteQueryResponse_Q{
+						Q: &command.QueryRows{
+							Columns: []string{"column1", "column2"},
+							Types:   []string{"int", "text"},
+							Values:  []*command.Values{},
+						},
+					},
+				},
 			},
-			expected: `[{"last_insert_id":123,"rows_affected":456},{"error":"unique constraint failed"},{"columns":["column1","column2"],"types":["int","text"],"values":[[456,"declan"]]}]`,
+			expected: `[{"last_insert_id":123,"rows_affected":456},{"error":"unique constraint failed"},{"columns":["column1","column2"],"types":["int","text"],"values":[[456,"declan"]]},{"columns":["column1","column2"],"types":["int","text"]}]`,
 		},
 	}
 
@@ -551,8 +560,26 @@ func Test_MarshalExecuteQueryAssociativeResponse(t *testing.T) {
 						},
 					},
 				},
+				{
+					Result: &command.ExecuteQueryResponse_Q{
+						Q: &command.QueryRows{
+							Columns: []string{"aaa", "bbb"},
+							Types:   []string{"int", "text"},
+							Values:  []*command.Values{},
+						},
+					},
+				},
+				{
+					Result: &command.ExecuteQueryResponse_Q{
+						Q: &command.QueryRows{
+							Columns: []string{"ccc", "ddd"},
+							Types:   []string{"int", "text"},
+							Values:  nil,
+						},
+					},
+				},
 			},
-			expected: `[{"last_insert_id":123,"rows_affected":456,"rows":null},{"error":"unique constraint failed"},{"types":{"column1":"int","column2":"text"},"rows":[{"column1":456,"column2":"declan"}]}]`,
+			expected: `[{"last_insert_id":123,"rows_affected":456,"rows":null},{"error":"unique constraint failed"},{"types":{"column1":"int","column2":"text"},"rows":[{"column1":456,"column2":"declan"}]},{"types":{"aaa":"int","bbb":"text"},"rows":[]},{"types":{"ccc":"int","ddd":"text"},"rows":[]}]`,
 		},
 	}
 
