@@ -1402,8 +1402,8 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add(ServedByHTTPHeader, addr)
 		results, resultsErr = s.cluster.Execute(er, addr, makeCredentials(username, password), timeout)
 		if resultsErr != nil {
-                        stats.Add(numRemoteExecutionsFailed, 1)
-                        if resultsErr.Error() == "unauthorized" {
+			stats.Add(numRemoteExecutionsFailed, 1)
+			if resultsErr.Error() == "unauthorized" {
 				http.Error(w, "remote execute not authorized", http.StatusUnauthorized)
 				return
 			}
