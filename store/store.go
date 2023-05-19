@@ -965,7 +965,7 @@ func (s *Store) Request(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQue
 	}
 
 	if !s.RequiresLeader(eqr) {
-		if eqr.Level == command.ExecuteQueryRequest_QUERY_REQUEST_LEVEL_NONE && eqr.Freshness > 0 &&
+		if eqr.Level == command.QueryRequest_QUERY_REQUEST_LEVEL_NONE && eqr.Freshness > 0 &&
 			time.Since(s.raft.LastContact()).Nanoseconds() > eqr.Freshness {
 			return nil, ErrStaleRead
 		}
@@ -1294,7 +1294,7 @@ func (s *Store) Noop(id string) error {
 // RequiresLeader returns whether the given ExecuteQueryRequest must be
 // processed on the cluster Leader.
 func (s *Store) RequiresLeader(eqr *command.ExecuteQueryRequest) bool {
-	if eqr.Level != command.ExecuteQueryRequest_QUERY_REQUEST_LEVEL_NONE {
+	if eqr.Level != command.QueryRequest_QUERY_REQUEST_LEVEL_NONE {
 		return true
 	}
 
