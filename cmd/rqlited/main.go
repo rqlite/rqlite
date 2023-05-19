@@ -159,6 +159,7 @@ func main() {
 
 	// Register remaining status providers.
 	httpServ.RegisterStatus("cluster", clstrServ)
+	httpServ.RegisterStatus("network", tcp.NetworkReporter{})
 
 	// Prepare the cluster-joiner
 	joiner, err := createJoiner(cfg, credStr)
