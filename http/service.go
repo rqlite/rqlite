@@ -2049,12 +2049,12 @@ func queryReqParams(req *http.Request, def time.Duration) (timeout, frsh time.Du
 	return
 }
 
-func executeQueryReqParams(req *http.Request, def time.Duration) (timeout, frsh time.Duration, lvl command.ExecuteQueryRequest_Level, isTx, timings, redirect, noRwRandom, isAssoc bool, err error) {
-	timeout, frsh, qLvl, isTx, timings, redirect, noRwRandom, isAssoc, err := queryReqParams(req, defaultTimeout)
+func executeQueryReqParams(req *http.Request, def time.Duration) (timeout, frsh time.Duration, lvl command.QueryRequest_Level, isTx, timings, redirect, noRwRandom, isAssoc bool, err error) {
+	timeout, frsh, lvl, isTx, timings, redirect, noRwRandom, isAssoc, err = queryReqParams(req, defaultTimeout)
 	if err != nil {
-		return 0, 0, command.ExecuteQueryRequest_QUERY_REQUEST_LEVEL_WEAK, false, false, false, false, false, err
+		return 0, 0, command.QueryRequest_QUERY_REQUEST_LEVEL_WEAK, false, false, false, false, false, err
 	}
-	return timeout, frsh, command.MapConsistencyLevel(qLvl), isTx, timings, redirect, noRwRandom, isAssoc, nil
+	return timeout, frsh, lvl, isTx, timings, redirect, noRwRandom, isAssoc, nil
 }
 
 // noLeader returns whether processing should skip the leader check.

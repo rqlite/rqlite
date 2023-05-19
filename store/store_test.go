@@ -515,7 +515,7 @@ func Test_SingleNodeInMemRequest(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		eqr := executeQueryRequestFromStrings(tt.stmts, command.ExecuteQueryRequest_QUERY_REQUEST_LEVEL_WEAK, false, false)
+		eqr := executeQueryRequestFromStrings(tt.stmts, command.QueryRequest_QUERY_REQUEST_LEVEL_WEAK, false, false)
 		r, err := s.Request(eqr)
 		if err != nil {
 			t.Fatalf("failed to execute request on single node: %s", err.Error())
@@ -593,7 +593,7 @@ func Test_SingleNodeInMemRequestTx(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		eqr := executeQueryRequestFromStrings(tt.stmts, command.ExecuteQueryRequest_QUERY_REQUEST_LEVEL_WEAK, false, tt.tx)
+		eqr := executeQueryRequestFromStrings(tt.stmts, command.QueryRequest_QUERY_REQUEST_LEVEL_WEAK, false, tt.tx)
 		r, err := s.Request(eqr)
 		if err != nil {
 			t.Fatalf("failed to execute request on single node: %s", err.Error())
@@ -2307,7 +2307,7 @@ func Test_MultiNodeExecuteQueryFreshness(t *testing.T) {
 	}
 
 	// Check Stale-read detection works with Requests too.
-	eqr := executeQueryRequestFromString("SELECT * FROM foo", command.ExecuteQueryRequest_QUERY_REQUEST_LEVEL_NONE,
+	eqr := executeQueryRequestFromString("SELECT * FROM foo", command.QueryRequest_QUERY_REQUEST_LEVEL_NONE,
 		false, false)
 	eqr.Freshness = mustParseDuration("1ns").Nanoseconds()
 	_, err = s1.Request(eqr)
@@ -2692,7 +2692,7 @@ func Test_RequiresLeader(t *testing.T) {
 	tests := []struct {
 		name     string
 		stmts    []string
-		lvl      command.ExecuteQueryRequest_Level
+		lvl      command.QueryRequest_Level
 		requires bool
 	}{
 		{
@@ -2733,43 +2733,43 @@ func Test_RequiresLeader(t *testing.T) {
 		{
 			name:     "Single SELECT with NONE",
 			stmts:    []string{"SELECT * FROM foo"},
-			lvl:      command.ExecuteQueryRequest_QUERY_REQUEST_LEVEL_NONE,
+			lvl:      command.QueryRequest_QUERY_REQUEST_LEVEL_NONE,
 			requires: false,
 		},
 		{
 			name:     "Single SELECT from non-existent table with NONE",
 			stmts:    []string{"SELECT * FROM qux"},
-			lvl:      command.ExecuteQueryRequest_QUERY_REQUEST_LEVEL_NONE,
+			lvl:      command.QueryRequest_QUERY_REQUEST_LEVEL_NONE,
 			requires: true,
 		},
 		{
 			name:     "Double SELECT with NONE",
 			stmts:    []string{"SELECT * FROM foo", "SELECT * FROM foo WHERE id = 1"},
-			lvl:      command.ExecuteQueryRequest_QUERY_REQUEST_LEVEL_NONE,
+			lvl:      command.QueryRequest_QUERY_REQUEST_LEVEL_NONE,
 			requires: false,
 		},
 		{
 			name:     "Single SELECT with STRONG",
 			stmts:    []string{"SELECT * FROM foo"},
-			lvl:      command.ExecuteQueryRequest_QUERY_REQUEST_LEVEL_STRONG,
+			lvl:      command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG,
 			requires: true,
 		},
 		{
 			name:     "Single SELECT with WEAK",
 			stmts:    []string{"SELECT * FROM foo"},
-			lvl:      command.ExecuteQueryRequest_QUERY_REQUEST_LEVEL_WEAK,
+			lvl:      command.QueryRequest_QUERY_REQUEST_LEVEL_WEAK,
 			requires: true,
 		},
 		{
 			name:     "Mix queries and executes with NONE",
 			stmts:    []string{"SELECT * FROM foo", "INSERT INTO foo(id, name) VALUES(1, 'fiona')"},
-			lvl:      command.ExecuteQueryRequest_QUERY_REQUEST_LEVEL_NONE,
+			lvl:      command.QueryRequest_QUERY_REQUEST_LEVEL_NONE,
 			requires: true,
 		},
 		{
 			name:     "Mix queries and executes with WEAK",
 			stmts:    []string{"SELECT * FROM foo", "INSERT INTO foo(id, name) VALUES(1, 'fiona')"},
-			lvl:      command.ExecuteQueryRequest_QUERY_REQUEST_LEVEL_WEAK,
+			lvl:      command.QueryRequest_QUERY_REQUEST_LEVEL_WEAK,
 			requires: true,
 		},
 	}
@@ -2953,11 +2953,11 @@ func queryRequestFromStrings(s []string, timings, tx bool) *command.QueryRequest
 	}
 }
 
-func executeQueryRequestFromString(s string, lvl command.ExecuteQueryRequest_Level, timings, tx bool) *command.ExecuteQueryRequest {
+func executeQueryRequestFromString(s string, lvl command.QueryRequest_Level, timings, tx bool) *command.ExecuteQueryRequest {
 	return executeQueryRequestFromStrings([]string{s}, lvl, timings, tx)
 }
 
-func executeQueryRequestFromStrings(s []string, lvl command.ExecuteQueryRequest_Level, timings, tx bool) *command.ExecuteQueryRequest {
+func executeQueryRequestFromStrings(s []string, lvl command.QueryRequest_Level, timings, tx bool) *command.ExecuteQueryRequest {
 	stmts := make([]*command.Statement, len(s))
 	for i := range s {
 		stmts[i] = &command.Statement{
