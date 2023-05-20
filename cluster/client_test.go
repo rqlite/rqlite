@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"io"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -210,6 +211,42 @@ func Test_ClientRemoveNode(t *testing.T) {
 	err := c.RemoveNode(req, srv.Addr(), nil, time.Second)
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+func Test_ClientRemoveNodeTimeout(t *testing.T) {
+	srv := servicetest.NewService()
+	srv.Handler = func(conn net.Conn) {
+		c := readCommand(conn)
+		if c == nil {
+			// Error on connection, so give up, as normal
+			// test exit can cause that too.
+			return
+		}
+		if c.Type != Command_COMMAND_TYPE_REMOVE_NODE {
+			t.Fatalf("unexpected command type: %d", c.Type)
+		}
+		rnr := c.GetRemoveNodeRequest()
+		if rnr == nil {
+			t.Fatal("expected remove node request, got nil")
+		}
+		if rnr.Id != "node1" {
+			t.Fatalf("unexpected node id, got %s", rnr.Id)
+		}
+
+		// Don't write anything, so a timeout occurs.
+		time.Sleep(5 * time.Second)
+	}
+	srv.Start()
+	defer srv.Close()
+
+	c := NewClient(&simpleDialer{}, 0)
+	req := &command.RemoveNodeRequest{
+		Id: "node1",
+	}
+	err := c.RemoveNode(req, srv.Addr(), nil, time.Second)
+	if err == nil || !strings.Contains(err.Error(), "i/o timeout") {
+		t.Fatalf("failed to receive expected error, got: %T %s", err, err)
 	}
 }
 
