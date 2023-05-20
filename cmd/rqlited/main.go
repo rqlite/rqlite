@@ -649,5 +649,5 @@ func removeSelf(cfg *Config, str *store.Store, client *cluster.Client) error {
 	rn := &command.RemoveNodeRequest{
 		Id: cfg.NodeID,
 	}
-	return client.RemoveNode(rn, laddr, nil, 30*time.Second)
+	return client.RemoveNode(rn, laddr, nil, 5*time.Second)
 }
