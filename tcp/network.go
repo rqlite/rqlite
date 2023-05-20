@@ -49,5 +49,7 @@ func (n NetworkReporter) Stats() (map[string]interface{}, error) {
 		}
 	}
 
-	return stats, nil
+	return map[string]interface{}{
+		"interfaces": stats,
+	}, nil
 }

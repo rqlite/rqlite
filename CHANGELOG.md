@@ -2,7 +2,7 @@
 This release also includes some small logging improvements, related to node-shutdown.
 
 ### Implementation changes and bug fixes
-- [PR #1266](https://github.com/rqlite/rqlite/pull/1266): Add network information to `/status`.
+- [PR #1266](https://github.com/rqlite/rqlite/pull/1266), [PR #1268](https://github.com/rqlite/rqlite/pull/1268): Add network information to `/status`.
 - [PR #1267](https://github.com/rqlite/rqlite/pull/1267): Reduce self-remove timeout to 5 seconds.
 
 ## 7.18.0 (May 18th 2023)
