@@ -1,3 +1,7 @@
+## 7.18.2 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1269](https://github.com/rqlite/rqlite/pull/1269): Add WaitForRemoval() to Store.
+
 ## 7.18.1 (May 20th 2023)
 This release also includes some small logging improvements, related to node-shutdown.
 

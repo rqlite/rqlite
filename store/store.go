@@ -696,6 +696,30 @@ func (s *Store) Nodes() ([]*Server, error) {
 	return servers, nil
 }
 
+// WaitForRemoval blocks until a node with the given ID is removed from the
+// cluster or the timeout expires.
+func (s *Store) WaitForRemoval(id string, timeout time.Duration) error {
+	tck := time.NewTicker(appliedWaitDelay)
+	defer tck.Stop()
+	tmr := time.NewTimer(timeout)
+	defer tmr.Stop()
+
+	for {
+		select {
+		case <-tck.C:
+			nodes, err := s.Nodes()
+			if err == nil {
+				servers := Servers(nodes)
+				if !servers.Contains(id) {
+					return nil
+				}
+			}
+		case <-tmr.C:
+			return fmt.Errorf("timeout expired")
+		}
+	}
+}
+
 // WaitForLeader blocks until a leader is detected, or the timeout expires.
 func (s *Store) WaitForLeader(timeout time.Duration) (string, error) {
 	tck := time.NewTicker(leaderWaitDelay)
