@@ -64,3 +64,50 @@ func Test_IsReadOnly(t *testing.T) {
 		})
 	}
 }
+
+func Test_Contains(t *testing.T) {
+	testCases := []struct {
+		name     string
+		servers  Servers
+		nodeID   string
+		expected bool
+	}{
+		{
+			name:     "EmptyServers",
+			servers:  nil,
+			nodeID:   "1",
+			expected: false,
+		},
+		{
+			name:     "EmptyNodeID",
+			servers:  Servers(make([]*Server, 1)),
+			nodeID:   "",
+			expected: false,
+		},
+		{
+			name: "NonExistentNode",
+			servers: Servers([]*Server{
+				{ID: "node1", Addr: "localhost:4002", Suffrage: "Voter"},
+			}),
+			nodeID:   "node2",
+			expected: false,
+		},
+		{
+			name: "ExistingNode",
+			servers: Servers([]*Server{
+				{ID: "node1", Addr: "localhost:4002", Suffrage: "Voter"},
+			}),
+			nodeID:   "node1",
+			expected: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := tc.servers.Contains(tc.nodeID)
+			if actual != tc.expected {
+				t.Fatalf("Contains for %s returned %t, expected %t", tc.name, actual, tc.expected)
+			}
+		})
+	}
+}
