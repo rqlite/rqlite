@@ -194,7 +194,8 @@ func main() {
 	// Block until signalled.
 	terminate := make(chan os.Signal, 1)
 	signal.Notify(terminate, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
-	<-terminate
+	sig := <-terminate
+	log.Printf(`received signal "%s", shutting down`, sig.String())
 
 	// Stop the HTTP server first, so clients get notification as soon as
 	// possible that the node is going away.
