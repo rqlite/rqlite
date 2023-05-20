@@ -1,6 +1,9 @@
 ## 7.18.1 (unreleased)
+This release also includes some small logging improvements, related to node-shutdown.
+
 ### Implementation changes and bug fixes
 - [PR #1266](https://github.com/rqlite/rqlite/pull/1266): Add network information to `/status`.
+- [PR #1267](https://github.com/rqlite/rqlite/pull/1267): Reduce self-remove timeout to 5 seconds.
 
 ## 7.18.0 (May 18th 2023)
 This release adds a new HTTP endpoint, located at `/db/request`. This endpoint accepts both read and write requests, including mixing both together in a single request. When requests are sent to this endpoint, rqlite will automatically perform the correct operation for each SQL statement in the request. This endpoint may be more convenient for some use cases, and means that client code doesn't have to decide on whether it should send requests to `/db/execute` or `/db/query`. 
