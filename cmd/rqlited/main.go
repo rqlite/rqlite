@@ -202,6 +202,7 @@ func main() {
 	httpServ.Close()
 
 	if cfg.RaftClusterRemoveOnShutdown {
+		log.Printf("initiating removal of this node from cluster before shutdown")
 		if err := removeSelf(cfg, str, clstrClient); err != nil {
 			log.Printf("failed to remove this node from cluster before shutdown: %s", err.Error())
 		} else {
