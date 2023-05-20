@@ -1721,6 +1721,16 @@ func Test_MultiNodeJoinRemove(t *testing.T) {
 		t.Fatalf("cluster does not have correct nodes")
 	}
 
+	// Should timeout waiting for removal of other node
+	err = s0.WaitForRemoval(s1.ID(), time.Second)
+	// if err is nil then fail the test
+	if err == nil {
+		t.Fatalf("no error waiting for removal of non-existent node")
+	}
+	if !strings.Contains(err.Error(), "timeout expired") {
+		t.Fatalf("waiting for removal resulted in wrong error: %s", err.Error())
+	}
+
 	// Remove a node.
 	if err := s0.Remove(removeNodeRequest(s1.ID())); err != nil {
 		t.Fatalf("failed to remove %s from cluster: %s", s1.ID(), err.Error())
@@ -1735,6 +1745,13 @@ func Test_MultiNodeJoinRemove(t *testing.T) {
 	}
 	if s0.ID() != nodes[0].ID {
 		t.Fatalf("cluster does not have correct nodes post remove")
+	}
+
+	// Should be no error now waiting for removal of other node
+	err = s0.WaitForRemoval(s1.ID(), time.Second)
+	// if err is nil then fail the test
+	if err != nil {
+		t.Fatalf("error waiting for removal of removed node")
 	}
 }
 
