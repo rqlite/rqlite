@@ -1,4 +1,4 @@
-## 7.18.1 (unreleased)
+## 7.18.1 (May 20th 2023)
 This release also includes some small logging improvements, related to node-shutdown.
 
 ### Implementation changes and bug fixes
