@@ -206,7 +206,11 @@ func main() {
 		if err := removeSelf(cfg, str, clstrClient); err != nil {
 			log.Printf("failed to remove this node from cluster before shutdown: %s", err.Error())
 		} else {
-			log.Printf("removed this node successfully from cluster before shutdown")
+			if err := str.WaitForRemoval(cfg.NodeID, 5*time.Second); err != nil {
+				log.Printf("timed-out waiting removal of node from config before shutdown: %s", err.Error())
+			} else {
+				log.Printf("removed this node successfully from cluster before shutdown")
+			}
 		}
 	}
 
