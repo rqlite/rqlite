@@ -1629,6 +1629,37 @@ func Test_SingleNodeStepdownNoWaitOK(t *testing.T) {
 	}
 }
 
+func Test_SingleNodeWaitForRemove(t *testing.T) {
+	s, ln := mustNewStore(t, true)
+	defer ln.Close()
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Should timeout waiting for removal of ourselves
+	err := s.WaitForRemoval(s.ID(), time.Second)
+	// if err is nil then fail the test
+	if err == nil {
+		t.Fatalf("no error waiting for removal of non-existent node")
+	}
+	if !strings.Contains(err.Error(), "timeout expired") {
+		t.Fatalf("waiting for removal resulted in wrong error: %s", err.Error())
+	}
+
+	// should be no error waiting for removal of non-existent node
+	err = s.WaitForRemoval("non-existent-node", time.Second)
+	if err != nil {
+		t.Fatalf("error waiting for removal of non-existent node: %s", err.Error())
+	}
+}
+
 func Test_MultiNodeJoinRemove(t *testing.T) {
 	s0, ln0 := mustNewStore(t, true)
 	defer ln0.Close()
