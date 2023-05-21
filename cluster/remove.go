@@ -8,7 +8,7 @@ import (
 
 // Control is an interface for interacting with a cluster.
 type Control interface {
-	LeaderAddr() (string, error)
+	WaitForLeader(time.Duration) (string, error)
 	WaitForRemoval(string, time.Duration) error
 }
 
@@ -30,7 +30,7 @@ func NewRemover(client *Client, timeout time.Duration, control Control) *Remover
 
 // Do executes the node-removal operation.
 func (r *Remover) Do(id string, confirm bool) error {
-	laddr, err := r.control.LeaderAddr()
+	laddr, err := r.control.WaitForLeader(r.timeout)
 	if err != nil {
 		return err
 	}
@@ -38,7 +38,6 @@ func (r *Remover) Do(id string, confirm bool) error {
 	rn := &command.RemoveNodeRequest{
 		Id: id,
 	}
-
 	if err := r.client.RemoveNode(rn, laddr, nil, r.timeout); err != nil {
 		return err
 	}
