@@ -707,20 +707,28 @@ func (s *Store) Nodes() ([]*Server, error) {
 // WaitForRemoval blocks until a node with the given ID is removed from the
 // cluster or the timeout expires.
 func (s *Store) WaitForRemoval(id string, timeout time.Duration) error {
+	check := func() bool {
+		nodes, err := s.Nodes()
+		if err == nil && !Servers(nodes).Contains(id) {
+			return true
+		}
+		return false
+	}
+
+	// try the fast path
+	if check() {
+		return nil
+	}
+
 	tck := time.NewTicker(appliedWaitDelay)
 	defer tck.Stop()
 	tmr := time.NewTimer(timeout)
 	defer tmr.Stop()
-
 	for {
 		select {
 		case <-tck.C:
-			nodes, err := s.Nodes()
-			if err == nil {
-				servers := Servers(nodes)
-				if !servers.Contains(id) {
-					return nil
-				}
+			if check() {
+				return nil
 			}
 		case <-tmr.C:
 			return ErrWaitForRemovalTimeout
@@ -730,19 +738,31 @@ func (s *Store) WaitForRemoval(id string, timeout time.Duration) error {
 
 // WaitForLeader blocks until a leader is detected, or the timeout expires.
 func (s *Store) WaitForLeader(timeout time.Duration) (string, error) {
+	var err error
+	var leaderAddr string
+
+	check := func() bool {
+		leaderAddr, err = s.LeaderAddr()
+		if err == nil && leaderAddr != "" {
+			return true
+		}
+		return false
+	}
+
+	// try the fast path
+	if check() {
+		return leaderAddr, nil
+	}
+
 	tck := time.NewTicker(leaderWaitDelay)
 	defer tck.Stop()
 	tmr := time.NewTimer(timeout)
 	defer tmr.Stop()
-
-	var err error
-	var l string
 	for {
 		select {
 		case <-tck.C:
-			l, err = s.LeaderAddr()
-			if err == nil && l != "" {
-				return l, nil
+			if check() {
+				return leaderAddr, nil
 			}
 		case <-tmr.C:
 			if err != nil {
