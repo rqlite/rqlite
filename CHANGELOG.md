@@ -2,6 +2,7 @@
 ### Implementation changes and bug fixes
 - [PR #1269](https://github.com/rqlite/rqlite/pull/1269): Add WaitForRemoval() to Store.
 - [PR #1270](https://github.com/rqlite/rqlite/pull/1270): Confirm self-removal changes cluster config.
+- [PR #1273](https://github.com/rqlite/rqlite/pull/1273): Make WaitForLeader() more consistent.
 
 ## 7.18.1 (May 20th 2023)
 This release also includes some small logging improvements, related to node-shutdown.
