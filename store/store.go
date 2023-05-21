@@ -735,14 +735,19 @@ func (s *Store) WaitForLeader(timeout time.Duration) (string, error) {
 	tmr := time.NewTimer(timeout)
 	defer tmr.Stop()
 
+	var err error
+	var l string
 	for {
 		select {
 		case <-tck.C:
-			l, err := s.LeaderAddr()
+			l, err = s.LeaderAddr()
 			if err == nil && l != "" {
 				return l, nil
 			}
 		case <-tmr.C:
+			if err != nil {
+				s.logger.Printf("timed out waiting for leader, last error: %s", err.Error())
+			}
 			return "", ErrWaitForLeaderTimeout
 		}
 	}
