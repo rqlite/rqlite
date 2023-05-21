@@ -29,6 +29,7 @@ _test
 
 # Temporary data files
 cmd/rqlited/data*
+system_test/e2e/__pycache__/
 
 # Notes
 TODO
