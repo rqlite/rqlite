@@ -601,8 +601,8 @@ class TestEndToEndSnapRestoreCluster(unittest.TestCase):
     deprovision_node(self.n2)
 
 class TestShutdown(unittest.TestCase):
-  def test_cluster_remove_on_shutdown(self):
-    '''Test that removing a node on shutdown leaves a good cluster'''
+  def test_cluster_leader_remove_on_shutdown(self):
+    '''Test that removing the leader on shutdown leaves a good cluster'''
     n0 = Node(RQLITED_PATH, '0',  raft_cluster_remove_shutdown=True)
     n0.start()
     n0.wait_for_leader()
@@ -613,6 +613,8 @@ class TestShutdown(unittest.TestCase):
 
     nodes = n0.nodes()
     self.assertEqual(len(nodes), 2)
+    nodes = n1.nodes()
+    self.assertEqual(len(nodes), 2)
 
     n0.stop(graceful=True)
     nodes = n1.nodes()
@@ -622,6 +624,34 @@ class TestShutdown(unittest.TestCase):
     # a write.
     n1.wait_for_ready()
     j = n1.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
+    self.assertEqual(j, d_("{'results': [{}]}"))
+
+    deprovision_node(n0)
+    deprovision_node(n1)
+
+  def test_cluster_follower_remove_on_shutdown(self):
+    '''Test that removing a follower on shutdown leaves a good cluster'''
+    n0 = Node(RQLITED_PATH, '0',  raft_cluster_remove_shutdown=True)
+    n0.start()
+    n0.wait_for_leader()
+
+    n1 = Node(RQLITED_PATH, '1', raft_cluster_remove_shutdown=True)
+    n1.start(join=n0.APIAddr())
+    n1.wait_for_leader()
+
+    nodes = n0.nodes()
+    self.assertEqual(len(nodes), 2)
+    nodes = n1.nodes()
+    self.assertEqual(len(nodes), 2)
+
+    n1.stop(graceful=True)
+    nodes = n0.nodes()
+    self.assertEqual(len(nodes), 1)
+
+    # Check that we have a working single-node cluster with a leader by doing
+    # a write.
+    n0.wait_for_ready()
+    j = n0.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
     self.assertEqual(j, d_("{'results': [{}]}"))
 
     deprovision_node(n0)
