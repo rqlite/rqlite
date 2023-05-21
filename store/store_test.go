@@ -1810,10 +1810,7 @@ func Test_MultiNodeStepdown(t *testing.T) {
 
 	check := func() bool {
 		leader, err := s1.WaitForLeader(10 * time.Second)
-		if err != nil {
-			return false
-		}
-		if leader == s0.Addr() {
+		if err != nil || leader == s0.Addr() {
 			return false
 		}
 		return true
