@@ -52,6 +52,14 @@ var (
 	// logs within the specified time.
 	ErrOpenTimeout = errors.New("timeout waiting for initial logs application")
 
+	// ErrWaitForRemovalTimeout is returned when the Store does not confirm removal
+	// of a node within the specified time.
+	ErrWaitForRemovalTimeout = errors.New("timeout waiting for node removal confirmation")
+
+	// ErrWaitForLeaderTimeout is returned when the Store cannot determine the leader
+	// within the specified time.
+	ErrWaitForLeaderTimeout = errors.New("timeout waiting for leader")
+
 	// ErrInvalidBackupFormat is returned when the requested backup format
 	// is not valid.
 	ErrInvalidBackupFormat = errors.New("invalid backup format")
@@ -715,7 +723,7 @@ func (s *Store) WaitForRemoval(id string, timeout time.Duration) error {
 				}
 			}
 		case <-tmr.C:
-			return fmt.Errorf("timeout expired")
+			return ErrWaitForRemovalTimeout
 		}
 	}
 }
@@ -731,14 +739,11 @@ func (s *Store) WaitForLeader(timeout time.Duration) (string, error) {
 		select {
 		case <-tck.C:
 			l, err := s.LeaderAddr()
-			if err != nil {
-				return "", nil
-			}
-			if l != "" {
+			if err == nil && l != "" {
 				return l, nil
 			}
 		case <-tmr.C:
-			return "", fmt.Errorf("timeout expired")
+			return "", ErrWaitForLeaderTimeout
 		}
 	}
 }

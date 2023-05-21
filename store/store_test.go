@@ -2,6 +2,7 @@ package store
 
 import (
 	"bytes"
+	"errors"
 	"expvar"
 	"fmt"
 	"io/ioutil"
@@ -34,6 +35,11 @@ func Test_StoreSingleNodeNotOpen(t *testing.T) {
 	}
 	if a != "" {
 		t.Fatalf("non-empty Leader return for non-open store: %s", a)
+	}
+
+	_, err = s.WaitForLeader(1 * time.Second)
+	if err != ErrWaitForLeaderTimeout {
+		t.Fatalf("wrong wait-for-leader error received for non-open store: %s", err)
 	}
 
 	if _, err := s.Stats(); err != nil {
@@ -1649,7 +1655,7 @@ func Test_SingleNodeWaitForRemove(t *testing.T) {
 	if err == nil {
 		t.Fatalf("no error waiting for removal of non-existent node")
 	}
-	if !strings.Contains(err.Error(), "timeout expired") {
+	if !errors.Is(err, ErrWaitForRemovalTimeout) {
 		t.Fatalf("waiting for removal resulted in wrong error: %s", err.Error())
 	}
 
@@ -1727,7 +1733,7 @@ func Test_MultiNodeJoinRemove(t *testing.T) {
 	if err == nil {
 		t.Fatalf("no error waiting for removal of non-existent node")
 	}
-	if !strings.Contains(err.Error(), "timeout expired") {
+	if !errors.Is(err, ErrWaitForRemovalTimeout) {
 		t.Fatalf("waiting for removal resulted in wrong error: %s", err.Error())
 	}
 
