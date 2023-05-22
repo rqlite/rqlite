@@ -1902,31 +1902,19 @@ func Test_MultiNodeStoreAutoRestoreBootstrap(t *testing.T) {
 	s1.SetRestorePath(path1)
 	s2.SetRestorePath(path2)
 
-	if err := s0.Open(); err != nil {
-		t.Fatalf("failed to open store 0: %s", err.Error())
+	for i, s := range []*Store{s0, s1, s2} {
+		if err := s.Open(); err != nil {
+			t.Fatalf("failed to open store %d: %s", i, err.Error())
+		}
+		defer s.Close(true)
 	}
-	defer s0.Close(true)
-
-	if err := s1.Open(); err != nil {
-		t.Fatalf("failed to open store 1: %s", err.Error())
-	}
-	defer s1.Close(true)
-
-	if err := s2.Open(); err != nil {
-		t.Fatalf("failed to open store 2: %s", err.Error())
-	}
-	defer s2.Close(true)
 
 	// Trigger a bootstrap.
 	s0.BootstrapExpect = 3
-	if err := s0.Notify(notifyRequest(s0.ID(), ln0.Addr().String())); err != nil {
-		t.Fatalf("failed to notify store: %s", err.Error())
-	}
-	if err := s0.Notify(notifyRequest(s1.ID(), ln1.Addr().String())); err != nil {
-		t.Fatalf("failed to notify store: %s", err.Error())
-	}
-	if err := s0.Notify(notifyRequest(s2.ID(), ln2.Addr().String())); err != nil {
-		t.Fatalf("failed to notify store: %s", err.Error())
+	for _, s := range []*Store{s0, s1, s2} {
+		if err := s0.Notify(notifyRequest(s.ID(), s.ln.Addr().String())); err != nil {
+			t.Fatalf("failed to notify store: %s", err.Error())
+		}
 	}
 
 	// Wait for the cluster to bootstrap.
