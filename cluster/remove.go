@@ -10,7 +10,7 @@ import (
 
 const (
 	removeRetries = 5
-	removeDelay   = 500 * time.Millisecond
+	removeDelay   = 250 * time.Millisecond
 )
 
 // Control is an interface for interacting with a cluster.
@@ -46,16 +46,22 @@ func (r *Remover) Do(id string, confirm bool) error {
 
 	nRetries := 0
 	for {
-		laddr, err := r.control.WaitForLeader(r.timeout)
-		if err != nil {
-			return err
-		}
+		err := func() error {
+			laddr, innerErr := r.control.WaitForLeader(r.timeout)
+			if innerErr != nil {
+				return innerErr
+			}
 
-		r.log.Printf("removing node %s from cluster via leader at %s", id, laddr)
-		if err := r.client.RemoveNode(rn, laddr, nil, r.timeout); err == nil {
+			r.log.Printf("removing node %s from cluster via leader at %s", id, laddr)
+			if innerErr = r.client.RemoveNode(rn, laddr, nil, r.timeout); innerErr != nil {
+				r.log.Printf("failed to remove node %s from cluster via leader at %s: %s", id, laddr, innerErr)
+				return innerErr
+			}
+			return nil
+		}()
+		if err == nil {
 			break
 		}
-		r.log.Printf("failed to remove node %s from cluster via leader at %s: %s", id, laddr, err)
 
 		nRetries++
 		if nRetries == removeRetries {
