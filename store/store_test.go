@@ -1855,41 +1855,23 @@ func Test_MultiNodeStoreNotifyBootstrap(t *testing.T) {
 	}
 
 	// Check that the cluster bootstrapped properly.
-	leader0, err := s0.WaitForLeader(10 * time.Second)
-	if err != nil {
-		t.Fatalf("failed to get leader: %s", err.Error())
-	}
-	nodes, err := s0.Nodes()
-	if err != nil {
-		t.Fatalf("failed to get nodes: %s", err.Error())
-	}
-	if len(nodes) != 3 {
-		t.Fatalf("size of bootstrapped cluster is not correct")
-	}
-	leader1, err := s1.WaitForLeader(10 * time.Second)
-	if err != nil {
-		t.Fatalf("failed to get leader: %s", err.Error())
-	}
-	nodes, err = s1.Nodes()
-	if err != nil {
-		t.Fatalf("failed to get nodes: %s", err.Error())
-	}
-	if len(nodes) != 3 {
-		t.Fatalf("size of bootstrapped cluster is not correct")
-	}
-	leader2, err := s2.WaitForLeader(10 * time.Second)
-	if err != nil {
-		t.Fatalf("failed to get leader: %s", err.Error())
-	}
-	nodes, err = s2.Nodes()
-	if err != nil {
-		t.Fatalf("failed to get nodes: %s", err.Error())
-	}
-	if len(nodes) != 3 {
-		t.Fatalf("size of bootstrapped cluster is not correct")
-	}
+	reportedLeaders := make([]string, 3)
+	for i, n := range []*Store{s0, s1, s2} {
+		var err error
+		reportedLeaders[i], err = n.WaitForLeader(10 * time.Second)
+		if err != nil {
+			t.Fatalf("failed to get leader on node %d (id=%s): %s", i, n.raftID, err.Error())
+		}
 
-	if leader0 != leader1 || leader0 != leader2 {
+		nodes, err := n.Nodes()
+		if err != nil {
+			t.Fatalf("failed to get nodes from node %d (id=%s): %s", i, n.raftID, err.Error())
+		}
+		if len(nodes) != 3 {
+			t.Fatalf("size of bootstrapped cluster is not correct on node %d (id=%s), got %s", i, n.raftID, asJSON(nodes))
+		}
+	}
+	if reportedLeaders[0] != reportedLeaders[1] || reportedLeaders[0] != reportedLeaders[2] {
 		t.Fatalf("leader not the same on each node")
 	}
 
