@@ -1857,18 +1857,16 @@ func Test_MultiNodeStoreNotifyBootstrap(t *testing.T) {
 	// Check that the cluster bootstrapped properly.
 	reportedLeaders := make([]string, 3)
 	for i, n := range []*Store{s0, s1, s2} {
+		check := func() bool {
+			nodes, err := n.Nodes()
+			return err == nil && len(nodes) == 3
+		}
+		testPoll(t, check, 250*time.Millisecond, 10*time.Second)
+
 		var err error
 		reportedLeaders[i], err = n.WaitForLeader(10 * time.Second)
 		if err != nil {
 			t.Fatalf("failed to get leader on node %d (id=%s): %s", i, n.raftID, err.Error())
-		}
-
-		nodes, err := n.Nodes()
-		if err != nil {
-			t.Fatalf("failed to get nodes from node %d (id=%s): %s", i, n.raftID, err.Error())
-		}
-		if len(nodes) != 3 {
-			t.Fatalf("size of bootstrapped cluster is not correct on node %d (id=%s), got %s", i, n.raftID, asJSON(nodes))
 		}
 	}
 	if reportedLeaders[0] != reportedLeaders[1] || reportedLeaders[0] != reportedLeaders[2] {
