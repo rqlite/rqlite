@@ -542,8 +542,7 @@ func createCluster(cfg *Config, hasPeers bool, joiner *cluster.Joiner, str *stor
 	switch cfg.DiscoMode {
 	case DiscoModeDNS, DiscoModeDNSSRV:
 		if hasPeers {
-			log.Printf("preexisting node configuration detected, ignoring %s option", cfg.DiscoMode)
-			return nil
+			log.Printf("preexisting configuration detected, still proceeding with %s", cfg.DiscoMode)
 		}
 		rc := cfg.DiscoConfigReader()
 		defer func() {
