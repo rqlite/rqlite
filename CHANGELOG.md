@@ -1,4 +1,4 @@
-## 7.18.2 (unreleased)
+## 7.18.2 (May 22nd 2023)
 ### Implementation changes and bug fixes
 - [PR #1269](https://github.com/rqlite/rqlite/pull/1269): Add WaitForRemoval() to Store.
 - [PR #1270](https://github.com/rqlite/rqlite/pull/1270): Confirm self-removal changes cluster config.
