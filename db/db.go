@@ -29,6 +29,8 @@ const (
 	numETx             = "execute_transactions"
 	numQTx             = "query_transactions"
 	numRTx             = "request_transactions"
+	numVacuums         = "vacuums"
+	numVacuumsErrors   = "vacuum_errors"
 )
 
 // DBVersion is the SQLite version.
@@ -55,6 +57,8 @@ func ResetStats() {
 	stats.Add(numETx, 0)
 	stats.Add(numQTx, 0)
 	stats.Add(numRTx, 0)
+	stats.Add(numVacuums, 0)
+	stats.Add(numVacuumsErrors, 0)
 }
 
 // DB is the SQL database.
@@ -399,6 +403,18 @@ func (db *DB) ConnectionPoolStats(sqlDB *sql.DB) *PoolStats {
 		MaxLifetimeClosed:  s.MaxLifetimeClosed,
 	}
 
+}
+
+// Vacuum executes a VACUUM command on the database.
+func (db *DB) Vacuum() (r []*command.ExecuteResult, err error) {
+	defer func() {
+		if err != nil {
+			stats.Add(numVacuumsErrors, 1)
+		} else {
+			stats.Add(numVacuums, 1)
+		}
+	}()
+	return db.ExecuteStringStmt("VACUUM")
 }
 
 // ExecuteStringStmt executes a single query that modifies the database. This is

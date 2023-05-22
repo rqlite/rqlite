@@ -262,6 +262,55 @@ func Test_SQLiteTimeTypes(t *testing.T) {
 	}
 }
 
+func Test_TableInsertVacuumOK(t *testing.T) {
+	onDisk, path := mustCreateDatabase()
+	defer onDisk.Close()
+	defer os.Remove(path)
+
+	inMem := mustCreateInMemoryDatabase()
+	defer inMem.Close()
+
+	for _, db := range []*DB{onDisk, inMem} {
+		r, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
+		if err != nil {
+			t.Fatalf("failed to create table: %s", err.Error())
+		}
+		if exp, got := `[{}]`, asJSON(r); exp != got {
+			t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+		}
+		r, err = db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("fiona")`)
+		if err != nil {
+			t.Fatalf("error executing insertion into non-existent table: %s", err.Error())
+		}
+		if exp, got := `[{"last_insert_id":1,"rows_affected":1}]`, asJSON(r); exp != got {
+			t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+		}
+
+		q, err := db.QueryStringStmt("SELECT * FROM foo")
+		if err != nil {
+			t.Fatalf("failed to query empty table: %s", err.Error())
+		}
+		if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(q); exp != got {
+			t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+		}
+
+		v, err := db.Vacuum()
+		if err != nil {
+			t.Fatalf("failed to vacuum database: %s", err.Error())
+		}
+		if exp, got := `[{"last_insert_id":1,"rows_affected":1}]`, asJSON(v); exp != got {
+			t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+		}
+		q, err = db.QueryStringStmt("SELECT * FROM foo")
+		if err != nil {
+			t.Fatalf("failed to query empty table: %s", err.Error())
+		}
+		if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(q); exp != got {
+			t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+		}
+	}
+}
+
 func Test_NotNULLField(t *testing.T) {
 	db, path := mustCreateDatabase()
 	defer db.Close()
