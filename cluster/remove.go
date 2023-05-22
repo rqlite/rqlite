@@ -1,9 +1,16 @@
 package cluster
 
 import (
+	"log"
+	"os"
 	"time"
 
 	"github.com/rqlite/rqlite/command"
+)
+
+const (
+	removeRetries = 5
+	removeDelay   = 500 * time.Millisecond
 )
 
 // Control is an interface for interacting with a cluster.
@@ -17,6 +24,8 @@ type Remover struct {
 	timeout time.Duration
 	control Control
 	client  *Client
+
+	log *log.Logger
 }
 
 // / NewRemover returns an instantiated Remover.
@@ -25,21 +34,34 @@ func NewRemover(client *Client, timeout time.Duration, control Control) *Remover
 		client:  client,
 		timeout: timeout,
 		control: control,
+		log:     log.New(os.Stderr, "[cluster-remove] ", log.LstdFlags),
 	}
 }
 
 // Do executes the node-removal operation.
 func (r *Remover) Do(id string, confirm bool) error {
-	laddr, err := r.control.WaitForLeader(r.timeout)
-	if err != nil {
-		return err
-	}
-
 	rn := &command.RemoveNodeRequest{
 		Id: id,
 	}
-	if err := r.client.RemoveNode(rn, laddr, nil, r.timeout); err != nil {
-		return err
+
+	nRetries := 0
+	for {
+		laddr, err := r.control.WaitForLeader(r.timeout)
+		if err != nil {
+			return err
+		}
+
+		r.log.Printf("removing node %s from cluster via leader at %s", id, laddr)
+		if err := r.client.RemoveNode(rn, laddr, nil, r.timeout); err == nil {
+			break
+		}
+		r.log.Printf("failed to remove node %s from cluster via leader at %s: %s", id, laddr, err)
+
+		nRetries++
+		if nRetries == removeRetries {
+			return err
+		}
+		time.Sleep(removeDelay)
 	}
 
 	if confirm {
