@@ -24,7 +24,6 @@ import (
 	"github.com/rqlite/rqlite/aws"
 	"github.com/rqlite/rqlite/cluster"
 	"github.com/rqlite/rqlite/cmd"
-	"github.com/rqlite/rqlite/command"
 	"github.com/rqlite/rqlite/db"
 	"github.com/rqlite/rqlite/disco"
 	httpd "github.com/rqlite/rqlite/http"
@@ -202,15 +201,12 @@ func main() {
 	httpServ.Close()
 
 	if cfg.RaftClusterRemoveOnShutdown {
+		remover := cluster.NewRemover(clstrClient, 5*time.Second, str)
 		log.Printf("initiating removal of this node from cluster before shutdown")
-		if err := removeSelf(cfg, str, clstrClient); err != nil {
-			log.Printf("failed to remove this node from cluster before shutdown: %s", err.Error())
+		if err := remover.Do(cfg.NodeID, true); err != nil {
+			log.Fatalf("failed to remove this node from cluster before shutdown: %s", err.Error())
 		} else {
-			if err := str.WaitForRemoval(cfg.NodeID, 5*time.Second); err != nil {
-				log.Printf("timed-out waiting removal of node from config before shutdown: %s", err.Error())
-			} else {
-				log.Printf("removed this node successfully from cluster before shutdown")
-			}
+			log.Printf("removed this node successfully from cluster before shutdown")
 		}
 	}
 
@@ -643,15 +639,4 @@ func createHTTPTLSConfig(cfg *Config) (*tls.Config, error) {
 	}
 	return rtls.CreateClientConfig(cfg.HTTPx509Cert, cfg.HTTPx509Key, cfg.HTTPx509CACert,
 		cfg.NoHTTPVerify, cfg.TLS1011)
-}
-
-func removeSelf(cfg *Config, str *store.Store, client *cluster.Client) error {
-	laddr, err := str.LeaderAddr()
-	if err != nil {
-		return fmt.Errorf("failed to get leader address: %s", err.Error())
-	}
-	rn := &command.RemoveNodeRequest{
-		Id: cfg.NodeID,
-	}
-	return client.RemoveNode(rn, laddr, nil, 5*time.Second)
 }

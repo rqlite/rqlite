@@ -1808,14 +1808,14 @@ func Test_MultiNodeStepdown(t *testing.T) {
 		t.Fatalf("leader failed to step down: %s", err.Error())
 	}
 
-	// Check for new leader.
-	nl, err := s2.WaitForLeader(10 * time.Second)
-	if err != nil {
-		t.Fatalf("Error waiting for leader: %s", err)
+	check := func() bool {
+		leader, err := s1.WaitForLeader(10 * time.Second)
+		if err != nil || leader == s0.Addr() {
+			return false
+		}
+		return true
 	}
-	if nl == s0.Addr() {
-		t.Fatalf("leader address not changed, was %s, is %s", s0.Addr(), nl)
-	}
+	testPoll(t, check, 250*time.Millisecond, 10*time.Second)
 }
 
 func Test_MultiNodeStoreNotifyBootstrap(t *testing.T) {
