@@ -1,3 +1,7 @@
+## 7.18.3 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1275](https://github.com/rqlite/rqlite/pull/1275): Node-removal performs retries.
+
 ## 7.18.2 (May 22nd 2023)
 ### Implementation changes and bug fixes
 - [PR #1269](https://github.com/rqlite/rqlite/pull/1269): Add WaitForRemoval() to Store.
