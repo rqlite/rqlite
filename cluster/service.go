@@ -462,7 +462,7 @@ func (s *Service) handleConn(conn net.Conn) {
 
 			jr := c.GetJoinRequest()
 			if jr == nil {
-				resp.Error = "NotifyRequest is nil"
+				resp.Error = "JoinRequest is nil"
 			} else {
 				if err := s.mgr.Join(jr); err != nil {
 					resp.Error = err.Error()

@@ -1855,41 +1855,21 @@ func Test_MultiNodeStoreNotifyBootstrap(t *testing.T) {
 	}
 
 	// Check that the cluster bootstrapped properly.
-	leader0, err := s0.WaitForLeader(10 * time.Second)
-	if err != nil {
-		t.Fatalf("failed to get leader: %s", err.Error())
-	}
-	nodes, err := s0.Nodes()
-	if err != nil {
-		t.Fatalf("failed to get nodes: %s", err.Error())
-	}
-	if len(nodes) != 3 {
-		t.Fatalf("size of bootstrapped cluster is not correct")
-	}
-	leader1, err := s1.WaitForLeader(10 * time.Second)
-	if err != nil {
-		t.Fatalf("failed to get leader: %s", err.Error())
-	}
-	nodes, err = s1.Nodes()
-	if err != nil {
-		t.Fatalf("failed to get nodes: %s", err.Error())
-	}
-	if len(nodes) != 3 {
-		t.Fatalf("size of bootstrapped cluster is not correct")
-	}
-	leader2, err := s2.WaitForLeader(10 * time.Second)
-	if err != nil {
-		t.Fatalf("failed to get leader: %s", err.Error())
-	}
-	nodes, err = s2.Nodes()
-	if err != nil {
-		t.Fatalf("failed to get nodes: %s", err.Error())
-	}
-	if len(nodes) != 3 {
-		t.Fatalf("size of bootstrapped cluster is not correct")
-	}
+	reportedLeaders := make([]string, 3)
+	for i, n := range []*Store{s0, s1, s2} {
+		check := func() bool {
+			nodes, err := n.Nodes()
+			return err == nil && len(nodes) == 3
+		}
+		testPoll(t, check, 250*time.Millisecond, 10*time.Second)
 
-	if leader0 != leader1 || leader0 != leader2 {
+		var err error
+		reportedLeaders[i], err = n.WaitForLeader(10 * time.Second)
+		if err != nil {
+			t.Fatalf("failed to get leader on node %d (id=%s): %s", i, n.raftID, err.Error())
+		}
+	}
+	if reportedLeaders[0] != reportedLeaders[1] || reportedLeaders[0] != reportedLeaders[2] {
 		t.Fatalf("leader not the same on each node")
 	}
 
@@ -1920,31 +1900,19 @@ func Test_MultiNodeStoreAutoRestoreBootstrap(t *testing.T) {
 	s1.SetRestorePath(path1)
 	s2.SetRestorePath(path2)
 
-	if err := s0.Open(); err != nil {
-		t.Fatalf("failed to open store 0: %s", err.Error())
+	for i, s := range []*Store{s0, s1, s2} {
+		if err := s.Open(); err != nil {
+			t.Fatalf("failed to open store %d: %s", i, err.Error())
+		}
+		defer s.Close(true)
 	}
-	defer s0.Close(true)
-
-	if err := s1.Open(); err != nil {
-		t.Fatalf("failed to open store 1: %s", err.Error())
-	}
-	defer s1.Close(true)
-
-	if err := s2.Open(); err != nil {
-		t.Fatalf("failed to open store 2: %s", err.Error())
-	}
-	defer s2.Close(true)
 
 	// Trigger a bootstrap.
 	s0.BootstrapExpect = 3
-	if err := s0.Notify(notifyRequest(s0.ID(), ln0.Addr().String())); err != nil {
-		t.Fatalf("failed to notify store: %s", err.Error())
-	}
-	if err := s0.Notify(notifyRequest(s1.ID(), ln1.Addr().String())); err != nil {
-		t.Fatalf("failed to notify store: %s", err.Error())
-	}
-	if err := s0.Notify(notifyRequest(s2.ID(), ln2.Addr().String())); err != nil {
-		t.Fatalf("failed to notify store: %s", err.Error())
+	for _, s := range []*Store{s0, s1, s2} {
+		if err := s0.Notify(notifyRequest(s.ID(), s.ln.Addr().String())); err != nil {
+			t.Fatalf("failed to notify store: %s", err.Error())
+		}
 	}
 
 	// Wait for the cluster to bootstrap.

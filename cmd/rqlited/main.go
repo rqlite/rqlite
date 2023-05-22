@@ -538,13 +538,12 @@ func createCluster(cfg *Config, hasPeers bool, joiner *cluster.Joiner, str *stor
 		return nil
 	}
 
+	// DNS-based discovery requested. It's OK to proceed with this even if this node
+	// is already part of a cluster. Re-joining and re-notifying other nodes will be
+	// ignored when the node is already part of the cluster.
 	log.Printf("discovery mode: %s", cfg.DiscoMode)
 	switch cfg.DiscoMode {
 	case DiscoModeDNS, DiscoModeDNSSRV:
-		if hasPeers {
-			log.Printf("preexisting node configuration detected, ignoring %s option", cfg.DiscoMode)
-			return nil
-		}
 		rc := cfg.DiscoConfigReader()
 		defer func() {
 			if rc != nil {
