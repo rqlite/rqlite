@@ -47,6 +47,7 @@ jobs:
             - "/home/circleci/go/pkg/mod"
       - cross_compile:
           cc: musl-gcc
+          goarch: amd64
       - cross_compile:
           cc: aarch64-linux-gnu-gcc
           goarch: arm64
