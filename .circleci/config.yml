@@ -12,6 +12,7 @@ commands: # a reusable command with parameters
         type: string
     steps:
       - run:
+          name: "Cross compile using <<parameters.cc>>"
           command: go install -a -tags sqlite_omit_load_extension ./...
           environment:
             CGO_ENABLED: 1
@@ -45,18 +46,14 @@ jobs:
           paths:
             - "/home/circleci/go/pkg/mod"
       - cross_compile:
-          name: "Cross compile musl"
           cc: musl-gcc
       - cross_compile:
-          name: "Cross compile arm64"
           cc: aarch64-linux-gnu-gcc
           goarch: arm64
       - cross_compile:
-          name: "Cross compile riscv64"
           cc: riscv64-linux-gnu-gcc
           goarch: riscv64
       - cross_compile:
-          name: "Cross compile ppc64le"
           cc: powerpc64le-linux-gnu-gcc
           goarch: ppc64le
   cross_compile_mips:
@@ -73,19 +70,15 @@ jobs:
           paths:
             - "/home/circleci/go/pkg/mod"
       - cross_compile:
-          name: "Cross compile mips"
           cc: mips-linux-gnu-gcc
           goarch: mips
       - cross_compile:
-          name: "Cross compile mipsel"
           cc: mipsel-linux-gnu-gcc
           goarch: mipsle
       - cross_compile:
-          name: "Cross compile mips64"
           cc: mips64-linux-gnuabi64-gcc
           goarch: mips64
       - cross_compile:
-          name: "Cross compile mips64el"
           cc: mips64el-linux-gnuabi64-gcc
           goarch: mips64le
 
