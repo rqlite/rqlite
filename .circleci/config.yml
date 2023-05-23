@@ -38,7 +38,6 @@ jobs:
           command: go install -a -tags sqlite_omit_load_extension -ldflags="-s" ./...
           environment:
             CGO_ENABLED: 1
-            GOARCH: musl
             CC: musl-gcc
       - run:
           command: go install -a -tags sqlite_omit_load_extension -ldflags="-s" ./...
