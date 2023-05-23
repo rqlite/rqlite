@@ -1,4 +1,7 @@
-## 7.18.3 (unreleased)
+## 7.19.0 (unreleased)
+### New features
+- [PR #1278](https://github.com/rqlite/rqlite/pull/1278): Enable support for riscv64 and mips builds. Fixes [issue #901](https://github.com/rqlite/rqlite/issues/901)
+
 ### Implementation changes and bug fixes
 - [PR #1275](https://github.com/rqlite/rqlite/pull/1275): Node-removal performs retries.
 - [PR #1277](https://github.com/rqlite/rqlite/pull/1277): Upgrade dependencies.
