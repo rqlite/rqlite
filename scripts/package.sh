@@ -121,7 +121,7 @@ fi
 # Package all other releases
 declare -A versions
 versions=(
-  ["musl"]="musl-gcc"
+  ["amd64"]="musl-gcc"
   ["arm64"]="aarch64-linux-gnu-gcc"
   ["arm"]="arm-linux-gnueabi-gcc"
   ["riscv64"]="riscv64-linux-gnu-gcc"
