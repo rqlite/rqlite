@@ -10,11 +10,18 @@
 #
 #     sudo apt-get -y install musl-dev musl-tools
 #
-# To install ARM and ARM64 tools run:
+# To install other cross-compilation tools run:
 #
-#     sudo apt-get -y install gcc make gcc-arm-linux-gnueabi binutils-arm-linux-gnueabi
-#     sudo apt-get -y install gcc make gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
-#     sudo apt-get -y install gcc-mips-linux-gnu g++-mips-linux-gnu
+#     sudo apt-get -y install gcc gcc-arm-linux-gnueabi
+#     sudo apt-get -y install gcc gcc-aarch64-linux-gnu
+#     sudo apt-get -y install gcc-mips-linux-gnu
+#	  sudo apt-get -y install gcc-mipsel-linux-gnu
+#	  sudo apt-get -y install gcc-mips64-linux-gnuabi64
+#	  sudo apt-get -y install gcc-mips64el-linux-gnuabi64
+#	  sudo apt-get -y install gcc-powerpc64-linux-gnu
+#	  sudo apt-get -y install gcc-powerpc64le-linux-gnu
+#	  sudo apt-get -y install gcc-riscv64-linux-gnu
+
 
 REPO_URL="https://github.com/rqlite/rqlite"
 
@@ -135,6 +142,12 @@ versions=(
   ["arm"]="arm-linux-gnueabi-gcc"
   ["riscv64"]="riscv64-linux-gnu-gcc"
   ["mips"]="mips-linux-gnu-gcc"
+  ["mipsel"]="mipsel-linux-gnu-gcc"
+  ["mips64"]="mips64-linux-gnuabi64-gcc"
+  ["mips64le"]="mips64el-linux-gnuabi64-gcc"
+  ["mipsle"]="mipsel-linux-gnu-gcc"
+  ["ppc64"]="powerpc64-linux-gnu-gcc"
+  ["ppc64le"]="powerpc64le-linux-gnu-gcc"
 )
 
 for version in "${!versions[@]}"; do

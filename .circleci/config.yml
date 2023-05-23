@@ -14,6 +14,31 @@ jobs:
       - run: go vet ./...
     resource_class: large
 
+  cross_compile:
+    docker:
+      - image: cimg/go:1.20.0
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - go-mod-v4-{{ checksum "go.sum" }}
+      - run: go get -v -t -d ./...
+      - save_cache:
+          key: go-mod-v4-{{ checksum "go.sum" }}
+          paths:
+            - "/home/circleci/go/pkg/mod"
+      - run: sudo apt-get update
+      - run: sudo apt-get install musl-dev musl-tools
+      - run: sudo apt-get install gcc gcc-arm-linux-gnueabi
+      - run: sudo apt-get install gcc gcc-aarch64-linux-gnu
+      - run: sudo apt-get install gcc-mips-linux-gnu
+      - run: sudo apt-get install gcc-mipsel-linux-gnu
+      - run: sudo apt-get install gcc-mips64-linux-gnuabi64
+      - run: sudo apt-get install gcc-mips64el-linux-gnuabi64
+      - run: sudo apt-get install gcc-powerpc64-linux-gnu
+      - run: sudo apt-get install gcc-powerpc64le-linux-gnu
+      - run: sudo apt-get install gcc-riscv64-linux-gnu
+
   test:
     docker:
       - image: cimg/go:1.20.0
@@ -197,6 +222,7 @@ workflows:
   build_and_test:
     jobs:
       - lint
+      - cross_compile
       - test
       - race_even
       - race_odd
