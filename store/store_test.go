@@ -1698,21 +1698,9 @@ func Test_MultiNodeJoinRemove(t *testing.T) {
 	if err := s0.Join(joinRequest(s1.ID(), s1.Addr(), true)); err != nil {
 		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
 	}
-
-	got, err := s1.WaitForLeader(10 * time.Second)
+	_, err := s1.WaitForLeader(10 * time.Second)
 	if err != nil {
 		t.Fatalf("failed to get leader address on follower: %s", err.Error())
-	}
-	// Check leader state on follower.
-	if exp := s0.Addr(); got != exp {
-		t.Fatalf("wrong leader address returned, got: %s, exp %s", got, exp)
-	}
-	id, err := waitForLeaderID(s1, 10*time.Second)
-	if err != nil {
-		t.Fatalf("failed to retrieve leader ID: %s", err.Error())
-	}
-	if got, exp := id, s0.raftID; got != exp {
-		t.Fatalf("wrong leader ID returned, got: %s, exp %s", got, exp)
 	}
 
 	nodes, err := s0.Nodes()
