@@ -1,6 +1,23 @@
 # CircleCI 2.0 configuration file
 # Check https://circleci.com/docs/2.0/language-go/ for more details
 version: 2.1
+
+commands: # a reusable command with parameters
+  cross_compile:
+    parameters:
+      cc:
+        type: string
+      goarch:
+        default: ""
+        type: string
+    steps:
+      - run:
+          command: go install -a -tags sqlite_omit_load_extension ./...
+          environment:
+            CGO_ENABLED: 1
+            GOARCH: <<parameters.goarch>>
+            CC: <<parameters.cc>>
+
 jobs:
   lint:
     docker:
