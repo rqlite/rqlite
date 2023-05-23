@@ -71,48 +71,48 @@ jobs:
             GOARCH: riscv64
             CC: riscv64-linux-gnu-gcc
 
-    cross_compile_mips:
-      docker:
-        - image: cimg/go:1.20.0
-      steps:
-        - checkout
-        - restore_cache:
-            keys:
-              - go-mod-v4-{{ checksum "go.sum" }}
-        - run: go get -v -t -d ./...
-        - save_cache:
-            key: go-mod-v4-{{ checksum "go.sum" }}
-            paths:
-              - "/home/circleci/go/pkg/mod"
-        - run: sudo apt-get update
-        - run: sudo apt-get install gcc-mips-linux-gnu
-        - run: sudo apt-get install gcc-mipsel-linux-gnu
-        - run: sudo apt-get install gcc-mips64-linux-gnuabi64
-        - run: sudo apt-get install gcc-mips64el-linux-gnuabi64
-        - run:
-            command: go install -a -tags sqlite_omit_load_extension -ldflags="-X -s" ./...
-            environment:
-              CGO_ENABLED: 1
-              GOARCH: mips
-              CC: mips-linux-gnu-gcc
-        - run:
-            command: go install -a -tags sqlite_omit_load_extension -ldflags="-X -s" ./...
-            environment:
-              CGO_ENABLED: 1
-              GOARCH: mipsle
-              CC: mipsel-linux-gnu-gcc
-        - run:
-            command: go install -a -tags sqlite_omit_load_extension -ldflags="-X -s" ./...
-            environment:
-              CGO_ENABLED: 1
-              GOARCH: mips64
-              CC: mips64-linux-gnuabi64-gcc
-        - run:
-            command: go install -a -tags sqlite_omit_load_extension -ldflags="-X -s" ./...
-            environment:
-              CGO_ENABLED: 1
-              GOARCH: mips64le
-              CC: mips64el-linux-gnuabi64-gcc
+  cross_compile_mips:
+    docker:
+      - image: cimg/go:1.20.0
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - go-mod-v4-{{ checksum "go.sum" }}
+      - run: go get -v -t -d ./...
+      - save_cache:
+          key: go-mod-v4-{{ checksum "go.sum" }}
+          paths:
+            - "/home/circleci/go/pkg/mod"
+      - run: sudo apt-get update
+      - run: sudo apt-get install gcc-mips-linux-gnu
+      - run: sudo apt-get install gcc-mipsel-linux-gnu
+      - run: sudo apt-get install gcc-mips64-linux-gnuabi64
+      - run: sudo apt-get install gcc-mips64el-linux-gnuabi64
+      - run:
+          command: go install -a -tags sqlite_omit_load_extension -ldflags="-X -s" ./...
+          environment:
+            CGO_ENABLED: 1
+            GOARCH: mips
+            CC: mips-linux-gnu-gcc
+      - run:
+          command: go install -a -tags sqlite_omit_load_extension -ldflags="-X -s" ./...
+          environment:
+            CGO_ENABLED: 1
+            GOARCH: mipsle
+            CC: mipsel-linux-gnu-gcc
+      - run:
+          command: go install -a -tags sqlite_omit_load_extension -ldflags="-X -s" ./...
+          environment:
+            CGO_ENABLED: 1
+            GOARCH: mips64
+            CC: mips64-linux-gnuabi64-gcc
+      - run:
+          command: go install -a -tags sqlite_omit_load_extension -ldflags="-X -s" ./...
+          environment:
+            CGO_ENABLED: 1
+            GOARCH: mips64le
+            CC: mips64el-linux-gnuabi64-gcc
 
   test:
     docker:
