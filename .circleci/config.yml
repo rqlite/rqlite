@@ -1,6 +1,24 @@
 # CircleCI 2.0 configuration file
 # Check https://circleci.com/docs/2.0/language-go/ for more details
-version: 2
+version: 2.1
+
+commands: # a reusable command with parameters
+  cross_compile:
+    parameters:
+      cc:
+        type: string
+      goarch:
+        default: ""
+        type: string
+    steps:
+      - run:
+          name: "Cross compile using <<parameters.cc>>"
+          command: go install -a -tags sqlite_omit_load_extension ./...
+          environment:
+            CGO_ENABLED: 1
+            GOARCH: <<parameters.goarch>>
+            CC: <<parameters.cc>>
+
 jobs:
   lint:
     docker:
@@ -27,35 +45,17 @@ jobs:
           key: go-mod-v4-{{ checksum "go.sum" }}
           paths:
             - "/home/circleci/go/pkg/mod"
-      - run:
-          command: go install -a -tags sqlite_omit_load_extension -ldflags="-s" ./...
-          environment:
-            CGO_ENABLED: 1
-            CC: musl-gcc
-      - run:
-          command: go install -a -tags sqlite_omit_load_extension -ldflags="-s" ./...
-          environment:
-            CGO_ENABLED: 1
-            GOARCH: arm
-            CC: arm-linux-gnueabi-gcc
-      - run:
-          command: go install -a -tags sqlite_omit_load_extension -ldflags="-s" ./...
-          environment:
-            CGO_ENABLED: 1
-            GOARCH: arm64
-            CC: aarch64-linux-gnu-gcc    
-      - run:
-          command: go install -a -tags sqlite_omit_load_extension -ldflags="-s" ./...
-          environment:
-            CGO_ENABLED: 1
-            GOARCH: riscv64
-            CC: riscv64-linux-gnu-gcc    
-      - run:
-          command: go install -a -tags sqlite_omit_load_extension -ldflags="-s" ./...
-          environment:
-            CGO_ENABLED: 1
-            GOARCH: ppc64le
-            CC: powerpc64le-linux-gnu-gcc
+      - cross_compile:
+          cc: musl-gcc
+      - cross_compile:
+          cc: aarch64-linux-gnu-gcc
+          goarch: arm64
+      - cross_compile:
+          cc: riscv64-linux-gnu-gcc
+          goarch: riscv64
+      - cross_compile:
+          cc: powerpc64le-linux-gnu-gcc
+          goarch: ppc64le
   cross_compile_mips:
     docker:
       - image: rqlite/circleci-primary:0.0.1
@@ -69,30 +69,18 @@ jobs:
           key: go-mod-v4-{{ checksum "go.sum" }}
           paths:
             - "/home/circleci/go/pkg/mod"
-      - run:
-          command: go install -a -tags sqlite_omit_load_extension -ldflags="-s" ./...
-          environment:
-            CGO_ENABLED: 1
-            GOARCH: mips
-            CC: mips-linux-gnu-gcc
-      - run:
-          command: go install -a -tags sqlite_omit_load_extension -ldflags="-s" ./...
-          environment:
-            CGO_ENABLED: 1
-            GOARCH: mipsle
-            CC: mipsel-linux-gnu-gcc
-      - run:
-          command: go install -a -tags sqlite_omit_load_extension -ldflags="-s" ./...
-          environment:
-            CGO_ENABLED: 1
-            GOARCH: mips64
-            CC: mips64-linux-gnuabi64-gcc
-      - run:
-          command: go install -a -tags sqlite_omit_load_extension -ldflags="-s" ./...
-          environment:
-            CGO_ENABLED: 1
-            GOARCH: mips64le
-            CC: mips64el-linux-gnuabi64-gcc
+      - cross_compile:
+          cc: mips-linux-gnu-gcc
+          goarch: mips
+      - cross_compile:
+          cc: mipsel-linux-gnu-gcc
+          goarch: mipsle
+      - cross_compile:
+          cc: mips64-linux-gnuabi64-gcc
+          goarch: mips64
+      - cross_compile:
+          cc: mips64el-linux-gnuabi64-gcc
+          goarch: mips64le
 
   test:
     docker:
