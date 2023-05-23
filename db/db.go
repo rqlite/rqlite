@@ -406,7 +406,7 @@ func (db *DB) ConnectionPoolStats(sqlDB *sql.DB) *PoolStats {
 }
 
 // Vacuum executes a VACUUM command on the database.
-func (db *DB) Vacuum() (r []*command.ExecuteResult, err error) {
+func (db *DB) Vacuum() (er []*command.ExecuteResult, err error) {
 	defer func() {
 		if err != nil {
 			stats.Add(numVacuumsErrors, 1)
