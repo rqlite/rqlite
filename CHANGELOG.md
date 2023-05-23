@@ -1,6 +1,6 @@
 ## 7.19.0 (unreleased)
 ### New features
-- [PR #1278](https://github.com/rqlite/rqlite/pull/1278): Enable support for more architectures. Fixes [issue #901](https://github.com/rqlite/rqlite/issues/901)
+- [PR #1278](https://github.com/rqlite/rqlite/pull/1278): Enable support for more CPU architectures. Fixes [issue #901](https://github.com/rqlite/rqlite/issues/901)
 
 ### Implementation changes and bug fixes
 - [PR #1275](https://github.com/rqlite/rqlite/pull/1275): Node-removal performs retries.
