@@ -90,25 +90,25 @@ jobs:
       - run: sudo apt-get install gcc-mips64-linux-gnuabi64
       - run: sudo apt-get install gcc-mips64el-linux-gnuabi64
       - run:
-          command: go install -a -tags sqlite_omit_load_extension -ldflags="-X -s" ./...
+          command: go install -a -tags sqlite_omit_load_extension -ldflags="-s" ./...
           environment:
             CGO_ENABLED: 1
             GOARCH: mips
             CC: mips-linux-gnu-gcc
       - run:
-          command: go install -a -tags sqlite_omit_load_extension -ldflags="-X -s" ./...
+          command: go install -a -tags sqlite_omit_load_extension -ldflags="-s" ./...
           environment:
             CGO_ENABLED: 1
             GOARCH: mipsle
             CC: mipsel-linux-gnu-gcc
       - run:
-          command: go install -a -tags sqlite_omit_load_extension -ldflags="-X -s" ./...
+          command: go install -a -tags sqlite_omit_load_extension -ldflags="-s" ./...
           environment:
             CGO_ENABLED: 1
             GOARCH: mips64
             CC: mips64-linux-gnuabi64-gcc
       - run:
-          command: go install -a -tags sqlite_omit_load_extension -ldflags="-X -s" ./...
+          command: go install -a -tags sqlite_omit_load_extension -ldflags="-s" ./...
           environment:
             CGO_ENABLED: 1
             GOARCH: mips64le
