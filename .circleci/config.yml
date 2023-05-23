@@ -49,7 +49,7 @@ jobs:
           cc: musl-gcc
           goarch: amd64
       - cross_compile:
-          cc: aarch64-linux-gnu-gcc
+          cc: aarch64-linux-gnu-gccxxxx
           goarch: arm64
       - cross_compile:
           cc: riscv64-linux-gnu-gcc
