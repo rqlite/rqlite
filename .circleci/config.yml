@@ -31,7 +31,7 @@ jobs:
       - run: sudo apt-get install musl-dev musl-tools
       - run: sudo apt-get install gcc-arm-linux-gnueabi
       - run: sudo apt-get install gcc-aarch64-linux-gnu
-      - run: sudo apt-get install gcc-riscv64-linux-gn
+      - run: sudo apt-get install gcc-riscv64-linux-gnu
       - run: sudo apt-get install gcc-powerpc64le-linux-gnu
       - run:
           command: go install -a -tags sqlite_omit_load_extension -ldflags="-s" ./...
