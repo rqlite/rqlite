@@ -1,4 +1,4 @@
-## 7.19.0 (unreleased)
+## 7.19.0 (May 23rd 2023)
 ### New features
 - [PR #1278](https://github.com/rqlite/rqlite/pull/1278): Enable support for more CPU architectures. Fixes [issue #901](https://github.com/rqlite/rqlite/issues/901)
 
