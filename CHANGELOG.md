@@ -1,6 +1,11 @@
-## 7.18.3 (unreleased)
+## 7.19.0 (May 23rd 2023)
+### New features
+- [PR #1278](https://github.com/rqlite/rqlite/pull/1278): Enable support for more CPU architectures. Fixes [issue #901](https://github.com/rqlite/rqlite/issues/901)
+
 ### Implementation changes and bug fixes
 - [PR #1275](https://github.com/rqlite/rqlite/pull/1275): Node-removal performs retries.
+- [PR #1277](https://github.com/rqlite/rqlite/pull/1277): Upgrade dependencies.
+- [PR #1279](https://github.com/rqlite/rqlite/pull/1279): Move to custom image to speed up testing on CircleCI.
 
 ## 7.18.2 (May 22nd 2023)
 ### Implementation changes and bug fixes

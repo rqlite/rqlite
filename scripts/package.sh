@@ -6,14 +6,6 @@
 #
 #   curl https://api.github.com/repos/rqlite/rqlite/releases
 #
-# To install musl tools run:
-#
-#     sudo apt-get -y install musl-dev musl-tools
-#
-# To install ARM and ARM64 tools run:
-#
-#     sudo apt-get -y install gcc make gcc-arm-linux-gnueabi binutils-arm-linux-gnueabi
-#     sudo apt-get -y install gcc make gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
 
 REPO_URL="https://github.com/rqlite/rqlite"
 
@@ -60,14 +52,8 @@ fi
 # Create work directories
 tmp_build=`mktemp -d`
 tmp_pkg=`mktemp -d`
-tmp_musl_pkg=`mktemp -d`
-tmp_linux_arm64_pkg=`mktemp -d`
-tmp_linux_arm_pkg=`mktemp -d`
 echo "$tmp_build created for build process."
 echo "$tmp_pkg created for packaging process."
-echo "$tmp_musl_pkg created for musl packaging process."
-echo "$tmp_linux_arm64_pkg created for Linux ARM64 packaging process."
-echo "$tmp_linux_arm_pkg created for Linux ARM packaging process."
 
 # Get common build parameters
 kernel=`uname -s`
@@ -81,9 +67,9 @@ kernel=`uname -s`
 buildtime=`date +%Y-%m-%dT%T%z`
 
 # Prepare common linker flags
-STRIP_SYMBOLS="-s"
+STRIP_SYMBOLS="-w -s"
 LINKER_PKG_PATH=github.com/rqlite/rqlite/cmd
-LDFLAGS="-$STRIP_SYMBOLS -X $LINKER_PKG_PATH.Version=$VERSION -X $LINKER_PKG_PATH.Branch=$branch -X $LINKER_PKG_PATH.Commit=$commit -X $LINKER_PKG_PATH.Buildtime=$buildtime"
+LDFLAGS="$STRIP_SYMBOLS -X $LINKER_PKG_PATH.Version=$VERSION -X $LINKER_PKG_PATH.Branch=$branch -X $LINKER_PKG_PATH.Commit=$commit -X $LINKER_PKG_PATH.Buildtime=$buildtime"
 
 # Prepare the source code
 mkdir -p $tmp_build/src/github.com/rqlite
@@ -125,54 +111,49 @@ if [ "$kernel" != "Linux" ]; then
 	exit 0
 fi
 
-################################################################################
-# Build version for Docker use
-rm -f $GOPATH/bin/*
-cd $tmp_build/src/github.com/rqlite/rqlite
-CGO_ENABLED=1 CC=musl-gcc go install -a -tags sqlite_omit_load_extension -ldflags="$LDFLAGS" ./...
-
-# Package the musl release
-release=`echo rqlite-$VERSION-$kernel-$machine-musl | tr '[:upper:]' '[:lower:]'`
-tarball=${release}.tar.gz
-mkdir $tmp_musl_pkg/$release
-copy_binaries $tmp_musl_pkg/$release $GOPATH/bin
-( cd $tmp_musl_pkg; tar cvfz $tarball $release )
-
-if [ -n "$API_TOKEN" ]; then
-    upload_asset $tmp_musl_pkg/$tarball $RELEASE_ID $API_TOKEN
- fi
 
 ################################################################################
-# Build version for ARM64
-rm -f $GOPATH/bin/*
-cd $tmp_build/src/github.com/rqlite/rqlite
-CGO_ENABLED=1 GOARCH=arm64 CC=aarch64-linux-gnu-gcc go install -a -tags sqlite_omit_load_extension -ldflags="$LDFLAGS" ./...
+# Package all other releases
+declare -A archs
+archs=(
+  ["amd64"]="musl-gcc"
+  ["arm64"]="aarch64-linux-gnu-gcc"
+  ["arm"]="arm-linux-gnueabi-gcc"
+  ["riscv64"]="riscv64-linux-gnu-gcc"
+  ["mips"]="mips-linux-gnu-gcc"
+  ["mipsle"]="mipsel-linux-gnu-gcc"
+  ["mips64"]="mips64-linux-gnuabi64-gcc"
+  ["mips64le"]="mips64el-linux-gnuabi64-gcc"
+  ["mipsle"]="mipsel-linux-gnu-gcc"
+  ["ppc64le"]="powerpc64le-linux-gnu-gcc"
+)
 
-# Package the ARM64 release
-release=`echo rqlite-$VERSION-$kernel-arm64 | tr '[:upper:]' '[:lower:]'`
-tarball=${release}.tar.gz
-mkdir $tmp_linux_arm64_pkg/$release
-copy_binaries $tmp_linux_arm64_pkg/$release $GOPATH/bin/linux_arm64
-( cd $tmp_linux_arm64_pkg; tar cvfz $tarball $release )
+for arch in "${!archs[@]}"; do
+  compiler=${archs[$arch]}
 
-if [ -n "$API_TOKEN" ]; then
-    upload_asset $tmp_linux_arm64_pkg/$tarball $RELEASE_ID $API_TOKEN
-fi
+  cd $tmp_build/src/github.com/rqlite/rqlite
+  CGO_ENABLED=1 GOARCH=$arch CC=$compiler go install -a -tags sqlite_omit_load_extension -ldflags="$LDFLAGS" ./...
 
-################################################################################
-# Build version for ARM32
-rm -f $GOPATH/bin/*
-cd $tmp_build/src/github.com/rqlite/rqlite
-CGO_ENABLED=1 GOARCH=arm CC=arm-linux-gnueabi-gcc go install -a -tags sqlite_omit_load_extension -ldflags="$LDFLAGS" ./...
+  if [ "$compiler" == "musl-gcc" ]; then
+    release=`echo rqlite-$VERSION-$kernel-$arch-musl | tr '[:upper:]' '[:lower:]'`
+  else
+    release=`echo rqlite-$VERSION-$kernel-$arch | tr '[:upper:]' '[:lower:]'`
+  fi
 
-# Package the ARM32 release
-release=`echo rqlite-$VERSION-$kernel-arm | tr '[:upper:]' '[:lower:]'`
-tarball=${release}.tar.gz
-mkdir $tmp_linux_arm_pkg/$release
-copy_binaries $tmp_linux_arm_pkg/$release $GOPATH/bin/linux_arm
-( cd $tmp_linux_arm_pkg; tar cvfz $tarball $release )
+  tarball=${release}.tar.gz
+  tmp_pkg=`mktemp -d`
+  mkdir -p $tmp_pkg/$release
 
-if [ -n "$API_TOKEN" ]; then
-    upload_asset $tmp_linux_arm_pkg/$tarball $RELEASE_ID $API_TOKEN
-fi
+  ls $GOPATH/bin
+  if [ "$arch" == "amd64" ]; then
+    copy_binaries $tmp_pkg/$release $GOPATH/bin
+  else
+    copy_binaries $tmp_pkg/$release $GOPATH/bin/linux_$arch
+  fi
 
+  ( cd $tmp_pkg; tar cvfz $tarball $release )
+
+  if [ -n "$API_TOKEN" ]; then
+    upload_asset $tmp_pkg/$tarball $RELEASE_ID $API_TOKEN
+  fi
+done

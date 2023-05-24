@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/hashicorp/raft"
-	"github.com/hashicorp/raft-boltdb/v2"
+	"github.com/rqlite/raft-boltdb/v2"
 	"go.etcd.io/bbolt"
 )
 

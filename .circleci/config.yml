@@ -1,10 +1,28 @@
 # CircleCI 2.0 configuration file
 # Check https://circleci.com/docs/2.0/language-go/ for more details
-version: 2
+version: 2.1
+
+commands: # a reusable command with parameters
+  cross_compile:
+    parameters:
+      cc:
+        type: string
+      goarch:
+        default: ""
+        type: string
+    steps:
+      - run:
+          name: "Cross compile using <<parameters.cc>>"
+          command: go install -a -tags sqlite_omit_load_extension ./...
+          environment:
+            CGO_ENABLED: 1
+            GOARCH: <<parameters.goarch>>
+            CC: <<parameters.cc>>
+
 jobs:
   lint:
     docker:
-      - image: cimg/go:1.20.0
+      - image: rqlite/circleci-primary:0.0.1
     steps:
       # Don't do a restore_cache here, so we regularly check that the Go
       # modules are actually fetchable.
@@ -14,9 +32,60 @@ jobs:
       - run: go vet ./...
     resource_class: large
 
+  cross_compile:
+    docker:
+      - image: rqlite/circleci-primary:0.0.1
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - go-mod-v4-{{ checksum "go.sum" }}
+      - run: go get -v -t -d ./...
+      - save_cache:
+          key: go-mod-v4-{{ checksum "go.sum" }}
+          paths:
+            - "/home/circleci/go/pkg/mod"
+      - cross_compile:
+          cc: musl-gcc
+          goarch: amd64
+      - cross_compile:
+          cc: aarch64-linux-gnu-gcc
+          goarch: arm64
+      - cross_compile:
+          cc: riscv64-linux-gnu-gcc
+          goarch: riscv64
+      - cross_compile:
+          cc: powerpc64le-linux-gnu-gcc
+          goarch: ppc64le
+  cross_compile_mips:
+    docker:
+      - image: rqlite/circleci-primary:0.0.1
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - go-mod-v4-{{ checksum "go.sum" }}
+      - run: go get -v -t -d ./...
+      - save_cache:
+          key: go-mod-v4-{{ checksum "go.sum" }}
+          paths:
+            - "/home/circleci/go/pkg/mod"
+      - cross_compile:
+          cc: mips-linux-gnu-gcc
+          goarch: mips
+      - cross_compile:
+          cc: mipsel-linux-gnu-gcc
+          goarch: mipsle
+      - cross_compile:
+          cc: mips64-linux-gnuabi64-gcc
+          goarch: mips64
+      - cross_compile:
+          cc: mips64el-linux-gnuabi64-gcc
+          goarch: mips64le
+
   test:
     docker:
-      - image: cimg/go:1.20.0
+      - image: rqlite/circleci-primary:0.0.1
     steps:
       - checkout
       - restore_cache:
@@ -32,7 +101,7 @@ jobs:
 
   race_odd:
     docker:
-      - image: cimg/go:1.20.0
+      - image: rqlite/circleci-primary:0.0.1
     steps:
       - checkout
       - restore_cache:
@@ -46,7 +115,7 @@ jobs:
 
   race_even:
     docker:
-      - image: cimg/go:1.20.0
+      - image: rqlite/circleci-primary:0.0.1
     steps:
       - checkout
       - restore_cache:
@@ -60,16 +129,12 @@ jobs:
 
   end_to_end_single:
     docker:
-      - image: cimg/go:1.20.0
+      - image: rqlite/circleci-primary:0.0.1
     steps:
       - checkout
       - restore_cache:
           keys:
             - go-mod-v4-{{ checksum "go.sum" }}
-      - run: sudo apt-get update
-      - run: sudo apt-get install python3
-      - run: sudo apt install python3-pip
-      - run: python3 -m pip install requests
       - run: go version
       - run: go get -t -d -v ./...
       - run: go install -tags osusergo,netgo,sqlite_omit_load_extension
@@ -82,16 +147,12 @@ jobs:
 
   end_to_end_joining:
     docker:
-      - image: cimg/go:1.20.0
+      - image: rqlite/circleci-primary:0.0.1
     steps:
       - checkout
       - restore_cache:
           keys:
             - go-mod-v4-{{ checksum "go.sum" }}
-      - run: sudo apt-get update
-      - run: sudo apt-get install python3
-      - run: sudo apt install python3-pip
-      - run: python3 -m pip install requests
       - run: go version
       - run: go get -t -d -v ./...
       - run: go install -tags osusergo,netgo,sqlite_omit_load_extension
@@ -104,16 +165,12 @@ jobs:
 
   end_to_end_multi:
     docker:
-      - image: cimg/go:1.20.0
+      - image: rqlite/circleci-primary:0.0.1
     steps:
       - checkout
       - restore_cache:
           keys:
             - go-mod-v4-{{ checksum "go.sum" }}
-      - run: sudo apt-get update
-      - run: sudo apt-get install python3
-      - run: sudo apt install python3-pip
-      - run: python3 -m pip install requests
       - run: go version
       - run: go get -t -d -v ./...
       - run: go install -tags osusergo,netgo,sqlite_omit_load_extension
@@ -126,16 +183,12 @@ jobs:
 
   end_to_end_multi_adv:
     docker:
-      - image: cimg/go:1.20.0
+      - image: rqlite/circleci-primary:0.0.1
     steps:
       - checkout
       - restore_cache:
           keys:
             - go-mod-v4-{{ checksum "go.sum" }}
-      - run: sudo apt-get update
-      - run: sudo apt-get install python3
-      - run: sudo apt install python3-pip
-      - run: python3 -m pip install requests
       - run: go version
       - run: go get -t -d -v ./...
       - run: go install -tags osusergo,netgo,sqlite_omit_load_extension
@@ -148,7 +201,7 @@ jobs:
 
   end_to_end_autoclustering:
     docker:
-      - image: cimg/go:1.20.0
+      - image: rqlite/circleci-primary:0.0.1
       - image: consul
       - image: gcr.io/etcd-development/etcd:v3.5.1
     steps:
@@ -156,10 +209,6 @@ jobs:
       - restore_cache:
           keys:
             - go-mod-v4-{{ checksum "go.sum" }}
-      - run: sudo apt-get update
-      - run: sudo apt-get install python3
-      - run: sudo apt install python3-pip
-      - run: python3 -m pip install requests
       - run: go version
       - run: go get -t -d -v ./...
       - run: go install -tags osusergo,netgo,sqlite_omit_load_extension
@@ -172,16 +221,12 @@ jobs:
 
   end_to_end_auto_state:
     docker:
-      - image: cimg/go:1.20.0
+      - image: rqlite/circleci-primary:0.0.1
     steps:
       - checkout
       - restore_cache:
           keys:
             - go-mod-v4-{{ checksum "go.sum" }}
-      - run: sudo apt-get update
-      - run: sudo apt-get install python3
-      - run: sudo apt install python3-pip
-      - run: python3 -m pip install requests boto3
       - run: go version
       - run: go get -t -d -v ./...
       - run: go install -tags osusergo,netgo,sqlite_omit_load_extension
@@ -197,6 +242,8 @@ workflows:
   build_and_test:
     jobs:
       - lint
+      - cross_compile
+      - cross_compile_mips
       - test
       - race_even
       - race_odd
