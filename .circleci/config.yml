@@ -3,6 +3,17 @@
 version: 2.1
 
 commands: # a reusable command with parameters
+  restore_and_save_cache:
+    steps:
+      - restore_cache:
+          keys:
+            - go-mod-v4-{{ checksum "go.sum" }}
+      - run: go get -v -t -d ./...
+      - save_cache:
+          key: go-mod-v4-{{ checksum "go.sum" }}
+          paths:
+            - "/home/circleci/go/pkg/mod"
+
   cross_compile:
     parameters:
       cc:
@@ -27,7 +38,6 @@ jobs:
       # Don't do a restore_cache here, so we regularly check that the Go
       # modules are actually fetchable.
       - checkout
-      - run: go version
       - run: test -z "$(gofmt -l . | tee /dev/stderr)"
       - run: go vet ./...
     resource_class: large
@@ -37,14 +47,7 @@ jobs:
       - image: rqlite/circleci-primary:0.0.1
     steps:
       - checkout
-      - restore_cache:
-          keys:
-            - go-mod-v4-{{ checksum "go.sum" }}
-      - run: go get -v -t -d ./...
-      - save_cache:
-          key: go-mod-v4-{{ checksum "go.sum" }}
-          paths:
-            - "/home/circleci/go/pkg/mod"
+      - restore_and_save_cache
       - cross_compile:
           cc: musl-gcc
           goarch: amd64
@@ -62,14 +65,7 @@ jobs:
       - image: rqlite/circleci-primary:0.0.1
     steps:
       - checkout
-      - restore_cache:
-          keys:
-            - go-mod-v4-{{ checksum "go.sum" }}
-      - run: go get -v -t -d ./...
-      - save_cache:
-          key: go-mod-v4-{{ checksum "go.sum" }}
-          paths:
-            - "/home/circleci/go/pkg/mod"
+      - restore_and_save_cache
       - cross_compile:
           cc: mips-linux-gnu-gcc
           goarch: mips
@@ -88,14 +84,7 @@ jobs:
       - image: rqlite/circleci-primary:0.0.1
     steps:
       - checkout
-      - restore_cache:
-          keys:
-            - go-mod-v4-{{ checksum "go.sum" }}
-      - run: go get -v -t -d ./...
-      - save_cache:
-          key: go-mod-v4-{{ checksum "go.sum" }}
-          paths:
-            - "/home/circleci/go/pkg/mod"
+      - restore_and_save_cache
       - run: go test -failfast ./...
     resource_class: large
 
@@ -104,10 +93,7 @@ jobs:
       - image: rqlite/circleci-primary:0.0.1
     steps:
       - checkout
-      - restore_cache:
-          keys:
-            - go-mod-v4-{{ checksum "go.sum" }}
-      - run: go get -t -d ./...
+      - restore_and_save_cache
       - run:
           command: go test -failfast -timeout 20m -race $(go list ./... | sed -n 'n;p')
           environment:
@@ -118,10 +104,7 @@ jobs:
       - image: rqlite/circleci-primary:0.0.1
     steps:
       - checkout
-      - restore_cache:
-          keys:
-            - go-mod-v4-{{ checksum "go.sum" }}
-      - run: go get -t -d ./...
+      - restore_and_save_cache
       - run:
           command: go test -failfast -timeout 20m -race $(go list ./... | sed -n 'p;n')
           environment:
@@ -132,11 +115,7 @@ jobs:
       - image: rqlite/circleci-primary:0.0.1
     steps:
       - checkout
-      - restore_cache:
-          keys:
-            - go-mod-v4-{{ checksum "go.sum" }}
-      - run: go version
-      - run: go get -t -d -v ./...
+      - restore_and_save_cache
       - run: go install -tags osusergo,netgo,sqlite_omit_load_extension
           -ldflags="-extldflags=-static" ./...
       - run:
@@ -150,11 +129,7 @@ jobs:
       - image: rqlite/circleci-primary:0.0.1
     steps:
       - checkout
-      - restore_cache:
-          keys:
-            - go-mod-v4-{{ checksum "go.sum" }}
-      - run: go version
-      - run: go get -t -d -v ./...
+      - restore_and_save_cache
       - run: go install -tags osusergo,netgo,sqlite_omit_load_extension
           -ldflags="-extldflags=-static" ./...
       - run:
@@ -168,11 +143,7 @@ jobs:
       - image: rqlite/circleci-primary:0.0.1
     steps:
       - checkout
-      - restore_cache:
-          keys:
-            - go-mod-v4-{{ checksum "go.sum" }}
-      - run: go version
-      - run: go get -t -d -v ./...
+      - restore_and_save_cache
       - run: go install -tags osusergo,netgo,sqlite_omit_load_extension
           -ldflags="-extldflags=-static" ./...
       - run:
@@ -186,11 +157,7 @@ jobs:
       - image: rqlite/circleci-primary:0.0.1
     steps:
       - checkout
-      - restore_cache:
-          keys:
-            - go-mod-v4-{{ checksum "go.sum" }}
-      - run: go version
-      - run: go get -t -d -v ./...
+      - restore_and_save_cache
       - run: go install -tags osusergo,netgo,sqlite_omit_load_extension
           -ldflags="-extldflags=-static" ./...
       - run:
@@ -206,11 +173,7 @@ jobs:
       - image: gcr.io/etcd-development/etcd:v3.5.1
     steps:
       - checkout
-      - restore_cache:
-          keys:
-            - go-mod-v4-{{ checksum "go.sum" }}
-      - run: go version
-      - run: go get -t -d -v ./...
+      - restore_and_save_cache
       - run: go install -tags osusergo,netgo,sqlite_omit_load_extension
           -ldflags="-extldflags=-static" ./...
       - run:
@@ -224,11 +187,7 @@ jobs:
       - image: rqlite/circleci-primary:0.0.1
     steps:
       - checkout
-      - restore_cache:
-          keys:
-            - go-mod-v4-{{ checksum "go.sum" }}
-      - run: go version
-      - run: go get -t -d -v ./...
+      - restore_and_save_cache
       - run: go install -tags osusergo,netgo,sqlite_omit_load_extension
           -ldflags="-extldflags=-static" ./...
       - run:
