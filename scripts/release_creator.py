@@ -8,7 +8,7 @@ import os
 release_template = """
 _rqlite_ is a lightweight, distributed relational database, which uses [SQLite](https://www.sqlite.org/) as its storage engine. rqlite provides an easy-to-use, fault-tolerant store for your most important relational data. You can learn a lot more about rqlite at [rqlite.io](https://www.rqlite.io).
 
-Release {release} {release_specific_notes}. See the [CHANGELOG](https://github.com/rqlite/rqlite/blob/master/CHANGELOG.md) for full details on this release.
+Release {release} {release_specific_notes}. See the [CHANGELOG](https://github.com/rqlite/rqlite/blob/master/CHANGELOG.md) for full details on this release, and check out the _Assets_ section below for prebuilt binaries.
 
 ## Getting started
 
@@ -26,9 +26,9 @@ docker run -p4001:4001 rqlite/rqlite
 Check out the [rqlite Docker page](https://hub.docker.com/r/rqlite/rqlite/) for more details on running nodes via Docker.
 
 ### Linux
-_Builds for AMD and ARM are available. See the Assets section below._
+_Builds for a variety of CPU architectures are available. See the Assets section below._
 
-To download and start rqlite, execute the following in a shell. 
+To download and start rqlite, execute the following in a shell.
 
 ```
 curl -L https://github.com/rqlite/rqlite/releases/download/{release}/rqlite-{release}-linux-amd64.tar.gz -o rqlite-{release}-linux-amd64.tar.gz
