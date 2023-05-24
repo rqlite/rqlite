@@ -12,6 +12,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rqlite/go-sqlite3"
@@ -72,6 +73,12 @@ type DB struct {
 
 	rwDSN string // DSN used for read-write connection
 	roDSN string // DSN used for read-only connections
+
+	vacuumEvery         int
+	executesSinceVacuum int
+	vacuumTimeMu        sync.RWMutex
+	lastVacuumTime      time.Time
+	lastVacuumDuration  time.Duration
 }
 
 // PoolStats represents connection pool statistics
@@ -320,6 +327,11 @@ func (db *DB) Stats() (map[string]interface{}, error) {
 		"conn_pool_stats": connPoolStats,
 	}
 
+	db.vacuumTimeMu.RLock()
+	stats["last_vacuum_time"] = db.lastVacuumTime
+	stats["last_vacuum_duration"] = db.lastVacuumDuration
+	db.vacuumTimeMu.RUnlock()
+
 	stats["path"] = db.path
 	if !db.memory {
 		if stats["size"], err = db.FileSize(); err != nil {
@@ -405,7 +417,8 @@ func (db *DB) ConnectionPoolStats(sqlDB *sql.DB) *PoolStats {
 
 }
 
-// Vacuum executes a VACUUM command on the database.
+// Vacuum executes a VACUUM command on the database. It is up to the caller
+// to know when it is safe to execute this command.
 func (db *DB) Vacuum() (er []*command.ExecuteResult, err error) {
 	defer func() {
 		if err != nil {
@@ -540,6 +553,22 @@ func (db *DB) executeStmtWithConn(stmt *command.Statement, xTime bool, e execer)
 	result.RowsAffected = ra
 	if xTime {
 		result.Time = time.Since(start).Seconds()
+	}
+
+	db.executesSinceVacuum++
+	if db.vacuumEvery > 0 && db.executesSinceVacuum >= db.vacuumEvery {
+		startTime := time.Now()
+		if err := db.vacuumWithConn(e); err != nil {
+			stats.Add(numVacuumsErrors, 1)
+		} else {
+			stats.Add(numVacuums, 1)
+			db.executesSinceVacuum = 0
+
+			db.vacuumTimeMu.Lock()
+			db.lastVacuumTime = startTime
+			db.lastVacuumDuration = time.Since(startTime)
+			db.vacuumTimeMu.Unlock()
+		}
 	}
 	return result, nil
 }
@@ -985,6 +1014,14 @@ func (db *DB) memStats() (map[string]int64, error) {
 		ms[p] = res[0].Values[0].Parameters[0].GetI()
 	}
 	return ms, nil
+}
+
+func (db *DB) vacuumWithConn(e execer) error {
+	_, err := e.ExecContext(context.Background(), "VACUUM", nil)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func createEQQueryResponse(rows *command.QueryRows, err error) *command.ExecuteQueryResponse {
