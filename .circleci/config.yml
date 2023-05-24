@@ -51,7 +51,7 @@ jobs:
             - "/home/circleci/go/pkg/mod"
       - run: sudo apt install gcc-mingw-w64-x86-64-posix
       - cross_compile:
-          cc: gcc-mingw-w64
+          cc: x86_64-w64-mingw32-gcc
           goarch: amd64
           goos: windows
       - cross_compile:
