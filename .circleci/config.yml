@@ -49,12 +49,12 @@ jobs:
           key: go-mod-v4-{{ checksum "go.sum" }}
           paths:
             - "/home/circleci/go/pkg/mod"
-     - run: sudo apt install gcc-mingw-w64-x86-64-posix
-     - cross_compile:
+      - run: sudo apt install gcc-mingw-w64-x86-64-posix
+      - cross_compile:
           cc: gcc-mingw-w64
           goarch: amd64
           goos: windows
-     - cross_compile:
+      - cross_compile:
           cc: musl-gcc
           goarch: amd64
       - cross_compile:
