@@ -2042,6 +2042,20 @@ func Test_ParallelOperationsInMemory(t *testing.T) {
 
 	close(done)
 	exWg.Wait()
+
+	for _, sql := range []string{
+		`SELECT COUNT(*) FROM foo`,
+		`SELECT COUNT(*) FROM bar`,
+		`SELECT COUNT(*) FROM qux`,
+	} {
+		if rows, err := db.QueryStringStmt(sql); err != nil {
+			t.Fatalf("failed to query for count using SQL %s: %s", sql, err.Error())
+		} else {
+			if exp, got := `[{"columns":["COUNT(*)"],"types":[""],"values":[[1]]}]`, asJSON(rows); exp != got {
+				t.Fatalf("count not correct, exp %s, got %s", exp, got)
+			}
+		}
+	}
 }
 
 func Test_DBSTAT_table(t *testing.T) {
