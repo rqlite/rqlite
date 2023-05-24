@@ -52,7 +52,7 @@ func Test_DbFileCreation(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := path.Join(dir, "test_db")
 
-	db, err := Open(dbPath, false)
+	db, err := Open(dbPath, false, 0)
 	if err != nil {
 		t.Fatalf("failed to open new database: %s", err.Error())
 	}
@@ -1654,7 +1654,7 @@ func Test_Backup(t *testing.T) {
 		t.Fatalf("failed to backup database: %s", err.Error())
 	}
 
-	newDB, err := Open(dstDB, false)
+	newDB, err := Open(dstDB, false, 0)
 	if err != nil {
 		t.Fatalf("failed to open backup database: %s", err.Error())
 	}
@@ -1703,7 +1703,7 @@ func Test_Copy(t *testing.T) {
 
 	dstFile := mustTempFile()
 	defer os.Remove(dstFile)
-	dstDB, err := Open(dstFile, false)
+	dstDB, err := Open(dstFile, false, 0)
 	if err != nil {
 		t.Fatalf("failed to open destination database: %s", err)
 	}
@@ -1772,7 +1772,7 @@ func Test_SerializeOnDisk(t *testing.T) {
 		t.Fatalf("failed to write serialized database to file: %s", err.Error())
 	}
 
-	newDB, err := Open(dstDB.Name(), false)
+	newDB, err := Open(dstDB.Name(), false, 0)
 	if err != nil {
 		t.Fatalf("failed to open on-disk serialized database: %s", err.Error())
 	}
@@ -1835,7 +1835,7 @@ func Test_SerializeInMemory(t *testing.T) {
 		t.Fatalf("failed to write serialized database to file: %s", err.Error())
 	}
 
-	newDB, err := Open(dstDB.Name(), false)
+	newDB, err := Open(dstDB.Name(), false, 0)
 	if err != nil {
 		t.Fatalf("failed to open on-disk serialized database: %s", err.Error())
 	}
@@ -2254,7 +2254,7 @@ func Test_StmtReadOnly(t *testing.T) {
 func mustCreateDatabase() (*DB, string) {
 	var err error
 	f := mustTempFile()
-	db, err := Open(f, false)
+	db, err := Open(f, false, 0)
 	if err != nil {
 		panic("failed to open database")
 	}

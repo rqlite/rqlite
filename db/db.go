@@ -118,7 +118,7 @@ func IsValidSQLiteData(b []byte) bool {
 
 // Open opens a file-based database, creating it if it does not exist. After this
 // function returns, an actual SQLite file will always exist.
-func Open(dbPath string, fkEnabled bool) (*DB, error) {
+func Open(dbPath string, fkEnabled bool, vacuumEvery int) (*DB, error) {
 	rwDSN := fmt.Sprintf("file:%s?_fk=%s", dbPath, strconv.FormatBool(fkEnabled))
 	rwDB, err := sql.Open("sqlite3", rwDSN)
 	if err != nil {
@@ -148,12 +148,13 @@ func Open(dbPath string, fkEnabled bool) (*DB, error) {
 	roDB.SetConnMaxLifetime(0)
 
 	return &DB{
-		path:      dbPath,
-		fkEnabled: fkEnabled,
-		rwDB:      rwDB,
-		roDB:      roDB,
-		rwDSN:     rwDSN,
-		roDSN:     roDSN,
+		path:        dbPath,
+		fkEnabled:   fkEnabled,
+		rwDB:        rwDB,
+		roDB:        roDB,
+		rwDSN:       rwDSN,
+		roDSN:       roDSN,
+		vacuumEvery: vacuumEvery,
 	}, nil
 }
 
@@ -219,7 +220,7 @@ func LoadIntoMemory(dbPath string, fkEnabled bool) (*DB, error) {
 		return nil, err
 	}
 
-	srcDB, err := Open(dbPath, false)
+	srcDB, err := Open(dbPath, false, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -325,6 +326,7 @@ func (db *DB) Stats() (map[string]interface{}, error) {
 		"rw_dsn":          db.rwDSN,
 		"ro_dsn":          db.roDSN,
 		"conn_pool_stats": connPoolStats,
+		"vacuum_every":    db.vacuumEvery,
 	}
 
 	db.vacuumTimeMu.RLock()
@@ -817,7 +819,7 @@ func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQuery
 // Backup writes a consistent snapshot of the database to the given file.
 // This function can be called when changes to the database are in flight.
 func (db *DB) Backup(path string) error {
-	dstDB, err := Open(path, false)
+	dstDB, err := Open(path, false, 0)
 	if err != nil {
 		return err
 	}
