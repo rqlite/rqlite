@@ -226,10 +226,8 @@ jobs:
     resource_class: large
     
   windows_test:
-    resource_class: 'windows.medium'
     machine:
       image: window-default
-      shell: 'powershell.exe -ExecutionPolicy Bypass'
     steps:
       # Commands are run in a Windows virtual machine environment
         - checkout
