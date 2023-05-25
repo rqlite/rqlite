@@ -60,14 +60,23 @@ jobs:
           cc: musl-gcc
           goarch: amd64
       - cross_compile:
-          cc: aarch64-linux-gnu-gcc
-          goarch: arm64
-      - cross_compile:
           cc: riscv64-linux-gnu-gcc
           goarch: riscv64
       - cross_compile:
           cc: powerpc64le-linux-gnu-gcc
           goarch: ppc64le
+  cross_compile_arm:
+    docker:
+      - image: rqlite/circleci-primary:0.0.2
+    steps:
+      - checkout
+      - restore_and_save_cache
+      - cross_compile:
+          cc: arm-linux-gnueabi-gcc
+          goarch: arm
+      - cross_compile:
+          cc: aarch64-linux-gnu-gcc
+          goarch: arm64
   cross_compile_mips:
     docker:
       - image: rqlite/circleci-primary:0.0.2
@@ -78,11 +87,17 @@ jobs:
           cc: mips-linux-gnu-gcc
           goarch: mips
       - cross_compile:
-          cc: mipsel-linux-gnu-gcc
-          goarch: mipsle
-      - cross_compile:
           cc: mips64-linux-gnuabi64-gcc
           goarch: mips64
+  cross_compile_mips_le:
+    docker:
+      - image: rqlite/circleci-primary:0.0.2
+    steps:
+      - checkout
+      - restore_and_save_cache
+      - cross_compile:
+          cc: mipsel-linux-gnu-gcc
+          goarch: mipsle
       - cross_compile:
           cc: mips64el-linux-gnuabi64-gcc
           goarch: mips64le
