@@ -232,7 +232,7 @@ jobs:
     steps:
       # Commands are run in a Windows virtual machine environment
         - checkout
-        - run: go version
+        - run: go test -v ./...
 
 workflows:
   version: 2
