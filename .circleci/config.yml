@@ -227,7 +227,8 @@ jobs:
     
   windows_test:
     machine:
-      image: window-default
+      image: 'windows-server-2022-gui:current'
+    resource_class: windows.medium # can be medium, large, xlarge, 2xlarge
     steps:
       # Commands are run in a Windows virtual machine environment
         - checkout
