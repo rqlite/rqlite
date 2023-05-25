@@ -2,6 +2,7 @@ FROM cimg/go:1.20.0
 
 RUN sudo apt-get update
 RUN sudo apt-get install musl-dev musl-tools
+RUN sudo apt-get install gcc-mingw-w64-x86-64-posix
 RUN sudo apt-get install gcc-arm-linux-gnueabi
 RUN sudo apt-get install gcc-aarch64-linux-gnu
 RUN sudo apt-get install gcc-riscv64-linux-gnu
