@@ -225,7 +225,9 @@ workflows:
     jobs:
       - lint
       - cross_compile
+      - cross_compile_arm
       - cross_compile_mips
+      - cross_compile_mips_le
       - test
       - race_even
       - race_odd
