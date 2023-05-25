@@ -224,6 +224,16 @@ jobs:
           environment:
             RQLITED_PATH: /home/circleci/go/bin/rqlited
     resource_class: large
+    
+  windows_test:
+    resource_class: 'windows.medium'
+    machine:
+      image: window-default
+      shell: 'powershell.exe -ExecutionPolicy Bypass'
+    steps:
+      # Commands are run in a Windows virtual machine environment
+        - checkout
+        - run: Write-Host 'Hello, Windows'
 
 workflows:
   version: 2
@@ -244,3 +254,4 @@ workflows:
       - end_to_end_joining
       - end_to_end_autoclustering
       - end_to_end_auto_state
+      - windows_test
