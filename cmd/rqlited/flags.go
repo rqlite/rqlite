@@ -260,6 +260,10 @@ func (c *Config) Validate() error {
 
 	}
 
+	if c.RaftAddr == c.HTTPAddr {
+		return errors.New("HTTP and Raft addresses must differ")
+	}
+
 	// Enforce policies regarding addresses
 	if c.RaftAdv == "" {
 		c.RaftAdv = c.RaftAddr
@@ -302,6 +306,10 @@ func (c *Config) Validate() error {
 	if addr := net.ParseIP(radv); addr != nil && addr.IsUnspecified() {
 		return fmt.Errorf("advertised Raft address is not routable (%s), specify it via -%s or -%s",
 			radv, RaftAddrFlag, RaftAdvAddrFlag)
+	}
+
+	if c.RaftAdv == c.HTTPAdv {
+		return errors.New("advertised HTTP and Raft addresses must differ")
 	}
 
 	// Enforce bootstrapping policies
