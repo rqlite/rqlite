@@ -1,3 +1,7 @@
+## 7.19.1 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1286](https://github.com/rqlite/rqlite/pull/1286): More validation of passed-in network addresses.
+
 ## 7.19.0 (May 23rd 2023)
 ### New features
 - [PR #1278](https://github.com/rqlite/rqlite/pull/1278): Enable support for more CPU architectures. Fixes [issue #901](https://github.com/rqlite/rqlite/issues/901)
