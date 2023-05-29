@@ -14,7 +14,7 @@ This is why rqlite offers selectable read consistency levels of _none_, _weak_, 
 With _none_, the node simply queries its local SQLite database, and does not care if it's a Leader or Follower. This offers the fastest query response, but suffers from the potential issues listed above.
 
 ### Limiting read staleness
-You can tell the node not return results (effectively) older than a certain time, however. If a read request sets the query parameter `freshness` to a [Go duration string](https://golang.org/pkg/time/#Duration), the node serving the read will check that less time has passed since it was last in contact with the Leader, than that specified via freshness. If more time has passed the node will return an error. `freshness` is ignored for all consistency levels except `none`, and is also ignored if set to zero.
+You can tell the node not to return results (effectively) older than a certain time, however. If a read request sets the query parameter `freshness` to a [Go duration string](https://golang.org/pkg/time/#Duration), the node serving the read will check that less time has passed since it was last in contact with the Leader, than that specified via freshness. If more time has passed the node will return an error. `freshness` is ignored for all consistency levels except `none`, and is also ignored if set to zero.
 
 > :warning: **The `freshness` parameter is always ignored if the node serving the query is the Leader**. Any read, when served by the leader, is always going to be within any possible freshness bound.
 
