@@ -1,4 +1,7 @@
-## 7.19.1 (unreleased)
+## 7.20.0 (unreleased)
+### New features
+- [PR #1288](https://github.com/rqlite/rqlite/pull/1288): Upgrade to SQLite 3.42.0.
+
 ### Implementation changes and bug fixes
 - [PR #1286](https://github.com/rqlite/rqlite/pull/1286): More validation of passed-in network addresses.
 
