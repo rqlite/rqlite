@@ -19,7 +19,7 @@ require (
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/mkideal/cli v0.2.7
 	github.com/mkideal/pkg v0.1.3
-	github.com/rqlite/go-sqlite3 v1.27.1
+	github.com/rqlite/go-sqlite3 v1.28.0
 	github.com/rqlite/raft-boltdb/v2 v2.0.0-20230523104317-c08e70f4de48
 	github.com/rqlite/rqlite-disco-clients v0.0.0-20230505011544-70f7602795ff
 	github.com/rqlite/sql v0.0.0-20221103124402-8f9ff0ceb8f0
