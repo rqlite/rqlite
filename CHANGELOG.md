@@ -1,4 +1,4 @@
-## 7.20.0 (unreleased)
+## 7.20.0 (June 1st 2023)
 ### New features
 - [PR #1288](https://github.com/rqlite/rqlite/pull/1288): Upgrade to SQLite 3.42.0.
 
