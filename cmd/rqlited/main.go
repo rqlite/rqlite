@@ -515,11 +515,6 @@ func createCluster(cfg *Config, hasPeers bool, joiner *cluster.Joiner, str *stor
 	}
 
 	if joins != nil && cfg.BootstrapExpect > 0 {
-		if hasPeers {
-			log.Println("preexisting node configuration detected, ignoring bootstrap request")
-			return nil
-		}
-
 		// Bootstrap with explicit join addresses requests.
 		bs := cluster.NewBootstrapper(cluster.NewAddressProviderString(joins), tlsConfig)
 		if cfg.JoinAs != "" {
