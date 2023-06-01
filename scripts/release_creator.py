@@ -112,6 +112,10 @@ def invoke_package_script(release_str, release_id, token):
     else:
         print("package.sh not found. Please ensure it's in the current working directory.")
 
+def confirm_CHANGELOG():
+    confirmation = input("Have you dated the CHANGELOG?: ")
+    return confirmation.lower() == "yes"
+
 def confirm_release_notes(release_notes):
     print("\nRelease Notes:")
     print(release_notes)
@@ -120,6 +124,9 @@ def confirm_release_notes(release_notes):
 
 def main():
     while True:
+        if not confirm_CHANGELOG():
+            continue
+
         release_str = get_release_string()
         features = get_release_features()
         release_notes = generate_release_notes(release_str, features)
