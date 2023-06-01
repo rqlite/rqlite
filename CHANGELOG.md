@@ -1,3 +1,7 @@
+## 7.20.1 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1291](https://github.com/rqlite/rqlite/pull/1291): Allow bootstrap-join even with preexisting state. Fixes [issue #1290](https://github.com/rqlite/rqlite/issues/1290) 
+
 ## 7.20.0 (June 1st 2023)
 ### New features
 - [PR #1288](https://github.com/rqlite/rqlite/pull/1288): Upgrade to SQLite 3.42.0.
