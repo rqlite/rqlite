@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	rurl "github.com/rqlite/rqlite/http/url"
@@ -25,6 +26,32 @@ var (
 	// complete within the timeout.
 	ErrBootTimeout = errors.New("boot timeout")
 )
+
+// BootStatus is status of the boot process, after it has completed.
+type BootStatus int
+
+const (
+	BootUnknown BootStatus = iota
+	BootJoin
+	BootDone
+	BootTimeout
+)
+
+// String returns a string representation of the BootStatus.
+func (b BootStatus) String() string {
+	switch b {
+	case BootUnknown:
+		return "unknown"
+	case BootJoin:
+		return "join"
+	case BootDone:
+		return "done"
+	case BootTimeout:
+		return "timeout"
+	default:
+		panic("unknown boot status")
+	}
+}
 
 // AddressProvider is the interface types must implement to provide
 // addresses to a Bootstrapper.
@@ -44,6 +71,9 @@ type Bootstrapper struct {
 
 	logger   *log.Logger
 	Interval time.Duration
+
+	bootStatusMu sync.RWMutex
+	bootStatus   BootStatus
 }
 
 // NewBootstrapper returns an instance of a Bootstrapper.
@@ -85,11 +115,13 @@ func (b *Bootstrapper) Boot(id, raftAddr string, done func() bool, timeout time.
 	for {
 		select {
 		case <-timeoutT.C:
+			b.setBootStatus(BootTimeout)
 			return ErrBootTimeout
 
 		case <-tickerT.C:
 			if done() {
 				b.logger.Printf("boot operation marked done")
+				b.setBootStatus(BootDone)
 				return nil
 			}
 			tickerT.Reset(jitter(b.Interval)) // Move to longer-period polling
@@ -108,6 +140,7 @@ func (b *Bootstrapper) Boot(id, raftAddr string, done func() bool, timeout time.
 			b.joiner.SetBasicAuth(b.username, b.password)
 			if j, err := b.joiner.Do(targets, id, raftAddr, true); err == nil {
 				b.logger.Printf("succeeded directly joining cluster via node at %s", j)
+				b.setBootStatus(BootJoin)
 				return nil
 			}
 
@@ -126,6 +159,13 @@ func (b *Bootstrapper) Boot(id, raftAddr string, done func() bool, timeout time.
 			}
 		}
 	}
+}
+
+// Status returns the reason for the boot process completing.
+func (b *Bootstrapper) Status() BootStatus {
+	b.bootStatusMu.RLock()
+	defer b.bootStatusMu.RUnlock()
+	return b.bootStatus
 }
 
 func (b *Bootstrapper) notify(targets []string, id, raftAddr string) error {
@@ -188,6 +228,12 @@ func (b *Bootstrapper) notify(targets []string, id, raftAddr string) error {
 		}
 	}
 	return nil
+}
+
+func (b *Bootstrapper) setBootStatus(status BootStatus) {
+	b.bootStatusMu.Lock()
+	defer b.bootStatusMu.Unlock()
+	b.bootStatus = status
 }
 
 type stringAddressProvider struct {
