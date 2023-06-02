@@ -31,7 +31,7 @@ copy_binaries () {
 upload_asset () {
 	release_pkg_name=`basename $1`
 	upload_url="https://uploads.github.com/repos/rqlite/rqlite/releases/$2/assets"
-	curl -v -H "Content-type: application/octet-stream" -H "Authorization: token $3" -XPOST $upload_url?name=$release_pkg_name --data-binary @$1
+	curl -H "Content-type: application/octet-stream" -H "Authorization: token $3" -XPOST $upload_url?name=$release_pkg_name --data-binary @$1
 }
 
 if [ $# -lt 1 ]; then
