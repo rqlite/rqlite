@@ -27,13 +27,20 @@ var (
 	ErrBootTimeout = errors.New("boot timeout")
 )
 
-// BootStatus is status of the boot process, after it has completed.
+// BootStatus is the reason the boot process completed.
 type BootStatus int
 
 const (
+	// BootUnknown is the initial state of the boot process.
 	BootUnknown BootStatus = iota
+
+	// BootJoin means boot completed due to a successful join.
 	BootJoin
+
+	// BootDone means boot completed due to Done being "true".
 	BootDone
+
+	// BootTimeout means the boot process timed out.
 	BootTimeout
 )
 
