@@ -40,6 +40,63 @@ class TestBootstrapping(unittest.TestCase):
     deprovision_node(n2)
     deprovision_node(n3)
 
+class TestBootstrappingRestart(unittest.TestCase):
+  '''Test simple bootstrapping works via -bootstrap-expect'''
+  def test(self):
+    n0 = Node(RQLITED_PATH, '0', bootstrap_expect=3)
+    n1 = Node(RQLITED_PATH, '1', bootstrap_expect=3)
+    n2 = Node(RQLITED_PATH, '2', bootstrap_expect=3)
+
+    n0.start(join=','.join([n0.APIProtoAddr(), n1.APIProtoAddr(), n2.APIProtoAddr()]))
+    n1.start(join=','.join([n0.APIProtoAddr(), n1.APIProtoAddr(), n2.APIProtoAddr()]))
+    n2.start(join=','.join([n0.APIProtoAddr(), n1.APIProtoAddr(), n2.APIProtoAddr()]))
+
+    self.assertEqual(n0.wait_for_leader(), n1.wait_for_leader())
+    self.assertEqual(n0.wait_for_leader(), n2.wait_for_leader())
+
+    # Restart all nodes, and ensure they still form a cluster using the same launch params.
+    n0.stop()
+    n1.stop()
+    n2.stop()
+
+    n0.start(join=','.join([n0.APIProtoAddr(), n1.APIProtoAddr(), n2.APIProtoAddr()]))
+    n1.start(join=','.join([n0.APIProtoAddr(), n1.APIProtoAddr(), n2.APIProtoAddr()]))
+    n2.start(join=','.join([n0.APIProtoAddr(), n1.APIProtoAddr(), n2.APIProtoAddr()]))
+    self.assertEqual(n0.wait_for_leader(), n1.wait_for_leader())
+    self.assertEqual(n0.wait_for_leader(), n2.wait_for_leader())
+
+    deprovision_node(n0)
+    deprovision_node(n1)
+    deprovision_node(n2)
+
+class TestBootstrappingRestartLeaveOnRemove(unittest.TestCase):
+  '''Test simple bootstrapping works via -bootstrap-expect'''
+  def test(self):
+    n0 = Node(RQLITED_PATH, '0', bootstrap_expect=3, raft_cluster_remove_shutdown=True)
+    n1 = Node(RQLITED_PATH, '1', bootstrap_expect=3, raft_cluster_remove_shutdown=True)
+    n2 = Node(RQLITED_PATH, '2', bootstrap_expect=3, raft_cluster_remove_shutdown=True)
+
+    n0.start(join=','.join([n0.APIProtoAddr(), n1.APIProtoAddr(), n2.APIProtoAddr()]))
+    n1.start(join=','.join([n0.APIProtoAddr(), n1.APIProtoAddr(), n2.APIProtoAddr()]))
+    n2.start(join=','.join([n0.APIProtoAddr(), n1.APIProtoAddr(), n2.APIProtoAddr()]))
+
+    self.assertEqual(n0.wait_for_leader(), n1.wait_for_leader())
+    self.assertEqual(n0.wait_for_leader(), n2.wait_for_leader())
+
+    # Restart one node, and ensure it still forms a cluster using the same launch params,
+    # even though it was removed from the cluster on shutdown.
+    n2.stop(graceful=True)
+    self.assertEqual(len(n0.nodes()), 2)
+
+    n2.start(join=','.join([n0.APIProtoAddr(), n1.APIProtoAddr(), n2.APIProtoAddr()]))
+    self.assertEqual(n0.wait_for_leader(), n1.wait_for_leader())
+    self.assertEqual(n0.wait_for_leader(), n2.wait_for_leader())
+    self.assertEqual(len(n0.nodes()), 3)
+
+    deprovision_node(n0)
+    deprovision_node(n1)
+    deprovision_node(n2)
+
 class TestAutoClustering(unittest.TestCase):
   DiscoModeConsulKV = "consul-kv"
   DiscoModeEtcdKV = "etcd-kv"
