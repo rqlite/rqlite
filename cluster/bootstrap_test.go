@@ -31,6 +31,9 @@ func Test_NewBootstrapper(t *testing.T) {
 	if bs == nil {
 		t.Fatalf("failed to create a simple Bootstrapper")
 	}
+	if exp, got := BootUnknown, bs.Status(); exp != got {
+		t.Fatalf("wrong status, exp %s, got %s", exp, got)
+	}
 }
 
 func Test_BootstrapperBootDoneImmediately(t *testing.T) {
@@ -45,6 +48,9 @@ func Test_BootstrapperBootDoneImmediately(t *testing.T) {
 	bs := NewBootstrapper(p, nil)
 	if err := bs.Boot("node1", "192.168.1.1:1234", done, 10*time.Second); err != nil {
 		t.Fatalf("failed to boot: %s", err)
+	}
+	if exp, got := BootDone, bs.Status(); exp != got {
+		t.Fatalf("wrong status, exp %s, got %s", exp, got)
 	}
 }
 
@@ -65,6 +71,35 @@ func Test_BootstrapperBootTimeout(t *testing.T) {
 	}
 	if !errors.Is(err, ErrBootTimeout) {
 		t.Fatalf("wrong error returned")
+	}
+	if exp, got := BootTimeout, bs.Status(); exp != got {
+		t.Fatalf("wrong status, exp %s, got %s", exp, got)
+	}
+}
+
+func Test_BootstrapperBootSingleJoin(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/join" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	done := func() bool {
+		return false
+	}
+
+	p := NewAddressProviderString([]string{ts.URL})
+	bs := NewBootstrapper(p, nil)
+	bs.Interval = time.Second
+
+	err := bs.Boot("node1", "192.168.1.1:1234", done, 60*time.Second)
+	if err != nil {
+		t.Fatalf("failed to boot: %s", err)
+	}
+	if exp, got := BootJoin, bs.Status(); exp != got {
+		t.Fatalf("wrong status, exp %s, got %s", exp, got)
 	}
 }
 
@@ -114,6 +149,10 @@ func Test_BootstrapperBootSingleNotify(t *testing.T) {
 	}
 	if got, exp := body["addr"], "192.168.1.1:1234"; got != exp {
 		t.Fatalf("wrong address supplied, exp %s, got %s", exp, got)
+	}
+
+	if exp, got := BootDone, bs.Status(); exp != got {
+		t.Fatalf("wrong status, exp %s, got %s", exp, got)
 	}
 }
 
@@ -175,6 +214,10 @@ func Test_BootstrapperBootSingleNotifyHTTPS(t *testing.T) {
 	if got, exp := body["addr"], "192.168.1.1:1234"; got != exp {
 		t.Fatalf("wrong address supplied, exp %s, got %s", exp, got)
 	}
+
+	if exp, got := BootDone, bs.Status(); exp != got {
+		t.Fatalf("wrong status, exp %s, got %s", exp, got)
+	}
 }
 
 func Test_BootstrapperBootSingleNotifyAuth(t *testing.T) {
@@ -213,6 +256,9 @@ func Test_BootstrapperBootSingleNotifyAuth(t *testing.T) {
 
 	if tsNotified != true {
 		t.Fatalf("notify target not contacted")
+	}
+	if exp, got := BootDone, bs.Status(); exp != got {
+		t.Fatalf("wrong status, exp %s, got %s", exp, got)
 	}
 }
 
@@ -257,8 +303,10 @@ func Test_BootstrapperBootMultiNotify(t *testing.T) {
 	if ts1Join != true || ts2Join != true {
 		t.Fatalf("all join targets not contacted")
 	}
-
 	if ts1Notified != true || ts2Notified != true {
 		t.Fatalf("all notify targets not contacted")
+	}
+	if exp, got := BootDone, bs.Status(); exp != got {
+		t.Fatalf("wrong status, exp %s, got %s", exp, got)
 	}
 }
