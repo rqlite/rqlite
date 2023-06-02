@@ -41,7 +41,7 @@ class TestBootstrapping(unittest.TestCase):
     deprovision_node(n3)
 
 class TestBootstrappingRestart(unittest.TestCase):
-  '''Test simple bootstrapping works via -bootstrap-expect'''
+  '''Test restarting a bootstrapped cluster works via -bootstrap-expect'''
   def test(self):
     n0 = Node(RQLITED_PATH, '0', bootstrap_expect=3)
     n1 = Node(RQLITED_PATH, '1', bootstrap_expect=3)
@@ -70,7 +70,7 @@ class TestBootstrappingRestart(unittest.TestCase):
     deprovision_node(n2)
 
 class TestBootstrappingRestartLeaveOnRemove(unittest.TestCase):
-  '''Test simple bootstrapping works via -bootstrap-expect'''
+  '''Test restarting a bootstrapped cluster works via -bootstrap-expect when nodes self-remove'''
   def test(self):
     n0 = Node(RQLITED_PATH, '0', bootstrap_expect=3, raft_cluster_remove_shutdown=True)
     n1 = Node(RQLITED_PATH, '1', bootstrap_expect=3, raft_cluster_remove_shutdown=True)
