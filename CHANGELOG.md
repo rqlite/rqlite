@@ -1,6 +1,6 @@
 ## 7.20.2 (unreleased)
 ### Implementation changes and bug fixes
-- [PR #1296](https://github.com/rqlite/rqlite/pull/1296): Use correct connection when checking a SQL statement for "read-only" status. Also refactors much of the DB-level unit tests.
+- [PR #1296](https://github.com/rqlite/rqlite/pull/1296): Use correct connection when checking a SQL statement for "read-only" status, otherwise "database locked" could result. Also refactors much of the DB-level unit tests.
 
 ## 7.20.1 (June 1st 2023)
 ### Implementation changes and bug fixes
