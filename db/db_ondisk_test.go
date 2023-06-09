@@ -6,6 +6,8 @@ import (
 	"os"
 	"path"
 	"testing"
+
+	"github.com/rqlite/rqlite/db"
 )
 
 func Test_IsValidSQLiteOnDisk(t *testing.T) {
@@ -41,6 +43,7 @@ func Test_IsValidSQLiteOnDisk(t *testing.T) {
 func Test_FileCreationOnDisk(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := path.Join(dir, "test_db")
+	defer db.Close()
 
 	db, err := Open(dbPath, false)
 	if err != nil {
@@ -78,6 +81,7 @@ func Test_ConnectionIsolationOnDisk(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open new database: %s", err.Error())
 	}
+	defer db.Close()
 
 	r, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
 	if err != nil {
