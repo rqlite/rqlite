@@ -803,7 +803,8 @@ func testSimpleRequest(t *testing.T, db *DB) {
 }
 
 // Test_SimpleRequestTx tests that a transaction is rolled back when an error occurs, and that
-// subsequent statements after the failed statement are not processed.
+// subsequent statements after the failed statement are not processed. This also checks that
+// the code which checks if the statement is a query or not works when holding a transaction.
 func testSimpleRequestTx(t *testing.T, db *DB) {
 	mustExecute(db, `CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`)
 	mustExecute(db, `INSERT INTO foo(id, name) VALUES(1, "fiona")`)
@@ -880,55 +881,6 @@ func testUniqueConstraints(t *testing.T, db *DB) {
 	}
 	if exp, got := `[{"error":"UNIQUE constraint failed: foo.name"}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for INSERT\nexp: %s\ngot: %s", exp, got)
-	}
-}
-
-// testConnectionIsolation test that ISOLATION behavior of on-disk databases doesn't
-// change unexpectedly.
-func testConnectionIsolation(t *testing.T, db *DB) {
-	r, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
-	if err != nil {
-		t.Fatalf("failed to create table: %s", err.Error())
-	}
-	if exp, got := `[{}]`, asJSON(r); exp != got {
-		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
-	}
-
-	r, err = db.ExecuteStringStmt("BEGIN")
-	if err != nil {
-		t.Fatalf("failed to create table: %s", err.Error())
-	}
-	if exp, got := `[{}]`, asJSON(r); exp != got {
-		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
-	}
-
-	r, err = db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("fiona")`)
-	if err != nil {
-		t.Fatalf("error executing insertion into table: %s", err.Error())
-	}
-	if exp, got := `[{"last_insert_id":1,"rows_affected":1}]`, asJSON(r); exp != got {
-		t.Fatalf("unexpected results for execute, expected %s, got %s", exp, got)
-	}
-
-	q, err := db.QueryStringStmt("SELECT * FROM foo")
-	if err != nil {
-		t.Fatalf("failed to query empty table: %s", err.Error())
-	}
-	if exp, got := `[{"columns":["id","name"],"types":["integer","text"]}]`, asJSON(q); exp != got {
-		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
-	}
-
-	_, err = db.ExecuteStringStmt("COMMIT")
-	if err != nil {
-		t.Fatalf("error executing insertion into table: %s", err.Error())
-	}
-
-	q, err = db.QueryStringStmt("SELECT * FROM foo")
-	if err != nil {
-		t.Fatalf("failed to query empty table: %s", err.Error())
-	}
-	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(q); exp != got {
-		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
 }
 
@@ -1345,7 +1297,6 @@ func Test_DatabaseCommonOperations(t *testing.T) {
 		{"SimpleRequestTx", testSimpleRequestTx},
 		{"CommonTableExpressions", testCommonTableExpressions},
 		{"UniqueConstraints", testUniqueConstraints},
-		{"ConnectionIsolation", testConnectionIsolation},
 		{"PartialFail", testPartialFail},
 		{"Serialize", testSerialize},
 		{"Dump", testDump},

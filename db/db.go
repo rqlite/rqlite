@@ -582,7 +582,7 @@ func (db *DB) queryWithConn(req *command.Request, xTime bool, conn *sql.Conn) ([
 		var rows *command.QueryRows
 		var err error
 
-		readOnly, err := db.StmtReadOnly(sql)
+		readOnly, err := db.StmtReadOnlyWithConn(sql, conn)
 		if err != nil {
 			stats.Add(numQueryErrors, 1)
 			rows = &command.QueryRows{
@@ -738,7 +738,7 @@ func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQuery
 			continue
 		}
 
-		ro, err := db.StmtReadOnly(ss)
+		ro, err := db.StmtReadOnlyWithConn(ss, conn)
 		if err != nil {
 			eqResponse = append(eqResponse, &command.ExecuteQueryResponse{
 				Result: &command.ExecuteQueryResponse_Error{
@@ -927,6 +927,17 @@ func (db *DB) Dump(w io.Writer) error {
 // As per https://www.sqlite.org/c3ref/stmt_readonly.html, this function
 // may not return 100% correct results, but should cover most scenarios.
 func (db *DB) StmtReadOnly(sql string) (bool, error) {
+	conn, err := db.roDB.Conn(context.Background())
+	if err != nil {
+		return false, err
+	}
+	defer conn.Close()
+	return db.StmtReadOnlyWithConn(sql, conn)
+}
+
+// StmtReadOnlyWithConn returns whether the given SQL statement is read-only, using
+// the given connection.
+func (db *DB) StmtReadOnlyWithConn(sql string, conn *sql.Conn) (bool, error) {
 	var readOnly bool
 	f := func(driverConn interface{}) error {
 		c := driverConn.(*sqlite3.SQLiteConn)
@@ -940,11 +951,6 @@ func (db *DB) StmtReadOnly(sql string) (bool, error) {
 		return nil
 	}
 
-	conn, err := db.roDB.Conn(context.Background())
-	if err != nil {
-		return false, err
-	}
-	defer conn.Close()
 	if err := conn.Raw(f); err != nil {
 		return false, err
 	}
