@@ -6,8 +6,6 @@ import (
 	"os"
 	"path"
 	"testing"
-
-	"github.com/rqlite/rqlite/db"
 )
 
 func Test_IsValidSQLiteOnDisk(t *testing.T) {
@@ -43,7 +41,6 @@ func Test_IsValidSQLiteOnDisk(t *testing.T) {
 func Test_FileCreationOnDisk(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := path.Join(dir, "test_db")
-	defer db.Close()
 
 	db, err := Open(dbPath, false)
 	if err != nil {
@@ -52,6 +49,7 @@ func Test_FileCreationOnDisk(t *testing.T) {
 	if db == nil {
 		t.Fatal("database is nil")
 	}
+	defer db.Close()
 	if db.InMemory() {
 		t.Fatal("on-disk database marked as in-memory")
 	}
