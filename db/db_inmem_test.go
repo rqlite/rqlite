@@ -1,6 +1,7 @@
 package db
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"sync"
@@ -8,6 +9,7 @@ import (
 	"time"
 
 	"github.com/rqlite/rqlite/command"
+	text "github.com/rqlite/rqlite/db/testdata"
 )
 
 // Test_TableCreationInMemory tests basic operation of an in-memory database,
@@ -293,5 +295,47 @@ func Test_TableCreationLoadRawInMemory(t *testing.T) {
 		if rows[0].Error != "" {
 			t.Fatalf("rows had error after %d queries: %s", i, rows[0].Error)
 		}
+	}
+}
+
+// Test_1GiBInMemory tests that in-memory databases larger than 1GiB,
+// but smaller than 2GiB, can be created without issue.
+func Test_1GiBInMemory(t *testing.T) {
+	db := mustCreateInMemoryDatabase()
+	defer db.Close()
+
+	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, txt TEXT)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	stmt := fmt.Sprintf(`INSERT INTO foo(txt) VALUES("%s")`, text.Lorum)
+	for i := 0; i < 1715017; i++ {
+		r, err := db.ExecuteStringStmt(stmt)
+		if err != nil {
+			t.Fatalf("failed to Execute statement %s", err.Error())
+		}
+		if len(r) != 1 {
+			t.Fatalf("unexpected length for Execute results: %d", len(r))
+		}
+		if r[0].GetError() != "" {
+			t.Fatalf("failed to insert record: %s", r[0].GetError())
+		}
+	}
+
+	r, err := db.ExecuteStringStmt(stmt)
+	if err != nil {
+		t.Fatalf("failed to insert record %s", err.Error())
+	}
+	if exp, got := `[{"last_insert_id":1715018,"rows_affected":1}]`, asJSON(r); exp != got {
+		t.Fatalf("got incorrect response, exp: %s, got: %s", exp, got)
+	}
+
+	sz, err := db.Size()
+	if err != nil {
+		t.Fatalf("failed to get size: %s", err.Error())
+	}
+	if sz <= 1024*1024*1024 {
+		t.Fatalf("failed to create a database greater than 1 GiB in size: %d", sz)
 	}
 }

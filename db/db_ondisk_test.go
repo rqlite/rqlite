@@ -49,6 +49,7 @@ func Test_FileCreationOnDisk(t *testing.T) {
 	if db == nil {
 		t.Fatal("database is nil")
 	}
+	defer db.Close()
 	if db.InMemory() {
 		t.Fatal("on-disk database marked as in-memory")
 	}
@@ -65,5 +66,63 @@ func Test_FileCreationOnDisk(t *testing.T) {
 	err = db.Close()
 	if err != nil {
 		t.Fatalf("failed to close database: %s", err.Error())
+	}
+}
+
+// Test_ConnectionIsolationOnDisk test that ISOLATION behavior of on-disk databases doesn't
+// change unexpectedly.
+func Test_ConnectionIsolationOnDisk(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := path.Join(dir, "test_db")
+
+	db, err := Open(dbPath, false)
+	if err != nil {
+		t.Fatalf("failed to open new database: %s", err.Error())
+	}
+	defer db.Close()
+
+	r, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if exp, got := `[{}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+
+	r, err = db.ExecuteStringStmt("BEGIN")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if exp, got := `[{}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+
+	r, err = db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("fiona")`)
+	if err != nil {
+		t.Fatalf("error executing insertion into table: %s", err.Error())
+	}
+	if exp, got := `[{"last_insert_id":1,"rows_affected":1}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for execute, expected %s, got %s", exp, got)
+	}
+
+	q, err := db.QueryStringStmt("SELECT * FROM foo")
+	if err != nil {
+		t.Fatalf("failed to query empty table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"]}]`, asJSON(q); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+
+	_, err = db.ExecuteStringStmt("COMMIT")
+	if err != nil {
+		t.Fatalf("error executing insertion into table: %s", err.Error())
+	}
+
+	q, err = db.QueryStringStmt("SELECT * FROM foo")
+	if err != nil {
+		t.Fatalf("failed to query empty table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(q); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
 }

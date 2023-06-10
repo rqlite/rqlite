@@ -1,3 +1,7 @@
+## 7.20.2 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1296](https://github.com/rqlite/rqlite/pull/1296): Use correct connection when checking a SQL statement for "read-only" status, otherwise "database locked" could result. Also refactors much of the DB-level unit tests.
+
 ## 7.20.1 (June 1st 2023)
 ### Implementation changes and bug fixes
 - [PR #1291](https://github.com/rqlite/rqlite/pull/1291): Allow bootstrap-join even with preexisting state. Fixes [issue #1290](https://github.com/rqlite/rqlite/issues/1290) 
