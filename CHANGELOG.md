@@ -1,3 +1,7 @@
+## 7.20.3 (unreleased))
+### Implementation changes and bug fixes
+- [PR #1298](https://github.com/rqlite/rqlite/pull/1298): Move FSMSnapshot to own source file.
+
 ## 7.20.2 (June 9th 2023)
 ### Implementation changes and bug fixes
 - [PR #1296](https://github.com/rqlite/rqlite/pull/1296): Use correct connection when checking a SQL statement for "read-only" status, otherwise "database locked" could result. Also refactors much of the DB-level unit tests.
