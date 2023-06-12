@@ -124,14 +124,15 @@ archs=(
   ["mipsle"]="mipsel-linux-gnu-gcc"
   ["mips64"]="mips64-linux-gnuabi64-gcc"
   ["mips64le"]="mips64el-linux-gnuabi64-gcc"
-  ["mipsle"]="mipsel-linux-gnu-gcc"
   ["ppc64le"]="powerpc64le-linux-gnu-gcc"
 )
 
 for arch in "${!archs[@]}"; do
+(
   compiler=${archs[$arch]}
 
   cd $tmp_build/src/github.com/rqlite/rqlite
+  echo "Building for $arch using $compiler..."
   CGO_ENABLED=1 GOARCH=$arch CC=$compiler go install -a -tags sqlite_omit_load_extension -ldflags="$LDFLAGS" ./...
 
   if [ "$compiler" == "musl-gcc" ]; then
@@ -144,16 +145,25 @@ for arch in "${!archs[@]}"; do
   tmp_pkg=`mktemp -d`
   mkdir -p $tmp_pkg/$release
 
-  ls $GOPATH/bin
   if [ "$arch" == "amd64" ]; then
     copy_binaries $tmp_pkg/$release $GOPATH/bin
   else
     copy_binaries $tmp_pkg/$release $GOPATH/bin/linux_$arch
   fi
 
-  ( cd $tmp_pkg; tar cvfz $tarball $release )
+  (
+  cd $tmp_pkg
+  tar cfz $tarball $release
+  if [ $? -ne 0 ]; then
+	  echo "Failed to create $tarball"
+	  exit 1
+  fi
+  )
 
   if [ -n "$API_TOKEN" ]; then
     upload_asset $tmp_pkg/$tarball $RELEASE_ID $API_TOKEN
   fi
+) &
 done
+
+wait
