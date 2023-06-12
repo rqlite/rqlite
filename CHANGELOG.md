@@ -1,6 +1,7 @@
 ## 7.20.3 (unreleased))
 ### Implementation changes and bug fixes
 - [PR #1298](https://github.com/rqlite/rqlite/pull/1298): Move FSMSnapshot to own source file.
+- [PR #1300](https://github.com/rqlite/rqlite/pull/1300): Check for WAL-enabled SQLite files during load and restore.
 
 ## 7.20.2 (June 9th 2023)
 ### Implementation changes and bug fixes

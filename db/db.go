@@ -105,6 +105,29 @@ func IsValidSQLiteData(b []byte) bool {
 	return len(b) > 13 && string(b[0:13]) == "SQLite format"
 }
 
+// IsWALModeEnabledSQLiteFile checks that the supplied path looks like a SQLite
+// with WAL mode enabled.
+func IsWALModeEnabledSQLiteFile(path string) bool {
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+
+	b := make([]byte, 20)
+	if _, err := f.Read(b); err != nil {
+		return false
+	}
+
+	return IsWALModeEnabled(b)
+}
+
+// IsWALModeEnabled checks that the supplied data looks like a SQLite data
+// with WAL mode enabled.
+func IsWALModeEnabled(b []byte) bool {
+	return len(b) >= 20 && b[18] == 2 && b[19] == 2
+}
+
 // Open opens a file-based database, creating it if it does not exist. After this
 // function returns, an actual SQLite file will always exist.
 func Open(dbPath string, fkEnabled bool) (*DB, error) {
