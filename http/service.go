@@ -858,6 +858,14 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 		lr := &command.LoadRequest{
 			Data: b,
 		}
+
+		if db.IsWALModeEnabled(b) {
+			s.logger.Printf("SQLite database file is in WAL mode - rejecting load request")
+			http.Error(w, `SQLite database file is in WAL mode - convert it to DELETE mode via 'PRAGMA journal_mode=DELETE'`,
+				http.StatusBadRequest)
+			return
+		}
+
 		err := s.store.Load(lr)
 		if err != nil && err != store.ErrNotLeader {
 			http.Error(w, err.Error(), http.StatusInternalServerError)

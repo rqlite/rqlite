@@ -310,6 +310,10 @@ func (s *Store) SetRestorePath(path string) error {
 	if !sql.IsValidSQLiteFile(path) {
 		return fmt.Errorf("file %s is not a valid SQLite file", path)
 	}
+	if sql.IsWALModeEnabledSQLiteFile(path) {
+		return fmt.Errorf("file %s is in WAL mode - convert to DELETE mode", path)
+	}
+
 	s.RegisterReadyChannel(s.restoreDoneCh)
 	s.restorePath = path
 	return nil

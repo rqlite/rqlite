@@ -38,6 +38,68 @@ func Test_IsValidSQLiteOnDisk(t *testing.T) {
 	}
 }
 
+func Test_IsWALModeEnablednDiskDELETE(t *testing.T) {
+	path := mustTempFile()
+	defer os.Remove(path)
+
+	dsn := fmt.Sprintf("file:%s", path)
+	db, err := sql.Open("sqlite3", dsn)
+	if err != nil {
+		t.Fatalf("failed to create SQLite database: %s", err.Error())
+	}
+	_, err = db.Exec("CREATE TABLE foo (name TEXT)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("failed to close database: %s", err.Error())
+	}
+
+	if IsWALModeEnabledSQLiteFile(path) {
+		t.Fatalf("non WAL file marked as WAL")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read SQLite file: %s", err.Error())
+	}
+	if IsWALModeEnabled(data) {
+		t.Fatalf("non WAL data marked as WAL")
+	}
+}
+
+func Test_IsWALModeEnablednDiskWAL(t *testing.T) {
+	path := mustTempFile()
+	defer os.Remove(path)
+
+	dsn := fmt.Sprintf("file:%s", path)
+	db, err := sql.Open("sqlite3", dsn)
+	if err != nil {
+		t.Fatalf("failed to create SQLite database: %s", err.Error())
+	}
+	_, err = db.Exec("CREATE TABLE foo (name TEXT)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	_, err = db.Exec("PRAGMA journal_mode=WAL")
+	if err != nil {
+		t.Fatalf("failed to enable WAL mode: %s", err.Error())
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("failed to close database: %s", err.Error())
+	}
+
+	if !IsWALModeEnabledSQLiteFile(path) {
+		t.Fatalf("WAL file marked as non-WAL")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read SQLite file: %s", err.Error())
+	}
+	if !IsWALModeEnabled(data) {
+		t.Fatalf("WAL data marked as non-WAL")
+	}
+}
+
 func Test_FileCreationOnDisk(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := path.Join(dir, "test_db")
