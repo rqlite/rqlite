@@ -337,6 +337,10 @@ func (db *DB) Stats() (map[string]interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
+	pragmas, err := db.pragmas()
+	if err != nil {
+		return nil, err
+	}
 	stats := map[string]interface{}{
 		"version":         DBVersion,
 		"compile_options": copts,
@@ -345,6 +349,7 @@ func (db *DB) Stats() (map[string]interface{}, error) {
 		"rw_dsn":          db.rwDSN,
 		"ro_dsn":          db.roDSN,
 		"conn_pool_stats": connPoolStats,
+		"pragmas":         pragmas,
 	}
 
 	stats["path"] = db.path
@@ -986,6 +991,36 @@ func (db *DB) StmtReadOnlyWithConn(sql string, conn *sql.Conn) (bool, error) {
 		return false, err
 	}
 	return readOnly, nil
+}
+
+func (db *DB) pragmas() (map[string]interface{}, error) {
+	conns := map[string]*sql.DB{
+		"rw": db.rwDB,
+		"ro": db.roDB,
+	}
+
+	m := make(map[string]interface{})
+	for k, v := range conns {
+		var sync string
+		if err := v.QueryRow("PRAGMA synchronous").Scan(&sync); err != nil {
+			return nil, err
+		}
+		var jm string
+		if err := v.QueryRow("PRAGMA journal_mode").Scan(&jm); err != nil {
+			return nil, err
+		}
+		var fk string
+		if err := v.QueryRow("PRAGMA foreign_keys").Scan(&fk); err != nil {
+			return nil, err
+		}
+		m[k] = map[string]string{
+			"synchronous":  sync,
+			"journal_mode": jm,
+			"foreign_keys": fk,
+		}
+	}
+
+	return m, nil
 }
 
 func (db *DB) memStats() (map[string]int64, error) {
