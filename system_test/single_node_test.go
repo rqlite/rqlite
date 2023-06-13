@@ -848,9 +848,10 @@ func Test_SingleNodeUpgrades(t *testing.T) {
 		"v6.0.0-data",
 		"v7.0.0-data",
 		"v7.9.2-data",
+		"v7.20.3-data-with-snapshots",
 	}
 
-	upgradeTo := func(dir string) {
+	upgradeFrom := func(dir string) {
 		// Deprovision of a node deletes the node's dir, so make a copy first.
 		srcdir := filepath.Join("testdata", dir)
 		destdir := mustTempDir()
@@ -897,7 +898,7 @@ func Test_SingleNodeUpgrades(t *testing.T) {
 
 	for _, version := range versions {
 		t.Run(version, func(t *testing.T) {
-			upgradeTo(version)
+			upgradeFrom(version)
 		})
 	}
 }
