@@ -1,5 +1,5 @@
 ## 7.20.4 (unreleased)
-This release changes the "syncing" mode SQLite uses with on-disk files, by switching "synchronous" to OFF. The [SQLite docs](https://www.sqlite.org/pragma.html#pragma_synchronous) state that this risks database corruption in the event of a crash, but that's OK, as rqlite always blows away any SQLite database on startup and rebuilds it from the Raft log. Testing should this results in (at least) a 3x speed-up in write performance.
+This release changes the "syncing" mode SQLite uses when rqlite runs in "on-disk" mode. It does this by switching "synchronous" to OFF. The [SQLite docs](https://www.sqlite.org/pragma.html#pragma_synchronous) state that this risks database corruption in the event of a crash, but that's OK, as rqlite always blows away any SQLite database on startup and rebuilds it from the Raft log. Testing should this results in (at least) a 3x speed-up in write performance.
 
 ### Implementation changes and bug fixes
 - [PR #1301](https://github.com/rqlite/rqlite/pull/1301): Set sychronous mode to `OFF` for SQLite on-disk files.
