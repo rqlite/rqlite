@@ -844,6 +844,12 @@ func Test_SingleNodeNoSQLInjection(t *testing.T) {
 
 // Test_SingleNodeUpgrades upgrade from a data created by earlier releases.
 func Test_SingleNodeUpgrades(t *testing.T) {
+	versions := []string{
+		"v6.0.0-data",
+		"v7.0.0-data",
+		"v7.9.2-data",
+	}
+
 	upgradeTo := func(dir string) {
 		// Deprovision of a node deletes the node's dir, so make a copy first.
 		srcdir := filepath.Join("testdata", dir)
@@ -889,9 +895,11 @@ func Test_SingleNodeUpgrades(t *testing.T) {
 		}
 	}
 
-	upgradeTo("v6.0.0-data")
-	upgradeTo("v7.0.0-data")
-	upgradeTo("v7.9.2-data")
+	for _, version := range versions {
+		t.Run(version, func(t *testing.T) {
+			upgradeTo(version)
+		})
+	}
 }
 
 func Test_SingleNodeNodes(t *testing.T) {
