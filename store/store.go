@@ -420,7 +420,7 @@ func (s *Store) Open() (retErr error) {
 	if s.StartupOnDisk || (!s.dbConf.Memory && !s.snapsExistOnOpen && s.lastCommandIdxOnOpen == 0) {
 		s.db, err = createOnDisk(nil, s.dbPath, s.dbConf.FKConstraints)
 		if err != nil {
-			return fmt.Errorf("failed to create on-disk database")
+			return fmt.Errorf("failed to create on-disk database: %s", err)
 		}
 		s.onDiskCreated = true
 		s.logger.Printf("created on-disk database at open")
@@ -428,7 +428,7 @@ func (s *Store) Open() (retErr error) {
 		// We need an in-memory database, at least for bootstrapping purposes.
 		s.db, err = createInMemory(nil, s.dbConf.FKConstraints)
 		if err != nil {
-			return fmt.Errorf("failed to create in-memory database")
+			return fmt.Errorf("failed to create in-memory database: %s", err)
 		}
 		s.logger.Printf("created in-memory database at open")
 	}

@@ -137,6 +137,14 @@ func Open(dbPath string, fkEnabled bool) (*DB, error) {
 		return nil, err
 	}
 
+	// Set synchronous to OFF, to improve performance. The SQLite docs state that
+	// this risks database corruption in the event of a crash, but that's OK, as
+	// rqlite blows away the database on startup and always rebuilds it from the
+	// Raft log.
+	if _, err := rwDB.Exec("PRAGMA synchronous=OFF"); err != nil {
+		return nil, err
+	}
+
 	roOpts := []string{
 		"mode=ro",
 		fmt.Sprintf("_fk=%s", strconv.FormatBool(fkEnabled)),
