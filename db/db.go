@@ -337,7 +337,7 @@ func (db *DB) Stats() (map[string]interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	pragams, err := db.pragmas()
+	pragmas, err := db.pragmas()
 	if err != nil {
 		return nil, err
 	}
@@ -349,7 +349,7 @@ func (db *DB) Stats() (map[string]interface{}, error) {
 		"rw_dsn":          db.rwDSN,
 		"ro_dsn":          db.roDSN,
 		"conn_pool_stats": connPoolStats,
-		"pragmas":         pragams,
+		"pragmas":         pragmas,
 	}
 
 	stats["path"] = db.path
