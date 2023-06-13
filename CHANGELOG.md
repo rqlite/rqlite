@@ -1,10 +1,10 @@
-## 7.20.4 (unreleased)
+## 7.20.4 (June 13th 2023)
 This release changes the "syncing" mode SQLite uses when rqlite runs in "on-disk" mode. It does this by switching "synchronous" to OFF. The [SQLite docs](https://www.sqlite.org/pragma.html#pragma_synchronous) state that this risks database corruption in the event of a crash, but that's OK, as rqlite always blows away any SQLite database on startup and rebuilds it from the Raft log. Testing should this results in (at least) a 3x speed-up in write performance.
 
 ### Implementation changes and bug fixes
 - [PR #1301](https://github.com/rqlite/rqlite/pull/1301): Set sychronous mode to `OFF` for SQLite on-disk files.
 
-## 7.20.3 (June 12th 2023))
+## 7.20.3 (June 12th 2023)
 ### Implementation changes and bug fixes
 - [PR #1298](https://github.com/rqlite/rqlite/pull/1298): Move FSMSnapshot to own source file.
 - [PR #1300](https://github.com/rqlite/rqlite/pull/1300): Check for WAL-enabled SQLite files during load and restore.
