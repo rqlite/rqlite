@@ -1,6 +1,6 @@
 ## 7.20.5 (unreleased)
 ### Implementation changes and bug fixes
-- [PR #1302](https://github.com/rqlite/rqlite/pull/1302): Add some important PRAGMA state to database-level status.
+- [PR #1302](https://github.com/rqlite/rqlite/pull/1302): Add some important PRAGMA state to database-level status reporting.
 
 ## 7.20.4 (June 13th 2023)
 This release changes the "syncing" mode SQLite uses to _OFF_ when rqlite runs in "on-disk" mode. The [SQLite docs](https://www.sqlite.org/pragma.html#pragma_synchronous) state that this risks database corruption in the event of a crash, but that's a non-issue for rqlite, as rqlite always deletes any SQLite database on startup and rebuilds it from the Raft log. Testing shows this change results in (at least) a 3x speed-up in write performance when operating in "on-disk" mode.
