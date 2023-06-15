@@ -4,11 +4,12 @@ go 1.16
 
 require (
 	github.com/Bowery/prompt v0.0.0-20190916142128-fa8279994f75
-	github.com/aws/aws-sdk-go v1.44.267
+	github.com/armon/go-metrics v0.5.1 // indirect
+	github.com/aws/aws-sdk-go v1.44.282
 	github.com/coreos/go-semver v0.3.1 // indirect
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
 	github.com/fatih/color v1.15.0 // indirect
-	github.com/hashicorp/consul/api v1.20.0 // indirect
+	github.com/hashicorp/consul/api v1.21.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-immutable-radix v1.3.1 // indirect
 	github.com/hashicorp/go-msgpack v1.1.5 // indirect
@@ -28,11 +29,15 @@ require (
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.24.0 // indirect
-	golang.org/x/crypto v0.9.0
-	golang.org/x/net v0.10.0
-	google.golang.org/genproto v0.0.0-20230410155749-daa745c078e1 // indirect
-	google.golang.org/grpc v1.55.0 // indirect
+	golang.org/x/crypto v0.10.0
+	golang.org/x/net v0.11.0
+	google.golang.org/genproto v0.0.0-20230530153820-e85fd2cbaebc // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20230530153820-e85fd2cbaebc // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20230530153820-e85fd2cbaebc // indirect
 	google.golang.org/protobuf v1.30.0
 )
 
-replace golang.org/x/text => golang.org/x/text v0.3.8
+replace (
+	github.com/armon/go-metrics => github.com/hashicorp/go-metrics v0.5.1
+	golang.org/x/text => golang.org/x/text v0.3.8
+)
