@@ -89,6 +89,9 @@ class TestBootstrappingRestartLeaveOnRemove(unittest.TestCase):
     self.assertEqual(len(n0.nodes()), 2)
 
     n2.start(join=','.join([n0.APIProtoAddr(), n1.APIProtoAddr(), n2.APIProtoAddr()]))
+    n2.wait_for_leader() # Be sure node has joined cluster.
+
+    # Ensure all nodes agree on which node is leader.
     self.assertEqual(n0.wait_for_leader(), n1.wait_for_leader())
     self.assertEqual(n0.wait_for_leader(), n2.wait_for_leader())
     self.assertEqual(len(n0.nodes()), 3)
