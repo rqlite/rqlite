@@ -69,7 +69,7 @@ const (
 	raftDBPath          = "raft.db" // Changing this will break backwards compatibility.
 	peersPath           = "raft/peers.json"
 	peersInfoPath       = "raft/peers.info"
-	retainSnapshotCount = 2
+	retainSnapshotCount = 1
 	applyTimeout        = 10 * time.Second
 	openTimeout         = 120 * time.Second
 	sqliteFile          = "db.sqlite"
