@@ -1,3 +1,7 @@
+## 7.20.6 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1305](https://github.com/rqlite/rqlite/pull/1305): Upgrade dependencies via `go get`.
+
 ## 7.20.5 (June 14th 2023)
 ### Implementation changes and bug fixes
 - [PR #1302](https://github.com/rqlite/rqlite/pull/1302): Add some important PRAGMA state to database-level status reporting.
