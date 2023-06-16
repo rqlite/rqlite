@@ -1008,6 +1008,11 @@ func testDBFileSize(t *testing.T, db *DB) {
 		t.Fatalf("failed to read database file size: %s", err)
 	}
 }
+func testDBWALSize(t *testing.T, db *DB) {
+	if _, err := db.WALSize(); err != nil {
+		t.Fatalf("failed to read database WAL file size: %s", err)
+	}
+}
 
 func testStmtReadOnly(t *testing.T, db *DB) {
 	r, err := db.ExecuteStringStmt(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`)
@@ -1302,6 +1307,7 @@ func Test_DatabaseCommonOperations(t *testing.T) {
 		{"Dump", testDump},
 		{"Size", testSize},
 		{"DBFileSize", testDBFileSize},
+		{"DBWALSize", testDBWALSize},
 		{"StmtReadOnly", testStmtReadOnly},
 		{"JSON1", testJSON1},
 		{"DBSTAT_table", testDBSTAT_table},

@@ -67,6 +67,7 @@ func ResetStats() {
 // DB is the SQL database.
 type DB struct {
 	path      string // Path to database file, if running on-disk.
+	walPath   string // Path to WAL file, if running on-disk and WAL is enabled.
 	memory    bool   // In-memory only.
 	fkEnabled bool   // Foreign key constraints enabled
 	wal       bool
@@ -183,6 +184,7 @@ func Open(dbPath string, fkEnabled, wal bool) (*DB, error) {
 
 	return &DB{
 		path:      dbPath,
+		walPath:   dbPath + "-wal",
 		fkEnabled: fkEnabled,
 		wal:       wal,
 		rwDB:      rwDB,
@@ -372,6 +374,11 @@ func (db *DB) Stats() (map[string]interface{}, error) {
 		if stats["size"], err = db.FileSize(); err != nil {
 			return nil, err
 		}
+		if db.wal {
+			if stats["wal_size"], err = db.WALSize(); err != nil {
+				return nil, err
+			}
+		}
 	}
 	return stats, nil
 }
@@ -396,6 +403,22 @@ func (db *DB) FileSize() (int64, error) {
 	fi, err := os.Stat(db.path)
 	if err != nil {
 		return 0, err
+	}
+	return fi.Size(), nil
+}
+
+// WALSize returns the size of the SQLite WAL file on disk. If running in
+// on-memory mode, this function returns 0.
+func (db *DB) WALSize() (int64, error) {
+	if !db.wal {
+		return 0, nil
+	}
+	fi, err := os.Stat(db.walPath)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return 0, err
+		}
+		return 0, nil
 	}
 	return fi.Size(), nil
 }
