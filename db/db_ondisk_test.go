@@ -6,6 +6,7 @@ import (
 	"os"
 	"path"
 	"testing"
+	"time"
 )
 
 func Test_IsValidSQLiteOnDisk(t *testing.T) {
@@ -120,6 +121,12 @@ func Test_FileCreationOnDisk(t *testing.T) {
 	}
 	if db.Path() != dbPath {
 		t.Fatal("database path is incorrect")
+	}
+
+	// Confirm checkpoint works without error on a database in DELETE Mode.
+	// It's just ignored.
+	if err := db.Checkpoint(5 * time.Second); err != nil {
+		t.Fatalf("failed to checkpoint in-memory database: %s", err.Error())
 	}
 
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
