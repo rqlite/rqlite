@@ -470,6 +470,11 @@ func (db *DB) FKEnabled() bool {
 	return db.fkEnabled
 }
 
+// WALEnabled returns whether WAL mode is enabled.
+func (db *DB) WALEnabled() bool {
+	return db.wal
+}
+
 // Path returns the path of this database.
 func (db *DB) Path() string {
 	return db.path
@@ -909,10 +914,17 @@ func (db *DB) Copy(dstDB *DB) error {
 // an ordinary on-disk database file, the serialization is just a copy of the
 // disk file. For an in-memory database or a "TEMP" database, the serialization
 // is the same sequence of bytes which would be written to disk if that database
-// were backed up to disk. This function must not be called while any writes
-// are happening to the database.
+// were backed up to disk. If the database is in WAL mode, a RESTART checkpoint
+// will be performed before the database is serialized. This function must not
+// be called while any writes are happening to the database.
 func (db *DB) Serialize() ([]byte, error) {
 	if !db.memory {
+		// If the database is in WAL mode, perform a checkpoint before serializing.
+		if db.wal {
+			if err := db.Checkpoint(defaultCheckpointTimeout); err != nil {
+				return nil, err
+			}
+		}
 		// Simply read and return the SQLite file.
 		return os.ReadFile(db.path)
 	}

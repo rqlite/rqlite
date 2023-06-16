@@ -967,7 +967,7 @@ func testSerialize(t *testing.T, db *DB) {
 		t.Fatalf("failed to write serialized database to file: %s", err.Error())
 	}
 
-	newDB, err := Open(dstDB.Name(), false)
+	newDB, err := Open(dstDB.Name(), false, false)
 	if err != nil {
 		t.Fatalf("failed to open on-disk serialized database: %s", err.Error())
 	}
@@ -1196,7 +1196,7 @@ func testCopy(t *testing.T, db *DB) {
 
 	dstFile := mustTempFile()
 	defer os.Remove(dstFile)
-	dstDB, err := Open(dstFile, false)
+	dstDB, err := Open(dstFile, false, false)
 	if err != nil {
 		t.Fatalf("failed to open destination database: %s", err)
 	}
@@ -1252,7 +1252,7 @@ func testBackup(t *testing.T, db *DB) {
 		t.Fatalf("failed to backup database: %s", err.Error())
 	}
 
-	newDB, err := Open(dstDB, false)
+	newDB, err := Open(dstDB, false, false)
 	if err != nil {
 		t.Fatalf("failed to open backup database: %s", err.Error())
 	}
@@ -1310,10 +1310,17 @@ func Test_DatabaseCommonOperations(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		db, path := mustCreateDatabase()
+		db, path := mustCreateOnDiskDatabase()
 		defer db.Close()
 		defer os.Remove(path)
 		t.Run(tc.name+":disk", func(t *testing.T) {
+			tc.testFunc(t, db)
+		})
+
+		db, path = mustCreateOnDiskDatabaseWAL()
+		defer db.Close()
+		defer os.Remove(path)
+		t.Run(tc.name+":wal", func(t *testing.T) {
 			tc.testFunc(t, db)
 		})
 

@@ -116,7 +116,7 @@ func Test_ConcurrentQueriesInMemory(t *testing.T) {
 }
 
 func Test_SimpleTransaction(t *testing.T) {
-	db, path := mustCreateDatabase()
+	db, path := mustCreateOnDiskDatabase()
 	defer db.Close()
 	defer os.Remove(path)
 
@@ -159,7 +159,7 @@ func Test_SimpleTransaction(t *testing.T) {
 }
 
 func Test_PartialFailTransaction(t *testing.T) {
-	db, path := mustCreateDatabase()
+	db, path := mustCreateOnDiskDatabase()
 	defer db.Close()
 	defer os.Remove(path)
 
@@ -201,12 +201,23 @@ func Test_PartialFailTransaction(t *testing.T) {
 	}
 }
 
-func mustCreateDatabase() (*DB, string) {
+func mustCreateOnDiskDatabase() (*DB, string) {
 	var err error
 	f := mustTempFile()
-	db, err := Open(f, false)
+	db, err := Open(f, false, false)
 	if err != nil {
-		panic("failed to open database")
+		panic("failed to open database in DELETE mode")
+	}
+
+	return db, f
+}
+
+func mustCreateOnDiskDatabaseWAL() (*DB, string) {
+	var err error
+	f := mustTempFile()
+	db, err := Open(f, false, true)
+	if err != nil {
+		panic("failed to open database in WAL mode")
 	}
 
 	return db, f
