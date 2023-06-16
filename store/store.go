@@ -2042,7 +2042,7 @@ func createOnDisk(b []byte, path string, fkConstraints bool) (*sql.DB, error) {
 			return nil, err
 		}
 	}
-	return sql.Open(path, fkConstraints)
+	return sql.Open(path, fkConstraints, false)
 }
 
 func readUint64(b []byte) (uint64, error) {

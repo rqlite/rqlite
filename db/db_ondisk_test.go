@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
-	"path"
 	"testing"
 	"time"
 )
@@ -39,7 +38,7 @@ func Test_IsValidSQLiteOnDisk(t *testing.T) {
 	}
 }
 
-func Test_IsWALModeEnablednDiskDELETE(t *testing.T) {
+func Test_IsWALModeEnabledOnDiskDELETE(t *testing.T) {
 	path := mustTempFile()
 	defer os.Remove(path)
 
@@ -68,7 +67,7 @@ func Test_IsWALModeEnablednDiskDELETE(t *testing.T) {
 	}
 }
 
-func Test_IsWALModeEnablednDiskWAL(t *testing.T) {
+func Test_IsWALModeEnabledOnDiskWAL(t *testing.T) {
 	path := mustTempFile()
 	defer os.Remove(path)
 
@@ -101,17 +100,44 @@ func Test_IsWALModeEnablednDiskWAL(t *testing.T) {
 	}
 }
 
-func Test_FileCreationOnDisk(t *testing.T) {
-	dir := t.TempDir()
-	dbPath := path.Join(dir, "test_db")
+// Add tests that check a WAL file is created, and that a checkpoint succeeds
+func Test_WALDatabaseCreatedOK(t *testing.T) {
+	path := mustTempFile()
+	defer os.Remove(path)
 
-	db, err := Open(dbPath, false)
+	db, err := Open(path, false, true)
 	if err != nil {
-		t.Fatalf("failed to open new database: %s", err.Error())
+		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
 	}
-	if db == nil {
-		t.Fatal("database is nil")
+	defer db.Close()
+
+	if !db.WALEnabled() {
+		t.Fatalf("WAL mode not enabled")
 	}
+
+	if db.InMemory() {
+		t.Fatalf("on-disk WAL database marked as in-memory")
+	}
+
+	if _, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"); err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	if !IsWALModeEnabledSQLiteFile(path) {
+		t.Fatalf("SQLite file not marked as WAL")
+	}
+
+	walPath := path + "-wal"
+	if _, err := os.Stat(walPath); os.IsNotExist(err) {
+		t.Fatalf("WAL file does not exist")
+	}
+
+	if err := db.Checkpoint(5 * time.Second); err != nil {
+		t.Fatalf("failed to checkpoint database in WAL mode: %s", err.Error())
+	}
+}
+
+func test_FileCreationOnDisk(t *testing.T, db *DB) {
 	defer db.Close()
 	if db.InMemory() {
 		t.Fatal("on-disk database marked as in-memory")
@@ -119,37 +145,17 @@ func Test_FileCreationOnDisk(t *testing.T) {
 	if db.FKEnabled() {
 		t.Fatal("FK constraints marked as enabled")
 	}
-	if db.Path() != dbPath {
-		t.Fatal("database path is incorrect")
-	}
 
-	// Confirm checkpoint works without error on a database in DELETE Mode.
-	// It's just ignored.
+	// Confirm checkpoint works on all types of on-disk databases. Worst case, this
+	// should be ignored.
 	if err := db.Checkpoint(5 * time.Second); err != nil {
 		t.Fatalf("failed to checkpoint database in DELETE mode: %s", err.Error())
 	}
-
-	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-		t.Fatalf("%s does not exist after open", dbPath)
-	}
-	err = db.Close()
-	if err != nil {
-		t.Fatalf("failed to close database: %s", err.Error())
-	}
 }
 
-// Test_ConnectionIsolationOnDisk test that ISOLATION behavior of on-disk databases doesn't
+// test_ConnectionIsolationOnDisk test that ISOLATION behavior of on-disk databases doesn't
 // change unexpectedly.
-func Test_ConnectionIsolationOnDisk(t *testing.T) {
-	dir := t.TempDir()
-	dbPath := path.Join(dir, "test_db")
-
-	db, err := Open(dbPath, false)
-	if err != nil {
-		t.Fatalf("failed to open new database: %s", err.Error())
-	}
-	defer db.Close()
-
+func test_ConnectionIsolationOnDisk(t *testing.T, db *DB) {
 	r, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -193,5 +199,31 @@ func Test_ConnectionIsolationOnDisk(t *testing.T) {
 	}
 	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(q); exp != got {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+}
+
+func Test_DatabaseCommonOnDiskOperations(t *testing.T) {
+	testCases := []struct {
+		name     string
+		testFunc func(*testing.T, *DB)
+	}{
+		{"FileCreationOnDisk", test_FileCreationOnDisk},
+		{"ConnectionIsolationOnDisk", test_ConnectionIsolationOnDisk},
+	}
+
+	for _, tc := range testCases {
+		db, path := mustCreateOnDiskDatabase()
+		defer db.Close()
+		defer os.Remove(path)
+		t.Run(tc.name+":disk", func(t *testing.T) {
+			tc.testFunc(t, db)
+		})
+
+		db, path = mustCreateOnDiskDatabaseWAL()
+		defer db.Close()
+		defer os.Remove(path)
+		t.Run(tc.name+":wal", func(t *testing.T) {
+			tc.testFunc(t, db)
+		})
 	}
 }

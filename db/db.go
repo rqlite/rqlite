@@ -24,14 +24,16 @@ const (
 )
 
 const (
-	numExecutions      = "executions"
-	numExecutionErrors = "execution_errors"
-	numQueries         = "queries"
-	numQueryErrors     = "query_errors"
-	numRequests        = "requests"
-	numETx             = "execute_transactions"
-	numQTx             = "query_transactions"
-	numRTx             = "request_transactions"
+	numCheckpoints      = "checkpoints"
+	numCheckpointErrors = "checkpoint_errors"
+	numExecutions       = "executions"
+	numExecutionErrors  = "execution_errors"
+	numQueries          = "queries"
+	numQueryErrors      = "query_errors"
+	numRequests         = "requests"
+	numETx              = "execute_transactions"
+	numQTx              = "query_transactions"
+	numRTx              = "request_transactions"
 )
 
 // DBVersion is the SQLite version.
@@ -50,6 +52,8 @@ func init() {
 // ResetStats resets the expvar stats for this module. Mostly for test purposes.
 func ResetStats() {
 	stats.Init()
+	stats.Add(numCheckpoints, 0)
+	stats.Add(numCheckpointErrors, 0)
 	stats.Add(numExecutions, 0)
 	stats.Add(numExecutionErrors, 0)
 	stats.Add(numQueries, 0)
@@ -63,8 +67,10 @@ func ResetStats() {
 // DB is the SQL database.
 type DB struct {
 	path      string // Path to database file, if running on-disk.
+	walPath   string // Path to WAL file, if running on-disk and WAL is enabled.
 	memory    bool   // In-memory only.
 	fkEnabled bool   // Foreign key constraints enabled
+	wal       bool
 
 	rwDB *sql.DB // Database connection for database reads and writes.
 	roDB *sql.DB // Database connection database reads.
@@ -133,7 +139,7 @@ func IsWALModeEnabled(b []byte) bool {
 
 // Open opens a file-based database, creating it if it does not exist. After this
 // function returns, an actual SQLite file will always exist.
-func Open(dbPath string, fkEnabled bool) (*DB, error) {
+func Open(dbPath string, fkEnabled, wal bool) (*DB, error) {
 	rwDSN := fmt.Sprintf("file:%s?_fk=%s", dbPath, strconv.FormatBool(fkEnabled))
 	rwDB, err := sql.Open("sqlite3", rwDSN)
 	if err != nil {
@@ -146,6 +152,12 @@ func Open(dbPath string, fkEnabled bool) (*DB, error) {
 	// Raft log.
 	if _, err := rwDB.Exec("PRAGMA synchronous=OFF"); err != nil {
 		return nil, err
+	}
+
+	if wal {
+		if _, err := rwDB.Exec("PRAGMA journal_mode=WAL"); err != nil {
+			return nil, err
+		}
 	}
 
 	roOpts := []string{
@@ -172,7 +184,9 @@ func Open(dbPath string, fkEnabled bool) (*DB, error) {
 
 	return &DB{
 		path:      dbPath,
+		walPath:   dbPath + "-wal",
 		fkEnabled: fkEnabled,
+		wal:       wal,
 		rwDB:      rwDB,
 		roDB:      roDB,
 		rwDSN:     rwDSN,
@@ -236,13 +250,13 @@ func OpenInMemory(fkEnabled bool) (*DB, error) {
 // LoadIntoMemory loads an in-memory database with that at the path.
 // Not safe to call while other operations are happening with the
 // source database.
-func LoadIntoMemory(dbPath string, fkEnabled bool) (*DB, error) {
+func LoadIntoMemory(dbPath string, fkEnabled, wal bool) (*DB, error) {
 	dstDB, err := OpenInMemory(fkEnabled)
 	if err != nil {
 		return nil, err
 	}
 
-	srcDB, err := Open(dbPath, false)
+	srcDB, err := Open(dbPath, fkEnabled, wal)
 	if err != nil {
 		return nil, err
 	}
@@ -360,6 +374,11 @@ func (db *DB) Stats() (map[string]interface{}, error) {
 		if stats["size"], err = db.FileSize(); err != nil {
 			return nil, err
 		}
+		if db.wal {
+			if stats["wal_size"], err = db.WALSize(); err != nil {
+				return nil, err
+			}
+		}
 	}
 	return stats, nil
 }
@@ -388,9 +407,33 @@ func (db *DB) FileSize() (int64, error) {
 	return fi.Size(), nil
 }
 
+// WALSize returns the size of the SQLite WAL file on disk. If running in
+// on-memory mode, this function returns 0.
+func (db *DB) WALSize() (int64, error) {
+	if !db.wal {
+		return 0, nil
+	}
+	fi, err := os.Stat(db.walPath)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return 0, err
+		}
+		return 0, nil
+	}
+	return fi.Size(), nil
+}
+
 // Checkpoint performs a WAL checkpoint. If the checkpoint does not complete
 // within the given duration, an error is returned.
-func (db *DB) Checkpoint(dur time.Duration) error {
+func (db *DB) Checkpoint(dur time.Duration) (err error) {
+	defer func() {
+		if err != nil {
+			stats.Add(numCheckpointErrors, 1)
+		} else {
+			stats.Add(numCheckpoints, 1)
+		}
+	}()
+
 	var ok int
 	var nPages int
 	var nMoved int
@@ -425,6 +468,21 @@ func (db *DB) Checkpoint(dur time.Duration) error {
 	}
 }
 
+// DisableCheckpoint disables the automatic checkpointing that occurs when
+// the WAL reaches a certain size. This is key for full control of snapshotting.
+// and can be useful for testing.
+func (db *DB) DisableCheckpointing() error {
+	_, err := db.rwDB.Exec("PRAGMA wal_autocheckpoint=-1")
+	return err
+}
+
+// EnableCheckpointing enables the automatic checkpointing that occurs when
+// the WAL reaches a certain size.
+func (db *DB) EnableCheckpointing() error {
+	_, err := db.rwDB.Exec("PRAGMA wal_autocheckpoint=1000")
+	return err
+}
+
 // InMemory returns whether this database is in-memory.
 func (db *DB) InMemory() bool {
 	return db.memory
@@ -433,6 +491,11 @@ func (db *DB) InMemory() bool {
 // FKEnabled returns whether Foreign Key constraints are enabled.
 func (db *DB) FKEnabled() bool {
 	return db.fkEnabled
+}
+
+// WALEnabled returns whether WAL mode is enabled.
+func (db *DB) WALEnabled() bool {
+	return db.wal
 }
 
 // Path returns the path of this database.
@@ -848,7 +911,7 @@ func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQuery
 // Backup writes a consistent snapshot of the database to the given file.
 // This function can be called when changes to the database are in flight.
 func (db *DB) Backup(path string) error {
-	dstDB, err := Open(path, false)
+	dstDB, err := Open(path, false, false)
 	if err != nil {
 		return err
 	}
@@ -874,10 +937,17 @@ func (db *DB) Copy(dstDB *DB) error {
 // an ordinary on-disk database file, the serialization is just a copy of the
 // disk file. For an in-memory database or a "TEMP" database, the serialization
 // is the same sequence of bytes which would be written to disk if that database
-// were backed up to disk. This function must not be called while any writes
-// are happening to the database.
+// were backed up to disk. If the database is in WAL mode, a RESTART checkpoint
+// will be performed before the database is serialized. This function must not
+// be called while any writes are happening to the database.
 func (db *DB) Serialize() ([]byte, error) {
 	if !db.memory {
+		// If the database is in WAL mode, perform a checkpoint before serializing.
+		if db.wal {
+			if err := db.Checkpoint(defaultCheckpointTimeout); err != nil {
+				return nil, err
+			}
+		}
 		// Simply read and return the SQLite file.
 		return os.ReadFile(db.path)
 	}
@@ -1039,28 +1109,25 @@ func (db *DB) pragmas() (map[string]interface{}, error) {
 		"ro": db.roDB,
 	}
 
-	m := make(map[string]interface{})
+	connsMap := make(map[string]interface{})
 	for k, v := range conns {
-		var sync string
-		if err := v.QueryRow("PRAGMA synchronous").Scan(&sync); err != nil {
-			return nil, err
+		pragmasMap := make(map[string]string)
+		for _, p := range []string{
+			"synchronous",
+			"journal_mode",
+			"foreign_keys",
+			"wal_autocheckpoint",
+		} {
+			var s string
+			if err := v.QueryRow(fmt.Sprintf("PRAGMA %s", p)).Scan(&s); err != nil {
+				return nil, err
+			}
+			pragmasMap[p] = s
 		}
-		var jm string
-		if err := v.QueryRow("PRAGMA journal_mode").Scan(&jm); err != nil {
-			return nil, err
-		}
-		var fk string
-		if err := v.QueryRow("PRAGMA foreign_keys").Scan(&fk); err != nil {
-			return nil, err
-		}
-		m[k] = map[string]string{
-			"synchronous":  sync,
-			"journal_mode": jm,
-			"foreign_keys": fk,
-		}
+		connsMap[k] = pragmasMap
 	}
 
-	return m, nil
+	return connsMap, nil
 }
 
 func (db *DB) memStats() (map[string]int64, error) {

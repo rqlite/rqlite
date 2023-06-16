@@ -47,7 +47,7 @@ func Test_TableCreationInMemory(t *testing.T) {
 }
 
 func Test_LoadIntoMemory(t *testing.T) {
-	db, path := mustCreateDatabase()
+	db, path := mustCreateOnDiskDatabase()
 	defer db.Close()
 	defer os.Remove(path)
 
@@ -64,7 +64,7 @@ func Test_LoadIntoMemory(t *testing.T) {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
 
-	inmem, err := LoadIntoMemory(path, false)
+	inmem, err := LoadIntoMemory(path, false, false)
 	if err != nil {
 		t.Fatalf("failed to create loaded in-memory database: %s", err.Error())
 	}
@@ -80,7 +80,7 @@ func Test_LoadIntoMemory(t *testing.T) {
 }
 
 func Test_DeserializeIntoMemory(t *testing.T) {
-	db, path := mustCreateDatabase()
+	db, path := mustCreateOnDiskDatabase()
 	defer db.Close()
 	defer os.Remove(path)
 
