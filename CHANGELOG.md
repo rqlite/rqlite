@@ -2,6 +2,7 @@
 ### Implementation changes and bug fixes
 - [PR #1305](https://github.com/rqlite/rqlite/pull/1305): Upgrade dependencies via `go get`.
 - [PR #1306](https://github.com/rqlite/rqlite/pull/1306): Add some (currently unused) WAL control code.
+- [PR #1307](https://github.com/rqlite/rqlite/pull/1307): Add full WAL-support to database layer. Not yet enabled by full application.
 
 ## 7.20.5 (June 14th 2023)
 ### Implementation changes and bug fixes
