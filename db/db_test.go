@@ -11,6 +11,24 @@ import (
 	"github.com/rqlite/rqlite/command/encoding"
 )
 
+func Test_RemoveFiles(t *testing.T) {
+	d := t.TempDir()
+	mustCreateClosedFile(fmt.Sprintf("%s/foo", d))
+	mustCreateClosedFile(fmt.Sprintf("%s/foo-wal", d))
+
+	if err := RemoveFiles(fmt.Sprintf("%s/foo", d)); err != nil {
+		t.Fatalf("failed to remove files: %s", err.Error())
+	}
+
+	files, err := ioutil.ReadDir(d)
+	if err != nil {
+		t.Fatalf("failed to read directory: %s", err.Error())
+	}
+	if len(files) != 0 {
+		t.Fatalf("expected directory to be empty, but wasn't")
+	}
+}
+
 // Test_TableCreationInMemoryFK ensures foreign key constraints work
 func Test_TableCreationInMemoryFK(t *testing.T) {
 	createTableFoo := "CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"
@@ -269,4 +287,14 @@ func mustTempFile() string {
 	}
 	tmpfile.Close()
 	return tmpfile.Name()
+}
+
+func mustCreateClosedFile(path string) {
+	f, err := os.Create(path)
+	if err != nil {
+		panic("failed to create file")
+	}
+	if err := f.Close(); err != nil {
+		panic("failed to close file")
+	}
 }

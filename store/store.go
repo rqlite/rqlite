@@ -2034,7 +2034,7 @@ func createInMemory(b []byte, fkConstraints bool) (db *sql.DB, err error) {
 // non-nil, any preexisting file will first be overwritten with those contents.
 // Otherwise, any preexisting file will be removed before the database is opened.
 func createOnDisk(b []byte, path string, fkConstraints bool) (*sql.DB, error) {
-	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+	if err := sql.RemoveFiles(path); err != nil {
 		return nil, err
 	}
 	if b != nil {

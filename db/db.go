@@ -137,6 +137,20 @@ func IsWALModeEnabled(b []byte) bool {
 	return len(b) >= 20 && b[18] == 2 && b[19] == 2
 }
 
+// RemoveFiles removes the SQLite database file, and any associated WAL and SHM files.
+func RemoveFiles(path string) error {
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if err := os.Remove(path + "-wal"); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if err := os.Remove(path + "-shm"); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
 // Open opens a file-based database, creating it if it does not exist. After this
 // function returns, an actual SQLite file will always exist.
 func Open(dbPath string, fkEnabled, wal bool) (*DB, error) {
@@ -408,7 +422,7 @@ func (db *DB) FileSize() (int64, error) {
 }
 
 // WALSize returns the size of the SQLite WAL file on disk. If running in
-// on-memory mode, this function returns 0.
+// WAL mode is not enabled, this function returns 0.
 func (db *DB) WALSize() (int64, error) {
 	if !db.wal {
 		return 0, nil
