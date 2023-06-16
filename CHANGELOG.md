@@ -1,4 +1,4 @@
-## 7.20.6 (unreleased)
+## 7.20.6 (June 16th 2023)
 ### Implementation changes and bug fixes
 - [PR #1305](https://github.com/rqlite/rqlite/pull/1305): Upgrade dependencies via `go get`.
 - [PR #1306](https://github.com/rqlite/rqlite/pull/1306): Add some (currently unused) WAL control code.
