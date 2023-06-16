@@ -408,7 +408,7 @@ func (db *DB) FileSize() (int64, error) {
 }
 
 // WALSize returns the size of the SQLite WAL file on disk. If running in
-// on-memory mode, this function returns 0.
+// WAL mode is not enabled, this function returns 0.
 func (db *DB) WALSize() (int64, error) {
 	if !db.wal {
 		return 0, nil
