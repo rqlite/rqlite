@@ -39,6 +39,11 @@ func Test_TableCreationInMemory(t *testing.T) {
 	if exp, got := `[{"columns":["id","name"],"types":["integer","text"]}]`, asJSON(q); exp != got {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
+
+	// Confirm checkpoint works without error on an in-memory database. It should just be ignored.
+	if err := db.Checkpoint(5 * time.Second); err != nil {
+		t.Fatalf("failed to checkpoint in-memory database: %s", err.Error())
+	}
 }
 
 func Test_LoadIntoMemory(t *testing.T) {

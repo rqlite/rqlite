@@ -18,7 +18,10 @@ import (
 	"github.com/rqlite/rqlite/command"
 )
 
-const bkDelay = 250
+const (
+	bkDelay                  = 250
+	defaultCheckpointTimeout = 30 * time.Second
+)
 
 const (
 	numExecutions      = "executions"
@@ -383,6 +386,43 @@ func (db *DB) FileSize() (int64, error) {
 		return 0, err
 	}
 	return fi.Size(), nil
+}
+
+// Checkpoint performs a WAL checkpoint. If the checkpoint does not complete
+// within the given duration, an error is returned.
+func (db *DB) Checkpoint(dur time.Duration) error {
+	var ok int
+	var nPages int
+	var nMoved int
+
+	f := func() error {
+		err := db.rwDB.QueryRow("PRAGMA wal_checkpoint(RESTART)").Scan(&ok, &nPages, &nMoved)
+		if err != nil {
+			return err
+		}
+		if ok != 0 {
+			return fmt.Errorf("failed to completely checkpoint WAL")
+		}
+		return nil
+	}
+
+	// Try fast path
+	if err := f(); err == nil {
+		return nil
+	}
+
+	t := time.NewTicker(100 * time.Millisecond)
+	defer t.Stop()
+	for {
+		select {
+		case <-t.C:
+			if err := f(); err == nil {
+				return nil
+			}
+		case <-time.After(dur):
+			return fmt.Errorf("checkpoint timeout")
+		}
+	}
 }
 
 // InMemory returns whether this database is in-memory.
