@@ -126,7 +126,7 @@ func Test_FileCreationOnDisk(t *testing.T) {
 	// Confirm checkpoint works without error on a database in DELETE Mode.
 	// It's just ignored.
 	if err := db.Checkpoint(5 * time.Second); err != nil {
-		t.Fatalf("failed to checkpoint in-memory database: %s", err.Error())
+		t.Fatalf("failed to checkpoint database in DELETE mode: %s", err.Error())
 	}
 
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
