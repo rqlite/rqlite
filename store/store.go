@@ -2053,10 +2053,6 @@ func readUint64(b []byte) (uint64, error) {
 	return sz, nil
 }
 
-func writeUint64(w io.Writer, v uint64) error {
-	return binary.Write(w, binary.LittleEndian, v)
-}
-
 // enabledFromBool converts bool to "enabled" or "disabled".
 func enabledFromBool(b bool) string {
 	if b {
