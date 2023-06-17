@@ -1,3 +1,7 @@
+## 7.20.7 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1309](https://github.com/rqlite/rqlite/pull/1309): Factor Snapshot creation into own module.
+
 ## 7.20.6 (June 16th 2023)
 ### Implementation changes and bug fixes
 - [PR #1305](https://github.com/rqlite/rqlite/pull/1305): Upgrade dependencies via `go get`.
