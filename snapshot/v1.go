@@ -6,7 +6,9 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"math"
+	"unsafe"
 )
 
 // V1Encoder creates a new V1 snapshot.
@@ -73,4 +75,85 @@ func (v *V1Encoder) compressedData() ([]byte, error) {
 		return nil, err
 	}
 	return buf.Bytes(), nil
+}
+
+// V1Decoder reads a V1 snapshot.
+type V1Decoder struct {
+	r io.Reader
+}
+
+// NewV1Decoder returns an initialized V1 decoder
+func NewV1Decoder(r io.Reader) *V1Decoder {
+	return &V1Decoder{
+		r: r,
+	}
+}
+
+// WriteTo writes the decoded snapshot data to the given writer.
+func (v *V1Decoder) WriteTo(w io.Writer) (int64, error) {
+	var uint64Size uint64
+	inc := int64(unsafe.Sizeof(uint64Size))
+
+	// Read all the data into RAM, since we have to decode known-length
+	// chunks of various forms.
+	var offset int64
+	b, err := ioutil.ReadAll(v.r)
+	if err != nil {
+		return 0, fmt.Errorf("readall: %s", err)
+	}
+
+	// Get size of data, checking for compression.
+	compressed := false
+	sz, err := readUint64(b[offset : offset+inc])
+	if err != nil {
+		return 0, fmt.Errorf("read compression check: %s", err)
+	}
+	offset = offset + inc
+
+	if sz == math.MaxUint64 {
+		compressed = true
+		// Data is actually compressed, read actual size next.
+		sz, err = readUint64(b[offset : offset+inc])
+		if err != nil {
+			return 0, fmt.Errorf("read compressed size: %s", err)
+		}
+		offset = offset + inc
+	}
+
+	// Now read in the data, decompressing if necessary.
+	var totalN int64
+	if sz > 0 {
+		if compressed {
+			gz, err := gzip.NewReader(bytes.NewReader(b[offset : offset+int64(sz)]))
+			if err != nil {
+				return 0, err
+			}
+
+			n, err := io.Copy(w, gz)
+			if err != nil {
+				return 0, fmt.Errorf("data decompress: %s", err)
+			}
+			totalN += n
+
+			if err := gz.Close(); err != nil {
+				return 0, err
+			}
+		} else {
+			// write the data directly
+			n, err := w.Write(b[offset : offset+int64(sz)])
+			if err != nil {
+				return 0, fmt.Errorf("uncompressed data write: %s", err)
+			}
+			totalN += int64(n)
+		}
+	}
+	return totalN, nil
+}
+
+func readUint64(b []byte) (uint64, error) {
+	var sz uint64
+	if err := binary.Read(bytes.NewReader(b), binary.LittleEndian, &sz); err != nil {
+		return 0, err
+	}
+	return sz, nil
 }

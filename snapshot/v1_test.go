@@ -101,3 +101,29 @@ func Test_V1EncoderNilSlice(t *testing.T) {
 		t.Errorf("unexpected remaining data; got %d, want %d", r.Len(), 0)
 	}
 }
+
+func TestV1Decoder(t *testing.T) {
+	// Create a test data.
+	data := []byte("This is a test data.")
+
+	// Create a new V1Encoder and compress the data.
+	encoder := NewV1Encoder(data)
+	var encBuf bytes.Buffer
+	_, err := encoder.WriteTo(&encBuf)
+	if err != nil {
+		t.Fatalf("Failed to write to encoder: %v", err)
+	}
+
+	// Create a new V1Decoder and decode the compressed data.
+	decoder := NewV1Decoder(&encBuf)
+	var decBuf bytes.Buffer
+	_, err = decoder.WriteTo(&decBuf)
+	if err != nil {
+		t.Fatalf("Failed to write to decoder: %v", err)
+	}
+
+	// The original and decoded data should match.
+	if !bytes.Equal(data, decBuf.Bytes()) {
+		t.Fatalf("Data mismatch; got %s, want %s", decBuf.Bytes(), data)
+	}
+}
