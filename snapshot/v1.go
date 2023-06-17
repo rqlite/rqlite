@@ -9,20 +9,20 @@ import (
 	"math"
 )
 
-// V1 is a v1-formatted snapshot.
-type V1 struct {
+// V1Encoder creates a new V1 snapshot.
+type V1Encoder struct {
 	data []byte
 }
 
-// NewV1 returns an initialized V1 snapshotter
-func NewV1(b []byte) *V1 {
-	return &V1{
+// NewV1Encoder returns an initialized V1 encoder
+func NewV1Encoder(b []byte) *V1Encoder {
+	return &V1Encoder{
 		data: b,
 	}
 }
 
 // WriteTo writes the snapshot to the given writer.
-func (v *V1) WriteTo(w io.Writer) (int64, error) {
+func (v *V1Encoder) WriteTo(w io.Writer) (int64, error) {
 	var totalN int64
 
 	// Indicate that the data is compressed by writing max uint64 value first.
@@ -55,7 +55,7 @@ func (v *V1) WriteTo(w io.Writer) (int64, error) {
 	return totalN, nil
 }
 
-func (v *V1) compressedData() ([]byte, error) {
+func (v *V1Encoder) compressedData() ([]byte, error) {
 	if v.data == nil {
 		return nil, nil
 	}

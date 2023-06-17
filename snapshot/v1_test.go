@@ -10,12 +10,12 @@ import (
 	"testing"
 )
 
-func Test_V1Create(t *testing.T) {
+func Test_V1EncoderCreate(t *testing.T) {
 	// Original data to compress and write.
 	data := []byte("test data")
 
 	// Create new V1 snapshot.
-	snap := NewV1(data)
+	snap := NewV1Encoder(data)
 
 	// Write snapshot to buffer.
 	var buf bytes.Buffer
@@ -63,8 +63,8 @@ func Test_V1Create(t *testing.T) {
 	}
 }
 
-func Test_V1NilSlice(t *testing.T) {
-	v := NewV1(nil)
+func Test_V1EncoderNilSlice(t *testing.T) {
+	v := NewV1Encoder(nil)
 
 	var buf bytes.Buffer
 	n, err := v.WriteTo(&buf)

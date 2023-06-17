@@ -40,7 +40,7 @@ func (f *FSMSnapshot) Persist(sink raft.SnapshotSink) error {
 	}()
 
 	err := func() error {
-		v1Snap := snapshot.NewV1(f.database)
+		v1Snap := snapshot.NewV1Encoder(f.database)
 		n, err := v1Snap.WriteTo(sink)
 		if err != nil {
 			return err
