@@ -5,15 +5,12 @@ package store
 
 import (
 	"bytes"
-	"compress/gzip"
-	"encoding/binary"
 	"errors"
 	"expvar"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
-	"math"
 	"net"
 	"os"
 	"path/filepath"
@@ -22,12 +19,12 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"unsafe"
 
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/command"
 	sql "github.com/rqlite/rqlite/db"
 	rlog "github.com/rqlite/rqlite/log"
+	"github.com/rqlite/rqlite/snapshot"
 )
 
 var (
@@ -1862,60 +1859,13 @@ func RecoverNode(dataDir string, logger *log.Logger, logs raft.LogStore, stable 
 }
 
 func dbBytesFromSnapshot(rc io.ReadCloser) ([]byte, error) {
-	var uint64Size uint64
-	inc := int64(unsafe.Sizeof(uint64Size))
-
-	// Read all the data into RAM, since we have to decode known-length
-	// chunks of various forms.
-	var offset int64
-	b, err := ioutil.ReadAll(rc)
+	var database bytes.Buffer
+	decoder := snapshot.NewV1Decoder(rc)
+	_, err := decoder.WriteTo(&database)
 	if err != nil {
-		return nil, fmt.Errorf("readall: %s", err)
+		return nil, err
 	}
-
-	// Get size of database, checking for compression.
-	compressed := false
-	sz, err := readUint64(b[offset : offset+inc])
-	if err != nil {
-		return nil, fmt.Errorf("read compression check: %s", err)
-	}
-	offset = offset + inc
-
-	if sz == math.MaxUint64 {
-		compressed = true
-		// Database is actually compressed, read actual size next.
-		sz, err = readUint64(b[offset : offset+inc])
-		if err != nil {
-			return nil, fmt.Errorf("read compressed size: %s", err)
-		}
-		offset = offset + inc
-	}
-
-	// Now read in the database file data, decompress if necessary, and restore.
-	var database []byte
-	if sz > 0 {
-		if compressed {
-			buf := new(bytes.Buffer)
-			gz, err := gzip.NewReader(bytes.NewReader(b[offset : offset+int64(sz)]))
-			if err != nil {
-				return nil, err
-			}
-
-			if _, err := io.Copy(buf, gz); err != nil {
-				return nil, fmt.Errorf("SQLite database decompress: %s", err)
-			}
-
-			if err := gz.Close(); err != nil {
-				return nil, err
-			}
-			database = buf.Bytes()
-		} else {
-			database = b[offset : offset+int64(sz)]
-		}
-	} else {
-		database = nil
-	}
-	return database, nil
+	return database.Bytes(), nil
 }
 
 func applyCommand(data []byte, pDB **sql.DB) (command.Command_Type, interface{}) {
@@ -2043,18 +1993,6 @@ func createOnDisk(b []byte, path string, fkConstraints bool) (*sql.DB, error) {
 		}
 	}
 	return sql.Open(path, fkConstraints, false)
-}
-
-func readUint64(b []byte) (uint64, error) {
-	var sz uint64
-	if err := binary.Read(bytes.NewReader(b), binary.LittleEndian, &sz); err != nil {
-		return 0, err
-	}
-	return sz, nil
-}
-
-func writeUint64(w io.Writer, v uint64) error {
-	return binary.Write(w, binary.LittleEndian, v)
 }
 
 // enabledFromBool converts bool to "enabled" or "disabled".
