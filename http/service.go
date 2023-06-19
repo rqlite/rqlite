@@ -1062,6 +1062,15 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 			http.StatusInternalServerError)
 		return
 	}
+
+	key := keyParam(r)
+	b, err = getSubJSON(b, key)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("JSON subkey: %s", err.Error()),
+			http.StatusInternalServerError)
+		return
+	}
+
 	_, err = w.Write(b)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("write: %s", err.Error()),
@@ -1979,6 +1988,44 @@ func isRedirect(req *http.Request) (bool, error) {
 func keyParam(req *http.Request) string {
 	q := req.URL.Query()
 	return strings.TrimSpace(q.Get("key"))
+}
+
+func getSubJSON(jsonBlob []byte, keyString string) (json.RawMessage, error) {
+	if keyString == "" {
+		return jsonBlob, nil
+	}
+
+	keys := strings.Split(keyString, ".")
+	var obj interface{}
+	if err := json.Unmarshal(jsonBlob, &obj); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal json: %w", err)
+	}
+
+	for _, key := range keys {
+		switch val := obj.(type) {
+		case map[string]interface{}:
+			if value, ok := val[key]; ok {
+				obj = value
+			} else {
+				emptyObj := json.RawMessage("{}")
+				return emptyObj, nil
+			}
+		default:
+			// If a value is not a map, marshal and return this value
+			finalObjBytes, err := json.Marshal(obj)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal final object: %w", err)
+			}
+			return finalObjBytes, nil
+		}
+	}
+
+	finalObjBytes, err := json.Marshal(obj)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal final object: %w", err)
+	}
+
+	return finalObjBytes, nil
 }
 
 // timeoutParam returns the value, if any, set for timeout. If not set, it
