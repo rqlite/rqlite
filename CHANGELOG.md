@@ -1,6 +1,7 @@
 ## 7.20.7 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #1309](https://github.com/rqlite/rqlite/pull/1309): Factor Snapshot creation into own module.
+- [PR #1311](https://github.com/rqlite/rqlite/pull/1311): Support 'key' param on /status endpoint.
 
 ## 7.20.6 (June 16th 2023)
 ### Implementation changes and bug fixes

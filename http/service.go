@@ -1991,8 +1991,11 @@ func keyParam(req *http.Request) string {
 }
 
 func getSubJSON(jsonBlob []byte, keyString string) (json.RawMessage, error) {
-	keys := strings.Split(keyString, ".")
+	if keyString == "" {
+		return jsonBlob, nil
+	}
 
+	keys := strings.Split(keyString, ".")
 	var obj interface{}
 	if err := json.Unmarshal(jsonBlob, &obj); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal json: %w", err)
