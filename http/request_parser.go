@@ -61,22 +61,40 @@ func ParseRequest(b []byte) ([]*command.Statement, error) {
 			return nil, ErrNoStatements
 		}
 
-		sql, ok := parameterized[i][0].(string)
-		if !ok {
+		sql := ""
+		returning := false
+		startIndex := 1
+		switch v := parameterized[i][0].(type) {
+		case bool:
+			returning = v
+			if len(parameterized[i]) == 1 {
+				return nil, ErrInvalidRequest
+			}
+			ok := false
+			sql, ok = parameterized[i][1].(string)
+			if !ok {
+				return nil, ErrInvalidRequest
+			}
+			startIndex++
+		case string:
+			sql = v
+		default:
 			return nil, ErrInvalidRequest
 		}
+
 		stmts[i] = &command.Statement{
 			Sql:        sql,
 			Parameters: nil,
+			Returning:  returning,
 		}
-		if len(parameterized[i]) == 1 {
+		if len(parameterized[i]) == startIndex {
 			// No actual parameters after the SQL string
 			continue
 		}
 
 		stmts[i].Parameters = make([]*command.Parameter, 0)
-		for j := range parameterized[i][1:] {
-			m, ok := parameterized[i][j+1].(map[string]interface{})
+		for j := range parameterized[i][startIndex:] {
+			m, ok := parameterized[i][j+startIndex].(map[string]interface{})
 			if ok {
 				for k, v := range m {
 					p, err := makeParameter(k, v)
@@ -86,7 +104,7 @@ func ParseRequest(b []byte) ([]*command.Statement, error) {
 					stmts[i].Parameters = append(stmts[i].Parameters, p)
 				}
 			} else {
-				p, err := makeParameter("", parameterized[i][j+1])
+				p, err := makeParameter("", parameterized[i][j+startIndex])
 				if err != nil {
 					return nil, err
 				}

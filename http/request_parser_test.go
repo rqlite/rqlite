@@ -115,6 +115,58 @@ func Test_SingleParameterizedRequest(t *testing.T) {
 	}
 }
 
+func Test_SingleParameterizedRequestReturning(t *testing.T) {
+	s := "UPDATE ? SET foo='bob' WHERE bar=? RETURNING *"
+	p0 := "FOO"
+	p1 := 1
+	f1 := 1.1
+	n1 := int64(1676555296046783000)
+
+	type testCase struct {
+		req           []byte
+		expect        interface{}
+		wantReturning bool
+	}
+	for _, tc := range []*testCase{
+		{req: []byte(fmt.Sprintf(`[[true, "%s", "%s", %d]]`, s, p0, p1)), expect: p1, wantReturning: true},
+		// wantReturning is false even though the request has the returning clause
+		{req: []byte(fmt.Sprintf(`[["%s", "%s", %.2f]]`, s, p0, f1)), expect: f1, wantReturning: false},
+		{req: []byte(fmt.Sprintf(`[[true, "%s", "%s", %d]]`, s, p0, n1)), expect: n1, wantReturning: true},
+	} {
+		stmts, err := ParseRequest(tc.req)
+		if err != nil {
+			t.Fatalf("failed to parse request: %s", err.Error())
+		}
+
+		if len(stmts) != 1 {
+			t.Fatalf("incorrect number of statements returned: %d", len(stmts))
+		}
+		if stmts[0].Sql != s {
+			t.Fatalf("incorrect statement parsed, exp %s, got %s", s, stmts[0].Sql)
+		}
+
+		if len(stmts[0].Parameters) != 2 {
+			t.Fatalf("incorrect number of parameters returned: %d", len(stmts[0].Parameters))
+		}
+		if stmts[0].Parameters[0].GetS() != p0 {
+			t.Fatalf("incorrect parameter, exp %s, got %s", p0, stmts[0].Parameters[0])
+		}
+		switch ex := tc.expect.(type) {
+		case int64:
+			if stmts[0].Parameters[1].GetI() != ex {
+				t.Fatalf("incorrect parameter, exp %d, got %d", ex, stmts[0].Parameters[1].GetI())
+			}
+		case float64:
+			if stmts[0].Parameters[1].GetD() != ex {
+				t.Fatalf("incorrect parameter, exp %f, got %f", ex, stmts[0].Parameters[1].GetD())
+			}
+		}
+		if stmts[0].Returning != tc.wantReturning {
+			t.Fatalf("incorrect returning, exp %v, got %v", tc.wantReturning, stmts[0].Returning)
+		}
+	}
+}
+
 func Test_SingleParameterizedRequestLargeNumber(t *testing.T) {
 	s := "SELECT * FROM ? WHERE bar=?"
 	p0 := "FOO"
@@ -375,6 +427,11 @@ func Test_SingleInvalidTypeRequests(t *testing.T) {
 	}
 
 	_, err = ParseRequest([]byte(`[[1, "x", 2]]`))
+	if err != ErrInvalidRequest {
+		t.Fatal("got unexpected error for invalid request")
+	}
+
+	_, err = ParseRequest([]byte(`[[true, 1, "x", 2]]`))
 	if err != ErrInvalidRequest {
 		t.Fatal("got unexpected error for invalid request")
 	}

@@ -26,6 +26,52 @@ func Test_RemoveFiles(t *testing.T) {
 	}
 	if len(files) != 0 {
 		t.Fatalf("expected directory to be empty, but wasn't")
+  }
+}
+
+func Test_ReturningClause(t *testing.T) {
+	db := mustCreateInMemoryDatabase()
+	defer func() { _ = db.Close() }()
+
+	r, err := db.ExecuteStringStmt(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if exp, got := `[{}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	rq, err := db.Request(
+		&command.Request{
+			Statements: []*command.Statement{
+				{
+					Sql:       `INSERT INTO foo(id, name) VALUES(1, "fiona") RETURNING id`,
+					Returning: true,
+				},
+			},
+		},
+		true)
+
+	if err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+	if len(rq) != 1 {
+		t.Fatalf("expected one response, got %d", len(rq))
+	}
+	rows := rq[0].GetQ()
+	if rows == nil {
+		t.Fatalf("expected rows result")
+	}
+
+	if len(rows.GetColumns()) != 1 && rows.GetColumns()[0] != "id" {
+		t.Fatalf("expected one 'id' column")
+	}
+	if len(rows.GetTypes()) != 1 && rows.GetTypes()[0] != "integer" {
+		t.Fatalf("expected one 'integer' type")
+	}
+	if len(rows.GetValues()) != 1 && len(rows.GetValues()[0].GetParameters()) != 1 &&
+		rows.GetValues()[0].GetParameters()[0].GetI() != int64(1) {
+		t.Fatalf("expected returned value 1")
 	}
 }
 

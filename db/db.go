@@ -901,7 +901,7 @@ func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQuery
 			continue
 		}
 
-		if ro {
+		if ro || stmt.Returning {
 			rows, opErr := db.queryStmtWithConn(stmt, xTime, queryer)
 			eqResponse = append(eqResponse, createEQQueryResponse(rows, opErr))
 			if abortOnError(opErr) {
