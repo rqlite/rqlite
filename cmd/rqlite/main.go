@@ -328,6 +328,7 @@ func sysdump(ctx *cli.Context, client *http.Client, filename string, argv *argT)
 		urls := []string{
 			fmt.Sprintf("%s/status?pretty", n.ApiAddr),
 			fmt.Sprintf("%s/nodes?pretty", n.ApiAddr),
+			fmt.Sprintf("%s/readyz", n.ApiAddr),
 			fmt.Sprintf("%s/debug/vars", n.ApiAddr),
 		}
 		if err := urlsToWriter(client, urls, f, argv); err != nil {
