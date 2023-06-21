@@ -988,8 +988,9 @@ func (db *DB) Copy(dstDB *DB) error {
 // disk file. For an in-memory database or a "TEMP" database, the serialization
 // is the same sequence of bytes which would be written to disk if that database
 // were backed up to disk. If the database is in WAL mode, a RESTART checkpoint
-// will be performed before the database is serialized. This function must not
-// be called while any writes are happening to the database.
+// will be performed before the database is serialized, but the returned database
+// will still be in WAL mode. This function must not be called while any writes
+// are happening to the database.
 func (db *DB) Serialize() ([]byte, error) {
 	if !db.memory {
 		// If the database is in WAL mode, perform a checkpoint before serializing.
