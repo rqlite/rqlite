@@ -15,7 +15,6 @@ import (
 	"sort"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/Bowery/prompt"
 	"github.com/mkideal/cli"
@@ -25,6 +24,13 @@ import (
 )
 
 const maxRedirect = 21
+
+type Node struct {
+	ApiAddr string `json:"api_addr"`
+	_       json.RawMessage
+}
+
+type Nodes map[string]Node
 
 type argT struct {
 	cli.Helper
@@ -186,7 +192,7 @@ func main() {
 					err = fmt.Errorf("please specify an output file for the sysdump")
 					break
 				}
-				err = sysdump(ctx, line[index+1:], argv)
+				err = sysdump(ctx, httpClient, line[index+1:], argv)
 			case ".DUMP":
 				if index == -1 || index == len(line)-1 {
 					err = fmt.Errorf("please specify an output file for the SQL text")
@@ -303,22 +309,71 @@ func expvar(ctx *cli.Context, cmd, line string, argv *argT) error {
 	return cliJSON(ctx, cmd, line, url, argv)
 }
 
-func sysdump(ctx *cli.Context, filename string, argv *argT) error {
-	f, err := os.Create(filename)
+func sysdump(ctx *cli.Context, client *http.Client, filename string, argv *argT) error {
+	nodes, err := getNodes(client, argv)
 	if err != nil {
 		return err
 	}
 
-	urls := []string{
-		fmt.Sprintf("%s://%s:%d/status?pretty", argv.Protocol, argv.Host, argv.Port),
-		fmt.Sprintf("%s://%s:%d/nodes?pretty", argv.Protocol, argv.Host, argv.Port),
-		fmt.Sprintf("%s://%s:%d/debug/vars", argv.Protocol, argv.Host, argv.Port),
-	}
-
-	if err := urlsToWriter(urls, f, argv); err != nil {
+	f, err := os.Create(filename)
+	if err != nil {
 		return err
 	}
-	return f.Close()
+	defer f.Close()
+
+	for _, n := range nodes {
+		if n.ApiAddr == "" {
+			continue
+		}
+		urls := []string{
+			fmt.Sprintf("%s/status?pretty", n.ApiAddr),
+			fmt.Sprintf("%s/nodes?pretty", n.ApiAddr),
+			fmt.Sprintf("%s/debug/vars", n.ApiAddr),
+		}
+		if err := urlsToWriter(client, urls, f, argv); err != nil {
+			f.WriteString(fmt.Sprintf("Error sysdumping %s: %s\n", n.ApiAddr, err.Error()))
+		}
+	}
+	return nil
+}
+
+func getNodes(client *http.Client, argv *argT) (Nodes, error) {
+	u := url.URL{
+		Scheme: argv.Protocol,
+		Host:   fmt.Sprintf("%s:%d", argv.Host, argv.Port),
+		Path:   fmt.Sprintf("%snodes", argv.Prefix),
+	}
+	urlStr := u.String()
+
+	req, err := http.NewRequest("GET", urlStr, nil)
+	if err != nil {
+		return nil, err
+	}
+	if argv.Credentials != "" {
+		creds := strings.Split(argv.Credentials, ":")
+		if len(creds) != 2 {
+			return nil, fmt.Errorf("invalid Basic Auth credentials format")
+		}
+		req.SetBasicAuth(creds[0], creds[1])
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	response, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var nodes Nodes
+	if err := parseResponse(&response, &nodes); err != nil {
+		return nil, err
+	}
+
+	return nodes, nil
 }
 
 func getHTTPClient(argv *argT) (*http.Client, error) {
@@ -538,15 +593,7 @@ func cliJSON(ctx *cli.Context, cmd, line, url string, argv *argT) error {
 	return nil
 }
 
-func urlsToWriter(urls []string, w io.Writer, argv *argT) error {
-	client := http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: argv.Insecure},
-			Proxy:           http.ProxyFromEnvironment,
-		},
-		Timeout: 10 * time.Second,
-	}
-
+func urlsToWriter(client *http.Client, urls []string, w io.Writer, argv *argT) error {
 	for i := range urls {
 		err := func() error {
 			w.Write([]byte("\n=========================================\n"))
