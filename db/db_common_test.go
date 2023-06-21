@@ -1256,6 +1256,9 @@ func testBackup(t *testing.T, db *DB) {
 	if err != nil {
 		t.Fatalf("failed to backup database: %s", err.Error())
 	}
+	if !IsDELETEModeEnabledSQLiteFile(dstDB) {
+		t.Fatalf("Backup file not marked in DELETE mode")
+	}
 
 	newDB, err := Open(dstDB, false, false)
 	if err != nil {

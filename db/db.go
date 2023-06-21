@@ -137,6 +137,29 @@ func IsWALModeEnabled(b []byte) bool {
 	return len(b) >= 20 && b[18] == 2 && b[19] == 2
 }
 
+// IsDELETEModeEnabledSQLiteFile checks that the supplied path looks like a SQLite
+// with DELETE mode enabled.
+func IsDELETEModeEnabledSQLiteFile(path string) bool {
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+
+	b := make([]byte, 20)
+	if _, err := f.Read(b); err != nil {
+		return false
+	}
+
+	return IsDELETEModeEnabled(b)
+}
+
+// IsDELETEModeEnabledSQLiteFile checks that the supplied path looks like a SQLite
+// with DELETE mode enabled.
+func IsDELETEModeEnabled(b []byte) bool {
+	return len(b) >= 20 && b[18] == 1 && b[19] == 1
+}
+
 // RemoveFiles removes the SQLite database file, and any associated WAL and SHM files.
 func RemoveFiles(path string) error {
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
@@ -168,10 +191,12 @@ func Open(dbPath string, fkEnabled, wal bool) (*DB, error) {
 		return nil, err
 	}
 
-	if wal {
-		if _, err := rwDB.Exec("PRAGMA journal_mode=WAL"); err != nil {
-			return nil, err
-		}
+	mode := "WAL"
+	if !wal {
+		mode = "DELETE"
+	}
+	if _, err := rwDB.Exec(fmt.Sprintf("PRAGMA journal_mode=%s", mode)); err != nil {
+		return nil, err
 	}
 
 	roOpts := []string{
@@ -923,17 +948,28 @@ func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQuery
 }
 
 // Backup writes a consistent snapshot of the database to the given file.
-// This function can be called when changes to the database are in flight.
+// The resultant SQLite database file will be in DELETE mode. This function
+// can be called when changes to the database are in flight.
 func (db *DB) Backup(path string) error {
 	dstDB, err := Open(path, false, false)
 	if err != nil {
 		return err
 	}
+	defer dstDB.Close()
 
 	if err := copyDatabase(dstDB, db); err != nil {
 		return fmt.Errorf("backup database: %s", err)
 	}
-	return nil
+	if err := dstDB.Close(); err != nil {
+		return err
+	}
+
+	// Open and close again to ensure the database is in DELETE mode.
+	dstDB, err = Open(path, false, false)
+	if err != nil {
+		return err
+	}
+	return dstDB.Close()
 }
 
 // Copy copies the contents of the database to the given database. All other
