@@ -1,4 +1,4 @@
-## 7.21.0 (unreleased)
+## 7.21.0 (June 20th 2023)
 ### New features
 - [PR #1311](https://github.com/rqlite/rqlite/pull/1311): Support 'key' param on the `/status` HTTP endpoint.
 - [PR #1313](https://github.com/rqlite/rqlite/pull/1313): Sysdump now retrieves data from all nodes if possible.
