@@ -1,7 +1,7 @@
 ## 7.21.0 (unreleased)
 ### New features
 - [PR #1311](https://github.com/rqlite/rqlite/pull/1311): Support 'key' param on the `/status` HTTP endpoint.
-- [PR #1313](https://github.com/rqlite/rqlite/pull/1313): Sysdump now contacts all nodes is possible.
+- [PR #1313](https://github.com/rqlite/rqlite/pull/1313): Sysdump now retrieves data from all nodes if possible.
 
 ### Implementation changes and bug fixes
 - [PR #1309](https://github.com/rqlite/rqlite/pull/1309): Factor Snapshot creation into own module.
