@@ -3,6 +3,7 @@
 package db
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"expvar"
@@ -10,6 +11,7 @@ import (
 	"io"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -34,6 +36,10 @@ const (
 	numETx              = "execute_transactions"
 	numQTx              = "query_transactions"
 	numRTx              = "request_transactions"
+)
+
+var (
+	ErrWALReplayDirectoryMismatch = fmt.Errorf("WAL file(s) not in same directory as database file")
 )
 
 // DBVersion is the SQLite version.
@@ -114,6 +120,36 @@ func IsValidSQLiteData(b []byte) bool {
 	return len(b) > 13 && string(b[0:13]) == "SQLite format"
 }
 
+// IsValidSQLiteWALFile checks that the supplied path looks like a SQLite
+// WAL file. See https://www.sqlite.org/fileformat2.html#walformat
+func IsValidSQLiteWALFile(path string) bool {
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+
+	b := make([]byte, 4)
+	if _, err := f.Read(b); err != nil {
+		return false
+	}
+
+	return IsValidSQLiteWALData(b)
+}
+
+// IsValidSQLiteWALFile checks that the supplied data looks like a SQLite
+// WAL file.
+func IsValidSQLiteWALData(b []byte) bool {
+	if len(b) < 4 {
+		return false
+	}
+
+	header1 := []byte{0x37, 0x7f, 0x06, 0x82}
+	header2 := []byte{0x37, 0x7f, 0x06, 0x83}
+	header := b[:4]
+	return bytes.Equal(header, header1) || bytes.Equal(header, header2)
+}
+
 // IsWALModeEnabledSQLiteFile checks that the supplied path looks like a SQLite
 // with WAL mode enabled.
 func IsWALModeEnabledSQLiteFile(path string) bool {
@@ -170,6 +206,54 @@ func RemoveFiles(path string) error {
 	}
 	if err := os.Remove(path + "-shm"); err != nil && !os.IsNotExist(err) {
 		return err
+	}
+	return nil
+}
+
+// ReplayWAL replays the given WAL files into the database at the given path,
+// in the order given by the slice. The supplied WAL files must be in the same
+// directory as the database file and are removed as a result of the replay operation.
+// The "real" WAL file is also removed. If deleteMode is true, the database file
+// will be in DELETE mode after the replay operation, otherwise it will be in WAL
+// mode.
+func ReplayWAL(path string, wals []string, deleteMode bool) error {
+	for _, wal := range wals {
+		if filepath.Dir(wal) != filepath.Dir(path) {
+			return ErrWALReplayDirectoryMismatch
+		}
+	}
+
+	if !IsValidSQLiteFile(path) {
+		return fmt.Errorf("invalid database file %s", path)
+	}
+
+	for _, wal := range wals {
+		if !IsValidSQLiteWALFile(wal) {
+			return fmt.Errorf("invalid WAL file %s", wal)
+		}
+		if err := os.Rename(wal, path+"-wal"); err != nil {
+			return fmt.Errorf("rename WAL %s: %s", wal, err.Error())
+		}
+		db, err := Open(path, false, true)
+		if err != nil {
+			return err
+		}
+		if err := db.Checkpoint(defaultCheckpointTimeout); err != nil {
+			return fmt.Errorf("checkpoint WAL %s: %s", wal, err.Error())
+		}
+		if err := db.Close(); err != nil {
+			return err
+		}
+	}
+
+	if deleteMode {
+		db, err := Open(path, false, false)
+		if err != nil {
+			return err
+		}
+		if db.Close(); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -478,7 +562,7 @@ func (db *DB) Checkpoint(dur time.Duration) (err error) {
 	var nMoved int
 
 	f := func() error {
-		err := db.rwDB.QueryRow("PRAGMA wal_checkpoint(RESTART)").Scan(&ok, &nPages, &nMoved)
+		err := db.rwDB.QueryRow("PRAGMA wal_checkpoint(TRUNCATE)").Scan(&ok, &nPages, &nMoved)
 		if err != nil {
 			return err
 		}
