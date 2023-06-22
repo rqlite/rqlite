@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/rqlite/rqlite/command"
+	"github.com/rqlite/rqlite/db"
 )
 
 func Test_SingleNodeOnDiskFileExecuteQuery(t *testing.T) {
@@ -172,20 +173,19 @@ COMMIT;
 		t.Fatalf("Backup failed %s", err.Error())
 	}
 
-	// Check the backed up data by reading back up file, underlying SQLite file,
-	// and comparing the two.
-	bkp, err := ioutil.ReadFile(f.Name())
+	// Open the backup file using the DB layer and check the data.
+	db, err := db.Open(f.Name(), false, false)
 	if err != nil {
-		t.Fatalf("Backup Failed: unable to read backup file, %s", err.Error())
+		t.Fatalf("unable to open backup database, %s", err.Error())
 	}
-
-	dbFile, err := ioutil.ReadFile(filepath.Join(s.Path(), sqliteFile))
-	if err != nil {
-		t.Fatalf("Backup Failed: unable to read source SQLite file, %s", err.Error())
+	defer db.Close()
+	var buf bytes.Buffer
+	w := &buf
+	if err := db.Dump(w); err != nil {
+		t.Fatalf("unable to dump backup database, %s", err.Error())
 	}
-
-	if ret := bytes.Compare(bkp, dbFile); ret != 0 {
-		t.Fatalf("Backup Failed: backup bytes are not same")
+	if buf.String() != dump {
+		t.Fatalf("backup dump is not as expected, got %s", buf.String())
 	}
 }
 

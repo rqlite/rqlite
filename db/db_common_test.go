@@ -1235,6 +1235,10 @@ func testBackup(t *testing.T, db *DB) {
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
+	_, err = db.ExecuteStringStmt("CREATE TABLE baz (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
 
 	req := &command.Request{
 		Transaction: true,
@@ -1280,6 +1284,13 @@ func testBackup(t *testing.T, db *DB) {
 		t.Fatalf("failed to query table: %s", err.Error())
 	}
 	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"],[2,"fiona"],[3,"fiona"],[4,"fiona"]]}]`, asJSON(ro); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	ro, err = newDB.QueryStringStmt(`SELECT name FROM sqlite_master`)
+	if err != nil {
+		t.Fatalf("failed to query table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["name"],"types":["text"],"values":[["foo"],["baz"]]}]`, asJSON(ro); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 }

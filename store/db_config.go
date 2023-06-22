@@ -10,6 +10,9 @@ type DBConfig struct {
 
 	// Enforce Foreign Key constraints
 	FKConstraints bool `json:"fk_constraints"`
+
+	// Disable WAL mode if running in on-disk mode
+	DisableWAL bool `json:"disable_wal"`
 }
 
 // NewDBConfig returns a new DB config instance.

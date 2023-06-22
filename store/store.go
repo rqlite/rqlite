@@ -415,7 +415,7 @@ func (s *Store) Open() (retErr error) {
 	// can also happen if the user explicitly disables the startup optimization of
 	// building the SQLite database in memory, before switching to disk.
 	if s.StartupOnDisk || (!s.dbConf.Memory && !s.snapsExistOnOpen && s.lastCommandIdxOnOpen == 0) {
-		s.db, err = createOnDisk(nil, s.dbPath, s.dbConf.FKConstraints)
+		s.db, err = createOnDisk(nil, s.dbPath, s.dbConf.FKConstraints, !s.dbConf.DisableWAL)
 		if err != nil {
 			return fmt.Errorf("failed to create on-disk database: %s", err)
 		}
@@ -1472,7 +1472,7 @@ func (s *Store) Apply(l *raft.Log) (e interface{}) {
 						return
 					}
 					// Open a new on-disk database.
-					s.db, err = createOnDisk(b, s.dbPath, s.dbConf.FKConstraints)
+					s.db, err = createOnDisk(b, s.dbPath, s.dbConf.FKConstraints, !s.dbConf.DisableWAL)
 					if err != nil {
 						e = &fsmGenericResponse{error: fmt.Errorf("open on-disk failed: %s", err)}
 						return
@@ -1563,7 +1563,7 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 		// Therefore, this is the last opportunity to create the on-disk database
 		// before Raft starts. This could also happen because the user has explicitly
 		// disabled the build-on-disk-database-in-memory-first optimization.
-		db, err = createOnDisk(b, s.dbPath, s.dbConf.FKConstraints)
+		db, err = createOnDisk(b, s.dbPath, s.dbConf.FKConstraints, !s.dbConf.DisableWAL)
 		if err != nil {
 			return fmt.Errorf("open on-disk file during restore: %s", err)
 		}
@@ -1912,7 +1912,7 @@ func applyCommand(data []byte, pDB **sql.DB) (command.Command_Type, interface{})
 				return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to create in-memory database: %s", err)}
 			}
 		} else {
-			newDB, err = createOnDisk(lr.Data, db.Path(), db.FKEnabled())
+			newDB, err = createOnDisk(lr.Data, db.Path(), db.FKEnabled(), db.WALEnabled())
 			if err != nil {
 				return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to create on-disk database: %s", err)}
 			}
@@ -1983,7 +1983,7 @@ func createInMemory(b []byte, fkConstraints bool) (db *sql.DB, err error) {
 // createOnDisk opens an on-disk database file at the configured path. If b is
 // non-nil, any preexisting file will first be overwritten with those contents.
 // Otherwise, any preexisting file will be removed before the database is opened.
-func createOnDisk(b []byte, path string, fkConstraints bool) (*sql.DB, error) {
+func createOnDisk(b []byte, path string, fkConstraints, wal bool) (*sql.DB, error) {
 	if err := sql.RemoveFiles(path); err != nil {
 		return nil, err
 	}
@@ -1992,7 +1992,7 @@ func createOnDisk(b []byte, path string, fkConstraints bool) (*sql.DB, error) {
 			return nil, err
 		}
 	}
-	return sql.Open(path, fkConstraints, false)
+	return sql.Open(path, fkConstraints, wal)
 }
 
 // enabledFromBool converts bool to "enabled" or "disabled".
