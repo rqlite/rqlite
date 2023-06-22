@@ -33,7 +33,7 @@ func Test_LogNewEmpty(t *testing.T) {
 		t.Fatalf("got non-zero value for last index of empty log: %d", li)
 	}
 
-	lci, err := l.LastCommandIndex()
+	lci, err := l.LastCommandIndex(fi, li)
 	if err != nil {
 		t.Fatalf("failed to get last command index: %s", err)
 	}
@@ -83,7 +83,7 @@ func Test_LogNewExistNotEmpty(t *testing.T) {
 		t.Fatalf("got wrong value for last index of not empty log: %d", li)
 	}
 
-	lci, err := l.LastCommandIndex()
+	lci, err := l.LastCommandIndex(fi, li)
 	if err != nil {
 		t.Fatalf("failed to get last command index: %s", err)
 	}
@@ -185,7 +185,7 @@ func Test_LogNewExistNotEmptyNoFreelistSync(t *testing.T) {
 		t.Fatalf("got wrong value for last index of not empty log: %d", li)
 	}
 
-	lci, err := l.LastCommandIndex()
+	lci, err := l.LastCommandIndex(fi, li)
 	if err != nil {
 		t.Fatalf("failed to get last command index: %s", err)
 	}
@@ -288,7 +288,7 @@ func Test_LogLastCommandIndexNotExist(t *testing.T) {
 		t.Fatalf("got wrong for last index of not empty log: %d", li)
 	}
 
-	lci, err := l.LastCommandIndex()
+	lci, err := l.LastCommandIndex(fi, li)
 	if err != nil {
 		t.Fatalf("failed to get last command index: %s", err)
 	}
@@ -317,12 +317,45 @@ func Test_LogLastCommandIndexNotExist(t *testing.T) {
 		t.Fatalf("failed to create new log: %s", err)
 	}
 
-	lci, err = l.LastCommandIndex()
+	fi, li, err = l.Indexes()
+	if err != nil {
+		t.Fatalf("failed to get indexes: %s", err)
+	}
+	lci, err = l.LastCommandIndex(fi, li)
 	if err != nil {
 		t.Fatalf("failed to get last command index: %s", err)
 	}
 	if lci != 0 {
 		t.Fatalf("got wrong value for last command index of not empty log: %d", lci)
+	}
+}
+
+func Test_LogAppliedIndex(t *testing.T) {
+	path := mustTempFile()
+	defer os.Remove(path)
+
+	l, err := New(path, false)
+	if err != nil {
+		t.Fatalf("failed to create new log: %s", err)
+	}
+
+	ai, err := l.GetAppliedIndex()
+	if err != nil {
+		t.Fatalf("failed to get applied index: %s", err)
+	}
+	if ai != 0 {
+		t.Fatalf("got wrong applied index for non-existent key: %d", ai)
+	}
+
+	if l.SetAppliedIndex(1234); err != nil {
+		t.Fatalf("failed to set applied index: %s", err)
+	}
+	ai, err = l.GetAppliedIndex()
+	if err != nil {
+		t.Fatalf("failed to get applied index: %s", err)
+	}
+	if ai != 1234 {
+		t.Fatalf("got wrong applied index: %d", ai)
 	}
 }
 
