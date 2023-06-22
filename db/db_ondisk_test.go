@@ -209,7 +209,6 @@ func Test_DELETEDatabaseCreatedOKFromWAL(t *testing.T) {
 		t.Fatalf("failed to close database: %s", err.Error())
 	}
 
-	fmt.Println("Attempting second open")
 	deleteDB, err2 := Open(walPath, false, false)
 	if err2 != nil {
 		t.Fatalf("failed to open database in DELETE mode: %s", err2.Error())
