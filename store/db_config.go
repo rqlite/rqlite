@@ -11,7 +11,7 @@ type DBConfig struct {
 	// Enforce Foreign Key constraints
 	FKConstraints bool `json:"fk_constraints"`
 
-	// Disable WAL mode
+	// Disable WAL mode if running in on-disk mode
 	DisableWAL bool `json:"disable_wal"`
 }
 
