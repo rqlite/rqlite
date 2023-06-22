@@ -137,6 +137,29 @@ func IsWALModeEnabled(b []byte) bool {
 	return len(b) >= 20 && b[18] == 2 && b[19] == 2
 }
 
+// IsDELETEModeEnabledSQLiteFile checks that the supplied path looks like a SQLite
+// with DELETE mode enabled.
+func IsDELETEModeEnabledSQLiteFile(path string) bool {
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+
+	b := make([]byte, 20)
+	if _, err := f.Read(b); err != nil {
+		return false
+	}
+
+	return IsDELETEModeEnabled(b)
+}
+
+// IsDELETEModeEnabledSQLiteFile checks that the supplied path looks like a SQLite
+// with DELETE mode enabled.
+func IsDELETEModeEnabled(b []byte) bool {
+	return len(b) >= 20 && b[18] == 1 && b[19] == 1
+}
+
 // RemoveFiles removes the SQLite database file, and any associated WAL and SHM files.
 func RemoveFiles(path string) error {
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
@@ -168,10 +191,12 @@ func Open(dbPath string, fkEnabled, wal bool) (*DB, error) {
 		return nil, err
 	}
 
-	if wal {
-		if _, err := rwDB.Exec("PRAGMA journal_mode=WAL"); err != nil {
-			return nil, err
-		}
+	mode := "WAL"
+	if !wal {
+		mode = "DELETE"
+	}
+	if _, err := rwDB.Exec(fmt.Sprintf("PRAGMA journal_mode=%s", mode)); err != nil {
+		return nil, err
 	}
 
 	roOpts := []string{
@@ -923,47 +948,73 @@ func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQuery
 }
 
 // Backup writes a consistent snapshot of the database to the given file.
-// This function can be called when changes to the database are in flight.
+// The resultant SQLite database file will be in DELETE mode. This function
+// can be called when changes to the database are in flight.
 func (db *DB) Backup(path string) error {
 	dstDB, err := Open(path, false, false)
 	if err != nil {
 		return err
 	}
+	defer dstDB.Close()
 
 	if err := copyDatabase(dstDB, db); err != nil {
 		return fmt.Errorf("backup database: %s", err)
 	}
-	return nil
+
+	// Source database might be in WAL mode.
+	_, err = dstDB.ExecuteStringStmt("PRAGMA journal_mode=DELETE")
+	if err != nil {
+		return err
+	}
+
+	return dstDB.Close()
 }
 
 // Copy copies the contents of the database to the given database. All other
 // attributes of the given database remain untouched e.g. whether it's an
-// on-disk database. This function can be called when changes to the source
-// database are in flight.
+// on-disk database, except the database will be placed in DELETE mode.
+// This function can be called when changes to the source database are in flight.
 func (db *DB) Copy(dstDB *DB) error {
 	if err := copyDatabase(dstDB, db); err != nil {
 		return fmt.Errorf("copy database: %s", err)
 	}
-	return nil
+	_, err := dstDB.ExecuteStringStmt("PRAGMA journal_mode=DELETE")
+	return err
 }
 
 // Serialize returns a byte slice representation of the SQLite database. For
 // an ordinary on-disk database file, the serialization is just a copy of the
 // disk file. For an in-memory database or a "TEMP" database, the serialization
 // is the same sequence of bytes which would be written to disk if that database
-// were backed up to disk. If the database is in WAL mode, a RESTART checkpoint
-// will be performed before the database is serialized. This function must not
+// were backed up to disk. If the database is in WAL mode, a temporary on-disk
+// copy is made, and it is this copy that is serialized. This function must not
 // be called while any writes are happening to the database.
 func (db *DB) Serialize() ([]byte, error) {
 	if !db.memory {
-		// If the database is in WAL mode, perform a checkpoint before serializing.
 		if db.wal {
-			if err := db.Checkpoint(defaultCheckpointTimeout); err != nil {
+			tmpFile, err := os.CreateTemp("", "rqlite-serialize")
+			if err != nil {
 				return nil, err
 			}
+			defer os.Remove(tmpFile.Name())
+			defer tmpFile.Close()
+
+			if err := db.Backup(tmpFile.Name()); err != nil {
+				return nil, err
+			}
+			newDB, err := Open(tmpFile.Name(), db.fkEnabled, false)
+			if err != nil {
+				return nil, err
+			}
+			defer newDB.Close()
+			return newDB.Serialize()
 		}
 		// Simply read and return the SQLite file.
-		return os.ReadFile(db.path)
+		b, err := os.ReadFile(db.path)
+		if err != nil {
+			return nil, err
+		}
+		return b, nil
 	}
 
 	conn, err := db.roDB.Conn(context.Background())

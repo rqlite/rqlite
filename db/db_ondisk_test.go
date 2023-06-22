@@ -55,15 +55,22 @@ func Test_IsWALModeEnabledOnDiskDELETE(t *testing.T) {
 		t.Fatalf("failed to close database: %s", err.Error())
 	}
 
+	if !IsDELETEModeEnabledSQLiteFile(path) {
+		t.Fatalf("DELETE file marked as non-DELETE")
+	}
 	if IsWALModeEnabledSQLiteFile(path) {
 		t.Fatalf("non WAL file marked as WAL")
 	}
+
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("failed to read SQLite file: %s", err.Error())
 	}
 	if IsWALModeEnabled(data) {
 		t.Fatalf("non WAL data marked as WAL")
+	}
+	if !IsDELETEModeEnabled(data) {
+		t.Fatalf("data marked as non-DELETE")
 	}
 }
 
@@ -91,12 +98,19 @@ func Test_IsWALModeEnabledOnDiskWAL(t *testing.T) {
 	if !IsWALModeEnabledSQLiteFile(path) {
 		t.Fatalf("WAL file marked as non-WAL")
 	}
+	if IsDELETEModeEnabledSQLiteFile(path) {
+		t.Fatalf("WAL file marked as DELETE")
+	}
+
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("failed to read SQLite file: %s", err.Error())
 	}
 	if !IsWALModeEnabled(data) {
 		t.Fatalf("WAL data marked as non-WAL")
+	}
+	if IsDELETEModeEnabled(data) {
+		t.Fatalf("WAL data marked as DELETE")
 	}
 }
 

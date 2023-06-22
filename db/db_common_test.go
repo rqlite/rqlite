@@ -962,6 +962,11 @@ func testSerialize(t *testing.T, db *DB) {
 	if err != nil {
 		t.Fatalf("failed to serialize database: %s", err.Error())
 	}
+
+	if !IsDELETEModeEnabled(b) {
+		t.Fatalf("expected DELETE mode to be enabled")
+	}
+
 	err = ioutil.WriteFile(dstDB.Name(), b, 0644)
 	if err != nil {
 		t.Fatalf("failed to write serialized database to file: %s", err.Error())
@@ -1212,6 +1217,10 @@ func testCopy(t *testing.T, db *DB) {
 		t.Fatalf("failed to copy database: %s", err.Error())
 	}
 
+	if !IsDELETEModeEnabledSQLiteFile(dstFile) {
+		t.Fatalf("Destination file not marked in DELETE mode")
+	}
+
 	ro, err := dstDB.QueryStringStmt(`SELECT * FROM foo`)
 	if err != nil {
 		t.Fatalf("failed to query table: %s", err.Error())
@@ -1255,6 +1264,9 @@ func testBackup(t *testing.T, db *DB) {
 	err = db.Backup(dstDB)
 	if err != nil {
 		t.Fatalf("failed to backup database: %s", err.Error())
+	}
+	if !IsDELETEModeEnabledSQLiteFile(dstDB) {
+		t.Fatalf("Backup file not marked in DELETE mode")
 	}
 
 	newDB, err := Open(dstDB, false, false)
