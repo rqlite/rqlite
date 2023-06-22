@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -224,6 +225,119 @@ func Test_DELETEDatabaseCreatedOKFromWAL(t *testing.T) {
 	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(rows); exp != got {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
+}
+
+// Test_WALReplay tests that WAL files are replayed as expected.
+func Test_WALReplay(t *testing.T) {
+	testFunc := func(t *testing.T, replayIntoDelete bool) {
+		dbPath := mustTempFile()
+		defer os.Remove(dbPath)
+		db, err := Open(dbPath, false, true)
+		if err != nil {
+			t.Fatalf("failed to open database in WAL mode: %s", err.Error())
+		}
+		defer db.Close()
+
+		dbFile := filepath.Base(dbPath)
+		walPath := dbPath + "-wal"
+		walFile := filepath.Base(walPath)
+
+		replayDir := mustTempDir()
+		defer os.RemoveAll(replayDir)
+		replayDBPath := filepath.Join(replayDir, dbFile)
+
+		// Take over control of checkpointing
+		if err := db.DisableCheckpointing(); err != nil {
+			t.Fatalf("failed to disable checkpointing: %s", err.Error())
+		}
+
+		// Copy the SQLite file and WAL #1
+		if _, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"); err != nil {
+			t.Fatalf("failed to create table: %s", err.Error())
+		}
+		if !fileExists(walPath) {
+			t.Fatalf("WAL file at %s does not exist", walPath)
+		}
+		mustCopyFile(replayDBPath, dbPath)
+		mustCopyFile(filepath.Join(replayDir, walFile+"_001"), walPath)
+		if err := db.Checkpoint(5 * time.Second); err != nil {
+			t.Fatalf("failed to checkpoint database in WAL mode: %s", err.Error())
+		}
+
+		// Copy WAL #2
+		_, err = db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("fiona")`)
+		if err != nil {
+			t.Fatalf("error executing insertion into table: %s", err.Error())
+		}
+		if !fileExists(walPath) {
+			t.Fatalf("WAL file at %s does not exist", walPath)
+		}
+		mustCopyFile(filepath.Join(replayDir, walFile+"_002"), walPath)
+		if err := db.Checkpoint(5 * time.Second); err != nil {
+			t.Fatalf("failed to checkpoint database in WAL mode: %s", err.Error())
+		}
+
+		// Copy WAL #3
+		_, err = db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("declan")`)
+		if err != nil {
+			t.Fatalf("error executing insertion into table: %s", err.Error())
+		}
+		if !fileExists(walPath) {
+			t.Fatalf("WAL file at %s does not exist", walPath)
+		}
+		mustCopyFile(filepath.Join(replayDir, walFile+"_003"), walPath)
+
+		if err := db.Close(); err != nil {
+			t.Fatalf("failed to close database: %s", err.Error())
+		}
+
+		wals := []string{
+			filepath.Join(replayDir, walFile+"_001"),
+			filepath.Join(replayDir, walFile+"_002"),
+			filepath.Join(replayDir, walFile+"_003"),
+		}
+		if err := ReplayWAL(replayDBPath, wals, replayIntoDelete); err != nil {
+			t.Fatalf("failed to replay WAL files: %s", err.Error())
+		}
+
+		if replayIntoDelete {
+			if !IsDELETEModeEnabledSQLiteFile(replayDBPath) {
+				t.Fatal("replayed database not marked as DELETE mode")
+			}
+		} else {
+			if !IsWALModeEnabledSQLiteFile(replayDBPath) {
+				t.Fatal("replayed database not marked as WAL mode")
+			}
+		}
+
+		// Check that there are no files ending in -wal in the replay directory
+		walFiles, err := filepath.Glob(filepath.Join(replayDir, "*-wal"))
+		if err != nil {
+			t.Fatalf("failed to glob replay directory: %s", err.Error())
+		}
+		if len(walFiles) != 0 {
+			t.Fatalf("replay directory contains WAL files: %s", walFiles)
+		}
+
+		replayedDB, err := Open(replayDBPath, false, true)
+		if err != nil {
+			t.Fatalf("failed to open replayed database: %s", err.Error())
+		}
+		rows, err := replayedDB.QueryStringStmt("SELECT * FROM foo")
+		if err != nil {
+			t.Fatalf("failed to query WAL table: %s", err.Error())
+		}
+		if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"],[2,"declan"]]}]`, asJSON(rows); exp != got {
+			t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+		}
+	}
+
+	t.Run("replayIntoWAL", func(t *testing.T) {
+		testFunc(t, false)
+	})
+	t.Run("replayIntoDELETE", func(t *testing.T) {
+		testFunc(t, true)
+	})
 }
 
 func test_FileCreationOnDisk(t *testing.T, db *DB) {

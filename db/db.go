@@ -174,6 +174,43 @@ func RemoveFiles(path string) error {
 	return nil
 }
 
+// ReplayWAL replays the given WAL files into the database at the given path,
+// in the order given by the slice. The supplied WAL files are assumed to be in the same
+// directory as the database file and are removed as a result of the replay operation.
+// The "real" WAL file is also removed. If deleteMode is true, the database file is also
+// put into DELETE mode.
+func ReplayWAL(path string, wals []string, deleteMode bool) error {
+	for _, wal := range wals {
+		if err := os.Rename(wal, path+"-wal"); err != nil {
+			return fmt.Errorf("rename WAL %s: %s", wal, err.Error())
+		}
+
+		db, err := Open(path, false, true)
+		if err != nil {
+			return err
+		}
+
+		if err := db.Checkpoint(defaultCheckpointTimeout); err != nil {
+			return fmt.Errorf("checkpoint WAL %s: %s", wal, err.Error())
+		}
+
+		if err := db.Close(); err != nil {
+			return err
+		}
+	}
+
+	if deleteMode {
+		db, err := Open(path, false, false)
+		if err != nil {
+			return err
+		}
+		if db.Close(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Open opens a file-based database, creating it if it does not exist. After this
 // function returns, an actual SQLite file will always exist.
 func Open(dbPath string, fkEnabled, wal bool) (*DB, error) {
@@ -478,7 +515,7 @@ func (db *DB) Checkpoint(dur time.Duration) (err error) {
 	var nMoved int
 
 	f := func() error {
-		err := db.rwDB.QueryRow("PRAGMA wal_checkpoint(RESTART)").Scan(&ok, &nPages, &nMoved)
+		err := db.rwDB.QueryRow("PRAGMA wal_checkpoint(TRUNCATE)").Scan(&ok, &nPages, &nMoved)
 		if err != nil {
 			return err
 		}

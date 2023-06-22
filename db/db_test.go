@@ -2,6 +2,7 @@ package db
 
 import (
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"sync"
@@ -287,6 +288,45 @@ func mustTempFile() string {
 	}
 	tmpfile.Close()
 	return tmpfile.Name()
+}
+
+func mustTempDir() string {
+	tmpdir, err := ioutil.TempDir("", "rqlite-db-test")
+	if err != nil {
+		panic(err.Error())
+	}
+	return tmpdir
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+// function which copies a src file to a dst file, panics if any error
+func mustCopyFile(dst, src string) {
+	srcFile, err := os.Open(src)
+	if err != nil {
+		panic(err)
+	}
+	defer srcFile.Close()
+
+	dstFile, err := os.Create(dst)
+	if err != nil {
+		panic(err)
+	}
+	defer dstFile.Close()
+
+	_, err = io.Copy(dstFile, srcFile)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func mustRenameFile(oldpath, newpath string) {
+	if err := os.Rename(oldpath, newpath); err != nil {
+		panic(err)
+	}
 }
 
 func mustCreateClosedFile(path string) {
