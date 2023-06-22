@@ -4,6 +4,7 @@ This release changes the mode of SQLite, when rqlite is running in _on-disk_ mod
 ### Implementation changes and bug fixes
 - [PR #1314](https://github.com/rqlite/rqlite/pull/1314): More preparations for WAL mode when running on-disk.
 - [PR #1315](https://github.com/rqlite/rqlite/pull/1315), [PR #1316](https://github.com/rqlite/rqlite/pull/1316): Enable WAL when running in on-disk mode.
+- [PR #1317](https://github.com/rqlite/rqlite/pull/1317): DB-layer now supports WAL replay.
   
 ## 7.21.0 (June 20th 2023)
 ### New features
