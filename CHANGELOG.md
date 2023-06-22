@@ -5,7 +5,8 @@ This release changes the mode of SQLite, when rqlite is running in _on-disk_ mod
 - [PR #1314](https://github.com/rqlite/rqlite/pull/1314): More preparations for WAL mode when running on-disk.
 - [PR #1315](https://github.com/rqlite/rqlite/pull/1315), [PR #1316](https://github.com/rqlite/rqlite/pull/1316): Enable WAL when running in on-disk mode.
 - [PR #1317](https://github.com/rqlite/rqlite/pull/1317): DB-layer now supports WAL replay.
-- [PR #1318](https://github.com/rqlite/rqlite/pull/1318): Periodically record actual applied index
+- [PR #1318](https://github.com/rqlite/rqlite/pull/1318): Periodically record actual applied index.
+- [PR #1319](https://github.com/rqlite/rqlite/pull/1319): Vacuum the generated backup copy of the database.
   
 ## 7.21.0 (June 20th 2023)
 ### New features
