@@ -227,8 +227,8 @@ func Test_DELETEDatabaseCreatedOKFromWAL(t *testing.T) {
 	}
 }
 
-// Test_WALReplay tests that WAL files are replayed as expected.
-func Test_WALReplay(t *testing.T) {
+// Test_WALReplayOK tests that WAL files are replayed as expected.
+func Test_WALReplayOK(t *testing.T) {
 	testFunc := func(t *testing.T, replayIntoDelete bool) {
 		dbPath := mustTempFile()
 		defer os.Remove(dbPath)
@@ -338,6 +338,18 @@ func Test_WALReplay(t *testing.T) {
 	t.Run("replayIntoDELETE", func(t *testing.T) {
 		testFunc(t, true)
 	})
+}
+
+func Test_WALReplayFailures(t *testing.T) {
+	dbDir := mustTempDir()
+	defer os.RemoveAll(dbDir)
+	walDir := mustTempDir()
+	defer os.RemoveAll(walDir)
+
+	err := ReplayWAL(filepath.Join(dbDir, "foo.db"), []string{filepath.Join(walDir, "foo.db-wal")}, false)
+	if err != ErrWALReplayDirectoryMismatch {
+		t.Fatalf("expected ErrWALReplayDirectoryMismatch, got %s", err.Error())
+	}
 }
 
 func test_FileCreationOnDisk(t *testing.T, db *DB) {

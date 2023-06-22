@@ -10,6 +10,7 @@ import (
 	"io"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -34,6 +35,10 @@ const (
 	numETx              = "execute_transactions"
 	numQTx              = "query_transactions"
 	numRTx              = "request_transactions"
+)
+
+var (
+	ErrWALReplayDirectoryMismatch = fmt.Errorf("WAL file(s) not in same directory as database file")
 )
 
 // DBVersion is the SQLite version.
@@ -175,11 +180,18 @@ func RemoveFiles(path string) error {
 }
 
 // ReplayWAL replays the given WAL files into the database at the given path,
-// in the order given by the slice. The supplied WAL files are assumed to be in the same
+// in the order given by the slice. The supplied WAL files must be in the same
 // directory as the database file and are removed as a result of the replay operation.
-// The "real" WAL file is also removed. If deleteMode is true, the database file will be
-// in DELETE mode after the replay operation, otherwise it will be in WAL mode.
+// The "real" WAL file is also removed. If deleteMode is true, the database file
+// will be in DELETE mode after the replay operation, otherwise it will be in WAL
+// mode.
 func ReplayWAL(path string, wals []string, deleteMode bool) error {
+	for _, wal := range wals {
+		if filepath.Dir(wal) != filepath.Dir(path) {
+			return ErrWALReplayDirectoryMismatch
+		}
+	}
+
 	for _, wal := range wals {
 		if err := os.Rename(wal, path+"-wal"); err != nil {
 			return fmt.Errorf("rename WAL %s: %s", wal, err.Error())
