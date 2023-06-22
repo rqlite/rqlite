@@ -114,7 +114,8 @@ func Test_IsWALModeEnabledOnDiskWAL(t *testing.T) {
 	}
 }
 
-// Add tests that check a WAL file is created, and that a checkpoint succeeds
+// Test_WALDatabaseCreatedOK tests that a WAL file is created, and that
+// a checkpoint succeeds
 func Test_WALDatabaseCreatedOK(t *testing.T) {
 	path := mustTempFile()
 	defer os.Remove(path)
@@ -148,6 +149,81 @@ func Test_WALDatabaseCreatedOK(t *testing.T) {
 
 	if err := db.Checkpoint(5 * time.Second); err != nil {
 		t.Fatalf("failed to checkpoint database in WAL mode: %s", err.Error())
+	}
+}
+
+// Test_WALDatabaseCreatedOKFromDELETE tests that a WAL database is created properly,
+// even when supplied with a DELETE-mode database.
+func Test_WALDatabaseCreatedOKFromDELETE(t *testing.T) {
+	deletePath := mustTempFile()
+	defer os.Remove(deletePath)
+	deleteDB, err := Open(deletePath, false, false)
+	if err != nil {
+		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
+	}
+	defer deleteDB.Close()
+	if _, err := deleteDB.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"); err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	_, err = deleteDB.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("fiona")`)
+	if err != nil {
+		t.Fatalf("error executing insertion into table: %s", err.Error())
+	}
+
+	walDB, err := Open(deletePath, false, true)
+	if err != nil {
+		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
+	}
+	defer walDB.Close()
+	if !IsWALModeEnabledSQLiteFile(deletePath) {
+		t.Fatalf("SQLite file not marked as WAL")
+	}
+	rows, err := walDB.QueryStringStmt("SELECT * FROM foo")
+	if err != nil {
+		t.Fatalf("failed to query WAL table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+}
+
+// Test_DELETEDatabaseCreatedOKFromWAL tests that a DELETE database is created properly,
+// even when supplied with a WAL-mode database.
+func Test_DELETEDatabaseCreatedOKFromWAL(t *testing.T) {
+	walPath := mustTempFile()
+	defer os.Remove(walPath)
+	walDB, err := Open(walPath, false, true)
+	if err != nil {
+		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
+	}
+	defer walDB.Close()
+	if _, err := walDB.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"); err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	_, err = walDB.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("fiona")`)
+	if err != nil {
+		t.Fatalf("error executing insertion into table: %s", err.Error())
+	}
+	if err := walDB.Close(); err != nil {
+		// Closing the WAL database is required if it's to be opened in DELETE mode.
+		t.Fatalf("failed to close database: %s", err.Error())
+	}
+
+	fmt.Println("Attempting second open")
+	deleteDB, err2 := Open(walPath, false, false)
+	if err2 != nil {
+		t.Fatalf("failed to open database in DELETE mode: %s", err2.Error())
+	}
+	defer deleteDB.Close()
+	if !IsDELETEModeEnabledSQLiteFile(walPath) {
+		t.Fatalf("SQLite file not marked as WAL")
+	}
+	rows, err := deleteDB.QueryStringStmt("SELECT * FROM foo")
+	if err != nil {
+		t.Fatalf("failed to query WAL table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
 }
 

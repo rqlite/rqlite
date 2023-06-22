@@ -180,7 +180,7 @@ func Open(dbPath string, fkEnabled, wal bool) (*DB, error) {
 	rwDSN := fmt.Sprintf("file:%s?_fk=%s", dbPath, strconv.FormatBool(fkEnabled))
 	rwDB, err := sql.Open("sqlite3", rwDSN)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("open: %s", err.Error())
 	}
 
 	// Set synchronous to OFF, to improve performance. The SQLite docs state that
@@ -188,7 +188,7 @@ func Open(dbPath string, fkEnabled, wal bool) (*DB, error) {
 	// rqlite blows away the database on startup and always rebuilds it from the
 	// Raft log.
 	if _, err := rwDB.Exec("PRAGMA synchronous=OFF"); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("sync OFF: %s", err.Error())
 	}
 
 	mode := "WAL"
@@ -196,7 +196,7 @@ func Open(dbPath string, fkEnabled, wal bool) (*DB, error) {
 		mode = "DELETE"
 	}
 	if _, err := rwDB.Exec(fmt.Sprintf("PRAGMA journal_mode=%s", mode)); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("journal mode to %s: %s", mode, err.Error())
 	}
 
 	roOpts := []string{
