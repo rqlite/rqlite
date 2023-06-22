@@ -1051,6 +1051,12 @@ func (db *DB) Backup(path string) error {
 		return err
 	}
 
+	// Compact the database.
+	_, err = dstDB.ExecuteStringStmt("VACUUM")
+	if err != nil {
+		return err
+	}
+
 	return dstDB.Close()
 }
 
