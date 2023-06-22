@@ -3,6 +3,7 @@
 package db
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"expvar"
@@ -119,6 +120,36 @@ func IsValidSQLiteData(b []byte) bool {
 	return len(b) > 13 && string(b[0:13]) == "SQLite format"
 }
 
+// IsValidSQLiteWALFile checks that the supplied path looks like a SQLite
+// WAL file. See https://www.sqlite.org/fileformat2.html#walformat
+func IsValidSQLiteWALFile(path string) bool {
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+
+	b := make([]byte, 4)
+	if _, err := f.Read(b); err != nil {
+		return false
+	}
+
+	return IsValidSQLiteWALData(b)
+}
+
+// IsValidSQLiteWALFile checks that the supplied data looks like a SQLite
+// WAL file.
+func IsValidSQLiteWALData(b []byte) bool {
+	if len(b) < 4 {
+		return false
+	}
+
+	header1 := []byte{0x37, 0x7f, 0x06, 0x82}
+	header2 := []byte{0x37, 0x7f, 0x06, 0x83}
+	header := b[:4]
+	return bytes.Equal(header, header1) || bytes.Equal(header, header2)
+}
+
 // IsWALModeEnabledSQLiteFile checks that the supplied path looks like a SQLite
 // with WAL mode enabled.
 func IsWALModeEnabledSQLiteFile(path string) bool {
@@ -192,7 +223,14 @@ func ReplayWAL(path string, wals []string, deleteMode bool) error {
 		}
 	}
 
+	if !IsValidSQLiteFile(path) {
+		return fmt.Errorf("invalid database file %s", path)
+	}
+
 	for _, wal := range wals {
+		if !IsValidSQLiteWALFile(wal) {
+			return fmt.Errorf("invalid WAL file %s", wal)
+		}
 		if err := os.Rename(wal, path+"-wal"); err != nil {
 			return fmt.Errorf("rename WAL %s: %s", wal, err.Error())
 		}

@@ -92,6 +92,16 @@ func Test_IsWALModeEnabledOnDiskWAL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to enable WAL mode: %s", err.Error())
 	}
+
+	_, err = db.Exec(`INSERT INTO foo(name) VALUES("fiona")`)
+	if err != nil {
+		t.Fatalf("error inserting record into table: %s", err.Error())
+	}
+
+	if !IsValidSQLiteWALFile(path + "-wal") {
+		t.Fatalf("WAL file marked not marked as valid")
+	}
+
 	if err := db.Close(); err != nil {
 		t.Fatalf("failed to close database: %s", err.Error())
 	}
