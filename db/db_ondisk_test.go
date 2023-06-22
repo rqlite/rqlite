@@ -358,7 +358,7 @@ func Test_WALReplayFailures(t *testing.T) {
 
 	err := ReplayWAL(filepath.Join(dbDir, "foo.db"), []string{filepath.Join(walDir, "foo.db-wal")}, false)
 	if err != ErrWALReplayDirectoryMismatch {
-		t.Fatalf("expected ErrWALReplayDirectoryMismatch, got %s", err.Error())
+		t.Fatalf("expected %s, got %s", ErrWALReplayDirectoryMismatch, err.Error())
 	}
 }
 
