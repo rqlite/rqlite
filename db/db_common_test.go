@@ -1217,6 +1217,10 @@ func testCopy(t *testing.T, db *DB) {
 		t.Fatalf("failed to copy database: %s", err.Error())
 	}
 
+	if !IsDELETEModeEnabledSQLiteFile(dstFile) {
+		t.Fatalf("Destination file not marked in DELETE mode")
+	}
+
 	ro, err := dstDB.QueryStringStmt(`SELECT * FROM foo`)
 	if err != nil {
 		t.Fatalf("failed to query table: %s", err.Error())

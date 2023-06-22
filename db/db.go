@@ -960,27 +960,26 @@ func (db *DB) Backup(path string) error {
 	if err := copyDatabase(dstDB, db); err != nil {
 		return fmt.Errorf("backup database: %s", err)
 	}
-	if err := dstDB.Close(); err != nil {
-		return err
-	}
 
-	// Open and close again to ensure the database is in DELETE mode.
-	dstDB, err = Open(path, false, false)
+	// Source database might be in WAL mode.
+	_, err = dstDB.ExecuteStringStmt("PRAGMA journal_mode=DELETE")
 	if err != nil {
 		return err
 	}
+
 	return dstDB.Close()
 }
 
 // Copy copies the contents of the database to the given database. All other
 // attributes of the given database remain untouched e.g. whether it's an
-// on-disk database. This function can be called when changes to the source
-// database are in flight.
+// on-disk database, except the database will be placed in DELETE mode.
+// This function can be called when changes to the source database are in flight.
 func (db *DB) Copy(dstDB *DB) error {
 	if err := copyDatabase(dstDB, db); err != nil {
 		return fmt.Errorf("copy database: %s", err)
 	}
-	return nil
+	_, err := dstDB.ExecuteStringStmt("PRAGMA journal_mode=DELETE")
+	return err
 }
 
 // Serialize returns a byte slice representation of the SQLite database. For
