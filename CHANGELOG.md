@@ -1,7 +1,7 @@
 ## 7.21.1 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #1314](https://github.com/rqlite/rqlite/pull/1314): More preparations for WAL mode when running on-disk.
-- 
+  
 ## 7.21.0 (June 20th 2023)
 ### New features
 - [PR #1311](https://github.com/rqlite/rqlite/pull/1311): Support 'key' param on the `/status` HTTP endpoint.
