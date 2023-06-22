@@ -395,7 +395,7 @@ func (s *Store) Open() (retErr error) {
 		if err != nil {
 			return fmt.Errorf("failed to read peers file: %s", err.Error())
 		}
-		if err = RecoverNode(s.raftDir, s.logger, s.raftLog, s.raftStable, snapshots, s.raftTn, config); err != nil {
+		if err = RecoverNode(s.raftDir, s.logger, s.raftLog, s.boltStore, snapshots, s.raftTn, config); err != nil {
 			return fmt.Errorf("failed to recover node: %s", err.Error())
 		}
 		if err := os.Rename(s.peersPath, s.peersInfoPath); err != nil {
@@ -1800,7 +1800,7 @@ func (s *Store) tryCompress(rq command.Requester) ([]byte, bool, error) {
 // RecoverNode is used to manually force a new configuration, in the event that
 // quorum cannot be restored. This borrows heavily from RecoverCluster functionality
 // of the Hashicorp Raft library, but has been customized for rqlite use.
-func RecoverNode(dataDir string, logger *log.Logger, logs raft.LogStore, stable raft.StableStore,
+func RecoverNode(dataDir string, logger *log.Logger, logs raft.LogStore, stable *rlog.Log,
 	snaps raft.SnapshotStore, tn raft.Transport, conf raft.Configuration) error {
 	logPrefix := logger.Prefix()
 	logger.SetPrefix(fmt.Sprintf("%s[recovery] ", logPrefix))
@@ -1908,6 +1908,11 @@ func RecoverNode(dataDir string, logger *log.Logger, logs raft.LogStore, stable 
 	}
 	if err := logs.DeleteRange(firstLogIndex, lastLogIndex); err != nil {
 		return fmt.Errorf("log compaction failed: %v", err)
+	}
+
+	// Erase record of previous updating of Applied Index too.
+	if err := stable.SetAppliedIndex(0); err != nil {
+		return fmt.Errorf("failed to zero applied index: %v", err)
 	}
 
 	return nil
