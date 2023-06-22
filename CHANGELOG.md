@@ -1,6 +1,9 @@
 ## 7.21.1 (unreleased)
+This release changes the mode of SQLite, when rqlite is running in _on-disk_ mode. SQLite now runs in WAL mode, when previously it was in DELETE mode. Testing shows this results in a ~30% increase in write-performance.
+
 ### Implementation changes and bug fixes
 - [PR #1314](https://github.com/rqlite/rqlite/pull/1314): More preparations for WAL mode when running on-disk.
+- [PR #1315](https://github.com/rqlite/rqlite/pull/1315): Enable WAL when running in on-disk mode.
   
 ## 7.21.0 (June 20th 2023)
 ### New features
