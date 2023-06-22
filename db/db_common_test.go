@@ -962,6 +962,11 @@ func testSerialize(t *testing.T, db *DB) {
 	if err != nil {
 		t.Fatalf("failed to serialize database: %s", err.Error())
 	}
+
+	if !IsDELETEModeEnabled(b) {
+		t.Fatalf("expected DELETE mode to be enabled")
+	}
+
 	err = ioutil.WriteFile(dstDB.Name(), b, 0644)
 	if err != nil {
 		t.Fatalf("failed to write serialized database to file: %s", err.Error())

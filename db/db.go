@@ -987,20 +987,35 @@ func (db *DB) Copy(dstDB *DB) error {
 // an ordinary on-disk database file, the serialization is just a copy of the
 // disk file. For an in-memory database or a "TEMP" database, the serialization
 // is the same sequence of bytes which would be written to disk if that database
-// were backed up to disk. If the database is in WAL mode, a RESTART checkpoint
-// will be performed before the database is serialized, but the returned database
-// will still be in WAL mode. This function must not be called while any writes
-// are happening to the database.
+// were backed up to disk. If the database is in WAL mode, a temporary on-disk
+// copy is made, and it is this copy that is serialized. This function must not
+// be called while any writes are happening to the database.
 func (db *DB) Serialize() ([]byte, error) {
 	if !db.memory {
-		// If the database is in WAL mode, perform a checkpoint before serializing.
 		if db.wal {
-			if err := db.Checkpoint(defaultCheckpointTimeout); err != nil {
+			tmpFile, err := os.CreateTemp("", "rqlite-serialize")
+			if err != nil {
 				return nil, err
 			}
+			defer os.Remove(tmpFile.Name())
+			defer tmpFile.Close()
+
+			if err := db.Backup(tmpFile.Name()); err != nil {
+				return nil, err
+			}
+			newDB, err := Open(tmpFile.Name(), db.fkEnabled, false)
+			if err != nil {
+				return nil, err
+			}
+			defer newDB.Close()
+			return newDB.Serialize()
 		}
 		// Simply read and return the SQLite file.
-		return os.ReadFile(db.path)
+		b, err := os.ReadFile(db.path)
+		if err != nil {
+			return nil, err
+		}
+		return b, nil
 	}
 
 	conn, err := db.roDB.Conn(context.Background())
