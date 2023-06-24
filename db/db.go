@@ -28,6 +28,7 @@ const (
 const (
 	numCheckpoints      = "checkpoints"
 	numCheckpointErrors = "checkpoint_errors"
+	checkpointDuration  = "checkpoint_duration_ns"
 	numExecutions       = "executions"
 	numExecutionErrors  = "execution_errors"
 	numQueries          = "queries"
@@ -60,6 +61,7 @@ func ResetStats() {
 	stats.Init()
 	stats.Add(numCheckpoints, 0)
 	stats.Add(numCheckpointErrors, 0)
+	stats.Add(checkpointDuration, 0)
 	stats.Add(numExecutions, 0)
 	stats.Add(numExecutionErrors, 0)
 	stats.Add(numQueries, 0)
@@ -549,10 +551,12 @@ func (db *DB) WALSize() (int64, error) {
 // Checkpoint performs a WAL checkpoint. If the checkpoint does not complete
 // within the given duration, an error is returned.
 func (db *DB) Checkpoint(dur time.Duration) (err error) {
+	start := time.Now()
 	defer func() {
 		if err != nil {
 			stats.Add(numCheckpointErrors, 1)
 		} else {
+			stats.Get(checkpointDuration).(*expvar.Int).Set(time.Since(start).Nanoseconds())
 			stats.Add(numCheckpoints, 1)
 		}
 	}()
