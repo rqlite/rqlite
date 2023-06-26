@@ -5,10 +5,20 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"time"
 )
+
+// Result represents a single result from a test request.
+type Result struct {
+	Error string `json:"error,omitempty"`
+	Rest  json.RawMessage
+}
+
+// Response represents a response from a test request.
+type Response struct {
+	Results []Result `json:"results"`
+}
 
 // HTTPTester represents an HTTP transport tester.
 type HTTPTester struct {
@@ -61,13 +71,22 @@ func (h *HTTPTester) Once() (time.Duration, error) {
 	}
 	defer resp.Body.Close()
 
-	_, err = ioutil.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("received %s", resp.Status)
+	}
+
+	r := Response{}
+	err = json.NewDecoder(resp.Body).Decode(&r)
 	if err != nil {
 		return 0, err
 	}
-
-	if resp.StatusCode != http.StatusOK {
-		return 0, fmt.Errorf("received %s", resp.Status)
+	if len(r.Results) == 0 {
+		return 0, fmt.Errorf("expected at least 1 result, got %d", len(r.Results))
+	}
+	for _, res := range r.Results {
+		if res.Error != "" {
+			return 0, fmt.Errorf("received error: %s", res.Error)
+		}
 	}
 	dur := time.Since(start)
 
