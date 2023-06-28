@@ -198,7 +198,7 @@ jobs:
   end_to_end_autoclustering:
     docker:
       - image: rqlite/circleci-primary:0.0.2
-      - image: consul
+      - image: hashicorp/consul
       - image: gcr.io/etcd-development/etcd:v3.5.1
     steps:
       - checkout
