@@ -171,10 +171,12 @@ type Config struct {
 	// RaftLeaderLeaseTimeout sets the leader lease timeout.
 	RaftLeaderLeaseTimeout time.Duration
 
-	// RaftHeartbeatTimeout sets the heartbeat timeout.
+	// RaftHeartbeatTimeout specifies the time in follower state without contact
+	// from a Leader before the node attempts an election.
 	RaftHeartbeatTimeout time.Duration
 
-	// RaftElectionTimeout sets the election timeout.
+	// RaftElectionTimeout specifies the time in candidate state without contact
+	// from a Leader before the node attempts an election.
 	RaftElectionTimeout time.Duration
 
 	// RaftApplyTimeout sets the Log-apply timeout.
