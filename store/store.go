@@ -1595,8 +1595,7 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 
 // Restore restores the node to a previous state. The Hashicorp docs state this
 // will not be called concurrently with Apply(), so synchronization with Execute()
-// is not necessary. To prevent problems during queries, which may not go through
-// the log, it blocks all query requests.
+// is not necessary.
 func (s *Store) Restore(rc io.ReadCloser) error {
 	startT := time.Now()
 	b, err := dbBytesFromSnapshot(rc)
@@ -1639,6 +1638,7 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 
 	stats.Add(numRestores, 1)
 	s.logger.Printf("node restored in %s", time.Since(startT))
+	rc.Close()
 	return nil
 }
 
