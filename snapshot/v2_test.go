@@ -98,6 +98,7 @@ func Test_V2SnapshotEncodeDecode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer f.Close()
 
 	var originalBuf bytes.Buffer
 	_, err = io.Copy(&originalBuf, f)
