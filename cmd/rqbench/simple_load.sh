@@ -16,7 +16,6 @@ handle_ctrl_c() {
 
 trap 'handle_ctrl_c' SIGINT
 
-
 $RQBENCH -o 'CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT, surname TEXT)' -m 100 -n 500000 -a $EXECUTE_HOST 'INSERT INTO foo(name) VALUES("fiona")' &
 $RQBENCH -o 'CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT, surname TEXT)' -m 100 -n 500000 -a $EXECUTE_HOST 'INSERT INTO bar(name, surname) VALUES("fiona", "OTOOLE")' &
 $RQBENCH -o 'CREATE TABLE qux (id INTEGER NOT NULL PRIMARY KEY, name TEXT)' -m 100 -n 500000 -a $EXECUTE_HOST 'INSERT INTO qux(name) VALUES("fionafionafionafionafionafionafionafionafionafionafionafionafionafionafionafionafionafiona")' &
