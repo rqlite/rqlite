@@ -26,6 +26,7 @@ class TestBootstrapping3To4Nodes(unittest.TestCase):
 
     self.assertEqual(n0.wait_for_leader(), n1.wait_for_leader())
     self.assertEqual(n0.wait_for_leader(), n2.wait_for_leader())
+    self.assertEqual(len(n0.nodes()), 3)
 
     # Ensure a 4th node can join later, with same launch params.
     n3 = Node(RQLITED_PATH, '4', bootstrap_expect=3)
@@ -34,6 +35,7 @@ class TestBootstrapping3To4Nodes(unittest.TestCase):
     n3.wait_for_leader()
 
     self.assertEqual(n3.wait_for_leader(), n0.wait_for_leader())
+    self.assertEqual(len(n0.nodes()), 4)
 
     deprovision_node(n0)
     deprovision_node(n1)
