@@ -13,7 +13,7 @@ from helpers import Node, Cluster, d_, write_random_file, deprovision_node, rand
 
 RQLITED_PATH = os.environ['RQLITED_PATH']
 
-class TestBootstrapping(unittest.TestCase):
+class TestBootstrapping3To4Nodes(unittest.TestCase):
   '''Test simple bootstrapping works via -bootstrap-expect'''
   def test(self):
     n0 = Node(RQLITED_PATH, '0', bootstrap_expect=3)
@@ -39,6 +39,36 @@ class TestBootstrapping(unittest.TestCase):
     deprovision_node(n1)
     deprovision_node(n2)
     deprovision_node(n3)
+
+class TestBootstrapping5Nodes(unittest.TestCase):
+  '''Test simple bootstrapping works via -bootstrap-expect set to 5'''
+  def test(self):
+    bootstrapN=5
+    n0 = Node(RQLITED_PATH, '0', bootstrap_expect=bootstrapN)
+    n1 = Node(RQLITED_PATH, '1', bootstrap_expect=bootstrapN)
+    n2 = Node(RQLITED_PATH, '2', bootstrap_expect=bootstrapN)
+    n3 = Node(RQLITED_PATH, '3', bootstrap_expect=bootstrapN)
+    n4 = Node(RQLITED_PATH, '4', bootstrap_expect=bootstrapN)
+
+    joinNodes = [n0.APIProtoAddr(), n1.APIProtoAddr(), n2.APIProtoAddr(), n3.APIProtoAddr(), n4.APIProtoAddr()]
+
+    n0.start(join=','.join(joinNodes))
+    n1.start(join=','.join(joinNodes))
+    n2.start(join=','.join(joinNodes))
+    n3.start(join=','.join(joinNodes))
+    n4.start(join=','.join(joinNodes))
+
+    self.assertEqual(n0.wait_for_leader(), n1.wait_for_leader())
+    self.assertEqual(n0.wait_for_leader(), n2.wait_for_leader())
+    self.assertEqual(n0.wait_for_leader(), n3.wait_for_leader())
+    self.assertEqual(n0.wait_for_leader(), n4.wait_for_leader())
+    self.assertEqual(len(n0.nodes()), bootstrapN)
+
+    deprovision_node(n0)
+    deprovision_node(n1)
+    deprovision_node(n2)
+    deprovision_node(n3)
+    deprovision_node(n4)
 
 class TestBootstrappingRestart(unittest.TestCase):
   '''Test restarting a bootstrapped cluster works via -bootstrap-expect'''
