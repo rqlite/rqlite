@@ -45,12 +45,11 @@ class TestBootstrapping3To4Nodes(unittest.TestCase):
 class TestBootstrapping5Nodes(unittest.TestCase):
   '''Test simple bootstrapping works via -bootstrap-expect set to 5'''
   def test(self):
-    bootstrapN=5
-    n0 = Node(RQLITED_PATH, '0', bootstrap_expect=bootstrapN)
-    n1 = Node(RQLITED_PATH, '1', bootstrap_expect=bootstrapN)
-    n2 = Node(RQLITED_PATH, '2', bootstrap_expect=bootstrapN)
-    n3 = Node(RQLITED_PATH, '3', bootstrap_expect=bootstrapN)
-    n4 = Node(RQLITED_PATH, '4', bootstrap_expect=bootstrapN)
+    n0 = Node(RQLITED_PATH, '0', bootstrap_expect=5)
+    n1 = Node(RQLITED_PATH, '1', bootstrap_expect=5)
+    n2 = Node(RQLITED_PATH, '2', bootstrap_expect=5)
+    n3 = Node(RQLITED_PATH, '3', bootstrap_expect=5)
+    n4 = Node(RQLITED_PATH, '4', bootstrap_expect=5)
 
     joinNodes = [n0.APIProtoAddr(), n1.APIProtoAddr(), n2.APIProtoAddr(), n3.APIProtoAddr(), n4.APIProtoAddr()]
 
@@ -64,7 +63,7 @@ class TestBootstrapping5Nodes(unittest.TestCase):
     self.assertEqual(n0.wait_for_leader(), n2.wait_for_leader())
     self.assertEqual(n0.wait_for_leader(), n3.wait_for_leader())
     self.assertEqual(n0.wait_for_leader(), n4.wait_for_leader())
-    self.assertEqual(len(n0.nodes()), bootstrapN)
+    self.assertEqual(len(n0.nodes()), 5)
 
     deprovision_node(n0)
     deprovision_node(n1)
