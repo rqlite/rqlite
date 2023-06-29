@@ -1639,6 +1639,7 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 
 	stats.Add(numRestores, 1)
 	s.logger.Printf("node restored in %s", time.Since(startT))
+	rc.Close()
 	return nil
 }
 
