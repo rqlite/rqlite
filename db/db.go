@@ -515,6 +515,9 @@ func (db *DB) Size() (int64, error) {
 	if err != nil {
 		return 0, err
 	}
+	if rows[0].Error != "" {
+		return 0, fmt.Errorf(rows[0].Error)
+	}
 
 	return rows[0].Values[0].Parameters[0].GetI(), nil
 }
@@ -1297,6 +1300,9 @@ func (db *DB) memStats() (map[string]int64, error) {
 		res, err := db.QueryStringStmt(fmt.Sprintf("PRAGMA %s", p))
 		if err != nil {
 			return nil, err
+		}
+		if res[0].Error != "" {
+			return nil, fmt.Errorf(res[0].Error)
 		}
 		ms[p] = res[0].Values[0].Parameters[0].GetI()
 	}

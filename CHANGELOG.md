@@ -3,6 +3,7 @@
 - [PR #1321](https://github.com/rqlite/rqlite/pull/1321): Check for errors in responses during load testing.
 - [PR #1323](https://github.com/rqlite/rqlite/pull/1323): Add codec for v2 snapshots.
 - [PR #1324](https://github.com/rqlite/rqlite/pull/1324): Close Snapshot after we're finished restoring from it.
+- [PR #1325](https://github.com/rqlite/rqlite/pull/1325): Handle getting an error when asking for database stats.
 
 ## 7.21.1 (June 26th 2023)
 This release changes the mode of SQLite, when rqlite is running in _on-disk_ mode. SQLite now runs in WAL mode, when previously it was in DELETE mode. Testing shows this results in a ~30% increase in write-performance.

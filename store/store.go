@@ -95,6 +95,7 @@ const (
 	numJoins                 = "num_joins"
 	numIgnoredJoins          = "num_ignored_joins"
 	numRemovedBeforeJoins    = "num_removed_before_joins"
+	numDBStatsErrors         = "num_db_stats_errors"
 	snapshotCreateDuration   = "snapshot_create_duration"
 	snapshotPersistDuration  = "snapshot_persist_duration"
 	snapshotDBSerializedSize = "snapshot_db_serialized_size"
@@ -130,6 +131,7 @@ func ResetStats() {
 	stats.Add(numJoins, 0)
 	stats.Add(numIgnoredJoins, 0)
 	stats.Add(numRemovedBeforeJoins, 0)
+	stats.Add(numDBStatsErrors, 0)
 	stats.Add(snapshotCreateDuration, 0)
 	stats.Add(snapshotPersistDuration, 0)
 	stats.Add(snapshotDBSerializedSize, 0)
@@ -846,7 +848,8 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 	}()
 	dbStatus, err := s.db.Stats()
 	if err != nil {
-		return nil, err
+		stats.Add(numDBStatsErrors, 1)
+		s.logger.Printf("failed to get database stats: %s", err.Error())
 	}
 
 	nodes, err := s.Nodes()
