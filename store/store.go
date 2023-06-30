@@ -846,7 +846,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 	}()
 	dbStatus, err := s.db.Stats()
 	if err != nil {
-		return nil, err
+		s.logger.Printf("failed to get database stats: %s", err.Error())
 	}
 
 	nodes, err := s.Nodes()
