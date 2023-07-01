@@ -3,7 +3,6 @@ package system
 import (
 	"fmt"
 	"net"
-	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -844,12 +843,6 @@ func Test_MultiNodeClusterQueuedWrites(t *testing.T) {
 // Test_MultiNodeClusterLargeQueuedWrites tests writing to a cluster using
 // many large concurrent Queued Writes operations.
 func Test_MultiNodeClusterLargeQueuedWrites(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		// https://github.com/rqlite/rqlite/issues/1123
-		// This is not great, but extensive testing on Windows has not been
-		// successful yet, so skip this test for now.
-		t.Skip("skipping test on windows")
-	}
 	store.ResetStats()
 	db.ResetStats()
 	http.ResetStats()
