@@ -778,12 +778,13 @@ func Test_MultiNodeClusterQueuedWrites(t *testing.T) {
 	// Write data to the cluster, via various methods and nodes.
 	writesPerLoop := 500
 	var wg sync.WaitGroup
-	wg.Add(5)
+	numLoops := 5
+	wg.Add(numLoops)
 	go func() {
 		defer wg.Done()
 		for i := 0; i < writesPerLoop; i++ {
 			if _, err := node1.Execute(`INSERT INTO foo(name) VALUES("fiona")`); err != nil {
-				t.Logf("failed to insert records: %s", err.Error())
+				t.Errorf("failed to insert records: %s", err.Error())
 			}
 		}
 	}()
@@ -791,7 +792,7 @@ func Test_MultiNodeClusterQueuedWrites(t *testing.T) {
 		defer wg.Done()
 		for i := 0; i < writesPerLoop; i++ {
 			if _, err := node2.Execute(`INSERT INTO foo(name) VALUES("fiona")`); err != nil {
-				t.Logf("failed to insert records: %s", err.Error())
+				t.Errorf("failed to insert records: %s", err.Error())
 			}
 		}
 	}()
@@ -799,38 +800,38 @@ func Test_MultiNodeClusterQueuedWrites(t *testing.T) {
 		defer wg.Done()
 		for i := 0; i < writesPerLoop-1; i++ {
 			if _, err := node2.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, false); err != nil {
-				t.Logf("failed to insert records: %s", err.Error())
+				t.Errorf("failed to insert records: %s\n", err.Error())
 			}
 		}
 		if _, err := node2.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, true); err != nil {
-			t.Logf("failed to insert records: %s", err.Error())
+			t.Errorf("failed to insert records: %s\n", err.Error())
 		}
 	}()
 	go func() {
 		defer wg.Done()
 		for i := 0; i < writesPerLoop-1; i++ {
 			if _, err := node3.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, false); err != nil {
-				t.Logf("failed to insert records: %s", err.Error())
+				t.Errorf("failed to insert records: %s\n", err.Error())
 			}
 		}
 		if _, err := node3.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, true); err != nil {
-			t.Logf("failed to insert records: %s", err.Error())
+			t.Errorf("failed to insert records: %s\n", err.Error())
 		}
 	}()
 	go func() {
 		defer wg.Done()
 		for i := 0; i < writesPerLoop-1; i++ {
 			if _, err := node3.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, false); err != nil {
-				t.Logf("failed to insert records: %s", err.Error())
+				t.Errorf("failed to insert records: %s\n", err.Error())
 			}
 		}
 		if _, err := node3.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, true); err != nil {
-			t.Logf("failed to insert records: %s", err.Error())
+			t.Errorf("failed to insert records: %s", err.Error())
 		}
 	}()
 	wg.Wait()
 
-	exp := fmt.Sprintf(`{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[%d]]}]}`, 5*writesPerLoop)
+	exp := fmt.Sprintf(`{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[%d]]}]}`, numLoops*writesPerLoop)
 	got, err := node1.Query(`SELECT COUNT(*) FROM foo`)
 	if err != nil {
 		t.Fatalf("failed to query follower node: %s", err.Error())
