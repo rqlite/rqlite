@@ -1,4 +1,4 @@
-## 7.21.2 (unreleased)
+## 7.21.2 (Jult 1st 2023)
 ### Implementation changes and bug fixes
 - [PR #1321](https://github.com/rqlite/rqlite/pull/1321): Check for errors in responses during load testing.
 - [PR #1323](https://github.com/rqlite/rqlite/pull/1323): Add codec for v2 snapshots.
