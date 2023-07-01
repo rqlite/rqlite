@@ -379,7 +379,6 @@ func (n *Node) ConfirmRedirect(host string) bool {
 		return false
 	}
 	defer resp.Body.Close()
-	fmt.Println(resp.StatusCode)
 	if resp.StatusCode != http.StatusMovedPermanently {
 		return false
 	}

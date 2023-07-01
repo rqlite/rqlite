@@ -390,7 +390,7 @@ func (s *Service) Start() error {
 	go func() {
 		err := s.httpServer.Serve(s.ln)
 		if err != nil {
-			s.logger.Println("HTTP service stopped:", err.Error())
+			s.logger.Printf("HTTP service on %s stopped: %s", s.ln.Addr().String(), err.Error())
 		}
 	}()
 	s.logger.Println("service listening on", s.Addr())
@@ -400,6 +400,7 @@ func (s *Service) Start() error {
 
 // Close closes the service.
 func (s *Service) Close() {
+	s.logger.Println("closing HTTP service on", s.ln.Addr().String())
 	s.httpServer.Shutdown(context.Background())
 
 	s.stmtQueue.Close()
