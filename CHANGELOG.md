@@ -1,3 +1,7 @@
+## 7.21.3 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1329](https://github.com/rqlite/rqlite/pull/1329): Try a different version of V2 Snapshot codec.
+
 ## 7.21.2 (July 1st 2023)
 ### Implementation changes and bug fixes
 - [PR #1321](https://github.com/rqlite/rqlite/pull/1321): Check for errors in responses during load testing.
