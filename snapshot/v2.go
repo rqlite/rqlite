@@ -1,26 +1,37 @@
 package snapshot
 
 import (
-	"archive/tar"
 	"compress/gzip"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 )
 
 const (
-	blueprintName = "blueprint.json"
+	RqliteHeaderVersionSize  = 32
+	RqliteHeaderReservedSize = 32
+
+	RqliteSnapshotVersion2 = "rqlite snapshot version 2"
 )
 
-// Blueprint is the metadata for a snapshot.
-type Blueprint struct {
-	// Version is the snapshot version.
-	Version uint64 `json:"version"`
+// FileIsV2Snapshot returns true if the given path is a V2 snapshot.
+func FileIsV2Snapshot(path string) bool {
+	file, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer file.Close()
+	return ReaderIsV2Snapshot(file)
+}
 
-	// Filename is the name of the file containing the SQLite database.
-	Filename string `json:"filename"`
+// ReaderIsV2Snapshot returns true if the given reader is a V2 snapshot.
+// The reader will be advanced 1 byte passed the end of the Version header.
+func ReaderIsV2Snapshot(r io.Reader) bool {
+	header := make([]byte, RqliteHeaderVersionSize)
+	if _, err := io.ReadFull(r, header); err != nil {
+		return false
+	}
+	return string(header[:len(RqliteSnapshotVersion2)]) == RqliteSnapshotVersion2
 }
 
 // V2Encoder creates a new V2 snapshot.
@@ -35,60 +46,38 @@ func NewV2Encoder(path string) *V2Encoder {
 	}
 }
 
-// WriteTo writes the snapshot to the given writer.
+// WriteTo writes the snapshot to the given writer. Returns the number
+// of bytes written, or an error.
 func (v *V2Encoder) WriteTo(w io.Writer) (int64, error) {
-	cw := &CountingWriter{Writer: w}
-	gw := gzip.NewWriter(cw)
-	defer gw.Close()
-	tw := tar.NewWriter(gw)
-	defer tw.Close()
-
-	// Write blueprint.
-	bp := &Blueprint{
-		Version:  2,
-		Filename: filepath.Base(v.path),
-	}
-	bpb, err := json.Marshal(bp)
+	file, err := os.Open(v.path)
 	if err != nil {
 		return 0, err
 	}
-	blueprintHeader := &tar.Header{
-		Name: blueprintName,
-		Size: int64(len(bpb)),
-	}
-	if err := tw.WriteHeader(blueprintHeader); err != nil {
-		return cw.Count, err
-	}
-	if _, err := tw.Write(bpb); err != nil {
-		return cw.Count, err
-	}
-
-	// Write database.
-	file, err := os.Open(v.path)
-	if err != nil {
-		return cw.Count, err
-	}
 	defer file.Close()
 
-	stat, err := file.Stat()
+	// Wrap w in counting writer.
+	cw := &CountingWriter{Writer: w}
+
+	if _, err := writeString(cw, RqliteSnapshotVersion2, RqliteHeaderVersionSize); err != nil {
+		return 0, err
+	}
+
+	// Write reserved space.
+	if _, err = cw.Write(make([]byte, RqliteHeaderReservedSize)); err != nil {
+		return cw.Count, err
+	}
+
+	gw, err := gzip.NewWriterLevel(cw, gzip.BestSpeed)
 	if err != nil {
 		return cw.Count, err
 	}
-	sqliteHeader := &tar.Header{
-		Name: stat.Name(),
-		Size: stat.Size(),
-	}
-	if err := tw.WriteHeader(sqliteHeader); err != nil {
-		return cw.Count, err
-	}
-	if _, err := io.Copy(tw, file); err != nil {
+	defer gw.Close()
+
+	if _, err := io.Copy(gw, file); err != nil {
 		return cw.Count, err
 	}
 
 	// We're done.
-	if err := tw.Close(); err != nil {
-		return cw.Count, err
-	}
 	if err := gw.Close(); err != nil {
 		return cw.Count, err
 	}
@@ -113,51 +102,42 @@ func NewV2Decoder(r io.Reader) *V2Decoder {
 
 // WriteTo writes the decoded snapshot data to the given writer.
 func (v *V2Decoder) WriteTo(w io.Writer) (int64, error) {
+	if !ReaderIsV2Snapshot(v.r) {
+		return 0, fmt.Errorf("data is not a V2 snapshot")
+	}
+
+	// Read the reserved space and discard.
+	reserved := make([]byte, RqliteHeaderReservedSize)
+	if _, err := io.ReadFull(v.r, reserved); err != nil {
+		return 0, fmt.Errorf("failed to read reserved space: %w", err)
+	}
+
 	gr, err := gzip.NewReader(v.r)
 	if err != nil {
 		return 0, err
 	}
 	defer gr.Close()
-	tr := tar.NewReader(gr)
 
-	// Read the blueprint
-	header, err := tr.Next()
-	if err == io.EOF {
-		return 0, fmt.Errorf("expected %s, got EOF", blueprintName)
-	}
-	if err != nil {
-		return 0, fmt.Errorf("failed to read blueprint header: %w", err)
-	}
-	if header.Name != blueprintName {
-		return 0, fmt.Errorf("expected %s, got %s", blueprintName, header.Name)
-	}
-	bp := &Blueprint{}
-	if err := json.NewDecoder(tr).Decode(bp); err != nil {
-		return 0, fmt.Errorf("failed to decode blueprint: %w", err)
-	}
-	if bp.Version != 2 {
-		return 0, fmt.Errorf("unsupported version (%d)", bp.Version)
-	}
-
-	// Read the data
-	header, err = tr.Next()
-	if err == io.EOF {
-		return 0, fmt.Errorf("expected %s, got EOF", blueprintName)
-	}
-	if err != nil {
-		return 0, fmt.Errorf("failed to read data header: %w", err)
-	}
-	if header.Name != bp.Filename {
-		return 0, fmt.Errorf("expected %s, got %s", bp.Filename, header.Name)
-	}
-
-	// Write the data
-	n, err := io.Copy(w, tr)
+	// Decompress the database.
+	n, err := io.Copy(w, gr)
 	if err != nil {
 		return 0, fmt.Errorf("failed to write data: %w", err)
 	}
 
 	return n, err
+}
+
+// function which takes a writer, a string, and a length. If the string is longer
+// than the length return an error. Otherwise string the string to the writer and
+// fil the remain space up to the lnegth with 0.
+func writeString(w io.Writer, s string, l int) (int, error) {
+	if len(s) >= l {
+		return 0, fmt.Errorf("string too long (%d, %d)", len(s), l)
+	}
+	if _, err := w.Write([]byte(s)); err != nil {
+		return 0, err
+	}
+	return w.Write(make([]byte, l-len(s)))
 }
 
 // CountingWriter counts the number of bytes written to it.

@@ -2,20 +2,16 @@ package snapshot
 
 import (
 	"bytes"
-	"compress/gzip"
 	"crypto/rand"
 	"io"
-	"io/ioutil"
 	"os"
 	"testing"
 )
 
 // Test_V1Encoder_WriteTo tests that the V1Encoder.WriteTo method
-// writes a valid gzip file.
+// writes a valid Snapshot to the given io.Writer.
 func Test_V2Encoder_WriteTo(t *testing.T) {
 	testFilePath := makeTempFile(t)
-
-	// Ensure the test file is deleted after the test
 	defer os.Remove(testFilePath)
 
 	// Create V2Encoder with a test file path
@@ -24,34 +20,38 @@ func Test_V2Encoder_WriteTo(t *testing.T) {
 	// Create a buffer to serve as the io.Writer
 	buf := new(bytes.Buffer)
 
-	// Write the gzip to the buffer
+	// Write a snapshot to the buffer
 	_, err := v.WriteTo(buf)
 	if err != nil {
 		t.Fatalf("Unexpected error in WriteTo: %v", err)
 	}
 
-	// Now we'll read it back and check if it's a valid gzip file
-	gz, err := gzip.NewReader(buf)
-	if err != nil {
-		t.Fatalf("Error creating gzip reader: %v", err)
-	}
-	defer gz.Close()
+	// Make a reader from the buffer
+	r := bytes.NewReader(buf.Bytes())
 
-	_, err = ioutil.ReadAll(gz)
-	if err != nil {
-		t.Fatalf("Error reading gzip file: %v", err)
+	// Now sanity check the snapshot.
+	if !ReaderIsV2Snapshot(r) {
+		t.Fatalf("ReaderIsV2Snapshot returned false for valid snapshot")
 	}
+
+	// Write the Snapshot to a temp file.
+	tempSnapshotPath := makeTempFile(t)
+	defer os.Remove(tempSnapshotPath)
+
+	if err := os.WriteFile(tempSnapshotPath, buf.Bytes(), 0644); err != nil {
+		t.Fatalf("Error writing temp file: %v", err)
+	}
+	if !FileIsV2Snapshot(tempSnapshotPath) {
+		t.Fatalf("FileIsV2Snapshot returned false for valid snapshot")
+	}
+
 }
 
+// Test_V1Encoder_WriteToNoFile tests that the V1Encoder.WriteTo method
+// returns an error when the given file does not exist.
 func Test_V2Encoder_WriteToNoFile(t *testing.T) {
-	// Create V2Encoder with a test file path
 	v := NewV2Encoder("/does/not/exist")
-
-	// Create a buffer to serve as the io.Writer
-	buf := new(bytes.Buffer)
-
-	// Write the gzip to the buffer
-	_, err := v.WriteTo(buf)
+	_, err := v.WriteTo(new(bytes.Buffer))
 	if err == nil {
 		t.Fatalf("Expected error in WriteTo due to non-existent file, but got nil")
 	}
@@ -67,7 +67,6 @@ func Test_V2SnapshotEncodeDecode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	f.Close()
 
 	// Encode it as a v2 snapshot to a byte buffer.
