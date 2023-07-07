@@ -3,7 +3,6 @@ package system
 import (
 	"fmt"
 	"net"
-	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -844,12 +843,6 @@ func Test_MultiNodeClusterQueuedWrites(t *testing.T) {
 // Test_MultiNodeClusterLargeQueuedWrites tests writing to a cluster using
 // many large concurrent Queued Writes operations.
 func Test_MultiNodeClusterLargeQueuedWrites(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		// https://github.com/rqlite/rqlite/issues/1123
-		// This is not great, but extensive testing on Windows has not been
-		// successful yet, so skip this test for now.
-		t.Skip("skipping test on windows")
-	}
 	store.ResetStats()
 	db.ResetStats()
 	http.ResetStats()
@@ -885,21 +878,25 @@ func Test_MultiNodeClusterLargeQueuedWrites(t *testing.T) {
 	// Write data to the cluster, via various nodes.
 	nodesUnderTest := []*Node{node3, node1, node2, node1, node2, node3, node1, node3, node2}
 	writesPerNode := 10000
+	writeBandBase := writesPerNode * 10
 
 	var wg sync.WaitGroup
 	wg.Add(len(nodesUnderTest))
-	for _, n := range nodesUnderTest {
-		go func(nt *Node) {
+	for i, n := range nodesUnderTest {
+		go func(ii int, nt *Node) {
 			defer wg.Done()
-			for i := 0; i < writesPerNode-1; i++ {
-				if _, err := nt.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, false); err != nil {
+			var j int
+			for j = 0; j < writesPerNode-1; j++ {
+				stmt := fmt.Sprintf(`INSERT OR IGNORE INTO foo(id, name) VALUES(%d, "fiona")`, j+(ii*writeBandBase))
+				if _, err := nt.ExecuteQueued(stmt, false); err != nil {
 					t.Logf("failed to insert records: %s", err.Error())
 				}
 			}
-			if _, err := nt.ExecuteQueued(`INSERT INTO foo(name) VALUES("fiona")`, true); err != nil {
+			stmt := fmt.Sprintf(`INSERT OR IGNORE INTO foo(id, name) VALUES(%d, "fiona")`, j+(ii*writeBandBase))
+			if _, err := nt.ExecuteQueued(stmt, true); err != nil {
 				t.Logf("failed to insert records: %s", err.Error())
 			}
-		}(n)
+		}(i, n)
 	}
 	wg.Wait()
 
