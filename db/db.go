@@ -917,6 +917,7 @@ func (db *DB) queryStmtWithConn(stmt *command.Statement, xTime bool, q queryer) 
 	for i := range types {
 		xTypes[i] = strings.ToLower(types[i].DatabaseTypeName())
 	}
+	needsQueryTypes := containsEmptyType(xTypes)
 
 	for rs.Next() {
 		dest := make([]interface{}, len(columns))
@@ -934,8 +935,11 @@ func (db *DB) queryStmtWithConn(stmt *command.Statement, xTime bool, q queryer) 
 		rows.Values = append(rows.Values, &command.Values{
 			Parameters: params,
 		})
-		if containsEmptyType(xTypes) {
+
+		// One-time population of any empty types.
+		if needsQueryTypes {
 			populateEmptyTypes(xTypes, params)
+			needsQueryTypes = false
 		}
 	}
 
