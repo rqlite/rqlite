@@ -934,6 +934,9 @@ func (db *DB) queryStmtWithConn(stmt *command.Statement, xTime bool, q queryer) 
 		rows.Values = append(rows.Values, &command.Values{
 			Parameters: params,
 		})
+		if containsEmptyType(xTypes) {
+			populateEmptyTypes(xTypes, params)
+		}
 	}
 
 	// Check for errors from iterating over rows.
@@ -1418,6 +1421,32 @@ func parametersToValues(parameters []*command.Parameter) ([]interface{}, error) 
 	return values, nil
 }
 
+// populateEmptyTypes populates any empty types with the type of the parameter.
+// This is necessary because the SQLite driver doesn't return the type of the
+// column in some cases e.g. it's an expression, so we use the actual types
+// of the returned data to fill in the blanks.
+func populateEmptyTypes(types []string, params []*command.Parameter) error {
+	for i := range types {
+		if types[i] == "" {
+			switch params[i].GetValue().(type) {
+			case *command.Parameter_I:
+				types[i] = "integer"
+			case *command.Parameter_D:
+				types[i] = "real"
+			case *command.Parameter_B:
+				types[i] = "boolean"
+			case *command.Parameter_Y:
+				types[i] = "blob"
+			case *command.Parameter_S:
+				types[i] = "text"
+			default:
+				return fmt.Errorf("unsupported type: %T", params[i].GetValue())
+			}
+		}
+	}
+	return nil
+}
+
 // normalizeRowValues performs some normalization of values in the returned rows.
 // Text values come over (from sqlite-go) as []byte instead of strings
 // for some reason, so we have explicitly converted (but only when type
@@ -1511,4 +1540,13 @@ func randomString() string {
 		output.WriteByte(randomChar)
 	}
 	return output.String()
+}
+
+func containsEmptyType(slice []string) bool {
+	for _, str := range slice {
+		if str == "" {
+			return true
+		}
+	}
+	return false
 }
