@@ -203,7 +203,6 @@ type Store struct {
 	observer          *raft.Observer
 
 	onDiskCreated        bool      // On disk database actually created?
-	snapsExistOnOpen     bool      // Any snaps present when store opens?
 	firstIdxOnOpen       uint64    // First index on log when Store opens.
 	lastIdxOnOpen        uint64    // Last index on log when Store opens.
 	lastCommandIdxOnOpen uint64    // Last command index before applied index when Store opens.
@@ -218,14 +217,6 @@ type Store struct {
 	BootstrapExpect int
 	bootstrapped    bool
 	notifyingNodes  map[string]*Server
-
-	// StartupOnDisk disables in-memory initialization of on-disk databases.
-	// Restarting a node with an on-disk database can be slow so, by default,
-	// rqlite creates on-disk databases in memory first, and then moves the
-	// database to disk before Raft starts. However, this optimization can
-	// prevent nodes with very large (2GB+) databases from starting. This
-	// flag allows control of the optimization.
-	StartupOnDisk bool
 
 	ShutdownOnRemove   bool
 	SnapshotThreshold  uint64
@@ -338,7 +329,6 @@ func (s *Store) Open() (retErr error) {
 
 	if !s.dbConf.Memory {
 		s.logger.Printf("configured for an on-disk database at %s", s.dbPath)
-		s.logger.Printf("on-disk database in-memory creation %s", enabledFromBool(!s.StartupOnDisk))
 		parentDir := filepath.Dir(s.dbPath)
 		s.logger.Printf("ensuring directory for on-disk database exists at %s", parentDir)
 		err := os.MkdirAll(parentDir, 0755)
@@ -377,7 +367,6 @@ func (s *Store) Open() (retErr error) {
 		return fmt.Errorf("list snapshots: %s", err)
 	}
 	s.logger.Printf("%d preexisting snapshots present", len(snaps))
-	s.snapsExistOnOpen = len(snaps) > 0
 
 	// Create the log store and stable store.
 	s.boltStore, err = rlog.New(filepath.Join(s.raftDir, raftDBPath), s.NoFreeListSync)
@@ -414,25 +403,19 @@ func (s *Store) Open() (retErr error) {
 	s.logger.Printf("first log index: %d, last log index: %d, last applied index: %d, last command log index: %d:",
 		s.firstIdxOnOpen, s.lastIdxOnOpen, s.lastAppliedIdxOnOpen, s.lastCommandIdxOnOpen)
 
-	// If an on-disk database has been requested, and there are no snapshots, and
-	// there are no commands in the log, then this is the only opportunity to
-	// create that on-disk database file before Raft initializes. In addition, this
-	// can also happen if the user explicitly disables the startup optimization of
-	// building the SQLite database in memory, before switching to disk.
-	if s.StartupOnDisk || (!s.dbConf.Memory && !s.snapsExistOnOpen && s.lastCommandIdxOnOpen == 0) {
+	if s.dbConf.Memory {
+		s.db, err = createInMemory(nil, s.dbConf.FKConstraints)
+		if err != nil {
+			return fmt.Errorf("failed to create in-memory database: %s", err)
+		}
+		s.logger.Printf("created in-memory database at open")
+	} else {
 		s.db, err = createOnDisk(nil, s.dbPath, s.dbConf.FKConstraints, !s.dbConf.DisableWAL)
 		if err != nil {
 			return fmt.Errorf("failed to create on-disk database: %s", err)
 		}
 		s.onDiskCreated = true
 		s.logger.Printf("created on-disk database at open")
-	} else {
-		// We need an in-memory database, at least for bootstrapping purposes.
-		s.db, err = createInMemory(nil, s.dbConf.FKConstraints)
-		if err != nil {
-			return fmt.Errorf("failed to create in-memory database: %s", err)
-		}
-		s.logger.Printf("created in-memory database at open")
 	}
 
 	// Instantiate the Raft system.
@@ -910,7 +893,6 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 			"observed": s.observer.GetNumObserved(),
 			"dropped":  s.observer.GetNumDropped(),
 		},
-		"startup_on_disk":        s.StartupOnDisk,
 		"apply_timeout":          s.ApplyTimeout.String(),
 		"heartbeat_timeout":      s.HeartbeatTimeout.String(),
 		"election_timeout":       s.ElectionTimeout.String(),
@@ -1508,36 +1490,6 @@ func (s *Store) Apply(l *raft.Log) (e interface{}) {
 			if l.Index == s.lastCommandIdxOnOpen {
 				s.logger.Printf("%d confirmed committed log entries applied in %s, took %s since open",
 					s.appliedOnOpen, time.Since(s.firstLogAppliedT), time.Since(s.openT))
-
-				// Last command log applied. Time to switch to on-disk database?
-				if s.dbConf.Memory {
-					s.logger.Println("continuing use of in-memory database")
-				} else if s.onDiskCreated {
-					s.logger.Println("continuing use of on-disk database")
-				} else {
-					// Since we're here, it means that a) an on-disk database was requested,
-					// b) in-memory creation of the on-disk database is enabled, and c) there
-					// were commands in the log. A snapshot may or may not have been applied,
-					// but it wouldn't have created the on-disk database in that case since
-					// there were commands in the log. This is the very last chance to convert
-					// from in-memory to on-disk.
-					s.queryTxMu.Lock()
-					defer s.queryTxMu.Unlock()
-					b, _ := s.db.Serialize()
-					err := s.db.Close()
-					if err != nil {
-						e = &fsmGenericResponse{error: fmt.Errorf("close failed: %s", err)}
-						return
-					}
-					// Open a new on-disk database.
-					s.db, err = createOnDisk(b, s.dbPath, s.dbConf.FKConstraints, !s.dbConf.DisableWAL)
-					if err != nil {
-						e = &fsmGenericResponse{error: fmt.Errorf("open on-disk failed: %s", err)}
-						return
-					}
-					s.onDiskCreated = true
-					s.logger.Println("successfully switched to on-disk database")
-				}
 			}
 		}
 	}()
@@ -1614,12 +1566,7 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 	}
 
 	var db *sql.DB
-	if s.StartupOnDisk || (!s.dbConf.Memory && s.lastCommandIdxOnOpen == 0) {
-		// A snapshot clearly exists (this function has been called) but there
-		// are no command entries in the log -- so Apply will not be called.
-		// Therefore, this is the last opportunity to create the on-disk database
-		// before Raft starts. This could also happen because the user has explicitly
-		// disabled the build-on-disk-database-in-memory-first optimization.
+	if !s.dbConf.Memory {
 		db, err = createOnDisk(b, s.dbPath, s.dbConf.FKConstraints, !s.dbConf.DisableWAL)
 		if err != nil {
 			return fmt.Errorf("open on-disk file during restore: %s", err)
@@ -1627,11 +1574,6 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 		s.onDiskCreated = true
 		s.logger.Println("successfully switched to on-disk database due to restore")
 	} else {
-		// Deserialize into an in-memory database because a) an in-memory database
-		// has been requested, or b) while there was a snapshot, there are also
-		// command entries in the log. So by sticking with an in-memory database
-		// those entries will be applied in the fastest possible manner. We will
-		// defer creation of any database on disk until the Apply function.
 		db, err = createInMemory(b, s.dbConf.FKConstraints)
 		if err != nil {
 			return fmt.Errorf("createInMemory: %s", err)
