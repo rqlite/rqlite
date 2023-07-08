@@ -229,7 +229,7 @@ class TestEndToEndSnapRestoreSingle(unittest.TestCase):
 
     # Ensure node has the full correct state.
     j = self.n0.query('SELECT count(*) FROM foo', level='none')
-    self.assertEqual(j, d_("{'results': [{'values': [[200]], 'types': [''], 'columns': ['count(*)']}]}"))
+    self.assertEqual(j, d_("{'results': [{'values': [[200]], 'types': ['integer'], 'columns': ['count(*)']}]}"))
 
     # Restart node, and make sure it comes back with the correct state
     self.n0.stop()
@@ -239,7 +239,7 @@ class TestEndToEndSnapRestoreSingle(unittest.TestCase):
     self.assertEqual(self.n0.expvar()['store']['num_restores'], 1)
 
     j = self.n0.query('SELECT count(*) FROM foo', level='none')
-    self.assertEqual(j, d_("{'results': [{'values': [[200]], 'types': [''], 'columns': ['count(*)']}]}"))
+    self.assertEqual(j, d_("{'results': [{'values': [[200]], 'types': ['integer'], 'columns': ['count(*)']}]}"))
 
   def tearDown(self):
     deprovision_node(self.n0)
