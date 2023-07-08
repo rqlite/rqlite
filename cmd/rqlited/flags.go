@@ -476,7 +476,7 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	flag.BoolVar(&config.PprofEnabled, "pprof", true, "Serve pprof data on HTTP server")
 	flag.BoolVar(&config.OnDisk, "on-disk", false, "Use an on-disk SQLite database")
 	flag.StringVar(&config.OnDiskPath, "on-disk-path", "", "Path for SQLite on-disk database file. If not set, use a file in data directory")
-	flag.BoolVar(&config.OnDiskStartup, "on-disk-startup", false, "Do not initialize on-disk database in memory first at startup")
+	flag.BoolVar(&config.OnDiskStartup, "on-disk-startup", false, "Ignored, on-disk startup optimization control no longer necessary")
 	flag.BoolVar(&config.FKConstraints, "fk", false, "Enable SQLite foreign key constraints")
 	flag.BoolVar(&showVersion, "version", false, "Show version information and exit")
 	flag.BoolVar(&config.RaftNonVoter, "raft-non-voter", false, "Configure as non-voting node")
