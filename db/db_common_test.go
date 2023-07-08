@@ -106,7 +106,7 @@ func testEmptyStatements(t *testing.T, db *DB) {
 	}
 }
 
-func testSimpleSingleStatementsNumeric(t *testing.T, db *DB) {
+func testSimpleStatementsNumeric(t *testing.T, db *DB) {
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT, age NUMERIC)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -1386,7 +1386,7 @@ func Test_DatabaseCommonOperations(t *testing.T) {
 		{"NotNULLField", testNotNULLField},
 		{"EmptyStatements", testEmptyStatements},
 		{"SimpleSingleStatements", testSimpleSingleStatements},
-		{"SimpleSingleStatementsNumeric", testSimpleSingleStatementsNumeric},
+		{"SimpleSingleStatementsNumeric", testSimpleStatementsNumeric},
 		{"SimpleExpressionStatements", testSimpleExpressionStatements},
 		{"SimpleSingleJSONStatements", testSimpleSingleJSONStatements},
 		{"SimpleJoinStatements", testSimpleJoinStatements},
