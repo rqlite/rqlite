@@ -327,7 +327,9 @@ func (s *Store) Open() (retErr error) {
 	s.openT = time.Now()
 	s.logger.Printf("opening store with node ID %s", s.raftID)
 
-	if !s.dbConf.Memory {
+	if s.dbConf.Memory {
+		s.logger.Printf("configured for an in-memory database")
+	} else {
 		s.logger.Printf("configured for an on-disk database at %s", s.dbPath)
 		parentDir := filepath.Dir(s.dbPath)
 		s.logger.Printf("ensuring directory for on-disk database exists at %s", parentDir)
@@ -335,8 +337,6 @@ func (s *Store) Open() (retErr error) {
 		if err != nil {
 			return err
 		}
-	} else {
-		s.logger.Printf("configured for an in-memory database")
 	}
 
 	// Create all the required Raft directories.
