@@ -294,7 +294,7 @@ func Test_SingleNodeConcurrentRequests(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to count records: %s", err.Error())
 	}
-	if r != `{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[200]]}]}` {
+	if r != `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[200]]}]}` {
 		t.Fatalf("test received wrong result got %s", r)
 	}
 }
@@ -327,7 +327,7 @@ func Test_SingleNodeConcurrentRequestsCompressed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to count records: %s", err.Error())
 	}
-	if r != `{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[200]]}]}` {
+	if r != `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[200]]}]}` {
 		t.Fatalf("test received wrong result got %s", r)
 	}
 }
@@ -568,7 +568,7 @@ LOOP:
 			if err != nil {
 				t.Fatalf(`query failed: %s`, err.Error())
 			}
-			if r == `{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[3]]}]}` {
+			if r == `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[3]]}]}` {
 				break LOOP
 			}
 		case <-timer.C:
@@ -590,7 +590,7 @@ LOOP:
 	if err != nil {
 		t.Fatalf(`query failed: %s`, err.Error())
 	}
-	if got, exp := r, `{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[6]]}]}`; got != exp {
+	if got, exp := r, `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[6]]}]}`; got != exp {
 		t.Fatalf("incorrect results, exp: %s, got: %s", exp, got)
 	}
 }
@@ -633,7 +633,7 @@ LOOP1:
 			if err != nil {
 				t.Fatalf(`query failed: %s`, err.Error())
 			}
-			if r == `{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[2]]}]}` {
+			if r == `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[2]]}]}` {
 				break LOOP1
 			}
 		case <-timer.C:
@@ -662,7 +662,7 @@ LOOP2:
 			if err != nil {
 				t.Fatalf(`query failed: %s`, err.Error())
 			}
-			if r == `{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[2]]}]}` {
+			if r == `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[2]]}]}` {
 				break LOOP2
 			}
 		case <-timer.C:
@@ -707,7 +707,7 @@ func Test_SingleNodeQueuedEmptyNil(t *testing.T) {
 	if err != nil {
 		t.Fatalf(`query failed: %s`, err.Error())
 	}
-	if got, exp := r, `{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[3]]}]}`; got != exp {
+	if got, exp := r, `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[3]]}]}`; got != exp {
 		t.Fatalf("incorrect results, exp: %s, got: %s", exp, got)
 	}
 
@@ -732,7 +732,7 @@ func Test_SingleNodeQueuedEmptyNil(t *testing.T) {
 	if err != nil {
 		t.Fatalf(`query failed: %s`, err.Error())
 	}
-	if got, exp := r, `{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[6]]}]}`; got != exp {
+	if got, exp := r, `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[6]]}]}`; got != exp {
 		t.Fatalf("incorrect results, exp: %s, got: %s", exp, got)
 	}
 }
@@ -888,7 +888,7 @@ func Test_SingleNodeUpgrades(t *testing.T) {
 				if err != nil {
 					t.Fatalf("query failed with %s data: %s", dir, err)
 				}
-				expected := `{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[20]]}]}`
+				expected := `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[20]]}]}`
 				if r == expected {
 					close(testSuccess)
 				}

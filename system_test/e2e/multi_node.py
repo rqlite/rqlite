@@ -333,7 +333,7 @@ class TestRequestForwarding(unittest.TestCase):
 
       # Data should be ready immediately, since we waited.
       j = l.query('SELECT COUNT(*) FROM foo')
-      self.assertEqual(j, d_("{'results': [{'columns': ['COUNT(*)'], 'types': [''], 'values': [[2002]]}]}"))
+      self.assertEqual(j, d_("{'results': [{'columns': ['COUNT(*)'], 'types': ['integer'], 'values': [[2002]]}]}"))
 
 class TestEndToEndNonVoter(unittest.TestCase):
   def setUp(self):

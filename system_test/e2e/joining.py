@@ -160,7 +160,7 @@ class TestJoinCatchup(unittest.TestCase):
     j = n0.execute('INSERT INTO foo(name) VALUES("fiona")')
     self.assertEqual(j, d_("{'results': [{'last_insert_id': 2, 'rows_affected': 1}]}"))
     j = n0.query('SELECT COUNT(*) FROM foo')
-    self.assertEqual(j, d_("{'results': [{'values': [[2]], 'types': [''], 'columns': ['COUNT(*)']}]}"))
+    self.assertEqual(j, d_("{'results': [{'values': [[2]], 'types': ['integer'], 'columns': ['COUNT(*)']}]}"))
     applied = n0.wait_for_all_fsm()
 
     # Restart follower, explicity rejoin, and ensure it picks up new records
@@ -169,7 +169,7 @@ class TestJoinCatchup(unittest.TestCase):
     self.n1.wait_for_fsm_index(applied)
     self.assertEqual(n0.expvar()['store']['num_ignored_joins'], 1)
     j = self.n1.query('SELECT COUNT(*) FROM foo', level='none')
-    self.assertEqual(j, d_("{'results': [{'values': [[2]], 'types': [''], 'columns': ['COUNT(*)']}]}"))
+    self.assertEqual(j, d_("{'results': [{'values': [[2]], 'types': ['integer'], 'columns': ['COUNT(*)']}]}"))
 
   def test_change_addresses(self):
     '''Test that a node rejoining with new addresses works fine'''
@@ -192,7 +192,7 @@ class TestJoinCatchup(unittest.TestCase):
     j = n0.execute('INSERT INTO foo(name) VALUES("fiona")')
     self.assertEqual(j, d_("{'results': [{'last_insert_id': 2, 'rows_affected': 1}]}"))
     j = n0.query('SELECT COUNT(*) FROM foo')
-    self.assertEqual(j, d_("{'results': [{'values': [[2]], 'types': [''], 'columns': ['COUNT(*)']}]}"))
+    self.assertEqual(j, d_("{'results': [{'values': [[2]], 'types': ['integer'], 'columns': ['COUNT(*)']}]}"))
     applied = n0.wait_for_all_fsm()
 
     # Restart follower with new network attributes, explicity rejoin, and ensure it picks up new records

@@ -429,7 +429,7 @@ func Test_SingleNodeInMemRequest(t *testing.T) {
 				`INSERT INTO foo(id, name) VALUES(77, "fiona")`,
 				`SELECT COUNT(*) FROM foo`,
 			},
-			expected: `[{"last_insert_id":77,"rows_affected":1},{"columns":["COUNT(*)"],"types":[""],"values":[[3]]}]`,
+			expected: `[{"last_insert_id":77,"rows_affected":1},{"columns":["COUNT(*)"],"types":["integer"],"values":[[3]]}]`,
 		},
 		{
 			stmts: []string{
@@ -438,7 +438,7 @@ func Test_SingleNodeInMemRequest(t *testing.T) {
 				`SELECT COUNT(*) FROM foo WHERE name='fiona'`,
 				`SELECT * FROM foo WHERE name='declan'`,
 			},
-			expected:    `[{"last_insert_id":88,"rows_affected":1,"rows":null},{"error":"near \"nonsense\": syntax error"},{"types":{"COUNT(*)":""},"rows":[{"COUNT(*)":3}]},{"types":{"id":"integer","name":"text"},"rows":[{"id":66,"name":"declan"}]}]`,
+			expected:    `[{"last_insert_id":88,"rows_affected":1,"rows":null},{"error":"near \"nonsense\": syntax error"},{"types":{"COUNT(*)":"integer"},"rows":[{"COUNT(*)":3}]},{"types":{"id":"integer","name":"text"},"rows":[{"id":66,"name":"declan"}]}]`,
 			associative: true,
 		},
 	}
@@ -517,7 +517,7 @@ func Test_SingleNodeInMemRequestTx(t *testing.T) {
 			stmts: []string{
 				`SELECT COUNT(*) FROM foo`,
 			},
-			expected: `[{"columns":["COUNT(*)"],"types":[""],"values":[[1]]}]`,
+			expected: `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1]]}]`,
 		},
 	}
 

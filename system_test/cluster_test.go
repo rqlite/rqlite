@@ -202,7 +202,7 @@ func Test_MultiNodeClusterRANDOM(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query for count: %s", err.Error())
 	}
-	if got, exp := r, `{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[1]]}]}`; got != exp {
+	if got, exp := r, `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1]]}]}`; got != exp {
 		t.Fatalf("wrong query results, exp %s, got %s", exp, got)
 	}
 
@@ -830,7 +830,7 @@ func Test_MultiNodeClusterQueuedWrites(t *testing.T) {
 	}()
 	wg.Wait()
 
-	exp := fmt.Sprintf(`{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[%d]]}]}`, numLoops*writesPerLoop)
+	exp := fmt.Sprintf(`{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[%d]]}]}`, numLoops*writesPerLoop)
 	got, err := node1.Query(`SELECT COUNT(*) FROM foo`)
 	if err != nil {
 		t.Fatalf("failed to query follower node: %s", err.Error())
@@ -900,7 +900,7 @@ func Test_MultiNodeClusterLargeQueuedWrites(t *testing.T) {
 	}
 	wg.Wait()
 
-	exp := fmt.Sprintf(`{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[%d]]}]}`, len(nodesUnderTest)*writesPerNode)
+	exp := fmt.Sprintf(`{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[%d]]}]}`, len(nodesUnderTest)*writesPerNode)
 	got, err := node1.Query(`SELECT COUNT(*) FROM foo`)
 	if err != nil {
 		t.Fatalf("failed to query follower node: %s", err.Error())
@@ -1185,7 +1185,7 @@ func Test_MultiNodeClusterSnapshot(t *testing.T) {
 				t.Fatalf("failed to query follower node: %s", err.Error())
 			}
 
-			if r != `{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[300]]}]}` {
+			if r != `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[300]]}]}` {
 				if n < 20 {
 					// Wait, and try again.
 					time.Sleep(mustParseDuration("1s"))
@@ -1217,7 +1217,7 @@ func Test_MultiNodeClusterSnapshot(t *testing.T) {
 			t.Fatalf("failed to query follower node: %s", err.Error())
 		}
 
-		if r != `{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[300]]}]}` {
+		if r != `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[300]]}]}` {
 			if n < 10 {
 				// Wait, and try again.
 				time.Sleep(mustParseDuration("100ms"))
@@ -1381,7 +1381,7 @@ func Test_MultiNodeClusterRecoverSingle(t *testing.T) {
 	if _, err := node1.Execute(`INSERT INTO foo(id, name) VALUES(1, "fiona")`); err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
-	if rows, _ := node1.Query(`SELECT COUNT(*) FROM foo`); rows != `{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[1]]}]}` {
+	if rows, _ := node1.Query(`SELECT COUNT(*) FROM foo`); rows != `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1]]}]}` {
 		t.Fatalf("got incorrect results from node: %s", rows)
 	}
 
@@ -1439,7 +1439,7 @@ func Test_MultiNodeClusterRecoverSingle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed waiting for leader: %s", err.Error())
 	}
-	if rows, _ := okSingle.Query(`SELECT COUNT(*) FROM foo`); rows != `{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[1]]}]}` {
+	if rows, _ := okSingle.Query(`SELECT COUNT(*) FROM foo`); rows != `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1]]}]}` {
 		t.Fatalf("got incorrect results from recovered node: %s", rows)
 	}
 	okSingle.Close(true)
@@ -1484,7 +1484,7 @@ func Test_MultiNodeClusterRecoverFull(t *testing.T) {
 	if _, err := node1.Execute(`INSERT INTO foo(id, name) VALUES(1, "fiona")`); err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
-	if rows, _ := node1.Query(`SELECT COUNT(*) FROM foo`); rows != `{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[1]]}]}` {
+	if rows, _ := node1.Query(`SELECT COUNT(*) FROM foo`); rows != `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1]]}]}` {
 		t.Fatalf("got incorrect results from node: %s", rows)
 	}
 
@@ -1532,7 +1532,7 @@ func Test_MultiNodeClusterRecoverFull(t *testing.T) {
 		t.Fatalf("failed waiting for leader on recovered cluster: %s", err.Error())
 	}
 
-	if rows, _ := node4.Query(`SELECT COUNT(*) FROM foo`); rows != `{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[1]]}]}` {
+	if rows, _ := node4.Query(`SELECT COUNT(*) FROM foo`); rows != `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1]]}]}` {
 		t.Fatalf("got incorrect results from recovered node: %s", rows)
 	}
 }

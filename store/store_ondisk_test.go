@@ -167,7 +167,6 @@ COMMIT;
 		t.Fatalf("Backup Failed: unable to create temp file, %s", err.Error())
 	}
 	defer os.Remove(f.Name())
-	t.Logf("backup file is %s", f.Name())
 
 	if err := s.Backup(backupRequestBinary(true), f); err != nil {
 		t.Fatalf("Backup failed %s", err.Error())
