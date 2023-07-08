@@ -2,6 +2,7 @@
 ### Implementation changes and bug fixes
 - [PR #1329](https://github.com/rqlite/rqlite/pull/1329): Try a different version of V2 Snapshot codec.
 - [PR #1332](https://github.com/rqlite/rqlite/pull/1332): Upgrade dependencies.
+- [PR #1333](https://github.com/rqlite/rqlite/pull/1333): Set "types" for expressions e.g. `COUNT`. Fixes [issue #1330](https://github.com/rqlite/rqlite/issues/1330)
 
 ## 7.21.2 (July 1st 2023)
 ### Implementation changes and bug fixes
