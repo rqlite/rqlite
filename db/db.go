@@ -936,7 +936,8 @@ func (db *DB) queryStmtWithConn(stmt *command.Statement, xTime bool, q queryer) 
 			Parameters: params,
 		})
 
-		// One-time population of any empty types.
+		// One-time population of any empty types. Best effort, ignore
+		// error.
 		if needsQueryTypes {
 			populateEmptyTypes(xTypes, params)
 			needsQueryTypes = false
