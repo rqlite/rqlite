@@ -1,3 +1,7 @@
+## 7.21.4 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1336](https://github.com/rqlite/rqlite/pull/1336): Remove on-disk-startup control.
+
 ## 7.21.3 (July 7th 2023)
 ### Implementation changes and bug fixes
 - [PR #1329](https://github.com/rqlite/rqlite/pull/1329): Try a different version of V2 Snapshot codec.
