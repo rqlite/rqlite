@@ -1566,18 +1566,18 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 	}
 
 	var db *sql.DB
-	if !s.dbConf.Memory {
+	if s.dbConf.Memory {
+		db, err = createInMemory(b, s.dbConf.FKConstraints)
+		if err != nil {
+			return fmt.Errorf("createInMemory: %s", err)
+		}
+	} else {
 		db, err = createOnDisk(b, s.dbPath, s.dbConf.FKConstraints, !s.dbConf.DisableWAL)
 		if err != nil {
 			return fmt.Errorf("open on-disk file during restore: %s", err)
 		}
 		s.onDiskCreated = true
 		s.logger.Println("successfully switched to on-disk database due to restore")
-	} else {
-		db, err = createInMemory(b, s.dbConf.FKConstraints)
-		if err != nil {
-			return fmt.Errorf("createInMemory: %s", err)
-		}
 	}
 	s.db = db
 
