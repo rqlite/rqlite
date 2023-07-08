@@ -185,6 +185,10 @@ func testSimpleExpressionStatements(t *testing.T, db *DB) {
 		exp   string
 	}{
 		{
+			query: `SELECT sum(name) FROM foo`,
+			exp:   `[{"columns":["sum(name)"],"types":["real"],"values":[[0]]}]`,
+		},
+		{
 			query: `SELECT sum(age) FROM foo`,
 			exp:   `[{"columns":["sum(age)"],"types":["integer"],"values":[[60]]}]`,
 		},
