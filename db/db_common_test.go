@@ -106,6 +106,26 @@ func testEmptyStatements(t *testing.T, db *DB) {
 	}
 }
 
+func testSimpleSingleStatementsNumeric(t *testing.T, db *DB) {
+	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT, age NUMERIC)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	_, err = db.ExecuteStringStmt(`INSERT INTO foo(name, age) VALUES("fiona", 20)`)
+	if err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+
+	r, err := db.QueryStringStmt(`SELECT * FROM foo`)
+	if err != nil {
+		t.Fatalf("failed to query table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name","age"],"types":["integer","text","numeric"],"values":[[1,"fiona",20]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
 func testSimpleSingleStatements(t *testing.T, db *DB) {
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
 	if err != nil {
@@ -1366,6 +1386,7 @@ func Test_DatabaseCommonOperations(t *testing.T) {
 		{"NotNULLField", testNotNULLField},
 		{"EmptyStatements", testEmptyStatements},
 		{"SimpleSingleStatements", testSimpleSingleStatements},
+		{"SimpleSingleStatementsNumeric", testSimpleSingleStatementsNumeric},
 		{"SimpleExpressionStatements", testSimpleExpressionStatements},
 		{"SimpleSingleJSONStatements", testSimpleSingleJSONStatements},
 		{"SimpleJoinStatements", testSimpleJoinStatements},
