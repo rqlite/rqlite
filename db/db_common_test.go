@@ -126,6 +126,71 @@ func testSimpleStatementsNumeric(t *testing.T, db *DB) {
 	}
 }
 
+func testSimpleStatementsCollate(t *testing.T, db *DB) {
+	_, err := db.ExecuteStringStmt("CREATE TABLE foo(x INTEGER PRIMARY KEY, a, b COLLATE BINARY, c COLLATE RTRIM, d COLLATE NOCASE)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	req := &command.Request{
+		Transaction: true,
+		Statements: []*command.Statement{
+			{
+				Sql: `INSERT INTO foo VALUES(1,'abc','abc', 'abc  ','abc')`,
+			},
+			{
+				Sql: `INSERT INTO foo VALUES(2,'abc','abc', 'abc',  'ABC')`,
+			},
+			{
+				Sql: `INSERT INTO foo VALUES(3,'abc','abc', 'abc ', 'Abc')`,
+			},
+			{
+				Sql: `INSERT INTO foo VALUES(4,'abc','abc ','ABC',  'abc')`,
+			},
+		},
+	}
+	_, err = db.Execute(req, false)
+	if err != nil {
+		t.Fatalf("failed to insert records: %s", err.Error())
+	}
+
+	tests := []struct {
+		query string
+		exp   string
+	}{
+		{
+			query: `SELECT x FROM foo WHERE a = b ORDER BY x`,
+			exp:   `[{"columns":["x"],"types":["integer"],"values":[[1],[2],[3]]}]`,
+		},
+		{
+			query: `SELECT x FROM foo WHERE a = b COLLATE RTRIM ORDER BY x`,
+			exp:   `[{"columns":["x"],"types":["integer"],"values":[[1],[2],[3],[4]]}]`,
+		},
+		{
+			query: `SELECT count(*) FROM foo GROUP BY d ORDER BY 1`,
+			exp:   `[{"columns":["count(*)"],"types":["integer"],"values":[[4]]}]`,
+		},
+		{
+			query: `SELECT count(*) FROM foo GROUP BY (d || '') ORDER BY 1`,
+			exp:   `[{"columns":["count(*)"],"types":["integer"],"values":[[1],[1],[2]]}]`,
+		},
+		{
+			query: `SELECT x FROM foo ORDER BY c COLLATE NOCASE, x`,
+			exp:   `[{"columns":["x"],"types":["integer"],"values":[[2],[4],[3],[1]]}]`,
+		},
+	}
+
+	for _, tt := range tests {
+		r, err := db.QueryStringStmt(tt.query)
+		if err != nil {
+			t.Fatalf("failed to query table: %s", err.Error())
+		}
+		if exp, got := tt.exp, asJSON(r); exp != got {
+			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+		}
+	}
+}
+
 func testSimpleSingleStatements(t *testing.T, db *DB) {
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
 	if err != nil {
@@ -1386,7 +1451,8 @@ func Test_DatabaseCommonOperations(t *testing.T) {
 		{"NotNULLField", testNotNULLField},
 		{"EmptyStatements", testEmptyStatements},
 		{"SimpleSingleStatements", testSimpleSingleStatements},
-		{"SimpleSingleStatementsNumeric", testSimpleStatementsNumeric},
+		{"SimpleStatementsNumeric", testSimpleStatementsNumeric},
+		{"SimpleStatementsCollate", testSimpleStatementsCollate},
 		{"SimpleExpressionStatements", testSimpleExpressionStatements},
 		{"SimpleSingleJSONStatements", testSimpleSingleJSONStatements},
 		{"SimpleJoinStatements", testSimpleJoinStatements},
