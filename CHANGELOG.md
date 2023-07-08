@@ -1,6 +1,6 @@
-## 7.21.4 (unreleased)
+## 7.21.4 (July 8th 2023)
 ### Implementation changes and bug fixes
-- [PR #1336](https://github.com/rqlite/rqlite/pull/1336): Remove on-disk-startup control.
+- [PR #1336](https://github.com/rqlite/rqlite/pull/1336): Remove on-disk-startup control. It's no longer needed as on-disk performance is now very close to in-memory performance, thanks to the switch to _synchronous off_ mode and the use of the SQLite WAL.
 
 ## 7.21.3 (July 7th 2023)
 ### Implementation changes and bug fixes
