@@ -52,7 +52,7 @@ In-memory SQLite databases (the default configuration) are currently limited to 
 
 Another option is to run rqlite in on-disk mode but place the SQLite database file on a memory-backed filesystem. That way you can use larger databases, and still have performance similar to running with an in-memory SQLite database.
 
-In either case to control where rqlite places the SQLite database file, set `-on-disk-startup` and `-on-disk-path` when launching `rqlited`. **Note that you should still place the `data` directory on an actual disk, so that the Raft log is always on a physical disk, to ensure your data is not lost if a node retarts.** 
+In either case to control where rqlite places the SQLite database file, set `-on-disk-startup` and `-on-disk-path` when launching `rqlited`. **Note that you should still place the `data` directory on an actual disk, so that the Raft log is always on a physical disk, to ensure your data is not lost if a node restarts.** 
 
 ## Linux example
 An example of running rqlite with a SQLite file on a memory-backed file system, and keeping the data directory on persistent disk, is shown below. The data directory is where the Raft log is stored. The example below would allow up to a 4GB SQLite database.
