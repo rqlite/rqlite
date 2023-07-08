@@ -556,11 +556,11 @@ class TestEndToEndSnapRestoreCluster(unittest.TestCase):
     # Ensure those new nodes have the full correct state.
     self.n1.wait_for_fsm_index(self.n0.fsm_index())
     j = self.n1.query('SELECT count(*) FROM foo', level='none')
-    self.assertEqual(j, d_("{'results': [{'values': [[201]], 'types': [''], 'columns': ['count(*)']}]}"))
+    self.assertEqual(j, d_("{'results': [{'values': [[201]], 'types': ['integer'], 'columns': ['count(*)']}]}"))
 
     self.n2.wait_for_fsm_index(self.n0.fsm_index())
     j = self.n2.query('SELECT count(*) FROM foo', level='none')
-    self.assertEqual(j, d_("{'results': [{'values': [[201]], 'types': [''], 'columns': ['count(*)']}]}"))
+    self.assertEqual(j, d_("{'results': [{'values': [[201]], 'types': ['integer'], 'columns': ['count(*)']}]}"))
 
     # Kill one of the nodes, and make more changes, enough to trigger more snaps.
     self.n2.stop()
@@ -590,7 +590,7 @@ class TestEndToEndSnapRestoreCluster(unittest.TestCase):
       if t > TIMEOUT:
         raise Exception('timeout waiting for n2 to have all data')
       j = self.n2.query('SELECT count(*) FROM foo', level='none')
-      if j == d_("{'results': [{'values': [[402]], 'types': [''], 'columns': ['count(*)']}]}"):
+      if j == d_("{'results': [{'values': [[402]], 'types': ['integer'], 'columns': ['count(*)']}]}"):
         break
       time.sleep(1)
       t+=1

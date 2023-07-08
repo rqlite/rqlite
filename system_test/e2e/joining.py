@@ -202,7 +202,7 @@ class TestJoinCatchup(unittest.TestCase):
     self.assertEqual(n0.expvar()['store']['num_removed_before_joins'], 1)
     self.n1.wait_for_fsm_index(applied)
     j = self.n1.query('SELECT COUNT(*) FROM foo', level='none')
-    self.assertEqual(j, d_("{'results': [{'values': [[2]], 'types': [''], 'columns': ['COUNT(*)']}]}"))
+    self.assertEqual(j, d_("{'results': [{'values': [[2]], 'types': ['integer'], 'columns': ['COUNT(*)']}]}"))
 
 if __name__ == "__main__":
   unittest.main(verbosity=2)
