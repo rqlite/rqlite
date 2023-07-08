@@ -239,7 +239,7 @@ func Test_MultiNodeClusterRequestForwardOK(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
-	if exp, got := `{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[3]]}]}`, rows; exp != got {
+	if exp, got := `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[3]]}]}`, rows; exp != got {
 		t.Fatalf("got incorrect response from follower exp: %s, got: %s", exp, got)
 	}
 }
@@ -279,7 +279,7 @@ func Test_MultiNodeClusterQueuedRequestForwardOK(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query for count: %s", err.Error())
 	}
-	if exp, got := `{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[0]]}]}`, rows; exp != got {
+	if exp, got := `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[0]]}]}`, rows; exp != got {
 		t.Fatalf("got incorrect response from follower exp: %s, got: %s", exp, got)
 	}
 
@@ -305,7 +305,7 @@ func Test_MultiNodeClusterQueuedRequestForwardOK(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to query for count: %s", err.Error())
 			}
-			if r == `{"results":[{"columns":["COUNT(*)"],"types":[""],"values":[[1]]}]}` {
+			if r == `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1]]}]}` {
 				return
 			}
 		case <-timer.C:

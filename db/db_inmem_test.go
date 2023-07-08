@@ -150,7 +150,7 @@ func Test_DeserializeIntoMemory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query table: %s", err.Error())
 	}
-	if exp, got := `[{"columns":["COUNT(*)"],"types":[""],"values":[[5004]]}]`, asJSON(ro); exp != got {
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[5004]]}]`, asJSON(ro); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 }

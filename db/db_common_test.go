@@ -90,7 +90,7 @@ func testNotNULLField(t *testing.T, db *DB) {
 	if err != nil {
 		t.Fatalf("failed to get PRAGMA table_info: %s", err.Error())
 	}
-	if exp, got := `[{"columns":["cid","name","type","notnull","dflt_value","pk"],"types":["","","","","",""],"values":[[0,"id","INTEGER",1,null,1],[1,"name","TEXT",0,null,0]]}]`, asJSON(r); exp != got {
+	if exp, got := `[{"columns":["cid","name","type","notnull","dflt_value","pk"],"types":["integer","text","text","integer","",""],"values":[[0,"id","INTEGER",1,null,1],[1,"name","TEXT",0,null,0]]}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
 }
@@ -160,6 +160,64 @@ func testSimpleSingleStatements(t *testing.T, db *DB) {
 	}
 	if exp, got := `[{"columns":["id","name","name"],"types":["integer","text","text"],"values":[[1,"fiona","fiona"],[2,"aoife","aoife"]]}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
+// testSimpleExpressionStatements tests that types are set for expressions.
+func testSimpleExpressionStatements(t *testing.T, db *DB) {
+	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT, age INTEGER, height REAL)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	_, err = db.ExecuteStringStmt(`INSERT INTO foo(id, name, age, height) VALUES(1, "fiona", 20, 6.7)`)
+	if err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+
+	_, err = db.ExecuteStringStmt(`INSERT INTO foo(id, name, age, height) VALUES(2, "aoife", 40, 10.4)`)
+	if err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+
+	tests := []struct {
+		query string
+		exp   string
+	}{
+		{
+			query: `SELECT sum(name) FROM foo`,
+			exp:   `[{"columns":["sum(name)"],"types":["real"],"values":[[0]]}]`,
+		},
+		{
+			query: `SELECT sum(age) FROM foo`,
+			exp:   `[{"columns":["sum(age)"],"types":["integer"],"values":[[60]]}]`,
+		},
+		{
+			query: `SELECT sum(height) FROM foo`,
+			exp:   `[{"columns":["sum(height)"],"types":["real"],"values":[[17.1]]}]`,
+		},
+		{
+			query: `SELECT count(*) FROM foo`,
+			exp:   `[{"columns":["count(*)"],"types":["integer"],"values":[[2]]}]`,
+		},
+		{
+			query: `SELECT avg(height) FROM foo`,
+			exp:   `[{"columns":["avg(height)"],"types":["real"],"values":[[8.55]]}]`,
+		},
+		{
+			query: `SELECT avg(height),count(*),sum(age) FROM foo`,
+			exp:   `[{"columns":["avg(height)","count(*)","sum(age)"],"types":["real","integer","integer"],"values":[[8.55,2,60]]}]`,
+		},
+	}
+
+	for _, tt := range tests {
+		r, err := db.QueryStringStmt(tt.query)
+		if err != nil {
+			t.Fatalf("failed to query table: %s", err.Error())
+		}
+		if exp, got := tt.exp, asJSON(r); exp != got {
+			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+		}
 	}
 }
 
@@ -241,7 +299,7 @@ func testSimpleSingleConcatStatements(t *testing.T, db *DB) {
 	if err != nil {
 		t.Fatalf("failed to query table: %s", err.Error())
 	}
-	if exp, got := `[{"columns":["id || \"_bar\"","name"],"types":["","text"],"values":[["1_bar","fiona"]]}]`, asJSON(r); exp != got {
+	if exp, got := `[{"columns":["id || \"_bar\"","name"],"types":["text","text"],"values":[["1_bar","fiona"]]}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 }
@@ -409,7 +467,7 @@ func testSimplePragmaTableInfo(t *testing.T, db *DB) {
 	if err != nil {
 		t.Fatalf("failed to query a common table expression: %s", err.Error())
 	}
-	if exp, got := `[{"columns":["cid","name","type","notnull","dflt_value","pk"],"types":["","","","","",""],"values":[[0,"id","INTEGER",1,null,1],[1,"name","TEXT",0,null,0]]}]`, asJSON(res); exp != got {
+	if exp, got := `[{"columns":["cid","name","type","notnull","dflt_value","pk"],"types":["integer","text","text","integer","",""],"values":[[0,"id","INTEGER",1,null,1],[1,"name","TEXT",0,null,0]]}]`, asJSON(res); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 }
@@ -443,7 +501,7 @@ func testWriteOnQueryDatabaseShouldFail(t *testing.T, db *DB) {
 	if err != nil {
 		t.Fatalf("failed to query table: %s", err.Error())
 	}
-	if exp, got := `[{"columns":["COUNT(*)"],"types":[""],"values":[[1]]}]`, asJSON(ro); exp != got {
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1]]}]`, asJSON(ro); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 }
@@ -776,7 +834,7 @@ func testSimpleRequest(t *testing.T, db *DB) {
 				`SELECT COUNT(*) FROM foo`,
 				`SELECT last FROM foo WHERE first="richard"`,
 			},
-			exp: `[{"last_insert_id":3,"rows_affected":1},{"columns":["COUNT(*)"],"types":[""],"values":[[3]]},{"columns":["last"],"types":["text"],"values":[["feynman"]]}]`,
+			exp: `[{"last_insert_id":3,"rows_affected":1},{"columns":["COUNT(*)"],"types":["integer"],"values":[[3]]},{"columns":["last"],"types":["text"],"values":[["feynman"]]}]`,
 		},
 		{
 			name: "insert and select non-existent table",
@@ -785,7 +843,7 @@ func testSimpleRequest(t *testing.T, db *DB) {
 				`SELECT COUNT(*) FROM foo`,
 				`SELECT * FROM bar`,
 			},
-			exp: `[{"last_insert_id":4,"rows_affected":1},{"columns":["COUNT(*)"],"types":[""],"values":[[4]]},{"error":"no such table: bar"}]`,
+			exp: `[{"last_insert_id":4,"rows_affected":1},{"columns":["COUNT(*)"],"types":["integer"],"values":[[4]]},{"error":"no such table: bar"}]`,
 		},
 	}
 
@@ -1142,21 +1200,21 @@ func testJSON1(t *testing.T, db *DB) {
 	if err != nil {
 		t.Fatalf("failed to perform simple SELECT: %s", err.Error())
 	}
-	if exp, got := `[{"columns":["phone"],"types":[""],"values":[["{\"mobile\":\"789111\",\"home\":\"123456\"}"]]}]`, asJSON(q); exp != got {
+	if exp, got := `[{"columns":["phone"],"types":["text"],"values":[["{\"mobile\":\"789111\",\"home\":\"123456\"}"]]}]`, asJSON(q); exp != got {
 		t.Fatalf("unexpected results for simple query, expected %s, got %s", exp, got)
 	}
 	q, err = db.QueryStringStmt("SELECT json_extract(customer.phone, '$.mobile') FROM customer")
 	if err != nil {
 		t.Fatalf("failed to perform simple SELECT: %s", err.Error())
 	}
-	if exp, got := `[{"columns":["json_extract(customer.phone, '$.mobile')"],"types":[""],"values":[["789111"]]}]`, asJSON(q); exp != got {
+	if exp, got := `[{"columns":["json_extract(customer.phone, '$.mobile')"],"types":["text"],"values":[["789111"]]}]`, asJSON(q); exp != got {
 		t.Fatalf("unexpected results for JSON query, expected %s, got %s", exp, got)
 	}
 	q, err = db.QueryStringStmt("SELECT customer.phone ->> '$.mobile' FROM customer")
 	if err != nil {
 		t.Fatalf("failed to perform simple SELECT: %s", err.Error())
 	}
-	if exp, got := `[{"columns":["customer.phone ->> '$.mobile'"],"types":[""],"values":[["789111"]]}]`, asJSON(q); exp != got {
+	if exp, got := `[{"columns":["customer.phone ->> '$.mobile'"],"types":["text"],"values":[["789111"]]}]`, asJSON(q); exp != got {
 		t.Fatalf("unexpected results for JSON query, expected %s, got %s", exp, got)
 	}
 }
@@ -1308,6 +1366,7 @@ func Test_DatabaseCommonOperations(t *testing.T) {
 		{"NotNULLField", testNotNULLField},
 		{"EmptyStatements", testEmptyStatements},
 		{"SimpleSingleStatements", testSimpleSingleStatements},
+		{"SimpleExpressionStatements", testSimpleExpressionStatements},
 		{"SimpleSingleJSONStatements", testSimpleSingleJSONStatements},
 		{"SimpleJoinStatements", testSimpleJoinStatements},
 		{"SimpleSingleConcatStatements", testSimpleSingleConcatStatements},

@@ -126,7 +126,7 @@ func Test_ConcurrentQueriesInMemory(t *testing.T) {
 			if err != nil {
 				t.Logf("failed to query table: %s", err.Error())
 			}
-			if exp, got := `[{"columns":["COUNT(*)"],"types":[""],"values":[[5000]]}]`, asJSON(ro); exp != got {
+			if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[5000]]}]`, asJSON(ro); exp != got {
 				t.Logf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 			}
 		}()
