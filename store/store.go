@@ -1143,6 +1143,27 @@ func (s *Store) Provide(path string) error {
 	return nil
 }
 
+// LoadFromReader loads SQLite data, as read from r, into the database, sending the
+// request through the Raft log.
+func (s *Store) LoadFromReader(r io.Reader) error {
+	if !s.open {
+		return ErrNotOpen
+	}
+
+	if !s.Ready() {
+		return ErrNotReady
+	}
+
+	b, err := io.ReadAll(r)
+	if err != nil {
+		return err
+	}
+	lr := &command.LoadRequest{
+		Data: b,
+	}
+	return s.load(lr)
+}
+
 // Loads an entire SQLite file into the database, sending the request
 // through the Raft log.
 func (s *Store) Load(lr *command.LoadRequest) error {
