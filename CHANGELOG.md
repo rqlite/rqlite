@@ -1,3 +1,7 @@
+## 7.21.5 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1337](https://github.com/rqlite/rqlite/pull/1337): Store can now load from an io.Reader.
+
 ## 7.21.4 (July 8th 2023)
 ### Implementation changes and bug fixes
 - [PR #1336](https://github.com/rqlite/rqlite/pull/1336): Remove on-disk-startup control. It's no longer needed as on-disk performance is now very close to in-memory performance, thanks to the switch to _synchronous off_ mode and the use of the SQLite WAL.
