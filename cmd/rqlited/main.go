@@ -102,7 +102,6 @@ func main() {
 	// Install the auto-restore file, if necessary.
 	if cfg.AutoRestoreFile != "" {
 		log.Printf("auto-restore requested, initiating download")
-
 		start := time.Now()
 		path, errOK, err := downloadRestoreFile(mainCtx, cfg.AutoRestoreFile)
 		if err != nil {
@@ -116,7 +115,6 @@ func main() {
 			}
 		} else {
 			log.Printf("auto-restore file downloaded in %s", time.Since(start))
-
 			if err := str.SetRestorePath(path); err != nil {
 				log.Fatalf("failed to preload auto-restore data: %s", err.Error())
 			}
@@ -251,7 +249,7 @@ func startAutoBackups(ctx context.Context, cfg *Config, str *store.Store) (*back
 }
 
 // downloadRestoreFile downloads the auto-restore file from the given URL, and returns the path to
-// the downloaded file. If the download fails, and the file is marked as continue-on-failure, then
+// the downloaded file. If the download fails, and the config is marked as continue-on-failure, then
 // the error is returned, but errOK is set to true. If the download fails, and the file is not
 // marked as continue-on-failure, then the error is returned, and errOK is set to false.
 func downloadRestoreFile(ctx context.Context, cfgPath string) (path string, errOK bool, err error) {
