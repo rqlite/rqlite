@@ -89,6 +89,13 @@ message LoadRequest {
 	bytes data = 1;
 }
 
+message LoadChunkRequest {
+	string stream_id = 1;
+	int64 sequence_num = 2;
+	bool is_last = 3;
+	bytes data = 4;
+}
+
 message JoinRequest {
 	string id = 1;
 	string address = 2;
