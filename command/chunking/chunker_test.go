@@ -30,7 +30,7 @@ func Test_ChunkerEmptyReader(t *testing.T) {
 
 // Test_ChunkerSingleChunk tests that a Chunker created with a reader that
 // contains a single chunk returns the expected chunk, when the chunk size is
-// smaller than the amount of data in the reader.
+// larger than the amount of data in the reader.
 func Test_ChunkerSingleChunk(t *testing.T) {
 	data := []byte("Hello, world!")
 	chunker := NewChunker(bytes.NewReader(data), 32)
@@ -39,14 +39,10 @@ func Test_ChunkerSingleChunk(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-
-	// The expected sequence number should be 1
 	if chunk.SequenceNum != 1 {
 		t.Errorf("unexpected sequence number: got %d, want %d", chunk.SequenceNum, 1)
 	}
-
-	// Should be the last chunk
-	if chunk.IsLast != true {
+	if !chunk.IsLast {
 		t.Errorf("unexpected IsLast value: got %v, want %v", chunk.IsLast, true)
 	}
 
@@ -85,14 +81,10 @@ func Test_ChunkerSingleChunkLarge(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-
-	// The expected sequence number should be 1
 	if chunk.SequenceNum != 1 {
 		t.Errorf("unexpected sequence number: got %d, want %d", chunk.SequenceNum, 1)
 	}
-
-	// Should be the last chunk
-	if chunk.IsLast != true {
+	if !chunk.IsLast {
 		t.Errorf("unexpected IsLast value: got %v, want %v", chunk.IsLast, true)
 	}
 
@@ -121,7 +113,7 @@ func Test_ChunkerSingleChunkLarge(t *testing.T) {
 
 // Test_ChunkerSingleChunkExact tests that a Chunker created with a reader that
 // contains a single chunk returns the expected chunk, when the chunk size is
-// exactly the amount of data in the reader.
+// exactly the size of amount of data in the reader.
 func Test_ChunkerSingleChunkExact(t *testing.T) {
 	data := []byte("Hello")
 	chunker := NewChunker(bytes.NewReader(data), 5)
@@ -162,13 +154,9 @@ func Test_ChunkerSingleChunkExact(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-
-	// The expected sequence number should be 2
 	if chunk.SequenceNum != 2 {
 		t.Errorf("unexpected sequence number: got %d, want %d", chunk.SequenceNum, 2)
 	}
-
-	// Should be the last chunk
 	if !chunk.IsLast {
 		t.Errorf("unexpected IsLast value: got %v, want %v", chunk.IsLast, true)
 	}
@@ -183,16 +171,14 @@ func Test_ChunkerSingleChunkExact(t *testing.T) {
 	}
 }
 
-// Test_ChunkerMultiChunks tests that a Chunker created with a reader that
-// that contains enough data that multiple chunks should be returned, returns
-// the expected chunks.
+// Test_ChunkerMultiChunks tests that a Chunker created with a reader which contains
+// enough data that multiple chunks should be returned, returns the expected chunks.
 func Test_ChunkerMultiChunks(t *testing.T) {
 	data := []byte("Hello, world!")
 	chunkSize := int64(5)
 
 	chunker := NewChunker(bytes.NewReader(data), chunkSize)
 
-	// Expected chunks: "Hello", ", wor", "ld!"
 	expectedChunks := []string{
 		"Hello",
 		", wor",
@@ -250,7 +236,6 @@ func (r *errorReader) Read([]byte) (int, error) {
 // returns an error other than io.EOF returns that error.
 func Test_ChunkerReaderError(t *testing.T) {
 	chunker := NewChunker(&errorReader{}, 1024)
-
 	_, err := chunker.Next()
 	if err == nil || err.Error() != "test error" {
 		t.Errorf("expected test error, got %v", err)
