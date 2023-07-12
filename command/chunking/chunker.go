@@ -26,7 +26,11 @@ var bufferPool = sync.Pool{
 // Define a sync.Pool to pool the gzip writers.
 var gzipWriterPool = sync.Pool{
 	New: func() interface{} {
-		return gzip.NewWriter(nil)
+		gw, err := gzip.NewWriterLevel(nil, gzip.BestCompression)
+		if err != nil {
+			panic(fmt.Sprintf("failed to create gzip writer: %s", err.Error()))
+		}
+		return gw
 	},
 }
 
@@ -94,6 +98,7 @@ func (c *Chunker) Next() (*command.LoadChunkRequest, error) {
 		}
 		if err != nil {
 			if err == io.EOF {
+				c.finished = true
 				break
 			} else {
 				return nil, err
@@ -106,13 +111,9 @@ func (c *Chunker) Next() (*command.LoadChunkRequest, error) {
 		return nil, errors.New("failed to close gzip writer: " + err.Error())
 	}
 
-	if totalRead < c.chunkSize {
-		c.finished = true
-	}
-
-	// If we didn't write any data, then we're finished
+	// If we didn't read any data, then we're finished
 	if totalRead == 0 {
-		// If no previous chunks were sent at all signal that.
+		// If no previous chunks were sent at all then signal that.
 		if c.sequenceNum == 0 {
 			return nil, io.EOF
 		}
