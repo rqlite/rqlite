@@ -30,6 +30,7 @@ const (
 	numRequestRequest     = "num_request_req"
 	numBackupRequest      = "num_backup_req"
 	numLoadRequest        = "num_load_req"
+	numLoadChunkRequest   = "num_load_chunk_req"
 	numRemoveNodeRequest  = "num_remove_node_req"
 	numNotifyRequest      = "num_notify_req"
 	numJoinRequest        = "num_join_req"
@@ -56,6 +57,7 @@ func init() {
 	stats.Add(numRequestRequest, 0)
 	stats.Add(numBackupRequest, 0)
 	stats.Add(numLoadRequest, 0)
+	stats.Add(numLoadChunkRequest, 0)
 	stats.Add(numRemoveNodeRequest, 0)
 	stats.Add(numGetNodeAPIRequestLocal, 0)
 	stats.Add(numNotifyRequest, 0)
@@ -87,6 +89,9 @@ type Database interface {
 
 	// Loads an entire SQLite file into the database
 	Load(lr *command.LoadRequest) error
+
+	// LoadChunk loads a chunk of a SQLite file into the database
+	LoadChunk(lcr *command.LoadChunkRequest) error
 }
 
 // Manager is the interface node-management systems must implement
@@ -287,8 +292,8 @@ func (s *Service) handleConn(conn net.Conn) {
 
 		case Command_COMMAND_TYPE_EXECUTE:
 			stats.Add(numExecuteRequest, 1)
-
 			resp := &CommandExecuteResponse{}
+
 			er := c.GetExecuteRequest()
 			if er == nil {
 				resp.Error = "ExecuteRequest is nil"
@@ -303,16 +308,10 @@ func (s *Service) handleConn(conn net.Conn) {
 					copy(resp.Results, res)
 				}
 			}
-
-			p, err := proto.Marshal(resp)
-			if err != nil {
-				return
-			}
-			writeBytesWithLength(conn, p)
+			marshalAndWrite(conn, resp)
 
 		case Command_COMMAND_TYPE_QUERY:
 			stats.Add(numQueryRequest, 1)
-
 			resp := &CommandQueryResponse{}
 
 			qr := c.GetQueryRequest()
@@ -329,16 +328,10 @@ func (s *Service) handleConn(conn net.Conn) {
 					copy(resp.Rows, res)
 				}
 			}
-
-			p, err = proto.Marshal(resp)
-			if err != nil {
-				return
-			}
-			writeBytesWithLength(conn, p)
+			marshalAndWrite(conn, resp)
 
 		case Command_COMMAND_TYPE_REQUEST:
 			stats.Add(numRequestRequest, 1)
-
 			resp := &CommandRequestResponse{}
 
 			rr := c.GetExecuteQueryRequest()
@@ -355,16 +348,10 @@ func (s *Service) handleConn(conn net.Conn) {
 					copy(resp.Response, res)
 				}
 			}
-
-			p, err = proto.Marshal(resp)
-			if err != nil {
-				return
-			}
-			writeBytesWithLength(conn, p)
+			marshalAndWrite(conn, resp)
 
 		case Command_COMMAND_TYPE_BACKUP:
 			stats.Add(numBackupRequest, 1)
-
 			resp := &CommandBackupResponse{}
 
 			br := c.GetBackupRequest()
@@ -396,7 +383,6 @@ func (s *Service) handleConn(conn net.Conn) {
 
 		case Command_COMMAND_TYPE_LOAD:
 			stats.Add(numLoadRequest, 1)
-
 			resp := &CommandLoadResponse{}
 
 			lr := c.GetLoadRequest()
@@ -409,12 +395,23 @@ func (s *Service) handleConn(conn net.Conn) {
 					resp.Error = fmt.Sprintf("remote node failed to load: %s", err.Error())
 				}
 			}
+			marshalAndWrite(conn, resp)
 
-			p, err = proto.Marshal(resp)
-			if err != nil {
-				return
+		case Command_COMMAND_TYPE_LOAD_CHUNK:
+			stats.Add(numLoadChunkRequest, 1)
+			resp := &CommandLoadChunkResponse{}
+
+			lcr := c.GetLoadChunkRequest()
+			if lcr == nil {
+				resp.Error = "LoadChunkRequest is nil"
+			} else if !s.checkCommandPerm(c, auth.PermLoad) {
+				resp.Error = "unauthorized"
+			} else {
+				if err := s.db.LoadChunk(lcr); err != nil {
+					resp.Error = fmt.Sprintf("remote node failed to load chunk: %s", err.Error())
+				}
 			}
-			writeBytesWithLength(conn, p)
+			marshalAndWrite(conn, resp)
 
 		case Command_COMMAND_TYPE_REMOVE_NODE:
 			stats.Add(numRemoveNodeRequest, 1)
@@ -430,12 +427,7 @@ func (s *Service) handleConn(conn net.Conn) {
 					resp.Error = err.Error()
 				}
 			}
-
-			p, err = proto.Marshal(resp)
-			if err != nil {
-				conn.Close()
-			}
-			writeBytesWithLength(conn, p)
+			marshalAndWrite(conn, resp)
 
 		case Command_COMMAND_TYPE_NOTIFY:
 			stats.Add(numNotifyRequest, 1)
@@ -449,12 +441,7 @@ func (s *Service) handleConn(conn net.Conn) {
 					resp.Error = err.Error()
 				}
 			}
-
-			p, err = proto.Marshal(resp)
-			if err != nil {
-				conn.Close()
-			}
-			writeBytesWithLength(conn, p)
+			marshalAndWrite(conn, resp)
 
 		case Command_COMMAND_TYPE_JOIN:
 			stats.Add(numJoinRequest, 1)
@@ -468,14 +455,17 @@ func (s *Service) handleConn(conn net.Conn) {
 					resp.Error = err.Error()
 				}
 			}
-
-			p, err = proto.Marshal(resp)
-			if err != nil {
-				conn.Close()
-			}
-			writeBytesWithLength(conn, p)
+			marshalAndWrite(conn, resp)
 		}
 	}
+}
+
+func marshalAndWrite(conn net.Conn, m proto.Message) {
+	p, err := proto.Marshal(m)
+	if err != nil {
+		conn.Close()
+	}
+	writeBytesWithLength(conn, p)
 }
 
 func writeBytesWithLength(conn net.Conn, p []byte) {

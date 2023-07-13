@@ -1168,37 +1168,57 @@ func (s *Store) LoadFromReader(r io.Reader) error {
 		if err != nil {
 			return err
 		}
-		b, err := command.MarshalLoadChunkRequest(chunk)
-		if err != nil {
+		if err := s.loadChunk(chunk); err != nil {
 			return err
 		}
-		c := &command.Command{
-			Type:       command.Command_COMMAND_TYPE_LOAD_CHUNK,
-			SubCommand: b,
-		}
-
-		b, err = command.Marshal(c)
-		if err != nil {
-			return err
-		}
-
-		af := s.raft.Apply(b, s.ApplyTimeout)
-		if af.Error() != nil {
-			if af.Error() == raft.ErrNotLeader {
-				return ErrNotLeader
-			}
-			return af.Error()
-		}
-
-		s.dbAppliedIndexMu.Lock()
-		s.dbAppliedIndex = af.Index()
-		s.dbAppliedIndexMu.Unlock()
-
 		if chunk.IsLast {
 			break
 		}
 	}
+	return nil
+}
 
+// LoadChunk loads a chunk of data into the database, sending the request
+// through the Raft log.
+func (s *Store) LoadChunk(lcr *command.LoadChunkRequest) error {
+	if !s.open {
+		return ErrNotOpen
+	}
+
+	if !s.Ready() {
+		return ErrNotReady
+	}
+
+	return s.loadChunk(lcr)
+}
+
+func (s *Store) loadChunk(lcr *command.LoadChunkRequest) error {
+	b, err := command.MarshalLoadChunkRequest(lcr)
+	if err != nil {
+		return err
+	}
+
+	c := &command.Command{
+		Type:       command.Command_COMMAND_TYPE_LOAD_CHUNK,
+		SubCommand: b,
+	}
+
+	b, err = command.Marshal(c)
+	if err != nil {
+		return err
+	}
+
+	af := s.raft.Apply(b, s.ApplyTimeout)
+	if af.Error() != nil {
+		if af.Error() == raft.ErrNotLeader {
+			return ErrNotLeader
+		}
+		return af.Error()
+	}
+
+	s.dbAppliedIndexMu.Lock()
+	s.dbAppliedIndex = af.Index()
+	s.dbAppliedIndexMu.Unlock()
 	return nil
 }
 

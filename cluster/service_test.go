@@ -410,11 +410,12 @@ func mustNewMockTLSTransport() *mockTransport {
 }
 
 type mockDatabase struct {
-	executeFn func(er *command.ExecuteRequest) ([]*command.ExecuteResult, error)
-	queryFn   func(qr *command.QueryRequest) ([]*command.QueryRows, error)
-	requestFn func(rr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, error)
-	backupFn  func(br *command.BackupRequest, dst io.Writer) error
-	loadFn    func(lr *command.LoadRequest) error
+	executeFn   func(er *command.ExecuteRequest) ([]*command.ExecuteResult, error)
+	queryFn     func(qr *command.QueryRequest) ([]*command.QueryRows, error)
+	requestFn   func(rr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, error)
+	backupFn    func(br *command.BackupRequest, dst io.Writer) error
+	loadFn      func(lr *command.LoadRequest) error
+	loadChunkFn func(lcr *command.LoadChunkRequest) error
 }
 
 func (m *mockDatabase) Execute(er *command.ExecuteRequest) ([]*command.ExecuteResult, error) {
@@ -444,6 +445,13 @@ func (m *mockDatabase) Load(lr *command.LoadRequest) error {
 		return nil
 	}
 	return m.loadFn(lr)
+}
+
+func (m *mockDatabase) LoadChunk(lcr *command.LoadChunkRequest) error {
+	if m.loadChunkFn == nil {
+		return nil
+	}
+	return m.loadChunkFn(lcr)
 }
 
 func mustNewMockDatabase() *mockDatabase {
