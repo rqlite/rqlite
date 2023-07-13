@@ -303,7 +303,6 @@ type Service struct {
 	CACertFile   string // Path to x509 CA certificate used to verify certificates.
 	CertFile     string // Path to server's own x509 certificate.
 	KeyFile      string // Path to server's own x509 private key.
-	TLS1011      bool   // Whether older, deprecated TLS should be supported.
 	ClientVerify bool   // Whether client certificates should verified.
 	tlsConfig    *tls.Config
 
@@ -356,7 +355,7 @@ func (s *Service) Start() error {
 			return err
 		}
 	} else {
-		s.tlsConfig, err = rtls.CreateServerConfig(s.CertFile, s.KeyFile, s.CACertFile, !s.ClientVerify, s.TLS1011)
+		s.tlsConfig, err = rtls.CreateServerConfig(s.CertFile, s.KeyFile, s.CACertFile, !s.ClientVerify)
 		if err != nil {
 			return err
 		}

@@ -504,7 +504,7 @@ func Test_MultiNodeClusterBootstrapLaterJoinHTTPS(t *testing.T) {
 	node3.Store.BootstrapExpect = 3
 	defer node3.Deprovision()
 
-	tlsConfig, err := rtls.CreateClientConfig("", "", "", true, false)
+	tlsConfig, err := rtls.CreateClientConfig("", "", "", true)
 	if err != nil {
 		t.Fatalf("failed to create TLS config: %s", err)
 	}
