@@ -22,6 +22,7 @@ import (
 
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/command"
+	"github.com/rqlite/rqlite/command/chunking"
 	sql "github.com/rqlite/rqlite/db"
 	rlog "github.com/rqlite/rqlite/log"
 	"github.com/rqlite/rqlite/snapshot"
@@ -1143,8 +1144,8 @@ func (s *Store) Provide(path string) error {
 	return nil
 }
 
-// LoadFromReader loads SQLite data, as read from r, into the database, sending the
-// request through the Raft log.
+// LoadFromReader reads data from r chunk-by-chunk, and loads it into the
+// database.
 func (s *Store) LoadFromReader(r io.Reader) error {
 	if !s.open {
 		return ErrNotOpen
@@ -1154,14 +1155,44 @@ func (s *Store) LoadFromReader(r io.Reader) error {
 		return ErrNotReady
 	}
 
-	b, err := io.ReadAll(r)
-	if err != nil {
-		return err
+	chunker := chunking.NewChunker(r, 1024*1024)
+	for {
+		chunk, err := chunker.Next()
+		if err != nil {
+			return err
+		}
+		b, err := command.MarshalLoadChunkRequest(chunk)
+		if err != nil {
+			return err
+		}
+		c := &command.Command{
+			Type:       command.Command_COMMAND_TYPE_LOAD_CHUNK,
+			SubCommand: b,
+		}
+
+		b, err = command.Marshal(c)
+		if err != nil {
+			return err
+		}
+
+		af := s.raft.Apply(b, s.ApplyTimeout)
+		if af.Error() != nil {
+			if af.Error() == raft.ErrNotLeader {
+				return ErrNotLeader
+			}
+			return af.Error()
+		}
+
+		s.dbAppliedIndexMu.Lock()
+		s.dbAppliedIndex = af.Index()
+		s.dbAppliedIndexMu.Unlock()
+
+		if chunk.IsLast {
+			break
+		}
 	}
-	lr := &command.LoadRequest{
-		Data: b,
-	}
-	return s.load(lr)
+
+	return nil
 }
 
 // Loads an entire SQLite file into the database, sending the request
@@ -1949,6 +1980,13 @@ func applyCommand(data []byte, pDB **sql.DB) (command.Command_Type, interface{})
 			return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to close post-load database: %s", err)}
 		}
 		*pDB = newDB
+		return c.Type, &fsmGenericResponse{}
+	case command.Command_COMMAND_TYPE_LOAD_CHUNK:
+		var lr command.LoadChunkRequest
+		if err := command.UnmarshalLoadChunkRequest(c.SubCommand, &lr); err != nil {
+			panic(fmt.Sprintf("failed to unmarshal load-chunk subcommand: %s", err.Error()))
+		}
+
 		return c.Type, &fsmGenericResponse{}
 	case command.Command_COMMAND_TYPE_NOOP:
 		return c.Type, &fsmGenericResponse{}

@@ -161,6 +161,16 @@ func UnmarshalLoadRequest(b []byte, lr *LoadRequest) error {
 	return proto.Unmarshal(u, lr)
 }
 
+// MarshalLoadChunkRequest marshals a LoadChunkRequest command
+func MarshalLoadChunkRequest(lr *LoadChunkRequest) ([]byte, error) {
+	return proto.Marshal(lr)
+}
+
+// UnmarshalLoadChunkRequest unmarshals a LoadChunkRequest command
+func UnmarshalLoadChunkRequest(b []byte, lr *LoadChunkRequest) error {
+	return proto.Unmarshal(b, lr)
+}
+
 // UnmarshalSubCommand unmarshalls a sub command m. It assumes that
 // m is the correct type.
 func UnmarshalSubCommand(c *Command, m proto.Message) error {

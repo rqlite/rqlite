@@ -26,6 +26,7 @@ message Command {
         COMMAND_TYPE_NOTIFY = 7;
         COMMAND_TYPE_JOIN = 8;
         COMMAND_TYPE_REQUEST = 9;
+        COMMAND_TYPE_LOAD_CHUNK = 10;
     }
     Type type = 1;
 
@@ -38,6 +39,7 @@ message Command {
         command.NotifyRequest notify_request = 8;
         command.JoinRequest join_request = 9;
         command.ExecuteQueryRequest execute_query_request = 10;
+        command.LoadChunkRequest load_chunk_request = 11;
     }
 
     Credentials credentials = 4;
@@ -64,6 +66,10 @@ message CommandBackupResponse {
 }
 
 message CommandLoadResponse {
+    string error = 1;
+}
+
+message CommandLoadChunkResponse {
     string error = 1;
 }
 
