@@ -29,6 +29,10 @@ import (
 const (
 	// SnapshotInterval is the period between snapshot checks
 	SnapshotInterval = time.Second
+
+	// ElectionTimeout is the period between elections. It's longer than
+	// the default to allow for slow CI systems.
+	ElectionTimeout = 2 * time.Second
 )
 
 var (
@@ -690,6 +694,7 @@ func mustNodeEncryptedOnDisk(dir string, enableSingle, httpEncrypt bool, mux *tc
 	})
 	node.Store.SnapshotThreshold = 100
 	node.Store.SnapshotInterval = SnapshotInterval
+	node.Store.ElectionTimeout = ElectionTimeout
 
 	if err := node.Store.Open(); err != nil {
 		node.Deprovision()
