@@ -45,15 +45,17 @@ func (d *Dechunker) WriteChunk(chunk *command.LoadChunkRequest) (bool, error) {
 	}
 	d.seqNum = chunk.SequenceNum
 
-	buf := bytes.NewBuffer(chunk.Data)
-	gzw, err := gzip.NewReader(buf)
-	if err != nil {
-		return false, fmt.Errorf("failed to create gzip reader: %v", err)
-	}
-	defer gzw.Close()
+	if chunk.Data != nil {
+		buf := bytes.NewBuffer(chunk.Data)
+		gzw, err := gzip.NewReader(buf)
+		if err != nil {
+			return false, fmt.Errorf("failed to create gzip reader: %v", err)
+		}
+		defer gzw.Close()
 
-	if _, err := io.Copy(d.file, gzw); err != nil {
-		return false, fmt.Errorf("failed to write decompressed data to file: %v", err)
+		if _, err := io.Copy(d.file, gzw); err != nil {
+			return false, fmt.Errorf("failed to write decompressed data to file: %v", err)
+		}
 	}
 
 	return chunk.IsLast, nil
