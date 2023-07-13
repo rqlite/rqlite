@@ -180,6 +180,8 @@ type Store struct {
 	dbAppliedIndex       uint64
 	appliedIdxUpdateDone chan struct{}
 
+	dechunkManager *chunking.DechunkerManager
+
 	// Channels that must be closed for the Store to be considered ready.
 	readyChans             []<-chan struct{}
 	numClosedReadyChannels int
@@ -348,6 +350,11 @@ func (s *Store) Open() (retErr error) {
 	if err := os.MkdirAll(filepath.Dir(s.peersPath), 0755); err != nil {
 		return err
 	}
+	decMgmr, err := chunking.NewDechunkerManager(filepath.Dir(s.dbPath))
+	if err != nil {
+		return err
+	}
+	s.dechunkManager = decMgmr
 
 	// Create Raft-compatible network layer.
 	s.raftTn = raft.NewNetworkTransport(NewTransport(s.ln), connectionPoolCount, connectionTimeout, nil)
@@ -1550,7 +1557,7 @@ func (s *Store) Apply(l *raft.Log) (e interface{}) {
 		s.firstLogAppliedT = time.Now()
 	}
 
-	typ, r := applyCommand(l.Data, &s.db)
+	typ, r := applyCommand(l.Data, &s.db, s.dechunkManager)
 	if typ == command.Command_COMMAND_TYPE_NOOP {
 		s.numNoops++
 	}
@@ -1858,6 +1865,12 @@ func RecoverNode(dataDir string, logger *log.Logger, logs raft.LogStore, stable 
 	}
 	defer db.Close()
 
+	// Need a dechunker manager to handle any chunked load requests.
+	decMgmr, err := chunking.NewDechunkerManager(dataDir)
+	if err != nil {
+		return fmt.Errorf("failed to create dechunker manager: %s", err.Error())
+	}
+
 	// The snapshot information is the best known end point for the data
 	// until we play back the Raft log entries.
 	lastIndex := snapshotIndex
@@ -1876,7 +1889,7 @@ func RecoverNode(dataDir string, logger *log.Logger, logs raft.LogStore, stable 
 			return fmt.Errorf("failed to get log at index %d: %v", index, err)
 		}
 		if entry.Type == raft.LogCommand {
-			applyCommand(entry.Data, &db)
+			applyCommand(entry.Data, &db, decMgmr)
 		}
 		lastIndex = entry.Index
 		lastTerm = entry.Term
@@ -1925,7 +1938,7 @@ func dbBytesFromSnapshot(rc io.ReadCloser) ([]byte, error) {
 	return database.Bytes(), nil
 }
 
-func applyCommand(data []byte, pDB **sql.DB) (command.Command_Type, interface{}) {
+func applyCommand(data []byte, pDB **sql.DB, decMgmr *chunking.DechunkerManager) (command.Command_Type, interface{}) {
 	var c command.Command
 	db := *pDB
 
@@ -1987,6 +2000,47 @@ func applyCommand(data []byte, pDB **sql.DB) (command.Command_Type, interface{})
 			panic(fmt.Sprintf("failed to unmarshal load-chunk subcommand: %s", err.Error()))
 		}
 
+		dec, err := decMgmr.Get(lcr.StreamId)
+		if err != nil {
+			return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to get dechunker: %s", err)}
+		}
+		last, err := dec.WriteChunk(&lcr)
+		if err != nil {
+			return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to write chunk: %s", err)}
+		}
+		if last {
+			path, err := dec.Close()
+			if err != nil {
+				return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to close dechunker: %s", err)}
+			}
+			decMgmr.Delete(lcr.StreamId)
+
+			// Read all the data at path into a byte slice.
+			b, err := ioutil.ReadFile(path)
+			if err != nil {
+				return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to read chunked data: %s", err)}
+			}
+			os.Remove(path)
+
+			var newDB *sql.DB
+			if db.InMemory() {
+				newDB, err = createInMemory(b, db.FKEnabled())
+				if err != nil {
+					return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to create in-memory database: %s", err)}
+				}
+			} else {
+				newDB, err = createOnDisk(b, db.Path(), db.FKEnabled(), db.WALEnabled())
+				if err != nil {
+					return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to create on-disk database: %s", err)}
+				}
+			}
+
+			// Swap the underlying database to the new one.
+			if err := db.Close(); err != nil {
+				return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to close post-load database: %s", err)}
+			}
+			*pDB = newDB
+		}
 		return c.Type, &fsmGenericResponse{}
 	case command.Command_COMMAND_TYPE_NOOP:
 		return c.Type, &fsmGenericResponse{}

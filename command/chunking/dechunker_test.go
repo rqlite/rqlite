@@ -309,6 +309,91 @@ func Test_ReassemblyOfLargeData(t *testing.T) {
 	}
 }
 
+func Test_CreateDechunkerManager(t *testing.T) {
+	dir := os.TempDir()
+	manager, err := NewDechunkerManager(dir)
+	if err != nil {
+		t.Fatalf("failed to create DechunkerManager: %v", err)
+	}
+	if manager == nil {
+		t.Fatalf("expected DechunkerManager instance, got nil")
+	}
+	if manager.dir != dir {
+		t.Errorf("unexpected dir in manager: expected %s, got %s", dir, manager.dir)
+	}
+	if manager.m != nil {
+		t.Errorf("expected manager map to be nil, got: %v", manager.m)
+	}
+}
+
+func Test_CreateDechunkerManagerFail(t *testing.T) {
+	manager, err := NewDechunkerManager("/does/not/exist/surely")
+	if err == nil {
+		t.Fatalf("expected an error but got none")
+	}
+	if manager != nil {
+		t.Fatalf("expected nil manager but got one")
+	}
+}
+
+func Test_GetDechunker(t *testing.T) {
+	dir := os.TempDir()
+	manager, err := NewDechunkerManager(dir)
+	if err != nil {
+		t.Fatalf("failed to create DechunkerManager: %v", err)
+	}
+
+	dechunker1, err := manager.Get("test1")
+	if err != nil {
+		t.Fatalf("failed to get dechunker: %v", err)
+	}
+	if dechunker1 == nil {
+		t.Fatalf("expected Dechunker instance, got nil")
+	}
+
+	// Make sure we get the same dechunker.
+	dechunker2, err := manager.Get("test1")
+	if err != nil {
+		t.Fatalf("failed to get dechunker: %v", err)
+	}
+	if dechunker2 == nil {
+		t.Fatalf("expected Dechunker instance, got nil")
+	}
+	if dechunker1 != dechunker2 {
+		t.Errorf("expected same dechunker instance, got different instances")
+	}
+}
+
+func Test_DeleteDechunker(t *testing.T) {
+	dir := os.TempDir()
+	manager, err := NewDechunkerManager(dir)
+	if err != nil {
+		t.Fatalf("failed to create DechunkerManager: %v", err)
+	}
+
+	dechunker1, err := manager.Get("test1")
+	if err != nil {
+		t.Fatalf("failed to get dechunker: %v", err)
+	}
+	if dechunker1 == nil {
+		t.Fatalf("expected Dechunker instance, got nil")
+	}
+
+	manager.Delete("test1")
+
+	// Attempt to get the Dechunker for the ID "test1"
+	dechunker2, err := manager.Get("test1")
+	if err != nil {
+		t.Fatalf("failed to get dechunker: %v", err)
+	}
+	if dechunker2 == nil {
+		t.Fatalf("expected Dechunker instance, got nil")
+	}
+	if dechunker1 == dechunker2 {
+		t.Errorf("expected different dechunker instances, got same instance")
+	}
+}
+
 func mustCompressData(data []byte) []byte {
 	var buf bytes.Buffer
 	gz := gzip.NewWriter(&buf)
