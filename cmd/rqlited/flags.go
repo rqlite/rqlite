@@ -47,10 +47,6 @@ type Config struct {
 	// HTTPAdv is the advertised HTTP server network.
 	HTTPAdv string
 
-	// TLS1011 indicates whether the node should support deprecated
-	// encryption standards.
-	TLS1011 bool
-
 	// AuthFile is the path to the authentication file. May not be set.
 	AuthFile string `filepath:"true"`
 
@@ -75,9 +71,6 @@ type Config struct {
 
 	// HTTPVerifyClient indicates whether the HTTP server should verify client certificates.
 	HTTPVerifyClient bool
-
-	// NodeEncrypt indicates whether node encryption should be enabled.
-	NodeEncrypt bool
 
 	// NodeX509CACert is the path to the CA certficate file for when this node verifies
 	// other certificates for any inter-node communications. May not be set.
@@ -149,9 +142,6 @@ type Config struct {
 
 	// OnDiskPath sets the path to the SQLite file. May not be set.
 	OnDiskPath string
-
-	// OnDiskStartup disables the in-memory on-disk startup optimization.
-	OnDiskStartup bool
 
 	// FKConstraints enables SQLite foreign key constraints.
 	FKConstraints bool
@@ -445,13 +435,11 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	flag.StringVar(&config.NodeID, "node-id", "", "Unique ID for node. If not set, set to advertised Raft address")
 	flag.StringVar(&config.HTTPAddr, HTTPAddrFlag, "localhost:4001", "HTTP server bind address. To enable HTTPS, set X.509 certificate and key")
 	flag.StringVar(&config.HTTPAdv, HTTPAdvAddrFlag, "", "Advertised HTTP address. If not set, same as HTTP server bind address")
-	flag.BoolVar(&config.TLS1011, "tls1011", false, "Support deprecated TLS versions 1.0 and 1.1")
 	flag.StringVar(&config.HTTPx509CACert, "http-ca-cert", "", "Path to X.509 CA certificate for HTTPS")
 	flag.StringVar(&config.HTTPx509Cert, HTTPx509CertFlag, "", "Path to HTTPS X.509 certificate")
 	flag.StringVar(&config.HTTPx509Key, HTTPx509KeyFlag, "", "Path to HTTPS X.509 private key")
 	flag.BoolVar(&config.NoHTTPVerify, "http-no-verify", false, "Skip verification of remote node's HTTPS certificate when joining a cluster")
 	flag.BoolVar(&config.HTTPVerifyClient, "http-verify-client", false, "Enable mutual TLS for HTTPS")
-	flag.BoolVar(&config.NodeEncrypt, "node-encrypt", false, "Ignored, control node-to-node encryption by setting node certificate and key")
 	flag.StringVar(&config.NodeX509CACert, "node-ca-cert", "", "Path to X.509 CA certificate for node-to-node encryption")
 	flag.StringVar(&config.NodeX509Cert, NodeX509CertFlag, "", "Path to X.509 certificate for node-to-node mutual authentication and encryption")
 	flag.StringVar(&config.NodeX509Key, NodeX509KeyFlag, "", "Path to X.509 private key for node-to-node mutual authentication and encryption")
@@ -476,7 +464,6 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	flag.BoolVar(&config.PprofEnabled, "pprof", true, "Serve pprof data on HTTP server")
 	flag.BoolVar(&config.OnDisk, "on-disk", false, "Use an on-disk SQLite database")
 	flag.StringVar(&config.OnDiskPath, "on-disk-path", "", "Path for SQLite on-disk database file. If not set, use a file in data directory")
-	flag.BoolVar(&config.OnDiskStartup, "on-disk-startup", false, "Ignored, on-disk startup optimization control no longer necessary")
 	flag.BoolVar(&config.FKConstraints, "fk", false, "Enable SQLite foreign key constraints")
 	flag.BoolVar(&showVersion, "version", false, "Show version information and exit")
 	flag.BoolVar(&config.RaftNonVoter, "raft-non-voter", false, "Configure as non-voting node")

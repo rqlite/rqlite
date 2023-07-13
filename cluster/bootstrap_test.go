@@ -190,7 +190,7 @@ func Test_BootstrapperBootSingleNotifyHTTPS(t *testing.T) {
 		return n == 5
 	}
 
-	tlsConfig, err := rtls.CreateClientConfig("", "", "", true, false)
+	tlsConfig, err := rtls.CreateClientConfig("", "", "", true)
 	if err != nil {
 		t.Fatalf("failed to create TLS config: %s", err)
 	}

@@ -103,7 +103,7 @@ func NewTLSMux(ln net.Listener, adv net.Addr, cert, key, caCert string, insecure
 		return nil, err
 	}
 
-	mux.tlsConfig, err = rtls.CreateConfig(cert, key, caCert, insecure, mutual, false)
+	mux.tlsConfig, err = rtls.CreateConfig(cert, key, caCert, insecure, mutual)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create TLS config: %s", err)
 	}
