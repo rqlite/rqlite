@@ -1172,6 +1172,12 @@ func (s *Store) LoadFromReader(r io.Reader, chunkSize int64) error {
 		return ErrNotReady
 	}
 
+	return s.loadFromReader(r, chunkSize)
+}
+
+// loadFromReader reads data from r chunk-by-chunk, and loads it into the
+// database. It is for internal use only. It does not check for readiness.
+func (s *Store) loadFromReader(r io.Reader, chunkSize int64) error {
 	chunker := chunking.NewChunker(r, chunkSize)
 	for {
 		chunk, err := chunker.Next()
@@ -1202,6 +1208,8 @@ func (s *Store) LoadChunk(lcr *command.LoadChunkRequest) error {
 	return s.loadChunk(lcr)
 }
 
+// loadChunk loads a chunk of data into the database, and is for internal use
+// only. It does not check for readiness.
 func (s *Store) loadChunk(lcr *command.LoadChunkRequest) error {
 	b, err := command.MarshalLoadChunkRequest(lcr)
 	if err != nil {
@@ -1794,7 +1802,7 @@ func (s *Store) installRestore() error {
 		return err
 	}
 	defer f.Close()
-	return s.LoadFromReader(f, s.restoreChunkSize)
+	return s.loadFromReader(f, s.restoreChunkSize)
 }
 
 // logSize returns the size of the Raft log on disk.
