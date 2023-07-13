@@ -1982,8 +1982,8 @@ func applyCommand(data []byte, pDB **sql.DB) (command.Command_Type, interface{})
 		*pDB = newDB
 		return c.Type, &fsmGenericResponse{}
 	case command.Command_COMMAND_TYPE_LOAD_CHUNK:
-		var lr command.LoadChunkRequest
-		if err := command.UnmarshalLoadChunkRequest(c.SubCommand, &lr); err != nil {
+		var lcr command.LoadChunkRequest
+		if err := command.UnmarshalLoadChunkRequest(c.SubCommand, &lcr); err != nil {
 			panic(fmt.Sprintf("failed to unmarshal load-chunk subcommand: %s", err.Error()))
 		}
 
