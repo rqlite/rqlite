@@ -36,7 +36,7 @@ upload_asset () {
 
 if [ $# -lt 1 ]; then
     echo "$0 <version> [release_id api_token]"
-    echo "Example: $0 v6.9.2 4284284 w40987joiudfigouuysdfgu_d"
+    echo "Example: $0 v8.9.2 4284284 w40987joiudfigouuysdfgu_d"
     exit 1
 fi
 

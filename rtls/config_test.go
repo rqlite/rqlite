@@ -26,7 +26,7 @@ func Test_CreateConfig(t *testing.T) {
 	caCertFile := mustWriteTempFile(t, caCertPEM)
 
 	// create a config with no server or client verification
-	config, err := CreateConfig(certFile, keyFile, caCertFile, true, false, false)
+	config, err := CreateConfig(certFile, keyFile, caCertFile, true, false)
 	if err != nil {
 		t.Fatalf("failed to create config: %v", err)
 	}
@@ -69,7 +69,7 @@ func Test_CreateConfig(t *testing.T) {
 	}
 
 	// create a config with server cert verification only
-	config, err = CreateConfig(certFile, keyFile, caCertFile, false, false, false)
+	config, err = CreateConfig(certFile, keyFile, caCertFile, false, false)
 	if err != nil {
 		t.Fatalf("failed to create config: %v", err)
 	}
@@ -81,7 +81,7 @@ func Test_CreateConfig(t *testing.T) {
 	}
 
 	// create a config with both server and client verification
-	config, err = CreateConfig(certFile, keyFile, "", false, true, false)
+	config, err = CreateConfig(certFile, keyFile, "", false, true)
 	if err != nil {
 		t.Fatalf("failed to create config: %v", err)
 	}
@@ -103,7 +103,7 @@ func Test_CreateServerConfig(t *testing.T) {
 	keyFile := mustWriteTempFile(t, keyPEM)
 
 	// create a server config with no client verification
-	config, err := CreateServerConfig(certFile, keyFile, "", true, false)
+	config, err := CreateServerConfig(certFile, keyFile, "", true)
 	if err != nil {
 		t.Fatalf("failed to create server config: %v", err)
 	}
@@ -130,7 +130,7 @@ func Test_CreateServerConfig(t *testing.T) {
 	}
 
 	// create a server config with client verification
-	config, err = CreateServerConfig(certFile, keyFile, "", false, false)
+	config, err = CreateServerConfig(certFile, keyFile, "", false)
 	if err != nil {
 		t.Fatalf("failed to create server config: %v", err)
 	}
@@ -149,7 +149,7 @@ func Test_CreateClientConfig(t *testing.T) {
 	keyFile := mustWriteTempFile(t, keyPEM)
 
 	// create a client config with no server verification
-	config, err := CreateClientConfig(certFile, keyFile, "", true, false)
+	config, err := CreateClientConfig(certFile, keyFile, "", true)
 	if err != nil {
 		t.Fatalf("failed to create client config: %v", err)
 	}
@@ -176,7 +176,7 @@ func Test_CreateClientConfig(t *testing.T) {
 	}
 
 	// create a client config with server verification
-	config, err = CreateClientConfig(certFile, keyFile, "", false, false)
+	config, err = CreateClientConfig(certFile, keyFile, "", false)
 	if err != nil {
 		t.Fatalf("failed to create client config: %v", err)
 	}

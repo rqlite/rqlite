@@ -371,7 +371,6 @@ func startHTTPService(cfg *Config, str *store.Store, cltr *cluster.Client, credS
 	s.CACertFile = cfg.HTTPx509CACert
 	s.CertFile = cfg.HTTPx509Cert
 	s.KeyFile = cfg.HTTPx509Key
-	s.TLS1011 = cfg.TLS1011
 	s.ClientVerify = cfg.HTTPVerifyClient
 	s.Expvar = cfg.Expvar
 	s.Pprof = cfg.PprofEnabled
@@ -462,7 +461,7 @@ func createClusterClient(cfg *Config, clstr *cluster.Service) (*cluster.Client, 
 	var err error
 	if cfg.NodeX509Cert != "" || cfg.NodeX509CACert != "" {
 		dialerTLSConfig, err = rtls.CreateClientConfig(cfg.NodeX509Cert, cfg.NodeX509Key,
-			cfg.NodeX509CACert, cfg.NoNodeVerify, cfg.TLS1011)
+			cfg.NodeX509CACert, cfg.NoNodeVerify)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create TLS config for cluster dialer: %s", err.Error())
 		}
@@ -629,5 +628,5 @@ func createHTTPTLSConfig(cfg *Config) (*tls.Config, error) {
 		return nil, nil
 	}
 	return rtls.CreateClientConfig(cfg.HTTPx509Cert, cfg.HTTPx509Key, cfg.HTTPx509CACert,
-		cfg.NoHTTPVerify, cfg.TLS1011)
+		cfg.NoHTTPVerify)
 }

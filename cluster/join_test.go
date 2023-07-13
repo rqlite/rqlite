@@ -109,7 +109,7 @@ func Test_SingleJoinHTTPSOK(t *testing.T) {
 	ts.TLS = &tls.Config{NextProtos: []string{"h2", "http/1.1"}}
 	ts.StartTLS()
 
-	tlsConfig, err := rtls.CreateClientConfig("", "", "", true, false)
+	tlsConfig, err := rtls.CreateClientConfig("", "", "", true)
 	if err != nil {
 		t.Fatalf("failed to create TLS config: %s", err.Error())
 	}

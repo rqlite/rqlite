@@ -184,7 +184,7 @@ class Node(object):
       if self.http_no_verify:
         command += ['-http-no-verify']
     if self.node_cert is not None:
-      command += ['-node-encrypt', '-node-cert', self.node_cert, '-node-key', self.node_key]
+      command += ['-node-cert', self.node_cert, '-node-key', self.node_key]
       if self.node_no_verify:
         command += ['-node-no-verify']
     if self.on_disk:
