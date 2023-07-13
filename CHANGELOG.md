@@ -1,5 +1,5 @@
 ## 8.0.0 (unreleased)
-Release 8.0.0 is in active development, with the goal of supporting much larger data sets. When officially released it will support (mostly) seamless upgrades from the 7.x series. However until the official release, upgrades will require backing up your data from any existing 7.x cluster and restoring into a new 8.0 cluster.
+Release 8.0.0 is in active development, with the goal of supporting much larger data sets, hopefully as large as 100GB. When officially released it will support (mostly) seamless upgrades from the 7.x series. However until the official release, upgrades will require backing up your data from any existing 7.x cluster and restoring into a new 8.0 cluster.
 ### Implementation changes and bug fixes
 - [PR #1337](https://github.com/rqlite/rqlite/pull/1337): Store can now load from an io.Reader.
 - [PR #1339](https://github.com/rqlite/rqlite/pull/1339), [PR #1340](https://github.com/rqlite/rqlite/pull/1340), [PR #1341](https://github.com/rqlite/rqlite/pull/1341): Add `LoadRequest` chunker/dechunker.
