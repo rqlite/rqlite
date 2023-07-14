@@ -968,8 +968,8 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 			}
 			if chunk.IsLast {
 				nChunks, nr, nw := chunker.Counts()
-				s.logger.Printf("%d bytes read, %d chunks generated, containing %d bytes of compressed data",
-					nr, nChunks, nw)
+				s.logger.Printf("%d bytes read, %d chunks generated, containing %d bytes of compressed data (compression ratio %.2f)",
+					nr, nChunks, nw, float64(nr)/float64(nw))
 				break
 			}
 		}
