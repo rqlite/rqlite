@@ -26,7 +26,7 @@ var bufferPool = sync.Pool{
 // Define a sync.Pool to pool the gzip writers.
 var gzipWriterPool = sync.Pool{
 	New: func() interface{} {
-		gw, err := gzip.NewWriterLevel(nil, gzip.BestCompression)
+		gw, err := gzip.NewWriterLevel(nil, gzip.BestSpeed)
 		if err != nil {
 			panic(fmt.Sprintf("failed to create gzip writer: %s", err.Error()))
 		}
