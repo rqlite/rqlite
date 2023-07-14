@@ -21,6 +21,8 @@ import (
 )
 
 const (
+	SQLiteHeaderSize = 32
+
 	bkDelay                  = 250
 	defaultCheckpointTimeout = 30 * time.Second
 )

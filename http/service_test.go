@@ -2,9 +2,11 @@ package http
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -741,14 +743,14 @@ func Test_LoadFlagsNoLeader(t *testing.T) {
 		t.Fatalf("failed to load test SQLite data")
 	}
 
-	m.loadFn = func(br *command.LoadRequest) error {
+	m.loadChunkFn = func(br *command.LoadChunkRequest) error {
 		return store.ErrNotLeader
 	}
 
 	clusterLoadCalled := false
-	c.loadFn = func(lr *command.LoadRequest, nodeAddr string, timeout time.Duration) error {
+	c.loadChunkFn = func(lc *command.LoadChunkRequest, nodeAddr string, timeout time.Duration) error {
 		clusterLoadCalled = true
-		if !bytes.Equal(lr.Data, testData) {
+		if !bytes.Equal(mustGunzip(lc.Data), testData) {
 			t.Fatalf("wrong data passed to cluster load")
 		}
 		return nil
@@ -798,11 +800,11 @@ func Test_LoadRemoteError(t *testing.T) {
 		t.Fatalf("failed to load test SQLite data")
 	}
 
-	m.loadFn = func(br *command.LoadRequest) error {
+	m.loadChunkFn = func(br *command.LoadChunkRequest) error {
 		return store.ErrNotLeader
 	}
 	clusterLoadCalled := false
-	c.loadFn = func(lr *command.LoadRequest, addr string, t time.Duration) error {
+	c.loadChunkFn = func(lr *command.LoadChunkRequest, addr string, t time.Duration) error {
 		clusterLoadCalled = true
 		return fmt.Errorf("the load failed")
 	}
@@ -1262,13 +1264,13 @@ func Test_timeoutQueryParam(t *testing.T) {
 }
 
 type MockStore struct {
-	executeFn  func(er *command.ExecuteRequest) ([]*command.ExecuteResult, error)
-	queryFn    func(qr *command.QueryRequest) ([]*command.QueryRows, error)
-	requestFn  func(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, error)
-	backupFn   func(br *command.BackupRequest, dst io.Writer) error
-	loadFn     func(lr *command.LoadRequest) error
-	leaderAddr string
-	notReady   bool // Default value is true, easier to test.
+	executeFn   func(er *command.ExecuteRequest) ([]*command.ExecuteResult, error)
+	queryFn     func(qr *command.QueryRequest) ([]*command.QueryRows, error)
+	requestFn   func(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, error)
+	backupFn    func(br *command.BackupRequest, dst io.Writer) error
+	loadChunkFn func(lr *command.LoadChunkRequest) error
+	leaderAddr  string
+	notReady    bool // Default value is true, easier to test.
 }
 
 func (m *MockStore) Execute(er *command.ExecuteRequest) ([]*command.ExecuteResult, error) {
@@ -1327,9 +1329,9 @@ func (m *MockStore) Backup(br *command.BackupRequest, w io.Writer) error {
 	return m.backupFn(br, w)
 }
 
-func (m *MockStore) Load(lr *command.LoadRequest) error {
-	if m.loadFn != nil {
-		return m.loadFn(lr)
+func (m *MockStore) LoadChunk(lc *command.LoadChunkRequest) error {
+	if m.loadChunkFn != nil {
+		return m.loadChunkFn(lc)
 	}
 	return nil
 }
@@ -1340,7 +1342,7 @@ type mockClusterService struct {
 	queryFn      func(qr *command.QueryRequest, addr string, t time.Duration) ([]*command.QueryRows, error)
 	requestFn    func(eqr *command.ExecuteQueryRequest, nodeAddr string, timeout time.Duration) ([]*command.ExecuteQueryResponse, error)
 	backupFn     func(br *command.BackupRequest, addr string, t time.Duration, w io.Writer) error
-	loadFn       func(lr *command.LoadRequest, addr string, t time.Duration) error
+	loadChunkFn  func(lc *command.LoadChunkRequest, addr string, t time.Duration) error
 	removeNodeFn func(rn *command.RemoveNodeRequest, nodeAddr string, t time.Duration) error
 }
 
@@ -1376,9 +1378,9 @@ func (m *mockClusterService) Backup(br *command.BackupRequest, addr string, cred
 	return nil
 }
 
-func (m *mockClusterService) Load(lr *command.LoadRequest, addr string, creds *cluster.Credentials, t time.Duration) error {
-	if m.loadFn != nil {
-		return m.loadFn(lr, addr, t)
+func (m *mockClusterService) LoadChunk(lc *command.LoadChunkRequest, addr string, creds *cluster.Credentials, t time.Duration) error {
+	if m.loadChunkFn != nil {
+		return m.loadChunkFn(lc, addr, t)
 	}
 	return nil
 }
@@ -1435,8 +1437,23 @@ func mustURLParse(s string) *url.URL {
 
 func mustParseDuration(d string) time.Duration {
 	if dur, err := time.ParseDuration(d); err != nil {
-		panic("failed to parse duration")
+		panic(fmt.Sprintf("failed to parse duration %s: %s", d, err))
 	} else {
 		return dur
 	}
+}
+
+func mustGunzip(b []byte) []byte {
+	r, err := gzip.NewReader(bytes.NewBuffer(b))
+	if err != nil {
+		panic(err)
+	}
+	defer r.Close()
+
+	dec, err := ioutil.ReadAll(r)
+	if err != nil {
+		panic(err)
+	}
+
+	return dec
 }

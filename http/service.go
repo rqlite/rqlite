@@ -3,6 +3,7 @@
 package http
 
 import (
+	"bufio"
 	"context"
 	"crypto/tls"
 	"encoding/json"
@@ -16,6 +17,7 @@ import (
 	"net/http/pprof"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -23,11 +25,16 @@ import (
 	"github.com/rqlite/rqlite/auth"
 	"github.com/rqlite/rqlite/cluster"
 	"github.com/rqlite/rqlite/command"
+	"github.com/rqlite/rqlite/command/chunking"
 	"github.com/rqlite/rqlite/command/encoding"
 	"github.com/rqlite/rqlite/db"
 	"github.com/rqlite/rqlite/queue"
 	"github.com/rqlite/rqlite/rtls"
 	"github.com/rqlite/rqlite/store"
+)
+
+const (
+	defaultChunkSize = 5 * 1024 * 1024 // 5 MB
 )
 
 var (
@@ -58,8 +65,8 @@ type Database interface {
 	// an Execute or Query request.
 	Request(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, error)
 
-	// Load loads a SQLite file into the system
-	Load(lr *command.LoadRequest) error
+	// LoadChunk loads a SQLite database into the node, chunk by chunk.
+	LoadChunk(lc *command.LoadChunkRequest) error
 }
 
 // Store is the interface the Raft-based database must implement.
@@ -72,7 +79,7 @@ type Store interface {
 	// Notify notifies this node that a node is available at addr.
 	Notify(nr *command.NotifyRequest) error
 
-	// RemoveNode removes the node from the cluster.
+	// Remove removes the node from the cluster.
 	Remove(rn *command.RemoveNodeRequest) error
 
 	// LeaderAddr returns the Raft address of the leader of the cluster.
@@ -108,8 +115,8 @@ type Cluster interface {
 	// Backup retrieves a backup from a remote node and writes to the io.Writer.
 	Backup(br *command.BackupRequest, nodeAddr string, creds *cluster.Credentials, timeout time.Duration, w io.Writer) error
 
-	// Load loads a SQLite database into the node.
-	Load(lr *command.LoadRequest, nodeAddr string, creds *cluster.Credentials, timeout time.Duration) error
+	// LoadChunk loads a SQLite database into the node, chunk by chunk.
+	LoadChunk(lc *command.LoadChunkRequest, nodeAddr string, creds *cluster.Credentials, timeout time.Duration) error
 
 	// RemoveNode removes a node from the cluster.
 	RemoveNode(rn *command.RemoveNodeRequest, nodeAddr string, creds *cluster.Credentials, timeout time.Duration) error
@@ -813,9 +820,10 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
 	s.lastBackup = time.Now()
 }
 
-// handleLoad loads the state contained in a .dump output. This API is different
-// from others in that it expects a raw file, not wrapped in any kind of JSON.
+// handleLoad loads the database from the given SQLite database file or SQLite dump.
 func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
+	startTime := time.Now()
+
 	if !s.CheckRequestPerm(r, auth.PermLoad) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
@@ -846,77 +854,39 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	b, err := io.ReadAll(r.Body)
+	chunkSz, err := chunkSizeParam(r, defaultChunkSize)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	r.Body.Close()
 
-	if db.IsValidSQLiteData(b) {
-		s.logger.Printf("SQLite database file detected as load data")
-		lr := &command.LoadRequest{
-			Data: b,
+	// Peek at the incoming bytes so we can determine if this is a SQLite database
+	validSQLite := false
+	bufReader := bufio.NewReader(r.Body)
+	peek, err := bufReader.Peek(db.SQLiteHeaderSize)
+	if err == nil {
+		validSQLite = db.IsValidSQLiteData(peek)
+		if validSQLite {
+			s.logger.Printf("SQLite database file detected as load data")
+			if db.IsWALModeEnabled(peek) {
+				s.logger.Printf("SQLite database file is in WAL mode - rejecting load request")
+				http.Error(w, `SQLite database file is in WAL mode - convert it to DELETE mode via 'PRAGMA journal_mode=DELETE'`,
+					http.StatusBadRequest)
+				return
+			}
 		}
 
-		if db.IsWALModeEnabled(b) {
-			s.logger.Printf("SQLite database file is in WAL mode - rejecting load request")
-			http.Error(w, `SQLite database file is in WAL mode - convert it to DELETE mode via 'PRAGMA journal_mode=DELETE'`,
-				http.StatusBadRequest)
+	}
+
+	if !validSQLite {
+		// Assume SQL text
+		b, err := io.ReadAll(bufReader)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		r.Body.Close()
 
-		err := s.store.Load(lr)
-		if err != nil && err != store.ErrNotLeader {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		} else if err != nil && err == store.ErrNotLeader {
-			if redirect {
-				leaderAPIAddr := s.LeaderAPIAddr()
-				if leaderAPIAddr == "" {
-					stats.Add(numLeaderNotFound, 1)
-					http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
-					return
-				}
-
-				redirect := s.FormRedirect(r, leaderAPIAddr)
-				http.Redirect(w, r, redirect, http.StatusMovedPermanently)
-				return
-			}
-
-			addr, err := s.store.LeaderAddr()
-			if err != nil {
-				http.Error(w, fmt.Sprintf("leader address: %s", err.Error()),
-					http.StatusInternalServerError)
-				return
-			}
-			if addr == "" {
-				stats.Add(numLeaderNotFound, 1)
-				http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
-				return
-			}
-
-			username, password, ok := r.BasicAuth()
-			if !ok {
-				username = ""
-			}
-
-			w.Header().Add(ServedByHTTPHeader, addr)
-			loadErr := s.cluster.Load(lr, addr, makeCredentials(username, password), timeout)
-			if loadErr != nil {
-				if loadErr.Error() == "unauthorized" {
-					http.Error(w, "remote load not authorized", http.StatusUnauthorized)
-				} else {
-					http.Error(w, loadErr.Error(), http.StatusInternalServerError)
-				}
-				return
-			}
-			stats.Add(numRemoteLoads, 1)
-			// Allow this if block to exit, so response remains as before request
-			// forwarding was put in place.
-		}
-	} else {
-		// No JSON structure expected for this API.
 		queries := []string{string(b)}
 		er := executeRequestFromStrings(queries, timings, false)
 
@@ -939,7 +909,73 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 			resp.Results.ExecuteResult = results
 		}
 		resp.end = time.Now()
+	} else {
+		chunker := chunking.NewChunker(bufReader, int64(chunkSz))
+		for {
+			chunk, err := chunker.Next()
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusServiceUnavailable)
+				return
+			}
+			err = s.store.LoadChunk(chunk)
+			if err != nil && err != store.ErrNotLeader {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			} else if err != nil && err == store.ErrNotLeader {
+				if redirect {
+					leaderAPIAddr := s.LeaderAPIAddr()
+					if leaderAPIAddr == "" {
+						stats.Add(numLeaderNotFound, 1)
+						http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+						return
+					}
+
+					redirect := s.FormRedirect(r, leaderAPIAddr)
+					http.Redirect(w, r, redirect, http.StatusMovedPermanently)
+					return
+				}
+
+				addr, err := s.store.LeaderAddr()
+				if err != nil {
+					http.Error(w, fmt.Sprintf("leader address: %s", err.Error()),
+						http.StatusInternalServerError)
+					return
+				}
+				if addr == "" {
+					stats.Add(numLeaderNotFound, 1)
+					http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+					return
+				}
+
+				username, password, ok := r.BasicAuth()
+				if !ok {
+					username = ""
+				}
+
+				w.Header().Add(ServedByHTTPHeader, addr)
+				loadErr := s.cluster.LoadChunk(chunk, addr, makeCredentials(username, password), timeout)
+				if loadErr != nil {
+					if loadErr.Error() == "unauthorized" {
+						http.Error(w, "remote load not authorized", http.StatusUnauthorized)
+					} else {
+						http.Error(w, loadErr.Error(), http.StatusInternalServerError)
+					}
+					return
+				}
+				stats.Add(numRemoteLoads, 1)
+				// Allow this if block to exit, so response remains as before request
+				// forwarding was put in place.
+			}
+			if chunk.IsLast {
+				nChunks, nr, nw := chunker.Counts()
+				s.logger.Printf("%d bytes read, %d chunks generated, containing %d bytes of compressed data (compression ratio %.2f)",
+					nr, nChunks, nw, float64(nr)/float64(nw))
+				break
+			}
+		}
 	}
+
+	s.logger.Printf("load request completed in %s", time.Now().Sub(startTime).String())
 	s.writeResponse(w, r, resp)
 }
 
@@ -2041,6 +2077,19 @@ func timeoutParam(req *http.Request, def time.Duration) (time.Duration, error) {
 		return 0, err
 	}
 	return t, nil
+}
+
+func chunkSizeParam(req *http.Request, defSz int) (int, error) {
+	q := req.URL.Query()
+	chunkSize := strings.TrimSpace(q.Get("chunk_kb"))
+	if chunkSize == "" {
+		return defSz, nil
+	}
+	sz, err := strconv.Atoi(chunkSize)
+	if err != nil {
+		return defSz, nil
+	}
+	return sz * 1024, nil
 }
 
 // isTx returns whether the HTTP request is requesting a transaction.

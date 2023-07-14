@@ -2041,31 +2041,34 @@ func applyCommand(data []byte, pDB **sql.DB, decMgmr *chunking.DechunkerManager)
 				return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to close dechunker: %s", err)}
 			}
 			decMgmr.Delete(lcr.StreamId)
+			defer os.Remove(path)
 
-			// Read all the data at path into a byte slice.
-			b, err := ioutil.ReadFile(path)
-			if err != nil {
-				return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to read chunked data: %s", err)}
+			// Close the underlying database before we overwrite it.
+			if err := db.Close(); err != nil {
+				return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to close post-load database: %s", err)}
 			}
-			os.Remove(path)
 
 			var newDB *sql.DB
 			if db.InMemory() {
+				b, err := ioutil.ReadFile(path)
+				if err != nil {
+					return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to read chunked data: %s", err)}
+				}
 				newDB, err = createInMemory(b, db.FKEnabled())
 				if err != nil {
 					return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to create in-memory database: %s", err)}
 				}
 			} else {
-				newDB, err = createOnDisk(b, db.Path(), db.FKEnabled(), db.WALEnabled())
+				if err := os.Rename(path, db.Path()); err != nil {
+					return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to rename temporary database file: %s", err)}
+				}
+				newDB, err = sql.Open(db.Path(), db.FKEnabled(), db.WALEnabled())
 				if err != nil {
-					return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to create on-disk database: %s", err)}
+					return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to open new on-disk database: %s", err)}
 				}
 			}
 
 			// Swap the underlying database to the new one.
-			if err := db.Close(); err != nil {
-				return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to close post-load database: %s", err)}
-			}
 			*pDB = newDB
 		}
 		return c.Type, &fsmGenericResponse{}

@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	internalChunkSize = 512 * 1024
+	internalChunkSize = 1024 * 1024
 )
 
 // Define a sync.Pool to pool the buffers.
@@ -26,7 +26,7 @@ var bufferPool = sync.Pool{
 // Define a sync.Pool to pool the gzip writers.
 var gzipWriterPool = sync.Pool{
 	New: func() interface{} {
-		gw, err := gzip.NewWriterLevel(nil, gzip.BestCompression)
+		gw, err := gzip.NewWriterLevel(nil, gzip.BestSpeed)
 		if err != nil {
 			panic(fmt.Sprintf("failed to create gzip writer: %s", err.Error()))
 		}
@@ -37,18 +37,22 @@ var gzipWriterPool = sync.Pool{
 // Chunker is a reader that reads from an underlying io.Reader and returns
 // LoadChunkRequests of a given size.
 type Chunker struct {
-	r           io.Reader
+	r *CountingReader
+
 	chunkSize   int64
 	streamID    string
 	sequenceNum int64
 	finished    bool
+
+	statsMu  sync.Mutex
+	nWritten int64
 }
 
 // NewChunker returns a new Chunker that reads from r and returns
 // LoadChunkRequests of size chunkSize.
 func NewChunker(r io.Reader, chunkSize int64) *Chunker {
 	return &Chunker{
-		r:         r,
+		r:         NewCountingReader(r),
 		chunkSize: chunkSize,
 		streamID:  generateStreamID(),
 	}
@@ -67,6 +71,9 @@ func generateStreamID() string {
 
 // Next returns the next LoadChunkRequest, or io.EOF if finished.
 func (c *Chunker) Next() (*command.LoadChunkRequest, error) {
+	c.statsMu.Lock()
+	defer c.statsMu.Unlock()
+
 	if c.finished {
 		return nil, io.EOF
 	}
@@ -110,6 +117,7 @@ func (c *Chunker) Next() (*command.LoadChunkRequest, error) {
 	if err := gw.Close(); err != nil {
 		return nil, errors.New("failed to close gzip writer: " + err.Error())
 	}
+	c.nWritten += int64(buf.Len())
 
 	// If we didn't read any data, then we're finished
 	if totalRead == 0 {
@@ -133,6 +141,13 @@ func (c *Chunker) Next() (*command.LoadChunkRequest, error) {
 		IsLast:      totalRead < c.chunkSize,
 		Data:        buf.Bytes(),
 	}, nil
+}
+
+// Counts returns the number of chunks generated, bytes read, and bytes written.
+func (c *Chunker) Counts() (int64, int64, int64) {
+	c.statsMu.Lock()
+	defer c.statsMu.Unlock()
+	return c.sequenceNum, c.r.Count(), c.nWritten
 }
 
 func min(a, b int64) int64 {
