@@ -1021,7 +1021,7 @@ COMMIT;
 		t.Fatalf("failed to open SQLite file: %s", err.Error())
 	}
 	defer f.Close()
-	err = s.LoadFromReader(f)
+	err = s.LoadFromReader(f, 1024*1024)
 	if err != nil {
 		t.Fatalf("failed to load SQLite file via Reader: %s", err.Error())
 	}

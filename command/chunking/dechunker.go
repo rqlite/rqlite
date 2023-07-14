@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sync"
 
 	"github.com/rqlite/rqlite/command"
 )
@@ -67,4 +68,54 @@ func (d *Dechunker) Close() (string, error) {
 		return "", fmt.Errorf("failed to close file: %v", err)
 	}
 	return d.filePath, nil
+}
+
+// DechunkerManager manages Dechunkers.
+type DechunkerManager struct {
+	dir string
+	mu  sync.Mutex
+	m   map[string]*Dechunker
+}
+
+// NewDechunkerManager returns a new DechunkerManager.
+func NewDechunkerManager(dir string) (*DechunkerManager, error) {
+	// Test that we can use the given directory.
+	file, err := os.CreateTemp(dir, "dechunker-manager-test-*")
+	if err != nil {
+		return nil, fmt.Errorf("failed to test file in dir %s: %v", dir, err)
+	}
+	file.Close()
+	os.Remove(file.Name())
+
+	return &DechunkerManager{
+		dir: dir,
+	}, nil
+}
+
+// Get returns the Dechunker for the given stream ID. If the Dechunker does not
+// exist, it is created.
+func (d *DechunkerManager) Get(id string) (*Dechunker, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	if d.m == nil {
+		d.m = make(map[string]*Dechunker)
+	}
+
+	if _, ok := d.m[id]; !ok {
+		dechunker, err := NewDechunker(d.dir)
+		if err != nil {
+			return nil, err
+		}
+		d.m[id] = dechunker
+	}
+
+	return d.m[id], nil
+}
+
+// Delete deletes the Dechunker for the given stream ID.
+func (d *DechunkerManager) Delete(id string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	delete(d.m, id)
 }

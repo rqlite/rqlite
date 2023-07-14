@@ -124,6 +124,7 @@ message Command {
         COMMAND_TYPE_LOAD = 4;
         COMMAND_TYPE_JOIN = 5;
 		COMMAND_TYPE_EXECUTE_QUERY = 6;
+		COMMAND_TYPE_LOAD_CHUNK = 7;
     }
     Type type = 1;
     bytes sub_command = 2;
