@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	internalChunkSize = 512 * 1024
+	internalChunkSize = 1024 * 1024
 )
 
 // Define a sync.Pool to pool the buffers.
