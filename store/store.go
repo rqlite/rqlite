@@ -1101,11 +1101,7 @@ func (s *Store) Request(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQue
 	return r.results, r.error
 }
 
-// Backup writes a snapshot of the underlying database to dst
-//
-// If Leader is true for the request, this operation is performed with a read consistency
-// level equivalent to "weak". Otherwise, no guarantees are made about the read consistency
-// level. This function is safe to call while the database is being changed.
+// Backup writes a consistent snapshot of the underlying database to dst.
 func (s *Store) Backup(br *command.BackupRequest, dst io.Writer) (retErr error) {
 	if !s.open {
 		return ErrNotOpen
