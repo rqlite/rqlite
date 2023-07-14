@@ -967,6 +967,9 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 				// forwarding was put in place.
 			}
 			if chunk.IsLast {
+				nChunks, nr, nw := chunker.Counts()
+				s.logger.Printf("%d bytes read, %d chunks generated, containing %d bytes of compressed data",
+					nr, nChunks, nw)
 				break
 			}
 		}
