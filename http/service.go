@@ -79,7 +79,7 @@ type Store interface {
 	// Notify notifies this node that a node is available at addr.
 	Notify(nr *command.NotifyRequest) error
 
-	// RemoveNode removes the node from the cluster.
+	// Remove removes the node from the cluster.
 	Remove(rn *command.RemoveNodeRequest) error
 
 	// LeaderAddr returns the Raft address of the leader of the cluster.
