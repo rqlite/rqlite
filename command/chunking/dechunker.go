@@ -2,12 +2,12 @@ package chunking
 
 import (
 	"bytes"
-	"compress/gzip"
 	"fmt"
 	"io"
 	"os"
 	"sync"
 
+	"github.com/golang/snappy"
 	"github.com/rqlite/rqlite/command"
 )
 
@@ -48,13 +48,9 @@ func (d *Dechunker) WriteChunk(chunk *command.LoadChunkRequest) (bool, error) {
 
 	if chunk.Data != nil {
 		buf := bytes.NewBuffer(chunk.Data)
-		gzw, err := gzip.NewReader(buf)
-		if err != nil {
-			return false, fmt.Errorf("failed to create gzip reader: %v", err)
-		}
-		defer gzw.Close()
+		snr := snappy.NewReader(buf)
 
-		if _, err := io.Copy(d.file, gzw); err != nil {
+		if _, err := io.Copy(d.file, snr); err != nil {
 			return false, fmt.Errorf("failed to write decompressed data to file: %v", err)
 		}
 	}

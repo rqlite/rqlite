@@ -2,13 +2,13 @@ package chunking
 
 import (
 	"bytes"
-	"compress/gzip"
 	"crypto/rand"
 	"errors"
 	"fmt"
 	"io"
 	"sync"
 
+	"github.com/golang/snappy"
 	"github.com/rqlite/rqlite/command"
 )
 
@@ -23,14 +23,10 @@ var bufferPool = sync.Pool{
 	},
 }
 
-// Define a sync.Pool to pool the gzip writers.
-var gzipWriterPool = sync.Pool{
+// Define a sync.Pool to pool the snappy writers.
+var snappyWriterPool = sync.Pool{
 	New: func() interface{} {
-		gw, err := gzip.NewWriterLevel(nil, gzip.BestSpeed)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create gzip writer: %s", err.Error()))
-		}
-		return gw
+		return snappy.NewBufferedWriter(nil)
 	},
 }
 
@@ -83,23 +79,20 @@ func (c *Chunker) Next() (*command.LoadChunkRequest, error) {
 	buf.Reset()
 	defer bufferPool.Put(buf)
 
-	// Get a gzip.Writer from the pool.
-	gw := gzipWriterPool.Get().(*gzip.Writer)
-	defer gzipWriterPool.Put(gw)
+	sw := snappyWriterPool.Get().(*snappy.Writer)
+	defer snappyWriterPool.Put(sw)
 
-	// Reset the gzip.Writer to use the buffer.
-	gw.Reset(buf)
+	sw.Reset(buf)
 
 	// Create an intermediate buffer to read into
 	intermediateBuffer := make([]byte, min(internalChunkSize, c.chunkSize))
 
-	// Read data into intermediate buffer and write to gzip.Writer
 	var totalRead int64 = 0
 	for totalRead < c.chunkSize {
 		n, err := c.r.Read(intermediateBuffer)
 		totalRead += int64(n)
 		if n > 0 {
-			if _, err = gw.Write(intermediateBuffer[:n]); err != nil {
+			if _, err = sw.Write(intermediateBuffer[:n]); err != nil {
 				return nil, err
 			}
 		}
@@ -113,9 +106,8 @@ func (c *Chunker) Next() (*command.LoadChunkRequest, error) {
 		}
 	}
 
-	// Close the gzip.Writer to ensure all data is written to the buffer
-	if err := gw.Close(); err != nil {
-		return nil, errors.New("failed to close gzip writer: " + err.Error())
+	if err := sw.Close(); err != nil {
+		return nil, errors.New("failed to close snappy writer: " + err.Error())
 	}
 	c.nWritten += int64(buf.Len())
 
