@@ -822,6 +822,8 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
 
 // handleLoad loads the database from the given SQLite database file or SQLite dump.
 func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
+	startTime := time.Now()
+
 	if !s.CheckRequestPerm(r, auth.PermLoad) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
@@ -970,6 +972,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	s.logger.Printf("load request completed in %s", time.Now().Sub(startTime).String())
 	s.writeResponse(w, r, resp)
 }
 
