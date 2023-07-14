@@ -1437,7 +1437,7 @@ func mustURLParse(s string) *url.URL {
 
 func mustParseDuration(d string) time.Duration {
 	if dur, err := time.ParseDuration(d); err != nil {
-		panic("failed to parse duration")
+		panic(fmt.Sprintf("failed to parse duration %s: %s", d, err))
 	} else {
 		return dur
 	}

@@ -17,6 +17,7 @@ import (
 	"net/http/pprof"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -2067,7 +2068,7 @@ func timeoutParam(req *http.Request, def time.Duration) (time.Duration, error) {
 	}
 	t, err := time.ParseDuration(timeout)
 	if err != nil {
-		return def, nil
+		return 0, err
 	}
 	return t, nil
 }
