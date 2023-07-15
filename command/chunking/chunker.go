@@ -284,6 +284,6 @@ func sortChunks(firstSeqNum int64, compressedCh <-chan *command.LoadChunkRequest
 	}
 }
 
-func (c *ParallelChunker) Counts() (int64, int64, int64) {
+func (c *ParallelChunker) Counts() (int64, int64, int64) { /// XXXX needs work
 	return c.sequenceNum, c.r.Count(), 0
 }

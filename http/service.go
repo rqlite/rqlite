@@ -34,7 +34,7 @@ import (
 )
 
 const (
-	defaultChunkSize = 5 * 1024 * 1024 // 5 MB
+	defaultChunkSize = 32 * 1024 * 1024
 )
 
 var (
@@ -910,9 +910,9 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 		}
 		resp.end = time.Now()
 	} else {
-		chunker := chunking.NewChunker(bufReader, int64(chunkSz))
-		for {
-			chunk, err := chunker.Next()
+		chunker := chunking.NewParallelChunker(bufReader, int64(chunkSz), 8, chunking.Gzip)
+		chunksCh := chunker.Start()
+		for chunk := range chunksCh {
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusServiceUnavailable)
 				return
