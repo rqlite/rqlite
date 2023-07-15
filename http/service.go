@@ -839,7 +839,6 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "content-length header must be set", http.StatusLengthRequired)
 		return
 	}
-	fmt.Println(">>>>>>content length", r.ContentLength)
 
 	resp := NewResponse()
 

@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
+	"os"
 	"sort"
 	"sync"
 
@@ -183,6 +185,8 @@ type ParallelChunker struct {
 
 	writtenMu sync.Mutex
 	nWritten  int64
+
+	logger *log.Logger
 }
 
 // NewParallelChunker returns a new ParallelChunker that reads from r and returns
@@ -194,6 +198,7 @@ func NewParallelChunker(r io.Reader, chunkSz int64, parallelism int, comp comman
 		parallelism: parallelism,
 		compAlgo:    comp,
 		streamID:    generateStreamID(),
+		logger:      log.New(os.Stderr, "[chunker] ", log.LstdFlags),
 	}
 }
 
@@ -221,10 +226,10 @@ func (c *ParallelChunker) readChunks(out chan<- *command.LoadChunkRequest) {
 					buf := new(bytes.Buffer)
 					gw := gzip.NewWriter(buf)
 					if _, err := gw.Write(chunk.Data); err != nil {
-						panic(err)
+						c.logger.Printf("error writing gzip chunk: %s", err.Error())
 					}
 					if err := gw.Close(); err != nil {
-						panic(err)
+						c.logger.Printf("error closing gzip writer: %s", err.Error())
 					}
 					chunk.Data = buf.Bytes()
 					chunk.Compression = command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_GZIP
@@ -232,15 +237,15 @@ func (c *ParallelChunker) readChunks(out chan<- *command.LoadChunkRequest) {
 					buf := new(bytes.Buffer)
 					sw := snappy.NewBufferedWriter(buf)
 					if _, err := sw.Write(chunk.Data); err != nil {
-						panic(err)
+						c.logger.Printf("error writing to snappy writer: %s", err.Error())
 					}
 					if err := sw.Close(); err != nil {
-						panic(err)
+						c.logger.Printf("error closing snappy writer: %s", err.Error())
 					}
 					chunk.Data = buf.Bytes()
 					chunk.Compression = command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_SNAPPY
 				default:
-					panic("unknown compression algorithm")
+					c.logger.Printf("unknown compression algorithm: %d", c.compAlgo)
 				}
 
 				c.writtenMu.Lock()
@@ -258,7 +263,7 @@ func (c *ParallelChunker) readChunks(out chan<- *command.LoadChunkRequest) {
 		buf := new(bytes.Buffer)
 		n, err := io.CopyN(buf, c.r, c.chunkSize)
 		if err != nil && err != io.EOF {
-			panic(err)
+			c.logger.Printf("error reading chunk: %s", err.Error())
 		}
 
 		c.sequenceNum++
