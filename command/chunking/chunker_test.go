@@ -37,6 +37,7 @@ func Test_ChunkerEmptyReader(t *testing.T) {
 func Test_ChunkerSingleChunk(t *testing.T) {
 	data := []byte("Hello, world!")
 	chunker := NewChunker(bytes.NewReader(data), 32)
+	chunker.SetExpectedSize(int64(len(data)))
 
 	chunk, err := chunker.Next()
 	if err != nil {
@@ -63,6 +64,9 @@ func Test_ChunkerSingleChunk(t *testing.T) {
 
 	if decompressed.String() != string(data) {
 		t.Errorf("unexpected chunk data: got %s, want %s", decompressed.String(), string(data))
+	}
+	if got, exp := chunk.TotalUncompressedSize, int64(len(decompressed.Bytes())); got != exp {
+		t.Errorf("unexpected ExpectedSize value: got %v, want %v", got, exp)
 	}
 
 	// After all chunks are read, Next should return nil, io.EOF

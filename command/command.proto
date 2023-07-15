@@ -100,7 +100,8 @@ message LoadChunkRequest {
 	int64 sequence_num = 2;
 	bool is_last = 3;
 	Compression compression = 4;
-	bytes data = 5;
+	int64 total_uncompressed_size = 5;
+	bytes data = 6;
 }
 
 message JoinRequest {

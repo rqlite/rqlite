@@ -2043,6 +2043,15 @@ func applyCommand(data []byte, pDB **sql.DB, decMgmr *chunking.DechunkerManager)
 			decMgmr.Delete(lcr.StreamId)
 			defer os.Remove(path)
 
+			stat, err := os.Stat(path)
+			if err != nil {
+				return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to stat data: %s", err)}
+			}
+			if stat.Size() != lcr.TotalUncompressedSize {
+				return c.Type, &fsmGenericResponse{error: fmt.Errorf("data size mismatch: %d != %d",
+					stat.Size(), lcr.TotalUncompressedSize)}
+			}
+
 			// Close the underlying database before we overwrite it.
 			if err := db.Close(); err != nil {
 				return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to close post-load database: %s", err)}

@@ -57,6 +57,8 @@ type Chunker struct {
 	sequenceNum int64
 	finished    bool
 
+	expectedSize int64
+
 	statsMu  sync.Mutex
 	nWritten int64
 }
@@ -65,10 +67,18 @@ type Chunker struct {
 // LoadChunkRequests of size chunkSize.
 func NewChunker(r io.Reader, chunkSize int64) *Chunker {
 	return &Chunker{
-		r:         NewCountingReader(r),
-		chunkSize: chunkSize,
-		streamID:  generateStreamID(),
+		r:            NewCountingReader(r),
+		chunkSize:    chunkSize,
+		streamID:     generateStreamID(),
+		expectedSize: -1,
 	}
+}
+
+// SetExpectedSize sets the expected size of the final data set
+// to be streamed. This is used to determine if all the data has
+// been streamed.
+func (c *Chunker) SetExpectedSize(sz int64) {
+	c.expectedSize = sz
 }
 
 func generateStreamID() string {
@@ -140,21 +150,23 @@ func (c *Chunker) Next() (*command.LoadChunkRequest, error) {
 		}
 		// If previous chunks were sent, return a final empty chunk with IsLast = true
 		return &command.LoadChunkRequest{
-			StreamId:    c.streamID,
-			SequenceNum: c.sequenceNum + 1,
-			IsLast:      true,
-			Compression: command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_GZIP,
-			Data:        nil,
+			StreamId:              c.streamID,
+			SequenceNum:           c.sequenceNum + 1,
+			IsLast:                true,
+			TotalUncompressedSize: c.expectedSize,
+			Compression:           command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_GZIP,
+			Data:                  nil,
 		}, nil
 	}
 
 	c.sequenceNum++
 	return &command.LoadChunkRequest{
-		StreamId:    c.streamID,
-		SequenceNum: c.sequenceNum,
-		IsLast:      totalRead < c.chunkSize,
-		Compression: command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_GZIP,
-		Data:        buf.Bytes(),
+		StreamId:              c.streamID,
+		SequenceNum:           c.sequenceNum,
+		IsLast:                totalRead < c.chunkSize,
+		TotalUncompressedSize: c.expectedSize,
+		Compression:           command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_GZIP,
+		Data:                  buf.Bytes(),
 	}, nil
 }
 
@@ -186,6 +198,8 @@ type ParallelChunker struct {
 	writtenMu sync.Mutex
 	nWritten  int64
 
+	expectedSize int64
+
 	logger *log.Logger
 }
 
@@ -193,19 +207,29 @@ type ParallelChunker struct {
 // LoadChunkRequests of size chunkSize.
 func NewParallelChunker(r io.Reader, chunkSz int64, parallelism int, comp command.LoadChunkRequest_Compression) *ParallelChunker {
 	return &ParallelChunker{
-		r:           NewCountingReader(r),
-		chunkSize:   chunkSz,
-		parallelism: parallelism,
-		compAlgo:    comp,
-		streamID:    generateStreamID(),
-		logger:      log.New(os.Stderr, "[chunker] ", log.LstdFlags),
+		r:            NewCountingReader(r),
+		chunkSize:    chunkSz,
+		parallelism:  parallelism,
+		compAlgo:     comp,
+		streamID:     generateStreamID(),
+		expectedSize: -1,
+		logger:       log.New(os.Stderr, "[chunker] ", log.LstdFlags),
 	}
 }
 
+// Start starts the chunker, returning a channel on which to receive
+// LoadChunkRequests.
 func (c *ParallelChunker) Start() <-chan *command.LoadChunkRequest {
 	out := make(chan *command.LoadChunkRequest)
 	go c.readChunks(out)
 	return out
+}
+
+// SetExpectedSize sets the expected size of the final data set
+// to be streamed. This is used to determine if all the data has
+// been streamed.
+func (c *ParallelChunker) SetExpectedSize(sz int64) {
+	c.expectedSize = sz
 }
 
 func (c *ParallelChunker) readChunks(out chan<- *command.LoadChunkRequest) {
@@ -268,10 +292,11 @@ func (c *ParallelChunker) readChunks(out chan<- *command.LoadChunkRequest) {
 
 		c.sequenceNum++
 		chunk := &command.LoadChunkRequest{
-			StreamId:    c.streamID,
-			SequenceNum: c.sequenceNum,
-			IsLast:      n < c.chunkSize,
-			Data:        buf.Bytes(),
+			StreamId:              c.streamID,
+			SequenceNum:           c.sequenceNum,
+			IsLast:                n < c.chunkSize,
+			TotalUncompressedSize: c.expectedSize,
+			Data:                  buf.Bytes(),
 		}
 		toCompressCh <- chunk
 

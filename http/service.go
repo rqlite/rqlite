@@ -924,6 +924,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 	} else {
 		chunker := chunking.NewParallelChunker(bufReader, int64(chunkSz), parallelism,
 			command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_SNAPPY)
+		chunker.SetExpectedSize(r.ContentLength)
 		chunksCh := chunker.Start()
 		for chunk := range chunksCh {
 			if err != nil {
