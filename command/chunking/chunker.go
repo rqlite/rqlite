@@ -180,6 +180,9 @@ type ParallelChunker struct {
 
 	streamID    string
 	sequenceNum int64
+
+	writtenMu sync.Mutex
+	nWritten  int64
 }
 
 // NewParallelChunker returns a new ParallelChunker that reads from r and returns
@@ -191,7 +194,6 @@ func NewParallelChunker(r io.Reader, chunkSz int64, parallelism int, comp comman
 		parallelism: parallelism,
 		compAlgo:    comp,
 		streamID:    generateStreamID(),
-		sequenceNum: 1,
 	}
 }
 
@@ -241,6 +243,9 @@ func (c *ParallelChunker) readChunks(out chan<- *command.LoadChunkRequest) {
 					panic("unknown compression algorithm")
 				}
 
+				c.writtenMu.Lock()
+				c.nWritten += int64(len(chunk.Data))
+				c.writtenMu.Unlock()
 				compressedCh <- chunk
 			}
 		}()
@@ -248,8 +253,7 @@ func (c *ParallelChunker) readChunks(out chan<- *command.LoadChunkRequest) {
 
 	// Run the goroutine that reads from the compressor goroutines and
 	// ensures the chunks are sent in order.
-	go sortChunks(c.sequenceNum, compressedCh, out)
-
+	go sortChunks(c.sequenceNum+1, compressedCh, out)
 	for {
 		buf := new(bytes.Buffer)
 		n, err := io.CopyN(buf, c.r, c.chunkSize)
@@ -257,6 +261,7 @@ func (c *ParallelChunker) readChunks(out chan<- *command.LoadChunkRequest) {
 			panic(err)
 		}
 
+		c.sequenceNum++
 		chunk := &command.LoadChunkRequest{
 			StreamId:    c.streamID,
 			SequenceNum: c.sequenceNum,
@@ -264,7 +269,6 @@ func (c *ParallelChunker) readChunks(out chan<- *command.LoadChunkRequest) {
 			Data:        buf.Bytes(),
 		}
 		toCompressCh <- chunk
-		c.sequenceNum++
 
 		if chunk.IsLast {
 			break
@@ -297,6 +301,6 @@ func sortChunks(firstSeqNum int64, compressedCh <-chan *command.LoadChunkRequest
 	}
 }
 
-func (c *ParallelChunker) Counts() (int64, int64, int64) { /// XXXX needs work
-	return c.sequenceNum, c.r.Count(), 0
+func (c *ParallelChunker) Counts() (int64, int64, int64) {
+	return c.sequenceNum, c.r.Count(), c.nWritten
 }
