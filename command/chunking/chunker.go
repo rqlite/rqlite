@@ -17,7 +17,7 @@ const (
 	internalChunkSize = 1024 * 1024
 )
 
-// Compression is the type of compression to use.
+// Compression is the type of compression to use. XXX move to protos!
 type Compression int
 
 const (
@@ -203,8 +203,34 @@ func (c *ParallelChunker) readChunks(out chan<- *command.LoadChunkRequest) {
 	compressedCh := make(chan *command.LoadChunkRequest, c.parallelism)
 
 	// Start the parallel compressor goroutines.
+	wg := sync.WaitGroup{}
 	for i := 0; i < c.parallelism; i++ {
-		go compressChunks(toCompressCh, compressedCh, c.compAlgo)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for chunk := range toCompressCh {
+				switch c.compAlgo {
+				case None:
+					// Nothing to do
+				case Gzip:
+					buf := new(bytes.Buffer)
+					gw := gzip.NewWriter(buf)
+					if _, err := gw.Write(chunk.Data); err != nil {
+						panic(err)
+					}
+					if err := gw.Close(); err != nil {
+						panic(err)
+					}
+					chunk.Data = buf.Bytes()
+				case Snappy:
+					panic("snappy compression not implemented")
+				default:
+					panic("unknown compression algorithm")
+				}
+
+				compressedCh <- chunk
+			}
+		}()
 	}
 
 	// Run the goroutine that reads from the compressor goroutines and
@@ -232,31 +258,8 @@ func (c *ParallelChunker) readChunks(out chan<- *command.LoadChunkRequest) {
 		}
 	}
 	close(toCompressCh)
-}
-
-func compressChunks(toCompressCh <-chan *command.LoadChunkRequest, compressedCh chan<- *command.LoadChunkRequest, comp Compression) {
-	for chunk := range toCompressCh {
-		switch comp {
-		case None:
-			// Nothing to do
-		case Gzip:
-			buf := new(bytes.Buffer)
-			gw := gzip.NewWriter(buf)
-			if _, err := gw.Write(chunk.Data); err != nil {
-				panic(err)
-			}
-			if err := gw.Close(); err != nil {
-				panic(err)
-			}
-			chunk.Data = buf.Bytes()
-		case Snappy:
-			panic("snappy compression not implemented")
-		default:
-			panic("unknown compression algorithm")
-		}
-
-		compressedCh <- chunk
-	}
+	wg.Wait()
+	close(compressedCh)
 }
 
 func sortChunks(firstSeqNum int64, compressedCh <-chan *command.LoadChunkRequest, out chan<- *command.LoadChunkRequest) {

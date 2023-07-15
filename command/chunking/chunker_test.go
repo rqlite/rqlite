@@ -244,12 +244,11 @@ func Test_ChunkerReaderError(t *testing.T) {
 	}
 }
 
-func Test_ParallelChunker_SingleChunkSingleCompressor(t *testing.T) {
+func test_ParallelChunk_SingleChunk(t *testing.T, numCompressors int) {
 	data := []byte("Hello, world!")
 	chunkSize := int64(32)
-	parallelism := 1
 
-	chunker := NewParallelChunker(bytes.NewReader(data), chunkSize, parallelism, Gzip)
+	chunker := NewParallelChunker(bytes.NewReader(data), chunkSize, numCompressors, Gzip)
 	ch := chunker.Start()
 
 	var expectedChunks []*command.LoadChunkRequest
@@ -274,12 +273,20 @@ func Test_ParallelChunker_SingleChunkSingleCompressor(t *testing.T) {
 	}
 }
 
-func Test_ParallelChunker_MultiChunkSingleCompressor(t *testing.T) {
+func Test_ParallelChunker_SingleChunk(t *testing.T) {
+	t.Run("SingleCompressor", func(t *testing.T) {
+		test_ParallelChunk_SingleChunk(t, 1)
+	})
+	t.Run("MultiCompressor", func(t *testing.T) {
+		test_ParallelChunk_SingleChunk(t, 8)
+	})
+}
+
+func test_ParallelChunk_MultiChunk(t *testing.T, numCompressors int) {
 	data := []byte("Hello, world!")
 	chunkSize := int64(5)
-	parallelism := 1
 
-	chunker := NewParallelChunker(bytes.NewReader(data), chunkSize, parallelism, Gzip)
+	chunker := NewParallelChunker(bytes.NewReader(data), chunkSize, numCompressors, Gzip)
 	ch := chunker.Start()
 
 	expectedChunksData := []string{
@@ -313,43 +320,13 @@ func Test_ParallelChunker_MultiChunkSingleCompressor(t *testing.T) {
 	}
 }
 
-func Test_ParallelChunker_MultiChunkMultiCompressor(t *testing.T) {
-	data := []byte("Hello, world!")
-	chunkSize := int64(5)
-	parallelism := 8
-
-	chunker := NewParallelChunker(bytes.NewReader(data), chunkSize, parallelism, Gzip)
-	ch := chunker.Start()
-
-	expectedChunksData := []string{
-		"Hello",
-		", wor",
-		"ld!",
-	}
-
-	var receivedChunks []*command.LoadChunkRequest
-	for chunk := range ch {
-		receivedChunks = append(receivedChunks, chunk)
-	}
-	if len(receivedChunks) != len(expectedChunksData) {
-		t.Fatalf("unexpected number of chunks: got %d, want %d", len(receivedChunks), len(expectedChunksData))
-	}
-
-	for i, chunk := range receivedChunks {
-		if chunk.SequenceNum != int64(i+1) {
-			t.Errorf("unexpected sequence number: got %d, want %d", chunk.SequenceNum, i+1)
-		}
-
-		expectedIsLast := i == len(expectedChunksData)-1
-		if chunk.IsLast != expectedIsLast {
-			t.Errorf("unexpected IsLast value: got %v, want %v", chunk.IsLast, expectedIsLast)
-		}
-
-		decompressed := mustGunzip(t, chunk.Data)
-		if string(decompressed) != expectedChunksData[i] {
-			t.Errorf("unexpected chunk data: got %s, want %s", string(decompressed), expectedChunksData[i])
-		}
-	}
+func Test_ParallelChunker_MultiChunk(t *testing.T) {
+	t.Run("SingleCompressor", func(t *testing.T) {
+		test_ParallelChunk_MultiChunk(t, 1)
+	})
+	t.Run("MultiCompressor", func(t *testing.T) {
+		test_ParallelChunk_MultiChunk(t, 8)
+	})
 }
 
 func mustGunzip(t *testing.T, data []byte) []byte {
