@@ -7,6 +7,7 @@ import (
 	"io"
 	"testing"
 
+	"github.com/golang/snappy"
 	"github.com/rqlite/rqlite/command"
 )
 
@@ -244,11 +245,11 @@ func Test_ChunkerReaderError(t *testing.T) {
 	}
 }
 
-func test_ParallelChunk_SingleChunk(t *testing.T, numCompressors int) {
+func test_ParallelChunk_SingleChunk(t *testing.T, numCompressors int, comp command.LoadChunkRequest_Compression) {
 	data := []byte("Hello, world!")
 	chunkSize := int64(32)
 
-	chunker := NewParallelChunker(bytes.NewReader(data), chunkSize, numCompressors, Gzip)
+	chunker := NewParallelChunker(bytes.NewReader(data), chunkSize, numCompressors, comp)
 	ch := chunker.Start()
 
 	var expectedChunks []*command.LoadChunkRequest
@@ -267,18 +268,34 @@ func test_ParallelChunk_SingleChunk(t *testing.T, numCompressors int) {
 		t.Errorf("unexpected IsLast value: got %v, want %v", chunk.IsLast, true)
 	}
 
-	decompressed := mustGunzip(t, chunk.Data)
+	var decompressed []byte
+	switch chunk.Compression {
+	case command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_NONE:
+		decompressed = chunk.Data
+	case command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_GZIP:
+		decompressed = mustGunzip(t, chunk.Data)
+	case command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_SNAPPY:
+		decompressed = mustSnappyDecode(t, chunk.Data)
+	default:
+		t.Fatalf("unsupported compression type: %v", comp)
+	}
 	if string(decompressed) != string(data) {
 		t.Errorf("unexpected chunk data: got %s, want %s", string(decompressed), string(data))
 	}
 }
 
 func Test_ParallelChunker_SingleChunk(t *testing.T) {
-	t.Run("SingleCompressor", func(t *testing.T) {
-		test_ParallelChunk_SingleChunk(t, 1)
+	t.Run("SingleCompressorGzip", func(t *testing.T) {
+		test_ParallelChunk_SingleChunk(t, 1, command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_GZIP)
 	})
-	t.Run("MultiCompressor", func(t *testing.T) {
-		test_ParallelChunk_SingleChunk(t, 8)
+	t.Run("SingleCompressorSnappy", func(t *testing.T) {
+		test_ParallelChunk_SingleChunk(t, 1, command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_SNAPPY)
+	})
+	t.Run("MultiCompressorGzip", func(t *testing.T) {
+		test_ParallelChunk_SingleChunk(t, 8, command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_GZIP)
+	})
+	t.Run("MultiCompressorGzip", func(t *testing.T) {
+		test_ParallelChunk_SingleChunk(t, 8, command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_SNAPPY)
 	})
 }
 
@@ -286,7 +303,7 @@ func test_ParallelChunk_MultiChunk(t *testing.T, numCompressors int) {
 	data := []byte("Hello, world!")
 	chunkSize := int64(5)
 
-	chunker := NewParallelChunker(bytes.NewReader(data), chunkSize, numCompressors, Gzip)
+	chunker := NewParallelChunker(bytes.NewReader(data), chunkSize, numCompressors, command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_GZIP)
 	ch := chunker.Start()
 
 	expectedChunksData := []string{
@@ -338,6 +355,15 @@ func mustGunzip(t *testing.T, data []byte) []byte {
 
 	decompressed := new(bytes.Buffer)
 	if _, err = io.Copy(decompressed, gzipReader); err != nil {
+		t.Fatalf("failed to decompress data: %v", err)
+	}
+	return decompressed.Bytes()
+}
+
+func mustSnappyDecode(t *testing.T, data []byte) []byte {
+	snappyReader := snappy.NewReader(bytes.NewReader(data))
+	decompressed := new(bytes.Buffer)
+	if _, err := io.Copy(decompressed, snappyReader); err != nil {
 		t.Fatalf("failed to decompress data: %v", err)
 	}
 	return decompressed.Bytes()

@@ -19,6 +19,7 @@ func Test_SingleChunk(t *testing.T) {
 		StreamId:    "123",
 		SequenceNum: 1,
 		IsLast:      true,
+		Compression: command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_GZIP,
 		Data:        mustCompressData(data),
 	}
 
@@ -62,6 +63,7 @@ func Test_MultiChunk(t *testing.T) {
 		StreamId:    "123",
 		SequenceNum: 1,
 		IsLast:      false,
+		Compression: command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_GZIP,
 		Data:        mustCompressData(data1),
 	}
 	data2 := []byte("I'm OK")
@@ -69,6 +71,7 @@ func Test_MultiChunk(t *testing.T) {
 		StreamId:    "123",
 		SequenceNum: 2,
 		IsLast:      true,
+		Compression: command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_GZIP,
 		Data:        mustCompressData(data2),
 	}
 
@@ -114,6 +117,7 @@ func Test_MultiChunkNilData(t *testing.T) {
 		StreamId:    "123",
 		SequenceNum: 1,
 		IsLast:      false,
+		Compression: command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_GZIP,
 		Data:        mustCompressData(data1),
 	}
 	data2 := []byte("I'm OK")
@@ -121,12 +125,14 @@ func Test_MultiChunkNilData(t *testing.T) {
 		StreamId:    "123",
 		SequenceNum: 2,
 		IsLast:      false,
+		Compression: command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_GZIP,
 		Data:        mustCompressData(data2),
 	}
 	chunk3 := &command.LoadChunkRequest{
 		StreamId:    "123",
 		SequenceNum: 3,
 		IsLast:      true,
+		Compression: command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_NONE,
 		Data:        nil,
 	}
 
@@ -174,6 +180,7 @@ func Test_UnexpectedStreamID(t *testing.T) {
 		StreamId:    "123",
 		SequenceNum: 1,
 		IsLast:      false,
+		Compression: command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_GZIP,
 		Data:        compressedData,
 	}
 
@@ -181,6 +188,7 @@ func Test_UnexpectedStreamID(t *testing.T) {
 		StreamId:    "456",
 		SequenceNum: 2,
 		IsLast:      true,
+		Compression: command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_GZIP,
 		Data:        compressedData,
 	}
 
@@ -218,6 +226,7 @@ func Test_ChunksOutOfOrder(t *testing.T) {
 		StreamId:    "123",
 		SequenceNum: 1,
 		IsLast:      false,
+		Compression: command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_GZIP,
 		Data:        compressedData,
 	}
 
@@ -225,6 +234,7 @@ func Test_ChunksOutOfOrder(t *testing.T) {
 		StreamId:    "123",
 		SequenceNum: 3,
 		IsLast:      true,
+		Compression: command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_GZIP,
 		Data:        compressedData,
 	}
 
@@ -287,6 +297,7 @@ func Test_ReassemblyOfLargeData(t *testing.T) {
 			StreamId:    "1",
 			SequenceNum: int64(i + 1),
 			IsLast:      isLast,
+			Compression: command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_GZIP,
 			Data:        mustCompressData(largeData[start:end]),
 		}); err != nil {
 			t.Fatalf("failed to write chunk: %v", err)

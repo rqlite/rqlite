@@ -90,10 +90,17 @@ message LoadRequest {
 }
 
 message LoadChunkRequest {
+	enum Compression {
+		LOAD_CHUNK_REQUEST_COMPRESSION_NONE = 0;
+		LOAD_CHUNK_REQUEST_COMPRESSION_GZIP = 1;
+		LOAD_CHUNK_REQUEST_COMPRESSION_SNAPPY = 2;
+	}
+
 	string stream_id = 1;
 	int64 sequence_num = 2;
 	bool is_last = 3;
-	bytes data = 4;
+	Compression compression = 4;
+	bytes data = 5;
 }
 
 message JoinRequest {

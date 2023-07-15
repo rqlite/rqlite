@@ -34,7 +34,8 @@ import (
 )
 
 const (
-	defaultChunkSize = 32 * 1024 * 1024
+	defaultChunkSize   = 64 * 1024 * 1024
+	defaultParallelism = 8
 )
 
 var (
@@ -860,6 +861,12 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	parallelism, err := parallelismParam(r, defaultParallelism)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	// Peek at the incoming bytes so we can determine if this is a SQLite database
 	validSQLite := false
 	bufReader := bufio.NewReader(r.Body)
@@ -910,7 +917,8 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 		}
 		resp.end = time.Now()
 	} else {
-		chunker := chunking.NewParallelChunker(bufReader, int64(chunkSz), 8, chunking.Gzip)
+		chunker := chunking.NewParallelChunker(bufReader, int64(chunkSz), parallelism,
+			command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_SNAPPY)
 		chunksCh := chunker.Start()
 		for chunk := range chunksCh {
 			if err != nil {
@@ -975,7 +983,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	s.logger.Printf("load request completed in %s", time.Now().Sub(startTime).String())
+	s.logger.Printf("load request completed in %s", time.Since(startTime).String())
 	s.writeResponse(w, r, resp)
 }
 
@@ -2088,6 +2096,19 @@ func chunkSizeParam(req *http.Request, defSz int) (int, error) {
 	sz, err := strconv.Atoi(chunkSize)
 	if err != nil {
 		return defSz, nil
+	}
+	return sz * 1024, nil
+}
+
+func parallelismParam(req *http.Request, def int) (int, error) {
+	q := req.URL.Query()
+	p := strings.TrimSpace(q.Get("parallelism"))
+	if p == "" {
+		return def, nil
+	}
+	sz, err := strconv.Atoi(p)
+	if err != nil {
+		return def, nil
 	}
 	return sz * 1024, nil
 }

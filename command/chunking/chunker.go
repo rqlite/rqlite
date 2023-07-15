@@ -10,6 +10,7 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/golang/snappy"
 	"github.com/rqlite/rqlite/command"
 )
 
@@ -140,6 +141,7 @@ func (c *Chunker) Next() (*command.LoadChunkRequest, error) {
 			StreamId:    c.streamID,
 			SequenceNum: c.sequenceNum + 1,
 			IsLast:      true,
+			Compression: command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_GZIP,
 			Data:        nil,
 		}, nil
 	}
@@ -149,6 +151,7 @@ func (c *Chunker) Next() (*command.LoadChunkRequest, error) {
 		StreamId:    c.streamID,
 		SequenceNum: c.sequenceNum,
 		IsLast:      totalRead < c.chunkSize,
+		Compression: command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_GZIP,
 		Data:        buf.Bytes(),
 	}, nil
 }
@@ -173,7 +176,7 @@ type ParallelChunker struct {
 	r           *CountingReader
 	chunkSize   int64
 	parallelism int
-	compAlgo    Compression
+	compAlgo    command.LoadChunkRequest_Compression
 
 	streamID    string
 	sequenceNum int64
@@ -181,7 +184,7 @@ type ParallelChunker struct {
 
 // NewParallelChunker returns a new ParallelChunker that reads from r and returns
 // LoadChunkRequests of size chunkSize.
-func NewParallelChunker(r io.Reader, chunkSz int64, parallelism int, comp Compression) *ParallelChunker {
+func NewParallelChunker(r io.Reader, chunkSz int64, parallelism int, comp command.LoadChunkRequest_Compression) *ParallelChunker {
 	return &ParallelChunker{
 		r:           NewCountingReader(r),
 		chunkSize:   chunkSz,
@@ -210,9 +213,9 @@ func (c *ParallelChunker) readChunks(out chan<- *command.LoadChunkRequest) {
 			defer wg.Done()
 			for chunk := range toCompressCh {
 				switch c.compAlgo {
-				case None:
+				case command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_NONE:
 					// Nothing to do
-				case Gzip:
+				case command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_GZIP:
 					buf := new(bytes.Buffer)
 					gw := gzip.NewWriter(buf)
 					if _, err := gw.Write(chunk.Data); err != nil {
@@ -222,8 +225,18 @@ func (c *ParallelChunker) readChunks(out chan<- *command.LoadChunkRequest) {
 						panic(err)
 					}
 					chunk.Data = buf.Bytes()
-				case Snappy:
-					panic("snappy compression not implemented")
+					chunk.Compression = command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_GZIP
+				case command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_SNAPPY:
+					buf := new(bytes.Buffer)
+					sw := snappy.NewBufferedWriter(buf)
+					if _, err := sw.Write(chunk.Data); err != nil {
+						panic(err)
+					}
+					if err := sw.Close(); err != nil {
+						panic(err)
+					}
+					chunk.Data = buf.Bytes()
+					chunk.Compression = command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_SNAPPY
 				default:
 					panic("unknown compression algorithm")
 				}

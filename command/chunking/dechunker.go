@@ -8,6 +8,7 @@ import (
 	"os"
 	"sync"
 
+	"github.com/golang/snappy"
 	"github.com/rqlite/rqlite/command"
 )
 
@@ -48,13 +49,26 @@ func (d *Dechunker) WriteChunk(chunk *command.LoadChunkRequest) (bool, error) {
 
 	if chunk.Data != nil {
 		buf := bytes.NewBuffer(chunk.Data)
-		gzw, err := gzip.NewReader(buf)
-		if err != nil {
-			return false, fmt.Errorf("failed to create gzip reader: %v", err)
-		}
-		defer gzw.Close()
+		var r io.Reader
 
-		if _, err := io.Copy(d.file, gzw); err != nil {
+		switch chunk.Compression {
+		case command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_NONE:
+			r = buf
+		case command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_GZIP:
+			gzr, err := gzip.NewReader(buf)
+			if err != nil {
+				return false, fmt.Errorf("failed to create gzip reader: %v", err)
+			}
+			defer gzr.Close()
+			r = gzr
+		case command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_SNAPPY:
+			sr := snappy.NewReader(buf)
+			r = sr
+		default:
+			return false, fmt.Errorf("unsupported compression type: %v", chunk.Compression)
+		}
+
+		if _, err := io.Copy(d.file, r); err != nil {
 			return false, fmt.Errorf("failed to write decompressed data to file: %v", err)
 		}
 	}
