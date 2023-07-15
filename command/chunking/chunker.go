@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sort"
 	"sync"
 
 	"github.com/rqlite/rqlite/command"
@@ -14,6 +15,15 @@ import (
 
 const (
 	internalChunkSize = 1024 * 1024
+)
+
+// Compression is the type of compression to use.
+type Compression int
+
+const (
+	None Compression = iota
+	Gzip
+	Snappy
 )
 
 // Define a sync.Pool to pool the buffers.
@@ -155,4 +165,122 @@ func min(a, b int64) int64 {
 		return a
 	}
 	return b
+}
+
+// ParallelChunker is a reader that reads from an underlying io.Reader and returns
+// LoadChunkRequests of a given size.
+type ParallelChunker struct {
+	r           *CountingReader
+	chunkSize   int64
+	parallelism int
+	compAlgo    Compression
+
+	streamID    string
+	sequenceNum int64
+}
+
+// NewParallelChunker returns a new ParallelChunker that reads from r and returns
+// LoadChunkRequests of size chunkSize.
+func NewParallelChunker(r io.Reader, chunkSz int64, parallelism int, comp Compression) *ParallelChunker {
+	return &ParallelChunker{
+		r:           NewCountingReader(r),
+		chunkSize:   chunkSz,
+		parallelism: parallelism,
+		compAlgo:    comp,
+		streamID:    generateStreamID(),
+		sequenceNum: 1,
+	}
+}
+
+func (c *ParallelChunker) Start() <-chan *command.LoadChunkRequest {
+	out := make(chan *command.LoadChunkRequest)
+	go c.readChunks(out)
+	return out
+}
+
+func (c *ParallelChunker) readChunks(out chan<- *command.LoadChunkRequest) {
+	toCompressCh := make(chan *command.LoadChunkRequest, c.parallelism)
+	compressedCh := make(chan *command.LoadChunkRequest, c.parallelism)
+
+	// Start the parallel compressor goroutines.
+	for i := 0; i < c.parallelism; i++ {
+		go compressChunks(toCompressCh, compressedCh, c.compAlgo)
+	}
+
+	// Run the goroutine that reads from the compressor goroutines and
+	// ensures the chunks are sent in order.
+	go sortChunks(c.sequenceNum, compressedCh, out)
+
+	for {
+		buf := new(bytes.Buffer)
+		n, err := io.CopyN(buf, c.r, c.chunkSize)
+		if err != nil && err != io.EOF {
+			panic(err)
+		}
+
+		chunk := &command.LoadChunkRequest{
+			StreamId:    c.streamID,
+			SequenceNum: c.sequenceNum,
+			IsLast:      n < c.chunkSize,
+			Data:        buf.Bytes(),
+		}
+		toCompressCh <- chunk
+		c.sequenceNum++
+
+		if chunk.IsLast {
+			break
+		}
+	}
+	close(toCompressCh)
+}
+
+func compressChunks(toCompressCh <-chan *command.LoadChunkRequest, compressedCh chan<- *command.LoadChunkRequest, comp Compression) {
+	for chunk := range toCompressCh {
+		switch comp {
+		case None:
+			// Nothing to do
+		case Gzip:
+			buf := new(bytes.Buffer)
+			gw := gzip.NewWriter(buf)
+			if _, err := gw.Write(chunk.Data); err != nil {
+				panic(err)
+			}
+			if err := gw.Close(); err != nil {
+				panic(err)
+			}
+			chunk.Data = buf.Bytes()
+		case Snappy:
+			panic("snappy compression not implemented")
+		default:
+			panic("unknown compression algorithm")
+		}
+
+		compressedCh <- chunk
+	}
+}
+
+func sortChunks(firstSeqNum int64, compressedCh <-chan *command.LoadChunkRequest, out chan<- *command.LoadChunkRequest) {
+	var chunks []*command.LoadChunkRequest
+	nextSeq := firstSeqNum
+
+	for c := range compressedCh {
+		chunks = append(chunks, c)
+		sort.Slice(chunks, func(i, j int) bool { return chunks[i].SequenceNum < chunks[j].SequenceNum })
+
+		for len(chunks) > 0 && chunks[0].SequenceNum == nextSeq {
+			chunk := chunks[0]
+			out <- chunk
+			if chunk.IsLast {
+				close(out)
+				return
+			}
+
+			chunks = chunks[1:]
+			nextSeq++
+		}
+	}
+}
+
+func (c *ParallelChunker) Counts() (int64, int64, int64) {
+	return c.sequenceNum, c.r.Count(), 0
 }
