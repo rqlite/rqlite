@@ -34,7 +34,7 @@ import (
 )
 
 const (
-	defaultChunkSize   = 64 * 1024 * 1024
+	defaultChunkSize   = 256 * 1024 * 1024
 	defaultParallelism = 8
 )
 
@@ -834,6 +834,12 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
+
+	if r.ContentLength == -1 {
+		http.Error(w, "content-length header must be set", http.StatusLengthRequired)
+		return
+	}
+	fmt.Println(">>>>>>content length", r.ContentLength)
 
 	resp := NewResponse()
 
@@ -2089,7 +2095,7 @@ func timeoutParam(req *http.Request, def time.Duration) (time.Duration, error) {
 
 func chunkSizeParam(req *http.Request, defSz int) (int, error) {
 	q := req.URL.Query()
-	chunkSize := strings.TrimSpace(q.Get("chunk_kb"))
+	chunkSize := strings.TrimSpace(q.Get("chunk_mb"))
 	if chunkSize == "" {
 		return defSz, nil
 	}
@@ -2097,7 +2103,7 @@ func chunkSizeParam(req *http.Request, defSz int) (int, error) {
 	if err != nil {
 		return defSz, nil
 	}
-	return sz * 1024, nil
+	return sz * 1024 * 1024, nil
 }
 
 func parallelismParam(req *http.Request, def int) (int, error) {
