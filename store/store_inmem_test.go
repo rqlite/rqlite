@@ -1016,12 +1016,17 @@ COMMIT;
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
-	f, err := os.Open(filepath.Join("testdata", "load.sqlite"))
+	sqliteFilePath := filepath.Join("testdata", "load.sqlite")
+	stat, err := os.Stat(sqliteFilePath)
+	if err != nil {
+		t.Fatalf("failed to get size of file: %s", err.Error())
+	}
+	f, err := os.Open(sqliteFilePath)
 	if err != nil {
 		t.Fatalf("failed to open SQLite file: %s", err.Error())
 	}
 	defer f.Close()
-	err = s.LoadFromReader(f, 1024*1024)
+	err = s.LoadFromReader(f, stat.Size(), 1024*1024, 2)
 	if err != nil {
 		t.Fatalf("failed to load SQLite file via Reader: %s", err.Error())
 	}

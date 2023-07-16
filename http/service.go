@@ -925,14 +925,10 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 		s.logger.Printf("initiating chunked load of SQLite database file, chunk size %d, parallelism %d",
 			chunkSz, parallelism)
 		chunker := chunking.NewParallelChunker(bufReader, int64(chunkSz), parallelism,
-			command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_SNAPPY)
+			command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_GZIP)
 		chunker.SetExpectedSize(r.ContentLength)
 		chunksCh := chunker.Start()
 		for chunk := range chunksCh {
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusServiceUnavailable)
-				return
-			}
 			err = s.store.LoadChunk(chunk)
 			if err != nil && err != store.ErrNotLeader {
 				http.Error(w, err.Error(), http.StatusInternalServerError)

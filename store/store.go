@@ -80,7 +80,8 @@ const (
 	trailingScale              = 1.25
 	observerChanLen            = 50
 
-	defaultChunkSize = 512 * 1024 * 1024 // 512 MB
+	defaultChunkSize        = 5 * 1024 * 1024 // 5 MB
+	defaultChunkParallelism = 2
 )
 
 const (
@@ -1159,7 +1160,7 @@ func (s *Store) Provide(path string) error {
 
 // LoadFromReader reads data from r chunk-by-chunk, and loads it into the
 // database.
-func (s *Store) LoadFromReader(r io.Reader, chunkSize int64) error {
+func (s *Store) LoadFromReader(r io.Reader, expectedSize, chunkSize int64, parallelism int) error {
 	if !s.open {
 		return ErrNotOpen
 	}
@@ -1168,22 +1169,25 @@ func (s *Store) LoadFromReader(r io.Reader, chunkSize int64) error {
 		return ErrNotReady
 	}
 
-	return s.loadFromReader(r, chunkSize)
+	return s.loadFromReader(r, expectedSize, chunkSize, parallelism)
 }
 
 // loadFromReader reads data from r chunk-by-chunk, and loads it into the
 // database. It is for internal use only. It does not check for readiness.
-func (s *Store) loadFromReader(r io.Reader, chunkSize int64) error {
-	chunker := chunking.NewChunker(r, chunkSize)
-	for {
-		chunk, err := chunker.Next()
-		if err != nil {
-			return err
-		}
+func (s *Store) loadFromReader(r io.Reader, expectedSize, chunkSize int64, parallelism int) error {
+	chunker := chunking.NewParallelChunker(r, chunkSize, parallelism,
+		command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_GZIP)
+	chunker.SetExpectedSize(expectedSize)
+	chunksCh := chunker.Start()
+
+	for chunk := range chunksCh {
 		if err := s.loadChunk(chunk); err != nil {
 			return err
 		}
 		if chunk.IsLast {
+			nChunks, nr, nw := chunker.Counts()
+			s.logger.Printf("%d bytes read, %d chunks generated, containing %d bytes of compressed data (compression ratio %.2f)",
+				nr, nChunks, nw, float64(nr)/float64(nw))
 			break
 		}
 	}
@@ -1793,12 +1797,16 @@ func (s *Store) selfLeaderChange(leader bool) {
 }
 
 func (s *Store) installRestore() error {
+	fi, err := os.Stat(s.restorePath)
+	if err != nil {
+		return err
+	}
 	f, err := os.Open(s.restorePath)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
-	return s.loadFromReader(f, s.restoreChunkSize)
+	return s.loadFromReader(f, fi.Size(), s.restoreChunkSize, defaultChunkParallelism)
 }
 
 // logSize returns the size of the Raft log on disk.
