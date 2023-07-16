@@ -922,6 +922,8 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 		}
 		resp.end = time.Now()
 	} else {
+		s.logger.Printf("initiating chunked load of SQLite database file, chunk size %d, parallelism %d",
+			chunkSz, parallelism)
 		chunker := chunking.NewParallelChunker(bufReader, int64(chunkSz), parallelism,
 			command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_SNAPPY)
 		chunker.SetExpectedSize(r.ContentLength)
@@ -2112,11 +2114,11 @@ func parallelismParam(req *http.Request, def int) (int, error) {
 	if p == "" {
 		return def, nil
 	}
-	sz, err := strconv.Atoi(p)
+	np, err := strconv.Atoi(p)
 	if err != nil {
 		return def, nil
 	}
-	return sz * 1024, nil
+	return np, nil
 }
 
 // isTx returns whether the HTTP request is requesting a transaction.
