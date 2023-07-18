@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"errors"
 	"expvar"
 	"fmt"
 	"io"
@@ -42,7 +43,7 @@ const (
 )
 
 var (
-	ErrWALReplayDirectoryMismatch = fmt.Errorf("WAL file(s) not in same directory as database file")
+	ErrWALReplayDirectoryMismatch = errors.New("WAL file(s) not in same directory as database file")
 )
 
 // DBVersion is the SQLite version.
@@ -141,7 +142,7 @@ func IsValidSQLiteWALFile(path string) bool {
 	return IsValidSQLiteWALData(b)
 }
 
-// IsValidSQLiteWALFile checks that the supplied data looks like a SQLite
+// IsValidSQLiteWALData checks that the supplied data looks like a SQLite
 // WAL file.
 func IsValidSQLiteWALData(b []byte) bool {
 	if len(b) < 4 {
@@ -194,7 +195,7 @@ func IsDELETEModeEnabledSQLiteFile(path string) bool {
 	return IsDELETEModeEnabled(b)
 }
 
-// IsDELETEModeEnabledSQLiteFile checks that the supplied path looks like a SQLite
+// IsDELETEModeEnabled checks that the supplied path looks like a SQLite file
 // with DELETE mode enabled.
 func IsDELETEModeEnabled(b []byte) bool {
 	return len(b) >= 20 && b[18] == 1 && b[19] == 1
@@ -600,7 +601,7 @@ func (db *DB) Checkpoint(dur time.Duration) (err error) {
 	}
 }
 
-// DisableCheckpoint disables the automatic checkpointing that occurs when
+// DisableCheckpointing disables the automatic checkpointing that occurs when
 // the WAL reaches a certain size. This is key for full control of snapshotting.
 // and can be useful for testing.
 func (db *DB) DisableCheckpointing() error {
