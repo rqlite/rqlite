@@ -2207,7 +2207,7 @@ func Test_StoreLogTruncationMultinode(t *testing.T) {
 	testPoll(t, f, 100*time.Millisecond, 2*time.Second)
 
 	// Do one more execute, to ensure there is at least one log not snapshot.
-	// Without this, there is no guaratnee fsmIndex will be set on s1.
+	// Without this, there is no guarantee fsmIndex will be set on s1.
 	_, err := s0.Execute(executeRequestFromString(`INSERT INTO foo(id, name) VALUES(6, "fiona")`, false, false))
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
