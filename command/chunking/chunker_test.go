@@ -258,7 +258,7 @@ func test_ParallelChunk_SingleChunk(t *testing.T, numCompressors int, comp comma
 
 	var expectedChunks []*command.LoadChunkRequest
 	for chunk := range ch {
-		expectedChunks = append(expectedChunks, chunk)
+		expectedChunks = append(expectedChunks, chunk.LoadChunkRequest())
 	}
 	if len(expectedChunks) != 1 {
 		t.Fatalf("unexpected number of chunks: got %d, want %d", len(expectedChunks), 1)
@@ -318,7 +318,7 @@ func test_ParallelChunk_MultiChunk(t *testing.T, numCompressors int) {
 
 	var receivedChunks []*command.LoadChunkRequest
 	for chunk := range ch {
-		receivedChunks = append(receivedChunks, chunk)
+		receivedChunks = append(receivedChunks, chunk.LoadChunkRequest())
 	}
 	if len(receivedChunks) != len(expectedChunksData) {
 		t.Fatalf("unexpected number of chunks: got %d, want %d", len(receivedChunks), len(expectedChunksData))

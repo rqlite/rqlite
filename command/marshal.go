@@ -123,9 +123,20 @@ func (m *RequestMarshaler) Stats() map[string]interface{} {
 	}
 }
 
+var protoMarshaledBufTopLevel []byte
+
 // Marshal marshals a Command.
 func Marshal(c *Command) ([]byte, error) {
-	return proto.Marshal(c)
+	if protoMarshaledBufTopLevel == nil {
+		protoMarshaledBufTopLevel = make([]byte, 0, 1024)
+	}
+	protoMarshaledBufTopLevel = protoMarshaledBufTopLevel[:0]
+
+	marshaler := proto.MarshalOptions{}
+
+	var err error
+	protoMarshaledBufTopLevel, err = marshaler.MarshalAppend(protoMarshaledBufTopLevel, c)
+	return protoMarshaledBufTopLevel, err
 }
 
 // Unmarshal unmarshals a Command
@@ -161,9 +172,19 @@ func UnmarshalLoadRequest(b []byte, lr *LoadRequest) error {
 	return proto.Unmarshal(u, lr)
 }
 
+var protoMarshaledBuf []byte
+
 // MarshalLoadChunkRequest marshals a LoadChunkRequest command
 func MarshalLoadChunkRequest(lr *LoadChunkRequest) ([]byte, error) {
-	return proto.Marshal(lr)
+	if protoMarshaledBuf == nil {
+		protoMarshaledBuf = make([]byte, 0, 1024)
+	}
+	protoMarshaledBuf = protoMarshaledBuf[:0]
+
+	marshaler := proto.MarshalOptions{}
+	var err error
+	protoMarshaledBuf, err = marshaler.MarshalAppend(protoMarshaledBuf, lr)
+	return protoMarshaledBuf, err
 }
 
 // UnmarshalLoadChunkRequest unmarshals a LoadChunkRequest command

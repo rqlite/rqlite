@@ -13,7 +13,51 @@ import (
 	"github.com/rqlite/rqlite/command"
 )
 
-func Test_SingleChunk(t *testing.T) {
+func Test_SingleChunkNone(t *testing.T) {
+	data := []byte("Hello, World!")
+	chunk := &command.LoadChunkRequest{
+		StreamId:    "123",
+		SequenceNum: 1,
+		IsLast:      true,
+		Compression: command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_NONE,
+		Data:        data,
+	}
+
+	dir, err := ioutil.TempDir("", "dechunker-test")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(dir)
+
+	dechunker, err := NewDechunker(dir)
+	if err != nil {
+		t.Fatalf("failed to create Dechunker: %v", err)
+	}
+
+	isLast, err := dechunker.WriteChunk(chunk)
+	if err != nil {
+		t.Fatalf("failed to write chunk: %v", err)
+	}
+	if !isLast {
+		t.Errorf("WriteChunk did not return true for isLast")
+	}
+
+	filePath, err := dechunker.Close()
+	if err != nil {
+		t.Fatalf("failed to close Dechunker: %v", err)
+	}
+
+	// Check the contents of the output file.
+	got, err := ioutil.ReadFile(filePath)
+	if err != nil {
+		t.Fatalf("failed to read output file: %v", err)
+	}
+	if string(got) != string(data) {
+		t.Errorf("output file data = %q; want %q", got, data)
+	}
+}
+
+func Test_SingleChunkGZIP(t *testing.T) {
 	data := []byte("Hello, World!")
 	chunk := &command.LoadChunkRequest{
 		StreamId:    "123",

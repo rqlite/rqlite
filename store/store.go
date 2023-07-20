@@ -1181,10 +1181,10 @@ func (s *Store) loadFromReader(r io.Reader, expectedSize, chunkSize int64, paral
 	chunksCh := chunker.Start()
 
 	for chunk := range chunksCh {
-		if err := s.loadChunk(chunk); err != nil {
+		if err := s.loadChunk(chunk.LoadChunkRequest()); err != nil {
 			return err
 		}
-		if chunk.IsLast {
+		if chunk.LoadChunkRequest().IsLast {
 			nChunks, nr, nw := chunker.Counts()
 			s.logger.Printf("%d bytes read, %d chunks generated, containing %d bytes of compressed data (compression ratio %.2f)",
 				nr, nChunks, nw, float64(nr)/float64(nw))
@@ -1973,10 +1973,13 @@ func dbBytesFromSnapshot(rc io.ReadCloser) ([]byte, error) {
 	return database.Bytes(), nil
 }
 
+var lcr command.LoadChunkRequest
+var c command.Command
+
 func applyCommand(data []byte, pDB **sql.DB, decMgmr *chunking.DechunkerManager) (command.Command_Type, interface{}) {
-	var c command.Command
 	db := *pDB
 
+	c.Reset()
 	if err := command.Unmarshal(data, &c); err != nil {
 		panic(fmt.Sprintf("failed to unmarshal cluster command: %s", err.Error()))
 	}
@@ -2030,7 +2033,7 @@ func applyCommand(data []byte, pDB **sql.DB, decMgmr *chunking.DechunkerManager)
 		*pDB = newDB
 		return c.Type, &fsmGenericResponse{}
 	case command.Command_COMMAND_TYPE_LOAD_CHUNK:
-		var lcr command.LoadChunkRequest
+		lcr.Reset()
 		if err := command.UnmarshalLoadChunkRequest(c.SubCommand, &lcr); err != nil {
 			panic(fmt.Sprintf("failed to unmarshal load-chunk subcommand: %s", err.Error()))
 		}

@@ -17,6 +17,7 @@ import (
 	"net/http/pprof"
 	"os"
 	"runtime"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -35,7 +36,7 @@ import (
 
 const (
 	defaultChunkSize   = 256 * 1024 * 1024
-	defaultParallelism = 8
+	defaultParallelism = 2
 )
 
 var (
@@ -925,11 +926,13 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 		s.logger.Printf("initiating chunked load of SQLite database file, chunk size %d, parallelism %d",
 			chunkSz, parallelism)
 		chunker := chunking.NewParallelChunker(bufReader, int64(chunkSz), parallelism,
-			command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_GZIP)
+			command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_NONE)
 		chunker.SetExpectedSize(r.ContentLength)
 		chunksCh := chunker.Start()
+
 		for chunk := range chunksCh {
-			err = s.store.LoadChunk(chunk)
+			lcr := chunk.LoadChunkRequest()
+			err = s.store.LoadChunk(lcr)
 			if err != nil && err != store.ErrNotLeader {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -965,7 +968,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 				}
 
 				w.Header().Add(ServedByHTTPHeader, addr)
-				loadErr := s.cluster.LoadChunk(chunk, addr, makeCredentials(username, password), timeout)
+				loadErr := s.cluster.LoadChunk(lcr, addr, makeCredentials(username, password), timeout)
 				if loadErr != nil {
 					if loadErr.Error() == "unauthorized" {
 						http.Error(w, "remote load not authorized", http.StatusUnauthorized)
@@ -976,15 +979,24 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 				}
 				stats.Add(numRemoteLoads, 1)
 				// Allow this if block to exit, so response remains as before request
-				// forwarding was put in place.
+				// forwarding was put in place.    XXXXX ?
 			}
-			if chunk.IsLast {
-				nChunks, nr, nw := chunker.Counts()
-				s.logger.Printf("%d bytes read, %d chunks generated, containing %d bytes of compressed data (compression ratio %.2f)",
-					nr, nChunks, nw, float64(nr)/float64(nw))
+			chunk.Close()
+			if lcr.IsLast {
 				break
 			}
 		}
+
+		nChunks, nr, nw := chunker.Counts()
+		s.logger.Printf("%d bytes read, %d chunks generated, containing %d bytes of compressed data (compression ratio %.2f)",
+			nr, nChunks, nw, float64(nr)/float64(nw))
+		// force gc to run
+
+		s.logger.Println("force gc to run")
+		runtime.GC()
+		debug.FreeOSMemory()
+		s.logger.Println("done")
+
 	}
 
 	s.logger.Printf("load request completed in %s", time.Since(startTime).String())

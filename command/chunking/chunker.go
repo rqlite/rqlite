@@ -20,22 +20,6 @@ const (
 	internalChunkSize = 1024 * 1024
 )
 
-// Compression is the type of compression to use. XXX move to protos!
-type Compression int
-
-const (
-	None Compression = iota
-	Gzip
-	Snappy
-)
-
-// Define a sync.Pool to pool the buffers.
-var bufferPool = sync.Pool{
-	New: func() interface{} {
-		return bytes.NewBuffer(nil)
-	},
-}
-
 // Define a sync.Pool to pool the gzip writers.
 var gzipWriterPool = sync.Pool{
 	New: func() interface{} {
@@ -102,9 +86,8 @@ func (c *Chunker) Next() (*command.LoadChunkRequest, error) {
 	}
 
 	// Get a buffer from the pool.
-	buf := bufferPool.Get().(*bytes.Buffer)
-	buf.Reset()
-	defer bufferPool.Put(buf)
+	buf := GetManualBuffer()
+	defer PutManualBuffer(buf)
 
 	// Get a gzip.Writer from the pool.
 	gw := gzipWriterPool.Get().(*gzip.Writer)
@@ -184,6 +167,20 @@ func min(a, b int64) int64 {
 	return b
 }
 
+type ParallelChunk struct {
+	req *command.LoadChunkRequest
+	buf *bytes.Buffer
+}
+
+func (c *ParallelChunk) LoadChunkRequest() *command.LoadChunkRequest {
+	return c.req
+}
+
+func (c *ParallelChunk) Close() {
+	fmt.Println("Closing chunk, releasing", c.buf.Len(), "bytes")
+	PutManualBuffer(c.buf)
+}
+
 // ParallelChunker is a reader that reads from an underlying io.Reader and returns
 // LoadChunkRequests of a given size.
 type ParallelChunker struct {
@@ -219,8 +216,8 @@ func NewParallelChunker(r io.Reader, chunkSz int64, parallelism int, comp comman
 
 // Start starts the chunker, returning a channel on which to receive
 // LoadChunkRequests.
-func (c *ParallelChunker) Start() <-chan *command.LoadChunkRequest {
-	out := make(chan *command.LoadChunkRequest)
+func (c *ParallelChunker) Start() <-chan *ParallelChunk {
+	out := make(chan *ParallelChunk)
 	go c.readChunks(out)
 	return out
 }
@@ -232,9 +229,9 @@ func (c *ParallelChunker) SetExpectedSize(sz int64) {
 	c.expectedSize = sz
 }
 
-func (c *ParallelChunker) readChunks(out chan<- *command.LoadChunkRequest) {
-	toCompressCh := make(chan *command.LoadChunkRequest, c.parallelism)
-	compressedCh := make(chan *command.LoadChunkRequest, c.parallelism)
+func (c *ParallelChunker) readChunks(out chan<- *ParallelChunk) {
+	toCompressCh := make(chan *ParallelChunk, c.parallelism)
+	compressedCh := make(chan *ParallelChunk, c.parallelism)
 
 	// Start the parallel compressor goroutines.
 	wg := sync.WaitGroup{}
@@ -247,33 +244,35 @@ func (c *ParallelChunker) readChunks(out chan<- *command.LoadChunkRequest) {
 				case command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_NONE:
 					// Nothing to do
 				case command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_GZIP:
-					buf := new(bytes.Buffer)
+					buf := GetManualBuffer()
 					gw := gzip.NewWriter(buf)
-					if _, err := gw.Write(chunk.Data); err != nil {
+					if _, err := gw.Write(chunk.req.Data); err != nil {
 						c.logger.Printf("error writing gzip chunk: %s", err.Error())
 					}
 					if err := gw.Close(); err != nil {
 						c.logger.Printf("error closing gzip writer: %s", err.Error())
 					}
-					chunk.Data = buf.Bytes()
-					chunk.Compression = command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_GZIP
+					PutManualBuffer(chunk.buf) // Return buffer containing uncompressed data.
+					chunk.req.Data = buf.Bytes()
+					chunk.req.Compression = command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_GZIP
 				case command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_SNAPPY:
-					buf := new(bytes.Buffer)
+					buf := GetManualBuffer()
 					sw := snappy.NewBufferedWriter(buf)
-					if _, err := sw.Write(chunk.Data); err != nil {
+					if _, err := sw.Write(chunk.req.Data); err != nil {
 						c.logger.Printf("error writing to snappy writer: %s", err.Error())
 					}
 					if err := sw.Close(); err != nil {
 						c.logger.Printf("error closing snappy writer: %s", err.Error())
 					}
-					chunk.Data = buf.Bytes()
-					chunk.Compression = command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_SNAPPY
+					PutManualBuffer(chunk.buf) // Return buffer containing uncompressed data.
+					chunk.req.Data = buf.Bytes()
+					chunk.req.Compression = command.LoadChunkRequest_LOAD_CHUNK_REQUEST_COMPRESSION_SNAPPY
 				default:
 					c.logger.Printf("unknown compression algorithm: %d", c.compAlgo)
 				}
 
 				c.writtenMu.Lock()
-				c.nWritten += int64(len(chunk.Data))
+				c.nWritten += int64(len(chunk.req.Data))
 				c.writtenMu.Unlock()
 				compressedCh <- chunk
 			}
@@ -284,10 +283,11 @@ func (c *ParallelChunker) readChunks(out chan<- *command.LoadChunkRequest) {
 	// ensures the chunks are sent in order.
 	go sortChunks(c.sequenceNum+1, compressedCh, out)
 	for {
-		buf := new(bytes.Buffer)
+		buf := GetManualBuffer()
 		n, err := io.CopyN(buf, c.r, c.chunkSize)
 		if err != nil && err != io.EOF {
 			c.logger.Printf("error reading chunk: %s", err.Error())
+			break
 		}
 
 		c.sequenceNum++
@@ -298,7 +298,7 @@ func (c *ParallelChunker) readChunks(out chan<- *command.LoadChunkRequest) {
 			TotalUncompressedSize: c.expectedSize,
 			Data:                  buf.Bytes(),
 		}
-		toCompressCh <- chunk
+		toCompressCh <- &ParallelChunk{req: chunk, buf: buf}
 
 		if chunk.IsLast {
 			break
@@ -309,19 +309,20 @@ func (c *ParallelChunker) readChunks(out chan<- *command.LoadChunkRequest) {
 	close(compressedCh)
 }
 
-func sortChunks(firstSeqNum int64, compressedCh <-chan *command.LoadChunkRequest, out chan<- *command.LoadChunkRequest) {
-	var chunks []*command.LoadChunkRequest
+func sortChunks(firstSeqNum int64, compressedCh <-chan *ParallelChunk, out chan<- *ParallelChunk) {
+	var chunks []*ParallelChunk
 	nextSeq := firstSeqNum
+
+	defer close(out)
 
 	for c := range compressedCh {
 		chunks = append(chunks, c)
-		sort.Slice(chunks, func(i, j int) bool { return chunks[i].SequenceNum < chunks[j].SequenceNum })
+		sort.Slice(chunks, func(i, j int) bool { return chunks[i].req.SequenceNum < chunks[j].req.SequenceNum })
 
-		for len(chunks) > 0 && chunks[0].SequenceNum == nextSeq {
+		for len(chunks) > 0 && chunks[0].req.SequenceNum == nextSeq {
 			chunk := chunks[0]
 			out <- chunk
-			if chunk.IsLast {
-				close(out)
+			if chunk.req.IsLast {
 				return
 			}
 

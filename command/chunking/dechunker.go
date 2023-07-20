@@ -48,7 +48,7 @@ func (d *Dechunker) WriteChunk(chunk *command.LoadChunkRequest) (bool, error) {
 	d.seqNum = chunk.SequenceNum
 
 	if chunk.Data != nil {
-		buf := bytes.NewBuffer(chunk.Data)
+		buf := bytes.NewReader(chunk.Data)
 		var r io.Reader
 
 		switch chunk.Compression {
@@ -68,9 +68,10 @@ func (d *Dechunker) WriteChunk(chunk *command.LoadChunkRequest) (bool, error) {
 			return false, fmt.Errorf("unsupported compression type: %v", chunk.Compression)
 		}
 
-		if _, err := io.Copy(d.file, r); err != nil {
-			return false, fmt.Errorf("failed to write decompressed data to file: %v", err)
-		}
+		_ = r
+		// if _, err := io.Copy(d.file, r); err != nil {
+		// 	return false, fmt.Errorf("failed to write decompressed data to file: %v", err)
+		// }
 	}
 
 	return chunk.IsLast, nil
