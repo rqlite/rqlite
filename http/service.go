@@ -26,6 +26,7 @@ import (
 	"github.com/rqlite/rqlite/cluster"
 	"github.com/rqlite/rqlite/command"
 	"github.com/rqlite/rqlite/command/chunking"
+	"github.com/rqlite/rqlite/command/chunking/file"
 	"github.com/rqlite/rqlite/command/encoding"
 	"github.com/rqlite/rqlite/db"
 	"github.com/rqlite/rqlite/queue"
@@ -34,7 +35,7 @@ import (
 )
 
 const (
-	defaultChunkSize = 5 * 1024 * 1024 // 5 MB
+	defaultChunkSize = 256 * 1024 * 1024 // 5 MB
 )
 
 var (
@@ -875,8 +876,17 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-
 	}
+
+	startT := time.Now()
+	dir, err := file.ProcessChunks(r.Body, int64(chunkSz), file.Gzip)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer os.RemoveAll(dir)
+	s.logger.Printf("created compressed data in %s", time.Now().Sub(startT).String())
+	return
 
 	if !validSQLite {
 		// Assume SQL text
