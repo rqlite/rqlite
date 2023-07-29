@@ -25,8 +25,8 @@ type WALFullSnapshotSink struct {
 	dir       string // The directory to store the snapshot in.
 	parentDir string // The parent directory of the snapshot.
 
-	sqliteFile *os.File
-	meta       *raft.SnapshotMeta
+	sqliteFd *os.File
+	meta     *raft.SnapshotMeta
 
 	logger *log.Logger
 
@@ -35,12 +35,11 @@ type WALFullSnapshotSink struct {
 
 // Write writes the given bytes to the snapshot.
 func (w *WALFullSnapshotSink) Write(p []byte) (n int, err error) {
-	return w.sqliteFile.Write(p)
+	return w.sqliteFd.Write(p)
 }
 
 // Close closes the snapshot.
 func (w *WALFullSnapshotSink) Close() (retErr error) {
-	// Make sure close is idempotent
 	if w.closed {
 		return nil
 	}
@@ -48,24 +47,27 @@ func (w *WALFullSnapshotSink) Close() (retErr error) {
 
 	defer func() {
 		if retErr != nil {
-			os.Remove(w.sqliteFile.Name())
-			os.RemoveAll(w.dir)
+			w.cleanup()
 		}
 	}()
 
-	if err := w.sqliteFile.Sync(); err != nil {
+	if err := w.sqliteFd.Sync(); err != nil {
 		w.logger.Printf("failed syncing snapshot SQLite file: %s", err)
 		return err
 	}
 
-	if err := w.sqliteFile.Close(); err != nil {
+	if err := w.sqliteFd.Close(); err != nil {
 		w.logger.Printf("failed closing snapshot SQLite file: %s", err)
 		return err
 	}
 
-	newPath := strings.TrimSuffix(w.dir, tmpSuffix)
-	if err := os.Rename(w.dir, newPath); err != nil {
-		w.logger.Printf("failed to move snapshot into place: %s", err)
+	if err := moveFromTmp(w.sqliteFd.Name()); err != nil {
+		w.logger.Printf("failed to move SQLite file into place: %s", err)
+		return err
+	}
+
+	if err := moveFromTmp(w.dir); err != nil {
+		w.logger.Printf("failed to move snapshot directory into place: %s", err)
 		return err
 	}
 
@@ -85,7 +87,7 @@ func (w *WALFullSnapshotSink) Close() (retErr error) {
 		}
 	}
 
-	// Reap old snapshots here XXXX
+	// Reap old snapshots here XXXX -- best effort! Don't cleanup
 	return nil
 }
 
@@ -96,6 +98,16 @@ func (w *WALFullSnapshotSink) ID() string {
 
 // Cancel closes the snapshot and removes it.
 func (w *WALFullSnapshotSink) Cancel() error {
+	w.closed = true
+	return w.cleanup()
+}
+
+func (w *WALFullSnapshotSink) cleanup() error {
+	w.sqliteFd.Close()
+	os.Remove(w.sqliteFd.Name())
+	os.Remove(nonTmpName(w.sqliteFd.Name()))
+	os.RemoveAll(w.dir)
+	os.RemoveAll(nonTmpName(w.dir))
 	return nil
 }
 
@@ -139,8 +151,6 @@ func (s *WALSnapshotStore) Path() string {
 // Create creates a new Sink object, ready for the writing a snapshot.
 func (s *WALSnapshotStore) Create(version raft.SnapshotVersion, index, term uint64, configuration raft.Configuration,
 	configurationIndex uint64, trans raft.Transport) (raft.SnapshotSink, error) {
-	name := snapshotName(term, index)
-	snapshotPath := filepath.Join(s.dir, name+tmpSuffix)
 
 	if s.hasBase() {
 		return &WALIncrementalSnapshotSink{}, nil
@@ -149,28 +159,30 @@ func (s *WALSnapshotStore) Create(version raft.SnapshotVersion, index, term uint
 	// If we're going to create a base, all previous snapshots are now invalid. XXXX
 
 	// Create the file to where the SQLite file will be written.
-	sqliteFile, err := os.Create(filepath.Join(s.dir, sqliteFilePath))
+	sqliteFd, err := os.Create(filepath.Join(s.dir, sqliteFilePath) + tmpSuffix)
 	if err != nil {
 		return nil, err
 	}
 
 	// Create a directory named for the snapshot. This directory won't actually contain
-	// a WAL file, but will contain meta. Does it need to be temp?
-	// Create a directory at snapshotPath.
+	// a WAL file, but will contain meta.
+	snapshotName := snapshotName(term, index)
+	snapshotPath := filepath.Join(s.dir, snapshotName+tmpSuffix)
 	if err := os.MkdirAll(snapshotPath, 0755); err != nil {
 		return nil, err
 	}
 
 	fullSink := &WALFullSnapshotSink{
-		dir:        snapshotPath,
-		parentDir:  s.dir,
-		sqliteFile: sqliteFile,
+		dir:       snapshotPath,
+		parentDir: s.dir,
+		sqliteFd:  sqliteFd,
 		meta: &raft.SnapshotMeta{
-			ID:                 name,
+			ID:                 snapshotName,
 			Index:              index,
 			Term:               term,
 			Configuration:      configuration,
 			ConfigurationIndex: configurationIndex,
+			// XXX not setting size. Don't think it matters.
 		},
 		logger: log.New(os.Stderr, "[wal-snapshot-sink] ", log.LstdFlags),
 	}
@@ -202,6 +214,18 @@ func snapshotName(term, index uint64) string {
 	now := time.Now()
 	msec := now.UnixNano() / int64(time.Millisecond)
 	return fmt.Sprintf("%d-%d-%d", term, index, msec)
+}
+
+func nonTmpName(path string) string {
+	return strings.TrimSuffix(path, tmpSuffix)
+}
+
+func moveFromTmp(src string) error {
+	dst := nonTmpName(src)
+	if err := os.Rename(src, dst); err != nil {
+		return err
+	}
+	return nil
 }
 
 func fileExists(path string) bool {
