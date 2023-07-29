@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 
 const (
 	sqliteFilePath = "base-sqlite.db"
+	walFilePath    = "wal"
 	tmpSuffix      = ".tmp"
 	metaFileName   = "meta.json"
 )
@@ -61,6 +63,10 @@ func (w *WALFullSnapshotSink) Close() (retErr error) {
 		return err
 	}
 
+	// Need to worry about crashes here. If we crash after the SQLite file is
+	// synced, but before the snapshot directory is moved into place, we'll
+	// have a dangling SQLite file. And perhaps other issues. XXXX
+
 	if err := moveFromTmp(w.sqliteFd.Name()); err != nil {
 		w.logger.Printf("failed to move SQLite file into place: %s", err)
 		return err
@@ -74,14 +80,7 @@ func (w *WALFullSnapshotSink) Close() (retErr error) {
 	// Sync parent directory to ensure snapshot is visible, but it's only
 	// needed on *nix style file systems.
 	if runtime.GOOS != "windows" {
-		parentFH, err := os.Open(w.parentDir)
-		if err != nil {
-			w.logger.Printf("failed to open snapshot parent directory: %s", err)
-			return err
-		}
-		defer parentFH.Close()
-
-		if err = parentFH.Sync(); err != nil {
+		if err := syncDir(w.parentDir); err != nil {
 			w.logger.Printf("failed syncing parent directory: %s", err)
 			return err
 		}
@@ -113,16 +112,62 @@ func (w *WALFullSnapshotSink) cleanup() error {
 
 // WALIncrementalSnapshotSink is a sink for an incremental snapshot.
 type WALIncrementalSnapshotSink struct {
-	io.WriteCloser
+	dir       string // The directory to store the snapshot in.
+	parentDir string // The parent directory of the snapshot.
+
+	walFd *os.File
+	meta  *raft.SnapshotMeta
+
+	logger *log.Logger
+
+	closed bool
 }
 
 // ID returns the ID of the snapshot.
 func (w *WALIncrementalSnapshotSink) ID() string {
-	return ""
+	return w.meta.ID
+}
+
+// Write writes the given bytes to the snapshot.
+func (w *WALIncrementalSnapshotSink) Write(p []byte) (n int, err error) {
+	return w.walFd.Write(p)
 }
 
 // Cancel closes the snapshot and removes it.
 func (w *WALIncrementalSnapshotSink) Cancel() error {
+	return nil
+}
+
+func (w *WALIncrementalSnapshotSink) Close() error {
+	if w.closed {
+		return nil
+	}
+	w.closed = true
+
+	if err := w.walFd.Sync(); err != nil {
+		w.logger.Printf("failed syncing snapshot SQLite file: %s", err)
+		return err
+	}
+
+	if err := w.walFd.Close(); err != nil {
+		w.logger.Printf("failed closing snapshot SQLite file: %s", err)
+		return err
+	}
+
+	if err := moveFromTmp(w.dir); err != nil {
+		w.logger.Printf("failed to move snapshot directory into place: %s", err)
+		return err
+	}
+
+	// Sync parent directory to ensure snapshot is visible, but it's only
+	// needed on *nix style file systems.
+	if runtime.GOOS != "windows" {
+		if err := syncDir(w.parentDir); err != nil {
+			w.logger.Printf("failed syncing parent directory: %s", err)
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -143,7 +188,7 @@ func NewWALSnapshotStore(dir string) *WALSnapshotStore {
 	}
 }
 
-// Path returns the path to director this store uses
+// Path returns the path to directory this store uses
 func (s *WALSnapshotStore) Path() string {
 	return s.dir
 }
@@ -152,51 +197,97 @@ func (s *WALSnapshotStore) Path() string {
 func (s *WALSnapshotStore) Create(version raft.SnapshotVersion, index, term uint64, configuration raft.Configuration,
 	configurationIndex uint64, trans raft.Transport) (raft.SnapshotSink, error) {
 
-	if s.hasBase() {
-		return &WALIncrementalSnapshotSink{}, nil
-	}
-
-	// If we're going to create a base, all previous snapshots are now invalid. XXXX
-
-	// Create the file to where the SQLite file will be written.
-	sqliteFd, err := os.Create(filepath.Join(s.dir, sqliteFilePath) + tmpSuffix)
-	if err != nil {
-		return nil, err
-	}
-
-	// Create a directory named for the snapshot. This directory won't actually contain
-	// a WAL file, but will contain meta.
 	snapshotName := snapshotName(term, index)
 	snapshotPath := filepath.Join(s.dir, snapshotName+tmpSuffix)
 	if err := os.MkdirAll(snapshotPath, 0755); err != nil {
 		return nil, err
 	}
 
-	fullSink := &WALFullSnapshotSink{
-		dir:       snapshotPath,
-		parentDir: s.dir,
-		sqliteFd:  sqliteFd,
-		meta: &raft.SnapshotMeta{
-			ID:                 snapshotName,
-			Index:              index,
-			Term:               term,
-			Configuration:      configuration,
-			ConfigurationIndex: configurationIndex,
-			// XXX not setting size. Don't think it matters.
-		},
-		logger: log.New(os.Stderr, "[wal-snapshot-sink] ", log.LstdFlags),
+	meta := &raft.SnapshotMeta{
+		ID:                 snapshotName,
+		Index:              index,
+		Term:               term,
+		Configuration:      configuration,
+		ConfigurationIndex: configurationIndex,
+		// XXX not setting size. Don't think it matters.
 	}
 
-	if err := writeMeta(fullSink.meta, filepath.Join(fullSink.dir, metaFileName)); err != nil {
+	var sink raft.SnapshotSink
+	if s.hasBase() {
+		walFd, err := os.Create(filepath.Join(snapshotPath, walFilePath))
+		if err != nil {
+			return nil, err
+		}
+		sink = &WALIncrementalSnapshotSink{
+			dir:       snapshotPath,
+			parentDir: s.dir,
+			walFd:     walFd,
+			meta:      meta,
+			logger:    log.New(os.Stderr, "[wal-inc-snapshot-sink] ", log.LstdFlags),
+		}
+	} else {
+		// If we're going to create a base, all previous snapshots are now invalid. XXXX
+		// Create the file to where the SQLite file will be written.
+		sqliteFd, err := os.Create(filepath.Join(s.dir, sqliteFilePath) + tmpSuffix)
+		if err != nil {
+			return nil, err
+		}
+
+		sink = &WALFullSnapshotSink{
+			dir:       snapshotPath,
+			parentDir: s.dir,
+			sqliteFd:  sqliteFd,
+			meta:      meta,
+			logger:    log.New(os.Stderr, "[wal-full-snapshot-sink] ", log.LstdFlags),
+		}
+	}
+
+	if err := writeMeta(meta, filepath.Join(snapshotPath, metaFileName)); err != nil {
 		return nil, err
 	}
 
-	return fullSink, nil
+	return sink, nil
 }
 
 // List returns a list of all the snapshots in the store.
 func (s *WALSnapshotStore) List() ([]*raft.SnapshotMeta, error) {
-	return nil, nil
+	// Get the eligible snapshots
+	snapshots, err := os.ReadDir(s.dir)
+	if err != nil {
+		s.logger.Printf("failed to scan snapshot directory: %s", err)
+		return nil, err
+	}
+
+	// Populate the metadata
+	var snapMeta []*raft.SnapshotMeta
+	for _, snap := range snapshots {
+		// Ignore any files
+		if !snap.IsDir() {
+			continue
+		}
+
+		// Ignore any temporary snapshots
+		snapName := snap.Name()
+		if strings.HasSuffix(snapName, tmpSuffix) {
+			s.logger.Printf("ignoring temporary snapshot: %s", snapName)
+			continue
+		}
+
+		// Try to read the meta data
+		meta, err := readMeta(s.dir, snapName)
+		if err != nil {
+			s.logger.Printf("failed to read metadata in %s: %s", snapName, err)
+			continue
+		}
+
+		// Append, but only return up to the retain count XXXX
+		snapMeta = append(snapMeta, meta)
+	}
+
+	// Sort the snapshot, reverse so we get new -> old
+	sort.Sort(sort.Reverse(snapMetaSlice(snapMeta)))
+
+	return snapMeta, nil
 }
 
 // Open opens the snapshot with the given ID.
@@ -214,6 +305,19 @@ func snapshotName(term, index uint64) string {
 	now := time.Now()
 	msec := now.UnixNano() / int64(time.Millisecond)
 	return fmt.Sprintf("%d-%d-%d", term, index, msec)
+}
+
+func syncDir(dir string) error {
+	fh, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	defer fh.Close()
+
+	if err := fh.Sync(); err != nil {
+		return err
+	}
+	return fh.Close()
 }
 
 func nonTmpName(path string) string {
@@ -253,4 +357,43 @@ func writeMeta(meta *raft.SnapshotMeta, metaPath string) error {
 		return err
 	}
 	return fh.Close()
+}
+
+// readMeta is used to read the meta data for a given named backup
+func readMeta(dir, name string) (*raft.SnapshotMeta, error) {
+	// Open the meta file
+	metaPath := filepath.Join(dir, name, metaFileName)
+	fh, err := os.Open(metaPath)
+	if err != nil {
+		return nil, err
+	}
+	defer fh.Close()
+
+	// Read in the JSON
+	meta := &raft.SnapshotMeta{}
+	dec := json.NewDecoder(fh)
+	if err := dec.Decode(meta); err != nil {
+		return nil, err
+	}
+	return meta, nil
+}
+
+type snapMetaSlice []*raft.SnapshotMeta
+
+func (s snapMetaSlice) Len() int {
+	return len(s)
+}
+
+func (s snapMetaSlice) Less(i, j int) bool {
+	if s[i].Term != s[j].Term {
+		return s[i].Term < s[j].Term
+	}
+	if s[i].Index != s[j].Index {
+		return s[i].Index < s[j].Index
+	}
+	return s[i].ID < s[j].ID
+}
+
+func (s snapMetaSlice) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
 }
