@@ -135,14 +135,21 @@ func (w *WALIncrementalSnapshotSink) Write(p []byte) (n int, err error) {
 
 // Cancel closes the snapshot and removes it.
 func (w *WALIncrementalSnapshotSink) Cancel() error {
-	return nil
+	w.closed = true
+	return w.cleanup()
 }
 
-func (w *WALIncrementalSnapshotSink) Close() error {
+func (w *WALIncrementalSnapshotSink) Close() (retErr error) {
 	if w.closed {
 		return nil
 	}
 	w.closed = true
+
+	defer func() {
+		if retErr != nil {
+			w.cleanup()
+		}
+	}()
 
 	if err := w.walFd.Sync(); err != nil {
 		w.logger.Printf("failed syncing snapshot SQLite file: %s", err)
@@ -168,6 +175,15 @@ func (w *WALIncrementalSnapshotSink) Close() error {
 		}
 	}
 
+	return nil
+}
+
+func (w *WALIncrementalSnapshotSink) cleanup() error {
+	w.walFd.Close()
+	os.Remove(w.walFd.Name())
+	os.Remove(nonTmpName(w.walFd.Name()))
+	os.RemoveAll(w.dir)
+	os.RemoveAll(nonTmpName(w.dir))
 	return nil
 }
 
