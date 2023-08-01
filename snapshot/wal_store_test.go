@@ -99,6 +99,19 @@ func Test_WALSnapshotStore_CreateFullThenIncremental(t *testing.T) {
 		t.Fatalf("failed to close sink: %s", err)
 	}
 
+	if !dirExists(filepath.Join(dir, id)) {
+		t.Fatalf("snapshot directory does not exist")
+	}
+	if !fileExists(filepath.Join(dir, id, metaFileName)) {
+		t.Fatalf("snapshot meta file does not exist")
+	}
+	if !fileExists(filepath.Join(dir, id, walFilePath)) {
+		t.Fatalf("snapshot wal file does not exist")
+	}
+	if !compareFileToByteSlice(filepath.Join(dir, id, walFilePath), testBytes) {
+		t.Fatalf("snapshot wal file does not match")
+	}
+
 	snaps, err = str.List()
 	if err != nil {
 		t.Fatalf("failed to list snapshots: %s", err)

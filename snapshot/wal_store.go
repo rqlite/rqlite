@@ -65,7 +65,8 @@ func (w *WALFullSnapshotSink) Close() (retErr error) {
 
 	// Need to worry about crashes here. If we crash after the SQLite file is
 	// synced, but before the snapshot directory is moved into place, we'll
-	// have a dangling SQLite file. And perhaps other issues. XXXX
+	// have a dangling SQLite file. And perhaps other issues. XXXX Perform
+	// cleanup at Store open.
 
 	if err := moveFromTmp(w.sqliteFd.Name()); err != nil {
 		w.logger.Printf("failed to move SQLite file into place: %s", err)
@@ -209,7 +210,7 @@ func (s *WALSnapshotStore) Path() string {
 	return s.dir
 }
 
-// Create creates a new Sink object, ready for the writing a snapshot.
+// Create creates a new Sink object, ready for writing a snapshot.
 func (s *WALSnapshotStore) Create(version raft.SnapshotVersion, index, term uint64, configuration raft.Configuration,
 	configurationIndex uint64, trans raft.Transport) (raft.SnapshotSink, error) {
 
