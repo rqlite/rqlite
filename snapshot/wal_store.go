@@ -22,8 +22,8 @@ const (
 	metaFileName   = "meta.json"
 )
 
-// WalSnapshotSink is a sink for a snapshot.
-type WalSnapshotSink struct {
+// walSnapshotSink is a sink for a snapshot.
+type walSnapshotSink struct {
 	dir       string // The directory to store the snapshot in.
 	parentDir string // The parent directory of the snapshot.
 	dataFd    *os.File
@@ -35,22 +35,22 @@ type WalSnapshotSink struct {
 }
 
 // Write writes the given bytes to the snapshot.
-func (w *WalSnapshotSink) Write(p []byte) (n int, err error) {
+func (w *walSnapshotSink) Write(p []byte) (n int, err error) {
 	return w.dataFd.Write(p)
 }
 
 // Cancel closes the snapshot and removes it.
-func (w *WalSnapshotSink) Cancel() error {
+func (w *walSnapshotSink) Cancel() error {
 	w.closed = true
 	return w.cleanup()
 }
 
 // ID returns the ID of the snapshot.
-func (w *WalSnapshotSink) ID() string {
+func (w *walSnapshotSink) ID() string {
 	return w.meta.ID
 }
 
-func (w *WalSnapshotSink) cleanup() error {
+func (w *walSnapshotSink) cleanup() error {
 	w.dataFd.Close()
 	os.Remove(w.dataFd.Name())
 	os.Remove(nonTmpName(w.dataFd.Name()))
@@ -61,7 +61,7 @@ func (w *WalSnapshotSink) cleanup() error {
 
 // WALFullSnapshotSink is a sink for a full snapshot.
 type WALFullSnapshotSink struct {
-	WalSnapshotSink
+	walSnapshotSink
 }
 
 // Close closes the snapshot.
@@ -117,7 +117,7 @@ func (w *WALFullSnapshotSink) Close() (retErr error) {
 
 // WALIncrementalSnapshotSink is a sink for an incremental snapshot.
 type WALIncrementalSnapshotSink struct {
-	WalSnapshotSink
+	walSnapshotSink
 }
 
 func (w *WALIncrementalSnapshotSink) Close() (retErr error) {
@@ -207,7 +207,7 @@ func (s *WALSnapshotStore) Create(version raft.SnapshotVersion, index, term uint
 			return nil, err
 		}
 		sink = &WALIncrementalSnapshotSink{
-			WalSnapshotSink: WalSnapshotSink{
+			walSnapshotSink: walSnapshotSink{
 				dir:       snapshotPath,
 				parentDir: s.dir,
 				dataFd:    walFd,
@@ -224,7 +224,7 @@ func (s *WALSnapshotStore) Create(version raft.SnapshotVersion, index, term uint
 		}
 
 		sink = &WALFullSnapshotSink{
-			WalSnapshotSink: WalSnapshotSink{
+			walSnapshotSink: walSnapshotSink{
 				dir:       snapshotPath,
 				parentDir: s.dir,
 				dataFd:    sqliteFd,
