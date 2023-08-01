@@ -22,22 +22,46 @@ const (
 	metaFileName   = "meta.json"
 )
 
-// WALFullSnapshotSink is a sink for a full snapshot.
-type WALFullSnapshotSink struct {
+// WalSnapshotSink is a sink for a snapshot.
+type WalSnapshotSink struct {
 	dir       string // The directory to store the snapshot in.
 	parentDir string // The parent directory of the snapshot.
+	dataFd    *os.File
 
-	sqliteFd *os.File
-	meta     *raft.SnapshotMeta
+	meta *raft.SnapshotMeta
 
 	logger *log.Logger
-
 	closed bool
 }
 
 // Write writes the given bytes to the snapshot.
-func (w *WALFullSnapshotSink) Write(p []byte) (n int, err error) {
-	return w.sqliteFd.Write(p)
+func (w *WalSnapshotSink) Write(p []byte) (n int, err error) {
+	return w.dataFd.Write(p)
+}
+
+// Cancel closes the snapshot and removes it.
+func (w *WalSnapshotSink) Cancel() error {
+	w.closed = true
+	return w.cleanup()
+}
+
+// ID returns the ID of the snapshot.
+func (w *WalSnapshotSink) ID() string {
+	return w.meta.ID
+}
+
+func (w *WalSnapshotSink) cleanup() error {
+	w.dataFd.Close()
+	os.Remove(w.dataFd.Name())
+	os.Remove(nonTmpName(w.dataFd.Name()))
+	os.RemoveAll(w.dir)
+	os.RemoveAll(nonTmpName(w.dir))
+	return nil
+}
+
+// WALFullSnapshotSink is a sink for a full snapshot.
+type WALFullSnapshotSink struct {
+	WalSnapshotSink
 }
 
 // Close closes the snapshot.
@@ -53,12 +77,12 @@ func (w *WALFullSnapshotSink) Close() (retErr error) {
 		}
 	}()
 
-	if err := w.sqliteFd.Sync(); err != nil {
+	if err := w.dataFd.Sync(); err != nil {
 		w.logger.Printf("failed syncing snapshot SQLite file: %s", err)
 		return err
 	}
 
-	if err := w.sqliteFd.Close(); err != nil {
+	if err := w.dataFd.Close(); err != nil {
 		w.logger.Printf("failed closing snapshot SQLite file: %s", err)
 		return err
 	}
@@ -68,7 +92,7 @@ func (w *WALFullSnapshotSink) Close() (retErr error) {
 	// have a dangling SQLite file. And perhaps other issues. XXXX Perform
 	// cleanup at Store open.
 
-	if err := moveFromTmp(w.sqliteFd.Name()); err != nil {
+	if err := moveFromTmp(w.dataFd.Name()); err != nil {
 		w.logger.Printf("failed to move SQLite file into place: %s", err)
 		return err
 	}
@@ -91,53 +115,9 @@ func (w *WALFullSnapshotSink) Close() (retErr error) {
 	return nil
 }
 
-// ID returns the ID of the snapshot.
-func (w *WALFullSnapshotSink) ID() string {
-	return w.meta.ID
-}
-
-// Cancel closes the snapshot and removes it.
-func (w *WALFullSnapshotSink) Cancel() error {
-	w.closed = true
-	return w.cleanup()
-}
-
-func (w *WALFullSnapshotSink) cleanup() error {
-	w.sqliteFd.Close()
-	os.Remove(w.sqliteFd.Name())
-	os.Remove(nonTmpName(w.sqliteFd.Name()))
-	os.RemoveAll(w.dir)
-	os.RemoveAll(nonTmpName(w.dir))
-	return nil
-}
-
 // WALIncrementalSnapshotSink is a sink for an incremental snapshot.
 type WALIncrementalSnapshotSink struct {
-	dir       string // The directory to store the snapshot in.
-	parentDir string // The parent directory of the snapshot.
-
-	walFd *os.File
-	meta  *raft.SnapshotMeta
-
-	logger *log.Logger
-
-	closed bool
-}
-
-// ID returns the ID of the snapshot.
-func (w *WALIncrementalSnapshotSink) ID() string {
-	return w.meta.ID
-}
-
-// Write writes the given bytes to the snapshot.
-func (w *WALIncrementalSnapshotSink) Write(p []byte) (n int, err error) {
-	return w.walFd.Write(p)
-}
-
-// Cancel closes the snapshot and removes it.
-func (w *WALIncrementalSnapshotSink) Cancel() error {
-	w.closed = true
-	return w.cleanup()
+	WalSnapshotSink
 }
 
 func (w *WALIncrementalSnapshotSink) Close() (retErr error) {
@@ -152,12 +132,12 @@ func (w *WALIncrementalSnapshotSink) Close() (retErr error) {
 		}
 	}()
 
-	if err := w.walFd.Sync(); err != nil {
+	if err := w.dataFd.Sync(); err != nil {
 		w.logger.Printf("failed syncing snapshot SQLite file: %s", err)
 		return err
 	}
 
-	if err := w.walFd.Close(); err != nil {
+	if err := w.dataFd.Close(); err != nil {
 		w.logger.Printf("failed closing snapshot SQLite file: %s", err)
 		return err
 	}
@@ -176,15 +156,6 @@ func (w *WALIncrementalSnapshotSink) Close() (retErr error) {
 		}
 	}
 
-	return nil
-}
-
-func (w *WALIncrementalSnapshotSink) cleanup() error {
-	w.walFd.Close()
-	os.Remove(w.walFd.Name())
-	os.Remove(nonTmpName(w.walFd.Name()))
-	os.RemoveAll(w.dir)
-	os.RemoveAll(nonTmpName(w.dir))
 	return nil
 }
 
@@ -236,11 +207,13 @@ func (s *WALSnapshotStore) Create(version raft.SnapshotVersion, index, term uint
 			return nil, err
 		}
 		sink = &WALIncrementalSnapshotSink{
-			dir:       snapshotPath,
-			parentDir: s.dir,
-			walFd:     walFd,
-			meta:      meta,
-			logger:    log.New(os.Stderr, "[wal-inc-snapshot-sink] ", log.LstdFlags),
+			WalSnapshotSink: WalSnapshotSink{
+				dir:       snapshotPath,
+				parentDir: s.dir,
+				dataFd:    walFd,
+				meta:      meta,
+				logger:    log.New(os.Stderr, "[wal-inc-snapshot-sink] ", log.LstdFlags),
+			},
 		}
 	} else {
 		// If we're going to create a base, all previous snapshots are now invalid. XXXX
@@ -251,11 +224,13 @@ func (s *WALSnapshotStore) Create(version raft.SnapshotVersion, index, term uint
 		}
 
 		sink = &WALFullSnapshotSink{
-			dir:       snapshotPath,
-			parentDir: s.dir,
-			sqliteFd:  sqliteFd,
-			meta:      meta,
-			logger:    log.New(os.Stderr, "[wal-full-snapshot-sink] ", log.LstdFlags),
+			WalSnapshotSink: WalSnapshotSink{
+				dir:       snapshotPath,
+				parentDir: s.dir,
+				dataFd:    sqliteFd,
+				meta:      meta,
+				logger:    log.New(os.Stderr, "[wal-full-snapshot-sink] ", log.LstdFlags),
+			},
 		}
 	}
 
