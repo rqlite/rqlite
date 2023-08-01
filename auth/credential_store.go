@@ -36,6 +36,8 @@ const (
 	PermBackup = "backup"
 	// PermLoad means user can load a SQLite dump into a node.
 	PermLoad = "load"
+	// PermWatch means user can watch raft log
+	PermWatch = "watch"
 )
 
 // BasicAuther is the interface an object must support to return basic auth information.

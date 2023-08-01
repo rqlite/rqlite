@@ -1401,6 +1401,10 @@ func copyDatabaseConnection(dst, src *sqlite3.SQLiteConn) error {
 	return bk.Finish()
 }
 
+func ParametersToValues(parameters []*command.Parameter) ([]interface{}, error) {
+	return parametersToValues(parameters)
+}
+
 // parametersToValues maps values in the proto params to SQL driver values.
 func parametersToValues(parameters []*command.Parameter) ([]interface{}, error) {
 	if parameters == nil {
