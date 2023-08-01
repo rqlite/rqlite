@@ -3,6 +3,8 @@ package snapshot
 import (
 	"encoding/json"
 	"fmt"
+	"hash"
+	"hash/crc64"
 	"io"
 	"log"
 	"os"
@@ -22,13 +24,23 @@ const (
 	metaFileName   = "meta.json"
 )
 
+// walSnapshotMeta is stored on disk. We also put a CRC
+// on disk so that we can verify the snapshot.
+type walSnapshotMeta struct {
+	raft.SnapshotMeta
+	CRC []byte
+}
+
 // walSnapshotSink is a sink for a snapshot.
 type walSnapshotSink struct {
 	dir       string // The directory to store the snapshot in.
 	parentDir string // The parent directory of the snapshot.
 	dataFd    *os.File
+	dataHash  hash.Hash64
 
-	meta *raft.SnapshotMeta
+	multiW io.Writer
+
+	meta *walSnapshotMeta
 
 	logger *log.Logger
 	closed bool
@@ -36,7 +48,7 @@ type walSnapshotSink struct {
 
 // Write writes the given bytes to the snapshot.
 func (w *walSnapshotSink) Write(p []byte) (n int, err error) {
-	return w.dataFd.Write(p)
+	return w.multiW.Write(p)
 }
 
 // Cancel closes the snapshot and removes it.
@@ -57,6 +69,27 @@ func (w *walSnapshotSink) cleanup() error {
 	os.RemoveAll(w.dir)
 	os.RemoveAll(nonTmpName(w.dir))
 	return nil
+}
+
+func (w *walSnapshotSink) writeMeta() error {
+	fh, err := os.Create(filepath.Join(w.dir, metaFileName))
+	if err != nil {
+		return err
+	}
+	defer fh.Close()
+
+	w.meta.CRC = w.dataHash.Sum(nil)
+
+	// Write out as JSON
+	enc := json.NewEncoder(fh)
+	if err = enc.Encode(w.meta); err != nil {
+		return err
+	}
+
+	if err := fh.Sync(); err != nil {
+		return err
+	}
+	return fh.Close()
 }
 
 // WALFullSnapshotSink is a sink for a full snapshot.
@@ -84,6 +117,10 @@ func (w *WALFullSnapshotSink) Close() (retErr error) {
 
 	if err := w.dataFd.Close(); err != nil {
 		w.logger.Printf("failed closing snapshot SQLite file: %s", err)
+		return err
+	}
+
+	if err := w.writeMeta(); err != nil {
 		return err
 	}
 
@@ -142,6 +179,10 @@ func (w *WALIncrementalSnapshotSink) Close() (retErr error) {
 		return err
 	}
 
+	if err := w.writeMeta(); err != nil {
+		return err
+	}
+
 	if err := moveFromTmp(w.dir); err != nil {
 		w.logger.Printf("failed to move snapshot directory into place: %s", err)
 		return err
@@ -163,8 +204,7 @@ func (w *WALIncrementalSnapshotSink) Close() (retErr error) {
 // WAL-based systems to store only the most recent WAL file for the snapshot, which
 // minimizes disk IO.
 type WALSnapshotStore struct {
-	dir string // The directory to store snapshots in.
-
+	dir    string // The directory to store snapshots in.
 	logger *log.Logger
 }
 
@@ -191,16 +231,20 @@ func (s *WALSnapshotStore) Create(version raft.SnapshotVersion, index, term uint
 		return nil, err
 	}
 
-	meta := &raft.SnapshotMeta{
-		ID:                 snapshotName,
-		Index:              index,
-		Term:               term,
-		Configuration:      configuration,
-		ConfigurationIndex: configurationIndex,
-		// XXX not setting size. Don't think it matters.
+	meta := &walSnapshotMeta{
+		SnapshotMeta: raft.SnapshotMeta{
+			ID:                 snapshotName,
+			Index:              index,
+			Term:               term,
+			Configuration:      configuration,
+			ConfigurationIndex: configurationIndex,
+			// XXX not setting size. Don't think it matters.
+		},
 	}
 
 	var sink raft.SnapshotSink
+	hash := crc64.New(crc64.MakeTable(crc64.ECMA))
+
 	if s.hasBase() {
 		walFd, err := os.Create(filepath.Join(snapshotPath, walFilePath))
 		if err != nil {
@@ -211,6 +255,8 @@ func (s *WALSnapshotStore) Create(version raft.SnapshotVersion, index, term uint
 				dir:       snapshotPath,
 				parentDir: s.dir,
 				dataFd:    walFd,
+				dataHash:  hash,
+				multiW:    io.MultiWriter(walFd, hash),
 				meta:      meta,
 				logger:    log.New(os.Stderr, "[wal-inc-snapshot-sink] ", log.LstdFlags),
 			},
@@ -228,14 +274,12 @@ func (s *WALSnapshotStore) Create(version raft.SnapshotVersion, index, term uint
 				dir:       snapshotPath,
 				parentDir: s.dir,
 				dataFd:    sqliteFd,
+				dataHash:  crc64.New(crc64.MakeTable(crc64.ECMA)),
+				multiW:    io.MultiWriter(sqliteFd, hash),
 				meta:      meta,
 				logger:    log.New(os.Stderr, "[wal-full-snapshot-sink] ", log.LstdFlags),
 			},
 		}
-	}
-
-	if err := writeMeta(meta, filepath.Join(snapshotPath, metaFileName)); err != nil {
-		return nil, err
 	}
 
 	return sink, nil
@@ -251,7 +295,7 @@ func (s *WALSnapshotStore) List() ([]*raft.SnapshotMeta, error) {
 	}
 
 	// Populate the metadata
-	var snapMeta []*raft.SnapshotMeta
+	var snapMeta []*walSnapshotMeta
 	for _, snap := range snapshots {
 		// Ignore any files
 		if !snap.IsDir() {
@@ -266,7 +310,7 @@ func (s *WALSnapshotStore) List() ([]*raft.SnapshotMeta, error) {
 		}
 
 		// Try to read the meta data
-		meta, err := readMeta(s.dir, snapName)
+		meta, err := s.readMeta(snapName)
 		if err != nil {
 			s.logger.Printf("failed to read metadata in %s: %s", snapName, err)
 			continue
@@ -279,12 +323,36 @@ func (s *WALSnapshotStore) List() ([]*raft.SnapshotMeta, error) {
 	// Sort the snapshot, reverse so we get new -> old
 	sort.Sort(sort.Reverse(snapMetaSlice(snapMeta)))
 
-	return snapMeta, nil
+	// Convert to the public type
+	var ret []*raft.SnapshotMeta
+	for _, meta := range snapMeta {
+		ret = append(ret, &meta.SnapshotMeta)
+	}
+	return ret, nil
 }
 
 // Open opens the snapshot with the given ID.
 func (s *WALSnapshotStore) Open(id string) (*raft.SnapshotMeta, io.ReadCloser, error) {
 	return nil, nil, nil
+}
+
+// readMeta is used to read the meta data for a given named backup
+func (s *WALSnapshotStore) readMeta(name string) (*walSnapshotMeta, error) {
+	// Open the meta file
+	metaPath := filepath.Join(s.dir, name, metaFileName)
+	fh, err := os.Open(metaPath)
+	if err != nil {
+		return nil, err
+	}
+	defer fh.Close()
+
+	// Read in the JSON
+	meta := &walSnapshotMeta{}
+	dec := json.NewDecoder(fh)
+	if err := dec.Decode(meta); err != nil {
+		return nil, err
+	}
+	return meta, nil
 }
 
 // return true if sqliteFilePath exists in the snapshot directory
@@ -329,48 +397,7 @@ func fileExists(path string) bool {
 	return !os.IsNotExist(err)
 }
 
-func writeMeta(meta *raft.SnapshotMeta, metaPath string) error {
-	var err error
-	// Open the meta file
-	var fh *os.File
-	fh, err = os.Create(metaPath)
-	if err != nil {
-		return err
-	}
-	defer fh.Close()
-
-	// Write out as JSON
-	enc := json.NewEncoder(fh)
-	if err = enc.Encode(meta); err != nil {
-		return err
-	}
-
-	if err := fh.Sync(); err != nil {
-		return err
-	}
-	return fh.Close()
-}
-
-// readMeta is used to read the meta data for a given named backup
-func readMeta(dir, name string) (*raft.SnapshotMeta, error) {
-	// Open the meta file
-	metaPath := filepath.Join(dir, name, metaFileName)
-	fh, err := os.Open(metaPath)
-	if err != nil {
-		return nil, err
-	}
-	defer fh.Close()
-
-	// Read in the JSON
-	meta := &raft.SnapshotMeta{}
-	dec := json.NewDecoder(fh)
-	if err := dec.Decode(meta); err != nil {
-		return nil, err
-	}
-	return meta, nil
-}
-
-type snapMetaSlice []*raft.SnapshotMeta
+type snapMetaSlice []*walSnapshotMeta
 
 func (s snapMetaSlice) Len() int {
 	return len(s)
