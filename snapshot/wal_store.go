@@ -1,6 +1,7 @@
 package snapshot
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"hash"
@@ -333,7 +334,49 @@ func (s *WALSnapshotStore) List() ([]*raft.SnapshotMeta, error) {
 
 // Open opens the snapshot with the given ID.
 func (s *WALSnapshotStore) Open(id string) (*raft.SnapshotMeta, io.ReadCloser, error) {
+	// Try to read the meta data
+	meta, err := s.readMeta(id)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// if the snapshot directory contains a WAL file, then it's an incremental snapshot
+	// otherwise it's a full snapshot
+	if fileExists(filepath.Join(s.dir, id, walFilePath)) {
+		fh, err := os.Open(filepath.Join(s.dir, id, walFilePath))
+		if err != nil {
+			return nil, nil, err
+		}
+
+		// Compute and verify the hash
+		dataHash := crc64.New(crc64.MakeTable(crc64.ECMA))
+		_, err = io.Copy(dataHash, fh)
+		if err != nil {
+			s.logger.Println("failed to read WAL file:", err)
+			fh.Close()
+			return nil, nil, err
+		}
+		computed := dataHash.Sum(nil)
+		if !bytes.Equal(meta.CRC, computed) {
+			s.logger.Println("CRC checksum failed", "stored", meta.CRC, "computed", computed)
+			fh.Close()
+			return nil, nil, fmt.Errorf("CRC mismatch")
+		}
+
+		// Rewind the file
+		if _, err := fh.Seek(0, 0); err != nil {
+			s.logger.Println("failed to rewind WAL file:", err)
+			fh.Close()
+			return nil, nil, err
+		}
+
+		// Return the file XXXX -- this actually won't be the final implementation. What
+		// the snapshot needs to be is the database and all WAL files.
+		return &meta.SnapshotMeta, fh, nil
+	}
+
 	return nil, nil, nil
+
 }
 
 // readMeta is used to read the meta data for a given named backup

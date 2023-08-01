@@ -1,6 +1,7 @@
 package snapshot
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -131,6 +132,16 @@ func Test_WALSnapshotStore_CreateFullThenIncremental(t *testing.T) {
 	if !reflect.DeepEqual(snaps[0].Configuration, makeTestConfiguration()) {
 		t.Fatalf("unexpected Configuration, exp=%s got=%s", makeTestConfiguration(), snaps[0].Configuration)
 	}
+
+	// Open incremental snapshot, which will trigger a bunch of checks.
+	_, rc, err := str.Open(id)
+	if err != nil {
+		t.Fatalf("failed to open snapshot: %s", err)
+	}
+	defer rc.Close()
+	if !compareReaderToByteSlice(rc, testBytes) {
+		t.Fatalf("snapshot wal file does not match")
+	}
 }
 
 func makeTempDir() string {
@@ -162,7 +173,16 @@ func dirExists(path string) bool {
 }
 
 func compareFileToByteSlice(path string, b []byte) bool {
-	contents, err := os.ReadFile(path)
+	fd, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer fd.Close()
+	return compareReaderToByteSlice(fd, b)
+}
+
+func compareReaderToByteSlice(r io.Reader, b []byte) bool {
+	contents, err := io.ReadAll(r)
 	if err != nil {
 		return false
 	}
