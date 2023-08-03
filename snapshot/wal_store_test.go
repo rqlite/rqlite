@@ -24,7 +24,8 @@ func Test_WALSnapshotStore_CreateFullThenIncremental(t *testing.T) {
 	defer os.RemoveAll(dir)
 	str := NewWALSnapshotStore(dir)
 
-	sink, err := str.Create(1, 2, 3, makeTestConfiguration(), 4, nil)
+	testConfig1 := makeTestConfiguration("1", "2")
+	sink, err := str.Create(1, 2, 3, testConfig1, 4, nil)
 	if err != nil {
 		t.Fatalf("failed to create 1st snapshot: %s", err)
 	}
@@ -73,11 +74,12 @@ func Test_WALSnapshotStore_CreateFullThenIncremental(t *testing.T) {
 	if snaps[0].Term != 3 {
 		t.Fatalf("unexpected Term, exp=3 got=%d", snaps[0].Term)
 	}
-	if !reflect.DeepEqual(snaps[0].Configuration, makeTestConfiguration()) {
-		t.Fatalf("unexpected Configuration, exp=%s got=%s", makeTestConfiguration(), snaps[0].Configuration)
+	if !reflect.DeepEqual(snaps[0].Configuration, testConfig1) {
+		t.Fatalf("unexpected Configuration, exp=%s got=%s", testConfig1, snaps[0].Configuration)
 	}
 
-	sink, err = str.Create(1, 5, 6, makeTestConfiguration(), 4, nil)
+	testConfig2 := makeTestConfiguration("3", "4")
+	sink, err = str.Create(1, 5, 6, testConfig2, 4, nil)
 	if err != nil {
 		t.Fatalf("failed to create 2nd snapshot: %s", err)
 	}
@@ -129,8 +131,8 @@ func Test_WALSnapshotStore_CreateFullThenIncremental(t *testing.T) {
 	if snaps[0].Term != 6 {
 		t.Fatalf("unexpected Term, exp=3 got=%d", snaps[0].Term)
 	}
-	if !reflect.DeepEqual(snaps[0].Configuration, makeTestConfiguration()) {
-		t.Fatalf("unexpected Configuration, exp=%s got=%s", makeTestConfiguration(), snaps[0].Configuration)
+	if !reflect.DeepEqual(snaps[0].Configuration, testConfig2) {
+		t.Fatalf("unexpected Configuration, exp=%s got=%s", testConfig2, snaps[0].Configuration)
 	}
 
 	// Open incremental snapshot, which will trigger a bunch of checks.
@@ -152,13 +154,12 @@ func makeTempDir() string {
 	return dir
 }
 
-// functtion to create a Raft configuration suitable for testing
-func makeTestConfiguration() raft.Configuration {
+func makeTestConfiguration(i, a string) raft.Configuration {
 	return raft.Configuration{
 		Servers: []raft.Server{
 			{
-				ID:      "4002",
-				Address: "localhost:4002",
+				ID:      raft.ServerID(i),
+				Address: raft.ServerAddress(a),
 			},
 		},
 	}
