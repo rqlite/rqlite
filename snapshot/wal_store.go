@@ -93,6 +93,15 @@ func (w *walSnapshotSink) writeMeta() error {
 	return fh.Close()
 }
 
+// WALStoreCheck performs a series of checks and cleanups on the WAL store. It should be
+// called before opening the store.
+func WALStoreCheck(dir string) error {
+	// Verify checksums?
+	// Check -- and repair -- dangling snapshots?
+	// Remove any tmp directories
+	return nil
+}
+
 // WALFullSnapshotSink is a sink for a full snapshot.
 type WALFullSnapshotSink struct {
 	walSnapshotSink
@@ -149,7 +158,7 @@ func (w *WALFullSnapshotSink) Close() (retErr error) {
 		}
 	}
 
-	// Reap old snapshots here XXXX -- best effort! Don't cleanup
+	w.logger.Printf("full snapshot (ID %s) written to %s", w.meta.ID, w.dataFd.Name())
 	return nil
 }
 
@@ -198,6 +207,9 @@ func (w *WALIncrementalSnapshotSink) Close() (retErr error) {
 		}
 	}
 
+	// Cleanup the old snapshots
+
+	w.logger.Printf("incremental snapshot (ID %s) written to %s", w.meta.ID, w.dataFd.Name())
 	return nil
 }
 
@@ -263,8 +275,14 @@ func (s *WALSnapshotStore) Create(version raft.SnapshotVersion, index, term uint
 			},
 		}
 	} else {
-		// If we're going to create a base, all previous snapshots are now invalid. XXXX
-		// Create the file to where the SQLite file will be written.
+		// If we're going to create a base, all previous snapshots are now invalid. There
+		// shouldn't be any previous snapshots without a base being present, but if there
+		// are, we need to clean them up. This could happen if someone manually deletes
+		// the base file.
+		if err := s.deleteAllSnapshots(); err != nil {
+			return nil, err
+		}
+
 		sqliteFd, err := os.Create(filepath.Join(s.dir, sqliteFilePath) + tmpSuffix)
 		if err != nil {
 			return nil, err
@@ -397,6 +415,23 @@ func (s *WALSnapshotStore) readMeta(name string) (*walSnapshotMeta, error) {
 // return true if sqliteFilePath exists in the snapshot directory
 func (s *WALSnapshotStore) hasBase() bool {
 	return fileExists(filepath.Join(s.dir, sqliteFilePath))
+}
+
+func (s *WALSnapshotStore) deleteAllSnapshots() error {
+	dirs, err := os.ReadDir(s.dir)
+	if err != nil {
+		return err
+	}
+
+	for _, d := range dirs {
+		if !d.IsDir() || strings.HasSuffix(d.Name(), tmpSuffix) {
+			continue
+		}
+		if err := os.RemoveAll(filepath.Join(s.dir, d.Name())); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // snapshotName generates a name for the snapshot.
