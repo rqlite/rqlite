@@ -316,20 +316,16 @@ func (s *WALSnapshotStore) List() ([]*raft.SnapshotMeta, error) {
 			s.logger.Printf("failed to read metadata in %s: %s", snapName, err)
 			continue
 		}
-
-		// Append, but only return up to the retain count XXXX
 		snapMeta = append(snapMeta, meta)
 	}
 
 	// Sort the snapshot, reverse so we get new -> old
 	sort.Sort(sort.Reverse(snapMetaSlice(snapMeta)))
 
-	// Convert to the public type
-	var ret []*raft.SnapshotMeta
-	for _, meta := range snapMeta {
-		ret = append(ret, &meta.SnapshotMeta)
-	}
-	return ret, nil
+	// Convert to the public type and make only 1 available.
+	return []*raft.SnapshotMeta{
+		&snapMeta[0].SnapshotMeta,
+	}, nil
 }
 
 // Open opens the snapshot with the given ID.

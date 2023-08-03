@@ -119,8 +119,8 @@ func Test_WALSnapshotStore_CreateFullThenIncremental(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to list snapshots: %s", err)
 	}
-	if len(snaps) != 2 {
-		t.Fatalf("expected 2 snapshot, got %d", len(snaps))
+	if len(snaps) != 1 {
+		t.Fatalf("expected 1 snapshot, got %d", len(snaps))
 	}
 	if snaps[0].ID != id {
 		t.Fatalf("unexpected ID, exp=%s got=%s", id, snaps[0].ID)
