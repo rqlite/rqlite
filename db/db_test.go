@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/rqlite/rqlite/command"
 	"github.com/rqlite/rqlite/command/encoding"
@@ -337,4 +339,22 @@ func mustCreateClosedFile(path string) {
 	if err := f.Close(); err != nil {
 		panic("failed to close file")
 	}
+}
+
+func mustStat(path string) os.FileInfo {
+	fi, err := os.Stat(path)
+	if err != nil {
+		panic("failed to stat file")
+	}
+	return fi
+}
+
+func mustFileSize(path string) int64 {
+	fi := mustStat(path)
+	return fi.Size()
+}
+
+func mustRandomInt(n int) int {
+	rand.Seed(time.Now().UnixNano())
+	return rand.Intn(n)
 }
