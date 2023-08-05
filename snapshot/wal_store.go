@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/raft"
+	"github.com/rqlite/rqlite/db"
 )
 
 const (
@@ -29,7 +30,7 @@ const (
 // on disk so that we can verify the snapshot.
 type walSnapshotMeta struct {
 	raft.SnapshotMeta
-	CRC []byte
+	CRC []byte // CRC of the data XXX shoudl decide if i really need this.
 }
 
 // walSnapshotSink is a sink for a snapshot.
@@ -367,15 +368,50 @@ func (s *WALSnapshotStore) Open(id string) (*raft.SnapshotMeta, io.ReadCloser, e
 	return nil, nil, nil
 }
 
-// ReapSnapshots reaps any snapshots beyond the retain count.
-func (s *WALSnapshotStore) ReapSnapshots() error {
-	_, err := s.getSnapshots()
+// ReapSnapshots removes snapshots that are no longer needed. It does this by
+// checkpointing WAL-based snapshots into the base SQLite file. The function
+// returns the number of snapshots removed, or an error
+func (s *WALSnapshotStore) ReapSnapshots() (int, error) {
+	snapshots, err := s.getSnapshots()
 	if err != nil {
 		s.logger.Printf("failed to get snapshots: %s", err)
-		return err
+		return 0, err
 	}
 
-	return nil
+	// Keeping 2 snapshots -- 1 full and 1 incremental --  makes it much easier to
+	// reason about the fixing up the Snapshot store if we crash in the middle of reaping.
+	if len(snapshots) <= 2 {
+		return 0, nil
+	}
+
+	// We have at least 3 incremental snapshots. We need to checkpoint the WAL files
+	// starting with the oldest snapshot. We'll do this by opening the base SQLite file
+	// and then replaying the WAL files into it. We'll then delete the snapshot.
+	n := 0
+	sort.Sort(sort.Reverse(snapMetaSlice(snapshots)))
+	for _, snap := range snapshots[1 : len(snapshots)-1] {
+		// Move the WAL file to beside the base SQLite file
+		walPath := filepath.Join(s.dir, snap.ID, walFilePath)
+		if err := os.Rename(walPath, filepath.Join(s.dir, walFilePath)); err != nil {
+			s.logger.Printf("failed to move WAL file %s: %s", walPath, err)
+			return 0, err
+		}
+
+		// Checkpoint the WAL file into the base SQLite file
+		if db.ReplayWAL(filepath.Join(s.dir, sqliteFilePath), []string{walPath}, false) != nil {
+			s.logger.Printf("failed to replay WAL file %s: %s", walPath, err)
+			return 0, err
+		}
+
+		// Delete the snapshot
+		if err := os.RemoveAll(filepath.Join(s.dir, snap.ID)); err != nil {
+			s.logger.Printf("failed to delete snapshot %s: %s", snap.ID, err)
+			return 0, err
+		}
+		n++
+	}
+
+	return n, nil
 }
 
 func (s *WALSnapshotStore) getSnapshots() ([]*walSnapshotMeta, error) {
