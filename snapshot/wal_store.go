@@ -139,12 +139,13 @@ func (w *WALFullSnapshotSink) Close() (retErr error) {
 	// have a dangling SQLite file. And perhaps other issues. XXXX Perform
 	// cleanup at Store open.
 
-	if err := moveFromTmp(w.dataFd.Name()); err != nil {
+	if _, err := moveFromTmp(w.dataFd.Name()); err != nil {
 		w.logger.Printf("failed to move SQLite file into place: %s", err)
 		return err
 	}
 
-	if err := moveFromTmp(w.dir); err != nil {
+	dstDir, err := moveFromTmp(w.dir)
+	if err != nil {
 		w.logger.Printf("failed to move snapshot directory into place: %s", err)
 		return err
 	}
@@ -158,7 +159,7 @@ func (w *WALFullSnapshotSink) Close() (retErr error) {
 		}
 	}
 
-	w.logger.Printf("full snapshot (ID %s) written to %s", w.meta.ID, w.dataFd.Name())
+	w.logger.Printf("full snapshot (ID %s) written to %s", w.meta.ID, dstDir)
 	return nil
 }
 
@@ -193,7 +194,8 @@ func (w *WALIncrementalSnapshotSink) Close() (retErr error) {
 		return err
 	}
 
-	if err := moveFromTmp(w.dir); err != nil {
+	dstDir, err := moveFromTmp(w.dir)
+	if err != nil {
 		w.logger.Printf("failed to move snapshot directory into place: %s", err)
 		return err
 	}
@@ -209,7 +211,7 @@ func (w *WALIncrementalSnapshotSink) Close() (retErr error) {
 
 	// Cleanup the old snapshots
 
-	w.logger.Printf("incremental snapshot (ID %s) written to %s", w.meta.ID, w.dataFd.Name())
+	w.logger.Printf("incremental snapshot (ID %s) written to %s", w.meta.ID, dstDir)
 	return nil
 }
 
@@ -306,44 +308,17 @@ func (s *WALSnapshotStore) Create(version raft.SnapshotVersion, index, term uint
 
 // List returns a list of all the snapshots in the store.
 func (s *WALSnapshotStore) List() ([]*raft.SnapshotMeta, error) {
-	// Get the eligible snapshots
-	snapshots, err := os.ReadDir(s.dir)
+	snapshots, err := s.getSnapshots()
 	if err != nil {
-		s.logger.Printf("failed to scan snapshot directory: %s", err)
 		return nil, err
 	}
 
-	// Populate the metadata
-	var snapMeta []*walSnapshotMeta
-	for _, snap := range snapshots {
-		// Ignore any files
-		if !snap.IsDir() {
-			continue
-		}
-
-		// Ignore any temporary snapshots
-		snapName := snap.Name()
-		if strings.HasSuffix(snapName, tmpSuffix) {
-			s.logger.Printf("ignoring temporary snapshot: %s", snapName)
-			continue
-		}
-
-		// Try to read the meta data
-		meta, err := s.readMeta(snapName)
-		if err != nil {
-			s.logger.Printf("failed to read metadata in %s: %s", snapName, err)
-			continue
-		}
-		snapMeta = append(snapMeta, meta)
-	}
-
-	// Sort the snapshot, reverse so we get new -> old
-	sort.Sort(sort.Reverse(snapMetaSlice(snapMeta)))
-
 	// Convert to the public type and make only 1 available.
-	return []*raft.SnapshotMeta{
-		&snapMeta[0].SnapshotMeta,
-	}, nil
+	var snaps = []*raft.SnapshotMeta{}
+	if len(snapshots) > 0 {
+		snaps = append(snaps, &snapshots[0].SnapshotMeta)
+	}
+	return snaps, nil
 }
 
 // Open opens the snapshot with the given ID.
@@ -355,7 +330,7 @@ func (s *WALSnapshotStore) Open(id string) (*raft.SnapshotMeta, io.ReadCloser, e
 	}
 
 	// if the snapshot directory contains a WAL file, then it's an incremental snapshot
-	// otherwise it's a full snapshot
+	// otherwise it's a full snapshot.
 	if fileExists(filepath.Join(s.dir, id, walFilePath)) {
 		fh, err := os.Open(filepath.Join(s.dir, id, walFilePath))
 		if err != nil {
@@ -390,7 +365,51 @@ func (s *WALSnapshotStore) Open(id string) (*raft.SnapshotMeta, io.ReadCloser, e
 	}
 
 	return nil, nil, nil
+}
 
+// ReapSnapshots reaps any snapshots beyond the retain count.
+func (s *WALSnapshotStore) ReapSnapshots() error {
+	_, err := s.getSnapshots()
+	if err != nil {
+		s.logger.Printf("failed to get snapshots: %s", err)
+		return err
+	}
+
+	return nil
+}
+
+func (s *WALSnapshotStore) getSnapshots() ([]*walSnapshotMeta, error) {
+	snapshots, err := os.ReadDir(s.dir)
+	if err != nil {
+		return nil, err
+	}
+
+	// Populate the metadata
+	var snapMeta []*walSnapshotMeta
+	for _, snap := range snapshots {
+		// Ignore any files
+		if !snap.IsDir() {
+			continue
+		}
+
+		// Ignore any temporary snapshots
+		snapName := snap.Name()
+		if strings.HasSuffix(snapName, tmpSuffix) {
+			continue
+		}
+
+		// Try to read the meta data
+		meta, err := s.readMeta(snapName)
+		if err != nil {
+			return nil, err
+		}
+		snapMeta = append(snapMeta, meta)
+	}
+
+	// Sort the snapshot, reverse so we get new -> old
+	sort.Sort(sort.Reverse(snapMetaSlice(snapMeta)))
+
+	return snapMeta, nil
 }
 
 // readMeta is used to read the meta data for a given named backup
@@ -458,12 +477,12 @@ func nonTmpName(path string) string {
 	return strings.TrimSuffix(path, tmpSuffix)
 }
 
-func moveFromTmp(src string) error {
+func moveFromTmp(src string) (string, error) {
 	dst := nonTmpName(src)
 	if err := os.Rename(src, dst); err != nil {
-		return err
+		return "", err
 	}
-	return nil
+	return dst, nil
 }
 
 func fileExists(path string) bool {

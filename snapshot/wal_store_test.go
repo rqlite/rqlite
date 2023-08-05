@@ -19,6 +19,23 @@ func Test_NewWALSnapshotStore(t *testing.T) {
 	}
 }
 
+func Test_NewWALSnapshotStore_ListEmpty(t *testing.T) {
+	dir := makeTempDir()
+	defer os.RemoveAll(dir)
+	s := NewWALSnapshotStore(dir)
+	if s.Path() != dir {
+		t.Fatalf("unexpected dir, exp=%s got=%s", dir, s.Path())
+	}
+
+	snaps, err := s.List()
+	if err != nil {
+		t.Fatalf("failed to list snapshots: %s", err)
+	}
+	if len(snaps) != 0 {
+		t.Fatalf("expected 0 snapshots, got %d", len(snaps))
+	}
+}
+
 func Test_WALSnapshotStore_CreateFullThenIncremental(t *testing.T) {
 	dir := makeTempDir()
 	defer os.RemoveAll(dir)
