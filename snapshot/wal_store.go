@@ -394,7 +394,7 @@ func (s *WALSnapshotStore) getSnapshots() ([]*walSnapshotMeta, error) {
 
 		// Ignore any temporary snapshots
 		snapName := snap.Name()
-		if strings.HasSuffix(snapName, tmpSuffix) {
+		if isTmpName(snapName) {
 			continue
 		}
 
@@ -443,7 +443,7 @@ func (s *WALSnapshotStore) deleteAllSnapshots() error {
 	}
 
 	for _, d := range dirs {
-		if !d.IsDir() || strings.HasSuffix(d.Name(), tmpSuffix) {
+		if !d.IsDir() || isTmpName(d.Name()) {
 			continue
 		}
 		if err := os.RemoveAll(filepath.Join(s.dir, d.Name())); err != nil {
@@ -475,6 +475,10 @@ func syncDir(dir string) error {
 
 func nonTmpName(path string) string {
 	return strings.TrimSuffix(path, tmpSuffix)
+}
+
+func isTmpName(path string) bool {
+	return strings.HasSuffix(path, tmpSuffix)
 }
 
 func moveFromTmp(src string) (string, error) {
