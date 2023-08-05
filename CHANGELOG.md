@@ -6,6 +6,7 @@ Release 8.0.0 is in active development, with the goal of supporting much larger 
 - [PR #1343](https://github.com/rqlite/rqlite/pull/1343): Remove no-longer supported command-line options.
 - [PR #1342](https://github.com/rqlite/rqlite/pull/1342): Integrate chunked-loading, applying to auto-restore from the Cloud.
 - [PR #1347](https://github.com/rqlite/rqlite/pull/1347): Migrate HTTP layer to chunked loading.
+- [PR #1355](https://github.com/rqlite/rqlite/pull/1355): Database layer can run an integrity check.
 
 ## 7.21.4 (July 8th 2023)
 ### Implementation changes and bug fixes

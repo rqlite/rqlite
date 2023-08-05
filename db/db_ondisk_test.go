@@ -39,6 +39,52 @@ func Test_IsValidSQLiteOnDisk(t *testing.T) {
 	}
 }
 
+func Test_CheckIntegrityOnDisk(t *testing.T) {
+	path := mustTempFile()
+	defer os.Remove(path)
+
+	dsn := fmt.Sprintf("file:%s", path)
+	db, err := sql.Open("sqlite3", dsn)
+	if err != nil {
+		t.Fatalf("failed to create SQLite database: %s", err.Error())
+	}
+	_, err = db.Exec("CREATE TABLE foo (name TEXT)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("failed to close database: %s", err.Error())
+	}
+
+	for _, check := range []bool{true, false} {
+		ok, err := CheckIntegrity(path, check)
+		if err != nil {
+			t.Fatalf("failed to check integrity of database (full=%t): %s", check, err.Error())
+		}
+		if !ok {
+			t.Fatalf("database failed integrity check (full=%t)", check)
+		}
+	}
+
+	sz := int(mustFileSize(path))
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read SQLite file: %s", err.Error())
+	}
+
+	// Chop the file in half, integrity check shouldn't even be error-free
+	if err := os.WriteFile(path, b[:len(b)-sz/2], 0644); err != nil {
+		t.Fatalf("failed to write SQLite file: %s", err.Error())
+	}
+	for _, check := range []bool{true, false} {
+		_, err := CheckIntegrity(path, check)
+		if err == nil {
+			t.Fatalf("succeeded checking integrity of database (full=%t): %s", check, err.Error())
+		}
+	}
+	// Unable to create a data set that actually fails integrity check.
+}
+
 func Test_IsWALModeEnabledOnDiskDELETE(t *testing.T) {
 	path := mustTempFile()
 	defer os.Remove(path)

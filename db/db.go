@@ -215,6 +215,35 @@ func RemoveFiles(path string) error {
 	return nil
 }
 
+// CheckIntegrity runs a PRAGMA integrity_check on the database at the given path.
+// If full is true, a full integrity check is performed, otherwise a quick check.
+func CheckIntegrity(path string, full bool) (bool, error) {
+	db, err := Open(path, false, false)
+	if err != nil {
+		return false, err
+	}
+	defer db.Close()
+
+	sql := "PRAGMA quick_check"
+	if full {
+		sql = "PRAGMA integrity_check"
+	}
+
+	rows, err := db.rwDB.Query(sql)
+	if err != nil {
+		return false, err
+	}
+
+	var result string
+	if !rows.Next() {
+		return false, nil
+	}
+	if err := rows.Scan(&result); err != nil {
+		return false, err
+	}
+	return result == "ok", nil
+}
+
 // ReplayWAL replays the given WAL files into the database at the given path,
 // in the order given by the slice. The supplied WAL files must be in the same
 // directory as the database file and are removed as a result of the replay operation.
