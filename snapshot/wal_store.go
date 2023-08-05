@@ -403,7 +403,7 @@ func (s *WALSnapshotStore) ReapSnapshots() (int, error) {
 			return 0, err
 		}
 
-		// Delete the snapshot
+		// Delete the snapshot directory that contained the WAL file
 		if err := os.RemoveAll(filepath.Join(s.dir, snap.ID)); err != nil {
 			s.logger.Printf("failed to delete snapshot %s: %s", snap.ID, err)
 			return 0, err
