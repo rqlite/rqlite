@@ -27,6 +27,8 @@ const (
 	snapWALFile       = "wal"
 	tmpSuffix         = ".tmp"
 	metaFileName      = "meta.json"
+
+	fullSnapshotFlagFile = "FULL"
 )
 
 // walSnapshotMeta is stored on disk. We also put a CRC
@@ -38,6 +40,8 @@ type walSnapshotMeta struct {
 
 // walSnapshotSink is a sink for a snapshot.
 type walSnapshotSink struct {
+	store *WALSnapshotStore
+
 	dir       string // The directory to store the snapshot in.
 	parentDir string // The parent directory of the snapshot.
 	dataFd    *os.File
@@ -134,6 +138,12 @@ func (w *WALFullSnapshotSink) Close() (retErr error) {
 		return err
 	}
 
+	// Mark that this is a full snapshot
+	if err := os.WriteFile(filepath.Join(w.dir, fullSnapshotFlagFile), []byte{}, 0644); err != nil {
+		w.logger.Printf("failed to create FULL marker file: %s", err)
+		return err
+	}
+
 	if err := w.writeMeta(); err != nil {
 		return err
 	}
@@ -212,10 +222,12 @@ func (w *WALIncrementalSnapshotSink) Close() (retErr error) {
 			return err
 		}
 	}
-
-	// Cleanup the old snapshots
-
 	w.logger.Printf("incremental snapshot (ID %s) written to %s", w.meta.ID, dstDir)
+
+	_, err = w.store.ReapSnapshots()
+	if err != nil {
+		w.logger.Printf("failed to reap snapshots: %s", err)
+	}
 	return nil
 }
 
@@ -271,6 +283,7 @@ func (s *WALSnapshotStore) Create(version raft.SnapshotVersion, index, term uint
 		}
 		sink = &WALIncrementalSnapshotSink{
 			walSnapshotSink: walSnapshotSink{
+				store:     s,
 				dir:       snapshotPath,
 				parentDir: s.dir,
 				dataFd:    walFd,
@@ -296,6 +309,7 @@ func (s *WALSnapshotStore) Create(version raft.SnapshotVersion, index, term uint
 
 		sink = &WALFullSnapshotSink{
 			walSnapshotSink: walSnapshotSink{
+				store:     s,
 				dir:       snapshotPath,
 				parentDir: s.dir,
 				dataFd:    sqliteFd,
