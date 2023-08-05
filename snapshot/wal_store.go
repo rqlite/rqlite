@@ -394,19 +394,19 @@ func (s *WALSnapshotStore) ReapSnapshots() (int, error) {
 		walPath := filepath.Join(s.dir, snap.ID, walFilePath)
 		if err := os.Rename(walPath, filepath.Join(s.dir, walFilePath)); err != nil {
 			s.logger.Printf("failed to move WAL file %s: %s", walPath, err)
-			return 0, err
+			return n, err
 		}
 
 		// Checkpoint the WAL file into the base SQLite file
 		if db.ReplayWAL(filepath.Join(s.dir, sqliteFilePath), []string{walPath}, false) != nil {
 			s.logger.Printf("failed to replay WAL file %s: %s", walPath, err)
-			return 0, err
+			return n, err
 		}
 
 		// Delete the snapshot directory that contained the WAL file
 		if err := os.RemoveAll(filepath.Join(s.dir, snap.ID)); err != nil {
 			s.logger.Printf("failed to delete snapshot %s: %s", snap.ID, err)
-			return 0, err
+			return n, err
 		}
 		n++
 	}
