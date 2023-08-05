@@ -366,8 +366,10 @@ func Test_WALReplayOK(t *testing.T) {
 			}
 		}
 
-		// Check that there are no files ending in -wal in the replay directory
-		walFiles, err := filepath.Glob(filepath.Join(replayDir, "*-wal"))
+		// Check that there are no files related to WALs in the replay directory
+		// Both the copied WAL files should be gone, and there should be no
+		// "real" WAL file either.
+		walFiles, err := filepath.Glob(filepath.Join(replayDir, "*-wal*"))
 		if err != nil {
 			t.Fatalf("failed to glob replay directory: %s", err.Error())
 		}
