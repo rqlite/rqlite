@@ -246,10 +246,10 @@ func CheckIntegrity(path string, full bool) (bool, error) {
 
 // ReplayWAL replays the given WAL files into the database at the given path,
 // in the order given by the slice. The supplied WAL files must be in the same
-// directory as the database file and are removed as a result of the replay operation.
-// The "real" WAL file is also removed. If deleteMode is true, the database file
-// will be in DELETE mode after the replay operation, otherwise it will be in WAL
-// mode.
+// directory as the database file and are deleted as a result of the replay operation.
+// If deleteMode is true, the database file will be in DELETE mode after the replay
+// operation, otherwise it will be in WAL mode. Finally, regardless of deleteMode,
+// there will be no "true" WAL file after the replay operation.
 func ReplayWAL(path string, wals []string, deleteMode bool) error {
 	for _, wal := range wals {
 		if filepath.Dir(wal) != filepath.Dir(path) {
@@ -275,6 +275,9 @@ func ReplayWAL(path string, wals []string, deleteMode bool) error {
 		if err := db.Checkpoint(defaultCheckpointTimeout); err != nil {
 			return fmt.Errorf("checkpoint WAL %s: %s", wal, err.Error())
 		}
+
+		// Closing the database will remove the WAL file which was just
+		// checkpointed into the database file.
 		if err := db.Close(); err != nil {
 			return err
 		}
