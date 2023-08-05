@@ -71,7 +71,7 @@ func Test_WALSnapshotStore_CreateFullThenIncremental(t *testing.T) {
 	if !fileExists(filepath.Join(dir, id, metaFileName)) {
 		t.Fatalf("snapshot meta file does not exist")
 	}
-	if !compareFileToByteSlice(filepath.Join(dir, sqliteFilePath), testBytes) {
+	if !compareFileToByteSlice(filepath.Join(dir, baseSqliteFile), testBytes) {
 		t.Fatalf("snapshot SQLite file does not match")
 	}
 
@@ -125,10 +125,10 @@ func Test_WALSnapshotStore_CreateFullThenIncremental(t *testing.T) {
 	if !fileExists(filepath.Join(dir, id, metaFileName)) {
 		t.Fatalf("snapshot meta file does not exist")
 	}
-	if !fileExists(filepath.Join(dir, id, walFilePath)) {
+	if !fileExists(filepath.Join(dir, id, snapWALFile)) {
 		t.Fatalf("snapshot wal file does not exist")
 	}
-	if !compareFileToByteSlice(filepath.Join(dir, id, walFilePath), testBytes) {
+	if !compareFileToByteSlice(filepath.Join(dir, id, snapWALFile), testBytes) {
 		t.Fatalf("snapshot wal file does not match")
 	}
 
