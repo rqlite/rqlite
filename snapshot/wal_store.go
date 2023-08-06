@@ -3,6 +3,7 @@ package snapshot
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hash"
 	"hash/crc64"
@@ -20,22 +21,29 @@ import (
 )
 
 const (
-	snapshotRetain = 2 // Number of snapshots to retain. Must be >= 2.
+	minSnapshotRetain = 2
 
 	baseSqliteFile    = "base-sqlite.db"
 	baseSqliteWALFile = "base-sqlite.db-wal"
 	snapWALFile       = "wal"
 	tmpSuffix         = ".tmp"
 	metaFileName      = "meta.json"
+)
 
-	fullSnapshotFlagFile = "FULL"
+var (
+	ErrRetainCountTooLow = errors.New("retain count must be >= 2")
 )
 
 // walSnapshotMeta is stored on disk. We also put a CRC
 // on disk so that we can verify the snapshot.
 type walSnapshotMeta struct {
 	raft.SnapshotMeta
-	CRC []byte // CRC of the data XXX shoudl decide if i really need this.
+	CRC  []byte // CRC of the data XXX shoudl decide if i really need this.
+	Full bool
+}
+
+func (w *walSnapshotMeta) String() string {
+	return fmt.Sprintf("walSnapshotMeta{ID:%s, Full:%v}", w.ID, w.Full)
 }
 
 // walSnapshotSink is a sink for a snapshot.
@@ -80,7 +88,7 @@ func (w *walSnapshotSink) cleanup() error {
 	return nil
 }
 
-func (w *walSnapshotSink) writeMeta() error {
+func (w *walSnapshotSink) writeMeta(full bool) error {
 	fh, err := os.Create(filepath.Join(w.dir, metaFileName))
 	if err != nil {
 		return err
@@ -88,6 +96,7 @@ func (w *walSnapshotSink) writeMeta() error {
 	defer fh.Close()
 
 	w.meta.CRC = w.dataHash.Sum(nil)
+	w.meta.Full = full
 
 	// Write out as JSON
 	enc := json.NewEncoder(fh)
@@ -105,6 +114,7 @@ func (w *walSnapshotSink) writeMeta() error {
 // called before opening the store.
 func WALStoreCheck(dir string) error {
 	// Verify checksums?
+	// Delete any SQLite base file if there are zero snapshots?
 	// Check -- and repair -- dangling snapshots?
 	// Remove any tmp directories
 	return nil
@@ -138,13 +148,7 @@ func (w *WALFullSnapshotSink) Close() (retErr error) {
 		return err
 	}
 
-	// Mark that this is a full snapshot
-	if err := os.WriteFile(filepath.Join(w.dir, fullSnapshotFlagFile), []byte{}, 0644); err != nil {
-		w.logger.Printf("failed to create FULL marker file: %s", err)
-		return err
-	}
-
-	if err := w.writeMeta(); err != nil {
+	if err := w.writeMeta(true); err != nil {
 		return err
 	}
 
@@ -204,7 +208,7 @@ func (w *WALIncrementalSnapshotSink) Close() (retErr error) {
 		return err
 	}
 
-	if err := w.writeMeta(); err != nil {
+	if err := w.writeMeta(false); err != nil {
 		return err
 	}
 
@@ -223,11 +227,6 @@ func (w *WALIncrementalSnapshotSink) Close() (retErr error) {
 		}
 	}
 	w.logger.Printf("incremental snapshot (ID %s) written to %s", w.meta.ID, dstDir)
-
-	_, err = w.store.ReapSnapshots()
-	if err != nil {
-		w.logger.Printf("failed to reap snapshots: %s", err)
-	}
 	return nil
 }
 
@@ -347,9 +346,7 @@ func (s *WALSnapshotStore) Open(id string) (*raft.SnapshotMeta, io.ReadCloser, e
 		return nil, nil, err
 	}
 
-	// if the snapshot directory contains a WAL file, then it's an incremental snapshot
-	// otherwise it's a full snapshot.
-	if fileExists(filepath.Join(s.dir, id, snapWALFile)) {
+	if !meta.Full {
 		fh, err := os.Open(filepath.Join(s.dir, id, snapWALFile))
 		if err != nil {
 			return nil, nil, err
@@ -388,7 +385,11 @@ func (s *WALSnapshotStore) Open(id string) (*raft.SnapshotMeta, io.ReadCloser, e
 // ReapSnapshots removes snapshots that are no longer needed. It does this by
 // checkpointing WAL-based snapshots into the base SQLite file. The function
 // returns the number of snapshots removed, or an error
-func (s *WALSnapshotStore) ReapSnapshots() (int, error) {
+func (s *WALSnapshotStore) ReapSnapshots(retain int) (int, error) {
+	if retain < minSnapshotRetain {
+		return 0, ErrRetainCountTooLow
+	}
+
 	snapshots, err := s.getSnapshots()
 	if err != nil {
 		s.logger.Printf("failed to get snapshots: %s", err)
@@ -397,7 +398,7 @@ func (s *WALSnapshotStore) ReapSnapshots() (int, error) {
 
 	// Keeping multipe snapshots makes it much easier to reason about the fixing
 	// up the Snapshot store if we crash in the middle of snapshotting or reaping.
-	if len(snapshots) <= snapshotRetain {
+	if len(snapshots) <= retain {
 		return 0, nil
 	}
 
@@ -405,9 +406,10 @@ func (s *WALSnapshotStore) ReapSnapshots() (int, error) {
 	// do this by opening the base SQLite file and then replaying the WAL files into it.
 	// We'll then delete each snapshot once we've checkpointed it.
 	s.logger.Printf("reaping snapshots (%d snapshots present)", len(snapshots))
-	sort.Sort(sort.Reverse(snapMetaSlice(snapshots)))
+	sort.Sort(snapMetaSlice(snapshots))
+
 	n := 0
-	for _, snap := range snapshots[0 : len(snapshots)-snapshotRetain] {
+	for _, snap := range snapshots[0 : len(snapshots)-retain] {
 		snapDirPath := filepath.Join(s.dir, snap.ID)
 		snapWALFilePath := filepath.Join(snapDirPath, snapWALFile)
 		walToCheckpointFilePath := filepath.Join(s.dir, baseSqliteWALFile)
@@ -425,7 +427,7 @@ func (s *WALSnapshotStore) ReapSnapshots() (int, error) {
 			}
 
 			// Checkpoint the WAL file into the base SQLite file
-			if db.ReplayWAL(baseSqliteFilePath, []string{walToCheckpointFilePath}, false) != nil {
+			if err := db.ReplayWAL(baseSqliteFilePath, []string{walToCheckpointFilePath}, false); err != nil {
 				s.logger.Printf("failed to checkpoint WAL file %s: %s", walToCheckpointFilePath, err)
 				return n, err
 			}
@@ -445,6 +447,51 @@ func (s *WALSnapshotStore) ReapSnapshots() (int, error) {
 	return n, nil
 }
 
+// ReplayWALs returns a path to a SQLite path, created from copying the
+// base SQLite file and replaying all WAL files into it.
+func (s *WALSnapshotStore) ReplayWALs() (string, error) {
+	// make a temporary directory
+	tmpDir, err := os.MkdirTemp("", "wal-snapshot-store-replay")
+	if err != nil {
+		return "", err
+	}
+
+	// copy the base SQLite file into the temporary directory
+	baseSqliteFilePath := filepath.Join(s.dir, baseSqliteFile)
+	tmpSqliteFilePath := filepath.Join(tmpDir, baseSqliteFile)
+	if err := copyFile(baseSqliteFilePath, tmpSqliteFilePath); err != nil {
+		return "", err
+	}
+
+	snaps, err := s.getSnapshots()
+	if err != nil {
+		return "", err
+	}
+	sort.Sort(snapMetaSlice(snaps))
+
+	walFiles := []string{}
+	for i, snap := range snaps {
+		if snap.Full {
+			continue
+		}
+
+		// Copy the WAL file to the temporary directory
+		snapWALFilePath := filepath.Join(s.dir, snap.ID, snapWALFile)
+		tmpSnapWALFilePath := filepath.Join(tmpDir, snapWALFile+fmt.Sprintf("_%d", i))
+		if err := copyFile(snapWALFilePath, tmpSnapWALFilePath); err != nil {
+			return "", err
+		}
+		walFiles = append(walFiles, tmpSnapWALFilePath)
+	}
+
+	if err := db.ReplayWAL(tmpSqliteFilePath, walFiles, false); err != nil {
+		return "", err
+	}
+	return tmpSqliteFilePath, nil
+}
+
+// getSnapshots returns a list of all the snapshots in the store, sorted from
+// most recently created to oldest created.
 func (s *WALSnapshotStore) getSnapshots() ([]*walSnapshotMeta, error) {
 	snapshots, err := os.ReadDir(s.dir)
 	if err != nil {
@@ -561,6 +608,32 @@ func fileExists(path string) bool {
 	return !os.IsNotExist(err)
 }
 
+// copyFile copies a file from src to dst. If dst already exists, it will be
+// overwritten. The file will be copied with the same permissions as the
+// original.
+func copyFile(src, dst string) error {
+	sourceFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer sourceFile.Close()
+
+	destinationFile, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer destinationFile.Close()
+
+	_, err = io.Copy(destinationFile, sourceFile)
+	if err != nil {
+		return err
+	}
+
+	return destinationFile.Sync()
+}
+
+// snapMetaSlice is a sortable slice of walSnapshotMeta, which are sorted
+// by term, index, and then ID. Snapshots are sorted from oldest to newest.
 type snapMetaSlice []*walSnapshotMeta
 
 func (s snapMetaSlice) Len() int {

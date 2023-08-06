@@ -9,22 +9,16 @@ db_file = 'mydatabase.db'
 conn = sqlite3.connect(db_file)
 cursor = conn.cursor()
 
-# Enable WAL mode
+# Enable WAL mode and disable automatic checkpointing
 cursor.execute("PRAGMA journal_mode=WAL;")
-# Disable automatic checkpoint
 cursor.execute("PRAGMA wal_autocheckpoint=0;")
-
 cursor.execute("CREATE TABLE foo (id INTEGER PRIMARY KEY, value TEXT);")
 conn.commit()
 
-# Copy the SQLite file and WAL file
-shutil.copy(db_file, 'backup.db')
-shutil.copy(db_file + '-wal', 'wal-01')
-
-# Checkpoint the original WAL file
+# Checkpoint the WAL file so we've got just a SQLite file
 conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+shutil.copy(db_file, 'backup.db')
 
-# Loop for the desired number of iterations
 for i in range(0, 4):
     # Write a new row
     cursor.execute(f"INSERT INTO foo (value) VALUES ('Row {i}');")
@@ -35,5 +29,6 @@ for i in range(0, 4):
 
     # Checkpoint the WAL file
     conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+    conn.commit()
 
 conn.close()
