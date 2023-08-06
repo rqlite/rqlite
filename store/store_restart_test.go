@@ -261,6 +261,7 @@ func test_SnapshotStress(t *testing.T, s *Store) {
 	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
+	defer s.Close(true)
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
