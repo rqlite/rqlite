@@ -8,7 +8,7 @@ import (
 	"github.com/rqlite/rqlite/command"
 )
 
-func openStoreCloseStartup(t *testing.T, s *Store) {
+func test_OpenStoreCloseStartup(t *testing.T, s *Store) {
 	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
@@ -211,8 +211,7 @@ func openStoreCloseStartup(t *testing.T, s *Store) {
 func Test_OpenStoreCloseStartupOnDiskSingleNode(t *testing.T) {
 	s, ln := mustNewStore(t, false)
 	defer ln.Close()
-
-	openStoreCloseStartup(t, s)
+	test_OpenStoreCloseStartup(t, s)
 }
 
 // Test_OpenStoreCloseStartupMemoryOnlySingleNode tests that in-memory
@@ -220,6 +219,76 @@ func Test_OpenStoreCloseStartupOnDiskSingleNode(t *testing.T) {
 func Test_OpenStoreCloseStartupMemoryOnlySingleNode(t *testing.T) {
 	s, ln := mustNewStore(t, true)
 	defer ln.Close()
+	test_OpenStoreCloseStartup(t, s)
+}
 
-	openStoreCloseStartup(t, s)
+func test_SnapshotStress(t *testing.T, s *Store) {
+	s.SnapshotInterval = 100 * time.Millisecond
+	s.SnapshotThreshold = 4
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	er := executeRequestFromString(
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		false, false)
+	_, err := s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	for i := 0; i < 1000; i++ {
+		er := executeRequestFromString(
+			fmt.Sprintf(`INSERT INTO foo(name) VALUES("fiona-%d")`, i),
+			false, false)
+		_, err := s.Execute(er)
+		if err != nil {
+			t.Fatalf("failed to execute on single node: %s", err.Error())
+		}
+	}
+
+	// Close and re-open to make sure all data is there recovering from snapshot.
+	if err := s.Close(true); err != nil {
+		t.Fatalf("failed to close single-node store: %s", err.Error())
+	}
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
+	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	r, err := s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1000]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
+// Test_StoreSnapshotStressOnDiskSingleNode tests that a high-rate of snapshotting
+// works fine with an on-disk setup.
+func Test_StoreSnapshotStressOnDiskSingleNode(t *testing.T) {
+	s, ln := mustNewStore(t, false)
+	defer ln.Close()
+	test_SnapshotStress(t, s)
+}
+
+// Test_StoreSnapshotStressInMemSingleNode tests that a high-rate of snapshotting
+// works fine with an in-memory setup.
+func Test_StoreSnapshotStressInMemSingleNode(t *testing.T) {
+	s, ln := mustNewStore(t, true)
+	defer ln.Close()
+	test_SnapshotStress(t, s)
 }
