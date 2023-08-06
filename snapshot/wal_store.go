@@ -384,7 +384,8 @@ func (s *WALSnapshotStore) Open(id string) (*raft.SnapshotMeta, io.ReadCloser, e
 
 // ReapSnapshots removes snapshots that are no longer needed. It does this by
 // checkpointing WAL-based snapshots into the base SQLite file. The function
-// returns the number of snapshots removed, or an error
+// returns the number of snapshots removed, or an error. The retain parameter
+// specifies the number of snapshots to retain.
 func (s *WALSnapshotStore) ReapSnapshots(retain int) (int, error) {
 	if retain < minSnapshotRetain {
 		return 0, ErrRetainCountTooLow

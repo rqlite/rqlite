@@ -194,10 +194,6 @@ func Test_WALSnapshotStore_Reaping(t *testing.T) {
 		sink.Close()
 	}
 
-	if _, err := str.ReapSnapshots(1); err != ErrRetainCountTooLow {
-		t.Fatalf("expected ErrRetainCountTooLow, got %s", err)
-	}
-
 	createSnapshot(1, 1, "testdata/reaping/backup.db")
 	createSnapshot(3, 2, "testdata/reaping/wal-00")
 	createSnapshot(5, 3, "testdata/reaping/wal-01")
@@ -283,6 +279,24 @@ func Test_WALSnapshotStore_Reaping(t *testing.T) {
 	}
 	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[4]]}]`, asJSON(rows); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
+func Test_WALSnapshotStore_ReapingLimitsFail(t *testing.T) {
+	dir := makeTempDir()
+	defer os.RemoveAll(dir)
+	str := NewWALSnapshotStore(dir)
+
+	if _, err := str.ReapSnapshots(1); err != ErrRetainCountTooLow {
+		t.Fatalf("expected ErrRetainCountTooLow, got %s", err)
+	}
+
+	n, err := str.ReapSnapshots(10)
+	if err != nil {
+		t.Fatalf("expected nil error, got %s", err)
+	}
+	if n != 0 {
+		t.Fatalf("expected 0 snapshots to be reaped, got %d", n)
 	}
 }
 
