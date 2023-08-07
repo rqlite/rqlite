@@ -1860,16 +1860,15 @@ func RecoverNode(dataDir string, logger *log.Logger, logs raft.LogStore, stable 
 		return fmt.Errorf("failed to restore any of the available snapshots")
 	}
 
-	// Now, create an in-memory database for temporary use, so we can generate new
-	// snapshots later.
-	var db *sql.DB
-	if len(b) == 0 {
-		db, err = sql.OpenInMemory(false)
-	} else {
-		db, err = sql.DeserializeIntoMemory(b, false)
+	// Now, create a temporary database, so we can generate new snapshots later.
+	tmpDBPath := filepath.Join(dataDir, "recovery.db")
+	if os.WriteFile(tmpDBPath, b, 0660) != nil {
+		return fmt.Errorf("failed to write SQLite data to temporary file: %s", err)
 	}
+	defer os.Remove(tmpDBPath)
+	db, err := sql.Open(tmpDBPath, false, true)
 	if err != nil {
-		return fmt.Errorf("create in-memory database failed: %s", err)
+		return fmt.Errorf("failed to open temporary database: %s", err)
 	}
 	defer db.Close()
 
