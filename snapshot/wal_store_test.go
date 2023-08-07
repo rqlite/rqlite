@@ -1,16 +1,19 @@
 package snapshot
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"testing"
 
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/command/encoding"
 	"github.com/rqlite/rqlite/db"
+	"github.com/rqlite/rqlite/snapshot/streamer"
 )
 
 func Test_NewWALSnapshotStore(t *testing.T) {
@@ -302,6 +305,148 @@ func Test_WALSnapshotStore_ReapingLimitsFail(t *testing.T) {
 	}
 	if n != 0 {
 		t.Fatalf("expected 0 snapshots to be reaped, got %d", n)
+	}
+}
+
+// Test_WALSnapshotStore_Open tests that the state is correctly opened for
+// a given snapshot. Open() is critical for correct operation, so it tested
+// in extensive detail.
+func Test_WALSnapshotStore_Open(t *testing.T) {
+	dir := makeTempDir()
+	defer os.RemoveAll(dir)
+	str, err := NewWALSnapshotStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create snapshot store: %s", err)
+	}
+
+	testConfig := makeTestConfiguration("1", "2")
+
+	createSnapshot := func(index, term uint64, file string) {
+		b, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatalf("failed to read file: %s", err)
+		}
+		sink, err := str.Create(1, index, term, testConfig, 4, nil)
+		if err != nil {
+			t.Fatalf("failed to create 2nd snapshot: %s", err)
+		}
+		if _, err = sink.Write(b); err != nil {
+			t.Fatalf("failed to write to sink: %s", err)
+		}
+		sink.Close()
+	}
+
+	createSnapshot(1, 1, "testdata/reaping/backup.db")
+	createSnapshot(3, 2, "testdata/reaping/wal-00")
+	createSnapshot(5, 3, "testdata/reaping/wal-01")
+	createSnapshot(7, 4, "testdata/reaping/wal-02")
+	createSnapshot(9, 5, "testdata/reaping/wal-03")
+
+	snaps, err := str.getSnapshots()
+	if err != nil {
+		t.Fatalf("failed to list snapshots: %s", err)
+	}
+	sort.Sort(snapMetaSlice(snaps))
+
+	var decoder *streamer.Decoder
+	var header *streamer.Header
+	var meta *raft.SnapshotMeta
+	var state io.ReadCloser
+	var buf bytes.Buffer
+
+	/////////////////////////////////////////////////////////////////////////////
+	// Ask for the first snapshot, it should just be a SQLite file.
+	meta, state, err = str.Open(snaps[0].ID)
+	if err != nil {
+		t.Fatalf("failed to open snapshot 0: %s", err)
+	}
+	defer state.Close()
+	if meta.Index != 1 || meta.Term != 1 {
+		t.Fatalf("snapshot 0 Index and Term are wrong, got %d and %d", meta.Index, meta.Term)
+	}
+	decoder, err = streamer.NewDecoder(state)
+	if err != nil {
+		t.Fatalf("failed to create decoder: %s", err)
+	}
+	defer decoder.Close()
+
+	header, err = decoder.Next()
+	if err != nil {
+		t.Fatalf("failed to get header: %s", err)
+	}
+	if header.Name != baseSqliteFile {
+		t.Fatalf("expected SQLite file, got %s", header.Name)
+	}
+	buf.Reset()
+	if _, err := io.Copy(&buf, decoder); err != nil {
+		t.Fatalf("failed to copy from decoder: %s", err)
+	}
+	if !compareFileToByteSlice("testdata/reaping/backup.db", buf.Bytes()) {
+		t.Fatalf("snapshot SQLite file does not match")
+	}
+	if _, err := decoder.Next(); err != io.EOF {
+		t.Fatalf("expected EOF, got %s", err)
+	}
+
+	/////////////////////////////////////////////////////////////////////////////
+	// Ask for the third snapshot, it should be a SQLite file plus two WAL files
+	meta, state, err = str.Open(snaps[2].ID)
+	if err != nil {
+		t.Fatalf("failed to open snapshot 2: %s", err)
+	}
+	defer state.Close()
+	if meta.Index != 5 || meta.Term != 3 {
+		t.Fatalf("snapshot 2 Index and Term are wrong, got %d and %d", meta.Index, meta.Term)
+	}
+	decoder, err = streamer.NewDecoder(state)
+	if err != nil {
+		t.Fatalf("failed to create decoder: %s", err)
+	}
+	defer decoder.Close()
+
+	header, err = decoder.Next()
+	if err != nil {
+		t.Fatalf("failed to get header: %s", err)
+	}
+	if header.Name != baseSqliteFile {
+		t.Fatalf("expected SQLite file, got %s", header.Name)
+	}
+	buf.Reset()
+	if _, err := io.Copy(&buf, decoder); err != nil {
+		t.Fatalf("failed to copy from decoder: %s", err)
+	}
+	if !compareFileToByteSlice("testdata/reaping/backup.db", buf.Bytes()) {
+		t.Fatalf("snapshot SQLite file does not match")
+	}
+
+	header, err = decoder.Next()
+	if err != nil {
+		t.Fatalf("failed to get header: %s", err)
+	}
+	if header.Name != "wal" {
+		t.Fatalf("expected wal file, got %s", header.Name)
+	}
+	buf.Reset()
+	if _, err := io.Copy(&buf, decoder); err != nil {
+		t.Fatalf("failed to copy from decoder: %s", err)
+	}
+	if !compareFileToByteSlice("testdata/reaping/wal-00", buf.Bytes()) {
+		t.Fatalf("snapshot WAL 0 file does not match")
+	}
+
+	header, err = decoder.Next()
+	if err != nil {
+		t.Fatalf("failed to get header: %s", err)
+	}
+	if header.Name != "wal" {
+		t.Fatalf("expected wal file, got %s", header.Name)
+	}
+	buf.Reset()
+	if _, err := io.Copy(&buf, decoder); err != nil {
+		t.Fatalf("failed to copy from decoder: %s", err)
+	}
+	if !compareFileToByteSlice("testdata/reaping/wal-01", buf.Bytes()) {
+		t.Fatalf("snapshot WAL 1 file does not match")
 	}
 }
 

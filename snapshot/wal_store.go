@@ -340,21 +340,18 @@ func (s *WALSnapshotStore) Open(id string) (*raft.SnapshotMeta, io.ReadCloser, e
 		return nil, nil, ErrSnapshotNotFound
 	}
 
-	// Hang on, XXXX. This needs more work. We have to return:
-	// - the SQLIte base file because it's the actual snapshot
-	// - the base SQLite file and 1 or more WAL files
-	files := []string{}
-	// for _, snap := range snapshots {
-	// 	path := snapWALFile
-	// 	if snap.Full {
-	// 		name = baseSqliteFile
-	// 	}
-	// 	files = append(files, filepath.Join(s.dir, snap.ID, name))
-	// 	if snap.ID == id {
-	// 		// Stop after we've reached the requested snapshot
-	// 		break
-	// 	}
-	// }
+	// Always include the base SQLite file. There may not be a snapshot directory
+	// for it if it's been checkpointed due to snapshot-reaping.
+	files := []string{s.basePath()}
+	for _, snap := range snapshots {
+		if !snap.Full {
+			files = append(files, filepath.Join(s.dir, snap.ID, snapWALFile))
+		}
+		if snap.ID == id {
+			// Stop after we've reached the requested snapshot
+			break
+		}
+	}
 	return &meta.SnapshotMeta, NewWALSnapshotState(streamer.NewEncoder(files), s), nil
 }
 
