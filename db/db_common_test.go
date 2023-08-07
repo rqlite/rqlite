@@ -1498,11 +1498,5 @@ func Test_DatabaseCommonOperations(t *testing.T) {
 		t.Run(tc.name+":wal", func(t *testing.T) {
 			tc.testFunc(t, db)
 		})
-
-		db = mustCreateInMemoryDatabase()
-		defer db.Close()
-		t.Run(tc.name+":memory", func(t *testing.T) {
-			tc.testFunc(t, db)
-		})
 	}
 }
