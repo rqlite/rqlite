@@ -20,7 +20,8 @@ import (
 )
 
 const (
-	minSnapshotRetain = 2
+	minSnapshotRetain        = 2
+	defaultReapCheckDuration = time.Minute
 
 	baseSqliteFile    = "base-sqlite.db"
 	baseSqliteWALFile = "base-sqlite.db-wal"
@@ -218,22 +219,39 @@ func (w *WALIncrementalSnapshotSink) Close() (retErr error) {
 // WAL-based systems to store only the most recent WAL file for the snapshot, which
 // minimizes disk IO.
 type WALSnapshotStore struct {
-	dir    string // The directory to store snapshots in.
-	logger *log.Logger
+	dir string // The directory to store snapshots in.
 
-	mu sync.RWMutex
+	mu           sync.RWMutex
+	reapInterval time.Duration
+	done         chan struct{}
+
+	logger *log.Logger
 }
 
 // NewWALSnapshotStore returns a new WALSnapshotStore.
 func NewWALSnapshotStore(dir string) (*WALSnapshotStore, error) {
 	s := &WALSnapshotStore{
-		dir:    dir,
-		logger: log.New(os.Stderr, "[wal-snapshot-store] ", log.LstdFlags),
+		dir:          dir,
+		reapInterval: defaultReapCheckDuration,
+		done:         make(chan struct{}),
+		logger:       log.New(os.Stderr, "[wal-snapshot-store] ", log.LstdFlags),
 	}
 	if s.check() != nil {
 		return nil, fmt.Errorf("failed WALSnapshotStore check")
 	}
 	return s, nil
+}
+
+// RunReaper runs the snapshot reaping process in the background.
+func (s *WALSnapshotStore) RunReaper() {
+	go s.runReaper()
+}
+
+// Close closes the WAL snapshot store.
+func (s *WALSnapshotStore) Close() error {
+	s.logger.Println("closing WAL snapshot store")
+	close(s.done)
+	return nil
 }
 
 // Path returns the path to the directory this store uses
@@ -359,8 +377,6 @@ func (s *WALSnapshotStore) Open(id string) (*raft.SnapshotMeta, io.ReadCloser, e
 // checkpointing WAL-based snapshots into the base SQLite file. The function
 // returns the number of snapshots removed, or an error. The retain parameter
 // specifies the number of snapshots to retain.
-//
-// XXXX Need to start the reaping process in a gorouting?!
 func (s *WALSnapshotStore) ReapSnapshots(retain int) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -384,7 +400,6 @@ func (s *WALSnapshotStore) ReapSnapshots(retain int) (int, error) {
 	// We need to checkpoint the WAL files starting with the oldest snapshot. We'll
 	// do this by opening the base SQLite file and then replaying the WAL files into it.
 	// We'll then delete each snapshot once we've checkpointed it.
-	s.logger.Printf("reaping snapshots (%d snapshots present)", len(snapshots))
 	sort.Sort(snapMetaSlice(snapshots))
 
 	n := 0
@@ -396,8 +411,6 @@ func (s *WALSnapshotStore) ReapSnapshots(retain int) (int, error) {
 		// If the snapshot directory doesn't contain a WAL file, then the base SQLite
 		// file is the snapshot state, and there is no checkpointing to do.
 		if fileExists(snapWALFilePath) {
-			s.logger.Printf("snapshot %s contains a WAL file", snap.ID)
-
 			// Move the WAL file to beside the base SQLite file
 			if err := os.Rename(snapWALFilePath, walToCheckpointFilePath); err != nil {
 				s.logger.Printf("failed to move WAL file %s: %s", snapWALFilePath, err)
@@ -409,8 +422,6 @@ func (s *WALSnapshotStore) ReapSnapshots(retain int) (int, error) {
 				s.logger.Printf("failed to checkpoint WAL file %s: %s", walToCheckpointFilePath, err)
 				return n, err
 			}
-		} else {
-			s.logger.Printf("snapshot %s does not contain a WAL file", snap.ID)
 		}
 
 		// Delete the snapshot directory, since the state is now in the base SQLite file.
@@ -578,6 +589,24 @@ func (s *WALSnapshotStore) getSnapshots() ([]*walSnapshotMeta, error) {
 	sort.Sort(sort.Reverse(snapMetaSlice(snapMeta)))
 
 	return snapMeta, nil
+}
+
+// runReaper runs the snapshot reaping process.
+func (s *WALSnapshotStore) runReaper() {
+	ticker := time.NewTicker(s.reapInterval)
+	defer ticker.Stop()
+
+	s.logger.Println("starting snapshot reaper")
+	for {
+		select {
+		case <-s.done:
+			return
+		case <-ticker.C:
+			if _, err := s.ReapSnapshots(minSnapshotRetain); err != nil {
+				s.logger.Printf("failed to reap snapshots: %s", err)
+			}
+		}
+	}
 }
 
 // readMeta is used to read the meta data for a given named backup

@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/command/encoding"
@@ -23,6 +24,7 @@ func Test_NewWALSnapshotStore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create snapshot store: %s", err)
 	}
+	defer s.Close()
 	if s.Path() != dir {
 		t.Fatalf("unexpected dir, exp=%s got=%s", dir, s.Path())
 	}
@@ -35,6 +37,7 @@ func Test_NewWALSnapshotStore_ListEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create snapshot store: %s", err)
 	}
+	defer s.Close()
 	if s.Path() != dir {
 		t.Fatalf("unexpected dir, exp=%s got=%s", dir, s.Path())
 	}
@@ -57,6 +60,7 @@ func Test_WALSnapshotStore_CreateFullThenIncremental(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create snapshot store: %s", err)
 	}
+	defer str.Close()
 
 	testConfig1 := makeTestConfiguration("1", "2")
 	sink, err := str.Create(1, 2, 3, testConfig1, 4, nil)
@@ -181,6 +185,7 @@ func Test_WALSnapshotStore_Reaping(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create snapshot store: %s", err)
 	}
+	defer str.Close()
 
 	testConfig := makeTestConfiguration("1", "2")
 
@@ -294,6 +299,7 @@ func Test_WALSnapshotStore_ReapingLimitsFail(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create snapshot store: %s", err)
 	}
+	defer str.Close()
 
 	if _, err := str.ReapSnapshots(1); err != ErrRetainCountTooLow {
 		t.Fatalf("expected ErrRetainCountTooLow, got %s", err)
@@ -308,6 +314,53 @@ func Test_WALSnapshotStore_ReapingLimitsFail(t *testing.T) {
 	}
 }
 
+func Test_WALSnapshotStore_ReaperRuns(t *testing.T) {
+	dir := makeTempDir()
+	defer os.RemoveAll(dir)
+	str, err := NewWALSnapshotStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create snapshot store: %s", err)
+	}
+	defer str.Close()
+	str.reapInterval = 100 * time.Millisecond
+
+	createSnapshot := func(index, term uint64, file string) {
+		b, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatalf("failed to read file: %s", err)
+		}
+		sink, err := str.Create(1, index, term, makeTestConfiguration("1", "2"), 4, nil)
+		if err != nil {
+			t.Fatalf("failed to create 2nd snapshot: %s", err)
+		}
+		if _, err = sink.Write(b); err != nil {
+			t.Fatalf("failed to write to sink: %s", err)
+		}
+		sink.Close()
+	}
+	createSnapshot(1, 1, "testdata/reaping/backup.db")
+	createSnapshot(3, 2, "testdata/reaping/wal-00")
+	createSnapshot(5, 3, "testdata/reaping/wal-01")
+
+	snaps, err := str.getSnapshots()
+	if err != nil {
+		t.Fatalf("failed to list snapshots: %s", err)
+	}
+	if exp, got := 3, len(snaps); exp != got {
+		t.Fatalf("expected %d snapshots, got %d", exp, got)
+	}
+
+	str.RunReaper()
+	checkFn := func() bool {
+		snaps, err = str.getSnapshots()
+		if err != nil {
+			t.Fatalf("failed to list snapshots: %s", err)
+		}
+		return len(snaps) == 2
+	}
+	testPoll(t, checkFn, 10*time.Millisecond, 5*time.Second)
+}
+
 // Test_WALSnapshotStore_Open tests that the state is correctly opened for
 // a given snapshot. Open() is critical for correct operation, so it tested
 // in extensive detail.
@@ -318,6 +371,7 @@ func Test_WALSnapshotStore_Open(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create snapshot store: %s", err)
 	}
+	defer str.Close()
 
 	testConfig := makeTestConfiguration("1", "2")
 
@@ -501,4 +555,22 @@ func asJSON(v interface{}) string {
 		panic(fmt.Sprintf("failed to JSON marshal value: %s", err.Error()))
 	}
 	return string(b)
+}
+
+func testPoll(t *testing.T, f func() bool, p time.Duration, timeout time.Duration) {
+	tck := time.NewTicker(p)
+	defer tck.Stop()
+	tmr := time.NewTimer(timeout)
+	defer tmr.Stop()
+
+	for {
+		select {
+		case <-tck.C:
+			if f() {
+				return
+			}
+		case <-tmr.C:
+			t.Fatalf("timeout expired: %s", t.Name())
+		}
+	}
 }
