@@ -1643,6 +1643,9 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 	if err := s.db.Close(); err != nil {
 		return fmt.Errorf("failed to close pre-restore database: %s", err)
 	}
+	if err := sql.RemoveFiles(s.db.Path()); err != nil {
+		return fmt.Errorf("failed to remove pre-restore database files: %s", err)
+	}
 
 	var db *sql.DB
 	db, err = createOnDisk(b, s.dbPath, s.dbConf.FKConstraints, !s.dbConf.DisableWAL)
@@ -1979,15 +1982,19 @@ func applyCommand(data []byte, pDB **sql.DB, decMgmr *chunking.DechunkerManager)
 			panic(fmt.Sprintf("failed to unmarshal load subcommand: %s", err.Error()))
 		}
 
+		// Swap the underlying database to the new one.
+		if err := db.Close(); err != nil {
+			return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to close post-load database: %s", err)}
+		}
+		if err := sql.RemoveFiles(db.Path()); err != nil {
+			return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to remove existing database files: %s", err)}
+		}
+
 		newDB, err := createOnDisk(lr.Data, db.Path(), db.FKEnabled(), db.WALEnabled())
 		if err != nil {
 			return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to create on-disk database: %s", err)}
 		}
 
-		// Swap the underlying database to the new one.
-		if err := db.Close(); err != nil {
-			return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to close post-load database: %s", err)}
-		}
 		*pDB = newDB
 		return c.Type, &fsmGenericResponse{}
 	case command.Command_COMMAND_TYPE_LOAD_CHUNK:
@@ -2015,6 +2022,9 @@ func applyCommand(data []byte, pDB **sql.DB, decMgmr *chunking.DechunkerManager)
 			// Close the underlying database before we overwrite it.
 			if err := db.Close(); err != nil {
 				return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to close post-load database: %s", err)}
+			}
+			if err := sql.RemoveFiles(db.Path()); err != nil {
+				return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to remove existing database files: %s", err)}
 			}
 
 			if err := os.Rename(path, db.Path()); err != nil {
