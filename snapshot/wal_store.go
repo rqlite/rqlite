@@ -36,6 +36,9 @@ var (
 
 	// ErrSnapshotNotFound is returned when a snapshot is not found.
 	ErrSnapshotNotFound = errors.New("snapshot not found")
+
+	// ErrSnapshotBaseMissing is returned when a snapshot base SQLite file is missing.
+	ErrSnapshotBaseMissing = errors.New("snapshot base SQLite file missing")
 )
 
 // walSnapshotMeta is stored on disk. We also put a CRC
@@ -296,14 +299,6 @@ func (s *WALSnapshotStore) Create(version raft.SnapshotVersion, index, term uint
 			},
 		}
 	} else {
-		// If we're going to create a base, all previous snapshots are now invalid. There
-		// shouldn't be any previous snapshots without a base being present, but if there
-		// are, we need to clean them up. This could happen if someone manually deletes
-		// the base file.
-		if err := s.deleteAllSnapshots(); err != nil {
-			return nil, err
-		}
-
 		sqliteFd, err := os.Create(s.basePath() + tmpSuffix)
 		if err != nil {
 			return nil, err
@@ -505,6 +500,18 @@ func (s *WALSnapshotStore) check() error {
 		}
 	}
 
+	// If we have no base file, we shouldn't have any snapshot directories. If we
+	// do it's an inconsistent state which we cannot repair, and needs to be flagged.
+	if !s.hasBase() {
+		snapshots, err := s.getSnapshots()
+		if err != nil {
+			return err
+		}
+		if len(snapshots) > 0 {
+			return ErrSnapshotBaseMissing
+		}
+	}
+
 	// If we have a base SQLite file, but no snapshot directories, this implies
 	// that we crashed after creating the base SQLite file, but before officially
 	// creating the first full snapshot. We need to delete the base SQLite file,
@@ -636,23 +643,6 @@ func (s *WALSnapshotStore) hasBase() bool {
 // basePath returns the path to the base SQLite file.
 func (s *WALSnapshotStore) basePath() string {
 	return filepath.Join(s.dir, baseSqliteFile)
-}
-
-func (s *WALSnapshotStore) deleteAllSnapshots() error {
-	dirs, err := os.ReadDir(s.dir)
-	if err != nil {
-		return err
-	}
-
-	for _, d := range dirs {
-		if !d.IsDir() || isTmpName(d.Name()) {
-			continue
-		}
-		if err := os.RemoveAll(filepath.Join(s.dir, d.Name())); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // snapshotName generates a name for the snapshot.
