@@ -437,6 +437,17 @@ func (s *WALSnapshotStore) ReplayWALs() (string, error) {
 	return tmpSqliteFilePath, nil
 }
 
+// Stats returns stats about the snapshot store.
+func (s *WALSnapshotStore) Stats() (map[string]interface{}, error) {
+	snaps, err := s.getSnapshots()
+	if err != nil {
+		return nil, err
+	}
+	return map[string]interface{}{
+		"snapshots": snaps,
+	}, nil
+}
+
 // check checks the Store for inconsistencies, and repairs it as needed.
 func (s *WALSnapshotStore) check() error {
 	// Remove any temporary files or directories. They represent operations
