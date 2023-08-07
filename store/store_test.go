@@ -3147,14 +3147,13 @@ func asJSONAssociative(v interface{}) string {
 	return string(b)
 }
 
-var storeTestRand = rand.New(rand.NewSource(time.Now().UnixNano()))
-
 func randomString() string {
 	var output strings.Builder
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	chars := "abcdedfghijklmnopqrstABCDEFGHIJKLMNOP"
 
 	for i := 0; i < 20; i++ {
-		random := storeTestRand.Intn(len(chars))
+		random := r.Intn(len(chars))
 		randomChar := chars[random]
 		output.WriteString(string(randomChar))
 	}
