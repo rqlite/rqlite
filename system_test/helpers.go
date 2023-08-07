@@ -680,7 +680,7 @@ func mustNodeEncryptedOnDisk(dir string, enableSingle, httpEncrypt bool, mux *tc
 		PeersPath:    filepath.Join(dir, "raft/peers.json"),
 	}
 
-	dbConf := store.NewDBConfig(!onDisk)
+	dbConf := store.NewDBConfig()
 
 	raftTn := mux.Listen(cluster.MuxRaftHeader)
 	id := nodeID

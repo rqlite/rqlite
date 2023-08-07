@@ -137,9 +137,6 @@ type Config struct {
 	// PprofEnabled enables Go PProf information. Defaults to true.
 	PprofEnabled bool
 
-	// OnDisk enables on-disk mode.
-	OnDisk bool
-
 	// OnDiskPath sets the path to the SQLite file. May not be set.
 	OnDiskPath string
 
@@ -229,10 +226,6 @@ type Config struct {
 // object before the Config object is used. It is OK to call more than
 // once.
 func (c *Config) Validate() error {
-	if c.OnDiskPath != "" && !c.OnDisk {
-		return errors.New("-on-disk-path is set, but -on-disk is not")
-	}
-
 	dataPath, err := filepath.Abs(c.DataPath)
 	if err != nil {
 		return fmt.Errorf("failed to determine absolute data path: %s", err.Error())
@@ -462,7 +455,6 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	flag.StringVar(&config.DiscoConfig, "disco-config", "", "Set discovery config, or path to cluster discovery config file")
 	flag.BoolVar(&config.Expvar, "expvar", true, "Serve expvar data on HTTP server")
 	flag.BoolVar(&config.PprofEnabled, "pprof", true, "Serve pprof data on HTTP server")
-	flag.BoolVar(&config.OnDisk, "on-disk", false, "Use an on-disk SQLite database")
 	flag.StringVar(&config.OnDiskPath, "on-disk-path", "", "Path for SQLite on-disk database file. If not set, use a file in data directory")
 	flag.BoolVar(&config.FKConstraints, "fk", false, "Enable SQLite foreign key constraints")
 	flag.BoolVar(&showVersion, "version", false, "Show version information and exit")

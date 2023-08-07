@@ -1303,7 +1303,7 @@ func Test_SingleNodeAutoRestore(t *testing.T) {
 
 	raftTn := mux.Listen(cluster.MuxRaftHeader)
 	node.Store = store.New(raftTn, &store.Config{
-		DBConf: store.NewDBConfig(true),
+		DBConf: store.NewDBConfig(),
 		Dir:    node.Dir,
 		ID:     raftTn.Addr().String(),
 	})
