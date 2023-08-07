@@ -16,7 +16,10 @@ import (
 func Test_NewWALSnapshotStore(t *testing.T) {
 	dir := makeTempDir()
 	defer os.RemoveAll(dir)
-	s := NewWALSnapshotStore(dir)
+	s, err := NewWALSnapshotStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create snapshot store: %s", err)
+	}
 	if s.Path() != dir {
 		t.Fatalf("unexpected dir, exp=%s got=%s", dir, s.Path())
 	}
@@ -25,7 +28,10 @@ func Test_NewWALSnapshotStore(t *testing.T) {
 func Test_NewWALSnapshotStore_ListEmpty(t *testing.T) {
 	dir := makeTempDir()
 	defer os.RemoveAll(dir)
-	s := NewWALSnapshotStore(dir)
+	s, err := NewWALSnapshotStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create snapshot store: %s", err)
+	}
 	if s.Path() != dir {
 		t.Fatalf("unexpected dir, exp=%s got=%s", dir, s.Path())
 	}
@@ -44,7 +50,10 @@ func Test_NewWALSnapshotStore_ListEmpty(t *testing.T) {
 func Test_WALSnapshotStore_CreateFullThenIncremental(t *testing.T) {
 	dir := makeTempDir()
 	defer os.RemoveAll(dir)
-	str := NewWALSnapshotStore(dir)
+	str, err := NewWALSnapshotStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create snapshot store: %s", err)
+	}
 
 	testConfig1 := makeTestConfiguration("1", "2")
 	sink, err := str.Create(1, 2, 3, testConfig1, 4, nil)
@@ -175,7 +184,10 @@ func Test_WALSnapshotStore_CreateFullThenIncremental(t *testing.T) {
 func Test_WALSnapshotStore_Reaping(t *testing.T) {
 	dir := makeTempDir()
 	defer os.RemoveAll(dir)
-	str := NewWALSnapshotStore(dir)
+	str, err := NewWALSnapshotStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create snapshot store: %s", err)
+	}
 
 	testConfig := makeTestConfiguration("1", "2")
 
@@ -285,7 +297,10 @@ func Test_WALSnapshotStore_Reaping(t *testing.T) {
 func Test_WALSnapshotStore_ReapingLimitsFail(t *testing.T) {
 	dir := makeTempDir()
 	defer os.RemoveAll(dir)
-	str := NewWALSnapshotStore(dir)
+	str, err := NewWALSnapshotStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create snapshot store: %s", err)
+	}
 
 	if _, err := str.ReapSnapshots(1); err != ErrRetainCountTooLow {
 		t.Fatalf("expected ErrRetainCountTooLow, got %s", err)

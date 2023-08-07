@@ -114,9 +114,7 @@ func (w *walSnapshotSink) writeMeta(full bool) error {
 // called before opening the store.
 func WALStoreCheck(dir string) error {
 	// Verify checksums?
-	// Delete any SQLite base file if there are zero snapshots?
 	// Check -- and repair -- dangling snapshots?
-	// Remove any tmp directories
 	return nil
 }
 
@@ -239,14 +237,18 @@ type WALSnapshotStore struct {
 }
 
 // NewWALSnapshotStore returns a new WALSnapshotStore.
-func NewWALSnapshotStore(dir string) *WALSnapshotStore {
-	return &WALSnapshotStore{
+func NewWALSnapshotStore(dir string) (*WALSnapshotStore, error) {
+	s := &WALSnapshotStore{
 		dir:    dir,
 		logger: log.New(os.Stderr, "[wal-snapshot-store] ", log.LstdFlags),
 	}
+	if s.check() != nil {
+		return nil, fmt.Errorf("failed WALSnapshotStore check")
+	}
+	return s, nil
 }
 
-// Path returns the path to directory this store uses
+// Path returns the path to the directory this store uses
 func (s *WALSnapshotStore) Path() string {
 	return s.dir
 }
@@ -301,7 +303,7 @@ func (s *WALSnapshotStore) Create(version raft.SnapshotVersion, index, term uint
 			return nil, err
 		}
 
-		sqliteFd, err := os.Create(filepath.Join(s.dir, baseSqliteFile) + tmpSuffix)
+		sqliteFd, err := os.Create(s.basePath() + tmpSuffix)
 		if err != nil {
 			return nil, err
 		}
@@ -378,7 +380,6 @@ func (s *WALSnapshotStore) Open(id string) (*raft.SnapshotMeta, io.ReadCloser, e
 		// the snapshot needs to be is the database and all WAL files.
 		return &meta.SnapshotMeta, fh, nil
 	}
-
 	return nil, nil, nil
 }
 
@@ -414,7 +415,6 @@ func (s *WALSnapshotStore) ReapSnapshots(retain int) (int, error) {
 		snapDirPath := filepath.Join(s.dir, snap.ID)
 		snapWALFilePath := filepath.Join(snapDirPath, snapWALFile)
 		walToCheckpointFilePath := filepath.Join(s.dir, baseSqliteWALFile)
-		baseSqliteFilePath := filepath.Join(s.dir, baseSqliteFile)
 
 		// If the snapshot directory doesn't contain a WAL file, then the base SQLite
 		// file is the snapshot state, and there is no checkpointing to do.
@@ -428,7 +428,7 @@ func (s *WALSnapshotStore) ReapSnapshots(retain int) (int, error) {
 			}
 
 			// Checkpoint the WAL file into the base SQLite file
-			if err := db.ReplayWAL(baseSqliteFilePath, []string{walToCheckpointFilePath}, false); err != nil {
+			if err := db.ReplayWAL(s.basePath(), []string{walToCheckpointFilePath}, false); err != nil {
 				s.logger.Printf("failed to checkpoint WAL file %s: %s", walToCheckpointFilePath, err)
 				return n, err
 			}
@@ -458,9 +458,8 @@ func (s *WALSnapshotStore) ReplayWALs() (string, error) {
 	}
 
 	// copy the base SQLite file into the temporary directory
-	baseSqliteFilePath := filepath.Join(s.dir, baseSqliteFile)
 	tmpSqliteFilePath := filepath.Join(tmpDir, baseSqliteFile)
-	if err := copyFile(baseSqliteFilePath, tmpSqliteFilePath); err != nil {
+	if err := copyFile(s.basePath(), tmpSqliteFilePath); err != nil {
 		return "", err
 	}
 
@@ -489,6 +488,71 @@ func (s *WALSnapshotStore) ReplayWALs() (string, error) {
 		return "", err
 	}
 	return tmpSqliteFilePath, nil
+}
+
+// check checks the Store for inconsistencies, and repairs it as needed.
+func (s *WALSnapshotStore) check() error {
+	// Remove any temporary files or directories. They represent operations
+	// that were interrupted.
+	paths, err := os.ReadDir(s.dir)
+	if err != nil {
+		return err
+	}
+	for _, path := range paths {
+		if isTmpName(path.Name()) {
+			if err := os.RemoveAll(filepath.Join(s.dir, path.Name())); err != nil {
+				return err
+			}
+		}
+	}
+
+	// If we have a base SQLite file, but no snapshot directories, this implies
+	// that we crashed after creating the base SQLite file, but before officially
+	// creating the first full snapshot. We need to delete the base SQLite file,
+	// which will cause the next snapshot to be a full snapshot.
+	if s.hasBase() {
+		snapshots, err := s.getSnapshots()
+		if err != nil {
+			return err
+		}
+		if len(snapshots) == 0 {
+			if err := os.Remove(s.basePath()); err != nil {
+				return err
+			}
+		}
+	}
+
+	// If we have a base SQLite file, and a WAL file sitting beside it, this implies
+	// that we were interrupted before completing a checkpoint operation. Complete the
+	// checkpoint operation now.
+	if s.hasBase() {
+		if fileExists(filepath.Join(s.dir, baseSqliteWALFile)) {
+			if err := db.ReplayWAL(s.basePath(), []string{filepath.Join(s.dir, baseSqliteWALFile)},
+				false); err != nil {
+				return err
+			}
+			if err := os.Remove(filepath.Join(s.dir, baseSqliteWALFile)); err != nil {
+				return err
+			}
+		}
+	}
+
+	// If we have any incremental snapshot directories which are missing a WAL file,
+	// this implies that we crashed after checkpointing the WAL file but before deleting
+	// the snapshot directory the WAL file came from. Delete that snapshot directory now.
+	snapshots, err := s.getSnapshots()
+	if err != nil {
+		return err
+	}
+	for _, snap := range snapshots {
+		snapshotDirPath := filepath.Join(s.dir, snap.ID)
+		if !snap.Full && !fileExists(filepath.Join(snapshotDirPath, snapWALFile)) {
+			if err := os.RemoveAll(snapshotDirPath); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // getSnapshots returns a list of all the snapshots in the store, sorted from
@@ -548,7 +612,12 @@ func (s *WALSnapshotStore) readMeta(name string) (*walSnapshotMeta, error) {
 
 // return true if sqliteFilePath exists in the snapshot directory
 func (s *WALSnapshotStore) hasBase() bool {
-	return fileExists(filepath.Join(s.dir, baseSqliteFile))
+	return fileExists(s.basePath())
+}
+
+// basePath returns the path to the base SQLite file.
+func (s *WALSnapshotStore) basePath() string {
+	return filepath.Join(s.dir, baseSqliteFile)
 }
 
 func (s *WALSnapshotStore) deleteAllSnapshots() error {
