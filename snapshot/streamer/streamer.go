@@ -115,3 +115,57 @@ func (s *Encoder) Close() error {
 	}
 	return nil
 }
+
+// Decoder is a io.ReadCloser that decodes a gzipped tar archive.
+type Decoder struct {
+	r     io.Reader    // The underlying ReadCloser
+	tarR  *tar.Reader  // The tar reader
+	gzipR *gzip.Reader // The gzip reader
+}
+
+// Header is the header of a file in the Encoded archive.
+type Header struct {
+	Name string // Name of file entry
+	Size int64  // Logical file size in bytes
+}
+
+// NewDecoder returns a new Decoder.
+func NewDecoder(r io.Reader) (*Decoder, error) {
+	gzipR, err := gzip.NewReader(r)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Decoder{
+		r:     r,
+		tarR:  tar.NewReader(gzipR),
+		gzipR: gzipR,
+	}, nil
+}
+
+// Next returns the next header and positions the Decoder at the
+// beginning of the corresponding file.
+func (d *Decoder) Next() (*Header, error) {
+	tarHeader, err := d.tarR.Next()
+	if err != nil {
+		return nil, err
+	}
+
+	return &Header{
+		Name: tarHeader.Name,
+		Size: tarHeader.Size,
+	}, nil
+}
+
+// Read reads from the Decoder.
+func (d *Decoder) Read(p []byte) (int, error) {
+	return d.tarR.Read(p)
+}
+
+// Close closes the Decoder.
+func (d *Decoder) Close() error {
+	if err := d.gzipR.Close(); err != nil {
+		return err
+	}
+	return nil
+}

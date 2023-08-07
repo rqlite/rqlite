@@ -6,6 +6,7 @@ import (
 	"compress/gzip"
 	"io"
 	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -73,6 +74,67 @@ func Test_Encoder(t *testing.T) {
 	t.Run("buffer size 4", func(t *testing.T) {
 		testStreamer(4)
 	})
+}
+
+func Test_EncoderDecoder(t *testing.T) {
+	// Create temporary files for testing
+	files := []string{makeTempFile(), makeTempFile(), makeTempFile()}
+	contents := []string{"Content of file 0", "Content of file 1", "Content of file 2"}
+	for i, file := range files {
+		mustWriteFile(file, []byte(contents[i]))
+		defer os.Remove(file)
+	}
+
+	// Create Encoder and write files to it
+	encoder := NewEncoder(files)
+	var buf bytes.Buffer
+	if _, err := io.Copy(&buf, encoder); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create Decoder and read files from it
+	decoder, err := NewDecoder(&buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < len(files); i++ {
+		header, err := decoder.Next()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if exp, got := filepath.Base(files[i]), header.Name; exp != got {
+			t.Errorf("expected name %s, got %s", exp, got)
+		}
+
+		if exp, got := int64(len(contents[i])), header.Size; exp != got {
+			t.Errorf("expected size %d, got %d", exp, got)
+		}
+
+		data := make([]byte, header.Size)
+		if _, err := io.ReadFull(decoder, data); err != nil {
+			t.Fatal(err)
+		}
+
+		if exp, got := contents[i], string(data); exp != got {
+			t.Errorf("expected content %s, got %s", exp, got)
+		}
+	}
+
+	// Ensure no more files
+	if _, err := decoder.Next(); err != io.EOF {
+		t.Errorf("expected EOF, got %v", err)
+	}
+
+	if err := decoder.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func mustWriteFile(filename string, data []byte) {
+	if err := os.WriteFile(filename, data, 0644); err != nil {
+		panic(err)
+	}
 }
 
 func makeTempFile() string {
