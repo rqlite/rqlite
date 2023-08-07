@@ -12,8 +12,8 @@ const (
 	defaultBufferSize = 16384
 )
 
-// Streamer is a io.ReadCloser that streams a tar archive of the given files.
-type Streamer struct {
+// Encoder is a io.ReadCloser that streams a gzipped tar archive of the given files.
+type Encoder struct {
 	files   []string // List of files to send
 	current *os.File // Current file being read
 	tarW    *tar.Writer
@@ -24,8 +24,8 @@ type Streamer struct {
 }
 
 // New returns a new streamer.
-func New(files []string) *Streamer {
-	s := &Streamer{
+func New(files []string) *Encoder {
+	s := &Encoder{
 		files:      files,
 		bufferSize: defaultBufferSize,
 	}
@@ -35,12 +35,12 @@ func New(files []string) *Streamer {
 }
 
 // SetBufferSize sets the buffer size.
-func (s *Streamer) SetBufferSize(bufferSize int) {
+func (s *Encoder) SetBufferSize(bufferSize int) {
 	s.bufferSize = bufferSize
 }
 
-// Read reads from the streamer.
-func (s *Streamer) Read(p []byte) (int, error) {
+// Read reads from the Encoder.
+func (s *Encoder) Read(p []byte) (int, error) {
 	for {
 		// If there's data in the buffer, read it
 		if s.buf.Len() > 0 {
@@ -98,8 +98,8 @@ func (s *Streamer) Read(p []byte) (int, error) {
 	}
 }
 
-// Close closes the streamer.
-func (s *Streamer) Close() error {
+// Close closes the Encoder.
+func (s *Encoder) Close() error {
 	if s.tarW != nil {
 		if err := s.tarW.Close(); err != nil {
 			return err

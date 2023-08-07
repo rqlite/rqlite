@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-func Test_Streamer(t *testing.T) {
+func Test_Encoder(t *testing.T) {
 	testStreamer := func(bufferSize int) {
 		fileContent := []string{
 			"this is content for file1",
@@ -77,7 +77,7 @@ func Test_Streamer(t *testing.T) {
 }
 
 func makeTempFile() string {
-	fd, err := os.CreateTemp("", "streamer-testfile")
+	fd, err := os.CreateTemp("", "streamer-encoder-testfile")
 	if err != nil {
 		panic(err)
 	}
