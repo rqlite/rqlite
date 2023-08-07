@@ -9,7 +9,6 @@ import (
 	"expvar"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net"
 	"os"
@@ -2091,19 +2090,11 @@ func createOnDisk(b []byte, path string, fkConstraints, wal bool) (*sql.DB, erro
 		return nil, err
 	}
 	if b != nil {
-		if err := ioutil.WriteFile(path, b, 0660); err != nil {
+		if err := os.WriteFile(path, b, 0660); err != nil {
 			return nil, err
 		}
 	}
 	return sql.Open(path, fkConstraints, wal)
-}
-
-// enabledFromBool converts bool to "enabled" or "disabled".
-func enabledFromBool(b bool) string {
-	if b {
-		return "enabled"
-	}
-	return "disabled"
 }
 
 // prettyVoter converts bool to "voter" or "non-voter"
