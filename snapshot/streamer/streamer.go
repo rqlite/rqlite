@@ -23,8 +23,8 @@ type Encoder struct {
 	bufferSize int
 }
 
-// New returns a new streamer.
-func New(files []string) *Encoder {
+// New returns a new Encoder.
+func NewEncoder(files []string) *Encoder {
 	s := &Encoder{
 		files:      files,
 		bufferSize: defaultBufferSize,

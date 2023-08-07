@@ -27,13 +27,13 @@ func Test_Encoder(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		streamer := New(filePaths)
+		encoder := NewEncoder(filePaths)
 		if bufferSize > 0 {
-			streamer.SetBufferSize(bufferSize)
+			encoder.SetBufferSize(bufferSize)
 		}
 
 		buf := bytes.NewBuffer(nil)
-		gzipReader, err := gzip.NewReader(streamer)
+		gzipReader, err := gzip.NewReader(encoder)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -59,8 +59,7 @@ func Test_Encoder(t *testing.T) {
 			t.Errorf("Expected EOF, got %v", err)
 		}
 
-		// Close the Streamer
-		if err := streamer.Close(); err != nil {
+		if err := encoder.Close(); err != nil {
 			t.Fatal(err)
 		}
 	}
