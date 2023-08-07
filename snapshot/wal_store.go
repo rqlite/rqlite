@@ -184,6 +184,7 @@ type WALIncrementalSnapshotSink struct {
 	walSnapshotSink
 }
 
+// Close closes the snapshot.
 func (w *WALIncrementalSnapshotSink) Close() (retErr error) {
 	if w.closed {
 		return nil
