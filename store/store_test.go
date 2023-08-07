@@ -20,8 +20,10 @@ import (
 	"github.com/rqlite/rqlite/testdata/chinook"
 )
 
-func Test_SingleNodeOnDiskFileExecuteQuery(t *testing.T) {
+// Test_StoreSingleNode tests that a single node basically operates.
+func Test_OpenStoreSingleNode(t *testing.T) {
 	s, ln := mustNewStore(t)
+	defer s.Close(true)
 	defer ln.Close()
 
 	if err := s.Open(); err != nil {
@@ -30,71 +32,22 @@ func Test_SingleNodeOnDiskFileExecuteQuery(t *testing.T) {
 	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
 		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
 	}
-	defer s.Close(true)
-	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+
+	_, err := s.WaitForLeader(10 * time.Second)
+	if err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
-
-	er := executeRequestFromStrings([]string{
-		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
-		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
-	}, false, false)
-	_, err := s.Execute(er)
+	_, err = s.LeaderAddr()
 	if err != nil {
-		t.Fatalf("failed to execute on single node: %s", err.Error())
+		t.Fatalf("failed to get leader address: %s", err.Error())
 	}
-
-	// Every query should return the same results, so use a function for the check.
-	check := func(r []*command.QueryRows) {
-		if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
-			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-		}
-		if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
-			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-		}
-	}
-
-	qr := queryRequestFromString("SELECT * FROM foo", false, false)
-	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
-	r, err := s.Query(qr)
+	id, err := waitForLeaderID(s, 10*time.Second)
 	if err != nil {
-		t.Fatalf("failed to query single node: %s", err.Error())
+		t.Fatalf("failed to retrieve leader ID: %s", err.Error())
 	}
-	check(r)
-
-	qr = queryRequestFromString("SELECT * FROM foo", false, false)
-	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_WEAK
-	r, err = s.Query(qr)
-	if err != nil {
-		t.Fatalf("failed to query single node: %s", err.Error())
+	if got, exp := id, s.raftID; got != exp {
+		t.Fatalf("wrong leader ID returned, got: %s, exp %s", got, exp)
 	}
-	check(r)
-
-	qr = queryRequestFromString("SELECT * FROM foo", false, false)
-	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
-	r, err = s.Query(qr)
-	if err != nil {
-		t.Fatalf("failed to query single node: %s", err.Error())
-	}
-	check(r)
-
-	qr = queryRequestFromString("SELECT * FROM foo", false, true)
-	qr.Timings = true
-	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
-	r, err = s.Query(qr)
-	if err != nil {
-		t.Fatalf("failed to query single node: %s", err.Error())
-	}
-	check(r)
-
-	qr = queryRequestFromString("SELECT * FROM foo", true, false)
-	qr.Request.Transaction = true
-	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
-	r, err = s.Query(qr)
-	if err != nil {
-		t.Fatalf("failed to query single node: %s", err.Error())
-	}
-	check(r)
 }
 
 // Test_SingleNodeSQLitePath ensures that basic functionality works when the SQLite database path
@@ -142,7 +95,9 @@ func Test_SingleNodeOnDiskSQLitePath(t *testing.T) {
 	}
 }
 
-func Test_SingleNodeOnDiskBackupBinary(t *testing.T) {
+// Test_SingleNodeBackupBinary tests that requesting a binary-formatted
+// backup works as expected.
+func Test_SingleNodeBackupBinary(t *testing.T) {
 	t.Parallel()
 
 	s, ln := mustNewStore(t)
@@ -196,7 +151,10 @@ COMMIT;
 	}
 }
 
-func Test_SingleNodeOnDiskRestoreNoncompressed(t *testing.T) {
+// Test_SingleNodeRestoreNoncompressed checks restoration from a
+// pre-compressed SQLite database snap. This is to test for backwards
+// compatilibty of this code.
+func Test_SingleNodeRestoreNoncompressed(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
 
@@ -234,8 +192,9 @@ func Test_SingleNodeOnDiskRestoreNoncompressed(t *testing.T) {
 	}
 }
 
-func Test_SingleNodeInMemOnDiskProvide(t *testing.T) {
-
+// Test_SingleNodeProvide tests that the Store correctly implements
+// the Provide method.
+func Test_SingleNodeProvide(t *testing.T) {
 	s0, ln := mustNewStore(t)
 	defer ln.Close()
 
@@ -311,7 +270,9 @@ func Test_SingleNodeInMemOnDiskProvide(t *testing.T) {
 	}
 }
 
-func Test_SingleNodeSnapshotOnDisk(t *testing.T) {
+// Test_SingleNodeSnapshot tests that the Store correctly takes a snapshot
+// and recovers from it.
+func Test_SingleNodeSnapshot(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
 
@@ -379,6 +340,8 @@ func Test_SingleNodeSnapshotOnDisk(t *testing.T) {
 	}
 }
 
+// Test_StoreSingleNodeNotOpen tests that various methods called on a
+// closed Store return ErrNotOpen.
 func Test_StoreSingleNodeNotOpen(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer s.Close(true)
@@ -430,35 +393,8 @@ func Test_StoreSingleNodeNotOpen(t *testing.T) {
 	}
 }
 
-func Test_OpenStoreSingleNode(t *testing.T) {
-	s, ln := mustNewStore(t)
-	defer s.Close(true)
-	defer ln.Close()
-
-	if err := s.Open(); err != nil {
-		t.Fatalf("failed to open single-node store: %s", err.Error())
-	}
-	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
-		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
-	}
-
-	_, err := s.WaitForLeader(10 * time.Second)
-	if err != nil {
-		t.Fatalf("Error waiting for leader: %s", err)
-	}
-	_, err = s.LeaderAddr()
-	if err != nil {
-		t.Fatalf("failed to get leader address: %s", err.Error())
-	}
-	id, err := waitForLeaderID(s, 10*time.Second)
-	if err != nil {
-		t.Fatalf("failed to retrieve leader ID: %s", err.Error())
-	}
-	if got, exp := id, s.raftID; got != exp {
-		t.Fatalf("wrong leader ID returned, got: %s, exp %s", got, exp)
-	}
-}
-
+// Test_OpenStoreCloseSingleNode tests a single node store can be
+// opened, closed, and then reopened.
 func Test_OpenStoreCloseSingleNode(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
@@ -528,6 +464,7 @@ func Test_OpenStoreCloseSingleNode(t *testing.T) {
 	}
 }
 
+// Test_StoreLeaderObservation tests observing leader changes works.
 func Test_StoreLeaderObservation(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer s.Close(true)
@@ -570,6 +507,7 @@ func Test_StoreLeaderObservation(t *testing.T) {
 	}
 }
 
+// Test_StoreReady tests that the Store correctly implements the Ready method.
 func Test_StoreReady(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer s.Close(true)
@@ -611,7 +549,9 @@ func Test_StoreReady(t *testing.T) {
 	testPoll(t, s.Ready, 100*time.Millisecond, 2*time.Second)
 }
 
-func Test_SingleNodeInMemExecuteQuery(t *testing.T) {
+// Test_SingleNodeExecuteQuery tests that a Store correctly responds to a simple
+// Execute and Query request.
+func Test_SingleNodeExecuteQuery(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
 
@@ -650,8 +590,8 @@ func Test_SingleNodeInMemExecuteQuery(t *testing.T) {
 	}
 }
 
-// Test_SingleNodeInMemExecuteQueryFail ensures database level errors are presented by the store.
-func Test_SingleNodeInMemExecuteQueryFail(t *testing.T) {
+// Test_SingleNodeExecuteQueryFail ensures database level errors are presented by the store.
+func Test_SingleNodeExecuteQueryFail(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
 
@@ -678,6 +618,8 @@ func Test_SingleNodeInMemExecuteQueryFail(t *testing.T) {
 	}
 }
 
+// Test_SingleNodeExecuteQueryTx tests that a Store correctly responds to a simple
+// Execute and Query request, when the request is wrapped in a transaction.
 func Test_SingleNodeExecuteQueryTx(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
@@ -730,9 +672,9 @@ func Test_SingleNodeExecuteQueryTx(t *testing.T) {
 	}
 }
 
-// Test_SingleNodeInMemRequest tests simple requests that contain both
+// Test_SingleNodeRequest tests simple requests that contain both
 // queries and execute statements.
-func Test_SingleNodeInMemRequest(t *testing.T) {
+func Test_SingleNodeRequest(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
 
@@ -818,7 +760,9 @@ func Test_SingleNodeInMemRequest(t *testing.T) {
 	}
 }
 
-func Test_SingleNodeInMemRequestTx(t *testing.T) {
+// Test_SingleNodeRequest tests simple requests that contain both
+// queries and execute statements, when wrapped in a transaction.
+func Test_SingleNodeRequestTx(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
 
@@ -889,7 +833,9 @@ func Test_SingleNodeInMemRequestTx(t *testing.T) {
 	}
 }
 
-func Test_SingleNodeInMemRequestParameters(t *testing.T) {
+// Test_SingleNodeRequestParameters tests simple requests that contain
+// parameters.
+func Test_SingleNodeRequestParameters(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
 
@@ -971,8 +917,8 @@ func Test_SingleNodeInMemRequestParameters(t *testing.T) {
 	}
 }
 
-// Test_SingleNodeInMemFK tests that basic foreign-key related functionality works.
-func Test_SingleNodeInMemFK(t *testing.T) {
+// Test_SingleNodeFK tests that basic foreign-key related functionality works.
+func Test_SingleNodeFK(t *testing.T) {
 	s, ln := mustNewStoreFK(t)
 	defer ln.Close()
 
@@ -1000,6 +946,83 @@ func Test_SingleNodeInMemFK(t *testing.T) {
 	if got, exp := asJSON(res), `[{"error":"FOREIGN KEY constraint failed"}]`; exp != got {
 		t.Fatalf("unexpected results for execute\nexp: %s\ngot: %s", exp, got)
 	}
+}
+
+func Test_SingleNodeOnDiskFileExecuteQuery(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+	}, false, false)
+	_, err := s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	// Every query should return the same results, so use a function for the check.
+	check := func(r []*command.QueryRows) {
+		if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
+			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+		}
+		if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
+			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+		}
+	}
+
+	qr := queryRequestFromString("SELECT * FROM foo", false, false)
+	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+	r, err := s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	check(r)
+
+	qr = queryRequestFromString("SELECT * FROM foo", false, false)
+	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_WEAK
+	r, err = s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	check(r)
+
+	qr = queryRequestFromString("SELECT * FROM foo", false, false)
+	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	r, err = s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	check(r)
+
+	qr = queryRequestFromString("SELECT * FROM foo", false, true)
+	qr.Timings = true
+	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+	r, err = s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	check(r)
+
+	qr = queryRequestFromString("SELECT * FROM foo", true, false)
+	qr.Request.Transaction = true
+	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+	r, err = s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	check(r)
 }
 
 func Test_SingleNodeBackupText(t *testing.T) {
