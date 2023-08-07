@@ -11,10 +11,12 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/db"
+	"github.com/rqlite/rqlite/snapshot/streamer"
 )
 
 const (
@@ -30,6 +32,9 @@ const (
 var (
 	// ErrRetainCountTooLow is returned when the retain count is too low.
 	ErrRetainCountTooLow = errors.New("retain count must be >= 2")
+
+	// ErrSnapshotNotFound is returned when a snapshot is not found.
+	ErrSnapshotNotFound = errors.New("snapshot not found")
 )
 
 // walSnapshotMeta is stored on disk. We also put a CRC
@@ -215,6 +220,8 @@ func (w *WALIncrementalSnapshotSink) Close() (retErr error) {
 type WALSnapshotStore struct {
 	dir    string // The directory to store snapshots in.
 	logger *log.Logger
+
+	mu sync.RWMutex
 }
 
 // NewWALSnapshotStore returns a new WALSnapshotStore.
@@ -316,25 +323,51 @@ func (s *WALSnapshotStore) List() ([]*raft.SnapshotMeta, error) {
 
 // Open opens the snapshot with the given ID.
 func (s *WALSnapshotStore) Open(id string) (*raft.SnapshotMeta, io.ReadCloser, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	meta, err := s.readMeta(id)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	// XXX RLock the store here.
 	snapshots, err := s.getSnapshots()
 	if err != nil {
 		return nil, nil, err
 	}
 	sort.Sort(snapMetaSlice(snapshots))
-	return &meta.SnapshotMeta, nil, nil
+	if !snapMetaSlice(snapshots).Contains(id) {
+		return nil, nil, ErrSnapshotNotFound
+	}
+
+	// Hang on, XXXX. This needs more work. We have to return:
+	// - the SQLIte base file because it's the actual snapshot
+	// - the base SQLite file and 1 or more WAL files
+	files := []string{}
+	// for _, snap := range snapshots {
+	// 	path := snapWALFile
+	// 	if snap.Full {
+	// 		name = baseSqliteFile
+	// 	}
+	// 	files = append(files, filepath.Join(s.dir, snap.ID, name))
+	// 	if snap.ID == id {
+	// 		// Stop after we've reached the requested snapshot
+	// 		break
+	// 	}
+	// }
+	return &meta.SnapshotMeta, NewWALSnapshotState(streamer.NewEncoder(files), s), nil
 }
 
 // ReapSnapshots removes snapshots that are no longer needed. It does this by
 // checkpointing WAL-based snapshots into the base SQLite file. The function
 // returns the number of snapshots removed, or an error. The retain parameter
 // specifies the number of snapshots to retain.
+//
+// XXXX Need to start the reaping process in a gorouting?!
 func (s *WALSnapshotStore) ReapSnapshots(retain int) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	if retain < minSnapshotRetain {
 		return 0, ErrRetainCountTooLow
 	}
@@ -345,7 +378,7 @@ func (s *WALSnapshotStore) ReapSnapshots(retain int) (int, error) {
 		return 0, err
 	}
 
-	// Keeping multipe snapshots makes it much easier to reason about the fixing
+	// Keeping multiple snapshots makes it much easier to reason about the fixing
 	// up the Snapshot store if we crash in the middle of snapshotting or reaping.
 	if len(snapshots) <= retain {
 		return 0, nil
@@ -681,4 +714,13 @@ func (s snapMetaSlice) Less(i, j int) bool {
 
 func (s snapMetaSlice) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
+}
+
+func (s snapMetaSlice) Contains(id string) bool {
+	for _, snap := range s {
+		if snap.ID == id {
+			return true
+		}
+	}
+	return false
 }
