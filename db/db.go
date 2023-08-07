@@ -79,7 +79,6 @@ func ResetStats() {
 type DB struct {
 	path      string // Path to database file, if running on-disk.
 	walPath   string // Path to WAL file, if running on-disk and WAL is enabled.
-	memory    bool   // In-memory only.
 	fkEnabled bool   // Foreign key constraints enabled
 	wal       bool
 
@@ -354,140 +353,6 @@ func Open(dbPath string, fkEnabled, wal bool) (*DB, error) {
 	}, nil
 }
 
-// OpenInMemory returns a new in-memory database.
-func OpenInMemory(fkEnabled bool) (*DB, error) {
-	inMemPath := fmt.Sprintf("file:/%s", randomString())
-
-	rwOpts := []string{
-		"mode=rw",
-		"vfs=memdb",
-		"_txlock=immediate",
-		fmt.Sprintf("_fk=%s", strconv.FormatBool(fkEnabled)),
-	}
-
-	rwDSN := fmt.Sprintf("%s?%s", inMemPath, strings.Join(rwOpts, "&"))
-	rwDB, err := sql.Open("sqlite3", rwDSN)
-	if err != nil {
-		return nil, err
-	}
-
-	// Ensure there is only one connection and it never closes.
-	// If it closed, in-memory database could be lost.
-	rwDB.SetConnMaxIdleTime(0)
-	rwDB.SetConnMaxLifetime(0)
-	rwDB.SetMaxIdleConns(1)
-	rwDB.SetMaxOpenConns(1)
-
-	roOpts := []string{
-		"mode=ro",
-		"vfs=memdb",
-		"_txlock=deferred",
-		fmt.Sprintf("_fk=%s", strconv.FormatBool(fkEnabled)),
-	}
-
-	roDSN := fmt.Sprintf("%s?%s", inMemPath, strings.Join(roOpts, "&"))
-	roDB, err := sql.Open("sqlite3", roDSN)
-	if err != nil {
-		return nil, err
-	}
-
-	// Ensure database is basically healthy.
-	if err := rwDB.Ping(); err != nil {
-		return nil, fmt.Errorf("failed to ping in-memory database: %s", err.Error())
-	}
-
-	return &DB{
-		memory:    true,
-		path:      ":memory:",
-		fkEnabled: fkEnabled,
-		rwDB:      rwDB,
-		roDB:      roDB,
-		rwDSN:     rwDSN,
-		roDSN:     roDSN,
-	}, nil
-}
-
-// LoadIntoMemory loads an in-memory database with that at the path.
-// Not safe to call while other operations are happening with the
-// source database.
-func LoadIntoMemory(dbPath string, fkEnabled, wal bool) (*DB, error) {
-	dstDB, err := OpenInMemory(fkEnabled)
-	if err != nil {
-		return nil, err
-	}
-
-	srcDB, err := Open(dbPath, fkEnabled, wal)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := copyDatabase(dstDB, srcDB); err != nil {
-		return nil, err
-	}
-
-	if err := srcDB.Close(); err != nil {
-		return nil, err
-	}
-
-	return dstDB, nil
-}
-
-// DeserializeIntoMemory loads an in-memory database with that contained
-// in the byte slide. The byte slice must not be changed or garbage-collected
-// until after this function returns.
-func DeserializeIntoMemory(b []byte, fkEnabled bool) (retDB *DB, retErr error) {
-	// Get a plain-ol' in-memory database.
-	tmpDB, err := sql.Open("sqlite3", ":memory:")
-	if err != nil {
-		return nil, fmt.Errorf("DeserializeIntoMemory: %s", err.Error())
-	}
-	defer tmpDB.Close()
-
-	tmpConn, err := tmpDB.Conn(context.Background())
-	if err != nil {
-		return nil, err
-	}
-
-	// tmpDB will still be using memory in Go space, so tmpDB needs to be explicitly
-	// copied to a new database, which we create now.
-	retDB, err = OpenInMemory(fkEnabled)
-	if err != nil {
-		return nil, fmt.Errorf("DeserializeIntoMemory: %s", err.Error())
-	}
-	defer func() {
-		// Don't leak a database if deserialization fails.
-		if retDB != nil && retErr != nil {
-			retDB.Close()
-		}
-	}()
-
-	if err := tmpConn.Raw(func(driverConn interface{}) error {
-		srcConn := driverConn.(*sqlite3.SQLiteConn)
-		err2 := srcConn.Deserialize(b, "")
-		if err2 != nil {
-			return fmt.Errorf("DeserializeIntoMemory: %s", err2.Error())
-		}
-		defer srcConn.Close()
-
-		// Now copy from tmp database to the database this function will return.
-		dbConn, err3 := retDB.rwDB.Conn(context.Background())
-		if err3 != nil {
-			return fmt.Errorf("DeserializeIntoMemory: %s", err3.Error())
-		}
-		defer dbConn.Close()
-
-		return dbConn.Raw(func(driverConn interface{}) error {
-			dstConn := driverConn.(*sqlite3.SQLiteConn)
-			return copyDatabaseConnection(dstConn, srcConn)
-		})
-
-	}); err != nil {
-		return nil, err
-	}
-
-	return retDB, nil
-}
-
 // Close closes the underlying database connection.
 func (db *DB) Close() error {
 	if err := db.rwDB.Close(); err != nil {
@@ -530,14 +395,12 @@ func (db *DB) Stats() (map[string]interface{}, error) {
 	}
 
 	stats["path"] = db.path
-	if !db.memory {
-		if stats["size"], err = db.FileSize(); err != nil {
+	if stats["size"], err = db.FileSize(); err != nil {
+		return nil, err
+	}
+	if db.wal {
+		if stats["wal_size"], err = db.WALSize(); err != nil {
 			return nil, err
-		}
-		if db.wal {
-			if stats["wal_size"], err = db.WALSize(); err != nil {
-				return nil, err
-			}
 		}
 	}
 	return stats, nil
@@ -560,9 +423,6 @@ func (db *DB) Size() (int64, error) {
 // FileSize returns the size of the SQLite file on disk. If running in
 // on-memory mode, this function returns 0.
 func (db *DB) FileSize() (int64, error) {
-	if db.memory {
-		return 0, nil
-	}
 	fi, err := os.Stat(db.path)
 	if err != nil {
 		return 0, err
@@ -646,11 +506,6 @@ func (db *DB) DisableCheckpointing() error {
 func (db *DB) EnableCheckpointing() error {
 	_, err := db.rwDB.Exec("PRAGMA wal_autocheckpoint=1000")
 	return err
-}
-
-// InMemory returns whether this database is in-memory.
-func (db *DB) InMemory() bool {
-	return db.memory
 }
 
 // FKEnabled returns whether Foreign Key constraints are enabled.
@@ -1118,55 +973,35 @@ func (db *DB) Copy(dstDB *DB) error {
 
 // Serialize returns a byte slice representation of the SQLite database. For
 // an ordinary on-disk database file, the serialization is just a copy of the
-// disk file. For an in-memory database or a "TEMP" database, the serialization
-// is the same sequence of bytes which would be written to disk if that database
-// were backed up to disk. If the database is in WAL mode, a temporary on-disk
+// disk file. If the database is in WAL mode, a temporary on-disk
 // copy is made, and it is this copy that is serialized. This function must not
 // be called while any writes are happening to the database.
 func (db *DB) Serialize() ([]byte, error) {
-	if !db.memory {
-		if db.wal {
-			tmpFile, err := os.CreateTemp("", "rqlite-serialize")
-			if err != nil {
-				return nil, err
-			}
-			defer os.Remove(tmpFile.Name())
-			defer tmpFile.Close()
-
-			if err := db.Backup(tmpFile.Name()); err != nil {
-				return nil, err
-			}
-			newDB, err := Open(tmpFile.Name(), db.fkEnabled, false)
-			if err != nil {
-				return nil, err
-			}
-			defer newDB.Close()
-			return newDB.Serialize()
-		}
-		// Simply read and return the SQLite file.
-		b, err := os.ReadFile(db.path)
+	if db.wal {
+		tmpFile, err := os.CreateTemp("", "rqlite-serialize")
 		if err != nil {
 			return nil, err
 		}
-		return b, nil
-	}
+		defer os.Remove(tmpFile.Name())
+		defer tmpFile.Close()
 
-	conn, err := db.roDB.Conn(context.Background())
+		if err := db.Backup(tmpFile.Name()); err != nil {
+			return nil, err
+		}
+		newDB, err := Open(tmpFile.Name(), db.fkEnabled, false)
+		if err != nil {
+			return nil, err
+		}
+		defer newDB.Close()
+		return newDB.Serialize()
+	}
+	// Simply read and return the SQLite file.
+	b, err := os.ReadFile(db.path)
 	if err != nil {
 		return nil, err
 	}
-	defer conn.Close()
-
-	var b []byte
-	if err := conn.Raw(func(raw interface{}) error {
-		var err error
-		b, err = raw.(*sqlite3.SQLiteConn).Serialize("")
-		return err
-	}); err != nil {
-		return nil, fmt.Errorf("failed to serialize database: %s", err.Error())
-	}
-
 	return b, nil
+
 }
 
 // Dump writes a consistent snapshot of the database in SQL text format.

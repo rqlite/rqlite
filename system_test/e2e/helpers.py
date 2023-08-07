@@ -78,7 +78,7 @@ class Node(object):
                http_cert=None, http_key=None, http_no_verify=False,
                node_cert=None, node_key=None, node_no_verify=False,
                auth=None, auto_backup=None, auto_restore=None,
-               dir=None, on_disk=False):
+               dir=None):
     
     s_api = None
     s_raft = None
@@ -125,7 +125,6 @@ class Node(object):
     self.auto_backup = auto_backup
     self.auto_restore = auto_restore
     self.disco_key = random_string(10)
-    self.on_disk = on_disk
     self.process = None
     self.stdout_file = os.path.join(dir, 'rqlited.log')
     self.stdout_fd = open(self.stdout_file, 'w')
@@ -187,8 +186,6 @@ class Node(object):
       command += ['-node-cert', self.node_cert, '-node-key', self.node_key]
       if self.node_no_verify:
         command += ['-node-no-verify']
-    if self.on_disk:
-      command += ['-on-disk']
     if self.auth is not None:
       command += ['-auth', self.auth]
     if self.auto_backup is not None:

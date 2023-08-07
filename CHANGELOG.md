@@ -1,5 +1,13 @@
 ## 8.0.0 (unreleased)
-Release 8.0.0 is in active development, with the goal of supporting much larger data sets, into the 10GB+ range. When officially released 8.0 will support (mostly) seamless upgrades from the 7.x series. However until the official release, upgrades will require backing up your data from any existing 7.x cluster and restoring into a new 8.0 cluster.
+Release 8.0.0 is in active development, with the goal of supporting much larger data sets, into the 10GB+ range (and hopefully much larger), while keeping its focus on simplicity, ease-of-operation, and high quality.
+
+**Upgrading from the 7.x release**
+
+When officially released 8.0 will support (mostly) seamless upgrades from the 7.x series. However until the official release you must follow these steps to upgrade from 7.x:
+
+- Backup your data and load it into a new 8.0 system.
+- 8.0 always runs with an on-disk database, in-memory databases are no longer supported. Improvements made late in the 7.0 series means there is little difference in write performance between in-memory and on-disk modes, and supporting both modes just means confusion and higher development costs. If you were previously running in in-memory mode (the default), you don't need to do anything. But if you were previously passing `-on-disk` to `rqlited` so that rqlite ran in on-disk mode, you must now remove that flag.
+
 ### Implementation changes and bug fixes
 - [PR #1337](https://github.com/rqlite/rqlite/pull/1337): Store can now load from an io.Reader.
 - [PR #1339](https://github.com/rqlite/rqlite/pull/1339), [PR #1340](https://github.com/rqlite/rqlite/pull/1340), [PR #1341](https://github.com/rqlite/rqlite/pull/1341): Add `LoadRequest` chunker/dechunker.
@@ -7,6 +15,7 @@ Release 8.0.0 is in active development, with the goal of supporting much larger 
 - [PR #1342](https://github.com/rqlite/rqlite/pull/1342): Integrate chunked-loading, applying to auto-restore from the Cloud.
 - [PR #1347](https://github.com/rqlite/rqlite/pull/1347): Migrate HTTP layer to chunked loading.
 - [PR #1355](https://github.com/rqlite/rqlite/pull/1355): Database layer can run an integrity check.
+- [PR #1385](https://github.com/rqlite/rqlite/pull/1358): Remove support for in-memory databases.
 
 ## 7.21.4 (July 8th 2023)
 ### Implementation changes and bug fixes

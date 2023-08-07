@@ -206,18 +206,10 @@ func test_OpenStoreCloseStartup(t *testing.T, s *Store) {
 	}
 }
 
-// Test_OpenStoreCloseStartupOnDiskSingleNode tests that on-disk
+// Test_OpenStoreCloseStartupSingleNode tests that on-disk
 // works fine during various restart scenarios.
-func Test_OpenStoreCloseStartupOnDiskSingleNode(t *testing.T) {
-	s, ln := mustNewStore(t, false)
-	defer ln.Close()
-	test_OpenStoreCloseStartup(t, s)
-}
-
-// Test_OpenStoreCloseStartupMemoryOnlySingleNode tests that in-memory
-// works fine during various restart scenarios.
-func Test_OpenStoreCloseStartupMemoryOnlySingleNode(t *testing.T) {
-	s, ln := mustNewStore(t, true)
+func Test_OpenStoreCloseStartupSingleNode(t *testing.T) {
+	s, ln := mustNewStore(t)
 	defer ln.Close()
 	test_OpenStoreCloseStartup(t, s)
 }
@@ -277,18 +269,10 @@ func test_SnapshotStress(t *testing.T, s *Store) {
 	}
 }
 
-// Test_StoreSnapshotStressOnDiskSingleNode tests that a high-rate of snapshotting
+// Test_StoreSnapshotStressSingleNode tests that a high-rate of snapshotting
 // works fine with an on-disk setup.
-func Test_StoreSnapshotStressOnDiskSingleNode(t *testing.T) {
-	s, ln := mustNewStore(t, false)
-	defer ln.Close()
-	test_SnapshotStress(t, s)
-}
-
-// Test_StoreSnapshotStressInMemSingleNode tests that a high-rate of snapshotting
-// works fine with an in-memory setup.
-func Test_StoreSnapshotStressInMemSingleNode(t *testing.T) {
-	s, ln := mustNewStore(t, true)
+func Test_StoreSnapshotStressSingleNode(t *testing.T) {
+	s, ln := mustNewStore(t)
 	defer ln.Close()
 	test_SnapshotStress(t, s)
 }
