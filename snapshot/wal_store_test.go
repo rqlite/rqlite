@@ -165,16 +165,6 @@ func Test_WALSnapshotStore_CreateFullThenIncremental(t *testing.T) {
 	if !reflect.DeepEqual(snaps[0].Configuration, testConfig2) {
 		t.Fatalf("unexpected Configuration, exp=%s got=%s", testConfig2, snaps[0].Configuration)
 	}
-
-	// Open incremental snapshot, which will trigger a bunch of checks.
-	_, rc, err := str.Open(id)
-	if err != nil {
-		t.Fatalf("failed to open snapshot: %s", err)
-	}
-	defer rc.Close()
-	if !compareReaderToByteSlice(rc, testBytes) {
-		t.Fatalf("snapshot wal file does not match")
-	}
 }
 
 // Test_WALSnapshotStore_Reaping tests that the snapshot store correctly

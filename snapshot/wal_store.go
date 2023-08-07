@@ -1,12 +1,9 @@
 package snapshot
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"hash"
-	"hash/crc64"
 	"io"
 	"log"
 	"os"
@@ -31,6 +28,7 @@ const (
 )
 
 var (
+	// ErrRetainCountTooLow is returned when the retain count is too low.
 	ErrRetainCountTooLow = errors.New("retain count must be >= 2")
 )
 
@@ -38,7 +36,6 @@ var (
 // on disk so that we can verify the snapshot.
 type walSnapshotMeta struct {
 	raft.SnapshotMeta
-	CRC  []byte // CRC of the data XXX shoudl decide if i really need this.
 	Full bool
 }
 
@@ -50,12 +47,9 @@ func (w *walSnapshotMeta) String() string {
 type walSnapshotSink struct {
 	store *WALSnapshotStore
 
-	dir       string // The directory to store the snapshot in.
-	parentDir string // The parent directory of the snapshot.
-	dataFd    *os.File
-	dataHash  hash.Hash64
-
-	multiW io.Writer
+	dir       string   // The directory to store the snapshot in.
+	parentDir string   // The parent directory of the snapshot.
+	dataFd    *os.File // The file to write the snapshot data to.
 
 	meta *walSnapshotMeta
 
@@ -65,7 +59,7 @@ type walSnapshotSink struct {
 
 // Write writes the given bytes to the snapshot.
 func (w *walSnapshotSink) Write(p []byte) (n int, err error) {
-	return w.multiW.Write(p)
+	return w.dataFd.Write(p)
 }
 
 // Cancel closes the snapshot and removes it.
@@ -95,7 +89,6 @@ func (w *walSnapshotSink) writeMeta(full bool) error {
 	}
 	defer fh.Close()
 
-	w.meta.CRC = w.dataHash.Sum(nil)
 	w.meta.Full = full
 
 	// Write out as JSON
@@ -108,14 +101,6 @@ func (w *walSnapshotSink) writeMeta(full bool) error {
 		return err
 	}
 	return fh.Close()
-}
-
-// WALStoreCheck performs a series of checks and cleanups on the WAL store. It should be
-// called before opening the store.
-func WALStoreCheck(dir string) error {
-	// Verify checksums?
-	// Check -- and repair -- dangling snapshots?
-	return nil
 }
 
 // WALFullSnapshotSink is a sink for a full snapshot.
@@ -149,11 +134,6 @@ func (w *WALFullSnapshotSink) Close() (retErr error) {
 	if err := w.writeMeta(true); err != nil {
 		return err
 	}
-
-	// Need to worry about crashes here. If we crash after the SQLite file is
-	// synced, but before the snapshot directory is moved into place, we'll
-	// have a dangling SQLite file. And perhaps other issues. XXXX Perform
-	// cleanup at Store open.
 
 	if _, err := moveFromTmp(w.dataFd.Name()); err != nil {
 		w.logger.Printf("failed to move SQLite file into place: %s", err)
@@ -271,13 +251,10 @@ func (s *WALSnapshotStore) Create(version raft.SnapshotVersion, index, term uint
 			Term:               term,
 			Configuration:      configuration,
 			ConfigurationIndex: configurationIndex,
-			// XXX not setting size. Don't think it matters.
 		},
 	}
 
 	var sink raft.SnapshotSink
-	hash := crc64.New(crc64.MakeTable(crc64.ECMA))
-
 	if s.hasBase() {
 		walFd, err := os.Create(filepath.Join(snapshotPath, snapWALFile))
 		if err != nil {
@@ -289,8 +266,6 @@ func (s *WALSnapshotStore) Create(version raft.SnapshotVersion, index, term uint
 				dir:       snapshotPath,
 				parentDir: s.dir,
 				dataFd:    walFd,
-				dataHash:  hash,
-				multiW:    io.MultiWriter(walFd, hash),
 				meta:      meta,
 				logger:    log.New(os.Stderr, "[wal-inc-snapshot-sink] ", log.LstdFlags),
 			},
@@ -315,8 +290,6 @@ func (s *WALSnapshotStore) Create(version raft.SnapshotVersion, index, term uint
 				dir:       snapshotPath,
 				parentDir: s.dir,
 				dataFd:    sqliteFd,
-				dataHash:  crc64.New(crc64.MakeTable(crc64.ECMA)),
-				multiW:    io.MultiWriter(sqliteFd, hash),
 				meta:      meta,
 				logger:    log.New(os.Stderr, "[wal-full-snapshot-sink] ", log.LstdFlags),
 			},
@@ -343,45 +316,18 @@ func (s *WALSnapshotStore) List() ([]*raft.SnapshotMeta, error) {
 
 // Open opens the snapshot with the given ID.
 func (s *WALSnapshotStore) Open(id string) (*raft.SnapshotMeta, io.ReadCloser, error) {
-	// Try to read the meta data
 	meta, err := s.readMeta(id)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	if !meta.Full {
-		fh, err := os.Open(filepath.Join(s.dir, id, snapWALFile))
-		if err != nil {
-			return nil, nil, err
-		}
-
-		// Compute and verify the hash
-		dataHash := crc64.New(crc64.MakeTable(crc64.ECMA))
-		_, err = io.Copy(dataHash, fh)
-		if err != nil {
-			s.logger.Println("failed to read WAL file:", err)
-			fh.Close()
-			return nil, nil, err
-		}
-		computed := dataHash.Sum(nil)
-		if !bytes.Equal(meta.CRC, computed) {
-			s.logger.Println("CRC checksum failed", "stored", meta.CRC, "computed", computed)
-			fh.Close()
-			return nil, nil, fmt.Errorf("CRC mismatch")
-		}
-
-		// Rewind the file
-		if _, err := fh.Seek(0, 0); err != nil {
-			s.logger.Println("failed to rewind WAL file:", err)
-			fh.Close()
-			return nil, nil, err
-		}
-
-		// Return the file XXXX -- this actually won't be the final implementation. What
-		// the snapshot needs to be is the database and all WAL files.
-		return &meta.SnapshotMeta, fh, nil
+	// XXX RLock the store here.
+	snapshots, err := s.getSnapshots()
+	if err != nil {
+		return nil, nil, err
 	}
-	return nil, nil, nil
+	sort.Sort(snapMetaSlice(snapshots))
+	return &meta.SnapshotMeta, nil, nil
 }
 
 // ReapSnapshots removes snapshots that are no longer needed. It does this by
@@ -437,7 +383,7 @@ func (s *WALSnapshotStore) ReapSnapshots(retain int) (int, error) {
 			s.logger.Printf("snapshot %s does not contain a WAL file", snap.ID)
 		}
 
-		// Delete the snapshot directory XXX handle crashing just before this.
+		// Delete the snapshot directory, since the state is now in the base SQLite file.
 		if err := os.RemoveAll(snapDirPath); err != nil {
 			s.logger.Printf("failed to delete snapshot %s: %s", snap.ID, err)
 			return n, err
@@ -524,8 +470,8 @@ func (s *WALSnapshotStore) check() error {
 	}
 
 	// If we have a base SQLite file, and a WAL file sitting beside it, this implies
-	// that we were interrupted before completing a checkpoint operation. Complete the
-	// checkpoint operation now.
+	// that we were interrupted before completing a checkpoint operation, as part of
+	// reaping snapshots. Complete the checkpoint operation now.
 	if s.hasBase() {
 		if fileExists(filepath.Join(s.dir, baseSqliteWALFile)) {
 			if err := db.ReplayWAL(s.basePath(), []string{filepath.Join(s.dir, baseSqliteWALFile)},
@@ -540,7 +486,8 @@ func (s *WALSnapshotStore) check() error {
 
 	// If we have any incremental snapshot directories which are missing a WAL file,
 	// this implies that we crashed after checkpointing the WAL file but before deleting
-	// the snapshot directory the WAL file came from. Delete that snapshot directory now.
+	// the snapshot directory the WAL file came from. Delete that snapshot directory now,
+	// since that snapshot is no longer available.
 	snapshots, err := s.getSnapshots()
 	if err != nil {
 		return err
