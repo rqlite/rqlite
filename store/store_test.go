@@ -270,6 +270,31 @@ func Test_SingleNodeProvide(t *testing.T) {
 	}
 }
 
+// Test_SingleNodeProvideNoData checks the Provide method operates
+// correctly when there is no data to provide.
+func Test_SingleNodeProvideNoData(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	tmpFile := mustCreateTempFile()
+	defer os.Remove(tmpFile)
+	err := s.Provide(tmpFile)
+	if err != nil {
+		t.Fatalf("store failed to provide: %s", err.Error())
+	}
+}
+
 // Test_SingleNodeSnapshot tests that the Store correctly takes a snapshot
 // and recovers from it.
 func Test_SingleNodeSnapshot(t *testing.T) {
@@ -948,6 +973,8 @@ func Test_SingleNodeFK(t *testing.T) {
 	}
 }
 
+// Test_SingleNodeExecuteQueryLevels test that various read-consistency
+// levels work as expected.
 func Test_SingleNodeOnDiskFileExecuteQuery(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
@@ -1025,6 +1052,8 @@ func Test_SingleNodeOnDiskFileExecuteQuery(t *testing.T) {
 	check(r)
 }
 
+// Test_SingleNodeBackup tests that a Store correctly backs up its data
+// in text format.
 func Test_SingleNodeBackupText(t *testing.T) {
 	t.Parallel()
 
@@ -1074,6 +1103,7 @@ COMMIT;
 	}
 }
 
+// Test_SingleNodeSingleCommandTrigger tests that a SQLite trigger works.
 func Test_SingleNodeSingleCommandTrigger(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
@@ -1119,6 +1149,8 @@ COMMIT;
 	}
 }
 
+// Test_SingleNodeLoadText tests that a Store correctly loads data in SQL
+// text format.
 func Test_SingleNodeLoadText(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
@@ -1160,6 +1192,8 @@ COMMIT;
 	}
 }
 
+// Test_SingleNodeLoadTextNoStatements tests that a Store correctly loads data in SQL
+// text format, when there are no statements.
 func Test_SingleNodeLoadTextNoStatements(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
@@ -1185,6 +1219,8 @@ COMMIT;
 	}
 }
 
+// Test_SingleNodeLoadTextEmpty tests that a Store correctly loads data in SQL
+// text format, when the text is empty.
 func Test_SingleNodeLoadTextEmpty(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
@@ -1207,6 +1243,7 @@ func Test_SingleNodeLoadTextEmpty(t *testing.T) {
 	}
 }
 
+// Test_SingleNodeLoadTextChinook tests loading and querying of the Chinook DB.
 func Test_SingleNodeLoadTextChinook(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
@@ -1269,6 +1306,8 @@ func Test_SingleNodeLoadTextChinook(t *testing.T) {
 	}
 }
 
+// Test_SingleNodeLoadBinary tests that a Store correctly loads data in SQLite
+// binary format from a file.
 func Test_SingleNodeLoadBinary(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
@@ -1353,6 +1392,8 @@ COMMIT;
 	}
 }
 
+// Test_SingleNodeLoadBinaryFromReader tests that a Store correctly loads data in SQLite
+// binary format from a reader.
 func Test_SingleNodeLoadBinaryFromReader(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
@@ -1504,29 +1545,6 @@ func Test_SingleNodeSetRestoreFailBadFile(t *testing.T) {
 	os.WriteFile(path, []byte("not valid SQLite data"), 0644)
 	if err := s.SetRestorePath(path); err == nil {
 		t.Fatalf("expected error setting restore path with invalid file")
-	}
-}
-
-func Test_SingleNodeInMemProvideNoData(t *testing.T) {
-	s, ln := mustNewStore(t)
-	defer ln.Close()
-
-	if err := s.Open(); err != nil {
-		t.Fatalf("failed to open single-node store: %s", err.Error())
-	}
-	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
-		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
-	}
-	defer s.Close(true)
-	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
-		t.Fatalf("Error waiting for leader: %s", err)
-	}
-
-	tmpFile := mustCreateTempFile()
-	defer os.Remove(tmpFile)
-	err := s.Provide(tmpFile)
-	if err != nil {
-		t.Fatalf("store failed to provide: %s", err.Error())
 	}
 }
 
@@ -2622,91 +2640,6 @@ func Test_StoreLogTruncationMultinode(t *testing.T) {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 	if exp, got := `[[6]]`, asJSON(r[0].Values); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-	}
-}
-
-func Test_SingleNodeSnapshotInMem(t *testing.T) {
-	s, ln := mustNewStore(t)
-	defer ln.Close()
-
-	if err := s.Open(); err != nil {
-		t.Fatalf("failed to open single-node store: %s", err.Error())
-	}
-	defer s.Close(true)
-	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
-		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
-	}
-	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
-		t.Fatalf("Error waiting for leader: %s", err)
-	}
-
-	queries := []string{
-		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
-		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
-	}
-	_, err := s.Execute(executeRequestFromStrings(queries, false, false))
-	if err != nil {
-		t.Fatalf("failed to execute on single node: %s", err.Error())
-	}
-	_, err = s.Query(queryRequestFromString("SELECT * FROM foo", false, false))
-	if err != nil {
-		t.Fatalf("failed to query single node: %s", err.Error())
-	}
-
-	// Snap the node and write to disk.
-	f, err := s.Snapshot()
-	if err != nil {
-		t.Fatalf("failed to snapshot node: %s", err.Error())
-	}
-
-	snapDir := t.TempDir()
-	snapFile, err := os.Create(filepath.Join(snapDir, "snapshot"))
-	if err != nil {
-		t.Fatalf("failed to create snapshot file: %s", err.Error())
-	}
-	defer snapFile.Close()
-	sink := &mockSnapshotSink{snapFile}
-	if err := f.Persist(sink); err != nil {
-		t.Fatalf("failed to persist snapshot to disk: %s", err.Error())
-	}
-
-	// Check restoration.
-	snapFile, err = os.Open(filepath.Join(snapDir, "snapshot"))
-	if err != nil {
-		t.Fatalf("failed to open snapshot file: %s", err.Error())
-	}
-	defer snapFile.Close()
-	if err := s.Restore(snapFile); err != nil {
-		t.Fatalf("failed to restore snapshot from disk: %s", err.Error())
-	}
-
-	// Ensure database is back in the correct state.
-	r, err := s.Query(queryRequestFromString("SELECT * FROM foo", false, false))
-	if err != nil {
-		t.Fatalf("failed to query single node: %s", err.Error())
-	}
-	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-	}
-	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-	}
-
-	// Write a record, ensuring it works and can be queried back i.e. that
-	// the system remains functional.
-	_, err = s.Execute(executeRequestFromString(`INSERT INTO foo(id, name) VALUES(2, "fiona")`, false, false))
-	if err != nil {
-		t.Fatalf("failed to execute on single node: %s", err.Error())
-	}
-	r, err = s.Query(queryRequestFromString("SELECT COUNT(*) FROM foo", false, false))
-	if err != nil {
-		t.Fatalf("failed to query single node: %s", err.Error())
-	}
-	if exp, got := `["COUNT(*)"]`, asJSON(r[0].Columns); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-	}
-	if exp, got := `[[2]]`, asJSON(r[0].Values); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 }
