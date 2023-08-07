@@ -291,7 +291,7 @@ func downloadRestoreFile(ctx context.Context, cfgPath string) (path string, errO
 }
 
 func createStore(cfg *Config, ln *tcp.Layer) (*store.Store, error) {
-	dbConf := store.NewDBConfig(!cfg.OnDisk)
+	dbConf := store.NewDBConfig()
 	dbConf.OnDiskPath = cfg.OnDiskPath
 	dbConf.FKConstraints = cfg.FKConstraints
 

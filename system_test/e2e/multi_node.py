@@ -152,22 +152,6 @@ class TestEndToEnd(unittest.TestCase):
     nodes = l.nodes()
     self.assertEqual(len(nodes), 2)
 
-class TestEndToEndOnDisk(TestEndToEnd):
-  def setUp(self):
-    n0 = Node(RQLITED_PATH, '0', on_disk=True)
-    n0.start()
-    n0.wait_for_leader()
-
-    n1 = Node(RQLITED_PATH, '1', on_disk=True)
-    n1.start(join=n0.APIAddr())
-    n1.wait_for_leader()
-
-    n2 = Node(RQLITED_PATH, '2', on_disk=True)
-    n2.start(join=n0.APIAddr())
-    n2.wait_for_leader()
-
-    self.cluster = Cluster([n0, n1, n2])
-
 class TestEndToEndEncryptedNode(TestEndToEnd):
   def setUp(self):
     certFile = write_random_file(x509cert)

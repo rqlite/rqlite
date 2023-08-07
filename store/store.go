@@ -9,7 +9,6 @@ import (
 	"expvar"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net"
 	"os"
@@ -208,7 +207,6 @@ type Store struct {
 	observerChan      chan raft.Observation
 	observer          *raft.Observer
 
-	onDiskCreated        bool      // On disk database actually created?
 	firstIdxOnOpen       uint64    // First index on log when Store opens.
 	lastIdxOnOpen        uint64    // Last index on log when Store opens.
 	lastCommandIdxOnOpen uint64    // Last command index before applied index when Store opens.
@@ -340,16 +338,12 @@ func (s *Store) Open() (retErr error) {
 	s.openT = time.Now()
 	s.logger.Printf("opening store with node ID %s", s.raftID)
 
-	if s.dbConf.Memory {
-		s.logger.Printf("configured for an in-memory database")
-	} else {
-		s.logger.Printf("configured for an on-disk database at %s", s.dbPath)
-		parentDir := filepath.Dir(s.dbPath)
-		s.logger.Printf("ensuring directory for on-disk database exists at %s", parentDir)
-		err := os.MkdirAll(parentDir, 0755)
-		if err != nil {
-			return err
-		}
+	s.logger.Printf("configured for an on-disk database at %s", s.dbPath)
+	parentDir := filepath.Dir(s.dbPath)
+	s.logger.Printf("ensuring directory for on-disk database exists at %s", parentDir)
+	err := os.MkdirAll(parentDir, 0755)
+	if err != nil {
+		return err
 	}
 
 	// Create all the required Raft directories.
@@ -421,20 +415,11 @@ func (s *Store) Open() (retErr error) {
 	s.logger.Printf("first log index: %d, last log index: %d, last applied index: %d, last command log index: %d:",
 		s.firstIdxOnOpen, s.lastIdxOnOpen, s.lastAppliedIdxOnOpen, s.lastCommandIdxOnOpen)
 
-	if s.dbConf.Memory {
-		s.db, err = createInMemory(nil, s.dbConf.FKConstraints)
-		if err != nil {
-			return fmt.Errorf("failed to create in-memory database: %s", err)
-		}
-		s.logger.Printf("created in-memory database at open")
-	} else {
-		s.db, err = createOnDisk(nil, s.dbPath, s.dbConf.FKConstraints, !s.dbConf.DisableWAL)
-		if err != nil {
-			return fmt.Errorf("failed to create on-disk database: %s", err)
-		}
-		s.onDiskCreated = true
-		s.logger.Printf("created on-disk database at open")
+	s.db, err = createOnDisk(nil, s.dbPath, s.dbConf.FKConstraints, !s.dbConf.DisableWAL)
+	if err != nil {
+		return fmt.Errorf("failed to create on-disk database: %s", err)
 	}
+	s.logger.Printf("created on-disk database at open")
 
 	// Instantiate the Raft system.
 	ra, err := raft.NewRaft(config, s, s.raftLog, s.raftStable, snapshots, s.raftTn)
@@ -558,7 +543,7 @@ func (s *Store) Close(wait bool) (retErr error) {
 	// strictly necessary, since any on-disk database files will be removed when
 	// rqlite next starts, but it leaves the directory containing the database
 	// file in a cleaner state.
-	if !s.dbConf.Memory && !s.dbConf.DisableWAL {
+	if !s.dbConf.DisableWAL {
 		walDB, err := sql.Open(s.dbPath, s.dbConf.FKConstraints, true)
 		if err != nil {
 			return err
@@ -1657,21 +1642,16 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 	if err := s.db.Close(); err != nil {
 		return fmt.Errorf("failed to close pre-restore database: %s", err)
 	}
+	if err := sql.RemoveFiles(s.db.Path()); err != nil {
+		return fmt.Errorf("failed to remove pre-restore database files: %s", err)
+	}
 
 	var db *sql.DB
-	if s.dbConf.Memory {
-		db, err = createInMemory(b, s.dbConf.FKConstraints)
-		if err != nil {
-			return fmt.Errorf("createInMemory: %s", err)
-		}
-	} else {
-		db, err = createOnDisk(b, s.dbPath, s.dbConf.FKConstraints, !s.dbConf.DisableWAL)
-		if err != nil {
-			return fmt.Errorf("open on-disk file during restore: %s", err)
-		}
-		s.onDiskCreated = true
-		s.logger.Println("successfully switched to on-disk database due to restore")
+	db, err = createOnDisk(b, s.dbPath, s.dbConf.FKConstraints, !s.dbConf.DisableWAL)
+	if err != nil {
+		return fmt.Errorf("open on-disk file during restore: %s", err)
 	}
+	s.logger.Println("successfully enabled on-disk database due to restore")
 	s.db = db
 
 	stats.Add(numRestores, 1)
@@ -1879,16 +1859,15 @@ func RecoverNode(dataDir string, logger *log.Logger, logs raft.LogStore, stable 
 		return fmt.Errorf("failed to restore any of the available snapshots")
 	}
 
-	// Now, create an in-memory database for temporary use, so we can generate new
-	// snapshots later.
-	var db *sql.DB
-	if len(b) == 0 {
-		db, err = sql.OpenInMemory(false)
-	} else {
-		db, err = sql.DeserializeIntoMemory(b, false)
+	// Now, create a temporary database, so we can generate new snapshots later.
+	tmpDBPath := filepath.Join(dataDir, "recovery.db")
+	if os.WriteFile(tmpDBPath, b, 0660) != nil {
+		return fmt.Errorf("failed to write SQLite data to temporary file: %s", err)
 	}
+	defer os.Remove(tmpDBPath)
+	db, err := sql.Open(tmpDBPath, false, true)
 	if err != nil {
-		return fmt.Errorf("create in-memory database failed: %s", err)
+		return fmt.Errorf("failed to open temporary database: %s", err)
 	}
 	defer db.Close()
 
@@ -2001,24 +1980,19 @@ func applyCommand(data []byte, pDB **sql.DB, decMgmr *chunking.DechunkerManager)
 			panic(fmt.Sprintf("failed to unmarshal load subcommand: %s", err.Error()))
 		}
 
-		var newDB *sql.DB
-		var err error
-		if db.InMemory() {
-			newDB, err = createInMemory(lr.Data, db.FKEnabled())
-			if err != nil {
-				return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to create in-memory database: %s", err)}
-			}
-		} else {
-			newDB, err = createOnDisk(lr.Data, db.Path(), db.FKEnabled(), db.WALEnabled())
-			if err != nil {
-				return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to create on-disk database: %s", err)}
-			}
-		}
-
 		// Swap the underlying database to the new one.
 		if err := db.Close(); err != nil {
 			return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to close post-load database: %s", err)}
 		}
+		if err := sql.RemoveFiles(db.Path()); err != nil {
+			return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to remove existing database files: %s", err)}
+		}
+
+		newDB, err := createOnDisk(lr.Data, db.Path(), db.FKEnabled(), db.WALEnabled())
+		if err != nil {
+			return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to create on-disk database: %s", err)}
+		}
+
 		*pDB = newDB
 		return c.Type, &fsmGenericResponse{}
 	case command.Command_COMMAND_TYPE_LOAD_CHUNK:
@@ -2047,25 +2021,16 @@ func applyCommand(data []byte, pDB **sql.DB, decMgmr *chunking.DechunkerManager)
 			if err := db.Close(); err != nil {
 				return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to close post-load database: %s", err)}
 			}
+			if err := sql.RemoveFiles(db.Path()); err != nil {
+				return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to remove existing database files: %s", err)}
+			}
 
-			var newDB *sql.DB
-			if db.InMemory() {
-				b, err := ioutil.ReadFile(path)
-				if err != nil {
-					return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to read chunked data: %s", err)}
-				}
-				newDB, err = createInMemory(b, db.FKEnabled())
-				if err != nil {
-					return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to create in-memory database: %s", err)}
-				}
-			} else {
-				if err := os.Rename(path, db.Path()); err != nil {
-					return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to rename temporary database file: %s", err)}
-				}
-				newDB, err = sql.Open(db.Path(), db.FKEnabled(), db.WALEnabled())
-				if err != nil {
-					return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to open new on-disk database: %s", err)}
-				}
+			if err := os.Rename(path, db.Path()); err != nil {
+				return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to rename temporary database file: %s", err)}
+			}
+			newDB, err := sql.Open(db.Path(), db.FKEnabled(), db.WALEnabled())
+			if err != nil {
+				return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to open new on-disk database: %s", err)}
 			}
 
 			// Swap the underlying database to the new one.
@@ -2117,17 +2082,6 @@ func checkRaftConfiguration(configuration raft.Configuration) error {
 	return nil
 }
 
-// createInMemory returns an in-memory database. If b is non-nil and non-empty,
-// then the database will be initialized with the contents of b.
-func createInMemory(b []byte, fkConstraints bool) (db *sql.DB, err error) {
-	if len(b) == 0 {
-		db, err = sql.OpenInMemory(fkConstraints)
-	} else {
-		db, err = sql.DeserializeIntoMemory(b, fkConstraints)
-	}
-	return
-}
-
 // createOnDisk opens an on-disk database file at the configured path. If b is
 // non-nil, any preexisting file will first be overwritten with those contents.
 // Otherwise, any preexisting file will be removed before the database is opened.
@@ -2136,19 +2090,11 @@ func createOnDisk(b []byte, path string, fkConstraints, wal bool) (*sql.DB, erro
 		return nil, err
 	}
 	if b != nil {
-		if err := ioutil.WriteFile(path, b, 0660); err != nil {
+		if err := os.WriteFile(path, b, 0660); err != nil {
 			return nil, err
 		}
 	}
 	return sql.Open(path, fkConstraints, wal)
-}
-
-// enabledFromBool converts bool to "enabled" or "disabled".
-func enabledFromBool(b bool) string {
-	if b {
-		return "enabled"
-	}
-	return "disabled"
 }
 
 // prettyVoter converts bool to "voter" or "non-voter"

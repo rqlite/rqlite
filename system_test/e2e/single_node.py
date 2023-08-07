@@ -182,13 +182,6 @@ class TestSingleNode(unittest.TestCase):
       time.sleep(1)
       t+=1
 
-class TestSingleNodeOnDisk(TestSingleNode):
-  def setUp(self):
-    n0 = Node(RQLITED_PATH, '0',  raft_snap_threshold=2, raft_snap_int="1s", on_disk=True)
-    n0.start()
-    n0.wait_for_leader()
-    self.cluster = Cluster([n0])
-
 class TestSingleNodeReadyz(unittest.TestCase):
   def test(self):
     ''' Test /readyz behaves correctly'''
@@ -243,12 +236,6 @@ class TestEndToEndSnapRestoreSingle(unittest.TestCase):
 
   def tearDown(self):
     deprovision_node(self.n0)
-
-class TestEndToEndSnapRestoreSingleOnDisk(TestEndToEndSnapRestoreSingle):
-  def setUp(self):
-    self.n0 = Node(RQLITED_PATH, '0',  raft_snap_threshold=10, raft_snap_int="1s", on_disk=True)
-    self.n0.start()
-    self.n0.wait_for_leader()
 
 if __name__ == "__main__":
   unittest.main(verbosity=2)
