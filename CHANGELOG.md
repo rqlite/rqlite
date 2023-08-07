@@ -2,6 +2,7 @@
 Release 8.0.0 is in active development, with the goal of supporting much larger data sets, into the 10GB+ range.
 
 **Upgrading from the 7.x release**
+
 When officially released 8.0 will support (mostly) seamless upgrades from the 7.x series. However until the official release you must follow these steps to upgrade from 7.x:
 
 - Backup your data and load it into a new 8.0 system.
