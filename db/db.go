@@ -508,6 +508,13 @@ func (db *DB) EnableCheckpointing() error {
 	return err
 }
 
+// GetCheckpointing returns the current checkpointing setting.
+func (db *DB) GetCheckpointing() (int, error) {
+	var n int
+	err := db.rwDB.QueryRow("PRAGMA wal_autocheckpoint").Scan(&n)
+	return n, err
+}
+
 // FKEnabled returns whether Foreign Key constraints are enabled.
 func (db *DB) FKEnabled() bool {
 	return db.fkEnabled

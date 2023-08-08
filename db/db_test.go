@@ -528,6 +528,40 @@ func Test_DELETEDatabaseCreatedOKFromWAL(t *testing.T) {
 	}
 }
 
+func Test_WALDisableCheckpointing(t *testing.T) {
+	path := mustTempFile()
+	defer os.Remove(path)
+
+	db, err := Open(path, false, true)
+	if err != nil {
+		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
+	}
+	defer db.Close()
+	if !db.WALEnabled() {
+		t.Fatalf("WAL mode not enabled")
+	}
+
+	n, err := db.GetCheckpointing()
+	if err != nil {
+		t.Fatalf("failed to get checkpoint value: %s", err.Error())
+	}
+	if n != 1000 {
+		t.Fatalf("unexpected checkpoint value, expected 1000, got %d", n)
+	}
+
+	if err := db.DisableCheckpointing(); err != nil {
+		t.Fatalf("failed to disable checkpointing: %s", err.Error())
+	}
+	n, err = db.GetCheckpointing()
+	if err != nil {
+		t.Fatalf("failed to get checkpoint value: %s", err.Error())
+	}
+	if exp, got := 0, n; exp != got {
+		t.Fatalf("unexpected checkpoint value, expected %d, got %d", exp, got)
+	}
+
+}
+
 // Test_WALReplayOK tests that WAL files are replayed as expected.
 func Test_WALReplayOK(t *testing.T) {
 	testFunc := func(t *testing.T, replayIntoDelete bool) {
