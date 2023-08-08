@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// NewDialer returns an initialized Dialer
+// NewDialer returns an initialized Dialer.
 func NewDialer(header byte, tlsConfig *tls.Config) *Dialer {
 	return &Dialer{
 		header:    header,
