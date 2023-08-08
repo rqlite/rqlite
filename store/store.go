@@ -373,7 +373,6 @@ func (s *Store) Open() (retErr error) {
 	if err != nil {
 		return fmt.Errorf("snapshot store: %s", err)
 	}
-	s.snapStore.RunReaper()
 
 	snaps, err := s.snapStore.List()
 	if err != nil {
@@ -525,8 +524,6 @@ func (s *Store) Close(wait bool) (retErr error) {
 	close(s.appliedIdxUpdateDone)
 	close(s.observerClose)
 	<-s.observerDone
-
-	s.snapStore.Close()
 
 	f := s.raft.Shutdown()
 	if wait {

@@ -57,11 +57,9 @@ func (w *walSnapshotMeta) String() string {
 type WALSnapshotStore struct {
 	dir string // The directory to store snapshots in.
 
-	mu           sync.RWMutex
-	reapInterval time.Duration
-	done         chan struct{}
-
-	logger *log.Logger
+	noAutoReap bool // Whether snapshot reaping is disabled. Useful for testing.
+	mu         sync.RWMutex
+	logger     *log.Logger
 }
 
 // NewWALSnapshotStore returns a new WALSnapshotStore.
@@ -70,27 +68,13 @@ func NewWALSnapshotStore(dir string) (*WALSnapshotStore, error) {
 		return nil, err
 	}
 	s := &WALSnapshotStore{
-		dir:          dir,
-		reapInterval: defaultReapCheckDuration,
-		done:         make(chan struct{}),
-		logger:       log.New(os.Stderr, "[wal-snapshot-store] ", log.LstdFlags),
+		dir:    dir,
+		logger: log.New(os.Stderr, "[wal-snapshot-store] ", log.LstdFlags),
 	}
 	if err := s.check(); err != nil {
 		return nil, fmt.Errorf("failed WALSnapshotStore check: %s", err)
 	}
 	return s, nil
-}
-
-// RunReaper runs the snapshot reaping process in the background.
-func (s *WALSnapshotStore) RunReaper() {
-	go s.runReaper()
-}
-
-// Close closes the WAL snapshot store.
-func (s *WALSnapshotStore) Close() error {
-	s.logger.Println("closing WAL snapshot store")
-	close(s.done)
-	return nil
 }
 
 // Path returns the path to the directory this store uses
@@ -155,6 +139,12 @@ func (s *WALSnapshotStore) Create(version raft.SnapshotVersion, index, term uint
 				meta:      meta,
 				logger:    log.New(os.Stderr, "[wal-full-snapshot-sink] ", log.LstdFlags),
 			},
+		}
+	}
+
+	if !s.noAutoReap {
+		if _, err := s.ReapSnapshots(minSnapshotRetain); err != nil {
+			s.logger.Printf("failed to reap snapshots: %s", err)
 		}
 	}
 
@@ -438,24 +428,6 @@ func (s *WALSnapshotStore) getSnapshots() ([]*walSnapshotMeta, error) {
 	sort.Sort(sort.Reverse(snapMetaSlice(snapMeta)))
 
 	return snapMeta, nil
-}
-
-// runReaper runs the snapshot reaping process.
-func (s *WALSnapshotStore) runReaper() {
-	ticker := time.NewTicker(s.reapInterval)
-	defer ticker.Stop()
-
-	s.logger.Println("starting snapshot reaper")
-	for {
-		select {
-		case <-s.done:
-			return
-		case <-ticker.C:
-			if _, err := s.ReapSnapshots(minSnapshotRetain); err != nil {
-				s.logger.Printf("failed to reap snapshots: %s", err)
-			}
-		}
-	}
 }
 
 // readMeta is used to read the meta data for a given named backup
