@@ -6,8 +6,6 @@ import (
 	"time"
 
 	"github.com/hashicorp/raft"
-	sql "github.com/rqlite/rqlite/db"
-	"github.com/rqlite/rqlite/snapshot"
 )
 
 // FSMSnapshot is a snapshot of the SQLite database.
@@ -15,20 +13,15 @@ type FSMSnapshot struct {
 	startT time.Time
 	logger *log.Logger
 
-	database []byte
+	data []byte
 }
 
 // NewFSMSnapshot creates a new FSMSnapshot.
-func NewFSMSnapshot(db *sql.DB, logger *log.Logger) *FSMSnapshot {
-	fsm := &FSMSnapshot{
+func NewFSMSnapshot(logger *log.Logger) *FSMSnapshot {
+	return &FSMSnapshot{
 		startT: time.Now(),
 		logger: logger,
 	}
-
-	// The error code is not meaningful from Serialize(). The code needs to be able
-	// to handle a nil byte slice being returned.
-	fsm.database, _ = db.Serialize()
-	return fsm
 }
 
 // Persist writes the snapshot to the given sink.
@@ -40,12 +33,9 @@ func (f *FSMSnapshot) Persist(sink raft.SnapshotSink) error {
 	}()
 
 	err := func() error {
-		v1Snap := snapshot.NewV1Encoder(f.database)
-		n, err := v1Snap.WriteTo(sink)
-		if err != nil {
+		if _, err := sink.Write(f.data); err != nil {
 			return err
 		}
-		stats.Get(snapshotDBOnDiskSize).(*expvar.Int).Set(int64(n))
 		return sink.Close()
 	}()
 	if err != nil {

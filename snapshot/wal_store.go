@@ -233,14 +233,17 @@ type WALSnapshotStore struct {
 
 // NewWALSnapshotStore returns a new WALSnapshotStore.
 func NewWALSnapshotStore(dir string) (*WALSnapshotStore, error) {
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return nil, err
+	}
 	s := &WALSnapshotStore{
 		dir:          dir,
 		reapInterval: defaultReapCheckDuration,
 		done:         make(chan struct{}),
 		logger:       log.New(os.Stderr, "[wal-snapshot-store] ", log.LstdFlags),
 	}
-	if s.check() != nil {
-		return nil, fmt.Errorf("failed WALSnapshotStore check")
+	if err := s.check(); err != nil {
+		return nil, fmt.Errorf("failed WALSnapshotStore check: %s", err)
 	}
 	return s, nil
 }

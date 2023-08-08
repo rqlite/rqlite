@@ -80,33 +80,33 @@ const (
 	observerChanLen            = 50
 
 	defaultChunkSize = 512 * 1024 * 1024 // 512 MB
+
+	checkpointTimeout = 10 * time.Second
 )
 
 const (
-	numSnaphots              = "num_snapshots"
-	numProvides              = "num_provides"
-	numBackups               = "num_backups"
-	numLoads                 = "num_loads"
-	numRestores              = "num_restores"
-	numAutoRestores          = "num_auto_restores"
-	numAutoRestoresSkipped   = "num_auto_restores_skipped"
-	numAutoRestoresFailed    = "num_auto_restores_failed"
-	numRecoveries            = "num_recoveries"
-	numUncompressedCommands  = "num_uncompressed_commands"
-	numCompressedCommands    = "num_compressed_commands"
-	numJoins                 = "num_joins"
-	numIgnoredJoins          = "num_ignored_joins"
-	numRemovedBeforeJoins    = "num_removed_before_joins"
-	numDBStatsErrors         = "num_db_stats_errors"
-	snapshotCreateDuration   = "snapshot_create_duration"
-	snapshotPersistDuration  = "snapshot_persist_duration"
-	snapshotDBSerializedSize = "snapshot_db_serialized_size"
-	snapshotDBOnDiskSize     = "snapshot_db_ondisk_size"
-	leaderChangesObserved    = "leader_changes_observed"
-	leaderChangesDropped     = "leader_changes_dropped"
-	failedHeartbeatObserved  = "failed_heartbeat_observed"
-	nodesReapedOK            = "nodes_reaped_ok"
-	nodesReapedFailed        = "nodes_reaped_failed"
+	numSnaphots             = "num_snapshots"
+	numProvides             = "num_provides"
+	numBackups              = "num_backups"
+	numLoads                = "num_loads"
+	numRestores             = "num_restores"
+	numAutoRestores         = "num_auto_restores"
+	numAutoRestoresSkipped  = "num_auto_restores_skipped"
+	numAutoRestoresFailed   = "num_auto_restores_failed"
+	numRecoveries           = "num_recoveries"
+	numUncompressedCommands = "num_uncompressed_commands"
+	numCompressedCommands   = "num_compressed_commands"
+	numJoins                = "num_joins"
+	numIgnoredJoins         = "num_ignored_joins"
+	numRemovedBeforeJoins   = "num_removed_before_joins"
+	numDBStatsErrors        = "num_db_stats_errors"
+	snapshotCreateDuration  = "snapshot_create_duration"
+	snapshotPersistDuration = "snapshot_persist_duration"
+	leaderChangesObserved   = "leader_changes_observed"
+	leaderChangesDropped    = "leader_changes_dropped"
+	failedHeartbeatObserved = "failed_heartbeat_observed"
+	nodesReapedOK           = "nodes_reaped_ok"
+	nodesReapedFailed       = "nodes_reaped_failed"
 )
 
 // stats captures stats for the Store.
@@ -136,8 +136,6 @@ func ResetStats() {
 	stats.Add(numDBStatsErrors, 0)
 	stats.Add(snapshotCreateDuration, 0)
 	stats.Add(snapshotPersistDuration, 0)
-	stats.Add(snapshotDBSerializedSize, 0)
-	stats.Add(snapshotDBOnDiskSize, 0)
 	stats.Add(leaderChangesObserved, 0)
 	stats.Add(leaderChangesDropped, 0)
 	stats.Add(failedHeartbeatObserved, 0)
@@ -194,10 +192,11 @@ type Store struct {
 	fsmIndex   uint64
 	fsmIndexMu sync.RWMutex
 
-	reqMarshaller *command.RequestMarshaler // Request marshaler for writing to log.
-	raftLog       raft.LogStore             // Persistent log store.
-	raftStable    raft.StableStore          // Persistent k-v store.
-	boltStore     *rlog.Log                 // Physical store.
+	reqMarshaller *command.RequestMarshaler  // Request marshaler for writing to log.
+	raftLog       raft.LogStore              // Persistent log store.
+	raftStable    raft.StableStore           // Persistent k-v store.
+	boltStore     *rlog.Log                  // Physical store.
+	snapStore     *snapshot.WALSnapshotStore // Snapshot store.
 
 	// Raft changes observer
 	leaderObserversMu sync.RWMutex
@@ -370,11 +369,13 @@ func (s *Store) Open() (retErr error) {
 	config.LocalID = raft.ServerID(s.raftID)
 
 	// Create the snapshot store. This allows Raft to truncate the log.
-	snapshots, err := raft.NewFileSnapshotStore(s.raftDir, retainSnapshotCount, os.Stderr)
+	s.snapStore, err = snapshot.NewWALSnapshotStore(filepath.Join(s.raftDir, "rsnapshots"))
 	if err != nil {
-		return fmt.Errorf("file snapshot store: %s", err)
+		return fmt.Errorf("snapshot store: %s", err)
 	}
-	snaps, err := snapshots.List()
+	s.snapStore.RunReaper()
+
+	snaps, err := s.snapStore.List()
 	if err != nil {
 		return fmt.Errorf("list snapshots: %s", err)
 	}
@@ -398,7 +399,7 @@ func (s *Store) Open() (retErr error) {
 		if err != nil {
 			return fmt.Errorf("failed to read peers file: %s", err.Error())
 		}
-		if err = RecoverNode(s.raftDir, s.logger, s.raftLog, s.boltStore, snapshots, s.raftTn, config); err != nil {
+		if err = RecoverNode(s.raftDir, s.logger, s.raftLog, s.boltStore, s.snapStore, s.raftTn, config); err != nil {
 			return fmt.Errorf("failed to recover node: %s", err.Error())
 		}
 		if err := os.Rename(s.peersPath, s.peersInfoPath); err != nil {
@@ -422,7 +423,7 @@ func (s *Store) Open() (retErr error) {
 	s.logger.Printf("created on-disk database at open")
 
 	// Instantiate the Raft system.
-	ra, err := raft.NewRaft(config, s, s.raftLog, s.raftStable, snapshots, s.raftTn)
+	ra, err := raft.NewRaft(config, s, s.raftLog, s.raftStable, s.snapStore, s.raftTn)
 	if err != nil {
 		return fmt.Errorf("new raft: %s", err)
 	}
@@ -524,6 +525,8 @@ func (s *Store) Close(wait bool) (retErr error) {
 	close(s.appliedIdxUpdateDone)
 	close(s.observerClose)
 	<-s.observerDone
+
+	s.snapStore.Close()
 
 	f := s.raft.Shutdown()
 	if wait {
@@ -1614,14 +1617,34 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 		defer s.numSnapshotsMu.Unlock()
 		s.numSnapshots++
 	}()
-
 	s.queryTxMu.Lock()
 	defer s.queryTxMu.Unlock()
-	fsm := NewFSMSnapshot(s.db, s.logger)
+
+	var b []byte
+	var err error
+	fsm := NewFSMSnapshot(s.logger)
+	if s.snapStore.FullNeeded() {
+		if err := s.db.Checkpoint(checkpointTimeout); err != nil {
+			return nil, err
+		}
+		b, err = os.ReadFile(s.db.Path())
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		b, err = os.ReadFile(s.db.WALPath())
+		if err != nil {
+			return nil, err
+		}
+		if err := s.db.Checkpoint(checkpointTimeout); err != nil {
+			return nil, err
+		}
+	}
+	fsm.data = b
 	dur := time.Since(fsm.startT)
+
 	stats.Add(numSnaphots, 1)
 	stats.Get(snapshotCreateDuration).(*expvar.Int).Set(dur.Milliseconds())
-	stats.Get(snapshotDBSerializedSize).(*expvar.Int).Set(int64(len(fsm.database)))
 	s.logger.Printf("node snapshot created in %s", dur)
 	return fsm, nil
 }
@@ -2094,7 +2117,14 @@ func createOnDisk(b []byte, path string, fkConstraints, wal bool) (*sql.DB, erro
 			return nil, err
 		}
 	}
-	return sql.Open(path, fkConstraints, wal)
+	db, err := sql.Open(path, fkConstraints, wal)
+	if err != nil {
+		return nil, err
+	}
+	if err := db.DisableCheckpointing(); err != nil {
+		return nil, err
+	}
+	return db, nil
 }
 
 // prettyVoter converts bool to "voter" or "non-voter"
