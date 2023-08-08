@@ -262,6 +262,12 @@ func (s *WALSnapshotStore) Path() string {
 	return s.dir
 }
 
+// FullNeeded returns true if the next type of snapshot needed
+// by the store is a full snapshot.
+func (s *WALSnapshotStore) FullNeeded() bool {
+	return !s.hasBase()
+}
+
 // Create creates a new Sink object, ready for writing a snapshot.
 func (s *WALSnapshotStore) Create(version raft.SnapshotVersion, index, term uint64, configuration raft.Configuration,
 	configurationIndex uint64, trans raft.Transport) (raft.SnapshotSink, error) {

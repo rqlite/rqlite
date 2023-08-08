@@ -28,6 +28,9 @@ func Test_NewWALSnapshotStore(t *testing.T) {
 	if s.Path() != dir {
 		t.Fatalf("unexpected dir, exp=%s got=%s", dir, s.Path())
 	}
+	if !s.FullNeeded() {
+		t.Fatalf("expected full snapshots to be needed")
+	}
 }
 
 func Test_NewWALSnapshotStore_ListEmpty(t *testing.T) {
@@ -61,6 +64,9 @@ func Test_WALSnapshotStore_CreateFullThenIncremental(t *testing.T) {
 		t.Fatalf("failed to create snapshot store: %s", err)
 	}
 	defer str.Close()
+	if !str.FullNeeded() {
+		t.Fatalf("expected full snapshots to be needed")
+	}
 
 	testConfig1 := makeTestConfiguration("1", "2")
 	sink, err := str.Create(1, 2, 3, testConfig1, 4, nil)
@@ -86,6 +92,9 @@ func Test_WALSnapshotStore_CreateFullThenIncremental(t *testing.T) {
 		t.Fatalf("failed to close sink: %s", err)
 	}
 
+	if str.FullNeeded() {
+		t.Fatalf("expected full snapshots to not be needed")
+	}
 	if !dirExists(filepath.Join(dir, id)) {
 		t.Fatalf("snapshot directory does not exist")
 	}
