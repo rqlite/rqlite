@@ -4,7 +4,6 @@
 package store
 
 import (
-	"bytes"
 	"errors"
 	"expvar"
 	"fmt"
@@ -1651,55 +1650,26 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 // will not be called concurrently with Apply(), so synchronization with Execute()
 // is not necessary.
 func (s *Store) Restore(rc io.ReadCloser) error {
+	defer rc.Close()
 	startT := time.Now()
 
-	decoder, err := streamer.NewDecoder(rc)
+	files, err := s.filesFromSnapshot(rc)
 	if err != nil {
-		return fmt.Errorf("failed to create stream decoder: %s", err.Error())
-	}
-	defer decoder.Close()
-	defer rc.Close()
-
-	files := []string{}
-	defer func() {
-		for _, f := range files {
-			os.Remove(f)
-		}
-	}()
-
-	for {
-		hdr, err := decoder.Next()
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			return fmt.Errorf("failed to get next file header from decoder: %s", err.Error())
-		}
-		tmpFd, err := os.CreateTemp(filepath.Dir(s.dbPath), "rqlite-restore-*")
-		if err != nil {
-			return fmt.Errorf("failed to create temporary file for restore: %s", err.Error())
-		}
-		files = append(files, tmpFd.Name())
-		if _, err := io.CopyN(tmpFd, decoder, hdr.Size); err != nil {
-			return fmt.Errorf("failed to copy file data during restore: %s", err.Error())
-		}
-		if err := tmpFd.Close(); err != nil {
-			return fmt.Errorf("failed to close temporary file during restore: %s", err.Error())
-		}
+		return fmt.Errorf("failed to get files from snapshot: %s", err)
 	}
 	if len(files) == 0 {
 		return fmt.Errorf("no files found in snapshot")
 	}
+	defer removeFiles(files)
 
+	if sql.ReplayWAL(files[0], files[1:], false); err != nil {
+		return fmt.Errorf("failed to replay WAL files during restore: %s", err)
+	}
 	if err := s.db.Close(); err != nil {
 		return fmt.Errorf("failed to close pre-restore database: %s", err)
 	}
 	if err := sql.RemoveFiles(s.db.Path()); err != nil {
 		return fmt.Errorf("failed to remove pre-restore database files: %s", err)
-	}
-
-	if sql.ReplayWAL(files[0], files[1:], false); err != nil {
-		return fmt.Errorf("failed to replay WAL files during restore: %s", err)
 	}
 	if os.Rename(files[0], s.dbPath); err != nil {
 		return fmt.Errorf("failed to rename database file during restore: %s", err)
@@ -1866,141 +1836,174 @@ func (s *Store) tryCompress(rq command.Requester) ([]byte, bool, error) {
 	return b, compressed, nil
 }
 
+// filesFromSnapshot returns the files from the given snapshot. The files
+// are written to temporary files alongside the database file.
+func (s *Store) filesFromSnapshot(r io.Reader) ([]string, error) {
+	var files []string
+	decoder, err := streamer.NewDecoder(r)
+	if err != nil {
+		return nil, err
+	}
+	defer decoder.Close()
+	for {
+		hdr, err := decoder.Next()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, err
+		}
+		tmpFd, err := os.CreateTemp(filepath.Dir(s.dbPath), "rqlite-restore-*")
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, tmpFd.Name())
+		if _, err := io.CopyN(tmpFd, decoder, hdr.Size); err != nil {
+			return nil, err
+		}
+		if err := tmpFd.Close(); err != nil {
+			return nil, err
+		}
+	}
+	return files, nil
+}
+
 // RecoverNode is used to manually force a new configuration, in the event that
 // quorum cannot be restored. This borrows heavily from RecoverCluster functionality
 // of the Hashicorp Raft library, but has been customized for rqlite use.
 func RecoverNode(dataDir string, logger *log.Logger, logs raft.LogStore, stable *rlog.Log,
 	snaps raft.SnapshotStore, tn raft.Transport, conf raft.Configuration) error {
-	panic("still not fixed for new snapshot store")
-	logPrefix := logger.Prefix()
-	logger.SetPrefix(fmt.Sprintf("%s[recovery] ", logPrefix))
-	defer logger.SetPrefix(logPrefix)
-
-	// Sanity check the Raft peer configuration.
-	if err := checkRaftConfiguration(conf); err != nil {
-		return err
-	}
-
-	// Attempt to restore any snapshots we find, newest to oldest.
-	var (
-		snapshotIndex  uint64
-		snapshotTerm   uint64
-		snapshots, err = snaps.List()
-	)
-	if err != nil {
-		return fmt.Errorf("failed to list snapshots: %v", err)
-	}
-	logger.Printf("recovery detected %d snapshots", len(snapshots))
-
-	var b []byte
-	for _, snapshot := range snapshots {
-		var source io.ReadCloser
-		_, source, err = snaps.Open(snapshot.ID)
-		if err != nil {
-			// Skip this one and try the next. We will detect if we
-			// couldn't open any snapshots.
-			continue
-		}
-
-		b, err = dbBytesFromSnapshot(source)
-		// Close the source after the restore has completed
-		source.Close()
-		if err != nil {
-			// Same here, skip and try the next one.
-			continue
-		}
-
-		snapshotIndex = snapshot.Index
-		snapshotTerm = snapshot.Term
-		break
-	}
-	if len(snapshots) > 0 && (snapshotIndex == 0 || snapshotTerm == 0) {
-		return fmt.Errorf("failed to restore any of the available snapshots")
-	}
-
-	// Now, create a temporary database, so we can generate new snapshots later.
-	tmpDBPath := filepath.Join(dataDir, "recovery.db")
-	if os.WriteFile(tmpDBPath, b, 0660) != nil {
-		return fmt.Errorf("failed to write SQLite data to temporary file: %s", err)
-	}
-	defer os.Remove(tmpDBPath)
-	db, err := sql.Open(tmpDBPath, false, true)
-	if err != nil {
-		return fmt.Errorf("failed to open temporary database: %s", err)
-	}
-	defer db.Close()
-
-	// Need a dechunker manager to handle any chunked load requests.
-	decMgmr, err := chunking.NewDechunkerManager(dataDir)
-	if err != nil {
-		return fmt.Errorf("failed to create dechunker manager: %s", err.Error())
-	}
-
-	// The snapshot information is the best known end point for the data
-	// until we play back the Raft log entries.
-	lastIndex := snapshotIndex
-	lastTerm := snapshotTerm
-
-	// Apply any Raft log entries past the snapshot.
-	lastLogIndex, err := logs.LastIndex()
-	if err != nil {
-		return fmt.Errorf("failed to find last log: %v", err)
-	}
-	logger.Printf("recovery snapshot index is %d, last index is %d", snapshotIndex, lastLogIndex)
-
-	for index := snapshotIndex + 1; index <= lastLogIndex; index++ {
-		var entry raft.Log
-		if err = logs.GetLog(index, &entry); err != nil {
-			return fmt.Errorf("failed to get log at index %d: %v", index, err)
-		}
-		if entry.Type == raft.LogCommand {
-			applyCommand(entry.Data, &db, decMgmr)
-		}
-		lastIndex = entry.Index
-		lastTerm = entry.Term
-	}
-
-	// Create a new snapshot, placing the configuration in as if it was
-	// committed at index 1.
-	snapshot := NewFSMSnapshot(db, logger)
-	sink, err := snaps.Create(1, lastIndex, lastTerm, conf, 1, tn)
-	if err != nil {
-		return fmt.Errorf("failed to create snapshot: %v", err)
-	}
-	if err = snapshot.Persist(sink); err != nil {
-		return fmt.Errorf("failed to persist snapshot: %v", err)
-	}
-	if err = sink.Close(); err != nil {
-		return fmt.Errorf("failed to finalize snapshot: %v", err)
-	}
-	logger.Printf("recovery snapshot created successfully")
-
-	// Compact the log so that we don't get bad interference from any
-	// configuration change log entries that might be there.
-	firstLogIndex, err := logs.FirstIndex()
-	if err != nil {
-		return fmt.Errorf("failed to get first log index: %v", err)
-	}
-	if err := logs.DeleteRange(firstLogIndex, lastLogIndex); err != nil {
-		return fmt.Errorf("log compaction failed: %v", err)
-	}
-
-	// Erase record of previous updating of Applied Index too.
-	if err := stable.SetAppliedIndex(0); err != nil {
-		return fmt.Errorf("failed to zero applied index: %v", err)
-	}
-
 	return nil
-}
+	// logPrefix := logger.Prefix()
+	// logger.SetPrefix(fmt.Sprintf("%s[recovery] ", logPrefix))
+	// defer logger.SetPrefix(logPrefix)
 
-func dbBytesFromSnapshot(rc io.ReadCloser) ([]byte, error) {
-	var database bytes.Buffer
-	decoder := snapshot.NewV1Decoder(rc)
-	_, err := decoder.WriteTo(&database)
-	if err != nil {
-		return nil, err
-	}
-	return database.Bytes(), nil
+	// // Sanity check the Raft peer configuration.
+	// if err := checkRaftConfiguration(conf); err != nil {
+	// 	return err
+	// }
+
+	// // Start by restoring any snapshot we find.
+	// snapshots, err := snaps.List()
+	// if err != nil {
+	// 	return fmt.Errorf("failed to list snapshots: %v", err)
+	// }
+	// logger.Printf("recovery detected %d snapshots", len(snapshots))
+	// if len(snapshots) > 0 {
+	// 	snapshot, rc, err := snaps.Open(snapshots[0].ID)
+	// 	if err != nil {
+	// 		return fmt.Errorf("failed to open snapshot: %v", err)
+	// 	}
+
+	// 	decoder, err := streamer.NewDecoder(rc)
+	// 	if err != nil {
+	// 		return fmt.Errorf("failed to create stream decoder: %s", err.Error())
+	// 	}
+	// 	defer decoder.Close()
+	// 	defer rc.Close()
+	// 	snapshotIndex := snapshot.Index
+	// 	snapshotTerm := snapshot.Term
+
+	// 	var b []byte
+	// 	for _, snapshot := range snapshots {
+	// 		var source io.ReadCloser
+	// 		_, source, err = snaps.Open(snapshot.ID)
+	// 		if err != nil {
+	// 			// Skip this one and try the next. We will detect if we
+	// 			// couldn't open any snapshots.
+	// 			continue
+	// 		}
+
+	// 		b, err = dbBytesFromSnapshot(source)
+	// 		// Close the source after the restore has completed
+	// 		source.Close()
+	// 		if err != nil {
+	// 			// Same here, skip and try the next one.
+	// 			continue
+	// 		}
+
+	// 		snapshotIndex = snapshot.Index
+	// 		snapshotTerm = snapshot.Term
+	// 		break
+	// 	}
+	// }
+	// // if len(snapshots) > 0 && (snapshotIndex == 0 || snapshotTerm == 0) {
+	// // 	return fmt.Errorf("failed to restore any of the available snapshots")
+	// // }
+
+	// // Now, create a temporary database, so we can generate new snapshots later.
+	// tmpDBPath := filepath.Join(dataDir, "recovery.db")
+	// if os.WriteFile(tmpDBPath, b, 0660) != nil {
+	// 	return fmt.Errorf("failed to write SQLite data to temporary file: %s", err)
+	// }
+	// defer os.Remove(tmpDBPath)
+	// db, err := sql.Open(tmpDBPath, false, true)
+	// if err != nil {
+	// 	return fmt.Errorf("failed to open temporary database: %s", err)
+	// }
+	// defer db.Close()
+
+	// // Need a dechunker manager to handle any chunked load requests.
+	// decMgmr, err := chunking.NewDechunkerManager(dataDir)
+	// if err != nil {
+	// 	return fmt.Errorf("failed to create dechunker manager: %s", err.Error())
+	// }
+
+	// // The snapshot information is the best known end point for the data
+	// // until we play back the Raft log entries.
+	// lastIndex := snapshotIndex
+	// lastTerm := snapshotTerm
+
+	// // Apply any Raft log entries past the snapshot.
+	// lastLogIndex, err := logs.LastIndex()
+	// if err != nil {
+	// 	return fmt.Errorf("failed to find last log: %v", err)
+	// }
+	// logger.Printf("recovery snapshot index is %d, last index is %d", snapshotIndex, lastLogIndex)
+
+	// for index := snapshotIndex + 1; index <= lastLogIndex; index++ {
+	// 	var entry raft.Log
+	// 	if err = logs.GetLog(index, &entry); err != nil {
+	// 		return fmt.Errorf("failed to get log at index %d: %v", index, err)
+	// 	}
+	// 	if entry.Type == raft.LogCommand {
+	// 		applyCommand(entry.Data, &db, decMgmr)
+	// 	}
+	// 	lastIndex = entry.Index
+	// 	lastTerm = entry.Term
+	// }
+
+	// // Create a new snapshot, placing the configuration in as if it was
+	// // committed at index 1.
+	// snapshot := NewFSMSnapshot(db, logger)
+	// sink, err := snaps.Create(1, lastIndex, lastTerm, conf, 1, tn)
+	// if err != nil {
+	// 	return fmt.Errorf("failed to create snapshot: %v", err)
+	// }
+	// if err = snapshot.Persist(sink); err != nil {
+	// 	return fmt.Errorf("failed to persist snapshot: %v", err)
+	// }
+	// if err = sink.Close(); err != nil {
+	// 	return fmt.Errorf("failed to finalize snapshot: %v", err)
+	// }
+	// logger.Printf("recovery snapshot created successfully")
+
+	// // Compact the log so that we don't get bad interference from any
+	// // configuration change log entries that might be there.
+	// firstLogIndex, err := logs.FirstIndex()
+	// if err != nil {
+	// 	return fmt.Errorf("failed to get first log index: %v", err)
+	// }
+	// if err := logs.DeleteRange(firstLogIndex, lastLogIndex); err != nil {
+	// 	return fmt.Errorf("log compaction failed: %v", err)
+	// }
+
+	// // Erase record of previous updating of Applied Index too.
+	// if err := stable.SetAppliedIndex(0); err != nil {
+	// 	return fmt.Errorf("failed to zero applied index: %v", err)
+	// }
+
+	// return nil
 }
 
 func applyCommand(data []byte, pDB **sql.DB, decMgmr *chunking.DechunkerManager) (command.Command_Type, interface{}) {
@@ -2166,6 +2169,15 @@ func openOnDisk(path string, fkConstraints, wal bool) (*sql.DB, error) {
 		return nil, err
 	}
 	return db, nil
+}
+
+func removeFiles(files []string) error {
+	for _, f := range files {
+		if err := os.Remove(f); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // prettyVoter converts bool to "voter" or "non-voter"
