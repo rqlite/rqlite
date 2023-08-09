@@ -1871,6 +1871,7 @@ func (s *Store) tryCompress(rq command.Requester) ([]byte, bool, error) {
 // of the Hashicorp Raft library, but has been customized for rqlite use.
 func RecoverNode(dataDir string, logger *log.Logger, logs raft.LogStore, stable *rlog.Log,
 	snaps raft.SnapshotStore, tn raft.Transport, conf raft.Configuration) error {
+	panic("still not fixed for new snapshot store")
 	logPrefix := logger.Prefix()
 	logger.SetPrefix(fmt.Sprintf("%s[recovery] ", logPrefix))
 	defer logger.SetPrefix(logPrefix)
