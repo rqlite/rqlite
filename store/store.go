@@ -1911,7 +1911,7 @@ func RecoverNode(workDir string, logger *log.Logger, logs raft.LogStore, stable 
 		if len(files) == 0 {
 			return fmt.Errorf("no files found in snapshot")
 		}
-		defer removeFiles(files[1:])
+		defer removeFiles(files)
 
 		if err := snaps.Reset(); err != nil {
 			return fmt.Errorf("failed to reset snapshot store: %v", err)
@@ -1929,7 +1929,7 @@ func RecoverNode(workDir string, logger *log.Logger, logs raft.LogStore, stable 
 		if os.Rename(files[0], db.Path()); err != nil {
 			return fmt.Errorf("failed to rename database file during restore: %s", err)
 		}
-		db, err = openOnDisk(files[0], false, true)
+		db, err = openOnDisk(db.Path(), false, true)
 		if err != nil {
 			return fmt.Errorf("failed to open database file: %v", err)
 		}
