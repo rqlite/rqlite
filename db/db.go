@@ -287,7 +287,7 @@ func ReplayWAL(path string, wals []string, deleteMode bool) error {
 		if err != nil {
 			return err
 		}
-		if db.Close(); err != nil {
+		if err := db.Close(); err != nil {
 			return err
 		}
 	}
