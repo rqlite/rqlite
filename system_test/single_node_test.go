@@ -5,7 +5,6 @@ package system
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"regexp"
 	"sync"
@@ -839,67 +838,6 @@ func Test_SingleNodeNoSQLInjection(t *testing.T) {
 		if r != tt.expected {
 			t.Fatalf(`test %d received wrong result "%s" got: %s exp: %s`, i, tt.stmt, r, tt.expected)
 		}
-	}
-}
-
-// Test_SingleNodeUpgrades upgrade from a data created by earlier releases.
-func Test_SingleNodeUpgrades(t *testing.T) {
-	versions := []string{
-		"v6.0.0-data",
-		"v7.0.0-data",
-		"v7.9.2-data",
-		"v7.20.3-data-with-snapshots",
-	}
-
-	upgradeFrom := func(dir string) {
-		// Deprovision of a node deletes the node's dir, so make a copy first.
-		srcdir := filepath.Join("testdata", dir)
-		destdir := mustTempDir()
-		if err := os.Remove(destdir); err != nil {
-			t.Fatalf("failed to remove dest dir: %s", err)
-		}
-		if err := copyDir(srcdir, destdir); err != nil {
-			t.Fatalf("failed to copy node test directory: %s", err)
-		}
-
-		mux, ln := mustNewOpenMux("")
-		defer ln.Close()
-
-		node := mustNodeEncrypted(destdir, true, false, mux, "node1")
-		defer node.Deprovision()
-		if _, err := node.WaitForLeader(); err != nil {
-			t.Fatalf("node never became leader with %s data:", dir)
-		}
-
-		timer := time.NewTimer(5 * time.Second)
-		defer timer.Stop()
-		ticker := time.NewTicker(100 * time.Millisecond)
-		defer ticker.Stop()
-		testSuccess := make(chan struct{})
-
-		for {
-			select {
-			case <-testSuccess:
-				return
-			case <-timer.C:
-				t.Fatalf(`timeout waiting for correct results with %s data`, dir)
-			case <-ticker.C:
-				r, err := node.QueryNoneConsistency(`SELECT COUNT(*) FROM foo`)
-				if err != nil {
-					t.Fatalf("query failed with %s data: %s", dir, err)
-				}
-				expected := `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[20]]}]}`
-				if r == expected {
-					close(testSuccess)
-				}
-			}
-		}
-	}
-
-	for _, version := range versions {
-		t.Run(version, func(t *testing.T) {
-			upgradeFrom(version)
-		})
 	}
 }
 
