@@ -39,16 +39,56 @@ func Test_NewWALSnapshotStore_ListEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create snapshot store: %s", err)
 	}
-	if s.Path() != dir {
-		t.Fatalf("unexpected dir, exp=%s got=%s", dir, s.Path())
+	if !s.FullNeeded() {
+		t.Fatalf("expected full snapshots to be needed")
 	}
 
-	snaps, err := s.List()
+	if snaps, err := s.List(); err != nil {
+		t.Fatalf("failed to list snapshots: %s", err)
+	} else if len(snaps) != 1 {
+		t.Fatalf("expected 1 snapshots, got %d", len(snaps))
+	}
+	if s.FullNeeded() {
+		t.Fatalf("full snapshot needed")
+	}
+
+	if err := s.Reset(); err != nil {
+		t.Fatalf("failed to reset snapshot store: %s", err)
+	}
+	if snaps, err := s.List(); err != nil {
+		t.Fatalf("failed to list snapshots: %s", err)
+	} else if len(snaps) != 0 {
+		t.Fatalf("expected 0 snapshots, got %d", len(snaps))
+	}
+	if !s.FullNeeded() {
+		t.Fatalf("expected full snapshots to be needed")
+	}
+}
+
+func Test_WALSnapshotStore_Reset(t *testing.T) {
+	dir := makeTempDir()
+	defer os.RemoveAll(dir)
+	str, err := NewWALSnapshotStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create snapshot store: %s", err)
+	}
+
+	sink, err := str.Create(1, 2, 3, makeTestConfiguration("1", "2"), 4, nil)
+	if err != nil {
+		t.Fatalf("failed to create 1st snapshot: %s", err)
+	}
+	_, err = sink.Write([]byte("test-db"))
+	if err != nil {
+		t.Fatalf("failed to write to sink: %s", err)
+	}
+	sink.Close()
+
+	snaps, err := str.List()
 	if err != nil {
 		t.Fatalf("failed to list snapshots: %s", err)
 	}
-	if len(snaps) != 0 {
-		t.Fatalf("expected 0 snapshots, got %d", len(snaps))
+	if len(snaps) != 1 {
+		t.Fatalf("expected 1 snapshot, got %d", len(snaps))
 	}
 }
 

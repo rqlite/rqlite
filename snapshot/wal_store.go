@@ -88,6 +88,17 @@ func (s *WALSnapshotStore) FullNeeded() bool {
 	return !s.hasBase()
 }
 
+// Resets the store by deleting all files inside it.
+func (s *WALSnapshotStore) Reset() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := os.RemoveAll(s.dir); err != nil {
+		return err
+	}
+	return os.MkdirAll(s.dir, 0755)
+}
+
 // Create creates a new Sink object, ready for writing a snapshot.
 func (s *WALSnapshotStore) Create(version raft.SnapshotVersion, index, term uint64, configuration raft.Configuration,
 	configurationIndex uint64, trans raft.Transport) (raft.SnapshotSink, error) {
