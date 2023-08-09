@@ -1689,8 +1689,6 @@ func Test_SingleNodeRecoverNetworkChange(t *testing.T) {
 func Test_SingleNodeRecoverNetworkChangeSnapshot(t *testing.T) {
 	s0, ln0 := mustNewStore(t)
 	defer ln0.Close()
-	s0.SnapshotThreshold = 4
-	s0.SnapshotInterval = 100 * time.Millisecond
 	if err := s0.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
@@ -1736,15 +1734,9 @@ func Test_SingleNodeRecoverNetworkChangeSnapshot(t *testing.T) {
 	}
 	queryTest(s0, 10)
 
-	// Wait for a snapshot to take place.
-	for {
-		time.Sleep(100 * time.Millisecond)
-		s0.numSnapshotsMu.Lock()
-		ns := s0.numSnapshots
-		s0.numSnapshotsMu.Unlock()
-		if ns > 0 {
-			break
-		}
+	// Force a snapshot.
+	if fut := s0.raft.Snapshot(); fut.Error() != nil {
+		t.Fatalf("failed to force snapshot: %s", fut.Error().Error())
 	}
 
 	id := s0.ID()
