@@ -16,6 +16,7 @@ When officially released 8.0 will support (mostly) seamless upgrades from the 7.
 - [PR #1347](https://github.com/rqlite/rqlite/pull/1347): Migrate HTTP layer to chunked loading.
 - [PR #1355](https://github.com/rqlite/rqlite/pull/1355): Database layer can run an integrity check.
 - [PR #1385](https://github.com/rqlite/rqlite/pull/1358): Remove support for in-memory databases.
+- [PR #1360](https://github.com/rqlite/rqlite/pull/1360): 'go mod' updates, and move to go 1.21.
 
 ## 7.21.4 (July 8th 2023)
 ### Implementation changes and bug fixes
