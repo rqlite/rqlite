@@ -25,6 +25,7 @@ import (
 	sql "github.com/rqlite/rqlite/db"
 	rlog "github.com/rqlite/rqlite/log"
 	"github.com/rqlite/rqlite/snapshot"
+	"github.com/rqlite/rqlite/snapshot/streamer"
 )
 
 var (
@@ -171,7 +172,7 @@ type Store struct {
 	raftTn *raft.NetworkTransport
 	raftID string    // Node ID.
 	dbConf *DBConfig // SQLite database config.
-	dbPath string    // Path to underlying SQLite file, if not in-memory.
+	dbPath string    // Path to underlying SQLite file
 	db     *sql.DB   // The underlying SQLite store.
 
 	queryTxMu sync.RWMutex
@@ -1651,12 +1652,43 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 // is not necessary.
 func (s *Store) Restore(rc io.ReadCloser) error {
 	startT := time.Now()
-	b, err := dbBytesFromSnapshot(rc)
+
+	decoder, err := streamer.NewDecoder(rc)
 	if err != nil {
-		return fmt.Errorf("restore failed: %s", err.Error())
+		return fmt.Errorf("failed to create stream decoder: %s", err.Error())
 	}
-	if b == nil {
-		s.logger.Println("no database data present in restored snapshot")
+	defer decoder.Close()
+	defer rc.Close()
+
+	files := []string{}
+	defer func() {
+		for _, f := range files {
+			os.Remove(f)
+		}
+	}()
+
+	for {
+		hdr, err := decoder.Next()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return fmt.Errorf("failed to get next file header from decoder: %s", err.Error())
+		}
+		tmpFd, err := os.CreateTemp(filepath.Dir(s.dbPath), "rqlite-restore-*")
+		if err != nil {
+			return fmt.Errorf("failed to create temporary file for restore: %s", err.Error())
+		}
+		files = append(files, tmpFd.Name())
+		if _, err := io.CopyN(tmpFd, decoder, hdr.Size); err != nil {
+			return fmt.Errorf("failed to copy file data during restore: %s", err.Error())
+		}
+		if err := tmpFd.Close(); err != nil {
+			return fmt.Errorf("failed to close temporary file during restore: %s", err.Error())
+		}
+	}
+	if len(files) == 0 {
+		return fmt.Errorf("no files found in snapshot")
 	}
 
 	if err := s.db.Close(); err != nil {
@@ -1666,17 +1698,23 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 		return fmt.Errorf("failed to remove pre-restore database files: %s", err)
 	}
 
+	if sql.ReplayWAL(files[0], files[1:], false); err != nil {
+		return fmt.Errorf("failed to replay WAL files during restore: %s", err)
+	}
+	if os.Rename(files[0], s.dbPath); err != nil {
+		return fmt.Errorf("failed to rename database file during restore: %s", err)
+	}
+
 	var db *sql.DB
-	db, err = createOnDisk(b, s.dbPath, s.dbConf.FKConstraints, !s.dbConf.DisableWAL)
+	db, err = openOnDisk(s.dbPath, s.dbConf.FKConstraints, !s.dbConf.DisableWAL)
 	if err != nil {
 		return fmt.Errorf("open on-disk file during restore: %s", err)
 	}
-	s.logger.Println("successfully enabled on-disk database due to restore")
+	s.logger.Println("successfully open new database due to restore")
 	s.db = db
 
 	stats.Add(numRestores, 1)
-	s.logger.Printf("node restored in %s", time.Since(startT))
-	rc.Close()
+	s.logger.Printf("node restored in %s to %s", time.Since(startT), s.dbPath)
 	return nil
 }
 
@@ -2114,6 +2152,11 @@ func createOnDisk(b []byte, path string, fkConstraints, wal bool) (*sql.DB, erro
 			return nil, err
 		}
 	}
+	return openOnDisk(path, fkConstraints, wal)
+}
+
+// openOnDisk opens an on-disk database file at the configured path.
+func openOnDisk(path string, fkConstraints, wal bool) (*sql.DB, error) {
 	db, err := sql.Open(path, fkConstraints, wal)
 	if err != nil {
 		return nil, err

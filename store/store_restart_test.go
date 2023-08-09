@@ -208,13 +208,58 @@ func test_OpenStoreCloseStartup(t *testing.T, s *Store) {
 
 // Test_OpenStoreCloseStartupSingleNode tests that on-disk
 // works fine during various restart scenarios.
-func Test_OpenStoreCloseStartupSingleNode(t *testing.T) {
+func Test_OpenStoreClose_SnapshotSingleNode(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
-	test_OpenStoreCloseStartup(t, s)
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	er := executeRequestFromString(
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		false, false)
+	_, err := s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	if fut := s.raft.Snapshot(); fut.Error() != nil {
+		t.Fatalf("failed to snapshot single node: %s", fut.Error())
+	}
+
+	// Close and re-open to make sure all data is there recovering from snapshot.
+	if err := s.Close(true); err != nil {
+		t.Fatalf("failed to close single-node store: %s", err.Error())
+	}
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+	qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
+	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	r, err := s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[0]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
 }
 
-func test_SnapshotStress(t *testing.T, s *Store) {
+// Test_StoreSnapshotStressSingleNode tests that a high-rate of snapshotting
+// works correctly.
+func Test_OpenStoreClose_SnapshotStressSingleNode(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
 	s.SnapshotInterval = 100 * time.Millisecond
 	s.SnapshotThreshold = 4
 
@@ -267,12 +312,4 @@ func test_SnapshotStress(t *testing.T, s *Store) {
 	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1000]]}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
-}
-
-// Test_StoreSnapshotStressSingleNode tests that a high-rate of snapshotting
-// works fine with an on-disk setup.
-func Test_StoreSnapshotStressSingleNode(t *testing.T) {
-	s, ln := mustNewStore(t)
-	defer ln.Close()
-	test_SnapshotStress(t, s)
 }

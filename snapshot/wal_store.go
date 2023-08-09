@@ -100,6 +100,7 @@ func (s *WALSnapshotStore) Create(version raft.SnapshotVersion, index, term uint
 
 	meta := &walSnapshotMeta{
 		SnapshotMeta: raft.SnapshotMeta{
+			Version:            raft.SnapshotVersionMax,
 			ID:                 snapshotName,
 			Index:              index,
 			Term:               term,

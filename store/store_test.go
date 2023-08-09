@@ -5,6 +5,7 @@ import (
 	"errors"
 	"expvar"
 	"fmt"
+	"io"
 	"math/rand"
 	"net"
 	"os"
@@ -17,6 +18,7 @@ import (
 	"github.com/rqlite/rqlite/command"
 	"github.com/rqlite/rqlite/command/encoding"
 	"github.com/rqlite/rqlite/db"
+	"github.com/rqlite/rqlite/snapshot/streamer"
 	"github.com/rqlite/rqlite/testdata/chinook"
 )
 
@@ -296,7 +298,6 @@ func Test_SingleNodeProvideNoData(t *testing.T) {
 }
 
 // Test_SingleNodeSnapshot tests that the Store correctly takes a snapshot
-// and recovers from it.
 func Test_SingleNodeSnapshot(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
@@ -320,48 +321,78 @@ func Test_SingleNodeSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
-	_, err = s.Query(queryRequestFromString("SELECT * FROM foo", false, false))
+
+	// Snap the node and check what the data in the snapshot.
+	snapFuture := s.raft.Snapshot()
+	if err := snapFuture.Error(); err != nil {
+		t.Fatalf("failed to snapshot raft: %s", err.Error())
+	}
+	_, rc, err := snapFuture.Open()
 	if err != nil {
-		t.Fatalf("failed to query single node: %s", err.Error())
+		t.Fatalf("failed to open snapshot: %s", err.Error())
 	}
 
-	// Snap the node and write to disk.
-	f, err := s.Snapshot()
+	decoder, err := streamer.NewDecoder(rc)
 	if err != nil {
-		t.Fatalf("failed to snapshot node: %s", err.Error())
+		t.Fatal(err)
+	}
+	header, err := decoder.Next()
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := make([]byte, header.Size)
+	if _, err := io.ReadFull(decoder, data); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(data, mustReadFile(s.db.Path())) {
+		t.Fatalf("snapshot data and database file not equal")
+	}
+	if err := rc.Close(); err != nil {
+		t.Fatal(err)
 	}
 
-	snapDir := t.TempDir()
-	snapFile, err := os.Create(filepath.Join(snapDir, "snapshot"))
-	if err != nil {
-		t.Fatalf("failed to create snapshot file: %s", err.Error())
+	// Insert a few more records so we create a WAL, and then
+	// trigger a snapshot of it.
+	queries = []string{
+		`INSERT INTO foo(id, name) VALUES(2, "fiona")`,
+		`INSERT INTO foo(id, name) VALUES(3, "fiona")`,
+		`INSERT INTO foo(id, name) VALUES(4, "fiona")`,
 	}
-	defer snapFile.Close()
-	sink := &mockSnapshotSink{snapFile}
-	if err := f.Persist(sink); err != nil {
-		t.Fatalf("failed to persist snapshot to disk: %s", err.Error())
+	_, err = s.Execute(executeRequestFromStrings(queries, false, false))
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	walBytes := mustReadFile(s.db.WALPath())
+
+	snapFuture = s.raft.Snapshot()
+	if err := snapFuture.Error(); err != nil {
+		t.Fatalf("failed to snapshot raft: %s", err.Error())
+	}
+	_, rc, err = snapFuture.Open()
+	if err != nil {
+		t.Fatalf("failed to open snapshot: %s", err.Error())
+	}
+	decoder, err = streamer.NewDecoder(rc)
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	// Check restoration.
-	snapFile, err = os.Open(filepath.Join(snapDir, "snapshot"))
-	if err != nil {
-		t.Fatalf("failed to open snapshot file: %s", err.Error())
+	// Skip past the SQLite base data.
+	for i := 0; i < 2; i++ {
+		header, err = decoder.Next()
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
-	defer snapFile.Close()
-	if err := s.Restore(snapFile); err != nil {
-		t.Fatalf("failed to restore snapshot from disk: %s", err.Error())
+	walData := make([]byte, header.Size)
+	if _, err := io.ReadFull(decoder, walData); err != nil {
+		t.Fatal(err)
 	}
-
-	// Ensure database is back in the correct state.
-	r, err := s.Query(queryRequestFromString("SELECT * FROM foo", false, false))
-	if err != nil {
-		t.Fatalf("failed to query single node: %s", err.Error())
+	if !bytes.Equal(walData, walBytes) {
+		t.Fatalf("snapshot data and WAL file not equal")
 	}
-	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-	}
-	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	if err := rc.Close(); err != nil {
+		t.Fatal(err)
 	}
 }
 

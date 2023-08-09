@@ -9,6 +9,8 @@ import (
 type WALSnapshotState struct {
 	rc    io.ReadCloser
 	store *WALSnapshotStore
+
+	closed bool
 }
 
 // NewWALSnapshotState returns a new WALSnapshotState
@@ -27,13 +29,22 @@ func (s *WALSnapshotState) Read(p []byte) (int, error) {
 }
 
 // Close closes the Snapshot. It should be called when the Snapshot is no
-// longer needed. It is critical for the user of the Snapshot to call Close
+// longer needed. It is CRITICAL for the user of the Snapshot to call Close
 // when finished with it to ensure that the associated Snapshot store
-// can make changes to the Store.
+// can make changes to the Store. If the Snapshot is not closed, the
+// associated Store will be locked indefinitely.
 func (s *WALSnapshotState) Close() error {
-	s.store.mu.RUnlock()
+	// It's not entirely clear from the Raft docs if it will close
+	// the snapshot after it's been read, so make closes idempotent.
+	// If we don't unlocking the an unlocked mutex, will cause a panic.
+	if s.closed {
+		return nil
+	}
+
 	if err := s.rc.Close(); err != nil {
 		return err
 	}
+	s.store.mu.RUnlock()
+	s.closed = true
 	return nil
 }
