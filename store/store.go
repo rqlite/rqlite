@@ -398,7 +398,7 @@ func (s *Store) Open() (retErr error) {
 		if err != nil {
 			return fmt.Errorf("failed to read peers file: %s", err.Error())
 		}
-		if err = RecoverNode(filepath.Base(s.dbPath), s.logger, s.raftLog, s.boltStore,
+		if err = RecoverNode(filepath.Dir(s.dbPath), s.logger, s.raftLog, s.boltStore,
 			s.snapStore, s.raftTn, config); err != nil {
 			return fmt.Errorf("failed to recover node: %s", err.Error())
 		}
@@ -1654,7 +1654,7 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 	defer rc.Close()
 	startT := time.Now()
 
-	files, err := filesFromSnapshot(s.dbPath, rc)
+	files, err := filesFromSnapshot(filepath.Dir(s.dbPath), rc)
 	if err != nil {
 		return fmt.Errorf("failed to get files from snapshot: %s", err)
 	}
@@ -1875,7 +1875,7 @@ func filesFromSnapshot(dir string, r io.Reader) ([]string, error) {
 func RecoverNode(workDir string, logger *log.Logger, logs raft.LogStore, stable *rlog.Log,
 	snaps *snapshot.WALSnapshotStore, tn raft.Transport, conf raft.Configuration) error {
 	logPrefix := logger.Prefix()
-	logger.SetPrefix(fmt.Sprintf("%s[recovery] ", logPrefix))
+	logger.SetPrefix("[recovery] ")
 	defer logger.SetPrefix(logPrefix)
 
 	// Sanity check the Raft peer configuration.
@@ -1885,7 +1885,12 @@ func RecoverNode(workDir string, logger *log.Logger, logs raft.LogStore, stable 
 
 	var snapshotIndex uint64
 	var snapshotTerm uint64
-	var db *sql.DB
+
+	db, err := createOnDisk(nil, filepath.Join(workDir, "sqlite.db"), false, true)
+	if err != nil {
+		return fmt.Errorf("failed to create database file: %v", err)
+	}
+
 	// Start by restoring any snapshot we find.
 	snapshots, err := snaps.List()
 	if err != nil {
@@ -1915,13 +1920,21 @@ func RecoverNode(workDir string, logger *log.Logger, logs raft.LogStore, stable 
 		if sql.ReplayWAL(files[0], files[1:], false); err != nil {
 			return fmt.Errorf("failed to replay WAL files during recovery: %s", err)
 		}
-
-		snapshotIndex = snapMeta.Index
-		snapshotTerm = snapMeta.Term
+		if err := db.Close(); err != nil {
+			return fmt.Errorf("failed to close pre-restore database: %s", err)
+		}
+		if err := sql.RemoveFiles(db.Path()); err != nil {
+			return fmt.Errorf("failed to remove pre-restore database files: %s", err)
+		}
+		if os.Rename(files[0], db.Path()); err != nil {
+			return fmt.Errorf("failed to rename database file during restore: %s", err)
+		}
 		db, err = openOnDisk(files[0], false, true)
 		if err != nil {
 			return fmt.Errorf("failed to open database file: %v", err)
 		}
+		snapshotIndex = snapMeta.Index
+		snapshotTerm = snapMeta.Term
 	}
 
 	// Need a dechunker manager to handle any chunked load requests.
