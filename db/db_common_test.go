@@ -46,6 +46,30 @@ func testTableCreation(t *testing.T, db *DB) {
 	}
 }
 
+func testTableCreationFTS(t *testing.T, db *DB) {
+	r, err := db.ExecuteStringStmt("CREATE VIRTUAL TABLE foo3 USING fts3(id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if exp, got := `[{}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+	r, err = db.ExecuteStringStmt("CREATE VIRTUAL TABLE foo4 USING fts4(id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if exp, got := `[{}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+	r, err = db.ExecuteStringStmt("CREATE VIRTUAL TABLE foo5 USING fts5(id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if exp, got := `[{}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+}
+
 func testSQLiteMasterTable(t *testing.T, db *DB) {
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
 	if err != nil {
@@ -1446,6 +1470,7 @@ func Test_DatabaseCommonOperations(t *testing.T) {
 		{"CompileOptions", testCompileOptions},
 		{"TableNotExist", testTableNotExist},
 		{"TableCreation", testTableCreation},
+		{"TableCreationFTS", testTableCreationFTS},
 		{"SQLiteMasterTable", testSQLiteMasterTable},
 		{"SQLiteTimeTypes", testSQLiteTimeTypes},
 		{"NotNULLField", testNotNULLField},
