@@ -13,6 +13,7 @@ import (
 
 const version = 1
 
+// Encoder is a type that encoders a set of files into a single stream.
 type Encoder struct {
 	currentReader io.Reader
 	files         []string
@@ -94,7 +95,8 @@ func (e *Encoder) Read(p []byte) (n int, err error) {
 	return n, err
 }
 
-// EncodedSize returns the aggregate number of bytes that will be returned by all calls to Read.
+// EncodedSize returns the aggregate number of bytes that will be
+// returned by all calls to Read.
 func (e *Encoder) EncodedSize() (int64, error) {
 	if e.header == nil {
 		return 0, errors.New("encoder not open")
@@ -111,4 +113,96 @@ func (e *Encoder) Close() error {
 		}
 	}
 	return firstErr
+}
+
+// Decoder is a type that decodes a stream of files , and allows them
+// to be read one at a time.
+type Decoder struct {
+	r              io.Reader
+	currFile       *File
+	bytesRemaining int64
+	header         *Header
+}
+
+// NewDecoder returns an instantiated Decoder
+func NewDecoder(r io.Reader) *Decoder {
+	return &Decoder{r: r}
+}
+
+// Open opens the decoder
+func (d *Decoder) Open() error {
+	lengthBytes := make([]byte, 4)
+	_, err := io.ReadFull(d.r, lengthBytes)
+	if err != nil {
+		return err
+	}
+	headerLength := binary.BigEndian.Uint32(lengthBytes)
+
+	headerBytes := make([]byte, headerLength)
+	_, err = io.ReadFull(d.r, headerBytes)
+	if err != nil {
+		return err
+	}
+	d.header = &Header{}
+	return proto.Unmarshal(headerBytes, d.header)
+}
+
+// Next advances to the next entry in the Decoder. The File.Size determines
+// how many bytes can be read for the next file. Any remaining data in the
+// current file is automatically discarded. At the end of the file, Next
+// returns the error io.EOF.
+func (d *Decoder) Next() (*File, error) {
+	if d.currFile != nil && d.bytesRemaining > 0 {
+		// Discard any remaining data in the current file
+		_, err := io.CopyN(io.Discard, d.r, d.bytesRemaining)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Any more files?
+	if len(d.header.Files) == 0 {
+		return nil, io.EOF
+	}
+
+	// Get the next file and set the bytes remaining
+	d.currFile = d.header.Files[0]
+	d.bytesRemaining = d.currFile.Size
+	d.header.Files = d.header.Files[1:]
+	return d.currFile, nil
+}
+
+// Read reads from the current file in the Decoder. It returns (0, io.EOF)
+// when it reaches the end of that file, until Next is called to advance
+// to the next file.
+func (d *Decoder) Read(b []byte) (int, error) {
+	if d.currFile == nil || d.bytesRemaining == 0 {
+		return 0, io.EOF
+	}
+
+	// Limit the number of bytes read to the remaining bytes in the
+	// current file. XXX Use io.LimitReader instead?
+	if int64(len(b)) > d.bytesRemaining {
+		b = b[:d.bytesRemaining]
+	}
+
+	n, err := d.r.Read(b)
+	if err != nil {
+		return n, err
+	}
+
+	// Update the bytes remaining for the current file
+	d.bytesRemaining -= int64(n)
+
+	// Return EOF only if all bytes of the current file have been read
+	if d.bytesRemaining == 0 {
+		err = io.EOF
+	}
+
+	return n, err
+}
+
+// Close the decoder
+func (d *Decoder) Close() error {
+	return nil
 }
