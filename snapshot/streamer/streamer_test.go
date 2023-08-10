@@ -162,7 +162,11 @@ func Test_EncoderChunkedReadOK(t *testing.T) {
 func Test_EncoderDecoder_ReadAllOK(t *testing.T) {
 	// Create temporary files for testing
 	files := []string{makeTempFile(), makeTempFile(), makeTempFile()}
-	contents := []string{"Content of file 0000", "Content of file 1", "Content of file 222222222"}
+	contents := []string{
+		"the content of file 0000",
+		"Content of file 1",
+		"Content of file 222222222",
+	}
 	for i, file := range files {
 		mustWriteFile(file, []byte(contents[i]))
 		defer os.Remove(file)

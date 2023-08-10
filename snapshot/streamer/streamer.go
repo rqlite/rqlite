@@ -181,7 +181,7 @@ func (d *Decoder) Read(b []byte) (int, error) {
 	}
 
 	// Limit the number of bytes read to the remaining bytes in the
-	// current file. XXX Use io.LimitReader instead?
+	// current file.
 	if int64(len(b)) > d.bytesRemaining {
 		b = b[:d.bytesRemaining]
 	}
