@@ -1,0 +1,14 @@
+syntax = "proto3";
+package streamer;
+
+option go_package = "github.com/rqlite/rqlite/snapshot/streamer";
+
+message File {
+    int64 size = 1;
+    bytes crc = 2;
+}
+
+message Header {
+    int32 version = 1;
+    repeated File files = 2;
+}

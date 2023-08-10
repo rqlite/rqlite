@@ -1,171 +1,114 @@
 package streamer
 
 import (
-	"archive/tar"
 	"bytes"
-	"compress/gzip"
+	"encoding/binary"
+	"errors"
+	"hash/crc64"
 	"io"
 	"os"
+
+	"google.golang.org/protobuf/proto"
 )
 
-const (
-	defaultBufferSize = 16384
-)
+const version = 1
 
-// Encoder is a io.ReadCloser that streams a gzipped tar archive of the given files.
 type Encoder struct {
-	files   []string // List of files to send
-	current *os.File // Current file being read
-	tarW    *tar.Writer
-	gzipW   *gzip.Writer
-	buf     bytes.Buffer
-
-	bufferSize int
+	currentReader io.Reader
+	files         []string
+	fileIndex     int
+	header        *Header
+	totalSize     int64
+	fd            []*os.File
 }
 
-// New returns a new Encoder.
-func NewEncoder(files []string) *Encoder {
-	s := &Encoder{
-		files:      files,
-		bufferSize: defaultBufferSize,
-	}
-	s.gzipW = gzip.NewWriter(&s.buf)
-	s.tarW = tar.NewWriter(s.gzipW)
-	return s
+// NewEncoder returns an uninitialized Encoder instance.
+func NewEncoder() *Encoder {
+	return &Encoder{}
 }
 
-// SetBufferSize sets the buffer size.
-func (s *Encoder) SetBufferSize(bufferSize int) {
-	s.bufferSize = bufferSize
-}
+// Open initializes the Encoder with the given files.
+func (e *Encoder) Open(files ...string) error {
+	e.files = files
+	e.header = &Header{Version: version}
+	table := crc64.MakeTable(crc64.ISO)
 
-// Read reads from the Encoder.
-func (s *Encoder) Read(p []byte) (int, error) {
-	for {
-		// If there's data in the buffer, read it
-		if s.buf.Len() > 0 {
-			return s.buf.Read(p)
-		}
-
-		// If all files are processed, return EOF
-		if len(s.files) == 0 && s.current == nil {
-			if s.tarW != nil {
-				if err := s.tarW.Close(); err != nil {
-					return 0, err
-				}
-				s.tarW = nil
-				if err := s.gzipW.Close(); err != nil {
-					return 0, err
-				}
-				continue // Make sure we return the tar footer.
-			}
-			return 0, io.EOF
-		}
-
-		// If we're between files, open the next one
-		if s.current == nil {
-			file, err := os.Open(s.files[0])
-			if err != nil {
-				return 0, err
-			}
-
-			s.current = file
-			s.files = s.files[1:]
-			fileInfo, err := file.Stat()
-			if err != nil {
-				return 0, err
-			}
-
-			header := &tar.Header{
-				Name: fileInfo.Name(),
-				Mode: int64(fileInfo.Mode()),
-				Size: fileInfo.Size(),
-			}
-
-			if err := s.tarW.WriteHeader(header); err != nil {
-				return 0, err
-			}
-		}
-
-		// Copy up to a chunk of file data into the tar writer
-		_, err := io.CopyN(s.tarW, s.current, int64(s.bufferSize))
-		if err == io.EOF {
-			s.current.Close()
-			s.current = nil
-		} else if err != nil {
-			return 0, err
-		}
-	}
-}
-
-// Close closes the Encoder.
-func (s *Encoder) Close() error {
-	if s.tarW != nil {
-		if err := s.tarW.Close(); err != nil {
+	for _, file := range files {
+		fi, err := os.Stat(file)
+		if err != nil {
 			return err
 		}
+
+		f, err := os.Open(file)
+		if err != nil {
+			return err
+		}
+
+		hash := crc64.New(table)
+		if _, err := io.Copy(hash, f); err != nil {
+			return err
+		}
+
+		if _, err := f.Seek(0, 0); err != nil {
+			return err
+		}
+
+		e.fd = append(e.fd, f)
+		e.header.Files = append(e.header.Files, &File{
+			Size: fi.Size(),
+			Crc:  hash.Sum(nil),
+		})
+
+		e.totalSize += fi.Size()
 	}
-	if err := s.gzipW.Close(); err != nil {
+
+	marshaledHeader, err := proto.Marshal(e.header)
+	if err != nil {
 		return err
 	}
-	if s.current != nil {
-		if err := s.current.Close(); err != nil {
-			return err
-		}
-	}
+
+	lengthBytes := make([]byte, 4)
+	binary.BigEndian.PutUint32(lengthBytes, uint32(len(marshaledHeader)))
+
+	headerBytes := append(lengthBytes, marshaledHeader...)
+	e.totalSize += int64(len(headerBytes))
+	e.currentReader = bytes.NewBuffer(headerBytes)
+
 	return nil
 }
 
-// Decoder is a io.ReadCloser that decodes a gzipped tar archive.
-type Decoder struct {
-	r     io.Reader    // The underlying ReadCloser
-	tarR  *tar.Reader  // The tar reader
-	gzipR *gzip.Reader // The gzip reader
-}
+// Read implements the io.Reader interface for the Encoder type.
+func (e *Encoder) Read(p []byte) (n int, err error) {
+	n, err = e.currentReader.Read(p)
+	if err == io.EOF {
+		if e.fileIndex < len(e.files) {
+			e.currentReader = e.fd[e.fileIndex]
+			// Read from the next file, starting at offset n in p
+			m, err := e.currentReader.Read(p[n:])
 
-// Header is the header of a file in the Encoded archive.
-type Header struct {
-	Name string // Name of file entry
-	Size int64  // Logical file size in bytes
-}
-
-// NewDecoder returns a new Decoder.
-func NewDecoder(r io.Reader) (*Decoder, error) {
-	gzipR, err := gzip.NewReader(r)
-	if err != nil {
-		return nil, err
+			e.fileIndex++
+			return n + m, err
+		}
+		return n, io.EOF
 	}
-
-	return &Decoder{
-		r:     r,
-		tarR:  tar.NewReader(gzipR),
-		gzipR: gzipR,
-	}, nil
+	return n, err
 }
 
-// Next returns the next header and positions the Decoder at the
-// beginning of the corresponding file.
-func (d *Decoder) Next() (*Header, error) {
-	tarHeader, err := d.tarR.Next()
-	if err != nil {
-		return nil, err
+// EncodedSize returns the aggregate number of bytes that will be returned by all calls to Read.
+func (e *Encoder) EncodedSize() (int64, error) {
+	if e.header == nil {
+		return 0, errors.New("encoder not open")
 	}
-
-	return &Header{
-		Name: tarHeader.Name,
-		Size: tarHeader.Size,
-	}, nil
+	return e.totalSize, nil
 }
 
-// Read reads from the Decoder.
-func (d *Decoder) Read(p []byte) (int, error) {
-	return d.tarR.Read(p)
-}
-
-// Close closes the Decoder.
-func (d *Decoder) Close() error {
-	if err := d.gzipR.Close(); err != nil {
-		return err
+// Close implements the io.Closer interface for the Encoder type.
+func (e *Encoder) Close() error {
+	var firstErr error
+	for _, f := range e.fd {
+		if err := f.Close(); err != nil && firstErr == nil {
+			firstErr = err
+		}
 	}
-	return nil
+	return firstErr
 }
