@@ -65,3 +65,8 @@ func (n *NodeTransport) InstallSnapshot(id raft.ServerID, target raft.ServerAddr
 	resp *raft.InstallSnapshotResponse, data io.Reader) error {
 	return n.NetworkTransport.InstallSnapshot(id, target, args, resp, data)
 }
+
+// Consumer returns a channel of RPC requests to be consumed.
+func (n *NodeTransport) Consumer() <-chan raft.RPC {
+	return n.NetworkTransport.Consumer()
+}
