@@ -13,7 +13,7 @@ import (
 
 const version = 1
 
-// Encoder is a type that encoders a set of files into a single stream.
+// Encoder is a type that encodes a set of files into a single stream.
 type Encoder struct {
 	currentReader io.Reader
 	files         []string

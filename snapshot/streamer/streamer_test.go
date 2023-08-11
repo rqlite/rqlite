@@ -163,7 +163,7 @@ func Test_EncoderDecoder_ReadAllOK(t *testing.T) {
 	// Create temporary files for testing
 	files := []string{makeTempFile(), makeTempFile(), makeTempFile()}
 	contents := []string{
-		"the content of file 0000",
+		"X the content of file 0000",
 		"Content of file 1",
 		"Content of file 222222222",
 	}
@@ -215,6 +215,8 @@ func Test_EncoderDecoder_ReadAllOK(t *testing.T) {
 		t.Fatalf("Failed to close decoder: %v", err)
 	}
 }
+
+// Test that Next() discards data.
 
 func mustWriteFile(filename string, data []byte) {
 	if err := os.WriteFile(filename, data, 0644); err != nil {
