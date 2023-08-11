@@ -216,7 +216,56 @@ func Test_EncoderDecoder_ReadAllOK(t *testing.T) {
 	}
 }
 
-// Test that Next() discards data.
+func Test_EncoderDecoder_NextDiscardsOK(t *testing.T) {
+	// Create temporary files for testing
+	files := []string{makeTempFile(), makeTempFile()}
+	contents := []string{
+		"X the content of file 0000",
+		"Content of file 1",
+	}
+
+	for i, file := range files {
+		mustWriteFile(file, []byte(contents[i]))
+		defer os.Remove(file)
+	}
+
+	// Create Encoder and write files to it
+	encoder := NewEncoder()
+	if err := encoder.Open(files...); err != nil {
+		t.Fatalf("Failed to open encoder: %v", err)
+	}
+
+	// Create Decoder and read files from it
+	decoder := NewDecoder(encoder)
+	if err := decoder.Open(); err != nil {
+		t.Fatalf("Failed to open decoder: %v", err)
+	}
+
+	// Read part of first file
+	if _, err := decoder.Next(); err != nil {
+		t.Fatalf("Failed to get next file: %v", err)
+	}
+	buf := make([]byte, 1)
+	if _, err := io.ReadFull(decoder, buf); err != nil {
+		t.Fatalf("Failed to read file contents: %v", err)
+	}
+	if exp, got := "X", string(buf); exp != got {
+		t.Fatalf("Expected file contents to be '%s', got '%s'", exp, got)
+	}
+
+	// Discard the rest of the file and read next file
+	f, err := decoder.Next()
+	if err != nil {
+		t.Fatalf("Failed to discard file: %v", err)
+	}
+	buf = make([]byte, f.Size)
+	if _, err := io.ReadFull(decoder, buf); err != nil {
+		t.Fatalf("Failed to read file contents: %v", err)
+	}
+	if exp, got := contents[1], string(buf); exp != got {
+		t.Fatalf("Expected file contents to be '%s', got '%s'", exp, got)
+	}
+}
 
 func mustWriteFile(filename string, data []byte) {
 	if err := os.WriteFile(filename, data, 0644); err != nil {
