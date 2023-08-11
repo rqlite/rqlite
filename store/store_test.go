@@ -2898,12 +2898,16 @@ func (m *mockListener) Close() error { return m.ln.Close() }
 
 func (m *mockListener) Addr() net.Addr { return m.ln.Addr() }
 
-func mustCreateTempFile() string {
+func mustCreateTempFD() *os.File {
 	f, err := os.CreateTemp("", "rqlite-temp")
 	if err != nil {
 		panic("failed to create temporary file")
 	}
-	f.Close()
+	return f
+}
+
+func mustCreateTempFile() string {
+	f := mustCreateTempFD()
 	return f.Name()
 }
 
