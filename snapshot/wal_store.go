@@ -209,7 +209,12 @@ func (s *WALSnapshotStore) Open(id string) (*raft.SnapshotMeta, io.ReadCloser, e
 			break
 		}
 	}
-	return &meta.SnapshotMeta, NewWALSnapshotState(streamer.NewEncoder(files), s), nil
+
+	enc := streamer.NewEncoder()
+	if enc.Open(files...) != nil {
+		return nil, nil, err
+	}
+	return &meta.SnapshotMeta, NewWALSnapshotState(enc, s), nil
 }
 
 // ReapSnapshots removes snapshots that are no longer needed. It does this by
