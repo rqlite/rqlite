@@ -84,6 +84,9 @@ func Test_EncoderFullReadOK(t *testing.T) {
 	if exp, got := "content1", file1Buf.String(); exp != got {
 		t.Fatalf("Expected file 1 contents to be '%s', got '%s'", exp, got)
 	}
+	if err := VerifyCRC(file1Buf.Bytes(), hdr.Files[0].Crc); err != nil {
+		t.Fatalf("Failed to verify CRC for file 1: %v", err)
+	}
 
 	file2Len := hdr.Files[1].Size
 	file2Buf := new(bytes.Buffer)
@@ -94,6 +97,9 @@ func Test_EncoderFullReadOK(t *testing.T) {
 	}
 	if exp, got := "content234", file2Buf.String(); exp != got {
 		t.Fatalf("Expected file 2 contents to be '%s', got '%s'", exp, got)
+	}
+	if err := VerifyCRC(file2Buf.Bytes(), hdr.Files[1].Crc); err != nil {
+		t.Fatalf("Failed to verify CRC for file 1: %v", err)
 	}
 
 	// Check the total number of bytes read

@@ -13,6 +13,20 @@ import (
 
 const version = 1
 
+// VerifyCRC verifies that the given data matches the given CRC.
+func VerifyCRC(data, crc []byte) error {
+	table := crc64.MakeTable(crc64.ISO)
+	// calculate the CRC of the data
+	hash := crc64.New(table)
+	if _, err := hash.Write(data); err != nil {
+		return err
+	}
+	if !bytes.Equal(hash.Sum(nil), crc) {
+		return errors.New("CRC mismatch")
+	}
+	return nil
+}
+
 // Encoder is a type that encodes a set of files into a single stream.
 type Encoder struct {
 	currentReader io.Reader
