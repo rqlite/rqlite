@@ -1691,6 +1691,8 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 	s.logger.Println("successfully open new database due to restore")
 	s.db = db
 
+	// XXX NEED TO SET LAST APPLIED INDEX HERE?
+
 	stats.Add(numRestores, 1)
 	s.logger.Printf("node restored in %s to %s", time.Since(startT), s.dbPath)
 	return nil
