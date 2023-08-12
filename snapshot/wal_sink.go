@@ -6,8 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-
-	"github.com/rqlite/rqlite/snapshot/streamer"
 )
 
 // walSnapshotSink is a sink for a snapshot.
