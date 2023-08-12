@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"hash"
 	"hash/crc64"
 	"io"
 	"os"
@@ -25,6 +26,12 @@ func VerifyCRC(data, crc []byte) error {
 		return errors.New("CRC mismatch")
 	}
 	return nil
+}
+
+// Hasher returns a new Hasher that calculates the CRC of the data written to it.
+func Hasher() hash.Hash {
+	table := crc64.MakeTable(crc64.ISO)
+	return crc64.New(table)
 }
 
 // Encoder is a type that encodes a set of files into a single stream.

@@ -214,6 +214,11 @@ func (s *WALSnapshotStore) Open(id string) (*raft.SnapshotMeta, io.ReadCloser, e
 	if enc.Open(files...) != nil {
 		return nil, nil, err
 	}
+	sz, err := enc.EncodedSize()
+	if err != nil {
+		return nil, nil, err
+	}
+	meta.Size = sz
 	return &meta.SnapshotMeta, NewWALSnapshotState(enc, s), nil
 }
 

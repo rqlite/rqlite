@@ -4,6 +4,7 @@
 package store
 
 import (
+	"bytes"
 	"errors"
 	"expvar"
 	"fmt"
@@ -1626,12 +1627,17 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 		if err := s.db.Checkpoint(checkpointTimeout); err != nil {
 			return nil, err
 		}
-		b, err = os.ReadFile(s.db.Path())
+		b, err = os.ReadFile(s.db.Path()) // XXX THIS WON'T WORK IF THE DB IS REALLY BIG
+		// THIS COULD HAPPEN IF THE SYSTEM WAS INITIALIZED WITH A LARGE SQLITE DB
+		// A DIRECT COPY TO THE SNAPSHOT STORE IS PROBABLY NEEDED HERE.
+		// THEN DATA IS NIL, indicating to store there is nothing to do.
+		// BUT THEN THIS CONFLICTS WITH USING NIL DATA TO INDIATE FULL SNAP
+		// WHAT ABOUT REMOTE RESTORE?
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		b, err = os.ReadFile(s.db.WALPath())
+		b, err = os.ReadFile(s.db.WALPath()) // JUST COPY WAL TO SNAPSHOT STORE TOO?
 		if err != nil {
 			return nil, err
 		}
@@ -1680,7 +1686,7 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 	var db *sql.DB
 	db, err = openOnDisk(s.dbPath, s.dbConf.FKConstraints, !s.dbConf.DisableWAL)
 	if err != nil {
-		return fmt.Errorf("open on-disk file during restore: %s", err)
+		return fmt.Errorf("open database file during restore: %s", err)
 	}
 	s.logger.Println("successfully open new database due to restore")
 	s.db = db
@@ -1839,16 +1845,16 @@ func (s *Store) tryCompress(rq command.Requester) ([]byte, bool, error) {
 }
 
 // filesFromSnapshot returns the files from the given snapshot. The files
-// are written to dir.
+// are written to dir, and the paths to those files are returned.
 func filesFromSnapshot(dir string, r io.Reader) ([]string, error) {
 	var files []string
-	decoder, err := streamer.NewDecoder(r)
-	if err != nil {
+	decoder := streamer.NewDecoder(r)
+	if err := decoder.Open(); err != nil {
 		return nil, err
 	}
 	defer decoder.Close()
 	for {
-		hdr, err := decoder.Next()
+		file, err := decoder.Next()
 		if err != nil {
 			if err == io.EOF {
 				break
@@ -1860,11 +1866,15 @@ func filesFromSnapshot(dir string, r io.Reader) ([]string, error) {
 			return nil, err
 		}
 		files = append(files, tmpFd.Name())
-		if _, err := io.CopyN(tmpFd, decoder, hdr.Size); err != nil {
+		defer tmpFd.Close()
+
+		hash := streamer.Hasher()
+		mw := io.MultiWriter(tmpFd, hash)
+		if _, err := io.CopyN(mw, decoder, file.Size); err != nil {
 			return nil, err
 		}
-		if err := tmpFd.Close(); err != nil {
-			return nil, err
+		if !bytes.Equal(hash.Sum(nil), file.Crc) {
+			return nil, fmt.Errorf("file %s failed CRC check", tmpFd.Name())
 		}
 	}
 	return files, nil

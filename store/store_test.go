@@ -291,20 +291,23 @@ func Test_SingleNodeSnapshot(t *testing.T) {
 		t.Fatalf("failed to open snapshot: %s", err.Error())
 	}
 
-	decoder, err := streamer.NewDecoder(rc)
+	decoder := streamer.NewDecoder(rc)
+	if err := decoder.Open(); err != nil {
+		t.Fatal(err)
+	}
+	fileHdr, err := decoder.Next()
 	if err != nil {
 		t.Fatal(err)
 	}
-	header, err := decoder.Next()
-	if err != nil {
-		t.Fatal(err)
-	}
-	data := make([]byte, header.Size)
+	data := make([]byte, fileHdr.Size)
 	if _, err := io.ReadFull(decoder, data); err != nil {
 		t.Fatal(err)
 	}
 	if !bytes.Equal(data, mustReadFile(s.db.Path())) {
 		t.Fatalf("snapshot data and database file not equal")
+	}
+	if _, err := decoder.Next(); err != io.EOF {
+		t.Fatalf("expected EOF, got: %s", err)
 	}
 	if err := rc.Close(); err != nil {
 		t.Fatal(err)
@@ -331,24 +334,27 @@ func Test_SingleNodeSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open snapshot: %s", err.Error())
 	}
-	decoder, err = streamer.NewDecoder(rc)
-	if err != nil {
+	decoder = streamer.NewDecoder(rc)
+	if err := decoder.Open(); err != nil {
 		t.Fatal(err)
 	}
 
-	// Skip past the SQLite base data.
+	// Skip past the SQLite base data, and move to the WAL.
 	for i := 0; i < 2; i++ {
-		header, err = decoder.Next()
+		fileHdr, err = decoder.Next()
 		if err != nil {
 			t.Fatal(err)
 		}
 	}
-	walData := make([]byte, header.Size)
+	walData := make([]byte, fileHdr.Size)
 	if _, err := io.ReadFull(decoder, walData); err != nil {
 		t.Fatal(err)
 	}
 	if !bytes.Equal(walData, walBytes) {
 		t.Fatalf("snapshot data and WAL file not equal")
+	}
+	if _, err := decoder.Next(); err != io.EOF {
+		t.Fatalf("expected EOF, got: %s", err)
 	}
 	if err := rc.Close(); err != nil {
 		t.Fatal(err)
