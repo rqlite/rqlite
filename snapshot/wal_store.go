@@ -62,6 +62,14 @@ type WALSnapshotStore struct {
 	logger     *log.Logger
 }
 
+type Store WALSnapshotStore
+
+func (s *Store) Path() string {
+	return (*WALSnapshotStore)(s).Path()
+}
+
+type Meta walSnapshotMeta
+
 // NewWALSnapshotStore returns a new WALSnapshotStore.
 func NewWALSnapshotStore(dir string) (*WALSnapshotStore, error) {
 	if err := os.MkdirAll(dir, 0755); err != nil {
@@ -397,6 +405,11 @@ func (s *WALSnapshotStore) check() error {
 		}
 	}
 
+	// If we have a full snapshot directory (indicated by Meta file), but other older
+	// snapshot directories of incremental, those incremental directories should be removed
+	// since they could no longer work. There is no base file for them. XXXXX This might
+	// happen during a Store reset?
+
 	// If we have any incremental snapshot directories which are missing a WAL file,
 	// this implies that we crashed after checkpointing the WAL file but before deleting
 	// the snapshot directory the WAL file came from. Delete that snapshot directory now,
@@ -499,6 +512,10 @@ func syncDir(dir string) error {
 		return err
 	}
 	return fh.Close()
+}
+
+func tmpName(path string) string {
+	return path + tmpSuffix
 }
 
 func nonTmpName(path string) string {
