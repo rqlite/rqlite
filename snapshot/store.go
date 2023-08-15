@@ -2,6 +2,7 @@ package snapshot
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -16,6 +17,17 @@ import (
 
 const (
 	generationsDir = "generations"
+)
+
+var (
+	// ErrRetainCountTooLow is returned when the retain count is too low.
+	ErrRetainCountTooLow = errors.New("retain count must be >= 2")
+
+	// ErrSnapshotNotFound is returned when a snapshot is not found.
+	ErrSnapshotNotFound = errors.New("snapshot not found")
+
+	// ErrSnapshotBaseMissing is returned when a snapshot base SQLite file is missing.
+	ErrSnapshotBaseMissing = errors.New("snapshot base SQLite file missing")
 )
 
 // Meta represents the metadata for a snapshot.
@@ -100,7 +112,43 @@ func (s *Store) List() ([]*raft.SnapshotMeta, error) {
 
 // Open opens the snapshot with the given ID.
 func (s *Store) Open(id string) (*raft.SnapshotMeta, io.ReadCloser, error) {
-	return nil, nil, nil
+	generations, err := s.GetGenerations()
+	if err != nil {
+		return nil, nil, err
+	}
+	sort.Reverse(sort.StringSlice(generations))
+	for _, gen := range generations {
+		genDir := filepath.Join(s.generationsDir, gen)
+		snapshots, err := s.getSnapshots(genDir)
+		if err != nil {
+			return nil, nil, err
+		}
+		sort.Sort(metaSlice(snapshots))
+		if !metaSlice(snapshots).Contains(id) {
+			// Try the previous generation.
+			continue
+		}
+
+		// Always include the base SQLite file. There may not be a snapshot directory
+		// if it's been checkpointed due to snapshot-reaping.
+		files := []string{filepath.Join(genDir, baseSqliteFile)}
+		for _, snap := range snapshots {
+			if !snap.Full {
+				files = append(files, filepath.Join(genDir, snap.ID, snapWALFile))
+			}
+			if snap.ID == id {
+				// Stop after we've reached the requested snapshot
+				break
+			}
+		}
+
+		enc := NewFullEncoder()
+		if err := enc.Open(files...); err != nil {
+			return nil, nil, err
+		}
+		return &snapshots[0].SnapshotMeta, enc, nil
+	}
+	return nil, nil, ErrSnapshotNotFound
 }
 
 // Dir returns the directory where the snapshots are stored.
@@ -214,7 +262,7 @@ func (s *Store) getSnapshots(dir string) ([]*Meta, error) {
 	}
 
 	// Sort the snapshot, reverse so we get new -> old
-	sort.Sort(sort.Reverse(snapMetaSlice(snapMeta)))
+	sort.Sort(sort.Reverse(metaSlice(snapMeta)))
 
 	return snapMeta, nil
 }
@@ -253,15 +301,15 @@ func snapshotName(term, index uint64) string {
 	return fmt.Sprintf("%d-%d-%d", term, index, msec)
 }
 
-// snapMetaSlice is a sortable slice of walSnapshotMeta, which are sorted
+// metaSlice is a sortable slice of Meta, which are sorted
 // by term, index, and then ID. Snapshots are sorted from oldest to newest.
-type snapMetaSlice []*Meta
+type metaSlice []*Meta
 
-func (s snapMetaSlice) Len() int {
+func (s metaSlice) Len() int {
 	return len(s)
 }
 
-func (s snapMetaSlice) Less(i, j int) bool {
+func (s metaSlice) Less(i, j int) bool {
 	if s[i].Term != s[j].Term {
 		return s[i].Term < s[j].Term
 	}
@@ -271,11 +319,11 @@ func (s snapMetaSlice) Less(i, j int) bool {
 	return s[i].ID < s[j].ID
 }
 
-func (s snapMetaSlice) Swap(i, j int) {
+func (s metaSlice) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
 }
 
-func (s snapMetaSlice) Contains(id string) bool {
+func (s metaSlice) Contains(id string) bool {
 	for _, snap := range s {
 		if snap.ID == id {
 			return true
