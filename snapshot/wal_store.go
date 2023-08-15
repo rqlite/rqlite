@@ -494,6 +494,19 @@ func (s *WALSnapshotStore) basePath() string {
 	return filepath.Join(s.dir, baseSqliteFile)
 }
 
+// CountingWriter counts the number of bytes written to it.
+type CountingWriter struct {
+	Writer io.Writer
+	Count  int64
+}
+
+// Write writes to the underlying writer and counts the number of bytes written.
+func (cw *CountingWriter) Write(p []byte) (int, error) {
+	n, err := cw.Writer.Write(p)
+	cw.Count += int64(n)
+	return n, err
+}
+
 // snapshotName generates a name for the snapshot.
 func snapshotName(term, index uint64) string {
 	now := time.Now()
