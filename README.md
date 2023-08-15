@@ -12,7 +12,7 @@ rqlite is simple to deploy, operating and accessing it is very straightforward, 
 _Check out the [rqlite FAQ](https://rqlite.io/docs/faq)_.
 
 ### Why?
-rqlite gives you the functionality of a [rock solid](https://www.sqlite.org/testing.html), fault-tolerant, replicated relational database, but with very **easy installation, deployment, and operation**. With it you've got a **lightweight** and **reliable distributed relational data store**. Think [etcd](https://github.com/coreos/etcd/) or [Consul](https://github.com/hashicorp/consul), but with relational data modelling also available.
+rqlite gives you the functionality of a [rock solid](https://www.sqlite.org/testing.html), fault-tolerant, replicated relational database, but with very **easy installation, deployment, and operation**. With it you've got a **lightweight** and **reliable distributed relational data store**.
 
 You could use rqlite as part of a larger system, as a central store for some critical relational data, without having to run larger, more complex distributed databases.
 
