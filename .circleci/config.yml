@@ -2,6 +2,11 @@
 # Check https://circleci.com/docs/2.0/language-go/ for more details
 version: 2.1
 
+parameters:
+  primary_image:
+    type: string
+    default: "<< pipeline.parameters.primary_image >>"
+
 commands: # a reusable command with parameters
   restore_and_save_cache:
     steps:
@@ -37,7 +42,7 @@ commands: # a reusable command with parameters
 jobs:
   lint:
     docker:
-      - image: rqlite/circleci-primary:0.0.2
+      - image: << pipeline.parameters.primary_image >>
     steps:
       # Don't do a restore_cache here, so we regularly check that the Go
       # modules are actually fetchable.
@@ -48,7 +53,7 @@ jobs:
 
   cross_compile_windows:
     docker:
-      - image: rqlite/circleci-primary:0.0.2
+      - image: << pipeline.parameters.primary_image >>
     steps:
       - checkout
       - restore_and_save_cache
@@ -58,7 +63,7 @@ jobs:
           goos: windows
   cross_compile:
     docker:
-      - image: rqlite/circleci-primary:0.0.2
+      - image: << pipeline.parameters.primary_image >>
     steps:
       - checkout
       - restore_and_save_cache
@@ -73,7 +78,7 @@ jobs:
           goarch: ppc64le
   cross_compile_arm:
     docker:
-      - image: rqlite/circleci-primary:0.0.2
+      - image: << pipeline.parameters.primary_image >>
     steps:
       - checkout
       - restore_and_save_cache
@@ -85,7 +90,7 @@ jobs:
           goarch: arm64
   cross_compile_mips:
     docker:
-      - image: rqlite/circleci-primary:0.0.2
+      - image: << pipeline.parameters.primary_image >>
     steps:
       - checkout
       - restore_and_save_cache
@@ -97,7 +102,7 @@ jobs:
           goarch: mips64
   cross_compile_mips_le:
     docker:
-      - image: rqlite/circleci-primary:0.0.2
+      - image: << pipeline.parameters.primary_image >>
     steps:
       - checkout
       - restore_and_save_cache
@@ -110,7 +115,7 @@ jobs:
 
   test:
     docker:
-      - image: rqlite/circleci-primary:0.0.2
+      - image: << pipeline.parameters.primary_image >>
     steps:
       - checkout
       - restore_and_save_cache
@@ -119,7 +124,7 @@ jobs:
 
   race_odd:
     docker:
-      - image: rqlite/circleci-primary:0.0.2
+      - image: << pipeline.parameters.primary_image >>
     steps:
       - checkout
       - restore_and_save_cache
@@ -130,7 +135,7 @@ jobs:
 
   race_even:
     docker:
-      - image: rqlite/circleci-primary:0.0.2
+      - image: << pipeline.parameters.primary_image >>
     steps:
       - checkout
       - restore_and_save_cache
@@ -141,7 +146,7 @@ jobs:
 
   end_to_end_single:
     docker:
-      - image: rqlite/circleci-primary:0.0.2
+      - image: << pipeline.parameters.primary_image >>
     steps:
       - checkout
       - restore_and_save_cache
@@ -155,7 +160,7 @@ jobs:
 
   end_to_end_joining:
     docker:
-      - image: rqlite/circleci-primary:0.0.2
+      - image: << pipeline.parameters.primary_image >>
     steps:
       - checkout
       - restore_and_save_cache
@@ -169,7 +174,7 @@ jobs:
 
   end_to_end_multi:
     docker:
-      - image: rqlite/circleci-primary:0.0.2
+      - image: << pipeline.parameters.primary_image >>
     steps:
       - checkout
       - restore_and_save_cache
@@ -183,7 +188,7 @@ jobs:
 
   end_to_end_multi_adv:
     docker:
-      - image: rqlite/circleci-primary:0.0.2
+      - image: << pipeline.parameters.primary_image >>
     steps:
       - checkout
       - restore_and_save_cache
@@ -197,7 +202,7 @@ jobs:
 
   end_to_end_autoclustering:
     docker:
-      - image: rqlite/circleci-primary:0.0.2
+      - image: << pipeline.parameters.primary_image >>
       - image: hashicorp/consul
       - image: gcr.io/etcd-development/etcd:v3.5.1
     steps:
@@ -213,7 +218,7 @@ jobs:
 
   end_to_end_auto_state:
     docker:
-      - image: rqlite/circleci-primary:0.0.2
+      - image: << pipeline.parameters.primary_image >>
     steps:
       - checkout
       - restore_and_save_cache
