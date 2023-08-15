@@ -116,9 +116,8 @@ func (s *Store) Open(id string) (*raft.SnapshotMeta, io.ReadCloser, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	sort.Reverse(sort.StringSlice(generations))
-	for _, gen := range generations {
-		genDir := filepath.Join(s.generationsDir, gen)
+	for i := len(generations) - 1; i >= 0; i-- {
+		genDir := filepath.Join(s.generationsDir, generations[i])
 		snapshots, err := s.getSnapshots(genDir)
 		if err != nil {
 			return nil, nil, err
