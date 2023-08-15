@@ -158,7 +158,13 @@ func (s *Store) Dir() string {
 // FullNeeded returns true if the next type of snapshot needed
 // by the Store is a full snapshot.
 func (s *Store) FullNeeded() bool {
-	return false
+	// Return true if the current generation's directory does
+	// not include a SQLite base file
+	currGenDir, err := s.GetCurrentGenerationDir()
+	if err != nil {
+		return false
+	}
+	return fileExists(filepath.Join(currGenDir, baseSqliteFile))
 }
 
 // GetNextGeneration returns the name of the next generation.
@@ -291,6 +297,11 @@ func (s *Store) check() error {
 
 func isTmpName(name string) bool {
 	return filepath.Ext(name) == tmpSuffix
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return !os.IsNotExist(err)
 }
 
 // snapshotName generates a name for the snapshot.
