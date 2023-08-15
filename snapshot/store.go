@@ -59,7 +59,7 @@ func NewStore(dir string) (*Store, error) {
 		return nil, fmt.Errorf("check failed: %s", err)
 	}
 	if err := s.ensureFirstGeneration(); err != nil {
-		return nil, fmt.Errorf("creatinmg first generation failed: %s", err)
+		return nil, fmt.Errorf("creating first generation failed: %s", err)
 	}
 
 	return s, nil
@@ -164,7 +164,7 @@ func (s *Store) FullNeeded() bool {
 	if err != nil {
 		return false
 	}
-	return fileExists(filepath.Join(currGenDir, baseSqliteFile))
+	return !fileExists(filepath.Join(currGenDir, baseSqliteFile))
 }
 
 // GetNextGeneration returns the name of the next generation.
