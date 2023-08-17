@@ -27,6 +27,7 @@ type Sink struct {
 	str *Store
 	dir string // Directory for the Snapshot
 
+	fullNeeded  bool
 	walFilePath string
 	dataFD      *os.File // File the snapshot data is written to
 	meta        *Meta
@@ -40,11 +41,17 @@ type Sink struct {
 // should be stored in, assuming that the snapshot is incremental. If
 // a full snapshot is written to the sink, then the Sink needs to create
 // a new generation directory and install the Snapshot there.
-func NewSink(str *Store, dir string, meta *Meta) *Sink {
+//
+// A Sink may require that a full snapshot is written to it. If an incremental
+// snapshot is written to it, then the Sink will return an error on Close().
+// However if a full snapshot is not required, but a full snapshot is written
+// to it, then the Sink will write the full snapshot to a new generation.
+func NewSink(str *Store, dir string, fullNeeded bool, meta *Meta) *Sink {
 	tDir := tmpName(dir)
 	return &Sink{
 		str:         str,
 		dir:         tDir,
+		fullNeeded:  fullNeeded,
 		walFilePath: filepath.Join(tDir, snapWALFile),
 		meta:        meta,
 		logger:      log.New(os.Stderr, "[snapshot-sink] ", log.LstdFlags),
