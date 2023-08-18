@@ -4,68 +4,34 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 
 	"google.golang.org/protobuf/proto"
 )
 
-const (
-	magicString   = "rqlite snapshot"
-	headerVersion = uint16(1)
-	sizeofHeader  = 24
-)
+const strHeaderLenSize = 8
 
-// Header is the header of a snapshot file.
-type Header struct {
-	Magic            [16]byte
-	Version          uint16
-	Reserved         [4]byte
-	StreamHeaderSize uint16
-}
-
-// NewHeader returns a new Header instance.
-func NewHeader(snapshotHeaderSize uint16) *Header {
-	var h Header
-	copy(h.Magic[:], magicString)
-	h.Version = headerVersion
-	h.StreamHeaderSize = snapshotHeaderSize
-	return &h
-}
-
-// Encode encodes the Header into a byte slice.
-func (h *Header) Encode() []byte {
-	buf := make([]byte, sizeofHeader)
-	copy(buf[:16], h.Magic[:])
-	binary.LittleEndian.PutUint16(buf[16:18], h.Version)
-	binary.LittleEndian.PutUint16(buf[20:22], h.StreamHeaderSize)
-	return buf
-}
-
-// String is a string representation of the Header.
-func (h *Header) String() string {
-	return fmt.Sprintf("Header{Magic: %s, Version: %d, SnapshotHeaderSize: %d}",
-		string(h.Magic[:]), h.Version, h.StreamHeaderSize)
-}
-
-// DecodeHeader decodes the Header from a byte slice.
-func DecodeHeader(buf []byte) (*Header, error) {
-	if len(buf) < sizeofHeader {
-		return nil, errors.New("buffer too small")
+func NewStreamHeader() *StreamHeader {
+	return &StreamHeader{
+		Version: 1,
 	}
-	var h Header
-	copy(h.Magic[:], buf[:16])
-	h.Version = binary.LittleEndian.Uint16(buf[16:18])
-	h.StreamHeaderSize = binary.LittleEndian.Uint16(buf[20:22])
-	if string(h.Magic[:len(magicString)]) != magicString {
-		return nil, errors.New("invalid magic string")
+}
+
+func (s *StreamHeader) FileSize() int64 {
+	if fs := s.GetFullSnapshot(); fs != nil {
+		var size int64
+		for _, di := range fs.Wals {
+			size += di.Size
+		}
+		size += fs.Db.Size
+		return size
 	}
-	return &h, nil
+	return 0
 }
 
 type Stream struct {
-	header *Header
+	headerLen int64
 
 	readClosers    []io.ReadCloser
 	readClosersIdx int
@@ -73,22 +39,22 @@ type Stream struct {
 }
 
 func NewIncrementalStream(data []byte) (*Stream, error) {
-	strHdr := &StreamHeader{
-		Payload: &StreamHeader_IncrementalSnapshot{
-			IncrementalSnapshot: &IncrementalSnapshot{
-				Data: data,
-			},
+	strHdr := NewStreamHeader()
+	strHdr.Payload = &StreamHeader_IncrementalSnapshot{
+		IncrementalSnapshot: &IncrementalSnapshot{
+			Data: data,
 		},
 	}
 	strHdrPb, err := proto.Marshal(strHdr)
 	if err != nil {
 		return nil, err
 	}
-	hdr := NewHeader(uint16(len(strHdrPb)))
-	buf := bytes.NewBuffer(append(hdr.Encode(), strHdrPb...))
+
+	buf := make([]byte, strHeaderLenSize)
+	binary.LittleEndian.PutUint64(buf, uint64(len(strHdrPb)))
 	return &Stream{
-		header:      hdr,
-		readClosers: []io.ReadCloser{io.NopCloser(buf)},
+		headerLen:   int64(len(strHdrPb)),
+		readClosers: []io.ReadCloser{io.NopCloser(bytes.NewBuffer(buf))},
 	}, nil
 }
 
@@ -97,8 +63,7 @@ func NewFullStream(files ...string) (*Stream, error) {
 		return nil, errors.New("no files provided")
 	}
 
-	str := &Stream{}
-
+	var totalFileSize int64
 	// First file must be the SQLite database file.
 	fi, err := os.Stat(files[0])
 	if err != nil {
@@ -107,7 +72,7 @@ func NewFullStream(files ...string) (*Stream, error) {
 	dbDataInfo := &FullSnapshot_DataInfo{
 		Size: fi.Size(),
 	}
-	str.totalFileSize += fi.Size()
+	totalFileSize += fi.Size()
 
 	// Rest, if any, are WAL files.
 	walDataInfos := make([]*FullSnapshot_DataInfo, len(files)-1)
@@ -119,14 +84,13 @@ func NewFullStream(files ...string) (*Stream, error) {
 		walDataInfos[i-1] = &FullSnapshot_DataInfo{
 			Size: fi.Size(),
 		}
-		str.totalFileSize += fi.Size()
+		totalFileSize += fi.Size()
 	}
-	strHdr := &StreamHeader{
-		Payload: &StreamHeader_FullSnapshot{
-			FullSnapshot: &FullSnapshot{
-				Db:   dbDataInfo,
-				Wals: walDataInfos,
-			},
+	strHdr := NewStreamHeader()
+	strHdr.Payload = &StreamHeader_FullSnapshot{
+		FullSnapshot: &FullSnapshot{
+			Db:   dbDataInfo,
+			Wals: walDataInfos,
 		},
 	}
 
@@ -134,26 +98,30 @@ func NewFullStream(files ...string) (*Stream, error) {
 	if err != nil {
 		return nil, err
 	}
+	buf := make([]byte, strHeaderLenSize)
+	binary.LittleEndian.PutUint64(buf, uint64(len(strHdrPb)))
 
-	str.header = NewHeader(uint16(len(strHdrPb)))
-	buf := bytes.NewBuffer(append(str.header.Encode(), strHdrPb...))
-
-	str.readClosers = append(str.readClosers, io.NopCloser(buf))
+	var readClosers []io.ReadCloser
+	readClosers = append(readClosers, io.NopCloser(bytes.NewBuffer(buf)))
 	for _, file := range files {
 		fd, err := os.Open(file)
 		if err != nil {
-			for _, rc := range str.readClosers {
+			for _, rc := range readClosers {
 				rc.Close() // Ignore the error during cleanup
 			}
 			return nil, err
 		}
-		str.readClosers = append(str.readClosers, fd)
+		readClosers = append(readClosers, fd)
 	}
-	return str, nil
+	return &Stream{
+		headerLen:     int64(len(strHdrPb)),
+		readClosers:   readClosers,
+		totalFileSize: strHdr.FileSize(),
+	}, nil
 }
 
 func (s *Stream) Size() int64 {
-	return int64(sizeofHeader) + int64(s.header.StreamHeaderSize) + s.totalFileSize
+	return int64(strHeaderLenSize + int64(s.headerLen) + s.totalFileSize)
 }
 
 func (s *Stream) Read(p []byte) (n int, err error) {

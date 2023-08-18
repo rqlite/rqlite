@@ -17,8 +17,9 @@ message FullSnapshot {
 }
 
 message StreamHeader {
+    int32 version = 1;
     oneof payload {
-        IncrementalSnapshot incremental_snapshot = 1;
-        FullSnapshot full_snapshot = 2;
+        IncrementalSnapshot incremental_snapshot = 2;
+        FullSnapshot full_snapshot = 3;
     }
 }

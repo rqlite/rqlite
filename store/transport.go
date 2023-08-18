@@ -44,3 +44,5 @@ func (t *Transport) Close() error {
 func (t *Transport) Addr() net.Addr {
 	return t.ln.Addr()
 }
+
+/// ADD GZIP INTERCEPT FOR SNAPSHOTS

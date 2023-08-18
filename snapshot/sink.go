@@ -1,6 +1,7 @@
 package snapshot
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -88,23 +89,7 @@ func (s *Sink) processSnapshotData() error {
 		return err
 	}
 
-	buf := make([]byte, sizeofHeader)
-	_, err := io.ReadFull(s.dataFD, buf)
-	if err != nil {
-		return fmt.Errorf("error reading header %v", err)
-	}
-	h, err := DecodeHeader(buf)
-	if err != nil {
-		return fmt.Errorf("error decoding header %v", err)
-	}
-
-	buf = make([]byte, h.StreamHeaderSize)
-	_, err = io.ReadFull(s.dataFD, buf)
-	if err != nil {
-		return fmt.Errorf("error reading snapshot header %v", err)
-	}
-	strHdr := &StreamHeader{}
-	err = proto.Unmarshal(buf, strHdr)
+	strHdr, err := getStreamHeader(s.dataFD)
 	if err != nil {
 		return fmt.Errorf("error unmarshaling FSM snapshot: %v", err)
 	}
@@ -233,6 +218,27 @@ func (s *Sink) writeMeta(full bool) error {
 		return err
 	}
 	return fh.Close()
+}
+
+func getStreamHeader(r io.Reader) (*StreamHeader, error) {
+	b := make([]byte, strHeaderLenSize)
+	_, err := io.ReadFull(r, b)
+	if err != nil {
+		return nil, fmt.Errorf("error reading snapshot header length: %v", err)
+	}
+	strHdrLen := binary.LittleEndian.Uint64(b)
+
+	b = make([]byte, strHdrLen)
+	_, err = io.ReadFull(r, b)
+	if err != nil {
+		return nil, fmt.Errorf("error reading snapshot header %v", err)
+	}
+	strHdr := &StreamHeader{}
+	err = proto.Unmarshal(b, strHdr)
+	if err != nil {
+		return nil, fmt.Errorf("error unmarshaling FSM snapshot: %v", err)
+	}
+	return strHdr, nil
 }
 
 func parentDir(dir string) string {
