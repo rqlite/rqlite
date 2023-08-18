@@ -63,7 +63,7 @@ func (s *Sink) Cancel() error {
 	if s.dataFD != nil {
 		s.dataFD.Close()
 	}
-	return nil
+	return os.RemoveAll(s.dir)
 }
 
 func (s *Sink) Close() error {
@@ -150,6 +150,7 @@ func (s *Sink) processFullSnapshot(fullSnap *FullSnapshot) error {
 	if err != nil {
 		return fmt.Errorf("error getting next generation directory: %v", err)
 	}
+	// XXXX actually make it temp dir presumably
 	newDir := filepath.Join(ngDir, filepath.Base(s.dir))
 	if err := os.MkdirAll(newDir, 0755); err != nil {
 		return fmt.Errorf("error creating full snapshot directory: %v", err)
@@ -192,7 +193,7 @@ func (s *Sink) processFullSnapshot(fullSnap *FullSnapshot) error {
 		walFiles = append(walFiles, walName)
 	}
 
-	// Checkpoint the WAL file into the base SQLite file
+	// Checkpoint the WAL files into the base SQLite file
 	if err := db.ReplayWAL(filepath.Join(s.dir, baseSqliteFile), walFiles, false); err != nil {
 		return fmt.Errorf("error checkpointing WAL: %v", err)
 	}
