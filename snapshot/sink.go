@@ -79,7 +79,8 @@ func (s *Sink) Close() error {
 		}
 	}
 
-	return os.Rename(s.dir, nonTmpName(s.dir))
+	_, err := moveFromTmp(s.dir)
+	return err
 }
 
 func (s *Sink) processSnapshotData() error {
