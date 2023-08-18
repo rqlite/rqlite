@@ -94,6 +94,10 @@ func (s *Sink) processSnapshotData() error {
 		return fmt.Errorf("error unmarshaling FSM snapshot: %v", err)
 	}
 
+	if strHdr.GetVersion() != streamVersion {
+		return fmt.Errorf("unsupported snapshot version %d", strHdr.GetVersion())
+	}
+
 	// Incremental snapshot?
 	if incSnap := strHdr.GetIncrementalSnapshot(); incSnap != nil {
 		if err := s.processIncrementalSnapshot(incSnap); err != nil {

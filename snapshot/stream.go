@@ -10,11 +10,14 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-const strHeaderLenSize = 8
+const (
+	strHeaderLenSize = 8
+	streamVersion    = 1
+)
 
 func NewStreamHeader() *StreamHeader {
 	return &StreamHeader{
-		Version: 1,
+		Version: streamVersion,
 	}
 }
 
