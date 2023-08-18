@@ -55,9 +55,10 @@ func NewIncrementalStream(data []byte) (*Stream, error) {
 
 	buf := make([]byte, strHeaderLenSize)
 	binary.LittleEndian.PutUint64(buf, uint64(len(strHdrPb)))
+	buf = append(buf, strHdrPb...)
 	return &Stream{
 		headerLen:   int64(len(strHdrPb)),
-		readClosers: []io.ReadCloser{io.NopCloser(bytes.NewBuffer(buf))},
+		readClosers: []io.ReadCloser{newRCBuffer(buf)},
 	}, nil
 }
 
@@ -103,9 +104,10 @@ func NewFullStream(files ...string) (*Stream, error) {
 	}
 	buf := make([]byte, strHeaderLenSize)
 	binary.LittleEndian.PutUint64(buf, uint64(len(strHdrPb)))
+	buf = append(buf, strHdrPb...)
 
 	var readClosers []io.ReadCloser
-	readClosers = append(readClosers, io.NopCloser(bytes.NewBuffer(buf)))
+	readClosers = append(readClosers, newRCBuffer(buf))
 	for _, file := range files {
 		fd, err := os.Open(file)
 		if err != nil {
@@ -151,4 +153,8 @@ func (s *Stream) Close() error {
 		}
 	}
 	return nil
+}
+
+func newRCBuffer(b []byte) io.ReadCloser {
+	return io.NopCloser(bytes.NewBuffer(b))
 }
