@@ -3,10 +3,20 @@ package snapshot
 import "io"
 
 type Snapshot struct {
+	walData []byte
+	files   []string
 }
 
-func New() *Snapshot {
-	return &Snapshot{}
+func NewWALSnapshot(b []byte) *Snapshot {
+	return &Snapshot{
+		walData: b,
+	}
+}
+
+func NewFullSnapshot(files ...string) *Snapshot {
+	return &Snapshot{
+		files: files,
+	}
 }
 
 func (s *Snapshot) Persist(sink *Sink) error {
@@ -25,5 +35,8 @@ func (s *Snapshot) Release() error {
 }
 
 func (s *Snapshot) OpenStream() (*Stream, error) {
-	return nil, nil
+	if len(s.files) > 0 {
+		return NewFullStream(s.files...)
+	}
+	return NewIncrementalStream(s.walData)
 }
