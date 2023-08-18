@@ -1,7 +1,6 @@
 package snapshot
 
 import (
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/rqlite/rqlite/db"
-	"google.golang.org/protobuf/proto"
 )
 
 type Sink struct {
@@ -89,7 +87,7 @@ func (s *Sink) processSnapshotData() error {
 		return err
 	}
 
-	strHdr, err := getStreamHeader(s.dataFD)
+	strHdr, _, err := NewStreamHeaderFromReader(s.dataFD)
 	if err != nil {
 		return fmt.Errorf("error unmarshaling FSM snapshot: %v", err)
 	}
@@ -222,27 +220,6 @@ func (s *Sink) writeMeta(full bool) error {
 		return err
 	}
 	return fh.Close()
-}
-
-func getStreamHeader(r io.Reader) (*StreamHeader, error) {
-	b := make([]byte, strHeaderLenSize)
-	_, err := io.ReadFull(r, b)
-	if err != nil {
-		return nil, fmt.Errorf("error reading snapshot header length: %v", err)
-	}
-	strHdrLen := binary.LittleEndian.Uint64(b)
-
-	b = make([]byte, strHdrLen)
-	_, err = io.ReadFull(r, b)
-	if err != nil {
-		return nil, fmt.Errorf("error reading snapshot header %v", err)
-	}
-	strHdr := &StreamHeader{}
-	err = proto.Unmarshal(b, strHdr)
-	if err != nil {
-		return nil, fmt.Errorf("error unmarshaling FSM snapshot: %v", err)
-	}
-	return strHdr, nil
 }
 
 func parentDir(dir string) string {

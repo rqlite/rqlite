@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 
@@ -19,6 +20,32 @@ func NewStreamHeader() *StreamHeader {
 	return &StreamHeader{
 		Version: streamVersion,
 	}
+}
+
+func NewStreamHeaderFromReader(r io.Reader) (*StreamHeader, int64, error) {
+	var totalSizeRead int64
+
+	b := make([]byte, strHeaderLenSize)
+	n, err := io.ReadFull(r, b)
+	if err != nil {
+		return nil, 0, fmt.Errorf("error reading snapshot header length: %v", err)
+	}
+	totalSizeRead += int64(n)
+	strHdrLen := binary.LittleEndian.Uint64(b)
+
+	b = make([]byte, strHdrLen)
+	n, err = io.ReadFull(r, b)
+	if err != nil {
+		return nil, 0, fmt.Errorf("error reading snapshot header %v", err)
+	}
+	totalSizeRead += int64(n)
+
+	strHdr := &StreamHeader{}
+	err = proto.Unmarshal(b, strHdr)
+	if err != nil {
+		return nil, 0, fmt.Errorf("error unmarshaling FSM snapshot: %v", err)
+	}
+	return strHdr, totalSizeRead, nil
 }
 
 func (s *StreamHeader) FileSize() int64 {
