@@ -16,7 +16,8 @@ import (
 )
 
 const (
-	generationsDir = "generations"
+	generationsDir  = "generations"
+	firstGeneration = "0000000001"
 
 	baseSqliteFile    = "base.sqlite"
 	baseSqliteWALFile = "base.sqlite-wal"
@@ -64,10 +65,6 @@ func NewStore(dir string) (*Store, error) {
 	if err := s.check(); err != nil {
 		return nil, fmt.Errorf("check failed: %s", err)
 	}
-	if err := s.ensureFirstGeneration(); err != nil {
-		return nil, fmt.Errorf("creating first generation failed: %s", err)
-	}
-
 	return s, nil
 }
 
@@ -117,6 +114,9 @@ func (s *Store) Open(id string) (*raft.SnapshotMeta, io.ReadCloser, error) {
 		snapshots, err := s.getSnapshots(genDir)
 		if err != nil {
 			return nil, nil, err
+		}
+		if len(snapshots) == 0 {
+			continue
 		}
 		sort.Sort(metaSlice(snapshots))
 		if !metaSlice(snapshots).Contains(id) {
@@ -208,40 +208,34 @@ func (s *Store) GetGenerations() ([]string, error) {
 	return generations, nil
 }
 
+// GetCurrentGenerationDir returns the directory path of the current generation.
+// It is not guaranteed to exist.
 func (s *Store) GetCurrentGenerationDir() (string, error) {
 	generations, err := s.GetGenerations()
 	if err != nil {
 		return "", err
 	}
 	if len(generations) == 0 {
-		return "", fmt.Errorf("no generations found")
+		return filepath.Join(s.generationsDir, firstGeneration), nil
 	}
 	return filepath.Join(s.generationsDir, generations[len(generations)-1]), nil
-}
-
-func (s *Store) ensureFirstGeneration() error {
-	generations, err := s.GetGenerations()
-	if err != nil {
-		return err
-	}
-	if len(generations) == 0 {
-		if err := os.MkdirAll(filepath.Join(s.generationsDir, "0000000001"), 0755); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // getSnapshots returns a list of all the snapshots in the given directory, sorted from
 // most recently created to oldest created.
 func (s *Store) getSnapshots(dir string) ([]*Meta, error) {
+	var snapMeta []*Meta
+
 	snapshots, err := os.ReadDir(dir)
 	if err != nil {
+		// If the directory doesn't exist, that's fine, just return an empty list
+		if os.IsNotExist(err) {
+			return snapMeta, nil
+		}
 		return nil, err
 	}
 
 	// Populate the metadata
-	var snapMeta []*Meta
 	for _, snap := range snapshots {
 		// Ignore any files
 		if !snap.IsDir() {
