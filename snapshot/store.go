@@ -247,12 +247,6 @@ func (s *Store) Reap() error {
 	if err != nil {
 		return err
 	}
-
-	if len(generations) < 2 {
-		return nil
-	}
-
-	// Reap all but the last generation.
 	for i := 0; i < len(generations)-1; i++ {
 		genDir := filepath.Join(s.generationsDir, generations[i])
 		if err := os.RemoveAll(genDir); err != nil {
