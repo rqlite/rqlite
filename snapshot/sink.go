@@ -13,6 +13,7 @@ import (
 	"github.com/rqlite/rqlite/db"
 )
 
+// Sink is a sink for writing snapshot data to a Snapshot store.
 type Sink struct {
 	workDir    string
 	curGenDir  string
@@ -25,6 +26,7 @@ type Sink struct {
 	closed bool
 }
 
+// NewSink creates a new Sink object.
 func NewSink(workDir, currGenDir, nextGenDir string, meta *Meta) *Sink {
 	return &Sink{
 		workDir:    workDir,
@@ -35,6 +37,7 @@ func NewSink(workDir, currGenDir, nextGenDir string, meta *Meta) *Sink {
 	}
 }
 
+// Open opens the sink for writing.
 func (s *Sink) Open() error {
 	dataPath := filepath.Join(s.workDir, "snapshot-data.tmp")
 	dataFD, err := os.Create(dataPath)
@@ -45,22 +48,23 @@ func (s *Sink) Open() error {
 	return nil
 }
 
+// Write writes snapshot data to the sink.
 func (s *Sink) Write(p []byte) (n int, err error) {
 	return s.dataFD.Write(p)
 }
 
+// ID returns the ID of the snapshot being written.
 func (s *Sink) ID() string {
 	return s.meta.ID
 }
 
+// Cancel cancels the snapshot.
 func (s *Sink) Cancel() error {
 	s.closed = true
-	if s.dataFD != nil {
-		s.dataFD.Close()
-	}
 	return s.cleanup()
 }
 
+// Close closes the sink, and finalizes creation of the snapshot.
 func (s *Sink) Close() error {
 	if s.closed {
 		return nil
@@ -77,7 +81,7 @@ func (s *Sink) processSnapshotData() error {
 
 	strHdr, _, err := NewStreamHeaderFromReader(s.dataFD)
 	if err != nil {
-		return fmt.Errorf("error unmarshaling FSM snapshot: %v", err)
+		return fmt.Errorf("error reading stream header: %v", err)
 	}
 	if strHdr.GetVersion() != streamVersion {
 		return fmt.Errorf("unsupported snapshot version %d", strHdr.GetVersion())
@@ -204,8 +208,22 @@ func (s *Sink) writeMeta(dir string, full bool) error {
 }
 
 func (s *Sink) cleanup() error {
-	s.dataFD.Close()
-	return os.Remove(s.dataFD.Name())
+	if s.dataFD != nil {
+		if err := s.dataFD.Close(); err != nil {
+			return err
+		}
+		if err := os.Remove(s.dataFD.Name()); err != nil {
+			return err
+		}
+	}
+
+	if err := os.RemoveAll(tmpName(s.nextGenDir)); err != nil {
+		return err
+	}
+	if err := os.RemoveAll(tmpName(s.curGenDir)); err != nil {
+		return err
+	}
+	return nil
 }
 
 func parentDir(dir string) string {
