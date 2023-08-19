@@ -181,6 +181,7 @@ func (s *Store) GetNextGeneration() (string, error) {
 }
 
 // GetNextGenerationDir returns the directory path of the next generation.
+// It is not guaranteed to exist.
 func (s *Store) GetNextGenerationDir() (string, error) {
 	nextGen, err := s.GetNextGeneration()
 	if err != nil {

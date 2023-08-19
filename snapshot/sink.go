@@ -14,43 +14,38 @@ import (
 )
 
 type Sink struct {
-	str         *Store
-	dir         string
-	walFilePath string
+	workDir    string
+	curGenDir  string
+	nextGenDir string
+	meta       *Meta
 
 	dataFD *os.File
-	meta   *Meta
 
 	logger *log.Logger
 	closed bool
 }
 
-func NewSink(s *Store, dir string, meta *Meta) *Sink {
-	tDir := tmpName(dir)
+func NewSink(workDir, currGenDir, nextGenDir string, meta *Meta) *Sink {
 	return &Sink{
-		str:         s,
-		dir:         tDir,
-		walFilePath: filepath.Join(tDir, snapWALFile),
-		meta:        meta,
-		logger:      log.New(os.Stderr, "snapshot-sink: ", log.LstdFlags),
+		workDir:    workDir,
+		curGenDir:  currGenDir,
+		nextGenDir: nextGenDir,
+		meta:       meta,
+		logger:     log.New(os.Stderr, "snapshot-sink: ", log.LstdFlags),
 	}
 }
 
 func (s *Sink) Open() error {
-	if err := os.MkdirAll(s.dir, 0755); err != nil {
+	dataPath := filepath.Join(s.workDir, "snapshot-data.tmp")
+	dataFD, err := os.Create(dataPath)
+	if err != nil {
 		return err
 	}
+	s.dataFD = dataFD
 	return nil
 }
 
 func (s *Sink) Write(p []byte) (n int, err error) {
-	if s.dataFD == nil {
-		f, err := os.CreateTemp(s.dir, "snapshot-data.tmp")
-		if err != nil {
-			return 0, err
-		}
-		s.dataFD = f
-	}
 	return s.dataFD.Write(p)
 }
 
@@ -63,7 +58,7 @@ func (s *Sink) Cancel() error {
 	if s.dataFD != nil {
 		s.dataFD.Close()
 	}
-	return os.RemoveAll(s.dir)
+	return s.cleanup()
 }
 
 func (s *Sink) Close() error {
@@ -71,16 +66,8 @@ func (s *Sink) Close() error {
 		return nil
 	}
 	s.closed = true
-
-	if s.dataFD != nil {
-		defer s.dataFD.Close()
-		if err := s.processSnapshotData(); err != nil {
-			return err
-		}
-	}
-
-	_, err := moveFromTmp(s.dir)
-	return err
+	defer s.cleanup()
+	return s.processSnapshotData()
 }
 
 func (s *Sink) processSnapshotData() error {
@@ -92,80 +79,59 @@ func (s *Sink) processSnapshotData() error {
 	if err != nil {
 		return fmt.Errorf("error unmarshaling FSM snapshot: %v", err)
 	}
-
 	if strHdr.GetVersion() != streamVersion {
 		return fmt.Errorf("unsupported snapshot version %d", strHdr.GetVersion())
 	}
 
-	// Incremental snapshot?
 	if incSnap := strHdr.GetIncrementalSnapshot(); incSnap != nil {
-		if err := s.processIncrementalSnapshot(incSnap); err != nil {
-			return err
-		}
-	} else {
-		// Turns out it's a full snapshot.
-		fullSnap := strHdr.GetFullSnapshot()
-		if fullSnap == nil {
-			return fmt.Errorf("got nil FullSnapshot")
-		}
-		if err := s.processFullSnapshot(fullSnap); err != nil {
-			return err
-		}
+		return s.processIncrementalSnapshot(incSnap)
 	}
-
-	dstDir, err := moveFromTmp(s.dir)
-	if err != nil {
-		s.logger.Printf("failed to move snapshot directory into place: %s", err)
-		return err
+	fullSnap := strHdr.GetFullSnapshot()
+	if fullSnap == nil {
+		return fmt.Errorf("got nil FullSnapshot")
 	}
-
-	// Sync parent directory to ensure snapshot is visible, but it's only
-	// needed on *nix style file systems.
-	if runtime.GOOS != "windows" {
-		if err := syncDir(parentDir(s.dir)); err != nil {
-			s.logger.Printf("failed syncing parent directory: %s", err)
-			return err
-		}
-	}
-
-	s.logger.Printf("snapshot (ID %s) written to %s", s.meta.ID, dstDir)
-	return nil
+	return s.processFullSnapshot(fullSnap)
 }
 
 func (s *Sink) processIncrementalSnapshot(incSnap *IncrementalSnapshot) error {
 	s.logger.Printf("processing incremental snapshot")
-	if err := os.WriteFile(s.walFilePath, incSnap.Data, 0644); err != nil {
+
+	incSnapDir := tmpName(filepath.Join(s.curGenDir, s.meta.ID))
+	walPath := filepath.Join(incSnapDir, snapWALFile)
+	if err := os.WriteFile(walPath, incSnap.Data, 0644); err != nil {
 		return fmt.Errorf("error writing WAL data: %v", err)
 	}
-	if err := s.writeMeta(false); err != nil {
+	if err := s.writeMeta(incSnapDir, false); err != nil {
 		return err
 	}
 
+	// We're done! Move the directory into place.
+	dstDir, err := moveFromTmpSync(incSnapDir)
+	if err != nil {
+		s.logger.Printf("failed to move incremental snapshot directory into place: %s", err)
+		return err
+	}
+	s.logger.Printf("incremental snapshot (ID %s) written to %s", s.meta.ID, dstDir)
 	return nil
 }
 
 func (s *Sink) processFullSnapshot(fullSnap *FullSnapshot) error {
 	s.logger.Printf("processing full snapshot")
-	ngDir, err := s.str.GetNextGenerationDir()
-	if err != nil {
-		return fmt.Errorf("error getting next generation directory: %v", err)
-	}
-	// XXXX actually make it temp dir presumably
-	newDir := filepath.Join(ngDir, filepath.Base(s.dir))
-	if err := os.MkdirAll(newDir, 0755); err != nil {
+
+	// We need a new generational directory, and need to create the first
+	// snapshot in that directory.
+	nextGenDir := tmpName(s.nextGenDir)
+	if err := os.MkdirAll(nextGenDir, 0755); err != nil {
 		return fmt.Errorf("error creating full snapshot directory: %v", err)
 	}
-	if err := os.Rename(s.dir, newDir); err != nil {
-		return fmt.Errorf("error moving full snapshot directory to %s: %v", newDir, err)
-	}
-	s.dir = newDir
 
 	// Write out base SQLite file.
+	sqliteBasePath := filepath.Join(nextGenDir, baseSqliteFile)
 	dbInfo := fullSnap.GetDb()
 	if dbInfo == nil {
 		return fmt.Errorf("got nil DB info")
 	}
-	sqliteBaseFD, err := os.Create(filepath.Join(s.dir, baseSqliteFile))
+	sqliteBaseFD, err := os.Create(sqliteBasePath)
 	if err != nil {
 		return fmt.Errorf("error creating SQLite file: %v", err)
 	}
@@ -174,14 +140,14 @@ func (s *Sink) processFullSnapshot(fullSnap *FullSnapshot) error {
 	}
 	sqliteBaseFD.Close()
 
-	// Write out WALs.
+	// Write out any WALs.
 	var walFiles []string
 	for i, wal := range fullSnap.GetWals() {
 		if wal == nil {
 			return fmt.Errorf("got nil WAL")
 		}
 
-		walName := filepath.Join(s.dir, baseSqliteWALFile+fmt.Sprintf("%d", i))
+		walName := filepath.Join(nextGenDir, baseSqliteWALFile+fmt.Sprintf("%d", i))
 		walFD, err := os.Create(walName)
 		if err != nil {
 			return fmt.Errorf("error creating WAL file: %v", err)
@@ -194,18 +160,31 @@ func (s *Sink) processFullSnapshot(fullSnap *FullSnapshot) error {
 	}
 
 	// Checkpoint the WAL files into the base SQLite file
-	if err := db.ReplayWAL(filepath.Join(s.dir, baseSqliteFile), walFiles, false); err != nil {
+	if err := db.ReplayWAL(sqliteBasePath, walFiles, false); err != nil {
 		return fmt.Errorf("error checkpointing WAL: %v", err)
 	}
 
-	if err := s.writeMeta(false); err != nil {
+	// Now create the first snapshot directory in the new generation.
+	snapDir := filepath.Join(nextGenDir, s.meta.ID)
+	if err := os.MkdirAll(snapDir, 0755); err != nil {
+		return fmt.Errorf("error creating full snapshot directory: %v", err)
+	}
+	if err := s.writeMeta(snapDir, true); err != nil {
 		return err
 	}
+
+	// We're done! Move the directory into place.
+	dstDir, err := moveFromTmpSync(nextGenDir)
+	if err != nil {
+		s.logger.Printf("failed to move full snapshot directory into place: %s", err)
+		return err
+	}
+	s.logger.Printf("full snapshot (ID %s) written to %s", s.meta.ID, dstDir)
 	return nil
 }
 
-func (s *Sink) writeMeta(full bool) error {
-	fh, err := os.Create(filepath.Join(s.dir, metaFileName))
+func (s *Sink) writeMeta(dir string, full bool) error {
+	fh, err := os.Create(filepath.Join(dir, metaFileName))
 	if err != nil {
 		return err
 	}
@@ -224,6 +203,11 @@ func (s *Sink) writeMeta(full bool) error {
 	return fh.Close()
 }
 
+func (s *Sink) cleanup() error {
+	s.dataFD.Close()
+	return os.Remove(s.dataFD.Name())
+}
+
 func parentDir(dir string) string {
 	return filepath.Dir(dir)
 }
@@ -236,10 +220,18 @@ func nonTmpName(path string) string {
 	return strings.TrimSuffix(path, tmpSuffix)
 }
 
-func moveFromTmp(src string) (string, error) {
+func moveFromTmpSync(src string) (string, error) {
 	dst := nonTmpName(src)
 	if err := os.Rename(src, dst); err != nil {
 		return "", err
+	}
+
+	// Sync parent directory to ensure snapshot is visible, but it's only
+	// needed on *nix style file systems.
+	if runtime.GOOS != "windows" {
+		if err := syncDir(parentDir(dst)); err != nil {
+			return "", err
+		}
 	}
 	return dst, nil
 }
