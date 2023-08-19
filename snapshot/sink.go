@@ -48,7 +48,8 @@ func (s *Sink) Open() error {
 	return nil
 }
 
-// Write writes snapshot data to the sink.
+// Write writes snapshot data to the sink. The snapshot is not in place
+// until Close is called.
 func (s *Sink) Write(p []byte) (n int, err error) {
 	return s.dataFD.Write(p)
 }
@@ -142,7 +143,9 @@ func (s *Sink) processFullSnapshot(fullSnap *FullSnapshot) error {
 	if _, err := io.CopyN(sqliteBaseFD, s.dataFD, dbInfo.Size); err != nil {
 		return fmt.Errorf("error writing SQLite file data: %v", err)
 	}
-	sqliteBaseFD.Close()
+	if err := sqliteBaseFD.Close(); err != nil {
+		return fmt.Errorf("error closing SQLite file: %v", err)
+	}
 
 	// Write out any WALs.
 	var walFiles []string
@@ -159,7 +162,9 @@ func (s *Sink) processFullSnapshot(fullSnap *FullSnapshot) error {
 		if _, err := io.CopyN(walFD, s.dataFD, wal.Size); err != nil {
 			return fmt.Errorf("error writing WAL file data: %v", err)
 		}
-		walFD.Close()
+		if err := walFD.Close(); err != nil {
+			return fmt.Errorf("error closing WAL file: %v", err)
+		}
 		walFiles = append(walFiles, walName)
 	}
 
