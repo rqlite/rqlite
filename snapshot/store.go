@@ -167,9 +167,10 @@ func (s *Store) Dir() string {
 // FullNeeded returns true if the next type of snapshot needed
 // by the Store is a full snapshot.
 func (s *Store) FullNeeded() bool {
-	// Return true if the current generation's directory does
-	// not include a SQLite base file
 	currGenDir, err := s.GetCurrentGenerationDir()
+	if !dirExists(currGenDir) {
+		return true
+	}
 	if err != nil {
 		return false
 	}
@@ -306,6 +307,11 @@ func isTmpName(name string) bool {
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return !os.IsNotExist(err)
+}
+
+func dirExists(path string) bool {
+	stat, err := os.Stat(path)
+	return err == nil && stat.IsDir()
 }
 
 // snapshotName generates a name for the snapshot.

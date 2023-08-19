@@ -109,6 +109,10 @@ func (s *Sink) processIncrementalSnapshot(incSnap *IncrementalSnapshot) error {
 	s.logger.Printf("processing incremental snapshot")
 
 	incSnapDir := tmpName(filepath.Join(s.curGenDir, s.meta.ID))
+	if err := os.Mkdir(incSnapDir, 0755); err != nil {
+		return fmt.Errorf("error creating incremental snapshot directory: %v", err)
+	}
+
 	walPath := filepath.Join(incSnapDir, snapWALFile)
 	if err := os.WriteFile(walPath, incSnap.Data, 0644); err != nil {
 		return fmt.Errorf("error writing WAL data: %v", err)
@@ -195,6 +199,12 @@ func (s *Sink) processFullSnapshot(fullSnap *FullSnapshot) error {
 		s.logger.Printf("failed to move full snapshot directory into place: %s", err)
 		return err
 	}
+
+	// XXXX need to clear out any snaphot directories older than the one
+	// we just created. Maybe this should be done at startup? It's an edge case.
+	// Yeah, this is why empty snap directories need the "full" flag.
+	// Any snapshot directories older than a full snapshot directory can be
+	// removed.
 	s.logger.Printf("full snapshot (ID %s) written to %s", s.meta.ID, dstDir)
 	return nil
 }
