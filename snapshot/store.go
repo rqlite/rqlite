@@ -75,13 +75,26 @@ func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configu
 	if err != nil {
 		return nil, err
 	}
-	snapshotName := snapshotName(term, index)
-	snapshotPath := filepath.Join(currGenDir, snapshotName+tmpSuffix)
-	if err := os.MkdirAll(snapshotPath, 0755); err != nil {
+	nextGenDir, err := s.GetNextGenerationDir()
+	if err != nil {
 		return nil, err
 	}
 
-	return nil, nil
+	meta := &Meta{
+		SnapshotMeta: raft.SnapshotMeta{
+			Index:              index,
+			Term:               term,
+			Configuration:      configuration,
+			ConfigurationIndex: configurationIndex,
+			Version:            version,
+		},
+	}
+
+	sink := NewSink(s.rootDir, currGenDir, nextGenDir, meta)
+	if err := sink.Open(); err != nil {
+		return nil, fmt.Errorf("failed to open Sink: %v", err)
+	}
+	return sink, nil
 }
 
 // List returns a list of all the snapshots in the Store.

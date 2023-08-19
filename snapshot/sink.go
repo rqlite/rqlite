@@ -20,7 +20,8 @@ type Sink struct {
 	nextGenDir string
 	meta       *Meta
 
-	dataFD *os.File
+	nWritten int64
+	dataFD   *os.File
 
 	logger *log.Logger
 	closed bool
@@ -51,7 +52,9 @@ func (s *Sink) Open() error {
 // Write writes snapshot data to the sink. The snapshot is not in place
 // until Close is called.
 func (s *Sink) Write(p []byte) (n int, err error) {
-	return s.dataFD.Write(p)
+	n, err = s.dataFD.Write(p)
+	s.nWritten += int64(n)
+	return
 }
 
 // ID returns the ID of the snapshot being written.
@@ -76,6 +79,10 @@ func (s *Sink) Close() error {
 }
 
 func (s *Sink) processSnapshotData() error {
+	if s.nWritten == 0 {
+		return nil
+	}
+
 	if _, err := s.dataFD.Seek(0, 0); err != nil {
 		return err
 	}
