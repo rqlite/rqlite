@@ -19,7 +19,9 @@ func Test_NewSinkOpenCloseOK(t *testing.T) {
 	mustCreateDir(workDir)
 	currGenDir := filepath.Join(tmpDir, "curr")
 	nextGenDir := filepath.Join(tmpDir, "next")
-	s := NewSink(workDir, currGenDir, nextGenDir, &Meta{})
+	str := mustNewStoreForSinkTest(t)
+
+	s := NewSink(str, workDir, currGenDir, nextGenDir, &Meta{})
 	if err := s.Open(); err != nil {
 		t.Fatal(err)
 	}
@@ -34,7 +36,9 @@ func Test_SinkFullSnapshot(t *testing.T) {
 	mustCreateDir(workDir)
 	currGenDir := filepath.Join(tmpDir, "curr")
 	nextGenDir := filepath.Join(tmpDir, "next")
-	s := NewSink(workDir, currGenDir, nextGenDir, makeMeta("snap-1234", 3, 2, 1))
+	str := mustNewStoreForSinkTest(t)
+
+	s := NewSink(str, workDir, currGenDir, nextGenDir, makeMeta("snap-1234", 3, 2, 1))
 	if err := s.Open(); err != nil {
 		t.Fatal(err)
 	}
@@ -44,12 +48,12 @@ func Test_SinkFullSnapshot(t *testing.T) {
 	wal1 := "testdata/db-and-wals/wal-01"
 	wal2 := "testdata/db-and-wals/wal-02"
 	wal3 := "testdata/db-and-wals/wal-03"
-	str, err := NewFullStream(sqliteFile, wal0, wal1, wal2, wal3)
+	stream, err := NewFullStream(sqliteFile, wal0, wal1, wal2, wal3)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if io.Copy(s, str); err != nil {
+	if io.Copy(s, stream); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Close(); err != nil {
@@ -91,18 +95,20 @@ func Test_SinkIncrementalSnapshot(t *testing.T) {
 	currGenDir := filepath.Join(tmpDir, "curr")
 	mustCreateDir(currGenDir)
 	nextGenDir := filepath.Join(tmpDir, "next")
-	s := NewSink(workDir, currGenDir, nextGenDir, makeMeta("snap-1234", 3, 2, 1))
+	str := mustNewStoreForSinkTest(t)
+
+	s := NewSink(str, workDir, currGenDir, nextGenDir, makeMeta("snap-1234", 3, 2, 1))
 	if err := s.Open(); err != nil {
 		t.Fatal(err)
 	}
 
 	walData := mustReadFile("testdata/db-and-wals/wal-00")
-	str, err := NewIncrementalStream(walData)
+	stream, err := NewIncrementalStream(walData)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if io.Copy(s, str); err != nil {
+	if io.Copy(s, stream); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Close(); err != nil {
@@ -125,6 +131,15 @@ func Test_SinkIncrementalSnapshot(t *testing.T) {
 	}
 
 	// confirm that snapshot is valid (incremental?, contains meta?)
+}
+
+func mustNewStoreForSinkTest(t *testing.T) *Store {
+	tmpDir := t.TempDir()
+	str, err := NewStore(tmpDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return str
 }
 
 func mustCreateDir(path string) {

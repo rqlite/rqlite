@@ -13,9 +13,12 @@ import (
 	"time"
 
 	"github.com/hashicorp/raft"
+	"github.com/rqlite/rqlite/db"
 )
 
 const (
+	minSnapshotRetain = 2
+
 	generationsDir  = "generations"
 	firstGeneration = "0000000001"
 
@@ -90,7 +93,7 @@ func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configu
 		},
 	}
 
-	sink := NewSink(s.rootDir, currGenDir, nextGenDir, meta)
+	sink := NewSink(s, s.rootDir, currGenDir, nextGenDir, meta)
 	if err := sink.Open(); err != nil {
 		return nil, fmt.Errorf("failed to open Sink: %v", err)
 	}
@@ -213,12 +216,14 @@ func (s *Store) GetGenerations() ([]string, error) {
 	}
 	var generations []string
 	for _, entry := range entries {
-		if entry.IsDir() {
-			if _, err := strconv.Atoi(entry.Name()); err != nil {
-				continue
-			}
-			generations = append(generations, entry.Name())
+		if !entry.IsDir() || isTmpName(entry.Name()) {
+			continue
 		}
+
+		if _, err := strconv.Atoi(entry.Name()); err != nil {
+			continue
+		}
+		generations = append(generations, entry.Name())
 	}
 	return generations, nil
 }
@@ -234,6 +239,97 @@ func (s *Store) GetCurrentGenerationDir() (string, error) {
 		return filepath.Join(s.generationsDir, firstGeneration), nil
 	}
 	return filepath.Join(s.generationsDir, generations[len(generations)-1]), nil
+}
+
+// Reap reaps old generations, and reaps snapshots within the remaining generation.
+func (s *Store) Reap() error {
+	generations, err := s.GetGenerations()
+	if err != nil {
+		return err
+	}
+
+	if len(generations) < 2 {
+		return nil
+	}
+
+	// Reap all but the last generation.
+	for i := 0; i < len(generations)-1; i++ {
+		genDir := filepath.Join(s.generationsDir, generations[i])
+		if err := os.RemoveAll(genDir); err != nil {
+			return err
+		}
+	}
+
+	currDir, err := s.GetCurrentGenerationDir()
+	if err != nil {
+		return err
+	}
+	_, err = s.reapSnapshots(currDir, 2)
+	return err
+}
+
+// ReapSnapshots removes snapshots that are no longer needed. It does this by
+// checkpointing WAL-based snapshots into the base SQLite file. The function
+// returns the number of snapshots removed, or an error. The retain parameter
+// specifies the number of snapshots to retain.
+func (s *Store) reapSnapshots(dir string, retain int) (int, error) {
+	// s.mu.Lock()
+	// defer s.mu.Unlock()
+
+	if retain < minSnapshotRetain {
+		return 0, ErrRetainCountTooLow
+	}
+
+	snapshots, err := s.getSnapshots(dir)
+	if err != nil {
+		s.logger.Printf("failed to get snapshots: %s", err)
+		return 0, err
+	}
+
+	// Keeping multiple snapshots makes it much easier to reason about the fixing
+	// up the Snapshot store if we crash in the middle of snapshotting or reaping.
+	if len(snapshots) <= retain {
+		return 0, nil
+	}
+
+	// We need to checkpoint the WAL files starting with the oldest snapshot. We'll
+	// do this by opening the base SQLite file and then replaying the WAL files into it.
+	// We'll then delete each snapshot once we've checkpointed it.
+	sort.Sort(metaSlice(snapshots))
+
+	n := 0
+	for _, snap := range snapshots[0 : len(snapshots)-retain] {
+		baseSqliteFilePath := filepath.Join(dir, baseSqliteFile)
+		snapDirPath := filepath.Join(dir, snap.ID)
+		snapWALFilePath := filepath.Join(snapDirPath, snapWALFile)
+		walToCheckpointFilePath := filepath.Join(dir, baseSqliteWALFile)
+
+		// If the snapshot directory doesn't contain a WAL file, then the base SQLite
+		// file is the snapshot state, and there is no checkpointing to do.
+		if fileExists(snapWALFilePath) {
+			// Move the WAL file to beside the base SQLite file
+			if err := os.Rename(snapWALFilePath, walToCheckpointFilePath); err != nil {
+				s.logger.Printf("failed to move WAL file %s: %s", snapWALFilePath, err)
+				return n, err
+			}
+
+			// Checkpoint the WAL file into the base SQLite file
+			if err := db.ReplayWAL(baseSqliteFilePath, []string{walToCheckpointFilePath}, false); err != nil {
+				s.logger.Printf("failed to checkpoint WAL file %s: %s", walToCheckpointFilePath, err)
+				return n, err
+			}
+		}
+
+		// Delete the snapshot directory, since the state is now in the base SQLite file.
+		if err := os.RemoveAll(snapDirPath); err != nil {
+			s.logger.Printf("failed to delete snapshot %s: %s", snap.ID, err)
+			return n, err
+		}
+		n++
+		s.logger.Printf("reaped snapshot %s successfully", snap.ID)
+	}
+
+	return n, nil
 }
 
 // getSnapshots returns a list of all the snapshots in the given directory, sorted from

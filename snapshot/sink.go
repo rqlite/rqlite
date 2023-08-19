@@ -15,6 +15,7 @@ import (
 
 // Sink is a sink for writing snapshot data to a Snapshot store.
 type Sink struct {
+	str        *Store
 	workDir    string
 	curGenDir  string
 	nextGenDir string
@@ -28,8 +29,9 @@ type Sink struct {
 }
 
 // NewSink creates a new Sink object.
-func NewSink(workDir, currGenDir, nextGenDir string, meta *Meta) *Sink {
+func NewSink(str *Store, workDir, currGenDir, nextGenDir string, meta *Meta) *Sink {
 	return &Sink{
+		str:        str,
 		workDir:    workDir,
 		curGenDir:  currGenDir,
 		nextGenDir: nextGenDir,
@@ -75,7 +77,11 @@ func (s *Sink) Close() error {
 	}
 	s.closed = true
 	defer s.cleanup()
-	return s.processSnapshotData()
+	if err := s.processSnapshotData(); err != nil {
+		return err
+	}
+
+	return s.str.Reap()
 }
 
 func (s *Sink) processSnapshotData() error {
