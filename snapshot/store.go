@@ -85,6 +85,7 @@ func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configu
 
 	meta := &Meta{
 		SnapshotMeta: raft.SnapshotMeta{
+			ID:                 snapshotName(term, index),
 			Index:              index,
 			Term:               term,
 			Configuration:      configuration,
