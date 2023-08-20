@@ -275,22 +275,9 @@ func moveFromTmpSync(src string) (string, error) {
 	// Sync parent directory to ensure snapshot is visible, but it's only
 	// needed on *nix style file systems.
 	if runtime.GOOS != "windows" {
-		if err := syncDir(parentDir(dst)); err != nil {
+		if err := syncFile(parentDir(dst)); err != nil {
 			return "", err
 		}
 	}
 	return dst, nil
-}
-
-func syncDir(dir string) error {
-	fh, err := os.Open(dir)
-	if err != nil {
-		return err
-	}
-	defer fh.Close()
-
-	if err := fh.Sync(); err != nil {
-		return err
-	}
-	return fh.Close()
 }

@@ -249,7 +249,7 @@ func (s *Store) GetCurrentGenerationDir() (string, bool, error) {
 
 // Reap reaps old generations, and reaps snapshots within the remaining generation.
 func (s *Store) Reap() error {
-	if err := s.ReapGenerations(); err != nil {
+	if _, err := s.ReapGenerations(); err != nil {
 		return err
 	}
 
@@ -264,21 +264,25 @@ func (s *Store) Reap() error {
 	return nil
 }
 
-func (s *Store) ReapGenerations() error {
+// ReapGenerations removes old generations. It returns the number of generations
+// removed, or an error.
+func (s *Store) ReapGenerations() (int, error) {
 	generations, err := s.GetGenerations()
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if len(generations) == 0 {
-		return nil
+		return 0, nil
 	}
+	n := 0
 	for i := 0; i < len(generations)-1; i++ {
 		genDir := filepath.Join(s.generationsDir, generations[i])
 		if err := os.RemoveAll(genDir); err != nil {
-			return err
+			return n, err
 		}
+		n++
 	}
-	return nil
+	return n, nil
 }
 
 // ReapSnapshots removes snapshots that are no longer needed. It does this by
@@ -311,16 +315,37 @@ func (s *Store) ReapSnapshots(dir string, retain int) (int, error) {
 	sort.Sort(metaSlice(snapshots))
 
 	n := 0
+	baseSqliteFilePath := filepath.Join(dir, baseSqliteFile)
+
 	for _, snap := range snapshots[0 : len(snapshots)-retain] {
-		baseSqliteFilePath := filepath.Join(dir, baseSqliteFile)
-		snapDirPath := filepath.Join(dir, snap.ID)
-		snapWALFilePath := filepath.Join(snapDirPath, snapWALFile)
-		walToCheckpointFilePath := filepath.Join(dir, baseSqliteWALFile)
+		snapDirPath := filepath.Join(dir, snap.ID)                       // Path to the snapshot directory
+		snapWALFilePath := filepath.Join(snapDirPath, snapWALFile)       // Path to the WAL file in the snapshot
+		walToCheckpointFilePath := filepath.Join(dir, baseSqliteWALFile) // Path to the WAL file to checkpoint
+		snapWALFilePathCopy := walToCheckpointFilePath + snap.ID
 
 		// If the snapshot directory doesn't contain a WAL file, then the base SQLite
 		// file is the snapshot state, and there is no checkpointing to do.
 		if fileExists(snapWALFilePath) {
-			// Move the WAL file to beside the base SQLite file
+			// Copy the WAL file from the snapshot to a temporary location beside the base SQLite file.
+			// We do this so that we only delete the snapshot directory once we can be sure that
+			// we've copied it out fully. Renaming is not atomic on every OS, so let's be sure. We
+			// also use a temporary file name, so we know where the WAL came from if we exit here
+			// and need to clean up on a restart.
+			if err := copyFileSync(snapWALFilePath, snapWALFilePathCopy); err != nil {
+				s.logger.Printf("failed to copy WAL file from snapshot %s: %s", snapWALFilePath, err)
+				return n, err
+			}
+
+			// Delete the snapshot directory, since we have what we need now.
+			if err := os.RemoveAll(snapDirPath); err != nil {
+				s.logger.Printf("failed to delete snapshot %s: %s", snap.ID, err)
+				return n, err
+			}
+			if err := syncFile(dir); err != nil {
+				s.logger.Printf("failed to sync directory containing snapshots: %s", err)
+			}
+
+			// Move the WAL file to the correct name for checkpointing.
 			if err := os.Rename(snapWALFilePath, walToCheckpointFilePath); err != nil {
 				s.logger.Printf("failed to move WAL file %s: %s", snapWALFilePath, err)
 				return n, err
@@ -333,11 +358,6 @@ func (s *Store) ReapSnapshots(dir string, retain int) (int, error) {
 			}
 		}
 
-		// Delete the snapshot directory, since the state is now in the base SQLite file.
-		if err := os.RemoveAll(snapDirPath); err != nil {
-			s.logger.Printf("failed to delete snapshot %s: %s", snap.ID, err)
-			return n, err
-		}
 		n++
 		s.logger.Printf("reaped snapshot %s successfully", snap.ID)
 	}
@@ -421,6 +441,33 @@ func fileExists(path string) bool {
 func dirExists(path string) bool {
 	stat, err := os.Stat(path)
 	return err == nil && stat.IsDir()
+}
+
+func copyFileSync(src, dst string) error {
+	srcFd, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer srcFd.Close()
+	dstFd, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer dstFd.Close()
+	if err := dstFd.Sync(); err != nil {
+		return err
+	}
+	_, err = io.Copy(dstFd, srcFd)
+	return err
+}
+
+func syncFile(path string) error {
+	fd, err := os.OpenFile(path, os.O_RDWR, 0644)
+	if err != nil {
+		return err
+	}
+	defer fd.Close()
+	return fd.Sync()
 }
 
 // snapshotName generates a name for the snapshot.
