@@ -3,14 +3,11 @@ package snapshot
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
-
-	"github.com/rqlite/rqlite/db"
 )
 
 // Sink is a sink for writing snapshot data to a Snapshot store.
@@ -150,47 +147,10 @@ func (s *Sink) processFullSnapshot(fullSnap *FullSnapshot) error {
 		return fmt.Errorf("error creating full snapshot directory: %v", err)
 	}
 
-	// Write out base SQLite file.
+	// Rebuild the SQLite database from the snapshot data.
 	sqliteBasePath := filepath.Join(nextGenDir, baseSqliteFile)
-	dbInfo := fullSnap.GetDb()
-	if dbInfo == nil {
-		return fmt.Errorf("got nil DB info")
-	}
-	sqliteBaseFD, err := os.Create(sqliteBasePath)
-	if err != nil {
-		return fmt.Errorf("error creating SQLite file: %v", err)
-	}
-	if _, err := io.CopyN(sqliteBaseFD, s.dataFD, dbInfo.Size); err != nil {
-		return fmt.Errorf("error writing SQLite file data: %v", err)
-	}
-	if err := sqliteBaseFD.Close(); err != nil {
-		return fmt.Errorf("error closing SQLite file: %v", err)
-	}
-
-	// Write out any WALs.
-	var walFiles []string
-	for i, wal := range fullSnap.GetWals() {
-		if wal == nil {
-			return fmt.Errorf("got nil WAL")
-		}
-
-		walName := filepath.Join(nextGenDir, baseSqliteWALFile+fmt.Sprintf("%d", i))
-		walFD, err := os.Create(walName)
-		if err != nil {
-			return fmt.Errorf("error creating WAL file: %v", err)
-		}
-		if _, err := io.CopyN(walFD, s.dataFD, wal.Size); err != nil {
-			return fmt.Errorf("error writing WAL file data: %v", err)
-		}
-		if err := walFD.Close(); err != nil {
-			return fmt.Errorf("error closing WAL file: %v", err)
-		}
-		walFiles = append(walFiles, walName)
-	}
-
-	// Checkpoint the WAL files into the base SQLite file
-	if err := db.ReplayWAL(sqliteBasePath, walFiles, false); err != nil {
-		return fmt.Errorf("error checkpointing WAL: %v", err)
+	if err := ReplayDB(fullSnap, s.dataFD, sqliteBasePath); err != nil {
+		return fmt.Errorf("error replaying DB: %v", err)
 	}
 
 	// Now create the first snapshot directory in the new generation.
@@ -202,7 +162,7 @@ func (s *Sink) processFullSnapshot(fullSnap *FullSnapshot) error {
 		return err
 	}
 
-	// We're done! Move the directory into place.
+	// We're done! Move the generational directory into place.
 	dstDir, err := moveFromTmpSync(nextGenDir)
 	if err != nil {
 		s.logger.Printf("failed to move full snapshot directory into place: %s", err)

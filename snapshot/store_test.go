@@ -1,10 +1,13 @@
 package snapshot
 
 import (
+	"bytes"
+	"io"
 	"strings"
 	"testing"
 
 	"github.com/hashicorp/raft"
+	"github.com/rqlite/rqlite/db"
 )
 
 func Test_NewStore(t *testing.T) {
@@ -60,9 +63,9 @@ func Test_NewStore_ListEmpty(t *testing.T) {
 }
 
 // Test_WALSnapshotStore_CreateFull performs detailed testing of the
-// snapshot creation process.
+// snapshot creation process. It is critical that snapshots are created
+// correctly, so this test is thorough.
 func Test_Store_CreateFullThenIncremental(t *testing.T) {
-
 	checkSnapshotCount := func(s *Store, exp int) *raft.SnapshotMeta {
 		snaps, err := s.List()
 		if err != nil {
@@ -92,6 +95,7 @@ func Test_Store_CreateFullThenIncremental(t *testing.T) {
 		t.Fatalf("failed to create 1st snapshot sink: %s", err)
 	}
 
+	//////////////////////////////////////////////////////////////////////////
 	// Create a full snapshot and write it to the sink.
 	fullSnap := NewFullSnapshot("testdata/db-and-wals/backup.db")
 	if err := fullSnap.Persist(sink); err != nil {
@@ -109,11 +113,31 @@ func Test_Store_CreateFullThenIncremental(t *testing.T) {
 	}
 
 	// Open the latest snapshot and check that it's correct.
-	_, _, err = str.Open(meta.ID)
+	_, rc, err := str.Open(meta.ID)
 	if err != nil {
 		t.Fatalf("failed to open snapshot %s: %s", meta.ID, err)
 	}
+	streamHdr, _, err := NewStreamHeaderFromReader(rc)
+	if err != nil {
+		t.Fatalf("error reading stream header: %v", err)
+	}
+	streamSnap := streamHdr.GetFullSnapshot()
+	if streamSnap == nil {
+		t.Fatal("got nil FullSnapshot")
+	}
+	dbInfo := streamSnap.GetDb()
+	if dbInfo == nil {
+		t.Fatal("got nil DB info")
+	}
+	dbReader := io.LimitReader(rc, dbInfo.Size)
+	if !compareReaderToFile(dbReader, "testdata/db-and-wals/backup.db") {
+		t.Fatalf("database file does not match what is in snapshot")
+	}
+	if err := rc.Close(); err != nil {
+		t.Fatalf("failed to close snapshot reader: %s", err)
+	}
 
+	//////////////////////////////////////////////////////////////////////////
 	// Incremental snapshot next
 	sink, err = str.Create(2, 55, 66, testConfig1, 4, nil)
 	if err != nil {
@@ -130,6 +154,137 @@ func Test_Store_CreateFullThenIncremental(t *testing.T) {
 	meta = checkSnapshotCount(str, 1)
 	if meta.Index != 55 || meta.Term != 66 {
 		t.Fatalf("unexpected snapshot metadata: %+v", meta)
+	}
+
+	// Open the latest snapshot again, and recreate the database so we
+	// can check its contents.
+	_, rc, err = str.Open(meta.ID)
+	if err != nil {
+		t.Fatalf("failed to open snapshot %s: %s", meta.ID, err)
+	}
+	streamHdr, _, err = NewStreamHeaderFromReader(rc)
+	if err != nil {
+		t.Fatalf("error reading stream header: %v", err)
+	}
+	streamSnap = streamHdr.GetFullSnapshot()
+	if streamSnap == nil {
+		t.Fatal("got nil FullSnapshot")
+	}
+	tmpFile := t.TempDir() + "/db"
+	if err := ReplayDB(streamSnap, rc, tmpFile); err != nil {
+		t.Fatalf("failed to replay database: %s", err)
+	}
+	checkDB, err := db.Open(tmpFile, false, true)
+	if err != nil {
+		t.Fatalf("failed to open database: %s", err)
+	}
+	defer checkDB.Close()
+	rows, err := checkDB.QueryStringStmt("SELECT * FROM foo")
+	if err != nil {
+		t.Fatalf("failed to query database: %s", err)
+	}
+	if exp, got := `[{"columns":["id","value"],"types":["integer","text"],"values":[[1,"Row 0"]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("unexpected results for query, exp %s, got %s", exp, got)
+	}
+
+	//////////////////////////////////////////////////////////////////////////
+	// Do it again!
+	sink, err = str.Create(2, 77, 88, testConfig1, 4, nil)
+	if err != nil {
+		t.Fatalf("failed to create 2nd snapshot sink: %s", err)
+	}
+	walData = mustReadFile("testdata/db-and-wals/wal-01")
+	incSnap = NewWALSnapshot(walData)
+	if err := incSnap.Persist(sink); err != nil {
+		t.Fatalf("failed to persist incremental snapshot: %s", err)
+	}
+	if err := sink.Close(); err != nil {
+		t.Fatalf("failed to close sink: %s", err)
+	}
+	meta = checkSnapshotCount(str, 1)
+	if meta.Index != 77 || meta.Term != 88 {
+		t.Fatalf("unexpected snapshot metadata: %+v", meta)
+	}
+
+	// Open the latest snapshot again, and recreate the database so we
+	// can check its contents.
+	_, rc, err = str.Open(meta.ID)
+	if err != nil {
+		t.Fatalf("failed to open snapshot %s: %s", meta.ID, err)
+	}
+	streamHdr, _, err = NewStreamHeaderFromReader(rc)
+	if err != nil {
+		t.Fatalf("error reading stream header: %v", err)
+	}
+	streamSnap = streamHdr.GetFullSnapshot()
+	if streamSnap == nil {
+		t.Fatal("got nil FullSnapshot")
+	}
+	tmpFile = t.TempDir() + "/db"
+	if err := ReplayDB(streamSnap, rc, tmpFile); err != nil {
+		t.Fatalf("failed to replay database: %s", err)
+	}
+	checkDB, err = db.Open(tmpFile, false, true)
+	if err != nil {
+		t.Fatalf("failed to open database: %s", err)
+	}
+	defer checkDB.Close()
+	rows, err = checkDB.QueryStringStmt("SELECT * FROM foo")
+	if err != nil {
+		t.Fatalf("failed to query database: %s", err)
+	}
+	if exp, got := `[{"columns":["id","value"],"types":["integer","text"],"values":[[1,"Row 0"],[2,"Row 1"]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("unexpected results for query, exp %s, got %s", exp, got)
+	}
+
+	//////////////////////////////////////////////////////////////////////////
+	// One last time, after a reaping took place in the middle.
+	sink, err = str.Create(2, 100, 200, testConfig1, 4, nil)
+	if err != nil {
+		t.Fatalf("failed to create 2nd snapshot sink: %s", err)
+	}
+	walData = mustReadFile("testdata/db-and-wals/wal-02")
+	incSnap = NewWALSnapshot(walData)
+	if err := incSnap.Persist(sink); err != nil {
+		t.Fatalf("failed to persist incremental snapshot: %s", err)
+	}
+	if err := sink.Close(); err != nil {
+		t.Fatalf("failed to close sink: %s", err)
+	}
+	meta = checkSnapshotCount(str, 1)
+	if meta.Index != 100 || meta.Term != 200 {
+		t.Fatalf("unexpected snapshot metadata: %+v", meta)
+	}
+
+	// Open the latest snapshot again, and recreate the database so we
+	// can check its contents.
+	_, rc, err = str.Open(meta.ID)
+	if err != nil {
+		t.Fatalf("failed to open snapshot %s: %s", meta.ID, err)
+	}
+	streamHdr, _, err = NewStreamHeaderFromReader(rc)
+	if err != nil {
+		t.Fatalf("error reading stream header: %v", err)
+	}
+	streamSnap = streamHdr.GetFullSnapshot()
+	if streamSnap == nil {
+		t.Fatal("got nil FullSnapshot")
+	}
+	tmpFile = t.TempDir() + "/db"
+	if err := ReplayDB(streamSnap, rc, tmpFile); err != nil {
+		t.Fatalf("failed to replay database: %s", err)
+	}
+	checkDB, err = db.Open(tmpFile, false, true)
+	if err != nil {
+		t.Fatalf("failed to open database: %s", err)
+	}
+	defer checkDB.Close()
+	rows, err = checkDB.QueryStringStmt("SELECT * FROM foo")
+	if err != nil {
+		t.Fatalf("failed to query database: %s", err)
+	}
+	if exp, got := `[{"columns":["id","value"],"types":["integer","text"],"values":[[1,"Row 0"],[2,"Row 1"],[3,"Row 2"]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("unexpected results for query, exp %s, got %s", exp, got)
 	}
 }
 
@@ -206,6 +361,20 @@ func Test_Store_ReapGenerations(t *testing.T) {
 	testReapsOK(10)
 	testGenCountIs(1)
 	testCurrGenDirIs(nextGenDir)
+}
+
+func compareReaderToFile(r io.Reader, path string) bool {
+	b := mustReadFile(path)
+	rb := mustReadAll(r)
+	return bytes.Equal(b, rb)
+}
+
+func mustReadAll(r io.Reader) []byte {
+	b, err := io.ReadAll(r)
+	if err != nil {
+		panic(err)
+	}
+	return b
 }
 
 // Test_Store_Reaping tests that the snapshot store correctly

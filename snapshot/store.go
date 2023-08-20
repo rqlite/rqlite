@@ -338,16 +338,12 @@ func (s *Store) ReapSnapshots(dir string, retain int) (int, error) {
 			}
 
 			// Delete the snapshot directory, since we have what we need now.
-			if err := os.RemoveAll(snapDirPath); err != nil {
-				s.logger.Printf("failed to delete snapshot %s: %s", snap.ID, err)
-				return n, err
-			}
-			if err := syncDir(dir); err != nil {
-				s.logger.Printf("failed to sync directory containing snapshots: %s", err)
+			if err := removeDirSync(snapDirPath); err != nil {
+				s.logger.Printf("failed to remove incremental snapshot directory %s: %s", snapDirPath, err)
 			}
 
 			// Move the WAL file to the correct name for checkpointing.
-			if err := os.Rename(snapWALFilePath, walToCheckpointFilePath); err != nil {
+			if err := os.Rename(snapWALFilePathCopy, walToCheckpointFilePath); err != nil {
 				s.logger.Printf("failed to move WAL file %s: %s", snapWALFilePath, err)
 				return n, err
 			}
@@ -356,6 +352,10 @@ func (s *Store) ReapSnapshots(dir string, retain int) (int, error) {
 			if err := db.ReplayWAL(baseSqliteFilePath, []string{walToCheckpointFilePath}, false); err != nil {
 				s.logger.Printf("failed to checkpoint WAL file %s: %s", walToCheckpointFilePath, err)
 				return n, err
+			}
+		} else {
+			if err := removeDirSync(snapDirPath); err != nil {
+				s.logger.Printf("failed to remove full snapshot directory %s: %s", snapDirPath, err)
 			}
 		}
 
@@ -461,13 +461,11 @@ func copyFileSync(src, dst string) error {
 	return err
 }
 
-func syncFile(path string) error {
-	fd, err := os.OpenFile(path, os.O_RDWR, 0644)
-	if err != nil {
+func removeDirSync(dir string) error {
+	if err := os.RemoveAll(dir); err != nil {
 		return err
 	}
-	defer fd.Close()
-	return fd.Sync()
+	return syncDir(filepath.Dir(dir))
 }
 
 func syncDir(dir string) error {
