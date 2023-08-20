@@ -74,13 +74,18 @@ func NewStore(dir string) (*Store, error) {
 // Create creates a new Sink object, ready for writing a snapshot.
 func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configuration raft.Configuration,
 	configurationIndex uint64, trans raft.Transport) (raft.SnapshotSink, error) {
-	currGenDir, err := s.GetCurrentGenerationDir()
+	currGenDir, ok, err := s.GetCurrentGenerationDir()
 	if err != nil {
 		return nil, err
 	}
 	nextGenDir, err := s.GetNextGenerationDir()
 	if err != nil {
 		return nil, err
+	}
+	if !ok {
+		// With an empty store, the snapshot will be written to the same directory
+		// regardless of whether it's a full or incremental snapshot.
+		currGenDir = nextGenDir
 	}
 
 	meta := &Meta{
@@ -103,9 +108,12 @@ func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configu
 
 // List returns a list of all the snapshots in the Store.
 func (s *Store) List() ([]*raft.SnapshotMeta, error) {
-	gen, err := s.GetCurrentGenerationDir()
+	gen, ok, err := s.GetCurrentGenerationDir()
 	if err != nil {
 		return nil, err
+	}
+	if !ok {
+		return nil, nil
 	}
 	snapshots, err := s.getSnapshots(gen)
 	if err != nil {
@@ -171,14 +179,11 @@ func (s *Store) Dir() string {
 // FullNeeded returns true if the next type of snapshot needed
 // by the Store is a full snapshot.
 func (s *Store) FullNeeded() bool {
-	currGenDir, err := s.GetCurrentGenerationDir()
-	if !dirExists(currGenDir) {
-		return true
-	}
+	currGenDir, ok, err := s.GetCurrentGenerationDir()
 	if err != nil {
 		return false
 	}
-	return !fileExists(filepath.Join(currGenDir, baseSqliteFile))
+	return !ok || !fileExists(filepath.Join(currGenDir, baseSqliteFile))
 }
 
 // GetNextGeneration returns the name of the next generation.
@@ -208,7 +213,7 @@ func (s *Store) GetNextGenerationDir() (string, error) {
 	return filepath.Join(s.generationsDir, nextGen), nil
 }
 
-// GetGenerations returns a list of all the generations, sorted
+// GetGenerations returns a list of all existing generations, sorted
 // from oldest to newest.
 func (s *Store) GetGenerations() ([]string, error) {
 	entries, err := os.ReadDir(s.generationsDir)
@@ -230,23 +235,42 @@ func (s *Store) GetGenerations() ([]string, error) {
 }
 
 // GetCurrentGenerationDir returns the directory path of the current generation.
-// It is not guaranteed to exist.
-func (s *Store) GetCurrentGenerationDir() (string, error) {
+// If there are no generations, the function returns false, but no error.
+func (s *Store) GetCurrentGenerationDir() (string, bool, error) {
 	generations, err := s.GetGenerations()
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 	if len(generations) == 0 {
-		return filepath.Join(s.generationsDir, firstGeneration), nil
+		return "", false, nil
 	}
-	return filepath.Join(s.generationsDir, generations[len(generations)-1]), nil
+	return filepath.Join(s.generationsDir, generations[len(generations)-1]), true, nil
 }
 
 // Reap reaps old generations, and reaps snapshots within the remaining generation.
 func (s *Store) Reap() error {
+	if err := s.ReapGenerations(); err != nil {
+		return err
+	}
+
+	currDir, ok, err := s.GetCurrentGenerationDir()
+	if err != nil {
+		return err
+	}
+	if ok {
+		_, err = s.ReapSnapshots(currDir, 2)
+		return err
+	}
+	return nil
+}
+
+func (s *Store) ReapGenerations() error {
 	generations, err := s.GetGenerations()
 	if err != nil {
 		return err
+	}
+	if len(generations) == 0 {
+		return nil
 	}
 	for i := 0; i < len(generations)-1; i++ {
 		genDir := filepath.Join(s.generationsDir, generations[i])
@@ -254,20 +278,14 @@ func (s *Store) Reap() error {
 			return err
 		}
 	}
-
-	currDir, err := s.GetCurrentGenerationDir()
-	if err != nil {
-		return err
-	}
-	_, err = s.reapSnapshots(currDir, 2)
-	return err
+	return nil
 }
 
 // ReapSnapshots removes snapshots that are no longer needed. It does this by
 // checkpointing WAL-based snapshots into the base SQLite file. The function
 // returns the number of snapshots removed, or an error. The retain parameter
 // specifies the number of snapshots to retain.
-func (s *Store) reapSnapshots(dir string, retain int) (int, error) {
+func (s *Store) ReapSnapshots(dir string, retain int) (int, error) {
 	// s.mu.Lock()
 	// defer s.mu.Unlock()
 
