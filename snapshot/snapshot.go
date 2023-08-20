@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/db"
 )
 
@@ -26,7 +27,7 @@ func NewFullSnapshot(files ...string) *Snapshot {
 	}
 }
 
-func (s *Snapshot) Persist(sink io.Writer) error {
+func (s *Snapshot) Persist(sink raft.SnapshotSink) error {
 	stream, err := s.OpenStream()
 	if err != nil {
 		return err
@@ -37,8 +38,8 @@ func (s *Snapshot) Persist(sink io.Writer) error {
 	return err
 }
 
-func (s *Snapshot) Release() error {
-	return nil
+func (s *Snapshot) Release() {
+	return
 }
 
 func (s *Snapshot) OpenStream() (*Stream, error) {
