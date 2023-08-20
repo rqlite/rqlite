@@ -81,7 +81,10 @@ func (s *Sink) Close() error {
 		return err
 	}
 
-	return s.str.Reap()
+	if !s.str.noAutoreap {
+		return s.str.Reap()
+	}
+	return nil
 }
 
 func (s *Sink) processSnapshotData() error {
@@ -218,7 +221,7 @@ func (s *Sink) processFullSnapshot(fullSnap *FullSnapshot) error {
 func (s *Sink) writeMeta(dir string, full bool) error {
 	fh, err := os.Create(filepath.Join(dir, metaFileName))
 	if err != nil {
-		return err
+		return fmt.Errorf("error creating meta file: %v", err)
 	}
 	defer fh.Close()
 	s.meta.Full = full
@@ -226,7 +229,7 @@ func (s *Sink) writeMeta(dir string, full bool) error {
 	// Write out as JSON
 	enc := json.NewEncoder(fh)
 	if err = enc.Encode(s.meta); err != nil {
-		return err
+		return fmt.Errorf("failed to encode meta: %v", err)
 	}
 
 	if err := fh.Sync(); err != nil {
@@ -275,7 +278,7 @@ func moveFromTmpSync(src string) (string, error) {
 	// Sync parent directory to ensure snapshot is visible, but it's only
 	// needed on *nix style file systems.
 	if runtime.GOOS != "windows" {
-		if err := syncFile(parentDir(dst)); err != nil {
+		if err := syncDir(parentDir(dst)); err != nil {
 			return "", err
 		}
 	}

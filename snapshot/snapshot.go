@@ -1,6 +1,8 @@
 package snapshot
 
-import "io"
+import (
+	"io"
+)
 
 type Snapshot struct {
 	walData []byte
@@ -19,7 +21,7 @@ func NewFullSnapshot(files ...string) *Snapshot {
 	}
 }
 
-func (s *Snapshot) Persist(sink *Sink) error {
+func (s *Snapshot) Persist(sink io.Writer) error {
 	stream, err := s.OpenStream()
 	if err != nil {
 		return err

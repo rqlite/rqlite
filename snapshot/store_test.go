@@ -3,6 +3,8 @@ package snapshot
 import (
 	"strings"
 	"testing"
+
+	"github.com/hashicorp/raft"
 )
 
 func Test_NewStore(t *testing.T) {
@@ -54,6 +56,80 @@ func Test_NewStore_ListEmpty(t *testing.T) {
 		t.Fatalf("failed to list snapshots: %s", err)
 	} else if len(snaps) != 0 {
 		t.Fatalf("expected 1 snapshots, got %d", len(snaps))
+	}
+}
+
+// Test_WALSnapshotStore_CreateFull performs detailed testing of the
+// snapshot creation process.
+func Test_Store_CreateFullThenIncremental(t *testing.T) {
+
+	checkSnapshotCount := func(s *Store, exp int) *raft.SnapshotMeta {
+		snaps, err := s.List()
+		if err != nil {
+			t.Fatalf("failed to list snapshots: %s", err)
+		}
+		if exp, got := exp, len(snaps); exp != got {
+			t.Fatalf("expected %d snapshots, got %d", exp, got)
+		}
+		if len(snaps) == 0 {
+			return nil
+		}
+		return snaps[0]
+	}
+
+	dir := t.TempDir()
+	str, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create snapshot store: %s", err)
+	}
+	if !str.FullNeeded() {
+		t.Fatalf("expected full snapshots to be needed")
+	}
+
+	testConfig1 := makeTestConfiguration("1", "2")
+	sink, err := str.Create(1, 22, 33, testConfig1, 4, nil)
+	if err != nil {
+		t.Fatalf("failed to create 1st snapshot sink: %s", err)
+	}
+
+	// Create a full snapshot and write it to the sink.
+	fullSnap := NewFullSnapshot("testdata/db-and-wals/backup.db")
+	if err := fullSnap.Persist(sink); err != nil {
+		t.Fatalf("failed to persist full snapshot: %s", err)
+	}
+	if err := sink.Close(); err != nil {
+		t.Fatalf("failed to close sink: %s", err)
+	}
+	if str.FullNeeded() {
+		t.Fatalf("full snapshot still needed")
+	}
+	meta := checkSnapshotCount(str, 1)
+	if meta.Index != 22 || meta.Term != 33 {
+		t.Fatalf("unexpected snapshot metadata: %+v", meta)
+	}
+
+	// Open the latest snapshot and check that it's correct.
+	_, _, err = str.Open(meta.ID)
+	if err != nil {
+		t.Fatalf("failed to open snapshot %s: %s", meta.ID, err)
+	}
+
+	// Incremental snapshot next
+	sink, err = str.Create(2, 55, 66, testConfig1, 4, nil)
+	if err != nil {
+		t.Fatalf("failed to create 2nd snapshot sink: %s", err)
+	}
+	walData := mustReadFile("testdata/db-and-wals/wal-00")
+	incSnap := NewWALSnapshot(walData)
+	if err := incSnap.Persist(sink); err != nil {
+		t.Fatalf("failed to persist incremental snapshot: %s", err)
+	}
+	if err := sink.Close(); err != nil {
+		t.Fatalf("failed to close sink: %s", err)
+	}
+	meta = checkSnapshotCount(str, 1)
+	if meta.Index != 55 || meta.Term != 66 {
+		t.Fatalf("unexpected snapshot metadata: %+v", meta)
 	}
 }
 

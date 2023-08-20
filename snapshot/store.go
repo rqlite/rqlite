@@ -50,7 +50,9 @@ type Meta struct {
 type Store struct {
 	rootDir        string
 	generationsDir string
-	logger         *log.Logger
+
+	noAutoreap bool
+	logger     *log.Logger
 }
 
 // NewStore creates a new Store object.
@@ -250,16 +252,18 @@ func (s *Store) GetCurrentGenerationDir() (string, bool, error) {
 // Reap reaps old generations, and reaps snapshots within the remaining generation.
 func (s *Store) Reap() error {
 	if _, err := s.ReapGenerations(); err != nil {
-		return err
+		return fmt.Errorf("failed to reap generations during reap: %s", err)
 	}
 
 	currDir, ok, err := s.GetCurrentGenerationDir()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get current generation directory during reap: %s", err)
 	}
 	if ok {
 		_, err = s.ReapSnapshots(currDir, 2)
-		return err
+		if err != nil {
+			return fmt.Errorf("failed to reap snapshots during reap: %s", err)
+		}
 	}
 	return nil
 }
@@ -290,16 +294,13 @@ func (s *Store) ReapGenerations() (int, error) {
 // returns the number of snapshots removed, or an error. The retain parameter
 // specifies the number of snapshots to retain.
 func (s *Store) ReapSnapshots(dir string, retain int) (int, error) {
-	// s.mu.Lock()
-	// defer s.mu.Unlock()
-
 	if retain < minSnapshotRetain {
 		return 0, ErrRetainCountTooLow
 	}
 
 	snapshots, err := s.getSnapshots(dir)
 	if err != nil {
-		s.logger.Printf("failed to get snapshots: %s", err)
+		s.logger.Printf("failed to get snapshots in directory %s: %s", dir, err)
 		return 0, err
 	}
 
@@ -341,7 +342,7 @@ func (s *Store) ReapSnapshots(dir string, retain int) (int, error) {
 				s.logger.Printf("failed to delete snapshot %s: %s", snap.ID, err)
 				return n, err
 			}
-			if err := syncFile(dir); err != nil {
+			if err := syncDir(dir); err != nil {
 				s.logger.Printf("failed to sync directory containing snapshots: %s", err)
 			}
 
@@ -387,15 +388,14 @@ func (s *Store) getSnapshots(dir string) ([]*Meta, error) {
 		}
 
 		// Ignore any temporary snapshots
-		snapName := snap.Name()
-		if isTmpName(snapName) {
+		if isTmpName(snap.Name()) {
 			continue
 		}
 
 		// Try to read the meta data
-		meta, err := s.readMeta(snapName)
+		meta, err := s.readMeta(filepath.Join(dir, snap.Name()))
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to read meta for snapshot %s: %s", snap.Name(), err)
 		}
 		snapMeta = append(snapMeta, meta)
 	}
@@ -406,10 +406,10 @@ func (s *Store) getSnapshots(dir string) ([]*Meta, error) {
 	return snapMeta, nil
 }
 
-// readMeta is used to read the meta data for a given named backup
-func (s *Store) readMeta(name string) (*Meta, error) {
+// readMeta is used to read the meta data in a given snapshot directory.
+func (s *Store) readMeta(dir string) (*Meta, error) {
 	// Open the meta file
-	metaPath := filepath.Join(s.rootDir, name, metaFileName)
+	metaPath := filepath.Join(dir, metaFileName)
 	fh, err := os.Open(metaPath)
 	if err != nil {
 		return nil, err
@@ -468,6 +468,19 @@ func syncFile(path string) error {
 	}
 	defer fd.Close()
 	return fd.Sync()
+}
+
+func syncDir(dir string) error {
+	fh, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	defer fh.Close()
+
+	if err := fh.Sync(); err != nil {
+		return err
+	}
+	return fh.Close()
 }
 
 // snapshotName generates a name for the snapshot.

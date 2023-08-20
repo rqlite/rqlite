@@ -70,6 +70,10 @@ func Test_SinkFullSnapshot(t *testing.T) {
 	if !fileExists(filepath.Join(nextGenDir, baseSqliteFile)) {
 		t.Fatalf("next generation directory %s does not contain base SQLite file", nextGenDir)
 	}
+	expMetaPath := filepath.Join(nextGenDir, "snap-1234", metaFileName)
+	if !fileExists(expMetaPath) {
+		t.Fatalf("meta file does not exist at %s", expMetaPath)
+	}
 
 	// Check SQLite database has been created correctly.
 	db, err := db.Open(filepath.Join(nextGenDir, baseSqliteFile), false, false)
@@ -84,8 +88,6 @@ func Test_SinkFullSnapshot(t *testing.T) {
 	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[4]]}]`, asJSON(rows); exp != got {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
-
-	// confirm that snapshot is valid (full?, contains meta?)
 }
 
 func Test_SinkIncrementalSnapshot(t *testing.T) {
@@ -130,7 +132,10 @@ func Test_SinkIncrementalSnapshot(t *testing.T) {
 		t.Fatalf("WAL file data does not match")
 	}
 
-	// confirm that snapshot is valid (incremental?, contains meta?)
+	expMetaPath := filepath.Join(currGenDir, "snap-1234", metaFileName)
+	if !fileExists(expMetaPath) {
+		t.Fatalf("meta file does not exist at %s", expMetaPath)
+	}
 }
 
 func mustNewStoreForSinkTest(t *testing.T) *Store {
