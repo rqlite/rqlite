@@ -473,7 +473,7 @@ func (s *Store) check() error {
 		return ErrSnapshotBaseMissing
 	}
 
-	// If we have a WAL file in the current generation which is ends with the same ID as
+	// If we have a WAL file in the current generation which ends with the same ID as
 	// the oldest snapshot, then the copy of the WAL from the snapshot didn't complete.
 	// Complete it now.
 	walSnapshotCopy := filepath.Join(currGenDir, baseSqliteWALFile+snapshots[0].ID)
