@@ -1948,7 +1948,10 @@ func RecoverNode(dataDir string, logger *log.Logger, logs raft.LogStore, stable 
 
 	// Create a new snapshot, placing the configuration in as if it was
 	// committed at index 1.
-	fsmSnapshot := snapshot.NewFullSnapshot(tmpDBPath)
+	if err := db.Checkpoint(checkpointTimeout); err != nil {
+		return fmt.Errorf("failed to checkpoint database: %s", err)
+	}
+	fsmSnapshot := snapshot.NewFullSnapshot(tmpDBPath) // tmpDBPath contains full state now.
 	sink, err := snaps.Create(1, lastIndex, lastTerm, conf, 1, tn)
 	if err != nil {
 		return fmt.Errorf("failed to create snapshot: %v", err)
