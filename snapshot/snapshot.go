@@ -10,23 +10,27 @@ import (
 	"github.com/rqlite/rqlite/db"
 )
 
+// Snapshot represents a snapshot of the database state.
 type Snapshot struct {
 	walData []byte
 	files   []string
 }
 
+// NewWALSnapshot creates a new snapshot from a WAL.
 func NewWALSnapshot(b []byte) *Snapshot {
 	return &Snapshot{
 		walData: b,
 	}
 }
 
+// NewFullSnapshot creates a new snapshot from a SQLite file and WALs.
 func NewFullSnapshot(files ...string) *Snapshot {
 	return &Snapshot{
 		files: files,
 	}
 }
 
+// Persist writes the snapshot to the given sink.
 func (s *Snapshot) Persist(sink raft.SnapshotSink) error {
 	stream, err := s.OpenStream()
 	if err != nil {
@@ -38,8 +42,10 @@ func (s *Snapshot) Persist(sink raft.SnapshotSink) error {
 	return err
 }
 
+// Release is a no-op.
 func (s *Snapshot) Release() {}
 
+// OpenStream returns a stream for reading the snapshot.
 func (s *Snapshot) OpenStream() (*Stream, error) {
 	if len(s.files) > 0 {
 		return NewFullStream(s.files...)
@@ -47,6 +53,8 @@ func (s *Snapshot) OpenStream() (*Stream, error) {
 	return NewIncrementalStream(s.walData)
 }
 
+// ReplayDB reconstructs the database from the given reader, and writes it to
+// the given path.
 func ReplayDB(fullSnap *FullSnapshot, r io.Reader, path string) error {
 	dbInfo := fullSnap.GetDb()
 	if dbInfo == nil {
