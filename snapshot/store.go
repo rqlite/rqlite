@@ -397,6 +397,7 @@ func (s *Store) ReapSnapshots(dir string, retain int) (int, error) {
 		} else {
 			if err := removeDirSync(snapDirPath); err != nil {
 				s.logger.Printf("failed to remove full snapshot directory %s: %s", snapDirPath, err)
+				return n, err
 			}
 		}
 
@@ -623,11 +624,10 @@ func copyFileSync(src, dst string) error {
 		return err
 	}
 	defer dstFd.Close()
-	if err := dstFd.Sync(); err != nil {
+	if _, err = io.Copy(dstFd, srcFd); err != nil {
 		return err
 	}
-	_, err = io.Copy(dstFd, srcFd)
-	return err
+	return dstFd.Sync()
 }
 
 func removeDirSync(dir string) error {
@@ -643,11 +643,7 @@ func syncDir(dir string) error {
 		return err
 	}
 	defer fh.Close()
-
-	if err := fh.Sync(); err != nil {
-		return err
-	}
-	return fh.Close()
+	return fh.Sync()
 }
 
 // snapshotName generates a name for the snapshot.
