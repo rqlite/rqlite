@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -25,7 +24,7 @@ func Test_RemoveFiles(t *testing.T) {
 		t.Fatalf("failed to remove files: %s", err.Error())
 	}
 
-	files, err := ioutil.ReadDir(d)
+	files, err := os.ReadDir(d)
 	if err != nil {
 		t.Fatalf("failed to read directory: %s", err.Error())
 	}
@@ -928,7 +927,7 @@ func asJSON(v interface{}) string {
 // mustTempFile returns a path to a temporary file in directory dir. It is up to the
 // caller to remove the file once it is no longer needed.
 func mustTempFile() string {
-	tmpfile, err := ioutil.TempFile("", "rqlite-db-test")
+	tmpfile, err := os.CreateTemp("", "rqlite-db-test")
 	if err != nil {
 		panic(err.Error())
 	}
@@ -937,7 +936,7 @@ func mustTempFile() string {
 }
 
 func mustTempDir() string {
-	tmpdir, err := ioutil.TempDir("", "rqlite-db-test")
+	tmpdir, err := os.MkdirTemp("", "rqlite-db-test")
 	if err != nil {
 		panic(err.Error())
 	}
@@ -965,12 +964,6 @@ func mustCopyFile(dst, src string) {
 
 	_, err = io.Copy(dstFile, srcFile)
 	if err != nil {
-		panic(err)
-	}
-}
-
-func mustRenameFile(oldpath, newpath string) {
-	if err := os.Rename(oldpath, newpath); err != nil {
 		panic(err)
 	}
 }
