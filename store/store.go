@@ -1612,6 +1612,7 @@ func (s *Store) Database(leader bool) ([]byte, error) {
 // http://sqlite.org/howtocorrupt.html states it is safe to copy or serialize the
 // database as long as no writes to the database are in progress.
 func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
+	startT := time.Now()
 	defer func() {
 		s.numSnapshotsMu.Lock()
 		defer s.numSnapshotsMu.Unlock()
@@ -1645,11 +1646,10 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 		}
 	}
 
-	//dur := time.Since(fsm.startT)
+	dur := time.Since(startT)
 	stats.Add(numSnaphots, 1)
-	//stats.Get(snapshotCreateDuration).(*expvar.Int).Set(dur.Milliseconds())
-	//stats.Get(snapshotDBSerializedSize).(*expvar.Int).Set(int64(len(fsm.database)))
-	//s.logger.Printf("node snapshot created in %s", dur)
+	stats.Get(snapshotCreateDuration).(*expvar.Int).Set(dur.Milliseconds())
+	s.logger.Printf("node snapshot created in %s", dur)
 	return fsmSnapshot, nil
 }
 
