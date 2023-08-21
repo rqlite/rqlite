@@ -433,11 +433,17 @@ func (s *Store) readMeta(dir string) (*Meta, error) {
 	return meta, nil
 }
 
-func (s *Store) check() error {
+func (s *Store) check() (retError error) {
+	defer s.logger.Printf("check complete")
+	s.logger.Printf("checking snapshot store at %s", s.rootDir)
+	var n int
+
 	// Simplify logic by reaping generations first.
-	if _, err := s.ReapGenerations(); err != nil {
-		return err
+	n, err := s.ReapGenerations()
+	if err != nil {
+		return fmt.Errorf("failed to reap generations: %s", err)
 	}
+	s.logger.Printf("reaped %d generations", n)
 
 	// Remove any temporary generational directories. They represent operations
 	// that were interrupted.
@@ -450,9 +456,11 @@ func (s *Store) check() error {
 			continue
 		}
 		if err := os.RemoveAll(filepath.Join(s.generationsDir, entry.Name())); err != nil {
-			return err
+			return fmt.Errorf("failed to remove temporary generation directory %s: %s", entry.Name(), err)
 		}
+		n++
 	}
+	s.logger.Printf("removed %d temporary generation directories", n)
 
 	// Remove any temporary files in the current generation.
 	currGenDir, ok, err := s.GetCurrentGenerationDir()
@@ -466,13 +474,16 @@ func (s *Store) check() error {
 	if err != nil {
 		return err
 	}
+	n = 0
 	for _, entry := range entries {
 		if isTmpName(entry.Name()) {
 			if err := os.RemoveAll(filepath.Join(currGenDir, entry.Name())); err != nil {
-				return err
+				return fmt.Errorf("failed to remove temporary file %s: %s", entry.Name(), err)
 			}
+			n++
 		}
 	}
+	s.logger.Printf("removed %d temporary files from current generation", n)
 
 	baseSqliteFilePath := filepath.Join(currGenDir, baseSqliteFile)
 	baseSqliteWALFilePath := filepath.Join(currGenDir, baseSqliteWALFile)
@@ -480,11 +491,15 @@ func (s *Store) check() error {
 	// Any snapshots in the current generation?
 	snapshots, err := s.getSnapshots(currGenDir)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get snapshots: %s", err)
 	}
 	if len(snapshots) == 0 {
 		// An empty current generation is useless.
-		return os.RemoveAll(currGenDir)
+		if err := os.RemoveAll(currGenDir); err != nil {
+			return fmt.Errorf("failed to remove empty current generation directory %s: %s", currGenDir, err)
+		}
+		s.logger.Printf("removed an empty current generation directory")
+		return nil
 	}
 
 	// If we have no base file, we shouldn't have any snapshot directories. If we
@@ -492,6 +507,7 @@ func (s *Store) check() error {
 	if !fileExists(baseSqliteFilePath) {
 		return ErrSnapshotBaseMissing
 	}
+	s.logger.Printf("found base SQLite file at %s", baseSqliteFilePath)
 
 	// If we have a WAL file in the current generation which ends with the same ID as
 	// the oldest snapshot, then the copy of the WAL from the snapshot didn't complete.
@@ -500,12 +516,13 @@ func (s *Store) check() error {
 	snapDirPath := filepath.Join(currGenDir, snapshots[0].ID)
 	if fileExists(filepath.Join(currGenDir, walSnapshotCopy)) {
 		if err := os.Remove(walSnapshotCopy); err != nil {
-			return err
+			return fmt.Errorf("failed to remove copy of WAL file %s: %s", walSnapshotCopy, err)
 		}
 		if err := copyWALFromSnapshot(snapDirPath, baseSqliteWALFilePath); err != nil {
 			s.logger.Printf("failed to copy WAL file from snapshot %s: %s", snapshots[0].ID, err)
 			return err
 		}
+		s.logger.Printf("completed copy of WAL file from snapshot %s", snapshots[0].ID)
 	}
 
 	// If we have a base SQLite file, and a WAL file sitting beside it, this implies
@@ -514,11 +531,12 @@ func (s *Store) check() error {
 	if fileExists(baseSqliteFilePath) && fileExists(baseSqliteWALFilePath) {
 		if err := db.ReplayWAL(baseSqliteFilePath, []string{baseSqliteWALFilePath},
 			false); err != nil {
-			return err
+			return fmt.Errorf("failed to replay WALs: %s", err)
 		}
 		if err := os.Remove(baseSqliteWALFilePath); err != nil {
-			return err
+			return fmt.Errorf("failed to remove WAL file %s: %s", baseSqliteWALFilePath, err)
 		}
+		s.logger.Printf("completed checkpoint of WAL file %s", baseSqliteWALFilePath)
 	}
 	return nil
 }
