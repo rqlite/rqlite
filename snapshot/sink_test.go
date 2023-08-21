@@ -138,6 +138,50 @@ func Test_SinkIncrementalSnapshot(t *testing.T) {
 	}
 }
 
+func Test_SinkIncrementalSnapshot_NoWALData(t *testing.T) {
+	tmpDir := t.TempDir()
+	workDir := filepath.Join(tmpDir, "work")
+	mustCreateDir(workDir)
+	currGenDir := filepath.Join(tmpDir, "curr")
+	mustCreateDir(currGenDir)
+	nextGenDir := filepath.Join(tmpDir, "next")
+	str := mustNewStoreForSinkTest(t)
+
+	s := NewSink(str, workDir, currGenDir, nextGenDir, makeMeta("snap-1234", 3, 2, 1))
+	if err := s.Open(); err != nil {
+		t.Fatal(err)
+	}
+
+	stream, err := NewIncrementalStream(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if io.Copy(s, stream); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	if dirExists(nextGenDir) {
+		t.Fatalf("next generation directory %s exists", nextGenDir)
+	}
+	if !dirExists(filepath.Join(currGenDir, "snap-1234")) {
+		t.Fatalf("current generation directory %s does not contain snapshot directory", currGenDir)
+	}
+
+	expWALPath := filepath.Join(currGenDir, "snap-1234", snapWALFile)
+	if !emptyFileExists(expWALPath) {
+		t.Fatalf("expected empty WAL file at %s", expWALPath)
+	}
+
+	expMetaPath := filepath.Join(currGenDir, "snap-1234", metaFileName)
+	if !fileExists(expMetaPath) {
+		t.Fatalf("meta file does not exist at %s", expMetaPath)
+	}
+}
+
 func mustNewStoreForSinkTest(t *testing.T) *Store {
 	tmpDir := t.TempDir()
 	str, err := NewStore(tmpDir)
@@ -159,6 +203,14 @@ func mustReadFile(path string) []byte {
 		panic(err)
 	}
 	return b
+}
+
+func emptyFileExists(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	return info.Size() == 0
 }
 
 func makeTestConfiguration(i, a string) raft.Configuration {
