@@ -33,7 +33,7 @@ func NewSink(str *Store, workDir, currGenDir, nextGenDir string, meta *Meta) *Si
 		curGenDir:  currGenDir,
 		nextGenDir: nextGenDir,
 		meta:       meta,
-		logger:     log.New(os.Stderr, "snapshot-sink: ", log.LstdFlags),
+		logger:     log.New(os.Stderr, "[snapshot-sink] ", log.LstdFlags),
 	}
 }
 

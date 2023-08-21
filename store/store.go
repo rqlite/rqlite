@@ -1669,7 +1669,7 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 		return fmt.Errorf("got nil FullSnapshot")
 	}
 
-	tmpFile, err := os.CreateTemp(filepath.Dir(s.db.Path()), "rqlilte-restore-*")
+	tmpFile, err := os.CreateTemp(filepath.Dir(s.db.Path()), "rqlite-restore-*")
 	if tmpFile.Close(); err != nil {
 		return fmt.Errorf("error creating temporary file for restore operation: %v", err)
 	}
@@ -1694,8 +1694,8 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 	if err != nil {
 		return fmt.Errorf("open on-disk file during restore: %s", err)
 	}
-	s.logger.Println("successfully opened on-disk database due to restore")
 	s.db = db
+	s.logger.Printf("successfully opened on-disk database at %s due to restore", s.db.Path())
 
 	stats.Add(numRestores, 1)
 	s.logger.Printf("node restored in %s", time.Since(startT))
@@ -1932,7 +1932,7 @@ func RecoverNode(dataDir string, logger *log.Logger, logs raft.LogStore, stable 
 	if err != nil {
 		return fmt.Errorf("failed to find last log: %v", err)
 	}
-	logger.Printf("recovery snapshot index is %d, last index is %d", snapshotIndex, lastLogIndex)
+	logger.Printf("last index is %d, last index written to log is %d", lastIndex, lastLogIndex)
 
 	for index := snapshotIndex + 1; index <= lastLogIndex; index++ {
 		var entry raft.Log
@@ -1959,7 +1959,7 @@ func RecoverNode(dataDir string, logger *log.Logger, logs raft.LogStore, stable 
 	if err = sink.Close(); err != nil {
 		return fmt.Errorf("failed to finalize snapshot: %v", err)
 	}
-	logger.Printf("recovery snapshot created successfully")
+	logger.Printf("recovery snapshot created successfully using %s", tmpDBPath)
 
 	// Compact the log so that we don't get bad interference from any
 	// configuration change log entries that might be there.
