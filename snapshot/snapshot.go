@@ -38,9 +38,7 @@ func (s *Snapshot) Persist(sink raft.SnapshotSink) error {
 	return err
 }
 
-func (s *Snapshot) Release() {
-	return
-}
+func (s *Snapshot) Release() {}
 
 func (s *Snapshot) OpenStream() (*Stream, error) {
 	if len(s.files) > 0 {

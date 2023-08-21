@@ -45,6 +45,9 @@ func NewStreamHeaderFromReader(r io.Reader) (*StreamHeader, int64, error) {
 	if err != nil {
 		return nil, 0, fmt.Errorf("error unmarshaling FSM snapshot: %v", err)
 	}
+	if strHdr.GetVersion() != streamVersion {
+		return nil, 0, fmt.Errorf("unsupported snapshot version %d", strHdr.GetVersion())
+	}
 	return strHdr, totalSizeRead, nil
 }
 
