@@ -84,30 +84,29 @@ const (
 )
 
 const (
-	numSnaphots              = "num_snapshots"
-	numProvides              = "num_provides"
-	numBackups               = "num_backups"
-	numLoads                 = "num_loads"
-	numRestores              = "num_restores"
-	numAutoRestores          = "num_auto_restores"
-	numAutoRestoresSkipped   = "num_auto_restores_skipped"
-	numAutoRestoresFailed    = "num_auto_restores_failed"
-	numRecoveries            = "num_recoveries"
-	numUncompressedCommands  = "num_uncompressed_commands"
-	numCompressedCommands    = "num_compressed_commands"
-	numJoins                 = "num_joins"
-	numIgnoredJoins          = "num_ignored_joins"
-	numRemovedBeforeJoins    = "num_removed_before_joins"
-	numDBStatsErrors         = "num_db_stats_errors"
-	snapshotCreateDuration   = "snapshot_create_duration"
-	snapshotPersistDuration  = "snapshot_persist_duration"
-	snapshotDBSerializedSize = "snapshot_db_serialized_size"
-	snapshotDBOnDiskSize     = "snapshot_db_ondisk_size"
-	leaderChangesObserved    = "leader_changes_observed"
-	leaderChangesDropped     = "leader_changes_dropped"
-	failedHeartbeatObserved  = "failed_heartbeat_observed"
-	nodesReapedOK            = "nodes_reaped_ok"
-	nodesReapedFailed        = "nodes_reaped_failed"
+	numSnaphots             = "num_snapshots"
+	numProvides             = "num_provides"
+	numBackups              = "num_backups"
+	numLoads                = "num_loads"
+	numRestores             = "num_restores"
+	numAutoRestores         = "num_auto_restores"
+	numAutoRestoresSkipped  = "num_auto_restores_skipped"
+	numAutoRestoresFailed   = "num_auto_restores_failed"
+	numRecoveries           = "num_recoveries"
+	numUncompressedCommands = "num_uncompressed_commands"
+	numCompressedCommands   = "num_compressed_commands"
+	numJoins                = "num_joins"
+	numIgnoredJoins         = "num_ignored_joins"
+	numRemovedBeforeJoins   = "num_removed_before_joins"
+	numDBStatsErrors        = "num_db_stats_errors"
+	snapshotCreateDuration  = "snapshot_create_duration"
+	snapshotPersistDuration = "snapshot_persist_duration"
+	snapshotDBOnDiskSize    = "snapshot_db_ondisk_size"
+	leaderChangesObserved   = "leader_changes_observed"
+	leaderChangesDropped    = "leader_changes_dropped"
+	failedHeartbeatObserved = "failed_heartbeat_observed"
+	nodesReapedOK           = "nodes_reaped_ok"
+	nodesReapedFailed       = "nodes_reaped_failed"
 )
 
 // stats captures stats for the Store.
@@ -137,7 +136,6 @@ func ResetStats() {
 	stats.Add(numDBStatsErrors, 0)
 	stats.Add(snapshotCreateDuration, 0)
 	stats.Add(snapshotPersistDuration, 0)
-	stats.Add(snapshotDBSerializedSize, 0)
 	stats.Add(snapshotDBOnDiskSize, 0)
 	stats.Add(leaderChangesObserved, 0)
 	stats.Add(leaderChangesDropped, 0)
@@ -1646,11 +1644,14 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 		}
 	}
 
-	dur := time.Since(startT)
 	stats.Add(numSnaphots, 1)
+	dur := time.Since(startT)
 	stats.Get(snapshotCreateDuration).(*expvar.Int).Set(dur.Milliseconds())
 	s.logger.Printf("node snapshot created in %s", dur)
-	return fsmSnapshot, nil
+	return &FSMSnapshot{
+		FSMSnapshot: fsmSnapshot,
+		logger:      s.logger,
+	}, nil
 }
 
 // Restore restores the node to a previous state. The Hashicorp docs state this
