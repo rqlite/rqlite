@@ -372,19 +372,19 @@ func (s *Store) Open() (retErr error) {
 	config := s.raftConfig()
 	config.LocalID = raft.ServerID(s.raftID)
 
+	// Create store for the Snapshots.
 	snapshotStore, err := snapshot.NewStore(filepath.Join(s.raftDir, "rsnapshots"))
 	if err != nil {
-		return fmt.Errorf("snapshot store: %s", err)
+		return fmt.Errorf("failed to create snapshot store: %s", err)
 	}
 	s.snapshotStore = snapshotStore
-
 	snaps, err := s.snapshotStore.List()
 	if err != nil {
 		return fmt.Errorf("list snapshots: %s", err)
 	}
 	s.logger.Printf("%d preexisting snapshots present", len(snaps))
 
-	// Create the log store and stable store.
+	// Create the Raft log store and stable store.
 	s.boltStore, err = rlog.New(filepath.Join(s.raftDir, raftDBPath), s.NoFreeListSync)
 	if err != nil {
 		return fmt.Errorf("new log store: %s", err)
@@ -428,7 +428,7 @@ func (s *Store) Open() (retErr error) {
 	// Instantiate the Raft system.
 	ra, err := raft.NewRaft(config, s, s.raftLog, s.raftStable, s.snapshotStore, s.raftTn)
 	if err != nil {
-		return fmt.Errorf("new raft: %s", err)
+		return fmt.Errorf("creating the raft system failed: %s", err)
 	}
 	s.raft = ra
 

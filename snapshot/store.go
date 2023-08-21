@@ -503,6 +503,9 @@ func (s *Store) check() error {
 	return nil
 }
 
+// copyWALFromSnapshot copies the WAL file from the snapshot at the given path
+// to the file at the given path. It does this in stages, so that we can be sure
+// that the copy is complete before deleting the snapshot directory.
 func copyWALFromSnapshot(snapDirPath string, dstWALPath string) error {
 	snapWALFilePath := filepath.Join(snapDirPath, snapWALFile)
 	snapWALFilePathCopy := filepath.Dir(dstWALPath) + filepath.Base(snapDirPath)
