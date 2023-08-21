@@ -322,7 +322,6 @@ func (s *Store) ReapSnapshots(dir string, retain int) (int, error) {
 		snapDirPath := filepath.Join(dir, snap.ID)                       // Path to the snapshot directory
 		snapWALFilePath := filepath.Join(snapDirPath, snapWALFile)       // Path to the WAL file in the snapshot
 		walToCheckpointFilePath := filepath.Join(dir, baseSqliteWALFile) // Path to the WAL file to checkpoint
-		snapWALFilePathCopy := walToCheckpointFilePath + snap.ID
 
 		// If the snapshot directory doesn't contain a WAL file, then the base SQLite
 		// file is the snapshot state, and there is no checkpointing to do.
@@ -332,19 +331,8 @@ func (s *Store) ReapSnapshots(dir string, retain int) (int, error) {
 			// we've copied it out fully. Renaming is not atomic on every OS, so let's be sure. We
 			// also use a temporary file name, so we know where the WAL came from if we exit here
 			// and need to clean up on a restart.
-			if err := copyFileSync(snapWALFilePath, snapWALFilePathCopy); err != nil {
+			if err := copyWALFromSnapshot(snapDirPath, walToCheckpointFilePath); err != nil {
 				s.logger.Printf("failed to copy WAL file from snapshot %s: %s", snapWALFilePath, err)
-				return n, err
-			}
-
-			// Delete the snapshot directory, since we have what we need now.
-			if err := removeDirSync(snapDirPath); err != nil {
-				s.logger.Printf("failed to remove incremental snapshot directory %s: %s", snapDirPath, err)
-			}
-
-			// Move the WAL file to the correct name for checkpointing.
-			if err := os.Rename(snapWALFilePathCopy, walToCheckpointFilePath); err != nil {
-				s.logger.Printf("failed to move WAL file %s: %s", snapWALFilePath, err)
 				return n, err
 			}
 
@@ -426,6 +414,120 @@ func (s *Store) readMeta(dir string) (*Meta, error) {
 }
 
 func (s *Store) check() error {
+	// Simplify logic by reaping generations first.
+	if _, err := s.ReapGenerations(); err != nil {
+		return err
+	}
+
+	// Remove any temporary generational directories. They represent operations
+	// that were interrupted.
+	entries, err := os.ReadDir(s.generationsDir)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if !isTmpName(entry.Name()) {
+			continue
+		}
+		if err := os.RemoveAll(filepath.Join(s.generationsDir, entry.Name())); err != nil {
+			return err
+		}
+	}
+
+	// Remove any temporary files in the current generation.
+	currGenDir, ok, err := s.GetCurrentGenerationDir()
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return nil
+	}
+	entries, err = os.ReadDir(currGenDir)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if isTmpName(entry.Name()) {
+			if err := os.RemoveAll(filepath.Join(currGenDir, entry.Name())); err != nil {
+				return err
+			}
+		}
+	}
+
+	baseSqliteFilePath := filepath.Join(currGenDir, baseSqliteFile)
+	baseSqliteWALFilePath := filepath.Join(currGenDir, baseSqliteWALFile)
+
+	// Any snapshots in the current generation?
+	snapshots, err := s.getSnapshots(currGenDir)
+	if err != nil {
+		return err
+	}
+	if len(snapshots) == 0 {
+		// An empty current generation is useless.
+		return os.RemoveAll(currGenDir)
+	}
+
+	// If we have no base file, we shouldn't have any snapshot directories. If we
+	// do it's an inconsistent state which we cannot repair, and needs to be flagged.
+	if !fileExists(baseSqliteFilePath) {
+		return ErrSnapshotBaseMissing
+	}
+
+	// If we have a WAL file in the current generation which is ends with the same ID as
+	// the oldest snapshot, then the copy of the WAL from the snapshot didn't complete.
+	// Complete it now.
+	walSnapshotCopy := filepath.Join(currGenDir, baseSqliteWALFile+snapshots[0].ID)
+	snapDirPath := filepath.Join(currGenDir, snapshots[0].ID)
+	if fileExists(filepath.Join(currGenDir, walSnapshotCopy)) {
+		if err := os.Remove(walSnapshotCopy); err != nil {
+			return err
+		}
+		if err := copyWALFromSnapshot(snapDirPath, baseSqliteWALFilePath); err != nil {
+			s.logger.Printf("failed to copy WAL file from snapshot %s: %s", snapshots[0].ID, err)
+			return err
+		}
+	}
+
+	// If we have a base SQLite file, and a WAL file sitting beside it, this implies
+	// that we were interrupted before completing a checkpoint operation, as part of
+	// reaping snapshots. Complete the checkpoint operation now.
+	if fileExists(baseSqliteFilePath) && fileExists(baseSqliteWALFilePath) {
+		if err := db.ReplayWAL(baseSqliteFilePath, []string{baseSqliteWALFilePath},
+			false); err != nil {
+			return err
+		}
+		if err := os.Remove(baseSqliteWALFilePath); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func hasBaseSQLiteFile(dir string) bool {
+	return fileExists(filepath.Join(dir, baseSqliteFile))
+}
+
+func hasBaseSQLiteWALFile(dir string) bool {
+	return fileExists(filepath.Join(dir, baseSqliteWALFile))
+}
+
+func copyWALFromSnapshot(snapDirPath string, dstWALPath string) error {
+	snapWALFilePath := filepath.Join(snapDirPath, snapWALFile)
+	snapWALFilePathCopy := filepath.Dir(dstWALPath) + filepath.Base(snapDirPath)
+
+	if err := copyFileSync(snapWALFilePath, snapWALFilePathCopy); err != nil {
+		return fmt.Errorf("failed to copy WAL file from snapshot %s: %s", snapWALFilePath, err)
+	}
+
+	// Delete the snapshot directory, since we have what we need now.
+	if err := removeDirSync(snapDirPath); err != nil {
+		return fmt.Errorf("failed to remove incremental snapshot directory %s: %s", snapDirPath, err)
+	}
+
+	// Move the WAL file to the correct name for checkpointing.
+	if err := os.Rename(snapWALFilePathCopy, dstWALPath); err != nil {
+		return fmt.Errorf("failed to move WAL file %s: %s", snapWALFilePath, err)
+	}
 	return nil
 }
 

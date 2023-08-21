@@ -79,6 +79,8 @@ const (
 	trailingScale              = 1.25
 	observerChanLen            = 50
 
+	checkpointTimeout = 10 * time.Second
+
 	defaultChunkSize = 512 * 1024 * 1024 // 512 MB
 )
 
@@ -198,6 +200,7 @@ type Store struct {
 	raftLog       raft.LogStore             // Persistent log store.
 	raftStable    raft.StableStore          // Persistent k-v store.
 	boltStore     *rlog.Log                 // Physical store.
+	snapshotStore *snapshot.Store           // Snapshot store.
 
 	// Raft changes observer
 	leaderObserversMu sync.RWMutex
@@ -369,12 +372,13 @@ func (s *Store) Open() (retErr error) {
 	config := s.raftConfig()
 	config.LocalID = raft.ServerID(s.raftID)
 
-	// Create the snapshot store. This allows Raft to truncate the log.
-	snapshots, err := raft.NewFileSnapshotStore(s.raftDir, retainSnapshotCount, os.Stderr)
+	snapshotStore, err := snapshot.NewStore(filepath.Join(s.raftDir, "rsnapshots"))
 	if err != nil {
-		return fmt.Errorf("file snapshot store: %s", err)
+		return fmt.Errorf("snapshot store: %s", err)
 	}
-	snaps, err := snapshots.List()
+	s.snapshotStore = snapshotStore
+
+	snaps, err := s.snapshotStore.List()
 	if err != nil {
 		return fmt.Errorf("list snapshots: %s", err)
 	}
@@ -398,7 +402,7 @@ func (s *Store) Open() (retErr error) {
 		if err != nil {
 			return fmt.Errorf("failed to read peers file: %s", err.Error())
 		}
-		if err = RecoverNode(s.raftDir, s.logger, s.raftLog, s.boltStore, snapshots, s.raftTn, config); err != nil {
+		if err = RecoverNode(s.raftDir, s.logger, s.raftLog, s.boltStore, s.snapshotStore, s.raftTn, config); err != nil {
 			return fmt.Errorf("failed to recover node: %s", err.Error())
 		}
 		if err := os.Rename(s.peersPath, s.peersInfoPath); err != nil {
@@ -422,7 +426,7 @@ func (s *Store) Open() (retErr error) {
 	s.logger.Printf("created on-disk database at open")
 
 	// Instantiate the Raft system.
-	ra, err := raft.NewRaft(config, s, s.raftLog, s.raftStable, snapshots, s.raftTn)
+	ra, err := raft.NewRaft(config, s, s.raftLog, s.raftStable, s.snapshotStore, s.raftTn)
 	if err != nil {
 		return fmt.Errorf("new raft: %s", err)
 	}
@@ -1617,13 +1621,34 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 
 	s.queryTxMu.Lock()
 	defer s.queryTxMu.Unlock()
-	fsm := NewFSMSnapshot(s.db, s.logger)
-	dur := time.Since(fsm.startT)
+
+	var fsmSnapshot raft.FSMSnapshot
+	if s.snapshotStore.FullNeeded() {
+		if err := s.db.Checkpoint(checkpointTimeout); err != nil {
+			return nil, err
+		}
+		fsmSnapshot = snapshot.NewFullSnapshot(s.dbPath)
+	} else {
+		b, err := os.ReadFile("xxxx")
+		if err != nil {
+			return nil, err
+		}
+		// XXX Handle no WAL data
+		fsmSnapshot = snapshot.NewWALSnapshot(b)
+		if err != nil {
+			return nil, err
+		}
+		if err := s.db.Checkpoint(checkpointTimeout); err != nil {
+			return nil, err
+		}
+	}
+
+	//dur := time.Since(fsm.startT)
 	stats.Add(numSnaphots, 1)
-	stats.Get(snapshotCreateDuration).(*expvar.Int).Set(dur.Milliseconds())
-	stats.Get(snapshotDBSerializedSize).(*expvar.Int).Set(int64(len(fsm.database)))
-	s.logger.Printf("node snapshot created in %s", dur)
-	return fsm, nil
+	//stats.Get(snapshotCreateDuration).(*expvar.Int).Set(dur.Milliseconds())
+	//stats.Get(snapshotDBSerializedSize).(*expvar.Int).Set(int64(len(fsm.database)))
+	//s.logger.Printf("node snapshot created in %s", dur)
+	return fsmSnapshot, nil
 }
 
 // Restore restores the node to a previous state. The Hashicorp docs state this
@@ -1631,6 +1656,23 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 // is not necessary.
 func (s *Store) Restore(rc io.ReadCloser) error {
 	startT := time.Now()
+
+	strHdr, _, err := snapshot.NewStreamHeaderFromReader(rc)
+	if err != nil {
+		return fmt.Errorf("error reading stream header: %v", err)
+	}
+	// if strHdr.GetVersion() != streamVersion {
+	// 	return fmt.Errorf("unsupported snapshot version %d", strHdr.GetVersion())
+	// }
+
+	fullSnap := strHdr.GetFullSnapshot()
+	if fullSnap == nil {
+		return fmt.Errorf("got nil FullSnapshot")
+	}
+	if err := snapshot.ReplayDB(fullSnap, rc, s.db.Path()); err != nil {
+		return fmt.Errorf("error replaying DB: %v", err)
+	}
+
 	b, err := dbBytesFromSnapshot(rc)
 	if err != nil {
 		return fmt.Errorf("restore failed: %s", err.Error())
