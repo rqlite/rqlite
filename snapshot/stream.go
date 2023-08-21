@@ -197,6 +197,50 @@ func (s *Stream) Close() error {
 	return nil
 }
 
+// FilesFromStream reads a stream and returns the files contained within it.
+// The first file is the SQLite database file, and the rest are WAL files.
+// The function will return an error if the stream does not contain a
+// FullSnapshot.
+func FilesFromStream(r io.Reader) (string, []string, error) {
+	strHdr, _, err := NewStreamHeaderFromReader(r)
+	if err != nil {
+		return "", nil, fmt.Errorf("error reading stream header: %v", err)
+	}
+
+	fullSnap := strHdr.GetFullSnapshot()
+	if fullSnap == nil {
+		return "", nil, fmt.Errorf("got nil FullSnapshot")
+	}
+	dbInfo := fullSnap.GetDb()
+	if dbInfo == nil {
+		return "", nil, fmt.Errorf("got nil DB info")
+	}
+
+	sqliteFd, err := os.CreateTemp("", "stream-db.sqlite3")
+	if _, err := io.CopyN(sqliteFd, r, dbInfo.Size); err != nil {
+		return "", nil, fmt.Errorf("error writing SQLite file data: %v", err)
+	}
+	if sqliteFd.Close(); err != nil {
+		return "", nil, fmt.Errorf("error closing SQLite data file %v", err)
+	}
+
+	var walFiles []string
+	for i, di := range fullSnap.Wals {
+		tmpFd, err := os.CreateTemp("", fmt.Sprintf("stream-wal-%d.wal", i))
+		if err != nil {
+			return "", nil, fmt.Errorf("error creating WAL file: %v", err)
+		}
+		if _, err := io.CopyN(tmpFd, r, di.Size); err != nil {
+			return "", nil, fmt.Errorf("error writing WAL file data: %v", err)
+		}
+		if err := tmpFd.Close(); err != nil {
+			return "", nil, fmt.Errorf("error closing WAL file: %v", err)
+		}
+		walFiles = append(walFiles, tmpFd.Name())
+	}
+	return sqliteFd.Name(), walFiles, nil
+}
+
 func newRCBuffer(b []byte) io.ReadCloser {
 	return io.NopCloser(bytes.NewBuffer(b))
 }

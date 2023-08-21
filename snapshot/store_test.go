@@ -432,119 +432,156 @@ func (c *countingReadCloser) Close() error {
 	return c.rc.Close()
 }
 
-// Test_Store_Reaping tests that the snapshot store correctly
-// reaps snapshots that are no longer needed. Because it's critical that
-// reaping is done correctly, this test checks internal implementation
-// details.
-// func Test_Store_Reaping(t *testing.T) {
-// 	dir := t.TempDir()
-// 	str, err := NewStore(dir)
-// 	if err != nil {
-// 		t.Fatalf("failed to create snapshot store: %s", err)
-// 	}
-// 	//str.noAutoReap = true
+func Test_StoreReaping(t *testing.T) {
+	dir := t.TempDir()
+	str, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create snapshot store: %s", err)
+	}
+	str.noAutoreap = true
+	testConfig := makeTestConfiguration("1", "2")
 
-// 	testConfig := makeTestConfiguration("1", "2")
+	// Create a full snapshot.
+	snapshot := NewFullSnapshot("testdata/db-and-wals/backup.db")
+	sink, err := str.Create(1, 1, 1, testConfig, 4, nil)
+	if err != nil {
+		t.Fatalf("failed to create snapshot sink: %s", err)
+	}
+	stream, err := snapshot.OpenStream()
+	if err != nil {
+		t.Fatalf("failed to open snapshot stream: %s", err)
+	}
+	_, err = io.Copy(sink, stream)
+	if err != nil {
+		t.Fatalf("failed to write snapshot: %s", err)
+	}
+	if err := sink.Close(); err != nil {
+		t.Fatalf("failed to close snapshot sink: %s", err)
+	}
 
-// 	createSnapshot := func(index, term uint64, file string) {
-// 		b, err := os.ReadFile(file)
-// 		if err != nil {
-// 			t.Fatalf("failed to read file: %s", err)
-// 		}
-// 		sink, err := str.Create(1, index, term, testConfig, 4, nil)
-// 		if err != nil {
-// 			t.Fatalf("failed to create 2nd snapshot: %s", err)
-// 		}
-// 		if _, err = sink.Write(b); err != nil {
-// 			t.Fatalf("failed to write to sink: %s", err)
-// 		}
-// 		sink.Close()
-// 	}
+	createIncSnapshot := func(index, term uint64, file string) {
+		snapshot := NewWALSnapshot(mustReadFile(file))
+		sink, err := str.Create(1, index, term, testConfig, 4, nil)
+		if err != nil {
+			t.Fatalf("failed to create snapshot sink: %s", err)
+		}
+		stream, err := snapshot.OpenStream()
+		if err != nil {
+			t.Fatalf("failed to open snapshot stream: %s", err)
+		}
+		_, err = io.Copy(sink, stream)
+		if err != nil {
+			t.Fatalf("failed to write snapshot: %s", err)
+		}
+		if err := sink.Close(); err != nil {
+			t.Fatalf("failed to close snapshot sink: %s", err)
+		}
+	}
 
-// 	createSnapshot(1, 1, "testdata/reaping/backup.db")
-// 	createSnapshot(3, 2, "testdata/reaping/wal-00")
-// 	createSnapshot(5, 3, "testdata/reaping/wal-01")
-// 	createSnapshot(7, 4, "testdata/reaping/wal-02")
-// 	createSnapshot(9, 5, "testdata/reaping/wal-03")
+	createIncSnapshot(3, 2, "testdata/db-and-wals/wal-00")
+	createIncSnapshot(5, 3, "testdata/db-and-wals/wal-01")
+	createIncSnapshot(7, 4, "testdata/db-and-wals/wal-02")
+	createIncSnapshot(9, 5, "testdata/db-and-wals/wal-03")
 
-// 	// There should be 5 snapshot directories, one of which should be
-// 	// a full, and the rest incremental.
-// 	snaps, err := str.getSnapshots()
-// 	if err != nil {
-// 		t.Fatalf("failed to list snapshots: %s", err)
-// 	}
-// 	if exp, got := 5, len(snaps); exp != got {
-// 		t.Fatalf("expected %d snapshots, got %d", exp, got)
-// 	}
-// 	for _, snap := range snaps[0:4] {
-// 		if snap.Full {
-// 			t.Fatalf("snapshot %s is full", snap.ID)
-// 		}
-// 	}
-// 	if !snaps[4].Full {
-// 		t.Fatalf("snapshot %s is incremental", snaps[4].ID)
-// 	}
+	// There should be 5 snapshot directories in the current generation.
+	generationsDir, ok, err := str.GetCurrentGenerationDir()
+	if err != nil {
+		t.Fatalf("failed to get generations dir: %s", err)
+	}
+	if !ok {
+		t.Fatalf("expected generations dir to exist")
+	}
+	snaps, err := str.getSnapshots(generationsDir)
+	if err != nil {
+		t.Fatalf("failed to list snapshots: %s", err)
+	}
+	if exp, got := 5, len(snaps); exp != got {
+		t.Fatalf("expected %d snapshots, got %d", exp, got)
+	}
+	for _, snap := range snaps[0:4] {
+		if snap.Full {
+			t.Fatalf("snapshot %s is full", snap.ID)
+		}
+	}
+	if !snaps[4].Full {
+		t.Fatalf("snapshot %s is incremental", snaps[4].ID)
+	}
 
-// 	// Reap just the first snapshot, which is full.
-// 	n, err := str.ReapSnapshots(4)
-// 	if err != nil {
-// 		t.Fatalf("failed to reap full snapshot: %s", err)
-// 	}
-// 	if exp, got := 1, n; exp != got {
-// 		t.Fatalf("expected %d snapshots to be reaped, got %d", exp, got)
-// 	}
-// 	snaps, err = str.getSnapshots()
-// 	if err != nil {
-// 		t.Fatalf("failed to list snapshots: %s", err)
-// 	}
-// 	if exp, got := 4, len(snaps); exp != got {
-// 		t.Fatalf("expected %d snapshots, got %d", exp, got)
-// 	}
+	// Reap just the first snapshot, which is full.
+	n, err := str.ReapSnapshots(generationsDir, 4)
+	if err != nil {
+		t.Fatalf("failed to reap full snapshot: %s", err)
+	}
+	if exp, got := 1, n; exp != got {
+		t.Fatalf("expected %d snapshots to be reaped, got %d", exp, got)
+	}
+	snaps, err = str.getSnapshots(generationsDir)
+	if err != nil {
+		t.Fatalf("failed to list snapshots: %s", err)
+	}
+	if exp, got := 4, len(snaps); exp != got {
+		t.Fatalf("expected %d snapshots, got %d", exp, got)
+	}
 
-// 	// Reap all but the last two snapshots. The remaining snapshots
-// 	// should all be incremental.
-// 	n, err = str.ReapSnapshots(2)
-// 	if err != nil {
-// 		t.Fatalf("failed to reap snapshots: %s", err)
-// 	}
-// 	if exp, got := 2, n; exp != got {
-// 		t.Fatalf("expected %d snapshots to be reaped, got %d", exp, got)
-// 	}
-// 	snaps, err = str.getSnapshots()
-// 	if err != nil {
-// 		t.Fatalf("failed to list snapshots: %s", err)
-// 	}
-// 	if exp, got := 2, len(snaps); exp != got {
-// 		t.Fatalf("expected %d snapshots, got %d", exp, got)
-// 	}
-// 	for _, snap := range snaps {
-// 		if snap.Full {
-// 			t.Fatalf("snapshot %s is full", snap.ID)
-// 		}
-// 	}
-// 	if snaps[0].Index != 9 && snaps[1].Term != 5 {
-// 		t.Fatalf("snap 0 is wrong")
-// 	}
-// 	if snaps[1].Index != 7 && snaps[1].Term != 3 {
-// 		t.Fatalf("snap 1 is wrong")
-// 	}
+	// Reap all but the last two snapshots. The remaining snapshots
+	// should all be incremental.
+	n, err = str.ReapSnapshots(generationsDir, 2)
+	if err != nil {
+		t.Fatalf("failed to reap snapshots: %s", err)
+	}
+	if exp, got := 2, n; exp != got {
+		t.Fatalf("expected %d snapshots to be reaped, got %d", exp, got)
+	}
+	snaps, err = str.getSnapshots(generationsDir)
+	if err != nil {
+		t.Fatalf("failed to list snapshots: %s", err)
+	}
+	if exp, got := 2, len(snaps); exp != got {
+		t.Fatalf("expected %d snapshots, got %d", exp, got)
+	}
+	for _, snap := range snaps {
+		if snap.Full {
+			t.Fatalf("snapshot %s is full", snap.ID)
+		}
+	}
+	if snaps[0].Index != 9 && snaps[1].Term != 5 {
+		t.Fatal("snap 0 is wrong, exp: ", snaps[0].Index, snaps[1].Term)
+	}
+	if snaps[1].Index != 7 && snaps[1].Term != 3 {
+		t.Fatal("snap 1 is wrong, exp:", snaps[1].Index, snaps[1].Term)
+	}
 
-// 	// Check the contents of the remaining snapshots by creating a new
-// 	// SQLite from the Store
-// 	dbPath, err := str.ReplayWALs()
-// 	if err != nil {
-// 		t.Fatalf("failed to replay WALs: %s", err)
-// 	}
-// 	db, err := db.Open(dbPath, false, true)
-// 	if err != nil {
-// 		t.Fatalf("failed to open database: %s", err)
-// 	}
-// 	defer db.Close()
-// 	rows, err := db.QueryStringStmt("SELECT COUNT(*) FROM foo")
-// 	if err != nil {
-// 		t.Fatalf("failed to query database: %s", err)
-// 	}
-// 	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[4]]}]`, asJSON(rows); exp != got {
-// 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-// 	}
-// }
+	// Open the latest snapshot, write it to disk, and check its contents.
+	_, rc, err := str.Open(snaps[0].ID)
+	if err != nil {
+		t.Fatalf("failed to open snapshot %s: %s", snaps[0].ID, err)
+	}
+	defer rc.Close()
+	strHdr, _, err := NewStreamHeaderFromReader(rc)
+	if err != nil {
+		t.Fatalf("error reading stream header: %v", err)
+	}
+	streamSnap := strHdr.GetFullSnapshot()
+	if streamSnap == nil {
+		t.Fatal("got nil FullSnapshot")
+	}
+
+	tmpFile := t.TempDir() + "/db"
+	if err := ReplayDB(streamSnap, rc, tmpFile); err != nil {
+		t.Fatalf("failed to replay database: %s", err)
+	}
+
+	// Check the database.
+	db, err := db.Open(tmpFile, false, true)
+	if err != nil {
+		t.Fatalf("failed to open database: %s", err)
+	}
+	defer db.Close()
+	rows, err := db.QueryStringStmt("SELECT COUNT(*) FROM foo")
+	if err != nil {
+		t.Fatalf("failed to query database: %s", err)
+	}
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[4]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("unexpected results for query exp: %s got: %s", exp, got)
+	}
+}
