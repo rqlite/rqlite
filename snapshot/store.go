@@ -503,14 +503,6 @@ func (s *Store) check() error {
 	return nil
 }
 
-func hasBaseSQLiteFile(dir string) bool {
-	return fileExists(filepath.Join(dir, baseSqliteFile))
-}
-
-func hasBaseSQLiteWALFile(dir string) bool {
-	return fileExists(filepath.Join(dir, baseSqliteWALFile))
-}
-
 func copyWALFromSnapshot(snapDirPath string, dstWALPath string) error {
 	snapWALFilePath := filepath.Join(snapDirPath, snapWALFile)
 	snapWALFilePathCopy := filepath.Dir(dstWALPath) + filepath.Base(snapDirPath)
