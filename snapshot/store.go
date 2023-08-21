@@ -136,6 +136,7 @@ func (s *Store) Open(id string) (*raft.SnapshotMeta, io.ReadCloser, error) {
 	if err != nil {
 		return nil, nil, err
 	}
+	var meta *raft.SnapshotMeta
 	for i := len(generations) - 1; i >= 0; i-- {
 		genDir := filepath.Join(s.generationsDir, generations[i])
 		snapshots, err := s.getSnapshots(genDir)
@@ -153,13 +154,31 @@ func (s *Store) Open(id string) (*raft.SnapshotMeta, io.ReadCloser, error) {
 
 		// Always include the base SQLite file. There may not be a snapshot directory
 		// if it's been checkpointed due to snapshot-reaping.
-		files := []string{filepath.Join(genDir, baseSqliteFile)}
+		baseSqliteFilePath := filepath.Join(genDir, baseSqliteFile)
+		if !fileExists(baseSqliteFilePath) {
+			return nil, nil, ErrSnapshotBaseMissing
+		}
+		files := []string{baseSqliteFilePath}
 		for _, snap := range snapshots {
 			if !snap.Full {
-				files = append(files, filepath.Join(genDir, snap.ID, snapWALFile))
+				// Only include WAL files for incremental snapshots, since base SQLite database
+				// is always included
+				snapWALFilePath := filepath.Join(genDir, snap.ID, snapWALFile)
+				if !fileExists(snapWALFilePath) {
+					return nil, nil, fmt.Errorf("WAL file %s does not exist", snapWALFilePath)
+				}
+				files = append(files, snapWALFilePath)
 			}
 			if snap.ID == id {
 				// Stop after we've reached the requested snapshot
+				meta = &raft.SnapshotMeta{
+					ID:                 snap.ID,
+					Index:              snap.Index,
+					Term:               snap.Term,
+					Configuration:      snap.Configuration,
+					ConfigurationIndex: snap.ConfigurationIndex,
+					Version:            snap.Version,
+				}
 				break
 			}
 		}
@@ -168,7 +187,8 @@ func (s *Store) Open(id string) (*raft.SnapshotMeta, io.ReadCloser, error) {
 		if err != nil {
 			return nil, nil, err
 		}
-		return nil, str, nil
+		meta.Size = str.Size()
+		return meta, str, nil
 	}
 	return nil, nil, ErrSnapshotNotFound
 }
