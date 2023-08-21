@@ -61,13 +61,16 @@ func (s *Sink) ID() string {
 	return s.meta.ID
 }
 
-// Cancel cancels the snapshot.
+// Cancel cancels the snapshot. Cancel must be called if the snapshot is not
+// going to be closed.
 func (s *Sink) Cancel() error {
 	s.closed = true
-	return s.cleanup()
+	s.cleanup() // Best effort, ignore errors.
+	return nil
 }
 
-// Close closes the sink, and finalizes creation of the snapshot.
+// Close closes the sink, and finalizes creation of the snapshot. It is critical
+// that Close is called, or the snapshot will not be in place.
 func (s *Sink) Close() error {
 	if s.closed {
 		return nil

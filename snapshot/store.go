@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	sync "sync"
 	"time"
 
 	"github.com/hashicorp/raft"
@@ -46,10 +47,31 @@ type Meta struct {
 	Full bool
 }
 
+// LockingSink is a wrapper around a SnapshotSink that ensures that the
+// Store has handed out only 1 sink at a time.
+type LockingSink struct {
+	raft.SnapshotSink
+	str *Store
+}
+
+// Close closes the sink, unlocking the Store for creation of a new sink.
+func (s *LockingSink) Close() error {
+	s.str.sinkMu.Unlock()
+	return s.SnapshotSink.Close()
+}
+
+// Cancel cancels the sink, unlocking the Store for creation of a new sink.
+func (s *LockingSink) Cancel() error {
+	s.str.sinkMu.Unlock()
+	return s.SnapshotSink.Cancel()
+}
+
 // Store is a store for snapshots.
 type Store struct {
 	rootDir        string
 	generationsDir string
+
+	sinkMu sync.Mutex
 
 	noAutoreap bool
 	logger     *log.Logger
@@ -75,7 +97,14 @@ func NewStore(dir string) (*Store, error) {
 
 // Create creates a new Sink object, ready for writing a snapshot.
 func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configuration raft.Configuration,
-	configurationIndex uint64, trans raft.Transport) (raft.SnapshotSink, error) {
+	configurationIndex uint64, trans raft.Transport) (retSink raft.SnapshotSink, retErr error) {
+	s.sinkMu.Lock()
+	defer func() {
+		if retErr != nil {
+			s.sinkMu.Unlock()
+		}
+	}()
+
 	currGenDir, ok, err := s.GetCurrentGenerationDir()
 	if err != nil {
 		return nil, err
@@ -103,9 +132,10 @@ func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configu
 
 	sink := NewSink(s, s.rootDir, currGenDir, nextGenDir, meta)
 	if err := sink.Open(); err != nil {
+		sink.Cancel()
 		return nil, fmt.Errorf("failed to open Sink: %v", err)
 	}
-	return sink, nil
+	return &LockingSink{sink, s}, nil
 }
 
 // List returns a list of all the snapshots in the Store.
@@ -515,6 +545,7 @@ func (s *Store) check() (retError error) {
 	walSnapshotCopyPath := filepath.Join(currGenDir, baseSqliteWALFile+snapshots[0].ID)
 	snapDirPath := filepath.Join(currGenDir, snapshots[0].ID)
 	if fileExists(walSnapshotCopyPath) {
+		s.logger.Printf("found uncheckpointed copy of WAL file from snapshot %s", snapshots[0].ID)
 		if err := os.Remove(walSnapshotCopyPath); err != nil {
 			return fmt.Errorf("failed to remove copy of WAL file %s: %s", walSnapshotCopyPath, err)
 		}
