@@ -512,11 +512,11 @@ func (s *Store) check() (retError error) {
 	// If we have a WAL file in the current generation which ends with the same ID as
 	// the oldest snapshot, then the copy of the WAL from the snapshot didn't complete.
 	// Complete it now.
-	walSnapshotCopy := filepath.Join(currGenDir, baseSqliteWALFile+snapshots[0].ID)
+	walSnapshotCopyPath := filepath.Join(currGenDir, baseSqliteWALFile+snapshots[0].ID)
 	snapDirPath := filepath.Join(currGenDir, snapshots[0].ID)
-	if fileExists(filepath.Join(currGenDir, walSnapshotCopy)) {
-		if err := os.Remove(walSnapshotCopy); err != nil {
-			return fmt.Errorf("failed to remove copy of WAL file %s: %s", walSnapshotCopy, err)
+	if fileExists(walSnapshotCopyPath) {
+		if err := os.Remove(walSnapshotCopyPath); err != nil {
+			return fmt.Errorf("failed to remove copy of WAL file %s: %s", walSnapshotCopyPath, err)
 		}
 		if err := copyWALFromSnapshot(snapDirPath, baseSqliteWALFilePath); err != nil {
 			s.logger.Printf("failed to copy WAL file from snapshot %s: %s", snapshots[0].ID, err)
