@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	sync "sync"
@@ -634,7 +635,12 @@ func removeDirSync(dir string) error {
 	if err := os.RemoveAll(dir); err != nil {
 		return err
 	}
-	return syncDir(filepath.Dir(dir))
+	if runtime.GOOS != "windows" {
+		if err := syncDir(filepath.Dir(dir)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func syncDir(dir string) error {
