@@ -95,7 +95,10 @@ func NewStore(dir string) (*Store, error) {
 	return s, nil
 }
 
-// Create creates a new Sink object, ready for writing a snapshot.
+// Create creates a new Sink object, ready for writing a snapshot. Sinks make certain assumptions about
+// the state of the store, and if those assumptions were changed by another Sink writing to the store
+// it could cause failures. Therefore we only allow 1 Sink to be in existence at a time. This shouldn't
+// be a problem, since snapshots are taken infrequently in one at a time.
 func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configuration raft.Configuration,
 	configurationIndex uint64, trans raft.Transport) (retSink raft.SnapshotSink, retErr error) {
 	s.sinkMu.Lock()
