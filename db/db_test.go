@@ -474,6 +474,17 @@ func Test_WALDatabaseCreatedOK(t *testing.T) {
 	if err := db.Checkpoint(5 * time.Second); err != nil {
 		t.Fatalf("failed to checkpoint database in WAL mode: %s", err.Error())
 	}
+	// Checkpoint a second time, to ensure it's idempotent.
+	if err := db.Checkpoint(5 * time.Second); err != nil {
+		t.Fatalf("failed to checkpoint database in WAL mode: %s", err.Error())
+	}
+	// Remove the WAL file, and ensure checkpoint still doesn't return an error.
+	if err := os.Remove(walPath); err != nil {
+		t.Fatalf("failed to remove WAL file: %s", err.Error())
+	}
+	if err := db.Checkpoint(5 * time.Second); err != nil {
+		t.Fatalf("failed to checkpoint database when non-existent WAL: %s", err.Error())
+	}
 }
 
 // Test_WALDatabaseCreatedOKFromDELETE tests that a WAL database is created properly,
