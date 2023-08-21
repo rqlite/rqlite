@@ -34,6 +34,28 @@ func Test_RemoveFiles(t *testing.T) {
 	}
 }
 
+func Test_DBPaths(t *testing.T) {
+	dbWAL, pathWAL := mustCreateOnDiskDatabaseWAL()
+	defer dbWAL.Close()
+	defer os.Remove(pathWAL)
+	if exp, got := pathWAL, dbWAL.Path(); exp != got {
+		t.Fatalf("expected path %s, got %s", exp, got)
+	}
+	if exp, got := pathWAL+"-wal", dbWAL.WALPath(); exp != got {
+		t.Fatalf("expected WAL path %s, got %s", exp, got)
+	}
+
+	db, path := mustCreateOnDiskDatabase()
+	defer db.Close()
+	defer os.Remove(path)
+	if exp, got := path, db.Path(); exp != got {
+		t.Fatalf("expected path %s, got %s", exp, got)
+	}
+	if exp, got := "", db.WALPath(); exp != got {
+		t.Fatalf("expected WAL path %s, got %s", exp, got)
+	}
+}
+
 // Test_TableCreation tests basic operation of an in-memory database,
 // ensuring that using different connection objects (as the Execute and Query
 // will do) works properly i.e. that the connections object work on the same

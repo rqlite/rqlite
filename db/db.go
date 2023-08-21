@@ -523,6 +523,14 @@ func (db *DB) Path() string {
 	return db.path
 }
 
+// WALPath returns the path to the WAL file for this database.
+func (db *DB) WALPath() string {
+	if !db.wal {
+		return ""
+	}
+	return db.walPath
+}
+
 // CompileOptions returns the SQLite compilation options.
 func (db *DB) CompileOptions() ([]string, error) {
 	res, err := db.QueryStringStmt("PRAGMA compile_options")
