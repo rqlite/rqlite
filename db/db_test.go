@@ -478,7 +478,7 @@ func Test_WALDatabaseCreatedOK(t *testing.T) {
 	if err := db.Checkpoint(5 * time.Second); err != nil {
 		t.Fatalf("failed to checkpoint database in WAL mode: %s", err.Error())
 	}
-	// Remove the WAL file, and ensure checkpoint still doesn't return an error.
+	// Remove the WAL file, and ensure checkpointing still doesn't return an error.
 	if err := os.Remove(walPath); err != nil {
 		t.Fatalf("failed to remove WAL file: %s", err.Error())
 	}
