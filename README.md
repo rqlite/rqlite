@@ -81,8 +81,6 @@ $ rqlite
 ```
 
 ## Limitations
- * In-memory databases are currently limited to 2GiB (2147483648 bytes) in size. You can learn more about possible ways to get around this limit in the [documentation](https://rqlite.io/docs/guides/performance/#in-memory-database-limits).
-
  * Because rqlite peforms _statement-based replication_ certain [_non-deterministic functions_](https://www.sqlite.org/deterministic.html), e.g. `RANDOM()`, are rewritten by rqlite before being passed to the Raft system and SQLite. To learn more about rqlite's support for non-deterministic functions, check out the [documentation](https://rqlite.io/docs/api/non-deterministic/).
 
  * This has not been extensively tested, but you can directly read the SQLite file under any node at anytime, assuming you run in "on-disk" mode. However there is no guarantee that the SQLite file reflects all the changes that have taken place on the cluster unless you are sure the host node itself has received and applied all changes.
