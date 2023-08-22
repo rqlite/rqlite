@@ -521,6 +521,7 @@ func (s *Store) Close(wait bool) (retErr error) {
 		// Protect against closing already-closed resource, such as channels.
 		return nil
 	}
+	s.logger.Printf("closing store with node ID %s", s.raftID)
 
 	close(s.appliedIdxUpdateDone)
 	close(s.observerClose)
