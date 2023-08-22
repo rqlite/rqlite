@@ -1547,17 +1547,18 @@ func Test_SingleNodeRecoverNoChange(t *testing.T) {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
 	queryTest()
+	id, addr := s.ID(), s.Addr()
 	if err := s.Close(true); err != nil {
 		t.Fatalf("failed to close single-node store: %s", err.Error())
 	}
 
 	// Set up for Recovery during open
-	peers := fmt.Sprintf(`[{"id": "%s","address": "%s"}]`, s.ID(), s.Addr())
+	peers := fmt.Sprintf(`[{"id": "%s","address": "%s"}]`, id, addr)
 	peersPath := filepath.Join(s.Path(), "/raft/peers.json")
 	peersInfo := filepath.Join(s.Path(), "/raft/peers.info")
 	mustWriteFile(peersPath, peers)
 	if err := s.Open(); err != nil {
-		t.Fatalf("failed to open single-node store: %s", err.Error())
+		t.Fatalf("failed to re-open single-node store: %s", err.Error())
 	}
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
