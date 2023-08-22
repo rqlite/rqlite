@@ -65,32 +65,33 @@ func ReplayDB(fullSnap *FullSnapshot, r io.Reader, path string) error {
 	if err != nil {
 		return fmt.Errorf("error creating SQLite file: %v", err)
 	}
+	defer sqliteBaseFD.Close()
 	if _, err := io.CopyN(sqliteBaseFD, r, dbInfo.Size); err != nil {
 		return fmt.Errorf("error writing SQLite file data: %v", err)
-	}
-	if err := sqliteBaseFD.Close(); err != nil {
-		return fmt.Errorf("error closing SQLite file: %v", err)
 	}
 
 	// Write out any WALs.
 	var walFiles []string
 	for i, wal := range fullSnap.GetWals() {
-		if wal == nil {
-			return fmt.Errorf("got nil WAL")
-		}
+		if err := func() error {
+			if wal == nil {
+				return fmt.Errorf("got nil WAL")
+			}
 
-		walName := filepath.Join(filepath.Dir(path), baseSqliteWALFile+fmt.Sprintf("%d", i))
-		walFD, err := os.Create(walName)
-		if err != nil {
-			return fmt.Errorf("error creating WAL file: %v", err)
+			walName := filepath.Join(filepath.Dir(path), baseSqliteWALFile+fmt.Sprintf("%d", i))
+			walFD, err := os.Create(walName)
+			if err != nil {
+				return fmt.Errorf("error creating WAL file: %v", err)
+			}
+			defer walFD.Close()
+			if _, err := io.CopyN(walFD, r, wal.Size); err != nil {
+				return fmt.Errorf("error writing WAL file data: %v", err)
+			}
+			walFiles = append(walFiles, walName)
+			return nil
+		}(); err != nil {
+			return err
 		}
-		if _, err := io.CopyN(walFD, r, wal.Size); err != nil {
-			return fmt.Errorf("error writing WAL file data: %v", err)
-		}
-		if err := walFD.Close(); err != nil {
-			return fmt.Errorf("error closing WAL file: %v", err)
-		}
-		walFiles = append(walFiles, walName)
 	}
 
 	// Checkpoint the WAL files into the base SQLite file
