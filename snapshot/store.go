@@ -340,6 +340,7 @@ func (s *Store) ReapGenerations() (int, error) {
 		if err := os.RemoveAll(genDir); err != nil {
 			return n, err
 		}
+		s.logger.Printf("reaped generation %s successfully", generations[i])
 		n++
 	}
 	return n, nil

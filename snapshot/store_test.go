@@ -332,6 +332,79 @@ func Test_Store_CreateFullThenIncremental(t *testing.T) {
 	crc.Close()
 }
 
+// Test_WALSnapshotStore_CreateFullThenFull ensures two full snapshots
+// can be created and persisted back-to-back.
+func Test_Store_CreateFullThenFull(t *testing.T) {
+	checkSnapshotCount := func(s *Store, exp int) *raft.SnapshotMeta {
+		snaps, err := s.List()
+		if err != nil {
+			t.Fatalf("failed to list snapshots: %s", err)
+		}
+		if exp, got := exp, len(snaps); exp != got {
+			t.Fatalf("expected %d snapshots, got %d", exp, got)
+		}
+		if len(snaps) == 0 {
+			return nil
+		}
+		return snaps[0]
+	}
+
+	dir := t.TempDir()
+	str, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create snapshot store: %s", err)
+	}
+	if !str.FullNeeded() {
+		t.Fatalf("expected full snapshots to be needed")
+	}
+
+	testConfig1 := makeTestConfiguration("1", "2")
+
+	//////////////////////////////////////////////////////////////////////////
+	// Create a full snapshot and write it to the sink.
+	sink, err := str.Create(1, 22, 33, testConfig1, 4, nil)
+	if err != nil {
+		t.Fatalf("failed to create 1st snapshot sink: %s", err)
+	}
+
+	fullSnap := NewFullSnapshot("testdata/db-and-wals/backup.db")
+	if err := fullSnap.Persist(sink); err != nil {
+		t.Fatalf("failed to persist full snapshot: %s", err)
+	}
+	if err := sink.Close(); err != nil {
+		t.Fatalf("failed to close sink: %s", err)
+	}
+	if str.FullNeeded() {
+		t.Fatalf("full snapshot still needed")
+	}
+	meta := checkSnapshotCount(str, 1)
+	if meta.Index != 22 || meta.Term != 33 {
+		t.Fatalf("unexpected snapshot metadata: %+v", meta)
+	}
+
+	//////////////////////////////////////////////////////////////////////////
+	// Create a second full snapshot and write it to the sink.
+	sink, err = str.Create(1, 44, 55, testConfig1, 4, nil)
+	if err != nil {
+		t.Fatalf("failed to create 1st snapshot sink: %s", err)
+	}
+
+	fullSnap = NewFullSnapshot("testdata/db-and-wals/backup.db")
+	if err := fullSnap.Persist(sink); err != nil {
+		t.Fatalf("failed to persist full snapshot: %s", err)
+	}
+	if err := sink.Close(); err != nil {
+		t.Fatalf("failed to close sink: %s", err)
+	}
+	if str.FullNeeded() {
+		t.Fatalf("full snapshot still needed")
+	}
+	meta = checkSnapshotCount(str, 1)
+	if meta.Index != 44 || meta.Term != 55 {
+		t.Fatalf("unexpected snapshot metadata: %+v", meta)
+	}
+}
+
 func Test_Store_ReapGenerations(t *testing.T) {
 	dir := t.TempDir()
 	s, err := NewStore(dir)
