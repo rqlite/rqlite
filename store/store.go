@@ -1611,6 +1611,7 @@ func (s *Store) Database(leader bool) ([]byte, error) {
 // http://sqlite.org/howtocorrupt.html states it is safe to copy or serialize the
 // database as long as no writes to the database are in progress.
 func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
+	s.logger.Printf("initiating node snapshot on node ID %s", s.raftID)
 	startT := time.Now()
 	defer func() {
 		s.numSnapshotsMu.Lock()
@@ -1659,6 +1660,7 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 // will not be called concurrently with Apply(), so synchronization with Execute()
 // is not necessary.
 func (s *Store) Restore(rc io.ReadCloser) error {
+	s.logger.Printf("initiating node restore on node ID %s", s.raftID)
 	startT := time.Now()
 
 	strHdr, _, err := snapshot.NewStreamHeaderFromReader(rc)
