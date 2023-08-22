@@ -5,18 +5,17 @@ import (
 	"errors"
 	"expvar"
 	"fmt"
-	"math/rand"
 	"net"
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/rqlite/rqlite/command"
 	"github.com/rqlite/rqlite/command/encoding"
 	"github.com/rqlite/rqlite/db"
+	"github.com/rqlite/rqlite/random"
 	"github.com/rqlite/rqlite/testdata/chinook"
 )
 
@@ -2867,18 +2866,18 @@ func mustNewStoreAtPathsLn(id, dataPath, sqlitePath string, fk bool) (*Store, ne
 }
 
 func mustNewStore(t *testing.T) (*Store, net.Listener) {
-	return mustNewStoreAtPathsLn(randomString(), t.TempDir(), "", false)
+	return mustNewStoreAtPathsLn(random.RandomString(), t.TempDir(), "", false)
 }
 
 func mustNewStoreFK(t *testing.T) (*Store, net.Listener) {
-	return mustNewStoreAtPathsLn(randomString(), t.TempDir(), "", true)
+	return mustNewStoreAtPathsLn(random.RandomString(), t.TempDir(), "", true)
 }
 
 func mustNewStoreSQLitePath(t *testing.T) (*Store, net.Listener, string) {
 	dataDir := t.TempDir()
 	sqliteDir := t.TempDir()
 	sqlitePath := filepath.Join(sqliteDir, "explicit-path.db")
-	s, ln := mustNewStoreAtPathsLn(randomString(), dataDir, sqlitePath, true)
+	s, ln := mustNewStoreAtPathsLn(random.RandomString(), dataDir, sqlitePath, true)
 	return s, ln, sqlitePath
 }
 
@@ -3101,19 +3100,6 @@ func asJSONAssociative(v interface{}) string {
 		panic(fmt.Sprintf("failed to JSON marshal value: %s", err.Error()))
 	}
 	return string(b)
-}
-
-func randomString() string {
-	var output strings.Builder
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	chars := "abcdedfghijklmnopqrstABCDEFGHIJKLMNOP"
-
-	for i := 0; i < 20; i++ {
-		random := r.Intn(len(chars))
-		randomChar := chars[random]
-		output.WriteString(string(randomChar))
-	}
-	return output.String()
 }
 
 func testPoll(t *testing.T, f func() bool, p time.Duration, d time.Duration) {

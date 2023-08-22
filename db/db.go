@@ -1405,18 +1405,6 @@ func isTextType(t string) bool {
 		strings.HasPrefix(t, "clob")
 }
 
-func randomString() string {
-	var output strings.Builder
-	chars := "abcdedfghijklmnopqrstABCDEFGHIJKLMNOP"
-
-	for i := 0; i < 20; i++ {
-		random := rand.Intn(len(chars))
-		randomChar := chars[random]
-		output.WriteByte(randomChar)
-	}
-	return output.String()
-}
-
 func containsEmptyType(slice []string) bool {
 	for _, str := range slice {
 		if str == "" {
