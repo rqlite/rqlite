@@ -1,6 +1,7 @@
 package store
 
 import (
+	"io"
 	"net"
 	"time"
 
@@ -43,4 +44,29 @@ func (t *Transport) Close() error {
 // Addr returns the binding address of the transport.
 func (t *Transport) Addr() net.Addr {
 	return t.ln.Addr()
+}
+
+// NodeTransport is a wrapper around the Raft NetworkTransport, which allows
+// custom configuration of the InstallSnapshot method.
+type NodeTransport struct {
+	*raft.NetworkTransport
+}
+
+// NewNodeTransport returns an initialized NodeTransport.
+func NewNodeTransport(transport *raft.NetworkTransport) *NodeTransport {
+	return &NodeTransport{
+		NetworkTransport: transport,
+	}
+}
+
+// InstallSnapshot is used to push a snapshot down to a follower. The data is read from
+// the ReadCloser and streamed to the client.
+func (n *NodeTransport) InstallSnapshot(id raft.ServerID, target raft.ServerAddress, args *raft.InstallSnapshotRequest,
+	resp *raft.InstallSnapshotResponse, data io.Reader) error {
+	return n.NetworkTransport.InstallSnapshot(id, target, args, resp, data)
+}
+
+// Consumer returns a channel of RPC requests to be consumed.
+func (n *NodeTransport) Consumer() <-chan raft.RPC {
+	return n.NetworkTransport.Consumer()
 }

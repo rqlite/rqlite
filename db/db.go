@@ -23,8 +23,7 @@ import (
 const (
 	SQLiteHeaderSize = 32
 
-	bkDelay                  = 250
-	defaultCheckpointTimeout = 30 * time.Second
+	bkDelay = 250
 )
 
 const (
@@ -269,7 +268,7 @@ func ReplayWAL(path string, wals []string, deleteMode bool) error {
 		if err != nil {
 			return err
 		}
-		if err := db.Checkpoint(defaultCheckpointTimeout); err != nil {
+		if err := db.Checkpoint(); err != nil {
 			return fmt.Errorf("checkpoint WAL %s: %s", wal, err.Error())
 		}
 
@@ -444,9 +443,16 @@ func (db *DB) WALSize() (int64, error) {
 	return fi.Size(), nil
 }
 
-// Checkpoint performs a WAL checkpoint. If the checkpoint does not complete
-// within the given duration, an error is returned.
-func (db *DB) Checkpoint(dur time.Duration) (err error) {
+// Checkpoint checkpoints the WAL file. If the WAL file is not enabled, this
+// function is a no-op.
+func (db *DB) Checkpoint() error {
+	return db.CheckpointWithTimeout(0)
+}
+
+// CheckpointWithTimeout performs a WAL checkpoint. If the checkpoint does not
+// complete within the given duration, an error is returned. If the duration is 0,
+// the checkpoint will be attempted only once.
+func (db *DB) CheckpointWithTimeout(dur time.Duration) (err error) {
 	start := time.Now()
 	defer func() {
 		if err != nil {
@@ -464,19 +470,25 @@ func (db *DB) Checkpoint(dur time.Duration) (err error) {
 	f := func() error {
 		err := db.rwDB.QueryRow("PRAGMA wal_checkpoint(TRUNCATE)").Scan(&ok, &nPages, &nMoved)
 		if err != nil {
-			return err
+			return fmt.Errorf("error checkpointing WAL: %s", err.Error())
 		}
 		if ok != 0 {
-			return fmt.Errorf("failed to completely checkpoint WAL")
+			return fmt.Errorf("failed to completely checkpoint WAL (%d ok, %d pages, %d moved)",
+				ok, nPages, nMoved)
 		}
 		return nil
 	}
 
 	// Try fast path
-	if err := f(); err == nil {
+	err = f()
+	if err == nil {
 		return nil
 	}
+	if dur == 0 {
+		return err
+	}
 
+	var lastError error
 	t := time.NewTicker(100 * time.Millisecond)
 	defer t.Stop()
 	for {
@@ -485,8 +497,9 @@ func (db *DB) Checkpoint(dur time.Duration) (err error) {
 			if err := f(); err == nil {
 				return nil
 			}
+			lastError = err
 		case <-time.After(dur):
-			return fmt.Errorf("checkpoint timeout")
+			return fmt.Errorf("checkpoint timeout: %v", lastError)
 		}
 	}
 }
@@ -506,6 +519,13 @@ func (db *DB) EnableCheckpointing() error {
 	return err
 }
 
+// GetCheckpointing returns the current checkpointing setting.
+func (db *DB) GetCheckpointing() (int, error) {
+	var n int
+	err := db.rwDB.QueryRow("PRAGMA wal_autocheckpoint").Scan(&n)
+	return n, err
+}
+
 // FKEnabled returns whether Foreign Key constraints are enabled.
 func (db *DB) FKEnabled() bool {
 	return db.fkEnabled
@@ -519,6 +539,14 @@ func (db *DB) WALEnabled() bool {
 // Path returns the path of this database.
 func (db *DB) Path() string {
 	return db.path
+}
+
+// WALPath returns the path to the WAL file for this database.
+func (db *DB) WALPath() string {
+	if !db.wal {
+		return ""
+	}
+	return db.walPath
 }
 
 // CompileOptions returns the SQLite compilation options.

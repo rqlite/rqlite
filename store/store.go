@@ -4,7 +4,6 @@
 package store
 
 import (
-	"bytes"
 	"errors"
 	"expvar"
 	"fmt"
@@ -83,30 +82,29 @@ const (
 )
 
 const (
-	numSnaphots              = "num_snapshots"
-	numProvides              = "num_provides"
-	numBackups               = "num_backups"
-	numLoads                 = "num_loads"
-	numRestores              = "num_restores"
-	numAutoRestores          = "num_auto_restores"
-	numAutoRestoresSkipped   = "num_auto_restores_skipped"
-	numAutoRestoresFailed    = "num_auto_restores_failed"
-	numRecoveries            = "num_recoveries"
-	numUncompressedCommands  = "num_uncompressed_commands"
-	numCompressedCommands    = "num_compressed_commands"
-	numJoins                 = "num_joins"
-	numIgnoredJoins          = "num_ignored_joins"
-	numRemovedBeforeJoins    = "num_removed_before_joins"
-	numDBStatsErrors         = "num_db_stats_errors"
-	snapshotCreateDuration   = "snapshot_create_duration"
-	snapshotPersistDuration  = "snapshot_persist_duration"
-	snapshotDBSerializedSize = "snapshot_db_serialized_size"
-	snapshotDBOnDiskSize     = "snapshot_db_ondisk_size"
-	leaderChangesObserved    = "leader_changes_observed"
-	leaderChangesDropped     = "leader_changes_dropped"
-	failedHeartbeatObserved  = "failed_heartbeat_observed"
-	nodesReapedOK            = "nodes_reaped_ok"
-	nodesReapedFailed        = "nodes_reaped_failed"
+	numSnaphots             = "num_snapshots"
+	numProvides             = "num_provides"
+	numBackups              = "num_backups"
+	numLoads                = "num_loads"
+	numRestores             = "num_restores"
+	numAutoRestores         = "num_auto_restores"
+	numAutoRestoresSkipped  = "num_auto_restores_skipped"
+	numAutoRestoresFailed   = "num_auto_restores_failed"
+	numRecoveries           = "num_recoveries"
+	numUncompressedCommands = "num_uncompressed_commands"
+	numCompressedCommands   = "num_compressed_commands"
+	numJoins                = "num_joins"
+	numIgnoredJoins         = "num_ignored_joins"
+	numRemovedBeforeJoins   = "num_removed_before_joins"
+	numDBStatsErrors        = "num_db_stats_errors"
+	snapshotCreateDuration  = "snapshot_create_duration"
+	snapshotPersistDuration = "snapshot_persist_duration"
+	snapshotDBOnDiskSize    = "snapshot_db_ondisk_size"
+	leaderChangesObserved   = "leader_changes_observed"
+	leaderChangesDropped    = "leader_changes_dropped"
+	failedHeartbeatObserved = "failed_heartbeat_observed"
+	nodesReapedOK           = "nodes_reaped_ok"
+	nodesReapedFailed       = "nodes_reaped_failed"
 )
 
 // stats captures stats for the Store.
@@ -136,7 +134,6 @@ func ResetStats() {
 	stats.Add(numDBStatsErrors, 0)
 	stats.Add(snapshotCreateDuration, 0)
 	stats.Add(snapshotPersistDuration, 0)
-	stats.Add(snapshotDBSerializedSize, 0)
 	stats.Add(snapshotDBOnDiskSize, 0)
 	stats.Add(leaderChangesObserved, 0)
 	stats.Add(leaderChangesDropped, 0)
@@ -198,6 +195,7 @@ type Store struct {
 	raftLog       raft.LogStore             // Persistent log store.
 	raftStable    raft.StableStore          // Persistent k-v store.
 	boltStore     *rlog.Log                 // Physical store.
+	snapshotStore *snapshot.Store           // Snapshot store.
 
 	// Raft changes observer
 	leaderObserversMu sync.RWMutex
@@ -336,7 +334,7 @@ func (s *Store) Open() (retErr error) {
 	}
 
 	s.openT = time.Now()
-	s.logger.Printf("opening store with node ID %s", s.raftID)
+	s.logger.Printf("opening store with node ID %s, listening on %s", s.raftID, s.ln.Addr().String())
 
 	s.logger.Printf("configured for an on-disk database at %s", s.dbPath)
 	parentDir := filepath.Dir(s.dbPath)
@@ -369,18 +367,19 @@ func (s *Store) Open() (retErr error) {
 	config := s.raftConfig()
 	config.LocalID = raft.ServerID(s.raftID)
 
-	// Create the snapshot store. This allows Raft to truncate the log.
-	snapshots, err := raft.NewFileSnapshotStore(s.raftDir, retainSnapshotCount, os.Stderr)
+	// Create store for the Snapshots.
+	snapshotStore, err := snapshot.NewStore(filepath.Join(s.raftDir, "rsnapshots"))
 	if err != nil {
-		return fmt.Errorf("file snapshot store: %s", err)
+		return fmt.Errorf("failed to create snapshot store: %s", err)
 	}
-	snaps, err := snapshots.List()
+	s.snapshotStore = snapshotStore
+	snaps, err := s.snapshotStore.List()
 	if err != nil {
 		return fmt.Errorf("list snapshots: %s", err)
 	}
 	s.logger.Printf("%d preexisting snapshots present", len(snaps))
 
-	// Create the log store and stable store.
+	// Create the Raft log store and stable store.
 	s.boltStore, err = rlog.New(filepath.Join(s.raftDir, raftDBPath), s.NoFreeListSync)
 	if err != nil {
 		return fmt.Errorf("new log store: %s", err)
@@ -398,7 +397,7 @@ func (s *Store) Open() (retErr error) {
 		if err != nil {
 			return fmt.Errorf("failed to read peers file: %s", err.Error())
 		}
-		if err = RecoverNode(s.raftDir, s.logger, s.raftLog, s.boltStore, snapshots, s.raftTn, config); err != nil {
+		if err = RecoverNode(s.raftDir, s.logger, s.raftLog, s.boltStore, s.snapshotStore, s.raftTn, config); err != nil {
 			return fmt.Errorf("failed to recover node: %s", err.Error())
 		}
 		if err := os.Rename(s.peersPath, s.peersInfoPath); err != nil {
@@ -422,9 +421,9 @@ func (s *Store) Open() (retErr error) {
 	s.logger.Printf("created on-disk database at open")
 
 	// Instantiate the Raft system.
-	ra, err := raft.NewRaft(config, s, s.raftLog, s.raftStable, snapshots, s.raftTn)
+	ra, err := raft.NewRaft(config, s, s.raftLog, s.raftStable, s.snapshotStore, s.raftTn)
 	if err != nil {
-		return fmt.Errorf("new raft: %s", err)
+		return fmt.Errorf("creating the raft system failed: %s", err)
 	}
 	s.raft = ra
 
@@ -520,6 +519,7 @@ func (s *Store) Close(wait bool) (retErr error) {
 		// Protect against closing already-closed resource, such as channels.
 		return nil
 	}
+	s.logger.Printf("closing store with node ID %s, listening on %s", s.raftID, s.ln.Addr().String())
 
 	close(s.appliedIdxUpdateDone)
 	close(s.observerClose)
@@ -650,6 +650,9 @@ func (s *Store) Path() string {
 
 // Addr returns the address of the store.
 func (s *Store) Addr() string {
+	if !s.open {
+		return ""
+	}
 	return string(s.raftTn.LocalAddr())
 }
 
@@ -1609,6 +1612,8 @@ func (s *Store) Database(leader bool) ([]byte, error) {
 // http://sqlite.org/howtocorrupt.html states it is safe to copy or serialize the
 // database as long as no writes to the database are in progress.
 func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
+	s.logger.Printf("initiating node snapshot on node ID %s", s.raftID)
+	startT := time.Now()
 	defer func() {
 		s.numSnapshotsMu.Lock()
 		defer s.numSnapshotsMu.Unlock()
@@ -1617,42 +1622,85 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 
 	s.queryTxMu.Lock()
 	defer s.queryTxMu.Unlock()
-	fsm := NewFSMSnapshot(s.db, s.logger)
-	dur := time.Since(fsm.startT)
+
+	var fsmSnapshot raft.FSMSnapshot
+	if s.snapshotStore.FullNeeded() {
+		if err := s.db.Checkpoint(); err != nil {
+			return nil, err
+		}
+		fsmSnapshot = snapshot.NewFullSnapshot(s.db.Path())
+	} else {
+		var b []byte
+		var err error
+		if pathExists(s.db.WALPath()) {
+			b, err = os.ReadFile(s.db.WALPath())
+			if err != nil {
+				return nil, err
+			}
+			if err := s.db.Checkpoint(); err != nil {
+				return nil, err
+			}
+		}
+		fsmSnapshot = snapshot.NewWALSnapshot(b)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	stats.Add(numSnaphots, 1)
+	dur := time.Since(startT)
 	stats.Get(snapshotCreateDuration).(*expvar.Int).Set(dur.Milliseconds())
-	stats.Get(snapshotDBSerializedSize).(*expvar.Int).Set(int64(len(fsm.database)))
 	s.logger.Printf("node snapshot created in %s", dur)
-	return fsm, nil
+	return &FSMSnapshot{
+		FSMSnapshot: fsmSnapshot,
+		logger:      s.logger,
+	}, nil
 }
 
 // Restore restores the node to a previous state. The Hashicorp docs state this
 // will not be called concurrently with Apply(), so synchronization with Execute()
 // is not necessary.
 func (s *Store) Restore(rc io.ReadCloser) error {
+	s.logger.Printf("initiating node restore on node ID %s", s.raftID)
 	startT := time.Now()
-	b, err := dbBytesFromSnapshot(rc)
+
+	strHdr, _, err := snapshot.NewStreamHeaderFromReader(rc)
 	if err != nil {
-		return fmt.Errorf("restore failed: %s", err.Error())
-	}
-	if b == nil {
-		s.logger.Println("no database data present in restored snapshot")
+		return fmt.Errorf("error reading stream header: %v", err)
 	}
 
+	fullSnap := strHdr.GetFullSnapshot()
+	if fullSnap == nil {
+		return fmt.Errorf("got nil FullSnapshot")
+	}
+
+	tmpFile, err := os.CreateTemp(filepath.Dir(s.db.Path()), "rqlite-restore-*")
+	if tmpFile.Close(); err != nil {
+		return fmt.Errorf("error creating temporary file for restore operation: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+	if err := snapshot.ReplayDB(fullSnap, rc, tmpFile.Name()); err != nil {
+		return fmt.Errorf("error replaying DB: %v", err)
+	}
+
+	// Must wipe out all pre-existing state if being asked to do a restore.
 	if err := s.db.Close(); err != nil {
 		return fmt.Errorf("failed to close pre-restore database: %s", err)
 	}
 	if err := sql.RemoveFiles(s.db.Path()); err != nil {
 		return fmt.Errorf("failed to remove pre-restore database files: %s", err)
 	}
+	if err := os.Rename(tmpFile.Name(), s.db.Path()); err != nil {
+		return fmt.Errorf("failed to rename restored database: %s", err)
+	}
 
 	var db *sql.DB
-	db, err = createOnDisk(b, s.dbPath, s.dbConf.FKConstraints, !s.dbConf.DisableWAL)
+	db, err = sql.Open(s.dbPath, s.dbConf.FKConstraints, !s.dbConf.DisableWAL)
 	if err != nil {
 		return fmt.Errorf("open on-disk file during restore: %s", err)
 	}
-	s.logger.Println("successfully enabled on-disk database due to restore")
 	s.db = db
+	s.logger.Printf("successfully opened on-disk database at %s due to restore", s.db.Path())
 
 	stats.Add(numRestores, 1)
 	s.logger.Printf("node restored in %s", time.Since(startT))
@@ -1822,49 +1870,56 @@ func RecoverNode(dataDir string, logger *log.Logger, logs raft.LogStore, stable 
 		return err
 	}
 
-	// Attempt to restore any snapshots we find, newest to oldest.
+	// Now, create a temporary database. If there is a snapshot, we will read data from
+	// that snapshot into it.
+	tmpDBPath := filepath.Join(dataDir, "recovery.db")
+	if err := os.WriteFile(tmpDBPath, nil, 0660); err != nil {
+		return fmt.Errorf("failed to create temporary recovery database file: %s", err)
+	}
+	defer os.Remove(tmpDBPath)
+
+	// Attempt to restore any latest snapshot.
 	var (
 		snapshotIndex  uint64
 		snapshotTerm   uint64
 		snapshots, err = snaps.List()
 	)
+
+	snapshots, err = snaps.List()
 	if err != nil {
-		return fmt.Errorf("failed to list snapshots: %v", err)
+		return fmt.Errorf("failed to list snapshots: %s", err)
 	}
 	logger.Printf("recovery detected %d snapshots", len(snapshots))
+	if len(snapshots) > 0 {
+		if err := func() error {
+			snapID := snapshots[0].ID
+			_, rc, err := snaps.Open(snapID)
+			if err != nil {
+				return fmt.Errorf("failed to open snapshot %s: %s", snapID, err)
+			}
+			defer rc.Close()
 
-	var b []byte
-	for _, snapshot := range snapshots {
-		var source io.ReadCloser
-		_, source, err = snaps.Open(snapshot.ID)
-		if err != nil {
-			// Skip this one and try the next. We will detect if we
-			// couldn't open any snapshots.
-			continue
+			strHdr, _, err := snapshot.NewStreamHeaderFromReader(rc)
+			if err != nil {
+				return fmt.Errorf("error reading stream header during recovery: %v", err)
+			}
+			fullSnap := strHdr.GetFullSnapshot()
+			if fullSnap == nil {
+				return fmt.Errorf("got nil FullSnapshot during recovery")
+			}
+			if err := snapshot.ReplayDB(fullSnap, rc, tmpDBPath); err != nil {
+				return fmt.Errorf("error replaying DB during recovery: %v", err)
+			}
+			snapshotIndex = snapshots[0].Index
+			snapshotTerm = snapshots[0].Term
+			return nil
+		}(); err != nil {
+			return err
 		}
 
-		b, err = dbBytesFromSnapshot(source)
-		// Close the source after the restore has completed
-		source.Close()
-		if err != nil {
-			// Same here, skip and try the next one.
-			continue
-		}
-
-		snapshotIndex = snapshot.Index
-		snapshotTerm = snapshot.Term
-		break
-	}
-	if len(snapshots) > 0 && (snapshotIndex == 0 || snapshotTerm == 0) {
-		return fmt.Errorf("failed to restore any of the available snapshots")
 	}
 
-	// Now, create a temporary database, so we can generate new snapshots later.
-	tmpDBPath := filepath.Join(dataDir, "recovery.db")
-	if os.WriteFile(tmpDBPath, b, 0660) != nil {
-		return fmt.Errorf("failed to write SQLite data to temporary file: %s", err)
-	}
-	defer os.Remove(tmpDBPath)
+	// Now, open the database so we can replay any outstanding Raft log entries.
 	db, err := sql.Open(tmpDBPath, false, true)
 	if err != nil {
 		return fmt.Errorf("failed to open temporary database: %s", err)
@@ -1887,7 +1942,7 @@ func RecoverNode(dataDir string, logger *log.Logger, logs raft.LogStore, stable 
 	if err != nil {
 		return fmt.Errorf("failed to find last log: %v", err)
 	}
-	logger.Printf("recovery snapshot index is %d, last index is %d", snapshotIndex, lastLogIndex)
+	logger.Printf("last index is %d, last index written to log is %d", lastIndex, lastLogIndex)
 
 	for index := snapshotIndex + 1; index <= lastLogIndex; index++ {
 		var entry raft.Log
@@ -1903,18 +1958,21 @@ func RecoverNode(dataDir string, logger *log.Logger, logs raft.LogStore, stable 
 
 	// Create a new snapshot, placing the configuration in as if it was
 	// committed at index 1.
-	snapshot := NewFSMSnapshot(db, logger)
+	if err := db.Checkpoint(); err != nil {
+		return fmt.Errorf("failed to checkpoint database: %s", err)
+	}
+	fsmSnapshot := snapshot.NewFullSnapshot(tmpDBPath) // tmpDBPath contains full state now.
 	sink, err := snaps.Create(1, lastIndex, lastTerm, conf, 1, tn)
 	if err != nil {
 		return fmt.Errorf("failed to create snapshot: %v", err)
 	}
-	if err = snapshot.Persist(sink); err != nil {
+	if err = fsmSnapshot.Persist(sink); err != nil {
 		return fmt.Errorf("failed to persist snapshot: %v", err)
 	}
 	if err = sink.Close(); err != nil {
 		return fmt.Errorf("failed to finalize snapshot: %v", err)
 	}
-	logger.Printf("recovery snapshot created successfully")
+	logger.Printf("recovery snapshot created successfully using %s", tmpDBPath)
 
 	// Compact the log so that we don't get bad interference from any
 	// configuration change log entries that might be there.
@@ -1930,18 +1988,7 @@ func RecoverNode(dataDir string, logger *log.Logger, logs raft.LogStore, stable 
 	if err := stable.SetAppliedIndex(0); err != nil {
 		return fmt.Errorf("failed to zero applied index: %v", err)
 	}
-
 	return nil
-}
-
-func dbBytesFromSnapshot(rc io.ReadCloser) ([]byte, error) {
-	var database bytes.Buffer
-	decoder := snapshot.NewV1Decoder(rc)
-	_, err := decoder.WriteTo(&database)
-	if err != nil {
-		return nil, err
-	}
-	return database.Bytes(), nil
 }
 
 func applyCommand(data []byte, pDB **sql.DB, decMgmr *chunking.DechunkerManager) (command.Command_Type, interface{}) {

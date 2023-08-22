@@ -150,47 +150,6 @@ COMMIT;
 	}
 }
 
-// Test_SingleNodeRestoreNoncompressed checks restoration from a
-// pre-compressed SQLite database snap. This is to test for backwards
-// compatilibty of this code.
-func Test_SingleNodeRestoreNoncompressed(t *testing.T) {
-	s, ln := mustNewStore(t)
-	defer ln.Close()
-
-	if err := s.Open(); err != nil {
-		t.Fatalf("failed to open single-node store: %s", err.Error())
-	}
-	defer s.Close(true)
-	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
-		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
-	}
-	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
-		t.Fatalf("Error waiting for leader: %s", err)
-	}
-
-	// Check restoration from a pre-compressed SQLite database snap.
-	// This is to test for backwards compatilibty of this code.
-	f, err := os.Open(filepath.Join("testdata", "noncompressed-sqlite-snap.bin"))
-	if err != nil {
-		t.Fatalf("failed to open snapshot file: %s", err.Error())
-	}
-	if err := s.Restore(f); err != nil {
-		t.Fatalf("failed to restore noncompressed snapshot from disk: %s", err.Error())
-	}
-
-	// Ensure database is back in the expected state.
-	r, err := s.Query(queryRequestFromString("SELECT count(*) FROM foo", false, false))
-	if err != nil {
-		t.Fatalf("failed to query single node: %s", err.Error())
-	}
-	if exp, got := `["count(*)"]`, asJSON(r[0].Columns); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-	}
-	if exp, got := `[[5000]]`, asJSON(r[0].Values); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-	}
-}
-
 // Test_SingleNodeProvide tests that the Store correctly implements
 // the Provide method.
 func Test_SingleNodeProvide(t *testing.T) {
@@ -1563,6 +1522,7 @@ func Test_SingleNodeRecoverNoChange(t *testing.T) {
 	}
 
 	queryTest := func() {
+		t.Helper()
 		qr := queryRequestFromString("SELECT * FROM foo", false, false)
 		qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
 		r, err := s.Query(qr)
@@ -1586,17 +1546,18 @@ func Test_SingleNodeRecoverNoChange(t *testing.T) {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
 	queryTest()
+	id, addr := s.ID(), s.Addr()
 	if err := s.Close(true); err != nil {
 		t.Fatalf("failed to close single-node store: %s", err.Error())
 	}
 
 	// Set up for Recovery during open
-	peers := fmt.Sprintf(`[{"id": "%s","address": "%s"}]`, s.ID(), s.Addr())
+	peers := fmt.Sprintf(`[{"id": "%s","address": "%s"}]`, id, addr)
 	peersPath := filepath.Join(s.Path(), "/raft/peers.json")
 	peersInfo := filepath.Join(s.Path(), "/raft/peers.info")
 	mustWriteFile(peersPath, peers)
 	if err := s.Open(); err != nil {
-		t.Fatalf("failed to open single-node store: %s", err.Error())
+		t.Fatalf("failed to re-open single-node store: %s", err.Error())
 	}
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
