@@ -1395,6 +1395,9 @@ func Test_MultiNodeClusterRecoverSingle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed waiting for leader: %s", err.Error())
 	}
+	if rows, _ := node2.Query(`SELECT COUNT(*) FROM foo`); rows != `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1]]}]}` {
+		t.Fatalf("got incorrect results from node: %s", rows)
+	}
 
 	node3 := mustNewNode(false)
 	defer node3.Deprovision()
@@ -1404,6 +1407,9 @@ func Test_MultiNodeClusterRecoverSingle(t *testing.T) {
 	_, err = node3.WaitForLeader()
 	if err != nil {
 		t.Fatalf("failed waiting for leader: %s", err.Error())
+	}
+	if rows, _ := node3.Query(`SELECT COUNT(*) FROM foo`); rows != `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1]]}]}` {
+		t.Fatalf("got incorrect results from node: %s", rows)
 	}
 
 	// Shutdown all nodes
