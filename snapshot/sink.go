@@ -122,9 +122,9 @@ func (s *Sink) processIncrementalSnapshot(incSnap *IncrementalSnapshot) error {
 		return fmt.Errorf("error creating incremental snapshot directory: %v", err)
 	}
 
-	walPath := filepath.Join(incSnapDir, snapWALFile)
+	walPath := filepath.Join(s.curGenDir, s.meta.WALName())
 	if err := os.WriteFile(walPath, incSnap.Data, 0644); err != nil {
-		return fmt.Errorf("error writing WAL data: %v", err)
+		return fmt.Errorf("error writing WAL data to %s: %v", walPath, err)
 	}
 	if err := s.writeMeta(incSnapDir, false); err != nil {
 		return err

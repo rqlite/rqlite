@@ -124,7 +124,7 @@ func Test_SinkIncrementalSnapshot(t *testing.T) {
 		t.Fatalf("current generation directory %s does not contain snapshot directory", currGenDir)
 	}
 
-	expWALPath := filepath.Join(currGenDir, "snap-1234", snapWALFile)
+	expWALPath := filepath.Join(currGenDir, "snap-1234.wal")
 	if !fileExists(expWALPath) {
 		t.Fatalf("WAL file does not exist at %s", expWALPath)
 	}
@@ -171,7 +171,7 @@ func Test_SinkIncrementalSnapshot_NoWALData(t *testing.T) {
 		t.Fatalf("current generation directory %s does not contain snapshot directory", currGenDir)
 	}
 
-	expWALPath := filepath.Join(currGenDir, "snap-1234", snapWALFile)
+	expWALPath := filepath.Join(currGenDir, "snap-1234.wal")
 	if !emptyFileExists(expWALPath) {
 		t.Fatalf("expected empty WAL file at %s", expWALPath)
 	}
