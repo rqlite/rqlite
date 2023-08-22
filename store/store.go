@@ -334,7 +334,7 @@ func (s *Store) Open() (retErr error) {
 	}
 
 	s.openT = time.Now()
-	s.logger.Printf("opening store with node ID %s", s.raftID)
+	s.logger.Printf("opening store with node ID %s, listening on %s", s.raftID, s.ln.Addr().String())
 
 	s.logger.Printf("configured for an on-disk database at %s", s.dbPath)
 	parentDir := filepath.Dir(s.dbPath)
@@ -519,7 +519,7 @@ func (s *Store) Close(wait bool) (retErr error) {
 		// Protect against closing already-closed resource, such as channels.
 		return nil
 	}
-	s.logger.Printf("closing store with node ID %s", s.raftID)
+	s.logger.Printf("closing store with node ID %s, listening on %s", s.raftID, s.ln.Addr().String())
 
 	close(s.appliedIdxUpdateDone)
 	close(s.observerClose)
@@ -650,6 +650,9 @@ func (s *Store) Path() string {
 
 // Addr returns the address of the store.
 func (s *Store) Addr() string {
+	if !s.open {
+		return ""
+	}
 	return string(s.raftTn.LocalAddr())
 }
 
