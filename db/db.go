@@ -10,6 +10,7 @@ import (
 	"expvar"
 	"fmt"
 	"io"
+	"log"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -87,6 +88,8 @@ type DB struct {
 
 	rwDSN string // DSN used for read-write connection
 	roDSN string // DSN used for read-only connections
+
+	logger *log.Logger
 }
 
 // PoolStats represents connection pool statistics
@@ -350,6 +353,7 @@ func Open(dbPath string, fkEnabled, wal bool) (*DB, error) {
 		roDB:      roDB,
 		rwDSN:     rwDSN,
 		roDSN:     roDSN,
+		logger:    log.New(os.Stderr, "[db] ", log.LstdFlags),
 	}, nil
 }
 
@@ -466,9 +470,11 @@ func (db *DB) Checkpoint(dur time.Duration) (err error) {
 	f := func() error {
 		err := db.rwDB.QueryRow("PRAGMA wal_checkpoint(TRUNCATE)").Scan(&ok, &nPages, &nMoved)
 		if err != nil {
+			db.logger.Println(">>>>>DB checkpoint errored: %s", err.Error())
 			return err
 		}
 		if ok != 0 {
+			db.logger.Println(">>>>>DB checkpoint failed to complete", db.path, ok, nPages, nMoved)
 			return fmt.Errorf("failed to completely checkpoint WAL")
 		}
 		return nil
