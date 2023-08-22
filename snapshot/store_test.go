@@ -147,6 +147,7 @@ func Test_Store_CreateFullThenIncremental(t *testing.T) {
 	if exp, got := raftMeta.Size, int64(crc.n); exp != got {
 		t.Fatalf("expected snapshot size to be %d, got %d", exp, got)
 	}
+	crc.Close()
 
 	//////////////////////////////////////////////////////////////////////////
 	// Incremental snapshot next
@@ -208,6 +209,7 @@ func Test_Store_CreateFullThenIncremental(t *testing.T) {
 	if exp, got := raftMeta.Size, int64(crc.n); exp != got {
 		t.Fatalf("expected snapshot size to be %d, got %d", exp, got)
 	}
+	crc.Close()
 
 	//////////////////////////////////////////////////////////////////////////
 	// Do it again!
@@ -267,6 +269,7 @@ func Test_Store_CreateFullThenIncremental(t *testing.T) {
 	if exp, got := raftMeta.Size, int64(crc.n); exp != got {
 		t.Fatalf("expected snapshot size to be %d, got %d", exp, got)
 	}
+	crc.Close()
 
 	//////////////////////////////////////////////////////////////////////////
 	// One last time, after a reaping took place in the middle.
@@ -326,6 +329,7 @@ func Test_Store_CreateFullThenIncremental(t *testing.T) {
 	if exp, got := raftMeta.Size, int64(crc.n); exp != got {
 		t.Fatalf("expected snapshot size to be %d, got %d", exp, got)
 	}
+	crc.Close()
 }
 
 func Test_Store_ReapGenerations(t *testing.T) {

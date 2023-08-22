@@ -70,6 +70,7 @@ func (s *LockingSink) Cancel() error {
 // Store is a store for snapshots.
 type Store struct {
 	rootDir        string
+	workDir        string
 	generationsDir string
 
 	sinkMu sync.Mutex
@@ -86,6 +87,7 @@ func NewStore(dir string) (*Store, error) {
 	}
 	s := &Store{
 		rootDir:        dir,
+		workDir:        filepath.Join(dir, "scratchpad"),
 		generationsDir: genDir,
 		logger:         log.New(os.Stderr, "[snapshot-store] ", log.LstdFlags),
 	}
@@ -134,7 +136,7 @@ func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configu
 		},
 	}
 
-	sink := NewSink(s, s.rootDir, currGenDir, nextGenDir, meta)
+	sink := NewSink(s, s.workDir, currGenDir, nextGenDir, meta)
 	if err := sink.Open(); err != nil {
 		sink.Cancel()
 		return nil, fmt.Errorf("failed to open Sink: %v", err)
@@ -473,6 +475,10 @@ func (s *Store) check() (retError error) {
 	s.logger.Printf("checking snapshot store at %s", s.rootDir)
 	var n int
 
+	if err := s.resetWorkDir(); err != nil {
+		return fmt.Errorf("failed to reset work directory: %s", err)
+	}
+
 	// Simplify logic by reaping generations first.
 	n, err := s.ReapGenerations()
 	if err != nil {
@@ -580,6 +586,16 @@ func (s *Store) check() (retError error) {
 			return fmt.Errorf("failed to remove WAL file %s: %s", baseSqliteWALFilePath, err)
 		}
 		s.logger.Printf("completed checkpoint of WAL file %s", baseSqliteWALFilePath)
+	}
+	return nil
+}
+
+func (s *Store) resetWorkDir() error {
+	if err := os.RemoveAll(s.workDir); err != nil {
+		return fmt.Errorf("failed to remove work directory %s: %s", s.workDir, err)
+	}
+	if err := os.MkdirAll(s.workDir, 0755); err != nil {
+		return fmt.Errorf("failed to create work directory %s: %s", s.workDir, err)
 	}
 	return nil
 }
