@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"fmt"
 	"io"
-	"math/rand"
 	"os"
 	"path/filepath"
 	"sync"
@@ -1013,9 +1012,4 @@ func mustStat(path string) os.FileInfo {
 func mustFileSize(path string) int64 {
 	fi := mustStat(path)
 	return fi.Size()
-}
-
-func mustRandomInt(n int) int {
-	rand.Seed(time.Now().UnixNano())
-	return rand.Intn(n)
 }

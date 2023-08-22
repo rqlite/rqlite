@@ -15,7 +15,7 @@ import (
 	"github.com/rqlite/rqlite/command"
 	"github.com/rqlite/rqlite/command/encoding"
 	"github.com/rqlite/rqlite/db"
-	"github.com/rqlite/rqlite/store/random"
+	"github.com/rqlite/rqlite/random"
 	"github.com/rqlite/rqlite/testdata/chinook"
 )
 
@@ -2827,18 +2827,18 @@ func mustNewStoreAtPathsLn(id, dataPath, sqlitePath string, fk bool) (*Store, ne
 }
 
 func mustNewStore(t *testing.T) (*Store, net.Listener) {
-	return mustNewStoreAtPathsLn(random.RandomString(), t.TempDir(), "", false)
+	return mustNewStoreAtPathsLn(random.String(), t.TempDir(), "", false)
 }
 
 func mustNewStoreFK(t *testing.T) (*Store, net.Listener) {
-	return mustNewStoreAtPathsLn(random.RandomString(), t.TempDir(), "", true)
+	return mustNewStoreAtPathsLn(random.String(), t.TempDir(), "", true)
 }
 
 func mustNewStoreSQLitePath(t *testing.T) (*Store, net.Listener, string) {
 	dataDir := t.TempDir()
 	sqliteDir := t.TempDir()
 	sqlitePath := filepath.Join(sqliteDir, "explicit-path.db")
-	s, ln := mustNewStoreAtPathsLn(random.RandomString(), dataDir, sqlitePath, true)
+	s, ln := mustNewStoreAtPathsLn(random.String(), dataDir, sqlitePath, true)
 	return s, ln, sqlitePath
 }
 

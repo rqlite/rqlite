@@ -20,7 +20,7 @@ When officially released 8.0 will support (mostly) seamless upgrades from the 7.
 - [PR #1355](https://github.com/rqlite/rqlite/pull/1355): Database layer can run an integrity check.
 - [PR #1385](https://github.com/rqlite/rqlite/pull/1358): Remove support for in-memory databases.
 - [PR #1360](https://github.com/rqlite/rqlite/pull/1360): 'go mod' updates, and move to go 1.21.
-- [PR #1369](https://github.com/rqlite/rqlite/pull/1369): Use singleton, sync'ed, random source for Store testing.
+- [PR #1369](https://github.com/rqlite/rqlite/pull/1369), [PR #1370](https://github.com/rqlite/rqlite/pull/1370): Use singleton, sync'ed, random source.
 
 ## 7.21.4 (July 8th 2023)
 ### Implementation changes and bug fixes
