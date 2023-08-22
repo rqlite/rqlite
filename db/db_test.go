@@ -81,7 +81,7 @@ func Test_TableCreation(t *testing.T) {
 	}
 
 	// Confirm checkpoint works without error on an in-memory database. It should just be ignored.
-	if err := db.Checkpoint(5 * time.Second); err != nil {
+	if err := db.Checkpoint(); err != nil {
 		t.Fatalf("failed to checkpoint in-memory database: %s", err.Error())
 	}
 }
@@ -471,11 +471,11 @@ func Test_WALDatabaseCreatedOK(t *testing.T) {
 		t.Fatalf("WAL file does not exist")
 	}
 
-	if err := db.Checkpoint(5 * time.Second); err != nil {
+	if err := db.Checkpoint(); err != nil {
 		t.Fatalf("failed to checkpoint database in WAL mode: %s", err.Error())
 	}
 	// Checkpoint a second time, to ensure it's idempotent.
-	if err := db.Checkpoint(5 * time.Second); err != nil {
+	if err := db.Checkpoint(); err != nil {
 		t.Fatalf("failed to checkpoint database in WAL mode: %s", err.Error())
 	}
 }
@@ -495,7 +495,7 @@ func Test_WALDatabaseCheckpointOKNoWAL(t *testing.T) {
 		t.Fatalf("WAL file exists when no writes have happened")
 	}
 	defer db.Close()
-	if err := db.Checkpoint(5 * time.Second); err != nil {
+	if err := db.Checkpoint(); err != nil {
 		t.Fatalf("failed to checkpoint database in WAL mode with non-existent WAL: %s", err.Error())
 	}
 }
@@ -607,7 +607,7 @@ func Test_WALReplayOK(t *testing.T) {
 		}
 		mustCopyFile(replayDBPath, dbPath)
 		mustCopyFile(filepath.Join(replayDir, walFile+"_001"), walPath)
-		if err := db.Checkpoint(5 * time.Second); err != nil {
+		if err := db.Checkpoint(); err != nil {
 			t.Fatalf("failed to checkpoint database in WAL mode: %s", err.Error())
 		}
 
@@ -620,7 +620,7 @@ func Test_WALReplayOK(t *testing.T) {
 			t.Fatalf("WAL file at %s does not exist", walPath)
 		}
 		mustCopyFile(filepath.Join(replayDir, walFile+"_002"), walPath)
-		if err := db.Checkpoint(5 * time.Second); err != nil {
+		if err := db.Checkpoint(); err != nil {
 			t.Fatalf("failed to checkpoint database in WAL mode: %s", err.Error())
 		}
 
@@ -709,7 +709,7 @@ func test_FileCreationOnDisk(t *testing.T, db *DB) {
 
 	// Confirm checkpoint works on all types of on-disk databases. Worst case, this
 	// should be ignored.
-	if err := db.Checkpoint(5 * time.Second); err != nil {
+	if err := db.Checkpoint(); err != nil {
 		t.Fatalf("failed to checkpoint database in DELETE mode: %s", err.Error())
 	}
 }

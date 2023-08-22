@@ -78,8 +78,6 @@ const (
 	trailingScale              = 1.25
 	observerChanLen            = 50
 
-	checkpointTimeout = 10 * time.Second
-
 	defaultChunkSize = 512 * 1024 * 1024 // 512 MB
 )
 
@@ -1624,7 +1622,7 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 
 	var fsmSnapshot raft.FSMSnapshot
 	if s.snapshotStore.FullNeeded() {
-		if err := s.db.Checkpoint(checkpointTimeout); err != nil {
+		if err := s.db.Checkpoint(); err != nil {
 			return nil, err
 		}
 		fsmSnapshot = snapshot.NewFullSnapshot(s.db.Path())
@@ -1636,7 +1634,7 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 			if err != nil {
 				return nil, err
 			}
-			if err := s.db.Checkpoint(checkpointTimeout); err != nil {
+			if err := s.db.Checkpoint(); err != nil {
 				return nil, err
 			}
 		}
@@ -1957,7 +1955,7 @@ func RecoverNode(dataDir string, logger *log.Logger, logs raft.LogStore, stable 
 
 	// Create a new snapshot, placing the configuration in as if it was
 	// committed at index 1.
-	if err := db.Checkpoint(checkpointTimeout); err != nil {
+	if err := db.Checkpoint(); err != nil {
 		return fmt.Errorf("failed to checkpoint database: %s", err)
 	}
 	fsmSnapshot := snapshot.NewFullSnapshot(tmpDBPath) // tmpDBPath contains full state now.
