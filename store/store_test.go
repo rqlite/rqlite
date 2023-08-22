@@ -15,7 +15,7 @@ import (
 	"github.com/rqlite/rqlite/command"
 	"github.com/rqlite/rqlite/command/encoding"
 	"github.com/rqlite/rqlite/db"
-	"github.com/rqlite/rqlite/random"
+	"github.com/rqlite/rqlite/store/random"
 	"github.com/rqlite/rqlite/testdata/chinook"
 )
 
