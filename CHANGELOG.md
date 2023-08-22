@@ -1,4 +1,6 @@
 ## 8.0.0 (unreleased)
+_Not yet ready for production use._
+
 Release 8.0.0 is in active development, with the goal of supporting much larger data sets, into the 10GB+ range (and hopefully much larger), while keeping its focus on simplicity, ease-of-operation, high quality, and performance.
 
 **Upgrading from the 7.x release**
