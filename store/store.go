@@ -1890,27 +1890,32 @@ func RecoverNode(dataDir string, logger *log.Logger, logs raft.LogStore, stable 
 	}
 	logger.Printf("recovery detected %d snapshots", len(snapshots))
 	if len(snapshots) > 0 {
-		snapID := snapshots[0].ID
-		_, rc, err := snaps.Open(snapID)
-		if err != nil {
-			// Skip this one and try the next. We will detect if we
-			// couldn't open any snapshots.
-			return fmt.Errorf("failed to open snapshot %s: %s", snapID, err)
+		if err := func() error {
+			snapID := snapshots[0].ID
+			_, rc, err := snaps.Open(snapID)
+			if err != nil {
+				return fmt.Errorf("failed to open snapshot %s: %s", snapID, err)
+			}
+			defer rc.Close()
+
+			strHdr, _, err := snapshot.NewStreamHeaderFromReader(rc)
+			if err != nil {
+				return fmt.Errorf("error reading stream header during recovery: %v", err)
+			}
+			fullSnap := strHdr.GetFullSnapshot()
+			if fullSnap == nil {
+				return fmt.Errorf("got nil FullSnapshot during recovery")
+			}
+			if err := snapshot.ReplayDB(fullSnap, rc, tmpDBPath); err != nil {
+				return fmt.Errorf("error replaying DB during recovery: %v", err)
+			}
+			snapshotIndex = snapshots[0].Index
+			snapshotTerm = snapshots[0].Term
+			return nil
+		}(); err != nil {
+			return err
 		}
 
-		strHdr, _, err := snapshot.NewStreamHeaderFromReader(rc)
-		if err != nil {
-			return fmt.Errorf("error reading stream header during recovery: %v", err)
-		}
-		fullSnap := strHdr.GetFullSnapshot()
-		if fullSnap == nil {
-			return fmt.Errorf("got nil FullSnapshot during recovery")
-		}
-		if err := snapshot.ReplayDB(fullSnap, rc, tmpDBPath); err != nil {
-			return fmt.Errorf("error replaying DB during recovery: %v", err)
-		}
-		snapshotIndex = snapshots[0].Index
-		snapshotTerm = snapshots[0].Term
 	}
 
 	// Now, open the database so we can replay any outstanding Raft log entries.

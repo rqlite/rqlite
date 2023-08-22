@@ -91,6 +91,10 @@ func Test_NewIncrementalStream(t *testing.T) {
 	if _, err := stream.Read(buf); err != io.EOF {
 		t.Fatalf("Expected EOF, got: %v", err)
 	}
+
+	if err := stream.Close(); err != nil {
+		t.Fatalf("unexpected error closing IncrementalStream: %v", err)
+	}
 }
 
 func Test_NewFullStream(t *testing.T) {
@@ -185,6 +189,10 @@ func Test_NewFullStream(t *testing.T) {
 	// matches the expected size
 	if totalSizeRead != str.Size() {
 		t.Errorf("unexpected total number of bytes read from FullEncoder, got: %d, want: %d", totalSizeRead, str.Size())
+	}
+
+	if err := str.Close(); err != nil {
+		t.Fatalf("unexpected error closing FullStream: %v", err)
 	}
 }
 

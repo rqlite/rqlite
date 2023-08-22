@@ -52,6 +52,7 @@ func Test_SinkFullSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer stream.Close()
 
 	if io.Copy(s, stream); err != nil {
 		t.Fatal(err)
@@ -109,6 +110,7 @@ func Test_SinkIncrementalSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer stream.Close()
 
 	if io.Copy(s, stream); err != nil {
 		t.Fatal(err)
@@ -156,6 +158,7 @@ func Test_SinkIncrementalSnapshot_NoWALData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer stream.Close()
 
 	if io.Copy(s, stream); err != nil {
 		t.Fatal(err)
