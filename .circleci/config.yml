@@ -51,6 +51,48 @@ jobs:
       - run: go vet ./...
     resource_class: large
 
+  test_odd:
+    docker:
+      - image: << pipeline.parameters.primary_image >>
+    steps:
+      - checkout
+      - restore_and_save_cache
+      - run: go test -failfast -v $(go list ./... | sed -n 'n;p')
+    resource_class: large
+
+  test_even:
+    docker:
+      - image: << pipeline.parameters.primary_image >>
+    steps:
+      - checkout
+      - restore_and_save_cache
+      - run: go test -failfast -v $(go list ./... | sed -n 'p;n')
+    resource_class: large
+
+  race_odd:
+    docker:
+      - image: << pipeline.parameters.primary_image >>
+    steps:
+      - checkout
+      - restore_and_save_cache
+      - run:
+          command: go test -failfast -timeout 20m -race $(go list ./... | sed -n 'n;p')
+          environment:
+            GORACE: "halt_on_error=1"
+    resource_class: large
+
+  race_even:
+    docker:
+      - image: << pipeline.parameters.primary_image >>
+    steps:
+      - checkout
+      - restore_and_save_cache
+      - run:
+          command: go test -failfast -timeout 20m -race $(go list ./... | sed -n 'p;n')
+          environment:
+            GORACE: "halt_on_error=1"
+    resource_class: large
+
   cross_compile_windows:
     docker:
       - image: << pipeline.parameters.primary_image >>
@@ -112,37 +154,6 @@ jobs:
       - cross_compile:
           cc: mips64el-linux-gnuabi64-gcc
           goarch: mips64le
-
-  test:
-    docker:
-      - image: << pipeline.parameters.primary_image >>
-    steps:
-      - checkout
-      - restore_and_save_cache
-      - run: go test -failfast ./...
-    resource_class: large
-
-  race_odd:
-    docker:
-      - image: << pipeline.parameters.primary_image >>
-    steps:
-      - checkout
-      - restore_and_save_cache
-      - run:
-          command: go test -failfast -v -timeout 20m -race $(go list ./... | sed -n 'n;p')
-          environment:
-            GORACE: "halt_on_error=1"
-
-  race_even:
-    docker:
-      - image: << pipeline.parameters.primary_image >>
-    steps:
-      - checkout
-      - restore_and_save_cache
-      - run:
-          command: go test -failfast -v -timeout 20m -race $(go list ./... | sed -n 'p;n')
-          environment:
-            GORACE: "halt_on_error=1"
 
   end_to_end_single:
     docker:
@@ -240,7 +251,8 @@ workflows:
       - cross_compile_arm
       - cross_compile_mips
       - cross_compile_mips_le
-      - test
+      - test_even
+      - test_odd
       - race_even
       - race_odd
       - end_to_end_single
