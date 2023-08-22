@@ -21,6 +21,7 @@ When officially released 8.0 will support (mostly) seamless upgrades from the 7.
 - [PR #1385](https://github.com/rqlite/rqlite/pull/1358): Remove support for in-memory databases.
 - [PR #1360](https://github.com/rqlite/rqlite/pull/1360): 'go mod' updates, and move to go 1.21.
 - [PR #1369](https://github.com/rqlite/rqlite/pull/1369), [PR #1370](https://github.com/rqlite/rqlite/pull/1370): Use singleton, sync'ed, random source.
+- [PR #1367](https://github.com/rqlite/rqlite/pull/1367): Move to a WAL-based Snapshot store.
 
 ## 7.21.4 (July 8th 2023)
 ### Implementation changes and bug fixes
