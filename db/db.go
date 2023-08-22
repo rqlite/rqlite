@@ -470,7 +470,7 @@ func (db *DB) Checkpoint(dur time.Duration) (err error) {
 	f := func() error {
 		err := db.rwDB.QueryRow("PRAGMA wal_checkpoint(TRUNCATE)").Scan(&ok, &nPages, &nMoved)
 		if err != nil {
-			db.logger.Println(">>>>>DB checkpoint errored: %s", err.Error())
+			db.logger.Printf(">>>>>DB checkpoint errored: %s", err.Error())
 			return err
 		}
 		if ok != 0 {
