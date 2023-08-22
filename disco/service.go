@@ -76,7 +76,7 @@ func (s *Service) Register(id, apiAddr, addr string) (bool, string, error) {
 			return true, apiAddr, nil
 		}
 
-		time.Sleep(jitter(s.RegisterInterval))
+		time.Sleep(random.Jitter(s.RegisterInterval))
 	}
 }
 
@@ -137,8 +137,4 @@ func (s *Service) updateContact(t time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.lastContact = t
-}
-
-func jitter(duration time.Duration) time.Duration {
-	return duration + time.Duration(random.Float64()*float64(duration))
 }

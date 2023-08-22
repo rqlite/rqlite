@@ -41,3 +41,10 @@ func Intn(n int) int {
 	defer mu.Unlock()
 	return r.Intn(n)
 }
+
+// Jitter adds a little bit of randomness to a given duration. This is
+// useful to prevent nodes across the cluster performing certain operations
+// all at the same time.
+func Jitter(d time.Duration) time.Duration {
+	return d + time.Duration(Float64()*float64(d))
+}
