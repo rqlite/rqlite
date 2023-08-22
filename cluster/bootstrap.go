@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"math/rand"
 	"net/http"
 	"os"
 	"strings"
@@ -15,11 +14,8 @@ import (
 	"time"
 
 	rurl "github.com/rqlite/rqlite/http/url"
+	"github.com/rqlite/rqlite/random"
 )
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
 
 var (
 	// ErrBootTimeout is returned when a boot operation does not
@@ -260,5 +256,5 @@ func NewAddressProviderString(ss []string) AddressProvider {
 // useful to prevent nodes across the cluster performing certain operations
 // all at the same time.
 func jitter(duration time.Duration) time.Duration {
-	return duration + time.Duration(rand.Float64()*float64(duration))
+	return duration + time.Duration(random.Float64()*float64(duration))
 }

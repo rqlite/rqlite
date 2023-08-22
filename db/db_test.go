@@ -4,8 +4,6 @@ import (
 	"database/sql"
 	"fmt"
 	"io"
-	"io/ioutil"
-	"math/rand"
 	"os"
 	"path/filepath"
 	"sync"
@@ -25,7 +23,7 @@ func Test_RemoveFiles(t *testing.T) {
 		t.Fatalf("failed to remove files: %s", err.Error())
 	}
 
-	files, err := ioutil.ReadDir(d)
+	files, err := os.ReadDir(d)
 	if err != nil {
 		t.Fatalf("failed to read directory: %s", err.Error())
 	}
@@ -906,7 +904,7 @@ func asJSON(v interface{}) string {
 // mustTempFile returns a path to a temporary file in directory dir. It is up to the
 // caller to remove the file once it is no longer needed.
 func mustTempFile() string {
-	tmpfile, err := ioutil.TempFile("", "rqlite-db-test")
+	tmpfile, err := os.CreateTemp("", "rqlite-db-test")
 	if err != nil {
 		panic(err.Error())
 	}
@@ -915,7 +913,7 @@ func mustTempFile() string {
 }
 
 func mustTempDir() string {
-	tmpdir, err := ioutil.TempDir("", "rqlite-db-test")
+	tmpdir, err := os.MkdirTemp("", "rqlite-db-test")
 	if err != nil {
 		panic(err.Error())
 	}
@@ -947,12 +945,6 @@ func mustCopyFile(dst, src string) {
 	}
 }
 
-func mustRenameFile(oldpath, newpath string) {
-	if err := os.Rename(oldpath, newpath); err != nil {
-		panic(err)
-	}
-}
-
 func mustCreateClosedFile(path string) {
 	f, err := os.Create(path)
 	if err != nil {
@@ -974,9 +966,4 @@ func mustStat(path string) os.FileInfo {
 func mustFileSize(path string) int64 {
 	fi := mustStat(path)
 	return fi.Size()
-}
-
-func mustRandomInt(n int) int {
-	rand.Seed(time.Now().UnixNano())
-	return rand.Intn(n)
 }

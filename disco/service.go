@@ -3,15 +3,12 @@ package disco
 import (
 	"fmt"
 	"log"
-	"math/rand"
 	"os"
 	"sync"
 	"time"
-)
 
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
+	"github.com/rqlite/rqlite/random"
+)
 
 const (
 	leaderChanLen = 5 // Support any fast back-to-back leadership changes.
@@ -143,5 +140,5 @@ func (s *Service) updateContact(t time.Time) {
 }
 
 func jitter(duration time.Duration) time.Duration {
-	return duration + time.Duration(rand.Float64()*float64(duration))
+	return duration + time.Duration(random.Float64()*float64(duration))
 }

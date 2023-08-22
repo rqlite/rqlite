@@ -15,7 +15,7 @@ func init() {
 }
 
 // RandomString returns a random string of 20 characters
-func RandomString() string {
+func String() string {
 	mu.Lock()
 	defer mu.Unlock()
 	var output strings.Builder
@@ -26,4 +26,18 @@ func RandomString() string {
 		output.WriteString(string(randomChar))
 	}
 	return output.String()
+}
+
+// Float64 returns a random float64
+func Float64() float64 {
+	mu.Lock()
+	defer mu.Unlock()
+	return r.Float64()
+}
+
+// Intn returns a random int
+func Intn(n int) int {
+	mu.Lock()
+	defer mu.Unlock()
+	return r.Intn(n)
 }
