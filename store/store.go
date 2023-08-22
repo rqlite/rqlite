@@ -1624,6 +1624,7 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 
 	var fsmSnapshot raft.FSMSnapshot
 	if s.snapshotStore.FullNeeded() {
+		s.logger.Printf("requesting checkpoint (full) of node ID %s, db at %s", s.raftID, s.db.Path())
 		if err := s.db.Checkpoint(checkpointTimeout); err != nil {
 			return nil, err
 		}
@@ -1636,6 +1637,7 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 			if err != nil {
 				return nil, err
 			}
+			s.logger.Printf("requesting checkpoint (inc) of node ID %s, db at %s", s.raftID, s.db.Path())
 			if err := s.db.Checkpoint(checkpointTimeout); err != nil {
 				return nil, err
 			}

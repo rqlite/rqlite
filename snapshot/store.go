@@ -394,6 +394,7 @@ func (s *Store) ReapSnapshots(dir string, retain int) (int, error) {
 			}
 
 			// Checkpoint the WAL file into the base SQLite file
+			s.logger.Printf("reaping initiating checkpointing WAL file %s into base SQLite file %s", walToCheckpointFilePath, baseSqliteFilePath)
 			if err := db.ReplayWAL(baseSqliteFilePath, []string{walToCheckpointFilePath}, false); err != nil {
 				s.logger.Printf("failed to checkpoint WAL file %s: %s", walToCheckpointFilePath, err)
 				return n, err
