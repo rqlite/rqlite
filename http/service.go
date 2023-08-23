@@ -323,9 +323,6 @@ type Service struct {
 
 	credentialStore CredentialStore
 
-	Expvar bool
-	Pprof  bool
-
 	BuildInfo map[string]interface{}
 
 	logger *log.Logger
@@ -463,9 +460,9 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case strings.HasPrefix(r.URL.Path, "/readyz"):
 		stats.Add(numReadyz, 1)
 		s.handleReadyz(w, r)
-	case r.URL.Path == "/debug/vars" && s.Expvar:
+	case r.URL.Path == "/debug/vars":
 		s.handleExpvar(w, r)
-	case strings.HasPrefix(r.URL.Path, "/debug/pprof") && s.Pprof:
+	case strings.HasPrefix(r.URL.Path, "/debug/pprof"):
 		s.handlePprof(w, r)
 	default:
 		w.WriteHeader(http.StatusNotFound)
