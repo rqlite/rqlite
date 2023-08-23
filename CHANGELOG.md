@@ -9,6 +9,7 @@ When officially released 8.0 will support (mostly) seamless upgrades from the 7.
 
 - Backup your data and load it into a new 8.0 system.
 - 8.0 always runs with an on-disk database, in-memory databases are no longer supported. Improvements made late in the 7.0 series means there is little difference in write performance between in-memory and on-disk modes, but supporting both modes just means confusion and higher development costs. If you were previously running in in-memory mode (the default), you don't need to do anything. But if you were previously passing `-on-disk` to `rqlited` so that rqlite ran in on-disk mode, you must now remove that flag.
+- A few, rarely if ever, used `rqlited` command-line flags have been removed. These flags just added operational overhead, while adding little value.
 
 ### New features
 - [PR #1362](https://github.com/rqlite/rqlite/pull/1362): Enable SQLite [FTS5](https://www.sqlite.org/fts5.html). Fixes [issue #1361](https://github.com/rqlite/rqlite/issues/1361)
@@ -16,7 +17,7 @@ When officially released 8.0 will support (mostly) seamless upgrades from the 7.
 ### Implementation changes and bug fixes
 - [PR #1337](https://github.com/rqlite/rqlite/pull/1337): Store can now load from an io.Reader.
 - [PR #1339](https://github.com/rqlite/rqlite/pull/1339), [PR #1340](https://github.com/rqlite/rqlite/pull/1340), [PR #1341](https://github.com/rqlite/rqlite/pull/1341): Add `LoadRequest` chunker/dechunker.
-- [PR #1343](https://github.com/rqlite/rqlite/pull/1343): Remove no-longer supported command-line options.
+- [PR #1343](https://github.com/rqlite/rqlite/pull/1343): Remove previously-obsoleted supported command-line options.
 - [PR #1342](https://github.com/rqlite/rqlite/pull/1342): Integrate chunked-loading, applying to auto-restore from the Cloud.
 - [PR #1347](https://github.com/rqlite/rqlite/pull/1347): Migrate HTTP layer to chunked loading.
 - [PR #1355](https://github.com/rqlite/rqlite/pull/1355): Database layer can run an integrity check.
@@ -24,6 +25,7 @@ When officially released 8.0 will support (mostly) seamless upgrades from the 7.
 - [PR #1360](https://github.com/rqlite/rqlite/pull/1360): 'go mod' updates, and move to go 1.21.
 - [PR #1369](https://github.com/rqlite/rqlite/pull/1369), [PR #1370](https://github.com/rqlite/rqlite/pull/1370): Use singleton, sync'ed, random source.
 - [PR #1367](https://github.com/rqlite/rqlite/pull/1367): Move to a WAL-based Snapshot store.
+- [PR #1373](https://github.com/rqlite/rqlite/pull/1373): Remove compression-control command-line options.
 
 ## 7.21.4 (July 8th 2023)
 ### Implementation changes and bug fixes
