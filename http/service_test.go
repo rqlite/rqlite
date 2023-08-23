@@ -343,8 +343,6 @@ func Test_401Routes_NoBasicAuth(t *testing.T) {
 	m := &MockStore{}
 	n := &mockClusterService{}
 	s := New("127.0.0.1:0", m, n, c)
-	s.Expvar = true
-	s.Pprof = true
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
@@ -386,8 +384,6 @@ func Test_401Routes_BasicAuthBadPassword(t *testing.T) {
 	m := &MockStore{}
 	n := &mockClusterService{}
 	s := New("127.0.0.1:0", m, n, c)
-	s.Expvar = true
-	s.Pprof = true
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
@@ -434,8 +430,6 @@ func Test_401Routes_BasicAuthBadPerm(t *testing.T) {
 	m := &MockStore{}
 	n := &mockClusterService{}
 	s := New("127.0.0.1:0", m, n, c)
-	s.Expvar = true
-	s.Pprof = true
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
