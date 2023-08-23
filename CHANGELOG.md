@@ -14,6 +14,7 @@ When officially released 8.0 will support (mostly) seamless upgrades from the 7.
 - [PR #1362](https://github.com/rqlite/rqlite/pull/1362): Enable SQLite [FTS5](https://www.sqlite.org/fts5.html). Fixes [issue #1361](https://github.com/rqlite/rqlite/issues/1361)
 
 ### Implementation changes and bug fixes
+- [PR #1368](https://github.com/rqlite/rqlite/pull/1374): Switch to always-on expvar and pprof.
 - [PR #1337](https://github.com/rqlite/rqlite/pull/1337): Store can now load from an io.Reader.
 - [PR #1339](https://github.com/rqlite/rqlite/pull/1339), [PR #1340](https://github.com/rqlite/rqlite/pull/1340), [PR #1341](https://github.com/rqlite/rqlite/pull/1341): Add `LoadRequest` chunker/dechunker.
 - [PR #1343](https://github.com/rqlite/rqlite/pull/1343): Remove no-longer supported command-line options.
