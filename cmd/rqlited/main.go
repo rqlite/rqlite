@@ -302,7 +302,6 @@ func createStore(cfg *Config, ln *tcp.Layer) (*store.Store, error) {
 	})
 
 	// Set optional parameters on store.
-	str.SetRequestCompression(cfg.CompressionBatch, cfg.CompressionSize)
 	str.RaftLogLevel = cfg.RaftLogLevel
 	str.NoFreeListSync = cfg.RaftNoFreelistSync
 	str.ShutdownOnRemove = cfg.RaftShutdownOnRemove
