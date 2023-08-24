@@ -842,14 +842,12 @@ func Test_SingleNodeNoSQLInjection(t *testing.T) {
 	}
 }
 
-// Test_SingleNodeUpgrades upgrade from a data created by earlier releases.
-func Test_SingleNodeUpgrades(t *testing.T) {
-	t.Skip()
+// Test_SingleNodeUpgrades_NoSnapshots upgrade from a data created by earlier releases, but which
+// do not have snapshots.
+func Test_SingleNodeUpgrades_NoSnapshots(t *testing.T) {
 	versions := []string{
-		"v6.0.0-data",
 		"v7.0.0-data",
 		"v7.9.2-data",
-		"v7.20.3-data-with-snapshots",
 	}
 
 	upgradeFrom := func(dir string) {
