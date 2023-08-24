@@ -13,37 +13,34 @@ import (
 // new Snapshot directory at 'new'. If the upgrade is successful, the
 // 'old' directory is removed before the function returns.
 func Upgrade(old, new string, logger *log.Logger) error {
-	if !dirExists(old) {
-		logger.Printf("old snapshot directory %s does not exist, nothing to upgrade", old)
-		return nil
+	newTmpDir := tmpName(new)
+	newGenerationDir := filepath.Join(newTmpDir, firstGeneration)
+
+	// If a temporary version of the new directory exists, remove it. This implies a
+	// previous upgrade attempt was interrupted. We will need to start over.
+	if dirExists(newTmpDir) {
+		if err := os.RemoveAll(newTmpDir); err != nil {
+			return fmt.Errorf("failed to remove temporary upgraded snapshot directory %s: %s", newTmpDir, err)
+		}
+		logger.Println("detected temporary upgraded snapshot directory, removing")
 	}
 
 	if dirExists(old) {
-		oldEmpty, err := dirIsEmpty(old)
+		oldIsEmpty, err := dirIsEmpty(old)
 		if err != nil {
 			return fmt.Errorf("failed to check if old snapshot directory %s is empty: %s", old, err)
 		}
 
-		if oldEmpty || dirExists(new) {
+		if oldIsEmpty || dirExists(new) {
 			if err := os.RemoveAll(old); err != nil {
 				return fmt.Errorf("failed to remove old snapshot directory %s: %s", old, err)
 			}
 			logger.Printf("removed old snapshot directory %s as no upgrade is needed", old)
 			return nil
 		}
-	}
-
-	newTmpDir := tmpName(new)
-	newGenerationDir := filepath.Join(newTmpDir, firstGeneration)
-
-	// If a temporary version of the new directory exists, remove it. This
-	// implies a previous upgrade attempt was interrupted. We will need to
-	// start over.
-	if dirExists(newTmpDir) {
-		if err := os.RemoveAll(newTmpDir); err != nil {
-			return fmt.Errorf("failed to remove temporary upgraded snapshot directory %s: %s", newTmpDir, err)
-		}
-		logger.Println("detected temporary upgraded snapshot directory, removing")
+	} else {
+		logger.Printf("old snapshot directory %s does not exist, nothing to upgrade", old)
+		return nil
 	}
 
 	// Start the upgrade process.
