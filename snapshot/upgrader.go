@@ -14,6 +14,7 @@ import (
 // 'old' directory is removed before the function returns.
 func Upgrade(old, new string, logger *log.Logger) error {
 	if !dirExists(old) {
+		logger.Printf("old snapshot directory %s does not exist, nothing to upgrade", old)
 		return nil
 	}
 
@@ -42,7 +43,7 @@ func Upgrade(old, new string, logger *log.Logger) error {
 		if err := os.RemoveAll(newTmpDir); err != nil {
 			return fmt.Errorf("failed to remove temporary upgraded snapshot directory %s: %s", newTmpDir, err)
 		}
-		logger.Printf("removed temporary upgraded snapshot directory %s", tmpName(new))
+		logger.Println("detected temporary upgraded snapshot directory, removing")
 	}
 
 	// Start the upgrade process.
@@ -85,9 +86,12 @@ func Upgrade(old, new string, logger *log.Logger) error {
 	if err := os.Rename(newTmpDir, new); err != nil {
 		return fmt.Errorf("failed to move temporary snapshot directory %s to %s: %s", newTmpDir, new, err)
 	}
+	if err := syncDirParentMaybe(new); err != nil {
+		return fmt.Errorf("failed to sync parent directory of new snapshot directory %s: %s", new, err)
+	}
 
 	// We're done! Remove old.
-	if err := os.RemoveAll(old); err != nil {
+	if err := removeDirSync(old); err != nil {
 		return fmt.Errorf("failed to remove old snapshot directory %s: %s", old, err)
 	}
 	return nil
