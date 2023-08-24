@@ -902,6 +902,65 @@ func Test_SingleNodeUpgrades_NoSnapshots(t *testing.T) {
 	}
 }
 
+// Test_SingleNodeUpgrades_Snapshots upgrade from a data created by earlier releases, but which
+// do have snapshots.
+func Test_SingleNodeUpgrades_Snapshots(t *testing.T) {
+	versions := []string{
+		"v7.20.3-data-with-snapshots",
+	}
+
+	upgradeFrom := func(dir string) {
+		// Deprovision of a node deletes the node's dir, so make a copy first.
+		srcdir := filepath.Join("testdata", dir)
+		destdir := mustTempDir()
+		if err := os.Remove(destdir); err != nil {
+			t.Fatalf("failed to remove dest dir: %s", err)
+		}
+		if err := copyDir(srcdir, destdir); err != nil {
+			t.Fatalf("failed to copy node test directory: %s", err)
+		}
+
+		mux, ln := mustNewOpenMux("")
+		defer ln.Close()
+
+		node := mustNodeEncrypted(destdir, true, false, mux, "node1")
+		defer node.Deprovision()
+		if _, err := node.WaitForLeader(); err != nil {
+			t.Fatalf("node never became leader with %s data:", dir)
+		}
+
+		timer := time.NewTimer(5 * time.Second)
+		defer timer.Stop()
+		ticker := time.NewTicker(100 * time.Millisecond)
+		defer ticker.Stop()
+		testSuccess := make(chan struct{})
+
+		for {
+			select {
+			case <-testSuccess:
+				return
+			case <-timer.C:
+				t.Fatalf(`timeout waiting for correct results with %s data`, dir)
+			case <-ticker.C:
+				r, err := node.QueryNoneConsistency(`SELECT COUNT(*) FROM foo`)
+				if err != nil {
+					t.Fatalf("query failed with %s data: %s", dir, err)
+				}
+				expected := `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[20]]}]}`
+				if r == expected {
+					close(testSuccess)
+				}
+			}
+		}
+	}
+
+	for _, version := range versions {
+		t.Run(version, func(t *testing.T) {
+			upgradeFrom(version)
+		})
+	}
+}
+
 func Test_SingleNodeNodes(t *testing.T) {
 	node := mustNewLeaderNode()
 	defer node.Deprovision()

@@ -182,23 +182,8 @@ func (s *Sink) processFullSnapshot(fullSnap *FullSnapshot) error {
 }
 
 func (s *Sink) writeMeta(dir string, full bool) error {
-	fh, err := os.Create(filepath.Join(dir, metaFileName))
-	if err != nil {
-		return fmt.Errorf("error creating meta file: %v", err)
-	}
-	defer fh.Close()
 	s.meta.Full = full
-
-	// Write out as JSON
-	enc := json.NewEncoder(fh)
-	if err = enc.Encode(s.meta); err != nil {
-		return fmt.Errorf("failed to encode meta: %v", err)
-	}
-
-	if err := fh.Sync(); err != nil {
-		return err
-	}
-	return fh.Close()
+	return writeMeta(dir, s.meta)
 }
 
 func (s *Sink) cleanup() error {
@@ -218,6 +203,25 @@ func (s *Sink) cleanup() error {
 		return err
 	}
 	return nil
+}
+
+func writeMeta(dir string, meta *Meta) error {
+	fh, err := os.Create(filepath.Join(dir, metaFileName))
+	if err != nil {
+		return fmt.Errorf("error creating meta file: %v", err)
+	}
+	defer fh.Close()
+
+	// Write out as JSON
+	enc := json.NewEncoder(fh)
+	if err = enc.Encode(meta); err != nil {
+		return fmt.Errorf("failed to encode meta: %v", err)
+	}
+
+	if err := fh.Sync(); err != nil {
+		return err
+	}
+	return fh.Close()
 }
 
 func parentDir(dir string) string {
