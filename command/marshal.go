@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	defaultBatchThreshold = 5
-	defaultSizeThreshold  = 150
+	defaultBatchThreshold = 50
+	defaultSizeThreshold  = 1024
 )
 
 // Requester is the interface objects must support to be marshaled

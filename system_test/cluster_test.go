@@ -1490,8 +1490,12 @@ func Test_MultiNodeClusterRecoverFull(t *testing.T) {
 	if _, err := node1.Execute(`INSERT INTO foo(id, name) VALUES(1, "fiona")`); err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
-	if rows, _ := node1.Query(`SELECT COUNT(*) FROM foo`); rows != `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1]]}]}` {
-		t.Fatalf("got incorrect results from node: %s", rows)
+	rows, err := node1.Query(`SELECT COUNT(*) FROM foo`)
+	if err != nil {
+		t.Fatalf("failed to query node: %s", err.Error())
+	}
+	if got, exp := rows, `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1]]}]}`; got != exp {
+		t.Fatalf("got incorrect results from node exp: %s got: %s", exp, got)
 	}
 
 	// Shutdown all nodes
@@ -1533,13 +1537,19 @@ func Test_MultiNodeClusterRecoverFull(t *testing.T) {
 	defer node6.Deprovision()
 	defer ln6.Close()
 
-	_, err = node6.WaitForLeader()
-	if err != nil {
-		t.Fatalf("failed waiting for leader on recovered cluster: %s", err.Error())
+	for _, node := range []*Node{node4, node5, node6} {
+		_, err = node.WaitForLeader()
+		if err != nil {
+			t.Fatalf("failed waiting for leader on node %s (recovered cluster): %s", node.ID, err.Error())
+		}
 	}
 
-	if rows, _ := node4.Query(`SELECT COUNT(*) FROM foo`); rows != `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1]]}]}` {
-		t.Fatalf("got incorrect results from recovered node: %s", rows)
+	rows, err = node4.Query(`SELECT COUNT(*) FROM foo`)
+	if err != nil {
+		t.Fatalf("failed to query recovered node: %s", err.Error())
+	}
+	if got, exp := rows, `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1]]}]}`; got != exp {
+		t.Fatalf("got incorrect results from recovered node exp: %s got: %s", exp, got)
 	}
 }
 
