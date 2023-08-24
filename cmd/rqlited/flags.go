@@ -131,12 +131,6 @@ type Config struct {
 	// DiscoConfig sets the path to any discovery configuration file. May not be set.
 	DiscoConfig string
 
-	// Expvar enables go/expvar information. Defaults to true.
-	Expvar bool
-
-	// PprofEnabled enables Go PProf information. Defaults to true.
-	PprofEnabled bool
-
 	// OnDiskPath sets the path to the SQLite file. May not be set.
 	OnDiskPath string
 
@@ -447,8 +441,6 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	flag.StringVar(&config.DiscoMode, "disco-mode", "", "Choose clustering discovery mode. If not set, no node discovery is performed")
 	flag.StringVar(&config.DiscoKey, "disco-key", "rqlite", "Key prefix for cluster discovery service")
 	flag.StringVar(&config.DiscoConfig, "disco-config", "", "Set discovery config, or path to cluster discovery config file")
-	flag.BoolVar(&config.Expvar, "expvar", true, "Serve expvar data on HTTP server")
-	flag.BoolVar(&config.PprofEnabled, "pprof", true, "Serve pprof data on HTTP server")
 	flag.StringVar(&config.OnDiskPath, "on-disk-path", "", "Path for SQLite on-disk database file. If not set, use a file in data directory")
 	flag.BoolVar(&config.FKConstraints, "fk", false, "Enable SQLite foreign key constraints")
 	flag.BoolVar(&showVersion, "version", false, "Show version information and exit")

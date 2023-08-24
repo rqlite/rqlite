@@ -14,7 +14,7 @@ func init() {
 	r = rand.New(rand.NewSource(time.Now().UnixNano()))
 }
 
-// RandomString returns a random string of 20 characters
+// String returns a random string of 20 characters
 func String() string {
 	mu.Lock()
 	defer mu.Unlock()
