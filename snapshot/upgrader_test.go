@@ -27,12 +27,8 @@ func Test_Upgrade_OK(t *testing.T) {
 	logger := log.New(os.Stderr, "[snapshot-store-upgrader] ", 0)
 	v7Snapshot := "testdata/upgrade/v7.20.3-snapshots"
 	v7SnapshotID := "2-18-1686659761026"
-	oldTemp := mustMakeTempDir()
-	defer os.RemoveAll(oldTemp)
-	newTemp := mustMakeTempDir()
-	defer os.RemoveAll(newTemp)
-	oldTemp = filepath.Join(oldTemp, "snapshots")
-	newTemp = filepath.Join(newTemp, "rsnapshots")
+	oldTemp := filepath.Join(t.TempDir(), "snapshots")
+	newTemp := filepath.Join(t.TempDir(), "rsnapshots")
 
 	// Copy directory because succeessful test runs will delete it.
 	copyDir(v7Snapshot, oldTemp)
@@ -202,12 +198,4 @@ func copyDir(src string, dst string) (err error) {
 	}
 
 	return
-}
-
-func mustMakeTempDir() string {
-	dir, err := os.MkdirTemp("", "rsnapshots-upgrade-test")
-	if err != nil {
-		panic(err)
-	}
-	return dir
 }
