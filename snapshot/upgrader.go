@@ -62,7 +62,6 @@ func Upgrade(old, new string, logger *log.Logger) error {
 	}
 
 	// Start the upgrade process.
-	logger.Printf("upgrading snapshot directory %s to %s", old, new)
 	if err := os.MkdirAll(newTmpDir, 0755); err != nil {
 		return fmt.Errorf("failed to create temporary snapshot directory %s: %s", newTmpDir, err)
 	}
@@ -137,6 +136,7 @@ func Upgrade(old, new string, logger *log.Logger) error {
 	if err := removeDirSync(old); err != nil {
 		return fmt.Errorf("failed to remove old snapshot directory %s: %s", old, err)
 	}
+	logger.Printf("upgraded snapshot directory %s to %s", old, new)
 	return nil
 }
 
