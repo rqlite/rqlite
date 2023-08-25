@@ -66,10 +66,11 @@ func Test_Upgrade_OK(t *testing.T) {
 		t.Fatalf("expected snapshot ID %s, got %s", exp, got)
 	}
 
-	meta, _, err := store.Open(snapshots[0].ID)
+	meta, rc, err := store.Open(snapshots[0].ID)
 	if err != nil {
 		t.Fatalf("failed to open snapshot: %s", err)
 	}
+	rc.Close() // Removing test resources, when running on Windows, will fail otherwise.
 	if exp, got := v7SnapshotID, meta.ID; exp != got {
 		t.Fatalf("expected meta ID %s, got %s", exp, got)
 	}
