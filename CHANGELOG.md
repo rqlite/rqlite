@@ -27,6 +27,7 @@ When officially released 8.0 will support (mostly) seamless upgrades from the 7.
 - [PR #1369](https://github.com/rqlite/rqlite/pull/1369), [PR #1370](https://github.com/rqlite/rqlite/pull/1370): Use singleton, sync'ed, random source.
 - [PR #1367](https://github.com/rqlite/rqlite/pull/1367): Move to a WAL-based Snapshot store, which unlocks support for much larger data set support.
 - [PR #1373](https://github.com/rqlite/rqlite/pull/1373): Remove compression-control command-line options.
+- [PR #1377](https://github.com/rqlite/rqlite/pull/1377): Automatically upgrade 7.x snapshots.
 
 ## 7.21.4 (July 8th 2023)
 ### Implementation changes and bug fixes
