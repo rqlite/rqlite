@@ -1,12 +1,21 @@
 package snapshot
 
 import (
+	"compress/gzip"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 
 	"github.com/hashicorp/raft"
+	"github.com/rqlite/rqlite/db"
+)
+
+const (
+	v7StateFile = "state.bin"
 )
 
 // Upgrade writes a copy of the 7.x-format Snapshot dircectory at 'old' to a
@@ -31,7 +40,16 @@ func Upgrade(old, new string, logger *log.Logger) error {
 			return fmt.Errorf("failed to check if old snapshot directory %s is empty: %s", old, err)
 		}
 
-		if oldIsEmpty || dirExists(new) {
+		if oldIsEmpty {
+			logger.Printf("old snapshot directory %s is empty, nothing to upgrade", old)
+			if err := os.RemoveAll(old); err != nil {
+				return fmt.Errorf("failed to remove old snapshot directory %s: %s", old, err)
+			}
+			return nil
+		}
+
+		if dirExists(new) {
+			logger.Printf("new snapshot directory %s exists", old)
 			if err := os.RemoveAll(old); err != nil {
 				return fmt.Errorf("failed to remove old snapshot directory %s: %s", old, err)
 			}
@@ -74,10 +92,38 @@ func Upgrade(old, new string, logger *log.Logger) error {
 
 	// Write SQLite data into generation directory, as the base SQLite file.
 	newSqliteBasePath := filepath.Join(newGenerationDir, baseSqliteFile)
-	_ = newSqliteBasePath
+	newSqliteFd, err := os.Create(newSqliteBasePath)
+	if err != nil {
+		return fmt.Errorf("failed to create new SQLite file %s: %s", newSqliteBasePath, err)
+	}
+	defer newSqliteFd.Close()
 
-	// Read and decompress SQLite data into newSqliteBasePath
-	// Perform basic checks of data: is it a valid SQLite file? Run a PRAGMA integrity_check?
+	// Copy the old state file into the new generation directory.
+	oldStatePath := filepath.Join(old, oldMeta.ID, v7StateFile)
+	stateFd, err := os.Open(oldStatePath)
+	if err != nil {
+		return fmt.Errorf("failed to open old state file %s: %s", oldStatePath, err)
+	}
+	defer stateFd.Close()
+
+	// Skip past the header and length of the old state file.
+	if _, err := stateFd.Seek(16, 0); err != nil {
+		return fmt.Errorf("failed to seek to beginning of old SQLite data %s: %s", oldStatePath, err)
+	}
+	gzipReader, err := gzip.NewReader(stateFd)
+	if err != nil {
+		return fmt.Errorf("failed to create gzip reader for new SQLite file %s: %s", newSqliteBasePath, err)
+	}
+	defer gzipReader.Close()
+	if _, err := io.Copy(newSqliteFd, gzipReader); err != nil {
+		return fmt.Errorf("failed to copy old SQLite file %s to new SQLite file %s: %s", oldStatePath,
+			newSqliteBasePath, err)
+	}
+
+	// Check that everything is OK with the new SQLite file.
+	if !db.IsValidSQLiteFile(newSqliteBasePath) {
+		return fmt.Errorf("migrated SQLite file %s is not valid", newSqliteBasePath)
+	}
 
 	// Move the upgraded snapshot directory into place.
 	if err := os.Rename(newTmpDir, new); err != nil {
@@ -96,7 +142,38 @@ func Upgrade(old, new string, logger *log.Logger) error {
 
 // getNewest7Snapshot returns the newest snapshot Raft meta in the given directory.
 func getNewest7Snapshot(dir string) (*raft.SnapshotMeta, error) {
-	return nil, nil
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	var snapshots []*raft.SnapshotMeta
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		metaPath := filepath.Join(dir, entry.Name(), metaFileName)
+		if !fileExists(metaPath) {
+			continue
+		}
+
+		fh, err := os.Open(metaPath)
+		if err != nil {
+			return nil, err
+		}
+		defer fh.Close()
+
+		meta := &raft.SnapshotMeta{}
+		dec := json.NewDecoder(fh)
+		if err := dec.Decode(meta); err != nil {
+			return nil, err
+		}
+		snapshots = append(snapshots, meta)
+	}
+	if len(snapshots) == 0 {
+		return nil, nil
+	}
+	return raftMetaSlice(snapshots).Newest(), nil
 }
 
 func dirIsEmpty(dir string) (bool, error) {
@@ -105,4 +182,34 @@ func dirIsEmpty(dir string) (bool, error) {
 		return false, err
 	}
 	return len(files) == 0, nil
+}
+
+// raftMetaSlice is a sortable slice of Raft Meta, which are sorted
+// by term, index, and then ID. Snapshots are sorted from oldest to newest.
+type raftMetaSlice []*raft.SnapshotMeta
+
+func (s raftMetaSlice) Newest() *raft.SnapshotMeta {
+	if len(s) == 0 {
+		return nil
+	}
+	sort.Sort(s)
+	return s[len(s)-1]
+}
+
+func (s raftMetaSlice) Len() int {
+	return len(s)
+}
+
+func (s raftMetaSlice) Less(i, j int) bool {
+	if s[i].Term != s[j].Term {
+		return s[i].Term < s[j].Term
+	}
+	if s[i].Index != s[j].Index {
+		return s[i].Index < s[j].Index
+	}
+	return s[i].ID < s[j].ID
+}
+
+func (s raftMetaSlice) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
 }
