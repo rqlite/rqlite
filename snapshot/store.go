@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"sort"
 	"strconv"
+	"strings"
 	sync "sync"
 	"time"
 
@@ -665,16 +666,31 @@ func copyFileSync(src, dst string) error {
 	return dstFd.Sync()
 }
 
+func parentDir(dir string) string {
+	return filepath.Dir(dir)
+}
+
+func tmpName(path string) string {
+	return path + tmpSuffix
+}
+
+func nonTmpName(path string) string {
+	return strings.TrimSuffix(path, tmpSuffix)
+}
+
+func moveFromTmpSync(src string) (string, error) {
+	dst := nonTmpName(src)
+	if err := os.Rename(src, dst); err != nil {
+		return "", err
+	}
+	return dst, syncDirParentMaybe(dst)
+}
+
 func removeDirSync(dir string) error {
 	if err := os.RemoveAll(dir); err != nil {
 		return err
 	}
-	if runtime.GOOS != "windows" {
-		if err := syncDir(filepath.Dir(dir)); err != nil {
-			return err
-		}
-	}
-	return nil
+	return syncDirParentMaybe(dir)
 }
 
 func syncDir(dir string) error {
@@ -684,6 +700,15 @@ func syncDir(dir string) error {
 	}
 	defer fh.Close()
 	return fh.Sync()
+}
+
+// syncDirParentMaybe syncs the parent directory of the given
+// directory, but only on non-Windows platforms.
+func syncDirParentMaybe(dir string) error {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+	return syncDir(parentDir(dir))
 }
 
 // snapshotName generates a name for the snapshot.

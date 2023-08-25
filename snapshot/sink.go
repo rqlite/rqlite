@@ -6,8 +6,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"runtime"
-	"strings"
 )
 
 // Sink is a sink for writing snapshot data to a Snapshot store.
@@ -182,23 +180,8 @@ func (s *Sink) processFullSnapshot(fullSnap *FullSnapshot) error {
 }
 
 func (s *Sink) writeMeta(dir string, full bool) error {
-	fh, err := os.Create(filepath.Join(dir, metaFileName))
-	if err != nil {
-		return fmt.Errorf("error creating meta file: %v", err)
-	}
-	defer fh.Close()
 	s.meta.Full = full
-
-	// Write out as JSON
-	enc := json.NewEncoder(fh)
-	if err = enc.Encode(s.meta); err != nil {
-		return fmt.Errorf("failed to encode meta: %v", err)
-	}
-
-	if err := fh.Sync(); err != nil {
-		return err
-	}
-	return fh.Close()
+	return writeMeta(dir, s.meta)
 }
 
 func (s *Sink) cleanup() error {
@@ -220,30 +203,21 @@ func (s *Sink) cleanup() error {
 	return nil
 }
 
-func parentDir(dir string) string {
-	return filepath.Dir(dir)
-}
+func writeMeta(dir string, meta *Meta) error {
+	fh, err := os.Create(filepath.Join(dir, metaFileName))
+	if err != nil {
+		return fmt.Errorf("error creating meta file: %v", err)
+	}
+	defer fh.Close()
 
-func tmpName(path string) string {
-	return path + tmpSuffix
-}
-
-func nonTmpName(path string) string {
-	return strings.TrimSuffix(path, tmpSuffix)
-}
-
-func moveFromTmpSync(src string) (string, error) {
-	dst := nonTmpName(src)
-	if err := os.Rename(src, dst); err != nil {
-		return "", err
+	// Write out as JSON
+	enc := json.NewEncoder(fh)
+	if err = enc.Encode(meta); err != nil {
+		return fmt.Errorf("failed to encode meta: %v", err)
 	}
 
-	// Sync parent directory to ensure snapshot is visible, but it's only
-	// needed on *nix style file systems.
-	if runtime.GOOS != "windows" {
-		if err := syncDir(parentDir(dst)); err != nil {
-			return "", err
-		}
+	if err := fh.Sync(); err != nil {
+		return err
 	}
-	return dst, nil
+	return fh.Close()
 }
