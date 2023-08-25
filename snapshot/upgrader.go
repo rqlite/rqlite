@@ -25,7 +25,7 @@ func Upgrade(old, new string, logger *log.Logger) error {
 	newTmpDir := tmpName(new)
 	newGenerationDir := filepath.Join(newTmpDir, generationsDir, firstGeneration)
 
-	// If a temporary version of the new directory exists, remove it. This implies a
+	// If a temporary version of the new snapshot exists, remove it. This implies a
 	// previous upgrade attempt was interrupted. We will need to start over.
 	if dirExists(newTmpDir) {
 		if err := os.RemoveAll(newTmpDir); err != nil {
@@ -68,12 +68,12 @@ func Upgrade(old, new string, logger *log.Logger) error {
 
 	oldMeta, err := getNewest7Snapshot(old)
 	if err != nil {
-		return fmt.Errorf("failed to get newest snapshot from old snapshot directory %s: %s", old, err)
+		return fmt.Errorf("failed to get newest snapshot from old snapshots directory %s: %s", old, err)
 	}
 	if oldMeta == nil {
 		// No snapshot to upgrade, this shouldn't happen since we checked for an empty old
 		// directory earlier.
-		return fmt.Errorf("no snapshot to upgrade in old snapshot directory %s", old)
+		return fmt.Errorf("no snapshot to upgrade in old snapshots directory %s", old)
 	}
 
 	// Write out the new meta file.
@@ -89,7 +89,7 @@ func Upgrade(old, new string, logger *log.Logger) error {
 		return fmt.Errorf("failed to write new snapshot meta file: %s", err)
 	}
 
-	// Ensure all file handles are closed before any dircetory is moved or removed.
+	// Ensure all file handles are closed before any directory is renamed or removed.
 	if err := func() error {
 		// Write SQLite data into generation directory, as the base SQLite file.
 		newSqliteBasePath := filepath.Join(newGenerationDir, baseSqliteFile)
@@ -121,7 +121,7 @@ func Upgrade(old, new string, logger *log.Logger) error {
 				newSqliteBasePath, err)
 		}
 
-		// Check that everything is OK with the new SQLite file.
+		// Sanity-check the SQLite data.
 		if !db.IsValidSQLiteFile(newSqliteBasePath) {
 			return fmt.Errorf("migrated SQLite file %s is not valid", newSqliteBasePath)
 		}
