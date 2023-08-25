@@ -89,39 +89,45 @@ func Upgrade(old, new string, logger *log.Logger) error {
 		return fmt.Errorf("failed to write new snapshot meta file: %s", err)
 	}
 
-	// Write SQLite data into generation directory, as the base SQLite file.
-	newSqliteBasePath := filepath.Join(newGenerationDir, baseSqliteFile)
-	newSqliteFd, err := os.Create(newSqliteBasePath)
-	if err != nil {
-		return fmt.Errorf("failed to create new SQLite file %s: %s", newSqliteBasePath, err)
-	}
-	defer newSqliteFd.Close()
+	// Ensure all file handles are closed before any dircetory is moved or removed.
+	if err := func() error {
+		// Write SQLite data into generation directory, as the base SQLite file.
+		newSqliteBasePath := filepath.Join(newGenerationDir, baseSqliteFile)
+		newSqliteFd, err := os.Create(newSqliteBasePath)
+		if err != nil {
+			return fmt.Errorf("failed to create new SQLite file %s: %s", newSqliteBasePath, err)
+		}
+		defer newSqliteFd.Close()
 
-	// Copy the old state file into the new generation directory.
-	oldStatePath := filepath.Join(old, oldMeta.ID, v7StateFile)
-	stateFd, err := os.Open(oldStatePath)
-	if err != nil {
-		return fmt.Errorf("failed to open old state file %s: %s", oldStatePath, err)
-	}
-	defer stateFd.Close()
+		// Copy the old state file into the new generation directory.
+		oldStatePath := filepath.Join(old, oldMeta.ID, v7StateFile)
+		stateFd, err := os.Open(oldStatePath)
+		if err != nil {
+			return fmt.Errorf("failed to open old state file %s: %s", oldStatePath, err)
+		}
+		defer stateFd.Close()
 
-	// Skip past the header and length of the old state file.
-	if _, err := stateFd.Seek(16, 0); err != nil {
-		return fmt.Errorf("failed to seek to beginning of old SQLite data %s: %s", oldStatePath, err)
-	}
-	gzipReader, err := gzip.NewReader(stateFd)
-	if err != nil {
-		return fmt.Errorf("failed to create gzip reader for new SQLite file %s: %s", newSqliteBasePath, err)
-	}
-	defer gzipReader.Close()
-	if _, err := io.Copy(newSqliteFd, gzipReader); err != nil {
-		return fmt.Errorf("failed to copy old SQLite file %s to new SQLite file %s: %s", oldStatePath,
-			newSqliteBasePath, err)
-	}
+		// Skip past the header and length of the old state file.
+		if _, err := stateFd.Seek(16, 0); err != nil {
+			return fmt.Errorf("failed to seek to beginning of old SQLite data %s: %s", oldStatePath, err)
+		}
+		gzipReader, err := gzip.NewReader(stateFd)
+		if err != nil {
+			return fmt.Errorf("failed to create gzip reader for new SQLite file %s: %s", newSqliteBasePath, err)
+		}
+		defer gzipReader.Close()
+		if _, err := io.Copy(newSqliteFd, gzipReader); err != nil {
+			return fmt.Errorf("failed to copy old SQLite file %s to new SQLite file %s: %s", oldStatePath,
+				newSqliteBasePath, err)
+		}
 
-	// Check that everything is OK with the new SQLite file.
-	if !db.IsValidSQLiteFile(newSqliteBasePath) {
-		return fmt.Errorf("migrated SQLite file %s is not valid", newSqliteBasePath)
+		// Check that everything is OK with the new SQLite file.
+		if !db.IsValidSQLiteFile(newSqliteBasePath) {
+			return fmt.Errorf("migrated SQLite file %s is not valid", newSqliteBasePath)
+		}
+		return nil
+	}(); err != nil {
+		return err
 	}
 
 	// Move the upgraded snapshot directory into place.
