@@ -23,7 +23,7 @@ const (
 // 'old' directory is removed before the function returns.
 func Upgrade(old, new string, logger *log.Logger) error {
 	newTmpDir := tmpName(new)
-	newGenerationDir := filepath.Join(newTmpDir, firstGeneration)
+	newGenerationDir := filepath.Join(newTmpDir, generationsDir, firstGeneration)
 
 	// If a temporary version of the new directory exists, remove it. This implies a
 	// previous upgrade attempt was interrupted. We will need to start over.

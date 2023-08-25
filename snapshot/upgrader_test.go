@@ -26,6 +26,7 @@ func Test_Upgrade_NothingToDo(t *testing.T) {
 func Test_Upgrade_OK(t *testing.T) {
 	logger := log.New(os.Stderr, "[snapshot-store-upgrader] ", 0)
 	v7Snapshot := "testdata/upgrade/v7.20.3-snapshots"
+	v7SnapshotID := "2-18-1686659761026"
 	oldTemp := filepath.Join(t.TempDir(), "snapshots")
 	newTemp := filepath.Join(t.TempDir(), "rsnapshots")
 
@@ -42,12 +43,35 @@ func Test_Upgrade_OK(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create new snapshot store: %s", err)
 	}
+
+	currGen, ok, err := store.GetCurrentGenerationDir()
+	if err != nil {
+		t.Fatalf("failed to get current generation directory: %s", err)
+	}
+	if !ok {
+		t.Fatalf("no current generation directory")
+	}
+	if exp, got := firstGeneration, filepath.Base(currGen); exp != got {
+		t.Fatalf("expected current generation directory %s, got %s", exp, got)
+	}
+
 	snapshots, err := store.List()
 	if err != nil {
 		t.Fatalf("failed to list snapshots: %s", err)
 	}
 	if len(snapshots) != 1 {
 		t.Fatalf("expected 1 snapshot, got %d", len(snapshots))
+	}
+	if got, exp := snapshots[0].ID, v7SnapshotID; got != exp {
+		t.Fatalf("expected snapshot ID %s, got %s", exp, got)
+	}
+
+	meta, _, err := store.Open(snapshots[0].ID)
+	if err != nil {
+		t.Fatalf("failed to open snapshot: %s", err)
+	}
+	if exp, got := v7SnapshotID, meta.ID; exp != got {
+		t.Fatalf("expected meta ID %s, got %s", exp, got)
 	}
 }
 
