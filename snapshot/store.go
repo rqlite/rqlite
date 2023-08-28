@@ -418,7 +418,7 @@ func (s *Store) ReapSnapshots(dir string, retain int) (int, error) {
 func (s *Store) getSnapshots(dir string) ([]*Meta, error) {
 	var snapMeta []*Meta
 
-	snapshots, err := os.ReadDir(dir)
+	entries, err := os.ReadDir(dir)
 	if err != nil {
 		// If the directory doesn't exist, that's fine, just return an empty list
 		if os.IsNotExist(err) {
@@ -428,28 +428,22 @@ func (s *Store) getSnapshots(dir string) ([]*Meta, error) {
 	}
 
 	// Populate the metadata
-	for _, snap := range snapshots {
-		// Ignore any files
-		if !snap.IsDir() {
-			continue
-		}
-
-		// Ignore any temporary snapshots
-		if isTmpName(snap.Name()) {
+	for _, entry := range entries {
+		// Ignore any files or temporary snapshots
+		if !entry.IsDir() || isTmpName(entry.Name()) {
 			continue
 		}
 
 		// Try to read the meta data
-		meta, err := s.readMeta(filepath.Join(dir, snap.Name()))
+		meta, err := s.readMeta(filepath.Join(dir, entry.Name()))
 		if err != nil {
-			return nil, fmt.Errorf("failed to read meta for snapshot %s: %s", snap.Name(), err)
+			return nil, fmt.Errorf("failed to read meta for snapshot %s: %s", entry.Name(), err)
 		}
 		snapMeta = append(snapMeta, meta)
 	}
 
 	// Sort the snapshot, reverse so we get new -> old
 	sort.Sort(sort.Reverse(metaSlice(snapMeta)))
-
 	return snapMeta, nil
 }
 
