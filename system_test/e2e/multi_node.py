@@ -496,7 +496,7 @@ class TestEndToEndBackupRestore(unittest.TestCase):
     os.remove(self.db_file)
 
 class TestEndToEndSnapRestoreCluster(unittest.TestCase):
-  def waitForSnap(self, n):
+  def wait_for_snap(self, n):
     timeout = 10
     t = 0
     while True:
@@ -507,23 +507,30 @@ class TestEndToEndSnapRestoreCluster(unittest.TestCase):
       time.sleep(1)
       t+=1
 
+  def poll_query(self, node, exp):
+    t = 0
+    while True:
+      if t > TIMEOUT:
+        raise Exception('timeout waiting for node %s to have all data' % node.node_id)
+      j = node.query('SELECT count(*) FROM foo', level='none')
+      if j == d_("{'results': [{'values': [[502]], 'types': ['integer'], 'columns': ['count(*)']}]}"):
+        break
+      time.sleep(1)
+      t+=1
+
   def test_join_with_snap(self):
-    '''Check that a node joins a cluster correctly via a snapshot'''
+    '''Check that nodes join a cluster correctly via a snapshot'''
     self.n0 = Node(RQLITED_PATH, '0',  raft_snap_threshold=100, raft_snap_int="1s")
     self.n0.start()
     self.n0.wait_for_leader()
-
-    # Let's get TWO snapshots done.
     self.n0.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
-    for i in range(0,100):
-      self.n0.execute('INSERT INTO foo(name) VALUES("fiona")')
-    self.n0.wait_for_all_fsm()
-    self.waitForSnap(1)
 
-    for i in range(0,100):
-      self.n0.execute('INSERT INTO foo(name) VALUES("fiona")')
-    self.n0.wait_for_all_fsm()
-    self.waitForSnap(2)
+    # Let's get multiple snapshots done.
+    for j in range(1, 4):
+      for i in range(0,100):
+        self.n0.execute('INSERT INTO foo(name) VALUES("fiona")')
+      self.n0.wait_for_all_fsm()
+      self.wait_for_snap(j)
 
     # Add two more nodes to the cluster
     self.n1 = Node(RQLITED_PATH, '1')
@@ -540,23 +547,21 @@ class TestEndToEndSnapRestoreCluster(unittest.TestCase):
     # Ensure those new nodes have the full correct state.
     self.n1.wait_for_fsm_index(self.n0.fsm_index())
     j = self.n1.query('SELECT count(*) FROM foo', level='none')
-    self.assertEqual(j, d_("{'results': [{'values': [[201]], 'types': ['integer'], 'columns': ['count(*)']}]}"))
+    self.assertEqual(j, d_("{'results': [{'values': [[301]], 'types': ['integer'], 'columns': ['count(*)']}]}"))
 
     self.n2.wait_for_fsm_index(self.n0.fsm_index())
     j = self.n2.query('SELECT count(*) FROM foo', level='none')
-    self.assertEqual(j, d_("{'results': [{'values': [[201]], 'types': ['integer'], 'columns': ['count(*)']}]}"))
+    self.assertEqual(j, d_("{'results': [{'values': [[301]], 'types': ['integer'], 'columns': ['count(*)']}]}"))
 
     # Kill one of the nodes, and make more changes, enough to trigger more snaps.
     self.n2.stop()
 
-    for i in range(0,100):
-      self.n0.execute('INSERT INTO foo(name) VALUES("fiona")')
-    self.n0.wait_for_all_fsm()
-    self.waitForSnap(3)
-    for i in range(0,100):
-      self.n0.execute('INSERT INTO foo(name) VALUES("fiona")')
-    self.n0.wait_for_all_fsm()
-    self.waitForSnap(4)
+    # Let's get more snapshots done.
+    for j in range(3, 5):
+      for i in range(0,100):
+        self.n0.execute('INSERT INTO foo(name) VALUES("fiona")')
+      self.n0.wait_for_all_fsm()
+      self.wait_for_snap(j)
 
     # Restart killed node, check it has full state.
     self.n2.start()
@@ -569,20 +574,20 @@ class TestEndToEndSnapRestoreCluster(unittest.TestCase):
 
     # Snapshot testing is tricky, as it's so timing-based -- and therefore hard to predict.
     # So adopt a polling approach.
-    t = 0
-    while True:
-      if t > TIMEOUT:
-        raise Exception('timeout waiting for n2 to have all data')
-      j = self.n2.query('SELECT count(*) FROM foo', level='none')
-      if j == d_("{'results': [{'values': [[402]], 'types': ['integer'], 'columns': ['count(*)']}]}"):
-        break
-      time.sleep(1)
-      t+=1
+    self.poll_query(self.n2, d_("{'results': [{'values': [[502]], 'types': ['integer'], 'columns': ['count(*)']}]}"))
+
+    # Launch a brand-new node, and check that is catches up via a single restore from snapshot.
+    self.n3 = Node(RQLITED_PATH, '3')
+    self.n3.start(join=self.n0.APIAddr())
+    self.n3.wait_for_leader()
+    self.poll_query(self.n3, d_("{'results': [{'values': [[502]], 'types': ['integer'], 'columns': ['count(*)']}]}"))
+    self.assertEqual(self.n3.expvar()['store']['num_restores'], 1)
 
   def tearDown(self):
     deprovision_node(self.n0)
     deprovision_node(self.n1)
     deprovision_node(self.n2)
+    deprovision_node(self.n3)
 
 class TestShutdown(unittest.TestCase):
   def test_cluster_leader_remove_on_shutdown(self):
