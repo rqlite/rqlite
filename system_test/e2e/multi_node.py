@@ -53,6 +53,7 @@ class TestEndToEnd(unittest.TestCase):
     self.cluster.stop()
     self.cluster.start()
     self.cluster.wait_for_leader()
+    self.cluster.cross_check_leader()
     # Guard against any error in testing, by confirming that restarting the cluster
     # actually resulted in all new rqlited processes.
     self.assertTrue(pids.isdisjoint(set(self.cluster.pids())))

@@ -267,7 +267,7 @@ class Node(object):
     '''
     try:
       return self.status()['store']['raft']['state'] == 'Leader'
-    except requests.exceptions.ConnectionError:
+    except (KeyError, requests.exceptions.ConnectionError):
       return False
 
   def is_follower(self):
@@ -594,6 +594,15 @@ class Cluster(object):
           return n
       time.sleep(1)
       t+=1
+  def cross_check_leader(self):
+    '''
+    Check that all nodes agree on who the leader is.
+    '''
+    leaders = {}
+    for n in self.nodes:
+      leaders[n.node_id] = n.wait_for_leader()
+    first_leader = next(iter(leaders.values()))
+    return all(ldr == first_leader for ldr in leaders.values())
   def start(self):
     for n in self.nodes:
       n.start()
