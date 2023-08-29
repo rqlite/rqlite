@@ -103,6 +103,7 @@ jobs:
           cc: x86_64-w64-mingw32-gcc
           goarch: amd64
           goos: windows
+    resource_class: large
   cross_compile:
     docker:
       - image: << pipeline.parameters.primary_image >>
@@ -118,6 +119,7 @@ jobs:
       - cross_compile:
           cc: powerpc64le-linux-gnu-gcc
           goarch: ppc64le
+    resource_class: large
   cross_compile_arm:
     docker:
       - image: << pipeline.parameters.primary_image >>
@@ -130,6 +132,7 @@ jobs:
       - cross_compile:
           cc: aarch64-linux-gnu-gcc
           goarch: arm64
+    resource_class: large
   cross_compile_mips:
     docker:
       - image: << pipeline.parameters.primary_image >>
@@ -142,6 +145,7 @@ jobs:
       - cross_compile:
           cc: mips64-linux-gnuabi64-gcc
           goarch: mips64
+    resource_class: large
   cross_compile_mips_le:
     docker:
       - image: << pipeline.parameters.primary_image >>
@@ -154,6 +158,7 @@ jobs:
       - cross_compile:
           cc: mips64el-linux-gnuabi64-gcc
           goarch: mips64le
+    resource_class: large
 
   end_to_end_single:
     docker:
