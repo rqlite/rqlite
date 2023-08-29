@@ -306,8 +306,12 @@ class Node(object):
     # Perform a check on readyness while we're here.
     if ready and (self.ready() is not True):
       raise Exception('leader is available but node reports not ready')
+
+    # Ensure the leader is sane.
     if lr['node_id'] == '':
       raise Exception('leader is available but node %s at %s reports empty leader node ID' % (self.node_id, self.APIAddr()))
+    if lr['addr'] == '':
+      raise Exception('leader is available but node %s at %s reports empty leader addr' % (self.node_id, self.APIAddr()))
     return lr
 
   def wait_for_ready(self, timeout=TIMEOUT):
@@ -598,11 +602,10 @@ class Cluster(object):
     '''
     Check that all nodes agree on who the leader is.
     '''
-    leaders = {}
+    leaders = []
     for n in self.nodes:
-      leaders[n.node_id] = n.wait_for_leader()
-    first_leader = next(iter(leaders.values()))
-    return all(ldr == first_leader for ldr in leaders.values())
+      leaders.append(n.wait_for_leader()['node_id'])
+    return set(leaders) == 1
   def start(self):
     for n in self.nodes:
       n.start()
