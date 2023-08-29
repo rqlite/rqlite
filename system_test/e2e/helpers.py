@@ -306,6 +306,8 @@ class Node(object):
     # Perform a check on readyness while we're here.
     if ready and (self.ready() is not True):
       raise Exception('leader is available but node reports not ready')
+    if lr['node_id'] == '':
+      raise Exception('leader is available but node %s at %s reports empty leader node ID' % (self.node_id, self.APIAddr()))
     return lr
 
   def wait_for_ready(self, timeout=TIMEOUT):
