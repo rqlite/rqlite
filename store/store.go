@@ -167,7 +167,7 @@ type Store struct {
 
 	raft   *raft.Raft // The consensus mechanism.
 	ln     Listener
-	raftTn *raft.NetworkTransport
+	raftTn *NodeTransport
 	raftID string    // Node ID.
 	dbConf *DBConfig // SQLite database config.
 	dbPath string    // Path to underlying SQLite file, if not in-memory.
@@ -359,7 +359,8 @@ func (s *Store) Open() (retErr error) {
 	s.dechunkManager = decMgmr
 
 	// Create Raft-compatible network layer.
-	s.raftTn = raft.NewNetworkTransport(NewTransport(s.ln), connectionPoolCount, connectionTimeout, nil)
+	nt := raft.NewNetworkTransport(NewTransport(s.ln), connectionPoolCount, connectionTimeout, nil)
+	s.raftTn = &NodeTransport{nt}
 
 	// Don't allow control over trailing logs directly, just implement a policy.
 	s.numTrailingLogs = uint64(float64(s.SnapshotThreshold) * trailingScale)
