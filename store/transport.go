@@ -65,6 +65,9 @@ func NewNodeTransport(transport *raft.NetworkTransport) *NodeTransport {
 // Close closes the transport
 func (n *NodeTransport) Close() error {
 	close(n.done)
+	if n.NetworkTransport == nil {
+		return nil
+	}
 	return n.NetworkTransport.Close()
 }
 
