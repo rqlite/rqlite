@@ -32,7 +32,7 @@ func NewCompressor(r io.Reader, bufSz int) *Compressor {
 
 // Read reads compressed data.
 func (c *Compressor) Read(p []byte) (int, error) {
-	if c.buf.Len() == 0 {
+	if c.buf.Len() == 0 && c.gzw != nil {
 		n, err := io.CopyN(c.gzw, c.r, int64(c.bufSz))
 		if err != nil {
 			c.gzw.Close() // Time to write the footer.
@@ -40,6 +40,7 @@ func (c *Compressor) Read(p []byte) (int, error) {
 				// Actual error, let caller handle
 				return 0, err
 			}
+			c.gzw = nil
 		} else if n > 0 {
 			// We read some data, but didn't hit any error.
 			// Just flush the data in the buffer, ready
