@@ -55,5 +55,8 @@ func (c *Compressor) Read(p []byte) (int, error) {
 
 // Close closes the Compressor.
 func (c *Compressor) Close() error {
+	if c.gzw == nil {
+		return nil
+	}
 	return c.gzw.Close()
 }

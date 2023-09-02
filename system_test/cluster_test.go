@@ -1816,3 +1816,7 @@ func Test_MultiNodeClusterNoReapReadOnlyZero(t *testing.T) {
 		t.Fatalf("didn't time out waiting for node to be removed")
 	}
 }
+
+func sleepForSecond() {
+	time.Sleep(mustParseDuration("1s"))
+}
