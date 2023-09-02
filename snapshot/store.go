@@ -225,6 +225,7 @@ func (s *Store) Open(id string) (*raft.SnapshotMeta, io.ReadCloser, error) {
 			return nil, nil, err
 		}
 		meta.Size = str.Size()
+		s.logger.Printf("opened snapshot %s successfully (size=%d)", id, meta.Size)
 		return meta, str, nil
 	}
 	return nil, nil, ErrSnapshotNotFound
