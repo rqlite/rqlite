@@ -18,4 +18,7 @@ func Test_NewNodeTransport(t *testing.T) {
 	if err := nt.Close(); err != nil {
 		t.Fatalf("failed to close NodeTransport: %s", err.Error())
 	}
+	if err := nt.Close(); err != nil {
+		t.Fatalf("failed to double-close NodeTransport: %s", err.Error())
+	}
 }

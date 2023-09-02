@@ -51,7 +51,8 @@ func (t *Transport) Addr() net.Addr {
 // custom configuration of the InstallSnapshot method.
 type NodeTransport struct {
 	*raft.NetworkTransport
-	done chan struct{}
+	done   chan struct{}
+	closed bool
 }
 
 // NewNodeTransport returns an initialized NodeTransport.
@@ -64,6 +65,11 @@ func NewNodeTransport(transport *raft.NetworkTransport) *NodeTransport {
 
 // Close closes the transport
 func (n *NodeTransport) Close() error {
+	if n.closed {
+		return nil
+	}
+	n.closed = true
+
 	close(n.done)
 	if n.NetworkTransport == nil {
 		return nil
