@@ -360,7 +360,7 @@ func (s *Store) Open() (retErr error) {
 
 	// Create Raft-compatible network layer.
 	nt := raft.NewNetworkTransport(NewTransport(s.ln), connectionPoolCount, connectionTimeout, nil)
-	s.raftTn = &NodeTransport{nt}
+	s.raftTn = NewNodeTransport(nt)
 
 	// Don't allow control over trailing logs directly, just implement a policy.
 	s.numTrailingLogs = uint64(float64(s.SnapshotThreshold) * trailingScale)
@@ -539,6 +539,10 @@ func (s *Store) Close(wait bool) (retErr error) {
 			return f.Error()
 		}
 	}
+	if err := s.raftTn.Close(); err != nil {
+		return err
+	}
+
 	// Only shutdown Bolt and SQLite when Raft is done.
 	if err := s.db.Close(); err != nil {
 		return err
