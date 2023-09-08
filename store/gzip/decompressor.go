@@ -33,6 +33,10 @@ func (c *Decompressor) Read(p []byte) (nn int, err error) {
 		if err != nil {
 			return 0, err
 		}
+		// Setting Multistream to false means the gzip reader will
+		// return io.EOF when it reaches the end of the gzip stream.
+		// Otherwise the reader hangs. This seems to be needed only
+		// for the gzip over a stream.
 		c.gzr.Multistream(false)
 	}
 
