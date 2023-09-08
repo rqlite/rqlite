@@ -16,6 +16,9 @@ type Compressor struct {
 	bufSz int
 	buf   *bytes.Buffer
 	gzw   *gzip.Writer
+
+	nRx int64
+	nTx int64
 }
 
 // NewCompressor returns an instantiated Compressor that reads from r and
@@ -31,17 +34,21 @@ func NewCompressor(r io.Reader, bufSz int) *Compressor {
 }
 
 // Read reads compressed data.
-func (c *Compressor) Read(p []byte) (int, error) {
+func (c *Compressor) Read(p []byte) (n int, err error) {
 	if c.buf.Len() == 0 && c.gzw != nil {
-		n, err := io.CopyN(c.gzw, c.r, int64(c.bufSz))
+		nn, err := io.CopyN(c.gzw, c.r, int64(c.bufSz))
+		c.nRx += nn
+		c.nTx += int64(len(p))
 		if err != nil {
-			c.gzw.Close() // Time to write the footer.
+			// Time to write the footer.
+			if err := c.Close(); err != nil {
+				return 0, err
+			}
 			if err != io.EOF {
 				// Actual error, let caller handle
 				return 0, err
 			}
-			c.gzw = nil
-		} else if n > 0 {
+		} else if nn > 0 {
 			// We read some data, but didn't hit any error.
 			// Just flush the data in the buffer, ready
 			// to be read.
@@ -58,5 +65,9 @@ func (c *Compressor) Close() error {
 	if c.gzw == nil {
 		return nil
 	}
-	return c.gzw.Close()
+	if err := c.gzw.Close(); err != nil {
+		return err
+	}
+	c.gzw = nil
+	return nil
 }
