@@ -52,17 +52,21 @@ func (c *Decompressor) Read(p []byte) (nn int, err error) {
 	return n, err
 }
 
+// CountingReader is a wrapper around io.Reader that counts the number of bytes
+// read.
 type CountingReader struct {
 	r io.Reader
 	n int64
 }
 
+// NewCountingReader returns an instantiated CountingReader that reads from r.
 func NewCountingReader(r io.Reader) *CountingReader {
 	return &CountingReader{
 		r: r,
 	}
 }
 
+// Read reads data.
 func (c *CountingReader) Read(p []byte) (n int, err error) {
 	n, err = c.r.Read(p)
 	c.n += int64(n)
