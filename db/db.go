@@ -308,6 +308,10 @@ func Open(dbPath string, fkEnabled, wal bool) (*DB, error) {
 		return nil, fmt.Errorf("sync OFF: %s", err.Error())
 	}
 
+	if _, err := rwDB.Exec("PRAGMA locking_mode=EXCLUSIVE"); err != nil {
+		return nil, fmt.Errorf("locking_mode EXCLUSIVE: %s", err.Error())
+	}
+
 	mode := "WAL"
 	if !wal {
 		mode = "DELETE"
