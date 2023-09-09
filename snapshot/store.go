@@ -39,10 +39,11 @@ const (
 )
 
 const (
-	persistSize          = "latest_persist_size"
-	persistDuration      = "latest_persist_duration"
-	numSnapshotsReaped   = "num_snapshots_reaped"
-	numGenerationsReaped = "num_generations_reaped"
+	persistSize             = "latest_persist_size"
+	persistDuration         = "latest_persist_duration"
+	reap_snapshots_duration = "reap_snapshots_duration"
+	numSnapshotsReaped      = "num_snapshots_reaped"
+	numGenerationsReaped    = "num_generations_reaped"
 )
 
 var (
@@ -64,6 +65,7 @@ func ResetStats() {
 	stats.Init()
 	stats.Add(persistSize, 0)
 	stats.Add(persistDuration, 0)
+	stats.Add(reap_snapshots_duration, 0)
 	stats.Add(numSnapshotsReaped, 0)
 	stats.Add(numGenerationsReaped, 0)
 }
@@ -421,8 +423,13 @@ func (s *Store) ReapGenerations() (int, error) {
 // returns the number of snapshots removed, or an error. The retain parameter
 // specifies the number of snapshots to retain.
 func (s *Store) ReapSnapshots(dir string, retain int) (n int, err error) {
+	startT := time.Now()
 	defer func() {
 		stats.Add(numSnapshotsReaped, int64(n))
+		if err == nil {
+			dur := time.Since(startT)
+			stats.Get(reap_snapshots_duration).(*expvar.Int).Set(dur.Milliseconds())
+		}
 	}()
 
 	if retain < minSnapshotRetain {
@@ -482,7 +489,6 @@ func (s *Store) ReapSnapshots(dir string, retain int) (n int, err error) {
 		n++
 		s.logger.Printf("reaped snapshot %s successfully", snap.ID)
 	}
-
 	return n, nil
 }
 
