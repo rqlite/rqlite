@@ -6,6 +6,7 @@ import (
 	"io"
 )
 
+// DefaultBufferSize is the default buffer size used by the Compressor.
 const DefaultBufferSize = 65536
 
 // Compressor is a wrapper around a gzip.Writer that reads from an io.Reader

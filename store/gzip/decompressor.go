@@ -5,6 +5,8 @@ import (
 	"io"
 )
 
+// Decompressor is a wrapper around a gzip.Reader that reads from an io.Reader
+// and decompresses the data.
 type Decompressor struct {
 	cr  *CountingReader
 	gzr *gzip.Reader
@@ -23,13 +25,12 @@ func NewDecompressor(r io.Reader) *Decompressor {
 
 // Read reads decompressed data.
 func (c *Decompressor) Read(p []byte) (nn int, err error) {
-	if c.cr == nil {
-		return 0, io.EOF
-	}
 	defer func() {
 		c.nTx += int64(nn)
 	}()
-
+	if c.cr == nil {
+		return 0, io.EOF
+	}
 	if c.gzr == nil {
 		var err error
 		c.gzr, err = gzip.NewReader(c.cr)
