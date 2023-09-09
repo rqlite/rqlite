@@ -1147,6 +1147,8 @@ func Test_MultiNodeClusterSnapshot(t *testing.T) {
 		}
 	}
 
+	expResults := `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[500]]}]}`
+
 	// Join a second node, check it gets the data via a snapshot.
 	node2 := mustNewNode(false)
 	defer node2.Deprovision()
@@ -1162,12 +1164,13 @@ func Test_MultiNodeClusterSnapshot(t *testing.T) {
 		if err != nil {
 			return false, err
 		}
-		if r != `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[500]]}]}` {
+		if r != expResults {
 			return false, nil
 		}
 		return true, nil
 	}, 100*time.Millisecond, 5*time.Second)
 
+	// Create and add a third node to the cluster.
 	node3 := mustNewNode(false)
 	defer node3.Deprovision()
 	if err := node3.Join(node1); err != nil {
@@ -1197,7 +1200,7 @@ func Test_MultiNodeClusterSnapshot(t *testing.T) {
 				t.Fatalf("failed to query follower node: %s", err.Error())
 			}
 
-			if r != `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[300]]}]}` {
+			if r != expResults {
 				if n < 10 {
 					// Wait, and try again.
 					sleepForSecond()
@@ -1229,7 +1232,7 @@ func Test_MultiNodeClusterSnapshot(t *testing.T) {
 			t.Fatalf("failed to query follower node: %s", err.Error())
 		}
 
-		if r != `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[300]]}]}` {
+		if r != expResults {
 			if n < 10 {
 				// Wait, and try again.
 				sleepForSecond()
