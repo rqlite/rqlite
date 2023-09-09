@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/raft"
+	"github.com/rqlite/rqlite/store/gzip"
 )
 
 // Listener is the interface expected by the Store for Transports.
@@ -50,23 +51,57 @@ func (t *Transport) Addr() net.Addr {
 // custom configuration of the InstallSnapshot method.
 type NodeTransport struct {
 	*raft.NetworkTransport
+	done   chan struct{}
+	closed bool
 }
 
 // NewNodeTransport returns an initialized NodeTransport.
 func NewNodeTransport(transport *raft.NetworkTransport) *NodeTransport {
 	return &NodeTransport{
 		NetworkTransport: transport,
+		done:             make(chan struct{}),
 	}
+}
+
+// Close closes the transport
+func (n *NodeTransport) Close() error {
+	if n.closed {
+		return nil
+	}
+	n.closed = true
+
+	close(n.done)
+	if n.NetworkTransport == nil {
+		return nil
+	}
+	return n.NetworkTransport.Close()
 }
 
 // InstallSnapshot is used to push a snapshot down to a follower. The data is read from
 // the ReadCloser and streamed to the client.
 func (n *NodeTransport) InstallSnapshot(id raft.ServerID, target raft.ServerAddress, args *raft.InstallSnapshotRequest,
 	resp *raft.InstallSnapshotResponse, data io.Reader) error {
-	return n.NetworkTransport.InstallSnapshot(id, target, args, resp, data)
+	gzipData := gzip.NewCompressor(data, gzip.DefaultBufferSize)
+	defer gzipData.Close()
+	return n.NetworkTransport.InstallSnapshot(id, target, args, resp, gzipData)
 }
 
 // Consumer returns a channel of RPC requests to be consumed.
 func (n *NodeTransport) Consumer() <-chan raft.RPC {
-	return n.NetworkTransport.Consumer()
+	ch := make(chan raft.RPC)
+	srcCh := n.NetworkTransport.Consumer()
+	go func() {
+		for {
+			select {
+			case <-n.done:
+				return
+			case rpc := <-srcCh:
+				if rpc.Reader != nil {
+					rpc.Reader = gzip.NewDecompressor(rpc.Reader)
+				}
+				ch <- rpc
+			}
+		}
+	}()
+	return ch
 }

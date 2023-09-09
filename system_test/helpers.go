@@ -1027,7 +1027,7 @@ func mustNewMockCredentialStore() *mockCredentialStore {
 func trueOrTimeout(fn func() bool, dur time.Duration) bool {
 	timer := time.NewTimer(dur)
 	defer timer.Stop()
-	ticker := time.NewTicker(1000 * time.Millisecond)
+	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
 	for {
@@ -1042,8 +1042,8 @@ func trueOrTimeout(fn func() bool, dur time.Duration) bool {
 	}
 }
 
-func testPoll(t *testing.T, f func() (bool, error), p time.Duration, timeout time.Duration) {
-	tck := time.NewTicker(p)
+func testPoll(t *testing.T, f func() (bool, error), period time.Duration, timeout time.Duration) {
+	tck := time.NewTicker(period)
 	defer tck.Stop()
 	tmr := time.NewTimer(timeout)
 	defer tmr.Stop()
@@ -1051,11 +1051,7 @@ func testPoll(t *testing.T, f func() (bool, error), p time.Duration, timeout tim
 	for {
 		select {
 		case <-tck.C:
-			b, err := f()
-			if err != nil {
-				continue
-			}
-			if b {
+			if b, err := f(); b && err == nil {
 				return
 			}
 		case <-tmr.C:

@@ -9,3 +9,16 @@ func Test_NewTransport(t *testing.T) {
 		t.Fatal("failed to create new Transport")
 	}
 }
+
+func Test_NewNodeTransport(t *testing.T) {
+	nt := NewNodeTransport(nil)
+	if nt == nil {
+		t.Fatal("failed to create new NodeTransport")
+	}
+	if err := nt.Close(); err != nil {
+		t.Fatalf("failed to close NodeTransport: %s", err.Error())
+	}
+	if err := nt.Close(); err != nil {
+		t.Fatalf("failed to double-close NodeTransport: %s", err.Error())
+	}
+}

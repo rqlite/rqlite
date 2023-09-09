@@ -1219,13 +1219,10 @@ func Test_SingleNodeNoopSnapReopen(t *testing.T) {
 // This tests that the code can handle a snapshot that doesn't
 // contain database data. This shouldn't happen in real systems
 func Test_SingleNodeNoopSnapLogsReopen(t *testing.T) {
-	var raftAddr string
 	dir := mustTempDir()
 	mux, ln := mustNewOpenMux("")
 	defer ln.Close()
 	node := mustNodeEncrypted(dir, true, false, mux, "")
-	raftAddr = node.RaftAddr
-	t.Logf("node listening for Raft on %s", raftAddr)
 
 	if _, err := node.WaitForLeader(); err != nil {
 		t.Fatalf("node never became leader")
