@@ -1027,7 +1027,7 @@ func mustNewMockCredentialStore() *mockCredentialStore {
 func trueOrTimeout(fn func() bool, dur time.Duration) bool {
 	timer := time.NewTimer(dur)
 	defer timer.Stop()
-	ticker := time.NewTicker(1000 * time.Millisecond)
+	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
 	for {

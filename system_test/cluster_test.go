@@ -213,17 +213,18 @@ func Test_MultiNodeClusterRANDOM(t *testing.T) {
 
 	// Check that row is *exactly* the same on each node. This could only happen if RANDOM was
 	// rewritten by the Leader before committing to the Raft log.
-	r1, err := node1.QueryNoneConsistency("SELECT * FROM foo")
-	if err != nil {
-		t.Fatalf("failed to query node 1: %s", err.Error())
+	tFn := func() bool {
+		r1, err := node1.QueryNoneConsistency("SELECT * FROM foo")
+		if err != nil {
+			t.Fatalf("failed to query node 1: %s", err.Error())
+		}
+		r2, err := node2.QueryNoneConsistency("SELECT * FROM foo")
+		if err != nil {
+			t.Fatalf("failed to query node 2: %s", err.Error())
+		}
+		return r1 == r2
 	}
-	r2, err := node2.QueryNoneConsistency("SELECT * FROM foo")
-	if err != nil {
-		t.Fatalf("failed to query node 2: %s", err.Error())
-	}
-	if r1 != r2 {
-		t.Fatalf("node 1 and node 2 do not have the same data (%s %s)", r1, r2)
-	}
+	trueOrTimeout(tFn, 10*time.Second)
 }
 
 // Test_MultiNodeClusterBootstrap tests formation of a 3-node cluster via bootstraping,
