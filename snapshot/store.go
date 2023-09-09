@@ -3,6 +3,7 @@ package snapshot
 import (
 	"encoding/json"
 	"errors"
+	"expvar"
 	"fmt"
 	"io"
 	"log"
@@ -19,6 +20,11 @@ import (
 	"github.com/rqlite/rqlite/db"
 )
 
+func init() {
+	stats = expvar.NewMap("snapshot")
+	ResetStats()
+}
+
 const (
 	minSnapshotRetain = 2
 
@@ -32,6 +38,10 @@ const (
 	tmpSuffix         = ".tmp"
 )
 
+const (
+	persistSize = "persist_size"
+)
+
 var (
 	// ErrRetainCountTooLow is returned when the retain count is too low.
 	ErrRetainCountTooLow = errors.New("retain count must be >= 2")
@@ -42,6 +52,15 @@ var (
 	// ErrSnapshotBaseMissing is returned when a snapshot base SQLite file is missing.
 	ErrSnapshotBaseMissing = errors.New("snapshot base SQLite file missing")
 )
+
+// stats captures stats for the Store.
+var stats *expvar.Map
+
+// ResetStats resets the expvar stats for this module. Mostly for test purposes.
+func ResetStats() {
+	stats.Init()
+	stats.Add(persistSize, 0)
+}
 
 // Meta represents the metadata for a snapshot.
 type Meta struct {

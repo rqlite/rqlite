@@ -1,6 +1,7 @@
 package snapshot
 
 import (
+	"expvar"
 	"fmt"
 	"io"
 	"os"
@@ -38,7 +39,8 @@ func (s *Snapshot) Persist(sink raft.SnapshotSink) error {
 	}
 	defer stream.Close()
 
-	_, err = io.Copy(sink, stream)
+	n, err := io.Copy(sink, stream)
+	stats.Get(persistSize).(*expvar.Int).Set(n)
 	return err
 }
 
