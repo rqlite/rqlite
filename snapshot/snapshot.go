@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/db"
@@ -33,6 +34,7 @@ func NewFullSnapshot(files ...string) *Snapshot {
 
 // Persist writes the snapshot to the given sink.
 func (s *Snapshot) Persist(sink raft.SnapshotSink) error {
+	startT := time.Now()
 	stream, err := s.OpenStream()
 	if err != nil {
 		return err
@@ -40,7 +42,12 @@ func (s *Snapshot) Persist(sink raft.SnapshotSink) error {
 	defer stream.Close()
 
 	n, err := io.Copy(sink, stream)
+	if err != nil {
+		return err
+	}
+	dur := time.Since(startT)
 	stats.Get(persistSize).(*expvar.Int).Set(n)
+	stats.Get(persistDuration).(*expvar.Int).Set(dur.Milliseconds())
 	return err
 }
 

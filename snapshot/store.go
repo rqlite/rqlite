@@ -39,7 +39,10 @@ const (
 )
 
 const (
-	persistSize = "persist_size"
+	persistSize          = "latest_persist_size"
+	persistDuration      = "latest_persist_duration"
+	numSnapshotsReaped   = "num_snapshots_reaped"
+	numGenerationsReaped = "num_generations_reaped"
 )
 
 var (
@@ -60,6 +63,9 @@ var stats *expvar.Map
 func ResetStats() {
 	stats.Init()
 	stats.Add(persistSize, 0)
+	stats.Add(persistDuration, 0)
+	stats.Add(numSnapshotsReaped, 0)
+	stats.Add(numGenerationsReaped, 0)
 }
 
 // Meta represents the metadata for a snapshot.
@@ -406,6 +412,7 @@ func (s *Store) ReapGenerations() (int, error) {
 		s.logger.Printf("reaped generation %s successfully", generations[i])
 		n++
 	}
+	stats.Add(numGenerationsReaped, int64(n))
 	return n, nil
 }
 
@@ -413,7 +420,11 @@ func (s *Store) ReapGenerations() (int, error) {
 // checkpointing WAL-based snapshots into the base SQLite file. The function
 // returns the number of snapshots removed, or an error. The retain parameter
 // specifies the number of snapshots to retain.
-func (s *Store) ReapSnapshots(dir string, retain int) (int, error) {
+func (s *Store) ReapSnapshots(dir string, retain int) (n int, err error) {
+	defer func() {
+		stats.Add(numSnapshotsReaped, int64(n))
+	}()
+
 	if retain < minSnapshotRetain {
 		return 0, ErrRetainCountTooLow
 	}
@@ -435,9 +446,9 @@ func (s *Store) ReapSnapshots(dir string, retain int) (int, error) {
 	// We'll then delete each snapshot once we've checkpointed it.
 	sort.Sort(metaSlice(snapshots))
 
-	n := 0
 	baseSqliteFilePath := filepath.Join(dir, baseSqliteFile)
 
+	n = 0
 	for _, snap := range snapshots[0 : len(snapshots)-retain] {
 		snapDirPath := filepath.Join(dir, snap.ID)                       // Path to the snapshot directory
 		walFileInSnapshot := filepath.Join(snapDirPath, snapWALFile)     // Path to the WAL file in the snapshot
