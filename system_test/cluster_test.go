@@ -1137,15 +1137,17 @@ func Test_MultiNodeClusterSnapshot(t *testing.T) {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
 
-	// Force snapshots and log truncation to occur.
-	for i := 0; i < 3*int(node1.Store.SnapshotThreshold); i++ {
+	// Force snapshots and log truncation to occur. Make the number of snapshots high enough
+	// that some logs are deleted from the log and are not present in trailing logs either.
+	// This way we can be sure that the follower will need to get an actual snapshot from the leader.
+	for i := 0; i < 5*int(node1.Store.SnapshotThreshold); i++ {
 		_, err := node1.Execute(`INSERT INTO foo(name) VALUES("sinead")`)
 		if err != nil {
 			t.Fatalf(`failed to write records for Snapshot test: %s`, err.Error())
 		}
 	}
 
-	// Join a second and third nodes, which will get database state via snapshots.
+	// Join a second node, check it gets the data via a snapshot.
 	node2 := mustNewNode(false)
 	defer node2.Deprovision()
 	if err := node2.Join(node1); err != nil {
@@ -1155,6 +1157,16 @@ func Test_MultiNodeClusterSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed waiting for leader: %s", err.Error())
 	}
+	testPoll(t, func() (bool, error) {
+		r, err := node2.QueryNoneConsistency(`SELECT COUNT(*) FROM foo`)
+		if err != nil {
+			return false, err
+		}
+		if r != `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[500]]}]}` {
+			return false, nil
+		}
+		return true, nil
+	}, 100*time.Millisecond, 5*time.Second)
 
 	node3 := mustNewNode(false)
 	defer node3.Deprovision()
@@ -1186,9 +1198,9 @@ func Test_MultiNodeClusterSnapshot(t *testing.T) {
 			}
 
 			if r != `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[300]]}]}` {
-				if n < 20 {
+				if n < 10 {
 					// Wait, and try again.
-					time.Sleep(mustParseDuration("1s"))
+					sleepForSecond()
 					n++
 					continue
 				}
@@ -1220,7 +1232,7 @@ func Test_MultiNodeClusterSnapshot(t *testing.T) {
 		if r != `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[300]]}]}` {
 			if n < 10 {
 				// Wait, and try again.
-				time.Sleep(mustParseDuration("100ms"))
+				sleepForSecond()
 				n++
 				continue
 			}
