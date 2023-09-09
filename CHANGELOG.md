@@ -30,6 +30,7 @@ When officially released 8.0 will support (mostly) seamless upgrades from the 7.
 - [PR #1377](https://github.com/rqlite/rqlite/pull/1377): Automatically upgrade 7.x snapshots.
 - [PR #1380](https://github.com/rqlite/rqlite/pull/1380): Compress snapshots when transmitting over the network.
 - [PR #1382](https://github.com/rqlite/rqlite/pull/1382), [PR #1383](https://github.com/rqlite/rqlite/pull/1383): Add basic stats for Snapshot store.
+= [PR #1384](https://github.com/rqlite/rqlite/pull/1384): Use less-racy function to retrieve Leader Address and ID.
 
 ## 7.21.4 (July 8th 2023)
 ### Implementation changes and bug fixes
