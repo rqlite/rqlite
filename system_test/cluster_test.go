@@ -1148,6 +1148,28 @@ func Test_MultiNodeClusterSnapshot(t *testing.T) {
 	}
 
 	expResults := `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[500]]}]}`
+	// Function that checks that a node has the correct state.
+	testerFn := func(n *Node) {
+		c := 0
+		for {
+			r, err := n.QueryNoneConsistency(`SELECT COUNT(*) FROM foo`)
+			if err != nil {
+				t.Fatalf("failed to query follower node: %s", err.Error())
+			}
+
+			if r != expResults {
+				if c < 10 {
+					// Wait, and try again.
+					sleepForSecond()
+					c++
+					continue
+				}
+				t.Fatalf("timed out waiting for snapshot state")
+			}
+			// The node passed!
+			break
+		}
+	}
 
 	// Join a second node, check it gets the data via a snapshot.
 	node2 := mustNewNode(false)
@@ -1159,16 +1181,7 @@ func Test_MultiNodeClusterSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed waiting for leader: %s", err.Error())
 	}
-	testPoll(t, func() (bool, error) {
-		r, err := node2.QueryNoneConsistency(`SELECT COUNT(*) FROM foo`)
-		if err != nil {
-			return false, err
-		}
-		if r != expResults {
-			return false, nil
-		}
-		return true, nil
-	}, 100*time.Millisecond, 5*time.Second)
+	testerFn(node2)
 
 	// Create and add a third node to the cluster.
 	node3 := mustNewNode(false)
@@ -1180,8 +1193,6 @@ func Test_MultiNodeClusterSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed waiting for leader: %s", err.Error())
 	}
-
-	// Create a new cluster.
 	c := Cluster{node1, node2, node3}
 
 	// Wait for followers to pick up state.
@@ -1190,28 +1201,9 @@ func Test_MultiNodeClusterSnapshot(t *testing.T) {
 		t.Fatalf("failed to determine followers: %s", err.Error())
 	}
 
-	var n int
-	var r string
+	// Check that all followers have the correct state.
 	for _, f := range followers {
-		n = 0
-		for {
-			r, err = f.QueryNoneConsistency(`SELECT COUNT(*) FROM foo`)
-			if err != nil {
-				t.Fatalf("failed to query follower node: %s", err.Error())
-			}
-
-			if r != expResults {
-				if n < 10 {
-					// Wait, and try again.
-					sleepForSecond()
-					n++
-					continue
-				}
-				t.Fatalf("timed out waiting for snapshot state")
-			}
-			// The node passed!
-			break
-		}
+		testerFn(f)
 	}
 
 	// Kill original node.
@@ -1224,26 +1216,7 @@ func Test_MultiNodeClusterSnapshot(t *testing.T) {
 	}
 
 	// Test that the new leader still has the full state.
-	n = 0
-	for {
-		var r string
-		r, err = leader.Query(`SELECT COUNT(*) FROM foo`)
-		if err != nil {
-			t.Fatalf("failed to query follower node: %s", err.Error())
-		}
-
-		if r != expResults {
-			if n < 10 {
-				// Wait, and try again.
-				sleepForSecond()
-				n++
-				continue
-			}
-			t.Fatalf("timed out waiting for snapshot state")
-		}
-		// Test passed!
-		break
-	}
+	testerFn(leader)
 }
 
 // Test_MultiNodeClusterWithNonVoter tests formation of a 4-node cluster, one of which is
