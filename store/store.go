@@ -686,22 +686,21 @@ func (s *Store) LeaderAddr() (string, error) {
 // LeaderID returns the node ID of the Raft leader. Returns a
 // blank string if there is no leader, or an error.
 func (s *Store) LeaderID() (string, error) {
-	addr, err := s.LeaderAddr()
-	if err != nil {
+	if !s.open {
 		return "", nil
 	}
-	configFuture := s.raft.GetConfiguration()
-	if err := configFuture.Error(); err != nil {
-		s.logger.Printf("failed to get raft configuration: %v", err)
-		return "", err
-	}
+	_, id := s.raft.LeaderWithID()
+	return string(id), nil
+}
 
-	for _, srv := range configFuture.Configuration().Servers {
-		if srv.Address == raft.ServerAddress(addr) {
-			return string(srv.ID), nil
-		}
+// LeaderWithID is used to return the current leader address and ID of the cluster.
+// It may return empty strings if there is no current leader or the leader is unknown.
+func (s *Store) LeaderWithID() (string, string) {
+	if !s.open {
+		return "", ""
 	}
-	return "", nil
+	addr, id := s.raft.LeaderWithID()
+	return string(addr), string(id)
 }
 
 // Nodes returns the slice of nodes in the cluster, sorted by ID ascending.
@@ -857,10 +856,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	leaderID, err := s.LeaderID()
-	if err != nil {
-		return nil, err
-	}
+	leaderID, leaderAddr := s.LeaderWithID()
 
 	// Perform type-conversion to actual numbers where possible.
 	raftStats := make(map[string]interface{})
@@ -891,10 +887,6 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		return nil, err
 	}
 
-	leaderAddr, err := s.LeaderAddr()
-	if err != nil {
-		return nil, err
-	}
 	lAppliedIdx, err := s.boltStore.GetAppliedIndex()
 	if err != nil {
 		return nil, err
