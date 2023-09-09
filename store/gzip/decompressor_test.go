@@ -29,6 +29,12 @@ func Test_Decompressor(t *testing.T) {
 	if !bytes.Equal(decompressedBuffer.Bytes(), []byte(testData)) {
 		t.Fatalf("decompressed data does not match original")
 	}
+
+	// Check that future reads return io.EOF
+	_, err = decompressor.Read(make([]byte, 1))
+	if !errors.Is(err, io.EOF) {
+		t.Fatalf("expected io.EOF, got %v", err)
+	}
 }
 
 func Test_Decompressor_EndToEnd(t *testing.T) {

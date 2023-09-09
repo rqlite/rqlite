@@ -1043,7 +1043,6 @@ func trueOrTimeout(fn func() bool, dur time.Duration) bool {
 }
 
 func testPoll(t *testing.T, f func() (bool, error), period time.Duration, timeout time.Duration) {
-	t.Helper()
 	tck := time.NewTicker(period)
 	defer tck.Stop()
 	tmr := time.NewTimer(timeout)
