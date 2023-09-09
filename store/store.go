@@ -886,6 +886,11 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		return nil, err
 	}
 
+	snapsStats, err := s.snapshotStore.Stats()
+	if err != nil {
+		return nil, err
+	}
+
 	leaderAddr, err := s.LeaderAddr()
 	if err != nil {
 		return nil, err
@@ -914,6 +919,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		"apply_timeout":          s.ApplyTimeout.String(),
 		"heartbeat_timeout":      s.HeartbeatTimeout.String(),
 		"election_timeout":       s.ElectionTimeout.String(),
+		"snapshot_store":         snapsStats,
 		"snapshot_threshold":     s.SnapshotThreshold,
 		"snapshot_interval":      s.SnapshotInterval.String(),
 		"reap_timeout":           s.ReapTimeout.String(),

@@ -236,6 +236,48 @@ func (s *Store) Dir() string {
 	return s.rootDir
 }
 
+// Stats returns stats about the Snapshot Store.
+func (s *Store) Stats() (map[string]interface{}, error) {
+	ng, err := s.GetNextGeneration()
+	if err != nil {
+		return nil, err
+	}
+	dirSize, err := dirSize(s.rootDir)
+	if err != nil {
+		return nil, err
+
+	}
+	stats := map[string]interface{}{
+		"root_dir":        s.rootDir,
+		"size":            dirSize,
+		"full_needed":     s.FullNeeded(),
+		"next_generation": ng,
+		"auto_reap":       !s.noAutoreap,
+	}
+
+	snaps, err := s.List()
+	if err != nil {
+		return nil, err
+	}
+	if len(snaps) > 0 {
+		var snapsAvailable []string
+		for i := range snaps {
+			snapsAvailable = append(snapsAvailable, snaps[i].ID)
+		}
+		stats["available"] = snapsAvailable
+	}
+
+	generations, err := s.GetGenerations()
+	if err != nil {
+		return nil, err
+	}
+	if len(generations) > 0 {
+		stats["generations"] = generations
+	}
+
+	return stats, nil
+}
+
 // FullNeeded returns true if the next type of snapshot needed
 // by the Store is a full snapshot.
 func (s *Store) FullNeeded() bool {
@@ -742,4 +784,24 @@ func (s metaSlice) Contains(id string) bool {
 		}
 	}
 	return false
+}
+
+// dirSize returns the total size of all files in the given directory
+func dirSize(path string) (int64, error) {
+	var size int64
+	err := filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
+		if err != nil {
+			// If the file doesn't exist, we can ignore it. Snapshot files might
+			// disappear during walking.
+			if os.IsNotExist(err) {
+				return nil
+			}
+			return err
+		}
+		if !info.IsDir() {
+			size += info.Size()
+		}
+		return err
+	})
+	return size, err
 }
