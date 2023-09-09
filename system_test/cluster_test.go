@@ -1148,7 +1148,6 @@ func Test_MultiNodeClusterSnapshot(t *testing.T) {
 	}
 
 	expResults := `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[500]]}]}`
-	// Function that checks that a node has the correct state.
 	testerFn := func(n *Node) {
 		c := 0
 		for {
