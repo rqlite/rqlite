@@ -35,6 +35,10 @@ func Test_Decompressor(t *testing.T) {
 	if !errors.Is(err, io.EOF) {
 		t.Fatalf("expected io.EOF, got %v", err)
 	}
+	_, err = decompressor.Read(make([]byte, 1))
+	if !errors.Is(err, io.EOF) {
+		t.Fatalf("expected io.EOF, got %v", err)
+	}
 }
 
 func Test_Decompressor_EndToEnd(t *testing.T) {

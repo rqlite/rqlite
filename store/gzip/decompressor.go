@@ -6,9 +6,8 @@ import (
 )
 
 type Decompressor struct {
-	cr     *CountingReader
-	gzr    *gzip.Reader
-	closed bool
+	cr  *CountingReader
+	gzr *gzip.Reader
 
 	nRx int64
 	nTx int64
@@ -24,7 +23,7 @@ func NewDecompressor(r io.Reader) *Decompressor {
 
 // Read reads decompressed data.
 func (c *Decompressor) Read(p []byte) (nn int, err error) {
-	if c.closed {
+	if c.cr == nil {
 		return 0, io.EOF
 	}
 	defer func() {
@@ -51,7 +50,7 @@ func (c *Decompressor) Read(p []byte) (nn int, err error) {
 		if err := c.gzr.Close(); err != nil {
 			return 0, err
 		}
-		c.closed = true
+		c.cr = nil // Signal no more re-use of the underlying reader.
 		c.gzr = nil
 	}
 	return n, err
