@@ -205,6 +205,7 @@ type Store struct {
 	observerChan      chan raft.Observation
 	observer          *raft.Observer
 
+	firstLogApplied      bool      // Whether the first log has been applied to the FSM.
 	firstIdxOnOpen       uint64    // First index on log when Store opens.
 	lastIdxOnOpen        uint64    // Last index on log when Store opens.
 	lastCommandIdxOnOpen uint64    // Last command index before applied index when Store opens.
@@ -1573,6 +1574,11 @@ func (s *Store) Apply(l *raft.Log) (e interface{}) {
 		s.fsmIndexMu.Lock()
 		defer s.fsmIndexMu.Unlock()
 		s.fsmIndex = l.Index
+
+		if !s.firstLogApplied {
+			s.firstLogApplied = true
+			s.logger.Printf("first log applied from index %d", l.Index)
+		}
 
 		if l.Index <= s.lastCommandIdxOnOpen {
 			// In here means at least one command entry was in the log when the Store
