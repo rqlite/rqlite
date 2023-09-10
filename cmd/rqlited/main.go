@@ -277,7 +277,7 @@ func downloadRestoreFile(ctx context.Context, cfgPath string) (path string, errO
 	d := restore.NewDownloader(sc)
 
 	// Create a temporary file to download to.
-	f, err = os.CreateTemp("", "rqlite-restore")
+	f, err = os.CreateTemp("", "rqlite-auto-restore")
 	if err != nil {
 		return "", false, fmt.Errorf("failed to create temporary file: %s", err.Error())
 	}
