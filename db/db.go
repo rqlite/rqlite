@@ -320,6 +320,7 @@ func Open(dbPath string, fkEnabled, wal bool) (*DB, error) {
 		return nil, fmt.Errorf("sync OFF: %s", err.Error())
 	}
 
+	// Critical that rqlite has full control over the checkpointing process.
 	if _, err := rwDB.Exec("PRAGMA wal_autocheckpoint=0"); err != nil {
 		return nil, fmt.Errorf("disable checkpointing: %s", err.Error())
 	}
