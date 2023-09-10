@@ -330,6 +330,26 @@ func Test_Store_CreateFullThenIncremental(t *testing.T) {
 		t.Fatalf("expected snapshot size to be %d, got %d", exp, got)
 	}
 	crc.Close()
+
+	// Finally, test via Restore() function.
+	tmpDir := t.TempDir()
+	rPath, err := str.Restore(meta.ID, tmpDir)
+	if err != nil {
+		t.Fatalf("failed to restore snapshot: %s", err)
+	}
+	restoredDB, err := db.Open(rPath, false, true)
+	if err != nil {
+		t.Fatalf("failed to open database: %s", err)
+	}
+	defer restoredDB.Close()
+	rows, err = restoredDB.QueryStringStmt("SELECT * FROM foo")
+	if err != nil {
+		t.Fatalf("failed to query database: %s", err)
+	}
+	if exp, got := `[{"columns":["id","value"],"types":["integer","text"],"values":[[1,"Row 0"],[2,"Row 1"],[3,"Row 2"]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("unexpected results for query, exp %s, got %s", exp, got)
+	}
+
 }
 
 // Test_WALSnapshotStore_CreateFullThenFull ensures two full snapshots

@@ -263,6 +263,35 @@ func (s *Store) Dir() string {
 	return s.rootDir
 }
 
+// Restore restores the snapshot with the given ID to the given path.
+func (s *Store) Restore(id string, dir string) (string, error) {
+	_, rc, err := s.Open(id)
+	if err != nil {
+		return "", err
+	}
+	defer rc.Close()
+
+	// Create the destination directory and SQLite file path
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return "", err
+	}
+	sqliteFilePath := filepath.Join(dir, baseSqliteFile)
+
+	strHdr, _, err := NewStreamHeaderFromReader(rc)
+	if err != nil {
+		return "", fmt.Errorf("error reading stream header: %v", err)
+	}
+	fullSnap := strHdr.GetFullSnapshot()
+	if fullSnap == nil {
+		return "", fmt.Errorf("got nil FullSnapshot")
+	}
+
+	if err := ReplayDB(fullSnap, rc, sqliteFilePath); err != nil {
+		return "", fmt.Errorf("error replaying DB: %v", err)
+	}
+	return sqliteFilePath, nil
+}
+
 // Stats returns stats about the Snapshot Store.
 func (s *Store) Stats() (map[string]interface{}, error) {
 	ng, err := s.GetNextGeneration()
