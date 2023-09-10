@@ -270,14 +270,18 @@ func (s *Store) Restore(id string, dir string) (string, error) {
 		return "", err
 	}
 	defer rc.Close()
+	return s.RestoreFromReader(rc, dir)
+}
 
+// RestoreFromReader restores the snapshot from the given reader to the given path.
+func (s *Store) RestoreFromReader(r io.Reader, dir string) (string, error) {
 	// Create the destination directory and SQLite file path
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return "", err
 	}
 	sqliteFilePath := filepath.Join(dir, baseSqliteFile)
 
-	strHdr, _, err := NewStreamHeaderFromReader(rc)
+	strHdr, _, err := NewStreamHeaderFromReader(r)
 	if err != nil {
 		return "", fmt.Errorf("error reading stream header: %v", err)
 	}
@@ -286,7 +290,7 @@ func (s *Store) Restore(id string, dir string) (string, error) {
 		return "", fmt.Errorf("got nil FullSnapshot")
 	}
 
-	if err := ReplayDB(fullSnap, rc, sqliteFilePath); err != nil {
+	if err := ReplayDB(fullSnap, r, sqliteFilePath); err != nil {
 		return "", fmt.Errorf("error replaying DB: %v", err)
 	}
 	return sqliteFilePath, nil
