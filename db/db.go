@@ -268,6 +268,9 @@ func ReplayWAL(path string, wals []string, deleteMode bool) error {
 		if err != nil {
 			return err
 		}
+		if db.SetSynchronousMode("FULL"); err != nil {
+			return err
+		}
 		if err := db.Checkpoint(); err != nil {
 			return fmt.Errorf("checkpoint WAL %s: %s", wal, err.Error())
 		}
@@ -288,7 +291,16 @@ func ReplayWAL(path string, wals []string, deleteMode bool) error {
 			return err
 		}
 	}
-	return nil
+
+	// Ensure the database file is sync'ed to disk.
+	fd, err := os.OpenFile(path, os.O_RDWR, 0666)
+	if err != nil {
+		return err
+	}
+	if err := fd.Sync(); err != nil {
+		return err
+	}
+	return fd.Close()
 }
 
 // Open opens a file-based database, creating it if it does not exist. After this
@@ -523,6 +535,24 @@ func (db *DB) EnableCheckpointing() error {
 func (db *DB) GetCheckpointing() (int, error) {
 	var n int
 	err := db.rwDB.QueryRow("PRAGMA wal_autocheckpoint").Scan(&n)
+	return n, err
+}
+
+// SetSynchronousMode sets the synchronous mode of the database.
+func (db *DB) SetSynchronousMode(mode string) error {
+	if mode != "OFF" && mode != "NORMAL" && mode != "FULL" && mode != "EXTRA" {
+		return fmt.Errorf("invalid synchronous mode %s", mode)
+	}
+	if _, err := db.rwDB.Exec(fmt.Sprintf("PRAGMA synchronous=%s", mode)); err != nil {
+		return fmt.Errorf("failed to set synchronous mode to %s: %s", mode, err.Error())
+	}
+	return nil
+}
+
+// GetSynchronousMode returns the current synchronous mode.
+func (db *DB) GetSynchronousMode() (int, error) {
+	var n int
+	err := db.rwDB.QueryRow("PRAGMA synchronous").Scan(&n)
 	return n, err
 }
 

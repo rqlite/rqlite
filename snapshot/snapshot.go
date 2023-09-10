@@ -78,6 +78,12 @@ func ReplayDB(fullSnap *FullSnapshot, r io.Reader, path string) error {
 	if _, err := io.CopyN(sqliteBaseFD, r, dbInfo.Size); err != nil {
 		return fmt.Errorf("error writing SQLite file data: %v", err)
 	}
+	if sqliteBaseFD.Sync() != nil {
+		return fmt.Errorf("error syncing SQLite file: %v", err)
+	}
+	if err := sqliteBaseFD.Close(); err != nil {
+		return fmt.Errorf("error closing SQLite file: %v", err)
+	}
 
 	// Write out any WALs.
 	var walFiles []string
@@ -95,6 +101,9 @@ func ReplayDB(fullSnap *FullSnapshot, r io.Reader, path string) error {
 			defer walFD.Close()
 			if _, err := io.CopyN(walFD, r, wal.Size); err != nil {
 				return fmt.Errorf("error writing WAL file data: %v", err)
+			}
+			if walFD.Sync() != nil {
+				return fmt.Errorf("error syncing WAL file: %v", err)
 			}
 			walFiles = append(walFiles, walName)
 			return nil
