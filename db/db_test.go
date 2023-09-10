@@ -586,22 +586,24 @@ func Test_WALDisableCheckpointing(t *testing.T) {
 		t.Fatalf("WAL mode not enabled")
 	}
 
+	// Test that databases open with checkpoint disabled by default.
+	// This is critical.
 	n, err := db.GetCheckpointing()
 	if err != nil {
 		t.Fatalf("failed to get checkpoint value: %s", err.Error())
 	}
-	if n != 1000 {
+	if n != 0 {
 		t.Fatalf("unexpected checkpoint value, expected 1000, got %d", n)
 	}
 
-	if err := db.DisableCheckpointing(); err != nil {
+	if err := db.EnableCheckpointing(); err != nil {
 		t.Fatalf("failed to disable checkpointing: %s", err.Error())
 	}
 	n, err = db.GetCheckpointing()
 	if err != nil {
 		t.Fatalf("failed to get checkpoint value: %s", err.Error())
 	}
-	if exp, got := 0, n; exp != got {
+	if exp, got := 1000, n; exp != got {
 		t.Fatalf("unexpected checkpoint value, expected %d, got %d", exp, got)
 	}
 }
