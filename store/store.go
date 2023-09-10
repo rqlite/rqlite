@@ -1577,9 +1577,8 @@ func (s *Store) Apply(l *raft.Log) (e interface{}) {
 
 		if !s.firstLogApplied {
 			s.firstLogApplied = true
-			s.logger.Printf("first log applied from index %d", l.Index)
+			s.logger.Printf("first log applied since node start, log at index %d", l.Index)
 		}
-
 		if l.Index <= s.lastCommandIdxOnOpen {
 			// In here means at least one command entry was in the log when the Store
 			// opened.
