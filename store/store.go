@@ -1674,23 +1674,14 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 	s.logger.Printf("initiating node restore on node ID %s", s.raftID)
 	startT := time.Now()
 
-	strHdr, _, err := snapshot.NewStreamHeaderFromReader(rc)
+	tempDir, err := os.MkdirTemp(filepath.Dir(s.db.Path()), "rqlite-restore-*")
 	if err != nil {
-		return fmt.Errorf("error reading stream header: %v", err)
+		return fmt.Errorf("error creating temporary directory for restore operation: %v", err)
 	}
-
-	fullSnap := strHdr.GetFullSnapshot()
-	if fullSnap == nil {
-		return fmt.Errorf("got nil FullSnapshot")
-	}
-
-	tmpFile, err := os.CreateTemp(filepath.Dir(s.db.Path()), "rqlite-restore-*")
-	if tmpFile.Close(); err != nil {
-		return fmt.Errorf("error creating temporary file for restore operation: %v", err)
-	}
-	defer os.Remove(tmpFile.Name())
-	if err := snapshot.ReplayDB(fullSnap, rc, tmpFile.Name()); err != nil {
-		return fmt.Errorf("error replaying DB: %v", err)
+	defer os.RemoveAll(tempDir)
+	restoredPath, err := s.snapshotStore.RestoreFromReader(rc, tempDir)
+	if err != nil {
+		return fmt.Errorf("error restoring from snapshot: %v", err)
 	}
 
 	// Must wipe out all pre-existing state if being asked to do a restore.
@@ -1700,9 +1691,10 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 	if err := sql.RemoveFiles(s.db.Path()); err != nil {
 		return fmt.Errorf("failed to remove pre-restore database files: %s", err)
 	}
-	if err := os.Rename(tmpFile.Name(), s.db.Path()); err != nil {
+	if err := os.Rename(restoredPath, s.db.Path()); err != nil {
 		return fmt.Errorf("failed to rename restored database: %s", err)
 	}
+	// XXX sync parent dir?
 
 	var db *sql.DB
 	db, err = sql.Open(s.dbPath, s.dbConf.FKConstraints, !s.dbConf.DisableWAL)
