@@ -78,9 +78,13 @@ func (s *Sink) Close() error {
 	if err := s.processSnapshotData(); err != nil {
 		return err
 	}
+	verifyOrPanic(s.str, s.meta.ID)
 
 	if !s.str.noAutoreap {
-		return s.str.Reap()
+		if err := s.str.Reap(); err != nil {
+			s.logger.Printf("error reaping old snapshots: %v", err)
+		}
+		//verifyOrPanic(s.str, s.meta.ID)
 	}
 	return nil
 }
@@ -220,4 +224,17 @@ func writeMeta(dir string, meta *Meta) error {
 		return err
 	}
 	return fh.Close()
+}
+
+func verifyOrPanic(str *Store, id string) {
+	tmpDir, err := os.MkdirTemp("", "snapshot-verify")
+	if err != nil {
+		panic("failed to create temp dir for snapshot verification")
+	}
+	defer os.RemoveAll(tmpDir)
+	_, err = str.Restore(id, tmpDir)
+	if err != nil {
+		panic(fmt.Sprintf("failed to verify snapshot: %v", err))
+	}
+	str.logger.Printf("snapshot %s verified", id)
 }

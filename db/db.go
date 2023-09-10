@@ -670,6 +670,7 @@ func (db *DB) executeWithConn(req *command.Request, xTime bool, conn *sql.Conn) 
 	// handleError sets the error field on the given result. It returns
 	// whether the caller should continue processing or break.
 	handleError := func(result *command.ExecuteResult, err error) bool {
+		fmt.Println(">>>>>>>>>>>. execute error", err)
 		stats.Add(numExecutionErrors, 1)
 		result.Error = err.Error()
 		allResults = append(allResults, result)

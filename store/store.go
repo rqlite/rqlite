@@ -4,6 +4,8 @@
 package store
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"expvar"
 	"fmt"
@@ -1640,14 +1642,31 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 
 	var fsmSnapshot raft.FSMSnapshot
 	if s.snapshotStore.FullNeeded() {
+		if !pathExists(s.db.WALPath()) {
+			panic("NO WAL FILE")
+		}
+
 		if err := s.db.Checkpoint(); err != nil {
 			return nil, err
 		}
+		sum, err := SHA256(s.db.Path())
+		if err != nil {
+			return nil, err
+		}
+		s.logger.Printf("SHA256 checksum of SQLite file: %s", sum)
 		fsmSnapshot = snapshot.NewFullSnapshot(s.db.Path())
+
+		// CAN WE BE SURE THAT SUBSEQUENT WRITES WILL GO TO WAL?
 	} else {
 		var b []byte
 		var err error
 		if pathExists(s.db.WALPath()) {
+			sum, err := SHA256(s.db.WALPath())
+			if err != nil {
+				return nil, err
+			}
+			s.logger.Printf("SHA256 checksum of WAL file: %s", sum)
+
 			b, err = os.ReadFile(s.db.WALPath())
 			if err != nil {
 				return nil, err
@@ -1689,6 +1708,28 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 		return fmt.Errorf("error restoring from snapshot: %v", err)
 	}
 
+	// CHECK IF THE SUPPLIED DB FILE IS BAD XXXXXXXXXXXXXXXXXXXXXXXXXXx
+	restoredDB, err := sql.Open(restoredPath, s.dbConf.FKConstraints, !s.dbConf.DisableWAL)
+	if err != nil {
+		return fmt.Errorf("open restored database: %s", err)
+	}
+	for _, stmt := range []string{
+		`SELECT COUNT(*) FROM foo`,
+		`SELECT COUNT(*) FROM bar`,
+		`SELECT COUNT(*) FROM qux`,
+	} {
+		rr, err := restoredDB.QueryStringStmt(stmt)
+		if err != nil {
+			return fmt.Errorf("failed to query database pre restore: %s", err)
+		}
+		if rr[0].Error != "" {
+			panic("failed to query database pre restore")
+		}
+	}
+	fmt.Println(">>>>>>>>>>. query connection is OK on pre-restored db")
+	restoredDB.Close()
+	// XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
 	// Must wipe out all pre-existing state if being asked to do a restore.
 	if err := s.db.Close(); err != nil {
 		return fmt.Errorf("failed to close pre-restore database: %s", err)
@@ -1708,6 +1749,23 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 	}
 	s.db = db
 	s.logger.Printf("successfully opened on-disk database at %s due to restore", s.db.Path())
+
+	// XXXXXXXXXXXX DO A QUERY TO CHECK DB
+	for _, stmt := range []string{
+		`SELECT COUNT(*) FROM foo`,
+		`SELECT COUNT(*) FROM bar`,
+		`SELECT COUNT(*) FROM qux`,
+	} {
+		rr, err := s.db.QueryStringStmt(stmt)
+		if err != nil {
+			return fmt.Errorf("failed to query database after restore: %s", err)
+		}
+		if rr[0].Error != "" {
+			panic("failed to query database after restore")
+		}
+	}
+	fmt.Println(">>>>>>>>>>. query connection is OK")
+	// XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
 	stats.Add(numRestores, 1)
 	s.logger.Printf("node restored in %s", time.Since(startT))
@@ -2185,4 +2243,18 @@ func dirSize(path string) (int64, error) {
 		return err
 	})
 	return size, err
+}
+
+// SHA256 returns string version of sha256 of file at path.
+func SHA256(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
 }

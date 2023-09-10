@@ -1,6 +1,8 @@
 package snapshot
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"expvar"
 	"fmt"
 	"io"
@@ -63,7 +65,7 @@ func (s *Snapshot) OpenStream() (*Stream, error) {
 }
 
 // ReplayDB reconstructs the database from the given reader, and writes it to
-// the given path.
+// the given path. On success the path is the full path to the SQLite file.
 func ReplayDB(fullSnap *FullSnapshot, r io.Reader, path string) error {
 	dbInfo := fullSnap.GetDb()
 	if dbInfo == nil {
@@ -84,6 +86,12 @@ func ReplayDB(fullSnap *FullSnapshot, r io.Reader, path string) error {
 	if err := sqliteBaseFD.Close(); err != nil {
 		return fmt.Errorf("error closing SQLite file: %v", err)
 	}
+
+	sum, err := SHA256(path)
+	if err != nil {
+		return fmt.Errorf("error calculating SHA256 of SQLite file: %v", err)
+	}
+	fmt.Println(">>>>>>>SHA256 of SQLite file:", sum, " %d WALs", len(fullSnap.GetWals()))
 
 	// Write out any WALs.
 	var walFiles []string
@@ -112,9 +120,24 @@ func ReplayDB(fullSnap *FullSnapshot, r io.Reader, path string) error {
 		}
 	}
 
-	// Checkpoint the WAL files into the base SQLite file
+	// Checkpoint the WAL files into the base SQLite file. Does this leave the
+	// FILE suitable for subsequent WAL replays?
 	if err := db.ReplayWAL(path, walFiles, false); err != nil {
 		return fmt.Errorf("error checkpointing WAL: %v", err)
 	}
 	return nil
+}
+
+// SHA256 returns string version of sha256 of file at path.
+func SHA256(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
