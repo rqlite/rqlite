@@ -18,6 +18,27 @@ func testCompileOptions(t *testing.T, db *DB) {
 	}
 }
 
+func testSetSynchronousMode(t *testing.T, db *DB) {
+	modes := map[string]int{
+		"OFF":    0,
+		"NORMAL": 1,
+		"FULL":   2,
+		"EXTRA":  3,
+	}
+	for m, i := range modes {
+		if db.SetSynchronousMode(m) != nil {
+			t.Fatalf("failed to set synchronous mode to %s", m)
+		}
+		mm, err := db.GetSynchronousMode()
+		if err != nil {
+			t.Fatalf("failed to get synchronous mode: %s", err.Error())
+		}
+		if mm != i {
+			t.Fatalf("synchonous mode not set to %s", m)
+		}
+	}
+}
+
 func testTableNotExist(t *testing.T, db *DB) {
 	q, err := db.QueryStringStmt("SELECT * FROM foo")
 	if err != nil {
@@ -1468,6 +1489,7 @@ func Test_DatabaseCommonOperations(t *testing.T) {
 		name     string
 		testFunc func(*testing.T, *DB)
 	}{
+		{"SetSynchronousMode", testSetSynchronousMode},
 		{"CompileOptions", testCompileOptions},
 		{"TableNotExist", testTableNotExist},
 		{"TableCreation", testTableCreation},
