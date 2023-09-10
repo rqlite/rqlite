@@ -320,6 +320,10 @@ func Open(dbPath string, fkEnabled, wal bool) (*DB, error) {
 		return nil, fmt.Errorf("sync OFF: %s", err.Error())
 	}
 
+	if _, err := rwDB.Exec("PRAGMA wal_autocheckpoint=0"); err != nil {
+		return nil, fmt.Errorf("disable checkpointing: %s", err.Error())
+	}
+
 	mode := "WAL"
 	if !wal {
 		mode = "DELETE"
@@ -520,7 +524,7 @@ func (db *DB) CheckpointWithTimeout(dur time.Duration) (err error) {
 // the WAL reaches a certain size. This is key for full control of snapshotting.
 // and can be useful for testing.
 func (db *DB) DisableCheckpointing() error {
-	_, err := db.rwDB.Exec("PRAGMA wal_autocheckpoint=-1")
+	_, err := db.rwDB.Exec("PRAGMA wal_autocheckpoint=0")
 	return err
 }
 
