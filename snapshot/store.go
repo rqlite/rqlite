@@ -263,6 +263,45 @@ func (s *Store) Dir() string {
 	return s.rootDir
 }
 
+// Restore restores the snapshot with the given ID to the given path.
+func (s *Store) Restore(id string, dir string) (string, error) {
+	_, rc, err := s.Open(id)
+	if err != nil {
+		return "", err
+	}
+	defer rc.Close()
+	return s.RestoreFromReader(rc, dir)
+}
+
+// RestoreFromReader restores the snapshot from the given reader to the given path.
+func (s *Store) RestoreFromReader(r io.Reader, dir string) (string, error) {
+	// Create the destination directory and SQLite file path
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return "", err
+	}
+	sqliteFD, err := os.CreateTemp(dir, "restored-*.sqlite")
+	if err != nil {
+		return "", err
+	}
+	if err := sqliteFD.Close(); err != nil {
+		return "", err
+	}
+
+	strHdr, _, err := NewStreamHeaderFromReader(r)
+	if err != nil {
+		return "", fmt.Errorf("error reading stream header: %v", err)
+	}
+	fullSnap := strHdr.GetFullSnapshot()
+	if fullSnap == nil {
+		return "", fmt.Errorf("got nil FullSnapshot")
+	}
+
+	if err := ReplayDB(fullSnap, r, sqliteFD.Name()); err != nil {
+		return "", fmt.Errorf("error replaying DB: %v", err)
+	}
+	return sqliteFD.Name(), nil
+}
+
 // Stats returns stats about the Snapshot Store.
 func (s *Store) Stats() (map[string]interface{}, error) {
 	ng, err := s.GetNextGeneration()
