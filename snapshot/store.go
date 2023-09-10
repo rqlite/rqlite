@@ -279,7 +279,13 @@ func (s *Store) RestoreFromReader(r io.Reader, dir string) (string, error) {
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return "", err
 	}
-	sqliteFilePath := filepath.Join(dir, baseSqliteFile)
+	sqliteFD, err := os.CreateTemp(dir, "restored-*.sqlite")
+	if err != nil {
+		return "", err
+	}
+	if err := sqliteFD.Close(); err != nil {
+		return "", err
+	}
 
 	strHdr, _, err := NewStreamHeaderFromReader(r)
 	if err != nil {
@@ -290,10 +296,10 @@ func (s *Store) RestoreFromReader(r io.Reader, dir string) (string, error) {
 		return "", fmt.Errorf("got nil FullSnapshot")
 	}
 
-	if err := ReplayDB(fullSnap, r, sqliteFilePath); err != nil {
+	if err := ReplayDB(fullSnap, r, sqliteFD.Name()); err != nil {
 		return "", fmt.Errorf("error replaying DB: %v", err)
 	}
-	return sqliteFilePath, nil
+	return sqliteFD.Name(), nil
 }
 
 // Stats returns stats about the Snapshot Store.
