@@ -592,8 +592,8 @@ func Test_WALDisableCheckpointing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get checkpoint value: %s", err.Error())
 	}
-	if n != 0 {
-		t.Fatalf("unexpected checkpoint value, expected 1000, got %d", n)
+	if exp, got := 0, n; exp != got {
+		t.Fatalf("unexpected checkpoint value, expected %d, got %d", exp, got)
 	}
 
 	if err := db.EnableCheckpointing(); err != nil {
