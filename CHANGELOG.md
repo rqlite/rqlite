@@ -33,6 +33,7 @@ When officially released 8.0 will support (mostly) seamless upgrades from the 7.
 - [PR #1384](https://github.com/rqlite/rqlite/pull/1384): Use less-racy function to retrieve Leader Address and ID.
 - [PR #1386](https://github.com/rqlite/rqlite/pull/1386): Ensure full sync'ing and closing of files during WAL replay.
 - [PR #1388](https://github.com/rqlite/rqlite/pull/1388): Ensure databases open with WAL checkpoint disabled. Thanks @benbjohnson.
+- [PR #1390](https://github.com/rqlite/rqlite/pull/1390): Add Restore functions to Snapshot Store.
 
 ## 7.21.4 (July 8th 2023)
 ### Implementation changes and bug fixes
