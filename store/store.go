@@ -1715,10 +1715,10 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 	var db *sql.DB
 	db, err = sql.Open(s.dbPath, s.dbConf.FKConstraints, !s.dbConf.DisableWAL)
 	if err != nil {
-		return fmt.Errorf("open on-disk file during restore: %s", err)
+		return fmt.Errorf("open SQLite file during restore: %s", err)
 	}
 	s.db = db
-	s.logger.Printf("successfully opened on-disk database at %s due to restore", s.db.Path())
+	s.logger.Printf("successfully opened database at %s due to restore", s.db.Path())
 
 	stats.Add(numRestores, 1)
 	s.logger.Printf("node restored in %s", time.Since(startT))
