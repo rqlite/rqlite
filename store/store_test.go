@@ -2538,7 +2538,7 @@ func Test_StoreLogTruncationMultinode(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
-	nSnaps := stats.Get(numSnaphots).String()
+	nSnaps := stats.Get(numSnapshots).String()
 
 	// Write more than s.SnapshotThreshold statements.
 	queries := []string{
@@ -2558,7 +2558,7 @@ func Test_StoreLogTruncationMultinode(t *testing.T) {
 
 	// Wait for the snapshot to happen and log to be truncated.
 	f := func() bool {
-		return stats.Get(numSnaphots).String() != nSnaps
+		return stats.Get(numSnapshots).String() != nSnaps
 	}
 	testPoll(t, f, 100*time.Millisecond, 2*time.Second)
 
