@@ -99,6 +99,7 @@ const (
 	numDBStatsErrors        = "num_db_stats_errors"
 	snapshotCreateDuration  = "snapshot_create_duration"
 	snapshotPersistDuration = "snapshot_persist_duration"
+	snapshotWALSize         = "snapshot_wal_size"
 	snapshotDBOnDiskSize    = "snapshot_db_ondisk_size"
 	leaderChangesObserved   = "leader_changes_observed"
 	leaderChangesDropped    = "leader_changes_dropped"
@@ -134,6 +135,7 @@ func ResetStats() {
 	stats.Add(numDBStatsErrors, 0)
 	stats.Add(snapshotCreateDuration, 0)
 	stats.Add(snapshotPersistDuration, 0)
+	stats.Add(snapshotWALSize, 0)
 	stats.Add(snapshotDBOnDiskSize, 0)
 	stats.Add(leaderChangesObserved, 0)
 	stats.Add(leaderChangesDropped, 0)
@@ -1623,8 +1625,11 @@ func (s *Store) Database(leader bool) ([]byte, error) {
 // http://sqlite.org/howtocorrupt.html states it is safe to copy or serialize the
 // database as long as no writes to the database are in progress.
 func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
-	s.logger.Printf("initiating node snapshot on node ID %s", s.raftID)
 	startT := time.Now()
+
+	fNeeded := s.snapshotStore.FullNeeded()
+	fPLog := fullPretty(fNeeded)
+	s.logger.Printf("initiating %s snapshot on node ID %s", fPLog, s.raftID)
 	defer func() {
 		s.numSnapshotsMu.Lock()
 		defer s.numSnapshotsMu.Unlock()
@@ -1635,7 +1640,7 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 	defer s.queryTxMu.Unlock()
 
 	var fsmSnapshot raft.FSMSnapshot
-	if s.snapshotStore.FullNeeded() {
+	if fNeeded {
 		if err := s.db.Checkpoint(); err != nil {
 			return nil, err
 		}
@@ -1648,6 +1653,8 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 			if err != nil {
 				return nil, err
 			}
+			stats.Get(snapshotWALSize).(*expvar.Int).Set(int64(len(b)))
+			s.logger.Printf("%s snapshot is %d bytes on node ID %s", fPLog, len(b), s.raftID)
 			if err := s.db.Checkpoint(); err != nil {
 				return nil, err
 			}
@@ -1661,7 +1668,7 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 	stats.Add(numSnaphots, 1)
 	dur := time.Since(startT)
 	stats.Get(snapshotCreateDuration).(*expvar.Int).Set(dur.Milliseconds())
-	s.logger.Printf("node snapshot created in %s", dur)
+	s.logger.Printf("%s snapshot created in %s on node ID %s", fPLog, dur, s.raftID)
 	return &FSMSnapshot{
 		FSMSnapshot: fsmSnapshot,
 		logger:      s.logger,
@@ -2189,4 +2196,11 @@ func dirSize(path string) (int64, error) {
 		return err
 	})
 	return size, err
+}
+
+func fullPretty(full bool) string {
+	if full {
+		return "full"
+	}
+	return "incremental"
 }

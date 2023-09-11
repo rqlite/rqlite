@@ -268,9 +268,6 @@ func ReplayWAL(path string, wals []string, deleteMode bool) error {
 		if err != nil {
 			return err
 		}
-		if db.SetSynchronousMode("FULL"); err != nil {
-			return err
-		}
 		if err := db.Checkpoint(); err != nil {
 			return fmt.Errorf("checkpoint WAL %s: %s", wal, err.Error())
 		}
@@ -312,20 +309,24 @@ func Open(dbPath string, fkEnabled, wal bool) (*DB, error) {
 		return nil, fmt.Errorf("open: %s", err.Error())
 	}
 
-	// Set synchronous to OFF, to improve performance. The SQLite docs state that
-	// this risks database corruption in the event of a crash, but that's OK, as
-	// rqlite blows away the database on startup and always rebuilds it from the
-	// Raft log.
-	if _, err := rwDB.Exec("PRAGMA synchronous=OFF"); err != nil {
-		return nil, fmt.Errorf("sync OFF: %s", err.Error())
-	}
-
+	// Ensure all PRAGMAs are set correctly.
 	mode := "WAL"
 	if !wal {
 		mode = "DELETE"
 	}
 	if _, err := rwDB.Exec(fmt.Sprintf("PRAGMA journal_mode=%s", mode)); err != nil {
 		return nil, fmt.Errorf("journal mode to %s: %s", mode, err.Error())
+	}
+	// Critical that rqlite has full control over the checkpointing process.
+	if _, err := rwDB.Exec("PRAGMA wal_autocheckpoint=0"); err != nil {
+		return nil, fmt.Errorf("disable checkpointing: %s", err.Error())
+	}
+	// Set synchronous to OFF, to improve performance. The SQLite docs state that
+	// this risks database corruption in the event of a crash, but that's OK, as
+	// rqlite blows away the database on startup and always rebuilds it from the
+	// Raft log.
+	if _, err := rwDB.Exec("PRAGMA synchronous=OFF"); err != nil {
+		return nil, fmt.Errorf("sync OFF: %s", err.Error())
 	}
 
 	roOpts := []string{
@@ -339,7 +340,7 @@ func Open(dbPath string, fkEnabled, wal bool) (*DB, error) {
 		return nil, err
 	}
 
-	// Force creation of on-disk database file.
+	// Force creation of database file.
 	if err := rwDB.Ping(); err != nil {
 		return nil, fmt.Errorf("failed to ping on-disk database: %s", err.Error())
 	}
@@ -520,7 +521,7 @@ func (db *DB) CheckpointWithTimeout(dur time.Duration) (err error) {
 // the WAL reaches a certain size. This is key for full control of snapshotting.
 // and can be useful for testing.
 func (db *DB) DisableCheckpointing() error {
-	_, err := db.rwDB.Exec("PRAGMA wal_autocheckpoint=-1")
+	_, err := db.rwDB.Exec("PRAGMA wal_autocheckpoint=0")
 	return err
 }
 
@@ -533,9 +534,12 @@ func (db *DB) EnableCheckpointing() error {
 
 // GetCheckpointing returns the current checkpointing setting.
 func (db *DB) GetCheckpointing() (int, error) {
-	var n int
-	err := db.rwDB.QueryRow("PRAGMA wal_autocheckpoint").Scan(&n)
-	return n, err
+	var rwN int
+	err := db.rwDB.QueryRow("PRAGMA wal_autocheckpoint").Scan(&rwN)
+	if err != nil {
+		return 0, err
+	}
+	return rwN, err
 }
 
 // SetSynchronousMode sets the synchronous mode of the database.
@@ -551,9 +555,12 @@ func (db *DB) SetSynchronousMode(mode string) error {
 
 // GetSynchronousMode returns the current synchronous mode.
 func (db *DB) GetSynchronousMode() (int, error) {
-	var n int
-	err := db.rwDB.QueryRow("PRAGMA synchronous").Scan(&n)
-	return n, err
+	var rwN int
+	err := db.rwDB.QueryRow("PRAGMA synchronous").Scan(&rwN)
+	if err != nil {
+		return 0, err
+	}
+	return rwN, err
 }
 
 // FKEnabled returns whether Foreign Key constraints are enabled.
