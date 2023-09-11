@@ -32,7 +32,7 @@ const (
 
 	// ElectionTimeout is the period between elections. It's longer than
 	// the default to allow for slow CI systems.
-	ElectionTimeout = 5 * time.Second
+	ElectionTimeout = 2 * time.Second
 )
 
 var (
