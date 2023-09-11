@@ -334,8 +334,8 @@ func New(addr string, store Store, cluster Cluster, credentials CredentialStore)
 	return &Service{
 		addr:                addr,
 		store:               store,
-		DefaultQueueCap:     1024,
-		DefaultQueueBatchSz: 128,
+		DefaultQueueCap:     256,
+		DefaultQueueBatchSz: 32,
 		DefaultQueueTimeout: 100 * time.Millisecond,
 		cluster:             cluster,
 		start:               time.Now(),
