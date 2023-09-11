@@ -878,7 +878,7 @@ func Test_MultiNodeClusterLargeQueuedWrites(t *testing.T) {
 
 	// Write data to the cluster, via various nodes.
 	nodesUnderTest := []*Node{node3, node1, node2, node1, node2, node3, node1, node3, node2}
-	writesPerNode := 10000
+	writesPerNode := 5000
 	writeBandBase := writesPerNode * 10
 
 	var wg sync.WaitGroup

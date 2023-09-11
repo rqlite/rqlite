@@ -30,9 +30,12 @@ const (
 	// SnapshotInterval is the period between snapshot checks
 	SnapshotInterval = time.Second
 
+	// SnapshotThreshold is the number of outstanding log entries that trigger a snapshot
+	SnapshotThreshold = 100
+
 	// ElectionTimeout is the period between elections. It's longer than
 	// the default to allow for slow CI systems.
-	ElectionTimeout = 5 * time.Second
+	ElectionTimeout = 1 * time.Second
 )
 
 var (
@@ -688,7 +691,7 @@ func mustNodeEncrypted(dir string, enableSingle, httpEncrypt bool, mux *tcp.Mux,
 		Dir:    node.Dir,
 		ID:     id,
 	})
-	node.Store.SnapshotThreshold = 300
+	node.Store.SnapshotThreshold = SnapshotThreshold
 	node.Store.SnapshotInterval = SnapshotInterval
 	node.Store.ElectionTimeout = ElectionTimeout
 
