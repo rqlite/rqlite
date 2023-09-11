@@ -688,7 +688,7 @@ func mustNodeEncrypted(dir string, enableSingle, httpEncrypt bool, mux *tcp.Mux,
 		Dir:    node.Dir,
 		ID:     id,
 	})
-	node.Store.SnapshotThreshold = 1000
+	node.Store.SnapshotThreshold = 500
 	node.Store.SnapshotInterval = SnapshotInterval
 	node.Store.ElectionTimeout = ElectionTimeout
 
