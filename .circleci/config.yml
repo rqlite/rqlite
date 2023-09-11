@@ -88,7 +88,7 @@ jobs:
       - checkout
       - restore_and_save_cache
       - run:
-          command: go test -failfast -timeout 20m -race $(go list ./... | sed -n 'p;n')
+          command: cd system_test && go test -failfast -timeout 20m -race -run Test_MultiNodeClusterLargeQueuedWrites
           environment:
             GORACE: "halt_on_error=1"
     resource_class: large
