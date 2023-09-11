@@ -82,7 +82,9 @@ const (
 )
 
 const (
-	numSnaphots             = "num_snapshots"
+	numSnapshots            = "num_snapshots"
+	numSnapshotsFull        = "num_snapshots_full"
+	numSnapshotsIncremental = "num_snapshots_incremental"
 	numProvides             = "num_provides"
 	numBackups              = "num_backups"
 	numLoads                = "num_loads"
@@ -119,7 +121,9 @@ func init() {
 // ResetStats resets the expvar stats for this module. Mostly for test purposes.
 func ResetStats() {
 	stats.Init()
-	stats.Add(numSnaphots, 0)
+	stats.Add(numSnapshots, 0)
+	stats.Add(numSnapshotsFull, 0)
+	stats.Add(numSnapshotsIncremental, 0)
 	stats.Add(numProvides, 0)
 	stats.Add(numBackups, 0)
 	stats.Add(numRestores, 0)
@@ -1645,6 +1649,7 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 			return nil, err
 		}
 		fsmSnapshot = snapshot.NewFullSnapshot(s.db.Path())
+		stats.Add(numSnapshotsFull, 1)
 	} else {
 		var b []byte
 		var err error
@@ -1663,9 +1668,10 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 		if err != nil {
 			return nil, err
 		}
+		stats.Add(numSnapshotsIncremental, 1)
 	}
 
-	stats.Add(numSnaphots, 1)
+	stats.Add(numSnapshots, 1)
 	dur := time.Since(startT)
 	stats.Get(snapshotCreateDuration).(*expvar.Int).Set(dur.Milliseconds())
 	s.logger.Printf("%s snapshot created in %s on node ID %s", fPLog, dur, s.raftID)

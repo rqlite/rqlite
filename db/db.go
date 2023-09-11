@@ -27,17 +27,19 @@ const (
 )
 
 const (
-	numCheckpoints      = "checkpoints"
-	numCheckpointErrors = "checkpoint_errors"
-	checkpointDuration  = "checkpoint_duration_ns"
-	numExecutions       = "executions"
-	numExecutionErrors  = "execution_errors"
-	numQueries          = "queries"
-	numQueryErrors      = "query_errors"
-	numRequests         = "requests"
-	numETx              = "execute_transactions"
-	numQTx              = "query_transactions"
-	numRTx              = "request_transactions"
+	numCheckpoints       = "checkpoints"
+	numCheckpointErrors  = "checkpoint_errors"
+	numCheckpointedPages = "checkpointed_pages"
+	numCheckpointedMoves = "checkpointed_moves"
+	checkpointDuration   = "checkpoint_duration_ns"
+	numExecutions        = "executions"
+	numExecutionErrors   = "execution_errors"
+	numQueries           = "queries"
+	numQueryErrors       = "query_errors"
+	numRequests          = "requests"
+	numETx               = "execute_transactions"
+	numQTx               = "query_transactions"
+	numRTx               = "request_transactions"
 )
 
 var (
@@ -61,6 +63,8 @@ func ResetStats() {
 	stats.Init()
 	stats.Add(numCheckpoints, 0)
 	stats.Add(numCheckpointErrors, 0)
+	stats.Add(numCheckpointedPages, 0)
+	stats.Add(numCheckpointedMoves, 0)
 	stats.Add(checkpointDuration, 0)
 	stats.Add(numExecutions, 0)
 	stats.Add(numExecutionErrors, 0)
@@ -482,6 +486,8 @@ func (db *DB) CheckpointWithTimeout(dur time.Duration) (err error) {
 
 	f := func() error {
 		err := db.rwDB.QueryRow("PRAGMA wal_checkpoint(TRUNCATE)").Scan(&ok, &nPages, &nMoved)
+		stats.Add(numCheckpointedPages, int64(nPages))
+		stats.Add(numCheckpointedMoves, int64(nMoved))
 		if err != nil {
 			return fmt.Errorf("error checkpointing WAL: %s", err.Error())
 		}
