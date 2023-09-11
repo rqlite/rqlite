@@ -345,9 +345,9 @@ func Open(dbPath string, fkEnabled, wal bool) (*DB, error) {
 		return nil, fmt.Errorf("failed to ping on-disk database: %s", err.Error())
 	}
 
-	// Set some reasonable connection pool behaviour.
-	rwDB.SetConnMaxIdleTime(30 * time.Second)
+	// Set connection pool behaviour.
 	rwDB.SetConnMaxLifetime(0)
+	rwDB.SetMaxOpenConns(1) // Key to ensure a new connection doesn't enable checkpointing
 	roDB.SetConnMaxIdleTime(30 * time.Second)
 	roDB.SetConnMaxLifetime(0)
 
