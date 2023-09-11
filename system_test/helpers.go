@@ -721,7 +721,7 @@ func mustNodeEncrypted(dir string, enableSingle, httpEncrypt bool, mux *tcp.Mux,
 		node.Service.KeyFile = node.HTTPKeyPath
 	}
 	// Lower for testing to reduce pressure on CI systems.
-	node.Service.DefaultQueueBatchSz = 16
+	node.Service.DefaultQueueBatchSz = 8
 	node.Service.DefaultQueueCap = 64
 
 	if err := node.Service.Start(); err != nil {
