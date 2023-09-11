@@ -619,6 +619,14 @@ func Test_WALReplayOK(t *testing.T) {
 		}
 		defer db.Close()
 
+		n, err := db.GetCheckpointing()
+		if err != nil {
+			t.Fatalf("failed to get checkpoint value: %s", err.Error())
+		}
+		if exp, got := 0, n; exp != got {
+			t.Fatalf("unexpected checkpoint value, expected %d, got %d", exp, got)
+		}
+
 		dbFile := filepath.Base(dbPath)
 		walPath := dbPath + "-wal"
 		walFile := filepath.Base(walPath)
@@ -627,12 +635,7 @@ func Test_WALReplayOK(t *testing.T) {
 		defer os.RemoveAll(replayDir)
 		replayDBPath := filepath.Join(replayDir, dbFile)
 
-		// Take over control of checkpointing
-		if err := db.DisableCheckpointing(); err != nil {
-			t.Fatalf("failed to disable checkpointing: %s", err.Error())
-		}
-
-		// Copy the SQLite file and WAL #1
+		// Create and copy the SQLite file and WAL #1
 		if _, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"); err != nil {
 			t.Fatalf("failed to create table: %s", err.Error())
 		}
@@ -645,7 +648,7 @@ func Test_WALReplayOK(t *testing.T) {
 			t.Fatalf("failed to checkpoint database in WAL mode: %s", err.Error())
 		}
 
-		// Copy WAL #2
+		// Create and copy WAL #2
 		_, err = db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("fiona")`)
 		if err != nil {
 			t.Fatalf("error executing insertion into table: %s", err.Error())
@@ -658,7 +661,7 @@ func Test_WALReplayOK(t *testing.T) {
 			t.Fatalf("failed to checkpoint database in WAL mode: %s", err.Error())
 		}
 
-		// Copy WAL #3
+		// Create and copy WAL #3
 		_, err = db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("declan")`)
 		if err != nil {
 			t.Fatalf("error executing insertion into table: %s", err.Error())
