@@ -1623,8 +1623,11 @@ func (s *Store) Database(leader bool) ([]byte, error) {
 // http://sqlite.org/howtocorrupt.html states it is safe to copy or serialize the
 // database as long as no writes to the database are in progress.
 func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
-	s.logger.Printf("initiating node snapshot on node ID %s", s.raftID)
 	startT := time.Now()
+
+	fullNeeded := s.snapshotStore.FullNeeded()
+	fullPLog := fullPretty(fullNeeded)
+	s.logger.Printf("initiating %s snapshot on node ID %s", fullPLog, s.raftID)
 	defer func() {
 		s.numSnapshotsMu.Lock()
 		defer s.numSnapshotsMu.Unlock()
@@ -1635,7 +1638,7 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 	defer s.queryTxMu.Unlock()
 
 	var fsmSnapshot raft.FSMSnapshot
-	if s.snapshotStore.FullNeeded() {
+	if fullNeeded {
 		if err := s.db.Checkpoint(); err != nil {
 			return nil, err
 		}
@@ -1648,6 +1651,7 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 			if err != nil {
 				return nil, err
 			}
+			s.logger.Printf("%s snapshot is %d bytes on node ID %s", fullPLog, len(b), s.raftID)
 			if err := s.db.Checkpoint(); err != nil {
 				return nil, err
 			}
@@ -1661,7 +1665,7 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 	stats.Add(numSnaphots, 1)
 	dur := time.Since(startT)
 	stats.Get(snapshotCreateDuration).(*expvar.Int).Set(dur.Milliseconds())
-	s.logger.Printf("node snapshot created in %s", dur)
+	s.logger.Printf("%s snapshot created in %s on node ID %s", fullPLog, dur, s.raftID)
 	return &FSMSnapshot{
 		FSMSnapshot: fsmSnapshot,
 		logger:      s.logger,
@@ -2189,4 +2193,11 @@ func dirSize(path string) (int64, error) {
 		return err
 	})
 	return size, err
+}
+
+func fullPretty(full bool) string {
+	if full {
+		return "full"
+	}
+	return "incremental"
 }

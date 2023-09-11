@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 // Sink is a sink for writing snapshot data to a Snapshot store.
@@ -113,7 +114,8 @@ func (s *Sink) processSnapshotData() error {
 }
 
 func (s *Sink) processIncrementalSnapshot(incSnap *IncrementalSnapshot) error {
-	s.logger.Printf("processing incremental snapshot")
+	startT := time.Now()
+	s.logger.Printf("processing incremental snapshot %s", s.meta.ID)
 
 	incSnapDir := tmpName(filepath.Join(s.curGenDir, s.meta.ID))
 	if err := os.Mkdir(incSnapDir, 0755); err != nil {
@@ -134,12 +136,13 @@ func (s *Sink) processIncrementalSnapshot(incSnap *IncrementalSnapshot) error {
 		s.logger.Printf("failed to move incremental snapshot directory into place: %s", err)
 		return err
 	}
-	s.logger.Printf("incremental snapshot (ID %s) written to %s", s.meta.ID, dstDir)
+	s.logger.Printf("incremental snapshot (ID %s) written to %s in %s", s.meta.ID, dstDir, time.Since(startT))
 	return nil
 }
 
 func (s *Sink) processFullSnapshot(fullSnap *FullSnapshot) error {
-	s.logger.Printf("processing full snapshot")
+	startT := time.Now()
+	s.logger.Printf("processing full snapshot %s", s.meta.ID)
 
 	// We need a new generational directory, and need to create the first
 	// snapshot in that directory.
@@ -175,7 +178,7 @@ func (s *Sink) processFullSnapshot(fullSnap *FullSnapshot) error {
 	// Yeah, this is why empty snap directories need the "full" flag.
 	// Any snapshot directories older than a full snapshot directory can be
 	// removed.
-	s.logger.Printf("full snapshot (ID %s) written to %s", s.meta.ID, dstDir)
+	s.logger.Printf("full snapshot (ID %s) written to %s in %s", s.meta.ID, dstDir, time.Since(startT))
 	return nil
 }
 
