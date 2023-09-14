@@ -36,6 +36,7 @@ When officially released 8.0 will support (mostly) seamless upgrades from the 7.
 - [PR #1390](https://github.com/rqlite/rqlite/pull/1390): Add Restore functions to Snapshot Store.
 - [PR #1394](https://github.com/rqlite/rqlite/pull/1394): Use only one RW database connection.
 - [PR #1395](https://github.com/rqlite/rqlite/pull/1395): More DB-level and Snapshotting statistics.
+- [PR #1399](https://github.com/rqlite/rqlite/pull/1399): Better trailing flags error message.
 
 ## 7.21.4 (July 8th 2023)
 ### Implementation changes and bug fixes
