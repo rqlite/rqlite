@@ -40,7 +40,7 @@ func main() {
 		fmt.Println("failed to read WAL header:", err)
 		os.Exit(1)
 	}
-	fmt.Println("WAL page size: ", r.PageSize())
+	fmt.Println("WAL page size:", r.PageSize())
 
 	nFrames := 0
 	nCommits := 0
