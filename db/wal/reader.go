@@ -12,16 +12,16 @@ const (
 	WALFrameHeaderSize = 24
 )
 
-// WALReader wraps an io.Reader and parses SQLite WAL frames.
+// Reader wraps an io.Reader and parses SQLite WAL frames.
 //
 // This reader verifies the salt & checksum integrity while it reads. It does
 // not enforce transaction boundaries (i.e. it may return uncommitted frames).
 // It is the responsibility of the caller to handle this.
 //
-// WALReader has been copied from the litefs source code. Many thanks to the
+// Reader has been copied from the litefs source code. Many thanks to the
 // authors of that software. See https://github.com/superfly/litefs for more
 // details.
-type WALReader struct {
+type Reader struct {
 	r      io.Reader
 	frameN int
 
@@ -33,17 +33,17 @@ type WALReader struct {
 	chksum1, chksum2 uint32
 }
 
-// NewWALReader returns a new instance of WALReader.
-func NewWALReader(r io.Reader) *WALReader {
-	return &WALReader{r: r}
+// NewReader returns a new instance of Reader.
+func NewReader(r io.Reader) *Reader {
+	return &Reader{r: r}
 }
 
 // PageSize returns the page size from the header. Must call ReadHeader() first.
-func (r *WALReader) PageSize() uint32 { return r.pageSize }
+func (r *Reader) PageSize() uint32 { return r.pageSize }
 
 // Offset returns the file offset of the last read frame.
 // Returns zero if no frames have been read.
-func (r *WALReader) Offset() int64 {
+func (r *Reader) Offset() int64 {
 	if r.frameN == 0 {
 		return 0
 	}
@@ -51,7 +51,7 @@ func (r *WALReader) Offset() int64 {
 }
 
 // ReadHeader reads the WAL header into the reader. Returns io.EOF if WAL is invalid.
-func (r *WALReader) ReadHeader() error {
+func (r *Reader) ReadHeader() error {
 	// If we have a partial WAL, then mark WAL as done.
 	hdr := make([]byte, WALHeaderSize)
 	if _, err := io.ReadFull(r.r, hdr); err == io.ErrUnexpectedEOF {
@@ -94,7 +94,7 @@ func (r *WALReader) ReadHeader() error {
 
 // ReadFrame reads the next frame from the WAL and returns the page number.
 // Returns io.EOF at the end of the valid WAL.
-func (r *WALReader) ReadFrame(data []byte) (pgno, commit uint32, err error) {
+func (r *Reader) ReadFrame(data []byte) (pgno, commit uint32, err error) {
 	if len(data) != int(r.pageSize) {
 		return 0, 0, fmt.Errorf("WALReader.ReadFrame(): buffer size (%d) must match page size (%d)", len(data), r.pageSize)
 	}

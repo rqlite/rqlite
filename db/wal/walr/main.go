@@ -35,7 +35,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	r := wal.NewWALReader(walFD)
+	r := wal.NewReader(walFD)
 	if err := r.ReadHeader(); err != nil {
 		fmt.Println("failed to read WAL header:", err)
 		os.Exit(1)

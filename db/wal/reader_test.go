@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestWALReader(t *testing.T) {
+func TestReader(t *testing.T) {
 	t.Run("OK", func(t *testing.T) {
 		buf := make([]byte, 4096)
 		b, err := os.ReadFile("testdata/wal-reader/ok/wal")
@@ -17,7 +17,7 @@ func TestWALReader(t *testing.T) {
 		}
 
 		// Initialize reader with header info.
-		r := NewWALReader(bytes.NewReader(b))
+		r := NewReader(bytes.NewReader(b))
 		if err := r.ReadHeader(); err != nil {
 			t.Fatal(err)
 		} else if got, want := r.PageSize(), uint32(4096); got != want {
@@ -78,7 +78,7 @@ func TestWALReader(t *testing.T) {
 		}
 
 		// Initialize reader with header info.
-		r := NewWALReader(bytes.NewReader(b))
+		r := NewReader(bytes.NewReader(b))
 		if err := r.ReadHeader(); err != nil {
 			t.Fatal(err)
 		} else if got, want := r.PageSize(), uint32(4096); got != want {
@@ -112,7 +112,7 @@ func TestWALReader(t *testing.T) {
 		}
 
 		// Initialize reader with header info.
-		r := NewWALReader(bytes.NewReader(b))
+		r := NewReader(bytes.NewReader(b))
 		if err := r.ReadHeader(); err != nil {
 			t.Fatal(err)
 		} else if got, want := r.PageSize(), uint32(4096); got != want {
@@ -139,21 +139,21 @@ func TestWALReader(t *testing.T) {
 	})
 
 	t.Run("ZeroLength", func(t *testing.T) {
-		r := NewWALReader(bytes.NewReader(nil))
+		r := NewReader(bytes.NewReader(nil))
 		if err := r.ReadHeader(); err != io.EOF {
 			t.Fatalf("unexpected error: %#v", err)
 		}
 	})
 
 	t.Run("PartialHeader", func(t *testing.T) {
-		r := NewWALReader(bytes.NewReader(make([]byte, 10)))
+		r := NewReader(bytes.NewReader(make([]byte, 10)))
 		if err := r.ReadHeader(); err != io.EOF {
 			t.Fatalf("unexpected error: %#v", err)
 		}
 	})
 
 	t.Run("BadMagic", func(t *testing.T) {
-		r := NewWALReader(bytes.NewReader(make([]byte, 32)))
+		r := NewReader(bytes.NewReader(make([]byte, 32)))
 		if err := r.ReadHeader(); err == nil || err.Error() != `invalid wal header magic: 0` {
 			t.Fatalf("unexpected error: %#v", err)
 		}
@@ -165,7 +165,7 @@ func TestWALReader(t *testing.T) {
 			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
-		r := NewWALReader(bytes.NewReader(data))
+		r := NewReader(bytes.NewReader(data))
 		if err := r.ReadHeader(); err != io.EOF {
 			t.Fatalf("unexpected error: %#v", err)
 		}
@@ -177,7 +177,7 @@ func TestWALReader(t *testing.T) {
 			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 			0x15, 0x7b, 0x20, 0x92, 0xbb, 0xf8, 0x34, 0x1d}
-		r := NewWALReader(bytes.NewReader(data))
+		r := NewReader(bytes.NewReader(data))
 		if err := r.ReadHeader(); err == nil || err.Error() != `unsupported wal version: 1` {
 			t.Fatalf("unexpected error: %#v", err)
 		}
@@ -190,7 +190,7 @@ func TestWALReader(t *testing.T) {
 		}
 
 		// Initialize reader with header info.
-		r := NewWALReader(bytes.NewReader(b))
+		r := NewReader(bytes.NewReader(b))
 		if err := r.ReadHeader(); err != nil {
 			t.Fatal(err)
 		}
@@ -205,7 +205,7 @@ func TestWALReader(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		r := NewWALReader(bytes.NewReader(b[:40]))
+		r := NewReader(bytes.NewReader(b[:40]))
 		if err := r.ReadHeader(); err != nil {
 			t.Fatal(err)
 		} else if _, _, err := r.ReadFrame(make([]byte, 4096)); err != io.EOF {
@@ -219,7 +219,7 @@ func TestWALReader(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		r := NewWALReader(bytes.NewReader(b[:56]))
+		r := NewReader(bytes.NewReader(b[:56]))
 		if err := r.ReadHeader(); err != nil {
 			t.Fatal(err)
 		} else if _, _, err := r.ReadFrame(make([]byte, 4096)); err != io.EOF {
@@ -233,7 +233,7 @@ func TestWALReader(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		r := NewWALReader(bytes.NewReader(b[:1000]))
+		r := NewReader(bytes.NewReader(b[:1000]))
 		if err := r.ReadHeader(); err != nil {
 			t.Fatal(err)
 		} else if _, _, err := r.ReadFrame(make([]byte, 4096)); err != io.EOF {
