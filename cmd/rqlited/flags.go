@@ -500,7 +500,9 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 
 	// Ensure no args come after the data directory.
 	if flag.NArg() > 1 {
-		errorExit(1, "arguments after data directory are not accepted")
+		fmt.Fprintf(os.Stderr, "arguments after data directory (%s) are not accepted (%s)\n",
+			config.DataPath, flag.Args()[1:])
+		os.Exit(1)
 	}
 
 	if err := config.Validate(); err != nil {
