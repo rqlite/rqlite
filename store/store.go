@@ -862,7 +862,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	leaderID, leaderAddr := s.LeaderWithID()
+	leaderAddr, leaderID := s.LeaderWithID()
 
 	// Perform type-conversion to actual numbers where possible.
 	raftStats := make(map[string]interface{})
