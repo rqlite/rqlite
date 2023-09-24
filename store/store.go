@@ -148,6 +148,17 @@ func ResetStats() {
 	stats.Add(nodesReapedFailed, 0)
 }
 
+// SnapshotStore is the interface Snapshot stores must implement.
+type SnapshotStore interface {
+	raft.SnapshotStore
+
+	// FullNeeded returns whether the Snapshot Store needs a full snapshot.
+	FullNeeded() bool
+
+	// Stats returns stats about the Snapshot Store.
+	Stats() (map[string]interface{}, error)
+}
+
 // ClusterState defines the possible Raft states the current node can be in
 type ClusterState int
 
@@ -201,7 +212,7 @@ type Store struct {
 	raftLog       raft.LogStore             // Persistent log store.
 	raftStable    raft.StableStore          // Persistent k-v store.
 	boltStore     *rlog.Log                 // Physical store.
-	snapshotStore *snapshot.Store           // Snapshot store.
+	snapshotStore SnapshotStore             // Snapshot store.
 
 	// Raft changes observer
 	leaderObserversMu sync.RWMutex
