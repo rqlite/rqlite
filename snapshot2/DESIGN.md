@@ -10,18 +10,18 @@ If the SS needs an incremental snapshot
   - checkpoint WAL into SQLite file.
 
 Persist()
+ - create <snap>.tmp directory in SS (perhaps already created by Sink)
 - check type of snapshot
 - if full:
- - create <snap>.tmp directory in SS (perhaps already created by Sink)
  - copy SQLite file to SS root, named as <snap>.db
  - rename <snap>.tmp to <snap>
- - delete <snap-1>.db
+ - delete <snap-1>.db, if it exists, and any earlier snap directories too.
 - else:
- - create <snap>.tmp directory in SS
  - copy WAL file to beside existing SQLite file. Name it <snap>.db-wal. Sync everything.
  - rename <snap>.tmp to <snap>
  - rename  <snap-1>.db to <snap>.db
  - checkpoint <snap>.db-wal <snap>.db
+ - open and close <snap>.db to remove any WAL file
 - delete any older snapshot directories <snap-1....-n>
 
 Recover()
@@ -33,6 +33,7 @@ Recover()
   - call this <snap>
   - there should be a DB file named <snap>.db. If not rename <snap-1>.db to <snap>.db. If there is no .db file, panic?
   - if there is a WAL file called <snap>.db-wal checkpoint it into <snap>.db.
+ - open and close <snap>.db to remove any WAL file
  - delete any older snapshot directories <snap-1....-n>, including any <snap-1......-n>.db
 
  Misc:
