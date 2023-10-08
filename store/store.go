@@ -24,6 +24,7 @@ import (
 	sql "github.com/rqlite/rqlite/db"
 	rlog "github.com/rqlite/rqlite/log"
 	"github.com/rqlite/rqlite/snapshot"
+	"github.com/rqlite/rqlite/snapshot2"
 )
 
 var (
@@ -388,12 +389,12 @@ func (s *Store) Open() (retErr error) {
 	// Upgrade any pre-existing snapshots.
 	oldSnapshotDir := filepath.Join(s.raftDir, "snapshots")
 	snapshotDir := filepath.Join(s.raftDir, "rsnapshots")
-	if err := snapshot.Upgrade(oldSnapshotDir, snapshotDir, s.logger); err != nil {
+	if err := snapshot2.Upgrade(oldSnapshotDir, snapshotDir, s.logger); err != nil {
 		return fmt.Errorf("failed to upgrade snapshots: %s", err)
 	}
 
 	// Create store for the Snapshots.
-	snapshotStore, err := snapshot.NewStore(filepath.Join(snapshotDir))
+	snapshotStore, err := snapshot2.NewStore(filepath.Join(snapshotDir))
 	if err != nil {
 		return fmt.Errorf("failed to create snapshot store: %s", err)
 	}
@@ -1659,7 +1660,7 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 		if err := s.db.Checkpoint(); err != nil {
 			return nil, err
 		}
-		fsmSnapshot = snapshot.NewFullSnapshot(s.db.Path())
+		fsmSnapshot = snapshot2.NewFullSnapshot(s.db.Path())
 		stats.Add(numSnapshotsFull, 1)
 	} else {
 		var b []byte
@@ -1675,7 +1676,7 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 				return nil, err
 			}
 		}
-		fsmSnapshot = snapshot.NewWALSnapshot(b)
+		fsmSnapshot = snapshot2.NewWALSnapshot(b)
 		if err != nil {
 			return nil, err
 		}
