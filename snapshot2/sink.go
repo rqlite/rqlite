@@ -1,9 +1,7 @@
 package snapshot2
 
 import (
-	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 
@@ -69,7 +67,10 @@ func (s *Sink) ID() string {
 // going to be closed.
 func (s *Sink) Cancel() error {
 	s.closed = true
-	return nil
+	if err := s.dataFD.Close(); err != nil {
+		return err
+	}
+	return RemoveAllTmpSnapshotData(s.str.Dir())
 }
 
 // Close closes the sink, and finalizes creation of the snapshot. It is critical
@@ -79,25 +80,24 @@ func (s *Sink) Close() error {
 		return nil
 	}
 	s.closed = true
+	s.dataFD.Close()
 
 	// Write meta data
 	if err := s.writeMeta(s.snapTmpDirPath); err != nil {
 		return err
 	}
 
-	s.dataFD.Close()
 	if err := s.processSnapshotData(); err != nil {
 		return err
 	}
 
-	// XXX Add autoreap check here.
 	return s.str.Reap()
 }
 
 func (s *Sink) processSnapshotData() (retErr error) {
 	defer func() {
 		if retErr != nil {
-			s.removeTmpSnapshotData()
+			RemoveAllTmpSnapshotData(s.str.Dir())
 		}
 	}()
 
@@ -158,63 +158,14 @@ func (s *Sink) processSnapshotData() (retErr error) {
 			// SQLite file for the latest snapshot. This is an invalid state.
 			return ErrInvalidStore
 		}
-
-		// // Remove all snapshots, and all associated data, except the newest one.
-		// for _, snap := range snapshots[:len(snapshots)-1] {
-		// 	if err := removeAllPrefix(s.str.Dir(), snap); err != nil {
-		// 		return err
-		// 	}
-		// }
 	} else {
 		return ErrInvalidStore
 	}
 
-	// At this point we have one of the following situations:
-	// - a single directory and a single DB file. They should have the same base name.
-	// - two directories and a single DB file and a wal file. The single DB file should be
-	// named  after the older snapshot. The wal file should be named after the newer snapshot.
+	s.str.Reap()
 	return nil
-}
-
-func (s *Sink) removeTmpSnapshotData() {
-	// Get a list of all snapshots in the directory which end with tmpSuffix.
-	// These are snapshots which were not successfully persisted -- all resources
-	// associated with them should be removed.
-
-	// List all directories in the snapshot directory.
-	directories, err := os.ReadDir(s.str.Dir())
-	if err != nil {
-		return
-	}
-	for _, d := range directories {
-		if d.IsDir() && isTmpName(d.Name()) {
-			os.RemoveAll(filepath.Join(s.str.Dir(), d.Name()))
-			// get a list of all files that reg match d.Name()
-			// remove all of them
-
-		}
-	}
 }
 
 func (s *Sink) writeMeta(dir string) error {
 	return writeMeta(dir, s.meta)
-}
-
-func writeMeta(dir string, meta *raft.SnapshotMeta) error {
-	fh, err := os.Create(filepath.Join(dir, metaFileName))
-	if err != nil {
-		return fmt.Errorf("error creating meta file: %v", err)
-	}
-	defer fh.Close()
-
-	// Write out as JSON
-	enc := json.NewEncoder(fh)
-	if err = enc.Encode(meta); err != nil {
-		return fmt.Errorf("failed to encode meta: %v", err)
-	}
-
-	if err := fh.Sync(); err != nil {
-		return err
-	}
-	return fh.Close()
 }

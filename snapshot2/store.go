@@ -1,6 +1,7 @@
 package snapshot2
 
 import (
+	"encoding/json"
 	"expvar"
 	"fmt"
 	"io"
@@ -69,14 +70,36 @@ func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configu
 	return sink, nil
 }
 
-// List returns a list of all the snapshots in the Store.
+// List returns a list of all the snapshots in the Store. It returns the snapshots
+// in newest to oldest order.
 func (s *Store) List() ([]*raft.SnapshotMeta, error) {
-	return nil, nil
+	snapshots, err := s.getSnapshots()
+	if err != nil {
+		return nil, err
+	}
+	var snapMeta []*raft.SnapshotMeta
+	if len(snapshots) > 0 {
+		snapshotDir := filepath.Join(s.dir, snapshots[0])
+		meta, err := readMeta(snapshotDir)
+		if err != nil {
+			return nil, err
+		}
+		snapMeta = append(snapMeta, meta)
+	}
+	return snapMeta, nil
 }
 
 // Open opens the snapshot with the given ID.
 func (s *Store) Open(id string) (*raft.SnapshotMeta, io.ReadCloser, error) {
-	return nil, nil, nil
+	meta, err := readMeta(filepath.Join(s.dir, id))
+	if err != nil {
+		return nil, nil, err
+	}
+	fd, err := os.Open(filepath.Join(s.dir, id+".db"))
+	if err != nil {
+		return nil, nil, err
+	}
+	return meta, fd, nil
 }
 
 // Stats returns stats about the Snapshot Store.
@@ -86,13 +109,17 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 
 // Reap reaps old snapshots.
 func (s *Store) Reap() error {
+	snapshots, err := s.getSnapshots()
+	if err != nil {
+		return err
+	}
+	// Remove all snapshots, and all associated data, except the newest one.
+	for _, snap := range snapshots[:len(snapshots)-1] {
+		if err := removeAllPrefix(s.dir, snap); err != nil {
+			return err
+		}
+	}
 	return nil
-}
-
-// FullNeeded returns true if the next type of snapshot needed
-// by the Store is a full snapshot.
-func (s *Store) FullNeeded() bool {
-	return true
 }
 
 // Dir returns the directory where the snapshots are stored.
@@ -100,7 +127,23 @@ func (s *Store) Dir() string {
 	return s.dir
 }
 
-// RemoveAllTmpSnapshotData removes all temporary Snapshot data from the store.
+// getSnapshots returns a list of all snapshots in the store, sorted
+// from oldest to newest.
+func (s *Store) getSnapshots() ([]string, error) {
+	directories, err := os.ReadDir(s.dir)
+	if err != nil {
+		return nil, err
+	}
+	var snapshots []string
+	for _, d := range directories {
+		if !isTmpName(d.Name()) {
+			snapshots = append(snapshots, d.Name())
+		}
+	}
+	return snapshots, nil
+}
+
+// RemoveAllTmpSnapshotData removes all temporary Snapshot data from the directory.
 // This process is defined as follows: for every directory in dir, if the directory
 // is a temporary directory, remove the directory. Then remove all other files
 // that contain the name of a temporary directory, minus the temporary suffix,
@@ -129,22 +172,6 @@ func RemoveAllTmpSnapshotData(dir string) error {
 		}
 	}
 	return nil
-}
-
-// getSnapshots returns a list of all snapshots in the store, sorted
-// from oldest to newest.
-func (s *Store) getSnapshots() ([]string, error) {
-	directories, err := os.ReadDir(s.dir)
-	if err != nil {
-		return nil, err
-	}
-	var snapshots []string
-	for _, d := range directories {
-		if !isTmpName(d.Name()) {
-			snapshots = append(snapshots, d.Name())
-		}
-	}
-	return snapshots, nil
 }
 
 // snapshotName generates a name for the snapshot.
@@ -183,11 +210,6 @@ func syncDirMaybe(dir string) error {
 	return syncDir(dir)
 }
 
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-	return !os.IsNotExist(err)
-}
-
 // removeAllPrefix removes all files in the given directory that have the given prefix.
 func removeAllPrefix(path, prefix string) error {
 	files, err := filepath.Glob(filepath.Join(path, prefix) + "*")
@@ -200,4 +222,40 @@ func removeAllPrefix(path, prefix string) error {
 		}
 	}
 	return nil
+}
+
+// readMeta is used to read the meta data in a given snapshot directory.
+func readMeta(dir string) (*raft.SnapshotMeta, error) {
+	metaPath := filepath.Join(dir, metaFileName)
+	fh, err := os.Open(metaPath)
+	if err != nil {
+		return nil, err
+	}
+	defer fh.Close()
+
+	meta := &raft.SnapshotMeta{}
+	dec := json.NewDecoder(fh)
+	if err := dec.Decode(meta); err != nil {
+		return nil, err
+	}
+	return meta, nil
+}
+
+func writeMeta(dir string, meta *raft.SnapshotMeta) error {
+	fh, err := os.Create(filepath.Join(dir, metaFileName))
+	if err != nil {
+		return fmt.Errorf("error creating meta file: %v", err)
+	}
+	defer fh.Close()
+
+	// Write out as JSON
+	enc := json.NewEncoder(fh)
+	if err = enc.Encode(meta); err != nil {
+		return fmt.Errorf("failed to encode meta: %v", err)
+	}
+
+	if err := fh.Sync(); err != nil {
+		return err
+	}
+	return fh.Close()
 }
