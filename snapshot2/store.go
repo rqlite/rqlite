@@ -107,19 +107,25 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 	return nil, nil
 }
 
-// Reap reaps old snapshots.
-func (s *Store) Reap() error {
+// Reap reaps all snapshots, except the most recent one. Returns the number of
+// snapshots reaped.
+func (s *Store) Reap() (int, error) {
 	snapshots, err := s.getSnapshots()
 	if err != nil {
-		return err
+		return 0, err
+	}
+	if len(snapshots) <= 1 {
+		return 0, nil
 	}
 	// Remove all snapshots, and all associated data, except the newest one.
+	n := 0
 	for _, snap := range snapshots[:len(snapshots)-1] {
 		if err := removeAllPrefix(s.dir, snap); err != nil {
-			return err
+			return n, err
 		}
+		n++
 	}
-	return nil
+	return n, nil
 }
 
 // Dir returns the directory where the snapshots are stored.
@@ -156,7 +162,7 @@ func RemoveAllTmpSnapshotData(dir string) error {
 	}
 	for _, d := range directories {
 		// If the directory is a temporary directory, remove it.
-		if isTmpName(d.Name()) {
+		if d.IsDir() && isTmpName(d.Name()) {
 			if err := os.RemoveAll(filepath.Join(dir, d.Name())); err != nil {
 				return err
 			}

@@ -91,7 +91,8 @@ func (s *Sink) Close() error {
 		return err
 	}
 
-	return s.str.Reap()
+	_, err := s.str.Reap()
+	return err
 }
 
 func (s *Sink) processSnapshotData() (retErr error) {
