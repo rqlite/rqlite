@@ -3,6 +3,8 @@ package snapshot2
 import (
 	"os"
 	"testing"
+
+	"github.com/hashicorp/raft"
 )
 
 func Test_RemoveAllTmpSnapshotData(t *testing.T) {
@@ -110,6 +112,45 @@ func Test_StoreEmpty(t *testing.T) {
 	}
 }
 
+func Test_StoreCreateCancel(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("Failed to create new store: %v", err)
+	}
+
+	sink, err := store.Create(1, 2, 3, makeTestConfiguration("1", "localhost:1"), 1, nil)
+	if err != nil {
+		t.Fatalf("Failed to create sink: %v", err)
+	}
+	if sink.ID() == "" {
+		t.Errorf("Expected sink ID to not be empty, got empty string")
+	}
+
+	// Should be a tmp directory with the name of the sink ID
+	if !pathExists(dir + "/" + sink.ID() + tmpSuffix) {
+		t.Errorf("Expected directory with name %s, but it does not exist", sink.ID())
+	}
+
+	// Test writing to the sink
+	if n, err := sink.Write([]byte("hello")); err != nil {
+		t.Fatalf("Failed to write to sink: %v", err)
+	} else if n != 5 {
+		t.Errorf("Expected 5 bytes written, got %d", n)
+	}
+
+	// Test canceling the sink
+	if err := sink.Cancel(); err != nil {
+		t.Fatalf("Failed to cancel sink: %v", err)
+	}
+
+	// Should not be a tmp directory with the name of the sink ID
+	if pathExists(dir + "/" + sink.ID() + tmpSuffix) {
+		t.Errorf("Expected directory with name %s to not exist, but it does", sink.ID())
+	}
+
+}
+
 func mustTouchFile(t *testing.T, path string) {
 	t.Helper()
 	if _, err := os.Create(path); err != nil {
@@ -127,4 +168,15 @@ func mustTouchDir(t *testing.T, path string) {
 func pathExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+func makeTestConfiguration(i, a string) raft.Configuration {
+	return raft.Configuration{
+		Servers: []raft.Server{
+			{
+				ID:      raft.ServerID(i),
+				Address: raft.ServerAddress(a),
+			},
+		},
+	}
 }

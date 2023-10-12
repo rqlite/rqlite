@@ -163,17 +163,23 @@ func RemoveAllTmpSnapshotData(dir string) error {
 	for _, d := range directories {
 		// If the directory is a temporary directory, remove it.
 		if d.IsDir() && isTmpName(d.Name()) {
-			if err := os.RemoveAll(filepath.Join(dir, d.Name())); err != nil {
-				return err
-			}
 			files, err := filepath.Glob(filepath.Join(dir, nonTmpName(d.Name())) + "*")
 			if err != nil {
 				return err
 			}
+
+			fullTmpDirPath := filepath.Join(dir, d.Name())
 			for _, f := range files {
+				if f == fullTmpDirPath {
+					// Only delete directory after all files have been deleted.
+					continue
+				}
 				if err := os.Remove(f); err != nil {
 					return err
 				}
+			}
+			if err := os.RemoveAll(fullTmpDirPath); err != nil {
+				return err
 			}
 		}
 	}
