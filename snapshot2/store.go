@@ -171,7 +171,7 @@ func RemoveAllTmpSnapshotData(dir string) error {
 			fullTmpDirPath := filepath.Join(dir, d.Name())
 			for _, f := range files {
 				if f == fullTmpDirPath {
-					// Only delete directory after all files have been deleted.
+					// Delete the directory last as a sign the deletion is complete.
 					continue
 				}
 				if err := os.Remove(f); err != nil {
