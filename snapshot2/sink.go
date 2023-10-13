@@ -66,9 +66,11 @@ func (s *Sink) ID() string {
 // Cancel cancels the snapshot. Cancel must be called if the snapshot is not
 // going to be closed.
 func (s *Sink) Cancel() error {
-	s.closed = true
-	if err := s.dataFD.Close(); err != nil {
-		return err
+	if s.dataFD != nil {
+		if err := s.dataFD.Close(); err != nil {
+			return err
+		}
+		s.dataFD = nil
 	}
 	return RemoveAllTmpSnapshotData(s.str.Dir())
 }
@@ -80,7 +82,12 @@ func (s *Sink) Close() error {
 		return nil
 	}
 	s.closed = true
-	s.dataFD.Close()
+	if s.dataFD == nil {
+		return nil
+	}
+	if err := s.dataFD.Close(); err != nil {
+		return err
+	}
 
 	// Write meta data
 	if err := s.writeMeta(s.snapTmpDirPath); err != nil {
