@@ -130,6 +130,7 @@ func (s *Store) Reap() (int, error) {
 		if err := removeAllPrefix(s.dir, snap); err != nil {
 			return n, err
 		}
+		s.logger.Printf("reaped snapshot %s", snap)
 		n++
 	}
 	return n, nil
