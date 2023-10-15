@@ -1,20 +1,12 @@
 package snapshot2
 
 import (
-	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/db"
-)
-
-var (
-	// ErrInvalidSnapshot is returned when a snapshot is invalid.
-	ErrInvalidSnapshot = errors.New("invalid snapshot")
-
-	// ErrInvalidStore is returned when a store is in an invalid state.
-	ErrInvalidStore = errors.New("invalid store")
 )
 
 // Sink is a sink for writing snapshot data to a Snapshot store.
@@ -123,7 +115,7 @@ func (s *Sink) processSnapshotData() (retErr error) {
 			return err
 		}
 	} else {
-		return ErrInvalidSnapshot
+		return fmt.Errorf("invalid snapshot data file: %s", s.dataFD.Name())
 	}
 
 	// Indicate snapshot data been successfully persisted to disk.
@@ -144,7 +136,7 @@ func (s *Sink) processSnapshotData() (retErr error) {
 		// double-check that it's valid.
 		snapDB := filepath.Join(s.str.Dir(), snapshots[0]+".db")
 		if !db.IsValidSQLiteFile(snapDB) {
-			return ErrInvalidStore
+			return fmt.Errorf("data for first snapshot is not a SQLite file: %s", snapDB)
 		}
 		return nil
 	} else if len(snapshots) >= 2 {
@@ -157,7 +149,7 @@ func (s *Sink) processSnapshotData() (retErr error) {
 		if db.IsValidSQLiteWALFile(snapNewWAL) {
 			// Double-check that the previous snapshot is a valid SQLite file.
 			if !db.IsValidSQLiteFile(snapPrevDB) {
-				return ErrInvalidStore
+				return fmt.Errorf("pre-existing data is not a SQLite file: %s", snapPrevDB)
 			}
 			// It is, so rename it and replay the WAL into it.
 			if err := os.Rename(snapPrevDB, snapNewDB); err != nil {
@@ -169,10 +161,11 @@ func (s *Sink) processSnapshotData() (retErr error) {
 		} else if !db.IsValidSQLiteFile(snapNewDB) {
 			// There is no valid WAL file for the latest snapshot, and no valid
 			// SQLite file for the latest snapshot. This is an invalid state.
-			return ErrInvalidStore
+
+			return fmt.Errorf("no valid SQLite file or WAL file for latest snapshot")
 		}
 	} else {
-		return ErrInvalidStore
+		return fmt.Errorf("unexpected number of snapshots: %d", len(snapshots))
 	}
 
 	s.str.Reap()

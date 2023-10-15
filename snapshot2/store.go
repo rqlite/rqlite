@@ -5,6 +5,7 @@ import (
 	"expvar"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -40,12 +41,18 @@ func ResetStats() {
 
 // Store stores Snapshots.
 type Store struct {
-	dir string
+	dir    string
+	logger *log.Logger
 }
 
 // NewStore returns a new Snapshot Store.
 func NewStore(dir string) (*Store, error) {
-	return &Store{dir: dir}, nil
+	str := &Store{
+		dir:    dir,
+		logger: log.New(os.Stderr, "[snapshot-store] ", log.LstdFlags),
+	}
+	str.logger.Printf("store initialized in %s", dir)
+	return str, nil
 }
 
 // Create creates a new Sink object, ready for writing a snapshot. Sinks make certain assumptions about
@@ -142,7 +149,7 @@ func (s *Store) getSnapshots() ([]string, error) {
 	}
 	var snapshots []string
 	for _, d := range directories {
-		if !isTmpName(d.Name()) {
+		if !isTmpName(d.Name()) && d.IsDir() {
 			snapshots = append(snapshots, d.Name())
 		}
 	}
