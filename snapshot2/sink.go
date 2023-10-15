@@ -169,6 +169,9 @@ func (s *Sink) processSnapshotData() (retErr error) {
 			}
 		}
 	}
+	if err := syncDirMaybe(s.str.Dir()); err != nil {
+		return err
+	}
 
 	s.str.Reap()
 	return nil
