@@ -94,8 +94,6 @@ func Test_SinkFullSnapshot(t *testing.T) {
 		t.Fatalf("Expected 1 snapshot, got %d", len(metas))
 	}
 	compareMetas(t, expMeta, metas[0])
-
-	// Check snapshot data is available and correct.
 	meta, fd, err := store.Open("snap-1234")
 	if err != nil {
 		t.Fatalf("Failed to open snapshot: %v", err)
@@ -107,6 +105,80 @@ func Test_SinkFullSnapshot(t *testing.T) {
 	}
 
 	// Write a second full snapshot, it should be installed without issue.
+	sink = NewSink(store, makeRaftMeta("snap-5678", 4, 3, 2))
+	if sink == nil {
+		t.Fatalf("Failed to create new sink")
+	}
+	if err := sink.Open(); err != nil {
+		t.Fatalf("Failed to open sink: %v", err)
+	}
+	sqliteFile2 := mustOpenFile(t, "testdata/db-and-wals/full2.db")
+	defer sqliteFile2.Close()
+	n, err = io.Copy(sink, sqliteFile2)
+	if err != nil {
+		t.Fatalf("Failed to copy second SQLite file: %v", err)
+	}
+	if n != mustGetFileSize(t, "testdata/db-and-wals/full2.db") {
+		t.Fatalf("Unexpected number of bytes copied: %d", n)
+	}
+	if err := sink.Close(); err != nil {
+		t.Fatalf("Failed to close sink: %v", err)
+	}
+
+	// Check second snapshot is available and correct.
+	expMeta2 := makeRaftMeta("snap-5678", 4, 3, 2)
+	metas2, err := store.List()
+	if err != nil {
+		t.Fatalf("Failed to list snapshots: %v", err)
+	}
+	if len(metas2) != 1 {
+		t.Fatalf("Expected 1 snapshot, got %d", len(metas))
+	}
+	compareMetas(t, expMeta2, metas2[0])
+	meta2, fd2, err := store.Open("snap-5678")
+	if err != nil {
+		t.Fatalf("Failed to open second snapshot: %v", err)
+	}
+	defer fd2.Close()
+	compareMetas(t, expMeta2, meta2)
+	if !compareReaderToFile(t, fd2, "testdata/db-and-wals/full2.db") {
+		t.Fatalf("second full snapshot data does not match")
+	}
+}
+
+// Test_SinkWALSnapshotEmptyStoreFail ensures that if a WAL file is
+// written to empty store, an error is returned.
+func Test_SinkWALSnapshotEmptyStoreFail(t *testing.T) {
+	store := mustStore(t)
+	sink := NewSink(store, makeRaftMeta("snap-1234", 3, 2, 1))
+	if sink == nil {
+		t.Fatalf("Failed to create new sink")
+	}
+	if err := sink.Open(); err != nil {
+		t.Fatalf("Failed to open sink: %v", err)
+	}
+
+	sqliteFile := mustOpenFile(t, "testdata/db-and-wals/wal-00")
+	defer sqliteFile.Close()
+	n, err := io.Copy(sink, sqliteFile)
+	if err != nil {
+		t.Fatalf("Failed to copy SQLite file: %v", err)
+	}
+	if n != mustGetFileSize(t, "testdata/db-and-wals/wal-00") {
+		t.Fatalf("Unexpected number of bytes copied: %d", n)
+	}
+	if err := sink.Close(); err == nil {
+		t.Fatalf("unexpected success closing sink after writing WAL data")
+	}
+
+	// Peek inside the Store, there should be zero data inside.
+	files, err := os.ReadDir(store.Dir())
+	if err != nil {
+		t.Fatalf("Failed to read dir: %v", err)
+	}
+	if len(files) != 0 {
+		t.Fatalf("Expected 0 files inside Store, got %d", len(files))
+	}
 }
 
 func compareMetas(t *testing.T, m1, m2 *raft.SnapshotMeta) {

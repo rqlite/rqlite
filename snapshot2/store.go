@@ -162,12 +162,11 @@ func (s *Store) getSnapshots() ([]string, error) {
 // that contain the name of a temporary directory, minus the temporary suffix,
 // as prefix.
 func RemoveAllTmpSnapshotData(dir string) error {
-	// List all directories in the snapshot directory.
-	directories, err := os.ReadDir(dir)
+	files, err := os.ReadDir(dir)
 	if err != nil {
 		return nil
 	}
-	for _, d := range directories {
+	for _, d := range files {
 		// If the directory is a temporary directory, remove it.
 		if d.IsDir() && isTmpName(d.Name()) {
 			files, err := filepath.Glob(filepath.Join(dir, nonTmpName(d.Name())) + "*")

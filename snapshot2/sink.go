@@ -106,11 +106,30 @@ func (s *Sink) processSnapshotData() (retErr error) {
 		}
 	}()
 
+	// Check the state of the store before processing this new snapshot. This
+	// allows us to perform some sanity checks on the incoming snapshot data.
+	snapshots, err := s.str.getSnapshots()
+	if err != nil {
+		return err
+	}
+
 	if db.IsValidSQLiteFile(s.dataFD.Name()) {
 		if err := os.Rename(s.dataFD.Name(), filepath.Join(s.str.Dir(), s.meta.ID+".db")); err != nil {
 			return err
 		}
 	} else if db.IsValidSQLiteWALFile(s.dataFD.Name()) {
+		if len(snapshots) == 0 {
+			// We are trying to create our first snapshot from a WAL file, which is invalid.
+			return fmt.Errorf("data for first snapshot is a WAL file")
+		} else {
+			// We have at least one previous snapshot. That means we should have a valid SQLite file
+			// for the previous snapshot.
+			snapPrev := snapshots[len(snapshots)-1]
+			snapPrevDB := filepath.Join(s.str.Dir(), snapPrev+".db")
+			if !db.IsValidSQLiteFile(snapPrevDB) {
+				return fmt.Errorf("previous snapshot data is not a SQLite file: %s", snapPrevDB)
+			}
+		}
 		if err := os.Rename(s.dataFD.Name(), filepath.Join(s.str.Dir(), s.meta.ID+".db-wal")); err != nil {
 			return err
 		}
@@ -118,7 +137,8 @@ func (s *Sink) processSnapshotData() (retErr error) {
 		return fmt.Errorf("invalid snapshot data file: %s", s.dataFD.Name())
 	}
 
-	// Indicate snapshot data been successfully persisted to disk.
+	// Indicate snapshot data been successfully persisted to disk by renaming
+	// the temp directory to a non-temporary name.
 	if err := os.Rename(s.snapTmpDirPath, nonTmpName(s.snapTmpDirPath)); err != nil {
 		return err
 	}
@@ -126,20 +146,13 @@ func (s *Sink) processSnapshotData() (retErr error) {
 		return err
 	}
 
-	// Now finalize the snapshot, so it's ready for use.
-	snapshots, err := s.str.getSnapshots()
+	// Now check if we need to replay any WAL file into the previous SQLite file. This is
+	// the final step of any snapshot process.
+	snapshots, err = s.str.getSnapshots()
 	if err != nil {
 		return err
 	}
-	if len(snapshots) == 1 {
-		// We just created our first snapshot. Nothing else to do, except
-		// double-check that it's valid.
-		snapDB := filepath.Join(s.str.Dir(), snapshots[0]+".db")
-		if !db.IsValidSQLiteFile(snapDB) {
-			return fmt.Errorf("data for first snapshot is not a SQLite file: %s", snapDB)
-		}
-		return nil
-	} else if len(snapshots) >= 2 {
+	if len(snapshots) >= 2 {
 		snapPrev := snapshots[len(snapshots)-2]
 		snapNew := snapshots[len(snapshots)-1]
 		snapPrevDB := filepath.Join(s.str.Dir(), snapPrev+".db")
@@ -147,25 +160,14 @@ func (s *Sink) processSnapshotData() (retErr error) {
 		snapNewWAL := filepath.Join(s.str.Dir(), snapNew+".db-wal")
 
 		if db.IsValidSQLiteWALFile(snapNewWAL) {
-			// Double-check that the previous snapshot is a valid SQLite file.
-			if !db.IsValidSQLiteFile(snapPrevDB) {
-				return fmt.Errorf("pre-existing data is not a SQLite file: %s", snapPrevDB)
-			}
-			// It is, so rename it and replay the WAL into it.
+			// Rename previous SQLite file and replay the WAL into it.
 			if err := os.Rename(snapPrevDB, snapNewDB); err != nil {
 				return err
 			}
 			if err := db.ReplayWAL(snapNewDB, []string{snapNewWAL}, false); err != nil {
 				return err
 			}
-		} else if !db.IsValidSQLiteFile(snapNewDB) {
-			// There is no valid WAL file for the latest snapshot, and no valid
-			// SQLite file for the latest snapshot. This is an invalid state.
-
-			return fmt.Errorf("no valid SQLite file or WAL file for latest snapshot")
 		}
-	} else {
-		return fmt.Errorf("unexpected number of snapshots: %d", len(snapshots))
 	}
 
 	s.str.Reap()
