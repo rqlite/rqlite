@@ -24,7 +24,7 @@ type Sink struct {
 
 	snapTmpDirPath string
 	dataFD         *os.File
-	closed         bool
+	opened         bool
 }
 
 // NewSink creates a new Sink object.
@@ -37,6 +37,11 @@ func NewSink(str *Store, meta *raft.SnapshotMeta) *Sink {
 
 // Open opens the sink for writing.
 func (s *Sink) Open() error {
+	if s.opened {
+		return nil
+	}
+	s.opened = true
+
 	// Make temp snapshot directory
 	s.snapTmpDirPath = filepath.Join(s.str.Dir(), tmpName(s.meta.ID))
 	if err := os.MkdirAll(s.snapTmpDirPath, 0755); err != nil {
@@ -66,25 +71,25 @@ func (s *Sink) ID() string {
 // Cancel cancels the snapshot. Cancel must be called if the snapshot is not
 // going to be closed.
 func (s *Sink) Cancel() error {
-	if s.dataFD != nil {
-		if err := s.dataFD.Close(); err != nil {
-			return err
-		}
-		s.dataFD = nil
+	if !s.opened {
+		return nil
 	}
+	s.opened = false
+	if err := s.dataFD.Close(); err != nil {
+		return err
+	}
+	s.dataFD = nil
 	return RemoveAllTmpSnapshotData(s.str.Dir())
 }
 
 // Close closes the sink, and finalizes creation of the snapshot. It is critical
 // that Close is called, or the snapshot will not be in place.
 func (s *Sink) Close() error {
-	if s.closed {
+	if !s.opened {
 		return nil
 	}
-	s.closed = true
-	if s.dataFD == nil {
-		return nil
-	}
+	s.opened = false
+
 	if err := s.dataFD.Close(); err != nil {
 		return err
 	}
