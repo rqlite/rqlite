@@ -160,17 +160,19 @@ func (s *Sink) processSnapshotData() (retErr error) {
 		snapNewWAL := filepath.Join(s.str.Dir(), snapNew+".db-wal")
 
 		if db.IsValidSQLiteWALFile(snapNewWAL) {
+			openCloseDB := func(path string) error {
+				d, err := db.Open(path, false, true)
+				if err != nil {
+					return err
+				}
+				return d.Close()
+			}
 			// The most recent snapshot was created from a WAL file, so we need to replay
-			// that WAL file into the previous SQLite file. We do this by opening the
-			// previous SQLite file in DELETE mode, and then closing it again.
+			// that WAL file into the previous SQLite file.
 			if err := os.Rename(snapPrevDB, snapNewDB); err != nil {
 				return err
 			}
-			db, err := db.Open(snapNewDB, false, false)
-			if err != nil {
-				return err
-			}
-			if err := db.Close(); err != nil {
+			if err := openCloseDB(snapNewDB); err != nil {
 				return err
 			}
 		}
