@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/raft"
+	"github.com/rqlite/rqlite/db"
 )
 
 const (
@@ -47,11 +48,19 @@ type Store struct {
 
 // NewStore returns a new Snapshot Store.
 func NewStore(dir string) (*Store, error) {
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return nil, err
+	}
+
 	str := &Store{
 		dir:    dir,
 		logger: log.New(os.Stderr, "[snapshot-store] ", log.LstdFlags),
 	}
-	str.logger.Printf("store initialized in %s", dir)
+	str.logger.Printf("store initialized using %s", dir)
+
+	if err := str.check(); err != nil {
+		return nil, fmt.Errorf("check failed: %s", err)
+	}
 	return str, nil
 }
 
@@ -139,6 +148,58 @@ func (s *Store) Reap() (int, error) {
 // Dir returns the directory where the snapshots are stored.
 func (s *Store) Dir() string {
 	return s.dir
+}
+
+// check checks the Store for any inconsistencies, and repairs
+// any inconsistencies it finds. Inconsistencies can happen
+// if the system crashes during snapshotting.
+func (s *Store) check() (retError error) {
+	defer func() {
+		syncDirMaybe(s.dir)
+		s.logger.Printf("check complete")
+	}()
+	s.logger.Printf("checking snapshot store at %s", s.dir)
+
+	if err := RemoveAllTmpSnapshotData(s.dir); err != nil {
+		return err
+	}
+
+	snapshots, err := s.getSnapshots()
+	if err != nil {
+		return err
+	}
+	if len(snapshots) == 0 {
+		// Nothing to do!
+		return nil
+	} else if len(snapshots) == 1 {
+		// We only have one snapshot. Confirm we have a valid SQLite file
+		// for that snapshot.
+		snap := snapshots[0]
+		snapDB := filepath.Join(s.dir, snap+".db")
+		if !db.IsValidSQLiteFile(snapDB) {
+			return fmt.Errorf("sole snapshot data is not a valid SQLite file: %s", snap)
+		}
+	} else {
+		// Do we have a valid SQLite file for the most recent snapshot?
+		snap := snapshots[len(snapshots)-1]
+		snapDB := filepath.Join(s.dir, snap+".db")
+		if db.IsValidSQLiteFile(snapDB) {
+			// Open and close it, which will replay any WAL file into it.
+			return openCloseDB(snapDB)
+		}
+		// We better have a SQLite file for the previous snapshot.
+		snapPrev := snapshots[len(snapshots)-2]
+		snapPrevDB := filepath.Join(s.dir, snapPrev+".db")
+		if !db.IsValidSQLiteFile(snapPrevDB) {
+			return fmt.Errorf("previous snapshot data is not a SQLite file: %s", snapPrev)
+		}
+		// Rename the previous SQLite file to the current snapshot, and then replay any WAL file into it.
+		if err := os.Rename(snapPrevDB, snapDB); err != nil {
+			return err
+		}
+		return openCloseDB(snapDB)
+	}
+	return nil
 }
 
 // getSnapshots returns a list of all snapshots in the store, sorted
@@ -290,4 +351,12 @@ func writeMeta(dir string, meta *raft.SnapshotMeta) error {
 		return err
 	}
 	return fh.Close()
+}
+
+func openCloseDB(path string) error {
+	d, err := db.Open(path, false, true)
+	if err != nil {
+		return err
+	}
+	return d.Close()
 }
