@@ -157,6 +157,19 @@ func (s *Store) getSnapshots() ([]string, error) {
 	return snapshots, nil
 }
 
+// getDBPath returns the path to the database file for the most recent snapshot.
+// It is mostly useful for testing.
+func (s *Store) getDBPath() (string, error) {
+	snapshots, err := s.getSnapshots()
+	if err != nil {
+		return "", err
+	}
+	if len(snapshots) == 0 {
+		return "", nil
+	}
+	return filepath.Join(s.dir, snapshots[len(snapshots)-1]+".db"), nil
+}
+
 // RemoveAllTmpSnapshotData removes all temporary Snapshot data from the directory.
 // This process is defined as follows: for every directory in dir, if the directory
 // is a temporary directory, remove the directory. Then remove all other files

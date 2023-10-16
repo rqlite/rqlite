@@ -2,11 +2,14 @@ package snapshot2
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"os"
 	"testing"
 
 	"github.com/hashicorp/raft"
+	"github.com/rqlite/rqlite/command/encoding"
+	"github.com/rqlite/rqlite/db"
 )
 
 func Test_NewSinkCancel(t *testing.T) {
@@ -181,6 +184,62 @@ func Test_SinkWALSnapshotEmptyStoreFail(t *testing.T) {
 	}
 }
 
+// Test_SinkCreateFullThenWALSnapshots performs detailed testing of the
+// snapshot creation process. It is critical that snapshots are created
+// correctly, so this test is thorough.
+func Test_SinkCreateFullThenWALSnapshots(t *testing.T) {
+	store := mustStore(t)
+	sink := NewSink(store, makeRaftMeta("snap-1234", 3, 2, 1))
+	if sink == nil {
+		t.Fatalf("Failed to create new sink")
+	}
+	if err := sink.Open(); err != nil {
+		t.Fatalf("Failed to open sink: %v", err)
+	}
+
+	createSnapshot := func(id string, index, term, cfgIndex uint64, file string) {
+		sink = NewSink(store, makeRaftMeta(id, index, term, cfgIndex))
+		if sink == nil {
+			t.Fatalf("Failed to create new sink")
+		}
+		if err := sink.Open(); err != nil {
+			t.Fatalf("Failed to open sink: %v", err)
+		}
+		wal := mustOpenFile(t, file)
+		defer wal.Close()
+		_, err := io.Copy(sink, wal)
+		if err != nil {
+			t.Fatalf("Failed to copy WAL file: %v", err)
+		}
+		if err := sink.Close(); err != nil {
+			t.Fatalf("Failed to close sink: %v", err)
+		}
+	}
+	createSnapshot("snap-1234", 3, 2, 1, "testdata/db-and-wals/backup.db")
+	createSnapshot("snap-2345", 4, 3, 2, "testdata/db-and-wals/wal-00")
+	createSnapshot("snap-3456", 5, 4, 3, "testdata/db-and-wals/wal-01")
+	createSnapshot("snap-4567", 6, 5, 4, "testdata/db-and-wals/wal-02")
+	createSnapshot("snap-5678", 7, 6, 5, "testdata/db-and-wals/wal-03")
+
+	// Check the database state inside the Store.
+	dbPath, err := store.getDBPath()
+	if err != nil {
+		t.Fatalf("Failed to get DB path: %v", err)
+	}
+	checkDB, err := db.Open(dbPath, false, true)
+	if err != nil {
+		t.Fatalf("failed to open database at %s: %s", dbPath, err)
+	}
+	defer checkDB.Close()
+	rows, err := checkDB.QueryStringStmt("SELECT COUNT(*) FROM foo")
+	if err != nil {
+		t.Fatalf("failed to query database: %s", err)
+	}
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[4]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("unexpected results for query exp: %s got: %s", exp, got)
+	}
+}
+
 func compareMetas(t *testing.T, m1, m2 *raft.SnapshotMeta) {
 	t.Helper()
 	if m1.ID != m2.ID {
@@ -255,4 +314,13 @@ func mustGetFileSize(t *testing.T, path string) int64 {
 		t.Fatalf("Failed to stat file: %v", err)
 	}
 	return stat.Size()
+}
+
+func asJSON(v interface{}) string {
+	enc := encoding.Encoder{}
+	b, err := enc.JSONMarshal(v)
+	if err != nil {
+		panic(fmt.Sprintf("failed to JSON marshal value: %s", err.Error()))
+	}
+	return string(b)
 }
