@@ -1700,23 +1700,14 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 	s.logger.Printf("initiating node restore on node ID %s", s.raftID)
 	startT := time.Now()
 
-	strHdr, _, err := snapshot.NewStreamHeaderFromReader(rc)
-	if err != nil {
-		return fmt.Errorf("error reading stream header: %v", err)
-	}
-
-	fullSnap := strHdr.GetFullSnapshot()
-	if fullSnap == nil {
-		return fmt.Errorf("got nil FullSnapshot")
-	}
-
 	tmpFile, err := os.CreateTemp(filepath.Dir(s.db.Path()), "rqlite-restore-*")
 	if tmpFile.Close(); err != nil {
 		return fmt.Errorf("error creating temporary file for restore operation: %v", err)
 	}
 	defer os.Remove(tmpFile.Name())
-	if err := snapshot.ReplayDB(fullSnap, rc, tmpFile.Name()); err != nil {
-		return fmt.Errorf("error replaying DB: %v", err)
+	_, err = io.Copy(tmpFile, rc)
+	if err != nil {
+		return fmt.Errorf("error copying restore data: %v", err)
 	}
 
 	// Must wipe out all pre-existing state if being asked to do a restore.
@@ -1909,19 +1900,19 @@ func RecoverNode(dataDir string, logger *log.Logger, logs raft.LogStore, stable 
 	// Now, create a temporary database. If there is a snapshot, we will read data from
 	// that snapshot into it.
 	tmpDBPath := filepath.Join(dataDir, "recovery.db")
-	if err := os.WriteFile(tmpDBPath, nil, 0660); err != nil {
+	tmpDBPathFD, err := os.Create(tmpDBPath)
+	if err != nil {
 		return fmt.Errorf("failed to create temporary recovery database file: %s", err)
 	}
 	defer os.Remove(tmpDBPath)
 
 	// Attempt to restore any latest snapshot.
 	var (
-		snapshotIndex  uint64
-		snapshotTerm   uint64
-		snapshots, err = snaps.List()
+		snapshotIndex uint64
+		snapshotTerm  uint64
 	)
 
-	snapshots, err = snaps.List()
+	snapshots, err := snaps.List()
 	if err != nil {
 		return fmt.Errorf("failed to list snapshots: %s", err)
 	}
@@ -1935,16 +1926,12 @@ func RecoverNode(dataDir string, logger *log.Logger, logs raft.LogStore, stable 
 			}
 			defer rc.Close()
 
-			strHdr, _, err := snapshot.NewStreamHeaderFromReader(rc)
+			_, err = io.Copy(tmpDBPathFD, rc)
 			if err != nil {
-				return fmt.Errorf("error reading stream header during recovery: %v", err)
+				return fmt.Errorf("error copying snapshot data during recovery: %v", err)
 			}
-			fullSnap := strHdr.GetFullSnapshot()
-			if fullSnap == nil {
-				return fmt.Errorf("got nil FullSnapshot during recovery")
-			}
-			if err := snapshot.ReplayDB(fullSnap, rc, tmpDBPath); err != nil {
-				return fmt.Errorf("error replaying DB during recovery: %v", err)
+			if err := tmpDBPathFD.Close(); err != nil {
+				return fmt.Errorf("error closing temporary database file during recovery: %v", err)
 			}
 			snapshotIndex = snapshots[0].Index
 			snapshotTerm = snapshots[0].Term
@@ -1952,7 +1939,6 @@ func RecoverNode(dataDir string, logger *log.Logger, logs raft.LogStore, stable 
 		}(); err != nil {
 			return err
 		}
-
 	}
 
 	// Now, open the database so we can replay any outstanding Raft log entries.
