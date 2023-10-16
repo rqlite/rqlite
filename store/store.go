@@ -437,7 +437,7 @@ func (s *Store) Open() (retErr error) {
 	s.logger.Printf("first log index: %d, last log index: %d, last applied index: %d, last command log index: %d:",
 		s.firstIdxOnOpen, s.lastIdxOnOpen, s.lastAppliedIdxOnOpen, s.lastCommandIdxOnOpen)
 
-	s.db, err = createOnDisk(nil, s.dbPath, s.dbConf.FKConstraints, !s.dbConf.DisableWAL)
+	s.db, err = createOnDisk(nil, s.dbPath, s.dbConf.FKConstraints, true)
 	if err != nil {
 		return fmt.Errorf("failed to create on-disk database: %s", err)
 	}
@@ -566,18 +566,16 @@ func (s *Store) Close(wait bool) (retErr error) {
 		return err
 	}
 
-	// If in WAL mode, open-and-close again to remove the -wal file. This is not
+	// Open-and-close again to remove the -wal file. This is not
 	// strictly necessary, since any on-disk database files will be removed when
 	// rqlite next starts, but it leaves the directory containing the database
 	// file in a cleaner state.
-	if !s.dbConf.DisableWAL {
-		walDB, err := sql.Open(s.dbPath, s.dbConf.FKConstraints, true)
-		if err != nil {
-			return err
-		}
-		if err := walDB.Close(); err != nil {
-			return err
-		}
+	walDB, err := sql.Open(s.dbPath, s.dbConf.FKConstraints, true)
+	if err != nil {
+		return err
+	}
+	if err := walDB.Close(); err != nil {
+		return err
 	}
 
 	return nil
@@ -1733,7 +1731,7 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 	}
 
 	var db *sql.DB
-	db, err = sql.Open(s.dbPath, s.dbConf.FKConstraints, !s.dbConf.DisableWAL)
+	db, err = sql.Open(s.dbPath, s.dbConf.FKConstraints, true)
 	if err != nil {
 		return fmt.Errorf("open SQLite file during restore: %s", err)
 	}
