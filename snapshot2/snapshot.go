@@ -22,6 +22,7 @@ func NewSnapshot(rc io.ReadCloser) *Snapshot {
 
 // Persist writes the snapshot to the given sink.
 func (s *Snapshot) Persist(sink raft.SnapshotSink) error {
+	defer s.rc.Close()
 	startT := time.Now()
 
 	n, err := io.Copy(sink, s.rc)
@@ -36,6 +37,4 @@ func (s *Snapshot) Persist(sink raft.SnapshotSink) error {
 }
 
 // Release releases the snapshot.
-func (s *Snapshot) Release() {
-	s.rc.Close()
-}
+func (s *Snapshot) Release() {}
