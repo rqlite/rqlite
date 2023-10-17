@@ -1920,13 +1920,8 @@ func RecoverNode(dataDir string, logger *log.Logger, logs raft.LogStore, stable 
 		return err
 	}
 
-	// Now, create a temporary database. If there is a snapshot, we will read data from
-	// that snapshot into it.
+	// Get a path to a temporary file to use for a temporary database.
 	tmpDBPath := filepath.Join(dataDir, "recovery.db")
-	tmpDBPathFD, err := os.Create(tmpDBPath)
-	if err != nil {
-		return fmt.Errorf("failed to create temporary recovery database file: %s", err)
-	}
 	defer os.Remove(tmpDBPath)
 
 	// Attempt to restore any latest snapshot.
@@ -1948,13 +1943,9 @@ func RecoverNode(dataDir string, logger *log.Logger, logs raft.LogStore, stable 
 				return fmt.Errorf("failed to open snapshot %s: %s", snapID, err)
 			}
 			defer rc.Close()
-
-			_, err = io.Copy(tmpDBPathFD, rc)
+			_, err = copyFileFromReader(tmpDBPath, rc)
 			if err != nil {
-				return fmt.Errorf("error copying snapshot data during recovery: %v", err)
-			}
-			if err := tmpDBPathFD.Close(); err != nil {
-				return fmt.Errorf("error closing temporary database file during recovery: %v", err)
+				return fmt.Errorf("failed to copy snapshot %s to temporary database: %s", snapID, err)
 			}
 			snapshotIndex = snapshots[0].Index
 			snapshotTerm = snapshots[0].Term
@@ -2191,6 +2182,15 @@ func createOnDisk(b []byte, path string, fkConstraints, wal bool) (*sql.DB, erro
 		}
 	}
 	return sql.Open(path, fkConstraints, wal)
+}
+
+func copyFileFromReader(path string, r io.Reader) (int64, error) {
+	fd, err := os.Create(path)
+	if err != nil {
+		return 0, err
+	}
+	defer fd.Close()
+	return io.Copy(fd, r)
 }
 
 // prettyVoter converts bool to "voter" or "non-voter"

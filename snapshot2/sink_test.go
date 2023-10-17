@@ -189,16 +189,8 @@ func Test_SinkWALSnapshotEmptyStoreFail(t *testing.T) {
 // correctly, so this test is thorough.
 func Test_SinkCreateFullThenWALSnapshots(t *testing.T) {
 	store := mustStore(t)
-	sink := NewSink(store, makeRaftMeta("snap-1234", 3, 2, 1))
-	if sink == nil {
-		t.Fatalf("Failed to create new sink")
-	}
-	if err := sink.Open(); err != nil {
-		t.Fatalf("Failed to open sink: %v", err)
-	}
-
 	createSnapshot := func(id string, index, term, cfgIndex uint64, file string) {
-		sink = NewSink(store, makeRaftMeta(id, index, term, cfgIndex))
+		sink := NewSink(store, makeRaftMeta(id, index, term, cfgIndex))
 		if sink == nil {
 			t.Fatalf("Failed to create new sink")
 		}
