@@ -1704,17 +1704,24 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 	s.logger.Printf("initiating node restore on node ID %s", s.raftID)
 	startT := time.Now()
 
+	// Create a scatch file to write the restore data to it.
 	tmpFile, err := os.CreateTemp(filepath.Dir(s.db.Path()), "rqlite-restore-*")
-	if tmpFile.Close(); err != nil {
+	if err != nil {
 		return fmt.Errorf("error creating temporary file for restore operation: %v", err)
 	}
 	defer os.Remove(tmpFile.Name())
+
+	// Copy it from the reader to the temporary file.
 	_, err = io.Copy(tmpFile, rc)
 	if err != nil {
 		return fmt.Errorf("error copying restore data: %v", err)
 	}
+	if tmpFile.Close(); err != nil {
+		return fmt.Errorf("error creating temporary file for restore operation: %v", err)
+	}
 
-	// Must wipe out all pre-existing state if being asked to do a restore.
+	// Must wipe out all pre-existing state if being asked to do a restore, and put
+	// the new database in place.
 	if err := s.db.Close(); err != nil {
 		return fmt.Errorf("failed to close pre-restore database: %s", err)
 	}
