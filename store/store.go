@@ -104,7 +104,6 @@ const (
 	snapshotCreateDuration  = "snapshot_create_duration"
 	snapshotPersistDuration = "snapshot_persist_duration"
 	snapshotWALSize         = "snapshot_wal_size"
-	snapshotDBOnDiskSize    = "snapshot_db_ondisk_size"
 	leaderChangesObserved   = "leader_changes_observed"
 	leaderChangesDropped    = "leader_changes_dropped"
 	failedHeartbeatObserved = "failed_heartbeat_observed"
@@ -142,7 +141,6 @@ func ResetStats() {
 	stats.Add(snapshotCreateDuration, 0)
 	stats.Add(snapshotPersistDuration, 0)
 	stats.Add(snapshotWALSize, 0)
-	stats.Add(snapshotDBOnDiskSize, 0)
 	stats.Add(leaderChangesObserved, 0)
 	stats.Add(leaderChangesDropped, 0)
 	stats.Add(failedHeartbeatObserved, 0)

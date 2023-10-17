@@ -19,10 +19,8 @@ import (
 )
 
 const (
-	persistSize             = "latest_persist_size"
-	persistDuration         = "latest_persist_duration"
-	reap_snapshots_duration = "reap_snapshots_duration"
-	numSnapshotsReaped      = "num_snapshots_reaped"
+	persistSize     = "latest_persist_size"
+	persistDuration = "latest_persist_duration"
 )
 
 const (
@@ -43,8 +41,6 @@ func ResetStats() {
 	stats.Init()
 	stats.Add(persistSize, 0)
 	stats.Add(persistDuration, 0)
-	stats.Add(reap_snapshots_duration, 0)
-	stats.Add(numSnapshotsReaped, 0)
 }
 
 // LockingSink is a wrapper around a SnapshotSink that ensures that the
