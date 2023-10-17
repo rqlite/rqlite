@@ -4,6 +4,7 @@
 package store
 
 import (
+	"bytes"
 	"errors"
 	"expvar"
 	"fmt"
@@ -23,7 +24,7 @@ import (
 	"github.com/rqlite/rqlite/command/chunking"
 	sql "github.com/rqlite/rqlite/db"
 	rlog "github.com/rqlite/rqlite/log"
-	"github.com/rqlite/rqlite/snapshot"
+	"github.com/rqlite/rqlite/snapshot2"
 )
 
 var (
@@ -62,6 +63,7 @@ var (
 )
 
 const (
+	restoreScratchPattern      = "rqlite-restore-*"
 	raftDBPath                 = "raft.db" // Changing this will break backwards compatibility.
 	peersPath                  = "raft/peers.json"
 	peersInfoPath              = "raft/peers.info"
@@ -151,9 +153,6 @@ func ResetStats() {
 // SnapshotStore is the interface Snapshot stores must implement.
 type SnapshotStore interface {
 	raft.SnapshotStore
-
-	// FullNeeded returns whether the Snapshot Store needs a full snapshot.
-	FullNeeded() bool
 
 	// Stats returns stats about the Snapshot Store.
 	Stats() (map[string]interface{}, error)
@@ -388,12 +387,12 @@ func (s *Store) Open() (retErr error) {
 	// Upgrade any pre-existing snapshots.
 	oldSnapshotDir := filepath.Join(s.raftDir, "snapshots")
 	snapshotDir := filepath.Join(s.raftDir, "rsnapshots")
-	if err := snapshot.Upgrade(oldSnapshotDir, snapshotDir, s.logger); err != nil {
+	if err := snapshot2.Upgrade(oldSnapshotDir, snapshotDir, s.logger); err != nil {
 		return fmt.Errorf("failed to upgrade snapshots: %s", err)
 	}
 
 	// Create store for the Snapshots.
-	snapshotStore, err := snapshot.NewStore(filepath.Join(snapshotDir))
+	snapshotStore, err := snapshot2.NewStore(filepath.Join(snapshotDir))
 	if err != nil {
 		return fmt.Errorf("failed to create snapshot store: %s", err)
 	}
@@ -439,11 +438,22 @@ func (s *Store) Open() (retErr error) {
 	s.logger.Printf("first log index: %d, last log index: %d, last applied index: %d, last command log index: %d:",
 		s.firstIdxOnOpen, s.lastIdxOnOpen, s.lastAppliedIdxOnOpen, s.lastCommandIdxOnOpen)
 
-	s.db, err = createOnDisk(nil, s.dbPath, s.dbConf.FKConstraints, !s.dbConf.DisableWAL)
+	s.db, err = createOnDisk(nil, s.dbPath, s.dbConf.FKConstraints, true)
 	if err != nil {
 		return fmt.Errorf("failed to create on-disk database: %s", err)
 	}
 	s.logger.Printf("created on-disk database at open")
+
+	// Clean up any files from aborted restores.
+	files, err := filepath.Glob(filepath.Join(s.db.Path(), restoreScratchPattern))
+	if err != nil {
+		return fmt.Errorf("failed to locate temporary restore files: %s", err.Error())
+	}
+	for _, f := range files {
+		if err := os.Remove(f); err != nil {
+			return fmt.Errorf("failed to remove temporary restore file %s: %s", f, err.Error())
+		}
+	}
 
 	// Instantiate the Raft system.
 	ra, err := raft.NewRaft(config, s, s.raftLog, s.raftStable, s.snapshotStore, s.raftTn)
@@ -568,18 +578,16 @@ func (s *Store) Close(wait bool) (retErr error) {
 		return err
 	}
 
-	// If in WAL mode, open-and-close again to remove the -wal file. This is not
+	// Open-and-close again to remove the -wal file. This is not
 	// strictly necessary, since any on-disk database files will be removed when
 	// rqlite next starts, but it leaves the directory containing the database
 	// file in a cleaner state.
-	if !s.dbConf.DisableWAL {
-		walDB, err := sql.Open(s.dbPath, s.dbConf.FKConstraints, true)
-		if err != nil {
-			return err
-		}
-		if err := walDB.Close(); err != nil {
-			return err
-		}
+	walDB, err := sql.Open(s.dbPath, s.dbConf.FKConstraints, true)
+	if err != nil {
+		return err
+	}
+	if err := walDB.Close(); err != nil {
+		return err
 	}
 
 	return nil
@@ -1642,8 +1650,13 @@ func (s *Store) Database(leader bool) ([]byte, error) {
 func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 	startT := time.Now()
 
-	fNeeded := s.snapshotStore.FullNeeded()
-	fPLog := fullPretty(fNeeded)
+	currSnaps, err := s.snapshotStore.List()
+	if err != nil {
+		return nil, err
+	}
+	fullNeeded := len(currSnaps) == 0
+
+	fPLog := fullPretty(fullNeeded)
 	s.logger.Printf("initiating %s snapshot on node ID %s", fPLog, s.raftID)
 	defer func() {
 		s.numSnapshotsMu.Lock()
@@ -1655,11 +1668,15 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 	defer s.queryTxMu.Unlock()
 
 	var fsmSnapshot raft.FSMSnapshot
-	if fNeeded {
+	if fullNeeded {
 		if err := s.db.Checkpoint(); err != nil {
 			return nil, err
 		}
-		fsmSnapshot = snapshot.NewFullSnapshot(s.db.Path())
+		dbFD, err := os.Open(s.db.Path())
+		if err != nil {
+			return nil, err
+		}
+		fsmSnapshot = snapshot2.NewSnapshot(dbFD)
 		stats.Add(numSnapshotsFull, 1)
 	} else {
 		var b []byte
@@ -1675,7 +1692,7 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 				return nil, err
 			}
 		}
-		fsmSnapshot = snapshot.NewWALSnapshot(b)
+		fsmSnapshot = snapshot2.NewSnapshot(io.NopCloser(bytes.NewBuffer(b)))
 		if err != nil {
 			return nil, err
 		}
@@ -1699,26 +1716,24 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 	s.logger.Printf("initiating node restore on node ID %s", s.raftID)
 	startT := time.Now()
 
-	strHdr, _, err := snapshot.NewStreamHeaderFromReader(rc)
+	// Create a scatch file to write the restore data to it.
+	tmpFile, err := os.CreateTemp(filepath.Dir(s.db.Path()), restoreScratchPattern)
 	if err != nil {
-		return fmt.Errorf("error reading stream header: %v", err)
-	}
-
-	fullSnap := strHdr.GetFullSnapshot()
-	if fullSnap == nil {
-		return fmt.Errorf("got nil FullSnapshot")
-	}
-
-	tmpFile, err := os.CreateTemp(filepath.Dir(s.db.Path()), "rqlite-restore-*")
-	if tmpFile.Close(); err != nil {
 		return fmt.Errorf("error creating temporary file for restore operation: %v", err)
 	}
 	defer os.Remove(tmpFile.Name())
-	if err := snapshot.ReplayDB(fullSnap, rc, tmpFile.Name()); err != nil {
-		return fmt.Errorf("error replaying DB: %v", err)
+
+	// Copy it from the reader to the temporary file.
+	_, err = io.Copy(tmpFile, rc)
+	if err != nil {
+		return fmt.Errorf("error copying restore data: %v", err)
+	}
+	if tmpFile.Close(); err != nil {
+		return fmt.Errorf("error creating temporary file for restore operation: %v", err)
 	}
 
-	// Must wipe out all pre-existing state if being asked to do a restore.
+	// Must wipe out all pre-existing state if being asked to do a restore, and put
+	// the new database in place.
 	if err := s.db.Close(); err != nil {
 		return fmt.Errorf("failed to close pre-restore database: %s", err)
 	}
@@ -1730,7 +1745,7 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 	}
 
 	var db *sql.DB
-	db, err = sql.Open(s.dbPath, s.dbConf.FKConstraints, !s.dbConf.DisableWAL)
+	db, err = sql.Open(s.dbPath, s.dbConf.FKConstraints, true)
 	if err != nil {
 		return fmt.Errorf("open SQLite file during restore: %s", err)
 	}
@@ -1905,22 +1920,17 @@ func RecoverNode(dataDir string, logger *log.Logger, logs raft.LogStore, stable 
 		return err
 	}
 
-	// Now, create a temporary database. If there is a snapshot, we will read data from
-	// that snapshot into it.
+	// Get a path to a temporary file to use for a temporary database.
 	tmpDBPath := filepath.Join(dataDir, "recovery.db")
-	if err := os.WriteFile(tmpDBPath, nil, 0660); err != nil {
-		return fmt.Errorf("failed to create temporary recovery database file: %s", err)
-	}
 	defer os.Remove(tmpDBPath)
 
 	// Attempt to restore any latest snapshot.
 	var (
-		snapshotIndex  uint64
-		snapshotTerm   uint64
-		snapshots, err = snaps.List()
+		snapshotIndex uint64
+		snapshotTerm  uint64
 	)
 
-	snapshots, err = snaps.List()
+	snapshots, err := snaps.List()
 	if err != nil {
 		return fmt.Errorf("failed to list snapshots: %s", err)
 	}
@@ -1933,17 +1943,9 @@ func RecoverNode(dataDir string, logger *log.Logger, logs raft.LogStore, stable 
 				return fmt.Errorf("failed to open snapshot %s: %s", snapID, err)
 			}
 			defer rc.Close()
-
-			strHdr, _, err := snapshot.NewStreamHeaderFromReader(rc)
+			_, err = copyFromReaderToFile(tmpDBPath, rc)
 			if err != nil {
-				return fmt.Errorf("error reading stream header during recovery: %v", err)
-			}
-			fullSnap := strHdr.GetFullSnapshot()
-			if fullSnap == nil {
-				return fmt.Errorf("got nil FullSnapshot during recovery")
-			}
-			if err := snapshot.ReplayDB(fullSnap, rc, tmpDBPath); err != nil {
-				return fmt.Errorf("error replaying DB during recovery: %v", err)
+				return fmt.Errorf("failed to copy snapshot %s to temporary database: %s", snapID, err)
 			}
 			snapshotIndex = snapshots[0].Index
 			snapshotTerm = snapshots[0].Term
@@ -1951,7 +1953,6 @@ func RecoverNode(dataDir string, logger *log.Logger, logs raft.LogStore, stable 
 		}(); err != nil {
 			return err
 		}
-
 	}
 
 	// Now, open the database so we can replay any outstanding Raft log entries.
@@ -1996,7 +1997,11 @@ func RecoverNode(dataDir string, logger *log.Logger, logs raft.LogStore, stable 
 	if err := db.Checkpoint(); err != nil {
 		return fmt.Errorf("failed to checkpoint database: %s", err)
 	}
-	fsmSnapshot := snapshot.NewFullSnapshot(tmpDBPath) // tmpDBPath contains full state now.
+	tmpDBFD, err := os.Open(tmpDBPath)
+	if err != nil {
+		return fmt.Errorf("failed to open temporary database file: %s", err)
+	}
+	fsmSnapshot := snapshot2.NewSnapshot(tmpDBFD) // tmpDBPath contains full state now.
 	sink, err := snaps.Create(1, lastIndex, lastTerm, conf, 1, tn)
 	if err != nil {
 		return fmt.Errorf("failed to create snapshot: %v", err)
@@ -2177,6 +2182,15 @@ func createOnDisk(b []byte, path string, fkConstraints, wal bool) (*sql.DB, erro
 		}
 	}
 	return sql.Open(path, fkConstraints, wal)
+}
+
+func copyFromReaderToFile(path string, r io.Reader) (int64, error) {
+	fd, err := os.Create(path)
+	if err != nil {
+		return 0, err
+	}
+	defer fd.Close()
+	return io.Copy(fd, r)
 }
 
 // prettyVoter converts bool to "voter" or "non-voter"

@@ -1,4 +1,4 @@
-package snapshot
+package snapshot2
 
 import (
 	"fmt"
@@ -38,21 +38,11 @@ func Test_Upgrade_OK(t *testing.T) {
 		t.Fatalf("failed to upgrade empty directories: %s", err)
 	}
 
-	// Create new SnapshotStore from the upgraded directory.
+	// Create new SnapshotStore from the upgraded directory, to verify its
+	// contents.
 	store, err := NewStore(newTemp)
 	if err != nil {
 		t.Fatalf("failed to create new snapshot store: %s", err)
-	}
-
-	currGen, ok, err := store.GetCurrentGenerationDir()
-	if err != nil {
-		t.Fatalf("failed to get current generation directory: %s", err)
-	}
-	if !ok {
-		t.Fatalf("no current generation directory")
-	}
-	if exp, got := firstGeneration, filepath.Base(currGen); exp != got {
-		t.Fatalf("expected current generation directory %s, got %s", exp, got)
 	}
 
 	snapshots, err := store.List()
