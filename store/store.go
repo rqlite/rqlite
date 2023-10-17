@@ -1943,7 +1943,7 @@ func RecoverNode(dataDir string, logger *log.Logger, logs raft.LogStore, stable 
 				return fmt.Errorf("failed to open snapshot %s: %s", snapID, err)
 			}
 			defer rc.Close()
-			_, err = copyFileFromReader(tmpDBPath, rc)
+			_, err = copyFromReaderToFile(tmpDBPath, rc)
 			if err != nil {
 				return fmt.Errorf("failed to copy snapshot %s to temporary database: %s", snapID, err)
 			}
@@ -2184,7 +2184,7 @@ func createOnDisk(b []byte, path string, fkConstraints, wal bool) (*sql.DB, erro
 	return sql.Open(path, fkConstraints, wal)
 }
 
-func copyFileFromReader(path string, r io.Reader) (int64, error) {
+func copyFromReaderToFile(path string, r io.Reader) (int64, error) {
 	fd, err := os.Create(path)
 	if err != nil {
 		return 0, err
