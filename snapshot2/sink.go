@@ -14,6 +14,7 @@ type Sink struct {
 	str  *Store
 	meta *raft.SnapshotMeta
 
+	snapDirPath    string
 	snapTmpDirPath string
 	dataFD         *os.File
 	opened         bool
@@ -35,7 +36,8 @@ func (s *Sink) Open() error {
 	s.opened = true
 
 	// Make temp snapshot directory
-	s.snapTmpDirPath = filepath.Join(s.str.Dir(), tmpName(s.meta.ID))
+	s.snapDirPath = filepath.Join(s.str.Dir(), s.meta.ID)
+	s.snapTmpDirPath = tmpName(s.snapDirPath)
 	if err := os.MkdirAll(s.snapTmpDirPath, 0755); err != nil {
 		return err
 	}
@@ -95,7 +97,20 @@ func (s *Sink) Close() error {
 		return err
 	}
 
-	_, err := s.str.Reap()
+	// Get size of SQLite file and set in meta.
+	dbPath, err := s.str.getDBPath()
+	if err != nil {
+		return err
+	}
+	fi, err := os.Stat(dbPath)
+	if err != nil {
+		return err
+	}
+	if err := updateMetaSize(s.snapDirPath, fi.Size()); err != nil {
+		return err
+	}
+
+	_, err = s.str.Reap()
 	return err
 }
 
@@ -139,7 +154,7 @@ func (s *Sink) processSnapshotData() (retErr error) {
 
 	// Indicate snapshot data been successfully persisted to disk by renaming
 	// the temp directory to a non-temporary name.
-	if err := os.Rename(s.snapTmpDirPath, nonTmpName(s.snapTmpDirPath)); err != nil {
+	if err := os.Rename(s.snapTmpDirPath, s.snapDirPath); err != nil {
 		return err
 	}
 	if err := syncDirMaybe(s.str.Dir()); err != nil {

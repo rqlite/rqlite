@@ -188,6 +188,7 @@ func (s *Store) check() (retError error) {
 		// Do we have a valid SQLite file for the most recent snapshot?
 		snap := snapshots[len(snapshots)-1]
 		snapDB := filepath.Join(s.dir, snap+".db")
+		snapDir := filepath.Join(s.dir, snap)
 		if db.IsValidSQLiteFile(snapDB) {
 			// Open and close it, which will replay any WAL file into it.
 			return openCloseDB(snapDB)
@@ -202,7 +203,18 @@ func (s *Store) check() (retError error) {
 		if err := os.Rename(snapPrevDB, snapDB); err != nil {
 			return err
 		}
-		return openCloseDB(snapDB)
+		if err := openCloseDB(snapDB); err != nil {
+			return err
+		}
+
+		// Ensure the size is set in the Snapshot's meta.
+		fi, err := os.Stat(snapDB)
+		if err != nil {
+			return err
+		}
+		if err := updateMetaSize(snapDir, fi.Size()); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -377,6 +389,7 @@ func readMeta(dir string) (*raft.SnapshotMeta, error) {
 	return meta, nil
 }
 
+// writeMeta is used to write the meta data in a given snapshot directory.
 func writeMeta(dir string, meta *raft.SnapshotMeta) error {
 	fh, err := os.Create(filepath.Join(dir, metaFileName))
 	if err != nil {
@@ -394,6 +407,16 @@ func writeMeta(dir string, meta *raft.SnapshotMeta) error {
 		return err
 	}
 	return fh.Close()
+}
+
+func updateMetaSize(dir string, sz int64) error {
+	meta, err := readMeta(dir)
+	if err != nil {
+		return err
+	}
+
+	meta.Size = sz
+	return writeMeta(dir, meta)
 }
 
 func openCloseDB(path string) error {
