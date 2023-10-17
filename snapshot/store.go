@@ -1,4 +1,4 @@
-package snapshot2
+package snapshot
 
 import (
 	"encoding/json"

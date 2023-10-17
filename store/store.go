@@ -24,7 +24,7 @@ import (
 	"github.com/rqlite/rqlite/command/chunking"
 	sql "github.com/rqlite/rqlite/db"
 	rlog "github.com/rqlite/rqlite/log"
-	"github.com/rqlite/rqlite/snapshot2"
+	"github.com/rqlite/rqlite/snapshot"
 )
 
 var (
@@ -387,12 +387,12 @@ func (s *Store) Open() (retErr error) {
 	// Upgrade any pre-existing snapshots.
 	oldSnapshotDir := filepath.Join(s.raftDir, "snapshots")
 	snapshotDir := filepath.Join(s.raftDir, "rsnapshots")
-	if err := snapshot2.Upgrade(oldSnapshotDir, snapshotDir, s.logger); err != nil {
+	if err := snapshot.Upgrade(oldSnapshotDir, snapshotDir, s.logger); err != nil {
 		return fmt.Errorf("failed to upgrade snapshots: %s", err)
 	}
 
 	// Create store for the Snapshots.
-	snapshotStore, err := snapshot2.NewStore(filepath.Join(snapshotDir))
+	snapshotStore, err := snapshot.NewStore(filepath.Join(snapshotDir))
 	if err != nil {
 		return fmt.Errorf("failed to create snapshot store: %s", err)
 	}
@@ -1676,7 +1676,7 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 		if err != nil {
 			return nil, err
 		}
-		fsmSnapshot = snapshot2.NewSnapshot(dbFD)
+		fsmSnapshot = snapshot.NewSnapshot(dbFD)
 		stats.Add(numSnapshotsFull, 1)
 	} else {
 		var b []byte
@@ -1692,7 +1692,7 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 				return nil, err
 			}
 		}
-		fsmSnapshot = snapshot2.NewSnapshot(io.NopCloser(bytes.NewBuffer(b)))
+		fsmSnapshot = snapshot.NewSnapshot(io.NopCloser(bytes.NewBuffer(b)))
 		if err != nil {
 			return nil, err
 		}
@@ -2001,7 +2001,7 @@ func RecoverNode(dataDir string, logger *log.Logger, logs raft.LogStore, stable 
 	if err != nil {
 		return fmt.Errorf("failed to open temporary database file: %s", err)
 	}
-	fsmSnapshot := snapshot2.NewSnapshot(tmpDBFD) // tmpDBPath contains full state now.
+	fsmSnapshot := snapshot.NewSnapshot(tmpDBFD) // tmpDBPath contains full state now.
 	sink, err := snaps.Create(1, lastIndex, lastTerm, conf, 1, tn)
 	if err != nil {
 		return fmt.Errorf("failed to create snapshot: %v", err)
