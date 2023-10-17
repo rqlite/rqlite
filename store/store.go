@@ -4,6 +4,7 @@
 package store
 
 import (
+	"bytes"
 	"errors"
 	"expvar"
 	"fmt"
@@ -23,7 +24,6 @@ import (
 	"github.com/rqlite/rqlite/command/chunking"
 	sql "github.com/rqlite/rqlite/db"
 	rlog "github.com/rqlite/rqlite/log"
-	"github.com/rqlite/rqlite/snapshot"
 	"github.com/rqlite/rqlite/snapshot2"
 )
 
@@ -1660,7 +1660,11 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 		if err := s.db.Checkpoint(); err != nil {
 			return nil, err
 		}
-		fsmSnapshot = snapshot2.NewFullSnapshot(s.db.Path())
+		dbFD, err := os.Open(s.db.Path())
+		if err != nil {
+			return nil, err
+		}
+		fsmSnapshot = snapshot2.NewSnapshot(dbFD)
 		stats.Add(numSnapshotsFull, 1)
 	} else {
 		var b []byte
@@ -1676,7 +1680,7 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 				return nil, err
 			}
 		}
-		fsmSnapshot = snapshot2.NewWALSnapshot(b)
+		fsmSnapshot = snapshot2.NewSnapshot(io.NopCloser(bytes.NewBuffer(b)))
 		if err != nil {
 			return nil, err
 		}
@@ -1983,7 +1987,11 @@ func RecoverNode(dataDir string, logger *log.Logger, logs raft.LogStore, stable 
 	if err := db.Checkpoint(); err != nil {
 		return fmt.Errorf("failed to checkpoint database: %s", err)
 	}
-	fsmSnapshot := snapshot.NewFullSnapshot(tmpDBPath) // tmpDBPath contains full state now.
+	tmpDBFD, err := os.Open(tmpDBPath)
+	if err != nil {
+		return fmt.Errorf("failed to open temporary database file: %s", err)
+	}
+	fsmSnapshot := snapshot2.NewSnapshot(tmpDBFD) // tmpDBPath contains full state now.
 	sink, err := snaps.Create(1, lastIndex, lastTerm, conf, 1, tn)
 	if err != nil {
 		return fmt.Errorf("failed to create snapshot: %v", err)

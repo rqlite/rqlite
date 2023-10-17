@@ -31,6 +31,11 @@ const (
 // stats captures stats for the Store.
 var stats *expvar.Map
 
+func init() {
+	stats = expvar.NewMap("snapshot")
+	ResetStats()
+}
+
 // ResetStats resets the expvar stats for this module. Mostly for test purposes.
 func ResetStats() {
 	stats.Init()
