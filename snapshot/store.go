@@ -19,10 +19,8 @@ import (
 )
 
 const (
-	persistSize             = "latest_persist_size"
-	persistDuration         = "latest_persist_duration"
-	reap_snapshots_duration = "reap_snapshots_duration"
-	numSnapshotsReaped      = "num_snapshots_reaped"
+	persistSize     = "latest_persist_size"
+	persistDuration = "latest_persist_duration"
 )
 
 const (
@@ -43,8 +41,6 @@ func ResetStats() {
 	stats.Init()
 	stats.Add(persistSize, 0)
 	stats.Add(persistDuration, 0)
-	stats.Add(reap_snapshots_duration, 0)
-	stats.Add(numSnapshotsReaped, 0)
 }
 
 // LockingSink is a wrapper around a SnapshotSink that ensures that the
@@ -153,7 +149,23 @@ func (s *Store) Open(id string) (*raft.SnapshotMeta, io.ReadCloser, error) {
 
 // Stats returns stats about the Snapshot Store.
 func (s *Store) Stats() (map[string]interface{}, error) {
-	return nil, nil
+	snapshots, err := s.getSnapshots()
+	if err != nil {
+		return nil, err
+	}
+	snapsAsIDs := make([]string, len(snapshots))
+	for i, snap := range snapshots {
+		snapsAsIDs[i] = snap.ID
+	}
+	dbPath, err := s.getDBPath()
+	if err != nil {
+		return nil, err
+	}
+	return map[string]interface{}{
+		"dir":       s.dir,
+		"snapshots": snapsAsIDs,
+		"db_path":   dbPath,
+	}, nil
 }
 
 // Reap reaps all snapshots, except the most recent one. Returns the number of
