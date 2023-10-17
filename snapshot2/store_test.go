@@ -153,8 +153,12 @@ func Test_StoreCreateCancel(t *testing.T) {
 
 func mustTouchFile(t *testing.T, path string) {
 	t.Helper()
-	if _, err := os.Create(path); err != nil {
+	fd, err := os.Create(path)
+	if err != nil {
 		t.Fatalf("Failed to create file: %v", err)
+	}
+	if err := fd.Close(); err != nil {
+		t.Fatalf("Failed to close file: %v", err)
 	}
 }
 
