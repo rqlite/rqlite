@@ -149,7 +149,23 @@ func (s *Store) Open(id string) (*raft.SnapshotMeta, io.ReadCloser, error) {
 
 // Stats returns stats about the Snapshot Store.
 func (s *Store) Stats() (map[string]interface{}, error) {
-	return nil, nil
+	snapshots, err := s.getSnapshots()
+	if err != nil {
+		return nil, err
+	}
+	snapsAsIDs := make([]string, len(snapshots))
+	for i, snap := range snapshots {
+		snapsAsIDs[i] = snap.ID
+	}
+	dbPath, err := s.getDBPath()
+	if err != nil {
+		return nil, err
+	}
+	return map[string]interface{}{
+		"dir":       s.dir,
+		"snapshots": snapsAsIDs,
+		"db_path":   dbPath,
+	}, nil
 }
 
 // Reap reaps all snapshots, except the most recent one. Returns the number of
