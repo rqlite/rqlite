@@ -107,7 +107,7 @@ func (s *Sink) Close() error {
 		return err
 	}
 	if err := updateMetaSize(s.snapDirPath, fi.Size()); err != nil {
-		return err
+		return fmt.Errorf("failed to update snapshot meta size: %s", err.Error())
 	}
 
 	_, err = s.str.Reap()
@@ -140,7 +140,7 @@ func (s *Sink) processSnapshotData() (retErr error) {
 			// We have at least one previous snapshot. That means we should have a valid SQLite file
 			// for the previous snapshot.
 			snapPrev := snapshots[len(snapshots)-1]
-			snapPrevDB := filepath.Join(s.str.Dir(), snapPrev+".db")
+			snapPrevDB := filepath.Join(s.str.Dir(), snapPrev.ID+".db")
 			if !db.IsValidSQLiteFile(snapPrevDB) {
 				return fmt.Errorf("previous snapshot data is not a SQLite file: %s", snapPrevDB)
 			}
@@ -170,9 +170,9 @@ func (s *Sink) processSnapshotData() (retErr error) {
 	if len(snapshots) >= 2 {
 		snapPrev := snapshots[len(snapshots)-2]
 		snapNew := snapshots[len(snapshots)-1]
-		snapPrevDB := filepath.Join(s.str.Dir(), snapPrev+".db")
-		snapNewDB := filepath.Join(s.str.Dir(), snapNew+".db")
-		snapNewWAL := filepath.Join(s.str.Dir(), snapNew+".db-wal")
+		snapPrevDB := filepath.Join(s.str.Dir(), snapPrev.ID+".db")
+		snapNewDB := filepath.Join(s.str.Dir(), snapNew.ID+".db")
+		snapNewWAL := filepath.Join(s.str.Dir(), snapNew.ID+".db-wal")
 
 		if db.IsValidSQLiteWALFile(snapNewWAL) {
 			// The most recent snapshot was created from a WAL file, so we need to replay

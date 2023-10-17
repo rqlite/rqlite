@@ -26,10 +26,6 @@ func (s *Snapshot) Persist(sink raft.SnapshotSink) error {
 
 	n, err := io.Copy(sink, s.rc)
 	if err != nil {
-		sink.Cancel() // Best effort
-		return err
-	}
-	if err := sink.Close(); err != nil {
 		return err
 	}
 

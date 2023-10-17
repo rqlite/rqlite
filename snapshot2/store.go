@@ -9,7 +9,9 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/hashicorp/raft"
@@ -45,9 +47,29 @@ func ResetStats() {
 	stats.Add(numSnapshotsReaped, 0)
 }
 
+// LockingSink is a wrapper around a SnapshotSink that ensures that the
+// Store has handed out only 1 sink at a time.
+type LockingSink struct {
+	raft.SnapshotSink
+	str *Store
+}
+
+// Close closes the sink, unlocking the Store for creation of a new sink.
+func (s *LockingSink) Close() error {
+	defer s.str.sinkMu.Unlock()
+	return s.SnapshotSink.Close()
+}
+
+// Cancel cancels the sink, unlocking the Store for creation of a new sink.
+func (s *LockingSink) Cancel() error {
+	defer s.str.sinkMu.Unlock()
+	return s.SnapshotSink.Cancel()
+}
+
 // Store stores Snapshots.
 type Store struct {
 	dir    string
+	sinkMu sync.Mutex
 	logger *log.Logger
 }
 
@@ -74,7 +96,13 @@ func NewStore(dir string) (*Store, error) {
 // it could cause failures. Therefore we only allow 1 Sink to be in existence at a time. This shouldn't
 // be a problem, since snapshots are taken infrequently in one at a time.
 func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configuration raft.Configuration,
-	configurationIndex uint64, trans raft.Transport) (raft.SnapshotSink, error) {
+	configurationIndex uint64, trans raft.Transport) (retSink raft.SnapshotSink, retErr error) {
+	s.sinkMu.Lock()
+	defer func() {
+		if retErr != nil {
+			s.sinkMu.Unlock()
+		}
+	}()
 
 	meta := &raft.SnapshotMeta{
 		ID:                 snapshotName(term, index),
@@ -88,7 +116,7 @@ func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configu
 	if err := sink.Open(); err != nil {
 		return nil, err
 	}
-	return sink, nil
+	return &LockingSink{sink, s}, nil
 }
 
 // List returns a list of all the snapshots in the Store. It returns the snapshots
@@ -100,7 +128,7 @@ func (s *Store) List() ([]*raft.SnapshotMeta, error) {
 	}
 	var snapMeta []*raft.SnapshotMeta
 	if len(snapshots) > 0 {
-		snapshotDir := filepath.Join(s.dir, snapshots[0])
+		snapshotDir := filepath.Join(s.dir, snapshots[0].ID)
 		meta, err := readMeta(snapshotDir)
 		if err != nil {
 			return nil, err
@@ -141,10 +169,10 @@ func (s *Store) Reap() (int, error) {
 	// Remove all snapshots, and all associated data, except the newest one.
 	n := 0
 	for _, snap := range snapshots[:len(snapshots)-1] {
-		if err := removeAllPrefix(s.dir, snap); err != nil {
+		if err := removeAllPrefix(s.dir, snap.ID); err != nil {
 			return n, err
 		}
-		s.logger.Printf("reaped snapshot %s", snap)
+		s.logger.Printf("reaped snapshot %s", snap.ID)
 		n++
 	}
 	return n, nil
@@ -180,24 +208,24 @@ func (s *Store) check() (retError error) {
 		// We only have one snapshot. Confirm we have a valid SQLite file
 		// for that snapshot.
 		snap := snapshots[0]
-		snapDB := filepath.Join(s.dir, snap+".db")
+		snapDB := filepath.Join(s.dir, snap.ID+".db")
 		if !db.IsValidSQLiteFile(snapDB) {
-			return fmt.Errorf("sole snapshot data is not a valid SQLite file: %s", snap)
+			return fmt.Errorf("sole snapshot data is not a valid SQLite file: %s", snap.ID)
 		}
 	} else {
 		// Do we have a valid SQLite file for the most recent snapshot?
 		snap := snapshots[len(snapshots)-1]
-		snapDB := filepath.Join(s.dir, snap+".db")
-		snapDir := filepath.Join(s.dir, snap)
+		snapDB := filepath.Join(s.dir, snap.ID+".db")
+		snapDir := filepath.Join(s.dir, snap.ID)
 		if db.IsValidSQLiteFile(snapDB) {
 			// Open and close it, which will replay any WAL file into it.
 			return openCloseDB(snapDB)
 		}
 		// We better have a SQLite file for the previous snapshot.
 		snapPrev := snapshots[len(snapshots)-2]
-		snapPrevDB := filepath.Join(s.dir, snapPrev+".db")
+		snapPrevDB := filepath.Join(s.dir, snapPrev.ID+".db")
 		if !db.IsValidSQLiteFile(snapPrevDB) {
-			return fmt.Errorf("previous snapshot data is not a SQLite file: %s", snapPrev)
+			return fmt.Errorf("previous snapshot data is not a SQLite file: %s", snapPrev.ID)
 		}
 		// Rename the previous SQLite file to the current snapshot, and then replay any WAL file into it.
 		if err := os.Rename(snapPrevDB, snapDB); err != nil {
@@ -221,18 +249,39 @@ func (s *Store) check() (retError error) {
 
 // getSnapshots returns a list of all snapshots in the store, sorted
 // from oldest to newest.
-func (s *Store) getSnapshots() ([]string, error) {
-	directories, err := os.ReadDir(s.dir)
+func (s *Store) getSnapshots() ([]*raft.SnapshotMeta, error) {
+	// Get the eligible snapshots
+	snapshots, err := os.ReadDir(s.dir)
 	if err != nil {
 		return nil, err
 	}
-	var snapshots []string
-	for _, d := range directories {
-		if !isTmpName(d.Name()) && d.IsDir() {
-			snapshots = append(snapshots, d.Name())
+
+	// Populate the metadata
+	var snapMeta []*raft.SnapshotMeta
+	for _, snap := range snapshots {
+		// Ignore any files
+		if !snap.IsDir() {
+			continue
 		}
+
+		// Ignore any temporary snapshots
+		dirName := snap.Name()
+		if isTmpName(dirName) {
+			continue
+		}
+
+		// Try to read the meta data
+		meta, err := readMeta(filepath.Join(s.dir, dirName))
+		if err != nil {
+			return nil, fmt.Errorf("failed to read meta for snapshot %s: %s", dirName, err)
+		}
+
+		// Append, but only return up to the retain count
+		snapMeta = append(snapMeta, meta)
 	}
-	return snapshots, nil
+
+	sort.Sort(snapMetaSlice(snapMeta))
+	return snapMeta, nil
 }
 
 // getDBPath returns the path to the database file for the most recent snapshot.
@@ -245,7 +294,7 @@ func (s *Store) getDBPath() (string, error) {
 	if len(snapshots) == 0 {
 		return "", nil
 	}
-	return filepath.Join(s.dir, snapshots[len(snapshots)-1]+".db"), nil
+	return filepath.Join(s.dir, snapshots[len(snapshots)-1].ID+".db"), nil
 }
 
 // RemoveAllTmpSnapshotData removes all temporary Snapshot data from the directory.
@@ -425,4 +474,25 @@ func openCloseDB(path string) error {
 		return err
 	}
 	return d.Close()
+}
+
+type snapMetaSlice []*raft.SnapshotMeta
+
+// Implement the sort interface for []*fileSnapshotMeta.
+func (s snapMetaSlice) Len() int {
+	return len(s)
+}
+
+func (s snapMetaSlice) Less(i, j int) bool {
+	if s[i].Term != s[j].Term {
+		return s[i].Term < s[j].Term
+	}
+	if s[i].Index != s[j].Index {
+		return s[i].Index < s[j].Index
+	}
+	return s[i].ID < s[j].ID
+}
+
+func (s snapMetaSlice) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
 }
