@@ -63,6 +63,7 @@ var (
 )
 
 const (
+	restoreScratchPattern      = "rqlite-restore-*"
 	raftDBPath                 = "raft.db" // Changing this will break backwards compatibility.
 	peersPath                  = "raft/peers.json"
 	peersInfoPath              = "raft/peers.info"
@@ -442,6 +443,17 @@ func (s *Store) Open() (retErr error) {
 		return fmt.Errorf("failed to create on-disk database: %s", err)
 	}
 	s.logger.Printf("created on-disk database at open")
+
+	// Clean up any files from aborted restores.
+	files, err := filepath.Glob(filepath.Join(s.db.Path(), restoreScratchPattern))
+	if err != nil {
+		return fmt.Errorf("failed to locate temporary restore files: %s", err.Error())
+	}
+	for _, f := range files {
+		if err := os.Remove(f); err != nil {
+			return fmt.Errorf("failed to remove temporary restore file %s: %s", f, err.Error())
+		}
+	}
 
 	// Instantiate the Raft system.
 	ra, err := raft.NewRaft(config, s, s.raftLog, s.raftStable, s.snapshotStore, s.raftTn)
@@ -1705,7 +1717,7 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 	startT := time.Now()
 
 	// Create a scatch file to write the restore data to it.
-	tmpFile, err := os.CreateTemp(filepath.Dir(s.db.Path()), "rqlite-restore-*")
+	tmpFile, err := os.CreateTemp(filepath.Dir(s.db.Path()), restoreScratchPattern)
 	if err != nil {
 		return fmt.Errorf("error creating temporary file for restore operation: %v", err)
 	}

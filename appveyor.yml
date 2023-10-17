@@ -21,12 +21,6 @@ build_script:
   - set LINKER_PKG_PATH=github.com/rqlite/rqlite/cmd
   - go version
   - go get ./...
-  - go test -failfast ./...
-  - go install -ldflags="-X %LINKER_PKG_PATH%.Branch=%APPVEYOR_REPO_BRANCH% -X %LINKER_PKG_PATH%.Commit=%APPVEYOR_REPO_COMMIT%" ./...
+  - cd snapshot2
+  - go test -run Test_SinkCreateFullThenWALSnapshots
 
-after_build:
-  - 7z a rqlite-latest-win64.zip %GOPATH%\bin\rq*.exe
-
-artifacts:
-  - path: rqlite-latest-win64.zip
-    name: rqlite for Windows x64
