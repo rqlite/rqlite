@@ -16,9 +16,6 @@ import (
 )
 
 var (
-	// ErrInvalidRedirect is returned when a node returns an invalid HTTP redirect.
-	ErrInvalidRedirect = errors.New("invalid redirect received")
-
 	// ErrNodeIDRequired is returned a join request doesn't supply a node ID
 	ErrNodeIDRequired = errors.New("node required")
 
@@ -152,12 +149,6 @@ func (j *Joiner) join(joinAddr, id, addr string, voter bool) (string, error) {
 		switch resp.StatusCode {
 		case http.StatusOK:
 			return fullAddr, nil
-		case http.StatusMovedPermanently:
-			fullAddr = resp.Header.Get("location")
-			if fullAddr == "" {
-				return "", ErrInvalidRedirect
-			}
-			continue
 		default:
 			return "", fmt.Errorf("%s: (%s)", resp.Status, string(respB))
 		}
