@@ -172,11 +172,6 @@ type Config struct {
 	// RaftStepdownOnShutdown sets whether Leadership should be relinquished on shutdown
 	RaftStepdownOnShutdown bool
 
-	// RaftNoFreelistSync disables syncing Raft database freelist to disk. When true,
-	// it improves the database write performance under normal operation, but requires
-	// a full database re-sync during recovery.
-	RaftNoFreelistSync bool
-
 	// RaftReapNodeTimeout sets the duration after which a non-reachable voting node is
 	// reaped i.e. removed from the cluster.
 	RaftReapNodeTimeout time.Duration
@@ -454,7 +449,6 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	flag.BoolVar(&config.RaftStepdownOnShutdown, "raft-shutdown-stepdown", true, "If leader, stepdown before shutting down. Enabled by default")
 	flag.BoolVar(&config.RaftShutdownOnRemove, "raft-remove-shutdown", false, "Shutdown Raft if node removed from cluster")
 	flag.BoolVar(&config.RaftClusterRemoveOnShutdown, "raft-cluster-remove-shutdown", false, "Node removes itself from cluster on graceful shutdown")
-	flag.BoolVar(&config.RaftNoFreelistSync, "raft-no-freelist-sync", false, "Do not sync Raft log database freelist to disk")
 	flag.StringVar(&config.RaftLogLevel, "raft-log-level", "INFO", "Minimum log level for Raft module")
 	flag.DurationVar(&config.RaftReapNodeTimeout, "raft-reap-node-timeout", 0*time.Hour, "Time after which a non-reachable voting node will be reaped. If not set, no reaping takes place")
 	flag.DurationVar(&config.RaftReapReadOnlyNodeTimeout, "raft-reap-read-only-node-timeout", 0*time.Hour, "Time after which a non-reachable non-voting node will be reaped. If not set, no reaping takes place")
