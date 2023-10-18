@@ -220,48 +220,6 @@ func Test_BootstrapperBootSingleNotifyHTTPS(t *testing.T) {
 	}
 }
 
-func Test_BootstrapperBootSingleNotifyAuth(t *testing.T) {
-	tsNotified := false
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		username, password, ok := r.BasicAuth()
-		if !ok {
-			t.Fatalf("request did not have Basic Auth credentials")
-		}
-		if username != "username1" || password != "password1" {
-			t.Fatalf("bad Basic Auth credentials received (%s, %s", username, password)
-		}
-
-		if r.URL.Path == "/join" {
-			w.WriteHeader(http.StatusServiceUnavailable)
-			return
-		}
-		tsNotified = true
-	}))
-
-	n := -1
-	done := func() bool {
-		n++
-		return n == 5
-	}
-
-	p := NewAddressProviderString([]string{ts.URL})
-	bs := NewBootstrapper(p, nil)
-	bs.SetBasicAuth("username1", "password1")
-	bs.Interval = time.Second
-
-	err := bs.Boot("node1", "192.168.1.1:1234", done, 60*time.Second)
-	if err != nil {
-		t.Fatalf("failed to boot: %s", err)
-	}
-
-	if tsNotified != true {
-		t.Fatalf("notify target not contacted")
-	}
-	if exp, got := BootDone, bs.Status(); exp != got {
-		t.Fatalf("wrong status, exp %s, got %s", exp, got)
-	}
-}
-
 func Test_BootstrapperBootMultiNotify(t *testing.T) {
 	ts1Join := false
 	ts1Notified := false

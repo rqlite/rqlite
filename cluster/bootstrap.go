@@ -69,9 +69,6 @@ type Bootstrapper struct {
 
 	joiner *Joiner
 
-	username string
-	password string
-
 	logger   *log.Logger
 	Interval time.Duration
 
@@ -89,11 +86,6 @@ func NewBootstrapper(p AddressProvider, tlsConfig *tls.Config) *Bootstrapper {
 		Interval:  2 * time.Second,
 	}
 	return bs
-}
-
-// SetBasicAuth sets Basic Auth credentials for any bootstrap attempt.
-func (b *Bootstrapper) SetBasicAuth(username, password string) {
-	b.username, b.password = username, password
 }
 
 // Boot performs the bootstrapping process for this node. This means it will
@@ -140,7 +132,6 @@ func (b *Bootstrapper) Boot(id, raftAddr string, done func() bool, timeout time.
 
 			// Try an explicit join first. Joining an existing cluster is always given priority
 			// over trying to form a new cluster.
-			b.joiner.SetBasicAuth(b.username, b.password)
 			if j, err := b.joiner.Do(targets, id, raftAddr, true); err == nil {
 				b.logger.Printf("succeeded directly joining cluster via node at %s", j)
 				b.setBootStatus(BootJoin)
@@ -196,9 +187,6 @@ func (b *Bootstrapper) notify(targets []string, id, raftAddr string) error {
 			req, err := http.NewRequest("POST", fullTarget, bytes.NewReader(buf))
 			if err != nil {
 				return err
-			}
-			if b.username != "" && b.password != "" {
-				req.SetBasicAuth(b.username, b.password)
 			}
 			req.Header.Add("Content-Type", "application/json")
 

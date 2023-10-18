@@ -431,15 +431,7 @@ func createJoiner(cfg *Config, credStr *auth.CredentialsStore) (*cluster.Joiner,
 	if err != nil {
 		return nil, err
 	}
-	joiner := cluster.NewJoiner(cfg.JoinSrcIP, cfg.JoinAttempts, cfg.JoinInterval, tlsConfig)
-	if cfg.JoinAs != "" {
-		pw, ok := credStr.Password(cfg.JoinAs)
-		if !ok {
-			return nil, fmt.Errorf("user %s does not exist in credential store", cfg.JoinAs)
-		}
-		joiner.SetBasicAuth(cfg.JoinAs, pw)
-	}
-	return joiner, nil
+	return cluster.NewJoiner(cfg.JoinSrcIP, cfg.JoinAttempts, cfg.JoinInterval, tlsConfig), nil
 }
 
 func clusterService(cfg *Config, tn cluster.Transport, db cluster.Database, mgr cluster.Manager, credStr *auth.CredentialsStore) (*cluster.Service, error) {
@@ -509,13 +501,6 @@ func createCluster(cfg *Config, hasPeers bool, joiner *cluster.Joiner, str *stor
 	if joins != nil && cfg.BootstrapExpect > 0 {
 		// Bootstrap with explicit join addresses requests.
 		bs := cluster.NewBootstrapper(cluster.NewAddressProviderString(joins), tlsConfig)
-		if cfg.JoinAs != "" {
-			pw, ok := credStr.Password(cfg.JoinAs)
-			if !ok {
-				return fmt.Errorf("user %s does not exist in credential store", cfg.JoinAs)
-			}
-			bs.SetBasicAuth(cfg.JoinAs, pw)
-		}
 		return bs.Boot(str.ID(), cfg.RaftAdv, isClustered, cfg.BootstrapExpectTimeout)
 	}
 
@@ -558,13 +543,6 @@ func createCluster(cfg *Config, hasPeers bool, joiner *cluster.Joiner, str *stor
 		}
 
 		bs := cluster.NewBootstrapper(provider, tlsConfig)
-		if cfg.JoinAs != "" {
-			pw, ok := credStr.Password(cfg.JoinAs)
-			if !ok {
-				return fmt.Errorf("user %s does not exist in credential store", cfg.JoinAs)
-			}
-			bs.SetBasicAuth(cfg.JoinAs, pw)
-		}
 		httpServ.RegisterStatus("disco", provider)
 		return bs.Boot(str.ID(), cfg.RaftAdv, isClustered, cfg.BootstrapExpectTimeout)
 

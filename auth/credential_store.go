@@ -18,10 +18,6 @@ const (
 
 	// PermAll means all actions permitted.
 	PermAll = "all"
-	// PermJoin means user is permitted to join cluster.
-	PermJoin = "join"
-	// PermJoinReadOnly means user is permitted to join the cluster only as a read-only node
-	PermJoinReadOnly = "join-read-only"
 	// PermRemove means user is permitted to remove a node.
 	PermRemove = "remove"
 	// PermExecute means user can access execute endpoint.
