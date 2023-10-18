@@ -36,9 +36,6 @@ type Joiner struct {
 	attemptInterval time.Duration
 	tlsConfig       *tls.Config
 
-	username string
-	password string
-
 	client *http.Client
 
 	logger *log.Logger
@@ -80,11 +77,6 @@ func NewJoiner(srcIP string, numAttempts int, attemptInterval time.Duration, tls
 	}
 
 	return joiner
-}
-
-// SetBasicAuth sets Basic Auth credentials for any join attempt.
-func (j *Joiner) SetBasicAuth(username, password string) {
-	j.username, j.password = username, password
 }
 
 // Do makes the actual join request. If any of the join addresses do not contain a
@@ -133,9 +125,6 @@ func (j *Joiner) join(joinAddr, id, addr string, voter bool) (string, error) {
 		req, err := http.NewRequest("POST", fullAddr, bytes.NewReader(reqBody))
 		if err != nil {
 			return "", err
-		}
-		if j.username != "" && j.password != "" {
-			req.SetBasicAuth(j.username, j.password)
 		}
 
 		var resp *http.Response
