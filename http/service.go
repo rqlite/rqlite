@@ -241,6 +241,18 @@ const (
 	// node (by node Raft address) actually served the request if
 	// it wasn't served by this node.
 	ServedByHTTPHeader = "X-RQLITE-SERVED-BY"
+
+	// AllowOriginHeader is the HTTP header for allowing CORS compliant access from certain origins
+	AllowOriginHeader = "Access-Control-Allow-Origin"
+
+	// AllowMethodsHeader is the HTTP header for supporting the correct methods
+	AllowMethodsHeader = "Access-Control-Allow-Methods"
+
+	// AllowHeadersHeader is the HTTP header for supporting the correct request headers
+	AllowHeadersHeader = "Access-Control-Allow-Headers"
+
+	// AllowCredentialsHeader is the HTTP header for supporting specifying credentials
+	AllowCredentialsHeader = "Access-Control-Allow-Credentials"
 )
 
 func init() {
@@ -312,6 +324,8 @@ type Service struct {
 	KeyFile      string // Path to server's own x509 private key.
 	ClientVerify bool   // Whether client certificates should verified.
 	tlsConfig    *tls.Config
+
+	AllowOrigin string // Value to set for Access-Control-Allow-Origin
 
 	DefaultQueueCap     int
 	DefaultQueueBatchSz int
@@ -425,6 +439,12 @@ func (s *Service) HTTPS() bool {
 // ServeHTTP allows Service to serve HTTP requests.
 func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.addBuildVersion(w)
+	s.addAllowHeaders(w)
+
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 
 	switch {
 	case r.URL.Path == "/" || r.URL.Path == "":
@@ -1916,6 +1936,21 @@ func (s *Service) addBuildVersion(w http.ResponseWriter) {
 		version = v
 	}
 	w.Header().Add(VersionHTTPHeader, version)
+}
+
+// addAllowHeaders adds the Access-Control-Allow-Origin, Access-Control-Allow-Methods,
+// and Access-Control-Allow-Headers headers to the HTTP response.
+func (s *Service) addAllowHeaders(w http.ResponseWriter) {
+	if s.AllowOrigin != "" {
+		w.Header().Add(AllowOriginHeader, s.AllowOrigin)
+	}
+	w.Header().Add(AllowMethodsHeader, "OPTIONS, GET, POST")
+	if s.credentialStore == nil {
+		w.Header().Add(AllowHeadersHeader, "Content-Type")
+	} else {
+		w.Header().Add(AllowHeadersHeader, "Content-Type, Authorization")
+		w.Header().Add(AllowCredentialsHeader, "true")
+	}
 }
 
 // tlsStats returns the TLS stats for the service.

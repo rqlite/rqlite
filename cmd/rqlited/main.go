@@ -381,6 +381,7 @@ func startHTTPService(cfg *Config, str *store.Store, cltr *cluster.Client, credS
 		"compiler":   runtime.Compiler,
 		"build_time": cmd.Buildtime,
 	}
+	s.AllowOrigin = cfg.HTTPAllowOrigin
 	return s, s.Start()
 }
 
