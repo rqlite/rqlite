@@ -86,12 +86,13 @@ func CreateClientConfig(certFile, keyFile, caCertFile string, noverify bool) (*t
 // parameters are the paths to the server's certificate and key files, which will be used to
 // authenticate the server to the client. The caCertFile parameter is the path to the CA
 // certificate file, which the server will use to verify any certificate presented by the
-// client. If noverify is true, the server will not verify the client's certificate.
+// client. If noverify is true, the server will not verify the client's certificate. If
+// tls1011 is true, the server will accept TLS 1.0 or 1.1. Otherwise, it will require TLS 1.2
+// or higher.
 func CreateServerConfig(certFile, keyFile, caCertFile string, noverify bool) (*tls.Config, error) {
 	var err error
 
 	config := createBaseTLSConfig(false)
-	config.NextProtos = []string{"h2", "http/1.1"}
 	config.Certificates = make([]tls.Certificate, 1)
 	config.Certificates[0], err = tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
@@ -117,6 +118,7 @@ func CreateServerConfig(certFile, keyFile, caCertFile string, noverify bool) (*t
 func createBaseTLSConfig(noverify bool) *tls.Config {
 	return &tls.Config{
 		InsecureSkipVerify: noverify,
+		NextProtos:         []string{"h2", "http/1.1"},
 		MinVersion:         uint16(tls.VersionTLS12),
 	}
 }
