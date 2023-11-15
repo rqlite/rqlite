@@ -385,6 +385,7 @@ func getHTTPClient(argv *argT) (*http.Client, error) {
 	if err != nil {
 		return nil, err
 	}
+	tlsConfig.NextProtos = nil // CLI too refuses to connect otherwise.
 
 	client := http.Client{
 		Transport: &http.Transport{
