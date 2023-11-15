@@ -22,6 +22,7 @@ import (
 	"github.com/rqlite/rqlite/cmd"
 	"github.com/rqlite/rqlite/cmd/rqlite/history"
 	httpcl "github.com/rqlite/rqlite/cmd/rqlite/http"
+	"github.com/rqlite/rqlite/rtls"
 )
 
 const maxRedirect = 21
@@ -42,6 +43,8 @@ type argT struct {
 	Prefix       string        `cli:"P,prefix" usage:"rqlited HTTP URL prefix" dft:"/"`
 	Insecure     bool          `cli:"i,insecure" usage:"do not verify rqlited HTTPS certificate" dft:"false"`
 	CACert       string        `cli:"c,ca-cert" usage:"path to trusted X.509 root CA certificate"`
+	ClientCert   string        `cli:"d,client-cert" usage:"path to client X.509 certificate for mTLS"`
+	ClientKey    string        `cli:"k,client-key" usage:"path to client X.509 key for mTLS"`
 	Credentials  string        `cli:"u,user" usage:"set basic auth credentials in form username:password"`
 	Version      bool          `cli:"v,version" usage:"display CLI version"`
 	HTTPTimeout  clix.Duration `cli:"t,http-timeout" usage:"set timeout on HTTP requests" dft:"30s"`
@@ -380,25 +383,14 @@ func getNodes(client *http.Client, argv *argT) (Nodes, error) {
 }
 
 func getHTTPClient(argv *argT) (*http.Client, error) {
-	var rootCAs *x509.CertPool
-
-	if argv.CACert != "" {
-		pemCerts, err := ioutil.ReadFile(argv.CACert)
-		if err != nil {
-			return nil, err
-		}
-
-		rootCAs = x509.NewCertPool()
-
-		ok := rootCAs.AppendCertsFromPEM(pemCerts)
-		if !ok {
-			return nil, fmt.Errorf("failed to parse root CA certificate(s)")
-		}
+	tlsConfig, err := rtls.CreateClientConfig(argv.ClientCert, argv.ClientKey, argv.CACert, argv.Insecure)
+	if err != nil {
+		return nil, err
 	}
 
 	client := http.Client{
 		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: argv.Insecure, RootCAs: rootCAs},
+			TLSClientConfig: tlsConfig,
 			Proxy:           http.ProxyFromEnvironment,
 		},
 		Timeout: argv.HTTPTimeout.Duration,
