@@ -33,7 +33,7 @@ To download and start rqlite, execute the following in a shell.
 ```
 curl -L https://github.com/rqlite/rqlite/releases/download/{release}/rqlite-{release}-linux-amd64.tar.gz -o rqlite-{release}-linux-amd64.tar.gz
 tar xvfz rqlite-{release}-linux-amd64.tar.gz
-cd rqlite-{release}linux-amd64
+cd rqlite-{release}-linux-amd64
 ./rqlited ~/node.1
 ```
 

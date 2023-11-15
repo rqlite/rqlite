@@ -123,6 +123,60 @@ func Test_HasVersionHeader(t *testing.T) {
 	}
 }
 
+func Test_HasAllowOriginHeader(t *testing.T) {
+	m := &MockStore{}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+	url := fmt.Sprintf("http://%s", s.Addr().String())
+
+	client := &http.Client{}
+	resp, err := client.Get(url)
+	if err != nil {
+		t.Fatalf("failed to make request")
+	}
+	if resp.Header.Get("Access-Control-Allow-Origin") != "" {
+		t.Fatalf("incorrect allow-origin present in HTTP response header")
+	}
+
+	s.AllowOrigin = "https://www.philipotoole.com"
+	resp, err = client.Get(url)
+	if err != nil {
+		t.Fatalf("failed to make request")
+	}
+	if resp.Header.Get("Access-Control-Allow-Origin") != "https://www.philipotoole.com" {
+		t.Fatalf("incorrect allow-origin in HTTP response header")
+	}
+}
+
+func Test_Options(t *testing.T) {
+	m := &MockStore{}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+	url := fmt.Sprintf("http://%s", s.Addr().String())
+
+	client := &http.Client{}
+	req, err := http.NewRequest("OPTIONS", url, nil)
+	if err != nil {
+		t.Fatalf("failed to create request: %s", err.Error())
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("failed to make request: %s", err.Error())
+	}
+	if resp.StatusCode != 200 {
+		t.Fatalf("failed to get expected 200 for OPTIONS, got %d", resp.StatusCode)
+	}
+}
+
 func Test_HasContentTypeJSON(t *testing.T) {
 	m := &MockStore{}
 	c := &mockClusterService{}

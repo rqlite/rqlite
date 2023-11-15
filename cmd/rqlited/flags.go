@@ -46,6 +46,9 @@ type Config struct {
 	// HTTPAdv is the advertised HTTP server network.
 	HTTPAdv string
 
+	// HTTPAllowOrigin is the value to set for Access-Control-Allow-Origin HTTP header.
+	HTTPAllowOrigin string
+
 	// AuthFile is the path to the authentication file. May not be set.
 	AuthFile string `filepath:"true"`
 
@@ -405,6 +408,7 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	flag.StringVar(&config.NodeID, "node-id", "", "Unique ID for node. If not set, set to advertised Raft address")
 	flag.StringVar(&config.HTTPAddr, HTTPAddrFlag, "localhost:4001", "HTTP server bind address. To enable HTTPS, set X.509 certificate and key")
 	flag.StringVar(&config.HTTPAdv, HTTPAdvAddrFlag, "", "Advertised HTTP address. If not set, same as HTTP server bind address")
+	flag.StringVar(&config.HTTPAllowOrigin, "http-allow-origin", "", "Value to set for Access-Control-Allow-Origin HTTP header")
 	flag.StringVar(&config.HTTPx509CACert, "http-ca-cert", "", "Path to X.509 CA certificate for HTTPS")
 	flag.StringVar(&config.HTTPx509Cert, HTTPx509CertFlag, "", "Path to HTTPS X.509 certificate")
 	flag.StringVar(&config.HTTPx509Key, HTTPx509KeyFlag, "", "Path to HTTPS X.509 private key")
