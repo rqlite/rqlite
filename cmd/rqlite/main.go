@@ -3,7 +3,6 @@ package main
 
 import (
 	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -437,22 +436,6 @@ func getVersionWithClient(client *http.Client, argv *argT) (string, error) {
 
 func sendRequest(ctx *cli.Context, makeNewRequest func(string) (*http.Request, error), urlStr string, argv *argT) (*[]byte, error) {
 	url := urlStr
-	var rootCAs *x509.CertPool
-
-	if argv.CACert != "" {
-		pemCerts, err := os.ReadFile(argv.CACert)
-		if err != nil {
-			return nil, err
-		}
-
-		rootCAs = x509.NewCertPool()
-
-		ok := rootCAs.AppendCertsFromPEM(pemCerts)
-		if !ok {
-			return nil, fmt.Errorf("failed to parse root CA certificate(s)")
-		}
-	}
-
 	tlsConfig, err := rtls.CreateClientConfig(argv.ClientCert, argv.ClientKey, argv.CACert, argv.Insecure)
 	if err != nil {
 		return nil, err
