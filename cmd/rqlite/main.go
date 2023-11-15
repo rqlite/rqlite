@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -368,7 +367,7 @@ func getNodes(client *http.Client, argv *argT) (Nodes, error) {
 		return nil, err
 	}
 
-	response, err := ioutil.ReadAll(resp.Body)
+	response, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -441,7 +440,7 @@ func sendRequest(ctx *cli.Context, makeNewRequest func(string) (*http.Request, e
 	var rootCAs *x509.CertPool
 
 	if argv.CACert != "" {
-		pemCerts, err := ioutil.ReadFile(argv.CACert)
+		pemCerts, err := os.ReadFile(argv.CACert)
 		if err != nil {
 			return nil, err
 		}
@@ -454,8 +453,12 @@ func sendRequest(ctx *cli.Context, makeNewRequest func(string) (*http.Request, e
 		}
 	}
 
+	tlsConfig, err := rtls.CreateClientConfig(argv.ClientCert, argv.ClientKey, argv.CACert, argv.Insecure)
+	if err != nil {
+		return nil, err
+	}
 	client := http.Client{Transport: &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: argv.Insecure, RootCAs: rootCAs},
+		TLSClientConfig: tlsConfig,
 		Proxy:           http.ProxyFromEnvironment,
 	}}
 
@@ -483,7 +486,7 @@ func sendRequest(ctx *cli.Context, makeNewRequest func(string) (*http.Request, e
 		if err != nil {
 			return nil, err
 		}
-		response, err := ioutil.ReadAll(resp.Body)
+		response, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return nil, err
 		}
@@ -569,7 +572,7 @@ func cliJSON(ctx *cli.Context, cmd, line, url string, argv *argT) error {
 		return fmt.Errorf("unauthorized")
 	}
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}
@@ -626,7 +629,7 @@ func urlsToWriter(client *http.Client, urls []string, w io.Writer, argv *argT) e
 				return nil
 			}
 
-			body, err := ioutil.ReadAll(resp.Body)
+			body, err := io.ReadAll(resp.Body)
 			if err != nil {
 				return err
 			}
