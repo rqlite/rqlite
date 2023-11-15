@@ -441,6 +441,7 @@ func sendRequest(ctx *cli.Context, makeNewRequest func(string) (*http.Request, e
 	if err != nil {
 		return nil, err
 	}
+	tlsConfig.NextProtos = nil // CLI too refuses to connect otherwise.
 	client := http.Client{Transport: &http.Transport{
 		TLSClientConfig: tlsConfig,
 		Proxy:           http.ProxyFromEnvironment,
