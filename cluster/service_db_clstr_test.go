@@ -449,6 +449,55 @@ func Test_ServiceRemoveNode(t *testing.T) {
 	}
 }
 
+func Test_ServiceJoinNode(t *testing.T) {
+	ln, mux := mustNewMux()
+	go mux.Serve()
+	tn := mux.Listen(1) // Could be any byte value.
+	db := mustNewMockDatabase()
+	mgr := mustNewMockManager()
+	cred := mustNewMockCredentialStore()
+	s := New(tn, db, mgr, cred)
+	if s == nil {
+		t.Fatalf("failed to create cluster service")
+	}
+
+	c := NewClient(mustNewDialer(1, false, false), 30*time.Second)
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open cluster service: %s", err.Error())
+	}
+
+	expNodeAddr := "test-node-addr"
+	called := false
+	mgr.joinFn = func(jr *command.JoinRequest) error {
+		called = true
+		if jr.Address != expNodeAddr {
+			t.Fatalf("node address is wrong, exp: %s, got %s", expNodeAddr, jr.Address)
+		}
+		return nil
+	}
+
+	req := &command.JoinRequest{
+		Address: expNodeAddr,
+	}
+	err := c.Join(req, s.Addr(), longWait)
+	if err != nil {
+		t.Fatalf("failed to join node: %s", err.Error())
+	}
+
+	if !called {
+		t.Fatal("JoinNode not called on manager")
+	}
+
+	// Clean up resources
+	if err := ln.Close(); err != nil {
+		t.Fatalf("failed to close Mux's listener: %s", err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatalf("failed to close cluster service")
+	}
+}
+
 // Test_BinaryEncoding_Backwards ensures that software earlier than v6.6.2
 // can communicate with v6.6.2+ releases. v6.6.2 increased the maximum size
 // of cluster responses.
