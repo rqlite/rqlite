@@ -100,9 +100,6 @@ type Config struct {
 	// RaftAdv is the advertised Raft server address.
 	RaftAdv string
 
-	// JoinSrcIP sets the source IP address during Join request. May not be set.
-	JoinSrcIP string
-
 	// JoinAddrs is the list of Raft addresses to use for a join attempt.
 	JoinAddrs string
 
@@ -300,9 +297,6 @@ func (c *Config) Validate() error {
 			}
 		}
 	}
-	if c.JoinSrcIP != "" && net.ParseIP(c.JoinSrcIP) == nil {
-		return fmt.Errorf("invalid join source IP address: %s", c.JoinSrcIP)
-	}
 
 	// Valid disco mode?
 	switch c.DiscoMode {
@@ -424,7 +418,6 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	flag.StringVar(&config.AutoRestoreFile, "auto-restore", "", "Path to automatic restore configuration file. If not set, not enabled")
 	flag.StringVar(&config.RaftAddr, RaftAddrFlag, "localhost:4002", "Raft communication bind address")
 	flag.StringVar(&config.RaftAdv, RaftAdvAddrFlag, "", "Advertised Raft communication address. If not set, same as Raft bind address")
-	flag.StringVar(&config.JoinSrcIP, "join-source-ip", "", "Set source IP address during HTTP Join request")
 	flag.StringVar(&config.JoinAddrs, "join", "", "Comma-delimited list of nodes, through which a cluster can be joined (proto://host:port)")
 	flag.IntVar(&config.JoinAttempts, "join-attempts", 5, "Number of join attempts to make")
 	flag.DurationVar(&config.JoinInterval, "join-interval", 3*time.Second, "Period between join attempts")

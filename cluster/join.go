@@ -1,18 +1,12 @@
 package cluster
 
 import (
-	"bytes"
-	"crypto/tls"
-	"encoding/json"
 	"errors"
-	"fmt"
-	"io"
 	"log"
-	"net"
-	"net/http"
 	"os"
-	"strings"
 	"time"
+
+	"github.com/rqlite/rqlite/command"
 )
 
 var (
@@ -28,59 +22,26 @@ var (
 
 // Joiner executes a node-join operation.
 type Joiner struct {
-	srcIP           string
 	numAttempts     int
 	attemptInterval time.Duration
-	tlsConfig       *tls.Config
 
-	client *http.Client
-
+	client *Client
 	logger *log.Logger
 }
 
 // NewJoiner returns an instantiated Joiner.
-func NewJoiner(srcIP string, numAttempts int, attemptInterval time.Duration, tlsCfg *tls.Config) *Joiner {
-	if tlsCfg == nil {
-		tlsCfg = &tls.Config{InsecureSkipVerify: true}
-	}
-
-	// Source IP is optional
-	dialer := &net.Dialer{}
-	if srcIP != "" {
-		netAddr := &net.TCPAddr{
-			IP:   net.ParseIP(srcIP),
-			Port: 0,
-		}
-		dialer = &net.Dialer{LocalAddr: netAddr}
-	}
-
-	joiner := &Joiner{
-		srcIP:           srcIP,
+func NewJoiner(client *Client, numAttempts int, attemptInterval time.Duration) *Joiner {
+	return &Joiner{
+		client:          client,
 		numAttempts:     numAttempts,
 		attemptInterval: attemptInterval,
-		tlsConfig:       tlsCfg,
 		logger:          log.New(os.Stderr, "[cluster-join] ", log.LstdFlags),
 	}
-
-	// Create and configure the client to connect to the other node.
-	tr := &http.Transport{
-		TLSClientConfig:   joiner.tlsConfig,
-		Dial:              dialer.Dial,
-		ForceAttemptHTTP2: true,
-	}
-	joiner.client = &http.Client{Transport: tr}
-	joiner.client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-		return http.ErrUseLastResponse
-	}
-
-	return joiner
 }
 
-// Do makes the actual join request. If any of the join addresses do not contain a
-// protocol, both http:// and https:// are tried for that address. If the join is successful
-// with any address, the Join URL of the node that joined is returned. Otherwise, an error
-// is returned.
-func (j *Joiner) Do(joinAddrs []string, id, addr string, voter bool) (string, error) {
+// Do makes the actual join request. If the join is successful with any address,
+// that address is returned. Otherwise, an error is returned.
+func (j *Joiner) Do(targetAddrs []string, id, addr string, voter bool) (string, error) {
 	if id == "" {
 		return "", ErrNodeIDRequired
 	}
@@ -88,82 +49,34 @@ func (j *Joiner) Do(joinAddrs []string, id, addr string, voter bool) (string, er
 	var err error
 	var joinee string
 	for i := 0; i < j.numAttempts; i++ {
-		for _, a := range normalizeAddrs(joinAddrs) {
-			joinee, err = j.join(a, id, addr, voter)
+		for _, ta := range targetAddrs {
+			joinee, err = j.join(ta, id, addr, voter)
 			if err == nil {
 				// Success!
 				return joinee, nil
 			}
-			j.logger.Printf("failed to join via node at %s: %s", a, err)
+			j.logger.Printf("failed to join via node at %s: %s", ta, err)
 		}
 		if i+1 < j.numAttempts {
 			// This logic message only make sense if performing more than 1 join-attempt.
-			j.logger.Printf("failed to join cluster at %s, sleeping %s before retry", joinAddrs, j.attemptInterval)
+			j.logger.Printf("failed to join cluster at %s, sleeping %s before retry", targetAddrs, j.attemptInterval)
 			time.Sleep(j.attemptInterval)
 		}
 	}
-	j.logger.Printf("failed to join cluster at %s, after %d attempt(s)", joinAddrs, j.numAttempts)
+	j.logger.Printf("failed to join cluster at %s, after %d attempt(s)", targetAddrs, j.numAttempts)
 	return "", ErrJoinFailed
 }
 
-func (j *Joiner) join(joinAddr, id, addr string, voter bool) (string, error) {
-	fullAddr := fmt.Sprintf("%s/join", joinAddr)
-	reqBody, err := json.Marshal(map[string]interface{}{
-		"id":    id,
-		"addr":  addr,
-		"voter": voter,
-	})
-	if err != nil {
+func (j *Joiner) join(targetAddr, id, addr string, voter bool) (string, error) {
+	req := &command.JoinRequest{
+		Id:      id,
+		Address: addr,
+		Voter:   voter,
+	}
+
+	// Attempt to join.
+	if err := j.client.Join(req, targetAddr, time.Second); err != nil {
 		return "", err
 	}
-
-	for {
-		// Attempt to join.
-		req, err := http.NewRequest("POST", fullAddr, bytes.NewReader(reqBody))
-		if err != nil {
-			return "", err
-		}
-
-		var resp *http.Response
-		var respB []byte
-		err = func() error {
-			req.Header.Add("Content-Type", "application/json")
-			resp, err = j.client.Do(req)
-			if err != nil {
-				return err
-			}
-			defer resp.Body.Close()
-
-			// Only significant in the event of an error response
-			// from the remote node.
-			respB, err = io.ReadAll(resp.Body)
-			if err != nil {
-				return err
-			}
-			return nil
-		}()
-		if err != nil {
-			return "", err
-		}
-
-		switch resp.StatusCode {
-		case http.StatusOK:
-			return fullAddr, nil
-		default:
-			return "", fmt.Errorf("%s: (%s)", resp.Status, string(respB))
-		}
-	}
-}
-
-func normalizeAddrs(addrs []string) []string {
-	var a []string
-	for _, addr := range addrs {
-		if strings.Contains(addr, "://") {
-			a = append(a, addr)
-		} else {
-			a = append(a, fmt.Sprintf("http://%s", addr))
-			a = append(a, fmt.Sprintf("https://%s", addr))
-		}
-	}
-	return a
+	return targetAddr, nil
 }
