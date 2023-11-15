@@ -116,7 +116,6 @@ func CreateServerConfig(certFile, keyFile, caCertFile string, noverify bool) (*t
 func createBaseTLSConfigNextProtos(noverify bool) *tls.Config {
 	return &tls.Config{
 		InsecureSkipVerify: noverify,
-		NextProtos:         []string{"h2", "http/1.1"},
 		MinVersion:         uint16(tls.VersionTLS12),
 	}
 }

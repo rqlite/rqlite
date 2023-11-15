@@ -385,7 +385,6 @@ func getHTTPClient(argv *argT) (*http.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	tlsConfig.NextProtos = nil // CLI refuses to connect otherwise.
 
 	client := http.Client{
 		Transport: &http.Transport{
@@ -441,7 +440,6 @@ func sendRequest(ctx *cli.Context, makeNewRequest func(string) (*http.Request, e
 	if err != nil {
 		return nil, err
 	}
-	tlsConfig.NextProtos = nil // CLI refuses to connect otherwise.
 	client := http.Client{Transport: &http.Transport{
 		TLSClientConfig: tlsConfig,
 		Proxy:           http.ProxyFromEnvironment,
