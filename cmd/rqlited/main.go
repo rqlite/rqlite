@@ -374,6 +374,7 @@ func startHTTPService(cfg *Config, str *store.Store, cltr *cluster.Client, credS
 	s.DefaultQueueBatchSz = cfg.WriteQueueBatchSz
 	s.DefaultQueueTimeout = cfg.WriteQueueTimeout
 	s.DefaultQueueTx = cfg.WriteQueueTx
+	s.AllowOrigin = cfg.HTTPAllowOrigin
 	s.BuildInfo = map[string]interface{}{
 		"commit":     cmd.Commit,
 		"branch":     cmd.Branch,
@@ -381,7 +382,6 @@ func startHTTPService(cfg *Config, str *store.Store, cltr *cluster.Client, credS
 		"compiler":   runtime.Compiler,
 		"build_time": cmd.Buildtime,
 	}
-	s.AllowOrigin = cfg.HTTPAllowOrigin
 	return s, s.Start()
 }
 
