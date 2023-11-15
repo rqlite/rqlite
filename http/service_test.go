@@ -305,22 +305,6 @@ func Test_405Routes(t *testing.T) {
 		t.Fatalf("failed to get expected 405, got %d", resp.StatusCode)
 	}
 
-	resp, err = client.Get(host + "/join")
-	if err != nil {
-		t.Fatalf("failed to make request")
-	}
-	if resp.StatusCode != 405 {
-		t.Fatalf("failed to get expected 405, got %d", resp.StatusCode)
-	}
-
-	resp, err = client.Get(host + "/notify")
-	if err != nil {
-		t.Fatalf("failed to make request")
-	}
-	if resp.StatusCode != 405 {
-		t.Fatalf("failed to get expected 405, got %d", resp.StatusCode)
-	}
-
 	resp, err = client.Post(host+"/db/backup", "", nil)
 	if err != nil {
 		t.Fatalf("failed to make request")
@@ -379,8 +363,6 @@ func Test_401Routes_NoBasicAuth(t *testing.T) {
 		"/db/request",
 		"/db/backup",
 		"/db/load",
-		"/join",
-		"/notify",
 		"/remove",
 		"/status",
 		"/nodes",
@@ -420,8 +402,6 @@ func Test_401Routes_BasicAuthBadPassword(t *testing.T) {
 		"/db/request",
 		"/db/backup",
 		"/db/load",
-		"/join",
-		"/notify",
 		"/status",
 		"/nodes",
 		"/readyz",
@@ -466,8 +446,6 @@ func Test_401Routes_BasicAuthBadPerm(t *testing.T) {
 		"/db/backup",
 		"/db/request",
 		"/db/load",
-		"/join",
-		"/notify",
 		"/status",
 		"/nodes",
 		"/readyz",
@@ -489,90 +467,6 @@ func Test_401Routes_BasicAuthBadPerm(t *testing.T) {
 		if resp.StatusCode != 401 {
 			t.Fatalf("failed to get expected 401 for path %s, got %d", path, resp.StatusCode)
 		}
-	}
-}
-
-func Test_401Join(t *testing.T) {
-	jf := func(_, _, perm string) bool {
-		return perm == "join" || perm == "join-read-only"
-	}
-	c := &mockCredentialStore{aaFunc: jf}
-
-	m := &MockStore{}
-	n := &mockClusterService{}
-	s := New("127.0.0.1:0", m, n, c)
-	if err := s.Start(); err != nil {
-		t.Fatalf("failed to start service")
-	}
-	defer s.Close()
-
-	client := &http.Client{}
-	host := fmt.Sprintf("http://%s", s.Addr().String())
-
-	resp, err := client.Post(host+"/join", "application/json", strings.NewReader(`{"id": "1", "addr":"localhost:4001", "voter": true}`))
-	if err != nil {
-		t.Fatalf("failed to make join request")
-	}
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("failed to get expected StatusOK for join, got %d", resp.StatusCode)
-	}
-
-	resp, err = client.Post(host+"/join", "application/json", strings.NewReader(`{"id": "1", "addr":"localhost:4001"}`))
-	if err != nil {
-		t.Fatalf("failed to make join request")
-	}
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("failed to get expected StatusOK for join, got %d", resp.StatusCode)
-	}
-
-	resp, err = client.Post(host+"/join", "application/json", strings.NewReader(`{"id": "1", "addr":"localhost:4001", "voter": false}`))
-	if err != nil {
-		t.Fatalf("failed to make join request")
-	}
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("failed to get expected StatusOK for non-voter join, got %d", resp.StatusCode)
-	}
-}
-
-func Test_401JoinReadOnly(t *testing.T) {
-	jf := func(_, _, perm string) bool {
-		return perm == "join-read-only"
-	}
-	c := &mockCredentialStore{aaFunc: jf}
-
-	m := &MockStore{}
-	n := &mockClusterService{}
-	s := New("127.0.0.1:0", m, n, c)
-	if err := s.Start(); err != nil {
-		t.Fatalf("failed to start service")
-	}
-	defer s.Close()
-
-	client := &http.Client{}
-	host := fmt.Sprintf("http://%s", s.Addr().String())
-
-	resp, err := client.Post(host+"/join", "application/json", strings.NewReader(`{"id": "1", "addr":"localhost:4001", "voter": true}`))
-	if err != nil {
-		t.Fatalf("failed to make join request")
-	}
-	if resp.StatusCode != http.StatusUnauthorized {
-		t.Fatalf("failed to get expected StatusUnauthorized for join, got %d", resp.StatusCode)
-	}
-
-	resp, err = client.Post(host+"/join", "application/json", strings.NewReader(`{"id": "1", "addr":"localhost:4001"}`))
-	if err != nil {
-		t.Fatalf("failed to make join request")
-	}
-	if resp.StatusCode != http.StatusUnauthorized {
-		t.Fatalf("failed to get expected StatusUnauthorized for join, got %d", resp.StatusCode)
-	}
-
-	resp, err = client.Post(host+"/join", "application/json", strings.NewReader(`{"id": "1", "addr":"localhost:4001", "voter": false}`))
-	if err != nil {
-		t.Fatalf("failed to make join request")
-	}
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("failed to get expected StatusOK for non-voter join, got %d", resp.StatusCode)
 	}
 }
 
@@ -847,59 +741,6 @@ func Test_LoadRemoteError(t *testing.T) {
 	if exp, got := "the load failed\n", string(body); exp != got {
 		t.Fatalf(`incorrect response body, exp: "%s", got: "%s"`, exp, got)
 	}
-}
-
-func Test_NotifyLocalhost(t *testing.T) {
-	m := &MockStore{}
-	c := &mockClusterService{}
-	s := New("127.0.0.1:0", m, c, nil)
-	if err := s.Start(); err != nil {
-		t.Fatalf("failed to start service")
-	}
-	defer s.Close()
-
-	client := &http.Client{}
-	host := fmt.Sprintf("http://%s", s.Addr().String())
-	resp, err := client.Post(host+"/notify", "application/json", mustMarshalNotifyMap("id1", "localhost"))
-	if err != nil {
-		t.Fatalf("failed to make load request")
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("failed to get expected StatusOK for notify, got %d", resp.StatusCode)
-	}
-}
-
-func Test_NotifyNoResolve(t *testing.T) {
-	m := &MockStore{}
-	c := &mockClusterService{}
-	s := New("127.0.0.1:0", m, c, nil)
-	if err := s.Start(); err != nil {
-		t.Fatalf("failed to start service")
-	}
-	defer s.Close()
-
-	client := &http.Client{}
-	host := fmt.Sprintf("http://%s", s.Addr().String())
-	resp, err := client.Post(host+"/notify", "application/json", mustMarshalNotifyMap("id1", "nonsense-domain:4444"))
-	if err != nil {
-		t.Fatalf("failed to make load request")
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusServiceUnavailable {
-		t.Fatalf("failed to get expected StatusOK for load, got %d", resp.StatusCode)
-	}
-}
-
-func mustMarshalNotifyMap(id, addr string) io.Reader {
-	buf, err := json.Marshal(map[string]interface{}{
-		"id":   id,
-		"addr": addr,
-	})
-	if err != nil {
-		panic("failed to marshal notify map")
-	}
-	return bytes.NewReader(buf)
 }
 
 func Test_RegisterStatus(t *testing.T) {
