@@ -378,7 +378,7 @@ func (s *Service) Start() error {
 		if s.ClientVerify {
 			b.WriteString(", mutual TLS enabled")
 		} else {
-			b.WriteString(", mutual disabled")
+			b.WriteString(", mutual TLS disabled")
 		}
 		// print the message
 		s.logger.Println(b.String())
