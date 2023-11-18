@@ -158,18 +158,12 @@ func main() {
 	httpServ.RegisterStatus("cluster", clstrServ)
 	httpServ.RegisterStatus("network", tcp.NetworkReporter{})
 
-	// Prepare the cluster-joiner
-	joiner, err := createJoiner(cfg, credStr)
-	if err != nil {
-		log.Fatalf("failed to create cluster joiner: %s", err.Error())
-	}
-
 	// Create the cluster!
 	nodes, err := str.Nodes()
 	if err != nil {
 		log.Fatalf("failed to get nodes %s", err.Error())
 	}
-	if err := createCluster(cfg, len(nodes) > 0, joiner, str, httpServ, credStr); err != nil {
+	if err := createCluster(cfg, len(nodes) > 0, clstrClient, str, httpServ, credStr); err != nil {
 		log.Fatalf("clustering failure: %s", err.Error())
 	}
 
@@ -427,14 +421,6 @@ func credentialStore(cfg *Config) (*auth.CredentialsStore, error) {
 	return auth.NewCredentialsStoreFromFile(cfg.AuthFile)
 }
 
-func createJoiner(cfg *Config, credStr *auth.CredentialsStore) (*cluster.Joiner, error) {
-	tlsConfig, err := createHTTPTLSConfig(cfg)
-	if err != nil {
-		return nil, err
-	}
-	return cluster.NewJoiner(cfg.JoinSrcIP, cfg.JoinAttempts, cfg.JoinInterval, tlsConfig), nil
-}
-
 func clusterService(cfg *Config, tn cluster.Transport, db cluster.Database, mgr cluster.Manager, credStr *auth.CredentialsStore) (*cluster.Service, error) {
 	c := cluster.New(tn, db, mgr, credStr)
 	c.SetAPIAddr(cfg.HTTPAdv)
@@ -463,12 +449,7 @@ func createClusterClient(cfg *Config, clstr *cluster.Service) (*cluster.Client, 
 	return clstrClient, nil
 }
 
-func createCluster(cfg *Config, hasPeers bool, joiner *cluster.Joiner, str *store.Store, httpServ *httpd.Service, credStr *auth.CredentialsStore) error {
-	tlsConfig, err := createHTTPTLSConfig(cfg)
-	if err != nil {
-		return fmt.Errorf("failed to create TLS client config for cluster: %s", err.Error())
-	}
-
+func createCluster(cfg *Config, hasPeers bool, client *cluster.Client, str *store.Store, httpServ *httpd.Service, credStr *auth.CredentialsStore) error {
 	joins := cfg.JoinAddresses()
 	if joins == nil && cfg.DiscoMode == "" && !hasPeers {
 		if cfg.RaftNonVoter {
@@ -489,6 +470,7 @@ func createCluster(cfg *Config, hasPeers bool, joiner *cluster.Joiner, str *stor
 		return leader != ""
 	}
 
+	joiner := cluster.NewJoiner(client, cfg.JoinAttempts, cfg.JoinInterval)
 	if joins != nil && cfg.BootstrapExpect == 0 {
 		// Explicit join operation requested, so do it.
 		j, err := joiner.Do(joins, str.ID(), cfg.RaftAdv, !cfg.RaftNonVoter)
@@ -501,7 +483,7 @@ func createCluster(cfg *Config, hasPeers bool, joiner *cluster.Joiner, str *stor
 
 	if joins != nil && cfg.BootstrapExpect > 0 {
 		// Bootstrap with explicit join addresses requests.
-		bs := cluster.NewBootstrapper(cluster.NewAddressProviderString(joins), tlsConfig)
+		bs := cluster.NewBootstrapper(cluster.NewAddressProviderString(joins), client)
 		return bs.Boot(str.ID(), cfg.RaftAdv, isClustered, cfg.BootstrapExpectTimeout)
 	}
 
@@ -543,7 +525,7 @@ func createCluster(cfg *Config, hasPeers bool, joiner *cluster.Joiner, str *stor
 			provider = dnssrv.New(dnssrvCfg)
 		}
 
-		bs := cluster.NewBootstrapper(provider, tlsConfig)
+		bs := cluster.NewBootstrapper(provider, client)
 		httpServ.RegisterStatus("disco", provider)
 		return bs.Boot(str.ID(), cfg.RaftAdv, isClustered, cfg.BootstrapExpectTimeout)
 

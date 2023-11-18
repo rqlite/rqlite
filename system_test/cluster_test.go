@@ -505,18 +505,20 @@ func Test_MultiNodeClusterBootstrapLaterJoinHTTPS(t *testing.T) {
 	node3.Store.BootstrapExpect = 3
 	defer node3.Deprovision()
 
-	tlsConfig, err := rtls.CreateClientConfig("", "", "", true)
+	dialerTLSConfig, err := rtls.CreateClientConfig("", "", "", true)
 	if err != nil {
-		t.Fatalf("failed to create TLS config: %s", err)
+		t.Fatalf("failed to create TLS config for cluster dialer: %s", err)
 	}
+	clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, dialerTLSConfig)
+	clstrClient := cluster.NewClient(clstrDialer, 5*time.Second)
 
 	provider := cluster.NewAddressProviderString(
-		[]string{node1.APIAddr, node2.APIAddr, node3.APIAddr})
-	node1Bs := cluster.NewBootstrapper(provider, tlsConfig)
+		[]string{node1.RaftAddr, node2.RaftAddr, node3.RaftAddr})
+	node1Bs := cluster.NewBootstrapper(provider, clstrClient)
 	node1Bs.Interval = time.Second
-	node2Bs := cluster.NewBootstrapper(provider, tlsConfig)
+	node2Bs := cluster.NewBootstrapper(provider, clstrClient)
 	node2Bs.Interval = time.Second
-	node3Bs := cluster.NewBootstrapper(provider, tlsConfig)
+	node3Bs := cluster.NewBootstrapper(provider, clstrClient)
 	node3Bs.Interval = time.Second
 
 	// Have all nodes start a bootstrap basically in parallel,
@@ -571,11 +573,11 @@ func Test_MultiNodeClusterBootstrapLaterJoinHTTPS(t *testing.T) {
 	}
 
 	// Ensure a 4th node can join cluster with exactly same launch
-	// params. Under the cover it should just do a join.
+	// params. Under the covers it should just do a join.
 	node4 := mustNewNodeEncrypted(false, true, true)
 	node4.Store.BootstrapExpect = 3
 	defer node3.Deprovision()
-	node4Bs := cluster.NewBootstrapper(provider, tlsConfig)
+	node4Bs := cluster.NewBootstrapper(provider, clstrClient)
 	node4Bs.Interval = time.Second
 	done := func() bool {
 		addr, _ := node4.Store.LeaderAddr()
