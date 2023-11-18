@@ -139,6 +139,11 @@ class Node(object):
   def APIProtoAddr(self):
       return "http://%s" % self.APIAddr()
 
+  def RaftAddr(self):
+      if self.raft_adv is not None:
+          return self.raft_adv
+      return self.raft_addr
+
   def scramble_network(self):
     if self.api_adv == self.api_addr:
       self.api_adv = None
@@ -193,8 +198,6 @@ class Node(object):
     if self.auto_restore is not None:
       command += ['-auto-restore', self.auto_restore]
     if join is not None:
-      if join.startswith('http://') is False:
-        join = 'http://' + join
       command += ['-join', join]
     if join_as is not None:
        command += ['-join-as', join_as]

@@ -20,9 +20,9 @@ class TestBootstrapping3To4Nodes(unittest.TestCase):
     n1 = Node(RQLITED_PATH, '1', bootstrap_expect=3)
     n2 = Node(RQLITED_PATH, '2', bootstrap_expect=3)
 
-    n0.start(join=','.join([n0.APIProtoAddr(), n1.APIProtoAddr(), n2.APIProtoAddr()]))
-    n1.start(join=','.join([n0.APIProtoAddr(), n1.APIProtoAddr(), n2.APIProtoAddr()]))
-    n2.start(join=','.join([n0.APIProtoAddr(), n1.APIProtoAddr(), n2.APIProtoAddr()]))
+    n0.start(join=','.join([n0.RaftAddr(), n1.RaftAddr(), n2.RaftAddr()]))
+    n1.start(join=','.join([n0.RaftAddr(), n1.RaftAddr(), n2.RaftAddr()]))
+    n2.start(join=','.join([n0.RaftAddr(), n1.RaftAddr(), n2.RaftAddr()]))
 
     self.assertEqual(n0.wait_for_leader(), n1.wait_for_leader())
     self.assertEqual(n0.wait_for_leader(), n2.wait_for_leader())
@@ -30,7 +30,7 @@ class TestBootstrapping3To4Nodes(unittest.TestCase):
 
     # Ensure a 4th node can join later, with same launch params.
     n3 = Node(RQLITED_PATH, '4', bootstrap_expect=3)
-    n3.start(join=','.join([n0.APIProtoAddr(), n1.APIProtoAddr(), n2.APIProtoAddr()]))
+    n3.start(join=','.join([n0.RaftAddr(), n1.RaftAddr(), n2.RaftAddr()]))
 
     n3.wait_for_leader()
 
@@ -51,7 +51,7 @@ class TestBootstrapping5Nodes(unittest.TestCase):
     n3 = Node(RQLITED_PATH, '3', bootstrap_expect=5)
     n4 = Node(RQLITED_PATH, '4', bootstrap_expect=5)
 
-    joinNodes = [n0.APIProtoAddr(), n1.APIProtoAddr(), n2.APIProtoAddr(), n3.APIProtoAddr(), n4.APIProtoAddr()]
+    joinNodes = [n0.RaftAddr(), n1.RaftAddr(), n2.RaftAddr(), n3.RaftAddr(), n4.RaftAddr()]
 
     n0.start(join=','.join(joinNodes))
     n1.start(join=','.join(joinNodes))
@@ -78,9 +78,9 @@ class TestBootstrappingRestart(unittest.TestCase):
     n1 = Node(RQLITED_PATH, '1', bootstrap_expect=3)
     n2 = Node(RQLITED_PATH, '2', bootstrap_expect=3)
 
-    n0.start(join=','.join([n0.APIProtoAddr(), n1.APIProtoAddr(), n2.APIProtoAddr()]))
-    n1.start(join=','.join([n0.APIProtoAddr(), n1.APIProtoAddr(), n2.APIProtoAddr()]))
-    n2.start(join=','.join([n0.APIProtoAddr(), n1.APIProtoAddr(), n2.APIProtoAddr()]))
+    n0.start(join=','.join([n0.RaftAddr(), n1.RaftAddr(), n2.RaftAddr()]))
+    n1.start(join=','.join([n0.RaftAddr(), n1.RaftAddr(), n2.RaftAddr()]))
+    n2.start(join=','.join([n0.RaftAddr(), n1.RaftAddr(), n2.RaftAddr()]))
 
     self.assertEqual(n0.wait_for_leader(), n1.wait_for_leader())
     self.assertEqual(n0.wait_for_leader(), n2.wait_for_leader())
@@ -90,9 +90,9 @@ class TestBootstrappingRestart(unittest.TestCase):
     n1.stop()
     n2.stop()
 
-    n0.start(join=','.join([n0.APIProtoAddr(), n1.APIProtoAddr(), n2.APIProtoAddr()]))
-    n1.start(join=','.join([n0.APIProtoAddr(), n1.APIProtoAddr(), n2.APIProtoAddr()]))
-    n2.start(join=','.join([n0.APIProtoAddr(), n1.APIProtoAddr(), n2.APIProtoAddr()]))
+    n0.start(join=','.join([n0.RaftAddr(), n1.RaftAddr(), n2.RaftAddr()]))
+    n1.start(join=','.join([n0.RaftAddr(), n1.RaftAddr(), n2.RaftAddr()]))
+    n2.start(join=','.join([n0.RaftAddr(), n1.RaftAddr(), n2.RaftAddr()]))
     self.assertEqual(n0.wait_for_leader(), n1.wait_for_leader())
     self.assertEqual(n0.wait_for_leader(), n2.wait_for_leader())
 
@@ -107,9 +107,9 @@ class TestBootstrappingRestartLeaveOnRemove(unittest.TestCase):
     n1 = Node(RQLITED_PATH, '1', bootstrap_expect=3, raft_cluster_remove_shutdown=True)
     n2 = Node(RQLITED_PATH, '2', bootstrap_expect=3, raft_cluster_remove_shutdown=True)
 
-    n0.start(join=','.join([n0.APIProtoAddr(), n1.APIProtoAddr(), n2.APIProtoAddr()]))
-    n1.start(join=','.join([n0.APIProtoAddr(), n1.APIProtoAddr(), n2.APIProtoAddr()]))
-    n2.start(join=','.join([n0.APIProtoAddr(), n1.APIProtoAddr(), n2.APIProtoAddr()]))
+    n0.start(join=','.join([n0.RaftAddr(), n1.RaftAddr(), n2.RaftAddr()]))
+    n1.start(join=','.join([n0.RaftAddr(), n1.RaftAddr(), n2.RaftAddr()]))
+    n2.start(join=','.join([n0.RaftAddr(), n1.RaftAddr(), n2.RaftAddr()]))
 
     self.assertEqual(n0.wait_for_leader(), n1.wait_for_leader())
     self.assertEqual(n0.wait_for_leader(), n2.wait_for_leader())
@@ -119,7 +119,7 @@ class TestBootstrappingRestartLeaveOnRemove(unittest.TestCase):
     n2.stop(graceful=True)
     self.assertEqual(len(n0.nodes()), 2)
 
-    n2.start(join=','.join([n0.APIProtoAddr(), n1.APIProtoAddr(), n2.APIProtoAddr()]))
+    n2.start(join=','.join([n0.RaftAddr(), n1.RaftAddr(), n2.RaftAddr()]))
     n2.wait_for_leader() # Be sure node has joined cluster.
 
     # Ensure all nodes agree on which node is leader.
