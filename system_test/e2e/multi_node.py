@@ -24,11 +24,11 @@ class TestEndToEnd(unittest.TestCase):
     n0.wait_for_leader()
 
     n1 = Node(RQLITED_PATH, '1')
-    n1.start(join=n0.APIAddr())
+    n1.start(join=n0.RaftAddr())
     n1.wait_for_leader()
 
     n2 = Node(RQLITED_PATH, '2')
-    n2.start(join=n0.APIAddr())
+    n2.start(join=n0.RaftAddr())
     n2.wait_for_leader()
 
     self.cluster = Cluster([n0, n1, n2])

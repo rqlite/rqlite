@@ -165,7 +165,7 @@ class Node(object):
     if self.raft_adv is None:
       self.raft_adv = self.raft_addr
 
-  def start(self, join=None, join_as=None, join_attempts=None, join_interval=None,
+  def start(self, join=None, join_attempts=None, join_interval=None,
     disco_mode=None, disco_key=None, disco_config=None, wait=True, timeout=TIMEOUT):
     if self.process is not None:
       return
@@ -199,8 +199,6 @@ class Node(object):
       command += ['-auto-restore', self.auto_restore]
     if join is not None:
       command += ['-join', join]
-    if join_as is not None:
-       command += ['-join-as', join_as]
     if join_attempts is not None:
        command += ['-join-attempts', str(join_attempts)]
     if join_interval is not None:
@@ -352,7 +350,7 @@ class Node(object):
     return int(self.status()['store']['raft']['last_snapshot_index'])
 
   def num_join_requests(self):
-    return int(self.expvar()['http']['joins'])
+    return int(self.expvar()['cluster']['num_join_req'])
 
   def num_snapshots(self):
     return int(self.expvar()['store']['num_snapshots'])

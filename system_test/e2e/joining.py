@@ -26,7 +26,7 @@ class TestJoinEncryptedNoVerify(unittest.TestCase):
     n0.wait_for_leader()
 
     n1 = Node(RQLITED_PATH, '1', node_cert=certFile, node_key=keyFile, node_no_verify=False)
-    n1.start(join=n0.APIAddr())
+    n1.start(join=n0.RaftAddr())
     self.assertRaises(Exception, n1.wait_for_leader) # Join should fail due to bad cert.
 
     deprovision_node(n0)
@@ -70,18 +70,18 @@ class TestIdempotentJoin(unittest.TestCase):
     self.n0.wait_for_leader()
 
     self.n1 = Node(RQLITED_PATH, '1')
-    self.n1.start(join=self.n0.APIAddr())
+    self.n1.start(join=self.n0.RaftAddr())
     self.n1.wait_for_leader()
 
     self.assertEqual(self.n0.num_join_requests(), 1)
 
     self.n1.stop()
-    self.n1.start(join=self.n0.APIAddr())
+    self.n1.start(join=self.n0.RaftAddr())
     self.n1.wait_for_leader()
     self.assertEqual(self.n0.num_join_requests(), 2)
 
 
-class TestRedirectedJoin(unittest.TestCase):
+class TestForwardedJoin(unittest.TestCase):
   def tearDown(self):
     deprovision_node(self.n0)
     deprovision_node(self.n1)
@@ -94,29 +94,29 @@ class TestRedirectedJoin(unittest.TestCase):
     l0 = self.n0.wait_for_leader()
 
     self.n1 = Node(RQLITED_PATH, '1')
-    self.n1.start(join=self.n0.APIAddr())
+    self.n1.start(join=self.n0.RaftAddr())
     self.n1.wait_for_leader()
     self.assertTrue(self.n1.is_follower())
 
     self.n2 = Node(RQLITED_PATH, '2')
-    self.n2.start(join=self.n1.APIAddr())
+    self.n2.start(join=self.n1.RaftAddr())
     l2 = self.n2.wait_for_leader()
     self.assertEqual(l0, l2)
 
-  def test_api_adv(self):
-    '''Test that a node can join via a follower that advertises a different API address'''
+  def test_raft_adv(self):
+    '''Test that a node can join via a follower that advertises a different Raft address'''
     self.n0 = Node(RQLITED_PATH, '0',
-      api_addr="0.0.0.0:4001", api_adv="localhost:4001")
+      raft_addr="0.0.0.0:4002", raft_adv="localhost:4002")
     self.n0.start()
     l0 = self.n0.wait_for_leader()
 
     self.n1 = Node(RQLITED_PATH, '1')
-    self.n1.start(join=self.n0.APIAddr())
+    self.n1.start(join=self.n0.RaftAddr())
     self.n1.wait_for_leader()
     self.assertTrue(self.n1.is_follower())
 
     self.n2 = Node(RQLITED_PATH, '2')
-    self.n2.start(join=self.n1.APIAddr())
+    self.n2.start(join=self.n1.RaftAddr())
     l2 = self.n2.wait_for_leader()
     self.assertEqual(l0, l2)
 
@@ -127,11 +127,11 @@ class TestJoinCatchup(unittest.TestCase):
     self.n0.wait_for_leader()
 
     self.n1 = Node(RQLITED_PATH, '1')
-    self.n1.start(join=self.n0.APIAddr())
+    self.n1.start(join=self.n0.RaftAddr())
     self.n1.wait_for_leader()
 
     self.n2 = Node(RQLITED_PATH, '2')
-    self.n2.start(join=self.n0.APIAddr())
+    self.n2.start(join=self.n0.RaftAddr())
     self.n2.wait_for_leader()
 
     self.cluster = Cluster([self.n0, self.n1, self.n2])
@@ -164,7 +164,7 @@ class TestJoinCatchup(unittest.TestCase):
     applied = n0.wait_for_all_fsm()
 
     # Restart follower, explicity rejoin, and ensure it picks up new records
-    self.n1.start(join=self.n0.APIAddr())
+    self.n1.start(join=self.n0.RaftAddr())
     self.n1.wait_for_leader()
     self.n1.wait_for_fsm_index(applied)
     self.assertEqual(n0.expvar()['store']['num_ignored_joins'], 1)
@@ -197,7 +197,7 @@ class TestJoinCatchup(unittest.TestCase):
 
     # Restart follower with new network attributes, explicity rejoin, and ensure it picks up new records
     self.n1.scramble_network()
-    self.n1.start(join=self.n0.APIAddr())
+    self.n1.start(join=self.n0.RaftAddr())
     self.n1.wait_for_leader()
     self.assertEqual(n0.expvar()['store']['num_removed_before_joins'], 1)
     self.n1.wait_for_fsm_index(applied)
