@@ -498,6 +498,79 @@ func Test_ServiceJoinNode(t *testing.T) {
 	}
 }
 
+// Test_ServiceJoinNodeForwarded ensures that a JoinNode request is forwarded
+// to the leader if the node receiving the request is not the leader.
+func Test_ServiceJoinNodeForwarded(t *testing.T) {
+	headerByte := byte(1)
+	cred := mustNewMockCredentialStore()
+	c := NewClient(mustNewDialer(headerByte, false, false), 30*time.Second)
+	leaderJoinCalled := false
+
+	// Create the Leader service.
+	lnL, muxL := mustNewMux()
+	go muxL.Serve()
+	tnL := muxL.Listen(headerByte)
+	dbL := mustNewMockDatabase()
+	mgrL := mustNewMockManager()
+	sL := New(tnL, dbL, mgrL, cred)
+	if sL == nil {
+		t.Fatalf("failed to create cluster service for Leader")
+	}
+	mgrL.joinFn = func(jr *command.JoinRequest) error {
+		leaderJoinCalled = true
+		return nil
+	}
+	if err := sL.Open(); err != nil {
+		t.Fatalf("failed to open cluster service on Leader: %s", err.Error())
+	}
+
+	// Create the Follower service.
+	lnF, muxF := mustNewMux()
+	go muxF.Serve()
+	tnF := muxF.Listen(headerByte)
+	dbF := mustNewMockDatabase()
+	mgrF := mustNewMockManager()
+	sF := New(tnF, dbF, mgrF, cred)
+	if sL == nil {
+		t.Fatalf("failed to create cluster service for Follower")
+	}
+	mgrF.joinFn = func(jr *command.JoinRequest) error {
+		return fmt.Errorf("not leader")
+	}
+	mgrF.leaderAddrFn = func() (string, error) {
+		return sL.Addr(), nil
+	}
+	if err := sF.Open(); err != nil {
+		t.Fatalf("failed to open cluster service on Follower: %s", err.Error())
+	}
+
+	req := &command.JoinRequest{
+		Address: "some client",
+	}
+	err := c.Join(req, sF.Addr(), longWait)
+	if err != nil {
+		t.Fatalf("failed to join node: %s", err.Error())
+	}
+
+	if !leaderJoinCalled {
+		t.Fatal("JoinNode not called on leader")
+	}
+
+	// Clean up resources
+	if err := lnL.Close(); err != nil {
+		t.Fatalf("failed to close Mux's listener: %s", err)
+	}
+	if err := sL.Close(); err != nil {
+		t.Fatalf("failed to close cluster service")
+	}
+	if err := lnF.Close(); err != nil {
+		t.Fatalf("failed to close Mux's listener: %s", err)
+	}
+	if err := sF.Close(); err != nil {
+		t.Fatalf("failed to close cluster service")
+	}
+}
+
 // Test_BinaryEncoding_Backwards ensures that software earlier than v6.6.2
 // can communicate with v6.6.2+ releases. v6.6.2 increased the maximum size
 // of cluster responses.

@@ -96,6 +96,9 @@ type Database interface {
 
 // Manager is the interface node-management systems must implement
 type Manager interface {
+	// LeaderAddr returns the Raft address of the leader of the cluster.
+	LeaderAddr() (string, error)
+
 	// Remove removes the node, given by id, from the cluster
 	Remove(rn *command.RemoveNodeRequest) error
 
@@ -453,6 +456,14 @@ func (s *Service) handleConn(conn net.Conn) {
 			} else {
 				if err := s.mgr.Join(jr); err != nil {
 					resp.Error = err.Error()
+					if err.Error() == "not leader" {
+						laddr, err := s.mgr.LeaderAddr()
+						if err != nil {
+							resp.Error = err.Error()
+						} else {
+							resp.Leader = laddr
+						}
+					}
 				}
 			}
 			marshalAndWrite(conn, resp)

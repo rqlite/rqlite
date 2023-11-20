@@ -338,41 +338,47 @@ func (c *Client) Notify(nr *command.NotifyRequest, nodeAddr string, timeout time
 
 // Join joins this node to a cluster at the remote address nodeAddr.
 func (c *Client) Join(jr *command.JoinRequest, nodeAddr string, timeout time.Duration) error {
-	conn, err := c.dial(nodeAddr, c.timeout)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
+	for {
+		conn, err := c.dial(nodeAddr, c.timeout)
+		if err != nil {
+			return err
+		}
+		defer conn.Close()
 
-	// Create the request.
-	command := &Command{
-		Type: Command_COMMAND_TYPE_JOIN,
-		Request: &Command_JoinRequest{
-			JoinRequest: jr,
-		},
-	}
+		// Create the request.
+		command := &Command{
+			Type: Command_COMMAND_TYPE_JOIN,
+			Request: &Command_JoinRequest{
+				JoinRequest: jr,
+			},
+		}
 
-	if err := writeCommand(conn, command, timeout); err != nil {
-		handleConnError(conn)
-		return err
-	}
+		if err := writeCommand(conn, command, timeout); err != nil {
+			handleConnError(conn)
+			return err
+		}
 
-	p, err := readResponse(conn, timeout)
-	if err != nil {
-		handleConnError(conn)
-		return err
-	}
+		p, err := readResponse(conn, timeout)
+		if err != nil {
+			handleConnError(conn)
+			return err
+		}
 
-	a := &CommandJoinResponse{}
-	err = proto.Unmarshal(p, a)
-	if err != nil {
-		return err
-	}
+		a := &CommandJoinResponse{}
+		err = proto.Unmarshal(p, a)
+		if err != nil {
+			return err
+		}
 
-	if a.Error != "" {
-		return errors.New(a.Error)
+		if a.Error != "" {
+			if a.Error == "not leader" {
+				nodeAddr = a.Leader
+				continue
+			}
+			return errors.New(a.Error)
+		}
+		return nil
 	}
-	return nil
 }
 
 // Stats returns stats on the Client instance
