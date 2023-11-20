@@ -513,7 +513,15 @@ func writeCommand(conn net.Conn, c *Command, timeout time.Duration) error {
 	return nil
 }
 
-func readResponse(conn net.Conn, timeout time.Duration) ([]byte, error) {
+func readResponse(conn net.Conn, timeout time.Duration) (buf []byte, retErr error) {
+	defer func() {
+		// Connecting to an open port, but not a rqlite Raft API, may cause a panic
+		// when the system tries to read the response. This is a workaround.
+		if r := recover(); r != nil {
+			retErr = fmt.Errorf("panic reading response from node: %v", r)
+		}
+	}()
+
 	// Read length of incoming response.
 	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
 		return nil, err
