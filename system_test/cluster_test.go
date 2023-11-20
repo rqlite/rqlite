@@ -11,7 +11,6 @@ import (
 	"github.com/rqlite/rqlite/db"
 	"github.com/rqlite/rqlite/http"
 	"github.com/rqlite/rqlite/queue"
-	"github.com/rqlite/rqlite/rtls"
 	"github.com/rqlite/rqlite/store"
 	"github.com/rqlite/rqlite/tcp"
 )
@@ -243,10 +242,10 @@ func Test_MultiNodeClusterBootstrap(t *testing.T) {
 	defer node3.Deprovision()
 
 	provider := cluster.NewAddressProviderString(
-		[]string{node1.APIAddr, node2.APIAddr, node3.APIAddr})
-	node1Bs := cluster.NewBootstrapper(provider, nil)
-	node2Bs := cluster.NewBootstrapper(provider, nil)
-	node3Bs := cluster.NewBootstrapper(provider, nil)
+		[]string{node1.RaftAddr, node2.RaftAddr, node3.RaftAddr})
+	node1Bs := cluster.NewBootstrapper(provider, node1.Client)
+	node2Bs := cluster.NewBootstrapper(provider, node2.Client)
+	node3Bs := cluster.NewBootstrapper(provider, node3.Client)
 
 	// Have all nodes start a bootstrap basically in parallel,
 	// ensure only 1 leader actually gets elected.
@@ -408,12 +407,12 @@ func Test_MultiNodeClusterBootstrapLaterJoin(t *testing.T) {
 	defer node3.Deprovision()
 
 	provider := cluster.NewAddressProviderString(
-		[]string{node1.APIAddr, node2.APIAddr, node3.APIAddr})
-	node1Bs := cluster.NewBootstrapper(provider, nil)
+		[]string{node1.RaftAddr, node2.RaftAddr, node3.RaftAddr})
+	node1Bs := cluster.NewBootstrapper(provider, node1.Client)
 	node1Bs.Interval = time.Second
-	node2Bs := cluster.NewBootstrapper(provider, nil)
+	node2Bs := cluster.NewBootstrapper(provider, node2.Client)
 	node2Bs.Interval = time.Second
-	node3Bs := cluster.NewBootstrapper(provider, nil)
+	node3Bs := cluster.NewBootstrapper(provider, node3.Client)
 	node3Bs.Interval = time.Second
 
 	// Have all nodes start a bootstrap basically in parallel,
@@ -471,8 +470,8 @@ func Test_MultiNodeClusterBootstrapLaterJoin(t *testing.T) {
 	// params. Under the cover it should just do a join.
 	node4 := mustNewNode(false)
 	node4.Store.BootstrapExpect = 3
-	defer node3.Deprovision()
-	node4Bs := cluster.NewBootstrapper(provider, nil)
+	defer node4.Deprovision()
+	node4Bs := cluster.NewBootstrapper(provider, node4.Client)
 	node4Bs.Interval = time.Second
 	done := func() bool {
 		addr, _ := node4.Store.LeaderAddr()
@@ -490,9 +489,9 @@ func Test_MultiNodeClusterBootstrapLaterJoin(t *testing.T) {
 	}
 }
 
-// Test_MultiNodeClusterBootstrapLaterJoinHTTPS tests formation of a 3-node cluster which
+// Test_MultiNodeClusterBootstrapLaterJoinTLS tests formation of a 3-node cluster which
 // uses HTTP and TLS,then checking a 4th node can join later with the bootstap parameters.
-func Test_MultiNodeClusterBootstrapLaterJoinHTTPS(t *testing.T) {
+func Test_MultiNodeClusterBootstrapLaterJoinTLS(t *testing.T) {
 	node1 := mustNewNodeEncrypted(false, true, true)
 	node1.Store.BootstrapExpect = 3
 	defer node1.Deprovision()
@@ -505,20 +504,13 @@ func Test_MultiNodeClusterBootstrapLaterJoinHTTPS(t *testing.T) {
 	node3.Store.BootstrapExpect = 3
 	defer node3.Deprovision()
 
-	dialerTLSConfig, err := rtls.CreateClientConfig("", "", "", true)
-	if err != nil {
-		t.Fatalf("failed to create TLS config for cluster dialer: %s", err)
-	}
-	clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, dialerTLSConfig)
-	clstrClient := cluster.NewClient(clstrDialer, 5*time.Second)
-
 	provider := cluster.NewAddressProviderString(
 		[]string{node1.RaftAddr, node2.RaftAddr, node3.RaftAddr})
-	node1Bs := cluster.NewBootstrapper(provider, clstrClient)
+	node1Bs := cluster.NewBootstrapper(provider, node1.Client)
 	node1Bs.Interval = time.Second
-	node2Bs := cluster.NewBootstrapper(provider, clstrClient)
+	node2Bs := cluster.NewBootstrapper(provider, node2.Client)
 	node2Bs.Interval = time.Second
-	node3Bs := cluster.NewBootstrapper(provider, clstrClient)
+	node3Bs := cluster.NewBootstrapper(provider, node3.Client)
 	node3Bs.Interval = time.Second
 
 	// Have all nodes start a bootstrap basically in parallel,
@@ -577,7 +569,7 @@ func Test_MultiNodeClusterBootstrapLaterJoinHTTPS(t *testing.T) {
 	node4 := mustNewNodeEncrypted(false, true, true)
 	node4.Store.BootstrapExpect = 3
 	defer node3.Deprovision()
-	node4Bs := cluster.NewBootstrapper(provider, clstrClient)
+	node4Bs := cluster.NewBootstrapper(provider, node3.Client)
 	node4Bs.Interval = time.Second
 	done := func() bool {
 		addr, _ := node4.Store.LeaderAddr()

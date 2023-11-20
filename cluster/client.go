@@ -372,6 +372,9 @@ func (c *Client) Join(jr *command.JoinRequest, nodeAddr string, timeout time.Dur
 
 		if a.Error != "" {
 			if a.Error == "not leader" {
+				if a.Leader == "" {
+					return errors.New("no leader")
+				}
 				nodeAddr = a.Leader
 				continue
 			}
