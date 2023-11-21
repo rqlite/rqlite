@@ -364,7 +364,6 @@ class TestEndToEndNonVoter(unittest.TestCase):
     self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona'], [2, 'declan']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
 
   def test_leader_redirect(self):
-    return
     '''Test that non-voters supply the correct leader redirects (HTTP 301)'''
 
     l = self.cluster.wait_for_leader()
