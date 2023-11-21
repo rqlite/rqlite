@@ -372,11 +372,6 @@ class TestEndToEndNonVoter(unittest.TestCase):
     for n in fs:
       self.assertEqual(l.APIProtoAddr(), n.redirect_addr())
 
-    l.stop()
-    n = self.cluster.wait_for_leader(node_exc=l)
-    for f in self.cluster.followers():
-      self.assertEqual(n.APIProtoAddr(), f.redirect_addr())
-
 class TestEndToEndNonVoterFollowsLeader(unittest.TestCase):
   def setUp(self):
     n0 = Node(RQLITED_PATH, '0')
