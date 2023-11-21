@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net"
 	"reflect"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -182,8 +183,8 @@ func Test_BootstrapperBootSingleNotify(t *testing.T) {
 }
 
 func Test_BootstrapperBootMultiJoinNotify(t *testing.T) {
-	srv1Join := false
-	srv1Notified := false
+	var srv1JoinC int32
+	var srv1NotifiedC int32
 	srv1 := servicetest.NewService()
 	srv1.Handler = func(conn net.Conn) {
 		var p []byte
@@ -195,13 +196,13 @@ func Test_BootstrapperBootMultiJoinNotify(t *testing.T) {
 		}
 
 		if c.Type == Command_COMMAND_TYPE_JOIN {
-			srv1Join = true
+			atomic.AddInt32(&srv1JoinC, 1)
 		}
 
 		if c.Type != Command_COMMAND_TYPE_NOTIFY {
 			return
 		}
-		srv1Notified = true
+		atomic.AddInt32(&srv1NotifiedC, 1)
 
 		p, err = proto.Marshal(&CommandNotifyResponse{})
 		if err != nil {
@@ -213,8 +214,8 @@ func Test_BootstrapperBootMultiJoinNotify(t *testing.T) {
 	srv1.Start()
 	defer srv1.Close()
 
-	srv2Join := false
-	srv2Notified := false
+	var srv2JoinC int32
+	var srv2NotifiedC int32
 	srv2 := servicetest.NewService()
 	srv2.Handler = func(conn net.Conn) {
 		var p []byte
@@ -226,13 +227,13 @@ func Test_BootstrapperBootMultiJoinNotify(t *testing.T) {
 		}
 
 		if c.Type == Command_COMMAND_TYPE_JOIN {
-			srv2Join = true
+			atomic.AddInt32(&srv2JoinC, 1)
 		}
 
 		if c.Type != Command_COMMAND_TYPE_NOTIFY {
 			return
 		}
-		srv2Notified = true
+		atomic.AddInt32(&srv2NotifiedC, 1)
 
 		p, err = proto.Marshal(&CommandNotifyResponse{})
 		if err != nil {
@@ -259,10 +260,10 @@ func Test_BootstrapperBootMultiJoinNotify(t *testing.T) {
 		t.Fatalf("failed to boot: %s", err)
 	}
 
-	if srv1Join != true || srv2Join != true {
+	if atomic.LoadInt32(&srv1JoinC) < 1 || atomic.LoadInt32(&srv2JoinC) < 1 {
 		t.Fatalf("all join targets not contacted")
 	}
-	if srv1Notified != true || srv2Notified != true {
+	if atomic.LoadInt32(&srv2JoinC) < 1 || atomic.LoadInt32(&srv2NotifiedC) < 1 {
 		t.Fatalf("all notify targets not contacted")
 	}
 	if exp, got := BootDone, bs.Status(); exp != got {
