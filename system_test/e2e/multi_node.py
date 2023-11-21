@@ -370,12 +370,12 @@ class TestEndToEndNonVoter(unittest.TestCase):
     fs = self.cluster.followers()
     self.assertEqual(len(fs), 1)
     for n in fs:
-      self.assertEqual(l.APIAddr(), n.redirect_addr())
+      self.assertEqual(l.APIProtoAddr(), n.redirect_addr())
 
     l.stop()
     n = self.cluster.wait_for_leader(node_exc=l)
     for f in self.cluster.followers():
-      self.assertEqual(n.APIAddr(), f.redirect_addr())
+      self.assertEqual(n.APIProtoAddr(), f.redirect_addr())
 
 class TestEndToEndNonVoterFollowsLeader(unittest.TestCase):
   def setUp(self):
