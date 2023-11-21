@@ -983,12 +983,14 @@ func Test_MultiNodeClusterNodesNonVoter(t *testing.T) {
 // This test enables inter-node encryption, but keeps the unencrypted HTTP API.
 func Test_MultiNodeClusterNodeEncrypted(t *testing.T) {
 	node1 := mustNewNodeEncrypted(true, false, true)
+	node1.EnableTLSClient()
 	defer node1.Deprovision()
 	if _, err := node1.WaitForLeader(); err != nil {
 		t.Fatalf("node never became leader")
 	}
 
 	node2 := mustNewNodeEncrypted(false, false, true)
+	node2.EnableTLSClient()
 	defer node2.Deprovision()
 	if err := node2.Join(node1); err != nil {
 		t.Fatalf("node failed to join leader: %s", err.Error())
@@ -1015,6 +1017,7 @@ func Test_MultiNodeClusterNodeEncrypted(t *testing.T) {
 	}
 
 	node3 := mustNewNodeEncrypted(false, false, true)
+	node3.EnableTLSClient()
 	defer node3.Deprovision()
 	if err := node3.Join(leader); err != nil {
 		t.Fatalf("node failed to join leader: %s", err.Error())
