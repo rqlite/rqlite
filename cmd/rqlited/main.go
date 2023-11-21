@@ -579,11 +579,3 @@ func createCluster(cfg *Config, hasPeers bool, client *cluster.Client, str *stor
 	}
 	return nil
 }
-
-func createHTTPTLSConfig(cfg *Config) (*tls.Config, error) {
-	if cfg.HTTPx509Cert == "" && cfg.HTTPx509CACert == "" {
-		return nil, nil
-	}
-	return rtls.CreateClientConfig(cfg.HTTPx509Cert, cfg.HTTPx509Key, cfg.HTTPx509CACert,
-		cfg.NoHTTPVerify)
-}
