@@ -10,7 +10,7 @@ When officially released 8.0 will support (mostly) seamless upgrades from the 7.
 - Backup your data and load it into a new 8.0 system.
 - 8.0 always runs with an on-disk database, in-memory databases are no longer supported. Improvements made late in the 7.0 series means there is little difference in write performance between in-memory and on-disk modes, but supporting both modes just means confusion and higher development costs. If you were previously running in in-memory mode (the default), you don't need to do anything. But if you were previously passing `-on-disk` to `rqlited` so that rqlite ran in on-disk mode, you must now remove that flag.
 - A few rarely, if ever, used `rqlited` command-line flags have been removed. These flags just added operational overhead, while adding little value.
-- When forming a new cluster using 8.0, pass the **Raft** addresss or the remote node to the `-join` command, not the HTTP API address.
+- When forming a new cluster using 8.0, pass the **Raft** addresss of the remote node to the `-join` command, not the HTTP API address.
 
 ### New features
 - [PR #1362](https://github.com/rqlite/rqlite/pull/1362): Enable SQLite [FTS5](https://www.sqlite.org/fts5.html). Fixes [issue #1361](https://github.com/rqlite/rqlite/issues/1361)
