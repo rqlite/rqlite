@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -257,17 +258,22 @@ func (c *Config) Validate() error {
 			hadv, HTTPAddrFlag, HTTPAdvAddrFlag)
 	}
 
-	if _, _, err := net.SplitHostPort(c.RaftAddr); err != nil {
+	if _, rp, err := net.SplitHostPort(c.RaftAddr); err != nil {
 		return errors.New("raft bind address not valid")
+	} else if _, err := strconv.Atoi(rp); err != nil {
+		return errors.New("raft bind port not valid")
 	}
 
-	radv, _, err := net.SplitHostPort(c.RaftAdv)
+	radv, rp, err := net.SplitHostPort(c.RaftAdv)
 	if err != nil {
 		return errors.New("raft advertised address not valid")
 	}
 	if addr := net.ParseIP(radv); addr != nil && addr.IsUnspecified() {
 		return fmt.Errorf("advertised Raft address is not routable (%s), specify it via -%s or -%s",
 			radv, RaftAddrFlag, RaftAdvAddrFlag)
+	}
+	if _, err := strconv.Atoi(rp); err != nil {
+		return errors.New("raft advertised port is not valid")
 	}
 
 	if c.RaftAdv == c.HTTPAdv {
@@ -334,6 +340,20 @@ func (c *Config) HTTPURL() string {
 		apiProto = "https"
 	}
 	return fmt.Sprintf("%s://%s", apiProto, c.HTTPAdv)
+}
+
+// RaftPort returns the port on which the Raft system is listening. Validate must
+// have been called before calling this method.
+func (c *Config) RaftPort() int {
+	_, port, err := net.SplitHostPort(c.RaftAddr)
+	if err != nil {
+		panic("RaftAddr not valid")
+	}
+	p, err := strconv.Atoi(port)
+	if err != nil {
+		panic("RaftAddr port not valid")
+	}
+	return p
 }
 
 // DiscoConfigReader returns a ReadCloser providing access to the Disco config.

@@ -515,7 +515,7 @@ func createCluster(cfg *Config, hasPeers bool, client *cluster.Client, str *stor
 			if err != nil {
 				return fmt.Errorf("error reading DNS configuration: %s", err.Error())
 			}
-			provider = dns.New(dnsCfg)
+			provider = dns.NewWithPort(dnsCfg, cfg.RaftPort())
 
 		} else {
 			dnssrvCfg, err := dnssrv.NewConfigFromReader(rc)
