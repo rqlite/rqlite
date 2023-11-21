@@ -494,14 +494,17 @@ func Test_MultiNodeClusterBootstrapLaterJoin(t *testing.T) {
 func Test_MultiNodeClusterBootstrapLaterJoinTLS(t *testing.T) {
 	node1 := mustNewNodeEncrypted(false, true, true)
 	node1.Store.BootstrapExpect = 3
+	node1.EnableTLSClient()
 	defer node1.Deprovision()
 
 	node2 := mustNewNodeEncrypted(false, true, true)
 	node2.Store.BootstrapExpect = 3
+	node2.EnableTLSClient()
 	defer node2.Deprovision()
 
 	node3 := mustNewNodeEncrypted(false, true, true)
 	node3.Store.BootstrapExpect = 3
+	node3.EnableTLSClient()
 	defer node3.Deprovision()
 
 	provider := cluster.NewAddressProviderString(
@@ -568,6 +571,7 @@ func Test_MultiNodeClusterBootstrapLaterJoinTLS(t *testing.T) {
 	// params. Under the covers it should just do a join.
 	node4 := mustNewNodeEncrypted(false, true, true)
 	node4.Store.BootstrapExpect = 3
+	node4.EnableTLSClient()
 	defer node3.Deprovision()
 	node4Bs := cluster.NewBootstrapper(provider, node3.Client)
 	node4Bs.Interval = time.Second
