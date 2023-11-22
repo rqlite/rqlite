@@ -17,6 +17,7 @@ When officially released 8.0 will support (mostly) seamless upgrades from the 7.
 - [PR #1405](https://github.com/rqlite/rqlite/pull/1405): Support a configurable HTTP connection timeout in the rqlite CLI. Thanks @jtarchie
 - [PR #1418](https://github.com/rqlite/rqlite/pull/1418): Add basic CORS support. Fixes [issue #687](https://github.com/rqlite/rqlite/issues/687). Thanks @kkoreilly
 - [PR #1422](https://github.com/rqlite/rqlite/pull/1422): Add mTLS support to rqlite CLI. Fixes [issue #1421](https://github.com/rqlite/rqlite/issues/1421)
+- [PR #1427](https://github.com/rqlite/rqlite/pull/1427): Upgrade to SQLite 3.44.0.
   
 ### Implementation changes and bug fixes
 - [PR #1368](https://github.com/rqlite/rqlite/pull/1374): Switch to always-on expvar and pprof.
