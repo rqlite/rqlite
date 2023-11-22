@@ -834,7 +834,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	s.logger.Printf("load request completed in %s", time.Now().Sub(startTime).String())
+	s.logger.Printf("load request completed in %s", time.Since(startTime).String())
 	s.writeResponse(w, r, resp)
 }
 
@@ -1798,7 +1798,7 @@ func (s *Service) addAllowHeaders(w http.ResponseWriter) {
 // tlsStats returns the TLS stats for the service.
 func (s *Service) tlsStats() map[string]interface{} {
 	m := map[string]interface{}{
-		"enabled": prettyEnabled(s.tlsConfig != nil),
+		"enabled": fmt.Sprintf("%t", s.tlsConfig != nil),
 	}
 	if s.tlsConfig != nil {
 		m["client_auth"] = s.tlsConfig.ClientAuth.String()
