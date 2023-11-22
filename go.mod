@@ -16,7 +16,7 @@ require (
 	github.com/labstack/gommon v0.4.1 // indirect
 	github.com/mkideal/cli v0.2.7
 	github.com/mkideal/pkg v0.1.3
-	github.com/rqlite/go-sqlite3 v1.29.0
+	github.com/rqlite/go-sqlite3 v1.30.0
 	github.com/rqlite/raft-boltdb/v2 v2.0.0-20230523104317-c08e70f4de48
 	github.com/rqlite/rqlite-disco-clients v0.0.0-20231121120431-b2b3f3f258b8
 	github.com/rqlite/sql v0.0.0-20221103124402-8f9ff0ceb8f0
