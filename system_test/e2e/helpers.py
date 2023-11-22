@@ -28,7 +28,6 @@ def random_addr():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
       s.bind(('localhost', 0))
       addr = f"{s.getsockname()[0]}:{s.getsockname()[1]}"
-
       if addr not in allocated_addresses:
         allocated_addresses.add(addr)
         return addr
