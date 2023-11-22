@@ -59,12 +59,12 @@ func NewService(c Client, s Store) *Service {
 // it can use to join the cluster, or c) an unrecoverable error occurs.
 func (s *Service) Register(id, apiAddr, addr string) (bool, string, error) {
 	for {
-		_, cAPIAddr, _, ok, err := s.c.GetLeader()
+		_, _, cRaftAddr, ok, err := s.c.GetLeader()
 		if err != nil {
 			s.logger.Printf("failed to get leader: %s", err.Error())
 		}
 		if ok {
-			return false, cAPIAddr, nil
+			return false, cRaftAddr, nil
 		}
 
 		ok, err = s.c.InitializeLeader(id, apiAddr, addr)
@@ -73,7 +73,7 @@ func (s *Service) Register(id, apiAddr, addr string) (bool, string, error) {
 		}
 		if ok {
 			s.updateContact(time.Now())
-			return true, apiAddr, nil
+			return true, addr, nil
 		}
 
 		time.Sleep(random.Jitter(s.RegisterInterval))

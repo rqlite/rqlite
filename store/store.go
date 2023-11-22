@@ -1336,6 +1336,15 @@ func (s *Store) Notify(nr *command.NotifyRequest) error {
 	if _, ok := s.notifyingNodes[nr.Id]; ok {
 		return nil
 	}
+
+	// Confirm that this node can resolve the remote address. This can happen due
+	// to incomplete DNS records across the underlying infrastructure. If it can't
+	// then don't consider this Notify attempt successful -- so the notifying node
+	// will presumably try again.
+	if addr, err := resolvableAddress(nr.Address); err != nil {
+		return fmt.Errorf("failed to resolve %s: %w", addr, err)
+	}
+
 	s.notifyingNodes[nr.Id] = &Server{nr.Id, nr.Address, "voter"}
 	if len(s.notifyingNodes) < s.BootstrapExpect {
 		return nil
@@ -1377,6 +1386,14 @@ func (s *Store) Join(jr *command.JoinRequest) error {
 	id := jr.Id
 	addr := jr.Address
 	voter := jr.Voter
+
+	// Confirm that this node can resolve the remote address. This can happen due
+	// to incomplete DNS records across the underlying infrastructure. If it can't
+	// then don't consider this join attempt successful -- so the joining node
+	// will presumably try again.
+	if addr, err := resolvableAddress(addr); err != nil {
+		return fmt.Errorf("failed to resolve %s: %w", addr, err)
+	}
 
 	configFuture := s.raft.GetConfiguration()
 	if err := configFuture.Error(); err != nil {
@@ -2232,4 +2249,14 @@ func fullPretty(full bool) string {
 		return "full"
 	}
 	return "incremental"
+}
+
+func resolvableAddress(addr string) (string, error) {
+	h, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		// Just try the given address directly.
+		h = addr
+	}
+	_, err = net.LookupHost(h)
+	return h, err
 }

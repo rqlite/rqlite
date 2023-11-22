@@ -7,11 +7,11 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -101,16 +101,8 @@ type Config struct {
 	// RaftAdv is the advertised Raft server address.
 	RaftAdv string
 
-	// JoinSrcIP sets the source IP address during Join request. May not be set.
-	JoinSrcIP string
-
-	// JoinAddr is the list addresses to use for a join attempt. Each address
-	// will include the proto (HTTP or HTTPS) and will never include the node's
-	// own HTTP server address. May not be set.
-	JoinAddr string
-
-	// JoinAs sets the user join attempts should be performed as. May not be set.
-	JoinAs string
+	// JoinAddrs is the list of Raft addresses to use for a join attempt.
+	JoinAddrs string
 
 	// JoinAttempts is the number of times a node should attempt to join using a
 	// given address.
@@ -266,17 +258,22 @@ func (c *Config) Validate() error {
 			hadv, HTTPAddrFlag, HTTPAdvAddrFlag)
 	}
 
-	if _, _, err := net.SplitHostPort(c.RaftAddr); err != nil {
+	if _, rp, err := net.SplitHostPort(c.RaftAddr); err != nil {
 		return errors.New("raft bind address not valid")
+	} else if _, err := strconv.Atoi(rp); err != nil {
+		return errors.New("raft bind port not valid")
 	}
 
-	radv, _, err := net.SplitHostPort(c.RaftAdv)
+	radv, rp, err := net.SplitHostPort(c.RaftAdv)
 	if err != nil {
 		return errors.New("raft advertised address not valid")
 	}
 	if addr := net.ParseIP(radv); addr != nil && addr.IsUnspecified() {
 		return fmt.Errorf("advertised Raft address is not routable (%s), specify it via -%s or -%s",
 			radv, RaftAddrFlag, RaftAdvAddrFlag)
+	}
+	if _, err := strconv.Atoi(rp); err != nil {
+		return errors.New("raft advertised port is not valid")
 	}
 
 	if c.RaftAdv == c.HTTPAdv {
@@ -289,15 +286,15 @@ func (c *Config) Validate() error {
 	}
 
 	// Join parameters OK?
-	if c.JoinAddr != "" {
-		addrs := strings.Split(c.JoinAddr, ",")
+	if c.JoinAddrs != "" {
+		addrs := strings.Split(c.JoinAddrs, ",")
 		for i := range addrs {
-			u, err := url.Parse(addrs[i])
-			if err != nil {
+			if _, _, err := net.SplitHostPort(addrs[i]); err != nil {
 				return fmt.Errorf("%s is an invalid join adddress", addrs[i])
 			}
+
 			if c.BootstrapExpect == 0 {
-				if u.Host == c.HTTPAdv || addrs[i] == c.HTTPAddr {
+				if addrs[i] == c.RaftAdv || addrs[i] == c.RaftAddr {
 					return errors.New("node cannot join with itself unless bootstrapping")
 				}
 				if c.AutoRestoreFile != "" {
@@ -305,9 +302,6 @@ func (c *Config) Validate() error {
 				}
 			}
 		}
-	}
-	if c.JoinSrcIP != "" && net.ParseIP(c.JoinSrcIP) == nil {
-		return fmt.Errorf("invalid join source IP address: %s", c.JoinSrcIP)
 	}
 
 	// Valid disco mode?
@@ -332,10 +326,10 @@ func (c *Config) Validate() error {
 // JoinAddresses returns the join addresses set at the command line. Returns nil
 // if no join addresses were set.
 func (c *Config) JoinAddresses() []string {
-	if c.JoinAddr == "" {
+	if c.JoinAddrs == "" {
 		return nil
 	}
-	return strings.Split(c.JoinAddr, ",")
+	return strings.Split(c.JoinAddrs, ",")
 }
 
 // HTTPURL returns the fully-formed, advertised HTTP API address for this config, including
@@ -346,6 +340,20 @@ func (c *Config) HTTPURL() string {
 		apiProto = "https"
 	}
 	return fmt.Sprintf("%s://%s", apiProto, c.HTTPAdv)
+}
+
+// RaftPort returns the port on which the Raft system is listening. Validate must
+// have been called before calling this method.
+func (c *Config) RaftPort() int {
+	_, port, err := net.SplitHostPort(c.RaftAddr)
+	if err != nil {
+		panic("RaftAddr not valid")
+	}
+	p, err := strconv.Atoi(port)
+	if err != nil {
+		panic("RaftAddr port not valid")
+	}
+	return p
 }
 
 // DiscoConfigReader returns a ReadCloser providing access to the Disco config.
@@ -430,9 +438,7 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	flag.StringVar(&config.AutoRestoreFile, "auto-restore", "", "Path to automatic restore configuration file. If not set, not enabled")
 	flag.StringVar(&config.RaftAddr, RaftAddrFlag, "localhost:4002", "Raft communication bind address")
 	flag.StringVar(&config.RaftAdv, RaftAdvAddrFlag, "", "Advertised Raft communication address. If not set, same as Raft bind address")
-	flag.StringVar(&config.JoinSrcIP, "join-source-ip", "", "Set source IP address during HTTP Join request")
-	flag.StringVar(&config.JoinAddr, "join", "", "Comma-delimited list of nodes, through which a cluster can be joined (proto://host:port)")
-	flag.StringVar(&config.JoinAs, "join-as", "", "Username in authentication file to join as. If not set, joins anonymously")
+	flag.StringVar(&config.JoinAddrs, "join", "", "Comma-delimited list of nodes, through which a cluster can be joined (proto://host:port)")
 	flag.IntVar(&config.JoinAttempts, "join-attempts", 5, "Number of join attempts to make")
 	flag.DurationVar(&config.JoinInterval, "join-interval", 3*time.Second, "Period between join attempts")
 	flag.IntVar(&config.BootstrapExpect, "bootstrap-expect", 0, "Minimum number of nodes required for a bootstrap")

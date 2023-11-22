@@ -250,6 +250,47 @@ func Test_ClientRemoveNodeTimeout(t *testing.T) {
 	}
 }
 
+func Test_ClientJoinNode(t *testing.T) {
+	srv := servicetest.NewService()
+	srv.Handler = func(conn net.Conn) {
+		var p []byte
+		var err error
+		c := readCommand(conn)
+		if c == nil {
+			// Connection error handling
+			return
+		}
+		if c.Type != Command_COMMAND_TYPE_JOIN {
+			t.Fatalf("unexpected command type: %d", c.Type)
+		}
+		jnr := c.GetJoinRequest()
+		if jnr == nil {
+			t.Fatal("expected join node request, got nil")
+		}
+		if jnr.Address != "test-node-addr" {
+			t.Fatalf("unexpected node address, got %s", jnr.Address)
+		}
+
+		p, err = proto.Marshal(&CommandJoinResponse{})
+		if err != nil {
+			conn.Close()
+			return
+		}
+		writeBytesWithLength(conn, p)
+	}
+	srv.Start()
+	defer srv.Close()
+
+	c := NewClient(&simpleDialer{}, 0)
+	req := &command.JoinRequest{
+		Address: "test-node-addr",
+	}
+	err := c.Join(req, srv.Addr(), time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func readCommand(conn net.Conn) *Command {
 	b := make([]byte, protoBufferLengthSize)
 	_, err := io.ReadFull(conn, b)

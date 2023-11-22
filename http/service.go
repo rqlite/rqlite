@@ -1,5 +1,4 @@
 // Package http provides the HTTP server for accessing the distributed database.
-// It also provides the endpoint for other nodes to join an existing cluster.
 package http
 
 import (
@@ -72,12 +71,6 @@ type Database interface {
 // Store is the interface the Raft-based database must implement.
 type Store interface {
 	Database
-
-	// Join joins the node with the given ID, reachable at addr, to this node.
-	Join(jr *command.JoinRequest) error
-
-	// Notify notifies this node that a node is available at addr.
-	Notify(nr *command.NotifyRequest) error
 
 	// Remove removes the node from the cluster.
 	Remove(rn *command.RemoveNodeRequest) error
@@ -226,8 +219,6 @@ const (
 	numStatus                         = "num_status"
 	numBackups                        = "backups"
 	numLoad                           = "loads"
-	numJoins                          = "joins"
-	numNotifies                       = "notifies"
 	numAuthOK                         = "authOK"
 	numAuthFail                       = "authFail"
 
@@ -293,8 +284,6 @@ func ResetStats() {
 	stats.Add(numStatus, 0)
 	stats.Add(numBackups, 0)
 	stats.Add(numLoad, 0)
-	stats.Add(numJoins, 0)
-	stats.Add(numNotifies, 0)
 	stats.Add(numAuthOK, 0)
 	stats.Add(numAuthFail, 0)
 }
@@ -464,12 +453,6 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case strings.HasPrefix(r.URL.Path, "/db/load"):
 		stats.Add(numLoad, 1)
 		s.handleLoad(w, r)
-	case strings.HasPrefix(r.URL.Path, "/join"):
-		stats.Add(numJoins, 1)
-		s.handleJoin(w, r)
-	case strings.HasPrefix(r.URL.Path, "/notify"):
-		stats.Add(numNotifies, 1)
-		s.handleNotify(w, r)
 	case strings.HasPrefix(r.URL.Path, "/remove"):
 		s.handleRemove(w, r)
 	case strings.HasPrefix(r.URL.Path, "/status"):
@@ -500,147 +483,6 @@ func (s *Service) RegisterStatus(key string, stat StatusReporter) error {
 	s.statuses[key] = stat
 
 	return nil
-}
-
-// handleJoin handles cluster-join requests from other nodes.
-func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
-	if !s.CheckRequestPerm(r, auth.PermJoin) && !s.CheckRequestPerm(r, auth.PermJoinReadOnly) {
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-
-	if r.Method != "POST" {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
-	b, err := io.ReadAll(r.Body)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	md := map[string]interface{}{}
-	if err := json.Unmarshal(b, &md); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	rID, ok := md["id"]
-	if !ok {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	rAddr, ok := md["addr"]
-	if !ok {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	voter, ok := md["voter"]
-	if !ok {
-		voter = true
-	}
-	if voter.(bool) && !s.CheckRequestPerm(r, auth.PermJoin) {
-		http.Error(w, "joining as voter not allowed", http.StatusUnauthorized)
-		return
-	}
-
-	remoteID, remoteAddr := rID.(string), rAddr.(string)
-
-	s.logger.Printf("received join request from node with ID %s at %s",
-		remoteID, remoteAddr)
-
-	// Confirm that this node can resolve the remote address. This can happen due
-	// to incomplete DNS records across the underlying infrastructure. If it can't
-	// then don't consider this join attempt successful -- so the joining node
-	// will presumably try again.
-	if addr, err := resolvableAddress(remoteAddr); err != nil {
-		s.logger.Printf("failed to resolve %s (%s) while handling join request", addr, err)
-		http.Error(w, fmt.Sprintf("can't resolve %s (%s)", addr, err.Error()),
-			http.StatusServiceUnavailable)
-		return
-	}
-
-	jr := &command.JoinRequest{
-		Id:      remoteID,
-		Address: remoteAddr,
-		Voter:   voter.(bool),
-	}
-	if err := s.store.Join(jr); err != nil {
-		if err == store.ErrNotLeader {
-			leaderAPIAddr := s.LeaderAPIAddr()
-			if leaderAPIAddr == "" {
-				stats.Add(numLeaderNotFound, 1)
-				http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
-				return
-			}
-
-			redirect := s.FormRedirect(r, leaderAPIAddr)
-			http.Redirect(w, r, redirect, http.StatusMovedPermanently)
-			return
-		}
-
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-}
-
-// handleNotify handles node-notify requests from other nodes.
-func (s *Service) handleNotify(w http.ResponseWriter, r *http.Request) {
-	if !s.CheckRequestPerm(r, auth.PermJoin) {
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-
-	if r.Method != "POST" {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
-	b, err := io.ReadAll(r.Body)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	md := map[string]interface{}{}
-	if err := json.Unmarshal(b, &md); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	rID, ok := md["id"]
-	if !ok {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	rAddr, ok := md["addr"]
-	if !ok {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	remoteID, remoteAddr := rID.(string), rAddr.(string)
-
-	s.logger.Printf("received notify request from node with ID %s at %s",
-		remoteID, remoteAddr)
-
-	// Confirm that this node can resolve the remote address. This can happen due
-	// to incomplete DNS records across the underlying infrastructure. If it can't
-	// then don't consider this notify attempt successful -- so the notifying node
-	// will presumably try again.
-	if addr, err := resolvableAddress(remoteAddr); err != nil {
-		s.logger.Printf("failed to resolve %s (%s) while handling notify request", addr, err)
-		http.Error(w, fmt.Sprintf("can't resolve %s (%s)", addr, err.Error()),
-			http.StatusServiceUnavailable)
-		return
-	}
-
-	if err := s.store.Notify(&command.NotifyRequest{
-		Id:      remoteID,
-		Address: remoteAddr,
-	}); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
 }
 
 // handleRemove handles cluster-remove requests.
@@ -2292,16 +2134,6 @@ func executeRequestFromStrings(s []string, timings, tx bool) *command.ExecuteReq
 		},
 		Timings: timings,
 	}
-}
-
-func resolvableAddress(addr string) (string, error) {
-	h, _, err := net.SplitHostPort(addr)
-	if err != nil {
-		// Just try the given address directly.
-		h = addr
-	}
-	_, err = net.LookupHost(h)
-	return h, err
 }
 
 func makeCredentials(username, password string) *cluster.Credentials {

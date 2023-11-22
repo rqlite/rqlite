@@ -468,6 +468,7 @@ type MockManager struct {
 	removeNodeFn func(rn *command.RemoveNodeRequest) error
 	notifyFn     func(n *command.NotifyRequest) error
 	joinFn       func(j *command.JoinRequest) error
+	leaderAddrFn func() (string, error)
 }
 
 func (m *MockManager) Remove(rn *command.RemoveNodeRequest) error {
@@ -489,6 +490,13 @@ func (m *MockManager) Join(j *command.JoinRequest) error {
 		return nil
 	}
 	return m.joinFn(j)
+}
+
+func (m *MockManager) LeaderAddr() (string, error) {
+	if m.leaderAddrFn == nil {
+		return "", nil
+	}
+	return m.leaderAddrFn()
 }
 
 func mustNewMockManager() *MockManager {

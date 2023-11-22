@@ -1,19 +1,14 @@
 package cluster
 
 import (
-	"bytes"
-	"crypto/tls"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
-	rurl "github.com/rqlite/rqlite/http/url"
+	"github.com/rqlite/rqlite/command"
 	"github.com/rqlite/rqlite/random"
 )
 
@@ -40,6 +35,12 @@ const (
 	BootTimeout
 )
 
+const (
+	requestTimeout  = 5 * time.Second
+	numJoinAttempts = 1
+	bootInterval    = 2 * time.Second
+)
+
 // String returns a string representation of the BootStatus.
 func (b BootStatus) String() string {
 	switch b {
@@ -64,13 +65,9 @@ type AddressProvider interface {
 
 // Bootstrapper performs a bootstrap of this node.
 type Bootstrapper struct {
-	provider  AddressProvider
-	tlsConfig *tls.Config
+	provider AddressProvider
 
-	joiner *Joiner
-
-	username string
-	password string
+	client *Client
 
 	logger   *log.Logger
 	Interval time.Duration
@@ -80,20 +77,14 @@ type Bootstrapper struct {
 }
 
 // NewBootstrapper returns an instance of a Bootstrapper.
-func NewBootstrapper(p AddressProvider, tlsConfig *tls.Config) *Bootstrapper {
+func NewBootstrapper(p AddressProvider, client *Client) *Bootstrapper {
 	bs := &Bootstrapper{
-		provider:  p,
-		tlsConfig: tlsConfig,
-		joiner:    NewJoiner("", 1, 0, tlsConfig),
-		logger:    log.New(os.Stderr, "[cluster-bootstrap] ", log.LstdFlags),
-		Interval:  2 * time.Second,
+		provider: p,
+		client:   client,
+		logger:   log.New(os.Stderr, "[cluster-bootstrap] ", log.LstdFlags),
+		Interval: bootInterval,
 	}
 	return bs
-}
-
-// SetBasicAuth sets Basic Auth credentials for any bootstrap attempt.
-func (b *Bootstrapper) SetBasicAuth(username, password string) {
-	b.username, b.password = username, password
 }
 
 // Boot performs the bootstrapping process for this node. This means it will
@@ -115,6 +106,7 @@ func (b *Bootstrapper) Boot(id, raftAddr string, done func() bool, timeout time.
 	tickerT := time.NewTimer(random.Jitter(time.Millisecond))
 	defer tickerT.Stop()
 
+	joiner := NewJoiner(b.client, numJoinAttempts, requestTimeout)
 	for {
 		select {
 		case <-timeoutT.C:
@@ -140,8 +132,7 @@ func (b *Bootstrapper) Boot(id, raftAddr string, done func() bool, timeout time.
 
 			// Try an explicit join first. Joining an existing cluster is always given priority
 			// over trying to form a new cluster.
-			b.joiner.SetBasicAuth(b.username, b.password)
-			if j, err := b.joiner.Do(targets, id, raftAddr, true); err == nil {
+			if j, err := joiner.Do(targets, id, raftAddr, true); err == nil {
 				b.logger.Printf("succeeded directly joining cluster via node at %s", j)
 				b.setBootStatus(BootJoin)
 				return nil
@@ -152,8 +143,8 @@ func (b *Bootstrapper) Boot(id, raftAddr string, done func() bool, timeout time.
 			// or none of the nodes are in a functioning cluster with a leader. That means that
 			// this node could be part of a set nodes that are bootstrapping to form a cluster
 			// de novo. For that to happen it needs to now let the other nodes know it is here.
-			// If this is a new cluster, some node will then reach the bootstrap-expect value,
-			// form the cluster, beating all other nodes to it.
+			// If this is a new cluster, some node will then reach the bootstrap-expect value
+			// first, form the cluster, beating all other nodes to it.
 			if err := b.notify(targets, id, raftAddr); err != nil {
 				b.logger.Printf("failed to notify all targets: %s (%s, will retry)", targets,
 					err.Error())
@@ -172,62 +163,13 @@ func (b *Bootstrapper) Status() BootStatus {
 }
 
 func (b *Bootstrapper) notify(targets []string, id, raftAddr string) error {
-	// Create and configure the client to connect to the other node.
-	tr := &http.Transport{
-		TLSClientConfig:   b.tlsConfig,
-		ForceAttemptHTTP2: true,
+	nr := &command.NotifyRequest{
+		Address: raftAddr,
+		Id:      id,
 	}
-	client := &http.Client{Transport: tr}
-
-	buf, err := json.Marshal(map[string]interface{}{
-		"id":   id,
-		"addr": raftAddr,
-	})
-	if err != nil {
-		return err
-	}
-
 	for _, t := range targets {
-		// Check for protocol scheme, and insert default if necessary.
-		fullTarget := rurl.NormalizeAddr(fmt.Sprintf("%s/notify", t))
-
-	TargetLoop:
-		for {
-			req, err := http.NewRequest("POST", fullTarget, bytes.NewReader(buf))
-			if err != nil {
-				return err
-			}
-			if b.username != "" && b.password != "" {
-				req.SetBasicAuth(b.username, b.password)
-			}
-			req.Header.Add("Content-Type", "application/json")
-
-			resp, err := client.Do(req)
-			if err != nil {
-				return fmt.Errorf("failed to post notification to node at %s: %s",
-					rurl.RemoveBasicAuth(fullTarget), err)
-			}
-			resp.Body.Close()
-			switch resp.StatusCode {
-			case http.StatusOK:
-				b.logger.Printf("succeeded notifying target: %s", rurl.RemoveBasicAuth(fullTarget))
-				break TargetLoop
-			case http.StatusBadRequest:
-				// One possible cause is that the target server is listening for HTTPS, but
-				// an HTTP attempt was made. Switch the protocol to HTTPS, and try again.
-				// This can happen when using various disco approaches, since it doesn't
-				// record information about which protocol a registered node is actually using.
-				if strings.HasPrefix(fullTarget, "https://") {
-					// It's already HTTPS, give up.
-					return fmt.Errorf("failed to notify node at %s: %s", rurl.RemoveBasicAuth(fullTarget),
-						resp.Status)
-				}
-				fullTarget = rurl.EnsureHTTPS(fullTarget)
-			default:
-				return fmt.Errorf("failed to notify node at %s: %s",
-					rurl.RemoveBasicAuth(fullTarget), resp.Status)
-			}
-
+		if err := b.client.Notify(nr, t, requestTimeout); err != nil {
+			return fmt.Errorf("failed to notify node at %s: %s", t, err)
 		}
 	}
 	return nil

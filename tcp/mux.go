@@ -148,9 +148,14 @@ func (mux *Mux) Serve() error {
 
 // Stats returns status of the mux.
 func (mux *Mux) Stats() (interface{}, error) {
+	e := "disabled"
+	if mux.tlsConfig != nil {
+		e = "enabled"
+	}
 	s := map[string]string{
 		"addr":    mux.addr.String(),
 		"timeout": mux.Timeout.String(),
+		"tls":     e,
 	}
 
 	return s, nil
