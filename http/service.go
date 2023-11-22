@@ -2136,16 +2136,6 @@ func executeRequestFromStrings(s []string, timings, tx bool) *command.ExecuteReq
 	}
 }
 
-func resolvableAddress(addr string) (string, error) {
-	h, _, err := net.SplitHostPort(addr)
-	if err != nil {
-		// Just try the given address directly.
-		h = addr
-	}
-	_, err = net.LookupHost(h)
-	return h, err
-}
-
 func makeCredentials(username, password string) *cluster.Credentials {
 	return &cluster.Credentials{
 		Username: username,
