@@ -20,6 +20,19 @@ TIMEOUT=20
 
 seqRe = re.compile("^{'results': \[\], 'sequence_number': \d+}$")
 
+# random_addr returns a random IP:port address which is not already in use,
+# and which has not already been returned by this function.
+allocated_addresses = set()
+def random_addr():
+  while True:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+      s.bind(('localhost', 0))
+      addr = f"{s.getsockname()[0]}:{s.getsockname()[1]}"
+
+      if addr not in allocated_addresses:
+        allocated_addresses.add(addr)
+        return addr
+
 def d_(s):
     return ast.literal_eval(s.replace("'", "\""))
 
@@ -62,11 +75,6 @@ def raise_for_status(r):
     print((r.text))
     raise e
 
-def random_addr():
-  s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-  s.bind(('localhost', 0))
-  return s, ':'.join([s.getsockname()[0], str(s.getsockname()[1])])
-
 class Node(object):
   def __init__(self, path, node_id,
                api_addr=None, api_adv=None,
@@ -83,19 +91,9 @@ class Node(object):
     s_api = None
     s_raft = None
     if api_addr is None:
-      s_api, addr = random_addr()
-      api_addr = addr
+      api_addr = random_addr()
     if raft_addr is None:
-      s_raft, addr = random_addr()
-      raft_addr = addr
-    
-    # Only now close any sockets used to get random addresses, so there is
-    # no chance a randomly selected address would get re-used by the HTTP
-    # system and Raft system.
-    if s_api is not None:
-        s_api.close()
-    if s_raft is not None:
-        s_raft.close()
+      raft_addr = random_addr()
         
     if api_adv is None:
       api_adv = api_addr
@@ -148,9 +146,7 @@ class Node(object):
     if self.api_adv == self.api_addr:
       self.api_adv = None
 
-    s, addr = random_addr()
-    self.api_addr = addr
-    s.close()
+    self.api_addr = random_addr()
 
     if self.api_adv is None:
       self.api_adv = self.api_addr
@@ -158,9 +154,7 @@ class Node(object):
     if self.raft_adv == self.raft_addr:
       self.raft_adv = None
 
-    s, addr = random_addr()
-    self.raft_addr = addr
-    s.close()
+    self.raft_addr = random_addr()
 
     if self.raft_adv is None:
       self.raft_adv = self.raft_addr
