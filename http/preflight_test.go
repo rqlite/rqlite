@@ -54,9 +54,6 @@ func Test_IsServingHTTP_InvalidAddress(t *testing.T) {
 	}
 }
 
-// // Test_IsServingHTTP_Timeout is not straightforward to simulate in a unit test without external dependencies.
-// // Skipping this test case.
-
 // Test_IsServingHTTP_HTTPErrorStatusCode tests HTTP server returning error status code.
 func Test_IsServingHTTP_HTTPErrorStatusCode(t *testing.T) {
 	httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
