@@ -1177,9 +1177,18 @@ func testSerialize(t *testing.T, db *DB) {
 }
 
 func testDump(t *testing.T, db *DB) {
+	expRows := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[347]]}]`
+
 	_, err := db.ExecuteStringStmt(chinook.DB)
 	if err != nil {
 		t.Fatalf("failed to load chinook dump: %s", err.Error())
+	}
+	r, err := db.QueryStringStmt(`SELECT COUNT(*) FROM Album`)
+	if err != nil {
+		t.Fatalf("failed to count rows: %s", err.Error())
+	}
+	if exp, got := expRows, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
 	var b strings.Builder
@@ -1187,8 +1196,18 @@ func testDump(t *testing.T, db *DB) {
 		t.Fatalf("failed to dump database: %s", err.Error())
 	}
 
-	if b.String() != chinook.DB {
-		t.Fatal("dumped database does not equal entered database")
+	newDB, newDBPath := mustCreateOnDiskDatabase()
+	defer db.Close()
+	defer os.Remove(newDBPath)
+	if _, err := newDB.ExecuteStringStmt(b.String()); err != nil {
+		t.Fatalf("failed to load dumped database into new database: %s", err.Error())
+	}
+	r, err = newDB.QueryStringStmt(`SELECT COUNT(*) FROM Album`)
+	if err != nil {
+		t.Fatalf("failed to count rows in new database: %s", err.Error())
+	}
+	if exp, got := expRows, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query of new database\nexp: %s\ngot: %s", exp, got)
 	}
 }
 
