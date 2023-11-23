@@ -47,6 +47,7 @@ When officially released 8.0 will support (mostly) seamless upgrades from the 7.
 - [PR #1413](https://github.com/rqlite/rqlite/pull/1413): Remove `-raft-no-freelist-sync` command line flag.
 - [PR #1420](https://github.com/rqlite/rqlite/pull/1420): Nodes join a cluster using the Raft address, not the HTTP API.
 - [PR #1426](https://github.com/rqlite/rqlite/pull/1426): 'go mod' updates, including moving to Raft 1.6.
+- [PR #1430](https://github.com/rqlite/rqlite/pull/1430): Check that any supplied Join addresses are not HTTP servers.
 
 ## 7.21.4 (July 8th 2023)
 ### Implementation changes and bug fixes
