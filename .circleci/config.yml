@@ -41,8 +41,7 @@ commands: # a reusable command with parameters
 
 jobs:
   kubernetes:
-    docker:
-      - image: << pipeline.parameters.primary_image >>
+    machine: true
     steps:
       - checkout
       # Install kubectl
