@@ -26,6 +26,7 @@ import (
 	"github.com/rqlite/rqlite/cmd"
 	"github.com/rqlite/rqlite/db"
 	"github.com/rqlite/rqlite/disco"
+	"github.com/rqlite/rqlite/http"
 	httpd "github.com/rqlite/rqlite/http"
 	"github.com/rqlite/rqlite/rtls"
 	"github.com/rqlite/rqlite/store"
@@ -451,6 +452,10 @@ func createClusterClient(cfg *Config, clstr *cluster.Service) (*cluster.Client, 
 
 func createCluster(cfg *Config, hasPeers bool, client *cluster.Client, str *store.Store, httpServ *httpd.Service, credStr *auth.CredentialsStore) error {
 	joins := cfg.JoinAddresses()
+	if err := networkCheckJoinAddrs(cfg, joins); err != nil {
+		return err
+	}
+
 	if joins == nil && cfg.DiscoMode == "" && !hasPeers {
 		if cfg.RaftNonVoter {
 			return fmt.Errorf("cannot create a new non-voting node without joining it to an existing cluster")
@@ -576,6 +581,19 @@ func createCluster(cfg *Config, hasPeers bool, client *cluster.Client, str *stor
 
 	default:
 		return fmt.Errorf("invalid disco mode %s", cfg.DiscoMode)
+	}
+	return nil
+}
+
+func networkCheckJoinAddrs(cfg *Config, joinAddrs []string) error {
+	if len(joinAddrs) == 0 {
+		return nil
+	}
+
+	for _, addr := range joinAddrs {
+		if http.IsServingHTTP(addr) {
+			return fmt.Errorf("join address %s appears to be serving HTTP when it should be Raft", addr)
+		}
 	}
 	return nil
 }
