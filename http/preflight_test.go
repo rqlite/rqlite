@@ -110,6 +110,7 @@ func Test_IsServingHTTP_OpenPortTLS(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create TLS listener: %s", err)
 	}
+	defer ln.Close()
 
 	addr := ln.Addr().String()
 	if IsServingHTTP(addr) {
