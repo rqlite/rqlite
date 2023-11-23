@@ -40,6 +40,43 @@ commands: # a reusable command with parameters
             CC: <<parameters.cc>>
 
 jobs:
+  kubernetes:
+    docker:
+      - image: << pipeline.parameters.primary_image >>
+    steps:
+      - checkout
+      # Install kubectl
+      - run:
+          name: Install kubectl
+          command: |
+            curl -LO "https://storage.googleapis.com/kubernetes-release/release/`curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt`/bin/linux/amd64/kubectl"
+            chmod +x ./kubectl
+            sudo mv ./kubectl /usr/local/bin/kubectl
+      # Install KinD
+      - run:
+          name: Install KinD
+          command: |
+            curl -Lo ./kind "https://kind.sigs.k8s.io/dl/v0.11.1/kind-linux-amd64"
+            chmod +x ./kind
+            sudo mv ./kind /usr/local/bin/kind
+      # Create a Kubernetes cluster using KinD
+      - run:
+          name: Create Kubernetes cluster
+          command: |
+            kind create cluster
+      # Set Kubeconfig
+      - run:
+          name: Set Kubeconfig
+          command: |
+            echo 'export KUBECONFIG="$(kind get kubeconfig-path)"' >> $BASH_ENV
+            source $BASH_ENV
+      # Cleanup
+      - run:
+          name: Cleanup
+          command: |
+            kind delete cluster
+    resource_class: large
+
   lint:
     docker:
       - image: << pipeline.parameters.primary_image >>
