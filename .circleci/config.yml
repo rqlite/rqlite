@@ -71,6 +71,7 @@ jobs:
             kubectl apply -f rqlite-service.yaml
             curl -s https://raw.githubusercontent.com/rqlite/kubernetes-configuration/master/statefulset-3-node.yaml -o rqlite-3-nodes.yaml
             kubectl apply -f rqlite-3-nodes.yaml
+            kubectl get pods
       # Cleanup
       - run:
           name: Cleanup
