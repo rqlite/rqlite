@@ -1197,7 +1197,7 @@ func testDump(t *testing.T, db *DB) {
 	}
 
 	newDB, newDBPath := mustCreateOnDiskDatabase()
-	defer db.Close()
+	defer newDB.Close()
 	defer os.Remove(newDBPath)
 	if _, err := newDB.ExecuteStringStmt(b.String()); err != nil {
 		t.Fatalf("failed to load dumped database into new database: %s", err.Error())
