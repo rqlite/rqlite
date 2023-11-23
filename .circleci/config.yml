@@ -63,12 +63,12 @@ jobs:
           name: Create Kubernetes cluster
           command: |
             kind create cluster
-      # Set Kubeconfig
+      # Deploy rqlite to the cluster
       - run:
-          name: Set Kubeconfig
+          name: Deploy rqlite
           command: |
-            echo 'export KUBECONFIG="$(kind get kubeconfig-path)"' >> $BASH_ENV
-            source $BASH_ENV
+            curl -s https://raw.githubusercontent.com/rqlite/kubernetes-configuration/master/service.yaml -o rqlite-service.yaml
+            kubectl apply -f rqlite-service.yaml
       # Cleanup
       - run:
           name: Cleanup
