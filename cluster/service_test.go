@@ -276,7 +276,8 @@ func Test_NewServiceNotify(t *testing.T) {
 		return nil
 	}
 
-	s := New(ml, mustNewMockDatabase(), mm, mustNewMockCredentialStore())
+	credStr := mustNewMockCredentialStore()
+	s := New(ml, mustNewMockDatabase(), mm, credStr)
 	if s == nil {
 		t.Fatalf("failed to create cluster service")
 	}
@@ -298,12 +299,22 @@ func Test_NewServiceNotify(t *testing.T) {
 		t.Fatalf("failed to notify node: %s", err)
 	}
 
+	// Ensure that the notify function was called.
+	wg.Wait()
+
+	// Test when auth is enabled
+	credStr.HasPermOK = false
+	err = c.Notify(nr, s.Addr(), 5*time.Second)
+	if err == nil {
+		t.Fatal("should have failed to notify node due to lack of auth")
+	}
+	if err.Error() != "unauthorized" {
+		t.Fatalf("failed to get correct error, exp %s, got %s", "unauthorized", err.Error())
+	}
+
 	if err := s.Close(); err != nil {
 		t.Fatalf("failed to close cluster service")
 	}
-
-	// Ensure that the notify function was called.
-	wg.Wait()
 }
 
 func Test_NewServiceJoin(t *testing.T) {
@@ -326,7 +337,8 @@ func Test_NewServiceJoin(t *testing.T) {
 		return nil
 	}
 
-	s := New(ml, mustNewMockDatabase(), mm, mustNewMockCredentialStore())
+	credStr := mustNewMockCredentialStore()
+	s := New(ml, mustNewMockDatabase(), mm, credStr)
 	if s == nil {
 		t.Fatalf("failed to create cluster service")
 	}
@@ -346,15 +358,25 @@ func Test_NewServiceJoin(t *testing.T) {
 	c := NewClient(ml, 30*time.Second)
 	err := c.Join(jr, s.Addr(), 5*time.Second)
 	if err != nil {
-		t.Fatalf("failed to notify node: %s", err)
+		t.Fatalf("failed to join node: %s", err)
+	}
+
+	// Ensure the join function was called.
+	wg.Wait()
+
+	// Test when auth is enabled
+	credStr.HasPermOK = false
+	err = c.Join(jr, s.Addr(), 5*time.Second)
+	if err == nil {
+		t.Fatal("should have failed to join node due to lack of auth")
+	}
+	if err.Error() != "unauthorized" {
+		t.Fatalf("failed to get correct error, exp %s, got %s", "unauthorized", err.Error())
 	}
 
 	if err := s.Close(); err != nil {
 		t.Fatalf("failed to close cluster service")
 	}
-
-	// Ensure the join function was called.
-	wg.Wait()
 }
 
 type mockTransport struct {
