@@ -294,7 +294,7 @@ func Test_NewServiceNotify(t *testing.T) {
 
 	// Test by connecting to itself.
 	c := NewClient(ml, 30*time.Second)
-	err := c.Notify(nr, s.Addr(), 5*time.Second)
+	err := c.Notify(nr, s.Addr(), nil, 5*time.Second)
 	if err != nil {
 		t.Fatalf("failed to notify node: %s", err)
 	}
@@ -304,7 +304,7 @@ func Test_NewServiceNotify(t *testing.T) {
 
 	// Test when auth is enabled
 	credStr.HasPermOK = false
-	err = c.Notify(nr, s.Addr(), 5*time.Second)
+	err = c.Notify(nr, s.Addr(), nil, 5*time.Second)
 	if err == nil {
 		t.Fatal("should have failed to notify node due to lack of auth")
 	}

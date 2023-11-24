@@ -299,7 +299,7 @@ func (c *Client) RemoveNode(rn *command.RemoveNodeRequest, nodeAddr string, cred
 }
 
 // Notify notifies a remote node that this node is ready to bootstrap.
-func (c *Client) Notify(nr *command.NotifyRequest, nodeAddr string, timeout time.Duration) error {
+func (c *Client) Notify(nr *command.NotifyRequest, nodeAddr string, creds *Credentials, timeout time.Duration) error {
 	conn, err := c.dial(nodeAddr, c.timeout)
 	if err != nil {
 		return err
@@ -312,6 +312,7 @@ func (c *Client) Notify(nr *command.NotifyRequest, nodeAddr string, timeout time
 		Request: &Command_NotifyRequest{
 			NotifyRequest: nr,
 		},
+		Credentials: creds,
 	}
 	if err := writeCommand(conn, command, timeout); err != nil {
 		handleConnError(conn)

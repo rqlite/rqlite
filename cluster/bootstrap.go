@@ -175,7 +175,7 @@ func (b *Bootstrapper) notify(targets []string, id, raftAddr string) error {
 		Id:      id,
 	}
 	for _, t := range targets {
-		if err := b.client.Notify(nr, t, requestTimeout); err != nil {
+		if err := b.client.Notify(nr, t, b.creds, requestTimeout); err != nil {
 			return fmt.Errorf("failed to notify node at %s: %s", t, err)
 		}
 	}

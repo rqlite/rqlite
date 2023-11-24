@@ -225,7 +225,7 @@ func (n *Node) Notify(id, raftAddr string) error {
 		Id:      n.Store.ID(),
 		Address: n.RaftAddr,
 	}
-	return n.Client.Notify(nr, raftAddr, 5*time.Second)
+	return n.Client.Notify(nr, raftAddr, nil, 5*time.Second)
 }
 
 // NodesStatus is the Go type /nodes endpoint response is marshaled into.
