@@ -439,7 +439,7 @@ func (s *Service) handleConn(conn net.Conn) {
 			nr := c.GetNotifyRequest()
 			if nr == nil {
 				resp.Error = "NotifyRequest is nil"
-			} else if !s.checkCommandPermAll(c, auth.PermJoin) {
+			} else if !s.checkCommandPerm(c, auth.PermJoin) {
 				resp.Error = "unauthorized"
 			} else {
 				if err := s.mgr.Notify(nr); err != nil {
