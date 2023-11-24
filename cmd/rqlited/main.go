@@ -602,6 +602,9 @@ func networkCheckJoinAddrs(cfg *Config, joinAddrs []string) error {
 }
 
 func credentialsFor(credStr *auth.CredentialsStore, username string) *cluster.Credentials {
+	if credStr == nil {
+		return nil
+	}
 	pw, ok := credStr.Password(username)
 	if !ok {
 		return nil

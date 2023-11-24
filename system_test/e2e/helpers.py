@@ -158,7 +158,7 @@ class Node(object):
     if self.raft_adv is None:
       self.raft_adv = self.raft_addr
 
-  def start(self, join=None, join_attempts=None, join_interval=None,
+  def start(self, join=None, join_attempts=None, join_interval=None, join_as=None,
     disco_mode=None, disco_key=None, disco_config=None, wait=True, timeout=TIMEOUT):
     if self.process is not None:
       return
@@ -196,6 +196,8 @@ class Node(object):
        command += ['-join-attempts', str(join_attempts)]
     if join_interval is not None:
        command += ['-join-interval', join_interval]
+    if join_as is not None:
+        command += ['-join-as', join_as]
     if disco_mode is not None:
       dk = disco_key
       if dk is None:
