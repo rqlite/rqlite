@@ -1508,7 +1508,7 @@ func (s *Store) RequiresLeader(eqr *command.ExecuteQueryRequest) bool {
 	return false
 }
 
-// setLogInfo records some key indexs about the log.
+// setLogInfo records some key indexes about the log.
 func (s *Store) setLogInfo() error {
 	var err error
 	s.firstIdxOnOpen, err = s.boltStore.FirstIndex()
