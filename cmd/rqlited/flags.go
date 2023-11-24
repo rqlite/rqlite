@@ -111,6 +111,9 @@ type Config struct {
 	// JoinInterval is the time between retrying failed join operations.
 	JoinInterval time.Duration
 
+	// JoinAs sets the user join attempts should be performed as. May not be set.
+	JoinAs string
+
 	// BootstrapExpect is the minimum number of nodes required for a bootstrap.
 	BootstrapExpect int
 
@@ -441,6 +444,7 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	flag.StringVar(&config.JoinAddrs, "join", "", "Comma-delimited list of nodes, through which a cluster can be joined (proto://host:port)")
 	flag.IntVar(&config.JoinAttempts, "join-attempts", 5, "Number of join attempts to make")
 	flag.DurationVar(&config.JoinInterval, "join-interval", 3*time.Second, "Period between join attempts")
+	flag.StringVar(&config.JoinAs, "join-as", "", "Username in authentication file to join as. If not set, joins anonymously")
 	flag.IntVar(&config.BootstrapExpect, "bootstrap-expect", 0, "Minimum number of nodes required for a bootstrap")
 	flag.DurationVar(&config.BootstrapExpectTimeout, "bootstrap-expect-timeout", 120*time.Second, "Maximum time for bootstrap process")
 	flag.StringVar(&config.DiscoMode, "disco-mode", "", "Choose clustering discovery mode. If not set, no node discovery is performed")

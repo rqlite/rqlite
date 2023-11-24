@@ -32,31 +32,69 @@ class TestJoinEncryptedNoVerify(unittest.TestCase):
     deprovision_node(n0)
     deprovision_node(n1)
 
-# class TestAuthJoin(unittest.TestCase):   XXXX WILL NEED TO REIMPLEMENT
-#   '''Test that joining works with authentication'''
+class TestAuthJoin(unittest.TestCase):
+  '''Test that joining works with authentication'''
 
-#   def test(self):
-#     self.auth_file = tempfile.NamedTemporaryFile()
-#     with open(self.auth_file.name, 'w') as f:
-#       f.write('[{"username": "foo","password": "bar","perms": ["all"]}, {"username": "*", "perms": ["status", "ready"]}]')
+  def test(self):
+    self.auth_file = tempfile.NamedTemporaryFile()
+    with open(self.auth_file.name, 'w') as f:
+      f.write('''
+[
+    {
+        "username": "foo",
+        "password": "bar",
+        "perms": [
+            "all"
+        ]
+    },
+    {
+        "username": "qux",
+        "password": "baz",
+        "perms": [
+            "join-read-only"
+        ]
+    },
+    {
+        "username": "*",
+        "perms": [
+            "status",
+            "ready"
+        ]
+    }
+]''')
 
-#     n0 = Node(RQLITED_PATH, '0', auth=self.auth_file.name)
-#     n0.start()
-#     n0.wait_for_leader()
+    n0 = Node(RQLITED_PATH, '0', auth=self.auth_file.name)
+    n0.start()
+    n0.wait_for_leader()
+    self.assertEqual(len(n0.nodes()), 1)
 
-#     n1 = Node(RQLITED_PATH, '1', auth=self.auth_file.name)
-#     n1.start(join=n0.APIAddr())
-#     self.assertTrue(n1.expect_leader_fail()) # Join should fail due to lack of auth.
+    n1 = Node(RQLITED_PATH, '1', auth=self.auth_file.name)
+    n1.start(join=n0.RaftAddr())
+    self.assertTrue(n1.expect_leader_fail()) # Join should fail due to lack of auth.
+    self.assertEqual(len(n0.nodes()), 1)
 
-#     n2 = Node(RQLITED_PATH, '2', auth=self.auth_file.name)
-#     n2.start(join=n0.APIAddr(), join_as="foo")
-#     n2.wait_for_leader()
+    n2 = Node(RQLITED_PATH, '2', auth=self.auth_file.name)
+    n2.start(join=n0.RaftAddr(), join_as="foo")
+    n2.wait_for_leader()
+    self.assertEqual(len(n0.nodes()), 2)
+    self.assertTrue(n2.is_voter())
 
-#     self.cluster = Cluster([n0, n1, n2])
+    n3 = Node(RQLITED_PATH, '3', auth=self.auth_file.name)
+    n3.start(join=n0.RaftAddr(), join_as="qux")
+    self.assertTrue(n3.expect_leader_fail()) # Join should fail due to lack of auth.
+    self.assertEqual(len(n0.nodes()), 2)
 
-#   def tearDown(self):
-#     self.auth_file.close()
-#     self.cluster.deprovision()
+    n4 = Node(RQLITED_PATH, '4', auth=self.auth_file.name, raft_voter=False)
+    n4.start(join=n0.RaftAddr(), join_as="qux")
+    n4.wait_for_leader()
+    self.assertEqual(len(n0.nodes()), 3)
+
+    self.cluster = Cluster([n0, n1, n2, n3, n4])
+
+  def tearDown(self):
+    self.auth_file.close()
+    if hasattr(self, 'cluster'):
+      self.cluster.deprovision()
 
 class TestIdempotentJoin(unittest.TestCase):
   def tearDown(self):

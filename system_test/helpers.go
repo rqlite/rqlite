@@ -225,7 +225,7 @@ func (n *Node) Notify(id, raftAddr string) error {
 		Id:      n.Store.ID(),
 		Address: n.RaftAddr,
 	}
-	return n.Client.Notify(nr, raftAddr, 5*time.Second)
+	return n.Client.Notify(nr, raftAddr, nil, 5*time.Second)
 }
 
 // NodesStatus is the Go type /nodes endpoint response is marshaled into.
@@ -671,7 +671,8 @@ func mustNodeEncrypted(dir string, enableSingle, httpEncrypt bool, mux *tcp.Mux,
 	node.RaftAddr = node.Store.Addr()
 	node.ID = node.Store.ID()
 
-	clstr := cluster.New(mux.Listen(cluster.MuxClusterHeader), node.Store, node.Store, mustNewMockCredentialStore())
+	credStr := mustNewMockCredentialStore()
+	clstr := cluster.New(mux.Listen(cluster.MuxClusterHeader), node.Store, node.Store, credStr)
 	if err := clstr.Open(); err != nil {
 		panic("failed to open Cluster service)")
 	}

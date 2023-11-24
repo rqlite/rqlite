@@ -26,6 +26,7 @@ type Joiner struct {
 	attemptInterval time.Duration
 
 	client *Client
+	creds  *Credentials
 	logger *log.Logger
 }
 
@@ -37,6 +38,11 @@ func NewJoiner(client *Client, numAttempts int, attemptInterval time.Duration) *
 		attemptInterval: attemptInterval,
 		logger:          log.New(os.Stderr, "[cluster-join] ", log.LstdFlags),
 	}
+}
+
+// SetCredentials sets the credentials for the Joiner.
+func (j *Joiner) SetCredentials(creds *Credentials) {
+	j.creds = creds
 }
 
 // Do makes the actual join request. If the join is successful with any address,
@@ -75,7 +81,7 @@ func (j *Joiner) join(targetAddr, id, addr string, voter bool) (string, error) {
 	}
 
 	// Attempt to join.
-	if err := j.client.Join(req, targetAddr, time.Second); err != nil {
+	if err := j.client.Join(req, targetAddr, j.creds, time.Second); err != nil {
 		return "", err
 	}
 	return targetAddr, nil
