@@ -285,7 +285,7 @@ func Test_ClientJoinNode(t *testing.T) {
 	req := &command.JoinRequest{
 		Address: "test-node-addr",
 	}
-	err := c.Join(req, srv.Addr(), time.Second)
+	err := c.Join(req, srv.Addr(), nil, time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}

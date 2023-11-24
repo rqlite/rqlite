@@ -68,6 +68,7 @@ type Bootstrapper struct {
 	provider AddressProvider
 
 	client *Client
+	creds  *Credentials
 
 	logger   *log.Logger
 	Interval time.Duration
@@ -85,6 +86,11 @@ func NewBootstrapper(p AddressProvider, client *Client) *Bootstrapper {
 		Interval: bootInterval,
 	}
 	return bs
+}
+
+// SetCredentials sets the credentials for the Bootstrapper.
+func (b *Bootstrapper) SetCredentials(creds *Credentials) {
+	b.creds = creds
 }
 
 // Boot performs the bootstrapping process for this node. This means it will
@@ -107,6 +113,7 @@ func (b *Bootstrapper) Boot(id, raftAddr string, done func() bool, timeout time.
 	defer tickerT.Stop()
 
 	joiner := NewJoiner(b.client, numJoinAttempts, requestTimeout)
+	joiner.SetCredentials(b.creds)
 	for {
 		select {
 		case <-timeoutT.C:

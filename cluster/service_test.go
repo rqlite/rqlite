@@ -356,7 +356,7 @@ func Test_NewServiceJoin(t *testing.T) {
 
 	// Test by connecting to itself.
 	c := NewClient(ml, 30*time.Second)
-	err := c.Join(jr, s.Addr(), 5*time.Second)
+	err := c.Join(jr, s.Addr(), nil, 5*time.Second)
 	if err != nil {
 		t.Fatalf("failed to join node: %s", err)
 	}
@@ -366,7 +366,7 @@ func Test_NewServiceJoin(t *testing.T) {
 
 	// Test when auth is enabled
 	credStr.HasPermOK = false
-	err = c.Join(jr, s.Addr(), 5*time.Second)
+	err = c.Join(jr, s.Addr(), nil, 5*time.Second)
 	if err == nil {
 		t.Fatal("should have failed to join node due to lack of auth")
 	}

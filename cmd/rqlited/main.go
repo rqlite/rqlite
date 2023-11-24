@@ -476,6 +476,7 @@ func createCluster(cfg *Config, hasPeers bool, client *cluster.Client, str *stor
 	}
 
 	joiner := cluster.NewJoiner(client, cfg.JoinAttempts, cfg.JoinInterval)
+	joiner.SetCredentials(credentialsFor(credStr, cfg.JoinAs))
 	if joins != nil && cfg.BootstrapExpect == 0 {
 		// Explicit join operation requested, so do it.
 		j, err := joiner.Do(joins, str.ID(), cfg.RaftAdv, !cfg.RaftNonVoter)
@@ -489,6 +490,7 @@ func createCluster(cfg *Config, hasPeers bool, client *cluster.Client, str *stor
 	if joins != nil && cfg.BootstrapExpect > 0 {
 		// Bootstrap with explicit join addresses requests.
 		bs := cluster.NewBootstrapper(cluster.NewAddressProviderString(joins), client)
+		bs.SetCredentials(credentialsFor(credStr, cfg.JoinAs))
 		return bs.Boot(str.ID(), cfg.RaftAdv, isClustered, cfg.BootstrapExpectTimeout)
 	}
 
@@ -531,6 +533,7 @@ func createCluster(cfg *Config, hasPeers bool, client *cluster.Client, str *stor
 		}
 
 		bs := cluster.NewBootstrapper(provider, client)
+		bs.SetCredentials(credentialsFor(credStr, cfg.JoinAs))
 		httpServ.RegisterStatus("disco", provider)
 		return bs.Boot(str.ID(), cfg.RaftAdv, isClustered, cfg.BootstrapExpectTimeout)
 
@@ -596,4 +599,15 @@ func networkCheckJoinAddrs(cfg *Config, joinAddrs []string) error {
 		}
 	}
 	return nil
+}
+
+func credentialsFor(credStr *auth.CredentialsStore, username string) *cluster.Credentials {
+	pw, ok := credStr.Password(username)
+	if !ok {
+		return nil
+	}
+	return &cluster.Credentials{
+		Username: username,
+		Password: pw,
+	}
 }

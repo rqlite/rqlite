@@ -337,7 +337,7 @@ func (c *Client) Notify(nr *command.NotifyRequest, nodeAddr string, timeout time
 }
 
 // Join joins this node to a cluster at the remote address nodeAddr.
-func (c *Client) Join(jr *command.JoinRequest, nodeAddr string, timeout time.Duration) error {
+func (c *Client) Join(jr *command.JoinRequest, nodeAddr string, creds *Credentials, timeout time.Duration) error {
 	for {
 		conn, err := c.dial(nodeAddr, c.timeout)
 		if err != nil {
@@ -351,6 +351,7 @@ func (c *Client) Join(jr *command.JoinRequest, nodeAddr string, timeout time.Dur
 			Request: &Command_JoinRequest{
 				JoinRequest: jr,
 			},
+			Credentials: creds,
 		}
 
 		if err := writeCommand(conn, command, timeout); err != nil {
