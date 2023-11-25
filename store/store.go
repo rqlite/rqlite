@@ -350,16 +350,8 @@ func (s *Store) Open() (retErr error) {
 	s.openT = time.Now()
 	s.logger.Printf("opening store with node ID %s, listening on %s", s.raftID, s.ln.Addr().String())
 
-	s.logger.Printf("configured for an on-disk database at %s", s.dbPath)
-	parentDir := filepath.Dir(s.dbPath)
-	s.logger.Printf("ensuring directory for on-disk database exists at %s", parentDir)
-	err := os.MkdirAll(parentDir, 0755)
-	if err != nil {
-		return err
-	}
-
 	// Create all the required Raft directories.
-	s.logger.Printf("ensuring directory for Raft exists at %s", s.raftDir)
+	s.logger.Printf("ensuring data directory exists at %s", s.raftDir)
 	if err := os.MkdirAll(s.raftDir, 0755); err != nil {
 		return err
 	}
@@ -371,6 +363,16 @@ func (s *Store) Open() (retErr error) {
 		return err
 	}
 	s.dechunkManager = decMgmr
+
+	// Create the database directory, if it doesn't already exist.
+	parentDBDir := filepath.Dir(s.dbPath)
+	if !dirExists(parentDBDir) {
+		s.logger.Printf("creating directory for database at %s", parentDBDir)
+		err := os.MkdirAll(parentDBDir, 0755)
+		if err != nil {
+			return err
+		}
+	}
 
 	// Create Raft-compatible network layer.
 	nt := raft.NewNetworkTransport(NewTransport(s.ln), connectionPoolCount, connectionTimeout, nil)
@@ -2222,6 +2224,11 @@ func pathExists(p string) bool {
 		return false
 	}
 	return true
+}
+
+func dirExists(path string) bool {
+	stat, err := os.Stat(path)
+	return err == nil && stat.IsDir()
 }
 
 // dirSize returns the total size of all files in the given directory
