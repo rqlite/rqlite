@@ -91,10 +91,15 @@ type Store interface {
 	Backup(br *command.BackupRequest, dst io.Writer) error
 }
 
+// GetAddresser is the interface that wraps the GetNodeAPIAddr method.
+// GetNodeAPIAddr returns the HTTP API URL for the node at the given Raft address.
+type GetAddresser interface {
+	GetNodeAPIAddr(addr string, timeout time.Duration) (string, error)
+}
+
 // Cluster is the interface node API services must provide
 type Cluster interface {
-	// GetNodeAPIAddr returns the HTTP API URL for the node at the given Raft address.
-	GetNodeAPIAddr(nodeAddr string, timeout time.Duration) (string, error)
+	GetAddresser
 
 	// Execute performs an Execute Request on a remote node.
 	Execute(er *command.ExecuteRequest, nodeAddr string, creds *cluster.Credentials, timeout time.Duration) ([]*command.ExecuteResult, error)
