@@ -17,7 +17,7 @@ type Node struct {
 	Addr      string  `json:"addr,omitempty"`
 	Voter     bool    `json:"voter"`
 	Reachable bool    `json:"reachable"`
-	Leader    bool    `json:"leader,omitempty"`
+	Leader    bool    `json:"leader"`
 	Time      float64 `json:"time,omitempty"`
 	Error     string  `json:"error,omitempty"`
 }
@@ -44,7 +44,7 @@ func (n *Node) Test(ga GetAddresser, leaderAddr string, timeout time.Duration) {
 	n.Time = time.Since(start).Seconds()
 	n.APIAddr = apiAddr
 	n.Reachable = true
-	n.Leader = apiAddr == leaderAddr
+	n.Leader = n.Addr == leaderAddr
 }
 
 type Nodes []*Node
