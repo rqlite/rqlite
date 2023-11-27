@@ -1,6 +1,7 @@
 package http
 
 import (
+	"sort"
 	"sync"
 	"time"
 
@@ -49,12 +50,17 @@ func (n *Node) Test(ga GetAddresser, leaderAddr string, timeout time.Duration) {
 
 type Nodes []*Node
 
+func (n Nodes) Len() int           { return len(n) }
+func (n Nodes) Swap(i, j int)      { n[i], n[j] = n[j], n[i] }
+func (n Nodes) Less(i, j int) bool { return n[i].ID < n[j].ID }
+
 // NewNodesFromServers creates a slice of Nodes from a slice of Servers.
 func NewNodesFromServers(servers []*store.Server) Nodes {
 	nodes := make([]*Node, len(servers))
 	for i, s := range servers {
 		nodes[i] = NewNodeFromServer(s)
 	}
+	sort.Sort(Nodes(nodes))
 	return nodes
 }
 
@@ -66,6 +72,7 @@ func (n Nodes) Voters() Nodes {
 			v = append(v, node)
 		}
 	}
+	sort.Sort(v)
 	return v
 }
 
