@@ -76,6 +76,16 @@ func (n Nodes) Voters() Nodes {
 	return v
 }
 
+// HasAddr returns whether any node in the Nodes slice has the given Raft address.
+func (n Nodes) HasAddr(addr string) bool {
+	for _, node := range n {
+		if node.Addr == addr {
+			return true
+		}
+	}
+	return false
+}
+
 // Test tests the reachability and leadership status of all nodes. It does this
 // in parallel, and blocks until all nodes have been tested.
 func (n Nodes) Test(ga GetAddresser, leaderAddr string, timeout time.Duration) {

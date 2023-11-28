@@ -67,11 +67,36 @@ func Test_NodeTestNotLeader(t *testing.T) {
 	}
 }
 
+func Test_NodeTestDouble(t *testing.T) {
+	node1 := &Node{ID: "1", Addr: "leader-raft-addr", APIAddr: "leader-api-addr"}
+	node2 := &Node{ID: "2", Addr: "follower-raft-addr", APIAddr: "follower-api-addr"}
+	mockGA := &mockGetAddresser{}
+	mockGA.getAddrFn = func(addr string, timeout time.Duration) (string, error) {
+		if addr == "leader-raft-addr" {
+			return "leader-api-addr", nil
+		}
+		return "", fmt.Errorf("not reachable")
+	}
+
+	nodes := Nodes{node1, node2}
+	nodes.Test(mockGA, "leader-raft-addr", 10*time.Second)
+	if !node1.Reachable || !node1.Leader || node2.Reachable || node2.Leader || node2.Error != "not reachable" {
+		t.Fatalf("Test method did not correctly update node status %s", asJSON(nodes))
+	}
+
+	if !nodes.HasAddr("leader-raft-addr") {
+		t.Fatalf("HasAddr method did not correctly find node")
+	}
+	if nodes.HasAddr("not-found") {
+		t.Fatalf("HasAddr method incorrectly found node")
+	}
+}
+
 // mockGetAddresser is a mock implementation of the GetAddresser interface.
 type mockGetAddresser struct {
-	// Add more fields if needed to simulate different behaviors.
-	apiAddr string
-	err     error
+	apiAddr   string
+	err       error
+	getAddrFn func(addr string, timeout time.Duration) (string, error)
 }
 
 // newMockGetAddresser creates a new instance of mockGetAddresser.
@@ -82,6 +107,9 @@ func newMockGetAddresser(apiAddr string, err error) *mockGetAddresser {
 
 // GetNodeAPIAddr is the mock implementation of the GetNodeAPIAddr method.
 func (m *mockGetAddresser) GetNodeAPIAddr(addr string, timeout time.Duration) (string, error) {
+	if m.getAddrFn != nil {
+		return m.getAddrFn(addr, timeout)
+	}
 	return m.apiAddr, m.err
 }
 
