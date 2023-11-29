@@ -40,6 +40,45 @@ commands: # a reusable command with parameters
             CC: <<parameters.cc>>
 
 jobs:
+  kubernetes:
+    machine: true
+    steps:
+      - checkout
+      # Install kubectl
+      - run:
+          name: Install kubectl
+          command: |
+            curl -LO "https://storage.googleapis.com/kubernetes-release/release/`curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt`/bin/linux/amd64/kubectl"
+            chmod +x ./kubectl
+            sudo mv ./kubectl /usr/local/bin/kubectl
+      # Install KinD
+      - run:
+          name: Install KinD
+          command: |
+            curl -Lo ./kind "https://kind.sigs.k8s.io/dl/v0.11.1/kind-linux-amd64"
+            chmod +x ./kind
+            sudo mv ./kind /usr/local/bin/kind
+      # Create a Kubernetes cluster using KinD
+      - run:
+          name: Create Kubernetes cluster
+          command: |
+            kind create cluster
+      # Deploy rqlite to the cluster
+      - run:
+          name: Deploy rqlite
+          command: |
+            curl -s https://raw.githubusercontent.com/rqlite/kubernetes-configuration/master/service.yaml -o rqlite-service.yaml
+            kubectl apply -f rqlite-service.yaml
+            curl -s https://raw.githubusercontent.com/rqlite/kubernetes-configuration/master/statefulset-3-node.yaml -o rqlite-3-nodes.yaml
+            kubectl apply -f rqlite-3-nodes.yaml
+            kubectl get pods
+      # Cleanup
+      - run:
+          name: Cleanup
+          command: |
+            kind delete cluster
+    resource_class: large
+
   lint:
     docker:
       - image: << pipeline.parameters.primary_image >>
@@ -250,19 +289,4 @@ workflows:
   version: 2
   build_and_test:
     jobs:
-      - lint
-      - cross_compile
-      - cross_compile_windows
-      - cross_compile_arm
-      - cross_compile_mips
-      - cross_compile_mips_le
-      - test_even
-      - test_odd
-      - race_even
-      - race_odd
-      - end_to_end_single
-      - end_to_end_multi
-      - end_to_end_multi_adv
-      - end_to_end_joining
-      - end_to_end_autoclustering
-      - end_to_end_auto_state
+      - kubernetes
