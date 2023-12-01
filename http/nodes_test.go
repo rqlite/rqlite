@@ -108,7 +108,7 @@ func Test_NodeTestDouble_Timeout(t *testing.T) {
 
 	nodes := Nodes{node1, node2}
 	nodes.Test(mockGA, "leader-raft-addr", 1*time.Second)
-	if !node1.Reachable || !node1.Leader || node2.Reachable || node2.Leader || node2.Error != "timeout" {
+	if !node1.Reachable || !node1.Leader || node2.Reachable || node2.Leader || node2.Error != "timeout waiting for node to respond" {
 		t.Fatalf("Test method did not correctly update node status %s", asJSON(nodes))
 	}
 
