@@ -74,6 +74,18 @@ func (n *Node) SetError(err string) {
 	n.Error = err
 }
 
+// MarshalJSON implements the json.Marshaler interface.
+func (n *Node) MarshalJSON() ([]byte, error) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	type Alias Node
+	return json.Marshal(&struct {
+		*Alias
+	}{
+		Alias: (*Alias)(n),
+	})
+}
+
 type Nodes []*Node
 
 func (n Nodes) Len() int           { return len(n) }
