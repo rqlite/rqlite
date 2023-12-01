@@ -44,7 +44,6 @@ func (n *Node) Test(ga GetAddresser, leaderAddr string, timeout time.Duration) {
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
 	done := make(chan struct{})
-
 	go func() {
 		defer close(done)
 		apiAddr, err := ga.GetNodeAPIAddr(n.Addr, timeout)
