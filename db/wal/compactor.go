@@ -113,6 +113,7 @@ func (c *Compactor) writeFrame(w io.Writer, frame *Frame) error {
 	return nil
 }
 
+// XXXX what about frame order? It's lost by using a map.
 func (c *Compactor) getFrames() (map[uint32]*Frame, error) {
 	if err := c.wr.ReadHeader(); err != io.EOF {
 		return nil, nil
@@ -155,6 +156,5 @@ func (c *Compactor) getFrames() (map[uint32]*Frame, error) {
 
 // putUint32 writes a uint32 to the given byte slice
 func (c *Compactor) putUint32(b []byte, v uint32) {
-
 	binary.BigEndian.PutUint32(b, v)
 }
