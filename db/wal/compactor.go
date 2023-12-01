@@ -16,6 +16,8 @@ type Frame struct {
 type Compactor struct {
 	r  io.ReadSeeker
 	wr *Reader
+
+	chksum1, chksum2 uint32
 }
 
 // NewCompactor returns a new Compactor.
@@ -51,22 +53,22 @@ func (c *Compactor) writeWALHeader(w io.Writer) error {
 	header := make([]byte, WALHeaderSize)
 
 	c.putUint32(header[0:], SQLITE_WAL_MAGIC)
+	c.putUint32(header[4:], SQLITE_WAL_FILE_FORMAT_VERSION)
 
-	// File format write version (1 byte) and read version (1 byte).
-	// Assuming values for SQLite version 3.7.0 or later.
-	header[4] = 0x02 // Write version
-	header[5] = 0x02 // Read version
+	// Database page size
+	c.putUint32(header[8:], c.wr.PageSize())
 
-	// Database page size (2 bytes).
-	c.putUint16(header[6:], uint16(c.wr.PageSize()))
+	// Checkpoint sequence number
+	c.putUint32(header[12:], c.wr.seq)
 
-	// Checkpoint sequence number (4 bytes).
-	// Incrementing from the original sequence number.
-	c.putUint32(header[12:], c.wr.seq+1)
-
-	// Salt values (4 bytes each), reusing the original salt values.
+	// Salt values, reusing the original salt values.
 	c.putUint32(header[16:], c.wr.salt1)
 	c.putUint32(header[20:], c.wr.salt2)
+
+	// Checksum of header
+	c.chksum1, c.chksum2 = WALChecksum(c.wr.bo, 0, 0, header[:24])
+	c.putUint32(header[24:], c.chksum1)
+	c.putUint32(header[28:], c.chksum2)
 
 	// Write the header to the new WAL file.
 	if _, err := w.Write(header); err != nil {
@@ -92,13 +94,13 @@ func (c *Compactor) writeFrame(w io.Writer, frame *Frame) error {
 		return err
 	}
 
-	// Recalculate checksums.
-	chksum1, chksum2 := WALChecksum(c.wr.bo, c.wr.salt1, c.wr.salt2, header)
-	chksum1, chksum2 = WALChecksum(c.wr.bo, chksum1, chksum2, data)
+	// Calculate checksums for the frame header and data.
+	c.chksum1, c.chksum2 = WALChecksum(c.wr.bo, c.chksum1, c.chksum2, header[:8]) // For frame header
+	c.chksum1, c.chksum2 = WALChecksum(c.wr.bo, c.chksum1, c.chksum2, data)       // For frame data
 
-	// Update checksums in the header.
-	c.putUint32(header[16:], chksum1)
-	c.putUint32(header[20:], chksum2)
+	// Update checksums in the header with the new values.
+	c.putUint32(header[16:], c.chksum1)
+	c.putUint32(header[20:], c.chksum2)
 
 	// Write the frame header and data to the new WAL file.
 	if _, err := w.Write(header); err != nil {
@@ -151,22 +153,8 @@ func (c *Compactor) getFrames() (map[uint32]*Frame, error) {
 	return frames, nil
 }
 
-// putUint16 writes a uint16 to the given byte slice in the same byte order as
-// as the source WAL file.
-func (c *Compactor) putUint16(b []byte, v uint16) {
-	if c.wr.bo == binary.LittleEndian {
-		binary.LittleEndian.PutUint16(b, v)
-	} else {
-		binary.BigEndian.PutUint16(b, v)
-	}
-}
-
-// putUint32 writes a uint32 to the given byte slice in the same byte order as
-// as the source WAL file.
+// putUint32 writes a uint32 to the given byte slice
 func (c *Compactor) putUint32(b []byte, v uint32) {
-	if c.wr.bo == binary.LittleEndian {
-		binary.LittleEndian.PutUint32(b, v)
-	} else {
-		binary.BigEndian.PutUint32(b, v)
-	}
+
+	binary.BigEndian.PutUint32(b, v)
 }

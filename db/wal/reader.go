@@ -11,7 +11,8 @@ const (
 	WALHeaderSize      = 32
 	WALFrameHeaderSize = 24
 
-	SQLITE_WAL_MAGIC = 0x377f0683
+	SQLITE_WAL_MAGIC               = 0x377f0683
+	SQLITE_WAL_FILE_FORMAT_VERSION = 3007000
 )
 
 // Reader wraps an io.Reader and parses SQLite WAL frames.
