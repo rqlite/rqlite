@@ -248,7 +248,7 @@ func (n NodesStatus) HasAddr(addr string) bool {
 
 // Nodes returns the sNodes endpoint output for node.
 func (n *Node) Nodes(includeNonVoters bool) (NodesStatus, error) {
-	v, _ := url.Parse("http://" + n.APIAddr + "/nodes")
+	v, _ := url.Parse("http://" + n.APIAddr + "/nodes?legacy")
 	if includeNonVoters {
 		q := v.Query()
 		q.Set("nonvoters", "true")
