@@ -2,7 +2,6 @@ package wal
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"os"
 	"testing"
@@ -240,13 +239,4 @@ func TestReader(t *testing.T) {
 			t.Fatalf("unexpected error: %#v", err)
 		}
 	})
-}
-
-type errWriter struct{ afterN int }
-
-func (w *errWriter) Write(p []byte) (int, error) {
-	if w.afterN -= len(p); w.afterN <= 0 {
-		return 0, fmt.Errorf("write error occurred")
-	}
-	return len(p), nil
 }
