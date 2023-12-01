@@ -228,9 +228,9 @@ func (n *Node) Notify(id, raftAddr string) error {
 	return n.Client.Notify(nr, raftAddr, nil, 5*time.Second)
 }
 
-// Nodes returns the sNodes endpoint output for node.
+// Nodes returns the Nodes endpoint output for node.
 func (n *Node) Nodes(includeNonVoters bool) (httpd.Nodes, error) {
-	v, _ := url.Parse("http://" + n.APIAddr + "/nodes")
+	v, _ := url.Parse("http://" + n.APIAddr + "/nodes?ver=2")
 	if includeNonVoters {
 		q := v.Query()
 		q.Set("nonvoters", "true")

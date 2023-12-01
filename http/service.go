@@ -1031,8 +1031,12 @@ func (s *Service) handleNodes(w http.ResponseWriter, r *http.Request) {
 	}
 	nodes.Test(s.cluster, lAddr, timeout)
 
-	legacy, _ := isLegacy(r)
-	enc := NewNodesRespEncoder(w, legacy)
+	ver, err := verParam(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	enc := NewNodesRespEncoder(w, (ver == "1" || ver == ""))
 	pretty, _ := isPretty(r)
 	if pretty {
 		enc.SetIndent("", "    ")
@@ -1813,14 +1817,15 @@ func fmtParam(req *http.Request) (string, error) {
 	return strings.TrimSpace(q.Get("fmt")), nil
 }
 
+// verParam returns the requested version, if present.
+func verParam(req *http.Request) (string, error) {
+	q := req.URL.Query()
+	return strings.TrimSpace(q.Get("ver")), nil
+}
+
 // isPretty returns whether the HTTP response body should be pretty-printed.
 func isPretty(req *http.Request) (bool, error) {
 	return queryParam(req, "pretty")
-}
-
-// isLegacy returns whether the HTTP request is requesting legacy behavior.
-func isLegacy(req *http.Request) (bool, error) {
-	return queryParam(req, "legacy")
 }
 
 // isRedirect returns whether the HTTP request is requesting a explicit
