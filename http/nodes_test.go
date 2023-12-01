@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -152,6 +153,50 @@ func Test_NodeRespEncodeLegacy(t *testing.T) {
 		t.Errorf("nodes key is not an map")
 	}
 	checkNode(t, node)
+}
+
+func Test_NodesRespDecoder_Decode_ValidJSON(t *testing.T) {
+	jsonInput := `{"nodes":[{"id":"1","addr":"192.168.1.1","voter":true},{"id":"2","addr":"192.168.1.2","voter":false}]}`
+	reader := strings.NewReader(jsonInput)
+	decoder := NewNodesRespDecoder(reader)
+
+	var nodes Nodes
+	err := decoder.Decode(&nodes)
+	if err != nil {
+		t.Errorf("Decode failed with valid JSON: %v", err)
+	}
+
+	if len(nodes) != 2 || nodes[0].ID != "1" || nodes[1].ID != "2" {
+		t.Errorf("Decode did not properly decode the JSON into Nodes")
+	}
+}
+
+func Test_NodesRespDecoder_Decode_InvalidJSON(t *testing.T) {
+	invalidJsonInput := `{"nodes": "invalid"}`
+	reader := strings.NewReader(invalidJsonInput)
+	decoder := NewNodesRespDecoder(reader)
+
+	var nodes Nodes
+	err := decoder.Decode(&nodes)
+	if err == nil {
+		t.Error("Decode should fail with invalid JSON")
+	}
+}
+
+func Test_NodesRespDecoder_Decode_EmptyJSON(t *testing.T) {
+	emptyJsonInput := `{}`
+	reader := strings.NewReader(emptyJsonInput)
+	decoder := NewNodesRespDecoder(reader)
+
+	var nodes Nodes
+	err := decoder.Decode(&nodes)
+	if err != nil {
+		t.Errorf("Decode failed with empty JSON: %v", err)
+	}
+
+	if len(nodes) != 0 {
+		t.Errorf("Decode should result in an empty Nodes slice for empty JSON")
+	}
 }
 
 // mockGetAddresser is a mock implementation of the GetAddresser interface.

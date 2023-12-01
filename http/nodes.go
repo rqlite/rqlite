@@ -173,3 +173,28 @@ func (e *NodesRespEncoder) encodeLegacy(nodes Nodes) ([]byte, error) {
 	}
 	return json.Marshal(legacyOutput)
 }
+
+// NodesRespDecoder decodes JSON data into a slice of Nodes.
+type NodesRespDecoder struct {
+	reader io.Reader
+}
+
+// NewNodesRespDecoder creates a new Decoder instance with the specified io.Reader.
+func NewNodesRespDecoder(r io.Reader) *NodesRespDecoder {
+	return &NodesRespDecoder{reader: r}
+}
+
+// Decode reads JSON from its reader and decodes it into the provided Nodes slice.
+func (d *NodesRespDecoder) Decode(nodes *Nodes) error {
+	// Temporary structure to facilitate decoding.
+	var data struct {
+		Nodes Nodes `json:"nodes"`
+	}
+
+	if err := json.NewDecoder(d.reader).Decode(&data); err != nil {
+		return err
+	}
+
+	*nodes = data.Nodes
+	return nil
+}
