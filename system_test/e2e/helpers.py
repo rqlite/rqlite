@@ -531,7 +531,7 @@ class Node(object):
   def _status_url(self):
     return 'http://' + self.APIAddr() + '/status'
   def _nodes_url(self):
-    return 'http://' + self.APIAddr() + '/nodes?nonvoters&legacy' # Getting all nodes back makes testing easier
+    return 'http://' + self.APIAddr() + '/nodes?nonvoters' # Getting all nodes back makes testing easier
   def _ready_url(self, noleader=False):
     nl = ""
     if noleader:
