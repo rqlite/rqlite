@@ -40,6 +40,8 @@ func NewNodeFromServer(s *store.Server) *Node {
 func (n *Node) Test(ga GetAddresser, leaderAddr string, timeout time.Duration) {
 	start := time.Now()
 	n.Time = time.Since(start).Seconds()
+	n.Reachable = false
+	n.Leader = false
 
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
@@ -49,7 +51,6 @@ func (n *Node) Test(ga GetAddresser, leaderAddr string, timeout time.Duration) {
 		apiAddr, err := ga.GetNodeAPIAddr(n.Addr, timeout)
 		if err != nil {
 			n.Error = err.Error()
-			n.Reachable = false
 			return
 		}
 		n.APIAddr = apiAddr
@@ -60,9 +61,7 @@ func (n *Node) Test(ga GetAddresser, leaderAddr string, timeout time.Duration) {
 	select {
 	case <-timer.C:
 		n.Error = "timeout"
-		return
 	case <-done:
-		return
 	}
 }
 
