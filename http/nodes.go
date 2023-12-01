@@ -24,6 +24,8 @@ type Node struct {
 	Leader    bool    `json:"leader"`
 	Time      float64 `json:"time,omitempty"`
 	Error     string  `json:"error,omitempty"`
+
+	mu sync.Mutex
 }
 
 // NewNodeFromServer creates a Node from a Server.
@@ -50,7 +52,7 @@ func (n *Node) Test(ga GetAddresser, leaderAddr string, timeout time.Duration) {
 		defer close(done)
 		apiAddr, err := ga.GetNodeAPIAddr(n.Addr, timeout)
 		if err != nil {
-			n.Error = err.Error()
+			n.SetError(err.Error())
 			return
 		}
 		n.APIAddr = apiAddr
@@ -60,9 +62,16 @@ func (n *Node) Test(ga GetAddresser, leaderAddr string, timeout time.Duration) {
 
 	select {
 	case <-timer.C:
-		n.Error = "timeout"
+		n.SetError("timeout waiting for node to respond")
 	case <-done:
 	}
+}
+
+// SetError sets the Error field of the Node in a synchronized manner.
+func (n *Node) SetError(err string) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.Error = err
 }
 
 type Nodes []*Node
