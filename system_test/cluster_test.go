@@ -701,8 +701,8 @@ func Test_MultiNodeClusterNodes(t *testing.T) {
 	if len(nodes) != len(c) {
 		t.Fatalf("nodes/ output returned wrong number of nodes, got %d, exp %d", len(nodes), len(c))
 	}
-	ns, ok := nodes[leader.ID]
-	if !ok {
+	ns := nodes.GetNode(leader.ID)
+	if ns == nil {
 		t.Fatalf("failed to find leader with ID %s in node status", leader.ID)
 	}
 	if !ns.Leader {
@@ -728,7 +728,10 @@ func Test_MultiNodeClusterNodes(t *testing.T) {
 		t.Fatalf("got incorrect number of followers: %d", len(followers))
 	}
 	f := followers[0]
-	ns = nodes[f.ID]
+	ns = nodes.GetNode(f.ID)
+	if ns == nil {
+		t.Fatalf("failed to find follower with ID %s in node status", f.ID)
+	}
 	if ns.Addr != f.RaftAddr {
 		t.Fatalf("node has wrong Raft address for follower")
 	}

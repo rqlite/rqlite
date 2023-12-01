@@ -974,10 +974,7 @@ func Test_SingleNodeNodes(t *testing.T) {
 	if len(nodes) != 1 {
 		t.Fatalf("wrong number of nodes in response")
 	}
-	n, ok := nodes[node.ID]
-	if !ok {
-		t.Fatalf("node not found by ID in response")
-	}
+	n := nodes[0]
 	if n.Addr != node.RaftAddr {
 		t.Fatalf("node has wrong Raft address")
 	}

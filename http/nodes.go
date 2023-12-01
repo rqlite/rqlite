@@ -89,6 +89,16 @@ func (n Nodes) HasAddr(addr string) bool {
 	return false
 }
 
+// GetNode returns the Node with the given ID, or nil if no such node exists.
+func (n Nodes) GetNode(id string) *Node {
+	for _, node := range n {
+		if node.ID == id {
+			return node
+		}
+	}
+	return nil
+}
+
 // Test tests the reachability and leadership status of all nodes. It does this
 // in parallel, and blocks until all nodes have been tested.
 func (n Nodes) Test(ga GetAddresser, leaderAddr string, timeout time.Duration) {

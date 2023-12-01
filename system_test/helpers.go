@@ -228,27 +228,9 @@ func (n *Node) Notify(id, raftAddr string) error {
 	return n.Client.Notify(nr, raftAddr, nil, 5*time.Second)
 }
 
-// NodesStatus is the Go type /nodes endpoint response is marshaled into.
-type NodesStatus map[string]struct {
-	APIAddr   string `json:"api_addr,omitempty"`
-	Addr      string `json:"addr,omitempty"`
-	Reachable bool   `json:"reachable,omitempty"`
-	Leader    bool   `json:"leader,omitempty"`
-}
-
-// HasAddr returns whether any node in the NodeStatus has the given Raft address.
-func (n NodesStatus) HasAddr(addr string) bool {
-	for i := range n {
-		if n[i].Addr == addr {
-			return true
-		}
-	}
-	return false
-}
-
 // Nodes returns the sNodes endpoint output for node.
-func (n *Node) Nodes(includeNonVoters bool) (NodesStatus, error) {
-	v, _ := url.Parse("http://" + n.APIAddr + "/nodes?legacy")
+func (n *Node) Nodes(includeNonVoters bool) (httpd.Nodes, error) {
+	v, _ := url.Parse("http://" + n.APIAddr + "/nodes")
 	if includeNonVoters {
 		q := v.Query()
 		q.Set("nonvoters", "true")
@@ -263,16 +245,13 @@ func (n *Node) Nodes(includeNonVoters bool) (NodesStatus, error) {
 		return nil, fmt.Errorf("nodes endpoint returned: %s", resp.Status)
 	}
 	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
 
-	var nstatus NodesStatus
-	if err = json.Unmarshal(body, &nstatus); err != nil {
+	dec := httpd.NewNodesRespDecoder(resp.Body)
+	var nodes httpd.Nodes
+	if err := dec.Decode(&nodes); err != nil {
 		return nil, err
 	}
-	return nstatus, nil
+	return nodes, nil
 }
 
 // Status returns the status and diagnostic output for node.
