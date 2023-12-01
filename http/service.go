@@ -1036,7 +1036,7 @@ func (s *Service) handleNodes(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	enc := NewNodesRespEncoder(w, (ver == "1" || ver == ""))
+	enc := NewNodesRespEncoder(w, ver != "2")
 	pretty, _ := isPretty(r)
 	if pretty {
 		enc.SetIndent("", "    ")
