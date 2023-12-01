@@ -579,10 +579,14 @@ class TestEndToEndSnapRestoreCluster(unittest.TestCase):
     self.assertEqual(self.n3.expvar()['store']['num_restores'], 1)
 
   def tearDown(self):
-    deprovision_node(self.n0)
-    deprovision_node(self.n1)
-    deprovision_node(self.n2)
-    deprovision_node(self.n3)
+    if hasattr(self, 'n0'):
+      deprovision_node(self.n0)
+    if hasattr(self, 'n1'):
+      deprovision_node(self.n1)
+    if hasattr(self, 'n2'):
+      deprovision_node(self.n2)
+    if hasattr(self, 'n3'):
+      deprovision_node(self.n3)
 
 class TestShutdown(unittest.TestCase):
   def test_cluster_leader_remove_on_shutdown(self):
