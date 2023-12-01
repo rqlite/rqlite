@@ -1072,19 +1072,21 @@ func Test_ForwardingRedirectExecuteQuery(t *testing.T) {
 	}
 }
 
-func Test_timeoutQueryParam(t *testing.T) {
-	var req http.Request
-
+func Test_timeoutVersionPrettyQueryParam(t *testing.T) {
 	defStr := "10s"
 	def := mustParseDuration(defStr)
 	tests := []struct {
-		u   string
-		dur string
-		err bool
+		u      string
+		dur    string
+		ver    string
+		pretty bool
+		err    bool
 	}{
 		{
-			u:   "http://localhost:4001/nodes?timeout=5s",
-			dur: "5s",
+			u:      "http://localhost:4001/nodes?pretty&timeout=5s&ver=2",
+			dur:    "5s",
+			pretty: true,
+			ver:    "2",
 		},
 		{
 			u:   "http://localhost:4001/nodes?timeout=2m",
@@ -1099,14 +1101,29 @@ func Test_timeoutQueryParam(t *testing.T) {
 			dur: defStr,
 		},
 		{
+			u:   "http://localhost:4001/nodes?ver=666",
+			dur: defStr,
+			ver: "666",
+		},
+		{
+			u:      "http://localhost:4001/nodes?pretty&ver=666",
+			dur:    defStr,
+			pretty: true,
+			ver:    "666",
+		},
+		{
 			u:   "http://localhost:4001/nodes?timeout=zdfjkh",
 			err: true,
 		},
 	}
 
-	for _, tt := range tests {
-		req.URL = mustURLParse(tt.u)
-		timeout, err := timeoutParam(&req, def)
+	for i, tt := range tests {
+		req, err := http.NewRequest("GET", tt.u, nil)
+		if err != nil {
+			t.Fatalf("failed to create request: %s", err)
+		}
+
+		timeout, err := timeoutParam(req, def)
 		if err != nil {
 			if tt.err {
 				// Error is expected, all is OK.
@@ -1116,6 +1133,22 @@ func Test_timeoutQueryParam(t *testing.T) {
 		}
 		if timeout != mustParseDuration(tt.dur) {
 			t.Fatalf("got wrong timeout, expected %s, got %s", mustParseDuration(tt.dur), timeout)
+		}
+
+		ver, err := verParam(req)
+		if err != nil {
+			t.Fatalf("failed to get version as expected: %s", err)
+		}
+		if ver != tt.ver {
+			t.Fatalf("got wrong version, expected %s, got %s", tt.ver, ver)
+		}
+
+		pretty, err := isPretty(req)
+		if err != nil {
+			t.Fatalf("failed to get pretty as expected on test %d: %s", i, err)
+		}
+		if pretty != tt.pretty {
+			t.Fatalf("got wrong pretty on test %d, expected %t, got %t", i, tt.pretty, pretty)
 		}
 	}
 }
