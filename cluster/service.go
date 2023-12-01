@@ -96,6 +96,9 @@ type Database interface {
 
 // Manager is the interface node-management systems must implement
 type Manager interface {
+	// LeaderAddr returns the Raft address of the leader of the cluster.
+	LeaderAddr() (string, error)
+
 	// Remove removes the node, given by id, from the cluster
 	Remove(rn *command.RemoveNodeRequest) error
 
@@ -436,6 +439,8 @@ func (s *Service) handleConn(conn net.Conn) {
 			nr := c.GetNotifyRequest()
 			if nr == nil {
 				resp.Error = "NotifyRequest is nil"
+			} else if !s.checkCommandPerm(c, auth.PermJoin) {
+				resp.Error = "unauthorized"
 			} else {
 				if err := s.mgr.Notify(nr); err != nil {
 					resp.Error = err.Error()
@@ -451,8 +456,21 @@ func (s *Service) handleConn(conn net.Conn) {
 			if jr == nil {
 				resp.Error = "JoinRequest is nil"
 			} else {
-				if err := s.mgr.Join(jr); err != nil {
-					resp.Error = err.Error()
+				if (jr.Voter && s.checkCommandPerm(c, auth.PermJoin)) ||
+					(!jr.Voter && s.checkCommandPerm(c, auth.PermJoinReadOnly)) {
+					if err := s.mgr.Join(jr); err != nil {
+						resp.Error = err.Error()
+						if err.Error() == "not leader" {
+							laddr, err := s.mgr.LeaderAddr()
+							if err != nil {
+								resp.Error = err.Error()
+							} else {
+								resp.Leader = laddr
+							}
+						}
+					}
+				} else {
+					resp.Error = "unauthorized"
 				}
 			}
 			marshalAndWrite(conn, resp)

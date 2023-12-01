@@ -26,6 +26,7 @@ import (
 	"github.com/rqlite/rqlite/cmd"
 	"github.com/rqlite/rqlite/db"
 	"github.com/rqlite/rqlite/disco"
+	"github.com/rqlite/rqlite/http"
 	httpd "github.com/rqlite/rqlite/http"
 	"github.com/rqlite/rqlite/rtls"
 	"github.com/rqlite/rqlite/store"
@@ -158,18 +159,12 @@ func main() {
 	httpServ.RegisterStatus("cluster", clstrServ)
 	httpServ.RegisterStatus("network", tcp.NetworkReporter{})
 
-	// Prepare the cluster-joiner
-	joiner, err := createJoiner(cfg, credStr)
-	if err != nil {
-		log.Fatalf("failed to create cluster joiner: %s", err.Error())
-	}
-
 	// Create the cluster!
 	nodes, err := str.Nodes()
 	if err != nil {
 		log.Fatalf("failed to get nodes %s", err.Error())
 	}
-	if err := createCluster(cfg, len(nodes) > 0, joiner, str, httpServ, credStr); err != nil {
+	if err := createCluster(cfg, len(nodes) > 0, clstrClient, str, httpServ, credStr); err != nil {
 		log.Fatalf("clustering failure: %s", err.Error())
 	}
 
@@ -303,7 +298,6 @@ func createStore(cfg *Config, ln *tcp.Layer) (*store.Store, error) {
 
 	// Set optional parameters on store.
 	str.RaftLogLevel = cfg.RaftLogLevel
-	str.NoFreeListSync = cfg.RaftNoFreelistSync
 	str.ShutdownOnRemove = cfg.RaftShutdownOnRemove
 	str.SnapshotThreshold = cfg.RaftSnapThreshold
 	str.SnapshotInterval = cfg.RaftSnapInterval
@@ -375,6 +369,7 @@ func startHTTPService(cfg *Config, str *store.Store, cltr *cluster.Client, credS
 	s.DefaultQueueBatchSz = cfg.WriteQueueBatchSz
 	s.DefaultQueueTimeout = cfg.WriteQueueTimeout
 	s.DefaultQueueTx = cfg.WriteQueueTx
+	s.AllowOrigin = cfg.HTTPAllowOrigin
 	s.BuildInfo = map[string]interface{}{
 		"commit":     cmd.Commit,
 		"branch":     cmd.Branch,
@@ -427,22 +422,6 @@ func credentialStore(cfg *Config) (*auth.CredentialsStore, error) {
 	return auth.NewCredentialsStoreFromFile(cfg.AuthFile)
 }
 
-func createJoiner(cfg *Config, credStr *auth.CredentialsStore) (*cluster.Joiner, error) {
-	tlsConfig, err := createHTTPTLSConfig(cfg)
-	if err != nil {
-		return nil, err
-	}
-	joiner := cluster.NewJoiner(cfg.JoinSrcIP, cfg.JoinAttempts, cfg.JoinInterval, tlsConfig)
-	if cfg.JoinAs != "" {
-		pw, ok := credStr.Password(cfg.JoinAs)
-		if !ok {
-			return nil, fmt.Errorf("user %s does not exist in credential store", cfg.JoinAs)
-		}
-		joiner.SetBasicAuth(cfg.JoinAs, pw)
-	}
-	return joiner, nil
-}
-
 func clusterService(cfg *Config, tn cluster.Transport, db cluster.Database, mgr cluster.Manager, credStr *auth.CredentialsStore) (*cluster.Service, error) {
 	c := cluster.New(tn, db, mgr, credStr)
 	c.SetAPIAddr(cfg.HTTPAdv)
@@ -471,13 +450,12 @@ func createClusterClient(cfg *Config, clstr *cluster.Service) (*cluster.Client, 
 	return clstrClient, nil
 }
 
-func createCluster(cfg *Config, hasPeers bool, joiner *cluster.Joiner, str *store.Store, httpServ *httpd.Service, credStr *auth.CredentialsStore) error {
-	tlsConfig, err := createHTTPTLSConfig(cfg)
-	if err != nil {
-		return fmt.Errorf("failed to create TLS client config for cluster: %s", err.Error())
+func createCluster(cfg *Config, hasPeers bool, client *cluster.Client, str *store.Store, httpServ *httpd.Service, credStr *auth.CredentialsStore) error {
+	joins := cfg.JoinAddresses()
+	if err := networkCheckJoinAddrs(cfg, joins); err != nil {
+		return err
 	}
 
-	joins := cfg.JoinAddresses()
 	if joins == nil && cfg.DiscoMode == "" && !hasPeers {
 		if cfg.RaftNonVoter {
 			return fmt.Errorf("cannot create a new non-voting node without joining it to an existing cluster")
@@ -497,6 +475,8 @@ func createCluster(cfg *Config, hasPeers bool, joiner *cluster.Joiner, str *stor
 		return leader != ""
 	}
 
+	joiner := cluster.NewJoiner(client, cfg.JoinAttempts, cfg.JoinInterval)
+	joiner.SetCredentials(credentialsFor(credStr, cfg.JoinAs))
 	if joins != nil && cfg.BootstrapExpect == 0 {
 		// Explicit join operation requested, so do it.
 		j, err := joiner.Do(joins, str.ID(), cfg.RaftAdv, !cfg.RaftNonVoter)
@@ -509,14 +489,8 @@ func createCluster(cfg *Config, hasPeers bool, joiner *cluster.Joiner, str *stor
 
 	if joins != nil && cfg.BootstrapExpect > 0 {
 		// Bootstrap with explicit join addresses requests.
-		bs := cluster.NewBootstrapper(cluster.NewAddressProviderString(joins), tlsConfig)
-		if cfg.JoinAs != "" {
-			pw, ok := credStr.Password(cfg.JoinAs)
-			if !ok {
-				return fmt.Errorf("user %s does not exist in credential store", cfg.JoinAs)
-			}
-			bs.SetBasicAuth(cfg.JoinAs, pw)
-		}
+		bs := cluster.NewBootstrapper(cluster.NewAddressProviderString(joins), client)
+		bs.SetCredentials(credentialsFor(credStr, cfg.JoinAs))
 		return bs.Boot(str.ID(), cfg.RaftAdv, isClustered, cfg.BootstrapExpectTimeout)
 	}
 
@@ -548,7 +522,7 @@ func createCluster(cfg *Config, hasPeers bool, joiner *cluster.Joiner, str *stor
 			if err != nil {
 				return fmt.Errorf("error reading DNS configuration: %s", err.Error())
 			}
-			provider = dns.New(dnsCfg)
+			provider = dns.NewWithPort(dnsCfg, cfg.RaftPort())
 
 		} else {
 			dnssrvCfg, err := dnssrv.NewConfigFromReader(rc)
@@ -558,14 +532,8 @@ func createCluster(cfg *Config, hasPeers bool, joiner *cluster.Joiner, str *stor
 			provider = dnssrv.New(dnssrvCfg)
 		}
 
-		bs := cluster.NewBootstrapper(provider, tlsConfig)
-		if cfg.JoinAs != "" {
-			pw, ok := credStr.Password(cfg.JoinAs)
-			if !ok {
-				return fmt.Errorf("user %s does not exist in credential store", cfg.JoinAs)
-			}
-			bs.SetBasicAuth(cfg.JoinAs, pw)
-		}
+		bs := cluster.NewBootstrapper(provider, client)
+		bs.SetCredentials(credentialsFor(credStr, cfg.JoinAs))
 		httpServ.RegisterStatus("disco", provider)
 		return bs.Boot(str.ID(), cfg.RaftAdv, isClustered, cfg.BootstrapExpectTimeout)
 
@@ -620,10 +588,29 @@ func createCluster(cfg *Config, hasPeers bool, joiner *cluster.Joiner, str *stor
 	return nil
 }
 
-func createHTTPTLSConfig(cfg *Config) (*tls.Config, error) {
-	if cfg.HTTPx509Cert == "" && cfg.HTTPx509CACert == "" {
-		return nil, nil
+func networkCheckJoinAddrs(cfg *Config, joinAddrs []string) error {
+	if len(joinAddrs) == 0 {
+		return nil
 	}
-	return rtls.CreateClientConfig(cfg.HTTPx509Cert, cfg.HTTPx509Key, cfg.HTTPx509CACert,
-		cfg.NoHTTPVerify)
+
+	for _, addr := range joinAddrs {
+		if http.IsServingHTTP(addr) {
+			return fmt.Errorf("join address %s appears to be serving HTTP when it should be Raft", addr)
+		}
+	}
+	return nil
+}
+
+func credentialsFor(credStr *auth.CredentialsStore, username string) *cluster.Credentials {
+	if credStr == nil {
+		return nil
+	}
+	pw, ok := credStr.Password(username)
+	if !ok {
+		return nil
+	}
+	return &cluster.Credentials{
+		Username: username,
+		Password: pw,
+	}
 }

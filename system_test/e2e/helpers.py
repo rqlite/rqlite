@@ -20,6 +20,18 @@ TIMEOUT=20
 
 seqRe = re.compile("^{'results': \[\], 'sequence_number': \d+}$")
 
+# random_addr returns a random IP:port address which is not already in use,
+# and which has not already been returned by this function.
+allocated_addresses = set()
+def random_addr():
+  while True:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+      s.bind(('localhost', 0))
+      addr = f"{s.getsockname()[0]}:{s.getsockname()[1]}"
+      if addr not in allocated_addresses:
+        allocated_addresses.add(addr)
+        return addr
+
 def d_(s):
     return ast.literal_eval(s.replace("'", "\""))
 
@@ -62,11 +74,6 @@ def raise_for_status(r):
     print((r.text))
     raise e
 
-def random_addr():
-  s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-  s.bind(('localhost', 0))
-  return s, ':'.join([s.getsockname()[0], str(s.getsockname()[1])])
-
 class Node(object):
   def __init__(self, path, node_id,
                api_addr=None, api_adv=None,
@@ -83,19 +90,9 @@ class Node(object):
     s_api = None
     s_raft = None
     if api_addr is None:
-      s_api, addr = random_addr()
-      api_addr = addr
+      api_addr = random_addr()
     if raft_addr is None:
-      s_raft, addr = random_addr()
-      raft_addr = addr
-    
-    # Only now close any sockets used to get random addresses, so there is
-    # no chance a randomly selected address would get re-used by the HTTP
-    # system and Raft system.
-    if s_api is not None:
-        s_api.close()
-    if s_raft is not None:
-        s_raft.close()
+      raft_addr = random_addr()
         
     if api_adv is None:
       api_adv = api_addr
@@ -139,13 +136,16 @@ class Node(object):
   def APIProtoAddr(self):
       return "http://%s" % self.APIAddr()
 
+  def RaftAddr(self):
+      if self.raft_adv is not None:
+          return self.raft_adv
+      return self.raft_addr
+
   def scramble_network(self):
     if self.api_adv == self.api_addr:
       self.api_adv = None
 
-    s, addr = random_addr()
-    self.api_addr = addr
-    s.close()
+    self.api_addr = random_addr()
 
     if self.api_adv is None:
       self.api_adv = self.api_addr
@@ -153,14 +153,12 @@ class Node(object):
     if self.raft_adv == self.raft_addr:
       self.raft_adv = None
 
-    s, addr = random_addr()
-    self.raft_addr = addr
-    s.close()
+    self.raft_addr = random_addr()
 
     if self.raft_adv is None:
       self.raft_adv = self.raft_addr
 
-  def start(self, join=None, join_as=None, join_attempts=None, join_interval=None,
+  def start(self, join=None, join_attempts=None, join_interval=None, join_as=None,
     disco_mode=None, disco_key=None, disco_config=None, wait=True, timeout=TIMEOUT):
     if self.process is not None:
       return
@@ -193,15 +191,13 @@ class Node(object):
     if self.auto_restore is not None:
       command += ['-auto-restore', self.auto_restore]
     if join is not None:
-      if join.startswith('http://') is False:
-        join = 'http://' + join
       command += ['-join', join]
-    if join_as is not None:
-       command += ['-join-as', join_as]
     if join_attempts is not None:
        command += ['-join-attempts', str(join_attempts)]
     if join_interval is not None:
        command += ['-join-interval', join_interval]
+    if join_as is not None:
+        command += ['-join-as', join_as]
     if disco_mode is not None:
       dk = disco_key
       if dk is None:
@@ -349,7 +345,7 @@ class Node(object):
     return int(self.status()['store']['raft']['last_snapshot_index'])
 
   def num_join_requests(self):
-    return int(self.expvar()['http']['joins'])
+    return int(self.expvar()['cluster']['num_join_req'])
 
   def num_snapshots(self):
     return int(self.expvar()['store']['num_snapshots'])

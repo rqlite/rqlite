@@ -7,11 +7,11 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -46,6 +46,9 @@ type Config struct {
 
 	// HTTPAdv is the advertised HTTP server network.
 	HTTPAdv string
+
+	// HTTPAllowOrigin is the value to set for Access-Control-Allow-Origin HTTP header.
+	HTTPAllowOrigin string
 
 	// AuthFile is the path to the authentication file. May not be set.
 	AuthFile string `filepath:"true"`
@@ -98,16 +101,8 @@ type Config struct {
 	// RaftAdv is the advertised Raft server address.
 	RaftAdv string
 
-	// JoinSrcIP sets the source IP address during Join request. May not be set.
-	JoinSrcIP string
-
-	// JoinAddr is the list addresses to use for a join attempt. Each address
-	// will include the proto (HTTP or HTTPS) and will never include the node's
-	// own HTTP server address. May not be set.
-	JoinAddr string
-
-	// JoinAs sets the user join attempts should be performed as. May not be set.
-	JoinAs string
+	// JoinAddrs is the list of Raft addresses to use for a join attempt.
+	JoinAddrs string
 
 	// JoinAttempts is the number of times a node should attempt to join using a
 	// given address.
@@ -115,6 +110,9 @@ type Config struct {
 
 	// JoinInterval is the time between retrying failed join operations.
 	JoinInterval time.Duration
+
+	// JoinAs sets the user join attempts should be performed as. May not be set.
+	JoinAs string
 
 	// BootstrapExpect is the minimum number of nodes required for a bootstrap.
 	BootstrapExpect int
@@ -171,11 +169,6 @@ type Config struct {
 
 	// RaftStepdownOnShutdown sets whether Leadership should be relinquished on shutdown
 	RaftStepdownOnShutdown bool
-
-	// RaftNoFreelistSync disables syncing Raft database freelist to disk. When true,
-	// it improves the database write performance under normal operation, but requires
-	// a full database re-sync during recovery.
-	RaftNoFreelistSync bool
 
 	// RaftReapNodeTimeout sets the duration after which a non-reachable voting node is
 	// reaped i.e. removed from the cluster.
@@ -268,17 +261,22 @@ func (c *Config) Validate() error {
 			hadv, HTTPAddrFlag, HTTPAdvAddrFlag)
 	}
 
-	if _, _, err := net.SplitHostPort(c.RaftAddr); err != nil {
+	if _, rp, err := net.SplitHostPort(c.RaftAddr); err != nil {
 		return errors.New("raft bind address not valid")
+	} else if _, err := strconv.Atoi(rp); err != nil {
+		return errors.New("raft bind port not valid")
 	}
 
-	radv, _, err := net.SplitHostPort(c.RaftAdv)
+	radv, rp, err := net.SplitHostPort(c.RaftAdv)
 	if err != nil {
 		return errors.New("raft advertised address not valid")
 	}
 	if addr := net.ParseIP(radv); addr != nil && addr.IsUnspecified() {
 		return fmt.Errorf("advertised Raft address is not routable (%s), specify it via -%s or -%s",
 			radv, RaftAddrFlag, RaftAdvAddrFlag)
+	}
+	if _, err := strconv.Atoi(rp); err != nil {
+		return errors.New("raft advertised port is not valid")
 	}
 
 	if c.RaftAdv == c.HTTPAdv {
@@ -291,15 +289,15 @@ func (c *Config) Validate() error {
 	}
 
 	// Join parameters OK?
-	if c.JoinAddr != "" {
-		addrs := strings.Split(c.JoinAddr, ",")
+	if c.JoinAddrs != "" {
+		addrs := strings.Split(c.JoinAddrs, ",")
 		for i := range addrs {
-			u, err := url.Parse(addrs[i])
-			if err != nil {
+			if _, _, err := net.SplitHostPort(addrs[i]); err != nil {
 				return fmt.Errorf("%s is an invalid join adddress", addrs[i])
 			}
+
 			if c.BootstrapExpect == 0 {
-				if u.Host == c.HTTPAdv || addrs[i] == c.HTTPAddr {
+				if addrs[i] == c.RaftAdv || addrs[i] == c.RaftAddr {
 					return errors.New("node cannot join with itself unless bootstrapping")
 				}
 				if c.AutoRestoreFile != "" {
@@ -307,9 +305,6 @@ func (c *Config) Validate() error {
 				}
 			}
 		}
-	}
-	if c.JoinSrcIP != "" && net.ParseIP(c.JoinSrcIP) == nil {
-		return fmt.Errorf("invalid join source IP address: %s", c.JoinSrcIP)
 	}
 
 	// Valid disco mode?
@@ -334,10 +329,10 @@ func (c *Config) Validate() error {
 // JoinAddresses returns the join addresses set at the command line. Returns nil
 // if no join addresses were set.
 func (c *Config) JoinAddresses() []string {
-	if c.JoinAddr == "" {
+	if c.JoinAddrs == "" {
 		return nil
 	}
-	return strings.Split(c.JoinAddr, ",")
+	return strings.Split(c.JoinAddrs, ",")
 }
 
 // HTTPURL returns the fully-formed, advertised HTTP API address for this config, including
@@ -348,6 +343,20 @@ func (c *Config) HTTPURL() string {
 		apiProto = "https"
 	}
 	return fmt.Sprintf("%s://%s", apiProto, c.HTTPAdv)
+}
+
+// RaftPort returns the port on which the Raft system is listening. Validate must
+// have been called before calling this method.
+func (c *Config) RaftPort() int {
+	_, port, err := net.SplitHostPort(c.RaftAddr)
+	if err != nil {
+		panic("RaftAddr not valid")
+	}
+	p, err := strconv.Atoi(port)
+	if err != nil {
+		panic("RaftAddr port not valid")
+	}
+	return p
 }
 
 // DiscoConfigReader returns a ReadCloser providing access to the Disco config.
@@ -416,6 +425,7 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	flag.StringVar(&config.NodeID, "node-id", "", "Unique ID for node. If not set, set to advertised Raft address")
 	flag.StringVar(&config.HTTPAddr, HTTPAddrFlag, "localhost:4001", "HTTP server bind address. To enable HTTPS, set X.509 certificate and key")
 	flag.StringVar(&config.HTTPAdv, HTTPAdvAddrFlag, "", "Advertised HTTP address. If not set, same as HTTP server bind address")
+	flag.StringVar(&config.HTTPAllowOrigin, "http-allow-origin", "", "Value to set for Access-Control-Allow-Origin HTTP header")
 	flag.StringVar(&config.HTTPx509CACert, "http-ca-cert", "", "Path to X.509 CA certificate for HTTPS")
 	flag.StringVar(&config.HTTPx509Cert, HTTPx509CertFlag, "", "Path to HTTPS X.509 certificate")
 	flag.StringVar(&config.HTTPx509Key, HTTPx509KeyFlag, "", "Path to HTTPS X.509 private key")
@@ -431,11 +441,10 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	flag.StringVar(&config.AutoRestoreFile, "auto-restore", "", "Path to automatic restore configuration file. If not set, not enabled")
 	flag.StringVar(&config.RaftAddr, RaftAddrFlag, "localhost:4002", "Raft communication bind address")
 	flag.StringVar(&config.RaftAdv, RaftAdvAddrFlag, "", "Advertised Raft communication address. If not set, same as Raft bind address")
-	flag.StringVar(&config.JoinSrcIP, "join-source-ip", "", "Set source IP address during HTTP Join request")
-	flag.StringVar(&config.JoinAddr, "join", "", "Comma-delimited list of nodes, through which a cluster can be joined (proto://host:port)")
-	flag.StringVar(&config.JoinAs, "join-as", "", "Username in authentication file to join as. If not set, joins anonymously")
+	flag.StringVar(&config.JoinAddrs, "join", "", "Comma-delimited list of nodes, through which a cluster can be joined (proto://host:port)")
 	flag.IntVar(&config.JoinAttempts, "join-attempts", 5, "Number of join attempts to make")
 	flag.DurationVar(&config.JoinInterval, "join-interval", 3*time.Second, "Period between join attempts")
+	flag.StringVar(&config.JoinAs, "join-as", "", "Username in authentication file to join as. If not set, joins anonymously")
 	flag.IntVar(&config.BootstrapExpect, "bootstrap-expect", 0, "Minimum number of nodes required for a bootstrap")
 	flag.DurationVar(&config.BootstrapExpectTimeout, "bootstrap-expect-timeout", 120*time.Second, "Maximum time for bootstrap process")
 	flag.StringVar(&config.DiscoMode, "disco-mode", "", "Choose clustering discovery mode. If not set, no node discovery is performed")
@@ -454,7 +463,6 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	flag.BoolVar(&config.RaftStepdownOnShutdown, "raft-shutdown-stepdown", true, "If leader, stepdown before shutting down. Enabled by default")
 	flag.BoolVar(&config.RaftShutdownOnRemove, "raft-remove-shutdown", false, "Shutdown Raft if node removed from cluster")
 	flag.BoolVar(&config.RaftClusterRemoveOnShutdown, "raft-cluster-remove-shutdown", false, "Node removes itself from cluster on graceful shutdown")
-	flag.BoolVar(&config.RaftNoFreelistSync, "raft-no-freelist-sync", false, "Do not sync Raft log database freelist to disk")
 	flag.StringVar(&config.RaftLogLevel, "raft-log-level", "INFO", "Minimum log level for Raft module")
 	flag.DurationVar(&config.RaftReapNodeTimeout, "raft-reap-node-timeout", 0*time.Hour, "Time after which a non-reachable voting node will be reaped. If not set, no reaping takes place")
 	flag.DurationVar(&config.RaftReapReadOnlyNodeTimeout, "raft-reap-read-only-node-timeout", 0*time.Hour, "Time after which a non-reachable non-voting node will be reaped. If not set, no reaping takes place")

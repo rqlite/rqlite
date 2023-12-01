@@ -83,4 +83,5 @@ message CommandNotifyResponse {
 
 message CommandJoinResponse {
     string error = 1;
+    string leader = 2;
 }

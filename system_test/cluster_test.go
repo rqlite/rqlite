@@ -11,7 +11,6 @@ import (
 	"github.com/rqlite/rqlite/db"
 	"github.com/rqlite/rqlite/http"
 	"github.com/rqlite/rqlite/queue"
-	"github.com/rqlite/rqlite/rtls"
 	"github.com/rqlite/rqlite/store"
 	"github.com/rqlite/rqlite/tcp"
 )
@@ -243,10 +242,10 @@ func Test_MultiNodeClusterBootstrap(t *testing.T) {
 	defer node3.Deprovision()
 
 	provider := cluster.NewAddressProviderString(
-		[]string{node1.APIAddr, node2.APIAddr, node3.APIAddr})
-	node1Bs := cluster.NewBootstrapper(provider, nil)
-	node2Bs := cluster.NewBootstrapper(provider, nil)
-	node3Bs := cluster.NewBootstrapper(provider, nil)
+		[]string{node1.RaftAddr, node2.RaftAddr, node3.RaftAddr})
+	node1Bs := cluster.NewBootstrapper(provider, node1.Client)
+	node2Bs := cluster.NewBootstrapper(provider, node2.Client)
+	node3Bs := cluster.NewBootstrapper(provider, node3.Client)
 
 	// Have all nodes start a bootstrap basically in parallel,
 	// ensure only 1 leader actually gets elected.
@@ -408,12 +407,12 @@ func Test_MultiNodeClusterBootstrapLaterJoin(t *testing.T) {
 	defer node3.Deprovision()
 
 	provider := cluster.NewAddressProviderString(
-		[]string{node1.APIAddr, node2.APIAddr, node3.APIAddr})
-	node1Bs := cluster.NewBootstrapper(provider, nil)
+		[]string{node1.RaftAddr, node2.RaftAddr, node3.RaftAddr})
+	node1Bs := cluster.NewBootstrapper(provider, node1.Client)
 	node1Bs.Interval = time.Second
-	node2Bs := cluster.NewBootstrapper(provider, nil)
+	node2Bs := cluster.NewBootstrapper(provider, node2.Client)
 	node2Bs.Interval = time.Second
-	node3Bs := cluster.NewBootstrapper(provider, nil)
+	node3Bs := cluster.NewBootstrapper(provider, node3.Client)
 	node3Bs.Interval = time.Second
 
 	// Have all nodes start a bootstrap basically in parallel,
@@ -471,8 +470,8 @@ func Test_MultiNodeClusterBootstrapLaterJoin(t *testing.T) {
 	// params. Under the cover it should just do a join.
 	node4 := mustNewNode(false)
 	node4.Store.BootstrapExpect = 3
-	defer node3.Deprovision()
-	node4Bs := cluster.NewBootstrapper(provider, nil)
+	defer node4.Deprovision()
+	node4Bs := cluster.NewBootstrapper(provider, node4.Client)
 	node4Bs.Interval = time.Second
 	done := func() bool {
 		addr, _ := node4.Store.LeaderAddr()
@@ -490,33 +489,31 @@ func Test_MultiNodeClusterBootstrapLaterJoin(t *testing.T) {
 	}
 }
 
-// Test_MultiNodeClusterBootstrapLaterJoinHTTPS tests formation of a 3-node cluster which
+// Test_MultiNodeClusterBootstrapLaterJoinTLS tests formation of a 3-node cluster which
 // uses HTTP and TLS,then checking a 4th node can join later with the bootstap parameters.
-func Test_MultiNodeClusterBootstrapLaterJoinHTTPS(t *testing.T) {
+func Test_MultiNodeClusterBootstrapLaterJoinTLS(t *testing.T) {
 	node1 := mustNewNodeEncrypted(false, true, true)
 	node1.Store.BootstrapExpect = 3
+	node1.EnableTLSClient()
 	defer node1.Deprovision()
 
 	node2 := mustNewNodeEncrypted(false, true, true)
 	node2.Store.BootstrapExpect = 3
+	node2.EnableTLSClient()
 	defer node2.Deprovision()
 
 	node3 := mustNewNodeEncrypted(false, true, true)
 	node3.Store.BootstrapExpect = 3
+	node3.EnableTLSClient()
 	defer node3.Deprovision()
 
-	tlsConfig, err := rtls.CreateClientConfig("", "", "", true)
-	if err != nil {
-		t.Fatalf("failed to create TLS config: %s", err)
-	}
-
 	provider := cluster.NewAddressProviderString(
-		[]string{node1.APIAddr, node2.APIAddr, node3.APIAddr})
-	node1Bs := cluster.NewBootstrapper(provider, tlsConfig)
+		[]string{node1.RaftAddr, node2.RaftAddr, node3.RaftAddr})
+	node1Bs := cluster.NewBootstrapper(provider, node1.Client)
 	node1Bs.Interval = time.Second
-	node2Bs := cluster.NewBootstrapper(provider, tlsConfig)
+	node2Bs := cluster.NewBootstrapper(provider, node2.Client)
 	node2Bs.Interval = time.Second
-	node3Bs := cluster.NewBootstrapper(provider, tlsConfig)
+	node3Bs := cluster.NewBootstrapper(provider, node3.Client)
 	node3Bs.Interval = time.Second
 
 	// Have all nodes start a bootstrap basically in parallel,
@@ -571,11 +568,12 @@ func Test_MultiNodeClusterBootstrapLaterJoinHTTPS(t *testing.T) {
 	}
 
 	// Ensure a 4th node can join cluster with exactly same launch
-	// params. Under the cover it should just do a join.
+	// params. Under the covers it should just do a join.
 	node4 := mustNewNodeEncrypted(false, true, true)
 	node4.Store.BootstrapExpect = 3
+	node4.EnableTLSClient()
 	defer node3.Deprovision()
-	node4Bs := cluster.NewBootstrapper(provider, tlsConfig)
+	node4Bs := cluster.NewBootstrapper(provider, node3.Client)
 	node4Bs.Interval = time.Second
 	done := func() bool {
 		addr, _ := node4.Store.LeaderAddr()
@@ -703,8 +701,8 @@ func Test_MultiNodeClusterNodes(t *testing.T) {
 	if len(nodes) != len(c) {
 		t.Fatalf("nodes/ output returned wrong number of nodes, got %d, exp %d", len(nodes), len(c))
 	}
-	ns, ok := nodes[leader.ID]
-	if !ok {
+	ns := nodes.GetNode(leader.ID)
+	if ns == nil {
 		t.Fatalf("failed to find leader with ID %s in node status", leader.ID)
 	}
 	if !ns.Leader {
@@ -730,7 +728,10 @@ func Test_MultiNodeClusterNodes(t *testing.T) {
 		t.Fatalf("got incorrect number of followers: %d", len(followers))
 	}
 	f := followers[0]
-	ns = nodes[f.ID]
+	ns = nodes.GetNode(f.ID)
+	if ns == nil {
+		t.Fatalf("failed to find follower with ID %s in node status", f.ID)
+	}
 	if ns.Addr != f.RaftAddr {
 		t.Fatalf("node has wrong Raft address for follower")
 	}
@@ -985,12 +986,14 @@ func Test_MultiNodeClusterNodesNonVoter(t *testing.T) {
 // This test enables inter-node encryption, but keeps the unencrypted HTTP API.
 func Test_MultiNodeClusterNodeEncrypted(t *testing.T) {
 	node1 := mustNewNodeEncrypted(true, false, true)
+	node1.EnableTLSClient()
 	defer node1.Deprovision()
 	if _, err := node1.WaitForLeader(); err != nil {
 		t.Fatalf("node never became leader")
 	}
 
 	node2 := mustNewNodeEncrypted(false, false, true)
+	node2.EnableTLSClient()
 	defer node2.Deprovision()
 	if err := node2.Join(node1); err != nil {
 		t.Fatalf("node failed to join leader: %s", err.Error())
@@ -1017,6 +1020,7 @@ func Test_MultiNodeClusterNodeEncrypted(t *testing.T) {
 	}
 
 	node3 := mustNewNodeEncrypted(false, false, true)
+	node3.EnableTLSClient()
 	defer node3.Deprovision()
 	if err := node3.Join(leader); err != nil {
 		t.Fatalf("node failed to join leader: %s", err.Error())

@@ -3,12 +3,10 @@ package main
 
 import (
 	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -18,9 +16,11 @@ import (
 
 	"github.com/Bowery/prompt"
 	"github.com/mkideal/cli"
+	clix "github.com/mkideal/cli/ext"
 	"github.com/rqlite/rqlite/cmd"
 	"github.com/rqlite/rqlite/cmd/rqlite/history"
 	httpcl "github.com/rqlite/rqlite/cmd/rqlite/http"
+	"github.com/rqlite/rqlite/rtls"
 )
 
 const maxRedirect = 21
@@ -34,15 +34,18 @@ type Nodes map[string]Node
 
 type argT struct {
 	cli.Helper
-	Alternatives string `cli:"a,alternatives" usage:"comma separated list of 'host:port' pairs to use as fallback"`
-	Protocol     string `cli:"s,scheme" usage:"protocol scheme (http or https)" dft:"http"`
-	Host         string `cli:"H,host" usage:"rqlited host address" dft:"127.0.0.1"`
-	Port         uint16 `cli:"p,port" usage:"rqlited host port" dft:"4001"`
-	Prefix       string `cli:"P,prefix" usage:"rqlited HTTP URL prefix" dft:"/"`
-	Insecure     bool   `cli:"i,insecure" usage:"do not verify rqlited HTTPS certificate" dft:"false"`
-	CACert       string `cli:"c,ca-cert" usage:"path to trusted X.509 root CA certificate"`
-	Credentials  string `cli:"u,user" usage:"set basic auth credentials in form username:password"`
-	Version      bool   `cli:"v,version" usage:"display CLI version"`
+	Alternatives string        `cli:"a,alternatives" usage:"comma separated list of 'host:port' pairs to use as fallback"`
+	Protocol     string        `cli:"s,scheme" usage:"protocol scheme (http or https)" dft:"http"`
+	Host         string        `cli:"H,host" usage:"rqlited host address" dft:"127.0.0.1"`
+	Port         uint16        `cli:"p,port" usage:"rqlited host port" dft:"4001"`
+	Prefix       string        `cli:"P,prefix" usage:"rqlited HTTP URL prefix" dft:"/"`
+	Insecure     bool          `cli:"i,insecure" usage:"do not verify rqlited HTTPS certificate" dft:"false"`
+	CACert       string        `cli:"c,ca-cert" usage:"path to trusted X.509 root CA certificate"`
+	ClientCert   string        `cli:"d,client-cert" usage:"path to client X.509 certificate for mTLS"`
+	ClientKey    string        `cli:"k,client-key" usage:"path to client X.509 key for mTLS"`
+	Credentials  string        `cli:"u,user" usage:"set basic auth credentials in form username:password"`
+	Version      bool          `cli:"v,version" usage:"display CLI version"`
+	HTTPTimeout  clix.Duration `cli:"t,http-timeout" usage:"set timeout on HTTP requests" dft:"30s"`
 }
 
 var cliHelp = []string{
@@ -363,7 +366,7 @@ func getNodes(client *http.Client, argv *argT) (Nodes, error) {
 		return nil, err
 	}
 
-	response, err := ioutil.ReadAll(resp.Body)
+	response, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -378,26 +381,19 @@ func getNodes(client *http.Client, argv *argT) (Nodes, error) {
 }
 
 func getHTTPClient(argv *argT) (*http.Client, error) {
-	var rootCAs *x509.CertPool
-
-	if argv.CACert != "" {
-		pemCerts, err := ioutil.ReadFile(argv.CACert)
-		if err != nil {
-			return nil, err
-		}
-
-		rootCAs = x509.NewCertPool()
-
-		ok := rootCAs.AppendCertsFromPEM(pemCerts)
-		if !ok {
-			return nil, fmt.Errorf("failed to parse root CA certificate(s)")
-		}
+	tlsConfig, err := rtls.CreateClientConfig(argv.ClientCert, argv.ClientKey, argv.CACert, argv.Insecure)
+	if err != nil {
+		return nil, err
 	}
+	tlsConfig.NextProtos = nil // CLI refuses to connect otherwise.
 
-	client := http.Client{Transport: &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: argv.Insecure, RootCAs: rootCAs},
-		Proxy:           http.ProxyFromEnvironment,
-	}}
+	client := http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: tlsConfig,
+			Proxy:           http.ProxyFromEnvironment,
+		},
+		Timeout: argv.HTTPTimeout.Duration,
+	}
 
 	// Explicitly handle redirects.
 	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
@@ -441,24 +437,13 @@ func getVersionWithClient(client *http.Client, argv *argT) (string, error) {
 
 func sendRequest(ctx *cli.Context, makeNewRequest func(string) (*http.Request, error), urlStr string, argv *argT) (*[]byte, error) {
 	url := urlStr
-	var rootCAs *x509.CertPool
-
-	if argv.CACert != "" {
-		pemCerts, err := ioutil.ReadFile(argv.CACert)
-		if err != nil {
-			return nil, err
-		}
-
-		rootCAs = x509.NewCertPool()
-
-		ok := rootCAs.AppendCertsFromPEM(pemCerts)
-		if !ok {
-			return nil, fmt.Errorf("failed to parse root CA certificate(s)")
-		}
+	tlsConfig, err := rtls.CreateClientConfig(argv.ClientCert, argv.ClientKey, argv.CACert, argv.Insecure)
+	if err != nil {
+		return nil, err
 	}
-
+	tlsConfig.NextProtos = nil // CLI refuses to connect otherwise.
 	client := http.Client{Transport: &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: argv.Insecure, RootCAs: rootCAs},
+		TLSClientConfig: tlsConfig,
 		Proxy:           http.ProxyFromEnvironment,
 	}}
 
@@ -486,7 +471,7 @@ func sendRequest(ctx *cli.Context, makeNewRequest func(string) (*http.Request, e
 		if err != nil {
 			return nil, err
 		}
-		response, err := ioutil.ReadAll(resp.Body)
+		response, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return nil, err
 		}
@@ -572,7 +557,7 @@ func cliJSON(ctx *cli.Context, cmd, line, url string, argv *argT) error {
 		return fmt.Errorf("unauthorized")
 	}
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}
@@ -629,7 +614,7 @@ func urlsToWriter(client *http.Client, urls []string, w io.Writer, argv *argT) e
 				return nil
 			}
 
-			body, err := ioutil.ReadAll(resp.Body)
+			body, err := io.ReadAll(resp.Body)
 			if err != nil {
 				return err
 			}

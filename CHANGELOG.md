@@ -9,11 +9,17 @@ When officially released 8.0 will support (mostly) seamless upgrades from the 7.
 
 - Backup your data and load it into a new 8.0 system.
 - 8.0 always runs with an on-disk database, in-memory databases are no longer supported. Improvements made late in the 7.0 series means there is little difference in write performance between in-memory and on-disk modes, but supporting both modes just means confusion and higher development costs. If you were previously running in in-memory mode (the default), you don't need to do anything. But if you were previously passing `-on-disk` to `rqlited` so that rqlite ran in on-disk mode, you must now remove that flag.
-- A few, rarely if ever, used `rqlited` command-line flags have been removed. These flags just added operational overhead, while adding little value.
+- A few rarely, if ever, used `rqlited` command-line flags have been removed. These flags just added operational overhead, while adding little value.
+- When forming a new cluster using 8.0, pass the **Raft** addresss of the remote node to the `-join` command, not the HTTP API address.
 
 ### New features
 - [PR #1362](https://github.com/rqlite/rqlite/pull/1362): Enable SQLite [FTS5](https://www.sqlite.org/fts5.html). Fixes [issue #1361](https://github.com/rqlite/rqlite/issues/1361)
-
+- [PR #1405](https://github.com/rqlite/rqlite/pull/1405): Support a configurable HTTP connection timeout in the rqlite CLI. Thanks @jtarchie
+- [PR #1418](https://github.com/rqlite/rqlite/pull/1418): Add basic CORS support. Fixes [issue #687](https://github.com/rqlite/rqlite/issues/687). Thanks @kkoreilly
+- [PR #1422](https://github.com/rqlite/rqlite/pull/1422): Add mTLS support to rqlite CLI. Fixes [issue #1421](https://github.com/rqlite/rqlite/issues/1421)
+- [PR #1427](https://github.com/rqlite/rqlite/pull/1427): Upgrade to SQLite 3.44.0.
+- [PR #1433](https://github.com/rqlite/rqlite/pull/1433): Support an optional better form for the `nodes/` output. Fixes [issue #1415](https://github.com/rqlite/rqlite/issues/1415)
+  
 ### Implementation changes and bug fixes
 - [PR #1368](https://github.com/rqlite/rqlite/pull/1374): Switch to always-on expvar and pprof.
 - [PR #1337](https://github.com/rqlite/rqlite/pull/1337): Store can now load from an io.Reader.
@@ -37,6 +43,13 @@ When officially released 8.0 will support (mostly) seamless upgrades from the 7.
 - [PR #1394](https://github.com/rqlite/rqlite/pull/1394): Use only one RW database connection.
 - [PR #1395](https://github.com/rqlite/rqlite/pull/1395): More DB-level and Snapshotting statistics.
 - [PR #1399](https://github.com/rqlite/rqlite/pull/1399): Better trailing flags error message.
+- [PR #1404](https://github.com/rqlite/rqlite/pull/1404): Add an interface between Store and Snapshot Store.
+- [PR #1410](https://github.com/rqlite/rqlite/pull/1410), [PR #1412](https://github.com/rqlite/rqlite/pull/1412): Implement simpler WAL-based snapshotting.
+- [PR #1413](https://github.com/rqlite/rqlite/pull/1413): Remove `-raft-no-freelist-sync` command line flag.
+- [PR #1420](https://github.com/rqlite/rqlite/pull/1420), [PR #1431](https://github.com/rqlite/rqlite/pull/1431): Nodes join a cluster using the Raft address, not the HTTP API.
+- [PR #1426](https://github.com/rqlite/rqlite/pull/1426): 'go mod' updates, including moving to Raft 1.6.
+- [PR #1430](https://github.com/rqlite/rqlite/pull/1430): Check that any supplied Join addresses are not HTTP servers.
+- [PR #1437](https://github.com/rqlite/rqlite/pull/1437), [PR #1438](https://github.com/rqlite/rqlite/pull/1438): Actually timeout if needed during `nodes/` access. Fixes [issue #1435](https://github.com/rqlite/rqlite/issues/1435). Thanks @dwco-z
 
 ## 7.21.4 (July 8th 2023)
 ### Implementation changes and bug fixes

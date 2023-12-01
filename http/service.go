@@ -1,5 +1,4 @@
 // Package http provides the HTTP server for accessing the distributed database.
-// It also provides the endpoint for other nodes to join an existing cluster.
 package http
 
 import (
@@ -73,12 +72,6 @@ type Database interface {
 type Store interface {
 	Database
 
-	// Join joins the node with the given ID, reachable at addr, to this node.
-	Join(jr *command.JoinRequest) error
-
-	// Notify notifies this node that a node is available at addr.
-	Notify(nr *command.NotifyRequest) error
-
 	// Remove removes the node from the cluster.
 	Remove(rn *command.RemoveNodeRequest) error
 
@@ -98,10 +91,15 @@ type Store interface {
 	Backup(br *command.BackupRequest, dst io.Writer) error
 }
 
+// GetAddresser is the interface that wraps the GetNodeAPIAddr method.
+// GetNodeAPIAddr returns the HTTP API URL for the node at the given Raft address.
+type GetAddresser interface {
+	GetNodeAPIAddr(addr string, timeout time.Duration) (string, error)
+}
+
 // Cluster is the interface node API services must provide
 type Cluster interface {
-	// GetNodeAPIAddr returns the HTTP API URL for the node at the given Raft address.
-	GetNodeAPIAddr(nodeAddr string, timeout time.Duration) (string, error)
+	GetAddresser
 
 	// Execute performs an Execute Request on a remote node.
 	Execute(er *command.ExecuteRequest, nodeAddr string, creds *cluster.Credentials, timeout time.Duration) ([]*command.ExecuteResult, error)
@@ -226,8 +224,6 @@ const (
 	numStatus                         = "num_status"
 	numBackups                        = "backups"
 	numLoad                           = "loads"
-	numJoins                          = "joins"
-	numNotifies                       = "notifies"
 	numAuthOK                         = "authOK"
 	numAuthFail                       = "authFail"
 
@@ -241,6 +237,18 @@ const (
 	// node (by node Raft address) actually served the request if
 	// it wasn't served by this node.
 	ServedByHTTPHeader = "X-RQLITE-SERVED-BY"
+
+	// AllowOriginHeader is the HTTP header for allowing CORS compliant access from certain origins
+	AllowOriginHeader = "Access-Control-Allow-Origin"
+
+	// AllowMethodsHeader is the HTTP header for supporting the correct methods
+	AllowMethodsHeader = "Access-Control-Allow-Methods"
+
+	// AllowHeadersHeader is the HTTP header for supporting the correct request headers
+	AllowHeadersHeader = "Access-Control-Allow-Headers"
+
+	// AllowCredentialsHeader is the HTTP header for supporting specifying credentials
+	AllowCredentialsHeader = "Access-Control-Allow-Credentials"
 )
 
 func init() {
@@ -281,8 +289,6 @@ func ResetStats() {
 	stats.Add(numStatus, 0)
 	stats.Add(numBackups, 0)
 	stats.Add(numLoad, 0)
-	stats.Add(numJoins, 0)
-	stats.Add(numNotifies, 0)
 	stats.Add(numAuthOK, 0)
 	stats.Add(numAuthFail, 0)
 }
@@ -312,6 +318,8 @@ type Service struct {
 	KeyFile      string // Path to server's own x509 private key.
 	ClientVerify bool   // Whether client certificates should verified.
 	tlsConfig    *tls.Config
+
+	AllowOrigin string // Value to set for Access-Control-Allow-Origin
 
 	DefaultQueueCap     int
 	DefaultQueueBatchSz int
@@ -375,7 +383,7 @@ func (s *Service) Start() error {
 		if s.ClientVerify {
 			b.WriteString(", mutual TLS enabled")
 		} else {
-			b.WriteString(", mutual disabled")
+			b.WriteString(", mutual TLS disabled")
 		}
 		// print the message
 		s.logger.Println(b.String())
@@ -425,6 +433,12 @@ func (s *Service) HTTPS() bool {
 // ServeHTTP allows Service to serve HTTP requests.
 func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.addBuildVersion(w)
+	s.addAllowHeaders(w)
+
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 
 	switch {
 	case r.URL.Path == "/" || r.URL.Path == "":
@@ -444,12 +458,6 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case strings.HasPrefix(r.URL.Path, "/db/load"):
 		stats.Add(numLoad, 1)
 		s.handleLoad(w, r)
-	case strings.HasPrefix(r.URL.Path, "/join"):
-		stats.Add(numJoins, 1)
-		s.handleJoin(w, r)
-	case strings.HasPrefix(r.URL.Path, "/notify"):
-		stats.Add(numNotifies, 1)
-		s.handleNotify(w, r)
 	case strings.HasPrefix(r.URL.Path, "/remove"):
 		s.handleRemove(w, r)
 	case strings.HasPrefix(r.URL.Path, "/status"):
@@ -480,147 +488,6 @@ func (s *Service) RegisterStatus(key string, stat StatusReporter) error {
 	s.statuses[key] = stat
 
 	return nil
-}
-
-// handleJoin handles cluster-join requests from other nodes.
-func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
-	if !s.CheckRequestPerm(r, auth.PermJoin) && !s.CheckRequestPerm(r, auth.PermJoinReadOnly) {
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-
-	if r.Method != "POST" {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
-	b, err := io.ReadAll(r.Body)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	md := map[string]interface{}{}
-	if err := json.Unmarshal(b, &md); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	rID, ok := md["id"]
-	if !ok {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	rAddr, ok := md["addr"]
-	if !ok {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	voter, ok := md["voter"]
-	if !ok {
-		voter = true
-	}
-	if voter.(bool) && !s.CheckRequestPerm(r, auth.PermJoin) {
-		http.Error(w, "joining as voter not allowed", http.StatusUnauthorized)
-		return
-	}
-
-	remoteID, remoteAddr := rID.(string), rAddr.(string)
-
-	s.logger.Printf("received join request from node with ID %s at %s",
-		remoteID, remoteAddr)
-
-	// Confirm that this node can resolve the remote address. This can happen due
-	// to incomplete DNS records across the underlying infrastructure. If it can't
-	// then don't consider this join attempt successful -- so the joining node
-	// will presumably try again.
-	if addr, err := resolvableAddress(remoteAddr); err != nil {
-		s.logger.Printf("failed to resolve %s (%s) while handling join request", addr, err)
-		http.Error(w, fmt.Sprintf("can't resolve %s (%s)", addr, err.Error()),
-			http.StatusServiceUnavailable)
-		return
-	}
-
-	jr := &command.JoinRequest{
-		Id:      remoteID,
-		Address: remoteAddr,
-		Voter:   voter.(bool),
-	}
-	if err := s.store.Join(jr); err != nil {
-		if err == store.ErrNotLeader {
-			leaderAPIAddr := s.LeaderAPIAddr()
-			if leaderAPIAddr == "" {
-				stats.Add(numLeaderNotFound, 1)
-				http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
-				return
-			}
-
-			redirect := s.FormRedirect(r, leaderAPIAddr)
-			http.Redirect(w, r, redirect, http.StatusMovedPermanently)
-			return
-		}
-
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-}
-
-// handleNotify handles node-notify requests from other nodes.
-func (s *Service) handleNotify(w http.ResponseWriter, r *http.Request) {
-	if !s.CheckRequestPerm(r, auth.PermJoin) {
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-
-	if r.Method != "POST" {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
-	b, err := io.ReadAll(r.Body)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	md := map[string]interface{}{}
-	if err := json.Unmarshal(b, &md); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	rID, ok := md["id"]
-	if !ok {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	rAddr, ok := md["addr"]
-	if !ok {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	remoteID, remoteAddr := rID.(string), rAddr.(string)
-
-	s.logger.Printf("received notify request from node with ID %s at %s",
-		remoteID, remoteAddr)
-
-	// Confirm that this node can resolve the remote address. This can happen due
-	// to incomplete DNS records across the underlying infrastructure. If it can't
-	// then don't consider this notify attempt successful -- so the notifying node
-	// will presumably try again.
-	if addr, err := resolvableAddress(remoteAddr); err != nil {
-		s.logger.Printf("failed to resolve %s (%s) while handling notify request", addr, err)
-		http.Error(w, fmt.Sprintf("can't resolve %s (%s)", addr, err.Error()),
-			http.StatusServiceUnavailable)
-		return
-	}
-
-	if err := s.store.Notify(&command.NotifyRequest{
-		Id:      remoteID,
-		Address: remoteAddr,
-	}); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
 }
 
 // handleRemove handles cluster-remove requests.
@@ -972,7 +839,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	s.logger.Printf("load request completed in %s", time.Now().Sub(startTime).String())
+	s.logger.Printf("load request completed in %s", time.Since(startTime).String())
 	s.writeResponse(w, r, resp)
 }
 
@@ -1141,7 +1008,7 @@ func (s *Service) handleNodes(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get nodes in the cluster, and possibly filter out non-voters.
-	nodes, err := s.store.Nodes()
+	sNodes, err := s.store.Nodes()
 	if err != nil {
 		statusCode := http.StatusInternalServerError
 		if err == store.ErrNotOpen {
@@ -1150,64 +1017,34 @@ func (s *Service) handleNodes(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("store nodes: %s", err.Error()), statusCode)
 		return
 	}
-
-	filteredNodes := make([]*store.Server, 0)
-	for _, n := range nodes {
-		if n.Suffrage != "Voter" && !includeNonVoters {
-			continue
-		}
-		filteredNodes = append(filteredNodes, n)
+	nodes := NewNodesFromServers(sNodes)
+	if !includeNonVoters {
+		nodes = nodes.Voters()
 	}
 
+	// Now test the nodes
 	lAddr, err := s.store.LeaderAddr()
 	if err != nil {
 		http.Error(w, fmt.Sprintf("leader address: %s", err.Error()),
 			http.StatusInternalServerError)
 		return
 	}
+	nodes.Test(s.cluster, lAddr, timeout)
 
-	nodesResp, err := s.checkNodes(filteredNodes, timeout)
+	ver, err := verParam(r)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("check nodes: %s", err.Error()),
-			http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
-	resp := make(map[string]struct {
-		APIAddr   string  `json:"api_addr,omitempty"`
-		Addr      string  `json:"addr,omitempty"`
-		Reachable bool    `json:"reachable"`
-		Leader    bool    `json:"leader"`
-		Time      float64 `json:"time,omitempty"`
-		Error     string  `json:"error,omitempty"`
-	})
-
-	for _, n := range filteredNodes {
-		nn := resp[n.ID]
-		nn.Addr = n.Addr
-		nn.Leader = nn.Addr == lAddr
-		nn.APIAddr = nodesResp[n.ID].apiAddr
-		nn.Reachable = nodesResp[n.ID].reachable
-		nn.Time = nodesResp[n.ID].time.Seconds()
-		nn.Error = nodesResp[n.ID].error
-		resp[n.ID] = nn
-	}
-
+	enc := NewNodesRespEncoder(w, ver != "2")
 	pretty, _ := isPretty(r)
-	var b []byte
 	if pretty {
-		b, err = json.MarshalIndent(resp, "", "    ")
-	} else {
-		b, err = json.Marshal(resp)
+		enc.SetIndent("", "    ")
 	}
+	err = enc.Encode(nodes)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	_, err = w.Write(b)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		http.Error(w, fmt.Sprintf("JSON marshal: %s", err.Error()),
+			http.StatusInternalServerError)
 	}
 }
 
@@ -1866,48 +1703,6 @@ func (s *Service) runQueue() {
 	}
 }
 
-type checkNodesResponse struct {
-	apiAddr   string
-	reachable bool
-	time      time.Duration
-	error     string
-}
-
-// checkNodes returns a map of node ID to node responsivness, reachable
-// being defined as node responds to a simple request over the network.
-func (s *Service) checkNodes(nodes []*store.Server, timeout time.Duration) (map[string]*checkNodesResponse, error) {
-	var wg sync.WaitGroup
-	var mu sync.Mutex
-	resp := make(map[string]*checkNodesResponse)
-
-	for _, n := range nodes {
-		resp[n.ID] = &checkNodesResponse{}
-	}
-
-	// Now confirm.
-	for _, n := range nodes {
-		wg.Add(1)
-		go func(id, raftAddr string) {
-			defer wg.Done()
-			mu.Lock()
-			defer mu.Unlock()
-
-			start := time.Now()
-			apiAddr, err := s.cluster.GetNodeAPIAddr(raftAddr, timeout)
-			if err != nil {
-				resp[id].error = err.Error()
-				return
-			}
-			resp[id].reachable = true
-			resp[id].apiAddr = apiAddr
-			resp[id].time = time.Since(start)
-		}(n.ID, n.Addr)
-	}
-	wg.Wait()
-
-	return resp, nil
-}
-
 // addBuildVersion adds the build version to the HTTP response.
 func (s *Service) addBuildVersion(w http.ResponseWriter) {
 	// Add version header to every response, if available.
@@ -1918,10 +1713,25 @@ func (s *Service) addBuildVersion(w http.ResponseWriter) {
 	w.Header().Add(VersionHTTPHeader, version)
 }
 
+// addAllowHeaders adds the Access-Control-Allow-Origin, Access-Control-Allow-Methods,
+// and Access-Control-Allow-Headers headers to the HTTP response.
+func (s *Service) addAllowHeaders(w http.ResponseWriter) {
+	if s.AllowOrigin != "" {
+		w.Header().Add(AllowOriginHeader, s.AllowOrigin)
+	}
+	w.Header().Add(AllowMethodsHeader, "OPTIONS, GET, POST")
+	if s.credentialStore == nil {
+		w.Header().Add(AllowHeadersHeader, "Content-Type")
+	} else {
+		w.Header().Add(AllowHeadersHeader, "Content-Type, Authorization")
+		w.Header().Add(AllowCredentialsHeader, "true")
+	}
+}
+
 // tlsStats returns the TLS stats for the service.
 func (s *Service) tlsStats() map[string]interface{} {
 	m := map[string]interface{}{
-		"enabled": prettyEnabled(s.tlsConfig != nil),
+		"enabled": fmt.Sprintf("%t", s.tlsConfig != nil),
 	}
 	if s.tlsConfig != nil {
 		m["client_auth"] = s.tlsConfig.ClientAuth.String()
@@ -2005,6 +1815,12 @@ func stmtParam(req *http.Request) (string, error) {
 func fmtParam(req *http.Request) (string, error) {
 	q := req.URL.Query()
 	return strings.TrimSpace(q.Get("fmt")), nil
+}
+
+// verParam returns the requested version, if present.
+func verParam(req *http.Request) (string, error) {
+	q := req.URL.Query()
+	return strings.TrimSpace(q.Get("ver")), nil
 }
 
 // isPretty returns whether the HTTP response body should be pretty-printed.
@@ -2257,16 +2073,6 @@ func executeRequestFromStrings(s []string, timings, tx bool) *command.ExecuteReq
 		},
 		Timings: timings,
 	}
-}
-
-func resolvableAddress(addr string) (string, error) {
-	h, _, err := net.SplitHostPort(addr)
-	if err != nil {
-		// Just try the given address directly.
-		h = addr
-	}
-	_, err = net.LookupHost(h)
-	return h, err
 }
 
 func makeCredentials(username, password string) *cluster.Credentials {

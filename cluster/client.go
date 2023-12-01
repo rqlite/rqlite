@@ -299,7 +299,7 @@ func (c *Client) RemoveNode(rn *command.RemoveNodeRequest, nodeAddr string, cred
 }
 
 // Notify notifies a remote node that this node is ready to bootstrap.
-func (c *Client) Notify(nr *command.NotifyRequest, nodeAddr string, timeout time.Duration) error {
+func (c *Client) Notify(nr *command.NotifyRequest, nodeAddr string, creds *Credentials, timeout time.Duration) error {
 	conn, err := c.dial(nodeAddr, c.timeout)
 	if err != nil {
 		return err
@@ -312,6 +312,7 @@ func (c *Client) Notify(nr *command.NotifyRequest, nodeAddr string, timeout time
 		Request: &Command_NotifyRequest{
 			NotifyRequest: nr,
 		},
+		Credentials: creds,
 	}
 	if err := writeCommand(conn, command, timeout); err != nil {
 		handleConnError(conn)
@@ -336,43 +337,53 @@ func (c *Client) Notify(nr *command.NotifyRequest, nodeAddr string, timeout time
 	return nil
 }
 
-// Join joins this node to a cluster
-func (c *Client) Join(jr *command.JoinRequest, nodeAddr string, timeout time.Duration) error {
-	conn, err := c.dial(nodeAddr, c.timeout)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
+// Join joins this node to a cluster at the remote address nodeAddr.
+func (c *Client) Join(jr *command.JoinRequest, nodeAddr string, creds *Credentials, timeout time.Duration) error {
+	for {
+		conn, err := c.dial(nodeAddr, c.timeout)
+		if err != nil {
+			return err
+		}
+		defer conn.Close()
 
-	// Create the request.
-	command := &Command{
-		Type: Command_COMMAND_TYPE_JOIN,
-		Request: &Command_JoinRequest{
-			JoinRequest: jr,
-		},
-	}
+		// Create the request.
+		command := &Command{
+			Type: Command_COMMAND_TYPE_JOIN,
+			Request: &Command_JoinRequest{
+				JoinRequest: jr,
+			},
+			Credentials: creds,
+		}
 
-	if err := writeCommand(conn, command, timeout); err != nil {
-		handleConnError(conn)
-		return err
-	}
+		if err := writeCommand(conn, command, timeout); err != nil {
+			handleConnError(conn)
+			return err
+		}
 
-	p, err := readResponse(conn, timeout)
-	if err != nil {
-		handleConnError(conn)
-		return err
-	}
+		p, err := readResponse(conn, timeout)
+		if err != nil {
+			handleConnError(conn)
+			return err
+		}
 
-	a := &CommandJoinResponse{}
-	err = proto.Unmarshal(p, a)
-	if err != nil {
-		return err
-	}
+		a := &CommandJoinResponse{}
+		err = proto.Unmarshal(p, a)
+		if err != nil {
+			return err
+		}
 
-	if a.Error != "" {
-		return errors.New(a.Error)
+		if a.Error != "" {
+			if a.Error == "not leader" {
+				if a.Leader == "" {
+					return errors.New("no leader")
+				}
+				nodeAddr = a.Leader
+				continue
+			}
+			return errors.New(a.Error)
+		}
+		return nil
 	}
-	return nil
 }
 
 // Stats returns stats on the Client instance
@@ -507,7 +518,15 @@ func writeCommand(conn net.Conn, c *Command, timeout time.Duration) error {
 	return nil
 }
 
-func readResponse(conn net.Conn, timeout time.Duration) ([]byte, error) {
+func readResponse(conn net.Conn, timeout time.Duration) (buf []byte, retErr error) {
+	defer func() {
+		// Connecting to an open port, but not a rqlite Raft API, may cause a panic
+		// when the system tries to read the response. This is a workaround.
+		if r := recover(); r != nil {
+			retErr = fmt.Errorf("panic reading response from node: %v", r)
+		}
+	}()
+
 	// Read length of incoming response.
 	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
 		return nil, err

@@ -35,7 +35,7 @@ func (d *Dialer) Dial(addr string, timeout time.Duration) (conn net.Conn, retErr
 	}
 
 	defer func() {
-		if retErr != nil {
+		if retErr != nil && conn != nil {
 			conn.Close()
 		}
 	}()

@@ -23,7 +23,6 @@ const (
 // 'old' directory is removed before the function returns.
 func Upgrade(old, new string, logger *log.Logger) error {
 	newTmpDir := tmpName(new)
-	newGenerationDir := filepath.Join(newTmpDir, generationsDir, firstGeneration)
 
 	// If a temporary version of the new snapshot exists, remove it. This implies a
 	// previous upgrade attempt was interrupted. We will need to start over.
@@ -43,7 +42,7 @@ func Upgrade(old, new string, logger *log.Logger) error {
 		if oldIsEmpty {
 			logger.Printf("old snapshot directory %s is empty, nothing to upgrade", old)
 			if err := os.RemoveAll(old); err != nil {
-				return fmt.Errorf("failed to remove old snapshot directory %s: %s", old, err)
+				return fmt.Errorf("failed to remove empty old snapshot directory %s: %s", old, err)
 			}
 			return nil
 		}
@@ -76,26 +75,22 @@ func Upgrade(old, new string, logger *log.Logger) error {
 		return fmt.Errorf("no snapshot to upgrade in old snapshots directory %s", old)
 	}
 
-	// Write out the new meta file.
-	newSnapshotPath := filepath.Join(newGenerationDir, oldMeta.ID)
+	// Write out the new meta file in the new snapshot directory.
+	newSnapshotPath := filepath.Join(newTmpDir, oldMeta.ID)
 	if err := os.MkdirAll(newSnapshotPath, 0755); err != nil {
 		return fmt.Errorf("failed to create new snapshot directory %s: %s", newSnapshotPath, err)
 	}
-	newMeta := &Meta{
-		SnapshotMeta: *oldMeta,
-		Full:         true,
-	}
-	if err := writeMeta(newSnapshotPath, newMeta); err != nil {
-		return fmt.Errorf("failed to write new snapshot meta file: %s", err)
+	if err := writeMeta(newSnapshotPath, oldMeta); err != nil {
+		return fmt.Errorf("failed to write new snapshot meta file to %s: %s", newSnapshotPath, err)
 	}
 
 	// Ensure all file handles are closed before any directory is renamed or removed.
 	if err := func() error {
-		// Write SQLite data into generation directory, as the base SQLite file.
-		newSqliteBasePath := filepath.Join(newGenerationDir, baseSqliteFile)
-		newSqliteFd, err := os.Create(newSqliteBasePath)
+		// Write SQLite database file into new snapshto dir.
+		newSqlitePath := filepath.Join(newTmpDir, oldMeta.ID+".db")
+		newSqliteFd, err := os.Create(newSqlitePath)
 		if err != nil {
-			return fmt.Errorf("failed to create new SQLite file %s: %s", newSqliteBasePath, err)
+			return fmt.Errorf("failed to create new SQLite file %s: %s", newSqlitePath, err)
 		}
 		defer newSqliteFd.Close()
 
@@ -113,17 +108,17 @@ func Upgrade(old, new string, logger *log.Logger) error {
 		}
 		gzipReader, err := gzip.NewReader(stateFd)
 		if err != nil {
-			return fmt.Errorf("failed to create gzip reader for new SQLite file %s: %s", newSqliteBasePath, err)
+			return fmt.Errorf("failed to create gzip reader for new SQLite file %s: %s", newSqlitePath, err)
 		}
 		defer gzipReader.Close()
 		if _, err := io.Copy(newSqliteFd, gzipReader); err != nil {
 			return fmt.Errorf("failed to copy old SQLite file %s to new SQLite file %s: %s", oldStatePath,
-				newSqliteBasePath, err)
+				newSqlitePath, err)
 		}
 
 		// Sanity-check the SQLite data.
-		if !db.IsValidSQLiteFile(newSqliteBasePath) {
-			return fmt.Errorf("migrated SQLite file %s is not valid", newSqliteBasePath)
+		if !db.IsValidSQLiteFile(newSqlitePath) {
+			return fmt.Errorf("migrated SQLite file %s is not valid", newSqlitePath)
 		}
 		return nil
 	}(); err != nil {
@@ -143,6 +138,7 @@ func Upgrade(old, new string, logger *log.Logger) error {
 		return fmt.Errorf("failed to remove old snapshot directory %s: %s", old, err)
 	}
 	logger.Printf("upgraded snapshot directory %s to %s", old, new)
+
 	return nil
 }
 
@@ -180,14 +176,6 @@ func getNewest7Snapshot(dir string) (*raft.SnapshotMeta, error) {
 		return nil, nil
 	}
 	return raftMetaSlice(snapshots).Newest(), nil
-}
-
-func dirIsEmpty(dir string) (bool, error) {
-	files, err := os.ReadDir(dir)
-	if err != nil {
-		return false, err
-	}
-	return len(files) == 0, nil
 }
 
 // raftMetaSlice is a sortable slice of Raft Meta, which are sorted

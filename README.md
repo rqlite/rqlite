@@ -94,4 +94,4 @@ $ rqlite
  * SQLite dot-commands such as `.schema` or `.tables` are not directly supported by the API, but the [rqlite CLI](https://rqlite.io/docs/cli/) supports some very similar functionality. This is because those commands are features of the `sqlite3` command, not SQLite itself.
 
 ## Pronunciation?
-How do I pronounce rqlite? For what it's worth I try to pronounce it "ree-qwell-lite". But it seems most people, including me, often pronouce it "R Q lite".
+How do I pronounce rqlite? For what it's worth I try to pronounce it "ree-qwell-lite". But it seems most people, including me, often pronounce it "R Q lite".

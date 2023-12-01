@@ -24,11 +24,11 @@ class TestEndToEnd(unittest.TestCase):
     n0.wait_for_leader()
 
     n1 = Node(RQLITED_PATH, '1')
-    n1.start(join=n0.APIAddr())
+    n1.start(join=n0.RaftAddr())
     n1.wait_for_leader()
 
     n2 = Node(RQLITED_PATH, '2')
-    n2.start(join=n0.APIAddr())
+    n2.start(join=n0.RaftAddr())
     n2.wait_for_leader()
 
     self.cluster = Cluster([n0, n1, n2])
@@ -163,11 +163,11 @@ class TestEndToEndEncryptedNode(TestEndToEnd):
     n0.wait_for_leader()
 
     n1 = Node(RQLITED_PATH, '1', node_cert=certFile, node_key=keyFile, node_no_verify=True)
-    n1.start(join=n0.APIAddr())
+    n1.start(join=n0.RaftAddr())
     n1.wait_for_leader()
 
     n2 = Node(RQLITED_PATH, '2', node_cert=certFile, node_key=keyFile, node_no_verify=True)
-    n2.start(join=n0.APIAddr())
+    n2.start(join=n0.RaftAddr())
     n2.wait_for_leader()
 
     self.cluster = Cluster([n0, n1, n2])
@@ -180,11 +180,11 @@ class TestClusterRecovery(unittest.TestCase):
     n0.wait_for_leader()
 
     n1 = Node(RQLITED_PATH, '1')
-    n1.start(join=n0.APIAddr())
+    n1.start(join=n0.RaftAddr())
     n1.wait_for_leader()
 
     n2 = Node(RQLITED_PATH, '2')
-    n2.start(join=n0.APIAddr())
+    n2.start(join=n0.RaftAddr())
     n2.wait_for_leader()
 
     self.nodes = [n0, n1, n2]
@@ -244,7 +244,7 @@ class TestRequestForwarding(unittest.TestCase):
     n0.wait_for_leader()
 
     n1 = Node(RQLITED_PATH, '1')
-    n1.start(join=n0.APIAddr())
+    n1.start(join=n0.RaftAddr())
     n1.wait_for_leader()
 
     self.cluster = Cluster([n0, n1])
@@ -327,7 +327,7 @@ class TestEndToEndNonVoter(unittest.TestCase):
     self.leader.wait_for_leader()
 
     self.non_voter = Node(RQLITED_PATH, '1', raft_voter=False)
-    self.non_voter.start(join=self.leader.APIAddr())
+    self.non_voter.start(join=self.leader.RaftAddr())
     self.non_voter.wait_for_leader()
 
     self.cluster = Cluster([self.leader, self.non_voter])
@@ -364,19 +364,13 @@ class TestEndToEndNonVoter(unittest.TestCase):
     self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona'], [2, 'declan']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
 
   def test_leader_redirect(self):
-    return
     '''Test that non-voters supply the correct leader redirects (HTTP 301)'''
 
     l = self.cluster.wait_for_leader()
     fs = self.cluster.followers()
     self.assertEqual(len(fs), 1)
     for n in fs:
-      self.assertEqual(l.APIAddr(), n.redirect_addr())
-
-    l.stop()
-    n = self.cluster.wait_for_leader(node_exc=l)
-    for f in self.cluster.followers():
-      self.assertEqual(n.APIAddr(), f.redirect_addr())
+      self.assertEqual(l.APIProtoAddr(), n.redirect_addr())
 
 class TestEndToEndNonVoterFollowsLeader(unittest.TestCase):
   def setUp(self):
@@ -385,15 +379,15 @@ class TestEndToEndNonVoterFollowsLeader(unittest.TestCase):
     n0.wait_for_leader()
 
     n1 = Node(RQLITED_PATH, '1')
-    n1.start(join=n0.APIAddr())
+    n1.start(join=n0.RaftAddr())
     n1.wait_for_leader()
 
     n2 = Node(RQLITED_PATH, '2')
-    n2.start(join=n0.APIAddr())
+    n2.start(join=n0.RaftAddr())
     n2.wait_for_leader()
 
     self.non_voter = Node(RQLITED_PATH, '3', raft_voter=False)
-    self.non_voter.start(join=n0.APIAddr())
+    self.non_voter.start(join=n0.RaftAddr())
     self.non_voter.wait_for_leader()
 
     self.cluster = Cluster([n0, n1, n2, self.non_voter])
@@ -441,7 +435,7 @@ class TestEndToEndBackupRestore(unittest.TestCase):
     self.node0.execute('INSERT INTO foo(name) VALUES("fiona")')
     self.node0.wait_for_all_fsm()
     self.node1 = Node(RQLITED_PATH, '1')
-    self.node1.start(join=self.node0.APIAddr())
+    self.node1.start(join=self.node0.RaftAddr())
     self.node1.wait_for_leader()
 
     # Get a backup from the first node and check it.
@@ -474,7 +468,7 @@ class TestEndToEndBackupRestore(unittest.TestCase):
     self.node3.start()
     self.node3.wait_for_leader()
     self.node4 = Node(RQLITED_PATH, '4')
-    self.node4.start(join=self.node3.APIAddr())
+    self.node4.start(join=self.node3.RaftAddr())
     self.node4.wait_for_leader()
     self.assertTrue(self.node3.is_leader())
 
@@ -535,11 +529,11 @@ class TestEndToEndSnapRestoreCluster(unittest.TestCase):
 
     # Add two more nodes to the cluster
     self.n1 = Node(RQLITED_PATH, '1')
-    self.n1.start(join=self.n0.APIAddr())
+    self.n1.start(join=self.n0.RaftAddr())
     self.n1.wait_for_leader()
 
     self.n2 = Node(RQLITED_PATH, '2')
-    self.n2.start(join=self.n0.APIAddr())
+    self.n2.start(join=self.n0.RaftAddr())
     self.n2.wait_for_leader()
 
     # Force the Apply loop to run on the node, so fsm_index is updated.
@@ -579,16 +573,20 @@ class TestEndToEndSnapRestoreCluster(unittest.TestCase):
 
     # Launch a brand-new node, and check that is catches up via a single restore from snapshot.
     self.n3 = Node(RQLITED_PATH, '3')
-    self.n3.start(join=self.n0.APIAddr())
+    self.n3.start(join=self.n0.RaftAddr())
     self.n3.wait_for_leader()
     self.poll_query(self.n3, d_("{'results': [{'values': [[502]], 'types': ['integer'], 'columns': ['count(*)']}]}"))
     self.assertEqual(self.n3.expvar()['store']['num_restores'], 1)
 
   def tearDown(self):
-    deprovision_node(self.n0)
-    deprovision_node(self.n1)
-    deprovision_node(self.n2)
-    deprovision_node(self.n3)
+    if hasattr(self, 'n0'):
+      deprovision_node(self.n0)
+    if hasattr(self, 'n1'):
+      deprovision_node(self.n1)
+    if hasattr(self, 'n2'):
+      deprovision_node(self.n2)
+    if hasattr(self, 'n3'):
+      deprovision_node(self.n3)
 
 class TestShutdown(unittest.TestCase):
   def test_cluster_leader_remove_on_shutdown(self):
@@ -598,7 +596,7 @@ class TestShutdown(unittest.TestCase):
     n0.wait_for_leader()
 
     n1 = Node(RQLITED_PATH, '1', raft_cluster_remove_shutdown=True)
-    n1.start(join=n0.APIAddr())
+    n1.start(join=n0.RaftAddr())
     n1.wait_for_leader()
 
     nodes = n0.nodes()
@@ -626,7 +624,7 @@ class TestShutdown(unittest.TestCase):
     n0.wait_for_leader()
 
     n1 = Node(RQLITED_PATH, '1', raft_cluster_remove_shutdown=True)
-    n1.start(join=n0.APIAddr())
+    n1.start(join=n0.RaftAddr())
     n1.wait_for_leader()
 
     nodes = n0.nodes()

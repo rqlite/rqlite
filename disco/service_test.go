@@ -34,7 +34,7 @@ func Test_RegisterGetLeaderOK(t *testing.T) {
 	if ok {
 		t.Fatalf("registered as leader unexpectedly")
 	}
-	if exp, got := "localhost:4003", addr; exp != got {
+	if exp, got := "localhost:4004", addr; exp != got {
 		t.Fatalf("returned addressed incorrect, exp %s, got %s", exp, got)
 	}
 }
@@ -62,7 +62,7 @@ func Test_RegisterInitializeLeader(t *testing.T) {
 	if !ok {
 		t.Fatalf("failed to register as expected")
 	}
-	if exp, got := "localhost:4001", addr; exp != got {
+	if exp, got := "localhost:4002", addr; exp != got {
 		t.Fatalf("returned addressed incorrect, exp %s, got %s", exp, got)
 	}
 }

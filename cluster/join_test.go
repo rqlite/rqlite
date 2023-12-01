@@ -1,322 +1,163 @@
 package cluster
 
 import (
-	"crypto/tls"
-	"encoding/json"
-	"fmt"
-	"io"
-	"net/http"
-	"net/http/httptest"
+	"net"
 	"testing"
 	"time"
 
-	"github.com/rqlite/rqlite/rtls"
+	"github.com/rqlite/rqlite/cluster/servicetest"
+	"google.golang.org/protobuf/proto"
 )
 
 const numAttempts int = 3
 const attemptInterval = 1 * time.Second
 
 func Test_SingleJoinOK(t *testing.T) {
-	var body map[string]interface{}
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" {
-			t.Fatalf("Client did not use POST")
+	srv := servicetest.NewService()
+	srv.Handler = func(conn net.Conn) {
+		var p []byte
+		var err error
+		c := readCommand(conn)
+		if c == nil {
+			// Error on connection, so give up, as normal
+			// test exit can cause that too.
+			return
 		}
-		w.WriteHeader(http.StatusOK)
-
-		if r.Header["Content-Type"][0] != "application/json" {
-			t.Fatalf("incorrect Content-Type set")
+		if c.Type != Command_COMMAND_TYPE_JOIN {
+			t.Fatalf("unexpected command type: %d", c.Type)
+		}
+		jr := c.GetJoinRequest()
+		if jr == nil {
+			t.Fatal("join request is nil")
+		}
+		if exp, got := "id0", jr.Id; exp != got {
+			t.Fatalf("unexpected id, got %s, exp: %s", got, exp)
+		}
+		if exp, got := "1.2.3.4", jr.Address; exp != got {
+			t.Fatalf("unexpected addr, got %s, exp: %s", got, exp)
 		}
 
-		b, err := io.ReadAll(r.Body)
+		resp := &CommandJoinResponse{}
+		p, err = proto.Marshal(resp)
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			return
+			conn.Close()
 		}
+		writeBytesWithLength(conn, p)
+	}
+	srv.Start()
+	defer srv.Close()
 
-		if err := json.Unmarshal(b, &body); err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-	}))
-	defer ts.Close()
-
-	joiner := NewJoiner("127.0.0.1", numAttempts, attemptInterval, nil)
-
-	// Ensure joining with protocol prefix works.
-	j, err := joiner.Do([]string{ts.URL}, "id0", "127.0.0.1:9090", false)
+	c := NewClient(&simpleDialer{}, 0)
+	joiner := NewJoiner(c, numAttempts, attemptInterval)
+	addr, err := joiner.Do([]string{srv.Addr()}, "id0", "1.2.3.4", true)
 	if err != nil {
-		t.Fatalf("failed to join a single node: %s", err.Error())
+		t.Fatal(err)
 	}
-	if j != ts.URL+"/join" {
-		t.Fatalf("node joined using wrong endpoint, exp: %s, got: %s", j, ts.URL)
-	}
-
-	if got, exp := body["id"].(string), "id0"; got != exp {
-		t.Fatalf("wrong node ID supplied, exp %s, got %s", exp, got)
-	}
-	if got, exp := body["addr"].(string), "127.0.0.1:9090"; got != exp {
-		t.Fatalf("wrong address supplied, exp %s, got %s", exp, got)
-	}
-	if got, exp := body["voter"].(bool), false; got != exp {
-		t.Fatalf("wrong voter state supplied, exp %v, got %v", exp, got)
-	}
-
-	// Ensure joining without protocol prefix works.
-	j, err = joiner.Do([]string{ts.Listener.Addr().String()}, "id0", "127.0.0.1:9090", false)
-	if err != nil {
-		t.Fatalf("failed to join a single node: %s", err.Error())
-	}
-	if j != ts.URL+"/join" {
-		t.Fatalf("node joined using wrong endpoint, exp: %s, got: %s", j, ts.URL)
-	}
-
-	if got, exp := body["id"].(string), "id0"; got != exp {
-		t.Fatalf("wrong node ID supplied, exp %s, got %s", exp, got)
-	}
-	if got, exp := body["addr"].(string), "127.0.0.1:9090"; got != exp {
-		t.Fatalf("wrong address supplied, exp %s, got %s", exp, got)
-	}
-	if got, exp := body["voter"].(bool), false; got != exp {
-		t.Fatalf("wrong voter state supplied, exp %v, got %v", exp, got)
-	}
-}
-
-func Test_SingleJoinHTTPSOK(t *testing.T) {
-	var body map[string]interface{}
-	ts := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" {
-			t.Fatalf("Client did not use POST")
-		}
-		w.WriteHeader(http.StatusOK)
-
-		if r.Header["Content-Type"][0] != "application/json" {
-			t.Fatalf("incorrect Content-Type set")
-		}
-
-		b, err := io.ReadAll(r.Body)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
-		if err := json.Unmarshal(b, &body); err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-	}))
-	defer ts.Close()
-	ts.TLS = &tls.Config{NextProtos: []string{"h2", "http/1.1"}}
-	ts.StartTLS()
-
-	tlsConfig, err := rtls.CreateClientConfig("", "", "", true)
-	if err != nil {
-		t.Fatalf("failed to create TLS config: %s", err.Error())
-	}
-	joiner := NewJoiner("127.0.0.1", numAttempts, attemptInterval, tlsConfig)
-
-	// Ensure joining with protocol prefix works.
-	j, err := joiner.Do([]string{ts.URL}, "id0", "127.0.0.1:9090", false)
-	if err != nil {
-		t.Fatalf("failed to join a single node: %s", err.Error())
-	}
-	if j != ts.URL+"/join" {
-		t.Fatalf("node joined using wrong endpoint, exp: %s, got: %s", j, ts.URL)
-	}
-
-	if got, exp := body["id"].(string), "id0"; got != exp {
-		t.Fatalf("wrong node ID supplied, exp %s, got %s", exp, got)
-	}
-	if got, exp := body["addr"].(string), "127.0.0.1:9090"; got != exp {
-		t.Fatalf("wrong address supplied, exp %s, got %s", exp, got)
-	}
-	if got, exp := body["voter"].(bool), false; got != exp {
-		t.Fatalf("wrong voter state supplied, exp %v, got %v", exp, got)
-	}
-
-	// Ensure joining without protocol prefix works.
-	j, err = joiner.Do([]string{ts.Listener.Addr().String()}, "id0", "127.0.0.1:9090", false)
-	if err != nil {
-		t.Fatalf("failed to join a single node: %s", err.Error())
-	}
-	if j != ts.URL+"/join" {
-		t.Fatalf("node joined using wrong endpoint, exp: %s, got: %s", j, ts.URL)
-	}
-
-	if got, exp := body["id"].(string), "id0"; got != exp {
-		t.Fatalf("wrong node ID supplied, exp %s, got %s", exp, got)
-	}
-	if got, exp := body["addr"].(string), "127.0.0.1:9090"; got != exp {
-		t.Fatalf("wrong address supplied, exp %s, got %s", exp, got)
-	}
-	if got, exp := body["voter"].(bool), false; got != exp {
-		t.Fatalf("wrong voter state supplied, exp %v, got %v", exp, got)
-	}
-}
-
-func Test_SingleJoinOKBasicAuth(t *testing.T) {
-	var body map[string]interface{}
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" {
-			t.Fatalf("Client did not use POST")
-		}
-		w.WriteHeader(http.StatusOK)
-
-		username, password, ok := r.BasicAuth()
-		if !ok {
-			t.Fatalf("request did not have Basic Auth credentials")
-		}
-		if username != "user1" || password != "password1" {
-			t.Fatalf("bad Basic Auth credentials received (%s, %s", username, password)
-		}
-
-		b, err := io.ReadAll(r.Body)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
-		if err := json.Unmarshal(b, &body); err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-	}))
-	defer ts.Close()
-
-	joiner := NewJoiner("127.0.0.1", numAttempts, attemptInterval, nil)
-	joiner.SetBasicAuth("user1", "password1")
-
-	j, err := joiner.Do([]string{ts.URL}, "id0", "127.0.0.1:9090", false)
-	if err != nil {
-		t.Fatalf("failed to join a single node: %s", err.Error())
-	}
-	if j != ts.URL+"/join" {
-		t.Fatalf("node joined using wrong endpoint, exp: %s, got: %s", j, ts.URL)
-	}
-
-	if got, exp := body["id"].(string), "id0"; got != exp {
-		t.Fatalf("wrong node ID supplied, exp %s, got %s", exp, got)
-	}
-	if got, exp := body["addr"].(string), "127.0.0.1:9090"; got != exp {
-		t.Fatalf("wrong address supplied, exp %s, got %s", exp, got)
-	}
-	if got, exp := body["voter"].(bool), false; got != exp {
-		t.Fatalf("wrong voter state supplied, exp %v, got %v", exp, got)
+	if exp, got := srv.Addr(), addr; exp != got {
+		t.Fatalf("unexpected addr, got %s, exp: %s", got, exp)
 	}
 }
 
 func Test_SingleJoinZeroAttempts(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := servicetest.NewService()
+	srv.Handler = func(conn net.Conn) {
 		t.Fatalf("handler should not have been called")
-	}))
+	}
+	srv.Start()
+	defer srv.Close()
 
-	joiner := NewJoiner("127.0.0.1", 0, attemptInterval, nil)
-	_, err := joiner.Do([]string{ts.URL}, "id0", "127.0.0.1:9090", false)
+	c := NewClient(&simpleDialer{}, 0)
+	joiner := NewJoiner(c, 0, attemptInterval)
+	_, err := joiner.Do([]string{srv.Addr()}, "id0", "1.2.3.4", true)
 	if err != ErrJoinFailed {
 		t.Fatalf("Incorrect error returned when zero attempts specified")
 	}
 }
 
 func Test_SingleJoinFail(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusBadRequest)
-	}))
-	defer ts.Close()
+	srv := servicetest.NewService()
+	srv.Handler = func(conn net.Conn) {
+		var p []byte
+		var err error
+		c := readCommand(conn)
+		if c == nil {
+			// Error on connection, so give up, as normal
+			// test exit can cause that too.
+			return
+		}
+		resp := &CommandJoinResponse{
+			Error: "bad request",
+		}
+		p, err = proto.Marshal(resp)
+		if err != nil {
+			conn.Close()
+		}
+		writeBytesWithLength(conn, p)
+	}
+	srv.Start()
+	defer srv.Close()
 
-	joiner := NewJoiner("", 0, attemptInterval, nil)
-	_, err := joiner.Do([]string{ts.URL}, "id0", "127.0.0.1:9090", true)
+	c := NewClient(&simpleDialer{}, 0)
+	joiner := NewJoiner(c, numAttempts, attemptInterval)
+	_, err := joiner.Do([]string{srv.Addr()}, "id0", "1.2.3.4", true)
 	if err == nil {
 		t.Fatalf("expected error when joining bad node")
 	}
 }
 
-func Test_DoubleJoinOK(t *testing.T) {
-	ts1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	}))
-	defer ts1.Close()
-	ts2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	}))
-	defer ts2.Close()
-
-	joiner := NewJoiner("127.0.0.1", numAttempts, attemptInterval, nil)
-
-	// Ensure joining with protocol prefix works.
-	j, err := joiner.Do([]string{ts1.URL, ts2.URL}, "id0", "127.0.0.1:9090", true)
-	if err != nil {
-		t.Fatalf("failed to join a single node: %s", err.Error())
-	}
-	if j != ts1.URL+"/join" {
-		t.Fatalf("node joined using wrong endpoint, exp: %s, got: %s", j, ts1.URL)
-	}
-
-	// Ensure joining without protocol prefix works.
-	j, err = joiner.Do([]string{ts1.Listener.Addr().String(), ts2.Listener.Addr().String()}, "id0", "127.0.0.1:9090", true)
-	if err != nil {
-		t.Fatalf("failed to join a single node: %s", err.Error())
-	}
-	if j != ts1.URL+"/join" {
-		t.Fatalf("node joined using wrong endpoint, exp: %s, got: %s", j, ts1.URL)
-	}
-}
-
 func Test_DoubleJoinOKSecondNode(t *testing.T) {
-	ts1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusBadRequest)
-	}))
-	defer ts1.Close()
-	ts2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	}))
-	defer ts2.Close()
+	srv1 := servicetest.NewService()
+	srv1.Handler = func(conn net.Conn) {
+		var p []byte
+		var err error
+		c := readCommand(conn)
+		if c == nil {
+			// Error on connection, so give up, as normal
+			// test exit can cause that too.
+			return
+		}
+		resp := &CommandJoinResponse{
+			Error: "bad request",
+		}
+		p, err = proto.Marshal(resp)
+		if err != nil {
+			conn.Close()
+		}
+		writeBytesWithLength(conn, p)
+	}
+	srv1.Start()
+	defer srv1.Close()
 
-	joiner := NewJoiner("", numAttempts, attemptInterval, nil)
+	srv2 := servicetest.NewService()
+	srv2.Handler = func(conn net.Conn) {
+		var p []byte
+		var err error
+		c := readCommand(conn)
+		if c == nil {
+			// Error on connection, so give up, as normal
+			// test exit can cause that too.
+			return
+		}
+		if c.Type != Command_COMMAND_TYPE_JOIN {
+			t.Fatalf("unexpected command type: %d", c.Type)
+		}
+		resp := &CommandJoinResponse{}
+		p, err = proto.Marshal(resp)
+		if err != nil {
+			conn.Close()
+		}
+		writeBytesWithLength(conn, p)
+	}
+	srv2.Start()
+	defer srv2.Close()
 
-	// Ensure joining with protocol prefix works.
-	j, err := joiner.Do([]string{ts1.URL, ts2.URL}, "id0", "127.0.0.1:9090", true)
+	c := NewClient(&simpleDialer{}, 0)
+	joiner := NewJoiner(c, numAttempts, attemptInterval)
+	addr, err := joiner.Do([]string{srv1.Addr(), srv2.Addr()}, "id0", "1.2.3.4", true)
 	if err != nil {
-		t.Fatalf("failed to join a single node: %s", err.Error())
+		t.Fatal(err)
 	}
-	if j != ts2.URL+"/join" {
-		t.Fatalf("node joined using wrong endpoint, exp: %s, got: %s", j, ts2.URL)
-	}
-
-	// Ensure joining without protocol prefix works.
-	j, err = joiner.Do([]string{ts1.Listener.Addr().String(), ts2.Listener.Addr().String()}, "id0", "127.0.0.1:9090", true)
-	if err != nil {
-		t.Fatalf("failed to join a single node: %s", err.Error())
-	}
-	if j != ts2.URL+"/join" {
-		t.Fatalf("node joined using wrong endpoint, exp: %s, got: %s", j, ts2.URL)
-	}
-}
-
-func Test_DoubleJoinOKSecondNodeRedirect(t *testing.T) {
-	ts1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	}))
-	defer ts1.Close()
-	redirectAddr := fmt.Sprintf("%s%s", ts1.URL, "/join")
-
-	ts2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, redirectAddr, http.StatusMovedPermanently)
-	}))
-	defer ts2.Close()
-
-	joiner := NewJoiner("127.0.0.1", numAttempts, attemptInterval, nil)
-
-	// Ensure joining with protocol prefix works.
-	j, err := joiner.Do([]string{ts2.URL}, "id0", "127.0.0.1:9090", true)
-	if err != nil {
-		t.Fatalf("failed to join a single node: %s", err.Error())
-	}
-	if j != redirectAddr {
-		t.Fatalf("node joined using wrong endpoint, exp: %s, got: %s", redirectAddr, j)
-	}
-
-	// Ensure joining without protocol prefix works.
-	j, err = joiner.Do([]string{ts2.Listener.Addr().String()}, "id0", "127.0.0.1:9090", true)
-	if err != nil {
-		t.Fatalf("failed to join a single node: %s", err.Error())
-	}
-	if j != redirectAddr {
-		t.Fatalf("node joined using wrong endpoint, exp: %s, got: %s", redirectAddr, j)
+	if exp, got := srv2.Addr(), addr; exp != got {
+		t.Fatalf("unexpected addr, got %s, exp: %s", got, exp)
 	}
 }
