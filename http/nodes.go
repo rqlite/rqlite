@@ -39,16 +39,31 @@ func NewNodeFromServer(s *store.Server) *Node {
 // occurs, the Error field will be populated.
 func (n *Node) Test(ga GetAddresser, leaderAddr string, timeout time.Duration) {
 	start := time.Now()
-	apiAddr, err := ga.GetNodeAPIAddr(n.Addr, timeout)
-	if err != nil {
-		n.Error = err.Error()
-		n.Reachable = false
+	n.Time = time.Since(start).Seconds()
+
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		apiAddr, err := ga.GetNodeAPIAddr(n.Addr, timeout)
+		if err != nil {
+			n.Error = err.Error()
+			n.Reachable = false
+			return
+		}
+		n.APIAddr = apiAddr
+		n.Reachable = true
+		n.Leader = n.Addr == leaderAddr
+	}()
+
+	select {
+	case <-timer.C:
+		n.Error = "timeout"
+		return
+	case <-done:
 		return
 	}
-	n.Time = time.Since(start).Seconds()
-	n.APIAddr = apiAddr
-	n.Reachable = true
-	n.Leader = n.Addr == leaderAddr
 }
 
 type Nodes []*Node
