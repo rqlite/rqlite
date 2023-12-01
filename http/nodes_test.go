@@ -1,6 +1,7 @@
 package http
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"testing"
@@ -92,6 +93,67 @@ func Test_NodeTestDouble(t *testing.T) {
 	}
 }
 
+func Test_NodesRespEncodeStandard(t *testing.T) {
+	nodes := mockNodes()
+	buffer := new(bytes.Buffer)
+	encoder := NewNodesRespEncoder(buffer, false)
+
+	err := encoder.Encode(nodes)
+	if err != nil {
+		t.Errorf("Encode failed: %v", err)
+	}
+
+	m := make(map[string]interface{})
+	if err := json.Unmarshal(buffer.Bytes(), &m); err != nil {
+		t.Errorf("Encode failed: %v", err)
+	}
+	if len(m) != 1 {
+		t.Errorf("unexpected number of keys")
+	}
+	if _, ok := m["nodes"]; !ok {
+		t.Errorf("nodes key missing")
+	}
+	nodesArray, ok := m["nodes"].([]interface{})
+	if !ok {
+		t.Errorf("nodes key is not an array")
+	}
+	if len(nodesArray) != 1 {
+		t.Errorf("unexpected number of nodes")
+	}
+	node, ok := nodesArray[0].(map[string]interface{})
+	if !ok {
+		t.Errorf("node is not a map")
+	}
+	checkNode(t, node)
+}
+
+func Test_NodeRespEncodeLegacy(t *testing.T) {
+	nodes := mockNodes()
+	buffer := new(bytes.Buffer)
+	encoder := NewNodesRespEncoder(buffer, true)
+
+	err := encoder.Encode(nodes)
+	if err != nil {
+		t.Errorf("Encode failed: %v", err)
+	}
+
+	m := make(map[string]interface{})
+	if err := json.Unmarshal(buffer.Bytes(), &m); err != nil {
+		t.Errorf("Encode failed: %v", err)
+	}
+	if len(m) != 1 {
+		t.Errorf("unexpected number of keys")
+	}
+	if _, ok := m["1"]; !ok {
+		t.Errorf("node key missing")
+	}
+	node, ok := m["1"].(map[string]interface{})
+	if !ok {
+		t.Errorf("nodes key is not an map")
+	}
+	checkNode(t, node)
+}
+
 // mockGetAddresser is a mock implementation of the GetAddresser interface.
 type mockGetAddresser struct {
 	apiAddr   string
@@ -111,6 +173,46 @@ func (m *mockGetAddresser) GetNodeAPIAddr(addr string, timeout time.Duration) (s
 		return m.getAddrFn(addr, timeout)
 	}
 	return m.apiAddr, m.err
+}
+
+func mockNodes() Nodes {
+	return Nodes{
+		&Node{ID: "1", APIAddr: "http://localhost:4001", Addr: "localhost:4002", Reachable: true, Leader: true},
+	}
+}
+
+func checkNode(t *testing.T, node map[string]interface{}) {
+	t.Helper()
+	if _, ok := node["id"]; !ok {
+		t.Errorf("node is missing id")
+	}
+	if node["id"] != "1" {
+		t.Errorf("unexpected node id")
+	}
+	if _, ok := node["api_addr"]; !ok {
+		t.Errorf("node is missing api_addr")
+	}
+	if node["api_addr"] != "http://localhost:4001" {
+		t.Errorf("unexpected node api_addr")
+	}
+	if _, ok := node["addr"]; !ok {
+		t.Errorf("node is missing addr")
+	}
+	if node["addr"] != "localhost:4002" {
+		t.Errorf("unexpected node addr")
+	}
+	if _, ok := node["reachable"]; !ok {
+		t.Errorf("node is missing reachable")
+	}
+	if node["reachable"] != true {
+		t.Errorf("unexpected node reachable")
+	}
+	if _, ok := node["leader"]; !ok {
+		t.Errorf("node is missing leader")
+	}
+	if node["leader"] != true {
+		t.Errorf("unexpected node leader")
+	}
 }
 
 func asJSON(v interface{}) string {
