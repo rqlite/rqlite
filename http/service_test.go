@@ -1118,6 +1118,7 @@ func Test_timeoutVersionPrettyQueryParam(t *testing.T) {
 	}
 
 	for i, tt := range tests {
+		mustURLParse(tt.u) // Make sure it's OK.
 		req, err := http.NewRequest("GET", tt.u, nil)
 		if err != nil {
 			t.Fatalf("failed to create request: %s", err)
