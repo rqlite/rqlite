@@ -1,6 +1,9 @@
 package http
 
 import (
+	"bytes"
+	"encoding/json"
+	"io"
 	"sort"
 	"sync"
 	"time"
@@ -98,4 +101,75 @@ func (n Nodes) Test(ga GetAddresser, leaderAddr string, timeout time.Duration) {
 		}(nn)
 	}
 	wg.Wait()
+}
+
+// NodesRespEncoder encodes Nodes into JSON with an option for legacy format.
+type NodesRespEncoder struct {
+	writer io.Writer
+	legacy bool
+	prefix string
+	indent string
+}
+
+// NewNodesRespEncoder creates a new NodesRespEncoder instance with the specified
+// io.Writer and legacy flag.
+func NewNodesRespEncoder(w io.Writer, legacy bool) *NodesRespEncoder {
+	return &NodesRespEncoder{
+		writer: w,
+		legacy: legacy,
+	}
+}
+
+// SetIndent sets the indentation format for the JSON output.
+func (e *NodesRespEncoder) SetIndent(prefix, indent string) {
+	e.prefix = prefix
+	e.indent = indent
+}
+
+// Encode takes a slice of Nodes and encodes it into JSON,
+// writing the output to the Encoder's writer.
+func (e *NodesRespEncoder) Encode(nodes Nodes) error {
+	var data []byte
+	var err error
+
+	if e.legacy {
+		data, err = e.encodeLegacy(nodes)
+	} else {
+		data, err = e.encode(nodes)
+	}
+
+	if err != nil {
+		return err
+	}
+
+	if e.indent != "" {
+		var buf bytes.Buffer
+		err = json.Indent(&buf, data, e.prefix, e.indent)
+		if err != nil {
+			return err
+		}
+		data = buf.Bytes()
+	}
+
+	_, err = e.writer.Write(data)
+	return err
+}
+
+// encode encodes the nodes in the standard format.
+func (e *NodesRespEncoder) encode(nodes Nodes) ([]byte, error) {
+	nodeOutput := &struct {
+		Nodes Nodes `json:"nodes"`
+	}{
+		Nodes: nodes,
+	}
+	return json.Marshal(nodeOutput)
+}
+
+// encodeLegacy encodes the nodes in the legacy format.
+func (e *NodesRespEncoder) encodeLegacy(nodes Nodes) ([]byte, error) {
+	legacyOutput := make(map[string]*Node)
+	for _, node := range nodes {
+		legacyOutput[node.ID] = node
+	}
+	return json.Marshal(legacyOutput)
 }

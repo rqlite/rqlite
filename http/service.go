@@ -1031,21 +1031,16 @@ func (s *Service) handleNodes(w http.ResponseWriter, r *http.Request) {
 	}
 	nodes.Test(s.cluster, lAddr, timeout)
 
+	legacy, _ := isLegacy(r)
+	enc := NewNodesRespEncoder(w, legacy)
 	pretty, _ := isPretty(r)
-	var b []byte
 	if pretty {
-		b, err = json.MarshalIndent(nodes, "", "    ")
-	} else {
-		b, err = json.Marshal(nodes)
+		enc.SetIndent("", "    ")
 	}
+	err = enc.Encode(nodes)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	_, err = w.Write(b)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		http.Error(w, fmt.Sprintf("JSON marshal: %s", err.Error()),
+			http.StatusInternalServerError)
 	}
 }
 
@@ -1821,6 +1816,11 @@ func fmtParam(req *http.Request) (string, error) {
 // isPretty returns whether the HTTP response body should be pretty-printed.
 func isPretty(req *http.Request) (bool, error) {
 	return queryParam(req, "pretty")
+}
+
+// isLegacy returns whether the HTTP request is requesting legacy behavior.
+func isLegacy(req *http.Request) (bool, error) {
+	return queryParam(req, "legacy")
 }
 
 // isRedirect returns whether the HTTP request is requesting a explicit
