@@ -5,6 +5,11 @@ import (
 	"io"
 )
 
+const (
+	SQLITE_WAL_MAGIC               = 0x377f0683
+	SQLITE_WAL_FILE_FORMAT_VERSION = 3007000
+)
+
 // Frame points to a single WAL frame in a WAL file.
 type Frame struct {
 	Pgno   uint32
