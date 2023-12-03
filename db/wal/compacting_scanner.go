@@ -85,7 +85,7 @@ func (c *CompactingScanner) Next() (*Frame, error) {
 		Data:   make([]byte, c.header.PageSize),
 	}
 
-	if _, err := c.readSeeker.Seek(c.frames[c.cIdx].Offset, io.SeekStart); err != nil {
+	if _, err := c.readSeeker.Seek(c.frames[c.cIdx].Offset+WALFrameHeaderSize, io.SeekStart); err != nil {
 		return nil, err
 	}
 	if _, err := io.ReadFull(c.readSeeker, frame.Data); err != nil {
