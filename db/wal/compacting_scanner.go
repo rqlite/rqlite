@@ -28,7 +28,7 @@ func (c cFrames) Swap(i, j int)      { c[uint32(i)], c[uint32(j)] = c[uint32(j)]
 // It also compacts the WAL file, with Next() returning the last frame for each page. This Scanner
 // requires that the final frame in the WAL file is a committing frame. It will return an
 // error at creation time if this is not the case.
-type CompactingWALScanner struct {
+type CompactingScanner struct {
 	readSeeker io.ReadSeeker
 	walReader  *Reader
 	header     *WALHeader
@@ -37,8 +37,8 @@ type CompactingWALScanner struct {
 	frames cFrames
 }
 
-// NewCompactingWALScanner creates a new CompactingWALScanner with the given io.ReadSeeker.
-func NewCompactingWALScanner(r io.ReadSeeker) (*CompactingWALScanner, error) {
+// NewCompactingScanner creates a new CompactingScanner with the given io.ReadSeeker.
+func NewCompactingScanner(r io.ReadSeeker) (*CompactingScanner, error) {
 	walReader := NewReader(r)
 	err := walReader.ReadHeader()
 	if err != nil {
@@ -56,7 +56,7 @@ func NewCompactingWALScanner(r io.ReadSeeker) (*CompactingWALScanner, error) {
 		Checksum2: walReader.chksum2,
 	}
 
-	s := &CompactingWALScanner{
+	s := &CompactingScanner{
 		readSeeker: r,
 		walReader:  walReader,
 		header:     hdr,
@@ -69,12 +69,12 @@ func NewCompactingWALScanner(r io.ReadSeeker) (*CompactingWALScanner, error) {
 }
 
 // Header returns the header of the WAL file.
-func (c *CompactingWALScanner) Header() (*WALHeader, error) {
+func (c *CompactingScanner) Header() (*WALHeader, error) {
 	return c.header, nil
 }
 
 // Next reads the next frame from the WAL file.
-func (c *CompactingWALScanner) Next() (*Frame, error) {
+func (c *CompactingScanner) Next() (*Frame, error) {
 	if c.cIdx >= len(c.frames) {
 		return nil, io.EOF
 	}
@@ -96,7 +96,7 @@ func (c *CompactingWALScanner) Next() (*Frame, error) {
 	return frame, nil
 }
 
-func (c *CompactingWALScanner) scan() error {
+func (c *CompactingScanner) scan() error {
 	waitingForCommit := false
 	txFrames := make(map[uint32]*cFrame)
 	frames := make(map[uint32]*cFrame)
