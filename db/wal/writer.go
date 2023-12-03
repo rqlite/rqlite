@@ -62,7 +62,7 @@ func NewWriter(r WALIterator) (*Writer, error) {
 	return w, nil
 }
 
-// WriteTo writes the compacted WAL file to the given writer.
+// WriteTo writes the frames from the WALIterator to the given io.Writer.
 func (w *Writer) WriteTo(ww io.Writer) (n int64, retErr error) {
 	nn, err := w.writeWALHeader(ww)
 	if err != nil {
@@ -72,14 +72,17 @@ func (w *Writer) WriteTo(ww io.Writer) (n int64, retErr error) {
 
 	for {
 		frame, err := w.r.Next()
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			if nn, err = w.writeFrame(ww, frame); err != nil {
-				return n + nn, err
+		if err != nil {
+			if err == io.EOF {
+				break // No more frames!
 			}
-			n += nn
+			return n, err
 		}
+
+		if nn, err = w.writeFrame(ww, frame); err != nil {
+			return n + nn, err
+		}
+		n += nn
 	}
 
 	return n, nil
