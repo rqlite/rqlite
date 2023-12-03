@@ -4,21 +4,10 @@ import (
 	"io"
 )
 
-// Frame represents a single frame in the WAL file.
-type Frame struct {
-	Pgno   uint32 // Page number
-	Commit uint32 // Commit flag
-	Data   []byte // Frame data
-}
-
-// WALIterator defines the interface for WAL frame iteration.
-type WALIterator interface {
-	Next() (*Frame, error)
-}
-
 // FullWALScanner implements WALIterator to iterate over all frames in a WAL file.
 type FullWALScanner struct {
 	reader *Reader
+	header *WALHeader
 }
 
 // NewFullWALScanner creates a new FullWALScanner with the given io.Reader.
@@ -28,9 +17,26 @@ func NewFullWALScanner(r io.Reader) (*FullWALScanner, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	hdr := &WALHeader{
+		Magic:     wr.magic,
+		Version:   3007000,
+		PageSize:  wr.PageSize(),
+		Seq:       wr.seq,
+		Salt1:     wr.salt1,
+		Salt2:     wr.salt2,
+		Checksum1: wr.chksum1,
+		Checksum2: wr.chksum2,
+	}
+
 	return &FullWALScanner{
 		reader: wr,
+		header: hdr,
 	}, nil
+}
+
+func (f *FullWALScanner) Header() (*WALHeader, error) {
+	return f.header, nil
 }
 
 // Next reads the next frame from the WAL file.

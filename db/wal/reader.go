@@ -25,6 +25,7 @@ type Reader struct {
 	r      io.Reader
 	frameN int
 
+	magic    uint32
 	bo       binary.ByteOrder
 	pageSize uint32
 	seq      uint32
@@ -61,13 +62,14 @@ func (r *Reader) ReadHeader() error {
 	}
 
 	// Determine byte order of checksums.
-	switch magic := binary.BigEndian.Uint32(hdr[0:]); magic {
+	r.magic = binary.BigEndian.Uint32(hdr[0:])
+	switch r.magic {
 	case 0x377f0682:
 		r.bo = binary.LittleEndian
 	case 0x377f0683:
 		r.bo = binary.BigEndian
 	default:
-		return fmt.Errorf("invalid wal header magic: %x", magic)
+		return fmt.Errorf("invalid wal header magic: %x", r.magic)
 	}
 
 	// If the header checksum doesn't match then we may have failed with
