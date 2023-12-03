@@ -4,14 +4,14 @@ import (
 	"io"
 )
 
-// FullWALScanner implements WALIterator to iterate over all frames in a WAL file.
-type FullWALScanner struct {
+// FullScanner implements WALIterator to iterate over all frames in a WAL file.
+type FullScanner struct {
 	reader *Reader
 	header *WALHeader
 }
 
-// NewFullWALScanner creates a new FullWALScanner with the given io.Reader.
-func NewFullWALScanner(r io.Reader) (*FullWALScanner, error) {
+// NewFullScanner creates a new FullScanner with the given io.Reader.
+func NewFullScanner(r io.Reader) (*FullScanner, error) {
 	wr := NewReader(r)
 	err := wr.ReadHeader()
 	if err != nil {
@@ -29,19 +29,19 @@ func NewFullWALScanner(r io.Reader) (*FullWALScanner, error) {
 		Checksum2: wr.chksum2,
 	}
 
-	return &FullWALScanner{
+	return &FullScanner{
 		reader: wr,
 		header: hdr,
 	}, nil
 }
 
 // Header returns the header of the WAL file.
-func (f *FullWALScanner) Header() (*WALHeader, error) {
+func (f *FullScanner) Header() (*WALHeader, error) {
 	return f.header, nil
 }
 
 // Next reads the next frame from the WAL file.
-func (f *FullWALScanner) Next() (*Frame, error) {
+func (f *FullScanner) Next() (*Frame, error) {
 	data := make([]byte, f.reader.PageSize())
 	pgno, commit, err := f.reader.ReadFrame(data)
 	if err != nil {

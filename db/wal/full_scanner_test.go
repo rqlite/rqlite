@@ -13,7 +13,7 @@ func Test_FullScanner_Scan(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	s, err := NewFullWALScanner(bytes.NewReader(b))
+	s, err := NewFullScanner(bytes.NewReader(b))
 	if err != nil {
 		t.Fatal(err)
 	}

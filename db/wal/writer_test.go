@@ -16,7 +16,7 @@ func Test_NewWriter_FullScanner(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	s, err := NewFullWALScanner(bytes.NewReader(b))
+	s, err := NewFullScanner(bytes.NewReader(b))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +50,7 @@ func Test_NewWriter_FullScanner_LargeWAL(t *testing.T) {
 	}
 	t.Log("WAL size:", len(b))
 
-	s, err := NewFullWALScanner(bytes.NewReader(b))
+	s, err := NewFullScanner(bytes.NewReader(b))
 	if err != nil {
 		t.Fatal(err)
 	}
