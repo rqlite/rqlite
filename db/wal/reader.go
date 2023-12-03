@@ -10,6 +10,8 @@ import (
 const (
 	WALHeaderSize      = 32
 	WALFrameHeaderSize = 24
+
+	WALSupportedVersion = 3007000
 )
 
 // Reader wraps an io.Reader and parses SQLite WAL frames.
@@ -81,7 +83,7 @@ func (r *Reader) ReadHeader() error {
 	}
 
 	// Verify version is correct.
-	if version := binary.BigEndian.Uint32(hdr[4:]); version != 3007000 {
+	if version := binary.BigEndian.Uint32(hdr[4:]); version != WALSupportedVersion {
 		return fmt.Errorf("unsupported wal version: %d", version)
 	}
 

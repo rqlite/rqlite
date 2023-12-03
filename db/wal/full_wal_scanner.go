@@ -20,7 +20,7 @@ func NewFullWALScanner(r io.Reader) (*FullWALScanner, error) {
 
 	hdr := &WALHeader{
 		Magic:     wr.magic,
-		Version:   3007000,
+		Version:   WALSupportedVersion,
 		PageSize:  wr.PageSize(),
 		Seq:       wr.seq,
 		Salt1:     wr.salt1,
@@ -35,6 +35,7 @@ func NewFullWALScanner(r io.Reader) (*FullWALScanner, error) {
 	}, nil
 }
 
+// Header returns the header of the WAL file.
 func (f *FullWALScanner) Header() (*WALHeader, error) {
 	return f.header, nil
 }
