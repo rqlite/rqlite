@@ -123,7 +123,7 @@ func Test_Writer_CompactingScanner(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer destF.Close()
-		s, err := NewCompactingScanner(srcF)
+		s, err := NewCompactingScanner(srcF, true)
 		if err != nil {
 			t.Fatal(err)
 		}

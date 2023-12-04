@@ -13,7 +13,7 @@ func Test_CompactingScanner_Scan(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	s, err := NewCompactingScanner(bytes.NewReader(b))
+	s, err := NewCompactingScanner(bytes.NewReader(b), true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +58,7 @@ func Test_CompactingScanner_Scan_Commit0(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	s, err := NewCompactingScanner(bytes.NewReader(b))
+	s, err := NewCompactingScanner(bytes.NewReader(b), false)
 	if err != nil {
 		t.Fatal(err)
 	}

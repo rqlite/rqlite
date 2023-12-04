@@ -11,7 +11,7 @@ type FullScanner struct {
 }
 
 // NewFullScanner creates a new FullScanner with the given io.Reader.
-func NewFullScanner(r io.Reader) (*FullScanner, error) {
+func NewFullScanner(r io.ReadSeeker) (*FullScanner, error) {
 	wr := NewReader(r)
 	err := wr.ReadHeader()
 	if err != nil {
