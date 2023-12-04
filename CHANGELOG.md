@@ -49,7 +49,7 @@ When officially released 8.0 will support (mostly) seamless upgrades from the 7.
 - [PR #1420](https://github.com/rqlite/rqlite/pull/1420), [PR #1431](https://github.com/rqlite/rqlite/pull/1431): Nodes join a cluster using the Raft address, not the HTTP API.
 - [PR #1426](https://github.com/rqlite/rqlite/pull/1426): 'go mod' updates, including moving to Raft 1.6.
 - [PR #1430](https://github.com/rqlite/rqlite/pull/1430): Check that any supplied Join addresses are not HTTP servers.
-- [PR #1437](https://github.com/rqlite/rqlite/pull/1437), [PR #1438](https://github.com/rqlite/rqlite/pull/1438): Actually timeout if needed during `nodes/` access. Fixes [issue #1435](https://github.com/rqlite/rqlite/issues/1435). Thanks @dwco-z
+- [PR #1437](https://github.com/rqlite/rqlite/pull/1437), [PR #1438](https://github.com/rqlite/rqlite/pull/1438), [PR #1439](https://github.com/rqlite/rqlite/pull/1439): Actually timeout if needed during `nodes/` access. Fixes [issue #1435](https://github.com/rqlite/rqlite/issues/1435). Thanks @dwco-z
 - [PR #1440](https://github.com/rqlite/rqlite/pull/1440): Add a Compacting WAL rewriter. Thanks @benbjohnson.
 
 ## 7.21.4 (July 8th 2023)
