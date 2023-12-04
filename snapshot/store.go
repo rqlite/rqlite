@@ -21,6 +21,8 @@ import (
 const (
 	persistSize     = "latest_persist_size"
 	persistDuration = "latest_persist_duration"
+	upgradeOk       = "upgrade_ok"
+	upgradeFail     = "upgrade_fail"
 )
 
 const (
@@ -41,6 +43,8 @@ func ResetStats() {
 	stats.Init()
 	stats.Add(persistSize, 0)
 	stats.Add(persistDuration, 0)
+	stats.Add(upgradeOk, 0)
+	stats.Add(upgradeFail, 0)
 }
 
 // LockingSink is a wrapper around a SnapshotSink that ensures that the

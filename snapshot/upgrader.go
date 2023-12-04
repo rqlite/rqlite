@@ -21,7 +21,12 @@ const (
 // Upgrade writes a copy of the 7.x-format Snapshot dircectory at 'old' to a
 // new Snapshot directory at 'new'. If the upgrade is successful, the
 // 'old' directory is removed before the function returns.
-func Upgrade(old, new string, logger *log.Logger) error {
+func Upgrade(old, new string, logger *log.Logger) (retErr error) {
+	defer func() {
+		if retErr != nil {
+			stats.Add(upgradeFail, 1)
+		}
+	}()
 	newTmpDir := tmpName(new)
 
 	// If a temporary version of the new snapshot exists, remove it. This implies a
@@ -138,6 +143,7 @@ func Upgrade(old, new string, logger *log.Logger) error {
 		return fmt.Errorf("failed to remove old snapshot directory %s: %s", old, err)
 	}
 	logger.Printf("upgraded snapshot directory %s to %s", old, new)
+	stats.Add(upgradeOk, 1)
 
 	return nil
 }
