@@ -1728,8 +1728,8 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 
 			stats.Get(snapshotWALSize).(*expvar.Int).Set(int64(compactedBuf.Len()))
 			stats.Get(snapshotPrecompactWALSize).(*expvar.Int).Set(walSz)
-			s.logger.Printf("%s snapshot is %d bytes on node ID %s, source WAL file was %d bytes",
-				fPLog, compactedBuf.Len(), s.raftID, walSz)
+			s.logger.Printf("%s snapshot is %d bytes (WAL=%d bytes) on node ID %s", fPLog, compactedBuf.Len(),
+				walSz, s.raftID)
 			if err := s.db.Checkpoint(); err != nil {
 				return nil, err
 			}
