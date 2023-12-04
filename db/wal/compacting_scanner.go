@@ -49,7 +49,8 @@ func NewFastCompactingScanner(r io.ReadSeeker) (*CompactingScanner, error) {
 // If fullScan is true, the scanner will perform a full scan of the WAL file, performing
 // a checksum on each frame. If fullScan is false, the scanner will only scan the file
 // sufficiently to find the last valid frame for each page. This is faster when the
-// caller knows that the WAL file is valid and does not need to be checked.
+// caller knows that the entire WAL file is valid, and will not contain pages from a
+// previous checkpointing operation.
 func NewCompactingScanner(r io.ReadSeeker, fullScan bool) (*CompactingScanner, error) {
 	walReader := NewReader(r)
 	err := walReader.ReadHeader()
