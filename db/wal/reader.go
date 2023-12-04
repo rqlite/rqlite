@@ -111,18 +111,18 @@ func (r *Reader) ReadFrame(data []byte) (pgno, commit uint32, err error) {
 		return 0, 0, err
 	}
 
-	// Read WAL page data.
-	if _, err := io.ReadFull(r.r, data); err == io.ErrUnexpectedEOF {
-		return 0, 0, io.EOF
-	} else if err != nil {
-		return 0, 0, err
-	}
-
 	// Verify salt matches the salt in the header.
 	salt1 := binary.BigEndian.Uint32(hdr[8:])
 	salt2 := binary.BigEndian.Uint32(hdr[12:])
 	if r.salt1 != salt1 || r.salt2 != salt2 {
 		return 0, 0, io.EOF
+	}
+
+	// Read WAL page data.
+	if _, err := io.ReadFull(r.r, data); err == io.ErrUnexpectedEOF {
+		return 0, 0, io.EOF
+	} else if err != nil {
+		return 0, 0, err
 	}
 
 	// Verify the checksum is valid.
