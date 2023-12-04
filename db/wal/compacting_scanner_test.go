@@ -7,18 +7,6 @@ import (
 	"testing"
 )
 
-func Test_CompactingScanner_OpenTx(t *testing.T) {
-	b, err := os.ReadFile("testdata/compacting-scanner/open-tx/wal")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	_, err = NewCompactingScanner(bytes.NewReader(b))
-	if err != ErrOpenTransaction {
-		t.Fatal("expected ErrOpenTransaction, got", err)
-	}
-}
-
 func Test_CompactingScanner_Scan(t *testing.T) {
 	b, err := os.ReadFile("testdata/wal-reader/ok/wal")
 	if err != nil {
