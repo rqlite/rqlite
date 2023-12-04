@@ -101,7 +101,7 @@ func (c *CompactingScanner) scan() error {
 	txFrames := make(map[uint32]*cFrame)
 	frames := make(map[uint32]*cFrame)
 	buf := make([]byte, c.header.PageSize)
-	
+
 	for {
 		pgno, commit, err := c.walReader.ReadFrame(buf)
 		if err == io.EOF {
