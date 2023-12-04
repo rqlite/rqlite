@@ -37,7 +37,7 @@ func Test_CompactingScanner_Scan(t *testing.T) {
 		dataHighIdx int
 	}{
 		{1, 0, 56, 4152},
-		//{2, 2, 4176, 8272}, // This frame is skipped.
+		//{2, 2, 4176, 8272}, skipped by the Compactor.
 		{2, 2, 8296, 12392},
 	} {
 		f, err := s.Next()
@@ -79,14 +79,14 @@ func Test_CompactingScanner_Scan_Commit0(t *testing.T) {
 		pgno   uint32
 		commit uint32
 	}{
-		// {1,0},
-		// {2,2},
+		// {1,0}, skipped by the Compactor.
+		// {2,2}, skipped by the Compactor.
 		{1, 0},
 		{2, 0},
 		{3, 0},
 		{4, 0},
 		{5, 0},
-		// {6,6},
+		// {6,6}, skipped by the Compactor.
 		{6, 6},
 	} {
 		f, err := s.Next()
