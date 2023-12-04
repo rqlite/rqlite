@@ -53,6 +53,7 @@ When officially released 8.0 will support (mostly) seamless upgrades from the 7.
 - [PR #1440](https://github.com/rqlite/rqlite/pull/1440): Add a Compacting WAL rewriter. Thanks @benbjohnson.
 - [PR #1441](https://github.com/rqlite/rqlite/pull/1441), [PR #1443](https://github.com/rqlite/rqlite/pull/1443): Integrate Compacting WAL writer
 - [PR #1444](https://github.com/rqlite/rqlite/pull/1444): Trivial clean-ups related to backups.
+- [PR #1445](https://github.com/rqlite/rqlite/pull/1445): Count Snapshot upgrades.
 
 ## 7.21.4 (July 8th 2023)
 ### Implementation changes and bug fixes
