@@ -1146,7 +1146,7 @@ func (s *Store) Backup(br *command.BackupRequest, dst io.Writer) (retErr error) 
 	}
 
 	if br.Format == command.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY {
-		f, err := os.CreateTemp("", "rqlite-snap-*")
+		f, err := os.CreateTemp("", "rqlite-backup-*")
 		if err != nil {
 			return err
 		}

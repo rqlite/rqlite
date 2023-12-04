@@ -87,7 +87,7 @@ type Store interface {
 	// Nodes returns the slice of store.Servers in the cluster
 	Nodes() ([]*store.Server, error)
 
-	// Backup wites backup of the node state to dst
+	// Backup writes backup of the node state to dst
 	Backup(br *command.BackupRequest, dst io.Writer) error
 }
 
