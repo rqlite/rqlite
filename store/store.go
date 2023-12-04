@@ -1708,7 +1708,7 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 			}
 			defer walFD.Close() // Make sure it closes.
 
-			scanner, err := wal.NewCompactingScanner(walFD, false)
+			scanner, err := wal.NewFastCompactingScanner(walFD)
 			if err != nil {
 				return nil, err
 			}

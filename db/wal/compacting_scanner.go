@@ -38,6 +38,13 @@ type CompactingScanner struct {
 	frames cFrames
 }
 
+// NewFastCompactingScanner creates a new CompactingScanner with the given io.ReadSeeker.
+// It performs a fast scan of the WAL file, assuming that the file is valid and does not
+// need to be checked.
+func NewFastCompactingScanner(r io.ReadSeeker) (*CompactingScanner, error) {
+	return NewCompactingScanner(r, false)
+}
+
 // NewCompactingScanner creates a new CompactingScanner with the given io.ReadSeeker.
 // If fullScan is true, the scanner will perform a full scan of the WAL file, performing
 // a checksum on each frame. If fullScan is false, the scanner will only scan the file
