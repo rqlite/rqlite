@@ -54,6 +54,8 @@ func main() {
 			fmt.Println("failed to read WAL frame:", err)
 			os.Exit(1)
 		}
+		fmt.Println("pgno:", pgno, "commit:", commit)
+
 		uniquePgs[pgno] = struct{}{}
 		nFrames++
 

@@ -25,9 +25,9 @@ func (c cFrames) Less(i, j int) bool { return c[uint32(i)].Offset < c[uint32(j)]
 func (c cFrames) Swap(i, j int)      { c[uint32(i)], c[uint32(j)] = c[uint32(j)], c[uint32(i)] }
 
 // CompactingWALScanner implements WALIterator to iterate over frames in a WAL file.
-// It also compacts the WAL file, with Next() returning the last frame for each page. This Scanner
-// requires that the final frame in the WAL file is a committing frame. It will return an
-// error at creation time if this is not the case.
+// It also compacts the WAL file, with Next() returning the last frame for each page.
+// This Scanner requires that the final frame in the WAL file is a committing frame.
+// It will return an error at creation time if this is not the case.
 type CompactingScanner struct {
 	readSeeker io.ReadSeeker
 	walReader  *Reader
