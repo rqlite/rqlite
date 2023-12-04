@@ -40,6 +40,8 @@ const (
 	numETx               = "execute_transactions"
 	numQTx               = "query_transactions"
 	numRTx               = "request_transactions"
+
+	CheckpointQuery = "PRAGMA wal_checkpoint(TRUNCATE)" // rqlite WAL compaction requires truncation
 )
 
 var (
@@ -485,7 +487,7 @@ func (db *DB) CheckpointWithTimeout(dur time.Duration) (err error) {
 	var nMoved int
 
 	f := func() error {
-		err := db.rwDB.QueryRow("PRAGMA wal_checkpoint(TRUNCATE)").Scan(&ok, &nPages, &nMoved)
+		err := db.rwDB.QueryRow(CheckpointQuery).Scan(&ok, &nPages, &nMoved)
 		stats.Add(numCheckpointedPages, int64(nPages))
 		stats.Add(numCheckpointedMoves, int64(nMoved))
 		if err != nil {

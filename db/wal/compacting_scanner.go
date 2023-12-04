@@ -32,13 +32,26 @@ type CompactingScanner struct {
 	readSeeker io.ReadSeeker
 	walReader  *Reader
 	header     *WALHeader
+	fullScan   bool
 
 	cIdx   int
 	frames cFrames
 }
 
+// NewFastCompactingScanner creates a new CompactingScanner with the given io.ReadSeeker.
+// It performs a fast scan of the WAL file, assuming that the file is valid and does not
+// need to be checked.
+func NewFastCompactingScanner(r io.ReadSeeker) (*CompactingScanner, error) {
+	return NewCompactingScanner(r, false)
+}
+
 // NewCompactingScanner creates a new CompactingScanner with the given io.ReadSeeker.
-func NewCompactingScanner(r io.ReadSeeker) (*CompactingScanner, error) {
+// If fullScan is true, the scanner will perform a full scan of the WAL file, performing
+// a checksum on each frame. If fullScan is false, the scanner will only scan the file
+// sufficiently to find the last valid frame for each page. This is faster when the
+// caller knows that the entire WAL file is valid, and will not contain pages from a
+// previous checkpointing operation.
+func NewCompactingScanner(r io.ReadSeeker, fullScan bool) (*CompactingScanner, error) {
 	walReader := NewReader(r)
 	err := walReader.ReadHeader()
 	if err != nil {
@@ -60,6 +73,7 @@ func NewCompactingScanner(r io.ReadSeeker) (*CompactingScanner, error) {
 		readSeeker: r,
 		walReader:  walReader,
 		header:     hdr,
+		fullScan:   fullScan,
 	}
 	if err := s.scan(); err != nil {
 		return nil, err
@@ -100,7 +114,10 @@ func (c *CompactingScanner) scan() error {
 	waitingForCommit := false
 	txFrames := make(map[uint32]*cFrame)
 	frames := make(map[uint32]*cFrame)
-	buf := make([]byte, c.header.PageSize)
+	var buf []byte
+	if c.fullScan {
+		buf = make([]byte, c.header.PageSize)
+	}
 
 	for {
 		pgno, commit, err := c.walReader.ReadFrame(buf)

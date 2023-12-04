@@ -24,7 +24,7 @@ const (
 // authors of that software. See https://github.com/superfly/litefs for more
 // details.
 type Reader struct {
-	r      io.Reader
+	r      io.ReadSeeker
 	frameN int
 
 	magic    uint32
@@ -37,7 +37,7 @@ type Reader struct {
 }
 
 // NewReader returns a new instance of Reader.
-func NewReader(r io.Reader) *Reader {
+func NewReader(r io.ReadSeeker) *Reader {
 	return &Reader{r: r}
 }
 
@@ -96,10 +96,12 @@ func (r *Reader) ReadHeader() error {
 	return nil
 }
 
-// ReadFrame reads the next frame from the WAL and returns the page number.
-// Returns io.EOF at the end of the valid WAL.
+// ReadFrame returns the next page number and commit offset from the WAL. If
+// data is not nil, then the page data is read into the buffer. If data is nil,
+// then the page data is skipped. ReadFrame Returns io.EOF at the end of the valid
+// WAL.
 func (r *Reader) ReadFrame(data []byte) (pgno, commit uint32, err error) {
-	if len(data) != int(r.pageSize) {
+	if data != nil && len(data) != int(r.pageSize) {
 		return 0, 0, fmt.Errorf("WALReader.ReadFrame(): buffer size (%d) must match page size (%d)", len(data), r.pageSize)
 	}
 
@@ -118,20 +120,27 @@ func (r *Reader) ReadFrame(data []byte) (pgno, commit uint32, err error) {
 		return 0, 0, io.EOF
 	}
 
-	// Read WAL page data.
-	if _, err := io.ReadFull(r.r, data); err == io.ErrUnexpectedEOF {
-		return 0, 0, io.EOF
-	} else if err != nil {
-		return 0, 0, err
-	}
+	if data != nil {
+		// Read WAL page data.
+		if _, err := io.ReadFull(r.r, data); err == io.ErrUnexpectedEOF {
+			return 0, 0, io.EOF
+		} else if err != nil {
+			return 0, 0, err
+		}
 
-	// Verify the checksum is valid.
-	chksum1 := binary.BigEndian.Uint32(hdr[16:])
-	chksum2 := binary.BigEndian.Uint32(hdr[20:])
-	r.chksum1, r.chksum2 = WALChecksum(r.bo, r.chksum1, r.chksum2, hdr[:8]) // frame header
-	r.chksum1, r.chksum2 = WALChecksum(r.bo, r.chksum1, r.chksum2, data)    // frame data
-	if r.chksum1 != chksum1 || r.chksum2 != chksum2 {
-		return 0, 0, io.EOF
+		// Verify the checksum is valid.
+		chksum1 := binary.BigEndian.Uint32(hdr[16:])
+		chksum2 := binary.BigEndian.Uint32(hdr[20:])
+		r.chksum1, r.chksum2 = WALChecksum(r.bo, r.chksum1, r.chksum2, hdr[:8]) // frame header
+		r.chksum1, r.chksum2 = WALChecksum(r.bo, r.chksum1, r.chksum2, data)    // frame data
+		if r.chksum1 != chksum1 || r.chksum2 != chksum2 {
+			return 0, 0, io.EOF
+		}
+	} else {
+		// Skip WAL page data.
+		if _, err := r.r.Seek(int64(r.pageSize), io.SeekCurrent); err != nil {
+			return 0, 0, err
+		}
 	}
 
 	pgno = binary.BigEndian.Uint32(hdr[0:])
