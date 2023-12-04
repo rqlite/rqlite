@@ -19,15 +19,15 @@ type cFrame struct {
 
 type cFrames []*cFrame
 
-// make cFrames sortable by offset.
 func (c cFrames) Len() int           { return len(c) }
 func (c cFrames) Less(i, j int) bool { return c[uint32(i)].Offset < c[uint32(j)].Offset }
 func (c cFrames) Swap(i, j int)      { c[uint32(i)], c[uint32(j)] = c[uint32(j)], c[uint32(i)] }
 
-// CompactingWALScanner implements WALIterator to iterate over frames in a WAL file.
-// It also compacts the WAL file, with Next() returning the last frame for each page.
-// This Scanner requires that the final frame in the WAL file is a committing frame.
-// It will return an error at creation time if this is not the case.
+// CompactingScanner implements WALIterator to iterate over frames in a WAL file.
+// It also compacts the WAL file, with Next() returning the last valid frame for each
+// page in the right order such that they can be written to a new WAL file. This Scanner
+// requires that the final frame in the WAL file is a committing frame. It will return an
+// error at creation time if this is not the case.
 type CompactingScanner struct {
 	readSeeker io.ReadSeeker
 	walReader  *Reader
@@ -73,7 +73,7 @@ func (c *CompactingScanner) Header() (*WALHeader, error) {
 	return c.header, nil
 }
 
-// Next reads the next frame from the WAL file.
+// Next return the next logical frame from the WAL file.
 func (c *CompactingScanner) Next() (*Frame, error) {
 	if c.cIdx >= len(c.frames) {
 		return nil, io.EOF
@@ -101,6 +101,7 @@ func (c *CompactingScanner) scan() error {
 	txFrames := make(map[uint32]*cFrame)
 	frames := make(map[uint32]*cFrame)
 	buf := make([]byte, c.header.PageSize)
+	
 	for {
 		pgno, commit, err := c.walReader.ReadFrame(buf)
 		if err == io.EOF {
@@ -130,7 +131,6 @@ func (c *CompactingScanner) scan() error {
 		}
 		txFrames = make(map[uint32]*cFrame)
 	}
-
 	if waitingForCommit {
 		return ErrOpenTransaction
 	}
@@ -142,6 +142,5 @@ func (c *CompactingScanner) scan() error {
 		c.frames = append(c.frames, frame)
 	}
 	sort.Sort(c.frames)
-
 	return nil
 }
