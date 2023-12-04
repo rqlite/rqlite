@@ -11,6 +11,9 @@ rqbench
 **/rqbench
 !**/rqbench/
 
+walr
+**/walr
+
 # Compiled Object files, Static and Dynamic libs (Shared Objects)
 *.o
 *.a
