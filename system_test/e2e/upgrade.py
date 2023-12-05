@@ -7,6 +7,7 @@ from helpers import Node, Cluster, d_
 RQLITED_PATH = os.environ['RQLITED_PATH']
 
 class TestUpgrade_v7(unittest.TestCase):
+  '''Test that a v7 cluster can be upgraded to this version code'''
   def test(self):
     n0 = Node(RQLITED_PATH, '1', api_addr='localhost:4001', raft_addr='localhost:4002', dir='testdata/v7/data.1')
     n0.start()
@@ -20,13 +21,13 @@ class TestUpgrade_v7(unittest.TestCase):
     self.cluster = Cluster([n0, n1, n2])
     l = self.cluster.wait_for_leader()
 
-    # Check that each node upgraded a snapshot
+    # Check that each node upgraded a snapshot.
     for n in self.cluster.nodes:
       self.assertTrue(n.expvar()['snapshot']['upgrade_ok'] == 1)
 
-    # count number of records in foo using leader
-    j = l.query('SELECT COUNT(*) FROM foo')
-    self.assertEqual(j, d_("{'results': [{'values': [[28]], 'types': ['integer'], 'columns': ['COUNT(*)']}]}"))
+    # Check that each node has the right data.
+    for n in self.cluster.nodes:
+      self.assertEqual(n.query('SELECT COUNT(*) FROM foo', level='none'), d_("{'results': [{'values': [[28]], 'types': ['integer'], 'columns': ['COUNT(*)']}]}"))
 
   def tearDown(self):
     self.cluster.deprovision()
