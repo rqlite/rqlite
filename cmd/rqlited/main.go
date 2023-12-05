@@ -195,6 +195,7 @@ func main() {
 
 	if cfg.RaftClusterRemoveOnShutdown {
 		remover := cluster.NewRemover(clstrClient, 5*time.Second, str)
+		remover.SetCredentials(credentialsFor(credStr, cfg.JoinAs))
 		log.Printf("initiating removal of this node from cluster before shutdown")
 		if err := remover.Do(cfg.NodeID, true); err != nil {
 			log.Fatalf("failed to remove this node from cluster before shutdown: %s", err.Error())
