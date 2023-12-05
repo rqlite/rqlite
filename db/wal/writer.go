@@ -105,7 +105,7 @@ func (w *Writer) writeWALHeader(ww io.Writer) (n int64, err error) {
 	binary.BigEndian.PutUint32(wHeader[20:], w.rHeader.Salt2)
 
 	// Checksum of header
-	w.chksum1, w.chksum2 = rHeader.Checksum1, w.rHeader.Checksum2
+	w.chksum1, w.chksum2 = w.rHeader.Checksum1, w.rHeader.Checksum2
 	binary.BigEndian.PutUint32(wHeader[24:], w.chksum1)
 	binary.BigEndian.PutUint32(wHeader[28:], w.chksum2)
 
