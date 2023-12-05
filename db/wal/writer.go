@@ -89,27 +89,23 @@ func (w *Writer) WriteTo(ww io.Writer) (n int64, retErr error) {
 }
 
 func (w *Writer) writeWALHeader(ww io.Writer) (n int64, err error) {
-	rHeader, err := w.r.Header()
-	if err != nil {
-		return 0, err
-	}
 	wHeader := make([]byte, WALHeaderSize)
 
-	binary.BigEndian.PutUint32(wHeader[0:], rHeader.Magic)
-	binary.BigEndian.PutUint32(wHeader[4:], rHeader.Version)
+	binary.BigEndian.PutUint32(wHeader[0:], w.rHeader.Magic)
+	binary.BigEndian.PutUint32(wHeader[4:], w.rHeader.Version)
 
 	// Database page size
-	binary.BigEndian.PutUint32(wHeader[8:], rHeader.PageSize)
+	binary.BigEndian.PutUint32(wHeader[8:], w.rHeader.PageSize)
 
 	// Checkpoint sequence number
-	binary.BigEndian.PutUint32(wHeader[12:], rHeader.Seq)
+	binary.BigEndian.PutUint32(wHeader[12:], w.rHeader.Seq)
 
 	// Salt values, reusing the original salt values.
-	binary.BigEndian.PutUint32(wHeader[16:], rHeader.Salt1)
-	binary.BigEndian.PutUint32(wHeader[20:], rHeader.Salt2)
+	binary.BigEndian.PutUint32(wHeader[16:], w.rHeader.Salt1)
+	binary.BigEndian.PutUint32(wHeader[20:], w.rHeader.Salt2)
 
 	// Checksum of header
-	w.chksum1, w.chksum2 = rHeader.Checksum1, rHeader.Checksum2
+	w.chksum1, w.chksum2 = rHeader.Checksum1, w.rHeader.Checksum2
 	binary.BigEndian.PutUint32(wHeader[24:], w.chksum1)
 	binary.BigEndian.PutUint32(wHeader[28:], w.chksum2)
 
