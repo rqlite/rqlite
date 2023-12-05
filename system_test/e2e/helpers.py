@@ -87,8 +87,6 @@ class Node(object):
                auth=None, auto_backup=None, auto_restore=None,
                dir=None):
     
-    s_api = None
-    s_raft = None
     if api_addr is None:
       api_addr = random_addr()
     if raft_addr is None:
