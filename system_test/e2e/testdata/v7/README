@@ -1,8 +1,8 @@
 v7 cluster created using these commands.
 
 ./rqlited -raft-snap=16 -raft-snap-int=1s -node-id 1 data.1
-./rqlited -raft-snap=16 -raft-snap-int=1s -http-addr localhost:4003 -raft-addr localhost:4004 -join localhost:4001 -node-id 2 data.2
-./rqlited -raft-snap=16 -raft-snap-int=1s -http-addr localhost:4005 -raft-addr localhost:4006 -join localhost:4001 -node-id 3 data.3
+./rqlited -raft-snap=16 -raft-snap-int=1s -http-addr localhost:4003 -raft-addr localhost:4004 -join http://localhost:4001 -node-id 2 data.2
+./rqlited -raft-snap=16 -raft-snap-int=1s -http-addr localhost:4005 -raft-addr localhost:4006 -join http://localhost:4001 -node-id 3 data.3
 
 -raft-snap=16 -raft-snap-int=1s
 
