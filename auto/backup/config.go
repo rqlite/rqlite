@@ -14,6 +14,7 @@ type Config struct {
 	Version    int              `json:"version"`
 	Type       auto.StorageType `json:"type"`
 	NoCompress bool             `json:"no_compress,omitempty"`
+	Vacuum     bool             `json:"vacuum,omitempty`
 	Interval   auto.Duration    `json:"interval"`
 	Sub        json.RawMessage  `json:"sub"`
 }
