@@ -24,6 +24,7 @@ type Remover struct {
 	timeout time.Duration
 	control Control
 	client  *Client
+	creds   *Credentials
 
 	log *log.Logger
 }
@@ -36,6 +37,11 @@ func NewRemover(client *Client, timeout time.Duration, control Control) *Remover
 		control: control,
 		log:     log.New(os.Stderr, "[cluster-remove] ", log.LstdFlags),
 	}
+}
+
+// SetCredentials sets the credentials for the Remover.
+func (r *Remover) SetCredentials(creds *Credentials) {
+	r.creds = creds
 }
 
 // Do executes the node-removal operation.
@@ -53,7 +59,7 @@ func (r *Remover) Do(id string, confirm bool) error {
 			}
 
 			r.log.Printf("removing node %s from cluster via leader at %s", id, laddr)
-			if innerErr = r.client.RemoveNode(rn, laddr, nil, r.timeout); innerErr != nil {
+			if innerErr = r.client.RemoveNode(rn, laddr, r.creds, r.timeout); innerErr != nil {
 				r.log.Printf("failed to remove node %s from cluster via leader at %s: %s", id, laddr, innerErr)
 				return innerErr
 			}
