@@ -20,8 +20,8 @@ type cFrame struct {
 type cFrames []*cFrame
 
 func (c cFrames) Len() int           { return len(c) }
-func (c cFrames) Less(i, j int) bool { return c[uint32(i)].Offset < c[uint32(j)].Offset }
-func (c cFrames) Swap(i, j int)      { c[uint32(i)], c[uint32(j)] = c[uint32(j)], c[uint32(i)] }
+func (c cFrames) Less(i, j int) bool { return c[i].Offset < c[j].Offset }
+func (c cFrames) Swap(i, j int)      { c[i], c[j] = c[j], c[i] }
 
 // CompactingScanner implements WALIterator to iterate over frames in a WAL file.
 // It also compacts the WAL file, with Next() returning the last valid frame for each
