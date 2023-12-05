@@ -1008,9 +1008,11 @@ func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQuery
 }
 
 // Backup writes a consistent snapshot of the database to the given file.
-// The resultant SQLite database file will be in DELETE mode. This function
-// can be called when changes to the database are in flight.
-func (db *DB) Backup(path string) error {
+// The resultant SQLite database file will be in DELETE mode. If vacuum is
+// true, the consistent snapshot will have the VACUUM command run on it
+// before the function returns. This function can be called when changes
+// to the database are in flight.
+func (db *DB) Backup(path string, vacuum bool) error {
 	dstDB, err := Open(path, false, false)
 	if err != nil {
 		return err
@@ -1025,6 +1027,13 @@ func (db *DB) Backup(path string) error {
 	_, err = dstDB.ExecuteStringStmt("PRAGMA journal_mode=DELETE")
 	if err != nil {
 		return err
+	}
+
+	if vacuum {
+		_, err = dstDB.ExecuteStringStmt("VACUUM")
+		if err != nil {
+			return err
+		}
 	}
 
 	return dstDB.Close()
