@@ -183,7 +183,9 @@ jobs:
       - run: go install -tags osusergo,netgo,sqlite_omit_load_extension
           -ldflags="-extldflags=-static" ./...
       - run:
-          command: python3 system_test/e2e/upgrade.py
+          command: |
+            cd system_test/e2e
+            python3 upgrade.py
           environment:
             RQLITED_PATH: /home/circleci/go/bin/rqlited
     resource_class: large
