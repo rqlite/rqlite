@@ -27,7 +27,7 @@ class TestUpgrade_v7(unittest.TestCase):
 
     # Check that each node has the right data.
     for n in self.cluster.nodes:
-      self.assertEqual(n.query('SELECT COUNT(*) FROM foo', level='none'), d_("{'results': [{'values': [[28]], 'types': ['integer'], 'columns': ['COUNT(*)']}]}"))
+      self.assertEqual(n.query('SELECT COUNT(*) FROM foo', level='none'), d_("{'results': [{'values': [[29]], 'types': ['integer'], 'columns': ['COUNT(*)']}]}"))
 
   def tearDown(self):
     self.cluster.deprovision()
