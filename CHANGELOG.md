@@ -1,16 +1,16 @@
-## 8.0.0 (unreleased)
-_Not yet ready for production use._
-
-Release 8.0.0 is in active development, with the goal of supporting much larger data sets, into the 10GB+ range (and hopefully much larger), while keeping its focus on simplicity, ease-of-operation, high quality, and performance.
+## 8.0.0 (December 5th 2023)
+This release introduces support for much larger data sets. Previously
 
 **Upgrading from the 7.x release**
 
-When officially released 8.0 will support (mostly) seamless upgrades from the 7.x series. However until the official release you must follow these steps to upgrade from 7.x:
+Release 8.0 supports (mostly) seamless upgrades from the 7.x series, and upgrading from 7.x has been tested. However, it is still strongly recommended you backup any production cluster before attempting an upgrade. A more conservative approach would be to create a brand new 8.0 system, and load your backup into that cluster. Then switch production traffic over to the new 8.0 cluster.
 
-- Backup your data and load it into a new 8.0 system.
+8.0 and 7.x nodes should be able to interoperate, so a rolling upgrade should work fine. Again, it is strongly recommended you test this first. However it is not recommended that you run a cluster with a mix of 7.x and 8.0 code for any significant length of time, just the time required for a rolling upgrade.
+
+**Changes in the 8.0 release**
 - 8.0 always runs with an on-disk database, in-memory databases are no longer supported. Improvements made late in the 7.0 series means there is little difference in write performance between in-memory and on-disk modes, but supporting both modes just means confusion and higher development costs. If you were previously running in in-memory mode (the default), you don't need to do anything. But if you were previously passing `-on-disk` to `rqlited` so that rqlite ran in on-disk mode, you must now remove that flag.
 - A few rarely, if ever, used `rqlited` command-line flags have been removed. These flags just added operational overhead, while adding little value.
-- When forming a new cluster using 8.0, pass the **Raft** addresss of the remote node to the `-join` command, not the HTTP API address.
+- When forming a new cluster using 8.0, pass the **Raft** addresss of the remote node to the `-join` command, not the HTTP API address. If you cluster is already formed, you do not need to do anything.
 
 ### New features
 - [PR #1362](https://github.com/rqlite/rqlite/pull/1362): Enable SQLite [FTS5](https://www.sqlite.org/fts5.html). Fixes [issue #1361](https://github.com/rqlite/rqlite/issues/1361)
