@@ -2,7 +2,7 @@ package backup
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"os"
 
 	"github.com/rqlite/rqlite/auto"
@@ -14,6 +14,7 @@ type Config struct {
 	Version    int              `json:"version"`
 	Type       auto.StorageType `json:"type"`
 	NoCompress bool             `json:"no_compress,omitempty"`
+	Vacuum     bool             `json:"vacuum,omitempty"`
 	Interval   auto.Duration    `json:"interval"`
 	Sub        json.RawMessage  `json:"sub"`
 }
@@ -47,7 +48,7 @@ func ReadConfigFile(filename string) ([]byte, error) {
 	}
 	defer f.Close()
 
-	data, err := ioutil.ReadAll(f)
+	data, err := io.ReadAll(f)
 	if err != nil {
 		return nil, err
 	}

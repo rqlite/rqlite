@@ -550,6 +550,12 @@ func (db *DB) GetCheckpointing() (int, error) {
 	return rwN, err
 }
 
+// Vacuum runs a VACUUM on the database.
+func (db *DB) Vacuum() error {
+	_, err := db.rwDB.Exec("VACUUM")
+	return err
+}
+
 // SetSynchronousMode sets the synchronous mode of the database.
 func (db *DB) SetSynchronousMode(mode string) error {
 	if mode != "OFF" && mode != "NORMAL" && mode != "FULL" && mode != "EXTRA" {
@@ -1010,7 +1016,7 @@ func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQuery
 // Backup writes a consistent snapshot of the database to the given file.
 // The resultant SQLite database file will be in DELETE mode. This function
 // can be called when changes to the database are in flight.
-func (db *DB) Backup(path string) error {
+func (db *DB) Backup(path string, vacuum bool) error {
 	dstDB, err := Open(path, false, false)
 	if err != nil {
 		return err
@@ -1025,6 +1031,12 @@ func (db *DB) Backup(path string) error {
 	_, err = dstDB.ExecuteStringStmt("PRAGMA journal_mode=DELETE")
 	if err != nil {
 		return err
+	}
+
+	if vacuum {
+		if dstDB.Vacuum(); err != nil {
+			return err
+		}
 	}
 
 	return dstDB.Close()
@@ -1056,7 +1068,7 @@ func (db *DB) Serialize() ([]byte, error) {
 		defer os.Remove(tmpFile.Name())
 		defer tmpFile.Close()
 
-		if err := db.Backup(tmpFile.Name()); err != nil {
+		if err := db.Backup(tmpFile.Name(), false); err != nil {
 			return nil, err
 		}
 		newDB, err := Open(tmpFile.Name(), db.fkEnabled, false)
