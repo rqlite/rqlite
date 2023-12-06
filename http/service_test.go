@@ -1293,6 +1293,10 @@ func (m *MockStore) LoadChunk(lc *command.LoadChunkRequest) error {
 	return nil
 }
 
+func (m *MockStore) Watch(index uint64) (lastIndex uint64, statemets []*command.Statement, err error) {
+	return
+}
+
 type mockClusterService struct {
 	apiAddr      string
 	executeFn    func(er *command.ExecuteRequest, addr string, t time.Duration) ([]*command.ExecuteResult, error)

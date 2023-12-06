@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"context"
 	"crypto/tls"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"expvar"
@@ -89,6 +90,9 @@ type Store interface {
 
 	// Backup writes backup of the node state to dst
 	Backup(br *command.BackupRequest, dst io.Writer) error
+
+	// Watch query raft log
+	Watch(index uint64) (lastIndex uint64, statemets []*command.Statement, err error)
 }
 
 // GetAddresser is the interface that wraps the GetNodeAPIAddr method.
@@ -1561,6 +1565,76 @@ func (s *Service) handlePprof(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// handleWatch serves watch raft log
+func (s *Service) handleWatch(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+	if !s.CheckRequestPerm(r, auth.PermWatch) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method != "GET" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	index, err := indexParam(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	index, statements, err := s.store.Watch(index)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	var resp = struct {
+		Index      uint64          `json:"index"`
+		Statements [][]interface{} `json:"statements,omitempty"`
+	}{
+		Index: index,
+	}
+
+	for _, stmt := range statements {
+		args, err := db.ParametersToValues(stmt.Parameters)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		var statement []interface{}
+		statement = append(statement, stmt.Sql)
+		for _, arg := range args {
+			statement = append(statement, arg.(sql.NamedArg).Value)
+		}
+
+		resp.Statements = append(resp.Statements, statement)
+	}
+
+	pretty, _ := isPretty(r)
+	var b []byte
+	if pretty {
+		b, err = json.MarshalIndent(resp, "", "    ")
+	} else {
+		b, err = json.Marshal(resp)
+	}
+	if err != nil {
+		http.Error(w, fmt.Sprintf("JSON marshal: %s", err.Error()),
+			http.StatusInternalServerError)
+		return
+	}
+
+	_, err = w.Write(b)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("write: %s", err.Error()),
+			http.StatusInternalServerError)
+		return
+	}
+}
+
 // Addr returns the address on which the Service is listening
 func (s *Service) Addr() net.Addr {
 	return s.ln.Addr()
@@ -1852,6 +1926,12 @@ func isRedirect(req *http.Request) (bool, error) {
 func keyParam(req *http.Request) string {
 	q := req.URL.Query()
 	return strings.TrimSpace(q.Get("key"))
+}
+
+func indexParam(req *http.Request) (uint64, error) {
+	q := req.URL.Query()
+	i := strings.TrimSpace(q.Get("index"))
+	return strconv.ParseUint(i, 10, 64)
 }
 
 func getSubJSON(jsonBlob []byte, keyString string) (json.RawMessage, error) {

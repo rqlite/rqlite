@@ -1798,6 +1798,79 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 	return nil
 }
 
+func (s *Store) Watch(index uint64) (lastIndex uint64, statemets []*command.Statement, err error) {
+	lastIndex, err = s.raftLog.LastIndex()
+	if err != nil {
+		lastIndex = index
+		return
+	}
+
+	if index == 0 || index > lastIndex {
+		return
+	}
+
+	after := time.After(time.Minute)
+	ticker := time.NewTicker(time.Millisecond * 10)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-after:
+			return
+		case <-ticker.C:
+			lastIndex, err = s.raftLog.LastIndex()
+			if err != nil {
+				lastIndex = index
+				return
+			}
+
+			for i := index + 1; i <= lastIndex; i++ {
+				var log raft.Log
+				if err = s.raftLog.GetLog(i, &log); err != nil {
+					err = nil
+					return
+				}
+				if log.Type != raft.LogCommand {
+					continue
+				}
+
+				var c command.Command
+				if err = command.Unmarshal(log.Data, &c); err != nil {
+					err = fmt.Errorf("failed to unmarshal command: %s", err.Error())
+					return
+				}
+
+				switch c.Type {
+				case command.Command_COMMAND_TYPE_EXECUTE:
+					var er command.ExecuteRequest
+					if err = command.UnmarshalSubCommand(&c, &er); err != nil {
+						err = fmt.Errorf("failed to unmarshal execute subcommand: %s", err.Error())
+						return
+					}
+					statemets = append(statemets, er.Request.Statements...)
+				case command.Command_COMMAND_TYPE_EXECUTE_QUERY:
+					var eqr command.ExecuteQueryRequest
+					if err = command.UnmarshalSubCommand(&c, &eqr); err != nil {
+						err = fmt.Errorf("failed to unmarshal execute and query subcommand: %s", err.Error())
+						return
+					}
+					statemets = append(statemets, eqr.Request.Statements...)
+				default:
+					continue
+				}
+
+				if len(statemets) >= 100 {
+					lastIndex = i
+					break
+				}
+			}
+
+			if len(statemets) > 0 {
+				return
+			}
+		}
+	}
+}
+
 // RegisterObserver registers an observer of Raft events
 func (s *Store) RegisterObserver(o *raft.Observer) {
 	s.raft.RegisterObserver(o)
