@@ -61,6 +61,10 @@ var (
 	// ErrInvalidBackupFormat is returned when the requested backup format
 	// is not valid.
 	ErrInvalidBackupFormat = errors.New("invalid backup format")
+
+	// ErrInvalidVacuumFormat is returned when the requested backup format is not
+	// compatible with vacuum.
+	ErrInvalidVacuum = errors.New("invalid vacuum")
 )
 
 const (
@@ -1133,6 +1137,10 @@ func (s *Store) Backup(br *command.BackupRequest, dst io.Writer) (retErr error) 
 		return ErrNotOpen
 	}
 
+	if br.Vacuum && br.Format != command.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY {
+		return ErrInvalidBackupFormat
+	}
+
 	startT := time.Now()
 	defer func() {
 		if retErr == nil {
@@ -1155,7 +1163,7 @@ func (s *Store) Backup(br *command.BackupRequest, dst io.Writer) (retErr error) 
 		}
 		defer os.Remove(f.Name())
 
-		if err := s.db.Backup(f.Name(), false); err != nil {
+		if err := s.db.Backup(f.Name(), br.Vacuum); err != nil {
 			return err
 		}
 

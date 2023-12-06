@@ -620,6 +620,12 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	vacuum, err := isVacuum(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	timeout, err := timeoutParam(r, defaultTimeout)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -629,6 +635,7 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
 	br := &command.BackupRequest{
 		Format: format,
 		Leader: !noLeader,
+		Vacuum: vacuum,
 	}
 
 	err = s.store.Backup(br, w)
@@ -675,6 +682,9 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			stats.Add(numRemoteBackups, 1)
+			return
+		} else if err == store.ErrInvalidVacuum {
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -1826,6 +1836,11 @@ func verParam(req *http.Request) (string, error) {
 // isPretty returns whether the HTTP response body should be pretty-printed.
 func isPretty(req *http.Request) (bool, error) {
 	return queryParam(req, "pretty")
+}
+
+// isVacuum returns whether the HTTP request is requesting a vacuum.
+func isVacuum(req *http.Request) (bool, error) {
+	return queryParam(req, "vacuum")
 }
 
 // isRedirect returns whether the HTTP request is requesting a explicit
