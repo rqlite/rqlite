@@ -550,6 +550,12 @@ func (db *DB) GetCheckpointing() (int, error) {
 	return rwN, err
 }
 
+// Vacuum runs a VACUUM on the database.
+func (db *DB) Vacuum() error {
+	_, err := db.rwDB.Exec("VACUUM")
+	return err
+}
+
 // SetSynchronousMode sets the synchronous mode of the database.
 func (db *DB) SetSynchronousMode(mode string) error {
 	if mode != "OFF" && mode != "NORMAL" && mode != "FULL" && mode != "EXTRA" {

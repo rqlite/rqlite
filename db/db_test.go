@@ -54,10 +54,7 @@ func Test_DBPaths(t *testing.T) {
 	}
 }
 
-// Test_TableCreation tests basic operation of an in-memory database,
-// ensuring that using different connection objects (as the Execute and Query
-// will do) works properly i.e. that the connections object work on the same
-// in-memory database.
+// Test_TableCreation tests basic operation of an database
 func Test_TableCreation(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
 	defer db.Close()
@@ -71,18 +68,34 @@ func Test_TableCreation(t *testing.T) {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
 
-	q, err := db.QueryStringStmt("SELECT * FROM foo")
-	if err != nil {
-		t.Fatalf("failed to query empty table: %s", err.Error())
-	}
-	if exp, got := `[{"columns":["id","name"],"types":["integer","text"]}]`, asJSON(q); exp != got {
-		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	testQ := func() {
+		t.Helper()
+		q, err := db.QueryStringStmt("SELECT * FROM foo")
+		if err != nil {
+			t.Fatalf("failed to query empty table: %s", err.Error())
+		}
+		if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(q); exp != got {
+			t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+		}
 	}
 
-	// Confirm checkpoint works without error on an in-memory database. It should just be ignored.
-	if err := db.Checkpoint(); err != nil {
-		t.Fatalf("failed to checkpoint in-memory database: %s", err.Error())
+	_, err = db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("fiona")`)
+	if err != nil {
+		t.Fatalf("error executing insertion into table: %s", err.Error())
 	}
+	testQ()
+
+	// Confirm checkpoint works without error.
+	if err := db.Checkpoint(); err != nil {
+		t.Fatalf("failed to checkpoint database: %s", err.Error())
+	}
+	testQ()
+
+	// Check that VACUUM returns without error.
+	if err := db.Vacuum(); err != nil {
+		t.Fatalf("failed to VACUUM database: %s", err.Error())
+	}
+	testQ()
 }
 
 // Test_TableCreationFK ensures foreign key constraints work
