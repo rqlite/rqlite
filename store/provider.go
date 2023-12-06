@@ -17,14 +17,8 @@ func NewProvider(s *Store, v bool) *Provider {
 
 // Provider writes the SQLite database to the given path.
 func (p *Provider) Provide(path string) error {
-	if err := p.str.db.Backup(path); err != nil {
+	if err := p.str.db.Backup(path, p.vacuum); err != nil {
 		return err
-	}
-
-	if p.vacuum {
-		if err := p.str.db.Vacuum(); err != nil {
-			return err
-		}
 	}
 	stats.Add(numProvides, 1)
 	return nil

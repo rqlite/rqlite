@@ -1439,67 +1439,69 @@ func testCopy(t *testing.T, db *DB) {
 }
 
 func testBackup(t *testing.T, db *DB) {
-	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
-	if err != nil {
-		t.Fatalf("failed to create table: %s", err.Error())
-	}
-	_, err = db.ExecuteStringStmt("CREATE TABLE baz (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
-	if err != nil {
-		t.Fatalf("failed to create table: %s", err.Error())
-	}
+	for _, vacuum := range []bool{false, true} {
+		_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
+		if err != nil {
+			t.Fatalf("failed to create table: %s", err.Error())
+		}
+		_, err = db.ExecuteStringStmt("CREATE TABLE baz (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
+		if err != nil {
+			t.Fatalf("failed to create table: %s", err.Error())
+		}
 
-	req := &command.Request{
-		Transaction: true,
-		Statements: []*command.Statement{
-			{
-				Sql: `INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+		req := &command.Request{
+			Transaction: true,
+			Statements: []*command.Statement{
+				{
+					Sql: `INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+				},
+				{
+					Sql: `INSERT INTO foo(id, name) VALUES(2, "fiona")`,
+				},
+				{
+					Sql: `INSERT INTO foo(id, name) VALUES(3, "fiona")`,
+				},
+				{
+					Sql: `INSERT INTO foo(id, name) VALUES(4, "fiona")`,
+				},
 			},
-			{
-				Sql: `INSERT INTO foo(id, name) VALUES(2, "fiona")`,
-			},
-			{
-				Sql: `INSERT INTO foo(id, name) VALUES(3, "fiona")`,
-			},
-			{
-				Sql: `INSERT INTO foo(id, name) VALUES(4, "fiona")`,
-			},
-		},
-	}
-	_, err = db.Execute(req, false)
-	if err != nil {
-		t.Fatalf("failed to insert records: %s", err.Error())
-	}
+		}
+		_, err = db.Execute(req, false)
+		if err != nil {
+			t.Fatalf("failed to insert records: %s", err.Error())
+		}
 
-	dstDB := mustTempFile()
-	defer os.Remove(dstDB)
+		dstDB := mustTempFile()
+		defer os.Remove(dstDB)
 
-	err = db.Backup(dstDB)
-	if err != nil {
-		t.Fatalf("failed to backup database: %s", err.Error())
-	}
-	if !IsDELETEModeEnabledSQLiteFile(dstDB) {
-		t.Fatalf("Backup file not marked in DELETE mode")
-	}
+		err = db.Backup(dstDB, vacuum)
+		if err != nil {
+			t.Fatalf("failed to backup database: %s", err.Error())
+		}
+		if !IsDELETEModeEnabledSQLiteFile(dstDB) {
+			t.Fatalf("Backup file not marked in DELETE mode")
+		}
 
-	newDB, err := Open(dstDB, false, false)
-	if err != nil {
-		t.Fatalf("failed to open backup database: %s", err.Error())
-	}
-	defer newDB.Close()
-	defer os.Remove(dstDB)
-	ro, err := newDB.QueryStringStmt(`SELECT * FROM foo`)
-	if err != nil {
-		t.Fatalf("failed to query table: %s", err.Error())
-	}
-	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"],[2,"fiona"],[3,"fiona"],[4,"fiona"]]}]`, asJSON(ro); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-	}
-	ro, err = newDB.QueryStringStmt(`SELECT name FROM sqlite_master`)
-	if err != nil {
-		t.Fatalf("failed to query table: %s", err.Error())
-	}
-	if exp, got := `[{"columns":["name"],"types":["text"],"values":[["foo"],["baz"]]}]`, asJSON(ro); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+		newDB, err := Open(dstDB, false, false)
+		if err != nil {
+			t.Fatalf("failed to open backup database: %s", err.Error())
+		}
+		defer newDB.Close()
+		defer os.Remove(dstDB)
+		ro, err := newDB.QueryStringStmt(`SELECT * FROM foo`)
+		if err != nil {
+			t.Fatalf("failed to query table: %s", err.Error())
+		}
+		if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"],[2,"fiona"],[3,"fiona"],[4,"fiona"]]}]`, asJSON(ro); exp != got {
+			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+		}
+		ro, err = newDB.QueryStringStmt(`SELECT name FROM sqlite_master`)
+		if err != nil {
+			t.Fatalf("failed to query table: %s", err.Error())
+		}
+		if exp, got := `[{"columns":["name"],"types":["text"],"values":[["foo"],["baz"]]}]`, asJSON(ro); exp != got {
+			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+		}
 	}
 }
 

@@ -129,6 +129,7 @@ func TestUnmarshal(t *testing.T) {
 					"access_key_id": "test_id",
 					"secret_access_key": "test_secret",
 					"region": "us-west-2",
+					"vacuum": true,
 					"bucket": "test_bucket",
 					"path": "test/path"
 				}
@@ -138,6 +139,7 @@ func TestUnmarshal(t *testing.T) {
 				Version:    1,
 				Type:       "s3",
 				NoCompress: true,
+				Vacuum:     true,
 				Interval:   24 * auto.Duration(time.Hour),
 			},
 			expectedS3: &aws.S3Config{
@@ -156,6 +158,7 @@ func TestUnmarshal(t *testing.T) {
                                 "version": 1,
                                 "type": "s3",
                                 "interval": "24h",
+                                "vacuum": false,
                                 "sub": {
                                         "access_key_id": "test_id",
                                         "secret_access_key": "test_secret",
@@ -170,6 +173,7 @@ func TestUnmarshal(t *testing.T) {
 				Type:       "s3",
 				NoCompress: false,
 				Interval:   24 * auto.Duration(time.Hour),
+				Vacuum:     false,
 			},
 			expectedS3: &aws.S3Config{
 				AccessKeyID:     "test_id",
