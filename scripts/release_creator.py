@@ -38,14 +38,8 @@ cd rqlite-{release}-linux-amd64
 ```
 
 ### macOS
-
-To download and start rqlite on macOS, execute the following in a shell.
-
 ```
-curl -L https://github.com/rqlite/rqlite/releases/download/{release}/rqlite-{release}-darwin-amd64.tar.gz -o rqlite-{release}-darwin-amd64.tar.gz
-tar xvfz rqlite-{release}-darwin-amd64.tar.gz
-cd rqlite-{release}-darwin-amd64
-./rqlited ~/node.1
+homebrew rqlite
 ```
 
 #### Homebrew
