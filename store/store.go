@@ -61,6 +61,10 @@ var (
 	// ErrInvalidBackupFormat is returned when the requested backup format
 	// is not valid.
 	ErrInvalidBackupFormat = errors.New("invalid backup format")
+
+	// ErrInvalidVacuumFormat is returned when the requested backup format is not
+	// compatible with vacuum.
+	ErrInvalidVacuum = errors.New("invalid vacuum")
 )
 
 const (
@@ -1131,6 +1135,10 @@ func (s *Store) Request(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQue
 func (s *Store) Backup(br *command.BackupRequest, dst io.Writer) (retErr error) {
 	if !s.open {
 		return ErrNotOpen
+	}
+
+	if br.Vacuum && br.Format != command.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY {
+		return ErrInvalidBackupFormat
 	}
 
 	startT := time.Now()

@@ -626,11 +626,6 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if format == command.BackupRequest_BACKUP_REQUEST_FORMAT_SQL && vacuum {
-		http.Error(w, "vacuum not supported for SQL format", http.StatusBadRequest)
-		return
-	}
-
 	timeout, err := timeoutParam(r, defaultTimeout)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -687,6 +682,9 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			stats.Add(numRemoteBackups, 1)
+			return
+		} else if err == store.ErrInvalidVacuum {
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
