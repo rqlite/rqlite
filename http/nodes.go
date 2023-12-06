@@ -23,6 +23,7 @@ type Node struct {
 	Reachable bool    `json:"reachable"`
 	Leader    bool    `json:"leader"`
 	Time      float64 `json:"time,omitempty"`
+	TimeS     string  `json:"time_s,omitempty"`
 	Error     string  `json:"error,omitempty"`
 
 	mu sync.Mutex
@@ -42,6 +43,7 @@ func NewNodeFromServer(s *store.Server) *Node {
 func (n *Node) Test(ga GetAddresser, leaderAddr string, timeout time.Duration) {
 	start := time.Now()
 	n.Time = time.Since(start).Seconds()
+	n.TimeS = time.Since(start).String()
 	n.Reachable = false
 	n.Leader = false
 
