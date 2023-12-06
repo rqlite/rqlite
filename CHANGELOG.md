@@ -1,4 +1,4 @@
-## 8.0.0 (unreleased)
+## 8.0.0 (December 5th 2023)
 This release introduces support for much larger data sets. Previously the [Raft snapshotting](https://raft.github.io/) process became more memory intensive and time-consuming as the SQLite database became larger. This set an practical upper limit on the size of the SQLite database. With the 8.0 release rqlite has been fundamentally redesigned such that snapshotting consumes approximately the same amount of resources, regardless of the size of the SQLite database.
 
 This release also eases operations, as well as adding new features and bug fixes.
@@ -11,7 +11,7 @@ Release 8.0 supports (mostly) seamless upgrades from the 7.x series, and upgradi
 
 Important things to note if you decide to upgrade an existing 7.x system:
 - 8.0 always runs with an on-disk database, in-memory databases are no longer supported. Improvements made late in the 7.0 series means there is little difference in write performance between in-memory and on-disk modes, but supporting both modes just meant confusion and higher development costs. If you were previously running in in-memory mode (the previous default), you don't need to do anything. But if you were previously passing `-on-disk` to `rqlited` so that rqlite ran in on-disk mode, you must now remove that flag.
-- When forming a new cluster using 8.0, pass the **Raft** addresss of the remote node to the `-join` command, not the HTTP API address. If your cluster is already formed, upgrades will work fine.
+- When forming a new cluster using 8.0, pass the **Raft** addresss of the remote node to the `-join` command, not the HTTP API address. If your cluster is already formed, upgrades will work without changing anything (`-join` options are ignored if nodes are already members of a cluster). You may need to change any scripting or automatic-configuration generation however.
 - A few rarely, if ever, used `rqlited` command-line flags have been removed. These flags just added operational overhead, while adding little value.
 
 ### New features
