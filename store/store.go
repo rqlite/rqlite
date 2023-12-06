@@ -1155,7 +1155,7 @@ func (s *Store) Backup(br *command.BackupRequest, dst io.Writer) (retErr error) 
 		}
 		defer os.Remove(f.Name())
 
-		if err := s.db.Backup(f.Name(), false); err != nil {
+		if err := s.db.Backup(f.Name(), br.Vacuum); err != nil {
 			return err
 		}
 

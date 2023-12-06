@@ -494,6 +494,41 @@ func Test_BackupOK(t *testing.T) {
 	}
 }
 
+func Test_BackupVacuumOK(t *testing.T) {
+	m := &MockStore{}
+	c := &mockClusterService{}
+	s := New("127.0.0.1:0", m, c, nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	m.backupFn = func(br *command.BackupRequest, dst io.Writer) error {
+		if !br.Vacuum {
+			t.Fatal("expected vacuum to be true")
+		}
+		return nil
+	}
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+
+	resp, err := client.Get(host + "/db/backup?vacuum")
+	if err != nil {
+		t.Fatalf("failed to make backup request")
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("failed to get expected StatusOK for backup, got %d", resp.StatusCode)
+	}
+	resp, err = client.Get(host + "/db/backup?vacuum&fmt=binary")
+	if err != nil {
+		t.Fatalf("failed to make backup request")
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("failed to get expected StatusOK for backup, got %d", resp.StatusCode)
+	}
+}
+
 func Test_BackupFlagsNoLeaderRedirect(t *testing.T) {
 	m := &MockStore{}
 	c := &mockClusterService{
@@ -602,6 +637,30 @@ func Test_BackupFlagsNoLeaderOK(t *testing.T) {
 	}
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("failed to get expected StatusOK for backup, got %d", resp.StatusCode)
+	}
+}
+
+func Test_BackupFlagsInvalid(t *testing.T) {
+	m := &MockStore{}
+	c := &mockClusterService{
+		apiAddr: "http://1.2.3.4:999",
+	}
+
+	s := New("127.0.0.1:0", m, c, nil)
+
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+	resp, err := client.Get(host + "/db/backup?fmt=sql&vacuum")
+	if err != nil {
+		t.Fatalf("failed to make backup request")
+	}
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("failed to get expected StatusBadRequest for backup, got %d", resp.StatusCode)
 	}
 }
 
