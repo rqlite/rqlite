@@ -653,6 +653,13 @@ func Test_BackupFlagsInvalid(t *testing.T) {
 	}
 	defer s.Close()
 
+	m.backupFn = func(br *command.BackupRequest, dst io.Writer) error {
+		if br.Vacuum && br.Format == command.BackupRequest_BACKUP_REQUEST_FORMAT_SQL {
+			return store.ErrInvalidVacuum
+		}
+		return nil
+	}
+
 	client := &http.Client{}
 	host := fmt.Sprintf("http://%s", s.Addr().String())
 	resp, err := client.Get(host + "/db/backup?fmt=sql&vacuum")
