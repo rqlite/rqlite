@@ -1173,16 +1173,6 @@ func (s *Store) Backup(br *command.BackupRequest, dst io.Writer) (retErr error) 
 	return ErrInvalidBackupFormat
 }
 
-// Provide implements the uploader Provider interface, allowing the
-// Store to be used as a DataProvider for an uploader.
-func (s *Store) Provide(path string) error {
-	if err := s.db.Backup(path); err != nil {
-		return err
-	}
-	stats.Add(numProvides, 1)
-	return nil
-}
-
 // LoadFromReader reads data from r chunk-by-chunk, and loads it into the
 // database.
 func (s *Store) LoadFromReader(r io.Reader, chunkSize int64) error {
