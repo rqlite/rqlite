@@ -20,6 +20,7 @@ When officially released 8.0 will support (mostly) seamless upgrades from the 7.
 - [PR #1427](https://github.com/rqlite/rqlite/pull/1427): Upgrade to SQLite 3.44.0.
 - [PR #1433](https://github.com/rqlite/rqlite/pull/1433): Support an optional better form for the `nodes/` output. Fixes [issue #1415](https://github.com/rqlite/rqlite/issues/1415)
 - [PR #1447](https://github.com/rqlite/rqlite/pull/1447): Remove-on-shutdown now supports authentication.
+- [PR #1451](https://github.com/rqlite/rqlite/pull/1451): Support optional `VACUUM` of SQLite database file before upload to Cloud storage.
   
 ### Implementation changes and bug fixes
 - [PR #1368](https://github.com/rqlite/rqlite/pull/1374): Switch to always-on expvar and pprof.
