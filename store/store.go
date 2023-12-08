@@ -1656,6 +1656,8 @@ func (s *Store) Apply(l *raft.Log) (e interface{}) {
 	switch cmd.Type {
 	case command.Command_COMMAND_TYPE_NOOP:
 		s.numNoops++
+	case command.Command_COMMAND_TYPE_LOAD:
+		s.snapshotTChan <- struct{}{}
 	case command.Command_COMMAND_TYPE_LOAD_CHUNK:
 		var lcr command.LoadChunkRequest
 		if err := command.UnmarshalLoadChunkRequest(cmd.SubCommand, &lcr); err != nil {
