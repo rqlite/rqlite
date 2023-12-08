@@ -1454,6 +1454,29 @@ func Test_SingleNodeLoadChunkBinaryReopen(t *testing.T) {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
+	// Close and re-open the store, and check one last time.
+	if err := s.Close(true); err != nil {
+		t.Fatalf("failed to close store: %s", err.Error())
+	}
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to re-open store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+	qr = queryRequestFromString("SELECT COUNT(*) FROM foo", false, true)
+	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	r, err = s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `["COUNT(*)"]`, asJSON(r[0].Columns); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[4]]`, asJSON(r[0].Values); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
 }
 
 // Test_SingleNodeLoadBinaryFromReader tests that a Store correctly loads data in SQLite

@@ -90,6 +90,7 @@ const (
 
 const (
 	numSnapshots              = "num_snapshots"
+	numUserSnapshots          = "num_user_snapshots"
 	numSnapshotsFull          = "num_snapshots_full"
 	numSnapshotsIncremental   = "num_snapshots_incremental"
 	numProvides               = "num_provides"
@@ -129,6 +130,7 @@ func init() {
 func ResetStats() {
 	stats.Init()
 	stats.Add(numSnapshots, 0)
+	stats.Add(numUserSnapshots, 0)
 	stats.Add(numSnapshotsFull, 0)
 	stats.Add(numSnapshotsIncremental, 0)
 	stats.Add(numProvides, 0)
@@ -1663,8 +1665,7 @@ func (s *Store) Apply(l *raft.Log) (e interface{}) {
 			if err := s.snapshotStore.SetFullNeeded(); err != nil {
 				return &fsmGenericResponse{error: fmt.Errorf("failed to SetFullNeeded post load: %s", err)}
 			}
-			// send a signal to the snapshot trigger channel. Due to Raft implementation we cannot
-			// send this signal from the Apply() function, as it will deadlock.
+			s.logger.Printf("last chunk loaded, forcing snapshot of database")
 			s.snapshotTChan <- struct{}{}
 		}
 	}
@@ -1909,7 +1910,8 @@ func (s *Store) observe() (closeCh, doneCh chan struct{}) {
 }
 
 // runSnapshotting runs the user-requested snapshotting, and returns the
-// trigger channel, the close channel, and the done channel.
+// trigger channel, the close channel, and the done channel. Unless Raft
+// triggered Snapshotting the log is also compacted after each snapshot.
 func (s *Store) runSnapshotting() (triggerT, closeCh, doneCh chan struct{}) {
 	closeCh = make(chan struct{})
 	doneCh = make(chan struct{})
@@ -1922,6 +1924,7 @@ func (s *Store) runSnapshotting() (triggerT, closeCh, doneCh chan struct{}) {
 				if err := s.raft.Snapshot().Error(); err != nil {
 					s.logger.Printf("failed to snapshot: %s", err.Error())
 				}
+				stats.Add(numUserSnapshots, 1)
 
 				// compact the log
 				lastLogIndex, err := s.boltStore.LastIndex()
@@ -1934,7 +1937,7 @@ func (s *Store) runSnapshotting() (triggerT, closeCh, doneCh chan struct{}) {
 					s.logger.Printf("failed to get first log index: %v", err)
 					continue
 				}
-				if err := s.boltStore.DeleteRange(firstLogIndex, lastLogIndex); err != nil {
+				if err := s.boltStore.DeleteRange(firstLogIndex, lastLogIndex-1); err != nil {
 					s.logger.Printf("log compaction failed: %v", err)
 					continue
 				}
