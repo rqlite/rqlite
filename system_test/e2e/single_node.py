@@ -186,6 +186,7 @@ class TestSingleNode(unittest.TestCase):
     ''' Test that a node can load a SQLite data set in binary format'''
     n = self.cluster.wait_for_leader()
     j = n.restore('system_test/e2e/testdata/1000-numbers.db', fmt='binary',chunk_kb=4)
+    self.assertEqual(n.expvar()['store']['num_snapshots'], 1)
     j = n.query('SELECT COUNT(*) from test')
     self.assertEqual(j, d_("{'results': [{'values': [[1000]], 'types': ['integer'], 'columns': ['COUNT(*)']}]}"))
 
