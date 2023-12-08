@@ -1,7 +1,6 @@
 ## 8.0.1 (unreleased)
 
 ### Implementation changes and bug fixes
-- [PR #1454](https://github.com/rqlite/rqlite/pull/1454): Reduce Raft snapshot threshold to 2048.
 - [PR #1456](https://github.com/rqlite/rqlite/pull/1456): Wrap Snaphot Store _FullNeeded_ logic in a function.
 - [PR #1457](https://github.com/rqlite/rqlite/pull/1457): Allow FullNeeded to be explicity set to true.
 - [PR #1458](https://github.com/rqlite/rqlite/pull/1458): Perform full snapshot after chunked load.
