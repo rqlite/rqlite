@@ -1652,24 +1652,27 @@ func (s *Store) Apply(l *raft.Log) (e interface{}) {
 		s.logger.Printf("first log applied since node start, log at index %d", l.Index)
 	}
 
+	snapshotNeeded := false
 	cmd, r := applyCommand(l.Data, &s.db, s.dechunkManager)
 	switch cmd.Type {
 	case command.Command_COMMAND_TYPE_NOOP:
 		s.numNoops++
 	case command.Command_COMMAND_TYPE_LOAD:
-		s.snapshotTChan <- struct{}{}
+		snapshotNeeded = true
 	case command.Command_COMMAND_TYPE_LOAD_CHUNK:
 		var lcr command.LoadChunkRequest
 		if err := command.UnmarshalLoadChunkRequest(cmd.SubCommand, &lcr); err != nil {
 			panic(fmt.Sprintf("failed to unmarshal load-chunk subcommand: %s", err.Error()))
 		}
-		if lcr.IsLast {
-			if err := s.snapshotStore.SetFullNeeded(); err != nil {
-				return &fsmGenericResponse{error: fmt.Errorf("failed to SetFullNeeded post load: %s", err)}
-			}
-			s.logger.Printf("last chunk loaded, forcing snapshot of database")
-			s.snapshotTChan <- struct{}{}
+		snapshotNeeded = lcr.IsLast
+	}
+
+	if snapshotNeeded {
+		if err := s.snapshotStore.SetFullNeeded(); err != nil {
+			return &fsmGenericResponse{error: fmt.Errorf("failed to SetFullNeeded post load: %s", err)}
 		}
+		s.logger.Printf("last chunk loaded, forcing snapshot of database")
+		s.snapshotTChan <- struct{}{}
 	}
 	return r
 }
