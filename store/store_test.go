@@ -1317,6 +1317,8 @@ COMMIT;
 	// Chunked loading should trigger a snapshot, so check that the snapshot
 	// exists. Check that numSnapshots is 1
 	testPoll(t, func() bool {
+		s.numSnapshotsMu.Lock()
+		defer s.numSnapshotsMu.Unlock()
 		return s.numSnapshots == numSnapshots+1
 	}, 100*time.Millisecond, 3*time.Second)
 
@@ -1403,6 +1405,8 @@ func Test_SingleNodeLoadChunkBinaryReopen(t *testing.T) {
 	// Chunked loading should trigger a snapshot, so check that the snapshot
 	// exists. Check that numSnapshots is 1
 	testPoll(t, func() bool {
+		s.numSnapshotsMu.Lock()
+		defer s.numSnapshotsMu.Unlock()
 		return s.numSnapshots == numSnapshots+1
 	}, 100*time.Millisecond, 3*time.Second)
 
