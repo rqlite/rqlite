@@ -1277,6 +1277,19 @@ func (s *Store) loadChunk(lcr *command.LoadChunkRequest) error {
 		if err := s.raft.Snapshot().Error(); err != nil {
 			return fmt.Errorf("failed to force snapshot: %s", err.Error())
 		}
+
+		// Compact the log so we don't have to keep around all the chunked data.
+		lastLogIndex, err := s.boltStore.LastIndex()
+		if err != nil {
+			return fmt.Errorf("failed to find last log: %v", err)
+		}
+		firstLogIndex, err := s.boltStore.FirstIndex()
+		if err != nil {
+			return fmt.Errorf("failed to get first log index: %v", err)
+		}
+		if err := s.boltStore.DeleteRange(firstLogIndex, lastLogIndex); err != nil {
+			return fmt.Errorf("log compaction failed: %v", err)
+		}
 	}
 
 	return nil

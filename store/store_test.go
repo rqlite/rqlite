@@ -1416,6 +1416,26 @@ func Test_SingleNodeLoadChunkBinaryReopen(t *testing.T) {
 	if exp, got := `[[3]]`, asJSON(r[0].Values); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
+
+	// Insert one more row to be sure everything is still working.
+	er := executeRequestFromString("INSERT INTO foo VALUES(4, 'bob')", false, true)
+	_, err = s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to insert into foo: %s", err.Error())
+	}
+	qr = queryRequestFromString("SELECT COUNT(*) FROM foo", false, true)
+	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	r, err = s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `["COUNT(*)"]`, asJSON(r[0].Columns); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[4]]`, asJSON(r[0].Values); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
 }
 
 // Test_SingleNodeLoadBinaryFromReader tests that a Store correctly loads data in SQLite
