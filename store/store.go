@@ -159,6 +159,9 @@ func ResetStats() {
 type SnapshotStore interface {
 	raft.SnapshotStore
 
+	// FullNeeded returns true if a full snapshot is needed.
+	FullNeeded() (bool, error)
+
 	// Stats returns stats about the Snapshot Store.
 	Stats() (map[string]interface{}, error)
 }
@@ -1668,12 +1671,10 @@ func (s *Store) Database(leader bool) ([]byte, error) {
 func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 	startT := time.Now()
 
-	currSnaps, err := s.snapshotStore.List()
+	fullNeeded, err := s.snapshotStore.FullNeeded()
 	if err != nil {
 		return nil, err
 	}
-	fullNeeded := len(currSnaps) == 0
-
 	fPLog := fullPretty(fullNeeded)
 	s.logger.Printf("initiating %s snapshot on node ID %s", fPLog, s.raftID)
 	defer func() {
