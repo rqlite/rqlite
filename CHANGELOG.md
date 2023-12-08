@@ -2,6 +2,7 @@
 
 ### Implementation changes and bug fixes
 - [PR #1454](https://github.com/rqlite/rqlite/pull/1454): Reduce Raft snapshot threshold to 2048.
+- [PR #1456](https://github.com/rqlite/rqlite/pull/1456): Wrap Snaphot Store _FullNeeded_ logic in a function.
 
 ## 8.0.0 (December 5th 2023)
 This release introduces support for much larger data sets. Previously the [Raft snapshotting](https://raft.github.io/) process became more memory intensive and time-consuming as the SQLite database became larger. This set an practical upper limit on the size of the SQLite database. With the 8.0 release rqlite has been fundamentally redesigned such that snapshotting consumes approximately the same amount of resources, regardless of the size of the SQLite database.
