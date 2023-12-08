@@ -494,11 +494,11 @@ class Node(object):
     r = requests.delete(self._remove_url(), data=json.dumps(body))
     raise_for_status(r)
 
-  def restore(self, file, fmt=None, chunk_kb=1024):
+  def restore(self, file, fmt=None, chunk_kb=None):
     # This is the one API that doesn't expect JSON.
     if fmt != "binary":
       conn = sqlite3.connect(file)
-      r = requests.post(self._load_url(), data='\n'.join(conn.iterdump()))
+      r = requests.post(self._load_url(chunk_kb), data='\n'.join(conn.iterdump()))
       raise_for_status(r)
       conn.close()
       return r.json()
