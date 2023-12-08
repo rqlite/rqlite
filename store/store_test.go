@@ -1392,6 +1392,12 @@ func Test_SingleNodeLoadChunkBinaryReopen(t *testing.T) {
 		}
 	}
 
+	// Chunked loading should trigger a snapshot, so check that the snapshot
+	// exists. Check that numSnapshots is 1
+	if got, exp := stats.Get(numSnapshots).(*expvar.Int).Value(), int64(1); got != exp {
+		t.Fatalf("unexpected number of snapshots\nexp: %d\ngot: %d", exp, got)
+	}
+
 	// Close and re-open the store.
 	if err := s.Close(true); err != nil {
 		t.Fatalf("failed to close store: %s", err.Error())
