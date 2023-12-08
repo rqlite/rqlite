@@ -182,6 +182,13 @@ class TestSingleNode(unittest.TestCase):
       time.sleep(1)
       t+=1
 
+  def test_load_binary(self):
+    ''' Test that a node can load a SQLite data set in binary format'''
+    n = self.cluster.wait_for_leader()
+    j = n.restore('testdata/1000-numbers.db', fmt='binary',chunk_kb=4)
+    j = n.query('SELECT COUNT(*) from test')
+    self.assertEqual(j, d_("{'results': [{'values': [[1000]], 'types': ['integer'], 'columns': ['COUNT(*)']}]}"))
+
 class TestSingleNodeReadyz(unittest.TestCase):
   def test(self):
     ''' Test /readyz behaves correctly'''
@@ -192,7 +199,7 @@ class TestSingleNodeReadyz(unittest.TestCase):
     self.assertEqual(False, n0.ready(noleader=False))
     deprovision_node(n0)
 
-class TestEndToEndSnapRestoreSingle(unittest.TestCase):
+class TestEndToEndSnapshotRestoreSingle(unittest.TestCase):
   def setUp(self):
     self.n0 = Node(RQLITED_PATH, '0',  raft_snap_threshold=10, raft_snap_int="1s")
     self.n0.start()
