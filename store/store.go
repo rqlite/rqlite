@@ -85,7 +85,7 @@ const (
 	trailingScale              = 1.25
 	observerChanLen            = 50
 
-	defaultChunkSize = 512 * 1024 * 1024 // 512 MB
+	defaultChunkSize = 64 * 1024 * 1024 // 64 MB
 )
 
 const (

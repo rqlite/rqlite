@@ -33,7 +33,7 @@ import (
 )
 
 const (
-	defaultChunkSize = 5 * 1024 * 1024 // 5 MB
+	defaultChunkSize = 64 * 1024 * 1024 // 64 MB
 )
 
 var (
