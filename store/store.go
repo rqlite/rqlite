@@ -249,7 +249,6 @@ type Store struct {
 	ElectionTimeout    time.Duration
 	ApplyTimeout       time.Duration
 	RaftLogLevel       string
-	NoFreeListSync     bool
 
 	// Node-reaping configuration
 	ReapTimeout         time.Duration
@@ -411,7 +410,7 @@ func (s *Store) Open() (retErr error) {
 	s.logger.Printf("%d preexisting snapshots present", len(snaps))
 
 	// Create the Raft log store and stable store.
-	s.boltStore, err = rlog.New(filepath.Join(s.raftDir, raftDBPath), s.NoFreeListSync)
+	s.boltStore, err = rlog.New(filepath.Join(s.raftDir, raftDBPath))
 	if err != nil {
 		return fmt.Errorf("new log store: %s", err)
 	}
@@ -948,7 +947,6 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		"snapshot_interval":      s.SnapshotInterval.String(),
 		"reap_timeout":           s.ReapTimeout.String(),
 		"reap_read_only_timeout": s.ReapReadOnlyTimeout.String(),
-		"no_freelist_sync":       s.NoFreeListSync,
 		"trailing_logs":          s.numTrailingLogs,
 		"request_marshaler":      s.reqMarshaller.Stats(),
 		"nodes":                  nodes,

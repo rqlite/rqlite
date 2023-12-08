@@ -18,16 +18,10 @@ type Log struct {
 }
 
 // New returns an instantiated Log object that provides access to the Raft log
-// stored in a BoltDB database. It takes a path to the database file and a
-// boolean flag to enable/disable the freelist sync. If the flag is set to true,
-// the freelist will not be synced to disk, which can improve write performance
-// but may increase the risk of data loss in the event of a crash or power loss.
-// Returns an error if the BoltDB store cannot be created.
-func New(path string, noFreelistSync bool) (*Log, error) {
+// stored in a BoltDB database. It takes a path to the database. Returns an
+// error if the BoltDB store cannot be created.
+func New(path string) (*Log, error) {
 	bs, err := raftboltdb.New(raftboltdb.Options{
-		BoltOptions: &bbolt.Options{
-			NoFreelistSync: noFreelistSync,
-		},
 		Path: path,
 	})
 	if err != nil {
