@@ -162,6 +162,9 @@ type SnapshotStore interface {
 	// FullNeeded returns true if a full snapshot is needed.
 	FullNeeded() (bool, error)
 
+	// SetFullNeeded explicitly sets that a full snapshot is needed.
+	SetFullNeeded() error
+
 	// Stats returns stats about the Snapshot Store.
 	Stats() (map[string]interface{}, error)
 }
@@ -1260,6 +1263,22 @@ func (s *Store) loadChunk(lcr *command.LoadChunkRequest) error {
 	s.dbAppliedIndexMu.Lock()
 	s.dbAppliedIndex = af.Index()
 	s.dbAppliedIndexMu.Unlock()
+
+	if lcr.IsLast {
+		// Chunked loading means the SQLite file itself is directly overwritten.
+		// This invalidates any existing snapshots, so set the full snapshot flag.
+		if err := s.snapshotStore.SetFullNeeded(); err != nil {
+			return err
+		}
+
+		// Force a manual snapshot, so the new SQLite file is snapshotted and
+		// so we have a valid Snapshot store again.
+		s.logger.Printf("forcing snapshot after chunked load completed")
+		if err := s.raft.Snapshot().Error(); err != nil {
+			return fmt.Errorf("failed to force snapshot: %s", err.Error())
+		}
+	}
+
 	return nil
 }
 

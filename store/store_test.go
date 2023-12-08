@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/rqlite/rqlite/command"
+	"github.com/rqlite/rqlite/command/chunking"
 	"github.com/rqlite/rqlite/command/encoding"
 	"github.com/rqlite/rqlite/db"
 	"github.com/rqlite/rqlite/random"
@@ -1243,6 +1244,176 @@ COMMIT;
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
 	if exp, got := `{"error":"no such table: bar"}`, asJSON(r[0]); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
+// Test_SingleNodeLoadChunkBinary tests that a Store correctly loads data in SQLite
+// binary format from a file using chunked loading.
+func Test_SingleNodeLoadChunkBinary(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Load a dataset, to check it's erased by the SQLite file load.
+	dump := `PRAGMA foreign_keys=OFF;
+BEGIN TRANSACTION;
+CREATE TABLE bar (id integer not null primary key, name text);
+INSERT INTO "bar" VALUES(1,'declan');
+COMMIT;
+`
+	_, err := s.Execute(executeRequestFromString(dump, false, false))
+	if err != nil {
+		t.Fatalf("failed to load simple dump: %s", err.Error())
+	}
+
+	// Check that data were loaded correctly.
+	qr := queryRequestFromString("SELECT * FROM bar", false, true)
+	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	r, err := s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[1,"declan"]]`, asJSON(r[0].Values); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	// Open the SQLite file for loading.
+	f, err := os.Open(filepath.Join("testdata", "load.sqlite"))
+	if err != nil {
+		t.Fatalf("failed to open SQLite file: %s", err.Error())
+	}
+	defer f.Close()
+
+	chunker := chunking.NewChunker(f, 2048)
+	for {
+		chunk, err := chunker.Next()
+		if err != nil {
+			t.Fatalf("failed to read next chunk: %s", err.Error())
+		}
+		err = s.LoadChunk(chunk)
+		if err != nil {
+			t.Fatalf("failed to load chunk: %s", err.Error())
+		}
+		if chunk.IsLast {
+			break
+		}
+	}
+
+	// Check that data were loaded correctly.
+	qr = queryRequestFromString("SELECT * FROM foo WHERE id=2", false, true)
+	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	r, err = s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[2,"fiona"]]`, asJSON(r[0].Values); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	qr = queryRequestFromString("SELECT count(*) FROM foo", false, true)
+	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	r, err = s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `["count(*)"]`, asJSON(r[0].Columns); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[3]]`, asJSON(r[0].Values); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	// Check pre-existing data is gone.
+	qr = queryRequestFromString("SELECT * FROM bar", false, true)
+	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	r, err = s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `{"error":"no such table: bar"}`, asJSON(r[0]); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
+// Test_SingleNodeLoadChunkBinary tests that a Store reopens with the correct
+// state after loading data in SQLite binary format from a file using chunked loading.
+// This is important because chunked loading involves forcing the creation of a new
+// snapshot.
+func Test_SingleNodeLoadChunkBinaryReopen(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Open the file for loading.
+	f, err := os.Open(filepath.Join("testdata", "load.sqlite"))
+	if err != nil {
+		t.Fatalf("failed to open SQLite file: %s", err.Error())
+	}
+	defer f.Close()
+
+	chunker := chunking.NewChunker(f, 2048)
+	for {
+		chunk, err := chunker.Next()
+		if err != nil {
+			t.Fatalf("failed to read next chunk: %s", err.Error())
+		}
+		err = s.LoadChunk(chunk)
+		if err != nil {
+			t.Fatalf("failed to load chunk: %s", err.Error())
+		}
+		if chunk.IsLast {
+			break
+		}
+	}
+
+	// Close and re-open the store.
+	if err := s.Close(true); err != nil {
+		t.Fatalf("failed to close store: %s", err.Error())
+	}
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to re-open store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Check that data were loaded correctly.
+	qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, true)
+	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	r, err := s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `["COUNT(*)"]`, asJSON(r[0].Columns); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[3]]`, asJSON(r[0].Values); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 }
