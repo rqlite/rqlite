@@ -153,6 +153,46 @@ func Test_SinkFullSnapshot(t *testing.T) {
 	if !compareReaderToFile(t, fd2, "testdata/db-and-wals/full2.db") {
 		t.Fatalf("second full snapshot data does not match")
 	}
+
+	// Check that setting FullNeeded flag works.
+	if fn, err := store.FullNeeded(); err != nil {
+		t.Fatalf("Failed to check if full snapshot needed: %v", err)
+	} else if fn {
+		t.Errorf("Expected full snapshot not to be needed, but it is")
+	}
+
+	if err := store.SetFullNeeded(); err != nil {
+		t.Fatalf("Failed to set full needed: %v", err)
+	}
+	if fn, err := store.FullNeeded(); err != nil {
+		t.Fatalf("Failed to check if full snapshot needed: %v", err)
+	} else if !fn {
+		t.Errorf("Expected full snapshot to be needed, but it is not")
+	}
+
+	// Write a third full snapshot, it should be installed without issue
+	// and unset the FullNeeded flag.
+	sink = NewSink(store, makeRaftMeta("snap-91011", 5, 4, 3))
+	if sink == nil {
+		t.Fatalf("Failed to create new sink")
+	}
+	if err := sink.Open(); err != nil {
+		t.Fatalf("Failed to open sink: %v", err)
+	}
+	sqliteFile3 := mustOpenFile(t, "testdata/db-and-wals/full2.db")
+	defer sqliteFile3.Close()
+	_, err = io.Copy(sink, sqliteFile3)
+	if err != nil {
+		t.Fatalf("Failed to copy second SQLite file: %v", err)
+	}
+	if err := sink.Close(); err != nil {
+		t.Fatalf("Failed to close sink: %v", err)
+	}
+	if fn, err := store.FullNeeded(); err != nil {
+		t.Fatalf("Failed to check if full snapshot needed: %v", err)
+	} else if fn {
+		t.Errorf("Expected full snapshot not to be needed, but it is")
+	}
 }
 
 // Test_SinkWALSnapshotEmptyStoreFail ensures that if a WAL file is
