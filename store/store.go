@@ -1914,6 +1914,28 @@ func (s *Store) observe() (closeCh, doneCh chan struct{}) {
 	return closeCh, doneCh
 }
 
+// snapAndTruncate performs a snapshot, and then truncates the Raft log.
+func (s *Store) snapAndTruncate() error {
+	// reload the config with zero trailing logs.
+	cfg := s.raft.ReloadableConfig()
+	defer func() {
+		// Whatever happens, this is a one-shot attempt to perform a snapshot
+		cfg.TrailingLogs = s.numTrailingLogs
+		if err := s.raft.ReloadConfig(cfg); err != nil {
+			s.logger.Printf("failed to reload Raft config: %s", err.Error())
+		}
+	}()
+	cfg.TrailingLogs = 0
+	if err := s.raft.ReloadConfig(cfg); err != nil {
+		return fmt.Errorf("failed to reload Raft config: %s", err.Error())
+	}
+	if err := s.raft.Snapshot().Error(); err != nil {
+		return fmt.Errorf("failed to snapshot: %s", err.Error())
+	}
+	stats.Add(numSnapshots, 1)
+	return nil
+}
+
 // runSnapshotting runs the user-requested snapshotting, and returns the
 // trigger channel, the close channel, and the done channel. Unless Raft
 // triggered Snapshotting the log is also compacted after each snapshot.
@@ -1926,27 +1948,9 @@ func (s *Store) runSnapshotting() (triggerT, closeCh, doneCh chan struct{}) {
 		for {
 			select {
 			case <-triggerT:
-				if err := s.raft.Snapshot().Error(); err != nil {
+				if err := s.snapAndTruncate(); err != nil {
 					s.logger.Printf("failed to snapshot: %s", err.Error())
 				}
-				stats.Add(numUserSnapshots, 1)
-
-				// compact the log
-				lastLogIndex, err := s.boltStore.LastIndex()
-				if err != nil {
-					s.logger.Printf("failed to find last log: %v", err)
-					continue
-				}
-				firstLogIndex, err := s.boltStore.FirstIndex()
-				if err != nil {
-					s.logger.Printf("failed to get first log index: %v", err)
-					continue
-				}
-				if err := s.boltStore.DeleteRange(firstLogIndex, lastLogIndex-1); err != nil {
-					s.logger.Printf("log compaction failed: %v", err)
-					continue
-				}
-
 			case <-closeCh:
 				return
 			}
