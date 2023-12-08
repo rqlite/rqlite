@@ -213,6 +213,11 @@ type Store struct {
 	numClosedReadyChannels int
 	readyChansMu           sync.Mutex
 
+	// Channels for triggering and listening to snapshots
+	snapshotTClose chan struct{}
+	snapshotTDone  chan struct{}
+	snapshotTChan  chan struct{}
+
 	// Latest log entry index actually reflected by the FSM. Due to Raft code
 	// this value is not updated after a Snapshot-restore.
 	fsmIndex   uint64
@@ -487,6 +492,9 @@ func (s *Store) Open() (retErr error) {
 	s.raft.RegisterObserver(s.observer)
 	s.observerClose, s.observerDone = s.observe()
 
+	// Setup user-triggered snapshotting.
+	s.snapshotTChan, s.snapshotTClose, s.snapshotTDone = s.runSnapshotting()
+
 	// Periodically update the applied index for faster startup.
 	s.appliedIdxUpdateDone = s.updateAppliedIndex()
 
@@ -572,6 +580,9 @@ func (s *Store) Close(wait bool) (retErr error) {
 	close(s.appliedIdxUpdateDone)
 	close(s.observerClose)
 	<-s.observerDone
+
+	close(s.snapshotTClose)
+	<-s.snapshotTDone
 
 	f := s.raft.Shutdown()
 	if wait {
@@ -1263,35 +1274,6 @@ func (s *Store) loadChunk(lcr *command.LoadChunkRequest) error {
 	s.dbAppliedIndexMu.Lock()
 	s.dbAppliedIndex = af.Index()
 	s.dbAppliedIndexMu.Unlock()
-
-	if lcr.IsLast {
-		// Chunked loading means the SQLite file itself is directly overwritten.
-		// This invalidates any existing snapshots, so set the full snapshot flag.
-		if err := s.snapshotStore.SetFullNeeded(); err != nil {
-			return err
-		}
-
-		// Force a manual snapshot, so the new SQLite file is snapshotted and
-		// so we have a valid Snapshot store again.
-		s.logger.Printf("forcing snapshot after chunked load completed")
-		if err := s.raft.Snapshot().Error(); err != nil {
-			return fmt.Errorf("failed to force snapshot: %s", err.Error())
-		}
-
-		// Compact the log so we don't have to keep around all the chunked data.
-		lastLogIndex, err := s.boltStore.LastIndex()
-		if err != nil {
-			return fmt.Errorf("failed to find last log: %v", err)
-		}
-		firstLogIndex, err := s.boltStore.FirstIndex()
-		if err != nil {
-			return fmt.Errorf("failed to get first log index: %v", err)
-		}
-		if err := s.boltStore.DeleteRange(firstLogIndex, lastLogIndex); err != nil {
-			return fmt.Errorf("log compaction failed: %v", err)
-		}
-	}
-
 	return nil
 }
 
@@ -1668,9 +1650,23 @@ func (s *Store) Apply(l *raft.Log) (e interface{}) {
 		s.logger.Printf("first log applied since node start, log at index %d", l.Index)
 	}
 
-	typ, r := applyCommand(l.Data, &s.db, s.dechunkManager)
-	if typ == command.Command_COMMAND_TYPE_NOOP {
+	cmd, r := applyCommand(l.Data, &s.db, s.dechunkManager)
+	switch cmd.Type {
+	case command.Command_COMMAND_TYPE_NOOP:
 		s.numNoops++
+	case command.Command_COMMAND_TYPE_LOAD_CHUNK:
+		var lcr command.LoadChunkRequest
+		if err := command.UnmarshalLoadChunkRequest(cmd.SubCommand, &lcr); err != nil {
+			panic(fmt.Sprintf("failed to unmarshal load-chunk subcommand: %s", err.Error()))
+		}
+		if lcr.IsLast {
+			if err := s.snapshotStore.SetFullNeeded(); err != nil {
+				return &fsmGenericResponse{error: fmt.Errorf("failed to SetFullNeeded post load: %s", err)}
+			}
+			// send a signal to the snapshot trigger channel. Due to Raft implementation we cannot
+			// send this signal from the Apply() function, as it will deadlock.
+			s.snapshotTChan <- struct{}{}
+		}
 	}
 	return r
 }
@@ -1912,6 +1908,45 @@ func (s *Store) observe() (closeCh, doneCh chan struct{}) {
 	return closeCh, doneCh
 }
 
+// runSnapshotting runs the user-requested snapshotting, and returns the
+// trigger channel, the close channel, and the done channel.
+func (s *Store) runSnapshotting() (triggerT, closeCh, doneCh chan struct{}) {
+	closeCh = make(chan struct{})
+	doneCh = make(chan struct{})
+	triggerT = make(chan struct{})
+	go func() {
+		defer close(doneCh)
+		for {
+			select {
+			case <-triggerT:
+				if err := s.raft.Snapshot().Error(); err != nil {
+					s.logger.Printf("failed to snapshot: %s", err.Error())
+				}
+
+				// compact the log
+				lastLogIndex, err := s.boltStore.LastIndex()
+				if err != nil {
+					s.logger.Printf("failed to find last log: %v", err)
+					continue
+				}
+				firstLogIndex, err := s.boltStore.FirstIndex()
+				if err != nil {
+					s.logger.Printf("failed to get first log index: %v", err)
+					continue
+				}
+				if err := s.boltStore.DeleteRange(firstLogIndex, lastLogIndex); err != nil {
+					s.logger.Printf("log compaction failed: %v", err)
+					continue
+				}
+
+			case <-closeCh:
+				return
+			}
+		}
+	}()
+	return triggerT, closeCh, doneCh
+}
+
 // selfLeaderChange is called when this node detects that its leadership
 // status has changed.
 func (s *Store) selfLeaderChange(leader bool) {
@@ -2104,36 +2139,36 @@ func RecoverNode(dataDir string, logger *log.Logger, logs raft.LogStore, stable 
 	return nil
 }
 
-func applyCommand(data []byte, pDB **sql.DB, decMgmr *chunking.DechunkerManager) (command.Command_Type, interface{}) {
-	var c command.Command
+func applyCommand(data []byte, pDB **sql.DB, decMgmr *chunking.DechunkerManager) (*command.Command, interface{}) {
+	c := &command.Command{}
 	db := *pDB
 
-	if err := command.Unmarshal(data, &c); err != nil {
+	if err := command.Unmarshal(data, c); err != nil {
 		panic(fmt.Sprintf("failed to unmarshal cluster command: %s", err.Error()))
 	}
 
 	switch c.Type {
 	case command.Command_COMMAND_TYPE_QUERY:
 		var qr command.QueryRequest
-		if err := command.UnmarshalSubCommand(&c, &qr); err != nil {
+		if err := command.UnmarshalSubCommand(c, &qr); err != nil {
 			panic(fmt.Sprintf("failed to unmarshal query subcommand: %s", err.Error()))
 		}
 		r, err := db.Query(qr.Request, qr.Timings)
-		return c.Type, &fsmQueryResponse{rows: r, error: err}
+		return c, &fsmQueryResponse{rows: r, error: err}
 	case command.Command_COMMAND_TYPE_EXECUTE:
 		var er command.ExecuteRequest
-		if err := command.UnmarshalSubCommand(&c, &er); err != nil {
+		if err := command.UnmarshalSubCommand(c, &er); err != nil {
 			panic(fmt.Sprintf("failed to unmarshal execute subcommand: %s", err.Error()))
 		}
 		r, err := db.Execute(er.Request, er.Timings)
-		return c.Type, &fsmExecuteResponse{results: r, error: err}
+		return c, &fsmExecuteResponse{results: r, error: err}
 	case command.Command_COMMAND_TYPE_EXECUTE_QUERY:
 		var eqr command.ExecuteQueryRequest
-		if err := command.UnmarshalSubCommand(&c, &eqr); err != nil {
+		if err := command.UnmarshalSubCommand(c, &eqr); err != nil {
 			panic(fmt.Sprintf("failed to unmarshal execute-query subcommand: %s", err.Error()))
 		}
 		r, err := db.Request(eqr.Request, eqr.Timings)
-		return c.Type, &fsmExecuteQueryResponse{results: r, error: err}
+		return c, &fsmExecuteQueryResponse{results: r, error: err}
 	case command.Command_COMMAND_TYPE_LOAD:
 		var lr command.LoadRequest
 		if err := command.UnmarshalLoadRequest(c.SubCommand, &lr); err != nil {
@@ -2142,19 +2177,19 @@ func applyCommand(data []byte, pDB **sql.DB, decMgmr *chunking.DechunkerManager)
 
 		// Swap the underlying database to the new one.
 		if err := db.Close(); err != nil {
-			return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to close post-load database: %s", err)}
+			return c, &fsmGenericResponse{error: fmt.Errorf("failed to close post-load database: %s", err)}
 		}
 		if err := sql.RemoveFiles(db.Path()); err != nil {
-			return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to remove existing database files: %s", err)}
+			return c, &fsmGenericResponse{error: fmt.Errorf("failed to remove existing database files: %s", err)}
 		}
 
 		newDB, err := createOnDisk(lr.Data, db.Path(), db.FKEnabled(), db.WALEnabled())
 		if err != nil {
-			return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to create on-disk database: %s", err)}
+			return c, &fsmGenericResponse{error: fmt.Errorf("failed to create on-disk database: %s", err)}
 		}
 
 		*pDB = newDB
-		return c.Type, &fsmGenericResponse{}
+		return c, &fsmGenericResponse{}
 	case command.Command_COMMAND_TYPE_LOAD_CHUNK:
 		var lcr command.LoadChunkRequest
 		if err := command.UnmarshalLoadChunkRequest(c.SubCommand, &lcr); err != nil {
@@ -2163,44 +2198,44 @@ func applyCommand(data []byte, pDB **sql.DB, decMgmr *chunking.DechunkerManager)
 
 		dec, err := decMgmr.Get(lcr.StreamId)
 		if err != nil {
-			return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to get dechunker: %s", err)}
+			return c, &fsmGenericResponse{error: fmt.Errorf("failed to get dechunker: %s", err)}
 		}
 		last, err := dec.WriteChunk(&lcr)
 		if err != nil {
-			return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to write chunk: %s", err)}
+			return c, &fsmGenericResponse{error: fmt.Errorf("failed to write chunk: %s", err)}
 		}
 		if last {
 			path, err := dec.Close()
 			if err != nil {
-				return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to close dechunker: %s", err)}
+				return c, &fsmGenericResponse{error: fmt.Errorf("failed to close dechunker: %s", err)}
 			}
 			decMgmr.Delete(lcr.StreamId)
 			defer os.Remove(path)
 
 			// Close the underlying database before we overwrite it.
 			if err := db.Close(); err != nil {
-				return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to close post-load database: %s", err)}
+				return c, &fsmGenericResponse{error: fmt.Errorf("failed to close post-load database: %s", err)}
 			}
 			if err := sql.RemoveFiles(db.Path()); err != nil {
-				return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to remove existing database files: %s", err)}
+				return c, &fsmGenericResponse{error: fmt.Errorf("failed to remove existing database files: %s", err)}
 			}
 
 			if err := os.Rename(path, db.Path()); err != nil {
-				return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to rename temporary database file: %s", err)}
+				return c, &fsmGenericResponse{error: fmt.Errorf("failed to rename temporary database file: %s", err)}
 			}
 			newDB, err := sql.Open(db.Path(), db.FKEnabled(), db.WALEnabled())
 			if err != nil {
-				return c.Type, &fsmGenericResponse{error: fmt.Errorf("failed to open new on-disk database: %s", err)}
+				return c, &fsmGenericResponse{error: fmt.Errorf("failed to open new on-disk database: %s", err)}
 			}
 
 			// Swap the underlying database to the new one.
 			*pDB = newDB
 		}
-		return c.Type, &fsmGenericResponse{}
+		return c, &fsmGenericResponse{}
 	case command.Command_COMMAND_TYPE_NOOP:
-		return c.Type, &fsmGenericResponse{}
+		return c, &fsmGenericResponse{}
 	default:
-		return c.Type, &fsmGenericResponse{error: fmt.Errorf("unhandled command: %v", c.Type)}
+		return c, &fsmGenericResponse{error: fmt.Errorf("unhandled command: %v", c.Type)}
 	}
 }
 

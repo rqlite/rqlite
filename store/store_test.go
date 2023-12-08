@@ -1298,6 +1298,7 @@ COMMIT;
 	}
 	defer f.Close()
 
+	numSnapshots := s.numSnapshots
 	chunker := chunking.NewChunker(f, 2048)
 	for {
 		chunk, err := chunker.Next()
@@ -1312,6 +1313,12 @@ COMMIT;
 			break
 		}
 	}
+
+	// Chunked loading should trigger a snapshot, so check that the snapshot
+	// exists. Check that numSnapshots is 1
+	testPoll(t, func() bool {
+		return s.numSnapshots == numSnapshots+1
+	}, 100*time.Millisecond, 3*time.Second)
 
 	// Check that data were loaded correctly.
 	qr = queryRequestFromString("SELECT * FROM foo WHERE id=2", false, true)
@@ -1377,6 +1384,7 @@ func Test_SingleNodeLoadChunkBinaryReopen(t *testing.T) {
 	}
 	defer f.Close()
 
+	numSnapshots := s.numSnapshots
 	chunker := chunking.NewChunker(f, 2048)
 	for {
 		chunk, err := chunker.Next()
@@ -1394,9 +1402,9 @@ func Test_SingleNodeLoadChunkBinaryReopen(t *testing.T) {
 
 	// Chunked loading should trigger a snapshot, so check that the snapshot
 	// exists. Check that numSnapshots is 1
-	if got, exp := s.numSnapshots, 1; got != exp {
-		t.Fatalf("unexpected number of snapshots, exp: %d, got: %d", exp, got)
-	}
+	testPoll(t, func() bool {
+		return s.numSnapshots == numSnapshots+1
+	}, 100*time.Millisecond, 3*time.Second)
 
 	// Close and re-open the store.
 	if err := s.Close(true); err != nil {
