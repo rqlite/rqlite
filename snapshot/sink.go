@@ -110,6 +110,10 @@ func (s *Sink) Close() error {
 		return fmt.Errorf("failed to update snapshot meta size: %s", err.Error())
 	}
 
+	if err := s.str.unsetFullNeeded(); err != nil {
+		return err
+	}
+
 	_, err = s.str.Reap()
 	return err
 }

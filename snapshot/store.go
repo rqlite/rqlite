@@ -26,8 +26,9 @@ const (
 )
 
 const (
-	metaFileName = "meta.json"
-	tmpSuffix    = ".tmp"
+	metaFileName   = "meta.json"
+	tmpSuffix      = ".tmp"
+	fullNeededFile = "FULL_NEEDED"
 )
 
 // stats captures stats for the Store.
@@ -68,9 +69,10 @@ func (s *LockingSink) Cancel() error {
 
 // Store stores Snapshots.
 type Store struct {
-	dir    string
-	sinkMu sync.Mutex
-	logger *log.Logger
+	dir            string
+	fullNeededPath string
+	sinkMu         sync.Mutex
+	logger         *log.Logger
 }
 
 // NewStore returns a new Snapshot Store.
@@ -80,8 +82,9 @@ func NewStore(dir string) (*Store, error) {
 	}
 
 	str := &Store{
-		dir:    dir,
-		logger: log.New(os.Stderr, "[snapshot-store] ", log.LstdFlags),
+		dir:            dir,
+		fullNeededPath: filepath.Join(dir, fullNeededFile),
+		logger:         log.New(os.Stderr, "[snapshot-store] ", log.LstdFlags),
 	}
 	str.logger.Printf("store initialized using %s", dir)
 
@@ -153,11 +156,24 @@ func (s *Store) Open(id string) (*raft.SnapshotMeta, io.ReadCloser, error) {
 
 // FullNeeded returns true if a full snapshot is needed.
 func (s *Store) FullNeeded() (bool, error) {
+	if fileExists(s.fullNeededPath) {
+		return true, nil
+	}
 	snaps, err := s.getSnapshots()
 	if err != nil {
 		return false, err
 	}
 	return len(snaps) == 0, nil
+}
+
+// SetFullNeeded sets the flag that indicates a full snapshot is needed.
+// This flag will be cleared when a snapshot is successfully persisted.
+func (s *Store) SetFullNeeded() error {
+	f, err := os.Create(s.fullNeededPath)
+	if err != nil {
+		return err
+	}
+	return f.Close()
 }
 
 // Stats returns stats about the Snapshot Store.
@@ -320,6 +336,15 @@ func (s *Store) getDBPath() (string, error) {
 		return "", nil
 	}
 	return filepath.Join(s.dir, snapshots[len(snapshots)-1].ID+".db"), nil
+}
+
+// unsetFullNeeded removes the flag that indicates a full snapshot is needed.
+func (s *Store) unsetFullNeeded() error {
+	err := os.Remove(s.fullNeededPath)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
 }
 
 // RemoveAllTmpSnapshotData removes all temporary Snapshot data from the directory.
