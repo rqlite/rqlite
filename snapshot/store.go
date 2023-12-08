@@ -151,6 +151,15 @@ func (s *Store) Open(id string) (*raft.SnapshotMeta, io.ReadCloser, error) {
 	return meta, fd, nil
 }
 
+// FullNeeded returns true if a full snapshot is needed.
+func (s *Store) FullNeeded() (bool, error) {
+	snaps, err := s.getSnapshots()
+	if err != nil {
+		return false, err
+	}
+	return len(snaps) == 0, nil
+}
+
 // Stats returns stats about the Snapshot Store.
 func (s *Store) Stats() (map[string]interface{}, error) {
 	snapshots, err := s.getSnapshots()

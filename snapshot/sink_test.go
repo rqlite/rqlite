@@ -107,6 +107,12 @@ func Test_SinkFullSnapshot(t *testing.T) {
 		t.Fatalf("Snapshot data does not match")
 	}
 
+	if fn, err := store.FullNeeded(); err != nil {
+		t.Fatalf("Failed to check if full snapshot needed: %v", err)
+	} else if fn {
+		t.Errorf("Expected full snapshot not to be needed, but it is")
+	}
+
 	// Write a second full snapshot, it should be installed without issue.
 	sink = NewSink(store, makeRaftMeta("snap-5678", 4, 3, 2))
 	if sink == nil {
@@ -206,6 +212,17 @@ func Test_SinkCreateFullThenWALSnapshots(t *testing.T) {
 		if err := sink.Close(); err != nil {
 			t.Fatalf("Failed to close sink: %v", err)
 		}
+
+		if fn, err := store.FullNeeded(); err != nil {
+			t.Fatalf("Failed to check if full snapshot needed: %v", err)
+		} else if fn {
+			t.Errorf("Expected full snapshot not to be needed, but it is")
+		}
+	}
+	if fn, err := store.FullNeeded(); err != nil {
+		t.Fatalf("Failed to check if full snapshot needed: %v", err)
+	} else if !fn {
+		t.Errorf("Expected full snapshot to be needed, but it is not")
 	}
 	createSnapshot("snap-1234", 3, 2, 1, "testdata/db-and-wals/backup.db")
 	createSnapshot("snap-2345", 4, 3, 2, "testdata/db-and-wals/wal-00")
