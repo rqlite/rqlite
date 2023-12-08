@@ -1,4 +1,5 @@
-## 8.0.1 (unreleased)
+## 8.0.1 (December 8th 2023)
+This release fixes an edge case issue during restore-from-SQLite. It's possible if a rqlite system crashes shortly after restoring from SQLite it may not have loaded the data correctly.
 
 ### Implementation changes and bug fixes
 - [PR #1456](https://github.com/rqlite/rqlite/pull/1456): Wrap Snaphot Store _FullNeeded_ logic in a function.
