@@ -69,6 +69,15 @@ func Test_ChunkerSingleChunk(t *testing.T) {
 	}
 }
 
+func Test_ChunkerAbort(t *testing.T) {
+	data := []byte("Hello, world!")
+	chunker := NewChunker(bytes.NewReader(data), 32)
+	chunk := chunker.Abort()
+	if chunk.Abort != true {
+		t.Errorf("expected Abort to be true, got %v", chunk.Abort)
+	}
+}
+
 // Test_ChunkerSingleChunkLarge tests that a Chunker created with a reader that
 // contains a single chunk returns the expected chunk, when the chunk size is
 // much larger than the amount of data in the reader, and is larger than the
