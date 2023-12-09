@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strings"
@@ -55,7 +54,7 @@ func executeWithClient(ctx *cli.Context, client *cl.Client, timer bool, stmt str
 		hcr = err
 	}
 
-	response, err := ioutil.ReadAll(resp.Body)
+	response, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}
