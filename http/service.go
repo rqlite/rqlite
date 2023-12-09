@@ -544,14 +544,11 @@ func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if err == store.ErrNotLeader {
 			if redirect {
-				leaderAPIAddr := s.LeaderAPIAddr()
-				if leaderAPIAddr == "" {
-					stats.Add(numLeaderNotFound, 1)
-					http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+				redirect, err := s.FormRedirect(r)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
 					return
 				}
-
-				redirect := s.FormRedirect(r, leaderAPIAddr)
 				http.Redirect(w, r, redirect, http.StatusMovedPermanently)
 				return
 			}
@@ -642,14 +639,11 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if err == store.ErrNotLeader {
 			if redirect {
-				leaderAPIAddr := s.LeaderAPIAddr()
-				if leaderAPIAddr == "" {
-					stats.Add(numLeaderNotFound, 1)
-					http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+				redirect, err := s.FormRedirect(r)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
 					return
 				}
-
-				redirect := s.FormRedirect(r, leaderAPIAddr)
 				http.Redirect(w, r, redirect, http.StatusMovedPermanently)
 				return
 			}
@@ -767,14 +761,11 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 		results, err := s.store.Execute(er)
 		if err != nil {
 			if err == store.ErrNotLeader {
-				leaderAPIAddr := s.LeaderAPIAddr()
-				if leaderAPIAddr == "" {
-					stats.Add(numLeaderNotFound, 1)
-					http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+				redirect, err := s.FormRedirect(r)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
 					return
 				}
-
-				redirect := s.FormRedirect(r, leaderAPIAddr)
 				http.Redirect(w, r, redirect, http.StatusMovedPermanently)
 				return
 			}
@@ -788,7 +779,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 		for {
 			chunk, err := chunker.Next()
 			if err != nil {
-				http.Error(w, err.Error(), http.StatusServiceUnavailable)
+				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
 			err = s.store.LoadChunk(chunk)
@@ -797,14 +788,11 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 				return
 			} else if err != nil && err == store.ErrNotLeader {
 				if redirect {
-					leaderAPIAddr := s.LeaderAPIAddr()
-					if leaderAPIAddr == "" {
-						stats.Add(numLeaderNotFound, 1)
-						http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+					redirect, err := s.FormRedirect(r)
+					if err != nil {
+						http.Error(w, err.Error(), http.StatusInternalServerError)
 						return
 					}
-
-					redirect := s.FormRedirect(r, leaderAPIAddr)
 					http.Redirect(w, r, redirect, http.StatusMovedPermanently)
 					return
 				}
@@ -1268,14 +1256,12 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request) {
 	results, resultsErr := s.store.Execute(er)
 	if resultsErr != nil && resultsErr == store.ErrNotLeader {
 		if redirect {
-			leaderAPIAddr := s.LeaderAPIAddr()
-			if leaderAPIAddr == "" {
-				stats.Add(numLeaderNotFound, 1)
-				http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+			redirect, err := s.FormRedirect(r)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
-			loc := s.FormRedirect(r, leaderAPIAddr)
-			http.Redirect(w, r, loc, http.StatusMovedPermanently)
+			http.Redirect(w, r, redirect, http.StatusMovedPermanently)
 			return
 		}
 
@@ -1370,14 +1356,12 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 	results, resultsErr := s.store.Query(qr)
 	if resultsErr != nil && resultsErr == store.ErrNotLeader {
 		if redirect {
-			leaderAPIAddr := s.LeaderAPIAddr()
-			if leaderAPIAddr == "" {
-				stats.Add(numLeaderNotFound, 1)
-				http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+			redirect, err := s.FormRedirect(r)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
-			loc := s.FormRedirect(r, leaderAPIAddr)
-			http.Redirect(w, r, loc, http.StatusMovedPermanently)
+			http.Redirect(w, r, redirect, http.StatusMovedPermanently)
 			return
 		}
 
@@ -1471,14 +1455,12 @@ func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request) {
 	results, resultErr := s.store.Request(eqr)
 	if resultErr != nil && resultErr == store.ErrNotLeader {
 		if redirect {
-			leaderAPIAddr := s.LeaderAPIAddr()
-			if leaderAPIAddr == "" {
-				stats.Add(numLeaderNotFound, 1)
-				http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+			redirect, err := s.FormRedirect(r)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
-			loc := s.FormRedirect(r, leaderAPIAddr)
-			http.Redirect(w, r, loc, http.StatusMovedPermanently)
+			http.Redirect(w, r, redirect, http.StatusMovedPermanently)
 			return
 		}
 
@@ -1567,12 +1549,18 @@ func (s *Service) Addr() net.Addr {
 }
 
 // FormRedirect returns the value for the "Location" header for a 301 response.
-func (s *Service) FormRedirect(r *http.Request, url string) string {
+func (s *Service) FormRedirect(r *http.Request) (string, error) {
+	leaderAPIAddr := s.LeaderAPIAddr()
+	if leaderAPIAddr == "" {
+		stats.Add(numLeaderNotFound, 1)
+		return "", ErrLeaderNotFound
+	}
+
 	rq := r.URL.RawQuery
 	if rq != "" {
 		rq = fmt.Sprintf("?%s", rq)
 	}
-	return fmt.Sprintf("%s%s%s", url, r.URL.Path, rq)
+	return fmt.Sprintf("%s%s%s", leaderAPIAddr, r.URL.Path, rq), nil
 }
 
 // CheckRequestPerm checks if the request is authenticated and authorized
@@ -1636,7 +1624,6 @@ func (s *Service) LeaderAPIAddr() string {
 	}
 
 	apiAddr, err := s.cluster.GetNodeAPIAddr(nodeAddr, defaultTimeout)
-
 	if err != nil {
 		return ""
 	}
