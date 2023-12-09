@@ -65,6 +65,10 @@ var (
 	// ErrInvalidVacuumFormat is returned when the requested backup format is not
 	// compatible with vacuum.
 	ErrInvalidVacuum = errors.New("invalid vacuum")
+
+	// ErrLoadActive is returned when a load operation is in progress and blocks
+	// the requested operation.
+	ErrLoadActive = errors.New("load in progress")
 )
 
 const (
@@ -209,6 +213,7 @@ type Store struct {
 	appliedIdxUpdateDone chan struct{}
 
 	dechunkManager *chunking.DechunkerManager
+	loadActive     bool
 
 	// Channels that must be closed for the Store to be considered ready.
 	readyChans             []<-chan struct{}
@@ -970,6 +975,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		"no_freelist_sync":       s.NoFreeListSync,
 		"trailing_logs":          s.numTrailingLogs,
 		"request_marshaler":      s.reqMarshaller.Stats(),
+		"load_active":            s.loadActive,
 		"nodes":                  nodes,
 		"dir":                    s.raftDir,
 		"dir_size":               dirSz,
@@ -1665,6 +1671,7 @@ func (s *Store) Apply(l *raft.Log) (e interface{}) {
 			panic(fmt.Sprintf("failed to unmarshal load-chunk subcommand: %s", err.Error()))
 		}
 		snapshotNeeded = lcr.IsLast
+		s.loadActive = !lcr.IsLast
 	}
 
 	if snapshotNeeded {
@@ -1704,6 +1711,9 @@ func (s *Store) Database(leader bool) ([]byte, error) {
 // database as long as no writes to the database are in progress.
 func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 	startT := time.Now()
+	if s.loadActive {
+		return nil, ErrLoadActive
+	}
 
 	fullNeeded, err := s.snapshotStore.FullNeeded()
 	if err != nil {
