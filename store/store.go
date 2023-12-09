@@ -1676,7 +1676,6 @@ func (s *Store) Apply(l *raft.Log) (e interface{}) {
 		} else {
 			s.loadsInProgress[lcr.StreamId] = struct{}{}
 		}
-
 	}
 
 	if snapshotNeeded {
