@@ -227,6 +227,7 @@ const (
 	numStatus                         = "num_status"
 	numBackups                        = "backups"
 	numLoad                           = "loads"
+	numLoadAborted                    = "loads_aborted"
 	numAuthOK                         = "authOK"
 	numAuthFail                       = "authFail"
 
@@ -292,6 +293,7 @@ func ResetStats() {
 	stats.Add(numStatus, 0)
 	stats.Add(numBackups, 0)
 	stats.Add(numLoad, 0)
+	stats.Add(numLoadAborted, 0)
 	stats.Add(numAuthOK, 0)
 	stats.Add(numAuthFail, 0)
 }
@@ -777,6 +779,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 				break
 			}
 			if chunk.Abort {
+				stats.Add(numLoadAborted, 1)
 				s.logger.Printf("load request aborted")
 				break
 			}

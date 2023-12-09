@@ -139,6 +139,7 @@ func ResetStats() {
 	stats.Add(numSnapshotsIncremental, 0)
 	stats.Add(numProvides, 0)
 	stats.Add(numBackups, 0)
+	stats.Add(numLoads, 0)
 	stats.Add(numRestores, 0)
 	stats.Add(numRecoveries, 0)
 	stats.Add(numAutoRestores, 0)
