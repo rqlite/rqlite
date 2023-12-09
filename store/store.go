@@ -213,8 +213,9 @@ type Store struct {
 	dbAppliedIndex       uint64
 	appliedIdxUpdateDone chan struct{}
 
-	dechunkManager  *chunking.DechunkerManager
-	loadsInProgress map[string]struct{}
+	dechunkManager    *chunking.DechunkerManager
+	loadsInProgressMu sync.Mutex
+	loadsInProgress   map[string]struct{}
 
 	// Channels that must be closed for the Store to be considered ready.
 	readyChans             []<-chan struct{}
@@ -978,6 +979,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		"trailing_logs":          s.numTrailingLogs,
 		"request_marshaler":      s.reqMarshaller.Stats(),
 		"nodes":                  nodes,
+		"loads_in_progress":      s.NumLoadsInProgress(),
 		"dir":                    s.raftDir,
 		"dir_size":               dirSz,
 		"sqlite3":                dbStatus,
@@ -1672,11 +1674,15 @@ func (s *Store) Apply(l *raft.Log) (e interface{}) {
 			panic(fmt.Sprintf("failed to unmarshal load-chunk subcommand: %s", err.Error()))
 		}
 		snapshotNeeded = lcr.IsLast
-		if lcr.IsLast || lcr.Abort {
-			delete(s.loadsInProgress, lcr.StreamId)
-		} else {
-			s.loadsInProgress[lcr.StreamId] = struct{}{}
-		}
+		func() {
+			s.loadsInProgressMu.Lock()
+			defer s.loadsInProgressMu.Unlock()
+			if lcr.IsLast || lcr.Abort {
+				delete(s.loadsInProgress, lcr.StreamId)
+			} else {
+				s.loadsInProgress[lcr.StreamId] = struct{}{}
+			}
+		}()
 	}
 
 	if snapshotNeeded {
@@ -1717,7 +1723,7 @@ func (s *Store) Database(leader bool) ([]byte, error) {
 func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 	startT := time.Now()
 
-	if len(s.loadsInProgress) > 0 {
+	if s.NumLoadsInProgress() > 0 {
 		// There are loads in progress. Now, the next thing that has to be true
 		// is that the last log entry must be a load-chunk command, and it must
 		// indicate an ongoing load. If that is not the case, then some other
@@ -2049,6 +2055,13 @@ func (s *Store) logSize() (int64, error) {
 		return 0, err
 	}
 	return fi.Size(), nil
+}
+
+// NumLoadsInProgress returns the number of loads currently in progress.
+func (s *Store) NumLoadsInProgress() int {
+	s.loadsInProgressMu.Lock()
+	defer s.loadsInProgressMu.Unlock()
+	return len(s.loadsInProgress)
 }
 
 // tryCompress attempts to compress the given command. If the command is
