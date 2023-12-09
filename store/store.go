@@ -2254,36 +2254,45 @@ func applyCommand(data []byte, pDB **sql.DB, decMgmr *chunking.DechunkerManager)
 		if err != nil {
 			return c, &fsmGenericResponse{error: fmt.Errorf("failed to get dechunker: %s", err)}
 		}
-		last, err := dec.WriteChunk(&lcr)
-		if err != nil {
-			return c, &fsmGenericResponse{error: fmt.Errorf("failed to write chunk: %s", err)}
-		}
-		if last {
+		if lcr.Abort {
 			path, err := dec.Close()
 			if err != nil {
 				return c, &fsmGenericResponse{error: fmt.Errorf("failed to close dechunker: %s", err)}
 			}
 			decMgmr.Delete(lcr.StreamId)
 			defer os.Remove(path)
-
-			// Close the underlying database before we overwrite it.
-			if err := db.Close(); err != nil {
-				return c, &fsmGenericResponse{error: fmt.Errorf("failed to close post-load database: %s", err)}
-			}
-			if err := sql.RemoveFiles(db.Path()); err != nil {
-				return c, &fsmGenericResponse{error: fmt.Errorf("failed to remove existing database files: %s", err)}
-			}
-
-			if err := os.Rename(path, db.Path()); err != nil {
-				return c, &fsmGenericResponse{error: fmt.Errorf("failed to rename temporary database file: %s", err)}
-			}
-			newDB, err := sql.Open(db.Path(), db.FKEnabled(), db.WALEnabled())
+		} else {
+			last, err := dec.WriteChunk(&lcr)
 			if err != nil {
-				return c, &fsmGenericResponse{error: fmt.Errorf("failed to open new on-disk database: %s", err)}
+				return c, &fsmGenericResponse{error: fmt.Errorf("failed to write chunk: %s", err)}
 			}
+			if last {
+				path, err := dec.Close()
+				if err != nil {
+					return c, &fsmGenericResponse{error: fmt.Errorf("failed to close dechunker: %s", err)}
+				}
+				decMgmr.Delete(lcr.StreamId)
+				defer os.Remove(path)
 
-			// Swap the underlying database to the new one.
-			*pDB = newDB
+				// Close the underlying database before we overwrite it.
+				if err := db.Close(); err != nil {
+					return c, &fsmGenericResponse{error: fmt.Errorf("failed to close post-load database: %s", err)}
+				}
+				if err := sql.RemoveFiles(db.Path()); err != nil {
+					return c, &fsmGenericResponse{error: fmt.Errorf("failed to remove existing database files: %s", err)}
+				}
+
+				if err := os.Rename(path, db.Path()); err != nil {
+					return c, &fsmGenericResponse{error: fmt.Errorf("failed to rename temporary database file: %s", err)}
+				}
+				newDB, err := sql.Open(db.Path(), db.FKEnabled(), db.WALEnabled())
+				if err != nil {
+					return c, &fsmGenericResponse{error: fmt.Errorf("failed to open new on-disk database: %s", err)}
+				}
+
+				// Swap the underlying database to the new one.
+				*pDB = newDB
+			}
 		}
 		return c, &fsmGenericResponse{}
 	case command.Command_COMMAND_TYPE_NOOP:
