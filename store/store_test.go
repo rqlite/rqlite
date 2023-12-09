@@ -1476,7 +1476,6 @@ func Test_SingleNodeLoadChunkBinaryReopen(t *testing.T) {
 	if exp, got := `[[4]]`, asJSON(r[0].Values); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
-
 }
 
 // Test_SingleNodeLoadBinaryFromReader tests that a Store correctly loads data in SQLite
