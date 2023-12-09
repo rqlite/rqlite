@@ -742,11 +742,11 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 		for {
 			chunk, err := chunker.Next()
 			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
+				chunk = chunker.Abort()
 			}
 			err = s.store.LoadChunk(chunk)
 			if err != nil && err != store.ErrNotLeader {
+				s.store.LoadChunk(chunker.Abort())
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			} else if err != nil && err == store.ErrNotLeader {
@@ -763,6 +763,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 					} else {
 						http.Error(w, err.Error(), http.StatusInternalServerError)
 					}
+					s.loadClusterChunk(r, chunker.Abort())
 					return
 				}
 				w.Header().Add(ServedByHTTPHeader, addr)
@@ -773,6 +774,10 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 				nChunks, nr, nw := chunker.Counts()
 				s.logger.Printf("%d bytes read, %d chunks generated, containing %d bytes of compressed data (compression ratio %.2f)",
 					nr, nChunks, nw, float64(nr)/float64(nw))
+				break
+			}
+			if chunk.Abort {
+				s.logger.Printf("load request aborted")
 				break
 			}
 		}
