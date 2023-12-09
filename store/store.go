@@ -65,6 +65,10 @@ var (
 	// ErrInvalidVacuumFormat is returned when the requested backup format is not
 	// compatible with vacuum.
 	ErrInvalidVacuum = errors.New("invalid vacuum")
+
+	// ErrLoadInProgress is returned when a load is already in progress and the
+	// requested operation cannot be performed.
+	ErrLoadInProgress = errors.New("load in progress")
 )
 
 const (
@@ -208,7 +212,8 @@ type Store struct {
 	dbAppliedIndex       uint64
 	appliedIdxUpdateDone chan struct{}
 
-	dechunkManager *chunking.DechunkerManager
+	dechunkManager  *chunking.DechunkerManager
+	loadsInProgress map[string]struct{}
 
 	// Channels that must be closed for the Store to be considered ready.
 	readyChans             []<-chan struct{}
@@ -313,6 +318,7 @@ func New(ln Listener, c *Config) *Store {
 		peersInfoPath:    filepath.Join(c.Dir, peersInfoPath),
 		restoreChunkSize: defaultChunkSize,
 		restoreDoneCh:    make(chan struct{}),
+		loadsInProgress:  make(map[string]struct{}),
 		raftID:           c.ID,
 		dbConf:           c.DBConf,
 		dbPath:           dbPath,
@@ -1665,6 +1671,12 @@ func (s *Store) Apply(l *raft.Log) (e interface{}) {
 			panic(fmt.Sprintf("failed to unmarshal load-chunk subcommand: %s", err.Error()))
 		}
 		snapshotNeeded = lcr.IsLast
+		if lcr.IsLast || lcr.Abort {
+			delete(s.loadsInProgress, lcr.StreamId)
+		} else {
+			s.loadsInProgress[lcr.StreamId] = struct{}{}
+		}
+
 	}
 
 	if snapshotNeeded {
@@ -1704,6 +1716,37 @@ func (s *Store) Database(leader bool) ([]byte, error) {
 // database as long as no writes to the database are in progress.
 func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 	startT := time.Now()
+
+	if len(s.loadsInProgress) > 0 {
+		// There are loads in progress. Now, the next thing that has to be true
+		// is that the last log entry must be a load-chunk command, and it must
+		// indicate an ongoing load. If that is not the case, then some other
+		// request has been sent to this systemg, and all load operations are invalid.
+		// Also, ignoring some non-nil errors is deliberate and it is left to the
+		// Raft snapshotting system to sort it out.
+		lastIdx, err := s.boltStore.LastIndex()
+		if err != nil {
+			return nil, nil
+		}
+		lastLog := &raft.Log{}
+		if err := s.boltStore.GetLog(lastIdx, lastLog); err != nil {
+			return nil, nil
+		}
+		var c command.Command
+		if err := command.Unmarshal(lastLog.Data, &c); err != nil {
+			panic(fmt.Sprintf("failed to unmarshal last log entry: %s", err.Error()))
+		}
+		if c.Type == command.Command_COMMAND_TYPE_LOAD_CHUNK {
+			var lcr command.LoadChunkRequest
+			if err := command.UnmarshalLoadChunkRequest(c.SubCommand, &lcr); err != nil {
+				panic(fmt.Sprintf("failed to unmarshal load-chunk subcommand: %s", err.Error()))
+			}
+			if !lcr.IsLast && !lcr.Abort {
+				return nil, ErrLoadInProgress
+			}
+
+		}
+	}
 
 	fullNeeded, err := s.snapshotStore.FullNeeded()
 	if err != nil {
