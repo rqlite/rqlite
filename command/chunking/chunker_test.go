@@ -72,9 +72,8 @@ func Test_ChunkerSingleChunk(t *testing.T) {
 func Test_ChunkerAbort(t *testing.T) {
 	data := []byte("Hello, world!")
 	chunker := NewChunker(bytes.NewReader(data), 32)
-	chunk := chunker.Abort()
-	if chunk.Abort != true {
-		t.Errorf("expected Abort to be true, got %v", chunk.Abort)
+	if chunker.Abort().Abort != true {
+		t.Errorf("expected Abort to be true")
 	}
 }
 
