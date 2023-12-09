@@ -1478,6 +1478,109 @@ func Test_SingleNodeLoadChunkBinaryReopen(t *testing.T) {
 	}
 }
 
+// Test_SingleNodeLoadChunk_SnapshotBlock tests that a Store correctly loads data in SQLite
+// binary format from a file using chunked loading, and that snapshotting is blocked
+// during the load.
+func Test_SingleNodeLoadChunk_SnapshotBlock(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	getChunker := func() (*os.File, *chunking.Chunker) {
+		// Open the SQLite file for loading.
+		f, err := os.Open(filepath.Join("testdata", "load.sqlite"))
+		if err != nil {
+			t.Fatalf("failed to open SQLite file: %s", err.Error())
+		}
+		return f, chunking.NewChunker(f, 2048)
+	}
+
+	// Load the first chunk, which should block snapshotting, complete
+	// the load, and then check that snapshotting is no longer blocked.
+	fd, chunker := getChunker()
+	defer fd.Close()
+	chunk, err := chunker.Next()
+	if err != nil {
+		t.Fatalf("failed to read first chunk: %s", err.Error())
+	}
+	if err := s.LoadChunk(chunk); err != nil {
+		t.Fatalf("failed to load first chunk: %s", err.Error())
+	}
+	if _, err := s.Snapshot(); err != ErrLoadInProgress {
+		t.Fatalf("snapshot should have been blocked")
+	}
+	for {
+		chunk, err := chunker.Next()
+		if err != nil {
+			t.Fatalf("failed to read next chunk: %s", err.Error())
+		}
+		err = s.LoadChunk(chunk)
+		if err != nil {
+			t.Fatalf("failed to load chunk: %s", err.Error())
+		}
+		if chunk.IsLast {
+			break
+		}
+	}
+	if _, err := s.Snapshot(); err != nil {
+		t.Fatalf("snapshot should not have been blocked")
+	}
+
+	// Load the first chunk, which should block snapshotting, send an
+	// Abort chunk, then check that snapshotting is no longer blocked.
+	fd, chunker = getChunker()
+	defer fd.Close()
+	chunk, err = chunker.Next()
+	if err != nil {
+		t.Fatalf("failed to read first chunk: %s", err.Error())
+	}
+	if err := s.LoadChunk(chunk); err != nil {
+		t.Fatalf("failed to load first chunk: %s", err.Error())
+	}
+	if _, err := s.Snapshot(); err != ErrLoadInProgress {
+		t.Fatalf("snapshot should have been blocked")
+	}
+	if err := s.LoadChunk(chunker.Abort()); err != nil {
+		t.Fatalf("failed to load abort chunk: %s", err.Error())
+	}
+	if _, err := s.Snapshot(); err != nil {
+		t.Fatalf("snapshot should not have been blocked")
+	}
+
+	// Load the first chunk, which should block snapshotting, then send
+	// execute, then check that snapshotting is no longer blocked.
+	fd, chunker = getChunker()
+	defer fd.Close()
+	chunk, err = chunker.Next()
+	if err != nil {
+		t.Fatalf("failed to read first chunk: %s", err.Error())
+	}
+	if err := s.LoadChunk(chunk); err != nil {
+		t.Fatalf("failed to load first chunk: %s", err.Error())
+	}
+	if _, err := s.Snapshot(); err != ErrLoadInProgress {
+		t.Fatalf("snapshot should have been blocked")
+	}
+	er := executeRequestFromString("anything at all, doesn't matter", false, true)
+	_, err = s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute: %s", err.Error())
+	}
+	if _, err := s.Snapshot(); err != nil {
+		t.Fatalf("snapshot should not have been blocked")
+	}
+}
+
 // Test_SingleNodeLoadBinaryFromReader tests that a Store correctly loads data in SQLite
 // binary format from a reader.
 func Test_SingleNodeLoadBinaryFromReader(t *testing.T) {
