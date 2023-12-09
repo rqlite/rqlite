@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"strings"
@@ -882,6 +883,34 @@ func Test_FormRedirectHTTPS(t *testing.T) {
 	}
 	if exp, got := "https://foo:4001", rd; exp != got {
 		t.Fatalf("incorrect redirect, exp: %s, got: %s", exp, got)
+	}
+}
+
+func Test_DoRedirect(t *testing.T) {
+	m := &MockStore{
+		leaderAddr: "foo:4002",
+	}
+	c := &mockClusterService{
+		apiAddr: "https://foo:4001",
+	}
+	s := New("127.0.0.1:0", m, c, nil)
+	req := mustNewHTTPRequest("http://qux:4001")
+
+	if s.DoRedirect(nil, req) {
+		t.Fatalf("incorrectly redirected")
+	}
+
+	req = mustNewHTTPRequest("http://qux:4001/db/query?redirect")
+	w := httptest.NewRecorder()
+	if !s.DoRedirect(w, req) {
+		t.Fatalf("incorrectly not redirected")
+	}
+	if exp, got := http.StatusMovedPermanently, w.Code; exp != got {
+		t.Fatalf("incorrect redirect code, exp: %d, got: %d", exp, got)
+	}
+	// check location header
+	if exp, got := "https://foo:4001/db/query?redirect", w.Header().Get("Location"); exp != got {
+		t.Fatalf("incorrect redirect location, exp: %s, got: %s", exp, got)
 	}
 }
 
