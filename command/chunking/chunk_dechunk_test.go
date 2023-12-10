@@ -3,7 +3,6 @@ package chunking
 import (
 	"bytes"
 	"crypto/rand"
-	"io/ioutil"
 	"os"
 	"testing"
 )
@@ -16,7 +15,7 @@ func Test_ChunkingRoundTrip(t *testing.T) {
 
 	chunker := NewChunker(bytes.NewReader(data), 1024)
 
-	dir, err := ioutil.TempDir("", "test-*")
+	dir, err := os.MkdirTemp("", "test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -52,7 +51,7 @@ func Test_ChunkingRoundTrip(t *testing.T) {
 	defer os.Remove(outFilePath)
 
 	// The output data should be the same as the original data.
-	outData, err := ioutil.ReadFile(outFilePath)
+	outData, err := os.ReadFile(outFilePath)
 	if err != nil {
 		t.Fatalf("failed to read output file data: %v", err)
 	}
