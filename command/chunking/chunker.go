@@ -143,6 +143,15 @@ func (c *Chunker) Next() (*command.LoadChunkRequest, error) {
 	}, nil
 }
 
+// Abort returns a LoadChunkRequest that signals the receiver to abort the
+// given stream.
+func (c *Chunker) Abort() *command.LoadChunkRequest {
+	return &command.LoadChunkRequest{
+		StreamId: c.streamID,
+		Abort:    true,
+	}
+}
+
 // Counts returns the number of chunks generated, bytes read, and bytes written.
 func (c *Chunker) Counts() (int64, int64, int64) {
 	c.statsMu.Lock()

@@ -95,6 +95,7 @@ message LoadChunkRequest {
 	int64 sequence_num = 2;
 	bool is_last = 3;
 	bytes data = 4;
+	bool abort = 5;
 }
 
 message JoinRequest {

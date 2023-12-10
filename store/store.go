@@ -65,6 +65,10 @@ var (
 	// ErrInvalidVacuumFormat is returned when the requested backup format is not
 	// compatible with vacuum.
 	ErrInvalidVacuum = errors.New("invalid vacuum")
+
+	// ErrLoadInProgress is returned when a load is already in progress and the
+	// requested operation cannot be performed.
+	ErrLoadInProgress = errors.New("load in progress")
 )
 
 const (
@@ -135,6 +139,7 @@ func ResetStats() {
 	stats.Add(numSnapshotsIncremental, 0)
 	stats.Add(numProvides, 0)
 	stats.Add(numBackups, 0)
+	stats.Add(numLoads, 0)
 	stats.Add(numRestores, 0)
 	stats.Add(numRecoveries, 0)
 	stats.Add(numAutoRestores, 0)
@@ -208,7 +213,9 @@ type Store struct {
 	dbAppliedIndex       uint64
 	appliedIdxUpdateDone chan struct{}
 
-	dechunkManager *chunking.DechunkerManager
+	dechunkManager    *chunking.DechunkerManager
+	loadsInProgressMu sync.Mutex
+	loadsInProgress   map[string]struct{}
 
 	// Channels that must be closed for the Store to be considered ready.
 	readyChans             []<-chan struct{}
@@ -313,6 +320,7 @@ func New(ln Listener, c *Config) *Store {
 		peersInfoPath:    filepath.Join(c.Dir, peersInfoPath),
 		restoreChunkSize: defaultChunkSize,
 		restoreDoneCh:    make(chan struct{}),
+		loadsInProgress:  make(map[string]struct{}),
 		raftID:           c.ID,
 		dbConf:           c.DBConf,
 		dbPath:           dbPath,
@@ -971,6 +979,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		"trailing_logs":          s.numTrailingLogs,
 		"request_marshaler":      s.reqMarshaller.Stats(),
 		"nodes":                  nodes,
+		"loads_in_progress":      s.NumLoadsInProgress(),
 		"dir":                    s.raftDir,
 		"dir_size":               dirSz,
 		"sqlite3":                dbStatus,
@@ -1665,6 +1674,15 @@ func (s *Store) Apply(l *raft.Log) (e interface{}) {
 			panic(fmt.Sprintf("failed to unmarshal load-chunk subcommand: %s", err.Error()))
 		}
 		snapshotNeeded = lcr.IsLast
+		func() {
+			s.loadsInProgressMu.Lock()
+			defer s.loadsInProgressMu.Unlock()
+			if lcr.IsLast || lcr.Abort {
+				delete(s.loadsInProgress, lcr.StreamId)
+			} else {
+				s.loadsInProgress[lcr.StreamId] = struct{}{}
+			}
+		}()
 	}
 
 	if snapshotNeeded {
@@ -1705,6 +1723,34 @@ func (s *Store) Database(leader bool) ([]byte, error) {
 func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 	startT := time.Now()
 
+	if s.NumLoadsInProgress() > 0 {
+		// There are loads in progress. Now, the next thing that has to be true
+		// is that the last log entry must be a load-chunk command, and it must
+		// indicate an ongoing load. If that is not the case, then some other
+		// request has been sent to this systemg, and all load operations are invalid.
+		lastIdx, err := s.boltStore.LastIndex()
+		if err != nil {
+			return nil, err
+		}
+		lastLog := &raft.Log{}
+		if err := s.boltStore.GetLog(lastIdx, lastLog); err != nil {
+			return nil, err
+		}
+		var c command.Command
+		if err := command.Unmarshal(lastLog.Data, &c); err != nil {
+			panic(fmt.Sprintf("failed to unmarshal last log entry: %s", err.Error()))
+		}
+		if c.Type == command.Command_COMMAND_TYPE_LOAD_CHUNK {
+			var lcr command.LoadChunkRequest
+			if err := command.UnmarshalLoadChunkRequest(c.SubCommand, &lcr); err != nil {
+				panic(fmt.Sprintf("failed to unmarshal load-chunk subcommand: %s", err.Error()))
+			}
+			if !lcr.IsLast && !lcr.Abort {
+				return nil, ErrLoadInProgress
+			}
+		}
+	}
+
 	fullNeeded, err := s.snapshotStore.FullNeeded()
 	if err != nil {
 		return nil, err
@@ -1734,7 +1780,7 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 	} else {
 		compactedBuf := bytes.NewBuffer(nil)
 		var err error
-		if pathExists(s.db.WALPath()) {
+		if pathExistsWithData(s.db.WALPath()) {
 			walFD, err := os.Open(s.db.WALPath())
 			if err != nil {
 				return nil, err
@@ -1758,7 +1804,6 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 			if err != nil {
 				return nil, err
 			}
-
 			stats.Get(snapshotWALSize).(*expvar.Int).Set(int64(compactedBuf.Len()))
 			stats.Get(snapshotPrecompactWALSize).(*expvar.Int).Set(walSz)
 			s.logger.Printf("%s snapshot is %d bytes (WAL=%d bytes) on node ID %s", fPLog, compactedBuf.Len(),
@@ -2008,6 +2053,13 @@ func (s *Store) logSize() (int64, error) {
 	return fi.Size(), nil
 }
 
+// NumLoadsInProgress returns the number of loads currently in progress.
+func (s *Store) NumLoadsInProgress() int {
+	s.loadsInProgressMu.Lock()
+	defer s.loadsInProgressMu.Unlock()
+	return len(s.loadsInProgress)
+}
+
 // tryCompress attempts to compress the given command. If the command is
 // successfully compressed, the compressed byte slice is returned, along with
 // a boolean true. If the command cannot be compressed, the uncompressed byte
@@ -2212,36 +2264,45 @@ func applyCommand(data []byte, pDB **sql.DB, decMgmr *chunking.DechunkerManager)
 		if err != nil {
 			return c, &fsmGenericResponse{error: fmt.Errorf("failed to get dechunker: %s", err)}
 		}
-		last, err := dec.WriteChunk(&lcr)
-		if err != nil {
-			return c, &fsmGenericResponse{error: fmt.Errorf("failed to write chunk: %s", err)}
-		}
-		if last {
+		if lcr.Abort {
 			path, err := dec.Close()
 			if err != nil {
 				return c, &fsmGenericResponse{error: fmt.Errorf("failed to close dechunker: %s", err)}
 			}
 			decMgmr.Delete(lcr.StreamId)
 			defer os.Remove(path)
-
-			// Close the underlying database before we overwrite it.
-			if err := db.Close(); err != nil {
-				return c, &fsmGenericResponse{error: fmt.Errorf("failed to close post-load database: %s", err)}
-			}
-			if err := sql.RemoveFiles(db.Path()); err != nil {
-				return c, &fsmGenericResponse{error: fmt.Errorf("failed to remove existing database files: %s", err)}
-			}
-
-			if err := os.Rename(path, db.Path()); err != nil {
-				return c, &fsmGenericResponse{error: fmt.Errorf("failed to rename temporary database file: %s", err)}
-			}
-			newDB, err := sql.Open(db.Path(), db.FKEnabled(), db.WALEnabled())
+		} else {
+			last, err := dec.WriteChunk(&lcr)
 			if err != nil {
-				return c, &fsmGenericResponse{error: fmt.Errorf("failed to open new on-disk database: %s", err)}
+				return c, &fsmGenericResponse{error: fmt.Errorf("failed to write chunk: %s", err)}
 			}
+			if last {
+				path, err := dec.Close()
+				if err != nil {
+					return c, &fsmGenericResponse{error: fmt.Errorf("failed to close dechunker: %s", err)}
+				}
+				decMgmr.Delete(lcr.StreamId)
+				defer os.Remove(path)
 
-			// Swap the underlying database to the new one.
-			*pDB = newDB
+				// Close the underlying database before we overwrite it.
+				if err := db.Close(); err != nil {
+					return c, &fsmGenericResponse{error: fmt.Errorf("failed to close post-load database: %s", err)}
+				}
+				if err := sql.RemoveFiles(db.Path()); err != nil {
+					return c, &fsmGenericResponse{error: fmt.Errorf("failed to remove existing database files: %s", err)}
+				}
+
+				if err := os.Rename(path, db.Path()); err != nil {
+					return c, &fsmGenericResponse{error: fmt.Errorf("failed to rename temporary database file: %s", err)}
+				}
+				newDB, err := sql.Open(db.Path(), db.FKEnabled(), db.WALEnabled())
+				if err != nil {
+					return c, &fsmGenericResponse{error: fmt.Errorf("failed to open new on-disk database: %s", err)}
+				}
+
+				// Swap the underlying database to the new one.
+				*pDB = newDB
+			}
 		}
 		return c, &fsmGenericResponse{}
 	case command.Command_COMMAND_TYPE_NOOP:
@@ -2324,6 +2385,17 @@ func prettyVoter(v bool) string {
 // pathExists returns true if the given path exists.
 func pathExists(p string) bool {
 	if _, err := os.Lstat(p); err != nil && os.IsNotExist(err) {
+		return false
+	}
+	return true
+}
+
+// pathExistsWithData returns true if the given path exists and has data.
+func pathExistsWithData(p string) bool {
+	if !pathExists(p) {
+		return false
+	}
+	if size, err := fileSize(p); err != nil || size == 0 {
 		return false
 	}
 	return true
