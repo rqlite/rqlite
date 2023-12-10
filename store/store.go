@@ -1728,15 +1728,13 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 		// is that the last log entry must be a load-chunk command, and it must
 		// indicate an ongoing load. If that is not the case, then some other
 		// request has been sent to this systemg, and all load operations are invalid.
-		// Also, ignoring some non-nil errors is deliberate and it is left to the
-		// Raft snapshotting system to sort it out.
 		lastIdx, err := s.boltStore.LastIndex()
 		if err != nil {
-			return nil, nil
+			return nil, err
 		}
 		lastLog := &raft.Log{}
 		if err := s.boltStore.GetLog(lastIdx, lastLog); err != nil {
-			return nil, nil
+			return nil, err
 		}
 		var c command.Command
 		if err := command.Unmarshal(lastLog.Data, &c); err != nil {
@@ -1750,7 +1748,6 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 			if !lcr.IsLast && !lcr.Abort {
 				return nil, ErrLoadInProgress
 			}
-
 		}
 	}
 
@@ -1807,7 +1804,6 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 			if err != nil {
 				return nil, err
 			}
-
 			stats.Get(snapshotWALSize).(*expvar.Int).Set(int64(compactedBuf.Len()))
 			stats.Get(snapshotPrecompactWALSize).(*expvar.Int).Set(walSz)
 			s.logger.Printf("%s snapshot is %d bytes (WAL=%d bytes) on node ID %s", fPLog, compactedBuf.Len(),
