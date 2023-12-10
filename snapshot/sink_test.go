@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/hashicorp/raft"
@@ -269,11 +270,15 @@ func Test_SinkCreateFullThenWALSnapshots(t *testing.T) {
 	createSnapshot("snap-3456", 5, 4, 3, "testdata/db-and-wals/wal-01")
 	createSnapshot("snap-4567", 6, 5, 4, "testdata/db-and-wals/wal-02")
 	createSnapshot("snap-5678", 7, 6, 5, "testdata/db-and-wals/wal-03")
+	createSnapshot("snap-9abc", 8, 7, 6, "testdata/db-and-wals/empty-file")
 
 	// Check the database state inside the Store.
 	dbPath, err := store.getDBPath()
 	if err != nil {
 		t.Fatalf("Failed to get DB path: %v", err)
+	}
+	if filepath.Base(dbPath) != "snap-9abc.db" {
+		t.Fatalf("Unexpected DB file name: %s", dbPath)
 	}
 	checkDB, err := db.Open(dbPath, false, true)
 	if err != nil {

@@ -106,6 +106,7 @@ type PoolStats struct {
 }
 
 // IsValidSQLiteFile checks that the supplied path looks like a SQLite file.
+// A non-existent file is considered invalid.
 func IsValidSQLiteFile(path string) bool {
 	f, err := os.Open(path)
 	if err != nil {
@@ -122,13 +123,14 @@ func IsValidSQLiteFile(path string) bool {
 }
 
 // IsValidSQLiteData checks that the supplied data looks like a SQLite data.
-// See https://www.sqlite.org/fileformat.html
+// See https://www.sqlite.org/fileformat.html.
 func IsValidSQLiteData(b []byte) bool {
 	return len(b) > 13 && string(b[0:13]) == "SQLite format"
 }
 
 // IsValidSQLiteWALFile checks that the supplied path looks like a SQLite
-// WAL file. See https://www.sqlite.org/fileformat2.html#walformat
+// WAL file. See https://www.sqlite.org/fileformat2.html#walformat. A
+// non-existent file is considered invalid.
 func IsValidSQLiteWALFile(path string) bool {
 	f, err := os.Open(path)
 	if err != nil {
