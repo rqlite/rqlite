@@ -5,7 +5,7 @@ import (
 	"compress/gzip"
 	"expvar"
 	"fmt"
-	"io/ioutil"
+	"io"
 
 	"google.golang.org/protobuf/proto"
 )
@@ -212,7 +212,7 @@ func gzUncompress(b []byte) ([]byte, error) {
 		return nil, fmt.Errorf("unmarshal gzip NewReader: %s", err)
 	}
 
-	ub, err := ioutil.ReadAll(gz)
+	ub, err := io.ReadAll(gz)
 	if err != nil {
 		return nil, fmt.Errorf("unmarshal gzip ReadAll: %s", err)
 	}
