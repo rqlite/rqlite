@@ -232,7 +232,7 @@ func (s *Store) check() (retError error) {
 		syncDirMaybe(s.dir)
 		s.logger.Printf("check complete")
 	}()
-	s.logger.Printf("checking snapshot store at %s", s.dir)
+	s.logger.Printf("checking consistency of snapshot store at %s", s.dir)
 
 	if err := RemoveAllTmpSnapshotData(s.dir); err != nil {
 		return err
