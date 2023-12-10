@@ -1,3 +1,7 @@
+## 8.0.3 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1466](https://github.com/rqlite/rqlite/pull/1466): Close all dechunkers at Store shutdown.
+
 ## 8.0.2 (December 10th 2023)
 Fix an edge case related to Raft Snapshotting when a chunked load is in progress at the same time.
 ### Implementation changes and bug fixes
