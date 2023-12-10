@@ -14,6 +14,7 @@ import (
 )
 
 func Test_NewUploader(t *testing.T) {
+	ResetStats()
 	storageClient := &mockStorageClient{}
 	dataProvider := &mockDataProvider{}
 	interval := time.Second
@@ -60,7 +61,6 @@ func Test_UploaderSingleUpload(t *testing.T) {
 func Test_UploaderSingleUploadCompress(t *testing.T) {
 	ResetStats()
 	var uploadedData []byte
-
 	var wg sync.WaitGroup
 	wg.Add(1)
 	sc := &mockStorageClient{
@@ -94,7 +94,6 @@ func Test_UploaderSingleUploadCompress(t *testing.T) {
 
 func Test_UploaderDoubleUpload(t *testing.T) {
 	ResetStats()
-
 	var uploadedData []byte
 	var err error
 
@@ -125,7 +124,6 @@ func Test_UploaderDoubleUpload(t *testing.T) {
 
 func Test_UploaderFailThenOK(t *testing.T) {
 	ResetStats()
-
 	var uploadedData []byte
 	uploadCount := 0
 	var err error
@@ -160,6 +158,7 @@ func Test_UploaderFailThenOK(t *testing.T) {
 }
 
 func Test_UploaderOKThenFail(t *testing.T) {
+	ResetStats()
 	var uploadedData []byte
 	uploadCount := 0
 	var err error
@@ -195,6 +194,7 @@ func Test_UploaderOKThenFail(t *testing.T) {
 }
 
 func Test_UploaderContextCancellation(t *testing.T) {
+	ResetStats()
 	var uploadCount int32
 
 	sc := &mockStorageClient{
@@ -218,7 +218,6 @@ func Test_UploaderContextCancellation(t *testing.T) {
 
 func Test_UploaderEnabledFalse(t *testing.T) {
 	ResetStats()
-
 	sc := &mockStorageClient{}
 	dp := &mockDataProvider{data: "my upload data"}
 	uploader := NewUploader(sc, dp, 100*time.Millisecond, false)
@@ -235,9 +234,9 @@ func Test_UploaderEnabledFalse(t *testing.T) {
 }
 
 func Test_UploaderEnabledTrue(t *testing.T) {
+	ResetStats()
 	var uploadedData []byte
 	var err error
-	ResetStats()
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -262,6 +261,7 @@ func Test_UploaderEnabledTrue(t *testing.T) {
 }
 
 func Test_UploaderStats(t *testing.T) {
+	ResetStats()
 	sc := &mockStorageClient{}
 	dp := &mockDataProvider{data: "my upload data"}
 	interval := 100 * time.Millisecond
