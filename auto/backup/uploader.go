@@ -83,33 +83,37 @@ func NewUploader(storageClient StorageClient, dataProvider DataProvider, interva
 }
 
 // Start starts the Uploader service.
-func (u *Uploader) Start(ctx context.Context, isUploadEnabled func() bool) {
+func (u *Uploader) Start(ctx context.Context, isUploadEnabled func() bool) chan struct{} {
+	doneCh := make(chan struct{})
 	if isUploadEnabled == nil {
 		isUploadEnabled = func() bool { return true }
 	}
 
 	u.logger.Printf("starting upload to %s every %s", u.storageClient, u.interval)
 	ticker := time.NewTicker(u.interval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			u.logger.Println("upload service shutting down")
-			return
-		case <-ticker.C:
-			if !isUploadEnabled() {
-				// Reset the lastSum so that the next time we're enabled upload will
-				// happen. We do this to be conservative, as we don't know what was
-				// happening while upload was disabled.
-				u.lastSum = nil
-				continue
-			}
-			if err := u.upload(ctx); err != nil {
-				u.logger.Printf("failed to upload to %s: %v", u.storageClient, err)
+	go func() {
+		defer ticker.Stop()
+		defer close(doneCh)
+		for {
+			select {
+			case <-ctx.Done():
+				u.logger.Println("upload service shutting down")
+				return
+			case <-ticker.C:
+				if !isUploadEnabled() {
+					// Reset the lastSum so that the next time we're enabled upload will
+					// happen. We do this to be conservative, as we don't know what was
+					// happening while upload was disabled.
+					u.lastSum = nil
+					continue
+				}
+				if err := u.upload(ctx); err != nil {
+					u.logger.Printf("failed to upload to %s: %v", u.storageClient, err)
+				}
 			}
 		}
-	}
+	}()
+	return doneCh
 }
 
 // Stats returns the stats for the Uploader service.

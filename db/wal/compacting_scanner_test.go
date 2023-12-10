@@ -7,6 +7,13 @@ import (
 	"testing"
 )
 
+func Test_CompactingScanner_Scan_Empty(t *testing.T) {
+	_, err := NewCompactingScanner(bytes.NewReader([]byte{}), true)
+	if err != io.EOF {
+		t.Fatal(err)
+	}
+}
+
 func Test_CompactingScanner_Scan(t *testing.T) {
 	b, err := os.ReadFile("testdata/wal-reader/ok/wal")
 	if err != nil {

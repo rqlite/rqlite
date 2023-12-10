@@ -232,7 +232,7 @@ func (s *Store) check() (retError error) {
 		syncDirMaybe(s.dir)
 		s.logger.Printf("check complete")
 	}()
-	s.logger.Printf("checking snapshot store at %s", s.dir)
+	s.logger.Printf("checking consistency of snapshot store at %s", s.dir)
 
 	if err := RemoveAllTmpSnapshotData(s.dir); err != nil {
 		return err
@@ -326,7 +326,6 @@ func (s *Store) getSnapshots() ([]*raft.SnapshotMeta, error) {
 }
 
 // getDBPath returns the path to the database file for the most recent snapshot.
-// It is mostly useful for testing.
 func (s *Store) getDBPath() (string, error) {
 	snapshots, err := s.getSnapshots()
 	if err != nil {
