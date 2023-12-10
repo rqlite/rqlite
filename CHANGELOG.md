@@ -2,9 +2,10 @@
 ### Implementation changes and bug fixes
 - [PR #1456](https://github.com/rqlite/rqlite/pull/1459): Standardize on chunk size.
 - [PR #1456](https://github.com/rqlite/rqlite/pull/1459): Set `TrailingLogs=0` to truncate log during user-initiated Snapshotting.
-- [PR #1462](https://github.com/rqlite/rqlite/pull/1462): Refactor redirect logic in HTTP service
-- [PR #1464](https://github.com/rqlite/rqlite/pull/1464): Handle snapshotting of empty WAL files
-  
+- [PR #1462](https://github.com/rqlite/rqlite/pull/1462): Refactor redirect logic in HTTP service.
+- [PR #1464](https://github.com/rqlite/rqlite/pull/1464): Handle snapshotting of empty WAL files.
+- [PR #1465](https://github.com/rqlite/rqlite/pull/1465): Move uploader goroutine into Uploader.
+
 ## 8.0.1 (December 8th 2023)
 This release fixes an edge case issue during restore-from-SQLite. It's possible if a rqlite system crashes shortly after restoring from SQLite it may not have loaded the data correctly.
 
