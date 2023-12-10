@@ -587,6 +587,8 @@ func (s *Store) Close(wait bool) (retErr error) {
 	}
 	s.logger.Printf("closing store with node ID %s, listening on %s", s.raftID, s.ln.Addr().String())
 
+	s.dechunkManager.Close()
+
 	close(s.appliedIdxUpdateDone)
 	close(s.observerClose)
 	<-s.observerDone

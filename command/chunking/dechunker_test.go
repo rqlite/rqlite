@@ -315,6 +315,7 @@ func Test_CreateDechunkerManager(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create DechunkerManager: %v", err)
 	}
+	defer manager.Close()
 	if manager == nil {
 		t.Fatalf("expected DechunkerManager instance, got nil")
 	}
@@ -342,6 +343,7 @@ func Test_GetDechunker(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create DechunkerManager: %v", err)
 	}
+	defer manager.Close()
 
 	dechunker1, err := manager.Get("test1")
 	if err != nil {
@@ -370,6 +372,7 @@ func Test_DeleteDechunker(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create DechunkerManager: %v", err)
 	}
+	defer manager.Close()
 
 	dechunker1, err := manager.Get("test1")
 	if err != nil {

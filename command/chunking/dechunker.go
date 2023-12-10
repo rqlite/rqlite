@@ -117,5 +117,19 @@ func (d *DechunkerManager) Get(id string) (*Dechunker, error) {
 func (d *DechunkerManager) Delete(id string) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	delete(d.m, id)
+	dc, ok := d.m[id]
+	if ok {
+		dc.Close()
+		delete(d.m, id)
+	}
+}
+
+// Closes closes the DechunkerManager and all Dechunkers it manages.
+func (d *DechunkerManager) Close() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for _, dc := range d.m {
+		dc.Close()
+		delete(d.m, dc.streamID)
+	}
 }
