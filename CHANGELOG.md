@@ -1,4 +1,5 @@
-## 8.0.2 (unreleased)
+## 8.0.2 (December 10th 2023)
+Fix an edge case related to Raft Snapshotting when a chunked load is in progress at the same time.
 ### Implementation changes and bug fixes
 - [PR #1456](https://github.com/rqlite/rqlite/pull/1459): Standardize on chunk size.
 - [PR #1456](https://github.com/rqlite/rqlite/pull/1459): Set `TrailingLogs=0` to truncate log during user-initiated Snapshotting.
