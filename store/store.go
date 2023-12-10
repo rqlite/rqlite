@@ -1780,7 +1780,7 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 	} else {
 		compactedBuf := bytes.NewBuffer(nil)
 		var err error
-		if pathExists(s.db.WALPath()) {
+		if pathExistsWithData(s.db.WALPath()) {
 			walFD, err := os.Open(s.db.WALPath())
 			if err != nil {
 				return nil, err
@@ -2385,6 +2385,17 @@ func prettyVoter(v bool) string {
 // pathExists returns true if the given path exists.
 func pathExists(p string) bool {
 	if _, err := os.Lstat(p); err != nil && os.IsNotExist(err) {
+		return false
+	}
+	return true
+}
+
+// pathExistsWithData returns true if the given path exists and has data.
+func pathExistsWithData(p string) bool {
+	if !pathExists(p) {
+		return false
+	}
+	if size, err := fileSize(p); err != nil || size == 0 {
 		return false
 	}
 	return true
