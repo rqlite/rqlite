@@ -182,7 +182,8 @@ func Test_SingleNodeSnapshot(t *testing.T) {
 	}
 
 	// Snap the node and write to disk.
-	f, err := s.Snapshot()
+	fsm := NewFSM(s)
+	f, err := fsm.Snapshot()
 	if err != nil {
 		t.Fatalf("failed to snapshot node: %s", err.Error())
 	}
@@ -204,7 +205,7 @@ func Test_SingleNodeSnapshot(t *testing.T) {
 		t.Fatalf("failed to open snapshot file: %s", err.Error())
 	}
 	defer snapFile.Close()
-	if err := s.Restore(snapFile); err != nil {
+	if err := fsm.Restore(snapFile); err != nil {
 		t.Fatalf("failed to restore snapshot from disk: %s", err.Error())
 	}
 
@@ -1519,7 +1520,7 @@ func Test_SingleNodeLoadChunk_SnapshotBlock(t *testing.T) {
 	if s.NumLoadsInProgress() != 1 {
 		t.Fatalf("expected 1 load in progress, got %d", s.NumLoadsInProgress())
 	}
-	if _, err := s.Snapshot(); err != ErrLoadInProgress {
+	if err := s.Snapshot(); err != ErrLoadInProgress {
 		t.Fatalf("snapshot should have been blocked")
 	}
 	for {
@@ -1535,7 +1536,7 @@ func Test_SingleNodeLoadChunk_SnapshotBlock(t *testing.T) {
 			break
 		}
 	}
-	if _, err := s.Snapshot(); err != nil {
+	if err := s.Snapshot(); err != nil {
 		t.Fatalf("snapshot should not have been blocked")
 	}
 	if s.NumLoadsInProgress() != 0 {
@@ -1553,13 +1554,13 @@ func Test_SingleNodeLoadChunk_SnapshotBlock(t *testing.T) {
 	if err := s.LoadChunk(chunk); err != nil {
 		t.Fatalf("failed to load first chunk: %s", err.Error())
 	}
-	if _, err := s.Snapshot(); err != ErrLoadInProgress {
+	if err := s.Snapshot(); err != ErrLoadInProgress {
 		t.Fatalf("snapshot should have been blocked")
 	}
 	if err := s.LoadChunk(chunker.Abort()); err != nil {
 		t.Fatalf("failed to load abort chunk: %s", err.Error())
 	}
-	if _, err := s.Snapshot(); err != nil {
+	if err := s.Snapshot(); err != nil {
 		t.Fatalf("snapshot should not have been blocked")
 	}
 
@@ -1574,7 +1575,7 @@ func Test_SingleNodeLoadChunk_SnapshotBlock(t *testing.T) {
 	if err := s.LoadChunk(chunk); err != nil {
 		t.Fatalf("failed to load first chunk: %s", err.Error())
 	}
-	if _, err := s.Snapshot(); err != ErrLoadInProgress {
+	if err := s.Snapshot(); err != ErrLoadInProgress {
 		t.Fatalf("snapshot should have been blocked")
 	}
 	er := executeRequestFromString("anything at all, doesn't matter", false, false)
@@ -1582,7 +1583,7 @@ func Test_SingleNodeLoadChunk_SnapshotBlock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to execute: %s", err.Error())
 	}
-	if _, err := s.Snapshot(); err != nil {
+	if err := s.Snapshot(); err != nil {
 		t.Fatalf("snapshot should not have been blocked, err: %s", err.Error())
 	}
 }

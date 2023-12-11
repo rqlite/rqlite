@@ -484,7 +484,7 @@ func (s *Store) Open() (retErr error) {
 	}
 
 	// Instantiate the Raft system.
-	ra, err := raft.NewRaft(config, s, s.raftLog, s.raftStable, s.snapshotStore, s.raftTn)
+	ra, err := raft.NewRaft(config, NewFSM(s), s.raftLog, s.raftStable, s.snapshotStore, s.raftTn)
 	if err != nil {
 		return fmt.Errorf("creating the raft system failed: %s", err)
 	}
@@ -1640,8 +1640,8 @@ type fsmGenericResponse struct {
 	error error
 }
 
-// Apply applies a Raft log entry to the database.
-func (s *Store) Apply(l *raft.Log) (e interface{}) {
+// fsmApply applies a Raft log entry to the database.
+func (s *Store) fsmApply(l *raft.Log) (e interface{}) {
 	defer func() {
 		s.fsmIndexMu.Lock()
 		defer s.fsmIndexMu.Unlock()
@@ -1712,7 +1712,7 @@ func (s *Store) Database(leader bool) ([]byte, error) {
 	return s.db.Serialize()
 }
 
-// Snapshot returns a snapshot of the database.
+// fsmSnapshot returns a snapshot of the database.
 //
 // The system must ensure that no transaction is taking place during this call.
 // Hashicorp Raft guarantees that this function will not be called concurrently
@@ -1722,7 +1722,7 @@ func (s *Store) Database(leader bool) ([]byte, error) {
 //
 // http://sqlite.org/howtocorrupt.html states it is safe to copy or serialize the
 // database as long as no writes to the database are in progress.
-func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
+func (s *Store) fsmSnapshot() (raft.FSMSnapshot, error) {
 	startT := time.Now()
 
 	if s.NumLoadsInProgress() > 0 {
@@ -1831,10 +1831,10 @@ func (s *Store) Snapshot() (raft.FSMSnapshot, error) {
 	}, nil
 }
 
-// Restore restores the node to a previous state. The Hashicorp docs state this
+// fsmRestore restores the node to a previous state. The Hashicorp docs state this
 // will not be called concurrently with Apply(), so synchronization with Execute()
 // is not necessary.
-func (s *Store) Restore(rc io.ReadCloser) error {
+func (s *Store) fsmRestore(rc io.ReadCloser) error {
 	s.logger.Printf("initiating node restore on node ID %s", s.raftID)
 	startT := time.Now()
 
@@ -1961,8 +1961,8 @@ func (s *Store) observe() (closeCh, doneCh chan struct{}) {
 	return closeCh, doneCh
 }
 
-// snapAndTruncate performs a snapshot, and then truncates the Raft log.
-func (s *Store) snapAndTruncate() error {
+// Snapshot performs a snapshot, and then truncates the Raft log.
+func (s *Store) Snapshot() error {
 	// reload the config with zero trailing logs.
 	cfg := s.raft.ReloadableConfig()
 	defer func() {
@@ -1977,7 +1977,10 @@ func (s *Store) snapAndTruncate() error {
 		return fmt.Errorf("failed to reload Raft config: %s", err.Error())
 	}
 	if err := s.raft.Snapshot().Error(); err != nil {
-		return fmt.Errorf("failed to snapshot: %s", err.Error())
+		if strings.Contains(err.Error(), ErrLoadInProgress.Error()) {
+			return ErrLoadInProgress
+		}
+		return err
 	}
 	stats.Add(numSnapshots, 1)
 	return nil
@@ -1995,7 +1998,7 @@ func (s *Store) runSnapshotting() (triggerT, closeCh, doneCh chan struct{}) {
 		for {
 			select {
 			case <-triggerT:
-				if err := s.snapAndTruncate(); err != nil {
+				if err := s.Snapshot(); err != nil {
 					s.logger.Printf("failed to snapshot: %s", err.Error())
 				}
 			case <-closeCh:
