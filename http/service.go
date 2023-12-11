@@ -772,21 +772,21 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 				// Allow this if block to exit without return, so response remains as before request
 				// forwarding was put in place.
 			}
+			nChunks, nr, nw := chunker.Counts()
 			if chunk.IsLast {
-				nChunks, nr, nw := chunker.Counts()
 				s.logger.Printf("%d bytes read, %d chunks generated, containing %d bytes of compressed data (compression ratio %.2f)",
 					nr, nChunks, nw, float64(nr)/float64(nw))
 				break
 			}
 			if chunk.Abort {
 				stats.Add(numLoadAborted, 1)
-				s.logger.Printf("load request aborted")
+				s.logger.Printf("load request aborted after %d bytes read, %d chunks generated", nr, nChunks)
 				break
 			}
 		}
 	}
 
-	s.logger.Printf("load request completed in %s", time.Since(startTime).String())
+	s.logger.Printf("load request finished in %s", time.Since(startTime).String())
 	s.writeResponse(w, r, resp)
 }
 
