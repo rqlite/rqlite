@@ -2,7 +2,7 @@
 ### Implementation changes and bug fixes
 - [PR #1466](https://github.com/rqlite/rqlite/pull/1466): Close all dechunkers at Store shutdown.
 - [PR #1467](https://github.com/rqlite/rqlite/pull/1467): Introduce explicit FSM type.
-- [PR #1468](https://github.com/rqlite/rqlite/pull/1468): Fix restart issue after chunked loading.
+- [PR #1468](https://github.com/rqlite/rqlite/pull/1468), [PR #1469](https://github.com/rqlite/rqlite/pull/1469): Fix restart issue after chunked loading.
 
 ## 8.0.2 (December 10th 2023)
 Fix an edge case related to Raft Snapshotting when a chunked load is in progress at the same time.
