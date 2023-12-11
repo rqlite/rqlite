@@ -1372,28 +1372,24 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 	}
 	if err := sql.RemoveFiles(s.dbPath); err != nil {
 		return 0, err
-	}
-
+	
 	n, err := copyFromReaderToFile(s.dbPath, r)
 	if err != nil {
 		return n, err
 	}
-
 	db, err := sql.Open(s.dbPath, s.dbConf.FKConstraints, true)
 	if err != nil {
 		return n, err
 	}
 	s.db = db
 
-	// Raft won't snapshot unless there is one unsnappshotted log entry.
+	// Raft won't snapshot unless there is at least one unsnappshotted log entry.
 	if err := s.Noop("bypass"); err != nil {
 		return n, err
 	}
-
 	if err := s.snapshotStore.SetFullNeeded(); err != nil {
 		return n, err
 	}
-
 	if err := s.Snapshot(); err != nil {
 		return n, err
 	}
