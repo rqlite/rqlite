@@ -1961,7 +1961,7 @@ func (s *Store) observe() (closeCh, doneCh chan struct{}) {
 	return closeCh, doneCh
 }
 
-// snapAndTruncate performs a snapshot, and then truncates the Raft log.
+// Snapshot performs a snapshot, and then truncates the Raft log.
 func (s *Store) Snapshot() error {
 	// reload the config with zero trailing logs.
 	cfg := s.raft.ReloadableConfig()
