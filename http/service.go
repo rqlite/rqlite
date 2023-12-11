@@ -69,6 +69,9 @@ type Database interface {
 	// LoadChunk loads a SQLite database into the node, chunk by chunk.
 	LoadChunk(lc *command.LoadChunkRequest) error
 
+	// ReadFrom reads and loads a SQLite database into the node, initially bypassing
+	// the Raft system. It then triggers a Raft snapshot, which will then make
+	// Raft aware of the new data.
 	ReadFrom(r io.Reader) (int64, error)
 }
 
@@ -730,12 +733,11 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 
 					addr, err := s.loadClusterChunk(r, qp, chunk)
 					if err != nil {
+						http.Error(w, err.Error(), http.StatusInternalServerError)
 						if err == ErrRemoteLoadNotAuthorized {
 							http.Error(w, err.Error(), http.StatusUnauthorized)
 						} else if err == ErrLeaderNotFound {
 							http.Error(w, err.Error(), http.StatusServiceUnavailable)
-						} else {
-							http.Error(w, err.Error(), http.StatusInternalServerError)
 						}
 						s.loadClusterChunk(r, qp, chunker.Abort())
 						return
@@ -758,7 +760,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 			}
 		}
 	}
-	s.writeResponse(w, r, qp, resp)
+	s.writeResponse(w, qp, resp)
 }
 
 func (s *Service) loadClusterChunk(r *http.Request, qp QueryParams, chunk *command.LoadChunkRequest) (string, error) {
@@ -1099,7 +1101,7 @@ func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request, qp Query
 	}
 
 	resp.end = time.Now()
-	s.writeResponse(w, r, qp, resp)
+	s.writeResponse(w, qp, resp)
 }
 
 // execute handles queries that modify the database.
@@ -1172,7 +1174,7 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request, qp QueryParams
 		resp.Results.ExecuteResult = results
 	}
 	resp.end = time.Now()
-	s.writeResponse(w, r, qp, resp)
+	s.writeResponse(w, qp, resp)
 }
 
 // handleQuery handles queries that do not modify the database.
@@ -1258,7 +1260,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryPa
 		resp.Results.QueryRows = results
 	}
 	resp.end = time.Now()
-	s.writeResponse(w, r, qp, resp)
+	s.writeResponse(w, qp, resp)
 }
 
 func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request, qp QueryParams) {
@@ -1345,7 +1347,7 @@ func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request, qp Query
 		resp.Results.ExecuteQueryResponse = results
 	}
 	resp.end = time.Now()
-	s.writeResponse(w, r, qp, resp)
+	s.writeResponse(w, qp, resp)
 }
 
 // handleExpvar serves registered expvar information over HTTP.
@@ -1613,7 +1615,7 @@ func (s *Service) tlsStats() map[string]interface{} {
 }
 
 // writeResponse writes the given response to the given writer.
-func (s *Service) writeResponse(w http.ResponseWriter, r *http.Request, qp QueryParams, j Responser) {
+func (s *Service) writeResponse(w http.ResponseWriter, qp QueryParams, j Responser) {
 	var b []byte
 	var err error
 	if qp.Timings() {
