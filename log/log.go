@@ -53,8 +53,9 @@ func (l *Log) Indexes() (uint64, uint64, error) {
 // log entry written to the Raft log. Returns an index of
 // zero if no such log exists.
 func (l *Log) LastCommandIndex(fi, li uint64) (uint64, error) {
-	// Check for empty log.
-	if li == 0 {
+	// Check for empty log. According to the interface defintion, if
+	// the first index is zero, or the last, the log is empty.
+	if fi == 0 || li == 0 {
 		return 0, nil
 	}
 
