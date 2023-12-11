@@ -1281,6 +1281,7 @@ type MockStore struct {
 	requestFn   func(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, error)
 	backupFn    func(br *command.BackupRequest, dst io.Writer) error
 	loadChunkFn func(lr *command.LoadChunkRequest) error
+	readFromFn  func(r io.Reader) (int64, error)
 	leaderAddr  string
 	notReady    bool // Default value is true, easier to test.
 }
@@ -1346,6 +1347,13 @@ func (m *MockStore) LoadChunk(lc *command.LoadChunkRequest) error {
 		return m.loadChunkFn(lc)
 	}
 	return nil
+}
+
+func (m *MockStore) ReadFrom(r io.Reader) (int64, error) {
+	if m.readFromFn != nil {
+		return m.readFromFn(r)
+	}
+	return 0, nil
 }
 
 type mockClusterService struct {

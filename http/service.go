@@ -69,6 +69,8 @@ type Database interface {
 
 	// LoadChunk loads a SQLite database into the node, chunk by chunk.
 	LoadChunk(lc *command.LoadChunkRequest) error
+
+	ReadFrom(r io.Reader) (int64, error)
 }
 
 // Store is the interface the Raft-based database must implement.
@@ -692,12 +694,6 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	chunkSz, err := chunkSizeParam(r, defaultChunkSize)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
 	// Peek at the incoming bytes so we can determine if this is a SQLite database
 	validSQLite := false
 	bufReader := bufio.NewReader(r.Body)
@@ -740,53 +736,72 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 		}
 		resp.end = time.Now()
 	} else {
-		chunker := chunking.NewChunker(bufReader, int64(chunkSz))
-		for {
-			chunk, err := chunker.Next()
+		bypass, err := isBypass(r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if bypass {
+			s.logger.Printf("bypass load requested")
+			n, err := s.store.ReadFrom(bufReader)
 			if err != nil {
-				chunk = chunker.Abort()
+				http.Error(w, err.Error(), http.StatusServiceUnavailable)
+				return
 			}
-			err = s.store.LoadChunk(chunk)
-			if err != nil && err != store.ErrNotLeader {
-				s.store.LoadChunk(chunker.Abort())
+			s.logger.Printf("bypass load request read %d bytes, completed in %s", n, time.Since(startTime).String())
+		} else {
+			chunkSz, err := chunkSizeParam(r, defaultChunkSize)
+			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
-			} else if err != nil && err == store.ErrNotLeader {
-				if s.DoRedirect(w, r) {
-					return
-				}
-
-				addr, err := s.loadClusterChunk(r, chunk)
+			}
+			chunker := chunking.NewChunker(bufReader, int64(chunkSz))
+			for {
+				chunk, err := chunker.Next()
 				if err != nil {
-					if err == ErrRemoteLoadNotAuthorized {
-						http.Error(w, err.Error(), http.StatusUnauthorized)
-					} else if err == ErrLeaderNotFound {
-						http.Error(w, err.Error(), http.StatusServiceUnavailable)
-					} else {
-						http.Error(w, err.Error(), http.StatusInternalServerError)
-					}
-					s.loadClusterChunk(r, chunker.Abort())
-					return
+					chunk = chunker.Abort()
 				}
-				w.Header().Add(ServedByHTTPHeader, addr)
-				// Allow this if block to exit without return, so response remains as before request
-				// forwarding was put in place.
+				err = s.store.LoadChunk(chunk)
+				if err != nil && err != store.ErrNotLeader {
+					s.store.LoadChunk(chunker.Abort())
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				} else if err != nil && err == store.ErrNotLeader {
+					if s.DoRedirect(w, r) {
+						return
+					}
+
+					addr, err := s.loadClusterChunk(r, chunk)
+					if err != nil {
+						if err == ErrRemoteLoadNotAuthorized {
+							http.Error(w, err.Error(), http.StatusUnauthorized)
+						} else if err == ErrLeaderNotFound {
+							http.Error(w, err.Error(), http.StatusServiceUnavailable)
+						} else {
+							http.Error(w, err.Error(), http.StatusInternalServerError)
+						}
+						s.loadClusterChunk(r, chunker.Abort())
+						return
+					}
+					w.Header().Add(ServedByHTTPHeader, addr)
+					// Allow this if block to exit without return, so response remains as before request
+					// forwarding was put in place.
+				}
+				nChunks, nr, nw := chunker.Counts()
+				if chunk.IsLast {
+					s.logger.Printf("%d bytes read, %d chunks generated, containing %d bytes of compressed data (compression ratio %.2f)",
+						nr, nChunks, nw, float64(nr)/float64(nw))
+					break
+				}
+				if chunk.Abort {
+					stats.Add(numLoadAborted, 1)
+					s.logger.Printf("load request aborted after %d bytes read, %d chunks generated", nr, nChunks)
+					break
+				}
 			}
-			nChunks, nr, nw := chunker.Counts()
-			if chunk.IsLast {
-				s.logger.Printf("%d bytes read, %d chunks generated, containing %d bytes of compressed data (compression ratio %.2f)",
-					nr, nChunks, nw, float64(nr)/float64(nw))
-				break
-			}
-			if chunk.Abort {
-				stats.Add(numLoadAborted, 1)
-				s.logger.Printf("load request aborted after %d bytes read, %d chunks generated", nr, nChunks)
-				break
-			}
+			s.logger.Printf("load request completed in %s", time.Since(startTime).String())
 		}
 	}
-
-	s.logger.Printf("load request finished in %s", time.Since(startTime).String())
 	s.writeResponse(w, r, resp)
 }
 
@@ -1966,6 +1981,16 @@ func nonVoters(req *http.Request) (bool, error) {
 // isTimings returns whether timings are requested.
 func isTimings(req *http.Request) (bool, error) {
 	return queryParam(req, "timings")
+}
+
+// isBypass returns whether bypass loading is requested.
+func isBypass(req *http.Request) (bool, error) {
+	q := req.URL.Query()
+	v := q.Get("mode")
+	if v == "" {
+		return false, nil
+	}
+	return strings.ToLower(v) == "bypass", nil
 }
 
 // isWait returns whether a wait operation is requested.

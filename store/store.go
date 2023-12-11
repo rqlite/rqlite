@@ -42,6 +42,10 @@ var (
 	// operation.
 	ErrNotLeader = errors.New("not leader")
 
+	// ErrNotSingleNode is returned when a node attempts to execute a single-node
+	// only operation.
+	ErrNotSingleNode = errors.New("not single-node")
+
 	// ErrStaleRead is returned if the executing the query would violate the
 	// requested freshness.
 	ErrStaleRead = errors.New("stale read")
@@ -100,6 +104,7 @@ const (
 	numProvides               = "num_provides"
 	numBackups                = "num_backups"
 	numLoads                  = "num_loads"
+	numLoadsBypass            = "num_loads_bypass"
 	numRestores               = "num_restores"
 	numAutoRestores           = "num_auto_restores"
 	numAutoRestoresSkipped    = "num_auto_restores_skipped"
@@ -140,6 +145,7 @@ func ResetStats() {
 	stats.Add(numProvides, 0)
 	stats.Add(numBackups, 0)
 	stats.Add(numLoads, 0)
+	stats.Add(numLoadsBypass, 0)
 	stats.Add(numRestores, 0)
 	stats.Add(numRecoveries, 0)
 	stats.Add(numAutoRestores, 0)
@@ -204,7 +210,7 @@ type Store struct {
 	raftTn *NodeTransport
 	raftID string    // Node ID.
 	dbConf *DBConfig // SQLite database config.
-	dbPath string    // Path to underlying SQLite file, if not in-memory.
+	dbPath string    // Path to underlying SQLite file.
 	db     *sql.DB   // The underlying SQLite store.
 
 	queryTxMu sync.RWMutex
@@ -1344,6 +1350,51 @@ func (s *Store) load(lr *command.LoadRequest) error {
 	s.logger.Printf("node loaded in %s (%d bytes)", time.Since(startT), len(b))
 
 	return nil
+}
+
+// ReadFrom reads data from r, and loads it into the database, bypassing Raft consensus.
+// One the data is loaded, a snapshot is triggered, which then results in a system as
+// if the data had been loaded through Raft consensus.
+func (s *Store) ReadFrom(r io.Reader) (int64, error) {
+	if s.raft.State() != raft.Leader {
+		return 0, ErrNotLeader
+	}
+	nodes, err := s.Nodes()
+	if err != nil {
+		return 0, err
+	}
+	if len(nodes) != 1 {
+		return 0, ErrNotSingleNode
+	}
+
+	if err := s.db.Close(); err != nil {
+		return 0, err
+	}
+	if err := sql.RemoveFiles(s.dbPath); err != nil {
+		return 0, err
+	}
+
+	n, err := copyFromReaderToFile(s.dbPath, r)
+	if err != nil {
+		return n, err
+	}
+
+	db, err := sql.Open(s.dbPath, s.dbConf.FKConstraints, true)
+	if err != nil {
+		return n, err
+	}
+	s.db = db
+
+	// Raft won't snapshot unless there is one unsnappshotted log entry.
+	if err := s.Noop("bypass"); err != nil {
+		return n, err
+	}
+
+	if err := s.Snapshot(); err != nil {
+		return n, err
+	}
+	stats.Add(numLoadsBypass, 1)
+	return n, nil
 }
 
 // Notify notifies this Store that a node is ready for bootstrapping at the
