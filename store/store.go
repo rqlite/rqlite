@@ -1977,7 +1977,10 @@ func (s *Store) Snapshot() error {
 		return fmt.Errorf("failed to reload Raft config: %s", err.Error())
 	}
 	if err := s.raft.Snapshot().Error(); err != nil {
-		return fmt.Errorf("failed to snapshot: %s", err.Error())
+		if strings.Contains(err.Error(), ErrLoadInProgress.Error()) {
+			return ErrLoadInProgress
+		}
+		return err
 	}
 	stats.Add(numSnapshots, 1)
 	return nil
