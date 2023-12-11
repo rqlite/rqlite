@@ -1390,6 +1390,10 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 		return n, err
 	}
 
+	if err := s.snapshotStore.SetFullNeeded(); err != nil {
+		return n, err
+	}
+
 	if err := s.Snapshot(); err != nil {
 		return n, err
 	}
