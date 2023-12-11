@@ -666,6 +666,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 	// Peek at the incoming bytes so we can determine if this is a SQLite database
 	validSQLite := false
 	bufReader := bufio.NewReader(r.Body)
+	defer r.Body.Close()
 	peek, err := bufReader.Peek(db.SQLiteHeaderSize)
 	if err == nil {
 		validSQLite = db.IsValidSQLiteData(peek)
@@ -687,7 +688,6 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		r.Body.Close()
 
 		queries := []string{string(b)}
 		er := executeRequestFromStrings(queries, qp.Timings(), false)
