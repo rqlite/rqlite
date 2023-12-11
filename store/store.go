@@ -1353,7 +1353,7 @@ func (s *Store) load(lr *command.LoadRequest) error {
 }
 
 // ReadFrom reads data from r, and loads it into the database, bypassing Raft consensus.
-// One the data is loaded, a snapshot is triggered, which then results in a system as
+// Once the data is loaded, a snapshot is triggered, which then results in a system as
 // if the data had been loaded through Raft consensus.
 func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 	if s.raft.State() != raft.Leader {
