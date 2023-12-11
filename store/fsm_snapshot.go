@@ -2,11 +2,37 @@ package store
 
 import (
 	"expvar"
+	"io"
 	"log"
 	"time"
 
 	"github.com/hashicorp/raft"
 )
+
+// FSM is a wrapper around the Store which implements raft.FSM.
+type FSM struct {
+	s *Store
+}
+
+// NewFSM returns a new FSM.
+func NewFSM(s *Store) *FSM {
+	return &FSM{s: s}
+}
+
+// Apply applies a Raft log entry to the key-value store.
+func (f *FSM) Apply(l *raft.Log) interface{} {
+	return f.s.fsmApply(l)
+}
+
+// Snapshot returns a Snapshot of the Store
+func (f *FSM) Snapshot() (raft.FSMSnapshot, error) {
+	return f.s.fsmSnapshot()
+}
+
+// Restore restores the Store from a snapshot.
+func (f *FSM) Restore(rc io.ReadCloser) error {
+	return f.s.fsmRestore(rc)
+}
 
 // FSMSnapshot is a wrapper around raft.FSMSnapshot which adds instrumentation and
 // logging.
