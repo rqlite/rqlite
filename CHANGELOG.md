@@ -1,4 +1,4 @@
-## 8.0.3 (December 11 2023)
+## 8.0.3 (December 11th 2023)
 ### Implementation changes and bug fixes
 - [PR #1466](https://github.com/rqlite/rqlite/pull/1466): Close all dechunkers at Store shutdown.
 - [PR #1467](https://github.com/rqlite/rqlite/pull/1467): Introduce explicit FSM type.
