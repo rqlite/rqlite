@@ -19,7 +19,7 @@ func NewFSM(s *Store) *FSM {
 	return &FSM{s: s}
 }
 
-// Apply applies a Raft log entry to the key-value store.
+// Apply applies a Raft log entry to the Store.
 func (f *FSM) Apply(l *raft.Log) interface{} {
 	return f.s.fsmApply(l)
 }
