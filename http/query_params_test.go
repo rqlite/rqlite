@@ -39,11 +39,9 @@ func Test_NewQueryParams(t *testing.T) {
 			}
 
 			qp, err := NewQueryParams(req)
-
 			if (err != nil) != tc.expectError {
 				t.Errorf("Test '%s' failed: expected error: %v, got: %v", tc.name, tc.expectError, err)
 			}
-
 			if err == nil && !reflect.DeepEqual(qp, tc.expected) {
 				t.Errorf("Test '%s' failed: expected: %#v, got: %#v", tc.name, tc.expected, qp)
 			}
