@@ -12,12 +12,13 @@ import (
 )
 
 // QueryParams represents the query parameters passed in an HTTP request.
+// Query parameter keys are case-sensitive, as per the HTTP spec.
 type QueryParams map[string]string
 
 // NewQueryParams returns a new QueryParams from the given HTTP request.
 func NewQueryParams(r *http.Request) (QueryParams, error) {
 	qp := make(QueryParams)
-	values, err := url.ParseQuery(strings.ToLower(r.URL.RawQuery))
+	values, err := url.ParseQuery(r.URL.RawQuery)
 	if err != nil {
 		return nil, err
 	}
