@@ -1,4 +1,7 @@
-## 8.0.4 (unreleased)
+## 8.10.0 (unreleased)
+### New features
+- [PR #1470](https://github.com/rqlite/rqlite/pull/1470): Add high-performance loading mechanism which bypasses Raft.
+
 ### Implementation changes and bug fixes
 - [PR #1471](https://github.com/rqlite/rqlite/pull/1471), [PR #1472](https://github.com/rqlite/rqlite/pull/1472): Refactor query parameters into own code.
 - [PR #1473](https://github.com/rqlite/rqlite/pull/1471): `go mod` updates.
