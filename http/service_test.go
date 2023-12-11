@@ -1199,11 +1199,11 @@ func Test_timeoutVersionPrettyQueryParam(t *testing.T) {
 	defStr := "10s"
 	def := mustParseDuration(defStr)
 	tests := []struct {
-		u      string
-		dur    string
-		ver    string
-		pretty bool
-		err    bool
+		u        string
+		dur      string
+		ver      string
+		pretty   bool
+		parseErr bool
 	}{
 		{
 			u:      "http://localhost:4001/nodes?pretty&timeout=5s&ver=2",
@@ -1235,8 +1235,18 @@ func Test_timeoutVersionPrettyQueryParam(t *testing.T) {
 			ver:    "666",
 		},
 		{
-			u:   "http://localhost:4001/nodes?timeout=zdfjkh",
-			err: true,
+			u:        "http://localhost:4001/nodes?timeout=zdfjkh",
+			parseErr: true,
+		},
+		{
+			u:        "http://localhost:4001/db/load?chunk_kb=aaaa",
+			dur:      defStr,
+			parseErr: true,
+		},
+		{
+			u:        "http://localhost:4001/db/query?q=",
+			dur:      defStr,
+			parseErr: true,
 		},
 	}
 
@@ -1248,14 +1258,17 @@ func Test_timeoutVersionPrettyQueryParam(t *testing.T) {
 		}
 		qp, err := NewQueryParams(req)
 		if err != nil {
-			t.Fatalf("failed to parse query params: %s", err)
+			if !tt.parseErr {
+				t.Fatalf(" unexpectedly failed to parse query params on test %d: %s", i, err)
+			}
+			continue
 		}
 
 		if got, exp := qp.Timeout(def), mustParseDuration(tt.dur); got != exp {
-			t.Fatalf("got wrong timeout, expected %s, got %s", exp, got)
+			t.Fatalf("got wrong timeout on test %d, expected %s, got %s", i, exp, got)
 		}
 		if got, exp := qp.Version(), tt.ver; got != exp {
-			t.Fatalf("got wrong version, expected %s, got %s", exp, got)
+			t.Fatalf("got wrong version on test %d, expected %s, got %s", i, exp, got)
 		}
 		if got, exp := qp.Pretty(), tt.pretty; got != exp {
 			t.Fatalf("got wrong pretty on test %d, expected %t, got %t", i, exp, got)

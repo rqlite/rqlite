@@ -1,6 +1,7 @@
 package http
 
 import (
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -29,7 +30,7 @@ func NewQueryParams(r *http.Request) (QueryParams, error) {
 		if ok {
 			_, err := time.ParseDuration(t)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("%s is not a valid duration", k)
 			}
 		}
 	}
@@ -37,7 +38,13 @@ func NewQueryParams(r *http.Request) (QueryParams, error) {
 	if ok {
 		_, err := strconv.Atoi(sz)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("chunk_kb is not an integer")
+		}
+	}
+	q, ok := qp["q"]
+	if ok {
+		if q == "" {
+			return nil, fmt.Errorf("query parameter not set")
 		}
 	}
 	return qp, nil
@@ -168,7 +175,7 @@ func (qp QueryParams) Timeout(def time.Duration) time.Duration {
 
 // Version returns the requested version.
 func (qp QueryParams) Version() string {
-	return qp["version"]
+	return qp["ver"]
 }
 
 // HasKey returns true if the given key is present in the query parameters.
