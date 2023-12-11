@@ -1985,12 +1985,7 @@ func isTimings(req *http.Request) (bool, error) {
 
 // isBypass returns whether bypass loading is requested.
 func isBypass(req *http.Request) (bool, error) {
-	q := req.URL.Query()
-	v := q.Get("mode")
-	if v == "" {
-		return false, nil
-	}
-	return strings.ToLower(v) == "bypass", nil
+	return queryParam(req, "bypass")
 }
 
 // isWait returns whether a wait operation is requested.
