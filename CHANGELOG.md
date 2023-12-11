@@ -1,3 +1,7 @@
+## 8.0.4 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1471](https://github.com/rqlite/rqlite/pull/1471): Refactor query parameters into own code.
+
 ## 8.0.3 (December 11th 2023)
 ### Implementation changes and bug fixes
 - [PR #1466](https://github.com/rqlite/rqlite/pull/1466): Close all dechunkers at Store shutdown.

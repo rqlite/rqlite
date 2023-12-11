@@ -895,14 +895,16 @@ func Test_DoRedirect(t *testing.T) {
 	}
 	s := New("127.0.0.1:0", m, c, nil)
 	req := mustNewHTTPRequest("http://qux:4001")
+	qp := mustGetQueryParams(req)
 
-	if s.DoRedirect(nil, req) {
+	if s.DoRedirect(nil, req, qp) {
 		t.Fatalf("incorrectly redirected")
 	}
 
 	req = mustNewHTTPRequest("http://qux:4001/db/query?redirect")
+	qp = mustGetQueryParams(req)
 	w := httptest.NewRecorder()
-	if !s.DoRedirect(w, req) {
+	if !s.DoRedirect(w, req, qp) {
 		t.Fatalf("incorrectly not redirected")
 	}
 	if exp, got := http.StatusMovedPermanently, w.Code; exp != got {
@@ -1197,11 +1199,11 @@ func Test_timeoutVersionPrettyQueryParam(t *testing.T) {
 	defStr := "10s"
 	def := mustParseDuration(defStr)
 	tests := []struct {
-		u      string
-		dur    string
-		ver    string
-		pretty bool
-		err    bool
+		u        string
+		dur      string
+		ver      string
+		pretty   bool
+		parseErr bool
 	}{
 		{
 			u:      "http://localhost:4001/nodes?pretty&timeout=5s&ver=2",
@@ -1233,8 +1235,18 @@ func Test_timeoutVersionPrettyQueryParam(t *testing.T) {
 			ver:    "666",
 		},
 		{
-			u:   "http://localhost:4001/nodes?timeout=zdfjkh",
-			err: true,
+			u:        "http://localhost:4001/nodes?timeout=zdfjkh",
+			parseErr: true,
+		},
+		{
+			u:        "http://localhost:4001/db/load?chunk_kb=aaaa",
+			dur:      defStr,
+			parseErr: true,
+		},
+		{
+			u:        "http://localhost:4001/db/query?q=",
+			dur:      defStr,
+			parseErr: true,
 		},
 	}
 
@@ -1244,33 +1256,22 @@ func Test_timeoutVersionPrettyQueryParam(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to create request: %s", err)
 		}
-
-		timeout, err := timeoutParam(req, def)
+		qp, err := NewQueryParams(req)
 		if err != nil {
-			if tt.err {
-				// Error is expected, all is OK.
-				continue
+			if !tt.parseErr {
+				t.Fatalf(" unexpectedly failed to parse query params on test %d: %s", i, err)
 			}
-			t.Fatalf("failed to get timeout as expected: %s", err)
-		}
-		if timeout != mustParseDuration(tt.dur) {
-			t.Fatalf("got wrong timeout, expected %s, got %s", mustParseDuration(tt.dur), timeout)
+			continue
 		}
 
-		ver, err := verParam(req)
-		if err != nil {
-			t.Fatalf("failed to get version as expected: %s", err)
+		if got, exp := qp.Timeout(def), mustParseDuration(tt.dur); got != exp {
+			t.Fatalf("got wrong timeout on test %d, expected %s, got %s", i, exp, got)
 		}
-		if ver != tt.ver {
-			t.Fatalf("got wrong version, expected %s, got %s", tt.ver, ver)
+		if got, exp := qp.Version(), tt.ver; got != exp {
+			t.Fatalf("got wrong version on test %d, expected %s, got %s", i, exp, got)
 		}
-
-		pretty, err := isPretty(req)
-		if err != nil {
-			t.Fatalf("failed to get pretty as expected on test %d: %s", i, err)
-		}
-		if pretty != tt.pretty {
-			t.Fatalf("got wrong pretty on test %d, expected %t, got %t", i, tt.pretty, pretty)
+		if got, exp := qp.Pretty(), tt.pretty; got != exp {
+			t.Fatalf("got wrong pretty on test %d, expected %t, got %t", i, exp, got)
 		}
 	}
 }
@@ -1468,4 +1469,12 @@ func mustGunzip(b []byte) []byte {
 	}
 
 	return dec
+}
+
+func mustGetQueryParams(req *http.Request) QueryParams {
+	qp, err := NewQueryParams(req)
+	if err != nil {
+		panic("failed to get query params")
+	}
+	return qp
 }
