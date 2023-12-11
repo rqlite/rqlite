@@ -182,12 +182,26 @@ class TestSingleNode(unittest.TestCase):
       time.sleep(1)
       t+=1
 
+class TestSingleNodeLoadRestart(unittest.TestCase):
+  ''' Test that a node can load a SQLite data set in binary format'''
   def test_load_binary(self):
-    ''' Test that a node can load a SQLite data set in binary format'''
-    n = self.cluster.wait_for_leader()
-    j = n.restore('system_test/e2e/testdata/1000-numbers.db', fmt='binary',chunk_kb=4)
-    j = n.query('SELECT COUNT(*) from test')
+    self.n = Node(RQLITED_PATH, '0',  raft_snap_threshold=8192, raft_snap_int="30s")
+    self.n.start()
+    n = self.n.wait_for_leader()
+    j = self.n.restore('system_test/e2e/testdata/1000-numbers.db', fmt='binary',chunk_kb=4)
+    j = self.n.query('SELECT COUNT(*) from test')
     self.assertEqual(j, d_("{'results': [{'values': [[1000]], 'types': ['integer'], 'columns': ['COUNT(*)']}]}"))
+
+    # Wait for a snapshot and persist to happen.
+    time.sleep(5)
+
+    # Ensure node can restart after chunked loading -- and the log truncation it forces..
+    self.n.stop()
+    self.n.start()
+    self.n.wait_for_leader()
+
+  def tearDown(self):
+    deprovision_node(self.n)
 
 class TestSingleNodeReadyz(unittest.TestCase):
   def test(self):
