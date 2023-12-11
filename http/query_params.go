@@ -98,19 +98,24 @@ func (qp QueryParams) NonVoters() bool {
 	return qp.HasKey("nonvoters")
 }
 
-// NoLeader returns true if the query parameters request no leader mode
+// NoLeader returns true if the query parameters request no leader mode.
 func (qp QueryParams) NoLeader() bool {
 	return qp.HasKey("noleader")
 }
 
-// Redirect returns true if the query parameters request redirect mode
+// Redirect returns true if the query parameters request redirect mode.
 func (qp QueryParams) Redirect() bool {
 	return qp.HasKey("redirect")
 }
 
-// Vacuum returns true if the query parameters request vacuum mode
+// Vacuum returns true if the query parameters request vacuum mode.
 func (qp QueryParams) Vacuum() bool {
 	return qp.HasKey("vacuum")
+}
+
+// Key returns the value of the key named "key".
+func (qp QueryParams) Key() string {
+	return qp["key"]
 }
 
 // Level returns the requested consistency level.
