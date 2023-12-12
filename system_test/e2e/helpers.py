@@ -494,18 +494,18 @@ class Node(object):
     r = requests.delete(self._remove_url(), data=json.dumps(body))
     raise_for_status(r)
 
-  def restore(self, file, fmt=None, chunk_kb=None):
+  def restore(self, file, fmt=None, chunk_kb=None, bypass=False):
     # This is the one API that doesn't expect JSON.
     if fmt != "binary":
       conn = sqlite3.connect(file)
-      r = requests.post(self._load_url(chunk_kb), data='\n'.join(conn.iterdump()))
+      r = requests.post(self._load_url(chunk_kb, bypass), data='\n'.join(conn.iterdump()))
       raise_for_status(r)
       conn.close()
       return r.json()
     else:
       with open(file, 'rb') as f:
         data = f.read()
-      r = requests.post(self._load_url(chunk_kb), data=data, headers={'Content-Type': 'application/octet-stream'})
+      r = requests.post(self._load_url(chunk_kb, bypass), data=data, headers={'Content-Type': 'application/octet-stream'})
       raise_for_status(r)
 
   def redirect_addr(self):
@@ -559,11 +559,19 @@ class Node(object):
     return 'http://' + self.APIAddr() + '/db/request' + rd
   def _backup_url(self):
     return 'http://' + self.APIAddr() + '/db/backup'
-  def _load_url(self, chunk_kb=None):
-    ckb = ""
+  def _load_url(self, chunk_kb=None, bypass=False):
+    # encode a dict in query param form
+
+    d = {}
     if chunk_kb is not None:
-      ckb = '?chunk_kb=%d' % chunk_kb
-    return 'http://' + self.APIAddr() + '/db/load' + ckb
+      d['chunk_kb'] = chunk_kb
+
+    if bypass:
+      d['bypass'] = bypass
+    qp = ''
+    if len(d) > 0:
+      qp = '?' + '&'.join(['%s=%s' % (k, v) for k, v in d.items()])
+    return 'http://' + self.APIAddr() + '/db/load' + qp
   def _remove_url(self):
     return 'http://' + self.APIAddr() + '/remove'
   def __eq__(self, other):
