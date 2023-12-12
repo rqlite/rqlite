@@ -47,6 +47,7 @@ jobs:
       # Don't do a restore_cache here, so we regularly check that the Go
       # modules are actually fetchable.
       - checkout
+      - go version
       - run: test -z "$(gofmt -l . | tee /dev/stderr)"
       - run: go vet ./...
     resource_class: large
@@ -166,6 +167,7 @@ jobs:
     steps:
       - checkout
       - restore_and_save_cache
+      - go version
       - run: go install -tags osusergo,netgo,sqlite_omit_load_extension
           -ldflags="-extldflags=-static" ./...
       - run:
