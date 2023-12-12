@@ -654,6 +654,10 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request, qp QueryP
 // handleLoad loads the database from the given SQLite database file or SQLite dump.
 func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryParams) {
 	startTime := time.Now()
+	defer func() {
+		stats.Add(numLoad, 1)
+		s.logger.Printf("load request took %s", time.Since(startTime))
+	}()
 
 	if !s.CheckRequestPerm(r, auth.PermLoad) {
 		w.WriteHeader(http.StatusUnauthorized)
@@ -664,8 +668,8 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-
 	resp := NewResponse()
+
 	// Peek at the incoming bytes so we can determine if this is a SQLite database
 	validSQLite := false
 	bufReader := bufio.NewReader(r.Body)
@@ -685,82 +689,89 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 	}
 
 	if !validSQLite {
-		// Assume SQL text
-		b, err := io.ReadAll(bufReader)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		queries := []string{string(b)}
-		er := executeRequestFromStrings(queries, qp.Timings(), false)
-		results, err := s.store.Execute(er)
-		if err != nil {
-			if err == store.ErrNotLeader {
-				if s.DoRedirect(w, r, qp) {
-					return
-				}
-			}
-			resp.Error = err.Error()
-		} else {
-			resp.Results.ExecuteResult = results
-		}
-		resp.end = time.Now()
+		s.loadSQLText(w, r, bufReader, qp, resp)
 	} else {
 		if qp.Bypass() {
-			s.logger.Printf("bypass load requested")
-			n, err := s.store.ReadFrom(bufReader)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusServiceUnavailable)
-			} else {
-				s.logger.Printf("bypass load request read %d bytes, completed in %s", n, time.Since(startTime).String())
-			}
+			s.loadBypass(w, r, bufReader, qp, resp)
 		} else {
-			chunker := chunking.NewChunker(bufReader, int64(qp.ChunkKB(defaultChunkSize)))
-			for {
-				chunk, err := chunker.Next()
-				if err != nil {
-					chunk = chunker.Abort()
-				}
-				err = s.store.LoadChunk(chunk)
-				if err != nil && err != store.ErrNotLeader {
-					s.store.LoadChunk(chunker.Abort())
-					http.Error(w, err.Error(), http.StatusInternalServerError)
-				} else if err != nil && err == store.ErrNotLeader {
-					if s.DoRedirect(w, r, qp) {
-						return
-					}
-
-					addr, err := s.loadClusterChunk(r, qp, chunk)
-					if err != nil {
-						http.Error(w, err.Error(), http.StatusInternalServerError)
-						if err == ErrRemoteLoadNotAuthorized {
-							http.Error(w, err.Error(), http.StatusUnauthorized)
-						} else if err == ErrLeaderNotFound {
-							http.Error(w, err.Error(), http.StatusServiceUnavailable)
-						}
-						s.loadClusterChunk(r, qp, chunker.Abort())
-						return
-					}
-					w.Header().Add(ServedByHTTPHeader, addr)
-					// Allow this 'if' block to exit without return, so response remains as before request
-					// forwarding was put in place.
-				}
-				nChunks, nr, nw := chunker.Counts()
-				if chunk.IsLast {
-					s.logger.Printf("%d bytes read, %d chunks generated, containing %d bytes of compressed data (compression ratio %.2f)",
-						nr, nChunks, nw, float64(nr)/float64(nw))
-					break
-				}
-				if chunk.Abort {
-					stats.Add(numLoadAborted, 1)
-					s.logger.Printf("load request aborted after %d bytes read, %d chunks generated", nr, nChunks)
-					break
-				}
-			}
+			s.loadChunks(w, r, bufReader, qp, resp)
 		}
 	}
 	s.writeResponse(w, qp, resp)
+}
+
+func (s *Service) loadSQLText(w http.ResponseWriter, r *http.Request, rdr io.Reader, qp QueryParams, resp *Response) {
+	b, err := io.ReadAll(rdr)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	queries := []string{string(b)}
+	er := executeRequestFromStrings(queries, qp.Timings(), false)
+	results, err := s.store.Execute(er)
+	if err != nil {
+		if err == store.ErrNotLeader {
+			if s.DoRedirect(w, r, qp) {
+				return
+			}
+		}
+		resp.Error = err.Error()
+	} else {
+		resp.Results.ExecuteResult = results
+	}
+	resp.end = time.Now()
+}
+
+func (s *Service) loadBypass(w http.ResponseWriter, r *http.Request, rdr io.Reader, qp QueryParams, resp *Response) {
+	n, err := s.store.ReadFrom(rdr)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+	s.logger.Printf("bypass load complete, request read %d bytes", n)
+}
+
+func (s *Service) loadChunks(w http.ResponseWriter, r *http.Request, rdr io.Reader, qp QueryParams, resp *Response) {
+	chunker := chunking.NewChunker(rdr, int64(qp.ChunkKB(defaultChunkSize)))
+	for {
+		chunk, err := chunker.Next()
+		if err != nil {
+			chunk = chunker.Abort()
+		}
+		err = s.store.LoadChunk(chunk)
+		if err != nil && err != store.ErrNotLeader {
+			s.store.LoadChunk(chunker.Abort())
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		} else if err != nil && err == store.ErrNotLeader {
+			if s.DoRedirect(w, r, qp) {
+				return
+			}
+			addr, err := s.loadClusterChunk(r, qp, chunk)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				if err == ErrRemoteLoadNotAuthorized {
+					http.Error(w, err.Error(), http.StatusUnauthorized)
+				} else if err == ErrLeaderNotFound {
+					http.Error(w, err.Error(), http.StatusServiceUnavailable)
+				}
+				s.loadClusterChunk(r, qp, chunker.Abort())
+				return
+			}
+			w.Header().Add(ServedByHTTPHeader, addr)
+		}
+		nChunks, nr, nw := chunker.Counts()
+		if chunk.IsLast {
+			s.logger.Printf("%d bytes read, %d chunks generated, containing %d bytes of compressed data (compression ratio %.2f)",
+				nr, nChunks, nw, float64(nr)/float64(nw))
+			break
+		}
+		if chunk.Abort {
+			stats.Add(numLoadAborted, 1)
+			s.logger.Printf("load request aborted after %d bytes read, %d chunks generated", nr, nChunks)
+			break
+		}
+	}
 }
 
 func (s *Service) loadClusterChunk(r *http.Request, qp QueryParams, chunk *command.LoadChunkRequest) (string, error) {
