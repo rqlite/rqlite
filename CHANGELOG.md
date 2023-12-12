@@ -3,6 +3,7 @@
 - [PR #1471](https://github.com/rqlite/rqlite/pull/1471), [PR #1472](https://github.com/rqlite/rqlite/pull/1472): Refactor query parameters into own code.
 - [PR #1473](https://github.com/rqlite/rqlite/pull/1471): `go mod` updates.
 - [PR #1478](https://github.com/rqlite/rqlite/pull/1478): Upgrade Go to 1.21 in `go.mod`. Fixes [issue #1476](https://github.com/rqlite/rqlite/issues/1476).
+- [PR #1475](https://github.com/rqlite/rqlite/pull/1475): Minor rqlite CLI improvements.
 
 ## 8.0.3 (December 11th 2023)
 ### Implementation changes and bug fixes
@@ -37,9 +38,11 @@ This release also eases operations, as well as adding new features and bug fixes
 
 Release 8.0 supports (mostly) seamless upgrades from the 7.x series, and upgrading from 7.x has been tested. However, it is still strongly recommended you backup any production cluster before attempting an upgrade. A more conservative approach would be to create a brand new 8.0 system, and load your backup into that cluster. Then switch production traffic over to the new 8.0 cluster.
 
-8.0 and 7.x nodes should be able to interoperate, so a rolling upgrade should work fine. Again, it is strongly recommended you test this first. However it is not recommended that you run a cluster with a mix of 7.x and 8.0 code for any significant length of time, just the time required for a rolling upgrade.
+8.0 and 7.x nodes should be able to interoperate, so a rolling upgrade should work fine **as long as all nodes are fully caught up with the Leader node**. Note you also cannot join a new 8.x node to a pre-existing 7.x cluster. Otherwise upgrade should operate but, again, it is strongly recommended you test this first. It is also not recommended that you run a cluster with a mix of 7.x and 8.0 code for any significant length of time, just the time required for a rolling upgrade.
 
 Important things to note if you decide to upgrade an existing 7.x system:
+- Backup your 7.x cluster first.
+- it is strongly recommended you upgrade your 7.x cluster to the [7.21.4](https://github.com/rqlite/rqlite/releases/tag/v7.21.4) release before upgrading to the 8.0 series.
 - 8.0 always runs with an on-disk database, in-memory databases are no longer supported. Improvements made late in the 7.0 series mean there is little difference in write performance between in-memory and on-disk modes, but supporting both modes just meant confusion and higher development costs. If you were previously running in in-memory mode (the previous default), you don't need to do anything. But if you were previously passing `-on-disk` to `rqlited` so that rqlite ran in on-disk mode, you must now remove that flag.
 - When forming a new cluster using 8.0, pass the **Raft** addresss of the remote node to the `-join` command, not the HTTP API address. If your cluster is already formed, upgrades will work without changing anything (`-join` options are ignored if nodes are already members of a cluster). You may need to change any scripting or automatic-configuration generation however.
 - A few rarely, if ever, used `rqlited` command-line flags have been removed. These flags just added operational overhead, while adding little value.

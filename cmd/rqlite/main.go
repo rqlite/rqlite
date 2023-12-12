@@ -88,20 +88,21 @@ func main() {
 			return nil
 		}
 
+		connectionStr := fmt.Sprintf("%s://%s:%d", argv.Protocol, argv.Host, argv.Port)
 		version, err := getVersionWithClient(httpClient, argv)
 		if err != nil {
 			msg := err.Error()
 			if errors.Is(err, syscall.ECONNREFUSED) {
-				msg = fmt.Sprintf("Unable to connect to rqlited at %s://%s:%d - is it running?",
-					argv.Protocol, argv.Host, argv.Port)
+				msg = fmt.Sprintf("Unable to connect to rqlited at %s - is it running?",
+					connectionStr)
 			}
 			ctx.String("%s %v\n", ctx.Color().Red("ERR!"), msg)
 			return nil
 		}
 
-		fmt.Println("Welcome to the rqlite CLI. Enter \".help\" for usage hints.")
-		fmt.Printf("Version %s, commit %s, branch %s\n", cmd.Version, cmd.Commit, cmd.Branch)
-		fmt.Printf("Connected to rqlited version %s\n", version)
+		fmt.Println("Welcome to the rqlite CLI.")
+		fmt.Printf("Enter \".help\" for usage hints.\n")
+		fmt.Printf("Connected to %s running version %s\n", connectionStr, version)
 
 		timer := false
 		consistency := "weak"
