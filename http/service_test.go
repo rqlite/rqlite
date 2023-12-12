@@ -720,14 +720,14 @@ func Test_LoadFlagsNoLeader(t *testing.T) {
 		t.Fatalf("failed to load test SQLite data")
 	}
 
-	m.loadChunkFn = func(br *command.LoadChunkRequest) error {
+	m.loadFn = func(lr *command.LoadRequest) error {
 		return store.ErrNotLeader
 	}
 
 	clusterLoadCalled := false
-	c.loadChunkFn = func(lc *command.LoadChunkRequest, nodeAddr string, timeout time.Duration) error {
+	c.loadFn = func(lc *command.LoadRequest, nodeAddr string, timeout time.Duration) error {
 		clusterLoadCalled = true
-		if !bytes.Equal(mustGunzip(lc.Data), testData) {
+		if !bytes.Equal(lc.Data, testData) {
 			t.Fatalf("wrong data passed to cluster load")
 		}
 		return nil
@@ -1363,7 +1363,7 @@ type mockClusterService struct {
 	queryFn      func(qr *command.QueryRequest, addr string, t time.Duration) ([]*command.QueryRows, error)
 	requestFn    func(eqr *command.ExecuteQueryRequest, nodeAddr string, timeout time.Duration) ([]*command.ExecuteQueryResponse, error)
 	backupFn     func(br *command.BackupRequest, addr string, t time.Duration, w io.Writer) error
-	loadFn       func(lr *command.LoadRequest) error
+	loadFn       func(lr *command.LoadRequest, addr string, t time.Duration) error
 	loadChunkFn  func(lc *command.LoadChunkRequest, addr string, t time.Duration) error
 	removeNodeFn func(rn *command.RemoveNodeRequest, nodeAddr string, t time.Duration) error
 }
@@ -1409,7 +1409,7 @@ func (m *mockClusterService) LoadChunk(lc *command.LoadChunkRequest, addr string
 
 func (m *mockClusterService) Load(lr *command.LoadRequest, nodeAddr string, creds *cluster.Credentials, timeout time.Duration) error {
 	if m.loadFn != nil {
-		return m.loadFn(lr)
+		return m.loadFn(lr, nodeAddr, timeout)
 	}
 	return nil
 }
