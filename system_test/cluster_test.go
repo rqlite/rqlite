@@ -1809,6 +1809,50 @@ func Test_MultiNodeClusterNoReapReadOnlyZero(t *testing.T) {
 	}
 }
 
+func Test_MultiNodeCluster_LoadBypass(t *testing.T) {
+	node1 := mustNewLeaderNode()
+	defer node1.Deprovision()
+
+	_, err := node1.Load("testdata/auto-restore.sqlite", true)
+	if err != nil {
+		t.Fatalf("failed to load file: %s", err.Error())
+	}
+
+	// Join a second node, check it gets the data via a snapshot.
+	node2 := mustNewNode(false)
+	defer node2.Deprovision()
+	if err := node2.Join(node1); err != nil {
+		t.Fatalf("node failed to join leader: %s", err.Error())
+	}
+	_, err = node2.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for leader: %s", err.Error())
+	}
+
+	// Send a few Noops through to ensure SQLite database has been updated on each node.
+	for i := 0; i < 5; i++ {
+		node1.Noop("some_id")
+	}
+
+	// Check the database on each node
+	for _, n := range []*Node{node1, node2} {
+		rows, err := n.QueryNoneConsistency(`SELECT COUNT(*) FROM foo`)
+		if err != nil {
+			t.Fatalf("failed to query node: %s", err.Error())
+		}
+		if got, exp := rows, `{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[3]]}]}`; got != exp {
+			t.Fatalf("got incorrect results from node exp: %s got: %s", exp, got)
+		}
+	}
+
+	// One last test -- the leader should refuse any more loads because it
+	// is now part of a cluster.
+	_, err = node1.Load("testdata/auto-restore.sqlite", true)
+	if err == nil {
+		t.Fatalf("expected error loading file")
+	}
+}
+
 func sleepForSecond() {
 	time.Sleep(mustParseDuration("1s"))
 }
