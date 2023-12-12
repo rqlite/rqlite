@@ -1368,15 +1368,27 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 		return 0, ErrNotSingleNode
 	}
 
-	// Overwrite the existing database. XXXX Write to temp first!
-	if err := s.db.Close(); err != nil {
+	// Write the data to a temporary file..
+	f, err := os.CreateTemp("", "rqlite-bypass-*")
+	if err != nil {
 		return 0, err
+	}
+	defer f.Close()
+	defer os.Remove(f.Name())
+	n, err := copyFromReaderToFile(s.dbPath, f)
+	if err != nil {
+		return n, err
+	}
+	f.Close()
+
+	// Close the database, remove the database file, and then rename the temporary
+	if err := s.db.Close(); err != nil {
+		return n, err
 	}
 	if err := sql.RemoveFiles(s.dbPath); err != nil {
-		return 0, err
+		return n, err
 	}
-	n, err := copyFromReaderToFile(s.dbPath, r)
-	if err != nil {
+	if err := os.Rename(f.Name(), s.dbPath); err != nil {
 		return n, err
 	}
 	db, err := sql.Open(s.dbPath, s.dbConf.FKConstraints, true)
