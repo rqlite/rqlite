@@ -194,7 +194,11 @@ func (n *Node) RequestMultiParameterized(stmt []interface{}) (string, error) {
 
 // Noop inserts a noop command into the Store's Raft log.
 func (n *Node) Noop(id string) error {
-	return n.Store.Noop(id)
+	af, err := n.Store.Noop(id)
+	if err != nil {
+		return err
+	}
+	return af.Error()
 }
 
 // EnableTLSClient enables TLS support for the node's cluster client.

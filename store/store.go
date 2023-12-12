@@ -1287,8 +1287,15 @@ func (s *Store) loadChunk(lcr *command.LoadChunkRequest) error {
 	// Send one last command through the log to deal with issues in
 	// underlying Raft code when truncating log to zero trailing.
 	if lcr.Abort || lcr.IsLast {
-		if err := s.Noop("load-chunk-trailing"); err != nil {
+		af, err = s.Noop("load-chunk-trailing")
+		if err != nil {
 			return err
+		}
+		if af.Error() != nil {
+			if af.Error() == raft.ErrNotLeader {
+				return ErrNotLeader
+			}
+			return af.Error()
 		}
 	}
 
@@ -1501,13 +1508,13 @@ func (s *Store) Remove(rn *command.RemoveNodeRequest) error {
 // Noop writes a noop command to the Raft log. A noop command simply
 // consumes a slot in the Raft log, but has no other effect on the
 // system.
-func (s *Store) Noop(id string) error {
+func (s *Store) Noop(id string) (raft.ApplyFuture, error) {
 	n := &command.Noop{
 		Id: id,
 	}
 	b, err := command.MarshalNoop(n)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	c := &command.Command{
@@ -1516,17 +1523,10 @@ func (s *Store) Noop(id string) error {
 	}
 	bc, err := command.Marshal(c)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	af := s.raft.Apply(bc, s.ApplyTimeout)
-	if af.Error() != nil {
-		if af.Error() == raft.ErrNotLeader {
-			return ErrNotLeader
-		}
-		return af.Error()
-	}
-	return nil
+	return s.raft.Apply(bc, s.ApplyTimeout), nil
 }
 
 // RequiresLeader returns whether the given ExecuteQueryRequest must be
