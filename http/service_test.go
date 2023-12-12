@@ -2,11 +2,9 @@ package http
 
 import (
 	"bytes"
-	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -1470,21 +1468,6 @@ func mustParseDuration(d string) time.Duration {
 	} else {
 		return dur
 	}
-}
-
-func mustGunzip(b []byte) []byte {
-	r, err := gzip.NewReader(bytes.NewBuffer(b))
-	if err != nil {
-		panic(err)
-	}
-	defer r.Close()
-
-	dec, err := ioutil.ReadAll(r)
-	if err != nil {
-		panic(err)
-	}
-
-	return dec
 }
 
 func mustGetQueryParams(req *http.Request) QueryParams {
