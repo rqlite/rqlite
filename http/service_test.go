@@ -777,11 +777,11 @@ func Test_LoadRemoteError(t *testing.T) {
 		t.Fatalf("failed to load test SQLite data")
 	}
 
-	m.loadChunkFn = func(br *command.LoadChunkRequest) error {
+	m.loadFn = func(br *command.LoadRequest) error {
 		return store.ErrNotLeader
 	}
 	clusterLoadCalled := false
-	c.loadChunkFn = func(lr *command.LoadChunkRequest, addr string, t time.Duration) error {
+	c.loadFn = func(lr *command.LoadRequest, addr string, t time.Duration) error {
 		clusterLoadCalled = true
 		return fmt.Errorf("the load failed")
 	}
