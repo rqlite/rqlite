@@ -697,7 +697,6 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 			s.loadChunks(w, r, bufReader, qp, resp)
 		}
 	}
-	s.writeResponse(w, qp, resp)
 }
 
 func (s *Service) loadSQLText(w http.ResponseWriter, r *http.Request, rdr io.Reader, qp QueryParams, resp *Response) {
@@ -721,6 +720,7 @@ func (s *Service) loadSQLText(w http.ResponseWriter, r *http.Request, rdr io.Rea
 		resp.Results.ExecuteResult = results
 	}
 	resp.end = time.Now()
+	s.writeResponse(w, qp, resp)
 }
 
 func (s *Service) loadBypass(w http.ResponseWriter, r *http.Request, rdr io.Reader, qp QueryParams, resp *Response) {
@@ -730,6 +730,7 @@ func (s *Service) loadBypass(w http.ResponseWriter, r *http.Request, rdr io.Read
 		return
 	}
 	s.logger.Printf("bypass load complete, request read %d bytes", n)
+	s.writeResponse(w, qp, resp)
 }
 
 func (s *Service) loadChunks(w http.ResponseWriter, r *http.Request, rdr io.Reader, qp QueryParams, resp *Response) {
@@ -772,6 +773,7 @@ func (s *Service) loadChunks(w http.ResponseWriter, r *http.Request, rdr io.Read
 			break
 		}
 	}
+	s.writeResponse(w, qp, resp)
 }
 
 func (s *Service) loadClusterChunk(r *http.Request, qp QueryParams, chunk *command.LoadChunkRequest) (string, error) {

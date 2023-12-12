@@ -709,7 +709,6 @@ func Test_LoadFlagsNoLeader(t *testing.T) {
 	}
 
 	s := New("127.0.0.1:0", m, c, nil)
-
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
@@ -766,7 +765,6 @@ func Test_LoadRemoteError(t *testing.T) {
 	}
 
 	s := New("127.0.0.1:0", m, c, nil)
-
 	if err := s.Start(); err != nil {
 		t.Fatalf("failed to start service")
 	}
@@ -807,6 +805,55 @@ func Test_LoadRemoteError(t *testing.T) {
 	}
 	if exp, got := "the load failed\n", string(body); exp != got {
 		t.Fatalf(`incorrect response body, exp: "%s", got: "%s"`, exp, got)
+	}
+}
+
+func Test_LoadBypass(t *testing.T) {
+	m := &MockStore{
+		leaderAddr: "foo:1234",
+	}
+	c := &mockClusterService{
+		apiAddr: "http://1.2.3.4:999",
+	}
+
+	s := New("127.0.0.1:0", m, c, nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	testData, err := os.ReadFile("testdata/load.db")
+	if err != nil {
+		t.Fatalf("failed to load test SQLite data")
+	}
+
+	readFromCalled := false
+	m.readFromFn = func(r io.Reader) (int64, error) {
+		// read all data from r and compare to the data in testData
+		b, err := io.ReadAll(r)
+		if err != nil {
+			return 0, err
+		}
+		if !bytes.Equal(b, testData) {
+			t.Fatalf("wrong data passed to ReadFrom")
+		}
+		readFromCalled = true
+		return int64(len(b)), nil
+	}
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+	resp, err := client.Post(host+"/db/load?bypass", "application/octet-stream", bytes.NewReader(testData))
+	if err != nil {
+		t.Fatalf("failed to make bypass load request")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("failed to get expected StatusOK for bypass load, got %d", resp.StatusCode)
+	}
+
+	if !readFromCalled {
+		t.Fatalf("ReadFrom was not called")
 	}
 }
 
