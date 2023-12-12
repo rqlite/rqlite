@@ -1375,7 +1375,7 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 	}
 	defer f.Close()
 	defer os.Remove(f.Name())
-	n, err := copyFromReaderToFile(s.dbPath, f)
+	n, err := io.Copy(f, r)
 	if err != nil {
 		return n, err
 	}

@@ -1679,6 +1679,109 @@ COMMIT;
 	}
 }
 
+// Test_SingleNodeLoadBypassBinaryFromReader tests that a Store correctly loads
+// data in SQLite in bypass mode.
+func Test_SingleNodeLoadBypassBinaryFromReader(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Load a dataset, to check it's erased by the SQLite file load.
+	dump := `PRAGMA foreign_keys=OFF;
+BEGIN TRANSACTION;
+CREATE TABLE bar (id integer not null primary key, name text);
+INSERT INTO "bar" VALUES(1,'declan');
+COMMIT;
+`
+	_, err := s.Execute(executeRequestFromString(dump, false, false))
+	if err != nil {
+		t.Fatalf("failed to load simple dump: %s", err.Error())
+	}
+
+	// Check that data were loaded correctly.
+	qr := queryRequestFromString("SELECT * FROM bar", false, true)
+	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	r, err := s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[1,"declan"]]`, asJSON(r[0].Values); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	f, err := os.Open(filepath.Join("testdata", "load.sqlite"))
+	if err != nil {
+		t.Fatalf("failed to open SQLite file: %s", err.Error())
+	}
+	defer f.Close()
+
+	// Load the SQLite file in bypass mode, check that the right number
+	// of snapshots were created, and that the right amount of data was
+	// loaded.
+	numSnapshots := s.numSnapshots
+	n, err := s.ReadFrom(f)
+	if err != nil {
+		t.Fatalf("failed to load SQLite file via Reader: %s", err.Error())
+	}
+	sz := mustFileSize(filepath.Join("testdata", "load.sqlite"))
+	if n != sz {
+		t.Fatalf("expected %d bytes to be read, got %d", sz, n)
+	}
+	if s.numSnapshots != numSnapshots+1 {
+		t.Fatalf("expected 1 extra snapshot, got %d", s.numSnapshots)
+	}
+
+	// Check that data were loaded correctly.
+	qr = queryRequestFromString("SELECT * FROM foo WHERE id=2", false, true)
+	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	r, err = s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[2,"fiona"]]`, asJSON(r[0].Values); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	qr = queryRequestFromString("SELECT count(*) FROM foo", false, true)
+	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	r, err = s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `["count(*)"]`, asJSON(r[0].Columns); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[3]]`, asJSON(r[0].Values); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	// Check pre-existing data is gone.
+	qr = queryRequestFromString("SELECT * FROM bar", false, true)
+	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	r, err = s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `{"error":"no such table: bar"}`, asJSON(r[0]); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
 func Test_SingleNodeAutoRestore(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
@@ -3142,6 +3245,14 @@ func mustCopyFileToTempFile(path string) string {
 	f := mustCreateTempFile()
 	mustWriteFile(f, string(mustReadFile(path)))
 	return f
+}
+
+func mustFileSize(path string) int64 {
+	n, err := fileSize(path)
+	if err != nil {
+		panic("failed to get file size")
+	}
+	return n
 }
 
 func mustParseDuration(t string) time.Duration {
