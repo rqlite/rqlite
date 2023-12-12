@@ -1284,6 +1284,14 @@ func (s *Store) loadChunk(lcr *command.LoadChunkRequest) error {
 		return af.Error()
 	}
 
+	// Send one last command through the log to deal with issues in
+	// underlying Raft code when truncating log to zero trailing.
+	if lcr.Abort || lcr.IsLast {
+		if err := s.Noop("load-chunk-trailing"); err != nil {
+			return err
+		}
+	}
+
 	s.dbAppliedIndexMu.Lock()
 	s.dbAppliedIndex = af.Index()
 	s.dbAppliedIndexMu.Unlock()
@@ -1961,7 +1969,9 @@ func (s *Store) observe() (closeCh, doneCh chan struct{}) {
 	return closeCh, doneCh
 }
 
-// Snapshot performs a snapshot, and then truncates the Raft log.
+// Snapshot performs a snapshot, and then truncates the log, except for the
+// the very last entry. This is due to issues in the underlying Raft code
+// when truncating the log to zero trailing entries.
 func (s *Store) Snapshot() error {
 	// reload the config with zero trailing logs.
 	cfg := s.raft.ReloadableConfig()
@@ -1972,7 +1982,7 @@ func (s *Store) Snapshot() error {
 			s.logger.Printf("failed to reload Raft config: %s", err.Error())
 		}
 	}()
-	cfg.TrailingLogs = 0
+	cfg.TrailingLogs = 1
 	if err := s.raft.ReloadConfig(cfg); err != nil {
 		return fmt.Errorf("failed to reload Raft config: %s", err.Error())
 	}
