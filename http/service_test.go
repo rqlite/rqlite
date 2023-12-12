@@ -1281,6 +1281,7 @@ type MockStore struct {
 	queryFn     func(qr *command.QueryRequest) ([]*command.QueryRows, error)
 	requestFn   func(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, error)
 	backupFn    func(br *command.BackupRequest, dst io.Writer) error
+	loadFn      func(lr *command.LoadRequest) error
 	loadChunkFn func(lr *command.LoadChunkRequest) error
 	leaderAddr  string
 	notReady    bool // Default value is true, easier to test.
@@ -1349,12 +1350,20 @@ func (m *MockStore) LoadChunk(lc *command.LoadChunkRequest) error {
 	return nil
 }
 
+func (m *MockStore) Load(lr *command.LoadRequest) error {
+	if m.loadFn != nil {
+		return m.loadFn(lr)
+	}
+	return nil
+}
+
 type mockClusterService struct {
 	apiAddr      string
 	executeFn    func(er *command.ExecuteRequest, addr string, t time.Duration) ([]*command.ExecuteResult, error)
 	queryFn      func(qr *command.QueryRequest, addr string, t time.Duration) ([]*command.QueryRows, error)
 	requestFn    func(eqr *command.ExecuteQueryRequest, nodeAddr string, timeout time.Duration) ([]*command.ExecuteQueryResponse, error)
 	backupFn     func(br *command.BackupRequest, addr string, t time.Duration, w io.Writer) error
+	loadFn       func(lr *command.LoadRequest) error
 	loadChunkFn  func(lc *command.LoadChunkRequest, addr string, t time.Duration) error
 	removeNodeFn func(rn *command.RemoveNodeRequest, nodeAddr string, t time.Duration) error
 }
@@ -1394,6 +1403,13 @@ func (m *mockClusterService) Backup(br *command.BackupRequest, addr string, cred
 func (m *mockClusterService) LoadChunk(lc *command.LoadChunkRequest, addr string, creds *cluster.Credentials, t time.Duration) error {
 	if m.loadChunkFn != nil {
 		return m.loadChunkFn(lc, addr, t)
+	}
+	return nil
+}
+
+func (m *mockClusterService) Load(lr *command.LoadRequest, nodeAddr string, creds *cluster.Credentials, timeout time.Duration) error {
+	if m.loadFn != nil {
+		return m.loadFn(lr)
 	}
 	return nil
 }

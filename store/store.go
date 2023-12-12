@@ -2056,7 +2056,14 @@ func (s *Store) installRestore() error {
 		return err
 	}
 	defer f.Close()
-	return s.loadFromReader(f, s.restoreChunkSize)
+	b, err := io.ReadAll(f)
+	if err != nil {
+		return err
+	}
+	lr := &command.LoadRequest{
+		Data: b,
+	}
+	return s.load(lr)
 }
 
 // logSize returns the size of the Raft log on disk.
