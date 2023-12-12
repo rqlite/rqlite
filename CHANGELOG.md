@@ -1,3 +1,7 @@
+## 8.0.5 (December 12th 2023)
+### Implementation changes and bug fixes
+- [PR #1481](https://github.com/rqlite/rqlite/pull/1481): Revert to simpler one-shot load for SQLite files.
+
 ## 8.0.4 (December 12th 2023)
 ### Implementation changes and bug fixes
 - [PR #1471](https://github.com/rqlite/rqlite/pull/1471), [PR #1472](https://github.com/rqlite/rqlite/pull/1472): Refactor query parameters into own code.
