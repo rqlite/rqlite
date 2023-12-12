@@ -197,6 +197,15 @@ func (n *Node) Noop(id string) error {
 	return n.Store.Noop(id)
 }
 
+// Load loads a SQLite database file into the node.
+func (n *Node) Load(filename string, bypass bool) (string, error) {
+	url := "/db/load"
+	if bypass {
+		url = url + "?bypass"
+	}
+	return n.postFile(url, filename)
+}
+
 // EnableTLSClient enables TLS support for the node's cluster client.
 func (n *Node) EnableTLSClient() {
 	tlsConfig := mustCreateTLSConfig(n.NodeCertPath, n.NodeKeyPath, "")
@@ -451,6 +460,28 @@ func (n *Node) postRequest(stmt string) (string, error) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("request endpoint returned: %s", resp.Status)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	return string(body), nil
+}
+
+func (n *Node) postFile(url, filename string) (string, error) {
+	f, err := os.Open(filename)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	resp, err := http.Post("http://"+n.APIAddr+url, "application/octet-stream", f)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("file endpoint returned: %s", resp.Status)
 	}
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

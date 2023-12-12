@@ -1363,3 +1363,33 @@ func Test_SingleNodeAutoRestore(t *testing.T) {
 		t.Fatalf("test received wrong result got %s", r)
 	}
 }
+
+func Test_SingleNodeLoadBypass_OK(t *testing.T) {
+	node := mustNewLeaderNode()
+	defer node.Deprovision()
+
+	body, err := node.Load(filepath.Join("testdata", "auto-restore.sqlite"), true)
+	if err != nil {
+		t.Fatalf("failed to load data: %s", err.Error())
+	}
+	if body != `{"results":[]}` {
+		t.Fatalf("test received wrong result got %s", body)
+	}
+
+	r, err := node.Query("SELECT * FROM foo WHERE id=2")
+	if err != nil {
+		t.Fatalf("failed to execute query: %s", err.Error())
+	}
+	if r != `{"results":[{"columns":["id","name"],"types":["integer","text"],"values":[[2,"fiona"]]}]}` {
+		t.Fatalf("test received wrong result got %s", r)
+	}
+}
+
+func Test_SingleNodeLoadBypass_FailNotLeader(t *testing.T) {
+	node := mustNewNode(false)
+	defer node.Deprovision()
+	_, err := node.Load(filepath.Join("testdata", "auto-restore.sqlite"), true)
+	if err == nil {
+		t.Fatalf("expected error loading data")
+	}
+}
