@@ -4,6 +4,7 @@
 - [PR #1473](https://github.com/rqlite/rqlite/pull/1471): `go mod` updates.
 - [PR #1478](https://github.com/rqlite/rqlite/pull/1478): Upgrade Go to 1.21 in `go.mod`. Fixes [issue #1476](https://github.com/rqlite/rqlite/issues/1476).
 - [PR #1475](https://github.com/rqlite/rqlite/pull/1475): Minor rqlite CLI improvements.
+- [PR #1480](https://github.com/rqlite/rqlite/pull/1480): Don't completely truncate the log, due to apparent unsigned overflow issues in Raft log.
 
 ## 8.0.3 (December 11th 2023)
 ### Implementation changes and bug fixes
