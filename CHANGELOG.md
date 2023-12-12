@@ -1,4 +1,4 @@
-## 8.0.4 (unreleased)
+## 8.0.4 (December 12th 2023)
 ### Implementation changes and bug fixes
 - [PR #1471](https://github.com/rqlite/rqlite/pull/1471), [PR #1472](https://github.com/rqlite/rqlite/pull/1472): Refactor query parameters into own code.
 - [PR #1473](https://github.com/rqlite/rqlite/pull/1471): `go mod` updates.
