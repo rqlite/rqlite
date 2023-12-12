@@ -2856,8 +2856,12 @@ func Test_SingleNodeNoop(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
-	if err := s.Noop("1"); err != nil {
+	af, err := s.Noop("1")
+	if err != nil {
 		t.Fatalf("failed to write noop command: %s", err.Error())
+	}
+	if af.Error() != nil {
+		t.Fatalf("expected nil apply future error")
 	}
 	if s.numNoops != 1 {
 		t.Fatalf("noop count is wrong, got: %d", s.numNoops)

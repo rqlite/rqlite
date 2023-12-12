@@ -1284,6 +1284,21 @@ func (s *Store) loadChunk(lcr *command.LoadChunkRequest) error {
 		return af.Error()
 	}
 
+	// Send one last command through the log to deal with issues in
+	// underlying Raft code when truncating log to zero trailing.
+	if lcr.Abort || lcr.IsLast {
+		af, err = s.Noop("load-chunk-trailing")
+		if err != nil {
+			return err
+		}
+		if af.Error() != nil {
+			if af.Error() == raft.ErrNotLeader {
+				return ErrNotLeader
+			}
+			return af.Error()
+		}
+	}
+
 	s.dbAppliedIndexMu.Lock()
 	s.dbAppliedIndex = af.Index()
 	s.dbAppliedIndexMu.Unlock()
@@ -1493,13 +1508,13 @@ func (s *Store) Remove(rn *command.RemoveNodeRequest) error {
 // Noop writes a noop command to the Raft log. A noop command simply
 // consumes a slot in the Raft log, but has no other effect on the
 // system.
-func (s *Store) Noop(id string) error {
+func (s *Store) Noop(id string) (raft.ApplyFuture, error) {
 	n := &command.Noop{
 		Id: id,
 	}
 	b, err := command.MarshalNoop(n)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	c := &command.Command{
@@ -1508,17 +1523,10 @@ func (s *Store) Noop(id string) error {
 	}
 	bc, err := command.Marshal(c)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	af := s.raft.Apply(bc, s.ApplyTimeout)
-	if af.Error() != nil {
-		if af.Error() == raft.ErrNotLeader {
-			return ErrNotLeader
-		}
-		return af.Error()
-	}
-	return nil
+	return s.raft.Apply(bc, s.ApplyTimeout), nil
 }
 
 // RequiresLeader returns whether the given ExecuteQueryRequest must be
@@ -1961,7 +1969,9 @@ func (s *Store) observe() (closeCh, doneCh chan struct{}) {
 	return closeCh, doneCh
 }
 
-// Snapshot performs a snapshot, and then truncates the Raft log.
+// Snapshot performs a snapshot, and then truncates the log, except for the
+// the very last entry. This is due to issues in the underlying Raft code
+// when truncating the log to zero trailing entries.
 func (s *Store) Snapshot() error {
 	// reload the config with zero trailing logs.
 	cfg := s.raft.ReloadableConfig()
@@ -1972,7 +1982,7 @@ func (s *Store) Snapshot() error {
 			s.logger.Printf("failed to reload Raft config: %s", err.Error())
 		}
 	}()
-	cfg.TrailingLogs = 0
+	cfg.TrailingLogs = 1
 	if err := s.raft.ReloadConfig(cfg); err != nil {
 		return fmt.Errorf("failed to reload Raft config: %s", err.Error())
 	}
