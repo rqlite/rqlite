@@ -1,4 +1,4 @@
-## 8.0.6 (unreleased)
+## 8.0.6 (December 12th 2023)
 ### Implementation changes and bug fixes
 - [PR #1482](https://github.com/rqlite/rqlite/pull/1482): Don't load invalid database.
 
