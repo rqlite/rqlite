@@ -1356,6 +1356,7 @@ func (s *Store) load(lr *command.LoadRequest) error {
 // Once the data is loaded, a snapshot is triggered, which then results in a system as
 // if the data had been loaded through Raft consensus.
 func (s *Store) ReadFrom(r io.Reader) (int64, error) {
+	// Check the constraints.
 	if s.raft.State() != raft.Leader {
 		return 0, ErrNotLeader
 	}
@@ -1367,12 +1368,13 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 		return 0, ErrNotSingleNode
 	}
 
+	// Overwrite the existing database. XXXX Write to temp first!
 	if err := s.db.Close(); err != nil {
 		return 0, err
 	}
 	if err := sql.RemoveFiles(s.dbPath); err != nil {
 		return 0, err
-	
+	}
 	n, err := copyFromReaderToFile(s.dbPath, r)
 	if err != nil {
 		return n, err
