@@ -188,14 +188,11 @@ class TestSingleNodeLoadRestart(unittest.TestCase):
     self.n = Node(RQLITED_PATH, '0',  raft_snap_threshold=8192, raft_snap_int="30s")
     self.n.start()
     n = self.n.wait_for_leader()
-    j = self.n.restore('system_test/e2e/testdata/1000-numbers.db', fmt='binary',chunk_kb=4)
+    j = self.n.restore('system_test/e2e/testdata/1000-numbers.db', fmt='binary')
     j = self.n.query('SELECT COUNT(*) from test')
     self.assertEqual(j, d_("{'results': [{'values': [[1000]], 'types': ['integer'], 'columns': ['COUNT(*)']}]}"))
 
-    # Wait for a snapshot and persist to happen.
-    time.sleep(5)
-
-    # Ensure node can restart after chunked loading -- and the log truncation it forces..
+    # Ensure node can restart after loading
     self.n.stop()
     self.n.start()
     self.n.wait_for_leader()

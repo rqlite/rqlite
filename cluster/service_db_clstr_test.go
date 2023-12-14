@@ -356,53 +356,6 @@ func Test_ServiceLoad(t *testing.T) {
 	}
 }
 
-func Test_ServiceLoadChunk(t *testing.T) {
-	ln, mux := mustNewMux()
-	go mux.Serve()
-	tn := mux.Listen(1) // Could be any byte value.
-	db := mustNewMockDatabase()
-	mgr := mustNewMockManager()
-	cred := mustNewMockCredentialStore()
-	s := New(tn, db, mgr, cred)
-	if s == nil {
-		t.Fatalf("failed to create cluster service")
-	}
-
-	c := NewClient(mustNewDialer(1, false, false), 30*time.Second)
-
-	if err := s.Open(); err != nil {
-		t.Fatalf("failed to open cluster service: %s", err.Error())
-	}
-
-	// Ready for Load tests now.
-	called := false
-	testData := []byte("this is SQLite data")
-	db.loadChunkFn = func(lc *command.LoadChunkRequest) error {
-		called = true
-		if !bytes.Equal(lc.Data, testData) {
-			t.Fatalf("load data is not as expected, exp: %s, got: %s", testData, lc.Data)
-		}
-		return nil
-	}
-
-	err := c.LoadChunk(loadChunkRequest(testData), s.Addr(), NO_CREDS, longWait)
-	if err != nil {
-		t.Fatalf("failed to load database: %s", err.Error())
-	}
-
-	if !called {
-		t.Fatal("load not called on database")
-	}
-
-	// Clean up resources.
-	if err := ln.Close(); err != nil {
-		t.Fatalf("failed to close Mux's listener: %s", err)
-	}
-	if err := s.Close(); err != nil {
-		t.Fatalf("failed to close cluster service")
-	}
-}
-
 func Test_ServiceRemoveNode(t *testing.T) {
 	ln, mux := mustNewMux()
 	go mux.Serve()
@@ -654,12 +607,6 @@ func backupRequestBinary(leader bool) *command.BackupRequest {
 
 func loadRequest(b []byte) *command.LoadRequest {
 	return &command.LoadRequest{
-		Data: b,
-	}
-}
-
-func loadChunkRequest(b []byte) *command.LoadChunkRequest {
-	return &command.LoadChunkRequest{
 		Data: b,
 	}
 }

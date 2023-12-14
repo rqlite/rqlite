@@ -88,8 +88,6 @@ const (
 	raftLogCacheSize           = 512
 	trailingScale              = 1.25
 	observerChanLen            = 50
-
-	defaultChunkSize = 64 * 1024 * 1024 // 64 MB
 )
 
 const (
@@ -195,9 +193,8 @@ type Store struct {
 	peersPath     string
 	peersInfoPath string
 
-	restoreChunkSize int64
-	restorePath      string
-	restoreDoneCh    chan struct{}
+	restorePath   string
+	restoreDoneCh chan struct{}
 
 	raft   *raft.Raft // The consensus mechanism.
 	ln     Listener
@@ -213,9 +210,7 @@ type Store struct {
 	dbAppliedIndex       uint64
 	appliedIdxUpdateDone chan struct{}
 
-	dechunkManager    *chunking.DechunkerManager
-	loadsInProgressMu sync.Mutex
-	loadsInProgress   map[string]struct{}
+	dechunkManager *chunking.DechunkerManager
 
 	// Channels that must be closed for the Store to be considered ready.
 	readyChans             []<-chan struct{}
@@ -314,21 +309,19 @@ func New(ln Listener, c *Config) *Store {
 	}
 
 	return &Store{
-		ln:               ln,
-		raftDir:          c.Dir,
-		peersPath:        filepath.Join(c.Dir, peersPath),
-		peersInfoPath:    filepath.Join(c.Dir, peersInfoPath),
-		restoreChunkSize: defaultChunkSize,
-		restoreDoneCh:    make(chan struct{}),
-		loadsInProgress:  make(map[string]struct{}),
-		raftID:           c.ID,
-		dbConf:           c.DBConf,
-		dbPath:           dbPath,
-		leaderObservers:  make([]chan<- struct{}, 0),
-		reqMarshaller:    command.NewRequestMarshaler(),
-		logger:           logger,
-		notifyingNodes:   make(map[string]*Server),
-		ApplyTimeout:     applyTimeout,
+		ln:              ln,
+		raftDir:         c.Dir,
+		peersPath:       filepath.Join(c.Dir, peersPath),
+		peersInfoPath:   filepath.Join(c.Dir, peersInfoPath),
+		restoreDoneCh:   make(chan struct{}),
+		raftID:          c.ID,
+		dbConf:          c.DBConf,
+		dbPath:          dbPath,
+		leaderObservers: make([]chan<- struct{}, 0),
+		reqMarshaller:   command.NewRequestMarshaler(),
+		logger:          logger,
+		notifyingNodes:  make(map[string]*Server),
+		ApplyTimeout:    applyTimeout,
 	}
 }
 
@@ -355,12 +348,6 @@ func (s *Store) SetRestorePath(path string) error {
 	s.RegisterReadyChannel(s.restoreDoneCh)
 	s.restorePath = path
 	return nil
-}
-
-// SetRestoreChunkSize sets the chunk size to use when restoring a database.
-// If not set, the default chunk size is used.
-func (s *Store) SetRestoreChunkSize(size int64) {
-	s.restoreChunkSize = size
 }
 
 // Open opens the Store.
@@ -981,7 +968,6 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		"trailing_logs":          s.numTrailingLogs,
 		"request_marshaler":      s.reqMarshaller.Stats(),
 		"nodes":                  nodes,
-		"loads_in_progress":      s.NumLoadsInProgress(),
 		"dir":                    s.raftDir,
 		"dir_size":               dirSz,
 		"sqlite3":                dbStatus,
@@ -1209,100 +1195,6 @@ func (s *Store) Backup(br *command.BackupRequest, dst io.Writer) (retErr error) 
 		return s.db.Dump(dst)
 	}
 	return ErrInvalidBackupFormat
-}
-
-// LoadFromReader reads data from r chunk-by-chunk, and loads it into the
-// database.
-func (s *Store) LoadFromReader(r io.Reader, chunkSize int64) error {
-	if !s.open {
-		return ErrNotOpen
-	}
-
-	if !s.Ready() {
-		return ErrNotReady
-	}
-
-	return s.loadFromReader(r, chunkSize)
-}
-
-// loadFromReader reads data from r chunk-by-chunk, and loads it into the
-// database. It is for internal use only. It does not check for readiness.
-func (s *Store) loadFromReader(r io.Reader, chunkSize int64) error {
-	chunker := chunking.NewChunker(r, chunkSize)
-	for {
-		chunk, err := chunker.Next()
-		if err != nil {
-			return err
-		}
-		if err := s.loadChunk(chunk); err != nil {
-			return err
-		}
-		if chunk.IsLast {
-			break
-		}
-	}
-	return nil
-}
-
-// LoadChunk loads a chunk of data into the database, sending the request
-// through the Raft log.
-func (s *Store) LoadChunk(lcr *command.LoadChunkRequest) error {
-	if !s.open {
-		return ErrNotOpen
-	}
-
-	if !s.Ready() {
-		return ErrNotReady
-	}
-
-	return s.loadChunk(lcr)
-}
-
-// loadChunk loads a chunk of data into the database, and is for internal use
-// only. It does not check for readiness.
-func (s *Store) loadChunk(lcr *command.LoadChunkRequest) error {
-	b, err := command.MarshalLoadChunkRequest(lcr)
-	if err != nil {
-		return err
-	}
-
-	c := &command.Command{
-		Type:       command.Command_COMMAND_TYPE_LOAD_CHUNK,
-		SubCommand: b,
-	}
-
-	b, err = command.Marshal(c)
-	if err != nil {
-		return err
-	}
-
-	af := s.raft.Apply(b, s.ApplyTimeout)
-	if af.Error() != nil {
-		if af.Error() == raft.ErrNotLeader {
-			return ErrNotLeader
-		}
-		return af.Error()
-	}
-
-	// Send one last command through the log to deal with issues in
-	// underlying Raft code when truncating log to zero trailing.
-	if lcr.Abort || lcr.IsLast {
-		af, err = s.Noop("load-chunk-trailing")
-		if err != nil {
-			return err
-		}
-		if af.Error() != nil {
-			if af.Error() == raft.ErrNotLeader {
-				return ErrNotLeader
-			}
-			return af.Error()
-		}
-	}
-
-	s.dbAppliedIndexMu.Lock()
-	s.dbAppliedIndex = af.Index()
-	s.dbAppliedIndexMu.Unlock()
-	return nil
 }
 
 // Loads an entire SQLite file into the database, sending the request
@@ -1671,36 +1563,9 @@ func (s *Store) fsmApply(l *raft.Log) (e interface{}) {
 		s.logger.Printf("first log applied since node start, log at index %d", l.Index)
 	}
 
-	snapshotNeeded := false
 	cmd, r := applyCommand(s.logger, l.Data, &s.db, s.dechunkManager)
-	switch cmd.Type {
-	case command.Command_COMMAND_TYPE_NOOP:
+	if cmd.Type == command.Command_COMMAND_TYPE_NOOP {
 		s.numNoops++
-	case command.Command_COMMAND_TYPE_LOAD:
-		snapshotNeeded = true
-	case command.Command_COMMAND_TYPE_LOAD_CHUNK:
-		var lcr command.LoadChunkRequest
-		if err := command.UnmarshalLoadChunkRequest(cmd.SubCommand, &lcr); err != nil {
-			panic(fmt.Sprintf("failed to unmarshal load-chunk subcommand: %s", err.Error()))
-		}
-		snapshotNeeded = lcr.IsLast
-		func() {
-			s.loadsInProgressMu.Lock()
-			defer s.loadsInProgressMu.Unlock()
-			if lcr.IsLast || lcr.Abort {
-				delete(s.loadsInProgress, lcr.StreamId)
-			} else {
-				s.loadsInProgress[lcr.StreamId] = struct{}{}
-			}
-		}()
-	}
-
-	if snapshotNeeded {
-		if err := s.snapshotStore.SetFullNeeded(); err != nil {
-			return &fsmGenericResponse{error: fmt.Errorf("failed to SetFullNeeded post load: %s", err)}
-		}
-		s.logger.Printf("last chunk loaded, forcing snapshot of database")
-		s.snapshotTChan <- struct{}{}
 	}
 	return r
 }
@@ -1732,34 +1597,6 @@ func (s *Store) Database(leader bool) ([]byte, error) {
 // database as long as no writes to the database are in progress.
 func (s *Store) fsmSnapshot() (raft.FSMSnapshot, error) {
 	startT := time.Now()
-
-	if s.NumLoadsInProgress() > 0 {
-		// There are loads in progress. Now, the next thing that has to be true
-		// is that the last log entry must be a load-chunk command, and it must
-		// indicate an ongoing load. If that is not the case, then some other
-		// request has been sent to this systemg, and all load operations are invalid.
-		lastIdx, err := s.boltStore.LastIndex()
-		if err != nil {
-			return nil, err
-		}
-		lastLog := &raft.Log{}
-		if err := s.boltStore.GetLog(lastIdx, lastLog); err != nil {
-			return nil, err
-		}
-		var c command.Command
-		if err := command.Unmarshal(lastLog.Data, &c); err != nil {
-			panic(fmt.Sprintf("failed to unmarshal last log entry: %s", err.Error()))
-		}
-		if c.Type == command.Command_COMMAND_TYPE_LOAD_CHUNK {
-			var lcr command.LoadChunkRequest
-			if err := command.UnmarshalLoadChunkRequest(c.SubCommand, &lcr); err != nil {
-				panic(fmt.Sprintf("failed to unmarshal load-chunk subcommand: %s", err.Error()))
-			}
-			if !lcr.IsLast && !lcr.Abort {
-				return nil, ErrLoadInProgress
-			}
-		}
-	}
 
 	fullNeeded, err := s.snapshotStore.FullNeeded()
 	if err != nil {
@@ -2073,13 +1910,6 @@ func (s *Store) logSize() (int64, error) {
 		return 0, err
 	}
 	return fi.Size(), nil
-}
-
-// NumLoadsInProgress returns the number of loads currently in progress.
-func (s *Store) NumLoadsInProgress() int {
-	s.loadsInProgressMu.Lock()
-	defer s.loadsInProgressMu.Unlock()
-	return len(s.loadsInProgress)
 }
 
 // tryCompress attempts to compress the given command. If the command is

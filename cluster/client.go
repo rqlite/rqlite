@@ -233,32 +233,6 @@ func (c *Client) Load(lr *command.LoadRequest, nodeAddr string, creds *Credentia
 	return nil
 }
 
-// LoadChunk loads a chunk of a SQLite file into the database.
-func (c *Client) LoadChunk(lcr *command.LoadChunkRequest, nodeAddr string, creds *Credentials, timeout time.Duration) error {
-	command := &Command{
-		Type: Command_COMMAND_TYPE_LOAD_CHUNK,
-		Request: &Command_LoadChunkRequest{
-			LoadChunkRequest: lcr,
-		},
-		Credentials: creds,
-	}
-	p, err := c.retry(command, nodeAddr, timeout)
-	if err != nil {
-		return err
-	}
-
-	a := &CommandLoadChunkResponse{}
-	err = proto.Unmarshal(p, a)
-	if err != nil {
-		return err
-	}
-
-	if a.Error != "" {
-		return errors.New(a.Error)
-	}
-	return nil
-}
-
 // RemoveNode removes a node from the cluster
 func (c *Client) RemoveNode(rn *command.RemoveNodeRequest, nodeAddr string, creds *Credentials, timeout time.Duration) error {
 	conn, err := c.dial(nodeAddr, c.timeout)

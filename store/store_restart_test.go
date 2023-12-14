@@ -2,13 +2,11 @@ package store
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/rqlite/rqlite/command"
-	"github.com/rqlite/rqlite/command/chunking"
 )
 
 func test_OpenStoreCloseStartup(t *testing.T, s *Store) {
@@ -280,7 +278,7 @@ func Test_StoreSnapshotStressSingleNode(t *testing.T) {
 	test_SnapshotStress(t, s)
 }
 
-func Test_StoreLoadChunk_Restart(t *testing.T) {
+func Test_StoreLoad_Restart(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
 
@@ -295,36 +293,10 @@ func Test_StoreLoadChunk_Restart(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
-	// Open the SQLite file for loading.
-	f, err := os.Open(filepath.Join("testdata", "load.sqlite"))
+	err := s.Load(loadRequestFromFile(filepath.Join("testdata", "load.sqlite")))
 	if err != nil {
-		t.Fatalf("failed to open SQLite file: %s", err.Error())
+		t.Fatalf("failed to load: %s", err.Error())
 	}
-	defer f.Close()
-
-	numSnapshots := s.numSnapshots
-	chunker := chunking.NewChunker(f, 2048)
-	for {
-		chunk, err := chunker.Next()
-		if err != nil {
-			t.Fatalf("failed to read next chunk: %s", err.Error())
-		}
-		err = s.LoadChunk(chunk)
-		if err != nil {
-			t.Fatalf("failed to load chunk: %s", err.Error())
-		}
-		if chunk.IsLast {
-			break
-		}
-	}
-
-	// Chunked loading should trigger a snapshot, so check that the snapshot
-	// exists. Check that numSnapshots is 1
-	testPoll(t, func() bool {
-		s.numSnapshotsMu.Lock()
-		defer s.numSnapshotsMu.Unlock()
-		return s.numSnapshots == numSnapshots+1
-	}, 100*time.Millisecond, 3*time.Second)
 
 	// Check store can be re-opened.
 	if err := s.Close(true); err != nil {
