@@ -560,7 +560,7 @@ class Node(object):
   def _backup_url(self):
     return 'http://' + self.APIAddr() + '/db/backup'
   def _load_url(self):
-    return 'http://' + self.APIAddr() + '/db/load' + ckb
+    return 'http://' + self.APIAddr() + '/db/load'
   def _remove_url(self):
     return 'http://' + self.APIAddr() + '/remove'
   def __eq__(self, other):
