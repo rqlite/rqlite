@@ -11,6 +11,7 @@ _rqlite_ is a lightweight, distributed relational database, which uses [SQLite](
 Release {release} {release_specific_notes}. See the [CHANGELOG](https://github.com/rqlite/rqlite/blob/master/CHANGELOG.md) for full details on this release, and check out the _Assets_ section below for prebuilt binaries.
 
 ## Getting started
+_Check out the [Quick Start guide](https://rqlite.io/docs/quick-start/)._
 
 To download and run a single rqlite node follow the directions below. It's also very easy to run a rqlite cluster -- you can learn more by checking out the [documentation](https://rqlite.io/docs/clustering/).
 
