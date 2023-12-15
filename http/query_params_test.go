@@ -16,9 +16,8 @@ func Test_NewQueryParams(t *testing.T) {
 		expectError bool
 	}{
 		{"Empty Query", "", QueryParams{}, false},
-		{"Valid Query", "timeout=10s&chunk_kb=1024&q=test", QueryParams{"timeout": "10s", "chunk_kb": "1024", "q": "test"}, false},
+		{"Valid Query", "timeout=10s&q=test", QueryParams{"timeout": "10s", "q": "test"}, false},
 		{"Invalid Timeout", "timeout=invalid", nil, true},
-		{"Invalid ChunkKB", "chunk_kb=invalid", nil, true},
 		{"Empty Q", "q=", nil, true},
 		{"Invalid Q", "q", nil, true},
 		{"Valid Q, no case changes", "q=SELeCT", QueryParams{"q": "SELeCT"}, false},

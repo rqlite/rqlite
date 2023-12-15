@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
@@ -33,13 +32,6 @@ func NewQueryParams(r *http.Request) (QueryParams, error) {
 			if err != nil {
 				return nil, fmt.Errorf("%s is not a valid duration", k)
 			}
-		}
-	}
-	sz, ok := qp["chunk_kb"]
-	if ok {
-		_, err := strconv.Atoi(sz)
-		if err != nil {
-			return nil, fmt.Errorf("chunk_kb is not an integer")
 		}
 	}
 	q, ok := qp["q"]
@@ -79,16 +71,6 @@ func (qp QueryParams) Bypass() bool {
 // Wait returns true if the query parameters indicate the query should wait.
 func (qp QueryParams) Wait() bool {
 	return qp.HasKey("wait")
-}
-
-// ChunkKB returns the requested chunk size.
-func (qp QueryParams) ChunkKB(defSz int) int {
-	s, ok := qp["chunk_kb"]
-	if !ok {
-		return defSz
-	}
-	sz, _ := strconv.Atoi(s)
-	return sz * 1024
 }
 
 // Associative returns true if the query parameters request associative results.

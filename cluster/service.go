@@ -30,7 +30,6 @@ const (
 	numRequestRequest     = "num_request_req"
 	numBackupRequest      = "num_backup_req"
 	numLoadRequest        = "num_load_req"
-	numLoadChunkRequest   = "num_load_chunk_req"
 	numRemoveNodeRequest  = "num_remove_node_req"
 	numNotifyRequest      = "num_notify_req"
 	numJoinRequest        = "num_join_req"
@@ -57,7 +56,6 @@ func init() {
 	stats.Add(numRequestRequest, 0)
 	stats.Add(numBackupRequest, 0)
 	stats.Add(numLoadRequest, 0)
-	stats.Add(numLoadChunkRequest, 0)
 	stats.Add(numRemoveNodeRequest, 0)
 	stats.Add(numGetNodeAPIRequestLocal, 0)
 	stats.Add(numNotifyRequest, 0)
@@ -89,9 +87,6 @@ type Database interface {
 
 	// Loads an entire SQLite file into the database
 	Load(lr *command.LoadRequest) error
-
-	// LoadChunk loads a chunk of a SQLite file into the database
-	LoadChunk(lcr *command.LoadChunkRequest) error
 }
 
 // Manager is the interface node-management systems must implement
@@ -401,18 +396,8 @@ func (s *Service) handleConn(conn net.Conn) {
 			marshalAndWrite(conn, resp)
 
 		case Command_COMMAND_TYPE_LOAD_CHUNK:
-			stats.Add(numLoadChunkRequest, 1)
-			resp := &CommandLoadChunkResponse{}
-
-			lcr := c.GetLoadChunkRequest()
-			if lcr == nil {
-				resp.Error = "LoadChunkRequest is nil"
-			} else if !s.checkCommandPerm(c, auth.PermLoad) {
-				resp.Error = "unauthorized"
-			} else {
-				if err := s.db.LoadChunk(lcr); err != nil {
-					resp.Error = fmt.Sprintf("remote node failed to load chunk: %s", err.Error())
-				}
+			resp := &CommandLoadChunkResponse{
+				Error: "unsupported",
 			}
 			marshalAndWrite(conn, resp)
 

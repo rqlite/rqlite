@@ -29,16 +29,9 @@ import (
 	"github.com/rqlite/rqlite/store"
 )
 
-const (
-	defaultChunkSize = 64 * 1024 * 1024 // 64 MB
-)
-
 var (
 	// ErrLeaderNotFound is returned when a node cannot locate a leader
 	ErrLeaderNotFound = errors.New("leader not found")
-
-	// ErrRemoteLoadNotAuthorized is returned when a remote node is not authorized to load a chunk
-	ErrRemoteLoadNotAuthorized = errors.New("remote load not authorized")
 )
 
 type ResultsError interface {
@@ -63,9 +56,6 @@ type Database interface {
 	// Request processes a slice of requests, each of which can be either
 	// an Execute or Query request.
 	Request(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, error)
-
-	// LoadChunk loads a SQLite database into the node, chunk by chunk.
-	LoadChunk(lc *command.LoadChunkRequest) error
 
 	// Load loads a SQLite file into the system
 	Load(lr *command.LoadRequest) error
@@ -115,9 +105,6 @@ type Cluster interface {
 
 	// Backup retrieves a backup from a remote node and writes to the io.Writer.
 	Backup(br *command.BackupRequest, nodeAddr string, creds *cluster.Credentials, timeout time.Duration, w io.Writer) error
-
-	// LoadChunk loads a SQLite database into the node, chunk by chunk.
-	LoadChunk(lc *command.LoadChunkRequest, nodeAddr string, creds *cluster.Credentials, timeout time.Duration) error
 
 	// Load loads a SQLite database into the node.
 	Load(lr *command.LoadRequest, nodeAddr string, creds *cluster.Credentials, timeout time.Duration) error

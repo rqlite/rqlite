@@ -1,3 +1,7 @@
+## 8.0.7 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1484](https://github.com/rqlite/rqlite/pull/1484): Remove ability to trigger chunked-loading.
+
 ## 8.0.6 (December 12th 2023)
 Release v8.0.6 protects against a malformed database being loaded as a result of using `/db/load`. **All 8.x users should upgrade to this release**.
 ### Implementation changes and bug fixes
