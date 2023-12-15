@@ -18,11 +18,11 @@ _Check out the [rqlite FAQ](https://rqlite.io/docs/faq)_.
 ## Why run rqlite?
 rqlite is your solution for a [rock-solid](https://www.sqlite.org/testing.html), fault-tolerant, relational database with **effortless installation, deployment, and operation**. It's ideal as a lightweight, distributed relational data store for both developers and operators.
 
-You can use rqlite for critical relational data in larger systems. And if you're interested in understanding how distributed systems actually work, it's a good example to study. A lot of thought has gone into its design, separating storage, consensus, and API clearly.
+You can use rqlite for critical relational data in larger systems. And if you're interested in understanding how distributed systems actually work, it's a good example to study. A lot of thought has gone into its [design](https://rqlite.io/docs/design/), separating storage, consensus, and API clearly.
 
 ### Key features
 - **Easy Deployment**: No separate SQLite installation.
-- **Developer-Friendly**: Straightforward [HTTP API](https://rqlite.io/docs/api/), [CLI](https://rqlite.io/docs/cli/), and [client libraries](https://github.com/rqlite).
+- **Developer-Friendly**: Straightforward [HTTP API](https://rqlite.io/docs/api/), [CLI](https://rqlite.io/docs/cli/), and [client libraries](https://rqlite.io/docs/api/client-libraries/).
 - **Fully Replicated**: SQL database with [full-text search](https://www.sqlite.org/fts5.html) and [JSON support](https://www.sqlite.org/json1.html).
 - **Dynamic Clustering**: Integrates with Kubernetes, Consul, etcd, and DNS for [automatic clustering](https://rqlite.io/docs/clustering/automatic-clustering/).
 - **Robust Security**: [Extensive encryption and TLS support](https://rqlite.io/docs/guides/security/).
