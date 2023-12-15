@@ -23,7 +23,7 @@ You can use rqlite for critical relational data in larger systems. And if you're
 ### Key features
 - **Easy Deployment**: No separate SQLite installation.
 - **Developer-Friendly**: Straightforward [HTTP API](https://rqlite.io/docs/api/), [CLI](https://rqlite.io/docs/cli/), and [client libraries](https://github.com/rqlite).
-- **Fully Replicated**: SQL database with [full-text search](https://www.sqlite.org/fts3.html) and [JSON support](https://www.sqlite.org/json1.html).
+- **Fully Replicated**: SQL database with [full-text search](https://www.sqlite.org/fts5.html) and [JSON support](https://www.sqlite.org/json1.html).
 - **Dynamic Clustering**: Integrates with Kubernetes, Consul, etcd, and DNS for [automatic clustering](https://rqlite.io/docs/clustering/automatic-clustering/).
 - **Robust Security**: [Extensive encryption and TLS support](https://rqlite.io/docs/guides/security/).
 - **Flexible Consistency**: Customize [read/write performance](https://rqlite.io/docs/api/read-consistency/) and [durability](https://rqlite.io/docs/api/queued-writes/).
