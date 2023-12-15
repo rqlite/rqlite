@@ -60,7 +60,9 @@ def temp_file():
   f.close()
   return f.name
 
-def copy_dir(src):
+def copy_dir_to_temp(src):
+  if not os.path.isdir(src):
+    raise Exception('src is not a directory')
   temp_dir = tempfile.mkdtemp()
   shutil.copytree(src, temp_dir, dirs_exist_ok=True)
   return temp_dir
