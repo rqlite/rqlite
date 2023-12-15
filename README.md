@@ -17,15 +17,12 @@ rqlite is simple to deploy, operating and accessing it is very straightforward, 
 
 _Check out the [rqlite FAQ](https://rqlite.io/docs/faq)_.
 
-### Why?
+## Why run rqlite?
 rqlite gives you the functionality of a [rock solid](https://www.sqlite.org/testing.html), fault-tolerant, replicated relational database, but with very **easy installation, deployment, and operation**. With it you've got a **lightweight** and **reliable distributed relational data store**.
 
 You could use rqlite as part of a larger system, as a central store for some critical relational data, without having to run larger, more complex distributed databases.
 
-Finally, if you're interested in understanding how distributed systems actually work, **rqlite is a good example to study**. Much thought has gone into its [design](https://rqlite.io/docs/design/) and implementation, with clear separation between the various components, including storage, distributed consensus, and API.
-
-### How?
-rqlite uses [Raft](https://raft.github.io/) to achieve consensus across all the instances of the SQLite databases, ensuring that every change made to the system is made to a quorum of SQLite databases, or none at all. You can learn more about the design [here](https://rqlite.io/docs/design/).
+And if you're interested in understanding how distributed systems actually work, **rqlite is a good example to study**. Much thought has gone into its [design](https://rqlite.io/docs/design/) and implementation, with clear separation between the various components, including storage, distributed consensus, and API.
 
 ### Key features
 - Trivially easy to deploy, with no need to separately install SQLite.
@@ -39,58 +36,7 @@ rqlite uses [Raft](https://raft.github.io/) to achieve consensus across all the 
 - Hot [backups](https://rqlite.io/docs/guides/backup/), including [automatic backups to AWS S3](https://rqlite.io/docs/guides/backup/#automatic-backups), as well as [restore directly from SQLite](https://rqlite.io/docs/guides/restore/) and AWS S3.
 
 ## Quick Start
-
-The quickest way to get running is to download a pre-built release binary, available on the [GitHub releases page](https://github.com/rqlite/rqlite/releases). Once installed, you can start a single rqlite node like so:
-```bash
-rqlited -node-id 1 ~/node.1
-```
-This single node automatically becomes the leader. You can pass `-h` to `rqlited` to list all configuration options.
-
-### Docker
-`docker run -p4001:4001 rqlite/rqlite`
-
-Check out the [rqlite Docker page](https://hub.docker.com/r/rqlite/rqlite/) for more details on running nodes via Docker.
-
-### Homebrew
-`brew install rqlite`
-
-### Forming a cluster
-While not strictly necessary to run rqlite, running multiple nodes means you'll have a fault-tolerant cluster. Start two more nodes, allowing the cluster to tolerate the failure of a single node, like so:
-```bash
-rqlited -node-id 2 -http-addr localhost:4003 -raft-addr localhost:4004 -join localhost:4002 ~/node.2
-rqlited -node-id 3 -http-addr localhost:4005 -raft-addr localhost:4006 -join localhost:4002 ~/node.3
-```
-_This demonstration shows all 3 nodes running on the same host. In reality you probably wouldn't do this, and then you wouldn't need to select different -http-addr and -raft-addr ports for each rqlite node._
-
-With just these few steps you've now got a fault-tolerant, distributed relational database. For full details on creating and managing real clusters, including running read-only nodes, check out [this documentation](https://rqlite.io/docs/clustering/).
-
-### Inserting records
-Let's insert some records via the [rqlite CLI](https://rqlite.io/docs/cli/), using standard SQLite commands. Once inserted, these records will be replicated across the cluster, in a durable and fault-tolerant manner.
-```
-$ rqlite
-127.0.0.1:4001> CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)
-0 row affected (0.000668 sec)
-127.0.0.1:4001> .schema
-+-----------------------------------------------------------------------------+
-| sql                                                                         |
-+-----------------------------------------------------------------------------+
-| CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)               |
-+-----------------------------------------------------------------------------+
-127.0.0.1:4001> INSERT INTO foo(name) VALUES("fiona")
-1 row affected (0.000080 sec)
-127.0.0.1:4001> SELECT * FROM foo
-+----+-------+
-| id | name  |
-+----+-------+
-| 1  | fiona |
-+----+-------+
-```
-
-## Limitations
- * Because rqlite peforms _statement-based replication_ certain [_non-deterministic functions_](https://www.sqlite.org/deterministic.html), e.g. `RANDOM()`, are rewritten by rqlite before being passed to the Raft system and SQLite. To learn more about rqlite's support for non-deterministic functions, check out the [documentation](https://rqlite.io/docs/api/non-deterministic/).
- * This has not been extensively tested, but you can directly read the SQLite file under any node at anytime. However there is no guarantee that the SQLite file reflects all the changes that have taken place on the cluster unless you are sure the host node itself has received and applied all changes.
- * In case it isn't obvious, rqlite does not replicate any changes made directly to any underlying SQLite file. **If you change the SQLite file directly, you may cause rqlite to fail**. Only modify the database via the HTTP API.
- * SQLite dot-commands such as `.schema` or `.tables` are not directly supported by the API, but the [rqlite CLI](https://rqlite.io/docs/cli/) supports some very similar functionality. This is because those commands are features of the `sqlite3` command, not SQLite itself.
+Check out the [_Quick Start_ guide](https://rqlite.io/docs/quick-start/).
 
 ## Pronunciation?
 How do I pronounce rqlite? For what it's worth I try to pronounce it "ree-qwell-lite". But it seems most people, including me, often pronounce it "R Q lite".
