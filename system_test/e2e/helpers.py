@@ -60,6 +60,11 @@ def temp_file():
   f.close()
   return f.name
 
+def copy_dir(src):
+  temp_dir = tempfile.mkdtemp()
+  shutil.copytree(src, temp_dir, dirs_exist_ok=True)
+  return temp_dir
+
 def write_random_file(data, mode='w'):
   f = tempfile.NamedTemporaryFile(mode, delete=False)
   f.write(data)
