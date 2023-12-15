@@ -8,7 +8,7 @@
 [![Slack](https://img.shields.io/badge/Slack--purple.svg)](https://www.philipotoole.com/join-rqlite-slack)
 [![Google Group](https://img.shields.io/badge/Google%20Group--blue.svg)](https://groups.google.com/group/rqlite)
 
-*rqlite* combines SQLite's simplicity with the power of a [robust](https://www.sqlite.org/testing.html), fault-tolerant distributed database. It's designed for easy deployment and efficient operation, offering a developer-friendly and operation-centric solution across [Linux, macOS, Windows, and on various CPU platforms](https://github.com/rqlite/rqlite/releases).
+*rqlite* combines SQLite's simplicity with the power of a robust, fault-tolerant distributed database. It's designed for easy deployment and efficient operation, offering a developer-friendly and operation-centric solution across [Linux, macOS, Windows, and on various CPU platforms](https://github.com/rqlite/rqlite/releases).
 
 - [Website](https://www.rqlite.io)
 - [Developer guide](https://www.rqlite.io/docs/api)
@@ -16,7 +16,7 @@
 _Check out the [rqlite FAQ](https://rqlite.io/docs/faq)_.
 
 ## Why run rqlite?
-rqlite is your solution for a rock-solid, fault-tolerant, replicated relational database with **effortless installation, deployment, and operation**. It's ideal as a lightweight, distributed relational data store for both developers and operators.
+rqlite is your solution for a [rock-solid](https://www.sqlite.org/testing.html), fault-tolerant, relational database with **effortless installation, deployment, and operation**. It's ideal as a lightweight, distributed relational data store for both developers and operators.
 
 You can use rqlite for critical relational data in larger systems. And if you're interested in understanding how distributed systems actually work, it's a good example to study. A lot of thought has gone into its design, separating storage, consensus, and API clearly.
 
