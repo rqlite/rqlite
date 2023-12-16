@@ -25,6 +25,7 @@ import (
 	sql "github.com/rqlite/rqlite/db"
 	wal "github.com/rqlite/rqlite/db/wal"
 	rlog "github.com/rqlite/rqlite/log"
+	"github.com/rqlite/rqlite/progress"
 	"github.com/rqlite/rqlite/snapshot"
 )
 
@@ -1282,11 +1283,19 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 	}
 	defer f.Close()
 	defer os.Remove(f.Name())
-	n, err := io.Copy(f, r)
+
+	cw := progress.NewCountingWriter(f)
+	cm := progress.StartCountingMonitor(func(n int64) {
+		s.logger.Printf("installed %d bytes", n)
+	}, cw)
+	n, err := func() (int64, error) {
+		defer cm.StopAndWait()
+		defer f.Close()
+		return io.Copy(cw, r)
+	}()
 	if err != nil {
 		return n, err
 	}
-	f.Close()
 
 	// Confirm the data is a valid SQLite database.
 	if !sql.IsValidSQLiteFile(f.Name()) {

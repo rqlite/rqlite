@@ -765,6 +765,7 @@ func (s *Service) handleBoot(w http.ResponseWriter, r *http.Request, qp QueryPar
 		return
 	}
 
+	s.logger.Printf("starting boot process")
 	_, err = s.store.ReadFrom(bufReader)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
