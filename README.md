@@ -16,7 +16,7 @@
 _Check out the [rqlite FAQ](https://rqlite.io/docs/faq)_.
 
 ## Why run rqlite?
-rqlite is your solution for a [rock-solid](https://www.sqlite.org/testing.html), fault-tolerant, relational database with **effortless installation, deployment, and operation**. It's ideal as a lightweight, distributed relational data store for both developers and operators.
+rqlite is your solution for a [rock-solid](https://www.sqlite.org/testing.html), fault-tolerant, relational database with **effortless installation, deployment, and operation**. It's ideal as a lightweight, distributed relational data store for both developers and operators. Think [Consul](https://www.consul.io/) or [etcd](https://etcd.io/), but with relational modeling available.
 
 You can use rqlite for critical relational data in larger systems. And if you're interested in understanding how distributed systems actually work, it's a good example to study. A lot of thought has gone into its [design](https://rqlite.io/docs/design/), separating storage, consensus, and API clearly.
 
