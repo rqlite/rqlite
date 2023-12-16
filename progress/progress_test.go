@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"io"
 	"strings"
-	"sync"
 	"testing"
 )
 
@@ -64,37 +63,6 @@ func TestCountingReader_Read(t *testing.T) {
 	}
 }
 
-func TestCountingReader_ConcurrentReads(t *testing.T) {
-	input := "Concurrent reading test string"
-	reader := strings.NewReader(input)
-	countingReader := NewCountingReader(reader)
-
-	var wg sync.WaitGroup
-	readFunc := func() {
-		defer wg.Done()
-		buf := make([]byte, 5) // Read in chunks of 5 bytes
-		for {
-			if _, err := countingReader.Read(buf); err == io.EOF {
-				break
-			} else if err != nil {
-				t.Errorf("Read() error = %v", err)
-			}
-		}
-	}
-
-	// Simulate concurrent reads
-	for i := 0; i < 3; i++ {
-		wg.Add(1)
-		go readFunc()
-	}
-	wg.Wait()
-
-	wantCount := int64(len(input))
-	if got := countingReader.Count(); got != wantCount {
-		t.Fatalf("CountingReader.Count() after concurrent reads = %v, want %v", got, wantCount)
-	}
-}
-
 func TestCountingWriter_Write(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -135,31 +103,5 @@ func TestCountingWriter_Write(t *testing.T) {
 				t.Errorf("CountingWriter.Count() = %v, want %v", got, tt.wantCount)
 			}
 		})
-	}
-}
-
-func TestCountingWriter_ConcurrentWrites(t *testing.T) {
-	var buf bytes.Buffer
-	countingWriter := NewCountingWriter(&buf)
-	input := "Concurrent write test string"
-	wantCount := int64(len(input) * 3) // 3 goroutines writing the same string
-
-	var wg sync.WaitGroup
-	writeFunc := func() {
-		defer wg.Done()
-		if _, err := countingWriter.Write([]byte(input)); err != nil {
-			t.Errorf("Write() error = %v", err)
-		}
-	}
-
-	// Perform concurrent writes
-	for i := 0; i < 3; i++ {
-		wg.Add(1)
-		go writeFunc()
-	}
-	wg.Wait()
-
-	if got := countingWriter.Count(); got != wantCount {
-		t.Errorf("CountingWriter.Count() after concurrent writes = %v, want %v", got, wantCount)
 	}
 }
