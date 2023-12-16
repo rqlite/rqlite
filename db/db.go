@@ -199,7 +199,7 @@ func IsDELETEModeEnabledSQLiteFile(path string) bool {
 	return IsDELETEModeEnabled(b)
 }
 
-// IsDELETEModeEnabled checks that the supplied path looks like a SQLite file
+// IsDELETEModeEnabled checks that the supplied data looks like a SQLite file
 // with DELETE mode enabled.
 func IsDELETEModeEnabled(b []byte) bool {
 	return len(b) >= 20 && b[18] == 1 && b[19] == 1

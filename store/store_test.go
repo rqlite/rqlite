@@ -2,6 +2,7 @@ package store
 
 import (
 	"bytes"
+	"crypto/rand"
 	"errors"
 	"expvar"
 	"fmt"
@@ -1310,6 +1311,142 @@ func Test_SingleNodeSetRestoreFailBadFile(t *testing.T) {
 	os.WriteFile(path, []byte("not valid SQLite data"), 0644)
 	if err := s.SetRestorePath(path); err == nil {
 		t.Fatalf("expected error setting restore path with invalid file")
+	}
+}
+
+// Test_SingleNodeBoot tests that a Store correctly boots from SQLite data.
+func Test_SingleNodeBoot(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Load a dataset, to check it's erased by the SQLite file load.
+	dump := `PRAGMA foreign_keys=OFF;
+BEGIN TRANSACTION;
+CREATE TABLE bar (id integer not null primary key, name text);
+INSERT INTO "bar" VALUES(1,'declan');
+COMMIT;
+`
+	_, err := s.Execute(executeRequestFromString(dump, false, false))
+	if err != nil {
+		t.Fatalf("failed to load simple dump: %s", err.Error())
+	}
+
+	// Check that data were loaded correctly.
+	qr := queryRequestFromString("SELECT * FROM bar", false, true)
+	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	r, err := s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[1,"declan"]]`, asJSON(r[0].Values); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	f, err := os.Open(filepath.Join("testdata", "load.sqlite"))
+	if err != nil {
+		t.Fatalf("failed to open SQLite file: %s", err.Error())
+	}
+	defer f.Close()
+
+	// Load the SQLite file in bypass mode, check that the right number
+	// of snapshots were created, and that the right amount of data was
+	// loaded.
+	numSnapshots := s.numSnapshots
+	n, err := s.ReadFrom(f)
+	if err != nil {
+		t.Fatalf("failed to load SQLite file via Reader: %s", err.Error())
+	}
+	sz := mustFileSize(filepath.Join("testdata", "load.sqlite"))
+	if n != sz {
+		t.Fatalf("expected %d bytes to be read, got %d", sz, n)
+	}
+	if s.numSnapshots != numSnapshots+1 {
+		t.Fatalf("expected 1 extra snapshot, got %d", s.numSnapshots)
+	}
+
+	// Check that data were loaded correctly.
+	qr = queryRequestFromString("SELECT * FROM foo WHERE id=2", false, true)
+	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	r, err = s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[2,"fiona"]]`, asJSON(r[0].Values); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	qr = queryRequestFromString("SELECT count(*) FROM foo", false, true)
+	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	r, err = s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `["count(*)"]`, asJSON(r[0].Columns); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[3]]`, asJSON(r[0].Values); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	// Check pre-existing data is gone.
+	qr = queryRequestFromString("SELECT * FROM bar", false, true)
+	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	r, err = s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `{"error":"no such table: bar"}`, asJSON(r[0]); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
+func Test_SingleNodeBoot_Fail(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Ensure invalid SQLite data is not accepted.
+	b := make([]byte, 1024)
+	mustReadRandom(b)
+	r := bytes.NewReader(b)
+	if _, err := s.ReadFrom(r); err == nil {
+		t.Fatalf("expected error reading from invalid SQLite file")
+	}
+
+	// Ensure WAL-enabled SQLite file is not accepted.
+	f, err := os.Open(filepath.Join("testdata", "wal-enabled.sqlite"))
+	if err != nil {
+		t.Fatalf("failed to open SQLite file: %s", err.Error())
+	}
+	defer f.Close()
+	if _, err := s.ReadFrom(f); err == nil {
+		t.Fatalf("expected error reading from WAL-enabled SQLite file")
 	}
 }
 
@@ -2711,6 +2848,13 @@ func mustReadFile(path string) []byte {
 	return b
 }
 
+func mustReadRandom(b []byte) {
+	_, err := rand.Read(b)
+	if err != nil {
+		panic("failed to read random bytes")
+	}
+}
+
 func mustCopyFileToTempFile(path string) string {
 	f := mustCreateTempFile()
 	mustWriteFile(f, string(mustReadFile(path)))
@@ -2723,6 +2867,14 @@ func mustParseDuration(t string) time.Duration {
 		panic("failed to parse duration")
 	}
 	return d
+}
+
+func mustFileSize(path string) int64 {
+	n, err := fileSize(path)
+	if err != nil {
+		panic("failed to get file size")
+	}
+	return n
 }
 
 func executeRequestFromString(s string, timings, tx bool) *command.ExecuteRequest {

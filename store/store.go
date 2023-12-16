@@ -42,6 +42,10 @@ var (
 	// operation.
 	ErrNotLeader = errors.New("not leader")
 
+	// ErrNotSingleNode is returned when a node attempts to execute a single-node
+	// only operation.
+	ErrNotSingleNode = errors.New("not single-node")
+
 	// ErrStaleRead is returned if the executing the query would violate the
 	// requested freshness.
 	ErrStaleRead = errors.New("stale read")
@@ -96,6 +100,7 @@ const (
 	numSnapshotsFull          = "num_snapshots_full"
 	numSnapshotsIncremental   = "num_snapshots_incremental"
 	numProvides               = "num_provides"
+	numBoots                  = "num_boots"
 	numBackups                = "num_backups"
 	numLoads                  = "num_loads"
 	numRestores               = "num_restores"
@@ -135,6 +140,7 @@ func ResetStats() {
 	stats.Add(numUserSnapshots, 0)
 	stats.Add(numSnapshotsFull, 0)
 	stats.Add(numSnapshotsIncremental, 0)
+	stats.Add(numBoots, 0)
 	stats.Add(numProvides, 0)
 	stats.Add(numBackups, 0)
 	stats.Add(numLoads, 0)
@@ -1251,6 +1257,75 @@ func (s *Store) load(lr *command.LoadRequest) error {
 	s.logger.Printf("node loaded in %s (%d bytes)", time.Since(startT), len(b))
 
 	return nil
+}
+
+// ReadFrom reads data from r, and loads it into the database, bypassing Raft consensus.
+// Once the data is loaded, a snapshot is triggered, which then results in a system as
+// if the data had been loaded through Raft consensus.
+func (s *Store) ReadFrom(r io.Reader) (int64, error) {
+	// Check the constraints.
+	if s.raft.State() != raft.Leader {
+		return 0, ErrNotLeader
+	}
+	nodes, err := s.Nodes()
+	if err != nil {
+		return 0, err
+	}
+	if len(nodes) != 1 {
+		return 0, ErrNotSingleNode
+	}
+
+	// Write the data to a temporary file..
+	f, err := os.CreateTemp("", "rqlite-boot-*")
+	if err != nil {
+		return 0, err
+	}
+	defer f.Close()
+	defer os.Remove(f.Name())
+	n, err := io.Copy(f, r)
+	if err != nil {
+		return n, err
+	}
+	f.Close()
+
+	// Confirm the data is a valid SQLite database.
+	if !sql.IsValidSQLiteFile(f.Name()) {
+		return n, fmt.Errorf("invalid SQLite data")
+	}
+	if !sql.IsDELETEModeEnabledSQLiteFile(f.Name()) {
+		return n, fmt.Errorf("SQLite file does not have DELETE mode enabled")
+	}
+
+	// Close the database, remove the database file, and then rename the temporary
+	if err := s.db.Close(); err != nil {
+		return n, err
+	}
+	if err := sql.RemoveFiles(s.dbPath); err != nil {
+		return n, err
+	}
+	if err := os.Rename(f.Name(), s.dbPath); err != nil {
+		return n, err
+	}
+	db, err := sql.Open(s.dbPath, s.dbConf.FKConstraints, true)
+	if err != nil {
+		return n, err
+	}
+	s.db = db
+
+	// Raft won't snapshot unless there is at least one unsnappshotted log entry.
+	if af, err := s.Noop("boot"); err != nil {
+		return n, err
+	} else if err := af.Error(); err != nil {
+		return n, err
+	}
+	if err := s.snapshotStore.SetFullNeeded(); err != nil {
+		return n, err
+	}
+	if err := s.Snapshot(); err != nil {
+		return n, err
+	}
+	stats.Add(numBoots, 1)
+	return n, nil
 }
 
 // Notify notifies this Store that a node is ready for bootstrapping at the
