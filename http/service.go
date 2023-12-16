@@ -765,7 +765,8 @@ func (s *Service) handleBoot(w http.ResponseWriter, r *http.Request, qp QueryPar
 		return
 	}
 	if !db.IsDELETEModeEnabled(peek) {
-		http.Error(w, "SQLite database file is in WAL mode - convert it to DELETE mode via 'PRAGMA journal_mode=DELETE'",
+		http.Error(w,
+			"SQLite database is in WAL mode - enable DELETE mode via 'PRAGMA journal_mode=DELETE'",
 			http.StatusBadRequest)
 		return
 	}
