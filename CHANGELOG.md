@@ -1,3 +1,7 @@
+## 8.11.1 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1490](https://github.com/rqlite/rqlite/pull/1490): Guard against `nil` History in rqlite shell. Fixes [issue #1486](https://github.com/rqlite/rqlite/issues/1486).
+
 ## 8.11.0 (December 17th 2023)
 ### New features
 - [PR #1489](https://github.com/rqlite/rqlite/pull/1489): Add `.boot` command to rqlite shell, to support _Booting_ nodes.
