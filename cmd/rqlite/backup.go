@@ -82,6 +82,20 @@ func dump(ctx *cli.Context, filename string, argv *argT) error {
 	return nil
 }
 
+func validSQLiteFile(path string) bool {
+	file, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer file.Close()
+	b := make([]byte, 16)
+	_, err = file.Read(b)
+	if err != nil {
+		return false
+	}
+	return validSQLiteData(b)
+}
+
 func validSQLiteData(b []byte) bool {
 	return len(b) > 13 && string(b[0:13]) == "SQLite format"
 }
@@ -186,5 +200,91 @@ func restore(ctx *cli.Context, filename string, argv *argT) error {
 	}
 
 	ctx.String("database restored successfully\n")
+	return nil
+}
+
+func boot(ctx *cli.Context, filename string, argv *argT) error {
+	statusURL := fmt.Sprintf("%s://%s:%d/status", argv.Protocol, argv.Host, argv.Port)
+	client := http.Client{Transport: &http.Transport{
+		Proxy:           http.ProxyFromEnvironment,
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: argv.Insecure},
+	}}
+
+	req, err := http.NewRequest("GET", statusURL, nil)
+	if err != nil {
+		return err
+	}
+	if argv.Credentials != "" {
+		creds := strings.Split(argv.Credentials, ":")
+		if len(creds) != 2 {
+			return fmt.Errorf("invalid Basic Auth credentials format")
+		}
+		req.SetBasicAuth(creds[0], creds[1])
+	}
+
+	// Check that we can talk to the node OK.
+	statusResp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer statusResp.Body.Close()
+	if statusResp.StatusCode == http.StatusUnauthorized {
+		return fmt.Errorf("unauthorized")
+	}
+	body, err := io.ReadAll(statusResp.Body)
+	if err != nil {
+		return err
+	}
+	statusRet := &statusResponse{}
+	if err := parseResponse(&body, &statusRet); err != nil {
+		return err
+	}
+	if statusRet.Store == nil {
+		return fmt.Errorf("unexpected server response: store status not found")
+	}
+
+	// File is OK?
+	if !validSQLiteFile(filename) {
+		return fmt.Errorf("%s is not a valid SQLite file", filename)
+	}
+
+	// Do the boot.
+	fd, err := os.Open(filename)
+	if err != nil {
+		return err
+	}
+	defer fd.Close()
+
+	bootURL := fmt.Sprintf("%s://%s:%d/boot", argv.Protocol, argv.Host, argv.Port)
+	req, err = http.NewRequest("POST", bootURL, fd)
+	if err != nil {
+		return err
+	}
+	if argv.Credentials != "" {
+		creds := strings.Split(argv.Credentials, ":")
+		if len(creds) != 2 {
+			return fmt.Errorf("invalid Basic Auth credentials format")
+		}
+		req.SetBasicAuth(creds[0], creds[1])
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	body, err = io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != http.StatusOK {
+		errMsg := fmt.Sprintf("boot failed, status code: %s", resp.Status)
+		if len(body) > 0 {
+			errMsg += fmt.Sprintf(", %s", string(body))
+		}
+		return fmt.Errorf(errMsg)
+	}
+
+	ctx.String("node booted successfully\n")
 	return nil
 }
