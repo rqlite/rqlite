@@ -24,7 +24,7 @@ import (
 const (
 	SQLiteHeaderSize = 32
 	bkDelay          = 250
-	sizeAtOpenWarn   = 500 * 1024 * 1024
+	sizeAtOpenWarn   = 1024 * 1024 * 1024
 	durToOpenLog     = 2 * time.Second
 )
 
