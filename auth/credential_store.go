@@ -107,10 +107,7 @@ func (c *CredentialsStore) Load(r io.Reader) error {
 // Check returns true if the password is correct for the given username.
 func (c *CredentialsStore) Check(username, password string) bool {
 	pw, ok := c.store[username]
-	if !ok {
-		return false
-	}
-	return password == pw
+	return ok && pw == password
 }
 
 // Password returns the password for the given user.
@@ -174,12 +171,12 @@ func (c *CredentialsStore) AA(username, password, perm string) bool {
 		return true
 	}
 
-	// At this point a username needs to have been supplied
+	// At this point a username needs to have been supplied.
 	if username == "" {
 		return false
 	}
 
-	// Are the creds good?
+	// Authenticate the user.
 	if !c.Check(username, password) {
 		return false
 	}
@@ -193,8 +190,5 @@ func (c *CredentialsStore) AA(username, password, perm string) bool {
 // in the request, it returns false.
 func (c *CredentialsStore) HasPermRequest(b BasicAuther, perm string) bool {
 	username, _, ok := b.BasicAuth()
-	if !ok {
-		return false
-	}
-	return c.HasPerm(username, perm)
+	return ok && c.HasPerm(username, perm)
 }
