@@ -6,9 +6,6 @@ import (
 	"encoding/json"
 	"io"
 	"os"
-	"sync"
-
-	"golang.org/x/crypto/bcrypt"
 )
 
 const (
@@ -43,43 +40,6 @@ type BasicAuther interface {
 	BasicAuth() (string, string, bool)
 }
 
-// HashCache store hash values for users. Safe for use from multiple goroutines.
-type HashCache struct {
-	mu sync.RWMutex
-	m  map[string]map[string]struct{}
-}
-
-// NewHashCache returns a instantiated HashCache
-func NewHashCache() *HashCache {
-	return &HashCache{
-		m: make(map[string]map[string]struct{}),
-	}
-}
-
-// Check returns whether hash is valid for username.
-func (h *HashCache) Check(username, hash string) bool {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	m, ok := h.m[username]
-	if !ok {
-		return false
-	}
-
-	_, ok = m[hash]
-	return ok
-}
-
-// Store stores the given hash as a valid hash for username.
-func (h *HashCache) Store(username, hash string) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	_, ok := h.m[username]
-	if !ok {
-		h.m[username] = make(map[string]struct{})
-	}
-	h.m[username][hash] = struct{}{}
-}
-
 // Credential represents authentication and authorization configuration for a single user.
 type Credential struct {
 	Username string   `json:"username,omitempty"`
@@ -91,18 +51,13 @@ type Credential struct {
 type CredentialsStore struct {
 	store map[string]string
 	perms map[string]map[string]bool
-
-	UseCache  bool
-	hashCache *HashCache
 }
 
 // NewCredentialsStore returns a new instance of a CredentialStore.
 func NewCredentialsStore() *CredentialsStore {
 	return &CredentialsStore{
-		store:     make(map[string]string),
-		perms:     make(map[string]map[string]bool),
-		hashCache: NewHashCache(),
-		UseCache:  true,
+		store: make(map[string]string),
+		perms: make(map[string]map[string]bool),
 	}
 }
 
@@ -155,28 +110,7 @@ func (c *CredentialsStore) Check(username, password string) bool {
 	if !ok {
 		return false
 	}
-
-	// Simple match with plaintext password in creds?
-	if password == pw {
-		return true
-	}
-
-	// Maybe the given password is a hash -- check if the hash is good
-	// for the given user. We use a cache to avoid recomputing a value we
-	// previously computed (at substantial compute cost).
-	if c.UseCache && c.hashCache.Check(username, password) {
-		return true
-	}
-
-	// Next, what's in the file may be hashed, so hash the given password
-	// and compare.
-	if bcrypt.CompareHashAndPassword([]byte(pw), []byte(password)) != nil {
-		return false
-	}
-
-	// It's good -- cache that result for this user.
-	c.hashCache.Store(username, password)
-	return true
+	return password == pw
 }
 
 // Password returns the password for the given user.
