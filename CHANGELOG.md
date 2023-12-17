@@ -1,3 +1,7 @@
+## 8.10.1 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1487](https://github.com/rqlite/rqlite/pull/1487): Small improvements to rqlite shell.
+
 ## 8.10.0 (December 17th 2023)
 This release introduces a new, high-performance, initialize-from-SQLite option. Known as _Boot_ loading, it allows an rqlite node to be seeded with large (multi-GB) datasets, with the time taken to seed the node determined only by your disk performance.
 
