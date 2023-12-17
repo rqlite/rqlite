@@ -79,8 +79,8 @@ func (n *Node) Close(graceful bool) error {
 
 // Deprovision shuts down and removes all resources associated with the node.
 func (n *Node) Deprovision() {
-	n.Store.Close(true)
 	n.Service.Close()
+	n.Store.Close(true)
 	n.Cluster.Close()
 	os.RemoveAll(n.Dir)
 }
