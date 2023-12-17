@@ -1793,13 +1793,11 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 		return fmt.Errorf("error creating temporary file for restore operation: %v", err)
 	}
 
-	// Double check it's valid.
+	// Must wipe out all pre-existing state if being asked to do a restore, and put
+	// the new database in place.
 	if !sql.IsValidSQLiteFile(tmpFile.Name()) {
 		return fmt.Errorf("invalid SQLite data")
 	}
-
-	// Must wipe out all pre-existing state if being asked to do a restore, and put
-	// the new database in place.
 	if err := s.db.Close(); err != nil {
 		return fmt.Errorf("failed to close pre-restore database: %s", err)
 	}
