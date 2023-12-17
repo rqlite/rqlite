@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 
@@ -106,7 +106,7 @@ func queryWithClient(ctx *cli.Context, client *cl.Client, timer bool, consistenc
 		hcr = err
 	}
 
-	response, err := ioutil.ReadAll(resp.Body)
+	response, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}

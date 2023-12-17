@@ -4,9 +4,10 @@ import (
 	"bytes"
 	"crypto/tls"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 
 	"github.com/mkideal/cli"
@@ -49,7 +50,7 @@ func backup(ctx *cli.Context, filename string, argv *argT) error {
 		return err
 	}
 
-	err = ioutil.WriteFile(filename, *response, 0644)
+	err = os.WriteFile(filename, *response, 0644)
 	if err != nil {
 		return err
 	}
@@ -72,7 +73,7 @@ func dump(ctx *cli.Context, filename string, argv *argT) error {
 		return err
 	}
 
-	err = ioutil.WriteFile(filename, *response, 0644)
+	err = os.WriteFile(filename, *response, 0644)
 	if err != nil {
 		return err
 	}
@@ -81,13 +82,13 @@ func dump(ctx *cli.Context, filename string, argv *argT) error {
 	return nil
 }
 
-func validSQLiteFile(b []byte) bool {
+func validSQLiteData(b []byte) bool {
 	return len(b) > 13 && string(b[0:13]) == "SQLite format"
 }
 
 func makeRestoreRequest(b []byte) func(string) (*http.Request, error) {
 	header := "text/plain"
-	if validSQLiteFile(b) {
+	if validSQLiteData(b) {
 		header = "application/octet-stream"
 	}
 	return func(urlStr string) (*http.Request, error) {
@@ -129,7 +130,7 @@ func restore(ctx *cli.Context, filename string, argv *argT) error {
 		return fmt.Errorf("unauthorized")
 	}
 
-	body, err := ioutil.ReadAll(statusResp.Body)
+	body, err := io.ReadAll(statusResp.Body)
 	if err != nil {
 		return err
 	}
@@ -141,12 +142,12 @@ func restore(ctx *cli.Context, filename string, argv *argT) error {
 		return fmt.Errorf("unexpected server response: store status not found")
 	}
 
-	restoreFile, err := ioutil.ReadFile(filename)
+	restoreFile, err := os.ReadFile(filename)
 	if err != nil {
 		return err
 	}
 
-	if !validSQLiteFile(restoreFile) {
+	if !validSQLiteData(restoreFile) {
 		// It is cheaper to append the actual pragma command to the restore file
 		fkEnabled := statusRet.Store.SqliteStatus.FkConstraint == "enabled"
 		if fkEnabled {
@@ -172,7 +173,7 @@ func restore(ctx *cli.Context, filename string, argv *argT) error {
 	if err := parseResponse(response, &restoreRet); err != nil {
 		return err
 	}
-	if !validSQLiteFile(restoreFile) {
+	if !validSQLiteData(restoreFile) {
 		if len(restoreRet.Results) < 1 {
 			return fmt.Errorf("unexpected results length: %d", len(restoreRet.Results))
 		}
