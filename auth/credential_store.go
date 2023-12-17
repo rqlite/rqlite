@@ -28,6 +28,11 @@ const (
 	PermExecute = "execute"
 	// PermQuery means user can access query endpoint
 	PermQuery = "query"
+	// PermQueryWeak means user can access query endpoint, but not perform any queries
+	// that require strong consistency. Strong consistency, while it doesn't affect
+	// the database, would write data to the Raft log. This permission is useful if you
+	// want to prevent a client making any changes to the system as a result of queries.
+	PermQueryWeak = "query-weak"
 	// PermStatus means user can retrieve node status.
 	PermStatus = "status"
 	// PermReady means user can retrieve ready status.

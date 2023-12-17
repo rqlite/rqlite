@@ -1174,8 +1174,13 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryPa
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 
 	if !s.CheckRequestPerm(r, auth.PermQuery) {
-		w.WriteHeader(http.StatusUnauthorized)
-		return
+		if qp.StrongConsistency() {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		} else if !s.CheckRequestPerm(r, auth.PermQueryWeak) {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
 	}
 
 	if r.Method != "GET" && r.Method != "POST" {

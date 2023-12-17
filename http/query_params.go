@@ -123,6 +123,11 @@ func (qp QueryParams) Level() command.QueryRequest_Level {
 	}
 }
 
+// StrongConsistency returns true if the query parameters request strong consistency.
+func (qp QueryParams) StrongConsistency() bool {
+	return qp.Level() == command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+}
+
 // BackupFormat returns the requested backup format.
 func (qp QueryParams) BackupFormat() command.BackupRequest_Format {
 	f := qp["fmt"]
