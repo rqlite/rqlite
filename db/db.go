@@ -327,12 +327,14 @@ func Open(dbPath string, fkEnabled, wal bool) (*DB, error) {
 		stats.Get(openDuration).(*expvar.Int).Set(time.Since(startTime).Milliseconds())
 	}()
 
-	sz, err := fileSize(dbPath)
-	if err != nil {
-		return nil, err
-	}
-	if sz > sizeAtOpenWarn {
-		logger.Printf("database file is %d bytes, SQLite may require an extended time to open", sz)
+	if fileExists(dbPath) {
+		sz, err := fileSize(dbPath)
+		if err != nil {
+			return nil, err
+		}
+		if sz > sizeAtOpenWarn {
+			logger.Printf("database file is %d bytes, SQLite may require an extended time to open", sz)
+		}
 	}
 
 	rwDSN := fmt.Sprintf("file:%s?_fk=%s", dbPath, strconv.FormatBool(fkEnabled))
@@ -1517,6 +1519,10 @@ func containsEmptyType(slice []string) bool {
 	return false
 }
 
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
 func fileSize(path string) (int64, error) {
 	stat, err := os.Stat(path)
 	if err != nil {
