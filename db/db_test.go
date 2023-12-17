@@ -14,6 +14,21 @@ import (
 	"github.com/rqlite/rqlite/command/encoding"
 )
 
+// Test_OpenNonExistentDatabase tests that opening a non-existent database
+// works OK. It should.
+func Test_OpenNonExistentDatabase(t *testing.T) {
+	path := mustTempPath()
+	defer os.Remove(path)
+	_, err := Open(path, false, false)
+	if err != nil {
+		t.Fatalf("error opening non-existent database")
+	}
+	// Confirm a file was created.
+	if !fileExists(path) {
+		t.Fatalf("database file not created")
+	}
+}
+
 func Test_RemoveFiles(t *testing.T) {
 	d := t.TempDir()
 	mustCreateClosedFile(fmt.Sprintf("%s/foo", d))
@@ -1019,6 +1034,20 @@ func asJSON(v interface{}) string {
 	return string(b)
 }
 
+// mustTempPath returns a path which can be used for a temporary file or directory.
+// No file will exist at the path.
+func mustTempPath() string {
+	tmpfile, err := os.CreateTemp("", "rqlite-db-test")
+	if err != nil {
+		panic(err.Error())
+	}
+	tmpfile.Close()
+	if err := os.Remove(tmpfile.Name()); err != nil {
+		panic(err.Error())
+	}
+	return tmpfile.Name()
+}
+
 // mustTempFile returns a path to a temporary file in directory dir. It is up to the
 // caller to remove the file once it is no longer needed.
 func mustTempFile() string {
@@ -1036,11 +1065,6 @@ func mustTempDir() string {
 		panic(err.Error())
 	}
 	return tmpdir
-}
-
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
 }
 
 // function which copies a src file to a dst file, panics if any error

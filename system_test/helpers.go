@@ -192,6 +192,16 @@ func (n *Node) RequestMultiParameterized(stmt []interface{}) (string, error) {
 	return n.postRequest(string(j))
 }
 
+// Load loads a SQLite database file into the node.
+func (n *Node) Load(filename string) (string, error) {
+	return n.postFile("/db/load", filename)
+}
+
+// Load loads a SQLite database file into the node.
+func (n *Node) Boot(filename string) (string, error) {
+	return n.postFile("/boot", filename)
+}
+
 // Noop inserts a noop command into the Store's Raft log.
 func (n *Node) Noop(id string) error {
 	af, err := n.Store.Noop(id)
@@ -455,6 +465,28 @@ func (n *Node) postRequest(stmt string) (string, error) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("request endpoint returned: %s", resp.Status)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	return string(body), nil
+}
+
+func (n *Node) postFile(url, filename string) (string, error) {
+	f, err := os.Open(filename)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	resp, err := http.Post("http://"+n.APIAddr+url, "application/octet-stream", f)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("file endpoint returned: %s", resp.Status)
 	}
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

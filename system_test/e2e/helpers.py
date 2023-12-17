@@ -502,7 +502,7 @@ class Node(object):
     raise_for_status(r)
 
   def restore(self, file, fmt=None):
-    # This is the one API that doesn't expect JSON.
+    # This is an API that doesn't expect JSON.
     if fmt != "binary":
       conn = sqlite3.connect(file)
       r = requests.post(self._load_url(), data='\n'.join(conn.iterdump()))
@@ -513,6 +513,13 @@ class Node(object):
       with open(file, 'rb') as f:
         data = f.read()
       r = requests.post(self._load_url(), data=data, headers={'Content-Type': 'application/octet-stream'})
+      raise_for_status(r)
+
+  def boot(self, file):
+    # This is an API that doesn't expect JSON.
+    with open(file, 'rb') as f:
+      data = f.read()
+      r = requests.post(self._boot_url(), data=data, headers={'Content-Type': 'application/octet-stream'})
       raise_for_status(r)
 
   def redirect_addr(self):
@@ -568,6 +575,8 @@ class Node(object):
     return 'http://' + self.APIAddr() + '/db/backup'
   def _load_url(self):
     return 'http://' + self.APIAddr() + '/db/load'
+  def _boot_url(self):
+    return 'http://' + self.APIAddr() + '/boot'
   def _remove_url(self):
     return 'http://' + self.APIAddr() + '/remove'
   def __eq__(self, other):

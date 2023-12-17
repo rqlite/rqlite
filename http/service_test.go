@@ -269,6 +269,22 @@ func Test_404Routes(t *testing.T) {
 }
 
 func Test_405Routes(t *testing.T) {
+	type testCase struct {
+		method string
+		path   string
+	}
+
+	tests := []testCase{
+		{method: "GET", path: "/db/execute"},
+		{method: "GET", path: "/boot"},
+		{method: "GET", path: "/db/load"},
+		{method: "GET", path: "/remove"},
+		{method: "POST", path: "/remove"},
+		{method: "POST", path: "/db/backup"},
+		{method: "POST", path: "/status"},
+		{method: "POST", path: "/nodes"},
+	}
+
 	m := &MockStore{}
 	c := &mockClusterService{}
 	s := New("127.0.0.1:0", m, c, nil)
@@ -280,44 +296,25 @@ func Test_405Routes(t *testing.T) {
 
 	client := &http.Client{}
 
-	resp, err := client.Get(host + "/db/execute")
-	if err != nil {
-		t.Fatalf("failed to make request")
-	}
-	if resp.StatusCode != 405 {
-		t.Fatalf("failed to get expected 405, got %d", resp.StatusCode)
-	}
+	for _, tc := range tests {
+		var resp *http.Response
+		var err error
 
-	resp, err = client.Get(host + "/remove")
-	if err != nil {
-		t.Fatalf("failed to make request")
-	}
-	if resp.StatusCode != 405 {
-		t.Fatalf("failed to get expected 405, got %d", resp.StatusCode)
-	}
+		switch tc.method {
+		case "GET":
+			resp, err = client.Get(host + tc.path)
+		case "POST":
+			resp, err = client.Post(host+tc.path, "", nil)
+		default:
+			t.Fatalf("unsupported method: %s", tc.method)
+		}
 
-	resp, err = client.Post(host+"/remove", "", nil)
-	if err != nil {
-		t.Fatalf("failed to make request")
-	}
-	if resp.StatusCode != 405 {
-		t.Fatalf("failed to get expected 405, got %d", resp.StatusCode)
-	}
-
-	resp, err = client.Post(host+"/db/backup", "", nil)
-	if err != nil {
-		t.Fatalf("failed to make request")
-	}
-	if resp.StatusCode != 405 {
-		t.Fatalf("failed to get expected 405, got %d", resp.StatusCode)
-	}
-
-	resp, err = client.Post(host+"/status", "", nil)
-	if err != nil {
-		t.Fatalf("failed to make request")
-	}
-	if resp.StatusCode != 405 {
-		t.Fatalf("failed to get expected 405, got %d", resp.StatusCode)
+		if err != nil {
+			t.Fatalf("failed to make request for %s %s", tc.method, tc.path)
+		}
+		if resp.StatusCode != 405 {
+			t.Fatalf("failed to get expected 405 for %s %s, got %d", tc.method, tc.path, resp.StatusCode)
+		}
 	}
 }
 
@@ -355,13 +352,13 @@ func Test_401Routes_NoBasicAuth(t *testing.T) {
 	host := fmt.Sprintf("http://%s", s.Addr().String())
 
 	client := &http.Client{}
-
 	for _, path := range []string{
 		"/db/execute",
 		"/db/query",
 		"/db/request",
 		"/db/backup",
 		"/db/load",
+		"/boot",
 		"/remove",
 		"/status",
 		"/nodes",
@@ -394,13 +391,13 @@ func Test_401Routes_BasicAuthBadPassword(t *testing.T) {
 	host := fmt.Sprintf("http://%s", s.Addr().String())
 
 	client := &http.Client{}
-
 	for _, path := range []string{
 		"/db/execute",
 		"/db/query",
 		"/db/request",
 		"/db/backup",
 		"/db/load",
+		"/boot",
 		"/status",
 		"/nodes",
 		"/readyz",
@@ -445,6 +442,7 @@ func Test_401Routes_BasicAuthBadPerm(t *testing.T) {
 		"/db/backup",
 		"/db/request",
 		"/db/load",
+		"/boot",
 		"/status",
 		"/nodes",
 		"/readyz",
@@ -805,6 +803,55 @@ func Test_LoadRemoteError(t *testing.T) {
 	}
 	if exp, got := "the load failed\n", string(body); exp != got {
 		t.Fatalf(`incorrect response body, exp: "%s", got: "%s"`, exp, got)
+	}
+}
+
+func Test_Boot(t *testing.T) {
+	m := &MockStore{
+		leaderAddr: "foo:1234",
+	}
+	c := &mockClusterService{
+		apiAddr: "http://1.2.3.4:999",
+	}
+
+	s := New("127.0.0.1:0", m, c, nil)
+	if err := s.Start(); err != nil {
+		t.Fatalf("failed to start service")
+	}
+	defer s.Close()
+
+	testData, err := os.ReadFile("testdata/load.db")
+	if err != nil {
+		t.Fatalf("failed to load test SQLite data")
+	}
+
+	readFromCalled := false
+	m.readFromFn = func(r io.Reader) (int64, error) {
+		// read all data from r and compare to the data in testData
+		b, err := io.ReadAll(r)
+		if err != nil {
+			return 0, err
+		}
+		if !bytes.Equal(b, testData) {
+			t.Fatalf("wrong data passed to ReadFrom")
+		}
+		readFromCalled = true
+		return int64(len(b)), nil
+	}
+
+	client := &http.Client{}
+	host := fmt.Sprintf("http://%s", s.Addr().String())
+	resp, err := client.Post(host+"/boot", "application/octet-stream", bytes.NewReader(testData))
+	if err != nil {
+		t.Fatalf("failed to make boot request")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("failed to get expected StatusOK for boot, got %d", resp.StatusCode)
+	}
+
+	if !readFromCalled {
+		t.Fatalf("ReadFrom was not called")
 	}
 }
 
@@ -1275,6 +1322,7 @@ type MockStore struct {
 	requestFn  func(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, error)
 	backupFn   func(br *command.BackupRequest, dst io.Writer) error
 	loadFn     func(lr *command.LoadRequest) error
+	readFromFn func(r io.Reader) (int64, error)
 	leaderAddr string
 	notReady   bool // Default value is true, easier to test.
 }
@@ -1340,6 +1388,13 @@ func (m *MockStore) Load(lr *command.LoadRequest) error {
 		return m.loadFn(lr)
 	}
 	return nil
+}
+
+func (m *MockStore) ReadFrom(r io.Reader) (int64, error) {
+	if m.readFromFn != nil {
+		return m.readFromFn(r)
+	}
+	return 0, nil
 }
 
 type mockClusterService struct {

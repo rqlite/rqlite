@@ -9,6 +9,8 @@ import (
 	"log"
 	"os"
 	"time"
+
+	"github.com/rqlite/rqlite/progress"
 )
 
 // StorageClient is an interface for uploading data to a storage service.
@@ -159,7 +161,7 @@ func (u *Uploader) upload(ctx context.Context) error {
 	}
 	defer fd.Close()
 
-	cr := &countingReader{reader: fd}
+	cr := progress.NewCountingReader(fd)
 	startTime := time.Now()
 	err = u.storageClient.Upload(ctx, cr)
 	if err != nil {
@@ -167,8 +169,8 @@ func (u *Uploader) upload(ctx context.Context) error {
 	} else {
 		u.lastSum = sum
 		stats.Add(numUploadsOK, 1)
-		stats.Add(totalUploadBytes, cr.count)
-		stats.Get(lastUploadBytes).(*expvar.Int).Set(cr.count)
+		stats.Add(totalUploadBytes, cr.Count())
+		stats.Get(lastUploadBytes).(*expvar.Int).Set(cr.Count())
 		u.lastUploadTime = time.Now()
 		u.lastUploadDuration = time.Since(startTime)
 	}
@@ -216,17 +218,6 @@ func compressFromTo(from, to string) error {
 		return err
 	}
 	return nil
-}
-
-type countingReader struct {
-	reader io.Reader
-	count  int64
-}
-
-func (c *countingReader) Read(p []byte) (int, error) {
-	n, err := c.reader.Read(p)
-	c.count += int64(n)
-	return n, err
 }
 
 func tempFilename() (string, error) {

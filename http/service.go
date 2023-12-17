@@ -2,6 +2,7 @@
 package http
 
 import (
+	"bufio"
 	"context"
 	"crypto/tls"
 	"encoding/json"
@@ -57,7 +58,7 @@ type Database interface {
 	// an Execute or Query request.
 	Request(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, error)
 
-	// Load loads a SQLite file into the system
+	// Load loads a SQLite file into the system via Raft consensus.
 	Load(lr *command.LoadRequest) error
 }
 
@@ -82,6 +83,11 @@ type Store interface {
 
 	// Backup writes backup of the node state to dst
 	Backup(br *command.BackupRequest, dst io.Writer) error
+
+	// ReadFrom reads and loads a SQLite database into the node, initially bypassing
+	// the Raft system. It then triggers a Raft snapshot, which will then make
+	// Raft aware of the new data.
+	ReadFrom(r io.Reader) (int64, error)
 }
 
 // GetAddresser is the interface that wraps the GetNodeAPIAddr method.
@@ -218,6 +224,7 @@ const (
 	numBackups                        = "backups"
 	numLoad                           = "loads"
 	numLoadAborted                    = "loads_aborted"
+	numBoot                           = "boot"
 	numAuthOK                         = "authOK"
 	numAuthFail                       = "authFail"
 
@@ -284,6 +291,7 @@ func ResetStats() {
 	stats.Add(numBackups, 0)
 	stats.Add(numLoad, 0)
 	stats.Add(numLoadAborted, 0)
+	stats.Add(numBoot, 0)
 	stats.Add(numAuthOK, 0)
 	stats.Add(numAuthFail, 0)
 }
@@ -459,6 +467,9 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case strings.HasPrefix(r.URL.Path, "/db/load"):
 		stats.Add(numLoad, 1)
 		s.handleLoad(w, r, params)
+	case r.URL.Path == "/boot":
+		stats.Add(numBoot, 1)
+		s.handleBoot(w, r, params)
 	case strings.HasPrefix(r.URL.Path, "/remove"):
 		s.handleRemove(w, r, params)
 	case strings.HasPrefix(r.URL.Path, "/status"):
@@ -729,6 +740,43 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 		resp.end = time.Now()
 	}
 	s.writeResponse(w, r, qp, resp)
+}
+
+// handleBoot handles booting this node using a SQLite file.
+func (s *Service) handleBoot(w http.ResponseWriter, r *http.Request, qp QueryParams) {
+	if !s.CheckRequestPerm(r, auth.PermLoad) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	bufReader := bufio.NewReader(r.Body)
+	peek, err := bufReader.Peek(db.SQLiteHeaderSize)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+	if !db.IsValidSQLiteData(peek) {
+		http.Error(w, "invalid SQLite data", http.StatusBadRequest)
+		return
+	}
+	if !db.IsDELETEModeEnabled(peek) {
+		http.Error(w,
+			"SQLite database is in WAL mode - enable DELETE mode via 'PRAGMA journal_mode=DELETE'",
+			http.StatusBadRequest)
+		return
+	}
+
+	s.logger.Printf("starting boot process")
+	_, err = s.store.ReadFrom(bufReader)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
 }
 
 // handleStatus returns status on the system.

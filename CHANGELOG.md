@@ -1,4 +1,7 @@
-## 8.0.7 (unreleased)
+## 8.10.0 (unreleased)
+### New features
+- [PR #1485](https://github.com/rqlite/rqlite/pull/1485): Add Boot loading.
+
 ### Implementation changes and bug fixes
 - [PR #1484](https://github.com/rqlite/rqlite/pull/1484): Remove ability to trigger chunked-loading.
 

@@ -192,10 +192,32 @@ class TestSingleNodeLoadRestart(unittest.TestCase):
     j = self.n.query('SELECT COUNT(*) from test')
     self.assertEqual(j, d_("{'results': [{'values': [[1000]], 'types': ['integer'], 'columns': ['COUNT(*)']}]}"))
 
-    # Ensure node can restart after loading
+    # Ensure node can restart after loading and that the data is correct.
     self.n.stop()
     self.n.start()
     self.n.wait_for_leader()
+    j = self.n.query('SELECT COUNT(*) from test')
+    self.assertEqual(j, d_("{'results': [{'values': [[1000]], 'types': ['integer'], 'columns': ['COUNT(*)']}]}"))
+
+  def tearDown(self):
+    deprovision_node(self.n)
+
+class TestSingleNodeBootRestart(unittest.TestCase):
+  ''' Test that a node can boot using a SQLite data set'''
+  def test(self):
+    self.n = Node(RQLITED_PATH, '0',  raft_snap_threshold=8192, raft_snap_int="30s")
+    self.n.start()
+    n = self.n.wait_for_leader()
+    j = self.n.boot('system_test/e2e/testdata/1000-numbers.db')
+    j = self.n.query('SELECT COUNT(*) from test')
+    self.assertEqual(j, d_("{'results': [{'values': [[1000]], 'types': ['integer'], 'columns': ['COUNT(*)']}]}"))
+
+    # Ensure node can restart after booting and that the data is correct.
+    self.n.stop()
+    self.n.start()
+    self.n.wait_for_leader()
+    j = self.n.query('SELECT COUNT(*) from test')
+    self.assertEqual(j, d_("{'results': [{'values': [[1000]], 'types': ['integer'], 'columns': ['COUNT(*)']}]}"))
 
   def tearDown(self):
     deprovision_node(self.n)

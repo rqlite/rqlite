@@ -3,20 +3,24 @@ package snapshot
 import (
 	"expvar"
 	"io"
+	"log"
 	"time"
 
 	"github.com/hashicorp/raft"
+	"github.com/rqlite/rqlite/progress"
 )
 
 // Snapshot represents a snapshot of the database state.
 type Snapshot struct {
-	rc io.ReadCloser
+	rc     io.ReadCloser
+	logger *log.Logger
 }
 
 // NewSnapshot creates a new snapshot.
 func NewSnapshot(rc io.ReadCloser) *Snapshot {
 	return &Snapshot{
-		rc: rc,
+		rc:     rc,
+		logger: log.New(log.Writer(), "[snapshot] ", log.LstdFlags),
 	}
 }
 
@@ -25,7 +29,14 @@ func (s *Snapshot) Persist(sink raft.SnapshotSink) error {
 	defer s.rc.Close()
 	startT := time.Now()
 
-	n, err := io.Copy(sink, s.rc)
+	cw := progress.NewCountingWriter(sink)
+	cm := progress.StartCountingMonitor(func(n int64) {
+		s.logger.Printf("persisted %d bytes", n)
+	}, cw)
+	n, err := func() (int64, error) {
+		defer cm.StopAndWait()
+		return io.Copy(cw, s.rc)
+	}()
 	if err != nil {
 		return err
 	}
