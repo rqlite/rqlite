@@ -1,6 +1,6 @@
 ## 8.11.0 (December 17th 2023)
 ### New features
-- [PR #1488](https://github.com/rqlite/rqlite/pull/1488): Add `.boot` command to rqlite shell, to support _Booting_ nodes.
+- [PR #1489](https://github.com/rqlite/rqlite/pull/1489): Add `.boot` command to rqlite shell, to support _Booting_ nodes.
 
 ### Implementation changes and bug fixes
 - [PR #1487](https://github.com/rqlite/rqlite/pull/1487): Small improvements to rqlite shell.
