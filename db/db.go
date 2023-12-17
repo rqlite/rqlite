@@ -1523,6 +1523,7 @@ func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
 }
+
 func fileSize(path string) (int64, error) {
 	stat, err := os.Stat(path)
 	if err != nil {

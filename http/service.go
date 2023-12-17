@@ -467,7 +467,7 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case strings.HasPrefix(r.URL.Path, "/db/load"):
 		stats.Add(numLoad, 1)
 		s.handleLoad(w, r, params)
-	case strings.HasPrefix(r.URL.Path, "/boot"):
+	case r.URL.Path == "/boot":
 		stats.Add(numBoot, 1)
 		s.handleBoot(w, r, params)
 	case strings.HasPrefix(r.URL.Path, "/remove"):
