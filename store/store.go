@@ -1305,7 +1305,15 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 		return n, fmt.Errorf("SQLite file does not have DELETE mode enabled")
 	}
 
-	// Close the database, remove the database file, and then rename the temporary
+	// Raft won't snapshot unless there is at least one unsnappshotted log entry,
+	// so prep that now before we do anything destructive.
+	if af, err := s.Noop("boot"); err != nil {
+		return n, err
+	} else if err := af.Error(); err != nil {
+		return n, err
+	}
+
+	// Swap in new database file.
 	if err := s.db.Close(); err != nil {
 		return n, err
 	}
@@ -1321,12 +1329,7 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 	}
 	s.db = db
 
-	// Raft won't snapshot unless there is at least one unsnappshotted log entry.
-	if af, err := s.Noop("boot"); err != nil {
-		return n, err
-	} else if err := af.Error(); err != nil {
-		return n, err
-	}
+	// Snapshot, so we load the new database into the Raft system.
 	if err := s.snapshotStore.SetFullNeeded(); err != nil {
 		return n, err
 	}
