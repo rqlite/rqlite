@@ -1,4 +1,4 @@
-## 8.11.1 (December 17th 2023)
+## 8.11.1 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #1490](https://github.com/rqlite/rqlite/pull/1490): Guard against `nil` History in rqlite shell. Fixes [issue #1486](https://github.com/rqlite/rqlite/issues/1486).
 
