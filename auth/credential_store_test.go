@@ -16,53 +16,6 @@ func (t *testBasicAuther) BasicAuth() (string, string, bool) {
 	return t.username, t.password, t.ok
 }
 
-func Test_HashCache(t *testing.T) {
-	hc := NewHashCache()
-
-	if hc.Check("user", "hash1") {
-		t.Fatalf("hash cache check OK for empty cache")
-	}
-	if hc.Check("user", "") {
-		t.Fatalf("hash cache check OK for empty cache")
-	}
-	if hc.Check("", "") {
-		t.Fatalf("hash cache check OK for empty cache")
-	}
-
-	hc.Store("user1", "hash1")
-	if !hc.Check("user1", "hash1") {
-		t.Fatalf("hash cache check not OK for user1")
-	}
-	if hc.Check("user", "hash1") {
-		t.Fatalf("hash cache check OK for bad user")
-	}
-
-	hc.Store("user1", "hash2")
-	if !hc.Check("user1", "hash1") {
-		t.Fatalf("hash cache check not OK for user1")
-	}
-	if !hc.Check("user1", "hash2") {
-		t.Fatalf("hash cache check not OK for user1")
-	}
-
-	hc.Store("user3", "hash3")
-	if !hc.Check("user1", "hash1") {
-		t.Fatalf("hash cache check not OK for user1")
-	}
-	if !hc.Check("user1", "hash2") {
-		t.Fatalf("hash cache check not OK for user1")
-	}
-	if hc.Check("user", "hash1") {
-		t.Fatalf("hash cache check OK for bad user")
-	}
-	if !hc.Check("user3", "hash3") {
-		t.Fatalf("hash cache check not OK for user3")
-	}
-	if hc.Check("user3", "hash1") {
-		t.Fatalf("hash cache check OK for user3, with bad hash")
-	}
-}
-
 func Test_AuthLoadEmpty(t *testing.T) {
 	const jsonStream = `[]`
 
@@ -333,6 +286,9 @@ func Test_AuthPermsAA(t *testing.T) {
 	if !store.AA("username2", "password2", "baz") {
 		t.Fatalf("username2 not authenticated and authorized for baz")
 	}
+	if store.AA("username2", "password1", "baz") {
+		t.Fatalf("username2 authenticated and authorized for baz with wrong password")
+	}
 	if !store.AA("username2", "password2", "qux") {
 		t.Fatalf("username2 not authenticated and authorized for qux")
 	}
@@ -341,76 +297,6 @@ func Test_AuthPermsAA(t *testing.T) {
 	}
 	if store.AA("username2", "password2", "quz") {
 		t.Fatalf("username2 was authenticated and authorized for quz")
-	}
-}
-
-func Test_AuthLoadHashedSingleRequest(t *testing.T) {
-	const jsonStream = `
-		[
-			{
-				"username": "username1",
-				"password": "$2a$10$fKRHxrEuyDTP6tXIiDycr.nyC8Q7UMIfc31YMyXHDLgRDyhLK3VFS"
-			},
-			{	"username": "username2",
-				"password": "password2"
-			}
-		]
-	`
-
-	store := NewCredentialsStore()
-	if err := store.Load(strings.NewReader(jsonStream)); err != nil {
-		t.Fatalf("failed to load multiple credentials: %s", err.Error())
-	}
-
-	b1 := &testBasicAuther{
-		username: "username1",
-		password: "password1",
-		ok:       true,
-	}
-	b2 := &testBasicAuther{
-		username: "username2",
-		password: "password2",
-		ok:       true,
-	}
-
-	b3 := &testBasicAuther{
-		username: "username1",
-		password: "wrong",
-		ok:       true,
-	}
-	b4 := &testBasicAuther{
-		username: "username2",
-		password: "wrong",
-		ok:       true,
-	}
-	b5 := &testBasicAuther{
-		username: "username1",
-		password: "password2",
-		ok:       true,
-	}
-	b6 := &testBasicAuther{
-		username: "username2",
-		password: "password1",
-		ok:       true,
-	}
-
-	if check := store.CheckRequest(b1); !check {
-		t.Fatalf("username1 (b1) credential not checked correctly via request")
-	}
-	if check := store.CheckRequest(b2); !check {
-		t.Fatalf("username2 (b2) credential not checked correctly via request")
-	}
-	if check := store.CheckRequest(b3); check {
-		t.Fatalf("username1 (b3) credential not checked correctly via request")
-	}
-	if check := store.CheckRequest(b4); check {
-		t.Fatalf("username2 (b4) credential not checked correctly via request")
-	}
-	if check := store.CheckRequest(b5); check {
-		t.Fatalf("username2 (b5) credential not checked correctly via request")
-	}
-	if check := store.CheckRequest(b6); check {
-		t.Fatalf("username2 (b5) credential not checked correctly via request")
 	}
 }
 

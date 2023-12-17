@@ -1,3 +1,7 @@
+## 8.11.2 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1492](https://github.com/rqlite/rqlite/pull/1492): Remove faulty bcrypt hashed password support. Fixes [issue #1488](https://github.com/rqlite/rqlite/issues/1488). Thanks @jtackaberry
+
 ## 8.11.1 (December 17th 2023)
 ### Implementation changes and bug fixes
 - [PR #1490](https://github.com/rqlite/rqlite/pull/1490): Guard against `nil` History in rqlite shell. Fixes [issue #1486](https://github.com/rqlite/rqlite/issues/1486).
