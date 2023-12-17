@@ -520,7 +520,6 @@ func (s *Store) Bootstrap(servers ...*Server) error {
 	s.raft.BootstrapCluster(raft.Configuration{
 		Servers: raftServers,
 	})
-
 	return nil
 }
 
@@ -621,7 +620,6 @@ func (s *Store) Close(wait bool) (retErr error) {
 	if err := walDB.Close(); err != nil {
 		return err
 	}
-
 	return nil
 }
 
@@ -1258,7 +1256,6 @@ func (s *Store) load(lr *command.LoadRequest) error {
 	s.dbAppliedIndex = af.Index()
 	s.dbAppliedIndexMu.Unlock()
 	s.logger.Printf("node loaded in %s (%d bytes)", time.Since(startT), len(b))
-
 	return nil
 }
 
