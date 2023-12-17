@@ -106,18 +106,12 @@ func (cm *CountingMonitor) run(ctx context.Context) {
 
 	ticker := time.NewTicker(countingMonitorInterval)
 	defer ticker.Stop()
-
-	ranOnce := false
 	for {
 		select {
 		case <-ctx.Done():
-			if !ranOnce {
-				cm.runOnce()
-			}
 			return
 		case <-ticker.C:
 			cm.runOnce()
-			ranOnce = true
 		}
 	}
 }

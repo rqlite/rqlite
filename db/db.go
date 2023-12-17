@@ -10,6 +10,7 @@ import (
 	"expvar"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -22,11 +23,13 @@ import (
 
 const (
 	SQLiteHeaderSize = 32
-
-	bkDelay = 250
+	bkDelay          = 250
+	sizeAtOpenWarn   = 500 * 1024 * 1024
+	durToOpenLog     = 2 * time.Second
 )
 
 const (
+	openDuration         = "open_duration_ms"
 	numCheckpoints       = "checkpoints"
 	numCheckpointErrors  = "checkpoint_errors"
 	numCheckpointedPages = "checkpointed_pages"
@@ -63,6 +66,7 @@ func init() {
 // ResetStats resets the expvar stats for this module. Mostly for test purposes.
 func ResetStats() {
 	stats.Init()
+	stats.Add(openDuration, 0)
 	stats.Add(numCheckpoints, 0)
 	stats.Add(numCheckpointErrors, 0)
 	stats.Add(numCheckpointedPages, 0)
@@ -90,6 +94,8 @@ type DB struct {
 
 	rwDSN string // DSN used for read-write connection
 	roDSN string // DSN used for read-only connections
+
+	logger *log.Logger
 }
 
 // PoolStats represents connection pool statistics
@@ -311,6 +317,24 @@ func ReplayWAL(path string, wals []string, deleteMode bool) error {
 // Open opens a file-based database, creating it if it does not exist. After this
 // function returns, an actual SQLite file will always exist.
 func Open(dbPath string, fkEnabled, wal bool) (*DB, error) {
+	logger := log.New(log.Writer(), "[db] ", log.LstdFlags)
+	startTime := time.Now()
+	defer func() {
+		dur := time.Since(startTime)
+		if dur > durToOpenLog {
+			logger.Printf("opened database %s in %s", dbPath, time.Since(startTime))
+		}
+		stats.Get(openDuration).(*expvar.Int).Set(time.Since(startTime).Milliseconds())
+	}()
+
+	sz, err := fileSize(dbPath)
+	if err != nil {
+		return nil, err
+	}
+	if sz > sizeAtOpenWarn {
+		logger.Printf("database file is %d bytes, SQLite may require an extended time to open", sz)
+	}
+
 	rwDSN := fmt.Sprintf("file:%s?_fk=%s", dbPath, strconv.FormatBool(fkEnabled))
 	rwDB, err := sql.Open("sqlite3", rwDSN)
 	if err != nil {
@@ -368,6 +392,7 @@ func Open(dbPath string, fkEnabled, wal bool) (*DB, error) {
 		roDB:      roDB,
 		rwDSN:     rwDSN,
 		roDSN:     roDSN,
+		logger:    logger,
 	}, nil
 }
 
@@ -441,11 +466,7 @@ func (db *DB) Size() (int64, error) {
 // FileSize returns the size of the SQLite file on disk. If running in
 // on-memory mode, this function returns 0.
 func (db *DB) FileSize() (int64, error) {
-	fi, err := os.Stat(db.path)
-	if err != nil {
-		return 0, err
-	}
-	return fi.Size(), nil
+	return fileSize(db.path)
 }
 
 // WALSize returns the size of the SQLite WAL file on disk. If running in
@@ -454,14 +475,11 @@ func (db *DB) WALSize() (int64, error) {
 	if !db.wal {
 		return 0, nil
 	}
-	fi, err := os.Stat(db.walPath)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			return 0, err
-		}
-		return 0, nil
+	sz, err := fileSize(db.walPath)
+	if err == nil || (err != nil && os.IsNotExist(err)) {
+		return sz, nil
 	}
-	return fi.Size(), nil
+	return 0, err
 }
 
 // Checkpoint checkpoints the WAL file. If the WAL file is not enabled, this
@@ -1497,4 +1515,15 @@ func containsEmptyType(slice []string) bool {
 		}
 	}
 	return false
+}
+
+func fileSize(path string) (int64, error) {
+	stat, err := os.Stat(path)
+	if err != nil {
+		return 0, err
+	}
+	if stat.Mode().IsDir() {
+		return 0, fmt.Errorf("not a file")
+	}
+	return stat.Size(), nil
 }

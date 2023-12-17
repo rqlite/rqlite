@@ -1286,7 +1286,7 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 
 	cw := progress.NewCountingWriter(f)
 	cm := progress.StartCountingMonitor(func(n int64) {
-		s.logger.Printf("installed %d bytes", n)
+		s.logger.Printf("boot process installed %d bytes", n)
 	}, cw)
 	n, err := func() (int64, error) {
 		defer cm.StopAndWait()
