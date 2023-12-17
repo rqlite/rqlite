@@ -50,6 +50,7 @@ type argT struct {
 
 var cliHelp = []string{
 	`.backup <file>                      Write database backup to SQLite file`,
+	`.boot <file>                        Boot the node from a SQLite database file`,
 	`.consistency [none|weak|strong]     Show or set read consistency level`,
 	`.dump <file>                        Dump the database in SQL text format to a file`,
 	`.exit                               Exit this program`,
@@ -191,6 +192,12 @@ func main() {
 					break
 				}
 				err = restore(ctx, line[index+1:], argv)
+			case ".BOOT":
+				if index == -1 || index == len(line)-1 {
+					err = fmt.Errorf("please specify an input file to boot with")
+					break
+				}
+				err = boot(ctx, line[index+1:], argv)
 			case ".SYSDUMP":
 				if index == -1 || index == len(line)-1 {
 					err = fmt.Errorf("please specify an output file for the sysdump")
