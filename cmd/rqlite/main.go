@@ -231,11 +231,13 @@ func main() {
 		}
 
 		hw := history.Writer()
-		sz := history.Size()
-		history.Write(term.History, sz, hw)
-		hw.Close()
-		if sz <= 0 {
-			history.Delete()
+		if hw != nil {
+			sz := history.Size()
+			history.Write(term.History, sz, hw)
+			hw.Close()
+			if sz <= 0 {
+				history.Delete()
+			}
 		}
 		ctx.String("bye~\n")
 		return nil
