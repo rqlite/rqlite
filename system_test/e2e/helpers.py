@@ -243,6 +243,12 @@ class Node(object):
       return None
     return self.process.pid
 
+  def db_path(self):
+    return self.status()['store']['sqlite3']['path']
+
+  def wal_path(self):
+    return self.db_path() + "-wal"
+
   def status(self):
     r = requests.get(self._status_url())
     raise_for_status(r)
