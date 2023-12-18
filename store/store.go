@@ -105,6 +105,7 @@ const (
 	numBackups                = "num_backups"
 	numLoads                  = "num_loads"
 	numRestores               = "num_restores"
+	numRestoresFailed         = "num_restores_failed"
 	numAutoRestores           = "num_auto_restores"
 	numAutoRestoresSkipped    = "num_auto_restores_skipped"
 	numAutoRestoresFailed     = "num_auto_restores_failed"
@@ -146,6 +147,7 @@ func ResetStats() {
 	stats.Add(numBackups, 0)
 	stats.Add(numLoads, 0)
 	stats.Add(numRestores, 0)
+	stats.Add(numRestoresFailed, 0)
 	stats.Add(numRecoveries, 0)
 	stats.Add(numAutoRestores, 0)
 	stats.Add(numAutoRestoresSkipped, 0)
@@ -518,7 +520,6 @@ func (s *Store) Bootstrap(servers ...*Server) error {
 	s.raft.BootstrapCluster(raft.Configuration{
 		Servers: raftServers,
 	})
-
 	return nil
 }
 
@@ -619,7 +620,6 @@ func (s *Store) Close(wait bool) (retErr error) {
 	if err := walDB.Close(); err != nil {
 		return err
 	}
-
 	return nil
 }
 
@@ -1256,7 +1256,6 @@ func (s *Store) load(lr *command.LoadRequest) error {
 	s.dbAppliedIndex = af.Index()
 	s.dbAppliedIndexMu.Unlock()
 	s.logger.Printf("node loaded in %s (%d bytes)", time.Since(startT), len(b))
-
 	return nil
 }
 
@@ -1766,7 +1765,12 @@ func (s *Store) fsmSnapshot() (raft.FSMSnapshot, error) {
 // fsmRestore restores the node to a previous state. The Hashicorp docs state this
 // will not be called concurrently with Apply(), so synchronization with Execute()
 // is not necessary.
-func (s *Store) fsmRestore(rc io.ReadCloser) error {
+func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
+	defer func() {
+		if retErr != nil {
+			stats.Add(numRestoresFailed, 1)
+		}
+	}()
 	s.logger.Printf("initiating node restore on node ID %s", s.raftID)
 	startT := time.Now()
 
@@ -1788,6 +1792,9 @@ func (s *Store) fsmRestore(rc io.ReadCloser) error {
 
 	// Must wipe out all pre-existing state if being asked to do a restore, and put
 	// the new database in place.
+	if !sql.IsValidSQLiteFile(tmpFile.Name()) {
+		return fmt.Errorf("invalid SQLite data")
+	}
 	if err := s.db.Close(); err != nil {
 		return fmt.Errorf("failed to close pre-restore database: %s", err)
 	}
