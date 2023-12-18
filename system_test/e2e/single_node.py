@@ -29,11 +29,13 @@ class TestSingleNode(unittest.TestCase):
     '''Test that a node does not have a WAL file after graceful shutdown'''
     n = self.cluster.wait_for_leader()
     n.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
-    self.assertTrue(os.path.exists(n.db_path()))
-    self.assertTrue(os.path.exists(n.wal_path()))
+    db_path = n.db_path()
+    wal_path = n.wal_path()
+    self.assertTrue(os.path.exists(db_path))
+    self.assertTrue(os.path.exists(wal_path))
     n.stop(graceful=True)
-    self.assertTrue(os.path.exists(n.db_path()))
-    self.assertFalse(os.path.exists(n.wal_path()))
+    self.assertTrue(os.path.exists(db_path))
+    self.assertFalse(os.path.exists(wal_path))
 
   def test_simple_raw_queries(self):
     '''Test simple queries work as expected'''
