@@ -1,5 +1,5 @@
 ## 8.12.0 (December 17th 2023)
-This version sees the minor version incremented to indicate the importance of this release. Bcrypted passwords were not secure in the Credentials Configuration, as they could also be used directly as passwords. This has been fixed, and bcrypted passwords are no longer supported going forward. **All users using Credentials should upgrade to this release**.
+This version sees the minor version incremented to indicate the importance of this release. Bcrypted passwords were not secure in the Credentials Configuration, as they could also be used directly as passwords. This has been fixed, and bcrypted passwords are no longer supported going forward. **All users using bcrypted hashes in Credential files should upgrade to this release** and migrate to using plaintext passwords in those files.
 
 If you were using bcrypted passwords, **this is probably a breaking change**. You should recreate any Credentials Configuration files to use plaintext passwords instead of bcrypt hashes, and ensure the Credentials Configuration files are secured from unauthorized access.
 
