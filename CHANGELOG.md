@@ -1,5 +1,5 @@
 ## 8.12.0 (unreleased)
-This version sees the minor version incremented to indicate the importance of this release. Bcrypted passwords were not secure in the Credentials Configuration, as they could also be used directly as passwords. This has been fixed, and bcrypted passwords are no longer supported going forward.
+This version sees the minor version incremented to indicate the importance of this release. Bcrypted passwords were not secure in the Credentials Configuration, as they could also be used directly as passwords. This has been fixed, and bcrypted passwords are no longer supported going forward. All users should upgrade to this release if possible.
 
 ### Implementation changes and bug fixes
 - [PR #1492](https://github.com/rqlite/rqlite/pull/1492): Remove faulty bcrypt hashed password support. Fixes [issue #1488](https://github.com/rqlite/rqlite/issues/1488). Thanks @jtackaberry
