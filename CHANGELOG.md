@@ -3,7 +3,7 @@ This version sees the minor version incremented to indicate the importance of th
 
 ### Implementation changes and bug fixes
 - [PR #1492](https://github.com/rqlite/rqlite/pull/1492): Remove faulty bcrypt hashed password support. Fixes [issue #1488](https://github.com/rqlite/rqlite/issues/1488). Thanks @jtackaberry
-- [or #1494](https://github.com/rqlite/rqlite/pull/1494): Confirm restored data looks like a SQLite file.
+- [PR #1494](https://github.com/rqlite/rqlite/pull/1494): Confirm restored data looks like a SQLite file.
 
 ## 8.11.1 (December 17th 2023)
 ### Implementation changes and bug fixes
