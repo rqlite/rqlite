@@ -199,7 +199,7 @@ func restore(ctx *cli.Context, filename string, argv *argT) error {
 		ctx.String("rows affected: %d\n", restoreRet.Results[0].RowsAffected)
 	}
 
-	ctx.String("database restored successfully\n")
+	ctx.String("Database restored successfully.\n")
 	return nil
 }
 
@@ -285,6 +285,6 @@ func boot(ctx *cli.Context, filename string, argv *argT) error {
 		return fmt.Errorf(errMsg)
 	}
 
-	ctx.String("node booted successfully\n")
+	ctx.String("Node booted successfully.\n")
 	return nil
 }
