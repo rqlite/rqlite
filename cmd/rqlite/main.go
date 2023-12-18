@@ -49,7 +49,7 @@ type argT struct {
 }
 
 var cliHelp = []string{
-	`.backup <file>                      Write database backup to SQLite file`,
+	`.backup <file>                      Write database backup to a file`,
 	`.boot <file>                        Boot the node from a SQLite database file`,
 	`.consistency [none|weak|strong]     Show or set read consistency level`,
 	`.dump <file>                        Dump the database in SQL text format to a file`,
@@ -58,14 +58,14 @@ var cliHelp = []string{
 	`.help                               Show this message`,
 	`.indexes                            Show names of all indexes`,
 	`.ready                              Show ready status for connected node`,
-	`.restore <file>                     Restore the database from a SQLite database file or dump file`,
+	`.remove <node ID>                   Remove a node from the cluster`,
+	`.restore <file>                     Load the database from a SQLite database file or dump file`,
 	`.nodes                              Show connection status of all nodes in cluster`,
 	`.schema                             Show CREATE statements for all tables`,
 	`.status                             Show status and diagnostic information for connected node`,
 	`.sysdump <file>                     Dump system diagnostics to a file for offline analysis`,
 	`.tables                             List names of tables`,
-	`.timer on|off                       Turn query timer on or off`,
-	`.remove <raft ID>                   Remove a node from the cluster`,
+	`.timer on|off                       Turn query timings on or off`,
 }
 
 func main() {
