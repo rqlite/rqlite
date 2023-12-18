@@ -573,6 +573,7 @@ func (s *Store) Ready() bool {
 func (s *Store) Close(wait bool) (retErr error) {
 	defer func() {
 		if retErr == nil {
+			s.logger.Printf("store closed with node ID %s, listening on %s", s.raftID, s.ln.Addr().String())
 			s.open = false
 		}
 	}()
@@ -580,7 +581,6 @@ func (s *Store) Close(wait bool) (retErr error) {
 		// Protect against closing already-closed resource, such as channels.
 		return nil
 	}
-	s.logger.Printf("closing store with node ID %s, listening on %s", s.raftID, s.ln.Addr().String())
 
 	s.dechunkManager.Close()
 
