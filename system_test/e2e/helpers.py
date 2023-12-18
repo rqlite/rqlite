@@ -82,7 +82,7 @@ def raise_for_status(r):
     raise e
 
 class Node(object):
-  def __init__(self, path, node_id,
+  def __init__(self, exe_path, node_id,
                api_addr=None, api_adv=None,
                bootstrap_expect=0,
                raft_addr=None, raft_adv=None,
@@ -105,7 +105,7 @@ class Node(object):
     if dir is None:
       dir = tempfile.mkdtemp()
     self.dir = dir
-    self.path = path
+    self.exe_path = exe_path
     self.peers_path = os.path.join(self.dir, "raft/peers.json")
     self.node_id = node_id
     self.api_addr = api_addr
@@ -168,7 +168,7 @@ class Node(object):
     if self.process is not None:
       return
 
-    command = [self.path,
+    command = [self.exe_path,
                '-node-id', self.node_id,
                '-http-addr', self.api_addr,
                '-bootstrap-expect', str(self.bootstrap_expect),

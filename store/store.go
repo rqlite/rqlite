@@ -608,18 +608,6 @@ func (s *Store) Close(wait bool) (retErr error) {
 	if err := s.boltStore.Close(); err != nil {
 		return err
 	}
-
-	// Open-and-close again to remove the -wal file. This is not
-	// strictly necessary, since any on-disk database files will be removed when
-	// rqlite next starts, but it leaves the directory containing the database
-	// file in a cleaner state.
-	walDB, err := sql.Open(s.dbPath, s.dbConf.FKConstraints, true)
-	if err != nil {
-		return err
-	}
-	if err := walDB.Close(); err != nil {
-		return err
-	}
 	return nil
 }
 

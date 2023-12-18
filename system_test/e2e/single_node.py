@@ -25,6 +25,16 @@ class TestSingleNode(unittest.TestCase):
   def tearDown(self):
     self.cluster.deprovision()
 
+  def test_no_wal_on_shutdown(self):
+    '''Test that a node does not have a WAL file after graceful shutdown'''
+    n = self.cluster.wait_for_leader()
+    n.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
+    self.assertTrue(os.path.exists(n.db_path()))
+    self.assertTrue(os.path.exists(n.wal_path()))
+    n.stop(graceful=True)
+    self.assertTrue(os.path.exists(n.db_path()))
+    self.assertFalse(os.path.exists(n.wal_path()))
+
   def test_simple_raw_queries(self):
     '''Test simple queries work as expected'''
     n = self.cluster.wait_for_leader()
