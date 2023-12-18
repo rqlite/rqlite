@@ -1,6 +1,8 @@
 ## 8.12.0 (December 17th 2023)
 This version sees the minor version incremented to indicate the importance of this release. Bcrypted passwords were not secure in the Credentials Configuration, as they could also be used directly as passwords. This has been fixed, and bcrypted passwords are no longer supported going forward. All users should upgrade to this release if possible.
 
+If you were using bcrypted passwords, **this is probably a breaking change**. You should recreate any Credentials Configuration files to use plaintext passwords, and ensure the Credentials Configuration files are secured from unauthorized access.
+
 ### Implementation changes and bug fixes
 - [PR #1492](https://github.com/rqlite/rqlite/pull/1492): Remove faulty bcrypt hashed password support. Fixes [issue #1488](https://github.com/rqlite/rqlite/issues/1488). Thanks @jtackaberry
 - [PR #1494](https://github.com/rqlite/rqlite/pull/1494): Confirm restored data looks like a SQLite file.
