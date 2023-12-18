@@ -1,4 +1,4 @@
-## 8.12.0 (unreleased)
+## 8.12.0 (December 17th 2023)
 This version sees the minor version incremented to indicate the importance of this release. Bcrypted passwords were not secure in the Credentials Configuration, as they could also be used directly as passwords. This has been fixed, and bcrypted passwords are no longer supported going forward. All users should upgrade to this release if possible.
 
 ### Implementation changes and bug fixes
