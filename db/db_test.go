@@ -29,6 +29,35 @@ func Test_OpenNonExistentDatabase(t *testing.T) {
 	}
 }
 
+func Test_WALRemovedOnClose(t *testing.T) {
+	path := mustTempPath()
+	defer os.Remove(path)
+	db, err := Open(path, false, true)
+	if err != nil {
+		t.Fatalf("error opening non-existent database")
+	}
+	defer db.Close()
+	if !db.WALEnabled() {
+		t.Fatalf("WAL mode not enabled")
+	}
+
+	_, err = db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	walPath := db.WALPath()
+	if !fileExists(walPath) {
+		t.Fatalf("WAL file does not exist after creating a table")
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("error closing database: %s", err.Error())
+	}
+
+	if fileExists(db.WALPath()) {
+		t.Fatalf("WAL file not removed after closing the database")
+	}
+}
+
 func Test_RemoveFiles(t *testing.T) {
 	d := t.TempDir()
 	mustCreateClosedFile(fmt.Sprintf("%s/foo", d))
