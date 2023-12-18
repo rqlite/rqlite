@@ -1,4 +1,4 @@
-## 8.12.1 (unreleased)
+## 8.12.1 (December 18th 2023)
 ### Implementation changes and bug fixes
 - [PR #1497](https://github.com/rqlite/rqlite/pull/1497): Don't re-open and close database on shutdown. It's unnecessary.
 
