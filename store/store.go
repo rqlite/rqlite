@@ -573,6 +573,7 @@ func (s *Store) Ready() bool {
 func (s *Store) Close(wait bool) (retErr error) {
 	defer func() {
 		if retErr == nil {
+			s.logger.Printf("store closed with node ID %s, listening on %s", s.raftID, s.ln.Addr().String())
 			s.open = false
 		}
 	}()
@@ -580,7 +581,6 @@ func (s *Store) Close(wait bool) (retErr error) {
 		// Protect against closing already-closed resource, such as channels.
 		return nil
 	}
-	s.logger.Printf("closing store with node ID %s, listening on %s", s.raftID, s.ln.Addr().String())
 
 	s.dechunkManager.Close()
 
@@ -606,18 +606,6 @@ func (s *Store) Close(wait bool) (retErr error) {
 		return err
 	}
 	if err := s.boltStore.Close(); err != nil {
-		return err
-	}
-
-	// Open-and-close again to remove the -wal file. This is not
-	// strictly necessary, since any on-disk database files will be removed when
-	// rqlite next starts, but it leaves the directory containing the database
-	// file in a cleaner state.
-	walDB, err := sql.Open(s.dbPath, s.dbConf.FKConstraints, true)
-	if err != nil {
-		return err
-	}
-	if err := walDB.Close(); err != nil {
 		return err
 	}
 	return nil

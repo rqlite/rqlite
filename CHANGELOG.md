@@ -1,3 +1,7 @@
+## 8.12.1 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1497](https://github.com/rqlite/rqlite/pull/1497): Don't re-open and close database on shutdown. It's unnecessary.
+
 ## 8.12.0 (December 17th 2023)
 This version sees the minor version incremented to indicate the importance of this release. Bcrypted passwords were not secure in the Credentials Configuration, as they could also be used directly as passwords. This has been fixed, and bcrypted passwords are no longer supported going forward. **All users using bcrypted hashes in Credential files should upgrade to this release** and migrate to using plaintext passwords in those files.
 
