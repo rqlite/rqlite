@@ -102,7 +102,7 @@ jobs:
       # Commands are run in a Windows virtual machine environment
         - checkout
         - run: choco install -y mingw
-        - run: refreshenv
+        - run: $Env:Path += ";C:\ProgramData\mingw64\mingw64\bin"
         - run: gcc --version
         - run: go version
         - run:
