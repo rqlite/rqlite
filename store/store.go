@@ -1274,8 +1274,8 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer f.Close()
 	defer os.Remove(f.Name())
+	defer f.Close()
 
 	cw := progress.NewCountingWriter(f)
 	cm := progress.StartCountingMonitor(func(n int64) {
@@ -1774,6 +1774,7 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 		return fmt.Errorf("error creating temporary file for restore operation: %v", err)
 	}
 	defer os.Remove(tmpFile.Name())
+	defer tmpFile.Close()
 
 	// Copy it from the reader to the temporary file.
 	_, err = io.Copy(tmpFile, rc)
