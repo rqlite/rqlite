@@ -1,3 +1,7 @@
+## 8.12.3 (December 19th 2023)
+### Implementation changes and bug fixes
+- [PR #1502](https://github.com/rqlite/rqlite/pull/1502): Create temporary SQLite files in same directory as actual SQLite file.
+
 ## 8.12.2 (December 19th 2023)
 ### Implementation changes and bug fixes
 - [PR #1498](https://github.com/rqlite/rqlite/pull/1498): rqlite shell `.help` should show commands in alphabetical order.
