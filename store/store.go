@@ -212,7 +212,8 @@ type Store struct {
 	raftTn *NodeTransport
 	raftID string    // Node ID.
 	dbConf *DBConfig // SQLite database config.
-	dbPath string    // Path to underlying SQLite file, if not in-memory.
+	dbPath string    // Path to underlying SQLite file.
+	dbDir  string    // Path to directory containing SQLite file.
 	db     *sql.DB   // The underlying SQLite store.
 
 	queryTxMu sync.RWMutex
@@ -328,6 +329,7 @@ func New(ln Listener, c *Config) *Store {
 		raftID:          c.ID,
 		dbConf:          c.DBConf,
 		dbPath:          dbPath,
+		dbDir:           filepath.Dir(dbPath),
 		leaderObservers: make([]chan<- struct{}, 0),
 		reqMarshaller:   command.NewRequestMarshaler(),
 		logger:          logger,
@@ -472,7 +474,7 @@ func (s *Store) Open() (retErr error) {
 
 	// Clean up any files from aborted operations
 	for _, pattern := range []string{restoreScratchPattern, bootScatchPattern, backupScatchPattern} {
-		files, err := filepath.Glob(filepath.Join(s.db.Path(), pattern))
+		files, err := filepath.Glob(filepath.Join(s.dbDir, pattern))
 		if err != nil {
 			return fmt.Errorf("failed to locate temporary files for pattern %s: %s", pattern, err.Error())
 		}
@@ -1169,7 +1171,7 @@ func (s *Store) Backup(br *command.BackupRequest, dst io.Writer) (retErr error) 
 	}
 
 	if br.Format == command.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY {
-		f, err := os.CreateTemp(filepath.Dir(s.db.Path()), backupScatchPattern)
+		f, err := os.CreateTemp(s.dbDir, backupScatchPattern)
 		if err != nil {
 			return err
 		}
@@ -1268,7 +1270,7 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 	}
 
 	// Write the data to a temporary file..
-	f, err := os.CreateTemp(filepath.Dir(s.db.Path()), bootScatchPattern)
+	f, err := os.CreateTemp(s.dbDir, bootScatchPattern)
 	if err != nil {
 		return 0, err
 	}
@@ -1767,7 +1769,7 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	startT := time.Now()
 
 	// Create a scatch file to write the restore data to it.
-	tmpFile, err := os.CreateTemp(filepath.Dir(s.db.Path()), restoreScratchPattern)
+	tmpFile, err := os.CreateTemp(s.dbDir, restoreScratchPattern)
 	if err != nil {
 		return fmt.Errorf("error creating temporary file for restore operation: %v", err)
 	}
