@@ -101,7 +101,7 @@ jobs:
     steps:
       # Commands are run in a Windows virtual machine environment
         - checkout
-        - run: choco install mingw
+        - run: choco install -y mingw
         - run: gcc --version
         - run: go version
         - run:
