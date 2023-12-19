@@ -78,6 +78,8 @@ var (
 
 const (
 	restoreScratchPattern      = "rqlite-restore-*"
+	bootScatchPattern          = "rqlite-boot-*"
+	backupScatchPattern        = "rqlite-backup-*"
 	raftDBPath                 = "raft.db" // Changing this will break backwards compatibility.
 	peersPath                  = "raft/peers.json"
 	peersInfoPath              = "raft/peers.info"
@@ -210,7 +212,8 @@ type Store struct {
 	raftTn *NodeTransport
 	raftID string    // Node ID.
 	dbConf *DBConfig // SQLite database config.
-	dbPath string    // Path to underlying SQLite file, if not in-memory.
+	dbPath string    // Path to underlying SQLite file.
+	dbDir  string    // Path to directory containing SQLite file.
 	db     *sql.DB   // The underlying SQLite store.
 
 	queryTxMu sync.RWMutex
@@ -326,6 +329,7 @@ func New(ln Listener, c *Config) *Store {
 		raftID:          c.ID,
 		dbConf:          c.DBConf,
 		dbPath:          dbPath,
+		dbDir:           filepath.Dir(dbPath),
 		leaderObservers: make([]chan<- struct{}, 0),
 		reqMarshaller:   command.NewRequestMarshaler(),
 		logger:          logger,
@@ -468,14 +472,20 @@ func (s *Store) Open() (retErr error) {
 	}
 	s.logger.Printf("created on-disk database at open")
 
-	// Clean up any files from aborted restores.
-	files, err := filepath.Glob(filepath.Join(s.db.Path(), restoreScratchPattern))
-	if err != nil {
-		return fmt.Errorf("failed to locate temporary restore files: %s", err.Error())
-	}
-	for _, f := range files {
-		if err := os.Remove(f); err != nil {
-			return fmt.Errorf("failed to remove temporary restore file %s: %s", f, err.Error())
+	// Clean up any files from aborted operations. This tries to catch the case where scratch files
+	// were created in the Raft directory, not cleaned up, and then the node was restarted with an
+	// explicit SQLite path set.
+	for _, pattern := range []string{restoreScratchPattern, bootScatchPattern, backupScatchPattern} {
+		for _, dir := range []string{s.raftDir, s.dbDir} {
+			files, err := filepath.Glob(filepath.Join(dir, pattern))
+			if err != nil {
+				return fmt.Errorf("failed to locate temporary files for pattern %s: %s", pattern, err.Error())
+			}
+			for _, f := range files {
+				if err := os.Remove(f); err != nil {
+					return fmt.Errorf("failed to remove temporary file %s: %s", f, err.Error())
+				}
+			}
 		}
 	}
 
@@ -1165,7 +1175,7 @@ func (s *Store) Backup(br *command.BackupRequest, dst io.Writer) (retErr error) 
 	}
 
 	if br.Format == command.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY {
-		f, err := os.CreateTemp("", "rqlite-backup-*")
+		f, err := os.CreateTemp(s.dbDir, backupScatchPattern)
 		if err != nil {
 			return err
 		}
@@ -1264,12 +1274,12 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 	}
 
 	// Write the data to a temporary file..
-	f, err := os.CreateTemp("", "rqlite-boot-*")
+	f, err := os.CreateTemp(s.dbDir, bootScatchPattern)
 	if err != nil {
 		return 0, err
 	}
-	defer f.Close()
 	defer os.Remove(f.Name())
+	defer f.Close()
 
 	cw := progress.NewCountingWriter(f)
 	cm := progress.StartCountingMonitor(func(n int64) {
@@ -1763,11 +1773,12 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	startT := time.Now()
 
 	// Create a scatch file to write the restore data to it.
-	tmpFile, err := os.CreateTemp(filepath.Dir(s.db.Path()), restoreScratchPattern)
+	tmpFile, err := os.CreateTemp(s.dbDir, restoreScratchPattern)
 	if err != nil {
 		return fmt.Errorf("error creating temporary file for restore operation: %v", err)
 	}
 	defer os.Remove(tmpFile.Name())
+	defer tmpFile.Close()
 
 	// Copy it from the reader to the temporary file.
 	_, err = io.Copy(tmpFile, rc)
