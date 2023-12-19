@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -90,7 +91,7 @@ func main() {
 			return nil
 		}
 
-		connectionStr := fmt.Sprintf("%s://%s:%d", argv.Protocol, argv.Host, argv.Port)
+		connectionStr := fmt.Sprintf("%s://%s", argv.Protocol, address6(argv))
 		version, err := getVersionWithClient(httpClient, argv)
 		if err != nil {
 			msg := err.Error()
@@ -108,7 +109,7 @@ func main() {
 
 		timer := false
 		consistency := "weak"
-		prefix := fmt.Sprintf("%s:%d>", argv.Host, argv.Port)
+		prefix := fmt.Sprintf("%s>", address6(argv))
 		term, err := prompt.NewTerminal()
 		if err != nil {
 			ctx.String("%s %v\n", ctx.Color().Red("ERR!"), err)
@@ -276,14 +277,14 @@ func help(ctx *cli.Context, cmd, line string, argv *argT) error {
 }
 
 func status(ctx *cli.Context, cmd, line string, argv *argT) error {
-	url := fmt.Sprintf("%s://%s:%d/status", argv.Protocol, argv.Host, argv.Port)
+	url := fmt.Sprintf("%s://%s/status", argv.Protocol, address6(argv))
 	return cliJSON(ctx, cmd, line, url, argv)
 }
 
 func ready(ctx *cli.Context, client *http.Client, argv *argT) error {
 	u := url.URL{
 		Scheme: argv.Protocol,
-		Host:   fmt.Sprintf("%s:%d", argv.Host, argv.Port),
+		Host:   address6(argv),
 		Path:   fmt.Sprintf("%sreadyz", argv.Prefix),
 	}
 	urlStr := u.String()
@@ -314,12 +315,12 @@ func ready(ctx *cli.Context, client *http.Client, argv *argT) error {
 }
 
 func nodes(ctx *cli.Context, cmd, line string, argv *argT) error {
-	url := fmt.Sprintf("%s://%s:%d/nodes", argv.Protocol, argv.Host, argv.Port)
+	url := fmt.Sprintf("%s://%s/nodes", argv.Protocol, address6(argv))
 	return cliJSON(ctx, cmd, line, url, argv)
 }
 
 func expvar(ctx *cli.Context, cmd, line string, argv *argT) error {
-	url := fmt.Sprintf("%s://%s:%d/debug/vars", argv.Protocol, argv.Host, argv.Port)
+	url := fmt.Sprintf("%s://%s/debug/vars", argv.Protocol, address6(argv))
 	return cliJSON(ctx, cmd, line, url, argv)
 }
 
@@ -355,7 +356,7 @@ func sysdump(ctx *cli.Context, client *http.Client, filename string, argv *argT)
 func getNodes(client *http.Client, argv *argT) (Nodes, error) {
 	u := url.URL{
 		Scheme: argv.Protocol,
-		Host:   fmt.Sprintf("%s:%d", argv.Host, argv.Port),
+		Host:   address6(argv),
 		Path:   fmt.Sprintf("%snodes", argv.Prefix),
 	}
 	urlStr := u.String()
@@ -417,7 +418,7 @@ func getHTTPClient(argv *argT) (*http.Client, error) {
 func getVersionWithClient(client *http.Client, argv *argT) (string, error) {
 	u := url.URL{
 		Scheme: argv.Protocol,
-		Host:   fmt.Sprintf("%s:%d", argv.Host, argv.Port),
+		Host:   address6(argv),
 		Path:   fmt.Sprintf("%s/status", argv.Prefix),
 	}
 	urlStr := u.String()
@@ -645,7 +646,13 @@ func urlsToWriter(client *http.Client, urls []string, w io.Writer, argv *argT) e
 
 func createHostList(argv *argT) []string {
 	var hosts = make([]string, 0)
-	hosts = append(hosts, fmt.Sprintf("%s:%d", argv.Host, argv.Port))
+	hosts = append(hosts, address6(argv))
 	hosts = append(hosts, strings.Split(argv.Alternatives, ",")...)
 	return hosts
+}
+
+// address6 returns a string representation of the given address and port,
+// which is compatible with IPv6 addresses.
+func address6(argv *argT) string {
+	return net.JoinHostPort(argv.Host, fmt.Sprintf("%d", argv.Port))
 }

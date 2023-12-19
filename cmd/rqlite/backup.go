@@ -41,7 +41,7 @@ func backup(ctx *cli.Context, filename string, argv *argT) error {
 	queryStr := url.Values{}
 	u := url.URL{
 		Scheme:   argv.Protocol,
-		Host:     fmt.Sprintf("%s:%d", argv.Host, argv.Port),
+		Host:     address6(argv),
 		Path:     fmt.Sprintf("%sdb/backup", argv.Prefix),
 		RawQuery: queryStr.Encode(),
 	}
@@ -64,7 +64,7 @@ func dump(ctx *cli.Context, filename string, argv *argT) error {
 	queryStr.Set("fmt", "sql")
 	u := url.URL{
 		Scheme:   argv.Protocol,
-		Host:     fmt.Sprintf("%s:%d", argv.Host, argv.Port),
+		Host:     address6(argv),
 		Path:     fmt.Sprintf("%sdb/backup", argv.Prefix),
 		RawQuery: queryStr.Encode(),
 	}
@@ -116,44 +116,9 @@ func makeRestoreRequest(b []byte) func(string) (*http.Request, error) {
 }
 
 func restore(ctx *cli.Context, filename string, argv *argT) error {
-	statusURL := fmt.Sprintf("%s://%s:%d/status", argv.Protocol, argv.Host, argv.Port)
-	client := http.Client{Transport: &http.Transport{
-		Proxy:           http.ProxyFromEnvironment,
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: argv.Insecure},
-	}}
-
-	req, err := http.NewRequest("GET", statusURL, nil)
+	statusRet, err := checkStatus(ctx, argv)
 	if err != nil {
 		return err
-	}
-	if argv.Credentials != "" {
-		creds := strings.Split(argv.Credentials, ":")
-		if len(creds) != 2 {
-			return fmt.Errorf("invalid Basic Auth credentials format")
-		}
-		req.SetBasicAuth(creds[0], creds[1])
-	}
-
-	statusResp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer statusResp.Body.Close()
-
-	if statusResp.StatusCode == http.StatusUnauthorized {
-		return fmt.Errorf("unauthorized")
-	}
-
-	body, err := io.ReadAll(statusResp.Body)
-	if err != nil {
-		return err
-	}
-	statusRet := &statusResponse{}
-	if err := parseResponse(&body, &statusRet); err != nil {
-		return err
-	}
-	if statusRet.Store == nil {
-		return fmt.Errorf("unexpected server response: store status not found")
 	}
 
 	restoreFile, err := os.ReadFile(filename)
@@ -174,7 +139,7 @@ func restore(ctx *cli.Context, filename string, argv *argT) error {
 	queryStr := url.Values{}
 	restoreURL := url.URL{
 		Scheme:   argv.Protocol,
-		Host:     fmt.Sprintf("%s:%d", argv.Host, argv.Port),
+		Host:     address6(argv),
 		Path:     fmt.Sprintf("%sdb/load", argv.Prefix),
 		RawQuery: queryStr.Encode(),
 	}
@@ -204,44 +169,14 @@ func restore(ctx *cli.Context, filename string, argv *argT) error {
 }
 
 func boot(ctx *cli.Context, filename string, argv *argT) error {
-	statusURL := fmt.Sprintf("%s://%s:%d/status", argv.Protocol, argv.Host, argv.Port)
+	if _, err := checkStatus(ctx, argv); err != nil {
+		return err
+	}
+
 	client := http.Client{Transport: &http.Transport{
 		Proxy:           http.ProxyFromEnvironment,
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: argv.Insecure},
 	}}
-
-	req, err := http.NewRequest("GET", statusURL, nil)
-	if err != nil {
-		return err
-	}
-	if argv.Credentials != "" {
-		creds := strings.Split(argv.Credentials, ":")
-		if len(creds) != 2 {
-			return fmt.Errorf("invalid Basic Auth credentials format")
-		}
-		req.SetBasicAuth(creds[0], creds[1])
-	}
-
-	// Check that we can talk to the node OK.
-	statusResp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer statusResp.Body.Close()
-	if statusResp.StatusCode == http.StatusUnauthorized {
-		return fmt.Errorf("unauthorized")
-	}
-	body, err := io.ReadAll(statusResp.Body)
-	if err != nil {
-		return err
-	}
-	statusRet := &statusResponse{}
-	if err := parseResponse(&body, &statusRet); err != nil {
-		return err
-	}
-	if statusRet.Store == nil {
-		return fmt.Errorf("unexpected server response: store status not found")
-	}
 
 	// File is OK?
 	if !validSQLiteFile(filename) {
@@ -255,8 +190,8 @@ func boot(ctx *cli.Context, filename string, argv *argT) error {
 	}
 	defer fd.Close()
 
-	bootURL := fmt.Sprintf("%s://%s:%d/boot", argv.Protocol, argv.Host, argv.Port)
-	req, err = http.NewRequest("POST", bootURL, fd)
+	bootURL := fmt.Sprintf("%s://%s/boot", argv.Protocol, address6(argv))
+	req, err := http.NewRequest("POST", bootURL, fd)
 	if err != nil {
 		return err
 	}
@@ -273,7 +208,7 @@ func boot(ctx *cli.Context, filename string, argv *argT) error {
 		return err
 	}
 	defer resp.Body.Close()
-	body, err = io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}
@@ -287,4 +222,47 @@ func boot(ctx *cli.Context, filename string, argv *argT) error {
 
 	ctx.String("Node booted successfully.\n")
 	return nil
+}
+
+func checkStatus(ctx *cli.Context, argv *argT) (*statusResponse, error) {
+	statusURL := fmt.Sprintf("%s://%s/status", argv.Protocol, address6(argv))
+	client := http.Client{Transport: &http.Transport{
+		Proxy:           http.ProxyFromEnvironment,
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: argv.Insecure},
+	}}
+
+	req, err := http.NewRequest("GET", statusURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	if argv.Credentials != "" {
+		creds := strings.Split(argv.Credentials, ":")
+		if len(creds) != 2 {
+			return nil, fmt.Errorf("invalid Basic Auth credentials format")
+		}
+		req.SetBasicAuth(creds[0], creds[1])
+	}
+
+	statusResp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer statusResp.Body.Close()
+	if statusResp.StatusCode == http.StatusUnauthorized {
+		return nil, fmt.Errorf("unauthorized")
+	}
+
+	body, err := io.ReadAll(statusResp.Body)
+	if err != nil {
+		return nil, err
+	}
+	statusRet := &statusResponse{}
+	if err := parseResponse(&body, &statusRet); err != nil {
+		return nil, err
+	}
+	if statusRet.Store == nil {
+		return nil, fmt.Errorf("unexpected server response: store status not found")
+	}
+
+	return statusRet, nil
 }
