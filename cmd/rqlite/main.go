@@ -49,21 +49,22 @@ type argT struct {
 }
 
 var cliHelp = []string{
-	`.backup <path to file>              Write database backup to a file`,
-	`.boot <path to file>                Boot the node from a SQLite database file`,
+	`.backup FILE                        Write database backup to FILE`,
+	`.boot FILE                          Boot the node using a SQLite file read from FILE`,
 	`.consistency [none|weak|strong]     Show or set read consistency level`,
-	`.dump <path to file>                Dump the database in SQL text format to a file`,
+	`.dump FILE                          Dump the database in SQL text format to FILE`,
 	`.exit                               Exit this program`,
 	`.expvar                             Show expvar (Go runtime) information for connected node`,
 	`.help                               Show this message`,
 	`.indexes                            Show names of all indexes`,
+	`.quit                               Exit this program`,
 	`.ready                              Show ready status for connected node`,
-	`.remove <node ID>                   Remove a node from the cluster`,
-	`.restore <path to file>             Load the database from a SQLite database file or dump file`,
+	`.remove NODEID                      Remove node NODEID from the cluster`,
+	`.restore FILE                       Load using SQLite file or SQL dump contained in FILE`,
 	`.nodes                              Show connection status of all nodes in cluster`,
 	`.schema                             Show CREATE statements for all tables`,
 	`.status                             Show status and diagnostic information for connected node`,
-	`.sysdump <path to file>             Dump system diagnostics to a file for offline analysis`,
+	`.sysdump FILE                       Dump system diagnostics to FILE`,
 	`.tables                             List names of tables`,
 	`.timer on|off                       Turn query timings on or off`,
 }

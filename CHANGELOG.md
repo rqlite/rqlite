@@ -1,3 +1,7 @@
+## 8.12.4 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1503](https://github.com/rqlite/rqlite/pull/1503): Use SQLite-style help in rqlite shell.
+
 ## 8.12.3 (December 19th 2023)
 ### Implementation changes and bug fixes
 - [PR #1502](https://github.com/rqlite/rqlite/pull/1502): Create temporary SQLite files in same directory as actual SQLite file.
