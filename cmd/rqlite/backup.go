@@ -41,7 +41,7 @@ func backup(ctx *cli.Context, filename string, argv *argT) error {
 	queryStr := url.Values{}
 	u := url.URL{
 		Scheme:   argv.Protocol,
-		Host:     fmt.Sprintf("%s:%d", argv.Host, argv.Port),
+		Host:     address6(argv),
 		Path:     fmt.Sprintf("%sdb/backup", argv.Prefix),
 		RawQuery: queryStr.Encode(),
 	}
@@ -64,7 +64,7 @@ func dump(ctx *cli.Context, filename string, argv *argT) error {
 	queryStr.Set("fmt", "sql")
 	u := url.URL{
 		Scheme:   argv.Protocol,
-		Host:     fmt.Sprintf("%s:%d", argv.Host, argv.Port),
+		Host:     address6(argv),
 		Path:     fmt.Sprintf("%sdb/backup", argv.Prefix),
 		RawQuery: queryStr.Encode(),
 	}
@@ -139,7 +139,7 @@ func restore(ctx *cli.Context, filename string, argv *argT) error {
 	queryStr := url.Values{}
 	restoreURL := url.URL{
 		Scheme:   argv.Protocol,
-		Host:     fmt.Sprintf("%s:%d", argv.Host, argv.Port),
+		Host:     address6(argv),
 		Path:     fmt.Sprintf("%sdb/load", argv.Prefix),
 		RawQuery: queryStr.Encode(),
 	}
@@ -190,7 +190,7 @@ func boot(ctx *cli.Context, filename string, argv *argT) error {
 	}
 	defer fd.Close()
 
-	bootURL := fmt.Sprintf("%s://%s:%d/boot", argv.Protocol, argv.Host, argv.Port)
+	bootURL := fmt.Sprintf("%s://%s/boot", argv.Protocol, address6(argv))
 	req, err := http.NewRequest("POST", bootURL, fd)
 	if err != nil {
 		return err
@@ -225,7 +225,7 @@ func boot(ctx *cli.Context, filename string, argv *argT) error {
 }
 
 func checkStatus(ctx *cli.Context, argv *argT) (*statusResponse, error) {
-	statusURL := fmt.Sprintf("%s://%s:%d/status", argv.Protocol, argv.Host, argv.Port)
+	statusURL := fmt.Sprintf("%s://%s/status", argv.Protocol, address6(argv))
 	client := http.Client{Transport: &http.Transport{
 		Proxy:           http.ProxyFromEnvironment,
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: argv.Insecure},

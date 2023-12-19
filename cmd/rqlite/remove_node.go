@@ -12,7 +12,7 @@ import (
 func removeNode(client *http.Client, id string, argv *argT, timer bool) error {
 	u := url.URL{
 		Scheme: argv.Protocol,
-		Host:   fmt.Sprintf("%s:%d", argv.Host, argv.Port),
+		Host:   address6(argv),
 		Path:   fmt.Sprintf("%sremove", argv.Prefix),
 	}
 	urlStr := u.String()
