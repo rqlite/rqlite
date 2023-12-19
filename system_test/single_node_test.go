@@ -156,6 +156,33 @@ func Test_SingleNode(t *testing.T) {
 	}
 }
 
+// Test_SingleNodeBasicEndpoint_IPv6 performs a very simple check that IPv6 works.
+func Test_SingleNode_IPv6(t *testing.T) {
+	node := mustNewNodeIPv6(true)
+	if _, err := node.WaitForLeader(); err != nil {
+		t.Fatalf("node never became leader")
+	}
+	defer node.Deprovision()
+
+	// Ensure accessing endpoints in basic manner works
+	_, err := node.Status()
+	if err != nil {
+		t.Fatalf(`failed to retrieve status: %s`, err)
+	}
+
+	_, err = node.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	r, err := node.Query("SELECT * FROM foo")
+	if err != nil {
+		t.Fatalf("failed to execute query: %s", err.Error())
+	}
+	if r != `{"results":[{"columns":["id","name"],"types":["integer","text"]}]}` {
+		t.Fatalf("test received wrong result got %s", r)
+	}
+}
+
 func Test_SingleNodeRequest(t *testing.T) {
 	node := mustNewLeaderNode()
 	defer node.Deprovision()
