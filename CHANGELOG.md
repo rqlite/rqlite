@@ -1,6 +1,7 @@
 ## 8.12.2 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #1498](https://github.com/rqlite/rqlite/pull/1498): rqlite shell `.help` should show commands in alphabetical order.
+- [PR #1499](https://github.com/rqlite/rqlite/pull/1499): Bump golang.org/x/crypto from 0.16.0 to 0.17.0.
 
 ## 8.12.1 (December 18th 2023)
 ### Implementation changes and bug fixes
