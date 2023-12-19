@@ -95,11 +95,48 @@ func Test_SingleNodeOnDiskSQLitePath(t *testing.T) {
 	}
 }
 
+func Test_SingleNodeTempFileCleanup(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	// Create temporary files in the Store directory.
+	for _, pattern := range []string{
+		restoreScratchPattern,
+		backupScatchPattern,
+		bootScatchPattern,
+	} {
+		f, err := os.CreateTemp(s.dbDir, pattern)
+		if err != nil {
+			t.Fatalf("failed to create temporary file: %s", err.Error())
+		}
+		f.Close()
+	}
+
+	// Open the Store, which should clean up the temporary files.
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+
+	// Confirm temporary files have been cleaned up.
+	for _, pattern := range []string{
+		restoreScratchPattern,
+		backupScatchPattern,
+		bootScatchPattern,
+	} {
+		matches, err := filepath.Glob(filepath.Join(s.dbDir, pattern))
+		if err != nil {
+			t.Fatalf("failed to glob temporary files: %s", err.Error())
+		}
+		if len(matches) != 0 {
+			t.Fatalf("temporary files not cleaned up: %s", matches)
+		}
+	}
+}
+
 // Test_SingleNodeBackupBinary tests that requesting a binary-formatted
 // backup works as expected.
 func Test_SingleNodeBackupBinary(t *testing.T) {
-	t.Parallel()
-
 	s, ln := mustNewStore(t)
 	defer ln.Close()
 
@@ -912,8 +949,6 @@ func Test_SingleNodeOnDiskFileExecuteQuery(t *testing.T) {
 // Test_SingleNodeBackup tests that a Store correctly backs up its data
 // in text format.
 func Test_SingleNodeBackupText(t *testing.T) {
-	t.Parallel()
-
 	s, ln := mustNewStore(t)
 	defer ln.Close()
 
