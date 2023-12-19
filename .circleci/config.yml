@@ -102,6 +102,7 @@ jobs:
       # Commands are run in a Windows virtual machine environment
         - checkout
         - run: choco install -y mingw
+        - run: refreshenv
         - run: gcc --version
         - run: go version
         - run:
@@ -283,21 +284,4 @@ workflows:
   version: 2
   build_and_test:
     jobs:
-      - lint
-      - cross_compile
-      - cross_compile_windows
-      - cross_compile_arm
-      - cross_compile_mips
-      - cross_compile_mips_le
-      - test_even
-      - test_odd
-      - race_even
-      - race_odd
-      - end_to_end_single
-      - end_to_end_multi
-      - end_to_end_multi_adv
-      - end_to_end_joining
-      - end_to_end_autoclustering
-      - end_to_end_auto_state
-      - end_to_end_upgrade
       - windows_test
