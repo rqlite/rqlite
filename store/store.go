@@ -78,6 +78,8 @@ var (
 
 const (
 	restoreScratchPattern      = "rqlite-restore-*"
+	bootScatchPattern          = "rqlite-boot-*"
+	backupScatchPattern        = "rqlite-backup-*"
 	raftDBPath                 = "raft.db" // Changing this will break backwards compatibility.
 	peersPath                  = "raft/peers.json"
 	peersInfoPath              = "raft/peers.info"
@@ -468,14 +470,16 @@ func (s *Store) Open() (retErr error) {
 	}
 	s.logger.Printf("created on-disk database at open")
 
-	// Clean up any files from aborted restores.
-	files, err := filepath.Glob(filepath.Join(s.db.Path(), restoreScratchPattern))
-	if err != nil {
-		return fmt.Errorf("failed to locate temporary restore files: %s", err.Error())
-	}
-	for _, f := range files {
-		if err := os.Remove(f); err != nil {
-			return fmt.Errorf("failed to remove temporary restore file %s: %s", f, err.Error())
+	// Clean up any files from aborted operations
+	for _, pattern := range []string{restoreScratchPattern, bootScatchPattern, backupScatchPattern} {
+		files, err := filepath.Glob(filepath.Join(s.db.Path(), pattern))
+		if err != nil {
+			return fmt.Errorf("failed to locate temporary files for pattern %s: %s", pattern, err.Error())
+		}
+		for _, f := range files {
+			if err := os.Remove(f); err != nil {
+				return fmt.Errorf("failed to remove temporary file %s: %s", f, err.Error())
+			}
 		}
 	}
 
@@ -1165,7 +1169,7 @@ func (s *Store) Backup(br *command.BackupRequest, dst io.Writer) (retErr error) 
 	}
 
 	if br.Format == command.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY {
-		f, err := os.CreateTemp("", "rqlite-backup-*")
+		f, err := os.CreateTemp(filepath.Dir(s.db.Path()), backupScatchPattern)
 		if err != nil {
 			return err
 		}
@@ -1264,7 +1268,7 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 	}
 
 	// Write the data to a temporary file..
-	f, err := os.CreateTemp("", "rqlite-boot-*")
+	f, err := os.CreateTemp(filepath.Dir(s.db.Path()), bootScatchPattern)
 	if err != nil {
 		return 0, err
 	}
