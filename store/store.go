@@ -472,15 +472,19 @@ func (s *Store) Open() (retErr error) {
 	}
 	s.logger.Printf("created on-disk database at open")
 
-	// Clean up any files from aborted operations
+	// Clean up any files from aborted operations. This tries to catch the case where scratch files
+	// were created in the Raft directory, not cleaned up, and then the node was restarted with an
+	// explicit SQLite path set.
 	for _, pattern := range []string{restoreScratchPattern, bootScatchPattern, backupScatchPattern} {
-		files, err := filepath.Glob(filepath.Join(s.dbDir, pattern))
-		if err != nil {
-			return fmt.Errorf("failed to locate temporary files for pattern %s: %s", pattern, err.Error())
-		}
-		for _, f := range files {
-			if err := os.Remove(f); err != nil {
-				return fmt.Errorf("failed to remove temporary file %s: %s", f, err.Error())
+		for _, dir := range []string{s.raftDir, s.dbDir} {
+			files, err := filepath.Glob(filepath.Join(dir, pattern))
+			if err != nil {
+				return fmt.Errorf("failed to locate temporary files for pattern %s: %s", pattern, err.Error())
+			}
+			for _, f := range files {
+				if err := os.Remove(f); err != nil {
+					return fmt.Errorf("failed to remove temporary file %s: %s", f, err.Error())
+				}
 			}
 		}
 	}
