@@ -10,7 +10,7 @@ require (
 	github.com/mkideal/pkg v0.1.3
 	github.com/rqlite/go-sqlite3 v1.30.0
 	github.com/rqlite/raft-boltdb/v2 v2.0.0-20230523104317-c08e70f4de48
-	github.com/rqlite/rqlite-disco-clients v0.0.0-20231121120431-b2b3f3f258b8
+	github.com/rqlite/rqlite-disco-clients v0.0.0-20231219071153-dbd5f134fa92
 	github.com/rqlite/sql v0.0.0-20221103124402-8f9ff0ceb8f0
 	go.etcd.io/bbolt v1.3.8
 	golang.org/x/net v0.19.0
