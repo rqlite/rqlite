@@ -94,6 +94,15 @@ jobs:
             GORACE: "halt_on_error=1"
     resource_class: large
 
+  windows_test:
+    machine:
+      image: 'windows-server-2022-gui:current'
+    resource_class: windows.medium # can be medium, large, xlarge, 2xlarge
+    steps:
+      # Commands are run in a Windows virtual machine environment
+        - checkout
+        - run: go test -failfast -v ./...
+
   cross_compile_windows:
     docker:
       - image: << pipeline.parameters.primary_image >>
@@ -285,3 +294,4 @@ workflows:
       - end_to_end_autoclustering
       - end_to_end_auto_state
       - end_to_end_upgrade
+      - windows_test
