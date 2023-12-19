@@ -2,7 +2,7 @@
 ### Implementation changes and bug fixes
 - [PR #1498](https://github.com/rqlite/rqlite/pull/1498): rqlite shell `.help` should show commands in alphabetical order.
 - [PR #1499](https://github.com/rqlite/rqlite/pull/1499): Bump golang.org/x/crypto from 0.16.0 to 0.17.0.
-- [PR #1501](https://github.com/rqlite/rqlite/pull/1501): Fixes [issue #1500](https://github.com/rqlite/rqlite/issues/1500). Thanks @jtackaberry
+- [PR #1501](https://github.com/rqlite/rqlite/pull/1501): Upgrade rqlite disco-client. Fixes [issue #1500](https://github.com/rqlite/rqlite/issues/1500). Thanks @jtackaberry
 
 ## 8.12.1 (December 18th 2023)
 ### Implementation changes and bug fixes
