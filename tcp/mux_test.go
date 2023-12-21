@@ -176,7 +176,7 @@ func TestTLSMux(t *testing.T) {
 	key := x509.KeyFile("")
 	defer os.Remove(key)
 
-	mux, err := NewTLSMux(tcpListener, nil, cert, key, "", true, false)
+	mux, err := NewTLSMux(tcpListener, nil, cert, key, "", "", true, false)
 	if err != nil {
 		t.Fatalf("failed to create mux: %s", err.Error())
 	}
@@ -199,7 +199,7 @@ func TestTLSMux(t *testing.T) {
 func TestTLSMux_Fail(t *testing.T) {
 	tcpListener := mustTCPListener("127.0.0.1:0")
 	defer tcpListener.Close()
-	_, err := NewTLSMux(tcpListener, nil, "xxxx", "yyyy", "", true, false)
+	_, err := NewTLSMux(tcpListener, nil, "xxxx", "yyyy", "", "", true, false)
 	if err == nil {
 		t.Fatalf("created mux unexpectedly with bad resources")
 	}

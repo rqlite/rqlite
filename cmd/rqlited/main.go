@@ -405,7 +405,7 @@ func startNodeMux(cfg *Config, ln net.Listener) (*tcp.Mux, error) {
 		}
 		log.Println(b.String())
 		mux, err = tcp.NewTLSMux(ln, adv, cfg.NodeX509Cert, cfg.NodeX509Key, cfg.NodeX509CACert,
-			cfg.NoNodeVerify, cfg.NodeVerifyClient)
+			cfg.NodeVerifyClientName, cfg.NoNodeVerify, cfg.NodeVerifyClient)
 	} else {
 		mux, err = tcp.NewMux(ln, adv)
 	}
@@ -439,7 +439,7 @@ func createClusterClient(cfg *Config, clstr *cluster.Service) (*cluster.Client, 
 	var err error
 	if cfg.NodeX509Cert != "" || cfg.NodeX509CACert != "" {
 		dialerTLSConfig, err = rtls.CreateClientConfig(cfg.NodeX509Cert, cfg.NodeX509Key,
-			cfg.NodeX509CACert, cfg.NoNodeVerify)
+			cfg.NodeVerifyClientName, cfg.NodeX509CACert, cfg.NoNodeVerify)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create TLS config for cluster dialer: %s", err.Error())
 		}
