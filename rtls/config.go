@@ -14,9 +14,9 @@ import (
 // is true, the client will not verify the server's certificate. If mutual is true,
 // the server will verify the client's certificate. If tls1011 is true, the client will
 // accept TLS 1.0 or 1.1. Otherwise, it will require TLS 1.2 or higher.
-func CreateConfig(certFile, keyFile, caCertFile string, noverify, mutual bool) (*tls.Config, error) {
+func CreateConfig(certFile, keyFile, caCertFile, serverName string, noverify, mutual bool) (*tls.Config, error) {
 	var err error
-	config := createBaseTLSConfig(noverify)
+	config := createBaseTLSConfig(serverName, noverify)
 
 	// load the certificate and key
 	if certFile != "" && keyFile != "" {
@@ -57,10 +57,10 @@ func CreateConfig(certFile, keyFile, caCertFile string, noverify, mutual bool) (
 // presented by the server. If noverify is true, the client will not verify the server's certificate.
 // If tls1011 is true, the client will accept TLS 1.0 or 1.1. Otherwise, it will require TLS 1.2
 // or higher.
-func CreateClientConfig(certFile, keyFile, caCertFile string, noverify bool) (*tls.Config, error) {
+func CreateClientConfig(certFile, keyFile, caCertFile, serverName string, noverify bool) (*tls.Config, error) {
 	var err error
 
-	config := createBaseTLSConfig(noverify)
+	config := createBaseTLSConfig(serverName, noverify)
 	if certFile != "" && keyFile != "" {
 		config.Certificates = make([]tls.Certificate, 1)
 		config.Certificates[0], err = tls.LoadX509KeyPair(certFile, keyFile)
@@ -89,10 +89,10 @@ func CreateClientConfig(certFile, keyFile, caCertFile string, noverify bool) (*t
 // client. If noverify is true, the server will not verify the client's certificate. If
 // tls1011 is true, the server will accept TLS 1.0 or 1.1. Otherwise, it will require TLS 1.2
 // or higher.
-func CreateServerConfig(certFile, keyFile, caCertFile string, noverify bool) (*tls.Config, error) {
+func CreateServerConfig(certFile, keyFile, caCertFile, serverName string, noverify bool) (*tls.Config, error) {
 	var err error
 
-	config := createBaseTLSConfig(false)
+	config := createBaseTLSConfig(serverName, false)
 	config.Certificates = make([]tls.Certificate, 1)
 	config.Certificates[0], err = tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
@@ -115,8 +115,9 @@ func CreateServerConfig(certFile, keyFile, caCertFile string, noverify bool) (*t
 	return config, nil
 }
 
-func createBaseTLSConfig(noverify bool) *tls.Config {
+func createBaseTLSConfig(serverName string, noverify bool) *tls.Config {
 	return &tls.Config{
+		ServerName:         serverName,
 		InsecureSkipVerify: noverify,
 		NextProtos:         []string{"h2", "http/1.1"},
 		MinVersion:         uint16(tls.VersionTLS12),
