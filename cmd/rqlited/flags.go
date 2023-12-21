@@ -92,6 +92,10 @@ type Config struct {
 	// other nodes.
 	NodeVerifyClient bool
 
+	// NodeVerifyClientName used to verify the hostname on the returned
+	// certificates unless NoNodeVerify is set
+	NodeVerifyClientName string
+
 	// NodeID is the Raft ID for the node.
 	NodeID string
 
@@ -436,6 +440,7 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	flag.StringVar(&config.NodeX509Key, NodeX509KeyFlag, "", "Path to X.509 private key for node-to-node mutual authentication and encryption")
 	flag.BoolVar(&config.NoNodeVerify, "node-no-verify", false, "Skip verification of any node-node certificate")
 	flag.BoolVar(&config.NodeVerifyClient, "node-verify-client", false, "Enable mutual TLS for node-to-node communication")
+	flag.StringVar(&config.NodeVerifyClientName, "node-verify-server-name", "", "Name used to verify the hostname on the returned certificates")
 	flag.StringVar(&config.AuthFile, "auth", "", "Path to authentication and authorization file. If not set, not enabled")
 	flag.StringVar(&config.AutoBackupFile, "auto-backup", "", "Path to automatic backup configuration file. If not set, not enabled")
 	flag.StringVar(&config.AutoRestoreFile, "auto-restore", "", "Path to automatic restore configuration file. If not set, not enabled")

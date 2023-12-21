@@ -594,7 +594,6 @@ func networkCheckJoinAddrs(cfg *Config, joinAddrs []string) error {
 	if len(joinAddrs) == 0 {
 		return nil
 	}
-
 	log.Println("checking that join addresses don't serve HTTP(S)")
 	for _, addr := range joinAddrs {
 		if http.IsServingHTTP(addr) {
