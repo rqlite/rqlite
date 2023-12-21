@@ -154,7 +154,7 @@ func mustNewEchoServerTLS() (*echoServer, string, string) {
 	cert := x509.CertFile("")
 	key := x509.KeyFile("")
 
-	tlsConfig, err := rtls.CreateServerConfig(cert, key, "", "", true)
+	tlsConfig, err := rtls.CreateServerConfig(cert, key, rtls.NoCACert, true)
 	if err != nil {
 		panic("failed to create TLS config")
 	}
