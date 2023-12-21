@@ -1,6 +1,7 @@
 ## 8.13.1 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #1510](https://github.com/rqlite/rqlite/pull/1510): Remove obsolete `-http-no-verify` command-line flag.
+- [PR #1511](https://github.com/rqlite/rqlite/pull/1511): Bring use of `go mod` into compliance. Fixes [issue #644](https://github.com/rqlite/rqlite/issues/644).
 
 ## 8.13.0 (December 21st 2023)
 This release supports setting the _Server Name_ a node should expect in any certificate it receives from another node in the cluster.
