@@ -1,4 +1,4 @@
-## 8.13.1 (unreleased)
+## 8.13.1 (December 21st 2023)
 ### Implementation changes and bug fixes
 - [PR #1510](https://github.com/rqlite/rqlite/pull/1510): Remove obsolete `-http-no-verify` command-line flag.
 - [PR #1511](https://github.com/rqlite/rqlite/pull/1511): Bring use of `go mod` into compliance. Fixes [issue #644](https://github.com/rqlite/rqlite/issues/644).
