@@ -595,6 +595,7 @@ func networkCheckJoinAddrs(cfg *Config, joinAddrs []string) error {
 		return nil
 	}
 
+	log.Println("checking that join addresses don't serve HTTP(S)")
 	for _, addr := range joinAddrs {
 		if http.IsServingHTTP(addr) {
 			return fmt.Errorf("join address %s appears to be serving HTTP when it should be Raft", addr)
