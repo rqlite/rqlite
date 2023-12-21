@@ -439,7 +439,7 @@ func createClusterClient(cfg *Config, clstr *cluster.Service) (*cluster.Client, 
 	var err error
 	if cfg.NodeX509Cert != "" || cfg.NodeX509CACert != "" {
 		dialerTLSConfig, err = rtls.CreateClientConfig(cfg.NodeX509Cert, cfg.NodeX509Key,
-			cfg.NodeVerifyServerName, cfg.NodeX509CACert, cfg.NoNodeVerify)
+			cfg.NodeX509CACert, cfg.NodeVerifyServerName, cfg.NoNodeVerify)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create TLS config for cluster dialer: %s", err.Error())
 		}
