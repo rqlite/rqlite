@@ -9,14 +9,18 @@ import (
 	"os"
 )
 
+const (
+	NoCACert     = ""
+	NoServerName = ""
+)
+
 // CreateClientConfig creates a TLS configuration for use by a system that does both
 // client and server authentication using the same cert, key, and CA cert. If noverify
-// is true, the client will not verify the server's certificate. If mutual is true,
-// the server will verify the client's certificate. If tls1011 is true, the client will
-// accept TLS 1.0 or 1.1. Otherwise, it will require TLS 1.2 or higher.
-func CreateConfig(certFile, keyFile, caCertFile, serverName string, noverify, mutual bool) (*tls.Config, error) {
+// is true, the client will not verify the server's certificate. If mutual is true, the
+// server will verify the client's certificate.
+func CreateConfig(certFile, keyFile, caCertFile string, noverify, mutual bool) (*tls.Config, error) {
 	var err error
-	config := createBaseTLSConfig(serverName, noverify)
+	config := createBaseTLSConfig(NoServerName, noverify)
 
 	// load the certificate and key
 	if certFile != "" && keyFile != "" {
@@ -54,9 +58,9 @@ func CreateConfig(certFile, keyFile, caCertFile, serverName string, noverify, mu
 // parameters are the paths to the client's certificate and key files, which will be used to
 // authenticate the client to the server if mutual TLS is active. The caCertFile parameter
 // is the path to the CA certificate file, which the client will use to verify any certificate
-// presented by the server. If noverify is true, the client will not verify the server's certificate.
-// If tls1011 is true, the client will accept TLS 1.0 or 1.1. Otherwise, it will require TLS 1.2
-// or higher.
+// presented by the server. serverName can also be set, informing the client which hostname
+// should appear in the returned certificate. If noverify is true, the client will not verify
+// the server's certificate.
 func CreateClientConfig(certFile, keyFile, caCertFile, serverName string, noverify bool) (*tls.Config, error) {
 	var err error
 
@@ -86,13 +90,11 @@ func CreateClientConfig(certFile, keyFile, caCertFile, serverName string, noveri
 // parameters are the paths to the server's certificate and key files, which will be used to
 // authenticate the server to the client. The caCertFile parameter is the path to the CA
 // certificate file, which the server will use to verify any certificate presented by the
-// client. If noverify is true, the server will not verify the client's certificate. If
-// tls1011 is true, the server will accept TLS 1.0 or 1.1. Otherwise, it will require TLS 1.2
-// or higher.
-func CreateServerConfig(certFile, keyFile, caCertFile, serverName string, noverify bool) (*tls.Config, error) {
+// client. If noverify is true, the server will not verify the client's certificate.
+func CreateServerConfig(certFile, keyFile, caCertFile string, noverify bool) (*tls.Config, error) {
 	var err error
 
-	config := createBaseTLSConfig(serverName, false)
+	config := createBaseTLSConfig(NoServerName, false)
 	config.Certificates = make([]tls.Certificate, 1)
 	config.Certificates[0], err = tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
