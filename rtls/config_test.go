@@ -103,7 +103,7 @@ func Test_CreateServerConfig(t *testing.T) {
 	keyFile := mustWriteTempFile(t, keyPEM)
 
 	// create a server config with no client verification
-	config, err := CreateServerConfig(certFile, keyFile, "", true)
+	config, err := CreateServerConfig(certFile, keyFile, NoCACert, true)
 	if err != nil {
 		t.Fatalf("failed to create server config: %v", err)
 	}
@@ -130,7 +130,7 @@ func Test_CreateServerConfig(t *testing.T) {
 	}
 
 	// create a server config with client verification
-	config, err = CreateServerConfig(certFile, keyFile, "", false)
+	config, err = CreateServerConfig(certFile, keyFile, NoCACert, false)
 	if err != nil {
 		t.Fatalf("failed to create server config: %v", err)
 	}
@@ -149,7 +149,7 @@ func Test_CreateClientConfig(t *testing.T) {
 	keyFile := mustWriteTempFile(t, keyPEM)
 
 	// create a client config with no server verification
-	config, err := CreateClientConfig(certFile, keyFile, "", true)
+	config, err := CreateClientConfig(certFile, keyFile, NoCACert, NoServerName, true)
 	if err != nil {
 		t.Fatalf("failed to create client config: %v", err)
 	}
@@ -176,12 +176,21 @@ func Test_CreateClientConfig(t *testing.T) {
 	}
 
 	// create a client config with server verification
-	config, err = CreateClientConfig(certFile, keyFile, "", false)
+	config, err = CreateClientConfig(certFile, keyFile, NoCACert, NoServerName, false)
 	if err != nil {
 		t.Fatalf("failed to create client config: %v", err)
 	}
 	if config.InsecureSkipVerify {
 		t.Fatalf("expected InsecureSkipVerify to be false, got true")
+	}
+
+	// create a client config with Server Name
+	config, err = CreateClientConfig(certFile, keyFile, NoCACert, "expected", false)
+	if err != nil {
+		t.Fatalf("failed to create client config: %v", err)
+	}
+	if config.ServerName != "expected" {
+		t.Fatalf("expected ServerName to be 'expected', got %s", config.ServerName)
 	}
 }
 

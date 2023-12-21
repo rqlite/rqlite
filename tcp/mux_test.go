@@ -171,9 +171,9 @@ func TestTLSMux(t *testing.T) {
 	tcpListener := mustTCPListener("127.0.0.1:0")
 	defer tcpListener.Close()
 
-	cert := x509.CertFile("")
+	cert := x509.CertExampleDotComFile("")
 	defer os.Remove(cert)
-	key := x509.KeyFile("")
+	key := x509.KeyExampleDotComFile("")
 	defer os.Remove(key)
 
 	mux, err := NewTLSMux(tcpListener, nil, cert, key, "", true, false)

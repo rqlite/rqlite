@@ -3,6 +3,7 @@ package tcp
 import (
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"net"
 	"os"
 	"testing"
@@ -51,13 +52,13 @@ func Test_DialerHeader(t *testing.T) {
 }
 
 func Test_DialerHeaderTLS(t *testing.T) {
-	s, cert, key := mustNewEchoServerTLS()
+	s, cert, key := mustNewEchoServerTLS_ExampleDotCom()
 	defer s.Close()
 	defer os.Remove(cert)
 	defer os.Remove(key)
 	go s.Start(t)
 
-	tlsConfig, err := rtls.CreateClientConfig("", "", "", true)
+	tlsConfig, err := rtls.CreateClientConfig("", "", rtls.NoCACert, rtls.NoServerName, true)
 	if err != nil {
 		t.Fatalf("failed to create TLS config: %s", err.Error())
 	}
@@ -79,8 +80,38 @@ func Test_DialerHeaderTLS(t *testing.T) {
 	}
 }
 
+func Test_DialerHeaderTLS_ExampleDotCom(t *testing.T) {
+	s, cert, key := mustNewEchoServerTLS_ExampleDotCom()
+	defer s.Close()
+	defer os.Remove(cert)
+	defer os.Remove(key)
+	go s.Start(t)
+
+	// Set server name to wrong value, dialing should fail.
+	tlsConfig, err := rtls.CreateClientConfig("", "", cert, "wrong.com", false)
+	if err != nil {
+		t.Fatalf("failed to create TLS config: %s", err.Error())
+	}
+	d := NewDialer(23, tlsConfig)
+	_, err = d.Dial(s.Addr(), 5*time.Second)
+	if err == nil {
+		t.Fatalf("dialing TLS echo server should have failed")
+	}
+
+	// Set server name to example.com, so dialing should succeed.
+	tlsConfig, err = rtls.CreateClientConfig("", "", cert, "example.com", false)
+	if err != nil {
+		t.Fatalf("failed to create TLS config: %s", err.Error())
+	}
+	d = NewDialer(23, tlsConfig)
+	_, err = d.Dial(s.Addr(), 5*time.Second)
+	if err != nil {
+		t.Fatalf("failed to dial TLS echo server: %s", err.Error())
+	}
+}
+
 func Test_DialerHeaderTLSBadConnect(t *testing.T) {
-	s, cert, key := mustNewEchoServerTLS()
+	s, cert, key := mustNewEchoServerTLS_ExampleDotCom()
 	defer s.Close()
 	defer os.Remove(cert)
 	defer os.Remove(key)
@@ -149,14 +180,14 @@ func mustNewEchoServer() *echoServer {
 	}
 }
 
-func mustNewEchoServerTLS() (*echoServer, string, string) {
+func mustNewEchoServerTLS_ExampleDotCom() (*echoServer, string, string) {
 	ln := mustTCPListener("127.0.0.1:0")
-	cert := x509.CertFile("")
-	key := x509.KeyFile("")
+	cert := x509.CertExampleDotComFile("")
+	key := x509.KeyExampleDotComFile("")
 
-	tlsConfig, err := rtls.CreateServerConfig(cert, key, "", true)
+	tlsConfig, err := rtls.CreateServerConfig(cert, key, rtls.NoCACert, true)
 	if err != nil {
-		panic("failed to create TLS config")
+		panic(fmt.Sprintf("failed to create TLS config: %s", err.Error()))
 	}
 
 	return &echoServer{

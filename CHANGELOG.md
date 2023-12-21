@@ -1,4 +1,8 @@
-## 8.12.4 (unreleased)
+## 8.13.0 (December 21st 2023)
+This release supports setting the _Server Name_ a node should expect in any certificate it receives from another node in the cluster.
+### New features
+- [PR #1509](https://github.com/rqlite/rqlite/pull/1509): Support setting the Server Name for internode certificate verification. Fixes [issue #1507](https://github.com/rqlite/rqlite/issues/1507).
+
 ### Implementation changes and bug fixes
 - [PR #1503](https://github.com/rqlite/rqlite/pull/1503): Use SQLite-style help in rqlite shell.
 - [PR #1505](https://github.com/rqlite/rqlite/pull/1505): Correct handling of IPv6 addresses in rqlite shell.

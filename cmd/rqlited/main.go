@@ -439,7 +439,7 @@ func createClusterClient(cfg *Config, clstr *cluster.Service) (*cluster.Client, 
 	var err error
 	if cfg.NodeX509Cert != "" || cfg.NodeX509CACert != "" {
 		dialerTLSConfig, err = rtls.CreateClientConfig(cfg.NodeX509Cert, cfg.NodeX509Key,
-			cfg.NodeX509CACert, cfg.NoNodeVerify)
+			cfg.NodeVerifyServerName, cfg.NodeX509CACert, cfg.NoNodeVerify)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create TLS config for cluster dialer: %s", err.Error())
 		}
@@ -594,7 +594,6 @@ func networkCheckJoinAddrs(cfg *Config, joinAddrs []string) error {
 	if len(joinAddrs) == 0 {
 		return nil
 	}
-
 	log.Println("checking that join addresses don't serve HTTP(S)")
 	for _, addr := range joinAddrs {
 		if http.IsServingHTTP(addr) {

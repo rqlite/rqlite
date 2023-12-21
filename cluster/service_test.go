@@ -520,9 +520,9 @@ func mustNewMockManager() *MockManager {
 func mustCreateTLSConfig() *tls.Config {
 	var err error
 
-	certFile := x509.CertFile("")
+	certFile := x509.CertExampleDotComFile("")
 	defer os.Remove(certFile)
-	keyFile := x509.KeyFile("")
+	keyFile := x509.KeyExampleDotComFile("")
 	defer os.Remove(keyFile)
 
 	config := &tls.Config{

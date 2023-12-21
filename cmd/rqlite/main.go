@@ -393,7 +393,7 @@ func getNodes(client *http.Client, argv *argT) (Nodes, error) {
 }
 
 func getHTTPClient(argv *argT) (*http.Client, error) {
-	tlsConfig, err := rtls.CreateClientConfig(argv.ClientCert, argv.ClientKey, argv.CACert, argv.Insecure)
+	tlsConfig, err := rtls.CreateClientConfig(argv.ClientCert, argv.ClientKey, argv.CACert, rtls.NoServerName, argv.Insecure)
 	if err != nil {
 		return nil, err
 	}
@@ -449,7 +449,7 @@ func getVersionWithClient(client *http.Client, argv *argT) (string, error) {
 
 func sendRequest(ctx *cli.Context, makeNewRequest func(string) (*http.Request, error), urlStr string, argv *argT) (*[]byte, error) {
 	url := urlStr
-	tlsConfig, err := rtls.CreateClientConfig(argv.ClientCert, argv.ClientKey, argv.CACert, argv.Insecure)
+	tlsConfig, err := rtls.CreateClientConfig(argv.ClientCert, argv.ClientKey, argv.CACert, rtls.NoServerName, argv.Insecure)
 	if err != nil {
 		return nil, err
 	}
