@@ -42,7 +42,6 @@ type argT struct {
 	Prefix       string        `cli:"P,prefix" usage:"rqlited HTTP URL prefix" dft:"/"`
 	Insecure     bool          `cli:"i,insecure" usage:"do not verify rqlited HTTPS certificate" dft:"false"`
 	CACert       string        `cli:"c,ca-cert" usage:"path to trusted X.509 root CA certificate"`
-	ServerName   string        `cli:"n,verify-name" usage:"used to verify the hostname on the returned certificates"`
 	ClientCert   string        `cli:"d,client-cert" usage:"path to client X.509 certificate for mTLS"`
 	ClientKey    string        `cli:"k,client-key" usage:"path to client X.509 key for mTLS"`
 	Credentials  string        `cli:"u,user" usage:"set basic auth credentials in form username:password"`
@@ -394,7 +393,7 @@ func getNodes(client *http.Client, argv *argT) (Nodes, error) {
 }
 
 func getHTTPClient(argv *argT) (*http.Client, error) {
-	tlsConfig, err := rtls.CreateClientConfig(argv.ClientCert, argv.ClientKey, argv.CACert, argv.ServerName, argv.Insecure)
+	tlsConfig, err := rtls.CreateClientConfig(argv.ClientCert, argv.ClientKey, argv.CACert, rtls.NoServerName, argv.Insecure)
 	if err != nil {
 		return nil, err
 	}
@@ -450,7 +449,7 @@ func getVersionWithClient(client *http.Client, argv *argT) (string, error) {
 
 func sendRequest(ctx *cli.Context, makeNewRequest func(string) (*http.Request, error), urlStr string, argv *argT) (*[]byte, error) {
 	url := urlStr
-	tlsConfig, err := rtls.CreateClientConfig(argv.ClientCert, argv.ClientKey, argv.CACert, argv.ServerName, argv.Insecure)
+	tlsConfig, err := rtls.CreateClientConfig(argv.ClientCert, argv.ClientKey, argv.CACert, rtls.NoServerName, argv.Insecure)
 	if err != nil {
 		return nil, err
 	}
