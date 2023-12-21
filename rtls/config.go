@@ -18,9 +18,9 @@ const (
 // client and server authentication using the same cert, key, and CA cert. If noverify
 // is true, the client will not verify the server's certificate. If mutual is true, the
 // server will verify the client's certificate.
-func CreateConfig(certFile, keyFile, caCertFile string, noverify, mutual bool) (*tls.Config, error) {
+func CreateConfig(certFile, keyFile, caCertFile, serverName string, noverify, mutual bool) (*tls.Config, error) {
 	var err error
-	config := createBaseTLSConfig(NoServerName, noverify)
+	config := createBaseTLSConfig(serverName, noverify)
 
 	// load the certificate and key
 	if certFile != "" && keyFile != "" {
