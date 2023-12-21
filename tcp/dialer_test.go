@@ -52,7 +52,7 @@ func Test_DialerHeader(t *testing.T) {
 }
 
 func Test_DialerHeaderTLS(t *testing.T) {
-	s, cert, key := mustNewEchoServerTLS()
+	s, cert, key := mustNewEchoServerTLS_ExampleDotCom()
 	defer s.Close()
 	defer os.Remove(cert)
 	defer os.Remove(key)
@@ -111,7 +111,7 @@ func Test_DialerHeaderTLS_ExampleDotCom(t *testing.T) {
 }
 
 func Test_DialerHeaderTLSBadConnect(t *testing.T) {
-	s, cert, key := mustNewEchoServerTLS()
+	s, cert, key := mustNewEchoServerTLS_ExampleDotCom()
 	defer s.Close()
 	defer os.Remove(cert)
 	defer os.Remove(key)
@@ -178,21 +178,6 @@ func mustNewEchoServer() *echoServer {
 	return &echoServer{
 		ln: mustTCPListener("127.0.0.1:0"),
 	}
-}
-
-func mustNewEchoServerTLS() (*echoServer, string, string) {
-	ln := mustTCPListener("127.0.0.1:0")
-	cert := x509.CertFile("")
-	key := x509.KeyFile("")
-
-	tlsConfig, err := rtls.CreateServerConfig(cert, key, rtls.NoCACert, true)
-	if err != nil {
-		panic("failed to create TLS config")
-	}
-
-	return &echoServer{
-		ln: tls.NewListener(ln, tlsConfig),
-	}, cert, key
 }
 
 func mustNewEchoServerTLS_ExampleDotCom() (*echoServer, string, string) {

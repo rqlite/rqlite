@@ -633,7 +633,7 @@ func mustNewNodeEncrypted(enableSingle, httpEncrypt, nodeEncrypt bool) *Node {
 	dir := mustTempDir()
 	var mux *tcp.Mux
 	if nodeEncrypt {
-		mux = mustNewOpenTLSMux(rX509.CertFile(dir), rX509.KeyFile(dir), "")
+		mux = mustNewOpenTLSMux(rX509.CertExampleDotComFile(dir), rX509.KeyExampleDotComFile(dir), "")
 	} else {
 		mux, _ = mustNewOpenMux("")
 	}
@@ -643,8 +643,8 @@ func mustNewNodeEncrypted(enableSingle, httpEncrypt, nodeEncrypt bool) *Node {
 }
 
 func mustNodeEncrypted(dir string, enableSingle, httpEncrypt bool, mux *tcp.Mux, nodeID string) *Node {
-	nodeCertPath := rX509.CertFile(dir)
-	nodeKeyPath := rX509.KeyFile(dir)
+	nodeCertPath := rX509.CertExampleDotComFile(dir)
+	nodeKeyPath := rX509.KeyExampleDotComFile(dir)
 	httpCertPath := nodeCertPath
 	httpKeyPath := nodeKeyPath
 
