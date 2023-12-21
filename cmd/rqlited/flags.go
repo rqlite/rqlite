@@ -69,9 +69,6 @@ type Config struct {
 	// HTTPx509Key is the path to the private key for the HTTP server. May not be set.
 	HTTPx509Key string `filepath:"true"`
 
-	// NoHTTPVerify disables checking other nodes' server HTTP X509 certs for validity.
-	NoHTTPVerify bool
-
 	// HTTPVerifyClient indicates whether the HTTP server should verify client certificates.
 	HTTPVerifyClient bool
 
@@ -432,7 +429,6 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	flag.StringVar(&config.HTTPx509CACert, "http-ca-cert", "", "Path to X.509 CA certificate for HTTPS")
 	flag.StringVar(&config.HTTPx509Cert, HTTPx509CertFlag, "", "Path to HTTPS X.509 certificate")
 	flag.StringVar(&config.HTTPx509Key, HTTPx509KeyFlag, "", "Path to HTTPS X.509 private key")
-	flag.BoolVar(&config.NoHTTPVerify, "http-no-verify", false, "Skip verification of remote node's HTTPS certificate when joining a cluster")
 	flag.BoolVar(&config.HTTPVerifyClient, "http-verify-client", false, "Enable mutual TLS for HTTPS")
 	flag.StringVar(&config.NodeX509CACert, "node-ca-cert", "", "Path to X.509 CA certificate for node-to-node encryption")
 	flag.StringVar(&config.NodeX509Cert, NodeX509CertFlag, "", "Path to X.509 certificate for node-to-node mutual authentication and encryption")
@@ -445,7 +441,7 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	flag.StringVar(&config.AutoRestoreFile, "auto-restore", "", "Path to automatic restore configuration file. If not set, not enabled")
 	flag.StringVar(&config.RaftAddr, RaftAddrFlag, "localhost:4002", "Raft communication bind address")
 	flag.StringVar(&config.RaftAdv, RaftAdvAddrFlag, "", "Advertised Raft communication address. If not set, same as Raft bind address")
-	flag.StringVar(&config.JoinAddrs, "join", "", "Comma-delimited list of nodes, through which a cluster can be joined (proto://host:port)")
+	flag.StringVar(&config.JoinAddrs, "join", "", "Comma-delimited list of nodes, in host:port form, through which a cluster can be joined")
 	flag.IntVar(&config.JoinAttempts, "join-attempts", 5, "Number of join attempts to make")
 	flag.DurationVar(&config.JoinInterval, "join-interval", 3*time.Second, "Period between join attempts")
 	flag.StringVar(&config.JoinAs, "join-as", "", "Username in authentication file to join as. If not set, joins anonymously")
