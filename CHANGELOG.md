@@ -1,3 +1,7 @@
+## 8.13.2 (December 21st 2023)
+### Implementation changes and bug fixes
+- [PR #1512](https://github.com/rqlite/rqlite/pull/1512): Fix swapping of CACert and ServerName.
+
 ## 8.13.1 (December 21st 2023)
 ### Implementation changes and bug fixes
 - [PR #1510](https://github.com/rqlite/rqlite/pull/1510): Remove obsolete `-http-no-verify` command-line flag.
