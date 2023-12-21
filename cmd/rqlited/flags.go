@@ -69,9 +69,6 @@ type Config struct {
 	// HTTPx509Key is the path to the private key for the HTTP server. May not be set.
 	HTTPx509Key string `filepath:"true"`
 
-	// NoHTTPVerify disables checking other nodes' server HTTP X509 certs for validity.
-	NoHTTPVerify bool
-
 	// HTTPVerifyClient indicates whether the HTTP server should verify client certificates.
 	HTTPVerifyClient bool
 
@@ -432,7 +429,6 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	flag.StringVar(&config.HTTPx509CACert, "http-ca-cert", "", "Path to X.509 CA certificate for HTTPS")
 	flag.StringVar(&config.HTTPx509Cert, HTTPx509CertFlag, "", "Path to HTTPS X.509 certificate")
 	flag.StringVar(&config.HTTPx509Key, HTTPx509KeyFlag, "", "Path to HTTPS X.509 private key")
-	flag.BoolVar(&config.NoHTTPVerify, "http-no-verify", false, "Skip verification of remote node's HTTPS certificate when joining a cluster")
 	flag.BoolVar(&config.HTTPVerifyClient, "http-verify-client", false, "Enable mutual TLS for HTTPS")
 	flag.StringVar(&config.NodeX509CACert, "node-ca-cert", "", "Path to X.509 CA certificate for node-to-node encryption")
 	flag.StringVar(&config.NodeX509Cert, NodeX509CertFlag, "", "Path to X.509 certificate for node-to-node mutual authentication and encryption")
