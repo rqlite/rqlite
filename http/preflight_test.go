@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rqlite/rqlite/rtls"
+	"github.com/rqlite/rqlite/v8/rtls"
 )
 
 // Test_IsServingHTTP_HTTPServerOnly tests only HTTP server running.

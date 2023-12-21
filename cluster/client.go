@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rqlite/rqlite/command"
-	"github.com/rqlite/rqlite/tcp/pool"
+	"github.com/rqlite/rqlite/v8/command"
+	"github.com/rqlite/rqlite/v8/tcp/pool"
 	"google.golang.org/protobuf/proto"
 )
 

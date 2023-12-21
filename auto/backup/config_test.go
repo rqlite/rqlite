@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rqlite/rqlite/auto"
-	"github.com/rqlite/rqlite/aws"
+	"github.com/rqlite/rqlite/v8/auto"
+	"github.com/rqlite/rqlite/v8/aws"
 )
 
 func Test_ReadConfigFile(t *testing.T) {

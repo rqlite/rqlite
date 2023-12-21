@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rqlite/rqlite/store"
+	"github.com/rqlite/rqlite/v8/store"
 )
 
 func Test_NewNodeFromServer(t *testing.T) {

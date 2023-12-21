@@ -18,13 +18,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rqlite/rqlite/cluster"
-	"github.com/rqlite/rqlite/command"
-	"github.com/rqlite/rqlite/command/encoding"
-	httpd "github.com/rqlite/rqlite/http"
-	"github.com/rqlite/rqlite/store"
-	"github.com/rqlite/rqlite/tcp"
-	rX509 "github.com/rqlite/rqlite/testdata/x509"
+	"github.com/rqlite/rqlite/v8/cluster"
+	"github.com/rqlite/rqlite/v8/command"
+	"github.com/rqlite/rqlite/v8/command/encoding"
+	httpd "github.com/rqlite/rqlite/v8/http"
+	"github.com/rqlite/rqlite/v8/store"
+	"github.com/rqlite/rqlite/v8/tcp"
+	rX509 "github.com/rqlite/rqlite/v8/testdata/x509"
 )
 
 const (

@@ -1,4 +1,4 @@
-module github.com/rqlite/rqlite
+module github.com/rqlite/rqlite/v8
 
 go 1.21
 

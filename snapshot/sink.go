@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/hashicorp/raft"
-	"github.com/rqlite/rqlite/db"
+	"github.com/rqlite/rqlite/v8/db"
 )
 
 // Sink is a sink for writing snapshot data to a Snapshot store.

@@ -20,13 +20,13 @@ import (
 	"time"
 
 	"github.com/hashicorp/raft"
-	"github.com/rqlite/rqlite/command"
-	"github.com/rqlite/rqlite/command/chunking"
-	sql "github.com/rqlite/rqlite/db"
-	wal "github.com/rqlite/rqlite/db/wal"
-	rlog "github.com/rqlite/rqlite/log"
-	"github.com/rqlite/rqlite/progress"
-	"github.com/rqlite/rqlite/snapshot"
+	"github.com/rqlite/rqlite/v8/command"
+	"github.com/rqlite/rqlite/v8/command/chunking"
+	sql "github.com/rqlite/rqlite/v8/db"
+	wal "github.com/rqlite/rqlite/v8/db/wal"
+	rlog "github.com/rqlite/rqlite/v8/log"
+	"github.com/rqlite/rqlite/v8/progress"
+	"github.com/rqlite/rqlite/v8/snapshot"
 )
 
 var (

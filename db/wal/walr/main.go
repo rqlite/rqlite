@@ -6,7 +6,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/rqlite/rqlite/db/wal"
+	"github.com/rqlite/rqlite/v8/db/wal"
 )
 
 const name = `walr`

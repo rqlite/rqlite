@@ -20,14 +20,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rqlite/rqlite/auth"
-	"github.com/rqlite/rqlite/cluster"
-	"github.com/rqlite/rqlite/command"
-	"github.com/rqlite/rqlite/command/encoding"
-	"github.com/rqlite/rqlite/db"
-	"github.com/rqlite/rqlite/queue"
-	"github.com/rqlite/rqlite/rtls"
-	"github.com/rqlite/rqlite/store"
+	"github.com/rqlite/rqlite/v8/auth"
+	"github.com/rqlite/rqlite/v8/cluster"
+	"github.com/rqlite/rqlite/v8/command"
+	"github.com/rqlite/rqlite/v8/command/encoding"
+	"github.com/rqlite/rqlite/v8/db"
+	"github.com/rqlite/rqlite/v8/queue"
+	"github.com/rqlite/rqlite/v8/rtls"
+	"github.com/rqlite/rqlite/v8/store"
 )
 
 var (

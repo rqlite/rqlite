@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rqlite/rqlite/command"
+	"github.com/rqlite/rqlite/v8/command"
 )
 
 // stats captures stats for the Queue.
