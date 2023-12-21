@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/raft"
-	"github.com/rqlite/rqlite/store/gzip"
+	"github.com/rqlite/rqlite/v8/store/gzip"
 )
 
 // Listener is the interface expected by the Store for Transports.

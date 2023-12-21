@@ -13,11 +13,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rqlite/rqlite/command"
-	"github.com/rqlite/rqlite/command/encoding"
-	"github.com/rqlite/rqlite/db"
-	"github.com/rqlite/rqlite/random"
-	"github.com/rqlite/rqlite/testdata/chinook"
+	"github.com/rqlite/rqlite/v8/command"
+	"github.com/rqlite/rqlite/v8/command/encoding"
+	"github.com/rqlite/rqlite/v8/db"
+	"github.com/rqlite/rqlite/v8/random"
+	"github.com/rqlite/rqlite/v8/testdata/chinook"
 )
 
 // Test_StoreSingleNode tests that a single node basically operates.

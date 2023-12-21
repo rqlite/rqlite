@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rqlite/rqlite/rtls"
+	"github.com/rqlite/rqlite/v8/rtls"
 	"golang.org/x/net/http2"
 )
 

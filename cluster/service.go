@@ -14,8 +14,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rqlite/rqlite/auth"
-	"github.com/rqlite/rqlite/command"
+	"github.com/rqlite/rqlite/v8/auth"
+	"github.com/rqlite/rqlite/v8/command"
 	"google.golang.org/protobuf/proto"
 )
 

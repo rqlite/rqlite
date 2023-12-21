@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rqlite/rqlite/cluster"
-	"github.com/rqlite/rqlite/command"
-	"github.com/rqlite/rqlite/rtls"
-	"github.com/rqlite/rqlite/tcp"
+	"github.com/rqlite/rqlite/v8/cluster"
+	"github.com/rqlite/rqlite/v8/command"
+	"github.com/rqlite/rqlite/v8/rtls"
+	"github.com/rqlite/rqlite/v8/tcp"
 )
 
 const (

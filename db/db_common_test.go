@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rqlite/rqlite/command"
-	"github.com/rqlite/rqlite/testdata/chinook"
+	"github.com/rqlite/rqlite/v8/command"
+	"github.com/rqlite/rqlite/v8/testdata/chinook"
 )
 
 func testCompileOptions(t *testing.T, db *DB) {

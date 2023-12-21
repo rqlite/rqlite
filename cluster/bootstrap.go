@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rqlite/rqlite/command"
-	"github.com/rqlite/rqlite/random"
+	"github.com/rqlite/rqlite/v8/command"
+	"github.com/rqlite/rqlite/v8/random"
 )
 
 var (
