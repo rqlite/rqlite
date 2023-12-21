@@ -370,7 +370,7 @@ func (s *Service) Start() error {
 			return err
 		}
 	} else {
-		s.tlsConfig, err = rtls.CreateServerConfig(s.CertFile, s.KeyFile, s.CACertFile, "", !s.ClientVerify)
+		s.tlsConfig, err = rtls.CreateServerConfig(s.CertFile, s.KeyFile, s.CACertFile, !s.ClientVerify)
 		if err != nil {
 			return err
 		}
