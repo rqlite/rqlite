@@ -57,7 +57,7 @@ func Test_DialerHeaderTLS(t *testing.T) {
 	defer os.Remove(key)
 	go s.Start(t)
 
-	tlsConfig, err := rtls.CreateClientConfig("", "", "", "", true)
+	tlsConfig, err := rtls.CreateClientConfig("", "", rtls.NoCACert, rtls.NoServerName, true)
 	if err != nil {
 		t.Fatalf("failed to create TLS config: %s", err.Error())
 	}

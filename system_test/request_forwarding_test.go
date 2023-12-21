@@ -381,7 +381,7 @@ func mustNewDialer(header byte, remoteEncrypted, skipVerify bool) *tcp.Dialer {
 	var tlsConfig *tls.Config
 	var err error
 	if remoteEncrypted {
-		tlsConfig, err = rtls.CreateClientConfig("", "", "", "", skipVerify)
+		tlsConfig, err = rtls.CreateClientConfig("", "", rtls.NoCACert, rtls.NoServerName, skipVerify)
 		if err != nil {
 			panic(fmt.Sprintf("failed to create client TLS config: %s", err))
 		}
