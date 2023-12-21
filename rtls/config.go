@@ -14,7 +14,7 @@ const (
 	NoServerName = ""
 )
 
-// CreateClientConfig creates a TLS configuration for use by a system that does both
+// CreateConfig creates a TLS configuration for use by a system that does both
 // client and server authentication using the same cert, key, and CA cert. If noverify
 // is true, the client will not verify the server's certificate. If mutual is true, the
 // server will verify the client's certificate.
