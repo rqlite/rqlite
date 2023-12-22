@@ -14,6 +14,7 @@ const (
 	NoServerName = ""
 )
 
+// MTLSState is a boolean type that indicates whether mutual TLS is enabled or disabled.
 type MTLSState bool
 
 const (
