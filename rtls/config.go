@@ -14,6 +14,13 @@ const (
 	NoServerName = ""
 )
 
+type MTLSState bool
+
+const (
+	MTLSStateDisabled MTLSState = false
+	MTLSStateEnabled  MTLSState = true
+)
+
 // CreateClientConfig creates a TLS configuration for use by a system that does both
 // client and server authentication using the same cert, key, and CA cert. If noverify
 // is true, the client will not verify the server's certificate. If mutual is true, the
@@ -90,8 +97,8 @@ func CreateClientConfig(certFile, keyFile, caCertFile, serverName string, noveri
 // parameters are the paths to the server's certificate and key files, which will be used to
 // authenticate the server to the client. The caCertFile parameter is the path to the CA
 // certificate file, which the server will use to verify any certificate presented by the
-// client. If noverify is true, the server will not verify the client's certificate.
-func CreateServerConfig(certFile, keyFile, caCertFile string, noverify bool) (*tls.Config, error) {
+// client. If mutual is true, the server requires the client to present a trusted certificate.
+func CreateServerConfig(certFile, keyFile, caCertFile string, mtls MTLSState) (*tls.Config, error) {
 	var err error
 
 	config := createBaseTLSConfig(NoServerName, false)
@@ -111,7 +118,7 @@ func CreateServerConfig(certFile, keyFile, caCertFile string, noverify bool) (*t
 			return nil, fmt.Errorf("failed to load CA certificate(s) for client verification in %q", caCertFile)
 		}
 	}
-	if !noverify {
+	if mtls {
 		config.ClientAuth = tls.RequireAndVerifyClientCert
 	}
 	return config, nil

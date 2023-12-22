@@ -103,7 +103,7 @@ func Test_CreateServerConfig(t *testing.T) {
 	keyFile := mustWriteTempFile(t, keyPEM)
 
 	// create a server config with no client verification
-	config, err := CreateServerConfig(certFile, keyFile, NoCACert, true)
+	config, err := CreateServerConfig(certFile, keyFile, NoCACert, MTLSStateDisabled)
 	if err != nil {
 		t.Fatalf("failed to create server config: %v", err)
 	}
@@ -130,7 +130,7 @@ func Test_CreateServerConfig(t *testing.T) {
 	}
 
 	// create a server config with client verification
-	config, err = CreateServerConfig(certFile, keyFile, NoCACert, false)
+	config, err = CreateServerConfig(certFile, keyFile, NoCACert, MTLSStateEnabled)
 	if err != nil {
 		t.Fatalf("failed to create server config: %v", err)
 	}

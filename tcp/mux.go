@@ -94,23 +94,15 @@ func NewMux(ln net.Listener, adv net.Addr) (*Mux, error) {
 }
 
 // NewTLSMux returns a new instance of Mux for ln, and encrypts all traffic
-// using TLS. If adv is nil, then the addr of ln is used. If insecure is true,
-// then the server will not verify the client's certificate. If mutual is true,
-// then the server will require the client to present a trusted certificate.
-func NewTLSMux(ln net.Listener, adv net.Addr, cert, key, caCert string, insecure, mutual bool) (*Mux, error) {
-	mux, err := NewMux(ln, adv)
-	if err != nil {
-		return nil, err
-	}
+// using TLS.
+func NewTLSMux(ln net.Listener, adv net.Addr, cert, key, caCert string) (*Mux, error) {
+	return newTLSMux(ln, adv, cert, key, caCert, false)
+}
 
-	mux.tlsConfig, err = rtls.CreateConfig(cert, key, caCert, insecure, mutual)
-	if err != nil {
-		return nil, fmt.Errorf("cannot create TLS config: %s", err)
-	}
-
-	mux.ln = tls.NewListener(ln, mux.tlsConfig)
-
-	return mux, nil
+// NewMutualTLSMux returns a new instance of Mux for ln, and encrypts all traffic
+// using TLS. The server will also verify the client's certificate.
+func NewMutualTLSMux(ln net.Listener, adv net.Addr, cert, key, caCert string) (*Mux, error) {
+	return newTLSMux(ln, adv, cert, key, caCert, true)
 }
 
 // Serve handles connections from ln and multiplexes then across registered listener.
@@ -159,6 +151,25 @@ func (mux *Mux) Stats() (interface{}, error) {
 	}
 
 	return s, nil
+}
+
+func newTLSMux(ln net.Listener, adv net.Addr, cert, key, caCert string, mutual bool) (*Mux, error) {
+	mux, err := NewMux(ln, adv)
+	if err != nil {
+		return nil, err
+	}
+
+	mtlsState := rtls.MTLSStateDisabled
+	if mutual {
+		mtlsState = rtls.MTLSStateEnabled
+	}
+	mux.tlsConfig, err = rtls.CreateServerConfig(cert, key, caCert, mtlsState)
+	if err != nil {
+		return nil, fmt.Errorf("cannot create TLS config: %s", err)
+	}
+
+	mux.ln = tls.NewListener(ln, mux.tlsConfig)
+	return mux, nil
 }
 
 func (mux *Mux) handleConn(conn net.Conn) {

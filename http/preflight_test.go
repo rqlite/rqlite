@@ -101,7 +101,7 @@ func Test_IsServingHTTP_OpenPortTLS(t *testing.T) {
 	}
 	certFile := mustWriteTempFile(t, cert)
 	keyFile := mustWriteTempFile(t, key)
-	tlsConfig, err := rtls.CreateServerConfig(certFile, keyFile, rtls.NoCACert, false)
+	tlsConfig, err := rtls.CreateServerConfig(certFile, keyFile, rtls.NoCACert, rtls.MTLSStateDisabled)
 	if err != nil {
 		t.Fatalf("failed to create TLS config: %s", err)
 	}

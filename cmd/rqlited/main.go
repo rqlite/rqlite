@@ -386,11 +386,11 @@ func startHTTPService(cfg *Config, str *store.Store, cltr *cluster.Client, credS
 // bound to the relevant interface.
 func startNodeMux(cfg *Config, ln net.Listener) (*tcp.Mux, error) {
 	var err error
+	var mux *tcp.Mux
 	adv := tcp.NameAddress{
 		Address: cfg.RaftAdv,
 	}
 
-	var mux *tcp.Mux
 	if cfg.NodeX509Cert != "" {
 		var b strings.Builder
 		b.WriteString(fmt.Sprintf("enabling node-to-node encryption with cert: %s, key: %s",
@@ -399,13 +399,19 @@ func startNodeMux(cfg *Config, ln net.Listener) (*tcp.Mux, error) {
 			b.WriteString(fmt.Sprintf(", CA cert %s", cfg.NodeX509CACert))
 		}
 		if cfg.NodeVerifyClient {
+			mux, err = tcp.NewMutualTLSMux(ln, adv, cfg.NodeX509Cert, cfg.NodeX509Key, cfg.NodeX509CACert)
+			if err != nil {
+				return nil, err
+			}
 			b.WriteString(", mutual TLS enabled")
 		} else {
+			mux, err = tcp.NewTLSMux(ln, adv, cfg.NodeX509Cert, cfg.NodeX509Key, cfg.NodeX509CACert)
+			if err != nil {
+				return nil, err
+			}
 			b.WriteString(", mutual TLS disabled")
 		}
 		log.Println(b.String())
-		mux, err = tcp.NewTLSMux(ln, adv, cfg.NodeX509Cert, cfg.NodeX509Key, cfg.NodeX509CACert,
-			cfg.NoNodeVerify, cfg.NodeVerifyClient)
 	} else {
 		mux, err = tcp.NewMux(ln, adv)
 	}
