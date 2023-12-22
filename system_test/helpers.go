@@ -860,7 +860,6 @@ func mustCreateTLSConfig(certFile, keyFile, caCertFile string) *tls.Config {
 			panic(err.Error())
 		}
 	}
-
 	return config
 }
 

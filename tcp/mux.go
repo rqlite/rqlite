@@ -94,7 +94,7 @@ func NewMux(ln net.Listener, adv net.Addr) (*Mux, error) {
 }
 
 // NewTLSMux returns a new instance of Mux for ln, and encrypts all traffic
-// using TLS.
+// using TLS. The mux does not request any client certificates.
 func NewTLSMux(ln net.Listener, adv net.Addr, cert, key, caCert string) (*Mux, error) {
 	return newTLSMux(ln, adv, cert, key, caCert, false)
 }
