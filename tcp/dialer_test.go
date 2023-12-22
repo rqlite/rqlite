@@ -180,12 +180,14 @@ func mustNewEchoServer() *echoServer {
 	}
 }
 
+// mustNewEchoServerTLS_ExampleDotCom creates a TLS echo server that uses the
+// example.com certificate and key, but does not require client authentication.
 func mustNewEchoServerTLS_ExampleDotCom() (*echoServer, string, string) {
 	ln := mustTCPListener("127.0.0.1:0")
 	cert := x509.CertExampleDotComFile("")
 	key := x509.KeyExampleDotComFile("")
 
-	tlsConfig, err := rtls.CreateServerConfig(cert, key, rtls.NoCACert, true)
+	tlsConfig, err := rtls.CreateServerConfig(cert, key, rtls.NoCACert, rtls.MTLSStateDisabled)
 	if err != nil {
 		panic(fmt.Sprintf("failed to create TLS config: %s", err.Error()))
 	}
