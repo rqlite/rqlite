@@ -138,6 +138,11 @@ func (mux *Mux) Serve() error {
 	}
 }
 
+// TLSConfig returns the TLS configuration used by the mux, or nil if TLS is not enabled.
+func (mux *Mux) TLSConfig() *tls.Config {
+	return mux.tlsConfig
+}
+
 // Stats returns status of the mux.
 func (mux *Mux) Stats() (interface{}, error) {
 	e := "disabled"
