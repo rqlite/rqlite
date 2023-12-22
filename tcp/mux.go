@@ -231,7 +231,6 @@ func (mux *Mux) Listen(header byte) *Layer {
 		addr: mux.addr,
 	}
 	layer.dialer = NewDialer(header, mux.tlsConfig)
-
 	return layer
 }
 
