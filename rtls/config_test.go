@@ -25,8 +25,8 @@ func Test_CreateConfig(t *testing.T) {
 	}
 	caCertFile := mustWriteTempFile(t, caCertPEM)
 
-	// create a config with no server or client verification
-	config, err := CreateConfig(certFile, keyFile, caCertFile, true, false)
+	// create a config with no server or client verification and no custom server name
+	config, err := CreateConfig(certFile, keyFile, caCertFile, "", true, false)
 	if err != nil {
 		t.Fatalf("failed to create config: %v", err)
 	}
@@ -69,7 +69,7 @@ func Test_CreateConfig(t *testing.T) {
 	}
 
 	// create a config with server cert verification only
-	config, err = CreateConfig(certFile, keyFile, caCertFile, false, false)
+	config, err = CreateConfig(certFile, keyFile, caCertFile, "", false, false)
 	if err != nil {
 		t.Fatalf("failed to create config: %v", err)
 	}
@@ -81,7 +81,7 @@ func Test_CreateConfig(t *testing.T) {
 	}
 
 	// create a config with both server and client verification
-	config, err = CreateConfig(certFile, keyFile, "", false, true)
+	config, err = CreateConfig(certFile, keyFile, "", "", false, true)
 	if err != nil {
 		t.Fatalf("failed to create config: %v", err)
 	}
@@ -90,6 +90,15 @@ func Test_CreateConfig(t *testing.T) {
 	}
 	if config.InsecureSkipVerify {
 		t.Fatalf("expected InsecureSkipVerify to be false, got true")
+	}
+
+	// create a config with explicit node server name
+	config, err = CreateConfig(certFile, keyFile, "", "rqlite.example.com", false, true)
+	if err != nil {
+		t.Fatalf("failed to create config: %v", err)
+	}
+	if config.ServerName != "rqlite.example.com" {
+		t.Fatalf("expected ServerNAme to be 'rqlite.example.com', got %s", config.ServerName)
 	}
 }
 
