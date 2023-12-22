@@ -1,3 +1,7 @@
+## 8.13.3 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1515](https://github.com/rqlite/rqlite/pull/1515): Fix a log message related to mutual TLS.
+
 ## 8.13.2 (December 21st 2023)
 ### Implementation changes and bug fixes
 - [PR #1512](https://github.com/rqlite/rqlite/pull/1512): Fix swapping of CACert and ServerName.
