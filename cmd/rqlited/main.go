@@ -399,12 +399,12 @@ func startNodeMux(cfg *Config, ln net.Listener) (*tcp.Mux, error) {
 			b.WriteString(fmt.Sprintf(", CA cert %s", cfg.NodeX509CACert))
 		}
 		if cfg.NodeVerifyClient {
-			b.WriteString(", mutual TLS disabled")
-		} else {
 			b.WriteString(", mutual TLS enabled")
+		} else {
+			b.WriteString(", mutual TLS disabled")
 		}
 		log.Println(b.String())
-		mux, err = tcp.NewTLSMux(ln, adv, cfg.NodeX509Cert, cfg.NodeX509Key, cfg.NodeX509CACert,
+		mux, err = tcp.NewTLSMux(ln, adv, cfg.NodeX509Cert, cfg.NodeX509Key, cfg.NodeX509CACert, cfg.NodeVerifyServerName,
 			cfg.NoNodeVerify, cfg.NodeVerifyClient)
 	} else {
 		mux, err = tcp.NewMux(ln, adv)
