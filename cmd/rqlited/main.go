@@ -91,7 +91,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to start node mux: %s", err.Error())
 	}
-	raftTn := mux.Listen(cluster.MuxRaftHeader)
+	clusterDialerTLSConfig, err := createDialerTLSConfig(cfg)
+	if err != nil {
+		log.Fatalf("failed to create TLS config for cluster dialer: %s", err.Error())
+	}
+	raftTn := mux.Layer(cluster.MuxRaftHeader, clusterDialerTLSConfig)
 	log.Printf("Raft TCP mux Listener registered with byte header %d", cluster.MuxRaftHeader)
 
 	// Create the store.
@@ -129,7 +133,7 @@ func main() {
 	}
 
 	// Create cluster service now, so nodes will be able to learn information about each other.
-	clstrServ, err := clusterService(cfg, mux.Listen(cluster.MuxClusterHeader), str, str, credStr)
+	clstrServ, err := clusterService(cfg, mux.Layer(cluster.MuxClusterHeader, clusterDialerTLSConfig), str, str, credStr)
 	if err != nil {
 		log.Fatalf("failed to create cluster service: %s", err.Error())
 	}
@@ -441,14 +445,9 @@ func clusterService(cfg *Config, tn cluster.Transport, db cluster.Database, mgr 
 }
 
 func createClusterClient(cfg *Config, clstr *cluster.Service) (*cluster.Client, error) {
-	var dialerTLSConfig *tls.Config
-	var err error
-	if cfg.NodeX509Cert != "" || cfg.NodeX509CACert != "" {
-		dialerTLSConfig, err = rtls.CreateClientConfig(cfg.NodeX509Cert, cfg.NodeX509Key,
-			cfg.NodeX509CACert, cfg.NodeVerifyServerName, cfg.NoNodeVerify)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create TLS config for cluster dialer: %s", err.Error())
-		}
+	dialerTLSConfig, err := createDialerTLSConfig(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create TLS config for cluster dialer: %s", err.Error())
 	}
 	clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, dialerTLSConfig)
 	clstrClient := cluster.NewClient(clstrDialer, cfg.ClusterConnectTimeout)
@@ -594,6 +593,17 @@ func createCluster(cfg *Config, hasPeers bool, client *cluster.Client, str *stor
 		return fmt.Errorf("invalid disco mode %s", cfg.DiscoMode)
 	}
 	return nil
+}
+
+func createDialerTLSConfig(cfg *Config) (*tls.Config, error) {
+	if cfg.NodeX509Cert == "" && cfg.NodeX509CACert == "" {
+		// If any node in the cluster is using TLS, then all nodes have to. It's not possible
+		// due to this logic here to have a mixed cluster of TLS and non-TLS nodes. Maybe
+		// we change that at some point, but not right now.
+		return nil, nil
+	}
+	return rtls.CreateClientConfig(cfg.NodeX509Cert, cfg.NodeX509Key, cfg.NodeX509CACert,
+		cfg.NodeVerifyServerName, cfg.NoNodeVerify)
 }
 
 func networkCheckJoinAddrs(cfg *Config, joinAddrs []string) error {

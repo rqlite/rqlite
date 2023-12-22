@@ -212,9 +212,11 @@ func (mux *Mux) handleConn(conn net.Conn) {
 	handler.c <- conn
 }
 
-// Listen returns a Layer associated with the given header. Any connection
-// accepted by mux is multiplexed based on the initial header byte.
-func (mux *Mux) Listen(header byte) *Layer {
+// Layer returns a Layer associated with the given header. Any connection
+// accepted by mux is multiplexed based on the initial header byte. clientCfg
+// is the TLS configuration to use when dialing remote nodes via the returned
+// Layer. If nil is passed, then no TLS is used when dialing..
+func (mux *Mux) Layer(header byte, clientCfg *tls.Config) *Layer {
 	// Ensure two listeners are not created for the same header byte.
 	if _, ok := mux.m[header]; ok {
 		panic(fmt.Sprintf("listener already registered under header byte: %d", header))
@@ -230,7 +232,7 @@ func (mux *Mux) Listen(header byte) *Layer {
 		ln:   ln,
 		addr: mux.addr,
 	}
-	layer.dialer = NewDialer(header, mux.tlsConfig)
+	layer.dialer = NewDialer(header, clientCfg)
 	return layer
 }
 

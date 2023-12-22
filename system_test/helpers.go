@@ -660,7 +660,7 @@ func mustNodeEncrypted(dir string, enableSingle, httpEncrypt bool, mux *tcp.Mux,
 
 	dbConf := store.NewDBConfig()
 
-	raftTn := mux.Listen(cluster.MuxRaftHeader)
+	raftTn := mux.Layer(cluster.MuxRaftHeader, node.TLSConfig)
 	id := nodeID
 	if id == "" {
 		id = raftTn.Addr().String()
@@ -687,7 +687,7 @@ func mustNodeEncrypted(dir string, enableSingle, httpEncrypt bool, mux *tcp.Mux,
 	node.ID = node.Store.ID()
 
 	credStr := mustNewMockCredentialStore()
-	clstr := cluster.New(mux.Listen(cluster.MuxClusterHeader), node.Store, node.Store, credStr)
+	clstr := cluster.New(mux.Layer(cluster.MuxClusterHeader, node.TLSConfig), node.Store, node.Store, credStr)
 	if err := clstr.Open(); err != nil {
 		panic("failed to open Cluster service)")
 	}

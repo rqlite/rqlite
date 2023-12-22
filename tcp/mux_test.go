@@ -43,7 +43,7 @@ func TestMux(t *testing.T) {
 			mux.Logger = log.New(io.Discard, "", 0)
 		}
 		for i := uint8(0); i < n; i++ {
-			ln := mux.Listen(i)
+			ln := mux.Layer(i, nil)
 
 			wg.Add(1)
 			go func(i uint8, ln net.Listener) {
@@ -142,7 +142,7 @@ func TestMux_Advertise(t *testing.T) {
 		mux.Logger = log.New(io.Discard, "", 0)
 	}
 
-	layer := mux.Listen(1)
+	layer := mux.Layer(1, nil)
 	if layer.Addr().String() != addr.Addr {
 		t.Fatalf("layer advertise address not correct, exp %s, got %s",
 			layer.Addr().String(), addr.Addr)
@@ -163,8 +163,8 @@ func TestMux_Listen_ErrAlreadyRegistered(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create mux: %s", err.Error())
 	}
-	mux.Listen(5)
-	mux.Listen(5)
+	mux.Layer(5, nil)
+	mux.Layer(5, nil)
 }
 
 func TestTLSMux(t *testing.T) {

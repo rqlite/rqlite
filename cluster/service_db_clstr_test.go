@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -24,7 +25,7 @@ var (
 func Test_ServiceExecute(t *testing.T) {
 	ln, mux := mustNewMux()
 	go mux.Serve()
-	tn := mux.Listen(1) // Could be any byte value.
+	tn := mux.Layer(1, nil) // Could be any byte value.
 	db := mustNewMockDatabase()
 	mgr := mustNewMockManager()
 	cred := mustNewMockCredentialStore()
@@ -113,7 +114,7 @@ func Test_ServiceExecute(t *testing.T) {
 func Test_ServiceQuery(t *testing.T) {
 	ln, mux := mustNewMux()
 	go mux.Serve()
-	tn := mux.Listen(1) // Could be any byte value.
+	tn := mux.Layer(1, nil) // Could be any byte value.
 	db := mustNewMockDatabase()
 	cred := mustNewMockCredentialStore()
 	mgr := mustNewMockManager()
@@ -204,7 +205,7 @@ func Test_ServiceQuery(t *testing.T) {
 func Test_ServiceQueryLarge(t *testing.T) {
 	ln, mux := mustNewMux()
 	go mux.Serve()
-	tn := mux.Listen(1) // Could be any byte value.
+	tn := mux.Layer(1, nil) // Could be any byte value.
 	db := mustNewMockDatabase()
 	mgr := mustNewMockManager()
 	cred := mustNewMockCredentialStore()
@@ -265,7 +266,7 @@ func Test_ServiceQueryLarge(t *testing.T) {
 func Test_ServiceBackup(t *testing.T) {
 	ln, mux := mustNewMux()
 	go mux.Serve()
-	tn := mux.Listen(1) // Could be any byte value.
+	tn := mux.Layer(1, nil) // Could be any byte value.
 	db := mustNewMockDatabase()
 	mgr := mustNewMockManager()
 	cred := mustNewMockCredentialStore()
@@ -312,7 +313,7 @@ func Test_ServiceBackup(t *testing.T) {
 func Test_ServiceLoad(t *testing.T) {
 	ln, mux := mustNewMux()
 	go mux.Serve()
-	tn := mux.Listen(1) // Could be any byte value.
+	tn := mux.Layer(1, nil) // Could be any byte value.
 	db := mustNewMockDatabase()
 	mgr := mustNewMockManager()
 	cred := mustNewMockCredentialStore()
@@ -359,7 +360,7 @@ func Test_ServiceLoad(t *testing.T) {
 func Test_ServiceRemoveNode(t *testing.T) {
 	ln, mux := mustNewMux()
 	go mux.Serve()
-	tn := mux.Listen(1) // Could be any byte value.
+	tn := mux.Layer(1, nil) // Could be any byte value.
 	db := mustNewMockDatabase()
 	mgr := mustNewMockManager()
 	cred := mustNewMockCredentialStore()
@@ -405,7 +406,7 @@ func Test_ServiceRemoveNode(t *testing.T) {
 func Test_ServiceJoinNode(t *testing.T) {
 	ln, mux := mustNewMux()
 	go mux.Serve()
-	tn := mux.Listen(1) // Could be any byte value.
+	tn := mux.Layer(1, nil) // Could be any byte value.
 	db := mustNewMockDatabase()
 	mgr := mustNewMockManager()
 	cred := mustNewMockCredentialStore()
@@ -462,7 +463,7 @@ func Test_ServiceJoinNodeForwarded(t *testing.T) {
 	// Create the Leader service.
 	lnL, muxL := mustNewMux()
 	go muxL.Serve()
-	tnL := muxL.Listen(headerByte)
+	tnL := muxL.Layer(headerByte, nil)
 	dbL := mustNewMockDatabase()
 	mgrL := mustNewMockManager()
 	sL := New(tnL, dbL, mgrL, cred)
@@ -480,7 +481,9 @@ func Test_ServiceJoinNodeForwarded(t *testing.T) {
 	// Create the Follower service.
 	lnF, muxF := mustNewMux()
 	go muxF.Serve()
-	tnF := muxF.Listen(headerByte)
+	tnF := muxF.Layer(headerByte, &tls.Config{
+		InsecureSkipVerify: true,
+	})
 	dbF := mustNewMockDatabase()
 	mgrF := mustNewMockManager()
 	sF := New(tnF, dbF, mgrF, cred)
