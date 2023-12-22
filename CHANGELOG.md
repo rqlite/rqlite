@@ -2,6 +2,7 @@
 ### Implementation changes and bug fixes
 - [PR #1515](https://github.com/rqlite/rqlite/pull/1515): Fix a log message related to mutual TLS.
 - [PR #1516](https://github.com/rqlite/rqlite/pull/1516): Add support to Python end-to-end test helpers for mTLS.
+- [PR #1517](https://github.com/rqlite/rqlite/pull/1517): Refactor for clearer TLS mux control.
 
 ## 8.13.2 (December 21st 2023)
 ### Implementation changes and bug fixes
