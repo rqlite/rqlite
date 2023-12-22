@@ -21,7 +21,7 @@ rqlite is your solution for a [rock-solid](https://www.sqlite.org/testing.html),
 You can use rqlite for critical relational data in larger systems. And if you're interested in understanding how distributed systems actually work, it's a good example to study. A lot of thought has gone into its [design](https://rqlite.io/docs/design/), separating storage, consensus, and API clearly.
 
 ### Key features
-- **Easy Deployment**: No separate SQLite installation.
+- **Easy Deployment**: Up and running in seconds, with no separate SQLite installation.
 - **Developer-Friendly**: Straightforward [HTTP API](https://rqlite.io/docs/api/), [CLI](https://rqlite.io/docs/cli/), and [client libraries](https://rqlite.io/docs/api/client-libraries/).
 - **Fully Replicated**: SQL database with [full-text search](https://www.sqlite.org/fts5.html) and [JSON support](https://www.sqlite.org/json1.html).
 - **Dynamic Clustering**: Integrates with Kubernetes, Consul, etcd, and DNS for [automatic clustering](https://rqlite.io/docs/clustering/automatic-clustering/).
