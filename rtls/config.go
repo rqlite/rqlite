@@ -14,19 +14,19 @@ const (
 	NoServerName = ""
 )
 
-// MTLSState is a boolean type that indicates whether mutual TLS is enabled or disabled.
-type MTLSState bool
+// MTLSState indicates whether mutual TLS is enabled or disabled.
+type MTLSState tls.ClientAuthType
 
 const (
-	MTLSStateDisabled MTLSState = false
-	MTLSStateEnabled  MTLSState = true
+	MTLSStateDisabled MTLSState = MTLSState(tls.NoClientCert)
+	MTLSStateEnabled  MTLSState = MTLSState(tls.RequireAndVerifyClientCert)
 )
 
 // CreateClientConfig creates a TLS configuration for use by a system that does both
 // client and server authentication using the same cert, key, and CA cert. If noverify
 // is true, the client will not verify the server's certificate. If mutual is true, the
 // server will verify the client's certificate.
-func CreateConfig(certFile, keyFile, caCertFile string, noverify, mutual bool) (*tls.Config, error) {
+func CreateConfig(certFile, keyFile, caCertFile string, noverify bool, mutual MTLSState) (*tls.Config, error) {
 	var err error
 	config := createBaseTLSConfig(NoServerName, noverify)
 
@@ -56,9 +56,7 @@ func CreateConfig(certFile, keyFile, caCertFile string, noverify, mutual bool) (
 			return nil, fmt.Errorf("failed to load CA certificate(s) for client verification in %q", caCertFile)
 		}
 	}
-	if mutual {
-		config.ClientAuth = tls.RequireAndVerifyClientCert
-	}
+	config.ClientAuth = tls.ClientAuthType(mutual)
 	return config, nil
 }
 
@@ -119,9 +117,7 @@ func CreateServerConfig(certFile, keyFile, caCertFile string, mtls MTLSState) (*
 			return nil, fmt.Errorf("failed to load CA certificate(s) for client verification in %q", caCertFile)
 		}
 	}
-	if mtls {
-		config.ClientAuth = tls.RequireAndVerifyClientCert
-	}
+	config.ClientAuth = tls.ClientAuthType(mtls)
 	return config, nil
 }
 
