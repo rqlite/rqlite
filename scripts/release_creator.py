@@ -125,6 +125,10 @@ def main():
         else:
             print("Please enter the release string and release-specific notes again.\n")
 
+    if os.getenv("GOBIN"):
+        print("GOBIN is set, which will prevent cross-compilation. Please unset it and try again.")
+        exit(1)
+
     token = get_github_token()
 
     try:
