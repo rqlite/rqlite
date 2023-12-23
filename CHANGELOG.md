@@ -1,3 +1,7 @@
+## 8.13.4 (December 23rd 2023)
+### Implementation changes and bug fixes
+- [Commit 03b6db2](https://github.com/rqlite/rqlite/commit/03b6db2e7dd0e6806b1315eb1cd63e04b126a235): Fix build process to version information is set correctly.
+
 ## 8.13.3 (December 23rd 2023)
 ### Implementation changes and bug fixes
 - [PR #1515](https://github.com/rqlite/rqlite/pull/1515): Fix a log message related to mutual TLS.
