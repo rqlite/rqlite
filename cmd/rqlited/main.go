@@ -424,8 +424,8 @@ func credentialStore(cfg *Config) (*auth.CredentialsStore, error) {
 	return auth.NewCredentialsStoreFromFile(cfg.AuthFile)
 }
 
-func clusterService(cfg *Config, tn cluster.Transport, db cluster.Database, mgr cluster.Manager, credStr *auth.CredentialsStore) (*cluster.Service, error) {
-	c := cluster.New(tn, db, mgr, credStr)
+func clusterService(cfg *Config, ln net.Listener, db cluster.Database, mgr cluster.Manager, credStr *auth.CredentialsStore) (*cluster.Service, error) {
+	c := cluster.New(ln, db, mgr, credStr)
 	c.SetAPIAddr(cfg.HTTPAdv)
 	c.EnableHTTPS(cfg.HTTPx509Cert != "" && cfg.HTTPx509Key != "") // Conditions met for an HTTPS API
 	if err := c.Open(); err != nil {

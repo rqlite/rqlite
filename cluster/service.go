@@ -111,15 +111,10 @@ type CredentialStore interface {
 	AA(username, password, perm string) bool
 }
 
-// Transport is the interface the network layer must provide.
-type Transport interface {
-	net.Listener
-}
-
 // Service provides information about the node and cluster.
 type Service struct {
-	tn   Transport // Network layer this service uses
-	addr net.Addr  // Address on which this service is listening
+	ln   net.Listener // Incoming connections to the service
+	addr net.Addr     // Address on which this service is listening
 
 	db  Database // The queryable system.
 	mgr Manager  // The cluster management system.
@@ -134,10 +129,10 @@ type Service struct {
 }
 
 // New returns a new instance of the cluster service
-func New(tn Transport, db Database, m Manager, credentialStore CredentialStore) *Service {
+func New(ln net.Listener, db Database, m Manager, credentialStore CredentialStore) *Service {
 	return &Service{
-		tn:              tn,
-		addr:            tn.Addr(),
+		ln:              ln,
+		addr:            ln.Addr(),
 		db:              db,
 		mgr:             m,
 		logger:          log.New(os.Stderr, "[cluster] ", log.LstdFlags),
@@ -148,13 +143,13 @@ func New(tn Transport, db Database, m Manager, credentialStore CredentialStore) 
 // Open opens the Service.
 func (s *Service) Open() error {
 	go s.serve()
-	s.logger.Println("service listening on", s.tn.Addr())
+	s.logger.Println("service listening on", s.addr)
 	return nil
 }
 
 // Close closes the service.
 func (s *Service) Close() error {
-	s.tn.Close()
+	s.ln.Close()
 	return nil
 }
 
@@ -210,7 +205,7 @@ func (s *Service) Stats() (map[string]interface{}, error) {
 
 func (s *Service) serve() error {
 	for {
-		conn, err := s.tn.Accept()
+		conn, err := s.ln.Accept()
 		if err != nil {
 			return err
 		}
