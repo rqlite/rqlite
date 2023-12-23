@@ -1,4 +1,4 @@
-## 8.13.3 (unreleased)
+## 8.13.3 (December 23rd 2023)
 ### Implementation changes and bug fixes
 - [PR #1515](https://github.com/rqlite/rqlite/pull/1515): Fix a log message related to mutual TLS.
 - [PR #1516](https://github.com/rqlite/rqlite/pull/1516): Add support to Python end-to-end test helpers for mTLS.
