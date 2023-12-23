@@ -68,7 +68,7 @@ buildtime=`date +%Y-%m-%dT%T%z`
 
 # Prepare common linker flags
 STRIP_SYMBOLS="-w -s"
-LINKER_PKG_PATH=github.com/rqlite/rqlite/cmd
+LINKER_PKG_PATH=github.com/rqlite/rqlite/v8/cmd
 LDFLAGS="$STRIP_SYMBOLS -X $LINKER_PKG_PATH.Version=$VERSION -X $LINKER_PKG_PATH.Branch=$branch -X $LINKER_PKG_PATH.Commit=$commit -X $LINKER_PKG_PATH.Buildtime=$buildtime"
 
 # Prepare the source code
