@@ -114,7 +114,6 @@ type CredentialStore interface {
 // Transport is the interface the network layer must provide.
 type Transport interface {
 	net.Listener
-	Dialer
 }
 
 // Service provides information about the node and cluster.
