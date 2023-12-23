@@ -161,6 +161,29 @@ func (mux *Mux) Stats() (interface{}, error) {
 	return s, nil
 }
 
+// Listen returns a Layer associated with the given header. Any connection
+// accepted by mux is multiplexed based on the initial header byte.
+func (mux *Mux) Listen(header byte) *Layer {
+	// Ensure two listeners are not created for the same header byte.
+	if _, ok := mux.m[header]; ok {
+		panic(fmt.Sprintf("listener already registered under header byte: %d", header))
+	}
+
+	// Create a new listener and assign it.
+	ln := &listener{
+		c: make(chan net.Conn),
+	}
+	mux.m[header] = ln
+
+	layer := &Layer{
+		ln:   ln,
+		addr: mux.addr,
+	}
+	layer.dialer = NewDialer(header, mux.tlsConfig)
+
+	return layer
+}
+
 func (mux *Mux) handleConn(conn net.Conn) {
 	stats.Add(numConnectionsHandled, 1)
 
@@ -199,29 +222,6 @@ func (mux *Mux) handleConn(conn net.Conn) {
 
 	// Send connection to handler.  The handler is responsible for closing the connection.
 	handler.c <- conn
-}
-
-// Listen returns a Layer associated with the given header. Any connection
-// accepted by mux is multiplexed based on the initial header byte.
-func (mux *Mux) Listen(header byte) *Layer {
-	// Ensure two listeners are not created for the same header byte.
-	if _, ok := mux.m[header]; ok {
-		panic(fmt.Sprintf("listener already registered under header byte: %d", header))
-	}
-
-	// Create a new listener and assign it.
-	ln := &listener{
-		c: make(chan net.Conn),
-	}
-	mux.m[header] = ln
-
-	layer := &Layer{
-		ln:   ln,
-		addr: mux.addr,
-	}
-	layer.dialer = NewDialer(header, mux.tlsConfig)
-
-	return layer
 }
 
 // listener is a receiver for connections received by Mux.
