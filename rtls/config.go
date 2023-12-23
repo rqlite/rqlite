@@ -14,45 +14,13 @@ const (
 	NoServerName = ""
 )
 
-// CreateClientConfig creates a TLS configuration for use by a system that does both
-// client and server authentication using the same cert, key, and CA cert. If noverify
-// is true, the client will not verify the server's certificate. If mutual is true, the
-// server will verify the client's certificate.
-func CreateConfig(certFile, keyFile, caCertFile string, noverify, mutual bool) (*tls.Config, error) {
-	var err error
-	config := createBaseTLSConfig(NoServerName, noverify)
+// MTLSState indicates whether mutual TLS is enabled or disabled.
+type MTLSState tls.ClientAuthType
 
-	// load the certificate and key
-	if certFile != "" && keyFile != "" {
-		config.Certificates = make([]tls.Certificate, 1)
-		config.Certificates[0], err = tls.LoadX509KeyPair(certFile, keyFile)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	// load the CA certificate file, if provided, as the root CA and client CA
-	if caCertFile != "" {
-		asn1Data, err := os.ReadFile(caCertFile)
-		if err != nil {
-			return nil, err
-		}
-		config.RootCAs = x509.NewCertPool()
-		ok := config.RootCAs.AppendCertsFromPEM(asn1Data)
-		if !ok {
-			return nil, fmt.Errorf("failed to load CA certificate(s) for server verification in %q", caCertFile)
-		}
-		config.ClientCAs = x509.NewCertPool()
-		ok = config.ClientCAs.AppendCertsFromPEM(asn1Data)
-		if !ok {
-			return nil, fmt.Errorf("failed to load CA certificate(s) for client verification in %q", caCertFile)
-		}
-	}
-	if mutual {
-		config.ClientAuth = tls.RequireAndVerifyClientCert
-	}
-	return config, nil
-}
+const (
+	MTLSStateDisabled MTLSState = MTLSState(tls.NoClientCert)
+	MTLSStateEnabled  MTLSState = MTLSState(tls.RequireAndVerifyClientCert)
+)
 
 // CreateClientConfig creates a new tls.Config for use by a client. The certFile and keyFile
 // parameters are the paths to the client's certificate and key files, which will be used to
@@ -90,8 +58,9 @@ func CreateClientConfig(certFile, keyFile, caCertFile, serverName string, noveri
 // parameters are the paths to the server's certificate and key files, which will be used to
 // authenticate the server to the client. The caCertFile parameter is the path to the CA
 // certificate file, which the server will use to verify any certificate presented by the
-// client. If noverify is true, the server will not verify the client's certificate.
-func CreateServerConfig(certFile, keyFile, caCertFile string, noverify bool) (*tls.Config, error) {
+// client. If mtls is MTLSStateEnabled, the server will require the client to present a
+// valid certificate.
+func CreateServerConfig(certFile, keyFile, caCertFile string, mtls MTLSState) (*tls.Config, error) {
 	var err error
 
 	config := createBaseTLSConfig(NoServerName, false)
@@ -111,9 +80,7 @@ func CreateServerConfig(certFile, keyFile, caCertFile string, noverify bool) (*t
 			return nil, fmt.Errorf("failed to load CA certificate(s) for client verification in %q", caCertFile)
 		}
 	}
-	if !noverify {
-		config.ClientAuth = tls.RequireAndVerifyClientCert
-	}
+	config.ClientAuth = tls.ClientAuthType(mtls)
 	return config, nil
 }
 
