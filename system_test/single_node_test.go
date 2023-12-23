@@ -31,7 +31,9 @@ func Test_SingleNodeBasicEndpoint(t *testing.T) {
 	dir := mustTempDir()
 	mux, ln := mustNewOpenMux("")
 	defer ln.Close()
-	node = mustNodeEncrypted(dir, true, false, mux, "")
+	raftDialer := tcp.NewDialer(cluster.MuxRaftHeader, nil)
+	clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, nil)
+	node = mustNodeEncrypted(dir, true, false, mux, raftDialer, clstrDialer, "")
 	if _, err := node.WaitForLeader(); err != nil {
 		t.Fatalf("node never became leader")
 	}
@@ -863,8 +865,9 @@ func Test_SingleNodeUpgrades_NoSnapshots(t *testing.T) {
 
 		mux, ln := mustNewOpenMux("")
 		defer ln.Close()
-
-		node := mustNodeEncrypted(destdir, true, false, mux, "node1")
+		raftDialer := tcp.NewDialer(cluster.MuxRaftHeader, nil)
+		clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, nil)
+		node := mustNodeEncrypted(destdir, true, false, mux, raftDialer, clstrDialer, "node1")
 		defer node.Deprovision()
 		if _, err := node.WaitForLeader(); err != nil {
 			t.Fatalf("node never became leader with %s data:", dir)
@@ -922,8 +925,9 @@ func Test_SingleNodeUpgrades_Snapshots(t *testing.T) {
 
 		mux, ln := mustNewOpenMux("")
 		defer ln.Close()
-
-		node := mustNodeEncrypted(destdir, true, false, mux, "node1")
+		raftDialer := tcp.NewDialer(cluster.MuxRaftHeader, nil)
+		clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, nil)
+		node := mustNodeEncrypted(destdir, true, false, mux, raftDialer, clstrDialer, "node1")
 		defer node.Deprovision()
 		if _, err := node.WaitForLeader(); err != nil {
 			t.Fatalf("node never became leader with %s data:", dir)
@@ -1019,7 +1023,9 @@ func Test_SingleNodeReopen(t *testing.T) {
 	dir := mustTempDir()
 	mux, ln := mustNewOpenMux("")
 	defer ln.Close()
-	node := mustNodeEncrypted(dir, true, false, mux, "")
+	raftDialer := tcp.NewDialer(cluster.MuxRaftHeader, nil)
+	clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, nil)
+	node := mustNodeEncrypted(dir, true, false, mux, raftDialer, clstrDialer, "")
 
 	if _, err := node.WaitForLeader(); err != nil {
 		t.Fatalf("node never became leader")
@@ -1052,7 +1058,9 @@ func Test_SingleNodeNoopReopen(t *testing.T) {
 	dir := mustTempDir()
 	mux, ln := mustNewOpenMux("")
 	defer ln.Close()
-	node := mustNodeEncrypted(dir, true, false, mux, "")
+	raftDialer := tcp.NewDialer(cluster.MuxRaftHeader, nil)
+	clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, nil)
+	node := mustNodeEncrypted(dir, true, false, mux, raftDialer, clstrDialer, "")
 
 	if _, err := node.WaitForLeader(); err != nil {
 		t.Fatalf("node never became leader")
@@ -1133,7 +1141,9 @@ func Test_SingleNodeNoopSnapReopen(t *testing.T) {
 	dir := mustTempDir()
 	mux, ln := mustNewOpenMux("")
 	defer ln.Close()
-	node := mustNodeEncrypted(dir, true, false, mux, "")
+	raftDialer := tcp.NewDialer(cluster.MuxRaftHeader, nil)
+	clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, nil)
+	node := mustNodeEncrypted(dir, true, false, mux, raftDialer, clstrDialer, "")
 
 	if _, err := node.WaitForLeader(); err != nil {
 		t.Fatalf("node never became leader")
@@ -1219,7 +1229,9 @@ func Test_SingleNodeNoopSnapLogsReopen(t *testing.T) {
 	dir := mustTempDir()
 	mux, ln := mustNewOpenMux("")
 	defer ln.Close()
-	node := mustNodeEncrypted(dir, true, false, mux, "")
+	raftDialer := tcp.NewDialer(cluster.MuxRaftHeader, nil)
+	clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, nil)
+	node := mustNodeEncrypted(dir, true, false, mux, raftDialer, clstrDialer, "")
 
 	if _, err := node.WaitForLeader(); err != nil {
 		t.Fatalf("node never became leader")
@@ -1310,7 +1322,8 @@ func Test_SingleNodeAutoRestore(t *testing.T) {
 	mux, _ := mustNewOpenMux("")
 	go mux.Serve()
 
-	raftTn := mux.Listen(cluster.MuxRaftHeader)
+	raftLn := mux.Listen(cluster.MuxRaftHeader)
+	raftTn := tcp.NewLayer(raftLn, tcp.NewDialer(cluster.MuxRaftHeader, nil))
 	node.Store = store.New(raftTn, &store.Config{
 		DBConf: store.NewDBConfig(),
 		Dir:    node.Dir,

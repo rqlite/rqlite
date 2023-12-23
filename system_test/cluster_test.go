@@ -629,8 +629,11 @@ func Test_MultiNodeClusterRaftAdv(t *testing.T) {
 	}
 	go mux2.Serve()
 
+	raftDialer := tcp.NewDialer(cluster.MuxRaftHeader, nil)
+	clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, nil)
+
 	// Start two nodes, and ensure a cluster can be formed.
-	node1 := mustNodeEncrypted(mustTempDir(), true, false, mux1, "1")
+	node1 := mustNodeEncrypted(mustTempDir(), true, false, mux1, raftDialer, clstrDialer, "1")
 	defer node1.Deprovision()
 	leader, err := node1.WaitForLeader()
 	if err != nil {
@@ -640,7 +643,7 @@ func Test_MultiNodeClusterRaftAdv(t *testing.T) {
 		t.Fatalf("node return wrong leader from leader, exp: %s, got %s", exp, got)
 	}
 
-	node2 := mustNodeEncrypted(mustTempDir(), false, false, mux2, "2")
+	node2 := mustNodeEncrypted(mustTempDir(), false, false, mux2, raftDialer, clstrDialer, "2")
 	defer node2.Deprovision()
 	if err := node2.Join(node1); err != nil {
 		t.Fatalf("node2 failed to join leader: %s", err.Error())
@@ -1415,11 +1418,14 @@ func Test_MultiNodeClusterRecoverSingle(t *testing.T) {
 		t.Fatalf("failed to close node3: %s", err.Error())
 	}
 
+	raftDialer := tcp.NewDialer(cluster.MuxRaftHeader, nil)
+	clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, nil)
+
 	// Create a single node using the node's data directory. It should fail because
 	// quorum can't be met. This isn't quite right since the Raft address is also
 	// changing, but it generally proves it doesn't come up.
 	mux0, ln0 := mustNewOpenMux("127.0.0.1:10000")
-	failedSingle := mustNodeEncrypted(node1.Dir, true, false, mux0, node1.Store.ID())
+	failedSingle := mustNodeEncrypted(node1.Dir, true, false, mux0, raftDialer, clstrDialer, node1.Store.ID())
 	_, err = failedSingle.WaitForLeader()
 	if err == nil {
 		t.Fatalf("no error waiting for leader")
@@ -1432,7 +1438,7 @@ func Test_MultiNodeClusterRecoverSingle(t *testing.T) {
 	peers := fmt.Sprintf(`[{"id": "%s","address": "%s"}]`, node1.Store.ID(), "127.0.0.1:10001")
 	mustWriteFile(node1.PeersPath, peers)
 
-	okSingle := mustNodeEncrypted(node1.Dir, true, false, mux1, node1.Store.ID())
+	okSingle := mustNodeEncrypted(node1.Dir, true, false, mux1, raftDialer, clstrDialer, node1.Store.ID())
 	_, err = okSingle.WaitForLeader()
 	if err != nil {
 		t.Fatalf("failed waiting for leader: %s", err.Error())
@@ -1449,15 +1455,18 @@ func Test_MultiNodeClusterRecoverSingle(t *testing.T) {
 func Test_MultiNodeClusterRecoverFull(t *testing.T) {
 	var err error
 
+	raftDialer := tcp.NewDialer(cluster.MuxRaftHeader, nil)
+	clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, nil)
+
 	mux1, ln1 := mustNewOpenMux("127.0.0.1:10001")
-	node1 := mustNodeEncrypted(mustTempDir(), true, false, mux1, "1")
+	node1 := mustNodeEncrypted(mustTempDir(), true, false, mux1, raftDialer, clstrDialer, "1")
 	_, err = node1.WaitForLeader()
 	if err != nil {
 		t.Fatalf("failed waiting for leader: %s", err.Error())
 	}
 
 	mux2, ln2 := mustNewOpenMux("127.0.0.1:10002")
-	node2 := mustNodeEncrypted(mustTempDir(), false, false, mux2, "2")
+	node2 := mustNodeEncrypted(mustTempDir(), false, false, mux2, raftDialer, clstrDialer, "2")
 	if err := node2.Join(node1); err != nil {
 		t.Fatalf("node failed to join leader: %s", err.Error())
 	}
@@ -1467,7 +1476,7 @@ func Test_MultiNodeClusterRecoverFull(t *testing.T) {
 	}
 
 	mux3, ln3 := mustNewOpenMux("127.0.0.1:10003")
-	node3 := mustNodeEncrypted(mustTempDir(), false, false, mux3, "3")
+	node3 := mustNodeEncrypted(mustTempDir(), false, false, mux3, raftDialer, clstrDialer, "3")
 	if err := node3.Join(node1); err != nil {
 		t.Fatalf("node failed to join leader: %s", err.Error())
 	}
@@ -1515,17 +1524,17 @@ func Test_MultiNodeClusterRecoverFull(t *testing.T) {
 	mustWriteFile(node3.PeersPath, peers)
 
 	mux4, ln4 := mustNewOpenMux("127.0.0.1:11001")
-	node4 := mustNodeEncrypted(node1.Dir, false, false, mux4, "1")
+	node4 := mustNodeEncrypted(node1.Dir, false, false, mux4, raftDialer, clstrDialer, "1")
 	defer node4.Deprovision()
 	defer ln4.Close()
 
 	mux5, ln5 := mustNewOpenMux("127.0.0.1:11002")
-	node5 := mustNodeEncrypted(node2.Dir, false, false, mux5, "2")
+	node5 := mustNodeEncrypted(node2.Dir, false, false, mux5, raftDialer, clstrDialer, "2")
 	defer node5.Deprovision()
 	defer ln5.Close()
 
 	mux6, ln6 := mustNewOpenMux("127.0.0.1:11003")
-	node6 := mustNodeEncrypted(node3.Dir, false, false, mux6, "3")
+	node6 := mustNodeEncrypted(node3.Dir, false, false, mux6, raftDialer, clstrDialer, "3")
 	defer node6.Deprovision()
 	defer ln6.Close()
 

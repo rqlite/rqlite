@@ -91,8 +91,15 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to start node mux: %s", err.Error())
 	}
-	raftTn := mux.Listen(cluster.MuxRaftHeader)
+
+	// Raft internode layer
+	raftLn := mux.Listen(cluster.MuxRaftHeader)
 	log.Printf("Raft TCP mux Listener registered with byte header %d", cluster.MuxRaftHeader)
+	raftDialer, err := createRaftDialer(cfg)
+	if err != nil {
+		log.Fatalf("failed to create Raft dialer: %s", err.Error())
+	}
+	raftTn := tcp.NewLayer(raftLn, raftDialer)
 
 	// Create the store.
 	str, err := createStore(cfg, raftTn)
@@ -450,6 +457,19 @@ func createClusterClient(cfg *Config, clstr *cluster.Service) (*cluster.Client, 
 		return nil, fmt.Errorf("failed to set cluster client local parameters: %s", err.Error())
 	}
 	return clstrClient, nil
+}
+
+func createRaftDialer(cfg *Config) (*tcp.Dialer, error) {
+	var dialerTLSConfig *tls.Config
+	var err error
+	if cfg.NodeX509Cert != "" || cfg.NodeX509CACert != "" {
+		dialerTLSConfig, err = rtls.CreateClientConfig(cfg.NodeX509Cert, cfg.NodeX509Key,
+			cfg.NodeX509CACert, cfg.NodeVerifyServerName, cfg.NoNodeVerify)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create TLS config for Raft dialer: %s", err.Error())
+		}
+	}
+	return tcp.NewDialer(cluster.MuxRaftHeader, dialerTLSConfig), nil
 }
 
 func createCluster(cfg *Config, hasPeers bool, client *cluster.Client, str *store.Store, httpServ *httpd.Service, credStr *auth.CredentialsStore) error {
