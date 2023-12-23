@@ -112,6 +112,10 @@ def confirm_release_notes(release_notes):
     return confirmation.lower() == "yes"
 
 def main():
+    if os.getenv("GOBIN"):
+        print("GOBIN is set, which will prevent cross-compilation. Please unset it and try again.")
+        exit(1)
+
     while True:
         if not confirm_CHANGELOG():
             continue
@@ -125,12 +129,7 @@ def main():
         else:
             print("Please enter the release string and release-specific notes again.\n")
 
-    if os.getenv("GOBIN"):
-        print("GOBIN is set, which will prevent cross-compilation. Please unset it and try again.")
-        exit(1)
-
     token = get_github_token()
-
     try:
         release_id = create_github_release(release_str, token, release_notes)
         print(f"Release created with ID: {release_id}")
