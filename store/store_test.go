@@ -2061,7 +2061,7 @@ func Test_MultiNodeStoreAutoRestoreBootstrap(t *testing.T) {
 	// Trigger a bootstrap.
 	s0.BootstrapExpect = 3
 	for _, s := range []*Store{s0, s1, s2} {
-		if err := s0.Notify(notifyRequest(s.ID(), s.ln.Addr().String())); err != nil {
+		if err := s0.Notify(notifyRequest(s.ID(), s.ly.Addr().String())); err != nil {
 			t.Fatalf("failed to notify store: %s", err.Error())
 		}
 	}
@@ -2797,8 +2797,8 @@ func mustNewStoreAtPathsLn(id, dataPath, sqlitePath string, fk bool) (*Store, ne
 	cfg.FKConstraints = fk
 	cfg.OnDiskPath = sqlitePath
 
-	ln := mustMockLister("localhost:0")
-	s := New(ln, &Config{
+	ly := mustMockLayer("localhost:0")
+	s := New(ly, &Config{
 		DBConf: cfg,
 		Dir:    dataPath,
 		ID:     id,
@@ -2806,7 +2806,7 @@ func mustNewStoreAtPathsLn(id, dataPath, sqlitePath string, fk bool) (*Store, ne
 	if s == nil {
 		panic("failed to create new store")
 	}
-	return s, ln
+	return s, ly
 }
 
 func mustNewStore(t *testing.T) (*Store, net.Listener) {
@@ -2837,27 +2837,27 @@ func (m *mockSnapshotSink) Cancel() error {
 	return nil
 }
 
-type mockListener struct {
+type mockLayer struct {
 	ln net.Listener
 }
 
-func mustMockLister(addr string) Listener {
+func mustMockLayer(addr string) Layer {
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		panic("failed to create new listner")
 	}
-	return &mockListener{ln}
+	return &mockLayer{ln}
 }
 
-func (m *mockListener) Dial(addr string, timeout time.Duration) (net.Conn, error) {
+func (m *mockLayer) Dial(addr string, timeout time.Duration) (net.Conn, error) {
 	return net.DialTimeout("tcp", addr, timeout)
 }
 
-func (m *mockListener) Accept() (net.Conn, error) { return m.ln.Accept() }
+func (m *mockLayer) Accept() (net.Conn, error) { return m.ln.Accept() }
 
-func (m *mockListener) Close() error { return m.ln.Close() }
+func (m *mockLayer) Close() error { return m.ln.Close() }
 
-func (m *mockListener) Addr() net.Addr { return m.ln.Addr() }
+func (m *mockLayer) Addr() net.Addr { return m.ln.Addr() }
 
 func mustCreateTempFile() string {
 	f, err := os.CreateTemp("", "rqlite-temp")

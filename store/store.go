@@ -208,7 +208,7 @@ type Store struct {
 	restoreDoneCh chan struct{}
 
 	raft   *raft.Raft // The consensus mechanism.
-	ln     Listener
+	ly     Layer
 	raftTn *NodeTransport
 	raftID string    // Node ID.
 	dbConf *DBConfig // SQLite database config.
@@ -309,7 +309,7 @@ type Config struct {
 }
 
 // New returns a new Store.
-func New(ln Listener, c *Config) *Store {
+func New(ly Layer, c *Config) *Store {
 	logger := c.Logger
 	if logger == nil {
 		logger = log.New(os.Stderr, "[store] ", log.LstdFlags)
@@ -321,7 +321,7 @@ func New(ln Listener, c *Config) *Store {
 	}
 
 	return &Store{
-		ln:              ln,
+		ly:              ly,
 		raftDir:         c.Dir,
 		peersPath:       filepath.Join(c.Dir, peersPath),
 		peersInfoPath:   filepath.Join(c.Dir, peersInfoPath),
@@ -376,7 +376,7 @@ func (s *Store) Open() (retErr error) {
 	}
 
 	s.openT = time.Now()
-	s.logger.Printf("opening store with node ID %s, listening on %s", s.raftID, s.ln.Addr().String())
+	s.logger.Printf("opening store with node ID %s, listening on %s", s.raftID, s.ly.Addr().String())
 
 	// Create all the required Raft directories.
 	s.logger.Printf("ensuring data directory exists at %s", s.raftDir)
@@ -403,7 +403,7 @@ func (s *Store) Open() (retErr error) {
 	}
 
 	// Create Raft-compatible network layer.
-	nt := raft.NewNetworkTransport(NewTransport(s.ln), connectionPoolCount, connectionTimeout, nil)
+	nt := raft.NewNetworkTransport(NewTransport(s.ly), connectionPoolCount, connectionTimeout, nil)
 	s.raftTn = NewNodeTransport(nt)
 
 	// Don't allow control over trailing logs directly, just implement a policy.
@@ -583,7 +583,7 @@ func (s *Store) Ready() bool {
 func (s *Store) Close(wait bool) (retErr error) {
 	defer func() {
 		if retErr == nil {
-			s.logger.Printf("store closed with node ID %s, listening on %s", s.raftID, s.ln.Addr().String())
+			s.logger.Printf("store closed with node ID %s, listening on %s", s.raftID, s.ly.Addr().String())
 			s.open = false
 		}
 	}()

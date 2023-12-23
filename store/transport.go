@@ -9,42 +9,43 @@ import (
 	"github.com/rqlite/rqlite/v8/store/gzip"
 )
 
-// Listener is the interface expected by the Store for Transports.
-type Listener interface {
+// Layer is the interface expected by the Store for network communication
+// between nodes, which is used for Raft distributed consensus.
+type Layer interface {
 	net.Listener
 	Dial(address string, timeout time.Duration) (net.Conn, error)
 }
 
 // Transport is the network service provided to Raft, and wraps a Listener.
 type Transport struct {
-	ln Listener
+	ly Layer
 }
 
 // NewTransport returns an initialized Transport.
-func NewTransport(ln Listener) *Transport {
+func NewTransport(ly Layer) *Transport {
 	return &Transport{
-		ln: ln,
+		ly: ly,
 	}
 }
 
 // Dial creates a new network connection.
 func (t *Transport) Dial(addr raft.ServerAddress, timeout time.Duration) (net.Conn, error) {
-	return t.ln.Dial(string(addr), timeout)
+	return t.ly.Dial(string(addr), timeout)
 }
 
 // Accept waits for the next connection.
 func (t *Transport) Accept() (net.Conn, error) {
-	return t.ln.Accept()
+	return t.ly.Accept()
 }
 
 // Close closes the transport
 func (t *Transport) Close() error {
-	return t.ln.Close()
+	return t.ly.Close()
 }
 
 // Addr returns the binding address of the transport.
 func (t *Transport) Addr() net.Addr {
-	return t.ln.Addr()
+	return t.ly.Addr()
 }
 
 // NodeTransport is a wrapper around the Raft NetworkTransport, which allows
