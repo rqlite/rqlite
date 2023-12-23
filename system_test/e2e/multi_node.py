@@ -172,42 +172,34 @@ class TestEndToEndEncryptedNode(TestEndToEnd):
 
     self.cluster = Cluster([n0, n1, n2])
 
+class TestEndToEndEncryptedNode_ServerName(unittest.TestCase):
+  caCertFile = write_random_file(caCert)
+  caSignedKey = write_random_file(caSignedKeyExampleDotCom)
+  caSignedCert = write_random_file(caSignedCertExampleDotCom)
 
-class TestEndToEndEncryptedNode_ServerName(TestEndToEnd):
-  def setUp(self):
-    caCertFile = write_random_file(caCert)
-    caSignedKey = write_random_file(caSignedKeyExampleDotCom)
-    caSignedCert = write_random_file(caSignedCertExampleDotCom)
-
-    n0 = Node(RQLITED_PATH, '0', node_cert=caSignedCert, node_key=caSignedKey, node_ca_cert=caCertFile,
+  def test_ok(self):
+    '''Test that a cluster can be created when nodes present the right server name'''
+    n0 = Node(RQLITED_PATH, '0', node_cert=self.caSignedCert, node_key=self.caSignedKey, node_ca_cert=self.caCertFile,
               node_verify_server_name='example.com')
     n0.start()
     n0.wait_for_leader()
 
-    n1 = Node(RQLITED_PATH, '1', node_cert=caSignedCert, node_key=caSignedKey, node_ca_cert=caCertFile,
+    n1 = Node(RQLITED_PATH, '1', node_cert=self.caSignedCert, node_key=self.caSignedKey, node_ca_cert=self.caCertFile,
               node_verify_server_name='example.com')
     n1.start(join=n0.RaftAddr())
     n1.wait_for_leader()
 
-    n2 = Node(RQLITED_PATH, '2', node_cert=caSignedCert, node_key=caSignedKey, node_ca_cert=caCertFile,
-              node_verify_server_name='example.com')
-    n2.start(join=n0.RaftAddr())
-    n2.wait_for_leader()
+    deprovision_node(n0)
+    deprovision_node(n1)
 
-    self.cluster = Cluster([n0, n1, n2])
-
-class TestEndToEndEncryptedNode_BadServerName(unittest.TestCase):
-  def test(self):
-    caCertFile = write_random_file(caCert)
-    caSignedKey = write_random_file(caSignedKeyExampleDotCom)
-    caSignedCert = write_random_file(caSignedCertExampleDotCom)
-
-    n0 = Node(RQLITED_PATH, '0', node_cert=caSignedCert, node_key=caSignedKey, node_ca_cert=caCertFile,
+  def test_bad(self):
+    '''Test that a cluster fails to be created when a node has a bad server name'''
+    n0 = Node(RQLITED_PATH, '0', node_cert=self.caSignedCert, node_key=self.caSignedKey, node_ca_cert=self.caCertFile,
               node_verify_server_name='example.com')
     n0.start()
     n0.wait_for_leader()
 
-    n1 = Node(RQLITED_PATH, '1', node_cert=caSignedCert, node_key=caSignedKey, node_ca_cert=caCertFile,
+    n1 = Node(RQLITED_PATH, '1', node_cert=self.caSignedCert, node_key=self.caSignedKey, node_ca_cert=self.caCertFile,
               node_verify_server_name='bad.com')
     n1.start(join=n0.RaftAddr())
     self.assertTrue(n1.expect_leader_fail())  # Should fail to join due to bad server name
