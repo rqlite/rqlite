@@ -1,4 +1,5 @@
 ## 8.13.4 (December 23rd 2023)
+This release makes sure the version information is correctly recorded in the released binaries. There are no functional changes.
 ### Implementation changes and bug fixes
 - [Commit 03b6db2](https://github.com/rqlite/rqlite/commit/03b6db2e7dd0e6806b1315eb1cd63e04b126a235): Fix build process so versioning information is set correctly.
 
