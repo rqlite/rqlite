@@ -1,6 +1,7 @@
 package cmd
 
 // These variables are populated via the Go linker.
+// Make sure the build process (linker flags) are updated too.
 var (
 	// Version of rqlite.
 	Version = "8"
