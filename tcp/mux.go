@@ -43,6 +43,15 @@ type Layer struct {
 	dialer *Dialer
 }
 
+// NewLayer returns a new instance of Layer.
+func NewLayer(ln net.Listener, dialer *Dialer) *Layer {
+	return &Layer{
+		ln:     ln,
+		addr:   ln.Addr(),
+		dialer: dialer,
+	}
+}
+
 // Dial creates a new network connection.
 func (l *Layer) Dial(addr string, timeout time.Duration) (net.Conn, error) {
 	return l.dialer.Dial(addr, timeout)
@@ -161,6 +170,23 @@ func (mux *Mux) Stats() (interface{}, error) {
 	return s, nil
 }
 
+// Listen returns a Listener associated with the given header. Any connection
+// accepted by mux is multiplexed based on the initial header byte.
+func (mux *Mux) Listen(header byte) net.Listener {
+	// Ensure two listeners are not created for the same header byte.
+	if _, ok := mux.m[header]; ok {
+		panic(fmt.Sprintf("listener already registered under header byte: %d", header))
+	}
+
+	// Create a new listener and assign it.
+	ln := &listener{
+		c:    make(chan net.Conn),
+		addr: mux.addr,
+	}
+	mux.m[header] = ln
+	return ln
+}
+
 func (mux *Mux) handleConn(conn net.Conn) {
 	stats.Add(numConnectionsHandled, 1)
 
@@ -201,32 +227,10 @@ func (mux *Mux) handleConn(conn net.Conn) {
 	handler.c <- conn
 }
 
-// Listen returns a Layer associated with the given header. Any connection
-// accepted by mux is multiplexed based on the initial header byte.
-func (mux *Mux) Listen(header byte) *Layer {
-	// Ensure two listeners are not created for the same header byte.
-	if _, ok := mux.m[header]; ok {
-		panic(fmt.Sprintf("listener already registered under header byte: %d", header))
-	}
-
-	// Create a new listener and assign it.
-	ln := &listener{
-		c: make(chan net.Conn),
-	}
-	mux.m[header] = ln
-
-	layer := &Layer{
-		ln:   ln,
-		addr: mux.addr,
-	}
-	layer.dialer = NewDialer(header, mux.tlsConfig)
-
-	return layer
-}
-
 // listener is a receiver for connections received by Mux.
 type listener struct {
-	c chan net.Conn
+	c    chan net.Conn
+	addr net.Addr
 }
 
 // Accept waits for and returns the next connection to the listener.
@@ -242,4 +246,4 @@ func (ln *listener) Accept() (c net.Conn, err error) {
 func (ln *listener) Close() error { return nil }
 
 // Addr always returns nil
-func (ln *listener) Addr() net.Addr { return nil }
+func (ln *listener) Addr() net.Addr { return ln.addr }

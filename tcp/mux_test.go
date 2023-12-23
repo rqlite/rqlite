@@ -142,10 +142,10 @@ func TestMux_Advertise(t *testing.T) {
 		mux.Logger = log.New(io.Discard, "", 0)
 	}
 
-	layer := mux.Listen(1)
-	if layer.Addr().String() != addr.Addr {
-		t.Fatalf("layer advertise address not correct, exp %s, got %s",
-			layer.Addr().String(), addr.Addr)
+	ln := mux.Listen(1)
+	if ln.Addr().String() != addr.Addr {
+		t.Fatalf("listener advertise address not correct, exp %s, got %s",
+			ln.Addr().String(), addr.Addr)
 	}
 }
 

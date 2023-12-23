@@ -632,17 +632,22 @@ func mustNewNode(enableSingle bool) *Node {
 func mustNewNodeEncrypted(enableSingle, httpEncrypt, nodeEncrypt bool) *Node {
 	dir := mustTempDir()
 	var mux *tcp.Mux
+	var raftDialer *tcp.Dialer
+	var clstrDialer *tcp.Dialer
 	if nodeEncrypt {
 		mux = mustNewOpenTLSMux(rX509.CertExampleDotComFile(dir), rX509.KeyExampleDotComFile(dir), "")
+		raftDialer = tcp.NewDialer(cluster.MuxRaftHeader, mustCreateTLSConfig(rX509.CertExampleDotComFile(dir), rX509.KeyExampleDotComFile(dir), ""))
+		clstrDialer = tcp.NewDialer(cluster.MuxClusterHeader, mustCreateTLSConfig(rX509.CertExampleDotComFile(dir), rX509.KeyExampleDotComFile(dir), ""))
 	} else {
 		mux, _ = mustNewOpenMux("")
+		raftDialer = tcp.NewDialer(cluster.MuxRaftHeader, nil)
+		clstrDialer = tcp.NewDialer(cluster.MuxClusterHeader, nil)
 	}
 	go mux.Serve()
-
-	return mustNodeEncrypted(dir, enableSingle, httpEncrypt, mux, "")
+	return mustNodeEncrypted(dir, enableSingle, httpEncrypt, mux, raftDialer, clstrDialer, "")
 }
 
-func mustNodeEncrypted(dir string, enableSingle, httpEncrypt bool, mux *tcp.Mux, nodeID string) *Node {
+func mustNodeEncrypted(dir string, enableSingle, httpEncrypt bool, mux *tcp.Mux, raftDialer, clstrDialer *tcp.Dialer, nodeID string) *Node {
 	nodeCertPath := rX509.CertExampleDotComFile(dir)
 	nodeKeyPath := rX509.KeyExampleDotComFile(dir)
 	httpCertPath := nodeCertPath
@@ -654,13 +659,14 @@ func mustNodeEncrypted(dir string, enableSingle, httpEncrypt bool, mux *tcp.Mux,
 		NodeKeyPath:  nodeKeyPath,
 		HTTPCertPath: httpCertPath,
 		HTTPKeyPath:  httpKeyPath,
-		TLSConfig:    mustCreateTLSConfig(nodeCertPath, nodeKeyPath, ""),
-		PeersPath:    filepath.Join(dir, "raft/peers.json"),
+		//TLSConfig:    mustCreateTLSConfig(nodeCertPath, nodeKeyPath, ""),
+		PeersPath: filepath.Join(dir, "raft/peers.json"),
 	}
 
 	dbConf := store.NewDBConfig()
 
-	raftTn := mux.Listen(cluster.MuxRaftHeader)
+	raftLn := mux.Listen(cluster.MuxRaftHeader)
+	raftTn := tcp.NewLayer(raftLn, raftDialer)
 	id := nodeID
 	if id == "" {
 		id = raftTn.Addr().String()
@@ -693,7 +699,6 @@ func mustNodeEncrypted(dir string, enableSingle, httpEncrypt bool, mux *tcp.Mux,
 	}
 	node.Cluster = clstr
 
-	clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, nil)
 	clstrClient := cluster.NewClient(clstrDialer, 30*time.Second)
 	node.Client = clstrClient
 	node.Service = httpd.New("localhost:0", node.Store, clstrClient, nil)
