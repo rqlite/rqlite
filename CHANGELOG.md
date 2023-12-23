@@ -3,6 +3,7 @@
 - [PR #1515](https://github.com/rqlite/rqlite/pull/1515): Fix a log message related to mutual TLS.
 - [PR #1516](https://github.com/rqlite/rqlite/pull/1516): Add support to Python end-to-end test helpers for mTLS.
 - [PR #1518](https://github.com/rqlite/rqlite/pull/1518): Refactor muxed internode communications.
+- [PR #1519](https://github.com/rqlite/rqlite/pull/1519): Refactor TCP TLS configuration control.
 
 ## 8.13.2 (December 21st 2023)
 ### Implementation changes and bug fixes
