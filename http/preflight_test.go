@@ -21,7 +21,10 @@ func Test_IsServingHTTP_HTTPServer(t *testing.T) {
 
 	addr := httpServer.Listener.Addr().String()
 	if !IsServingHTTP(addr) {
-		t.Errorf("Expected true for HTTP server running on %s", addr)
+		t.Fatalf("Expected true for HTTP server running on %s", addr)
+	}
+	if !AnyServingHTTP([]string{addr}) {
+		t.Fatalf("Expected true for HTTP server running on %s", addr)
 	}
 }
 
@@ -36,6 +39,9 @@ func Test_IsServingHTTP_HTTPSServer(t *testing.T) {
 	if !IsServingHTTP(addr) {
 		t.Error("Expected true for HTTPS server running")
 	}
+	if !AnyServingHTTP([]string{addr}) {
+		t.Fatalf("Expected true for HTTPS server running")
+	}
 }
 
 // Test_IsServingHTTP_NoServersRunning tests no servers running.
@@ -44,12 +50,18 @@ func Test_IsServingHTTP_NoServersRunning(t *testing.T) {
 	if IsServingHTTP(addr) {
 		t.Error("Expected false for no servers running")
 	}
+	if AnyServingHTTP([]string{addr}) {
+		t.Error("Expected false for no servers running")
+	}
 }
 
 // Test_IsServingHTTP_InvalidAddress tests invalid address format.
 func Test_IsServingHTTP_InvalidAddress(t *testing.T) {
 	addr := "invalid-address"
 	if IsServingHTTP(addr) {
+		t.Error("Expected false for invalid address")
+	}
+	if AnyServingHTTP([]string{addr}) {
 		t.Error("Expected false for invalid address")
 	}
 }
@@ -65,6 +77,9 @@ func Test_IsServingHTTP_HTTPErrorStatusCode(t *testing.T) {
 	if !IsServingHTTP(addr) {
 		t.Error("Expected true for HTTP server running, even with error status code")
 	}
+	if !AnyServingHTTP([]string{addr}) {
+		t.Error("Expected true for HTTP server running, even with error status code")
+	}
 }
 
 // Test_IsServingHTTP_HTTPSSuccessStatusCode tests HTTPS server running with success status code.
@@ -76,6 +91,9 @@ func Test_IsServingHTTP_HTTPSSuccessStatusCode(t *testing.T) {
 
 	addr := httpsServer.Listener.Addr().String()
 	if !IsServingHTTP(addr) {
+		t.Error("Expected true for HTTPS server running with success status code")
+	}
+	if !AnyServingHTTP([]string{addr}) {
 		t.Error("Expected true for HTTPS server running with success status code")
 	}
 }
@@ -90,6 +108,9 @@ func Test_IsServingHTTP_OpenPort(t *testing.T) {
 
 	addr := ln.Addr().String()
 	if IsServingHTTP(addr) {
+		t.Error("Expected false for open port")
+	}
+	if AnyServingHTTP([]string{addr}) {
 		t.Error("Expected false for open port")
 	}
 }
@@ -114,6 +135,9 @@ func Test_IsServingHTTP_OpenPortTLS(t *testing.T) {
 
 	addr := ln.Addr().String()
 	if IsServingHTTP(addr) {
+		t.Error("Expected false for open TLS port")
+	}
+	if AnyServingHTTP([]string{addr}) {
 		t.Error("Expected false for open TLS port")
 	}
 }

@@ -95,7 +95,8 @@ func main() {
 	// Raft internode layer
 	raftLn := mux.Listen(cluster.MuxRaftHeader)
 	log.Printf("Raft TCP mux Listener registered with byte header %d", cluster.MuxRaftHeader)
-	raftDialer, err := createRaftDialer(cfg)
+	raftDialer, err := cluster.CreateRaftDialer(cfg.NodeX509Cert, cfg.NodeX509Key, cfg.NodeX509CACert,
+		cfg.NodeVerifyServerName, cfg.NoNodeVerify)
 	if err != nil {
 		log.Fatalf("failed to create Raft dialer: %s", err.Error())
 	}
@@ -202,7 +203,7 @@ func main() {
 
 	if cfg.RaftClusterRemoveOnShutdown {
 		remover := cluster.NewRemover(clstrClient, 5*time.Second, str)
-		remover.SetCredentials(credentialsFor(credStr, cfg.JoinAs))
+		remover.SetCredentials(cluster.CredentialsFor(credStr, cfg.JoinAs))
 		log.Printf("initiating removal of this node from cluster before shutdown")
 		if err := remover.Do(cfg.NodeID, true); err != nil {
 			log.Fatalf("failed to remove this node from cluster before shutdown: %s", err.Error())
@@ -459,22 +460,9 @@ func createClusterClient(cfg *Config, clstr *cluster.Service) (*cluster.Client, 
 	return clstrClient, nil
 }
 
-func createRaftDialer(cfg *Config) (*tcp.Dialer, error) {
-	var dialerTLSConfig *tls.Config
-	var err error
-	if cfg.NodeX509Cert != "" || cfg.NodeX509CACert != "" {
-		dialerTLSConfig, err = rtls.CreateClientConfig(cfg.NodeX509Cert, cfg.NodeX509Key,
-			cfg.NodeX509CACert, cfg.NodeVerifyServerName, cfg.NoNodeVerify)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create TLS config for Raft dialer: %s", err.Error())
-		}
-	}
-	return tcp.NewDialer(cluster.MuxRaftHeader, dialerTLSConfig), nil
-}
-
 func createCluster(cfg *Config, hasPeers bool, client *cluster.Client, str *store.Store, httpServ *httpd.Service, credStr *auth.CredentialsStore) error {
 	joins := cfg.JoinAddresses()
-	if err := networkCheckJoinAddrs(cfg, joins); err != nil {
+	if err := networkCheckJoinAddrs(joins); err != nil {
 		return err
 	}
 
@@ -498,7 +486,7 @@ func createCluster(cfg *Config, hasPeers bool, client *cluster.Client, str *stor
 	}
 
 	joiner := cluster.NewJoiner(client, cfg.JoinAttempts, cfg.JoinInterval)
-	joiner.SetCredentials(credentialsFor(credStr, cfg.JoinAs))
+	joiner.SetCredentials(cluster.CredentialsFor(credStr, cfg.JoinAs))
 	if joins != nil && cfg.BootstrapExpect == 0 {
 		// Explicit join operation requested, so do it.
 		j, err := joiner.Do(joins, str.ID(), cfg.RaftAdv, !cfg.RaftNonVoter)
@@ -512,7 +500,7 @@ func createCluster(cfg *Config, hasPeers bool, client *cluster.Client, str *stor
 	if joins != nil && cfg.BootstrapExpect > 0 {
 		// Bootstrap with explicit join addresses requests.
 		bs := cluster.NewBootstrapper(cluster.NewAddressProviderString(joins), client)
-		bs.SetCredentials(credentialsFor(credStr, cfg.JoinAs))
+		bs.SetCredentials(cluster.CredentialsFor(credStr, cfg.JoinAs))
 		return bs.Boot(str.ID(), cfg.RaftAdv, isClustered, cfg.BootstrapExpectTimeout)
 	}
 
@@ -555,7 +543,7 @@ func createCluster(cfg *Config, hasPeers bool, client *cluster.Client, str *stor
 		}
 
 		bs := cluster.NewBootstrapper(provider, client)
-		bs.SetCredentials(credentialsFor(credStr, cfg.JoinAs))
+		bs.SetCredentials(cluster.CredentialsFor(credStr, cfg.JoinAs))
 		httpServ.RegisterStatus("disco", provider)
 		return bs.Boot(str.ID(), cfg.RaftAdv, isClustered, cfg.BootstrapExpectTimeout)
 
@@ -610,29 +598,10 @@ func createCluster(cfg *Config, hasPeers bool, client *cluster.Client, str *stor
 	return nil
 }
 
-func networkCheckJoinAddrs(cfg *Config, joinAddrs []string) error {
-	if len(joinAddrs) == 0 {
-		return nil
-	}
+func networkCheckJoinAddrs(joinAddrs []string) error {
 	log.Println("checking that join addresses don't serve HTTP(S)")
-	for _, addr := range joinAddrs {
-		if http.IsServingHTTP(addr) {
-			return fmt.Errorf("join address %s appears to be serving HTTP when it should be Raft", addr)
-		}
+	if http.AnyServingHTTP(joinAddrs) {
+		return fmt.Errorf("join address appears to be serving HTTP when it should be Raft")
 	}
 	return nil
-}
-
-func credentialsFor(credStr *auth.CredentialsStore, username string) *cluster.Credentials {
-	if credStr == nil {
-		return nil
-	}
-	pw, ok := credStr.Password(username)
-	if !ok {
-		return nil
-	}
-	return &cluster.Credentials{
-		Username: username,
-		Password: pw,
-	}
 }

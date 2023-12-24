@@ -6,6 +6,17 @@ import (
 	"time"
 )
 
+// AnyServingHTTP returns true if there appears to be a HTTP or HTTPS server
+// running on any of the given addresses.
+func AnyServingHTTP(addrs []string) bool {
+	for _, addr := range addrs {
+		if IsServingHTTP(addr) {
+			return true
+		}
+	}
+	return false
+}
+
 // IsServingHTTP returns true if there appears to be a HTTP or HTTPS server
 // running on the given address.
 func IsServingHTTP(addr string) bool {
