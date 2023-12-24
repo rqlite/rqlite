@@ -1,6 +1,7 @@
 ## 8.13.4 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #1522](https://github.com/rqlite/rqlite/pull/1522): Minor refactoring of main module.
+- [PR #1523](https://github.com/rqlite/rqlite/pull/1523): MMove download functionality into _restore_ module.
 
 ## 8.13.4 (December 23rd 2023)
 This release makes sure the version information is correctly recorded in the released binaries. There are no functional changes.
