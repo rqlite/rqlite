@@ -6,15 +6,15 @@ import (
 	"time"
 )
 
-// AnyServingHTTP returns true if there appears to be a HTTP or HTTPS server
-// running on any of the given addresses.
-func AnyServingHTTP(addrs []string) bool {
+// AnyServingHTTP returns the first address in the list that appears to be
+// serving HTTP or HTTPS, or false if none of them are.
+func AnyServingHTTP(addrs []string) (string, bool) {
 	for _, addr := range addrs {
 		if IsServingHTTP(addr) {
-			return true
+			return addr, true
 		}
 	}
-	return false
+	return "", false
 }
 
 // IsServingHTTP returns true if there appears to be a HTTP or HTTPS server
