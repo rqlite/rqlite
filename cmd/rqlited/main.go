@@ -111,7 +111,7 @@ func main() {
 	if cfg.AutoRestoreFile != "" {
 		log.Printf("auto-restore requested, initiating download")
 		start := time.Now()
-		path, errOK, err := downloadRestoreFile(mainCtx, cfg.AutoRestoreFile)
+		path, errOK, err := restore.DownloadFile(mainCtx, cfg.AutoRestoreFile)
 		if err != nil {
 			var b strings.Builder
 			b.WriteString(fmt.Sprintf("failed to download auto-restore file: %s", err.Error()))
@@ -250,48 +250,6 @@ func startAutoBackups(ctx context.Context, cfg *Config, str *store.Store) (*back
 	u := backup.NewUploader(sc, provider, time.Duration(uCfg.Interval), !uCfg.NoCompress)
 	u.Start(ctx, nil)
 	return u, nil
-}
-
-// downloadRestoreFile downloads the auto-restore file from the given URL, and returns the path to
-// the downloaded file. If the download fails, and the config is marked as continue-on-failure, then
-// the error is returned, but errOK is set to true. If the download fails, and the file is not
-// marked as continue-on-failure, then the error is returned, and errOK is set to false.
-func downloadRestoreFile(ctx context.Context, cfgPath string) (path string, errOK bool, err error) {
-	var f *os.File
-	defer func() {
-		if err != nil {
-			if f != nil {
-				f.Close()
-				os.Remove(f.Name())
-			}
-		}
-	}()
-
-	b, err := restore.ReadConfigFile(cfgPath)
-	if err != nil {
-		return "", false, fmt.Errorf("failed to read auto-restore file: %s", err.Error())
-	}
-
-	dCfg, s3cfg, err := restore.Unmarshal(b)
-	if err != nil {
-		return "", false, fmt.Errorf("failed to parse auto-restore file: %s", err.Error())
-	}
-	sc := aws.NewS3Client(s3cfg.Endpoint, s3cfg.Region, s3cfg.AccessKeyID, s3cfg.SecretAccessKey,
-		s3cfg.Bucket, s3cfg.Path)
-	d := restore.NewDownloader(sc)
-
-	// Create a temporary file to download to.
-	f, err = os.CreateTemp("", "rqlite-auto-restore")
-	if err != nil {
-		return "", false, fmt.Errorf("failed to create temporary file: %s", err.Error())
-	}
-	defer f.Close()
-
-	if err := d.Do(ctx, f, time.Duration(dCfg.Timeout)); err != nil {
-		return "", dCfg.ContinueOnFailure, fmt.Errorf("failed to download auto-restore file: %s", err.Error())
-	}
-
-	return f.Name(), false, nil
 }
 
 func createStore(cfg *Config, ln *tcp.Layer) (*store.Store, error) {

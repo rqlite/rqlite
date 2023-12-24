@@ -10,7 +10,50 @@ import (
 	"log"
 	"os"
 	"time"
+
+	"github.com/rqlite/rqlite/v8/aws"
 )
+
+// DownloadFile downloads the auto-restore file from the given URL, and returns the path to
+// the downloaded file. If the download fails, and the config is marked as continue-on-failure, then
+// the error is returned, but errOK is set to true. If the download fails, and the file is not
+// marked as continue-on-failure, then the error is returned, and errOK is set to false.
+func DownloadFile(ctx context.Context, cfgPath string) (path string, errOK bool, err error) {
+	var f *os.File
+	defer func() {
+		if err != nil {
+			if f != nil {
+				f.Close()
+				os.Remove(f.Name())
+			}
+		}
+	}()
+
+	b, err := ReadConfigFile(cfgPath)
+	if err != nil {
+		return "", false, fmt.Errorf("failed to read auto-restore file: %s", err.Error())
+	}
+
+	dCfg, s3cfg, err := Unmarshal(b)
+	if err != nil {
+		return "", false, fmt.Errorf("failed to parse auto-restore file: %s", err.Error())
+	}
+	sc := aws.NewS3Client(s3cfg.Endpoint, s3cfg.Region, s3cfg.AccessKeyID, s3cfg.SecretAccessKey,
+		s3cfg.Bucket, s3cfg.Path)
+	d := NewDownloader(sc)
+
+	// Create a temporary file to download to.
+	f, err = os.CreateTemp("", "rqlite-auto-restore")
+	if err != nil {
+		return "", false, fmt.Errorf("failed to create temporary file: %s", err.Error())
+	}
+	defer f.Close()
+
+	if err := d.Do(ctx, f, time.Duration(dCfg.Timeout)); err != nil {
+		return "", dCfg.ContinueOnFailure, fmt.Errorf("failed to download auto-restore file: %s", err.Error())
+	}
+	return f.Name(), false, nil
+}
 
 // StorageClient is an interface for downloading data from a storage service.
 type StorageClient interface {
