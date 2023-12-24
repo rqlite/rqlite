@@ -3,6 +3,7 @@ package cluster
 import (
 	"bytes"
 	"compress/gzip"
+	"crypto/tls"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -11,7 +12,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rqlite/rqlite/v8/auth"
 	"github.com/rqlite/rqlite/v8/command"
+	"github.com/rqlite/rqlite/v8/rtls"
+	"github.com/rqlite/rqlite/v8/tcp"
 	"github.com/rqlite/rqlite/v8/tcp/pool"
 	"google.golang.org/protobuf/proto"
 )
@@ -23,6 +27,36 @@ const (
 
 	protoBufferLengthSize = 8
 )
+
+// CreateRaftDialer creates a dialer for connecting to other nodes' Raft service. If the cert and
+// key arguments are not set, then the returned dialer will not use TLS.
+func CreateRaftDialer(cert, key, caCert, serverName string, Insecure bool) (*tcp.Dialer, error) {
+	var dialerTLSConfig *tls.Config
+	var err error
+	if cert != "" || key != "" {
+		dialerTLSConfig, err = rtls.CreateClientConfig(cert, key, caCert, serverName, Insecure)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create TLS config for Raft dialer: %s", err.Error())
+		}
+	}
+	return tcp.NewDialer(MuxRaftHeader, dialerTLSConfig), nil
+}
+
+// CredentialsFor returns a Credentials instance for the given username, or nil if
+// the given CredentialsStore is nil, or the username is not found.
+func CredentialsFor(credStr *auth.CredentialsStore, username string) *Credentials {
+	if credStr == nil {
+		return nil
+	}
+	pw, ok := credStr.Password(username)
+	if !ok {
+		return nil
+	}
+	return &Credentials{
+		Username: username,
+		Password: pw,
+	}
+}
 
 // Client allows communicating with a remote node.
 type Client struct {
