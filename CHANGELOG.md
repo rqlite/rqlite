@@ -1,4 +1,4 @@
-## 8.13.4 (unreleased)
+## 8.13.5 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #1522](https://github.com/rqlite/rqlite/pull/1522): Minor refactoring of main module.
 - [PR #1523](https://github.com/rqlite/rqlite/pull/1523): Move download functionality into _restore_ module.
