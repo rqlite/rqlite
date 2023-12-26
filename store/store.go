@@ -1932,7 +1932,7 @@ func (s *Store) Snapshot() error {
 		}
 		return err
 	}
-	stats.Add(numSnapshots, 1)
+	stats.Add(numUserSnapshots, 1)
 	return nil
 }
 
