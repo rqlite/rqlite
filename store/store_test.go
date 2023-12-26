@@ -2627,6 +2627,56 @@ func Test_IsLeader(t *testing.T) {
 	if !s.IsLeader() {
 		t.Fatalf("single node is not leader!")
 	}
+	if !s.HasLeader() {
+		t.Fatalf("single node does not have leader!")
+	}
+}
+
+func Test_MultiNodeIsLeaderHasLeader(t *testing.T) {
+	s0, ln0 := mustNewStore(t)
+	defer ln0.Close()
+	if err := s0.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s0.Close(true)
+	if err := s0.Bootstrap(NewServer(s0.ID(), s0.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	s1, ln1 := mustNewStore(t)
+	defer ln1.Close()
+	if err := s1.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s1.Close(true)
+	if err := s1.Bootstrap(NewServer(s1.ID(), s1.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+
+	// Join the second node to the first.
+	if err := s0.Join(joinRequest(s1.ID(), s1.Addr(), true)); err != nil {
+		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
+	}
+	_, err := s1.WaitForLeader(10 * time.Second)
+	if err != nil {
+		t.Fatalf("failed to get leader address on follower: %s", err.Error())
+	}
+
+	if !s0.IsLeader() {
+		t.Fatalf("s0 is not leader")
+	}
+	if !s0.HasLeader() {
+		t.Fatalf("s0 does not have a leader")
+	}
+	if s1.IsLeader() {
+		t.Fatalf("s1 is leader")
+	}
+	if !s1.HasLeader() {
+		t.Fatalf("s1 does not have a leader")
+	}
 }
 
 func Test_IsVoter(t *testing.T) {

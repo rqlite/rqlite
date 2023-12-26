@@ -675,6 +675,11 @@ func (s *Store) IsLeader() bool {
 	return s.raft.State() == raft.Leader
 }
 
+// HasLeader returns true if the cluster has a leader, false otherwise.
+func (s *Store) HasLeader() bool {
+	return s.raft.Leader() != ""
+}
+
 // IsVoter returns true if the current node is a voter in the cluster. If there
 // is no reference to the current node in the current cluster configuration then
 // false will also be returned.
@@ -1352,8 +1357,13 @@ func (s *Store) Notify(nr *command.NotifyRequest) error {
 	s.notifyMu.Lock()
 	defer s.notifyMu.Unlock()
 
-	if s.BootstrapExpect == 0 || s.bootstrapped || s.raft.Leader() != "" {
+	if s.BootstrapExpect == 0 || s.bootstrapped || s.HasLeader() {
 		// There is no reason this node will bootstrap.
+		//
+		// - Read-only nodes require that BootstrapExpect is set to 0, so this
+		// block ensures that notifying a read-only node will not cause a bootstrap.
+		// - If the node is already bootstrapped, then there is nothing to do.
+		// - If the node already has a leader, then no bootstrapping is required.
 		return nil
 	}
 
