@@ -305,6 +305,10 @@ func (c *Config) Validate() error {
 				}
 			}
 		}
+
+		if c.DiscoMode != "" {
+			return errors.New("disco mode cannot be used when also explicitly joining a cluster")
+		}
 	}
 
 	// Valid disco mode?
