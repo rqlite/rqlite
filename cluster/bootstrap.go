@@ -39,7 +39,8 @@ const (
 type Suffrage int
 
 const (
-	Voter Suffrage = iota
+	SuffrageUnknown Suffrage = iota
+	Voter
 	NonVoter
 )
 
@@ -66,6 +67,11 @@ func (s Suffrage) String() string {
 // IsVoter returns whether the Suffrage is a Voter.
 func (s Suffrage) IsVoter() bool {
 	return s == Voter
+}
+
+// IsNonVoter returns whether the Suffrage is a NonVoter.
+func (s Suffrage) IsNonVoter() bool {
+	return s == NonVoter
 }
 
 const (
@@ -178,7 +184,7 @@ func (b *Bootstrapper) Boot(id, raftAddr string, suf Suffrage, done func() bool,
 				return nil
 			}
 
-			if suf == Voter {
+			if suf.IsVoter() {
 				// This is where we have to be careful. This node failed to join with any node
 				// in the targets list. This could be because none of the nodes are contactable,
 				// or none of the nodes are in a functioning cluster with a leader. That means that
