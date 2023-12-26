@@ -1360,10 +1360,10 @@ func (s *Store) Notify(nr *command.NotifyRequest) error {
 	if s.BootstrapExpect == 0 || s.bootstrapped || s.HasLeader() {
 		// There is no reason this node will bootstrap.
 		//
-		// - Read-only nodes require that BootstrapExpect is set to 0, so block
-		// ensures that notifying a read-only node will not cause a bootstrap.
-		// - If the cluster is already bootstrapped, then there is nothing to do.
-		// - If the cluster already has a leader, then no bootstrapping is required.
+		// - Read-only nodes require that BootstrapExpect is set to 0, so this
+		// block ensures that notifying a read-only node will not cause a bootstrap.
+		// - If the node is already bootstrapped, then there is nothing to do.
+		// - If the node already has a leader, then no bootstrapping is required.
 		return nil
 	}
 
