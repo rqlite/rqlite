@@ -675,7 +675,7 @@ func (s *Store) IsLeader() bool {
 	return s.raft.State() == raft.Leader
 }
 
-// HasLeader is used to determine if the cluster has a leader
+// HasLeader returns true if the cluster has a leader, false otherwise.
 func (s *Store) HasLeader() bool {
 	return s.raft.Leader() != ""
 }
