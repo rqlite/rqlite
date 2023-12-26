@@ -47,7 +47,7 @@ func (j *Joiner) SetCredentials(creds *Credentials) {
 
 // Do makes the actual join request. If the join is successful with any address,
 // that address is returned. Otherwise, an error is returned.
-func (j *Joiner) Do(targetAddrs []string, id, addr string, voter bool) (string, error) {
+func (j *Joiner) Do(targetAddrs []string, id, addr string, suf Suffrage) (string, error) {
 	if id == "" {
 		return "", ErrNodeIDRequired
 	}
@@ -56,7 +56,7 @@ func (j *Joiner) Do(targetAddrs []string, id, addr string, voter bool) (string, 
 	var joinee string
 	for i := 0; i < j.numAttempts; i++ {
 		for _, ta := range targetAddrs {
-			joinee, err = j.join(ta, id, addr, voter)
+			joinee, err = j.join(ta, id, addr, suf)
 			if err == nil {
 				// Success!
 				return joinee, nil
@@ -73,11 +73,11 @@ func (j *Joiner) Do(targetAddrs []string, id, addr string, voter bool) (string, 
 	return "", ErrJoinFailed
 }
 
-func (j *Joiner) join(targetAddr, id, addr string, voter bool) (string, error) {
+func (j *Joiner) join(targetAddr, id, addr string, suf Suffrage) (string, error) {
 	req := &command.JoinRequest{
 		Id:      id,
 		Address: addr,
-		Voter:   voter,
+		Voter:   suf.IsVoter(),
 	}
 
 	// Attempt to join.

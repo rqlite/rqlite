@@ -447,7 +447,7 @@ func createCluster(cfg *Config, hasPeers bool, client *cluster.Client, str *stor
 	joiner.SetCredentials(cluster.CredentialsFor(credStr, cfg.JoinAs))
 	if joins != nil && cfg.BootstrapExpect == 0 {
 		// Explicit join operation requested, so do it.
-		j, err := joiner.Do(joins, str.ID(), cfg.RaftAdv, !cfg.RaftNonVoter)
+		j, err := joiner.Do(joins, str.ID(), cfg.RaftAdv, cluster.VoterSuffrage(!cfg.RaftNonVoter))
 		if err != nil {
 			return fmt.Errorf("failed to join cluster: %s", err.Error())
 		}
@@ -534,7 +534,7 @@ func createCluster(cfg *Config, hasPeers bool, client *cluster.Client, str *stor
 		} else {
 			for {
 				log.Printf("discovery service returned %s as join address", addr)
-				if j, err := joiner.Do([]string{addr}, str.ID(), cfg.RaftAdv, !cfg.RaftNonVoter); err != nil {
+				if j, err := joiner.Do([]string{addr}, str.ID(), cfg.RaftAdv, cluster.VoterSuffrage(!cfg.RaftNonVoter)); err != nil {
 					log.Printf("failed to join cluster at %s: %s", addr, err.Error())
 
 					time.Sleep(time.Second)

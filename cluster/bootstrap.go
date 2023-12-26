@@ -35,12 +35,38 @@ const (
 	BootTimeout
 )
 
+// Suffrage is the type of suffrage -- voting or non-voting -- a node has.
 type Suffrage int
 
 const (
 	Voter Suffrage = iota
 	NonVoter
 )
+
+// VoterSuffrage returns a Suffrage based on the given boolean.
+func VoterSuffrage(b bool) Suffrage {
+	if b {
+		return Voter
+	}
+	return NonVoter
+}
+
+// String returns a string representation of the Suffrage.
+func (s Suffrage) String() string {
+	switch s {
+	case Voter:
+		return "voter"
+	case NonVoter:
+		return "non-voter"
+	default:
+		panic("unknown suffrage")
+	}
+}
+
+// IsVoter returns whether the Suffrage is a Voter.
+func (s Suffrage) IsVoter() bool {
+	return s == Voter
+}
 
 const (
 	requestTimeout  = 5 * time.Second
@@ -146,7 +172,7 @@ func (b *Bootstrapper) Boot(id, raftAddr string, suf Suffrage, done func() bool,
 
 			// Try an explicit join first. Joining an existing cluster is always given priority
 			// over trying to form a new cluster.
-			if j, err := joiner.Do(targets, id, raftAddr, true); err == nil {
+			if j, err := joiner.Do(targets, id, raftAddr, suf); err == nil {
 				b.logger.Printf("succeeded directly joining cluster via node at %s", j)
 				b.setBootStatus(BootJoin)
 				return nil
