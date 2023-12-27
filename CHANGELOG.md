@@ -5,6 +5,7 @@
 - [PR #1524](https://github.com/rqlite/rqlite/pull/1524): Disco mode not supported when explicitly joining.
 - [PR #1525](https://github.com/rqlite/rqlite/pull/1525): Make Store _Notify_ logic clearer.
 - [PR #1526](https://github.com/rqlite/rqlite/pull/1526): Bootstrapper explicitly supports Voting nodes.
+- [PR #1527](https://github.com/rqlite/rqlite/pull/1527): More snapshotting instrumentation.
 
 ## 8.13.4 (December 23rd 2023)
 This release makes sure the version information is correctly recorded in the released binaries. There are no functional changes.
