@@ -1,6 +1,7 @@
 ## 8.14.0 (unreleased)
 ### New features
-- [PR #1530](https://github.com/rqlite/rqlite/pull/1530): Support automatically snapshotting when WAL reaches a certain size
+- [PR #1530](https://github.com/rqlite/rqlite/pull/1530): Support automatically snapshotting when WAL reaches a certain size.
+- [PR #1531](https://github.com/rqlite/rqlite/pull/1531): Check for Raft snapshot condition every 10 seconds by default.
 
 ### Implementation changes and bug fixes
 - [PR #1528](https://github.com/rqlite/rqlite/pull/1528): Support setting trailing logs for user-requested snapshot.
