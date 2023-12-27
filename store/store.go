@@ -143,7 +143,7 @@ func init() {
 func ResetStats() {
 	stats.Init()
 	stats.Add(numSnapshots, 0)
-	stats.Add(User, 0)
+	stats.Add(numSnapshotsFailed, 0)
 	stats.Add(numUserSnapshots, 0)
 	stats.Add(numUserSnapshotsFailed, 0)
 	stats.Add(numSnapshotsFull, 0)
