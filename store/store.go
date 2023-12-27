@@ -99,7 +99,9 @@ const (
 
 const (
 	numSnapshots              = "num_snapshots"
+	numSnapshotsFailed        = "num_snapshots_failed"
 	numUserSnapshots          = "num_user_snapshots"
+	numUserSnapshotsFailed    = "num_user_snapshots_failed"
 	numSnapshotsFull          = "num_snapshots_full"
 	numSnapshotsIncremental   = "num_snapshots_incremental"
 	numProvides               = "num_provides"
@@ -141,7 +143,9 @@ func init() {
 func ResetStats() {
 	stats.Init()
 	stats.Add(numSnapshots, 0)
+	stats.Add(User, 0)
 	stats.Add(numUserSnapshots, 0)
+	stats.Add(numUserSnapshotsFailed, 0)
 	stats.Add(numSnapshotsFull, 0)
 	stats.Add(numSnapshotsIncremental, 0)
 	stats.Add(numBoots, 0)
@@ -1689,8 +1693,13 @@ func (s *Store) Database(leader bool) ([]byte, error) {
 //
 // http://sqlite.org/howtocorrupt.html states it is safe to copy or serialize the
 // database as long as no writes to the database are in progress.
-func (s *Store) fsmSnapshot() (raft.FSMSnapshot, error) {
+func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	startT := time.Now()
+	defer func() {
+		if retErr != nil {
+			stats.Add(numSnapshotsFailed, 1)
+		}
+	}()
 
 	fullNeeded, err := s.snapshotStore.FullNeeded()
 	if err != nil {
@@ -1912,7 +1921,12 @@ func (s *Store) observe() (closeCh, doneCh chan struct{}) {
 // Snapshot performs a snapshot, and then truncates the log, except for the
 // the very last entry. This is due to issues in the underlying Raft code
 // when truncating the log to zero trailing entries.
-func (s *Store) Snapshot() error {
+func (s *Store) Snapshot() (retError error) {
+	defer func() {
+		if retError != nil {
+			stats.Add(numUserSnapshotsFailed, 1)
+		}
+	}()
 	// reload the config with zero trailing logs.
 	cfg := s.raft.ReloadableConfig()
 	defer func() {
