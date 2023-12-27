@@ -1339,7 +1339,7 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 	if err := s.snapshotStore.SetFullNeeded(); err != nil {
 		return n, err
 	}
-	if err := s.Snapshot(); err != nil {
+	if err := s.Snapshot(1); err != nil {
 		return n, err
 	}
 	stats.Add(numBoots, 1)
@@ -1918,27 +1918,30 @@ func (s *Store) observe() (closeCh, doneCh chan struct{}) {
 	return closeCh, doneCh
 }
 
-// Snapshot performs a snapshot, and then truncates the log, except for the
-// the very last entry. This is due to issues in the underlying Raft code
-// when truncating the log to zero trailing entries.
-func (s *Store) Snapshot() (retError error) {
+// Snapshot performs a snapshot, leaving n trailing logs behind. If n
+// is greater than zero, that many logs are left in the log after
+// snapshotting. If n is zero, then the number set at Store creation is used.
+// Finally, once this function returns, the trailing log configuration value
+// is reset to the value set at Store creation.
+func (s *Store) Snapshot(n uint64) (retError error) {
 	defer func() {
 		if retError != nil {
 			stats.Add(numUserSnapshotsFailed, 1)
 		}
 	}()
-	// reload the config with zero trailing logs.
-	cfg := s.raft.ReloadableConfig()
-	defer func() {
-		// Whatever happens, this is a one-shot attempt to perform a snapshot
-		cfg.TrailingLogs = s.numTrailingLogs
+
+	if n > 0 {
+		cfg := s.raft.ReloadableConfig()
+		defer func() {
+			cfg.TrailingLogs = s.numTrailingLogs
+			if err := s.raft.ReloadConfig(cfg); err != nil {
+				s.logger.Printf("failed to reload Raft config: %s", err.Error())
+			}
+		}()
+		cfg.TrailingLogs = n
 		if err := s.raft.ReloadConfig(cfg); err != nil {
-			s.logger.Printf("failed to reload Raft config: %s", err.Error())
+			return fmt.Errorf("failed to reload Raft config: %s", err.Error())
 		}
-	}()
-	cfg.TrailingLogs = 1
-	if err := s.raft.ReloadConfig(cfg); err != nil {
-		return fmt.Errorf("failed to reload Raft config: %s", err.Error())
 	}
 	if err := s.raft.Snapshot().Error(); err != nil {
 		if strings.Contains(err.Error(), ErrLoadInProgress.Error()) {
@@ -1962,7 +1965,7 @@ func (s *Store) runSnapshotting() (triggerT, closeCh, doneCh chan struct{}) {
 		for {
 			select {
 			case <-triggerT:
-				if err := s.Snapshot(); err != nil {
+				if err := s.Snapshot(1); err != nil {
 					s.logger.Printf("failed to snapshot: %s", err.Error())
 				}
 			case <-closeCh:
