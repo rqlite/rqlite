@@ -1960,6 +1960,9 @@ func (s *Store) Snapshot(n uint64) (retError error) {
 // runWALSnapshotting runs the periodic check to see if a snapshot should be
 // triggered due to WAL size.
 func (s *Store) runWALSnapshotting() (closeCh, doneCh chan struct{}) {
+	if s.SnapshotInterval <= 0 {
+		return nil, nil
+	}
 	closeCh = make(chan struct{})
 	doneCh = make(chan struct{})
 	ticker := time.NewTicker(s.SnapshotInterval)
