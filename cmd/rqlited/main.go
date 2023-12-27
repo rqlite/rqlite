@@ -557,6 +557,9 @@ func createCluster(cfg *Config, hasPeers bool, client *cluster.Client, str *stor
 }
 
 func networkCheckJoinAddrs(joinAddrs []string) error {
+	if len(joinAddrs) == 0 {
+		return nil
+	}
 	log.Println("checking that join addresses don't serve HTTP(S)")
 	if addr, ok := http.AnyServingHTTP(joinAddrs); ok {
 		return fmt.Errorf("join address %s appears to be serving HTTP when it should be Raft", addr)
