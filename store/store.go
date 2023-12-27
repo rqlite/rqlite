@@ -606,8 +606,10 @@ func (s *Store) Close(wait bool) (retErr error) {
 	close(s.observerClose)
 	<-s.observerDone
 
-	close(s.snapshotWClose)
-	<-s.snapshotWDone
+	if s.snapshotWClose != nil {
+		close(s.snapshotWClose)
+		<-s.snapshotWDone
+	}
 
 	f := s.raft.Shutdown()
 	if wait {
