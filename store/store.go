@@ -233,11 +233,6 @@ type Store struct {
 	numClosedReadyChannels int
 	readyChansMu           sync.Mutex
 
-	// Channels for triggering and listening to snapshots
-	snapshotTClose chan struct{}
-	snapshotTDone  chan struct{}
-	snapshotTChan  chan struct{}
-
 	// Latest log entry index actually reflected by the FSM. Due to Raft code
 	// this value is not updated after a Snapshot-restore.
 	fsmIndex   uint64
@@ -272,15 +267,16 @@ type Store struct {
 	bootstrapped    bool
 	notifyingNodes  map[string]*Server
 
-	ShutdownOnRemove   bool
-	SnapshotThreshold  uint64
-	SnapshotInterval   time.Duration
-	LeaderLeaseTimeout time.Duration
-	HeartbeatTimeout   time.Duration
-	ElectionTimeout    time.Duration
-	ApplyTimeout       time.Duration
-	RaftLogLevel       string
-	NoFreeListSync     bool
+	ShutdownOnRemove         bool
+	SnapshotThreshold        uint64
+	SnapshotWALSizeThreshold uint64
+	SnapshotInterval         time.Duration
+	LeaderLeaseTimeout       time.Duration
+	HeartbeatTimeout         time.Duration
+	ElectionTimeout          time.Duration
+	ApplyTimeout             time.Duration
+	RaftLogLevel             string
+	NoFreeListSync           bool
 
 	// Node-reaping configuration
 	ReapTimeout         time.Duration
@@ -512,9 +508,6 @@ func (s *Store) Open() (retErr error) {
 	s.raft.RegisterObserver(s.observer)
 	s.observerClose, s.observerDone = s.observe()
 
-	// Setup user-triggered snapshotting.
-	s.snapshotTChan, s.snapshotTClose, s.snapshotTDone = s.runSnapshotting()
-
 	// Periodically update the applied index for faster startup.
 	s.appliedIdxUpdateDone = s.updateAppliedIndex()
 
@@ -601,9 +594,6 @@ func (s *Store) Close(wait bool) (retErr error) {
 	close(s.appliedIdxUpdateDone)
 	close(s.observerClose)
 	<-s.observerDone
-
-	close(s.snapshotTClose)
-	<-s.snapshotTDone
 
 	f := s.raft.Shutdown()
 	if wait {
