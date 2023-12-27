@@ -35,6 +35,45 @@ const (
 	BootTimeout
 )
 
+// Suffrage is the type of suffrage -- voting or non-voting -- a node has.
+type Suffrage int
+
+const (
+	SuffrageUnknown Suffrage = iota
+	Voter
+	NonVoter
+)
+
+// VoterSuffrage returns a Suffrage based on the given boolean.
+func VoterSuffrage(b bool) Suffrage {
+	if b {
+		return Voter
+	}
+	return NonVoter
+}
+
+// String returns a string representation of the Suffrage.
+func (s Suffrage) String() string {
+	switch s {
+	case Voter:
+		return "voter"
+	case NonVoter:
+		return "non-voter"
+	default:
+		panic("unknown suffrage")
+	}
+}
+
+// IsVoter returns whether the Suffrage is a Voter.
+func (s Suffrage) IsVoter() bool {
+	return s == Voter
+}
+
+// IsNonVoter returns whether the Suffrage is a NonVoter.
+func (s Suffrage) IsNonVoter() bool {
+	return s == NonVoter
+}
+
 const (
 	requestTimeout  = 5 * time.Second
 	numJoinAttempts = 1
@@ -94,19 +133,20 @@ func (b *Bootstrapper) SetCredentials(creds *Credentials) {
 }
 
 // Boot performs the bootstrapping process for this node. This means it will
-// ensure this node becomes part of a cluster. It does this by either joining
-// an existing cluster by explicitly joining it through one of these nodes,
-// or by notifying those nodes that it exists, allowing a cluster-wide bootstap
-// take place.
+// ensure this node becomes part of a cluster. It does this by either:
+//   - joining an existing cluster by explicitly joining it through a node returned
+//     by the AddressProvider, or
+//   - if it's a Voting node, notifying all nodes returned by the AddressProvider
+//     that it exists, allowing a cluster-wide bootstrap take place.
 //
 // Returns nil if the boot operation was successful, or if done() ever returns
 // true. done() is periodically polled by the boot process. Returns an error
 // the boot process encounters an unrecoverable error, or booting does not
 // occur within the given timeout.
 //
-// id and raftAddr are those of the node calling Boot.  All operations
-// performed by this function are done as a voting node.
-func (b *Bootstrapper) Boot(id, raftAddr string, done func() bool, timeout time.Duration) error {
+// id and raftAddr are those of the node calling Boot. suf is whether this node
+// is a Voter or NonVoter.
+func (b *Bootstrapper) Boot(id, raftAddr string, suf Suffrage, done func() bool, timeout time.Duration) error {
 	timeoutT := time.NewTimer(timeout)
 	defer timeoutT.Stop()
 	tickerT := time.NewTimer(random.Jitter(time.Millisecond))
@@ -132,31 +172,32 @@ func (b *Bootstrapper) Boot(id, raftAddr string, done func() bool, timeout time.
 			if err != nil {
 				b.logger.Printf("provider lookup failed %s", err.Error())
 			}
-
 			if len(targets) == 0 {
 				continue
 			}
 
 			// Try an explicit join first. Joining an existing cluster is always given priority
 			// over trying to form a new cluster.
-			if j, err := joiner.Do(targets, id, raftAddr, true); err == nil {
+			if j, err := joiner.Do(targets, id, raftAddr, suf); err == nil {
 				b.logger.Printf("succeeded directly joining cluster via node at %s", j)
 				b.setBootStatus(BootJoin)
 				return nil
 			}
 
-			// This is where we have to be careful. This node failed to join with any node
-			// in the targets list. This could be because none of the nodes are contactable,
-			// or none of the nodes are in a functioning cluster with a leader. That means that
-			// this node could be part of a set nodes that are bootstrapping to form a cluster
-			// de novo. For that to happen it needs to now let the other nodes know it is here.
-			// If this is a new cluster, some node will then reach the bootstrap-expect value
-			// first, form the cluster, beating all other nodes to it.
-			if err := b.notify(targets, id, raftAddr); err != nil {
-				b.logger.Printf("failed to notify all targets: %s (%s, will retry)", targets,
-					err.Error())
-			} else {
-				b.logger.Printf("succeeded notifying all targets: %s", targets)
+			if suf.IsVoter() {
+				// This is where we have to be careful. This node failed to join with any node
+				// in the targets list. This could be because none of the nodes are contactable,
+				// or none of the nodes are in a functioning cluster with a leader. That means that
+				// this node could be part of a set nodes that are bootstrapping to form a cluster
+				// de novo. For that to happen it needs to now let the other nodes know it is here.
+				// If this is a new cluster, some node will then reach the bootstrap-expect value
+				// first, form the cluster, beating all other nodes to it.
+				if err := b.notify(targets, id, raftAddr); err != nil {
+					b.logger.Printf("failed to notify all targets: %s (%s, will retry)", targets,
+						err.Error())
+				} else {
+					b.logger.Printf("succeeded notifying all targets: %s", targets)
+				}
 			}
 		}
 	}
