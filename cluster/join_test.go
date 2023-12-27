@@ -49,7 +49,7 @@ func Test_SingleJoinOK(t *testing.T) {
 
 	c := NewClient(&simpleDialer{}, 0)
 	joiner := NewJoiner(c, numAttempts, attemptInterval)
-	addr, err := joiner.Do([]string{srv.Addr()}, "id0", "1.2.3.4", true)
+	addr, err := joiner.Do([]string{srv.Addr()}, "id0", "1.2.3.4", Voter)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +68,7 @@ func Test_SingleJoinZeroAttempts(t *testing.T) {
 
 	c := NewClient(&simpleDialer{}, 0)
 	joiner := NewJoiner(c, 0, attemptInterval)
-	_, err := joiner.Do([]string{srv.Addr()}, "id0", "1.2.3.4", true)
+	_, err := joiner.Do([]string{srv.Addr()}, "id0", "1.2.3.4", Voter)
 	if err != ErrJoinFailed {
 		t.Fatalf("Incorrect error returned when zero attempts specified")
 	}
@@ -99,7 +99,7 @@ func Test_SingleJoinFail(t *testing.T) {
 
 	c := NewClient(&simpleDialer{}, 0)
 	joiner := NewJoiner(c, numAttempts, attemptInterval)
-	_, err := joiner.Do([]string{srv.Addr()}, "id0", "1.2.3.4", true)
+	_, err := joiner.Do([]string{srv.Addr()}, "id0", "1.2.3.4", Voter)
 	if err == nil {
 		t.Fatalf("expected error when joining bad node")
 	}
@@ -153,7 +153,7 @@ func Test_DoubleJoinOKSecondNode(t *testing.T) {
 
 	c := NewClient(&simpleDialer{}, 0)
 	joiner := NewJoiner(c, numAttempts, attemptInterval)
-	addr, err := joiner.Do([]string{srv1.Addr(), srv2.Addr()}, "id0", "1.2.3.4", true)
+	addr, err := joiner.Do([]string{srv1.Addr(), srv2.Addr()}, "id0", "1.2.3.4", Voter)
 	if err != nil {
 		t.Fatal(err)
 	}
