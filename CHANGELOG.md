@@ -1,6 +1,7 @@
 ## 8.13.6 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #1528](https://github.com/rqlite/rqlite/pull/1528): Support setting trailing logs for user-requested snapshot.
+- [PR #1529](https://github.com/rqlite/rqlite/pull/1529): Remove obsolete code related to user-triggered snapshots.
 
 ## 8.13.5 (December 26th 2023)
 ### Implementation changes and bug fixes
