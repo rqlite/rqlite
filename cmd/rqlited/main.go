@@ -268,6 +268,7 @@ func createStore(cfg *Config, ln *tcp.Layer) (*store.Store, error) {
 	str.RaftLogLevel = cfg.RaftLogLevel
 	str.ShutdownOnRemove = cfg.RaftShutdownOnRemove
 	str.SnapshotThreshold = cfg.RaftSnapThreshold
+	str.SnapshotThresholdWALSize = cfg.RaftSnapThresholdWALSize
 	str.SnapshotInterval = cfg.RaftSnapInterval
 	str.LeaderLeaseTimeout = cfg.RaftLeaderLeaseTimeout
 	str.HeartbeatTimeout = cfg.RaftHeartbeatTimeout
