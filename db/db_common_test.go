@@ -127,6 +127,24 @@ func testSQLiteTimeTypes(t *testing.T, db *DB) {
 	}
 }
 
+func testBlobType(t *testing.T, db *DB) {
+	_, err := db.ExecuteStringStmt("CREATE TABLE foo(real_column REAL, text_column TEXT, blob_column BLOB, boolean_column INTEGER)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	_, err = db.ExecuteStringStmt(`INSERT INTO foo(real_column, text_column, blob_column, boolean_column) VALUES (3.14159, 'Hello, World!', x'53514C697465', 1)`)
+	if err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+	r, err := db.QueryStringStmt("SELECT x'53514C697465' from foo")
+	if err != nil {
+		t.Fatalf("failed to query master table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["d","ts","dt"],"types":["date","timestamp","datetime"],"values":[["2004-02-14T00:00:00Z","2004-02-14T07:15:00Z","2021-10-22T19:39:32.016087Z"]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+}
+
 func testNotNULLField(t *testing.T, db *DB) {
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
 	if err != nil {
@@ -1517,6 +1535,7 @@ func Test_DatabaseCommonOperations(t *testing.T) {
 		{"TableCreationFTS", testTableCreationFTS},
 		{"SQLiteMasterTable", testSQLiteMasterTable},
 		{"SQLiteTimeTypes", testSQLiteTimeTypes},
+		{"SQLiteBlobTypes", testBlobType},
 		{"NotNULLField", testNotNULLField},
 		{"EmptyStatements", testEmptyStatements},
 		{"SimpleSingleStatements", testSimpleSingleStatements},
