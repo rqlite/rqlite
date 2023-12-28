@@ -222,7 +222,9 @@ type Store struct {
 	dbConf *DBConfig // SQLite database config.
 	dbPath string    // Path to underlying SQLite file.
 	dbDir  string    // Path to directory containing SQLite file.
-	db     *sql.DB   // The underlying SQLite store.
+
+	dbMu sync.RWMutex
+	db   *DBSync // The DBSync object for this Store.
 
 	queryTxMu sync.RWMutex
 
@@ -474,11 +476,12 @@ func (s *Store) Open() (retErr error) {
 	s.logger.Printf("first log index: %d, last log index: %d, last applied index: %d, last command log index: %d:",
 		s.firstIdxOnOpen, s.lastIdxOnOpen, s.lastAppliedIdxOnOpen, s.lastCommandIdxOnOpen)
 
-	s.db, err = createOnDisk(nil, s.dbPath, s.dbConf.FKConstraints, true)
+	db, err := createOnDisk(nil, s.dbPath, s.dbConf.FKConstraints, true)
 	if err != nil {
 		return fmt.Errorf("failed to create on-disk database: %s", err)
 	}
 	s.logger.Printf("created on-disk database at open")
+	s.db = &DBSync{Store: s, DB: db}
 
 	// Clean up any files from aborted operations. This tries to catch the case where scratch files
 	// were created in the Raft directory, not cleaned up, and then the node was restarted with an
@@ -1326,29 +1329,37 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 	}
 
 	// Swap in new database file.
-	if err := s.db.Close(); err != nil {
-		return n, err
-	}
-	if err := sql.RemoveFiles(s.dbPath); err != nil {
-		return n, err
-	}
-	if err := os.Rename(f.Name(), s.dbPath); err != nil {
-		return n, err
-	}
-	db, err := sql.Open(s.dbPath, s.dbConf.FKConstraints, true)
-	if err != nil {
-		return n, err
-	}
-	s.db = db
+	if err := func() error {
+		s.dbMu.Lock()
+		defer s.dbMu.Unlock()
 
-	// Snapshot, so we load the new database into the Raft system.
-	if err := s.snapshotStore.SetFullNeeded(); err != nil {
+		if err := s.db.Close(); err != nil {
+			return err
+		}
+		if err := sql.RemoveFiles(s.dbPath); err != nil {
+			return err
+		}
+		if err := os.Rename(f.Name(), s.dbPath); err != nil {
+			return err
+		}
+		db, err := sql.Open(s.dbPath, s.dbConf.FKConstraints, true)
+		if err != nil {
+			return err
+		}
+		s.db = &DBSync{Store: s, DB: db}
+
+		// Snapshot, so we load the new database into the Raft system.
+		if err := s.snapshotStore.SetFullNeeded(); err != nil {
+			return err
+		}
+		if err := s.Snapshot(1); err != nil {
+			return err
+		}
+		stats.Add(numBoots, 1)
+		return nil
+	}(); err != nil {
 		return n, err
 	}
-	if err := s.Snapshot(1); err != nil {
-		return n, err
-	}
-	stats.Add(numBoots, 1)
 	return n, nil
 }
 
@@ -1667,7 +1678,7 @@ func (s *Store) fsmApply(l *raft.Log) (e interface{}) {
 		s.logger.Printf("first log applied since node start, log at index %d", l.Index)
 	}
 
-	cmd, r := applyCommand(s.logger, l.Data, &s.db, s.dechunkManager)
+	cmd, r := applyCommand(s.logger, l.Data, &s.db.DB, s.dechunkManager)
 	if cmd.Type == command.Command_COMMAND_TYPE_NOOP {
 		s.numNoops++
 	}
@@ -1834,7 +1845,7 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	if err != nil {
 		return fmt.Errorf("open SQLite file during restore: %s", err)
 	}
-	s.db = db
+	s.db = &DBSync{Store: s, DB: db}
 	s.logger.Printf("successfully opened database at %s due to restore", s.db.Path())
 
 	stats.Add(numRestores, 1)
