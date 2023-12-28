@@ -86,6 +86,9 @@ func Test_DBPaths(t *testing.T) {
 	if exp, got := pathWAL+"-wal", dbWAL.WALPath(); exp != got {
 		t.Fatalf("expected WAL path %s, got %s", exp, got)
 	}
+	if p1, p2 := WALPath(pathWAL), dbWAL.WALPath(); p1 != p2 {
+		t.Fatalf("WAL paths are not equal (%s != %s)", p1, p2)
+	}
 
 	db, path := mustCreateOnDiskDatabase()
 	defer db.Close()
