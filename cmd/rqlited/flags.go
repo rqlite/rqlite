@@ -465,7 +465,7 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	flag.DurationVar(&config.RaftElectionTimeout, "raft-election-timeout", time.Second, "Raft election timeout")
 	flag.DurationVar(&config.RaftApplyTimeout, "raft-apply-timeout", 10*time.Second, "Raft apply timeout")
 	flag.Uint64Var(&config.RaftSnapThreshold, "raft-snap", 8192, "Number of outstanding log entries that trigger snapshot and Raft log compaction")
-	flag.Uint64Var(&config.RaftSnapThresholdWALSize, "raft-snap-wal-size", 16*1024*1024, "Size of a SQLite WAL file in bytes which will trigger a snapshot and Raft log compaction")
+	flag.Uint64Var(&config.RaftSnapThresholdWALSize, "raft-snap-wal-size", 4*1024*1024, "Size of a SQLite WAL file in bytes which will trigger a snapshot and Raft log compaction")
 	flag.DurationVar(&config.RaftSnapInterval, "raft-snap-int", 10*time.Second, "Snapshot threshold check interval")
 	flag.DurationVar(&config.RaftLeaderLeaseTimeout, "raft-leader-lease-timeout", 0, "Raft leader lease timeout. Use 0s for Raft default")
 	flag.BoolVar(&config.RaftStepdownOnShutdown, "raft-shutdown-stepdown", true, "If leader, stepdown before shutting down. Enabled by default")
