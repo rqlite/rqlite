@@ -3,12 +3,12 @@ This release adds new control over Raft snapshotting, a key part of the Raft con
 ### New features
 - [PR #1530](https://github.com/rqlite/rqlite/pull/1530), [PR #1533](https://github.com/rqlite/rqlite/pull/1533): Support automatically snapshotting when WAL reaches the SQLite default of 4MB.
 - [PR #1531](https://github.com/rqlite/rqlite/pull/1531): Check for Raft snapshot condition every 10 seconds by default.
-- [PR #1535](https://github.com/rqlite/rqlite/pull/1535): Refactor using CommandProcessor.
 
 ### Implementation changes and bug fixes
 - [PR #1528](https://github.com/rqlite/rqlite/pull/1528): Support setting trailing logs for user-requested snapshot.
 - [PR #1529](https://github.com/rqlite/rqlite/pull/1529): Remove obsolete code related to user-triggered snapshots.
 - [PR #1536](https://github.com/rqlite/rqlite/pull/1536): Store WAL path in store, to avoid races.
+- [PR #1535](https://github.com/rqlite/rqlite/pull/1535): Refactor using CommandProcessor.
 
 ## 8.13.5 (December 26th 2023)
 ### Implementation changes and bug fixes
