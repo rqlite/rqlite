@@ -1506,7 +1506,6 @@ func normalizeRowValues(row []interface{}, types []string) ([]*command.Parameter
 func isTextType(t string) bool {
 	return t == "text" ||
 		t == "json" ||
-		t == "" ||
 		strings.HasPrefix(t, "varchar") ||
 		strings.HasPrefix(t, "varying character") ||
 		strings.HasPrefix(t, "nchar") ||

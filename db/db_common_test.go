@@ -128,11 +128,11 @@ func testSQLiteTimeTypes(t *testing.T, db *DB) {
 }
 
 func testBlobType(t *testing.T, db *DB) {
-	_, err := db.ExecuteStringStmt("CREATE TABLE foo(real_column REAL, text_column TEXT, blob_column BLOB, boolean_column INTEGER)")
+	_, err := db.ExecuteStringStmt("CREATE TABLE foo(blob_column BLOB)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
-	_, err = db.ExecuteStringStmt(`INSERT INTO foo(real_column, text_column, blob_column, boolean_column) VALUES (3.14159, 'Hello, World!', x'53514C697465', 1)`)
+	_, err = db.ExecuteStringStmt(`INSERT INTO foo(blob_column) VALUES (x'53514C697465')`)
 	if err != nil {
 		t.Fatalf("failed to insert record: %s", err.Error())
 	}
@@ -140,7 +140,7 @@ func testBlobType(t *testing.T, db *DB) {
 	if err != nil {
 		t.Fatalf("failed to query master table: %s", err.Error())
 	}
-	if exp, got := `[{"columns":["d","ts","dt"],"types":["date","timestamp","datetime"],"values":[["2004-02-14T00:00:00Z","2004-02-14T07:15:00Z","2021-10-22T19:39:32.016087Z"]]}]`, asJSON(r); exp != got {
+	if exp, got := `[{"columns":["x'53514C697465'"],"types":["blob"],"values":[["U1FMaXRl"]]}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
 }
