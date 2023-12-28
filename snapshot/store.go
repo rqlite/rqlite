@@ -178,11 +178,6 @@ func (s *Store) SetFullNeeded() error {
 
 // Stats returns stats about the Snapshot Store.
 func (s *Store) Stats() (map[string]interface{}, error) {
-	// Keep the store locked while we get the stats. Sinks can change the store
-	// in two ways: by creating a new snapshot, or by reaping old snapshots.
-	s.sinkMu.Lock()
-	defer s.sinkMu.Unlock()
-
 	snapshots, err := s.getSnapshots()
 	if err != nil {
 		return nil, err
