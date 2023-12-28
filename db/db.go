@@ -111,6 +111,11 @@ type PoolStats struct {
 	MaxLifetimeClosed  int64         `json:"max_lifetime_closed"`
 }
 
+// WALPath returns the path to the WAL file for the given database path.
+func WALPath(dbPath string) string {
+	return dbPath + "-wal"
+}
+
 // IsValidSQLiteFile checks that the supplied path looks like a SQLite file.
 // A non-existent file is considered invalid.
 func IsValidSQLiteFile(path string) bool {

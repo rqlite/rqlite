@@ -215,14 +215,15 @@ type Store struct {
 	restorePath   string
 	restoreDoneCh chan struct{}
 
-	raft   *raft.Raft // The consensus mechanism.
-	ly     Layer
-	raftTn *NodeTransport
-	raftID string    // Node ID.
-	dbConf *DBConfig // SQLite database config.
-	dbPath string    // Path to underlying SQLite file.
-	dbDir  string    // Path to directory containing SQLite file.
-	db     *sql.DB   // The underlying SQLite store.
+	raft    *raft.Raft // The consensus mechanism.
+	ly      Layer
+	raftTn  *NodeTransport
+	raftID  string    // Node ID.
+	dbConf  *DBConfig // SQLite database config.
+	dbPath  string    // Path to underlying SQLite file.
+	walPath string    // Path to WAL file.
+	dbDir   string    // Path to directory containing SQLite file.
+	db      *sql.DB   // The underlying SQLite store.
 
 	queryTxMu sync.RWMutex
 
@@ -337,6 +338,7 @@ func New(ly Layer, c *Config) *Store {
 		raftID:          c.ID,
 		dbConf:          c.DBConf,
 		dbPath:          dbPath,
+		walPath:         sql.WALPath(dbPath),
 		dbDir:           filepath.Dir(dbPath),
 		leaderObservers: make([]chan<- struct{}, 0),
 		reqMarshaller:   command.NewRequestMarshaler(),
@@ -1736,8 +1738,8 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	} else {
 		compactedBuf := bytes.NewBuffer(nil)
 		var err error
-		if pathExistsWithData(s.db.WALPath()) {
-			walFD, err := os.Open(s.db.WALPath())
+		if pathExistsWithData(s.walPath) {
+			walFD, err := os.Open(s.walPath)
 			if err != nil {
 				return nil, err
 			}
@@ -1756,7 +1758,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			}
 			walFD.Close() // We need it closed for the next step.
 
-			walSz, err := fileSize(s.db.WALPath())
+			walSz, err := fileSize(s.walPath)
 			if err != nil {
 				return nil, err
 			}
@@ -1973,7 +1975,7 @@ func (s *Store) runWALSnapshotting() (closeCh, doneCh chan struct{}) {
 		for {
 			select {
 			case <-ticker.C:
-				sz, err := s.db.WALSize()
+				sz, err := fileSize(s.walPath)
 				if err != nil {
 					s.logger.Printf("failed to get WAL size: %s", err.Error())
 					continue
