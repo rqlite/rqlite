@@ -1,7 +1,7 @@
 ## 8.14.0 (unreleased)
-This release adds new control over Raft snapshotting, a key part of the Raft consensus protocol. When the WAL file reaches a certain size (16MB by default), rqlite will trigger a Raft snapshot. Most users can ignore this feature and carry on as before after upgrading to this release.
+This release adds new control over Raft snapshotting, a key part of the Raft consensus protocol. When the WAL file reaches a certain size (4MB by default), rqlite will trigger a Raft snapshot. In its default setting this change may reduce disk usage, but may also result in more frequent Raft snapshotting. Most users can ignore this change and carry on as before after upgrading to this release.
 ### New features
-- [PR #1530](https://github.com/rqlite/rqlite/pull/1530): Support automatically snapshotting when WAL reaches a certain size.
+- [PR #1530](https://github.com/rqlite/rqlite/pull/1530), [PR #1533](https://github.com/rqlite/rqlite/pull/1533): Support automatically snapshotting when WAL reaches the SQLite default of 4MB.
 - [PR #1531](https://github.com/rqlite/rqlite/pull/1531): Check for Raft snapshot condition every 10 seconds by default.
 
 ### Implementation changes and bug fixes
