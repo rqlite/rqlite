@@ -995,9 +995,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 	snapsStats, err := s.snapshotStore.Stats()
 	if err == nil {
 		status["snapshot_store"] = snapsStats
-		return nil, err
 	}
-
 	return status, nil
 }
 
