@@ -8,6 +8,7 @@ This release adds new control over Raft snapshotting, a key part of the Raft con
 - [PR #1528](https://github.com/rqlite/rqlite/pull/1528): Support setting trailing logs for user-requested snapshot.
 - [PR #1529](https://github.com/rqlite/rqlite/pull/1529): Remove obsolete code related to user-triggered snapshots.
 - [PR #1536](https://github.com/rqlite/rqlite/pull/1536): Store WAL path in store, to avoid races.
+- [PR #1535](https://github.com/rqlite/rqlite/pull/1535): Refactor using CommandProcessor.
 
 ## 8.13.5 (December 26th 2023)
 ### Implementation changes and bug fixes
