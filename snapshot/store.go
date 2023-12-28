@@ -176,7 +176,9 @@ func (s *Store) SetFullNeeded() error {
 	return f.Close()
 }
 
-// Stats returns stats about the Snapshot Store.
+// Stats returns stats about the Snapshot Store. This function may return
+// an error if the Store is in an inconsistent state. In that case the stats
+// returned may be incomplete or invalid.
 func (s *Store) Stats() (map[string]interface{}, error) {
 	snapshots, err := s.getSnapshots()
 	if err != nil {

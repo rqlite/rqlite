@@ -952,11 +952,6 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		return nil, err
 	}
 
-	snapsStats, err := s.snapshotStore.Stats()
-	if err != nil {
-		return nil, err
-	}
-
 	lAppliedIdx, err := s.boltStore.GetAppliedIndex()
 	if err != nil {
 		return nil, err
@@ -981,7 +976,6 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		"apply_timeout":          s.ApplyTimeout.String(),
 		"heartbeat_timeout":      s.HeartbeatTimeout.String(),
 		"election_timeout":       s.ElectionTimeout.String(),
-		"snapshot_store":         snapsStats,
 		"snapshot_threshold":     s.SnapshotThreshold,
 		"snapshot_interval":      s.SnapshotInterval.String(),
 		"reap_timeout":           s.ReapTimeout.String(),
@@ -995,6 +989,15 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		"sqlite3":                dbStatus,
 		"db_conf":                s.dbConf,
 	}
+
+	// Snapshot stats may be in flux if a snapshot is in progress. Only
+	// report them if they are available.
+	snapsStats, err := s.snapshotStore.Stats()
+	if err == nil {
+		status["snapshot_store"] = snapsStats
+		return nil, err
+	}
+
 	return status, nil
 }
 
