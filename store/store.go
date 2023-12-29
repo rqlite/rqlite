@@ -1970,6 +1970,8 @@ func (s *Store) runWALSnapshotting() (closeCh, doneCh chan struct{}) {
 	ticker := time.NewTicker(s.SnapshotInterval)
 	if s.SnapshotInterval == 0 || s.SnapshotThresholdWALSize == 0 {
 		ticker.Stop()
+	} else {
+		defer ticker.Stop()
 	}
 	go func() {
 		defer close(doneCh)
