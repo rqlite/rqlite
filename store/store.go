@@ -610,10 +610,8 @@ func (s *Store) Close(wait bool) (retErr error) {
 	close(s.observerClose)
 	<-s.observerDone
 
-	if s.snapshotWClose != nil {
-		close(s.snapshotWClose)
-		<-s.snapshotWDone
-	}
+	close(s.snapshotWClose)
+	<-s.snapshotWDone
 
 	f := s.raft.Shutdown()
 	if wait {
@@ -1967,20 +1965,23 @@ func (s *Store) Snapshot(n uint64) (retError error) {
 // runWALSnapshotting runs the periodic check to see if a snapshot should be
 // triggered due to WAL size.
 func (s *Store) runWALSnapshotting() (closeCh, doneCh chan struct{}) {
-	if s.SnapshotInterval <= 0 {
-		return nil, nil
-	}
 	closeCh = make(chan struct{})
 	doneCh = make(chan struct{})
-	ticker := time.NewTicker(s.SnapshotInterval)
+	ticker := time.NewTicker(time.Hour) // Just need an initialized ticker to start with.
+	ticker.Stop()
+	if s.SnapshotInterval > 0 && s.SnapshotThresholdWALSize > 0 {
+		ticker.Reset(s.SnapshotInterval)
+	}
+
 	go func() {
 		defer close(doneCh)
+		defer ticker.Stop()
 		for {
 			select {
 			case <-ticker.C:
-				sz, err := fileSize(s.walPath)
+				sz, err := fileSizeExists(s.walPath)
 				if err != nil {
-					s.logger.Printf("failed to get WAL size: %s", err.Error())
+					s.logger.Printf("failed to check WAL size: %s", err.Error())
 					continue
 				}
 				if uint64(sz) >= s.SnapshotThresholdWALSize {
@@ -2298,6 +2299,15 @@ func fileSize(path string) (int64, error) {
 		return 0, err
 	}
 	return stat.Size(), nil
+}
+
+// fileSizeExists returns the size of the given file, or 0 if the file does not
+// exist. Any other error is returned.
+func fileSizeExists(path string) (int64, error) {
+	if !pathExists(path) {
+		return 0, nil
+	}
+	return fileSize(path)
 }
 
 // dirSize returns the total size of all files in the given directory
