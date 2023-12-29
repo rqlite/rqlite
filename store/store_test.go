@@ -2583,6 +2583,45 @@ func Test_StoreLogTruncationMultinode(t *testing.T) {
 	}
 }
 
+func Test_SingleNode_WALTriggeredSnapshot(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+	s.SnapshotThreshold = 8192
+	s.SnapshotInterval = 1 * time.Second
+	s.SnapshotThresholdWALSize = 4096
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+	er := executeRequestFromString(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		false, false)
+	_, err := s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	nSnaps := stats.Get(numWALSnapshots).String()
+
+	for i := 0; i < 100; i++ {
+		_, err := s.Execute(executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`, false, false))
+		if err != nil {
+			t.Fatalf("failed to execute INSERT on single node: %s", err.Error())
+		}
+	}
+
+	// Ensure WAL-triggered snapshots take place.
+	f := func() bool {
+		return stats.Get(numWALSnapshots).String() != nSnaps
+	}
+	testPoll(t, f, 100*time.Millisecond, 2*time.Second)
+}
+
 func Test_SingleNodeNoop(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
