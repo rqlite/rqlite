@@ -1967,20 +1967,21 @@ func (s *Store) Snapshot(n uint64) (retError error) {
 func (s *Store) runWALSnapshotting() (closeCh, doneCh chan struct{}) {
 	closeCh = make(chan struct{})
 	doneCh = make(chan struct{})
-	ticker := time.NewTicker(s.SnapshotInterval)
-	if s.SnapshotInterval == 0 || s.SnapshotThresholdWALSize == 0 {
-		ticker.Stop()
-	} else {
-		defer ticker.Stop()
+	ticker := time.NewTicker(time.Hour) // Just need an initialized ticker to start with.
+	ticker.Stop()
+	if s.SnapshotInterval > 0 && s.SnapshotThresholdWALSize > 0 {
+		ticker.Reset(s.SnapshotInterval)
 	}
+
 	go func() {
 		defer close(doneCh)
+		defer ticker.Stop()
 		for {
 			select {
 			case <-ticker.C:
 				sz, err := fileSizeExists(s.walPath)
 				if err != nil {
-					s.logger.Printf("failed to get WAL size: %s", err.Error())
+					s.logger.Printf("failed to check WAL size: %s", err.Error())
 					continue
 				}
 				if uint64(sz) >= s.SnapshotThresholdWALSize {
