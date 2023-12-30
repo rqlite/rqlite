@@ -137,7 +137,8 @@ func (b *Bootstrapper) SetCredentials(creds *Credentials) {
 //   - joining an existing cluster by explicitly joining it through a node returned
 //     by the AddressProvider, or
 //   - if it's a Voting node, notifying all nodes returned by the AddressProvider
-//     that it exists, allowing a cluster-wide bootstrap take place.
+//     that it exists, potentially allowing a cluster-wide bootstrap take place
+//     which will include this node.
 //
 // Returns nil if the boot operation was successful, or if done() ever returns
 // true. done() is periodically polled by the boot process. Returns an error
