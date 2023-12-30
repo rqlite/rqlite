@@ -338,7 +338,7 @@ func Open(dbPath string, fkEnabled, wal bool) (*DB, error) {
 			return nil, err
 		}
 		if sz > sizeAtOpenWarn {
-			logger.Printf("database file is %d bytes, SQLite may require an extended time to open", sz)
+			logger.Printf("database file is %d bytes, SQLite may take longer to open it", sz)
 		}
 	}
 
