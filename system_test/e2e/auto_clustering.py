@@ -131,7 +131,7 @@ class TestBootstrappingRestartLeaveOnRemove(unittest.TestCase):
     deprovision_node(n1)
     deprovision_node(n2)
 
-class TestAutoClustering(unittest.TestCase):
+class TestAutoClusteringKVStores(unittest.TestCase):
   DiscoModeConsulKV = "consul-kv"
   DiscoModeEtcdKV = "etcd-kv"
 
