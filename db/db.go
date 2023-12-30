@@ -19,6 +19,7 @@ import (
 
 	"github.com/rqlite/go-sqlite3"
 	"github.com/rqlite/rqlite/v8/command"
+	"github.com/rqlite/rqlite/v8/db/humanize"
 )
 
 const (
@@ -338,7 +339,8 @@ func Open(dbPath string, fkEnabled, wal bool) (*DB, error) {
 			return nil, err
 		}
 		if sz > sizeAtOpenWarn {
-			logger.Printf("database file is %d bytes, SQLite may take longer to open it", sz)
+			szH := humanize.Bytes(uint64(sz))
+			logger.Printf("database file is %s, SQLite may take longer to open it", szH)
 		}
 	}
 
@@ -434,14 +436,15 @@ func (db *DB) Stats() (map[string]interface{}, error) {
 		return nil, err
 	}
 	stats := map[string]interface{}{
-		"version":         DBVersion,
-		"compile_options": copts,
-		"mem_stats":       memStats,
-		"db_size":         dbSz,
-		"rw_dsn":          db.rwDSN,
-		"ro_dsn":          db.roDSN,
-		"conn_pool_stats": connPoolStats,
-		"pragmas":         pragmas,
+		"version":          DBVersion,
+		"compile_options":  copts,
+		"mem_stats":        memStats,
+		"db_size":          dbSz,
+		"db_size_friendly": humanize.Bytes(uint64(dbSz)),
+		"rw_dsn":           db.rwDSN,
+		"ro_dsn":           db.roDSN,
+		"conn_pool_stats":  connPoolStats,
+		"pragmas":          pragmas,
 	}
 
 	stats["path"] = db.path
