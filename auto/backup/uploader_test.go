@@ -45,7 +45,7 @@ func Test_UploaderSingleUpload(t *testing.T) {
 		},
 	}
 	dp := &mockDataProvider{data: "my upload data"}
-	uploader := NewUploader(sc, dp, 100*time.Millisecond, UploadNoCompress)
+	uploader := NewUploader(sc, dp, time.Second, UploadNoCompress)
 	ctx, cancel := context.WithCancel(context.Background())
 
 	done := uploader.Start(ctx, nil)
@@ -79,7 +79,7 @@ func Test_UploaderSingleUploadCompress(t *testing.T) {
 		},
 	}
 	dp := &mockDataProvider{data: "my upload data"}
-	uploader := NewUploader(sc, dp, 100*time.Millisecond, UploadCompress)
+	uploader := NewUploader(sc, dp, time.Second, UploadCompress)
 	ctx, cancel := context.WithCancel(context.Background())
 
 	done := uploader.Start(ctx, nil)
@@ -108,7 +108,7 @@ func Test_UploaderDoubleUpload(t *testing.T) {
 		},
 	}
 	dp := &mockDataProvider{data: "my upload data"}
-	uploader := NewUploader(sc, dp, 100*time.Millisecond, UploadNoCompress)
+	uploader := NewUploader(sc, dp, time.Second, UploadNoCompress)
 	uploader.disableSumCheck = true // Force upload of the same data
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -144,7 +144,7 @@ func Test_UploaderFailThenOK(t *testing.T) {
 		},
 	}
 	dp := &mockDataProvider{data: "my upload data"}
-	uploader := NewUploader(sc, dp, 100*time.Millisecond, UploadNoCompress)
+	uploader := NewUploader(sc, dp, time.Second, UploadNoCompress)
 	ctx, cancel := context.WithCancel(context.Background())
 
 	done := uploader.Start(ctx, nil)
@@ -179,7 +179,7 @@ func Test_UploaderOKThenFail(t *testing.T) {
 		},
 	}
 	dp := &mockDataProvider{data: "my upload data"}
-	uploader := NewUploader(sc, dp, 100*time.Millisecond, UploadNoCompress)
+	uploader := NewUploader(sc, dp, time.Second, UploadNoCompress)
 	uploader.disableSumCheck = true // Disable because we want to upload twice.
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -248,7 +248,7 @@ func Test_UploaderEnabledTrue(t *testing.T) {
 		},
 	}
 	dp := &mockDataProvider{data: "my upload data"}
-	uploader := NewUploader(sc, dp, 100*time.Millisecond, UploadNoCompress)
+	uploader := NewUploader(sc, dp, time.Second, UploadNoCompress)
 	ctx, cancel := context.WithCancel(context.Background())
 
 	done := uploader.Start(ctx, func() bool { return true })
