@@ -9,7 +9,7 @@ This release adds new control over Raft snapshotting, a key part of the Raft con
 - [PR #1529](https://github.com/rqlite/rqlite/pull/1529): Remove obsolete code related to user-triggered snapshots.
 - [PR #1536](https://github.com/rqlite/rqlite/pull/1536): Store WAL path in store, to avoid races.
 - [PR #1535](https://github.com/rqlite/rqlite/pull/1535): Refactor using CommandProcessor.
-- [PR #1538](https://github.com/rqlite/rqlite/pull/1538): Cleaner WAL Snapshotting goroutine logic.
+- [PR #1539](https://github.com/rqlite/rqlite/pull/1539): `go mod` updates.
 
 ## 8.13.5 (December 26th 2023)
 ### Implementation changes and bug fixes
