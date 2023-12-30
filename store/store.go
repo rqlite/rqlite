@@ -23,6 +23,7 @@ import (
 	"github.com/rqlite/rqlite/v8/command"
 	"github.com/rqlite/rqlite/v8/command/chunking"
 	sql "github.com/rqlite/rqlite/v8/db"
+	"github.com/rqlite/rqlite/v8/db/humanize"
 	wal "github.com/rqlite/rqlite/v8/db/wal"
 	rlog "github.com/rqlite/rqlite/v8/log"
 	"github.com/rqlite/rqlite/v8/progress"
@@ -986,6 +987,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		"nodes":                  nodes,
 		"dir":                    s.raftDir,
 		"dir_size":               dirSz,
+		"dir_size_friendly":      friendlyBytes(uint64(dirSz)),
 		"sqlite3":                dbStatus,
 		"db_conf":                s.dbConf,
 	}
@@ -2345,4 +2347,8 @@ func resolvableAddress(addr string) (string, error) {
 	}
 	_, err = net.LookupHost(h)
 	return h, err
+}
+
+func friendlyBytes(n uint64) string {
+	return humanize.Bytes(n)
 }
