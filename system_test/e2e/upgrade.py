@@ -1,13 +1,24 @@
 #!/usr/bin/env python
 
-import os
-import unittest
+import os, unittest, time
 from helpers import Node, Cluster, d_, deprovision_node, copy_dir_to_temp
 
 RQLITED_PATH = os.environ['RQLITED_PATH']
+TIMEOUT=20
 
 class TestUpgrade_v7(unittest.TestCase):
   '''Test that a v7 cluster can be upgraded to this version code'''
+  def poll_query(self, node, query, exp):
+    t = 0
+    while True:
+      if t > TIMEOUT:
+        raise Exception('timeout waiting for node %s to return correct results' % node.node_id)
+      j = node.query(query, level='none')
+      if j == exp:
+        break
+      time.sleep(1)
+      t+=1
+
   def test(self):
     dir1 = copy_dir_to_temp('testdata/v7/data.1')
     n0 = Node(RQLITED_PATH, '1', api_addr='localhost:4001', raft_addr='localhost:4002', dir=dir1)
@@ -30,7 +41,7 @@ class TestUpgrade_v7(unittest.TestCase):
 
     # Check that each node has the right data.
     for n in self.cluster.nodes:
-      self.assertEqual(n.query('SELECT COUNT(*) FROM foo', level='none'), d_("{'results': [{'values': [[28]], 'types': ['integer'], 'columns': ['COUNT(*)']}]}"))
+      self.poll_query(n, 'SELECT COUNT(*) FROM foo', d_("{'results': [{'values': [[28]], 'types': ['integer'], 'columns': ['COUNT(*)']}]}"))
 
   def tearDown(self):
     self.cluster.deprovision()
