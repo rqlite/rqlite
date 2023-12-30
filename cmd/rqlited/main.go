@@ -26,7 +26,6 @@ import (
 	"github.com/rqlite/rqlite/v8/cmd"
 	"github.com/rqlite/rqlite/v8/db"
 	"github.com/rqlite/rqlite/v8/disco"
-	"github.com/rqlite/rqlite/v8/http"
 	httpd "github.com/rqlite/rqlite/v8/http"
 	"github.com/rqlite/rqlite/v8/rtls"
 	"github.com/rqlite/rqlite/v8/store"
@@ -559,7 +558,7 @@ func createCluster(cfg *Config, hasPeers bool, client *cluster.Client, str *stor
 
 func networkCheckJoinAddrs(joinAddrs []string) error {
 	log.Println("checking that any supplied join addresses don't serve HTTP(S)")
-	if addr, ok := http.AnyServingHTTP(joinAddrs); ok {
+	if addr, ok := httpd.AnyServingHTTP(joinAddrs); ok {
 		return fmt.Errorf("join address %s appears to be serving HTTP when it should be Raft", addr)
 	}
 	return nil

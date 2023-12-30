@@ -322,8 +322,8 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("bootstrapping not applicable when using %s", c.DiscoMode)
 		}
 	case DiscoModeDNS, DiscoModeDNSSRV:
-		if c.BootstrapExpect == 0 {
-			return fmt.Errorf("bootstrap-expect value required when using %s", c.DiscoMode)
+		if c.BootstrapExpect == 0 && !c.RaftNonVoter {
+			return fmt.Errorf("bootstrap-expect value required when using %s with a voting node", c.DiscoMode)
 		}
 	default:
 		return fmt.Errorf("disco mode must be one of %s, %s, %s, or %s",
