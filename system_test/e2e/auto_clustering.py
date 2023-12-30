@@ -135,43 +135,50 @@ class TestAutoClusteringDNS(unittest.TestCase):
     def test_3_voters(self):
       os.environ['RQLITE_DISCO_DNS_HOSTS'] = 'localhost:4002,localhost:4004,localhost:4006'
       filename = write_random_file('{"name":"rqlite.cluster"}') # Anything, doesn't matter.
+      self.nodes = []
 
       n0 = Node(RQLITED_PATH, '0', raft_addr='localhost:4002', bootstrap_expect=3)
       n1 = Node(RQLITED_PATH, '1', raft_addr='localhost:4004', bootstrap_expect=3)
       n2 = Node(RQLITED_PATH, '2', raft_addr='localhost:4006', bootstrap_expect=3)
 
       n0.start(disco_mode='dns', disco_config=filename)
+      self.nodes.append(n0)
       n1.start(disco_mode='dns', disco_config=filename)
+      self.nodes.append(n1)
       n2.start(disco_mode='dns', disco_config=filename)
+      self.nodes.append(n2)
 
       self.assertEqual(n0.wait_for_leader(), n1.wait_for_leader())
       self.assertEqual(n0.wait_for_leader(), n2.wait_for_leader())
 
-      deprovision_node(n0)
-      deprovision_node(n1)
-      deprovision_node(n2)
-
     def test_3_voters_1_nonvoter(self):
       os.environ['RQLITE_DISCO_DNS_HOSTS'] = 'localhost:4002,localhost:4004,localhost:4006'
       filename = write_random_file('{"name":"rqlite.cluster"}') # Anything, doesn't matter.
+      self.nodes = []
 
       n0 = Node(RQLITED_PATH, '0', raft_addr='localhost:4002', bootstrap_expect=3)
       n1 = Node(RQLITED_PATH, '1', raft_addr='localhost:4004', bootstrap_expect=3)
       n2 = Node(RQLITED_PATH, '2', raft_addr='localhost:4006', bootstrap_expect=3)
 
       n0.start(disco_mode='dns', disco_config=filename)
+      self.nodes.append(n0)
       n1.start(disco_mode='dns', disco_config=filename)
+      self.nodes.append(n1)
       n2.start(disco_mode='dns', disco_config=filename)
+      self.nodes.append(n2)
 
       self.assertEqual(n0.wait_for_leader(), n1.wait_for_leader())
       self.assertEqual(n0.wait_for_leader(), n2.wait_for_leader())
 
       n3 = Node(RQLITED_PATH, '3', raft_voter=False)
       n3.start(disco_mode='dns', disco_config=filename)
+      self.nodes.append(n3)
       self.assertEqual(n0.wait_for_leader(), n3.wait_for_leader())
 
     def tearDown(self):
       del os.environ['RQLITE_DISCO_DNS_HOSTS']
+      for n in self.nodes:
+        deprovision_node(n)
 
 class TestAutoClusteringKVStores(unittest.TestCase):
   DiscoModeConsulKV = "consul-kv"
