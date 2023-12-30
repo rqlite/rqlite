@@ -131,6 +131,29 @@ class TestBootstrappingRestartLeaveOnRemove(unittest.TestCase):
     deprovision_node(n1)
     deprovision_node(n2)
 
+class TestAutoClusteringDNS(unittest.TestCase):
+    def test(self):
+      os.environ['RQLITE_DISCO_DNS_HOSTS'] = 'localhost:4002,localhost:4004,localhost:4006'
+      filename = write_random_file('{"name":"rqlite.cluster"}') # Anything, doesn't matter.
+
+      n0 = Node(RQLITED_PATH, '0', raft_addr='localhost:4002', bootstrap_expect=3)
+      n1 = Node(RQLITED_PATH, '1', raft_addr='localhost:4004', bootstrap_expect=3)
+      n2 = Node(RQLITED_PATH, '2', raft_addr='localhost:4006', bootstrap_expect=3)
+
+      n0.start(disco_mode='dns', disco_config=filename)
+      n1.start(disco_mode='dns', disco_config=filename)
+      n2.start(disco_mode='dns', disco_config=filename)
+
+      self.assertEqual(n0.wait_for_leader(), n1.wait_for_leader())
+      self.assertEqual(n0.wait_for_leader(), n2.wait_for_leader())
+
+      deprovision_node(n0)
+      deprovision_node(n1)
+      deprovision_node(n2)
+
+    def tearDown(self):
+      del os.environ['RQLITE_DISCO_DNS_HOSTS']
+
 class TestAutoClusteringKVStores(unittest.TestCase):
   DiscoModeConsulKV = "consul-kv"
   DiscoModeEtcdKV = "etcd-kv"
@@ -211,22 +234,22 @@ class TestAutoClusteringKVStores(unittest.TestCase):
 
   def test_consul(self):
     '''Test clustering via Consul and that leadership change is observed'''
-    self.autocluster(TestAutoClustering.DiscoModeConsulKV)
+    self.autocluster(TestAutoClusteringKVStores.DiscoModeConsulKV)
 
   def test_etcd(self):
     '''Test clustering via Etcd and that leadership change is observed'''
-    self.autocluster(TestAutoClustering.DiscoModeEtcdKV)
+    self.autocluster(TestAutoClusteringKVStores.DiscoModeEtcdKV)
 
   def test_consul_config(self):
     '''Test clustering via Consul with explicit file-based config'''
     filename = write_random_file('{"address": "localhost:8500"}')
-    self.autocluster_config(TestAutoClustering.DiscoModeConsulKV, filename)
+    self.autocluster_config(TestAutoClusteringKVStores.DiscoModeConsulKV, filename)
     os.remove(filename)
 
   def test_etcd_config(self):
     '''Test clustering via Etcd with explicit file-based config'''
     filename = write_random_file('{"endpoints": ["localhost:2379"]}')
-    self.autocluster_config(TestAutoClustering.DiscoModeEtcdKV, filename)
+    self.autocluster_config(TestAutoClusteringKVStores.DiscoModeEtcdKV, filename)
     os.remove(filename)
 
 if __name__ == "__main__":
