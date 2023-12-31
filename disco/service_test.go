@@ -7,7 +7,7 @@ import (
 )
 
 func Test_NewServce(t *testing.T) {
-	s := NewService(&mockClient{}, &mockStore{})
+	s := NewService(&mockClient{}, &mockStore{}, Voter)
 	if s == nil {
 		t.Fatalf("service is nil")
 	}
@@ -24,7 +24,7 @@ func Test_RegisterGetLeaderOK(t *testing.T) {
 	}
 	c := &mockStore{}
 
-	s := NewService(m, c)
+	s := NewService(m, c, Voter)
 	s.RegisterInterval = 10 * time.Millisecond
 
 	ok, addr, err := s.Register("1", "localhost:4001", "localhost:4002")
@@ -52,7 +52,7 @@ func Test_RegisterInitializeLeader(t *testing.T) {
 	}
 	c := &mockStore{}
 
-	s := NewService(m, c)
+	s := NewService(m, c, Voter)
 	s.RegisterInterval = 10 * time.Millisecond
 
 	ok, addr, err := s.Register("1", "localhost:4001", "localhost:4002")
@@ -82,12 +82,8 @@ func Test_RegisterNonVoter(t *testing.T) {
 		return false, nil
 	}
 
-	c := &mockStore{
-		isVoterFn: func() (bool, error) {
-			return false, nil
-		},
-	}
-	s := NewService(m, c)
+	c := &mockStore{}
+	s := NewService(m, c, NonVoter)
 	s.RegisterInterval = 10 * time.Millisecond
 
 	ok, addr, err := s.Register("1", "localhost:4001", "localhost:4002")
@@ -120,7 +116,7 @@ func Test_StartReportingTimer(t *testing.T) {
 		return true
 	}
 
-	s := NewService(m, c)
+	s := NewService(m, c, Voter)
 	s.ReportInterval = 10 * time.Millisecond
 
 	go s.StartReporting("1", "localhost:4001", "localhost:4002")
@@ -147,7 +143,7 @@ func Test_StartReportingChange(t *testing.T) {
 	}
 
 	wg.Add(1)
-	s := NewService(m, c)
+	s := NewService(m, c, Voter)
 	s.ReportInterval = 10 * time.Minute // Nothing will happen due to timer.
 	done := s.StartReporting("1", "localhost:4001", "localhost:4002")
 
@@ -190,7 +186,6 @@ func (m *mockClient) String() string {
 
 type mockStore struct {
 	isLeaderFn             func() bool
-	isVoterFn              func() (bool, error)
 	registerLeaderChangeFn func(c chan<- struct{})
 }
 
@@ -199,13 +194,6 @@ func (m *mockStore) IsLeader() bool {
 		return m.isLeaderFn()
 	}
 	return false
-}
-
-func (m *mockStore) IsVoter() (bool, error) {
-	if m.isVoterFn != nil {
-		return m.isVoterFn()
-	}
-	return true, nil
 }
 
 func (m *mockStore) RegisterLeaderChange(c chan<- struct{}) {

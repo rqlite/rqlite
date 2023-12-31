@@ -322,7 +322,7 @@ func createDiscoService(cfg *Config, str *store.Store) (*disco.Service, error) {
 		return nil, fmt.Errorf("invalid disco service: %s", cfg.DiscoMode)
 	}
 
-	return disco.NewService(c, str), nil
+	return disco.NewService(c, str, disco.VoterSuffrage(!cfg.RaftNonVoter)), nil
 }
 
 func startHTTPService(cfg *Config, str *store.Store, cltr *cluster.Client, credStr *auth.CredentialsStore) (*httpd.Service, error) {
