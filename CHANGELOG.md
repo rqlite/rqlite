@@ -12,6 +12,7 @@ This release adds new control over Raft snapshotting, a key part of the Raft con
 - [PR #1535](https://github.com/rqlite/rqlite/pull/1535): Refactor using CommandProcessor.
 - [PR #1539](https://github.com/rqlite/rqlite/pull/1539): `go mod` updates.
 - [PR #1540](https://github.com/rqlite/rqlite/pull/1540): Friendlier display of database sizes.
+- [PR #1543](https://github.com/rqlite/rqlite/pull/1543): Remove some excessive logging.
 
 ## 8.13.5 (December 26th 2023)
 ### Implementation changes and bug fixes
