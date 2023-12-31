@@ -423,7 +423,6 @@ func createCluster(cfg *Config, hasPeers bool, client *cluster.Client, str *stor
 	if err := networkCheckJoinAddrs(joins); err != nil {
 		return err
 	}
-
 	if joins == nil && cfg.DiscoMode == "" && !hasPeers {
 		if cfg.RaftNonVoter {
 			return fmt.Errorf("cannot create a new non-voting node without joining it to an existing cluster")
@@ -438,16 +437,17 @@ func createCluster(cfg *Config, hasPeers bool, client *cluster.Client, str *stor
 	}
 
 	// Prepare definition of being part of a cluster.
-	isClustered := func() bool {
+	bootDoneFn := func() bool {
 		leader, _ := str.LeaderAddr()
 		return leader != ""
 	}
+	clusterSuf := cluster.VoterSuffrage(!cfg.RaftNonVoter)
 
 	joiner := cluster.NewJoiner(client, cfg.JoinAttempts, cfg.JoinInterval)
 	joiner.SetCredentials(cluster.CredentialsFor(credStr, cfg.JoinAs))
 	if joins != nil && cfg.BootstrapExpect == 0 {
 		// Explicit join operation requested, so do it.
-		j, err := joiner.Do(joins, str.ID(), cfg.RaftAdv, cluster.VoterSuffrage(!cfg.RaftNonVoter))
+		j, err := joiner.Do(joins, str.ID(), cfg.RaftAdv, clusterSuf)
 		if err != nil {
 			return fmt.Errorf("failed to join cluster: %s", err.Error())
 		}
@@ -459,7 +459,7 @@ func createCluster(cfg *Config, hasPeers bool, client *cluster.Client, str *stor
 		// Bootstrap with explicit join addresses requests.
 		bs := cluster.NewBootstrapper(cluster.NewAddressProviderString(joins), client)
 		bs.SetCredentials(cluster.CredentialsFor(credStr, cfg.JoinAs))
-		return bs.Boot(str.ID(), cfg.RaftAdv, cluster.VoterSuffrage(!cfg.RaftNonVoter), isClustered, cfg.BootstrapExpectTimeout)
+		return bs.Boot(str.ID(), cfg.RaftAdv, clusterSuf, bootDoneFn, cfg.BootstrapExpectTimeout)
 	}
 
 	if cfg.DiscoMode == "" {
@@ -503,7 +503,7 @@ func createCluster(cfg *Config, hasPeers bool, client *cluster.Client, str *stor
 		bs := cluster.NewBootstrapper(provider, client)
 		bs.SetCredentials(cluster.CredentialsFor(credStr, cfg.JoinAs))
 		httpServ.RegisterStatus("disco", provider)
-		return bs.Boot(str.ID(), cfg.RaftAdv, cluster.VoterSuffrage(!cfg.RaftNonVoter), isClustered, cfg.BootstrapExpectTimeout)
+		return bs.Boot(str.ID(), cfg.RaftAdv, clusterSuf, bootDoneFn, cfg.BootstrapExpectTimeout)
 
 	case DiscoModeEtcdKV, DiscoModeConsulKV:
 		discoService, err := createDiscoService(cfg, str)
@@ -533,7 +533,7 @@ func createCluster(cfg *Config, hasPeers bool, client *cluster.Client, str *stor
 		} else {
 			for {
 				log.Printf("discovery service returned %s as join address", addr)
-				if j, err := joiner.Do([]string{addr}, str.ID(), cfg.RaftAdv, cluster.VoterSuffrage(!cfg.RaftNonVoter)); err != nil {
+				if j, err := joiner.Do([]string{addr}, str.ID(), cfg.RaftAdv, clusterSuf); err != nil {
 					log.Printf("failed to join cluster at %s: %s", addr, err.Error())
 
 					time.Sleep(time.Second)
