@@ -175,6 +175,11 @@ class TestAutoClusteringDNS(unittest.TestCase):
       self.nodes.append(n3)
       self.assertEqual(n0.wait_for_leader(), n3.wait_for_leader())
 
+      self.assertTrue(n0.is_voter())
+      self.assertTrue(n1.is_voter())
+      self.assertTrue(n2.is_voter())
+      self.assertFalse(n3.is_voter())
+
     def tearDown(self):
       del os.environ['RQLITE_DISCO_DNS_HOSTS']
       for n in self.nodes:

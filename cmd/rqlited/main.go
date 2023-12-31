@@ -459,7 +459,7 @@ func createCluster(cfg *Config, hasPeers bool, client *cluster.Client, str *stor
 		// Bootstrap with explicit join addresses requests.
 		bs := cluster.NewBootstrapper(cluster.NewAddressProviderString(joins), client)
 		bs.SetCredentials(cluster.CredentialsFor(credStr, cfg.JoinAs))
-		return bs.Boot(str.ID(), cfg.RaftAdv, cluster.Voter, isClustered, cfg.BootstrapExpectTimeout)
+		return bs.Boot(str.ID(), cfg.RaftAdv, cluster.VoterSuffrage(!cfg.RaftNonVoter), isClustered, cfg.BootstrapExpectTimeout)
 	}
 
 	if cfg.DiscoMode == "" {
@@ -503,7 +503,7 @@ func createCluster(cfg *Config, hasPeers bool, client *cluster.Client, str *stor
 		bs := cluster.NewBootstrapper(provider, client)
 		bs.SetCredentials(cluster.CredentialsFor(credStr, cfg.JoinAs))
 		httpServ.RegisterStatus("disco", provider)
-		return bs.Boot(str.ID(), cfg.RaftAdv, cluster.Voter, isClustered, cfg.BootstrapExpectTimeout)
+		return bs.Boot(str.ID(), cfg.RaftAdv, cluster.VoterSuffrage(!cfg.RaftNonVoter), isClustered, cfg.BootstrapExpectTimeout)
 
 	case DiscoModeEtcdKV, DiscoModeConsulKV:
 		discoService, err := createDiscoService(cfg, str)
