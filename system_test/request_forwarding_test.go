@@ -24,7 +24,7 @@ var (
 // RPC, and ensures results are the same for basically the same operation.
 func Test_StoreClientSideBySide(t *testing.T) {
 
-	node := mustNewLeaderNode()
+	node := mustNewLeaderNode("leader1")
 	defer node.Deprovision()
 	leaderAddr, err := node.Store.LeaderAddr()
 	if err != nil {
@@ -158,10 +158,10 @@ func Test_StoreClientSideBySide(t *testing.T) {
 // Test_MultiNodeCluster tests formation of a 3-node cluster and query
 // against all nodes to test requests are forwarded to leader transparently.
 func Test_MultiNodeClusterRequestForwardOK(t *testing.T) {
-	node1 := mustNewLeaderNode()
+	node1 := mustNewLeaderNode("leader1")
 	defer node1.Deprovision()
 
-	node2 := mustNewNode(false)
+	node2 := mustNewNode("node2", false)
 	defer node2.Deprovision()
 	if err := node2.Join(node1); err != nil {
 		t.Fatalf("node failed to join leader: %s", err.Error())
@@ -178,7 +178,7 @@ func Test_MultiNodeClusterRequestForwardOK(t *testing.T) {
 		t.Fatalf("failed to find cluster leader: %s", err.Error())
 	}
 
-	node3 := mustNewNode(false)
+	node3 := mustNewNode("node3", false)
 	defer node3.Deprovision()
 	if err := node3.Join(leader); err != nil {
 		t.Fatalf("node failed to join leader: %s", err.Error())
@@ -247,10 +247,10 @@ func Test_MultiNodeClusterRequestForwardOK(t *testing.T) {
 // Test_MultiNodeClusterQueuedRequestForwardOK tests that queued writes are forwarded
 // correctly.
 func Test_MultiNodeClusterQueuedRequestForwardOK(t *testing.T) {
-	node1 := mustNewLeaderNode()
+	node1 := mustNewLeaderNode("leader1")
 	defer node1.Deprovision()
 
-	node2 := mustNewNode(false)
+	node2 := mustNewNode("node2", false)
 	defer node2.Deprovision()
 	if err := node2.Join(node1); err != nil {
 		t.Fatalf("node failed to join leader: %s", err.Error())

@@ -17,15 +17,15 @@ import (
 
 // Test_JoinLeaderNode tests a join operation between a leader and a new node.
 func Test_JoinLeaderNode(t *testing.T) {
-	leader := mustNewLeaderNode()
+	leader := mustNewLeaderNode("leader1")
 	defer leader.Deprovision()
 
-	node := mustNewNode(false)
-	defer node.Deprovision()
-	if err := node.Join(leader); err != nil {
+	node2 := mustNewNode("node1", false)
+	defer node2.Deprovision()
+	if err := node2.Join(leader); err != nil {
 		t.Fatalf("node failed to join leader: %s", err.Error())
 	}
-	_, err := node.WaitForLeader()
+	_, err := node2.WaitForLeader()
 	if err != nil {
 		t.Fatalf("failed waiting for leader: %s", err.Error())
 	}
@@ -33,10 +33,10 @@ func Test_JoinLeaderNode(t *testing.T) {
 
 // Test_MultiNodeCluster tests formation of a 3-node cluster, and its operation.
 func Test_MultiNodeCluster(t *testing.T) {
-	node1 := mustNewLeaderNode()
+	node1 := mustNewLeaderNode("leader1")
 	defer node1.Deprovision()
 
-	node2 := mustNewNode(false)
+	node2 := mustNewNode("node2", false)
 	defer node2.Deprovision()
 	if err := node2.Join(node1); err != nil {
 		t.Fatalf("node failed to join leader: %s", err.Error())
@@ -62,7 +62,7 @@ func Test_MultiNodeCluster(t *testing.T) {
 		t.Fatalf("got incorrect number of followers: %d", len(followers))
 	}
 
-	node3 := mustNewNode(false)
+	node3 := mustNewNode("node3", false)
 	defer node3.Deprovision()
 	if err := node3.Join(leader); err != nil {
 		t.Fatalf("node failed to join leader: %s", err.Error())
@@ -169,10 +169,10 @@ func Test_MultiNodeCluster(t *testing.T) {
 // Test_MultiNodeClusterRANDOM tests operation of RANDOM() SQL rewriting. It checks that a rewritten
 // statement is sent to follower.
 func Test_MultiNodeClusterRANDOM(t *testing.T) {
-	node1 := mustNewLeaderNode()
+	node1 := mustNewLeaderNode("leader1")
 	defer node1.Deprovision()
 
-	node2 := mustNewNode(false)
+	node2 := mustNewNode("node2", false)
 	defer node2.Deprovision()
 	if err := node2.Join(node1); err != nil {
 		t.Fatalf("node failed to join leader: %s", err.Error())
@@ -229,15 +229,15 @@ func Test_MultiNodeClusterRANDOM(t *testing.T) {
 // Test_MultiNodeClusterBootstrap tests formation of a 3-node cluster via bootstraping,
 // and its operation.
 func Test_MultiNodeClusterBootstrap(t *testing.T) {
-	node1 := mustNewNode(false)
+	node1 := mustNewNode("node1", false)
 	node1.Store.BootstrapExpect = 3
 	defer node1.Deprovision()
 
-	node2 := mustNewNode(false)
+	node2 := mustNewNode("node2", false)
 	node2.Store.BootstrapExpect = 3
 	defer node2.Deprovision()
 
-	node3 := mustNewNode(false)
+	node3 := mustNewNode("node3", false)
 	node3.Store.BootstrapExpect = 3
 	defer node3.Deprovision()
 
@@ -394,15 +394,15 @@ func Test_MultiNodeClusterBootstrap(t *testing.T) {
 // Test_MultiNodeClusterBootstrapLaterJoin tests formation of a 3-node cluster and
 // then checking a 4th node can join later with the bootstap parameters.
 func Test_MultiNodeClusterBootstrapLaterJoin(t *testing.T) {
-	node1 := mustNewNode(false)
+	node1 := mustNewNode("node1", false)
 	node1.Store.BootstrapExpect = 3
 	defer node1.Deprovision()
 
-	node2 := mustNewNode(false)
+	node2 := mustNewNode("node2", false)
 	node2.Store.BootstrapExpect = 3
 	defer node2.Deprovision()
 
-	node3 := mustNewNode(false)
+	node3 := mustNewNode("node3", false)
 	node3.Store.BootstrapExpect = 3
 	defer node3.Deprovision()
 
@@ -468,7 +468,7 @@ func Test_MultiNodeClusterBootstrapLaterJoin(t *testing.T) {
 
 	// Ensure a 4th node can join cluster with exactly same launch
 	// params. Under the cover it should just do a join.
-	node4 := mustNewNode(false)
+	node4 := mustNewNode("node4", false)
 	node4.Store.BootstrapExpect = 3
 	defer node4.Deprovision()
 	node4Bs := cluster.NewBootstrapper(provider, node4.Client)
@@ -492,17 +492,17 @@ func Test_MultiNodeClusterBootstrapLaterJoin(t *testing.T) {
 // Test_MultiNodeClusterBootstrapLaterJoinTLS tests formation of a 3-node cluster which
 // uses HTTP and TLS,then checking a 4th node can join later with the bootstap parameters.
 func Test_MultiNodeClusterBootstrapLaterJoinTLS(t *testing.T) {
-	node1 := mustNewNodeEncrypted(false, true, true)
+	node1 := mustNewNodeEncrypted("node1", false, true, true)
 	node1.Store.BootstrapExpect = 3
 	node1.EnableTLSClient()
 	defer node1.Deprovision()
 
-	node2 := mustNewNodeEncrypted(false, true, true)
+	node2 := mustNewNodeEncrypted("node2", false, true, true)
 	node2.Store.BootstrapExpect = 3
 	node2.EnableTLSClient()
 	defer node2.Deprovision()
 
-	node3 := mustNewNodeEncrypted(false, true, true)
+	node3 := mustNewNodeEncrypted("node3", false, true, true)
 	node3.Store.BootstrapExpect = 3
 	node3.EnableTLSClient()
 	defer node3.Deprovision()
@@ -569,7 +569,7 @@ func Test_MultiNodeClusterBootstrapLaterJoinTLS(t *testing.T) {
 
 	// Ensure a 4th node can join cluster with exactly same launch
 	// params. Under the covers it should just do a join.
-	node4 := mustNewNodeEncrypted(false, true, true)
+	node4 := mustNewNodeEncrypted("node4", false, true, true)
 	node4.Store.BootstrapExpect = 3
 	node4.EnableTLSClient()
 	defer node3.Deprovision()
@@ -633,7 +633,7 @@ func Test_MultiNodeClusterRaftAdv(t *testing.T) {
 	clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, nil)
 
 	// Start two nodes, and ensure a cluster can be formed.
-	node1 := mustNodeEncrypted(mustTempDir(), true, false, mux1, raftDialer, clstrDialer, "1")
+	node1 := mustNodeEncrypted("node1", mustTempDir("node1"), true, false, mux1, raftDialer, clstrDialer)
 	defer node1.Deprovision()
 	leader, err := node1.WaitForLeader()
 	if err != nil {
@@ -643,7 +643,7 @@ func Test_MultiNodeClusterRaftAdv(t *testing.T) {
 		t.Fatalf("node return wrong leader from leader, exp: %s, got %s", exp, got)
 	}
 
-	node2 := mustNodeEncrypted(mustTempDir(), false, false, mux2, raftDialer, clstrDialer, "2")
+	node2 := mustNodeEncrypted("node2", mustTempDir("node2"), false, false, mux2, raftDialer, clstrDialer)
 	defer node2.Deprovision()
 	if err := node2.Join(node1); err != nil {
 		t.Fatalf("node2 failed to join leader: %s", err.Error())
@@ -659,10 +659,10 @@ func Test_MultiNodeClusterRaftAdv(t *testing.T) {
 
 // Test_MultiNodeClusterNodes checks nodes/ endpoint under various situations.
 func Test_MultiNodeClusterNodes(t *testing.T) {
-	node1 := mustNewLeaderNode()
+	node1 := mustNewLeaderNode("leader1")
 	defer node1.Deprovision()
 
-	node2 := mustNewNode(false)
+	node2 := mustNewNode("node2", false)
 	defer node2.Deprovision()
 	if err := node2.Join(node1); err != nil {
 		t.Fatalf("node failed to join leader: %s", err.Error())
@@ -679,7 +679,7 @@ func Test_MultiNodeClusterNodes(t *testing.T) {
 		t.Fatalf("failed to find cluster leader: %s", err.Error())
 	}
 
-	node3 := mustNewNode(false)
+	node3 := mustNewNode("node3", false)
 	defer node3.Deprovision()
 	if err := node3.Join(leader); err != nil {
 		t.Fatalf("node failed to join leader: %s", err.Error())
@@ -752,7 +752,7 @@ func Test_MultiNodeClusterNodes(t *testing.T) {
 // Test_MultiNodeClusterQueuedWrites tests writing to a cluster using
 // normal and queued writes.
 func Test_MultiNodeClusterQueuedWrites(t *testing.T) {
-	node1 := mustNewLeaderNode()
+	node1 := mustNewLeaderNode("leader1")
 	defer node1.Deprovision()
 
 	if _, err := node1.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`); err != nil {
@@ -760,7 +760,7 @@ func Test_MultiNodeClusterQueuedWrites(t *testing.T) {
 	}
 
 	// Join a second and third nodes
-	node2 := mustNewNode(false)
+	node2 := mustNewNode("node2", false)
 	defer node2.Deprovision()
 	if err := node2.Join(node1); err != nil {
 		t.Fatalf("node failed to join leader: %s", err.Error())
@@ -769,7 +769,7 @@ func Test_MultiNodeClusterQueuedWrites(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed waiting for leader: %s", err.Error())
 	}
-	node3 := mustNewNode(false)
+	node3 := mustNewNode("node3", false)
 	defer node3.Deprovision()
 	if err := node3.Join(node1); err != nil {
 		t.Fatalf("node failed to join leader: %s", err.Error())
@@ -853,7 +853,7 @@ func Test_MultiNodeClusterLargeQueuedWrites(t *testing.T) {
 	http.ResetStats()
 	queue.ResetStats()
 
-	node1 := mustNewLeaderNode()
+	node1 := mustNewLeaderNode("leader1")
 	defer node1.Deprovision()
 
 	if _, err := node1.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`); err != nil {
@@ -861,7 +861,7 @@ func Test_MultiNodeClusterLargeQueuedWrites(t *testing.T) {
 	}
 
 	// Join a second and third nodes
-	node2 := mustNewNode(false)
+	node2 := mustNewNode("node2", false)
 	defer node2.Deprovision()
 	if err := node2.Join(node1); err != nil {
 		t.Fatalf("node failed to join leader: %s", err.Error())
@@ -870,7 +870,7 @@ func Test_MultiNodeClusterLargeQueuedWrites(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed waiting for leader: %s", err.Error())
 	}
-	node3 := mustNewNode(false)
+	node3 := mustNewNode("node3", false)
 	defer node3.Deprovision()
 	if err := node3.Join(node1); err != nil {
 		t.Fatalf("node failed to join leader: %s", err.Error())
@@ -917,10 +917,10 @@ func Test_MultiNodeClusterLargeQueuedWrites(t *testing.T) {
 
 // Test_MultiNodeClusterNodesNonVoter checks nodes/ endpoint with a non-voting node.
 func Test_MultiNodeClusterNodesNonVoter(t *testing.T) {
-	node1 := mustNewLeaderNode()
+	node1 := mustNewLeaderNode("leader1")
 	defer node1.Deprovision()
 
-	node2 := mustNewNode(false)
+	node2 := mustNewNode("node2", false)
 	defer node2.Deprovision()
 	if err := node2.Join(node1); err != nil {
 		t.Fatalf("node failed to join leader: %s", err.Error())
@@ -937,7 +937,7 @@ func Test_MultiNodeClusterNodesNonVoter(t *testing.T) {
 		t.Fatalf("failed to find cluster leader: %s", err.Error())
 	}
 
-	nonVoter := mustNewNode(false)
+	nonVoter := mustNewNode("nonvoter", false)
 	defer nonVoter.Deprovision()
 	if err := nonVoter.JoinAsNonVoter(leader); err != nil {
 		t.Fatalf("node failed to join leader: %s", err.Error())
@@ -988,14 +988,14 @@ func Test_MultiNodeClusterNodesNonVoter(t *testing.T) {
 // Test_MultiNodeClusterNodeEncrypted tests formation of a 3-node cluster, and its operation.
 // This test enables inter-node encryption, but keeps the unencrypted HTTP API.
 func Test_MultiNodeClusterNodeEncrypted(t *testing.T) {
-	node1 := mustNewNodeEncrypted(true, false, true)
+	node1 := mustNewNodeEncrypted("node1", true, false, true)
 	node1.EnableTLSClient()
 	defer node1.Deprovision()
 	if _, err := node1.WaitForLeader(); err != nil {
 		t.Fatalf("node never became leader")
 	}
 
-	node2 := mustNewNodeEncrypted(false, false, true)
+	node2 := mustNewNodeEncrypted("node2", false, false, true)
 	node2.EnableTLSClient()
 	defer node2.Deprovision()
 	if err := node2.Join(node1); err != nil {
@@ -1022,7 +1022,7 @@ func Test_MultiNodeClusterNodeEncrypted(t *testing.T) {
 		t.Fatalf("got incorrect number of followers: %d", len(followers))
 	}
 
-	node3 := mustNewNodeEncrypted(false, false, true)
+	node3 := mustNewNodeEncrypted("node3", false, false, true)
 	node3.EnableTLSClient()
 	defer node3.Deprovision()
 	if err := node3.Join(leader); err != nil {
@@ -1138,7 +1138,7 @@ func Test_MultiNodeClusterNodeEncrypted(t *testing.T) {
 
 // Test_MultiNodeClusterSnapshot tests formation of a 3-node cluster, which involves sharing snapshots.
 func Test_MultiNodeClusterSnapshot(t *testing.T) {
-	node1 := mustNewLeaderNode()
+	node1 := mustNewLeaderNode("leader1")
 	defer node1.Deprovision()
 
 	if _, err := node1.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`); err != nil {
@@ -1179,7 +1179,7 @@ func Test_MultiNodeClusterSnapshot(t *testing.T) {
 	}
 
 	// Join a second node, check it gets the data via a snapshot.
-	node2 := mustNewNode(false)
+	node2 := mustNewNode("node2", false)
 	defer node2.Deprovision()
 	if err := node2.Join(node1); err != nil {
 		t.Fatalf("node failed to join leader: %s", err.Error())
@@ -1191,7 +1191,7 @@ func Test_MultiNodeClusterSnapshot(t *testing.T) {
 	testerFn(node2)
 
 	// Create and add a third node to the cluster.
-	node3 := mustNewNode(false)
+	node3 := mustNewNode("node3", false)
 	defer node3.Deprovision()
 	if err := node3.Join(node1); err != nil {
 		t.Fatalf("node failed to join leader: %s", err.Error())
@@ -1229,10 +1229,10 @@ func Test_MultiNodeClusterSnapshot(t *testing.T) {
 // Test_MultiNodeClusterWithNonVoter tests formation of a 4-node cluster, one of which is
 // a non-voter
 func Test_MultiNodeClusterWithNonVoter(t *testing.T) {
-	node1 := mustNewLeaderNode()
+	node1 := mustNewLeaderNode("leader1")
 	defer node1.Deprovision()
 
-	node2 := mustNewNode(false)
+	node2 := mustNewNode("node2", false)
 	defer node2.Deprovision()
 	if err := node2.Join(node1); err != nil {
 		t.Fatalf("node failed to join leader: %s", err.Error())
@@ -1249,7 +1249,7 @@ func Test_MultiNodeClusterWithNonVoter(t *testing.T) {
 		t.Fatalf("failed to find cluster leader: %s", err.Error())
 	}
 
-	node3 := mustNewNode(false)
+	node3 := mustNewNode("node3", false)
 	defer node3.Deprovision()
 	if err := node3.Join(leader); err != nil {
 		t.Fatalf("node failed to join leader: %s", err.Error())
@@ -1266,7 +1266,7 @@ func Test_MultiNodeClusterWithNonVoter(t *testing.T) {
 		t.Fatalf("failed to find cluster leader: %s", err.Error())
 	}
 
-	nonVoter := mustNewNode(false)
+	nonVoter := mustNewNode("nonvoter", false)
 	defer nonVoter.Deprovision()
 	if err := nonVoter.JoinAsNonVoter(leader); err != nil {
 		t.Fatalf("non-voting node failed to join leader: %s", err.Error())
@@ -1367,7 +1367,7 @@ func Test_MultiNodeClusterWithNonVoter(t *testing.T) {
 // Test_MultiNodeClusterRecoverSingle tests recovery of a single node from a 3-node cluster,
 // which no longer has quorum.
 func Test_MultiNodeClusterRecoverSingle(t *testing.T) {
-	node1 := mustNewLeaderNode()
+	node1 := mustNewLeaderNode("leader1")
 	defer node1.Deprovision()
 
 	if _, err := node1.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`); err != nil {
@@ -1381,7 +1381,7 @@ func Test_MultiNodeClusterRecoverSingle(t *testing.T) {
 	}
 
 	// Join a second and third nodes, which will get database state via snapshots.
-	node2 := mustNewNode(false)
+	node2 := mustNewNode("node2", false)
 	defer node2.Deprovision()
 	if err := node2.Join(node1); err != nil {
 		t.Fatalf("node failed to join leader: %s", err.Error())
@@ -1394,7 +1394,7 @@ func Test_MultiNodeClusterRecoverSingle(t *testing.T) {
 		t.Fatalf("got incorrect results from node: %s", rows)
 	}
 
-	node3 := mustNewNode(false)
+	node3 := mustNewNode("node3", false)
 	defer node3.Deprovision()
 	if err := node3.Join(node1); err != nil {
 		t.Fatalf("node failed to join leader: %s", err.Error())
@@ -1425,7 +1425,7 @@ func Test_MultiNodeClusterRecoverSingle(t *testing.T) {
 	// quorum can't be met. This isn't quite right since the Raft address is also
 	// changing, but it generally proves it doesn't come up.
 	mux0, ln0 := mustNewOpenMux("127.0.0.1:10000")
-	failedSingle := mustNodeEncrypted(node1.Dir, true, false, mux0, raftDialer, clstrDialer, node1.Store.ID())
+	failedSingle := mustNodeEncrypted(node1.Store.ID(), node1.Dir, true, false, mux0, raftDialer, clstrDialer)
 	_, err = failedSingle.WaitForLeader()
 	if err == nil {
 		t.Fatalf("no error waiting for leader")
@@ -1438,7 +1438,7 @@ func Test_MultiNodeClusterRecoverSingle(t *testing.T) {
 	peers := fmt.Sprintf(`[{"id": "%s","address": "%s"}]`, node1.Store.ID(), "127.0.0.1:10001")
 	mustWriteFile(node1.PeersPath, peers)
 
-	okSingle := mustNodeEncrypted(node1.Dir, true, false, mux1, raftDialer, clstrDialer, node1.Store.ID())
+	okSingle := mustNodeEncrypted(node1.Store.ID(), node1.Dir, true, false, mux1, raftDialer, clstrDialer)
 	_, err = okSingle.WaitForLeader()
 	if err != nil {
 		t.Fatalf("failed waiting for leader: %s", err.Error())
@@ -1459,14 +1459,14 @@ func Test_MultiNodeClusterRecoverFull(t *testing.T) {
 	clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, nil)
 
 	mux1, ln1 := mustNewOpenMux("127.0.0.1:10001")
-	node1 := mustNodeEncrypted(mustTempDir(), true, false, mux1, raftDialer, clstrDialer, "1")
+	node1 := mustNodeEncrypted("node1", mustTempDir("node1"), true, false, mux1, raftDialer, clstrDialer)
 	_, err = node1.WaitForLeader()
 	if err != nil {
 		t.Fatalf("failed waiting for leader: %s", err.Error())
 	}
 
 	mux2, ln2 := mustNewOpenMux("127.0.0.1:10002")
-	node2 := mustNodeEncrypted(mustTempDir(), false, false, mux2, raftDialer, clstrDialer, "2")
+	node2 := mustNodeEncrypted("node2", mustTempDir("node2"), false, false, mux2, raftDialer, clstrDialer)
 	if err := node2.Join(node1); err != nil {
 		t.Fatalf("node failed to join leader: %s", err.Error())
 	}
@@ -1476,7 +1476,7 @@ func Test_MultiNodeClusterRecoverFull(t *testing.T) {
 	}
 
 	mux3, ln3 := mustNewOpenMux("127.0.0.1:10003")
-	node3 := mustNodeEncrypted(mustTempDir(), false, false, mux3, raftDialer, clstrDialer, "3")
+	node3 := mustNodeEncrypted("node3", mustTempDir("node3"), false, false, mux3, raftDialer, clstrDialer)
 	if err := node3.Join(node1); err != nil {
 		t.Fatalf("node failed to join leader: %s", err.Error())
 	}
@@ -1524,17 +1524,17 @@ func Test_MultiNodeClusterRecoverFull(t *testing.T) {
 	mustWriteFile(node3.PeersPath, peers)
 
 	mux4, ln4 := mustNewOpenMux("127.0.0.1:11001")
-	node4 := mustNodeEncrypted(node1.Dir, false, false, mux4, raftDialer, clstrDialer, "1")
+	node4 := mustNodeEncrypted("1", node1.Dir, false, false, mux4, raftDialer, clstrDialer)
 	defer node4.Deprovision()
 	defer ln4.Close()
 
 	mux5, ln5 := mustNewOpenMux("127.0.0.1:11002")
-	node5 := mustNodeEncrypted(node2.Dir, false, false, mux5, raftDialer, clstrDialer, "2")
+	node5 := mustNodeEncrypted("2", node2.Dir, false, false, mux5, raftDialer, clstrDialer)
 	defer node5.Deprovision()
 	defer ln5.Close()
 
 	mux6, ln6 := mustNewOpenMux("127.0.0.1:11003")
-	node6 := mustNodeEncrypted(node3.Dir, false, false, mux6, raftDialer, clstrDialer, "3")
+	node6 := mustNodeEncrypted("3", node3.Dir, false, false, mux6, raftDialer, clstrDialer)
 	defer node6.Deprovision()
 	defer ln6.Close()
 
@@ -1561,7 +1561,7 @@ func Test_MultiNodeClusterReapNodes(t *testing.T) {
 		n.Store.ReapReadOnlyTimeout = time.Second
 	}
 
-	node1 := mustNewLeaderNode()
+	node1 := mustNewLeaderNode("leader1")
 	defer node1.Deprovision()
 	cfgStoreFn(node1)
 	_, err := node1.WaitForLeader()
@@ -1569,7 +1569,7 @@ func Test_MultiNodeClusterReapNodes(t *testing.T) {
 		t.Fatalf("failed waiting for leader: %s", err.Error())
 	}
 
-	node2 := mustNewNode(false)
+	node2 := mustNewNode("node2", false)
 	defer node2.Deprovision()
 	cfgStoreFn(node2)
 	if err := node2.Join(node1); err != nil {
@@ -1587,7 +1587,7 @@ func Test_MultiNodeClusterReapNodes(t *testing.T) {
 		t.Fatalf("failed to find cluster leader: %s", err.Error())
 	}
 
-	node3 := mustNewNode(false)
+	node3 := mustNewNode("node3", false)
 	defer node3.Deprovision()
 	cfgStoreFn(node3)
 	if err := node3.Join(leader); err != nil {
@@ -1605,7 +1605,7 @@ func Test_MultiNodeClusterReapNodes(t *testing.T) {
 		t.Fatalf("failed to find cluster leader: %s", err.Error())
 	}
 
-	nonVoter := mustNewNode(false)
+	nonVoter := mustNewNode("nonvoter", false)
 	defer nonVoter.Deprovision()
 	cfgStoreFn(nonVoter)
 	if err := nonVoter.JoinAsNonVoter(leader); err != nil {
@@ -1663,7 +1663,7 @@ func Test_MultiNodeClusterNoReap(t *testing.T) {
 		n.Store.ReapReadOnlyTimeout = 120 * time.Second
 	}
 
-	node1 := mustNewLeaderNode()
+	node1 := mustNewLeaderNode("leader1")
 	defer node1.Deprovision()
 	cfgStoreFn(node1)
 	_, err := node1.WaitForLeader()
@@ -1671,7 +1671,7 @@ func Test_MultiNodeClusterNoReap(t *testing.T) {
 		t.Fatalf("failed waiting for leader: %s", err.Error())
 	}
 
-	nonVoter := mustNewNode(false)
+	nonVoter := mustNewNode("nonvoter", false)
 	defer nonVoter.Deprovision()
 	cfgStoreFn(nonVoter)
 	if err := nonVoter.JoinAsNonVoter(node1); err != nil {
@@ -1708,7 +1708,7 @@ func Test_MultiNodeClusterNoReapZero(t *testing.T) {
 		n.Store.ReapTimeout = 0
 	}
 
-	node1 := mustNewLeaderNode()
+	node1 := mustNewLeaderNode("leader1")
 	defer node1.Deprovision()
 	cfgStoreFn(node1)
 	_, err := node1.WaitForLeader()
@@ -1716,7 +1716,7 @@ func Test_MultiNodeClusterNoReapZero(t *testing.T) {
 		t.Fatalf("failed waiting for leader: %s", err.Error())
 	}
 
-	node2 := mustNewNode(false)
+	node2 := mustNewNode("node2", false)
 	defer node2.Deprovision()
 	cfgStoreFn(node2)
 	if err := node2.Join(node1); err != nil {
@@ -1734,7 +1734,7 @@ func Test_MultiNodeClusterNoReapZero(t *testing.T) {
 		t.Fatalf("failed to find cluster leader: %s", err.Error())
 	}
 
-	node3 := mustNewNode(false)
+	node3 := mustNewNode("node3", false)
 	defer node3.Deprovision()
 	cfgStoreFn(node3)
 	if err := node3.Join(leader); err != nil {
@@ -1779,7 +1779,7 @@ func Test_MultiNodeClusterNoReapReadOnlyZero(t *testing.T) {
 		n.Store.ReapReadOnlyTimeout = 0
 	}
 
-	node1 := mustNewLeaderNode()
+	node1 := mustNewLeaderNode("leader1")
 	defer node1.Deprovision()
 	cfgStoreFn(node1)
 	_, err := node1.WaitForLeader()
@@ -1787,7 +1787,7 @@ func Test_MultiNodeClusterNoReapReadOnlyZero(t *testing.T) {
 		t.Fatalf("failed waiting for leader: %s", err.Error())
 	}
 
-	nonVoter := mustNewNode(false)
+	nonVoter := mustNewNode("2", false)
 	defer nonVoter.Deprovision()
 	cfgStoreFn(nonVoter)
 	if err := nonVoter.JoinAsNonVoter(node1); err != nil {
@@ -1819,7 +1819,7 @@ func Test_MultiNodeClusterNoReapReadOnlyZero(t *testing.T) {
 }
 
 func Test_MultiNodeCluster_Boot(t *testing.T) {
-	node1 := mustNewLeaderNode()
+	node1 := mustNewLeaderNode("leader1")
 	defer node1.Deprovision()
 
 	_, err := node1.Boot("testdata/auto-restore.sqlite")
@@ -1828,7 +1828,7 @@ func Test_MultiNodeCluster_Boot(t *testing.T) {
 	}
 
 	// Join a second node, check it gets the data via a snapshot.
-	node2 := mustNewNode(false)
+	node2 := mustNewNode("node2", false)
 	defer node2.Deprovision()
 	if err := node2.Join(node1); err != nil {
 		t.Fatalf("node failed to join leader: %s", err.Error())

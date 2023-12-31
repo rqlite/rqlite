@@ -625,12 +625,12 @@ func Remove(n *Node, addr string) error {
 	return nil
 }
 
-func mustNewNode(enableSingle bool) *Node {
-	return mustNewNodeEncrypted(enableSingle, false, false)
+func mustNewNode(id string, enableSingle bool) *Node {
+	return mustNewNodeEncrypted(id, enableSingle, false, false)
 }
 
-func mustNewNodeEncrypted(enableSingle, httpEncrypt, nodeEncrypt bool) *Node {
-	dir := mustTempDir()
+func mustNewNodeEncrypted(id string, enableSingle, httpEncrypt, nodeEncrypt bool) *Node {
+	dir := mustTempDir(id)
 	var mux *tcp.Mux
 	var raftDialer *tcp.Dialer
 	var clstrDialer *tcp.Dialer
@@ -644,10 +644,10 @@ func mustNewNodeEncrypted(enableSingle, httpEncrypt, nodeEncrypt bool) *Node {
 		clstrDialer = tcp.NewDialer(cluster.MuxClusterHeader, nil)
 	}
 	go mux.Serve()
-	return mustNodeEncrypted(dir, enableSingle, httpEncrypt, mux, raftDialer, clstrDialer, "")
+	return mustNodeEncrypted(id, dir, enableSingle, httpEncrypt, mux, raftDialer, clstrDialer)
 }
 
-func mustNodeEncrypted(dir string, enableSingle, httpEncrypt bool, mux *tcp.Mux, raftDialer, clstrDialer *tcp.Dialer, nodeID string) *Node {
+func mustNodeEncrypted(id, dir string, enableSingle, httpEncrypt bool, mux *tcp.Mux, raftDialer, clstrDialer *tcp.Dialer) *Node {
 	nodeCertPath := rX509.CertExampleDotComFile(dir)
 	nodeKeyPath := rX509.KeyExampleDotComFile(dir)
 	httpCertPath := nodeCertPath
@@ -667,7 +667,6 @@ func mustNodeEncrypted(dir string, enableSingle, httpEncrypt bool, mux *tcp.Mux,
 
 	raftLn := mux.Listen(cluster.MuxRaftHeader)
 	raftTn := tcp.NewLayer(raftLn, raftDialer)
-	id := nodeID
 	if id == "" {
 		id = raftTn.Addr().String()
 	}
@@ -722,8 +721,8 @@ func mustNodeEncrypted(dir string, enableSingle, httpEncrypt bool, mux *tcp.Mux,
 	return node
 }
 
-func mustNewLeaderNode() *Node {
-	node := mustNewNode(true)
+func mustNewLeaderNode(id string) *Node {
+	node := mustNewNode(id, true)
 	if _, err := node.WaitForLeader(); err != nil {
 		node.Deprovision()
 		panic("node never became leader")
@@ -731,9 +730,9 @@ func mustNewLeaderNode() *Node {
 	return node
 }
 
-func mustTempDir() string {
+func mustTempDir(s string) string {
 	var err error
-	path, err := os.MkdirTemp("", "rqlilte-system-test-")
+	path, err := os.MkdirTemp("", fmt.Sprintf("rqlilte-system-test-%s-", s))
 	if err != nil {
 		panic("failed to create temp dir")
 	}

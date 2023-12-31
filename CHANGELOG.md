@@ -1,3 +1,7 @@
+## 8.14.2 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1548](https://github.com/rqlite/rqlite/pull/1548): Make system-level test failures easier to understand.
+
 ## 8.14.1 (December 31st 2023)
 ### Implementation changes and bug fixes
 - [PR #1546](https://github.com/rqlite/rqlite/pull/1546): Don't hardcode suffrage when joining. Fixes issue [#1545](https://github.com/rqlite/rqlite/issues/1545). Thanks @jtackaberry

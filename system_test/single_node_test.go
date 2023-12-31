@@ -19,7 +19,7 @@ import (
 )
 
 func Test_SingleNodeBasicEndpoint(t *testing.T) {
-	node := mustNewLeaderNode()
+	node := mustNewLeaderNode("node1")
 	defer node.Deprovision()
 
 	// Ensure accessing endpoints in basic manner works
@@ -28,12 +28,12 @@ func Test_SingleNodeBasicEndpoint(t *testing.T) {
 		t.Fatalf(`failed to retrieve status: %s`, err)
 	}
 
-	dir := mustTempDir()
+	dir := mustTempDir("node1")
 	mux, ln := mustNewOpenMux("")
 	defer ln.Close()
 	raftDialer := tcp.NewDialer(cluster.MuxRaftHeader, nil)
 	clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, nil)
-	node = mustNodeEncrypted(dir, true, false, mux, raftDialer, clstrDialer, "")
+	node = mustNodeEncrypted("node1", dir, true, false, mux, raftDialer, clstrDialer)
 	if _, err := node.WaitForLeader(); err != nil {
 		t.Fatalf("node never became leader")
 	}
@@ -65,7 +65,7 @@ func Test_SingleNodeBasicEndpoint(t *testing.T) {
 }
 
 func Test_SingleNodeNotReadyLive(t *testing.T) {
-	node := mustNewNode(false)
+	node := mustNewNode("node1", false)
 	defer node.Deprovision()
 	ready, err := node.Ready()
 	if err != nil {
@@ -96,7 +96,7 @@ func Test_SingleNodeNotReadyLive(t *testing.T) {
 }
 
 func Test_SingleNode(t *testing.T) {
-	node := mustNewLeaderNode()
+	node := mustNewLeaderNode("node1")
 	defer node.Deprovision()
 
 	tests := []struct {
@@ -159,7 +159,7 @@ func Test_SingleNode(t *testing.T) {
 }
 
 func Test_SingleNodeRequest(t *testing.T) {
-	node := mustNewLeaderNode()
+	node := mustNewLeaderNode("leader1")
 	defer node.Deprovision()
 
 	tests := []struct {
@@ -208,7 +208,7 @@ func Test_SingleNodeRequest(t *testing.T) {
 }
 
 func Test_SingleNodeMulti(t *testing.T) {
-	node := mustNewLeaderNode()
+	node := mustNewLeaderNode("leader1")
 	defer node.Deprovision()
 
 	tests := []struct {
@@ -270,7 +270,7 @@ func Test_SingleNodeMulti(t *testing.T) {
 
 func Test_SingleNodeConcurrentRequests(t *testing.T) {
 	var err error
-	node := mustNewLeaderNode()
+	node := mustNewLeaderNode("leader1")
 	node.Store.SetRequestCompression(1024, 1024) // Ensure no compression
 	defer node.Deprovision()
 
@@ -303,7 +303,7 @@ func Test_SingleNodeConcurrentRequests(t *testing.T) {
 
 func Test_SingleNodeConcurrentRequestsCompressed(t *testing.T) {
 	var err error
-	node := mustNewLeaderNode()
+	node := mustNewLeaderNode("leader1")
 	node.Store.SetRequestCompression(0, 0) // Ensure compression
 	defer node.Deprovision()
 
@@ -335,7 +335,7 @@ func Test_SingleNodeConcurrentRequestsCompressed(t *testing.T) {
 }
 
 func Test_SingleNodeParameterized(t *testing.T) {
-	node := mustNewLeaderNode()
+	node := mustNewLeaderNode("leader1")
 	defer node.Deprovision()
 
 	tests := []struct {
@@ -378,7 +378,7 @@ func Test_SingleNodeParameterized(t *testing.T) {
 }
 
 func Test_SingleNodeRequestParameterized(t *testing.T) {
-	node := mustNewLeaderNode()
+	node := mustNewLeaderNode("leader1")
 	defer node.Deprovision()
 
 	tests := []struct {
@@ -411,7 +411,7 @@ func Test_SingleNodeRequestParameterized(t *testing.T) {
 }
 
 func Test_SingleNodeParameterizedNull(t *testing.T) {
-	node := mustNewLeaderNode()
+	node := mustNewLeaderNode("leader1")
 	defer node.Deprovision()
 
 	tests := []struct {
@@ -454,7 +454,7 @@ func Test_SingleNodeParameterizedNull(t *testing.T) {
 }
 
 func Test_SingleNodeParameterizedNamed(t *testing.T) {
-	node := mustNewLeaderNode()
+	node := mustNewLeaderNode("leader1")
 	defer node.Deprovision()
 
 	tests := []struct {
@@ -499,7 +499,7 @@ func Test_SingleNodeParameterizedNamed(t *testing.T) {
 // Test_SingleNodeParameterizedNamedConstraints tests that named parameters can be used with constraints
 // See https://github.com/rqlite/rqlite/issues/1177
 func Test_SingleNodeParameterizedNamedConstraints(t *testing.T) {
-	node := mustNewLeaderNode()
+	node := mustNewLeaderNode("leader1")
 	defer node.Deprovision()
 
 	_, err := node.ExecuteParameterized([]interface{}{"CREATE TABLE [TestTable] ([Id] int primary key, [Col1] int not null, [Col2] varchar(500), [Col3] int not null, [Col4] varchar(500))"})
@@ -519,7 +519,7 @@ func Test_SingleNodeParameterizedNamedConstraints(t *testing.T) {
 }
 
 func Test_SingleNodeRewriteRandom(t *testing.T) {
-	node := mustNewLeaderNode()
+	node := mustNewLeaderNode("leader1")
 	defer node.Deprovision()
 
 	_, err := node.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`)
@@ -539,7 +539,7 @@ func Test_SingleNodeRewriteRandom(t *testing.T) {
 }
 
 func Test_SingleNodeQueued(t *testing.T) {
-	node := mustNewLeaderNode()
+	node := mustNewLeaderNode("leader1")
 	defer node.Deprovision()
 
 	_, err := node.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`)
@@ -599,7 +599,7 @@ LOOP:
 
 // Test_SingleNodeQueuedBadStmt tests that a single bad SQL statement has the right outcome.
 func Test_SingleNodeQueuedBadStmt(t *testing.T) {
-	node := mustNewLeaderNode()
+	node := mustNewLeaderNode("leader1")
 	defer node.Deprovision()
 	node.Service.DefaultQueueTx = false
 
@@ -675,7 +675,7 @@ LOOP2:
 }
 
 func Test_SingleNodeQueuedEmptyNil(t *testing.T) {
-	node := mustNewLeaderNode()
+	node := mustNewLeaderNode("leader1")
 	defer node.Deprovision()
 
 	_, err := node.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`)
@@ -742,7 +742,7 @@ func Test_SingleNodeQueuedEmptyNil(t *testing.T) {
 // Test_SingleNodeSQLInjection demonstrates that using the non-parameterized API is vulnerable to
 // SQL injection attacks.
 func Test_SingleNodeSQLInjection(t *testing.T) {
-	node := mustNewLeaderNode()
+	node := mustNewLeaderNode("leader1")
 	defer node.Deprovision()
 
 	tests := []struct {
@@ -797,7 +797,7 @@ func Test_SingleNodeSQLInjection(t *testing.T) {
 // Test_SingleNodeNoSQLInjection demonstrates that using the parameterized API protects
 // against SQL injection attacks.
 func Test_SingleNodeNoSQLInjection(t *testing.T) {
-	node := mustNewLeaderNode()
+	node := mustNewLeaderNode("leader1")
 	defer node.Deprovision()
 
 	tests := []struct {
@@ -855,7 +855,7 @@ func Test_SingleNodeUpgrades_NoSnapshots(t *testing.T) {
 	upgradeFrom := func(dir string) {
 		// Deprovision of a node deletes the node's dir, so make a copy first.
 		srcdir := filepath.Join("testdata", dir)
-		destdir := mustTempDir()
+		destdir := mustTempDir("")
 		if err := os.Remove(destdir); err != nil {
 			t.Fatalf("failed to remove dest dir: %s", err)
 		}
@@ -867,7 +867,7 @@ func Test_SingleNodeUpgrades_NoSnapshots(t *testing.T) {
 		defer ln.Close()
 		raftDialer := tcp.NewDialer(cluster.MuxRaftHeader, nil)
 		clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, nil)
-		node := mustNodeEncrypted(destdir, true, false, mux, raftDialer, clstrDialer, "node1")
+		node := mustNodeEncrypted("node1", destdir, true, false, mux, raftDialer, clstrDialer)
 		defer node.Deprovision()
 		if _, err := node.WaitForLeader(); err != nil {
 			t.Fatalf("node never became leader with %s data:", dir)
@@ -915,7 +915,7 @@ func Test_SingleNodeUpgrades_Snapshots(t *testing.T) {
 	upgradeFrom := func(dir string) {
 		// Deprovision of a node deletes the node's dir, so make a copy first.
 		srcdir := filepath.Join("testdata", dir)
-		destdir := mustTempDir()
+		destdir := mustTempDir("")
 		if err := os.Remove(destdir); err != nil {
 			t.Fatalf("failed to remove dest dir: %s", err)
 		}
@@ -927,7 +927,7 @@ func Test_SingleNodeUpgrades_Snapshots(t *testing.T) {
 		defer ln.Close()
 		raftDialer := tcp.NewDialer(cluster.MuxRaftHeader, nil)
 		clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, nil)
-		node := mustNodeEncrypted(destdir, true, false, mux, raftDialer, clstrDialer, "node1")
+		node := mustNodeEncrypted("node1", destdir, true, false, mux, raftDialer, clstrDialer)
 		defer node.Deprovision()
 		if _, err := node.WaitForLeader(); err != nil {
 			t.Fatalf("node never became leader with %s data:", dir)
@@ -966,7 +966,7 @@ func Test_SingleNodeUpgrades_Snapshots(t *testing.T) {
 }
 
 func Test_SingleNodeNodes(t *testing.T) {
-	node := mustNewLeaderNode()
+	node := mustNewLeaderNode("leader1")
 	defer node.Deprovision()
 
 	// Access endpoints to ensure the code is covered.
@@ -994,7 +994,7 @@ func Test_SingleNodeNodes(t *testing.T) {
 }
 
 func Test_SingleNodeCoverage(t *testing.T) {
-	node := mustNewLeaderNode()
+	node := mustNewLeaderNode("leader1")
 	defer node.Deprovision()
 
 	// Access endpoints to ensure the code is covered.
@@ -1020,12 +1020,12 @@ func Test_SingleNodeCoverage(t *testing.T) {
 
 // Test_SingleNodeReopen tests that a node can be re-opened OK.
 func Test_SingleNodeReopen(t *testing.T) {
-	dir := mustTempDir()
+	dir := mustTempDir("node1")
 	mux, ln := mustNewOpenMux("")
 	defer ln.Close()
 	raftDialer := tcp.NewDialer(cluster.MuxRaftHeader, nil)
 	clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, nil)
-	node := mustNodeEncrypted(dir, true, false, mux, raftDialer, clstrDialer, "")
+	node := mustNodeEncrypted("node1", dir, true, false, mux, raftDialer, clstrDialer)
 
 	if _, err := node.WaitForLeader(); err != nil {
 		t.Fatalf("node never became leader")
@@ -1055,12 +1055,12 @@ func Test_SingleNodeReopen(t *testing.T) {
 // Test_SingleNodeReopen tests that a node can be re-opened OK, with
 // a non-database command in the log.
 func Test_SingleNodeNoopReopen(t *testing.T) {
-	dir := mustTempDir()
+	dir := mustTempDir("node1")
 	mux, ln := mustNewOpenMux("")
 	defer ln.Close()
 	raftDialer := tcp.NewDialer(cluster.MuxRaftHeader, nil)
 	clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, nil)
-	node := mustNodeEncrypted(dir, true, false, mux, raftDialer, clstrDialer, "")
+	node := mustNodeEncrypted("node1", dir, true, false, mux, raftDialer, clstrDialer)
 
 	if _, err := node.WaitForLeader(); err != nil {
 		t.Fatalf("node never became leader")
@@ -1138,12 +1138,12 @@ func Test_SingleNodeNoopReopen(t *testing.T) {
 // This tests that the code can handle a snapshot that doesn't
 // contain database data. This shouldn't happen in real systems
 func Test_SingleNodeNoopSnapReopen(t *testing.T) {
-	dir := mustTempDir()
+	dir := mustTempDir("node1")
 	mux, ln := mustNewOpenMux("")
 	defer ln.Close()
 	raftDialer := tcp.NewDialer(cluster.MuxRaftHeader, nil)
 	clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, nil)
-	node := mustNodeEncrypted(dir, true, false, mux, raftDialer, clstrDialer, "")
+	node := mustNodeEncrypted("node1", dir, true, false, mux, raftDialer, clstrDialer)
 
 	if _, err := node.WaitForLeader(); err != nil {
 		t.Fatalf("node never became leader")
@@ -1226,12 +1226,12 @@ func Test_SingleNodeNoopSnapReopen(t *testing.T) {
 // This tests that the code can handle a snapshot that doesn't
 // contain database data. This shouldn't happen in real systems
 func Test_SingleNodeNoopSnapLogsReopen(t *testing.T) {
-	dir := mustTempDir()
+	dir := mustTempDir("node1")
 	mux, ln := mustNewOpenMux("")
 	defer ln.Close()
 	raftDialer := tcp.NewDialer(cluster.MuxRaftHeader, nil)
 	clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, nil)
-	node := mustNodeEncrypted(dir, true, false, mux, raftDialer, clstrDialer, "")
+	node := mustNodeEncrypted("node1", dir, true, false, mux, raftDialer, clstrDialer)
 
 	if _, err := node.WaitForLeader(); err != nil {
 		t.Fatalf("node never became leader")
@@ -1312,7 +1312,7 @@ func Test_SingleNodeNoopSnapLogsReopen(t *testing.T) {
 }
 
 func Test_SingleNodeAutoRestore(t *testing.T) {
-	dir := mustTempDir()
+	dir := mustTempDir("node1")
 	node := &Node{
 		Dir:       dir,
 		PeersPath: filepath.Join(dir, "raft/peers.json"),
@@ -1327,7 +1327,7 @@ func Test_SingleNodeAutoRestore(t *testing.T) {
 	node.Store = store.New(raftTn, &store.Config{
 		DBConf: store.NewDBConfig(),
 		Dir:    node.Dir,
-		ID:     raftTn.Addr().String(),
+		ID:     "node1",
 	})
 
 	restoreFile := mustTempFile()
@@ -1378,7 +1378,7 @@ func Test_SingleNodeAutoRestore(t *testing.T) {
 }
 
 func Test_SingleNodeBoot_OK(t *testing.T) {
-	node := mustNewLeaderNode()
+	node := mustNewLeaderNode("leader1")
 	defer node.Deprovision()
 
 	_, err := node.Boot(filepath.Join("testdata", "auto-restore.sqlite"))
@@ -1396,7 +1396,7 @@ func Test_SingleNodeBoot_OK(t *testing.T) {
 }
 
 func Test_SingleNodeBoot_FailNotLeader(t *testing.T) {
-	node := mustNewNode(false)
+	node := mustNewNode("node1", false)
 	defer node.Deprovision()
 	_, err := node.Boot(filepath.Join("testdata", "auto-restore.sqlite"))
 	if err == nil {
