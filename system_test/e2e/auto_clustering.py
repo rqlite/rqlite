@@ -184,6 +184,22 @@ class TestAutoClusteringKVStores(unittest.TestCase):
   DiscoModeConsulKV = "consul-kv"
   DiscoModeEtcdKV = "etcd-kv"
 
+  def autocluster_readonly(self, mode):
+    disco_key = random_string(10)
+
+    # Non-voter shouldn't become leader.
+    nonVoter = Node(RQLITED_PATH, '0', raft_voter=False)
+    nonVoter.start(disco_mode=mode, disco_key=disco_key)
+    nonVoter.expect_leader_failure()
+
+    # Voter should become leader, the non-voting node's actions
+    # shouldn't have affected leadership selection.
+    voter = Node(RQLITED_PATH, '1')
+    voter.start(disco_mode=mode, disco_key=disco_key)
+    voter.wait_for_leader()
+    self.assertTrue(voter.is_leader())
+    self.assertEqual(voter.disco_mode(), mode)
+
   def autocluster(self, mode):
     disco_key = random_string(10)
 
@@ -274,6 +290,14 @@ class TestAutoClusteringKVStores(unittest.TestCase):
   def test_etcd(self):
     '''Test clustering via Etcd and that leadership change is observed'''
     self.autocluster(TestAutoClusteringKVStores.DiscoModeEtcdKV)
+
+  def test_consul_readonly(self):
+    '''Test clustering via Consul when a read-only node is started first'''
+    self.autocluster_readonly(TestAutoClusteringKVStores.DiscoModeConsulKV)
+
+  def test_etcd_readonly(self):
+    '''Test clustering via Ectd when a read-only node is started first'''
+    self.autocluster_readonly(TestAutoClusteringKVStores.DiscoModeEtcdKV)
 
   def test_consul_config(self):
     '''Test clustering via Consul with explicit file-based config'''
