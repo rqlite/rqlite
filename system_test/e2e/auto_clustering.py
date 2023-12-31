@@ -184,6 +184,25 @@ class TestAutoClusteringKVStores(unittest.TestCase):
   DiscoModeConsulKV = "consul-kv"
   DiscoModeEtcdKV = "etcd-kv"
 
+  def autocluster_readonly(self, mode):
+    disco_key = random_string(10)
+
+    # Non-voter shouldn't become leader.
+    nonVoter = Node(RQLITED_PATH, '0', raft_voter=False)
+    nonVoter.start(disco_mode=mode, disco_key=disco_key)
+    nonVoter.expect_leader_fail()
+
+    # Voter should become leader, the non-voting node's actions
+    # shouldn't have affected leadership selection.
+    voter = Node(RQLITED_PATH, '1')
+    voter.start(disco_mode=mode, disco_key=disco_key)
+    voter.wait_for_leader()
+    self.assertTrue(voter.is_leader())
+    self.assertEqual(voter.disco_mode(), mode)
+
+    deprovision_node(nonVoter)
+    deprovision_node(voter)
+
   def autocluster(self, mode):
     disco_key = random_string(10)
 
@@ -228,9 +247,18 @@ class TestAutoClusteringKVStores(unittest.TestCase):
     j = n3.query('SELECT * FROM foo', level='none')
     self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
 
+    # Add a fifth node, this time running in non-voter mode. Should join fine.
+    n4 = Node(RQLITED_PATH, '4', raft_voter=False)
+    n4.start(disco_mode=mode, disco_key=disco_key, join_interval='1s', join_attempts=1)
+    n4.wait_for_leader()
+    self.assertEqual(n4.disco_mode(), mode)
+    j = n4.query('SELECT * FROM foo', level='none')
+    self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
+
     deprovision_node(n1)
     deprovision_node(n2)
     deprovision_node(n3)
+    deprovision_node(n4)
 
   def autocluster_config(self, mode, config):
     disco_key = random_string(10)
@@ -265,6 +293,14 @@ class TestAutoClusteringKVStores(unittest.TestCase):
   def test_etcd(self):
     '''Test clustering via Etcd and that leadership change is observed'''
     self.autocluster(TestAutoClusteringKVStores.DiscoModeEtcdKV)
+
+  def test_consul_readonly(self):
+    '''Test clustering via Consul when a read-only node is started first'''
+    self.autocluster_readonly(TestAutoClusteringKVStores.DiscoModeConsulKV)
+
+  def test_etcd_readonly(self):
+    '''Test clustering via Ectd when a read-only node is started first'''
+    self.autocluster_readonly(TestAutoClusteringKVStores.DiscoModeEtcdKV)
 
   def test_consul_config(self):
     '''Test clustering via Consul with explicit file-based config'''

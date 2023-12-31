@@ -322,7 +322,7 @@ func createDiscoService(cfg *Config, str *store.Store) (*disco.Service, error) {
 		return nil, fmt.Errorf("invalid disco service: %s", cfg.DiscoMode)
 	}
 
-	return disco.NewService(c, str), nil
+	return disco.NewService(c, str, disco.VoterSuffrage(!cfg.RaftNonVoter)), nil
 }
 
 func startHTTPService(cfg *Config, str *store.Store, cltr *cluster.Client, credStr *auth.CredentialsStore) (*httpd.Service, error) {
@@ -519,7 +519,6 @@ func createCluster(cfg *Config, hasPeers bool, client *cluster.Client, str *stor
 			log.Printf("preexisting node configuration detected, not registering with discovery service")
 			return nil
 		}
-
 		log.Println("no preexisting nodes, registering with discovery service")
 
 		leader, addr, err := discoService.Register(str.ID(), cfg.HTTPURL(), cfg.RaftAdv)

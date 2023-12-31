@@ -3,6 +3,7 @@ This release adds new control over Raft snapshotting, a key part of the Raft con
 ### New features
 - [PR #1530](https://github.com/rqlite/rqlite/pull/1530), [PR #1533](https://github.com/rqlite/rqlite/pull/1533): Support automatically snapshotting when WAL reaches the SQLite default of 4MB.
 - [PR #1541](https://github.com/rqlite/rqlite/pull/1541), [PR #1542](https://github.com/rqlite/rqlite/pull/1542): DNS-based autoclustering supports read-only (non-voting) nodes. Fixes issue [#1521](https://github.com/rqlite/rqlite/issues/1521)
+- [PR #1544](https://github.com/rqlite/rqlite/pull/1544): Support autoclustering of read-only nodes with Consul and etcd.
 
 ### Implementation changes and bug fixes
 - [PR #1531](https://github.com/rqlite/rqlite/pull/1531): Check for Raft snapshot condition every 10 seconds by default.
