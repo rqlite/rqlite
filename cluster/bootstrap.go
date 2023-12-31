@@ -180,7 +180,7 @@ func (b *Bootstrapper) Boot(id, raftAddr string, suf Suffrage, done func() bool,
 			// Try an explicit join first. Joining an existing cluster is always given priority
 			// over trying to form a new cluster.
 			if j, err := joiner.Do(targets, id, raftAddr, suf); err == nil {
-				b.logger.Printf("succeeded directly joining cluster via node at %s", j)
+				b.logger.Printf("succeeded directly joining cluster via node at %s as %s", j, suf)
 				b.setBootStatus(BootJoin)
 				return nil
 			}
