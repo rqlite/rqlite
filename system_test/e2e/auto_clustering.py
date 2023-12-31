@@ -190,7 +190,7 @@ class TestAutoClusteringKVStores(unittest.TestCase):
     # Non-voter shouldn't become leader.
     nonVoter = Node(RQLITED_PATH, '0', raft_voter=False)
     nonVoter.start(disco_mode=mode, disco_key=disco_key)
-    nonVoter.expect_leader_failure()
+    nonVoter.expect_leader_fail()
 
     # Voter should become leader, the non-voting node's actions
     # shouldn't have affected leadership selection.
@@ -199,6 +199,9 @@ class TestAutoClusteringKVStores(unittest.TestCase):
     voter.wait_for_leader()
     self.assertTrue(voter.is_leader())
     self.assertEqual(voter.disco_mode(), mode)
+
+    deprovision_node(nonVoter)
+    deprovision_node(voter)
 
   def autocluster(self, mode):
     disco_key = random_string(10)
