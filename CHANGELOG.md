@@ -1,8 +1,12 @@
+## 8.14.1 (December 26th 2023)
+### Implementation changes and bug fixes
+- PR [#1546](https://github.com/rqlite/rqlite/pull/1546): Don't hardcode suffrage when joining. Fixes issue [#1525](https://github.com/rqlite/rqlite/issues/1525)
+
 ## 8.14.0 (December 31st 2023)
 This release adds new control over Raft snapshotting, a key part of the Raft consensus protocol. When the WAL file reaches a certain size (4MB by default, which equals the SQLite default), rqlite will trigger a Raft snapshot. In its default setting this change may reduce disk usage, but may also result in more frequent Raft snapshotting. Most users can ignore this change and carry on as before after upgrading to this release.
 ### New features
 - [PR #1530](https://github.com/rqlite/rqlite/pull/1530), [PR #1533](https://github.com/rqlite/rqlite/pull/1533): Support automatically snapshotting when WAL reaches the SQLite default of 4MB.
-- [PR #1541](https://github.com/rqlite/rqlite/pull/1541), [PR #1542](https://github.com/rqlite/rqlite/pull/1542), [PR #1546](https://github.com/rqlite/rqlite/pull/1546): DNS-based autoclustering supports read-only (non-voting) nodes. Fixes issue [#1521](https://github.com/rqlite/rqlite/issues/1521) and [#1525](https://github.com/rqlite/rqlite/issues/1525)
+- [PR #1541](https://github.com/rqlite/rqlite/pull/1541), [PR #1542](https://github.com/rqlite/rqlite/pull/1542): DNS-based autoclustering supports read-only (non-voting) nodes. Fixes issue [#1521](https://github.com/rqlite/rqlite/issues/1521) and [#1525](https://github.com/rqlite/rqlite/issues/1525)
 - [PR #1544](https://github.com/rqlite/rqlite/pull/1544): Support autoclustering of read-only nodes with Consul and etcd.
 
 ### Implementation changes and bug fixes
