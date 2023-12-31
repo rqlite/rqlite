@@ -1,4 +1,4 @@
-## 8.14.1 (December 26th 2023)
+## 8.14.1 (December 31st 2023)
 ### Implementation changes and bug fixes
 - [PR #1546](https://github.com/rqlite/rqlite/pull/1546): Don't hardcode suffrage when joining. Fixes issue [#1525](https://github.com/rqlite/rqlite/issues/1525). Thanks @jtackaberry
 
