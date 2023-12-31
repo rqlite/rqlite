@@ -1,6 +1,6 @@
 ## 8.14.1 (December 31st 2023)
 ### Implementation changes and bug fixes
-- [PR #1546](https://github.com/rqlite/rqlite/pull/1546): Don't hardcode suffrage when joining. Fixes issue [#1525](https://github.com/rqlite/rqlite/issues/1525). Thanks @jtackaberry
+- [PR #1546](https://github.com/rqlite/rqlite/pull/1546): Don't hardcode suffrage when joining. Fixes issue [#1545](https://github.com/rqlite/rqlite/issues/1545). Thanks @jtackaberry
 
 ## 8.14.0 (December 31st 2023)
 This release adds new control over Raft snapshotting, a key part of the Raft consensus protocol. When the WAL file reaches a certain size (4MB by default, which equals the SQLite default), rqlite will trigger a Raft snapshot. In its default setting this change may reduce disk usage, but may also result in more frequent Raft snapshotting. Most users can ignore this change and carry on as before after upgrading to this release.
