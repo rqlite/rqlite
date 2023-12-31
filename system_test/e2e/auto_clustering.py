@@ -228,9 +228,18 @@ class TestAutoClusteringKVStores(unittest.TestCase):
     j = n3.query('SELECT * FROM foo', level='none')
     self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
 
+    # Add a fifth node, this time running in non-voter mode. Should join fine.
+    n4 = Node(RQLITED_PATH, '4', raft_voter=False)
+    n4.start(disco_mode=mode, disco_key=disco_key, join_interval='1s', join_attempts=1)
+    n4.wait_for_leader()
+    self.assertEqual(n4.disco_mode(), mode)
+    j = n4.query('SELECT * FROM foo', level='none')
+    self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
+
     deprovision_node(n1)
     deprovision_node(n2)
     deprovision_node(n3)
+    deprovision_node(n4)
 
   def autocluster_config(self, mode, config):
     disco_key = random_string(10)
