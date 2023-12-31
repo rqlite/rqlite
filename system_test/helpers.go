@@ -629,6 +629,15 @@ func mustNewNode(enableSingle bool) *Node {
 	return mustNewNodeEncrypted(enableSingle, false, false)
 }
 
+func mustNewNodeIPv6(enableSingle bool) *Node {
+	dir := mustTempDir()
+	var mux *tcp.Mux
+	mux, _ = mustNewOpenMux("[::1]:0")
+	go mux.Serve()
+
+	return mustNodeEncrypted(dir, enableSingle, false, mux, "")
+}
+
 func mustNewNodeEncrypted(enableSingle, httpEncrypt, nodeEncrypt bool) *Node {
 	dir := mustTempDir()
 	var mux *tcp.Mux
