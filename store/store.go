@@ -1717,7 +1717,6 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		return nil, err
 	}
 	fPLog := fullPretty(fullNeeded)
-	s.logger.Printf("initiating %s snapshot on node ID %s", fPLog, s.raftID)
 	defer func() {
 		s.numSnapshotsMu.Lock()
 		defer s.numSnapshotsMu.Unlock()
@@ -1767,8 +1766,6 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			}
 			stats.Get(snapshotWALSize).(*expvar.Int).Set(int64(compactedBuf.Len()))
 			stats.Get(snapshotPrecompactWALSize).(*expvar.Int).Set(walSz)
-			s.logger.Printf("%s snapshot is %d bytes (WAL=%d bytes) on node ID %s", fPLog, compactedBuf.Len(),
-				walSz, s.raftID)
 			if err := s.db.Checkpoint(); err != nil {
 				return nil, err
 			}

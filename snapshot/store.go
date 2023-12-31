@@ -23,6 +23,7 @@ const (
 	persistDuration = "latest_persist_duration"
 	upgradeOk       = "upgrade_ok"
 	upgradeFail     = "upgrade_fail"
+	snapshotsReaped = "snapshots_reaped"
 )
 
 const (
@@ -46,6 +47,7 @@ func ResetStats() {
 	stats.Add(persistDuration, 0)
 	stats.Add(upgradeOk, 0)
 	stats.Add(upgradeFail, 0)
+	stats.Add(snapshotsReaped, 0)
 }
 
 // LockingSink is a wrapper around a SnapshotSink that ensures that the
@@ -201,7 +203,11 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 
 // Reap reaps all snapshots, except the most recent one. Returns the number of
 // snapshots reaped.
-func (s *Store) Reap() (int, error) {
+func (s *Store) Reap() (retN int, retErr error) {
+	defer func() {
+		stats.Add(snapshotsReaped, int64(retN))
+	}()
+
 	snapshots, err := s.getSnapshots()
 	if err != nil {
 		return 0, err
@@ -215,7 +221,6 @@ func (s *Store) Reap() (int, error) {
 		if err := removeAllPrefix(s.dir, snap.ID); err != nil {
 			return n, err
 		}
-		s.logger.Printf("reaped snapshot %s", snap.ID)
 		n++
 	}
 	return n, nil
