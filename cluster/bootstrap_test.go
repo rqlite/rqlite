@@ -129,6 +129,48 @@ func Test_BootstrapperBootSingleJoin(t *testing.T) {
 	}
 }
 
+// Test_BootstrapperBootNonVoter tests that a non-voter just attempts
+// to join the cluster, and does not send a notify request.
+func Test_BootstrapperBootNonVoter(t *testing.T) {
+	srv := servicetest.NewService()
+	srv.Handler = func(conn net.Conn) {
+		c := readCommand(conn)
+		if c == nil {
+			// Connection error handling
+			return
+		}
+		if c.Type != Command_COMMAND_TYPE_JOIN {
+			t.Fatalf("unexpected command type: %d", c.Type)
+		}
+		jnr := c.GetJoinRequest()
+		if jnr == nil {
+			t.Fatal("expected join node request, got nil")
+		}
+		if jnr.Address != "192.168.1.1:1234" {
+			t.Fatalf("unexpected node address, got %s", jnr.Address)
+		}
+		// Just return, which will cause the bootstrapper to timeout.
+	}
+	srv.Start()
+	defer srv.Close()
+
+	done := func() bool {
+		return false
+	}
+
+	p := NewAddressProviderString([]string{srv.Addr()})
+	bs := NewBootstrapper(p, NewClient(&simpleDialer{}, 0))
+	bs.Interval = time.Second
+
+	err := bs.Boot("node1", "192.168.1.1:1234", NonVoter, done, 3*time.Second)
+	if err == nil {
+		t.Fatalf("expected error, got none")
+	}
+	if exp, got := BootTimeout, bs.Status(); exp != got {
+		t.Fatalf("wrong status, exp %s, got %s", exp, got)
+	}
+}
+
 func Test_BootstrapperBootSingleNotify(t *testing.T) {
 	var gotNR *command.NotifyRequest
 	srv := servicetest.NewService()
