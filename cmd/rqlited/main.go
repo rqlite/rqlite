@@ -519,7 +519,6 @@ func createCluster(cfg *Config, hasPeers bool, client *cluster.Client, str *stor
 			log.Printf("preexisting node configuration detected, not registering with discovery service")
 			return nil
 		}
-
 		log.Println("no preexisting nodes, registering with discovery service")
 
 		leader, addr, err := discoService.Register(str.ID(), cfg.HTTPURL(), cfg.RaftAdv)

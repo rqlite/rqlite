@@ -16,15 +16,32 @@ const (
 
 // Client is the interface discovery clients must implement.
 type Client interface {
+	// GetLeader returns the current Leader stored in the KV store. If the Leader
+	// is set, the returned ok flag will be true. If the Leader is not set, the
+	// returned ok flag will be false.
 	GetLeader() (id string, apiAddr string, addr string, ok bool, e error)
+
+	// InitializeLeader sets the leader to the given details, but only if no leader
+	// has already been set. This operation is a check-and-set type operation. If
+	// initialization succeeds, ok is set to true, otherwise false.
 	InitializeLeader(id, apiAddr, addr string) (bool, error)
+
+	// SetLeader unconditionally sets the leader to the given details.
 	SetLeader(id, apiAddr, addr string) error
+
 	fmt.Stringer
 }
 
 // Store is the interface the consensus system must implement.
 type Store interface {
+	// IsLeader returns whether this node is the Leader.
 	IsLeader() bool
+
+	// IsVoter returns whether this node is a voter. Only Voters can be Leaders.
+	IsVoter() (bool, error)
+
+	// RegisterLeaderChange registers a channel that will be notified when
+	// a leadership change occurs.
 	RegisterLeaderChange(c chan<- struct{})
 }
 
@@ -55,8 +72,8 @@ func NewService(c Client, s Store) *Service {
 }
 
 // Register registers this node with the discovery service. It will block
-// until a) the node registers itself as leader, b) learns of another node
-// it can use to join the cluster, or c) an unrecoverable error occurs.
+// until a) if the node is a voter, it registers itself, b) learns of another
+// node it can use to join the cluster, or c) an unrecoverable error occurs.
 func (s *Service) Register(id, apiAddr, addr string) (bool, string, error) {
 	for {
 		_, _, cRaftAddr, ok, err := s.c.GetLeader()
@@ -67,13 +84,15 @@ func (s *Service) Register(id, apiAddr, addr string) (bool, string, error) {
 			return false, cRaftAddr, nil
 		}
 
-		ok, err = s.c.InitializeLeader(id, apiAddr, addr)
-		if err != nil {
-			s.logger.Printf("failed to initialize as Leader: %s", err.Error())
-		}
-		if ok {
-			s.updateContact(time.Now())
-			return true, addr, nil
+		if s.isVoter() {
+			ok, err = s.c.InitializeLeader(id, apiAddr, addr)
+			if err != nil {
+				s.logger.Printf("failed to initialize as Leader: %s", err.Error())
+			}
+			if ok {
+				s.updateContact(time.Now())
+				return true, addr, nil
+			}
 		}
 
 		time.Sleep(random.Jitter(s.RegisterInterval))
@@ -137,4 +156,9 @@ func (s *Service) updateContact(t time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.lastContact = t
+}
+
+func (s *Service) isVoter() bool {
+	v, _ := s.s.IsVoter()
+	return v
 }

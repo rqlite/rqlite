@@ -67,6 +67,41 @@ func Test_RegisterInitializeLeader(t *testing.T) {
 	}
 }
 
+func Test_RegisterNonVoter(t *testing.T) {
+	m := &mockClient{}
+	getCalled := false
+	m.getLeaderFn = func() (id string, apiAddr string, addr string, ok bool, e error) {
+		if getCalled {
+			return "2", "localhost:4003", "localhost:4004", true, nil
+		}
+		getCalled = true
+		return "", "", "", false, nil
+	}
+	m.initializeLeaderFn = func(tID, tAPIAddr, tAddr string) (bool, error) {
+		t.Fatal("InitializeLeader called unexpectedly")
+		return false, nil
+	}
+
+	c := &mockStore{
+		isVoterFn: func() (bool, error) {
+			return false, nil
+		},
+	}
+	s := NewService(m, c)
+	s.RegisterInterval = 10 * time.Millisecond
+
+	ok, addr, err := s.Register("1", "localhost:4001", "localhost:4002")
+	if err != nil {
+		t.Fatalf("error registering with disco: %s", err.Error())
+	}
+	if ok {
+		t.Fatalf("registered incorrectly as non-voter")
+	}
+	if exp, got := "localhost:4004", addr; exp != got {
+		t.Fatalf("returned addressed incorrect, exp %s, got %s", exp, got)
+	}
+}
+
 func Test_StartReportingTimer(t *testing.T) {
 	// WaitGroups won't work because we don't know how many times
 	// setLeaderFn will be called.
@@ -155,6 +190,7 @@ func (m *mockClient) String() string {
 
 type mockStore struct {
 	isLeaderFn             func() bool
+	isVoterFn              func() (bool, error)
 	registerLeaderChangeFn func(c chan<- struct{})
 }
 
@@ -163,6 +199,13 @@ func (m *mockStore) IsLeader() bool {
 		return m.isLeaderFn()
 	}
 	return false
+}
+
+func (m *mockStore) IsVoter() (bool, error) {
+	if m.isVoterFn != nil {
+		return m.isVoterFn()
+	}
+	return true, nil
 }
 
 func (m *mockStore) RegisterLeaderChange(c chan<- struct{}) {
