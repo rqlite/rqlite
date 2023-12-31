@@ -15,7 +15,7 @@ _Check out the [Quick Start guide](https://rqlite.io/docs/quick-start/)._
 
 To download and run a single rqlite node follow the directions below. It's also very easy to run a rqlite cluster -- you can learn more by checking out the [documentation](https://rqlite.io/docs/clustering/).
 
-If you wish to build rqlite from source, check out [this documentation](https://github.com/rqlite/rqlite/blob/master/CONTRIBUTING.md).
+If you wish to build rqlite from source, check out [this documentation](https://rqlite.io/docs/install-rqlite/building-from-source/).
 
 ### Docker
 Run a single node as follows:
