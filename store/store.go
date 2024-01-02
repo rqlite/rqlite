@@ -20,13 +20,14 @@ import (
 	"time"
 
 	"github.com/hashicorp/raft"
-	"github.com/rqlite/rqlite/v8/command"
+	rcommand "github.com/rqlite/rqlite/v8/command"
 	"github.com/rqlite/rqlite/v8/command/chunking"
 	sql "github.com/rqlite/rqlite/v8/db"
 	"github.com/rqlite/rqlite/v8/db/humanize"
 	wal "github.com/rqlite/rqlite/v8/db/wal"
 	rlog "github.com/rqlite/rqlite/v8/log"
 	"github.com/rqlite/rqlite/v8/progress"
+	"github.com/rqlite/rqlite/v8/proto/command"
 	"github.com/rqlite/rqlite/v8/snapshot"
 )
 
@@ -249,11 +250,11 @@ type Store struct {
 	fsmIndex   uint64
 	fsmIndexMu sync.RWMutex
 
-	reqMarshaller *command.RequestMarshaler // Request marshaler for writing to log.
-	raftLog       raft.LogStore             // Persistent log store.
-	raftStable    raft.StableStore          // Persistent k-v store.
-	boltStore     *rlog.Log                 // Physical store.
-	snapshotStore SnapshotStore             // Snapshot store.
+	reqMarshaller *rcommand.RequestMarshaler // Request marshaler for writing to log.
+	raftLog       raft.LogStore              // Persistent log store.
+	raftStable    raft.StableStore           // Persistent k-v store.
+	boltStore     *rlog.Log                  // Physical store.
+	snapshotStore SnapshotStore              // Snapshot store.
 
 	// Raft changes observer
 	leaderObserversMu sync.RWMutex
@@ -343,7 +344,7 @@ func New(ly Layer, c *Config) *Store {
 		walPath:         sql.WALPath(dbPath),
 		dbDir:           filepath.Dir(dbPath),
 		leaderObservers: make([]chan<- struct{}, 0),
-		reqMarshaller:   command.NewRequestMarshaler(),
+		reqMarshaller:   rcommand.NewRequestMarshaler(),
 		logger:          logger,
 		notifyingNodes:  make(map[string]*Server),
 		ApplyTimeout:    applyTimeout,
@@ -1029,7 +1030,7 @@ func (s *Store) execute(ex *command.ExecuteRequest) ([]*command.ExecuteResult, e
 		Compressed: compressed,
 	}
 
-	b, err = command.Marshal(c)
+	b, err = rcommand.Marshal(c)
 	if err != nil {
 		return nil, err
 	}
@@ -1074,7 +1075,7 @@ func (s *Store) Query(qr *command.QueryRequest) ([]*command.QueryRows, error) {
 			Compressed: compressed,
 		}
 
-		b, err = command.Marshal(c)
+		b, err = rcommand.Marshal(c)
 		if err != nil {
 			return nil, err
 		}
@@ -1152,7 +1153,7 @@ func (s *Store) Request(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQue
 		Compressed: compressed,
 	}
 
-	b, err = command.Marshal(c)
+	b, err = rcommand.Marshal(c)
 	if err != nil {
 		return nil, err
 	}
@@ -1245,7 +1246,7 @@ func (s *Store) Load(lr *command.LoadRequest) error {
 func (s *Store) load(lr *command.LoadRequest) error {
 	startT := time.Now()
 
-	b, err := command.MarshalLoadRequest(lr)
+	b, err := rcommand.MarshalLoadRequest(lr)
 	if err != nil {
 		s.logger.Printf("load failed during load-request marshalling %s", err.Error())
 		return err
@@ -1256,7 +1257,7 @@ func (s *Store) load(lr *command.LoadRequest) error {
 		SubCommand: b,
 	}
 
-	b, err = command.Marshal(c)
+	b, err = rcommand.Marshal(c)
 	if err != nil {
 		return err
 	}
@@ -1513,7 +1514,7 @@ func (s *Store) Noop(id string) (raft.ApplyFuture, error) {
 	n := &command.Noop{
 		Id: id,
 	}
-	b, err := command.MarshalNoop(n)
+	b, err := rcommand.MarshalNoop(n)
 	if err != nil {
 		return nil, err
 	}
@@ -1522,7 +1523,7 @@ func (s *Store) Noop(id string) (raft.ApplyFuture, error) {
 		Type:       command.Command_COMMAND_TYPE_NOOP,
 		SubCommand: b,
 	}
-	bc, err := command.Marshal(c)
+	bc, err := rcommand.Marshal(c)
 	if err != nil {
 		return nil, err
 	}
@@ -2059,7 +2060,7 @@ func (s *Store) logSize() (int64, error) {
 // a boolean true. If the command cannot be compressed, the uncompressed byte
 // slice is returned, along with a boolean false. The stats are updated
 // accordingly.
-func (s *Store) tryCompress(rq command.Requester) ([]byte, bool, error) {
+func (s *Store) tryCompress(rq rcommand.Requester) ([]byte, bool, error) {
 	b, compressed, err := s.reqMarshaller.Marshal(rq)
 	if err != nil {
 		return nil, false, err

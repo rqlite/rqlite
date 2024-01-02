@@ -3,6 +3,8 @@ package command
 import (
 	"regexp"
 	"testing"
+
+	"github.com/rqlite/rqlite/v8/proto/command"
 )
 
 func Test_NoRewrites(t *testing.T) {
@@ -13,7 +15,7 @@ func Test_NoRewrites(t *testing.T) {
 		`INSERT INTO foo(name, age) VALUES(?, ?)`,
 	} {
 
-		stmts := []*Statement{
+		stmts := []*command.Statement{
 			{
 				Sql: str,
 			},
@@ -28,7 +30,7 @@ func Test_NoRewrites(t *testing.T) {
 }
 
 func Test_NoRewritesMulti(t *testing.T) {
-	stmts := []*Statement{
+	stmts := []*command.Statement{
 		{
 			Sql: `INSERT INTO "names" VALUES (1, 'bob', '123-45-678')`,
 		},
@@ -65,7 +67,7 @@ func Test_Rewrites(t *testing.T) {
 		`CREATE TABLE tbl (col1 TEXT, ts DATETIME DEFAULT CURRENT_TIMESTAMP)`, `CREATE TABLE tbl \(col1 TEXT, ts DATETIME DEFAULT CURRENT_TIMESTAMP\)`,
 	}
 	for i := 0; i < len(testSQLs)-1; i += 2 {
-		stmts := []*Statement{
+		stmts := []*command.Statement{
 			{
 				Sql: testSQLs[i],
 			},

@@ -1,7 +1,7 @@
 syntax = "proto3";
 package cluster;
 
-import "command/command.proto";
+import "proto/command/command.proto";
 
 option go_package = "github.com/rqlite/rqlite/v8/cluster";
 

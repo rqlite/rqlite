@@ -5,9 +5,10 @@ import (
 	"log"
 	"os"
 
-	"github.com/rqlite/rqlite/v8/command"
+	rcommand "github.com/rqlite/rqlite/v8/command"
 	"github.com/rqlite/rqlite/v8/command/chunking"
 	sql "github.com/rqlite/rqlite/v8/db"
+	"github.com/rqlite/rqlite/v8/proto/command"
 )
 
 // CommandProcessor processes commands by applying them to the underlying database.
@@ -27,35 +28,35 @@ func NewCommandProcessor(logger *log.Logger, dm *chunking.DechunkerManager) *Com
 func (c *CommandProcessor) Process(data []byte, pDB **sql.DB) (*command.Command, interface{}) {
 	db := *pDB
 	cmd := &command.Command{}
-	if err := command.Unmarshal(data, cmd); err != nil {
+	if err := rcommand.Unmarshal(data, cmd); err != nil {
 		panic(fmt.Sprintf("failed to unmarshal cluster command: %s", err.Error()))
 	}
 
 	switch cmd.Type {
 	case command.Command_COMMAND_TYPE_QUERY:
 		var qr command.QueryRequest
-		if err := command.UnmarshalSubCommand(cmd, &qr); err != nil {
+		if err := rcommand.UnmarshalSubCommand(cmd, &qr); err != nil {
 			panic(fmt.Sprintf("failed to unmarshal query subcommand: %s", err.Error()))
 		}
 		r, err := db.Query(qr.Request, qr.Timings)
 		return cmd, &fsmQueryResponse{rows: r, error: err}
 	case command.Command_COMMAND_TYPE_EXECUTE:
 		var er command.ExecuteRequest
-		if err := command.UnmarshalSubCommand(cmd, &er); err != nil {
+		if err := rcommand.UnmarshalSubCommand(cmd, &er); err != nil {
 			panic(fmt.Sprintf("failed to unmarshal execute subcommand: %s", err.Error()))
 		}
 		r, err := db.Execute(er.Request, er.Timings)
 		return cmd, &fsmExecuteResponse{results: r, error: err}
 	case command.Command_COMMAND_TYPE_EXECUTE_QUERY:
 		var eqr command.ExecuteQueryRequest
-		if err := command.UnmarshalSubCommand(cmd, &eqr); err != nil {
+		if err := rcommand.UnmarshalSubCommand(cmd, &eqr); err != nil {
 			panic(fmt.Sprintf("failed to unmarshal execute-query subcommand: %s", err.Error()))
 		}
 		r, err := db.Request(eqr.Request, eqr.Timings)
 		return cmd, &fsmExecuteQueryResponse{results: r, error: err}
 	case command.Command_COMMAND_TYPE_LOAD:
 		var lr command.LoadRequest
-		if err := command.UnmarshalLoadRequest(cmd.SubCommand, &lr); err != nil {
+		if err := rcommand.UnmarshalLoadRequest(cmd.SubCommand, &lr); err != nil {
 			panic(fmt.Sprintf("failed to unmarshal load subcommand: %s", err.Error()))
 		}
 
@@ -76,7 +77,7 @@ func (c *CommandProcessor) Process(data []byte, pDB **sql.DB) (*command.Command,
 		return cmd, &fsmGenericResponse{}
 	case command.Command_COMMAND_TYPE_LOAD_CHUNK:
 		var lcr command.LoadChunkRequest
-		if err := command.UnmarshalLoadChunkRequest(cmd.SubCommand, &lcr); err != nil {
+		if err := rcommand.UnmarshalLoadChunkRequest(cmd.SubCommand, &lcr); err != nil {
 			panic(fmt.Sprintf("failed to unmarshal load-chunk subcommand: %s", err.Error()))
 		}
 

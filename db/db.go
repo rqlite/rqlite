@@ -18,8 +18,8 @@ import (
 	"time"
 
 	"github.com/rqlite/go-sqlite3"
-	"github.com/rqlite/rqlite/v8/command"
 	"github.com/rqlite/rqlite/v8/db/humanize"
+	"github.com/rqlite/rqlite/v8/proto/command"
 )
 
 const (

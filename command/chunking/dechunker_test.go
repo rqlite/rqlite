@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rqlite/rqlite/v8/command"
+	"github.com/rqlite/rqlite/v8/proto/command"
 )
 
 func Test_SingleChunk(t *testing.T) {

@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rqlite/rqlite/v8/command"
 	"github.com/rqlite/rqlite/v8/command/encoding"
+	"github.com/rqlite/rqlite/v8/proto/command"
 )
 
 // Test_OpenNonExistentDatabase tests that opening a non-existent database

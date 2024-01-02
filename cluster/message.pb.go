@@ -7,7 +7,7 @@
 package cluster
 
 import (
-	command "github.com/rqlite/rqlite/v8/command"
+	command "github.com/rqlite/rqlite/v8/proto/command"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"

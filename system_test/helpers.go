@@ -19,9 +19,9 @@ import (
 	"time"
 
 	"github.com/rqlite/rqlite/v8/cluster"
-	"github.com/rqlite/rqlite/v8/command"
 	"github.com/rqlite/rqlite/v8/command/encoding"
 	httpd "github.com/rqlite/rqlite/v8/http"
+	"github.com/rqlite/rqlite/v8/proto/command"
 	"github.com/rqlite/rqlite/v8/store"
 	"github.com/rqlite/rqlite/v8/tcp"
 	rX509 "github.com/rqlite/rqlite/v8/testdata/x509"

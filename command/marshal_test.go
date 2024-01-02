@@ -4,6 +4,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/rqlite/rqlite/v8/proto/command"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -16,9 +17,9 @@ func Test_NewRequestMarshaler(t *testing.T) {
 
 func Test_MarshalUncompressed(t *testing.T) {
 	rm := NewRequestMarshaler()
-	r := &QueryRequest{
-		Request: &Request{
-			Statements: []*Statement{
+	r := &command.QueryRequest{
+		Request: &command.Request{
+			Statements: []*command.Statement{
 				{
 					Sql: `INSERT INTO "names" VALUES(1,'bob','123-45-678')`,
 				},
@@ -36,8 +37,8 @@ func Test_MarshalUncompressed(t *testing.T) {
 		t.Fatal("Marshaled QueryRequest incorrectly compressed")
 	}
 
-	c := &Command{
-		Type:       Command_COMMAND_TYPE_QUERY,
+	c := &command.Command{
+		Type:       command.Command_COMMAND_TYPE_QUERY,
 		SubCommand: b,
 		Compressed: comp,
 	}
@@ -47,18 +48,18 @@ func Test_MarshalUncompressed(t *testing.T) {
 		t.Fatalf("failed to marshal Command: %s", err)
 	}
 
-	var nc Command
+	var nc command.Command
 	if err := Unmarshal(b, &nc); err != nil {
 		t.Fatalf("failed to unmarshal Command: %s", err)
 	}
-	if nc.Type != Command_COMMAND_TYPE_QUERY {
+	if nc.Type != command.Command_COMMAND_TYPE_QUERY {
 		t.Fatalf("unmarshaled command has wrong type: %s", nc.Type)
 	}
 	if nc.Compressed {
 		t.Fatal("Unmarshaled QueryRequest incorrectly marked as compressed")
 	}
 
-	var nr QueryRequest
+	var nr command.QueryRequest
 	if err := UnmarshalSubCommand(&nc, &nr); err != nil {
 		t.Fatalf("failed to unmarshal sub command: %s", err)
 	}
@@ -81,9 +82,9 @@ func Test_MarshalCompressedBatch(t *testing.T) {
 	rm.BatchThreshold = 1
 	rm.ForceCompression = true
 
-	r := &QueryRequest{
-		Request: &Request{
-			Statements: []*Statement{
+	r := &command.QueryRequest{
+		Request: &command.Request{
+			Statements: []*command.Statement{
 				{
 					Sql: `INSERT INTO "names" VALUES(1,'bob','123-45-678')`,
 				},
@@ -101,8 +102,8 @@ func Test_MarshalCompressedBatch(t *testing.T) {
 		t.Fatal("Marshaled QueryRequest wasn't compressed")
 	}
 
-	c := &Command{
-		Type:       Command_COMMAND_TYPE_QUERY,
+	c := &command.Command{
+		Type:       command.Command_COMMAND_TYPE_QUERY,
 		SubCommand: b,
 		Compressed: comp,
 	}
@@ -112,18 +113,18 @@ func Test_MarshalCompressedBatch(t *testing.T) {
 		t.Fatalf("failed to marshal Command: %s", err)
 	}
 
-	var nc Command
+	var nc command.Command
 	if err := Unmarshal(b, &nc); err != nil {
 		t.Fatalf("failed to unmarshal Command: %s", err)
 	}
-	if nc.Type != Command_COMMAND_TYPE_QUERY {
+	if nc.Type != command.Command_COMMAND_TYPE_QUERY {
 		t.Fatalf("unmarshaled command has wrong type: %s", nc.Type)
 	}
 	if !nc.Compressed {
 		t.Fatal("Unmarshaled QueryRequest incorrectly marked as uncompressed")
 	}
 
-	var nr QueryRequest
+	var nr command.QueryRequest
 	if err := UnmarshalSubCommand(&nc, &nr); err != nil {
 		t.Fatalf("failed to unmarshal sub command: %s", err)
 	}
@@ -137,9 +138,9 @@ func Test_MarshalCompressedSize(t *testing.T) {
 	rm.SizeThreshold = 1
 	rm.ForceCompression = true
 
-	r := &QueryRequest{
-		Request: &Request{
-			Statements: []*Statement{
+	r := &command.QueryRequest{
+		Request: &command.Request{
+			Statements: []*command.Statement{
 				{
 					Sql: `INSERT INTO "names" VALUES(1,'bob','123-45-678')`,
 				},
@@ -157,8 +158,8 @@ func Test_MarshalCompressedSize(t *testing.T) {
 		t.Fatal("Marshaled QueryRequest wasn't compressed")
 	}
 
-	c := &Command{
-		Type:       Command_COMMAND_TYPE_QUERY,
+	c := &command.Command{
+		Type:       command.Command_COMMAND_TYPE_QUERY,
 		SubCommand: b,
 		Compressed: comp,
 	}
@@ -168,18 +169,18 @@ func Test_MarshalCompressedSize(t *testing.T) {
 		t.Fatalf("failed to marshal Command: %s", err)
 	}
 
-	var nc Command
+	var nc command.Command
 	if err := Unmarshal(b, &nc); err != nil {
 		t.Fatalf("failed to unmarshal Command: %s", err)
 	}
-	if nc.Type != Command_COMMAND_TYPE_QUERY {
+	if nc.Type != command.Command_COMMAND_TYPE_QUERY {
 		t.Fatalf("unmarshaled command has wrong type: %s", nc.Type)
 	}
 	if !nc.Compressed {
 		t.Fatal("Unmarshaled QueryRequest incorrectly marked as uncompressed")
 	}
 
-	var nr QueryRequest
+	var nr command.QueryRequest
 	if err := UnmarshalSubCommand(&nc, &nr); err != nil {
 		t.Fatalf("failed to unmarshal sub command: %s", err)
 	}
@@ -192,9 +193,9 @@ func Test_MarshalWontCompressBatch(t *testing.T) {
 	rm := NewRequestMarshaler()
 	rm.BatchThreshold = 1
 
-	r := &QueryRequest{
-		Request: &Request{
-			Statements: []*Statement{
+	r := &command.QueryRequest{
+		Request: &command.Request{
+			Statements: []*command.Statement{
 				{
 					Sql: `INSERT INTO "names" VALUES(1,'bob','123-45-678')`,
 				},
@@ -218,9 +219,9 @@ func Test_MarshalCompressedConcurrent(t *testing.T) {
 	rm.SizeThreshold = 1
 	rm.ForceCompression = true
 
-	r := &QueryRequest{
-		Request: &Request{
-			Statements: []*Statement{
+	r := &command.QueryRequest{
+		Request: &command.Request{
+			Statements: []*command.Statement{
 				{
 					Sql: `INSERT INTO "names" VALUES(1,'bob','123-45-678')`,
 				},
@@ -251,9 +252,9 @@ func Test_MarshalWontCompressSize(t *testing.T) {
 	rm := NewRequestMarshaler()
 	rm.SizeThreshold = 1
 
-	r := &QueryRequest{
-		Request: &Request{
-			Statements: []*Statement{
+	r := &command.QueryRequest{
+		Request: &command.Request{
+			Statements: []*command.Statement{
 				{
 					Sql: `INSERT INTO "names" VALUES(1,'bob','123-45-678')`,
 				},

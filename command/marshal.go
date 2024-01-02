@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/rqlite/rqlite/v8/proto/command"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -19,7 +20,7 @@ const (
 // successfully.
 type Requester interface {
 	proto.Message
-	GetRequest() *Request
+	GetRequest() *command.Request
 }
 
 // RequestMarshaler marshals Request objects, potentially performing
@@ -124,27 +125,27 @@ func (m *RequestMarshaler) Stats() map[string]interface{} {
 }
 
 // Marshal marshals a Command.
-func Marshal(c *Command) ([]byte, error) {
+func Marshal(c *command.Command) ([]byte, error) {
 	return proto.Marshal(c)
 }
 
 // Unmarshal unmarshals a Command
-func Unmarshal(b []byte, c *Command) error {
+func Unmarshal(b []byte, c *command.Command) error {
 	return proto.Unmarshal(b, c)
 }
 
 // MarshalNoop marshals a Noop command
-func MarshalNoop(c *Noop) ([]byte, error) {
+func MarshalNoop(c *command.Noop) ([]byte, error) {
 	return proto.Marshal(c)
 }
 
 // UnmarshalNoop unmarshals a Noop command
-func UnmarshalNoop(b []byte, c *Noop) error {
+func UnmarshalNoop(b []byte, c *command.Noop) error {
 	return proto.Unmarshal(b, c)
 }
 
 // MarshalLoadRequest marshals a LoadRequest command
-func MarshalLoadRequest(lr *LoadRequest) ([]byte, error) {
+func MarshalLoadRequest(lr *command.LoadRequest) ([]byte, error) {
 	b, err := proto.Marshal(lr)
 	if err != nil {
 		return nil, err
@@ -153,7 +154,7 @@ func MarshalLoadRequest(lr *LoadRequest) ([]byte, error) {
 }
 
 // UnmarshalLoadRequest unmarshals a LoadRequest command
-func UnmarshalLoadRequest(b []byte, lr *LoadRequest) error {
+func UnmarshalLoadRequest(b []byte, lr *command.LoadRequest) error {
 	u, err := gzUncompress(b)
 	if err != nil {
 		return err
@@ -162,18 +163,18 @@ func UnmarshalLoadRequest(b []byte, lr *LoadRequest) error {
 }
 
 // MarshalLoadChunkRequest marshals a LoadChunkRequest command
-func MarshalLoadChunkRequest(lr *LoadChunkRequest) ([]byte, error) {
+func MarshalLoadChunkRequest(lr *command.LoadChunkRequest) ([]byte, error) {
 	return proto.Marshal(lr)
 }
 
 // UnmarshalLoadChunkRequest unmarshals a LoadChunkRequest command
-func UnmarshalLoadChunkRequest(b []byte, lr *LoadChunkRequest) error {
+func UnmarshalLoadChunkRequest(b []byte, lr *command.LoadChunkRequest) error {
 	return proto.Unmarshal(b, lr)
 }
 
 // UnmarshalSubCommand unmarshalls a sub command m. It assumes that
 // m is the correct type.
-func UnmarshalSubCommand(c *Command, m proto.Message) error {
+func UnmarshalSubCommand(c *command.Command, m proto.Message) error {
 	b := c.SubCommand
 	if c.Compressed {
 		var err error

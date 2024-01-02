@@ -5,7 +5,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/rqlite/rqlite/v8/command"
+	"github.com/rqlite/rqlite/v8/proto/command"
 )
 
 const (
