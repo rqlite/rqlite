@@ -62,7 +62,7 @@ var cliHelp = []string{
 	`.ready                              Show ready status for connected node`,
 	`.remove NODEID                      Remove node NODEID from the cluster`,
 	`.restore FILE                       Load using SQLite file or SQL dump contained in FILE`,
-	`.nodes                              Show connection status of all nodes in cluster`,
+	`.nodes [all]                        Show connection status of voting nodes. 'all' to show all nodes`,
 	`.schema                             Show CREATE statements for all tables`,
 	`.status                             Show status and diagnostic information for connected node`,
 	`.sysdump FILE                       Dump system diagnostics to FILE`,
@@ -177,7 +177,11 @@ func main() {
 			case ".READY":
 				err = ready(ctx, httpClient, argv)
 			case ".NODES":
-				err = nodes(ctx, cmd, line, argv)
+				if index == -1 || index == len(line)-1 {
+					err = nodes(ctx, cmd, line, argv, false)
+					break
+				}
+				err = nodes(ctx, cmd, line, argv, true)
 			case ".EXPVAR":
 				err = expvar(ctx, cmd, line, argv)
 			case ".REMOVE":
@@ -314,9 +318,15 @@ func ready(ctx *cli.Context, client *http.Client, argv *argT) error {
 	return nil
 }
 
-func nodes(ctx *cli.Context, cmd, line string, argv *argT) error {
-	url := fmt.Sprintf("%s://%s/nodes", argv.Protocol, address6(argv))
-	return cliJSON(ctx, cmd, line, url, argv)
+// nodes returns the status of nodes in the cluster. If all is true, then
+// non-voting nodes are included in the response.
+func nodes(ctx *cli.Context, cmd, line string, argv *argT, all bool) error {
+	path := "nodes"
+	if all {
+		path = "nodes?nonvoters"
+	}
+	url := fmt.Sprintf("%s://%s/%s", argv.Protocol, address6(argv), path)
+	return cliJSON(ctx, cmd, "", url, argv)
 }
 
 func expvar(ctx *cli.Context, cmd, line string, argv *argT) error {
@@ -516,7 +526,9 @@ func parseResponse(response *[]byte, ret interface{}) error {
 	return decoder.Decode(ret)
 }
 
-// cliJSON fetches JSON from a URL, and displays it at the CLI.
+// cliJSON fetches JSON from a URL, and displays it at the CLI. If line contains more
+// than one word, then the JSON is filtered to only show the key specified in the
+// second word.
 func cliJSON(ctx *cli.Context, cmd, line, url string, argv *argT) error {
 	// Recursive JSON printer.
 	var pprint func(indent int, m map[string]interface{})
