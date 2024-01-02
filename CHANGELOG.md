@@ -1,4 +1,7 @@
-## 8.14.2 (unreleased)
+## 8.15.0 (unreleased)
+### New features
+- [PR #1550](https://github.com/rqlite/rqlite/pull/1550): CLI command `.nodes` supports showing non-voting nodes.
+
 ### Implementation changes and bug fixes
 - [PR #1548](https://github.com/rqlite/rqlite/pull/1548): Make system-level test failures easier to understand.
 
