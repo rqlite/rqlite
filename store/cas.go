@@ -34,4 +34,3 @@ func (c *CheckAndSet) Begin() error {
 func (c *CheckAndSet) End() {
 	c.state.Store(0)
 }
-
