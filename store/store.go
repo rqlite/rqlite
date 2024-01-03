@@ -91,6 +91,7 @@ const (
 	sqliteFile                 = "db.sqlite"
 	leaderWaitDelay            = 100 * time.Millisecond
 	appliedWaitDelay           = 100 * time.Millisecond
+	snapshotTimeout            = 10 * time.Second
 	appliedIndexUpdateInterval = 5 * time.Second
 	connectionPoolCount        = 5
 	connectionTimeout          = 10 * time.Second
@@ -1217,7 +1218,7 @@ func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 			}
 		} else {
 			// Snapshot to ensure the main SQLite file has all the latest data.
-			if err := s.Snapshot(0); err != nil {
+			if err := s.SnapshotOrTimeout(0, snapshotTimeout); err != nil {
 				if err != raft.ErrNothingNewToSnapshot &&
 					!strings.Contains(err.Error(), "wait until the configuration entry at") {
 					return fmt.Errorf("pre-backup snapshot failed: %s", err.Error())
@@ -1988,6 +1989,28 @@ func (s *Store) Snapshot(n uint64) (retError error) {
 	}
 	stats.Add(numUserSnapshots, 1)
 	return nil
+}
+
+// SnapshotOrTimeout attempts to snapshot, and if it fails, retries until
+// the timeout is reached.
+func (s *Store) SnapshotOrTimeout(n uint64, timeout time.Duration) error {
+	if err := s.Snapshot(n); err == nil {
+		return nil
+	}
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-timer.C:
+			return fmt.Errorf("timed out waiting for snapshot %s", timeout)
+		case <-ticker.C:
+			if err := s.Snapshot(n); err == nil {
+				return nil
+			}
+		}
+	}
 }
 
 // runWALSnapshotting runs the periodic check to see if a snapshot should be
