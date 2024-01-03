@@ -27,6 +27,7 @@ message Command {
         COMMAND_TYPE_JOIN = 8;
         COMMAND_TYPE_REQUEST = 9;
         COMMAND_TYPE_LOAD_CHUNK = 10;
+        COMMAND_TYPE_BACKUP_STREAMING = 11;
     }
     Type type = 1;
 
@@ -63,6 +64,12 @@ message CommandRequestResponse {
 message CommandBackupResponse {
     string error = 1;
     bytes data = 2;
+}
+
+message CommandBackupStreamingResponse {
+    string error = 1;
+    int64 size = 2;
+    bytes md5sum = 3;
 }
 
 message CommandLoadResponse {

@@ -374,6 +374,30 @@ func (s *Service) handleConn(conn net.Conn) {
 			}
 			writeBytesWithLength(conn, p)
 
+		case proto.Command_COMMAND_TYPE_BACKUP_STREAMING:
+			stats.Add(numBackupRequest, 1)
+			resp := &proto.CommandBackupStreamingResponse{}
+
+			br := c.GetBackupRequest()
+			if br == nil {
+				resp.Error = "BackupStreamingRequest is nil"
+			} else if !s.checkCommandPerm(c, auth.PermBackup) {
+				resp.Error = "unauthorized"
+			} else {
+				resp.Size = 100
+			}
+
+			p, err = pb.Marshal(resp)
+			if err != nil {
+				conn.Close()
+				return
+			}
+			writeBytesWithLength(conn, p)
+			if resp.Error != "" {
+
+				s.db.Backup(br, conn)
+			}
+
 		case proto.Command_COMMAND_TYPE_LOAD:
 			stats.Add(numLoadRequest, 1)
 			resp := &proto.CommandLoadResponse{}
