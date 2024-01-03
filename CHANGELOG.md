@@ -4,6 +4,7 @@
 
 ### Implementation changes and bug fixes
 - [PR #1548](https://github.com/rqlite/rqlite/pull/1548): Make system-level test failures easier to understand.
+- [PR #1555](https://github.com/rqlite/rqlite/pull/1555): Correct build and import of Protobuf files.
 
 ## 8.14.1 (December 31st 2023)
 ### Implementation changes and bug fixes
