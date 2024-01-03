@@ -1200,7 +1200,7 @@ func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 
 	if br.Format == proto.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY {
 		// Snapshot to ensure the main SQLite file has all the latest data.
-		if err := s.Snapshot(0); err != nil {
+		if err := s.Snapshot(0); err != nil && err != raft.ErrNothingNewToSnapshot {
 			return fmt.Errorf("pre-backup snapshot failed: %s", err.Error())
 		}
 
