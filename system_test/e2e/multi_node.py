@@ -477,6 +477,8 @@ class TestEndToEndBackupRestore(unittest.TestCase):
     self.node0.backup(self.db_file)
     conn = sqlite3.connect(self.db_file)
     rows = conn.execute('SELECT * FROM foo').fetchall()
+    conn.execute('PRAGMA journal_mode=DELETE')
+
     self.assertEqual(len(rows), 1)
     self.assertEqual(rows[0], (1, 'fiona'))
     conn.close()
@@ -485,6 +487,7 @@ class TestEndToEndBackupRestore(unittest.TestCase):
     self.node1.backup(self.db_file)
     conn = sqlite3.connect(self.db_file)
     rows = conn.execute('SELECT * FROM foo').fetchall()
+    conn.execute('PRAGMA journal_mode=DELETE')
     self.assertEqual(len(rows), 1)
     self.assertEqual(rows[0], (1, 'fiona'))
     conn.close()
