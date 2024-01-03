@@ -1218,7 +1218,7 @@ func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 		} else {
 			// Snapshot to ensure the main SQLite file has all the latest data.
 			if err := s.Snapshot(0); err != nil {
-				if err != raft.ErrNothingNewToSnapshot ||
+				if err != raft.ErrNothingNewToSnapshot &&
 					!strings.Contains(err.Error(), "wait until the configuration entry at") {
 					return fmt.Errorf("pre-backup snapshot failed: %s", err.Error())
 				}
