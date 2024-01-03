@@ -45,12 +45,14 @@ func backup(ctx *cli.Context, filename string, argv *argT) error {
 		Path:     fmt.Sprintf("%sdb/backup", argv.Prefix),
 		RawQuery: queryStr.Encode(),
 	}
-	response, err := sendRequest(ctx, makeBackupRequest, u.String(), argv)
+
+	fd, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return err
 	}
+	defer fd.Close()
 
-	err = os.WriteFile(filename, *response, 0644)
+	_, err = sendRequestW(ctx, makeBackupRequest, u.String(), argv, fd)
 	if err != nil {
 		return err
 	}
@@ -68,12 +70,14 @@ func dump(ctx *cli.Context, filename string, argv *argT) error {
 		Path:     fmt.Sprintf("%sdb/backup", argv.Prefix),
 		RawQuery: queryStr.Encode(),
 	}
-	response, err := sendRequest(ctx, makeBackupRequest, u.String(), argv)
+
+	fd, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return err
 	}
+	defer fd.Close()
 
-	err = os.WriteFile(filename, *response, 0644)
+	_, err = sendRequestW(ctx, makeBackupRequest, u.String(), argv, fd)
 	if err != nil {
 		return err
 	}
