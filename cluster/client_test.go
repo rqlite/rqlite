@@ -8,9 +8,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rqlite/rqlite/v8/cluster/proto"
 	"github.com/rqlite/rqlite/v8/cluster/servicetest"
-	"github.com/rqlite/rqlite/v8/command"
-	"google.golang.org/protobuf/proto"
+	command "github.com/rqlite/rqlite/v8/command/proto"
+	pb "google.golang.org/protobuf/proto"
 )
 
 func Test_NewClient(t *testing.T) {
@@ -31,10 +32,10 @@ func Test_ClientGetNodeAPIAddr(t *testing.T) {
 			// test exit can cause that too.
 			return
 		}
-		if c.Type != Command_COMMAND_TYPE_GET_NODE_API_URL {
+		if c.Type != proto.Command_COMMAND_TYPE_GET_NODE_API_URL {
 			t.Fatalf("unexpected command type: %d", c.Type)
 		}
-		p, err = proto.Marshal(&Address{
+		p, err = pb.Marshal(&proto.Address{
 			Url: "http://localhost:1234",
 		})
 		if err != nil {
@@ -67,7 +68,7 @@ func Test_ClientExecute(t *testing.T) {
 			// test exit can cause that too.
 			return
 		}
-		if c.Type != Command_COMMAND_TYPE_EXECUTE {
+		if c.Type != proto.Command_COMMAND_TYPE_EXECUTE {
 			t.Fatalf("unexpected command type: %d", c.Type)
 		}
 		er := c.GetExecuteRequest()
@@ -78,7 +79,7 @@ func Test_ClientExecute(t *testing.T) {
 			t.Fatalf("unexpected statement, got %s", er.Request.Statements[0])
 		}
 
-		p, err = proto.Marshal(&CommandExecuteResponse{})
+		p, err = pb.Marshal(&proto.CommandExecuteResponse{})
 		if err != nil {
 			conn.Close()
 		}
@@ -106,7 +107,7 @@ func Test_ClientQuery(t *testing.T) {
 			// test exit can cause that too.
 			return
 		}
-		if c.Type != Command_COMMAND_TYPE_QUERY {
+		if c.Type != proto.Command_COMMAND_TYPE_QUERY {
 			t.Fatalf("unexpected command type: %d", c.Type)
 		}
 		qr := c.GetQueryRequest()
@@ -117,7 +118,7 @@ func Test_ClientQuery(t *testing.T) {
 			t.Fatalf("unexpected statement, got %s", qr.Request.Statements[0])
 		}
 
-		p, err = proto.Marshal(&CommandQueryResponse{})
+		p, err = pb.Marshal(&proto.CommandQueryResponse{})
 		if err != nil {
 			conn.Close()
 		}
@@ -145,7 +146,7 @@ func Test_ClientRequest(t *testing.T) {
 			// test exit can cause that too.
 			return
 		}
-		if c.Type != Command_COMMAND_TYPE_REQUEST {
+		if c.Type != proto.Command_COMMAND_TYPE_REQUEST {
 			t.Fatalf("unexpected command type: %d", c.Type)
 		}
 		er := c.GetExecuteQueryRequest()
@@ -156,7 +157,7 @@ func Test_ClientRequest(t *testing.T) {
 			t.Fatalf("unexpected statement, got %s", er.Request.Statements[0])
 		}
 
-		p, err = proto.Marshal(&CommandRequestResponse{})
+		p, err = pb.Marshal(&proto.CommandRequestResponse{})
 		if err != nil {
 			conn.Close()
 		}
@@ -184,7 +185,7 @@ func Test_ClientRemoveNode(t *testing.T) {
 			// test exit can cause that too.
 			return
 		}
-		if c.Type != Command_COMMAND_TYPE_REMOVE_NODE {
+		if c.Type != proto.Command_COMMAND_TYPE_REMOVE_NODE {
 			t.Fatalf("unexpected command type: %d", c.Type)
 		}
 		rnr := c.GetRemoveNodeRequest()
@@ -195,7 +196,7 @@ func Test_ClientRemoveNode(t *testing.T) {
 			t.Fatalf("unexpected node id, got %s", rnr.Id)
 		}
 
-		p, err = proto.Marshal(&CommandRemoveNodeResponse{})
+		p, err = pb.Marshal(&proto.CommandRemoveNodeResponse{})
 		if err != nil {
 			conn.Close()
 		}
@@ -223,7 +224,7 @@ func Test_ClientRemoveNodeTimeout(t *testing.T) {
 			// test exit can cause that too.
 			return
 		}
-		if c.Type != Command_COMMAND_TYPE_REMOVE_NODE {
+		if c.Type != proto.Command_COMMAND_TYPE_REMOVE_NODE {
 			t.Fatalf("unexpected command type: %d", c.Type)
 		}
 		rnr := c.GetRemoveNodeRequest()
@@ -260,7 +261,7 @@ func Test_ClientJoinNode(t *testing.T) {
 			// Connection error handling
 			return
 		}
-		if c.Type != Command_COMMAND_TYPE_JOIN {
+		if c.Type != proto.Command_COMMAND_TYPE_JOIN {
 			t.Fatalf("unexpected command type: %d", c.Type)
 		}
 		jnr := c.GetJoinRequest()
@@ -271,7 +272,7 @@ func Test_ClientJoinNode(t *testing.T) {
 			t.Fatalf("unexpected node address, got %s", jnr.Address)
 		}
 
-		p, err = proto.Marshal(&CommandJoinResponse{})
+		p, err = pb.Marshal(&proto.CommandJoinResponse{})
 		if err != nil {
 			conn.Close()
 			return
@@ -291,7 +292,7 @@ func Test_ClientJoinNode(t *testing.T) {
 	}
 }
 
-func readCommand(conn net.Conn) *Command {
+func readCommand(conn net.Conn) *proto.Command {
 	b := make([]byte, protoBufferLengthSize)
 	_, err := io.ReadFull(conn, b)
 	if err != nil {
@@ -303,8 +304,8 @@ func readCommand(conn net.Conn) *Command {
 	if err != nil {
 		return nil
 	}
-	c := &Command{}
-	err = proto.Unmarshal(p, c)
+	c := &proto.Command{}
+	err = pb.Unmarshal(p, c)
 	if err != nil {
 		return nil
 	}

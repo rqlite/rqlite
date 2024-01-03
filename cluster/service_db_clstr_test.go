@@ -10,15 +10,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rqlite/rqlite/v8/command"
+	"github.com/rqlite/rqlite/v8/cluster/proto"
 	"github.com/rqlite/rqlite/v8/command/encoding"
+	command "github.com/rqlite/rqlite/v8/command/proto"
 )
 
 const shortWait = 1 * time.Second
 const longWait = 5 * time.Second
 
 var (
-	NO_CREDS = (*Credentials)(nil)
+	NO_CREDS = (*proto.Credentials)(nil)
 )
 
 func Test_ServiceExecute(t *testing.T) {

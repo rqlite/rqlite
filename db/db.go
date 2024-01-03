@@ -18,7 +18,7 @@ import (
 	"time"
 
 	"github.com/rqlite/go-sqlite3"
-	"github.com/rqlite/rqlite/v8/command"
+	command "github.com/rqlite/rqlite/v8/command/proto"
 	"github.com/rqlite/rqlite/v8/db/humanize"
 )
 

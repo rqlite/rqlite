@@ -10,12 +10,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rqlite/rqlite/v8/command"
+	"github.com/rqlite/rqlite/v8/command/proto"
 )
 
 func Test_SingleChunk(t *testing.T) {
 	data := []byte("Hello, World!")
-	chunk := &command.LoadChunkRequest{
+	chunk := &proto.LoadChunkRequest{
 		StreamId:    "123",
 		SequenceNum: 1,
 		IsLast:      true,
@@ -58,14 +58,14 @@ func Test_SingleChunk(t *testing.T) {
 
 func Test_MultiChunk(t *testing.T) {
 	data1 := []byte("Hello, World!")
-	chunk1 := &command.LoadChunkRequest{
+	chunk1 := &proto.LoadChunkRequest{
 		StreamId:    "123",
 		SequenceNum: 1,
 		IsLast:      false,
 		Data:        mustCompressData(data1),
 	}
 	data2 := []byte("I'm OK")
-	chunk2 := &command.LoadChunkRequest{
+	chunk2 := &proto.LoadChunkRequest{
 		StreamId:    "123",
 		SequenceNum: 2,
 		IsLast:      true,
@@ -83,7 +83,7 @@ func Test_MultiChunk(t *testing.T) {
 		t.Fatalf("failed to create Dechunker: %v", err)
 	}
 
-	for _, chunk := range []*command.LoadChunkRequest{chunk1, chunk2} {
+	for _, chunk := range []*proto.LoadChunkRequest{chunk1, chunk2} {
 		isLast, err := dechunker.WriteChunk(chunk)
 		if err != nil {
 			t.Fatalf("failed to write chunk: %v", err)
@@ -110,20 +110,20 @@ func Test_MultiChunk(t *testing.T) {
 
 func Test_MultiChunkNilData(t *testing.T) {
 	data1 := []byte("Hello, World!")
-	chunk1 := &command.LoadChunkRequest{
+	chunk1 := &proto.LoadChunkRequest{
 		StreamId:    "123",
 		SequenceNum: 1,
 		IsLast:      false,
 		Data:        mustCompressData(data1),
 	}
 	data2 := []byte("I'm OK")
-	chunk2 := &command.LoadChunkRequest{
+	chunk2 := &proto.LoadChunkRequest{
 		StreamId:    "123",
 		SequenceNum: 2,
 		IsLast:      false,
 		Data:        mustCompressData(data2),
 	}
-	chunk3 := &command.LoadChunkRequest{
+	chunk3 := &proto.LoadChunkRequest{
 		StreamId:    "123",
 		SequenceNum: 3,
 		IsLast:      true,
@@ -141,7 +141,7 @@ func Test_MultiChunkNilData(t *testing.T) {
 		t.Fatalf("failed to create Dechunker: %v", err)
 	}
 
-	for _, chunk := range []*command.LoadChunkRequest{chunk1, chunk2, chunk3} {
+	for _, chunk := range []*proto.LoadChunkRequest{chunk1, chunk2, chunk3} {
 		isLast, err := dechunker.WriteChunk(chunk)
 		if err != nil {
 			t.Fatalf("failed to write chunk: %v", err)
@@ -170,14 +170,14 @@ func Test_UnexpectedStreamID(t *testing.T) {
 	originalData := []byte("Hello, World!")
 	compressedData := mustCompressData(originalData)
 
-	chunk1 := &command.LoadChunkRequest{
+	chunk1 := &proto.LoadChunkRequest{
 		StreamId:    "123",
 		SequenceNum: 1,
 		IsLast:      false,
 		Data:        compressedData,
 	}
 
-	chunk2 := &command.LoadChunkRequest{
+	chunk2 := &proto.LoadChunkRequest{
 		StreamId:    "456",
 		SequenceNum: 2,
 		IsLast:      true,
@@ -214,14 +214,14 @@ func Test_ChunksOutOfOrder(t *testing.T) {
 	originalData := []byte("Hello, World!")
 	compressedData := mustCompressData(originalData)
 
-	chunk1 := &command.LoadChunkRequest{
+	chunk1 := &proto.LoadChunkRequest{
 		StreamId:    "123",
 		SequenceNum: 1,
 		IsLast:      false,
 		Data:        compressedData,
 	}
 
-	chunk3 := &command.LoadChunkRequest{
+	chunk3 := &proto.LoadChunkRequest{
 		StreamId:    "123",
 		SequenceNum: 3,
 		IsLast:      true,
@@ -283,7 +283,7 @@ func Test_ReassemblyOfLargeData(t *testing.T) {
 		end := start + chunkSize
 
 		isLast := i == numChunks-1
-		if _, err := d.WriteChunk(&command.LoadChunkRequest{
+		if _, err := d.WriteChunk(&proto.LoadChunkRequest{
 			StreamId:    "1",
 			SequenceNum: int64(i + 1),
 			IsLast:      isLast,

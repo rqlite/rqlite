@@ -6,7 +6,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/rqlite/rqlite/v8/command"
+	"github.com/rqlite/rqlite/v8/cluster/proto"
+	command "github.com/rqlite/rqlite/v8/command/proto"
 )
 
 var (
@@ -26,7 +27,7 @@ type Joiner struct {
 	attemptInterval time.Duration
 
 	client *Client
-	creds  *Credentials
+	creds  *proto.Credentials
 	logger *log.Logger
 }
 
@@ -41,7 +42,7 @@ func NewJoiner(client *Client, numAttempts int, attemptInterval time.Duration) *
 }
 
 // SetCredentials sets the credentials for the Joiner.
-func (j *Joiner) SetCredentials(creds *Credentials) {
+func (j *Joiner) SetCredentials(creds *proto.Credentials) {
 	j.creds = creds
 }
 

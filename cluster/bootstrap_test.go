@@ -8,9 +8,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rqlite/rqlite/v8/cluster/proto"
 	"github.com/rqlite/rqlite/v8/cluster/servicetest"
-	"github.com/rqlite/rqlite/v8/command"
-	"google.golang.org/protobuf/proto"
+	command "github.com/rqlite/rqlite/v8/command/proto"
+	pb "google.golang.org/protobuf/proto"
 )
 
 func Test_AddressProviderString(t *testing.T) {
@@ -91,7 +92,7 @@ func Test_BootstrapperBootSingleJoin(t *testing.T) {
 			// Connection error handling
 			return
 		}
-		if c.Type != Command_COMMAND_TYPE_JOIN {
+		if c.Type != proto.Command_COMMAND_TYPE_JOIN {
 			t.Fatalf("unexpected command type: %d", c.Type)
 		}
 		jnr := c.GetJoinRequest()
@@ -102,7 +103,7 @@ func Test_BootstrapperBootSingleJoin(t *testing.T) {
 			t.Fatalf("unexpected node address, got %s", jnr.Address)
 		}
 
-		p, err = proto.Marshal(&CommandJoinResponse{})
+		p, err = pb.Marshal(&proto.CommandJoinResponse{})
 		if err != nil {
 			conn.Close()
 			return
@@ -139,7 +140,7 @@ func Test_BootstrapperBootNonVoter(t *testing.T) {
 			// Connection error handling
 			return
 		}
-		if c.Type != Command_COMMAND_TYPE_JOIN {
+		if c.Type != proto.Command_COMMAND_TYPE_JOIN {
 			t.Fatalf("unexpected command type: %d", c.Type)
 		}
 		jnr := c.GetJoinRequest()
@@ -183,12 +184,12 @@ func Test_BootstrapperBootSingleNotify(t *testing.T) {
 			return
 		}
 
-		if c.Type != Command_COMMAND_TYPE_NOTIFY {
+		if c.Type != proto.Command_COMMAND_TYPE_NOTIFY {
 			return
 		}
 		gotNR = c.GetNotifyRequest()
 
-		p, err = proto.Marshal(&CommandNotifyResponse{})
+		p, err = pb.Marshal(&proto.CommandNotifyResponse{})
 		if err != nil {
 			conn.Close()
 			return
@@ -237,16 +238,16 @@ func Test_BootstrapperBootMultiJoinNotify(t *testing.T) {
 			return
 		}
 
-		if c.Type == Command_COMMAND_TYPE_JOIN {
+		if c.Type == proto.Command_COMMAND_TYPE_JOIN {
 			atomic.AddInt32(&srv1JoinC, 1)
 		}
 
-		if c.Type != Command_COMMAND_TYPE_NOTIFY {
+		if c.Type != proto.Command_COMMAND_TYPE_NOTIFY {
 			return
 		}
 		atomic.AddInt32(&srv1NotifiedC, 1)
 
-		p, err = proto.Marshal(&CommandNotifyResponse{})
+		p, err = pb.Marshal(&proto.CommandNotifyResponse{})
 		if err != nil {
 			conn.Close()
 			return
@@ -268,16 +269,16 @@ func Test_BootstrapperBootMultiJoinNotify(t *testing.T) {
 			return
 		}
 
-		if c.Type == Command_COMMAND_TYPE_JOIN {
+		if c.Type == proto.Command_COMMAND_TYPE_JOIN {
 			atomic.AddInt32(&srv2JoinC, 1)
 		}
 
-		if c.Type != Command_COMMAND_TYPE_NOTIFY {
+		if c.Type != proto.Command_COMMAND_TYPE_NOTIFY {
 			return
 		}
 		atomic.AddInt32(&srv2NotifiedC, 1)
 
-		p, err = proto.Marshal(&CommandNotifyResponse{})
+		p, err = pb.Marshal(&proto.CommandNotifyResponse{})
 		if err != nil {
 			conn.Close()
 			return

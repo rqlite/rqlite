@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rqlite/rqlite/v8/command"
+	command "github.com/rqlite/rqlite/v8/command/proto"
 	"github.com/rqlite/rqlite/v8/testdata/chinook"
 )
 

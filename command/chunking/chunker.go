@@ -9,7 +9,7 @@ import (
 	"io"
 	"sync"
 
-	"github.com/rqlite/rqlite/v8/command"
+	"github.com/rqlite/rqlite/v8/command/proto"
 )
 
 const (
@@ -70,7 +70,7 @@ func generateStreamID() string {
 }
 
 // Next returns the next LoadChunkRequest, or io.EOF if finished.
-func (c *Chunker) Next() (*command.LoadChunkRequest, error) {
+func (c *Chunker) Next() (*proto.LoadChunkRequest, error) {
 	c.statsMu.Lock()
 	defer c.statsMu.Unlock()
 
@@ -126,7 +126,7 @@ func (c *Chunker) Next() (*command.LoadChunkRequest, error) {
 			return nil, io.EOF
 		}
 		// If previous chunks were sent, return a final empty chunk with IsLast = true
-		return &command.LoadChunkRequest{
+		return &proto.LoadChunkRequest{
 			StreamId:    c.streamID,
 			SequenceNum: c.sequenceNum + 1,
 			IsLast:      true,
@@ -135,7 +135,7 @@ func (c *Chunker) Next() (*command.LoadChunkRequest, error) {
 	}
 
 	c.sequenceNum++
-	return &command.LoadChunkRequest{
+	return &proto.LoadChunkRequest{
 		StreamId:    c.streamID,
 		SequenceNum: c.sequenceNum,
 		IsLast:      totalRead < c.chunkSize,
@@ -145,8 +145,8 @@ func (c *Chunker) Next() (*command.LoadChunkRequest, error) {
 
 // Abort returns a LoadChunkRequest that signals the receiver to abort the
 // given stream.
-func (c *Chunker) Abort() *command.LoadChunkRequest {
-	return &command.LoadChunkRequest{
+func (c *Chunker) Abort() *proto.LoadChunkRequest {
+	return &proto.LoadChunkRequest{
 		StreamId: c.streamID,
 		Abort:    true,
 	}

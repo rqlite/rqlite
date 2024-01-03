@@ -19,8 +19,8 @@ import (
 	"time"
 
 	"github.com/rqlite/rqlite/v8/cluster"
-	"github.com/rqlite/rqlite/v8/command"
 	"github.com/rqlite/rqlite/v8/command/encoding"
+	"github.com/rqlite/rqlite/v8/command/proto"
 	httpd "github.com/rqlite/rqlite/v8/http"
 	"github.com/rqlite/rqlite/v8/store"
 	"github.com/rqlite/rqlite/v8/tcp"
@@ -235,7 +235,7 @@ func (n *Node) JoinAsNonVoter(leader *Node) error {
 
 // Notify notifies this node of the existence of another node
 func (n *Node) Notify(id, raftAddr string) error {
-	nr := &command.NotifyRequest{
+	nr := &proto.NotifyRequest{
 		Id:      n.Store.ID(),
 		Address: n.RaftAddr,
 	}

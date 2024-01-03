@@ -6,8 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rqlite/rqlite/v8/cluster/proto"
 	"github.com/rqlite/rqlite/v8/cluster/servicetest"
-	"google.golang.org/protobuf/proto"
+	pb "google.golang.org/protobuf/proto"
 )
 
 func Test_NewRemover(t *testing.T) {
@@ -101,7 +102,7 @@ func makeServiceRemoveOK(t *testing.T, ch chan struct{}) *servicetest.Service {
 			var p []byte
 			var err error
 			_ = readCommand(conn)
-			p, err = proto.Marshal(&CommandRemoveNodeResponse{})
+			p, err = pb.Marshal(&proto.CommandRemoveNodeResponse{})
 			if err != nil {
 				t.Fatalf("failed to marshal response: %s", err.Error())
 			}

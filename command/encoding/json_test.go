@@ -3,7 +3,7 @@ package encoding
 import (
 	"testing"
 
-	"github.com/rqlite/rqlite/v8/command"
+	"github.com/rqlite/rqlite/v8/command/proto"
 )
 
 func Test_JSONNoEscaping(t *testing.T) {
@@ -25,10 +25,10 @@ func Test_JSONNoEscaping(t *testing.T) {
 func Test_MarshalExecuteResult(t *testing.T) {
 	var b []byte
 	var err error
-	var r *command.ExecuteResult
+	var r *proto.ExecuteResult
 	enc := Encoder{}
 
-	r = &command.ExecuteResult{
+	r = &proto.ExecuteResult{
 		LastInsertId: 1,
 		RowsAffected: 2,
 		Time:         1234,
@@ -41,7 +41,7 @@ func Test_MarshalExecuteResult(t *testing.T) {
 		t.Fatalf("failed to marshal ExecuteResult: exp %s, got %s", exp, got)
 	}
 
-	r = &command.ExecuteResult{
+	r = &proto.ExecuteResult{
 		LastInsertId: 4,
 		RowsAffected: 5,
 		Error:        "something went wrong",
@@ -78,17 +78,17 @@ func Test_MarshalExecuteResults(t *testing.T) {
 	var err error
 	enc := Encoder{}
 
-	r1 := &command.ExecuteResult{
+	r1 := &proto.ExecuteResult{
 		LastInsertId: 1,
 		RowsAffected: 2,
 		Time:         1234,
 	}
-	r2 := &command.ExecuteResult{
+	r2 := &proto.ExecuteResult{
 		LastInsertId: 3,
 		RowsAffected: 4,
 		Time:         5678,
 	}
-	b, err = enc.JSONMarshal([]*command.ExecuteResult{r1, r2})
+	b, err = enc.JSONMarshal([]*proto.ExecuteResult{r1, r2})
 	if err != nil {
 		t.Fatalf("failed to marshal ExecuteResults: %s", err.Error())
 	}
@@ -100,10 +100,10 @@ func Test_MarshalExecuteResults(t *testing.T) {
 // Test_MarshalQueryRowsError tests error cases
 func Test_MarshalQueryRowsError(t *testing.T) {
 	var err error
-	var r *command.QueryRows
+	var r *proto.QueryRows
 	enc := Encoder{}
 
-	r = &command.QueryRows{
+	r = &proto.QueryRows{
 		Columns: []string{"c1", "c2"},
 		Types:   []string{"int", "float", "string"},
 		Time:    6789,
@@ -125,32 +125,32 @@ func Test_MarshalQueryRowsError(t *testing.T) {
 func Test_MarshalQueryRows(t *testing.T) {
 	var b []byte
 	var err error
-	var r *command.QueryRows
+	var r *proto.QueryRows
 	enc := Encoder{}
 
-	r = &command.QueryRows{
+	r = &proto.QueryRows{
 		Columns: []string{"c1", "c2", "c3"},
 		Types:   []string{"int", "float", "string"},
 		Time:    6789,
 	}
-	values := make([]*command.Parameter, len(r.Columns))
-	values[0] = &command.Parameter{
-		Value: &command.Parameter_I{
+	values := make([]*proto.Parameter, len(r.Columns))
+	values[0] = &proto.Parameter{
+		Value: &proto.Parameter_I{
 			I: 123,
 		},
 	}
-	values[1] = &command.Parameter{
-		Value: &command.Parameter_D{
+	values[1] = &proto.Parameter{
+		Value: &proto.Parameter_D{
 			D: 678.0,
 		},
 	}
-	values[2] = &command.Parameter{
-		Value: &command.Parameter_S{
+	values[2] = &proto.Parameter{
+		Value: &proto.Parameter_S{
 			S: "fiona",
 		},
 	}
 
-	r.Values = []*command.Values{
+	r.Values = []*proto.Values{
 		{Parameters: values},
 	}
 
@@ -196,34 +196,34 @@ func Test_MarshalQueryRows(t *testing.T) {
 func Test_MarshalQueryAssociativeRows(t *testing.T) {
 	var b []byte
 	var err error
-	var r *command.QueryRows
+	var r *proto.QueryRows
 	enc := Encoder{
 		Associative: true,
 	}
 
-	r = &command.QueryRows{
+	r = &proto.QueryRows{
 		Columns: []string{"c1", "c2", "c3"},
 		Types:   []string{"int", "float", "string"},
 		Time:    6789,
 	}
-	values := make([]*command.Parameter, len(r.Columns))
-	values[0] = &command.Parameter{
-		Value: &command.Parameter_I{
+	values := make([]*proto.Parameter, len(r.Columns))
+	values[0] = &proto.Parameter{
+		Value: &proto.Parameter_I{
 			I: 123,
 		},
 	}
-	values[1] = &command.Parameter{
-		Value: &command.Parameter_D{
+	values[1] = &proto.Parameter{
+		Value: &proto.Parameter_D{
 			D: 678.0,
 		},
 	}
-	values[2] = &command.Parameter{
-		Value: &command.Parameter_S{
+	values[2] = &proto.Parameter{
+		Value: &proto.Parameter_S{
 			S: "fiona",
 		},
 	}
 
-	r.Values = []*command.Values{
+	r.Values = []*proto.Values{
 		{Parameters: values},
 	}
 
@@ -264,36 +264,36 @@ func Test_MarshalQueryAssociativeRows(t *testing.T) {
 func Test_MarshalQueryRowses(t *testing.T) {
 	var b []byte
 	var err error
-	var r *command.QueryRows
+	var r *proto.QueryRows
 	enc := Encoder{}
 
-	r = &command.QueryRows{
+	r = &proto.QueryRows{
 		Columns: []string{"c1", "c2", "c3"},
 		Types:   []string{"int", "float", "string"},
 		Time:    6789,
 	}
-	values := make([]*command.Parameter, len(r.Columns))
-	values[0] = &command.Parameter{
-		Value: &command.Parameter_I{
+	values := make([]*proto.Parameter, len(r.Columns))
+	values[0] = &proto.Parameter{
+		Value: &proto.Parameter_I{
 			I: 123,
 		},
 	}
-	values[1] = &command.Parameter{
-		Value: &command.Parameter_D{
+	values[1] = &proto.Parameter{
+		Value: &proto.Parameter_D{
 			D: 678.0,
 		},
 	}
-	values[2] = &command.Parameter{
-		Value: &command.Parameter_S{
+	values[2] = &proto.Parameter{
+		Value: &proto.Parameter_S{
 			S: "fiona",
 		},
 	}
 
-	r.Values = []*command.Values{
+	r.Values = []*proto.Values{
 		{Parameters: values},
 	}
 
-	b, err = enc.JSONMarshal([]*command.QueryRows{r, r})
+	b, err = enc.JSONMarshal([]*proto.QueryRows{r, r})
 	if err != nil {
 		t.Fatalf("failed to marshal QueryRows: %s", err.Error())
 	}
@@ -306,38 +306,38 @@ func Test_MarshalQueryRowses(t *testing.T) {
 func Test_MarshalQueryAssociativeRowses(t *testing.T) {
 	var b []byte
 	var err error
-	var r *command.QueryRows
+	var r *proto.QueryRows
 	enc := Encoder{
 		Associative: true,
 	}
 
-	r = &command.QueryRows{
+	r = &proto.QueryRows{
 		Columns: []string{"c1", "c2", "c3"},
 		Types:   []string{"int", "float", "string"},
 		Time:    6789,
 	}
-	values := make([]*command.Parameter, len(r.Columns))
-	values[0] = &command.Parameter{
-		Value: &command.Parameter_I{
+	values := make([]*proto.Parameter, len(r.Columns))
+	values[0] = &proto.Parameter{
+		Value: &proto.Parameter_I{
 			I: 123,
 		},
 	}
-	values[1] = &command.Parameter{
-		Value: &command.Parameter_D{
+	values[1] = &proto.Parameter{
+		Value: &proto.Parameter_D{
 			D: 678.0,
 		},
 	}
-	values[2] = &command.Parameter{
-		Value: &command.Parameter_S{
+	values[2] = &proto.Parameter{
+		Value: &proto.Parameter_S{
 			S: "fiona",
 		},
 	}
 
-	r.Values = []*command.Values{
+	r.Values = []*proto.Values{
 		{Parameters: values},
 	}
 
-	b, err = enc.JSONMarshal([]*command.QueryRows{r, r})
+	b, err = enc.JSONMarshal([]*proto.QueryRows{r, r})
 	if err != nil {
 		t.Fatalf("failed to marshal QueryRows: %s", err.Error())
 	}
@@ -351,15 +351,15 @@ func Test_MarshalExecuteQueryResponse(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		responses []*command.ExecuteQueryResponse
+		responses []*proto.ExecuteQueryResponse
 		expected  string
 	}{
 		{
 			name: "Test with ExecuteResult",
-			responses: []*command.ExecuteQueryResponse{
+			responses: []*proto.ExecuteQueryResponse{
 				{
-					Result: &command.ExecuteQueryResponse_E{
-						E: &command.ExecuteResult{
+					Result: &proto.ExecuteQueryResponse_E{
+						E: &proto.ExecuteResult{
 							LastInsertId: 123,
 							RowsAffected: 456,
 						},
@@ -370,22 +370,22 @@ func Test_MarshalExecuteQueryResponse(t *testing.T) {
 		},
 		{
 			name: "Test with QueryRows",
-			responses: []*command.ExecuteQueryResponse{
+			responses: []*proto.ExecuteQueryResponse{
 				{
-					Result: &command.ExecuteQueryResponse_Q{
-						Q: &command.QueryRows{
+					Result: &proto.ExecuteQueryResponse_Q{
+						Q: &proto.QueryRows{
 							Columns: []string{"column1", "column2"},
 							Types:   []string{"type1", "type2"},
-							Values: []*command.Values{
+							Values: []*proto.Values{
 								{
-									Parameters: []*command.Parameter{
+									Parameters: []*proto.Parameter{
 										{
-											Value: &command.Parameter_I{
+											Value: &proto.Parameter_I{
 												I: 123,
 											},
 										},
 										{
-											Value: &command.Parameter_S{
+											Value: &proto.Parameter_S{
 												S: "fiona",
 											},
 										},
@@ -400,35 +400,35 @@ func Test_MarshalExecuteQueryResponse(t *testing.T) {
 		},
 		{
 			name: "Test with ExecuteResult and QueryRows",
-			responses: []*command.ExecuteQueryResponse{
+			responses: []*proto.ExecuteQueryResponse{
 				{
-					Result: &command.ExecuteQueryResponse_E{
-						E: &command.ExecuteResult{
+					Result: &proto.ExecuteQueryResponse_E{
+						E: &proto.ExecuteResult{
 							LastInsertId: 123,
 							RowsAffected: 456,
 						},
 					},
 				},
 				{
-					Result: &command.ExecuteQueryResponse_Error{
+					Result: &proto.ExecuteQueryResponse_Error{
 						Error: "unique constraint failed",
 					},
 				},
 				{
-					Result: &command.ExecuteQueryResponse_Q{
-						Q: &command.QueryRows{
+					Result: &proto.ExecuteQueryResponse_Q{
+						Q: &proto.QueryRows{
 							Columns: []string{"column1", "column2"},
 							Types:   []string{"int", "text"},
-							Values: []*command.Values{
+							Values: []*proto.Values{
 								{
-									Parameters: []*command.Parameter{
+									Parameters: []*proto.Parameter{
 										{
-											Value: &command.Parameter_I{
+											Value: &proto.Parameter_I{
 												I: 456,
 											},
 										},
 										{
-											Value: &command.Parameter_S{
+											Value: &proto.Parameter_S{
 												S: "declan",
 											},
 										},
@@ -439,11 +439,11 @@ func Test_MarshalExecuteQueryResponse(t *testing.T) {
 					},
 				},
 				{
-					Result: &command.ExecuteQueryResponse_Q{
-						Q: &command.QueryRows{
+					Result: &proto.ExecuteQueryResponse_Q{
+						Q: &proto.QueryRows{
 							Columns: []string{"column1", "column2"},
 							Types:   []string{"int", "text"},
-							Values:  []*command.Values{},
+							Values:  []*proto.Values{},
 						},
 					},
 				},
@@ -473,15 +473,15 @@ func Test_MarshalExecuteQueryAssociativeResponse(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		responses []*command.ExecuteQueryResponse
+		responses []*proto.ExecuteQueryResponse
 		expected  string
 	}{
 		{
 			name: "Test with ExecuteResult",
-			responses: []*command.ExecuteQueryResponse{
+			responses: []*proto.ExecuteQueryResponse{
 				{
-					Result: &command.ExecuteQueryResponse_E{
-						E: &command.ExecuteResult{
+					Result: &proto.ExecuteQueryResponse_E{
+						E: &proto.ExecuteResult{
 							LastInsertId: 123,
 							RowsAffected: 456,
 						},
@@ -492,22 +492,22 @@ func Test_MarshalExecuteQueryAssociativeResponse(t *testing.T) {
 		},
 		{
 			name: "Test with QueryRows",
-			responses: []*command.ExecuteQueryResponse{
+			responses: []*proto.ExecuteQueryResponse{
 				{
-					Result: &command.ExecuteQueryResponse_Q{
-						Q: &command.QueryRows{
+					Result: &proto.ExecuteQueryResponse_Q{
+						Q: &proto.QueryRows{
 							Columns: []string{"column1", "column2"},
 							Types:   []string{"type1", "type2"},
-							Values: []*command.Values{
+							Values: []*proto.Values{
 								{
-									Parameters: []*command.Parameter{
+									Parameters: []*proto.Parameter{
 										{
-											Value: &command.Parameter_I{
+											Value: &proto.Parameter_I{
 												I: 123,
 											},
 										},
 										{
-											Value: &command.Parameter_S{
+											Value: &proto.Parameter_S{
 												S: "fiona",
 											},
 										},
@@ -522,35 +522,35 @@ func Test_MarshalExecuteQueryAssociativeResponse(t *testing.T) {
 		},
 		{
 			name: "Test with ExecuteResult and QueryRows",
-			responses: []*command.ExecuteQueryResponse{
+			responses: []*proto.ExecuteQueryResponse{
 				{
-					Result: &command.ExecuteQueryResponse_E{
-						E: &command.ExecuteResult{
+					Result: &proto.ExecuteQueryResponse_E{
+						E: &proto.ExecuteResult{
 							LastInsertId: 123,
 							RowsAffected: 456,
 						},
 					},
 				},
 				{
-					Result: &command.ExecuteQueryResponse_Error{
+					Result: &proto.ExecuteQueryResponse_Error{
 						Error: "unique constraint failed",
 					},
 				},
 				{
-					Result: &command.ExecuteQueryResponse_Q{
-						Q: &command.QueryRows{
+					Result: &proto.ExecuteQueryResponse_Q{
+						Q: &proto.QueryRows{
 							Columns: []string{"column1", "column2"},
 							Types:   []string{"int", "text"},
-							Values: []*command.Values{
+							Values: []*proto.Values{
 								{
-									Parameters: []*command.Parameter{
+									Parameters: []*proto.Parameter{
 										{
-											Value: &command.Parameter_I{
+											Value: &proto.Parameter_I{
 												I: 456,
 											},
 										},
 										{
-											Value: &command.Parameter_S{
+											Value: &proto.Parameter_S{
 												S: "declan",
 											},
 										},
@@ -561,17 +561,17 @@ func Test_MarshalExecuteQueryAssociativeResponse(t *testing.T) {
 					},
 				},
 				{
-					Result: &command.ExecuteQueryResponse_Q{
-						Q: &command.QueryRows{
+					Result: &proto.ExecuteQueryResponse_Q{
+						Q: &proto.QueryRows{
 							Columns: []string{"aaa", "bbb"},
 							Types:   []string{"int", "text"},
-							Values:  []*command.Values{},
+							Values:  []*proto.Values{},
 						},
 					},
 				},
 				{
-					Result: &command.ExecuteQueryResponse_Q{
-						Q: &command.QueryRows{
+					Result: &proto.ExecuteQueryResponse_Q{
+						Q: &proto.QueryRows{
 							Columns: []string{"ccc", "ddd"},
 							Types:   []string{"int", "text"},
 							Values:  nil,

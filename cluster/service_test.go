@@ -10,7 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rqlite/rqlite/v8/command"
+	"github.com/rqlite/rqlite/v8/cluster/proto"
+	command "github.com/rqlite/rqlite/v8/command/proto"
 	"github.com/rqlite/rqlite/v8/testdata/x509"
 )
 
@@ -557,8 +558,8 @@ func mustNewMockCredentialStore() *mockCredentialStore {
 	return &mockCredentialStore{HasPermOK: true}
 }
 
-func makeCredentials(username, password string) *Credentials {
-	return &Credentials{
+func makeCredentials(username, password string) *proto.Credentials {
+	return &proto.Credentials{
 		Username: username,
 		Password: password,
 	}

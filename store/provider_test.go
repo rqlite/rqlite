@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rqlite/rqlite/v8/command"
+	command "github.com/rqlite/rqlite/v8/command/proto"
 )
 
 // Test_SingleNodeProvide tests that the Store correctly implements

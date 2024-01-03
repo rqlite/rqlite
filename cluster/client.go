@@ -13,11 +13,12 @@ import (
 	"time"
 
 	"github.com/rqlite/rqlite/v8/auth"
-	"github.com/rqlite/rqlite/v8/command"
+	"github.com/rqlite/rqlite/v8/cluster/proto"
+	command "github.com/rqlite/rqlite/v8/command/proto"
 	"github.com/rqlite/rqlite/v8/rtls"
 	"github.com/rqlite/rqlite/v8/tcp"
 	"github.com/rqlite/rqlite/v8/tcp/pool"
-	"google.golang.org/protobuf/proto"
+	pb "google.golang.org/protobuf/proto"
 )
 
 const (
@@ -44,7 +45,7 @@ func CreateRaftDialer(cert, key, caCert, serverName string, Insecure bool) (*tcp
 
 // CredentialsFor returns a Credentials instance for the given username, or nil if
 // the given CredentialsStore is nil, or the username is not found.
-func CredentialsFor(credStr *auth.CredentialsStore, username string) *Credentials {
+func CredentialsFor(credStr *auth.CredentialsStore, username string) *proto.Credentials {
 	if credStr == nil {
 		return nil
 	}
@@ -52,7 +53,7 @@ func CredentialsFor(credStr *auth.CredentialsStore, username string) *Credential
 	if !ok {
 		return nil
 	}
-	return &Credentials{
+	return &proto.Credentials{
 		Username: username,
 		Password: pw,
 	}
@@ -108,16 +109,16 @@ func (c *Client) GetNodeAPIAddr(nodeAddr string, timeout time.Duration) (string,
 		return c.localServ.GetNodeAPIURL(), nil
 	}
 
-	command := &Command{
-		Type: Command_COMMAND_TYPE_GET_NODE_API_URL,
+	command := &proto.Command{
+		Type: proto.Command_COMMAND_TYPE_GET_NODE_API_URL,
 	}
 	p, err := c.retry(command, nodeAddr, timeout)
 	if err != nil {
 		return "", err
 	}
 
-	a := &Address{}
-	err = proto.Unmarshal(p, a)
+	a := &proto.Address{}
+	err = pb.Unmarshal(p, a)
 	if err != nil {
 		return "", fmt.Errorf("protobuf unmarshal: %w", err)
 	}
@@ -128,10 +129,10 @@ func (c *Client) GetNodeAPIAddr(nodeAddr string, timeout time.Duration) (string,
 // Execute performs an Execute on a remote node. If username is an empty string
 // no credential information will be included in the Execute request to the
 // remote node.
-func (c *Client) Execute(er *command.ExecuteRequest, nodeAddr string, creds *Credentials, timeout time.Duration) ([]*command.ExecuteResult, error) {
-	command := &Command{
-		Type: Command_COMMAND_TYPE_EXECUTE,
-		Request: &Command_ExecuteRequest{
+func (c *Client) Execute(er *command.ExecuteRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) ([]*command.ExecuteResult, error) {
+	command := &proto.Command{
+		Type: proto.Command_COMMAND_TYPE_EXECUTE,
+		Request: &proto.Command_ExecuteRequest{
 			ExecuteRequest: er,
 		},
 		Credentials: creds,
@@ -141,8 +142,8 @@ func (c *Client) Execute(er *command.ExecuteRequest, nodeAddr string, creds *Cre
 		return nil, err
 	}
 
-	a := &CommandExecuteResponse{}
-	err = proto.Unmarshal(p, a)
+	a := &proto.CommandExecuteResponse{}
+	err = pb.Unmarshal(p, a)
 	if err != nil {
 		return nil, err
 	}
@@ -154,10 +155,10 @@ func (c *Client) Execute(er *command.ExecuteRequest, nodeAddr string, creds *Cre
 }
 
 // Query performs a Query on a remote node.
-func (c *Client) Query(qr *command.QueryRequest, nodeAddr string, creds *Credentials, timeout time.Duration) ([]*command.QueryRows, error) {
-	command := &Command{
-		Type: Command_COMMAND_TYPE_QUERY,
-		Request: &Command_QueryRequest{
+func (c *Client) Query(qr *command.QueryRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) ([]*command.QueryRows, error) {
+	command := &proto.Command{
+		Type: proto.Command_COMMAND_TYPE_QUERY,
+		Request: &proto.Command_QueryRequest{
 			QueryRequest: qr,
 		},
 		Credentials: creds,
@@ -167,8 +168,8 @@ func (c *Client) Query(qr *command.QueryRequest, nodeAddr string, creds *Credent
 		return nil, err
 	}
 
-	a := &CommandQueryResponse{}
-	err = proto.Unmarshal(p, a)
+	a := &proto.CommandQueryResponse{}
+	err = pb.Unmarshal(p, a)
 	if err != nil {
 		return nil, err
 	}
@@ -180,10 +181,10 @@ func (c *Client) Query(qr *command.QueryRequest, nodeAddr string, creds *Credent
 }
 
 // Request performs an ExecuteQuery on a remote node.
-func (c *Client) Request(r *command.ExecuteQueryRequest, nodeAddr string, creds *Credentials, timeout time.Duration) ([]*command.ExecuteQueryResponse, error) {
-	command := &Command{
-		Type: Command_COMMAND_TYPE_REQUEST,
-		Request: &Command_ExecuteQueryRequest{
+func (c *Client) Request(r *command.ExecuteQueryRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) ([]*command.ExecuteQueryResponse, error) {
+	command := &proto.Command{
+		Type: proto.Command_COMMAND_TYPE_REQUEST,
+		Request: &proto.Command_ExecuteQueryRequest{
 			ExecuteQueryRequest: r,
 		},
 		Credentials: creds,
@@ -193,8 +194,8 @@ func (c *Client) Request(r *command.ExecuteQueryRequest, nodeAddr string, creds 
 		return nil, err
 	}
 
-	a := &CommandRequestResponse{}
-	err = proto.Unmarshal(p, a)
+	a := &proto.CommandRequestResponse{}
+	err = pb.Unmarshal(p, a)
 	if err != nil {
 		return nil, err
 	}
@@ -206,10 +207,10 @@ func (c *Client) Request(r *command.ExecuteQueryRequest, nodeAddr string, creds 
 }
 
 // Backup retrieves a backup from a remote node and writes to the io.Writer
-func (c *Client) Backup(br *command.BackupRequest, nodeAddr string, creds *Credentials, timeout time.Duration, w io.Writer) error {
-	command := &Command{
-		Type: Command_COMMAND_TYPE_BACKUP,
-		Request: &Command_BackupRequest{
+func (c *Client) Backup(br *command.BackupRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration, w io.Writer) error {
+	command := &proto.Command{
+		Type: proto.Command_COMMAND_TYPE_BACKUP,
+		Request: &proto.Command_BackupRequest{
 			BackupRequest: br,
 		},
 		Credentials: creds,
@@ -225,8 +226,8 @@ func (c *Client) Backup(br *command.BackupRequest, nodeAddr string, creds *Crede
 		return fmt.Errorf("backup decompress: %w", err)
 	}
 
-	resp := &CommandBackupResponse{}
-	err = proto.Unmarshal(p, resp)
+	resp := &proto.CommandBackupResponse{}
+	err = pb.Unmarshal(p, resp)
 	if err != nil {
 		return fmt.Errorf("backup unmarshal: %w", err)
 	}
@@ -242,10 +243,10 @@ func (c *Client) Backup(br *command.BackupRequest, nodeAddr string, creds *Crede
 }
 
 // Load loads a SQLite file into the database.
-func (c *Client) Load(lr *command.LoadRequest, nodeAddr string, creds *Credentials, timeout time.Duration) error {
-	command := &Command{
-		Type: Command_COMMAND_TYPE_LOAD,
-		Request: &Command_LoadRequest{
+func (c *Client) Load(lr *command.LoadRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) error {
+	command := &proto.Command{
+		Type: proto.Command_COMMAND_TYPE_LOAD,
+		Request: &proto.Command_LoadRequest{
 			LoadRequest: lr,
 		},
 		Credentials: creds,
@@ -255,8 +256,8 @@ func (c *Client) Load(lr *command.LoadRequest, nodeAddr string, creds *Credentia
 		return err
 	}
 
-	a := &CommandLoadResponse{}
-	err = proto.Unmarshal(p, a)
+	a := &proto.CommandLoadResponse{}
+	err = pb.Unmarshal(p, a)
 	if err != nil {
 		return err
 	}
@@ -268,7 +269,7 @@ func (c *Client) Load(lr *command.LoadRequest, nodeAddr string, creds *Credentia
 }
 
 // RemoveNode removes a node from the cluster
-func (c *Client) RemoveNode(rn *command.RemoveNodeRequest, nodeAddr string, creds *Credentials, timeout time.Duration) error {
+func (c *Client) RemoveNode(rn *command.RemoveNodeRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) error {
 	conn, err := c.dial(nodeAddr, c.timeout)
 	if err != nil {
 		return err
@@ -276,9 +277,9 @@ func (c *Client) RemoveNode(rn *command.RemoveNodeRequest, nodeAddr string, cred
 	defer conn.Close()
 
 	// Create the request.
-	command := &Command{
-		Type: Command_COMMAND_TYPE_REMOVE_NODE,
-		Request: &Command_RemoveNodeRequest{
+	command := &proto.Command{
+		Type: proto.Command_COMMAND_TYPE_REMOVE_NODE,
+		Request: &proto.Command_RemoveNodeRequest{
 			RemoveNodeRequest: rn,
 		},
 		Credentials: creds,
@@ -294,8 +295,8 @@ func (c *Client) RemoveNode(rn *command.RemoveNodeRequest, nodeAddr string, cred
 		return err
 	}
 
-	a := &CommandRemoveNodeResponse{}
-	err = proto.Unmarshal(p, a)
+	a := &proto.CommandRemoveNodeResponse{}
+	err = pb.Unmarshal(p, a)
 	if err != nil {
 		return err
 	}
@@ -307,7 +308,7 @@ func (c *Client) RemoveNode(rn *command.RemoveNodeRequest, nodeAddr string, cred
 }
 
 // Notify notifies a remote node that this node is ready to bootstrap.
-func (c *Client) Notify(nr *command.NotifyRequest, nodeAddr string, creds *Credentials, timeout time.Duration) error {
+func (c *Client) Notify(nr *command.NotifyRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) error {
 	conn, err := c.dial(nodeAddr, c.timeout)
 	if err != nil {
 		return err
@@ -315,9 +316,9 @@ func (c *Client) Notify(nr *command.NotifyRequest, nodeAddr string, creds *Crede
 	defer conn.Close()
 
 	// Create the request.
-	command := &Command{
-		Type: Command_COMMAND_TYPE_NOTIFY,
-		Request: &Command_NotifyRequest{
+	command := &proto.Command{
+		Type: proto.Command_COMMAND_TYPE_NOTIFY,
+		Request: &proto.Command_NotifyRequest{
 			NotifyRequest: nr,
 		},
 		Credentials: creds,
@@ -333,8 +334,8 @@ func (c *Client) Notify(nr *command.NotifyRequest, nodeAddr string, creds *Crede
 		return err
 	}
 
-	a := &CommandNotifyResponse{}
-	err = proto.Unmarshal(p, a)
+	a := &proto.CommandNotifyResponse{}
+	err = pb.Unmarshal(p, a)
 	if err != nil {
 		return err
 	}
@@ -346,7 +347,7 @@ func (c *Client) Notify(nr *command.NotifyRequest, nodeAddr string, creds *Crede
 }
 
 // Join joins this node to a cluster at the remote address nodeAddr.
-func (c *Client) Join(jr *command.JoinRequest, nodeAddr string, creds *Credentials, timeout time.Duration) error {
+func (c *Client) Join(jr *command.JoinRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) error {
 	for {
 		conn, err := c.dial(nodeAddr, c.timeout)
 		if err != nil {
@@ -355,9 +356,9 @@ func (c *Client) Join(jr *command.JoinRequest, nodeAddr string, creds *Credentia
 		defer conn.Close()
 
 		// Create the request.
-		command := &Command{
-			Type: Command_COMMAND_TYPE_JOIN,
-			Request: &Command_JoinRequest{
+		command := &proto.Command{
+			Type: proto.Command_COMMAND_TYPE_JOIN,
+			Request: &proto.Command_JoinRequest{
 				JoinRequest: jr,
 			},
 			Credentials: creds,
@@ -374,8 +375,8 @@ func (c *Client) Join(jr *command.JoinRequest, nodeAddr string, creds *Credentia
 			return err
 		}
 
-		a := &CommandJoinResponse{}
-		err = proto.Unmarshal(p, a)
+		a := &proto.CommandJoinResponse{}
+		err = pb.Unmarshal(p, a)
 		if err != nil {
 			return err
 		}
@@ -463,7 +464,7 @@ func (c *Client) dial(nodeAddr string, timeout time.Duration) (net.Conn, error) 
 // retry retries a command on a remote node. It does this so we churn through connections
 // in the pool if we hit an error, as the remote node may have restarted and the pool's
 // connections are now stale.
-func (c *Client) retry(command *Command, nodeAddr string, timeout time.Duration) ([]byte, error) {
+func (c *Client) retry(command *proto.Command, nodeAddr string, timeout time.Duration) ([]byte, error) {
 	var p []byte
 	var errOuter error
 	var nRetries int
@@ -499,8 +500,8 @@ func (c *Client) retry(command *Command, nodeAddr string, timeout time.Duration)
 	return p, nil
 }
 
-func writeCommand(conn net.Conn, c *Command, timeout time.Duration) error {
-	p, err := proto.Marshal(c)
+func writeCommand(conn net.Conn, c *proto.Command, timeout time.Duration) error {
+	p, err := pb.Marshal(c)
 	if err != nil {
 		return fmt.Errorf("command marshal: %w", err)
 	}
