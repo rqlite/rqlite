@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rqlite/rqlite/v8/cluster"
+	cluster "github.com/rqlite/rqlite/v8/cluster/proto"
 	command "github.com/rqlite/rqlite/v8/command/proto"
 	"github.com/rqlite/rqlite/v8/store"
 )

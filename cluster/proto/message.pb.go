@@ -7,7 +7,7 @@
 package proto
 
 import (
-	proto "github.com/rqlite/rqlite/command/proto"
+	proto "github.com/rqlite/rqlite/v8/command/proto"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"

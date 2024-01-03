@@ -5,8 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rqlite/rqlite/v8/cluster/proto"
 	"github.com/rqlite/rqlite/v8/cluster/servicetest"
-	"google.golang.org/protobuf/proto"
+	pb "google.golang.org/protobuf/proto"
 )
 
 const numAttempts int = 3
@@ -23,7 +24,7 @@ func Test_SingleJoinOK(t *testing.T) {
 			// test exit can cause that too.
 			return
 		}
-		if c.Type != Command_COMMAND_TYPE_JOIN {
+		if c.Type != proto.Command_COMMAND_TYPE_JOIN {
 			t.Fatalf("unexpected command type: %d", c.Type)
 		}
 		jr := c.GetJoinRequest()
@@ -37,8 +38,8 @@ func Test_SingleJoinOK(t *testing.T) {
 			t.Fatalf("unexpected addr, got %s, exp: %s", got, exp)
 		}
 
-		resp := &CommandJoinResponse{}
-		p, err = proto.Marshal(resp)
+		resp := &proto.CommandJoinResponse{}
+		p, err = pb.Marshal(resp)
 		if err != nil {
 			conn.Close()
 		}
@@ -85,10 +86,10 @@ func Test_SingleJoinFail(t *testing.T) {
 			// test exit can cause that too.
 			return
 		}
-		resp := &CommandJoinResponse{
+		resp := &proto.CommandJoinResponse{
 			Error: "bad request",
 		}
-		p, err = proto.Marshal(resp)
+		p, err = pb.Marshal(resp)
 		if err != nil {
 			conn.Close()
 		}
@@ -116,10 +117,10 @@ func Test_DoubleJoinOKSecondNode(t *testing.T) {
 			// test exit can cause that too.
 			return
 		}
-		resp := &CommandJoinResponse{
+		resp := &proto.CommandJoinResponse{
 			Error: "bad request",
 		}
-		p, err = proto.Marshal(resp)
+		p, err = pb.Marshal(resp)
 		if err != nil {
 			conn.Close()
 		}
@@ -138,11 +139,11 @@ func Test_DoubleJoinOKSecondNode(t *testing.T) {
 			// test exit can cause that too.
 			return
 		}
-		if c.Type != Command_COMMAND_TYPE_JOIN {
+		if c.Type != proto.Command_COMMAND_TYPE_JOIN {
 			t.Fatalf("unexpected command type: %d", c.Type)
 		}
-		resp := &CommandJoinResponse{}
-		p, err = proto.Marshal(resp)
+		resp := &proto.CommandJoinResponse{}
+		p, err = pb.Marshal(resp)
 		if err != nil {
 			conn.Close()
 		}

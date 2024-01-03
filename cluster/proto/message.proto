@@ -3,7 +3,7 @@ package cluster;
 
 import "command/proto/command.proto";
 
-option go_package = "github.com/rqlite/rqlite/v8/cluster";
+option go_package = "github.com/rqlite/rqlite/v8/cluster/proto";
 
 message Credentials {
     string username = 1;

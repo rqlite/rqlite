@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"github.com/rqlite/rqlite/v8/auth"
-	"github.com/rqlite/rqlite/v8/cluster"
+	clstrPB "github.com/rqlite/rqlite/v8/cluster/proto"
 	"github.com/rqlite/rqlite/v8/command"
 	"github.com/rqlite/rqlite/v8/command/encoding"
 	"github.com/rqlite/rqlite/v8/command/proto"
@@ -102,22 +102,22 @@ type Cluster interface {
 	GetAddresser
 
 	// Execute performs an Execute Request on a remote node.
-	Execute(er *proto.ExecuteRequest, nodeAddr string, creds *cluster.Credentials, timeout time.Duration) ([]*proto.ExecuteResult, error)
+	Execute(er *proto.ExecuteRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) ([]*proto.ExecuteResult, error)
 
 	// Query performs an Query Request on a remote node.
-	Query(qr *proto.QueryRequest, nodeAddr string, creds *cluster.Credentials, timeout time.Duration) ([]*proto.QueryRows, error)
+	Query(qr *proto.QueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) ([]*proto.QueryRows, error)
 
 	// Request performs an ExecuteQuery Request on a remote node.
-	Request(eqr *proto.ExecuteQueryRequest, nodeAddr string, creds *cluster.Credentials, timeout time.Duration) ([]*proto.ExecuteQueryResponse, error)
+	Request(eqr *proto.ExecuteQueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) ([]*proto.ExecuteQueryResponse, error)
 
 	// Backup retrieves a backup from a remote node and writes to the io.Writer.
-	Backup(br *proto.BackupRequest, nodeAddr string, creds *cluster.Credentials, timeout time.Duration, w io.Writer) error
+	Backup(br *proto.BackupRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, w io.Writer) error
 
 	// Load loads a SQLite database into the node.
-	Load(lr *proto.LoadRequest, nodeAddr string, creds *cluster.Credentials, timeout time.Duration) error
+	Load(lr *proto.LoadRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
 
 	// RemoveNode removes a node from the cluster.
-	RemoveNode(rn *proto.RemoveNodeRequest, nodeAddr string, creds *cluster.Credentials, timeout time.Duration) error
+	RemoveNode(rn *proto.RemoveNodeRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
 
 	// Stats returns stats on the Cluster.
 	Stats() (map[string]interface{}, error)
@@ -1716,8 +1716,8 @@ func executeRequestFromStrings(s []string, timings, tx bool) *proto.ExecuteReque
 	}
 }
 
-func makeCredentials(username, password string) *cluster.Credentials {
-	return &cluster.Credentials{
+func makeCredentials(username, password string) *clstrPB.Credentials {
+	return &clstrPB.Credentials{
 		Username: username,
 		Password: password,
 	}

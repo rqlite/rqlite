@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/rqlite/rqlite/v8/cluster"
+	clstrPB "github.com/rqlite/rqlite/v8/cluster/proto"
 	"github.com/rqlite/rqlite/v8/command/proto"
 	"github.com/rqlite/rqlite/v8/rtls"
 	"github.com/rqlite/rqlite/v8/tcp"
@@ -17,7 +18,7 @@ const (
 )
 
 var (
-	NO_CREDS = (*cluster.Credentials)(nil)
+	NO_CREDS = (*clstrPB.Credentials)(nil)
 )
 
 // Test_StoreClientSideBySide operates on the same store directly, and via

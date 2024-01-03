@@ -15,8 +15,9 @@ import (
 	"time"
 
 	"github.com/rqlite/rqlite/v8/auth"
+	"github.com/rqlite/rqlite/v8/cluster/proto"
 	command "github.com/rqlite/rqlite/v8/command/proto"
-	"google.golang.org/protobuf/proto"
+	pb "google.golang.org/protobuf/proto"
 )
 
 // stats captures stats for the Cluster service.
@@ -214,7 +215,7 @@ func (s *Service) serve() error {
 	}
 }
 
-func (s *Service) checkCommandPerm(c *Command, perm string) bool {
+func (s *Service) checkCommandPerm(c *proto.Command, perm string) bool {
 	if s.credentialStore == nil {
 		return true
 	}
@@ -228,7 +229,7 @@ func (s *Service) checkCommandPerm(c *Command, perm string) bool {
 	return s.credentialStore.AA(username, password, perm)
 }
 
-func (s *Service) checkCommandPermAll(c *Command, perms ...string) bool {
+func (s *Service) checkCommandPermAll(c *proto.Command, perms ...string) bool {
 	if s.credentialStore == nil {
 		return true
 	}
@@ -264,16 +265,16 @@ func (s *Service) handleConn(conn net.Conn) {
 			return
 		}
 
-		c := &Command{}
-		err = proto.Unmarshal(p, c)
+		c := &proto.Command{}
+		err = pb.Unmarshal(p, c)
 		if err != nil {
 			conn.Close()
 		}
 
 		switch c.Type {
-		case Command_COMMAND_TYPE_GET_NODE_API_URL:
+		case proto.Command_COMMAND_TYPE_GET_NODE_API_URL:
 			stats.Add(numGetNodeAPIRequest, 1)
-			p, err = proto.Marshal(&Address{
+			p, err = pb.Marshal(&proto.Address{
 				Url: s.GetNodeAPIURL(),
 			})
 			if err != nil {
@@ -282,9 +283,9 @@ func (s *Service) handleConn(conn net.Conn) {
 			writeBytesWithLength(conn, p)
 			stats.Add(numGetNodeAPIResponse, 1)
 
-		case Command_COMMAND_TYPE_EXECUTE:
+		case proto.Command_COMMAND_TYPE_EXECUTE:
 			stats.Add(numExecuteRequest, 1)
-			resp := &CommandExecuteResponse{}
+			resp := &proto.CommandExecuteResponse{}
 
 			er := c.GetExecuteRequest()
 			if er == nil {
@@ -302,9 +303,9 @@ func (s *Service) handleConn(conn net.Conn) {
 			}
 			marshalAndWrite(conn, resp)
 
-		case Command_COMMAND_TYPE_QUERY:
+		case proto.Command_COMMAND_TYPE_QUERY:
 			stats.Add(numQueryRequest, 1)
-			resp := &CommandQueryResponse{}
+			resp := &proto.CommandQueryResponse{}
 
 			qr := c.GetQueryRequest()
 			if qr == nil {
@@ -322,9 +323,9 @@ func (s *Service) handleConn(conn net.Conn) {
 			}
 			marshalAndWrite(conn, resp)
 
-		case Command_COMMAND_TYPE_REQUEST:
+		case proto.Command_COMMAND_TYPE_REQUEST:
 			stats.Add(numRequestRequest, 1)
-			resp := &CommandRequestResponse{}
+			resp := &proto.CommandRequestResponse{}
 
 			rr := c.GetExecuteQueryRequest()
 			if rr == nil {
@@ -342,9 +343,9 @@ func (s *Service) handleConn(conn net.Conn) {
 			}
 			marshalAndWrite(conn, resp)
 
-		case Command_COMMAND_TYPE_BACKUP:
+		case proto.Command_COMMAND_TYPE_BACKUP:
 			stats.Add(numBackupRequest, 1)
-			resp := &CommandBackupResponse{}
+			resp := &proto.CommandBackupResponse{}
 
 			br := c.GetBackupRequest()
 			if br == nil {
@@ -359,7 +360,7 @@ func (s *Service) handleConn(conn net.Conn) {
 					resp.Data = buf.Bytes()
 				}
 			}
-			p, err = proto.Marshal(resp)
+			p, err = pb.Marshal(resp)
 			if err != nil {
 				conn.Close()
 				return
@@ -373,9 +374,9 @@ func (s *Service) handleConn(conn net.Conn) {
 			}
 			writeBytesWithLength(conn, p)
 
-		case Command_COMMAND_TYPE_LOAD:
+		case proto.Command_COMMAND_TYPE_LOAD:
 			stats.Add(numLoadRequest, 1)
-			resp := &CommandLoadResponse{}
+			resp := &proto.CommandLoadResponse{}
 
 			lr := c.GetLoadRequest()
 			if lr == nil {
@@ -389,15 +390,15 @@ func (s *Service) handleConn(conn net.Conn) {
 			}
 			marshalAndWrite(conn, resp)
 
-		case Command_COMMAND_TYPE_LOAD_CHUNK:
-			resp := &CommandLoadChunkResponse{
+		case proto.Command_COMMAND_TYPE_LOAD_CHUNK:
+			resp := &proto.CommandLoadChunkResponse{
 				Error: "unsupported",
 			}
 			marshalAndWrite(conn, resp)
 
-		case Command_COMMAND_TYPE_REMOVE_NODE:
+		case proto.Command_COMMAND_TYPE_REMOVE_NODE:
 			stats.Add(numRemoveNodeRequest, 1)
-			resp := &CommandRemoveNodeResponse{}
+			resp := &proto.CommandRemoveNodeResponse{}
 
 			rn := c.GetRemoveNodeRequest()
 			if rn == nil {
@@ -411,9 +412,9 @@ func (s *Service) handleConn(conn net.Conn) {
 			}
 			marshalAndWrite(conn, resp)
 
-		case Command_COMMAND_TYPE_NOTIFY:
+		case proto.Command_COMMAND_TYPE_NOTIFY:
 			stats.Add(numNotifyRequest, 1)
-			resp := &CommandNotifyResponse{}
+			resp := &proto.CommandNotifyResponse{}
 
 			nr := c.GetNotifyRequest()
 			if nr == nil {
@@ -427,9 +428,9 @@ func (s *Service) handleConn(conn net.Conn) {
 			}
 			marshalAndWrite(conn, resp)
 
-		case Command_COMMAND_TYPE_JOIN:
+		case proto.Command_COMMAND_TYPE_JOIN:
 			stats.Add(numJoinRequest, 1)
-			resp := &CommandJoinResponse{}
+			resp := &proto.CommandJoinResponse{}
 
 			jr := c.GetJoinRequest()
 			if jr == nil {
@@ -457,8 +458,8 @@ func (s *Service) handleConn(conn net.Conn) {
 	}
 }
 
-func marshalAndWrite(conn net.Conn, m proto.Message) {
-	p, err := proto.Marshal(m)
+func marshalAndWrite(conn net.Conn, m pb.Message) {
+	p, err := pb.Marshal(m)
 	if err != nil {
 		conn.Close()
 	}

@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rqlite/rqlite/v8/cluster/proto"
 	command "github.com/rqlite/rqlite/v8/command/proto"
 	"github.com/rqlite/rqlite/v8/random"
 )
@@ -107,7 +108,7 @@ type Bootstrapper struct {
 	provider AddressProvider
 
 	client *Client
-	creds  *Credentials
+	creds  *proto.Credentials
 
 	logger   *log.Logger
 	Interval time.Duration
@@ -128,7 +129,7 @@ func NewBootstrapper(p AddressProvider, client *Client) *Bootstrapper {
 }
 
 // SetCredentials sets the credentials for the Bootstrapper.
-func (b *Bootstrapper) SetCredentials(creds *Credentials) {
+func (b *Bootstrapper) SetCredentials(creds *proto.Credentials) {
 	b.creds = creds
 }
 

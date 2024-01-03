@@ -5,6 +5,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/rqlite/rqlite/v8/cluster/proto"
 	command "github.com/rqlite/rqlite/v8/command/proto"
 )
 
@@ -24,7 +25,7 @@ type Remover struct {
 	timeout time.Duration
 	control Control
 	client  *Client
-	creds   *Credentials
+	creds   *proto.Credentials
 
 	log *log.Logger
 }
@@ -40,7 +41,7 @@ func NewRemover(client *Client, timeout time.Duration, control Control) *Remover
 }
 
 // SetCredentials sets the credentials for the Remover.
-func (r *Remover) SetCredentials(creds *Credentials) {
+func (r *Remover) SetCredentials(creds *proto.Credentials) {
 	r.creds = creds
 }
 
