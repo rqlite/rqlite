@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rqlite/rqlite/v8/command"
+	command "github.com/rqlite/rqlite/v8/command/proto"
 	"github.com/rqlite/rqlite/v8/random"
 )
 

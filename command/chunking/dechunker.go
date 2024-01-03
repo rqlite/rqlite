@@ -8,7 +8,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/rqlite/rqlite/v8/command"
+	"github.com/rqlite/rqlite/v8/command/proto"
 )
 
 // Dechunker is a writer that writes chunks to a file and returns the file path when
@@ -34,7 +34,7 @@ func NewDechunker(dir string) (*Dechunker, error) {
 
 // WriteChunk writes the chunk to the file. If the chunk is the last chunk, the
 // the bool return value is true.
-func (d *Dechunker) WriteChunk(chunk *command.LoadChunkRequest) (bool, error) {
+func (d *Dechunker) WriteChunk(chunk *proto.LoadChunkRequest) (bool, error) {
 	if d.streamID == "" {
 		d.streamID = chunk.StreamId
 	} else if d.streamID != chunk.StreamId {

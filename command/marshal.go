@@ -7,7 +7,8 @@ import (
 	"fmt"
 	"io"
 
-	"google.golang.org/protobuf/proto"
+	"github.com/rqlite/rqlite/v8/command/proto"
+	pb "google.golang.org/protobuf/proto"
 )
 
 const (
@@ -18,8 +19,8 @@ const (
 // Requester is the interface objects must support to be marshaled
 // successfully.
 type Requester interface {
-	proto.Message
-	GetRequest() *Request
+	pb.Message
+	GetRequest() *proto.Request
 }
 
 // RequestMarshaler marshals Request objects, potentially performing
@@ -80,7 +81,7 @@ func (m *RequestMarshaler) Marshal(r Requester) ([]byte, bool, error) {
 		}
 	}
 
-	b, err := proto.Marshal(r)
+	b, err := pb.Marshal(r)
 	if err != nil {
 		return nil, false, err
 	}
@@ -124,28 +125,28 @@ func (m *RequestMarshaler) Stats() map[string]interface{} {
 }
 
 // Marshal marshals a Command.
-func Marshal(c *Command) ([]byte, error) {
-	return proto.Marshal(c)
+func Marshal(c *proto.Command) ([]byte, error) {
+	return pb.Marshal(c)
 }
 
 // Unmarshal unmarshals a Command
-func Unmarshal(b []byte, c *Command) error {
-	return proto.Unmarshal(b, c)
+func Unmarshal(b []byte, c *proto.Command) error {
+	return pb.Unmarshal(b, c)
 }
 
 // MarshalNoop marshals a Noop command
-func MarshalNoop(c *Noop) ([]byte, error) {
-	return proto.Marshal(c)
+func MarshalNoop(c *proto.Noop) ([]byte, error) {
+	return pb.Marshal(c)
 }
 
 // UnmarshalNoop unmarshals a Noop command
-func UnmarshalNoop(b []byte, c *Noop) error {
-	return proto.Unmarshal(b, c)
+func UnmarshalNoop(b []byte, c *proto.Noop) error {
+	return pb.Unmarshal(b, c)
 }
 
 // MarshalLoadRequest marshals a LoadRequest command
-func MarshalLoadRequest(lr *LoadRequest) ([]byte, error) {
-	b, err := proto.Marshal(lr)
+func MarshalLoadRequest(lr *proto.LoadRequest) ([]byte, error) {
+	b, err := pb.Marshal(lr)
 	if err != nil {
 		return nil, err
 	}
@@ -153,27 +154,27 @@ func MarshalLoadRequest(lr *LoadRequest) ([]byte, error) {
 }
 
 // UnmarshalLoadRequest unmarshals a LoadRequest command
-func UnmarshalLoadRequest(b []byte, lr *LoadRequest) error {
+func UnmarshalLoadRequest(b []byte, lr *proto.LoadRequest) error {
 	u, err := gzUncompress(b)
 	if err != nil {
 		return err
 	}
-	return proto.Unmarshal(u, lr)
+	return pb.Unmarshal(u, lr)
 }
 
 // MarshalLoadChunkRequest marshals a LoadChunkRequest command
-func MarshalLoadChunkRequest(lr *LoadChunkRequest) ([]byte, error) {
-	return proto.Marshal(lr)
+func MarshalLoadChunkRequest(lr *proto.LoadChunkRequest) ([]byte, error) {
+	return pb.Marshal(lr)
 }
 
 // UnmarshalLoadChunkRequest unmarshals a LoadChunkRequest command
-func UnmarshalLoadChunkRequest(b []byte, lr *LoadChunkRequest) error {
-	return proto.Unmarshal(b, lr)
+func UnmarshalLoadChunkRequest(b []byte, lr *proto.LoadChunkRequest) error {
+	return pb.Unmarshal(b, lr)
 }
 
 // UnmarshalSubCommand unmarshalls a sub command m. It assumes that
 // m is the correct type.
-func UnmarshalSubCommand(c *Command, m proto.Message) error {
+func UnmarshalSubCommand(c *proto.Command, m pb.Message) error {
 	b := c.SubCommand
 	if c.Compressed {
 		var err error
@@ -183,7 +184,7 @@ func UnmarshalSubCommand(c *Command, m proto.Message) error {
 		}
 	}
 
-	if err := proto.Unmarshal(b, m); err != nil {
+	if err := pb.Unmarshal(b, m); err != nil {
 		return fmt.Errorf("proto unmarshal: %s", err)
 	}
 	return nil

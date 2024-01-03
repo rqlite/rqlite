@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rqlite/rqlite/v8/command"
+	command "github.com/rqlite/rqlite/v8/command/proto"
 )
 
 // QueryParams represents the query parameters passed in an HTTP request.

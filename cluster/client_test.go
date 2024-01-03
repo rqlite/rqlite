@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/rqlite/rqlite/v8/cluster/servicetest"
-	"github.com/rqlite/rqlite/v8/command"
+	command "github.com/rqlite/rqlite/v8/command/proto"
 	"google.golang.org/protobuf/proto"
 )
 

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rqlite/rqlite/v8/command"
+	command "github.com/rqlite/rqlite/v8/command/proto"
 )
 
 func test_OpenStoreCloseStartup(t *testing.T, s *Store) {

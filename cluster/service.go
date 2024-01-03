@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/rqlite/rqlite/v8/auth"
-	"github.com/rqlite/rqlite/v8/command"
+	command "github.com/rqlite/rqlite/v8/command/proto"
 	"google.golang.org/protobuf/proto"
 )
 

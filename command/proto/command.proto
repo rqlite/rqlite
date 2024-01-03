@@ -1,7 +1,6 @@
 syntax = "proto3";
-package command;
 
-option go_package = "github.com/rqlite/rqlite/v8/command";
+option go_package = "github.com/rqlite/rqlite/command/proto";
 
 message Parameter {
 	oneof value {

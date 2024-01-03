@@ -22,6 +22,7 @@ import (
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/v8/command"
 	"github.com/rqlite/rqlite/v8/command/chunking"
+	"github.com/rqlite/rqlite/v8/command/proto"
 	sql "github.com/rqlite/rqlite/v8/db"
 	"github.com/rqlite/rqlite/v8/db/humanize"
 	wal "github.com/rqlite/rqlite/v8/db/wal"
@@ -1002,7 +1003,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 }
 
 // Execute executes queries that return no rows, but do modify the database.
-func (s *Store) Execute(ex *command.ExecuteRequest) ([]*command.ExecuteResult, error) {
+func (s *Store) Execute(ex *proto.ExecuteRequest) ([]*proto.ExecuteResult, error) {
 	if !s.open {
 		return nil, ErrNotOpen
 	}
@@ -1017,14 +1018,14 @@ func (s *Store) Execute(ex *command.ExecuteRequest) ([]*command.ExecuteResult, e
 	return s.execute(ex)
 }
 
-func (s *Store) execute(ex *command.ExecuteRequest) ([]*command.ExecuteResult, error) {
+func (s *Store) execute(ex *proto.ExecuteRequest) ([]*proto.ExecuteResult, error) {
 	b, compressed, err := s.tryCompress(ex)
 	if err != nil {
 		return nil, err
 	}
 
-	c := &command.Command{
-		Type:       command.Command_COMMAND_TYPE_EXECUTE,
+	c := &proto.Command{
+		Type:       proto.Command_COMMAND_TYPE_EXECUTE,
 		SubCommand: b,
 		Compressed: compressed,
 	}
@@ -1050,12 +1051,12 @@ func (s *Store) execute(ex *command.ExecuteRequest) ([]*command.ExecuteResult, e
 }
 
 // Query executes queries that return rows, and do not modify the database.
-func (s *Store) Query(qr *command.QueryRequest) ([]*command.QueryRows, error) {
+func (s *Store) Query(qr *proto.QueryRequest) ([]*proto.QueryRows, error) {
 	if !s.open {
 		return nil, ErrNotOpen
 	}
 
-	if qr.Level == command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG {
+	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG {
 		if s.raft.State() != raft.Leader {
 			return nil, ErrNotLeader
 		}
@@ -1068,8 +1069,8 @@ func (s *Store) Query(qr *command.QueryRequest) ([]*command.QueryRows, error) {
 		if err != nil {
 			return nil, err
 		}
-		c := &command.Command{
-			Type:       command.Command_COMMAND_TYPE_QUERY,
+		c := &proto.Command{
+			Type:       proto.Command_COMMAND_TYPE_QUERY,
 			SubCommand: b,
 			Compressed: compressed,
 		}
@@ -1094,11 +1095,11 @@ func (s *Store) Query(qr *command.QueryRequest) ([]*command.QueryRows, error) {
 		return r.rows, r.error
 	}
 
-	if qr.Level == command.QueryRequest_QUERY_REQUEST_LEVEL_WEAK && s.raft.State() != raft.Leader {
+	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK && s.raft.State() != raft.Leader {
 		return nil, ErrNotLeader
 	}
 
-	if s.raft.State() != raft.Leader && qr.Level == command.QueryRequest_QUERY_REQUEST_LEVEL_NONE &&
+	if s.raft.State() != raft.Leader && qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE &&
 		qr.Freshness > 0 && time.Since(s.raft.LastContact()).Nanoseconds() > qr.Freshness {
 		return nil, ErrStaleRead
 	}
@@ -1114,13 +1115,13 @@ func (s *Store) Query(qr *command.QueryRequest) ([]*command.QueryRows, error) {
 }
 
 // Request processes a request that may contain both Executes and Queries.
-func (s *Store) Request(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, error) {
+func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryResponse, error) {
 	if !s.open {
 		return nil, ErrNotOpen
 	}
 
 	if !s.RequiresLeader(eqr) {
-		if eqr.Level == command.QueryRequest_QUERY_REQUEST_LEVEL_NONE && eqr.Freshness > 0 &&
+		if eqr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE && eqr.Freshness > 0 &&
 			time.Since(s.raft.LastContact()).Nanoseconds() > eqr.Freshness {
 			return nil, ErrStaleRead
 		}
@@ -1146,8 +1147,8 @@ func (s *Store) Request(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQue
 		return nil, err
 	}
 
-	c := &command.Command{
-		Type:       command.Command_COMMAND_TYPE_EXECUTE_QUERY,
+	c := &proto.Command{
+		Type:       proto.Command_COMMAND_TYPE_EXECUTE_QUERY,
 		SubCommand: b,
 		Compressed: compressed,
 	}
@@ -1173,12 +1174,12 @@ func (s *Store) Request(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQue
 }
 
 // Backup writes a consistent snapshot of the underlying database to dst.
-func (s *Store) Backup(br *command.BackupRequest, dst io.Writer) (retErr error) {
+func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 	if !s.open {
 		return ErrNotOpen
 	}
 
-	if br.Vacuum && br.Format != command.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY {
+	if br.Vacuum && br.Format != proto.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY {
 		return ErrInvalidBackupFormat
 	}
 
@@ -1194,7 +1195,7 @@ func (s *Store) Backup(br *command.BackupRequest, dst io.Writer) (retErr error) 
 		return ErrNotLeader
 	}
 
-	if br.Format == command.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY {
+	if br.Format == proto.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY {
 		f, err := os.CreateTemp(s.dbDir, backupScatchPattern)
 		if err != nil {
 			return err
@@ -1216,7 +1217,7 @@ func (s *Store) Backup(br *command.BackupRequest, dst io.Writer) (retErr error) 
 
 		_, err = io.Copy(dst, of)
 		return err
-	} else if br.Format == command.BackupRequest_BACKUP_REQUEST_FORMAT_SQL {
+	} else if br.Format == proto.BackupRequest_BACKUP_REQUEST_FORMAT_SQL {
 		return s.db.Dump(dst)
 	}
 	return ErrInvalidBackupFormat
@@ -1224,7 +1225,7 @@ func (s *Store) Backup(br *command.BackupRequest, dst io.Writer) (retErr error) 
 
 // Loads an entire SQLite file into the database, sending the request
 // through the Raft log.
-func (s *Store) Load(lr *command.LoadRequest) error {
+func (s *Store) Load(lr *proto.LoadRequest) error {
 	if !s.open {
 		return ErrNotOpen
 	}
@@ -1242,7 +1243,7 @@ func (s *Store) Load(lr *command.LoadRequest) error {
 
 // load loads an entire SQLite file into the database, and is for internal use
 // only. It does not check for readiness, and does not update statistics.
-func (s *Store) load(lr *command.LoadRequest) error {
+func (s *Store) load(lr *proto.LoadRequest) error {
 	startT := time.Now()
 
 	b, err := command.MarshalLoadRequest(lr)
@@ -1251,8 +1252,8 @@ func (s *Store) load(lr *command.LoadRequest) error {
 		return err
 	}
 
-	c := &command.Command{
-		Type:       command.Command_COMMAND_TYPE_LOAD,
+	c := &proto.Command{
+		Type:       proto.Command_COMMAND_TYPE_LOAD,
 		SubCommand: b,
 	}
 
@@ -1364,7 +1365,7 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 // with the *advertised Raft address* which the Store doesn't know about.
 //
 // Notifying is idempotent. A node may repeatedly notify the Store without issue.
-func (s *Store) Notify(nr *command.NotifyRequest) error {
+func (s *Store) Notify(nr *proto.NotifyRequest) error {
 	if !s.open {
 		return ErrNotOpen
 	}
@@ -1423,7 +1424,7 @@ func (s *Store) Notify(nr *command.NotifyRequest) error {
 
 // Join joins a node, identified by id and located at addr, to this store.
 // The node must be ready to respond to Raft communications at that address.
-func (s *Store) Join(jr *command.JoinRequest) error {
+func (s *Store) Join(jr *proto.JoinRequest) error {
 	if !s.open {
 		return ErrNotOpen
 	}
@@ -1491,7 +1492,7 @@ func (s *Store) Join(jr *command.JoinRequest) error {
 }
 
 // Remove removes a node from the store.
-func (s *Store) Remove(rn *command.RemoveNodeRequest) error {
+func (s *Store) Remove(rn *proto.RemoveNodeRequest) error {
 	if !s.open {
 		return ErrNotOpen
 	}
@@ -1510,7 +1511,7 @@ func (s *Store) Remove(rn *command.RemoveNodeRequest) error {
 // consumes a slot in the Raft log, but has no other effect on the
 // system.
 func (s *Store) Noop(id string) (raft.ApplyFuture, error) {
-	n := &command.Noop{
+	n := &proto.Noop{
 		Id: id,
 	}
 	b, err := command.MarshalNoop(n)
@@ -1518,8 +1519,8 @@ func (s *Store) Noop(id string) (raft.ApplyFuture, error) {
 		return nil, err
 	}
 
-	c := &command.Command{
-		Type:       command.Command_COMMAND_TYPE_NOOP,
+	c := &proto.Command{
+		Type:       proto.Command_COMMAND_TYPE_NOOP,
 		SubCommand: b,
 	}
 	bc, err := command.Marshal(c)
@@ -1532,8 +1533,8 @@ func (s *Store) Noop(id string) (raft.ApplyFuture, error) {
 
 // RequiresLeader returns whether the given ExecuteQueryRequest must be
 // processed on the cluster Leader.
-func (s *Store) RequiresLeader(eqr *command.ExecuteQueryRequest) bool {
-	if eqr.Level != command.QueryRequest_QUERY_REQUEST_LEVEL_NONE {
+func (s *Store) RequiresLeader(eqr *proto.ExecuteQueryRequest) bool {
+	if eqr.Level != proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE {
 		return true
 	}
 
@@ -1631,17 +1632,17 @@ func (s *Store) updateAppliedIndex() chan struct{} {
 }
 
 type fsmExecuteResponse struct {
-	results []*command.ExecuteResult
+	results []*proto.ExecuteResult
 	error   error
 }
 
 type fsmQueryResponse struct {
-	rows  []*command.QueryRows
+	rows  []*proto.QueryRows
 	error error
 }
 
 type fsmExecuteQueryResponse struct {
-	results []*command.ExecuteQueryResponse
+	results []*proto.ExecuteQueryResponse
 	error   error
 }
 
@@ -1673,7 +1674,7 @@ func (s *Store) fsmApply(l *raft.Log) (e interface{}) {
 	}
 
 	cmd, r := s.cmdProc.Process(l.Data, &s.db)
-	if cmd.Type == command.Command_COMMAND_TYPE_NOOP {
+	if cmd.Type == proto.Command_COMMAND_TYPE_NOOP {
 		s.numNoops++
 	}
 	return r
@@ -2039,7 +2040,7 @@ func (s *Store) installRestore() error {
 	if err != nil {
 		return err
 	}
-	lr := &command.LoadRequest{
+	lr := &proto.LoadRequest{
 		Data: b,
 	}
 	return s.load(lr)

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/rqlite/rqlite/v8/cluster"
-	"github.com/rqlite/rqlite/v8/command"
+	"github.com/rqlite/rqlite/v8/command/proto"
 	"github.com/rqlite/rqlite/v8/rtls"
 	"github.com/rqlite/rqlite/v8/tcp"
 )
@@ -314,20 +314,20 @@ func Test_MultiNodeClusterQueuedRequestForwardOK(t *testing.T) {
 	}
 }
 
-func executeRequestFromString(s string) *command.ExecuteRequest {
+func executeRequestFromString(s string) *proto.ExecuteRequest {
 	return executeRequestFromStrings([]string{s})
 }
 
 // queryRequestFromStrings converts a slice of strings into a command.ExecuteRequest
-func executeRequestFromStrings(s []string) *command.ExecuteRequest {
-	stmts := make([]*command.Statement, len(s))
+func executeRequestFromStrings(s []string) *proto.ExecuteRequest {
+	stmts := make([]*proto.Statement, len(s))
 	for i := range s {
-		stmts[i] = &command.Statement{
+		stmts[i] = &proto.Statement{
 			Sql: s[i],
 		}
 	}
-	return &command.ExecuteRequest{
-		Request: &command.Request{
+	return &proto.ExecuteRequest{
+		Request: &proto.Request{
 			Statements:  stmts,
 			Transaction: false,
 		},
@@ -335,20 +335,20 @@ func executeRequestFromStrings(s []string) *command.ExecuteRequest {
 	}
 }
 
-func queryRequestFromString(s string) *command.QueryRequest {
+func queryRequestFromString(s string) *proto.QueryRequest {
 	return queryRequestFromStrings([]string{s})
 }
 
 // queryRequestFromStrings converts a slice of strings into a command.QueryRequest
-func queryRequestFromStrings(s []string) *command.QueryRequest {
-	stmts := make([]*command.Statement, len(s))
+func queryRequestFromStrings(s []string) *proto.QueryRequest {
+	stmts := make([]*proto.Statement, len(s))
 	for i := range s {
-		stmts[i] = &command.Statement{
+		stmts[i] = &proto.Statement{
 			Sql: s[i],
 		}
 	}
-	return &command.QueryRequest{
-		Request: &command.Request{
+	return &proto.QueryRequest{
+		Request: &proto.Request{
 			Statements:  stmts,
 			Transaction: false,
 		},
@@ -356,20 +356,20 @@ func queryRequestFromStrings(s []string) *command.QueryRequest {
 	}
 }
 
-func executeQueryRequestFromString(s string) *command.ExecuteQueryRequest {
+func executeQueryRequestFromString(s string) *proto.ExecuteQueryRequest {
 	return executeQueryRequestFromStrings([]string{s})
 }
 
 // executeQueryRequestFromStrings converts a slice of strings into a command.ExecuteQueryRequest
-func executeQueryRequestFromStrings(s []string) *command.ExecuteQueryRequest {
-	stmts := make([]*command.Statement, len(s))
+func executeQueryRequestFromStrings(s []string) *proto.ExecuteQueryRequest {
+	stmts := make([]*proto.Statement, len(s))
 	for i := range s {
-		stmts[i] = &command.Statement{
+		stmts[i] = &proto.Statement{
 			Sql: s[i],
 		}
 	}
-	return &command.ExecuteQueryRequest{
-		Request: &command.Request{
+	return &proto.ExecuteQueryRequest{
+		Request: &proto.Request{
 			Statements:  stmts,
 			Transaction: false,
 		},
