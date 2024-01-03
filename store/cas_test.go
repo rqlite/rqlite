@@ -9,7 +9,7 @@ func Test_NewCAS(t *testing.T) {
 	}
 }
 
-func Test_CASBegin(t *testing.T) {
+func Test_CASBeginEnd(t *testing.T) {
 	cas := NewCheckAndSet()
 	if err := cas.Begin(); err != nil {
 		t.Fatalf("expected nil, got %v", err)

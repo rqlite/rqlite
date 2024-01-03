@@ -1201,7 +1201,7 @@ func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 	if br.Format == proto.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY {
 		// Snapshot to ensure the main SQLite file has all the latest data.
 		if err := s.Snapshot(0); err != nil {
-			return err
+			return fmt.Errorf("pre-backup snapshot failed: %s", err.Error())
 		}
 
 		// Pause any snapshotting and which will allow us to read the SQLite
@@ -1230,9 +1230,9 @@ func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 			}
 		} else {
 			// Fast path -- direct copy.
-			srcFD, err := os.Open(s.dbPath)
+			srcFD, err = os.Open(s.dbPath)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to open database file: %s", err.Error())
 			}
 			defer srcFD.Close()
 		}

@@ -7,7 +7,7 @@ import (
 
 var (
 	// ErrCASConflict is returned when a CAS operation fails.
-	ErrCASConflict = errors.New("cas conflict")
+	ErrCASConflict = errors.New("CAS conflict")
 )
 
 // CheckAndSet is a simple concurrency control mechanism that allows

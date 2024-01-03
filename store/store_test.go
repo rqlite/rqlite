@@ -168,23 +168,44 @@ COMMIT;
 	}
 	defer os.Remove(f.Name())
 
-	if err := s.Backup(backupRequestBinary(true), f); err != nil {
+	// Non-vacuumed backup, database should be bit-for-bit identical.
+	if err := s.Backup(backupRequestBinary(true, false), f); err != nil {
 		t.Fatalf("Backup failed %s", err.Error())
 	}
-
 	// Open the backup file using the DB layer and check the data.
-	db, err := db.Open(f.Name(), false, false)
+	dstDB, err := db.Open(f.Name(), false, false)
 	if err != nil {
 		t.Fatalf("unable to open backup database, %s", err.Error())
 	}
-	defer db.Close()
+	defer dstDB.Close()
 	var buf bytes.Buffer
 	w := &buf
-	if err := db.Dump(w); err != nil {
+	if err := dstDB.Dump(w); err != nil {
 		t.Fatalf("unable to dump backup database, %s", err.Error())
 	}
 	if buf.String() != dump {
 		t.Fatalf("backup dump is not as expected, got %s", buf.String())
+	}
+
+	// Vacuumed backup, database may be not be bit-for-bit identical, but
+	// records should be OK.
+	if err := s.Backup(backupRequestBinary(true, true), f); err != nil {
+		t.Fatalf("Backup failed %s", err.Error())
+	}
+	// Open the backup file using the DB layer and check the data.
+	dstDB, err = db.Open(f.Name(), false, false)
+	if err != nil {
+		t.Fatalf("unable to open backup database, %s", err.Error())
+	}
+	defer dstDB.Close()
+	qr := queryRequestFromString("SELECT * FROM foo", false, false)
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+	r, err := s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 }
 
@@ -1733,6 +1754,39 @@ func Test_SingleNodeRecoverNetworkChangeSnapshot(t *testing.T) {
 	}
 }
 
+func Test_SingleNodeUserSnapshot_CAS(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	mustNoop(s, "1")
+	if err := s.Snapshot(0); err != nil {
+		t.Fatalf("failed to snapshot single-node store: %s", err.Error())
+	}
+
+	if err := s.snapshotCAS.Begin(); err != nil {
+		t.Fatalf("failed to begin snapshot CAS: %s", err.Error())
+	}
+	mustNoop(s, "2")
+	if err := s.Snapshot(0); err == nil {
+		t.Fatalf("expected error snapshotting single-node store with CAS")
+	}
+	s.snapshotCAS.End()
+	mustNoop(s, "3")
+	if err := s.Snapshot(0); err != nil {
+		t.Fatalf("failed to snapshot single-node store: %s", err.Error())
+	}
+}
+
 func Test_SingleNodeSelfJoinNoChangeOK(t *testing.T) {
 	s0, ln0 := mustNewStore(t)
 	defer ln0.Close()
@@ -2948,6 +3002,16 @@ func (m *mockLayer) Close() error { return m.ln.Close() }
 
 func (m *mockLayer) Addr() net.Addr { return m.ln.Addr() }
 
+func mustNoop(s *Store, id string) {
+	af, err := s.Noop(id)
+	if err != nil {
+		panic("failed to write noop command")
+	}
+	if af.Error() != nil {
+		panic("expected nil apply future error")
+	}
+}
+
 func mustCreateTempFile() string {
 	f, err := os.CreateTemp("", "rqlite-temp")
 	if err != nil {
@@ -3071,10 +3135,11 @@ func backupRequestSQL(leader bool) *proto.BackupRequest {
 	}
 }
 
-func backupRequestBinary(leader bool) *proto.BackupRequest {
+func backupRequestBinary(leader, vacuum bool) *proto.BackupRequest {
 	return &proto.BackupRequest{
 		Format: proto.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY,
 		Leader: leader,
+		Vacuum: vacuum,
 	}
 }
 
