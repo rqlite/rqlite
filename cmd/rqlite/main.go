@@ -2,6 +2,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/tls"
 	"encoding/json"
 	"errors"
@@ -458,10 +459,21 @@ func getVersionWithClient(client *http.Client, argv *argT) (string, error) {
 }
 
 func sendRequest(ctx *cli.Context, makeNewRequest func(string) (*http.Request, error), urlStr string, argv *argT) (*[]byte, error) {
+	// create a byte-based buffer that implments io.Writer
+	var buf []byte
+	w := bytes.NewBuffer(buf)
+	_, err := sendRequestW(ctx, makeNewRequest, urlStr, argv, w)
+	if err != nil {
+		return nil, err
+	}
+	return &buf, nil
+}
+
+func sendRequestW(ctx *cli.Context, makeNewRequest func(string) (*http.Request, error), urlStr string, argv *argT, w io.Writer) (int64, error) {
 	url := urlStr
 	tlsConfig, err := rtls.CreateClientConfig(argv.ClientCert, argv.ClientKey, argv.CACert, rtls.NoServerName, argv.Insecure)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
 	tlsConfig.NextProtos = nil // CLI refuses to connect otherwise.
 	client := http.Client{Transport: &http.Transport{
@@ -478,45 +490,46 @@ func sendRequest(ctx *cli.Context, makeNewRequest func(string) (*http.Request, e
 	for {
 		req, err := makeNewRequest(url)
 		if err != nil {
-			return nil, err
+			return 0, err
 		}
 
 		if argv.Credentials != "" {
 			creds := strings.Split(argv.Credentials, ":")
 			if len(creds) != 2 {
-				return nil, fmt.Errorf("invalid Basic Auth credentials format")
+				return 0, fmt.Errorf("invalid Basic Auth credentials format")
 			}
 			req.SetBasicAuth(creds[0], creds[1])
 		}
 
 		resp, err := client.Do(req)
 		if err != nil {
-			return nil, err
+			return 0, err
 		}
-		response, err := io.ReadAll(resp.Body)
+
+		n, err := io.Copy(w, resp.Body)
 		if err != nil {
-			return nil, err
+			return n, err
 		}
 		resp.Body.Close()
 
 		if resp.StatusCode == http.StatusUnauthorized {
-			return nil, fmt.Errorf("unauthorized")
+			return 0, fmt.Errorf("unauthorized")
 		}
 
 		if resp.StatusCode == http.StatusMovedPermanently {
 			nRedirect++
 			if nRedirect > maxRedirect {
-				return nil, fmt.Errorf("maximum leader redirect limit exceeded")
+				return 0, fmt.Errorf("maximum leader redirect limit exceeded")
 			}
 			url = resp.Header["Location"][0]
 			continue
 		}
 
 		if resp.StatusCode != http.StatusOK {
-			return nil, fmt.Errorf("server responded with: %s", resp.Status)
+			return 0, fmt.Errorf("server responded with: %s", resp.Status)
 		}
 
-		return &response, nil
+		return n, nil
 	}
 }
 

@@ -227,8 +227,6 @@ type Store struct {
 	dbDir   string    // Path to directory containing SQLite file.
 	db      *sql.DB   // The underlying SQLite store.
 
-	queryTxMu sync.RWMutex
-
 	dbAppliedIndexMu     sync.RWMutex
 	dbAppliedIndex       uint64
 	appliedIdxUpdateDone chan struct{}
@@ -244,6 +242,10 @@ type Store struct {
 	// Channels for WAL-size triggered snapshotting
 	snapshotWClose chan struct{}
 	snapshotWDone  chan struct{}
+
+	// Snapshotting syncronization
+	queryTxMu   sync.RWMutex
+	snapshotCAS *CheckAndSet
 
 	// Latest log entry index actually reflected by the FSM. Due to Raft code
 	// this value is not updated after a Snapshot-restore.
@@ -348,6 +350,7 @@ func New(ly Layer, c *Config) *Store {
 		logger:          logger,
 		notifyingNodes:  make(map[string]*Server),
 		ApplyTimeout:    applyTimeout,
+		snapshotCAS:     NewCheckAndSet(),
 	}
 }
 
@@ -1196,26 +1199,46 @@ func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 	}
 
 	if br.Format == proto.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY {
-		f, err := os.CreateTemp(s.dbDir, backupScatchPattern)
-		if err != nil {
-			return err
-		}
-		if err := f.Close(); err != nil {
-			return err
-		}
-		defer os.Remove(f.Name())
+		var srcFD *os.File
+		var err error
+		if br.Vacuum {
+			// Vacuum requested, so need an intermediate file.
+			srcFD, err = os.CreateTemp(s.dbDir, backupScatchPattern)
+			if err != nil {
+				return err
+			}
+			defer os.Remove(srcFD.Name())
+			defer srcFD.Close()
+			if err := s.db.Backup(srcFD.Name(), br.Vacuum); err != nil {
+				return err
+			}
+			if _, err := srcFD.Seek(0, io.SeekStart); err != nil {
+				return err
+			}
+		} else {
+			// Snapshot to ensure the main SQLite file has all the latest data.
+			if err := s.Snapshot(0); err != nil {
+				if err != raft.ErrNothingNewToSnapshot &&
+					!strings.Contains(err.Error(), "wait until the configuration entry at") {
+					return fmt.Errorf("pre-backup snapshot failed: %s", err.Error())
+				}
+			}
+			// Pause any snapshotting and which will allow us to read the SQLite
+			// file without it changing underneath us. Any new writes will be
+			// sent to the WAL.
+			if err := s.snapshotCAS.Begin(); err != nil {
+				return err
+			}
+			defer s.snapshotCAS.End()
 
-		if err := s.db.Backup(f.Name(), br.Vacuum); err != nil {
-			return err
+			// Fast path -- direct copy.
+			srcFD, err = os.Open(s.dbPath)
+			if err != nil {
+				return fmt.Errorf("failed to open database file: %s", err.Error())
+			}
+			defer srcFD.Close()
 		}
-
-		of, err := os.Open(f.Name())
-		if err != nil {
-			return err
-		}
-		defer of.Close()
-
-		_, err = io.Copy(dst, of)
+		_, err = io.Copy(dst, srcFD)
 		return err
 	} else if br.Format == proto.BackupRequest_BACKUP_REQUEST_FORMAT_SQL {
 		return s.db.Dump(dst)
@@ -1706,6 +1729,11 @@ func (s *Store) Database(leader bool) ([]byte, error) {
 // http://sqlite.org/howtocorrupt.html states it is safe to copy or serialize the
 // database as long as no writes to the database are in progress.
 func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
+	if err := s.snapshotCAS.Begin(); err != nil {
+		return nil, err
+	}
+	defer s.snapshotCAS.End()
+
 	startT := time.Now()
 	defer func() {
 		if retErr != nil {
