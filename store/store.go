@@ -1199,19 +1199,6 @@ func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 	}
 
 	if br.Format == proto.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY {
-		// Snapshot to ensure the main SQLite file has all the latest data.
-		if err := s.Snapshot(0); err != nil && err != raft.ErrNothingNewToSnapshot {
-			return fmt.Errorf("pre-backup snapshot failed: %s", err.Error())
-		}
-
-		// Pause any snapshotting and which will allow us to read the SQLite
-		// file without it changing underneath us. Any new writes will be
-		// sent to the WAL.
-		if err := s.snapshotCAS.Begin(); err != nil {
-			return err
-		}
-		defer s.snapshotCAS.End()
-
 		var srcFD *os.File
 		var err error
 		if br.Vacuum {
@@ -1229,6 +1216,18 @@ func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 				return err
 			}
 		} else {
+			// Snapshot to ensure the main SQLite file has all the latest data.
+			if err := s.Snapshot(0); err != nil && err != raft.ErrNothingNewToSnapshot {
+				return fmt.Errorf("pre-backup snapshot failed: %s", err.Error())
+			}
+			// Pause any snapshotting and which will allow us to read the SQLite
+			// file without it changing underneath us. Any new writes will be
+			// sent to the WAL.
+			if err := s.snapshotCAS.Begin(); err != nil {
+				return err
+			}
+			defer s.snapshotCAS.End()
+
 			// Fast path -- direct copy.
 			srcFD, err = os.Open(s.dbPath)
 			if err != nil {
