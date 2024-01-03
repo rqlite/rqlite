@@ -26,12 +26,12 @@ func NewCheckAndSet() *CheckAndSet {
 func (c *CheckAndSet) Begin() error {
 	if c.state.CompareAndSwap(0, 1) {
 		return nil
-	} else {
-		return ErrCASConflict
 	}
+	return ErrCASConflict
 }
 
 // End exits the critical section.
 func (c *CheckAndSet) End() {
 	c.state.Store(0)
 }
+
