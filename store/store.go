@@ -1173,7 +1173,11 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 	return r.results, r.error
 }
 
-// Backup writes a consistent snapshot of the underlying database to dst.
+// Backup writes a consistent snapshot of the underlying database to the
+// given writer. If vacuum is true, then a VACUUM is performed before
+// the backup. If BINARY format is requested, then a BackupHeader is
+// written first, followed by the raw SQLite database file. If SQL format
+// is requested, then the database is dumped to the writer in SQL text.
 func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 	if !s.open {
 		return ErrNotOpen
@@ -1198,6 +1202,7 @@ func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 	if br.Format == proto.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY {
 		var srcFD *os.File
 		var err error
+		var hdr *proto.BackupHeader
 		if br.Vacuum {
 			// Vacuum requested, so need an intermediate file.
 			srcFD, err = os.CreateTemp(s.dbDir, backupScatchPattern)
@@ -1234,6 +1239,13 @@ func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 				return fmt.Errorf("failed to open database file: %s", err.Error())
 			}
 			defer srcFD.Close()
+		}
+		hdr, err = command.NewBackupHeader(srcFD.Name())
+		if err != nil {
+			return err
+		}
+		if err := command.WriteBackupHeaderTo(hdr, dst); err != nil {
+			return err
 		}
 		_, err = io.Copy(dst, srcFD)
 		return err

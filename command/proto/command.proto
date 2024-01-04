@@ -133,3 +133,9 @@ message Command {
     bytes sub_command = 2;
     bool compressed = 3;
 }
+
+message BackupHeader {
+	int64 version = 1;
+    int64 size = 2;
+    bytes md5sum = 3;
+}
