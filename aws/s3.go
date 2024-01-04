@@ -20,16 +20,18 @@ type S3Config struct {
 	SecretAccessKey string `json:"secret_access_key"`
 	Bucket          string `json:"bucket"`
 	Path            string `json:"path"`
+	ForcePathStyle  bool   `json:"force_path_style"`
 }
 
 // S3Client is a client for uploading data to S3.
 type S3Client struct {
-	endpoint  string
-	region    string
-	accessKey string
-	secretKey string
-	bucket    string
-	key       string
+	endpoint       string
+	region         string
+	accessKey      string
+	secretKey      string
+	bucket         string
+	key            string
+	forcePathStyle bool
 
 	// These fields are used for testing via dependency injection.
 	uploader   uploader
@@ -37,14 +39,15 @@ type S3Client struct {
 }
 
 // NewS3Client returns an instance of an S3Client.
-func NewS3Client(endpoint, region, accessKey, secretKey, bucket, key string) *S3Client {
+func NewS3Client(endpoint, region, accessKey, secretKey, bucket, key string, forcePathStyle bool) *S3Client {
 	return &S3Client{
-		endpoint:  endpoint,
-		region:    region,
-		accessKey: accessKey,
-		secretKey: secretKey,
-		bucket:    bucket,
-		key:       key,
+		endpoint:       endpoint,
+		region:         region,
+		accessKey:      accessKey,
+		secretKey:      secretKey,
+		bucket:         bucket,
+		key:            key,
+		forcePathStyle: forcePathStyle,
 	}
 }
 
@@ -108,9 +111,10 @@ func (s *S3Client) Download(ctx context.Context, writer io.WriterAt) error {
 
 func (s *S3Client) createSession() (*session.Session, error) {
 	sess, err := session.NewSession(&aws.Config{
-		Endpoint:    aws.String(s.endpoint),
-		Region:      aws.String(s.region),
-		Credentials: credentials.NewStaticCredentials(s.accessKey, s.secretKey, ""),
+		Endpoint:         aws.String(s.endpoint),
+		Region:           aws.String(s.region),
+		Credentials:      credentials.NewStaticCredentials(s.accessKey, s.secretKey, ""),
+		S3ForcePathStyle: aws.Bool(s.forcePathStyle),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create S3 session: %w", err)
