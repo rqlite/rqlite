@@ -14,7 +14,7 @@ import (
 )
 
 func Test_NewS3Client(t *testing.T) {
-	c := NewS3Client("endpoint1", "region1", "access", "secret", "bucket2", "key3")
+	c := NewS3Client("endpoint1", "region1", "access", "secret", "bucket2", "key3", true)
 	if c.region != "region1" {
 		t.Fatalf("expected region to be %q, got %q", "region1", c.region)
 	}
@@ -30,12 +30,31 @@ func Test_NewS3Client(t *testing.T) {
 	if c.key != "key3" {
 		t.Fatalf("expected key to be %q, got %q", "key3", c.key)
 	}
+	if c.forcePathStyle != true {
+		t.Fatalf("expected forcePathStyle to be %v, got %v", true, c.forcePathStyle)
+	}
 }
 
 func Test_S3Client_String(t *testing.T) {
-	c := NewS3Client("endpoint1", "region1", "access", "secret", "bucket2", "key3")
+	// Test native S3 with implicit endpoint
+	c := NewS3Client("", "region1", "access", "secret", "bucket2", "key3", false)
 	if c.String() != "s3://bucket2/key3" {
 		t.Fatalf("expected String() to be %q, got %q", "s3://bucket2/key3", c.String())
+	}
+	// Test native S3 with explicit endpoint
+	c = NewS3Client("s3.amazonaws.com", "region1", "access", "secret", "bucket2", "key3", false)
+	if c.String() != "s3://bucket2/key3" {
+		t.Fatalf("expected String() to be %q, got %q", "s3://bucket2/key3", c.String())
+	}
+	// Test non-native S3 (explicit endpoint) with non-path style (e.g. Wasabi)
+	c = NewS3Client("s3.ca-central-1.wasabisys.com", "region1", "access", "secret", "bucket2", "key3", false)
+	if c.String() != "s3://bucket2.s3.ca-central-1.wasabisys.com/key3" {
+		t.Fatalf("expected String() to be %q, got %q", "s3://bucket2.s3.ca-central-1.wasabisys.com/key3", c.String())
+	}
+	// Test non-native S3 (explicit endpoint) with forced path style (e.g. MinIO)
+	c = NewS3Client("s3.minio.example.com", "region1", "access", "secret", "bucket2", "key3", true)
+	if c.String() != "s3://s3.minio.example.com/bucket2/key3" {
+		t.Fatalf("expected String() to be %q, got %q", "s3://s3.minio.example.com/bucket2/key3", c.String())
 	}
 }
 
