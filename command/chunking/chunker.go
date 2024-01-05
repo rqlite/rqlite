@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/rqlite/rqlite/v8/command/proto"
+	"github.com/rqlite/rqlite/v8/progress"
 )
 
 const (
@@ -37,7 +38,7 @@ var gzipWriterPool = sync.Pool{
 // Chunker is a reader that reads from an underlying io.Reader and returns
 // LoadChunkRequests of a given size.
 type Chunker struct {
-	r *CountingReader
+	r *progress.CountingReader
 
 	chunkSize   int64
 	streamID    string
@@ -52,7 +53,7 @@ type Chunker struct {
 // LoadChunkRequests of size chunkSize.
 func NewChunker(r io.Reader, chunkSize int64) *Chunker {
 	return &Chunker{
-		r:         NewCountingReader(r),
+		r:         progress.NewCountingReader(r),
 		chunkSize: chunkSize,
 		streamID:  generateStreamID(),
 	}
