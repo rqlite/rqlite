@@ -79,6 +79,7 @@ var (
 )
 
 const (
+	snapshotsDirName           = "rsnapshots"
 	restoreScratchPattern      = "rqlite-restore-*"
 	bootScatchPattern          = "rqlite-boot-*"
 	backupScatchPattern        = "rqlite-backup-*"
@@ -313,6 +314,37 @@ func IsNewNode(raftDir string) bool {
 	return !pathExists(filepath.Join(raftDir, raftDBPath))
 }
 
+// HasData returns true if the given dir indiciates that at least one FSM entry
+// has been committed to the log. This is true is there are any snapshots, or
+// if there are any entries in the log of raft.LogCommand type. This function
+// will block if the Bolt database is already open.
+func HasData(dir string) (bool, error) {
+	if !dirExists(dir) {
+		return false, nil
+	}
+	sstr, err := snapshot.NewStore(filepath.Join(dir, snapshotsDirName))
+	if err != nil {
+		return false, nil
+	}
+	snaps, err := sstr.List()
+	if err != nil {
+		return false, nil
+	}
+	if len(snaps) > 0 {
+		return true, nil
+	}
+	logs, err := rlog.New(filepath.Join(dir, raftDBPath), false)
+	if err != nil {
+		return false, nil
+	}
+	defer logs.Close()
+	h, err := logs.HasCommand()
+	if err != nil {
+		return false, nil
+	}
+	return h, nil
+}
+
 // Config represents the configuration of the underlying Store.
 type Config struct {
 	DBConf *DBConfig   // The DBConfig object for this Store.
@@ -428,7 +460,7 @@ func (s *Store) Open() (retErr error) {
 
 	// Upgrade any pre-existing snapshots.
 	oldSnapshotDir := filepath.Join(s.raftDir, "snapshots")
-	snapshotDir := filepath.Join(s.raftDir, "rsnapshots")
+	snapshotDir := filepath.Join(s.raftDir, snapshotsDirName)
 	if err := snapshot.Upgrade(oldSnapshotDir, snapshotDir, s.logger); err != nil {
 		return fmt.Errorf("failed to upgrade snapshots: %s", err)
 	}
