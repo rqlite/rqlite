@@ -1,4 +1,4 @@
-## 8.15.0 (January 4th 2023)
+## 8.15.0 (January 4th 2024)
 ### New features
 - [PR #1550](https://github.com/rqlite/rqlite/pull/1550): CLI command `.nodes` supports showing non-voting nodes.
 
