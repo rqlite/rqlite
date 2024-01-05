@@ -3,6 +3,7 @@
 - [PR #1563](https://github.com/rqlite/rqlite/pull/1563): Support S3-compatible storage systems for auto-backups and auto-restores. Fixes issue [#1560](https://github.com/rqlite/rqlite/issues/1560). Thanks @jtackaberry
 ### Implementation changes and bug fixes
 - [Commit d1cc802](https://github.com/rqlite/rqlite/commit/d1cc80229221ff51cd4741cc7a2e05e87f0337cb): Fix return codes in `HasData()`.
+- [PR #1566](https://github.com/rqlite/rqlite/pull/1566): Move some Store state-related functions to own file.
 
 ## 8.15.0 (January 4th 2024)
 This release fixes bugs related to auto-restore from S3, improves backup performance, and adds some other minor enhancements.
