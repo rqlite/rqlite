@@ -162,15 +162,14 @@ COMMIT;
 		t.Fatalf("failed to load simple dump: %s", err.Error())
 	}
 
+	// Non-vacuumed backup, database should be bit-for-bit identical.
 	f, err := os.CreateTemp("", "rqlite-baktest-")
 	if err != nil {
 		t.Fatalf("Backup Failed: unable to create temp file, %s", err.Error())
 	}
 	defer os.Remove(f.Name())
-
-	// Non-vacuumed backup, database should be bit-for-bit identical.
 	if err := s.Backup(backupRequestBinary(true, false), f); err != nil {
-		t.Fatalf("Backup failed %s", err.Error())
+		t.Fatalf("Backup failed: %s", err.Error())
 	}
 	// Open the backup file using the DB layer and check the data.
 	dstDB, err := db.Open(f.Name(), false, false)
@@ -189,11 +188,16 @@ COMMIT;
 
 	// Vacuumed backup, database may be not be bit-for-bit identical, but
 	// records should be OK.
-	if err := s.Backup(backupRequestBinary(true, true), f); err != nil {
+	vf, err := os.CreateTemp("", "rqlite-baktest-")
+	if err != nil {
+		t.Fatalf("Backup Failed: unable to create temp file, %s", err.Error())
+	}
+	defer os.Remove(vf.Name())
+	if err := s.Backup(backupRequestBinary(true, true), vf); err != nil {
 		t.Fatalf("Backup failed %s", err.Error())
 	}
 	// Open the backup file using the DB layer and check the data.
-	dstDB, err = db.Open(f.Name(), false, false)
+	dstDB, err = db.Open(vf.Name(), false, false)
 	if err != nil {
 		t.Fatalf("unable to open backup database, %s", err.Error())
 	}

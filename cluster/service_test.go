@@ -436,7 +436,7 @@ type mockDatabase struct {
 	executeFn func(er *command.ExecuteRequest) ([]*command.ExecuteResult, error)
 	queryFn   func(qr *command.QueryRequest) ([]*command.QueryRows, error)
 	requestFn func(rr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, error)
-	backupFn  func(br *command.BackupRequest, dst io.Writer) error
+	backupFn  func(br *command.BackupRequest, dst io.WriteCloser) error
 	loadFn    func(lr *command.LoadRequest) error
 }
 
@@ -455,7 +455,7 @@ func (m *mockDatabase) Request(rr *command.ExecuteQueryRequest) ([]*command.Exec
 	return m.requestFn(rr)
 }
 
-func (m *mockDatabase) Backup(br *command.BackupRequest, dst io.Writer) error {
+func (m *mockDatabase) Backup(br *command.BackupRequest, dst io.WriteCloser) error {
 	if m.backupFn == nil {
 		return nil
 	}

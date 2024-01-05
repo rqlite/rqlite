@@ -1376,7 +1376,7 @@ func (m *MockStore) Nodes() ([]*store.Server, error) {
 	return nil, nil
 }
 
-func (m *MockStore) Backup(br *command.BackupRequest, w io.Writer) error {
+func (m *MockStore) Backup(br *command.BackupRequest, w io.WriteCloser) error {
 	if m.backupFn == nil {
 		return nil
 	}

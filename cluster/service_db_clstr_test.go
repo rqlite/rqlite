@@ -283,11 +283,12 @@ func Test_ServiceBackup(t *testing.T) {
 
 	// Ready for Backup tests now.
 	testData := []byte("this is SQLite data")
-	db.backupFn = func(br *command.BackupRequest, dst io.Writer) error {
+	db.backupFn = func(br *command.BackupRequest, dst io.WriteCloser) error {
 		if br.Format != command.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY {
 			t.Fatalf("wrong backup format requested")
 		}
 		dst.Write(testData)
+		dst.Close()
 		return nil
 	}
 

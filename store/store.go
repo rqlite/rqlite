@@ -1167,7 +1167,7 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 }
 
 // Backup writes a consistent snapshot of the underlying database to dst.
-func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
+func (s *Store) Backup(br *proto.BackupRequest, dst io.WriteCloser) (retErr error) {
 	if !s.open {
 		return ErrNotOpen
 	}
@@ -1229,7 +1229,10 @@ func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 			defer srcFD.Close()
 		}
 		_, err = io.Copy(dst, srcFD)
-		return err
+		if err != nil {
+			return err
+		}
+		return dst.Close()
 	} else if br.Format == proto.BackupRequest_BACKUP_REQUEST_FORMAT_SQL {
 		return s.db.Dump(dst)
 	}

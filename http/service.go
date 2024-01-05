@@ -83,7 +83,7 @@ type Store interface {
 	Nodes() ([]*store.Server, error)
 
 	// Backup writes backup of the node state to dst
-	Backup(br *proto.BackupRequest, dst io.Writer) error
+	Backup(br *proto.BackupRequest, dst io.WriteCloser) error
 
 	// ReadFrom reads and loads a SQLite database into the node, initially bypassing
 	// the Raft system. It then triggers a Raft snapshot, which will then make
@@ -606,7 +606,7 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request, qp QueryP
 	}
 	addBackupFormatHeader(w, qp)
 
-	err := s.store.Backup(br, w)
+	err := s.store.Backup(br, noopWriteCloser{w})
 	if err != nil {
 		if err == store.ErrNotLeader {
 			if s.DoRedirect(w, r, qp) {
@@ -1484,6 +1484,14 @@ func (s *Service) LeaderAPIAddr() string {
 		return ""
 	}
 	return apiAddr
+}
+
+type noopWriteCloser struct {
+	io.Writer
+}
+
+func (n noopWriteCloser) Close() error {
+	return nil
 }
 
 func (s *Service) runQueue() {

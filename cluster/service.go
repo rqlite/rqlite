@@ -84,7 +84,7 @@ type Database interface {
 	Request(rr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, error)
 
 	// Backup writes a backup of the database to the writer.
-	Backup(br *command.BackupRequest, dst io.Writer) error
+	Backup(br *command.BackupRequest, dst io.WriteCloser) error
 
 	// Loads an entire SQLite file into the database
 	Load(lr *command.LoadRequest) error
@@ -354,7 +354,7 @@ func (s *Service) handleConn(conn net.Conn) {
 				resp.Error = "unauthorized"
 			} else {
 				buf := new(bytes.Buffer)
-				if err := s.db.Backup(br, buf); err != nil {
+				if err := s.db.Backup(br, noopWriteCloser{buf}); err != nil {
 					resp.Error = err.Error()
 				} else {
 					resp.Data = buf.Bytes()
@@ -456,6 +456,14 @@ func (s *Service) handleConn(conn net.Conn) {
 			marshalAndWrite(conn, resp)
 		}
 	}
+}
+
+type noopWriteCloser struct {
+	io.Writer
+}
+
+func (n noopWriteCloser) Close() error {
+	return nil
 }
 
 func marshalAndWrite(conn net.Conn, m pb.Message) {
