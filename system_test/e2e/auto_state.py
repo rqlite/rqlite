@@ -113,7 +113,7 @@ class TestAutoRestoreS3(unittest.TestCase):
     delete_s3_object(access_key_id, secret_access_key_id, S3_BUCKET, path)
 
   @unittest.skipUnless(env_present('RQLITE_S3_ACCESS_KEY'), "S3 credentials not available")
-  def test_skipped_if_daya(self):
+  def test_skipped_if_data(self):
     '''Test that automatic restores are skipped if the node has data'''
 
     node = None
@@ -158,7 +158,7 @@ class TestAutoRestoreS3(unittest.TestCase):
     n1.start()
     n1.wait_for_ready()
     j = n1.query('SELECT * FROM bar')
-    self.assertEqual(j, d_("{'results': ['types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
+    self.assertEqual(j, d_("{'results': [{'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
     j = n1.query('SELECT * FROM foo')
     self.assertEqual(j, d_("{'results': [{'error': 'no such table: foo'}]}"))
 
