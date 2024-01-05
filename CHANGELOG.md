@@ -1,3 +1,7 @@
+## 8.15.1 (unreleased)
+### Implementation changes and bug fixes
+- [Commit d1cc802](https://github.com/rqlite/rqlite/commit/d1cc80229221ff51cd4741cc7a2e05e87f0337cb): Fix return codes in `HasData()`.
+
 ## 8.15.0 (January 4th 2024)
 ### New features
 - [PR #1550](https://github.com/rqlite/rqlite/pull/1550): CLI command `.nodes` supports showing non-voting nodes.
