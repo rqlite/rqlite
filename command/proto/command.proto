@@ -118,6 +118,12 @@ message Noop {
 	string id = 1;
 }
 
+message BackupHeader {
+	int64 version = 1;
+	int64 size = 2;
+	bytes md5sum = 3;
+}
+
 message Command {
     enum Type {
         COMMAND_TYPE_UNKNOWN = 0;
