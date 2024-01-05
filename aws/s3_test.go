@@ -49,12 +49,12 @@ func Test_S3Client_String(t *testing.T) {
 	// Test non-native S3 (explicit endpoint) with non-path style (e.g. Wasabi)
 	c = NewS3Client("s3.ca-central-1.wasabisys.com", "region1", "access", "secret", "bucket2", "key3", false)
 	if c.String() != "s3://bucket2.s3.ca-central-1.wasabisys.com/key3" {
-		t.Fatalf("expected String() to be %q, got %q", "s3://bucket2/key3", c.String())
+		t.Fatalf("expected String() to be %q, got %q", "s3://bucket2.s3.ca-central-1.wasabisys.com/key3", c.String())
 	}
 	// Test non-native S3 (explicit endpoint) with forced path style (e.g. MinIO)
 	c = NewS3Client("s3.minio.example.com", "region1", "access", "secret", "bucket2", "key3", true)
 	if c.String() != "s3://s3.minio.example.com/bucket2/key3" {
-		t.Fatalf("expected String() to be %q, got %q", "s3://bucket2/key3", c.String())
+		t.Fatalf("expected String() to be %q, got %q", "s3://s3.minio.example.com/bucket2/key3", c.String())
 	}
 }
 
