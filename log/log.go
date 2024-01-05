@@ -71,6 +71,22 @@ func (l *Log) LastCommandIndex(fi, li uint64) (uint64, error) {
 	return 0, nil
 }
 
+// HasCommand returns whether the Raft log contains any Command log entries.
+func (l *Log) HasCommand() (bool, error) {
+	fi, li, err := l.Indexes()
+	if err != nil {
+		return false, err
+	}
+	if fi == 0 || li == 0 {
+		return false, nil
+	}
+	i, err := l.LastCommandIndex(fi, li)
+	if err != nil {
+		return false, err
+	}
+	return i != 0, nil
+}
+
 // SetAppliedIndex sets the AppliedIndex value.
 func (l *Log) SetAppliedIndex(index uint64) error {
 	return l.SetUint64([]byte(rqliteAppliedIndex), index)
