@@ -3,12 +3,14 @@ package gzip
 import (
 	"compress/gzip"
 	"io"
+
+	"github.com/rqlite/rqlite/v8/progress"
 )
 
 // Decompressor is a wrapper around a gzip.Reader that reads from an io.Reader
 // and decompresses the data.
 type Decompressor struct {
-	cr  *CountingReader
+	cr  *progress.CountingReader
 	gzr *gzip.Reader
 
 	nRx int64
@@ -19,7 +21,7 @@ type Decompressor struct {
 // decompresses the data using gzip.
 func NewDecompressor(r io.Reader) *Decompressor {
 	return &Decompressor{
-		cr: NewCountingReader(r),
+		cr: progress.NewCountingReader(r),
 	}
 }
 
@@ -54,26 +56,5 @@ func (c *Decompressor) Read(p []byte) (nn int, err error) {
 		c.cr = nil // Signal no more re-use of the underlying reader.
 		c.gzr = nil
 	}
-	return n, err
-}
-
-// CountingReader is a wrapper around io.Reader that counts the number of bytes
-// read.
-type CountingReader struct {
-	r io.Reader
-	n int64
-}
-
-// NewCountingReader returns an instantiated CountingReader that reads from r.
-func NewCountingReader(r io.Reader) *CountingReader {
-	return &CountingReader{
-		r: r,
-	}
-}
-
-// Read reads data.
-func (c *CountingReader) Read(p []byte) (n int, err error) {
-	n, err = c.r.Read(p)
-	c.n += int64(n)
 	return n, err
 }
