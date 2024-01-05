@@ -8,6 +8,7 @@
 - [PR #1556](https://github.com/rqlite/rqlite/pull/1556): Add fast-path backup.
 - [PR #1556](https://github.com/rqlite/rqlite/pull/1556): rqlite CLI streams backup to file.
 - [PR #1557](https://github.com/rqlite/rqlite/pull/1557): Remove restriction on restores using SQLite files in WAL mode.
+- [PR #1564](https://github.com/rqlite/rqlite/pull/1564): Only auto-restore if the node is "empty". Fixes issue [#1561](https://github.com/rqlite/rqlite/issues/1561). Thanks @jtackaberry
 
 ## 8.14.1 (December 31st 2023)
 ### Implementation changes and bug fixes
