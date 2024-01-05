@@ -158,7 +158,9 @@ class TestAutoRestoreS3(unittest.TestCase):
     n1.start()
     n1.wait_for_ready()
     j = n1.query('SELECT * FROM bar')
-    self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
+    self.assertEqual(j, d_("{'results': ['types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
+    j = n1.query('SELECT * FROM foo')
+    self.assertEqual(j, d_("{'results': [{'error': 'no such table: foo'}]}"))
 
     deprovision_node(n0)
     deprovision_node(n1)
