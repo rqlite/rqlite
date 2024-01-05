@@ -40,6 +40,14 @@ func Test_LogNewEmpty(t *testing.T) {
 	if lci != 0 {
 		t.Fatalf("got wrong value for last command index of not empty log: %d", lci)
 	}
+
+	f, err := l.HasCommand()
+	if err != nil {
+		t.Fatalf("failed to get has command: %s", err)
+	}
+	if f {
+		t.Fatalf("got wrong value for has command of empty log: %v", f)
+	}
 }
 
 func Test_LogNewExistNotEmpty(t *testing.T) {
@@ -89,6 +97,14 @@ func Test_LogNewExistNotEmpty(t *testing.T) {
 	}
 	if lci != 4 {
 		t.Fatalf("got wrong value for last command index of not empty log: %d", lci)
+	}
+
+	f, err := l.HasCommand()
+	if err != nil {
+		t.Fatalf("failed to get has command: %s", err)
+	}
+	if !f {
+		t.Fatalf("got wrong value for has command of non-empty log: %v", f)
 	}
 
 	if err := l.Close(); err != nil {
@@ -310,6 +326,14 @@ func Test_LogDeleteAll(t *testing.T) {
 	}
 	if li != 0 {
 		t.Fatalf("got wrong value for last index of empty log: %d", li)
+	}
+
+	f, err := l.HasCommand()
+	if err != nil {
+		t.Fatalf("failed to get has command: %s", err)
+	}
+	if f {
+		t.Fatalf("got wrong value for has command of empty log: %v", f)
 	}
 }
 

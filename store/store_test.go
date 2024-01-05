@@ -50,6 +50,49 @@ func Test_OpenStoreSingleNode(t *testing.T) {
 	}
 }
 
+func Test_SingleNodeStore_HasData(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	h, err := HasData(s.raftDir)
+	if err != nil {
+		t.Fatalf("failed to check for data: %s", err.Error())
+	}
+	if h {
+		t.Fatalf("new store has data")
+	}
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Write some data.
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+	}, false, false)
+	_, err = s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	// Close the store to unblock the Bolt database.
+	s.Close(true)
+
+	h, err = HasData(s.raftDir)
+	if err != nil {
+		t.Fatalf("failed to check for data: %s", err.Error())
+	}
+	if !h {
+		t.Fatalf("store does not have data")
+	}
+}
+
 // Test_SingleNodeSQLitePath ensures that basic functionality works when the SQLite database path
 // is explicitly specificed.
 func Test_SingleNodeOnDiskSQLitePath(t *testing.T) {
