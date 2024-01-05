@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -53,7 +54,16 @@ func NewS3Client(endpoint, region, accessKey, secretKey, bucket, key string, for
 
 // String returns a string representation of the S3Client.
 func (s *S3Client) String() string {
-	return fmt.Sprintf("s3://%s/%s", s.bucket, s.key)
+	if s.endpoint == "" || strings.HasSuffix(s.endpoint, "amazonaws.com") {
+		// Native Amazon S3, use AWS's S3 URL format
+		return fmt.Sprintf("s3://%s/%s", s.bucket, s.key)
+	} else if !s.forcePathStyle {
+		// Endpoint specified but not using path style (e.g. Wasabi)
+		return fmt.Sprintf("s3://%s.%s/%s", s.bucket, s.endpoint, s.key)
+	} else {
+		// Endpoint specified and using path style (e.g. MinIO)
+		return fmt.Sprintf("s3://%s/%s/%s", s.endpoint, s.bucket, s.key)
+	}
 }
 
 // Upload uploads data to S3.
