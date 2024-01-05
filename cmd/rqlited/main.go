@@ -107,24 +107,32 @@ func main() {
 		log.Fatalf("failed to create store: %s", err.Error())
 	}
 
-	// Install the auto-restore file, if necessary.
+	// Install the auto-restore data, if necessary.
 	if cfg.AutoRestoreFile != "" {
-		log.Printf("auto-restore requested, initiating download")
-		start := time.Now()
-		path, errOK, err := restore.DownloadFile(mainCtx, cfg.AutoRestoreFile)
+		hd, err := store.HasData(str.Path())
 		if err != nil {
-			var b strings.Builder
-			b.WriteString(fmt.Sprintf("failed to download auto-restore file: %s", err.Error()))
-			if errOK {
-				b.WriteString(", continuing with node startup anyway")
-				log.Print(b.String())
-			} else {
-				log.Fatal(b.String())
-			}
+			log.Fatalf("failed to check for existing data: %s", err.Error())
+		}
+		if hd {
+			log.Printf("auto-restore requested, but data already exists in %s, skipping", str.Path())
 		} else {
-			log.Printf("auto-restore file downloaded in %s", time.Since(start))
-			if err := str.SetRestorePath(path); err != nil {
-				log.Fatalf("failed to preload auto-restore data: %s", err.Error())
+			log.Printf("auto-restore requested, initiating download")
+			start := time.Now()
+			path, errOK, err := restore.DownloadFile(mainCtx, cfg.AutoRestoreFile)
+			if err != nil {
+				var b strings.Builder
+				b.WriteString(fmt.Sprintf("failed to download auto-restore file: %s", err.Error()))
+				if errOK {
+					b.WriteString(", continuing with node startup anyway")
+					log.Print(b.String())
+				} else {
+					log.Fatal(b.String())
+				}
+			} else {
+				log.Printf("auto-restore file downloaded in %s", time.Since(start))
+				if err := str.SetRestorePath(path); err != nil {
+					log.Fatalf("failed to preload auto-restore data: %s", err.Error())
+				}
 			}
 		}
 	}
