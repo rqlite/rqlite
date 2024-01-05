@@ -324,23 +324,23 @@ func HasData(dir string) (bool, error) {
 	}
 	sstr, err := snapshot.NewStore(filepath.Join(dir, snapshotsDirName))
 	if err != nil {
-		return false, nil
+		return false, err
 	}
 	snaps, err := sstr.List()
 	if err != nil {
-		return false, nil
+		return false, err
 	}
 	if len(snaps) > 0 {
 		return true, nil
 	}
 	logs, err := rlog.New(filepath.Join(dir, raftDBPath), false)
 	if err != nil {
-		return false, nil
+		return false, err
 	}
 	defer logs.Close()
 	h, err := logs.HasCommand()
 	if err != nil {
-		return false, nil
+		return false, err
 	}
 	return h, nil
 }
