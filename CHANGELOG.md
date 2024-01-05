@@ -1,4 +1,6 @@
-## 8.15.1 (unreleased)
+## 8.16.0 (unreleased)
+### New features
+- [PR #1563](https://github.com/rqlite/rqlite/pull/1563): Support S3-compatible storage systems for auto-backups. Fixes issue [#1560](https://github.com/rqlite/rqlite/issues/1560). Thanks @jtackaberry
 ### Implementation changes and bug fixes
 - [Commit d1cc802](https://github.com/rqlite/rqlite/commit/d1cc80229221ff51cd4741cc7a2e05e87f0337cb): Fix return codes in `HasData()`.
 
