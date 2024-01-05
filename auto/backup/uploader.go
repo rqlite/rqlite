@@ -173,6 +173,7 @@ func (u *Uploader) upload(ctx context.Context) error {
 		stats.Get(lastUploadBytes).(*expvar.Int).Set(cr.Count())
 		u.lastUploadTime = time.Now()
 		u.lastUploadDuration = time.Since(startTime)
+		u.logger.Printf("completed auto upload to %s in %s", u.storageClient, u.lastUploadDuration)
 	}
 	return err
 }
