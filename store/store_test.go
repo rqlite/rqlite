@@ -175,7 +175,7 @@ COMMIT;
 	if err := s.Backup(backupRequestBinary(true, false), f); err != nil {
 		t.Fatalf("Backup failed %s", err.Error())
 	}
-	if !filesEqual(f.Name(), s.dbPath) {
+	if !filesIdentical(f.Name(), s.dbPath) {
 		t.Fatalf("backup file not identical to database file")
 	}
 
@@ -203,7 +203,7 @@ COMMIT;
 	if err := gunzipFile(guzf, gzf); err != nil {
 		t.Fatalf("Failed to gunzip backup file %s", err.Error())
 	}
-	if !filesEqual(guzf.Name(), s.dbPath) {
+	if !filesIdentical(guzf.Name(), s.dbPath) {
 		t.Fatalf("backup file not identical to database file")
 	}
 }
@@ -3023,7 +3023,7 @@ func gunzipFile(dst, src *os.File) error {
 	return err
 }
 
-func filesEqual(path1, path2 string) bool {
+func filesIdentical(path1, path2 string) bool {
 	b1, err := os.ReadFile(path1)
 	if err != nil {
 		return false
