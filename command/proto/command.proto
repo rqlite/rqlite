@@ -85,6 +85,11 @@ message BackupRequest {
 	Format format = 1;
 	bool Leader = 2;
 	bool Vacuum = 3;
+	bool Compress = 4; // This is the key. Set it and the Backup method on Store will
+	// emit a self-terminating stream. Compress can be set by the cluster client, 
+	// and the service just passes it down the Store! Nothing changes.
+	// Back at the client, it decompresses and writes to w.
+	// This might open up a "compress" flag on the backup API, not sure.
 }
 
 message LoadRequest {
@@ -116,6 +121,12 @@ message RemoveNodeRequest {
 
 message Noop {
 	string id = 1;
+}
+
+message BackupHeader {
+	int64 version = 1;
+	int64 size = 2;
+	bytes md5sum = 3;
 }
 
 message Command {

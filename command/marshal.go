@@ -3,9 +3,12 @@ package command
 import (
 	"bytes"
 	"compress/gzip"
+	"crypto/md5"
+	"encoding/binary"
 	"expvar"
 	"fmt"
 	"io"
+	"os"
 
 	"github.com/rqlite/rqlite/v8/command/proto"
 	pb "google.golang.org/protobuf/proto"
@@ -14,6 +17,7 @@ import (
 const (
 	defaultBatchThreshold = 50
 	defaultSizeThreshold  = 1024
+	protoBufferLengthSize = 8
 )
 
 // Requester is the interface objects must support to be marshaled
@@ -186,6 +190,66 @@ func UnmarshalSubCommand(c *proto.Command, m pb.Message) error {
 
 	if err := pb.Unmarshal(b, m); err != nil {
 		return fmt.Errorf("proto unmarshal: %s", err)
+	}
+	return nil
+}
+
+// NewBackupHeader returns a BackupHeader for the given file.
+func NewBackupHeader(file string) (*proto.BackupHeader, error) {
+	stat, err := os.Stat(file)
+	if err != nil {
+		return nil, err
+	}
+
+	// Calculate MD5 sum
+	f, err := os.Open(file)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	hasher := md5.New()
+	if _, err := io.Copy(hasher, f); err != nil {
+		return nil, err
+	}
+
+	return &proto.BackupHeader{
+		Version: 1,
+		Size:    stat.Size(),
+		Md5Sum:  hasher.Sum(nil),
+	}, nil
+}
+
+// WriteBackupHeaderTo writes a BackupHeader to the given writer.
+// It first marshals the BackupHeader, then writes the length of the
+// marshaled data, followed by the marshaled data itself.
+func WriteBackupHeaderTo(bh *proto.BackupHeader, w io.Writer) error {
+	b, err := MarshalBackupHeader(bh)
+	if err != nil {
+		return err
+	}
+	return writeBytesWithLength(w, b)
+}
+
+// MarshalBackupHeader marshals a BackupHeader.
+func MarshalBackupHeader(bh *proto.BackupHeader) ([]byte, error) {
+	return pb.Marshal(bh)
+}
+
+// UnmarshalBackupHeader unmarshals a BackupHeader.
+func UnmarshalBackupHeader(b []byte, bh *proto.BackupHeader) error {
+	return pb.Unmarshal(b, bh)
+}
+
+// writeBytesWithLength writes the given byte slice to the given writer,
+// preceded by the length of the byte slice.
+func writeBytesWithLength(w io.Writer, p []byte) error {
+	b := make([]byte, protoBufferLengthSize)
+	binary.LittleEndian.PutUint64(b[0:], uint64(len(p)))
+	if _, err := w.Write(b); err != nil {
+		return err
+	}
+	if _, err := w.Write(p); err != nil {
+		return err
 	}
 	return nil
 }

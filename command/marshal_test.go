@@ -1,6 +1,11 @@
 package command
 
 import (
+	"bytes"
+	"crypto/md5"
+	"encoding/binary"
+	"encoding/hex"
+	"os"
 	"sync"
 	"testing"
 
@@ -270,5 +275,94 @@ func Test_MarshalWontCompressSize(t *testing.T) {
 	}
 	if comp {
 		t.Fatal("Marshaled QueryRequest was compressed")
+	}
+}
+
+// Test_NewBackupHeader_FileNotFound tests NewBackupHeader for a non-existent file.
+func Test_NewBackupHeader_FileNotFound(t *testing.T) {
+	_, err := NewBackupHeader("nonexistent.file")
+	if err == nil {
+		t.Errorf("Expected an error for a non-existent file, but got nil")
+	}
+}
+
+// Test_NewBackupHeader_OK tests NewBackupHeader for a valid file.
+func Test_NewBackupHeader_OK(t *testing.T) {
+	content := []byte("hello world")
+	tmpfile := mustCreateTempFile()
+	defer os.Remove(tmpfile)
+	mustWriteFile(tmpfile, content)
+
+	// Call NewBackupHeader
+	header, err := NewBackupHeader(tmpfile)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	// Check the size
+	if header.Size != int64(len(content)) {
+		t.Errorf("Expected size %d, got %d", len(content), header.Size)
+	}
+
+	// Check the MD5 sum
+	hasher := md5.New()
+	hasher.Write(content)
+	expectedMd5 := hasher.Sum(nil)
+	if !bytes.Equal(header.Md5Sum, expectedMd5) {
+		t.Errorf("Expected MD5 sum %s, got %s", hex.EncodeToString(expectedMd5), hex.EncodeToString(header.Md5Sum))
+	}
+}
+
+// Test_WriteBackupHeaderTo_OK tests WriteBackupHeaderTo for successful writing.
+func Test_WriteBackupHeaderTo_OK(t *testing.T) {
+	// Create a sample BackupHeader
+	header := &proto.BackupHeader{
+		Version: 1,
+		Size:    11,
+		Md5Sum:  []byte("1234567890ab"),
+	}
+
+	var buf bytes.Buffer
+	if err := WriteBackupHeaderTo(header, &buf); err != nil {
+		t.Fatalf("WriteBackupHeaderTo failed: %v", err)
+	}
+
+	var length uint64
+	if err := binary.Read(bytes.NewReader(buf.Bytes()[:8]), binary.LittleEndian, &length); err != nil {
+		t.Fatalf("Failed to read length: %v", err)
+	}
+
+	// Now the specified length of bytes should be the header
+	var newHeader proto.BackupHeader
+	if err := UnmarshalBackupHeader(buf.Bytes()[8:8+length], &newHeader); err != nil {
+		t.Fatalf("Failed to unmarshal header: %v", err)
+	}
+
+	if newHeader.Version != header.Version {
+		t.Errorf("Expected version %d, got %d", header.Version, newHeader.Version)
+	}
+
+	if newHeader.Size != header.Size {
+		t.Errorf("Expected size %d, got %d", header.Size, newHeader.Size)
+	}
+
+	if !bytes.Equal(newHeader.Md5Sum, header.Md5Sum) {
+		t.Errorf("Expected MD5 sum %s, got %s", hex.EncodeToString(header.Md5Sum), hex.EncodeToString(newHeader.Md5Sum))
+	}
+}
+
+func mustCreateTempFile() string {
+	fd, err := os.CreateTemp("", "command-marshall-test")
+	if err != nil {
+		panic(err)
+	}
+	fd.Close()
+	return fd.Name()
+}
+
+func mustWriteFile(path string, contents []byte) {
+	err := os.WriteFile(path, contents, 0644)
+	if err != nil {
+		panic("failed to write to file")
 	}
 }

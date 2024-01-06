@@ -1166,6 +1166,12 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 	return r.results, r.error
 }
 
+// BackupStreamer returns a BackupStreamer which can stream a consistent
+// backup of the underlying database to a client.
+func (s *Store) BackupStreamer() (command.BackupStreamer, error) {
+	return NewBackupStreamer(s), nil
+}
+
 // Backup writes a consistent snapshot of the underlying database to dst.
 func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 	if !s.open {
@@ -1216,10 +1222,10 @@ func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 			// Pause any snapshotting and which will allow us to read the SQLite
 			// file without it changing underneath us. Any new writes will be
 			// sent to the WAL.
-			if err := s.snapshotCAS.Begin(); err != nil {
+			if err := s.disableSnapshotting(); err != nil {
 				return err
 			}
-			defer s.snapshotCAS.End()
+			defer s.enableSnapshotting()
 
 			// Fast path -- direct copy.
 			srcFD, err = os.Open(s.dbPath)
@@ -1978,6 +1984,21 @@ func (s *Store) Snapshot(n uint64) (retError error) {
 	}
 	stats.Add(numUserSnapshots, 1)
 	return nil
+}
+
+// enableSnapshotting enables snapshotting. The caller must not call
+// enableSnapshotting() unless it has previously called disableSnapshotting()
+// and that call returned nil.
+func (s *Store) enableSnapshotting() {
+	s.snapshotCAS.End()
+}
+
+// disableSnapshotting disables snapshotting. If disabling was successful,
+// the caller must call enableSnapshotting() when it is safe to snapshot again.
+// If disabling was unsuccessful, an error will be returned and the caller
+// does not need to call enableSnapshotting().
+func (s *Store) disableSnapshotting() error {
+	return s.snapshotCAS.Begin()
 }
 
 // runWALSnapshotting runs the periodic check to see if a snapshot should be

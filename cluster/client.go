@@ -14,7 +14,8 @@ import (
 
 	"github.com/rqlite/rqlite/v8/auth"
 	"github.com/rqlite/rqlite/v8/cluster/proto"
-	command "github.com/rqlite/rqlite/v8/command/proto"
+	"github.com/rqlite/rqlite/v8/command"
+	cmdpb "github.com/rqlite/rqlite/v8/command/proto"
 	"github.com/rqlite/rqlite/v8/rtls"
 	"github.com/rqlite/rqlite/v8/tcp"
 	"github.com/rqlite/rqlite/v8/tcp/pool"
@@ -129,7 +130,7 @@ func (c *Client) GetNodeAPIAddr(nodeAddr string, timeout time.Duration) (string,
 // Execute performs an Execute on a remote node. If username is an empty string
 // no credential information will be included in the Execute request to the
 // remote node.
-func (c *Client) Execute(er *command.ExecuteRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) ([]*command.ExecuteResult, error) {
+func (c *Client) Execute(er *cmdpb.ExecuteRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) ([]*cmdpb.ExecuteResult, error) {
 	command := &proto.Command{
 		Type: proto.Command_COMMAND_TYPE_EXECUTE,
 		Request: &proto.Command_ExecuteRequest{
@@ -155,7 +156,7 @@ func (c *Client) Execute(er *command.ExecuteRequest, nodeAddr string, creds *pro
 }
 
 // Query performs a Query on a remote node.
-func (c *Client) Query(qr *command.QueryRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) ([]*command.QueryRows, error) {
+func (c *Client) Query(qr *cmdpb.QueryRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) ([]*cmdpb.QueryRows, error) {
 	command := &proto.Command{
 		Type: proto.Command_COMMAND_TYPE_QUERY,
 		Request: &proto.Command_QueryRequest{
@@ -181,7 +182,7 @@ func (c *Client) Query(qr *command.QueryRequest, nodeAddr string, creds *proto.C
 }
 
 // Request performs an ExecuteQuery on a remote node.
-func (c *Client) Request(r *command.ExecuteQueryRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) ([]*command.ExecuteQueryResponse, error) {
+func (c *Client) Request(r *cmdpb.ExecuteQueryRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) ([]*cmdpb.ExecuteQueryResponse, error) {
 	command := &proto.Command{
 		Type: proto.Command_COMMAND_TYPE_REQUEST,
 		Request: &proto.Command_ExecuteQueryRequest{
@@ -207,43 +208,43 @@ func (c *Client) Request(r *command.ExecuteQueryRequest, nodeAddr string, creds 
 }
 
 // Backup retrieves a backup from a remote node and writes to the io.Writer
-func (c *Client) Backup(br *command.BackupRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration, w io.Writer) error {
-	command := &proto.Command{
-		Type: proto.Command_COMMAND_TYPE_BACKUP,
+func (c *Client) Backup(br *cmdpb.BackupRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration, w io.Writer) error {
+	cmd := &proto.Command{
+		Type: proto.Command_COMMAND_TYPE_BACKUP_STREAM,
 		Request: &proto.Command_BackupRequest{
 			BackupRequest: br,
 		},
 		Credentials: creds,
 	}
-	p, err := c.retry(command, nodeAddr, timeout)
+
+	conn, err := c.dial(nodeAddr, c.timeout)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	if err = writeCommand(conn, cmd, timeout); err != nil {
+		handleConnError(conn)
+		return err
+	}
+
+	// WAIT FOR RESPONSE HERE
+	// CHECK IT for errors
+	// IF GOOD, look at sum? But when to compare here?
+	// COULD TEE THE CONN TO W AND A SUMMER
+	// IF NO MATCH, return error?
+
+	sr := command.NewBackupStreamReader(conn)
+	_, err = io.Copy(w, sr)
 	if err != nil {
 		return err
 	}
 
-	// Decompress....
-	p, err = gzUncompress(p)
-	if err != nil {
-		return fmt.Errorf("backup decompress: %w", err)
-	}
-
-	resp := &proto.CommandBackupResponse{}
-	err = pb.Unmarshal(p, resp)
-	if err != nil {
-		return fmt.Errorf("backup unmarshal: %w", err)
-	}
-
-	if resp.Error != "" {
-		return errors.New(resp.Error)
-	}
-
-	if _, err := w.Write(resp.Data); err != nil {
-		return fmt.Errorf("backup write: %w", err)
-	}
 	return nil
 }
 
 // Load loads a SQLite file into the database.
-func (c *Client) Load(lr *command.LoadRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) error {
+func (c *Client) Load(lr *cmdpb.LoadRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) error {
 	command := &proto.Command{
 		Type: proto.Command_COMMAND_TYPE_LOAD,
 		Request: &proto.Command_LoadRequest{
@@ -269,7 +270,7 @@ func (c *Client) Load(lr *command.LoadRequest, nodeAddr string, creds *proto.Cre
 }
 
 // RemoveNode removes a node from the cluster
-func (c *Client) RemoveNode(rn *command.RemoveNodeRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) error {
+func (c *Client) RemoveNode(rn *cmdpb.RemoveNodeRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) error {
 	conn, err := c.dial(nodeAddr, c.timeout)
 	if err != nil {
 		return err
@@ -308,7 +309,7 @@ func (c *Client) RemoveNode(rn *command.RemoveNodeRequest, nodeAddr string, cred
 }
 
 // Notify notifies a remote node that this node is ready to bootstrap.
-func (c *Client) Notify(nr *command.NotifyRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) error {
+func (c *Client) Notify(nr *cmdpb.NotifyRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) error {
 	conn, err := c.dial(nodeAddr, c.timeout)
 	if err != nil {
 		return err
@@ -347,7 +348,7 @@ func (c *Client) Notify(nr *command.NotifyRequest, nodeAddr string, creds *proto
 }
 
 // Join joins this node to a cluster at the remote address nodeAddr.
-func (c *Client) Join(jr *command.JoinRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) error {
+func (c *Client) Join(jr *cmdpb.JoinRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) error {
 	for {
 		conn, err := c.dial(nodeAddr, c.timeout)
 		if err != nil {

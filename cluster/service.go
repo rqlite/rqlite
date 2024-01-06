@@ -16,7 +16,8 @@ import (
 
 	"github.com/rqlite/rqlite/v8/auth"
 	"github.com/rqlite/rqlite/v8/cluster/proto"
-	command "github.com/rqlite/rqlite/v8/command/proto"
+	"github.com/rqlite/rqlite/v8/command"
+	cmdpb "github.com/rqlite/rqlite/v8/command/proto"
 	pb "google.golang.org/protobuf/proto"
 )
 
@@ -75,19 +76,23 @@ type Dialer interface {
 type Database interface {
 	// Execute executes a slice of queries, none of which is expected
 	// to return rows.
-	Execute(er *command.ExecuteRequest) ([]*command.ExecuteResult, error)
+	Execute(er *cmdpb.ExecuteRequest) ([]*cmdpb.ExecuteResult, error)
 
 	// Query executes a slice of queries, each of which returns rows.
-	Query(qr *command.QueryRequest) ([]*command.QueryRows, error)
+	Query(qr *cmdpb.QueryRequest) ([]*cmdpb.QueryRows, error)
 
 	// Request processes a request that can both executes and queries.
-	Request(rr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, error)
+	Request(rr *cmdpb.ExecuteQueryRequest) ([]*cmdpb.ExecuteQueryResponse, error)
 
 	// Backup writes a backup of the database to the writer.
-	Backup(br *command.BackupRequest, dst io.Writer) error
+	Backup(br *cmdpb.BackupRequest, dst io.Writer) error
+
+	// BackupStreamer returns a streamer that can be used to stream
+	// a consistent backup of the database.
+	BackupStreamer() (command.BackupStreamer, error)
 
 	// Loads an entire SQLite file into the database
-	Load(lr *command.LoadRequest) error
+	Load(lr *cmdpb.LoadRequest) error
 }
 
 // Manager is the interface node-management systems must implement
@@ -96,14 +101,14 @@ type Manager interface {
 	LeaderAddr() (string, error)
 
 	// Remove removes the node, given by id, from the cluster
-	Remove(rn *command.RemoveNodeRequest) error
+	Remove(rn *cmdpb.RemoveNodeRequest) error
 
 	// Notify notifies this node that a remote node is ready
 	// for bootstrapping.
-	Notify(n *command.NotifyRequest) error
+	Notify(n *cmdpb.NotifyRequest) error
 
 	// Join joins a remote node to the cluster.
-	Join(n *command.JoinRequest) error
+	Join(n *cmdpb.JoinRequest) error
 }
 
 // CredentialStore is the interface credential stores must support.
@@ -297,7 +302,7 @@ func (s *Service) handleConn(conn net.Conn) {
 				if err != nil {
 					resp.Error = err.Error()
 				} else {
-					resp.Results = make([]*command.ExecuteResult, len(res))
+					resp.Results = make([]*cmdpb.ExecuteResult, len(res))
 					copy(resp.Results, res)
 				}
 			}
@@ -317,7 +322,7 @@ func (s *Service) handleConn(conn net.Conn) {
 				if err != nil {
 					resp.Error = err.Error()
 				} else {
-					resp.Rows = make([]*command.QueryRows, len(res))
+					resp.Rows = make([]*cmdpb.QueryRows, len(res))
 					copy(resp.Rows, res)
 				}
 			}
@@ -337,7 +342,7 @@ func (s *Service) handleConn(conn net.Conn) {
 				if err != nil {
 					resp.Error = err.Error()
 				} else {
-					resp.Response = make([]*command.ExecuteQueryResponse, len(res))
+					resp.Response = make([]*cmdpb.ExecuteQueryResponse, len(res))
 					copy(resp.Response, res)
 				}
 			}
@@ -373,6 +378,31 @@ func (s *Service) handleConn(conn net.Conn) {
 				return
 			}
 			writeBytesWithLength(conn, p)
+
+		case proto.Command_COMMAND_TYPE_BACKUP_STREAM:
+			stats.Add(numBackupRequest, 1)
+
+			br := c.GetBackupRequest()
+			if br == nil {
+				// indicate error
+			} else if !s.checkCommandPerm(c, auth.PermBackup) {
+				// flag no permission // THIS IMPLIES DISTINCT RESPONSE TYPE! NOT BACKUP READER
+			} else {
+				err := func() error {
+					streamer, err := s.db.BackupStreamer()
+					if err != nil {
+						return err
+					}
+					defer streamer.Close()
+
+					_, err = streamer.WriteTo(conn)
+					return err
+				}()
+				if err != nil {
+					conn.Close()
+					return
+				}
+			}
 
 		case proto.Command_COMMAND_TYPE_LOAD:
 			stats.Add(numLoadRequest, 1)

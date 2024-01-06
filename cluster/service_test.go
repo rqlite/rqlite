@@ -11,7 +11,8 @@ import (
 	"time"
 
 	"github.com/rqlite/rqlite/v8/cluster/proto"
-	command "github.com/rqlite/rqlite/v8/command/proto"
+	"github.com/rqlite/rqlite/v8/command"
+	cmdpb "github.com/rqlite/rqlite/v8/command/proto"
 	"github.com/rqlite/rqlite/v8/testdata/x509"
 )
 
@@ -196,12 +197,12 @@ func Test_NewServiceTestExecuteQueryAuthNoCredentials(t *testing.T) {
 	if err := cl.SetLocal(s.Addr(), s); err != nil {
 		t.Fatalf("failed to set cluster client local parameters: %s", err)
 	}
-	er := &command.ExecuteRequest{}
+	er := &cmdpb.ExecuteRequest{}
 	_, err := cl.Execute(er, s.Addr(), nil, 5*time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
-	qr := &command.QueryRequest{}
+	qr := &cmdpb.QueryRequest{}
 	_, err = cl.Query(qr, s.Addr(), nil, 5*time.Second)
 	if err != nil {
 		t.Fatal(err)
@@ -239,7 +240,7 @@ func Test_NewServiceTestExecuteQueryAuth(t *testing.T) {
 	if err := cl.SetLocal(s.Addr(), s); err != nil {
 		t.Fatalf("failed to set cluster client local parameters: %s", err)
 	}
-	er := &command.ExecuteRequest{}
+	er := &cmdpb.ExecuteRequest{}
 	_, err := cl.Execute(er, s.Addr(), makeCredentials("alice", "secret1"), 5*time.Second)
 	if err != nil {
 		t.Fatal("alice improperly unauthorized to execute")
@@ -248,7 +249,7 @@ func Test_NewServiceTestExecuteQueryAuth(t *testing.T) {
 	if err == nil {
 		t.Fatal("bob improperly authorized to execute")
 	}
-	qr := &command.QueryRequest{}
+	qr := &cmdpb.QueryRequest{}
 	_, err = cl.Query(qr, s.Addr(), makeCredentials("bob", "secret1"), 5*time.Second)
 	if err != nil && err.Error() != "unauthorized" {
 		fmt.Println(err)
@@ -266,7 +267,7 @@ func Test_NewServiceNotify(t *testing.T) {
 	var wg sync.WaitGroup
 
 	wg.Add(1)
-	mm.notifyFn = func(n *command.NotifyRequest) error {
+	mm.notifyFn = func(n *cmdpb.NotifyRequest) error {
 		defer wg.Done()
 		if n.Id != "foo" {
 			t.Fatalf("failed to get correct node ID, exp %s, got %s", "foo", n.Id)
@@ -288,7 +289,7 @@ func Test_NewServiceNotify(t *testing.T) {
 	}
 
 	// Create a notify request.
-	nr := &command.NotifyRequest{
+	nr := &cmdpb.NotifyRequest{
 		Id:      "foo",
 		Address: "localhost",
 	}
@@ -324,7 +325,7 @@ func Test_NewServiceJoin(t *testing.T) {
 	var wg sync.WaitGroup
 
 	wg.Add(1)
-	mm.joinFn = func(j *command.JoinRequest) error {
+	mm.joinFn = func(j *cmdpb.JoinRequest) error {
 		defer wg.Done()
 		if j.Id != "foo" {
 			t.Fatalf("failed to get correct node ID, exp %s, got %s", "foo", j.Id)
@@ -349,7 +350,7 @@ func Test_NewServiceJoin(t *testing.T) {
 	}
 
 	// Create a Join request.
-	jr := &command.JoinRequest{
+	jr := &cmdpb.JoinRequest{
 		Id:      "foo",
 		Address: "localhost",
 		Voter:   true,
@@ -433,36 +434,44 @@ func mustNewMockTLSTransport() *mockTransport {
 }
 
 type mockDatabase struct {
-	executeFn func(er *command.ExecuteRequest) ([]*command.ExecuteResult, error)
-	queryFn   func(qr *command.QueryRequest) ([]*command.QueryRows, error)
-	requestFn func(rr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, error)
-	backupFn  func(br *command.BackupRequest, dst io.Writer) error
-	loadFn    func(lr *command.LoadRequest) error
+	executeFn        func(er *cmdpb.ExecuteRequest) ([]*cmdpb.ExecuteResult, error)
+	queryFn          func(qr *cmdpb.QueryRequest) ([]*cmdpb.QueryRows, error)
+	requestFn        func(rr *cmdpb.ExecuteQueryRequest) ([]*cmdpb.ExecuteQueryResponse, error)
+	backupFn         func(br *cmdpb.BackupRequest, dst io.Writer) error
+	backupStreamerFn func() (command.BackupStreamer, error)
+	loadFn           func(lr *cmdpb.LoadRequest) error
 }
 
-func (m *mockDatabase) Execute(er *command.ExecuteRequest) ([]*command.ExecuteResult, error) {
+func (m *mockDatabase) Execute(er *cmdpb.ExecuteRequest) ([]*cmdpb.ExecuteResult, error) {
 	return m.executeFn(er)
 }
 
-func (m *mockDatabase) Query(qr *command.QueryRequest) ([]*command.QueryRows, error) {
+func (m *mockDatabase) Query(qr *cmdpb.QueryRequest) ([]*cmdpb.QueryRows, error) {
 	return m.queryFn(qr)
 }
 
-func (m *mockDatabase) Request(rr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, error) {
+func (m *mockDatabase) Request(rr *cmdpb.ExecuteQueryRequest) ([]*cmdpb.ExecuteQueryResponse, error) {
 	if m.requestFn == nil {
-		return []*command.ExecuteQueryResponse{}, nil
+		return []*cmdpb.ExecuteQueryResponse{}, nil
 	}
 	return m.requestFn(rr)
 }
 
-func (m *mockDatabase) Backup(br *command.BackupRequest, dst io.Writer) error {
+func (m *mockDatabase) Backup(br *cmdpb.BackupRequest, dst io.Writer) error {
 	if m.backupFn == nil {
 		return nil
 	}
 	return m.backupFn(br, dst)
 }
 
-func (m *mockDatabase) Load(lr *command.LoadRequest) error {
+func (m *mockDatabase) BackupStreamer() (command.BackupStreamer, error) {
+	if m.backupStreamerFn == nil {
+		return nil, nil
+	}
+	return m.backupStreamerFn()
+}
+
+func (m *mockDatabase) Load(lr *cmdpb.LoadRequest) error {
 	if m.loadFn == nil {
 		return nil
 	}
@@ -470,37 +479,37 @@ func (m *mockDatabase) Load(lr *command.LoadRequest) error {
 }
 
 func mustNewMockDatabase() *mockDatabase {
-	e := func(er *command.ExecuteRequest) ([]*command.ExecuteResult, error) {
-		return []*command.ExecuteResult{}, nil
+	e := func(er *cmdpb.ExecuteRequest) ([]*cmdpb.ExecuteResult, error) {
+		return []*cmdpb.ExecuteResult{}, nil
 	}
-	q := func(er *command.QueryRequest) ([]*command.QueryRows, error) {
-		return []*command.QueryRows{}, nil
+	q := func(er *cmdpb.QueryRequest) ([]*cmdpb.QueryRows, error) {
+		return []*cmdpb.QueryRows{}, nil
 	}
 	return &mockDatabase{executeFn: e, queryFn: q}
 }
 
 type MockManager struct {
-	removeNodeFn func(rn *command.RemoveNodeRequest) error
-	notifyFn     func(n *command.NotifyRequest) error
-	joinFn       func(j *command.JoinRequest) error
+	removeNodeFn func(rn *cmdpb.RemoveNodeRequest) error
+	notifyFn     func(n *cmdpb.NotifyRequest) error
+	joinFn       func(j *cmdpb.JoinRequest) error
 	leaderAddrFn func() (string, error)
 }
 
-func (m *MockManager) Remove(rn *command.RemoveNodeRequest) error {
+func (m *MockManager) Remove(rn *cmdpb.RemoveNodeRequest) error {
 	if m.removeNodeFn == nil {
 		return nil
 	}
 	return m.removeNodeFn(rn)
 }
 
-func (m *MockManager) Notify(n *command.NotifyRequest) error {
+func (m *MockManager) Notify(n *cmdpb.NotifyRequest) error {
 	if m.notifyFn == nil {
 		return nil
 	}
 	return m.notifyFn(n)
 }
 
-func (m *MockManager) Join(j *command.JoinRequest) error {
+func (m *MockManager) Join(j *cmdpb.JoinRequest) error {
 	if m.joinFn == nil {
 		return nil
 	}
