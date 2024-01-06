@@ -71,7 +71,7 @@ func (s *S3Client) String() string {
 }
 
 // LatestHash returns the latest hash for the object. If the returned string
-// is "", then the object does not exist.
+// is "", then the hash does not exist.
 func (s *S3Client) LatestHash(ctx context.Context) (string, error) {
 	sess, err := s.createSession()
 	if err != nil {
