@@ -21,8 +21,8 @@ func (s SHA256Sum) Equals(other SHA256Sum) bool {
 	return bytes.Equal(s, other)
 }
 
-// FromString returns a SHA256Sum from the given hex-encoded string.
-func FromString(s string) (SHA256Sum, error) {
+// SHA256FromString returns a SHA256Sum from the given hex-encoded string.
+func SHA256FromString(s string) (SHA256Sum, error) {
 	b, err := hex.DecodeString(s)
 	if err != nil {
 		return nil, err
