@@ -965,6 +965,44 @@ func Test_SingleNodeUpgrades_Snapshots(t *testing.T) {
 	}
 }
 
+func Test_SingleNodeBackup(t *testing.T) {
+	node := mustNewLeaderNode("leader1")
+	defer node.Deprovision()
+
+	// create a table and insert a row
+	_, err := node.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`)
+	if err != nil {
+		t.Fatalf(`CREATE TABLE failed: %s`, err.Error())
+	}
+	_, err = node.Execute(`INSERT INTO foo(name) VALUES("fiona")`)
+	if err != nil {
+		t.Fatalf(`INSERT failed: %s`, err.Error())
+	}
+
+	backup := mustTempFile()
+	defer os.Remove(backup)
+	if err := node.Backup(backup); err != nil {
+		t.Fatalf(`backup failed: %s`, err.Error())
+	}
+
+	newNode := mustNewLeaderNode("leader2")
+	defer newNode.Deprovision()
+
+	_, err = newNode.Boot(backup)
+	if err != nil {
+		t.Fatalf(`boot failed: %s`, err.Error())
+	}
+
+	// check that the row is present in the new node
+	r, err := newNode.Query(`SELECT * FROM foo`)
+	if err != nil {
+		t.Fatalf(`query failed: %s`, err.Error())
+	}
+	if r != `{"results":[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]}` {
+		t.Fatalf("test received wrong result got %s", r)
+	}
+}
+
 func Test_SingleNodeNodes(t *testing.T) {
 	node := mustNewLeaderNode("leader1")
 	defer node.Deprovision()
