@@ -224,7 +224,7 @@ class TestAutoBackupS3(unittest.TestCase):
     node.stop(graceful=True)
     node.start()
     node.wait_for_leader()
-    time.Sleep(5)
+    time.sleep(5)
     self.assertEqual(node.expvar()['uploader']['num_uploads_ok'], 0)
 
     deprovision_node(node)
