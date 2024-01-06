@@ -1168,20 +1168,16 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 }
 
 // Backup writes a consistent snapshot of the underlying database to dst. This
-// can be called while writes are being made to the system. If vacuum is not true
-// the copy is written directly to dst, optionally compressed.
-
+// can be called while writes are being made to the system. The backup may fail
+// if the system is actively snapshotting. The client can just retry in this case.
+//
+// If vacuum is not true the copy is written directly to dst, optionally in compressed
+// form, without any intermediate temporary files.
+//
 // If vacuum is true, then a VACUUM is performed on the database before the backup
 // is made. If compression false, and dst is an os.File, then the vacuumed copy
 // will be written directly to that file. Otherwise a temporary file will be created,
 // and that temporary file copied to dst.
-//
-// The backup may fail if the system is actively snapshotting. The client can just
-// retry in this case.
-// can be called while writes are being made to the system. If vacuum is true,
-// then a VACUUM is performed on the database before the backup is made. The backup
-// may fail if the system is actively snapshotting however. The client should
-// just retry in this case.
 func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 	if !s.open {
 		return ErrNotOpen
