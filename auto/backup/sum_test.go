@@ -95,6 +95,16 @@ func TestFileSha256(t *testing.T) {
 	if !hash.Equals(SHA256Sum(expectedHash)) {
 		t.Errorf("Expected: %x, got: %s", expectedHash, hash)
 	}
+
+	// Ensure string back-and-forth works
+	hashString := hash.String()
+	hash, err = FromString(hashString)
+	if err != nil {
+		t.Fatalf("Error calling FromString: %v", err)
+	}
+	if !hash.Equals(SHA256Sum(expectedHash)) {
+		t.Errorf("Expected: %x, got: %s", expectedHash, hash)
+	}
 }
 
 func mustWriteDataTempFile(data []byte) string {

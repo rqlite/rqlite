@@ -282,7 +282,12 @@ func Test_UploaderStats(t *testing.T) {
 }
 
 type mockStorageClient struct {
+	hash     string
 	uploadFn func(ctx context.Context, reader io.Reader, hash string) error
+}
+
+func (mc *mockStorageClient) LatestHash(ctx context.Context) (string, error) {
+	return mc.hash, nil
 }
 
 func (mc *mockStorageClient) Upload(ctx context.Context, reader io.Reader, hash string) error {

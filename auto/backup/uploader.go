@@ -15,6 +15,7 @@ import (
 
 // StorageClient is an interface for uploading data to a storage service.
 type StorageClient interface {
+	LatestHash(ctx context.Context) (string, error)
 	Upload(ctx context.Context, reader io.Reader, hash string) error
 	fmt.Stringer
 }
@@ -144,6 +145,17 @@ func (u *Uploader) upload(ctx context.Context) error {
 	}
 	if err := u.compressIfNeeded(filetoUpload); err != nil {
 		return err
+	}
+
+	// If we don't have a lastSum, try to get it from the storage service.
+	if u.lastSum == nil {
+		hash, err := u.storageClient.LatestHash(ctx)
+		if err == nil && hash != "" {
+			s, err := FromString(hash)
+			if err == nil {
+				u.lastSum = s
+			}
+		}
 	}
 
 	sum, err := FileSHA256(filetoUpload)

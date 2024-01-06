@@ -21,6 +21,15 @@ func (s SHA256Sum) Equals(other SHA256Sum) bool {
 	return bytes.Equal(s, other)
 }
 
+// FromString returns a SHA256Sum from the given hex-encoded string.
+func FromString(s string) (SHA256Sum, error) {
+	b, err := hex.DecodeString(s)
+	if err != nil {
+		return nil, err
+	}
+	return SHA256Sum(b), nil
+}
+
 // FileSHA256 returns the SHA256 hash of the file at the given path.
 func FileSHA256(filePath string) (SHA256Sum, error) {
 	file, err := os.Open(filePath)

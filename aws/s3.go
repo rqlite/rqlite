@@ -13,6 +13,10 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 )
 
+const (
+	metadataHashKey = "rqlite_hash"
+)
+
 // S3Config is the subconfig for the S3 storage type
 type S3Config struct {
 	Endpoint        string `json:"endpoint,omitempty"`
@@ -66,6 +70,33 @@ func (s *S3Client) String() string {
 	}
 }
 
+// LatestHash returns the latest hash for the object. If the returned string
+// is "", then the object does not exist.
+func (s *S3Client) LatestHash(ctx context.Context) (string, error) {
+	sess, err := s.createSession()
+	if err != nil {
+		return "", fmt.Errorf("failed to create S3 session: %w", err)
+	}
+
+	svc := s3.New(sess)
+	input := &s3.HeadObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(s.key),
+	}
+
+	result, err := svc.HeadObject(input)
+	if err != nil {
+		return "", fmt.Errorf("failed to get object head: %w", err)
+	}
+
+	hash, ok := result.Metadata[metadataHashKey]
+	if !ok || hash == nil {
+		return "", nil
+	}
+
+	return *hash, nil
+}
+
 // Upload uploads data to S3.
 func (s *S3Client) Upload(ctx context.Context, reader io.Reader, hash string) error {
 	sess, err := s.createSession()
@@ -84,7 +115,7 @@ func (s *S3Client) Upload(ctx context.Context, reader io.Reader, hash string) er
 	_, err = uploader.UploadWithContext(ctx, &s3manager.UploadInput{
 		Bucket:   aws.String(s.bucket),
 		Key:      aws.String(s.key),
-		Metadata: map[string]*string{"rqlite_hash": aws.String(hash)},
+		Metadata: map[string]*string{metadataHashKey: aws.String(hash)},
 		Body:     reader,
 	})
 	if err != nil {
