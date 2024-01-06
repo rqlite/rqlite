@@ -500,6 +500,26 @@ func Test_IsWALModeEnabledOnDiskWAL(t *testing.T) {
 		t.Fatalf("WAL data marked as DELETE")
 	}
 }
+func Test_EnsureDelete(t *testing.T) {
+	path := mustTempFile()
+	defer os.Remove(path)
+
+	db, err := Open(path, false, true)
+	if err != nil {
+		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
+	}
+	defer db.Close()
+	if !IsWALModeEnabledSQLiteFile(path) {
+		t.Fatalf("WAL file marked as non-WAL")
+	}
+
+	if err := EnsureDeleteMode(path); err != nil {
+		t.Fatalf("failed to ensure DELETE mode: %s", err.Error())
+	}
+	if !IsDELETEModeEnabledSQLiteFile(path) {
+		t.Fatalf("database not marked as DELETE mode")
+	}
+}
 
 // Test_WALDatabaseCreatedOK tests that a WAL file is created, and that
 // a checkpoint succeeds
