@@ -600,9 +600,10 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request, qp QueryP
 	}
 
 	br := &proto.BackupRequest{
-		Format: qp.BackupFormat(),
-		Leader: !qp.NoLeader(),
-		Vacuum: qp.Vacuum(),
+		Format:   qp.BackupFormat(),
+		Leader:   !qp.NoLeader(),
+		Vacuum:   qp.Vacuum(),
+		Compress: qp.Compress(),
 	}
 	addBackupFormatHeader(w, qp)
 
