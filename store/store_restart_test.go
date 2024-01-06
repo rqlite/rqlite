@@ -382,7 +382,7 @@ func Test_OpenStoreCloseOpen_Hash(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
-	// Write a few 100 records
+	// Write some data
 	er := executeRequestFromString(
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		false, false)
@@ -390,7 +390,6 @@ func Test_OpenStoreCloseOpen_Hash(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
-
 	for i := 0; i < 100; i++ {
 		er := executeRequestFromString(
 			fmt.Sprintf(`INSERT INTO foo(name) VALUES("fiona-%d")`, i),
@@ -402,13 +401,13 @@ func Test_OpenStoreCloseOpen_Hash(t *testing.T) {
 	}
 
 	// Hash the backup
-	tmpFD := mustCreateTempFD()
-	defer os.Remove(tmpFD.Name())
-	defer tmpFD.Close()
-	if err := s.Backup(backupRequestBinary(true, false, false), tmpFD); err != nil {
+	tmpFD1 := mustCreateTempFD()
+	defer os.Remove(tmpFD1.Name())
+	defer tmpFD1.Close()
+	if err := s.Backup(backupRequestBinary(true, false, false), tmpFD1); err != nil {
 		t.Fatalf("Backup failed %s", err.Error())
 	}
-	sum1 := mustSHA256Sum(tmpFD.Name())
+	sum1 := mustSHA256Sum(tmpFD1.Name())
 
 	// Restart the node
 	if err := s.Close(true); err != nil {
@@ -422,14 +421,14 @@ func Test_OpenStoreCloseOpen_Hash(t *testing.T) {
 	}
 
 	/// Hash the backup again
-	tmpFD = mustCreateTempFD()
-	defer os.Remove(tmpFD.Name())
-	defer tmpFD.Close()
-	if err := s.Backup(backupRequestBinary(true, false, false), tmpFD); err != nil {
+	tmpFD2 := mustCreateTempFD()
+	defer os.Remove(tmpFD2.Name())
+	defer tmpFD2.Close()
+	if err := s.Backup(backupRequestBinary(true, false, false), tmpFD2); err != nil {
 		t.Fatalf("Backup failed %s", err.Error())
 	}
 
-	sum2 := mustSHA256Sum(tmpFD.Name())
+	sum2 := mustSHA256Sum(tmpFD2.Name())
 	if sum1 != sum2 {
 		t.Fatalf("hash mismatch, %s != %s", sum1, sum2)
 	}
