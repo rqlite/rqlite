@@ -38,7 +38,7 @@ func Test_UploaderSingleUpload(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	sc := &mockStorageClient{
-		uploadFn: func(ctx context.Context, reader io.Reader) error {
+		uploadFn: func(ctx context.Context, reader io.Reader, hash string) error {
 			defer wg.Done()
 			uploadedData, err = io.ReadAll(reader)
 			return err
@@ -64,7 +64,7 @@ func Test_UploaderSingleUploadCompress(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	sc := &mockStorageClient{
-		uploadFn: func(ctx context.Context, reader io.Reader) error {
+		uploadFn: func(ctx context.Context, reader io.Reader, hash string) error {
 			defer wg.Done()
 
 			// Wrap a gzip reader about the reader.
@@ -100,7 +100,7 @@ func Test_UploaderDoubleUpload(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 	sc := &mockStorageClient{
-		uploadFn: func(ctx context.Context, reader io.Reader) error {
+		uploadFn: func(ctx context.Context, reader io.Reader, hash string) error {
 			defer wg.Done()
 			uploadedData = nil // Wipe out any previous state.
 			uploadedData, err = io.ReadAll(reader)
@@ -131,7 +131,7 @@ func Test_UploaderFailThenOK(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 	sc := &mockStorageClient{
-		uploadFn: func(ctx context.Context, reader io.Reader) error {
+		uploadFn: func(ctx context.Context, reader io.Reader, hash string) error {
 			defer wg.Done()
 
 			if uploadCount == 0 {
@@ -166,7 +166,7 @@ func Test_UploaderOKThenFail(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 	sc := &mockStorageClient{
-		uploadFn: func(ctx context.Context, reader io.Reader) error {
+		uploadFn: func(ctx context.Context, reader io.Reader, hash string) error {
 			defer wg.Done()
 
 			if uploadCount == 1 {
@@ -198,7 +198,7 @@ func Test_UploaderContextCancellation(t *testing.T) {
 	var uploadCount int32
 
 	sc := &mockStorageClient{
-		uploadFn: func(ctx context.Context, reader io.Reader) error {
+		uploadFn: func(ctx context.Context, reader io.Reader, hash string) error {
 			atomic.AddInt32(&uploadCount, 1)
 			return nil
 		},
@@ -241,7 +241,7 @@ func Test_UploaderEnabledTrue(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	sc := &mockStorageClient{
-		uploadFn: func(ctx context.Context, reader io.Reader) error {
+		uploadFn: func(ctx context.Context, reader io.Reader, hash string) error {
 			defer wg.Done()
 			uploadedData, err = io.ReadAll(reader)
 			return err
@@ -282,12 +282,12 @@ func Test_UploaderStats(t *testing.T) {
 }
 
 type mockStorageClient struct {
-	uploadFn func(ctx context.Context, reader io.Reader) error
+	uploadFn func(ctx context.Context, reader io.Reader, hash string) error
 }
 
-func (mc *mockStorageClient) Upload(ctx context.Context, reader io.Reader) error {
+func (mc *mockStorageClient) Upload(ctx context.Context, reader io.Reader, hash string) error {
 	if mc.uploadFn != nil {
-		return mc.uploadFn(ctx, reader)
+		return mc.uploadFn(ctx, reader, hash)
 	}
 	return nil
 }

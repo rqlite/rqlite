@@ -65,6 +65,7 @@ func TestS3ClientUploadOK(t *testing.T) {
 	secretKey := "your-secret-key"
 	bucket := "your-bucket"
 	key := "your/key/path"
+	hash := "1234"
 	expectedData := "test data"
 	uploadedData := new(bytes.Buffer)
 
@@ -75,6 +76,9 @@ func TestS3ClientUploadOK(t *testing.T) {
 			}
 			if *input.Key != key {
 				t.Errorf("expected key to be %q, got %q", key, *input.Key)
+			}
+			if *input.Metadata["rqlite_hash"] != hash {
+				t.Errorf("expected hash to be %q, got %q", hash, *input.Metadata["rqlite_hash"])
 			}
 			if input.Body == nil {
 				t.Errorf("expected body to be non-nil")
@@ -98,7 +102,7 @@ func TestS3ClientUploadOK(t *testing.T) {
 	}
 
 	reader := strings.NewReader("test data")
-	err := client.Upload(context.Background(), reader)
+	err := client.Upload(context.Background(), reader, "1234")
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
@@ -130,7 +134,7 @@ func TestS3ClientUploadFail(t *testing.T) {
 	}
 
 	reader := strings.NewReader("test data")
-	err := client.Upload(context.Background(), reader)
+	err := client.Upload(context.Background(), reader, "5678")
 	if err == nil {
 		t.Fatal("Expected error, got nil")
 	}

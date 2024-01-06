@@ -67,7 +67,7 @@ func (s *S3Client) String() string {
 }
 
 // Upload uploads data to S3.
-func (s *S3Client) Upload(ctx context.Context, reader io.Reader) error {
+func (s *S3Client) Upload(ctx context.Context, reader io.Reader, hash string) error {
 	sess, err := s.createSession()
 	if err != nil {
 		return err
@@ -82,9 +82,10 @@ func (s *S3Client) Upload(ctx context.Context, reader io.Reader) error {
 	}
 
 	_, err = uploader.UploadWithContext(ctx, &s3manager.UploadInput{
-		Bucket: aws.String(s.bucket),
-		Key:    aws.String(s.key),
-		Body:   reader,
+		Bucket:   aws.String(s.bucket),
+		Key:      aws.String(s.key),
+		Metadata: map[string]*string{"rqlite_hash": aws.String(hash)},
+		Body:     reader,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to upload to %v: %w", s, err)
