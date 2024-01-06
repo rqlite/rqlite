@@ -1167,7 +1167,11 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 	return r.results, r.error
 }
 
-// Backup writes a consistent snapshot of the underlying database to dst.
+// Backup writes a consistent snapshot of the underlying database to dst. This
+// can be called while writes are being made to the system. If vacuum is true,
+// then a VACUUM is performed on the database before the backup is made. The backup
+// may fail if the system is actively snapshotting however. The client should
+// just retry in this case.
 func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 	if !s.open {
 		return ErrNotOpen
