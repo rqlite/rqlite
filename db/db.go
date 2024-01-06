@@ -217,6 +217,21 @@ func IsDELETEModeEnabled(b []byte) bool {
 	return len(b) >= 20 && b[18] == 1 && b[19] == 1
 }
 
+// EnsureDeleteMode ensures the database at the given path is in DELETE mode.
+func EnsureDeleteMode(path string) error {
+	if IsDELETEModeEnabledSQLiteFile(path) {
+		return nil
+	}
+	rwDSN := fmt.Sprintf("file:%s", path)
+	conn, err := sql.Open("sqlite3", rwDSN)
+	if err != nil {
+		return fmt.Errorf("open: %s", err.Error())
+	}
+	defer conn.Close()
+	_, err = conn.Exec("PRAGMA journal_mode=DELETE")
+	return err
+}
+
 // RemoveFiles removes the SQLite database file, and any associated WAL and SHM files.
 func RemoveFiles(path string) error {
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
