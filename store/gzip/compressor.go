@@ -24,14 +24,18 @@ type Compressor struct {
 
 // NewCompressor returns an instantiated Compressor that reads from r and
 // compresses the data using gzip.
-func NewCompressor(r io.Reader, bufSz int) *Compressor {
+func NewCompressor(r io.Reader, bufSz int) (*Compressor, error) {
 	buf := new(bytes.Buffer)
+	gzw, err := gzip.NewWriterLevel(buf, gzip.BestSpeed)
+	if err != nil {
+		return nil, err
+	}
 	return &Compressor{
 		r:     r,
 		bufSz: bufSz,
 		buf:   buf,
-		gzw:   gzip.NewWriter(buf),
-	}
+		gzw:   gzw,
+	}, nil
 }
 
 // Read reads compressed data.

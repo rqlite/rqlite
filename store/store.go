@@ -1231,7 +1231,11 @@ func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 		}
 
 		if br.Compress {
-			dstGz := gzip.NewWriter(dst)
+			var dstGz *gzip.Writer
+			dstGz, err = gzip.NewWriterLevel(dst, gzip.BestSpeed)
+			if err != nil {
+				return err
+			}
 			defer dstGz.Close()
 			_, err = io.Copy(dstGz, srcFD)
 		} else {
