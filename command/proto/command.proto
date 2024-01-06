@@ -85,6 +85,7 @@ message BackupRequest {
 	Format format = 1;
 	bool Leader = 2;
 	bool Vacuum = 3;
+	bool Compress = 4;
 }
 
 message LoadRequest {
