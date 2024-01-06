@@ -258,6 +258,47 @@ COMMIT;
 	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
+
+	/////////////////////////////////////////////////////////////////////
+	// Compressed and vacuumed backup.
+	vgzf, err := os.CreateTemp("", "rqlite-baktest-")
+	if err != nil {
+		t.Fatalf("Backup Failed: unable to create temp file, %s", err.Error())
+	}
+	defer os.Remove(vgzf.Name())
+	defer vgzf.Close()
+	vbr := backupRequestBinary(true, true)
+	vbr.Compress = true
+	if err := s.Backup(br, vgzf); err != nil {
+		t.Fatalf("Compressed backup failed %s", err.Error())
+	}
+
+	// Gzip decompress f to a new temp file
+	vguzf, err := os.CreateTemp("", "rqlite-baktest-")
+	if err != nil {
+		t.Fatalf("Backup Failed: unable to create temp file, %s", err.Error())
+	}
+	defer os.Remove(guzf.Name())
+	defer guzf.Close()
+	if err := gunzipFile(vguzf, vgzf); err != nil {
+		t.Fatalf("Failed to gunzip backup file %s", err.Error())
+	}
+
+	// Open the backup file using the DB layer and check the data.
+	dstDB, err = db.Open(vguzf.Name(), false, false)
+	if err != nil {
+		t.Fatalf("unable to open backup database, %s", err.Error())
+	}
+	defer dstDB.Close()
+	qr = queryRequestFromString("SELECT * FROM foo", false, false)
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+	r, err = s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
 }
 
 // Test_SingleNodeSnapshot tests that the Store correctly takes a snapshot
