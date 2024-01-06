@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -287,7 +288,7 @@ func Test_ServiceBackup(t *testing.T) {
 		if br.Format != command.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY {
 			t.Fatalf("wrong backup format requested")
 		}
-		dst.Write(testData)
+		dst.Write(mustGZIPCompress(testData))
 		return nil
 	}
 
@@ -616,6 +617,18 @@ func removeNodeRequest(id string) *command.RemoveNodeRequest {
 	return &command.RemoveNodeRequest{
 		Id: id,
 	}
+}
+
+func mustGZIPCompress(b []byte) []byte {
+	var buf bytes.Buffer
+	zw := gzip.NewWriter(&buf)
+	if _, err := zw.Write(b); err != nil {
+		panic(fmt.Sprintf("failed to compress data: %s", err.Error()))
+	}
+	if err := zw.Close(); err != nil {
+		panic(fmt.Sprintf("failed to close gzip writer: %s", err.Error()))
+	}
+	return buf.Bytes()
 }
 
 func asJSON(v interface{}) string {

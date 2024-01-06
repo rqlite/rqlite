@@ -27,6 +27,7 @@ message Command {
         COMMAND_TYPE_JOIN = 8;
         COMMAND_TYPE_REQUEST = 9;
         COMMAND_TYPE_LOAD_CHUNK = 10;
+        COMMAND_TYPE_BACKUP_STREAM = 11;
     }
     Type type = 1;
 
