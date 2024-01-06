@@ -172,7 +172,7 @@ COMMIT;
 	}
 	defer os.Remove(f.Name())
 	defer f.Close()
-	if err := s.Backup(backupRequestBinary(true, false), f); err != nil {
+	if err := s.Backup(backupRequestBinary(true, false, false), f); err != nil {
 		t.Fatalf("Backup failed %s", err.Error())
 	}
 	if !filesIdentical(f.Name(), s.dbPath) {
@@ -187,9 +187,7 @@ COMMIT;
 	}
 	defer os.Remove(gzf.Name())
 	defer gzf.Close()
-	br := backupRequestBinary(true, false)
-	br.Compress = true
-	if err := s.Backup(br, gzf); err != nil {
+	if err := s.Backup(backupRequestBinary(true, false, true), gzf); err != nil {
 		t.Fatalf("Compressed backup failed %s", err.Error())
 	}
 
@@ -237,6 +235,7 @@ COMMIT;
 	}
 
 	checkDB := func(path string) {
+		t.Helper()
 		// Open the backup file using the DB layer and check the data.
 		dstDB, err := db.Open(path, false, false)
 		if err != nil {
@@ -263,7 +262,7 @@ COMMIT;
 	}
 	defer os.Remove(vf.Name())
 	defer vf.Close()
-	if err := s.Backup(backupRequestBinary(true, true), vf); err != nil {
+	if err := s.Backup(backupRequestBinary(true, true, false), vf); err != nil {
 		t.Fatalf("Backup failed %s", err.Error())
 	}
 	checkDB(vf.Name())
@@ -276,9 +275,7 @@ COMMIT;
 	}
 	defer os.Remove(gzf.Name())
 	defer gzf.Close()
-	br := backupRequestBinary(true, true)
-	br.Compress = true
-	if err := s.Backup(br, gzf); err != nil {
+	if err := s.Backup(backupRequestBinary(true, true, true), gzf); err != nil {
 		t.Fatalf("Compressed backup failed %s", err.Error())
 	}
 
@@ -2973,11 +2970,12 @@ func backupRequestSQL(leader bool) *proto.BackupRequest {
 	}
 }
 
-func backupRequestBinary(leader, vacuum bool) *proto.BackupRequest {
+func backupRequestBinary(leader, vacuum, compress bool) *proto.BackupRequest {
 	return &proto.BackupRequest{
-		Format: proto.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY,
-		Leader: leader,
-		Vacuum: vacuum,
+		Format:   proto.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY,
+		Leader:   leader,
+		Vacuum:   vacuum,
+		Compress: compress,
 	}
 }
 
