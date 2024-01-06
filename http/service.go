@@ -762,12 +762,6 @@ func (s *Service) handleBoot(w http.ResponseWriter, r *http.Request, qp QueryPar
 		http.Error(w, "invalid SQLite data", http.StatusBadRequest)
 		return
 	}
-	if !db.IsDELETEModeEnabled(peek) {
-		http.Error(w,
-			"SQLite database is in WAL mode - enable DELETE mode via 'PRAGMA journal_mode=DELETE'",
-			http.StatusBadRequest)
-		return
-	}
 
 	s.logger.Printf("starting boot process")
 	_, err = s.store.ReadFrom(bufReader)
