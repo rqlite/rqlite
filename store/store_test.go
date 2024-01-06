@@ -164,6 +164,23 @@ COMMIT;
 		t.Fatalf("failed to load simple dump: %s", err.Error())
 	}
 
+	checkDB := func(path string) {
+		// Open the backup file using the DB layer and check the data.
+		dstDB, err := db.Open(path, false, false)
+		if err != nil {
+			t.Fatalf("unable to open backup database, %s", err.Error())
+		}
+		defer dstDB.Close()
+		var buf bytes.Buffer
+		w := &buf
+		if err := dstDB.Dump(w); err != nil {
+			t.Fatalf("unable to dump backup database, %s", err.Error())
+		}
+		if buf.String() != dump {
+			t.Fatalf("backup dump is not as expected, got %s", buf.String())
+		}
+	}
+
 	/////////////////////////////////////////////////////////////////////
 	// Non-vacuumed backup, database should be bit-for-bit identical.
 	f, err := os.CreateTemp("", "rqlite-baktest-")
@@ -175,48 +192,7 @@ COMMIT;
 	if err := s.Backup(backupRequestBinary(true, false), f); err != nil {
 		t.Fatalf("Backup failed %s", err.Error())
 	}
-	// Open the backup file using the DB layer and check the data.
-	dstDB, err := db.Open(f.Name(), false, false)
-	if err != nil {
-		t.Fatalf("unable to open backup database, %s", err.Error())
-	}
-	defer dstDB.Close()
-	var buf bytes.Buffer
-	w := &buf
-	if err := dstDB.Dump(w); err != nil {
-		t.Fatalf("unable to dump backup database, %s", err.Error())
-	}
-	if buf.String() != dump {
-		t.Fatalf("backup dump is not as expected, got %s", buf.String())
-	}
-
-	/////////////////////////////////////////////////////////////////////
-	// Vacuumed backup, database may be not be bit-for-bit identical, but
-	// records should be OK.
-	vf, err := os.CreateTemp("", "rqlite-baktest-")
-	if err != nil {
-		t.Fatalf("Backup Failed: unable to create temp file, %s", err.Error())
-	}
-	defer os.Remove(vf.Name())
-	defer vf.Close()
-	if err := s.Backup(backupRequestBinary(true, true), vf); err != nil {
-		t.Fatalf("Backup failed %s", err.Error())
-	}
-	// Open the backup file using the DB layer and check the data.
-	dstDB, err = db.Open(vf.Name(), false, false)
-	if err != nil {
-		t.Fatalf("unable to open backup database, %s", err.Error())
-	}
-	defer dstDB.Close()
-	qr := queryRequestFromString("SELECT * FROM foo", false, false)
-	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
-	r, err := s.Query(qr)
-	if err != nil {
-		t.Fatalf("failed to query single node: %s", err.Error())
-	}
-	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(r); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-	}
+	checkDB(f.Name())
 
 	/////////////////////////////////////////////////////////////////////
 	// Compressed backup.
@@ -232,7 +208,7 @@ COMMIT;
 		t.Fatalf("Compressed backup failed %s", err.Error())
 	}
 
-	// Gzip decompress f to a new temp file
+	// Gzip decompress file to a new temp file
 	guzf, err := os.CreateTemp("", "rqlite-baktest-")
 	if err != nil {
 		t.Fatalf("Backup Failed: unable to create temp file, %s", err.Error())
@@ -242,63 +218,94 @@ COMMIT;
 	if err := gunzipFile(guzf, gzf); err != nil {
 		t.Fatalf("Failed to gunzip backup file %s", err.Error())
 	}
+	checkDB(guzf.Name())
+}
 
-	// Open the backup file using the DB layer and check the data.
-	dstDB, err = db.Open(guzf.Name(), false, false)
-	if err != nil {
-		t.Fatalf("unable to open backup database, %s", err.Error())
+// Test_SingleNodeBackupBinary tests that requesting a binary-formatted
+// backup works as expected.
+func Test_SingleNodeBackupBinaryVacuum(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
-	defer dstDB.Close()
-	qr = queryRequestFromString("SELECT * FROM foo", false, false)
-	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
-	r, err = s.Query(qr)
-	if err != nil {
-		t.Fatalf("failed to query single node: %s", err.Error())
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
 	}
-	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(r); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	dump := `PRAGMA foreign_keys=OFF;
+BEGIN TRANSACTION;
+CREATE TABLE foo (id integer not null primary key, name text);
+INSERT INTO "foo" VALUES(1,'fiona');
+COMMIT;
+`
+	_, err := s.Execute(executeRequestFromString(dump, false, false))
+	if err != nil {
+		t.Fatalf("failed to load simple dump: %s", err.Error())
+	}
+
+	checkDB := func(path string) {
+		// Open the backup file using the DB layer and check the data.
+		dstDB, err := db.Open(path, false, false)
+		if err != nil {
+			t.Fatalf("unable to open backup database, %s", err.Error())
+		}
+		defer dstDB.Close()
+		qr := queryRequestFromString("SELECT * FROM foo", false, false)
+		qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+		r, err := s.Query(qr)
+		if err != nil {
+			t.Fatalf("failed to query single node: %s", err.Error())
+		}
+		if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(r); exp != got {
+			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+		}
 	}
 
 	/////////////////////////////////////////////////////////////////////
-	// Compressed and vacuumed backup.
-	vgzf, err := os.CreateTemp("", "rqlite-baktest-")
+	// Vacuumed backup, database may be not be bit-for-bit identical, but
+	// records should be OK.
+	vf, err := os.CreateTemp("", "rqlite-baktest-")
 	if err != nil {
 		t.Fatalf("Backup Failed: unable to create temp file, %s", err.Error())
 	}
-	defer os.Remove(vgzf.Name())
-	defer vgzf.Close()
-	vbr := backupRequestBinary(true, true)
-	vbr.Compress = true
-	if err := s.Backup(br, vgzf); err != nil {
+	defer os.Remove(vf.Name())
+	defer vf.Close()
+	if err := s.Backup(backupRequestBinary(true, true), vf); err != nil {
+		t.Fatalf("Backup failed %s", err.Error())
+	}
+	checkDB(vf.Name())
+
+	/////////////////////////////////////////////////////////////////////
+	// Compressed and vacuumed backup.
+	gzf, err := os.CreateTemp("", "rqlite-baktest-")
+	if err != nil {
+		t.Fatalf("Backup Failed: unable to create temp file, %s", err.Error())
+	}
+	defer os.Remove(gzf.Name())
+	defer gzf.Close()
+	br := backupRequestBinary(true, true)
+	br.Compress = true
+	if err := s.Backup(br, gzf); err != nil {
 		t.Fatalf("Compressed backup failed %s", err.Error())
 	}
 
-	// Gzip decompress f to a new temp file
-	vguzf, err := os.CreateTemp("", "rqlite-baktest-")
+	// Gzip decompress file to a new temp file
+	guzf, err := os.CreateTemp("", "rqlite-baktest-")
 	if err != nil {
 		t.Fatalf("Backup Failed: unable to create temp file, %s", err.Error())
 	}
 	defer os.Remove(guzf.Name())
 	defer guzf.Close()
-	if err := gunzipFile(vguzf, vgzf); err != nil {
+	if err := gunzipFile(guzf, gzf); err != nil {
 		t.Fatalf("Failed to gunzip backup file %s", err.Error())
 	}
-
-	// Open the backup file using the DB layer and check the data.
-	dstDB, err = db.Open(vguzf.Name(), false, false)
-	if err != nil {
-		t.Fatalf("unable to open backup database, %s", err.Error())
-	}
-	defer dstDB.Close()
-	qr = queryRequestFromString("SELECT * FROM foo", false, false)
-	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
-	r, err = s.Query(qr)
-	if err != nil {
-		t.Fatalf("failed to query single node: %s", err.Error())
-	}
-	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(r); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-	}
+	checkDB(guzf.Name())
 }
 
 // Test_SingleNodeSnapshot tests that the Store correctly takes a snapshot
