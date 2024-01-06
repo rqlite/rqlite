@@ -220,6 +220,13 @@ class TestAutoBackupS3(unittest.TestCase):
     self.assertEqual(rows[0][1], 'fiona')
     conn.close()
 
+    # Stop the node, and restart it. Check that no uploads happen due to a restart.
+    node.stop(graceful=True)
+    node.start()
+    node.wait_for_leader()
+    time.Sleep(5)
+    self.assertEqual(node.expvar()['uploader']['num_uploads_ok'], 0)
+
     deprovision_node(node)
     os.remove(cfg)
     os.remove(backup_file)
