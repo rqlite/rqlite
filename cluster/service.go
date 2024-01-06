@@ -397,12 +397,9 @@ func (s *Service) handleConn(conn net.Conn) {
 			// space on the wire.
 			br.Compress = true
 			if err := s.db.Backup(br, conn); err != nil {
-				conn.Close()
-				return
+				s.logger.Printf("failed to stream backup: %s", err.Error())
 			}
-
-			// XXXX
-			return //// HAVE TO CLOSE THIS CONNECTION TO SIGNAL OTHER SIDE, WHY?
+			return // Required to signal end of stream. I do not know why. :-(
 
 		case proto.Command_COMMAND_TYPE_LOAD:
 			stats.Add(numLoadRequest, 1)
