@@ -1,6 +1,8 @@
 ## 8.16.0 (unreleased)
 ### New features
 - [PR #1563](https://github.com/rqlite/rqlite/pull/1563): Support S3-compatible storage systems for auto-backups and auto-restores. Fixes issue [#1560](https://github.com/rqlite/rqlite/issues/1560). Thanks @jtackaberry
+- [PR #1573](https://github.com/rqlite/rqlite/pull/1573): Add support for automatically gzipped-compressed backups.
+
 ### Implementation changes and bug fixes
 - [PR #1567](https://github.com/rqlite/rqlite/pull/1567): Refactor to make more use of `progress` module.
 - [Commit d1cc802](https://github.com/rqlite/rqlite/commit/d1cc80229221ff51cd4741cc7a2e05e87f0337cb): Fix return codes in `HasData()`.
