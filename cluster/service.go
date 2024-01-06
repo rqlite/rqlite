@@ -401,6 +401,9 @@ func (s *Service) handleConn(conn net.Conn) {
 				return
 			}
 
+			// XXXX
+			return //// HAVE TO CLOSE THIS CONNECTION TO SIGNAL OTHER SIDE, WHY?
+
 		case proto.Command_COMMAND_TYPE_LOAD:
 			stats.Add(numLoadRequest, 1)
 			resp := &proto.CommandLoadResponse{}
