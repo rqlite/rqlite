@@ -164,23 +164,6 @@ COMMIT;
 		t.Fatalf("failed to load simple dump: %s", err.Error())
 	}
 
-	checkDB := func(path string) {
-		// Open the backup file using the DB layer and check the data.
-		dstDB, err := db.Open(path, false, false)
-		if err != nil {
-			t.Fatalf("unable to open backup database, %s", err.Error())
-		}
-		defer dstDB.Close()
-		var buf bytes.Buffer
-		w := &buf
-		if err := dstDB.Dump(w); err != nil {
-			t.Fatalf("unable to dump backup database, %s", err.Error())
-		}
-		if buf.String() != dump {
-			t.Fatalf("backup dump is not as expected, got %s", buf.String())
-		}
-	}
-
 	/////////////////////////////////////////////////////////////////////
 	// Non-vacuumed backup, database should be bit-for-bit identical.
 	f, err := os.CreateTemp("", "rqlite-baktest-")
@@ -192,7 +175,9 @@ COMMIT;
 	if err := s.Backup(backupRequestBinary(true, false), f); err != nil {
 		t.Fatalf("Backup failed %s", err.Error())
 	}
-	checkDB(f.Name())
+	if !filesEqual(f.Name(), s.dbPath) {
+		t.Fatalf("backup file not identical to database file")
+	}
 
 	/////////////////////////////////////////////////////////////////////
 	// Compressed backup.
@@ -218,7 +203,9 @@ COMMIT;
 	if err := gunzipFile(guzf, gzf); err != nil {
 		t.Fatalf("Failed to gunzip backup file %s", err.Error())
 	}
-	checkDB(guzf.Name())
+	if !filesEqual(guzf.Name(), s.dbPath) {
+		t.Fatalf("backup file not identical to database file")
+	}
 }
 
 // Test_SingleNodeBackupBinary tests that requesting a binary-formatted
@@ -3034,6 +3021,18 @@ func gunzipFile(dst, src *os.File) error {
 	defer gzr.Close()
 	_, err = io.Copy(dst, gzr)
 	return err
+}
+
+func filesEqual(path1, path2 string) bool {
+	b1, err := os.ReadFile(path1)
+	if err != nil {
+		return false
+	}
+	b2, err := os.ReadFile(path2)
+	if err != nil {
+		return false
+	}
+	return bytes.Equal(b1, b2)
 }
 
 // waitForLeaderID waits until the Store's LeaderID is set, or the timeout
