@@ -208,38 +208,53 @@ func (c *Client) Request(r *command.ExecuteQueryRequest, nodeAddr string, creds 
 
 // Backup retrieves a backup from a remote node and writes to the io.Writer
 func (c *Client) Backup(br *command.BackupRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration, w io.Writer) error {
+	conn, err := c.dial(nodeAddr, c.timeout)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
 	command := &proto.Command{
-		Type: proto.Command_COMMAND_TYPE_BACKUP,
+		Type: proto.Command_COMMAND_TYPE_BACKUP_STREAM,
 		Request: &proto.Command_BackupRequest{
 			BackupRequest: br,
 		},
 		Credentials: creds,
 	}
-	p, err := c.retry(command, nodeAddr, timeout)
-	if err != nil {
+
+	if err := writeCommand(conn, command, timeout); err != nil {
+		handleConnError(conn)
 		return err
 	}
 
-	// Decompress....
-	p, err = gzUncompress(p)
+	p, err := readResponse(conn, timeout)
 	if err != nil {
-		return fmt.Errorf("backup decompress: %w", err)
+		handleConnError(conn)
+		return err
 	}
 
-	resp := &proto.CommandBackupResponse{}
-	err = pb.Unmarshal(p, resp)
+	a := &proto.CommandBackupResponse{}
+	err = pb.Unmarshal(p, a)
 	if err != nil {
-		return fmt.Errorf("backup unmarshal: %w", err)
+		return err
+	}
+	if a.Error != "" {
+		return errors.New(a.Error)
 	}
 
-	if resp.Error != "" {
-		return errors.New(resp.Error)
+	// The backup stream is unconditionally compressed, so depending on whether
+	// the user requested compression, we may need to decompress the response.
+	var rc io.ReadCloser
+	rc = conn
+	if !br.Compress {
+		rc, err = gzip.NewReader(conn)
+		if err != nil {
+			return err
+		}
+		defer rc.Close()
 	}
-
-	if _, err := w.Write(resp.Data); err != nil {
-		return fmt.Errorf("backup write: %w", err)
-	}
-	return nil
+	_, err = io.Copy(w, rc)
+	return err
 }
 
 // Load loads a SQLite file into the database.
