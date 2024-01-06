@@ -151,8 +151,7 @@ func (u *Uploader) upload(ctx context.Context) error {
 	if u.lastSum == nil {
 		hash, err := u.storageClient.LatestHash(ctx)
 		if err == nil && hash != "" {
-			s, err := SHA256FromString(hash)
-			if err == nil {
+			if s, err := SHA256FromString(hash); err == nil {
 				u.lastSum = s
 			}
 		}
