@@ -1,4 +1,4 @@
-## 8.16.0 (unreleased)
+## 8.16.0 (January 6th 2024)
 ### New features
 - [PR #1563](https://github.com/rqlite/rqlite/pull/1563): Support S3-compatible storage systems for auto-backups and auto-restores. Fixes issue [#1560](https://github.com/rqlite/rqlite/issues/1560). Thanks @jtackaberry
 - [PR #1573](https://github.com/rqlite/rqlite/pull/1573): Add support for automatically gzipped-compressed backups.
