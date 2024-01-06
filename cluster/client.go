@@ -255,7 +255,9 @@ func (c *Client) Backup(br *command.BackupRequest, nodeAddr string, creds *proto
 		rc = gzr
 		defer rc.Close()
 	}
+	ss := time.Now()
 	_, err = io.Copy(w, rc)
+	fmt.Println("backup copy time on client side:", time.Since(ss))
 	return err
 }
 

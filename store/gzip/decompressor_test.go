@@ -60,10 +60,10 @@ func Test_Decompressor_EndToEnd(t *testing.T) {
 			}
 			compressor, err := NewCompressor(srcBuf, DefaultBufferSize)
 			if err != nil {
-				t.Fatalf("failed to create compressor: %v", err)
+				t.Errorf("failed to create compressor: %v", err)
 			}
 			if _, err := io.Copy(conn, compressor); err != nil {
-				t.Fatalf("failed to copy data: %v", err)
+				t.Errorf("failed to copy data: %v", err)
 			}
 			conn.Close()
 		}
