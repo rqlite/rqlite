@@ -11,7 +11,10 @@ import (
 func Test_Compressor_SingleRead(t *testing.T) {
 	originalData := []byte("This is a test string, xxxxx -- xxxxxx -- test should compress")
 	reader := bytes.NewReader(originalData)
-	compressor := NewCompressor(reader, DefaultBufferSize)
+	compressor, err := NewCompressor(reader, DefaultBufferSize)
+	if err != nil {
+		t.Fatalf("Failed to create compressor: %v", err)
+	}
 
 	// Create a buffer to hold compressed data
 	compressedBuffer := make([]byte, DefaultBufferSize)
@@ -41,7 +44,10 @@ func Test_Compressor_SingleRead(t *testing.T) {
 func Test_Compressor_MultipleRead(t *testing.T) {
 	originalData := []byte("This is a test string, xxxxx -- xxxxxx -- test should compress")
 	reader := bytes.NewReader(originalData)
-	compressor := NewCompressor(reader, DefaultBufferSize)
+	compressor, err := NewCompressor(reader, DefaultBufferSize)
+	if err != nil {
+		t.Fatalf("Failed to create compressor: %v", err)
+	}
 
 	// Create a buffer to hold compressed data
 	compressedBuffer := new(bytes.Buffer)
@@ -76,7 +82,10 @@ func Test_Compressor_MultipleRead(t *testing.T) {
 func Test_Compressor_MultipleReadSmallBuffer(t *testing.T) {
 	originalData := []byte("This is a test string, xxxxx -- xxxxxx -- test should compress")
 	reader := bytes.NewReader(originalData)
-	compressor := NewCompressor(reader, 8)
+	compressor, err := NewCompressor(reader, 8)
+	if err != nil {
+		t.Fatalf("Failed to create compressor: %v", err)
+	}
 
 	// Create a buffer to hold compressed data
 	compressedBuffer := new(bytes.Buffer)
@@ -121,7 +130,10 @@ func Test_Compressor_CompressFile(t *testing.T) {
 	}
 
 	// Compress it.
-	compressor := NewCompressor(srcFD, DefaultBufferSize)
+	compressor, err := NewCompressor(srcFD, DefaultBufferSize)
+	if err != nil {
+		t.Fatalf("Failed to create compressor: %v", err)
+	}
 	dstFD := mustOpenTempFile(t)
 	defer dstFD.Close()
 	_, err = io.Copy(dstFD, compressor)

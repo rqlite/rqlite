@@ -58,7 +58,10 @@ func Test_Decompressor_EndToEnd(t *testing.T) {
 				}
 				t.Errorf("failed to accept connection: %v", err)
 			}
-			compressor := NewCompressor(srcBuf, DefaultBufferSize)
+			compressor, err := NewCompressor(srcBuf, DefaultBufferSize)
+			if err != nil {
+				t.Errorf("failed to create compressor: %v", err)
+			}
 			if _, err := io.Copy(conn, compressor); err != nil {
 				t.Errorf("failed to copy data: %v", err)
 			}
