@@ -1,3 +1,7 @@
+## 8.16.1 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1574](https://github.com/rqlite/rqlite/pull/1574): Use "GZIP best speed" for internode traffic compression.
+
 ## 8.16.0 (January 6th 2024)
 ### New features
 - [PR #1563](https://github.com/rqlite/rqlite/pull/1563): Support S3-compatible storage systems for auto-backups and auto-restores. Fixes issue [#1560](https://github.com/rqlite/rqlite/issues/1560). Thanks @jtackaberry
