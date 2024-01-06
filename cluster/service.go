@@ -398,8 +398,8 @@ func (s *Service) handleConn(conn net.Conn) {
 			br.Compress = true
 			if err := s.db.Backup(br, conn); err != nil {
 				s.logger.Printf("failed to stream backup: %s", err.Error())
+				return
 			}
-			return // Required to signal end of stream. I do not know why. :-(
 
 		case proto.Command_COMMAND_TYPE_LOAD:
 			stats.Add(numLoadRequest, 1)

@@ -247,10 +247,12 @@ func (c *Client) Backup(br *command.BackupRequest, nodeAddr string, creds *proto
 	var rc io.ReadCloser
 	rc = conn
 	if !br.Compress {
-		rc, err = gzip.NewReader(conn)
+		gzr, err := gzip.NewReader(conn)
 		if err != nil {
 			return err
 		}
+		gzr.Multistream(false)
+		rc = gzr
 		defer rc.Close()
 	}
 	_, err = io.Copy(w, rc)
