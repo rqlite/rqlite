@@ -1168,10 +1168,16 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 }
 
 // Backup writes a consistent snapshot of the underlying database to dst. This
-// can be called while writes are being made to the system. If vacuum is true,
-// then a VACUUM is performed on the database before the backup is made. The backup
-// may fail if the system is actively snapshotting however. The client should
-// just retry in this case.
+// can be called while writes are being made to the system. The backup may fail
+// if the system is actively snapshotting. The client can just retry in this case.
+//
+// If vacuum is not true the copy is written directly to dst, optionally in compressed
+// form, without any intermediate temporary files.
+//
+// If vacuum is true, then a VACUUM is performed on the database before the backup
+// is made. If compression false, and dst is an os.File, then the vacuumed copy
+// will be written directly to that file. Otherwise a temporary file will be created,
+// and that temporary file copied to dst.
 func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 	if !s.open {
 		return ErrNotOpen
@@ -1197,7 +1203,13 @@ func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 		var srcFD *os.File
 		var err error
 		if br.Vacuum {
-			// Vacuum requested, so need an intermediate file.
+			if !br.Compress {
+				if f, ok := dst.(*os.File); ok {
+					// Fast path, just vacuum directly to the destination.
+					return s.db.Backup(f.Name(), br.Vacuum)
+				}
+			}
+
 			srcFD, err = os.CreateTemp(s.dbDir, backupScatchPattern)
 			if err != nil {
 				return err
@@ -1205,9 +1217,6 @@ func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 			defer os.Remove(srcFD.Name())
 			defer srcFD.Close()
 			if err := s.db.Backup(srcFD.Name(), br.Vacuum); err != nil {
-				return err
-			}
-			if _, err := srcFD.Seek(0, io.SeekStart); err != nil {
 				return err
 			}
 		} else {
@@ -1226,7 +1235,7 @@ func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 			}
 			defer s.snapshotCAS.End()
 
-			// Fast path -- direct copy.
+			// Now we can copy the SQLite file directly.
 			srcFD, err = os.Open(s.dbPath)
 			if err != nil {
 				return fmt.Errorf("failed to open database file: %s", err.Error())
