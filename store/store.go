@@ -1340,9 +1340,6 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 	if !sql.IsValidSQLiteFile(f.Name()) {
 		return n, fmt.Errorf("invalid SQLite data")
 	}
-	if !sql.IsDELETEModeEnabledSQLiteFile(f.Name()) {
-		return n, fmt.Errorf("SQLite file does not have DELETE mode enabled")
-	}
 
 	// Raft won't snapshot unless there is at least one unsnappshotted log entry,
 	// so prep that now before we do anything destructive.

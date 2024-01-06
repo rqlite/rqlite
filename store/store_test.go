@@ -1555,7 +1555,7 @@ COMMIT;
 	}
 }
 
-func Test_SingleNodeBoot_Fail(t *testing.T) {
+func Test_SingleNodeBoot_InvalidFail_WALOK(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
 
@@ -1570,7 +1570,7 @@ func Test_SingleNodeBoot_Fail(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
-	// Ensure invalid SQLite data is not accepted.
+	// Ensure WAL SQLite data is not accepted.
 	b := make([]byte, 1024)
 	mustReadRandom(b)
 	r := bytes.NewReader(b)
@@ -1578,14 +1578,14 @@ func Test_SingleNodeBoot_Fail(t *testing.T) {
 		t.Fatalf("expected error reading from invalid SQLite file")
 	}
 
-	// Ensure WAL-enabled SQLite file is not accepted.
+	// Ensure WAL-enabled SQLite file is accepted.
 	f, err := os.Open(filepath.Join("testdata", "wal-enabled.sqlite"))
 	if err != nil {
 		t.Fatalf("failed to open SQLite file: %s", err.Error())
 	}
 	defer f.Close()
-	if _, err := s.ReadFrom(f); err == nil {
-		t.Fatalf("expected error reading from WAL-enabled SQLite file")
+	if _, err := s.ReadFrom(f); err != nil {
+		t.Fatalf("error reading from WAL-enabled SQLite file")
 	}
 }
 

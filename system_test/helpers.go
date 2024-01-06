@@ -197,6 +197,26 @@ func (n *Node) Load(filename string) (string, error) {
 	return n.postFile("/db/load", filename)
 }
 
+// Backup backs up the node's database to the given file.
+func (n *Node) Backup(filename string) error {
+	v, _ := url.Parse("http://" + n.APIAddr + "/db/backup")
+	resp, err := http.Get(v.String())
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("backup returned: %s", resp.Status)
+	}
+	defer resp.Body.Close()
+	f, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = io.Copy(f, resp.Body)
+	return err
+}
+
 // Load loads a SQLite database file into the node.
 func (n *Node) Boot(filename string) (string, error) {
 	return n.postFile("/boot", filename)
@@ -485,12 +505,12 @@ func (n *Node) postFile(url, filename string) (string, error) {
 		return "", err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("file endpoint returned: %s", resp.Status)
-	}
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("file endpoint returned: %s %s", resp.Status, body)
 	}
 	return string(body), nil
 }

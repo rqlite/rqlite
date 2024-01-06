@@ -3,6 +3,7 @@ package system
 import (
 	"fmt"
 	"net"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -1224,6 +1225,60 @@ func Test_MultiNodeClusterSnapshot(t *testing.T) {
 
 	// Test that the new leader still has the full state.
 	testerFn(leader)
+}
+
+func Test_MultiNodeCluster_Backup(t *testing.T) {
+	node1 := mustNewLeaderNode("leader1")
+	defer node1.Deprovision()
+
+	node2 := mustNewNode("node2", false)
+	defer node2.Deprovision()
+	if err := node2.Join(node1); err != nil {
+		t.Fatalf("node failed to join leader: %s", err.Error())
+	}
+	_, err := node2.WaitForLeader()
+	if err != nil {
+		t.Fatalf("failed waiting for leader: %s", err.Error())
+	}
+
+	// Create a table and write a record
+	if _, err := node1.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`); err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if _, err := node1.Execute(`INSERT INTO foo(name) VALUES("fiona")`); err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+
+	// Get a backup from the leader via the follower.
+	c := Cluster{node1, node2}
+	followers, err := c.Followers()
+	if err != nil {
+		t.Fatalf("failed to get followers: %s", err.Error())
+	}
+
+	backupFile := mustTempFile()
+	defer os.Remove(backupFile)
+	if err := followers[0].Backup(backupFile); err != nil {
+		t.Fatalf("failed to get backup from follower: %s", err.Error())
+	}
+
+	// Create brand new node, and restore backup into it.
+	newNode := mustNewLeaderNode("newNode")
+	defer newNode.Deprovision()
+	_, err = newNode.Boot(backupFile)
+	if err != nil {
+		t.Fatalf("failed to boot using backup: %s", err.Error())
+	}
+
+	// Check that the new node has the correct state.
+	exp := `{"results":[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]}`
+	got, err := newNode.Query(`SELECT * FROM foo`)
+	if err != nil {
+		t.Fatalf("failed to query new node: %s", err.Error())
+	}
+	if got != exp {
+		t.Fatalf("incorrect count, got %s, exp %s", got, exp)
+	}
 }
 
 // Test_MultiNodeClusterWithNonVoter tests formation of a 4-node cluster, one of which is
