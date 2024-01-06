@@ -5,6 +5,7 @@ package store
 
 import (
 	"bytes"
+	"compress/gzip"
 	"errors"
 	"expvar"
 	"fmt"
@@ -1228,8 +1229,15 @@ func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 			}
 			defer srcFD.Close()
 		}
-		_, err = io.Copy(dst, srcFD)
-		return err
+		if br.Compress {
+			dstGz := gzip.NewWriter(dst)
+			defer dstGz.Close()
+			_, err = io.Copy(dstGz, srcFD)
+			return err
+		} else {
+			_, err = io.Copy(dst, srcFD)
+			return err
+		}
 	} else if br.Format == proto.BackupRequest_BACKUP_REQUEST_FORMAT_SQL {
 		return s.db.Dump(dst)
 	}
