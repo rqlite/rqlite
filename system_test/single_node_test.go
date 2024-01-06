@@ -4,7 +4,9 @@ Package system runs system-level testing of rqlite. This includes testing of sin
 package system
 
 import (
+	"compress/gzip"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -981,20 +983,61 @@ func Test_SingleNodeBackup(t *testing.T) {
 
 	backup := mustTempFile()
 	defer os.Remove(backup)
-	if err := node.Backup(backup); err != nil {
+	if err := node.Backup(backup, false); err != nil {
 		t.Fatalf(`backup failed: %s`, err.Error())
 	}
 
+	// Create new node, and restore from backup.
 	newNode := mustNewLeaderNode("leader2")
 	defer newNode.Deprovision()
-
 	_, err = newNode.Boot(backup)
 	if err != nil {
 		t.Fatalf(`boot failed: %s`, err.Error())
 	}
-
-	// check that the row is present in the new node
 	r, err := newNode.Query(`SELECT * FROM foo`)
+	if err != nil {
+		t.Fatalf(`query failed: %s`, err.Error())
+	}
+	if r != `{"results":[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]}` {
+		t.Fatalf("test received wrong result got %s", r)
+	}
+
+	// Get a compressed backup, test it again.
+	if err := node.Backup(backup, true); err != nil {
+		t.Fatalf(`backup failed: %s`, err.Error())
+	}
+
+	// decompress backup and check it.
+	decompressedBackup := mustTempFile()
+	defer os.Remove(decompressedBackup)
+
+	f, err := os.Open(backup)
+	if err != nil {
+		t.Fatalf(`failed to open backup: %s`, err.Error())
+	}
+	defer f.Close()
+	gzr, err := gzip.NewReader(f)
+	if err != nil {
+		t.Fatalf(`failed to create gzip reader: %s`, err.Error())
+	}
+	defer gzr.Close()
+	w, err := os.Create(decompressedBackup)
+	if err != nil {
+		t.Fatalf(`failed to create decompressed backup: %s`, err.Error())
+	}
+	defer w.Close()
+	if _, err := io.Copy(w, gzr); err != nil {
+		t.Fatalf(`failed to decompress backup: %s`, err.Error())
+	}
+
+	// Create new node, and restore from backup.
+	newNode2 := mustNewLeaderNode("leader3")
+	defer newNode2.Deprovision()
+	_, err = newNode2.Boot(decompressedBackup)
+	if err != nil {
+		t.Fatalf(`boot failed: %s`, err.Error())
+	}
+	r, err = newNode2.Query(`SELECT * FROM foo`)
 	if err != nil {
 		t.Fatalf(`query failed: %s`, err.Error())
 	}
