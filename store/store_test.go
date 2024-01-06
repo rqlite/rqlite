@@ -2847,6 +2847,14 @@ func mustNoop(s *Store, id string) {
 	}
 }
 
+func mustCreateTempFD() *os.File {
+	f, err := os.CreateTemp("", "rqlite-temp")
+	if err != nil {
+		panic("failed to create temporary file")
+	}
+	return f
+}
+
 func mustCreateTempFile() string {
 	f, err := os.CreateTemp("", "rqlite-temp")
 	if err != nil {

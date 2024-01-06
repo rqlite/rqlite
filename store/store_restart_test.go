@@ -1,7 +1,11 @@
 package store
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"io"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -362,4 +366,85 @@ func Test_OpenStoreCloseUserSnapshot(t *testing.T) {
 	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
+}
+
+func Test_OpenStoreCloseOpen_Hash(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Write a few 100 records
+	er := executeRequestFromString(
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		false, false)
+	_, err := s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	for i := 0; i < 100; i++ {
+		er := executeRequestFromString(
+			fmt.Sprintf(`INSERT INTO foo(name) VALUES("fiona-%d")`, i),
+			false, false)
+		_, err := s.Execute(er)
+		if err != nil {
+			t.Fatalf("failed to execute on single node: %s", err.Error())
+		}
+	}
+
+	// Hash the backup
+	tmpFD := mustCreateTempFD()
+	defer os.Remove(tmpFD.Name())
+	defer tmpFD.Close()
+	if err := s.Backup(backupRequestBinary(true, false, false), tmpFD); err != nil {
+		t.Fatalf("Backup failed %s", err.Error())
+	}
+	sum1 := mustSHA256Sum(tmpFD.Name())
+
+	// Restart the node
+	if err := s.Close(true); err != nil {
+		t.Fatalf("failed to close single-node store: %s", err.Error())
+	}
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	/// Hash the backup again
+	tmpFD = mustCreateTempFD()
+	defer os.Remove(tmpFD.Name())
+	defer tmpFD.Close()
+	if err := s.Backup(backupRequestBinary(true, false, false), tmpFD); err != nil {
+		t.Fatalf("Backup failed %s", err.Error())
+	}
+
+	sum2 := mustSHA256Sum(tmpFD.Name())
+	if sum1 != sum2 {
+		t.Fatalf("hash mismatch, %s != %s", sum1, sum2)
+	}
+}
+
+func mustSHA256Sum(path string) string {
+	fd, err := os.Open(path)
+	if err != nil {
+		panic(err)
+	}
+	defer fd.Close()
+
+	h := sha256.New()
+	if _, err := io.Copy(h, fd); err != nil {
+		panic(err)
+	}
+	return hex.EncodeToString(h.Sum(nil))
 }
