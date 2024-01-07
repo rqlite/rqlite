@@ -28,6 +28,18 @@ func NewProvider(s *Store, v bool) *Provider {
 	}
 }
 
+// Check returns true if the Store has changed since the last time Check() was
+// called with the given value of i. Check() also returns the current value of
+// i, which should be passed to the next invocation of Check(). If Check()
+// returns false, the returned uint64 of can be ignored.
+func (p *Provider) Check(i uint64) (uint64, bool) {
+	li, err := p.str.boltStore.LastIndex()
+	if err != nil {
+		return 0, false
+	}
+	return li, li > i
+}
+
 // Provider writes the SQLite database to the given path, ensuring the database
 // is in DELETE mode. If path exists, it will be overwritten.
 func (p *Provider) Provide(path string) error {
