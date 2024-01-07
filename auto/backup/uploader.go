@@ -74,7 +74,8 @@ type Uploader struct {
 	lastUploadTime     time.Time
 	lastUploadDuration time.Duration
 
-	lastI uint64
+	lastSum SHA256Sum
+	lastI   uint64
 }
 
 // NewUploader creates a new Uploader service.
@@ -126,6 +127,7 @@ func (u *Uploader) Stats() (map[string]interface{}, error) {
 		"compress":             u.compress,
 		"last_upload_time":     u.lastUploadTime.Format(time.RFC3339),
 		"last_upload_duration": u.lastUploadDuration.String(),
+		"last_upload_sum":      u.lastSum.String(),
 		"last_i":               u.lastI,
 	}
 	return status, nil
@@ -152,6 +154,15 @@ func (u *Uploader) upload(ctx context.Context) error {
 		return err
 	}
 
+	sum, err := FileSHA256(filetoUpload)
+	if err != nil {
+		return err
+	}
+	if sum.Equals(u.lastSum) {
+		stats.Add(numUploadsSkipped, 1)
+		return nil
+	}
+
 	fd, err := os.Open(filetoUpload)
 	if err != nil {
 		return err
@@ -165,6 +176,7 @@ func (u *Uploader) upload(ctx context.Context) error {
 		stats.Add(numUploadsFail, 1)
 	} else {
 		u.lastI = lastI
+		u.lastSum = sum
 		stats.Add(numUploadsOK, 1)
 		stats.Add(totalUploadBytes, cr.Count())
 		stats.Get(lastUploadBytes).(*expvar.Int).Set(cr.Count())
