@@ -120,6 +120,9 @@ const (
 	numAutoRestoresSkipped    = "num_auto_restores_skipped"
 	numAutoRestoresFailed     = "num_auto_restores_failed"
 	numRecoveries             = "num_recoveries"
+	numProviderChecks         = "num_provider_checks"
+	numProviderProvides       = "num_provider_provides"
+	numProviderProvidesFail   = "num_provider_provides_fail"
 	numUncompressedCommands   = "num_uncompressed_commands"
 	numCompressedCommands     = "num_compressed_commands"
 	numJoins                  = "num_joins"
@@ -163,6 +166,9 @@ func ResetStats() {
 	stats.Add(numRestores, 0)
 	stats.Add(numRestoresFailed, 0)
 	stats.Add(numRecoveries, 0)
+	stats.Add(numProviderChecks, 0)
+	stats.Add(numProviderProvides, 0)
+	stats.Add(numProviderProvidesFail, 0)
 	stats.Add(numAutoRestores, 0)
 	stats.Add(numAutoRestoresSkipped, 0)
 	stats.Add(numAutoRestoresFailed, 0)
