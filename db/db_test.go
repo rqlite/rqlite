@@ -552,6 +552,7 @@ func Test_DBLastModified(t *testing.T) {
 		t.Fatalf("last modified time not updated")
 	}
 
+	// Checkpoint, check time is later.
 	if err := db.Checkpoint(); err != nil {
 		t.Fatalf("failed to checkpoint database: %s", err.Error())
 	}
@@ -561,6 +562,15 @@ func Test_DBLastModified(t *testing.T) {
 	}
 	if lm3.Before(lm2) {
 		t.Fatalf("last modified time not updated after checkpoint")
+	}
+
+	// Call again, without changes, check time is same.
+	lm4, err := db.LastModified()
+	if err != nil {
+		t.Fatalf("failed to get last modified time: %s", err.Error())
+	}
+	if !lm4.Equal(lm3) {
+		t.Fatalf("last modified time updated without changes")
 	}
 }
 
