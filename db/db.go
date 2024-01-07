@@ -420,6 +420,23 @@ func Open(dbPath string, fkEnabled, wal bool) (*DB, error) {
 	}, nil
 }
 
+// LastModified returns the last modified time of the database file, or the WAL file,
+// whichever is most recent.
+func (db *DB) LastModified() (time.Time, error) {
+	dbTime, err := lastModified(db.path)
+	if err != nil {
+		return time.Time{}, err
+	}
+	walTime, err := lastModified(db.walPath)
+	if err != nil {
+		return time.Time{}, err
+	}
+	if dbTime.After(walTime) {
+		return dbTime, nil
+	}
+	return walTime, nil
+}
+
 // Close closes the underlying database connection.
 func (db *DB) Close() error {
 	if err := db.rwDB.Close(); err != nil {
@@ -1556,4 +1573,15 @@ func fileSize(path string) (int64, error) {
 		return 0, fmt.Errorf("not a file")
 	}
 	return stat.Size(), nil
+}
+
+func lastModified(path string) (time.Time, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return time.Time{}, nil
+		}
+		return time.Time{}, err
+	}
+	return info.ModTime(), nil
 }

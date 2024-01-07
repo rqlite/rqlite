@@ -31,14 +31,14 @@ func NewProvider(s *Store, v bool) *Provider {
 // Check returns true if the Provider data has changed since the last time
 // Check() was called with the given value of i. Check() also returns the
 // current value of i, which should be passed to the next invocation of
-// Check(). If Check() returns false, the returned uint64 can be ignored.
-func (p *Provider) Check(i uint64) (uint64, bool) {
+// Check(). If Check() returns false, the returned int64 can be ignored.
+func (p *Provider) Check(i int64) (int64, bool) {
 	stats.Add(numProviderChecks, 1)
-	li, err := p.str.boltStore.LastIndex()
+	lm, err := p.str.db.LastModified()
 	if err != nil {
 		return 0, false
 	}
-	return li, li > i
+	return lm.UnixNano(), lm.UnixNano() > i
 }
 
 // Provider writes the SQLite database to the given path, ensuring the database

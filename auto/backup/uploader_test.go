@@ -45,7 +45,7 @@ func Test_UploaderSingleUpload(t *testing.T) {
 		},
 	}
 	dp := &mockDataProvider{data: "my upload data"}
-	dp.checkFn = func(i uint64) (uint64, bool) {
+	dp.checkFn = func(i int64) (int64, bool) {
 		if i == 0 {
 			return 1, true
 		}
@@ -85,7 +85,7 @@ func Test_UploaderSingleUploadCompress(t *testing.T) {
 		},
 	}
 	dp := &mockDataProvider{data: "my upload data"}
-	dp.checkFn = func(i uint64) (uint64, bool) {
+	dp.checkFn = func(i int64) (int64, bool) {
 		if i == 0 {
 			return 1, true
 		}
@@ -120,7 +120,7 @@ func Test_UploaderDoubleUpload(t *testing.T) {
 		},
 	}
 	dp := &mockDataProvider{data: "my upload data"}
-	dp.checkFn = func(i uint64) (uint64, bool) {
+	dp.checkFn = func(i int64) (int64, bool) {
 		if i == 0 {
 			return 1, true
 		}
@@ -163,7 +163,7 @@ func Test_UploaderFailThenOK(t *testing.T) {
 		},
 	}
 	dp := &mockDataProvider{data: "my upload data"}
-	dp.checkFn = func(i uint64) (uint64, bool) {
+	dp.checkFn = func(i int64) (int64, bool) {
 		return 1, true
 	}
 	uploader := NewUploader(sc, dp, time.Second, UploadNoCompress)
@@ -201,7 +201,7 @@ func Test_UploaderOKThenFail(t *testing.T) {
 		},
 	}
 	dp := &mockDataProvider{data: "my upload data"}
-	dp.checkFn = func(i uint64) (uint64, bool) {
+	dp.checkFn = func(i int64) (int64, bool) {
 		return 1, true
 	}
 	uploader := NewUploader(sc, dp, time.Second, UploadNoCompress)
@@ -244,7 +244,7 @@ func Test_UploaderEnabledFalse(t *testing.T) {
 	ResetStats()
 	sc := &mockStorageClient{}
 	dp := &mockDataProvider{data: "my upload data"}
-	dp.checkFn = func(i uint64) (uint64, bool) {
+	dp.checkFn = func(i int64) (int64, bool) {
 		return 1, true // Upload if asked (which it shouldn't be).
 	}
 	uploader := NewUploader(sc, dp, 100*time.Millisecond, false)
@@ -275,7 +275,7 @@ func Test_UploaderEnabledTrue(t *testing.T) {
 		},
 	}
 	dp := &mockDataProvider{data: "my upload data"}
-	dp.checkFn = func(i uint64) (uint64, bool) {
+	dp.checkFn = func(i int64) (int64, bool) {
 		return 1, true
 	}
 	uploader := NewUploader(sc, dp, time.Second, UploadNoCompress)
@@ -329,10 +329,10 @@ func (mc *mockStorageClient) String() string {
 type mockDataProvider struct {
 	data    string
 	err     error
-	checkFn func(i uint64) (uint64, bool)
+	checkFn func(i int64) (int64, bool)
 }
 
-func (mp *mockDataProvider) Check(i uint64) (uint64, bool) {
+func (mp *mockDataProvider) Check(i int64) (int64, bool) {
 	if mp.checkFn != nil {
 		return mp.checkFn(i)
 	}

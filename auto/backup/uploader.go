@@ -28,7 +28,7 @@ type DataProvider interface {
 	// returns the current value of i, which should be passed to the next
 	// invocation of Check(). If Check() returns false, the returned value of
 	// can be ignored.
-	Check(i uint64) (uint64, bool)
+	Check(i int64) (int64, bool)
 
 	// Provide writes the data-for-upload to the file specified by path.
 	Provide(path string) error
@@ -74,8 +74,7 @@ type Uploader struct {
 	lastUploadTime     time.Time
 	lastUploadDuration time.Duration
 
-	lastSum SHA256Sum
-	lastI   uint64
+	lastI int64
 }
 
 // NewUploader creates a new Uploader service.
@@ -127,7 +126,6 @@ func (u *Uploader) Stats() (map[string]interface{}, error) {
 		"compress":             u.compress,
 		"last_upload_time":     u.lastUploadTime.Format(time.RFC3339),
 		"last_upload_duration": u.lastUploadDuration.String(),
-		"last_upload_sum":      u.lastSum.String(),
 		"last_i":               u.lastI,
 	}
 	return status, nil
@@ -154,15 +152,6 @@ func (u *Uploader) upload(ctx context.Context) error {
 		return err
 	}
 
-	sum, err := FileSHA256(filetoUpload)
-	if err != nil {
-		return err
-	}
-	if sum.Equals(u.lastSum) {
-		stats.Add(numUploadsSkipped, 1)
-		return nil
-	}
-
 	fd, err := os.Open(filetoUpload)
 	if err != nil {
 		return err
@@ -176,7 +165,6 @@ func (u *Uploader) upload(ctx context.Context) error {
 		stats.Add(numUploadsFail, 1)
 	} else {
 		u.lastI = lastI
-		u.lastSum = sum
 		stats.Add(numUploadsOK, 1)
 		stats.Add(totalUploadBytes, cr.Count())
 		stats.Get(lastUploadBytes).(*expvar.Int).Set(cr.Count())
