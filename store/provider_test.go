@@ -151,6 +151,9 @@ func Test_SingleNodeProvideCheck(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
+	if _, err := s.WaitForAppliedFSM(2 * time.Second); err != nil {
+		t.Fatalf("failed to wait for FSM to apply")
+	}
 	i, changed = provider.Check(i)
 	if !changed {
 		t.Fatalf("check should have indicated change")
@@ -162,6 +165,9 @@ func Test_SingleNodeProvideCheck(t *testing.T) {
 	_, err = s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query leader node: %s", err.Error())
+	}
+	if _, err := s.WaitForAppliedFSM(2 * time.Second); err != nil {
+		t.Fatalf("failed to wait for FSM to apply")
 	}
 	i, changed = provider.Check(i)
 	if changed {
@@ -193,6 +199,9 @@ func Test_SingleNodeProvideCheck(t *testing.T) {
 	_, err = s.Execute(er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	if _, err := s.WaitForAppliedFSM(2 * time.Second); err != nil {
+		t.Fatalf("failed to wait for FSM to apply")
 	}
 	_, changed = provider.Check(i)
 	if !changed {
