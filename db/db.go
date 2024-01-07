@@ -479,6 +479,11 @@ func (db *DB) Stats() (map[string]interface{}, error) {
 		"pragmas":          pragmas,
 	}
 
+	lm, err := db.LastModified()
+	if err == nil {
+		stats["last_modified"] = lm
+	}
+
 	stats["path"] = db.path
 	if stats["size"], err = db.FileSize(); err != nil {
 		return nil, err
