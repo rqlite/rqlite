@@ -23,6 +23,14 @@ type StorageClient interface {
 // service will call Provide() to have the data-for-upload to be written to the
 // to the file specified by path.
 type DataProvider interface {
+	// Check returns true if data in the DataProvider has changed since the
+	// last time Check() was called with the given value of i. Check() also
+	// returns the current value of i, which should be passed to the next
+	// invocation of Check(). If Check() returns false, the returned value of
+	// can be ignored.
+	Check(i uint64) (uint64, bool)
+
+	// Provide writes the data-for-upload to the file specified by path.
 	Provide(path string) error
 }
 
@@ -66,11 +74,7 @@ type Uploader struct {
 	lastUploadTime     time.Time
 	lastUploadDuration time.Duration
 
-	lastSum SHA256Sum
-
-	// disableSumCheck is used for testing purposes to disable the check that
-	// prevents uploading the same data twice.
-	disableSumCheck bool
+	lastI uint64
 }
 
 // NewUploader creates a new Uploader service.
@@ -103,10 +107,6 @@ func (u *Uploader) Start(ctx context.Context, isUploadEnabled func() bool) chan 
 				return
 			case <-ticker.C:
 				if !isUploadEnabled() {
-					// Reset the lastSum so that the next time we're enabled upload will
-					// happen. We do this to be conservative, as we don't know what was
-					// happening while upload was disabled.
-					u.lastSum = nil
 					continue
 				}
 				if err := u.upload(ctx); err != nil {
@@ -126,7 +126,7 @@ func (u *Uploader) Stats() (map[string]interface{}, error) {
 		"compress":             u.compress,
 		"last_upload_time":     u.lastUploadTime.Format(time.RFC3339),
 		"last_upload_duration": u.lastUploadDuration.String(),
-		"last_upload_sum":      u.lastSum.String(),
+		"last_i":               u.lastI,
 	}
 	return status, nil
 }
@@ -139,20 +139,17 @@ func (u *Uploader) upload(ctx context.Context) error {
 	}
 	defer os.Remove(filetoUpload)
 
+	lastI, changed := u.dataProvider.Check(u.lastI)
+	if !changed {
+		stats.Add(numUploadsSkipped, 1)
+		return nil
+	}
+
 	if err := u.dataProvider.Provide(filetoUpload); err != nil {
 		return err
 	}
 	if err := u.compressIfNeeded(filetoUpload); err != nil {
 		return err
-	}
-
-	sum, err := FileSHA256(filetoUpload)
-	if err != nil {
-		return err
-	}
-	if !u.disableSumCheck && sum.Equals(u.lastSum) {
-		stats.Add(numUploadsSkipped, 1)
-		return nil
 	}
 
 	fd, err := os.Open(filetoUpload)
@@ -167,7 +164,7 @@ func (u *Uploader) upload(ctx context.Context) error {
 	if err != nil {
 		stats.Add(numUploadsFail, 1)
 	} else {
-		u.lastSum = sum
+		u.lastI = lastI
 		stats.Add(numUploadsOK, 1)
 		stats.Add(totalUploadBytes, cr.Count())
 		stats.Get(lastUploadBytes).(*expvar.Int).Set(cr.Count())

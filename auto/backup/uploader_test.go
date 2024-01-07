@@ -45,6 +45,12 @@ func Test_UploaderSingleUpload(t *testing.T) {
 		},
 	}
 	dp := &mockDataProvider{data: "my upload data"}
+	dp.checkFn = func(i uint64) (uint64, bool) {
+		if i == 0 {
+			return 1, true
+		}
+		return 1, false
+	}
 	uploader := NewUploader(sc, dp, time.Second, UploadNoCompress)
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -79,6 +85,12 @@ func Test_UploaderSingleUploadCompress(t *testing.T) {
 		},
 	}
 	dp := &mockDataProvider{data: "my upload data"}
+	dp.checkFn = func(i uint64) (uint64, bool) {
+		if i == 0 {
+			return 1, true
+		}
+		return 1, false
+	}
 	uploader := NewUploader(sc, dp, time.Second, UploadCompress)
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -108,8 +120,16 @@ func Test_UploaderDoubleUpload(t *testing.T) {
 		},
 	}
 	dp := &mockDataProvider{data: "my upload data"}
+	dp.checkFn = func(i uint64) (uint64, bool) {
+		if i == 0 {
+			return 1, true
+		}
+		if i == 1 {
+			return 2, true
+		}
+		return 2, false
+	}
 	uploader := NewUploader(sc, dp, time.Second, UploadNoCompress)
-	uploader.disableSumCheck = true // Force upload of the same data
 	ctx, cancel := context.WithCancel(context.Background())
 
 	done := uploader.Start(ctx, nil)
@@ -133,7 +153,6 @@ func Test_UploaderFailThenOK(t *testing.T) {
 	sc := &mockStorageClient{
 		uploadFn: func(ctx context.Context, reader io.Reader) error {
 			defer wg.Done()
-
 			if uploadCount == 0 {
 				uploadCount++
 				return fmt.Errorf("failed to upload")
@@ -144,6 +163,9 @@ func Test_UploaderFailThenOK(t *testing.T) {
 		},
 	}
 	dp := &mockDataProvider{data: "my upload data"}
+	dp.checkFn = func(i uint64) (uint64, bool) {
+		return 1, true
+	}
 	uploader := NewUploader(sc, dp, time.Second, UploadNoCompress)
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -179,8 +201,10 @@ func Test_UploaderOKThenFail(t *testing.T) {
 		},
 	}
 	dp := &mockDataProvider{data: "my upload data"}
+	dp.checkFn = func(i uint64) (uint64, bool) {
+		return 1, true
+	}
 	uploader := NewUploader(sc, dp, time.Second, UploadNoCompress)
-	uploader.disableSumCheck = true // Disable because we want to upload twice.
 	ctx, cancel := context.WithCancel(context.Background())
 
 	done := uploader.Start(ctx, nil)
@@ -220,6 +244,9 @@ func Test_UploaderEnabledFalse(t *testing.T) {
 	ResetStats()
 	sc := &mockStorageClient{}
 	dp := &mockDataProvider{data: "my upload data"}
+	dp.checkFn = func(i uint64) (uint64, bool) {
+		return 1, true // Upload if asked (which it shouldn't be).
+	}
 	uploader := NewUploader(sc, dp, 100*time.Millisecond, false)
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -248,6 +275,9 @@ func Test_UploaderEnabledTrue(t *testing.T) {
 		},
 	}
 	dp := &mockDataProvider{data: "my upload data"}
+	dp.checkFn = func(i uint64) (uint64, bool) {
+		return 1, true
+	}
 	uploader := NewUploader(sc, dp, time.Second, UploadNoCompress)
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -297,8 +327,16 @@ func (mc *mockStorageClient) String() string {
 }
 
 type mockDataProvider struct {
-	data string
-	err  error
+	data    string
+	err     error
+	checkFn func(i uint64) (uint64, bool)
+}
+
+func (mp *mockDataProvider) Check(i uint64) (uint64, bool) {
+	if mp.checkFn != nil {
+		return mp.checkFn(i)
+	}
+	return 0, false
 }
 
 func (mp *mockDataProvider) Provide(path string) error {
