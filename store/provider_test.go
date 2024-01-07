@@ -110,3 +110,92 @@ func Test_SingleNodeProvideNoData(t *testing.T) {
 		t.Fatalf("store failed to provide: %s", err.Error())
 	}
 }
+
+func Test_SingleNodeProvideCheck(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	tmpFile := mustCreateTempFile()
+	defer os.Remove(tmpFile)
+	provider := NewProvider(s, false)
+
+	i, changed := provider.Check(0)
+	if !changed {
+		t.Fatalf("check should have indicated change")
+	}
+	i, changed = provider.Check(i)
+	if changed {
+		t.Fatalf("check should not have indicated change")
+	}
+	i, changed = provider.Check(i + 1)
+	if changed {
+		t.Fatalf("check should not have indicated change")
+	}
+
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+	}, false, false)
+	_, err := s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	i, changed = provider.Check(i)
+	if !changed {
+		t.Fatalf("check should have indicated change")
+	}
+
+	// Try various queries and commands which should not change the database.
+	qr := queryRequestFromString("SELECT * FROM foo", false, false)
+	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	_, err = s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query leader node: %s", err.Error())
+	}
+	i, changed = provider.Check(i)
+	if changed {
+		t.Fatalf("check should not have indicated change with STRONG query")
+	}
+	if af, err := s.Noop("don't care"); err != nil || af.Error() != nil {
+		t.Fatalf("failed to execute Noop")
+	}
+	i, changed = provider.Check(i)
+	if changed {
+		t.Fatalf("check should not have indicated change with Noop")
+	}
+	er = executeRequestFromStrings([]string{
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`, // Constraint violation.
+	}, false, false)
+	_, err = s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	i, changed = provider.Check(i)
+	if changed {
+		t.Fatalf("check should not have indicated change with constraint violation")
+	}
+
+	// This should change the database.
+	er = executeRequestFromStrings([]string{
+		`INSERT INTO foo(id, name) VALUES(2, "fiona")`,
+	}, false, false)
+	_, err = s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	_, changed = provider.Check(i)
+	if !changed {
+		t.Fatalf("check should have indicated change")
+	}
+}

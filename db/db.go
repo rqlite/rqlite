@@ -85,8 +85,8 @@ func ResetStats() {
 
 // DB is the SQL database.
 type DB struct {
-	path      string // Path to database file, if running on-disk.
-	walPath   string // Path to WAL file, if running on-disk and WAL is enabled.
+	path      string // Path to database file.
+	walPath   string // Path to WAL file.
 	fkEnabled bool   // Foreign key constraints enabled
 	wal       bool
 
