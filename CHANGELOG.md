@@ -1,5 +1,5 @@
 ## 8.16.2 (January 9th 2024)
-This releases fixes a bug related to Raft snapshot management. While it's an edge case, and can only happen if rqlited is hard-killed at a very specific point, all users should upgrade to this release.
+This releases fixes a bug related to Raft snapshot management. While it's an edge case, and can only happen if rqlited is hard-killed at a very specific point, all 8.x users should upgrade to this release.
 ### Implementation changes and bug fixes
 - [PR #1580](https://github.com/rqlite/rqlite/pull/1580): List newest Snapshot, not oldest.
 
