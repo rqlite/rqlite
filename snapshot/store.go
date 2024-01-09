@@ -207,12 +207,12 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 // Reap reaps all snapshots, except the most recent one. Returns the number of
 // snapshots reaped.
 func (s *Store) Reap() (retN int, retErr error) {
-	if s.reapDisabled {
-		return 0, nil
-	}
 	defer func() {
 		stats.Add(snapshotsReaped, int64(retN))
 	}()
+	if s.reapDisabled {
+		return 0, nil
+	}
 
 	snapshots, err := s.getSnapshots()
 	if err != nil {
