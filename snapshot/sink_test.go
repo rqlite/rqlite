@@ -65,6 +65,8 @@ func Test_NewSinkOpenCloseFail(t *testing.T) {
 	}
 }
 
+// Test_SinkFullSnapshot tests that multiple full snapshots are
+// written to the Store correctly.
 func Test_SinkFullSnapshot(t *testing.T) {
 	store := mustStore(t)
 	sink := NewSink(store, makeRaftMeta("snap-1234", 3, 2, 1))
@@ -194,6 +196,33 @@ func Test_SinkFullSnapshot(t *testing.T) {
 	} else if fn {
 		t.Errorf("Expected full snapshot not to be needed, but it is")
 	}
+
+	// Make sure Store returns correct snapshot.
+	expMeta3 := makeRaftMeta("snap-91011", 5, 4, 3)
+	metas3, err := store.List()
+	if err != nil {
+		t.Fatalf("Failed to list snapshots: %v", err)
+	}
+	if len(metas3) != 1 {
+		t.Fatalf("Expected 1 snapshot, got %d", len(metas))
+	}
+	compareMetas(t, expMeta3, metas3[0])
+
+	// Look inside store, make sure everything was repead correctly.
+	dirs, err := os.ReadDir(store.Dir())
+	if err != nil {
+		t.Fatalf("Failed to read dir: %v", err)
+	}
+	if len(dirs) != 2 {
+		t.Fatalf("Expected 2 files, got %d", len(dirs))
+	}
+	if !fileExists(filepath.Join(store.Dir(), "snap-91011.db")) {
+		t.Fatalf("Latest snapshot SQLite file does not exist")
+	}
+	if !dirExists(filepath.Join(store.Dir(), "snap-91011")) {
+		t.Fatalf("Latest snapshot directory does not exist")
+	}
+
 }
 
 // Test_SinkWALSnapshotEmptyStoreFail ensures that if a WAL file is
