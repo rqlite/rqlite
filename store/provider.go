@@ -53,7 +53,7 @@ func (p *Provider) Provide(path string) (retErr error) {
 
 	fd, err := os.Create(path)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer fd.Close()
 
@@ -70,17 +70,21 @@ func (p *Provider) Provide(path string) (retErr error) {
 		time.Sleep(p.retryInterval)
 		nRetries++
 		if nRetries > p.nRetries {
-			return err
+			return 0, err
 		}
 	}
 
 	// Switch database to DELETE mode, to keep existing behaviour.
 	if err := fd.Close(); err != nil {
-		return err
+		return 0, err
 	}
 	if db.EnsureDeleteMode(path) != nil {
-		return err
+		return 0, err
+	}
+	lm, err := p.str.db.LastModified()
+	if err != nil {
+		return 0, err
 	}
 	stats.Add(numProvides, 1)
-	return nil
+	return lm.UnixNano(), nil
 }

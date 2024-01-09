@@ -30,8 +30,10 @@ type DataProvider interface {
 	// can be ignored.
 	Check(i int64) (int64, bool)
 
-	// Provide writes the data-for-upload to the file specified by path.
-	Provide(path string) error
+	// Provide writes the data-for-upload to the file specified by path. Because
+	// Provide may change the data in the DataProvider, it returns the current
+	// value of i, which should be passed to the next invocation of Check().
+	Provide(path string) (int64, error)
 }
 
 // stats captures stats for the Uploader service.
@@ -139,13 +141,14 @@ func (u *Uploader) upload(ctx context.Context) error {
 	}
 	defer os.Remove(filetoUpload)
 
-	lastI, changed := u.dataProvider.Check(u.lastI)
+	_, changed := u.dataProvider.Check(u.lastI)
 	if !changed {
 		stats.Add(numUploadsSkipped, 1)
 		return nil
 	}
 
-	if err := u.dataProvider.Provide(filetoUpload); err != nil {
+	lastI, err := u.dataProvider.Provide(filetoUpload)
+	if err != nil {
 		return err
 	}
 	if err := u.compressIfNeeded(filetoUpload); err != nil {

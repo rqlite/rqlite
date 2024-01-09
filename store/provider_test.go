@@ -49,7 +49,7 @@ func Test_SingleNodeProvide(t *testing.T) {
 	tempFile := mustCreateTempFile()
 	defer os.Remove(tempFile)
 	provider := NewProvider(s0, false)
-	if err := provider.Provide(tempFile); err != nil {
+	if _, err := provider.Provide(tempFile); err != nil {
 		t.Fatalf("failed to provide SQLite data: %s", err.Error())
 	}
 
@@ -106,7 +106,7 @@ func Test_SingleNodeProvideNoData(t *testing.T) {
 	tmpFile := mustCreateTempFile()
 	defer os.Remove(tmpFile)
 	provider := NewProvider(s, false)
-	if err := provider.Provide(tmpFile); err != nil {
+	if _, err := provider.Provide(tmpFile); err != nil {
 		t.Fatalf("store failed to provide: %s", err.Error())
 	}
 }

@@ -129,6 +129,14 @@ func Test_UploaderDoubleUpload(t *testing.T) {
 		}
 		return 2, false
 	}
+
+	provideLastFnCalled := int64(1)
+	dp.provideLastIFn = func() int64 {
+		// Keep it one ahead of checkFn.
+		defer func() { provideLastFnCalled++ }()
+		return provideLastFnCalled
+	}
+
 	uploader := NewUploader(sc, dp, time.Second, UploadNoCompress)
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -166,6 +174,14 @@ func Test_UploaderFailThenOK(t *testing.T) {
 	dp.checkFn = func(i int64) (int64, bool) {
 		return 1, true
 	}
+
+	provideLastFnCalled := int64(1)
+	dp.provideLastIFn = func() int64 {
+		// Keep it one ahead of checkFn.
+		defer func() { provideLastFnCalled++ }()
+		return provideLastFnCalled
+	}
+
 	uploader := NewUploader(sc, dp, time.Second, UploadNoCompress)
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -203,6 +219,12 @@ func Test_UploaderOKThenFail(t *testing.T) {
 	dp := &mockDataProvider{data: "my upload data"}
 	dp.checkFn = func(i int64) (int64, bool) {
 		return 1, true
+	}
+	provideLastFnCalled := int64(2)
+	dp.provideLastIFn = func() int64 {
+		// Keep it one ahead of checkFn.
+		defer func() { provideLastFnCalled++ }()
+		return provideLastFnCalled
 	}
 	uploader := NewUploader(sc, dp, time.Second, UploadNoCompress)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -278,6 +300,12 @@ func Test_UploaderEnabledTrue(t *testing.T) {
 	dp.checkFn = func(i int64) (int64, bool) {
 		return 1, true
 	}
+	provideLastFnCalled := int64(2)
+	dp.provideLastIFn = func() int64 {
+		// Keep it one ahead of checkFn.
+		defer func() { provideLastFnCalled++ }()
+		return provideLastFnCalled
+	}
 	uploader := NewUploader(sc, dp, time.Second, UploadNoCompress)
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -327,9 +355,10 @@ func (mc *mockStorageClient) String() string {
 }
 
 type mockDataProvider struct {
-	data    string
-	err     error
-	checkFn func(i int64) (int64, bool)
+	data           string
+	err            error
+	checkFn        func(i int64) (int64, bool)
+	provideLastIFn func() int64
 }
 
 func (mp *mockDataProvider) Check(i int64) (int64, bool) {
@@ -339,9 +368,15 @@ func (mp *mockDataProvider) Check(i int64) (int64, bool) {
 	return 0, false
 }
 
-func (mp *mockDataProvider) Provide(path string) error {
+func (mp *mockDataProvider) Provide(path string) (int64, error) {
 	if mp.err != nil {
-		return mp.err
+		return 0, mp.err
 	}
-	return os.WriteFile(path, []byte(mp.data), 0644)
+
+	lastI := int64(0)
+	if mp.provideLastIFn != nil {
+		lastI = mp.provideLastIFn()
+	}
+
+	return lastI, os.WriteFile(path, []byte(mp.data), 0644)
 }
