@@ -127,8 +127,8 @@ func Upgrade(old, new string, logger *log.Logger) (retErr error) {
 		}
 
 		// Convert to WAL mode.
-		if openCloseDB(newSqlitePath) != nil {
-			return fmt.Errorf("failed to convert migrated SQLite file %s to WAL mode", newSqlitePath)
+		if err := openCloseDB(newSqlitePath); err != nil {
+			return fmt.Errorf("failed to convert migrated SQLite file %s to WAL mode: %s", newSqlitePath, err)
 		}
 		return nil
 	}(); err != nil {
