@@ -208,13 +208,13 @@ func Test_SinkFullSnapshot(t *testing.T) {
 	}
 	compareMetas(t, expMeta3, metas3[0])
 
-	// Look inside store, make sure everything was repead correctly.
-	dirs, err := os.ReadDir(store.Dir())
+	// Look inside store, make sure everything was reaped correctly.
+	files, err := os.ReadDir(store.Dir())
 	if err != nil {
 		t.Fatalf("Failed to read dir: %v", err)
 	}
-	if len(dirs) != 2 {
-		t.Fatalf("Expected 2 files, got %d", len(dirs))
+	if len(files) != 2 {
+		t.Fatalf("Expected 2 files, got %d", len(files))
 	}
 	if !fileExists(filepath.Join(store.Dir(), "snap-91011.db")) {
 		t.Fatalf("Latest snapshot SQLite file does not exist")
