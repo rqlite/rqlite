@@ -120,12 +120,18 @@ func (s *S3Client) Download(ctx context.Context, writer io.WriterAt) error {
 }
 
 func (s *S3Client) createSession() (*session.Session, error) {
-	sess, err := session.NewSession(&aws.Config{
+	cfg := aws.Config{
 		Endpoint:         aws.String(s.endpoint),
 		Region:           aws.String(s.region),
-		Credentials:      credentials.NewStaticCredentials(s.accessKey, s.secretKey, ""),
 		S3ForcePathStyle: aws.Bool(s.forcePathStyle),
-	})
+	}
+	// If credentials aren't provided by the user, the AWS SDK will use the default
+	// credential provider chain, which supports environment variables, shared credentials
+	// file, and EC2 instance roles.
+	if s.accessKey != "" && s.secretKey != "" {
+		cfg.Credentials = credentials.NewStaticCredentials(s.accessKey, s.secretKey, "")
+	}
+	sess, err := session.NewSession(&cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create S3 session: %w", err)
 	}
