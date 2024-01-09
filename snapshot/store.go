@@ -75,6 +75,8 @@ type Store struct {
 	fullNeededPath string
 	sinkMu         sync.Mutex
 	logger         *log.Logger
+
+	reapDisabled bool // For testing purposes
 }
 
 // NewStore returns a new Snapshot Store.
@@ -124,21 +126,22 @@ func (s *Store) Create(version raft.SnapshotVersion, index, term uint64, configu
 	return &LockingSink{sink, s}, nil
 }
 
-// List returns a list of all the snapshots in the Store. It returns the snapshots
-// in newest to oldest order.
+// List returns a list of all the snapshots in the Store. In pratice, this will at most be
+// a list of 1, and that will be the newest snapshot available.
 func (s *Store) List() ([]*raft.SnapshotMeta, error) {
 	snapshots, err := s.getSnapshots()
 	if err != nil {
 		return nil, err
 	}
+
 	var snapMeta []*raft.SnapshotMeta
 	if len(snapshots) > 0 {
-		snapshotDir := filepath.Join(s.dir, snapshots[0].ID)
+		snapshotDir := filepath.Join(s.dir, snapshots[len(snapshots)-1].ID)
 		meta, err := readMeta(snapshotDir)
 		if err != nil {
 			return nil, err
 		}
-		snapMeta = append(snapMeta, meta)
+		snapMeta = append(snapMeta, meta) // Insert it.
 	}
 	return snapMeta, nil
 }
@@ -204,6 +207,9 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 // Reap reaps all snapshots, except the most recent one. Returns the number of
 // snapshots reaped.
 func (s *Store) Reap() (retN int, retErr error) {
+	if s.reapDisabled {
+		return 0, nil
+	}
 	defer func() {
 		stats.Add(snapshotsReaped, int64(retN))
 	}()
