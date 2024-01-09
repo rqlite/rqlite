@@ -28,12 +28,26 @@ func NewProvider(s *Store, v bool) *Provider {
 	}
 }
 
+// LastModified returns the time the data managed by the Provider was
+// last modified.
+func (p *Provider) LastModified() (time.Time, error) {
+	stats.Add(numProviderChecks, 1)
+	return p.str.db.LastModified()
+}
+
 // Provider writes the SQLite database to the given path, ensuring the database
 // is in DELETE mode. If path exists, it will be overwritten.
-func (p *Provider) Provide(path string) error {
+func (p *Provider) Provide(path string) (t time.Time, retErr error) {
+	stats.Add(numProviderProvides, 1)
+	defer func() {
+		if retErr != nil {
+			stats.Add(numProviderProvidesFail, 1)
+		}
+	}()
+
 	fd, err := os.Create(path)
 	if err != nil {
-		return err
+		return time.Time{}, err
 	}
 	defer fd.Close()
 
@@ -50,17 +64,16 @@ func (p *Provider) Provide(path string) error {
 		time.Sleep(p.retryInterval)
 		nRetries++
 		if nRetries > p.nRetries {
-			return err
+			return time.Time{}, err
 		}
 	}
 
 	// Switch database to DELETE mode, to keep existing behaviour.
 	if err := fd.Close(); err != nil {
-		return err
+		return time.Time{}, err
 	}
 	if db.EnsureDeleteMode(path) != nil {
-		return err
+		return time.Time{}, err
 	}
-	stats.Add(numProvides, 1)
-	return nil
+	return p.str.db.LastModified()
 }

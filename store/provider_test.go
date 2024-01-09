@@ -49,7 +49,7 @@ func Test_SingleNodeProvide(t *testing.T) {
 	tempFile := mustCreateTempFile()
 	defer os.Remove(tempFile)
 	provider := NewProvider(s0, false)
-	if err := provider.Provide(tempFile); err != nil {
+	if _, err := provider.Provide(tempFile); err != nil {
 		t.Fatalf("failed to provide SQLite data: %s", err.Error())
 	}
 
@@ -106,7 +106,119 @@ func Test_SingleNodeProvideNoData(t *testing.T) {
 	tmpFile := mustCreateTempFile()
 	defer os.Remove(tmpFile)
 	provider := NewProvider(s, false)
-	if err := provider.Provide(tmpFile); err != nil {
+	if _, err := provider.Provide(tmpFile); err != nil {
 		t.Fatalf("store failed to provide: %s", err.Error())
+	}
+}
+
+func Test_SingleNodeProvideLastModified(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	tmpFile := mustCreateTempFile()
+	defer os.Remove(tmpFile)
+	provider := NewProvider(s, false)
+
+	lm, err := provider.LastModified()
+	if err != nil {
+		t.Fatalf("failed to get last modified: %s", err.Error())
+	}
+
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+	}, false, false)
+	_, err = s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	if _, err := s.WaitForAppliedFSM(2 * time.Second); err != nil {
+		t.Fatalf("failed to wait for FSM to apply")
+	}
+
+	newLM, err := provider.LastModified()
+	if err != nil {
+		t.Fatalf("failed to get last modified: %s", err.Error())
+	}
+	if !newLM.After(lm) {
+		t.Fatalf("last modified time should have changed")
+	}
+	lm = newLM
+
+	// Try various queries and commands which should not change the database.
+	qr := queryRequestFromString("SELECT * FROM foo", false, false)
+	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	_, err = s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query leader node: %s", err.Error())
+	}
+	if _, err := s.WaitForAppliedFSM(2 * time.Second); err != nil {
+		t.Fatalf("failed to wait for FSM to apply")
+	}
+	newLM, err = provider.LastModified()
+	if err != nil {
+		t.Fatalf("failed to get last modified: %s", err.Error())
+	}
+	if !newLM.Equal(lm) {
+		t.Fatalf("last modified time should not have changed")
+	}
+	lm = newLM
+
+	if af, err := s.Noop("don't care"); err != nil || af.Error() != nil {
+		t.Fatalf("failed to execute Noop")
+	}
+	newLM, err = provider.LastModified()
+	if err != nil {
+		t.Fatalf("failed to get last modified: %s", err.Error())
+	}
+	if !newLM.Equal(lm) {
+		t.Fatalf("last modified time should not have changed")
+	}
+	lm = newLM
+
+	er = executeRequestFromStrings([]string{
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`, // Constraint violation.
+	}, false, false)
+	_, err = s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	newLM, err = provider.LastModified()
+	if err != nil {
+		t.Fatalf("failed to get last modified: %s", err.Error())
+	}
+	if !newLM.Equal(lm) {
+		t.Fatalf("last modified time should not have changed with constraint violation")
+	}
+	lm = newLM
+
+	// This should change the database.
+	er = executeRequestFromStrings([]string{
+		`INSERT INTO foo(id, name) VALUES(2, "fiona")`,
+	}, false, false)
+	_, err = s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	if _, err := s.WaitForAppliedFSM(2 * time.Second); err != nil {
+		t.Fatalf("failed to wait for FSM to apply")
+	}
+	newLM, err = provider.LastModified()
+	if err != nil {
+		t.Fatalf("failed to get last modified: %s", err.Error())
+	}
+	if !newLM.After(lm) {
+		t.Fatalf("last modified time should have changed")
 	}
 }

@@ -172,7 +172,7 @@ class TestAutoRestoreS3(unittest.TestCase):
 class TestAutoBackupS3(unittest.TestCase):
   @unittest.skipUnless(env_present('RQLITE_S3_ACCESS_KEY'), "S3 credentials not available")
   def test_no_compress(self):
-    '''Test that automatic backups to AWS S3 work with compression off'''
+    '''Test that automatic backups to S3 work with compression off, and don't happen unnecessarily'''
     node = None
     cfg = None
     path = None
@@ -186,7 +186,7 @@ class TestAutoBackupS3(unittest.TestCase):
     auto_backup_cfg = {
       "version": 1,
       "type": "s3",
-      "interval": "1s",
+      "interval": "100ms",
       "no_compress": True,
       "sub" : {
          "access_key_id": access_key_id,
@@ -203,10 +203,24 @@ class TestAutoBackupS3(unittest.TestCase):
     node = Node(RQLITED_PATH, '0', auto_backup=cfg)
     node.start()
     node.wait_for_leader()
+    i = node.num_auto_backups()[0]
     node.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
     node.execute('INSERT INTO foo(name) VALUES("fiona")')
     node.wait_for_all_fsm()
-    time.sleep(5)
+    counts = node.wait_for_upload(i+1)
+
+    # Wait and check that no further backups have been made.
+    time.sleep(2)
+    self.assertEqual(node.num_auto_backups()[0], counts[0])
+
+    # Write one more row, confirm another backup is made.
+    node.execute('INSERT INTO foo(name) VALUES("fiona")')
+    node.wait_for_all_fsm()
+    counts = node.wait_for_upload(i+2)
+
+    # Wait and check that no further backups have been made.
+    time.sleep(2)
+    self.assertEqual(node.num_auto_backups()[0], counts[0])
 
     # Download the backup file from S3 and check it.
     backup_data = download_s3_object(access_key_id, secret_access_key_id,
@@ -216,7 +230,7 @@ class TestAutoBackupS3(unittest.TestCase):
     c = conn.cursor()
     c.execute('SELECT * FROM foo')
     rows = c.fetchall()
-    self.assertEqual(len(rows), 1)
+    self.assertEqual(len(rows), 2)
     self.assertEqual(rows[0][1], 'fiona')
     conn.close()
 
@@ -226,8 +240,8 @@ class TestAutoBackupS3(unittest.TestCase):
     delete_s3_object(access_key_id, secret_access_key_id, S3_BUCKET, path)
 
   @unittest.skipUnless(env_present('RQLITE_S3_ACCESS_KEY'), "S3 credentials not available")
-  def test_no_compress_vacuum(self):
-    '''Test that automatic backups to AWS S3 work with compression off and vacuum on'''
+  def test_leader_only(self):
+    '''Test that automatic backups to S3 only happen on the leader'''
     node = None
     cfg = None
     path = None
@@ -241,7 +255,60 @@ class TestAutoBackupS3(unittest.TestCase):
     auto_backup_cfg = {
       "version": 1,
       "type": "s3",
-      "interval": "1s",
+      "interval": "100ms",
+      "no_compress": True,
+      "sub" : {
+         "access_key_id": access_key_id,
+         "secret_access_key": secret_access_key_id,
+         "region": S3_BUCKET_REGION,
+         "bucket": S3_BUCKET,
+         "path": path
+      }
+    }
+    cfg = write_random_file(json.dumps(auto_backup_cfg))
+
+    # Create a cluster with automatic backups enabled.
+    leader = Node(RQLITED_PATH, '0', auto_backup=cfg)
+    leader.start()
+    leader.wait_for_leader()
+
+    follower = Node(RQLITED_PATH, '1', auto_backup=cfg)
+    follower.start(join=leader.RaftAddr())
+    follower.wait_for_leader()
+
+    # Then create a table and insert a row. Wait for a backup to happen.
+    i = leader.num_auto_backups()[0]
+    leader.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
+    leader.execute('INSERT INTO foo(name) VALUES("fiona")')
+    leader.wait_for_all_fsm()
+    leader.wait_for_upload(i+1)
+
+    # Confirm that the follower has performed no backups.
+    time.sleep(5)
+    self.assertEqual(follower.num_auto_backups()[0], 0)
+
+    delete_s3_object(access_key_id, secret_access_key_id, S3_BUCKET, path)
+    deprovision_node(leader)
+    deprovision_node(follower)
+    os.remove(cfg)
+
+  @unittest.skipUnless(env_present('RQLITE_S3_ACCESS_KEY'), "S3 credentials not available")
+  def test_no_compress_vacuum(self):
+    '''Test that automatic backups to S3 work with compression off and vacuum on'''
+    node = None
+    cfg = None
+    path = None
+    backup_file = None
+
+    access_key_id = os.environ['RQLITE_S3_ACCESS_KEY']
+    secret_access_key_id = os.environ['RQLITE_S3_SECRET_ACCESS_KEY']
+
+    # Create the auto-backup config file
+    path = random_string(32)
+    auto_backup_cfg = {
+      "version": 1,
+      "type": "s3",
+      "interval": "100ms",
       "no_compress": True,
       "vacuum": True,
       "sub" : {
@@ -259,10 +326,11 @@ class TestAutoBackupS3(unittest.TestCase):
     node = Node(RQLITED_PATH, '0', auto_backup=cfg)
     node.start()
     node.wait_for_leader()
+    i = node.num_auto_backups()[0]
     node.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
     node.execute('INSERT INTO foo(name) VALUES("fiona")')
     node.wait_for_all_fsm()
-    time.sleep(5)
+    node.wait_for_upload(i+1)
 
     # Download the backup file from S3 and check it.
     backup_data = download_s3_object(access_key_id, secret_access_key_id,
@@ -283,7 +351,7 @@ class TestAutoBackupS3(unittest.TestCase):
     
   @unittest.skipUnless(env_present('RQLITE_S3_ACCESS_KEY'), "S3 credentials not available")
   def test_compress(self):
-    '''Test that automatic backups to AWS S3 work with compression on'''
+    '''Test that automatic backups to S3 work with compression on'''
     node = None
     cfg = None
     path = None
@@ -298,7 +366,7 @@ class TestAutoBackupS3(unittest.TestCase):
     auto_backup_cfg = {
       "version": 1,
       "type": "s3",
-      "interval": "1s",
+      "interval": "100ms",
       "sub" : {
          "access_key_id": access_key_id,
          "secret_access_key": secret_access_key_id,
@@ -314,11 +382,12 @@ class TestAutoBackupS3(unittest.TestCase):
     node = Node(RQLITED_PATH, '0', auto_backup=cfg)
     node.start()
     node.wait_for_leader()
+    i = node.num_auto_backups()[0]
     node.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
-    for i in range(1000):
+    for _ in range(100):
       node.execute('INSERT INTO foo(name) VALUES("fiona")')
     node.wait_for_all_fsm()
-    time.sleep(5)
+    node.wait_for_upload(i+1, timeout=10)
 
     # Download the backup file from S3 and check it.
     backup_data = download_s3_object(access_key_id, secret_access_key_id,
@@ -330,7 +399,7 @@ class TestAutoBackupS3(unittest.TestCase):
     c.execute('SELECT count(*) FROM foo WHERE name="fiona"')
     rows = c.fetchall()
     self.assertEqual(len(rows), 1)
-    self.assertEqual(rows[0][0], 1000)
+    self.assertEqual(rows[0][0], 100)
     conn.close()
 
     deprovision_node(node)

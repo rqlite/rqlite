@@ -45,6 +45,10 @@ func Test_UploaderSingleUpload(t *testing.T) {
 		},
 	}
 	dp := &mockDataProvider{data: "my upload data"}
+	n := time.Now()
+	dp.lastModifiedFn = func() (time.Time, error) {
+		return n, nil // Single upload, since time doesn't change.
+	}
 	uploader := NewUploader(sc, dp, time.Second, UploadNoCompress)
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -67,7 +71,7 @@ func Test_UploaderSingleUploadCompress(t *testing.T) {
 		uploadFn: func(ctx context.Context, reader io.Reader) error {
 			defer wg.Done()
 
-			// Wrap a gzip reader about the reader.
+			// Wrap a gzip reader about the reader, to ensure the data is compressed.
 			gzReader, err := gzip.NewReader(reader)
 			if err != nil {
 				return err
@@ -79,6 +83,10 @@ func Test_UploaderSingleUploadCompress(t *testing.T) {
 		},
 	}
 	dp := &mockDataProvider{data: "my upload data"}
+	n := time.Now()
+	dp.lastModifiedFn = func() (time.Time, error) {
+		return n, nil // Single upload, since time doesn't change.
+	}
 	uploader := NewUploader(sc, dp, time.Second, UploadCompress)
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -109,7 +117,6 @@ func Test_UploaderDoubleUpload(t *testing.T) {
 	}
 	dp := &mockDataProvider{data: "my upload data"}
 	uploader := NewUploader(sc, dp, time.Second, UploadNoCompress)
-	uploader.disableSumCheck = true // Force upload of the same data
 	ctx, cancel := context.WithCancel(context.Background())
 
 	done := uploader.Start(ctx, nil)
@@ -133,7 +140,6 @@ func Test_UploaderFailThenOK(t *testing.T) {
 	sc := &mockStorageClient{
 		uploadFn: func(ctx context.Context, reader io.Reader) error {
 			defer wg.Done()
-
 			if uploadCount == 0 {
 				uploadCount++
 				return fmt.Errorf("failed to upload")
@@ -180,7 +186,6 @@ func Test_UploaderOKThenFail(t *testing.T) {
 	}
 	dp := &mockDataProvider{data: "my upload data"}
 	uploader := NewUploader(sc, dp, time.Second, UploadNoCompress)
-	uploader.disableSumCheck = true // Disable because we want to upload twice.
 	ctx, cancel := context.WithCancel(context.Background())
 
 	done := uploader.Start(ctx, nil)
@@ -297,13 +302,22 @@ func (mc *mockStorageClient) String() string {
 }
 
 type mockDataProvider struct {
-	data string
-	err  error
+	data           string
+	err            error
+	lastModifiedFn func() (time.Time, error)
 }
 
-func (mp *mockDataProvider) Provide(path string) error {
-	if mp.err != nil {
-		return mp.err
+func (mp *mockDataProvider) LastModified() (time.Time, error) {
+	if mp.lastModifiedFn != nil {
+		return mp.lastModifiedFn()
 	}
-	return os.WriteFile(path, []byte(mp.data), 0644)
+	return time.Now(), nil
+}
+
+func (mp *mockDataProvider) Provide(path string) (time.Time, error) {
+	if mp.err != nil {
+		return time.Time{}, mp.err
+	}
+
+	return time.Now(), os.WriteFile(path, []byte(mp.data), 0644)
 }
