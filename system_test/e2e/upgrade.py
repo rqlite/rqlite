@@ -21,15 +21,18 @@ class TestUpgrade_v7(unittest.TestCase):
 
   def test(self):
     dir1 = copy_dir_to_temp('testdata/v7/data.1')
-    n0 = Node(RQLITED_PATH, '1', api_addr='localhost:4001', raft_addr='localhost:4002', dir=dir1)
+    n0 = Node(RQLITED_PATH, '1', api_addr='localhost:4001', raft_addr='localhost:4002', dir=dir1,
+              raft_snap_int='100ms', raft_snap_threshold='5')
     n0.start()
 
     dir2 = copy_dir_to_temp('testdata/v7/data.2')
-    n1 = Node(RQLITED_PATH, '2', api_addr='localhost:4003', raft_addr='localhost:4004', dir=dir2)
+    n1 = Node(RQLITED_PATH, '2', api_addr='localhost:4003', raft_addr='localhost:4004', dir=dir2,
+              raft_snap_int='100ms', raft_snap_threshold='5')
     n1.start()
 
     dir3 = copy_dir_to_temp('testdata/v7/data.3')
-    n2 = Node(RQLITED_PATH, '3', api_addr='localhost:4005', raft_addr='localhost:4006', dir=dir3)
+    n2 = Node(RQLITED_PATH, '3', api_addr='localhost:4005', raft_addr='localhost:4006', dir=dir3,
+              raft_snap_int='100ms', raft_snap_threshold='5')
     n2.start()
 
     self.cluster = Cluster([n0, n1, n2])
@@ -42,6 +45,15 @@ class TestUpgrade_v7(unittest.TestCase):
     # Check that each node has the right data.
     for n in self.cluster.nodes:
       self.poll_query(n, 'SELECT COUNT(*) FROM foo', d_("{'results': [{'values': [[28]], 'types': ['integer'], 'columns': ['COUNT(*)']}]}"))
+
+    # Check that writes work OK post upgrade and subsequent snapshots.
+    for i in range(100):
+      l = self.cluster.wait_for_leader()
+      l.execute('INSERT INTO foo(name) VALUES("fiona")')
+
+    # Check that each node has the right data.
+    for n in self.cluster.nodes:
+      self.poll_query(n, 'SELECT COUNT(*) FROM foo', d_("{'results': [{'values': [[128]], 'types': ['integer'], 'columns': ['COUNT(*)']}]}"))
 
   def tearDown(self):
     self.cluster.deprovision()
