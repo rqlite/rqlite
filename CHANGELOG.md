@@ -1,4 +1,4 @@
-## 8.16.1 (unreleased)
+## 8.16.1 (January 8th 2024)
 ### Implementation changes and bug fixes
 - [PR #1574](https://github.com/rqlite/rqlite/pull/1574): Use "GZIP best speed" for internode traffic compression.
 - [PR #1575](https://github.com/rqlite/rqlite/pull/1575): Upload Provider uses Snapshot-locking backup.
