@@ -23,17 +23,14 @@ type StorageClient interface {
 // service will call Provide() to have the data-for-upload to be written to the
 // to the file specified by path.
 type DataProvider interface {
-	// Check returns true if data in the DataProvider has changed since the
-	// last time Check() was called with the given value of i. Check() also
-	// returns the current value of i, which should be passed to the next
-	// invocation of Check(). If Check() returns false, the returned value of
-	// can be ignored.
-	Check(i int64) (int64, bool)
+	// LastModified returns the time the data managed by the DataProvider was
+	// last modified.
+	LastModified() (time.Time, error)
 
 	// Provide writes the data-for-upload to the file specified by path. Because
 	// Provide may change the data in the DataProvider, it returns the current
-	// value of i, which should be passed to the next invocation of Check().
-	Provide(path string) (int64, error)
+	// modified time of the data, after the data has been written to path.
+	Provide(path string) (time.Time, error)
 }
 
 // stats captures stats for the Uploader service.
@@ -76,7 +73,7 @@ type Uploader struct {
 	lastUploadTime     time.Time
 	lastUploadDuration time.Duration
 
-	lastI int64
+	lastModified time.Time
 }
 
 // NewUploader creates a new Uploader service.
@@ -128,26 +125,33 @@ func (u *Uploader) Stats() (map[string]interface{}, error) {
 		"compress":             u.compress,
 		"last_upload_time":     u.lastUploadTime.Format(time.RFC3339),
 		"last_upload_duration": u.lastUploadDuration.String(),
-		"last_i":               u.lastI,
+		"last_modified":        u.lastModified.String(),
 	}
 	return status, nil
 }
 
 func (u *Uploader) upload(ctx context.Context) error {
-	// create a temporary file for the data to be uploaded
+	var err error
+	var lm time.Time
+
+	// Data source changed?
+	lm, err = u.dataProvider.LastModified()
+	if err != nil {
+		return err
+	}
+	if !lm.After(u.lastModified) {
+		stats.Add(numUploadsSkipped, 1)
+		return nil
+	}
+
+	// Create a temporary file for the data to be uploaded
 	filetoUpload, err := tempFilename()
 	if err != nil {
 		return err
 	}
 	defer os.Remove(filetoUpload)
 
-	_, changed := u.dataProvider.Check(u.lastI)
-	if !changed {
-		stats.Add(numUploadsSkipped, 1)
-		return nil
-	}
-
-	lastI, err := u.dataProvider.Provide(filetoUpload)
+	lm, err = u.dataProvider.Provide(filetoUpload)
 	if err != nil {
 		return err
 	}
@@ -167,7 +171,7 @@ func (u *Uploader) upload(ctx context.Context) error {
 	if err != nil {
 		stats.Add(numUploadsFail, 1)
 	} else {
-		u.lastI = lastI
+		u.lastModified = lm
 		stats.Add(numUploadsOK, 1)
 		stats.Add(totalUploadBytes, cr.Count())
 		stats.Get(lastUploadBytes).(*expvar.Int).Set(cr.Count())

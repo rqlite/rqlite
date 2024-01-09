@@ -28,22 +28,16 @@ func NewProvider(s *Store, v bool) *Provider {
 	}
 }
 
-// Check returns true if the Provider data has changed since the last time
-// Check() was called with the given value of i. Check() also returns the
-// current value of i, which should be passed to the next invocation of
-// Check(). If Check() returns false, the returned int64 can be ignored.
-func (p *Provider) Check(i int64) (int64, bool) {
+// LastModified returns the time the data managed by the Provider was
+// last modified.
+func (p *Provider) LastModified() (time.Time, error) {
 	stats.Add(numProviderChecks, 1)
-	lm, err := p.str.db.LastModified()
-	if err != nil {
-		return 0, false
-	}
-	return lm.UnixNano(), lm.UnixNano() > i
+	return p.str.db.LastModified()
 }
 
 // Provider writes the SQLite database to the given path, ensuring the database
 // is in DELETE mode. If path exists, it will be overwritten.
-func (p *Provider) Provide(path string) (retErr error) {
+func (p *Provider) Provide(path string) (t time.Time, retErr error) {
 	stats.Add(numProviderProvides, 1)
 	defer func() {
 		if retErr != nil {
@@ -53,7 +47,7 @@ func (p *Provider) Provide(path string) (retErr error) {
 
 	fd, err := os.Create(path)
 	if err != nil {
-		return 0, err
+		return time.Time{}, err
 	}
 	defer fd.Close()
 
@@ -70,21 +64,16 @@ func (p *Provider) Provide(path string) (retErr error) {
 		time.Sleep(p.retryInterval)
 		nRetries++
 		if nRetries > p.nRetries {
-			return 0, err
+			return time.Time{}, err
 		}
 	}
 
 	// Switch database to DELETE mode, to keep existing behaviour.
 	if err := fd.Close(); err != nil {
-		return 0, err
+		return time.Time{}, err
 	}
 	if db.EnsureDeleteMode(path) != nil {
-		return 0, err
+		return time.Time{}, err
 	}
-	lm, err := p.str.db.LastModified()
-	if err != nil {
-		return 0, err
-	}
-	stats.Add(numProvides, 1)
-	return lm.UnixNano(), nil
+	return p.str.db.LastModified()
 }

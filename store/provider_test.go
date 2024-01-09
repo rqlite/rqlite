@@ -111,7 +111,7 @@ func Test_SingleNodeProvideNoData(t *testing.T) {
 	}
 }
 
-func Test_SingleNodeProvideCheck(t *testing.T) {
+func Test_SingleNodeProvideLastModified(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
 
@@ -130,34 +130,31 @@ func Test_SingleNodeProvideCheck(t *testing.T) {
 	defer os.Remove(tmpFile)
 	provider := NewProvider(s, false)
 
-	i, changed := provider.Check(0)
-	if !changed {
-		t.Fatalf("check should have indicated change")
-	}
-	i, changed = provider.Check(i)
-	if changed {
-		t.Fatalf("check should not have indicated change")
-	}
-	i, changed = provider.Check(i + 1)
-	if changed {
-		t.Fatalf("check should not have indicated change")
+	lm, err := provider.LastModified()
+	if err != nil {
+		t.Fatalf("failed to get last modified: %s", err.Error())
 	}
 
 	er := executeRequestFromStrings([]string{
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 	}, false, false)
-	_, err := s.Execute(er)
+	_, err = s.Execute(er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
 	if _, err := s.WaitForAppliedFSM(2 * time.Second); err != nil {
 		t.Fatalf("failed to wait for FSM to apply")
 	}
-	i, changed = provider.Check(i)
-	if !changed {
-		t.Fatalf("check should have indicated change")
+
+	newLM, err := provider.LastModified()
+	if err != nil {
+		t.Fatalf("failed to get last modified: %s", err.Error())
 	}
+	if !newLM.After(lm) {
+		t.Fatalf("last modified time should have changed")
+	}
+	lm = newLM
 
 	// Try various queries and commands which should not change the database.
 	qr := queryRequestFromString("SELECT * FROM foo", false, false)
@@ -169,17 +166,27 @@ func Test_SingleNodeProvideCheck(t *testing.T) {
 	if _, err := s.WaitForAppliedFSM(2 * time.Second); err != nil {
 		t.Fatalf("failed to wait for FSM to apply")
 	}
-	i, changed = provider.Check(i)
-	if changed {
-		t.Fatalf("check should not have indicated change with STRONG query")
+	newLM, err = provider.LastModified()
+	if err != nil {
+		t.Fatalf("failed to get last modified: %s", err.Error())
 	}
+	if !newLM.Equal(lm) {
+		t.Fatalf("last modified time should not have changed")
+	}
+	lm = newLM
+
 	if af, err := s.Noop("don't care"); err != nil || af.Error() != nil {
 		t.Fatalf("failed to execute Noop")
 	}
-	i, changed = provider.Check(i)
-	if changed {
-		t.Fatalf("check should not have indicated change with Noop")
+	newLM, err = provider.LastModified()
+	if err != nil {
+		t.Fatalf("failed to get last modified: %s", err.Error())
 	}
+	if !newLM.Equal(lm) {
+		t.Fatalf("last modified time should not have changed")
+	}
+	lm = newLM
+
 	er = executeRequestFromStrings([]string{
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`, // Constraint violation.
 	}, false, false)
@@ -187,10 +194,14 @@ func Test_SingleNodeProvideCheck(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
-	i, changed = provider.Check(i)
-	if changed {
-		t.Fatalf("check should not have indicated change with constraint violation")
+	newLM, err = provider.LastModified()
+	if err != nil {
+		t.Fatalf("failed to get last modified: %s", err.Error())
 	}
+	if !newLM.Equal(lm) {
+		t.Fatalf("last modified time should not have changed with constraint violation")
+	}
+	lm = newLM
 
 	// This should change the database.
 	er = executeRequestFromStrings([]string{
@@ -203,8 +214,11 @@ func Test_SingleNodeProvideCheck(t *testing.T) {
 	if _, err := s.WaitForAppliedFSM(2 * time.Second); err != nil {
 		t.Fatalf("failed to wait for FSM to apply")
 	}
-	_, changed = provider.Check(i)
-	if !changed {
-		t.Fatalf("check should have indicated change")
+	newLM, err = provider.LastModified()
+	if err != nil {
+		t.Fatalf("failed to get last modified: %s", err.Error())
+	}
+	if !newLM.After(lm) {
+		t.Fatalf("last modified time should have changed")
 	}
 }

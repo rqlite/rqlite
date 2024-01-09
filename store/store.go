@@ -110,7 +110,6 @@ const (
 	numWALSnapshotsFailed     = "num_wal_snapshots_failed"
 	numSnapshotsFull          = "num_snapshots_full"
 	numSnapshotsIncremental   = "num_snapshots_incremental"
-	numProvides               = "num_provides"
 	numBoots                  = "num_boots"
 	numBackups                = "num_backups"
 	numLoads                  = "num_loads"
@@ -160,7 +159,6 @@ func ResetStats() {
 	stats.Add(numSnapshotsFull, 0)
 	stats.Add(numSnapshotsIncremental, 0)
 	stats.Add(numBoots, 0)
-	stats.Add(numProvides, 0)
 	stats.Add(numBackups, 0)
 	stats.Add(numLoads, 0)
 	stats.Add(numRestores, 0)

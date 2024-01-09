@@ -45,11 +45,9 @@ func Test_UploaderSingleUpload(t *testing.T) {
 		},
 	}
 	dp := &mockDataProvider{data: "my upload data"}
-	dp.checkFn = func(i int64) (int64, bool) {
-		if i == 0 {
-			return 1, true
-		}
-		return 1, false
+	n := time.Now()
+	dp.lastModifiedFn = func() (time.Time, error) {
+		return n, nil // Single upload, since time doesn't change.
 	}
 	uploader := NewUploader(sc, dp, time.Second, UploadNoCompress)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -73,7 +71,7 @@ func Test_UploaderSingleUploadCompress(t *testing.T) {
 		uploadFn: func(ctx context.Context, reader io.Reader) error {
 			defer wg.Done()
 
-			// Wrap a gzip reader about the reader.
+			// Wrap a gzip reader about the reader, to ensure the data is compressed.
 			gzReader, err := gzip.NewReader(reader)
 			if err != nil {
 				return err
@@ -85,11 +83,9 @@ func Test_UploaderSingleUploadCompress(t *testing.T) {
 		},
 	}
 	dp := &mockDataProvider{data: "my upload data"}
-	dp.checkFn = func(i int64) (int64, bool) {
-		if i == 0 {
-			return 1, true
-		}
-		return 1, false
+	n := time.Now()
+	dp.lastModifiedFn = func() (time.Time, error) {
+		return n, nil // Single upload, since time doesn't change.
 	}
 	uploader := NewUploader(sc, dp, time.Second, UploadCompress)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -120,23 +116,6 @@ func Test_UploaderDoubleUpload(t *testing.T) {
 		},
 	}
 	dp := &mockDataProvider{data: "my upload data"}
-	dp.checkFn = func(i int64) (int64, bool) {
-		if i == 0 {
-			return 1, true
-		}
-		if i == 1 {
-			return 2, true
-		}
-		return 2, false
-	}
-
-	provideLastFnCalled := int64(1)
-	dp.provideLastIFn = func() int64 {
-		// Keep it one ahead of checkFn.
-		defer func() { provideLastFnCalled++ }()
-		return provideLastFnCalled
-	}
-
 	uploader := NewUploader(sc, dp, time.Second, UploadNoCompress)
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -171,17 +150,6 @@ func Test_UploaderFailThenOK(t *testing.T) {
 		},
 	}
 	dp := &mockDataProvider{data: "my upload data"}
-	dp.checkFn = func(i int64) (int64, bool) {
-		return 1, true
-	}
-
-	provideLastFnCalled := int64(1)
-	dp.provideLastIFn = func() int64 {
-		// Keep it one ahead of checkFn.
-		defer func() { provideLastFnCalled++ }()
-		return provideLastFnCalled
-	}
-
 	uploader := NewUploader(sc, dp, time.Second, UploadNoCompress)
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -217,15 +185,6 @@ func Test_UploaderOKThenFail(t *testing.T) {
 		},
 	}
 	dp := &mockDataProvider{data: "my upload data"}
-	dp.checkFn = func(i int64) (int64, bool) {
-		return 1, true
-	}
-	provideLastFnCalled := int64(2)
-	dp.provideLastIFn = func() int64 {
-		// Keep it one ahead of checkFn.
-		defer func() { provideLastFnCalled++ }()
-		return provideLastFnCalled
-	}
 	uploader := NewUploader(sc, dp, time.Second, UploadNoCompress)
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -266,9 +225,6 @@ func Test_UploaderEnabledFalse(t *testing.T) {
 	ResetStats()
 	sc := &mockStorageClient{}
 	dp := &mockDataProvider{data: "my upload data"}
-	dp.checkFn = func(i int64) (int64, bool) {
-		return 1, true // Upload if asked (which it shouldn't be).
-	}
 	uploader := NewUploader(sc, dp, 100*time.Millisecond, false)
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -297,15 +253,6 @@ func Test_UploaderEnabledTrue(t *testing.T) {
 		},
 	}
 	dp := &mockDataProvider{data: "my upload data"}
-	dp.checkFn = func(i int64) (int64, bool) {
-		return 1, true
-	}
-	provideLastFnCalled := int64(2)
-	dp.provideLastIFn = func() int64 {
-		// Keep it one ahead of checkFn.
-		defer func() { provideLastFnCalled++ }()
-		return provideLastFnCalled
-	}
 	uploader := NewUploader(sc, dp, time.Second, UploadNoCompress)
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -357,26 +304,20 @@ func (mc *mockStorageClient) String() string {
 type mockDataProvider struct {
 	data           string
 	err            error
-	checkFn        func(i int64) (int64, bool)
-	provideLastIFn func() int64
+	lastModifiedFn func() (time.Time, error)
 }
 
-func (mp *mockDataProvider) Check(i int64) (int64, bool) {
-	if mp.checkFn != nil {
-		return mp.checkFn(i)
+func (mp *mockDataProvider) LastModified() (time.Time, error) {
+	if mp.lastModifiedFn != nil {
+		return mp.lastModifiedFn()
 	}
-	return 0, false
+	return time.Now(), nil
 }
 
-func (mp *mockDataProvider) Provide(path string) (int64, error) {
+func (mp *mockDataProvider) Provide(path string) (time.Time, error) {
 	if mp.err != nil {
-		return 0, mp.err
+		return time.Time{}, mp.err
 	}
 
-	lastI := int64(0)
-	if mp.provideLastIFn != nil {
-		lastI = mp.provideLastIFn()
-	}
-
-	return lastI, os.WriteFile(path, []byte(mp.data), 0644)
+	return time.Now(), os.WriteFile(path, []byte(mp.data), 0644)
 }
