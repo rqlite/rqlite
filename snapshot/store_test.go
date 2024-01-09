@@ -1,11 +1,43 @@
 package snapshot
 
 import (
+	"io"
 	"os"
+	"sort"
 	"testing"
 
 	"github.com/hashicorp/raft"
 )
+
+func Test_SnapshotMetaSort(t *testing.T) {
+	metas := []*raft.SnapshotMeta{
+		{
+			ID:    "2-1017-1704807719996",
+			Index: 1017,
+			Term:  2,
+		},
+		{
+			ID:    "2-1131-1704807720976",
+			Index: 1131,
+			Term:  2,
+		},
+	}
+	sort.Sort(snapMetaSlice(metas))
+	if metas[0].ID != "2-1017-1704807719996" {
+		t.Errorf("Expected first snapshot ID to be 2-1017-1704807719996, got %s", metas[0].ID)
+	}
+	if metas[1].ID != "2-1131-1704807720976" {
+		t.Errorf("Expected second snapshot ID to be 2-1131-1704807720976, got %s", metas[1].ID)
+	}
+
+	sort.Sort(sort.Reverse(snapMetaSlice(metas)))
+	if metas[0].ID != "2-1131-1704807720976" {
+		t.Errorf("Expected first snapshot ID to be 2-1131-1704807720976, got %s", metas[0].ID)
+	}
+	if metas[1].ID != "2-1017-1704807719996" {
+		t.Errorf("Expected second snapshot ID to be 2-1017-1704807719996, got %s", metas[1].ID)
+	}
+}
 
 func Test_RemoveAllTmpSnapshotData(t *testing.T) {
 	dir := t.TempDir()
@@ -154,7 +186,61 @@ func Test_StoreCreateCancel(t *testing.T) {
 	if pathExists(dir + "/" + sink.ID() + tmpSuffix) {
 		t.Errorf("Expected directory with name %s to not exist, but it does", sink.ID())
 	}
+}
 
+func Test_StoreList(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("Failed to create new store: %v", err)
+	}
+	store.reapDisabled = true
+
+	snaps, err := store.List()
+	if err != nil {
+		t.Fatalf("Failed to list snapshots: %v", err)
+	}
+	if len(snaps) != 0 {
+		t.Errorf("Expected 0 snapshots, got %d", len(snaps))
+	}
+
+	createSnapshot := func(id string, index, term, cfgIndex uint64, file string) {
+		sink := NewSink(store, makeRaftMeta(id, index, term, cfgIndex))
+		if sink == nil {
+			t.Fatalf("Failed to create new sink")
+		}
+		if err := sink.Open(); err != nil {
+			t.Fatalf("Failed to open sink: %v", err)
+		}
+		wal := mustOpenFile(t, file)
+		defer wal.Close()
+		_, err := io.Copy(sink, wal)
+		if err != nil {
+			t.Fatalf("Failed to copy WAL file: %v", err)
+		}
+		if err := sink.Close(); err != nil {
+			t.Fatalf("Failed to close sink: %v", err)
+		}
+
+		if fn, err := store.FullNeeded(); err != nil {
+			t.Fatalf("Failed to check if full snapshot needed: %v", err)
+		} else if fn {
+			t.Errorf("Expected full snapshot not to be needed, but it is")
+		}
+	}
+
+	createSnapshot("2-1017-1704807719996", 1017, 2, 1, "testdata/db-and-wals/backup.db")
+	createSnapshot("2-1131-1704807720976", 1131, 2, 1, "testdata/db-and-wals/wal-00")
+	snaps, err = store.List()
+	if err != nil {
+		t.Fatalf("Failed to list snapshots: %v", err)
+	}
+	if len(snaps) != 1 {
+		t.Errorf("Expected 1 snapshot, got %d", len(snaps))
+	}
+	if snaps[0].ID != "2-1131-1704807720976" {
+		t.Errorf("Expected snapshot ID to be 2-1131-1704807720976, got %s", snaps[0].ID)
+	}
 }
 
 func mustTouchFile(t *testing.T, path string) {
