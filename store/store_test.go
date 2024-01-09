@@ -1350,6 +1350,15 @@ COMMIT;
 		t.Fatalf("failed to load SQLite file: %s", err.Error())
 	}
 
+	// Load a database should mark that the snapshot store needs a Full Snapshot
+	fn, err := s.snapshotStore.FullNeeded()
+	if err != nil {
+		t.Fatalf("failed to check if snapshot store needs a full snapshot: %s", err.Error())
+	}
+	if !fn {
+		t.Fatalf("expected snapshot store to need a full snapshot")
+	}
+
 	// Check that data were loaded correctly.
 	qr = queryRequestFromString("SELECT * FROM foo WHERE id=2", false, true)
 	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
