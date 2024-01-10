@@ -214,7 +214,7 @@ func Test_SinkFullSnapshot(t *testing.T) {
 		t.Fatalf("Failed to read dir: %v", err)
 	}
 	if len(files) != 2 {
-		t.Fatalf("Expected 2 files, got %d", len(files))
+		t.Fatalf("Expected 2 files, got %d, %s", len(files), files)
 	}
 	if !fileExists(filepath.Join(store.Dir(), "snap-91011.db")) {
 		t.Fatalf("Latest snapshot SQLite file does not exist")
