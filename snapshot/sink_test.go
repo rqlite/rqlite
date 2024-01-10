@@ -66,7 +66,8 @@ func Test_NewSinkOpenCloseFail(t *testing.T) {
 }
 
 // Test_SinkFullSnapshot tests that multiple full snapshots are
-// written to the Store correctly.
+// written to the Store correctly. The closing of files is awkward
+// on Windows, so this test is a little more involved.
 func Test_SinkFullSnapshot(t *testing.T) {
 	store := mustStore(t)
 	sink := NewSink(store, makeRaftMeta("snap-1234", 3, 2, 1))
@@ -83,7 +84,7 @@ func Test_SinkFullSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to copy SQLite file: %v", err)
 	}
-	sqliteFile.Close()
+	sqliteFile.Close() // Reaping will fail on Windows if file is not closed.
 	if n != mustGetFileSize(t, "testdata/db-and-wals/backup.db") {
 		t.Fatalf("Unexpected number of bytes copied: %d", n)
 	}
