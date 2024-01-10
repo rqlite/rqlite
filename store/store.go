@@ -1715,6 +1715,14 @@ func (s *Store) fsmApply(l *raft.Log) (e interface{}) {
 	cmd, r := s.cmdProc.Process(l.Data, &s.db)
 	if cmd.Type == proto.Command_COMMAND_TYPE_NOOP {
 		s.numNoops++
+	} else if cmd.Type == proto.Command_COMMAND_TYPE_LOAD {
+		// Swapping in a new database invalidates any existing snapshot.
+		err := s.snapshotStore.SetFullNeeded()
+		if err != nil {
+			return &fsmGenericResponse{
+				error: fmt.Errorf("failed to set full snapshot needed: %s", err.Error()),
+			}
+		}
 	}
 	return r
 }
