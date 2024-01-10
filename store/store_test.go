@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -2485,7 +2486,7 @@ func Test_SingleNode_WALTriggeredSnapshot(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
 	s.SnapshotThreshold = 8192
-	s.SnapshotInterval = 1 * time.Second
+	s.SnapshotInterval = 500 * time.Millisecond
 	s.SnapshotThresholdWALSize = 4096
 
 	if err := s.Open(); err != nil {
@@ -2518,6 +2519,34 @@ func Test_SingleNode_WALTriggeredSnapshot(t *testing.T) {
 		return stats.Get(numWALSnapshots).String() != nSnaps
 	}
 	testPoll(t, f, 100*time.Millisecond, 2*time.Second)
+
+	// Sanity-check the contents of the Store. There should be two
+	// files -- a SQLite database file, and a diretory named after
+	// the most recent snapshot. This basically checks that reaping
+	// is working, as it can be tricky on Windows due to stricter
+	// file deletion rules.
+	time.Sleep(5 * time.Second) // Tricky to know when all snapshots are done. Just wait.
+	snaps, err := s.snapshotStore.List()
+	if err != nil {
+		t.Fatalf("failed to list snapshots: %s", err.Error())
+	}
+	if len(snaps) != 1 {
+		t.Fatalf("wrong number of snapshots: %d", len(snaps))
+	}
+	snapshotDir := filepath.Join(s.raftDir, snapshotsDirName)
+	files, err := os.ReadDir(snapshotDir)
+	if err != nil {
+		t.Fatalf("failed to read snapshot store dir: %s", err.Error())
+	}
+	if len(files) != 2 {
+		t.Fatalf("wrong number of snapshot store files: %d", len(files))
+	}
+	for _, f := range files {
+		if !strings.Contains(f.Name(), snaps[0].ID) {
+			t.Fatalf("wrong snapshot store file: %s", f.Name())
+		}
+	}
+
 }
 
 func Test_SingleNodeNoop(t *testing.T) {
