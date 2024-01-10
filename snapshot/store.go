@@ -19,11 +19,12 @@ import (
 )
 
 const (
-	persistSize     = "latest_persist_size"
-	persistDuration = "latest_persist_duration"
-	upgradeOk       = "upgrade_ok"
-	upgradeFail     = "upgrade_fail"
-	snapshotsReaped = "snapshots_reaped"
+	persistSize         = "latest_persist_size"
+	persistDuration     = "latest_persist_duration"
+	upgradeOk           = "upgrade_ok"
+	upgradeFail         = "upgrade_fail"
+	snapshotsReaped     = "snapshots_reaped"
+	snapshotsReapedFail = "snapshots_reaped_failed"
 )
 
 const (
@@ -48,6 +49,7 @@ func ResetStats() {
 	stats.Add(upgradeOk, 0)
 	stats.Add(upgradeFail, 0)
 	stats.Add(snapshotsReaped, 0)
+	stats.Add(snapshotsReapedFail, 0)
 }
 
 // LockingSink is a wrapper around a SnapshotSink that ensures that the
@@ -208,7 +210,11 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 // snapshots reaped.
 func (s *Store) Reap() (retN int, retErr error) {
 	defer func() {
-		stats.Add(snapshotsReaped, int64(retN))
+		if retErr != nil {
+			stats.Add(snapshotsReapedFail, 1)
+		} else {
+			stats.Add(snapshotsReaped, int64(retN))
+		}
 	}()
 	if s.reapDisabled {
 		return 0, nil
