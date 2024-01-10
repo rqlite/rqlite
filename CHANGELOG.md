@@ -1,4 +1,4 @@
-## 8.16.3 (unreleased)
+## 8.16.3 (January 9th 2024)
 ### Implementation changes and bug fixes
 - [PR #1582](https://github.com/rqlite/rqlite/pull/1582): Explicitly switch any upgraded v7 Snapshot to WAL mode.
 - [PR #1583](https://github.com/rqlite/rqlite/pull/1583): Loading a database invalidates existing snapshots.
