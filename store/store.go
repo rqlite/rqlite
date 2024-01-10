@@ -249,7 +249,7 @@ type Store struct {
 	snapshotWClose chan struct{}
 	snapshotWDone  chan struct{}
 
-	// Snapshotting syncronization
+	// Snapshotting synchronization
 	queryTxMu   sync.RWMutex
 	snapshotCAS *CheckAndSet
 
