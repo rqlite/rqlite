@@ -23,8 +23,8 @@ func IsNewNode(raftDir string) bool {
 	return !pathExists(filepath.Join(raftDir, raftDBPath))
 }
 
-// HasData returns true if the given dir indiciates that at least one FSM entry
-// has been committed to the log. This is true is there are any snapshots, or
+// HasData returns true if the given dir indicates that at least one FSM entry
+// has been committed to the log. This is true if there are any snapshots, or
 // if there are any entries in the log of raft.LogCommand type. This function
 // will block if the Bolt database is already open.
 func HasData(dir string) (bool, error) {
