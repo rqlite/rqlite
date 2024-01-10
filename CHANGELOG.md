@@ -1,3 +1,7 @@
+## 8.16.4 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1584](https://github.com/rqlite/rqlite/pull/1584): Count Snapshot reaping failures.
+
 ## 8.16.3 (January 9th 2024)
 ### Implementation changes and bug fixes
 - [PR #1582](https://github.com/rqlite/rqlite/pull/1582): Explicitly switch any upgraded v7 Snapshot to WAL mode.
