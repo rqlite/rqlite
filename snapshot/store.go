@@ -476,7 +476,9 @@ func removeAllPrefix(path, prefix string) error {
 		return err
 	}
 	for _, f := range files {
+		log.Printf("removing %s", f)
 		if err := os.RemoveAll(f); err != nil {
+			log.Printf("failed to remove %s: %s", f, err)
 			return err
 		}
 	}
