@@ -15,7 +15,7 @@ import (
 
 // StorageClient is an interface for uploading data to a storage service.
 type StorageClient interface {
-	Upload(ctx context.Context, reader io.Reader) error
+	Upload(ctx context.Context, reader io.Reader, sum []byte) error
 	fmt.Stringer
 }
 
@@ -73,7 +73,7 @@ type Uploader struct {
 	lastUploadTime     time.Time
 	lastUploadDuration time.Duration
 
-	lastModified time.Time
+	lastModified time.Time // The last-modified time of the data most-recently uploaded.
 }
 
 // NewUploader creates a new Uploader service.
@@ -165,9 +165,14 @@ func (u *Uploader) upload(ctx context.Context) error {
 	}
 	defer fd.Close()
 
+	sum, err := FileSHA256(filetoUpload)
+	if err != nil {
+		return err
+	}
+
 	cr := progress.NewCountingReader(fd)
 	startTime := time.Now()
-	err = u.storageClient.Upload(ctx, cr)
+	err = u.storageClient.Upload(ctx, cr, sum)
 	if err != nil {
 		stats.Add(numUploadsFail, 1)
 	} else {

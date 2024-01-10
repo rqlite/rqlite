@@ -98,7 +98,7 @@ func TestS3ClientUploadOK(t *testing.T) {
 	}
 
 	reader := strings.NewReader("test data")
-	err := client.Upload(context.Background(), reader)
+	err := client.Upload(context.Background(), reader, nil)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
@@ -130,7 +130,7 @@ func TestS3ClientUploadFail(t *testing.T) {
 	}
 
 	reader := strings.NewReader("test data")
-	err := client.Upload(context.Background(), reader)
+	err := client.Upload(context.Background(), reader, nil)
 	if err == nil {
 		t.Fatal("Expected error, got nil")
 	}
