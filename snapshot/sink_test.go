@@ -83,6 +83,7 @@ func Test_SinkFullSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to copy SQLite file: %v", err)
 	}
+	sqliteFile.Close()
 	if n != mustGetFileSize(t, "testdata/db-and-wals/backup.db") {
 		t.Fatalf("Unexpected number of bytes copied: %d", n)
 	}
@@ -109,6 +110,7 @@ func Test_SinkFullSnapshot(t *testing.T) {
 	if !compareReaderToFile(t, fd, "testdata/db-and-wals/backup.db") {
 		t.Fatalf("Snapshot data does not match")
 	}
+	fd.Close()
 
 	if fn, err := store.FullNeeded(); err != nil {
 		t.Fatalf("Failed to check if full snapshot needed: %v", err)
@@ -130,6 +132,7 @@ func Test_SinkFullSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to copy second SQLite file: %v", err)
 	}
+	sqliteFile2.Close()
 	if n != mustGetFileSize(t, "testdata/db-and-wals/full2.db") {
 		t.Fatalf("Unexpected number of bytes copied: %d", n)
 	}
@@ -156,6 +159,7 @@ func Test_SinkFullSnapshot(t *testing.T) {
 	if !compareReaderToFile(t, fd2, "testdata/db-and-wals/full2.db") {
 		t.Fatalf("second full snapshot data does not match")
 	}
+	fd2.Close()
 
 	// Check that setting FullNeeded flag works.
 	if fn, err := store.FullNeeded(); err != nil {
@@ -188,6 +192,7 @@ func Test_SinkFullSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to copy second SQLite file: %v", err)
 	}
+	sqliteFile3.Close()
 	if err := sink.Close(); err != nil {
 		t.Fatalf("Failed to close sink: %v", err)
 	}
