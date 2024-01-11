@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/rqlite/rqlite/v8/command/proto"
-	"github.com/rqlite/rqlite/v8/db"
 )
 
 // Provider implements the uploader Provider interface, allowing the
@@ -35,8 +34,8 @@ func (p *Provider) LastModified() (time.Time, error) {
 	return p.str.db.LastModified()
 }
 
-// Provider writes the SQLite database to the given path, ensuring the database
-// is in DELETE mode. If path exists, it will be overwritten.
+// Provider writes the SQLite database to the given path. If path exists,
+// it will be overwritten.
 func (p *Provider) Provide(path string) (t time.Time, retErr error) {
 	stats.Add(numProviderProvides, 1)
 	defer func() {
@@ -66,14 +65,6 @@ func (p *Provider) Provide(path string) (t time.Time, retErr error) {
 		if nRetries > p.nRetries {
 			return time.Time{}, err
 		}
-	}
-
-	// Switch database to DELETE mode, to keep existing behaviour.
-	if err := fd.Close(); err != nil {
-		return time.Time{}, err
-	}
-	if db.EnsureDeleteMode(path) != nil {
-		return time.Time{}, err
 	}
 	return p.str.db.LastModified()
 }
