@@ -50,6 +50,7 @@ const (
 	numUploadsFail       = "num_uploads_fail"
 	numUploadsSkipped    = "num_uploads_skipped"
 	numUploadsSkippedSum = "num_uploads_skipped_sum"
+	numSumGetFail        = "num_sum_get_fail"
 	totalUploadBytes     = "total_upload_bytes"
 	lastUploadBytes      = "last_upload_bytes"
 
@@ -69,6 +70,7 @@ func ResetStats() {
 	stats.Add(numUploadsFail, 0)
 	stats.Add(numUploadsSkipped, 0)
 	stats.Add(numUploadsSkippedSum, 0)
+	stats.Add(numSumGetFail, 0)
 	stats.Add(totalUploadBytes, 0)
 	stats.Add(lastUploadBytes, 0)
 }
@@ -185,7 +187,10 @@ func (u *Uploader) upload(ctx context.Context) error {
 		// No "last modified" time, so this must be the first upload since this
 		// uploader started. Double-check that we really need to upload.
 		cloudSum, err := u.storageClient.CurrentSum(ctx)
-		if err == nil && bytes.Equal(cloudSum, filesum) {
+		if err != nil {
+			stats.Add(numSumGetFail, 1)
+			u.logger.Printf("failed to get current sum from %s: %v", u.storageClient, err)
+		} else if err == nil && bytes.Equal(cloudSum, filesum) {
 			stats.Add(numUploadsSkippedSum, 1)
 			return nil
 		}

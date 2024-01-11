@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -14,8 +15,8 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 )
 
-const (
-	AWSS3SumKey = "x-rqlite-sum"
+var (
+	AWSS3SumKey = http.CanonicalHeaderKey("x-rqlite-auto-backup-sum")
 )
 
 // S3Config is the subconfig for the S3 storage type
