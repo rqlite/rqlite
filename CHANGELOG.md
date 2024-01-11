@@ -5,6 +5,7 @@
 - [PR #1586](https://github.com/rqlite/rqlite/pull/1586): Auto-backups will be in WAL mode going forward, and not in DELETE mode.
 - [PR #1587](https://github.com/rqlite/rqlite/pull/1587): Refactor Store Backup Provider to use `io.Writer`.
 - [PR #1588](https://github.com/rqlite/rqlite/pull/1588): More consistent use of Sum types in Uploader.
+- [PR #1589](https://github.com/rqlite/rqlite/pull/1589): Avoid SQLite file copy during automatic backups.
 
 ## 8.16.3 (January 9th 2024)
 ### Implementation changes and bug fixes
