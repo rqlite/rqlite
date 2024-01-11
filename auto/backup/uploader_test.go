@@ -287,8 +287,8 @@ func Test_UploaderStats(t *testing.T) {
 }
 
 type mockStorageClient struct {
-	uploadFn  func(ctx context.Context, reader io.Reader, sum []byte) error
-	lastSumFn func(ctx context.Context) ([]byte, error)
+	uploadFn     func(ctx context.Context, reader io.Reader, sum []byte) error
+	currentSumFn func(ctx context.Context) ([]byte, error)
 }
 
 func (mc *mockStorageClient) Upload(ctx context.Context, reader io.Reader, sum []byte) error {
@@ -298,11 +298,11 @@ func (mc *mockStorageClient) Upload(ctx context.Context, reader io.Reader, sum [
 	return nil
 }
 
-func (mc *mockStorageClient) LastSum(ctx context.Context) ([]byte, error) {
-	if mc.lastSumFn != nil {
-		return mc.lastSumFn(ctx)
+func (mc *mockStorageClient) CurrentSum(ctx context.Context) ([]byte, error) {
+	if mc.currentSumFn != nil {
+		return mc.currentSumFn(ctx)
 	}
-	return nil, fmt.Errorf("no last sum")
+	return nil, fmt.Errorf("no current sum")
 }
 
 func (mc *mockStorageClient) String() string {
