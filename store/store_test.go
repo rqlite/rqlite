@@ -2894,6 +2894,14 @@ func mustCreateTempFile() string {
 	return f.Name()
 }
 
+func mustCreateTempFD() *os.File {
+	f, err := os.CreateTemp("", "rqlite-temp")
+	if err != nil {
+		panic("failed to create temporary file")
+	}
+	return f
+}
+
 func mustWriteFile(path, contents string) {
 	err := os.WriteFile(path, []byte(contents), 0644)
 	if err != nil {
