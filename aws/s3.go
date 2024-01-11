@@ -2,8 +2,10 @@ package aws
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -11,6 +13,10 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+)
+
+var (
+	AWSS3SumKey = http.CanonicalHeaderKey("x-rqlite-auto-backup-sum")
 )
 
 // S3Config is the subconfig for the S3 storage type
@@ -67,7 +73,7 @@ func (s *S3Client) String() string {
 }
 
 // Upload uploads data to S3.
-func (s *S3Client) Upload(ctx context.Context, reader io.Reader) error {
+func (s *S3Client) Upload(ctx context.Context, reader io.Reader, sum []byte) error {
 	sess, err := s.createSession()
 	if err != nil {
 		return err
@@ -81,16 +87,49 @@ func (s *S3Client) Upload(ctx context.Context, reader io.Reader) error {
 		uploader = s.uploader
 	}
 
-	_, err = uploader.UploadWithContext(ctx, &s3manager.UploadInput{
+	input := &s3manager.UploadInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(s.key),
 		Body:   reader,
-	})
+	}
+
+	if sum != nil {
+		input.Metadata = map[string]*string{
+			AWSS3SumKey: aws.String(hex.EncodeToString(sum)),
+		}
+	}
+	_, err = uploader.UploadWithContext(ctx, input)
 	if err != nil {
 		return fmt.Errorf("failed to upload to %v: %w", s, err)
 	}
 
 	return nil
+}
+
+// CurrentSum returns the last SHA256 sum uploaded to S3. It is always
+// read from S3 and never cached.
+func (s *S3Client) CurrentSum(ctx context.Context) ([]byte, error) {
+	sess, err := s.createSession()
+	if err != nil {
+		return nil, err
+	}
+
+	svc := s3.New(sess)
+	input := &s3.HeadObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(s.key),
+	}
+
+	result, err := svc.HeadObjectWithContext(ctx, input)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get object head for %v: %w", s, err)
+	}
+
+	sumHex, ok := result.Metadata[AWSS3SumKey]
+	if !ok {
+		return nil, fmt.Errorf("sum metadata not found for %v", s)
+	}
+	return hex.DecodeString(*sumHex)
 }
 
 // Download downloads data from S3.

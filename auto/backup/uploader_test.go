@@ -38,7 +38,7 @@ func Test_UploaderSingleUpload(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	sc := &mockStorageClient{
-		uploadFn: func(ctx context.Context, reader io.Reader) error {
+		uploadFn: func(ctx context.Context, reader io.Reader, sum []byte) error {
 			defer wg.Done()
 			uploadedData, err = io.ReadAll(reader)
 			return err
@@ -49,16 +49,20 @@ func Test_UploaderSingleUpload(t *testing.T) {
 	dp.lastModifiedFn = func() (time.Time, error) {
 		return n, nil // Single upload, since time doesn't change.
 	}
-	uploader := NewUploader(sc, dp, time.Second, UploadNoCompress)
+	uploader := NewUploader(sc, dp, 100*time.Millisecond, UploadNoCompress)
 	ctx, cancel := context.WithCancel(context.Background())
 
 	done := uploader.Start(ctx, nil)
 	wg.Wait()
 	cancel()
 	<-done
-
 	if exp, got := "my upload data", string(uploadedData); exp != got {
 		t.Errorf("expected uploadedData to be %s, got %s", exp, got)
+	}
+
+	time.Sleep(time.Second)
+	if exp, got := int64(0), stats.Get(numUploadsSkipped).(*expvar.Int); exp < got.Value() {
+		t.Errorf("expected numUploadsSkipped to be > %d, got %d", exp, got)
 	}
 }
 
@@ -68,7 +72,7 @@ func Test_UploaderSingleUploadCompress(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	sc := &mockStorageClient{
-		uploadFn: func(ctx context.Context, reader io.Reader) error {
+		uploadFn: func(ctx context.Context, reader io.Reader, sum []byte) error {
 			defer wg.Done()
 
 			// Wrap a gzip reader about the reader, to ensure the data is compressed.
@@ -87,16 +91,43 @@ func Test_UploaderSingleUploadCompress(t *testing.T) {
 	dp.lastModifiedFn = func() (time.Time, error) {
 		return n, nil // Single upload, since time doesn't change.
 	}
-	uploader := NewUploader(sc, dp, time.Second, UploadCompress)
+	uploader := NewUploader(sc, dp, 100*time.Millisecond, UploadCompress)
 	ctx, cancel := context.WithCancel(context.Background())
 
 	done := uploader.Start(ctx, nil)
 	wg.Wait()
 	cancel()
 	<-done
-
 	if exp, got := "my upload data", string(uploadedData); exp != got {
 		t.Errorf("expected uploadedData to be %s, got %s", exp, got)
+	}
+}
+
+// Test_UploaderSingleUpload_Checksum ensures that when the checksum in the
+// storage service is the same as the checksum of the data being uploaded, the
+// upload is skipped.
+func Test_UploaderSingleUpload_Checksum(t *testing.T) {
+	ResetStats()
+	var wg sync.WaitGroup
+	wg.Add(1)
+	sc := &mockStorageClient{
+		currentSumFn: func(ctx context.Context) ([]byte, error) {
+			defer wg.Done()
+			tmpF := mustWriteToFile("my upload data")
+			defer os.Remove(tmpF)
+			return FileSHA256(tmpF)
+		},
+	}
+	dp := &mockDataProvider{data: "my upload data"}
+	uploader := NewUploader(sc, dp, 100*time.Millisecond, UploadNoCompress)
+	ctx, cancel := context.WithCancel(context.Background())
+
+	done := uploader.Start(ctx, nil)
+	wg.Wait()
+	cancel()
+	<-done
+	if exp, got := int64(1), stats.Get(numUploadsSkippedSum).(*expvar.Int); exp != got.Value() {
+		t.Errorf("expected numUploadsSkippedSum to be %d, got %d", exp, got)
 	}
 }
 
@@ -108,7 +139,7 @@ func Test_UploaderDoubleUpload(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 	sc := &mockStorageClient{
-		uploadFn: func(ctx context.Context, reader io.Reader) error {
+		uploadFn: func(ctx context.Context, reader io.Reader, sum []byte) error {
 			defer wg.Done()
 			uploadedData = nil // Wipe out any previous state.
 			uploadedData, err = io.ReadAll(reader)
@@ -116,14 +147,13 @@ func Test_UploaderDoubleUpload(t *testing.T) {
 		},
 	}
 	dp := &mockDataProvider{data: "my upload data"}
-	uploader := NewUploader(sc, dp, time.Second, UploadNoCompress)
+	uploader := NewUploader(sc, dp, 100*time.Millisecond, UploadNoCompress)
 	ctx, cancel := context.WithCancel(context.Background())
 
 	done := uploader.Start(ctx, nil)
 	wg.Wait()
 	cancel()
 	<-done
-
 	if exp, got := "my upload data", string(uploadedData); exp != got {
 		t.Errorf("expected uploadedData to be %s, got %s", exp, got)
 	}
@@ -138,7 +168,7 @@ func Test_UploaderFailThenOK(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 	sc := &mockStorageClient{
-		uploadFn: func(ctx context.Context, reader io.Reader) error {
+		uploadFn: func(ctx context.Context, reader io.Reader, sum []byte) error {
 			defer wg.Done()
 			if uploadCount == 0 {
 				uploadCount++
@@ -150,14 +180,13 @@ func Test_UploaderFailThenOK(t *testing.T) {
 		},
 	}
 	dp := &mockDataProvider{data: "my upload data"}
-	uploader := NewUploader(sc, dp, time.Second, UploadNoCompress)
+	uploader := NewUploader(sc, dp, 100*time.Millisecond, UploadNoCompress)
 	ctx, cancel := context.WithCancel(context.Background())
 
 	done := uploader.Start(ctx, nil)
 	wg.Wait()
 	cancel()
 	<-done
-
 	if exp, got := "my upload data", string(uploadedData); exp != got {
 		t.Errorf("expected uploadedData to be %s, got %s", exp, got)
 	}
@@ -172,7 +201,7 @@ func Test_UploaderOKThenFail(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 	sc := &mockStorageClient{
-		uploadFn: func(ctx context.Context, reader io.Reader) error {
+		uploadFn: func(ctx context.Context, reader io.Reader, sum []byte) error {
 			defer wg.Done()
 
 			if uploadCount == 1 {
@@ -185,14 +214,13 @@ func Test_UploaderOKThenFail(t *testing.T) {
 		},
 	}
 	dp := &mockDataProvider{data: "my upload data"}
-	uploader := NewUploader(sc, dp, time.Second, UploadNoCompress)
+	uploader := NewUploader(sc, dp, 100*time.Millisecond, UploadNoCompress)
 	ctx, cancel := context.WithCancel(context.Background())
 
 	done := uploader.Start(ctx, nil)
 	wg.Wait()
 	cancel()
 	<-done
-
 	if exp, got := "my upload data", string(uploadedData); exp != got {
 		t.Errorf("expected uploadedData to be %s, got %s", exp, got)
 	}
@@ -203,19 +231,18 @@ func Test_UploaderContextCancellation(t *testing.T) {
 	var uploadCount int32
 
 	sc := &mockStorageClient{
-		uploadFn: func(ctx context.Context, reader io.Reader) error {
+		uploadFn: func(ctx context.Context, reader io.Reader, sum []byte) error {
 			atomic.AddInt32(&uploadCount, 1)
 			return nil
 		},
 	}
 	dp := &mockDataProvider{data: "my upload data"}
-	uploader := NewUploader(sc, dp, time.Second, UploadNoCompress)
+	uploader := NewUploader(sc, dp, 100*time.Millisecond, UploadNoCompress)
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
 
 	done := uploader.Start(ctx, nil)
 	cancel()
 	<-done
-
 	if exp, got := int32(0), atomic.LoadInt32(&uploadCount); exp != got {
 		t.Errorf("expected uploadCount to be %d, got %d", exp, got)
 	}
@@ -246,7 +273,7 @@ func Test_UploaderEnabledTrue(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	sc := &mockStorageClient{
-		uploadFn: func(ctx context.Context, reader io.Reader) error {
+		uploadFn: func(ctx context.Context, reader io.Reader, sum []byte) error {
 			defer wg.Done()
 			uploadedData, err = io.ReadAll(reader)
 			return err
@@ -286,21 +313,34 @@ func Test_UploaderStats(t *testing.T) {
 	}
 }
 
+// mockStorageClient implements StorageClient and in its default configuration
+// always returns an error for CurrentSum.
 type mockStorageClient struct {
-	uploadFn func(ctx context.Context, reader io.Reader) error
+	uploadFn     func(ctx context.Context, reader io.Reader, sum []byte) error
+	currentSumFn func(ctx context.Context) ([]byte, error)
 }
 
-func (mc *mockStorageClient) Upload(ctx context.Context, reader io.Reader) error {
+func (mc *mockStorageClient) Upload(ctx context.Context, reader io.Reader, sum []byte) error {
 	if mc.uploadFn != nil {
-		return mc.uploadFn(ctx, reader)
+		return mc.uploadFn(ctx, reader, sum)
 	}
 	return nil
+}
+
+func (mc *mockStorageClient) CurrentSum(ctx context.Context) ([]byte, error) {
+	if mc.currentSumFn != nil {
+		return mc.currentSumFn(ctx)
+	}
+	return nil, fmt.Errorf("no current sum")
 }
 
 func (mc *mockStorageClient) String() string {
 	return "mockStorageClient"
 }
 
+// mockDataProvider implements DataProvider and in its default configuration
+// always returns the current time for LastModified and writes the data it is
+// provided to the file specified by Provide.
 type mockDataProvider struct {
 	data           string
 	err            error
@@ -320,4 +360,16 @@ func (mp *mockDataProvider) Provide(path string) (time.Time, error) {
 	}
 
 	return time.Now(), os.WriteFile(path, []byte(mp.data), 0644)
+}
+
+func mustWriteToFile(s string) string {
+	f, err := os.CreateTemp("", "rqlite-auto-backup-test")
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+	if err := os.WriteFile(f.Name(), []byte(s), 0644); err != nil {
+		panic(err)
+	}
+	return f.Name()
 }
