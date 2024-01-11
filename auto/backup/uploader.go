@@ -1,6 +1,7 @@
 package backup
 
 import (
+	"bytes"
 	"compress/gzip"
 	"context"
 	"expvar"
@@ -16,6 +17,9 @@ import (
 // StorageClient is an interface for uploading data to a storage service.
 type StorageClient interface {
 	Upload(ctx context.Context, reader io.Reader, sum []byte) error
+
+	LastSum(ctx context.Context) ([]byte, error)
+
 	fmt.Stringer
 }
 
@@ -73,6 +77,7 @@ type Uploader struct {
 	lastUploadTime     time.Time
 	lastUploadDuration time.Duration
 
+	lastSum      []byte    // The SHA256 sum of the data most-recently uploaded.
 	lastModified time.Time // The last-modified time of the data most-recently uploaded.
 }
 
@@ -125,6 +130,7 @@ func (u *Uploader) Stats() (map[string]interface{}, error) {
 		"compress":             u.compress,
 		"last_upload_time":     u.lastUploadTime.Format(time.RFC3339),
 		"last_upload_duration": u.lastUploadDuration.String(),
+		"last_sum":             fmt.Sprintf("%x", u.lastSum),
 		"last_modified":        u.lastModified.String(),
 	}
 	return status, nil
@@ -170,12 +176,23 @@ func (u *Uploader) upload(ctx context.Context) error {
 		return err
 	}
 
+	if u.lastSum == nil {
+		ls, err := u.storageClient.LastSum(ctx)
+		if err == nil {
+			u.lastSum = ls
+		}
+	} else if bytes.Equal(u.lastSum, sum) {
+		stats.Add(numUploadsSkipped, 1)
+		return nil
+	}
+
 	cr := progress.NewCountingReader(fd)
 	startTime := time.Now()
 	err = u.storageClient.Upload(ctx, cr, sum)
 	if err != nil {
 		stats.Add(numUploadsFail, 1)
 	} else {
+		u.lastSum = sum
 		u.lastModified = lm
 		stats.Add(numUploadsOK, 1)
 		stats.Add(totalUploadBytes, cr.Count())

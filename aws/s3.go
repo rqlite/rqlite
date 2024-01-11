@@ -2,6 +2,7 @@ package aws
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"strings"
@@ -11,6 +12,10 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+)
+
+const (
+	AWSS3SumKey = "x-rqlite-sum"
 )
 
 // S3Config is the subconfig for the S3 storage type
@@ -89,7 +94,7 @@ func (s *S3Client) Upload(ctx context.Context, reader io.Reader, sum []byte) err
 
 	if sum != nil {
 		input.Metadata = map[string]*string{
-			"x-rqlite-sum": aws.String(fmt.Sprintf("%x", sum)),
+			AWSS3SumKey: aws.String(fmt.Sprintf("%x", sum)),
 		}
 	}
 	_, err = uploader.UploadWithContext(ctx, input)
@@ -98,6 +103,30 @@ func (s *S3Client) Upload(ctx context.Context, reader io.Reader, sum []byte) err
 	}
 
 	return nil
+}
+
+func (s *S3Client) LastSum(ctx context.Context) ([]byte, error) {
+	sess, err := s.createSession()
+	if err != nil {
+		return nil, err
+	}
+
+	svc := s3.New(sess)
+	input := &s3.HeadObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(s.key),
+	}
+
+	result, err := svc.HeadObjectWithContext(ctx, input)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get object head for %v: %w", s, err)
+	}
+
+	sumHex, ok := result.Metadata[AWSS3SumKey]
+	if !ok {
+		return nil, fmt.Errorf("sum metadata not found for %v", s)
+	}
+	return hex.DecodeString(*sumHex)
 }
 
 // Download downloads data from S3.
