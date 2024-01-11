@@ -373,11 +373,12 @@ class Node(object):
 
   def num_auto_backups(self):
     '''
-    Return a tuple of the number of successful, failed, and skipped auto-backups.
+    Return a tuple of the number of successful, failed, skipped auto-backups.
     '''
     return (int(self.expvar()['uploader']['num_uploads_ok']),
             int(self.expvar()['uploader']['num_uploads_fail']),
-            int(self.expvar()['uploader']['num_uploads_skipped']))
+            int(self.expvar()['uploader']['num_uploads_skipped'],
+             int(self.expvar()['uploader']['num_uploads_skipped_sum']))
 
   def wait_for_upload(self, i, timeout=TIMEOUT):
     '''
@@ -390,7 +391,20 @@ class Node(object):
       time.sleep(1)
       t+=1
     n = self.num_auto_backups()
-    raise Exception('rqlite node failed to upload backup within %d seconds (%d, %d, %d)' % (timeout, n[0], n[1], n[2]))
+    raise Exception('rqlite node failed to upload backup within %d seconds (%d, %d, %d)' % (timeout, n[0], n[1], n[2], n[3]))
+
+  def wait_for_upload_skipped_sum(self, i, timeout=TIMEOUT):
+    '''
+    Wait until the number of skipped sum uploads is at least as great as the given value.
+    '''
+    t = 0
+    while t < timeout:
+      if self.num_auto_backups()[3] >= i:
+        return self.num_auto_backups()
+      time.sleep(1)
+      t+=1
+    n = self.num_auto_backups()
+    raise Exception('rqlite node failed to skip backup within %d seconds (%d, %d, %d)' % (timeout, n[0], n[1], n[2], n[3]))
 
   def wait_for_fsm_index(self, index, timeout=TIMEOUT):
     '''

@@ -94,7 +94,7 @@ func (s *S3Client) Upload(ctx context.Context, reader io.Reader, sum []byte) err
 
 	if sum != nil {
 		input.Metadata = map[string]*string{
-			AWSS3SumKey: aws.String(fmt.Sprintf("%x", sum)),
+			AWSS3SumKey: aws.String(hex.EncodeToString(sum)),
 		}
 	}
 	_, err = uploader.UploadWithContext(ctx, input)

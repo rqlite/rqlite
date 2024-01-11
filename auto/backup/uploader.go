@@ -46,11 +46,12 @@ type DataProvider interface {
 var stats *expvar.Map
 
 const (
-	numUploadsOK      = "num_uploads_ok"
-	numUploadsFail    = "num_uploads_fail"
-	numUploadsSkipped = "num_uploads_skipped"
-	totalUploadBytes  = "total_upload_bytes"
-	lastUploadBytes   = "last_upload_bytes"
+	numUploadsOK         = "num_uploads_ok"
+	numUploadsFail       = "num_uploads_fail"
+	numUploadsSkipped    = "num_uploads_skipped"
+	numUploadsSkippedSum = "num_uploads_skippedSum"
+	totalUploadBytes     = "total_upload_bytes"
+	lastUploadBytes      = "last_upload_bytes"
 
 	UploadCompress   = true
 	UploadNoCompress = false
@@ -67,6 +68,7 @@ func ResetStats() {
 	stats.Add(numUploadsOK, 0)
 	stats.Add(numUploadsFail, 0)
 	stats.Add(numUploadsSkipped, 0)
+	stats.Add(numUploadsSkippedSum, 0)
 	stats.Add(totalUploadBytes, 0)
 	stats.Add(lastUploadBytes, 0)
 }
@@ -184,7 +186,7 @@ func (u *Uploader) upload(ctx context.Context) error {
 		// uploader started. Double-check that we really need to upload.
 		cloudSum, err := u.storageClient.CurrentSum(ctx)
 		if err == nil && bytes.Equal(cloudSum, filesum) {
-			stats.Add(numUploadsSkipped, 1)
+			stats.Add(numUploadsSkippedSum, 1)
 			return nil
 		}
 	}
