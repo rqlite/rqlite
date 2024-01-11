@@ -1,7 +1,6 @@
 package backup
 
 import (
-	"compress/gzip"
 	"context"
 	"expvar"
 	"fmt"
@@ -63,43 +62,6 @@ func Test_UploaderSingleUpload(t *testing.T) {
 	time.Sleep(time.Second)
 	if exp, got := int64(0), stats.Get(numUploadsSkipped).(*expvar.Int); exp < got.Value() {
 		t.Errorf("expected numUploadsSkipped to be > %d, got %d", exp, got)
-	}
-}
-
-func Test_UploaderSingleUploadCompress(t *testing.T) {
-	ResetStats()
-	var uploadedData []byte
-	var wg sync.WaitGroup
-	wg.Add(1)
-	sc := &mockStorageClient{
-		uploadFn: func(ctx context.Context, reader io.Reader, sum []byte) error {
-			defer wg.Done()
-
-			// Wrap a gzip reader about the reader, to ensure the data is compressed.
-			gzReader, err := gzip.NewReader(reader)
-			if err != nil {
-				return err
-			}
-			defer gzReader.Close()
-
-			uploadedData, err = io.ReadAll(gzReader)
-			return err
-		},
-	}
-	dp := &mockDataProvider{data: "my upload data"}
-	n := time.Now()
-	dp.lastModifiedFn = func() (time.Time, error) {
-		return n, nil // Single upload, since time doesn't change.
-	}
-	uploader := NewUploader(sc, dp, 100*time.Millisecond, UploadCompress)
-	ctx, cancel := context.WithCancel(context.Background())
-
-	done := uploader.Start(ctx, nil)
-	wg.Wait()
-	cancel()
-	<-done
-	if exp, got := "my upload data", string(uploadedData); exp != got {
-		t.Errorf("expected uploadedData to be %s, got %s", exp, got)
 	}
 }
 
@@ -354,12 +316,15 @@ func (mp *mockDataProvider) LastModified() (time.Time, error) {
 	return time.Now(), nil
 }
 
-func (mp *mockDataProvider) Provide(path string) (time.Time, error) {
+func (mp *mockDataProvider) Provide(w io.Writer) (time.Time, error) {
 	if mp.err != nil {
 		return time.Time{}, mp.err
 	}
 
-	return time.Now(), os.WriteFile(path, []byte(mp.data), 0644)
+	if _, err := w.Write([]byte(mp.data)); err != nil {
+		return time.Time{}, err
+	}
+	return time.Now(), nil
 }
 
 func mustWriteToFile(s string) string {

@@ -1,7 +1,6 @@
 package backup
 
 import (
-	"compress/gzip"
 	"context"
 	"expvar"
 	"fmt"
@@ -35,10 +34,10 @@ type DataProvider interface {
 	// last modified.
 	LastModified() (time.Time, error)
 
-	// Provide writes the data-for-upload to the file specified by path. Because
-	// Provide may change the data in the DataProvider, it returns the current
-	// modified time of the data, after the data has been written to path.
-	Provide(path string) (time.Time, error)
+	// Provide writes the data-for-upload to the writer. Because Provide may
+	// change the data in the DataProvider, it returns the current modified
+	// time of the data, after the data has been written to path.
+	Provide(w io.Writer) (time.Time, error)
 }
 
 // stats captures stats for the Uploader service.
@@ -158,27 +157,19 @@ func (u *Uploader) upload(ctx context.Context) error {
 	}
 
 	// Create a temporary file for the data to be uploaded
-	filetoUpload, err := tempFilename()
+	fd, err := tempFD()
 	if err != nil {
 		return err
 	}
-	defer os.Remove(filetoUpload)
-
-	lm, err = u.dataProvider.Provide(filetoUpload)
-	if err != nil {
-		return err
-	}
-	if err := u.compressIfNeeded(filetoUpload); err != nil {
-		return err
-	}
-
-	fd, err := os.Open(filetoUpload)
-	if err != nil {
-		return err
-	}
+	defer os.Remove(fd.Name())
 	defer fd.Close()
 
-	filesum, err := FileSHA256(filetoUpload)
+	lm, err = u.dataProvider.Provide(fd)
+	if err != nil {
+		return err
+	}
+
+	filesum, err := FileSHA256(fd.Name())
 	if err != nil {
 		return err
 	}
@@ -195,6 +186,9 @@ func (u *Uploader) upload(ctx context.Context) error {
 		}
 	}
 
+	if _, err := fd.Seek(0, io.SeekStart); err != nil {
+		return err
+	}
 	cr := progress.NewCountingReader(fd)
 	startTime := time.Now()
 	err = u.storageClient.Upload(ctx, cr, filesum)
@@ -221,54 +215,6 @@ func (u *Uploader) currentSum(ctx context.Context) (SHA256Sum, error) {
 	return SHA256Sum(s), nil
 }
 
-func (u *Uploader) compressIfNeeded(path string) error {
-	if !u.compress {
-		return nil
-	}
-
-	compressedFile, err := tempFilename()
-	if err != nil {
-		return err
-	}
-	defer os.Remove(compressedFile)
-
-	if err = compressFromTo(path, compressedFile); err != nil {
-		return err
-	}
-
-	return os.Rename(compressedFile, path)
-}
-
-func compressFromTo(from, to string) error {
-	uncompressedFd, err := os.Open(from)
-	if err != nil {
-		return err
-	}
-	defer uncompressedFd.Close()
-
-	compressedFd, err := os.Create(to)
-	if err != nil {
-		return err
-	}
-	defer compressedFd.Close()
-
-	gw := gzip.NewWriter(compressedFd)
-	_, err = io.Copy(gw, uncompressedFd)
-	if err != nil {
-		return err
-	}
-	err = gw.Close()
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func tempFilename() (string, error) {
-	f, err := os.CreateTemp("", "rqlite-upload")
-	if err != nil {
-		return "", err
-	}
-	f.Close()
-	return f.Name(), nil
+func tempFD() (*os.File, error) {
+	return os.CreateTemp("", "rqlite-upload")
 }

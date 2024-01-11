@@ -2,7 +2,6 @@ package store
 
 import (
 	"io"
-	"os"
 	"time"
 
 	"github.com/rqlite/rqlite/v8/command/proto"
@@ -11,18 +10,22 @@ import (
 // Provider implements the uploader Provider interface, allowing the
 // Store to be used as a DataProvider for an uploader.
 type Provider struct {
-	str    *Store
-	vacuum bool
+	str      *Store
+	vacuum   bool
+	compress bool
 
 	nRetries      int
 	retryInterval time.Duration
 }
 
-// NewProvider returns a new instance of Provider.
-func NewProvider(s *Store, v bool) *Provider {
+// NewProvider returns a new instance of Provider. If v is true, the
+// SQLite database will be VACUUMed before being provided. If c is
+// true, the SQLite database will be compressed before being provided.
+func NewProvider(s *Store, v, c bool) *Provider {
 	return &Provider{
 		str:           s,
 		vacuum:        v,
+		compress:      c,
 		nRetries:      10,
 		retryInterval: 500 * time.Millisecond,
 	}
@@ -37,7 +40,7 @@ func (p *Provider) LastModified() (time.Time, error) {
 
 // Provider writes the SQLite database to the given path. If path exists,
 // it will be overwritten.
-func (p *Provider) Provide(path string) (t time.Time, retErr error) {
+func (p *Provider) Provide(w io.Writer) (t time.Time, retErr error) {
 	stats.Add(numProviderProvides, 1)
 	defer func() {
 		if retErr != nil {
@@ -45,18 +48,10 @@ func (p *Provider) Provide(path string) (t time.Time, retErr error) {
 		}
 	}()
 
-	fd, err := os.Create(path)
-	if err != nil {
-		return time.Time{}, err
-	}
-	defer fd.Close()
-	return p.provide(fd)
-}
-
-func (p *Provider) provide(w io.Writer) (time.Time, error) {
 	br := &proto.BackupRequest{
-		Format: proto.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY,
-		Vacuum: p.vacuum,
+		Format:   proto.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY,
+		Vacuum:   p.vacuum,
+		Compress: p.compress,
 	}
 	nRetries := 0
 	for {
