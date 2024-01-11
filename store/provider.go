@@ -1,6 +1,7 @@
 package store
 
 import (
+	"io"
 	"os"
 	"time"
 
@@ -49,14 +50,17 @@ func (p *Provider) Provide(path string) (t time.Time, retErr error) {
 		return time.Time{}, err
 	}
 	defer fd.Close()
+	return p.provide(fd)
+}
 
+func (p *Provider) provider(w io.Writer) (time.Time, error) {
 	br := &proto.BackupRequest{
 		Format: proto.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY,
 		Vacuum: p.vacuum,
 	}
 	nRetries := 0
 	for {
-		err := p.str.Backup(br, fd)
+		err := p.str.Backup(br, w)
 		if err == nil {
 			break
 		}
