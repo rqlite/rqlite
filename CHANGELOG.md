@@ -3,6 +3,7 @@
 - [PR #1584](https://github.com/rqlite/rqlite/pull/1584): Count Snapshot reaping failures.
 - [PR #1585](https://github.com/rqlite/rqlite/pull/1585): Avoid unnecessary auto-backups by storing sha256 sums in S3. Fixes issue [#1565](https://github.com/rqlite/rqlite/issues/1565).
 - [PR #1586](https://github.com/rqlite/rqlite/pull/1586): Auto-backups will be in WAL mode going forward, and not in DELETE mode.
+- [PR #1587](https://github.com/rqlite/rqlite/pull/1587): Refactor Store Backup Provider to use `io.Writer`.
 
 ## 8.16.3 (January 9th 2024)
 ### Implementation changes and bug fixes
