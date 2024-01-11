@@ -49,7 +49,7 @@ const (
 	numUploadsOK         = "num_uploads_ok"
 	numUploadsFail       = "num_uploads_fail"
 	numUploadsSkipped    = "num_uploads_skipped"
-	numUploadsSkippedSum = "num_uploads_skippedSum"
+	numUploadsSkippedSum = "num_uploads_skipped_sum"
 	totalUploadBytes     = "total_upload_bytes"
 	lastUploadBytes      = "last_upload_bytes"
 
