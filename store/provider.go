@@ -67,13 +67,5 @@ func (p *Provider) Provide(path string) (t time.Time, retErr error) {
 			return time.Time{}, err
 		}
 	}
-
-	// Switch database to DELETE mode, to keep existing behaviour.
-	if err := fd.Close(); err != nil {
-		return time.Time{}, err
-	}
-	if db.EnsureDeleteMode(path) != nil {
-		return time.Time{}, err
-	}
 	return p.str.db.LastModified()
 }
