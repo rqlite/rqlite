@@ -386,6 +386,8 @@ class TestAutoBackupS3(unittest.TestCase):
     node.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
     node.execute('INSERT INTO foo(name) VALUES("fiona")')
     node.wait_for_all_fsm()
+    j = node.query('SELECT count(*) FROM foo', level='strong')
+    self.assertEqual(j, d_("{'results': [{'values': [[1]], 'types': ['integer'], 'columns': ['count(*)']}]}"))
     node.wait_for_upload(i+1)
 
     # Download the backup file from S3 and check it.
@@ -443,6 +445,8 @@ class TestAutoBackupS3(unittest.TestCase):
     for _ in range(100):
       node.execute('INSERT INTO foo(name) VALUES("fiona")')
     node.wait_for_all_fsm()
+    j = node.query('SELECT count(*) FROM foo', level='strong')
+    self.assertEqual(j, d_("{'results': [{'values': [[100]], 'types': ['integer'], 'columns': ['count(*)']}]}"))
     node.wait_for_upload(i+1, timeout=10)
 
     # Download the backup file from S3 and check it.

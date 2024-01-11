@@ -126,8 +126,8 @@ func Test_UploaderSingleUpload_Checksum(t *testing.T) {
 	wg.Wait()
 	cancel()
 	<-done
-	if exp, got := int64(1), stats.Get(numUploadsSkipped).(*expvar.Int); exp != got.Value() {
-		t.Errorf("expected numUploadsSkipped to be %d, got %d", exp, got)
+	if exp, got := int64(1), stats.Get(numUploadsSkippedSum).(*expvar.Int); exp != got.Value() {
+		t.Errorf("expected numUploadsSkippedSum to be %d, got %d", exp, got)
 	}
 }
 
