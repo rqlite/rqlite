@@ -16,8 +16,13 @@ import (
 
 // StorageClient is an interface for uploading data to a storage service.
 type StorageClient interface {
+	// Upload uploads the data from the given reader to the storage service.
+	// sum is the SHA256 sum of the data being uploaded and will be stored with
+	// the data. If sum is nil, no sum will be stored.
 	Upload(ctx context.Context, reader io.Reader, sum []byte) error
 
+	// LastSum returns the SHA256 sum of the data in the Storage service.
+	// It is always read from the Storage service and never cached.
 	LastSum(ctx context.Context) ([]byte, error)
 
 	fmt.Stringer
@@ -130,7 +135,7 @@ func (u *Uploader) Stats() (map[string]interface{}, error) {
 		"compress":             u.compress,
 		"last_upload_time":     u.lastUploadTime.Format(time.RFC3339),
 		"last_upload_duration": u.lastUploadDuration.String(),
-		"last_sum":             fmt.Sprintf("%x", u.lastSum),
+		"last_sum_uploaded":    fmt.Sprintf("%x", u.lastSum),
 		"last_modified":        u.lastModified.String(),
 	}
 	return status, nil

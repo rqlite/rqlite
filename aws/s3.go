@@ -105,6 +105,8 @@ func (s *S3Client) Upload(ctx context.Context, reader io.Reader, sum []byte) err
 	return nil
 }
 
+// LastSum returns the last SHA256 sum uploaded to S3. It is always read from
+// S3 and never cached.
 func (s *S3Client) LastSum(ctx context.Context) ([]byte, error) {
 	sess, err := s.createSession()
 	if err != nil {
