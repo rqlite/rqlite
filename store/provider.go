@@ -53,7 +53,7 @@ func (p *Provider) Provide(path string) (t time.Time, retErr error) {
 	return p.provide(fd)
 }
 
-func (p *Provider) provider(w io.Writer) (time.Time, error) {
+func (p *Provider) provide(w io.Writer) (time.Time, error) {
 	br := &proto.BackupRequest{
 		Format: proto.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY,
 		Vacuum: p.vacuum,
