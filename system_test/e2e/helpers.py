@@ -378,7 +378,7 @@ class Node(object):
     return (int(self.expvar()['uploader']['num_uploads_ok']),
             int(self.expvar()['uploader']['num_uploads_fail']),
             int(self.expvar()['uploader']['num_uploads_skipped'],
-             int(self.expvar()['uploader']['num_uploads_skipped_sum']))
+             int(self.expvar()['uploader']['num_uploads_skipped_sum'])))
 
   def wait_for_upload(self, i, timeout=TIMEOUT):
     '''
