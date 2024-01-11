@@ -302,7 +302,7 @@ func (mc *mockStorageClient) LastSum(ctx context.Context) ([]byte, error) {
 	if mc.lastSumFn != nil {
 		return mc.lastSumFn(ctx)
 	}
-	return nil, nil
+	return nil, fmt.Errorf("no last sum")
 }
 
 func (mc *mockStorageClient) String() string {
