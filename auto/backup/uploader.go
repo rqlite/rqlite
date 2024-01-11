@@ -1,7 +1,6 @@
 package backup
 
 import (
-	"bytes"
 	"compress/gzip"
 	"context"
 	"expvar"
@@ -186,11 +185,11 @@ func (u *Uploader) upload(ctx context.Context) error {
 	if u.lastModified.IsZero() {
 		// No "last modified" time, so this must be the first upload since this
 		// uploader started. Double-check that we really need to upload.
-		cloudSum, err := u.storageClient.CurrentSum(ctx)
+		cloudSum, err := u.currentSum(ctx)
 		if err != nil {
 			stats.Add(numSumGetFail, 1)
 			u.logger.Printf("failed to get current sum from %s: %v", u.storageClient, err)
-		} else if err == nil && bytes.Equal(cloudSum, filesum) {
+		} else if err == nil && filesum.Equals(cloudSum) {
 			stats.Add(numUploadsSkippedSum, 1)
 			return nil
 		}
@@ -212,6 +211,14 @@ func (u *Uploader) upload(ctx context.Context) error {
 		u.logger.Printf("completed auto upload to %s in %s", u.storageClient, u.lastUploadDuration)
 	}
 	return err
+}
+
+func (u *Uploader) currentSum(ctx context.Context) (SHA256Sum, error) {
+	s, err := u.storageClient.CurrentSum(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return SHA256Sum(s), nil
 }
 
 func (u *Uploader) compressIfNeeded(path string) error {
