@@ -317,7 +317,7 @@ class TestAutoBackupS3(unittest.TestCase):
     cfg = write_random_file(json.dumps(auto_backup_cfg))
 
     # Create a cluster with automatic backups enabled.
-    node = Node(RQLITED_PATH, '0', auto_backup=cfg)
+    node = Node(RQLITED_PATH, '0', auto_backup=cfg, raft_snap_int='300s')
     node.start()
     node.wait_for_leader()
 
@@ -328,11 +328,21 @@ class TestAutoBackupS3(unittest.TestCase):
     node.wait_for_all_fsm()
     node.wait_for_upload(i+1)
 
-    # Restart the node, and confirm no further backups are made.
+    # Restart the node, and confirm no backup is uploaded just due to the restart.
     node.stop(graceful=True)
     node.start()
     node.wait_for_leader()
     node.wait_for_upload_skipped_sum(1)
+
+    # Insert a row, make sure a backup will happen now.
+    i = node.num_auto_backups()[0]
+    node.execute('INSERT INTO foo(name) VALUES("fiona")')
+    node.wait_for_all_fsm()
+    node.wait_for_upload(i+1)
+
+    # Make sure we go back to skipping backups.
+    i = node.num_auto_backups()[0]
+    node.wait_for_upload_skipped(i+1)
 
     delete_s3_object(access_key_id, secret_access_key_id, S3_BUCKET, path)
     deprovision_node(node)
