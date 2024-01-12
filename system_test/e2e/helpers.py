@@ -382,30 +382,16 @@ class Node(object):
 
   def wait_for_upload(self, i, timeout=TIMEOUT):
     '''
-    Wait until the number of uploads is at least as great as the given value.
+    Wait until the number of uploads is equal to the given value.
     '''
     t = 0
     while t < timeout:
-      if self.num_auto_backups()[0] >= i:
+      if self.num_auto_backups()[0] == i:
         return self.num_auto_backups()
-      time.sleep(1)
+      time.sleep(0.1)
       t+=1
     n = self.num_auto_backups()
     raise Exception('rqlite node failed to upload backup within %d seconds (%d, %d, %d, %d)' % (timeout, n[0], n[1], n[2], n[3]))
-
-  def wait_for_upload_skipped(self, i, timeout=TIMEOUT):
-    '''
-    Wait until the number of skipped uploads is at least as great as the given value.
-    '''
-    t = 0
-    while t < timeout:
-      if self.num_auto_backups()[2] >= i:
-        return self.num_auto_backups()
-      time.sleep(1)
-      t+=1
-    n = self.num_auto_backups()
-    raise Exception('rqlite node failed to skip backup due sum within %d seconds (%d, %d, %d, %d)' % (timeout, n[0], n[1], n[2], n[3]))
-
 
   def wait_for_upload_skipped_sum(self, i, timeout=TIMEOUT):
     '''
@@ -415,10 +401,24 @@ class Node(object):
     while t < timeout:
       if self.num_auto_backups()[3] >= i:
         return self.num_auto_backups()
-      time.sleep(1)
+      time.sleep(0.1)
       t+=1
     n = self.num_auto_backups()
     raise Exception('rqlite node failed to skip backup due sum within %d seconds (%d, %d, %d, %d)' % (timeout, n[0], n[1], n[2], n[3]))
+
+  def wait_until_uploads_idle(self, timeout=TIMEOUT):
+    '''
+    Wait until uploads go idle.
+    '''
+    i = self.num_auto_backups()[2]
+    t = 0
+    while t < timeout:
+      if self.num_auto_backups()[2] > i:
+        return self.num_auto_backups()
+      time.sleep(0.1)
+      t+=1
+    n = self.num_auto_backups()
+    raise Exception('rqlite node failed to idle backups within %d seconds (%d, %d, %d, %d)' % (timeout, n[0], n[1], n[2], n[3]))
 
   def wait_for_fsm_index(self, index, timeout=TIMEOUT):
     '''

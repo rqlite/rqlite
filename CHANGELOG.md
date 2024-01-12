@@ -6,6 +6,7 @@
 - [PR #1587](https://github.com/rqlite/rqlite/pull/1587): Refactor Store Backup Provider to use `io.Writer`.
 - [PR #1588](https://github.com/rqlite/rqlite/pull/1588): More consistent use of Sum types in Uploader.
 - [PR #1589](https://github.com/rqlite/rqlite/pull/1589): Avoid SQLite file copy during automatic backups.
+- [PR #1590](https://github.com/rqlite/rqlite/pull/1590): Fix automatic backup end-to-end tests.
 
 ## 8.16.3 (January 9th 2024)
 ### Implementation changes and bug fixes
