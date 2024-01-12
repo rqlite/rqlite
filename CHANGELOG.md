@@ -1,4 +1,4 @@
-## 8.16.4 (unreleased)
+## 8.16.4 (January 12th 2024)
 ### Implementation changes and bug fixes
 - [PR #1584](https://github.com/rqlite/rqlite/pull/1584): Count Snapshot reaping failures.
 - [PR #1585](https://github.com/rqlite/rqlite/pull/1585): Avoid unnecessary auto-backups by storing sha256 sums in S3. Fixes issue [#1565](https://github.com/rqlite/rqlite/issues/1565).
