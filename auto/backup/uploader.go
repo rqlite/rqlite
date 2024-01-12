@@ -9,6 +9,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/rqlite/rqlite/v8/db/humanize"
 	"github.com/rqlite/rqlite/v8/progress"
 )
 
@@ -194,17 +195,21 @@ func (u *Uploader) upload(ctx context.Context) error {
 	err = u.storageClient.Upload(ctx, cr, filesum)
 	if err != nil {
 		stats.Add(numUploadsFail, 1)
-	} else {
-		u.lastSumUploaded = filesum
-		u.lastModified = lm
-		stats.Add(numUploadsOK, 1)
-		stats.Add(totalUploadBytes, cr.Count())
-		stats.Get(lastUploadBytes).(*expvar.Int).Set(cr.Count())
-		u.lastUploadTime = time.Now()
-		u.lastUploadDuration = time.Since(startTime)
-		u.logger.Printf("completed auto upload to %s in %s", u.storageClient, u.lastUploadDuration)
+		return err
 	}
-	return err
+
+	// Successful upload!
+	u.lastSumUploaded = filesum
+	u.lastModified = lm
+	stats.Add(numUploadsOK, 1)
+	stats.Add(totalUploadBytes, cr.Count())
+	stats.Get(lastUploadBytes).(*expvar.Int).Set(cr.Count())
+	u.lastUploadTime = time.Now()
+	u.lastUploadDuration = time.Since(startTime)
+	u.logger.Printf("completed auto upload of %s to %s in %s",
+		humanize.Bytes(uint64(stats.Get(lastUploadBytes).(*expvar.Int).Value())),
+		u.storageClient, u.lastUploadDuration)
+	return nil
 }
 
 func (u *Uploader) currentSum(ctx context.Context) (SHA256Sum, error) {
