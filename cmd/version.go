@@ -1,9 +1,10 @@
 package cmd
 
 // These variables are populated via the Go linker.
+// Make sure the build process (linker flags) are updated, as well as go.mod.
 var (
 	// Version of rqlite.
-	Version = "7"
+	Version = "8"
 
 	// Commit this code was built at.
 	Commit = "unknown"

@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// NewDialer returns an initialized Dialer
+// NewDialer returns an initialized Dialer.
 func NewDialer(header byte, tlsConfig *tls.Config) *Dialer {
 	return &Dialer{
 		header:    header,
@@ -35,7 +35,7 @@ func (d *Dialer) Dial(addr string, timeout time.Duration) (conn net.Conn, retErr
 	}
 
 	defer func() {
-		if retErr != nil {
+		if retErr != nil && conn != nil {
 			conn.Close()
 		}
 	}()

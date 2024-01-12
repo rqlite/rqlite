@@ -1,10 +1,29 @@
 #!/bin/bash
 
-EXECUTE_HOST=localhost:4001
+if [[ -z "$EXECUTE_HOST" ]]; then
+  EXECUTE_HOST=localhost:4001
+fi
 
-$RQBENCH -o 'CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT, surname TEXT)' -m 100 -n 1500000 -a $EXECUTE_HOST 'INSERT INTO foo(name) VALUES("fiona")' &
-$RQBENCH -o 'CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT, surname TEXT)' -m 100 -n 1500000 -a $EXECUTE_HOST 'INSERT INTO bar(name, surname) VALUES("fiona", "OTOOLE")' &
-$RQBENCH -o 'CREATE TABLE qux (id INTEGER NOT NULL PRIMARY KEY, name TEXT)' -m 100 -n 1500000 -a $EXECUTE_HOST 'INSERT INTO qux(name) VALUES("fionafionafionafionafionafionafionafionafionafionafionafionafionafionafionafionafionafiona")' &
+if [[ -z "$RQBENCH" ]]; then
+  RQBENCH="./rqbench"
+fi
+
+handle_ctrl_c() {
+    echo "Killing all load testing..."
+    killall rqbench
+    exit 1
+}
+
+COUNT=10000
+
+trap 'handle_ctrl_c' SIGINT
+
+$RQBENCH -o 'CREATE TABLE IF NOT EXISTS foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT, surname TEXT)' -m 100 -n $COUNT -a $EXECUTE_HOST 'INSERT INTO foo(name) VALUES("fiona")' &
+$RQBENCH -o 'CREATE TABLE IF NOT EXISTS bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT, surname TEXT)' -m 100 -n $COUNT -a $EXECUTE_HOST 'INSERT INTO bar(name, surname) VALUES("fiona", "OTOOLE")' &
+$RQBENCH -o 'CREATE TABLE IF NOT EXISTS qux (id INTEGER NOT NULL PRIMARY KEY, name TEXT)' -m 100 -n $COUNT -a $EXECUTE_HOST 'INSERT INTO qux(name) VALUES("fionafionafionafionafionafionafionafionafionafionafionafionafionafionafionafionafionafiona")' &
+
+echo "Waiting for tables to be created before starting queries"
+sleep 5
 
 $RQBENCH -p "/db/query" -n 150000000 -m 1000 "SELECT COUNT(*) FROM foo" &
 $RQBENCH -p "/db/query" -n 150000000 -m 1000 "SELECT COUNT(*) FROM bar" &

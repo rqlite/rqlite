@@ -2,13 +2,13 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 
 	"github.com/mkideal/cli"
 	"github.com/mkideal/pkg/textutil"
-	cl "github.com/rqlite/rqlite/cmd/rqlite/http"
+	cl "github.com/rqlite/rqlite/v8/cmd/rqlite/http"
 )
 
 // Rows represents query result
@@ -66,9 +66,9 @@ type headerRenderStyle struct {
 
 func (render headerRenderStyle) CellRender(row, col int, cell string, cw *textutil.ColorWriter) {
 	if row != 0 {
-		fmt.Fprintf(cw, cell)
+		fmt.Fprint(cw, cell)
 	} else {
-		fmt.Fprintf(cw, cw.Color.Cyan(cell))
+		fmt.Fprint(cw, cw.Color.Cyan(cell))
 	}
 }
 
@@ -106,7 +106,7 @@ func queryWithClient(ctx *cli.Context, client *cl.Client, timer bool, consistenc
 		hcr = err
 	}
 
-	response, err := ioutil.ReadAll(resp.Body)
+	response, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}

@@ -1,0 +1,88 @@
+syntax = "proto3";
+package cluster;
+
+import "command/proto/command.proto";
+
+option go_package = "github.com/rqlite/rqlite/v8/cluster/proto";
+
+message Credentials {
+    string username = 1;
+    string password = 2;
+}
+
+message Address {
+	string url = 1;
+}
+
+message Command {
+    enum Type {
+        COMMAND_TYPE_UNKNOWN = 0;
+        COMMAND_TYPE_GET_NODE_API_URL = 1;
+        COMMAND_TYPE_EXECUTE = 2;
+        COMMAND_TYPE_QUERY = 3;
+        COMMAND_TYPE_BACKUP = 4;
+        COMMAND_TYPE_LOAD = 5;
+        COMMAND_TYPE_REMOVE_NODE = 6;
+        COMMAND_TYPE_NOTIFY = 7;
+        COMMAND_TYPE_JOIN = 8;
+        COMMAND_TYPE_REQUEST = 9;
+        COMMAND_TYPE_LOAD_CHUNK = 10;
+        COMMAND_TYPE_BACKUP_STREAM = 11;
+    }
+    Type type = 1;
+
+    oneof request {
+        command.ExecuteRequest execute_request = 2;
+        command.QueryRequest query_request = 3;
+        command.BackupRequest backup_request = 5;
+        command.LoadRequest load_request = 6;
+        command.RemoveNodeRequest remove_node_request = 7;
+        command.NotifyRequest notify_request = 8;
+        command.JoinRequest join_request = 9;
+        command.ExecuteQueryRequest execute_query_request = 10;
+        command.LoadChunkRequest load_chunk_request = 11;
+    }
+
+    Credentials credentials = 4;
+}
+
+message CommandExecuteResponse {
+	string error = 1;
+	repeated command.ExecuteResult results = 2;
+}
+
+message CommandQueryResponse {
+	string error = 1;
+	repeated command.QueryRows rows = 2;
+}
+
+message CommandRequestResponse {
+    string error = 1;
+    repeated command.ExecuteQueryResponse response = 2;
+}
+
+message CommandBackupResponse {
+    string error = 1;
+    bytes data = 2;
+}
+
+message CommandLoadResponse {
+    string error = 1;
+}
+
+message CommandLoadChunkResponse {
+    string error = 1;
+}
+
+message CommandRemoveNodeResponse {
+    string error = 1;
+}
+
+message CommandNotifyResponse {
+    string error = 1;
+}
+
+message CommandJoinResponse {
+    string error = 1;
+    string leader = 2;
+}

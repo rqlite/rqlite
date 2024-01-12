@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rqlite/rqlite/command"
+	command "github.com/rqlite/rqlite/v8/command/proto"
 )
 
 // stats captures stats for the Queue.
@@ -122,7 +122,7 @@ func New(maxSize, batchSize int, t time.Duration) *Queue {
 // Write queues a request, and returns a monotonically incrementing
 // sequence number associated with the slice of statements. If one
 // slice has a larger sequence number than a number, the former slice
-// will always be commited to Raft before the latter slice.
+// will always be committed to Raft before the latter slice.
 //
 // c is an optional channel. If non-nil, it will be closed when the Request
 // containing these statements is closed.

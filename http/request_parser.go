@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/rqlite/rqlite/command"
+	command "github.com/rqlite/rqlite/v8/command/proto"
 )
 
 var (

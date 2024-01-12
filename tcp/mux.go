@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rqlite/rqlite/rtls"
+	"github.com/rqlite/rqlite/v8/rtls"
 )
 
 const (
@@ -41,6 +41,15 @@ type Layer struct {
 	ln     net.Listener
 	addr   net.Addr
 	dialer *Dialer
+}
+
+// NewLayer returns a new instance of Layer.
+func NewLayer(ln net.Listener, dialer *Dialer) *Layer {
+	return &Layer{
+		ln:     ln,
+		addr:   ln.Addr(),
+		dialer: dialer,
+	}
 }
 
 // Dial creates a new network connection.
@@ -98,18 +107,31 @@ func NewMux(ln net.Listener, adv net.Addr) (*Mux, error) {
 // then the server will not verify the client's certificate. If mutual is true,
 // then the server will require the client to present a trusted certificate.
 func NewTLSMux(ln net.Listener, adv net.Addr, cert, key, caCert string, insecure, mutual bool) (*Mux, error) {
+	return newTLSMux(ln, adv, cert, key, caCert, false)
+}
+
+// NewMutualTLSMux returns a new instance of Mux for ln, and encrypts all traffic
+// using TLS. The server will also verify the client's certificate.
+func NewMutualTLSMux(ln net.Listener, adv net.Addr, cert, key, caCert string) (*Mux, error) {
+	return newTLSMux(ln, adv, cert, key, caCert, true)
+}
+
+func newTLSMux(ln net.Listener, adv net.Addr, cert, key, caCert string, mutual bool) (*Mux, error) {
 	mux, err := NewMux(ln, adv)
 	if err != nil {
 		return nil, err
 	}
 
-	mux.tlsConfig, err = rtls.CreateConfig(cert, key, caCert, insecure, mutual, false)
+	mtlsState := rtls.MTLSStateDisabled
+	if mutual {
+		mtlsState = rtls.MTLSStateEnabled
+	}
+	mux.tlsConfig, err = rtls.CreateServerConfig(cert, key, caCert, mtlsState)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create TLS config: %s", err)
 	}
 
 	mux.ln = tls.NewListener(ln, mux.tlsConfig)
-
 	return mux, nil
 }
 
@@ -148,12 +170,34 @@ func (mux *Mux) Serve() error {
 
 // Stats returns status of the mux.
 func (mux *Mux) Stats() (interface{}, error) {
+	e := "disabled"
+	if mux.tlsConfig != nil {
+		e = "enabled"
+	}
 	s := map[string]string{
 		"addr":    mux.addr.String(),
 		"timeout": mux.Timeout.String(),
+		"tls":     e,
 	}
 
 	return s, nil
+}
+
+// Listen returns a Listener associated with the given header. Any connection
+// accepted by mux is multiplexed based on the initial header byte.
+func (mux *Mux) Listen(header byte) net.Listener {
+	// Ensure two listeners are not created for the same header byte.
+	if _, ok := mux.m[header]; ok {
+		panic(fmt.Sprintf("listener already registered under header byte: %d", header))
+	}
+
+	// Create a new listener and assign it.
+	ln := &listener{
+		c:    make(chan net.Conn),
+		addr: mux.addr,
+	}
+	mux.m[header] = ln
+	return ln
 }
 
 func (mux *Mux) handleConn(conn net.Conn) {
@@ -196,32 +240,10 @@ func (mux *Mux) handleConn(conn net.Conn) {
 	handler.c <- conn
 }
 
-// Listen returns a Layer associated with the given header. Any connection
-// accepted by mux is multiplexed based on the initial header byte.
-func (mux *Mux) Listen(header byte) *Layer {
-	// Ensure two listeners are not created for the same header byte.
-	if _, ok := mux.m[header]; ok {
-		panic(fmt.Sprintf("listener already registered under header byte: %d", header))
-	}
-
-	// Create a new listener and assign it.
-	ln := &listener{
-		c: make(chan net.Conn),
-	}
-	mux.m[header] = ln
-
-	layer := &Layer{
-		ln:   ln,
-		addr: mux.addr,
-	}
-	layer.dialer = NewDialer(header, mux.tlsConfig)
-
-	return layer
-}
-
 // listener is a receiver for connections received by Mux.
 type listener struct {
-	c chan net.Conn
+	c    chan net.Conn
+	addr net.Addr
 }
 
 // Accept waits for and returns the next connection to the listener.
@@ -237,4 +259,4 @@ func (ln *listener) Accept() (c net.Conn, err error) {
 func (ln *listener) Close() error { return nil }
 
 // Addr always returns nil
-func (ln *listener) Addr() net.Addr { return nil }
+func (ln *listener) Addr() net.Addr { return ln.addr }

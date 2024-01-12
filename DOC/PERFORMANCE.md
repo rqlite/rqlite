@@ -25,7 +25,7 @@ The more SQLite statements you can include in a single request to a rqlite node,
 By using the [bulk API](https://github.com/rqlite/rqlite/blob/master/DOC/BULK.md), transactions, or both, throughput will increase significantly, often by 2 orders of magnitude. This speed-up is due to the way Raft and SQLite work. So for high throughput, execute as many operations as possible within a single transaction.
 
 ## Queued Writes
-If you can tolerate a small risk of some data loss in the event that a node crashes, you could consider using the [Queued Writes API](https://github.com/rqlite/rqlite/blob/master/DOC/QUEUED_WRITES.md). Using Queued Writes can easily give you orders of magnitude improvement in perfomance.
+If you can tolerate a small risk of some data loss in the event that a node crashes, you could consider using the [Queued Writes API](https://github.com/rqlite/rqlite/blob/master/DOC/QUEUED_WRITES.md). Using Queued Writes can easily give you orders of magnitude improvement in performance.
 
 ## Use more powerful hardware
 Obviously running rqlite on better disks, better networks, or both, will improve performance.
@@ -52,7 +52,7 @@ In-memory SQLite databases (the default configuration) are currently limited to 
 
 Another option is to run rqlite in on-disk mode but place the SQLite database file on a memory-backed filesystem. That way you can use larger databases, and still have performance similar to running with an in-memory SQLite database.
 
-In either case to control where rqlite places the SQLite database file, set `-on-disk-startup` and `-on-disk-path` when launching `rqlited`. **Note that you should still place the `data` directory on an actual disk, so that the Raft log is always on a physical disk, to ensure your data is not lost if a node retarts.** 
+In either case to control where rqlite places the SQLite database file, set `-on-disk-startup` and `-on-disk-path` when launching `rqlited`. **Note that you should still place the `data` directory on an actual disk, so that the Raft log is always on a physical disk, to ensure your data is not lost if a node restarts.** 
 
 ## Linux example
 An example of running rqlite with a SQLite file on a memory-backed file system, and keeping the data directory on persistent disk, is shown below. The data directory is where the Raft log is stored. The example below would allow up to a 4GB SQLite database.

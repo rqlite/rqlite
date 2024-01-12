@@ -2,9 +2,12 @@ package store
 
 import (
 	"bytes"
+	"compress/gzip"
+	"crypto/rand"
+	"errors"
+	"expvar"
 	"fmt"
-	"io/ioutil"
-	"math/rand"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -13,17 +16,358 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rqlite/rqlite/command"
-	"github.com/rqlite/rqlite/command/encoding"
-	"github.com/rqlite/rqlite/testdata/chinook"
+	"github.com/rqlite/rqlite/v8/command/encoding"
+	"github.com/rqlite/rqlite/v8/command/proto"
+	"github.com/rqlite/rqlite/v8/db"
+	"github.com/rqlite/rqlite/v8/random"
+	"github.com/rqlite/rqlite/v8/testdata/chinook"
 )
 
-func init() {
-	rand.Seed(time.Now().UnixNano())
+// Test_StoreSingleNode tests that a single node basically operates.
+func Test_OpenStoreSingleNode(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer s.Close(true)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+
+	_, err := s.WaitForLeader(10 * time.Second)
+	if err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+	_, err = s.LeaderAddr()
+	if err != nil {
+		t.Fatalf("failed to get leader address: %s", err.Error())
+	}
+	id, err := waitForLeaderID(s, 10*time.Second)
+	if err != nil {
+		t.Fatalf("failed to retrieve leader ID: %s", err.Error())
+	}
+	if got, exp := id, s.raftID; got != exp {
+		t.Fatalf("wrong leader ID returned, got: %s, exp %s", got, exp)
+	}
 }
 
+// Test_SingleNodeSQLitePath ensures that basic functionality works when the SQLite database path
+// is explicitly specificed.
+func Test_SingleNodeOnDiskSQLitePath(t *testing.T) {
+	s, ln, path := mustNewStoreSQLitePath(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+	}, false, false)
+	_, err := s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	qr := queryRequestFromString("SELECT * FROM foo", false, false)
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+	r, err := s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	// Confirm SQLite file was actually created at supplied path.
+	if !pathExists(path) {
+		t.Fatalf("SQLite file does not exist at %s", path)
+	}
+}
+
+func Test_SingleNodeTempFileCleanup(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	// Create temporary files in the Store directory.
+	for _, pattern := range []string{
+		restoreScratchPattern,
+		backupScatchPattern,
+		bootScatchPattern,
+	} {
+		f, err := os.CreateTemp(s.dbDir, pattern)
+		if err != nil {
+			t.Fatalf("failed to create temporary file: %s", err.Error())
+		}
+		f.Close()
+	}
+
+	// Open the Store, which should clean up the temporary files.
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+
+	// Confirm temporary files have been cleaned up.
+	for _, pattern := range []string{
+		restoreScratchPattern,
+		backupScatchPattern,
+		bootScatchPattern,
+	} {
+		matches, err := filepath.Glob(filepath.Join(s.dbDir, pattern))
+		if err != nil {
+			t.Fatalf("failed to glob temporary files: %s", err.Error())
+		}
+		if len(matches) != 0 {
+			t.Fatalf("temporary files not cleaned up: %s", matches)
+		}
+	}
+}
+
+// Test_SingleNodeBackupBinary tests that requesting a binary-formatted
+// backup works as expected.
+func Test_SingleNodeBackupBinary(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	dump := `PRAGMA foreign_keys=OFF;
+BEGIN TRANSACTION;
+CREATE TABLE foo (id integer not null primary key, name text);
+INSERT INTO "foo" VALUES(1,'fiona');
+COMMIT;
+`
+	_, err := s.Execute(executeRequestFromString(dump, false, false))
+	if err != nil {
+		t.Fatalf("failed to load simple dump: %s", err.Error())
+	}
+
+	/////////////////////////////////////////////////////////////////////
+	// Non-vacuumed backup, database should be bit-for-bit identical.
+	f, err := os.CreateTemp("", "rqlite-baktest-")
+	if err != nil {
+		t.Fatalf("Backup Failed: unable to create temp file, %s", err.Error())
+	}
+	defer os.Remove(f.Name())
+	defer f.Close()
+	if err := s.Backup(backupRequestBinary(true, false, false), f); err != nil {
+		t.Fatalf("Backup failed %s", err.Error())
+	}
+	if !filesIdentical(f.Name(), s.dbPath) {
+		t.Fatalf("backup file not identical to database file")
+	}
+
+	/////////////////////////////////////////////////////////////////////
+	// Compressed backup.
+	gzf, err := os.CreateTemp("", "rqlite-baktest-")
+	if err != nil {
+		t.Fatalf("Backup Failed: unable to create temp file, %s", err.Error())
+	}
+	defer os.Remove(gzf.Name())
+	defer gzf.Close()
+	if err := s.Backup(backupRequestBinary(true, false, true), gzf); err != nil {
+		t.Fatalf("Compressed backup failed %s", err.Error())
+	}
+
+	// Gzip decompress file to a new temp file
+	guzf, err := os.CreateTemp("", "rqlite-baktest-")
+	if err != nil {
+		t.Fatalf("Backup Failed: unable to create temp file, %s", err.Error())
+	}
+	defer os.Remove(guzf.Name())
+	defer guzf.Close()
+	if err := gunzipFile(guzf, gzf); err != nil {
+		t.Fatalf("Failed to gunzip backup file %s", err.Error())
+	}
+	if !filesIdentical(guzf.Name(), s.dbPath) {
+		t.Fatalf("backup file not identical to database file")
+	}
+}
+
+// Test_SingleNodeBackupBinary tests that requesting a binary-formatted
+// backup works as expected.
+func Test_SingleNodeBackupBinaryVacuum(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	dump := `PRAGMA foreign_keys=OFF;
+BEGIN TRANSACTION;
+CREATE TABLE foo (id integer not null primary key, name text);
+INSERT INTO "foo" VALUES(1,'fiona');
+COMMIT;
+`
+	_, err := s.Execute(executeRequestFromString(dump, false, false))
+	if err != nil {
+		t.Fatalf("failed to load simple dump: %s", err.Error())
+	}
+
+	checkDB := func(path string) {
+		t.Helper()
+		// Open the backup file using the DB layer and check the data.
+		dstDB, err := db.Open(path, false, false)
+		if err != nil {
+			t.Fatalf("unable to open backup database, %s", err.Error())
+		}
+		defer dstDB.Close()
+		qr := queryRequestFromString("SELECT * FROM foo", false, false)
+		qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+		r, err := s.Query(qr)
+		if err != nil {
+			t.Fatalf("failed to query single node: %s", err.Error())
+		}
+		if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(r); exp != got {
+			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+		}
+	}
+
+	/////////////////////////////////////////////////////////////////////
+	// Vacuumed backup, database may be not be bit-for-bit identical, but
+	// records should be OK.
+	vf, err := os.CreateTemp("", "rqlite-baktest-")
+	if err != nil {
+		t.Fatalf("Backup Failed: unable to create temp file, %s", err.Error())
+	}
+	defer os.Remove(vf.Name())
+	defer vf.Close()
+	if err := s.Backup(backupRequestBinary(true, true, false), vf); err != nil {
+		t.Fatalf("Backup failed %s", err.Error())
+	}
+	checkDB(vf.Name())
+
+	/////////////////////////////////////////////////////////////////////
+	// Compressed and vacuumed backup.
+	gzf, err := os.CreateTemp("", "rqlite-baktest-")
+	if err != nil {
+		t.Fatalf("Backup Failed: unable to create temp file, %s", err.Error())
+	}
+	defer os.Remove(gzf.Name())
+	defer gzf.Close()
+	if err := s.Backup(backupRequestBinary(true, true, true), gzf); err != nil {
+		t.Fatalf("Compressed backup failed %s", err.Error())
+	}
+
+	// Gzip decompress file to a new temp file
+	guzf, err := os.CreateTemp("", "rqlite-baktest-")
+	if err != nil {
+		t.Fatalf("Backup Failed: unable to create temp file, %s", err.Error())
+	}
+	defer os.Remove(guzf.Name())
+	defer guzf.Close()
+	if err := gunzipFile(guzf, gzf); err != nil {
+		t.Fatalf("Failed to gunzip backup file %s", err.Error())
+	}
+	checkDB(guzf.Name())
+}
+
+// Test_SingleNodeSnapshot tests that the Store correctly takes a snapshot
+// and recovers from it.
+func Test_SingleNodeSnapshot(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	queries := []string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+	}
+	_, err := s.Execute(executeRequestFromStrings(queries, false, false))
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	_, err = s.Query(queryRequestFromString("SELECT * FROM foo", false, false))
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+
+	// Snap the node and write to disk.
+	fsm := NewFSM(s)
+	f, err := fsm.Snapshot()
+	if err != nil {
+		t.Fatalf("failed to snapshot node: %s", err.Error())
+	}
+
+	snapDir := t.TempDir()
+	snapFile, err := os.Create(filepath.Join(snapDir, "snapshot"))
+	if err != nil {
+		t.Fatalf("failed to create snapshot file: %s", err.Error())
+	}
+	defer snapFile.Close()
+	sink := &mockSnapshotSink{snapFile}
+	if err := f.Persist(sink); err != nil {
+		t.Fatalf("failed to persist snapshot to disk: %s", err.Error())
+	}
+
+	// Check restoration.
+	snapFile, err = os.Open(filepath.Join(snapDir, "snapshot"))
+	if err != nil {
+		t.Fatalf("failed to open snapshot file: %s", err.Error())
+	}
+	defer snapFile.Close()
+	if err := fsm.Restore(snapFile); err != nil {
+		t.Fatalf("failed to restore snapshot from disk: %s", err.Error())
+	}
+
+	// Ensure database is back in the correct state.
+	r, err := s.Query(queryRequestFromString("SELECT * FROM foo", false, false))
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
+// Test_StoreSingleNodeNotOpen tests that various methods called on a
+// closed Store return ErrNotOpen.
 func Test_StoreSingleNodeNotOpen(t *testing.T) {
-	s, ln := mustNewStore(t, true)
+	s, ln := mustNewStore(t)
 	defer s.Close(true)
 	defer ln.Close()
 
@@ -33,6 +377,11 @@ func Test_StoreSingleNodeNotOpen(t *testing.T) {
 	}
 	if a != "" {
 		t.Fatalf("non-empty Leader return for non-open store: %s", a)
+	}
+
+	_, err = s.WaitForLeader(1 * time.Second)
+	if err != ErrWaitForLeaderTimeout {
+		t.Fatalf("wrong wait-for-leader error received for non-open store: %s", err)
 	}
 
 	if _, err := s.Stats(); err != nil {
@@ -68,37 +417,10 @@ func Test_StoreSingleNodeNotOpen(t *testing.T) {
 	}
 }
 
-func Test_OpenStoreSingleNode(t *testing.T) {
-	s, ln := mustNewStore(t, true)
-	defer s.Close(true)
-	defer ln.Close()
-
-	if err := s.Open(); err != nil {
-		t.Fatalf("failed to open single-node store: %s", err.Error())
-	}
-	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
-		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
-	}
-
-	_, err := s.WaitForLeader(10 * time.Second)
-	if err != nil {
-		t.Fatalf("Error waiting for leader: %s", err)
-	}
-	_, err = s.LeaderAddr()
-	if err != nil {
-		t.Fatalf("failed to get leader address: %s", err.Error())
-	}
-	id, err := waitForLeaderID(s, 10*time.Second)
-	if err != nil {
-		t.Fatalf("failed to retrieve leader ID: %s", err.Error())
-	}
-	if got, exp := id, s.raftID; got != exp {
-		t.Fatalf("wrong leader ID returned, got: %s, exp %s", got, exp)
-	}
-}
-
+// Test_OpenStoreCloseSingleNode tests a single node store can be
+// opened, closed, and then reopened.
 func Test_OpenStoreCloseSingleNode(t *testing.T) {
-	s, ln := mustNewStore(t, true)
+	s, ln := mustNewStore(t)
 	defer ln.Close()
 
 	if err := s.Open(); err != nil {
@@ -150,7 +472,7 @@ func Test_OpenStoreCloseSingleNode(t *testing.T) {
 	}
 
 	qr := queryRequestFromString("SELECT * FROM foo", false, false)
-	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
 	r, err := s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
@@ -166,8 +488,9 @@ func Test_OpenStoreCloseSingleNode(t *testing.T) {
 	}
 }
 
+// Test_StoreLeaderObservation tests observing leader changes works.
 func Test_StoreLeaderObservation(t *testing.T) {
-	s, ln := mustNewStore(t, true)
+	s, ln := mustNewStore(t)
 	defer s.Close(true)
 	defer ln.Close()
 
@@ -208,8 +531,52 @@ func Test_StoreLeaderObservation(t *testing.T) {
 	}
 }
 
-func Test_SingleNodeInMemExecuteQuery(t *testing.T) {
-	s, ln := mustNewStore(t, true)
+// Test_StoreReady tests that the Store correctly implements the Ready method.
+func Test_StoreReady(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer s.Close(true)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	_, err := s.WaitForLeader(10 * time.Second)
+	if err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	if !s.Ready() {
+		t.Fatalf("store not marked as ready even though Leader is set")
+	}
+
+	ch1 := make(chan struct{})
+	s.RegisterReadyChannel(ch1)
+	if s.Ready() {
+		t.Fatalf("store marked as ready even though registered channel is open")
+	}
+	close(ch1)
+	testPoll(t, s.Ready, 100*time.Millisecond, 2*time.Second)
+
+	ch2 := make(chan struct{})
+	s.RegisterReadyChannel(ch2)
+	ch3 := make(chan struct{})
+	s.RegisterReadyChannel(ch3)
+	if s.Ready() {
+		t.Fatalf("store marked as ready even though registered channels are open")
+	}
+	close(ch2)
+	close(ch3)
+	testPoll(t, s.Ready, 100*time.Millisecond, 2*time.Second)
+}
+
+// Test_SingleNodeExecuteQuery tests that a Store correctly responds to a simple
+// Execute and Query request.
+func Test_SingleNodeExecuteQuery(t *testing.T) {
+	s, ln := mustNewStore(t)
 	defer ln.Close()
 
 	if err := s.Open(); err != nil {
@@ -234,7 +601,7 @@ func Test_SingleNodeInMemExecuteQuery(t *testing.T) {
 	}
 
 	qr := queryRequestFromString("SELECT * FROM foo", false, false)
-	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
 	r, err := s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
@@ -247,9 +614,9 @@ func Test_SingleNodeInMemExecuteQuery(t *testing.T) {
 	}
 }
 
-// Test_SingleNodeInMemExecuteQueryFail ensures database level errors are presented by the store.
-func Test_SingleNodeInMemExecuteQueryFail(t *testing.T) {
-	s, ln := mustNewStore(t, true)
+// Test_SingleNodeExecuteQueryFail ensures database level errors are presented by the store.
+func Test_SingleNodeExecuteQueryFail(t *testing.T) {
+	s, ln := mustNewStore(t)
 	defer ln.Close()
 
 	if err := s.Open(); err != nil {
@@ -275,85 +642,10 @@ func Test_SingleNodeInMemExecuteQueryFail(t *testing.T) {
 	}
 }
 
-func Test_SingleNodeFileExecuteQuery(t *testing.T) {
-	s, ln := mustNewStore(t, false)
-	defer ln.Close()
-
-	if err := s.Open(); err != nil {
-		t.Fatalf("failed to open single-node store: %s", err.Error())
-	}
-	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
-		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
-	}
-	defer s.Close(true)
-	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
-		t.Fatalf("Error waiting for leader: %s", err)
-	}
-
-	er := executeRequestFromStrings([]string{
-		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
-		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
-	}, false, false)
-	_, err := s.Execute(er)
-	if err != nil {
-		t.Fatalf("failed to execute on single node: %s", err.Error())
-	}
-
-	// Every query should return the same results, so use a function for the check.
-	check := func(r []*command.QueryRows) {
-		if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
-			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-		}
-		if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
-			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-		}
-	}
-
-	qr := queryRequestFromString("SELECT * FROM foo", false, false)
-	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
-	r, err := s.Query(qr)
-	if err != nil {
-		t.Fatalf("failed to query single node: %s", err.Error())
-	}
-	check(r)
-
-	qr = queryRequestFromString("SELECT * FROM foo", false, false)
-	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_WEAK
-	r, err = s.Query(qr)
-	if err != nil {
-		t.Fatalf("failed to query single node: %s", err.Error())
-	}
-	check(r)
-
-	qr = queryRequestFromString("SELECT * FROM foo", false, false)
-	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
-	r, err = s.Query(qr)
-	if err != nil {
-		t.Fatalf("failed to query single node: %s", err.Error())
-	}
-	check(r)
-
-	qr = queryRequestFromString("SELECT * FROM foo", false, true)
-	qr.Timings = true
-	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
-	r, err = s.Query(qr)
-	if err != nil {
-		t.Fatalf("failed to query single node: %s", err.Error())
-	}
-	check(r)
-
-	qr = queryRequestFromString("SELECT * FROM foo", true, false)
-	qr.Request.Transaction = true
-	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
-	r, err = s.Query(qr)
-	if err != nil {
-		t.Fatalf("failed to query single node: %s", err.Error())
-	}
-	check(r)
-}
-
+// Test_SingleNodeExecuteQueryTx tests that a Store correctly responds to a simple
+// Execute and Query request, when the request is wrapped in a transaction.
 func Test_SingleNodeExecuteQueryTx(t *testing.T) {
-	s, ln := mustNewStore(t, true)
+	s, ln := mustNewStore(t)
 	defer ln.Close()
 
 	if err := s.Open(); err != nil {
@@ -377,21 +669,21 @@ func Test_SingleNodeExecuteQueryTx(t *testing.T) {
 	}
 
 	qr := queryRequestFromString("SELECT * FROM foo", false, true)
-	var r []*command.QueryRows
+	var r []*proto.QueryRows
 
-	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
 	_, err = s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
 
-	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_WEAK
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK
 	_, err = s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
 
-	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
 	r, err = s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
@@ -404,9 +696,254 @@ func Test_SingleNodeExecuteQueryTx(t *testing.T) {
 	}
 }
 
-// Test_SingleNodeInMemFK tests that basic foreign-key related functionality works.
-func Test_SingleNodeInMemFK(t *testing.T) {
-	s, ln := mustNewStoreFK(t, true)
+// Test_SingleNodeRequest tests simple requests that contain both
+// queries and execute statements.
+func Test_SingleNodeRequest(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	_, err := s.WaitForLeader(10 * time.Second)
+	if err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+	}, false, false)
+	_, err = s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	tests := []struct {
+		stmts       []string
+		expected    string
+		associative bool
+	}{
+		{
+			stmts:    []string{},
+			expected: `[]`,
+		},
+		{
+			stmts: []string{
+				`SELECT * FROM foo`,
+			},
+			expected: `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`,
+		},
+		{
+			stmts: []string{
+				`SELECT * FROM foo`,
+				`INSERT INTO foo(id, name) VALUES(66, "declan")`,
+			},
+			expected: `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]},{"last_insert_id":66,"rows_affected":1}]`,
+		},
+		{
+			stmts: []string{
+				`INSERT INTO foo(id, name) VALUES(77, "fiona")`,
+				`SELECT COUNT(*) FROM foo`,
+			},
+			expected: `[{"last_insert_id":77,"rows_affected":1},{"columns":["COUNT(*)"],"types":["integer"],"values":[[3]]}]`,
+		},
+		{
+			stmts: []string{
+				`INSERT INTO foo(id, name) VALUES(88, "fiona")`,
+				`nonsense SQL`,
+				`SELECT COUNT(*) FROM foo WHERE name='fiona'`,
+				`SELECT * FROM foo WHERE name='declan'`,
+			},
+			expected:    `[{"last_insert_id":88,"rows_affected":1,"rows":null},{"error":"near \"nonsense\": syntax error"},{"types":{"COUNT(*)":"integer"},"rows":[{"COUNT(*)":3}]},{"types":{"id":"integer","name":"text"},"rows":[{"id":66,"name":"declan"}]}]`,
+			associative: true,
+		},
+	}
+
+	for _, tt := range tests {
+		eqr := executeQueryRequestFromStrings(tt.stmts, proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK, false, false)
+		r, err := s.Request(eqr)
+		if err != nil {
+			t.Fatalf("failed to execute request on single node: %s", err.Error())
+		}
+
+		var exp string
+		var got string
+		if tt.associative {
+			exp, got = tt.expected, asJSONAssociative(r)
+		} else {
+			exp, got = tt.expected, asJSON(r)
+		}
+		if exp != got {
+			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+		}
+	}
+}
+
+// Test_SingleNodeRequest tests simple requests that contain both
+// queries and execute statements, when wrapped in a transaction.
+func Test_SingleNodeRequestTx(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	_, err := s.WaitForLeader(10 * time.Second)
+	if err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+	}, false, false)
+	_, err = s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	tests := []struct {
+		stmts    []string
+		expected string
+		tx       bool
+	}{
+		{
+			stmts:    []string{},
+			expected: `[]`,
+		},
+		{
+			stmts: []string{
+				`INSERT INTO foo(id, name) VALUES(1, "declan")`,
+				`SELECT * FROM foo`,
+			},
+			expected: `[{"last_insert_id":1,"rows_affected":1},{"columns":["id","name"],"types":["integer","text"],"values":[[1,"declan"]]}]`,
+		},
+		{
+			stmts: []string{
+				`INSERT INTO foo(id, name) VALUES(2, "fiona")`,
+				`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+				`SELECT COUNT(*) FROM foo`,
+			},
+			expected: `[{"last_insert_id":2,"rows_affected":1},{"error":"UNIQUE constraint failed: foo.id"}]`,
+			tx:       true,
+		},
+		{
+			// Since the above transaction should be rolled back, there will be only one row in the table.
+			stmts: []string{
+				`SELECT COUNT(*) FROM foo`,
+			},
+			expected: `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1]]}]`,
+		},
+	}
+
+	for _, tt := range tests {
+		eqr := executeQueryRequestFromStrings(tt.stmts, proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK, false, tt.tx)
+		r, err := s.Request(eqr)
+		if err != nil {
+			t.Fatalf("failed to execute request on single node: %s", err.Error())
+		}
+
+		if exp, got := tt.expected, asJSON(r); exp != got {
+			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+		}
+	}
+}
+
+// Test_SingleNodeRequestParameters tests simple requests that contain
+// parameters.
+func Test_SingleNodeRequestParameters(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	_, err := s.WaitForLeader(10 * time.Second)
+	if err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+	}, false, false)
+	_, err = s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	tests := []struct {
+		request  *proto.ExecuteQueryRequest
+		expected string
+	}{
+		{
+			request: &proto.ExecuteQueryRequest{
+				Request: &proto.Request{
+					Statements: []*proto.Statement{
+						{
+							Sql: "SELECT * FROM foo WHERE id = ?",
+							Parameters: []*proto.Parameter{
+								{
+									Value: &proto.Parameter_I{
+										I: 1,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`,
+		},
+		{
+			request: &proto.ExecuteQueryRequest{
+				Request: &proto.Request{
+					Statements: []*proto.Statement{
+						{
+							Sql: "SELECT id FROM foo WHERE name = :qux",
+							Parameters: []*proto.Parameter{
+								{
+									Value: &proto.Parameter_S{
+										S: "fiona",
+									},
+									Name: "qux",
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: `[{"columns":["id"],"types":["integer"],"values":[[1]]}]`,
+		},
+	}
+
+	for _, tt := range tests {
+		r, err := s.Request(tt.request)
+		if err != nil {
+			t.Fatalf("failed to execute request on single node: %s", err.Error())
+		}
+
+		if exp, got := tt.expected, asJSON(r); exp != got {
+			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+		}
+	}
+}
+
+// Test_SingleNodeFK tests that basic foreign-key related functionality works.
+func Test_SingleNodeFK(t *testing.T) {
+	s, ln := mustNewStoreFK(t)
 	defer ln.Close()
 
 	if err := s.Open(); err != nil {
@@ -429,25 +966,25 @@ func Test_SingleNodeInMemFK(t *testing.T) {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
 
-	res, err := s.Execute(executeRequestFromString("INSERT INTO bar(fooid) VALUES(1)", false, false))
+	res, _ := s.Execute(executeRequestFromString("INSERT INTO bar(fooid) VALUES(1)", false, false))
 	if got, exp := asJSON(res), `[{"error":"FOREIGN KEY constraint failed"}]`; exp != got {
 		t.Fatalf("unexpected results for execute\nexp: %s\ngot: %s", exp, got)
 	}
 }
 
-// Test_SingleNodeSQLitePath ensures that basic functionality works when the SQLite database path
-// is explicitly specificed.
-func Test_SingleNodeSQLitePath(t *testing.T) {
-	s, ln, path := mustNewStoreSQLitePath(t)
+// Test_SingleNodeExecuteQueryLevels test that various read-consistency
+// levels work as expected.
+func Test_SingleNodeOnDiskFileExecuteQuery(t *testing.T) {
+	s, ln := mustNewStore(t)
 	defer ln.Close()
 
 	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
-	defer s.Close(true)
 	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
 		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
 	}
+	defer s.Close(true)
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
@@ -461,82 +998,63 @@ func Test_SingleNodeSQLitePath(t *testing.T) {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
 
+	// Every query should return the same results, so use a function for the check.
+	check := func(r []*proto.QueryRows) {
+		if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
+			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+		}
+		if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
+			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+		}
+	}
+
 	qr := queryRequestFromString("SELECT * FROM foo", false, false)
-	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
 	r, err := s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
-	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-	}
-	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-	}
+	check(r)
 
-	// Confirm SQLite file was actually created at supplied path.
-	if !pathExists(path) {
-		t.Fatalf("SQLite file does not exist at %s", path)
+	qr = queryRequestFromString("SELECT * FROM foo", false, false)
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK
+	r, err = s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
 	}
+	check(r)
+
+	qr = queryRequestFromString("SELECT * FROM foo", false, false)
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	r, err = s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	check(r)
+
+	qr = queryRequestFromString("SELECT * FROM foo", false, true)
+	qr.Timings = true
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+	r, err = s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	check(r)
+
+	qr = queryRequestFromString("SELECT * FROM foo", true, false)
+	qr.Request.Transaction = true
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+	r, err = s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	check(r)
 }
 
-func Test_SingleNodeBackupBinary(t *testing.T) {
-	t.Parallel()
-
-	s, ln := mustNewStore(t, false)
-	defer ln.Close()
-
-	if err := s.Open(); err != nil {
-		t.Fatalf("failed to open single-node store: %s", err.Error())
-	}
-	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
-		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
-	}
-	defer s.Close(true)
-	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
-		t.Fatalf("Error waiting for leader: %s", err)
-	}
-
-	dump := `PRAGMA foreign_keys=OFF;
-BEGIN TRANSACTION;
-CREATE TABLE foo (id integer not null primary key, name text);
-INSERT INTO "foo" VALUES(1,'fiona');
-COMMIT;
-`
-	_, err := s.Execute(executeRequestFromString(dump, false, false))
-	if err != nil {
-		t.Fatalf("failed to load simple dump: %s", err.Error())
-	}
-
-	f, err := ioutil.TempFile("", "rqlite-baktest-")
-	defer os.Remove(f.Name())
-	t.Logf("backup file is %s", f.Name())
-
-	if err := s.Backup(backupRequestBinary(true), f); err != nil {
-		t.Fatalf("Backup failed %s", err.Error())
-	}
-
-	// Check the backed up data by reading back up file, underlying SQLite file,
-	// and comparing the two.
-	bkp, err := ioutil.ReadFile(f.Name())
-	if err != nil {
-		t.Fatalf("Backup Failed: unable to read backup file, %s", err.Error())
-	}
-
-	dbFile, err := ioutil.ReadFile(filepath.Join(s.Path(), sqliteFile))
-	if err != nil {
-		t.Fatalf("Backup Failed: unable to read source SQLite file, %s", err.Error())
-	}
-
-	if ret := bytes.Compare(bkp, dbFile); ret != 0 {
-		t.Fatalf("Backup Failed: backup bytes are not same")
-	}
-}
-
+// Test_SingleNodeBackup tests that a Store correctly backs up its data
+// in text format.
 func Test_SingleNodeBackupText(t *testing.T) {
-	t.Parallel()
-
-	s, ln := mustNewStore(t, true)
+	s, ln := mustNewStore(t)
 	defer ln.Close()
 
 	if err := s.Open(); err != nil {
@@ -561,7 +1079,10 @@ COMMIT;
 		t.Fatalf("failed to load simple dump: %s", err.Error())
 	}
 
-	f, err := ioutil.TempFile("", "rqlite-baktest-")
+	f, err := os.CreateTemp("", "rqlite-baktest-")
+	if err != nil {
+		t.Fatalf("Backup Failed: unable to create temp file, %s", err.Error())
+	}
 	defer os.Remove(f.Name())
 	s.logger.Printf("backup file is %s", f.Name())
 
@@ -570,7 +1091,7 @@ COMMIT;
 	}
 
 	// Check the backed up data
-	bkp, err := ioutil.ReadFile(f.Name())
+	bkp, err := os.ReadFile(f.Name())
 	if err != nil {
 		t.Fatalf("Backup Failed: unable to read backup file, %s", err.Error())
 	}
@@ -579,8 +1100,9 @@ COMMIT;
 	}
 }
 
+// Test_SingleNodeSingleCommandTrigger tests that a SQLite trigger works.
 func Test_SingleNodeSingleCommandTrigger(t *testing.T) {
-	s, ln := mustNewStore(t, true)
+	s, ln := mustNewStore(t)
 	defer ln.Close()
 
 	if err := s.Open(); err != nil {
@@ -624,8 +1146,10 @@ COMMIT;
 	}
 }
 
+// Test_SingleNodeLoadText tests that a Store correctly loads data in SQL
+// text format.
 func Test_SingleNodeLoadText(t *testing.T) {
-	s, ln := mustNewStore(t, true)
+	s, ln := mustNewStore(t)
 	defer ln.Close()
 
 	if err := s.Open(); err != nil {
@@ -652,7 +1176,7 @@ COMMIT;
 
 	// Check that data were loaded correctly.
 	qr := queryRequestFromString("SELECT * FROM foo", false, true)
-	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
 	r, err := s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
@@ -665,8 +1189,10 @@ COMMIT;
 	}
 }
 
+// Test_SingleNodeLoadTextNoStatements tests that a Store correctly loads data in SQL
+// text format, when there are no statements.
 func Test_SingleNodeLoadTextNoStatements(t *testing.T) {
-	s, ln := mustNewStore(t, true)
+	s, ln := mustNewStore(t)
 	defer ln.Close()
 
 	if err := s.Open(); err != nil {
@@ -690,8 +1216,10 @@ COMMIT;
 	}
 }
 
+// Test_SingleNodeLoadTextEmpty tests that a Store correctly loads data in SQL
+// text format, when the text is empty.
 func Test_SingleNodeLoadTextEmpty(t *testing.T) {
-	s, ln := mustNewStore(t, true)
+	s, ln := mustNewStore(t)
 	defer ln.Close()
 
 	if err := s.Open(); err != nil {
@@ -712,8 +1240,9 @@ func Test_SingleNodeLoadTextEmpty(t *testing.T) {
 	}
 }
 
+// Test_SingleNodeLoadTextChinook tests loading and querying of the Chinook DB.
 func Test_SingleNodeLoadTextChinook(t *testing.T) {
-	s, ln := mustNewStore(t, true)
+	s, ln := mustNewStore(t)
 	defer ln.Close()
 
 	if err := s.Open(); err != nil {
@@ -735,7 +1264,7 @@ func Test_SingleNodeLoadTextChinook(t *testing.T) {
 	// Check that data were loaded correctly.
 
 	qr := queryRequestFromString("SELECT count(*) FROM track", false, true)
-	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
 	r, err := s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
@@ -748,7 +1277,7 @@ func Test_SingleNodeLoadTextChinook(t *testing.T) {
 	}
 
 	qr = queryRequestFromString("SELECT count(*) FROM album", false, true)
-	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
 	r, err = s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
@@ -761,7 +1290,7 @@ func Test_SingleNodeLoadTextChinook(t *testing.T) {
 	}
 
 	qr = queryRequestFromString("SELECT count(*) FROM artist", false, true)
-	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
 	r, err = s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
@@ -774,8 +1303,10 @@ func Test_SingleNodeLoadTextChinook(t *testing.T) {
 	}
 }
 
+// Test_SingleNodeLoadBinary tests that a Store correctly loads data in SQLite
+// binary format from a file.
 func Test_SingleNodeLoadBinary(t *testing.T) {
-	s, ln := mustNewStore(t, true)
+	s, ln := mustNewStore(t)
 	defer ln.Close()
 
 	if err := s.Open(); err != nil {
@@ -803,7 +1334,7 @@ COMMIT;
 
 	// Check that data were loaded correctly.
 	qr := queryRequestFromString("SELECT * FROM bar", false, true)
-	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
 	r, err := s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
@@ -820,9 +1351,18 @@ COMMIT;
 		t.Fatalf("failed to load SQLite file: %s", err.Error())
 	}
 
+	// Load a database should mark that the snapshot store needs a Full Snapshot
+	fn, err := s.snapshotStore.FullNeeded()
+	if err != nil {
+		t.Fatalf("failed to check if snapshot store needs a full snapshot: %s", err.Error())
+	}
+	if !fn {
+		t.Fatalf("expected snapshot store to need a full snapshot")
+	}
+
 	// Check that data were loaded correctly.
 	qr = queryRequestFromString("SELECT * FROM foo WHERE id=2", false, true)
-	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
 	r, err = s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
@@ -834,7 +1374,7 @@ COMMIT;
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 	qr = queryRequestFromString("SELECT count(*) FROM foo", false, true)
-	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
 	r, err = s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
@@ -848,7 +1388,7 @@ COMMIT;
 
 	// Check pre-existing data is gone.
 	qr = queryRequestFromString("SELECT * FROM bar", false, true)
-	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
 	r, err = s.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
@@ -858,14 +1398,214 @@ COMMIT;
 	}
 }
 
-// Test_SingleNodeRecoverNoChange tests a node recovery that doesn't
-// actually change anything.
-func Test_SingleNodeRecoverNoChange(t *testing.T) {
-	s, ln := mustNewStore(t, true)
+func Test_SingleNodeAutoRestore(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	path := mustCopyFileToTempFile(filepath.Join("testdata", "load.sqlite"))
+	if err := s.SetRestorePath(path); err != nil {
+		t.Fatalf("failed to set restore path: %s", err.Error())
+	}
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	testPoll(t, s.Ready, 100*time.Millisecond, 2*time.Second)
+	qr := queryRequestFromString("SELECT * FROM foo WHERE id=2", false, true)
+	r, err := s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[2,"fiona"]]`, asJSON(r[0].Values); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
+func Test_SingleNodeSetRestoreFailStoreOpen(t *testing.T) {
+	s, ln := mustNewStore(t)
 	defer ln.Close()
 	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
+	defer s.Close(true)
+
+	path := mustCopyFileToTempFile(filepath.Join("testdata", "load.sqlite"))
+	defer os.Remove(path)
+	if err := s.SetRestorePath(path); err == nil {
+		t.Fatalf("expected error setting restore path on open store")
+	}
+}
+
+func Test_SingleNodeSetRestoreFailBadFile(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+
+	path := mustCreateTempFile()
+	defer os.Remove(path)
+	os.WriteFile(path, []byte("not valid SQLite data"), 0644)
+	if err := s.SetRestorePath(path); err == nil {
+		t.Fatalf("expected error setting restore path with invalid file")
+	}
+}
+
+// Test_SingleNodeBoot tests that a Store correctly boots from SQLite data.
+func Test_SingleNodeBoot(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Load a dataset, to check it's erased by the SQLite file load.
+	dump := `PRAGMA foreign_keys=OFF;
+BEGIN TRANSACTION;
+CREATE TABLE bar (id integer not null primary key, name text);
+INSERT INTO "bar" VALUES(1,'declan');
+COMMIT;
+`
+	_, err := s.Execute(executeRequestFromString(dump, false, false))
+	if err != nil {
+		t.Fatalf("failed to load simple dump: %s", err.Error())
+	}
+
+	// Check that data were loaded correctly.
+	qr := queryRequestFromString("SELECT * FROM bar", false, true)
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	r, err := s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[1,"declan"]]`, asJSON(r[0].Values); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	f, err := os.Open(filepath.Join("testdata", "load.sqlite"))
+	if err != nil {
+		t.Fatalf("failed to open SQLite file: %s", err.Error())
+	}
+	defer f.Close()
+
+	// Load the SQLite file in bypass mode, check that the right number
+	// of snapshots were created, and that the right amount of data was
+	// loaded.
+	numSnapshots := s.numSnapshots
+	n, err := s.ReadFrom(f)
+	if err != nil {
+		t.Fatalf("failed to load SQLite file via Reader: %s", err.Error())
+	}
+	sz := mustFileSize(filepath.Join("testdata", "load.sqlite"))
+	if n != sz {
+		t.Fatalf("expected %d bytes to be read, got %d", sz, n)
+	}
+	if s.numSnapshots != numSnapshots+1 {
+		t.Fatalf("expected 1 extra snapshot, got %d", s.numSnapshots)
+	}
+
+	// Check that data were loaded correctly.
+	qr = queryRequestFromString("SELECT * FROM foo WHERE id=2", false, true)
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	r, err = s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[2,"fiona"]]`, asJSON(r[0].Values); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	qr = queryRequestFromString("SELECT count(*) FROM foo", false, true)
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	r, err = s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `["count(*)"]`, asJSON(r[0].Columns); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[3]]`, asJSON(r[0].Values); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	// Check pre-existing data is gone.
+	qr = queryRequestFromString("SELECT * FROM bar", false, true)
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	r, err = s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `{"error":"no such table: bar"}`, asJSON(r[0]); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
+func Test_SingleNodeBoot_InvalidFail_WALOK(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Ensure WAL SQLite data is not accepted.
+	b := make([]byte, 1024)
+	mustReadRandom(b)
+	r := bytes.NewReader(b)
+	if _, err := s.ReadFrom(r); err == nil {
+		t.Fatalf("expected error reading from invalid SQLite file")
+	}
+
+	// Ensure WAL-enabled SQLite file is accepted.
+	f, err := os.Open(filepath.Join("testdata", "wal-enabled.sqlite"))
+	if err != nil {
+		t.Fatalf("failed to open SQLite file: %s", err.Error())
+	}
+	defer f.Close()
+	if _, err := s.ReadFrom(f); err != nil {
+		t.Fatalf("error reading from WAL-enabled SQLite file")
+	}
+}
+
+func Test_SingleNodeUserSnapshot_CAS(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
 	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
 		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
 	}
@@ -873,239 +1613,27 @@ func Test_SingleNodeRecoverNoChange(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
-	queryTest := func() {
-		qr := queryRequestFromString("SELECT * FROM foo", false, false)
-		qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
-		r, err := s.Query(qr)
-		if err != nil {
-			t.Fatalf("failed to query single node: %s", err.Error())
-		}
-		if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
-			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-		}
-		if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
-			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-		}
+	mustNoop(s, "1")
+	if err := s.Snapshot(0); err != nil {
+		t.Fatalf("failed to snapshot single-node store: %s", err.Error())
 	}
 
-	er := executeRequestFromStrings([]string{
-		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
-		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
-	}, false, false)
-	_, err := s.Execute(er)
-	if err != nil {
-		t.Fatalf("failed to execute on single node: %s", err.Error())
+	if err := s.snapshotCAS.Begin(); err != nil {
+		t.Fatalf("failed to begin snapshot CAS: %s", err.Error())
 	}
-	queryTest()
-	if err := s.Close(true); err != nil {
-		t.Fatalf("failed to close single-node store: %s", err.Error())
+	mustNoop(s, "2")
+	if err := s.Snapshot(0); err == nil {
+		t.Fatalf("expected error snapshotting single-node store with CAS")
 	}
-
-	// Set up for Recovery during open
-	peers := fmt.Sprintf(`[{"id": "%s","address": "%s"}]`, s.ID(), s.Addr())
-	peersPath := filepath.Join(s.Path(), "/raft/peers.json")
-	peersInfo := filepath.Join(s.Path(), "/raft/peers.info")
-	mustWriteFile(peersPath, peers)
-	if err := s.Open(); err != nil {
-		t.Fatalf("failed to open single-node store: %s", err.Error())
-	}
-	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
-		t.Fatalf("Error waiting for leader: %s", err)
-	}
-	queryTest()
-	if err := s.Close(true); err != nil {
-		t.Fatalf("failed to close single-node store: %s", err.Error())
-	}
-
-	if pathExists(peersPath) {
-		t.Fatalf("Peers JSON exists at %s", peersPath)
-	}
-	if !pathExists(peersInfo) {
-		t.Fatalf("Peers info does not exist at %s", peersInfo)
-	}
-}
-
-// Test_SingleNodeRecoverNetworkChange tests a node recovery that
-// involves a changed-network address.
-func Test_SingleNodeRecoverNetworkChange(t *testing.T) {
-	s0, ln0 := mustNewStore(t, true)
-	defer ln0.Close()
-	if err := s0.Open(); err != nil {
-		t.Fatalf("failed to open single-node store: %s", err.Error())
-	}
-	if err := s0.Bootstrap(NewServer(s0.ID(), s0.Addr(), true)); err != nil {
-		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
-	}
-	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
-		t.Fatalf("Error waiting for leader: %s", err)
-	}
-
-	queryTest := func(s *Store) {
-		qr := queryRequestFromString("SELECT * FROM foo", false, false)
-		qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
-		r, err := s.Query(qr)
-		if err != nil {
-			t.Fatalf("failed to query single node: %s", err.Error())
-		}
-		if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
-			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-		}
-		if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
-			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-		}
-	}
-
-	er := executeRequestFromStrings([]string{
-		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
-		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
-	}, false, false)
-	_, err := s0.Execute(er)
-	if err != nil {
-		t.Fatalf("failed to execute on single node: %s", err.Error())
-	}
-	queryTest(s0)
-
-	id := s0.ID()
-	if err := s0.Close(true); err != nil {
-		t.Fatalf("failed to close single-node store: %s", err.Error())
-	}
-
-	// Create a new node, at the same path. Will presumably have a different
-	// Raft network address, since they are randomly assigned.
-	sR, srLn := mustNewStoreAtPathsLn(id, s0.Path(), "", true, false)
-	defer srLn.Close()
-	if IsNewNode(sR.Path()) {
-		t.Fatalf("store detected incorrectly as new")
-	}
-
-	// Set up for Recovery during open
-	peers := fmt.Sprintf(`[{"id": "%s","address": "%s"}]`, s0.ID(), srLn.Addr().String())
-	peersPath := filepath.Join(sR.Path(), "/raft/peers.json")
-	peersInfo := filepath.Join(sR.Path(), "/raft/peers.info")
-	mustWriteFile(peersPath, peers)
-	if err := sR.Open(); err != nil {
-		t.Fatalf("failed to open single-node store: %s", err.Error())
-	}
-
-	if _, err := sR.WaitForLeader(10 * time.Second); err != nil {
-		t.Fatalf("Error waiting for leader on recovered node: %s", err)
-	}
-
-	queryTest(sR)
-	if err := sR.Close(true); err != nil {
-		t.Fatalf("failed to close single-node recovered store: %s", err.Error())
-	}
-
-	if pathExists(peersPath) {
-		t.Fatalf("Peers JSON exists at %s", peersPath)
-	}
-	if !pathExists(peersInfo) {
-		t.Fatalf("Peers info does not exist at %s", peersInfo)
-	}
-}
-
-// Test_SingleNodeRecoverNetworkChangeSnapshot tests a node recovery that
-// involves a changed-network address, with snapshots underneath.
-func Test_SingleNodeRecoverNetworkChangeSnapshot(t *testing.T) {
-	s0, ln0 := mustNewStore(t, true)
-	defer ln0.Close()
-	s0.SnapshotThreshold = 4
-	s0.SnapshotInterval = 100 * time.Millisecond
-	if err := s0.Open(); err != nil {
-		t.Fatalf("failed to open single-node store: %s", err.Error())
-	}
-	if err := s0.Bootstrap(NewServer(s0.ID(), s0.Addr(), true)); err != nil {
-		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
-	}
-	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
-		t.Fatalf("Error waiting for leader: %s", err)
-	}
-
-	queryTest := func(s *Store, c int) {
-		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
-		qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
-		r, err := s.Query(qr)
-		if err != nil {
-			t.Fatalf("failed to query single node: %s", err.Error())
-		}
-		if exp, got := `["COUNT(*)"]`, asJSON(r[0].Columns); exp != got {
-			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-		}
-		if exp, got := fmt.Sprintf(`[[%d]]`, c), asJSON(r[0].Values); exp != got {
-			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-		}
-	}
-
-	er := executeRequestFromStrings([]string{
-		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
-		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
-	}, false, false)
-	_, err := s0.Execute(er)
-	if err != nil {
-		t.Fatalf("failed to execute on single node: %s", err.Error())
-	}
-	queryTest(s0, 1)
-
-	for i := 0; i < 9; i++ {
-		er := executeRequestFromStrings([]string{
-			`INSERT INTO foo(name) VALUES("fiona")`,
-		}, false, false)
-		if _, err := s0.Execute(er); err != nil {
-			t.Fatalf("failed to execute on single node: %s", err.Error())
-		}
-	}
-	queryTest(s0, 10)
-
-	// Wait for a snapshot to take place.
-	for {
-		time.Sleep(100 * time.Millisecond)
-		s0.numSnapshotsMu.Lock()
-		ns := s0.numSnapshots
-		s0.numSnapshotsMu.Unlock()
-		if ns > 0 {
-			break
-		}
-	}
-
-	id := s0.ID()
-	if err := s0.Close(true); err != nil {
-		t.Fatalf("failed to close single-node store: %s", err.Error())
-	}
-
-	// Create a new node, at the same path. Will presumably have a different
-	// Raft network address, since they are randomly assigned.
-	sR, srLn := mustNewStoreAtPathsLn(id, s0.Path(), "", true, false)
-	if IsNewNode(sR.Path()) {
-		t.Fatalf("store detected incorrectly as new")
-	}
-
-	// Set up for Recovery during open
-	peers := fmt.Sprintf(`[{"id": "%s","address": "%s"}]`, id, srLn.Addr().String())
-	peersPath := filepath.Join(sR.Path(), "/raft/peers.json")
-	peersInfo := filepath.Join(sR.Path(), "/raft/peers.info")
-	mustWriteFile(peersPath, peers)
-	if err := sR.Open(); err != nil {
-		t.Fatalf("failed to open single-node store: %s", err.Error())
-	}
-
-	if _, err := sR.WaitForLeader(10 * time.Second); err != nil {
-		t.Fatalf("Error waiting for leader on recovered node: %s", err)
-	}
-	queryTest(sR, 10)
-	if err := sR.Close(true); err != nil {
-		t.Fatalf("failed to close single-node recovered store: %s", err.Error())
-	}
-
-	if pathExists(peersPath) {
-		t.Fatalf("Peers JSON exists at %s", peersPath)
-	}
-	if !pathExists(peersInfo) {
-		t.Fatalf("Peers info does not exist at %s", peersInfo)
+	s.snapshotCAS.End()
+	mustNoop(s, "3")
+	if err := s.Snapshot(0); err != nil {
+		t.Fatalf("failed to snapshot single-node store: %s", err.Error())
 	}
 }
 
 func Test_SingleNodeSelfJoinNoChangeOK(t *testing.T) {
-	s0, ln0 := mustNewStore(t, true)
+	s0, ln0 := mustNewStore(t)
 	defer ln0.Close()
 	if err := s0.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
@@ -1130,7 +1658,7 @@ func Test_SingleNodeSelfJoinNoChangeOK(t *testing.T) {
 }
 
 func Test_SingleNodeStepdown(t *testing.T) {
-	s, ln := mustNewStore(t, true)
+	s, ln := mustNewStore(t)
 	defer ln.Close()
 	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
@@ -1150,7 +1678,7 @@ func Test_SingleNodeStepdown(t *testing.T) {
 }
 
 func Test_SingleNodeStepdownNoWaitOK(t *testing.T) {
-	s, ln := mustNewStore(t, true)
+	s, ln := mustNewStore(t)
 	defer ln.Close()
 	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
@@ -1169,8 +1697,39 @@ func Test_SingleNodeStepdownNoWaitOK(t *testing.T) {
 	}
 }
 
+func Test_SingleNodeWaitForRemove(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Should timeout waiting for removal of ourselves
+	err := s.WaitForRemoval(s.ID(), time.Second)
+	// if err is nil then fail the test
+	if err == nil {
+		t.Fatalf("no error waiting for removal of non-existent node")
+	}
+	if !errors.Is(err, ErrWaitForRemovalTimeout) {
+		t.Fatalf("waiting for removal resulted in wrong error: %s", err.Error())
+	}
+
+	// should be no error waiting for removal of non-existent node
+	err = s.WaitForRemoval("non-existent-node", time.Second)
+	if err != nil {
+		t.Fatalf("error waiting for removal of non-existent node: %s", err.Error())
+	}
+}
+
 func Test_MultiNodeJoinRemove(t *testing.T) {
-	s0, ln0 := mustNewStore(t, true)
+	s0, ln0 := mustNewStore(t)
 	defer ln0.Close()
 	if err := s0.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
@@ -1183,7 +1742,7 @@ func Test_MultiNodeJoinRemove(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
-	s1, ln1 := mustNewStore(t, true)
+	s1, ln1 := mustNewStore(t)
 	defer ln1.Close()
 	if err := s1.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
@@ -1201,21 +1760,9 @@ func Test_MultiNodeJoinRemove(t *testing.T) {
 	if err := s0.Join(joinRequest(s1.ID(), s1.Addr(), true)); err != nil {
 		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
 	}
-
-	got, err := s1.WaitForLeader(10 * time.Second)
+	_, err := s1.WaitForLeader(10 * time.Second)
 	if err != nil {
 		t.Fatalf("failed to get leader address on follower: %s", err.Error())
-	}
-	// Check leader state on follower.
-	if exp := s0.Addr(); got != exp {
-		t.Fatalf("wrong leader address returned, got: %s, exp %s", got, exp)
-	}
-	id, err := waitForLeaderID(s1, 10*time.Second)
-	if err != nil {
-		t.Fatalf("failed to retrieve leader ID: %s", err.Error())
-	}
-	if got, exp := id, s0.raftID; got != exp {
-		t.Fatalf("wrong leader ID returned, got: %s, exp %s", got, exp)
 	}
 
 	nodes, err := s0.Nodes()
@@ -1228,6 +1775,16 @@ func Test_MultiNodeJoinRemove(t *testing.T) {
 	}
 	if storeNodes[0] != nodes[0].ID || storeNodes[1] != nodes[1].ID {
 		t.Fatalf("cluster does not have correct nodes")
+	}
+
+	// Should timeout waiting for removal of other node
+	err = s0.WaitForRemoval(s1.ID(), time.Second)
+	// if err is nil then fail the test
+	if err == nil {
+		t.Fatalf("no error waiting for removal of non-existent node")
+	}
+	if !errors.Is(err, ErrWaitForRemovalTimeout) {
+		t.Fatalf("waiting for removal resulted in wrong error: %s", err.Error())
 	}
 
 	// Remove a node.
@@ -1245,10 +1802,17 @@ func Test_MultiNodeJoinRemove(t *testing.T) {
 	if s0.ID() != nodes[0].ID {
 		t.Fatalf("cluster does not have correct nodes post remove")
 	}
+
+	// Should be no error now waiting for removal of other node
+	err = s0.WaitForRemoval(s1.ID(), time.Second)
+	// if err is nil then fail the test
+	if err != nil {
+		t.Fatalf("error waiting for removal of removed node")
+	}
 }
 
 func Test_MultiNodeStepdown(t *testing.T) {
-	s0, ln0 := mustNewStore(t, true)
+	s0, ln0 := mustNewStore(t)
 	defer ln0.Close()
 	if err := s0.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
@@ -1261,14 +1825,14 @@ func Test_MultiNodeStepdown(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
-	s1, ln1 := mustNewStore(t, true)
+	s1, ln1 := mustNewStore(t)
 	defer ln1.Close()
 	if err := s1.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s1.Close(true)
 
-	s2, ln2 := mustNewStore(t, true)
+	s2, ln2 := mustNewStore(t)
 	defer ln2.Close()
 	if err := s2.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
@@ -1294,32 +1858,32 @@ func Test_MultiNodeStepdown(t *testing.T) {
 		t.Fatalf("leader failed to step down: %s", err.Error())
 	}
 
-	// Check for new leader.
-	nl, err := s2.WaitForLeader(10 * time.Second)
-	if err != nil {
-		t.Fatalf("Error waiting for leader: %s", err)
+	check := func() bool {
+		leader, err := s1.WaitForLeader(10 * time.Second)
+		if err != nil || leader == s0.Addr() {
+			return false
+		}
+		return true
 	}
-	if nl == s0.Addr() {
-		t.Fatalf("leader address not changed, was %s, is %s", s0.Addr(), nl)
-	}
+	testPoll(t, check, 250*time.Millisecond, 10*time.Second)
 }
 
 func Test_MultiNodeStoreNotifyBootstrap(t *testing.T) {
-	s0, ln0 := mustNewStore(t, true)
+	s0, ln0 := mustNewStore(t)
 	defer ln0.Close()
 	if err := s0.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s0.Close(true)
 
-	s1, ln1 := mustNewStore(t, true)
+	s1, ln1 := mustNewStore(t)
 	defer ln1.Close()
 	if err := s1.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s1.Close(true)
 
-	s2, ln2 := mustNewStore(t, true)
+	s2, ln2 := mustNewStore(t)
 	defer ln2.Close()
 	if err := s2.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
@@ -1341,41 +1905,21 @@ func Test_MultiNodeStoreNotifyBootstrap(t *testing.T) {
 	}
 
 	// Check that the cluster bootstrapped properly.
-	leader0, err := s0.WaitForLeader(10 * time.Second)
-	if err != nil {
-		t.Fatalf("failed to get leader: %s", err.Error())
-	}
-	nodes, err := s0.Nodes()
-	if err != nil {
-		t.Fatalf("failed to get nodes: %s", err.Error())
-	}
-	if len(nodes) != 3 {
-		t.Fatalf("size of bootstrapped cluster is not correct")
-	}
-	leader1, err := s1.WaitForLeader(10 * time.Second)
-	if err != nil {
-		t.Fatalf("failed to get leader: %s", err.Error())
-	}
-	nodes, err = s1.Nodes()
-	if err != nil {
-		t.Fatalf("failed to get nodes: %s", err.Error())
-	}
-	if len(nodes) != 3 {
-		t.Fatalf("size of bootstrapped cluster is not correct")
-	}
-	leader2, err := s2.WaitForLeader(10 * time.Second)
-	if err != nil {
-		t.Fatalf("failed to get leader: %s", err.Error())
-	}
-	nodes, err = s2.Nodes()
-	if err != nil {
-		t.Fatalf("failed to get nodes: %s", err.Error())
-	}
-	if len(nodes) != 3 {
-		t.Fatalf("size of bootstrapped cluster is not correct")
-	}
+	reportedLeaders := make([]string, 3)
+	for i, n := range []*Store{s0, s1, s2} {
+		check := func() bool {
+			nodes, err := n.Nodes()
+			return err == nil && len(nodes) == 3
+		}
+		testPoll(t, check, 250*time.Millisecond, 10*time.Second)
 
-	if leader0 != leader1 || leader0 != leader2 {
+		var err error
+		reportedLeaders[i], err = n.WaitForLeader(10 * time.Second)
+		if err != nil {
+			t.Fatalf("failed to get leader on node %d (id=%s): %s", i, n.raftID, err.Error())
+		}
+	}
+	if reportedLeaders[0] != reportedLeaders[1] || reportedLeaders[0] != reportedLeaders[2] {
 		t.Fatalf("leader not the same on each node")
 	}
 
@@ -1386,8 +1930,84 @@ func Test_MultiNodeStoreNotifyBootstrap(t *testing.T) {
 	}
 }
 
+// Test_MultiNodeStoreAutoRestoreBootstrap tests that a cluster will
+// bootstrap correctly when each node is supplied with an auto-restore
+// file. Only one node should do able to restore from the file.
+func Test_MultiNodeStoreAutoRestoreBootstrap(t *testing.T) {
+	ResetStats()
+	s0, ln0 := mustNewStore(t)
+	defer ln0.Close()
+	s1, ln1 := mustNewStore(t)
+	defer ln1.Close()
+	s2, ln2 := mustNewStore(t)
+	defer ln2.Close()
+
+	path0 := mustCopyFileToTempFile(filepath.Join("testdata", "load.sqlite"))
+	path1 := mustCopyFileToTempFile(filepath.Join("testdata", "load.sqlite"))
+	path2 := mustCopyFileToTempFile(filepath.Join("testdata", "load.sqlite"))
+
+	s0.SetRestorePath(path0)
+	s1.SetRestorePath(path1)
+	s2.SetRestorePath(path2)
+
+	for i, s := range []*Store{s0, s1, s2} {
+		if err := s.Open(); err != nil {
+			t.Fatalf("failed to open store %d: %s", i, err.Error())
+		}
+		defer s.Close(true)
+	}
+
+	// Trigger a bootstrap.
+	s0.BootstrapExpect = 3
+	for _, s := range []*Store{s0, s1, s2} {
+		if err := s0.Notify(notifyRequest(s.ID(), s.ly.Addr().String())); err != nil {
+			t.Fatalf("failed to notify store: %s", err.Error())
+		}
+	}
+
+	// Wait for the cluster to bootstrap.
+	_, err := s0.WaitForLeader(10 * time.Second)
+	if err != nil {
+		t.Fatalf("failed to get leader: %s", err.Error())
+	}
+
+	// Ultimately there is a hard-to-control timing issue here. Knowing
+	// exactly when the leader has applied the restore is difficult, so
+	// just wait a bit.
+	time.Sleep(2 * time.Second)
+
+	if !s0.Ready() {
+		t.Fatalf("node is not ready")
+	}
+
+	qr := queryRequestFromString("SELECT * FROM foo WHERE id=2", false, true)
+	r, err := s0.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[2,"fiona"]]`, asJSON(r[0].Values); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	if pathExists(path0) || pathExists(path1) || pathExists(path2) {
+		t.Fatalf("an auto-restore file was not removed")
+	}
+
+	numAuto := stats.Get(numAutoRestores).(*expvar.Int).Value()
+	numAutoSkipped := stats.Get(numAutoRestoresSkipped).(*expvar.Int).Value()
+	if exp, got := int64(1), numAuto; exp != got {
+		t.Fatalf("unexpected number of auto-restores\nexp: %d\ngot: %d", exp, got)
+	}
+	if exp, got := int64(2), numAutoSkipped; exp != got {
+		t.Fatalf("unexpected number of auto-restores skipped\nexp: %d\ngot: %d", exp, got)
+	}
+}
+
 func Test_MultiNodeJoinNonVoterRemove(t *testing.T) {
-	s0, ln0 := mustNewStore(t, true)
+	s0, ln0 := mustNewStore(t)
 	defer ln0.Close()
 	if err := s0.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
@@ -1400,7 +2020,7 @@ func Test_MultiNodeJoinNonVoterRemove(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
-	s1, ln1 := mustNewStore(t, true)
+	s1, ln1 := mustNewStore(t)
 	defer ln1.Close()
 	if err := s1.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
@@ -1466,7 +2086,7 @@ func Test_MultiNodeJoinNonVoterRemove(t *testing.T) {
 }
 
 func Test_MultiNodeExecuteQuery(t *testing.T) {
-	s0, ln0 := mustNewStore(t, true)
+	s0, ln0 := mustNewStore(t)
 	defer ln0.Close()
 	if err := s0.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
@@ -1479,14 +2099,14 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
-	s1, ln1 := mustNewStore(t, true)
+	s1, ln1 := mustNewStore(t)
 	defer ln1.Close()
 	if err := s1.Open(); err != nil {
 		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
 	}
 	defer s1.Close(true)
 
-	s2, ln2 := mustNewStore(t, true)
+	s2, ln2 := mustNewStore(t)
 	defer ln2.Close()
 	if err := s2.Open(); err != nil {
 		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
@@ -1517,7 +2137,7 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 	}
 
 	qr := queryRequestFromString("SELECT * FROM foo", false, false)
-	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
 	r, err := s0.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query leader node: %s", err.Error())
@@ -1535,17 +2155,17 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 		t.Fatalf("error waiting for follower to apply index: %s:", err.Error())
 	}
 
-	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_WEAK
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK
 	_, err = s1.Query(qr)
 	if err == nil {
 		t.Fatalf("successfully queried non-leader node")
 	}
-	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
 	_, err = s1.Query(qr)
 	if err == nil {
 		t.Fatalf("successfully queried non-leader node")
 	}
-	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
 	r, err = s1.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query follower node: %s", err.Error())
@@ -1563,17 +2183,17 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 		t.Fatalf("error waiting for follower to apply index: %s:", err.Error())
 	}
 
-	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_WEAK
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK
 	_, err = s1.Query(qr)
 	if err == nil {
 		t.Fatalf("successfully queried non-voting node with Weak")
 	}
-	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
 	_, err = s1.Query(qr)
 	if err == nil {
 		t.Fatalf("successfully queried non-voting node with Strong")
 	}
-	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
 	r, err = s1.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query non-voting node: %s", err.Error())
@@ -1588,7 +2208,7 @@ func Test_MultiNodeExecuteQuery(t *testing.T) {
 
 // Test_SingleNodeExecuteQueryFreshness tests that freshness is ignored on the Leader.
 func Test_SingleNodeExecuteQueryFreshness(t *testing.T) {
-	s0, ln0 := mustNewStore(t, true)
+	s0, ln0 := mustNewStore(t)
 	defer ln0.Close()
 	if err := s0.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
@@ -1615,7 +2235,7 @@ func Test_SingleNodeExecuteQueryFreshness(t *testing.T) {
 		t.Fatalf("failed to wait for fsmIndex: %s", err.Error())
 	}
 	qr := queryRequestFromString("SELECT * FROM foo", false, false)
-	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
 	qr.Freshness = mustParseDuration("1ns").Nanoseconds()
 	r, err := s0.Query(qr)
 	if err != nil {
@@ -1630,7 +2250,7 @@ func Test_SingleNodeExecuteQueryFreshness(t *testing.T) {
 }
 
 func Test_MultiNodeExecuteQueryFreshness(t *testing.T) {
-	s0, ln0 := mustNewStore(t, true)
+	s0, ln0 := mustNewStore(t)
 	defer ln0.Close()
 	if err := s0.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
@@ -1643,7 +2263,7 @@ func Test_MultiNodeExecuteQueryFreshness(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
-	s1, ln1 := mustNewStore(t, true)
+	s1, ln1 := mustNewStore(t)
 	defer ln1.Close()
 	if err := s1.Open(); err != nil {
 		t.Fatalf("failed to open node for multi-node test: %s", err.Error())
@@ -1665,7 +2285,7 @@ func Test_MultiNodeExecuteQueryFreshness(t *testing.T) {
 	}
 
 	qr := queryRequestFromString("SELECT * FROM foo", false, false)
-	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
 	r, err := s0.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query leader node: %s", err.Error())
@@ -1685,13 +2305,13 @@ func Test_MultiNodeExecuteQueryFreshness(t *testing.T) {
 
 	// "Weak" consistency queries with 1 nanosecond freshness should pass, because freshness
 	// is ignored in this case.
-	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_WEAK
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK
 	qr.Freshness = mustParseDuration("1ns").Nanoseconds()
 	_, err = s0.Query(qr)
 	if err != nil {
 		t.Fatalf("Failed to ignore freshness if level is Weak: %s", err.Error())
 	}
-	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
 	// "Strong" consistency queries with 1 nanosecond freshness should pass, because freshness
 	// is ignored in this case.
 	_, err = s0.Query(qr)
@@ -1703,7 +2323,7 @@ func Test_MultiNodeExecuteQueryFreshness(t *testing.T) {
 	s0.Close(true)
 
 	// "None" consistency queries should still work.
-	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
 	qr.Freshness = 0
 	r, err = s1.Query(qr)
 	if err != nil {
@@ -1721,14 +2341,14 @@ func Test_MultiNodeExecuteQueryFreshness(t *testing.T) {
 
 	// "None" consistency queries with 1 nanosecond freshness should fail, because at least
 	// one nanosecond *should* have passed since leader died (surely!).
-	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
 	qr.Freshness = mustParseDuration("1ns").Nanoseconds()
 	_, err = s1.Query(qr)
 	if err == nil {
 		t.Fatalf("freshness violating query didn't return an error")
 	}
 	if err != ErrStaleRead {
-		t.Fatalf("freshness violating query didn't returned wrong error: %s", err.Error())
+		t.Fatalf("freshness violating query returned wrong error: %s", err.Error())
 	}
 
 	// Freshness of 0 is ignored.
@@ -1757,10 +2377,30 @@ func Test_MultiNodeExecuteQueryFreshness(t *testing.T) {
 	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
+
+	// Check Stale-read detection works with Requests too.
+	eqr := executeQueryRequestFromString("SELECT * FROM foo", proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE,
+		false, false)
+	eqr.Freshness = mustParseDuration("1ns").Nanoseconds()
+	_, err = s1.Request(eqr)
+	if err == nil {
+		t.Fatalf("freshness violating request didn't return an error")
+	}
+	if err != ErrStaleRead {
+		t.Fatalf("freshness violating request returned wrong error: %s", err.Error())
+	}
+	eqr.Freshness = 0
+	eqresp, err := s1.Request(eqr)
+	if err != nil {
+		t.Fatalf("inactive freshness violating request returned an error")
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(eqresp); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
 }
 
 func Test_StoreLogTruncationMultinode(t *testing.T) {
-	s0, ln0 := mustNewStore(t, true)
+	s0, ln0 := mustNewStore(t)
 	defer ln0.Close()
 	s0.SnapshotThreshold = 4
 	s0.SnapshotInterval = 100 * time.Millisecond
@@ -1776,7 +2416,7 @@ func Test_StoreLogTruncationMultinode(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
-	nSnaps := stats.Get(numSnaphots).String()
+	nSnaps := stats.Get(numSnapshots).String()
 
 	// Write more than s.SnapshotThreshold statements.
 	queries := []string{
@@ -1796,12 +2436,12 @@ func Test_StoreLogTruncationMultinode(t *testing.T) {
 
 	// Wait for the snapshot to happen and log to be truncated.
 	f := func() bool {
-		return stats.Get(numSnaphots).String() != nSnaps
+		return stats.Get(numSnapshots).String() != nSnaps
 	}
 	testPoll(t, f, 100*time.Millisecond, 2*time.Second)
 
 	// Do one more execute, to ensure there is at least one log not snapshot.
-	// Without this, there is no guaratnee fsmIndex will be set on s1.
+	// Without this, there is no guarantee fsmIndex will be set on s1.
 	_, err := s0.Execute(executeRequestFromString(`INSERT INTO foo(id, name) VALUES(6, "fiona")`, false, false))
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
@@ -1809,7 +2449,7 @@ func Test_StoreLogTruncationMultinode(t *testing.T) {
 
 	// Fire up new node and ensure it picks up all changes. This will
 	// involve getting a snapshot and truncated log.
-	s1, ln1 := mustNewStore(t, true)
+	s1, ln1 := mustNewStore(t)
 	defer ln1.Close()
 	if err := s1.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
@@ -1829,7 +2469,7 @@ func Test_StoreLogTruncationMultinode(t *testing.T) {
 		t.Fatalf("error waiting for follower to apply index: %s:", err.Error())
 	}
 	qr := queryRequestFromString("SELECT count(*) FROM foo", false, true)
-	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
 	r, err := s1.Query(qr)
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
@@ -1842,9 +2482,12 @@ func Test_StoreLogTruncationMultinode(t *testing.T) {
 	}
 }
 
-func Test_SingleNodeSnapshotOnDisk(t *testing.T) {
-	s, ln := mustNewStore(t, false)
+func Test_SingleNode_WALTriggeredSnapshot(t *testing.T) {
+	s, ln := mustNewStore(t)
 	defer ln.Close()
+	s.SnapshotThreshold = 8192
+	s.SnapshotInterval = 500 * time.Millisecond
+	s.SnapshotThresholdWALSize = 4096
 
 	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
@@ -1856,185 +2499,58 @@ func Test_SingleNodeSnapshotOnDisk(t *testing.T) {
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
-
-	queries := []string{
-		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
-		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
-	}
-	_, err := s.Execute(executeRequestFromStrings(queries, false, false))
+	er := executeRequestFromString(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		false, false)
+	_, err := s.Execute(er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
-	_, err = s.Query(queryRequestFromString("SELECT * FROM foo", false, false))
+	nSnaps := stats.Get(numWALSnapshots).String()
+
+	for i := 0; i < 100; i++ {
+		_, err := s.Execute(executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`, false, false))
+		if err != nil {
+			t.Fatalf("failed to execute INSERT on single node: %s", err.Error())
+		}
+	}
+
+	// Ensure WAL-triggered snapshots take place.
+	f := func() bool {
+		return stats.Get(numWALSnapshots).String() != nSnaps
+	}
+	testPoll(t, f, 100*time.Millisecond, 2*time.Second)
+
+	// Sanity-check the contents of the Store. There should be two
+	// files -- a SQLite database file, and a diretory named after
+	// the most recent snapshot. This basically checks that reaping
+	// is working, as it can be tricky on Windows due to stricter
+	// file deletion rules.
+	time.Sleep(5 * time.Second) // Tricky to know when all snapshots are done. Just wait.
+	snaps, err := s.snapshotStore.List()
 	if err != nil {
-		t.Fatalf("failed to query single node: %s", err.Error())
+		t.Fatalf("failed to list snapshots: %s", err.Error())
 	}
-
-	// Snap the node and write to disk.
-	f, err := s.Snapshot()
+	if len(snaps) != 1 {
+		t.Fatalf("wrong number of snapshots: %d", len(snaps))
+	}
+	snapshotDir := filepath.Join(s.raftDir, snapshotsDirName)
+	files, err := os.ReadDir(snapshotDir)
 	if err != nil {
-		t.Fatalf("failed to snapshot node: %s", err.Error())
+		t.Fatalf("failed to read snapshot store dir: %s", err.Error())
+	}
+	if len(files) != 2 {
+		t.Fatalf("wrong number of snapshot store files: %d", len(files))
+	}
+	for _, f := range files {
+		if !strings.Contains(f.Name(), snaps[0].ID) {
+			t.Fatalf("wrong snapshot store file: %s", f.Name())
+		}
 	}
 
-	snapDir := t.TempDir()
-	snapFile, err := os.Create(filepath.Join(snapDir, "snapshot"))
-	if err != nil {
-		t.Fatalf("failed to create snapshot file: %s", err.Error())
-	}
-	defer snapFile.Close()
-	sink := &mockSnapshotSink{snapFile}
-	if err := f.Persist(sink); err != nil {
-		t.Fatalf("failed to persist snapshot to disk: %s", err.Error())
-	}
-
-	// Check restoration.
-	snapFile, err = os.Open(filepath.Join(snapDir, "snapshot"))
-	if err != nil {
-		t.Fatalf("failed to open snapshot file: %s", err.Error())
-	}
-	defer snapFile.Close()
-	if err := s.Restore(snapFile); err != nil {
-		t.Fatalf("failed to restore snapshot from disk: %s", err.Error())
-	}
-
-	// Ensure database is back in the correct state.
-	r, err := s.Query(queryRequestFromString("SELECT * FROM foo", false, false))
-	if err != nil {
-		t.Fatalf("failed to query single node: %s", err.Error())
-	}
-	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-	}
-	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-	}
-}
-
-func Test_SingleNodeSnapshotInMem(t *testing.T) {
-	s, ln := mustNewStore(t, true)
-	defer ln.Close()
-
-	if err := s.Open(); err != nil {
-		t.Fatalf("failed to open single-node store: %s", err.Error())
-	}
-	defer s.Close(true)
-	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
-		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
-	}
-	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
-		t.Fatalf("Error waiting for leader: %s", err)
-	}
-
-	queries := []string{
-		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
-		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
-	}
-	_, err := s.Execute(executeRequestFromStrings(queries, false, false))
-	if err != nil {
-		t.Fatalf("failed to execute on single node: %s", err.Error())
-	}
-	_, err = s.Query(queryRequestFromString("SELECT * FROM foo", false, false))
-	if err != nil {
-		t.Fatalf("failed to query single node: %s", err.Error())
-	}
-
-	// Snap the node and write to disk.
-	f, err := s.Snapshot()
-	if err != nil {
-		t.Fatalf("failed to snapshot node: %s", err.Error())
-	}
-
-	snapDir := t.TempDir()
-	snapFile, err := os.Create(filepath.Join(snapDir, "snapshot"))
-	if err != nil {
-		t.Fatalf("failed to create snapshot file: %s", err.Error())
-	}
-	defer snapFile.Close()
-	sink := &mockSnapshotSink{snapFile}
-	if err := f.Persist(sink); err != nil {
-		t.Fatalf("failed to persist snapshot to disk: %s", err.Error())
-	}
-
-	// Check restoration.
-	snapFile, err = os.Open(filepath.Join(snapDir, "snapshot"))
-	if err != nil {
-		t.Fatalf("failed to open snapshot file: %s", err.Error())
-	}
-	defer snapFile.Close()
-	if err := s.Restore(snapFile); err != nil {
-		t.Fatalf("failed to restore snapshot from disk: %s", err.Error())
-	}
-
-	// Ensure database is back in the correct state.
-	r, err := s.Query(queryRequestFromString("SELECT * FROM foo", false, false))
-	if err != nil {
-		t.Fatalf("failed to query single node: %s", err.Error())
-	}
-	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-	}
-	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-	}
-
-	// Write a record, ensuring it works and can be queried back i.e. that
-	// the system remains functional.
-	_, err = s.Execute(executeRequestFromString(`INSERT INTO foo(id, name) VALUES(2, "fiona")`, false, false))
-	if err != nil {
-		t.Fatalf("failed to execute on single node: %s", err.Error())
-	}
-	r, err = s.Query(queryRequestFromString("SELECT COUNT(*) FROM foo", false, false))
-	if err != nil {
-		t.Fatalf("failed to query single node: %s", err.Error())
-	}
-	if exp, got := `["COUNT(*)"]`, asJSON(r[0].Columns); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-	}
-	if exp, got := `[[2]]`, asJSON(r[0].Values); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-	}
-}
-
-func Test_SingleNodeRestoreNoncompressed(t *testing.T) {
-	s, ln := mustNewStore(t, false)
-	defer ln.Close()
-
-	if err := s.Open(); err != nil {
-		t.Fatalf("failed to open single-node store: %s", err.Error())
-	}
-	defer s.Close(true)
-	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
-		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
-	}
-	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
-		t.Fatalf("Error waiting for leader: %s", err)
-	}
-
-	// Check restoration from a pre-compressed SQLite database snap.
-	// This is to test for backwards compatilibty of this code.
-	f, err := os.Open(filepath.Join("testdata", "noncompressed-sqlite-snap.bin"))
-	if err != nil {
-		t.Fatalf("failed to open snapshot file: %s", err.Error())
-	}
-	if err := s.Restore(f); err != nil {
-		t.Fatalf("failed to restore noncompressed snapshot from disk: %s", err.Error())
-	}
-
-	// Ensure database is back in the expected state.
-	r, err := s.Query(queryRequestFromString("SELECT count(*) FROM foo", false, false))
-	if err != nil {
-		t.Fatalf("failed to query single node: %s", err.Error())
-	}
-	if exp, got := `["count(*)"]`, asJSON(r[0].Columns); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-	}
-	if exp, got := `[[5000]]`, asJSON(r[0].Values); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
-	}
 }
 
 func Test_SingleNodeNoop(t *testing.T) {
-	s, ln := mustNewStore(t, true)
+	s, ln := mustNewStore(t)
 	defer ln.Close()
 	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
@@ -2047,8 +2563,12 @@ func Test_SingleNodeNoop(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
-	if err := s.Noop("1"); err != nil {
+	af, err := s.Noop("1")
+	if err != nil {
 		t.Fatalf("failed to write noop command: %s", err.Error())
+	}
+	if af.Error() != nil {
+		t.Fatalf("expected nil apply future error")
 	}
 	if s.numNoops != 1 {
 		t.Fatalf("noop count is wrong, got: %d", s.numNoops)
@@ -2056,7 +2576,7 @@ func Test_SingleNodeNoop(t *testing.T) {
 }
 
 func Test_IsLeader(t *testing.T) {
-	s, ln := mustNewStore(t, true)
+	s, ln := mustNewStore(t)
 	defer ln.Close()
 
 	if err := s.Open(); err != nil {
@@ -2073,10 +2593,60 @@ func Test_IsLeader(t *testing.T) {
 	if !s.IsLeader() {
 		t.Fatalf("single node is not leader!")
 	}
+	if !s.HasLeader() {
+		t.Fatalf("single node does not have leader!")
+	}
+}
+
+func Test_MultiNodeIsLeaderHasLeader(t *testing.T) {
+	s0, ln0 := mustNewStore(t)
+	defer ln0.Close()
+	if err := s0.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s0.Close(true)
+	if err := s0.Bootstrap(NewServer(s0.ID(), s0.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	s1, ln1 := mustNewStore(t)
+	defer ln1.Close()
+	if err := s1.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s1.Close(true)
+	if err := s1.Bootstrap(NewServer(s1.ID(), s1.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+
+	// Join the second node to the first.
+	if err := s0.Join(joinRequest(s1.ID(), s1.Addr(), true)); err != nil {
+		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
+	}
+	_, err := s1.WaitForLeader(10 * time.Second)
+	if err != nil {
+		t.Fatalf("failed to get leader address on follower: %s", err.Error())
+	}
+
+	if !s0.IsLeader() {
+		t.Fatalf("s0 is not leader")
+	}
+	if !s0.HasLeader() {
+		t.Fatalf("s0 does not have a leader")
+	}
+	if s1.IsLeader() {
+		t.Fatalf("s1 is leader")
+	}
+	if !s1.HasLeader() {
+		t.Fatalf("s1 does not have a leader")
+	}
 }
 
 func Test_IsVoter(t *testing.T) {
-	s, ln := mustNewStore(t, true)
+	s, ln := mustNewStore(t)
 	defer ln.Close()
 
 	if err := s.Open(); err != nil {
@@ -2099,8 +2669,126 @@ func Test_IsVoter(t *testing.T) {
 	}
 }
 
+func Test_RequiresLeader(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	er := executeRequestFromString(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		false, false)
+	_, err := s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	tests := []struct {
+		name     string
+		stmts    []string
+		lvl      proto.QueryRequest_Level
+		requires bool
+	}{
+		{
+			name:     "Empty SQL",
+			stmts:    []string{""},
+			requires: false,
+		},
+		{
+			name:     "Junk SQL",
+			stmts:    []string{"asdkflj asgkdj"},
+			requires: true,
+		},
+		{
+			name:     "CREATE TABLE statement, already exists",
+			stmts:    []string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"},
+			requires: true,
+		},
+		{
+			name:     "CREATE TABLE statement, does not exists",
+			stmts:    []string{"CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"},
+			requires: true,
+		},
+		{
+			name:     "Single INSERT",
+			stmts:    []string{"INSERT INTO foo(id, name) VALUES(1, 'fiona')"},
+			requires: true,
+		},
+		{
+			name:     "Single INSERT, non-existent table",
+			stmts:    []string{"INSERT INTO qux(id, name) VALUES(1, 'fiona')"},
+			requires: true,
+		},
+		{
+			name:     "Single SELECT with implicit NONE",
+			stmts:    []string{"SELECT * FROM foo"},
+			requires: false,
+		},
+		{
+			name:     "Single SELECT with NONE",
+			stmts:    []string{"SELECT * FROM foo"},
+			lvl:      proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE,
+			requires: false,
+		},
+		{
+			name:     "Single SELECT from non-existent table with NONE",
+			stmts:    []string{"SELECT * FROM qux"},
+			lvl:      proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE,
+			requires: true,
+		},
+		{
+			name:     "Double SELECT with NONE",
+			stmts:    []string{"SELECT * FROM foo", "SELECT * FROM foo WHERE id = 1"},
+			lvl:      proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE,
+			requires: false,
+		},
+		{
+			name:     "Single SELECT with STRONG",
+			stmts:    []string{"SELECT * FROM foo"},
+			lvl:      proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG,
+			requires: true,
+		},
+		{
+			name:     "Single SELECT with WEAK",
+			stmts:    []string{"SELECT * FROM foo"},
+			lvl:      proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK,
+			requires: true,
+		},
+		{
+			name:     "Mix queries and executes with NONE",
+			stmts:    []string{"SELECT * FROM foo", "INSERT INTO foo(id, name) VALUES(1, 'fiona')"},
+			lvl:      proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE,
+			requires: true,
+		},
+		{
+			name:     "Mix queries and executes with WEAK",
+			stmts:    []string{"SELECT * FROM foo", "INSERT INTO foo(id, name) VALUES(1, 'fiona')"},
+			lvl:      proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK,
+			requires: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			requires := s.RequiresLeader(executeQueryRequestFromStrings(tt.stmts, tt.lvl, false, false))
+			if requires != tt.requires {
+				t.Fatalf(" test %s failed, unexpected requires: expected %v, got %v", tt.name, tt.requires, requires)
+			}
+		})
+	}
+
+}
+
 func Test_State(t *testing.T) {
-	s, ln := mustNewStore(t, true)
+	s, ln := mustNewStore(t)
 	defer ln.Close()
 
 	if err := s.Open(); err != nil {
@@ -2120,13 +2808,13 @@ func Test_State(t *testing.T) {
 	}
 }
 
-func mustNewStoreAtPathsLn(id, dataPath, sqlitePath string, inmem, fk bool) (*Store, net.Listener) {
-	cfg := NewDBConfig(inmem)
+func mustNewStoreAtPathsLn(id, dataPath, sqlitePath string, fk bool) (*Store, net.Listener) {
+	cfg := NewDBConfig()
 	cfg.FKConstraints = fk
 	cfg.OnDiskPath = sqlitePath
 
-	ln := mustMockLister("localhost:0")
-	s := New(ln, &Config{
+	ly := mustMockLayer("localhost:0")
+	s := New(ly, &Config{
 		DBConf: cfg,
 		Dir:    dataPath,
 		ID:     id,
@@ -2134,22 +2822,22 @@ func mustNewStoreAtPathsLn(id, dataPath, sqlitePath string, inmem, fk bool) (*St
 	if s == nil {
 		panic("failed to create new store")
 	}
-	return s, ln
+	return s, ly
 }
 
-func mustNewStore(t *testing.T, inmem bool) (*Store, net.Listener) {
-	return mustNewStoreAtPathsLn(randomString(), t.TempDir(), "", inmem, false)
+func mustNewStore(t *testing.T) (*Store, net.Listener) {
+	return mustNewStoreAtPathsLn(random.String(), t.TempDir(), "", false)
 }
 
-func mustNewStoreFK(t *testing.T, inmem bool) (*Store, net.Listener) {
-	return mustNewStoreAtPathsLn(randomString(), t.TempDir(), "", inmem, true)
+func mustNewStoreFK(t *testing.T) (*Store, net.Listener) {
+	return mustNewStoreAtPathsLn(random.String(), t.TempDir(), "", true)
 }
 
 func mustNewStoreSQLitePath(t *testing.T) (*Store, net.Listener, string) {
 	dataDir := t.TempDir()
 	sqliteDir := t.TempDir()
 	sqlitePath := filepath.Join(sqliteDir, "explicit-path.db")
-	s, ln := mustNewStoreAtPathsLn(randomString(), dataDir, sqlitePath, false, true)
+	s, ln := mustNewStoreAtPathsLn(random.String(), dataDir, sqlitePath, true)
 	return s, ln, sqlitePath
 }
 
@@ -2165,31 +2853,54 @@ func (m *mockSnapshotSink) Cancel() error {
 	return nil
 }
 
-type mockTransport struct {
+type mockLayer struct {
 	ln net.Listener
 }
 
-type mockListener struct {
-	ln net.Listener
-}
-
-func mustMockLister(addr string) Listener {
+func mustMockLayer(addr string) Layer {
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		panic("failed to create new listner")
 	}
-	return &mockListener{ln}
+	return &mockLayer{ln}
 }
 
-func (m *mockListener) Dial(addr string, timeout time.Duration) (net.Conn, error) {
+func (m *mockLayer) Dial(addr string, timeout time.Duration) (net.Conn, error) {
 	return net.DialTimeout("tcp", addr, timeout)
 }
 
-func (m *mockListener) Accept() (net.Conn, error) { return m.ln.Accept() }
+func (m *mockLayer) Accept() (net.Conn, error) { return m.ln.Accept() }
 
-func (m *mockListener) Close() error { return m.ln.Close() }
+func (m *mockLayer) Close() error { return m.ln.Close() }
 
-func (m *mockListener) Addr() net.Addr { return m.ln.Addr() }
+func (m *mockLayer) Addr() net.Addr { return m.ln.Addr() }
+
+func mustNoop(s *Store, id string) {
+	af, err := s.Noop(id)
+	if err != nil {
+		panic("failed to write noop command")
+	}
+	if af.Error() != nil {
+		panic("expected nil apply future error")
+	}
+}
+
+func mustCreateTempFile() string {
+	f, err := os.CreateTemp("", "rqlite-temp")
+	if err != nil {
+		panic("failed to create temporary file")
+	}
+	f.Close()
+	return f.Name()
+}
+
+func mustCreateTempFD() *os.File {
+	f, err := os.CreateTemp("", "rqlite-temp")
+	if err != nil {
+		panic("failed to create temporary file")
+	}
+	return f
+}
 
 func mustWriteFile(path, contents string) {
 	err := os.WriteFile(path, []byte(contents), 0644)
@@ -2199,11 +2910,24 @@ func mustWriteFile(path, contents string) {
 }
 
 func mustReadFile(path string) []byte {
-	b, err := ioutil.ReadFile(path)
+	b, err := os.ReadFile(path)
 	if err != nil {
 		panic("failed to read file")
 	}
 	return b
+}
+
+func mustReadRandom(b []byte) {
+	_, err := rand.Read(b)
+	if err != nil {
+		panic("failed to read random bytes")
+	}
+}
+
+func mustCopyFileToTempFile(path string) string {
+	f := mustCreateTempFile()
+	mustWriteFile(f, string(mustReadFile(path)))
+	return f
 }
 
 func mustParseDuration(t string) time.Duration {
@@ -2214,20 +2938,28 @@ func mustParseDuration(t string) time.Duration {
 	return d
 }
 
-func executeRequestFromString(s string, timings, tx bool) *command.ExecuteRequest {
+func mustFileSize(path string) int64 {
+	n, err := fileSize(path)
+	if err != nil {
+		panic("failed to get file size")
+	}
+	return n
+}
+
+func executeRequestFromString(s string, timings, tx bool) *proto.ExecuteRequest {
 	return executeRequestFromStrings([]string{s}, timings, tx)
 }
 
-// queryRequestFromStrings converts a slice of strings into a command.ExecuteRequest
-func executeRequestFromStrings(s []string, timings, tx bool) *command.ExecuteRequest {
-	stmts := make([]*command.Statement, len(s))
+// executeRequestFromStrings converts a slice of strings into a proto.ExecuteRequest
+func executeRequestFromStrings(s []string, timings, tx bool) *proto.ExecuteRequest {
+	stmts := make([]*proto.Statement, len(s))
 	for i := range s {
-		stmts[i] = &command.Statement{
+		stmts[i] = &proto.Statement{
 			Sql: s[i],
 		}
 	}
-	return &command.ExecuteRequest{
-		Request: &command.Request{
+	return &proto.ExecuteRequest{
+		Request: &proto.Request{
 			Statements:  stmts,
 			Transaction: tx,
 		},
@@ -2235,20 +2967,20 @@ func executeRequestFromStrings(s []string, timings, tx bool) *command.ExecuteReq
 	}
 }
 
-func queryRequestFromString(s string, timings, tx bool) *command.QueryRequest {
+func queryRequestFromString(s string, timings, tx bool) *proto.QueryRequest {
 	return queryRequestFromStrings([]string{s}, timings, tx)
 }
 
-// queryRequestFromStrings converts a slice of strings into a command.QueryRequest
-func queryRequestFromStrings(s []string, timings, tx bool) *command.QueryRequest {
-	stmts := make([]*command.Statement, len(s))
+// queryRequestFromStrings converts a slice of strings into a proto.QueryRequest
+func queryRequestFromStrings(s []string, timings, tx bool) *proto.QueryRequest {
+	stmts := make([]*proto.Statement, len(s))
 	for i := range s {
-		stmts[i] = &command.Statement{
+		stmts[i] = &proto.Statement{
 			Sql: s[i],
 		}
 	}
-	return &command.QueryRequest{
-		Request: &command.Request{
+	return &proto.QueryRequest{
+		Request: &proto.Request{
 			Statements:  stmts,
 			Transaction: tx,
 		},
@@ -2256,45 +2988,95 @@ func queryRequestFromStrings(s []string, timings, tx bool) *command.QueryRequest
 	}
 }
 
-func backupRequestSQL(leader bool) *command.BackupRequest {
-	return &command.BackupRequest{
-		Format: command.BackupRequest_BACKUP_REQUEST_FORMAT_SQL,
+func executeQueryRequestFromString(s string, lvl proto.QueryRequest_Level, timings, tx bool) *proto.ExecuteQueryRequest {
+	return executeQueryRequestFromStrings([]string{s}, lvl, timings, tx)
+}
+
+func executeQueryRequestFromStrings(s []string, lvl proto.QueryRequest_Level, timings, tx bool) *proto.ExecuteQueryRequest {
+	stmts := make([]*proto.Statement, len(s))
+	for i := range s {
+		stmts[i] = &proto.Statement{
+			Sql: s[i],
+		}
+	}
+	return &proto.ExecuteQueryRequest{
+		Request: &proto.Request{
+			Statements:  stmts,
+			Transaction: tx,
+		},
+		Timings: timings,
+		Level:   lvl,
+	}
+}
+
+func backupRequestSQL(leader bool) *proto.BackupRequest {
+	return &proto.BackupRequest{
+		Format: proto.BackupRequest_BACKUP_REQUEST_FORMAT_SQL,
 		Leader: leader,
 	}
 }
 
-func backupRequestBinary(leader bool) *command.BackupRequest {
-	return &command.BackupRequest{
-		Format: command.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY,
-		Leader: leader,
+func backupRequestBinary(leader, vacuum, compress bool) *proto.BackupRequest {
+	return &proto.BackupRequest{
+		Format:   proto.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY,
+		Leader:   leader,
+		Vacuum:   vacuum,
+		Compress: compress,
 	}
 }
 
-func loadRequestFromFile(path string) *command.LoadRequest {
-	return &command.LoadRequest{
+func loadRequestFromFile(path string) *proto.LoadRequest {
+	return &proto.LoadRequest{
 		Data: mustReadFile(path),
 	}
 }
 
-func joinRequest(id, addr string, voter bool) *command.JoinRequest {
-	return &command.JoinRequest{
+func joinRequest(id, addr string, voter bool) *proto.JoinRequest {
+	return &proto.JoinRequest{
 		Id:      id,
 		Address: addr,
 		Voter:   voter,
 	}
 }
 
-func notifyRequest(id, addr string) *command.NotifyRequest {
-	return &command.NotifyRequest{
+func notifyRequest(id, addr string) *proto.NotifyRequest {
+	return &proto.NotifyRequest{
 		Id:      id,
 		Address: addr,
 	}
 }
 
-func removeNodeRequest(id string) *command.RemoveNodeRequest {
-	return &command.RemoveNodeRequest{
+func removeNodeRequest(id string) *proto.RemoveNodeRequest {
+	return &proto.RemoveNodeRequest{
 		Id: id,
 	}
+}
+
+func gunzipFile(dst, src *os.File) error {
+	r, err := os.Open(src.Name())
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+	gzr, err := gzip.NewReader(r)
+	if err != nil {
+		return err
+	}
+	defer gzr.Close()
+	_, err = io.Copy(dst, gzr)
+	return err
+}
+
+func filesIdentical(path1, path2 string) bool {
+	b1, err := os.ReadFile(path1)
+	if err != nil {
+		return false
+	}
+	b2, err := os.ReadFile(path2)
+	if err != nil {
+		return false
+	}
+	return bytes.Equal(b1, b2)
 }
 
 // waitForLeaderID waits until the Store's LeaderID is set, or the timeout
@@ -2331,16 +3113,15 @@ func asJSON(v interface{}) string {
 	return string(b)
 }
 
-func randomString() string {
-	var output strings.Builder
-	chars := "abcdedfghijklmnopqrstABCDEFGHIJKLMNOP"
-
-	for i := 0; i < 20; i++ {
-		random := rand.Intn(len(chars))
-		randomChar := chars[random]
-		output.WriteString(string(randomChar))
+func asJSONAssociative(v interface{}) string {
+	enc := encoding.Encoder{
+		Associative: true,
 	}
-	return output.String()
+	b, err := enc.JSONMarshal(v)
+	if err != nil {
+		panic(fmt.Sprintf("failed to JSON marshal value: %s", err.Error()))
+	}
+	return string(b)
 }
 
 func testPoll(t *testing.T, f func() bool, p time.Duration, d time.Duration) {

@@ -2,11 +2,12 @@ package pool
 
 import (
 	"log"
-	"math/rand"
 	"net"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/rqlite/rqlite/v8/random"
 )
 
 var (
@@ -21,8 +22,6 @@ func init() {
 	// used for factory function
 	go simpleTCPServer()
 	time.Sleep(time.Millisecond * 300) // wait until tcp server has been settled
-
-	rand.Seed(time.Now().UTC().UnixNano())
 }
 
 func TestNew(t *testing.T) {
@@ -229,7 +228,7 @@ func TestPoolConcurrent2(t *testing.T) {
 		for i := 0; i < 10; i++ {
 			go func(i int) {
 				conn, _ := p.Get()
-				time.Sleep(time.Millisecond * time.Duration(rand.Intn(100)))
+				time.Sleep(time.Millisecond * time.Duration(random.Intn(100)))
 				conn.Close()
 				wg.Done()
 			}(i)
@@ -240,7 +239,7 @@ func TestPoolConcurrent2(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			conn, _ := p.Get()
-			time.Sleep(time.Millisecond * time.Duration(rand.Intn(100)))
+			time.Sleep(time.Millisecond * time.Duration(random.Intn(100)))
 			conn.Close()
 			wg.Done()
 		}(i)

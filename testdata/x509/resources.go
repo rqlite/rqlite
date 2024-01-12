@@ -1,28 +1,28 @@
 package x509
 
 import (
-	"io/ioutil"
+	"os"
 )
 
-// CertFile returns the path to a temporary file, in directory dir, containing a cert.
-// It is up to the caller to remove the file when finished. If dir is the empty string
-// then the default directory for temporary files is used.
-func CertFile(dir string) string {
-	return mustWriteToFile(dir, cert)
+// CertExampleDotComFile returns the path to a temporary file, in directory dir, containing
+// a cert for example.com. It is up to the caller to remove the file when finished. If
+// dir is the empty string then the default directory for temporary files is used.
+func CertExampleDotComFile(dir string) string {
+	return mustWriteToFile(dir, certExampleDotCom)
 }
 
-// KeyFile returns the path to a temporary file, in directory dir, containing a key.
-// It is up to the caller to remove the file when finished.If dir is the empty string
-// then the default directory for temporary files is used.
-func KeyFile(dir string) string {
-	return mustWriteToFile(dir, key)
+// KeyExampleDotComFile returns the path to a temporary file, in directory dir, containing
+// a key for example.com. It is up to the caller to remove the file when finished. If
+// dir is the empty string then the default directory for temporary files is used.
+func KeyExampleDotComFile(dir string) string {
+	return mustWriteToFile(dir, keyExampleDotCom)
 }
 
 func mustWriteToFile(dir, content string) string {
 	b := []byte(content)
 
 	path := mustTempFile(dir)
-	if err := ioutil.WriteFile(path, b, 0600); err != nil {
+	if err := os.WriteFile(path, b, 0600); err != nil {
 		panic(err.Error())
 	}
 	return path
@@ -32,7 +32,7 @@ func mustWriteToFile(dir, content string) string {
 // caller to remove the file once it is no longer needed. If dir is the empty
 // string, then the default directory for temporary files is used.
 func mustTempFile(dir string) string {
-	tmpfile, err := ioutil.TempFile(dir, "rqlite-tls-test")
+	tmpfile, err := os.CreateTemp(dir, "rqlite-tls-test")
 	if err != nil {
 		panic(err.Error())
 	}
@@ -40,87 +40,53 @@ func mustTempFile(dir string) string {
 	return tmpfile.Name()
 }
 
-const cert = `-----BEGIN CERTIFICATE-----
-MIIFXTCCA0WgAwIBAgIJALrA6P0W35jRMA0GCSqGSIb3DQEBCwUAMEUxCzAJBgNV
-BAYTAlVTMRMwEQYDVQQIDApTb21lLVN0YXRlMSEwHwYDVQQKDBhJbnRlcm5ldCBX
-aWRnaXRzIFB0eSBMdGQwHhcNMTcwNjEwMjIwMDM1WhcNMTgwNjEwMjIwMDM1WjBF
-MQswCQYDVQQGEwJVUzETMBEGA1UECAwKU29tZS1TdGF0ZTEhMB8GA1UECgwYSW50
-ZXJuZXQgV2lkZ2l0cyBQdHkgTHRkMIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIIC
-CgKCAgEA2cxg1IcP1gDQezLJm9MDkEEHqOZEAn1iatoIHUoIlfu36Sripn4yoTxM
-1pmOT37CFoaiRfj0biEbjrgfi0QXk9z4E7Vy0XGF6XB5KofOneqnUuSgnOnEkL0p
-gQ3itCr/FLkvuT8/zYKL+PXsMnfHGORgJmHlu1/4rY6Z/dayaf4fUFlKRRziEVUn
-3EMd/hHFHThXimWd3mtxE1YnpKimnFLmIYjXrK22QUZJ2MYVcRklJYaXhIJgHW2s
-oe+ZRhFHxcYoY3znRFZXYkoCXETcExCmo7czLoN4/F92zFDEGbAMbwC/7Zo9AxQg
-30Q4iCrLfwAx+M/0A2dRbSTqGReBeBVfEBWopfz7zV3W7kI+s5K2AIFi+1hbmJ6a
-mKomv3f4z6Ml+yOqrq4KtrDSxnSf6Vh7EHsws6uyMG7Y6rLpPm1sLDiffPABlAti
-/YlVT+3vlg86h7Vlw68CcNSclgyfFW+i1e5a+EV7WB0VmIQXzSkhA86b9aD8qWdL
-N4H8sRlSZ3XfIil4u93QDC/NzJl22wRsN7926xR4DgbCesEsc361KYE8fBSx61fa
-6EyvlQoI2I4r1aWCSHq7YGfV6guBZekR0BeaIsoNwfZDZrboL0sOrHGxiEfzYdVC
-pAxjdG13zuPo+634fUfewBAq695kVYcy3aBt2wOkLyQGLu0CHHsCAwEAAaNQME4w
-HQYDVR0OBBYEFAYLLJUqmUdXCNYTQIWX1ICBKGvWMB8GA1UdIwQYMBaAFAYLLJUq
-mUdXCNYTQIWX1ICBKGvWMAwGA1UdEwQFMAMBAf8wDQYJKoZIhvcNAQELBQADggIB
-AGnvTPevCooo3xO8U/lq2YNo3cFxYnkurBwAn5pwzJrtPgogwezBltEp52+n39TY
-5hSa//pfKdQz2GrQ9YvX1vB8gWkNLxBe6g2ksn0DsGTApC/te1p4M+yTKhogtE7a
-qYmZBSEI46URe0JLYNirzdTu5dri7DzxFc7E/XlQ0riuMyHNqOP0JXKhxKN1dYOu
-NEPxekq2Z2phoo1ul8hBXsz4IRwVeQOAtpRnfrKjxogOI1teP/RSikTsSLvFHxqo
-UHVzwBexQs9isBlBUcmuKksxoGugqqSkGQRE+dSs5RSeEPLexMgACfFmKfpS+Vn4
-ikb2ETQ3i76+JgMoDHKwb4u9xIyKTUToIsx5dUO+o7paPfyqRE6WbO4H+suM4VCd
-VhNbG9qv02Fl8vdYAc/A6tVyV8b4fMbSsGEQnBlvKuOXf/uxAIcz11WUQ4gy/0/e
-kHbMqGuBFPkg5nww3dBxkrBbtKq/1yrnQUjpBvjYtyUvoKrLSbQSGj586i52r4hF
-+bqGPTxmk6hU4JZN+0wvkbVWLZBTRVNKs8Sb6fRWTd2Zd/o7a7QFhbnnAhv8bgyb
-4472yLaXTL/siml+LlSrNGeZEsAaCVH4ETp+HzjpAMAyhhFGqCixG0e9BRPGV936
-H/8+SUQK5KxnwDz3hqrAVJyimrvNlSaP1eZ5P8WXuvBl
+const certExampleDotCom = `-----BEGIN CERTIFICATE-----
+MIIDjjCCAnagAwIBAgIUQdomCw77L5nEqXe9WKVBu+YNTtUwDQYJKoZIhvcNAQEL
+BQAwczELMAkGA1UEBhMCVVMxCzAJBgNVBAgMAkNBMRYwFAYDVQQHDA1TYW4gRnJh
+bmNpc2NvMRMwEQYDVQQKDApNeSBDb21wYW55MRQwEgYDVQQLDAtNeSBEaXZpc2lv
+bjEUMBIGA1UEAwwLZXhhbXBsZS5jb20wHhcNMjMxMjIxMTMyNzUzWhcNMjQxMjIw
+MTMyNzUzWjBzMQswCQYDVQQGEwJVUzELMAkGA1UECAwCQ0ExFjAUBgNVBAcMDVNh
+biBGcmFuY2lzY28xEzARBgNVBAoMCk15IENvbXBhbnkxFDASBgNVBAsMC015IERp
+dmlzaW9uMRQwEgYDVQQDDAtleGFtcGxlLmNvbTCCASIwDQYJKoZIhvcNAQEBBQAD
+ggEPADCCAQoCggEBALSBJKK21N5pxrkcNOUun0VWZmSQr/CgGv0bYMoxHQhsa+Sr
+zvDom+4+tXrlDwEqtpaUOC4HPTZHZoPJPcII9lpLwxRcFX7foyZ0N5IDgF5Dg1o/
+1Wrujh/fQJ0TMjWua5VxAhRBWlY2h3uEe482wDC9d0aVBEFG6agaKcV6NaKs+VLX
+lF8raVYsckjm2ad99wDg8WBAhyLKoEo+2Rfnpj0V4O3G3gK3CTR/QXXT3lTWPVeR
+gcQNzhA7oPrrgp0jKpWdjfKp7SokfAYYelzs155Zam7YX3danHZb6JHdYPYco82U
+R8vkjIj0LvuteKNb4VQfIj63HJy6X84blLpmbl8CAwEAAaMaMBgwFgYDVR0RBA8w
+DYILZXhhbXBsZS5jb20wDQYJKoZIhvcNAQELBQADggEBAD0lAd964YLyg0HCigC8
+GoPlPAtkFwhFwRaklm7LhZQOfgS1QruOtm1ds2PuSSr787L/tInWogp2SO1tCLK+
+O+2bu0w59UhKc1bK9OWhBk0yLnMVkOIMF4Rp0kgocKVjX12Q/2Gd8Yr6UL4inOUV
+r7/VOlekLQLkslsS73udGURmV/2G/90a/QuG8ZOKexLzUFVe/VPOVZ0/Jmxzckg1
+W4tevlDIckAcBD6zovycDgY/qDwNyVvGot6N0BxFCSoq1iqg2vgr7zvuz++N7HPi
+1mCoxsDmy5i7cEBewtvl+9+yu6OvQdkr7LZpgEyZnyiG/Q6xHxxe3QlQc3WEc0fQ
+NPU=
 -----END CERTIFICATE-----`
 
-const key = `-----BEGIN PRIVATE KEY-----
-MIIJQQIBADANBgkqhkiG9w0BAQEFAASCCSswggknAgEAAoICAQDZzGDUhw/WANB7
-Msmb0wOQQQeo5kQCfWJq2ggdSgiV+7fpKuKmfjKhPEzWmY5PfsIWhqJF+PRuIRuO
-uB+LRBeT3PgTtXLRcYXpcHkqh86d6qdS5KCc6cSQvSmBDeK0Kv8UuS+5Pz/Ngov4
-9ewyd8cY5GAmYeW7X/itjpn91rJp/h9QWUpFHOIRVSfcQx3+EcUdOFeKZZ3ea3ET
-ViekqKacUuYhiNesrbZBRknYxhVxGSUlhpeEgmAdbayh75lGEUfFxihjfOdEVldi
-SgJcRNwTEKajtzMug3j8X3bMUMQZsAxvAL/tmj0DFCDfRDiIKst/ADH4z/QDZ1Ft
-JOoZF4F4FV8QFail/PvNXdbuQj6zkrYAgWL7WFuYnpqYqia/d/jPoyX7I6qurgq2
-sNLGdJ/pWHsQezCzq7Iwbtjqsuk+bWwsOJ988AGUC2L9iVVP7e+WDzqHtWXDrwJw
-1JyWDJ8Vb6LV7lr4RXtYHRWYhBfNKSEDzpv1oPypZ0s3gfyxGVJndd8iKXi73dAM
-L83MmXbbBGw3v3brFHgOBsJ6wSxzfrUpgTx8FLHrV9roTK+VCgjYjivVpYJIertg
-Z9XqC4Fl6RHQF5oiyg3B9kNmtugvSw6scbGIR/Nh1UKkDGN0bXfO4+j7rfh9R97A
-ECrr3mRVhzLdoG3bA6QvJAYu7QIcewIDAQABAoICAEKMgXXPAxa3zvwl65ZyZp9Y
-T3fbTCKan0zY7CvO6EqzzGExmmmXG+9KVowoBWTi7XkmkETjKgTQlvQH7JOILdAf
-b6nOApRepLVMialmL8ru3Uul0jG/+DDlq93kGUZF8QUrBJsM6XjpD831jsNo9+vy
-NDLmLOURERIvBXybco6SeIz7i4cMqUL0iyZxV6O/WERyZ8VBAXjpyXZIF/rnEWmo
-purOPmBj/9F4Ia5b8EdLkJ8jvf5eO/IiBeLBLEtNkmmq/8JOcvfdjfvZc1kwLTKi
-HtjdbIUk5P3wSYNqllDnCxWL3BlEzKm5J8YwuTlaIi3fKGXHXN8BXc8EvYcHOKah
-K89HIuexjQyQ0JAWKIIJTZs8jVvTMTjgYnEAB+sLfehBBOKmRdmYij28kIo18blx
-tsx1HjdfImDd0QloofRW1Srp6FhcgDK0qfWXze/Vm6IfF40oTVE3fS/RgYzx0SSM
-2pc6hTXOnrw1r/UBPyNkJ1D/4UK4m0x91BvTSi6MsThWnhicoaTZl1GP4Qpeo9+4
-9Z7t0Yalm0PA55aiHZsm9S8OroasVun2QnDxfUC44PIov7nhqifGVcKA8hIDgSNT
-WP8amq9cNjft5xQnP/y70fbioPPiwau2+Q0SXVn/BYxjqZrNp6OfbWSi2IRO1NOD
-QZDo2rtnL1RrDdBmtDShAoIBAQD2MTJT6HNacu8+u7DDtbMdKvy7rXVblGbUouh9
-cLWX7/zGVcNzB5GSVki3J7J+Kdrs4H45/1JR1YvWtWd93F/xKXmCGkUQCsturtRn
-IX93by3zuWNdLv4giP2pk97wNYaaJWZmo87nXKV6BbL//eEl+Ospg5lGrLCsj+Mk
-9V8oBBxsxqgVZYVyoevLDAuwUw3Cb52PhnEaLrv30ljGFHpsYb9lFlMs8vRosVWy
-i3/T5ASfdnMXKQ1gxN/aPtN6yrFVpXe+S/A5JBzAQfrjiZk4SzNvE7R0eze1YLfO
-IulTvlqpk3HVQEpgfq8D3l1x/zqsh0SpCH3VkV5sQQx262iRAoIBAQDieZsWv9eO
-QzF5nZmh3NL53LkpqONRBjF5b9phppgxw2jiS8D2eEn2XWExmEaK/JppmzvfxSG4
-cPaQHJFjkRGpnJyBlBUnyk4ua5hlXOTb9l5HsLIBlVdcWxwF+zJh8Ylwau+mcVF8
-b8n86zke88du+xTvXfMDn6p6EACmBncyZGi424hSw72u8jS0cdmqJl3isLR6duG3
-4yipWhEpLU5YuR+796jmjK5h+HQwl/Ra2dykbAw7vN0ofdK0+7LrVnGh7dDecOGK
-0fElgFPTazeQQV+dEzqz6UwO0Z9koxqBwPqCLi7sXOeUWwqqb3ewYO7TMM4NlK/o
-C8oG4yvWj9pLAoIBACEI9PHhbSkj5wqJ8OwyA3jUfdlJK0hAn5PE0GGUsClVIJwU
-ggd7aoMyZMt+3iqjvyat8QIjSo6EkyEacmqnGZCoug9FKyM975JIj2PPUOVb29Sq
-ebTVS3BeMXuBxhaBeDBS+GypamgNPH8lKKHFFWMdBaEqcXTUU1i0bgxViJE8C/xk
-o8VLPB7nr1YtpZvhaSVACOprZd3Xi41zgkoCEXNdomsUFdEgQL+TnCY7Jcnu/NfQ
-8xyWe58Si98jMwl1DVqqu2ijk/Z27Ay4TcweeJrfLGWpRTukFROXiNJ2SMzd7Bh5
-Gns9Bz3vgdiJDAzx7JOeCw6LfycbPIpWKDAE4qECggEAZ5kPG7H4Dcio6iPwsj1M
-eSXBwc/S5C58FTvYXtERT7o+0T2r8FMIKl1+52vr4Qo6LFLpaaxIh5GNCFE5JJ2o
-wbi1UwUFRGVjrBJl7QA4ZHJnoE2wr8673rCCui21V15g637PT4kIqG6OrFaBk6oa
-MadDZVfJoX+5QQru8QOGJRQPX3h0/L8zlsKO33gxBId2bQs+E8Mr761G3Wko7nge
-HbHZVWet6IC0CHbZ15y7F5APQVt3oR/83tfnughlSQgLBPK/l/F1CsaMlAYG0nB6
-Q0/USAsS0FfJBgJX8nY12uMG9OPhbRf2i0O2Nk61JobA2PS7XTUF3pT9/naOiCDX
-zwKCAQBK9dPzoc9CfdAJVWjCqR2xS8Jr3/64k59Pya6e7Y4ca+e1g4N7hhQRLPW7
-owTKloXrR0mAkwOIiJlk+gXsl2banuSajiPxumSfPYWE1Q/QNFD/WoPvo6rPYJ8N
-yA/ORsMjWq51SfpzOU69+FdY7p3GvIVWhRtinqseaAIMOkNZBLVDXF4DvtFgiLZM
-bKAjGuXsKOT3MPFU9tHxi4q/7flUb30mSUVXyPjh+C+UH7e0BS0pi/rDeRdEju4z
-bJVERP8/VAJ61TDQJq+Il95fzKe4yTA3dDHnO+EG5W2eCsawTK4Ze5XAWqomgdew
-62D3AkJQiflLfJL8zTFph1FZXLOm
------END PRIVATE KEY-----`
+const keyExampleDotCom = `-----BEGIN RSA PRIVATE KEY-----
+MIIEowIBAAKCAQEAtIEkorbU3mnGuRw05S6fRVZmZJCv8KAa/RtgyjEdCGxr5KvO
+8Oib7j61euUPASq2lpQ4Lgc9Nkdmg8k9wgj2WkvDFFwVft+jJnQ3kgOAXkODWj/V
+au6OH99AnRMyNa5rlXECFEFaVjaHe4R7jzbAML13RpUEQUbpqBopxXo1oqz5UteU
+XytpVixySObZp333AODxYECHIsqgSj7ZF+emPRXg7cbeArcJNH9BddPeVNY9V5GB
+xA3OEDug+uuCnSMqlZ2N8qntKiR8Bhh6XOzXnllqbthfd1qcdlvokd1g9hyjzZRH
+y+SMiPQu+614o1vhVB8iPrccnLpfzhuUumZuXwIDAQABAoIBAQCCd94NJm3SnU4g
+On0ZMou4yGyWP+aL3I3laMabHsjHb+bEkFKx2s/qcrUmMS6ZP1Beop/A1UavVwiI
+NQtIlsXKGnzU2IJJBEie4N3R0moUuGPW9dDCy886xlmjr15ZYsssZ1SDY4FyU1O2
+Odo9d+uOz0PJZqh+rkzxTofmzyC5hWp/QDSwflM63Ddc54oxqXre3d7E4ZIybv4z
+/NhjVOeJQ5rcsPuoDyzcvu9zjoZlWyUVhJXxOD9Lsl4m1OtedlCy5pC7EGLfKCX8
+2cMa6xyRGG5fkD1p3KtRjDRlCnJWZSfUpqfyBDNyd35ggsU2t1YUjtGOIm02s8Bv
+Ppj91spRAoGBAN31QS7hb68KeyXzIg8PTmekuCe3J5pLdqqSJUddRRnuXF3Ck1UG
+vIxCTthMDnrwm1zNOKSr8o1yWQiB+D8+wK4BQBWp3d+aPMdmXKrLabyOvBYC9l1k
+pmvApgU3mq3Gmo5HItqnKveu77/0f9Phc7+Zx61D0M64GoyxCocxOeclAoGBANAw
+S8ON0ly9z9/SeP7827GZe6BTHRosDLIeB4nhj28UkZA5Tqmhl9KltYRKN+elM9lk
+dEbpJHKbQq8p9KrMgPMZbA10clp0201Phl+p/gXoV3+tW4ty68LnoHoJ0aVmcJg7
+1wi6hQA4TktsuqGrQopxBcP2sfkPxw2wvOsC0zozAoGAIsrMAe5ClHyfGy7Gevfa
+QXLXjxotsgj8O/aWs14Sc+MiRWw3rg9VROMr+snJR0oqAF0G8QEnDzcKb8P3xuou
+R9hYVE0BQ4io2FTaV8d09qKlJwol1jPtxlw3af/yViUYmw7Zjs6/dH3OhRdtZigj
+/be8ThOgSpcfSkiCLvjva6UCgYB5mWv3WbPgNYHgYqgHj5umnVZHK6SY79euhbmz
+gErt/56SFdbrX5Y1FFL0ZQFITQb+2BzOekiupB8L/r6IsJA07cleBoDwcsbQ3j1H
+TRwxSScqTRBmYAZyviXOgkOwjyf+0xzjXUZn/XtFtMlBuq1P/Xn3nvUO23dReMSv
+o+PKXwKBgAIAB8Om2Sn2WtVbEoUSKthdp3C3Uv4rtpuHrChA/CJfznTz+abDI0Lq
+65L3OLg5mPkyRQQuOPyo68S9ebuAwfX464G/P3IPPc3wcvvVOKrvgCxRbDzoO90i
+XRolXKALnQTRz+4u+Essl9QG8ETWtAPz3De6fJybfSbg616LXr0u
+-----END RSA PRIVATE KEY-----`

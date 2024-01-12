@@ -7,7 +7,7 @@ import (
 )
 
 func Test_NewServce(t *testing.T) {
-	s := NewService(&mockClient{}, &mockStore{})
+	s := NewService(&mockClient{}, &mockStore{}, Voter)
 	if s == nil {
 		t.Fatalf("service is nil")
 	}
@@ -24,7 +24,7 @@ func Test_RegisterGetLeaderOK(t *testing.T) {
 	}
 	c := &mockStore{}
 
-	s := NewService(m, c)
+	s := NewService(m, c, Voter)
 	s.RegisterInterval = 10 * time.Millisecond
 
 	ok, addr, err := s.Register("1", "localhost:4001", "localhost:4002")
@@ -34,7 +34,7 @@ func Test_RegisterGetLeaderOK(t *testing.T) {
 	if ok {
 		t.Fatalf("registered as leader unexpectedly")
 	}
-	if exp, got := "localhost:4003", addr; exp != got {
+	if exp, got := "localhost:4004", addr; exp != got {
 		t.Fatalf("returned addressed incorrect, exp %s, got %s", exp, got)
 	}
 }
@@ -52,7 +52,7 @@ func Test_RegisterInitializeLeader(t *testing.T) {
 	}
 	c := &mockStore{}
 
-	s := NewService(m, c)
+	s := NewService(m, c, Voter)
 	s.RegisterInterval = 10 * time.Millisecond
 
 	ok, addr, err := s.Register("1", "localhost:4001", "localhost:4002")
@@ -62,7 +62,38 @@ func Test_RegisterInitializeLeader(t *testing.T) {
 	if !ok {
 		t.Fatalf("failed to register as expected")
 	}
-	if exp, got := "localhost:4001", addr; exp != got {
+	if exp, got := "localhost:4002", addr; exp != got {
+		t.Fatalf("returned addressed incorrect, exp %s, got %s", exp, got)
+	}
+}
+
+func Test_RegisterNonVoter(t *testing.T) {
+	m := &mockClient{}
+	getCalled := false
+	m.getLeaderFn = func() (id string, apiAddr string, addr string, ok bool, e error) {
+		if getCalled {
+			return "2", "localhost:4003", "localhost:4004", true, nil
+		}
+		getCalled = true
+		return "", "", "", false, nil
+	}
+	m.initializeLeaderFn = func(tID, tAPIAddr, tAddr string) (bool, error) {
+		t.Fatal("InitializeLeader called unexpectedly")
+		return false, nil
+	}
+
+	c := &mockStore{}
+	s := NewService(m, c, NonVoter)
+	s.RegisterInterval = 10 * time.Millisecond
+
+	ok, addr, err := s.Register("1", "localhost:4001", "localhost:4002")
+	if err != nil {
+		t.Fatalf("error registering with disco: %s", err.Error())
+	}
+	if ok {
+		t.Fatalf("registered incorrectly as non-voter")
+	}
+	if exp, got := "localhost:4004", addr; exp != got {
 		t.Fatalf("returned addressed incorrect, exp %s, got %s", exp, got)
 	}
 }
@@ -85,7 +116,7 @@ func Test_StartReportingTimer(t *testing.T) {
 		return true
 	}
 
-	s := NewService(m, c)
+	s := NewService(m, c, Voter)
 	s.ReportInterval = 10 * time.Millisecond
 
 	go s.StartReporting("1", "localhost:4001", "localhost:4002")
@@ -112,7 +143,7 @@ func Test_StartReportingChange(t *testing.T) {
 	}
 
 	wg.Add(1)
-	s := NewService(m, c)
+	s := NewService(m, c, Voter)
 	s.ReportInterval = 10 * time.Minute // Nothing will happen due to timer.
 	done := s.StartReporting("1", "localhost:4001", "localhost:4002")
 

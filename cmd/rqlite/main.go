@@ -2,60 +2,73 @@
 package main
 
 import (
+	"bytes"
 	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"sort"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/Bowery/prompt"
 	"github.com/mkideal/cli"
-	"github.com/rqlite/rqlite/cmd"
-	"github.com/rqlite/rqlite/cmd/rqlite/history"
-	httpcl "github.com/rqlite/rqlite/cmd/rqlite/http"
+	clix "github.com/mkideal/cli/ext"
+	"github.com/rqlite/rqlite/v8/cmd"
+	"github.com/rqlite/rqlite/v8/cmd/rqlite/history"
+	httpcl "github.com/rqlite/rqlite/v8/cmd/rqlite/http"
+	"github.com/rqlite/rqlite/v8/rtls"
 )
 
 const maxRedirect = 21
 
+type Node struct {
+	ApiAddr string `json:"api_addr"`
+	_       json.RawMessage
+}
+
+type Nodes map[string]Node
+
 type argT struct {
 	cli.Helper
-	Alternatives string `cli:"a,alternatives" usage:"comma separated list of 'host:port' pairs to use as fallback"`
-	Protocol     string `cli:"s,scheme" usage:"protocol scheme (http or https)" dft:"http"`
-	Host         string `cli:"H,host" usage:"rqlited host address" dft:"127.0.0.1"`
-	Port         uint16 `cli:"p,port" usage:"rqlited host port" dft:"4001"`
-	Prefix       string `cli:"P,prefix" usage:"rqlited HTTP URL prefix" dft:"/"`
-	Insecure     bool   `cli:"i,insecure" usage:"do not verify rqlited HTTPS certificate" dft:"false"`
-	CACert       string `cli:"c,ca-cert" usage:"path to trusted X.509 root CA certificate"`
-	Credentials  string `cli:"u,user" usage:"set basic auth credentials in form username:password"`
-	Version      bool   `cli:"v,version" usage:"display CLI version"`
+	Alternatives string        `cli:"a,alternatives" usage:"comma separated list of 'host:port' pairs to use as fallback"`
+	Protocol     string        `cli:"s,scheme" usage:"protocol scheme (http or https)" dft:"http"`
+	Host         string        `cli:"H,host" usage:"rqlited host address" dft:"127.0.0.1"`
+	Port         uint16        `cli:"p,port" usage:"rqlited host port" dft:"4001"`
+	Prefix       string        `cli:"P,prefix" usage:"rqlited HTTP URL prefix" dft:"/"`
+	Insecure     bool          `cli:"i,insecure" usage:"do not verify rqlited HTTPS certificate" dft:"false"`
+	CACert       string        `cli:"c,ca-cert" usage:"path to trusted X.509 root CA certificate"`
+	ClientCert   string        `cli:"d,client-cert" usage:"path to client X.509 certificate for mTLS"`
+	ClientKey    string        `cli:"k,client-key" usage:"path to client X.509 key for mTLS"`
+	Credentials  string        `cli:"u,user" usage:"set basic auth credentials in form username:password"`
+	Version      bool          `cli:"v,version" usage:"display CLI version"`
+	HTTPTimeout  clix.Duration `cli:"t,http-timeout" usage:"set timeout on HTTP requests" dft:"30s"`
 }
 
 var cliHelp = []string{
-	`.backup <file>                      Write database backup to SQLite file`,
+	`.backup FILE                        Write database backup to FILE`,
+	`.boot FILE                          Boot the node using a SQLite file read from FILE`,
 	`.consistency [none|weak|strong]     Show or set read consistency level`,
-	`.dump <file>                        Dump the database in SQL text format to a file`,
+	`.dump FILE                          Dump the database in SQL text format to FILE`,
 	`.exit                               Exit this program`,
 	`.expvar                             Show expvar (Go runtime) information for connected node`,
 	`.help                               Show this message`,
 	`.indexes                            Show names of all indexes`,
+	`.quit                               Exit this program`,
 	`.ready                              Show ready status for connected node`,
-	`.restore <file>                     Restore the database from a SQLite database file or dump file`,
-	`.nodes                              Show connection status of all nodes in cluster`,
+	`.remove NODEID                      Remove node NODEID from the cluster`,
+	`.restore FILE                       Load using SQLite file or SQL dump contained in FILE`,
+	`.nodes [all]                        Show connection status of voting nodes. 'all' to show all nodes`,
 	`.schema                             Show CREATE statements for all tables`,
 	`.status                             Show status and diagnostic information for connected node`,
-	`.sysdump <file>                     Dump system diagnostics to a file for offline analysis`,
+	`.sysdump FILE                       Dump system diagnostics to FILE`,
 	`.tables                             List names of tables`,
-	`.timer on|off                       Turn query timer on or off`,
-	`.remove <raft ID>                   Remove a node from the cluster`,
+	`.timer on|off                       Turn query timings on or off`,
 }
 
 func main() {
@@ -79,24 +92,25 @@ func main() {
 			return nil
 		}
 
+		connectionStr := fmt.Sprintf("%s://%s", argv.Protocol, address6(argv))
 		version, err := getVersionWithClient(httpClient, argv)
 		if err != nil {
 			msg := err.Error()
 			if errors.Is(err, syscall.ECONNREFUSED) {
-				msg = fmt.Sprintf("Unable to connect to rqlited at %s://%s:%d - is it running?",
-					argv.Protocol, argv.Host, argv.Port)
+				msg = fmt.Sprintf("Unable to connect to rqlited at %s - is it running?",
+					connectionStr)
 			}
 			ctx.String("%s %v\n", ctx.Color().Red("ERR!"), msg)
 			return nil
 		}
 
-		fmt.Println("Welcome to the rqlite CLI. Enter \".help\" for usage hints.")
-		fmt.Printf("Version %s, commit %s, branch %s\n", cmd.Version, cmd.Commit, cmd.Branch)
-		fmt.Printf("Connected to rqlited version %s\n", version)
+		fmt.Println("Welcome to the rqlite CLI.")
+		fmt.Printf("Enter \".help\" for usage hints.\n")
+		fmt.Printf("Connected to %s running version %s\n", connectionStr, version)
 
 		timer := false
 		consistency := "weak"
-		prefix := fmt.Sprintf("%s:%d>", argv.Host, argv.Port)
+		prefix := fmt.Sprintf("%s>", address6(argv))
 		term, err := prompt.NewTerminal()
 		if err != nil {
 			ctx.String("%s %v\n", ctx.Color().Red("ERR!"), err)
@@ -164,7 +178,11 @@ func main() {
 			case ".READY":
 				err = ready(ctx, httpClient, argv)
 			case ".NODES":
-				err = nodes(ctx, cmd, line, argv)
+				if index == -1 || index == len(line)-1 {
+					err = nodes(ctx, cmd, line, argv, false)
+					break
+				}
+				err = nodes(ctx, cmd, line, argv, true)
 			case ".EXPVAR":
 				err = expvar(ctx, cmd, line, argv)
 			case ".REMOVE":
@@ -181,12 +199,18 @@ func main() {
 					break
 				}
 				err = restore(ctx, line[index+1:], argv)
+			case ".BOOT":
+				if index == -1 || index == len(line)-1 {
+					err = fmt.Errorf("please specify an input file to boot with")
+					break
+				}
+				err = boot(ctx, line[index+1:], argv)
 			case ".SYSDUMP":
 				if index == -1 || index == len(line)-1 {
 					err = fmt.Errorf("please specify an output file for the sysdump")
 					break
 				}
-				err = sysdump(ctx, line[index+1:], argv)
+				err = sysdump(ctx, httpClient, line[index+1:], argv)
 			case ".DUMP":
 				if index == -1 || index == len(line)-1 {
 					err = fmt.Errorf("please specify an output file for the SQL text")
@@ -214,11 +238,13 @@ func main() {
 		}
 
 		hw := history.Writer()
-		sz := history.Size()
-		history.Write(term.History, sz, hw)
-		hw.Close()
-		if sz <= 0 {
-			history.Delete()
+		if hw != nil {
+			sz := history.Size()
+			history.Write(term.History, sz, hw)
+			hw.Close()
+			if sz <= 0 {
+				history.Delete()
+			}
 		}
 		ctx.String("bye~\n")
 		return nil
@@ -251,19 +277,19 @@ func makeJSONBody(line string) string {
 
 func help(ctx *cli.Context, cmd, line string, argv *argT) error {
 	sort.Strings(cliHelp)
-	fmt.Printf(strings.Join(cliHelp, "\n"))
+	fmt.Print(strings.Join(cliHelp, "\n"))
 	return nil
 }
 
 func status(ctx *cli.Context, cmd, line string, argv *argT) error {
-	url := fmt.Sprintf("%s://%s:%d/status", argv.Protocol, argv.Host, argv.Port)
+	url := fmt.Sprintf("%s://%s/status", argv.Protocol, address6(argv))
 	return cliJSON(ctx, cmd, line, url, argv)
 }
 
 func ready(ctx *cli.Context, client *http.Client, argv *argT) error {
 	u := url.URL{
 		Scheme: argv.Protocol,
-		Host:   fmt.Sprintf("%s:%d", argv.Host, argv.Port),
+		Host:   address6(argv),
 		Path:   fmt.Sprintf("%sreadyz", argv.Prefix),
 	}
 	urlStr := u.String()
@@ -293,55 +319,104 @@ func ready(ctx *cli.Context, client *http.Client, argv *argT) error {
 	return nil
 }
 
-func nodes(ctx *cli.Context, cmd, line string, argv *argT) error {
-	url := fmt.Sprintf("%s://%s:%d/nodes", argv.Protocol, argv.Host, argv.Port)
-	return cliJSON(ctx, cmd, line, url, argv)
+// nodes returns the status of nodes in the cluster. If all is true, then
+// non-voting nodes are included in the response.
+func nodes(ctx *cli.Context, cmd, line string, argv *argT, all bool) error {
+	path := "nodes"
+	if all {
+		path = "nodes?nonvoters"
+	}
+	url := fmt.Sprintf("%s://%s/%s", argv.Protocol, address6(argv), path)
+	return cliJSON(ctx, cmd, "", url, argv)
 }
 
 func expvar(ctx *cli.Context, cmd, line string, argv *argT) error {
-	url := fmt.Sprintf("%s://%s:%d/debug/vars", argv.Protocol, argv.Host, argv.Port)
+	url := fmt.Sprintf("%s://%s/debug/vars", argv.Protocol, address6(argv))
 	return cliJSON(ctx, cmd, line, url, argv)
 }
 
-func sysdump(ctx *cli.Context, filename string, argv *argT) error {
-	f, err := os.Create(filename)
+func sysdump(ctx *cli.Context, client *http.Client, filename string, argv *argT) error {
+	nodes, err := getNodes(client, argv)
 	if err != nil {
 		return err
 	}
 
-	urls := []string{
-		fmt.Sprintf("%s://%s:%d/status?pretty", argv.Protocol, argv.Host, argv.Port),
-		fmt.Sprintf("%s://%s:%d/nodes?pretty", argv.Protocol, argv.Host, argv.Port),
-		fmt.Sprintf("%s://%s:%d/debug/vars", argv.Protocol, argv.Host, argv.Port),
-	}
-
-	if err := urlsToWriter(urls, f, argv); err != nil {
+	f, err := os.Create(filename)
+	if err != nil {
 		return err
 	}
-	return f.Close()
+	defer f.Close()
+
+	for _, n := range nodes {
+		if n.ApiAddr == "" {
+			continue
+		}
+		urls := []string{
+			fmt.Sprintf("%s/status?pretty", n.ApiAddr),
+			fmt.Sprintf("%s/nodes?pretty", n.ApiAddr),
+			fmt.Sprintf("%s/readyz", n.ApiAddr),
+			fmt.Sprintf("%s/debug/vars", n.ApiAddr),
+		}
+		if err := urlsToWriter(client, urls, f, argv); err != nil {
+			f.WriteString(fmt.Sprintf("Error sysdumping %s: %s\n", n.ApiAddr, err.Error()))
+		}
+	}
+	return nil
+}
+
+func getNodes(client *http.Client, argv *argT) (Nodes, error) {
+	u := url.URL{
+		Scheme: argv.Protocol,
+		Host:   address6(argv),
+		Path:   fmt.Sprintf("%snodes", argv.Prefix),
+	}
+	urlStr := u.String()
+
+	req, err := http.NewRequest("GET", urlStr, nil)
+	if err != nil {
+		return nil, err
+	}
+	if argv.Credentials != "" {
+		creds := strings.Split(argv.Credentials, ":")
+		if len(creds) != 2 {
+			return nil, fmt.Errorf("invalid Basic Auth credentials format")
+		}
+		req.SetBasicAuth(creds[0], creds[1])
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	response, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var nodes Nodes
+	if err := parseResponse(&response, &nodes); err != nil {
+		return nil, err
+	}
+
+	return nodes, nil
 }
 
 func getHTTPClient(argv *argT) (*http.Client, error) {
-	var rootCAs *x509.CertPool
-
-	if argv.CACert != "" {
-		pemCerts, err := ioutil.ReadFile(argv.CACert)
-		if err != nil {
-			return nil, err
-		}
-
-		rootCAs = x509.NewCertPool()
-
-		ok := rootCAs.AppendCertsFromPEM(pemCerts)
-		if !ok {
-			return nil, fmt.Errorf("failed to parse root CA certificate(s)")
-		}
+	tlsConfig, err := rtls.CreateClientConfig(argv.ClientCert, argv.ClientKey, argv.CACert, rtls.NoServerName, argv.Insecure)
+	if err != nil {
+		return nil, err
 	}
+	tlsConfig.NextProtos = nil // CLI refuses to connect otherwise.
 
-	client := http.Client{Transport: &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: argv.Insecure, RootCAs: rootCAs},
-		Proxy:           http.ProxyFromEnvironment,
-	}}
+	client := http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: tlsConfig,
+			Proxy:           http.ProxyFromEnvironment,
+		},
+		Timeout: argv.HTTPTimeout.Duration,
+	}
 
 	// Explicitly handle redirects.
 	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
@@ -354,7 +429,7 @@ func getHTTPClient(argv *argT) (*http.Client, error) {
 func getVersionWithClient(client *http.Client, argv *argT) (string, error) {
 	u := url.URL{
 		Scheme: argv.Protocol,
-		Host:   fmt.Sprintf("%s:%d", argv.Host, argv.Port),
+		Host:   address6(argv),
 		Path:   fmt.Sprintf("%s/status", argv.Prefix),
 	}
 	urlStr := u.String()
@@ -384,25 +459,25 @@ func getVersionWithClient(client *http.Client, argv *argT) (string, error) {
 }
 
 func sendRequest(ctx *cli.Context, makeNewRequest func(string) (*http.Request, error), urlStr string, argv *argT) (*[]byte, error) {
-	url := urlStr
-	var rootCAs *x509.CertPool
-
-	if argv.CACert != "" {
-		pemCerts, err := ioutil.ReadFile(argv.CACert)
-		if err != nil {
-			return nil, err
-		}
-
-		rootCAs = x509.NewCertPool()
-
-		ok := rootCAs.AppendCertsFromPEM(pemCerts)
-		if !ok {
-			return nil, fmt.Errorf("failed to parse root CA certificate(s)")
-		}
+	// create a byte-based buffer that implments io.Writer
+	var buf []byte
+	w := bytes.NewBuffer(buf)
+	_, err := sendRequestW(ctx, makeNewRequest, urlStr, argv, w)
+	if err != nil {
+		return nil, err
 	}
+	return &buf, nil
+}
 
+func sendRequestW(ctx *cli.Context, makeNewRequest func(string) (*http.Request, error), urlStr string, argv *argT, w io.Writer) (int64, error) {
+	url := urlStr
+	tlsConfig, err := rtls.CreateClientConfig(argv.ClientCert, argv.ClientKey, argv.CACert, rtls.NoServerName, argv.Insecure)
+	if err != nil {
+		return 0, err
+	}
+	tlsConfig.NextProtos = nil // CLI refuses to connect otherwise.
 	client := http.Client{Transport: &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: argv.Insecure, RootCAs: rootCAs},
+		TLSClientConfig: tlsConfig,
 		Proxy:           http.ProxyFromEnvironment,
 	}}
 
@@ -415,45 +490,46 @@ func sendRequest(ctx *cli.Context, makeNewRequest func(string) (*http.Request, e
 	for {
 		req, err := makeNewRequest(url)
 		if err != nil {
-			return nil, err
+			return 0, err
 		}
 
 		if argv.Credentials != "" {
 			creds := strings.Split(argv.Credentials, ":")
 			if len(creds) != 2 {
-				return nil, fmt.Errorf("invalid Basic Auth credentials format")
+				return 0, fmt.Errorf("invalid Basic Auth credentials format")
 			}
 			req.SetBasicAuth(creds[0], creds[1])
 		}
 
 		resp, err := client.Do(req)
 		if err != nil {
-			return nil, err
+			return 0, err
 		}
-		response, err := ioutil.ReadAll(resp.Body)
+
+		n, err := io.Copy(w, resp.Body)
 		if err != nil {
-			return nil, err
+			return n, err
 		}
 		resp.Body.Close()
 
 		if resp.StatusCode == http.StatusUnauthorized {
-			return nil, fmt.Errorf("unauthorized")
+			return 0, fmt.Errorf("unauthorized")
 		}
 
 		if resp.StatusCode == http.StatusMovedPermanently {
 			nRedirect++
 			if nRedirect > maxRedirect {
-				return nil, fmt.Errorf("maximum leader redirect limit exceeded")
+				return 0, fmt.Errorf("maximum leader redirect limit exceeded")
 			}
 			url = resp.Header["Location"][0]
 			continue
 		}
 
 		if resp.StatusCode != http.StatusOK {
-			return nil, fmt.Errorf("server responded with: %s", resp.Status)
+			return 0, fmt.Errorf("server responded with: %s", resp.Status)
 		}
 
-		return &response, nil
+		return n, nil
 	}
 }
 
@@ -463,7 +539,9 @@ func parseResponse(response *[]byte, ret interface{}) error {
 	return decoder.Decode(ret)
 }
 
-// cliJSON fetches JSON from a URL, and displays it at the CLI.
+// cliJSON fetches JSON from a URL, and displays it at the CLI. If line contains more
+// than one word, then the JSON is filtered to only show the key specified in the
+// second word.
 func cliJSON(ctx *cli.Context, cmd, line, url string, argv *argT) error {
 	// Recursive JSON printer.
 	var pprint func(indent int, m map[string]interface{})
@@ -473,13 +551,13 @@ func cliJSON(ctx *cli.Context, cmd, line, url string, argv *argT) error {
 			if v == nil {
 				continue
 			}
-			switch v.(type) {
+			switch w := v.(type) {
 			case map[string]interface{}:
 				for i := 0; i < indent; i++ {
 					fmt.Print(indentation)
 				}
 				fmt.Printf("%s:\n", k)
-				pprint(indent+1, v.(map[string]interface{}))
+				pprint(indent+1, w)
 			default:
 				for i := 0; i < indent; i++ {
 					fmt.Print(indentation)
@@ -516,7 +594,7 @@ func cliJSON(ctx *cli.Context, cmd, line, url string, argv *argT) error {
 		return fmt.Errorf("unauthorized")
 	}
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}
@@ -538,15 +616,7 @@ func cliJSON(ctx *cli.Context, cmd, line, url string, argv *argT) error {
 	return nil
 }
 
-func urlsToWriter(urls []string, w io.Writer, argv *argT) error {
-	client := http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: argv.Insecure},
-			Proxy:           http.ProxyFromEnvironment,
-		},
-		Timeout: 10 * time.Second,
-	}
-
+func urlsToWriter(client *http.Client, urls []string, w io.Writer, argv *argT) error {
 	for i := range urls {
 		err := func() error {
 			w.Write([]byte("\n=========================================\n"))
@@ -581,7 +651,7 @@ func urlsToWriter(urls []string, w io.Writer, argv *argT) error {
 				return nil
 			}
 
-			body, err := ioutil.ReadAll(resp.Body)
+			body, err := io.ReadAll(resp.Body)
 			if err != nil {
 				return err
 			}
@@ -601,7 +671,13 @@ func urlsToWriter(urls []string, w io.Writer, argv *argT) error {
 
 func createHostList(argv *argT) []string {
 	var hosts = make([]string, 0)
-	hosts = append(hosts, fmt.Sprintf("%s:%d", argv.Host, argv.Port))
+	hosts = append(hosts, address6(argv))
 	hosts = append(hosts, strings.Split(argv.Alternatives, ",")...)
 	return hosts
+}
+
+// address6 returns a string representation of the given address and port,
+// which is compatible with IPv6 addresses.
+func address6(argv *argT) string {
+	return net.JoinHostPort(argv.Host, fmt.Sprintf("%d", argv.Port))
 }

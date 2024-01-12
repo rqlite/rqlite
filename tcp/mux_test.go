@@ -13,7 +13,7 @@ import (
 	"testing/quick"
 	"time"
 
-	"github.com/rqlite/rqlite/testdata/x509"
+	"github.com/rqlite/rqlite/v8/testdata/x509"
 )
 
 // Ensure the muxer can split a listener's connections across multiple listeners.
@@ -142,10 +142,10 @@ func TestMux_Advertise(t *testing.T) {
 		mux.Logger = log.New(io.Discard, "", 0)
 	}
 
-	layer := mux.Listen(1)
-	if layer.Addr().String() != addr.Addr {
-		t.Fatalf("layer advertise address not correct, exp %s, got %s",
-			layer.Addr().String(), addr.Addr)
+	ln := mux.Listen(1)
+	if ln.Addr().String() != addr.Addr {
+		t.Fatalf("listener advertise address not correct, exp %s, got %s",
+			ln.Addr().String(), addr.Addr)
 	}
 }
 
@@ -171,9 +171,9 @@ func TestTLSMux(t *testing.T) {
 	tcpListener := mustTCPListener("127.0.0.1:0")
 	defer tcpListener.Close()
 
-	cert := x509.CertFile("")
+	cert := x509.CertExampleDotComFile("")
 	defer os.Remove(cert)
-	key := x509.KeyFile("")
+	key := x509.KeyExampleDotComFile("")
 	defer os.Remove(key)
 
 	mux, err := NewTLSMux(tcpListener, nil, cert, key, "", true, false)

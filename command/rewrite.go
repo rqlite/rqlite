@@ -3,12 +3,13 @@ package command
 import (
 	"strings"
 
+	"github.com/rqlite/rqlite/v8/command/proto"
 	"github.com/rqlite/sql"
 )
 
 // Rewrite rewrites the statements such that RANDOM is rewritten,
 // if r is true.
-func Rewrite(stmts []*Statement, r bool) error {
+func Rewrite(stmts []*proto.Statement, r bool) error {
 	if !r {
 		return nil
 	}

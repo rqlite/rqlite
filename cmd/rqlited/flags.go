@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"net/url"
 	"os"
+	"path/filepath"
+	"reflect"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -45,48 +47,50 @@ type Config struct {
 	// HTTPAdv is the advertised HTTP server network.
 	HTTPAdv string
 
-	// TLS1011 indicates whether the node should support deprecated
-	// encryption standards.
-	TLS1011 bool
+	// HTTPAllowOrigin is the value to set for Access-Control-Allow-Origin HTTP header.
+	HTTPAllowOrigin string
 
 	// AuthFile is the path to the authentication file. May not be set.
-	AuthFile string
+	AuthFile string `filepath:"true"`
+
+	// AutoBackupFile is the path to the auto-backup file. May not be set.
+	AutoBackupFile string `filepath:"true"`
+
+	// AutoRestoreFile is the path to the auto-restore file. May not be set.
+	AutoRestoreFile string `filepath:"true"`
 
 	// HTTPx509CACert is the path to the CA certficate file for when this node verifies
 	// other certificates for any HTTP communications. May not be set.
-	HTTPx509CACert string
+	HTTPx509CACert string `filepath:"true"`
 
 	// HTTPx509Cert is the path to the X509 cert for the HTTP server. May not be set.
-	HTTPx509Cert string
+	HTTPx509Cert string `filepath:"true"`
 
 	// HTTPx509Key is the path to the private key for the HTTP server. May not be set.
-	HTTPx509Key string
-
-	// NoHTTPVerify disables checking other nodes' server HTTP X509 certs for validity.
-	NoHTTPVerify bool
+	HTTPx509Key string `filepath:"true"`
 
 	// HTTPVerifyClient indicates whether the HTTP server should verify client certificates.
 	HTTPVerifyClient bool
 
-	// NodeEncrypt indicates whether node encryption should be enabled.
-	NodeEncrypt bool
-
 	// NodeX509CACert is the path to the CA certficate file for when this node verifies
 	// other certificates for any inter-node communications. May not be set.
-	NodeX509CACert string
+	NodeX509CACert string `filepath:"true"`
 
 	// NodeX509Cert is the path to the X509 cert for the Raft server. May not be set.
-	NodeX509Cert string
+	NodeX509Cert string `filepath:"true"`
 
 	// NodeX509Key is the path to the X509 key for the Raft server. May not be set.
-	NodeX509Key string
+	NodeX509Key string `filepath:"true"`
 
 	// NoNodeVerify disables checking other nodes' Node X509 certs for validity.
 	NoNodeVerify bool
 
-	// NodeVerifyClient indicates whether a node should verify client certificates from
-	// other nodes.
+	// NodeVerifyClient enable mutual TLS for node-to-node communication.
 	NodeVerifyClient bool
+
+	// NodeVerifyServerName is the hostname to verify on the certificates returned by nodes.
+	// If NoNodeVerify is true this field is ignored.
+	NodeVerifyServerName string
 
 	// NodeID is the Raft ID for the node.
 	NodeID string
@@ -97,16 +101,8 @@ type Config struct {
 	// RaftAdv is the advertised Raft server address.
 	RaftAdv string
 
-	// JoinSrcIP sets the source IP address during Join request. May not be set.
-	JoinSrcIP string
-
-	// JoinAddr is the list addresses to use for a join attempt. Each address
-	// will include the proto (HTTP or HTTPS) and will never include the node's
-	// own HTTP server address. May not be set.
-	JoinAddr string
-
-	// JoinAs sets the user join attempts should be performed as. May not be set.
-	JoinAs string
+	// JoinAddrs is the list of Raft addresses to use for a join attempt.
+	JoinAddrs string
 
 	// JoinAttempts is the number of times a node should attempt to join using a
 	// given address.
@@ -114,6 +110,9 @@ type Config struct {
 
 	// JoinInterval is the time between retrying failed join operations.
 	JoinInterval time.Duration
+
+	// JoinAs sets the user join attempts should be performed as. May not be set.
+	JoinAs string
 
 	// BootstrapExpect is the minimum number of nodes required for a bootstrap.
 	BootstrapExpect int
@@ -130,20 +129,8 @@ type Config struct {
 	// DiscoConfig sets the path to any discovery configuration file. May not be set.
 	DiscoConfig string
 
-	// Expvar enables go/expvar information. Defaults to true.
-	Expvar bool
-
-	// PprofEnabled enables Go PProf information. Defaults to true.
-	PprofEnabled bool
-
-	// OnDisk enables on-disk mode.
-	OnDisk bool
-
 	// OnDiskPath sets the path to the SQLite file. May not be set.
 	OnDiskPath string
-
-	// OnDiskStartup disables the in-memory on-disk startup optimization.
-	OnDiskStartup bool
 
 	// FKConstraints enables SQLite foreign key constraints.
 	FKConstraints bool
@@ -157,16 +144,21 @@ type Config struct {
 	// RaftSnapThreshold is the number of outstanding log entries that trigger snapshot.
 	RaftSnapThreshold uint64
 
+	// RaftSnapThreshold is the size of a SQLite WAL file which will trigger a snapshot.
+	RaftSnapThresholdWALSize uint64
+
 	// RaftSnapInterval sets the threshold check interval.
 	RaftSnapInterval time.Duration
 
 	// RaftLeaderLeaseTimeout sets the leader lease timeout.
 	RaftLeaderLeaseTimeout time.Duration
 
-	// RaftHeartbeatTimeout sets the heartbeat timeout.
+	// RaftHeartbeatTimeout specifies the time in follower state without contact
+	// from a Leader before the node attempts an election.
 	RaftHeartbeatTimeout time.Duration
 
-	// RaftElectionTimeout sets the election timeout.
+	// RaftElectionTimeout specifies the time in candidate state without contact
+	// from a Leader before the node attempts an election.
 	RaftElectionTimeout time.Duration
 
 	// RaftApplyTimeout sets the Log-apply timeout.
@@ -175,13 +167,11 @@ type Config struct {
 	// RaftShutdownOnRemove sets whether Raft should be shutdown if the node is removed
 	RaftShutdownOnRemove bool
 
+	// RaftClusterRemoveOnShutdown sets whether the node should remove itself from the cluster on shutdown
+	RaftClusterRemoveOnShutdown bool
+
 	// RaftStepdownOnShutdown sets whether Leadership should be relinquished on shutdown
 	RaftStepdownOnShutdown bool
-
-	// RaftNoFreelistSync disables syncing Raft database freelist to disk. When true,
-	// it improves the database write performance under normal operation, but requires
-	// a full database re-sync during recovery.
-	RaftNoFreelistSync bool
 
 	// RaftReapNodeTimeout sets the duration after which a non-reachable voting node is
 	// reaped i.e. removed from the cluster.
@@ -208,12 +198,6 @@ type Config struct {
 	// WriteQueueTx controls whether writes from the queue are done within a transaction.
 	WriteQueueTx bool
 
-	// CompressionSize sets request query size for compression attempt
-	CompressionSize int
-
-	// CompressionBatch sets request batch threshold for compression attempt.
-	CompressionBatch int
-
 	// CPUProfile enables CPU profiling.
 	CPUProfile string
 
@@ -226,8 +210,15 @@ type Config struct {
 // object before the Config object is used. It is OK to call more than
 // once.
 func (c *Config) Validate() error {
-	if c.OnDiskPath != "" && !c.OnDisk {
-		return errors.New("-on-disk-path is set, but -on-disk is not")
+	dataPath, err := filepath.Abs(c.DataPath)
+	if err != nil {
+		return fmt.Errorf("failed to determine absolute data path: %s", err.Error())
+	}
+	c.DataPath = dataPath
+
+	err = c.CheckFilePaths()
+	if err != nil {
+		return err
 	}
 
 	if !bothUnsetSet(c.HTTPx509Cert, c.HTTPx509Key) {
@@ -236,6 +227,10 @@ func (c *Config) Validate() error {
 	if !bothUnsetSet(c.NodeX509Cert, c.NodeX509Key) {
 		return fmt.Errorf("either both -%s and -%s must be set, or neither", NodeX509CertFlag, NodeX509KeyFlag)
 
+	}
+
+	if c.RaftAddr == c.HTTPAddr {
+		return errors.New("HTTP and Raft addresses must differ")
 	}
 
 	// Enforce policies regarding addresses
@@ -269,11 +264,13 @@ func (c *Config) Validate() error {
 			hadv, HTTPAddrFlag, HTTPAdvAddrFlag)
 	}
 
-	if _, _, err := net.SplitHostPort(c.RaftAddr); err != nil {
+	if _, rp, err := net.SplitHostPort(c.RaftAddr); err != nil {
 		return errors.New("raft bind address not valid")
+	} else if _, err := strconv.Atoi(rp); err != nil {
+		return errors.New("raft bind port not valid")
 	}
 
-	radv, _, err := net.SplitHostPort(c.RaftAdv)
+	radv, rp, err := net.SplitHostPort(c.RaftAdv)
 	if err != nil {
 		return errors.New("raft advertised address not valid")
 	}
@@ -281,25 +278,39 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("advertised Raft address is not routable (%s), specify it via -%s or -%s",
 			radv, RaftAddrFlag, RaftAdvAddrFlag)
 	}
+	if _, err := strconv.Atoi(rp); err != nil {
+		return errors.New("raft advertised port is not valid")
+	}
+
+	if c.RaftAdv == c.HTTPAdv {
+		return errors.New("advertised HTTP and Raft addresses must differ")
+	}
 
 	// Enforce bootstrapping policies
 	if c.BootstrapExpect > 0 && c.RaftNonVoter {
 		return errors.New("bootstrapping only applicable to voting nodes")
 	}
 
-	// Join addresses OK?
-	if c.JoinAddr != "" {
-		addrs := strings.Split(c.JoinAddr, ",")
+	// Join parameters OK?
+	if c.JoinAddrs != "" {
+		addrs := strings.Split(c.JoinAddrs, ",")
 		for i := range addrs {
-			u, err := url.Parse(addrs[i])
-			if err != nil {
+			if _, _, err := net.SplitHostPort(addrs[i]); err != nil {
 				return fmt.Errorf("%s is an invalid join adddress", addrs[i])
 			}
+
 			if c.BootstrapExpect == 0 {
-				if u.Host == c.HTTPAdv || addrs[i] == c.HTTPAddr {
+				if addrs[i] == c.RaftAdv || addrs[i] == c.RaftAddr {
 					return errors.New("node cannot join with itself unless bootstrapping")
 				}
+				if c.AutoRestoreFile != "" {
+					return errors.New("auto-restoring cannot be used when joining a cluster")
+				}
 			}
+		}
+
+		if c.DiscoMode != "" {
+			return errors.New("disco mode cannot be used when also explicitly joining a cluster")
 		}
 	}
 
@@ -311,8 +322,8 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("bootstrapping not applicable when using %s", c.DiscoMode)
 		}
 	case DiscoModeDNS, DiscoModeDNSSRV:
-		if c.BootstrapExpect == 0 {
-			return fmt.Errorf("bootstrap-expect value required when using %s", c.DiscoMode)
+		if c.BootstrapExpect == 0 && !c.RaftNonVoter {
+			return fmt.Errorf("bootstrap-expect value required when using %s with a voting node", c.DiscoMode)
 		}
 	default:
 		return fmt.Errorf("disco mode must be one of %s, %s, %s, or %s",
@@ -325,10 +336,10 @@ func (c *Config) Validate() error {
 // JoinAddresses returns the join addresses set at the command line. Returns nil
 // if no join addresses were set.
 func (c *Config) JoinAddresses() []string {
-	if c.JoinAddr == "" {
+	if c.JoinAddrs == "" {
 		return nil
 	}
-	return strings.Split(c.JoinAddr, ",")
+	return strings.Split(c.JoinAddrs, ",")
 }
 
 // HTTPURL returns the fully-formed, advertised HTTP API address for this config, including
@@ -339,6 +350,20 @@ func (c *Config) HTTPURL() string {
 		apiProto = "https"
 	}
 	return fmt.Sprintf("%s://%s", apiProto, c.HTTPAdv)
+}
+
+// RaftPort returns the port on which the Raft system is listening. Validate must
+// have been called before calling this method.
+func (c *Config) RaftPort() int {
+	_, port, err := net.SplitHostPort(c.RaftAddr)
+	if err != nil {
+		panic("RaftAddr not valid")
+	}
+	p, err := strconv.Atoi(port)
+	if err != nil {
+		panic("RaftAddr port not valid")
+	}
+	return p
 }
 
 // DiscoConfigReader returns a ReadCloser providing access to the Disco config.
@@ -360,6 +385,34 @@ func (c *Config) DiscoConfigReader() io.ReadCloser {
 	return rc
 }
 
+// CheckFilePaths checks that all file paths in the config exist.
+// Empy filepaths are ignored.
+func (c *Config) CheckFilePaths() error {
+	v := reflect.ValueOf(c).Elem()
+
+	// Iterate through the fields of the struct
+	for i := 0; i < v.NumField(); i++ {
+		field := v.Type().Field(i)
+		fieldValue := v.Field(i)
+
+		if fieldValue.Kind() != reflect.String {
+			continue
+		}
+
+		if tagValue, ok := field.Tag.Lookup("filepath"); ok && tagValue == "true" {
+			filePath := fieldValue.String()
+			if filePath == "" {
+				continue
+			}
+			_, err := os.Stat(filePath)
+			if os.IsNotExist(err) {
+				return fmt.Errorf("%s does not exist", filePath)
+			}
+		}
+	}
+	return nil
+}
+
 // BuildInfo is build information for display at command line.
 type BuildInfo struct {
 	Version       string
@@ -376,61 +429,56 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	config := &Config{}
 	showVersion := false
 
-	flag.StringVar(&config.NodeID, "node-id", "", "Unique name for node. If not set, set to advertised Raft address")
+	flag.StringVar(&config.NodeID, "node-id", "", "Unique ID for node. If not set, set to advertised Raft address")
 	flag.StringVar(&config.HTTPAddr, HTTPAddrFlag, "localhost:4001", "HTTP server bind address. To enable HTTPS, set X.509 certificate and key")
-	flag.StringVar(&config.HTTPAdv, HTTPAdvAddrFlag, "", "Advertised HTTP address. If not set, same as HTTP server bind")
-	flag.BoolVar(&config.TLS1011, "tls1011", false, "Support deprecated TLS versions 1.0 and 1.1")
+	flag.StringVar(&config.HTTPAdv, HTTPAdvAddrFlag, "", "Advertised HTTP address. If not set, same as HTTP server bind address")
+	flag.StringVar(&config.HTTPAllowOrigin, "http-allow-origin", "", "Value to set for Access-Control-Allow-Origin HTTP header")
 	flag.StringVar(&config.HTTPx509CACert, "http-ca-cert", "", "Path to X.509 CA certificate for HTTPS")
 	flag.StringVar(&config.HTTPx509Cert, HTTPx509CertFlag, "", "Path to HTTPS X.509 certificate")
 	flag.StringVar(&config.HTTPx509Key, HTTPx509KeyFlag, "", "Path to HTTPS X.509 private key")
-	flag.BoolVar(&config.NoHTTPVerify, "http-no-verify", false, "Skip verification of remote node's HTTPS certificate when joining a cluster")
 	flag.BoolVar(&config.HTTPVerifyClient, "http-verify-client", false, "Enable mutual TLS for HTTPS")
-	flag.BoolVar(&config.NodeEncrypt, "node-encrypt", false, "Ignored, control node-to-node encryption by setting node certificate and key")
 	flag.StringVar(&config.NodeX509CACert, "node-ca-cert", "", "Path to X.509 CA certificate for node-to-node encryption")
 	flag.StringVar(&config.NodeX509Cert, NodeX509CertFlag, "", "Path to X.509 certificate for node-to-node mutual authentication and encryption")
 	flag.StringVar(&config.NodeX509Key, NodeX509KeyFlag, "", "Path to X.509 private key for node-to-node mutual authentication and encryption")
 	flag.BoolVar(&config.NoNodeVerify, "node-no-verify", false, "Skip verification of any node-node certificate")
 	flag.BoolVar(&config.NodeVerifyClient, "node-verify-client", false, "Enable mutual TLS for node-to-node communication")
+	flag.StringVar(&config.NodeVerifyServerName, "node-verify-server-name", "", "Hostname to verify on certificate returned by a node")
 	flag.StringVar(&config.AuthFile, "auth", "", "Path to authentication and authorization file. If not set, not enabled")
+	flag.StringVar(&config.AutoBackupFile, "auto-backup", "", "Path to automatic backup configuration file. If not set, not enabled")
+	flag.StringVar(&config.AutoRestoreFile, "auto-restore", "", "Path to automatic restore configuration file. If not set, not enabled")
 	flag.StringVar(&config.RaftAddr, RaftAddrFlag, "localhost:4002", "Raft communication bind address")
-	flag.StringVar(&config.RaftAdv, RaftAdvAddrFlag, "", "Advertised Raft communication address. If not set, same as Raft bind")
-	flag.StringVar(&config.JoinSrcIP, "join-source-ip", "", "Set source IP address during Join request")
-	flag.StringVar(&config.JoinAddr, "join", "", "Comma-delimited list of nodes, through which a cluster can be joined (proto://host:port)")
-	flag.StringVar(&config.JoinAs, "join-as", "", "Username in authentication file to join as. If not set, joins anonymously")
+	flag.StringVar(&config.RaftAdv, RaftAdvAddrFlag, "", "Advertised Raft communication address. If not set, same as Raft bind address")
+	flag.StringVar(&config.JoinAddrs, "join", "", "Comma-delimited list of nodes, in host:port form, through which a cluster can be joined")
 	flag.IntVar(&config.JoinAttempts, "join-attempts", 5, "Number of join attempts to make")
 	flag.DurationVar(&config.JoinInterval, "join-interval", 3*time.Second, "Period between join attempts")
+	flag.StringVar(&config.JoinAs, "join-as", "", "Username in authentication file to join as. If not set, joins anonymously")
 	flag.IntVar(&config.BootstrapExpect, "bootstrap-expect", 0, "Minimum number of nodes required for a bootstrap")
 	flag.DurationVar(&config.BootstrapExpectTimeout, "bootstrap-expect-timeout", 120*time.Second, "Maximum time for bootstrap process")
 	flag.StringVar(&config.DiscoMode, "disco-mode", "", "Choose clustering discovery mode. If not set, no node discovery is performed")
 	flag.StringVar(&config.DiscoKey, "disco-key", "rqlite", "Key prefix for cluster discovery service")
 	flag.StringVar(&config.DiscoConfig, "disco-config", "", "Set discovery config, or path to cluster discovery config file")
-	flag.BoolVar(&config.Expvar, "expvar", true, "Serve expvar data on HTTP server")
-	flag.BoolVar(&config.PprofEnabled, "pprof", true, "Serve pprof data on HTTP server")
-	flag.BoolVar(&config.OnDisk, "on-disk", false, "Use an on-disk SQLite database")
-	flag.StringVar(&config.OnDiskPath, "on-disk-path", "", "Path for SQLite on-disk database file. If not set, use file in data directory")
-	flag.BoolVar(&config.OnDiskStartup, "on-disk-startup", false, "Do not initialize on-disk database in memory first at startup")
+	flag.StringVar(&config.OnDiskPath, "on-disk-path", "", "Path for SQLite on-disk database file. If not set, use a file in data directory")
 	flag.BoolVar(&config.FKConstraints, "fk", false, "Enable SQLite foreign key constraints")
 	flag.BoolVar(&showVersion, "version", false, "Show version information and exit")
 	flag.BoolVar(&config.RaftNonVoter, "raft-non-voter", false, "Configure as non-voting node")
 	flag.DurationVar(&config.RaftHeartbeatTimeout, "raft-timeout", time.Second, "Raft heartbeat timeout")
 	flag.DurationVar(&config.RaftElectionTimeout, "raft-election-timeout", time.Second, "Raft election timeout")
 	flag.DurationVar(&config.RaftApplyTimeout, "raft-apply-timeout", 10*time.Second, "Raft apply timeout")
-	flag.Uint64Var(&config.RaftSnapThreshold, "raft-snap", 8192, "Number of outstanding log entries that trigger snapshot")
-	flag.DurationVar(&config.RaftSnapInterval, "raft-snap-int", 30*time.Second, "Snapshot threshold check interval")
+	flag.Uint64Var(&config.RaftSnapThreshold, "raft-snap", 8192, "Number of outstanding log entries which triggers Raft snapshot")
+	flag.Uint64Var(&config.RaftSnapThresholdWALSize, "raft-snap-wal-size", 4*1024*1024, "SQLite WAL file size in bytes which triggers Raft snapshot. Set to 0 to disable")
+	flag.DurationVar(&config.RaftSnapInterval, "raft-snap-int", 10*time.Second, "Snapshot threshold check interval")
 	flag.DurationVar(&config.RaftLeaderLeaseTimeout, "raft-leader-lease-timeout", 0, "Raft leader lease timeout. Use 0s for Raft default")
-	flag.BoolVar(&config.RaftStepdownOnShutdown, "raft-shutdown-stepdown", true, "Stepdown as leader before shutting down. Enabled by default")
-	flag.BoolVar(&config.RaftShutdownOnRemove, "raft-remove-shutdown", false, "Shutdown Raft if node removed")
-	flag.BoolVar(&config.RaftNoFreelistSync, "raft-no-freelist-sync", false, "Do not sync Raft log database freelist to disk")
+	flag.BoolVar(&config.RaftStepdownOnShutdown, "raft-shutdown-stepdown", true, "If leader, stepdown before shutting down. Enabled by default")
+	flag.BoolVar(&config.RaftShutdownOnRemove, "raft-remove-shutdown", false, "Shutdown Raft if node removed from cluster")
+	flag.BoolVar(&config.RaftClusterRemoveOnShutdown, "raft-cluster-remove-shutdown", false, "Node removes itself from cluster on graceful shutdown")
 	flag.StringVar(&config.RaftLogLevel, "raft-log-level", "INFO", "Minimum log level for Raft module")
 	flag.DurationVar(&config.RaftReapNodeTimeout, "raft-reap-node-timeout", 0*time.Hour, "Time after which a non-reachable voting node will be reaped. If not set, no reaping takes place")
 	flag.DurationVar(&config.RaftReapReadOnlyNodeTimeout, "raft-reap-read-only-node-timeout", 0*time.Hour, "Time after which a non-reachable non-voting node will be reaped. If not set, no reaping takes place")
 	flag.DurationVar(&config.ClusterConnectTimeout, "cluster-connect-timeout", 30*time.Second, "Timeout for initial connection to other nodes")
-	flag.IntVar(&config.WriteQueueCap, "write-queue-capacity", 1024, "Write queue capacity")
-	flag.IntVar(&config.WriteQueueBatchSz, "write-queue-batch-size", 128, "Write queue batch size")
-	flag.DurationVar(&config.WriteQueueTimeout, "write-queue-timeout", 50*time.Millisecond, "Write queue timeout")
-	flag.BoolVar(&config.WriteQueueTx, "write-queue-tx", false, "Use a transaction when writing from queue")
-	flag.IntVar(&config.CompressionSize, "compression-size", 150, "Request query size for compression attempt")
-	flag.IntVar(&config.CompressionBatch, "compression-batch", 5, "Request batch threshold for compression attempt")
+	flag.IntVar(&config.WriteQueueCap, "write-queue-capacity", 1024, "QueuedWrites queue capacity")
+	flag.IntVar(&config.WriteQueueBatchSz, "write-queue-batch-size", 128, "QueuedWrites queue batch size")
+	flag.DurationVar(&config.WriteQueueTimeout, "write-queue-timeout", 50*time.Millisecond, "QueuedWrites queue timeout")
+	flag.BoolVar(&config.WriteQueueTx, "write-queue-tx", false, "Use a transaction when processing a queued write")
 	flag.StringVar(&config.CPUProfile, "cpu-profile", "", "Path to file for CPU profiling information")
 	flag.StringVar(&config.MemProfile, "mem-profile", "", "Path to file for memory profiling information")
 	flag.Usage = func() {
@@ -468,7 +516,9 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 
 	// Ensure no args come after the data directory.
 	if flag.NArg() > 1 {
-		errorExit(1, "arguments after data directory are not accepted")
+		fmt.Fprintf(os.Stderr, "arguments after data directory (%s) are not accepted (%s)\n",
+			config.DataPath, flag.Args()[1:])
+		os.Exit(1)
 	}
 
 	if err := config.Validate(); err != nil {

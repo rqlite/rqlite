@@ -1,1 +1,3 @@
-Data must be created by node with Node ID of "node1".
+Data must be created by node with Node ID of "node1" i.e. `rqlited -node-id=node1 data`.
+
+Then INSERT 20 records.

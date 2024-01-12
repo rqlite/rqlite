@@ -15,19 +15,28 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"testing"
 	"time"
 
-	"github.com/rqlite/rqlite/cluster"
-	"github.com/rqlite/rqlite/command/encoding"
-	httpd "github.com/rqlite/rqlite/http"
-	"github.com/rqlite/rqlite/store"
-	"github.com/rqlite/rqlite/tcp"
-	rX509 "github.com/rqlite/rqlite/testdata/x509"
+	"github.com/rqlite/rqlite/v8/cluster"
+	"github.com/rqlite/rqlite/v8/command/encoding"
+	"github.com/rqlite/rqlite/v8/command/proto"
+	httpd "github.com/rqlite/rqlite/v8/http"
+	"github.com/rqlite/rqlite/v8/store"
+	"github.com/rqlite/rqlite/v8/tcp"
+	rX509 "github.com/rqlite/rqlite/v8/testdata/x509"
 )
 
 const (
 	// SnapshotInterval is the period between snapshot checks
 	SnapshotInterval = time.Second
+
+	// SnapshotThreshold is the number of outstanding log entries before a snapshot is triggered
+	SnapshotThreshold = 100
+
+	// ElectionTimeout is the period between elections. It's longer than
+	// the default to allow for slow CI systems.
+	ElectionTimeout = 2 * time.Second
 )
 
 var (
@@ -50,6 +59,7 @@ type Node struct {
 	Store        *store.Store
 	Service      *httpd.Service
 	Cluster      *cluster.Service
+	Client       *cluster.Client
 }
 
 // SameAs returns true if this node is the same as node o.
@@ -69,8 +79,8 @@ func (n *Node) Close(graceful bool) error {
 
 // Deprovision shuts down and removes all resources associated with the node.
 func (n *Node) Deprovision() {
-	n.Store.Close(true)
 	n.Service.Close()
+	n.Store.Close(true)
 	n.Cluster.Close()
 	os.RemoveAll(n.Dir)
 }
@@ -156,71 +166,110 @@ func (n *Node) QueryParameterized(stmt []interface{}) (string, error) {
 	return n.postQuery(string(j))
 }
 
+// Request runs a single request against the node.
+func (n *Node) Request(stmt string) (string, error) {
+	return n.RequestMulti([]string{stmt})
+}
+
+// RequestMulti runs multiple statements in a single request against the node.
+func (n *Node) RequestMulti(stmts []string) (string, error) {
+	j, err := json.Marshal(stmts)
+	if err != nil {
+		return "", err
+	}
+	return n.postRequest(string(j))
+}
+
+// RequestMultiParameterized runs a single paramterized request against the node
+func (n *Node) RequestMultiParameterized(stmt []interface{}) (string, error) {
+	m := make([][]interface{}, 1)
+	m[0] = stmt
+
+	j, err := json.Marshal(m)
+	if err != nil {
+		return "", err
+	}
+	return n.postRequest(string(j))
+}
+
+// Load loads a SQLite database file into the node.
+func (n *Node) Load(filename string) (string, error) {
+	return n.postFile("/db/load", filename)
+}
+
+// Backup backs up the node's database to the given file.
+func (n *Node) Backup(filename string, compress bool) error {
+	v, _ := url.Parse("http://" + n.APIAddr + "/db/backup")
+	if compress {
+		q := v.Query()
+		q.Set("compress", "true")
+		v.RawQuery = q.Encode()
+	}
+	resp, err := http.Get(v.String())
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("backup returned: %s", resp.Status)
+	}
+	defer resp.Body.Close()
+	f, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = io.Copy(f, resp.Body)
+	return err
+}
+
+// Load loads a SQLite database file into the node.
+func (n *Node) Boot(filename string) (string, error) {
+	return n.postFile("/boot", filename)
+}
+
 // Noop inserts a noop command into the Store's Raft log.
 func (n *Node) Noop(id string) error {
-	return n.Store.Noop(id)
+	af, err := n.Store.Noop(id)
+	if err != nil {
+		return err
+	}
+	return af.Error()
+}
+
+// EnableTLSClient enables TLS support for the node's cluster client.
+func (n *Node) EnableTLSClient() {
+	tlsConfig := mustCreateTLSConfig(n.NodeCertPath, n.NodeKeyPath, "")
+	clsterDialer := tcp.NewDialer(cluster.MuxClusterHeader, tlsConfig)
+	clsterClient := cluster.NewClient(clsterDialer, 30*time.Second)
+	n.Client = clsterClient
 }
 
 // Join instructs this node to join the leader.
 func (n *Node) Join(leader *Node) error {
-	resp, err := DoJoinRequest(leader.APIAddr, n.Store.ID(), n.RaftAddr, true)
-	if err != nil {
-		return err
-	}
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("failed to join as voter, leader returned: %s", resp.Status)
-	}
-	defer resp.Body.Close()
-	return nil
+	joiner := cluster.NewJoiner(n.Client, 3, 1*time.Second)
+	_, err := joiner.Do([]string{leader.RaftAddr}, n.Store.ID(), n.RaftAddr, cluster.Voter)
+	return err
 }
 
 // JoinAsNonVoter instructs this node to join the leader, but as a non-voting node.
 func (n *Node) JoinAsNonVoter(leader *Node) error {
-	resp, err := DoJoinRequest(leader.APIAddr, n.Store.ID(), n.RaftAddr, false)
-	if err != nil {
-		return err
-	}
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("failed to join as non-voter, leader returned: %s", resp.Status)
-	}
-	defer resp.Body.Close()
-	return nil
+	joiner := cluster.NewJoiner(n.Client, 3, 1*time.Second)
+	_, err := joiner.Do([]string{leader.RaftAddr}, n.Store.ID(), n.RaftAddr, cluster.NonVoter)
+	return err
 }
 
 // Notify notifies this node of the existence of another node
 func (n *Node) Notify(id, raftAddr string) error {
-	resp, err := DoNotify(n.APIAddr, id, raftAddr)
-	if err != nil {
-		return err
+	nr := &proto.NotifyRequest{
+		Id:      n.Store.ID(),
+		Address: n.RaftAddr,
 	}
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("failed to notify node: %s", resp.Status)
-	}
-	defer resp.Body.Close()
-	return nil
+	return n.Client.Notify(nr, raftAddr, nil, 5*time.Second)
 }
 
-// NodesStatus is the Go type /nodes endpoint response is marshaled into.
-type NodesStatus map[string]struct {
-	APIAddr   string `json:"api_addr,omitempty"`
-	Addr      string `json:"addr,omitempty"`
-	Reachable bool   `json:"reachable,omitempty"`
-	Leader    bool   `json:"leader,omitempty"`
-}
-
-// HasAddr returns whether any node in the NodeStatus has the given Raft address.
-func (n NodesStatus) HasAddr(addr string) bool {
-	for i := range n {
-		if n[i].Addr == addr {
-			return true
-		}
-	}
-	return false
-}
-
-// Nodes returns the sNodes endpoint output for node.
-func (n *Node) Nodes(includeNonVoters bool) (NodesStatus, error) {
-	v, _ := url.Parse("http://" + n.APIAddr + "/nodes")
+// Nodes returns the Nodes endpoint output for node.
+func (n *Node) Nodes(includeNonVoters bool) (httpd.Nodes, error) {
+	v, _ := url.Parse("http://" + n.APIAddr + "/nodes?ver=2")
 	if includeNonVoters {
 		q := v.Query()
 		q.Set("nonvoters", "true")
@@ -235,16 +284,13 @@ func (n *Node) Nodes(includeNonVoters bool) (NodesStatus, error) {
 		return nil, fmt.Errorf("nodes endpoint returned: %s", resp.Status)
 	}
 	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
 
-	var nstatus NodesStatus
-	if err = json.Unmarshal(body, &nstatus); err != nil {
+	dec := httpd.NewNodesRespDecoder(resp.Body)
+	var nodes httpd.Nodes
+	if err := dec.Decode(&nodes); err != nil {
 		return nil, err
 	}
-	return nstatus, nil
+	return nodes, nil
 }
 
 // Status returns the status and diagnostic output for node.
@@ -352,7 +398,6 @@ func (n *Node) ConfirmRedirect(host string) bool {
 		return false
 	}
 	defer resp.Body.Close()
-	fmt.Println(resp.StatusCode)
 	if resp.StatusCode != http.StatusMovedPermanently {
 		return false
 	}
@@ -368,6 +413,9 @@ func (n *Node) postExecute(stmt string) (string, error) {
 		return "", err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("execute endpoint returned: %s", resp.Status)
+	}
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
@@ -386,6 +434,9 @@ func (n *Node) postExecuteQueued(stmt string, wait bool) (string, error) {
 		return "", err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("execute endpoint (queued) returned: %s", resp.Status)
+	}
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
@@ -405,6 +456,9 @@ func (n *Node) query(stmt, consistency string) (string, error) {
 		return "", err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("query endpoint returned: %s", resp.Status)
+	}
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
@@ -418,9 +472,50 @@ func (n *Node) postQuery(stmt string) (string, error) {
 		return "", err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("query endpoint (POST) returned: %s", resp.Status)
+	}
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
+	}
+	return string(body), nil
+}
+
+func (n *Node) postRequest(stmt string) (string, error) {
+	resp, err := http.Post("http://"+n.APIAddr+"/db/request", "application/json", strings.NewReader(stmt))
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("request endpoint returned: %s", resp.Status)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	return string(body), nil
+}
+
+func (n *Node) postFile(url, filename string) (string, error) {
+	f, err := os.Open(filename)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	resp, err := http.Post("http://"+n.APIAddr+url, "application/octet-stream", f)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("file endpoint returned: %s %s", resp.Status, body)
 	}
 	return string(body), nil
 }
@@ -442,6 +537,9 @@ func PostExecuteStmtMulti(apiAddr string, stmts []string) (string, error) {
 		return "", err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("execute endpoint returned: %s", resp.Status)
+	}
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
@@ -508,11 +606,10 @@ func (c Cluster) Followers() ([]*Node, error) {
 // a cluster.
 func (c Cluster) RemoveNode(node *Node) Cluster {
 	nodes := []*Node{}
-	for i, n := range c {
-		if n.RaftAddr == node.RaftAddr {
-			continue
+	for _, n := range c {
+		if n.RaftAddr != node.RaftAddr {
+			nodes = append(nodes, n)
 		}
-		nodes = append(nodes, c[i])
 	}
 	return nodes
 }
@@ -553,60 +650,31 @@ func Remove(n *Node, addr string) error {
 	return nil
 }
 
-// DoJoinRequest sends a join request to nodeAddr, for raftID, reachable at raftAddr.
-func DoJoinRequest(nodeAddr, raftID, raftAddr string, voter bool) (*http.Response, error) {
-	b, err := json.Marshal(map[string]interface{}{"id": raftID, "addr": raftAddr, "voter": voter})
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := http.Post("http://"+nodeAddr+"/join", "application/json", bytes.NewReader(b))
-	if err != nil {
-		return nil, err
-	}
-
-	return resp, nil
+func mustNewNode(id string, enableSingle bool) *Node {
+	return mustNewNodeEncrypted(id, enableSingle, false, false)
 }
 
-// DoNotify notifies the node at nodeAddr about node with ID, and Raft address of raftAddr.
-func DoNotify(nodeAddr, id, raftAddr string) (*http.Response, error) {
-	b, err := json.Marshal(map[string]interface{}{"id": id, "addr": raftAddr})
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := http.Post("http://"+nodeAddr+"/notify", "application/json", bytes.NewReader(b))
-	if err != nil {
-		return nil, err
-	}
-
-	return resp, nil
-}
-
-func mustNewNode(enableSingle bool) *Node {
-	return mustNewNodeEncrypted(enableSingle, false, false)
-}
-
-func mustNewNodeEncrypted(enableSingle, httpEncrypt, nodeEncrypt bool) *Node {
-	dir := mustTempDir()
+func mustNewNodeEncrypted(id string, enableSingle, httpEncrypt, nodeEncrypt bool) *Node {
+	dir := mustTempDir(id)
 	var mux *tcp.Mux
+	var raftDialer *tcp.Dialer
+	var clstrDialer *tcp.Dialer
 	if nodeEncrypt {
-		mux = mustNewOpenTLSMux(rX509.CertFile(dir), rX509.KeyFile(dir), "")
+		mux = mustNewOpenTLSMux(rX509.CertExampleDotComFile(dir), rX509.KeyExampleDotComFile(dir), "")
+		raftDialer = tcp.NewDialer(cluster.MuxRaftHeader, mustCreateTLSConfig(rX509.CertExampleDotComFile(dir), rX509.KeyExampleDotComFile(dir), ""))
+		clstrDialer = tcp.NewDialer(cluster.MuxClusterHeader, mustCreateTLSConfig(rX509.CertExampleDotComFile(dir), rX509.KeyExampleDotComFile(dir), ""))
 	} else {
 		mux, _ = mustNewOpenMux("")
+		raftDialer = tcp.NewDialer(cluster.MuxRaftHeader, nil)
+		clstrDialer = tcp.NewDialer(cluster.MuxClusterHeader, nil)
 	}
 	go mux.Serve()
-
-	return mustNodeEncrypted(dir, enableSingle, httpEncrypt, mux, "")
+	return mustNodeEncrypted(id, dir, enableSingle, httpEncrypt, mux, raftDialer, clstrDialer)
 }
 
-func mustNodeEncrypted(dir string, enableSingle, httpEncrypt bool, mux *tcp.Mux, nodeID string) *Node {
-	return mustNodeEncryptedOnDisk(dir, enableSingle, httpEncrypt, mux, nodeID, false)
-}
-
-func mustNodeEncryptedOnDisk(dir string, enableSingle, httpEncrypt bool, mux *tcp.Mux, nodeID string, onDisk bool) *Node {
-	nodeCertPath := rX509.CertFile(dir)
-	nodeKeyPath := rX509.KeyFile(dir)
+func mustNodeEncrypted(id, dir string, enableSingle, httpEncrypt bool, mux *tcp.Mux, raftDialer, clstrDialer *tcp.Dialer) *Node {
+	nodeCertPath := rX509.CertExampleDotComFile(dir)
+	nodeKeyPath := rX509.KeyExampleDotComFile(dir)
 	httpCertPath := nodeCertPath
 	httpKeyPath := nodeKeyPath
 
@@ -616,14 +684,14 @@ func mustNodeEncryptedOnDisk(dir string, enableSingle, httpEncrypt bool, mux *tc
 		NodeKeyPath:  nodeKeyPath,
 		HTTPCertPath: httpCertPath,
 		HTTPKeyPath:  httpKeyPath,
-		TLSConfig:    mustCreateTLSConfig(nodeCertPath, nodeKeyPath, ""),
-		PeersPath:    filepath.Join(dir, "raft/peers.json"),
+		//TLSConfig:    mustCreateTLSConfig(nodeCertPath, nodeKeyPath, ""),
+		PeersPath: filepath.Join(dir, "raft/peers.json"),
 	}
 
-	dbConf := store.NewDBConfig(!onDisk)
+	dbConf := store.NewDBConfig()
 
-	raftTn := mux.Listen(cluster.MuxRaftHeader)
-	id := nodeID
+	raftLn := mux.Listen(cluster.MuxRaftHeader)
+	raftTn := tcp.NewLayer(raftLn, raftDialer)
 	if id == "" {
 		id = raftTn.Addr().String()
 	}
@@ -632,16 +700,15 @@ func mustNodeEncryptedOnDisk(dir string, enableSingle, httpEncrypt bool, mux *tc
 		Dir:    node.Dir,
 		ID:     id,
 	})
-	node.Store.SnapshotThreshold = 100
+	node.Store.SnapshotThreshold = SnapshotThreshold
 	node.Store.SnapshotInterval = SnapshotInterval
+	node.Store.ElectionTimeout = ElectionTimeout
 
 	if err := node.Store.Open(); err != nil {
-		node.Deprovision()
 		panic(fmt.Sprintf("failed to open store: %s", err.Error()))
 	}
 	if enableSingle {
 		if err := node.Store.Bootstrap(store.NewServer(node.Store.ID(), node.Store.Addr(), true)); err != nil {
-			node.Deprovision()
 			panic(fmt.Sprintf("failed to bootstrap store: %s", err.Error()))
 		}
 	}
@@ -649,20 +716,23 @@ func mustNodeEncryptedOnDisk(dir string, enableSingle, httpEncrypt bool, mux *tc
 	node.RaftAddr = node.Store.Addr()
 	node.ID = node.Store.ID()
 
-	clstr := cluster.New(mux.Listen(cluster.MuxClusterHeader), node.Store, node.Store, mustNewMockCredentialStore())
+	credStr := mustNewMockCredentialStore()
+	clstr := cluster.New(mux.Listen(cluster.MuxClusterHeader), node.Store, node.Store, credStr)
 	if err := clstr.Open(); err != nil {
 		panic("failed to open Cluster service)")
 	}
 	node.Cluster = clstr
 
-	clstrDialer := tcp.NewDialer(cluster.MuxClusterHeader, nil)
 	clstrClient := cluster.NewClient(clstrDialer, 30*time.Second)
+	node.Client = clstrClient
 	node.Service = httpd.New("localhost:0", node.Store, clstrClient, nil)
-	node.Service.Expvar = true
 	if httpEncrypt {
 		node.Service.CertFile = node.HTTPCertPath
 		node.Service.KeyFile = node.HTTPKeyPath
 	}
+	// Lower for testing to reduce pressure on CI systems.
+	node.Service.DefaultQueueBatchSz = 8
+	node.Service.DefaultQueueCap = 64
 
 	if err := node.Service.Start(); err != nil {
 		node.Deprovision()
@@ -676,8 +746,8 @@ func mustNodeEncryptedOnDisk(dir string, enableSingle, httpEncrypt bool, mux *tc
 	return node
 }
 
-func mustNewLeaderNode() *Node {
-	node := mustNewNode(true)
+func mustNewLeaderNode(id string) *Node {
+	node := mustNewNode(id, true)
 	if _, err := node.WaitForLeader(); err != nil {
 		node.Deprovision()
 		panic("node never became leader")
@@ -685,13 +755,22 @@ func mustNewLeaderNode() *Node {
 	return node
 }
 
-func mustTempDir() string {
+func mustTempDir(s string) string {
 	var err error
-	path, err := os.MkdirTemp("", "rqlilte-system-test-")
+	path, err := os.MkdirTemp("", fmt.Sprintf("rqlilte-system-test-%s-", s))
 	if err != nil {
 		panic("failed to create temp dir")
 	}
 	return path
+}
+
+func mustTempFile() string {
+	f, err := os.CreateTemp("", "rqlite-system-test-")
+	if err != nil {
+		panic("failed to create temp file")
+	}
+	f.Close()
+	return f.Name()
 }
 
 func mustNewOpenMux(addr string) (*tcp.Mux, net.Listener) {
@@ -964,7 +1043,7 @@ func mustNewMockCredentialStore() *mockCredentialStore {
 func trueOrTimeout(fn func() bool, dur time.Duration) bool {
 	timer := time.NewTimer(dur)
 	defer timer.Stop()
-	ticker := time.NewTicker(1000 * time.Millisecond)
+	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
 	for {
@@ -975,6 +1054,24 @@ func trueOrTimeout(fn func() bool, dur time.Duration) bool {
 			if fn() {
 				return true
 			}
+		}
+	}
+}
+
+func testPoll(t *testing.T, f func() (bool, error), period time.Duration, timeout time.Duration) {
+	tck := time.NewTicker(period)
+	defer tck.Stop()
+	tmr := time.NewTimer(timeout)
+	defer tmr.Stop()
+
+	for {
+		select {
+		case <-tck.C:
+			if b, err := f(); b && err == nil {
+				return
+			}
+		case <-tmr.C:
+			t.Fatalf("timeout expired: %s", t.Name())
 		}
 	}
 }

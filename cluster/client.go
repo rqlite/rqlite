@@ -3,6 +3,7 @@ package cluster
 import (
 	"bytes"
 	"compress/gzip"
+	"crypto/tls"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -11,17 +12,52 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rqlite/rqlite/command"
-	"github.com/rqlite/rqlite/tcp/pool"
-	"google.golang.org/protobuf/proto"
+	"github.com/rqlite/rqlite/v8/auth"
+	"github.com/rqlite/rqlite/v8/cluster/proto"
+	command "github.com/rqlite/rqlite/v8/command/proto"
+	"github.com/rqlite/rqlite/v8/rtls"
+	"github.com/rqlite/rqlite/v8/tcp"
+	"github.com/rqlite/rqlite/v8/tcp/pool"
+	pb "google.golang.org/protobuf/proto"
 )
 
 const (
 	initialPoolSize = 4
 	maxPoolCapacity = 64
+	maxRetries      = 8
 
 	protoBufferLengthSize = 8
 )
+
+// CreateRaftDialer creates a dialer for connecting to other nodes' Raft service. If the cert and
+// key arguments are not set, then the returned dialer will not use TLS.
+func CreateRaftDialer(cert, key, caCert, serverName string, Insecure bool) (*tcp.Dialer, error) {
+	var dialerTLSConfig *tls.Config
+	var err error
+	if cert != "" || key != "" {
+		dialerTLSConfig, err = rtls.CreateClientConfig(cert, key, caCert, serverName, Insecure)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create TLS config for Raft dialer: %s", err.Error())
+		}
+	}
+	return tcp.NewDialer(MuxRaftHeader, dialerTLSConfig), nil
+}
+
+// CredentialsFor returns a Credentials instance for the given username, or nil if
+// the given CredentialsStore is nil, or the username is not found.
+func CredentialsFor(credStr *auth.CredentialsStore, username string) *proto.Credentials {
+	if credStr == nil {
+		return nil
+	}
+	pw, ok := credStr.Password(username)
+	if !ok {
+		return nil
+	}
+	return &proto.Credentials{
+		Username: username,
+		Password: pw,
+	}
+}
 
 // Client allows communicating with a remote node.
 type Client struct {
@@ -32,16 +68,23 @@ type Client struct {
 	localNodeAddr string
 	localServ     *Service
 
-	mu    sync.RWMutex
-	pools map[string]pool.Pool
+	mu            sync.RWMutex
+	poolInitialSz int
+	pools         map[string]pool.Pool
 }
 
 // NewClient returns a client instance for talking to a remote node.
+// Clients will retry certain commands if they fail, to allow for
+// remote node restarts. Cluster management operations such as joining
+// and removing nodes are not retried, to make it clear to the operator
+// that the operation failed. In addition, higher-level code will
+// usually retry these operations.
 func NewClient(dl Dialer, t time.Duration) *Client {
 	return &Client{
-		dialer:  dl,
-		timeout: t,
-		pools:   make(map[string]pool.Pool),
+		dialer:        dl,
+		timeout:       t,
+		poolInitialSz: initialPoolSize,
+		pools:         make(map[string]pool.Pool),
 	}
 }
 
@@ -66,31 +109,18 @@ func (c *Client) GetNodeAPIAddr(nodeAddr string, timeout time.Duration) (string,
 		return c.localServ.GetNodeAPIURL(), nil
 	}
 
-	conn, err := c.dial(nodeAddr, c.timeout)
+	command := &proto.Command{
+		Type: proto.Command_COMMAND_TYPE_GET_NODE_API_URL,
+	}
+	p, err := c.retry(command, nodeAddr, timeout)
 	if err != nil {
 		return "", err
 	}
-	defer conn.Close()
 
-	// Send the request
-	command := &Command{
-		Type: Command_COMMAND_TYPE_GET_NODE_API_URL,
-	}
-	if err := writeCommand(conn, command, timeout); err != nil {
-		handleConnError(conn)
-		return "", err
-	}
-
-	p, err := readResponse(conn, timeout)
+	a := &proto.Address{}
+	err = pb.Unmarshal(p, a)
 	if err != nil {
-		handleConnError(conn)
-		return "", err
-	}
-
-	a := &Address{}
-	err = proto.Unmarshal(p, a)
-	if err != nil {
-		return "", fmt.Errorf("protobuf unmarshal: %s", err)
+		return "", fmt.Errorf("protobuf unmarshal: %w", err)
 	}
 
 	return a.Url, nil
@@ -99,34 +129,21 @@ func (c *Client) GetNodeAPIAddr(nodeAddr string, timeout time.Duration) (string,
 // Execute performs an Execute on a remote node. If username is an empty string
 // no credential information will be included in the Execute request to the
 // remote node.
-func (c *Client) Execute(er *command.ExecuteRequest, nodeAddr string, creds *Credentials, timeout time.Duration) ([]*command.ExecuteResult, error) {
-	conn, err := c.dial(nodeAddr, c.timeout)
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Close()
-
-	// Create the request.
-	command := &Command{
-		Type: Command_COMMAND_TYPE_EXECUTE,
-		Request: &Command_ExecuteRequest{
+func (c *Client) Execute(er *command.ExecuteRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) ([]*command.ExecuteResult, error) {
+	command := &proto.Command{
+		Type: proto.Command_COMMAND_TYPE_EXECUTE,
+		Request: &proto.Command_ExecuteRequest{
 			ExecuteRequest: er,
 		},
 		Credentials: creds,
 	}
-	if err := writeCommand(conn, command, timeout); err != nil {
-		handleConnError(conn)
-		return nil, err
-	}
-
-	p, err := readResponse(conn, timeout)
+	p, err := c.retry(command, nodeAddr, timeout)
 	if err != nil {
-		handleConnError(conn)
 		return nil, err
 	}
 
-	a := &CommandExecuteResponse{}
-	err = proto.Unmarshal(p, a)
+	a := &proto.CommandExecuteResponse{}
+	err = pb.Unmarshal(p, a)
 	if err != nil {
 		return nil, err
 	}
@@ -138,34 +155,21 @@ func (c *Client) Execute(er *command.ExecuteRequest, nodeAddr string, creds *Cre
 }
 
 // Query performs a Query on a remote node.
-func (c *Client) Query(qr *command.QueryRequest, nodeAddr string, creds *Credentials, timeout time.Duration) ([]*command.QueryRows, error) {
-	conn, err := c.dial(nodeAddr, c.timeout)
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Close()
-
-	// Create the request.
-	command := &Command{
-		Type: Command_COMMAND_TYPE_QUERY,
-		Request: &Command_QueryRequest{
+func (c *Client) Query(qr *command.QueryRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) ([]*command.QueryRows, error) {
+	command := &proto.Command{
+		Type: proto.Command_COMMAND_TYPE_QUERY,
+		Request: &proto.Command_QueryRequest{
 			QueryRequest: qr,
 		},
 		Credentials: creds,
 	}
-	if err := writeCommand(conn, command, timeout); err != nil {
-		handleConnError(conn)
-		return nil, err
-	}
-
-	p, err := readResponse(conn, timeout)
+	p, err := c.retry(command, nodeAddr, timeout)
 	if err != nil {
-		handleConnError(conn)
 		return nil, err
 	}
 
-	a := &CommandQueryResponse{}
-	err = proto.Unmarshal(p, a)
+	a := &proto.CommandQueryResponse{}
+	err = pb.Unmarshal(p, a)
 	if err != nil {
 		return nil, err
 	}
@@ -176,22 +180,48 @@ func (c *Client) Query(qr *command.QueryRequest, nodeAddr string, creds *Credent
 	return a.Rows, nil
 }
 
+// Request performs an ExecuteQuery on a remote node.
+func (c *Client) Request(r *command.ExecuteQueryRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) ([]*command.ExecuteQueryResponse, error) {
+	command := &proto.Command{
+		Type: proto.Command_COMMAND_TYPE_REQUEST,
+		Request: &proto.Command_ExecuteQueryRequest{
+			ExecuteQueryRequest: r,
+		},
+		Credentials: creds,
+	}
+	p, err := c.retry(command, nodeAddr, timeout)
+	if err != nil {
+		return nil, err
+	}
+
+	a := &proto.CommandRequestResponse{}
+	err = pb.Unmarshal(p, a)
+	if err != nil {
+		return nil, err
+	}
+
+	if a.Error != "" {
+		return nil, errors.New(a.Error)
+	}
+	return a.Response, nil
+}
+
 // Backup retrieves a backup from a remote node and writes to the io.Writer
-func (c *Client) Backup(br *command.BackupRequest, nodeAddr string, creds *Credentials, timeout time.Duration, w io.Writer) error {
+func (c *Client) Backup(br *command.BackupRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration, w io.Writer) error {
 	conn, err := c.dial(nodeAddr, c.timeout)
 	if err != nil {
 		return err
 	}
 	defer conn.Close()
 
-	// Send the request
-	command := &Command{
-		Type: Command_COMMAND_TYPE_BACKUP,
-		Request: &Command_BackupRequest{
+	command := &proto.Command{
+		Type: proto.Command_COMMAND_TYPE_BACKUP_STREAM,
+		Request: &proto.Command_BackupRequest{
 			BackupRequest: br,
 		},
 		Credentials: creds,
 	}
+
 	if err := writeCommand(conn, command, timeout); err != nil {
 		handleConnError(conn)
 		return err
@@ -203,58 +233,50 @@ func (c *Client) Backup(br *command.BackupRequest, nodeAddr string, creds *Crede
 		return err
 	}
 
-	// Decompress....
-	p, err = gzUncompress(p)
-	if err != nil {
-		handleConnError(conn)
-		return fmt.Errorf("backup decompress: %s", err)
-	}
-
-	resp := &CommandBackupResponse{}
-	err = proto.Unmarshal(p, resp)
-	if err != nil {
-		return fmt.Errorf("backup unmarshal: %s", err)
-	}
-
-	if resp.Error != "" {
-		return errors.New(resp.Error)
-	}
-
-	if _, err := w.Write(resp.Data); err != nil {
-		return fmt.Errorf("backup write: %s", err)
-	}
-	return nil
-}
-
-// Load loads a SQLite file into the database.
-func (c *Client) Load(lr *command.LoadRequest, nodeAddr string, creds *Credentials, timeout time.Duration) error {
-	conn, err := c.dial(nodeAddr, c.timeout)
+	a := &proto.CommandBackupResponse{}
+	err = pb.Unmarshal(p, a)
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	if a.Error != "" {
+		return errors.New(a.Error)
+	}
 
-	// Create the request.
-	command := &Command{
-		Type: Command_COMMAND_TYPE_LOAD,
-		Request: &Command_LoadRequest{
+	// The backup stream is unconditionally compressed, so depending on whether
+	// the user requested compression, we may need to decompress the response.
+	var rc io.ReadCloser
+	rc = conn
+	if !br.Compress {
+		gzr, err := gzip.NewReader(conn)
+		if err != nil {
+			return err
+		}
+		gzr.Multistream(false)
+		rc = gzr
+		defer rc.Close()
+	}
+	ss := time.Now()
+	_, err = io.Copy(w, rc)
+	fmt.Println("backup copy time on client side:", time.Since(ss))
+	return err
+}
+
+// Load loads a SQLite file into the database.
+func (c *Client) Load(lr *command.LoadRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) error {
+	command := &proto.Command{
+		Type: proto.Command_COMMAND_TYPE_LOAD,
+		Request: &proto.Command_LoadRequest{
 			LoadRequest: lr,
 		},
 		Credentials: creds,
 	}
-	if err := writeCommand(conn, command, timeout); err != nil {
-		handleConnError(conn)
-		return err
-	}
-
-	p, err := readResponse(conn, timeout)
+	p, err := c.retry(command, nodeAddr, timeout)
 	if err != nil {
-		handleConnError(conn)
 		return err
 	}
 
-	a := &CommandLoadResponse{}
-	err = proto.Unmarshal(p, a)
+	a := &proto.CommandLoadResponse{}
+	err = pb.Unmarshal(p, a)
 	if err != nil {
 		return err
 	}
@@ -266,7 +288,7 @@ func (c *Client) Load(lr *command.LoadRequest, nodeAddr string, creds *Credentia
 }
 
 // RemoveNode removes a node from the cluster
-func (c *Client) RemoveNode(rn *command.RemoveNodeRequest, nodeAddr string, creds *Credentials, timeout time.Duration) error {
+func (c *Client) RemoveNode(rn *command.RemoveNodeRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) error {
 	conn, err := c.dial(nodeAddr, c.timeout)
 	if err != nil {
 		return err
@@ -274,9 +296,9 @@ func (c *Client) RemoveNode(rn *command.RemoveNodeRequest, nodeAddr string, cred
 	defer conn.Close()
 
 	// Create the request.
-	command := &Command{
-		Type: Command_COMMAND_TYPE_REMOVE_NODE,
-		Request: &Command_RemoveNodeRequest{
+	command := &proto.Command{
+		Type: proto.Command_COMMAND_TYPE_REMOVE_NODE,
+		Request: &proto.Command_RemoveNodeRequest{
 			RemoveNodeRequest: rn,
 		},
 		Credentials: creds,
@@ -292,8 +314,8 @@ func (c *Client) RemoveNode(rn *command.RemoveNodeRequest, nodeAddr string, cred
 		return err
 	}
 
-	a := &CommandRemoveNodeResponse{}
-	err = proto.Unmarshal(p, a)
+	a := &proto.CommandRemoveNodeResponse{}
+	err = pb.Unmarshal(p, a)
 	if err != nil {
 		return err
 	}
@@ -302,6 +324,94 @@ func (c *Client) RemoveNode(rn *command.RemoveNodeRequest, nodeAddr string, cred
 		return errors.New(a.Error)
 	}
 	return nil
+}
+
+// Notify notifies a remote node that this node is ready to bootstrap.
+func (c *Client) Notify(nr *command.NotifyRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) error {
+	conn, err := c.dial(nodeAddr, c.timeout)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	// Create the request.
+	command := &proto.Command{
+		Type: proto.Command_COMMAND_TYPE_NOTIFY,
+		Request: &proto.Command_NotifyRequest{
+			NotifyRequest: nr,
+		},
+		Credentials: creds,
+	}
+	if err := writeCommand(conn, command, timeout); err != nil {
+		handleConnError(conn)
+		return err
+	}
+
+	p, err := readResponse(conn, timeout)
+	if err != nil {
+		handleConnError(conn)
+		return err
+	}
+
+	a := &proto.CommandNotifyResponse{}
+	err = pb.Unmarshal(p, a)
+	if err != nil {
+		return err
+	}
+
+	if a.Error != "" {
+		return errors.New(a.Error)
+	}
+	return nil
+}
+
+// Join joins this node to a cluster at the remote address nodeAddr.
+func (c *Client) Join(jr *command.JoinRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) error {
+	for {
+		conn, err := c.dial(nodeAddr, c.timeout)
+		if err != nil {
+			return err
+		}
+		defer conn.Close()
+
+		// Create the request.
+		command := &proto.Command{
+			Type: proto.Command_COMMAND_TYPE_JOIN,
+			Request: &proto.Command_JoinRequest{
+				JoinRequest: jr,
+			},
+			Credentials: creds,
+		}
+
+		if err := writeCommand(conn, command, timeout); err != nil {
+			handleConnError(conn)
+			return err
+		}
+
+		p, err := readResponse(conn, timeout)
+		if err != nil {
+			handleConnError(conn)
+			return err
+		}
+
+		a := &proto.CommandJoinResponse{}
+		err = pb.Unmarshal(p, a)
+		if err != nil {
+			return err
+		}
+
+		if a.Error != "" {
+			if a.Error == "not leader" {
+				if a.Leader == "" {
+					return errors.New("no leader")
+				}
+				nodeAddr = a.Leader
+				continue
+			}
+			return errors.New(a.Error)
+		}
+		return nil
+	}
 }
 
 // Stats returns stats on the Client instance
@@ -350,7 +460,7 @@ func (c *Client) dial(nodeAddr string, timeout time.Duration) (net.Conn, error) 
 
 			// New pool is needed for given address.
 			factory := func() (net.Conn, error) { return c.dialer.Dial(nodeAddr, c.timeout) }
-			p, err := pool.NewChannelPool(initialPoolSize, maxPoolCapacity, factory)
+			p, err := pool.NewChannelPool(c.poolInitialSz, maxPoolCapacity, factory)
 			if err != nil {
 				return err
 			}
@@ -365,15 +475,54 @@ func (c *Client) dial(nodeAddr string, timeout time.Duration) (net.Conn, error) 
 	// Got pool, now get a connection.
 	conn, err := pl.Get()
 	if err != nil {
-		return nil, fmt.Errorf("pool get: %s", err)
+		return nil, fmt.Errorf("pool get: %w", err)
 	}
 	return conn, nil
 }
 
-func writeCommand(conn net.Conn, c *Command, timeout time.Duration) error {
-	p, err := proto.Marshal(c)
+// retry retries a command on a remote node. It does this so we churn through connections
+// in the pool if we hit an error, as the remote node may have restarted and the pool's
+// connections are now stale.
+func (c *Client) retry(command *proto.Command, nodeAddr string, timeout time.Duration) ([]byte, error) {
+	var p []byte
+	var errOuter error
+	var nRetries int
+	for {
+		p, errOuter = func() ([]byte, error) {
+			conn, errInner := c.dial(nodeAddr, c.timeout)
+			if errInner != nil {
+				return nil, errInner
+			}
+			defer conn.Close()
+
+			if errInner = writeCommand(conn, command, timeout); errInner != nil {
+				handleConnError(conn)
+				return nil, errInner
+			}
+
+			b, errInner := readResponse(conn, timeout)
+			if errInner != nil {
+				handleConnError(conn)
+				return nil, errInner
+			}
+			return b, nil
+		}()
+		if errOuter == nil {
+			break
+		}
+		nRetries++
+		stats.Add(numClientRetries, 1)
+		if nRetries > maxRetries {
+			return nil, errOuter
+		}
+	}
+	return p, nil
+}
+
+func writeCommand(conn net.Conn, c *proto.Command, timeout time.Duration) error {
+	p, err := pb.Marshal(c)
 	if err != nil {
-		return fmt.Errorf("command marshal: %s", err)
+		return fmt.Errorf("command marshal: %w", err)
 	}
 
 	// Write length of Protobuf
@@ -384,7 +533,7 @@ func writeCommand(conn net.Conn, c *Command, timeout time.Duration) error {
 	binary.LittleEndian.PutUint64(b[0:], uint64(len(p)))
 	_, err = conn.Write(b)
 	if err != nil {
-		return fmt.Errorf("write length: %s", err)
+		return fmt.Errorf("write length: %w", err)
 	}
 	// Write actual protobuf.
 	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
@@ -392,12 +541,20 @@ func writeCommand(conn net.Conn, c *Command, timeout time.Duration) error {
 	}
 	_, err = conn.Write(p)
 	if err != nil {
-		return fmt.Errorf("write protobuf bytes: %s", err)
+		return fmt.Errorf("write protobuf bytes: %w", err)
 	}
 	return nil
 }
 
-func readResponse(conn net.Conn, timeout time.Duration) ([]byte, error) {
+func readResponse(conn net.Conn, timeout time.Duration) (buf []byte, retErr error) {
+	defer func() {
+		// Connecting to an open port, but not a rqlite Raft API, may cause a panic
+		// when the system tries to read the response. This is a workaround.
+		if r := recover(); r != nil {
+			retErr = fmt.Errorf("panic reading response from node: %v", r)
+		}
+	}()
+
 	// Read length of incoming response.
 	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
 		return nil, err
@@ -405,7 +562,7 @@ func readResponse(conn net.Conn, timeout time.Duration) ([]byte, error) {
 	b := make([]byte, protoBufferLengthSize)
 	_, err := io.ReadFull(conn, b)
 	if err != nil {
-		return nil, fmt.Errorf("read protobuf length: %s", err)
+		return nil, fmt.Errorf("read protobuf length: %w", err)
 	}
 	sz := binary.LittleEndian.Uint64(b[0:])
 
@@ -416,7 +573,7 @@ func readResponse(conn net.Conn, timeout time.Duration) ([]byte, error) {
 	}
 	_, err = io.ReadFull(conn, p)
 	if err != nil {
-		return nil, fmt.Errorf("read protobuf bytes: %s", err)
+		return nil, fmt.Errorf("read protobuf bytes: %w", err)
 	}
 	return p, nil
 }
@@ -430,16 +587,16 @@ func handleConnError(conn net.Conn) {
 func gzUncompress(b []byte) ([]byte, error) {
 	gz, err := gzip.NewReader(bytes.NewReader(b))
 	if err != nil {
-		return nil, fmt.Errorf("unmarshal gzip NewReader: %s", err)
+		return nil, fmt.Errorf("unmarshal gzip NewReader: %w", err)
 	}
 
 	ub, err := io.ReadAll(gz)
 	if err != nil {
-		return nil, fmt.Errorf("unmarshal gzip ReadAll: %s", err)
+		return nil, fmt.Errorf("unmarshal gzip ReadAll: %w", err)
 	}
 
 	if err := gz.Close(); err != nil {
-		return nil, fmt.Errorf("unmarshal gzip Close: %s", err)
+		return nil, fmt.Errorf("unmarshal gzip Close: %w", err)
 	}
 	return ub, nil
 }

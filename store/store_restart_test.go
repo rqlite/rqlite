@@ -2,13 +2,14 @@ package store
 
 import (
 	"fmt"
+	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/rqlite/rqlite/command"
+	command "github.com/rqlite/rqlite/v8/command/proto"
 )
 
-func openStoreCloseStartup(t *testing.T, s *Store) {
+func test_OpenStoreCloseStartup(t *testing.T, s *Store) {
 	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
@@ -141,7 +142,7 @@ func openStoreCloseStartup(t *testing.T, s *Store) {
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
-	if exp, got := `[{"columns":["COUNT(*)"],"types":[""],"values":[[10]]}]`, asJSON(r); exp != got {
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[10]]}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
@@ -169,7 +170,7 @@ func openStoreCloseStartup(t *testing.T, s *Store) {
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
-	if exp, got := `[{"columns":["COUNT(*)"],"types":[""],"values":[[11]]}]`, asJSON(r); exp != got {
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[11]]}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
@@ -201,36 +202,164 @@ func openStoreCloseStartup(t *testing.T, s *Store) {
 	if err != nil {
 		t.Fatalf("failed to query single node: %s", err.Error())
 	}
-	if exp, got := `[{"columns":["COUNT(*)"],"types":[""],"values":[[11]]}]`, asJSON(r); exp != got {
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[11]]}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 }
 
-// Test_OpenStoreCloseStartupOnDiskSingleNode tests that the on-disk
-// optimization can be disabled in various scenarios.
-func Test_OpenStoreCloseStartupOnDiskSingleNode(t *testing.T) {
-	s, ln := mustNewStore(t, false)
-	s.StartupOnDisk = true
-	defer ln.Close()
-
-	openStoreCloseStartup(t, s)
-}
-
-// Test_OpenStoreCloseStartupMemorySingleNode tests that the on-disk
-// optimization works fine.
-func Test_OpenStoreCloseStartupMemorySingleNode(t *testing.T) {
-	s, ln := mustNewStore(t, false)
-	s.StartupOnDisk = false
-	defer ln.Close()
-
-	openStoreCloseStartup(t, s)
-}
-
-// Test_OpenStoreCloseStartupMemoryOnlySingleNode tests that in-memory
+// Test_OpenStoreCloseStartupSingleNode tests that on-disk
 // works fine during various restart scenarios.
-func Test_OpenStoreCloseStartupMemoryOnlySingleNode(t *testing.T) {
-	s, ln := mustNewStore(t, true)
+func Test_OpenStoreCloseStartupSingleNode(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+	test_OpenStoreCloseStartup(t, s)
+}
+
+func test_SnapshotStress(t *testing.T, s *Store) {
+	s.SnapshotInterval = 100 * time.Millisecond
+	s.SnapshotThreshold = 4
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	er := executeRequestFromString(
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		false, false)
+	_, err := s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	for i := 0; i < 1000; i++ {
+		er := executeRequestFromString(
+			fmt.Sprintf(`INSERT INTO foo(name) VALUES("fiona-%d")`, i),
+			false, false)
+		_, err := s.Execute(er)
+		if err != nil {
+			t.Fatalf("failed to execute on single node: %s", err.Error())
+		}
+	}
+
+	// Close and re-open to make sure all data is there recovering from snapshot.
+	if err := s.Close(true); err != nil {
+		t.Fatalf("failed to close single-node store: %s", err.Error())
+	}
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
+	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	r, err := s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1000]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
+// Test_StoreSnapshotStressSingleNode tests that a high-rate of snapshotting
+// works fine with an on-disk setup.
+func Test_StoreSnapshotStressSingleNode(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+	test_SnapshotStress(t, s)
+}
+
+func Test_StoreLoad_Restart(t *testing.T) {
+	s, ln := mustNewStore(t)
 	defer ln.Close()
 
-	openStoreCloseStartup(t, s)
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	err := s.Load(loadRequestFromFile(filepath.Join("testdata", "load.sqlite")))
+	if err != nil {
+		t.Fatalf("failed to load: %s", err.Error())
+	}
+
+	// Check store can be re-opened.
+	if err := s.Close(true); err != nil {
+		t.Fatalf("failed to close single-node store: %s", err.Error())
+	}
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+}
+
+// Test_OpenStoreCloseUserSnapshot tests that user-requested snapshots
+// work fine.
+func Test_OpenStoreCloseUserSnapshot(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	er := executeRequestFromString(
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		false, false)
+	_, err := s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	_, err = s.Execute(executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`, false, false))
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	// Take a snapshot.
+	if err := s.Snapshot(1); err != nil {
+		t.Fatalf("failed to take user-requested snapshot: %s", err.Error())
+	}
+
+	// Check store can be re-opened and has the correct data.
+	if err := s.Close(true); err != nil {
+		t.Fatalf("failed to close single-node store: %s", err.Error())
+	}
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	qr := queryRequestFromString("SELECT * FROM foo", false, false)
+	qr.Level = command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	r, err := s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
 }

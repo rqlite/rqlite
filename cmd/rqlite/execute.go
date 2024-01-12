@@ -3,13 +3,12 @@ package main
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strings"
 
 	"github.com/mkideal/cli"
-	cl "github.com/rqlite/rqlite/cmd/rqlite/http"
+	cl "github.com/rqlite/rqlite/v8/cmd/rqlite/http"
 )
 
 // Result represents execute result
@@ -55,11 +54,11 @@ func executeWithClient(ctx *cli.Context, client *cl.Client, timer bool, stmt str
 		hcr = err
 	}
 
-	response, err := ioutil.ReadAll(resp.Body)
+	response, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}
-	resp.Body.Close()
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("server responded with %s: %s", resp.Status, response)
@@ -89,12 +88,10 @@ func executeWithClient(ctx *cli.Context, client *cl.Client, timer bool, stmt str
 	}
 	if timer {
 		ctx.String("%d %s affected (%f sec)\n", result.RowsAffected, rowString, result.Time)
+		fmt.Printf("Run Time: %f seconds\n", result.Time) // Move this line inside the if timer block
 	} else {
 		ctx.String("%d %s affected\n", result.RowsAffected, rowString)
 	}
 
-	if timer {
-		fmt.Printf("Run Time: %f seconds\n", result.Time)
-	}
 	return hcr
 }

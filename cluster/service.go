@@ -14,9 +14,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rqlite/rqlite/auth"
-	"github.com/rqlite/rqlite/command"
-	"google.golang.org/protobuf/proto"
+	"github.com/rqlite/rqlite/v8/auth"
+	"github.com/rqlite/rqlite/v8/cluster/proto"
+	command "github.com/rqlite/rqlite/v8/command/proto"
+	pb "google.golang.org/protobuf/proto"
 )
 
 // stats captures stats for the Cluster service.
@@ -27,9 +28,13 @@ const (
 	numGetNodeAPIResponse = "num_get_node_api_resp"
 	numExecuteRequest     = "num_execute_req"
 	numQueryRequest       = "num_query_req"
+	numRequestRequest     = "num_request_req"
 	numBackupRequest      = "num_backup_req"
 	numLoadRequest        = "num_load_req"
 	numRemoveNodeRequest  = "num_remove_node_req"
+	numNotifyRequest      = "num_notify_req"
+	numJoinRequest        = "num_join_req"
+	numClientRetries      = "num_client_retries"
 
 	// Client stats for this package.
 	numGetNodeAPIRequestLocal = "num_get_node_api_req_local"
@@ -49,10 +54,14 @@ func init() {
 	stats.Add(numGetNodeAPIResponse, 0)
 	stats.Add(numExecuteRequest, 0)
 	stats.Add(numQueryRequest, 0)
+	stats.Add(numRequestRequest, 0)
 	stats.Add(numBackupRequest, 0)
 	stats.Add(numLoadRequest, 0)
 	stats.Add(numRemoveNodeRequest, 0)
 	stats.Add(numGetNodeAPIRequestLocal, 0)
+	stats.Add(numNotifyRequest, 0)
+	stats.Add(numJoinRequest, 0)
+	stats.Add(numClientRetries, 0)
 }
 
 // Dialer is the interface dialers must implement.
@@ -71,6 +80,9 @@ type Database interface {
 	// Query executes a slice of queries, each of which returns rows.
 	Query(qr *command.QueryRequest) ([]*command.QueryRows, error)
 
+	// Request processes a request that can both executes and queries.
+	Request(rr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, error)
+
 	// Backup writes a backup of the database to the writer.
 	Backup(br *command.BackupRequest, dst io.Writer) error
 
@@ -80,8 +92,18 @@ type Database interface {
 
 // Manager is the interface node-management systems must implement
 type Manager interface {
+	// LeaderAddr returns the Raft address of the leader of the cluster.
+	LeaderAddr() (string, error)
+
 	// Remove removes the node, given by id, from the cluster
 	Remove(rn *command.RemoveNodeRequest) error
+
+	// Notify notifies this node that a remote node is ready
+	// for bootstrapping.
+	Notify(n *command.NotifyRequest) error
+
+	// Join joins a remote node to the cluster.
+	Join(n *command.JoinRequest) error
 }
 
 // CredentialStore is the interface credential stores must support.
@@ -90,16 +112,10 @@ type CredentialStore interface {
 	AA(username, password, perm string) bool
 }
 
-// Transport is the interface the network layer must provide.
-type Transport interface {
-	net.Listener
-	Dialer
-}
-
 // Service provides information about the node and cluster.
 type Service struct {
-	tn   Transport // Network layer this service uses
-	addr net.Addr  // Address on which this service is listening
+	ln   net.Listener // Incoming connections to the service
+	addr net.Addr     // Address on which this service is listening
 
 	db  Database // The queryable system.
 	mgr Manager  // The cluster management system.
@@ -114,10 +130,10 @@ type Service struct {
 }
 
 // New returns a new instance of the cluster service
-func New(tn Transport, db Database, m Manager, credentialStore CredentialStore) *Service {
+func New(ln net.Listener, db Database, m Manager, credentialStore CredentialStore) *Service {
 	return &Service{
-		tn:              tn,
-		addr:            tn.Addr(),
+		ln:              ln,
+		addr:            ln.Addr(),
 		db:              db,
 		mgr:             m,
 		logger:          log.New(os.Stderr, "[cluster] ", log.LstdFlags),
@@ -128,13 +144,13 @@ func New(tn Transport, db Database, m Manager, credentialStore CredentialStore) 
 // Open opens the Service.
 func (s *Service) Open() error {
 	go s.serve()
-	s.logger.Println("service listening on", s.tn.Addr())
+	s.logger.Println("service listening on", s.addr)
 	return nil
 }
 
 // Close closes the service.
 func (s *Service) Close() error {
-	s.tn.Close()
+	s.ln.Close()
 	return nil
 }
 
@@ -190,7 +206,7 @@ func (s *Service) Stats() (map[string]interface{}, error) {
 
 func (s *Service) serve() error {
 	for {
-		conn, err := s.tn.Accept()
+		conn, err := s.ln.Accept()
 		if err != nil {
 			return err
 		}
@@ -199,7 +215,7 @@ func (s *Service) serve() error {
 	}
 }
 
-func (s *Service) checkCommandPerm(c *Command, perm string) bool {
+func (s *Service) checkCommandPerm(c *proto.Command, perm string) bool {
 	if s.credentialStore == nil {
 		return true
 	}
@@ -211,6 +227,25 @@ func (s *Service) checkCommandPerm(c *Command, perm string) bool {
 		password = c.Credentials.GetPassword()
 	}
 	return s.credentialStore.AA(username, password, perm)
+}
+
+func (s *Service) checkCommandPermAll(c *proto.Command, perms ...string) bool {
+	if s.credentialStore == nil {
+		return true
+	}
+
+	username := ""
+	password := ""
+	if c.Credentials != nil {
+		username = c.Credentials.GetUsername()
+		password = c.Credentials.GetPassword()
+	}
+	for _, perm := range perms {
+		if !s.credentialStore.AA(username, password, perm) {
+			return false
+		}
+	}
+	return true
 }
 
 func (s *Service) handleConn(conn net.Conn) {
@@ -230,16 +265,16 @@ func (s *Service) handleConn(conn net.Conn) {
 			return
 		}
 
-		c := &Command{}
-		err = proto.Unmarshal(p, c)
+		c := &proto.Command{}
+		err = pb.Unmarshal(p, c)
 		if err != nil {
 			conn.Close()
 		}
 
 		switch c.Type {
-		case Command_COMMAND_TYPE_GET_NODE_API_URL:
+		case proto.Command_COMMAND_TYPE_GET_NODE_API_URL:
 			stats.Add(numGetNodeAPIRequest, 1)
-			p, err = proto.Marshal(&Address{
+			p, err = pb.Marshal(&proto.Address{
 				Url: s.GetNodeAPIURL(),
 			})
 			if err != nil {
@@ -248,10 +283,10 @@ func (s *Service) handleConn(conn net.Conn) {
 			writeBytesWithLength(conn, p)
 			stats.Add(numGetNodeAPIResponse, 1)
 
-		case Command_COMMAND_TYPE_EXECUTE:
+		case proto.Command_COMMAND_TYPE_EXECUTE:
 			stats.Add(numExecuteRequest, 1)
+			resp := &proto.CommandExecuteResponse{}
 
-			resp := &CommandExecuteResponse{}
 			er := c.GetExecuteRequest()
 			if er == nil {
 				resp.Error = "ExecuteRequest is nil"
@@ -266,17 +301,11 @@ func (s *Service) handleConn(conn net.Conn) {
 					copy(resp.Results, res)
 				}
 			}
+			marshalAndWrite(conn, resp)
 
-			p, err := proto.Marshal(resp)
-			if err != nil {
-				return
-			}
-			writeBytesWithLength(conn, p)
-
-		case Command_COMMAND_TYPE_QUERY:
+		case proto.Command_COMMAND_TYPE_QUERY:
 			stats.Add(numQueryRequest, 1)
-
-			resp := &CommandQueryResponse{}
+			resp := &proto.CommandQueryResponse{}
 
 			qr := c.GetQueryRequest()
 			if qr == nil {
@@ -292,17 +321,31 @@ func (s *Service) handleConn(conn net.Conn) {
 					copy(resp.Rows, res)
 				}
 			}
+			marshalAndWrite(conn, resp)
 
-			p, err = proto.Marshal(resp)
-			if err != nil {
-				return
+		case proto.Command_COMMAND_TYPE_REQUEST:
+			stats.Add(numRequestRequest, 1)
+			resp := &proto.CommandRequestResponse{}
+
+			rr := c.GetExecuteQueryRequest()
+			if rr == nil {
+				resp.Error = "RequestRequest is nil"
+			} else if !s.checkCommandPermAll(c, auth.PermQuery, auth.PermExecute) {
+				resp.Error = "unauthorized"
+			} else {
+				res, err := s.db.Request(rr)
+				if err != nil {
+					resp.Error = err.Error()
+				} else {
+					resp.Response = make([]*command.ExecuteQueryResponse, len(res))
+					copy(resp.Response, res)
+				}
 			}
-			writeBytesWithLength(conn, p)
+			marshalAndWrite(conn, resp)
 
-		case Command_COMMAND_TYPE_BACKUP:
+		case proto.Command_COMMAND_TYPE_BACKUP:
 			stats.Add(numBackupRequest, 1)
-
-			resp := &CommandBackupResponse{}
+			resp := &proto.CommandBackupResponse{}
 
 			br := c.GetBackupRequest()
 			if br == nil {
@@ -317,7 +360,7 @@ func (s *Service) handleConn(conn net.Conn) {
 					resp.Data = buf.Bytes()
 				}
 			}
-			p, err = proto.Marshal(resp)
+			p, err = pb.Marshal(resp)
 			if err != nil {
 				conn.Close()
 				return
@@ -331,10 +374,36 @@ func (s *Service) handleConn(conn net.Conn) {
 			}
 			writeBytesWithLength(conn, p)
 
-		case Command_COMMAND_TYPE_LOAD:
-			stats.Add(numLoadRequest, 1)
+		case proto.Command_COMMAND_TYPE_BACKUP_STREAM:
+			stats.Add(numBackupRequest, 1)
+			resp := &proto.CommandBackupResponse{}
 
-			resp := &CommandLoadResponse{}
+			br := c.GetBackupRequest()
+			if br == nil {
+				resp.Error = "BackupRequest is nil"
+			} else if !s.checkCommandPerm(c, auth.PermBackup) {
+				resp.Error = "unauthorized"
+			}
+			p, err = pb.Marshal(resp)
+			if err != nil {
+				conn.Close()
+				return
+			}
+			writeBytesWithLength(conn, p)
+
+			// Now, start streaming the backup. Enable compressed mode
+			// regardless of whether the client requested it, so the client
+			// can easily detect the end of the stream, as well as saving
+			// space on the wire.
+			br.Compress = true
+			if err := s.db.Backup(br, conn); err != nil {
+				s.logger.Printf("failed to stream backup: %s", err.Error())
+				return
+			}
+
+		case proto.Command_COMMAND_TYPE_LOAD:
+			stats.Add(numLoadRequest, 1)
+			resp := &proto.CommandLoadResponse{}
 
 			lr := c.GetLoadRequest()
 			if lr == nil {
@@ -346,16 +415,17 @@ func (s *Service) handleConn(conn net.Conn) {
 					resp.Error = fmt.Sprintf("remote node failed to load: %s", err.Error())
 				}
 			}
+			marshalAndWrite(conn, resp)
 
-			p, err = proto.Marshal(resp)
-			if err != nil {
-				return
+		case proto.Command_COMMAND_TYPE_LOAD_CHUNK:
+			resp := &proto.CommandLoadChunkResponse{
+				Error: "unsupported",
 			}
-			writeBytesWithLength(conn, p)
+			marshalAndWrite(conn, resp)
 
-		case Command_COMMAND_TYPE_REMOVE_NODE:
+		case proto.Command_COMMAND_TYPE_REMOVE_NODE:
 			stats.Add(numRemoveNodeRequest, 1)
-			resp := &CommandRemoveNodeResponse{}
+			resp := &proto.CommandRemoveNodeResponse{}
 
 			rn := c.GetRemoveNodeRequest()
 			if rn == nil {
@@ -367,14 +437,60 @@ func (s *Service) handleConn(conn net.Conn) {
 					resp.Error = err.Error()
 				}
 			}
+			marshalAndWrite(conn, resp)
 
-			p, err = proto.Marshal(resp)
-			if err != nil {
-				conn.Close()
+		case proto.Command_COMMAND_TYPE_NOTIFY:
+			stats.Add(numNotifyRequest, 1)
+			resp := &proto.CommandNotifyResponse{}
+
+			nr := c.GetNotifyRequest()
+			if nr == nil {
+				resp.Error = "NotifyRequest is nil"
+			} else if !s.checkCommandPerm(c, auth.PermJoin) {
+				resp.Error = "unauthorized"
+			} else {
+				if err := s.mgr.Notify(nr); err != nil {
+					resp.Error = err.Error()
+				}
 			}
-			writeBytesWithLength(conn, p)
+			marshalAndWrite(conn, resp)
+
+		case proto.Command_COMMAND_TYPE_JOIN:
+			stats.Add(numJoinRequest, 1)
+			resp := &proto.CommandJoinResponse{}
+
+			jr := c.GetJoinRequest()
+			if jr == nil {
+				resp.Error = "JoinRequest is nil"
+			} else {
+				if (jr.Voter && s.checkCommandPerm(c, auth.PermJoin)) ||
+					(!jr.Voter && s.checkCommandPerm(c, auth.PermJoinReadOnly)) {
+					if err := s.mgr.Join(jr); err != nil {
+						resp.Error = err.Error()
+						if err.Error() == "not leader" {
+							laddr, err := s.mgr.LeaderAddr()
+							if err != nil {
+								resp.Error = err.Error()
+							} else {
+								resp.Leader = laddr
+							}
+						}
+					}
+				} else {
+					resp.Error = "unauthorized"
+				}
+			}
+			marshalAndWrite(conn, resp)
 		}
 	}
+}
+
+func marshalAndWrite(conn net.Conn, m pb.Message) {
+	p, err := pb.Marshal(m)
+	if err != nil {
+		conn.Close()
+	}
+	writeBytesWithLength(conn, p)
 }
 
 func writeBytesWithLength(conn net.Conn, p []byte) {

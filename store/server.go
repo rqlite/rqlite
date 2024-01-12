@@ -44,6 +44,21 @@ func (s Servers) IsReadOnly(id string) (readOnly bool, found bool) {
 	return
 }
 
+// Contains returns whether the given node, as specified by its Raft ID,
+// is a member of the set of servers.
+func (s Servers) Contains(id string) bool {
+	if s == nil || id == "" {
+		return false
+	}
+
+	for _, n := range s {
+		if n != nil && n.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
 func (s Servers) Less(i, j int) bool { return s[i].ID < s[j].ID }
 func (s Servers) Len() int           { return len(s) }
 func (s Servers) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }

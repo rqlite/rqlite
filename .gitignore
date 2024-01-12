@@ -11,6 +11,9 @@ rqbench
 **/rqbench
 !**/rqbench/
 
+walr
+**/walr
+
 # Compiled Object files, Static and Dynamic libs (Shared Objects)
 *.o
 *.a
@@ -28,7 +31,8 @@ _test
 *.swp
 
 # Temporary data files
-cmd/rqlited/data
+cmd/rqlited/data*
+system_test/e2e/__pycache__/
 
 # Notes
 TODO

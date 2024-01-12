@@ -1,8 +1,8 @@
 // Package http provides the HTTP server for accessing the distributed database.
-// It also provides the endpoint for other nodes to join an existing cluster.
 package http
 
 import (
+	"bufio"
 	"context"
 	"crypto/tls"
 	"encoding/json"
@@ -20,13 +20,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rqlite/rqlite/auth"
-	"github.com/rqlite/rqlite/cluster"
-	"github.com/rqlite/rqlite/command"
-	"github.com/rqlite/rqlite/command/encoding"
-	"github.com/rqlite/rqlite/queue"
-	"github.com/rqlite/rqlite/rtls"
-	"github.com/rqlite/rqlite/store"
+	"github.com/rqlite/rqlite/v8/auth"
+	clstrPB "github.com/rqlite/rqlite/v8/cluster/proto"
+	"github.com/rqlite/rqlite/v8/command"
+	"github.com/rqlite/rqlite/v8/command/encoding"
+	"github.com/rqlite/rqlite/v8/command/proto"
+	"github.com/rqlite/rqlite/v8/db"
+	"github.com/rqlite/rqlite/v8/queue"
+	"github.com/rqlite/rqlite/v8/rtls"
+	"github.com/rqlite/rqlite/v8/store"
 )
 
 var (
@@ -45,33 +47,34 @@ type Database interface {
 	// to return rows. If timings is true, then timing information will
 	// be return. If tx is true, then either all queries will be executed
 	// successfully or it will as though none executed.
-	Execute(er *command.ExecuteRequest) ([]*command.ExecuteResult, error)
+	Execute(er *proto.ExecuteRequest) ([]*proto.ExecuteResult, error)
 
 	// Query executes a slice of queries, each of which returns rows. If
 	// timings is true, then timing information will be returned. If tx
 	// is true, then all queries will take place while a read transaction
 	// is held on the database.
-	Query(qr *command.QueryRequest) ([]*command.QueryRows, error)
+	Query(qr *proto.QueryRequest) ([]*proto.QueryRows, error)
 
-	// Load loads a SQLite file into the system
-	Load(lr *command.LoadRequest) error
+	// Request processes a slice of requests, each of which can be either
+	// an Execute or Query request.
+	Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryResponse, error)
+
+	// Load loads a SQLite file into the system via Raft consensus.
+	Load(lr *proto.LoadRequest) error
 }
 
 // Store is the interface the Raft-based database must implement.
 type Store interface {
 	Database
 
-	// Join joins the node with the given ID, reachable at addr, to this node.
-	Join(jr *command.JoinRequest) error
-
-	// Notify notifies this node that a node is available at addr.
-	Notify(nr *command.NotifyRequest) error
-
-	// RemoveNode removes the node from the cluster.
-	Remove(rn *command.RemoveNodeRequest) error
+	// Remove removes the node from the cluster.
+	Remove(rn *proto.RemoveNodeRequest) error
 
 	// LeaderAddr returns the Raft address of the leader of the cluster.
 	LeaderAddr() (string, error)
+
+	// Ready returns whether the Store is ready to service requests.
+	Ready() bool
 
 	// Stats returns stats on the Store.
 	Stats() (map[string]interface{}, error)
@@ -79,29 +82,42 @@ type Store interface {
 	// Nodes returns the slice of store.Servers in the cluster
 	Nodes() ([]*store.Server, error)
 
-	// Backup wites backup of the node state to dst
-	Backup(br *command.BackupRequest, dst io.Writer) error
+	// Backup writes backup of the node state to dst
+	Backup(br *proto.BackupRequest, dst io.Writer) error
+
+	// ReadFrom reads and loads a SQLite database into the node, initially bypassing
+	// the Raft system. It then triggers a Raft snapshot, which will then make
+	// Raft aware of the new data.
+	ReadFrom(r io.Reader) (int64, error)
+}
+
+// GetAddresser is the interface that wraps the GetNodeAPIAddr method.
+// GetNodeAPIAddr returns the HTTP API URL for the node at the given Raft address.
+type GetAddresser interface {
+	GetNodeAPIAddr(addr string, timeout time.Duration) (string, error)
 }
 
 // Cluster is the interface node API services must provide
 type Cluster interface {
-	// GetNodeAPIAddr returns the HTTP API URL for the node at the given Raft address.
-	GetNodeAPIAddr(nodeAddr string, timeout time.Duration) (string, error)
+	GetAddresser
 
 	// Execute performs an Execute Request on a remote node.
-	Execute(er *command.ExecuteRequest, nodeAddr string, creds *cluster.Credentials, timeout time.Duration) ([]*command.ExecuteResult, error)
+	Execute(er *proto.ExecuteRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) ([]*proto.ExecuteResult, error)
 
 	// Query performs an Query Request on a remote node.
-	Query(qr *command.QueryRequest, nodeAddr string, creds *cluster.Credentials, timeout time.Duration) ([]*command.QueryRows, error)
+	Query(qr *proto.QueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) ([]*proto.QueryRows, error)
+
+	// Request performs an ExecuteQuery Request on a remote node.
+	Request(eqr *proto.ExecuteQueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) ([]*proto.ExecuteQueryResponse, error)
 
 	// Backup retrieves a backup from a remote node and writes to the io.Writer.
-	Backup(br *command.BackupRequest, nodeAddr string, creds *cluster.Credentials, timeout time.Duration, w io.Writer) error
+	Backup(br *proto.BackupRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, w io.Writer) error
 
 	// Load loads a SQLite database into the node.
-	Load(lr *command.LoadRequest, nodeAddr string, creds *cluster.Credentials, timeout time.Duration) error
+	Load(lr *proto.LoadRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
 
 	// RemoveNode removes a node from the cluster.
-	RemoveNode(rn *command.RemoveNodeRequest, nodeAddr string, creds *cluster.Credentials, timeout time.Duration) error
+	RemoveNode(rn *proto.RemoveNodeRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
 
 	// Stats returns stats on the Cluster.
 	Stats() (map[string]interface{}, error)
@@ -118,10 +134,12 @@ type StatusReporter interface {
 	Stats() (map[string]interface{}, error)
 }
 
-// DBResults stores either an Execute result or a Query result
+// DBResults stores either an Execute result, a Query result, or
+// an ExecuteQuery result.
 type DBResults struct {
-	ExecuteResult []*command.ExecuteResult
-	QueryRows     []*command.QueryRows
+	ExecuteResult        []*proto.ExecuteResult
+	QueryRows            []*proto.QueryRows
+	ExecuteQueryResponse []*proto.ExecuteQueryResponse
 
 	AssociativeJSON bool // Render in associative form
 }
@@ -141,6 +159,8 @@ func (d *DBResults) MarshalJSON() ([]byte, error) {
 		return enc.JSONMarshal(d.ExecuteResult)
 	} else if d.QueryRows != nil {
 		return enc.JSONMarshal(d.QueryRows)
+	} else if d.ExecuteQueryResponse != nil {
+		return enc.JSONMarshal(d.ExecuteQueryResponse)
 	}
 	return json.Marshal(make([]interface{}, 0))
 }
@@ -176,6 +196,7 @@ var stats *expvar.Map
 const (
 	numLeaderNotFound                 = "leader_not_found"
 	numExecutions                     = "executions"
+	numExecuteStmtsRx                 = "execute_stmts_rx"
 	numQueuedExecutions               = "queued_executions"
 	numQueuedExecutionsOK             = "queued_executions_ok"
 	numQueuedExecutionsStmtsRx        = "queued_executions_num_stmts_rx"
@@ -187,8 +208,15 @@ const (
 	numQueuedExecutionsFailed         = "queued_executions_failed"
 	numQueuedExecutionsWait           = "queued_executions_wait"
 	numQueries                        = "queries"
+	numQueryStmtsRx                   = "query_stmts_rx"
+	numRequests                       = "requests"
+	numRequestStmtsRx                 = "request_stmts_rx"
 	numRemoteExecutions               = "remote_executions"
+	numRemoteExecutionsFailed         = "remote_executions_failed"
 	numRemoteQueries                  = "remote_queries"
+	numRemoteQueriesFailed            = "remote_queries_failed"
+	numRemoteRequests                 = "remote_requests"
+	numRemoteRequestsFailed           = "remote_requests_failed"
 	numRemoteBackups                  = "remote_backups"
 	numRemoteLoads                    = "remote_loads"
 	numRemoteRemoveNode               = "remote_remove_node"
@@ -196,8 +224,8 @@ const (
 	numStatus                         = "num_status"
 	numBackups                        = "backups"
 	numLoad                           = "loads"
-	numJoins                          = "joins"
-	numNotifies                       = "notifies"
+	numLoadAborted                    = "loads_aborted"
+	numBoot                           = "boot"
 	numAuthOK                         = "authOK"
 	numAuthFail                       = "authFail"
 
@@ -211,6 +239,18 @@ const (
 	// node (by node Raft address) actually served the request if
 	// it wasn't served by this node.
 	ServedByHTTPHeader = "X-RQLITE-SERVED-BY"
+
+	// AllowOriginHeader is the HTTP header for allowing CORS compliant access from certain origins
+	AllowOriginHeader = "Access-Control-Allow-Origin"
+
+	// AllowMethodsHeader is the HTTP header for supporting the correct methods
+	AllowMethodsHeader = "Access-Control-Allow-Methods"
+
+	// AllowHeadersHeader is the HTTP header for supporting the correct request headers
+	AllowHeadersHeader = "Access-Control-Allow-Headers"
+
+	// AllowCredentialsHeader is the HTTP header for supporting specifying credentials
+	AllowCredentialsHeader = "Access-Control-Allow-Credentials"
 )
 
 func init() {
@@ -223,6 +263,7 @@ func ResetStats() {
 	stats.Init()
 	stats.Add(numLeaderNotFound, 0)
 	stats.Add(numExecutions, 0)
+	stats.Add(numExecuteStmtsRx, 0)
 	stats.Add(numQueuedExecutions, 0)
 	stats.Add(numQueuedExecutionsOK, 0)
 	stats.Add(numQueuedExecutionsStmtsRx, 0)
@@ -234,8 +275,15 @@ func ResetStats() {
 	stats.Add(numQueuedExecutionsFailed, 0)
 	stats.Add(numQueuedExecutionsWait, 0)
 	stats.Add(numQueries, 0)
+	stats.Add(numQueryStmtsRx, 0)
+	stats.Add(numRequests, 0)
+	stats.Add(numRequestStmtsRx, 0)
 	stats.Add(numRemoteExecutions, 0)
+	stats.Add(numRemoteExecutionsFailed, 0)
 	stats.Add(numRemoteQueries, 0)
+	stats.Add(numRemoteQueriesFailed, 0)
+	stats.Add(numRemoteRequests, 0)
+	stats.Add(numRemoteRequestsFailed, 0)
 	stats.Add(numRemoteBackups, 0)
 	stats.Add(numRemoteLoads, 0)
 	stats.Add(numRemoteRemoveNode, 0)
@@ -243,8 +291,8 @@ func ResetStats() {
 	stats.Add(numStatus, 0)
 	stats.Add(numBackups, 0)
 	stats.Add(numLoad, 0)
-	stats.Add(numJoins, 0)
-	stats.Add(numNotifies, 0)
+	stats.Add(numLoadAborted, 0)
+	stats.Add(numBoot, 0)
 	stats.Add(numAuthOK, 0)
 	stats.Add(numAuthFail, 0)
 }
@@ -272,9 +320,10 @@ type Service struct {
 	CACertFile   string // Path to x509 CA certificate used to verify certificates.
 	CertFile     string // Path to server's own x509 certificate.
 	KeyFile      string // Path to server's own x509 private key.
-	TLS1011      bool   // Whether older, deprecated TLS should be supported.
 	ClientVerify bool   // Whether client certificates should verified.
 	tlsConfig    *tls.Config
+
+	AllowOrigin string // Value to set for Access-Control-Allow-Origin
 
 	DefaultQueueCap     int
 	DefaultQueueBatchSz int
@@ -285,9 +334,6 @@ type Service struct {
 	seqNum   int64 // Last sequence number written OK.
 
 	credentialStore CredentialStore
-
-	Expvar bool
-	Pprof  bool
 
 	BuildInfo map[string]interface{}
 
@@ -325,7 +371,11 @@ func (s *Service) Start() error {
 			return err
 		}
 	} else {
-		s.tlsConfig, err = rtls.CreateServerConfig(s.CertFile, s.KeyFile, s.CACertFile, !s.ClientVerify, s.TLS1011)
+		mTLSState := rtls.MTLSStateDisabled
+		if s.ClientVerify {
+			mTLSState = rtls.MTLSStateEnabled
+		}
+		s.tlsConfig, err = rtls.CreateServerConfig(s.CertFile, s.KeyFile, s.CACertFile, mTLSState)
 		if err != nil {
 			return err
 		}
@@ -341,7 +391,7 @@ func (s *Service) Start() error {
 		if s.ClientVerify {
 			b.WriteString(", mutual TLS enabled")
 		} else {
-			b.WriteString(", mutual disabled")
+			b.WriteString(", mutual TLS disabled")
 		}
 		// print the message
 		s.logger.Println(b.String())
@@ -359,7 +409,7 @@ func (s *Service) Start() error {
 	go func() {
 		err := s.httpServer.Serve(s.ln)
 		if err != nil {
-			s.logger.Println("HTTP service stopped:", err.Error())
+			s.logger.Printf("HTTP service on %s stopped: %s", s.ln.Addr().String(), err.Error())
 		}
 	}()
 	s.logger.Println("service listening on", s.Addr())
@@ -369,6 +419,7 @@ func (s *Service) Start() error {
 
 // Close closes the service.
 func (s *Service) Close() {
+	s.logger.Println("closing HTTP service on", s.ln.Addr().String())
 	s.httpServer.Shutdown(context.Background())
 
 	s.stmtQueue.Close()
@@ -390,42 +441,54 @@ func (s *Service) HTTPS() bool {
 // ServeHTTP allows Service to serve HTTP requests.
 func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.addBuildVersion(w)
+	s.addAllowHeaders(w)
+
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	params, err := NewQueryParams(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
 	switch {
 	case r.URL.Path == "/" || r.URL.Path == "":
 		http.Redirect(w, r, "/status", http.StatusFound)
 	case strings.HasPrefix(r.URL.Path, "/db/execute"):
 		stats.Add(numExecutions, 1)
-		s.handleExecute(w, r)
+		s.handleExecute(w, r, params)
 	case strings.HasPrefix(r.URL.Path, "/db/query"):
 		stats.Add(numQueries, 1)
-		s.handleQuery(w, r)
+		s.handleQuery(w, r, params)
+	case strings.HasPrefix(r.URL.Path, "/db/request"):
+		stats.Add(numRequests, 1)
+		s.handleRequest(w, r, params)
 	case strings.HasPrefix(r.URL.Path, "/db/backup"):
 		stats.Add(numBackups, 1)
-		s.handleBackup(w, r)
+		s.handleBackup(w, r, params)
 	case strings.HasPrefix(r.URL.Path, "/db/load"):
 		stats.Add(numLoad, 1)
-		s.handleLoad(w, r)
-	case strings.HasPrefix(r.URL.Path, "/join"):
-		stats.Add(numJoins, 1)
-		s.handleJoin(w, r)
-	case strings.HasPrefix(r.URL.Path, "/notify"):
-		stats.Add(numNotifies, 1)
-		s.handleNotify(w, r)
+		s.handleLoad(w, r, params)
+	case r.URL.Path == "/boot":
+		stats.Add(numBoot, 1)
+		s.handleBoot(w, r, params)
 	case strings.HasPrefix(r.URL.Path, "/remove"):
-		s.handleRemove(w, r)
+		s.handleRemove(w, r, params)
 	case strings.HasPrefix(r.URL.Path, "/status"):
 		stats.Add(numStatus, 1)
-		s.handleStatus(w, r)
+		s.handleStatus(w, r, params)
 	case strings.HasPrefix(r.URL.Path, "/nodes"):
-		s.handleNodes(w, r)
+		s.handleNodes(w, r, params)
 	case strings.HasPrefix(r.URL.Path, "/readyz"):
 		stats.Add(numReadyz, 1)
-		s.handleReadyz(w, r)
-	case r.URL.Path == "/debug/vars" && s.Expvar:
-		s.handleExpvar(w, r)
-	case strings.HasPrefix(r.URL.Path, "/debug/pprof") && s.Pprof:
-		s.handlePprof(w, r)
+		s.handleReadyz(w, r, params)
+	case r.URL.Path == "/debug/vars":
+		s.handleExpvar(w, r, params)
+	case strings.HasPrefix(r.URL.Path, "/debug/pprof"):
+		s.handlePprof(w, r, params)
 	default:
 		w.WriteHeader(http.StatusNotFound)
 	}
@@ -444,149 +507,8 @@ func (s *Service) RegisterStatus(key string, stat StatusReporter) error {
 	return nil
 }
 
-// handleJoin handles cluster-join requests from other nodes.
-func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
-	if !s.CheckRequestPerm(r, auth.PermJoin) && !s.CheckRequestPerm(r, auth.PermJoinReadOnly) {
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-
-	if r.Method != "POST" {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
-	b, err := io.ReadAll(r.Body)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	md := map[string]interface{}{}
-	if err := json.Unmarshal(b, &md); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	rID, ok := md["id"]
-	if !ok {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	rAddr, ok := md["addr"]
-	if !ok {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	voter, ok := md["voter"]
-	if !ok {
-		voter = true
-	}
-	if voter.(bool) && !s.CheckRequestPerm(r, auth.PermJoin) {
-		http.Error(w, "joining as voter not allowed", http.StatusUnauthorized)
-		return
-	}
-
-	remoteID, remoteAddr := rID.(string), rAddr.(string)
-
-	s.logger.Printf("received join request from node with ID %s at %s",
-		remoteID, remoteAddr)
-
-	// Confirm that this node can resolve the remote address. This can happen due
-	// to incomplete DNS records across the underlying infrastructure. If it can't
-	// then don't consider this join attempt successful -- so the joining node
-	// will presumably try again.
-	if addr, err := resolvableAddress(remoteAddr); err != nil {
-		s.logger.Printf("failed to resolve %s (%s) while handling join request", addr, err)
-		http.Error(w, fmt.Sprintf("can't resolve %s (%s)", addr, err.Error()),
-			http.StatusServiceUnavailable)
-		return
-	}
-
-	jr := &command.JoinRequest{
-		Id:      remoteID,
-		Address: remoteAddr,
-		Voter:   voter.(bool),
-	}
-	if err := s.store.Join(jr); err != nil {
-		if err == store.ErrNotLeader {
-			leaderAPIAddr := s.LeaderAPIAddr()
-			if leaderAPIAddr == "" {
-				stats.Add(numLeaderNotFound, 1)
-				http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
-				return
-			}
-
-			redirect := s.FormRedirect(r, leaderAPIAddr)
-			http.Redirect(w, r, redirect, http.StatusMovedPermanently)
-			return
-		}
-
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-}
-
-// handleNotify handles node-notify requests from other nodes.
-func (s *Service) handleNotify(w http.ResponseWriter, r *http.Request) {
-	if !s.CheckRequestPerm(r, auth.PermJoin) {
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-
-	if r.Method != "POST" {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
-	b, err := io.ReadAll(r.Body)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	md := map[string]interface{}{}
-	if err := json.Unmarshal(b, &md); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	rID, ok := md["id"]
-	if !ok {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	rAddr, ok := md["addr"]
-	if !ok {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	remoteID, remoteAddr := rID.(string), rAddr.(string)
-
-	s.logger.Printf("received notify request from node with ID %s at %s",
-		remoteID, remoteAddr)
-
-	// Confirm that this node can resolve the remote address. This can happen due
-	// to incomplete DNS records across the underlying infrastructure. If it can't
-	// then don't consider this notify attempt successful -- so the notifying node
-	// will presumably try again.
-	if addr, err := resolvableAddress(remoteAddr); err != nil {
-		s.logger.Printf("failed to resolve %s (%s) while handling notify request", addr, err)
-		http.Error(w, fmt.Sprintf("can't resolve %s (%s)", addr, err.Error()),
-			http.StatusServiceUnavailable)
-		return
-	}
-
-	if err := s.store.Notify(&command.NotifyRequest{
-		Id:      remoteID,
-		Address: remoteAddr,
-	}); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-}
-
 // handleRemove handles cluster-remove requests.
-func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request) {
+func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request, qp QueryParams) {
 	if !s.CheckRequestPerm(r, auth.PermRemove) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
@@ -594,12 +516,6 @@ func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method != "DELETE" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
-	redirect, err := isRedirect(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -625,29 +541,14 @@ func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	timeout, err := timeoutParam(r, defaultTimeout)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	rn := &command.RemoveNodeRequest{
+	rn := &proto.RemoveNodeRequest{
 		Id: remoteID,
 	}
 
 	err = s.store.Remove(rn)
 	if err != nil {
 		if err == store.ErrNotLeader {
-			if redirect {
-				leaderAPIAddr := s.LeaderAPIAddr()
-				if leaderAPIAddr == "" {
-					stats.Add(numLeaderNotFound, 1)
-					http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
-					return
-				}
-
-				redirect := s.FormRedirect(r, leaderAPIAddr)
-				http.Redirect(w, r, redirect, http.StatusMovedPermanently)
+			if s.DoRedirect(w, r, qp) {
 				return
 			}
 
@@ -669,7 +570,7 @@ func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request) {
 			}
 
 			w.Header().Add(ServedByHTTPHeader, addr)
-			removeErr := s.cluster.RemoveNode(rn, addr, makeCredentials(username, password), timeout)
+			removeErr := s.cluster.RemoveNode(rn, addr, makeCredentials(username, password), qp.Timeout(defaultTimeout))
 			if removeErr != nil {
 				if removeErr.Error() == "unauthorized" {
 					http.Error(w, "remote remove node not authorized", http.StatusUnauthorized)
@@ -687,7 +588,7 @@ func (s *Service) handleRemove(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleBackup returns the consistent database snapshot.
-func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
+func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request, qp QueryParams) {
 	if !s.CheckRequestPerm(r, auth.PermBackup) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
@@ -698,47 +599,18 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	noLeader, err := noLeader(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+	br := &proto.BackupRequest{
+		Format:   qp.BackupFormat(),
+		Leader:   !qp.NoLeader(),
+		Vacuum:   qp.Vacuum(),
+		Compress: qp.Compress(),
 	}
-	redirect, err := isRedirect(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	addBackupFormatHeader(w, qp)
 
-	format, err := backupFormat(w, r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	timeout, err := timeoutParam(r, defaultTimeout)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	br := &command.BackupRequest{
-		Format: format,
-		Leader: !noLeader,
-	}
-
-	err = s.store.Backup(br, w)
+	err := s.store.Backup(br, w)
 	if err != nil {
 		if err == store.ErrNotLeader {
-			if redirect {
-				leaderAPIAddr := s.LeaderAPIAddr()
-				if leaderAPIAddr == "" {
-					stats.Add(numLeaderNotFound, 1)
-					http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
-					return
-				}
-
-				redirect := s.FormRedirect(r, leaderAPIAddr)
-				http.Redirect(w, r, redirect, http.StatusMovedPermanently)
+			if s.DoRedirect(w, r, qp) {
 				return
 			}
 
@@ -760,7 +632,7 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
 			}
 
 			w.Header().Add(ServedByHTTPHeader, addr)
-			backupErr := s.cluster.Backup(br, addr, makeCredentials(username, password), timeout, w)
+			backupErr := s.cluster.Backup(br, addr, makeCredentials(username, password), qp.Timeout(defaultTimeout), w)
 			if backupErr != nil {
 				if backupErr.Error() == "unauthorized" {
 					http.Error(w, "remote backup not authorized", http.StatusUnauthorized)
@@ -771,6 +643,9 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
 			}
 			stats.Add(numRemoteBackups, 1)
 			return
+		} else if err == store.ErrInvalidVacuum {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
 		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -779,9 +654,8 @@ func (s *Service) handleBackup(w http.ResponseWriter, r *http.Request) {
 	s.lastBackup = time.Now()
 }
 
-// handleLoad loads the state contained in a .dump output. This API is different
-// from others in that it expects a raw file, not wrapped in any kind of JSON.
-func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
+// handleLoad loads the database from the given SQLite database file or SQLite dump.
+func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryParams) {
 	if !s.CheckRequestPerm(r, auth.PermLoad) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
@@ -793,25 +667,6 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := NewResponse()
-
-	timings, err := isTimings(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	timeout, err := timeoutParam(r, defaultTimeout)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	redirect, err := isRedirect(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
 	b, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -819,26 +674,18 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body.Close()
 
-	if validSQLiteFile(b) {
+	if db.IsValidSQLiteData(b) {
 		s.logger.Printf("SQLite database file detected as load data")
-		lr := &command.LoadRequest{
+		lr := &proto.LoadRequest{
 			Data: b,
 		}
+
 		err := s.store.Load(lr)
 		if err != nil && err != store.ErrNotLeader {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		} else if err != nil && err == store.ErrNotLeader {
-			if redirect {
-				leaderAPIAddr := s.LeaderAPIAddr()
-				if leaderAPIAddr == "" {
-					stats.Add(numLeaderNotFound, 1)
-					http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
-					return
-				}
-
-				redirect := s.FormRedirect(r, leaderAPIAddr)
-				http.Redirect(w, r, redirect, http.StatusMovedPermanently)
+			if s.DoRedirect(w, r, qp) {
 				return
 			}
 
@@ -860,7 +707,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 			}
 
 			w.Header().Add(ServedByHTTPHeader, addr)
-			loadErr := s.cluster.Load(lr, addr, makeCredentials(username, password), timeout)
+			loadErr := s.cluster.Load(lr, addr, makeCredentials(username, password), qp.Timeout(defaultTimeout))
 			if loadErr != nil {
 				if loadErr.Error() == "unauthorized" {
 					http.Error(w, "remote load not authorized", http.StatusUnauthorized)
@@ -876,21 +723,14 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// No JSON structure expected for this API.
 		queries := []string{string(b)}
-		er := executeRequestFromStrings(queries, timings, false)
+		er := executeRequestFromStrings(queries, qp.Timings(), false)
 
 		results, err := s.store.Execute(er)
 		if err != nil {
 			if err == store.ErrNotLeader {
-				leaderAPIAddr := s.LeaderAPIAddr()
-				if leaderAPIAddr == "" {
-					stats.Add(numLeaderNotFound, 1)
-					http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+				if s.DoRedirect(w, r, qp) {
 					return
 				}
-
-				redirect := s.FormRedirect(r, leaderAPIAddr)
-				http.Redirect(w, r, redirect, http.StatusMovedPermanently)
-				return
 			}
 			resp.Error = err.Error()
 		} else {
@@ -898,11 +738,42 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 		}
 		resp.end = time.Now()
 	}
-	s.writeResponse(w, r, resp)
+	s.writeResponse(w, r, qp, resp)
+}
+
+// handleBoot handles booting this node using a SQLite file.
+func (s *Service) handleBoot(w http.ResponseWriter, r *http.Request, qp QueryParams) {
+	if !s.CheckRequestPerm(r, auth.PermLoad) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	bufReader := bufio.NewReader(r.Body)
+	peek, err := bufReader.Peek(db.SQLiteHeaderSize)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+	if !db.IsValidSQLiteData(peek) {
+		http.Error(w, "invalid SQLite data", http.StatusBadRequest)
+		return
+	}
+
+	s.logger.Printf("starting boot process")
+	_, err = s.store.ReadFrom(bufReader)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
 }
 
 // handleStatus returns status on the system.
-func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
+func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request, qp QueryParams) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 
 	if !s.CheckRequestPerm(r, auth.PermStatus) {
@@ -1008,9 +879,8 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	pretty, _ := isPretty(r)
 	var b []byte
-	if pretty {
+	if qp.Pretty() {
 		b, err = json.MarshalIndent(status, "", "    ")
 	} else {
 		b, err = json.Marshal(status)
@@ -1020,6 +890,14 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 			http.StatusInternalServerError)
 		return
 	}
+
+	b, err = getSubJSON(b, qp.Key())
+	if err != nil {
+		http.Error(w, fmt.Sprintf("JSON subkey: %s", err.Error()),
+			http.StatusInternalServerError)
+		return
+	}
+
 	_, err = w.Write(b)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("write: %s", err.Error()),
@@ -1031,7 +909,7 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 // handleNodes returns status on the other voting nodes in the system.
 // This attempts to contact all the nodes in the cluster, so may take
 // some time to return.
-func (s *Service) handleNodes(w http.ResponseWriter, r *http.Request) {
+func (s *Service) handleNodes(w http.ResponseWriter, r *http.Request, qp QueryParams) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 
 	if !s.CheckRequestPerm(r, auth.PermStatus) {
@@ -1044,20 +922,8 @@ func (s *Service) handleNodes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	timeout, err := timeoutParam(r, defaultTimeout)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	includeNonVoters, err := nonVoters(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
 	// Get nodes in the cluster, and possibly filter out non-voters.
-	nodes, err := s.store.Nodes()
+	sNodes, err := s.store.Nodes()
 	if err != nil {
 		statusCode := http.StatusInternalServerError
 		if err == store.ErrNotOpen {
@@ -1066,69 +932,33 @@ func (s *Service) handleNodes(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("store nodes: %s", err.Error()), statusCode)
 		return
 	}
-
-	filteredNodes := make([]*store.Server, 0)
-	for _, n := range nodes {
-		if n.Suffrage != "Voter" && !includeNonVoters {
-			continue
-		}
-		filteredNodes = append(filteredNodes, n)
+	nodes := NewNodesFromServers(sNodes)
+	if !qp.NonVoters() {
+		nodes = nodes.Voters()
 	}
 
+	// Now test the nodes
 	lAddr, err := s.store.LeaderAddr()
 	if err != nil {
 		http.Error(w, fmt.Sprintf("leader address: %s", err.Error()),
 			http.StatusInternalServerError)
 		return
 	}
+	nodes.Test(s.cluster, lAddr, qp.Timeout(defaultTimeout))
 
-	nodesResp, err := s.checkNodes(filteredNodes, timeout)
+	enc := NewNodesRespEncoder(w, qp.Version() != "2")
+	if qp.Pretty() {
+		enc.SetIndent("", "    ")
+	}
+	err = enc.Encode(nodes)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("check nodes: %s", err.Error()),
+		http.Error(w, fmt.Sprintf("JSON marshal: %s", err.Error()),
 			http.StatusInternalServerError)
-		return
-	}
-
-	resp := make(map[string]struct {
-		APIAddr   string  `json:"api_addr,omitempty"`
-		Addr      string  `json:"addr,omitempty"`
-		Reachable bool    `json:"reachable"`
-		Leader    bool    `json:"leader"`
-		Time      float64 `json:"time,omitempty"`
-		Error     string  `json:"error,omitempty"`
-	})
-
-	for _, n := range filteredNodes {
-		nn := resp[n.ID]
-		nn.Addr = n.Addr
-		nn.Leader = nn.Addr == lAddr
-		nn.APIAddr = nodesResp[n.ID].apiAddr
-		nn.Reachable = nodesResp[n.ID].reachable
-		nn.Time = nodesResp[n.ID].time.Seconds()
-		nn.Error = nodesResp[n.ID].error
-		resp[n.ID] = nn
-	}
-
-	pretty, _ := isPretty(r)
-	var b []byte
-	if pretty {
-		b, err = json.MarshalIndent(resp, "", "    ")
-	} else {
-		b, err = json.Marshal(resp)
-	}
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	_, err = w.Write(b)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
 	}
 }
 
 // handleReadyz returns whether the node is ready.
-func (s *Service) handleReadyz(w http.ResponseWriter, r *http.Request) {
+func (s *Service) handleReadyz(w http.ResponseWriter, r *http.Request, qp QueryParams) {
 	if !s.CheckRequestPerm(r, auth.PermReady) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
@@ -1139,21 +969,10 @@ func (s *Service) handleReadyz(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	noLeader, err := noLeader(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if noLeader {
+	if qp.NoLeader() {
 		// Simply handling the HTTP request is enough.
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("[+]node ok"))
-		return
-	}
-
-	timeout, err := timeoutParam(r, defaultTimeout)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -1170,17 +989,24 @@ func (s *Service) handleReadyz(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = s.cluster.GetNodeAPIAddr(lAddr, timeout)
+	_, err = s.cluster.GetNodeAPIAddr(lAddr, qp.Timeout(defaultTimeout))
 	if err != nil {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		w.Write([]byte(fmt.Sprintf("[+]node ok\n[+]leader not contactable: %s", err.Error())))
 		return
 	}
+
+	if !s.store.Ready() {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		w.Write([]byte("[+]node ok\n[+]leader ok\n[+]store not ready"))
+		return
+	}
+
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("[+]node ok\n[+]leader ok"))
+	w.Write([]byte("[+]node ok\n[+]leader ok\n[+]store ok"))
 }
 
-func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
+func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request, qp QueryParams) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 
 	if !s.CheckRequestPerm(r, auth.PermExecute) {
@@ -1193,44 +1019,27 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	queue, err := isQueue(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	if queue {
+	if qp.Queue() {
 		stats.Add(numQueuedExecutions, 1)
-		s.queuedExecute(w, r)
+		s.queuedExecute(w, r, qp)
 	} else {
-		s.execute(w, r)
+		s.execute(w, r, qp)
 	}
 }
 
 // queuedExecute handles queued queries that modify the database.
-func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request) {
+func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request, qp QueryParams) {
 	resp := NewResponse()
 
 	// Perform a leader check, unless disabled. This prevents generating queued writes on
 	// a node that does not appear to be connected to a cluster (even a single-node cluster).
-	noLeader, err := noLeader(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if !noLeader {
+	if !qp.NoLeader() {
 		addr, err := s.store.LeaderAddr()
 		if err != nil || addr == "" {
 			stats.Add(numLeaderNotFound, 1)
 			http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
 			return
 		}
-	}
-
-	wait, err := isWait(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
 	}
 
 	b, err := io.ReadAll(r.Body)
@@ -1242,29 +1051,18 @@ func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request) {
 
 	stmts, err := ParseRequest(b)
 	if err != nil {
-		if errors.Is(err, ErrNoStatements) && !wait {
+		if errors.Is(err, ErrNoStatements) && !qp.Wait() {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 	}
-	noRewriteRandom, err := noRewriteRandom(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	if err := command.Rewrite(stmts, !noRewriteRandom); err != nil {
+	if err := command.Rewrite(stmts, !qp.NoRewriteRandom()); err != nil {
 		http.Error(w, fmt.Sprintf("SQL rewrite: %s", err.Error()), http.StatusInternalServerError)
 		return
 	}
 
-	timeout, err := timeoutParam(r, defaultTimeout)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
 	var fc queue.FlushChannel
-	if wait {
+	if qp.Wait() {
 		stats.Add(numQueuedExecutionsWait, 1)
 		fc = make(queue.FlushChannel)
 	}
@@ -1276,31 +1074,24 @@ func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request) {
 	}
 	resp.SequenceNum = seqNum
 
-	if wait {
+	if qp.Wait() {
 		// Wait for the flush channel to close, or timeout.
 		select {
 		case <-fc:
 			break
-		case <-time.NewTimer(timeout).C:
+		case <-time.NewTimer(qp.Timeout(defaultTimeout)).C:
 			http.Error(w, "timeout", http.StatusRequestTimeout)
 			return
 		}
 	}
 
 	resp.end = time.Now()
-	s.writeResponse(w, r, resp)
+	s.writeResponse(w, r, qp, resp)
 }
 
 // execute handles queries that modify the database.
-func (s *Service) execute(w http.ResponseWriter, r *http.Request) {
+func (s *Service) execute(w http.ResponseWriter, r *http.Request, qp QueryParams) {
 	resp := NewResponse()
-
-	timeout, isTx, timings, redirect, noRewriteRandom, err := reqParams(r, defaultTimeout)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
 	b, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -1313,30 +1104,23 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if err := command.Rewrite(stmts, !noRewriteRandom); err != nil {
+	stats.Add(numExecuteStmtsRx, int64(len(stmts)))
+	if err := command.Rewrite(stmts, !qp.NoRewriteRandom()); err != nil {
 		http.Error(w, fmt.Sprintf("SQL rewrite: %s", err.Error()), http.StatusInternalServerError)
 		return
 	}
 
-	er := &command.ExecuteRequest{
-		Request: &command.Request{
-			Transaction: isTx,
+	er := &proto.ExecuteRequest{
+		Request: &proto.Request{
+			Transaction: qp.Tx(),
 			Statements:  stmts,
 		},
-		Timings: timings,
+		Timings: qp.Timings(),
 	}
 
 	results, resultsErr := s.store.Execute(er)
 	if resultsErr != nil && resultsErr == store.ErrNotLeader {
-		if redirect {
-			leaderAPIAddr := s.LeaderAPIAddr()
-			if leaderAPIAddr == "" {
-				stats.Add(numLeaderNotFound, 1)
-				http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
-				return
-			}
-			loc := s.FormRedirect(r, leaderAPIAddr)
-			http.Redirect(w, r, loc, http.StatusMovedPermanently)
+		if s.DoRedirect(w, r, qp) {
 			return
 		}
 
@@ -1358,10 +1142,13 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request) {
 		}
 
 		w.Header().Add(ServedByHTTPHeader, addr)
-		results, resultsErr = s.cluster.Execute(er, addr, makeCredentials(username, password), timeout)
-		if resultsErr != nil && resultsErr.Error() == "unauthorized" {
-			http.Error(w, "remote execute not authorized", http.StatusUnauthorized)
-			return
+		results, resultsErr = s.cluster.Execute(er, addr, makeCredentials(username, password), qp.Timeout(defaultTimeout))
+		if resultsErr != nil {
+			stats.Add(numRemoteExecutionsFailed, 1)
+			if resultsErr.Error() == "unauthorized" {
+				http.Error(w, "remote execute not authorized", http.StatusUnauthorized)
+				return
+			}
 		}
 		stats.Add(numRemoteExecutions, 1)
 	}
@@ -1372,11 +1159,11 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request) {
 		resp.Results.ExecuteResult = results
 	}
 	resp.end = time.Now()
-	s.writeResponse(w, r, resp)
+	s.writeResponse(w, r, qp, resp)
 }
 
 // handleQuery handles queries that do not modify the database.
-func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
+func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryParams) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 
 	if !s.CheckRequestPerm(r, auth.PermQuery) {
@@ -1389,70 +1176,39 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	timeout, isTx, timings, redirect, noRewriteRandom, err := reqParams(r, defaultTimeout)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	lvl, err := level(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	frsh, err := freshness(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	assoc, err := isAssociative(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
 	// Get the query statement(s), and do tx if necessary.
-	queries, err := requestQueries(r)
+	queries, err := requestQueries(r, qp)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	stats.Add(numQueryStmtsRx, int64(len(queries)))
 
 	// No point rewriting queries if they don't go through the Raft log, since they
 	// will never be replayed from the log anyway.
-	if lvl == command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG {
-		if err := command.Rewrite(queries, noRewriteRandom); err != nil {
+	if qp.Level() == proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG {
+		if err := command.Rewrite(queries, qp.NoRewriteRandom()); err != nil {
 			http.Error(w, fmt.Sprintf("SQL rewrite: %s", err.Error()), http.StatusInternalServerError)
 			return
 		}
 	}
 
 	resp := NewResponse()
-	resp.Results.AssociativeJSON = assoc
+	resp.Results.AssociativeJSON = qp.Associative()
 
-	qr := &command.QueryRequest{
-		Request: &command.Request{
-			Transaction: isTx,
+	qr := &proto.QueryRequest{
+		Request: &proto.Request{
+			Transaction: qp.Tx(),
 			Statements:  queries,
 		},
-		Timings:   timings,
-		Level:     lvl,
-		Freshness: frsh.Nanoseconds(),
+		Timings:   qp.Timings(),
+		Level:     qp.Level(),
+		Freshness: qp.Freshness().Nanoseconds(),
 	}
 
 	results, resultsErr := s.store.Query(qr)
 	if resultsErr != nil && resultsErr == store.ErrNotLeader {
-		if redirect {
-			leaderAPIAddr := s.LeaderAPIAddr()
-			if leaderAPIAddr == "" {
-				stats.Add(numLeaderNotFound, 1)
-				http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
-				return
-			}
-			loc := s.FormRedirect(r, leaderAPIAddr)
-			http.Redirect(w, r, loc, http.StatusMovedPermanently)
+		if s.DoRedirect(w, r, qp) {
 			return
 		}
 
@@ -1472,10 +1228,13 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 		}
 
 		w.Header().Add(ServedByHTTPHeader, addr)
-		results, resultsErr = s.cluster.Query(qr, addr, makeCredentials(username, password), timeout)
-		if resultsErr != nil && resultsErr.Error() == "unauthorized" {
-			http.Error(w, "remote query not authorized", http.StatusUnauthorized)
-			return
+		results, resultsErr = s.cluster.Query(qr, addr, makeCredentials(username, password), qp.Timeout(defaultTimeout))
+		if resultsErr != nil {
+			stats.Add(numRemoteQueriesFailed, 1)
+			if resultsErr.Error() == "unauthorized" {
+				http.Error(w, "remote query not authorized", http.StatusUnauthorized)
+				return
+			}
 		}
 		stats.Add(numRemoteQueries, 1)
 	}
@@ -1486,22 +1245,108 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 		resp.Results.QueryRows = results
 	}
 	resp.end = time.Now()
-	s.writeResponse(w, r, resp)
+	s.writeResponse(w, r, qp, resp)
+}
+
+func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request, qp QueryParams) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+	if !s.CheckRequestPermAll(r, auth.PermQuery, auth.PermExecute) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	b, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	r.Body.Close()
+
+	stmts, err := ParseRequest(b)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	stats.Add(numRequestStmtsRx, int64(len(stmts)))
+
+	if err := command.Rewrite(stmts, qp.NoRewriteRandom()); err != nil {
+		http.Error(w, fmt.Sprintf("SQL rewrite: %s", err.Error()), http.StatusInternalServerError)
+		return
+	}
+
+	resp := NewResponse()
+	resp.Results.AssociativeJSON = qp.Associative()
+
+	eqr := &proto.ExecuteQueryRequest{
+		Request: &proto.Request{
+			Transaction: qp.Tx(),
+			Statements:  stmts,
+		},
+		Timings:   qp.Timings(),
+		Level:     qp.Level(),
+		Freshness: qp.Freshness().Nanoseconds(),
+	}
+
+	results, resultErr := s.store.Request(eqr)
+	if resultErr != nil && resultErr == store.ErrNotLeader {
+		if s.DoRedirect(w, r, qp) {
+			return
+		}
+
+		addr, err := s.store.LeaderAddr()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if addr == "" {
+			stats.Add(numLeaderNotFound, 1)
+			http.Error(w, ErrLeaderNotFound.Error(), http.StatusServiceUnavailable)
+			return
+		}
+		username, password, ok := r.BasicAuth()
+		if !ok {
+			username = ""
+		}
+
+		w.Header().Add(ServedByHTTPHeader, addr)
+		results, resultErr = s.cluster.Request(eqr, addr, makeCredentials(username, password), qp.Timeout(defaultTimeout))
+		if resultErr != nil {
+			stats.Add(numRemoteRequestsFailed, 1)
+			if resultErr.Error() == "unauthorized" {
+				http.Error(w, "remote request not authorized", http.StatusUnauthorized)
+				return
+			}
+		}
+		stats.Add(numRemoteRequests, 1)
+	}
+
+	if resultErr != nil {
+		resp.Error = resultErr.Error()
+	} else {
+		resp.Results.ExecuteQueryResponse = results
+	}
+	resp.end = time.Now()
+	s.writeResponse(w, r, qp, resp)
 }
 
 // handleExpvar serves registered expvar information over HTTP.
-func (s *Service) handleExpvar(w http.ResponseWriter, r *http.Request) {
+func (s *Service) handleExpvar(w http.ResponseWriter, r *http.Request, qp QueryParams) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	if !s.CheckRequestPerm(r, auth.PermStatus) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
-	key := keyParam(r)
 
 	fmt.Fprintf(w, "{\n")
 	first := true
 	expvar.Do(func(kv expvar.KeyValue) {
-		if key != "" && key != kv.Key {
+		if qp.Key() != "" && qp.Key() != kv.Key {
 			return
 		}
 		if !first {
@@ -1514,7 +1359,7 @@ func (s *Service) handleExpvar(w http.ResponseWriter, r *http.Request) {
 }
 
 // handlePprof serves pprof information over HTTP.
-func (s *Service) handlePprof(w http.ResponseWriter, r *http.Request) {
+func (s *Service) handlePprof(w http.ResponseWriter, r *http.Request, qp QueryParams) {
 	if !s.CheckRequestPerm(r, auth.PermStatus) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
@@ -1537,13 +1382,36 @@ func (s *Service) Addr() net.Addr {
 	return s.ln.Addr()
 }
 
+// DoRedirect checks if the request is a redirect, and if so, performs the redirect.
+// Returns true caller can consider the request handled. Returns false if the request
+// was not a redirect and the caller should continue processing the request.
+func (s *Service) DoRedirect(w http.ResponseWriter, r *http.Request, qp QueryParams) bool {
+	if !qp.Redirect() {
+		return false
+	}
+
+	rd, err := s.FormRedirect(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	} else {
+		http.Redirect(w, r, rd, http.StatusMovedPermanently)
+	}
+	return true
+}
+
 // FormRedirect returns the value for the "Location" header for a 301 response.
-func (s *Service) FormRedirect(r *http.Request, url string) string {
+func (s *Service) FormRedirect(r *http.Request) (string, error) {
+	leaderAPIAddr := s.LeaderAPIAddr()
+	if leaderAPIAddr == "" {
+		stats.Add(numLeaderNotFound, 1)
+		return "", ErrLeaderNotFound
+	}
+
 	rq := r.URL.RawQuery
 	if rq != "" {
 		rq = fmt.Sprintf("?%s", rq)
 	}
-	return fmt.Sprintf("%s%s%s", url, r.URL.Path, rq)
+	return fmt.Sprintf("%s%s%s", leaderAPIAddr, r.URL.Path, rq), nil
 }
 
 // CheckRequestPerm checks if the request is authenticated and authorized
@@ -1570,6 +1438,35 @@ func (s *Service) CheckRequestPerm(r *http.Request, perm string) (b bool) {
 	return s.credentialStore.AA(username, password, perm)
 }
 
+// CheckRequestPermAll checksif the request is authenticated and authorized
+// with all the given Perms.
+func (s *Service) CheckRequestPermAll(r *http.Request, perms ...string) (b bool) {
+	defer func() {
+		if b {
+			stats.Add(numAuthOK, 1)
+		} else {
+			stats.Add(numAuthFail, 1)
+		}
+	}()
+
+	// No auth store set, so no checking required.
+	if s.credentialStore == nil {
+		return true
+	}
+
+	username, password, ok := r.BasicAuth()
+	if !ok {
+		username = ""
+	}
+
+	for _, perm := range perms {
+		if !s.credentialStore.AA(username, password, perm) {
+			return false
+		}
+	}
+	return true
+}
+
 // LeaderAPIAddr returns the API address of the leader, as known by this node.
 func (s *Service) LeaderAPIAddr() string {
 	nodeAddr, err := s.store.LeaderAddr()
@@ -1578,7 +1475,6 @@ func (s *Service) LeaderAPIAddr() string {
 	}
 
 	apiAddr, err := s.cluster.GetNodeAPIAddr(nodeAddr, defaultTimeout)
-
 	if err != nil {
 		return ""
 	}
@@ -1595,8 +1491,8 @@ func (s *Service) runQueue() {
 		case <-s.closeCh:
 			return
 		case req := <-s.stmtQueue.C:
-			er := &command.ExecuteRequest{
-				Request: &command.Request{
+			er := &proto.ExecuteRequest{
+				Request: &proto.Request{
 					Statements:  req.Statements,
 					Transaction: s.DefaultQueueTx,
 				},
@@ -1655,48 +1551,6 @@ func (s *Service) runQueue() {
 	}
 }
 
-type checkNodesResponse struct {
-	apiAddr   string
-	reachable bool
-	time      time.Duration
-	error     string
-}
-
-// checkNodes returns a map of node ID to node responsivness, reachable
-// being defined as node responds to a simple request over the network.
-func (s *Service) checkNodes(nodes []*store.Server, timeout time.Duration) (map[string]*checkNodesResponse, error) {
-	var wg sync.WaitGroup
-	var mu sync.Mutex
-	resp := make(map[string]*checkNodesResponse)
-
-	for _, n := range nodes {
-		resp[n.ID] = &checkNodesResponse{}
-	}
-
-	// Now confirm.
-	for _, n := range nodes {
-		wg.Add(1)
-		go func(id, raftAddr string) {
-			defer wg.Done()
-			mu.Lock()
-			defer mu.Unlock()
-
-			start := time.Now()
-			apiAddr, err := s.cluster.GetNodeAPIAddr(raftAddr, timeout)
-			if err != nil {
-				resp[id].error = err.Error()
-				return
-			}
-			resp[id].reachable = true
-			resp[id].apiAddr = apiAddr
-			resp[id].time = time.Since(start)
-		}(n.ID, n.Addr)
-	}
-	wg.Wait()
-
-	return resp, nil
-}
-
 // addBuildVersion adds the build version to the HTTP response.
 func (s *Service) addBuildVersion(w http.ResponseWriter) {
 	// Add version header to every response, if available.
@@ -1707,10 +1561,33 @@ func (s *Service) addBuildVersion(w http.ResponseWriter) {
 	w.Header().Add(VersionHTTPHeader, version)
 }
 
+// addAllowHeaders adds the Access-Control-Allow-Origin, Access-Control-Allow-Methods,
+// and Access-Control-Allow-Headers headers to the HTTP response.
+func (s *Service) addAllowHeaders(w http.ResponseWriter) {
+	if s.AllowOrigin != "" {
+		w.Header().Add(AllowOriginHeader, s.AllowOrigin)
+	}
+	w.Header().Add(AllowMethodsHeader, "OPTIONS, GET, POST")
+	if s.credentialStore == nil {
+		w.Header().Add(AllowHeadersHeader, "Content-Type")
+	} else {
+		w.Header().Add(AllowHeadersHeader, "Content-Type, Authorization")
+		w.Header().Add(AllowCredentialsHeader, "true")
+	}
+}
+
+// addBackupFormatHeader adds the Content-Type header for the backup format.
+func addBackupFormatHeader(w http.ResponseWriter, qp QueryParams) {
+	w.Header().Set("Content-Type", "application/octet-stream")
+	if qp.BackupFormat() == proto.BackupRequest_BACKUP_REQUEST_FORMAT_SQL {
+		w.Header().Set("Content-Type", "application/sql")
+	}
+}
+
 // tlsStats returns the TLS stats for the service.
 func (s *Service) tlsStats() map[string]interface{} {
 	m := map[string]interface{}{
-		"enabled": prettyEnabled(s.tlsConfig != nil),
+		"enabled": fmt.Sprintf("%t", s.tlsConfig != nil),
 	}
 	if s.tlsConfig != nil {
 		m["client_auth"] = s.tlsConfig.ClientAuth.String()
@@ -1723,17 +1600,14 @@ func (s *Service) tlsStats() map[string]interface{} {
 }
 
 // writeResponse writes the given response to the given writer.
-func (s *Service) writeResponse(w http.ResponseWriter, r *http.Request, j Responser) {
+func (s *Service) writeResponse(w http.ResponseWriter, r *http.Request, qp QueryParams, j Responser) {
 	var b []byte
 	var err error
-	pretty, _ := isPretty(r)
-	timings, _ := isTimings(r)
-
-	if timings {
+	if qp.Timings() {
 		j.SetTime()
 	}
 
-	if pretty {
+	if qp.Pretty() {
 		b, err = json.MarshalIndent(j, "", "    ")
 	} else {
 		b, err = json.Marshal(j)
@@ -1749,15 +1623,11 @@ func (s *Service) writeResponse(w http.ResponseWriter, r *http.Request, j Respon
 	}
 }
 
-func requestQueries(r *http.Request) ([]*command.Statement, error) {
+func requestQueries(r *http.Request, qp QueryParams) ([]*proto.Statement, error) {
 	if r.Method == "GET" {
-		query, err := stmtParam(r)
-		if err != nil || query == "" {
-			return nil, errors.New("bad query GET request")
-		}
-		return []*command.Statement{
+		return []*proto.Statement{
 			{
-				Sql: query,
+				Sql: qp.Query(),
 			},
 		}, nil
 	}
@@ -1771,172 +1641,42 @@ func requestQueries(r *http.Request) ([]*command.Statement, error) {
 	return ParseRequest(b)
 }
 
-// queryParam returns whether the given query param is present.
-func queryParam(req *http.Request, param string) (bool, error) {
-	err := req.ParseForm()
+func getSubJSON(jsonBlob []byte, keyString string) (json.RawMessage, error) {
+	if keyString == "" {
+		return jsonBlob, nil
+	}
+
+	keys := strings.Split(keyString, ".")
+	var obj interface{}
+	if err := json.Unmarshal(jsonBlob, &obj); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal json: %w", err)
+	}
+
+	for _, key := range keys {
+		switch val := obj.(type) {
+		case map[string]interface{}:
+			if value, ok := val[key]; ok {
+				obj = value
+			} else {
+				emptyObj := json.RawMessage("{}")
+				return emptyObj, nil
+			}
+		default:
+			// If a value is not a map, marshal and return this value
+			finalObjBytes, err := json.Marshal(obj)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal final object: %w", err)
+			}
+			return finalObjBytes, nil
+		}
+	}
+
+	finalObjBytes, err := json.Marshal(obj)
 	if err != nil {
-		return false, err
-	}
-	if _, ok := req.Form[param]; ok {
-		return true, nil
-	}
-	return false, nil
-}
-
-// stmtParam returns the value for URL param 'q', if present.
-func stmtParam(req *http.Request) (string, error) {
-	q := req.URL.Query()
-	stmt := strings.TrimSpace(q.Get("q"))
-	return stmt, nil
-}
-
-// fmtParam returns the value for URL param 'fmt', if present.
-func fmtParam(req *http.Request) (string, error) {
-	q := req.URL.Query()
-	return strings.TrimSpace(q.Get("fmt")), nil
-}
-
-// isPretty returns whether the HTTP response body should be pretty-printed.
-func isPretty(req *http.Request) (bool, error) {
-	return queryParam(req, "pretty")
-}
-
-// isRedirect returns whether the HTTP request is requesting a explicit
-// redirect to the leader, if necessary.
-func isRedirect(req *http.Request) (bool, error) {
-	return queryParam(req, "redirect")
-}
-
-func keyParam(req *http.Request) string {
-	q := req.URL.Query()
-	return strings.TrimSpace(q.Get("key"))
-}
-
-// timeoutParam returns the value, if any, set for timeout. If not set, it
-// returns the value passed in as a default.
-func timeoutParam(req *http.Request, def time.Duration) (time.Duration, error) {
-	q := req.URL.Query()
-	timeout := strings.TrimSpace(q.Get("timeout"))
-	if timeout == "" {
-		return def, nil
-	}
-	t, err := time.ParseDuration(timeout)
-	if err != nil {
-		return 0, err
-	}
-	return t, nil
-}
-
-// isTx returns whether the HTTP request is requesting a transaction.
-func isTx(req *http.Request) (bool, error) {
-	return queryParam(req, "transaction")
-}
-
-// isQueue returns whether the HTTP request is requesting a queue.
-func isQueue(req *http.Request) (bool, error) {
-	return queryParam(req, "queue")
-}
-
-// reqParams is a convenience function to get a bunch of query params
-// in one function call.
-func reqParams(req *http.Request, def time.Duration) (timeout time.Duration, tx, timings, redirect, noRwRandom bool, err error) {
-	timeout, err = timeoutParam(req, def)
-	if err != nil {
-		return 0, false, false, false, true, err
-	}
-	tx, err = isTx(req)
-	if err != nil {
-		return 0, false, false, false, true, err
-	}
-	timings, err = isTimings(req)
-	if err != nil {
-		return 0, false, false, false, true, err
-	}
-	redirect, err = isRedirect(req)
-	if err != nil {
-		return 0, false, false, false, true, err
-	}
-	noRwRandom, err = noRewriteRandom(req)
-	if err != nil {
-		return 0, false, false, false, true, err
-	}
-	return timeout, tx, timings, redirect, noRwRandom, nil
-}
-
-// noLeader returns whether processing should skip the leader check.
-func noLeader(req *http.Request) (bool, error) {
-	return queryParam(req, "noleader")
-}
-
-// nonVoters returns whether a query is requesting to include non-voter results
-func nonVoters(req *http.Request) (bool, error) {
-	return queryParam(req, "nonvoters")
-}
-
-// isTimings returns whether timings are requested.
-func isTimings(req *http.Request) (bool, error) {
-	return queryParam(req, "timings")
-}
-
-// isWait returns whether a wait operation is requested.
-func isWait(req *http.Request) (bool, error) {
-	return queryParam(req, "wait")
-}
-
-func isAssociative(req *http.Request) (bool, error) {
-	return queryParam(req, "associative")
-}
-
-// noRewriteRandom returns whether a rewrite of RANDOM is disabled.
-func noRewriteRandom(req *http.Request) (bool, error) {
-	return queryParam(req, "norwrandom")
-}
-
-// level returns the requested consistency level for a query
-func level(req *http.Request) (command.QueryRequest_Level, error) {
-	q := req.URL.Query()
-	lvl := strings.TrimSpace(q.Get("level"))
-
-	switch strings.ToLower(lvl) {
-	case "none":
-		return command.QueryRequest_QUERY_REQUEST_LEVEL_NONE, nil
-	case "weak":
-		return command.QueryRequest_QUERY_REQUEST_LEVEL_WEAK, nil
-	case "strong":
-		return command.QueryRequest_QUERY_REQUEST_LEVEL_STRONG, nil
-	default:
-		return command.QueryRequest_QUERY_REQUEST_LEVEL_WEAK, nil
-	}
-}
-
-// freshness returns any freshness requested with a query.
-func freshness(req *http.Request) (time.Duration, error) {
-	q := req.URL.Query()
-	f := strings.TrimSpace(q.Get("freshness"))
-	if f == "" {
-		return 0, nil
+		return nil, fmt.Errorf("failed to marshal final object: %w", err)
 	}
 
-	d, err := time.ParseDuration(f)
-	if err != nil {
-		return 0, err
-	}
-	return d, nil
-}
-
-// backupFormat returns the request backup format, setting the response header
-// accordingly.
-func backupFormat(w http.ResponseWriter, r *http.Request) (command.BackupRequest_Format, error) {
-	fmt, err := fmtParam(r)
-	if err != nil {
-		return command.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY, err
-	}
-	if fmt == "sql" {
-		w.Header().Set("Content-Type", "application/sql")
-		return command.BackupRequest_BACKUP_REQUEST_FORMAT_SQL, nil
-	}
-	w.Header().Set("Content-Type", "application/octet-stream")
-	return command.BackupRequest_BACKUP_REQUEST_FORMAT_BINARY, nil
+	return finalObjBytes, nil
 }
 
 func prettyEnabled(e bool) string {
@@ -1947,16 +1687,16 @@ func prettyEnabled(e bool) string {
 }
 
 // queryRequestFromStrings converts a slice of strings into a command.QueryRequest
-func executeRequestFromStrings(s []string, timings, tx bool) *command.ExecuteRequest {
-	stmts := make([]*command.Statement, len(s))
+func executeRequestFromStrings(s []string, timings, tx bool) *proto.ExecuteRequest {
+	stmts := make([]*proto.Statement, len(s))
 	for i := range s {
-		stmts[i] = &command.Statement{
+		stmts[i] = &proto.Statement{
 			Sql: s[i],
 		}
 
 	}
-	return &command.ExecuteRequest{
-		Request: &command.Request{
+	return &proto.ExecuteRequest{
+		Request: &proto.Request{
 			Statements:  stmts,
 			Transaction: tx,
 		},
@@ -1964,24 +1704,8 @@ func executeRequestFromStrings(s []string, timings, tx bool) *command.ExecuteReq
 	}
 }
 
-// validateSQLiteFile checks that the supplied data looks like a SQLite database
-// file. See https://www.sqlite.org/fileformat.html
-func validSQLiteFile(b []byte) bool {
-	return len(b) > 13 && string(b[0:13]) == "SQLite format"
-}
-
-func resolvableAddress(addr string) (string, error) {
-	h, _, err := net.SplitHostPort(addr)
-	if err != nil {
-		// Just try the given address directly.
-		h = addr
-	}
-	_, err = net.LookupHost(h)
-	return h, err
-}
-
-func makeCredentials(username, password string) *cluster.Credentials {
-	return &cluster.Credentials{
+func makeCredentials(username, password string) *clstrPB.Credentials {
+	return &clstrPB.Credentials{
 		Username: username,
 		Password: password,
 	}
