@@ -333,11 +333,18 @@ class TestAutoBackupS3(unittest.TestCase):
 
     # Then create a table and insert rows. Wait for another backup to happen.
     node.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
-    for _ in range(100):
+    for _ in range(99):
       node.execute('INSERT INTO foo(name) VALUES("fiona")')
     j = node.query('SELECT count(*) FROM foo', level='strong')
-    self.assertEqual(j, d_("{'results': [{'values': [[100]], 'types': ['integer'], 'columns': ['count(*)']}]}"))
+    self.assertEqual(j, d_("{'results': [{'values': [[99]], 'types': ['integer'], 'columns': ['count(*)']}]}"))
+    node.wait_until_uploads_idle()
 
+    # Write one more record, wait for a backup to happen.
+    i = node.num_auto_backups()[0]
+    node.execute('INSERT INTO foo(name) VALUES("fiona")')
+    j = node.query('SELECT count(*) FROM foo', level='strong')
+    self.assertEqual(j, d_("{'results': [{'values': [[100]], 'types': ['integer'], 'columns': ['count(*)']}]}"))
+    node.wait_for_upload(i+1)
     node.wait_until_uploads_idle()
 
     # Download the backup file from S3 and check it.
