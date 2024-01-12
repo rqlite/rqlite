@@ -1,3 +1,7 @@
+## 8.16.5 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1592](https://github.com/rqlite/rqlite/pull/1592): Refactor and enhance upload logging.
+
 ## 8.16.4 (January 12th 2024)
 ### Implementation changes and bug fixes
 - [PR #1584](https://github.com/rqlite/rqlite/pull/1584): Count Snapshot reaping failures.
