@@ -1351,7 +1351,7 @@ COMMIT;
 		t.Fatalf("failed to load SQLite file: %s", err.Error())
 	}
 
-	// Load a database should mark that the snapshot store needs a Full Snapshot
+	// Loading a database should mark that the snapshot store needs a Full Snapshot
 	fn, err := s.snapshotStore.FullNeeded()
 	if err != nil {
 		t.Fatalf("failed to check if snapshot store needs a full snapshot: %s", err.Error())
@@ -1563,6 +1563,29 @@ COMMIT;
 	if exp, got := `{"error":"no such table: bar"}`, asJSON(r[0]); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
+
+	// Confirm that after restarting the Store, the data still looks good.
+	if err := s.Close(true); err != nil {
+		t.Fatalf("failed to close store: %s", err.Error())
+	}
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+	qr = queryRequestFromString("SELECT count(*) FROM foo", false, true)
+	r, err = s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `["count(*)"]`, asJSON(r[0].Columns); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[3]]`, asJSON(r[0].Values); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
 }
 
 func Test_SingleNodeBoot_InvalidFail_WALOK(t *testing.T) {
