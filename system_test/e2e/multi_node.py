@@ -530,15 +530,19 @@ class TestEndToEndBackupRestore(unittest.TestCase):
 
 class TestEndToEndSnapRestoreCluster(unittest.TestCase):
   def wait_for_snap(self, n):
+    '''
+    Wait for at least n snapshots to be taken.
+    '''
     timeout = 10
     t = 0
     while True:
       if t > timeout:
         raise Exception('timeout')
-      if self.n0.num_snapshots() is n:
+      if self.n0.num_snapshots() >= n:
         break
       time.sleep(1)
       t+=1
+    return self.n0.num_snapshots()
 
   def poll_query(self, node, exp):
     t = 0
@@ -546,7 +550,7 @@ class TestEndToEndSnapRestoreCluster(unittest.TestCase):
       if t > TIMEOUT:
         raise Exception('timeout waiting for node %s to have all data' % node.node_id)
       j = node.query('SELECT count(*) FROM foo', level='none')
-      if j == d_("{'results': [{'values': [[502]], 'types': ['integer'], 'columns': ['count(*)']}]}"):
+      if j == exp:
         break
       time.sleep(1)
       t+=1
@@ -559,11 +563,10 @@ class TestEndToEndSnapRestoreCluster(unittest.TestCase):
     self.n0.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
 
     # Let's get multiple snapshots done.
-    for j in range(1, 4):
-      for i in range(0,100):
-        self.n0.execute('INSERT INTO foo(name) VALUES("fiona")')
-      self.n0.wait_for_all_fsm()
-      self.wait_for_snap(j)
+    for i in range(0,300):
+      self.n0.execute('INSERT INTO foo(name) VALUES("fiona")')
+    self.n0.wait_for_all_fsm()
+    num_snaps = self.wait_for_snap(1)
 
     # Add two more nodes to the cluster
     self.n1 = Node(RQLITED_PATH, '1')
@@ -579,22 +582,19 @@ class TestEndToEndSnapRestoreCluster(unittest.TestCase):
 
     # Ensure those new nodes have the full correct state.
     self.n1.wait_for_fsm_index(self.n0.fsm_index())
-    j = self.n1.query('SELECT count(*) FROM foo', level='none')
-    self.assertEqual(j, d_("{'results': [{'values': [[301]], 'types': ['integer'], 'columns': ['count(*)']}]}"))
+    self.poll_query(self.n1, d_("{'results': [{'values': [[301]], 'types': ['integer'], 'columns': ['count(*)']}]}"))
 
     self.n2.wait_for_fsm_index(self.n0.fsm_index())
-    j = self.n2.query('SELECT count(*) FROM foo', level='none')
-    self.assertEqual(j, d_("{'results': [{'values': [[301]], 'types': ['integer'], 'columns': ['count(*)']}]}"))
+    self.poll_query(self.n2, d_("{'results': [{'values': [[301]], 'types': ['integer'], 'columns': ['count(*)']}]}"))
 
     # Kill one of the nodes, and make more changes, enough to trigger more snaps.
     self.n2.stop()
 
     # Let's get more snapshots done.
-    for j in range(3, 5):
-      for i in range(0,100):
-        self.n0.execute('INSERT INTO foo(name) VALUES("fiona")')
-      self.n0.wait_for_all_fsm()
-      self.wait_for_snap(j)
+    for j in range(0, 200):
+      self.n0.execute('INSERT INTO foo(name) VALUES("fiona")')
+    self.n0.wait_for_all_fsm()
+    self.wait_for_snap(num_snaps+1)
 
     # Restart killed node, check it has full state.
     self.n2.start()
