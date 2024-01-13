@@ -31,16 +31,16 @@ func NewProvider(s *Store, v, c bool) *Provider {
 	}
 }
 
-// LastModified returns the time the data managed by the Provider was
-// last modified.
-func (p *Provider) LastModified() (time.Time, error) {
+// LastIndex returns the cluster-wide index the data managed by the DataProvider was
+// last modified by.
+func (p *Provider) LastIndex() (uint64, error) {
 	stats.Add(numProviderChecks, 1)
-	return p.str.db.LastModified()
+	return p.str.DBAppliedIndex(), nil
 }
 
 // Provider writes the SQLite database to the given path. If path exists,
 // it will be overwritten.
-func (p *Provider) Provide(w io.Writer) (t time.Time, retErr error) {
+func (p *Provider) Provide(w io.Writer) (retErr error) {
 	stats.Add(numProviderProvides, 1)
 	defer func() {
 		if retErr != nil {
@@ -62,8 +62,8 @@ func (p *Provider) Provide(w io.Writer) (t time.Time, retErr error) {
 		time.Sleep(p.retryInterval)
 		nRetries++
 		if nRetries > p.nRetries {
-			return time.Time{}, err
+			return err
 		}
 	}
-	return p.str.db.LastModified()
+	return nil
 }
