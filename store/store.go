@@ -237,6 +237,9 @@ type Store struct {
 	dbAppliedIndex       uint64
 	appliedIdxUpdateDone chan struct{}
 
+	dbMuMu        sync.RWMutex // Mutex to protect database mutation index.
+	dbMutationIdx uint64       // Index of last log which mutated the database.
+
 	dechunkManager *chunking.DechunkerManager
 	cmdProc        *CommandProcessor
 
@@ -1712,7 +1715,12 @@ func (s *Store) fsmApply(l *raft.Log) (e interface{}) {
 		s.logger.Printf("first log applied since node start, log at index %d", l.Index)
 	}
 
-	cmd, _, r := s.cmdProc.Process(l.Data, &s.db)
+	cmd, mutated, r := s.cmdProc.Process(l.Data, &s.db)
+	if mutated {
+		s.dbMuMu.Lock()
+		s.dbMutationIdx = l.Index
+		s.dbMuMu.Unlock()
+	}
 	if cmd.Type == proto.Command_COMMAND_TYPE_NOOP {
 		s.numNoops++
 	} else if cmd.Type == proto.Command_COMMAND_TYPE_LOAD {
