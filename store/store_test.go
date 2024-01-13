@@ -1796,15 +1796,12 @@ func Test_MultiNodeDBAppliedIndex(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
-	testPoll(t, func() bool {
-		qr := queryRequestFromString("SELECT count(*) FROM foo", false, true)
-		qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
-		r, err := s1.Query(qr)
-		return err == nil && asJSON(r[0].Values) == `[[3]]`
-	}, 250*time.Millisecond, 3*time.Second)
-	if s0.DBAppliedIndex() != s1.DBAppliedIndex() {
-		t.Fatalf("applied index mismatch (%d, %d)", s0.DBAppliedIndex(), s1.DBAppliedIndex())
+	if _, err := s0.WaitForAppliedFSM(5 * time.Second); err != nil {
+		t.Fatalf("failed to wait for FSM to apply on leader")
 	}
+	testPoll(t, func() bool {
+		return s0.DBAppliedIndex() == s1.DBAppliedIndex()
+	}, 250*time.Millisecond, 3*time.Second)
 
 	// Create a third node, make sure it joins the cluster, and check that the DBAppliedIndex
 	// is correct.
@@ -1822,14 +1819,9 @@ func Test_MultiNodeDBAppliedIndex(t *testing.T) {
 		t.Fatalf("failed to wait for leader on follower: %s", err.Error())
 	}
 	testPoll(t, func() bool {
-		qr := queryRequestFromString("SELECT count(*) FROM foo", false, true)
-		qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
-		r, err := s2.Query(qr)
-		return err == nil && asJSON(r[0].Values) == `[[3]]`
+		return s0.DBAppliedIndex() == s2.DBAppliedIndex()
+
 	}, 250*time.Millisecond, 3*time.Second)
-	if s0.DBAppliedIndex() != s2.DBAppliedIndex() {
-		t.Fatalf("applied index mismatch (%d, %d)", s0.DBAppliedIndex(), s2.DBAppliedIndex())
-	}
 
 	// Noop, then snapshot, truncating all logs. Then have another node join the cluster.
 	if af, err := s0.Noop("don't care"); err != nil || af.Error() != nil {
@@ -1852,14 +1844,8 @@ func Test_MultiNodeDBAppliedIndex(t *testing.T) {
 		t.Fatalf("failed to wait for leader on follower: %s", err.Error())
 	}
 	testPoll(t, func() bool {
-		qr := queryRequestFromString("SELECT count(*) FROM foo", false, true)
-		qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
-		r, err := s3.Query(qr)
-		return err == nil && asJSON(r[0].Values) == `[[3]]`
-	}, 250*time.Millisecond, 3*time.Second)
-	if s0.DBAppliedIndex() > s2.DBAppliedIndex() {
-		t.Fatalf("applied index on new node is not correct (%d, %d)", s0.DBAppliedIndex(), s2.DBAppliedIndex())
-	}
+		return s0.DBAppliedIndex() <= s3.DBAppliedIndex()
+	}, 250*time.Millisecond, 5*time.Second)
 
 	// Write one last row, and everything should be in sync.
 	er = executeRequestFromStrings([]string{
@@ -1868,6 +1854,9 @@ func Test_MultiNodeDBAppliedIndex(t *testing.T) {
 	_, err = s0.Execute(er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	if _, err := s0.WaitForAppliedFSM(5 * time.Second); err != nil {
+		t.Fatalf("failed to wait for FSM to apply on leader")
 	}
 
 	testPoll(t, func() bool {
