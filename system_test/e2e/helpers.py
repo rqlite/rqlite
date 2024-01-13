@@ -424,7 +424,7 @@ class Node(object):
         t+=1
         continue
 
-      # OK, skipped backups are increasing, but has the number of backups stayed the same?
+      # OK, skipped uploads are increasing, but has the number of backups stayed the same?
       if self.num_auto_backups()[0] != backups:
         t+=1
         continue
