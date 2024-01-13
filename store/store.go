@@ -217,6 +217,7 @@ const (
 type Store struct {
 	open          bool
 	raftDir       string
+	snapshotDir   string
 	peersPath     string
 	peersInfoPath string
 
@@ -336,6 +337,7 @@ func New(ly Layer, c *Config) *Store {
 	return &Store{
 		ly:              ly,
 		raftDir:         c.Dir,
+		snapshotDir:     filepath.Join(c.Dir, snapshotsDirName),
 		peersPath:       filepath.Join(c.Dir, peersPath),
 		peersInfoPath:   filepath.Join(c.Dir, peersInfoPath),
 		restoreDoneCh:   make(chan struct{}),
@@ -427,13 +429,12 @@ func (s *Store) Open() (retErr error) {
 
 	// Upgrade any pre-existing snapshots.
 	oldSnapshotDir := filepath.Join(s.raftDir, "snapshots")
-	snapshotDir := filepath.Join(s.raftDir, snapshotsDirName)
-	if err := snapshot.Upgrade(oldSnapshotDir, snapshotDir, s.logger); err != nil {
+	if err := snapshot.Upgrade(oldSnapshotDir, s.snapshotDir, s.logger); err != nil {
 		return fmt.Errorf("failed to upgrade snapshots: %s", err)
 	}
 
 	// Create store for the Snapshots.
-	snapshotStore, err := snapshot.NewStore(filepath.Join(snapshotDir))
+	snapshotStore, err := snapshot.NewStore(filepath.Join(s.snapshotDir))
 	if err != nil {
 		return fmt.Errorf("failed to create snapshot store: %s", err)
 	}
@@ -643,20 +644,9 @@ func (s *Store) WaitForAppliedFSM(timeout time.Duration) (uint64, error) {
 	return s.WaitForFSMIndex(s.raft.AppliedIndex(), timeout)
 }
 
-// WaitForInitialLogs waits for logs that were in the Store at time of open
-// to be applied to the state machine.
-func (s *Store) WaitForInitialLogs(timeout time.Duration) error {
-	if timeout == 0 {
-		return nil
-	}
-	s.logger.Printf("waiting for up to %s for application of initial logs (lcIdx=%d)",
-		timeout, s.lastCommandIdxOnOpen)
-	return s.WaitForApplied(timeout)
-}
-
 // WaitForApplied waits for all Raft log entries to be applied to the
 // underlying database.
-func (s *Store) WaitForApplied(timeout time.Duration) error {
+func (s *Store) WaitForAllApplied(timeout time.Duration) error {
 	if timeout == 0 {
 		return nil
 	}
@@ -681,6 +671,14 @@ func (s *Store) WaitForAppliedIndex(idx uint64, timeout time.Duration) error {
 			return fmt.Errorf("timeout expired")
 		}
 	}
+}
+
+// DBAppliedIndex returns the index of the last Raft log that changed the
+// underlying database. If the index is unknown then 0 is returned.
+func (s *Store) DBAppliedIndex() uint64 {
+	s.dbAppliedIdxMu.RLock()
+	defer s.dbAppliedIdxMu.RUnlock()
+	return s.dbAppliedIdx
 }
 
 // IsLeader is used to determine if the current node is cluster leader
@@ -875,7 +873,7 @@ func (s *Store) SetRequestCompression(batch, size int) {
 	s.reqMarshaller.SizeThreshold = size
 }
 
-// WaitForFSMIndex blocks until a given log index has been applied to the
+// WaitForFSMIndex blocks until a given log index has been applied to our
 // state machine or the timeout expires.
 func (s *Store) WaitForFSMIndex(idx uint64, timeout time.Duration) (uint64, error) {
 	tck := time.NewTicker(appliedWaitDelay)
@@ -1881,6 +1879,25 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	}
 	s.db = db
 	s.logger.Printf("successfully opened database at %s due to restore", s.db.Path())
+
+	// Take conservative approach and assume that everything has changed, so update
+	// the indexes. It is possible that dbAppliedIdx is now ahead of some other nodes'
+	// same value, since the last index is not necessarily a database-changing index,
+	// but that is OK. Worse that can happen is that anything paying attention to the
+	// index might consider the database to be changed when it is not, *logically* speaking.
+	li, err := snapshot.LatestIndex(s.snapshotDir)
+	if err != nil {
+		return fmt.Errorf("failed to get latest snapshot index post restore: %s", err)
+	}
+	if err := s.boltStore.SetAppliedIndex(li); err != nil {
+		return fmt.Errorf("failed to set applied index: %s", err)
+	}
+	s.fsmIdxMu.Lock()
+	s.fsmIdx = li
+	s.fsmIdxMu.Unlock()
+	s.dbAppliedIdxMu.Lock()
+	s.dbAppliedIdx = li
+	s.dbAppliedIdxMu.Unlock()
 
 	stats.Add(numRestores, 1)
 	s.logger.Printf("node restored in %s", time.Since(startT))

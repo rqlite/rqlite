@@ -1751,6 +1751,133 @@ func Test_SingleNodeWaitForRemove(t *testing.T) {
 	}
 }
 
+func Test_MultiNodeDBAppliedIndex(t *testing.T) {
+	s0, ln0 := mustNewStore(t)
+	defer ln0.Close()
+	if err := s0.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s0.Close(true)
+	if err := s0.Bootstrap(NewServer(s0.ID(), s0.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Join a second node to the first.
+	s1, ln1 := mustNewStore(t)
+	defer ln1.Close()
+	if err := s1.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s1.Close(true)
+	if err := s0.Join(joinRequest(s1.ID(), s1.Addr(), true)); err != nil {
+		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
+	}
+	_, err := s1.WaitForLeader(10 * time.Second)
+	if err != nil {
+		t.Fatalf("failed to wait for leader on follower: %s", err.Error())
+	}
+
+	// Check that the DBAppliedIndex is the same on both nodes.
+	if s0.DBAppliedIndex() != s1.DBAppliedIndex() {
+		t.Fatalf("applied index mismatch")
+	}
+
+	// Write some data, and check that the DBAppliedIndex remains the same on both nodes.
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+		`INSERT INTO foo(id, name) VALUES(2, "fiona")`,
+		`INSERT INTO foo(id, name) VALUES(3, "fiona")`,
+	}, false, false)
+	_, err = s0.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	testPoll(t, func() bool {
+		qr := queryRequestFromString("SELECT count(*) FROM foo", false, true)
+		qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+		r, err := s1.Query(qr)
+		return err == nil && asJSON(r[0].Values) == `[[3]]`
+	}, 250*time.Millisecond, 3*time.Second)
+	if s0.DBAppliedIndex() != s1.DBAppliedIndex() {
+		t.Fatalf("applied index mismatch (%d, %d)", s0.DBAppliedIndex(), s1.DBAppliedIndex())
+	}
+
+	// Create a third node, make sure it joins the cluster, and check that the DBAppliedIndex
+	// is correct.
+	s2, ln2 := mustNewStore(t)
+	defer ln2.Close()
+	if err := s2.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s2.Close(true)
+	if err := s0.Join(joinRequest(s2.ID(), s2.Addr(), true)); err != nil {
+		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
+	}
+	_, err = s2.WaitForLeader(10 * time.Second)
+	if err != nil {
+		t.Fatalf("failed to wait for leader on follower: %s", err.Error())
+	}
+	testPoll(t, func() bool {
+		qr := queryRequestFromString("SELECT count(*) FROM foo", false, true)
+		qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+		r, err := s2.Query(qr)
+		return err == nil && asJSON(r[0].Values) == `[[3]]`
+	}, 250*time.Millisecond, 3*time.Second)
+	if s0.DBAppliedIndex() != s2.DBAppliedIndex() {
+		t.Fatalf("applied index mismatch (%d, %d)", s0.DBAppliedIndex(), s2.DBAppliedIndex())
+	}
+
+	// Noop, then snapshot, truncating all logs. Then have another node join the cluster.
+	if af, err := s0.Noop("don't care"); err != nil || af.Error() != nil {
+		t.Fatalf("failed to noop on single node: %s", err.Error())
+	}
+	if err := s0.Snapshot(1); err != nil {
+		t.Fatalf("failed to snapshot single-node store: %s", err.Error())
+	}
+	s3, ln3 := mustNewStore(t)
+	defer ln3.Close()
+	if err := s3.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s3.Close(true)
+	if err := s0.Join(joinRequest(s3.ID(), s3.Addr(), true)); err != nil {
+		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
+	}
+	_, err = s3.WaitForLeader(10 * time.Second)
+	if err != nil {
+		t.Fatalf("failed to wait for leader on follower: %s", err.Error())
+	}
+	testPoll(t, func() bool {
+		qr := queryRequestFromString("SELECT count(*) FROM foo", false, true)
+		qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+		r, err := s3.Query(qr)
+		return err == nil && asJSON(r[0].Values) == `[[3]]`
+	}, 250*time.Millisecond, 3*time.Second)
+	if s0.DBAppliedIndex() > s2.DBAppliedIndex() {
+		t.Fatalf("applied index on new node is not correct (%d, %d)", s0.DBAppliedIndex(), s2.DBAppliedIndex())
+	}
+
+	// Write one last row, and everything should be in sync.
+	er = executeRequestFromStrings([]string{
+		`INSERT INTO foo(id, name) VALUES(4, "fiona")`,
+	}, false, false)
+	_, err = s0.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	testPoll(t, func() bool {
+		i := s0.DBAppliedIndex()
+		return i == s1.DBAppliedIndex() &&
+			i == s2.DBAppliedIndex() &&
+			i == s3.DBAppliedIndex()
+	}, 100*time.Millisecond, 5*time.Second)
+}
+
 func Test_MultiNodeJoinRemove(t *testing.T) {
 	s0, ln0 := mustNewStore(t)
 	defer ln0.Close()
@@ -3148,6 +3275,7 @@ func asJSONAssociative(v interface{}) string {
 }
 
 func testPoll(t *testing.T, f func() bool, p time.Duration, d time.Duration) {
+	t.Helper()
 	tck := time.NewTicker(p)
 	defer tck.Stop()
 	tmr := time.NewTimer(d)
