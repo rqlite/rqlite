@@ -1751,6 +1751,71 @@ func Test_SingleNodeWaitForRemove(t *testing.T) {
 	}
 }
 
+func Test_MultiNodeDBAppliedIndex(t *testing.T) {
+	s0, ln0 := mustNewStore(t)
+	defer ln0.Close()
+	if err := s0.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s0.Close(true)
+	if err := s0.Bootstrap(NewServer(s0.ID(), s0.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Join a second node to the first.
+	s1, ln1 := mustNewStore(t)
+	defer ln1.Close()
+	if err := s1.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s1.Close(true)
+	if err := s1.Bootstrap(NewServer(s1.ID(), s1.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if err := s0.Join(joinRequest(s1.ID(), s1.Addr(), true)); err != nil {
+		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
+	}
+	_, err := s1.WaitForLeader(10 * time.Second)
+	if err != nil {
+		t.Fatalf("failed to wait for leader on follower: %s", err.Error())
+	}
+
+	// Check that the DBAppliedIndex is the same on both nodes.
+	if s0.DBAppliedIndex() != s1.DBAppliedIndex() {
+		t.Fatalf("applied index mismatch")
+	}
+
+	// Write some data, and check that the DBAppliedIndex remains the same on both nodes.
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+	}, false, false)
+	_, err = s0.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	testPoll(t, func() bool {
+		// wait until the SELECT count(*) returns 1 on s1
+		qr := queryRequestFromString("SELECT count(*) FROM foo", false, true)
+		qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+		r, err := s1.Query(qr)
+		if err != nil {
+			return false
+		}
+		if exp, got := `[[1]]`, asJSON(r[0].Values); exp != got {
+			return false
+		}
+		return true
+	}, 250*time.Millisecond, 3*time.Second)
+
+	if s0.DBAppliedIndex() != s1.DBAppliedIndex() {
+		t.Fatalf("applied index mismatch (%d, %d)", s0.DBAppliedIndex(), s1.DBAppliedIndex())
+	}
+}
+
 func Test_MultiNodeJoinRemove(t *testing.T) {
 	s0, ln0 := mustNewStore(t)
 	defer ln0.Close()

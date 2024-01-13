@@ -683,6 +683,14 @@ func (s *Store) WaitForAppliedIndex(idx uint64, timeout time.Duration) error {
 	}
 }
 
+// DBAppliedIndex returns the index of the last Raft log that changed the
+// underlying database.
+func (s *Store) DBAppliedIndex() uint64 {
+	s.dbAppliedIdxMu.RLock()
+	defer s.dbAppliedIdxMu.RUnlock()
+	return s.dbAppliedIdx
+}
+
 // IsLeader is used to determine if the current node is cluster leader
 func (s *Store) IsLeader() bool {
 	return s.raft.State() == raft.Leader
