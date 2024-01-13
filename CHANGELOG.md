@@ -6,6 +6,7 @@
 - [PR #1597](https://github.com/rqlite/rqlite/pull/1597): Clarify end-to-end testing code.
 - [PR #1598](https://github.com/rqlite/rqlite/pull/1598): Refactor Store-level index tracking.
 - [PR #1599](https://github.com/rqlite/rqlite/pull/1599): Test no upload after Leader change.
+- [PR #1600](https://github.com/rqlite/rqlite/pull/1600): Use Raft index for upload checks. Fixes [#1594](https://github.com/rqlite/rqlite/issues/1594).
 
 ## 8.16.4 (January 12th 2024)
 ### Implementation changes and bug fixes
