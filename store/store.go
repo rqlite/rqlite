@@ -233,13 +233,6 @@ type Store struct {
 	dbDir   string    // Path to directory containing SQLite file.
 	db      *sql.DB   // The underlying SQLite store.
 
-	dbAppliedIndexMu     sync.RWMutex
-	dbAppliedIndex       uint64
-	appliedIdxUpdateDone chan struct{}
-
-	dbMuMu        sync.RWMutex // Mutex to protect database mutation index.
-	dbMutationIdx uint64       // Index of last log which mutated the database.
-
 	dechunkManager *chunking.DechunkerManager
 	cmdProc        *CommandProcessor
 
@@ -260,6 +253,11 @@ type Store struct {
 	// this value is not updated after a Snapshot-restore.
 	fsmIndex   uint64
 	fsmIndexMu sync.RWMutex
+
+	// Latest log entry index which actually changed the database.
+	dbAppliedIndexMu     sync.RWMutex
+	dbAppliedIndex       uint64
+	appliedIdxUpdateDone chan struct{}
 
 	reqMarshaller *command.RequestMarshaler // Request marshaler for writing to log.
 	raftLog       raft.LogStore             // Persistent log store.
@@ -1043,10 +1041,6 @@ func (s *Store) execute(ex *proto.ExecuteRequest) ([]*proto.ExecuteResult, error
 		}
 		return nil, af.Error()
 	}
-
-	s.dbAppliedIndexMu.Lock()
-	s.dbAppliedIndex = af.Index()
-	s.dbAppliedIndexMu.Unlock()
 	r := af.Response().(*fsmExecuteResponse)
 	return r.results, r.error
 }
@@ -1088,10 +1082,6 @@ func (s *Store) Query(qr *proto.QueryRequest) ([]*proto.QueryRows, error) {
 			}
 			return nil, af.Error()
 		}
-
-		s.dbAppliedIndexMu.Lock()
-		s.dbAppliedIndex = af.Index()
-		s.dbAppliedIndexMu.Unlock()
 		r := af.Response().(*fsmQueryResponse)
 		return r.rows, r.error
 	}
@@ -1166,10 +1156,6 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 		}
 		return nil, af.Error()
 	}
-
-	s.dbAppliedIndexMu.Lock()
-	s.dbAppliedIndex = af.Index()
-	s.dbAppliedIndexMu.Unlock()
 	r := af.Response().(*fsmExecuteQueryResponse)
 	return r.results, r.error
 }
@@ -1315,10 +1301,6 @@ func (s *Store) load(lr *proto.LoadRequest) error {
 		s.logger.Printf("load failed during Apply: %s", af.Error())
 		return af.Error()
 	}
-
-	s.dbAppliedIndexMu.Lock()
-	s.dbAppliedIndex = af.Index()
-	s.dbAppliedIndexMu.Unlock()
 	s.logger.Printf("node loaded in %s (%d bytes)", time.Since(startT), len(b))
 	return nil
 }
@@ -1717,9 +1699,9 @@ func (s *Store) fsmApply(l *raft.Log) (e interface{}) {
 
 	cmd, mutated, r := s.cmdProc.Process(l.Data, &s.db)
 	if mutated {
-		s.dbMuMu.Lock()
-		s.dbMutationIdx = l.Index
-		s.dbMuMu.Unlock()
+		s.dbAppliedIndexMu.Lock()
+		s.dbAppliedIndex = l.Index
+		s.dbAppliedIndexMu.Unlock()
 	}
 	if cmd.Type == proto.Command_COMMAND_TYPE_NOOP {
 		s.numNoops++
