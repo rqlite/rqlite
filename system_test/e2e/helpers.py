@@ -413,10 +413,14 @@ class Node(object):
     '''
     Wait until uploads go idle.
     '''
-    i = self.num_auto_backups()[2]
+    backups = self.num_auto_backups()[0]
+    skipped = self.num_auto_backups()[2]
+    skipped_sum = self.num_auto_backups()[3]
+    total_skipped = skipped + skipped_sum
     t = 0
     while t < timeout:
-      if self.num_auto_backups()[2] > i:
+      # No change in backups, and the other backups are being skipped?
+      if self.num_auto_backups()[0] == backups and (self.num_auto_backups()[2] + self.num_auto_backups()[3]) >total_skipped:
         return self.num_auto_backups()
       time.sleep(0.1)
       t+=1
