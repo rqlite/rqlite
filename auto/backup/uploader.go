@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/rqlite/rqlite/v8/db/humanize"
@@ -16,13 +17,14 @@ import (
 // StorageClient is an interface for uploading data to a storage service.
 type StorageClient interface {
 	// Upload uploads the data from the given reader to the storage service.
-	// sum is the SHA256 sum of the data being uploaded and will be stored with
-	// the data. If sum is nil, no sum will be stored.
-	Upload(ctx context.Context, reader io.Reader, sum []byte) error
+	// id is a identifier for the data, and will be stored along with
+	// the data in the storage service.
+	Upload(ctx context.Context, reader io.Reader, id string) error
 
-	// CurrentSum returns the SHA256 sum of the data in the Storage service.
-	// It is always read from the Storage service and never cached.
-	CurrentSum(ctx context.Context) ([]byte, error)
+	// CurrentID returns the ID of the data in the Storage service.
+	// It is always read from the Storage service, and a cached
+	// value is never returned.
+	CurrentID(ctx context.Context) (string, error)
 
 	fmt.Stringer
 }
@@ -31,14 +33,12 @@ type StorageClient interface {
 // service will call Provide() to have the data-for-upload to be written to the
 // to the file specified by path.
 type DataProvider interface {
-	// LastModified returns the time the data managed by the DataProvider was
-	// last modified.
-	LastModified() (time.Time, error)
+	// LastIndex returns the cluster-wide index the data managed by the DataProvider was
+	// last modified by.
+	LastIndex() (uint64, error)
 
-	// Provide writes the data-for-upload to the writer. Because Provide may
-	// change the data in the DataProvider, it returns the current modified
-	// time of the data, after the data has been written to path.
-	Provide(w io.Writer) (time.Time, error)
+	// Provide writes the data-for-upload to the writer.
+	Provide(w io.Writer) error
 }
 
 // stats captures stats for the Uploader service.
@@ -85,8 +85,7 @@ type Uploader struct {
 	lastUploadTime     time.Time
 	lastUploadDuration time.Duration
 
-	lastSumUploaded []byte
-	lastModified    time.Time // The last-modified time of the data most-recently uploaded.
+	lastIndex uint64 // The last index of the data most-recently uploaded.
 }
 
 // NewUploader creates a new Uploader service.
@@ -138,21 +137,20 @@ func (u *Uploader) Stats() (map[string]interface{}, error) {
 		"compress":             u.compress,
 		"last_upload_time":     u.lastUploadTime.Format(time.RFC3339),
 		"last_upload_duration": u.lastUploadDuration.String(),
-		"last_sum_uploaded":    fmt.Sprintf("%x", u.lastSumUploaded),
-		"last_modified":        u.lastModified.String(),
+		"last_index":           strconv.FormatUint(u.lastIndex, 10),
 	}
 	return status, nil
 }
 
 func (u *Uploader) upload(ctx context.Context) error {
 	var err error
-	var lm time.Time
+	var li uint64
 
-	lm, err = u.dataProvider.LastModified()
+	li, err = u.dataProvider.LastIndex()
 	if err != nil {
 		return err
 	}
-	if !lm.After(u.lastModified) {
+	if li <= u.lastIndex {
 		stats.Add(numUploadsSkipped, 1)
 		return nil
 	}
@@ -165,23 +163,18 @@ func (u *Uploader) upload(ctx context.Context) error {
 	defer os.Remove(fd.Name())
 	defer fd.Close()
 
-	lm, err = u.dataProvider.Provide(fd)
-	if err != nil {
+	if err := u.dataProvider.Provide(fd); err != nil {
 		return err
 	}
 
-	filesum, err := FileSHA256(fd.Name())
-	if err != nil {
-		return err
-	}
-	if u.lastModified.IsZero() {
-		// No "last modified" time, so this must be the first upload since this
+	if u.lastIndex == 0 {
+		// No last index, so this must be the first upload since this
 		// uploader started. Double-check that we really need to upload.
-		cloudSum, err := u.currentSum(ctx)
+		cloudID, err := u.storageClient.CurrentID(ctx)
 		if err != nil {
 			stats.Add(numSumGetFail, 1)
 			u.logger.Printf("failed to get current sum from %s: %v", u.storageClient, err)
-		} else if err == nil && filesum.Equals(cloudSum) {
+		} else if err == nil && cloudID == strconv.FormatUint(li, 10) {
 			stats.Add(numUploadsSkippedSum, 1)
 			return nil
 		}
@@ -192,15 +185,14 @@ func (u *Uploader) upload(ctx context.Context) error {
 	}
 	cr := progress.NewCountingReader(fd)
 	startTime := time.Now()
-	err = u.storageClient.Upload(ctx, cr, filesum)
+	err = u.storageClient.Upload(ctx, cr, strconv.FormatUint(li, 10))
 	if err != nil {
 		stats.Add(numUploadsFail, 1)
 		return err
 	}
 
 	// Successful upload!
-	u.lastSumUploaded = filesum
-	u.lastModified = lm
+	u.lastIndex = li
 	stats.Add(numUploadsOK, 1)
 	stats.Add(totalUploadBytes, cr.Count())
 	stats.Get(lastUploadBytes).(*expvar.Int).Set(cr.Count())
@@ -210,14 +202,6 @@ func (u *Uploader) upload(ctx context.Context) error {
 		humanize.Bytes(uint64(stats.Get(lastUploadBytes).(*expvar.Int).Value())),
 		u.storageClient, u.lastUploadDuration)
 	return nil
-}
-
-func (u *Uploader) currentSum(ctx context.Context) (SHA256Sum, error) {
-	s, err := u.storageClient.CurrentSum(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return SHA256Sum(s), nil
 }
 
 func tempFD() (*os.File, error) {

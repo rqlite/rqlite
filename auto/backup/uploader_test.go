@@ -37,17 +37,13 @@ func Test_UploaderSingleUpload(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	sc := &mockStorageClient{
-		uploadFn: func(ctx context.Context, reader io.Reader, sum []byte) error {
+		uploadFn: func(ctx context.Context, reader io.Reader, id string) error {
 			defer wg.Done()
 			uploadedData, err = io.ReadAll(reader)
 			return err
 		},
 	}
 	dp := &mockDataProvider{data: "my upload data"}
-	n := time.Now()
-	dp.lastModifiedFn = func() (time.Time, error) {
-		return n, nil // Single upload, since time doesn't change.
-	}
 	uploader := NewUploader(sc, dp, 100*time.Millisecond, UploadNoCompress)
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -73,14 +69,13 @@ func Test_UploaderSingleUpload_Checksum(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	sc := &mockStorageClient{
-		currentSumFn: func(ctx context.Context) ([]byte, error) {
+		currentIDFn: func(ctx context.Context) (string, error) {
 			defer wg.Done()
-			tmpF := mustWriteToFile("my upload data")
-			defer os.Remove(tmpF)
-			return FileSHA256(tmpF)
+			return "1234", nil
 		},
 	}
 	dp := &mockDataProvider{data: "my upload data"}
+	dp.lastIndexFn = func() (uint64, error) { return 1234, nil }
 	uploader := NewUploader(sc, dp, 100*time.Millisecond, UploadNoCompress)
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -101,7 +96,7 @@ func Test_UploaderDoubleUpload(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 	sc := &mockStorageClient{
-		uploadFn: func(ctx context.Context, reader io.Reader, sum []byte) error {
+		uploadFn: func(ctx context.Context, reader io.Reader, id string) error {
 			defer wg.Done()
 			uploadedData = nil // Wipe out any previous state.
 			uploadedData, err = io.ReadAll(reader)
@@ -109,6 +104,14 @@ func Test_UploaderDoubleUpload(t *testing.T) {
 		},
 	}
 	dp := &mockDataProvider{data: "my upload data"}
+	lastIndexCalled := false
+	dp.lastIndexFn = func() (uint64, error) {
+		if lastIndexCalled {
+			return 2, nil
+		}
+		lastIndexCalled = true
+		return 1, nil
+	}
 	uploader := NewUploader(sc, dp, 100*time.Millisecond, UploadNoCompress)
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -130,7 +133,7 @@ func Test_UploaderFailThenOK(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 	sc := &mockStorageClient{
-		uploadFn: func(ctx context.Context, reader io.Reader, sum []byte) error {
+		uploadFn: func(ctx context.Context, reader io.Reader, id string) error {
 			defer wg.Done()
 			if uploadCount == 0 {
 				uploadCount++
@@ -142,6 +145,14 @@ func Test_UploaderFailThenOK(t *testing.T) {
 		},
 	}
 	dp := &mockDataProvider{data: "my upload data"}
+	lastIndexCalled := false
+	dp.lastIndexFn = func() (uint64, error) {
+		if lastIndexCalled {
+			return 2, nil
+		}
+		lastIndexCalled = true
+		return 1, nil
+	}
 	uploader := NewUploader(sc, dp, 100*time.Millisecond, UploadNoCompress)
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -163,7 +174,7 @@ func Test_UploaderOKThenFail(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 	sc := &mockStorageClient{
-		uploadFn: func(ctx context.Context, reader io.Reader, sum []byte) error {
+		uploadFn: func(ctx context.Context, reader io.Reader, id string) error {
 			defer wg.Done()
 
 			if uploadCount == 1 {
@@ -176,6 +187,14 @@ func Test_UploaderOKThenFail(t *testing.T) {
 		},
 	}
 	dp := &mockDataProvider{data: "my upload data"}
+	lastIndexCalled := false
+	dp.lastIndexFn = func() (uint64, error) {
+		if lastIndexCalled {
+			return 2, nil
+		}
+		lastIndexCalled = true
+		return 1, nil
+	}
 	uploader := NewUploader(sc, dp, 100*time.Millisecond, UploadNoCompress)
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -193,7 +212,7 @@ func Test_UploaderContextCancellation(t *testing.T) {
 	var uploadCount int32
 
 	sc := &mockStorageClient{
-		uploadFn: func(ctx context.Context, reader io.Reader, sum []byte) error {
+		uploadFn: func(ctx context.Context, reader io.Reader, id string) error {
 			atomic.AddInt32(&uploadCount, 1)
 			return nil
 		},
@@ -235,7 +254,7 @@ func Test_UploaderEnabledTrue(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	sc := &mockStorageClient{
-		uploadFn: func(ctx context.Context, reader io.Reader, sum []byte) error {
+		uploadFn: func(ctx context.Context, reader io.Reader, id string) error {
 			defer wg.Done()
 			uploadedData, err = io.ReadAll(reader)
 			return err
@@ -278,22 +297,22 @@ func Test_UploaderStats(t *testing.T) {
 // mockStorageClient implements StorageClient and in its default configuration
 // always returns an error for CurrentSum.
 type mockStorageClient struct {
-	uploadFn     func(ctx context.Context, reader io.Reader, sum []byte) error
-	currentSumFn func(ctx context.Context) ([]byte, error)
+	uploadFn    func(ctx context.Context, reader io.Reader, id string) error
+	currentIDFn func(ctx context.Context) (string, error)
 }
 
-func (mc *mockStorageClient) Upload(ctx context.Context, reader io.Reader, sum []byte) error {
+func (mc *mockStorageClient) Upload(ctx context.Context, reader io.Reader, id string) error {
 	if mc.uploadFn != nil {
-		return mc.uploadFn(ctx, reader, sum)
+		return mc.uploadFn(ctx, reader, id)
 	}
 	return nil
 }
 
-func (mc *mockStorageClient) CurrentSum(ctx context.Context) ([]byte, error) {
-	if mc.currentSumFn != nil {
-		return mc.currentSumFn(ctx)
+func (mc *mockStorageClient) CurrentID(ctx context.Context) (string, error) {
+	if mc.currentIDFn != nil {
+		return mc.currentIDFn(ctx)
 	}
-	return nil, fmt.Errorf("no current sum")
+	return "", fmt.Errorf("no current sum")
 }
 
 func (mc *mockStorageClient) String() string {
@@ -304,27 +323,27 @@ func (mc *mockStorageClient) String() string {
 // always returns the current time for LastModified and writes the data it is
 // provided to the file specified by Provide.
 type mockDataProvider struct {
-	data           string
-	err            error
-	lastModifiedFn func() (time.Time, error)
+	data        string
+	err         error
+	lastIndexFn func() (uint64, error)
 }
 
-func (mp *mockDataProvider) LastModified() (time.Time, error) {
-	if mp.lastModifiedFn != nil {
-		return mp.lastModifiedFn()
+func (mp *mockDataProvider) LastIndex() (uint64, error) {
+	if mp.lastIndexFn != nil {
+		return mp.lastIndexFn()
 	}
-	return time.Now(), nil
+	return 1, nil
 }
 
-func (mp *mockDataProvider) Provide(w io.Writer) (time.Time, error) {
+func (mp *mockDataProvider) Provide(w io.Writer) error {
 	if mp.err != nil {
-		return time.Time{}, mp.err
+		return mp.err
 	}
 
 	if _, err := w.Write([]byte(mp.data)); err != nil {
-		return time.Time{}, err
+		return err
 	}
-	return time.Now(), nil
+	return nil
 }
 
 func mustWriteToFile(s string) string {
