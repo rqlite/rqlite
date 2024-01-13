@@ -186,7 +186,7 @@ class TestJoinCatchup(unittest.TestCase):
     self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
     j = n0.query('SELECT * FROM foo')
     self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
-    applied = n0.wait_for_all_fsm()
+    applied = n0.wait_for_all_applied()
 
     # Test that follower node has correct state in local database, and then kill the follower
     self.n1.wait_for_fsm_index(applied)
@@ -199,7 +199,7 @@ class TestJoinCatchup(unittest.TestCase):
     self.assertEqual(j, d_("{'results': [{'last_insert_id': 2, 'rows_affected': 1}]}"))
     j = n0.query('SELECT COUNT(*) FROM foo')
     self.assertEqual(j, d_("{'results': [{'values': [[2]], 'types': ['integer'], 'columns': ['COUNT(*)']}]}"))
-    applied = n0.wait_for_all_fsm()
+    applied = n0.wait_for_all_applied()
 
     # Restart follower, explicity rejoin, and ensure it picks up new records
     self.n1.start(join=self.n0.RaftAddr())
@@ -218,7 +218,7 @@ class TestJoinCatchup(unittest.TestCase):
     self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
     j = n0.query('SELECT * FROM foo')
     self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
-    applied = n0.wait_for_all_fsm()
+    applied = n0.wait_for_all_applied()
 
     # Test that follower node has correct state in local database, and then kill the follower
     self.n1.wait_for_fsm_index(applied)
@@ -231,7 +231,7 @@ class TestJoinCatchup(unittest.TestCase):
     self.assertEqual(j, d_("{'results': [{'last_insert_id': 2, 'rows_affected': 1}]}"))
     j = n0.query('SELECT COUNT(*) FROM foo')
     self.assertEqual(j, d_("{'results': [{'values': [[2]], 'types': ['integer'], 'columns': ['COUNT(*)']}]}"))
-    applied = n0.wait_for_all_fsm()
+    applied = n0.wait_for_all_applied()
 
     # Restart follower with new network attributes, explicity rejoin, and ensure it picks up new records
     self.n1.scramble_network()

@@ -219,7 +219,7 @@ class TestAutoClusteringKVStores(unittest.TestCase):
     j = n0.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
     self.assertEqual(j, d_("{'results': [{}]}"))
     j = n0.execute('INSERT INTO foo(name) VALUES("fiona")')
-    n0.wait_for_all_fsm()
+    n0.wait_for_all_applied()
     j = n0.query('SELECT * FROM foo')
     self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
 
@@ -276,7 +276,7 @@ class TestAutoClusteringKVStores(unittest.TestCase):
     j = n0.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
     self.assertEqual(j, d_("{'results': [{}]}"))
     j = n0.execute('INSERT INTO foo(name) VALUES("fiona")')
-    n0.wait_for_all_fsm()
+    n0.wait_for_all_applied()
     j = n0.query('SELECT * FROM foo')
     self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
 
