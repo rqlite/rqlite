@@ -61,10 +61,10 @@ func Test_UploaderSingleUpload(t *testing.T) {
 	}
 }
 
-// Test_UploaderSingleUpload_Checksum ensures that when the checksum in the
-// storage service is the same as the checksum of the data being uploaded, the
+// Test_UploaderSingleUpload_ID ensures that when the ID in the
+// storage service is the same as the ID of the data being uploaded, the
 // upload is skipped.
-func Test_UploaderSingleUpload_Checksum(t *testing.T) {
+func Test_UploaderSingleUpload_ID(t *testing.T) {
 	ResetStats()
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -83,7 +83,7 @@ func Test_UploaderSingleUpload_Checksum(t *testing.T) {
 	wg.Wait()
 	cancel()
 	<-done
-	if exp, got := int64(1), stats.Get(numUploadsSkippedSum).(*expvar.Int); exp != got.Value() {
+	if exp, got := int64(1), stats.Get(numUploadsSkippedID).(*expvar.Int); exp != got.Value() {
 		t.Errorf("expected numUploadsSkippedSum to be %d, got %d", exp, got)
 	}
 }
