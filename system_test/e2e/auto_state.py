@@ -6,7 +6,7 @@ import unittest
 import sqlite3
 import time
 
-from helpers import Node, deprovision_node, write_random_file, random_string, env_present, gunzip_file, gzip_compress, temp_file, d_
+from helpers import Node, deprovision_node, write_random_file, random_string, env_present, gunzip_file, gzip_compress, temp_file, d_, Cluster
 from s3 import download_s3_object, delete_s3_object, upload_s3_object
 
 S3_BUCKET = 'rqlite-testing-circleci'
@@ -340,7 +340,7 @@ class TestAutoBackupS3(unittest.TestCase):
     node.wait_until_uploads_idle()
 
     # Write one more record, wait for a backup to happen.
-    i = node.num_auto_backups()[0]
+    i = node.num_auto_backups()['ok']
     node.execute('INSERT INTO foo(name) VALUES("fiona")')
     j = node.query('SELECT count(*) FROM foo', level='strong')
     self.assertEqual(j, d_("{'results': [{'values': [[100]], 'types': ['integer'], 'columns': ['count(*)']}]}"))
@@ -409,7 +409,7 @@ class TestAutoBackupS3(unittest.TestCase):
 
     # Confirm that the follower has performed no backups.
     time.sleep(5)
-    self.assertEqual(follower.num_auto_backups()[0], 0)
+    self.assertEqual(follower.num_auto_backups()['ok'], 0)
 
     delete_s3_object(access_key_id, secret_access_key_id, S3_BUCKET, path)
     deprovision_node(leader)
@@ -468,6 +468,67 @@ class TestAutoBackupS3(unittest.TestCase):
 
     delete_s3_object(access_key_id, secret_access_key_id, S3_BUCKET, path)
     deprovision_node(node)
+    os.remove(cfg)
+
+  @unittest.skipUnless(env_present('RQLITE_S3_ACCESS_KEY'), "S3 credentials not available")
+  def test_no_upload_leader_change(self):
+    '''Test that when a cluster changes leader, the new leader doesn't upload again'''
+    node = None
+    cfg = None
+    path = None
+    access_key_id = os.environ['RQLITE_S3_ACCESS_KEY']
+    secret_access_key_id = os.environ['RQLITE_S3_SECRET_ACCESS_KEY']
+
+    # Create the auto-backup config file
+    path = random_string(32)
+    auto_backup_cfg = {
+      "version": 1,
+      "type": "s3",
+      "interval": "100ms",
+      "no_compress": True,
+      "sub" : {
+        "access_key_id": access_key_id,
+        "secret_access_key": secret_access_key_id,
+        "region": S3_BUCKET_REGION,
+        "bucket": S3_BUCKET,
+         "path": path
+      }
+    }
+    cfg = write_random_file(json.dumps(auto_backup_cfg))
+
+    # Create a cluster with automatic backups enabled. An initial
+    # backup will happen because there is no data in the cloud.
+    n0 = Node(RQLITED_PATH, '0', auto_backup=cfg)
+    n0.start()
+    n0.wait_for_leader()
+    n0.wait_for_upload(1)
+
+    # Then create a table and insert a row. Wait for another backup to happen.
+    n0.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
+    n0.wait_for_upload(2)
+
+    # Create a cluster with two more followers
+    n1 = Node(RQLITED_PATH, '1', auto_backup=cfg)
+    n1.start(join=n0.RaftAddr())
+    n1.wait_for_leader()
+    n2 = Node(RQLITED_PATH, '2', auto_backup=cfg)
+    n2.start(join=n0.RaftAddr())
+    n2.wait_for_leader()
+
+    # Kill the leader, and get the new leader
+    cluster = Cluster([n0, n1, n2])
+    l = cluster.wait_for_leader()
+    l.stop(graceful=False)
+    new_leader = cluster.wait_for_leader(node_exc=l)
+
+    # Ensure new leader didn't do a backup
+    new_leader.wait_until_uploads_idle()
+    self.assertEqual(new_leader.num_auto_backups()['ok'], 0)
+
+    delete_s3_object(access_key_id, secret_access_key_id, S3_BUCKET, path)
+    deprovision_node(n0)
+    deprovision_node(n1)
+    deprovision_node(n2)
     os.remove(cfg)
 
 

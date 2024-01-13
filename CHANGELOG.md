@@ -5,6 +5,7 @@
 - [PR #1596](https://github.com/rqlite/rqlite/pull/1596): Track Raft logs which change the database.
 - [PR #1597](https://github.com/rqlite/rqlite/pull/1597): Clarify end-to-end testing code.
 - [PR #1598](https://github.com/rqlite/rqlite/pull/1598): Refactor Store-level index tracking.
+- [PR #1599](https://github.com/rqlite/rqlite/pull/1599): Test no upload after Leader change.
 
 ## 8.16.4 (January 12th 2024)
 ### Implementation changes and bug fixes
