@@ -58,7 +58,7 @@ jobs:
     steps:
       - checkout
       - restore_and_save_cache
-      - run: go test -failfast -v $(go list ./... | sed -n 'n;p')
+      - run: go test -failfast $(go list ./... | sed -n 'n;p')
     resource_class: large
 
   test_even:
@@ -67,7 +67,7 @@ jobs:
     steps:
       - checkout
       - restore_and_save_cache
-      - run: go test -failfast -v $(go list ./... | sed -n 'p;n')
+      - run: go test -failfast $(go list ./... | sed -n 'p;n')
     resource_class: large
 
   race_odd:

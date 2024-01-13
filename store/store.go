@@ -685,7 +685,7 @@ func (s *Store) WaitForAppliedIndex(idx uint64, timeout time.Duration) error {
 }
 
 // DBAppliedIndex returns the index of the last Raft log that changed the
-// underlying database.
+// underlying database. If the index is unknown then 0 is returned.
 func (s *Store) DBAppliedIndex() uint64 {
 	s.dbAppliedIdxMu.RLock()
 	defer s.dbAppliedIdxMu.RUnlock()
