@@ -11,22 +11,6 @@ import (
 	sql "github.com/rqlite/rqlite/v8/db"
 )
 
-// ExecuteResults is a slice of ExecuteResult, which detects mutations.
-type ExecuteResults []*proto.ExecuteResult
-
-// Mutation returns true if any of the results mutated the database.
-func (e ExecuteResults) Mutation() bool {
-	if len(e) == 0 {
-		return false
-	}
-	for i := range e {
-		if e[i].RowsAffected > 0 {
-			return true
-		}
-	}
-	return false
-}
-
 // ExecuteQueryResponses is a slice of ExecuteQueryResponse, which detects mutations.
 type ExecuteQueryResponses []*proto.ExecuteQueryResponse
 
@@ -36,7 +20,7 @@ func (e ExecuteQueryResponses) Mutation() bool {
 		return false
 	}
 	for i := range e {
-		if e[i].GetE() != nil && e[i].GetE().RowsAffected > 0 {
+		if e[i].GetE() != nil {
 			return true
 		}
 	}
@@ -78,7 +62,7 @@ func (c *CommandProcessor) Process(data []byte, pDB **sql.DB) (*proto.Command, b
 			panic(fmt.Sprintf("failed to unmarshal execute subcommand: %s", err.Error()))
 		}
 		r, err := db.Execute(er.Request, er.Timings)
-		return cmd, ExecuteResults(r).Mutation(), &fsmExecuteResponse{results: r, error: err}
+		return cmd, true, &fsmExecuteResponse{results: r, error: err}
 	case proto.Command_COMMAND_TYPE_EXECUTE_QUERY:
 		var eqr proto.ExecuteQueryRequest
 		if err := command.UnmarshalSubCommand(cmd, &eqr); err != nil {
