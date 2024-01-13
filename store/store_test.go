@@ -98,6 +98,56 @@ func Test_SingleNodeOnDiskSQLitePath(t *testing.T) {
 	}
 }
 
+func Test_SingleNodeDBAppliedIndex(t *testing.T) {
+	s, ln, _ := mustNewStoreSQLitePath(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+	if exp, got := s.DBAppliedIndex(), uint64(0); exp != got {
+		t.Fatalf("wrong DB applied index, got: %d, exp %d", got, exp)
+	}
+
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+	}, false, false)
+	_, err := s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	if exp, got := s.DBAppliedIndex(), uint64(3); exp != got {
+		t.Fatalf("wrong DB applied index, got: %d, exp %d", got, exp)
+	}
+	er = executeRequestFromStrings([]string{
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+	}, false, false)
+	_, err = s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	if exp, got := s.DBAppliedIndex(), uint64(4); exp != got {
+		t.Fatalf("wrong DB applied index, got: %d, exp %d", got, exp)
+	}
+	qr := queryRequestFromString("SELECT * FROM foo", false, false)
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+	_, err = s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := s.DBAppliedIndex(), uint64(4); exp != got {
+		t.Fatalf("wrong DB applied index, got: %d, exp %d", got, exp)
+	}
+
+}
+
 func Test_SingleNodeTempFileCleanup(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
