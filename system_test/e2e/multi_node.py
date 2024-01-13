@@ -65,7 +65,7 @@ class TestEndToEnd(unittest.TestCase):
     j = n.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
     self.assertEqual(j, d_("{'results': [{}]}"))
     j = n.execute('INSERT INTO foo(name) VALUES("fiona")')
-    fsmIdx = n.wait_for_all_fsm()
+    fsmIdx = n.wait_for_all_applied()
     self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
     j = n.query('SELECT * FROM foo')
     self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
@@ -227,7 +227,7 @@ class TestClusterRecovery(unittest.TestCase):
     j = n0.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
     self.assertEqual(j, d_("{'results': [{}]}"))
     j = n0.execute('INSERT INTO foo(name) VALUES("fiona")')
-    fsmIdx = n0.wait_for_all_fsm()
+    fsmIdx = n0.wait_for_all_applied()
     self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
     j = n0.query('SELECT * FROM foo')
     self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
@@ -295,7 +295,7 @@ class TestRequestForwarding(unittest.TestCase):
       f = self.cluster.followers()[0]
       j = f.execute('INSERT INTO foo(name) VALUES("fiona")')
       self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
-      fsmIdx = l.wait_for_all_fsm()
+      fsmIdx = l.wait_for_all_applied()
 
       j = l.query('SELECT * FROM foo')
       self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
@@ -313,7 +313,7 @@ class TestRequestForwarding(unittest.TestCase):
       f = self.cluster.followers()[0]
       j = f.execute('INSERT INTO foo(name) VALUES("fiona")')
       self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
-      fsmIdx = l.wait_for_all_fsm()
+      fsmIdx = l.wait_for_all_applied()
 
       j = f.execute_queued('INSERT INTO foo(name) VALUES("declan")')
       self.assertTrue(is_sequence_number(str(j)))
@@ -341,7 +341,7 @@ class TestRequestForwarding(unittest.TestCase):
       f = self.cluster.followers()[0]
       j = f.execute('INSERT INTO foo(name) VALUES("fiona")')
       self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
-      fsmIdx = l.wait_for_all_fsm()
+      fsmIdx = l.wait_for_all_applied()
 
       # Load up the queue!
       for i in range(0,2000):
@@ -381,7 +381,7 @@ class TestEndToEndNonVoter(unittest.TestCase):
     j = self.leader.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
     self.assertEqual(j, d_("{'results': [{}]}"))
     j = self.leader.execute('INSERT INTO foo(name) VALUES("fiona")')
-    self.leader.wait_for_all_fsm()
+    self.leader.wait_for_all_applied()
     self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
     j = self.leader.query('SELECT * FROM foo')
     self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
@@ -437,7 +437,7 @@ class TestEndToEndNonVoterFollowsLeader(unittest.TestCase):
     j = n.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
     self.assertEqual(j, d_("{'results': [{}]}"))
     j = n.execute('INSERT INTO foo(name) VALUES("fiona")')
-    n.wait_for_all_fsm()
+    n.wait_for_all_applied()
     self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
     j = n.query('SELECT * FROM foo')
     self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
@@ -468,7 +468,7 @@ class TestEndToEndBackupRestore(unittest.TestCase):
     self.node0.wait_for_leader()
     self.node0.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
     self.node0.execute('INSERT INTO foo(name) VALUES("fiona")')
-    self.node0.wait_for_all_fsm()
+    self.node0.wait_for_all_applied()
     self.node1 = Node(RQLITED_PATH, '1')
     self.node1.start(join=self.node0.RaftAddr())
     self.node1.wait_for_leader()
@@ -511,7 +511,7 @@ class TestEndToEndBackupRestore(unittest.TestCase):
     self.assertTrue(self.node3.is_leader())
 
     self.node4.restore(self.db_file, fmt='binary')
-    self.node3.wait_for_all_fsm()
+    self.node3.wait_for_all_applied()
     j = self.node3.query('SELECT * FROM foo')
     self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
 
@@ -565,7 +565,7 @@ class TestEndToEndSnapRestoreCluster(unittest.TestCase):
     # Let's get multiple snapshots done.
     for i in range(0,300):
       self.n0.execute('INSERT INTO foo(name) VALUES("fiona")')
-    self.n0.wait_for_all_fsm()
+    self.n0.wait_for_all_applied()
     num_snaps = self.wait_for_snap(1)
 
     # Add two more nodes to the cluster
@@ -593,7 +593,7 @@ class TestEndToEndSnapRestoreCluster(unittest.TestCase):
     # Let's get more snapshots done.
     for j in range(0, 200):
       self.n0.execute('INSERT INTO foo(name) VALUES("fiona")')
-    self.n0.wait_for_all_fsm()
+    self.n0.wait_for_all_applied()
     self.wait_for_snap(num_snaps+1)
 
     # Restart killed node, check it has full state.

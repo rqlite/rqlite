@@ -32,13 +32,13 @@ class TestSingleNode(unittest.TestCase):
     self.assertEqual(j, d_("{'results': [{}]}"))
 
     j = n.execute('INSERT INTO bar(name) VALUES("fiona")')
-    applied = n.wait_for_all_fsm()
+    applied = n.wait_for_all_applied()
     self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
     j = n.query('SELECT * from bar')
     self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
 
     j = n.execute('INSERT INTO bar(name) VALUES("declan")')
-    applied = n.wait_for_all_fsm()
+    applied = n.wait_for_all_applied()
     self.assertEqual(j, d_("{'results': [{'last_insert_id': 2, 'rows_affected': 1}]}"))
     j = n.query('SELECT * from bar where id=2')
     self.assertEqual(j, d_("{'results': [{'values': [[2, 'declan']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
@@ -57,7 +57,7 @@ class TestSingleNode(unittest.TestCase):
     j = n.execute('CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
     self.assertEqual(j, d_("{'results': [{}]}"))
     j = n.execute('INSERT INTO bar(name) VALUES("fiona")')
-    applied = n.wait_for_all_fsm()
+    applied = n.wait_for_all_applied()
     self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
     j = n.query('SELECT * from bar', pretty=True, text=True)
     exp = '''{
@@ -89,11 +89,11 @@ class TestSingleNode(unittest.TestCase):
     self.assertEqual(j, d_("{'results': [{}]}"))
 
     j = n.execute('INSERT INTO bar(name, age) VALUES(?,?)', params=["fiona", 20])
-    applied = n.wait_for_all_fsm()
+    applied = n.wait_for_all_applied()
     self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
 
     j = n.execute('INSERT INTO bar(name, age) VALUES(?,?)', params=["declan", None])
-    applied = n.wait_for_all_fsm()
+    applied = n.wait_for_all_applied()
     self.assertEqual(j, d_("{'results': [{'last_insert_id': 2, 'rows_affected': 1}]}"))
 
     j = n.query('SELECT * from bar WHERE age=?', params=[20])
@@ -110,7 +110,7 @@ class TestSingleNode(unittest.TestCase):
     self.assertEqual(j, d_("{'results': [{}]}"))
 
     j = n.execute('INSERT INTO bar(name, age) VALUES(?,?)', params=["fiona", 20])
-    applied = n.wait_for_all_fsm()
+    applied = n.wait_for_all_applied()
     self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
 
     j = n.query('SELECT * from bar')
@@ -120,7 +120,7 @@ class TestSingleNode(unittest.TestCase):
     self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona', 20]], 'types': ['integer', 'text', 'integer'], 'columns': ['id', 'name', 'age']}]}"))
 
     j = n.execute('INSERT INTO bar(name, age) VALUES(?,?)', params=["declan", None])
-    applied = n.wait_for_all_fsm()
+    applied = n.wait_for_all_applied()
     self.assertEqual(j, d_("{'results': [{'last_insert_id': 2, 'rows_affected': 1}]}"))
 
     j = n.query('SELECT * from bar WHERE name=:name', params={"name": "declan"})
@@ -137,7 +137,7 @@ class TestSingleNode(unittest.TestCase):
         ['INSERT INTO bar(name, age) VALUES("sinead", 25)']
     ])
     j = n.execute_raw(body)
-    applied = n.wait_for_all_fsm()
+    applied = n.wait_for_all_applied()
     self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}, {'last_insert_id': 2, 'rows_affected': 1}]}"))
     j = n.query('SELECT * from bar')
     self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona', 20], [2, 'sinead', 25]], 'types': ['integer', 'text', 'integer'], 'columns': ['id', 'name', 'age']}]}"))
@@ -153,7 +153,7 @@ class TestSingleNode(unittest.TestCase):
         ['INSERT INTO bar(name, age) VALUES("sinead", 25)']
     ])
     j = n.request_raw(body)
-    applied = n.wait_for_all_fsm()
+    applied = n.wait_for_all_applied()
     self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}, {'last_insert_id': 2, 'rows_affected': 1}]}"))
     j = n.request('SELECT * from bar')
     self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona', 20], [2, 'sinead', 25]], 'types': ['integer', 'text', 'integer'], 'columns': ['id', 'name', 'age']}]}"))
@@ -168,7 +168,7 @@ class TestSingleNode(unittest.TestCase):
     j = n.execute('INSERT INTO foo(name) VALUES("fiona")')
     self.assertEqual(j, d_("{'results': [{'last_insert_id': 1, 'rows_affected': 1}]}"))
 
-    applied = n.wait_for_all_fsm()
+    applied = n.wait_for_all_applied()
 
     # Wait for a snapshot to happen.
     timeout = 10
@@ -244,7 +244,7 @@ class TestEndToEndSnapshotRestoreSingle(unittest.TestCase):
     while True:
       if t > timeout:
         raise Exception('timeout')
-      if self.n0.last_snapshot_index() >= n:
+      if self.n0.raft_last_snapshot_index() >= n:
         break
       time.sleep(1)
       t+=1
@@ -257,7 +257,7 @@ class TestEndToEndSnapshotRestoreSingle(unittest.TestCase):
 
     for i in range(0,200):
       self.n0.execute('INSERT INTO foo(name) VALUES("fiona")')
-    self.n0.wait_for_all_fsm()
+    self.n0.wait_for_all_applied()
     self.waitForSnapIndex(175)
 
     # Ensure node has the full correct state.

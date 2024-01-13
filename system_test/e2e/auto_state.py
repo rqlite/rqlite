@@ -274,7 +274,7 @@ class TestAutoBackupS3(unittest.TestCase):
 
     # Then create a table and insert a row. Wait for another backup to happen.
     node.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
-    node.wait_for_all_fsm()
+    node.wait_for_all_applied()
     j = node.query('SELECT count(*) FROM foo', level='strong')
     self.assertEqual(j, d_("{'results': [{'values': [[0]], 'types': ['integer'], 'columns': ['count(*)']}]}"))
     node.wait_for_upload(2)
@@ -404,7 +404,7 @@ class TestAutoBackupS3(unittest.TestCase):
 
     # Then create a table and insert a row. Wait for a backup to happen.
     leader.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
-    leader.wait_for_all_fsm()
+    leader.wait_for_all_applied()
     leader.wait_for_upload(2)
 
     # Confirm that the follower has performed no backups.
