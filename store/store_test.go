@@ -1830,6 +1830,36 @@ func Test_MultiNodeDBAppliedIndex(t *testing.T) {
 	if s0.DBAppliedIndex() != s2.DBAppliedIndex() {
 		t.Fatalf("applied index mismatch (%d, %d)", s0.DBAppliedIndex(), s2.DBAppliedIndex())
 	}
+
+	// Noop, then snapshot, truncating all logs. Then have another node join the cluster.
+	if af, err := s0.Noop("don't care"); err != nil || af.Error() != nil {
+		t.Fatalf("failed to noop on single node: %s", err.Error())
+	}
+	if err := s0.Snapshot(1); err != nil {
+		t.Fatalf("failed to snapshot single-node store: %s", err.Error())
+	}
+	s3, ln3 := mustNewStore(t)
+	defer ln3.Close()
+	if err := s3.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s3.Close(true)
+	if err := s0.Join(joinRequest(s3.ID(), s3.Addr(), true)); err != nil {
+		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
+	}
+	_, err = s3.WaitForLeader(10 * time.Second)
+	if err != nil {
+		t.Fatalf("failed to wait for leader on follower: %s", err.Error())
+	}
+	testPoll(t, func() bool {
+		qr := queryRequestFromString("SELECT count(*) FROM foo", false, true)
+		qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+		r, err := s3.Query(qr)
+		return err == nil && asJSON(r[0].Values) == `[[3]]`
+	}, 250*time.Millisecond, 3*time.Second)
+	if s0.DBAppliedIndex() > s2.DBAppliedIndex() {
+		t.Fatalf("applied index on new node is not correct (%d, %d)", s0.DBAppliedIndex(), s2.DBAppliedIndex())
+	}
 }
 
 func Test_MultiNodeJoinRemove(t *testing.T) {
