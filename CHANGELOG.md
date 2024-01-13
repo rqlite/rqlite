@@ -2,6 +2,7 @@
 ### Implementation changes and bug fixes
 - [PR #1592](https://github.com/rqlite/rqlite/pull/1592): Refactor and enhance upload logging.
 - [PR #1593](https://github.com/rqlite/rqlite/pull/1593): Tighthen snapshot-join end-to-end testing.
+- [PR #1596](https://github.com/rqlite/rqlite/pull/1596): Track Raft logs which change the database.
 
 ## 8.16.4 (January 12th 2024)
 ### Implementation changes and bug fixes
