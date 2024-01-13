@@ -1860,6 +1860,23 @@ func Test_MultiNodeDBAppliedIndex(t *testing.T) {
 	if s0.DBAppliedIndex() > s2.DBAppliedIndex() {
 		t.Fatalf("applied index on new node is not correct (%d, %d)", s0.DBAppliedIndex(), s2.DBAppliedIndex())
 	}
+
+	// Write one last row, and everything should be in sync.
+	er = executeRequestFromStrings([]string{
+		`INSERT INTO foo(id, name) VALUES(4, "fiona")`,
+	}, false, false)
+	_, err = s0.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	testPoll(t, func() bool {
+		i := s0.DBAppliedIndex()
+		return i == s1.DBAppliedIndex() &&
+			i == s2.DBAppliedIndex() &&
+			i == s3.DBAppliedIndex()
+	}, 100*time.Millisecond, 5*time.Second)
+
 }
 
 func Test_MultiNodeJoinRemove(t *testing.T) {
@@ -3259,6 +3276,7 @@ func asJSONAssociative(v interface{}) string {
 }
 
 func testPoll(t *testing.T, f func() bool, p time.Duration, d time.Duration) {
+	t.Helper()
 	tck := time.NewTicker(p)
 	defer tck.Stop()
 	tmr := time.NewTimer(d)
