@@ -4,6 +4,7 @@
 - [PR #1593](https://github.com/rqlite/rqlite/pull/1593): Tighthen snapshot-join end-to-end testing.
 - [PR #1596](https://github.com/rqlite/rqlite/pull/1596): Track Raft logs which change the database.
 - [PR #1597](https://github.com/rqlite/rqlite/pull/1597): Clarify end-to-end testing code.
+- [PR #1598](https://github.com/rqlite/rqlite/pull/1598): Refactor Store-level index tracking.
 
 ## 8.16.4 (January 12th 2024)
 ### Implementation changes and bug fixes
