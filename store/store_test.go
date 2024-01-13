@@ -1876,7 +1876,6 @@ func Test_MultiNodeDBAppliedIndex(t *testing.T) {
 			i == s2.DBAppliedIndex() &&
 			i == s3.DBAppliedIndex()
 	}, 100*time.Millisecond, 5*time.Second)
-
 }
 
 func Test_MultiNodeJoinRemove(t *testing.T) {
