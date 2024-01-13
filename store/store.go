@@ -233,10 +233,6 @@ type Store struct {
 	dbDir   string    // Path to directory containing SQLite file.
 	db      *sql.DB   // The underlying SQLite store.
 
-	dbAppliedIndexMu     sync.RWMutex
-	dbAppliedIndex       uint64
-	appliedIdxUpdateDone chan struct{}
-
 	dechunkManager *chunking.DechunkerManager
 	cmdProc        *CommandProcessor
 
@@ -255,8 +251,13 @@ type Store struct {
 
 	// Latest log entry index actually reflected by the FSM. Due to Raft code
 	// this value is not updated after a Snapshot-restore.
-	fsmIndex   uint64
-	fsmIndexMu sync.RWMutex
+	fsmIdx   uint64
+	fsmIdxMu sync.RWMutex
+
+	// Latest log entry index which actually changed the database.
+	dbAppliedIdxMu       sync.RWMutex
+	dbAppliedIdx         uint64
+	appliedIdxUpdateDone chan struct{}
 
 	reqMarshaller *command.RequestMarshaler // Request marshaler for writing to log.
 	raftLog       raft.LogStore             // Persistent log store.
@@ -886,9 +887,9 @@ func (s *Store) WaitForFSMIndex(idx uint64, timeout time.Duration) (uint64, erro
 	for {
 		select {
 		case <-tck.C:
-			s.fsmIndexMu.RLock()
-			fsmIdx = s.fsmIndex
-			s.fsmIndexMu.RUnlock()
+			s.fsmIdxMu.RLock()
+			fsmIdx = s.fsmIdx
+			s.fsmIdxMu.RUnlock()
 			if fsmIdx >= idx {
 				return fsmIdx, nil
 			}
@@ -907,14 +908,14 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 	}
 
 	fsmIdx := func() uint64 {
-		s.fsmIndexMu.RLock()
-		defer s.fsmIndexMu.RUnlock()
-		return s.fsmIndex
+		s.fsmIdxMu.RLock()
+		defer s.fsmIdxMu.RUnlock()
+		return s.fsmIdx
 	}()
 	dbAppliedIdx := func() uint64 {
-		s.dbAppliedIndexMu.Lock()
-		defer s.dbAppliedIndexMu.Unlock()
-		return s.dbAppliedIndex
+		s.dbAppliedIdxMu.Lock()
+		defer s.dbAppliedIdxMu.Unlock()
+		return s.dbAppliedIdx
 	}()
 	dbStatus, err := s.db.Stats()
 	if err != nil {
@@ -1040,10 +1041,6 @@ func (s *Store) execute(ex *proto.ExecuteRequest) ([]*proto.ExecuteResult, error
 		}
 		return nil, af.Error()
 	}
-
-	s.dbAppliedIndexMu.Lock()
-	s.dbAppliedIndex = af.Index()
-	s.dbAppliedIndexMu.Unlock()
 	r := af.Response().(*fsmExecuteResponse)
 	return r.results, r.error
 }
@@ -1085,10 +1082,6 @@ func (s *Store) Query(qr *proto.QueryRequest) ([]*proto.QueryRows, error) {
 			}
 			return nil, af.Error()
 		}
-
-		s.dbAppliedIndexMu.Lock()
-		s.dbAppliedIndex = af.Index()
-		s.dbAppliedIndexMu.Unlock()
 		r := af.Response().(*fsmQueryResponse)
 		return r.rows, r.error
 	}
@@ -1163,10 +1156,6 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 		}
 		return nil, af.Error()
 	}
-
-	s.dbAppliedIndexMu.Lock()
-	s.dbAppliedIndex = af.Index()
-	s.dbAppliedIndexMu.Unlock()
 	r := af.Response().(*fsmExecuteQueryResponse)
 	return r.results, r.error
 }
@@ -1312,10 +1301,6 @@ func (s *Store) load(lr *proto.LoadRequest) error {
 		s.logger.Printf("load failed during Apply: %s", af.Error())
 		return af.Error()
 	}
-
-	s.dbAppliedIndexMu.Lock()
-	s.dbAppliedIndex = af.Index()
-	s.dbAppliedIndexMu.Unlock()
 	s.logger.Printf("node loaded in %s (%d bytes)", time.Since(startT), len(b))
 	return nil
 }
@@ -1692,9 +1677,9 @@ type fsmGenericResponse struct {
 // fsmApply applies a Raft log entry to the database.
 func (s *Store) fsmApply(l *raft.Log) (e interface{}) {
 	defer func() {
-		s.fsmIndexMu.Lock()
-		defer s.fsmIndexMu.Unlock()
-		s.fsmIndex = l.Index
+		s.fsmIdxMu.Lock()
+		defer s.fsmIdxMu.Unlock()
+		s.fsmIdx = l.Index
 
 		if l.Index <= s.lastCommandIdxOnOpen {
 			// In here means at least one command entry was in the log when the Store
@@ -1712,7 +1697,12 @@ func (s *Store) fsmApply(l *raft.Log) (e interface{}) {
 		s.logger.Printf("first log applied since node start, log at index %d", l.Index)
 	}
 
-	cmd, r := s.cmdProc.Process(l.Data, &s.db)
+	cmd, mutated, r := s.cmdProc.Process(l.Data, &s.db)
+	if mutated {
+		s.dbAppliedIdxMu.Lock()
+		s.dbAppliedIdx = l.Index
+		s.dbAppliedIdxMu.Unlock()
+	}
 	if cmd.Type == proto.Command_COMMAND_TYPE_NOOP {
 		s.numNoops++
 	} else if cmd.Type == proto.Command_COMMAND_TYPE_LOAD {
