@@ -1772,9 +1772,6 @@ func Test_MultiNodeDBAppliedIndex(t *testing.T) {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s1.Close(true)
-	if err := s1.Bootstrap(NewServer(s1.ID(), s1.Addr(), true)); err != nil {
-		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
-	}
 	if err := s0.Join(joinRequest(s1.ID(), s1.Addr(), true)); err != nil {
 		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
 	}
@@ -1792,27 +1789,46 @@ func Test_MultiNodeDBAppliedIndex(t *testing.T) {
 	er := executeRequestFromStrings([]string{
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+		`INSERT INTO foo(id, name) VALUES(2, "fiona")`,
+		`INSERT INTO foo(id, name) VALUES(3, "fiona")`,
 	}, false, false)
 	_, err = s0.Execute(er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
 	testPoll(t, func() bool {
-		// wait until the SELECT count(*) returns 1 on s1
 		qr := queryRequestFromString("SELECT count(*) FROM foo", false, true)
 		qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
 		r, err := s1.Query(qr)
-		if err != nil {
-			return false
-		}
-		if exp, got := `[[1]]`, asJSON(r[0].Values); exp != got {
-			return false
-		}
-		return true
+		return err == nil && asJSON(r[0].Values) == `[[3]]`
 	}, 250*time.Millisecond, 3*time.Second)
-
 	if s0.DBAppliedIndex() != s1.DBAppliedIndex() {
 		t.Fatalf("applied index mismatch (%d, %d)", s0.DBAppliedIndex(), s1.DBAppliedIndex())
+	}
+
+	// Create a third node, make sure it joins the cluster, and check that the DBAppliedIndex
+	// is correct.
+	s2, ln2 := mustNewStore(t)
+	defer ln2.Close()
+	if err := s2.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s2.Close(true)
+	if err := s0.Join(joinRequest(s2.ID(), s2.Addr(), true)); err != nil {
+		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
+	}
+	_, err = s2.WaitForLeader(10 * time.Second)
+	if err != nil {
+		t.Fatalf("failed to wait for leader on follower: %s", err.Error())
+	}
+	testPoll(t, func() bool {
+		qr := queryRequestFromString("SELECT count(*) FROM foo", false, true)
+		qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+		r, err := s2.Query(qr)
+		return err == nil && asJSON(r[0].Values) == `[[3]]`
+	}, 250*time.Millisecond, 3*time.Second)
+	if s0.DBAppliedIndex() != s2.DBAppliedIndex() {
+		t.Fatalf("applied index mismatch (%d, %d)", s0.DBAppliedIndex(), s2.DBAppliedIndex())
 	}
 }
 

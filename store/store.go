@@ -1891,17 +1891,17 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	s.db = db
 	s.logger.Printf("successfully opened database at %s due to restore", s.db.Path())
 
-	// Bring internal indexes up to date.
-	li, err := snapshot.LatestIndex(s.snapshotDir)
-	if err != nil {
-		return fmt.Errorf("failed to get latest index post restore: %s", err)
+	// It's not possible to the indexes after a restore, so we need to reset them
+	// to zero to indicate this.
+	if err := s.boltStore.SetAppliedIndex(0); err != nil {
+		return fmt.Errorf("failed to set applied index: %s", err)
 	}
-	s.dbAppliedIdxMu.Lock()
-	s.dbAppliedIdx = li
-	s.dbAppliedIdxMu.Unlock()
 	s.fsmIdxMu.Lock()
-	s.fsmIdx = li
+	s.fsmIdx = 0
 	s.fsmIdxMu.Unlock()
+	s.dbAppliedIdxMu.Lock()
+	s.dbAppliedIdx = 0
+	s.dbAppliedIdxMu.Unlock()
 
 	stats.Add(numRestores, 1)
 	s.logger.Printf("node restored in %s", time.Since(startT))
