@@ -1712,7 +1712,7 @@ func (s *Store) fsmApply(l *raft.Log) (e interface{}) {
 		s.logger.Printf("first log applied since node start, log at index %d", l.Index)
 	}
 
-	cmd, r := s.cmdProc.Process(l.Data, &s.db)
+	cmd, _, r := s.cmdProc.Process(l.Data, &s.db)
 	if cmd.Type == proto.Command_COMMAND_TYPE_NOOP {
 		s.numNoops++
 	} else if cmd.Type == proto.Command_COMMAND_TYPE_LOAD {
