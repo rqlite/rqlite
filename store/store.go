@@ -217,6 +217,7 @@ const (
 type Store struct {
 	open          bool
 	raftDir       string
+	snapshotDir   string
 	peersPath     string
 	peersInfoPath string
 
@@ -336,6 +337,7 @@ func New(ly Layer, c *Config) *Store {
 	return &Store{
 		ly:              ly,
 		raftDir:         c.Dir,
+		snapshotDir:     filepath.Join(c.Dir, snapshotsDirName),
 		peersPath:       filepath.Join(c.Dir, peersPath),
 		peersInfoPath:   filepath.Join(c.Dir, peersInfoPath),
 		restoreDoneCh:   make(chan struct{}),
@@ -427,13 +429,12 @@ func (s *Store) Open() (retErr error) {
 
 	// Upgrade any pre-existing snapshots.
 	oldSnapshotDir := filepath.Join(s.raftDir, "snapshots")
-	snapshotDir := filepath.Join(s.raftDir, snapshotsDirName)
-	if err := snapshot.Upgrade(oldSnapshotDir, snapshotDir, s.logger); err != nil {
+	if err := snapshot.Upgrade(oldSnapshotDir, s.snapshotDir, s.logger); err != nil {
 		return fmt.Errorf("failed to upgrade snapshots: %s", err)
 	}
 
 	// Create store for the Snapshots.
-	snapshotStore, err := snapshot.NewStore(filepath.Join(snapshotDir))
+	snapshotStore, err := snapshot.NewStore(filepath.Join(s.snapshotDir))
 	if err != nil {
 		return fmt.Errorf("failed to create snapshot store: %s", err)
 	}
@@ -1889,6 +1890,18 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	}
 	s.db = db
 	s.logger.Printf("successfully opened database at %s due to restore", s.db.Path())
+
+	// Bring internal indexes up to date.
+	li, err := snapshot.LatestIndex(s.snapshotDir)
+	if err != nil {
+		return fmt.Errorf("failed to get latest index post restore: %s", err)
+	}
+	s.dbAppliedIdxMu.Lock()
+	s.dbAppliedIdx = li
+	s.dbAppliedIdxMu.Unlock()
+	s.fsmIdxMu.Lock()
+	s.fsmIdx = li
+	s.fsmIdxMu.Unlock()
 
 	stats.Add(numRestores, 1)
 	s.logger.Printf("node restored in %s", time.Since(startT))
