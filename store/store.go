@@ -1882,7 +1882,9 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 
 	// Take conservative approach and assume that everything has changed, so update
 	// the indexes. It is possible that dbAppliedIdx is now ahead of some other nodes'
-	// same value, but that is OK.
+	// same value, since the last index is not necessarily a database-changing index,
+	// but that is OK. Worse that can happen is that anything paying attention to the
+	// index might consider the database to be changed when it is not, *logically* speaking.
 	li, err := snapshot.LatestIndex(s.snapshotDir)
 	if err != nil {
 		return fmt.Errorf("failed to get latest snapshot index post restore: %s", err)
