@@ -376,12 +376,14 @@ class Node(object):
 
   def num_auto_backups(self):
     '''
-    Return a tuple of the number of successful, failed, skipped auto-backups, skipped sum auto-backups.
+    Return a dict of the number of successful, failed, skipped auto-backups, skipped sum auto-backups.
     '''
-    return (int(self.expvar()['uploader']['num_uploads_ok']),
-            int(self.expvar()['uploader']['num_uploads_fail']),
-            int(self.expvar()['uploader']['num_uploads_skipped']),
-            int(self.expvar()['uploader']['num_uploads_skipped_sum']))
+    return {
+      'ok': int(self.expvar()['uploader']['num_uploads_ok']),
+      'fail': int(self.expvar()['uploader']['num_uploads_fail']),
+      'skip': int(self.expvar()['uploader']['num_uploads_skipped']),
+      'skip_sum': int(self.expvar()['uploader']['num_uploads_skipped_sum'])
+    }
 
   def wait_for_upload(self, i, timeout=TIMEOUT):
     '''
@@ -389,7 +391,7 @@ class Node(object):
     '''
     t = 0
     while t < timeout:
-      if self.num_auto_backups()[0] == i:
+      if self.num_auto_backups()['ok'] == i:
         return self.num_auto_backups()
       time.sleep(0.1)
       t+=1
@@ -402,7 +404,7 @@ class Node(object):
     '''
     t = 0
     while t < timeout:
-      if self.num_auto_backups()[3] >= i:
+      if self.num_auto_backups()['skip_sum'] >= i:
         return self.num_auto_backups()
       time.sleep(0.1)
       t+=1
@@ -415,17 +417,17 @@ class Node(object):
     '''
     t = 0
     while t < timeout:
-      backups = self.num_auto_backups()[0]
-      skipped = self.num_auto_backups()[2]
-      skipped_sum = self.num_auto_backups()[3]
+      backups = self.num_auto_backups()['ok']
+      skipped = self.num_auto_backups()['skip']
+      skipped_sum = self.num_auto_backups()['skip_sum']
       time.sleep(0.5)
-      if self.num_auto_backups()[1] + self.num_auto_backups()[2] == skipped + skipped_sum:
+      if self.num_auto_backups()['skip'] + self.num_auto_backups()['skip_sum'] == skipped + skipped_sum:
         # Skipped uploads are not increasing, so uploads are not idle
         t+=1
         continue
 
       # OK, skipped uploads are increasing, but has the number of backups stayed the same?
-      if self.num_auto_backups()[0] != backups:
+      if self.num_auto_backups()['ok'] != backups:
         t+=1
         continue
 
@@ -433,7 +435,7 @@ class Node(object):
       return self.num_auto_backups()
 
     n = self.num_auto_backups()
-    raise Exception('rqlite node failed to idle backups within %d seconds (%d, %d, %d, %d)' % (timeout, n[0], n[1], n[2], n[3]))
+    raise Exception('rqlite node failed to idle backups within %d seconds (%s)' % n)
 
   def wait_for_fsm_index(self, index, timeout=TIMEOUT):
     '''

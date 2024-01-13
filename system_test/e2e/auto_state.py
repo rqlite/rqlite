@@ -340,7 +340,7 @@ class TestAutoBackupS3(unittest.TestCase):
     node.wait_until_uploads_idle()
 
     # Write one more record, wait for a backup to happen.
-    i = node.num_auto_backups()[0]
+    i = node.num_auto_backups()['ok']
     node.execute('INSERT INTO foo(name) VALUES("fiona")')
     j = node.query('SELECT count(*) FROM foo', level='strong')
     self.assertEqual(j, d_("{'results': [{'values': [[100]], 'types': ['integer'], 'columns': ['count(*)']}]}"))
@@ -409,7 +409,7 @@ class TestAutoBackupS3(unittest.TestCase):
 
     # Confirm that the follower has performed no backups.
     time.sleep(5)
-    self.assertEqual(follower.num_auto_backups()[0], 0)
+    self.assertEqual(follower.num_auto_backups()['ok'], 0)
 
     delete_s3_object(access_key_id, secret_access_key_id, S3_BUCKET, path)
     deprovision_node(leader)
@@ -523,7 +523,7 @@ class TestAutoBackupS3(unittest.TestCase):
 
     # Ensure new leader didn't do a backup
     new_leader.wait_until_uploads_idle()
-    self.assertEquals(new_leader.num_auto_backups()[0], 0)
+    self.assertEqual(new_leader.num_auto_backups()['ok'], 0)
 
     delete_s3_object(access_key_id, secret_access_key_id, S3_BUCKET, path)
     deprovision_node(n0)
