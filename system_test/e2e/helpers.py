@@ -413,17 +413,25 @@ class Node(object):
     '''
     Wait until uploads go idle.
     '''
-    backups = self.num_auto_backups()[0]
-    skipped = self.num_auto_backups()[2]
-    skipped_sum = self.num_auto_backups()[3]
-    total_skipped = skipped + skipped_sum
     t = 0
     while t < timeout:
-      # No change in backups, and the other backups are being skipped?
-      if self.num_auto_backups()[0] == backups and (self.num_auto_backups()[2] + self.num_auto_backups()[3]) >total_skipped:
-        return self.num_auto_backups()
-      time.sleep(0.1)
-      t+=1
+      backups = self.num_auto_backups()[0]
+      skipped = self.num_auto_backups()[2]
+      skipped_sum = self.num_auto_backups()[3]
+      time.sleep(0.5)
+      if self.num_auto_backups()[1] + self.num_auto_backups()[2] == skipped + skipped_sum:
+        # Skipped uploads are not increasing, so uploads are not idle
+        t+=1
+        continue
+
+      # OK, skipped backups are increasing, but has the number of backups stayed the same?
+      if self.num_auto_backups()[0] != backups:
+        t+=1
+        continue
+
+      # Backups are idle
+      return self.num_auto_backups()
+
     n = self.num_auto_backups()
     raise Exception('rqlite node failed to idle backups within %d seconds (%d, %d, %d, %d)' % (timeout, n[0], n[1], n[2], n[3]))
 
