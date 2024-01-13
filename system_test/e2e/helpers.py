@@ -350,16 +350,19 @@ class Node(object):
   def fsm_index(self):
     return int(self.status()['store']['fsm_index'])
 
-  def commit_index(self):
+  def raft_commit_index(self):
     return int(self.status()['store']['raft']['commit_index'])
 
-  def applied_index(self):
+  def raft_applied_index(self):
     return int(self.status()['store']['raft']['applied_index'])
 
-  def last_log_index(self):
+  def raft_fsm_pending_index(self):
+    return int(self.status()['store']['raft']['fsm_pending'])
+
+  def raft_last_log_index(self):
     return int(self.status()['store']['raft']['last_log_index'])
 
-  def last_snapshot_index(self):
+  def raft_last_snapshot_index(self):
     return int(self.status()['store']['raft']['last_snapshot_index'])
 
   def num_join_requests(self):
@@ -428,46 +431,21 @@ class Node(object):
     while self.fsm_index() < index:
       if t > timeout:
         raise Exception('timeout, target index: %d, actual index %d' % (index, self.fsm_index()))
-      time.sleep(1)
+      time.sleep(0.1)
       t+=1
     return self.fsm_index()
-
-  def wait_for_commit_index(self, index, timeout=TIMEOUT):
-    '''
-    Wait until the commit index reaches the given value
-    '''
-    t = 0
-    while self.commit_index() < index:
-      if t > timeout:
-        raise Exception('wait_for_commit_index timeout')
-      time.sleep(1)
-      t+=1
-    return self.commit_index()
 
   def wait_for_all_applied(self, timeout=TIMEOUT):
     '''
     Wait until the applied index equals the commit index.
     '''
     t = 0
-    while self.commit_index() != self.applied_index():
+    while self.raft_commit_index() != self.raft_applied_index():
       if t > timeout:
         raise Exception('wait_for_all_applied timeout')
-      time.sleep(1)
+      time.sleep(0.1)
       t+=1
-    return self.applied_index()
-
-  def wait_for_all_fsm(self, timeout=TIMEOUT):
-    '''
-    Wait until all outstanding database commands have actually
-    been applied to the database i.e. state machine.
-    '''
-    t = 0
-    while self.fsm_index() != self.db_applied_index():
-      if t > timeout:
-        raise Exception('wait_for_all_fsm timeout')
-      time.sleep(1)
-      t+=1
-    return self.fsm_index()
+    return self.raft_applied_index()
 
   def wait_for_restores(self, num, timeout=TIMEOUT):
     '''
@@ -478,7 +456,7 @@ class Node(object):
     while self.num_restores() != num:
       if t > timeout:
         raise Exception('wait_for_restores timeout wanted %d, got %d' % (num, self.num_restores()))
-      time.sleep(1)
+      time.sleep(0.1)
       t+=1
     return self.num_restores()
 
