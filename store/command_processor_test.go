@@ -6,35 +6,6 @@ import (
 	"github.com/rqlite/rqlite/v8/command/proto"
 )
 
-func Test_ExecuteResultsMutation_Nil(t *testing.T) {
-	var e ExecuteResults
-	if e.Mutation() {
-		t.Fatalf("expected no mutations for empty ExecuteResults")
-	}
-}
-
-func Test_ExecuteResultsMutation_Check(t *testing.T) {
-	er0 := &proto.ExecuteResult{
-		RowsAffected: 0,
-	}
-	er1 := &proto.ExecuteResult{
-		RowsAffected: 1,
-	}
-
-	e := ExecuteResults{er0}
-	if e.Mutation() {
-		t.Fatalf("expected no mutations")
-	}
-	e = ExecuteResults{er1}
-	if !e.Mutation() {
-		t.Fatalf("expected mutations")
-	}
-	e = ExecuteResults{er0, er1}
-	if !e.Mutation() {
-		t.Fatalf("expected mutations")
-	}
-}
-
 func Test_ExecuteQueryResponsesMutation(t *testing.T) {
 	var e ExecuteQueryResponses
 	if e.Mutation() {
@@ -67,8 +38,8 @@ func Test_ExecuteQueryResponsesMutation_Check(t *testing.T) {
 	}
 
 	e := ExecuteQueryResponses{eqr0}
-	if e.Mutation() {
-		t.Fatalf("expected no mutations")
+	if !e.Mutation() {
+		t.Fatalf("expected mutations")
 	}
 	e = ExecuteQueryResponses{eqr1}
 	if !e.Mutation() {
@@ -83,10 +54,14 @@ func Test_ExecuteQueryResponsesMutation_Check(t *testing.T) {
 		t.Fatalf("expected mutations")
 	}
 	e = ExecuteQueryResponses{eqr0, qqr}
+	if !e.Mutation() {
+		t.Fatalf("expected mutations")
+	}
+	e = ExecuteQueryResponses{qqr}
 	if e.Mutation() {
 		t.Fatalf("expected no mutations")
 	}
-	e = ExecuteQueryResponses{qqr}
+	e = ExecuteQueryResponses{qqr, qqr}
 	if e.Mutation() {
 		t.Fatalf("expected no mutations")
 	}
