@@ -16,6 +16,9 @@ type ExecuteResults []*proto.ExecuteResult
 
 // Mutation returns true if any of the results mutated the database.
 func (e ExecuteResults) Mutation() bool {
+	if len(e) == 0 {
+		return false
+	}
 	for i := range e {
 		if e[i].RowsAffected > 0 {
 			return true
@@ -29,6 +32,9 @@ type ExecuteQueryResponses []*proto.ExecuteQueryResponse
 
 // Mutation returns true if any of the responses mutated the database.
 func (e ExecuteQueryResponses) Mutation() bool {
+	if len(e) == 0 {
+		return false
+	}
 	for i := range e {
 		if e[i].GetE() != nil && e[i].GetE().RowsAffected > 0 {
 			return true
