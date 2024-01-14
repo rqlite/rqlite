@@ -113,6 +113,9 @@ class TestBootstrappingRestartLeaveOnRemove(unittest.TestCase):
 
     self.assertEqual(n0.wait_for_leader(), n1.wait_for_leader())
     self.assertEqual(n0.wait_for_leader(), n2.wait_for_leader())
+    self.assertEqual(len(n0.nodes()), 3)
+    self.assertEqual(len(n1.nodes()), 3)
+    self.assertEqual(len(n2.nodes()), 3)
 
     # Restart one node, and ensure it still forms a cluster using the same launch params,
     # even though it was removed from the cluster on shutdown.

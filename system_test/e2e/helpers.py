@@ -166,7 +166,7 @@ class Node(object):
     if self.raft_adv is None:
       self.raft_adv = self.raft_addr
 
-  def start(self, join=None, join_attempts=None, join_interval=None, join_as=None,
+  def start(self, join=None, join_attempts=None, join_interval="1s", join_as=None,
     disco_mode=None, disco_key=None, disco_config=None, wait=True, timeout=TIMEOUT):
     if self.process is not None:
       return
@@ -231,6 +231,8 @@ class Node(object):
         time.sleep(0.1)
       else:
         break
+    with open(os.path.join(self.dir, "pid"), "w") as f:
+      f.write(str(self.process.pid))
     return self
 
   def stop(self, graceful=False):

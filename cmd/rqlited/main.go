@@ -8,7 +8,6 @@ import (
 	"log"
 	"net"
 	"os"
-	"os/signal"
 	"runtime"
 	"strings"
 	"syscall"
@@ -57,6 +56,9 @@ func init() {
 }
 
 func main() {
+	// Handle signals first, so signal handling is established before anything else.
+	sigCh := HandleSignals(syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
+
 	cfg, err := ParseFlags(name, desc, &BuildInfo{
 		Version:       cmd.Version,
 		Commit:        cmd.Commit,
@@ -199,10 +201,7 @@ func main() {
 	}
 
 	// Block until signalled.
-	terminate := make(chan os.Signal, 1)
-	signal.Notify(terminate, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
-	sig := <-terminate
-	log.Printf(`received signal "%s", shutting down`, sig.String())
+	<-sigCh
 
 	// Stop the HTTP server first, so clients get notification as soon as
 	// possible that the node is going away.
