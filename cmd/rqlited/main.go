@@ -213,14 +213,13 @@ func main() {
 		log.Printf("initiating removal of this node from cluster before shutdown")
 		if err := remover.Do(cfg.NodeID, true); err != nil {
 			log.Fatalf("failed to remove this node from cluster before shutdown: %s", err.Error())
-		} else {
-			log.Printf("removed this node successfully from cluster before shutdown")
 		}
+		log.Printf("removed this node successfully from cluster before shutdown")
 	}
 
 	if cfg.RaftStepdownOnShutdown {
 		if str.IsLeader() {
-			// Don't log a confusing message if not (probably) Leader
+			// Don't log a confusing message if (probably) not Leader
 			log.Printf("stepping down as Leader before shutdown")
 		}
 		// Perform a stepdown, ignore any errors.
@@ -328,7 +327,6 @@ func createDiscoService(cfg *Config, str *store.Store) (*disco.Service, error) {
 	} else {
 		return nil, fmt.Errorf("invalid disco service: %s", cfg.DiscoMode)
 	}
-
 	return disco.NewService(c, str, disco.VoterSuffrage(!cfg.RaftNonVoter)), nil
 }
 
@@ -386,7 +384,6 @@ func startNodeMux(cfg *Config, ln net.Listener) (*tcp.Mux, error) {
 		return nil, fmt.Errorf("failed to create node-to-node mux: %s", err.Error())
 	}
 	go mux.Serve()
-
 	return mux, nil
 }
 
