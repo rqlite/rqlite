@@ -20,6 +20,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/v8/command"
 	"github.com/rqlite/rqlite/v8/command/chunking"
@@ -1625,6 +1626,9 @@ func (s *Store) raftConfig() *raft.Config {
 	if s.ElectionTimeout != 0 {
 		config.ElectionTimeout = s.ElectionTimeout
 	}
+	opts := hclog.DefaultOptions
+	opts.Name = ""
+	config.Logger = hclog.FromStandardLogger(log.New(os.Stderr, "[raft] ", log.LstdFlags), opts)
 	return config
 }
 
