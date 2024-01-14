@@ -1,4 +1,5 @@
 ## 8.16.5 (January 14th 2024)
+This release further improves _Automatic Backup_ performance, as well as improving test coverage generally.
 ### Implementation changes and bug fixes
 - [PR #1592](https://github.com/rqlite/rqlite/pull/1592): Refactor and enhance upload logging.
 - [PR #1593](https://github.com/rqlite/rqlite/pull/1593): Tighthen snapshot-join end-to-end testing.
@@ -11,6 +12,7 @@
 - [PR #1602](https://github.com/rqlite/rqlite/pull/1602): `go mod` updates.
 
 ## 8.16.4 (January 12th 2024)
+This release improves _Automatic Backup_ performance, mostly by avoiding unnecessary file copies and uploads.
 ### Implementation changes and bug fixes
 - [PR #1584](https://github.com/rqlite/rqlite/pull/1584): Count Snapshot reaping failures.
 - [PR #1585](https://github.com/rqlite/rqlite/pull/1585): Avoid unnecessary auto-backups by storing sha256 sums in S3. Fixes issue [#1565](https://github.com/rqlite/rqlite/issues/1565).
