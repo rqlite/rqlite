@@ -87,7 +87,7 @@ func TestS3ClientUploadOK(t *testing.T) {
 			if input.Metadata == nil {
 				t.Errorf("expected metadata to be non-nil")
 			}
-			exp, got := "736f6d652d7368613235362d73756d", *input.Metadata[http.CanonicalHeaderKey(AWSS3SumKey)]
+			exp, got := "some-id", *input.Metadata[http.CanonicalHeaderKey(AWSS3IDKey)]
 			if exp != got {
 				t.Errorf("expected metadata to contain %q, got %q", exp, got)
 			}
@@ -106,7 +106,7 @@ func TestS3ClientUploadOK(t *testing.T) {
 	}
 
 	reader := strings.NewReader("test data")
-	err := client.Upload(context.Background(), reader, []byte("some-sha256-sum"))
+	err := client.Upload(context.Background(), reader, "some-id")
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
@@ -138,7 +138,7 @@ func TestS3ClientUploadFail(t *testing.T) {
 	}
 
 	reader := strings.NewReader("test data")
-	err := client.Upload(context.Background(), reader, nil)
+	err := client.Upload(context.Background(), reader, "")
 	if err == nil {
 		t.Fatal("Expected error, got nil")
 	}

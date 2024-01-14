@@ -50,7 +50,7 @@ func test_SingleNodeProvide(t *testing.T, vaccuum, compress bool) {
 	defer os.Remove(tmpFd.Name())
 	defer tmpFd.Close()
 	provider := NewProvider(s0, vaccuum, compress)
-	if _, err := provider.Provide(tmpFd); err != nil {
+	if err := provider.Provide(tmpFd); err != nil {
 		t.Fatalf("failed to provide SQLite data: %s", err.Error())
 	}
 
@@ -113,7 +113,7 @@ func Test_SingleNodeProvide(t *testing.T) {
 	})
 }
 
-func Test_SingleNodeProvideLastModified(t *testing.T) {
+func Test_SingleNodeProvideLastIndex(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
 
@@ -132,7 +132,7 @@ func Test_SingleNodeProvideLastModified(t *testing.T) {
 	defer os.Remove(tmpFile)
 	provider := NewProvider(s, false, false)
 
-	lm, err := provider.LastModified()
+	lm, err := provider.LastIndex()
 	if err != nil {
 		t.Fatalf("failed to get last modified: %s", err.Error())
 	}
@@ -149,14 +149,14 @@ func Test_SingleNodeProvideLastModified(t *testing.T) {
 		t.Fatalf("failed to wait for FSM to apply")
 	}
 
-	newLM, err := provider.LastModified()
+	newLI, err := provider.LastIndex()
 	if err != nil {
 		t.Fatalf("failed to get last modified: %s", err.Error())
 	}
-	if !newLM.After(lm) {
-		t.Fatalf("last modified time should have changed")
+	if newLI <= lm {
+		t.Fatalf("last index should have changed")
 	}
-	lm = newLM
+	lm = newLI
 
 	// Try various queries and commands which should not change the database.
 	qr := queryRequestFromString("SELECT * FROM foo", false, false)
@@ -168,27 +168,29 @@ func Test_SingleNodeProvideLastModified(t *testing.T) {
 	if _, err := s.WaitForAppliedFSM(2 * time.Second); err != nil {
 		t.Fatalf("failed to wait for FSM to apply")
 	}
-	newLM, err = provider.LastModified()
+	newLI, err = provider.LastIndex()
 	if err != nil {
 		t.Fatalf("failed to get last modified: %s", err.Error())
 	}
-	if !newLM.Equal(lm) {
-		t.Fatalf("last modified time should not have changed")
+	if newLI != lm {
+		t.Fatalf("last index should not have changed")
 	}
-	lm = newLM
+	lm = newLI
 
 	if af, err := s.Noop("don't care"); err != nil || af.Error() != nil {
 		t.Fatalf("failed to execute Noop")
 	}
-	newLM, err = provider.LastModified()
+	newLI, err = provider.LastIndex()
 	if err != nil {
 		t.Fatalf("failed to get last modified: %s", err.Error())
 	}
-	if !newLM.Equal(lm) {
-		t.Fatalf("last modified time should not have changed")
+	if newLI != lm {
+		t.Fatalf("last index should not have changed")
 	}
-	lm = newLM
+	lm = newLI
 
+	// Right now any "execute" will be assumed to change the database. It's possible
+	// that by checking the Error field of the response we could avoid this.
 	er = executeRequestFromStrings([]string{
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`, // Constraint violation.
 	}, false, false)
@@ -196,14 +198,14 @@ func Test_SingleNodeProvideLastModified(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
-	newLM, err = provider.LastModified()
+	newLI, err = provider.LastIndex()
 	if err != nil {
 		t.Fatalf("failed to get last modified: %s", err.Error())
 	}
-	if !newLM.Equal(lm) {
-		t.Fatalf("last modified time should not have changed with constraint violation")
+	if newLI == lm {
+		t.Fatalf("last index should changed even with constraint violation")
 	}
-	lm = newLM
+	lm = newLI
 
 	// This should change the database.
 	er = executeRequestFromStrings([]string{
@@ -216,12 +218,12 @@ func Test_SingleNodeProvideLastModified(t *testing.T) {
 	if _, err := s.WaitForAppliedFSM(2 * time.Second); err != nil {
 		t.Fatalf("failed to wait for FSM to apply")
 	}
-	newLM, err = provider.LastModified()
+	newLI, err = provider.LastIndex()
 	if err != nil {
 		t.Fatalf("failed to get last modified: %s", err.Error())
 	}
-	if !newLM.After(lm) {
-		t.Fatalf("last modified time should have changed")
+	if newLI <= lm {
+		t.Fatalf("last index should have changed")
 	}
 }
 

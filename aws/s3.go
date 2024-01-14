@@ -2,7 +2,6 @@ package aws
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,7 +15,7 @@ import (
 )
 
 var (
-	AWSS3SumKey = http.CanonicalHeaderKey("x-rqlite-auto-backup-sum")
+	AWSS3IDKey = http.CanonicalHeaderKey("x-rqlite-auto-backup-id")
 )
 
 // S3Config is the subconfig for the S3 storage type
@@ -73,7 +72,7 @@ func (s *S3Client) String() string {
 }
 
 // Upload uploads data to S3.
-func (s *S3Client) Upload(ctx context.Context, reader io.Reader, sum []byte) error {
+func (s *S3Client) Upload(ctx context.Context, reader io.Reader, id string) error {
 	sess, err := s.createSession()
 	if err != nil {
 		return err
@@ -93,9 +92,9 @@ func (s *S3Client) Upload(ctx context.Context, reader io.Reader, sum []byte) err
 		Body:   reader,
 	}
 
-	if sum != nil {
+	if id != "" {
 		input.Metadata = map[string]*string{
-			AWSS3SumKey: aws.String(hex.EncodeToString(sum)),
+			AWSS3IDKey: aws.String(id),
 		}
 	}
 	_, err = uploader.UploadWithContext(ctx, input)
@@ -106,12 +105,11 @@ func (s *S3Client) Upload(ctx context.Context, reader io.Reader, sum []byte) err
 	return nil
 }
 
-// CurrentSum returns the last SHA256 sum uploaded to S3. It is always
-// read from S3 and never cached.
-func (s *S3Client) CurrentSum(ctx context.Context) ([]byte, error) {
+// CurrentID returns the last ID uploaded to S3.
+func (s *S3Client) CurrentID(ctx context.Context) (string, error) {
 	sess, err := s.createSession()
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	svc := s3.New(sess)
@@ -122,14 +120,14 @@ func (s *S3Client) CurrentSum(ctx context.Context) ([]byte, error) {
 
 	result, err := svc.HeadObjectWithContext(ctx, input)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get object head for %v: %w", s, err)
+		return "", fmt.Errorf("failed to get object head for %v: %w", s, err)
 	}
 
-	sumHex, ok := result.Metadata[AWSS3SumKey]
+	id, ok := result.Metadata[AWSS3IDKey]
 	if !ok {
-		return nil, fmt.Errorf("sum metadata not found for %v", s)
+		return "", fmt.Errorf("sum metadata not found for %v", s)
 	}
-	return hex.DecodeString(*sumHex)
+	return *id, nil
 }
 
 // Download downloads data from S3.

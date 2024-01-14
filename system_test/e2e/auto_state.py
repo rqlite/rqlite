@@ -199,21 +199,19 @@ class TestAutoBackupS3(unittest.TestCase):
     cfg = write_random_file(json.dumps(auto_backup_cfg))
 
     # Create a node, enable automatic backups, and start it. Then
-    # create a table and insert a row. Wait for an initial backup
-    # to happen because there is no data in the cloud.
+    # create a table and insert a row.
     node = Node(RQLITED_PATH, '0', auto_backup=cfg)
     node.start()
     node.wait_for_leader()
-    node.wait_for_upload(1)
     node.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
-    node.wait_for_upload(2)
+    node.wait_for_upload(1)
 
     # Wait and check that no further backups have been made.
     node.wait_until_uploads_idle()
 
     # Write one more row, confirm another backup is made.
     node.execute('INSERT INTO foo(name) VALUES("fiona")')
-    node.wait_for_upload(3)
+    node.wait_for_upload(2)
 
     # Wait and check that no further backups have been made.
     node.wait_until_uploads_idle()
@@ -265,19 +263,17 @@ class TestAutoBackupS3(unittest.TestCase):
     cfg = write_random_file(json.dumps(auto_backup_cfg))
 
     # Create a node, enable automatic backups, and start it. Then
-    # create a table and insert a row. An initial backup will happen
-    # because there is no data in the cloud.
+    # create a table and insert a row.
     node = Node(RQLITED_PATH, '0', auto_backup=cfg)
     node.start()
     node.wait_for_leader()
-    node.wait_for_upload(1)
 
     # Then create a table and insert a row. Wait for another backup to happen.
     node.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
     node.wait_for_all_applied()
+    node.wait_for_upload(1)
     j = node.query('SELECT count(*) FROM foo', level='strong')
     self.assertEqual(j, d_("{'results': [{'values': [[0]], 'types': ['integer'], 'columns': ['count(*)']}]}"))
-    node.wait_for_upload(2)
 
     # Download the backup file from S3 and check it.
     backup_data = download_s3_object(access_key_id, secret_access_key_id,
@@ -324,12 +320,10 @@ class TestAutoBackupS3(unittest.TestCase):
     cfg = write_random_file(json.dumps(auto_backup_cfg))
 
     # Create a node, enable automatic backups, and start it. Then
-    # create a table and insert a row. Wait for a backup to happen
-    # because there is no data in the cloud.
+    # create a table and insert a row.
     node = Node(RQLITED_PATH, '0', auto_backup=cfg)
     node.start()
     node.wait_for_leader()
-    node.wait_for_upload(1)
 
     # Then create a table and insert rows. Wait for another backup to happen.
     node.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
@@ -396,7 +390,6 @@ class TestAutoBackupS3(unittest.TestCase):
     leader = Node(RQLITED_PATH, '0', auto_backup=cfg)
     leader.start()
     leader.wait_for_leader()
-    leader.wait_for_upload(1)
 
     follower = Node(RQLITED_PATH, '1', auto_backup=cfg)
     follower.start(join=leader.RaftAddr())
@@ -405,7 +398,7 @@ class TestAutoBackupS3(unittest.TestCase):
     # Then create a table and insert a row. Wait for a backup to happen.
     leader.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
     leader.wait_for_all_applied()
-    leader.wait_for_upload(2)
+    leader.wait_for_upload(1)
 
     # Confirm that the follower has performed no backups.
     time.sleep(5)
@@ -418,7 +411,7 @@ class TestAutoBackupS3(unittest.TestCase):
 
   @unittest.skipUnless(env_present('RQLITE_S3_ACCESS_KEY'), "S3 credentials not available")
   def test_no_upload_restart(self):
-    '''Test that restarting a node that already upload doesn't upload again'''
+    '''Test that restarting a node that already uploaded doesn't upload again'''
     node = None
     cfg = None
     path = None
@@ -442,22 +435,20 @@ class TestAutoBackupS3(unittest.TestCase):
     }
     cfg = write_random_file(json.dumps(auto_backup_cfg))
 
-    # Create a cluster with automatic backups enabled. An initial
-    # backup will happen because there is no data in the cloud.
+    # Create a cluster with automatic backups enabled.
     node = Node(RQLITED_PATH, '0', auto_backup=cfg)
     node.start()
     node.wait_for_leader()
-    node.wait_for_upload(1)
 
     # Then create a table and insert a row. Wait for another backup to happen.
     node.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
-    node.wait_for_upload(2)
+    node.wait_for_upload(1)
 
     # Restart the node, and confirm no backup is uploaded due to the restart.
     node.stop(graceful=True)
     node.start()
     node.wait_for_leader()
-    node.wait_for_upload_skipped_sum(1)
+    node.wait_for_upload_skipped_id(1)
 
     # Insert a row, make sure a backup will happen now.
     node.execute('INSERT INTO foo(name) VALUES("fiona")')
@@ -496,16 +487,14 @@ class TestAutoBackupS3(unittest.TestCase):
     }
     cfg = write_random_file(json.dumps(auto_backup_cfg))
 
-    # Create a cluster with automatic backups enabled. An initial
-    # backup will happen because there is no data in the cloud.
+    # Create a cluster with automatic backups enabled.
     n0 = Node(RQLITED_PATH, '0', auto_backup=cfg)
     n0.start()
     n0.wait_for_leader()
-    n0.wait_for_upload(1)
 
     # Then create a table and insert a row. Wait for another backup to happen.
     n0.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
-    n0.wait_for_upload(2)
+    n0.wait_for_upload(1)
 
     # Create a cluster with two more followers
     n1 = Node(RQLITED_PATH, '1', auto_backup=cfg)

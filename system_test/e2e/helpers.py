@@ -166,7 +166,7 @@ class Node(object):
     if self.raft_adv is None:
       self.raft_adv = self.raft_addr
 
-  def start(self, join=None, join_attempts=None, join_interval=None, join_as=None,
+  def start(self, join=None, join_attempts=None, join_interval="1s", join_as=None,
     disco_mode=None, disco_key=None, disco_config=None, wait=True, timeout=TIMEOUT):
     if self.process is not None:
       return
@@ -220,18 +220,19 @@ class Node(object):
     command.append(self.dir)
 
     self.process = subprocess.Popen(command, stdout=self.stdout_fd, stderr=self.stderr_fd)
-    t = 0
+    deadline = time.time() + timeout
     while wait:
-      if t > timeout:
+      if time.time() > deadline:
         self.dump_log("dumping log due to timeout during start")
         raise Exception('rqlite process failed to start within %d seconds' % timeout)
       try:
         self.status()
       except requests.exceptions.ConnectionError:
-        time.sleep(1)
-        t+=1
+        time.sleep(0.1)
       else:
         break
+    with open(os.path.join(self.dir, "pid"), "w") as f:
+      f.write(str(self.process.pid))
     return self
 
   def stop(self, graceful=False):
@@ -304,9 +305,9 @@ class Node(object):
 
   def wait_for_leader(self, timeout=TIMEOUT, log=True, ready=True):
     lr = None
-    t = 0
+    deadline = time.time() + timeout
     while lr == None or lr['addr'] == '':
-      if t > timeout:
+      if time.time() > deadline:
         if log:
           self.dump_log("dumping log due to timeout waiting for leader")
         raise Exception('rqlite node failed to detect leader within %d seconds' % timeout)
@@ -314,8 +315,7 @@ class Node(object):
         lr = self.status()['store']['leader']
       except (KeyError, requests.exceptions.ConnectionError):
         pass
-      time.sleep(1)
-      t+=1
+      time.sleep(0.1)
 
     # Perform a check on readyness while we're here.
     if ready and (self.ready() is not True):
@@ -329,12 +329,11 @@ class Node(object):
     return lr
 
   def wait_for_ready(self, timeout=TIMEOUT):
-    t = 0
-    while t < timeout:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
       if self.ready():
         return
-      time.sleep(1)
-      t+=1
+      time.sleep(0.1)
     raise Exception('rqlite node failed to become ready within %d seconds' % timeout)
 
   def expect_leader_fail(self, timeout=TIMEOUT):
@@ -382,53 +381,47 @@ class Node(object):
       'ok': int(self.expvar()['uploader']['num_uploads_ok']),
       'fail': int(self.expvar()['uploader']['num_uploads_fail']),
       'skip': int(self.expvar()['uploader']['num_uploads_skipped']),
-      'skip_sum': int(self.expvar()['uploader']['num_uploads_skipped_sum'])
+      'skip_id': int(self.expvar()['uploader']['num_uploads_skipped_id'])
     }
 
   def wait_for_upload(self, i, timeout=TIMEOUT):
     '''
     Wait until the number of uploads is equal to the given value.
     '''
-    t = 0
-    while t < timeout:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
       if self.num_auto_backups()['ok'] == i:
         return self.num_auto_backups()
       time.sleep(0.1)
-      t+=1
-    n = self.num_auto_backups()
-    raise Exception('rqlite node failed to upload backup within %d seconds (%d, %d, %d, %d)' % (timeout, n[0], n[1], n[2], n[3]))
+    raise Exception('rqlite node failed to upload backup within %d seconds (%s)' % (timeout, self.num_auto_backups()))
 
-  def wait_for_upload_skipped_sum(self, i, timeout=TIMEOUT):
+  def wait_for_upload_skipped_id(self, i, timeout=TIMEOUT):
     '''
-    Wait until the number of skipped sum uploads is at least as great as the given value.
+    Wait until the number of skipped ID uploads is at least as great as the given value.
     '''
-    t = 0
-    while t < timeout:
-      if self.num_auto_backups()['skip_sum'] >= i:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+      if self.num_auto_backups()['skip_id'] >= i:
         return self.num_auto_backups()
       time.sleep(0.1)
-      t+=1
-    n = self.num_auto_backups()
-    raise Exception('rqlite node failed to skip backup due sum within %d seconds (%d, %d, %d, %d)' % (timeout, n[0], n[1], n[2], n[3]))
+    raise Exception('rqlite node failed to skip backup due sum within %d seconds (%s)' % (timeout, self.num_auto_backups()))
 
   def wait_until_uploads_idle(self, timeout=TIMEOUT):
     '''
     Wait until uploads go idle.
     '''
-    t = 0
-    while t < timeout:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
       backups = self.num_auto_backups()['ok']
       skipped = self.num_auto_backups()['skip']
-      skipped_sum = self.num_auto_backups()['skip_sum']
-      time.sleep(0.5)
-      if self.num_auto_backups()['skip'] + self.num_auto_backups()['skip_sum'] == skipped + skipped_sum:
+      skipped_sum = self.num_auto_backups()['skip_id']
+      time.sleep(0.1)
+      if self.num_auto_backups()['skip'] + self.num_auto_backups()['skip_id'] == skipped + skipped_sum:
         # Skipped uploads are not increasing, so uploads are not idle
-        t+=1
         continue
 
       # OK, skipped uploads are increasing, but has the number of backups stayed the same?
       if self.num_auto_backups()['ok'] != backups:
-        t+=1
         continue
 
       # Backups are idle
@@ -441,24 +434,22 @@ class Node(object):
     '''
     Wait until the given index has been applied to the state machine.
     '''
-    t = 0
+    deadline = time.time() + timeout
     while self.fsm_index() < index:
-      if t > timeout:
+      if time.time() > deadline:
         raise Exception('timeout, target index: %d, actual index %d' % (index, self.fsm_index()))
       time.sleep(0.1)
-      t+=1
     return self.fsm_index()
 
   def wait_for_all_applied(self, timeout=TIMEOUT):
     '''
     Wait until the applied index equals the commit index.
     '''
-    t = 0
+    deadline = time.time() + timeout
     while self.raft_commit_index() != self.raft_applied_index():
-      if t > timeout:
+      if time.time() > deadline:
         raise Exception('wait_for_all_applied timeout')
       time.sleep(0.1)
-      t+=1
     return self.raft_applied_index()
 
   def wait_for_restores(self, num, timeout=TIMEOUT):
@@ -466,12 +457,11 @@ class Node(object):
     Wait until the number of snapshot-restores on this node reach
     the given value.
     '''
-    t = 0
+    deadline = time.time() + timeout
     while self.num_restores() != num:
-      if t > timeout:
+      if time.time() > deadline:
         raise Exception('wait_for_restores timeout wanted %d, got %d' % (num, self.num_restores()))
       time.sleep(0.1)
-      t+=1
     return self.num_restores()
 
   def query(self, statement, params=None, level='weak', pretty=False, text=False, associative=False):
@@ -651,17 +641,16 @@ class Cluster(object):
   def __init__(self, nodes):
     self.nodes = nodes
   def wait_for_leader(self, node_exc=None, timeout=TIMEOUT):
-    t = 0
+    deadline = time.time() + timeout
     while True:
-      if t > timeout:
+      if time.time() > deadline:
         raise Exception('timeout')
       for n in self.nodes:
         if node_exc is not None and n == node_exc:
           continue
         if n.is_leader():
           return n
-      time.sleep(1)
-      t+=1
+      time.sleep(0.1)
   def cross_check_leader(self):
     '''
     Check that all nodes agree on who the leader is.
