@@ -61,6 +61,8 @@ def get_release_string():
             print("Invalid release string. Please try again.")
 
 def get_github_token():
+    if os.environ.get('PERSONAL_ACCESS_TOKEN'):
+        return os.environ.get('PERSONAL_ACCESS_TOKEN')
     token = input("Enter your GitHub Personal Access Token: ")
     return token
 
