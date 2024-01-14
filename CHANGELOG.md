@@ -8,6 +8,7 @@
 - [PR #1599](https://github.com/rqlite/rqlite/pull/1599): Test no upload after Leader change.
 - [PR #1600](https://github.com/rqlite/rqlite/pull/1600): Use Raft index for upload checks. Fixes [#1594](https://github.com/rqlite/rqlite/issues/1594).
 - [PR #1601](https://github.com/rqlite/rqlite/pull/1601): CREATE TABLE should change DB Applied index.
+- [PR #1602](https://github.com/rqlite/rqlite/pull/1602): `go mod` updates.
 
 ## 8.16.4 (January 12th 2024)
 ### Implementation changes and bug fixes
