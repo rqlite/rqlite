@@ -66,6 +66,15 @@ def get_github_token():
     token = input("Enter your GitHub Personal Access Token: ")
     return token
 
+def validate_github_token(token):
+    headers = {
+        'Authorization': f'token {token}',
+        'Accept': 'application/vnd.github+json'
+    }
+    url = 'https://api.github.com/user'
+    response = requests.get(url, headers=headers)
+    return response.status_code == 200
+
 def get_release_features():
     notes = input("Enter release features: ")
     return notes
@@ -132,6 +141,10 @@ def main():
             print("Please enter the release string and release-specific notes again.\n")
 
     token = get_github_token()
+    if not validate_github_token(token):
+        print("Invalid or expired GitHub token. Please check your token and try again.")
+        exit(1)
+
     try:
         release_id = create_github_release(release_str, token, release_notes)
         print(f"Release created with ID: {release_id}")
