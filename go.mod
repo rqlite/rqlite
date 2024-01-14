@@ -4,16 +4,16 @@ go 1.21
 
 require (
 	github.com/Bowery/prompt v0.0.0-20190916142128-fa8279994f75
-	github.com/aws/aws-sdk-go v1.49.13
+	github.com/aws/aws-sdk-go v1.49.21
 	github.com/hashicorp/raft v1.6.0
 	github.com/mkideal/cli v0.2.7
 	github.com/mkideal/pkg v0.1.3
 	github.com/rqlite/go-sqlite3 v1.30.0
 	github.com/rqlite/raft-boltdb/v2 v2.0.0-20230523104317-c08e70f4de48
 	github.com/rqlite/rqlite-disco-clients v0.0.0-20231230135307-118e35426347
-	github.com/rqlite/sql v0.0.0-20221103124402-8f9ff0ceb8f0
+	github.com/rqlite/sql v0.0.0-20240102050638-e741e9f54197
 	go.etcd.io/bbolt v1.3.8
-	golang.org/x/net v0.19.0
+	golang.org/x/net v0.20.0
 	google.golang.org/protobuf v1.32.0
 )
 
@@ -47,14 +47,14 @@ require (
 	go.etcd.io/etcd/client/v3 v3.5.11 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.26.0 // indirect
-	golang.org/x/crypto v0.17.0 // indirect
-	golang.org/x/exp v0.0.0-20231226003508-02704c960a9b // indirect
-	golang.org/x/sys v0.15.0 // indirect
-	golang.org/x/term v0.15.0 // indirect
+	golang.org/x/crypto v0.18.0 // indirect
+	golang.org/x/exp v0.0.0-20240112132812-db7319d0e0e3 // indirect
+	golang.org/x/sys v0.16.0 // indirect
+	golang.org/x/term v0.16.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
-	google.golang.org/genproto v0.0.0-20231212172506-995d672761c0 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20231212172506-995d672761c0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20231212172506-995d672761c0 // indirect
+	google.golang.org/genproto v0.0.0-20240108191215-35c7eff3a6b1 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20240108191215-35c7eff3a6b1 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20240108191215-35c7eff3a6b1 // indirect
 	google.golang.org/grpc v1.60.1 // indirect
 )
 
