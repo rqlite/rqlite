@@ -189,6 +189,8 @@ func Test_SingleNodeProvideLastIndex(t *testing.T) {
 	}
 	lm = newLI
 
+	// Right now any "execute" will be assumed to change the database. It's possible
+	// that by checking the Error field of the response we could avoid this.
 	er = executeRequestFromStrings([]string{
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`, // Constraint violation.
 	}, false, false)
@@ -200,8 +202,8 @@ func Test_SingleNodeProvideLastIndex(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get last modified: %s", err.Error())
 	}
-	if newLI != lm {
-		t.Fatalf("last index should not have changed with constraint violation")
+	if newLI == lm {
+		t.Fatalf("last index should changed even with constraint violation")
 	}
 	lm = newLI
 
