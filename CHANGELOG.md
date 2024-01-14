@@ -1,4 +1,4 @@
-## 8.16.5 (unreleased)
+## 8.16.5 (January 14th 2024)
 ### Implementation changes and bug fixes
 - [PR #1592](https://github.com/rqlite/rqlite/pull/1592): Refactor and enhance upload logging.
 - [PR #1593](https://github.com/rqlite/rqlite/pull/1593): Tighthen snapshot-join end-to-end testing.
