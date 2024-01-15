@@ -111,26 +111,21 @@ type PoolStats struct {
 
 // Open opens a file-based database, creating it if it does not exist. After this
 // function returns, an actual SQLite file will always exist.
-func Open(dbPath string, fkEnabled, wal bool) (*DB, error) {
+func Open(dbPath string, fkEnabled, wal bool) (retDB *DB, retErr error) {
 	logger := log.New(log.Writer(), "[db] ", log.LstdFlags)
 	startTime := time.Now()
 	defer func() {
-		dur := time.Since(startTime)
-		if dur > durToOpenLog {
-			logger.Printf("opened database %s in %s", dbPath, time.Since(startTime))
+		if retErr != nil {
+			return
+		}
+		if dur := time.Since(startTime); dur > durToOpenLog {
+			logger.Printf("opened database %s in %s", dbPath, dur)
 		}
 		stats.Get(openDuration).(*expvar.Int).Set(time.Since(startTime).Milliseconds())
 	}()
 
-	if fileExists(dbPath) {
-		sz, err := fileSize(dbPath)
-		if err != nil {
-			return nil, err
-		}
-		if sz > sizeAtOpenWarn {
-			szH := humanize.Bytes(uint64(sz))
-			logger.Printf("database file is %s, SQLite may take longer to open it", szH)
-		}
+	if sz, err := fileSize(dbPath); err == nil && sz > sizeAtOpenWarn {
+		logger.Printf("database file is %s, SQLite may take longer to open it", humanize.Bytes(uint64(sz)))
 	}
 
 	rwDSN := MakeDSN(dbPath, ModeReadWrite, fkEnabled, wal)
