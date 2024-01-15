@@ -25,6 +25,11 @@ class TestSingleNode(unittest.TestCase):
   def tearDown(self):
     self.cluster.deprovision()
 
+  def test_pragmas(self):
+    '''Test that the pragma configration is correct'''
+    n = self.cluster.wait_for_leader()
+    self.assertEqual(n.pragmas(), d_("{'ro':{'foreign_keys':'0','journal_mode':'wal','synchronous':'0','wal_autocheckpoint':'1000'},'rw':{'foreign_keys':'0','journal_mode':'wal','synchronous':'0','wal_autocheckpoint':'0'}}"))
+
   def test_simple_raw_queries(self):
     '''Test simple queries work as expected'''
     n = self.cluster.wait_for_leader()
