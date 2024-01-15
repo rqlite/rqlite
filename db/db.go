@@ -1134,12 +1134,10 @@ func copyDatabase(dst *DB, src *DB) error {
 
 	var dstSQLiteConn *sqlite3.SQLiteConn
 
-	// Define the backup function.
 	bf := func(driverConn interface{}) error {
 		srcSQLiteConn := driverConn.(*sqlite3.SQLiteConn)
 		return copyDatabaseConnection(dstSQLiteConn, srcSQLiteConn)
 	}
-
 	return dstConn.Raw(
 		func(driverConn interface{}) error {
 			dstSQLiteConn = driverConn.(*sqlite3.SQLiteConn)

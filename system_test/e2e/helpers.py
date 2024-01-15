@@ -262,6 +262,11 @@ class Node(object):
     raise_for_status(r)
     return r.json()
 
+  def pragmas(self):
+    r = requests.get(self._status_url())
+    raise_for_status(r)
+    return r.json()['store']['sqlite3']['pragmas']
+
   def nodes(self):
     r = requests.get(self._nodes_url())
     raise_for_status(r)
