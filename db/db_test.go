@@ -465,9 +465,15 @@ func Test_WALDatabaseCreatedOK(t *testing.T) {
 	if _, err := os.Stat(walPath); os.IsNotExist(err) {
 		t.Fatalf("WAL file does not exist")
 	}
+	if mustFileSize(walPath) == 0 {
+		t.Fatalf("WAL file exists but is empty")
+	}
 
 	if err := db.Checkpoint(); err != nil {
 		t.Fatalf("failed to checkpoint database in WAL mode: %s", err.Error())
+	}
+	if mustFileSize(walPath) != 0 {
+		t.Fatalf("WAL file exists but is non-empty")
 	}
 	// Checkpoint a second time, to ensure it's idempotent.
 	if err := db.Checkpoint(); err != nil {
