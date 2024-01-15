@@ -28,6 +28,7 @@ func MakeDSN(path string, readOnly, fkEnabled, walEnabled bool) string {
 	if !walEnabled {
 		opts.Set("_journal", "DELETE")
 	}
+	opts.Add("_sync", "0")
 	return fmt.Sprintf("file:%s?%s", path, opts.Encode())
 }
 

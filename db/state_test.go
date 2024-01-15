@@ -8,6 +8,45 @@ import (
 	"testing"
 )
 
+func Test_MakeDSN(t *testing.T) {
+	tests := []struct {
+		path       string
+		readOnly   bool
+		fkEnabled  bool
+		walEnabled bool
+		want       string
+	}{
+		{
+			path: "foo.db",
+			want: "file:foo.db?_fk=false&_journal=DELETE&_sync=0",
+		},
+		{
+			path:     "foo.db",
+			readOnly: true,
+			want:     "file:foo.db?_fk=false&_journal=DELETE&_sync=0&mode=ro",
+		},
+		{
+			path:       "foo.db",
+			readOnly:   true,
+			walEnabled: true,
+			want:       "file:foo.db?_fk=false&_journal=WAL&_sync=0&mode=ro",
+		},
+		{
+			path:      "foo.db",
+			readOnly:  true,
+			fkEnabled: true,
+			want:      "file:foo.db?_fk=true&_journal=DELETE&_sync=0&mode=ro",
+		},
+	}
+
+	for _, test := range tests {
+		got := MakeDSN(test.path, test.readOnly, test.fkEnabled, test.walEnabled)
+		if test.want != got {
+			t.Fatalf("expected %s, got %s", test.want, got)
+		}
+	}
+}
+
 func Test_IsValidSQLiteOnDisk(t *testing.T) {
 	path := mustTempFile()
 	defer os.Remove(path)
