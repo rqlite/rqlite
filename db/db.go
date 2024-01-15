@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -359,38 +360,18 @@ func Open(dbPath string, fkEnabled, wal bool) (*DB, error) {
 		}
 	}
 
-	rwDSN := fmt.Sprintf("file:%s?_fk=%s", dbPath, strconv.FormatBool(fkEnabled))
+	rwDSN := MakeDSN(dbPath, ModeReadWrite, fkEnabled, wal)
 	rwDB, err := sql.Open("sqlite3", rwDSN)
 	if err != nil {
 		return nil, fmt.Errorf("open: %s", err.Error())
 	}
 
-	// Ensure all PRAGMAs are set correctly.
-	mode := "WAL"
-	if !wal {
-		mode = "DELETE"
-	}
-	if _, err := rwDB.Exec(fmt.Sprintf("PRAGMA journal_mode=%s", mode)); err != nil {
-		return nil, fmt.Errorf("journal mode to %s: %s", mode, err.Error())
-	}
 	// Critical that rqlite has full control over the checkpointing process.
 	if _, err := rwDB.Exec("PRAGMA wal_autocheckpoint=0"); err != nil {
-		return nil, fmt.Errorf("disable checkpointing: %s", err.Error())
-	}
-	// Set synchronous to OFF, to improve performance. The SQLite docs state that
-	// this risks database corruption in the event of a crash, but that's OK, as
-	// rqlite blows away the database on startup and always rebuilds it from the
-	// Raft log.
-	if _, err := rwDB.Exec("PRAGMA synchronous=OFF"); err != nil {
-		return nil, fmt.Errorf("sync OFF: %s", err.Error())
+		return nil, fmt.Errorf("disable autocheckpointing: %s", err.Error())
 	}
 
-	roOpts := []string{
-		"mode=ro",
-		fmt.Sprintf("_fk=%s", strconv.FormatBool(fkEnabled)),
-	}
-
-	roDSN := fmt.Sprintf("file:%s?%s", dbPath, strings.Join(roOpts, "&"))
+	roDSN := MakeDSN(dbPath, ModeReadOnly, fkEnabled, wal)
 	roDB, err := sql.Open("sqlite3", roDSN)
 	if err != nil {
 		return nil, err
@@ -1562,6 +1543,22 @@ func containsEmptyType(slice []string) bool {
 		}
 	}
 	return false
+}
+
+var ModeReadOnly = true
+var ModeReadWrite = false
+
+func MakeDSN(path string, readOnly, fkEnabled, walEnabled bool) string {
+	opts := url.Values{}
+	if readOnly {
+		opts.Add("mode", "ro")
+	}
+	opts.Add("_fk", strconv.FormatBool(fkEnabled))
+	opts.Add("_journal", "WAL")
+	if !walEnabled {
+		opts.Set("_journal", "DELETE")
+	}
+	return fmt.Sprintf("file:%s?%s", path, opts.Encode())
 }
 
 func fileExists(path string) bool {

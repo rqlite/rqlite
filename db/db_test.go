@@ -21,11 +21,11 @@ func Test_OpenNonExistentDatabase(t *testing.T) {
 	defer os.Remove(path)
 	_, err := Open(path, false, false)
 	if err != nil {
-		t.Fatalf("error opening non-existent database")
+		t.Fatalf("error opening non-existent database: %s", err.Error())
 	}
 	// Confirm a file was created.
 	if !fileExists(path) {
-		t.Fatalf("database file not created")
+		t.Fatalf("database file not created at %s", path)
 	}
 }
 
