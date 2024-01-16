@@ -1,3 +1,7 @@
+## 8.16.7 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1607](https://github.com/rqlite/rqlite/pull/1607): Remove use of deprecated `ioutil`.
+
 ## 8.16.6 (January 16th 2024)
 ### Implementation changes and bug fixes
 - [PR #1603](https://github.com/rqlite/rqlite/pull/1603): Standardize logging by Raft module.
