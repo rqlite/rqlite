@@ -2,7 +2,6 @@ package db
 
 import (
 	"errors"
-	"io/ioutil"
 	"os"
 	"strings"
 	"testing"
@@ -1139,7 +1138,7 @@ func testSerialize(t *testing.T, db *DB) {
 		t.Fatalf("failed to insert records: %s", err.Error())
 	}
 
-	dstDB, err := ioutil.TempFile("", "rqlite-bak-")
+	dstDB, err := os.CreateTemp("", "rqlite-bak-")
 	if err != nil {
 		t.Fatalf("failed to create temp file: %s", err.Error())
 	}
@@ -1156,7 +1155,7 @@ func testSerialize(t *testing.T, db *DB) {
 		t.Fatalf("expected DELETE mode to be enabled")
 	}
 
-	err = ioutil.WriteFile(dstDB.Name(), b, 0644)
+	err = os.WriteFile(dstDB.Name(), b, 0644)
 	if err != nil {
 		t.Fatalf("failed to write serialized database to file: %s", err.Error())
 	}

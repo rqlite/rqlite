@@ -5,7 +5,6 @@ import (
 	"compress/gzip"
 	"crypto/rand"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strings"
 	"testing"
@@ -22,7 +21,7 @@ func Test_SingleChunk(t *testing.T) {
 		Data:        mustCompressData(data),
 	}
 
-	dir, err := ioutil.TempDir("", "dechunker-test")
+	dir, err := os.MkdirTemp("", "dechunker-test")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -47,7 +46,7 @@ func Test_SingleChunk(t *testing.T) {
 	}
 
 	// Check the contents of the output file.
-	got, err := ioutil.ReadFile(filePath)
+	got, err := os.ReadFile(filePath)
 	if err != nil {
 		t.Fatalf("failed to read output file: %v", err)
 	}
@@ -72,7 +71,7 @@ func Test_MultiChunk(t *testing.T) {
 		Data:        mustCompressData(data2),
 	}
 
-	dir, err := ioutil.TempDir("", "dechunker-test")
+	dir, err := os.MkdirTemp("", "dechunker-test")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -99,7 +98,7 @@ func Test_MultiChunk(t *testing.T) {
 	}
 
 	// Check the contents of the output file.
-	got, err := ioutil.ReadFile(filePath)
+	got, err := os.ReadFile(filePath)
 	if err != nil {
 		t.Fatalf("failed to read output file: %v", err)
 	}
@@ -130,7 +129,7 @@ func Test_MultiChunkNilData(t *testing.T) {
 		Data:        nil,
 	}
 
-	dir, err := ioutil.TempDir("", "dechunker-test")
+	dir, err := os.MkdirTemp("", "dechunker-test")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -157,7 +156,7 @@ func Test_MultiChunkNilData(t *testing.T) {
 	}
 
 	// Check the contents of the output file.
-	got, err := ioutil.ReadFile(filePath)
+	got, err := os.ReadFile(filePath)
 	if err != nil {
 		t.Fatalf("failed to read output file: %v", err)
 	}
@@ -184,7 +183,7 @@ func Test_UnexpectedStreamID(t *testing.T) {
 		Data:        compressedData,
 	}
 
-	dir, err := ioutil.TempDir("", "dechunker-test")
+	dir, err := os.MkdirTemp("", "dechunker-test")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -228,7 +227,7 @@ func Test_ChunksOutOfOrder(t *testing.T) {
 		Data:        compressedData,
 	}
 
-	dir, err := ioutil.TempDir("", "dechunker-test")
+	dir, err := os.MkdirTemp("", "dechunker-test")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -256,7 +255,7 @@ func Test_ChunksOutOfOrder(t *testing.T) {
 }
 
 func Test_ReassemblyOfLargeData(t *testing.T) {
-	dir, err := ioutil.TempDir("", "test-*")
+	dir, err := os.MkdirTemp("", "test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -300,7 +299,7 @@ func Test_ReassemblyOfLargeData(t *testing.T) {
 	defer os.Remove(outFilePath)
 
 	// The output data should be the same as the original largeData.
-	outData, err := ioutil.ReadFile(outFilePath)
+	outData, err := os.ReadFile(outFilePath)
 	if err != nil {
 		t.Fatalf("failed to read output file data: %v", err)
 	}
