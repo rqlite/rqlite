@@ -2,6 +2,7 @@
 ### Implementation changes and bug fixes
 - [PR #1603](https://github.com/rqlite/rqlite/pull/1603): Standardize logging by Raft module.
 - [PR #1604](https://github.com/rqlite/rqlite/pull/1604), [PR #1605](https://github.com/rqlite/rqlite/pull/1605), [PR #1606](https://github.com/rqlite/rqlite/pull/1606): Minor refactor of database code.
+- [Commit 2176101](https://github.com/rqlite/rqlite/commit/21761011d45630998ea603576d5c390bafba0afd): Fix rqlite shell help output.
 
 ## 8.16.5 (January 14th 2024)
 This release further improves _Automatic Backup_ performance, as well as improving test coverage generally.
