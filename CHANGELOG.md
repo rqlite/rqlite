@@ -1,4 +1,4 @@
-## 8.16.6 (unreleased)
+## 8.16.6 (January 16th 2024)
 ### Implementation changes and bug fixes
 - [PR #1603](https://github.com/rqlite/rqlite/pull/1603): Standardize logging by Raft module.
 - [PR #1604](https://github.com/rqlite/rqlite/pull/1604), [PR #1605](https://github.com/rqlite/rqlite/pull/1605), [PR #1606](https://github.com/rqlite/rqlite/pull/1606): Minor refactor of database code.
