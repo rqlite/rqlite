@@ -277,7 +277,7 @@ func makeJSONBody(line string) string {
 
 func help(ctx *cli.Context, cmd, line string, argv *argT) error {
 	sort.Strings(cliHelp)
-	fmt.Print(strings.Join(cliHelp, "\n"))
+	fmt.Println(strings.Join(cliHelp, "\n"))
 	return nil
 }
 
