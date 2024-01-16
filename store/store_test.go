@@ -1801,6 +1801,50 @@ func Test_SingleNodeWaitForRemove(t *testing.T) {
 	}
 }
 
+// Test_MultiNodeSnapshot_ErrorMessage tests that a snapshot fails with a specific
+// error message when the snapshot is attempted too soon after joining a cluster.
+// Hashicorp Raft doesn't expose a typed error, so we have to check the error
+// message in the production code. This test makes sure the text doesn't change.
+func Test_MultiNodeSnapshot_ErrorMessage(t *testing.T) {
+	s0, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s0.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s0.Close(true)
+	if err := s0.Bootstrap(NewServer(s0.ID(), s0.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+	s0.Noop("don't care") // If if fails, we'll find out later.
+
+	s1, ln1 := mustNewStore(t)
+	defer ln1.Close()
+
+	if err := s1.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s1.Close(true)
+
+	if err := s0.Join(joinRequest(s1.ID(), s1.Addr(), true)); err != nil {
+		t.Fatalf("failed to join single-node store: %s", err.Error())
+	}
+	if _, err := s1.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	err := s0.Snapshot(0)
+	if err == nil {
+		t.Fatalf("expected error when snapshotting multi-node store immediately after joining")
+	}
+	if !strings.Contains(err.Error(), "wait until the configuration entry at") {
+		t.Fatalf("expected error to contain 'wait until the configuration entry at', got %s", err.Error())
+	}
+}
+
 func Test_MultiNodeDBAppliedIndex(t *testing.T) {
 	s0, ln0 := mustNewStore(t)
 	defer ln0.Close()
