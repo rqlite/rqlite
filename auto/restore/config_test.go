@@ -3,7 +3,6 @@ package restore
 import (
 	"bytes"
 	"errors"
-	"io/ioutil"
 	"os"
 	"reflect"
 	"testing"
@@ -16,7 +15,7 @@ import (
 func Test_ReadConfigFile(t *testing.T) {
 	t.Run("valid config file", func(t *testing.T) {
 		// Create a temporary config file
-		tempFile, err := ioutil.TempFile("", "upload_config")
+		tempFile, err := os.CreateTemp("", "upload_config")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -52,7 +51,7 @@ func Test_ReadConfigFile(t *testing.T) {
 		defer os.Unsetenv("TEST_VAR")
 
 		// Create a temporary config file with an environment variable
-		tempFile, err := ioutil.TempFile("", "upload_config")
+		tempFile, err := os.CreateTemp("", "upload_config")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -82,7 +81,7 @@ func Test_ReadConfigFile(t *testing.T) {
 		defer os.Unsetenv("TEST_VAR1")
 
 		// Create a temporary config file with an environment variable
-		tempFile, err := ioutil.TempFile("", "upload_config")
+		tempFile, err := os.CreateTemp("", "upload_config")
 		if err != nil {
 			t.Fatal(err)
 		}

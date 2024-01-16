@@ -1,7 +1,6 @@
 package log
 
 import (
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -476,7 +475,7 @@ func Test_LogStats(t *testing.T) {
 // mustTempFile returns a path to a temporary file in directory dir. It is up to the
 // caller to remove the file once it is no longer needed.
 func mustTempFile() string {
-	tmpfile, err := ioutil.TempFile("", "rqlite-db-test")
+	tmpfile, err := os.CreateTemp("", "rqlite-db-test")
 	if err != nil {
 		panic(err.Error())
 	}

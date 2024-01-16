@@ -2,7 +2,7 @@ package restore
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"os"
 	"time"
 
@@ -52,7 +52,7 @@ func ReadConfigFile(filename string) ([]byte, error) {
 	}
 	defer f.Close()
 
-	data, err := ioutil.ReadAll(f)
+	data, err := io.ReadAll(f)
 	if err != nil {
 		return nil, err
 	}
