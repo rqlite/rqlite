@@ -26,9 +26,12 @@ class TestSingleNode(unittest.TestCase):
     self.cluster.deprovision()
 
   def test_pragmas(self):
-    '''Test that the pragma configration is correct'''
+    '''Test that the critical configration is correct'''
     n = self.cluster.wait_for_leader()
-    self.assertEqual(n.pragmas(), d_("{'ro':{'foreign_keys':'0','journal_mode':'wal','synchronous':'0','wal_autocheckpoint':'1000'},'rw':{'foreign_keys':'0','journal_mode':'wal','synchronous':'0','wal_autocheckpoint':'0'}}"))
+    ro_pragmas = n.pragmas()['ro']
+    rw_pragmas = n.pragmas()['rw']
+    self.assertEqual(ro_pragmas, d_("{'foreign_keys': '0', 'journal_mode': 'wal', 'synchronous': '0', 'wal_autocheckpoint': '1000'}"))
+    self.assertEqual(rw_pragmas, d_("{'foreign_keys': '0', 'journal_mode': 'wal', 'synchronous': '0', 'wal_autocheckpoint': '0'}"))
 
   def test_simple_raw_queries(self):
     '''Test simple queries work as expected'''
