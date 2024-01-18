@@ -1825,7 +1825,9 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	stats.Add(numSnapshots, 1)
 	dur := time.Since(startT)
 	stats.Get(snapshotCreateDuration).(*expvar.Int).Set(dur.Milliseconds())
-	s.logger.Printf("%s snapshot created in %s on node ID %s", fPLog, dur, s.raftID)
+	if fullNeeded {
+		s.logger.Printf("%s snapshot created in %s on node ID %s", fPLog, dur, s.raftID)
+	}
 	return &FSMSnapshot{
 		FSMSnapshot: fsmSnapshot,
 		logger:      s.logger,
