@@ -11,7 +11,7 @@ import os
 import time
 import unittest
 
-from helpers import Node, Cluster, d_, deprovision_node, TIMEOUT
+from helpers import Node, Cluster, d_, deprovision_node, poll_query
 
 RQLITED_PATH = os.environ['RQLITED_PATH']
 
@@ -192,28 +192,19 @@ class TestSingleNode(unittest.TestCase):
 
 class TestSingleNodeLoadRestart(unittest.TestCase):
   ''' Test that a node can load a SQLite data set in binary format'''
-  def poll_query(self, node, query, exp):
-    deadline = time.time() + 3
-    while time.time() < deadline:
-      j = node.query(query, level='none')
-      if j == exp:
-        return
-      time.sleep(0.1)
-    raise Exception('timeout waiting for node %s to have all data' % node.node_id)
-
   def test_load_binary(self):
     self.n = Node(RQLITED_PATH, '0',  raft_snap_threshold=8192, raft_snap_int="30s")
     self.n.start()
     n = self.n.wait_for_leader()
     self.n.restore('system_test/e2e/testdata/1000-numbers.db', fmt='binary')
-    self.poll_query(self.n, 'SELECT COUNT(*) from test', d_("{'results': [{'values': [[1000]], 'types': ['integer'], 'columns': ['COUNT(*)']}]}"))
+    poll_query(self.n, 'SELECT COUNT(*) from test', d_("{'results': [{'values': [[1000]], 'types': ['integer'], 'columns': ['COUNT(*)']}]}"))
 
     # Ensure node can restart after loading and that the data is correct.
     self.n.stop()
     self.n.start()
     self.n.wait_for_leader()
     self.n.restore('system_test/e2e/testdata/1000-numbers.db', fmt='binary')
-    self.poll_query(self.n, 'SELECT COUNT(*) from test', d_("{'results': [{'values': [[1000]], 'types': ['integer'], 'columns': ['COUNT(*)']}]}"))
+    poll_query(self.n, 'SELECT COUNT(*) from test', d_("{'results': [{'values': [[1000]], 'types': ['integer'], 'columns': ['COUNT(*)']}]}"))
 
   def tearDown(self):
     deprovision_node(self.n)

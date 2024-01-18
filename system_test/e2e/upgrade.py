@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import os, unittest, time
-from helpers import Node, Cluster, d_, deprovision_node, copy_dir_to_temp
+from helpers import Node, Cluster, d_, deprovision_node, copy_dir_to_temp, poll_query
 
 RQLITED_PATH = os.environ['RQLITED_PATH']
 TIMEOUT=20
@@ -65,7 +65,7 @@ class TestUpgrade_v8_LoadChunk(unittest.TestCase):
     self.n = Node(RQLITED_PATH, 'localhost:4002', api_addr='localhost:4001', raft_addr='localhost:4002', dir=dir)
     self.n.start()
     l = self.n.wait_for_leader()
-    self.assertEqual(self.n.query('SELECT COUNT(*) FROM foo', level='none'), d_("{'results': [{'values': [[1]], 'types': ['integer'], 'columns': ['COUNT(*)']}]}"))
+    poll_query(self.n, 'SELECT COUNT(*) FROM foo', d_("{'results': [{'values': [[1]], 'types': ['integer'], 'columns': ['COUNT(*)']}]}"))
 
   def tearDown(self):
     deprovision_node(self.n)
