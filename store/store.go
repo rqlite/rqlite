@@ -283,7 +283,8 @@ type Store struct {
 	appliedOnOpen        uint64    // Number of logs applied at open.
 	openT                time.Time // Timestamp when Store opens.
 
-	logger *log.Logger
+	logger         *log.Logger
+	logIncremental bool
 
 	notifyMu        sync.Mutex
 	BootstrapExpect int
@@ -1629,6 +1630,9 @@ func (s *Store) raftConfig() *raft.Config {
 	opts := hclog.DefaultOptions
 	opts.Name = ""
 	opts.Level = hclog.LevelFromString(s.RaftLogLevel)
+	if opts.Level < hclog.Warn {
+		s.logIncremental = true
+	}
 	config.Logger = hclog.FromStandardLogger(log.New(os.Stderr, "[raft] ", log.LstdFlags), opts)
 	return config
 }
@@ -1829,7 +1833,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	fs := FSMSnapshot{
 		FSMSnapshot: fsmSnapshot,
 	}
-	if fullNeeded {
+	if fullNeeded || s.logIncremental {
 		s.logger.Printf("%s snapshot created in %s on node ID %s", fPLog, dur, s.raftID)
 		fs.logger = s.logger
 	}
