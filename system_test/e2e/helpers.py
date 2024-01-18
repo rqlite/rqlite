@@ -73,6 +73,15 @@ def write_random_file(data, mode='w'):
   f.close()
   return f.name
 
+def poll_query(node, query, exp, level='none', timeout=TIMEOUT):
+    deadline = time.time() + 3
+    while time.time() < deadline:
+      j = node.query(query, level=level)
+      if j == exp:
+        return
+      time.sleep(0.1)
+    raise Exception('timeout waiting expected query response')
+
 def raise_for_status(r):
   try:
     r.raise_for_status()

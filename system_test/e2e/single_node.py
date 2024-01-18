@@ -11,7 +11,7 @@ import os
 import time
 import unittest
 
-from helpers import Node, Cluster, d_, deprovision_node, TIMEOUT
+from helpers import Node, Cluster, d_, deprovision_node, poll_query
 
 RQLITED_PATH = os.environ['RQLITED_PATH']
 
@@ -196,16 +196,15 @@ class TestSingleNodeLoadRestart(unittest.TestCase):
     self.n = Node(RQLITED_PATH, '0',  raft_snap_threshold=8192, raft_snap_int="30s")
     self.n.start()
     n = self.n.wait_for_leader()
-    j = self.n.restore('system_test/e2e/testdata/1000-numbers.db', fmt='binary')
-    j = self.n.query('SELECT COUNT(*) from test')
-    self.assertEqual(j, d_("{'results': [{'values': [[1000]], 'types': ['integer'], 'columns': ['COUNT(*)']}]}"))
+    self.n.restore('system_test/e2e/testdata/1000-numbers.db', fmt='binary')
+    poll_query(self.n, 'SELECT COUNT(*) from test', d_("{'results': [{'values': [[1000]], 'types': ['integer'], 'columns': ['COUNT(*)']}]}"))
 
     # Ensure node can restart after loading and that the data is correct.
     self.n.stop()
     self.n.start()
     self.n.wait_for_leader()
-    j = self.n.query('SELECT COUNT(*) from test')
-    self.assertEqual(j, d_("{'results': [{'values': [[1000]], 'types': ['integer'], 'columns': ['COUNT(*)']}]}"))
+    self.n.restore('system_test/e2e/testdata/1000-numbers.db', fmt='binary')
+    poll_query(self.n, 'SELECT COUNT(*) from test', d_("{'results': [{'values': [[1000]], 'types': ['integer'], 'columns': ['COUNT(*)']}]}"))
 
   def tearDown(self):
     deprovision_node(self.n)

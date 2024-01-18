@@ -283,7 +283,8 @@ type Store struct {
 	appliedOnOpen        uint64    // Number of logs applied at open.
 	openT                time.Time // Timestamp when Store opens.
 
-	logger *log.Logger
+	logger         *log.Logger
+	logIncremental bool
 
 	notifyMu        sync.Mutex
 	BootstrapExpect int
@@ -1629,6 +1630,7 @@ func (s *Store) raftConfig() *raft.Config {
 	opts := hclog.DefaultOptions
 	opts.Name = ""
 	opts.Level = hclog.LevelFromString(s.RaftLogLevel)
+	s.logIncremental = opts.Level < hclog.Warn
 	config.Logger = hclog.FromStandardLogger(log.New(os.Stderr, "[raft] ", log.LstdFlags), opts)
 	return config
 }
@@ -1826,11 +1828,14 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	stats.Add(numSnapshots, 1)
 	dur := time.Since(startT)
 	stats.Get(snapshotCreateDuration).(*expvar.Int).Set(dur.Milliseconds())
-	s.logger.Printf("%s snapshot created in %s on node ID %s", fPLog, dur, s.raftID)
-	return &FSMSnapshot{
+	fs := FSMSnapshot{
 		FSMSnapshot: fsmSnapshot,
-		logger:      s.logger,
-	}, nil
+	}
+	if fullNeeded || s.logIncremental {
+		s.logger.Printf("%s snapshot created in %s on node ID %s", fPLog, dur, s.raftID)
+		fs.logger = s.logger
+	}
+	return &fs, nil
 }
 
 // fsmRestore restores the node to a previous state. The Hashicorp docs state this
