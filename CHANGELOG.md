@@ -4,6 +4,7 @@ The releases changes the default logging level for the Raft subsystem from `INFO
 - [PR #1607](https://github.com/rqlite/rqlite/pull/1607): Remove use of deprecated `ioutil`.
 - [PR #1608](https://github.com/rqlite/rqlite/pull/1608): Always close the FSM Snapshot.
 - [PR #1610](https://github.com/rqlite/rqlite/pull/1610): Change Raft default log level to `WARN`.
+- [PR #1611](https://github.com/rqlite/rqlite/pull/1611): Don't log incremental Raft snapshots.
 
 ## 8.16.6 (January 16th 2024)
 ### Implementation changes and bug fixes

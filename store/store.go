@@ -1826,13 +1826,14 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	stats.Add(numSnapshots, 1)
 	dur := time.Since(startT)
 	stats.Get(snapshotCreateDuration).(*expvar.Int).Set(dur.Milliseconds())
+	fs := FSMSnapshot{
+		FSMSnapshot: fsmSnapshot,
+	}
 	if fullNeeded {
 		s.logger.Printf("%s snapshot created in %s on node ID %s", fPLog, dur, s.raftID)
+		fs.logger = s.logger
 	}
-	return &FSMSnapshot{
-		FSMSnapshot: fsmSnapshot,
-		logger:      s.logger,
-	}, nil
+	return &fs, nil
 }
 
 // fsmRestore restores the node to a previous state. The Hashicorp docs state this

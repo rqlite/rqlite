@@ -48,7 +48,9 @@ func (f *FSMSnapshot) Persist(sink raft.SnapshotSink) (retError error) {
 		if retError == nil {
 			dur := time.Since(startT)
 			stats.Get(snapshotPersistDuration).(*expvar.Int).Set(dur.Milliseconds())
-			f.logger.Printf("persisted snapshot %s in %s", sink.ID(), time.Since(startT))
+			if f.logger != nil {
+				f.logger.Printf("persisted snapshot %s in %s", sink.ID(), dur)
+			}
 		}
 	}()
 	return f.FSMSnapshot.Persist(sink)
