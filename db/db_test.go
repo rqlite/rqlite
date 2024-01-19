@@ -138,6 +138,54 @@ func Test_TableCreation(t *testing.T) {
 	testQ()
 }
 
+func Test_DBSums(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
+	getSums := func() (string, string) {
+		sumDB, err := db.DBSum()
+		if err != nil {
+			t.Fatalf("failed to get DB checksum: %s", err.Error())
+		}
+		sumWAL, err := db.WALSum()
+		if err != nil {
+			t.Fatalf("failed to get WAL checksum: %s", err.Error())
+		}
+		return sumDB, sumWAL
+	}
+
+	r, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if exp, got := `[{}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+
+	sumDBPre, sumWALPre := getSums()
+	_, err = db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("fiona")`)
+	if err != nil {
+		t.Fatalf("error executing insertion into table: %s", err.Error())
+	}
+	sumDBPost, sumWALPost := getSums()
+	if sumDBPost != sumDBPre {
+		t.Fatalf("DB sum changed after insertion")
+	}
+	if sumWALPost == sumWALPre {
+		t.Fatalf("WAL sum did not change after insertion")
+	}
+
+	if err := db.Checkpoint(); err != nil {
+		t.Fatalf("failed to checkpoint database: %s", err.Error())
+	}
+
+	sumDBPostChk, _ := getSums()
+	if sumDBPostChk == sumDBPost {
+		t.Fatalf("DB sum did not change after checkpoint")
+	}
+}
+
 func Test_DBVacuum(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
 	defer db.Close()
