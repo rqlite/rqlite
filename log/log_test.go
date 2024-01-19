@@ -449,6 +449,31 @@ func Test_LogAppliedIndex(t *testing.T) {
 	}
 }
 
+func Test_SetGetUint64(t *testing.T) {
+	path := mustTempFile()
+	defer os.Remove(path)
+
+	l, err := New(path, false)
+	if err != nil {
+		t.Fatalf("failed to create new log: %s", err)
+	}
+	_, err = l.GetUint64("non-existent")
+	if err != raftboltdb.ErrKeyNotFound {
+		t.Fatalf("got wrong error for non-existent key: %s", err)
+	}
+
+	if err := l.SetUint64("foo", 1234); err != nil {
+		t.Fatalf("failed to set uint64: %s", err)
+	}
+	v, err := l.GetUint64("foo")
+	if err != nil {
+		t.Fatalf("failed to get uint64: %s", err)
+	}
+	if v != 1234 {
+		t.Fatalf("got wrong value for uint64: %d", v)
+	}
+}
+
 func Test_LogStats(t *testing.T) {
 	path := mustTempFile()
 	defer os.Remove(path)

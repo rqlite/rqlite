@@ -89,16 +89,26 @@ func (l *Log) HasCommand() (bool, error) {
 
 // SetAppliedIndex sets the AppliedIndex value.
 func (l *Log) SetAppliedIndex(index uint64) error {
-	return l.SetUint64([]byte(rqliteAppliedIndex), index)
+	return l.BoltStore.SetUint64([]byte(rqliteAppliedIndex), index)
 }
 
 // GetAppliedIndex returns the AppliedIndex value.
 func (l *Log) GetAppliedIndex() (uint64, error) {
-	i, err := l.GetUint64([]byte(rqliteAppliedIndex))
+	i, err := l.BoltStore.GetUint64([]byte(rqliteAppliedIndex))
 	if err != nil {
 		return 0, nil
 	}
 	return i, nil
+}
+
+// SetUint64 sets a uint64 value.
+func (l *Log) SetUint64(key string, val uint64) error {
+	return l.BoltStore.SetUint64([]byte(key), val)
+}
+
+// GetUint64 returns a uint64 value.
+func (l *Log) GetUint64(key string) (uint64, error) {
+	return l.BoltStore.GetUint64([]byte(key))
 }
 
 // Stats returns stats about the BBoltDB database.
