@@ -232,7 +232,7 @@ func Test_DBLastModified(t *testing.T) {
 	}
 
 	// Checkpoint, check time is later.
-	time.Sleep(2 * time.Second)
+	time.Sleep(1 * time.Second)
 	if err := db.Checkpoint(); err != nil {
 		t.Fatalf("failed to checkpoint database: %s", err.Error())
 	}
