@@ -1359,6 +1359,14 @@ func Test_SingleNodeLoadBinary(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
 
+	fullNeeded := func() bool {
+		fn, err := s.snapshotStore.FullNeeded()
+		if err != nil {
+			t.Fatalf("failed to check if snapshot store needs a full snapshot: %s", err.Error())
+		}
+		return fn
+	}
+
 	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
@@ -1382,6 +1390,18 @@ COMMIT;
 		t.Fatalf("failed to load simple dump: %s", err.Error())
 	}
 
+	// To start, since the Snapshot Store is empty, we should need a Full snapshot.
+	// Then we create one, and check that we don't need a Full snapshot.
+	if !fullNeeded() {
+		t.Fatalf("expected snapshot store to need a full snapshot")
+	}
+	if err := s.Snapshot(0); err != nil {
+		t.Fatalf("failed to create snapshot: %s", err.Error())
+	}
+	if fullNeeded() {
+		t.Fatalf("expected snapshot store to not need a full snapshot")
+	}
+
 	// Check that data were loaded correctly.
 	qr := queryRequestFromString("SELECT * FROM bar", false, true)
 	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
@@ -1401,12 +1421,9 @@ COMMIT;
 		t.Fatalf("failed to load SQLite file: %s", err.Error())
 	}
 
-	// Loading a database should mark that the snapshot store needs a Full Snapshot
-	fn, err := s.snapshotStore.FullNeeded()
-	if err != nil {
-		t.Fatalf("failed to check if snapshot store needs a full snapshot: %s", err.Error())
-	}
-	if !fn {
+	// Loading a database should mark that the snapshot store needs a Full
+	// Snapshot again.
+	if !fullNeeded() {
 		t.Fatalf("expected snapshot store to need a full snapshot")
 	}
 
