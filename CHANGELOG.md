@@ -2,6 +2,7 @@
 ### Implementation changes and bug fixes
 - [PR #1615](https://github.com/rqlite/rqlite/pull/1615): Add extensive WAL checkpoint test at the database level.
 - [PR #1616](https://github.com/rqlite/rqlite/pull/1616): Add time and checksum based change-detection functions to the database level.
+- [PR #1617](https://github.com/rqlite/rqlite/pull/1617): Add VacuumInto to database layer.
 - [PR #1618](https://github.com/rqlite/rqlite/pull/1618): Add generic KV store GET and SET to Log.
 
 ## 8.16.7 (January 18th 2024)
