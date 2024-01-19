@@ -102,13 +102,13 @@ func (l *Log) GetAppliedIndex() (uint64, error) {
 }
 
 // SetUint64 sets a uint64 value.
-func (l *Log) SetUint64(key string, val uint64) error {
-	return l.BoltStore.SetUint64([]byte(key), val)
+func (l *Log) SetUint64(key []byte, val uint64) error {
+	return l.BoltStore.SetUint64(key, val)
 }
 
 // GetUint64 returns a uint64 value.
-func (l *Log) GetUint64(key string) (uint64, error) {
-	return l.BoltStore.GetUint64([]byte(key))
+func (l *Log) GetUint64(key []byte) (uint64, error) {
+	return l.BoltStore.GetUint64(key)
 }
 
 // Stats returns stats about the BBoltDB database.

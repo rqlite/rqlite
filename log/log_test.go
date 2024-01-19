@@ -457,15 +457,15 @@ func Test_SetGetUint64(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create new log: %s", err)
 	}
-	_, err = l.GetUint64("non-existent")
+	_, err = l.GetUint64([]byte("non-existent"))
 	if err != raftboltdb.ErrKeyNotFound {
 		t.Fatalf("got wrong error for non-existent key: %s", err)
 	}
 
-	if err := l.SetUint64("foo", 1234); err != nil {
+	if err := l.SetUint64([]byte("foo"), 1234); err != nil {
 		t.Fatalf("failed to set uint64: %s", err)
 	}
-	v, err := l.GetUint64("foo")
+	v, err := l.GetUint64([]byte("foo"))
 	if err != nil {
 		t.Fatalf("failed to get uint64: %s", err)
 	}
