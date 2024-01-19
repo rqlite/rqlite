@@ -61,16 +61,7 @@ jobs:
       - run: go test -failfast $(go list ./... | sed -n 'n;p')
     resource_class: large
 
-  test_even:
-    docker:
-      - image: << pipeline.parameters.primary_image >>
-    steps:
-      - checkout
-      - restore_and_save_cache
-      - run: go test -failfast $(go list ./... | sed -n 'p;n')
-    resource_class: large
-
-  race_odd:
+  test_odd_race:
     docker:
       - image: << pipeline.parameters.primary_image >>
     steps:
@@ -82,7 +73,16 @@ jobs:
             GORACE: "halt_on_error=1"
     resource_class: large
 
-  race_even:
+  test_even:
+    docker:
+      - image: << pipeline.parameters.primary_image >>
+    steps:
+      - checkout
+      - restore_and_save_cache
+      - run: go test -failfast $(go list ./... | sed -n 'p;n')
+    resource_class: large
+
+  test_even_race:
     docker:
       - image: << pipeline.parameters.primary_image >>
     steps:
@@ -275,9 +275,9 @@ workflows:
       - cross_compile_mips
       - cross_compile_mips_le
       - test_even
+      - test_even_race
       - test_odd
-      - race_even
-      - race_odd
+      - test_odd_race
       - end_to_end_single
       - end_to_end_multi
       - end_to_end_multi_adv
