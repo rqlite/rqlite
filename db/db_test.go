@@ -136,12 +136,66 @@ func Test_TableCreation(t *testing.T) {
 		t.Fatalf("failed to checkpoint database: %s", err.Error())
 	}
 	testQ()
+}
 
-	// Check that VACUUM returns without error.
+func Test_DBVacuum(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
+	r, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if exp, got := `[{}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+
+	testQ := func() {
+		t.Helper()
+		q, err := db.QueryStringStmt("SELECT * FROM foo")
+		if err != nil {
+			t.Fatalf("failed to query empty table: %s", err.Error())
+		}
+		if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(q); exp != got {
+			t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+		}
+	}
+
+	_, err = db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("fiona")`)
+	if err != nil {
+		t.Fatalf("error executing insertion into table: %s", err.Error())
+	}
+
+	// Confirm VACUUM works without error and that only the WAL file is altered
+	lmDBPre, err := db.DBLastModified()
+	if err != nil {
+		t.Fatalf("failed to get last modified time: %s", err.Error())
+	}
+	lmWALPre, err := db.WALLastModified()
+	if err != nil {
+		t.Fatalf("failed to get last modified time: %s", err.Error())
+	}
+
 	if err := db.Vacuum(); err != nil {
-		t.Fatalf("failed to VACUUM database: %s", err.Error())
+		t.Fatalf("failed to vacuum database: %s", err.Error())
 	}
 	testQ()
+
+	lmDBPost, err := db.DBLastModified()
+	if err != nil {
+		t.Fatalf("failed to get last modified time: %s", err.Error())
+	}
+	lmWALPost, err := db.WALLastModified()
+	if err != nil {
+		t.Fatalf("failed to get last modified time: %s", err.Error())
+	}
+	if !lmDBPre.Equal(lmDBPost) {
+		t.Fatalf("last modified time of DB changed after VACUUM")
+	}
+	if !lmWALPost.After(lmWALPre) {
+		t.Fatalf("last modified time of WAL not updated after VACUUM (pre=%s, post=%s)", lmWALPre, lmWALPost)
+	}
 }
 
 // Test_TableCreationFK ensures foreign key constraints work
