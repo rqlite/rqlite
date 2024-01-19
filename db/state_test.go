@@ -303,8 +303,7 @@ func Test_WALReplayOK(t *testing.T) {
 }
 
 // Test_WALReplayOK_Complex tests that WAL files are replayed as expected in a more
-// complex scenario. If VACUUM is performed, the dst database becomes corrupt. This
-// shows that VACUUM introduces issues which warrant a full snapshot after auto-vacuum.
+// complex scenario, including showing the interaction with VACUUM.
 func Test_WALReplayOK_Complex(t *testing.T) {
 	srcPath := mustTempFile()
 	defer os.Remove(srcPath)
@@ -445,11 +444,12 @@ func Test_WALReplayOK_Complex(t *testing.T) {
 		}
 	}
 
+	// Finally, run an integrity check on dst.
 	r, err := dstDB.IntegrityCheck(true)
 	if err != nil {
 		t.Fatalf("failed to run integrity check on dst: %s", err.Error())
 	}
-	if exp, got := "ok", asJSON(r); `[{"columns":["integrity_check"],"types":["text"],"values":[["ok"]]}]` != got {
+	if exp, got := `[{"columns":["integrity_check"],"types":["text"],"values":[["ok"]]}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for integrity check of dst, expected %s, got %s", exp, got)
 	}
 }
