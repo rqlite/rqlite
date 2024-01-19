@@ -231,7 +231,8 @@ func Test_DBLastModified(t *testing.T) {
 		t.Fatalf("last modified time changed for DB even though only WAL should have changed")
 	}
 
-	// Checkpoint, check time is later.
+	// Checkpoint, and check time is later. On some platforms the time resolution isn't that
+	// high, so we sleep so the test won't suffer a false failure.
 	time.Sleep(1 * time.Second)
 	if err := db.Checkpoint(); err != nil {
 		t.Fatalf("failed to checkpoint database: %s", err.Error())
