@@ -344,6 +344,8 @@ func Test_WALReplayOK_Complex(t *testing.T) {
 			}
 		}
 
+		// Now copy the WAL! Has to happen after any possible VACUUM since the VACUUM will
+		// rewrite the WAL.
 		dstWALPath := fmt.Sprintf("%s-%d", dstPath, i)
 		mustCopyFile(dstWALPath, srcWALPath)
 		dstWALs = append(dstWALs, dstWALPath)
@@ -383,6 +385,18 @@ func Test_WALReplayOK_Complex(t *testing.T) {
 		}
 	}
 	dstWALPath = fmt.Sprintf("%s-create-tables", dstPath)
+	mustCopyFile(dstWALPath, srcWALPath)
+	dstWALs = append(dstWALs, dstWALPath)
+	if err := srcDB.Checkpoint(); err != nil {
+		t.Fatalf("failed to checkpoint database in WAL mode: %s", err.Error())
+	}
+
+	// Do a VACUUM and copy the WAL again, to test the flow of copying the WAL
+	// immediately before a VACUUM.
+	if err := srcDB.Vacuum(); err != nil {
+		t.Fatalf("failed to vacuum database post CREATE: %s", err.Error())
+	}
+	dstWALPath = fmt.Sprintf("%s-post-create-tables", dstPath)
 	mustCopyFile(dstWALPath, srcWALPath)
 	dstWALs = append(dstWALs, dstWALPath)
 	if err := srcDB.Checkpoint(); err != nil {
