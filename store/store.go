@@ -129,6 +129,7 @@ const (
 	numIgnoredJoins           = "num_ignored_joins"
 	numRemovedBeforeJoins     = "num_removed_before_joins"
 	numDBStatsErrors          = "num_db_stats_errors"
+	numDBExternalMod          = "num_db_external_mod"
 	snapshotCreateDuration    = "snapshot_create_duration"
 	snapshotPersistDuration   = "snapshot_persist_duration"
 	snapshotPrecompactWALSize = "snapshot_precompact_wal_size"
@@ -177,6 +178,7 @@ func ResetStats() {
 	stats.Add(numIgnoredJoins, 0)
 	stats.Add(numRemovedBeforeJoins, 0)
 	stats.Add(numDBStatsErrors, 0)
+	stats.Add(numDBExternalMod, 0)
 	stats.Add(snapshotCreateDuration, 0)
 	stats.Add(snapshotPersistDuration, 0)
 	stats.Add(snapshotPrecompactWALSize, 0)
@@ -225,15 +227,17 @@ type Store struct {
 	restorePath   string
 	restoreDoneCh chan struct{}
 
-	raft    *raft.Raft // The consensus mechanism.
-	ly      Layer
-	raftTn  *NodeTransport
-	raftID  string    // Node ID.
-	dbConf  *DBConfig // SQLite database config.
-	dbPath  string    // Path to underlying SQLite file.
-	walPath string    // Path to WAL file.
-	dbDir   string    // Path to directory containing SQLite file.
-	db      *sql.DB   // The underlying SQLite store.
+	raft   *raft.Raft // The consensus mechanism.
+	ly     Layer
+	raftTn *NodeTransport
+	raftID string // Node ID.
+
+	dbConf         *DBConfig // SQLite database config.
+	dbPath         string    // Path to underlying SQLite file.
+	walPath        string    // Path to WAL file.
+	dbDir          string    // Path to directory containing SQLite file.
+	db             *sql.DB   // The underlying SQLite store.
+	dbLastModified time.Time // Last time SQLite file was modified.
 
 	dechunkManager *chunking.DechunkerManager
 	cmdProc        *CommandProcessor
@@ -487,6 +491,10 @@ func (s *Store) Open() (retErr error) {
 		return fmt.Errorf("failed to create on-disk database: %s", err)
 	}
 	s.logger.Printf("created on-disk database at open")
+	s.dbLastModified, err = modTime(s.dbPath)
+	if err != nil {
+		return fmt.Errorf("failed to get last modified time of database: %s", err.Error())
+	}
 
 	// Clean up any files from aborted operations. This tries to catch the case where scratch files
 	// were created in the Raft directory, not cleaned up, and then the node was restarted with an
@@ -1372,9 +1380,6 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 	s.db = db
 
 	// Snapshot, so we load the new database into the Raft system.
-	if err := s.snapshotStore.SetFullNeeded(); err != nil {
-		return n, err
-	}
 	if err := s.Snapshot(1); err != nil {
 		return n, err
 	}
@@ -1710,14 +1715,6 @@ func (s *Store) fsmApply(l *raft.Log) (e interface{}) {
 	}
 	if cmd.Type == proto.Command_COMMAND_TYPE_NOOP {
 		s.numNoops++
-	} else if cmd.Type == proto.Command_COMMAND_TYPE_LOAD {
-		// Swapping in a new database invalidates any existing snapshot.
-		err := s.snapshotStore.SetFullNeeded()
-		if err != nil {
-			return &fsmGenericResponse{
-				error: fmt.Errorf("failed to set full snapshot needed: %s", err.Error()),
-			}
-		}
 	}
 	return r
 }
@@ -1759,6 +1756,18 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			stats.Add(numSnapshotsFailed, 1)
 		}
 	}()
+
+	lm, err := modTime(s.dbPath)
+	if err != nil {
+		return nil, err
+	}
+	if lm.After(s.dbLastModified) {
+		s.logger.Printf("database file modified externally, forcing full snapshot")
+		stats.Add(numDBExternalMod, 1)
+		if err := s.snapshotStore.SetFullNeeded(); err != nil {
+			return nil, err
+		}
+	}
 
 	fullNeeded, err := s.snapshotStore.FullNeeded()
 	if err != nil {
@@ -1823,6 +1832,10 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			return nil, err
 		}
 		stats.Add(numSnapshotsIncremental, 1)
+	}
+	s.dbLastModified, err = modTime(s.dbPath)
+	if err != nil {
+		return nil, err
 	}
 
 	stats.Add(numSnapshots, 1)
@@ -2233,6 +2246,14 @@ func dirSize(path string) (int64, error) {
 		return err
 	})
 	return size, err
+}
+
+func modTime(path string) (time.Time, error) {
+	stat, err := os.Stat(path)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return stat.ModTime(), nil
 }
 
 func fullPretty(full bool) string {
