@@ -372,6 +372,17 @@ func (db *DB) Vacuum() error {
 	return err
 }
 
+// IntegrityCheck runs a PRAGMA integrity_check on the database.
+// If full is true, a full integrity check is performed, otherwise
+// a quick check. It returns after hitting the first integrity
+// failure, if any.
+func (db *DB) IntegrityCheck(full bool) ([]*command.QueryRows, error) {
+	if full {
+		return db.QueryStringStmt("PRAGMA integrity_check(1)")
+	}
+	return db.QueryStringStmt("PRAGMA quick_check(1)")
+}
+
 // SetSynchronousMode sets the synchronous mode of the database.
 func (db *DB) SetSynchronousMode(mode string) error {
 	if mode != "OFF" && mode != "NORMAL" && mode != "FULL" && mode != "EXTRA" {

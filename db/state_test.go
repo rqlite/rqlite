@@ -317,6 +317,8 @@ func Test_WALReplayOK_Complex(t *testing.T) {
 	}
 	defer srcDB.Close()
 
+	//////////////////////////////////////////////////////////////////////////
+	// Create the very first table so first WAL is created.
 	if _, err := srcDB.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"); err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
@@ -325,6 +327,9 @@ func Test_WALReplayOK_Complex(t *testing.T) {
 	}
 	mustCopyFile(dstPath, srcPath)
 
+	//////////////////////////////////////////////////////////////////////////
+	// INSERT a bunch of records, sometimes doing a VACUUM,
+	// but always copying the WAL.
 	var dstWALs []string
 	defer func() {
 		for _, p := range dstWALs {
@@ -354,6 +359,7 @@ func Test_WALReplayOK_Complex(t *testing.T) {
 		}
 	}
 
+	//////////////////////////////////////////////////////////////////////////
 	// Create some other type of transactions in src - first DELETE, then UPDATE.
 	if _, err := srcDB.ExecuteStringStmt(`DELETE FROM foo WHERE id >= 100 AND id <= 200`); err != nil {
 		t.Fatalf("error executing deletion from table: %s", err.Error())
@@ -378,6 +384,8 @@ func Test_WALReplayOK_Complex(t *testing.T) {
 		t.Fatalf("failed to checkpoint database in WAL mode: %s", err.Error())
 	}
 
+	//////////////////////////////////////////////////////////////////////////
+	// Create a bunch of new tables, copy the WAL afterwards.
 	for i := 0; i < 20; i++ {
 		createTable := fmt.Sprintf("CREATE TABLE bar%d (id INTEGER NOT NULL PRIMARY KEY, name TEXT)", i)
 		if _, err := srcDB.ExecuteStringStmt(createTable); err != nil {
@@ -391,8 +399,9 @@ func Test_WALReplayOK_Complex(t *testing.T) {
 		t.Fatalf("failed to checkpoint database in WAL mode: %s", err.Error())
 	}
 
+	//////////////////////////////////////////////////////////////////////////
 	// Do a VACUUM and copy the WAL again, to test the flow of copying the WAL
-	// immediately before a VACUUM.
+	// immediately before a VACUUM (up above)
 	if err := srcDB.Vacuum(); err != nil {
 		t.Fatalf("failed to vacuum database post CREATE: %s", err.Error())
 	}
@@ -434,6 +443,14 @@ func Test_WALReplayOK_Complex(t *testing.T) {
 		if exp, got := srcRes, asJSON(r); exp != got {
 			t.Fatalf("unexpected results for query (%s) of dst, expected %s, got %s", q, exp, got)
 		}
+	}
+
+	r, err := dstDB.IntegrityCheck(true)
+	if err != nil {
+		t.Fatalf("failed to run integrity check on dst: %s", err.Error())
+	}
+	if exp, got := "ok", asJSON(r); `[{"columns":["integrity_check"],"types":["text"],"values":[["ok"]]}]` != got {
+		t.Fatalf("unexpected results for integrity check of dst, expected %s, got %s", exp, got)
 	}
 }
 
