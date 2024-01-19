@@ -136,12 +136,191 @@ func Test_TableCreation(t *testing.T) {
 		t.Fatalf("failed to checkpoint database: %s", err.Error())
 	}
 	testQ()
+}
 
-	// Check that VACUUM returns without error.
+func Test_DBSums(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
+	getSums := func() (string, string) {
+		sumDB, err := db.DBSum()
+		if err != nil {
+			t.Fatalf("failed to get DB checksum: %s", err.Error())
+		}
+		sumWAL, err := db.WALSum()
+		if err != nil {
+			t.Fatalf("failed to get WAL checksum: %s", err.Error())
+		}
+		return sumDB, sumWAL
+	}
+
+	r, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if exp, got := `[{}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+
+	sumDBPre, sumWALPre := getSums()
+	_, err = db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("fiona")`)
+	if err != nil {
+		t.Fatalf("error executing insertion into table: %s", err.Error())
+	}
+	sumDBPost, sumWALPost := getSums()
+	if sumDBPost != sumDBPre {
+		t.Fatalf("DB sum changed after insertion")
+	}
+	if sumWALPost == sumWALPre {
+		t.Fatalf("WAL sum did not change after insertion")
+	}
+
+	if err := db.Checkpoint(); err != nil {
+		t.Fatalf("failed to checkpoint database: %s", err.Error())
+	}
+
+	sumDBPostChk, _ := getSums()
+	if sumDBPostChk == sumDBPost {
+		t.Fatalf("DB sum did not change after checkpoint")
+	}
+}
+
+func Test_DBLastModified(t *testing.T) {
+	path := mustTempFile()
+	defer os.Remove(path)
+	db, err := Open(path, false, true)
+	if err != nil {
+		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
+	}
+	defer db.Close()
+
+	lm, err := db.LastModified()
+	if err != nil {
+		t.Fatalf("failed to get last modified time: %s", err.Error())
+	}
+	if lm.IsZero() {
+		t.Fatalf("last modified time is zero")
+	}
+	lmDB, err := db.DBLastModified()
+	if err != nil {
+		t.Fatalf("failed to get last modified time: %s", err.Error())
+	}
+	if lmDB.IsZero() {
+		t.Fatalf("last modified time is zero")
+	}
+
+	// Write some data, check times are later.
+	_, err = db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	lm2, err := db.LastModified()
+	if err != nil {
+		t.Fatalf("failed to get last modified time: %s", err.Error())
+	}
+	if lm2.Before(lm) {
+		t.Fatalf("last modified time not updated")
+	}
+	lmDB2, err := db.DBLastModified()
+	if err != nil {
+		t.Fatalf("failed to get last modified time: %s", err.Error())
+	}
+	if !lmDB2.Equal(lmDB) {
+		t.Fatalf("last modified time changed for DB even though only WAL should have changed")
+	}
+
+	// Checkpoint, and check time is later. On some platforms the time resolution isn't that
+	// high, so we sleep so the test won't suffer a false failure.
+	time.Sleep(1 * time.Second)
+	if err := db.Checkpoint(); err != nil {
+		t.Fatalf("failed to checkpoint database: %s", err.Error())
+	}
+	lm3, err := db.LastModified()
+	if err != nil {
+		t.Fatalf("failed to get last modified time: %s", err.Error())
+	}
+	if lm3.Before(lm2) {
+		t.Fatalf("last modified time not updated after checkpoint")
+	}
+	lmDB3, err := db.DBLastModified()
+	if err != nil {
+		t.Fatalf("failed to get last modified time: %s", err.Error())
+	}
+	if !lmDB3.After(lmDB2) {
+		t.Fatalf("last modified time not updated for DB after checkpoint")
+	}
+
+	// Call again, without changes, check time is same.
+	lm4, err := db.LastModified()
+	if err != nil {
+		t.Fatalf("failed to get last modified time: %s", err.Error())
+	}
+	if !lm4.Equal(lm3) {
+		t.Fatalf("last modified time updated without changes")
+	}
+}
+
+func Test_DBVacuum(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
+	r, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if exp, got := `[{}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+
+	testQ := func() {
+		t.Helper()
+		q, err := db.QueryStringStmt("SELECT * FROM foo")
+		if err != nil {
+			t.Fatalf("failed to query empty table: %s", err.Error())
+		}
+		if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(q); exp != got {
+			t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+		}
+	}
+
+	_, err = db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("fiona")`)
+	if err != nil {
+		t.Fatalf("error executing insertion into table: %s", err.Error())
+	}
+
+	// Confirm VACUUM works without error and that only the WAL file is altered.
+	sumDBPre, err := db.DBSum()
+	if err != nil {
+		t.Fatalf("failed to get DB checksum: %s", err.Error())
+	}
+	sumWALPre, err := db.WALSum()
+	if err != nil {
+		t.Fatalf("failed to get WAL checksum: %s", err.Error())
+	}
+
 	if err := db.Vacuum(); err != nil {
-		t.Fatalf("failed to VACUUM database: %s", err.Error())
+		t.Fatalf("failed to vacuum database: %s", err.Error())
 	}
 	testQ()
+
+	sumDBPost, err := db.DBSum()
+	if err != nil {
+		t.Fatalf("failed to get DB checksum: %s", err.Error())
+	}
+	sumWALPost, err := db.WALSum()
+	if err != nil {
+		t.Fatalf("failed to get WAL checksum: %s", err.Error())
+	}
+
+	if sumDBPost != sumDBPre {
+		t.Fatalf("DB sum changed after VACUUM")
+	}
+	if sumWALPost == sumWALPre {
+		t.Fatalf("WAL sum did not change after VACUUM")
+	}
 }
 
 // Test_TableCreationFK ensures foreign key constraints work
@@ -382,59 +561,6 @@ func Test_CheckIntegrityOnDisk(t *testing.T) {
 		}
 	}
 	// Unable to create a data set that actually fails integrity check.
-}
-
-func Test_DBLastModified(t *testing.T) {
-	path := mustTempFile()
-	defer os.Remove(path)
-	db, err := Open(path, false, true)
-	if err != nil {
-		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
-	}
-	defer db.Close()
-
-	lm, err := db.LastModified()
-	if err != nil {
-		t.Fatalf("failed to get last modified time: %s", err.Error())
-	}
-	if lm.IsZero() {
-		t.Fatalf("last modified time is zero")
-	}
-
-	// Write some data, check time is later.
-	_, err = db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
-	if err != nil {
-		t.Fatalf("failed to create table: %s", err.Error())
-	}
-
-	lm2, err := db.LastModified()
-	if err != nil {
-		t.Fatalf("failed to get last modified time: %s", err.Error())
-	}
-	if lm2.Before(lm) {
-		t.Fatalf("last modified time not updated")
-	}
-
-	// Checkpoint, check time is later.
-	if err := db.Checkpoint(); err != nil {
-		t.Fatalf("failed to checkpoint database: %s", err.Error())
-	}
-	lm3, err := db.LastModified()
-	if err != nil {
-		t.Fatalf("failed to get last modified time: %s", err.Error())
-	}
-	if lm3.Before(lm2) {
-		t.Fatalf("last modified time not updated after checkpoint")
-	}
-
-	// Call again, without changes, check time is same.
-	lm4, err := db.LastModified()
-	if err != nil {
-		t.Fatalf("failed to get last modified time: %s", err.Error())
-	}
-	if !lm4.Equal(lm3) {
-		t.Fatalf("last modified time updated without changes")
-	}
 }
 
 // Test_WALDatabaseCreatedOK tests that a WAL file is created, and that

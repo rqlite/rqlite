@@ -4,7 +4,9 @@ package db
 
 import (
 	"context"
+	"crypto/md5"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"expvar"
 	"fmt"
@@ -172,11 +174,11 @@ func Open(dbPath string, fkEnabled, wal bool) (retDB *DB, retErr error) {
 // LastModified returns the last modified time of the database file, or the WAL file,
 // whichever is most recent.
 func (db *DB) LastModified() (time.Time, error) {
-	dbTime, err := lastModified(db.path)
+	dbTime, err := db.DBLastModified()
 	if err != nil {
 		return time.Time{}, err
 	}
-	walTime, err := lastModified(db.walPath)
+	walTime, err := db.WALLastModified()
 	if err != nil {
 		return time.Time{}, err
 	}
@@ -184,6 +186,26 @@ func (db *DB) LastModified() (time.Time, error) {
 		return dbTime, nil
 	}
 	return walTime, nil
+}
+
+// DBLastModified returns the last modified time of the database file.
+func (db *DB) DBLastModified() (time.Time, error) {
+	return lastModified(db.path)
+}
+
+// DBSum returns the MD5 checksum of the database file.
+func (db *DB) DBSum() (string, error) {
+	return md5sum(db.path)
+}
+
+// WALLastModified returns the last modified time of the WAL file.
+func (db *DB) WALLastModified() (time.Time, error) {
+	return lastModified(db.walPath)
+}
+
+// WALSum returns the MD5 checksum of the WAL file.
+func (db *DB) WALSum() (string, error) {
+	return md5sum(db.walPath)
 }
 
 // Close closes the underlying database connection.
@@ -1338,12 +1360,37 @@ func fileSize(path string) (int64, error) {
 	return stat.Size(), nil
 }
 
-func lastModified(path string) (time.Time, error) {
+func md5sum(path string) (string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	hash := md5.New()
+	if _, err := io.Copy(hash, file); err != nil {
+		return "", err
+	}
+
+	return hex.EncodeToString(hash.Sum(nil)), nil
+}
+
+func lastModified(path string) (t time.Time, retError error) {
+	defer func() {
+		if os.IsNotExist(retError) {
+			retError = nil
+		}
+	}()
+	fd, err := os.OpenFile(path, os.O_WRONLY, 0644)
+	if err != nil {
+		return time.Time{}, err
+	}
+	defer fd.Close()
+	if err := fd.Sync(); err != nil {
+		return time.Time{}, err
+	}
 	info, err := os.Stat(path)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return time.Time{}, nil
-		}
 		return time.Time{}, err
 	}
 	return info.ModTime(), nil
