@@ -337,15 +337,16 @@ func Test_WALReplayOK_Complex(t *testing.T) {
 				t.Fatalf("error executing insertion into table: %s", err.Error())
 			}
 		}
+
+		if i%5 == 0 {
+			if err := srcDB.Vacuum(); err != nil {
+				t.Fatalf("failed to vacuum database during INSERT: %s", err.Error())
+			}
+		}
+
 		dstWALPath := fmt.Sprintf("%s-%d", dstPath, i)
 		mustCopyFile(dstWALPath, srcWALPath)
 		dstWALs = append(dstWALs, dstWALPath)
-
-		// if i%5 == 0 {
-		// 	if err := srcDB.Vacuum(); err != nil {
-		// 		t.Fatalf("failed to vacuum database during INSERT: %s", err.Error())
-		// 	}
-		// }
 		if err := srcDB.Checkpoint(); err != nil {
 			t.Fatalf("failed to checkpoint database in WAL mode: %s", err.Error())
 		}
@@ -354,6 +355,9 @@ func Test_WALReplayOK_Complex(t *testing.T) {
 	// Create some other type of transactions in src - first DELETE, then UPDATE.
 	if _, err := srcDB.ExecuteStringStmt(`DELETE FROM foo WHERE id >= 100 AND id <= 200`); err != nil {
 		t.Fatalf("error executing deletion from table: %s", err.Error())
+	}
+	if err := srcDB.Vacuum(); err != nil {
+		t.Fatalf("failed to vacuum database post DELETE: %s", err.Error())
 	}
 	dstWALPath := fmt.Sprintf("%s-postdelete", dstPath)
 	mustCopyFile(dstWALPath, srcWALPath)
@@ -368,9 +372,6 @@ func Test_WALReplayOK_Complex(t *testing.T) {
 	dstWALPath = fmt.Sprintf("%s-postupdate", dstPath)
 	mustCopyFile(dstWALPath, srcWALPath)
 	dstWALs = append(dstWALs, dstWALPath)
-	// if err := srcDB.Vacuum(); err != nil {
-	// 	t.Fatalf("failed to vacuum database post UPDATE: %s", err.Error())
-	// }
 	if err := srcDB.Checkpoint(); err != nil {
 		t.Fatalf("failed to checkpoint database in WAL mode: %s", err.Error())
 	}
@@ -408,13 +409,13 @@ func Test_WALReplayOK_Complex(t *testing.T) {
 	} {
 		r, err := srcDB.QueryStringStmt(q)
 		if err != nil {
-			t.Fatalf("failed to query table: %s", err.Error())
+			t.Fatalf("failed to query srcDB table: %s", err.Error())
 		}
 		srcRes := asJSON(r)
 
 		r, err = dstDB.QueryStringStmt(q)
 		if err != nil {
-			t.Fatalf("failed to query table: %s", err.Error())
+			t.Fatalf("failed to query dstDB table: %s", err.Error())
 		}
 		if exp, got := srcRes, asJSON(r); exp != got {
 			t.Fatalf("unexpected results for query (%s) of dst, expected %s, got %s", q, exp, got)
