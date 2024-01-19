@@ -186,6 +186,80 @@ func Test_DBSums(t *testing.T) {
 	}
 }
 
+func Test_DBLastModified(t *testing.T) {
+	path := mustTempFile()
+	defer os.Remove(path)
+	db, err := Open(path, false, true)
+	if err != nil {
+		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
+	}
+	defer db.Close()
+
+	lm, err := db.LastModified()
+	if err != nil {
+		t.Fatalf("failed to get last modified time: %s", err.Error())
+	}
+	if lm.IsZero() {
+		t.Fatalf("last modified time is zero")
+	}
+	lmDB, err := db.DBLastModified()
+	if err != nil {
+		t.Fatalf("failed to get last modified time: %s", err.Error())
+	}
+	if lmDB.IsZero() {
+		t.Fatalf("last modified time is zero")
+	}
+
+	// Write some data, check times are later.
+	_, err = db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	lm2, err := db.LastModified()
+	if err != nil {
+		t.Fatalf("failed to get last modified time: %s", err.Error())
+	}
+	if lm2.Before(lm) {
+		t.Fatalf("last modified time not updated")
+	}
+	lmDB2, err := db.DBLastModified()
+	if err != nil {
+		t.Fatalf("failed to get last modified time: %s", err.Error())
+	}
+	if !lmDB2.Equal(lmDB) {
+		t.Fatalf("last modified time changed for DB even though only WAL should have changed")
+	}
+
+	// Checkpoint, check time is later.
+	if err := db.Checkpoint(); err != nil {
+		t.Fatalf("failed to checkpoint database: %s", err.Error())
+	}
+	lm3, err := db.LastModified()
+	if err != nil {
+		t.Fatalf("failed to get last modified time: %s", err.Error())
+	}
+	if lm3.Before(lm2) {
+		t.Fatalf("last modified time not updated after checkpoint")
+	}
+	lmDB3, err := db.DBLastModified()
+	if err != nil {
+		t.Fatalf("failed to get last modified time: %s", err.Error())
+	}
+	if !lmDB3.After(lmDB2) {
+		t.Fatalf("last modified time not updated for DB after checkpoint")
+	}
+
+	// Call again, without changes, check time is same.
+	lm4, err := db.LastModified()
+	if err != nil {
+		t.Fatalf("failed to get last modified time: %s", err.Error())
+	}
+	if !lm4.Equal(lm3) {
+		t.Fatalf("last modified time updated without changes")
+	}
+}
+
 func Test_DBVacuum(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
 	defer db.Close()
@@ -485,59 +559,6 @@ func Test_CheckIntegrityOnDisk(t *testing.T) {
 		}
 	}
 	// Unable to create a data set that actually fails integrity check.
-}
-
-func Test_DBLastModified(t *testing.T) {
-	path := mustTempFile()
-	defer os.Remove(path)
-	db, err := Open(path, false, true)
-	if err != nil {
-		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
-	}
-	defer db.Close()
-
-	lm, err := db.LastModified()
-	if err != nil {
-		t.Fatalf("failed to get last modified time: %s", err.Error())
-	}
-	if lm.IsZero() {
-		t.Fatalf("last modified time is zero")
-	}
-
-	// Write some data, check time is later.
-	_, err = db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
-	if err != nil {
-		t.Fatalf("failed to create table: %s", err.Error())
-	}
-
-	lm2, err := db.LastModified()
-	if err != nil {
-		t.Fatalf("failed to get last modified time: %s", err.Error())
-	}
-	if lm2.Before(lm) {
-		t.Fatalf("last modified time not updated")
-	}
-
-	// Checkpoint, check time is later.
-	if err := db.Checkpoint(); err != nil {
-		t.Fatalf("failed to checkpoint database: %s", err.Error())
-	}
-	lm3, err := db.LastModified()
-	if err != nil {
-		t.Fatalf("failed to get last modified time: %s", err.Error())
-	}
-	if lm3.Before(lm2) {
-		t.Fatalf("last modified time not updated after checkpoint")
-	}
-
-	// Call again, without changes, check time is same.
-	lm4, err := db.LastModified()
-	if err != nil {
-		t.Fatalf("failed to get last modified time: %s", err.Error())
-	}
-	if !lm4.Equal(lm3) {
-		t.Fatalf("last modified time updated without changes")
-	}
 }
 
 // Test_WALDatabaseCreatedOK tests that a WAL file is created, and that
