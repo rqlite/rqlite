@@ -302,6 +302,158 @@ func Test_WALReplayOK(t *testing.T) {
 	})
 }
 
+// Test_WALReplayOK_Complex tests that WAL files are replayed as expected in a more
+// complex scenario, including showing the interaction with VACUUM.
+func Test_WALReplayOK_Complex(t *testing.T) {
+	srcPath := mustTempFile()
+	defer os.Remove(srcPath)
+	srcWALPath := srcPath + "-wal"
+	dstPath := srcPath + "-dst"
+
+	srcDB, err := Open(srcPath, false, true)
+	if err != nil {
+		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
+	}
+	defer srcDB.Close()
+
+	//////////////////////////////////////////////////////////////////////////
+	// Create the very first table so first WAL is created.
+	if _, err := srcDB.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"); err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if err := srcDB.Checkpoint(); err != nil {
+		t.Fatalf("failed to checkpoint database in WAL mode: %s", err.Error())
+	}
+	mustCopyFile(dstPath, srcPath)
+
+	//////////////////////////////////////////////////////////////////////////
+	// INSERT a bunch of records, sometimes doing a VACUUM,
+	// but always copying the WAL.
+	var dstWALs []string
+	defer func() {
+		for _, p := range dstWALs {
+			os.Remove(p)
+		}
+	}()
+	for i := 0; i < 20; i++ {
+		for j := 0; j < 2000; j++ {
+			if _, err := srcDB.ExecuteStringStmt(fmt.Sprintf(`INSERT INTO foo(name) VALUES("fiona-%d")`, i)); err != nil {
+				t.Fatalf("error executing insertion into table: %s", err.Error())
+			}
+		}
+
+		if i%5 == 0 {
+			if err := srcDB.Vacuum(); err != nil {
+				t.Fatalf("failed to vacuum database during INSERT: %s", err.Error())
+			}
+		}
+
+		// Now copy the WAL! Has to happen after any possible VACUUM since the VACUUM will
+		// rewrite the WAL.
+		dstWALPath := fmt.Sprintf("%s-%d", dstPath, i)
+		mustCopyFile(dstWALPath, srcWALPath)
+		dstWALs = append(dstWALs, dstWALPath)
+		if err := srcDB.Checkpoint(); err != nil {
+			t.Fatalf("failed to checkpoint database in WAL mode: %s", err.Error())
+		}
+	}
+
+	//////////////////////////////////////////////////////////////////////////
+	// Create some other type of transactions in src - first DELETE, then UPDATE.
+	if _, err := srcDB.ExecuteStringStmt(`DELETE FROM foo WHERE id >= 100 AND id <= 200`); err != nil {
+		t.Fatalf("error executing deletion from table: %s", err.Error())
+	}
+	if err := srcDB.Vacuum(); err != nil {
+		t.Fatalf("failed to vacuum database post DELETE: %s", err.Error())
+	}
+	dstWALPath := fmt.Sprintf("%s-postdelete", dstPath)
+	mustCopyFile(dstWALPath, srcWALPath)
+	dstWALs = append(dstWALs, dstWALPath)
+	if err := srcDB.Checkpoint(); err != nil {
+		t.Fatalf("failed to checkpoint database in WAL mode: %s", err.Error())
+	}
+
+	if _, err := srcDB.ExecuteStringStmt(`UPDATE foo SET name="fiona-updated" WHERE id >= 300 AND id <= 600`); err != nil {
+		t.Fatalf("error executing update of table: %s", err.Error())
+	}
+	dstWALPath = fmt.Sprintf("%s-postupdate", dstPath)
+	mustCopyFile(dstWALPath, srcWALPath)
+	dstWALs = append(dstWALs, dstWALPath)
+	if err := srcDB.Checkpoint(); err != nil {
+		t.Fatalf("failed to checkpoint database in WAL mode: %s", err.Error())
+	}
+
+	//////////////////////////////////////////////////////////////////////////
+	// Create a bunch of new tables, copy the WAL afterwards.
+	for i := 0; i < 20; i++ {
+		createTable := fmt.Sprintf("CREATE TABLE bar%d (id INTEGER NOT NULL PRIMARY KEY, name TEXT)", i)
+		if _, err := srcDB.ExecuteStringStmt(createTable); err != nil {
+			t.Fatalf("failed to create table: %s", err.Error())
+		}
+	}
+	dstWALPath = fmt.Sprintf("%s-create-tables", dstPath)
+	mustCopyFile(dstWALPath, srcWALPath)
+	dstWALs = append(dstWALs, dstWALPath)
+	if err := srcDB.Checkpoint(); err != nil {
+		t.Fatalf("failed to checkpoint database in WAL mode: %s", err.Error())
+	}
+
+	//////////////////////////////////////////////////////////////////////////
+	// Do a VACUUM and copy the WAL again, to test the flow of copying the WAL
+	// immediately before a VACUUM (up above)
+	if err := srcDB.Vacuum(); err != nil {
+		t.Fatalf("failed to vacuum database post CREATE: %s", err.Error())
+	}
+	dstWALPath = fmt.Sprintf("%s-post-create-tables", dstPath)
+	mustCopyFile(dstWALPath, srcWALPath)
+	dstWALs = append(dstWALs, dstWALPath)
+	if err := srcDB.Checkpoint(); err != nil {
+		t.Fatalf("failed to checkpoint database in WAL mode: %s", err.Error())
+	}
+
+	// Replay all the WALs into dst and check the data looks good. Then compare
+	// the data in src and dst.
+	if err := ReplayWAL(dstPath, dstWALs, false); err != nil {
+		t.Fatalf("failed to replay WALs: %s", err.Error())
+	}
+	dstDB, err := Open(dstPath, false, true)
+	if err != nil {
+		t.Fatalf("failed to open dst database: %s", err.Error())
+	}
+	defer dstDB.Close()
+
+	// Run various queries to make sure src and dst are the same.
+	for _, q := range []string{
+		"SELECT COUNT(*) FROM foo",
+		"SELECT COUNT(*) FROM foo WHERE name='fiona-updated'",
+		"SELECT COUNT(*) FROM foo WHERE name='no-one'",
+		"SELECT COUNT(*) FROM sqlite_master WHERE type='table'",
+	} {
+		r, err := srcDB.QueryStringStmt(q)
+		if err != nil {
+			t.Fatalf("failed to query srcDB table: %s", err.Error())
+		}
+		srcRes := asJSON(r)
+
+		r, err = dstDB.QueryStringStmt(q)
+		if err != nil {
+			t.Fatalf("failed to query dstDB table: %s", err.Error())
+		}
+		if exp, got := srcRes, asJSON(r); exp != got {
+			t.Fatalf("unexpected results for query (%s) of dst, expected %s, got %s", q, exp, got)
+		}
+	}
+
+	// Finally, run an integrity check on dst.
+	r, err := dstDB.IntegrityCheck(true)
+	if err != nil {
+		t.Fatalf("failed to run integrity check on dst: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["integrity_check"],"types":["text"],"values":[["ok"]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for integrity check of dst, expected %s, got %s", exp, got)
+	}
+}
+
 func Test_WALReplayFailures(t *testing.T) {
 	dbDir := mustTempDir()
 	defer os.RemoveAll(dbDir)
