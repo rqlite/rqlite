@@ -193,6 +193,11 @@ func (db *DB) DBLastModified() (time.Time, error) {
 	return lastModified(db.path)
 }
 
+// DBSum returns the MD5 checksum of the database file.
+func (db *DB) DBSum() (string, error) {
+	return md5sum(db.path)
+}
+
 // WALLastModified returns the last modified time of the WAL file.
 func (db *DB) WALLastModified() (time.Time, error) {
 	return lastModified(db.walPath)

@@ -167,14 +167,10 @@ func Test_DBVacuum(t *testing.T) {
 		t.Fatalf("error executing insertion into table: %s", err.Error())
 	}
 
-	// Confirm VACUUM works without error and that only the WAL file is altered
-	lmDBPre, err := db.DBLastModified()
+	// Confirm VACUUM works without error and that only the WAL file is altered.
+	sumDBPre, err := db.DBSum()
 	if err != nil {
-		t.Fatalf("failed to get last modified time: %s", err.Error())
-	}
-	lmWALPre, err := db.WALLastModified()
-	if err != nil {
-		t.Fatalf("failed to get last modified time: %s", err.Error())
+		t.Fatalf("failed to get DB checksum: %s", err.Error())
 	}
 	sumWALPre, err := db.WALSum()
 	if err != nil {
@@ -186,26 +182,20 @@ func Test_DBVacuum(t *testing.T) {
 	}
 	testQ()
 
-	lmDBPost, err := db.DBLastModified()
+	sumDBPost, err := db.DBSum()
 	if err != nil {
-		t.Fatalf("failed to get last modified time: %s", err.Error())
-	}
-	lmWALPost, err := db.WALLastModified()
-	if err != nil {
-		t.Fatalf("failed to get last modified time: %s", err.Error())
+		t.Fatalf("failed to get DB checksum: %s", err.Error())
 	}
 	sumWALPost, err := db.WALSum()
 	if err != nil {
 		t.Fatalf("failed to get WAL checksum: %s", err.Error())
 	}
-	if !lmDBPre.Equal(lmDBPost) {
-		t.Fatalf("last modified time of DB changed after VACUUM")
+
+	if sumDBPost != sumDBPre {
+		t.Fatalf("DB sum changed after VACUUM")
 	}
 	if sumWALPost == sumWALPre {
 		t.Fatalf("WAL sum did not change after VACUUM")
-	}
-	if !lmWALPost.After(lmWALPre) {
-		t.Fatalf("last modified time of WAL not updated after VACUUM (pre=%s, post=%s)", lmWALPre, lmWALPost)
 	}
 }
 
