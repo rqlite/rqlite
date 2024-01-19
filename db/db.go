@@ -394,6 +394,12 @@ func (db *DB) Vacuum() error {
 	return err
 }
 
+// VacuumInto VACUUMs the database into the file at path
+func (db *DB) VacuumInto(path string) error {
+	_, err := db.rwDB.Exec(fmt.Sprintf("VACUUM INTO '%s'", path))
+	return err
+}
+
 // IntegrityCheck runs a PRAGMA integrity_check on the database.
 // If full is true, a full integrity check is performed, otherwise
 // a quick check. It returns after hitting the first integrity
