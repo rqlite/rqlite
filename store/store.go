@@ -232,12 +232,12 @@ type Store struct {
 	raftTn *NodeTransport
 	raftID string // Node ID.
 
-	dbConf         *DBConfig // SQLite database config.
-	dbPath         string    // Path to underlying SQLite file.
-	walPath        string    // Path to WAL file.
-	dbDir          string    // Path to directory containing SQLite file.
-	db             *sql.DB   // The underlying SQLite store.
-	dbLastModified time.Time // Last time SQLite file was modified.
+	dbConf   *DBConfig // SQLite database config.
+	dbPath   string    // Path to underlying SQLite file.
+	walPath  string    // Path to WAL file.
+	dbDir    string    // Path to directory containing SQLite file.
+	db       *sql.DB   // The underlying SQLite store.
+	dbLMTime time.Time // Last time SQLite file was modified.
 
 	dechunkManager *chunking.DechunkerManager
 	cmdProc        *CommandProcessor
@@ -491,7 +491,7 @@ func (s *Store) Open() (retErr error) {
 		return fmt.Errorf("failed to create on-disk database: %s", err)
 	}
 	s.logger.Printf("created on-disk database at open")
-	s.dbLastModified, err = modTime(s.dbPath)
+	s.dbLMTime, err = modTime(s.dbPath)
 	if err != nil {
 		return fmt.Errorf("failed to get last modified time of database: %s", err.Error())
 	}
@@ -1761,7 +1761,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	if err != nil {
 		return nil, err
 	}
-	if lm.After(s.dbLastModified) {
+	if lm.After(s.dbLMTime) {
 		s.logger.Printf("database file modified externally, forcing full snapshot")
 		stats.Add(numDBExternalMod, 1)
 		if err := s.snapshotStore.SetFullNeeded(); err != nil {
@@ -1833,7 +1833,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		}
 		stats.Add(numSnapshotsIncremental, 1)
 	}
-	s.dbLastModified, err = modTime(s.dbPath)
+	s.dbLMTime, err = modTime(s.dbPath)
 	if err != nil {
 		return nil, err
 	}
