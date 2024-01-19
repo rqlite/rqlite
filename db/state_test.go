@@ -302,6 +302,9 @@ func Test_WALReplayOK(t *testing.T) {
 	})
 }
 
+// Test_WALReplayOK_Complex tests that WAL files are replayed as expected in a more
+// complex scenario. If VACUUM is performed, the dst database becomes corrupt. This
+// shows that VACUUM introduces issues which warrant a full snapshot after auto-vacuum.
 func Test_WALReplayOK_Complex(t *testing.T) {
 	srcPath := mustTempFile()
 	defer os.Remove(srcPath)
