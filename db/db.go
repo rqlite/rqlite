@@ -4,7 +4,9 @@ package db
 
 import (
 	"context"
+	"crypto/md5"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"expvar"
 	"fmt"
@@ -194,6 +196,11 @@ func (db *DB) DBLastModified() (time.Time, error) {
 // WALLastModified returns the last modified time of the WAL file.
 func (db *DB) WALLastModified() (time.Time, error) {
 	return lastModified(db.walPath)
+}
+
+// WALSum returns the MD5 checksum of the WAL file.
+func (db *DB) WALSum() (string, error) {
+	return md5sum(db.walPath)
 }
 
 // Close closes the underlying database connection.
@@ -1346,6 +1353,21 @@ func fileSize(path string) (int64, error) {
 		return 0, fmt.Errorf("not a file")
 	}
 	return stat.Size(), nil
+}
+
+func md5sum(path string) (string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	hash := md5.New()
+	if _, err := io.Copy(hash, file); err != nil {
+		return "", err
+	}
+
+	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
 func lastModified(path string) (time.Time, error) {

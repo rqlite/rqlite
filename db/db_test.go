@@ -176,6 +176,10 @@ func Test_DBVacuum(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get last modified time: %s", err.Error())
 	}
+	sumWALPre, err := db.WALSum()
+	if err != nil {
+		t.Fatalf("failed to get WAL checksum: %s", err.Error())
+	}
 
 	if err := db.Vacuum(); err != nil {
 		t.Fatalf("failed to vacuum database: %s", err.Error())
@@ -190,8 +194,15 @@ func Test_DBVacuum(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get last modified time: %s", err.Error())
 	}
+	sumWALPost, err := db.WALSum()
+	if err != nil {
+		t.Fatalf("failed to get WAL checksum: %s", err.Error())
+	}
 	if !lmDBPre.Equal(lmDBPost) {
 		t.Fatalf("last modified time of DB changed after VACUUM")
+	}
+	if sumWALPost == sumWALPre {
+		t.Fatalf("WAL sum did not change after VACUUM")
 	}
 	if !lmWALPost.After(lmWALPre) {
 		t.Fatalf("last modified time of WAL not updated after VACUUM (pre=%s, post=%s)", lmWALPre, lmWALPost)
