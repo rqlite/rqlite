@@ -1375,7 +1375,12 @@ func md5sum(path string) (string, error) {
 	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
-func lastModified(path string) (time.Time, error) {
+func lastModified(path string) (t time.Time, retError error) {
+	defer func() {
+		if os.IsNotExist(retError) {
+			retError = nil
+		}
+	}()
 	fd, err := os.Open(path)
 	if err != nil {
 		return time.Time{}, err
@@ -1386,9 +1391,6 @@ func lastModified(path string) (time.Time, error) {
 	}
 	info, err := os.Stat(path)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return time.Time{}, nil
-		}
 		return time.Time{}, err
 	}
 	return info.ModTime(), nil
