@@ -1,8 +1,11 @@
-## 8.16.8 (unreleased)
+## 8.17.0 (unreleased)
+### New features
+- [PR #1619](https://github.com/rqlite/rqlite/pull/1619): Support automatic `VACUUM` of the SQLite database. Fixes [#1609](https://github.com/rqlite/rqlite/issues/1609).
+
 ### Implementation changes and bug fixes
 - [PR #1615](https://github.com/rqlite/rqlite/pull/1615): Add extensive WAL checkpoint test at the database level.
 - [PR #1616](https://github.com/rqlite/rqlite/pull/1616): Add time and checksum based change-detection functions to the database level.
-- [PR #1617](https://github.com/rqlite/rqlite/pull/1617): Add VacuumInto to database layer.
+- [PR #1617](https://github.com/rqlite/rqlite/pull/1617): Add `VacuumInto` to database layer.
 
 ## 8.16.7 (January 18th 2024)
 The releases changes the default logging level for the Raft subsystem from `INFO` to `WARN`. This results is less logging by the Raft subsystem. If you prefer the previous `INFO` level of logging, it can be re-enabled via the command line flag `-raft-log-level=INFO`.
