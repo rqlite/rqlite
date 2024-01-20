@@ -1648,7 +1648,7 @@ func (s *Store) initLastVacuumTime() error {
 			if err := binary.Write(buf, binary.LittleEndian, n); err != nil {
 				return fmt.Errorf("failed to write last vacuum time: %s", err)
 			}
-			if err := s.boltStore.Set([]byte("rqlite_last_vacuum"), buf.Bytes()); err != nil {
+			if err := s.boltStore.Set([]byte(lastVacuumTimeKey), buf.Bytes()); err != nil {
 				return fmt.Errorf("failed to set last vacuum time: %s", err)
 			}
 		} else {
