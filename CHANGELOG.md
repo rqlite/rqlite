@@ -1,4 +1,4 @@
-## 8.16.8 (unreleased)
+## 8.16.8 (January 20th 2024)
 ### Implementation changes and bug fixes
 - [PR #1615](https://github.com/rqlite/rqlite/pull/1615): Add extensive WAL checkpoint test at the database level.
 - [PR #1616](https://github.com/rqlite/rqlite/pull/1616): Add time and checksum based change-detection functions to the database level.
