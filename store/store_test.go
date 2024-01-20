@@ -1828,7 +1828,6 @@ func Test_SingleNode_WALTriggeredSnapshot(t *testing.T) {
 			t.Fatalf("wrong snapshot store file: %s", f.Name())
 		}
 	}
-
 }
 
 func Test_SingleNodeSelfJoinNoChangeOK(t *testing.T) {
