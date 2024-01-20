@@ -1737,7 +1737,6 @@ func (s *Store) updateAppliedIndex() chan struct{} {
 }
 
 func (s *Store) vacuum() error {
-	vacStart := time.Now()
 	vacPath, err := s.vacuumInto()
 	if err != nil {
 		return err
@@ -1770,9 +1769,6 @@ func (s *Store) vacuum() error {
 	if err := s.setLastVacuumTime(time.Now()); err != nil {
 		return err
 	}
-	s.logger.Printf("database vacuumed in %s", time.Since(vacStart))
-	stats.Get(autoVacuumDuration).(*expvar.Int).Set(time.Since(vacStart).Milliseconds())
-	stats.Add(numAutoVacuums, 1)
 	return nil
 }
 
@@ -1863,6 +1859,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 
 	// Automatic VACUUM needed?
 	if s.AutoVacInterval != 0 {
+		vacStart := time.Now()
 		lvt, err := s.LastVacuumTime()
 		if err != nil {
 			return nil, err
@@ -1872,6 +1869,9 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 				return nil, err
 			}
 		}
+		s.logger.Printf("database vacuumed in %s", time.Since(vacStart))
+		stats.Get(autoVacuumDuration).(*expvar.Int).Set(time.Since(vacStart).Milliseconds())
+		stats.Add(numAutoVacuums, 1)
 	}
 
 	fullNeeded, err := s.snapshotStore.FullNeeded()
