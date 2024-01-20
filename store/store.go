@@ -973,10 +973,6 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	lVac, err := s.lastVacuumTime()
-	if err != nil {
-		return nil, err
-	}
 	status := map[string]interface{}{
 		"open":               s.open,
 		"node_id":            s.raftID,
@@ -1010,8 +1006,9 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		"dir_size_friendly":      friendlyBytes(uint64(dirSz)),
 		"sqlite3":                dbStatus,
 		"db_conf":                s.dbConf,
-		"last_vacuum":            lVac.String(),
-		"next_vacuum":            lVac.Add(s.AutoVacInterval).String(),
+	}
+	if lVac, err := s.lastVacuumTime(); err == nil {
+		status["last_vacuum"] = lVac.String()
 	}
 
 	// Snapshot stats may be in flux if a snapshot is in progress. Only
