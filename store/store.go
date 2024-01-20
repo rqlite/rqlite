@@ -320,6 +320,7 @@ type Store struct {
 	numTrailingLogs uint64
 
 	// For whitebox testing
+	numAutoVacuums  int
 	numIgnoredJoins int
 	numNoops        int
 	numSnapshotsMu  sync.Mutex
@@ -1869,6 +1870,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		s.logger.Printf("database vacuumed in %s", time.Since(vacStart))
 		stats.Get(autoVacuumDuration).(*expvar.Int).Set(time.Since(vacStart).Milliseconds())
 		stats.Add(numAutoVacuums, 1)
+		s.numAutoVacuums++
 		if err := s.setLastVacuumTime(time.Now()); err != nil {
 			return nil, err
 		}

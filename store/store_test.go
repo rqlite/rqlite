@@ -1830,6 +1830,121 @@ func Test_SingleNode_WALTriggeredSnapshot(t *testing.T) {
 	}
 }
 
+// Test_SingleNode_SnapshotWithAutoVac tests that a Store correctly operates
+// when performing both Snapshots and Auto-Vacuums.
+func Test_SingleNode_SnapshotWithAutoVac(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+	s.SnapshotThreshold = 8192 // Ensures Snapshot not triggered during testing.
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Create a table, and insert some data.
+	er := executeRequestFromString(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		false, false)
+	_, err := s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	for i := 0; i < 100; i++ {
+		_, err := s.Execute(executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`, false, false))
+		if err != nil {
+			t.Fatalf("failed to execute INSERT on single node: %s", err.Error())
+		}
+	}
+
+	// Force an initial snapshot, shouldn't need a full snapshot afterwards
+	if err := s.Snapshot(0); err != nil {
+		t.Fatalf("failed to snapshot single-node store: %s", err.Error())
+	}
+	if fn, err := s.snapshotStore.FullNeeded(); err != nil {
+		t.Fatalf("failed to check if snapshot store needs a full snapshot: %s", err.Error())
+	} else if fn {
+		t.Fatalf("expected snapshot store to not need a full snapshot")
+	}
+
+	// Enable auto-vacuuming.
+	s.AutoVacInterval = 1 * time.Nanosecond
+	if n, err := s.autoVacNeeded(time.Now()); err != nil {
+		t.Fatalf("failed to check if auto-vacuum is needed: %s", err.Error())
+	} else if !n {
+		t.Fatalf("expected auto-vacuum to be needed")
+	}
+
+	// Force another snapshot, this time a VACUUM should be triggered.
+	if err := s.Snapshot(0); err != nil {
+		t.Fatalf("failed to snapshot single-node store: %s", err.Error())
+	}
+	if exp, got := 1, s.numAutoVacuums; exp != got {
+		t.Fatalf("expected %d auto-vacuums, got %d", exp, got)
+	}
+
+	s.AutoVacInterval = 1 * time.Hour // Effectively disable auto-vacuuming.
+	if n, err := s.autoVacNeeded(time.Now()); err != nil {
+		t.Fatalf("failed to check if auto-vacuum is needed: %s", err.Error())
+	} else if n {
+		t.Fatalf("auto-vacuum should not be needed")
+	}
+
+	// Query the data, make sure it looks good after all this.
+	qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, true)
+	r, err := s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[100]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	// Make sure the node works across a restart
+	preAVT, err := s.LastVacuumTime()
+	if err != nil {
+		t.Fatalf("failed to get last vacuum time: %s", err.Error())
+	}
+
+	if err := s.Close(true); err != nil {
+		t.Fatalf("failed to close store: %s", err.Error())
+	}
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	postAVT, err := s.LastVacuumTime()
+	if err != nil {
+		t.Fatalf("failed to get last vacuum time: %s", err.Error())
+	}
+	if preAVT != postAVT {
+		t.Fatalf("expected last vacuum time to be the same across restarts")
+	}
+	if n, err := s.autoVacNeeded(time.Now()); err != nil {
+		t.Fatalf("failed to check if auto-vacuum is needed: %s", err.Error())
+	} else if n {
+		t.Fatalf("auto-vacuum should not be needed")
+	}
+
+	// Query the data again, make sure it still looks good after all this.
+	qr = queryRequestFromString("SELECT COUNT(*) FROM foo", false, true)
+	r, err = s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[100]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
 func Test_SingleNodeSelfJoinNoChangeOK(t *testing.T) {
 	s0, ln0 := mustNewStore(t)
 	defer ln0.Close()
