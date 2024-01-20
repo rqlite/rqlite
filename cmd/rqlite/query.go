@@ -92,18 +92,17 @@ func queryWithClient(ctx *cli.Context, client *cl.Client, timer bool, consistenc
 		RawQuery: queryStr.Encode(),
 	}
 
-	resp, err := client.Query(u)
-
 	var hcr error
+	resp, err := client.Query(u)
 	if err != nil {
 		// If the error is HostChangedError, it should be propagated back to the caller to handle
 		// accordingly (change prompt display), but we should still assume that the request succeeded on some
 		// host and not treat it as an error.
-		err, ok := err.(*cl.HostChangedError)
+		innerErr, ok := err.(*cl.HostChangedError)
 		if !ok {
 			return err
 		}
-		hcr = err
+		hcr = innerErr
 	}
 
 	response, err := io.ReadAll(resp.Body)
