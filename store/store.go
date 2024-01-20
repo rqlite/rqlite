@@ -116,6 +116,7 @@ const (
 	numSnapshotsFull          = "num_snapshots_full"
 	numSnapshotsIncremental   = "num_snapshots_incremental"
 	numAutoVacuums            = "num_auto_vacuums"
+	numAutoVacuumsFailed      = "num_auto_vacuums_failed"
 	autoVacuumDuration        = "auto_vacuum_duration"
 	numBoots                  = "num_boots"
 	numBackups                = "num_backups"
@@ -166,6 +167,7 @@ func ResetStats() {
 	stats.Add(numSnapshotsFull, 0)
 	stats.Add(numSnapshotsIncremental, 0)
 	stats.Add(numAutoVacuums, 0)
+	stats.Add(numAutoVacuumsFailed, 0)
 	stats.Add(autoVacuumDuration, 0)
 	stats.Add(numBoots, 0)
 	stats.Add(numBackups, 0)
@@ -1856,20 +1858,20 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	}()
 
 	// Automatic VACUUM needed?
-	if s.AutoVacInterval != 0 {
+	if avn, err := s.autoVacNeeded(time.Now()); err != nil {
+		return nil, err
+	} else if avn {
 		vacStart := time.Now()
-		lvt, err := s.LastVacuumTime()
-		if err != nil {
+		if err := s.Vacuum(); err != nil {
+			stats.Add(numAutoVacuumsFailed, 1)
 			return nil, err
-		}
-		if time.Since(lvt) > s.AutoVacInterval {
-			if err := s.Vacuum(); err != nil {
-				return nil, err
-			}
 		}
 		s.logger.Printf("database vacuumed in %s", time.Since(vacStart))
 		stats.Get(autoVacuumDuration).(*expvar.Int).Set(time.Since(vacStart).Milliseconds())
 		stats.Add(numAutoVacuums, 1)
+		if err := s.setLastVacuumTime(time.Now()); err != nil {
+			return nil, err
+		}
 	}
 
 	fullNeeded, err := s.snapshotStore.FullNeeded()
@@ -2249,6 +2251,18 @@ func (s *Store) tryCompress(rq command.Requester) ([]byte, bool, error) {
 		stats.Add(numUncompressedCommands, 1)
 	}
 	return b, compressed, nil
+}
+
+// autoVacNeeded returns true if an automatic VACUUM is needed.
+func (s *Store) autoVacNeeded(t time.Time) (bool, error) {
+	if s.AutoVacInterval == 0 {
+		return false, nil
+	}
+	lvt, err := s.LastVacuumTime()
+	if err != nil {
+		return false, err
+	}
+	return t.Sub(lvt) > s.AutoVacInterval, nil
 }
 
 // createOnDisk opens an on-disk database file at the configured path. If b is
