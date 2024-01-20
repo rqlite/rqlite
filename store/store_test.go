@@ -53,6 +53,24 @@ func Test_OpenStoreSingleNode(t *testing.T) {
 	}
 }
 
+func Test_OpenStoreSingleNode_LastVacuum(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer s.Close(true)
+	defer ln.Close()
+
+	now := time.Now()
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	lv, err := s.LastVacuumTime()
+	if err != nil {
+		t.Fatalf("failed to retrieve last vacuum time: %s", err.Error())
+	}
+	if lv.Before(now) {
+		t.Fatalf("last vacuum time is before now, lv: %s, now: %s", lv, now)
+	}
+}
+
 // Test_SingleNodeSQLitePath ensures that basic functionality works when the SQLite database path
 // is explicitly specificed.
 func Test_SingleNodeOnDiskSQLitePath(t *testing.T) {

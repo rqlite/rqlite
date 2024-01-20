@@ -742,6 +742,16 @@ func (s *Store) State() ClusterState {
 	}
 }
 
+// LastVacuumTime returns the time of the last automatic VACUUM.
+func (s *Store) LastVacuumTime() (time.Time, error) {
+	vt, err := s.boltStore.Get([]byte(lastVacuumTimeKey))
+	if err != nil {
+		return time.Time{}, fmt.Errorf("failed to get last vacuum time: %s", err)
+	}
+	n := int64(binary.LittleEndian.Uint64(vt))
+	return time.Unix(0, n), nil
+}
+
 // Path returns the path to the store's storage directory.
 func (s *Store) Path() string {
 	return s.raftDir
@@ -1007,7 +1017,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		"sqlite3":                dbStatus,
 		"db_conf":                s.dbConf,
 	}
-	if lVac, err := s.lastVacuumTime(); err == nil {
+	if lVac, err := s.LastVacuumTime(); err == nil {
 		status["last_vacuum"] = lVac.String()
 	}
 
@@ -1640,20 +1650,8 @@ func (s *Store) vacuumInto() (string, error) {
 }
 
 func (s *Store) initLastVacuumTime() error {
-	if _, err := s.boltStore.Get([]byte(lastVacuumTimeKey)); err != nil {
-		if err == rlog.ErrKeyNotFound {
-			s.logger.Println("no vacuum has been performed on this database")
-			n := time.Now().UnixNano() // First vacuum will be in the future.
-			buf := bytes.NewBuffer(make([]byte, 0, 8))
-			if err := binary.Write(buf, binary.LittleEndian, n); err != nil {
-				return fmt.Errorf("failed to write last vacuum time: %s", err)
-			}
-			if err := s.boltStore.Set([]byte(lastVacuumTimeKey), buf.Bytes()); err != nil {
-				return fmt.Errorf("failed to set last vacuum time: %s", err)
-			}
-		} else {
-			return fmt.Errorf("failed to get last vacuum time: %s", err)
-		}
+	if _, err := s.LastVacuumTime(); err != nil {
+		return s.setLastVacuumTime(time.Now())
 	}
 	return nil
 }
@@ -1667,15 +1665,6 @@ func (s *Store) setLastVacuumTime(t time.Time) error {
 		return fmt.Errorf("failed to set last vacuum time: %s", err)
 	}
 	return nil
-}
-
-func (s *Store) lastVacuumTime() (time.Time, error) {
-	vt, err := s.boltStore.Get([]byte(lastVacuumTimeKey))
-	if err != nil {
-		return time.Time{}, fmt.Errorf("failed to get last vacuum time: %s", err)
-	}
-	n := int64(binary.LittleEndian.Uint64(vt))
-	return time.Unix(0, n), nil
 }
 
 // raftConfig returns a new Raft config for the store.
@@ -1833,7 +1822,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	}()
 
 	// Automatic VACUUM needed?
-	lvt, err := s.lastVacuumTime()
+	lvt, err := s.LastVacuumTime()
 	if err != nil {
 		return nil, err
 	}
