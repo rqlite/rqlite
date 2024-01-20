@@ -135,6 +135,9 @@ type Config struct {
 	// FKConstraints enables SQLite foreign key constraints.
 	FKConstraints bool
 
+	// AutoVacInterval sets the automatic VACUUM interval. Use 0s to disable.
+	AutoVacInterval time.Duration
+
 	// RaftLogLevel sets the minimum logging level for the Raft subsystem.
 	RaftLogLevel string
 
@@ -460,6 +463,7 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	flag.StringVar(&config.OnDiskPath, "on-disk-path", "", "Path for SQLite on-disk database file. If not set, use a file in data directory")
 	flag.BoolVar(&config.FKConstraints, "fk", false, "Enable SQLite foreign key constraints")
 	flag.BoolVar(&showVersion, "version", false, "Show version information and exit")
+	flag.DurationVar(&config.AutoVacInterval, "auto-vacuum-int", 0, "Automatic VACUUM interval. Automatic VACUUM disabled if not set")
 	flag.BoolVar(&config.RaftNonVoter, "raft-non-voter", false, "Configure as non-voting node")
 	flag.DurationVar(&config.RaftHeartbeatTimeout, "raft-timeout", time.Second, "Raft heartbeat timeout")
 	flag.DurationVar(&config.RaftElectionTimeout, "raft-election-timeout", time.Second, "Raft election timeout")

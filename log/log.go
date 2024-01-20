@@ -12,6 +12,10 @@ const (
 	rqliteAppliedIndex = "rqlite_applied_index"
 )
 
+var (
+	ErrKeyNotFound = raftboltdb.ErrKeyNotFound
+)
+
 // Log is an object that can return information about the Raft log.
 type Log struct {
 	*raftboltdb.BoltStore
@@ -99,6 +103,17 @@ func (l *Log) GetAppliedIndex() (uint64, error) {
 		return 0, nil
 	}
 	return i, nil
+}
+
+// Get returns the value for the given key.
+func (l *Log) Get(key []byte) (val []byte, err error) {
+	defer func() {
+		if err != raftboltdb.ErrKeyNotFound {
+			err = ErrKeyNotFound
+		}
+	}()
+	val, err = l.BoltStore.Get(key)
+	return
 }
 
 // Stats returns stats about the BBoltDB database.

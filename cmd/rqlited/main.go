@@ -282,6 +282,7 @@ func createStore(cfg *Config, ln *tcp.Layer) (*store.Store, error) {
 	str.BootstrapExpect = cfg.BootstrapExpect
 	str.ReapTimeout = cfg.RaftReapNodeTimeout
 	str.ReapReadOnlyTimeout = cfg.RaftReapReadOnlyNodeTimeout
+	str.AutoVacInterval = cfg.AutoVacInterval
 
 	if store.IsNewNode(cfg.DataPath) {
 		log.Printf("no preexisting node state detected in %s, node may be bootstrapping", cfg.DataPath)
