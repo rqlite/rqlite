@@ -1350,7 +1350,7 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 		return 0, ErrNotSingleNode
 	}
 
-	// Write the data to a temporary file..
+	// Write the data to a temporary file.
 	f, err := os.CreateTemp(s.dbDir, bootScatchPattern)
 	if err != nil {
 		return 0, err
@@ -1409,6 +1409,51 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 	}
 	stats.Add(numBoots, 1)
 	return n, nil
+}
+
+// Vacuum performs a VACUUM operation on the underlying database. It is up
+// to the caller to ensure that no writes are taking place during this call.
+func (s *Store) Vacuum() error {
+	fd, err := os.CreateTemp(s.dbDir, vacuumScatchPattern)
+	if err != nil {
+		return err
+	}
+	if err := fd.Close(); err != nil {
+		return err
+	}
+	defer os.Remove(fd.Name())
+	if err := s.db.VacuumInto(fd.Name()); err != nil {
+		return err
+	}
+
+	// Verify that the VACUUMed database is valid.
+	if !sql.IsValidSQLiteFile(fd.Name()) {
+		return fmt.Errorf("invalid SQLite file post VACUUM")
+	}
+
+	// Swap in new database file.
+	if err := s.db.Close(); err != nil {
+		return err
+	}
+	if err := sql.RemoveFiles(s.dbPath); err != nil {
+		return err
+	}
+	if err := os.Rename(fd.Name(), s.dbPath); err != nil {
+		return err
+	}
+	db, err := sql.Open(s.dbPath, s.dbConf.FKConstraints, true)
+	if err != nil {
+		return err
+	}
+	s.db = db
+
+	if err := s.snapshotStore.SetFullNeeded(); err != nil {
+		return err
+	}
+	if err := s.setLastVacuumTime(time.Now()); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Database returns a copy of the underlying database. The caller MUST
@@ -1650,20 +1695,6 @@ func (s *Store) remove(id string) error {
 	return f.Error()
 }
 
-func (s *Store) vacuumInto() (string, error) {
-	fd, err := os.CreateTemp(s.dbDir, vacuumScatchPattern)
-	if err != nil {
-		return "", err
-	}
-	if err := fd.Close(); err != nil {
-		return "", err
-	}
-	if err := s.db.VacuumInto(fd.Name()); err != nil {
-		return "", err
-	}
-	return fd.Name(), nil
-}
-
 func (s *Store) initLastVacuumTime() error {
 	if _, err := s.LastVacuumTime(); err != nil {
 		return s.setLastVacuumTime(time.Now())
@@ -1734,42 +1765,6 @@ func (s *Store) updateAppliedIndex() chan struct{} {
 		}
 	}()
 	return done
-}
-
-func (s *Store) vacuum() error {
-	vacPath, err := s.vacuumInto()
-	if err != nil {
-		return err
-	}
-
-	// Verify that the VACUUMed database is valid.
-	if !sql.IsValidSQLiteFile(vacPath) {
-		return fmt.Errorf("invalid SQLite file post VACUUM")
-	}
-
-	// Swap in new database file.
-	if err := s.db.Close(); err != nil {
-		return err
-	}
-	if err := sql.RemoveFiles(s.dbPath); err != nil {
-		return err
-	}
-	if err := os.Rename(vacPath, s.dbPath); err != nil {
-		return err
-	}
-	db, err := sql.Open(s.dbPath, s.dbConf.FKConstraints, true)
-	if err != nil {
-		return err
-	}
-	s.db = db
-
-	if err := s.snapshotStore.SetFullNeeded(); err != nil {
-		return err
-	}
-	if err := s.setLastVacuumTime(time.Now()); err != nil {
-		return err
-	}
-	return nil
 }
 
 type fsmExecuteResponse struct {
@@ -1845,6 +1840,9 @@ func (s *Store) fsmApply(l *raft.Log) (e interface{}) {
 // http://sqlite.org/howtocorrupt.html states it is safe to copy or serialize the
 // database as long as no writes to the database are in progress.
 func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
+	s.queryTxMu.Lock()
+	defer s.queryTxMu.Unlock()
+
 	if err := s.snapshotCAS.Begin(); err != nil {
 		return nil, err
 	}
@@ -1865,7 +1863,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			return nil, err
 		}
 		if time.Since(lvt) > s.AutoVacInterval {
-			if err := s.vacuum(); err != nil {
+			if err := s.Vacuum(); err != nil {
 				return nil, err
 			}
 		}
@@ -1884,9 +1882,6 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		defer s.numSnapshotsMu.Unlock()
 		s.numSnapshots++
 	}()
-
-	s.queryTxMu.Lock()
-	defer s.queryTxMu.Unlock()
 
 	var fsmSnapshot raft.FSMSnapshot
 	if fullNeeded {
