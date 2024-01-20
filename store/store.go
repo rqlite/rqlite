@@ -1411,6 +1411,21 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 	return n, nil
 }
 
+// Database returns a copy of the underlying database. The caller MUST
+// ensure that no transaction is taking place during this call, or an error may
+// be returned. If leader is true, this operation is performed with a read
+// consistency level equivalent to "weak". Otherwise, no guarantees are made
+// about the read consistency level.
+//
+// http://sqlite.org/howtocorrupt.html states it is safe to do this
+// as long as the database is not written to during the call.
+func (s *Store) Database(leader bool) ([]byte, error) {
+	if leader && s.raft.State() != raft.Leader {
+		return nil, ErrNotLeader
+	}
+	return s.db.Serialize()
+}
+
 // Notify notifies this Store that a node is ready for bootstrapping at the
 // given address. Once the number of known nodes reaches the expected level
 // bootstrapping will be attempted using this Store. "Expected level" includes
@@ -1721,6 +1736,46 @@ func (s *Store) updateAppliedIndex() chan struct{} {
 	return done
 }
 
+func (s *Store) vacuum() error {
+	vacStart := time.Now()
+	vacPath, err := s.vacuumInto()
+	if err != nil {
+		return err
+	}
+
+	// Verify that the VACUUMed database is valid.
+	if !sql.IsValidSQLiteFile(vacPath) {
+		return fmt.Errorf("invalid SQLite file post VACUUM")
+	}
+
+	// Swap in new database file.
+	if err := s.db.Close(); err != nil {
+		return err
+	}
+	if err := sql.RemoveFiles(s.dbPath); err != nil {
+		return err
+	}
+	if err := os.Rename(vacPath, s.dbPath); err != nil {
+		return err
+	}
+	db, err := sql.Open(s.dbPath, s.dbConf.FKConstraints, true)
+	if err != nil {
+		return err
+	}
+	s.db = db
+
+	if err := s.snapshotStore.SetFullNeeded(); err != nil {
+		return err
+	}
+	if err := s.setLastVacuumTime(time.Now()); err != nil {
+		return err
+	}
+	s.logger.Printf("database vacuumed in %s", time.Since(vacStart))
+	stats.Get(autoVacuumDuration).(*expvar.Int).Set(time.Since(vacStart).Milliseconds())
+	stats.Add(numAutoVacuums, 1)
+	return nil
+}
+
 type fsmExecuteResponse struct {
 	results []*proto.ExecuteResult
 	error   error
@@ -1783,21 +1838,6 @@ func (s *Store) fsmApply(l *raft.Log) (e interface{}) {
 	return r
 }
 
-// Database returns a copy of the underlying database. The caller MUST
-// ensure that no transaction is taking place during this call, or an error may
-// be returned. If leader is true, this operation is performed with a read
-// consistency level equivalent to "weak". Otherwise, no guarantees are made
-// about the read consistency level.
-//
-// http://sqlite.org/howtocorrupt.html states it is safe to do this
-// as long as the database is not written to during the call.
-func (s *Store) Database(leader bool) ([]byte, error) {
-	if leader && s.raft.State() != raft.Leader {
-		return nil, ErrNotLeader
-	}
-	return s.db.Serialize()
-}
-
 // fsmSnapshot returns a snapshot of the database.
 //
 // The system must ensure that no transaction is taking place during this call.
@@ -1822,47 +1862,16 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	}()
 
 	// Automatic VACUUM needed?
-	lvt, err := s.LastVacuumTime()
-	if err != nil {
-		return nil, err
-	}
-	if s.AutoVacInterval != 0 && time.Since(lvt) > s.AutoVacInterval {
-		vacStart := time.Now()
-		vacPath, err := s.vacuumInto()
+	if s.AutoVacInterval != 0 {
+		lvt, err := s.LastVacuumTime()
 		if err != nil {
 			return nil, err
 		}
-
-		// Verify that the VACUUMed database is valid.
-		if !sql.IsValidSQLiteFile(vacPath) {
-			return nil, fmt.Errorf("invalid SQLite file post VACUUM")
+		if time.Since(lvt) > s.AutoVacInterval {
+			if err := s.vacuum(); err != nil {
+				return nil, err
+			}
 		}
-
-		// Swap in new database file.
-		if err := s.db.Close(); err != nil {
-			return nil, err
-		}
-		if err := sql.RemoveFiles(s.dbPath); err != nil {
-			return nil, err
-		}
-		if err := os.Rename(vacPath, s.dbPath); err != nil {
-			return nil, err
-		}
-		db, err := sql.Open(s.dbPath, s.dbConf.FKConstraints, true)
-		if err != nil {
-			return nil, err
-		}
-		s.db = db
-
-		if err := s.snapshotStore.SetFullNeeded(); err != nil {
-			return nil, err
-		}
-		if err := s.setLastVacuumTime(time.Now()); err != nil {
-			return nil, err
-		}
-		s.logger.Printf("database vacuumed in %s", time.Since(vacStart))
-		stats.Get(autoVacuumDuration).(*expvar.Int).Set(time.Since(vacStart).Milliseconds())
-		stats.Add(numAutoVacuums, 1)
 	}
 
 	fullNeeded, err := s.snapshotStore.FullNeeded()
