@@ -42,8 +42,7 @@ func NewCommandProcessor(logger *log.Logger, dm *chunking.DechunkerManager) *Com
 }
 
 // Process processes the given command against the given database.
-func (c *CommandProcessor) Process(data []byte, pDB *sql.SwappableDB) (*proto.Command, bool, interface{}) {
-	db := *pDB
+func (c *CommandProcessor) Process(data []byte, db *sql.SwappableDB) (*proto.Command, bool, interface{}) {
 	cmd := &proto.Command{}
 	if err := command.Unmarshal(data, cmd); err != nil {
 		panic(fmt.Sprintf("failed to unmarshal cluster command: %s", err.Error()))
@@ -78,7 +77,7 @@ func (c *CommandProcessor) Process(data []byte, pDB *sql.SwappableDB) (*proto.Co
 		}
 
 		// create a scratch file in the same directory as s.db.Path()
-		fd, err := os.CreateTemp(filepath.Dir(pDB.Path()), "rqlilte-load-")
+		fd, err := os.CreateTemp(filepath.Dir(db.Path()), "rqlilte-load-")
 		if err != nil {
 			return cmd, false, &fsmGenericResponse{error: fmt.Errorf("failed to create temporary database file: %s", err)}
 		}
@@ -91,7 +90,7 @@ func (c *CommandProcessor) Process(data []byte, pDB *sql.SwappableDB) (*proto.Co
 		fd.Close()
 
 		// Swap the underlying database to the new one.
-		if err := pDB.Swap(fd.Name(), pDB.FKEnabled(), pDB.WALEnabled()); err != nil {
+		if err := db.Swap(fd.Name(), db.FKEnabled(), db.WALEnabled()); err != nil {
 			return cmd, false, &fsmGenericResponse{error: fmt.Errorf("error swapping databases: %s", err)}
 		}
 		return cmd, true, &fsmGenericResponse{}
@@ -133,7 +132,7 @@ func (c *CommandProcessor) Process(data []byte, pDB *sql.SwappableDB) (*proto.Co
 					c.logger.Printf("invalid chunked database file - ignoring")
 					return cmd, false, &fsmGenericResponse{error: fmt.Errorf("invalid chunked database file - ignoring")}
 				}
-				if err := pDB.Swap(path, pDB.FKEnabled(), pDB.WALEnabled()); err != nil {
+				if err := db.Swap(path, db.FKEnabled(), db.WALEnabled()); err != nil {
 					return cmd, false, &fsmGenericResponse{error: fmt.Errorf("error swapping databases: %s", err)}
 				}
 			}
