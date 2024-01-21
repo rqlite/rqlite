@@ -14,7 +14,7 @@ handle_ctrl_c() {
     exit 1
 }
 
-COUNT=10000
+COUNT=1000000
 
 trap 'handle_ctrl_c' SIGINT
 
@@ -28,5 +28,7 @@ sleep 5
 $RQBENCH -p "/db/query" -n 150000000 -m 1000 "SELECT COUNT(*) FROM foo" &
 $RQBENCH -p "/db/query" -n 150000000 -m 1000 "SELECT COUNT(*) FROM bar" &
 $RQBENCH -p "/db/query" -n 150000000 -m 1000 "SELECT * FROM qux LIMIT 10" &
+
+$RQBENCH -p "/db/execute" -m 100 -n $COUNT -a $EXECUTE_HOST 'DELETE FROM qux WHERE id IN (SELECT id FROM qux ORDER BY RANDOM() LIMIT 10)'
 
 wait

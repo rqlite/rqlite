@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/rqlite/rqlite/v8/command"
 	"github.com/rqlite/rqlite/v8/command/chunking"
@@ -41,8 +42,7 @@ func NewCommandProcessor(logger *log.Logger, dm *chunking.DechunkerManager) *Com
 }
 
 // Process processes the given command against the given database.
-func (c *CommandProcessor) Process(data []byte, pDB **sql.DB) (*proto.Command, bool, interface{}) {
-	db := *pDB
+func (c *CommandProcessor) Process(data []byte, db *sql.SwappableDB) (*proto.Command, bool, interface{}) {
 	cmd := &proto.Command{}
 	if err := command.Unmarshal(data, cmd); err != nil {
 		panic(fmt.Sprintf("failed to unmarshal cluster command: %s", err.Error()))
@@ -76,20 +76,23 @@ func (c *CommandProcessor) Process(data []byte, pDB **sql.DB) (*proto.Command, b
 			panic(fmt.Sprintf("failed to unmarshal load subcommand: %s", err.Error()))
 		}
 
-		// Swap the underlying database to the new one.
-		if err := db.Close(); err != nil {
-			return cmd, false, &fsmGenericResponse{error: fmt.Errorf("failed to close post-load database: %s", err)}
-		}
-		if err := sql.RemoveFiles(db.Path()); err != nil {
-			return cmd, false, &fsmGenericResponse{error: fmt.Errorf("failed to remove existing database files: %s", err)}
-		}
-
-		newDB, err := createOnDisk(lr.Data, db.Path(), db.FKEnabled(), db.WALEnabled())
+		// create a scratch file in the same directory as s.db.Path()
+		fd, err := os.CreateTemp(filepath.Dir(db.Path()), "rqlilte-load-")
 		if err != nil {
-			return cmd, false, &fsmGenericResponse{error: fmt.Errorf("failed to create on-disk database: %s", err)}
+			return cmd, false, &fsmGenericResponse{error: fmt.Errorf("failed to create temporary database file: %s", err)}
 		}
+		defer os.Remove(fd.Name())
+		defer fd.Close()
+		_, err = fd.Write(lr.Data)
+		if err != nil {
+			return cmd, false, &fsmGenericResponse{error: fmt.Errorf("failed to write to temporary database file: %s", err)}
+		}
+		fd.Close()
 
-		*pDB = newDB
+		// Swap the underlying database to the new one.
+		if err := db.Swap(fd.Name(), db.FKEnabled(), db.WALEnabled()); err != nil {
+			return cmd, false, &fsmGenericResponse{error: fmt.Errorf("error swapping databases: %s", err)}
+		}
 		return cmd, true, &fsmGenericResponse{}
 	case proto.Command_COMMAND_TYPE_LOAD_CHUNK:
 		var lcr proto.LoadChunkRequest
@@ -129,25 +132,9 @@ func (c *CommandProcessor) Process(data []byte, pDB **sql.DB) (*proto.Command, b
 					c.logger.Printf("invalid chunked database file - ignoring")
 					return cmd, false, &fsmGenericResponse{error: fmt.Errorf("invalid chunked database file - ignoring")}
 				}
-
-				// Close the underlying database before we overwrite it.
-				if err := db.Close(); err != nil {
-					return cmd, false, &fsmGenericResponse{error: fmt.Errorf("failed to close post-load database: %s", err)}
+				if err := db.Swap(path, db.FKEnabled(), db.WALEnabled()); err != nil {
+					return cmd, false, &fsmGenericResponse{error: fmt.Errorf("error swapping databases: %s", err)}
 				}
-				if err := sql.RemoveFiles(db.Path()); err != nil {
-					return cmd, false, &fsmGenericResponse{error: fmt.Errorf("failed to remove existing database files: %s", err)}
-				}
-
-				if err := os.Rename(path, db.Path()); err != nil {
-					return cmd, false, &fsmGenericResponse{error: fmt.Errorf("failed to rename temporary database file: %s", err)}
-				}
-				newDB, err := sql.Open(db.Path(), db.FKEnabled(), db.WALEnabled())
-				if err != nil {
-					return cmd, false, &fsmGenericResponse{error: fmt.Errorf("failed to open new on-disk database: %s", err)}
-				}
-
-				// Swap the underlying database to the new one.
-				*pDB = newDB
 			}
 		}
 		return cmd, true, &fsmGenericResponse{}

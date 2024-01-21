@@ -6,6 +6,7 @@ package store
 import (
 	"bytes"
 	"compress/gzip"
+	"encoding/binary"
 	"errors"
 	"expvar"
 	"fmt"
@@ -85,6 +86,7 @@ const (
 	restoreScratchPattern      = "rqlite-restore-*"
 	bootScatchPattern          = "rqlite-boot-*"
 	backupScatchPattern        = "rqlite-backup-*"
+	vacuumScatchPattern        = "rqlite-vacuum-*"
 	raftDBPath                 = "raft.db" // Changing this will break backwards compatibility.
 	peersPath                  = "raft/peers.json"
 	peersInfoPath              = "raft/peers.info"
@@ -100,6 +102,8 @@ const (
 	raftLogCacheSize           = 512
 	trailingScale              = 1.25
 	observerChanLen            = 50
+
+	lastVacuumTimeKey = "rqlite_last_vacuum"
 )
 
 const (
@@ -111,6 +115,9 @@ const (
 	numWALSnapshotsFailed     = "num_wal_snapshots_failed"
 	numSnapshotsFull          = "num_snapshots_full"
 	numSnapshotsIncremental   = "num_snapshots_incremental"
+	numAutoVacuums            = "num_auto_vacuums"
+	numAutoVacuumsFailed      = "num_auto_vacuums_failed"
+	autoVacuumDuration        = "auto_vacuum_duration"
 	numBoots                  = "num_boots"
 	numBackups                = "num_backups"
 	numLoads                  = "num_loads"
@@ -159,6 +166,9 @@ func ResetStats() {
 	stats.Add(numWALSnapshotsFailed, 0)
 	stats.Add(numSnapshotsFull, 0)
 	stats.Add(numSnapshotsIncremental, 0)
+	stats.Add(numAutoVacuums, 0)
+	stats.Add(numAutoVacuumsFailed, 0)
+	stats.Add(autoVacuumDuration, 0)
 	stats.Add(numBoots, 0)
 	stats.Add(numBackups, 0)
 	stats.Add(numLoads, 0)
@@ -228,12 +238,12 @@ type Store struct {
 	raft    *raft.Raft // The consensus mechanism.
 	ly      Layer
 	raftTn  *NodeTransport
-	raftID  string    // Node ID.
-	dbConf  *DBConfig // SQLite database config.
-	dbPath  string    // Path to underlying SQLite file.
-	walPath string    // Path to WAL file.
-	dbDir   string    // Path to directory containing SQLite file.
-	db      *sql.DB   // The underlying SQLite store.
+	raftID  string           // Node ID.
+	dbConf  *DBConfig        // SQLite database config.
+	dbPath  string           // Path to underlying SQLite file.
+	walPath string           // Path to WAL file.
+	dbDir   string           // Path to directory containing SQLite file.
+	db      *sql.SwappableDB // The underlying SQLite store.
 
 	dechunkManager *chunking.DechunkerManager
 	cmdProc        *CommandProcessor
@@ -301,6 +311,7 @@ type Store struct {
 	ApplyTimeout             time.Duration
 	RaftLogLevel             string
 	NoFreeListSync           bool
+	AutoVacInterval          time.Duration
 
 	// Node-reaping configuration
 	ReapTimeout         time.Duration
@@ -309,6 +320,7 @@ type Store struct {
 	numTrailingLogs uint64
 
 	// For whitebox testing
+	numAutoVacuums  int
 	numIgnoredJoins int
 	numNoops        int
 	numSnapshotsMu  sync.Mutex
@@ -482,16 +494,19 @@ func (s *Store) Open() (retErr error) {
 	s.logger.Printf("first log index: %d, last log index: %d, last applied index: %d, last command log index: %d:",
 		s.firstIdxOnOpen, s.lastIdxOnOpen, s.lastAppliedIdxOnOpen, s.lastCommandIdxOnOpen)
 
-	s.db, err = createOnDisk(nil, s.dbPath, s.dbConf.FKConstraints, true)
+	s.db, err = createOnDisk(s.dbPath, s.dbConf.FKConstraints, true)
 	if err != nil {
 		return fmt.Errorf("failed to create on-disk database: %s", err)
 	}
-	s.logger.Printf("created on-disk database at open")
 
 	// Clean up any files from aborted operations. This tries to catch the case where scratch files
 	// were created in the Raft directory, not cleaned up, and then the node was restarted with an
 	// explicit SQLite path set.
-	for _, pattern := range []string{restoreScratchPattern, bootScatchPattern, backupScatchPattern} {
+	for _, pattern := range []string{
+		restoreScratchPattern,
+		bootScatchPattern,
+		backupScatchPattern,
+		vacuumScatchPattern} {
 		for _, dir := range []string{s.raftDir, s.dbDir} {
 			files, err := filepath.Glob(filepath.Join(dir, pattern))
 			if err != nil {
@@ -530,6 +545,9 @@ func (s *Store) Open() (retErr error) {
 	// Periodically update the applied index for faster startup.
 	s.appliedIdxUpdateDone = s.updateAppliedIndex()
 
+	if err := s.initLastVacuumTime(); err != nil {
+		return fmt.Errorf("failed to initialize last vacuum time: %s", err.Error())
+	}
 	return nil
 }
 
@@ -724,6 +742,16 @@ func (s *Store) State() ClusterState {
 	default:
 		return Unknown
 	}
+}
+
+// LastVacuumTime returns the time of the last automatic VACUUM.
+func (s *Store) LastVacuumTime() (time.Time, error) {
+	vt, err := s.boltStore.Get([]byte(lastVacuumTimeKey))
+	if err != nil {
+		return time.Time{}, fmt.Errorf("failed to get last vacuum time: %s", err)
+	}
+	n := int64(binary.LittleEndian.Uint64(vt))
+	return time.Unix(0, n), nil
 }
 
 // Path returns the path to the store's storage directory.
@@ -990,6 +1018,9 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		"dir_size_friendly":      friendlyBytes(uint64(dirSz)),
 		"sqlite3":                dbStatus,
 		"db_conf":                s.dbConf,
+	}
+	if lVac, err := s.LastVacuumTime(); err == nil {
+		status["last_vacuum"] = lVac.String()
 	}
 
 	// Snapshot stats may be in flux if a snapshot is in progress. Only
@@ -1321,7 +1352,7 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 		return 0, ErrNotSingleNode
 	}
 
-	// Write the data to a temporary file..
+	// Write the data to a temporary file.
 	f, err := os.CreateTemp(s.dbDir, bootScatchPattern)
 	if err != nil {
 		return 0, err
@@ -1356,20 +1387,9 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 	}
 
 	// Swap in new database file.
-	if err := s.db.Close(); err != nil {
-		return n, err
+	if err := s.db.Swap(f.Name(), s.dbConf.FKConstraints, true); err != nil {
+		return n, fmt.Errorf("error swapping database file: %v", err)
 	}
-	if err := sql.RemoveFiles(s.dbPath); err != nil {
-		return n, err
-	}
-	if err := os.Rename(f.Name(), s.dbPath); err != nil {
-		return n, err
-	}
-	db, err := sql.Open(s.dbPath, s.dbConf.FKConstraints, true)
-	if err != nil {
-		return n, err
-	}
-	s.db = db
 
 	// Snapshot, so we load the new database into the Raft system.
 	if err := s.snapshotStore.SetFullNeeded(); err != nil {
@@ -1380,6 +1400,55 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 	}
 	stats.Add(numBoots, 1)
 	return n, nil
+}
+
+// Vacuum performs a VACUUM operation on the underlying database. It is up
+// to the caller to ensure that no writes are taking place during this call.
+func (s *Store) Vacuum() error {
+	fd, err := os.CreateTemp(s.dbDir, vacuumScatchPattern)
+	if err != nil {
+		return err
+	}
+	if err := fd.Close(); err != nil {
+		return err
+	}
+	defer os.Remove(fd.Name())
+	if err := s.db.VacuumInto(fd.Name()); err != nil {
+		return err
+	}
+
+	// Verify that the VACUUMed database is valid.
+	if !sql.IsValidSQLiteFile(fd.Name()) {
+		return fmt.Errorf("invalid SQLite file post VACUUM")
+	}
+
+	// Swap in new database file.
+	if err := s.db.Swap(fd.Name(), s.dbConf.FKConstraints, true); err != nil {
+		return fmt.Errorf("error swapping database file: %v", err)
+	}
+
+	if err := s.snapshotStore.SetFullNeeded(); err != nil {
+		return err
+	}
+	if err := s.setLastVacuumTime(time.Now()); err != nil {
+		return err
+	}
+	return nil
+}
+
+// Database returns a copy of the underlying database. The caller MUST
+// ensure that no transaction is taking place during this call, or an error may
+// be returned. If leader is true, this operation is performed with a read
+// consistency level equivalent to "weak". Otherwise, no guarantees are made
+// about the read consistency level.
+//
+// http://sqlite.org/howtocorrupt.html states it is safe to do this
+// as long as the database is not written to during the call.
+func (s *Store) Database(leader bool) ([]byte, error) {
+	if leader && s.raft.State() != raft.Leader {
+		return nil, ErrNotLeader
+	}
+	return s.db.Serialize()
 }
 
 // Notify notifies this Store that a node is ready for bootstrapping at the
@@ -1606,6 +1675,24 @@ func (s *Store) remove(id string) error {
 	return f.Error()
 }
 
+func (s *Store) initLastVacuumTime() error {
+	if _, err := s.LastVacuumTime(); err != nil {
+		return s.setLastVacuumTime(time.Now())
+	}
+	return nil
+}
+
+func (s *Store) setLastVacuumTime(t time.Time) error {
+	buf := bytes.NewBuffer(make([]byte, 0, 8))
+	if err := binary.Write(buf, binary.LittleEndian, t.UnixNano()); err != nil {
+		return fmt.Errorf("failed to encode last vacuum time: %s", err)
+	}
+	if err := s.boltStore.Set([]byte(lastVacuumTimeKey), buf.Bytes()); err != nil {
+		return fmt.Errorf("failed to set last vacuum time: %s", err)
+	}
+	return nil
+}
+
 // raftConfig returns a new Raft config for the store.
 func (s *Store) raftConfig() *raft.Config {
 	config := raft.DefaultConfig()
@@ -1702,7 +1789,7 @@ func (s *Store) fsmApply(l *raft.Log) (e interface{}) {
 		s.logger.Printf("first log applied since node start, log at index %d", l.Index)
 	}
 
-	cmd, mutated, r := s.cmdProc.Process(l.Data, &s.db)
+	cmd, mutated, r := s.cmdProc.Process(l.Data, s.db)
 	if mutated {
 		s.dbAppliedIdxMu.Lock()
 		s.dbAppliedIdx = l.Index
@@ -1722,21 +1809,6 @@ func (s *Store) fsmApply(l *raft.Log) (e interface{}) {
 	return r
 }
 
-// Database returns a copy of the underlying database. The caller MUST
-// ensure that no transaction is taking place during this call, or an error may
-// be returned. If leader is true, this operation is performed with a read
-// consistency level equivalent to "weak". Otherwise, no guarantees are made
-// about the read consistency level.
-//
-// http://sqlite.org/howtocorrupt.html states it is safe to do this
-// as long as the database is not written to during the call.
-func (s *Store) Database(leader bool) ([]byte, error) {
-	if leader && s.raft.State() != raft.Leader {
-		return nil, ErrNotLeader
-	}
-	return s.db.Serialize()
-}
-
 // fsmSnapshot returns a snapshot of the database.
 //
 // The system must ensure that no transaction is taking place during this call.
@@ -1748,6 +1820,9 @@ func (s *Store) Database(leader bool) ([]byte, error) {
 // http://sqlite.org/howtocorrupt.html states it is safe to copy or serialize the
 // database as long as no writes to the database are in progress.
 func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
+	s.queryTxMu.Lock()
+	defer s.queryTxMu.Unlock()
+
 	if err := s.snapshotCAS.Begin(); err != nil {
 		return nil, err
 	}
@@ -1760,6 +1835,24 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		}
 	}()
 
+	// Automatic VACUUM needed?
+	if avn, err := s.autoVacNeeded(time.Now()); err != nil {
+		return nil, err
+	} else if avn {
+		vacStart := time.Now()
+		if err := s.Vacuum(); err != nil {
+			stats.Add(numAutoVacuumsFailed, 1)
+			return nil, err
+		}
+		s.logger.Printf("database vacuumed in %s", time.Since(vacStart))
+		stats.Get(autoVacuumDuration).(*expvar.Int).Set(time.Since(vacStart).Milliseconds())
+		stats.Add(numAutoVacuums, 1)
+		s.numAutoVacuums++
+		if err := s.setLastVacuumTime(time.Now()); err != nil {
+			return nil, err
+		}
+	}
+
 	fullNeeded, err := s.snapshotStore.FullNeeded()
 	if err != nil {
 		return nil, err
@@ -1770,9 +1863,6 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		defer s.numSnapshotsMu.Unlock()
 		s.numSnapshots++
 	}()
-
-	s.queryTxMu.Lock()
-	defer s.queryTxMu.Unlock()
 
 	var fsmSnapshot raft.FSMSnapshot
 	if fullNeeded {
@@ -1867,27 +1957,9 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 		return fmt.Errorf("error creating temporary file for restore operation: %v", err)
 	}
 
-	// Must wipe out all pre-existing state if being asked to do a restore, and put
-	// the new database in place.
-	if !sql.IsValidSQLiteFile(tmpFile.Name()) {
-		return fmt.Errorf("invalid SQLite data")
+	if err := s.db.Swap(tmpFile.Name(), s.dbConf.FKConstraints, true); err != nil {
+		return fmt.Errorf("error swapping database file: %v", err)
 	}
-	if err := s.db.Close(); err != nil {
-		return fmt.Errorf("failed to close pre-restore database: %s", err)
-	}
-	if err := sql.RemoveFiles(s.db.Path()); err != nil {
-		return fmt.Errorf("failed to remove pre-restore database files: %s", err)
-	}
-	if err := os.Rename(tmpFile.Name(), s.db.Path()); err != nil {
-		return fmt.Errorf("failed to rename restored database: %s", err)
-	}
-
-	var db *sql.DB
-	db, err = sql.Open(s.dbPath, s.dbConf.FKConstraints, true)
-	if err != nil {
-		return fmt.Errorf("open SQLite file during restore: %s", err)
-	}
-	s.db = db
 	s.logger.Printf("successfully opened database at %s due to restore", s.db.Path())
 
 	// Take conservative approach and assume that everything has changed, so update
@@ -2142,19 +2214,25 @@ func (s *Store) tryCompress(rq command.Requester) ([]byte, bool, error) {
 	return b, compressed, nil
 }
 
-// createOnDisk opens an on-disk database file at the configured path. If b is
-// non-nil, any preexisting file will first be overwritten with those contents.
-// Otherwise, any preexisting file will be removed before the database is opened.
-func createOnDisk(b []byte, path string, fkConstraints, wal bool) (*sql.DB, error) {
+// autoVacNeeded returns true if an automatic VACUUM is needed.
+func (s *Store) autoVacNeeded(t time.Time) (bool, error) {
+	if s.AutoVacInterval == 0 {
+		return false, nil
+	}
+	lvt, err := s.LastVacuumTime()
+	if err != nil {
+		return false, err
+	}
+	return t.Sub(lvt) > s.AutoVacInterval, nil
+}
+
+// createOnDisk opens an on-disk database file at the configured path. Any
+// preexisting file will be removed before the database is opened.
+func createOnDisk(path string, fkConstraints, wal bool) (*sql.SwappableDB, error) {
 	if err := sql.RemoveFiles(path); err != nil {
 		return nil, err
 	}
-	if b != nil {
-		if err := os.WriteFile(path, b, 0660); err != nil {
-			return nil, err
-		}
-	}
-	return sql.Open(path, fkConstraints, wal)
+	return sql.OpenSwappable(path, fkConstraints, wal)
 }
 
 func copyFromReaderToFile(path string, r io.Reader) (int64, error) {

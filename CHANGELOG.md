@@ -1,8 +1,12 @@
+## 8.17.0 (unreleased)
+### New features
+- [PR #1619](https://github.com/rqlite/rqlite/pull/1619): Support automatic `VACUUM` of the SQLite database. Fixes [#1609](https://github.com/rqlite/rqlite/issues/1609).
+
 ## 8.16.8 (January 20th 2024)
 ### Implementation changes and bug fixes
 - [PR #1615](https://github.com/rqlite/rqlite/pull/1615): Add extensive WAL checkpoint test at the database level.
 - [PR #1616](https://github.com/rqlite/rqlite/pull/1616): Add time and checksum based change-detection functions to the database level.
-- [PR #1617](https://github.com/rqlite/rqlite/pull/1617): Add VacuumInto to database layer.
+- [PR #1617](https://github.com/rqlite/rqlite/pull/1617): Add `VacuumInto` to database layer.
 - [PR #1621](https://github.com/rqlite/rqlite/pull/1621): Fix a panic in the rqlite shell by not stomping on an "outer" error.
 
 ## 8.16.7 (January 18th 2024)
