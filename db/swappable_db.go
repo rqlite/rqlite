@@ -25,7 +25,9 @@ func OpenSwappable(dbPath string, fkEnabled, wal bool) (*SwappableDB, error) {
 	return &SwappableDB{db: db}, nil
 }
 
-// Swap swaps the underlying database with that at the given path.
+// Swap swaps the underlying database with that at the given path. The Swap operation
+// may fail on some platforms if the file at path is open by another process. It is
+// the caller's responsibility to ensure the file at path is not in use.
 func (s *SwappableDB) Swap(path string, fkConstraints, walEnabled bool) error {
 	if !IsValidSQLiteFile(path) {
 		return fmt.Errorf("invalid SQLite data")

@@ -75,6 +75,9 @@ func Test_SwapSuccess(t *testing.T) {
 	defer swappableDB.Close()
 
 	// Perform the swap
+	if err := srcDB.Close(); err != nil {
+		t.Fatalf("failed to close source database pre-swap: %s", err)
+	}
 	if err := swappableDB.Swap(srcPath, false, false); err != nil {
 		t.Fatalf("failed to swap database: %s", err)
 	}
