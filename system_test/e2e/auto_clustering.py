@@ -9,7 +9,7 @@
 import os
 import unittest
 
-from helpers import Node, Cluster, d_, write_random_file, deprovision_node, random_string, TIMEOUT
+from helpers import Node, Cluster, d_, write_random_file, deprovision_node, random_string, poll_query, TIMEOUT
 
 RQLITED_PATH = os.environ['RQLITED_PATH']
 
@@ -253,8 +253,7 @@ class TestAutoClusteringKVStores(unittest.TestCase):
     n3.wait_for_leader()
     n3.wait_for_all_applied()
     self.assertEqual(n3.disco_mode(), mode)
-    j = n3.query('SELECT * FROM foo', level='none')
-    self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
+    poll_query(n3, 'SELECT * FROM foo', d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
 
     # Add a fifth node, this time running in non-voter mode. Should join fine.
     n4 = Node(RQLITED_PATH, '4', raft_voter=False)
@@ -262,8 +261,7 @@ class TestAutoClusteringKVStores(unittest.TestCase):
     n4.wait_for_leader()
     n4.wait_for_all_applied()
     self.assertEqual(n4.disco_mode(), mode)
-    j = n4.query('SELECT * FROM foo', level='none')
-    self.assertEqual(j, d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
+    poll_query(n4, 'SELECT * FROM foo', d_("{'results': [{'values': [[1, 'fiona']], 'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
 
     deprovision_node(n1)
     deprovision_node(n2)
