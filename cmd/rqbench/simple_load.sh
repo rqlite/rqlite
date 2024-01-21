@@ -29,6 +29,11 @@ $RQBENCH -p "/db/query" -n 150000000 -m 1000 "SELECT COUNT(*) FROM foo" &
 $RQBENCH -p "/db/query" -n 150000000 -m 1000 "SELECT COUNT(*) FROM bar" &
 $RQBENCH -p "/db/query" -n 150000000 -m 1000 "SELECT * FROM qux LIMIT 10" &
 
-$RQBENCH -p "/db/execute" -m 100 -n $COUNT -a $EXECUTE_HOST 'DELETE FROM qux WHERE id IN (SELECT id FROM qux ORDER BY RANDOM() LIMIT 10)'
+echo "Waiting 1 minute while before starting DELETEs"
+sleep 60
+
+$RQBENCH -p "/db/execute" -m 100 -n $COUNT -a $EXECUTE_HOST 'DELETE FROM foo WHERE id IN (SELECT id FROM foo ORDER BY RANDOM() LIMIT 1)' &
+#$RQBENCH -p "/db/execute" -m 100 -n $COUNT -a $EXECUTE_HOST 'DELETE FROM bar WHERE id IN (SELECT id FROM bar ORDER BY RANDOM() LIMIT 50)' &
+#$RQBENCH -p "/db/execute" -m 100 -n $COUNT -a $EXECUTE_HOST 'DELETE FROM qux WHERE id IN (SELECT id FROM qux ORDER BY RANDOM() LIMIT 1)' &
 
 wait
