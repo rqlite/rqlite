@@ -238,12 +238,12 @@ type Store struct {
 	raft    *raft.Raft // The consensus mechanism.
 	ly      Layer
 	raftTn  *NodeTransport
-	raftID  string    // Node ID.
-	dbConf  *DBConfig // SQLite database config.
-	dbPath  string    // Path to underlying SQLite file.
-	walPath string    // Path to WAL file.
-	dbDir   string    // Path to directory containing SQLite file.
-	db      *sql.DB   // The underlying SQLite store.
+	raftID  string           // Node ID.
+	dbConf  *DBConfig        // SQLite database config.
+	dbPath  string           // Path to underlying SQLite file.
+	walPath string           // Path to WAL file.
+	dbDir   string           // Path to directory containing SQLite file.
+	db      *sql.SwappableDB // The underlying SQLite store.
 
 	dechunkManager *chunking.DechunkerManager
 	cmdProc        *CommandProcessor
@@ -1388,20 +1388,9 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 	}
 
 	// Swap in new database file.
-	if err := s.db.Close(); err != nil {
-		return n, err
+	if err := s.db.Swap(f.Name(), s.dbConf.FKConstraints, true); err != nil {
+		return n, fmt.Errorf("error swapping database file: %v", err)
 	}
-	if err := sql.RemoveFiles(s.dbPath); err != nil {
-		return n, err
-	}
-	if err := os.Rename(f.Name(), s.dbPath); err != nil {
-		return n, err
-	}
-	db, err := sql.Open(s.dbPath, s.dbConf.FKConstraints, true)
-	if err != nil {
-		return n, err
-	}
-	s.db = db
 
 	// Snapshot, so we load the new database into the Raft system.
 	if err := s.snapshotStore.SetFullNeeded(); err != nil {
@@ -1435,20 +1424,9 @@ func (s *Store) Vacuum() error {
 	}
 
 	// Swap in new database file.
-	if err := s.db.Close(); err != nil {
-		return err
+	if err := s.db.Swap(fd.Name(), s.dbConf.FKConstraints, true); err != nil {
+		return fmt.Errorf("error swapping database file: %v", err)
 	}
-	if err := sql.RemoveFiles(s.dbPath); err != nil {
-		return err
-	}
-	if err := os.Rename(fd.Name(), s.dbPath); err != nil {
-		return err
-	}
-	db, err := sql.Open(s.dbPath, s.dbConf.FKConstraints, true)
-	if err != nil {
-		return err
-	}
-	s.db = db
 
 	if err := s.snapshotStore.SetFullNeeded(); err != nil {
 		return err
@@ -1812,7 +1790,7 @@ func (s *Store) fsmApply(l *raft.Log) (e interface{}) {
 		s.logger.Printf("first log applied since node start, log at index %d", l.Index)
 	}
 
-	cmd, mutated, r := s.cmdProc.Process(l.Data, &s.db)
+	cmd, mutated, r := s.cmdProc.Process(l.Data, s.db)
 	if mutated {
 		s.dbAppliedIdxMu.Lock()
 		s.dbAppliedIdx = l.Index
@@ -1980,27 +1958,9 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 		return fmt.Errorf("error creating temporary file for restore operation: %v", err)
 	}
 
-	// Must wipe out all pre-existing state if being asked to do a restore, and put
-	// the new database in place.
-	if !sql.IsValidSQLiteFile(tmpFile.Name()) {
-		return fmt.Errorf("invalid SQLite data")
+	if err := s.db.Swap(tmpFile.Name(), s.dbConf.FKConstraints, true); err != nil {
+		return fmt.Errorf("error swapping database file: %v", err)
 	}
-	if err := s.db.Close(); err != nil {
-		return fmt.Errorf("failed to close pre-restore database: %s", err)
-	}
-	if err := sql.RemoveFiles(s.db.Path()); err != nil {
-		return fmt.Errorf("failed to remove pre-restore database files: %s", err)
-	}
-	if err := os.Rename(tmpFile.Name(), s.db.Path()); err != nil {
-		return fmt.Errorf("failed to rename restored database: %s", err)
-	}
-
-	var db *sql.DB
-	db, err = sql.Open(s.dbPath, s.dbConf.FKConstraints, true)
-	if err != nil {
-		return fmt.Errorf("open SQLite file during restore: %s", err)
-	}
-	s.db = db
 	s.logger.Printf("successfully opened database at %s due to restore", s.db.Path())
 
 	// Take conservative approach and assume that everything has changed, so update
@@ -2270,7 +2230,7 @@ func (s *Store) autoVacNeeded(t time.Time) (bool, error) {
 // createOnDisk opens an on-disk database file at the configured path. If b is
 // non-nil, any preexisting file will first be overwritten with those contents.
 // Otherwise, any preexisting file will be removed before the database is opened.
-func createOnDisk(b []byte, path string, fkConstraints, wal bool) (*sql.DB, error) {
+func createOnDisk(b []byte, path string, fkConstraints, wal bool) (*sql.SwappableDB, error) {
 	if err := sql.RemoveFiles(path); err != nil {
 		return nil, err
 	}
@@ -2279,7 +2239,7 @@ func createOnDisk(b []byte, path string, fkConstraints, wal bool) (*sql.DB, erro
 			return nil, err
 		}
 	}
-	return sql.Open(path, fkConstraints, wal)
+	return sql.OpenSwappable(path, fkConstraints, wal)
 }
 
 func copyFromReaderToFile(path string, r io.Reader) (int64, error) {
