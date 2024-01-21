@@ -87,6 +87,13 @@ func (s *SwappableDB) Query(q *command.Request, xTime bool) ([]*command.QueryRow
 	return s.db.Query(q, xTime)
 }
 
+// QueryStringStmt calls QueryStringStmt on the underlying database.
+func (s *SwappableDB) QueryStringStmt(query string) ([]*command.QueryRows, error) {
+	s.dbMu.RLock()
+	defer s.dbMu.RUnlock()
+	return s.db.QueryStringStmt(query)
+}
+
 // VacuumInto calls VacuumInto on the underlying database.
 func (s *SwappableDB) VacuumInto(path string) error {
 	s.dbMu.RLock()
