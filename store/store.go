@@ -494,11 +494,10 @@ func (s *Store) Open() (retErr error) {
 	s.logger.Printf("first log index: %d, last log index: %d, last applied index: %d, last command log index: %d:",
 		s.firstIdxOnOpen, s.lastIdxOnOpen, s.lastAppliedIdxOnOpen, s.lastCommandIdxOnOpen)
 
-	s.db, err = createOnDisk(nil, s.dbPath, s.dbConf.FKConstraints, true)
+	s.db, err = createOnDisk(s.dbPath, s.dbConf.FKConstraints, true)
 	if err != nil {
 		return fmt.Errorf("failed to create on-disk database: %s", err)
 	}
-	s.logger.Printf("created on-disk database at open")
 
 	// Clean up any files from aborted operations. This tries to catch the case where scratch files
 	// were created in the Raft directory, not cleaned up, and then the node was restarted with an
@@ -2227,17 +2226,11 @@ func (s *Store) autoVacNeeded(t time.Time) (bool, error) {
 	return t.Sub(lvt) > s.AutoVacInterval, nil
 }
 
-// createOnDisk opens an on-disk database file at the configured path. If b is
-// non-nil, any preexisting file will first be overwritten with those contents.
-// Otherwise, any preexisting file will be removed before the database is opened.
-func createOnDisk(b []byte, path string, fkConstraints, wal bool) (*sql.SwappableDB, error) {
+// createOnDisk opens an on-disk database file at the configured path. Any
+// preexisting file will be removed before the database is opened.
+func createOnDisk(path string, fkConstraints, wal bool) (*sql.SwappableDB, error) {
 	if err := sql.RemoveFiles(path); err != nil {
 		return nil, err
-	}
-	if b != nil {
-		if err := os.WriteFile(path, b, 0660); err != nil {
-			return nil, err
-		}
 	}
 	return sql.OpenSwappable(path, fkConstraints, wal)
 }
