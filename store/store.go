@@ -1022,12 +1022,12 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 			return nil, err
 		}
 
-		avm := map[string]string{}
+		avm := map[string]interface{}{}
 		if lvt, err := s.LastVacuumTime(); err == nil {
-			avm["last_vacuum"] = lvt.String()
+			avm["last_vacuum"] = lvt
 			bt = lvt
 		}
-		avm["next_vacuum"] = bt.Add(s.AutoVacInterval).String()
+		avm["next_vacuum_after"] = bt.Add(s.AutoVacInterval)
 		status["auto_vaccum"] = avm
 	}
 
@@ -1863,7 +1863,8 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		}
 	}()
 
-	// Automatic VACUUM needed?
+	// Automatic VACUUM needed? This is deliberately done in the context of a Snapshot
+	// as it guarantees that the database is not being written to.
 	if avn, err := s.autoVacNeeded(time.Now()); err != nil {
 		return nil, err
 	} else if avn {
