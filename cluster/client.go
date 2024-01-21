@@ -222,7 +222,7 @@ func (c *Client) Backup(br *command.BackupRequest, nodeAddr string, creds *proto
 		Credentials: creds,
 	}
 
-	if err := writeCommand(conn, command, timeout); err != nil {
+	if err, _ := writeCommand(conn, command, timeout); err != nil {
 		handleConnError(conn)
 		return err
 	}
@@ -303,7 +303,7 @@ func (c *Client) RemoveNode(rn *command.RemoveNodeRequest, nodeAddr string, cred
 		},
 		Credentials: creds,
 	}
-	if err := writeCommand(conn, command, timeout); err != nil {
+	if err, _ := writeCommand(conn, command, timeout); err != nil {
 		handleConnError(conn)
 		return err
 	}
@@ -342,7 +342,7 @@ func (c *Client) Notify(nr *command.NotifyRequest, nodeAddr string, creds *proto
 		},
 		Credentials: creds,
 	}
-	if err := writeCommand(conn, command, timeout); err != nil {
+	if err, _ := writeCommand(conn, command, timeout); err != nil {
 		handleConnError(conn)
 		return err
 	}
@@ -383,7 +383,7 @@ func (c *Client) Join(jr *command.JoinRequest, nodeAddr string, creds *proto.Cre
 			Credentials: creds,
 		}
 
-		if err := writeCommand(conn, command, timeout); err != nil {
+		if err, _ := writeCommand(conn, command, timeout); err != nil {
 			handleConnError(conn)
 			return err
 		}
@@ -487,28 +487,33 @@ func (c *Client) retry(command *proto.Command, nodeAddr string, timeout time.Dur
 	var p []byte
 	var errOuter error
 	var nRetries int
+	var retriableOuter bool
 	for {
-		p, errOuter = func() ([]byte, error) {
+		p, errOuter, retriableOuter = func() ([]byte, error, bool) {
+			var retriableInner bool
 			conn, errInner := c.dial(nodeAddr, c.timeout)
 			if errInner != nil {
-				return nil, errInner
+				return nil, errInner, true
 			}
 			defer conn.Close()
 
-			if errInner = writeCommand(conn, command, timeout); errInner != nil {
+			if errInner, retriableInner = writeCommand(conn, command, timeout); errInner != nil {
 				handleConnError(conn)
-				return nil, errInner
+				return nil, errInner, retriableInner
 			}
 
 			b, errInner := readResponse(conn, timeout)
 			if errInner != nil {
 				handleConnError(conn)
-				return nil, errInner
+				return nil, errInner, false
 			}
-			return b, nil
+			return b, nil, false
 		}()
 		if errOuter == nil {
 			break
+		}
+		if !retriableOuter {
+			return nil, errOuter
 		}
 		nRetries++
 		stats.Add(numClientRetries, 1)
@@ -519,31 +524,34 @@ func (c *Client) retry(command *proto.Command, nodeAddr string, timeout time.Dur
 	return p, nil
 }
 
-func writeCommand(conn net.Conn, c *proto.Command, timeout time.Duration) error {
+func writeCommand(conn net.Conn, c *proto.Command, timeout time.Duration) (err error, retriable bool) {
 	p, err := pb.Marshal(c)
 	if err != nil {
-		return fmt.Errorf("command marshal: %w", err)
+		return fmt.Errorf("command marshal: %w", err), false
 	}
 
 	// Write length of Protobuf
 	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
-		return err
+		// This error is retriable, as we haven't written the command yet
+		return err, true
 	}
 	b := make([]byte, protoBufferLengthSize)
 	binary.LittleEndian.PutUint64(b[0:], uint64(len(p)))
 	_, err = conn.Write(b)
 	if err != nil {
-		return fmt.Errorf("write length: %w", err)
+		// This error is retriable, as we haven't written the command yet
+		return fmt.Errorf("write length: %w", err), true
 	}
-	// Write actual protobuf.
+	// Write actual protobuf
 	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
-		return err
+		return err, true
 	}
 	_, err = conn.Write(p)
 	if err != nil {
-		return fmt.Errorf("write protobuf bytes: %w", err)
+		// This error is not retriable, as we might have sent the entire command
+		return fmt.Errorf("write protobuf bytes: %w", err), false
 	}
-	return nil
+	return nil, false
 }
 
 func readResponse(conn net.Conn, timeout time.Duration) (buf []byte, retErr error) {
