@@ -52,21 +52,41 @@ func Test_OpenStoreSingleNode(t *testing.T) {
 	}
 }
 
-func Test_OpenStoreSingleNode_LastVacuum(t *testing.T) {
-	s, ln := mustNewStore(t)
-	defer s.Close(true)
-	defer ln.Close()
-
-	now := time.Now()
-	if err := s.Open(); err != nil {
+func Test_OpenStoreSingleNode_VacuumTimes(t *testing.T) {
+	s0, ln0 := mustNewStore(t)
+	defer s0.Close(true)
+	defer ln0.Close()
+	if err := s0.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
-	lv, err := s.LastVacuumTime()
-	if err != nil {
-		t.Fatalf("failed to retrieve last vacuum time: %s", err.Error())
+	_, err := s0.LastVacuumTime()
+	if err == nil {
+		t.Fatal("expected error getting last vacuum time")
 	}
-	if lv.Before(now) {
-		t.Fatalf("last vacuum time is before now, lv: %s, now: %s", lv, now)
+	_, err = s0.getKeyTime(baseVacuumTimeKey)
+	if err == nil {
+		t.Fatal("expected error getting base time")
+	}
+
+	s1, ln1 := mustNewStore(t)
+	s1.AutoVacInterval = time.Hour
+	defer s1.Close(true)
+	defer ln1.Close()
+	if err := s1.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	now := time.Now()
+	_, err = s1.LastVacuumTime()
+	if err == nil {
+		t.Fatal("expected error getting last vacuum time")
+	}
+	bt, err := s1.getKeyTime(baseVacuumTimeKey)
+	if err != nil {
+		t.Fatalf("error getting base time: %s", err.Error())
+	}
+
+	if !bt.Before(now) {
+		t.Fatal("expected last base time to be before now")
 	}
 }
 
@@ -1916,8 +1936,11 @@ func Test_SingleNode_SnapshotWithAutoVac(t *testing.T) {
 		t.Fatalf("expected snapshot store to not need a full snapshot")
 	}
 
-	// Enable auto-vacuuming.
+	// Enable auto-vacuuming. Need to go under the covers to init the vacuum times.
 	s.AutoVacInterval = 1 * time.Nanosecond
+	if err := s.initVacuumTime(); err != nil {
+		t.Fatalf("failed to initialize vacuum time: %s", err.Error())
+	}
 	if n, err := s.autoVacNeeded(time.Now()); err != nil {
 		t.Fatalf("failed to check if auto-vacuum is needed: %s", err.Error())
 	} else if !n {

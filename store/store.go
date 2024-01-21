@@ -1710,8 +1710,10 @@ func (s *Store) setKeyTime(key string, t time.Time) error {
 
 func (s *Store) getKeyTime(key string) (time.Time, error) {
 	kt, err := s.boltStore.Get([]byte(key))
-	if err != nil || kt == nil {
+	if err != nil {
 		return time.Time{}, fmt.Errorf("failed to get key %s: %s", key, err)
+	} else if kt == nil {
+		return time.Time{}, fmt.Errorf("key %s is nil", key)
 	}
 	n := int64(binary.LittleEndian.Uint64(kt))
 	return time.Unix(0, n), nil
