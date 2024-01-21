@@ -1,6 +1,6 @@
 ## 8.17.0 (unreleased)
 ### New features
-- [PR #1619](https://github.com/rqlite/rqlite/pull/1619): Support automatic `VACUUM` of the SQLite database. Fixes [#1609](https://github.com/rqlite/rqlite/issues/1609).
+- [PR #1619](https://github.com/rqlite/rqlite/pull/1619), [PR #1622](https://github.com/rqlite/rqlite/pull/1622): Support automatic `VACUUM` of the SQLite database. Fixes [#1609](https://github.com/rqlite/rqlite/issues/1609).
 
 ## 8.16.8 (January 20th 2024)
 ### Implementation changes and bug fixes
