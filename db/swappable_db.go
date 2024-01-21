@@ -140,12 +140,12 @@ func (s *SwappableDB) Dump(w io.Writer) error {
 func (s *SwappableDB) FKEnabled() bool {
 	s.dbMu.RLock()
 	defer s.dbMu.RUnlock()
-	return s.db.fkEnabled
+	return s.db.FKEnabled()
 }
 
 // WALEnabled calls WALEnabled on the underlying database.
 func (s *SwappableDB) WALEnabled() bool {
 	s.dbMu.RLock()
 	defer s.dbMu.RUnlock()
-	return s.db.wal
+	return s.db.WALEnabled()
 }
