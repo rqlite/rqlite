@@ -1,6 +1,6 @@
 ## 8.17.0 (unreleased)
 ### New features
-- [PR #1619](https://github.com/rqlite/rqlite/pull/1619): Support automatic `VACUUM` of the SQLite database. Fixes [#1609](https://github.com/rqlite/rqlite/issues/1609).
+- [PR #1619](https://github.com/rqlite/rqlite/pull/1619), [PR #1622](https://github.com/rqlite/rqlite/pull/1622): Support automatic `VACUUM` of the SQLite database. Fixes [#1609](https://github.com/rqlite/rqlite/issues/1609).
 
 ### Implementation changes and bug fixes
 - [PR #1623](https://github.com/rqlite/rqlite/pull/1623): Unit tests for Swappable DB.
