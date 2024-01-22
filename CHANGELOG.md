@@ -1,4 +1,5 @@
-## 8.17.0 (unreleased)
+## 8.17.0 (January 22nd 2024)
+This release adds the ability to [configure scheduled](http://127.0.0.1:1313/docs/guides/performance/#vacuum) [VACUUM](https://www.sqlite.org/lang_vacuum.html) of the SQLite database managed by rqlite. As part of the work for this release, extensive research and testing was performed to confirm that explicitly issuing a `VACUUM` command is also compatible with rqlite. This testing has been made part of the automatic test suite.
 ### New features
 - [PR #1619](https://github.com/rqlite/rqlite/pull/1619), [PR #1622](https://github.com/rqlite/rqlite/pull/1622): Support automatic `VACUUM` of the SQLite database. Fixes [#1609](https://github.com/rqlite/rqlite/issues/1609).
 
