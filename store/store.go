@@ -1410,8 +1410,10 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 	return n, nil
 }
 
-// Vacuum performs a VACUUM operation on the underlying database. It is up
-// to the caller to ensure that no writes are taking place during this call.
+// Vacuum performs a VACUUM operation on the underlying database. It does
+// this by performing a VACUUM INTO a temporary file, and then swapping
+// the temporary file with the existing database file. The database is then
+// re-opened.
 func (s *Store) Vacuum() error {
 	fd, err := os.CreateTemp(s.dbDir, vacuumScatchPattern)
 	if err != nil {
