@@ -45,7 +45,6 @@ func (s *SwappableDB) Swap(path string, fkConstraints, walEnabled bool) error {
 		return fmt.Errorf("failed to rename database: %s", err)
 	}
 
-	var db *DB
 	db, err := Open(s.db.Path(), fkConstraints, walEnabled)
 	if err != nil {
 		return fmt.Errorf("open SQLite file failed: %s", err)
