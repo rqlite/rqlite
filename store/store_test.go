@@ -1895,6 +1895,91 @@ func Test_OpenStoreSingleNode_VacuumFullNeeded(t *testing.T) {
 	}
 }
 
+func Test_SingleNodeExplicitVacuumOK(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	s.SnapshotThreshold = 8192
+	s.SnapshotInterval = 1 * time.Hour
+	s.SnapshotThresholdWALSize = 4096
+	s.AutoVacInterval = 1 * time.Hour
+
+	doVacuum := func() {
+		er := executeRequestFromString(`VACUUM`, false, false)
+		_, err := s.Execute(er)
+		if err != nil {
+			t.Fatalf("failed to execute on single node: %s", err.Error())
+		}
+	}
+	doQuery := func() {
+		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, true)
+		r, err := s.Query(qr)
+		if err != nil {
+			t.Fatalf("failed to query single node: %s", err.Error())
+		}
+		if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[100]]}]`, asJSON(r); exp != got {
+			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+		}
+	}
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	er := executeRequestFromString(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		false, false)
+	_, err := s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	for i := 0; i < 100; i++ {
+		_, err := s.Execute(executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`, false, false))
+		if err != nil {
+			t.Fatalf("failed to execute INSERT on single node: %s", err.Error())
+		}
+	}
+
+	// Do a snapshot, so that the next snapshot will have to deal with a WAL that has been
+	// modified by the upcoming VACUUM.
+	if err := s.Snapshot(0); err != nil {
+		t.Fatalf("failed to snapshot single-node store: %s", err.Error())
+	}
+
+	// VACUUM, and then query the data, make sure it looks good.
+	doVacuum()
+	doQuery()
+	if fn, err := s.snapshotStore.FullNeeded(); err != nil {
+		t.Fatalf("failed to check if snapshot store needs a full snapshot: %s", err.Error())
+	} else if fn {
+		t.Fatalf("expected snapshot store to not need a full snapshot post explicit VACUUM")
+	}
+
+	// The next snapshot will be incremental.
+	if err := s.Snapshot(0); err != nil {
+		t.Fatalf("failed to snapshot single-node store: %s", err.Error())
+	}
+
+	// Restart test
+	if err := s.Close(true); err != nil {
+		t.Fatalf("failed to close store: %s", err.Error())
+	}
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+	doQuery()
+}
+
 // Test_SingleNode_SnapshotWithAutoVac tests that a Store correctly operates
 // when performing both Snapshots and Auto-Vacuums.
 func Test_SingleNode_SnapshotWithAutoVac(t *testing.T) {
