@@ -1965,6 +1965,7 @@ func Test_SingleNodeExplicitVacuumOK(t *testing.T) {
 	if err := s.Snapshot(0); err != nil {
 		t.Fatalf("failed to snapshot single-node store: %s", err.Error())
 	}
+	doQuery()
 
 	// Restart test
 	if err := s.Close(true); err != nil {
