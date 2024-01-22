@@ -1913,6 +1913,7 @@ func Test_SingleNodeExplicitVacuumOK(t *testing.T) {
 	}
 	doQuery := func() {
 		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, true)
+		qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
 		r, err := s.Query(qr)
 		if err != nil {
 			t.Fatalf("failed to query single node: %s", err.Error())
@@ -1968,6 +1969,96 @@ func Test_SingleNodeExplicitVacuumOK(t *testing.T) {
 	doQuery()
 
 	// Restart test
+	if err := s.Close(true); err != nil {
+		t.Fatalf("failed to close store: %s", err.Error())
+	}
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+	doQuery()
+}
+
+func Test_SingleNodeExplicitVacuumOK_Stress(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+	s.SnapshotThreshold = 50
+	s.SnapshotInterval = 100 * time.Millisecond
+	s.AutoVacInterval = 1 * time.Hour
+
+	doVacuum := func() {
+		er := executeRequestFromString(`VACUUM`, false, false)
+		_, err := s.Execute(er)
+		if err != nil {
+			t.Fatalf("failed to execute on single node: %s", err.Error())
+		}
+	}
+	doQuery := func() {
+		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, true)
+		qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
+		r, err := s.Query(qr)
+		if err != nil {
+			t.Fatalf("failed to query single node: %s", err.Error())
+		}
+		if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[2500]]}]`, asJSON(r); exp != got {
+			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+		}
+	}
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	// Create a table
+	er := executeRequestFromString(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		false, false)
+	_, err := s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	// Insert a bunch of data concurrently, and do VACUUMs; putting some load on the Store.
+	var wg sync.WaitGroup
+	wg.Add(6)
+	insertFn := func() {
+		defer wg.Done()
+		for i := 0; i < 500; i++ {
+			_, err := s.Execute(executeRequestFromString(`INSERT INTO foo(name) VALUES("fiona")`, false, false))
+			if err != nil {
+				t.Errorf("failed to execute INSERT on single node: %s", err.Error())
+			}
+		}
+	}
+	for i := 0; i < 5; i++ {
+		go insertFn()
+	}
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 10; i++ {
+			doVacuum()
+			time.Sleep(time.Second)
+		}
+	}()
+
+	wg.Wait()
+	if s.WaitForAllApplied(5*time.Second) != nil {
+		t.Fatalf("failed to wait for all data to be applied")
+	}
+
+	// Query the data, make sure it looks good after all this.
+	doQuery()
+
+	// Restart the Store, make sure it still works.
 	if err := s.Close(true); err != nil {
 		t.Fatalf("failed to close store: %s", err.Error())
 	}
