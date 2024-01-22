@@ -1899,9 +1899,9 @@ func Test_SingleNodeExplicitVacuumOK(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
 
-	s.SnapshotThreshold = 8192
+	s.SnapshotThreshold = 65536
 	s.SnapshotInterval = 1 * time.Hour
-	s.SnapshotThresholdWALSize = 4096
+	s.SnapshotThresholdWALSize = 1024 * 1024 * 1024 // Ensure WAL size doesn't trigger.
 	s.AutoVacInterval = 1 * time.Hour
 
 	doVacuum := func() {
