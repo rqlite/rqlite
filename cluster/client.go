@@ -112,7 +112,8 @@ func (c *Client) GetNodeAPIAddr(nodeAddr string, timeout time.Duration) (string,
 	command := &proto.Command{
 		Type: proto.Command_COMMAND_TYPE_GET_NODE_API_URL,
 	}
-	p, err := c.retry(command, nodeAddr, timeout)
+	p, nr, err := c.retry(command, nodeAddr, timeout)
+	stats.Add(numGetNodeAPIRequestRetries, int64(nr))
 	if err != nil {
 		return "", err
 	}
@@ -137,7 +138,8 @@ func (c *Client) Execute(er *command.ExecuteRequest, nodeAddr string, creds *pro
 		},
 		Credentials: creds,
 	}
-	p, err := c.retry(command, nodeAddr, timeout)
+	p, nr, err := c.retry(command, nodeAddr, timeout)
+	stats.Add(numClientExecuteRetries, int64(nr))
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +165,8 @@ func (c *Client) Query(qr *command.QueryRequest, nodeAddr string, creds *proto.C
 		},
 		Credentials: creds,
 	}
-	p, err := c.retry(command, nodeAddr, timeout)
+	p, nr, err := c.retry(command, nodeAddr, timeout)
+	stats.Add(numClientQueryRetries, int64(nr))
 	if err != nil {
 		return nil, err
 	}
@@ -189,7 +192,8 @@ func (c *Client) Request(r *command.ExecuteQueryRequest, nodeAddr string, creds 
 		},
 		Credentials: creds,
 	}
-	p, err := c.retry(command, nodeAddr, timeout)
+	p, nr, err := c.retry(command, nodeAddr, timeout)
+	stats.Add(numClientRequestRetries, int64(nr))
 	if err != nil {
 		return nil, err
 	}
@@ -270,7 +274,8 @@ func (c *Client) Load(lr *command.LoadRequest, nodeAddr string, creds *proto.Cre
 		},
 		Credentials: creds,
 	}
-	p, err := c.retry(command, nodeAddr, timeout)
+	p, nr, err := c.retry(command, nodeAddr, timeout)
+	stats.Add(numClientLoadRetries, int64(nr))
 	if err != nil {
 		return err
 	}
@@ -483,7 +488,7 @@ func (c *Client) dial(nodeAddr string, timeout time.Duration) (net.Conn, error) 
 // retry retries a command on a remote node. It does this so we churn through connections
 // in the pool if we hit an error, as the remote node may have restarted and the pool's
 // connections are now stale.
-func (c *Client) retry(command *proto.Command, nodeAddr string, timeout time.Duration) ([]byte, error) {
+func (c *Client) retry(command *proto.Command, nodeAddr string, timeout time.Duration) ([]byte, int, error) {
 	var p []byte
 	var errOuter error
 	var nRetries int
@@ -513,10 +518,10 @@ func (c *Client) retry(command *proto.Command, nodeAddr string, timeout time.Dur
 		nRetries++
 		stats.Add(numClientRetries, 1)
 		if nRetries > maxRetries {
-			return nil, errOuter
+			return nil, nRetries, errOuter
 		}
 	}
-	return p, nil
+	return p, nRetries, nil
 }
 
 func writeCommand(conn net.Conn, c *proto.Command, timeout time.Duration) error {
