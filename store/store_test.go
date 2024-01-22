@@ -52,88 +52,6 @@ func Test_OpenStoreSingleNode(t *testing.T) {
 	}
 }
 
-func Test_OpenStoreSingleNode_VacuumTimes(t *testing.T) {
-	s0, ln0 := mustNewStore(t)
-	defer s0.Close(true)
-	defer ln0.Close()
-	if err := s0.Open(); err != nil {
-		t.Fatalf("failed to open single-node store: %s", err.Error())
-	}
-	_, err := s0.LastVacuumTime()
-	if err == nil {
-		t.Fatal("expected error getting last vacuum time")
-	}
-	_, err = s0.getKeyTime(baseVacuumTimeKey)
-	if err == nil {
-		t.Fatal("expected error getting base time")
-	}
-
-	s1, ln1 := mustNewStore(t)
-	s1.AutoVacInterval = time.Hour
-	defer s1.Close(true)
-	defer ln1.Close()
-	if err := s1.Open(); err != nil {
-		t.Fatalf("failed to open single-node store: %s", err.Error())
-	}
-	now := time.Now()
-	_, err = s1.LastVacuumTime()
-	if err == nil {
-		t.Fatal("expected error getting last vacuum time")
-	}
-	bt, err := s1.getKeyTime(baseVacuumTimeKey)
-	if err != nil {
-		t.Fatalf("error getting base time: %s", err.Error())
-	}
-
-	if !bt.Before(now) {
-		t.Fatal("expected last base time to be before now")
-	}
-}
-
-// Test_OpenStoreSingleNode_VacuumFullNeeded tests that running a VACUUM
-// means that a full snapshot is needed.
-func Test_OpenStoreSingleNode_VacuumFullNeeded(t *testing.T) {
-	s, ln := mustNewStore(t)
-	defer s.Close(true)
-	defer ln.Close()
-
-	if err := s.Open(); err != nil {
-		t.Fatalf("failed to open single-node store: %s", err.Error())
-	}
-	defer s.Close(true)
-	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
-		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
-	}
-	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
-		t.Fatalf("Error waiting for leader: %s", err)
-	}
-
-	er := executeRequestFromStrings([]string{
-		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
-	}, false, false)
-	_, err := s.Execute(er)
-	if err != nil {
-		t.Fatalf("failed to execute on single node: %s", err.Error())
-	}
-
-	if err := s.Snapshot(0); err != nil {
-		t.Fatalf("failed to snapshot store: %s", err.Error())
-	}
-	if fn, err := s.snapshotStore.FullNeeded(); err != nil {
-		t.Fatalf("failed to determine full snapshot needed: %s", err.Error())
-	} else if fn {
-		t.Fatalf("full snapshot marked as needed")
-	}
-	if err := s.Vacuum(); err != nil {
-		t.Fatalf("failed to vacuum database: %s", err.Error())
-	}
-	if fn, err := s.snapshotStore.FullNeeded(); err != nil {
-		t.Fatalf("failed to determine full snapshot needed: %s", err.Error())
-	} else if !fn {
-		t.Fatalf("full snapshot not marked as needed")
-	}
-}
-
 // Test_SingleNodeSQLitePath ensures that basic functionality works when the SQLite database path
 // is explicitly specificed.
 func Test_SingleNodeOnDiskSQLitePath(t *testing.T) {
@@ -1892,6 +1810,88 @@ func Test_SingleNode_WALTriggeredSnapshot(t *testing.T) {
 		if !strings.Contains(f.Name(), snaps[0].ID) {
 			t.Fatalf("wrong snapshot store file: %s", f.Name())
 		}
+	}
+}
+
+func Test_OpenStoreSingleNode_VacuumTimes(t *testing.T) {
+	s0, ln0 := mustNewStore(t)
+	defer s0.Close(true)
+	defer ln0.Close()
+	if err := s0.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	_, err := s0.LastVacuumTime()
+	if err == nil {
+		t.Fatal("expected error getting last vacuum time")
+	}
+	_, err = s0.getKeyTime(baseVacuumTimeKey)
+	if err == nil {
+		t.Fatal("expected error getting base time")
+	}
+
+	s1, ln1 := mustNewStore(t)
+	s1.AutoVacInterval = time.Hour
+	defer s1.Close(true)
+	defer ln1.Close()
+	if err := s1.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	now := time.Now()
+	_, err = s1.LastVacuumTime()
+	if err == nil {
+		t.Fatal("expected error getting last vacuum time")
+	}
+	bt, err := s1.getKeyTime(baseVacuumTimeKey)
+	if err != nil {
+		t.Fatalf("error getting base time: %s", err.Error())
+	}
+
+	if !bt.Before(now) {
+		t.Fatal("expected last base time to be before now")
+	}
+}
+
+// Test_OpenStoreSingleNode_VacuumFullNeeded tests that running a VACUUM
+// means that a full snapshot is needed.
+func Test_OpenStoreSingleNode_VacuumFullNeeded(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer s.Close(true)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+	}, false, false)
+	_, err := s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	if err := s.Snapshot(0); err != nil {
+		t.Fatalf("failed to snapshot store: %s", err.Error())
+	}
+	if fn, err := s.snapshotStore.FullNeeded(); err != nil {
+		t.Fatalf("failed to determine full snapshot needed: %s", err.Error())
+	} else if fn {
+		t.Fatalf("full snapshot marked as needed")
+	}
+	if err := s.Vacuum(); err != nil {
+		t.Fatalf("failed to vacuum database: %s", err.Error())
+	}
+	if fn, err := s.snapshotStore.FullNeeded(); err != nil {
+		t.Fatalf("failed to determine full snapshot needed: %s", err.Error())
+	} else if !fn {
+		t.Fatalf("full snapshot not marked as needed")
 	}
 }
 
