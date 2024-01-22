@@ -1941,7 +1941,7 @@ func Test_SingleNode_SnapshotWithAutoVac(t *testing.T) {
 	if err := s.initVacuumTime(); err != nil {
 		t.Fatalf("failed to initialize vacuum time: %s", err.Error())
 	}
-	if n, err := s.autoVacNeeded(time.Now()); err != nil {
+	if n, err := s.autoVacNeeded(time.Now().Add(time.Second)); err != nil {
 		t.Fatalf("failed to check if auto-vacuum is needed: %s", err.Error())
 	} else if !n {
 		t.Fatalf("expected auto-vacuum to be needed")
@@ -1955,7 +1955,7 @@ func Test_SingleNode_SnapshotWithAutoVac(t *testing.T) {
 		t.Fatalf("expected %d auto-vacuums, got %d", exp, got)
 	}
 
-	s.AutoVacInterval = 1 * time.Hour // Effectively disable auto-vacuuming.
+	s.AutoVacInterval = 1 * time.Hour
 	if n, err := s.autoVacNeeded(time.Now()); err != nil {
 		t.Fatalf("failed to check if auto-vacuum is needed: %s", err.Error())
 	} else if n {
