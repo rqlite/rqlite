@@ -2174,7 +2174,6 @@ func Test_SingleNode_SnapshotWithAutoVac_Stress(t *testing.T) {
 	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[2500]]}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
-
 }
 
 func Test_SingleNodeSelfJoinNoChangeOK(t *testing.T) {
