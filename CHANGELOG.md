@@ -4,7 +4,7 @@
 
 ### Implementation changes and bug fixes
 - [PR #1623](https://github.com/rqlite/rqlite/pull/1623): Unit tests for Swappable DB.
-- [PR #1625](https://github.com/rqlite/rqlite/pull/1625): Count Client retries at operation level.
+- [PR #1625](https://github.com/rqlite/rqlite/pull/1625): Count Cluster client retries at operation level.
 
 ## 8.16.8 (January 20th 2024)
 ### Implementation changes and bug fixes
