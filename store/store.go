@@ -1028,7 +1028,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 			bt = lvt
 		}
 		avm["next_vacuum_after"] = bt.Add(s.AutoVacInterval)
-		status["auto_vaccum"] = avm
+		status["auto_vacuum"] = avm
 	}
 
 	// Snapshot stats may be in flux if a snapshot is in progress. Only
