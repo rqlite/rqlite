@@ -1,3 +1,7 @@
+## 8.17.1 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1629](https://github.com/rqlite/rqlite/pull/1629): Set default cluster client retries to 0.
+
 ## 8.17.0 (January 22nd 2024)
 This release adds the ability to [configure scheduled](https://rqlite.io/docs/guides/performance/#vacuum) [VACUUM](https://www.sqlite.org/lang_vacuum.html) of the SQLite database managed by rqlite. As part of the work for this release, extensive research and testing was performed to confirm that explicitly issuing a `VACUUM` command is also compatible with rqlite. This testing has been made part of the automatic test suite.
 ### New features
