@@ -1,4 +1,4 @@
-## 8.18.1 (unreleased)
+## 8.18.1 (January 26th 2024)
 ### Implementation changes and bug fixes
 - [PR #1633](https://github.com/rqlite/rqlite/pull/1633): Improve error messages for internode communication failures.
 - [PR #1634](https://github.com/rqlite/rqlite/pull/1634): FullSnapshot needed if WAL checkpoint fails.
