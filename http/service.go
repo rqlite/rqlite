@@ -1148,9 +1148,11 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request, qp QueryParams
 		if resultsErr != nil {
 			stats.Add(numRemoteExecutionsFailed, 1)
 			if resultsErr.Error() == "unauthorized" {
-				http.Error(w, "remote execute not authorized", http.StatusUnauthorized)
+				http.Error(w, "remote Execute not authorized", http.StatusUnauthorized)
 				return
 			}
+			resultsErr = fmt.Errorf("node failed to process Execute on remote node at %s: %s",
+				addr, resultsErr.Error())
 		}
 		stats.Add(numRemoteExecutions, 1)
 	}
@@ -1295,8 +1297,8 @@ func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request, qp Query
 		Freshness: qp.Freshness().Nanoseconds(),
 	}
 
-	results, resultErr := s.store.Request(eqr)
-	if resultErr != nil && resultErr == store.ErrNotLeader {
+	results, resultsErr := s.store.Request(eqr)
+	if resultsErr != nil && resultsErr == store.ErrNotLeader {
 		if s.DoRedirect(w, r, qp) {
 			return
 		}
@@ -1317,20 +1319,22 @@ func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request, qp Query
 		}
 
 		w.Header().Add(ServedByHTTPHeader, addr)
-		results, resultErr = s.cluster.Request(eqr, addr, makeCredentials(username, password),
+		results, resultsErr = s.cluster.Request(eqr, addr, makeCredentials(username, password),
 			qp.Timeout(defaultTimeout), qp.Retries(0))
-		if resultErr != nil {
+		if resultsErr != nil {
 			stats.Add(numRemoteRequestsFailed, 1)
-			if resultErr.Error() == "unauthorized" {
-				http.Error(w, "remote request not authorized", http.StatusUnauthorized)
+			if resultsErr.Error() == "unauthorized" {
+				http.Error(w, "remote Request not authorized", http.StatusUnauthorized)
 				return
 			}
+			resultsErr = fmt.Errorf("node failed to process Request on remote node at %s: %s",
+				addr, resultsErr.Error())
 		}
 		stats.Add(numRemoteRequests, 1)
 	}
 
-	if resultErr != nil {
-		resp.Error = resultErr.Error()
+	if resultsErr != nil {
+		resp.Error = resultsErr.Error()
 	} else {
 		resp.Results.ExecuteQueryResponse = results
 	}
