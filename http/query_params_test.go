@@ -18,6 +18,8 @@ func Test_NewQueryParams(t *testing.T) {
 		{"Empty Query", "", QueryParams{}, false},
 		{"Valid Query", "timeout=10s&q=test", QueryParams{"timeout": "10s", "q": "test"}, false},
 		{"Invalid Timeout", "timeout=invalid", nil, true},
+		{"Invalid Retry", "retries=invalid", nil, true},
+		{"Valid Retry", "retries=4", QueryParams{"retries": "4"}, false},
 		{"Empty Q", "q=", nil, true},
 		{"Invalid Q", "q", nil, true},
 		{"Valid Q, no case changes", "q=SELeCT", QueryParams{"q": "SELeCT"}, false},

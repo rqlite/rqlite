@@ -197,7 +197,7 @@ func Test_NewServiceTestExecuteQueryAuthNoCredentials(t *testing.T) {
 		t.Fatalf("failed to set cluster client local parameters: %s", err)
 	}
 	er := &command.ExecuteRequest{}
-	_, err := cl.Execute(er, s.Addr(), nil, 5*time.Second)
+	_, err := cl.Execute(er, s.Addr(), nil, 5*time.Second, defaultMaxRetries)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -240,11 +240,11 @@ func Test_NewServiceTestExecuteQueryAuth(t *testing.T) {
 		t.Fatalf("failed to set cluster client local parameters: %s", err)
 	}
 	er := &command.ExecuteRequest{}
-	_, err := cl.Execute(er, s.Addr(), makeCredentials("alice", "secret1"), 5*time.Second)
+	_, err := cl.Execute(er, s.Addr(), makeCredentials("alice", "secret1"), 5*time.Second, defaultMaxRetries)
 	if err != nil {
 		t.Fatal("alice improperly unauthorized to execute")
 	}
-	_, err = cl.Execute(er, s.Addr(), makeCredentials("bob", "secret1"), 5*time.Second)
+	_, err = cl.Execute(er, s.Addr(), makeCredentials("bob", "secret1"), 5*time.Second, defaultMaxRetries)
 	if err == nil {
 		t.Fatal("bob improperly authorized to execute")
 	}

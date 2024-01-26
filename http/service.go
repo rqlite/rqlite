@@ -102,19 +102,19 @@ type Cluster interface {
 	GetAddresser
 
 	// Execute performs an Execute Request on a remote node.
-	Execute(er *proto.ExecuteRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) ([]*proto.ExecuteResult, error)
+	Execute(er *proto.ExecuteRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*proto.ExecuteResult, error)
 
 	// Query performs an Query Request on a remote node.
 	Query(qr *proto.QueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) ([]*proto.QueryRows, error)
 
 	// Request performs an ExecuteQuery Request on a remote node.
-	Request(eqr *proto.ExecuteQueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) ([]*proto.ExecuteQueryResponse, error)
+	Request(eqr *proto.ExecuteQueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*proto.ExecuteQueryResponse, error)
 
 	// Backup retrieves a backup from a remote node and writes to the io.Writer.
 	Backup(br *proto.BackupRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, w io.Writer) error
 
 	// Load loads a SQLite database into the node.
-	Load(lr *proto.LoadRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
+	Load(lr *proto.LoadRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) error
 
 	// RemoveNode removes a node from the cluster.
 	RemoveNode(rn *proto.RemoveNodeRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) error
@@ -707,7 +707,8 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 			}
 
 			w.Header().Add(ServedByHTTPHeader, addr)
-			loadErr := s.cluster.Load(lr, addr, makeCredentials(username, password), qp.Timeout(defaultTimeout))
+			loadErr := s.cluster.Load(lr, addr, makeCredentials(username, password),
+				qp.Timeout(defaultTimeout), qp.Retries(0))
 			if loadErr != nil {
 				if loadErr.Error() == "unauthorized" {
 					http.Error(w, "remote load not authorized", http.StatusUnauthorized)
@@ -1142,7 +1143,8 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request, qp QueryParams
 		}
 
 		w.Header().Add(ServedByHTTPHeader, addr)
-		results, resultsErr = s.cluster.Execute(er, addr, makeCredentials(username, password), qp.Timeout(defaultTimeout))
+		results, resultsErr = s.cluster.Execute(er, addr, makeCredentials(username, password),
+			qp.Timeout(defaultTimeout), qp.Retries(0))
 		if resultsErr != nil {
 			stats.Add(numRemoteExecutionsFailed, 1)
 			if resultsErr.Error() == "unauthorized" {
@@ -1315,7 +1317,8 @@ func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request, qp Query
 		}
 
 		w.Header().Add(ServedByHTTPHeader, addr)
-		results, resultErr = s.cluster.Request(eqr, addr, makeCredentials(username, password), qp.Timeout(defaultTimeout))
+		results, resultErr = s.cluster.Request(eqr, addr, makeCredentials(username, password),
+			qp.Timeout(defaultTimeout), qp.Retries(0))
 		if resultErr != nil {
 			stats.Add(numRemoteRequestsFailed, 1)
 			if resultErr.Error() == "unauthorized" {
@@ -1516,7 +1519,7 @@ func (s *Service) runQueue() {
 								req.SequenceNumber, s.Addr().String())
 							stats.Add(numQueuedExecutionsNoLeader, 1)
 						} else {
-							_, err = s.cluster.Execute(er, addr, nil, defaultTimeout)
+							_, err = s.cluster.Execute(er, addr, nil, defaultTimeout, 0)
 							if err != nil {
 								s.logger.Printf("execute queue write failed for sequence number %d on node %s: %s",
 									req.SequenceNumber, s.Addr().String(), err.Error())
