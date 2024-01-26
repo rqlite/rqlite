@@ -1,3 +1,7 @@
+## 8.18.1 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1630](https://github.com/rqlite/rqlite/pull/1630): Improve Error messages for internode communication failures.
+
 ## 8.18.0 (January 25th 2024)
 This release upgrades SQLite to 3.45.0, which brings in [JSONB](https://sqlite.org/draft/jsonb.html) support. JSONB is a more efficient way to process JSON data within the SQLite database.
 ### New features
