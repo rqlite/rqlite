@@ -1,6 +1,6 @@
 ## 8.18.0 (unreleased)
 ### New features
-- [PR #1630](https://github.com/rqlite/rqlite/pull/1630): Allow HTTP clients to control number of retries.
+- [PR #1631](https://github.com/rqlite/rqlite/pull/1631): Allow HTTP clients to control number of retries.
 
 ### Implementation changes and bug fixes
 - [PR #1629](https://github.com/rqlite/rqlite/pull/1629): Set default cluster client retries to 0.
