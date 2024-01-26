@@ -1813,6 +1813,8 @@ func Test_SingleNode_WALTriggeredSnapshot(t *testing.T) {
 	}
 }
 
+// Test_OpenStoreSingleNode_WALCheckpointFail tests that a WAL checkpoint
+// failure will trigger a full snapshot.
 func Test_OpenStoreSingleNode_WALCheckpointFail(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer s.Close(true)
