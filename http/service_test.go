@@ -1411,7 +1411,7 @@ func (m *mockClusterService) GetNodeAPIAddr(a string, t time.Duration) (string, 
 	return m.apiAddr, nil
 }
 
-func (m *mockClusterService) Execute(er *command.ExecuteRequest, addr string, creds *cluster.Credentials, t time.Duration) ([]*command.ExecuteResult, error) {
+func (m *mockClusterService) Execute(er *command.ExecuteRequest, addr string, creds *cluster.Credentials, t time.Duration, r int) ([]*command.ExecuteResult, error) {
 	if m.executeFn != nil {
 		return m.executeFn(er, addr, t)
 	}
@@ -1425,7 +1425,7 @@ func (m *mockClusterService) Query(qr *command.QueryRequest, addr string, creds 
 	return nil, nil
 }
 
-func (m *mockClusterService) Request(eqr *command.ExecuteQueryRequest, nodeAddr string, creds *cluster.Credentials, timeout time.Duration) ([]*command.ExecuteQueryResponse, error) {
+func (m *mockClusterService) Request(eqr *command.ExecuteQueryRequest, nodeAddr string, creds *cluster.Credentials, timeout time.Duration, r int) ([]*command.ExecuteQueryResponse, error) {
 	if m.requestFn != nil {
 		return m.requestFn(eqr, nodeAddr, timeout)
 	}
@@ -1439,7 +1439,7 @@ func (m *mockClusterService) Backup(br *command.BackupRequest, addr string, cred
 	return nil
 }
 
-func (m *mockClusterService) Load(lr *command.LoadRequest, nodeAddr string, creds *cluster.Credentials, timeout time.Duration) error {
+func (m *mockClusterService) Load(lr *command.LoadRequest, nodeAddr string, creds *cluster.Credentials, timeout time.Duration, r int) error {
 	if m.loadFn != nil {
 		return m.loadFn(lr, nodeAddr, timeout)
 	}

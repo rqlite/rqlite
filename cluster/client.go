@@ -22,9 +22,9 @@ import (
 )
 
 const (
-	initialPoolSize = 4
-	maxPoolCapacity = 64
-	maxRetries      = 0
+	initialPoolSize   = 4
+	maxPoolCapacity   = 64
+	defaultMaxRetries = 8
 
 	protoBufferLengthSize = 8
 )
@@ -112,7 +112,7 @@ func (c *Client) GetNodeAPIAddr(nodeAddr string, timeout time.Duration) (string,
 	command := &proto.Command{
 		Type: proto.Command_COMMAND_TYPE_GET_NODE_API_URL,
 	}
-	p, nr, err := c.retry(command, nodeAddr, timeout)
+	p, nr, err := c.retry(command, nodeAddr, timeout, defaultMaxRetries)
 	stats.Add(numGetNodeAPIRequestRetries, int64(nr))
 	if err != nil {
 		return "", err
@@ -130,7 +130,7 @@ func (c *Client) GetNodeAPIAddr(nodeAddr string, timeout time.Duration) (string,
 // Execute performs an Execute on a remote node. If username is an empty string
 // no credential information will be included in the Execute request to the
 // remote node.
-func (c *Client) Execute(er *command.ExecuteRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) ([]*command.ExecuteResult, error) {
+func (c *Client) Execute(er *command.ExecuteRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration, retries int) ([]*command.ExecuteResult, error) {
 	command := &proto.Command{
 		Type: proto.Command_COMMAND_TYPE_EXECUTE,
 		Request: &proto.Command_ExecuteRequest{
@@ -138,7 +138,7 @@ func (c *Client) Execute(er *command.ExecuteRequest, nodeAddr string, creds *pro
 		},
 		Credentials: creds,
 	}
-	p, nr, err := c.retry(command, nodeAddr, timeout)
+	p, nr, err := c.retry(command, nodeAddr, timeout, retries)
 	stats.Add(numClientExecuteRetries, int64(nr))
 	if err != nil {
 		return nil, err
@@ -165,7 +165,7 @@ func (c *Client) Query(qr *command.QueryRequest, nodeAddr string, creds *proto.C
 		},
 		Credentials: creds,
 	}
-	p, nr, err := c.retry(command, nodeAddr, timeout)
+	p, nr, err := c.retry(command, nodeAddr, timeout, defaultMaxRetries)
 	stats.Add(numClientQueryRetries, int64(nr))
 	if err != nil {
 		return nil, err
@@ -184,7 +184,7 @@ func (c *Client) Query(qr *command.QueryRequest, nodeAddr string, creds *proto.C
 }
 
 // Request performs an ExecuteQuery on a remote node.
-func (c *Client) Request(r *command.ExecuteQueryRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) ([]*command.ExecuteQueryResponse, error) {
+func (c *Client) Request(r *command.ExecuteQueryRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration, retries int) ([]*command.ExecuteQueryResponse, error) {
 	command := &proto.Command{
 		Type: proto.Command_COMMAND_TYPE_REQUEST,
 		Request: &proto.Command_ExecuteQueryRequest{
@@ -192,7 +192,7 @@ func (c *Client) Request(r *command.ExecuteQueryRequest, nodeAddr string, creds 
 		},
 		Credentials: creds,
 	}
-	p, nr, err := c.retry(command, nodeAddr, timeout)
+	p, nr, err := c.retry(command, nodeAddr, timeout, retries)
 	stats.Add(numClientRequestRetries, int64(nr))
 	if err != nil {
 		return nil, err
@@ -266,7 +266,7 @@ func (c *Client) Backup(br *command.BackupRequest, nodeAddr string, creds *proto
 }
 
 // Load loads a SQLite file into the database.
-func (c *Client) Load(lr *command.LoadRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) error {
+func (c *Client) Load(lr *command.LoadRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration, retries int) error {
 	command := &proto.Command{
 		Type: proto.Command_COMMAND_TYPE_LOAD,
 		Request: &proto.Command_LoadRequest{
@@ -274,7 +274,7 @@ func (c *Client) Load(lr *command.LoadRequest, nodeAddr string, creds *proto.Cre
 		},
 		Credentials: creds,
 	}
-	p, nr, err := c.retry(command, nodeAddr, timeout)
+	p, nr, err := c.retry(command, nodeAddr, timeout, retries)
 	stats.Add(numClientLoadRetries, int64(nr))
 	if err != nil {
 		return err
@@ -488,7 +488,7 @@ func (c *Client) dial(nodeAddr string, timeout time.Duration) (net.Conn, error) 
 // retry retries a command on a remote node. It does this so we churn through connections
 // in the pool if we hit an error, as the remote node may have restarted and the pool's
 // connections are now stale.
-func (c *Client) retry(command *proto.Command, nodeAddr string, timeout time.Duration) ([]byte, int, error) {
+func (c *Client) retry(command *proto.Command, nodeAddr string, timeout time.Duration, maxRetries int) ([]byte, int, error) {
 	var p []byte
 	var errOuter error
 	var nRetries int
