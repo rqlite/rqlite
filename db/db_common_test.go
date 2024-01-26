@@ -371,6 +371,26 @@ func testSimpleSingleJSONStatements(t *testing.T, db *DB) {
 	}
 }
 
+func testSimpleSingleJSONBStatements(t *testing.T, db *DB) {
+	_, err := db.ExecuteStringStmt("CREATE TABLE foo (tag JSONB)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	_, err = db.ExecuteStringStmt(`INSERT INTO foo(tag) VALUES('{"mittens": "qux"}')`)
+	if err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+
+	r, err := db.QueryStringStmt(`SELECT tag->>'mittens' FROM foo WHERE tag->>'mittens' = 'qux'`)
+	if err != nil {
+		t.Fatalf("failed to query: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["tag->>'mittens'"],"types":["text"],"values":[["qux"]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+}
+
 func testSimpleJoinStatements(t *testing.T, db *DB) {
 	_, err := db.ExecuteStringStmt("CREATE TABLE names (id INTEGER NOT NULL PRIMARY KEY, name TEXT, ssn TEXT)")
 	if err != nil {
@@ -1523,6 +1543,7 @@ func Test_DatabaseCommonOperations(t *testing.T) {
 		{"SimpleStatementsCollate", testSimpleStatementsCollate},
 		{"SimpleExpressionStatements", testSimpleExpressionStatements},
 		{"SimpleSingleJSONStatements", testSimpleSingleJSONStatements},
+		{"SimpleSingleJSONBStatements", testSimpleSingleJSONBStatements},
 		{"SimpleJoinStatements", testSimpleJoinStatements},
 		{"SimpleSingleConcatStatements", testSimpleSingleConcatStatements},
 		{"SimpleMultiStatements", testSimpleMultiStatements},
