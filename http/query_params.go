@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -31,6 +32,15 @@ func NewQueryParams(r *http.Request) (QueryParams, error) {
 			_, err := time.ParseDuration(t)
 			if err != nil {
 				return nil, fmt.Errorf("%s is not a valid duration", k)
+			}
+		}
+	}
+	for _, k := range []string{"retries"} {
+		r, ok := qp[k]
+		if ok {
+			_, err := strconv.Atoi(r)
+			if err != nil {
+				return nil, fmt.Errorf("%s is not a valid integer", k)
 			}
 		}
 	}
@@ -159,6 +169,16 @@ func (qp QueryParams) Timeout(def time.Duration) time.Duration {
 	}
 	d, _ := time.ParseDuration(t)
 	return d
+}
+
+// Retries returns the requested number of retries.
+func (qp QueryParams) Retries(def int) int {
+	i, ok := qp["retries"]
+	if !ok {
+		return def
+	}
+	r, _ := strconv.Atoi(i)
+	return r
 }
 
 // Version returns the requested version.
