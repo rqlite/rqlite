@@ -1,4 +1,5 @@
-## 8.18.0 (unreleased)
+## 8.18.0 (January 25th 2024)
+This release upgrades SQLite to 3.45.0, which brings in [JSONB](https://sqlite.org/draft/jsonb.html) support. JSONB is a more efficient way to process JSON data within the SQLite database.
 ### New features
 - [PR #1632](https://github.com/rqlite/rqlite/pull/1632): Upgrade to SQLite 3.45.0.
 - [PR #1631](https://github.com/rqlite/rqlite/pull/1631): Allow HTTP clients to control number of retries for internode requests.
