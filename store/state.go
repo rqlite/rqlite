@@ -143,7 +143,7 @@ func RecoverNode(dataDir string, logger *log.Logger, logs raft.LogStore, stable 
 
 	// Create a new snapshot, placing the configuration in as if it was
 	// committed at index 1.
-	if err := db.Checkpoint(); err != nil {
+	if err := db.Checkpoint(sql.CheckpointTruncate); err != nil {
 		return fmt.Errorf("failed to checkpoint database: %s", err)
 	}
 	tmpDBFD, err := os.Open(tmpDBPath)

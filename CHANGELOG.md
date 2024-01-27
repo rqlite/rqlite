@@ -1,3 +1,7 @@
+## 8.18.2 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1636](https://github.com/rqlite/rqlite/pull/1636): Move to explicit choice of SQLite Checkpointing mode.
+
 ## 8.18.1 (January 26th 2024)
 ### Implementation changes and bug fixes
 - [PR #1633](https://github.com/rqlite/rqlite/pull/1633): Improve error messages for internode communication failures.

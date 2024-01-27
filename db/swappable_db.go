@@ -124,10 +124,10 @@ func (s *SwappableDB) StmtReadOnly(sql string) (bool, error) {
 }
 
 // Checkpoint calls Checkpoint on the underlying database.
-func (s *SwappableDB) Checkpoint() error {
+func (s *SwappableDB) Checkpoint(mode CheckpointMode) error {
 	s.dbMu.RLock()
 	defer s.dbMu.RUnlock()
-	return s.db.Checkpoint()
+	return s.db.Checkpoint(mode)
 }
 
 // Path calls Path on the underlying database.
