@@ -1903,7 +1903,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 
 	var fsmSnapshot raft.FSMSnapshot
 	if fullNeeded {
-		if err := s.db.Checkpoint(); err != nil {
+		if err := s.db.Checkpoint(sql.CheckpointTruncate); err != nil {
 			stats.Add(numFullCheckpointFailed, 1)
 			return nil, err
 		}
@@ -1942,7 +1942,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			}
 			stats.Get(snapshotWALSize).(*expvar.Int).Set(int64(compactedBuf.Len()))
 			stats.Get(snapshotPrecompactWALSize).(*expvar.Int).Set(walSz)
-			if err := s.db.Checkpoint(); err != nil {
+			if err := s.db.Checkpoint(sql.CheckpointTruncate); err != nil {
 				stats.Add(numWALCheckpointFailed, 1)
 				return nil, err
 			}

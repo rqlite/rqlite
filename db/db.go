@@ -43,12 +43,33 @@ const (
 	numETx               = "execute_transactions"
 	numQTx               = "query_transactions"
 	numRTx               = "request_transactions"
-
-	CheckpointQuery = "PRAGMA wal_checkpoint(TRUNCATE)" // rqlite WAL compaction requires truncation
 )
 
 var (
+	// ErrWALReplayDirectoryMismatch is returned when the WAL file(s) are not in the same
+	// directory as the database file.
 	ErrWALReplayDirectoryMismatch = errors.New("WAL file(s) not in same directory as database file")
+
+	// ErrCheckpointTimeout is returned when a checkpoint does not complete within the
+	// given duration.
+	ErrCheckpointTimeout = errors.New("checkpoint timeout")
+)
+
+// CheckpointMode is the mode in which a checkpoint runs.
+type CheckpointMode int
+
+const (
+	// CheckpointRestart instructs the checkpoint to run in restart mode.
+	CheckpointRestart CheckpointMode = iota
+	// CheckpointTruncate instructs the checkpoint to run in truncate mode.
+	CheckpointTruncate
+)
+
+var (
+	checkpointPRAGMAs = map[CheckpointMode]string{
+		CheckpointRestart:  "PRAGMA wal_checkpoint(RESTART)",
+		CheckpointTruncate: "PRAGMA wal_checkpoint(TRUNCATE)",
+	}
 )
 
 // DBVersion is the SQLite version.
@@ -302,14 +323,14 @@ func (db *DB) WALSize() (int64, error) {
 
 // Checkpoint checkpoints the WAL file. If the WAL file is not enabled, this
 // function is a no-op.
-func (db *DB) Checkpoint() error {
-	return db.CheckpointWithTimeout(0)
+func (db *DB) Checkpoint(mode CheckpointMode) error {
+	return db.CheckpointWithTimeout(mode, 0)
 }
 
 // CheckpointWithTimeout performs a WAL checkpoint. If the checkpoint does not
 // complete within the given duration, an error is returned. If the duration is 0,
 // the checkpoint will be attempted only once.
-func (db *DB) CheckpointWithTimeout(dur time.Duration) (err error) {
+func (db *DB) CheckpointWithTimeout(mode CheckpointMode, dur time.Duration) (err error) {
 	start := time.Now()
 	defer func() {
 		if err != nil {
@@ -325,7 +346,7 @@ func (db *DB) CheckpointWithTimeout(dur time.Duration) (err error) {
 	var nMoved int
 
 	f := func() error {
-		err := db.rwDB.QueryRow(CheckpointQuery).Scan(&ok, &nPages, &nMoved)
+		err := db.rwDB.QueryRow(checkpointPRAGMAs[mode]).Scan(&ok, &nPages, &nMoved)
 		stats.Add(numCheckpointedPages, int64(nPages))
 		stats.Add(numCheckpointedMoves, int64(nMoved))
 		if err != nil {

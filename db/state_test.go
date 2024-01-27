@@ -220,7 +220,7 @@ func Test_WALReplayOK(t *testing.T) {
 		}
 		mustCopyFile(replayDBPath, dbPath)
 		mustCopyFile(filepath.Join(replayDir, walFile+"_001"), walPath)
-		if err := db.Checkpoint(); err != nil {
+		if err := db.Checkpoint(CheckpointTruncate); err != nil {
 			t.Fatalf("failed to checkpoint database in WAL mode: %s", err.Error())
 		}
 
@@ -233,7 +233,7 @@ func Test_WALReplayOK(t *testing.T) {
 			t.Fatalf("WAL file at %s does not exist", walPath)
 		}
 		mustCopyFile(filepath.Join(replayDir, walFile+"_002"), walPath)
-		if err := db.Checkpoint(); err != nil {
+		if err := db.Checkpoint(CheckpointTruncate); err != nil {
 			t.Fatalf("failed to checkpoint database in WAL mode: %s", err.Error())
 		}
 
@@ -321,7 +321,7 @@ func Test_WALReplayOK_Complex(t *testing.T) {
 	if _, err := srcDB.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"); err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
-	if err := srcDB.Checkpoint(); err != nil {
+	if err := srcDB.Checkpoint(CheckpointTruncate); err != nil {
 		t.Fatalf("failed to checkpoint database in WAL mode: %s", err.Error())
 	}
 	mustCopyFile(dstPath, srcPath)
@@ -353,7 +353,7 @@ func Test_WALReplayOK_Complex(t *testing.T) {
 		dstWALPath := fmt.Sprintf("%s-%d", dstPath, i)
 		mustCopyFile(dstWALPath, srcWALPath)
 		dstWALs = append(dstWALs, dstWALPath)
-		if err := srcDB.Checkpoint(); err != nil {
+		if err := srcDB.Checkpoint(CheckpointTruncate); err != nil {
 			t.Fatalf("failed to checkpoint database in WAL mode: %s", err.Error())
 		}
 	}
@@ -369,7 +369,7 @@ func Test_WALReplayOK_Complex(t *testing.T) {
 	dstWALPath := fmt.Sprintf("%s-postdelete", dstPath)
 	mustCopyFile(dstWALPath, srcWALPath)
 	dstWALs = append(dstWALs, dstWALPath)
-	if err := srcDB.Checkpoint(); err != nil {
+	if err := srcDB.Checkpoint(CheckpointTruncate); err != nil {
 		t.Fatalf("failed to checkpoint database in WAL mode: %s", err.Error())
 	}
 
@@ -379,7 +379,7 @@ func Test_WALReplayOK_Complex(t *testing.T) {
 	dstWALPath = fmt.Sprintf("%s-postupdate", dstPath)
 	mustCopyFile(dstWALPath, srcWALPath)
 	dstWALs = append(dstWALs, dstWALPath)
-	if err := srcDB.Checkpoint(); err != nil {
+	if err := srcDB.Checkpoint(CheckpointTruncate); err != nil {
 		t.Fatalf("failed to checkpoint database in WAL mode: %s", err.Error())
 	}
 
@@ -394,7 +394,7 @@ func Test_WALReplayOK_Complex(t *testing.T) {
 	dstWALPath = fmt.Sprintf("%s-create-tables", dstPath)
 	mustCopyFile(dstWALPath, srcWALPath)
 	dstWALs = append(dstWALs, dstWALPath)
-	if err := srcDB.Checkpoint(); err != nil {
+	if err := srcDB.Checkpoint(CheckpointTruncate); err != nil {
 		t.Fatalf("failed to checkpoint database in WAL mode: %s", err.Error())
 	}
 
@@ -407,7 +407,7 @@ func Test_WALReplayOK_Complex(t *testing.T) {
 	dstWALPath = fmt.Sprintf("%s-post-create-tables", dstPath)
 	mustCopyFile(dstWALPath, srcWALPath)
 	dstWALs = append(dstWALs, dstWALPath)
-	if err := srcDB.Checkpoint(); err != nil {
+	if err := srcDB.Checkpoint(CheckpointTruncate); err != nil {
 		t.Fatalf("failed to checkpoint database in WAL mode: %s", err.Error())
 	}
 

@@ -223,7 +223,7 @@ func ReplayWAL(path string, wals []string, deleteMode bool) error {
 		if err != nil {
 			return err
 		}
-		if err := db.Checkpoint(); err != nil {
+		if err := db.Checkpoint(CheckpointTruncate); err != nil {
 			return fmt.Errorf("checkpoint WAL %s: %s", wal, err.Error())
 		}
 
