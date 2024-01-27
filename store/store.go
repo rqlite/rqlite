@@ -1154,24 +1154,30 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 		return nil, ErrNotOpen
 	}
 
-	if !s.RequiresLeader(eqr) {
-		if eqr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE && eqr.Freshness > 0 &&
-			time.Since(s.raft.LastContact()).Nanoseconds() > eqr.Freshness {
-			return nil, ErrStaleRead
-		}
+	if s.QueriesOnly(eqr) {
 		if eqr.Request.Transaction {
 			// Transaction requested during query, but not going through consensus. This means
 			// we need to block any database serialization during the query.
 			s.queryTxMu.RLock()
 			defer s.queryTxMu.RUnlock()
 		}
-		return s.db.Request(eqr.Request, eqr.Timings)
+
+		if eqr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE {
+			if eqr.Freshness > 0 && time.Since(s.raft.LastContact()).Nanoseconds() > eqr.Freshness {
+				return nil, ErrStaleRead
+			}
+			return s.db.Request(eqr.Request, eqr.Timings)
+		} else if eqr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK {
+			if s.raft.State() != raft.Leader {
+				return nil, ErrNotLeader
+			}
+			return s.db.Request(eqr.Request, eqr.Timings)
+		}
 	}
 
 	if s.raft.State() != raft.Leader {
 		return nil, ErrNotLeader
 	}
-
 	if !s.Ready() {
 		return nil, ErrNotReady
 	}
@@ -1635,24 +1641,21 @@ func (s *Store) Noop(id string) (raft.ApplyFuture, error) {
 	return s.raft.Apply(bc, s.ApplyTimeout), nil
 }
 
-// RequiresLeader returns whether the given ExecuteQueryRequest must be
-// processed on the cluster Leader.
-func (s *Store) RequiresLeader(eqr *proto.ExecuteQueryRequest) bool {
-	if eqr.Level != proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE {
-		return true
-	}
-
+// QueriesOnly returns whether the given ExecuteQueryRequest contains only
+// queries.
+func (s *Store) QueriesOnly(eqr *proto.ExecuteQueryRequest) bool {
 	for _, stmt := range eqr.Request.Statements {
 		sql := stmt.Sql
 		if sql == "" {
 			continue
 		}
 		ro, err := s.db.StmtReadOnly(sql)
-		if !ro || err != nil {
-			return true
+		if ro && err == nil {
+			continue
 		}
+		return false
 	}
-	return false
+	return true
 }
 
 // setLogInfo records some key indexes about the log.
