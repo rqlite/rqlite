@@ -1944,15 +1944,6 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			stats.Get(snapshotPrecompactWALSize).(*expvar.Int).Set(walSz)
 			if err := s.db.Checkpoint(); err != nil {
 				stats.Add(numWALCheckpointFailed, 1)
-				// Failing to checkpoint the WAL leaves the main database in an inconsistent
-				// state (if a WAL file was partially checkpointed, then the next WAL file will not
-				// be in sequence with what is in the Snapshot store), so attempt a Full snapshot next
-				// time.
-				if err := s.snapshotStore.SetFullNeeded(); err != nil {
-					// Give up!
-					s.logger.Fatalf("failed to set full snapshot needed after failed WAL checkpoint: %s",
-						err.Error())
-				}
 				return nil, err
 			}
 		}
