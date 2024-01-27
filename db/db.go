@@ -22,10 +22,11 @@ import (
 )
 
 const (
-	SQLiteHeaderSize = 32
-	bkDelay          = 250
-	sizeAtOpenWarn   = 1024 * 1024 * 1024
-	durToOpenLog     = 2 * time.Second
+	SQLiteHeaderSize     = 32
+	bkDelay              = 250
+	sizeAtOpenWarn       = 1024 * 1024 * 1024
+	durToOpenLog         = 2 * time.Second
+	checkpointRetryDelay = 20 * time.Millisecond
 )
 
 const (
@@ -328,8 +329,8 @@ func (db *DB) Checkpoint(mode CheckpointMode) error {
 }
 
 // CheckpointWithTimeout performs a WAL checkpoint. If the checkpoint does not
-// complete within the given duration, an error is returned. If the duration is 0,
-// the checkpoint will be attempted only once.
+// run to completion within the given duration, an error is returned. If the
+// duration is 0, the checkpoint will be attempted only once.
 func (db *DB) CheckpointWithTimeout(mode CheckpointMode, dur time.Duration) (err error) {
 	start := time.Now()
 	defer func() {
@@ -368,8 +369,7 @@ func (db *DB) CheckpointWithTimeout(mode CheckpointMode, dur time.Duration) (err
 		return err
 	}
 
-	var lastError error
-	t := time.NewTicker(100 * time.Millisecond)
+	t := time.NewTicker(checkpointRetryDelay)
 	defer t.Stop()
 	for {
 		select {
@@ -377,9 +377,8 @@ func (db *DB) CheckpointWithTimeout(mode CheckpointMode, dur time.Duration) (err
 			if err := f(); err == nil {
 				return nil
 			}
-			lastError = err
 		case <-time.After(dur):
-			return fmt.Errorf("checkpoint timeout: %v", lastError)
+			return ErrCheckpointTimeout
 		}
 	}
 }
