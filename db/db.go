@@ -163,6 +163,11 @@ func Open(dbPath string, fkEnabled, wal bool) (retDB *DB, retErr error) {
 		return nil, fmt.Errorf("disable autocheckpointing: %s", err.Error())
 	}
 
+	// Unset any busy_timeout
+	if _, err := rwDB.Exec("PRAGMA busy_timeout=0"); err != nil {
+		return nil, fmt.Errorf("disable busy_timeout: %s", err.Error())
+	}
+
 	roDSN := MakeDSN(dbPath, ModeReadOnly, fkEnabled, wal)
 	roDB, err := sql.Open("sqlite3", roDSN)
 	if err != nil {
@@ -369,15 +374,17 @@ func (db *DB) CheckpointWithTimeout(mode CheckpointMode, dur time.Duration) (err
 		return err
 	}
 
-	t := time.NewTicker(checkpointRetryDelay)
-	defer t.Stop()
+	ticker := time.NewTicker(checkpointRetryDelay)
+	timer := time.NewTimer(dur)
+	defer ticker.Stop()
+	defer timer.Stop()
 	for {
 		select {
-		case <-t.C:
+		case <-ticker.C:
 			if err := f(); err == nil {
 				return nil
 			}
-		case <-time.After(dur):
+		case <-timer.C:
 			return ErrCheckpointTimeout
 		}
 	}
