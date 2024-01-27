@@ -59,20 +59,14 @@ var (
 type CheckpointMode int
 
 const (
-	// CheckpointPassive instructs the checkpoint to run in passive mode.
-	CheckpointPassive CheckpointMode = iota
-	// CheckpointFull instructs the checkpoint to run in full mode.
-	CheckpointFull
 	// CheckpointRestart instructs the checkpoint to run in restart mode.
-	CheckpointRestart
+	CheckpointRestart CheckpointMode = iota
 	// CheckpointTruncate instructs the checkpoint to run in truncate mode.
 	CheckpointTruncate
 )
 
 var (
 	checkpointPRAGMAs = map[CheckpointMode]string{
-		CheckpointPassive:  "PRAGMA wal_checkpoint(PASSIVE)",
-		CheckpointFull:     "PRAGMA wal_checkpoint(FULL)",
 		CheckpointRestart:  "PRAGMA wal_checkpoint(RESTART)",
 		CheckpointTruncate: "PRAGMA wal_checkpoint(TRUNCATE)",
 	}
