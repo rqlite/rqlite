@@ -154,8 +154,8 @@ func Test_WALDatabaseCheckpoint_RestartTimeout(t *testing.T) {
 		t.Fatalf("expected %s, got %s", exp, got)
 	}
 
-	if err := db.CheckpointWithTimeout(CheckpointTruncate, 250*time.Millisecond); err != ErrCheckpointTimeout {
-		t.Fatal("expected timeout error")
+	if err := db.CheckpointWithTimeout(CheckpointTruncate, 250*time.Millisecond); err == nil {
+		t.Fatal("expected error due to failure to checkpoint")
 	}
 
 	blockingDB.Close()

@@ -50,10 +50,6 @@ var (
 	// ErrWALReplayDirectoryMismatch is returned when the WAL file(s) are not in the same
 	// directory as the database file.
 	ErrWALReplayDirectoryMismatch = errors.New("WAL file(s) not in same directory as database file")
-
-	// ErrCheckpointTimeout is returned when a checkpoint does not complete within the
-	// given duration.
-	ErrCheckpointTimeout = errors.New("checkpoint timeout")
 )
 
 // CheckpointMode is the mode in which a checkpoint runs.
