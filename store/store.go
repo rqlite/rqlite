@@ -1164,16 +1164,28 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 			defer s.queryTxMu.RUnlock()
 		}
 
+		convertFn := func(qr []*proto.QueryRows) []*proto.ExecuteQueryResponse {
+			resp := make([]*proto.ExecuteQueryResponse, len(qr))
+			for i := range qr {
+				resp[i] = &proto.ExecuteQueryResponse{
+					Result: &proto.ExecuteQueryResponse_Q{Q: qr[i]},
+				}
+			}
+			return resp
+		}
+
 		if eqr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE {
 			if eqr.Freshness > 0 && time.Since(s.raft.LastContact()).Nanoseconds() > eqr.Freshness {
 				return nil, ErrStaleRead
 			}
-			return s.db.Request(eqr.Request, eqr.Timings)
+			qr, err := s.db.Query(eqr.Request, eqr.Timings)
+			return convertFn(qr), err
 		} else if eqr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK {
 			if s.raft.State() != raft.Leader {
 				return nil, ErrNotLeader
 			}
-			return s.db.Request(eqr.Request, eqr.Timings)
+			qr, err := s.db.Query(eqr.Request, eqr.Timings)
+			return convertFn(qr), err
 		}
 	}
 
@@ -1652,10 +1664,9 @@ func (s *Store) QueriesOnly(eqr *proto.ExecuteQueryRequest) bool {
 			continue
 		}
 		ro, err := s.db.StmtReadOnly(sql)
-		if ro && err == nil {
-			continue
+		if err != nil || !ro {
+			return false
 		}
-		return false
 	}
 	return true
 }
