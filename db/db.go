@@ -356,16 +356,15 @@ func (db *DB) CheckpointWithTimeout(mode CheckpointMode, dur time.Duration) (err
 		}
 	}()
 
-	var ok int
-	var nPages int
-	var nMoved int
-
 	if dur > 0 {
 		if _, err := db.chkDB.Exec(fmt.Sprintf("PRAGMA busy_timeout=%d", dur.Milliseconds())); err != nil {
 			return fmt.Errorf("failed to set busy_timeout on checkpointing connection: %s", err.Error())
 		}
 	}
 
+	var ok int
+	var nPages int
+	var nMoved int
 	if err := db.chkDB.QueryRow(checkpointPRAGMAs[mode]).Scan(&ok, &nPages, &nMoved); err != nil {
 		return fmt.Errorf("error checkpointing WAL: %s", err.Error())
 	}
