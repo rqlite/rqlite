@@ -1,6 +1,8 @@
 ## 8.18.2 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #1635](https://github.com/rqlite/rqlite/pull/1635): Always execute ExecuteRequests locally if possible.
+- [PR #1636](https://github.com/rqlite/rqlite/pull/1636): Move to explicit choice of SQLite Checkpointing mode.
+- [PR #1637](https://github.com/rqlite/rqlite/pull/1637): Remove unneeded SetFullNeeded post WAL checkpoint failure.
 
 ## 8.18.1 (January 26th 2024)
 ### Implementation changes and bug fixes

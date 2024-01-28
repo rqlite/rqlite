@@ -108,46 +108,47 @@ const (
 )
 
 const (
-	numSnapshots              = "num_snapshots"
-	numSnapshotsFailed        = "num_snapshots_failed"
-	numUserSnapshots          = "num_user_snapshots"
-	numUserSnapshotsFailed    = "num_user_snapshots_failed"
-	numWALSnapshots           = "num_wal_snapshots"
-	numWALSnapshotsFailed     = "num_wal_snapshots_failed"
-	numSnapshotsFull          = "num_snapshots_full"
-	numSnapshotsIncremental   = "num_snapshots_incremental"
-	numFullCheckpointFailed   = "num_full_checkpoint_failed"
-	numWALCheckpointFailed    = "num_wal_checkpoint_failed"
-	numAutoVacuums            = "num_auto_vacuums"
-	numAutoVacuumsFailed      = "num_auto_vacuums_failed"
-	autoVacuumDuration        = "auto_vacuum_duration"
-	numBoots                  = "num_boots"
-	numBackups                = "num_backups"
-	numLoads                  = "num_loads"
-	numRestores               = "num_restores"
-	numRestoresFailed         = "num_restores_failed"
-	numAutoRestores           = "num_auto_restores"
-	numAutoRestoresSkipped    = "num_auto_restores_skipped"
-	numAutoRestoresFailed     = "num_auto_restores_failed"
-	numRecoveries             = "num_recoveries"
-	numProviderChecks         = "num_provider_checks"
-	numProviderProvides       = "num_provider_provides"
-	numProviderProvidesFail   = "num_provider_provides_fail"
-	numUncompressedCommands   = "num_uncompressed_commands"
-	numCompressedCommands     = "num_compressed_commands"
-	numJoins                  = "num_joins"
-	numIgnoredJoins           = "num_ignored_joins"
-	numRemovedBeforeJoins     = "num_removed_before_joins"
-	numDBStatsErrors          = "num_db_stats_errors"
-	snapshotCreateDuration    = "snapshot_create_duration"
-	snapshotPersistDuration   = "snapshot_persist_duration"
-	snapshotPrecompactWALSize = "snapshot_precompact_wal_size"
-	snapshotWALSize           = "snapshot_wal_size"
-	leaderChangesObserved     = "leader_changes_observed"
-	leaderChangesDropped      = "leader_changes_dropped"
-	failedHeartbeatObserved   = "failed_heartbeat_observed"
-	nodesReapedOK             = "nodes_reaped_ok"
-	nodesReapedFailed         = "nodes_reaped_failed"
+	numSnapshots                   = "num_snapshots"
+	numSnapshotsFailed             = "num_snapshots_failed"
+	numUserSnapshots               = "num_user_snapshots"
+	numUserSnapshotsFailed         = "num_user_snapshots_failed"
+	numWALSnapshots                = "num_wal_snapshots"
+	numWALSnapshotsFailed          = "num_wal_snapshots_failed"
+	numSnapshotsFull               = "num_snapshots_full"
+	numSnapshotsIncremental        = "num_snapshots_incremental"
+	numFullCheckpointFailed        = "num_full_checkpoint_failed"
+	numWALCheckpointRestartFailed  = "num_wal_checkpoint_restart_failed"
+	numWALCheckpointTruncateFailed = "num_wal_checkpoint_truncate_failed"
+	numAutoVacuums                 = "num_auto_vacuums"
+	numAutoVacuumsFailed           = "num_auto_vacuums_failed"
+	autoVacuumDuration             = "auto_vacuum_duration"
+	numBoots                       = "num_boots"
+	numBackups                     = "num_backups"
+	numLoads                       = "num_loads"
+	numRestores                    = "num_restores"
+	numRestoresFailed              = "num_restores_failed"
+	numAutoRestores                = "num_auto_restores"
+	numAutoRestoresSkipped         = "num_auto_restores_skipped"
+	numAutoRestoresFailed          = "num_auto_restores_failed"
+	numRecoveries                  = "num_recoveries"
+	numProviderChecks              = "num_provider_checks"
+	numProviderProvides            = "num_provider_provides"
+	numProviderProvidesFail        = "num_provider_provides_fail"
+	numUncompressedCommands        = "num_uncompressed_commands"
+	numCompressedCommands          = "num_compressed_commands"
+	numJoins                       = "num_joins"
+	numIgnoredJoins                = "num_ignored_joins"
+	numRemovedBeforeJoins          = "num_removed_before_joins"
+	numDBStatsErrors               = "num_db_stats_errors"
+	snapshotCreateDuration         = "snapshot_create_duration"
+	snapshotPersistDuration        = "snapshot_persist_duration"
+	snapshotPrecompactWALSize      = "snapshot_precompact_wal_size"
+	snapshotWALSize                = "snapshot_wal_size"
+	leaderChangesObserved          = "leader_changes_observed"
+	leaderChangesDropped           = "leader_changes_dropped"
+	failedHeartbeatObserved        = "failed_heartbeat_observed"
+	nodesReapedOK                  = "nodes_reaped_ok"
+	nodesReapedFailed              = "nodes_reaped_failed"
 )
 
 // stats captures stats for the Store.
@@ -170,7 +171,8 @@ func ResetStats() {
 	stats.Add(numSnapshotsFull, 0)
 	stats.Add(numSnapshotsIncremental, 0)
 	stats.Add(numFullCheckpointFailed, 0)
-	stats.Add(numWALCheckpointFailed, 0)
+	stats.Add(numWALCheckpointRestartFailed, 0)
+	stats.Add(numWALCheckpointTruncateFailed, 0)
 	stats.Add(numAutoVacuums, 0)
 	stats.Add(numAutoVacuumsFailed, 0)
 	stats.Add(autoVacuumDuration, 0)
@@ -1906,7 +1908,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 
 	var fsmSnapshot raft.FSMSnapshot
 	if fullNeeded {
-		if err := s.db.Checkpoint(); err != nil {
+		if err := s.db.Checkpoint(sql.CheckpointTruncate); err != nil {
 			stats.Add(numFullCheckpointFailed, 1)
 			return nil, err
 		}
@@ -1920,12 +1922,23 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		compactedBuf := bytes.NewBuffer(nil)
 		var err error
 		if pathExistsWithData(s.walPath) {
+			// Attempt to checkpoint everything into the main database file. Only
+			// if this works should we bother to compact-scan the WAL. It's possible
+			// it fails if some query is in progress. If it fails, return an error
+			// and Raft will retry later. But if it succeeds it means that all readers
+			// are reading from the main database file.
+			if err := s.db.Checkpoint(sql.CheckpointRestart); err != nil {
+				stats.Add(numWALCheckpointRestartFailed, 1)
+				return nil, err
+			}
+
+			// Read a compacted version of the WAL into memory, and write it
+			// to the Snapshot store.
 			walFD, err := os.Open(s.walPath)
 			if err != nil {
 				return nil, err
 			}
 			defer walFD.Close() // Make sure it closes.
-
 			scanner, err := wal.NewFastCompactingScanner(walFD)
 			if err != nil {
 				return nil, err
@@ -1939,25 +1952,20 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			}
 			walFD.Close() // We need it closed for the next step.
 
+			// Clean-up by truncating the WAL. This should be fast because all the pages
+			// have been checkpointed into the main database file, and writes are
+			// blocked during this process by Raft. In otherwords, the WAL file should
+			// be unchanged.
 			walSz, err := fileSize(s.walPath)
 			if err != nil {
 				return nil, err
 			}
+			if err := s.db.Checkpoint(sql.CheckpointTruncate); err != nil {
+				stats.Add(numWALCheckpointTruncateFailed, 1)
+				return nil, fmt.Errorf("failed to truncate WAL: %s", err.Error())
+			}
 			stats.Get(snapshotWALSize).(*expvar.Int).Set(int64(compactedBuf.Len()))
 			stats.Get(snapshotPrecompactWALSize).(*expvar.Int).Set(walSz)
-			if err := s.db.Checkpoint(); err != nil {
-				stats.Add(numWALCheckpointFailed, 1)
-				// Failing to checkpoint the WAL leaves the main database in an inconsistent
-				// state (if a WAL file was partially checkpointed, then the next WAL file will not
-				// be in sequence with what is in the Snapshot store), so attempt a Full snapshot next
-				// time.
-				if err := s.snapshotStore.SetFullNeeded(); err != nil {
-					// Give up!
-					s.logger.Fatalf("failed to set full snapshot needed after failed WAL checkpoint: %s",
-						err.Error())
-				}
-				return nil, err
-			}
 		}
 		fsmSnapshot = snapshot.NewSnapshot(io.NopCloser(compactedBuf))
 		if err != nil {

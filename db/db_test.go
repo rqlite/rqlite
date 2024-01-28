@@ -132,7 +132,7 @@ func Test_TableCreation(t *testing.T) {
 	testQ()
 
 	// Confirm checkpoint works without error.
-	if err := db.Checkpoint(); err != nil {
+	if err := db.Checkpoint(CheckpointRestart); err != nil {
 		t.Fatalf("failed to checkpoint database: %s", err.Error())
 	}
 	testQ()
@@ -176,7 +176,7 @@ func Test_DBSums(t *testing.T) {
 		t.Fatalf("WAL sum did not change after insertion")
 	}
 
-	if err := db.Checkpoint(); err != nil {
+	if err := db.Checkpoint(CheckpointRestart); err != nil {
 		t.Fatalf("failed to checkpoint database: %s", err.Error())
 	}
 
@@ -234,7 +234,7 @@ func Test_DBLastModified(t *testing.T) {
 	// Checkpoint, and check time is later. On some platforms the time resolution isn't that
 	// high, so we sleep so the test won't suffer a false failure.
 	time.Sleep(1 * time.Second)
-	if err := db.Checkpoint(); err != nil {
+	if err := db.Checkpoint(CheckpointRestart); err != nil {
 		t.Fatalf("failed to checkpoint database: %s", err.Error())
 	}
 	lm3, err := db.LastModified()
@@ -669,56 +669,15 @@ func Test_WALDatabaseCreatedOK(t *testing.T) {
 		t.Fatalf("WAL file exists but is empty")
 	}
 
-	if err := db.Checkpoint(); err != nil {
+	if err := db.Checkpoint(CheckpointTruncate); err != nil {
 		t.Fatalf("failed to checkpoint database in WAL mode: %s", err.Error())
 	}
 	if mustFileSize(walPath) != 0 {
 		t.Fatalf("WAL file exists but is non-empty")
 	}
 	// Checkpoint a second time, to ensure it's idempotent.
-	if err := db.Checkpoint(); err != nil {
+	if err := db.Checkpoint(CheckpointTruncate); err != nil {
 		t.Fatalf("failed to checkpoint database in WAL mode: %s", err.Error())
-	}
-}
-
-// Test_WALDatabaseCheckpointOKNoWAL tests that a checkpoint succeeds
-// even when no WAL file exists.
-func Test_WALDatabaseCheckpointOKNoWAL(t *testing.T) {
-	path := mustTempFile()
-	defer os.Remove(path)
-
-	db, err := Open(path, false, true)
-	if err != nil {
-		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
-	}
-	if !db.WALEnabled() {
-		t.Fatalf("WAL mode not enabled")
-	}
-	if fileExists(db.WALPath()) {
-		t.Fatalf("WAL file exists when no writes have happened")
-	}
-	defer db.Close()
-	if err := db.Checkpoint(); err != nil {
-		t.Fatalf("failed to checkpoint database in WAL mode with non-existent WAL: %s", err.Error())
-	}
-}
-
-// Test_WALDatabaseCheckpointOKDelete tests that a checkpoint returns no error
-// even when the database is opened in DELETE mode.
-func Test_WALDatabaseCheckpointOKDelete(t *testing.T) {
-	path := mustTempFile()
-	defer os.Remove(path)
-
-	db, err := Open(path, false, false)
-	if err != nil {
-		t.Fatalf("failed to open database in DELETE mode: %s", err.Error())
-	}
-	if db.WALEnabled() {
-		t.Fatalf("WAL mode enabled")
-	}
-	defer db.Close()
-	if err := db.Checkpoint(); err != nil {
-		t.Fatalf("failed to checkpoint database in DELETE mode: %s", err.Error())
 	}
 }
 
@@ -839,7 +798,7 @@ func test_FileCreationOnDisk(t *testing.T, db *DB) {
 
 	// Confirm checkpoint works on all types of on-disk databases. Worst case, this
 	// should be ignored.
-	if err := db.Checkpoint(); err != nil {
+	if err := db.Checkpoint(CheckpointRestart); err != nil {
 		t.Fatalf("failed to checkpoint database in DELETE mode: %s", err.Error())
 	}
 }
