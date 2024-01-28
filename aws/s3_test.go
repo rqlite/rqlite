@@ -15,7 +15,10 @@ import (
 )
 
 func Test_NewS3Client(t *testing.T) {
-	c := NewS3Client("endpoint1", "region1", "access", "secret", "bucket2", "key3", true)
+	c, err := NewS3Client("endpoint1", "region1", "access", "secret", "bucket2", "key3", true)
+	if err != nil {
+		t.Fatalf("error while creating aws S3 client: %v", err)
+	}
 	if c.region != "region1" {
 		t.Fatalf("expected region to be %q, got %q", "region1", c.region)
 	}
@@ -38,22 +41,34 @@ func Test_NewS3Client(t *testing.T) {
 
 func Test_S3Client_String(t *testing.T) {
 	// Test native S3 with implicit endpoint
-	c := NewS3Client("", "region1", "access", "secret", "bucket2", "key3", false)
+	c, err := NewS3Client("", "region1", "access", "secret", "bucket2", "key3", false)
+	if err != nil {
+		t.Fatalf("error while creating aws S3 client: %v", err)
+	}
 	if c.String() != "s3://bucket2/key3" {
 		t.Fatalf("expected String() to be %q, got %q", "s3://bucket2/key3", c.String())
 	}
 	// Test native S3 with explicit endpoint
-	c = NewS3Client("s3.amazonaws.com", "region1", "access", "secret", "bucket2", "key3", false)
+	c, err = NewS3Client("s3.amazonaws.com", "region1", "access", "secret", "bucket2", "key3", false)
+	if err != nil {
+		t.Fatalf("error while creating aws S3 client: %v", err)
+	}
 	if c.String() != "s3://bucket2/key3" {
 		t.Fatalf("expected String() to be %q, got %q", "s3://bucket2/key3", c.String())
 	}
 	// Test non-native S3 (explicit endpoint) with non-path style (e.g. Wasabi)
-	c = NewS3Client("s3.ca-central-1.wasabisys.com", "region1", "access", "secret", "bucket2", "key3", false)
+	c, err = NewS3Client("s3.ca-central-1.wasabisys.com", "region1", "access", "secret", "bucket2", "key3", false)
+	if err != nil {
+		t.Fatalf("error while creating aws S3 client: %v", err)
+	}
 	if c.String() != "s3://bucket2.s3.ca-central-1.wasabisys.com/key3" {
 		t.Fatalf("expected String() to be %q, got %q", "s3://bucket2.s3.ca-central-1.wasabisys.com/key3", c.String())
 	}
 	// Test non-native S3 (explicit endpoint) with forced path style (e.g. MinIO)
-	c = NewS3Client("s3.minio.example.com", "region1", "access", "secret", "bucket2", "key3", true)
+	c, err = NewS3Client("s3.minio.example.com", "region1", "access", "secret", "bucket2", "key3", true)
+	if err != nil {
+		t.Fatalf("error while creating aws S3 client: %v", err)
+	}
 	if c.String() != "s3://s3.minio.example.com/bucket2/key3" {
 		t.Fatalf("expected String() to be %q, got %q", "s3://s3.minio.example.com/bucket2/key3", c.String())
 	}
