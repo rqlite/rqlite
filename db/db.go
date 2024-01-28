@@ -154,6 +154,8 @@ func Open(dbPath string, fkEnabled, wal bool) (retDB *DB, retErr error) {
 	if err != nil {
 		return nil, fmt.Errorf("open: %s", err.Error())
 	}
+
+	// Critical that rqlite has full control over the checkpointing process.
 	if _, err := rwDB.Exec("PRAGMA wal_autocheckpoint=0"); err != nil {
 		return nil, fmt.Errorf("disable autocheckpointing: %s", err.Error())
 	}
