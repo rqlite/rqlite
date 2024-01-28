@@ -165,7 +165,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to start HTTP server: %s", err.Error())
 	}
-	log.Printf("HTTP server started")
 
 	// Now, open store. How long this takes does depend on how much data is being stored by rqlite.
 	if err := str.Open(); err != nil {

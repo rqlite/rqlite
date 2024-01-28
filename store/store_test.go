@@ -2436,7 +2436,7 @@ func Test_IsVoter(t *testing.T) {
 	}
 }
 
-func Test_RequiresLeader(t *testing.T) {
+func Test_QueriesOnly(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
 
@@ -2459,95 +2459,62 @@ func Test_RequiresLeader(t *testing.T) {
 	}
 
 	tests := []struct {
-		name     string
-		stmts    []string
-		lvl      proto.QueryRequest_Level
-		requires bool
+		name        string
+		stmts       []string
+		queriesOnly bool
 	}{
 		{
-			name:     "Empty SQL",
-			stmts:    []string{""},
-			requires: false,
+			name:        "Empty SQL",
+			stmts:       []string{""},
+			queriesOnly: true,
 		},
 		{
-			name:     "Junk SQL",
-			stmts:    []string{"asdkflj asgkdj"},
-			requires: true,
+			name:        "Junk SQL",
+			stmts:       []string{"asdkflj asgkdj"},
+			queriesOnly: false,
 		},
 		{
-			name:     "CREATE TABLE statement, already exists",
-			stmts:    []string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"},
-			requires: true,
+			name:        "CREATE TABLE statement, already exists",
+			stmts:       []string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"},
+			queriesOnly: false,
 		},
 		{
-			name:     "CREATE TABLE statement, does not exists",
-			stmts:    []string{"CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"},
-			requires: true,
+			name:        "Single INSERT",
+			stmts:       []string{"INSERT INTO foo(id, name) VALUES(1, 'fiona')"},
+			queriesOnly: false,
 		},
 		{
-			name:     "Single INSERT",
-			stmts:    []string{"INSERT INTO foo(id, name) VALUES(1, 'fiona')"},
-			requires: true,
+			name:        "Single INSERT, non-existent table",
+			stmts:       []string{"INSERT INTO qux(id, name) VALUES(1, 'fiona')"},
+			queriesOnly: false,
 		},
 		{
-			name:     "Single INSERT, non-existent table",
-			stmts:    []string{"INSERT INTO qux(id, name) VALUES(1, 'fiona')"},
-			requires: true,
+			name:        "Single SELECT",
+			stmts:       []string{"SELECT * FROM foo"},
+			queriesOnly: true,
 		},
 		{
-			name:     "Single SELECT with implicit NONE",
-			stmts:    []string{"SELECT * FROM foo"},
-			requires: false,
+			name:        "Single SELECT from non-existent table",
+			stmts:       []string{"SELECT * FROM qux"},
+			queriesOnly: false,
 		},
 		{
-			name:     "Single SELECT with NONE",
-			stmts:    []string{"SELECT * FROM foo"},
-			lvl:      proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE,
-			requires: false,
+			name:        "Double SELECT",
+			stmts:       []string{"SELECT * FROM foo", "SELECT * FROM foo WHERE id = 1"},
+			queriesOnly: true,
 		},
 		{
-			name:     "Single SELECT from non-existent table with NONE",
-			stmts:    []string{"SELECT * FROM qux"},
-			lvl:      proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE,
-			requires: true,
-		},
-		{
-			name:     "Double SELECT with NONE",
-			stmts:    []string{"SELECT * FROM foo", "SELECT * FROM foo WHERE id = 1"},
-			lvl:      proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE,
-			requires: false,
-		},
-		{
-			name:     "Single SELECT with STRONG",
-			stmts:    []string{"SELECT * FROM foo"},
-			lvl:      proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG,
-			requires: true,
-		},
-		{
-			name:     "Single SELECT with WEAK",
-			stmts:    []string{"SELECT * FROM foo"},
-			lvl:      proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK,
-			requires: true,
-		},
-		{
-			name:     "Mix queries and executes with NONE",
-			stmts:    []string{"SELECT * FROM foo", "INSERT INTO foo(id, name) VALUES(1, 'fiona')"},
-			lvl:      proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE,
-			requires: true,
-		},
-		{
-			name:     "Mix queries and executes with WEAK",
-			stmts:    []string{"SELECT * FROM foo", "INSERT INTO foo(id, name) VALUES(1, 'fiona')"},
-			lvl:      proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK,
-			requires: true,
+			name:        "Mix queries and executes",
+			stmts:       []string{"SELECT * FROM foo", "INSERT INTO foo(id, name) VALUES(1, 'fiona')"},
+			queriesOnly: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			requires := s.RequiresLeader(executeQueryRequestFromStrings(tt.stmts, tt.lvl, false, false))
-			if requires != tt.requires {
-				t.Fatalf(" test %s failed, unexpected requires: expected %v, got %v", tt.name, tt.requires, requires)
+			requires := s.QueriesOnly(executeQueryRequestFromStrings(tt.stmts, proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE, false, false))
+			if requires != tt.queriesOnly {
+				t.Fatalf(" test %s failed, unexpected requires: expected %v, got %v", tt.name, tt.queriesOnly, requires)
 			}
 		})
 	}
