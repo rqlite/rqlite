@@ -111,9 +111,8 @@ type DB struct {
 	fkEnabled bool   // Foreign key constraints enabled
 	wal       bool
 
-	rwDB  *sql.DB // Database connection for database reads and writes.
-	roDB  *sql.DB // Database connection database reads.
-	chkDB *sql.DB // Database connection for checkpointing.
+	rwDB *sql.DB // Database connection for database reads and writes.
+	roDB *sql.DB // Database connection database reads.
 
 	rwDSN string // DSN used for read-write connection
 	roDSN string // DSN used for read-only connections
@@ -165,16 +164,6 @@ func Open(dbPath string, fkEnabled, wal bool) (retDB *DB, retErr error) {
 	}
 
 	/////////////////////////////////////////////////////////////////////////
-	// Checkpointing connection
-	chkDB, err := sql.Open("sqlite3", rwDSN)
-	if err != nil {
-		return nil, fmt.Errorf("open checkpointing database: %s", err.Error())
-	}
-	if _, err := chkDB.Exec("PRAGMA busy_timeout=0"); err != nil {
-		return nil, fmt.Errorf("disable busy_timeout on checkpointing connection: %s", err.Error())
-	}
-
-	/////////////////////////////////////////////////////////////////////////
 	// Read-only connection
 	roDSN := MakeDSN(dbPath, ModeReadOnly, fkEnabled, wal)
 	roDB, err := sql.Open("sqlite3", roDSN)
@@ -200,7 +189,6 @@ func Open(dbPath string, fkEnabled, wal bool) (retDB *DB, retErr error) {
 		wal:       wal,
 		rwDB:      rwDB,
 		roDB:      roDB,
-		chkDB:     chkDB,
 		rwDSN:     rwDSN,
 		roDSN:     roDSN,
 		logger:    logger,
@@ -344,7 +332,8 @@ func (db *DB) Checkpoint(mode CheckpointMode) error {
 
 // CheckpointWithTimeout performs a WAL checkpoint. If the checkpoint does not
 // run to completion within the given duration, an error is returned. If the
-// duration is 0, the checkpoint will be attempted only once.
+// duration is 0, the busy timeout is not modified before executing the
+// checkpoint.
 func (db *DB) CheckpointWithTimeout(mode CheckpointMode, dur time.Duration) (err error) {
 	start := time.Now()
 	defer func() {
@@ -357,15 +346,20 @@ func (db *DB) CheckpointWithTimeout(mode CheckpointMode, dur time.Duration) (err
 	}()
 
 	if dur > 0 {
-		if _, err := db.chkDB.Exec(fmt.Sprintf("PRAGMA busy_timeout=%d", dur.Milliseconds())); err != nil {
+		if _, err := db.rwDB.Exec(fmt.Sprintf("PRAGMA busy_timeout=%d", dur.Milliseconds())); err != nil {
 			return fmt.Errorf("failed to set busy_timeout on checkpointing connection: %s", err.Error())
 		}
+		defer func() {
+			if _, err := db.rwDB.Exec("PRAGMA busy_timeout=5000"); err != nil {
+				db.logger.Printf("failed to reset busy_timeout on checkpointing connection: %s", err.Error())
+			}
+		}()
 	}
 
 	var ok int
 	var nPages int
 	var nMoved int
-	if err := db.chkDB.QueryRow(checkpointPRAGMAs[mode]).Scan(&ok, &nPages, &nMoved); err != nil {
+	if err := db.rwDB.QueryRow(checkpointPRAGMAs[mode]).Scan(&ok, &nPages, &nMoved); err != nil {
 		return fmt.Errorf("error checkpointing WAL: %s", err.Error())
 	}
 	stats.Add(numCheckpointedPages, int64(nPages))
@@ -1091,9 +1085,8 @@ func (db *DB) StmtReadOnlyWithConn(sql string, conn *sql.Conn) (bool, error) {
 
 func (db *DB) pragmas() (map[string]interface{}, error) {
 	conns := map[string]*sql.DB{
-		"rw":  db.rwDB,
-		"ro":  db.roDB,
-		"chk": db.chkDB,
+		"rw": db.rwDB,
+		"ro": db.roDB,
 	}
 
 	connsMap := make(map[string]interface{})
