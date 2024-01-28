@@ -2,13 +2,43 @@ package db
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
 
 	command "github.com/rqlite/rqlite/v8/command/proto"
+	"github.com/rqlite/rqlite/v8/random"
 	"github.com/rqlite/rqlite/v8/testdata/chinook"
 )
+
+func testBusyTimeout(t *testing.T, db *DB) {
+	rbt := random.Intn(10000)
+	_, err := db.ExecuteStringStmt(fmt.Sprintf("PRAGMA busy_timeout=%d", rbt))
+	if err != nil {
+		t.Fatalf("failed to set busy_timeout: %s", err.Error())
+	}
+
+	bt, err := db.BusyTimeout()
+	if err != nil {
+		t.Fatalf("failed to get busy_timeout: %s", err.Error())
+	}
+	if exp, got := rbt, bt; exp != got {
+		t.Fatalf("expected busy_timeout %d, got %d", exp, got)
+	}
+
+	rbt2 := random.Intn(10000)
+	if err := db.SetBusyTimeout(rbt2); err != nil {
+		t.Fatalf("failed to set busy_timeout: %s", err.Error())
+	}
+	bt, err = db.BusyTimeout()
+	if err != nil {
+		t.Fatalf("failed to get busy_timeout: %s", err.Error())
+	}
+	if exp, got := rbt2, bt; exp != got {
+		t.Fatalf("expected busy_timeout %d, got %d", exp, got)
+	}
+}
 
 func testCompileOptions(t *testing.T, db *DB) {
 	_, err := db.CompileOptions()
@@ -1529,6 +1559,7 @@ func Test_DatabaseCommonOperations(t *testing.T) {
 		name     string
 		testFunc func(*testing.T, *DB)
 	}{
+		{"BusyTimeout", testBusyTimeout},
 		{"SetSynchronousMode", testSetSynchronousMode},
 		{"CompileOptions", testCompileOptions},
 		{"TableNotExist", testTableNotExist},

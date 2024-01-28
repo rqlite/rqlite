@@ -49,10 +49,6 @@ var (
 	// ErrWALReplayDirectoryMismatch is returned when the WAL file(s) are not in the same
 	// directory as the database file.
 	ErrWALReplayDirectoryMismatch = errors.New("WAL file(s) not in same directory as database file")
-
-	// ErrCheckpointTimeout is returned when a checkpoint does not complete within the
-	// given duration.
-	ErrCheckpointTimeout = errors.New("checkpoint timeout")
 )
 
 // CheckpointMode is the mode in which a checkpoint runs.
@@ -151,6 +147,8 @@ func Open(dbPath string, fkEnabled, wal bool) (retDB *DB, retErr error) {
 		logger.Printf("database file is %s, SQLite may take longer to open it", humanize.Bytes(uint64(sz)))
 	}
 
+	/////////////////////////////////////////////////////////////////////////
+	// Main RW connection
 	rwDSN := MakeDSN(dbPath, ModeReadWrite, fkEnabled, wal)
 	rwDB, err := sql.Open("sqlite3", rwDSN)
 	if err != nil {
@@ -162,6 +160,8 @@ func Open(dbPath string, fkEnabled, wal bool) (retDB *DB, retErr error) {
 		return nil, fmt.Errorf("disable autocheckpointing: %s", err.Error())
 	}
 
+	/////////////////////////////////////////////////////////////////////////
+	// Read-only connection
 	roDSN := MakeDSN(dbPath, ModeReadOnly, fkEnabled, wal)
 	roDB, err := sql.Open("sqlite3", roDSN)
 	if err != nil {
@@ -321,6 +321,22 @@ func (db *DB) WALSize() (int64, error) {
 	return 0, err
 }
 
+// SetBusyTimeout sets the busy timeout for the database.
+func (db *DB) SetBusyTimeout(ms int) error {
+	_, err := db.rwDB.Exec(fmt.Sprintf("PRAGMA busy_timeout=%d", ms))
+	return err
+}
+
+// BusyTimeout returns the current busy timeout value.
+func (db *DB) BusyTimeout() (int, error) {
+	var rwN int
+	err := db.rwDB.QueryRow("PRAGMA busy_timeout").Scan(&rwN)
+	if err != nil {
+		return 0, err
+	}
+	return rwN, err
+}
+
 // Checkpoint checkpoints the WAL file. If the WAL file is not enabled, this
 // function is a no-op.
 func (db *DB) Checkpoint(mode CheckpointMode) error {
@@ -328,8 +344,9 @@ func (db *DB) Checkpoint(mode CheckpointMode) error {
 }
 
 // CheckpointWithTimeout performs a WAL checkpoint. If the checkpoint does not
-// complete within the given duration, an error is returned. If the duration is 0,
-// the checkpoint will be attempted only once.
+// run to completion within the given duration, an error is returned. If the
+// duration is 0, the busy timeout is not modified before executing the
+// checkpoint.
 func (db *DB) CheckpointWithTimeout(mode CheckpointMode, dur time.Duration) (err error) {
 	start := time.Now()
 	defer func() {
@@ -341,47 +358,35 @@ func (db *DB) CheckpointWithTimeout(mode CheckpointMode, dur time.Duration) (err
 		}
 	}()
 
+	if dur > 0 {
+		bt, err := db.BusyTimeout()
+		if err != nil {
+			return fmt.Errorf("failed to get busy_timeout on checkpointing connection: %s", err.Error())
+		}
+		if err := db.SetBusyTimeout(int(dur.Milliseconds())); err != nil {
+			return fmt.Errorf("failed to set busy_timeout on checkpointing connection: %s", err.Error())
+		}
+		defer func() {
+			// Reset back to default
+			if _, err := db.rwDB.Exec(fmt.Sprintf("PRAGMA busy_timeout=%d", bt)); err != nil {
+				db.logger.Printf("failed to reset busy_timeout on checkpointing connection: %s", err.Error())
+			}
+		}()
+	}
+
 	var ok int
 	var nPages int
 	var nMoved int
-
-	f := func() error {
-		err := db.rwDB.QueryRow(checkpointPRAGMAs[mode]).Scan(&ok, &nPages, &nMoved)
-		stats.Add(numCheckpointedPages, int64(nPages))
-		stats.Add(numCheckpointedMoves, int64(nMoved))
-		if err != nil {
-			return fmt.Errorf("error checkpointing WAL: %s", err.Error())
-		}
-		if ok != 0 {
-			return fmt.Errorf("failed to completely checkpoint WAL (%d ok, %d pages, %d moved)",
-				ok, nPages, nMoved)
-		}
-		return nil
+	if err := db.rwDB.QueryRow(checkpointPRAGMAs[mode]).Scan(&ok, &nPages, &nMoved); err != nil {
+		return fmt.Errorf("error checkpointing WAL: %s", err.Error())
 	}
-
-	// Try fast path
-	err = f()
-	if err == nil {
-		return nil
+	stats.Add(numCheckpointedPages, int64(nPages))
+	stats.Add(numCheckpointedMoves, int64(nMoved))
+	if ok != 0 {
+		return fmt.Errorf("failed to completely checkpoint WAL (%d ok, %d pages, %d moved)",
+			ok, nPages, nMoved)
 	}
-	if dur == 0 {
-		return err
-	}
-
-	var lastError error
-	t := time.NewTicker(100 * time.Millisecond)
-	defer t.Stop()
-	for {
-		select {
-		case <-t.C:
-			if err := f(); err == nil {
-				return nil
-			}
-			lastError = err
-		case <-time.After(dur):
-			return fmt.Errorf("checkpoint timeout: %v", lastError)
-		}
-	}
+	return nil
 }
 
 // DisableCheckpointing disables the automatic checkpointing that occurs when
