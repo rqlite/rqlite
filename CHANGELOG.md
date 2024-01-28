@@ -1,4 +1,4 @@
-## 8.18.2 (unreleased)
+## 8.18.2 (January 27th 2024)
 ### Implementation changes and bug fixes
 - [PR #1635](https://github.com/rqlite/rqlite/pull/1635): Always execute ExecuteRequests locally if possible.
 - [PR #1636](https://github.com/rqlite/rqlite/pull/1636): Move to explicit choice of SQLite Checkpointing mode.
