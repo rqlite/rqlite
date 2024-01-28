@@ -34,7 +34,7 @@ const (
 	numCheckpointErrors  = "checkpoint_errors"
 	numCheckpointedPages = "checkpointed_pages"
 	numCheckpointedMoves = "checkpointed_moves"
-	checkpointDuration   = "checkpoint_duration_ns"
+	checkpointDuration   = "checkpoint_duration_ms"
 	numExecutions        = "executions"
 	numExecutionErrors   = "execution_errors"
 	numQueries           = "queries"
@@ -353,7 +353,7 @@ func (db *DB) CheckpointWithTimeout(mode CheckpointMode, dur time.Duration) (err
 		if err != nil {
 			stats.Add(numCheckpointErrors, 1)
 		} else {
-			stats.Get(checkpointDuration).(*expvar.Int).Set(time.Since(start).Nanoseconds())
+			stats.Get(checkpointDuration).(*expvar.Int).Set(time.Since(start).Milliseconds())
 			stats.Add(numCheckpoints, 1)
 		}
 	}()
