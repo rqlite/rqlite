@@ -360,43 +360,22 @@ func (db *DB) CheckpointWithTimeout(mode CheckpointMode, dur time.Duration) (err
 	var nPages int
 	var nMoved int
 
-	f := func() error {
-		err := db.chkDB.QueryRow(checkpointPRAGMAs[mode]).Scan(&ok, &nPages, &nMoved)
-		stats.Add(numCheckpointedPages, int64(nPages))
-		stats.Add(numCheckpointedMoves, int64(nMoved))
-		if err != nil {
-			return fmt.Errorf("error checkpointing WAL: %s", err.Error())
+	if dur > 0 {
+		if _, err := db.chkDB.Exec(fmt.Sprintf("PRAGMA busy_timeout=%d", dur.Milliseconds())); err != nil {
+			return fmt.Errorf("failed to set busy_timeout on checkpointing connection: %s", err.Error())
 		}
-		if ok != 0 {
-			return fmt.Errorf("failed to completely checkpoint WAL (%d ok, %d pages, %d moved)",
-				ok, nPages, nMoved)
-		}
-		return nil
 	}
 
-	// Try fast path
-	err = f()
-	if err == nil {
-		return nil
+	if err := db.chkDB.QueryRow(checkpointPRAGMAs[mode]).Scan(&ok, &nPages, &nMoved); err != nil {
+		return fmt.Errorf("error checkpointing WAL: %s", err.Error())
 	}
-	if dur == 0 {
-		return err
+	stats.Add(numCheckpointedPages, int64(nPages))
+	stats.Add(numCheckpointedMoves, int64(nMoved))
+	if ok != 0 {
+		return fmt.Errorf("failed to completely checkpoint WAL (%d ok, %d pages, %d moved)",
+			ok, nPages, nMoved)
 	}
-
-	ticker := time.NewTicker(checkpointRetryDelay)
-	timer := time.NewTimer(dur)
-	defer ticker.Stop()
-	defer timer.Stop()
-	for {
-		select {
-		case <-ticker.C:
-			if err := f(); err == nil {
-				return nil
-			}
-		case <-timer.C:
-			return ErrCheckpointTimeout
-		}
-	}
+	return nil
 }
 
 // DisableCheckpointing disables the automatic checkpointing that occurs when
