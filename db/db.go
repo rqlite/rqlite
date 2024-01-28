@@ -320,6 +320,22 @@ func (db *DB) WALSize() (int64, error) {
 	return 0, err
 }
 
+// SetBusyTimeout sets the busy timeout for the database.
+func (db *DB) SetBusyTimeout(ms int) error {
+	_, err := db.rwDB.Exec(fmt.Sprintf("PRAGMA busy_timeout=%d", ms))
+	return err
+}
+
+// BusyTimeout returns the current busy timeout value.
+func (db *DB) BusyTimeout() (int, error) {
+	var rwN int
+	err := db.rwDB.QueryRow("PRAGMA busy_timeout").Scan(&rwN)
+	if err != nil {
+		return 0, err
+	}
+	return rwN, err
+}
+
 // Checkpoint checkpoints the WAL file. If the WAL file is not enabled, this
 // function is a no-op.
 func (db *DB) Checkpoint(mode CheckpointMode) error {
@@ -342,11 +358,16 @@ func (db *DB) CheckpointWithTimeout(mode CheckpointMode, dur time.Duration) (err
 	}()
 
 	if dur > 0 {
-		if _, err := db.rwDB.Exec(fmt.Sprintf("PRAGMA busy_timeout=%d", dur.Milliseconds())); err != nil {
+		bt, err := db.BusyTimeout()
+		if err != nil {
+			return fmt.Errorf("failed to get busy_timeout on checkpointing connection: %s", err.Error())
+		}
+		if err := db.SetBusyTimeout(int(dur.Milliseconds())); err != nil {
 			return fmt.Errorf("failed to set busy_timeout on checkpointing connection: %s", err.Error())
 		}
 		defer func() {
-			if _, err := db.rwDB.Exec("PRAGMA busy_timeout=5000"); err != nil {
+			// Reset back to default
+			if _, err := db.rwDB.Exec(fmt.Sprintf("PRAGMA busy_timeout=%d", bt)); err != nil {
 				db.logger.Printf("failed to reset busy_timeout on checkpointing connection: %s", err.Error())
 			}
 		}()
