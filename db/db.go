@@ -22,11 +22,10 @@ import (
 )
 
 const (
-	SQLiteHeaderSize     = 32
-	bkDelay              = 250
-	sizeAtOpenWarn       = 1024 * 1024 * 1024
-	durToOpenLog         = 2 * time.Second
-	checkpointRetryDelay = 20 * time.Millisecond
+	SQLiteHeaderSize = 32
+	bkDelay          = 250
+	sizeAtOpenWarn   = 1024 * 1024 * 1024
+	durToOpenLog     = 2 * time.Second
 )
 
 const (
