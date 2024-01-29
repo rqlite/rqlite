@@ -72,19 +72,13 @@ func Test_WALDatabaseCheckpoint_RestartTruncate(t *testing.T) {
 		}
 	}
 
-	walPreBytes, err := os.ReadFile(db.WALPath())
-	if err != nil {
-		t.Fatalf("failed to read wal file: %s", err.Error())
-	}
+	walPreBytes := mustReadBytes(db.WALPath())
 	if err := db.Checkpoint(CheckpointRestart); err != nil {
 		t.Fatalf("failed to checkpoint database: %s", err.Error())
 	}
-	walPostBytes, err := os.ReadFile(db.WALPath())
-	if err != nil {
-		t.Fatalf("failed to read wal file: %s", err.Error())
-	}
+	walPostBytes := mustReadBytes(db.WALPath())
 	if !bytes.Equal(walPreBytes, walPostBytes) {
-		t.Fatalf("wal files should be identical after checkpoint restart")
+		t.Fatalf("wal file should be unchanged after checkpoint restart")
 	}
 
 	// query the data to make sure all is well.
@@ -117,6 +111,8 @@ func Test_WALDatabaseCheckpoint_RestartTruncate(t *testing.T) {
 	}
 }
 
+// Test_WALDatabaseCheckpoint_RestartTimeout tests that a restart checkpoint
+// does time out as expected if there is a long running read.
 func Test_WALDatabaseCheckpoint_RestartTimeout(t *testing.T) {
 	path := mustTempFile()
 	defer os.Remove(path)
@@ -154,12 +150,78 @@ func Test_WALDatabaseCheckpoint_RestartTimeout(t *testing.T) {
 		t.Fatalf("expected %s, got %s", exp, got)
 	}
 
+	if err := db.CheckpointWithTimeout(CheckpointRestart, 250*time.Millisecond); err == nil {
+		t.Fatal("expected error due to failure to checkpoint")
+	}
+
+	blockingDB.Close()
+	if err := db.CheckpointWithTimeout(CheckpointRestart, 250*time.Millisecond); err != nil {
+		t.Fatalf("failed to checkpoint database: %s", err.Error())
+	}
+}
+
+// Test_WALDatabaseCheckpoint_TruncateTimeout tests that a truncate checkpoint
+// does time out as expected if there is a long running read. It also confirms
+// that the WAL file is not modified as a result of this failure.
+func Test_WALDatabaseCheckpoint_TruncateTimeout(t *testing.T) {
+	path := mustTempFile()
+	defer os.Remove(path)
+	db, err := Open(path, false, true)
+	if err != nil {
+		t.Fatalf("failed to open database in WAL mode: %s", err.Error())
+	}
+	defer db.Close()
+
+	_, err = db.ExecuteStringStmt(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+	for i := 0; i < 50; i++ {
+		_, err := db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("fiona")`)
+		if err != nil {
+			t.Fatalf("failed to execute INSERT on single node: %s", err.Error())
+		}
+	}
+
+	preWALBytes := mustReadBytes(db.WALPath())
+	blockingDB, err := Open(path, false, true)
+	if err != nil {
+		t.Fatalf("failed to open blocking database in WAL mode: %s", err.Error())
+	}
+	defer blockingDB.Close()
+	_, err = blockingDB.QueryStringStmt(`BEGIN TRANSACTION`)
+	if err != nil {
+		t.Fatalf("failed to execute query on single node: %s", err.Error())
+	}
+	rows, err := blockingDB.QueryStringStmt(`SELECT COUNT(*) FROM foo`)
+	if err != nil {
+		t.Fatalf("failed to execute query on single node: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[50]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("expected %s, got %s", exp, got)
+	}
+
 	if err := db.CheckpointWithTimeout(CheckpointTruncate, 250*time.Millisecond); err == nil {
 		t.Fatal("expected error due to failure to checkpoint")
+	}
+	postWALBytes := mustReadBytes(db.WALPath())
+	if !bytes.Equal(preWALBytes, postWALBytes) {
+		t.Fatalf("wal file should be unchanged after checkpoint failure")
 	}
 
 	blockingDB.Close()
 	if err := db.CheckpointWithTimeout(CheckpointTruncate, 250*time.Millisecond); err != nil {
 		t.Fatalf("failed to checkpoint database: %s", err.Error())
 	}
+	if mustFileSize(db.WALPath()) != 0 {
+		t.Fatalf("wal file should be zero length after checkpoint truncate")
+	}
+}
+
+func mustReadBytes(path string) []byte {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		panic(err)
+	}
+	return b
 }
