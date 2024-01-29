@@ -8,7 +8,7 @@
 [![Slack](https://img.shields.io/badge/Slack--purple.svg)](https://www.philipotoole.com/join-rqlite-slack)
 [![Google Group](https://img.shields.io/badge/Google%20Group--blue.svg)](https://groups.google.com/group/rqlite)
 
-*rqlite* combines SQLite's simplicity with the power of a robust, fault-tolerant distributed database. It's designed for easy deployment and lightweight operation, offering a developer-friendly and operator-centric solution for [Linux, macOS, and Windows, as well as various CPU platforms](https://github.com/rqlite/rqlite/releases).
+*rqlite* is a relational database which combines SQLite's simplicity with the power of a robust, fault-tolerant, distributed system. It's designed for easy deployment and lightweight operation, offering a developer-friendly and operator-centric solution for [Linux, macOS, and Windows, as well as various CPU platforms](https://github.com/rqlite/rqlite/releases).
 
 - [Website](https://www.rqlite.io)
 - [Developer guide](https://www.rqlite.io/docs/api)
