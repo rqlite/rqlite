@@ -117,7 +117,6 @@ const (
 	numSnapshotsFull                  = "num_snapshots_full"
 	numSnapshotsIncremental           = "num_snapshots_incremental"
 	numFullCheckpointFailed           = "num_full_checkpoint_failed"
-	numWALCheckpointRestartFailed     = "num_wal_checkpoint_restart_failed"
 	numWALCheckpointTruncateFailed    = "num_wal_checkpoint_truncate_failed"
 	numAutoVacuums                    = "num_auto_vacuums"
 	numAutoVacuumsFailed              = "num_auto_vacuums_failed"
@@ -141,7 +140,6 @@ const (
 	numRemovedBeforeJoins             = "num_removed_before_joins"
 	numDBStatsErrors                  = "num_db_stats_errors"
 	snapshotCreateDuration            = "snapshot_create_duration"
-	snapshotCreateChkRestartDuration  = "snapshot_create_chk_restart_duration"
 	snapshotCreateChkTruncateDuration = "snapshot_create_chk_truncate_duration"
 	snapshotCreateWALCompactDuration  = "snapshot_create_wal_compact_duration"
 	snapshotPersistDuration           = "snapshot_persist_duration"
@@ -174,7 +172,6 @@ func ResetStats() {
 	stats.Add(numSnapshotsFull, 0)
 	stats.Add(numSnapshotsIncremental, 0)
 	stats.Add(numFullCheckpointFailed, 0)
-	stats.Add(numWALCheckpointRestartFailed, 0)
 	stats.Add(numWALCheckpointTruncateFailed, 0)
 	stats.Add(numAutoVacuums, 0)
 	stats.Add(numAutoVacuumsFailed, 0)
@@ -198,7 +195,6 @@ func ResetStats() {
 	stats.Add(numRemovedBeforeJoins, 0)
 	stats.Add(numDBStatsErrors, 0)
 	stats.Add(snapshotCreateDuration, 0)
-	stats.Add(snapshotCreateChkRestartDuration, 0)
 	stats.Add(snapshotCreateChkTruncateDuration, 0)
 	stats.Add(snapshotCreateWALCompactDuration, 0)
 	stats.Add(snapshotPersistDuration, 0)
@@ -1941,18 +1937,6 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		compactedBuf := bytes.NewBuffer(nil)
 		var err error
 		if pathExistsWithData(s.walPath) {
-			// Attempt to checkpoint everything into the main database file. Only
-			// if this works should we bother to compact-scan the WAL. It's possible
-			// it fails if some query is in progress. If it fails, return an error
-			// and Raft will retry later. But if it succeeds it means that all readers
-			// are reading from the main database file.
-			chkRStartTime := time.Now()
-			if err := s.db.Checkpoint(sql.CheckpointRestart); err != nil {
-				stats.Add(numWALCheckpointRestartFailed, 1)
-				return nil, err
-			}
-			stats.Get(snapshotCreateChkRestartDuration).(*expvar.Int).Set(time.Since(chkRStartTime).Milliseconds())
-
 			compactStartTime := time.Now()
 			// Read a compacted version of the WAL into memory, and write it
 			// to the Snapshot store.
@@ -1975,10 +1959,9 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			walFD.Close() // We need it closed for the next step.
 			stats.Get(snapshotCreateWALCompactDuration).(*expvar.Int).Set(time.Since(compactStartTime).Milliseconds())
 
-			// Clean-up by truncating the WAL. This should be fast because all the pages
-			// have been checkpointed into the main database file, and writes are
-			// blocked during this process by Raft. In otherwords, the WAL file should
-			// be unchanged.
+			// Now that we're written a (compacted) copy of the WAL to the Snapshot,
+			// we can truncate the WAL. We use truncate mode so that the next WAL
+			// contains just changes since the this snapshot.
 			walSz, err := fileSize(s.walPath)
 			if err != nil {
 				return nil, err
@@ -1986,7 +1969,8 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			chkTStartTime := time.Now()
 			if err := s.db.Checkpoint(sql.CheckpointTruncate); err != nil {
 				stats.Add(numWALCheckpointTruncateFailed, 1)
-				return nil, fmt.Errorf("failed to truncate WAL: %s", err.Error())
+				return nil, fmt.Errorf("snapshot can't complete due to WAL checkpoint failure (will retry): %s",
+					err.Error())
 			}
 			stats.Get(snapshotCreateChkTruncateDuration).(*expvar.Int).Set(time.Since(chkTStartTime).Milliseconds())
 			stats.Get(snapshotWALSize).(*expvar.Int).Set(int64(compactedBuf.Len()))
