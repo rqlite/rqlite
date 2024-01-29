@@ -1,4 +1,4 @@
-## 8.18.3 (unreleased)
+## 8.18.3 (January 29th 2024)
 ### Implementation changes and bug fixes
 - [PR #1638](https://github.com/rqlite/rqlite/pull/1638): More Snapshotting metrics.
 - [PR #1639](https://github.com/rqlite/rqlite/pull/1639): Reuse Session and S3 manager when working with AWS S3. Thanks @mauri870
