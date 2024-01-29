@@ -3,6 +3,7 @@
 - [PR #1638](https://github.com/rqlite/rqlite/pull/1638): More Snapshotting metrics.
 - [PR #1639](https://github.com/rqlite/rqlite/pull/1639): Reuse Session and S3 manager when working with AWS S3. Thanks @mauri870
 - [PR #1640](https://github.com/rqlite/rqlite/pull/1640): Remove Restart checkpoint, tests show it's not an optimization.
+- [PR #1641](https://github.com/rqlite/rqlite/pull/1641): `go mod` updates.
 
 ## 8.18.2 (January 27th 2024)
 ### Implementation changes and bug fixes
