@@ -144,12 +144,10 @@ func (c *CompactingScanner) Bytes() ([]byte, error) {
 
 		// Read the frame data.
 		if _, err := c.readSeeker.Seek(frame.Offset+WALFrameHeaderSize, io.SeekStart); err != nil {
-			fmt.Println("error seeking to frame offset:", err)
-			return nil, err
+			return nil, fmt.Errorf("error seeking to frame offset: %s", err)
 		}
 		if _, err := io.ReadFull(c.readSeeker, buf[frmData:frmData+pageSz]); err != nil {
-			fmt.Println("error reading frame data:", err)
-			return nil, err
+			return nil, fmt.Errorf("error reading frame data: %s", err)
 		}
 
 		// Update checksum using frame data: "..the content of all frames up to and including the current frame."
