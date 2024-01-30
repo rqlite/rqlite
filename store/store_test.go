@@ -1150,7 +1150,7 @@ func Test_SingleNodeExecuteQueryFreshness(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query leader node: %s", err.Error())
 	}
-	if exp, got := `[[1,"fiona"]]`, asJSON(eqr); exp != got {
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(eqr); exp != got {
 		t.Fatalf("unexpected results for request\nexp: %s\ngot: %s", exp, got)
 	}
 }
