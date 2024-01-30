@@ -1953,7 +1953,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			if err != nil {
 				return nil, err
 			}
-			walFD.Close() // We need it closed for the next step.
+			walFD.Close() // We need it closed before truncating it.
 
 			stats.Get(snapshotCreateWALCompactDuration).(*expvar.Int).Set(time.Since(compactStartTime).Milliseconds())
 			compactedBuf = bytes.NewBuffer(compactedBytes)
