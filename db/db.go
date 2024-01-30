@@ -321,20 +321,35 @@ func (db *DB) WALSize() (int64, error) {
 	return 0, err
 }
 
-// SetBusyTimeout sets the busy timeout for the database.
-func (db *DB) SetBusyTimeout(ms int) error {
-	_, err := db.rwDB.Exec(fmt.Sprintf("PRAGMA busy_timeout=%d", ms))
-	return err
+// SetBusyTimeout sets the busy timeout for the database. If a timeout is
+// is less than zero it is not set.
+func (db *DB) SetBusyTimeout(rwMs, roMs int) (err error) {
+	if rwMs >= 0 {
+		_, err := db.rwDB.Exec(fmt.Sprintf("PRAGMA busy_timeout=%d", rwMs))
+		if err != nil {
+			return err
+		}
+	}
+	if roMs >= 0 {
+		_, err = db.roDB.Exec(fmt.Sprintf("PRAGMA busy_timeout=%d", roMs))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // BusyTimeout returns the current busy timeout value.
-func (db *DB) BusyTimeout() (int, error) {
-	var rwN int
-	err := db.rwDB.QueryRow("PRAGMA busy_timeout").Scan(&rwN)
+func (db *DB) BusyTimeout() (rwMs, roMs int, err error) {
+	err = db.rwDB.QueryRow("PRAGMA busy_timeout").Scan(&rwMs)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
-	return rwN, err
+	err = db.rwDB.QueryRow("PRAGMA busy_timeout").Scan(&roMs)
+	if err != nil {
+		return 0, 0, err
+	}
+	return rwMs, roMs, nil
 }
 
 // Checkpoint checkpoints the WAL file. If the WAL file is not enabled, this
@@ -359,16 +374,16 @@ func (db *DB) CheckpointWithTimeout(mode CheckpointMode, dur time.Duration) (err
 	}()
 
 	if dur > 0 {
-		bt, err := db.BusyTimeout()
+		rwBt, _, err := db.BusyTimeout()
 		if err != nil {
 			return fmt.Errorf("failed to get busy_timeout on checkpointing connection: %s", err.Error())
 		}
-		if err := db.SetBusyTimeout(int(dur.Milliseconds())); err != nil {
+		if err := db.SetBusyTimeout(int(dur.Milliseconds()), -1); err != nil {
 			return fmt.Errorf("failed to set busy_timeout on checkpointing connection: %s", err.Error())
 		}
 		defer func() {
 			// Reset back to default
-			if _, err := db.rwDB.Exec(fmt.Sprintf("PRAGMA busy_timeout=%d", bt)); err != nil {
+			if err := db.SetBusyTimeout(rwBt, -1); err != nil {
 				db.logger.Printf("failed to reset busy_timeout on checkpointing connection: %s", err.Error())
 			}
 		}()
@@ -1115,6 +1130,7 @@ func (db *DB) pragmas() (map[string]interface{}, error) {
 			"journal_mode",
 			"foreign_keys",
 			"wal_autocheckpoint",
+			"busy_timeout",
 		} {
 			var s string
 			if err := v.QueryRow(fmt.Sprintf("PRAGMA %s", p)).Scan(&s); err != nil {
