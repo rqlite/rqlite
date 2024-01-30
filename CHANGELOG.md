@@ -2,6 +2,7 @@
 ### Implementation changes and bug fixes
 - [PR #1646](https://github.com/rqlite/rqlite/pull/1646): Expose BUSY TIMEOUT on /status.
 - [PR #1647](https://github.com/rqlite/rqlite/pull/1647): More CHECKPOINT test coverage.
+- [PR #1649](https://github.com/rqlite/rqlite/pull/1649): Check Leader when handling `/db/request` with _None_ read consistency. Fixes issue [#1648](https://github.com/rqlite/rqlite/issues/1648).
 
 ## 8.18.4 (January 30th 2024)
 ### Implementation changes and bug fixes
