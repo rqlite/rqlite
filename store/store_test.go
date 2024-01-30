@@ -1128,6 +1128,7 @@ func Test_SingleNodeExecuteQueryFreshness(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to wait for fsmIndex: %s", err.Error())
 	}
+
 	qr := queryRequestFromString("SELECT * FROM foo", false, false)
 	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
 	qr.Freshness = mustParseDuration("1ns").Nanoseconds()
@@ -1140,6 +1141,14 @@ func Test_SingleNodeExecuteQueryFreshness(t *testing.T) {
 	}
 	if exp, got := `[[1,"fiona"]]`, asJSON(r[0].Values); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	rr := executeQueryRequestFromString("SELECT * FROM foo", proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE,
+		false, false)
+	rr.Freshness = mustParseDuration("1ns").Nanoseconds()
+	_, err = s0.Request(rr)
+	if err != nil {
+		t.Fatalf("failed to query leader node: %s", err.Error())
 	}
 }
 
