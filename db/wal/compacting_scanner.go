@@ -1,7 +1,9 @@
 package wal
 
 import (
+	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"sort"
 )
@@ -108,6 +110,56 @@ func (c *CompactingScanner) Next() (*Frame, error) {
 	c.cIdx++
 
 	return frame, nil
+}
+
+// Bytes returns a byte slice containing the entire contents of the compacted WAL file.
+// The byte slice is suitable for writing to a new WAL file.
+func (c *CompactingScanner) Bytes() ([]byte, error) {
+	pageSz := int(c.header.PageSize)
+	buf := make([]byte, WALHeaderSize+(len(c.frames)*WALFrameHeaderSize)+len(c.frames)*pageSz)
+	c.header.Copy(buf)
+
+	var bo binary.ByteOrder
+	switch magic := c.header.Magic; magic {
+	case 0x377f0682:
+		bo = binary.LittleEndian
+	case 0x377f0683:
+		bo = binary.BigEndian
+	default:
+		return nil, fmt.Errorf("invalid wal header magic: %x", magic)
+	}
+
+	frmHdr := WALHeaderSize
+	chksum1, chksum2 := c.header.Checksum1, c.header.Checksum2
+	for _, frame := range c.frames {
+		frmData := frmHdr + WALFrameHeaderSize
+
+		binary.BigEndian.PutUint32(buf[frmHdr:], frame.Pgno)
+		binary.BigEndian.PutUint32(buf[frmHdr+4:], frame.Commit)
+		binary.BigEndian.PutUint32(buf[frmHdr+8:], c.header.Salt1)
+		binary.BigEndian.PutUint32(buf[frmHdr+12:], c.header.Salt2)
+
+		// Checksum of frame header: "...the first 8 bytes..."
+		chksum1, chksum2 = WALChecksum(bo, chksum1, chksum2, buf[frmHdr:frmHdr+8])
+
+		// Read the frame data.
+		if _, err := c.readSeeker.Seek(frame.Offset+WALFrameHeaderSize, io.SeekStart); err != nil {
+			fmt.Println("error seeking to frame offset:", err)
+			return nil, err
+		}
+		if _, err := io.ReadFull(c.readSeeker, buf[frmData:frmData+pageSz]); err != nil {
+			fmt.Println("error reading frame data:", err)
+			return nil, err
+		}
+
+		// Update checksum using frame data: "..the content of all frames up to and including the current frame."
+		chksum1, chksum2 = WALChecksum(bo, chksum1, chksum2, buf[frmData:frmData+pageSz])
+		binary.BigEndian.PutUint32(buf[frmHdr+16:], chksum1)
+		binary.BigEndian.PutUint32(buf[frmHdr+20:], chksum2)
+
+		frmHdr += WALFrameHeaderSize + pageSz
+	}
+	return buf, nil
 }
 
 func (c *CompactingScanner) scan() error {

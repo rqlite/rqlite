@@ -1949,15 +1949,14 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			if err != nil {
 				return nil, err
 			}
-			walWr, err := wal.NewWriter(scanner)
+			compactedBytes, err := scanner.Bytes()
 			if err != nil {
 				return nil, err
 			}
-			if _, err := walWr.WriteTo(compactedBuf); err != nil {
-				return nil, err
-			}
-			walFD.Close() // We need it closed for the next step.
+			walFD.Close() // We need it closed before truncating it.
+
 			stats.Get(snapshotCreateWALCompactDuration).(*expvar.Int).Set(time.Since(compactStartTime).Milliseconds())
+			compactedBuf = bytes.NewBuffer(compactedBytes)
 
 			// Now that we're written a (compacted) copy of the WAL to the Snapshot,
 			// we can truncate the WAL. We use truncate mode so that the next WAL

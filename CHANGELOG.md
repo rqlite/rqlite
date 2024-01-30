@@ -1,3 +1,7 @@
+## 8.18.4 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1644](https://github.com/rqlite/rqlite/pull/1644): Remove an unnecessary memcpy during Snapshotting.
+
 ## 8.18.3 (January 29th 2024)
 ### Implementation changes and bug fixes
 - [PR #1638](https://github.com/rqlite/rqlite/pull/1638): More Snapshotting metrics.

@@ -101,3 +101,35 @@ func Test_CompactingScanner_Scan_Commit0(t *testing.T) {
 		t.Fatalf("expected EOF, got %v", err)
 	}
 }
+
+func Test_CompactingScanner_Bytes(t *testing.T) {
+	conn, path := mustCreateWAL(t, 128*1024)
+	defer conn.Close()
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	s, err := NewCompactingScanner(bytes.NewReader(b), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var ramWriter bytes.Buffer
+	w, err := NewWriter(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = w.WriteTo(&ramWriter)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	buf, err := s.Bytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(buf, ramWriter.Bytes()) {
+		t.Fatal("bytes mismatch")
+	}
+}
