@@ -1177,7 +1177,8 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 		}
 
 		if eqr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE {
-			if eqr.Freshness > 0 && time.Since(s.raft.LastContact()).Nanoseconds() > eqr.Freshness {
+			if s.raft.State() != raft.Leader && eqr.Freshness > 0 &&
+				time.Since(s.raft.LastContact()).Nanoseconds() > eqr.Freshness {
 				return nil, ErrStaleRead
 			}
 			qr, err := s.db.Query(eqr.Request, eqr.Timings)
