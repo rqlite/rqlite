@@ -18,6 +18,22 @@ type WALHeader struct {
 	Checksum2 uint32
 }
 
+// Copy copies the WALHeader to the given byte slice. If the byte slice
+// is too small, a panic occurs.
+func (h *WALHeader) Copy(b []byte) {
+	if len(b) < WALHeaderSize {
+		panic("byte slice too small")
+	}
+	binary.BigEndian.PutUint32(b[0:], h.Magic)
+	binary.BigEndian.PutUint32(b[4:], h.Version)
+	binary.BigEndian.PutUint32(b[8:], h.PageSize)
+	binary.BigEndian.PutUint32(b[12:], h.Seq)
+	binary.BigEndian.PutUint32(b[16:], h.Salt1)
+	binary.BigEndian.PutUint32(b[20:], h.Salt2)
+	binary.BigEndian.PutUint32(b[24:], h.Checksum1)
+	binary.BigEndian.PutUint32(b[28:], h.Checksum2)
+}
+
 // Frame points to a single WAL frame in a WAL file.
 type Frame struct {
 	Pgno   uint32
