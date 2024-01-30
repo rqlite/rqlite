@@ -2,9 +2,12 @@ package db
 
 import (
 	"bytes"
+	"io"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/rqlite/rqlite/v8/db/wal"
 )
 
 // Test_WALDatabaseCheckpointOKNoWAL tests that a checkpoint succeeds
@@ -154,6 +157,27 @@ func Test_WALDatabaseCheckpoint_RestartTimeout(t *testing.T) {
 		t.Fatal("expected error due to failure to checkpoint")
 	}
 
+	// Get some information on the WAL file before the checkpoint. The goal here is
+	// to confirm that after a non-completing RESTART checkpoint, a write does
+	// not RESET the WAL file.
+	walSzPre := mustFileSize(db.WALPath())
+	hdrPre := mustGetWALHeader(db.WALPath())
+	_, err = db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("fiona")`)
+	if err != nil {
+		t.Fatalf("failed to execute INSERT on single node: %s", err.Error())
+	}
+
+	// Check that the WAL file has grown, because we want to ensure that the next write
+	// is appended to the WAL file, and doesn't overwrite the first page.
+	walSzPost := mustFileSize(db.WALPath())
+	hdrPost := mustGetWALHeader(db.WALPath())
+	if walSzPost <= walSzPre {
+		t.Fatalf("wal file should have grown after post-failed-checkpoint write")
+	}
+	if !bytes.Equal(hdrPre, hdrPost) {
+		t.Fatalf("wal file header should be unchanged after post-failed-checkpoint write")
+	}
+
 	blockingDB.Close()
 	if err := db.CheckpointWithTimeout(CheckpointRestart, 250*time.Millisecond); err != nil {
 		t.Fatalf("failed to checkpoint database: %s", err.Error())
@@ -209,6 +233,25 @@ func Test_WALDatabaseCheckpoint_TruncateTimeout(t *testing.T) {
 		t.Fatalf("wal file should be unchanged after checkpoint failure")
 	}
 
+	// Confirm that the next write to the WAL is appended to the WAL file, and doesn't
+	// overwrite the first page i.e. that the WAL is not reset.
+	hdrPre := mustGetWALHeader(db.WALPath())
+	_, err = db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("fiona")`)
+	if err != nil {
+		t.Fatalf("failed to execute INSERT on single node: %s", err.Error())
+	}
+	rows, err = db.QueryStringStmt(`SELECT COUNT(*) FROM foo`)
+	if err != nil {
+		t.Fatalf("failed to execute query on single node: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[51]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("expected %s, got %s", exp, got)
+	}
+	hdrPost := mustGetWALHeader(db.WALPath())
+	if !bytes.Equal(hdrPre, hdrPost) {
+		t.Fatalf("wal file header should be unchanged after post-failed-TRUNCATE checkpoint write")
+	}
+
 	blockingDB.Close()
 	if err := db.CheckpointWithTimeout(CheckpointTruncate, 250*time.Millisecond); err != nil {
 		t.Fatalf("failed to checkpoint database: %s", err.Error())
@@ -224,4 +267,18 @@ func mustReadBytes(path string) []byte {
 		panic(err)
 	}
 	return b
+}
+
+func mustGetWALHeader(path string) []byte {
+	fd, err := os.Open(path)
+	if err != nil {
+		panic(err)
+	}
+	defer fd.Close()
+	hdr := make([]byte, wal.WALHeaderSize)
+	_, err = io.ReadFull(fd, hdr)
+	if err != nil {
+		panic(err)
+	}
+	return hdr
 }
