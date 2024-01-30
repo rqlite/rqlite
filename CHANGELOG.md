@@ -1,4 +1,4 @@
-## 8.18.4 (unreleased)
+## 8.18.4 (January 30th 2024)
 ### Implementation changes and bug fixes
 - [PR #1644](https://github.com/rqlite/rqlite/pull/1644): Remove an unnecessary memcpy during Snapshotting.
 
