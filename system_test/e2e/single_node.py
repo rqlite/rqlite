@@ -30,8 +30,8 @@ class TestSingleNode(unittest.TestCase):
     n = self.cluster.wait_for_leader()
     ro_pragmas = n.pragmas()['ro']
     rw_pragmas = n.pragmas()['rw']
-    self.assertEqual(ro_pragmas, d_("{'foreign_keys': '0', 'journal_mode': 'wal', 'synchronous': '0', 'wal_autocheckpoint': '1000'}"))
-    self.assertEqual(rw_pragmas, d_("{'foreign_keys': '0', 'journal_mode': 'wal', 'synchronous': '0', 'wal_autocheckpoint': '0'}"))
+    self.assertEqual(ro_pragmas, d_("{'busy_timeout': '5000', 'foreign_keys': '0', 'journal_mode': 'wal', 'synchronous': '0', 'wal_autocheckpoint': '1000'}"))
+    self.assertEqual(rw_pragmas, d_("{'busy_timeout': '5000', 'foreign_keys': '0', 'journal_mode': 'wal', 'synchronous': '0', 'wal_autocheckpoint': '0'}"))
 
   def test_simple_raw_queries(self):
     '''Test simple queries work as expected'''
