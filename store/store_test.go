@@ -1146,9 +1146,12 @@ func Test_SingleNodeExecuteQueryFreshness(t *testing.T) {
 	rr := executeQueryRequestFromString("SELECT * FROM foo", proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE,
 		false, false)
 	rr.Freshness = mustParseDuration("1ns").Nanoseconds()
-	_, err = s0.Request(rr)
+	eqr, err := s0.Request(rr)
 	if err != nil {
 		t.Fatalf("failed to query leader node: %s", err.Error())
+	}
+	if exp, got := `[[1,"fiona"]]`, asJSON(eqr); exp != got {
+		t.Fatalf("unexpected results for request\nexp: %s\ngot: %s", exp, got)
 	}
 }
 
