@@ -1,6 +1,7 @@
 ## 8.18.5 (unreleased)
 ### Implementation changes and bug fixes
-- [PR #1644](https://github.com/rqlite/rqlite/pull/1644): Expose BUSY TIMEOUT on /status.
+- [PR #1646](https://github.com/rqlite/rqlite/pull/1646): Expose BUSY TIMEOUT on /status.
+- [PR #1647](https://github.com/rqlite/rqlite/pull/1647): More CHECKPOINT test coverage.
 
 ## 8.18.4 (January 30th 2024)
 ### Implementation changes and bug fixes
