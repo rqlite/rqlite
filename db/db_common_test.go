@@ -19,23 +19,23 @@ func testBusyTimeout(t *testing.T, db *DB) {
 		t.Fatalf("failed to set busy_timeout: %s", err.Error())
 	}
 
-	bt, err := db.BusyTimeout()
+	rw, _, err := db.BusyTimeout()
 	if err != nil {
 		t.Fatalf("failed to get busy_timeout: %s", err.Error())
 	}
-	if exp, got := rbt, bt; exp != got {
+	if exp, got := rbt, rw; exp != got {
 		t.Fatalf("expected busy_timeout %d, got %d", exp, got)
 	}
 
-	rbt2 := random.Intn(10000)
-	if err := db.SetBusyTimeout(rbt2); err != nil {
+	rw2 := random.Intn(10000)
+	if err := db.SetBusyTimeout(rw2, 0); err != nil {
 		t.Fatalf("failed to set busy_timeout: %s", err.Error())
 	}
-	bt, err = db.BusyTimeout()
+	rw, _, err = db.BusyTimeout()
 	if err != nil {
 		t.Fatalf("failed to get busy_timeout: %s", err.Error())
 	}
-	if exp, got := rbt2, bt; exp != got {
+	if exp, got := rw2, rw; exp != got {
 		t.Fatalf("expected busy_timeout %d, got %d", exp, got)
 	}
 }
