@@ -12,20 +12,21 @@ import (
 )
 
 func testBusyTimeout(t *testing.T, db *DB) {
-	wantTimeout := random.Intn(10000)
+	wantRw := random.Intn(10000)
+	wantRo := random.Intn(10000)
 
-	err := db.SetBusyTimeout(wantTimeout, wantTimeout)
+	err := db.SetBusyTimeout(wantRw, wantRo)
 	if err != nil {
 		t.Fatalf("failed to set busy_timeout: %s", err.Error())
 	}
 
-	gotrw, gotro, err := db.BusyTimeout()
+	gotRw, gotRo, err := db.BusyTimeout()
 	if err != nil {
 		t.Fatalf("failed to get busy_timeout: %s", err.Error())
 	}
 
-	if gotrw != wantTimeout || gotro != wantTimeout {
-		t.Fatalf("want busy_timeout=%d, got rw=%d, ro=%d", wantTimeout, gotrw, gotro)
+	if gotRw != wantRw || gotRo != wantRo {
+		t.Fatalf("want busy_timeout rw=%d, ro=%d, got rw=%d, ro=%d", wantRw, wantRo, gotRw, gotRo)
 	}
 }
 
