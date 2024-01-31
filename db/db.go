@@ -496,8 +496,13 @@ func (db *DB) WALPath() string {
 	return db.walPath
 }
 
+var compileOptions []string // Memoized compile options
+
 // CompileOptions returns the SQLite compilation options.
 func (db *DB) CompileOptions() ([]string, error) {
+	if compileOptions != nil {
+		return compileOptions, nil
+	}
 	res, err := db.QueryStringStmt("PRAGMA compile_options")
 	if err != nil {
 		return nil, err
@@ -506,14 +511,14 @@ func (db *DB) CompileOptions() ([]string, error) {
 		return nil, fmt.Errorf("compile options result wrong size (%d)", len(res))
 	}
 
-	copts := make([]string, len(res[0].Values))
-	for i := range copts {
+	compileOptions = make([]string, len(res[0].Values))
+	for i := range compileOptions {
 		if len(res[0].Values[i].Parameters) != 1 {
 			return nil, fmt.Errorf("compile options values wrong size (%d)", len(res))
 		}
-		copts[i] = res[0].Values[i].Parameters[0].GetS()
+		compileOptions[i] = res[0].Values[i].Parameters[0].GetS()
 	}
-	return copts, nil
+	return compileOptions, nil
 }
 
 // ConnectionPoolStats returns database pool statistics
