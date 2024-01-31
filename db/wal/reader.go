@@ -2,6 +2,7 @@ package wal
 
 import (
 	"encoding/binary"
+	"expvar"
 	"fmt"
 	"io"
 )
@@ -13,6 +14,28 @@ const (
 
 	WALSupportedVersion = 3007000
 )
+
+const (
+	compactScanDuration  = "compact_index_duration_ms"
+	compactLoadDuration  = "compact_load_duration_ms"
+	compactLoadPageCount = "compact_load_page_count"
+)
+
+// stats captures stats for the DB layer.
+var stats *expvar.Map
+
+func init() {
+	stats = expvar.NewMap("wal")
+	ResetStats()
+}
+
+// ResetStats resets the expvar stats for this module. Mostly for test purposes.
+func ResetStats() {
+	stats.Init()
+	stats.Add(compactScanDuration, 0)
+	stats.Add(compactLoadDuration, 0)
+	stats.Add(compactLoadPageCount, 0)
+}
 
 // Reader wraps an io.Reader and parses SQLite WAL frames.
 //

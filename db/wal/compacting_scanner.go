@@ -3,9 +3,11 @@ package wal
 import (
 	"encoding/binary"
 	"errors"
+	"expvar"
 	"fmt"
 	"io"
 	"sort"
+	"time"
 )
 
 var (
@@ -77,9 +79,11 @@ func NewCompactingScanner(r io.ReadSeeker, fullScan bool) (*CompactingScanner, e
 		header:     hdr,
 		fullScan:   fullScan,
 	}
+	startT := time.Now()
 	if err := s.scan(); err != nil {
 		return nil, err
 	}
+	stats.Get(compactScanDuration).(*expvar.Int).Set(time.Since(startT).Milliseconds())
 
 	return s, nil
 }
@@ -115,6 +119,7 @@ func (c *CompactingScanner) Next() (*Frame, error) {
 // Bytes returns a byte slice containing the entire contents of the compacted WAL file.
 // The byte slice is suitable for writing to a new WAL file.
 func (c *CompactingScanner) Bytes() ([]byte, error) {
+	startT := time.Now()
 	pageSz := int(c.header.PageSize)
 	buf := make([]byte, WALHeaderSize+(len(c.frames)*WALFrameHeaderSize)+len(c.frames)*pageSz)
 	c.header.Copy(buf)
@@ -157,6 +162,8 @@ func (c *CompactingScanner) Bytes() ([]byte, error) {
 
 		frmHdr += WALFrameHeaderSize + pageSz
 	}
+	stats.Get(compactLoadDuration).(*expvar.Int).Set(time.Since(startT).Milliseconds())
+	stats.Get(compactLoadPageCount).(*expvar.Int).Set(int64(len(c.frames)))
 	return buf, nil
 }
 

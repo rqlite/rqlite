@@ -1,3 +1,7 @@
+## 8.18.6 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1656](https://github.com/rqlite/rqlite/pull/1656): Add low-level WAL compaction timings and metrics.
+
 ## 8.18.5 (January 30th 2024)
 ### Implementation changes and bug fixes
 - [PR #1646](https://github.com/rqlite/rqlite/pull/1646): Expose BUSY TIMEOUT on /status.
