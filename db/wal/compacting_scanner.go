@@ -84,7 +84,7 @@ func NewCompactingScanner(r io.ReadSeeker, fullScan bool) (*CompactingScanner, e
 		return nil, err
 	}
 	stats.Get(compactScanDuration).(*expvar.Int).Set(time.Since(startT).Milliseconds())
-
+	stats.Get(compactLoadPageCount).(*expvar.Int).Set(int64(len(s.frames)))
 	return s, nil
 }
 
@@ -163,7 +163,6 @@ func (c *CompactingScanner) Bytes() ([]byte, error) {
 		frmHdr += WALFrameHeaderSize + pageSz
 	}
 	stats.Get(compactLoadDuration).(*expvar.Int).Set(time.Since(startT).Milliseconds())
-	stats.Get(compactLoadPageCount).(*expvar.Int).Set(int64(len(c.frames)))
 	return buf, nil
 }
 
