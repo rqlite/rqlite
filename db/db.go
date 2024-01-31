@@ -345,7 +345,7 @@ func (db *DB) BusyTimeout() (rwMs, roMs int, err error) {
 	if err != nil {
 		return 0, 0, err
 	}
-	err = db.rwDB.QueryRow("PRAGMA busy_timeout").Scan(&roMs)
+	err = db.roDB.QueryRow("PRAGMA busy_timeout").Scan(&roMs)
 	if err != nil {
 		return 0, 0, err
 	}
