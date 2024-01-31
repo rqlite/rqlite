@@ -2,7 +2,6 @@ package db
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -13,30 +12,20 @@ import (
 )
 
 func testBusyTimeout(t *testing.T, db *DB) {
-	rbt := random.Intn(10000)
-	_, err := db.ExecuteStringStmt(fmt.Sprintf("PRAGMA busy_timeout=%d", rbt))
+	wantTimeout := random.Intn(10000)
+
+	err := db.SetBusyTimeout(wantTimeout, wantTimeout)
 	if err != nil {
 		t.Fatalf("failed to set busy_timeout: %s", err.Error())
 	}
 
-	rw, _, err := db.BusyTimeout()
+	gotrw, gotro, err := db.BusyTimeout()
 	if err != nil {
 		t.Fatalf("failed to get busy_timeout: %s", err.Error())
-	}
-	if exp, got := rbt, rw; exp != got {
-		t.Fatalf("expected busy_timeout %d, got %d", exp, got)
 	}
 
-	rw2 := random.Intn(10000)
-	if err := db.SetBusyTimeout(rw2, 0); err != nil {
-		t.Fatalf("failed to set busy_timeout: %s", err.Error())
-	}
-	rw, _, err = db.BusyTimeout()
-	if err != nil {
-		t.Fatalf("failed to get busy_timeout: %s", err.Error())
-	}
-	if exp, got := rw2, rw; exp != got {
-		t.Fatalf("expected busy_timeout %d, got %d", exp, got)
+	if gotrw != wantTimeout || gotro != wantTimeout {
+		t.Fatalf("want busy_timeout=%d, got rw=%d, ro=%d", wantTimeout, gotrw, gotro)
 	}
 }
 
