@@ -28,7 +28,7 @@ func String() string {
 	return output.String()
 }
 
-// Float64 returns a random float64
+// Float64 returns a random float64 between 0 and 1.
 func Float64() float64 {
 	mu.Lock()
 	defer mu.Unlock()
