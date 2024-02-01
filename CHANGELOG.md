@@ -1,6 +1,7 @@
 ## 8.18.6 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #1656](https://github.com/rqlite/rqlite/pull/1656): Add low-level WAL compaction timings and metrics.
+- [PR #1660](https://github.com/rqlite/rqlite/pull/1660): Upgrade to SQLite 3.45.1.
 
 ## 8.18.5 (January 30th 2024)
 ### Implementation changes and bug fixes
