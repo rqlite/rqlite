@@ -31,6 +31,7 @@ import (
 	wal "github.com/rqlite/rqlite/v8/db/wal"
 	rlog "github.com/rqlite/rqlite/v8/log"
 	"github.com/rqlite/rqlite/v8/progress"
+	"github.com/rqlite/rqlite/v8/random"
 	"github.com/rqlite/rqlite/v8/snapshot"
 )
 
@@ -2179,7 +2180,7 @@ func (s *Store) runWALSnapshotting() (closeCh, doneCh chan struct{}) {
 	ticker := time.NewTicker(time.Hour) // Just need an initialized ticker to start with.
 	ticker.Stop()
 	if s.SnapshotInterval > 0 && s.SnapshotThresholdWALSize > 0 {
-		ticker.Reset(s.SnapshotInterval)
+		ticker.Reset(random.Jitter(s.SnapshotInterval))
 	}
 
 	go func() {

@@ -2,6 +2,7 @@ package random
 
 import (
 	"testing"
+	"time"
 )
 
 func Test_StringLength(t *testing.T) {
@@ -47,5 +48,14 @@ func Test_IntnUniqueness(t *testing.T) {
 			t.Errorf("Intn() returned a non-unique int: %d", n)
 		}
 		intns[n] = true
+	}
+}
+
+func Test_Jitter(t *testing.T) {
+	for n := 0; n < 100; n++ {
+		d := Jitter(100 * time.Millisecond)
+		if d < 100*time.Millisecond || d >= 200*time.Millisecond {
+			t.Errorf("Jitter(100ms) returned a duration of %s; want between 0 and 200ms", d)
+		}
 	}
 }

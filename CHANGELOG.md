@@ -3,6 +3,7 @@
 - [PR #1656](https://github.com/rqlite/rqlite/pull/1656): Add low-level WAL compaction timings and metrics.
 - [PR #1660](https://github.com/rqlite/rqlite/pull/1660): Upgrade to SQLite 3.45.1.
 - [PR #1659](https://github.com/rqlite/rqlite/pull/1659): Use `go generate` to generate Go Protobuf code. Thanks @mauri870
+- [PR #1661](https://github.com/rqlite/rqlite/pull/1661): Jitter the WAL size check interval.
 
 ## 8.18.5 (January 30th 2024)
 ### Implementation changes and bug fixes
