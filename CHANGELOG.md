@@ -1,3 +1,7 @@
+## 8.18.7 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1663](https://github.com/rqlite/rqlite/pull/1663): Remove unnecessary WAL-close during Raft snapshotting.
+
 ## 8.18.6 (January 31st 2024)
 ### Implementation changes and bug fixes
 - [PR #1656](https://github.com/rqlite/rqlite/pull/1656): Add low-level WAL compaction timings and metrics.
