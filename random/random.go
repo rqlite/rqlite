@@ -14,16 +14,15 @@ func init() {
 	r = rand.New(rand.NewSource(time.Now().UnixNano()))
 }
 
-// String returns a random string of 20 characters
+// String returns a random string, 20 characters long.
 func String() string {
 	mu.Lock()
 	defer mu.Unlock()
 	var output strings.Builder
-	chars := "abcdedfghijklmnopqrstABCDEFGHIJKLMNOP"
+	chars := "abcdedfghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 	for i := 0; i < 20; i++ {
 		random := r.Intn(len(chars))
-		randomChar := chars[random]
-		output.WriteString(string(randomChar))
+		output.WriteString(string(chars[random]))
 	}
 	return output.String()
 }
@@ -35,16 +34,16 @@ func Float64() float64 {
 	return r.Float64()
 }
 
-// Intn returns a random int
+// Intn returns a random int >=0 and < n.
 func Intn(n int) int {
 	mu.Lock()
 	defer mu.Unlock()
 	return r.Intn(n)
 }
 
-// Jitter adds a little bit of randomness to a given duration. This is
-// useful to prevent nodes across the cluster performing certain operations
-// all at the same time.
+// Jitter returns a randomly-chosen duration between d and 2d.
 func Jitter(d time.Duration) time.Duration {
-	return d + time.Duration(Float64()*float64(d))
+	mu.Lock()
+	defer mu.Unlock()
+	return d + time.Duration(r.Float64()*float64(d))
 }
