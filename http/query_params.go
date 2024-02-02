@@ -26,7 +26,7 @@ func NewQueryParams(r *http.Request) (QueryParams, error) {
 		qp[k] = v[0]
 	}
 
-	for _, k := range []string{"timeout", "freshness"} {
+	for _, k := range []string{"timeout", "freshness", "db_timeout"} {
 		t, ok := qp[k]
 		if ok {
 			_, err := time.ParseDuration(t)
@@ -123,9 +123,9 @@ func (qp QueryParams) Key() string {
 	return qp["key"]
 }
 
-// SqlTimeout returns the value of the key named "sql_timeout_seconds".
-func (qp QueryParams) SqlTimeout(def time.Duration) time.Duration {
-	t, ok := qp["sql_timeout"]
+// DBTimeout returns the value of the key named "db_timeout".
+func (qp QueryParams) DBTimeout(def time.Duration) time.Duration {
+	t, ok := qp["db_timeout"]
 	if !ok {
 		return def
 	}

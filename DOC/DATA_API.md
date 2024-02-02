@@ -200,9 +200,9 @@ curl -XPOST 'localhost:4001/db/execute?timeout=2m' -H "Content-Type: application
 ```
 
 ### SQL Query Timeout
-By default, SQL queries do not have a predefined timeout. You can set a timeout by sending a `sql_timeout` query parameter in the request. This parameter allows you to specify the maximum amount of time to spend executing the query before it is interrupted.
+By default, SQL queries do not have a predefined timeout. You can set a timeout by sending a `db_timeout` query parameter in the request. This parameter allows you to specify the maximum amount of time to spend executing the query before it is interrupted.
 ```bash
-curl -XPOST 'localhost:4001/db/execute?sql_timeout=2s' -H "Content-Type: application/json" -d '[
+curl -XPOST 'localhost:4001/db/execute?db_timeout=2s' -H "Content-Type: application/json" -d '[
     ["INSERT INTO foo(name, age) VALUES(?, ?)", "fiona", 20]
 ]'
 ```

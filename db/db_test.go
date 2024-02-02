@@ -988,7 +988,7 @@ func Test_ParallelOperationsInMemory(t *testing.T) {
 	exWg.Wait()
 }
 
-func mustSetupDbForTimeoutTests(t *testing.T, n int) (*DB, string) {
+func mustSetupDBForTimeoutTests(t *testing.T, n int) (*DB, string) {
 	db, path := mustCreateOnDiskDatabase()
 
 	req := &command.Request{
@@ -1036,7 +1036,7 @@ func mustSetupDbForTimeoutTests(t *testing.T, n int) (*DB, string) {
 }
 
 func Test_ExecShouldTimeout(t *testing.T) {
-	db, path := mustSetupDbForTimeoutTests(t, 1000)
+	db, path := mustSetupDBForTimeoutTests(t, 1000)
 	defer db.Close()
 	defer os.Remove(path)
 
@@ -1044,58 +1044,57 @@ func Test_ExecShouldTimeout(t *testing.T) {
 INSERT INTO test_table (key1, key_id, key2, key3, key4, key5, key6, data)
 SELECT t1.key1 || t2.key1, t1.key_id || t2.key_id, t1.key2 || t2.key2, t1.key3 || t2.key3, t1.key4 || t2.key4, t1.key5 || t2.key5, t1.key6 || t2.key6, t1.data || t2.data
 FROM test_table t1 LEFT OUTER JOIN test_table t2`
-	mustTimeoutExecute(db, q, 1*time.Millisecond)
+	assertExecTimeoutReached(t, db, q, 1*time.Millisecond)
 
 	qr, err := db.QueryStringStmt("SELECT COUNT(*) FROM test_table")
 	if err != nil {
-		t.Fatalf("failed to query empty table: %s", err.Error())
+		t.Fatalf("error counting rows: %s", err.Error())
 	}
-	if exp, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1000]]}]`, asJSON(qr); exp != got {
-		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	if want, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1000]]}]`, asJSON(qr); want != got {
+		t.Fatalf("want response %s, got %s", want, got)
 	}
 }
 
 func Test_QueryShouldTimeout(t *testing.T) {
-	db, path := mustSetupDbForTimeoutTests(t, 1000)
+	db, path := mustSetupDBForTimeoutTests(t, 1000)
 	defer db.Close()
 	defer os.Remove(path)
 
 	q := `SELECT key1, key_id, key2, key3, key4, key5, key6, data
 	FROM test_table
 	ORDER BY key2 ASC`
-	mustTimeoutQuery(db, q, 1*time.Microsecond)
+	assertQueryTimeoutReached(t, db, q, 1*time.Microsecond)
 }
 
-// mustTimeoutExecute executes a statement with a given timeout, and panics if the timeout is NOT reached.
-func mustTimeoutExecute(db *DB, stmt string, timeout time.Duration) {
+func assertExecTimeoutReached(t *testing.T, db *DB, stmt string, timeout time.Duration) {
 	r, err := db.ExecuteStringStmtWithTimeout(stmt, timeout)
 	if err != nil {
-		panic(fmt.Sprintf("unexpected error: %s", err.Error()))
+		t.Fatalf("failed to execute: %s", err.Error())
 	}
 
 	if len(r) != 1 {
-		panic(fmt.Sprintf("expected one result, got %d", len(r)))
+		t.Fatalf("expected one result, got %d: %s", len(r), asJSON(r))
 	}
 
 	res := r[0]
 	if !strings.Contains(res.Error, "context deadline exceeded") {
-		panic(fmt.Sprintf("expected context.DeadlineExceeded, got %s", res.Error))
+		t.Fatalf("expected context.DeadlineExceeded, got %s", res.Error)
 	}
 }
 
-func mustTimeoutQuery(db *DB, stmt string, timeout time.Duration) {
+func assertQueryTimeoutReached(t *testing.T, db *DB, stmt string, timeout time.Duration) {
 	r, err := db.QueryStringStmtWithTimeout(stmt, timeout)
 	if err != nil {
-		panic("unexpected error")
+		t.Fatalf("failed to run query: %s", err.Error())
 	}
 
 	if len(r) != 1 {
-		panic(fmt.Sprintf("expected one result, got %d", len(r)))
+		t.Fatalf("expected one result, got %d: %s", len(r), asJSON(r))
 	}
 
 	res := r[0]
 	if !strings.Contains(res.Error, "context deadline exceeded") {
-		panic(fmt.Sprintf("expected context.DeadlineExceeded, got %s", res.Error))
+		t.Fatalf("expected context.DeadlineExceeded, got %s", res.Error)
 	}
 }
 

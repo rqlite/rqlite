@@ -1316,21 +1316,21 @@ func Test_timeoutVersionPrettyQueryParam(t *testing.T) {
 	}
 }
 
-func Test_SQLTimeoutQueryParam(t *testing.T) {
+func Test_DBTimeoutQueryParam(t *testing.T) {
 	tests := []struct {
 		url  string
 		want time.Duration
 	}{
 		{
-			url:  "http://localhost:4001/execute?sql_timeout=1s",
+			url:  "http://localhost:4001/execute?db_timeout=1s",
 			want: 1 * time.Second,
 		},
 		{
-			url:  "http://localhost:4001/execute?sql_timeout=100ms",
+			url:  "http://localhost:4001/execute?db_timeout=100ms",
 			want: 100 * time.Millisecond,
 		},
 		{
-			url:  "http://localhost:4001/execute?sql_timeout=xyz",
+			url:  "http://localhost:4001/execute?db_timeout=xyz",
 			want: 0,
 		},
 	}
@@ -1346,7 +1346,7 @@ func Test_SQLTimeoutQueryParam(t *testing.T) {
 			t.Fatalf(" unexpectedly failed to parse query params on test %d: %s", i, err)
 		}
 
-		got := qp.SqlTimeout(0)
+		got := qp.DBTimeout(0)
 		if got != tt.want {
 			t.Fatalf("want %d, got %d", tt.want, got)
 		}

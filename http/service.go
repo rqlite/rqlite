@@ -1114,7 +1114,7 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request, qp QueryParams
 	er := &proto.ExecuteRequest{
 		Request: &proto.Request{
 			Transaction: qp.Tx(),
-			SqlTimeout:  int64(qp.SqlTimeout(0)),
+			DBTimeout:   int64(qp.DBTimeout(0)),
 			Statements:  stmts,
 		},
 		Timings: qp.Timings(),
@@ -1204,7 +1204,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryPa
 	qr := &proto.QueryRequest{
 		Request: &proto.Request{
 			Transaction: qp.Tx(),
-			SqlTimeout:  int64(qp.SqlTimeout(0)),
+			DBTimeout:   int64(qp.DBTimeout(0)),
 			Statements:  queries,
 		},
 		Timings:   qp.Timings(),

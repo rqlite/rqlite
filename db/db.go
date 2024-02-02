@@ -542,7 +542,7 @@ func (db *DB) ExecuteStringStmtWithTimeout(query string, timeout time.Duration) 
 				Sql: query,
 			},
 		},
-		SqlTimeout: int64(timeout),
+		DBTimeout: int64(timeout),
 	}
 	return db.Execute(r, false)
 }
@@ -619,7 +619,7 @@ func (db *DB) executeWithConn(req *command.Request, xTime bool, conn *sql.Conn) 
 			continue
 		}
 
-		result, err := db.executeStmtWithConn(stmt, xTime, execer, time.Duration(req.SqlTimeout))
+		result, err := db.executeStmtWithConn(stmt, xTime, execer, time.Duration(req.DBTimeout))
 		if err != nil {
 			if handleError(result, err) {
 				continue
@@ -702,7 +702,7 @@ func (db *DB) QueryStringStmtWithTimeout(query string, timeout time.Duration) ([
 				Sql: query,
 			},
 		},
-		SqlTimeout: int64(timeout),
+		DBTimeout: int64(timeout),
 	}
 	return db.Query(r, false)
 }
@@ -767,7 +767,7 @@ func (db *DB) queryWithConn(req *command.Request, xTime bool, conn *sql.Conn) ([
 			continue
 		}
 
-		rows, err = db.queryStmtWithConn(stmt, xTime, queryer, time.Duration(req.SqlTimeout))
+		rows, err = db.queryStmtWithConn(stmt, xTime, queryer, time.Duration(req.DBTimeout))
 		if err != nil {
 			stats.Add(numQueryErrors, 1)
 			rows = &command.QueryRows{
@@ -931,13 +931,13 @@ func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQuery
 		}
 
 		if ro {
-			rows, opErr := db.queryStmtWithConn(stmt, xTime, queryer, time.Duration(req.SqlTimeout))
+			rows, opErr := db.queryStmtWithConn(stmt, xTime, queryer, time.Duration(req.DBTimeout))
 			eqResponse = append(eqResponse, createEQQueryResponse(rows, opErr))
 			if abortOnError(opErr) {
 				break
 			}
 		} else {
-			result, opErr := db.executeStmtWithConn(stmt, xTime, execer, time.Duration(req.SqlTimeout))
+			result, opErr := db.executeStmtWithConn(stmt, xTime, execer, time.Duration(req.DBTimeout))
 			eqResponse = append(eqResponse, createEQExecuteResponse(result, opErr))
 			if abortOnError(opErr) {
 				break
