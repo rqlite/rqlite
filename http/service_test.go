@@ -1318,38 +1318,52 @@ func Test_timeoutVersionPrettyQueryParam(t *testing.T) {
 
 func Test_DBTimeoutQueryParam(t *testing.T) {
 	tests := []struct {
-		url  string
-		want time.Duration
+		name    string
+		url     string
+		want    time.Duration
+		wantErr bool
 	}{
 		{
+			name: "1s",
 			url:  "http://localhost:4001/execute?db_timeout=1s",
 			want: 1 * time.Second,
 		},
 		{
+			name: "100ms",
 			url:  "http://localhost:4001/execute?db_timeout=100ms",
 			want: 100 * time.Millisecond,
 		},
 		{
-			url:  "http://localhost:4001/execute?db_timeout=xyz",
+			name: "default value",
+			url:  "http://localhost:4001/execute",
 			want: 0,
+		},
+		{
+			name:    "parse error",
+			url:     "http://localhost:4001/execute?db_timeout=xyz",
+			wantErr: true,
 		},
 	}
 
-	for i, tt := range tests {
-		mustURLParse(tt.url)
-		req, err := http.NewRequest("GET", tt.url, nil)
-		if err != nil {
-			t.Fatalf("failed to create request: %s", err)
-		}
-		qp, err := NewQueryParams(req)
-		if err != nil {
-			t.Fatalf(" unexpectedly failed to parse query params on test %d: %s", i, err)
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mustURLParse(tt.url)
+			req, err := http.NewRequest("GET", tt.url, nil)
+			if err != nil {
+				t.Fatalf("failed to create request: %s", err)
+			}
+			qp, err := NewQueryParams(req)
+			if err != nil {
+				if !tt.wantErr {
+					t.Fatalf("failed to create request: %s", err)
+				}
+			}
 
-		got := qp.DBTimeout(0)
-		if got != tt.want {
-			t.Fatalf("want %d, got %d", tt.want, got)
-		}
+			got := qp.DBTimeout(0)
+			if got != tt.want {
+				t.Fatalf("want %d, got %d", tt.want, got)
+			}
+		})
 	}
 }
 
