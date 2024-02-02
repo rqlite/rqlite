@@ -1,4 +1,4 @@
-## 8.18.7 (unreleased)
+## 8.18.7 (February 1st 2024)
 ### Implementation changes and bug fixes
 - [PR #1663](https://github.com/rqlite/rqlite/pull/1663): Remove unnecessary WAL-close during Raft snapshotting.
 
