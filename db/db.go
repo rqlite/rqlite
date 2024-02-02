@@ -24,7 +24,6 @@ import (
 const (
 	SQLiteHeaderSize = 32
 	bkDelay          = 250
-	sizeAtOpenWarn   = 1024 * 1024 * 1024
 	durToOpenLog     = 2 * time.Second
 )
 
@@ -142,10 +141,6 @@ func Open(dbPath string, fkEnabled, wal bool) (retDB *DB, retErr error) {
 		}
 		stats.Get(openDuration).(*expvar.Int).Set(time.Since(startTime).Milliseconds())
 	}()
-
-	if sz, err := fileSize(dbPath); err == nil && sz > sizeAtOpenWarn {
-		logger.Printf("database file is %s, SQLite may take longer to open it", humanize.Bytes(uint64(sz)))
-	}
 
 	/////////////////////////////////////////////////////////////////////////
 	// Main RW connection
