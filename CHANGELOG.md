@@ -1,3 +1,7 @@
+## 8.18.8 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1665](https://github.com/rqlite/rqlite/pull/1665): Minor improvements to `random` module.
+
 ## 8.18.7 (February 1st 2024)
 ### Implementation changes and bug fixes
 - [PR #1663](https://github.com/rqlite/rqlite/pull/1663): Remove unnecessary WAL-close during Raft snapshotting.

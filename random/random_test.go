@@ -7,13 +7,13 @@ import (
 
 func Test_StringLength(t *testing.T) {
 	str := String()
-	if len(str) != 20 {
-		t.Errorf("String() returned a string of length %d; want 20", len(str))
+	if exp, got := 20, len(str); exp != got {
+		t.Errorf("String() returned a string of length %d; want %d", got, exp)
 	}
 }
 
 func Test_StringUniqueness(t *testing.T) {
-	const numStrings = 10
+	const numStrings = 100
 	strs := make(map[string]bool, numStrings)
 
 	for i := 0; i < numStrings; i++ {
@@ -26,7 +26,7 @@ func Test_StringUniqueness(t *testing.T) {
 }
 
 func Test_Float64Uniqueness(t *testing.T) {
-	const numFloat64s = 10
+	const numFloat64s = 100
 	floats := make(map[float64]bool, numFloat64s)
 
 	for i := 0; i < numFloat64s; i++ {
@@ -39,7 +39,7 @@ func Test_Float64Uniqueness(t *testing.T) {
 }
 
 func Test_IntnUniqueness(t *testing.T) {
-	const numIntns = 10
+	const numIntns = 100
 	intns := make(map[int]bool, numIntns)
 
 	for i := 0; i < numIntns; i++ {
@@ -53,9 +53,12 @@ func Test_IntnUniqueness(t *testing.T) {
 
 func Test_Jitter(t *testing.T) {
 	for n := 0; n < 100; n++ {
-		d := Jitter(100 * time.Millisecond)
-		if d < 100*time.Millisecond || d >= 200*time.Millisecond {
-			t.Errorf("Jitter(100ms) returned a duration of %s; want between 0 and 200ms", d)
+		dur := 100 * time.Millisecond
+		lower := dur
+		upper := 2 * dur
+		if got := Jitter(dur); got < lower || got >= upper {
+			t.Errorf("Jitter(%s) returned a duration of %s; want between %s and %s",
+				dur, got, lower, upper)
 		}
 	}
 }
