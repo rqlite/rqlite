@@ -199,14 +199,6 @@ curl -XPOST 'localhost:4001/db/execute?timeout=2m' -H "Content-Type: application
 ]'
 ```
 
-### SQL Query Timeout
-By default, SQL queries do not have a predefined timeout. You can set a timeout by sending a `db_timeout` query parameter in the request. This parameter allows you to specify the maximum amount of time to spend executing the query before it is interrupted.
-```bash
-curl -XPOST 'localhost:4001/db/execute?db_timeout=2s' -H "Content-Type: application/json" -d '[
-    ["INSERT INTO foo(name, age) VALUES(?, ?)", "fiona", 20]
-]'
-```
-
 ### Disabling Request Forwarding
 If you do not wish a Follower to transparently forward a request to a Leader, add `redirect` to the URL as a query parameter. In that case if a Follower receives a request that can only be serviced by the Leader, the Follower will respond with [HTTP 301 Moved Permanently](https://en.wikipedia.org/wiki/HTTP_301) and include the address of the Leader as the `Location` header in the response. It is then up the clients to re-issue the command to the Leader.
 
