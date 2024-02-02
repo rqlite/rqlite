@@ -123,6 +123,16 @@ func (qp QueryParams) Key() string {
 	return qp["key"]
 }
 
+// SqlTimeout returns the value of the key named "sql_timeout_seconds".
+func (qp QueryParams) SqlTimeout(def time.Duration) time.Duration {
+	t, ok := qp["sql_timeout"]
+	if !ok {
+		return def
+	}
+	d, _ := time.ParseDuration(t)
+	return d
+}
+
 // Level returns the requested consistency level.
 func (qp QueryParams) Level() command.QueryRequest_Level {
 	lvl := qp["level"]

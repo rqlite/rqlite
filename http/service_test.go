@@ -1316,6 +1316,43 @@ func Test_timeoutVersionPrettyQueryParam(t *testing.T) {
 	}
 }
 
+func Test_SQLTimeoutQueryParam(t *testing.T) {
+	tests := []struct {
+		url  string
+		want time.Duration
+	}{
+		{
+			url:  "http://localhost:4001/execute?sql_timeout=1s",
+			want: 1 * time.Second,
+		},
+		{
+			url:  "http://localhost:4001/execute?sql_timeout=100ms",
+			want: 100 * time.Millisecond,
+		},
+		{
+			url:  "http://localhost:4001/execute?sql_timeout=xyz",
+			want: 0,
+		},
+	}
+
+	for i, tt := range tests {
+		mustURLParse(tt.url)
+		req, err := http.NewRequest("GET", tt.url, nil)
+		if err != nil {
+			t.Fatalf("failed to create request: %s", err)
+		}
+		qp, err := NewQueryParams(req)
+		if err != nil {
+			t.Fatalf(" unexpectedly failed to parse query params on test %d: %s", i, err)
+		}
+
+		got := qp.SqlTimeout(0)
+		if got != tt.want {
+			t.Fatalf("want %d, got %d", tt.want, got)
+		}
+	}
+}
+
 type MockStore struct {
 	executeFn  func(er *command.ExecuteRequest) ([]*command.ExecuteResult, error)
 	queryFn    func(qr *command.QueryRequest) ([]*command.QueryRows, error)

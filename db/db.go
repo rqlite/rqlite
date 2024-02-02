@@ -533,6 +533,20 @@ func (db *DB) ConnectionPoolStats(sqlDB *sql.DB) *PoolStats {
 
 }
 
+// ExecuteStringStmtWithTimeout executes a single query that modifies the database.
+// It also sets a timeout for the query. This is primarily a convenience function.
+func (db *DB) ExecuteStringStmtWithTimeout(query string, timeout time.Duration) ([]*command.ExecuteResult, error) {
+	r := &command.Request{
+		Statements: []*command.Statement{
+			{
+				Sql: query,
+			},
+		},
+		SqlTimeout: int64(timeout),
+	}
+	return db.Execute(r, false)
+}
+
 // ExecuteStringStmt executes a single query that modifies the database. This is
 // primarily a convenience function.
 func (db *DB) ExecuteStringStmt(query string) ([]*command.ExecuteResult, error) {
@@ -605,7 +619,7 @@ func (db *DB) executeWithConn(req *command.Request, xTime bool, conn *sql.Conn) 
 			continue
 		}
 
-		result, err := db.executeStmtWithConn(stmt, xTime, execer)
+		result, err := db.executeStmtWithConn(stmt, xTime, execer, time.Duration(req.SqlTimeout))
 		if err != nil {
 			if handleError(result, err) {
 				continue
@@ -621,7 +635,7 @@ func (db *DB) executeWithConn(req *command.Request, xTime bool, conn *sql.Conn) 
 	return allResults, err
 }
 
-func (db *DB) executeStmtWithConn(stmt *command.Statement, xTime bool, e execer) (*command.ExecuteResult, error) {
+func (db *DB) executeStmtWithConn(stmt *command.Statement, xTime bool, e execer, timeout time.Duration) (*command.ExecuteResult, error) {
 	result := &command.ExecuteResult{}
 	start := time.Now()
 
@@ -631,7 +645,14 @@ func (db *DB) executeStmtWithConn(stmt *command.Statement, xTime bool, e execer)
 		return result, nil
 	}
 
-	r, err := e.ExecContext(context.Background(), stmt.Sql, parameters...)
+	ctx := context.Background()
+	if timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
+	}
+
+	r, err := e.ExecContext(ctx, stmt.Sql, parameters...)
 	if err != nil {
 		result.Error = err.Error()
 		return result, err
@@ -668,6 +689,20 @@ func (db *DB) QueryStringStmt(query string) ([]*command.QueryRows, error) {
 				Sql: query,
 			},
 		},
+	}
+	return db.Query(r, false)
+}
+
+// QueryStringStmtWithTimeout executes a single query that return rows, but don't modify database.
+// It also sets a timeout for the query.
+func (db *DB) QueryStringStmtWithTimeout(query string, timeout time.Duration) ([]*command.QueryRows, error) {
+	r := &command.Request{
+		Statements: []*command.Statement{
+			{
+				Sql: query,
+			},
+		},
+		SqlTimeout: int64(timeout),
 	}
 	return db.Query(r, false)
 }
@@ -732,7 +767,7 @@ func (db *DB) queryWithConn(req *command.Request, xTime bool, conn *sql.Conn) ([
 			continue
 		}
 
-		rows, err = db.queryStmtWithConn(stmt, xTime, queryer)
+		rows, err = db.queryStmtWithConn(stmt, xTime, queryer, time.Duration(req.SqlTimeout))
 		if err != nil {
 			stats.Add(numQueryErrors, 1)
 			rows = &command.QueryRows{
@@ -748,7 +783,7 @@ func (db *DB) queryWithConn(req *command.Request, xTime bool, conn *sql.Conn) ([
 	return allRows, err
 }
 
-func (db *DB) queryStmtWithConn(stmt *command.Statement, xTime bool, q queryer) (*command.QueryRows, error) {
+func (db *DB) queryStmtWithConn(stmt *command.Statement, xTime bool, q queryer, timeout time.Duration) (*command.QueryRows, error) {
 	rows := &command.QueryRows{}
 	start := time.Now()
 
@@ -759,7 +794,14 @@ func (db *DB) queryStmtWithConn(stmt *command.Statement, xTime bool, q queryer) 
 		return rows, nil
 	}
 
-	rs, err := q.QueryContext(context.Background(), stmt.Sql, parameters...)
+	ctx := context.Background()
+	if timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
+	}
+
+	rs, err := q.QueryContext(ctx, stmt.Sql, parameters...)
 	if err != nil {
 		stats.Add(numQueryErrors, 1)
 		rows.Error = err.Error()
@@ -889,13 +931,13 @@ func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQuery
 		}
 
 		if ro {
-			rows, opErr := db.queryStmtWithConn(stmt, xTime, queryer)
+			rows, opErr := db.queryStmtWithConn(stmt, xTime, queryer, time.Duration(req.SqlTimeout))
 			eqResponse = append(eqResponse, createEQQueryResponse(rows, opErr))
 			if abortOnError(opErr) {
 				break
 			}
 		} else {
-			result, opErr := db.executeStmtWithConn(stmt, xTime, execer)
+			result, opErr := db.executeStmtWithConn(stmt, xTime, execer, time.Duration(req.SqlTimeout))
 			eqResponse = append(eqResponse, createEQExecuteResponse(result, opErr))
 			if abortOnError(opErr) {
 				break
