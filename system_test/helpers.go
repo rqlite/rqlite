@@ -37,6 +37,8 @@ const (
 	// ElectionTimeout is the period between elections. It's longer than
 	// the default to allow for slow CI systems.
 	ElectionTimeout = 2 * time.Second
+
+	NoQueryTimeout = 0
 )
 
 var (
@@ -132,17 +134,22 @@ func (n *Node) ExecuteQueuedMulti(stmts []string, wait bool) (string, error) {
 
 // Query runs a single query against the node.
 func (n *Node) Query(stmt string) (string, error) {
-	return n.query(stmt, "weak")
+	return n.query(stmt, "weak", NoQueryTimeout)
+}
+
+// QueryWithTimeout runs a single query against the node, with a timeout.
+func (n *Node) QueryWithTimeout(stmt string, timeout time.Duration) (string, error) {
+	return n.query(stmt, "weak", timeout)
 }
 
 // QueryNoneConsistency runs a single query against the node, with no read consistency.
 func (n *Node) QueryNoneConsistency(stmt string) (string, error) {
-	return n.query(stmt, "none")
+	return n.query(stmt, "none", NoQueryTimeout)
 }
 
 // QueryStrongConsistency runs a single query against the node, with Strong read consistency.
 func (n *Node) QueryStrongConsistency(stmt string) (string, error) {
-	return n.query(stmt, "strong")
+	return n.query(stmt, "strong", NoQueryTimeout)
 }
 
 // QueryMulti runs multiple queries against the node.
@@ -444,11 +451,12 @@ func (n *Node) postExecuteQueued(stmt string, wait bool) (string, error) {
 	return string(body), nil
 }
 
-func (n *Node) query(stmt, consistency string) (string, error) {
+func (n *Node) query(stmt, consistency string, timeout time.Duration) (string, error) {
 	v, _ := url.Parse("http://" + n.APIAddr + "/db/query")
 	v.RawQuery = url.Values{
-		"q":     []string{stmt},
-		"level": []string{consistency},
+		"q":          []string{stmt},
+		"level":      []string{consistency},
+		"db_timeout": []string{timeout.String()},
 	}.Encode()
 
 	resp, err := http.Get(v.String())
