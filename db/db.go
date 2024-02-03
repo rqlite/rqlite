@@ -818,6 +818,7 @@ func (db *DB) queryStmtWithConn(ctx context.Context, stmt *command.Statement, xT
 	rs, err := q.QueryContext(ctx, stmt.Sql, parameters...)
 	if err != nil {
 		stats.Add(numQueryErrors, 1)
+		err = rewriteContextTimeout(err, ErrQueryTimeout)
 		rows.Error = err.Error()
 		return rows, nil
 	}
