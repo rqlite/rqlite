@@ -23,7 +23,7 @@ message Statement {
 message Request {
 	bool transaction = 1;
 	repeated Statement statements = 2;
-	int64 DBTimeout = 3;
+	int64 dbTimeout = 3;
 }
 
 message QueryRequest {
