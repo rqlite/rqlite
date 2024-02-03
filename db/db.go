@@ -820,7 +820,7 @@ func (db *DB) queryStmtWithConn(ctx context.Context, stmt *command.Statement, xT
 		stats.Add(numQueryErrors, 1)
 		err = rewriteContextTimeout(err, ErrQueryTimeout)
 		rows.Error = err.Error()
-		return rows, nil
+		return rows, err
 	}
 	defer rs.Close()
 
