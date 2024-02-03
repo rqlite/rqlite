@@ -540,7 +540,7 @@ func Test_SingleNodeQueryTimeout(t *testing.T) {
 	}
 
 	// Bulk insert rows (for speed and to avoid snapshotting)
-	sqls := make([]string, 1000)
+	sqls := make([]string, 5000)
 	for i := 0; i < cap(sqls); i++ {
 		args := []any{
 			random.String(),
