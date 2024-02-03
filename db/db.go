@@ -48,6 +48,9 @@ var (
 	// ErrWALReplayDirectoryMismatch is returned when the WAL file(s) are not in the same
 	// directory as the database file.
 	ErrWALReplayDirectoryMismatch = errors.New("WAL file(s) not in same directory as database file")
+
+	// ErrQueryTimeout is returned when a query times out.
+	ErrQueryTimeout = errors.New("query timeout")
 )
 
 // CheckpointMode is the mode in which a checkpoint runs.
@@ -859,7 +862,7 @@ func (db *DB) queryStmtWithConn(ctx context.Context, stmt *command.Statement, xT
 	// Check for errors from iterating over rows.
 	if err := rs.Err(); err != nil {
 		stats.Add(numQueryErrors, 1)
-		rows.Error = err.Error()
+		rows.Error = rewriteContextTimeout(err).Error()
 		return rows, nil
 	}
 
@@ -1511,4 +1514,11 @@ func lastModified(path string) (t time.Time, retError error) {
 		return time.Time{}, err
 	}
 	return info.ModTime(), nil
+}
+
+func rewriteContextTimeout(err error) error {
+	if err == context.DeadlineExceeded {
+		return ErrQueryTimeout
+	}
+	return err
 }

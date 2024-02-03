@@ -1085,8 +1085,8 @@ func Test_QueryShouldTimeout(t *testing.T) {
 		t.Fatalf("expected one result, got %d: %s", len(r), asJSON(r))
 	}
 	res := r[0]
-	if !strings.Contains(res.Error, "context deadline exceeded") {
-		t.Fatalf("expected context.DeadlineExceeded, got %s", res.Error)
+	if !strings.Contains(res.Error, "query timeout") {
+		t.Fatalf("expected query timeout, got %s", res.Error)
 	}
 
 	// ... and with tx
@@ -1101,8 +1101,8 @@ func Test_QueryShouldTimeout(t *testing.T) {
 			t.Fatalf("expected one result, got %d: %s", len(r), asJSON(r))
 		}
 		res = r[0]
-		if !strings.Contains(res.Error, "context deadline exceeded") {
-			t.Fatalf("expected context.DeadlineExceeded, got %s", res.Error)
+		if !strings.Contains(res.Error, "query timeout") {
+			t.Fatalf("expected query timeout, got %s", res.Error)
 		}
 	}
 }
