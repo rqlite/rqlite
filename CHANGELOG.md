@@ -1,4 +1,5 @@
 ## 8.19.0 (February 3rd 2024)
+This release allows you to set a maximum amount of a time a query will run. If the query does not complete with the set time, an error will be returned.
 ### New features
 - [PR #1666](https://github.com/rqlite/rqlite/pull/1667), [PR #1667](https://github.com/rqlite/rqlite/pull/1667), [PR #1669](https://github.com/rqlite/rqlite/pull/1669): Support timing out if query doesn't finish within specified interval. Fixes issue [#1657](https://github.com/rqlite/rqlite/issues/1657). Thanks @mauri870
 
