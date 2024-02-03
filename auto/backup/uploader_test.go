@@ -134,6 +134,11 @@ func Test_UploaderFailThenOK(t *testing.T) {
 	wg.Add(2)
 	sc := &mockStorageClient{
 		uploadFn: func(ctx context.Context, reader io.Reader, id string) error {
+			if uploadCount == 2 {
+				// uploadFn can be called a third time before the cancel kicks in.
+				// This would push waitGroup into negative numbers and panic.
+				return nil
+			}
 			defer wg.Done()
 			if uploadCount == 0 {
 				uploadCount++
@@ -175,6 +180,11 @@ func Test_UploaderOKThenFail(t *testing.T) {
 	wg.Add(2)
 	sc := &mockStorageClient{
 		uploadFn: func(ctx context.Context, reader io.Reader, id string) error {
+			if uploadCount == 2 {
+				// uploadFn can be called a third time before the cancel kicks in.
+				// This would push waitGroup into negative numbers and panic.
+				return nil
+			}
 			defer wg.Done()
 
 			if uploadCount == 1 {
