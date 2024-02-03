@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/rqlite/rqlite/v8/command/encoding"
 	command "github.com/rqlite/rqlite/v8/command/proto"
+	"github.com/rqlite/rqlite/v8/random"
 )
 
 // Test_OpenNonExistentDatabase tests that opening a non-existent database
@@ -984,6 +986,116 @@ func Test_ParallelOperationsInMemory(t *testing.T) {
 
 	close(done)
 	exWg.Wait()
+}
+
+func mustSetupDBForTimeoutTests(t *testing.T, n int) (*DB, string) {
+	db, path := mustCreateOnDiskDatabase()
+
+	req := &command.Request{
+		Statements: []*command.Statement{
+			{
+				Sql: `CREATE TABLE IF NOT EXISTS test_table (
+					key1      VARCHAR(64) PRIMARY KEY,
+					key_id    VARCHAR(64) NOT NULL,
+					key2      VARCHAR(64) NOT NULL,
+					key3      VARCHAR(64) NOT NULL,
+					key4      VARCHAR(64) NOT NULL,
+					key5      VARCHAR(64) NOT NULL,
+					key6      VARCHAR(64) NOT NULL,
+					data      BLOB        NOT NULL
+				);`,
+			},
+		},
+	}
+
+	for i := 0; i < n; i++ {
+		args := []any{
+			random.String(),
+			fmt.Sprint(i),
+			random.String(),
+			random.String(),
+			random.String(),
+			random.String(),
+			random.String(),
+			random.String(),
+		}
+		req.Statements = append(req.Statements, &command.Statement{
+			Sql: fmt.Sprintf(`INSERT INTO test_table
+			(key1, key_id, key2, key3, key4, key5, key6, data)
+			VALUES
+			(%q, %q, %q, %q, %q, %q, %q, %q);`, args...),
+		})
+	}
+
+	_, err := db.Execute(req, false)
+	if err != nil {
+		t.Fatalf("failed to insert records: %s", err.Error())
+	}
+
+	return db, path
+}
+
+func Test_ExecShouldTimeout(t *testing.T) {
+	db, path := mustSetupDBForTimeoutTests(t, 1000)
+	defer db.Close()
+	defer os.Remove(path)
+
+	q := `
+INSERT INTO test_table (key1, key_id, key2, key3, key4, key5, key6, data)
+SELECT t1.key1 || t2.key1, t1.key_id || t2.key_id, t1.key2 || t2.key2, t1.key3 || t2.key3, t1.key4 || t2.key4, t1.key5 || t2.key5, t1.key6 || t2.key6, t1.data || t2.data
+FROM test_table t1 LEFT OUTER JOIN test_table t2`
+	assertExecTimeoutReached(t, db, q, 1*time.Millisecond)
+
+	qr, err := db.QueryStringStmt("SELECT COUNT(*) FROM test_table")
+	if err != nil {
+		t.Fatalf("error counting rows: %s", err.Error())
+	}
+	if want, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1000]]}]`, asJSON(qr); want != got {
+		t.Fatalf("want response %s, got %s", want, got)
+	}
+}
+
+func Test_QueryShouldTimeout(t *testing.T) {
+	db, path := mustSetupDBForTimeoutTests(t, 1000)
+	defer db.Close()
+	defer os.Remove(path)
+
+	q := `SELECT key1, key_id, key2, key3, key4, key5, key6, data
+	FROM test_table
+	ORDER BY key2 ASC`
+	assertQueryTimeoutReached(t, db, q, 1*time.Microsecond)
+}
+
+func assertExecTimeoutReached(t *testing.T, db *DB, stmt string, timeout time.Duration) {
+	r, err := db.ExecuteStringStmtWithTimeout(stmt, timeout)
+	if err != nil {
+		t.Fatalf("failed to execute: %s", err.Error())
+	}
+
+	if len(r) != 1 {
+		t.Fatalf("expected one result, got %d: %s", len(r), asJSON(r))
+	}
+
+	res := r[0]
+	if !strings.Contains(res.Error, "context deadline exceeded") {
+		t.Fatalf("expected context.DeadlineExceeded, got %s", res.Error)
+	}
+}
+
+func assertQueryTimeoutReached(t *testing.T, db *DB, stmt string, timeout time.Duration) {
+	r, err := db.QueryStringStmtWithTimeout(stmt, timeout)
+	if err != nil {
+		t.Fatalf("failed to run query: %s", err.Error())
+	}
+
+	if len(r) != 1 {
+		t.Fatalf("expected one result, got %d: %s", len(r), asJSON(r))
+	}
+
+	res := r[0]
+	if !strings.Contains(res.Error, "context deadline exceeded") {
+		t.Fatalf("expected context.DeadlineExceeded, got %s", res.Error)
+	}
 }
 
 func mustCreateOnDiskDatabase() (*DB, string) {
