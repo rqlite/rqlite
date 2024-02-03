@@ -1044,7 +1044,7 @@ func Test_ExecShouldTimeout(t *testing.T) {
 INSERT INTO test_table (key1, key_id, key2, key3, key4, key5, key6, data)
 SELECT t1.key1 || t2.key1, t1.key_id || t2.key_id, t1.key2 || t2.key2, t1.key3 || t2.key3, t1.key4 || t2.key4, t1.key5 || t2.key5, t1.key6 || t2.key6, t1.data || t2.data
 FROM test_table t1 LEFT OUTER JOIN test_table t2`
-	r, err := db.ExecuteStringStmtWithTimeout(q, 1*time.Millisecond)
+	r, err := db.ExecuteStringStmtWithTimeout(q, 1*time.Microsecond)
 	if err != nil {
 		t.Fatalf("failed to execute: %s", err.Error())
 	}
