@@ -846,6 +846,7 @@ func (db *DB) queryStmtWithConn(ctx context.Context, stmt *command.Statement, xT
 			ptrs[i] = &dest[i]
 		}
 		if err := rs.Scan(ptrs...); err != nil {
+			err = rewriteContextTimeout(err, ErrQueryTimeout)
 			return nil, err
 		}
 		params, err := normalizeRowValues(dest, xTypes)
