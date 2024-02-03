@@ -51,6 +51,9 @@ var (
 
 	// ErrQueryTimeout is returned when a query times out.
 	ErrQueryTimeout = errors.New("query timeout")
+
+	// ErrExecuteTimeout is returned when an execute times out.
+	ErrExecuteTimeout = errors.New("execute timeout")
 )
 
 // CheckpointMode is the mode in which a checkpoint runs.
@@ -663,6 +666,7 @@ func (db *DB) executeStmtWithConn(ctx context.Context, stmt *command.Statement, 
 
 	r, err := e.ExecContext(ctx, stmt.Sql, parameters...)
 	if err != nil {
+		err = rewriteContextTimeout(err, ErrExecuteTimeout)
 		result.Error = err.Error()
 		return result, err
 	}
@@ -862,7 +866,7 @@ func (db *DB) queryStmtWithConn(ctx context.Context, stmt *command.Statement, xT
 	// Check for errors from iterating over rows.
 	if err := rs.Err(); err != nil {
 		stats.Add(numQueryErrors, 1)
-		rows.Error = rewriteContextTimeout(err).Error()
+		rows.Error = rewriteContextTimeout(err, ErrQueryTimeout).Error()
 		return rows, nil
 	}
 
@@ -1516,9 +1520,9 @@ func lastModified(path string) (t time.Time, retError error) {
 	return info.ModTime(), nil
 }
 
-func rewriteContextTimeout(err error) error {
+func rewriteContextTimeout(err, retErr error) error {
 	if err == context.DeadlineExceeded {
-		return ErrQueryTimeout
+		return retErr
 	}
 	return err
 }

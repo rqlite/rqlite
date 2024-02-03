@@ -1054,8 +1054,8 @@ FROM test_table t1 LEFT OUTER JOIN test_table t2`
 	}
 
 	res := r[0]
-	if !strings.Contains(res.Error, "context deadline exceeded") {
-		t.Fatalf("expected context.DeadlineExceeded, got %s", res.Error)
+	if !strings.Contains(res.Error, ErrExecuteTimeout.Error()) {
+		t.Fatalf("expected execute timeout, got %s", res.Error)
 	}
 
 	qr, err := db.QueryStringStmt("SELECT COUNT(*) FROM test_table")
@@ -1125,7 +1125,7 @@ func Test_RequestShouldTimeout(t *testing.T) {
 	}
 
 	r := res[0]
-	if !strings.Contains(r.GetQ().Error, "context deadline exceeded") {
+	if !strings.Contains(r.GetQ().Error, ErrQueryTimeout.Error()) {
 		t.Fatalf("expected context.DeadlineExceeded, got %s", r.GetQ().Error)
 	}
 }
