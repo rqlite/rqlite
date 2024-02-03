@@ -876,6 +876,18 @@ func (db *DB) RequestStringStmts(stmts []string) ([]*command.ExecuteQueryRespons
 	return db.Request(req, false)
 }
 
+// RequestStringStmtsWithTimeout processes a request that can contain both executes and queries.
+func (db *DB) RequestStringStmtsWithTimeout(stmts []string, timeout time.Duration) ([]*command.ExecuteQueryResponse, error) {
+	req := &command.Request{}
+	for _, q := range stmts {
+		req.Statements = append(req.Statements, &command.Statement{
+			Sql: q,
+		})
+	}
+	req.DbTimeout = int64(timeout)
+	return db.Request(req, false)
+}
+
 // Request processes a request that can contain both executes and queries.
 func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQueryResponse, error) {
 	stats.Add(numRequests, int64(len(req.Statements)))

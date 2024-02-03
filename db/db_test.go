@@ -1090,28 +1090,28 @@ func Test_QueryShouldTimeout(t *testing.T) {
 	}
 }
 
-// func Test_RequestShouldTimeout(t *testing.T) {
-// 	db, path := mustSetupDBForTimeoutTests(t, 1000)
-// 	defer db.Close()
-// 	defer os.Remove(path)
+func Test_RequestShouldTimeout(t *testing.T) {
+	db, path := mustSetupDBForTimeoutTests(t, 1000)
+	defer db.Close()
+	defer os.Remove(path)
 
-// 	q := `SELECT key1, key_id, key2, key3, key4, key5, key6, data
-// 	FROM test_table
-// 	ORDER BY key2 ASC`
-// 	r, err := db.QueryStringStmtWithTimeout(q, 1*time.Microsecond)
-// 	if err != nil {
-// 		t.Fatalf("failed to run query: %s", err.Error())
-// 	}
+	q := `SELECT key1, key_id, key2, key3, key4, key5, key6, data
+	FROM test_table
+	ORDER BY key2 ASC`
+	res, err := db.RequestStringStmtsWithTimeout([]string{q}, 1*time.Microsecond)
+	if err != nil {
+		t.Fatalf("failed to run query: %s", err.Error())
+	}
 
-// 	if len(r) != 1 {
-// 		t.Fatalf("expected one result, got %d: %s", len(r), asJSON(r))
-// 	}
+	if len(res) != 1 {
+		t.Fatalf("expected one result, got %d: %s", len(res), asJSON(res))
+	}
 
-// 	res := r[0]
-// 	if !strings.Contains(res.Error, "context deadline exceeded") {
-// 		t.Fatalf("expected context.DeadlineExceeded, got %s", res.Error)
-// 	}
-// }
+	r := res[0]
+	if !strings.Contains(r.GetQ().Error, "context deadline exceeded") {
+		t.Fatalf("expected context.DeadlineExceeded, got %s", r.GetQ().Error)
+	}
+}
 
 func mustCreateOnDiskDatabase() (*DB, string) {
 	var err error
