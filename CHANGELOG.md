@@ -1,6 +1,6 @@
 ## 8.19.0 (unreleased)
 ### New features
-- [PR #1666](https://github.com/rqlite/rqlite/pull/1666): Support timing out if query doesn't finish within specified interval. Fixes issue [#1657](https://github.com/rqlite/rqlite/issues/1657). Thanks @mauri870
+- [PR #1666](https://github.com/rqlite/rqlite/pull/1667), [PR #1667](https://github.com/rqlite/rqlite/pull/1667): Support timing out if query doesn't finish within specified interval. Fixes issue [#1657](https://github.com/rqlite/rqlite/issues/1657). Thanks @mauri870
 
 ### Implementation changes and bug fixes
 - [PR #1665](https://github.com/rqlite/rqlite/pull/1665): Minor improvements to `random` module.
