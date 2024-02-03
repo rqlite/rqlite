@@ -577,7 +577,7 @@ func Test_SingleNodeQueryTimeout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query with timeout: %s", err.Error())
 	}
-	if exp, got := `{"results":[{"error":"context deadline exceeded"}]}`, r; exp != got {
+	if exp, got := `{"results":[{"error":"query timeout"}]}`, r; exp != got {
 		t.Fatalf("test received wrong result\nexp: %s\ngot: %s\n", exp, got)
 	}
 }
