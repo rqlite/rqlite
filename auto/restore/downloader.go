@@ -14,6 +14,32 @@ import (
 	"github.com/rqlite/rqlite/v8/aws"
 )
 
+// stats captures stats for the Uploader service.
+var stats *expvar.Map
+
+var (
+	gzipMagic = []byte{0x1f, 0x8b, 0x08}
+)
+
+const (
+	numDownloadsOK   = "num_downloads_ok"
+	numDownloadsFail = "num_downloads_fail"
+	numDownloadBytes = "download_bytes"
+)
+
+func init() {
+	stats = expvar.NewMap("downloader")
+	ResetStats()
+}
+
+// ResetStats resets the expvar stats for this module. Mostly for test purposes.
+func ResetStats() {
+	stats.Init()
+	stats.Add(numDownloadsOK, 0)
+	stats.Add(numDownloadsFail, 0)
+	stats.Add(numDownloadBytes, 0)
+}
+
 // DownloadFile downloads the auto-restore file from the given URL, and returns the path to
 // the downloaded file. If the download fails, and the config is marked as continue-on-failure, then
 // the error is returned, but errOK is set to true. If the download fails, and the file is not
@@ -62,32 +88,6 @@ func DownloadFile(ctx context.Context, cfgPath string) (path string, errOK bool,
 type StorageClient interface {
 	Download(ctx context.Context, writer io.WriterAt) error
 	fmt.Stringer
-}
-
-// stats captures stats for the Uploader service.
-var stats *expvar.Map
-
-var (
-	gzipMagic = []byte{0x1f, 0x8b, 0x08}
-)
-
-const (
-	numDownloadsOK   = "num_downloads_ok"
-	numDownloadsFail = "num_downloads_fail"
-	numDownloadBytes = "download_bytes"
-)
-
-func init() {
-	stats = expvar.NewMap("downloader")
-	ResetStats()
-}
-
-// ResetStats resets the expvar stats for this module. Mostly for test purposes.
-func ResetStats() {
-	stats.Init()
-	stats.Add(numDownloadsOK, 0)
-	stats.Add(numDownloadsFail, 0)
-	stats.Add(numDownloadBytes, 0)
 }
 
 type Downloader struct {

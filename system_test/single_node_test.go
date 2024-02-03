@@ -10,12 +10,14 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/rqlite/rqlite/v8/cluster"
 	httpd "github.com/rqlite/rqlite/v8/http"
+	"github.com/rqlite/rqlite/v8/random"
 	"github.com/rqlite/rqlite/v8/store"
 	"github.com/rqlite/rqlite/v8/tcp"
 )
@@ -517,6 +519,70 @@ func Test_SingleNodeParameterizedNamedConstraints(t *testing.T) {
 		if r != fmt.Sprintf(`{"results":[{"last_insert_id":%d,"rows_affected":1}]}`, i+1) {
 			t.Fatalf("test received wrong result on loop %d, got %s", i, r)
 		}
+	}
+}
+
+func Test_SingleNodeQueryTimeout(t *testing.T) {
+	node := mustNewLeaderNode("leader1")
+	defer node.Deprovision()
+
+	sql := `CREATE TABLE IF NOT EXISTS test_table (
+		key1      VARCHAR(64) PRIMARY KEY,
+		key_id    VARCHAR(64) NOT NULL,
+		key2      VARCHAR(64) NOT NULL,
+		key3      VARCHAR(64) NOT NULL,
+		key4      VARCHAR(64) NOT NULL,
+		key5      VARCHAR(64) NOT NULL,
+		key6      VARCHAR(64) NOT NULL,
+		data      BLOB        NOT NULL
+	)`
+	if _, err := node.Execute(sql); err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	// Bulk insert rows (for speed and to avoid snapshotting)
+	sqls := make([]string, 5000)
+	for i := 0; i < cap(sqls); i++ {
+		args := []any{
+			random.String(),
+			fmt.Sprint(i),
+			random.String(),
+			random.String(),
+			random.String(),
+			random.String(),
+			random.String(),
+			random.String(),
+		}
+		sql := fmt.Sprintf(`INSERT INTO test_table
+			(key1, key_id, key2, key3, key4, key5, key6, data)
+			VALUES
+			(%q, %q, %q, %q, %q, %q, %q, %q);`, args...)
+		sqls[i] = sql
+	}
+	if _, err := node.ExecuteMulti(sqls); err != nil {
+		t.Fatalf("failed to insert data: %s", err.Error())
+	}
+	r, err := node.Query(`SELECT COUNT(*) FROM test_table`)
+	if err != nil {
+		t.Fatalf("failed to count records: %s", err.Error())
+	}
+	exp := fmt.Sprintf(`{"results":[{"columns":["COUNT(*)"],"types":["integer"],"values":[[%d]]}]}`, len(sqls))
+	if r != exp {
+		t.Fatalf("test received wrong result\nexp: %s\ngot: %s\n", exp, r)
+	}
+
+	q := `SELECT key1, key_id, key2, key3, key4, key5, key6, data
+	FROM test_table
+	ORDER BY key2 ASC`
+	r, err = node.QueryWithTimeout(q, 1*time.Millisecond)
+	if err != nil {
+		t.Fatalf("failed to query with timeout: %s", err.Error())
+	}
+	if !strings.Contains(r, `"error":"query timeout"`) {
+		// This test is brittle, but it's the best we can do, as we can't be sure
+		// how much of the query will actually be executed. We just know it should
+		// time out at some point.
+		t.Fatalf("query ran to completion, but should have timed out")
 	}
 }
 
