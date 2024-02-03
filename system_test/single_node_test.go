@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -540,7 +541,7 @@ func Test_SingleNodeQueryTimeout(t *testing.T) {
 	}
 
 	// Bulk insert rows (for speed and to avoid snapshotting)
-	sqls := make([]string, 5000)
+	sqls := make([]string, 1000)
 	for i := 0; i < cap(sqls); i++ {
 		args := []any{
 			random.String(),
@@ -577,8 +578,11 @@ func Test_SingleNodeQueryTimeout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query with timeout: %s", err.Error())
 	}
-	if exp, got := `{"results":[{"error":"query timeout"}]}`, r; exp != got {
-		t.Fatalf("test received wrong result\nexp: %s\ngot: %s\n", exp, got)
+	if !strings.Contains(r, `"error":"query timeout"`) {
+		// This test is brittle, but it's the best we can do, as we can't be sure
+		// how much of the query will actually be executed. We just know it should
+		// time out at some point.
+		t.Fatalf("query ran to completion, but should have timed out")
 	}
 }
 
