@@ -1085,7 +1085,7 @@ func Test_QueryShouldTimeout(t *testing.T) {
 		t.Fatalf("expected one result, got %d: %s", len(r), asJSON(r))
 	}
 	res := r[0]
-	if !strings.Contains(res.Error, "query timeout") {
+	if !strings.Contains(res.Error, ErrQueryTimeout.Error()) {
 		t.Fatalf("expected query timeout, got %s", res.Error)
 	}
 
@@ -1101,7 +1101,7 @@ func Test_QueryShouldTimeout(t *testing.T) {
 			t.Fatalf("expected one result, got %d: %s", len(r), asJSON(r))
 		}
 		res = r[0]
-		if !strings.Contains(res.Error, "query timeout") {
+		if !strings.Contains(res.Error, ErrQueryTimeout.Error()) {
 			t.Fatalf("expected query timeout, got %s", res.Error)
 		}
 	}
