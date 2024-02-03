@@ -648,7 +648,13 @@ func (db *DB) executeWithConn(ctx context.Context, req *command.Request, xTime b
 	return allResults, err
 }
 
-func (db *DB) executeStmtWithConn(ctx context.Context, stmt *command.Statement, xTime bool, e execer, timeout time.Duration) (*command.ExecuteResult, error) {
+func (db *DB) executeStmtWithConn(ctx context.Context, stmt *command.Statement, xTime bool, e execer, timeout time.Duration) (res *command.ExecuteResult, retErr error) {
+	defer func() {
+		if retErr != nil {
+			retErr = rewriteContextTimeout(retErr, ErrExecuteTimeout)
+			res.Error = retErr.Error()
+		}
+	}()
 	result := &command.ExecuteResult{}
 	start := time.Now()
 
@@ -666,7 +672,6 @@ func (db *DB) executeStmtWithConn(ctx context.Context, stmt *command.Statement, 
 
 	r, err := e.ExecContext(ctx, stmt.Sql, parameters...)
 	if err != nil {
-		err = rewriteContextTimeout(err, ErrExecuteTimeout)
 		result.Error = err.Error()
 		return result, err
 	}
@@ -804,7 +809,13 @@ func (db *DB) queryWithConn(ctx context.Context, req *command.Request, xTime boo
 	return allRows, err
 }
 
-func (db *DB) queryStmtWithConn(ctx context.Context, stmt *command.Statement, xTime bool, q queryer, timeout time.Duration) (*command.QueryRows, error) {
+func (db *DB) queryStmtWithConn(ctx context.Context, stmt *command.Statement, xTime bool, q queryer, timeout time.Duration) (retRows *command.QueryRows, retErr error) {
+	defer func() {
+		if retErr != nil {
+			retErr = rewriteContextTimeout(retErr, ErrQueryTimeout)
+			retRows.Error = retErr.Error()
+		}
+	}()
 	rows := &command.QueryRows{}
 	start := time.Now()
 
@@ -818,7 +829,6 @@ func (db *DB) queryStmtWithConn(ctx context.Context, stmt *command.Statement, xT
 	rs, err := q.QueryContext(ctx, stmt.Sql, parameters...)
 	if err != nil {
 		stats.Add(numQueryErrors, 1)
-		err = rewriteContextTimeout(err, ErrQueryTimeout)
 		rows.Error = err.Error()
 		return rows, err
 	}
@@ -846,7 +856,6 @@ func (db *DB) queryStmtWithConn(ctx context.Context, stmt *command.Statement, xT
 			ptrs[i] = &dest[i]
 		}
 		if err := rs.Scan(ptrs...); err != nil {
-			err = rewriteContextTimeout(err, ErrQueryTimeout)
 			return nil, err
 		}
 		params, err := normalizeRowValues(dest, xTypes)
@@ -868,8 +877,7 @@ func (db *DB) queryStmtWithConn(ctx context.Context, stmt *command.Statement, xT
 	// Check for errors from iterating over rows.
 	if err := rs.Err(); err != nil {
 		stats.Add(numQueryErrors, 1)
-		rows.Error = rewriteContextTimeout(err, ErrQueryTimeout).Error()
-		return rows, nil
+		return rows, err
 	}
 
 	if xTime {
