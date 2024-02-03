@@ -150,6 +150,8 @@ class TestAutoRestoreS3(unittest.TestCase):
     n0.start()
     n0.wait_for_ready()
     n0.execute('CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
+    j = n1.query('SELECT * FROM bar', level='strong')
+    self.assertEqual(j, d_("{'results': [{'types': ['integer', 'text'], 'columns': ['id', 'name']}]}"))
     n0.stop()
 
     # Create a new node, using the directory from the previous node, but check
