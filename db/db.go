@@ -701,14 +701,15 @@ func (db *DB) QueryStringStmt(query string) ([]*command.QueryRows, error) {
 
 // QueryStringStmtWithTimeout executes a single query that return rows, but don't modify database.
 // It also sets a timeout for the query.
-func (db *DB) QueryStringStmtWithTimeout(query string, timeout time.Duration) ([]*command.QueryRows, error) {
+func (db *DB) QueryStringStmtWithTimeout(query string, tx bool, timeout time.Duration) ([]*command.QueryRows, error) {
 	r := &command.Request{
 		Statements: []*command.Statement{
 			{
 				Sql: query,
 			},
 		},
-		DbTimeout: int64(timeout),
+		Transaction: tx,
+		DbTimeout:   int64(timeout),
 	}
 	return db.Query(r, false)
 }

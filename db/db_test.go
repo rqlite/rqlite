@@ -1075,18 +1075,35 @@ func Test_QueryShouldTimeout(t *testing.T) {
 	q := `SELECT key1, key_id, key2, key3, key4, key5, key6, data
 	FROM test_table
 	ORDER BY key2 ASC`
-	r, err := db.QueryStringStmtWithTimeout(q, 1*time.Microsecond)
+
+	// Without tx....
+	r, err := db.QueryStringStmtWithTimeout(q, false, 1*time.Microsecond)
 	if err != nil {
 		t.Fatalf("failed to run query: %s", err.Error())
 	}
-
 	if len(r) != 1 {
 		t.Fatalf("expected one result, got %d: %s", len(r), asJSON(r))
 	}
-
 	res := r[0]
 	if !strings.Contains(res.Error, "context deadline exceeded") {
 		t.Fatalf("expected context.DeadlineExceeded, got %s", res.Error)
+	}
+
+	// ... and with tx
+	r, err = db.QueryStringStmtWithTimeout(q, true, 1*time.Microsecond)
+	if err != nil {
+		if !strings.Contains(err.Error(), "context deadline exceeded") &&
+			!strings.Contains(err.Error(), "transaction has already been committed or rolled back") {
+			t.Fatalf("failed to run query: %s", err.Error())
+		}
+	} else {
+		if len(r) != 1 {
+			t.Fatalf("expected one result, got %d: %s", len(r), asJSON(r))
+		}
+		res = r[0]
+		if !strings.Contains(res.Error, "context deadline exceeded") {
+			t.Fatalf("expected context.DeadlineExceeded, got %s", res.Error)
+		}
 	}
 }
 
