@@ -1027,16 +1027,23 @@ func mustSetupDBForTimeoutTests(t *testing.T, n int) (*DB, string) {
 		})
 	}
 
+	// Insert the records, and confirm that they were inserted.
 	_, err := db.Execute(req, false)
 	if err != nil {
 		t.Fatalf("failed to insert records: %s", err.Error())
 	}
-
+	qr, err := db.QueryStringStmt("SELECT COUNT(*) FROM test_table")
+	if err != nil {
+		t.Fatalf("error counting rows: %s", err.Error())
+	}
+	if want, got := fmt.Sprintf(`[{"columns":["COUNT(*)"],"types":["integer"],"values":[[%d]]}]`, n), asJSON(qr); want != got {
+		t.Fatalf("want response %s, got %s", want, got)
+	}
 	return db, path
 }
 
 func Test_ExecShouldTimeout(t *testing.T) {
-	db, path := mustSetupDBForTimeoutTests(t, 1000)
+	db, path := mustSetupDBForTimeoutTests(t, 5000)
 	defer db.Close()
 	defer os.Remove(path)
 
@@ -1044,7 +1051,7 @@ func Test_ExecShouldTimeout(t *testing.T) {
 INSERT INTO test_table (key1, key_id, key2, key3, key4, key5, key6, data)
 SELECT t1.key1 || t2.key1, t1.key_id || t2.key_id, t1.key2 || t2.key2, t1.key3 || t2.key3, t1.key4 || t2.key4, t1.key5 || t2.key5, t1.key6 || t2.key6, t1.data || t2.data
 FROM test_table t1 LEFT OUTER JOIN test_table t2`
-	r, err := db.ExecuteStringStmtWithTimeout(q, 1*time.Microsecond)
+	r, err := db.ExecuteStringStmtWithTimeout(q, 1*time.Millisecond)
 	if err != nil {
 		t.Fatalf("failed to execute: %s", err.Error())
 	}
@@ -1057,18 +1064,10 @@ FROM test_table t1 LEFT OUTER JOIN test_table t2`
 	if !strings.Contains(res.Error, ErrExecuteTimeout.Error()) {
 		t.Fatalf("expected execute timeout, got %s", res.Error)
 	}
-
-	qr, err := db.QueryStringStmt("SELECT COUNT(*) FROM test_table")
-	if err != nil {
-		t.Fatalf("error counting rows: %s", err.Error())
-	}
-	if want, got := `[{"columns":["COUNT(*)"],"types":["integer"],"values":[[1000]]}]`, asJSON(qr); want != got {
-		t.Fatalf("want response %s, got %s", want, got)
-	}
 }
 
 func Test_QueryShouldTimeout(t *testing.T) {
-	db, path := mustSetupDBForTimeoutTests(t, 1000)
+	db, path := mustSetupDBForTimeoutTests(t, 5000)
 	defer db.Close()
 	defer os.Remove(path)
 
@@ -1077,7 +1076,7 @@ func Test_QueryShouldTimeout(t *testing.T) {
 	ORDER BY key2 ASC`
 
 	// Without tx....
-	r, err := db.QueryStringStmtWithTimeout(q, false, 1*time.Microsecond)
+	r, err := db.QueryStringStmtWithTimeout(q, false, 1*time.Millisecond)
 	if err != nil {
 		t.Fatalf("failed to run query: %s", err.Error())
 	}
@@ -1090,7 +1089,7 @@ func Test_QueryShouldTimeout(t *testing.T) {
 	}
 
 	// ... and with tx
-	r, err = db.QueryStringStmtWithTimeout(q, true, 1*time.Microsecond)
+	r, err = db.QueryStringStmtWithTimeout(q, true, 1*time.Millisecond)
 	if err != nil {
 		if !strings.Contains(err.Error(), "context deadline exceeded") &&
 			!strings.Contains(err.Error(), "transaction has already been committed or rolled back") {
@@ -1108,14 +1107,14 @@ func Test_QueryShouldTimeout(t *testing.T) {
 }
 
 func Test_RequestShouldTimeout(t *testing.T) {
-	db, path := mustSetupDBForTimeoutTests(t, 1000)
+	db, path := mustSetupDBForTimeoutTests(t, 5000)
 	defer db.Close()
 	defer os.Remove(path)
 
 	q := `SELECT key1, key_id, key2, key3, key4, key5, key6, data
 	FROM test_table
 	ORDER BY key2 ASC`
-	res, err := db.RequestStringStmtsWithTimeout([]string{q}, 1*time.Microsecond)
+	res, err := db.RequestStringStmtsWithTimeout([]string{q}, 1*time.Millisecond)
 	if err != nil {
 		t.Fatalf("failed to run query: %s", err.Error())
 	}

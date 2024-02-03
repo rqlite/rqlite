@@ -541,7 +541,7 @@ func Test_SingleNodeQueryTimeout(t *testing.T) {
 	}
 
 	// Bulk insert rows (for speed and to avoid snapshotting)
-	sqls := make([]string, 1000)
+	sqls := make([]string, 5000)
 	for i := 0; i < cap(sqls); i++ {
 		args := []any{
 			random.String(),
@@ -574,7 +574,7 @@ func Test_SingleNodeQueryTimeout(t *testing.T) {
 	q := `SELECT key1, key_id, key2, key3, key4, key5, key6, data
 	FROM test_table
 	ORDER BY key2 ASC`
-	r, err = node.QueryWithTimeout(q, 1*time.Microsecond)
+	r, err = node.QueryWithTimeout(q, 1*time.Millisecond)
 	if err != nil {
 		t.Fatalf("failed to query with timeout: %s", err.Error())
 	}
