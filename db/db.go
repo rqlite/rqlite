@@ -652,7 +652,9 @@ func (db *DB) executeStmtWithConn(ctx context.Context, stmt *command.Statement, 
 	defer func() {
 		if retErr != nil {
 			retErr = rewriteContextTimeout(retErr, ErrExecuteTimeout)
-			res.Error = retErr.Error()
+			if res != nil {
+				res.Error = retErr.Error()
+			}
 		}
 	}()
 	result := &command.ExecuteResult{}
@@ -813,7 +815,9 @@ func (db *DB) queryStmtWithConn(ctx context.Context, stmt *command.Statement, xT
 	defer func() {
 		if retErr != nil {
 			retErr = rewriteContextTimeout(retErr, ErrQueryTimeout)
-			retRows.Error = retErr.Error()
+			if retRows != nil {
+				retRows.Error = retErr.Error()
+			}
 		}
 	}()
 	rows := &command.QueryRows{}
