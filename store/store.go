@@ -1158,11 +1158,12 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 	if !s.open {
 		return nil, ErrNotOpen
 	}
-	nRW, nRO := s.RORWCount(eqr)
+	nRW, _ := s.RORWCount(eqr)
 	isLeader := s.raft.State() == raft.Leader
 
-	if nRW == 0 {
-		// It's a little faster just to do a Query of the DB if we know there are no writes.
+	if nRW == 0 && eqr.Level != proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG {
+		// It's a little faster just to do a Query of the DB if we know there is no need
+		// for consensus.
 		if eqr.Request.Transaction {
 			// Transaction requested during query, but not going through consensus. This means
 			// we need to block any database serialization during the query.
@@ -1183,15 +1184,13 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 				time.Since(s.raft.LastContact()).Nanoseconds() > eqr.Freshness {
 				return nil, ErrStaleRead
 			}
-			qr, err := s.db.Query(eqr.Request, eqr.Timings)
-			return convertFn(qr), err
 		} else if eqr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK {
-			if s.raft.State() != raft.Leader {
+			if !isLeader {
 				return nil, ErrNotLeader
 			}
-			qr, err := s.db.Query(eqr.Request, eqr.Timings)
-			return convertFn(qr), err
 		}
+		qr, err := s.db.Query(eqr.Request, eqr.Timings)
+		return convertFn(qr), err
 	}
 
 	// At least one write in the request, or STRONG consistency requested, so
@@ -1203,32 +1202,16 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 		return nil, ErrNotReady
 	}
 
-	if nRO == 0 {
-		// No read-only requests, so we can go through the faster path.
-		convertFn := func(er []*proto.ExecuteResult) []*proto.ExecuteQueryResponse {
-			resp := make([]*proto.ExecuteQueryResponse, len(er))
-			for i := range er {
-				resp[i] = &proto.ExecuteQueryResponse{
-					Result: &proto.ExecuteQueryResponse_E{E: er[i]},
-				}
-			}
-			return resp
-		}
-		er, err := s.db.Execute(eqr.Request, eqr.Timings)
-		return convertFn(er), err
-	}
-
+	// Send the request through consensus.
 	b, compressed, err := s.tryCompress(eqr)
 	if err != nil {
 		return nil, err
 	}
-
 	c := &proto.Command{
 		Type:       proto.Command_COMMAND_TYPE_EXECUTE_QUERY,
 		SubCommand: b,
 		Compressed: compressed,
 	}
-
 	b, err = command.Marshal(c)
 	if err != nil {
 		return nil, err
