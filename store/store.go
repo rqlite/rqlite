@@ -1158,15 +1158,18 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 	if !s.open {
 		return nil, ErrNotOpen
 	}
+	nRW, _ := s.RORWCount(eqr)
+	isLeader := s.raft.State() == raft.Leader
 
-	if s.QueriesOnly(eqr) {
+	if nRW == 0 && eqr.Level != proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG {
+		// It's a little faster just to do a Query of the DB if we know there is no need
+		// for consensus.
 		if eqr.Request.Transaction {
 			// Transaction requested during query, but not going through consensus. This means
 			// we need to block any database serialization during the query.
 			s.queryTxMu.RLock()
 			defer s.queryTxMu.RUnlock()
 		}
-
 		convertFn := func(qr []*proto.QueryRows) []*proto.ExecuteQueryResponse {
 			resp := make([]*proto.ExecuteQueryResponse, len(qr))
 			for i := range qr {
@@ -1176,41 +1179,39 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 			}
 			return resp
 		}
-
 		if eqr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE {
-			if s.raft.State() != raft.Leader && eqr.Freshness > 0 &&
+			if !isLeader && eqr.Freshness > 0 &&
 				time.Since(s.raft.LastContact()).Nanoseconds() > eqr.Freshness {
 				return nil, ErrStaleRead
 			}
-			qr, err := s.db.Query(eqr.Request, eqr.Timings)
-			return convertFn(qr), err
 		} else if eqr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK {
-			if s.raft.State() != raft.Leader {
+			if !isLeader {
 				return nil, ErrNotLeader
 			}
-			qr, err := s.db.Query(eqr.Request, eqr.Timings)
-			return convertFn(qr), err
 		}
+		qr, err := s.db.Query(eqr.Request, eqr.Timings)
+		return convertFn(qr), err
 	}
 
-	if s.raft.State() != raft.Leader {
+	// At least one write in the request, or STRONG consistency requested, so
+	// we need to go through consensus. Check that we can do that.
+	if !isLeader {
 		return nil, ErrNotLeader
 	}
 	if !s.Ready() {
 		return nil, ErrNotReady
 	}
 
+	// Send the request through consensus.
 	b, compressed, err := s.tryCompress(eqr)
 	if err != nil {
 		return nil, err
 	}
-
 	c := &proto.Command{
 		Type:       proto.Command_COMMAND_TYPE_EXECUTE_QUERY,
 		SubCommand: b,
 		Compressed: compressed,
 	}
-
 	b, err = command.Marshal(c)
 	if err != nil {
 		return nil, err
@@ -1659,20 +1660,22 @@ func (s *Store) Noop(id string) (raft.ApplyFuture, error) {
 	return s.raft.Apply(bc, s.ApplyTimeout), nil
 }
 
-// QueriesOnly returns whether the given ExecuteQueryRequest contains only
-// queries.
-func (s *Store) QueriesOnly(eqr *proto.ExecuteQueryRequest) bool {
+// RORWCount returns the number of read-only and read-write statements in the
+// given ExecuteQueryRequest.
+func (s *Store) RORWCount(eqr *proto.ExecuteQueryRequest) (nRW, nRO int) {
 	for _, stmt := range eqr.Request.Statements {
 		sql := stmt.Sql
 		if sql == "" {
 			continue
 		}
 		ro, err := s.db.StmtReadOnly(sql)
-		if err != nil || !ro {
-			return false
+		if err == nil && ro {
+			nRO++
+		} else {
+			nRW++
 		}
 	}
-	return true
+	return
 }
 
 // setLogInfo records some key indexes about the log.
