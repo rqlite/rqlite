@@ -789,7 +789,14 @@ func Test_SingleNodeRequest(t *testing.T) {
 		},
 		{
 			stmts: []string{
-				`SELECT * FROM foo`,
+				`INSERT INTO foo(id, name) VALUES(1234, "dana")`,
+				`INSERT INTO foo(id, name) VALUES(5678, "bob")`,
+			},
+			expected: `[{"last_insert_id":1234,"rows_affected":1},{"last_insert_id":5678,"rows_affected":1}]`,
+		},
+		{
+			stmts: []string{
+				`SELECT * FROM foo WHERE name='fiona'`,
 				`INSERT INTO foo(id, name) VALUES(66, "declan")`,
 			},
 			expected: `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]},{"last_insert_id":66,"rows_affected":1}]`,
@@ -799,7 +806,7 @@ func Test_SingleNodeRequest(t *testing.T) {
 				`INSERT INTO foo(id, name) VALUES(77, "fiona")`,
 				`SELECT COUNT(*) FROM foo`,
 			},
-			expected: `[{"last_insert_id":77,"rows_affected":1},{"columns":["COUNT(*)"],"types":["integer"],"values":[[3]]}]`,
+			expected: `[{"last_insert_id":77,"rows_affected":1},{"columns":["COUNT(*)"],"types":["integer"],"values":[[5]]}]`,
 		},
 		{
 			stmts: []string{
@@ -2448,7 +2455,7 @@ func Test_IsVoter(t *testing.T) {
 	}
 }
 
-func Test_QueriesOnly(t *testing.T) {
+func Test_RWROCount(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
 
@@ -2471,62 +2478,66 @@ func Test_QueriesOnly(t *testing.T) {
 	}
 
 	tests := []struct {
-		name        string
-		stmts       []string
-		queriesOnly bool
+		name  string
+		stmts []string
+		expRW int
+		expRO int
 	}{
 		{
-			name:        "Empty SQL",
-			stmts:       []string{""},
-			queriesOnly: true,
+			name:  "Empty SQL",
+			stmts: []string{""},
 		},
 		{
-			name:        "Junk SQL",
-			stmts:       []string{"asdkflj asgkdj"},
-			queriesOnly: false,
+			name:  "Junk SQL",
+			stmts: []string{"asdkflj asgkdj"},
+			expRW: 1,
 		},
 		{
-			name:        "CREATE TABLE statement, already exists",
-			stmts:       []string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"},
-			queriesOnly: false,
+			name:  "CREATE TABLE statement, already exists",
+			stmts: []string{"CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)"},
+			expRW: 1,
 		},
 		{
-			name:        "Single INSERT",
-			stmts:       []string{"INSERT INTO foo(id, name) VALUES(1, 'fiona')"},
-			queriesOnly: false,
+			name:  "Single INSERT",
+			stmts: []string{"INSERT INTO foo(id, name) VALUES(1, 'fiona')"},
+			expRW: 1,
 		},
 		{
-			name:        "Single INSERT, non-existent table",
-			stmts:       []string{"INSERT INTO qux(id, name) VALUES(1, 'fiona')"},
-			queriesOnly: false,
+			name:  "Single INSERT, non-existent table",
+			stmts: []string{"INSERT INTO qux(id, name) VALUES(1, 'fiona')"},
+			expRW: 1,
 		},
 		{
-			name:        "Single SELECT",
-			stmts:       []string{"SELECT * FROM foo"},
-			queriesOnly: true,
+			name:  "Single SELECT",
+			stmts: []string{"SELECT * FROM foo"},
+			expRO: 1,
 		},
 		{
-			name:        "Single SELECT from non-existent table",
-			stmts:       []string{"SELECT * FROM qux"},
-			queriesOnly: false,
+			name:  "Single SELECT from non-existent table",
+			stmts: []string{"SELECT * FROM qux"},
+			expRW: 1, // Yeah, this is unfortunate, but it's how SQLite works.
 		},
 		{
-			name:        "Double SELECT",
-			stmts:       []string{"SELECT * FROM foo", "SELECT * FROM foo WHERE id = 1"},
-			queriesOnly: true,
+			name:  "Double SELECT",
+			stmts: []string{"SELECT * FROM foo", "SELECT * FROM foo WHERE id = 1"},
+			expRO: 2,
 		},
 		{
-			name:        "Mix queries and executes",
-			stmts:       []string{"SELECT * FROM foo", "INSERT INTO foo(id, name) VALUES(1, 'fiona')"},
-			queriesOnly: false,
+			name:  "Mix queries and executes",
+			stmts: []string{"SELECT * FROM foo", "INSERT INTO foo(id, name) VALUES(1, 'fiona')"},
+			expRW: 1,
+			expRO: 1,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			requires := s.QueriesOnly(executeQueryRequestFromStrings(tt.stmts, proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE, false, false))
-			if requires != tt.queriesOnly {
-				t.Fatalf(" test %s failed, unexpected requires: expected %v, got %v", tt.name, tt.queriesOnly, requires)
+			rwN, roN := s.RORWCount(executeQueryRequestFromStrings(tt.stmts, proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE, false, false))
+			if rwN != tt.expRW {
+				t.Fatalf("wrong number of RW statements, exp %d, got %d", tt.expRW, rwN)
+			}
+			if roN != tt.expRO {
+				t.Fatalf("wrong number of RO statements, exp %d, got %d", tt.expRO, roN)
 			}
 		})
 	}
