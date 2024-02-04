@@ -1241,6 +1241,8 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryPa
 				http.Error(w, "remote query not authorized", http.StatusUnauthorized)
 				return
 			}
+			resultsErr = fmt.Errorf("node failed to process Query on remote node at %s: %s",
+				addr, resultsErr.Error())
 		}
 		stats.Add(numRemoteQueries, 1)
 	}
