@@ -64,6 +64,7 @@ func Test_MultiNodeSimple(t *testing.T) {
 	// Now, do a NONE consistency query on each node, to actually confirm the data
 	// has been replicated.
 	testFn1 := func(t *testing.T, s *Store) {
+		t.Helper()
 		qr := queryRequestFromString("SELECT * FROM foo", false, false)
 		qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
 		r, err := s.Query(qr)
@@ -90,6 +91,7 @@ func Test_MultiNodeSimple(t *testing.T) {
 	// Now, do a NONE consistency query on each node, to actually confirm the data
 	// has been replicated.
 	testFn2 := func(t *testing.T, s *Store) {
+		t.Helper()
 		qr := queryRequestFromString("SELECT COUNT(*) FROM foo", false, false)
 		qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
 		r, err := s.Query(qr)
