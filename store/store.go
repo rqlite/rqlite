@@ -999,7 +999,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		"last_applied_index": lAppliedIdx,
 		"commit_index":       s.raft.CommitIndex(),
 		"addr":               s.Addr(),
-		"leader": map[string]interface{}{
+		"leader": map[string]string{
 			"node_id": leaderID,
 			"addr":    leaderAddr,
 		},
