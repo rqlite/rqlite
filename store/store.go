@@ -998,9 +998,10 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		"db_applied_index":   dbAppliedIdx,
 		"last_applied_index": lAppliedIdx,
 		"addr":               s.Addr(),
-		"leader": map[string]string{
-			"node_id": leaderID,
-			"addr":    leaderAddr,
+		"leader": map[string]interface{}{
+			"node_id":      leaderID,
+			"addr":         leaderAddr,
+			"commit_index": s.raftTn.LeaderCommitIndex(),
 		},
 		"ready": s.Ready(),
 		"observer": map[string]uint64{
