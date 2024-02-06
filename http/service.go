@@ -29,6 +29,7 @@ import (
 	"github.com/rqlite/rqlite/v8/queue"
 	"github.com/rqlite/rqlite/v8/rtls"
 	"github.com/rqlite/rqlite/v8/store"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 var (
@@ -360,7 +361,7 @@ func New(addr string, store Store, cluster Cluster, credentials CredentialStore)
 // Start starts the service.
 func (s *Service) Start() error {
 	s.httpServer = http.Server{
-		Handler: s,
+		Handler: otelhttp.NewHandler(s, "rqlited"),
 	}
 
 	var ln net.Listener

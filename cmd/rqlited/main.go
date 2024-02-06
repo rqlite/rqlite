@@ -26,6 +26,7 @@ import (
 	"github.com/rqlite/rqlite/v8/db"
 	"github.com/rqlite/rqlite/v8/disco"
 	httpd "github.com/rqlite/rqlite/v8/http"
+	"github.com/rqlite/rqlite/v8/otel"
 	"github.com/rqlite/rqlite/v8/rtls"
 	"github.com/rqlite/rqlite/v8/store"
 	"github.com/rqlite/rqlite/v8/tcp"
@@ -79,6 +80,19 @@ func main() {
 	log.Printf("%s, target architecture is %s, operating system target is %s", runtime.Version(),
 		runtime.GOARCH, runtime.GOOS)
 	log.Printf("launch command: %s", strings.Join(os.Args, " "))
+
+	// Configure span export
+	if cfg.OTLPDest != "" {
+		cleanup, err := otel.Setup(mainCtx, cfg.OTLPDest)
+		if err != nil {
+			log.Printf("%v", err)
+		}
+		defer func() {
+			if err := cleanup(); err != nil {
+				log.Printf("%v", err)
+			}
+		}()
+	}
 
 	// Start requested profiling.
 	startProfile(cfg.CPUProfile, cfg.MemProfile)
