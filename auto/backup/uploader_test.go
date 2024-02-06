@@ -68,9 +68,13 @@ func Test_UploaderSingleUpload_ID(t *testing.T) {
 	ResetStats()
 	var wg sync.WaitGroup
 	wg.Add(1)
+	nCalled := 0
 	sc := &mockStorageClient{
 		currentIDFn: func(ctx context.Context) (string, error) {
-			defer wg.Done()
+			nCalled++
+			if nCalled == 0 {
+				defer wg.Done()
+			}
 			return "1234", nil
 		},
 	}
