@@ -80,7 +80,7 @@ func (s *SwappableDB) Request(req *command.Request, xTime bool) ([]*command.Exec
 // Execute calls Execute on the underlying database.
 func (s *SwappableDB) Execute(ex *command.Request, xTime bool) ([]*command.ExecuteResult, error) {
 	ctx := otel.GetTextMapPropagator().Extract(context.Background(), propagation.MapCarrier(ex.Metadata))
-	_, span := otel.GetTracerProvider().Tracer("").Start(ctx, "DB.Execute")
+	_, span := otel.Tracer("").Start(ctx, "DB.Execute")
 	defer span.End()
 
 	s.dbMu.RLock()
