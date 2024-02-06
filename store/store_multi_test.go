@@ -105,12 +105,9 @@ func Test_MultiNodeSimple(t *testing.T) {
 	testFn2(t, s0)
 	testFn2(t, s1)
 
-	// Ensure transport returns correct commit index for the leader.
-	if s0.LeaderCommitIndex() != s1.LeaderCommitIndex() {
+	// Ensure Commit Indexes are good.
+	if s0.raft.CommitIndex() != s1.raft.CommitIndex() {
 		t.Fatalf("leader commit index mismatch")
-	}
-	if s0.raft.CommitIndex() != s1.raftTn.LeaderCommitIndex() {
-		t.Fatalf("leader commit index mismatch at Transport level")
 	}
 }
 

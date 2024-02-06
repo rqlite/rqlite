@@ -721,14 +721,6 @@ func (s *Store) HasLeader() bool {
 	return s.raft.Leader() != ""
 }
 
-// LeaderCommitIndex returns the commit index of the leader.
-func (s *Store) LeaderCommitIndex() uint64 {
-	if s.raft.State() == raft.Leader {
-		return s.raft.CommitIndex()
-	}
-	return s.raftTn.LeaderCommitIndex()
-}
-
 // IsVoter returns true if the current node is a voter in the cluster. If there
 // is no reference to the current node in the current cluster configuration then
 // false will also be returned.
@@ -999,14 +991,14 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		return nil, err
 	}
 	status := map[string]interface{}{
-		"open":                s.open,
-		"node_id":             s.raftID,
-		"raft":                raftStats,
-		"fsm_index":           fsmIdx,
-		"db_applied_index":    dbAppliedIdx,
-		"last_applied_index":  lAppliedIdx,
-		"leader_commit_index": s.LeaderCommitIndex(),
-		"addr":                s.Addr(),
+		"open":               s.open,
+		"node_id":            s.raftID,
+		"raft":               raftStats,
+		"fsm_index":          fsmIdx,
+		"db_applied_index":   dbAppliedIdx,
+		"last_applied_index": lAppliedIdx,
+		"commit_index":       s.raft.CommitIndex(),
+		"addr":               s.Addr(),
 		"leader": map[string]interface{}{
 			"node_id": leaderID,
 			"addr":    leaderAddr,
@@ -1816,7 +1808,7 @@ func (s *Store) isStaleRead(freshness int64) bool {
 		return false
 	}
 	return time.Since(s.raft.LastContact()).Nanoseconds() > freshness &&
-		s.raftTn.LeaderCommitIndex() == s.DBAppliedIndex()
+		s.raft.CommitIndex() == s.DBAppliedIndex()
 }
 
 type fsmExecuteResponse struct {

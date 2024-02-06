@@ -3,7 +3,6 @@ package store
 import (
 	"io"
 	"net"
-	"sync"
 	"time"
 
 	"github.com/hashicorp/raft"
@@ -55,11 +54,6 @@ type NodeTransport struct {
 	*raft.NetworkTransport
 	done   chan struct{}
 	closed bool
-
-	// leaderCommitIndex is the commit index of the leader, as received by
-	// the most recent AppendEntries RPC.
-	leaderCommitIndex uint64
-	lciMu             sync.RWMutex
 }
 
 // NewNodeTransport returns an initialized NodeTransport.
@@ -84,14 +78,6 @@ func (n *NodeTransport) Close() error {
 	return n.NetworkTransport.Close()
 }
 
-// LeaderCommitIndex returns the commit index of the leader, as received by the
-// most recent AppendEntries RPC.
-func (n *NodeTransport) LeaderCommitIndex() uint64 {
-	n.lciMu.RLock()
-	defer n.lciMu.RUnlock()
-	return n.leaderCommitIndex
-}
-
 // InstallSnapshot is used to push a snapshot down to a follower. The data is read from
 // the ReadCloser and streamed to the client.
 func (n *NodeTransport) InstallSnapshot(id raft.ServerID, target raft.ServerAddress, args *raft.InstallSnapshotRequest,
@@ -114,13 +100,8 @@ func (n *NodeTransport) Consumer() <-chan raft.RPC {
 			case <-n.done:
 				return
 			case rpc := <-srcCh:
-				switch cmd := rpc.Command.(type) {
-				case *raft.InstallSnapshotRequest:
+				if rpc.Reader != nil {
 					rpc.Reader = gzip.NewDecompressor(rpc.Reader)
-				case *raft.AppendEntriesRequest:
-					n.lciMu.Lock()
-					n.leaderCommitIndex = cmd.LeaderCommitIndex
-					n.lciMu.Unlock()
 				}
 				ch <- rpc
 			}
