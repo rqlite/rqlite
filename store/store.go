@@ -1138,8 +1138,7 @@ func (s *Store) Query(qr *proto.QueryRequest) ([]*proto.QueryRows, error) {
 		return nil, ErrNotLeader
 	}
 
-	if s.raft.State() != raft.Leader && qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE &&
-		qr.Freshness > 0 && time.Since(s.raft.LastContact()).Nanoseconds() > qr.Freshness {
+	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE && s.isStaleRead(qr.Freshness) {
 		return nil, ErrStaleRead
 	}
 
@@ -1179,11 +1178,8 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 			}
 			return resp
 		}
-		if eqr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE {
-			if !isLeader && eqr.Freshness > 0 &&
-				time.Since(s.raft.LastContact()).Nanoseconds() > eqr.Freshness {
-				return nil, ErrStaleRead
-			}
+		if eqr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE && s.isStaleRead(eqr.Freshness) {
+			return nil, ErrStaleRead
 		} else if eqr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK {
 			if !isLeader {
 				return nil, ErrNotLeader
@@ -1804,6 +1800,13 @@ func (s *Store) updateAppliedIndex() chan struct{} {
 		}
 	}()
 	return done
+}
+
+func (s *Store) isStaleRead(freshness int64) bool {
+	if freshness == 0 || s.raft.State() == raft.Leader {
+		return false
+	}
+	return time.Since(s.raft.LastContact()).Nanoseconds() > freshness
 }
 
 type fsmExecuteResponse struct {
