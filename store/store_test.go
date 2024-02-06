@@ -589,6 +589,10 @@ func Test_StoreReady(t *testing.T) {
 	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
+	if s.Ready() {
+		t.Fatalf("store marked as ready, even though no leader is set")
+	}
+
 	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
 		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
 	}
@@ -597,9 +601,8 @@ func Test_StoreReady(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
-
 	if !s.Ready() {
-		t.Fatalf("store not marked as ready even though Leader is set")
+		t.Fatalf("store not marked as ready even though there is a leader")
 	}
 
 	ch1 := make(chan struct{})
