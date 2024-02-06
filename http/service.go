@@ -1097,7 +1097,7 @@ func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request, qp Query
 
 func metadataFromContext(ctx context.Context) map[string]string {
 	mc := propagation.MapCarrier{}
-	otel.GetTextMapPropagator().Inject(ctx, propagation.MapCarrier(mc))
+	otel.GetTextMapPropagator().Inject(ctx, mc)
 	return mc
 }
 

@@ -51,7 +51,7 @@ type argT struct {
 	Credentials  string        `cli:"u,user" usage:"set basic auth credentials in form username:password"`
 	Version      bool          `cli:"v,version" usage:"display CLI version"`
 	HTTPTimeout  clix.Duration `cli:"t,http-timeout" usage:"set timeout on HTTP requests" dft:"30s"`
-	OTLPDest     string        `cli:"o,otlp-dest" usage:"host:port to which OTLP spans should be exporter"`
+	OTLPDest     string        `cli:"o,otlp-dest" usage:"host:port to which OTLP spans should be exported"`
 }
 
 var cliHelp = []string{
