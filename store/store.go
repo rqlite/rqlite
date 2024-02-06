@@ -1989,12 +1989,6 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 			stats.Add(numRestoresFailed, 1)
 		}
 	}()
-
-	// Running a Restore marks the Store as not ready.
-	snapshotRunningCh := make(chan struct{})
-	s.RegisterReadyChannel(snapshotRunningCh)
-	defer close(snapshotRunningCh)
-
 	s.logger.Printf("initiating node restore on node ID %s", s.raftID)
 	startT := time.Now()
 
