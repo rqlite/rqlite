@@ -3,7 +3,7 @@
 - [PR #1670](https://github.com/rqlite/rqlite/pull/1670): Improve error message when query on remote node fails.
 - [PR #1671](https://github.com/rqlite/rqlite/pull/1670): Minor optimizations to Unified Request processing.
 - [PR #1674](https://github.com/rqlite/rqlite/pull/1674): Small refactor of _Stale Reads_ check.
-- [PR #1672](https://github.com/rqlite/rqlite/pull/1672): _Stale Read_ checks include comparing node's Applied Index with Leader Commit Index.
+- [PR #1673](https://github.com/rqlite/rqlite/pull/1673): _Stale Read_ checks include comparing node's Applied Index with Leader Commit Index.
 
 ## 8.19.0 (February 3rd 2024)
 This release allows you to set a maximum amount of a time a query will run. If the query does not complete within the set time, an error will be returned.
