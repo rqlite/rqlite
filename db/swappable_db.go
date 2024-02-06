@@ -1,12 +1,15 @@
 package db
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
 	"sync"
 
 	command "github.com/rqlite/rqlite/v8/command/proto"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 )
 
 // SwappableDB is a wrapper around DB that allows the underlying database to be swapped out
@@ -76,6 +79,10 @@ func (s *SwappableDB) Request(req *command.Request, xTime bool) ([]*command.Exec
 
 // Execute calls Execute on the underlying database.
 func (s *SwappableDB) Execute(ex *command.Request, xTime bool) ([]*command.ExecuteResult, error) {
+	ctx := otel.GetTextMapPropagator().Extract(context.Background(), propagation.MapCarrier(ex.Metadata))
+	_, span := otel.GetTracerProvider().Tracer("").Start(ctx, "DB.Execute")
+	defer span.End()
+
 	s.dbMu.RLock()
 	defer s.dbMu.RUnlock()
 	return s.db.Execute(ex, xTime)
