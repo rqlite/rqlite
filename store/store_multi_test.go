@@ -104,6 +104,11 @@ func Test_MultiNodeSimple(t *testing.T) {
 	}
 	testFn2(t, s0)
 	testFn2(t, s1)
+
+	// Ensure Commit Indexes are good.
+	if s0.raft.CommitIndex() != s1.raft.CommitIndex() {
+		t.Fatalf("leader commit index mismatch")
+	}
 }
 
 // Test_MultiNodeSnapshot_ErrorMessage tests that a snapshot fails with a specific

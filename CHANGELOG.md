@@ -3,6 +3,7 @@
 - [PR #1670](https://github.com/rqlite/rqlite/pull/1670): Improve error message when query on remote node fails.
 - [PR #1671](https://github.com/rqlite/rqlite/pull/1670): Minor optimizations to Unified Request processing.
 - [PR #1674](https://github.com/rqlite/rqlite/pull/1674): Small refactor of _Stale Reads_ check.
+- [PR #1673](https://github.com/rqlite/rqlite/pull/1673): _Stale Read_ checks include comparing node's Applied Index with Leader Commit Index.
 - [PR #1675](https://github.com/rqlite/rqlite/pull/1675): Use atomic.Uint64 instead of Mutexes for Store indexes.
 
 ## 8.19.0 (February 3rd 2024)

@@ -144,7 +144,6 @@ func Test_SingleNodeDBAppliedIndex(t *testing.T) {
 	if exp, got := s.DBAppliedIndex(), uint64(4); exp != got {
 		t.Fatalf("wrong DB applied index, got: %d, exp %d", got, exp)
 	}
-
 }
 
 func Test_SingleNodeTempFileCleanup(t *testing.T) {

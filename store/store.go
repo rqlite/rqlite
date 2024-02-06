@@ -981,6 +981,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		"fsm_index":          s.fsmIdx.Load(),
 		"db_applied_index":   s.dbAppliedIdx.Load(),
 		"last_applied_index": lAppliedIdx,
+		"commit_index":       s.raft.CommitIndex(),
 		"addr":               s.Addr(),
 		"leader": map[string]string{
 			"node_id": leaderID,
@@ -1790,7 +1791,8 @@ func (s *Store) isStaleRead(freshness int64) bool {
 	if freshness == 0 || s.raft.State() == raft.Leader {
 		return false
 	}
-	return time.Since(s.raft.LastContact()).Nanoseconds() > freshness
+	return time.Since(s.raft.LastContact()).Nanoseconds() > freshness ||
+		s.raft.CommitIndex() != s.DBAppliedIndex()
 }
 
 type fsmExecuteResponse struct {
