@@ -1807,7 +1807,8 @@ func (s *Store) isStaleRead(freshness int64) bool {
 	if freshness == 0 || s.raft.State() == raft.Leader {
 		return false
 	}
-	return time.Since(s.raft.LastContact()).Nanoseconds() > freshness || s.raft.CommitIndex() != s.DBAppliedIndex()
+	return time.Since(s.raft.LastContact()).Nanoseconds() > freshness ||
+		s.raft.CommitIndex() != s.DBAppliedIndex()
 }
 
 type fsmExecuteResponse struct {
