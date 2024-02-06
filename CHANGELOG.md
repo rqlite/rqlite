@@ -4,6 +4,7 @@
 - [PR #1671](https://github.com/rqlite/rqlite/pull/1670): Minor optimizations to Unified Request processing.
 - [PR #1674](https://github.com/rqlite/rqlite/pull/1674): Small refactor of _Stale Reads_ check.
 - [PR #1675](https://github.com/rqlite/rqlite/pull/1675): Use `atomic.Uint64` instead of Mutexes for Store indexes.
+- [PR #1677](https://github.com/rqlite/rqlite/pull/1677): Mark the Store as _not ready_ during a Raft Restore from Snapshot. See issue [#1672](https://github.com/rqlite/rqlite/issues/1672).
 
 ## 8.19.0 (February 3rd 2024)
 This release allows you to set a maximum amount of a time a query will run. If the query does not complete within the set time, an error will be returned.
