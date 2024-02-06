@@ -999,17 +999,17 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		return nil, err
 	}
 	status := map[string]interface{}{
-		"open":               s.open,
-		"node_id":            s.raftID,
-		"raft":               raftStats,
-		"fsm_index":          fsmIdx,
-		"db_applied_index":   dbAppliedIdx,
-		"last_applied_index": lAppliedIdx,
-		"addr":               s.Addr(),
+		"open":                s.open,
+		"node_id":             s.raftID,
+		"raft":                raftStats,
+		"fsm_index":           fsmIdx,
+		"db_applied_index":    dbAppliedIdx,
+		"last_applied_index":  lAppliedIdx,
+		"leader_commit_index": s.LeaderCommitIndex(),
+		"addr":                s.Addr(),
 		"leader": map[string]interface{}{
-			"node_id":      leaderID,
-			"addr":         leaderAddr,
-			"commit_index": s.LeaderCommitIndex(),
+			"node_id": leaderID,
+			"addr":    leaderAddr,
 		},
 		"ready": s.Ready(),
 		"observer": map[string]uint64{
