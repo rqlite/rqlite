@@ -72,7 +72,7 @@ func Test_UploaderSingleUpload_ID(t *testing.T) {
 	sc := &mockStorageClient{
 		currentIDFn: func(ctx context.Context) (string, error) {
 			nCalled++
-			if nCalled == 0 {
+			if nCalled == 1 {
 				defer wg.Done()
 			}
 			return "1234", nil
