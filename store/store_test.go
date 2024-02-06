@@ -97,7 +97,7 @@ func Test_SingleNodeOnDiskSQLitePath(t *testing.T) {
 	}
 }
 
-func Test_SingleNodeDBAppliedIndex(t *testing.T) {
+func Test_SingleNodeDBAppliedLeaderIndex(t *testing.T) {
 	s, ln, _ := mustNewStoreSQLitePath(t)
 	defer ln.Close()
 
@@ -114,6 +114,9 @@ func Test_SingleNodeDBAppliedIndex(t *testing.T) {
 	if exp, got := s.DBAppliedIndex(), uint64(0); exp != got {
 		t.Fatalf("wrong DB applied index, got: %d, exp %d", got, exp)
 	}
+	if exp, got := s.LeaderCommitIndex(), uint64(2); exp != got {
+		t.Fatalf("wrong Leader Commit index, got: %d, exp %d", got, exp)
+	}
 
 	er := executeRequestFromStrings([]string{
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
@@ -125,6 +128,9 @@ func Test_SingleNodeDBAppliedIndex(t *testing.T) {
 	if exp, got := s.DBAppliedIndex(), uint64(3); exp != got {
 		t.Fatalf("wrong DB applied index, got: %d, exp %d", got, exp)
 	}
+	if exp, got := s.LeaderCommitIndex(), uint64(3); exp != got {
+		t.Fatalf("wrong Leader Commit index, got: %d, exp %d", got, exp)
+	}
 	er = executeRequestFromStrings([]string{
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 	}, false, false)
@@ -135,6 +141,9 @@ func Test_SingleNodeDBAppliedIndex(t *testing.T) {
 	if exp, got := s.DBAppliedIndex(), uint64(4); exp != got {
 		t.Fatalf("wrong DB applied index, got: %d, exp %d", got, exp)
 	}
+	if exp, got := s.LeaderCommitIndex(), uint64(4); exp != got {
+		t.Fatalf("wrong Leader Commit index, got: %d, exp %d", got, exp)
+	}
 	qr := queryRequestFromString("SELECT * FROM foo", false, false)
 	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
 	_, err = s.Query(qr)
@@ -144,7 +153,9 @@ func Test_SingleNodeDBAppliedIndex(t *testing.T) {
 	if exp, got := s.DBAppliedIndex(), uint64(4); exp != got {
 		t.Fatalf("wrong DB applied index, got: %d, exp %d", got, exp)
 	}
-
+	if exp, got := s.LeaderCommitIndex(), uint64(5); exp != got {
+		t.Fatalf("wrong Leader Commit index, got: %d, exp %d", got, exp)
+	}
 }
 
 func Test_SingleNodeTempFileCleanup(t *testing.T) {
