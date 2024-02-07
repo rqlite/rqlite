@@ -917,8 +917,8 @@ func (s *Store) WaitForFSMIndex(idx uint64, timeout time.Duration) (uint64, erro
 	for {
 		select {
 		case <-tck.C:
-			if s.fsmIdx.Load() >= idx {
-				return s.fsmIdx.Load(), nil
+			if fsmIdx := s.fsmIdx.Load(); fsmIdx >= idx {
+				return fsmIdx, nil
 			}
 		case <-tmr.C:
 			return 0, fmt.Errorf("timeout expired")
