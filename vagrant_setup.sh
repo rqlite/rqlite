@@ -9,8 +9,8 @@ apt-get install -y curl git bison make mercurial
 # Go
 bash < <(curl -s -S -L https://raw.githubusercontent.com/moovweb/gvm/master/binscripts/gvm-installer)
 source ~/.gvm/scripts/gvm
-gvm install go1.21
-gvm use go1.21
+gvm install go1.22
+gvm use go1.22
 
 # rqlite
 mkdir -p rqlite

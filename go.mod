@@ -1,6 +1,6 @@
 module github.com/rqlite/rqlite/v8
 
-go 1.21
+go 1.22
 
 require (
 	github.com/Bowery/prompt v0.0.0-20190916142128-fa8279994f75
