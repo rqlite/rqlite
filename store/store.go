@@ -274,8 +274,11 @@ type Store struct {
 
 	// Latest log entry index actually reflected by the FSM. Due to Raft code
 	// this value is not updated after a Snapshot-restore.
-	fsmIdx         *atomic.Uint64
-	fsmUpdateTime  *AtomicTime
+	fsmIdx        *atomic.Uint64
+	fsmUpdateTime *AtomicTime // This is node-local time.
+
+	// appendedAtTimeis the time the Leader was at when it appended the log entry.
+	// The Leader that actually appended the log entry is not necessarily the current Leader.
 	appendedAtTime *AtomicTime
 
 	// Latest log entry index which actually changed the database.
