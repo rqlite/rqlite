@@ -31,6 +31,8 @@ func Test_NewQueryParams(t *testing.T) {
 		{"No Value", "key=", QueryParams{"key": ""}, false},
 		{"Complex Query", "a=1&b=two&c=&d=true&e=123.456", QueryParams{"a": "1", "b": "two", "c": "", "d": "true", "e": "123.456"}, false},
 		{"Invalid URL Encoding", "invalid=%ZZ", nil, true},
+		{"Max Stale", "max_stale=10s&freshness=5s", QueryParams{"max_stale": "10s", "freshness": "5s"}, false},
+		{"Max Stale requires Freshness", "max_stale=10s", nil, true},
 	}
 
 	for _, tc := range testCases {
@@ -47,5 +49,17 @@ func Test_NewQueryParams(t *testing.T) {
 				t.Errorf("Test '%s' failed: expected: %#v, got: %#v", tc.name, tc.expected, qp)
 			}
 		})
+	}
+}
+
+// Test_QueryParamsTimings tests that looking up unset timings values does
+// not result in a panic, and that zero values are returned.
+func Test_NewQueryParamsTimes(t *testing.T) {
+	qp := QueryParams{}
+	if qp.Freshness() != 0 {
+		t.Errorf("Expected 0, got %v", qp.Freshness())
+	}
+	if qp.MaxStale() != 0 {
+		t.Errorf("Expected 0, got %v", qp.MaxStale())
 	}
 }

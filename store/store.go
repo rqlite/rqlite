@@ -274,7 +274,9 @@ type Store struct {
 
 	// Latest log entry index actually reflected by the FSM. Due to Raft code
 	// this value is not updated after a Snapshot-restore.
-	fsmIdx *atomic.Uint64
+	fsmIdx         *atomic.Uint64
+	fsmUpdateTime  *AtomicTime
+	appendedAtTime *AtomicTime
 
 	// Latest log entry index which actually changed the database.
 	dbAppliedIdx         *atomic.Uint64
@@ -376,6 +378,8 @@ func New(ly Layer, c *Config) *Store {
 		ApplyTimeout:    applyTimeout,
 		snapshotCAS:     NewCheckAndSet(),
 		fsmIdx:          &atomic.Uint64{},
+		fsmUpdateTime:   NewAtomicTime(),
+		appendedAtTime:  NewAtomicTime(),
 		dbAppliedIdx:    &atomic.Uint64{},
 	}
 }
@@ -1122,7 +1126,7 @@ func (s *Store) Query(qr *proto.QueryRequest) ([]*proto.QueryRows, error) {
 		return nil, ErrNotLeader
 	}
 
-	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE && s.isStaleRead(qr.Freshness) {
+	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE && s.isStaleRead(qr.Freshness, qr.MaxStale) {
 		return nil, ErrStaleRead
 	}
 
@@ -1162,7 +1166,7 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 			}
 			return resp
 		}
-		if eqr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE && s.isStaleRead(eqr.Freshness) {
+		if eqr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE && s.isStaleRead(eqr.Freshness, eqr.MaxStale) {
 			return nil, ErrStaleRead
 		} else if eqr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK {
 			if !isLeader {
@@ -1786,11 +1790,20 @@ func (s *Store) updateAppliedIndex() chan struct{} {
 	return done
 }
 
-func (s *Store) isStaleRead(freshness int64) bool {
+func (s *Store) isStaleRead(freshness, maxStale int64) bool {
 	if freshness == 0 || s.raft.State() == raft.Leader {
 		return false
 	}
-	return time.Since(s.raft.LastContact()).Nanoseconds() > freshness
+	if time.Since(s.raft.LastContact()).Nanoseconds() > freshness {
+		return true
+	}
+	if maxStale == 0 {
+		return false
+	}
+	if s.fsmIdx.Load() < s.raft.CommitIndex() && s.fsmUpdateTime.Sub(s.appendedAtTime).Nanoseconds() > maxStale {
+		return true
+	}
+	return false
 }
 
 type fsmExecuteResponse struct {
@@ -1816,6 +1829,8 @@ type fsmGenericResponse struct {
 func (s *Store) fsmApply(l *raft.Log) (e interface{}) {
 	defer func() {
 		s.fsmIdx.Store(l.Index)
+		s.fsmUpdateTime.Store(time.Now())
+		s.appendedAtTime.Store(l.AppendedAt)
 		if l.Index <= s.lastCommandIdxOnOpen {
 			// In here means at least one command entry was in the log when the Store
 			// opened.

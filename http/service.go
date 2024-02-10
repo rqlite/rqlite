@@ -1210,6 +1210,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryPa
 		Timings:   qp.Timings(),
 		Level:     qp.Level(),
 		Freshness: qp.Freshness().Nanoseconds(),
+		MaxStale:  qp.MaxStale().Nanoseconds(),
 	}
 
 	results, resultsErr := s.store.Query(qr)
@@ -1300,6 +1301,7 @@ func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request, qp Query
 		Timings:   qp.Timings(),
 		Level:     qp.Level(),
 		Freshness: qp.Freshness().Nanoseconds(),
+		MaxStale:  qp.MaxStale().Nanoseconds(),
 	}
 
 	results, resultsErr := s.store.Request(eqr)

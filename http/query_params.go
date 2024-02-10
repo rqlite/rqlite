@@ -26,7 +26,12 @@ func NewQueryParams(r *http.Request) (QueryParams, error) {
 		qp[k] = v[0]
 	}
 
-	for _, k := range []string{"timeout", "freshness", "db_timeout"} {
+	if _, ok := qp["max_stale"]; ok {
+		if _, ok := qp["freshness"]; !ok {
+			return nil, fmt.Errorf("max_stale requires freshness")
+		}
+	}
+	for _, k := range []string{"timeout", "freshness", "db_timeout", "max_stale"} {
 		t, ok := qp[k]
 		if ok {
 			_, err := time.ParseDuration(t)
@@ -167,6 +172,13 @@ func (qp QueryParams) Query() string {
 // Freshness returns the requested freshness duration.
 func (qp QueryParams) Freshness() time.Duration {
 	f := qp["freshness"]
+	d, _ := time.ParseDuration(f)
+	return d
+}
+
+// MaxStale returns the requested max stale duration.
+func (qp QueryParams) MaxStale() time.Duration {
+	f := qp["max_stale"]
 	d, _ := time.ParseDuration(f)
 	return d
 }
