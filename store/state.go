@@ -18,27 +18,27 @@ import (
 
 // IsStaleRead returns whether a read is stale.
 func IsStaleRead(
-	LeaderLastContact time.Time,
-	LastFSMUpdateTime time.Time,
-	LastAppendedAtTime time.Time,
-	FSMIndex uint64,
-	CommitIndex uint64,
-	Freshness int64,
-	MaxStale int64,
+	leaderlastContact time.Time,
+	lastFSMUpdateTime time.Time,
+	lastAppendedAtTime time.Time,
+	fsmIndex uint64,
+	commitIndex uint64,
+	freshness int64,
+	maxStale int64,
 ) bool {
-	if Freshness == 0 {
+	if freshness == 0 {
 		return false
 	}
-	if time.Since(LeaderLastContact).Nanoseconds() > Freshness {
+	if time.Since(leaderlastContact).Nanoseconds() > freshness {
 		return true
 	}
-	if MaxStale == 0 {
+	if maxStale == 0 {
 		return false
 	}
-	if FSMIndex == CommitIndex {
+	if fsmIndex == commitIndex {
 		return false
 	}
-	return LastFSMUpdateTime.Sub(LastAppendedAtTime).Nanoseconds() > MaxStale
+	return lastFSMUpdateTime.Sub(lastAppendedAtTime).Nanoseconds() > maxStale
 }
 
 // IsNewNode returns whether a node using raftDir would be a brand-new node.
