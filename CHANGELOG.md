@@ -1,4 +1,7 @@
-## 8.19.1 (unreleased)
+## 8.20.0 (unreleased)
+### New features
+- [PR #1681](https://github.com/rqlite/rqlite/pull/1681): Support _Stale Reads_ relative to Leader time.
+
 ### Implementation changes and bug fixes
 - [PR #1670](https://github.com/rqlite/rqlite/pull/1670): Improve error message when query on remote node fails.
 - [PR #1671](https://github.com/rqlite/rqlite/pull/1670): Minor optimizations to Unified Request processing.
