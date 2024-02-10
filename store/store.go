@@ -1800,10 +1800,10 @@ func (s *Store) isStaleRead(freshness, maxStale int64) bool {
 	if maxStale == 0 {
 		return false
 	}
-	if s.fsmIdx.Load() < s.raft.CommitIndex() && s.fsmUpdateTime.Sub(s.appendedAtTime).Nanoseconds() > maxStale {
-		return true
+	if s.fsmIdx.Load() == s.raft.CommitIndex() {
+		return false
 	}
-	return false
+	return s.fsmUpdateTime.Sub(s.appendedAtTime).Nanoseconds() > maxStale
 }
 
 type fsmExecuteResponse struct {
