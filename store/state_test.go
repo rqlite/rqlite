@@ -27,8 +27,14 @@ func Test_IsStaleRead(t *testing.T) {
 			Exp:       false,
 		},
 		{
+			Name:              "no freshness set, but clearly unfresh connection",
+			LeaderLastContact: time.Now().Add(-1000 * time.Hour),
+			Freshness:         0,
+			Exp:               false,
+		},
+		{
 			Name:              "freshness set, but not exceeded",
-			LeaderLastContact: time.Now().Add(-1 * time.Second),
+			LeaderLastContact: time.Now().Add(10 * time.Second),
 			Freshness:         time.Minute,
 			Exp:               false,
 		},
@@ -79,6 +85,7 @@ func Test_IsStaleRead(t *testing.T) {
 			FSMIndex:           9,
 			CommitIndex:        10,
 			Freshness:          time.Minute,
+			MaxStale:           0,
 			Exp:                false,
 		},
 	}
