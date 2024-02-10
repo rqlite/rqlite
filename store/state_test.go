@@ -17,8 +17,8 @@ func Test_IsStaleRead(t *testing.T) {
 		LastAppendedAtTime time.Time
 		FSMIndex           uint64
 		CommitIndex        uint64
-		Freshness          int64
-		MaxStale           int64
+		Freshness          time.Duration
+		MaxStale           time.Duration
 		Exp                bool
 	}{
 		{
@@ -29,13 +29,13 @@ func Test_IsStaleRead(t *testing.T) {
 		{
 			Name:              "freshness set, but not exceeded",
 			LeaderLastContact: time.Now().Add(-1 * time.Second),
-			Freshness:         time.Minute.Nanoseconds(),
+			Freshness:         time.Minute,
 			Exp:               false,
 		},
 		{
 			Name:              "freshness set and exceeded",
 			LeaderLastContact: time.Now().Add(-10 * time.Second),
-			Freshness:         time.Second.Nanoseconds(),
+			Freshness:         time.Second,
 			Exp:               true,
 		},
 		{
@@ -45,8 +45,8 @@ func Test_IsStaleRead(t *testing.T) {
 			LastAppendedAtTime: time.Now().Add(-10 * time.Second),
 			FSMIndex:           10,
 			CommitIndex:        10,
-			Freshness:          time.Minute.Nanoseconds(),
-			MaxStale:           time.Second.Nanoseconds(),
+			Freshness:          time.Minute,
+			MaxStale:           time.Second,
 			Exp:                false,
 		},
 		{
@@ -56,8 +56,8 @@ func Test_IsStaleRead(t *testing.T) {
 			LastAppendedAtTime: time.Now().Add(-10 * time.Second),
 			FSMIndex:           9,
 			CommitIndex:        10,
-			Freshness:          time.Minute.Nanoseconds(),
-			MaxStale:           time.Second.Nanoseconds(),
+			Freshness:          time.Minute,
+			MaxStale:           time.Second,
 			Exp:                true,
 		},
 		{
@@ -67,8 +67,8 @@ func Test_IsStaleRead(t *testing.T) {
 			LastAppendedAtTime: time.Now().Add(-10 * time.Second),
 			FSMIndex:           9,
 			CommitIndex:        10,
-			Freshness:          time.Minute.Nanoseconds(),
-			MaxStale:           time.Minute.Nanoseconds(),
+			Freshness:          time.Minute,
+			MaxStale:           time.Minute,
 			Exp:                false,
 		},
 		{
@@ -78,7 +78,7 @@ func Test_IsStaleRead(t *testing.T) {
 			LastAppendedAtTime: time.Now().Add(-10 * time.Second),
 			FSMIndex:           9,
 			CommitIndex:        10,
-			Freshness:          time.Minute.Nanoseconds(),
+			Freshness:          time.Minute,
 			Exp:                false,
 		},
 	}
@@ -90,8 +90,8 @@ func Test_IsStaleRead(t *testing.T) {
 			tt.LastAppendedAtTime,
 			tt.FSMIndex,
 			tt.CommitIndex,
-			tt.Freshness,
-			tt.MaxStale), tt.Exp; got != exp {
+			tt.Freshness.Nanoseconds(),
+			tt.MaxStale.Nanoseconds()), tt.Exp; got != exp {
 			t.Fatalf("unexpected result for IsStaleRead test %s\nexp: %v\ngot: %v", tt.Name, exp, got)
 		}
 	}
