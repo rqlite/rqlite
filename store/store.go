@@ -1791,19 +1791,17 @@ func (s *Store) updateAppliedIndex() chan struct{} {
 }
 
 func (s *Store) isStaleRead(freshness, maxStale int64) bool {
-	if freshness == 0 || s.raft.State() == raft.Leader {
+	if s.raft.State() == raft.Leader {
 		return false
 	}
-	if time.Since(s.raft.LastContact()).Nanoseconds() > freshness {
-		return true
-	}
-	if maxStale == 0 {
-		return false
-	}
-	if s.fsmIdx.Load() == s.raft.CommitIndex() {
-		return false
-	}
-	return s.fsmUpdateTime.Sub(s.appendedAtTime).Nanoseconds() > maxStale
+	return IsStaleRead(
+		s.raft.LastContact(),
+		s.fsmUpdateTime.Load(),
+		s.appendedAtTime.Load(),
+		s.fsmIdx.Load(),
+		s.raft.CommitIndex(),
+		freshness,
+		maxStale)
 }
 
 type fsmExecuteResponse struct {

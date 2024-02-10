@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/v8/command/chunking"
@@ -14,6 +15,31 @@ import (
 	rlog "github.com/rqlite/rqlite/v8/log"
 	"github.com/rqlite/rqlite/v8/snapshot"
 )
+
+// IsStaleRead returns whether a read is stale.
+func IsStaleRead(
+	LeaderLastContact time.Time,
+	LastFSMUpdateTime time.Time,
+	LastAppendedAtTime time.Time,
+	FSMIndex uint64,
+	CommitIndex uint64,
+	Freshness int64,
+	MaxStale int64,
+) bool {
+	if Freshness == 0 {
+		return false
+	}
+	if time.Since(LeaderLastContact).Nanoseconds() > Freshness {
+		return true
+	}
+	if MaxStale == 0 {
+		return false
+	}
+	if FSMIndex == CommitIndex {
+		return false
+	}
+	return LastFSMUpdateTime.Sub(LastAppendedAtTime).Nanoseconds() > MaxStale
+}
 
 // IsNewNode returns whether a node using raftDir would be a brand-new node.
 // It also means that the window for this node joining a different cluster has passed.

@@ -9,6 +9,94 @@ import (
 	"github.com/rqlite/rqlite/v8/command/proto"
 )
 
+func Test_IsStaleRead(t *testing.T) {
+	tests := []struct {
+		Name               string
+		LeaderLastContact  time.Time
+		LastFSMUpdateTime  time.Time
+		LastAppendedAtTime time.Time
+		FSMIndex           uint64
+		CommitIndex        uint64
+		Freshness          int64
+		MaxStale           int64
+		Exp                bool
+	}{
+		{
+			Name:      "no freshness set",
+			Freshness: 0,
+			Exp:       false,
+		},
+		{
+			Name:              "freshness set, but not exceeded",
+			LeaderLastContact: time.Now().Add(-1 * time.Second),
+			Freshness:         time.Minute.Nanoseconds(),
+			Exp:               false,
+		},
+		{
+			Name:              "freshness set and exceeded",
+			LeaderLastContact: time.Now().Add(-10 * time.Second),
+			Freshness:         time.Second.Nanoseconds(),
+			Exp:               true,
+		},
+		{
+			Name:               "freshness set, is ok, max stale exceeded, but applied index is up-to-date",
+			LeaderLastContact:  time.Now().Add(-1 * time.Second),
+			LastFSMUpdateTime:  time.Now().Add(-1 * time.Second),
+			LastAppendedAtTime: time.Now().Add(-10 * time.Second),
+			FSMIndex:           10,
+			CommitIndex:        10,
+			Freshness:          time.Minute.Nanoseconds(),
+			MaxStale:           time.Second.Nanoseconds(),
+			Exp:                false,
+		},
+		{
+			Name:               "freshness set, is ok, max stale exceeded, and applied index is behind",
+			LeaderLastContact:  time.Now().Add(-1 * time.Second),
+			LastFSMUpdateTime:  time.Now().Add(-1 * time.Second),
+			LastAppendedAtTime: time.Now().Add(-10 * time.Second),
+			FSMIndex:           9,
+			CommitIndex:        10,
+			Freshness:          time.Minute.Nanoseconds(),
+			MaxStale:           time.Second.Nanoseconds(),
+			Exp:                true,
+		},
+		{
+			Name:               "freshness set, is ok, max stale not exceeded, but applied index is behind",
+			LeaderLastContact:  time.Now().Add(-1 * time.Second),
+			LastFSMUpdateTime:  time.Now().Add(-1 * time.Second),
+			LastAppendedAtTime: time.Now().Add(-10 * time.Second),
+			FSMIndex:           9,
+			CommitIndex:        10,
+			Freshness:          time.Minute.Nanoseconds(),
+			MaxStale:           time.Minute.Nanoseconds(),
+			Exp:                false,
+		},
+		{
+			Name:               "freshness set, is ok, applied index is behind, but max stale not set",
+			LeaderLastContact:  time.Now().Add(-1 * time.Second),
+			LastFSMUpdateTime:  time.Now().Add(-1 * time.Second),
+			LastAppendedAtTime: time.Now().Add(-10 * time.Second),
+			FSMIndex:           9,
+			CommitIndex:        10,
+			Freshness:          time.Minute.Nanoseconds(),
+			Exp:                false,
+		},
+	}
+
+	for _, tt := range tests {
+		if got, exp := IsStaleRead(
+			tt.LeaderLastContact,
+			tt.LastFSMUpdateTime,
+			tt.LastAppendedAtTime,
+			tt.FSMIndex,
+			tt.CommitIndex,
+			tt.Freshness,
+			tt.MaxStale), tt.Exp; got != exp {
+			t.Fatalf("unexpected result for IsStaleRead test %s\nexp: %v\ngot: %v", tt.Name, exp, got)
+		}
+	}
+}
+
 func Test_Store_IsNewNode(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()
