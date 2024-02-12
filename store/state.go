@@ -24,7 +24,7 @@ func IsStaleRead(
 	fsmIndex uint64,
 	commitIndex uint64,
 	freshness int64,
-	maxStale int64,
+	strict bool,
 ) bool {
 	if freshness == 0 {
 		return false
@@ -32,13 +32,13 @@ func IsStaleRead(
 	if time.Since(leaderlastContact).Nanoseconds() > freshness {
 		return true
 	}
-	if maxStale == 0 {
+	if !strict {
 		return false
 	}
 	if fsmIndex == commitIndex {
 		return false
 	}
-	return lastFSMUpdateTime.Sub(lastAppendedAtTime).Nanoseconds() > maxStale
+	return lastFSMUpdateTime.Sub(lastAppendedAtTime).Nanoseconds() > freshness
 }
 
 // IsNewNode returns whether a node using raftDir would be a brand-new node.

@@ -18,7 +18,7 @@ func Test_IsStaleRead(t *testing.T) {
 		FSMIndex           uint64
 		CommitIndex        uint64
 		Freshness          time.Duration
-		MaxStale           time.Duration
+		Strict             bool
 		Exp                bool
 	}{
 		{
@@ -45,52 +45,51 @@ func Test_IsStaleRead(t *testing.T) {
 			Exp:               true,
 		},
 		{
-			Name:               "freshness set, is ok, max stale exceeded, but applied index is up-to-date",
-			LeaderLastContact:  time.Now().Add(-1 * time.Second),
-			LastFSMUpdateTime:  time.Now().Add(-1 * time.Second),
-			LastAppendedAtTime: time.Now().Add(-10 * time.Second),
+			Name:               "freshness set, is ok, strict is set, appended time exceeds, but applied index is up-to-date",
+			LeaderLastContact:  time.Now(),
+			LastFSMUpdateTime:  time.Now(),
+			LastAppendedAtTime: time.Now().Add(-30 * time.Second),
 			FSMIndex:           10,
 			CommitIndex:        10,
-			Freshness:          time.Minute,
-			MaxStale:           time.Second,
+			Freshness:          10 * time.Second,
+			Strict:             true,
 			Exp:                false,
 		},
 		{
-			Name:               "freshness set, is ok, max stale exceeded, and applied index is behind",
-			LeaderLastContact:  time.Now().Add(-1 * time.Second),
-			LastFSMUpdateTime:  time.Now().Add(-1 * time.Second),
-			LastAppendedAtTime: time.Now().Add(-10 * time.Second),
+			Name:               "freshness set, is ok, strict is set, appended time exceeds, applied index behind",
+			LeaderLastContact:  time.Now(),
+			LastFSMUpdateTime:  time.Now(),
+			LastAppendedAtTime: time.Now().Add(-15 * time.Second),
 			FSMIndex:           9,
 			CommitIndex:        10,
-			Freshness:          time.Minute,
-			MaxStale:           time.Second,
+			Freshness:          10 * time.Second,
+			Strict:             true,
 			Exp:                true,
 		},
 		{
-			Name:               "freshness set, is ok, max stale not exceeded, but applied index is behind",
-			LeaderLastContact:  time.Now().Add(-1 * time.Second),
-			LastFSMUpdateTime:  time.Now().Add(-1 * time.Second),
-			LastAppendedAtTime: time.Now().Add(-10 * time.Second),
+			Name:               "freshness set, is ok, strict is set, appended time does not execeed, applied index is behind",
+			LeaderLastContact:  time.Now(),
+			LastFSMUpdateTime:  time.Now(),
+			LastAppendedAtTime: time.Now(),
 			FSMIndex:           9,
 			CommitIndex:        10,
 			Freshness:          time.Minute,
-			MaxStale:           time.Minute,
+			Strict:             true,
 			Exp:                false,
 		},
 		{
-			Name:               "freshness set, is ok, applied index is behind, but max stale not set",
-			LeaderLastContact:  time.Now().Add(-1 * time.Second),
-			LastFSMUpdateTime:  time.Now().Add(-1 * time.Second),
+			Name:               "freshness set, is ok, appended time exceeds, applied index is behind, but strict not set",
+			LeaderLastContact:  time.Now(),
+			LastFSMUpdateTime:  time.Now(),
 			LastAppendedAtTime: time.Now().Add(-10 * time.Second),
 			FSMIndex:           9,
 			CommitIndex:        10,
-			Freshness:          time.Minute,
-			MaxStale:           0,
+			Freshness:          5 * time.Second,
 			Exp:                false,
 		},
 	}
 
-	for _, tt := range tests {
+	for i, tt := range tests {
 		if got, exp := IsStaleRead(
 			tt.LeaderLastContact,
 			tt.LastFSMUpdateTime,
@@ -98,8 +97,8 @@ func Test_IsStaleRead(t *testing.T) {
 			tt.FSMIndex,
 			tt.CommitIndex,
 			tt.Freshness.Nanoseconds(),
-			tt.MaxStale.Nanoseconds()), tt.Exp; got != exp {
-			t.Fatalf("unexpected result for IsStaleRead test %s\nexp: %v\ngot: %v", tt.Name, exp, got)
+			tt.Strict), tt.Exp; got != exp {
+			t.Fatalf("unexpected result for IsStaleRead test #%d, %s\nexp: %v\ngot: %v", i+1, tt.Name, exp, got)
 		}
 	}
 }

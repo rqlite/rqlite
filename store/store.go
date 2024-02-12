@@ -1129,7 +1129,7 @@ func (s *Store) Query(qr *proto.QueryRequest) ([]*proto.QueryRows, error) {
 		return nil, ErrNotLeader
 	}
 
-	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE && s.isStaleRead(qr.Freshness, qr.MaxStale) {
+	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE && s.isStaleRead(qr.Freshness, qr.FreshnessStrict) {
 		return nil, ErrStaleRead
 	}
 
@@ -1169,7 +1169,7 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 			}
 			return resp
 		}
-		if eqr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE && s.isStaleRead(eqr.Freshness, eqr.MaxStale) {
+		if eqr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE && s.isStaleRead(eqr.Freshness, eqr.FreshnessStrict) {
 			return nil, ErrStaleRead
 		} else if eqr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK {
 			if !isLeader {
@@ -1793,7 +1793,7 @@ func (s *Store) updateAppliedIndex() chan struct{} {
 	return done
 }
 
-func (s *Store) isStaleRead(freshness, maxStale int64) bool {
+func (s *Store) isStaleRead(freshness int64, strict bool) bool {
 	if s.raft.State() == raft.Leader {
 		return false
 	}
@@ -1804,7 +1804,7 @@ func (s *Store) isStaleRead(freshness, maxStale int64) bool {
 		s.fsmIdx.Load(),
 		s.raft.CommitIndex(),
 		freshness,
-		maxStale)
+		strict)
 }
 
 type fsmExecuteResponse struct {

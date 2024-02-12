@@ -1207,10 +1207,10 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryPa
 			DbTimeout:   int64(qp.DBTimeout(0)),
 			Statements:  queries,
 		},
-		Timings:   qp.Timings(),
-		Level:     qp.Level(),
-		Freshness: qp.Freshness().Nanoseconds(),
-		MaxStale:  qp.MaxStale().Nanoseconds(),
+		Timings:         qp.Timings(),
+		Level:           qp.Level(),
+		Freshness:       qp.Freshness().Nanoseconds(),
+		FreshnessStrict: qp.FreshnessStrict(),
 	}
 
 	results, resultsErr := s.store.Query(qr)
@@ -1298,10 +1298,10 @@ func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request, qp Query
 			Statements:  stmts,
 			DbTimeout:   int64(qp.DBTimeout(0)),
 		},
-		Timings:   qp.Timings(),
-		Level:     qp.Level(),
-		Freshness: qp.Freshness().Nanoseconds(),
-		MaxStale:  qp.MaxStale().Nanoseconds(),
+		Timings:         qp.Timings(),
+		Level:           qp.Level(),
+		Freshness:       qp.Freshness().Nanoseconds(),
+		FreshnessStrict: qp.FreshnessStrict(),
 	}
 
 	results, resultsErr := s.store.Request(eqr)
