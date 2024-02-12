@@ -3,6 +3,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"errors"
@@ -22,7 +23,9 @@ import (
 	"github.com/rqlite/rqlite/v8/cmd"
 	"github.com/rqlite/rqlite/v8/cmd/rqlite/history"
 	httpcl "github.com/rqlite/rqlite/v8/cmd/rqlite/http"
+	rotel "github.com/rqlite/rqlite/v8/otel"
 	"github.com/rqlite/rqlite/v8/rtls"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 const maxRedirect = 21
@@ -48,6 +51,7 @@ type argT struct {
 	Credentials  string        `cli:"u,user" usage:"set basic auth credentials in form username:password"`
 	Version      bool          `cli:"v,version" usage:"display CLI version"`
 	HTTPTimeout  clix.Duration `cli:"t,http-timeout" usage:"set timeout on HTTP requests" dft:"30s"`
+	OTLPDest     string        `cli:"o,otlp-dest" usage:"host:port to which OTLP spans should be exported"`
 }
 
 var cliHelp = []string{
@@ -84,6 +88,19 @@ func main() {
 			ctx.String("Version %s, commit %s, branch %s, built on %s\n", cmd.Version,
 				cmd.Commit, cmd.Branch, cmd.Buildtime)
 			return nil
+		}
+
+		if argv.OTLPDest != "" {
+			cleanup, err := rotel.Setup(context.Background(), argv.OTLPDest)
+			if err != nil {
+				ctx.String("%v", err)
+			}
+			defer func() {
+				err := cleanup()
+				if err != nil {
+					ctx.String("%v", err)
+				}
+			}()
 		}
 
 		httpClient, err := getHTTPClient(argv)
@@ -411,10 +428,10 @@ func getHTTPClient(argv *argT) (*http.Client, error) {
 	tlsConfig.NextProtos = nil // CLI refuses to connect otherwise.
 
 	client := http.Client{
-		Transport: &http.Transport{
+		Transport: otelhttp.NewTransport(&http.Transport{
 			TLSClientConfig: tlsConfig,
 			Proxy:           http.ProxyFromEnvironment,
-		},
+		}),
 		Timeout: argv.HTTPTimeout.Duration,
 	}
 

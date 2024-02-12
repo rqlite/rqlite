@@ -29,6 +29,11 @@ import (
 	"github.com/rqlite/rqlite/v8/queue"
 	"github.com/rqlite/rqlite/v8/rtls"
 	"github.com/rqlite/rqlite/v8/store"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 )
 
 var (
@@ -360,7 +365,7 @@ func New(addr string, store Store, cluster Cluster, credentials CredentialStore)
 // Start starts the service.
 func (s *Service) Start() error {
 	s.httpServer = http.Server{
-		Handler: s,
+		Handler: otelhttp.NewHandler(s, "rqlited"),
 	}
 
 	var ln net.Listener
@@ -1090,6 +1095,12 @@ func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request, qp Query
 	s.writeResponse(w, r, qp, resp)
 }
 
+func metadataFromContext(ctx context.Context) map[string]string {
+	mc := propagation.MapCarrier{}
+	otel.GetTextMapPropagator().Inject(ctx, mc)
+	return mc
+}
+
 // execute handles queries that modify the database.
 func (s *Service) execute(w http.ResponseWriter, r *http.Request, qp QueryParams) {
 	resp := NewResponse()
@@ -1111,16 +1122,20 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request, qp QueryParams
 		return
 	}
 
+	ctx, span := otel.Tracer("").Start(r.Context(), "Raft.Execute", trace.WithAttributes(
+		attribute.String("statement", stmts[0].Sql)))
 	er := &proto.ExecuteRequest{
 		Request: &proto.Request{
 			Transaction: qp.Tx(),
 			DbTimeout:   int64(qp.DBTimeout(0)),
 			Statements:  stmts,
+			Metadata:    metadataFromContext(ctx),
 		},
 		Timings: qp.Timings(),
 	}
-
 	results, resultsErr := s.store.Execute(er)
+	span.End()
+
 	if resultsErr != nil && resultsErr == store.ErrNotLeader {
 		if s.DoRedirect(w, r, qp) {
 			return

@@ -206,6 +206,9 @@ type Config struct {
 
 	// MemProfile enables memory profiling.
 	MemProfile string
+
+	// OTLPDest sets the OTLP endpoint
+	OTLPDest string
 }
 
 // Validate checks the configuration for internal consistency, and activates
@@ -485,6 +488,7 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	flag.BoolVar(&config.WriteQueueTx, "write-queue-tx", false, "Use a transaction when processing a queued write")
 	flag.StringVar(&config.CPUProfile, "cpu-profile", "", "Path to file for CPU profiling information")
 	flag.StringVar(&config.MemProfile, "mem-profile", "", "Path to file for memory profiling information")
+	flag.StringVar(&config.OTLPDest, "otlp-dest", "", "OTLP destination, in the format host:port")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "\n%s\n\n", desc)
 		fmt.Fprintf(os.Stderr, "Usage: %s [flags] <data directory>\n", name)

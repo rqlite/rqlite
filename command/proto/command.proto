@@ -24,6 +24,7 @@ message Request {
 	bool transaction = 1;
 	repeated Statement statements = 2;
 	int64 dbTimeout = 3;
+	map<string, string> metadata = 4;
 }
 
 message QueryRequest {
