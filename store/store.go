@@ -986,6 +986,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		"node_id":            s.raftID,
 		"raft":               raftStats,
 		"fsm_index":          s.fsmIdx.Load(),
+		"fsm_update_time":    s.fsmUpdateTime.Load(),
 		"db_applied_index":   s.dbAppliedIdx.Load(),
 		"last_applied_index": lAppliedIdx,
 		"addr":               s.Addr(),
@@ -993,7 +994,8 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 			"node_id": leaderID,
 			"addr":    leaderAddr,
 		},
-		"ready": s.Ready(),
+		"leader_appended_at_time": s.appendedAtTime.Load(),
+		"ready":                   s.Ready(),
 		"observer": map[string]uint64{
 			"observed": s.observer.GetNumObserved(),
 			"dropped":  s.observer.GetNumDropped(),
