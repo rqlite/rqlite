@@ -1,6 +1,6 @@
 ## 8.20.0 (unreleased)
 ### New features
-- [PR #1681](https://github.com/rqlite/rqlite/pull/1681): Add `freshness_strict` flag, which checks _Stale Reads_ against Leader time.
+- [PR #1681](https://github.com/rqlite/rqlite/pull/1681): Add `freshness_strict` flag, which checks _Stale Reads_ against Leader time. Thanks @aderouineau
 
 ### Implementation changes and bug fixes
 - [PR #1670](https://github.com/rqlite/rqlite/pull/1670): Improve error message when query on remote node fails.
