@@ -1,6 +1,6 @@
 os: Visual Studio 2019
 
-stack: go 1.22
+stack: go 1.21
 
 version: 7.{build}
 
