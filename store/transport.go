@@ -114,7 +114,7 @@ func (n *NodeTransport) Consumer() <-chan raft.RPC {
 					if rpc.Reader != nil {
 						rpc.Reader = gzip.NewDecompressor(rpc.Reader)
 					}
-				case raft.AppendEntriesRequest:
+				case *raft.AppendEntriesRequest:
 					for _, e := range cmd.Entries {
 						if e.Type == raft.LogCommand {
 							n.commandCommitIndex.Store(e.Index)

@@ -2406,8 +2406,8 @@ func Test_SingleNodeNoop(t *testing.T) {
 	if af.Error() != nil {
 		t.Fatalf("expected nil apply future error")
 	}
-	if s.numNoops != 1 {
-		t.Fatalf("noop count is wrong, got: %d", s.numNoops)
+	if s.numNoops.Load() != 1 {
+		t.Fatalf("noop count is wrong, got: %d", s.numNoops.Load())
 	}
 }
 
@@ -2884,11 +2884,11 @@ func asJSONAssociative(v interface{}) string {
 	return string(b)
 }
 
-func testPoll(t *testing.T, f func() bool, p time.Duration, d time.Duration) {
+func testPoll(t *testing.T, f func() bool, checkPeriod time.Duration, timeout time.Duration) {
 	t.Helper()
-	tck := time.NewTicker(p)
+	tck := time.NewTicker(checkPeriod)
 	defer tck.Stop()
-	tmr := time.NewTimer(d)
+	tmr := time.NewTimer(timeout)
 	defer tmr.Stop()
 
 	for {

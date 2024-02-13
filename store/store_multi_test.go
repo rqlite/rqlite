@@ -106,6 +106,57 @@ func Test_MultiNodeSimple(t *testing.T) {
 	testFn2(t, s1)
 }
 
+func Test_MultiNodeNode_CommitIndexes(t *testing.T) {
+	s0, ln0 := mustNewStore(t)
+	defer s0.Close(true)
+	defer ln0.Close()
+	if err := s0.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s0.Bootstrap(NewServer(s0.ID(), s0.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	_, err := s0.WaitForLeader(10 * time.Second)
+	if err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	s1, ln1 := mustNewStore(t)
+	defer ln1.Close()
+
+	if err := s1.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s1.Close(true)
+
+	if err := s0.Join(joinRequest(s1.ID(), s1.Addr(), true)); err != nil {
+		t.Fatalf("failed to join single-node store: %s", err.Error())
+	}
+	if _, err := s1.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	if exp, got := uint64(3), s1.raft.CommitIndex(); exp != got {
+		t.Fatalf("wrong commit index, got: %d, exp %d", got, exp)
+	}
+	if exp, got := uint64(0), s1.raftTn.CommandCommitIndex(); exp != got {
+		t.Fatalf("wrong command commit index, got: %d, exp %d", got, exp)
+	}
+
+	// Send an FSM command through the log, ensure the indexes are correctly updated.
+	// on the follower.
+	s0.Noop("don't care")
+	testPoll(t, func() bool {
+		return s1.numNoops.Load() == 1
+	}, 50*time.Millisecond, 2*time.Second)
+	if exp, got := uint64(4), s1.raft.CommitIndex(); exp != got {
+		t.Fatalf("wrong commit index, got: %d, exp %d", got, exp)
+	}
+	if exp, got := uint64(4), s1.raftTn.CommandCommitIndex(); exp != got {
+		t.Fatalf("wrong command commit index, got: %d, exp %d", got, exp)
+	}
+}
+
 // Test_MultiNodeSnapshot_ErrorMessage tests that a snapshot fails with a specific
 // error message when the snapshot is attempted too soon after joining a cluster.
 // Hashicorp Raft doesn't expose a typed error, so we have to check the error
