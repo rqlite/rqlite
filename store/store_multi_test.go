@@ -181,9 +181,10 @@ func Test_MultiNodeNode_CommitIndexes(t *testing.T) {
 
 	// First node to join should also reflect the new cluster config
 	// command.
-	if exp, got := uint64(5), s1.raft.CommitIndex(); exp != got {
-		t.Fatalf("wrong commit index, got: %d, exp %d", got, exp)
-	}
+	testPoll(t, func() bool {
+		// The config change command comming through the log due to s2 joining is not instant.
+		return s1.raft.CommitIndex() == 5
+	}, 50*time.Millisecond, 2*time.Second)
 	if exp, got := uint64(4), s1.raftTn.CommandCommitIndex(); exp != got {
 		t.Fatalf("wrong command commit index, got: %d, exp %d", got, exp)
 	}
