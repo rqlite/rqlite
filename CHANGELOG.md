@@ -1,4 +1,4 @@
-## 8.20.0 (unreleased)
+## 8.20.0 (February 12th 2024)
 ### New features
 - [PR #1681](https://github.com/rqlite/rqlite/pull/1681): Add `freshness_strict` flag, which checks _Stale Reads_ against Leader time. Thanks @aderouineau
 
