@@ -1,4 +1,4 @@
-## 8.20.1 (unreleased)
+## 8.20.1 (February 13th 2024)
 
 ### Implementation changes and bug fixes
 - [PR #1684](https://github.com/rqlite/rqlite/pull/1684): Improvements to strict _Stale Read_ checks
