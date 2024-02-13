@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/v8/command/chunking"
@@ -14,6 +15,38 @@ import (
 	rlog "github.com/rqlite/rqlite/v8/log"
 	"github.com/rqlite/rqlite/v8/snapshot"
 )
+
+// IsStaleRead returns whether a read is stale.
+func IsStaleRead(
+	leaderlastContact time.Time,
+	lastFSMUpdateTime time.Time,
+	lastAppendedAtTime time.Time,
+	fsmIndex uint64,
+	commitIndex uint64,
+	freshness int64,
+	strict bool,
+) bool {
+	if freshness == 0 {
+		// Freshness not set, so no read can be stale.
+		return false
+	}
+	if time.Since(leaderlastContact).Nanoseconds() > freshness {
+		// The Leader has not been in contact witin the freshness window, so
+		// the read is stale.
+		return true
+	}
+	if !strict {
+		// Strict mode is not enabled, so no further checks are needed.
+		return false
+	}
+	if fsmIndex == commitIndex {
+		// FSM index is the same as the commit index, so we're caught up.
+		return false
+	}
+	// OK, we're not caught up. So was the log that last updated our local FSM
+	// appended by the Leader to its log within the freshness window?
+	return lastFSMUpdateTime.Sub(lastAppendedAtTime).Nanoseconds() > freshness
+}
 
 // IsNewNode returns whether a node using raftDir would be a brand-new node.
 // It also means that the window for this node joining a different cluster has passed.
