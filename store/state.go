@@ -39,6 +39,11 @@ func IsStaleRead(
 		// Strict mode is not enabled, so no further checks are needed.
 		return false
 	}
+	if lastAppendedAtTime.IsZero() {
+		// We've yet to be told about any appended log entries, so we
+		// assume we're caught up.
+		return false
+	}
 	if fsmIndex == commitIndex {
 		// FSM index is the same as the commit index, so we're caught up.
 		return false

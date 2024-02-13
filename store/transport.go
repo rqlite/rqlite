@@ -3,6 +3,7 @@ package store
 import (
 	"io"
 	"net"
+	"sync/atomic"
 	"time"
 
 	"github.com/hashicorp/raft"
@@ -52,16 +53,24 @@ func (t *Transport) Addr() net.Addr {
 // custom configuration of the InstallSnapshot method.
 type NodeTransport struct {
 	*raft.NetworkTransport
-	done   chan struct{}
-	closed bool
+	commandCommitIndex *atomic.Uint64
+	done               chan struct{}
+	closed             bool
 }
 
 // NewNodeTransport returns an initialized NodeTransport.
 func NewNodeTransport(transport *raft.NetworkTransport) *NodeTransport {
 	return &NodeTransport{
-		NetworkTransport: transport,
-		done:             make(chan struct{}),
+		NetworkTransport:   transport,
+		commandCommitIndex: &atomic.Uint64{},
+		done:               make(chan struct{}),
 	}
+}
+
+// CommandCommitIndex returns the index of the latest committed log entry
+// which is applied to the FSM.
+func (n *NodeTransport) CommandCommitIndex() uint64 {
+	return n.commandCommitIndex.Load()
 }
 
 // Close closes the transport
@@ -100,8 +109,17 @@ func (n *NodeTransport) Consumer() <-chan raft.RPC {
 			case <-n.done:
 				return
 			case rpc := <-srcCh:
-				if rpc.Reader != nil {
-					rpc.Reader = gzip.NewDecompressor(rpc.Reader)
+				switch cmd := rpc.Command.(type) {
+				case *raft.InstallSnapshotRequest:
+					if rpc.Reader != nil {
+						rpc.Reader = gzip.NewDecompressor(rpc.Reader)
+					}
+				case *raft.AppendEntriesRequest:
+					for _, e := range cmd.Entries {
+						if e.Type == raft.LogCommand {
+							n.commandCommitIndex.Store(e.Index)
+						}
+					}
 				}
 				ch <- rpc
 			}

@@ -336,7 +336,7 @@ type Store struct {
 	// For whitebox testing
 	numAutoVacuums  int
 	numIgnoredJoins int
-	numNoops        int
+	numNoops        *atomic.Uint64
 	numSnapshotsMu  sync.Mutex
 	numSnapshots    int
 }
@@ -384,6 +384,7 @@ func New(ly Layer, c *Config) *Store {
 		fsmUpdateTime:   NewAtomicTime(),
 		appendedAtTime:  NewAtomicTime(),
 		dbAppliedIdx:    &atomic.Uint64{},
+		numNoops:        &atomic.Uint64{},
 	}
 }
 
@@ -982,14 +983,15 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		return nil, err
 	}
 	status := map[string]interface{}{
-		"open":               s.open,
-		"node_id":            s.raftID,
-		"raft":               raftStats,
-		"fsm_index":          s.fsmIdx.Load(),
-		"fsm_update_time":    s.fsmUpdateTime.Load(),
-		"db_applied_index":   s.dbAppliedIdx.Load(),
-		"last_applied_index": lAppliedIdx,
-		"addr":               s.Addr(),
+		"open":                 s.open,
+		"node_id":              s.raftID,
+		"raft":                 raftStats,
+		"fsm_index":            s.fsmIdx.Load(),
+		"fsm_update_time":      s.fsmUpdateTime.Load(),
+		"db_applied_index":     s.dbAppliedIdx.Load(),
+		"last_applied_index":   lAppliedIdx,
+		"command_commit_index": s.raftTn.CommandCommitIndex(),
+		"addr":                 s.Addr(),
 		"leader": map[string]string{
 			"node_id": leaderID,
 			"addr":    leaderAddr,
@@ -1804,7 +1806,7 @@ func (s *Store) isStaleRead(freshness int64, strict bool) bool {
 		s.fsmUpdateTime.Load(),
 		s.appendedAtTime.Load(),
 		s.fsmIdx.Load(),
-		s.raft.CommitIndex(),
+		s.raftTn.CommandCommitIndex(),
 		freshness,
 		strict)
 }
@@ -1855,7 +1857,7 @@ func (s *Store) fsmApply(l *raft.Log) (e interface{}) {
 		s.dbAppliedIdx.Store(l.Index)
 	}
 	if cmd.Type == proto.Command_COMMAND_TYPE_NOOP {
-		s.numNoops++
+		s.numNoops.Add(1)
 	} else if cmd.Type == proto.Command_COMMAND_TYPE_LOAD {
 		// Swapping in a new database invalidates any existing snapshot.
 		err := s.snapshotStore.SetFullNeeded()

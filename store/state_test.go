@@ -45,6 +45,13 @@ func Test_IsStaleRead(t *testing.T) {
 			Exp:               true,
 		},
 		{
+			Name:              "freshness set and ok, strict is set, but no appended time",
+			LeaderLastContact: time.Now(),
+			Freshness:         10 * time.Second,
+			Strict:            true,
+			Exp:               false,
+		},
+		{
 			Name:               "freshness set, is ok, strict is set, appended time exceeds, but applied index is up-to-date",
 			LeaderLastContact:  time.Now(),
 			LastFSMUpdateTime:  time.Now(),
