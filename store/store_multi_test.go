@@ -106,6 +106,9 @@ func Test_MultiNodeSimple(t *testing.T) {
 	testFn2(t, s1)
 }
 
+// Test_MultiNodeNode_CommitIndexes tests that the commit indexes are
+// correctly updated as nodes join and leave the cluster, and as
+// commands are committed through the Raft log.
 func Test_MultiNodeNode_CommitIndexes(t *testing.T) {
 	s0, ln0 := mustNewStore(t)
 	defer s0.Close(true)
@@ -123,22 +126,20 @@ func Test_MultiNodeNode_CommitIndexes(t *testing.T) {
 
 	s1, ln1 := mustNewStore(t)
 	defer ln1.Close()
-
 	if err := s1.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
 	defer s1.Close(true)
-
 	if err := s0.Join(joinRequest(s1.ID(), s1.Addr(), true)); err != nil {
 		t.Fatalf("failed to join single-node store: %s", err.Error())
 	}
 	if _, err := s1.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
-
-	if exp, got := uint64(3), s1.raft.CommitIndex(); exp != got {
-		t.Fatalf("wrong commit index, got: %d, exp %d", got, exp)
-	}
+	testPoll(t, func() bool {
+		// The config change command comming through the log due to s1 joining is not instant.
+		return s1.raft.CommitIndex() == 3
+	}, 50*time.Millisecond, 2*time.Second)
 	if exp, got := uint64(0), s1.raftTn.CommandCommitIndex(); exp != got {
 		t.Fatalf("wrong command commit index, got: %d, exp %d", got, exp)
 	}
@@ -150,6 +151,37 @@ func Test_MultiNodeNode_CommitIndexes(t *testing.T) {
 		return s1.numNoops.Load() == 1
 	}, 50*time.Millisecond, 2*time.Second)
 	if exp, got := uint64(4), s1.raft.CommitIndex(); exp != got {
+		t.Fatalf("wrong commit index, got: %d, exp %d", got, exp)
+	}
+	if exp, got := uint64(4), s1.raftTn.CommandCommitIndex(); exp != got {
+		t.Fatalf("wrong command commit index, got: %d, exp %d", got, exp)
+	}
+
+	// Join another node to the cluster, which will result in Raft cluster
+	// config commands through the log, but no FSM commands.
+	s2, ln2 := mustNewStore(t)
+	defer ln2.Close()
+	if err := s2.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s2.Close(true)
+	if err := s0.Join(joinRequest(s2.ID(), s2.Addr(), true)); err != nil {
+		t.Fatalf("failed to join single-node store: %s", err.Error())
+	}
+	if _, err := s2.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+	testPoll(t, func() bool {
+		// The config change command comming through the log due to s2 joining is not instant.
+		return s2.raft.CommitIndex() == 5
+	}, 50*time.Millisecond, 2*time.Second)
+	if exp, got := uint64(4), s2.raftTn.CommandCommitIndex(); exp != got {
+		t.Fatalf("wrong command commit index, got: %d, exp %d", got, exp)
+	}
+
+	// First node to join should also reflect the new cluster config
+	// command.
+	if exp, got := uint64(5), s1.raft.CommitIndex(); exp != got {
 		t.Fatalf("wrong commit index, got: %d, exp %d", got, exp)
 	}
 	if exp, got := uint64(4), s1.raftTn.CommandCommitIndex(); exp != got {
