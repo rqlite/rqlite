@@ -285,7 +285,7 @@ func (s *Service) handleConn(conn net.Conn) {
 		switch c.Type {
 		case proto.Command_COMMAND_TYPE_GET_NODE_API_URL:
 			stats.Add(numGetNodeAPIRequest, 1)
-			p, err = pb.Marshal(&proto.Address{
+			p, err = pb.Marshal(&proto.NodeMeta{
 				Url: s.GetNodeAPIURL(),
 			})
 			if err != nil {

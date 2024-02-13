@@ -118,7 +118,7 @@ func (c *Client) GetNodeAPIAddr(nodeAddr string, timeout time.Duration) (string,
 		return "", err
 	}
 
-	a := &proto.Address{}
+	a := &proto.NodeMeta{}
 	err = pb.Unmarshal(p, a)
 	if err != nil {
 		return "", fmt.Errorf("protobuf unmarshal: %w", err)
