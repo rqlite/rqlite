@@ -1,7 +1,10 @@
-## 8.20.1 (February 13th 2024)
-
+## 8.20.2 (unreleased)
 ### Implementation changes and bug fixes
-- [PR #1684](https://github.com/rqlite/rqlite/pull/1684): Improvements to strict _Stale Read_ checks
+- [PR #1685](https://github.com/rqlite/rqlite/pull/1685): Rename a Proto (but not its fields).
+
+## 8.20.1 (February 13th 2024)
+### Implementation changes and bug fixes
+- [PR #1684](https://github.com/rqlite/rqlite/pull/1684): Improvements to strict _Stale Read_ checks.
 
 ## 8.20.0 (February 12th 2024)
 ### New features

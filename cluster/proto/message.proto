@@ -10,7 +10,7 @@ message Credentials {
     string password = 2;
 }
 
-message Address {
+message NodeMeta {
 	string url = 1;
 }
 
