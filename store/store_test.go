@@ -52,8 +52,9 @@ func Test_OpenStoreSingleNode(t *testing.T) {
 	}
 }
 
-// Test_SingleNodeSQLitePath ensures that basic functionality works when the SQLite database path
-// is explicitly specificed.
+// Test_SingleNodeSQLitePath ensures that basic functionality works when the SQLite
+// database path is explicitly specificed. It also checks that the CommitIndex is
+// set correctly.
 func Test_SingleNodeOnDiskSQLitePath(t *testing.T) {
 	s, ln, path := mustNewStoreSQLitePath(t)
 	defer ln.Close()
@@ -69,13 +70,29 @@ func Test_SingleNodeOnDiskSQLitePath(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 
+	ci, err := s.CommitIndex()
+	if err != nil {
+		t.Fatalf("failed to retrieve commit index: %s", err.Error())
+	}
+	if exp, got := uint64(2), ci; exp != got {
+		t.Fatalf("wrong commit index, got: %d, exp: %d", got, exp)
+	}
+
 	er := executeRequestFromStrings([]string{
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 	}, false, false)
-	_, err := s.Execute(er)
+	_, err = s.Execute(er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	ci, err = s.CommitIndex()
+	if err != nil {
+		t.Fatalf("failed to retrieve commit index: %s", err.Error())
+	}
+	if exp, got := uint64(3), ci; exp != got {
+		t.Fatalf("wrong commit index, got: %d, exp: %d", got, exp)
 	}
 
 	qr := queryRequestFromString("SELECT * FROM foo", false, false)
