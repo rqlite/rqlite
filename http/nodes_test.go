@@ -51,7 +51,7 @@ func Test_NodesVoters(t *testing.T) {
 
 func Test_NodeTestLeader(t *testing.T) {
 	node := &Node{ID: "1", Addr: "leader-raft-addr", APIAddr: "leader-api-addr"}
-	mockGA := newMockGetAddresser("leader-api-addr", nil)
+	mockGA := newMockGetNodeMetaer("leader-api-addr", nil)
 
 	node.Test(mockGA, "leader-raft-addr", 10*time.Second)
 	if !node.Reachable || !node.Leader {
@@ -61,7 +61,7 @@ func Test_NodeTestLeader(t *testing.T) {
 
 func Test_NodeTestNotLeader(t *testing.T) {
 	node := &Node{ID: "1", Addr: "follower-raft-addr", APIAddr: "follower-api-addr"}
-	mockGA := newMockGetAddresser("follower-api-addr", nil)
+	mockGA := newMockGetNodeMetaer("follower-api-addr", nil)
 
 	node.Test(mockGA, "leader-raft-addr", 10*time.Second)
 	if !node.Reachable || node.Leader {
@@ -72,7 +72,7 @@ func Test_NodeTestNotLeader(t *testing.T) {
 func Test_NodeTestDouble(t *testing.T) {
 	node1 := &Node{ID: "1", Addr: "leader-raft-addr", APIAddr: "leader-api-addr"}
 	node2 := &Node{ID: "2", Addr: "follower-raft-addr", APIAddr: "follower-api-addr"}
-	mockGA := &mockGetAddresser{}
+	mockGA := &mockGetNodeMetaer{}
 	mockGA.getAddrFn = func(addr string, timeout time.Duration) (string, error) {
 		if addr == "leader-raft-addr" {
 			return "leader-api-addr", nil
@@ -97,7 +97,7 @@ func Test_NodeTestDouble(t *testing.T) {
 func Test_NodeTestDouble_Timeout(t *testing.T) {
 	node1 := &Node{ID: "1", Addr: "leader-raft-addr", APIAddr: "leader-api-addr"}
 	node2 := &Node{ID: "2", Addr: "follower-raft-addr", APIAddr: "follower-api-addr"}
-	mockGA := &mockGetAddresser{}
+	mockGA := &mockGetNodeMetaer{}
 	mockGA.getAddrFn = func(addr string, timeout time.Duration) (string, error) {
 		if addr == "leader-raft-addr" {
 			return "leader-api-addr", nil
@@ -225,21 +225,21 @@ func Test_NodesRespDecoder_Decode_EmptyJSON(t *testing.T) {
 	}
 }
 
-// mockGetAddresser is a mock implementation of the GetAddresser interface.
-type mockGetAddresser struct {
+// mockGetNodeMetaer is a mock implementation of the GetNodeMetaer interface.
+type mockGetNodeMetaer struct {
 	apiAddr   string
 	err       error
 	getAddrFn func(addr string, timeout time.Duration) (string, error)
 }
 
-// newMockGetAddresser creates a new instance of mockGetAddresser.
-// You can customize the return values for GetNodeAPIAddr by setting apiAddr and err.
-func newMockGetAddresser(apiAddr string, err error) *mockGetAddresser {
-	return &mockGetAddresser{apiAddr: apiAddr, err: err}
+// newMockGetNodeMetaer creates a new instance of mockGetNodeMetaer.
+// You can customize the return values for GetNodeMetaer by setting apiAddr and err.
+func newMockGetNodeMetaer(apiAddr string, err error) *mockGetNodeMetaer {
+	return &mockGetNodeMetaer{apiAddr: apiAddr, err: err}
 }
 
 // GetNodeAPIAddr is the mock implementation of the GetNodeAPIAddr method.
-func (m *mockGetAddresser) GetNodeAPIAddr(addr string, timeout time.Duration) (string, error) {
+func (m *mockGetNodeMetaer) GetNodeMeta(addr string, timeout time.Duration) (string, error) {
 	if m.getAddrFn != nil {
 		return m.getAddrFn(addr, timeout)
 	}

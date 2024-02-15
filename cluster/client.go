@@ -99,8 +99,8 @@ func (c *Client) SetLocal(nodeAddr string, serv *Service) error {
 	return nil
 }
 
-// GetNodeAPIAddr retrieves the API Address for the node at nodeAddr
-func (c *Client) GetNodeAPIAddr(nodeAddr string, timeout time.Duration) (string, error) {
+// GetNodeMeta retrieves the API Address for the node at nodeAddr
+func (c *Client) GetNodeMeta(nodeAddr string, timeout time.Duration) (string, error) {
 	c.lMu.RLock()
 	defer c.lMu.RUnlock()
 	if c.localNodeAddr == nodeAddr && c.localServ != nil {

@@ -91,15 +91,15 @@ type Store interface {
 	ReadFrom(r io.Reader) (int64, error)
 }
 
-// GetAddresser is the interface that wraps the GetNodeAPIAddr method.
-// GetNodeAPIAddr returns the HTTP API URL for the node at the given Raft address.
-type GetAddresser interface {
-	GetNodeAPIAddr(addr string, timeout time.Duration) (string, error)
+// GetNodeMetaer is the interface that wraps the GetNodeMeta method.
+// GetNodeMeta returns the HTTP API URL for the node at the given Raft address.
+type GetNodeMetaer interface {
+	GetNodeMeta(addr string, timeout time.Duration) (string, error)
 }
 
 // Cluster is the interface node API services must provide
 type Cluster interface {
-	GetAddresser
+	GetNodeMetaer
 
 	// Execute performs an Execute Request on a remote node.
 	Execute(er *proto.ExecuteRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*proto.ExecuteResult, error)
@@ -990,7 +990,7 @@ func (s *Service) handleReadyz(w http.ResponseWriter, r *http.Request, qp QueryP
 		return
 	}
 
-	_, err = s.cluster.GetNodeAPIAddr(lAddr, qp.Timeout(defaultTimeout))
+	_, err = s.cluster.GetNodeMeta(lAddr, qp.Timeout(defaultTimeout))
 	if err != nil {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		w.Write([]byte(fmt.Sprintf("[+]node ok\n[+]leader not contactable: %s", err.Error())))
@@ -1488,7 +1488,7 @@ func (s *Service) LeaderAPIAddr() string {
 		return ""
 	}
 
-	apiAddr, err := s.cluster.GetNodeAPIAddr(nodeAddr, defaultTimeout)
+	apiAddr, err := s.cluster.GetNodeMeta(nodeAddr, defaultTimeout)
 	if err != nil {
 		return ""
 	}

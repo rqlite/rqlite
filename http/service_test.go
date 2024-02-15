@@ -1458,7 +1458,7 @@ type mockClusterService struct {
 	removeNodeFn func(rn *command.RemoveNodeRequest, nodeAddr string, t time.Duration) error
 }
 
-func (m *mockClusterService) GetNodeAPIAddr(a string, t time.Duration) (string, error) {
+func (m *mockClusterService) GetNodeMeta(a string, t time.Duration) (string, error) {
 	return m.apiAddr, nil
 }
 

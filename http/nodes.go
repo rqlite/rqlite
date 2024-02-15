@@ -40,7 +40,7 @@ func NewNodeFromServer(s *store.Server) *Node {
 
 // Test tests the node's reachability and leadership status. If an error
 // occurs, the Error field will be populated.
-func (n *Node) Test(ga GetAddresser, leaderAddr string, timeout time.Duration) {
+func (n *Node) Test(ga GetNodeMetaer, leaderAddr string, timeout time.Duration) {
 	start := time.Now()
 	n.Time = time.Since(start).Seconds()
 	n.TimeS = time.Since(start).String()
@@ -52,7 +52,7 @@ func (n *Node) Test(ga GetAddresser, leaderAddr string, timeout time.Duration) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		apiAddr, err := ga.GetNodeAPIAddr(n.Addr, timeout)
+		apiAddr, err := ga.GetNodeMeta(n.Addr, timeout)
 		if err != nil {
 			n.SetError(err.Error())
 			return
@@ -138,7 +138,7 @@ func (n Nodes) GetNode(id string) *Node {
 
 // Test tests the reachability and leadership status of all nodes. It does this
 // in parallel, and blocks until all nodes have been tested.
-func (n Nodes) Test(ga GetAddresser, leaderAddr string, timeout time.Duration) {
+func (n Nodes) Test(ga GetNodeMetaer, leaderAddr string, timeout time.Duration) {
 	var wg sync.WaitGroup
 	for _, nn := range n {
 		wg.Add(1)
