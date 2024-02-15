@@ -24,16 +24,17 @@ import (
 var stats *expvar.Map
 
 const (
-	numGetNodeAPIRequest  = "num_get_node_api_req"
-	numGetNodeAPIResponse = "num_get_node_api_resp"
-	numExecuteRequest     = "num_execute_req"
-	numQueryRequest       = "num_query_req"
-	numRequestRequest     = "num_request_req"
-	numBackupRequest      = "num_backup_req"
-	numLoadRequest        = "num_load_req"
-	numRemoveNodeRequest  = "num_remove_node_req"
-	numNotifyRequest      = "num_notify_req"
-	numJoinRequest        = "num_join_req"
+	numUnknownCommand      = "num_unknown_command"
+	numGetNodeMetaRequest  = "num_get_node_meta_req"
+	numGetNodeMetaResponse = "num_get_node_meta_resp"
+	numExecuteRequest      = "num_execute_req"
+	numQueryRequest        = "num_query_req"
+	numRequestRequest      = "num_request_req"
+	numBackupRequest       = "num_backup_req"
+	numLoadRequest         = "num_load_req"
+	numRemoveNodeRequest   = "num_remove_node_req"
+	numNotifyRequest       = "num_notify_req"
+	numJoinRequest         = "num_join_req"
 
 	numClientRetries            = "num_client_retries"
 	numGetNodeAPIRequestRetries = "num_get_node_api_req_retries"
@@ -56,8 +57,9 @@ const (
 
 func init() {
 	stats = expvar.NewMap("cluster")
-	stats.Add(numGetNodeAPIRequest, 0)
-	stats.Add(numGetNodeAPIResponse, 0)
+	stats.Add(numUnknownCommand, 0)
+	stats.Add(numGetNodeMetaRequest, 0)
+	stats.Add(numGetNodeMetaResponse, 0)
 	stats.Add(numExecuteRequest, 0)
 	stats.Add(numQueryRequest, 0)
 	stats.Add(numRequestRequest, 0)
@@ -286,8 +288,8 @@ func (s *Service) handleConn(conn net.Conn) {
 		}
 
 		switch c.Type {
-		case proto.Command_COMMAND_TYPE_GET_NODE_API_URL:
-			stats.Add(numGetNodeAPIRequest, 1)
+		case proto.Command_COMMAND_TYPE_GET_NODE_META:
+			stats.Add(numGetNodeMetaRequest, 1)
 			ci, err := s.mgr.CommitIndex()
 			if err != nil {
 				conn.Close()
@@ -301,7 +303,7 @@ func (s *Service) handleConn(conn net.Conn) {
 				conn.Close()
 			}
 			writeBytesWithLength(conn, p)
-			stats.Add(numGetNodeAPIResponse, 1)
+			stats.Add(numGetNodeMetaResponse, 1)
 
 		case proto.Command_COMMAND_TYPE_EXECUTE:
 			stats.Add(numExecuteRequest, 1)
@@ -501,6 +503,10 @@ func (s *Service) handleConn(conn net.Conn) {
 				}
 			}
 			marshalAndWrite(conn, resp)
+
+		default:
+			stats.Add(numUnknownCommand, 1)
+			conn.Close()
 		}
 	}
 }

@@ -18,7 +18,7 @@ message NodeMeta {
 message Command {
     enum Type {
         COMMAND_TYPE_UNKNOWN = 0;
-        COMMAND_TYPE_GET_NODE_API_URL = 1;
+        COMMAND_TYPE_GET_NODE_META = 1;
         COMMAND_TYPE_EXECUTE = 2;
         COMMAND_TYPE_QUERY = 3;
         COMMAND_TYPE_BACKUP = 4;
