@@ -94,7 +94,7 @@ type Store interface {
 // GetNodeMetaer is the interface that wraps the GetNodeMeta method.
 // GetNodeMeta returns the HTTP API URL for the node at the given Raft address.
 type GetNodeMetaer interface {
-	GetNodeMeta(addr string, timeout time.Duration) (string, error)
+	GetNodeMeta(addr string, timeout time.Duration) (*clstrPB.NodeMeta, error)
 }
 
 // Cluster is the interface node API services must provide
@@ -1488,11 +1488,11 @@ func (s *Service) LeaderAPIAddr() string {
 		return ""
 	}
 
-	apiAddr, err := s.cluster.GetNodeMeta(nodeAddr, defaultTimeout)
+	meta, err := s.cluster.GetNodeMeta(nodeAddr, defaultTimeout)
 	if err != nil {
 		return ""
 	}
-	return apiAddr
+	return meta.Url
 }
 
 func (s *Service) runQueue() {

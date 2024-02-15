@@ -47,11 +47,11 @@ func Test_ClientGetNodeMeta(t *testing.T) {
 	defer srv.Close()
 
 	c := NewClient(&simpleDialer{}, 0)
-	addr, err := c.GetNodeMeta(srv.Addr(), time.Second)
+	meta, err := c.GetNodeMeta(srv.Addr(), time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
-	exp, got := "http://localhost:1234", addr
+	exp, got := "http://localhost:1234", meta.Url
 	if exp != got {
 		t.Fatalf("unexpected addr, got %s, exp: %s", got, exp)
 	}

@@ -52,12 +52,12 @@ func (n *Node) Test(ga GetNodeMetaer, leaderAddr string, timeout time.Duration) 
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		apiAddr, err := ga.GetNodeMeta(n.Addr, timeout)
+		meta, err := ga.GetNodeMeta(n.Addr, timeout)
 		if err != nil {
 			n.SetError(err.Error())
 			return
 		}
-		n.APIAddr = apiAddr
+		n.APIAddr = meta.Url
 		n.Reachable = true
 		n.Leader = n.Addr == leaderAddr
 	}()

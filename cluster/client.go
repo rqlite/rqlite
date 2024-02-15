@@ -100,13 +100,20 @@ func (c *Client) SetLocal(nodeAddr string, serv *Service) error {
 }
 
 // GetNodeMeta retrieves the API Address for the node at nodeAddr
-func (c *Client) GetNodeMeta(nodeAddr string, timeout time.Duration) (string, error) {
+func (c *Client) GetNodeMeta(nodeAddr string, timeout time.Duration) (*proto.NodeMeta, error) {
 	c.lMu.RLock()
 	defer c.lMu.RUnlock()
 	if c.localNodeAddr == nodeAddr && c.localServ != nil {
 		// Serve it locally!
 		stats.Add(numGetNodeAPIRequestLocal, 1)
-		return c.localServ.GetNodeAPIURL(), nil
+		ci, err := c.localServ.mgr.CommitIndex()
+		if err != nil {
+			return nil, err
+		}
+		return &proto.NodeMeta{
+			Url:         c.localServ.GetNodeAPIURL(),
+			CommitIndex: ci,
+		}, nil
 	}
 
 	command := &proto.Command{
@@ -115,16 +122,15 @@ func (c *Client) GetNodeMeta(nodeAddr string, timeout time.Duration) (string, er
 	p, nr, err := c.retry(command, nodeAddr, timeout, defaultMaxRetries)
 	stats.Add(numGetNodeAPIRequestRetries, int64(nr))
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	a := &proto.NodeMeta{}
 	err = pb.Unmarshal(p, a)
 	if err != nil {
-		return "", fmt.Errorf("protobuf unmarshal: %w", err)
+		return nil, fmt.Errorf("protobuf unmarshal: %w", err)
 	}
-
-	return a.Url, nil
+	return a, nil
 }
 
 // Execute performs an Execute on a remote node. If username is an empty string

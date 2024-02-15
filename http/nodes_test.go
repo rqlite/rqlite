@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	cluster "github.com/rqlite/rqlite/v8/cluster/proto"
 	"github.com/rqlite/rqlite/v8/store"
 )
 
@@ -73,11 +74,11 @@ func Test_NodeTestDouble(t *testing.T) {
 	node1 := &Node{ID: "1", Addr: "leader-raft-addr", APIAddr: "leader-api-addr"}
 	node2 := &Node{ID: "2", Addr: "follower-raft-addr", APIAddr: "follower-api-addr"}
 	mockGA := &mockGetNodeMetaer{}
-	mockGA.getAddrFn = func(addr string, timeout time.Duration) (string, error) {
+	mockGA.getMetaFn = func(addr string, timeout time.Duration) (*cluster.NodeMeta, error) {
 		if addr == "leader-raft-addr" {
-			return "leader-api-addr", nil
+			return &cluster.NodeMeta{Url: "leader-api-addr"}, nil
 		}
-		return "", fmt.Errorf("not reachable")
+		return nil, fmt.Errorf("not reachable")
 	}
 
 	nodes := Nodes{node1, node2}
@@ -98,12 +99,12 @@ func Test_NodeTestDouble_Timeout(t *testing.T) {
 	node1 := &Node{ID: "1", Addr: "leader-raft-addr", APIAddr: "leader-api-addr"}
 	node2 := &Node{ID: "2", Addr: "follower-raft-addr", APIAddr: "follower-api-addr"}
 	mockGA := &mockGetNodeMetaer{}
-	mockGA.getAddrFn = func(addr string, timeout time.Duration) (string, error) {
+	mockGA.getMetaFn = func(addr string, timeout time.Duration) (*cluster.NodeMeta, error) {
 		if addr == "leader-raft-addr" {
-			return "leader-api-addr", nil
+			return &cluster.NodeMeta{Url: "leader-api-addr"}, nil
 		}
 		time.Sleep(10 * time.Second) // Simulate a node just hanging when contacted.
-		return "", nil
+		return nil, nil
 	}
 
 	nodes := Nodes{node1, node2}
@@ -229,7 +230,7 @@ func Test_NodesRespDecoder_Decode_EmptyJSON(t *testing.T) {
 type mockGetNodeMetaer struct {
 	apiAddr   string
 	err       error
-	getAddrFn func(addr string, timeout time.Duration) (string, error)
+	getMetaFn func(addr string, timeout time.Duration) (*cluster.NodeMeta, error)
 }
 
 // newMockGetNodeMetaer creates a new instance of mockGetNodeMetaer.
@@ -239,11 +240,11 @@ func newMockGetNodeMetaer(apiAddr string, err error) *mockGetNodeMetaer {
 }
 
 // GetNodeAPIAddr is the mock implementation of the GetNodeAPIAddr method.
-func (m *mockGetNodeMetaer) GetNodeMeta(addr string, timeout time.Duration) (string, error) {
-	if m.getAddrFn != nil {
-		return m.getAddrFn(addr, timeout)
+func (m *mockGetNodeMetaer) GetNodeMeta(addr string, timeout time.Duration) (*cluster.NodeMeta, error) {
+	if m.getMetaFn != nil {
+		return m.getMetaFn(addr, timeout)
 	}
-	return m.apiAddr, m.err
+	return &cluster.NodeMeta{Url: m.apiAddr}, m.err
 }
 
 func mockNodes() Nodes {
