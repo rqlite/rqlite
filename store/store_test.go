@@ -69,25 +69,21 @@ func Test_SingleNodeOnDiskSQLitePath(t *testing.T) {
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
-
-	ci, err := s.CommitIndex()
-	if err != nil {
-		t.Fatalf("failed to retrieve commit index: %s", err.Error())
-	}
-	if exp, got := uint64(2), ci; exp != got {
-		t.Fatalf("wrong commit index, got: %d, exp: %d", got, exp)
-	}
+	testPoll(t, func() bool {
+		ci, err := s.CommitIndex()
+		return err == nil && ci == uint64(2)
+	}, 50*time.Millisecond, 2*time.Second)
 
 	er := executeRequestFromStrings([]string{
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
 		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
 	}, false, false)
-	_, err = s.Execute(er)
+	_, err := s.Execute(er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
 
-	ci, err = s.CommitIndex()
+	ci, err := s.CommitIndex()
 	if err != nil {
 		t.Fatalf("failed to retrieve commit index: %s", err.Error())
 	}
