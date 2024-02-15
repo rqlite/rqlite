@@ -110,7 +110,7 @@ func (c *Client) GetNodeAPIAddr(nodeAddr string, timeout time.Duration) (string,
 	}
 
 	command := &proto.Command{
-		Type: proto.Command_COMMAND_TYPE_GET_NODE_API_URL,
+		Type: proto.Command_COMMAND_TYPE_GET_NODE_META,
 	}
 	p, nr, err := c.retry(command, nodeAddr, timeout, defaultMaxRetries)
 	stats.Add(numGetNodeAPIRequestRetries, int64(nr))
