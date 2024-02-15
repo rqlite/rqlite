@@ -814,6 +814,11 @@ func (s *Store) LeaderWithID() (string, string) {
 	return string(addr), string(id)
 }
 
+// CommitIndex returns the Raft commit index.
+func (s *Store) CommitIndex() (uint64, error) {
+	return s.raft.CommitIndex(), nil
+}
+
 // Nodes returns the slice of nodes in the cluster, sorted by ID ascending.
 func (s *Store) Nodes() ([]*Server, error) {
 	if !s.open {

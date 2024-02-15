@@ -1,6 +1,7 @@
 ## 8.20.2 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #1685](https://github.com/rqlite/rqlite/pull/1685): Rename a Proto (but not its fields).
+- [PR #1686](https://github.com/rqlite/rqlite/pull/1686): Node returns _Meta_, not just Address.
 
 ## 8.20.1 (February 13th 2024)
 ### Implementation changes and bug fixes

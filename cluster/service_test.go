@@ -56,7 +56,8 @@ func Test_NewServiceSetGetAPIAddr(t *testing.T) {
 
 func Test_NewServiceSetGetNodeAPIAddr(t *testing.T) {
 	ml := mustNewMockTransport()
-	s := New(ml, mustNewMockDatabase(), mustNewMockManager(), mustNewMockCredentialStore())
+	mgr := mustNewMockManager()
+	s := New(ml, mustNewMockDatabase(), mgr, mustNewMockCredentialStore())
 	if s == nil {
 		t.Fatalf("failed to create cluster service")
 	}
@@ -484,6 +485,7 @@ type MockManager struct {
 	notifyFn     func(n *command.NotifyRequest) error
 	joinFn       func(j *command.JoinRequest) error
 	leaderAddrFn func() (string, error)
+	commitIndex  uint64
 }
 
 func (m *MockManager) Remove(rn *command.RemoveNodeRequest) error {
@@ -512,6 +514,10 @@ func (m *MockManager) LeaderAddr() (string, error) {
 		return "", nil
 	}
 	return m.leaderAddrFn()
+}
+
+func (m *MockManager) CommitIndex() (uint64, error) {
+	return m.commitIndex, nil
 }
 
 func mustNewMockManager() *MockManager {
