@@ -181,6 +181,11 @@ func (qp QueryParams) FreshnessStrict() bool {
 	return qp.HasKey("freshness_strict")
 }
 
+// Commit returns whether the commit flag is set.
+func (qp QueryParams) Commit() bool {
+	return qp.HasKey("commit")
+}
+
 // Timeout returns the requested timeout duration.
 func (qp QueryParams) Timeout(def time.Duration) time.Duration {
 	t, ok := qp["timeout"]
