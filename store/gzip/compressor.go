@@ -26,7 +26,7 @@ type Compressor struct {
 // compresses the data using gzip.
 func NewCompressor(r io.Reader, bufSz int) (*Compressor, error) {
 	buf := new(bytes.Buffer)
-	gzw, err := gzip.NewWriterLevel(buf, gzip.BestSpeed)
+	gzw, err := gzip.NewWriterLevel(buf, gzip.DefaultCompression)
 	if err != nil {
 		return nil, err
 	}
