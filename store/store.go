@@ -635,11 +635,15 @@ func (s *Store) Ready() bool {
 
 // Committed blocks until the local commit index is greater than or
 // equal to the Leader index, as checked when the function is called.
-// It returns the committed index.
+// It returns the committed index. If the Leader index is 0, then the
+// system waits until the commit index is at least 1.
 func (s *Store) Committed(timeout time.Duration) (uint64, error) {
 	lci, err := s.LeaderCommitIndex()
 	if err != nil {
 		return lci, err
+	}
+	if lci == 0 {
+		lci = 1
 	}
 	return lci, s.WaitForCommitIndex(lci, timeout)
 }
