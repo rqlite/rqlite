@@ -819,6 +819,16 @@ func (s *Store) CommitIndex() (uint64, error) {
 	return s.raft.CommitIndex(), nil
 }
 
+// LeaderCommitIndex returns the Raft leader commit index, as indicated
+// by the latest AppendEntries RPC. If this node is the Leader then the
+// commit index is returned directly from the Raft object.
+func (s *Store) LeaderCommitIndex() (uint64, error) {
+	if s.raft.State() == raft.Leader {
+		return s.raft.CommitIndex(), nil
+	}
+	return s.raftTn.LeaderCommitIndex(), nil
+}
+
 // Nodes returns the slice of nodes in the cluster, sorted by ID ascending.
 func (s *Store) Nodes() ([]*Server, error) {
 	if !s.open {
