@@ -342,10 +342,10 @@ class Node(object):
       raise Exception('leader is available but node %s at %s reports empty leader addr' % (self.node_id, self.APIAddr()))
     return lr
 
-  def wait_for_ready(self, timeout=TIMEOUT):
+  def wait_for_ready(self, commit=False, timeout=TIMEOUT):
     deadline = time.time() + timeout
     while time.time() < deadline:
-      if self.ready():
+      if self.ready(commit):
         return
       time.sleep(0.1)
     raise Exception('rqlite node failed to become ready within %d seconds' % timeout)
