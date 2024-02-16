@@ -713,23 +713,18 @@ func (s *Store) WaitForAppliedIndex(idx uint64, timeout time.Duration) error {
 	}
 }
 
-// WaitCommitIndex blocks until the local Raft commit index is equal to
-// or greater than the Leader Commit Index at the time this function
-// is called, or the timeout expires.
-func (s *Store) WaitCommitIndex(timeout time.Duration) error {
+// WaitForCommitIndex blocks until the local Raft commit index is equal to
+// or greater the given index, or the timeout expires.
+func (s *Store) WaitForCommitIndex(idx uint64, timeout time.Duration) error {
 	tck := time.NewTicker(commitEquivalenceDelay)
 	defer tck.Stop()
 	tmr := time.NewTimer(timeout)
 	defer tmr.Stop()
 
-	lci, err := s.LeaderCommitIndex()
-	if err != nil {
-		return err
-	}
 	for {
 		select {
 		case <-tck.C:
-			if lci <= s.raft.CommitIndex() {
+			if s.raft.CommitIndex() >= idx {
 				return nil
 			}
 		case <-tmr.C:
