@@ -987,6 +987,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		return nil, err
 	}
 	raftStats["bolt"] = s.boltStore.Stats()
+	raftStats["transport"] = s.raftTn.Stats()
 
 	dirSz, err := dirSize(s.raftDir)
 	if err != nil {
@@ -998,15 +999,14 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		return nil, err
 	}
 	status := map[string]interface{}{
-		"open":                 s.open,
-		"node_id":              s.raftID,
-		"raft":                 raftStats,
-		"fsm_index":            s.fsmIdx.Load(),
-		"fsm_update_time":      s.fsmUpdateTime.Load(),
-		"db_applied_index":     s.dbAppliedIdx.Load(),
-		"last_applied_index":   lAppliedIdx,
-		"command_commit_index": s.raftTn.CommandCommitIndex(),
-		"addr":                 s.Addr(),
+		"open":               s.open,
+		"node_id":            s.raftID,
+		"raft":               raftStats,
+		"fsm_index":          s.fsmIdx.Load(),
+		"fsm_update_time":    s.fsmUpdateTime.Load(),
+		"db_applied_index":   s.dbAppliedIdx.Load(),
+		"last_applied_index": lAppliedIdx,
+		"addr":               s.Addr(),
 		"leader": map[string]string{
 			"node_id": leaderID,
 			"addr":    leaderAddr,
