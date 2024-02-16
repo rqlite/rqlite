@@ -90,6 +90,13 @@ func Test_SingleNodeOnDiskSQLitePath(t *testing.T) {
 	if exp, got := uint64(3), ci; exp != got {
 		t.Fatalf("wrong commit index, got: %d, exp: %d", got, exp)
 	}
+	lci, err := s.LeaderCommitIndex()
+	if err != nil {
+		t.Fatalf("failed to retrieve commit index: %s", err.Error())
+	}
+	if exp, got := uint64(3), lci; exp != got {
+		t.Fatalf("wrong leader commit index, got: %d, exp: %d", got, exp)
+	}
 
 	qr := queryRequestFromString("SELECT * FROM foo", false, false)
 	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE

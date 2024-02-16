@@ -54,6 +54,7 @@ func (t *Transport) Addr() net.Addr {
 type NodeTransport struct {
 	*raft.NetworkTransport
 	commandCommitIndex *atomic.Uint64
+	leaderCommitIndex  *atomic.Uint64
 	done               chan struct{}
 	closed             bool
 }
@@ -63,6 +64,7 @@ func NewNodeTransport(transport *raft.NetworkTransport) *NodeTransport {
 	return &NodeTransport{
 		NetworkTransport:   transport,
 		commandCommitIndex: &atomic.Uint64{},
+		leaderCommitIndex:  &atomic.Uint64{},
 		done:               make(chan struct{}),
 	}
 }
@@ -71,6 +73,12 @@ func NewNodeTransport(transport *raft.NetworkTransport) *NodeTransport {
 // which is applied to the FSM.
 func (n *NodeTransport) CommandCommitIndex() uint64 {
 	return n.commandCommitIndex.Load()
+}
+
+// LeaderCommitIndex returns the index of the latest committed log entry
+// which is known to be replicated to the majority of the cluster.
+func (n *NodeTransport) LeaderCommitIndex() uint64 {
+	return n.leaderCommitIndex.Load()
 }
 
 // Close closes the transport
@@ -120,10 +128,19 @@ func (n *NodeTransport) Consumer() <-chan raft.RPC {
 							n.commandCommitIndex.Store(e.Index)
 						}
 					}
+					n.leaderCommitIndex.Store(cmd.LeaderCommitIndex)
 				}
 				ch <- rpc
 			}
 		}
 	}()
 	return ch
+}
+
+// Stats returns the current stats of the transport.
+func (n *NodeTransport) Stats() map[string]interface{} {
+	return map[string]interface{}{
+		"command_commit_index": n.CommandCommitIndex(),
+		"leader_commit_index":  n.LeaderCommitIndex(),
+	}
 }

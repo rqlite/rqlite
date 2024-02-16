@@ -61,6 +61,21 @@ func Test_MultiNodeSimple(t *testing.T) {
 		return s0.DBAppliedIndex() == s1.DBAppliedIndex()
 	}, 250*time.Millisecond, 3*time.Second)
 
+	ci, err := s0.CommitIndex()
+	if err != nil {
+		t.Fatalf("failed to retrieve commit index: %s", err.Error())
+	}
+	if exp, got := uint64(4), ci; exp != got {
+		t.Fatalf("wrong commit index, got: %d, exp: %d", got, exp)
+	}
+	lci, err := s0.LeaderCommitIndex()
+	if err != nil {
+		t.Fatalf("failed to retrieve commit index: %s", err.Error())
+	}
+	if exp, got := uint64(4), lci; exp != got {
+		t.Fatalf("wrong leader commit index, got: %d, exp: %d", got, exp)
+	}
+
 	// Now, do a NONE consistency query on each node, to actually confirm the data
 	// has been replicated.
 	testFn1 := func(t *testing.T, s *Store) {
@@ -77,6 +92,21 @@ func Test_MultiNodeSimple(t *testing.T) {
 	}
 	testFn1(t, s0)
 	testFn1(t, s1)
+
+	ci, err = s1.CommitIndex()
+	if err != nil {
+		t.Fatalf("failed to retrieve commit index: %s", err.Error())
+	}
+	if exp, got := uint64(4), ci; exp != got {
+		t.Fatalf("wrong commit index, got: %d, exp: %d", got, exp)
+	}
+	lci, err = s1.LeaderCommitIndex()
+	if err != nil {
+		t.Fatalf("failed to retrieve commit index: %s", err.Error())
+	}
+	if exp, got := uint64(4), lci; exp != got {
+		t.Fatalf("wrong leader commit index, got: %d, exp: %d", got, exp)
+	}
 
 	// Write another row using Request
 	rr := executeQueryRequestFromString("INSERT INTO foo(id, name) VALUES(2, 'fiona')", proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG, false, false)
