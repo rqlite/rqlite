@@ -3,6 +3,7 @@
 - [PR #1685](https://github.com/rqlite/rqlite/pull/1685): Rename a Proto (but not its fields).
 - [PR #1686](https://github.com/rqlite/rqlite/pull/1686): Node returns _Meta_, not just Address.
 - [PR #1688](https://github.com/rqlite/rqlite/pull/1688): Expose Leader Commit Index, as read from latest AppendEntries RPC.
+- [PR #1689](https://github.com/rqlite/rqlite/pull/1689): `/readyz` can wait for Commit Index.
 
 ## 8.20.1 (February 13th 2024)
 ### Implementation changes and bug fixes
