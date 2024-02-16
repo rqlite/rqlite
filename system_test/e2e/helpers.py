@@ -281,8 +281,8 @@ class Node(object):
     raise_for_status(r)
     return r.json()
 
-  def ready(self, noleader=False):
-    r = requests.get(self._ready_url(noleader))
+  def ready(self, noleader=False, commit=False):
+    r = requests.get(self._ready_url(noleader, commit))
     return r.status_code == 200
 
   def expvar(self):
@@ -602,10 +602,14 @@ class Node(object):
     return 'http://' + self.APIAddr() + '/status'
   def _nodes_url(self):
     return 'http://' + self.APIAddr() + '/nodes?nonvoters' # Getting all nodes back makes testing easier
-  def _ready_url(self, noleader=False):
+  def _ready_url(self, noleader=False, commit=False):
+    vals = []
     nl = ""
     if noleader:
-      nl = "?noleader"
+      vals = vals + ["noleader"]
+    if commit:
+      vals = vals + ["commit"]
+    nl = '?' + '&'.join(vals)
     return 'http://' + self.APIAddr() + '/readyz' + nl
   def _expvar_url(self):
     return 'http://' + self.APIAddr() + '/debug/vars'
