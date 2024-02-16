@@ -3,7 +3,11 @@ package gzip
 import (
 	"bytes"
 	"compress/gzip"
+	"crypto/md5"
+	"encoding/hex"
+	"fmt"
 	"io"
+	"math/rand"
 	"os"
 	"testing"
 )
@@ -158,6 +162,51 @@ func Test_Compressor_CompressFile(t *testing.T) {
 	compareFiles(t, srcFD, dstUncompressedFD)
 }
 
+func Test_Compressor_CompressLargeFile(t *testing.T) {
+	mb512 := int64(512*1024*1024) + 13
+	srcFD := mustOpenTempFile(t)
+	_, err := io.CopyN(srcFD, io.LimitReader(rand.New(rand.NewSource(0)), mb512), mb512)
+	if err != nil {
+		t.Fatalf("Failed to write random data to source file: %v", err)
+	}
+	defer os.Remove(srcFD.Name())
+	defer srcFD.Close()
+	// Reset file pointer to beginning
+	if _, err := srcFD.Seek(0, 0); err != nil {
+		t.Fatalf("Failed to seek to beginning of file: %v", err)
+	}
+
+	// Compress it.
+	compressor, err := NewCompressor(srcFD, DefaultBufferSize)
+	if err != nil {
+		t.Fatalf("Failed to create compressor: %v", err)
+	}
+	dstFD := mustOpenTempFile(t)
+	defer os.Remove(dstFD.Name())
+	defer dstFD.Close()
+	_, err = io.Copy(dstFD, compressor)
+	if err != nil {
+		t.Fatalf("Failed to compress: %v", err)
+	}
+
+	// Decompress it via actual gzip.
+	dstUncompressedFD := mustOpenTempFile(t)
+	defer os.Remove(dstUncompressedFD.Name())
+	defer dstUncompressedFD.Close()
+	dstFD.Seek(0, 0)
+	r, err := gzip.NewReader(dstFD)
+	if err != nil {
+		t.Fatalf("Failed to create gzip reader: %v", err)
+	}
+	_, err = io.Copy(dstUncompressedFD, r)
+	if err != nil {
+		t.Fatalf("Failed to decompress: %v", err)
+	}
+
+	// Compare the files.
+	compareFileMD5(t, srcFD.Name(), dstUncompressedFD.Name())
+}
+
 func mustOpenTempFile(t *testing.T) *os.File {
 	t.Helper()
 	tmpDir := t.TempDir()
@@ -200,4 +249,42 @@ func compareFiles(t *testing.T, srcFD, dstFD *os.File) {
 	if !bytes.Equal(srcBytes, dstBytes) {
 		t.Fatalf("Source data does not match destination data")
 	}
+}
+
+func compareFileMD5(t *testing.T, srcPath, dstPath string) {
+	t.Helper()
+
+	srcMD5, err := md5sum(srcPath)
+	if err != nil {
+		t.Fatalf("Failed to calculate md5sum of source file: %v", err)
+	}
+	dstMD5, err := md5sum(dstPath)
+	if err != nil {
+		t.Fatalf("Failed to calculate md5sum of destination file: %v", err)
+	}
+
+	// compare md5sums
+	if srcMD5 != dstMD5 {
+		t.Fatal("Source file md5sum does not match destination file md5sum")
+	}
+}
+
+func md5sum(path string) (string, error) {
+	// open file
+	f, err := os.Open(path)
+	if err != nil {
+		return "", fmt.Errorf("failed to open file: %w", err)
+	}
+	defer f.Close()
+
+	// create new hash
+	h := md5.New()
+
+	// copy file to hash
+	if _, err := io.Copy(h, f); err != nil {
+		return "", fmt.Errorf("failed to copy file to hash: %w", err)
+	}
+
+	// return hex encoded hash
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
