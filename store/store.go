@@ -633,6 +633,17 @@ func (s *Store) Ready() bool {
 	}()
 }
 
+// Committed blocks until the local commit index is greater than or
+// equal to the Leader index, as checked when the function is called.
+// It returns the committed index.
+func (s *Store) Committed(timeout time.Duration) (uint64, error) {
+	lci, err := s.LeaderCommitIndex()
+	if err != nil {
+		return lci, err
+	}
+	return lci, s.WaitForCommitIndex(lci, timeout)
+}
+
 // Close closes the store. If wait is true, waits for a graceful shutdown.
 func (s *Store) Close(wait bool) (retErr error) {
 	defer func() {

@@ -1419,6 +1419,10 @@ func (m *MockStore) Ready() bool {
 	return !m.notReady
 }
 
+func (m *MockStore) Committed(timeout time.Duration) (uint64, error) {
+	return 0, nil
+}
+
 func (m *MockStore) Stats() (map[string]interface{}, error) {
 	return nil, nil
 }

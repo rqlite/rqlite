@@ -76,6 +76,10 @@ type Store interface {
 	// Ready returns whether the Store is ready to service requests.
 	Ready() bool
 
+	// Committed blocks until the local commit index is greater than or
+	// equal to the Leader index, as checked when the function is called.
+	Committed(timeout time.Duration) (uint64, error)
+
 	// Stats returns stats on the Store.
 	Stats() (map[string]interface{}, error)
 
@@ -1003,8 +1007,17 @@ func (s *Service) handleReadyz(w http.ResponseWriter, r *http.Request, qp QueryP
 		return
 	}
 
+	okMsg := "[+]node ok\n[+]leader ok\n[+]store ok"
+	if qp.Commit() {
+		if _, err := s.store.Committed(qp.Timeout(defaultTimeout)); err != nil {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			w.Write([]byte(fmt.Sprintf("[+]node ok\n[+]leader ok\n[+]store ok\n[+]commit %s", err.Error())))
+			return
+		}
+		okMsg += "\n[+]commit ok"
+	}
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("[+]node ok\n[+]leader ok\n[+]store ok"))
+	w.Write([]byte(okMsg))
 }
 
 func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request, qp QueryParams) {
