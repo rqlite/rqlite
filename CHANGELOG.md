@@ -1,3 +1,7 @@
+## 8.20.2 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1690](https://github.com/rqlite/rqlite/pull/1690): Check for `isTextType` in panic-proof way.
+
 ## 8.20.2 (February 16th 2024)
 ### Implementation changes and bug fixes
 - [PR #1685](https://github.com/rqlite/rqlite/pull/1685): Rename a Proto (but not its fields).

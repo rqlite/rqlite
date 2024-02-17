@@ -1430,8 +1430,10 @@ func normalizeRowValues(row []interface{}, types []string) ([]*command.Parameter
 			}
 		case []byte:
 			if isTextType(types[i]) {
-				values[i].Value = &command.Parameter_S{
-					S: string(val),
+				values[i] = &command.Parameter{
+					Value: &command.Parameter_S{
+						S: string(val),
+					},
 				}
 			} else {
 				values[i] = &command.Parameter{
