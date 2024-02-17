@@ -1,4 +1,4 @@
-## 8.20.3 (unreleased)
+## 8.20.3 (Feburary 17th 2024)
 ### Implementation changes and bug fixes
 - [PR #1690](https://github.com/rqlite/rqlite/pull/1690): Check for `isTextType` in panic-proof way.
 
