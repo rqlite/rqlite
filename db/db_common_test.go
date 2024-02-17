@@ -180,18 +180,12 @@ func testNotNULLField(t *testing.T, db *DB) {
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
-	_, err = db.ExecuteStringStmt(`
-WITH RECURSIVE generate_large_data(id, large_text) AS (
-		SELECT 1, randomblob(100000)
-		UNION ALL
-		SELECT id + 1, randomblob(100000)
-		FROM generate_large_data
-		WHERE id < 2
-	)
-	INSERT INTO large_data(id, large_text)
-	SELECT id, large_text FROM generate_large_data`)
+	r, err := db.QueryStringStmt(`PRAGMA table_info("foo")`)
 	if err != nil {
-		t.Fatalf("failed to create table: %s", err.Error())
+		t.Fatalf("failed to get PRAGMA table_info: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["cid","name","type","notnull","dflt_value","pk"],"types":["integer","text","text","integer","",""],"values":[[0,"id","INTEGER",1,null,1],[1,"name","TEXT",0,null,0]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
 	}
 }
 
