@@ -181,9 +181,9 @@ func (qp QueryParams) FreshnessStrict() bool {
 	return qp.HasKey("freshness_strict")
 }
 
-// Commit returns whether the commit flag is set.
-func (qp QueryParams) Commit() bool {
-	return qp.HasKey("commit")
+// Sync returns whether the sync flag is set.
+func (qp QueryParams) Sync() bool {
+	return qp.HasKey("sync")
 }
 
 // Timeout returns the requested timeout duration.

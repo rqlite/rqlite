@@ -237,7 +237,7 @@ class TestSingleNodeReadyz(unittest.TestCase):
     self.assertEqual(False, n0.ready())
     self.assertEqual(True, n0.ready(noleader=True))
     self.assertEqual(False, n0.ready(noleader=False))
-    self.assertEqual(False, n0.ready(commit=True))
+    self.assertEqual(False, n0.ready(sync=True))
     deprovision_node(n0)
 
 class TestEndToEndSnapshotRestoreSingle(unittest.TestCase):

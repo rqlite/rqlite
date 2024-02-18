@@ -1008,10 +1008,10 @@ func (s *Service) handleReadyz(w http.ResponseWriter, r *http.Request, qp QueryP
 	}
 
 	okMsg := "[+]node ok\n[+]leader ok\n[+]store ok"
-	if qp.Commit() {
+	if qp.Sync() {
 		if _, err := s.store.Committed(qp.Timeout(defaultTimeout)); err != nil {
 			w.WriteHeader(http.StatusServiceUnavailable)
-			w.Write([]byte(fmt.Sprintf("[+]node ok\n[+]leader ok\n[+]store ok\n[+]commit %s", err.Error())))
+			w.Write([]byte(fmt.Sprintf("[+]node ok\n[+]leader ok\n[+]store ok\n[+]sync %s", err.Error())))
 			return
 		}
 		okMsg += "\n[+]commit ok"

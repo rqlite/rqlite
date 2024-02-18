@@ -1065,9 +1065,9 @@ func Test_Readyz(t *testing.T) {
 		cnt.Store(1)
 		return 0, fmt.Errorf("timeout")
 	}
-	resp, err = client.Get(host + "/readyz?commit")
+	resp, err = client.Get(host + "/readyz?sync")
 	if err != nil {
-		t.Fatalf("failed to make readyz request with commit set")
+		t.Fatalf("failed to make readyz request with sync set")
 	}
 	if resp.StatusCode != http.StatusServiceUnavailable {
 		t.Fatalf("failed to get expected StatusServiceUnavailable, got %d", resp.StatusCode)
@@ -1080,9 +1080,9 @@ func Test_Readyz(t *testing.T) {
 		cnt.Store(2)
 		return 0, nil
 	}
-	resp, err = client.Get(host + "/readyz?commit")
+	resp, err = client.Get(host + "/readyz?sync")
 	if err != nil {
-		t.Fatalf("failed to make readyz request with commit set")
+		t.Fatalf("failed to make readyz request with sync set")
 	}
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("failed to get expected StatusOK, got %d", resp.StatusCode)

@@ -649,7 +649,7 @@ class TestShutdown(unittest.TestCase):
     # Check that we have a working single-node cluster with a leader by doing
     # a write.
     n1.wait_for_ready()
-    n1.wait_for_ready(commit=True)
+    n1.wait_for_ready(sync=True)
     j = n1.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
     self.assertEqual(j, d_("{'results': [{}]}"))
 
