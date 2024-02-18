@@ -1050,22 +1050,22 @@ func Test_MultiNodeIsLeaderHasLeader(t *testing.T) {
 	if err := s0.Join(joinRequest(s1.ID(), s1.Addr(), true)); err != nil {
 		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
 	}
-	_, err := s1.WaitForLeader(10 * time.Second)
+	leader, err := s1.WaitForLeader(10 * time.Second)
 	if err != nil {
 		t.Fatalf("failed to get leader address on follower: %s", err.Error())
 	}
 
-	if !s0.IsLeader() {
-		t.Fatalf("s0 is not leader")
-	}
 	if !s0.HasLeader() {
 		t.Fatalf("s0 does not have a leader")
 	}
-	if s1.IsLeader() {
-		t.Fatalf("s1 is leader")
+	if !s0.IsLeader() {
+		t.Fatalf("s0 is not leader, leader is %s", leader)
 	}
 	if !s1.HasLeader() {
 		t.Fatalf("s1 does not have a leader")
+	}
+	if s1.IsLeader() {
+		t.Fatalf("s1 is leader, leader is %s", leader)
 	}
 }
 

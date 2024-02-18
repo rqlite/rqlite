@@ -1,9 +1,17 @@
-## 8.20.2 (unreleased)
+## 8.21.0 (unreleased)
+### New features
+- [PR #1689](https://github.com/rqlite/rqlite/pull/1689): `/readyz` can wait for Commit Index.
+
+## 8.20.3 (Feburary 17th 2024)
+### Implementation changes and bug fixes
+- [PR #1690](https://github.com/rqlite/rqlite/pull/1690): Check for `isTextType` in panic-proof way.
+
+## 8.20.2 (February 16th 2024)
 ### Implementation changes and bug fixes
 - [PR #1685](https://github.com/rqlite/rqlite/pull/1685): Rename a Proto (but not its fields).
 - [PR #1686](https://github.com/rqlite/rqlite/pull/1686): Node returns _Meta_, not just Address.
 - [PR #1688](https://github.com/rqlite/rqlite/pull/1688): Expose Leader Commit Index, as read from latest AppendEntries RPC.
-- [PR #1689](https://github.com/rqlite/rqlite/pull/1689): `/readyz` can wait for Commit Index.
+- [Commit 40e3098](https://github.com/rqlite/rqlite/commit/40e3098e3c7ab1512a6436adac32a7017d24dc4c): Seeing some boot failures locally, revert to default GZIP compression. `git bisect` shows this issue was introduced with [this change](https://github.com/rqlite/rqlite/pull/1574/files#diff-e3c4101b534a442b6f05bbaa9c1c2b9e2f459e92d865ae6654a6ae3d532a7a49).
 
 ## 8.20.1 (February 13th 2024)
 ### Implementation changes and bug fixes

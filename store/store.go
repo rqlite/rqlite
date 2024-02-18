@@ -735,11 +735,18 @@ func (s *Store) WaitForCommitIndex(idx uint64, timeout time.Duration) error {
 	defer tck.Stop()
 	tmr := time.NewTimer(timeout)
 	defer tmr.Stop()
+	checkFn := func() bool {
+		return s.raft.CommitIndex() >= idx
+	}
 
+	// Try the fast path.
+	if checkFn() {
+		return nil
+	}
 	for {
 		select {
 		case <-tck.C:
-			if s.raft.CommitIndex() >= idx {
+			if checkFn() {
 				return nil
 			}
 		case <-tmr.C:
@@ -905,7 +912,6 @@ func (s *Store) WaitForRemoval(id string, timeout time.Duration) error {
 	if check() {
 		return nil
 	}
-
 	tck := time.NewTicker(appliedWaitDelay)
 	defer tck.Stop()
 	tmr := time.NewTimer(timeout)
@@ -939,7 +945,6 @@ func (s *Store) WaitForLeader(timeout time.Duration) (string, error) {
 	if check() {
 		return leaderAddr, nil
 	}
-
 	tck := time.NewTicker(leaderWaitDelay)
 	defer tck.Stop()
 	tmr := time.NewTimer(timeout)
@@ -1107,7 +1112,6 @@ func (s *Store) Execute(ex *proto.ExecuteRequest) ([]*proto.ExecuteResult, error
 	if !s.Ready() {
 		return nil, ErrNotReady
 	}
-
 	return s.execute(ex)
 }
 

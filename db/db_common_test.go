@@ -146,6 +146,35 @@ func testSQLiteTimeTypes(t *testing.T, db *DB) {
 	}
 }
 
+func testSQLiteRandomBlob(t *testing.T, db *DB) {
+	_, err := db.ExecuteStringStmt("CREATE TABLE large_data (id INTEGER PRIMARY KEY, large_text TEXT)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	_, err = db.ExecuteStringStmt(`
+	WITH RECURSIVE generate_large_data(id, large_text) AS (
+		SELECT 1, randomblob(1)
+		UNION ALL
+		SELECT id + 1, randomblob(1)
+		FROM generate_large_data
+		WHERE id < 2
+	)
+	INSERT INTO large_data(id, large_text)
+	SELECT id, large_text FROM generate_large_data
+	`)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	r, err := db.QueryStringStmt("SELECT * FROM large_data LIMIT 1")
+	if err != nil {
+		t.Fatalf("failed to query master table: %s", err.Error())
+	}
+	if !strings.Contains(asJSON(r), "large_text") {
+		// Just check that it doesn't panic.
+		t.Fatalf("unexpected results for query, expected large_text, got %s", asJSON(r))
+	}
+}
+
 func testNotNULLField(t *testing.T, db *DB) {
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
 	if err != nil {
@@ -1558,6 +1587,7 @@ func Test_DatabaseCommonOperations(t *testing.T) {
 		{"SQLiteMasterTable", testSQLiteMasterTable},
 		{"SQLiteTimeTypes", testSQLiteTimeTypes},
 		{"NotNULLField", testNotNULLField},
+		{"RandomBlob", testSQLiteRandomBlob},
 		{"EmptyStatements", testEmptyStatements},
 		{"SimpleSingleStatements", testSimpleSingleStatements},
 		{"SimpleStatementsNumeric", testSimpleStatementsNumeric},
