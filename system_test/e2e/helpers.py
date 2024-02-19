@@ -281,8 +281,8 @@ class Node(object):
     raise_for_status(r)
     return r.json()
 
-  def ready(self, noleader=False):
-    r = requests.get(self._ready_url(noleader))
+  def ready(self, noleader=False, sync=False):
+    r = requests.get(self._ready_url(noleader, sync))
     return r.status_code == 200
 
   def expvar(self):
@@ -342,10 +342,10 @@ class Node(object):
       raise Exception('leader is available but node %s at %s reports empty leader addr' % (self.node_id, self.APIAddr()))
     return lr
 
-  def wait_for_ready(self, timeout=TIMEOUT):
+  def wait_for_ready(self, sync=False, timeout=TIMEOUT):
     deadline = time.time() + timeout
     while time.time() < deadline:
-      if self.ready():
+      if self.ready(sync):
         return
       time.sleep(0.1)
     raise Exception('rqlite node failed to become ready within %d seconds' % timeout)
@@ -602,10 +602,14 @@ class Node(object):
     return 'http://' + self.APIAddr() + '/status'
   def _nodes_url(self):
     return 'http://' + self.APIAddr() + '/nodes?nonvoters' # Getting all nodes back makes testing easier
-  def _ready_url(self, noleader=False):
+  def _ready_url(self, noleader=False, sync=False):
+    vals = []
     nl = ""
     if noleader:
-      nl = "?noleader"
+      vals = vals + ["noleader"]
+    if sync:
+      vals = vals + ["sync"]
+    nl = '?' + '&'.join(vals)
     return 'http://' + self.APIAddr() + '/readyz' + nl
   def _expvar_url(self):
     return 'http://' + self.APIAddr() + '/debug/vars'

@@ -181,6 +181,11 @@ func (qp QueryParams) FreshnessStrict() bool {
 	return qp.HasKey("freshness_strict")
 }
 
+// Sync returns whether the sync flag is set.
+func (qp QueryParams) Sync() bool {
+	return qp.HasKey("sync")
+}
+
 // Timeout returns the requested timeout duration.
 func (qp QueryParams) Timeout(def time.Duration) time.Duration {
 	t, ok := qp["timeout"]

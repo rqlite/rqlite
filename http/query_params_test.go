@@ -33,6 +33,7 @@ func Test_NewQueryParams(t *testing.T) {
 		{"Invalid URL Encoding", "invalid=%ZZ", nil, true},
 		{"freshness_strict", "&freshness=5s&freshness_strict", QueryParams{"freshness_strict": "", "freshness": "5s"}, false},
 		{"freshness_strict requires freshness", "freshness_strict", nil, true},
+		{"sync with timeout", "sync&timeout=2s", QueryParams{"sync": "", "timeout": "2s"}, false},
 	}
 
 	for _, tc := range testCases {

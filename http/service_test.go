@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1039,21 +1040,56 @@ func Test_Readyz(t *testing.T) {
 	host := fmt.Sprintf("http://%s", s.Addr().String())
 	resp, err := client.Get(host + "/readyz")
 	if err != nil {
-		t.Fatalf("failed to make nodes request")
+		t.Fatalf("failed to make readyz request")
 	}
 	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("failed to get expected StatusOK for nodes, got %d", resp.StatusCode)
+		t.Fatalf("failed to get expected StatusOK for node, got %d", resp.StatusCode)
 	}
 
 	m.notReady = true
+	m.committedFn = func(timeout time.Duration) (uint64, error) {
+		t.Fatal("committedFn should not have been called")
+		return 0, nil
+	}
 	resp, err = client.Get(host + "/readyz")
 	if err != nil {
-		t.Fatalf("failed to make nodes request")
+		t.Fatalf("failed to make readyz request")
 	}
 	if resp.StatusCode != http.StatusServiceUnavailable {
-		t.Fatalf("failed to get expected StatusServiceUnavailable for nodes, got %d", resp.StatusCode)
+		t.Fatalf("failed to get expected StatusServiceUnavailable, got %d", resp.StatusCode)
 	}
 
+	cnt := &atomic.Uint32{}
+	m.notReady = false
+	m.committedFn = func(timeout time.Duration) (uint64, error) {
+		cnt.Store(1)
+		return 0, fmt.Errorf("timeout")
+	}
+	resp, err = client.Get(host + "/readyz?sync")
+	if err != nil {
+		t.Fatalf("failed to make readyz request with sync set")
+	}
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("failed to get expected StatusServiceUnavailable, got %d", resp.StatusCode)
+	}
+	if cnt.Load() != 1 {
+		t.Fatalf("failed to call committedFn")
+	}
+	m.notReady = false
+	m.committedFn = func(timeout time.Duration) (uint64, error) {
+		cnt.Store(2)
+		return 0, nil
+	}
+	resp, err = client.Get(host + "/readyz?sync")
+	if err != nil {
+		t.Fatalf("failed to make readyz request with sync set")
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("failed to get expected StatusOK, got %d", resp.StatusCode)
+	}
+	if cnt.Load() != 2 {
+		t.Fatalf("failed to call committedFn")
+	}
 }
 
 func Test_ForwardingRedirectQuery(t *testing.T) {
@@ -1368,14 +1404,15 @@ func Test_DBTimeoutQueryParam(t *testing.T) {
 }
 
 type MockStore struct {
-	executeFn  func(er *command.ExecuteRequest) ([]*command.ExecuteResult, error)
-	queryFn    func(qr *command.QueryRequest) ([]*command.QueryRows, error)
-	requestFn  func(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, error)
-	backupFn   func(br *command.BackupRequest, dst io.Writer) error
-	loadFn     func(lr *command.LoadRequest) error
-	readFromFn func(r io.Reader) (int64, error)
-	leaderAddr string
-	notReady   bool // Default value is true, easier to test.
+	executeFn   func(er *command.ExecuteRequest) ([]*command.ExecuteResult, error)
+	queryFn     func(qr *command.QueryRequest) ([]*command.QueryRows, error)
+	requestFn   func(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, error)
+	backupFn    func(br *command.BackupRequest, dst io.Writer) error
+	loadFn      func(lr *command.LoadRequest) error
+	readFromFn  func(r io.Reader) (int64, error)
+	committedFn func(timeout time.Duration) (uint64, error)
+	leaderAddr  string
+	notReady    bool // Default value is true, easier to test.
 }
 
 func (m *MockStore) Execute(er *command.ExecuteRequest) ([]*command.ExecuteResult, error) {
@@ -1417,6 +1454,13 @@ func (m *MockStore) LeaderAddr() (string, error) {
 
 func (m *MockStore) Ready() bool {
 	return !m.notReady
+}
+
+func (m *MockStore) Committed(timeout time.Duration) (uint64, error) {
+	if m.committedFn != nil {
+		return m.committedFn(timeout)
+	}
+	return 0, nil
 }
 
 func (m *MockStore) Stats() (map[string]interface{}, error) {

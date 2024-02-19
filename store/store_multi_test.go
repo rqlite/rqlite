@@ -76,6 +76,13 @@ func Test_MultiNodeSimple(t *testing.T) {
 		t.Fatalf("wrong leader commit index, got: %d, exp: %d", got, exp)
 	}
 
+	if err := s0.WaitForCommitIndex(4, time.Second); err != nil {
+		t.Fatalf("failed to wait for commit index: %s", err.Error())
+	}
+	if err := s0.WaitForCommitIndex(5, 500*time.Millisecond); err == nil {
+		t.Fatalf("unexpectedly waited successfully for commit index")
+	}
+
 	// Now, do a NONE consistency query on each node, to actually confirm the data
 	// has been replicated.
 	testFn1 := func(t *testing.T, s *Store) {
@@ -106,6 +113,13 @@ func Test_MultiNodeSimple(t *testing.T) {
 	}
 	if exp, got := uint64(4), lci; exp != got {
 		t.Fatalf("wrong leader commit index, got: %d, exp: %d", got, exp)
+	}
+
+	if err := s1.WaitForCommitIndex(4, time.Second); err != nil {
+		t.Fatalf("failed to wait for commit index: %s", err.Error())
+	}
+	if err := s1.WaitForCommitIndex(5, 500*time.Millisecond); err == nil {
+		t.Fatalf("unexpectedly waited successfully for commit index")
 	}
 
 	// Write another row using Request

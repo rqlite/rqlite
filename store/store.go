@@ -98,6 +98,7 @@ const (
 	sqliteFile                 = "db.sqlite"
 	leaderWaitDelay            = 100 * time.Millisecond
 	appliedWaitDelay           = 100 * time.Millisecond
+	commitEquivalenceDelay     = 50 * time.Millisecond
 	appliedIndexUpdateInterval = 5 * time.Second
 	connectionPoolCount        = 5
 	connectionTimeout          = 10 * time.Second
@@ -632,6 +633,21 @@ func (s *Store) Ready() bool {
 	}()
 }
 
+// Committed blocks until the local commit index is greater than or
+// equal to the Leader index, as checked when the function is called.
+// It returns the committed index. If the Leader index is 0, then the
+// system waits until the commit index is at least 1.
+func (s *Store) Committed(timeout time.Duration) (uint64, error) {
+	lci, err := s.LeaderCommitIndex()
+	if err != nil {
+		return lci, err
+	}
+	if lci == 0 {
+		lci = 1
+	}
+	return lci, s.WaitForCommitIndex(lci, timeout)
+}
+
 // Close closes the store. If wait is true, waits for a graceful shutdown.
 func (s *Store) Close(wait bool) (retErr error) {
 	defer func() {
@@ -704,6 +720,33 @@ func (s *Store) WaitForAppliedIndex(idx uint64, timeout time.Duration) error {
 		select {
 		case <-tck.C:
 			if s.raft.AppliedIndex() >= idx {
+				return nil
+			}
+		case <-tmr.C:
+			return fmt.Errorf("timeout expired")
+		}
+	}
+}
+
+// WaitForCommitIndex blocks until the local Raft commit index is equal to
+// or greater the given index, or the timeout expires.
+func (s *Store) WaitForCommitIndex(idx uint64, timeout time.Duration) error {
+	tck := time.NewTicker(commitEquivalenceDelay)
+	defer tck.Stop()
+	tmr := time.NewTimer(timeout)
+	defer tmr.Stop()
+	checkFn := func() bool {
+		return s.raft.CommitIndex() >= idx
+	}
+
+	// Try the fast path.
+	if checkFn() {
+		return nil
+	}
+	for {
+		select {
+		case <-tck.C:
+			if checkFn() {
 				return nil
 			}
 		case <-tmr.C:
@@ -869,7 +912,6 @@ func (s *Store) WaitForRemoval(id string, timeout time.Duration) error {
 	if check() {
 		return nil
 	}
-
 	tck := time.NewTicker(appliedWaitDelay)
 	defer tck.Stop()
 	tmr := time.NewTimer(timeout)
@@ -903,7 +945,6 @@ func (s *Store) WaitForLeader(timeout time.Duration) (string, error) {
 	if check() {
 		return leaderAddr, nil
 	}
-
 	tck := time.NewTicker(leaderWaitDelay)
 	defer tck.Stop()
 	tmr := time.NewTimer(timeout)
@@ -1071,7 +1112,6 @@ func (s *Store) Execute(ex *proto.ExecuteRequest) ([]*proto.ExecuteResult, error
 	if !s.Ready() {
 		return nil, ErrNotReady
 	}
-
 	return s.execute(ex)
 }
 

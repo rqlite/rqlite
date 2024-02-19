@@ -1,3 +1,7 @@
+## 8.21.0 (unreleased)
+### New features
+- [PR #1689](https://github.com/rqlite/rqlite/pull/1689): `/readyz` can wait for Commit Index.
+
 ## 8.20.3 (Feburary 17th 2024)
 ### Implementation changes and bug fixes
 - [PR #1690](https://github.com/rqlite/rqlite/pull/1690): Check for `isTextType` in panic-proof way.
