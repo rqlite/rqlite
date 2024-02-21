@@ -1014,7 +1014,7 @@ func (s *Service) handleReadyz(w http.ResponseWriter, r *http.Request, qp QueryP
 			w.Write([]byte(fmt.Sprintf("[+]node ok\n[+]leader ok\n[+]store ok\n[+]sync %s", err.Error())))
 			return
 		}
-		okMsg += "\n[+]commit ok"
+		okMsg += "\n[+]sync ok"
 	}
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(okMsg))
