@@ -1,7 +1,7 @@
 ## 8.21.1 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #1693](https://github.com/rqlite/rqlite/pull/1693): Use built-in `max` function for Commit Index _sync_ check.
-- [PR #1694](https://github.com/rqlite/rqlite/pull/1694): Correct output of `readyz` when using _sync_ flag.
+- [PR #1694](https://github.com/rqlite/rqlite/pull/1694): Correct output of `/readyz` when using _sync_ flag.
 
 ## 8.21.0 (February 21st 2024)
 This release enhances the `/readyz` check, giving you more information about node readiness. See [the documentation](https://rqlite.io/docs/guides/monitoring-rqlite/#readiness-checks) for more details.
