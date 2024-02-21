@@ -642,10 +642,7 @@ func (s *Store) Committed(timeout time.Duration) (uint64, error) {
 	if err != nil {
 		return lci, err
 	}
-	if lci == 0 {
-		lci = 1
-	}
-	return lci, s.WaitForCommitIndex(lci, timeout)
+	return lci, s.WaitForCommitIndex(max(1, lci), timeout)
 }
 
 // Close closes the store. If wait is true, waits for a graceful shutdown.
