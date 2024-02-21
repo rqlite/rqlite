@@ -6,7 +6,7 @@ This release enhances the `/readyz` check, giving you more information about nod
 ### Implementation changes and bug fixes
 - [PR #1692](https://github.com/rqlite/rqlite/pull/1692): `go mod` updates.
 
-## 8.20.3 (Feburary 17th 2024)
+## 8.20.3 (February 17th 2024)
 ### Implementation changes and bug fixes
 - [PR #1690](https://github.com/rqlite/rqlite/pull/1690): Check for `isTextType` in panic-proof way.
 
