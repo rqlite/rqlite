@@ -1,4 +1,5 @@
 ## 8.21.0 (February 21st 2024)
+This release enhances the `/readyz` check, giving you more information about node readiness. See [the documentation](https://rqlite.io/docs/guides/monitoring-rqlite/#readiness-checks) for more details.
 ### New features
 - [PR #1689](https://github.com/rqlite/rqlite/pull/1689): `/readyz` can wait for Commit Index, via `sync` flag.
 
