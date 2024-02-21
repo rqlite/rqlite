@@ -1,6 +1,9 @@
-## 8.21.0 (unreleased)
+## 8.21.0 (February 21st 2024)
 ### New features
-- [PR #1689](https://github.com/rqlite/rqlite/pull/1689): `/readyz` can wait for Commit Index.
+- [PR #1689](https://github.com/rqlite/rqlite/pull/1689): `/readyz` can wait for Commit Index, via `sync` flag.
+
+### Implementation changes and bug fixes
+- [PR #1692](https://github.com/rqlite/rqlite/pull/1692): `go mod` updates.
 
 ## 8.20.3 (Feburary 17th 2024)
 ### Implementation changes and bug fixes
