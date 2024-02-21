@@ -181,7 +181,7 @@ func Test_MultiNodeNode_CommitIndexes(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 	testPoll(t, func() bool {
-		// The config change command comming through the log due to s1 joining is not instant.
+		// The config change command coming through the log due to s1 joining is not instant.
 		return s1.raft.CommitIndex() == 3
 	}, 50*time.Millisecond, 2*time.Second)
 	if exp, got := uint64(0), s1.raftTn.CommandCommitIndex(); exp != got {
@@ -216,7 +216,7 @@ func Test_MultiNodeNode_CommitIndexes(t *testing.T) {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
 	testPoll(t, func() bool {
-		// The config change command comming through the log due to s2 joining is not instant.
+		// The config change command coming through the log due to s2 joining is not instant.
 		return s2.raft.CommitIndex() == 5
 	}, 50*time.Millisecond, 2*time.Second)
 	if exp, got := uint64(4), s2.raftTn.CommandCommitIndex(); exp != got {
@@ -226,7 +226,7 @@ func Test_MultiNodeNode_CommitIndexes(t *testing.T) {
 	// First node to join should also reflect the new cluster config
 	// command.
 	testPoll(t, func() bool {
-		// The config change command comming through the log due to s2 joining is not instant.
+		// The config change command coming through the log due to s2 joining is not instant.
 		return s1.raft.CommitIndex() == 5
 	}, 50*time.Millisecond, 2*time.Second)
 	if exp, got := uint64(4), s1.raftTn.CommandCommitIndex(); exp != got {
