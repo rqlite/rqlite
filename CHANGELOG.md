@@ -1,4 +1,4 @@
-## 8.21.1 (unreleased)
+## 8.21.1 (February 21st 2024)
 ### Implementation changes and bug fixes
 - [PR #1693](https://github.com/rqlite/rqlite/pull/1693): Use built-in `max` function for Commit Index _sync_ check.
 - [PR #1694](https://github.com/rqlite/rqlite/pull/1694): Correct output of `/readyz` when using _sync_ flag.
