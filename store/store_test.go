@@ -177,7 +177,7 @@ func Test_SingleNodeTempFileCleanup(t *testing.T) {
 		backupScatchPattern,
 		bootScatchPattern,
 	} {
-		f, err := os.CreateTemp(s.dbDir, pattern)
+		f, err := createTemp(s.dbDir, pattern)
 		if err != nil {
 			t.Fatalf("failed to create temporary file: %s", err.Error())
 		}
@@ -2666,7 +2666,7 @@ func mustNoop(s *Store, id string) {
 }
 
 func mustCreateTempFile() string {
-	f, err := os.CreateTemp("", "rqlite-temp")
+	f, err := createTemp("", "rqlite-temp")
 	if err != nil {
 		panic("failed to create temporary file")
 	}
@@ -2675,7 +2675,7 @@ func mustCreateTempFile() string {
 }
 
 func mustCreateTempFD() *os.File {
-	f, err := os.CreateTemp("", "rqlite-temp")
+	f, err := createTemp("", "rqlite-temp")
 	if err != nil {
 		panic("failed to create temporary file")
 	}
