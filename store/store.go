@@ -857,7 +857,7 @@ func (s *Store) LeaderWithID() (string, string) {
 // CommitIndex returns the Raft commit index.
 func (s *Store) CommitIndex() (uint64, error) {
 	if !s.open {
-		return nil, ErrNotOpen
+		return 0, ErrNotOpen
 	}
 	return s.raft.CommitIndex(), nil
 }
@@ -867,7 +867,7 @@ func (s *Store) CommitIndex() (uint64, error) {
 // commit index is returned directly from the Raft object.
 func (s *Store) LeaderCommitIndex() (uint64, error) {
 	if !s.open {
-		return nil, ErrNotOpen
+		return 0, ErrNotOpen
 	}
 	if s.raft.State() == raft.Leader {
 		return s.raft.CommitIndex(), nil
