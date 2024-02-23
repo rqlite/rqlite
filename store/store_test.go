@@ -22,6 +22,47 @@ import (
 	"github.com/rqlite/rqlite/v8/testdata/chinook"
 )
 
+// Test_StoreSingleNode tests that a non-open Store handles public methods correctly.
+func Test_NonOpenStore(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer s.Close(true)
+	defer ln.Close()
+
+	if err := s.Stepdown(false); err != ErrNotOpen {
+		t.Fatalf("wrong error received for non-open store: %s", err)
+	}
+	if s.IsLeader() {
+		t.Fatalf("store incorrectly marked as leader")
+	}
+	if s.HasLeader() {
+		t.Fatalf("store incorrectly marked as having leader")
+	}
+	if _, err := s.IsVoter(); err != ErrNotOpen {
+		t.Fatalf("wrong error received for non-open store: %s", err)
+	}
+	if s.State() != Unknown {
+		t.Fatalf("wrong cluster state returned for non-open store")
+	}
+	if _, err := s.CommitIndex(); err != ErrNotOpen {
+		t.Fatalf("wrong error received for non-open store: %s", err)
+	}
+	if _, err := s.LeaderCommitIndex(); err != ErrNotOpen {
+		t.Fatalf("wrong error received for non-open store: %s", err)
+	}
+	if addr, err := s.LeaderAddr(); addr != "" || err != nil {
+		t.Fatalf("wrong leader address returned for non-open store: %s", addr)
+	}
+	if id, err := s.LeaderID(); id != "" || err != nil {
+		t.Fatalf("wrong leader ID returned for non-open store: %s", id)
+	}
+	if addr, id := s.LeaderWithID(); addr != "" || id != "" {
+		t.Fatalf("wrong leader address and ID returned for non-open store: %s", id)
+	}
+	if _, err := s.Nodes(); err != ErrNotOpen {
+		t.Fatalf("wrong error received for non-open store: %s", err)
+	}
+}
+
 // Test_StoreSingleNode tests that a single node basically operates.
 func Test_OpenStoreSingleNode(t *testing.T) {
 	s, ln := mustNewStore(t)
@@ -495,7 +536,7 @@ func Test_OpenStoreCloseSingleNode(t *testing.T) {
 	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
-	if !s.open {
+	if !s.open.Is() {
 		t.Fatalf("store not marked as open")
 	}
 
@@ -522,7 +563,7 @@ func Test_OpenStoreCloseSingleNode(t *testing.T) {
 	if err := s.Close(true); err != nil {
 		t.Fatalf("failed to close single-node store: %s", err.Error())
 	}
-	if s.open {
+	if s.open.Is() {
 		t.Fatalf("store still marked as open")
 	}
 

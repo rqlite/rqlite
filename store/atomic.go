@@ -2,6 +2,7 @@ package store
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -42,4 +43,29 @@ func (t *AtomicTime) Sub(tt *AtomicTime) time.Duration {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	return t.t.Sub(tt.t)
+}
+
+// AtomicBool is a boolean with atomic operations.
+type AtomicBool struct {
+	state int32 // 1 for true, 0 for false
+}
+
+// NewAtomicBool returns a new AtomicBool initialized to false.
+func NewAtomicBool() *AtomicBool {
+	return &AtomicBool{state: 0}
+}
+
+// Set sets the AtomicBool to true.
+func (b *AtomicBool) Set() {
+	atomic.StoreInt32(&b.state, 1)
+}
+
+// Unset sets the AtomicBool to false.
+func (b *AtomicBool) Unset() {
+	atomic.StoreInt32(&b.state, 0)
+}
+
+// Is returns true if the AtomicBool is true, false otherwise.
+func (b *AtomicBool) Is() bool {
+	return atomic.LoadInt32(&b.state) == 1
 }

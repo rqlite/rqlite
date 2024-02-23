@@ -238,7 +238,7 @@ const (
 
 // Store is a SQLite database, where all changes are made via Raft consensus.
 type Store struct {
-	open          bool
+	open          *AtomicBool
 	raftDir       string
 	snapshotDir   string
 	peersPath     string
@@ -364,6 +364,7 @@ func New(ly Layer, c *Config) *Store {
 	}
 
 	return &Store{
+		open:            NewAtomicBool(),
 		ly:              ly,
 		raftDir:         c.Dir,
 		snapshotDir:     filepath.Join(c.Dir, snapshotsDirName),
@@ -398,7 +399,7 @@ func New(ly Layer, c *Config) *Store {
 // and setting the restore path means the Store will not report
 // itself as ready until a restore has been attempted.
 func (s *Store) SetRestorePath(path string) error {
-	if s.open {
+	if s.open.Is() {
 		return ErrOpen
 	}
 
@@ -415,11 +416,11 @@ func (s *Store) SetRestorePath(path string) error {
 func (s *Store) Open() (retErr error) {
 	defer func() {
 		if retErr == nil {
-			s.open = true
+			s.open.Set()
 		}
 	}()
 
-	if s.open {
+	if s.open.Is() {
 		return ErrOpen
 	}
 
@@ -591,6 +592,9 @@ func (s *Store) Bootstrap(servers ...*Server) error {
 // the cluster. If this node is not the leader, and 'wait' is true, an error
 // will be returned.
 func (s *Store) Stepdown(wait bool) error {
+	if !s.open.Is() {
+		return ErrNotOpen
+	}
 	f := s.raft.LeadershipTransfer()
 	if !wait {
 		return nil
@@ -650,10 +654,10 @@ func (s *Store) Close(wait bool) (retErr error) {
 	defer func() {
 		if retErr == nil {
 			s.logger.Printf("store closed with node ID %s, listening on %s", s.raftID, s.ly.Addr().String())
-			s.open = false
+			s.open.Unset()
 		}
 	}()
-	if !s.open {
+	if !s.open.Is() {
 		// Protect against closing already-closed resource, such as channels.
 		return nil
 	}
@@ -760,11 +764,17 @@ func (s *Store) DBAppliedIndex() uint64 {
 
 // IsLeader is used to determine if the current node is cluster leader
 func (s *Store) IsLeader() bool {
+	if !s.open.Is() {
+		return false
+	}
 	return s.raft.State() == raft.Leader
 }
 
 // HasLeader returns true if the cluster has a leader, false otherwise.
 func (s *Store) HasLeader() bool {
+	if !s.open.Is() {
+		return false
+	}
 	return s.raft.Leader() != ""
 }
 
@@ -772,6 +782,9 @@ func (s *Store) HasLeader() bool {
 // is no reference to the current node in the current cluster configuration then
 // false will also be returned.
 func (s *Store) IsVoter() (bool, error) {
+	if !s.open.Is() {
+		return false, ErrNotOpen
+	}
 	cfg := s.raft.GetConfiguration()
 	if err := cfg.Error(); err != nil {
 		return false, err
@@ -786,6 +799,9 @@ func (s *Store) IsVoter() (bool, error) {
 
 // State returns the current node's Raft state
 func (s *Store) State() ClusterState {
+	if !s.open.Is() {
+		return Unknown
+	}
 	state := s.raft.State()
 	switch state {
 	case raft.Leader:
@@ -813,7 +829,7 @@ func (s *Store) Path() string {
 
 // Addr returns the address of the store.
 func (s *Store) Addr() string {
-	if !s.open {
+	if !s.open.Is() {
 		return ""
 	}
 	return string(s.raftTn.LocalAddr())
@@ -827,7 +843,7 @@ func (s *Store) ID() string {
 // LeaderAddr returns the address of the current leader. Returns a
 // blank string if there is no leader or if the Store is not open.
 func (s *Store) LeaderAddr() (string, error) {
-	if !s.open {
+	if !s.open.Is() {
 		return "", nil
 	}
 	addr, _ := s.raft.LeaderWithID()
@@ -837,7 +853,7 @@ func (s *Store) LeaderAddr() (string, error) {
 // LeaderID returns the node ID of the Raft leader. Returns a
 // blank string if there is no leader, or an error.
 func (s *Store) LeaderID() (string, error) {
-	if !s.open {
+	if !s.open.Is() {
 		return "", nil
 	}
 	_, id := s.raft.LeaderWithID()
@@ -847,7 +863,7 @@ func (s *Store) LeaderID() (string, error) {
 // LeaderWithID is used to return the current leader address and ID of the cluster.
 // It may return empty strings if there is no current leader or the leader is unknown.
 func (s *Store) LeaderWithID() (string, string) {
-	if !s.open {
+	if !s.open.Is() {
 		return "", ""
 	}
 	addr, id := s.raft.LeaderWithID()
@@ -856,6 +872,9 @@ func (s *Store) LeaderWithID() (string, string) {
 
 // CommitIndex returns the Raft commit index.
 func (s *Store) CommitIndex() (uint64, error) {
+	if !s.open.Is() {
+		return 0, ErrNotOpen
+	}
 	return s.raft.CommitIndex(), nil
 }
 
@@ -863,6 +882,9 @@ func (s *Store) CommitIndex() (uint64, error) {
 // by the latest AppendEntries RPC. If this node is the Leader then the
 // commit index is returned directly from the Raft object.
 func (s *Store) LeaderCommitIndex() (uint64, error) {
+	if !s.open.Is() {
+		return 0, ErrNotOpen
+	}
 	if s.raft.State() == raft.Leader {
 		return s.raft.CommitIndex(), nil
 	}
@@ -871,7 +893,7 @@ func (s *Store) LeaderCommitIndex() (uint64, error) {
 
 // Nodes returns the slice of nodes in the cluster, sorted by ID ascending.
 func (s *Store) Nodes() ([]*Server, error) {
-	if !s.open {
+	if !s.open.Is() {
 		return nil, ErrNotOpen
 	}
 
@@ -989,7 +1011,7 @@ func (s *Store) WaitForFSMIndex(idx uint64, timeout time.Duration) (uint64, erro
 
 // Stats returns stats for the store.
 func (s *Store) Stats() (map[string]interface{}, error) {
-	if !s.open {
+	if !s.open.Is() {
 		return map[string]interface{}{
 			"open": false,
 		}, nil
@@ -1099,7 +1121,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 
 // Execute executes queries that return no rows, but do modify the database.
 func (s *Store) Execute(ex *proto.ExecuteRequest) ([]*proto.ExecuteResult, error) {
-	if !s.open {
+	if !s.open.Is() {
 		return nil, ErrNotOpen
 	}
 
@@ -1142,7 +1164,7 @@ func (s *Store) execute(ex *proto.ExecuteRequest) ([]*proto.ExecuteResult, error
 
 // Query executes queries that return rows, and do not modify the database.
 func (s *Store) Query(qr *proto.QueryRequest) ([]*proto.QueryRows, error) {
-	if !s.open {
+	if !s.open.Is() {
 		return nil, ErrNotOpen
 	}
 
@@ -1201,7 +1223,7 @@ func (s *Store) Query(qr *proto.QueryRequest) ([]*proto.QueryRows, error) {
 
 // Request processes a request that may contain both Executes and Queries.
 func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryResponse, error) {
-	if !s.open {
+	if !s.open.Is() {
 		return nil, ErrNotOpen
 	}
 	nRW, _ := s.RORWCount(eqr)
@@ -1283,7 +1305,7 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 // will be written directly to that file. Otherwise a temporary file will be created,
 // and that temporary file copied to dst.
 func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
-	if !s.open {
+	if !s.open.Is() {
 		return ErrNotOpen
 	}
 
@@ -1368,7 +1390,7 @@ func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 // Loads an entire SQLite file into the database, sending the request
 // through the Raft log.
 func (s *Store) Load(lr *proto.LoadRequest) error {
-	if !s.open {
+	if !s.open.Is() {
 		return ErrNotOpen
 	}
 
@@ -1538,7 +1560,7 @@ func (s *Store) Database(leader bool) ([]byte, error) {
 //
 // Notifying is idempotent. A node may repeatedly notify the Store without issue.
 func (s *Store) Notify(nr *proto.NotifyRequest) error {
-	if !s.open {
+	if !s.open.Is() {
 		return ErrNotOpen
 	}
 
@@ -1597,7 +1619,7 @@ func (s *Store) Notify(nr *proto.NotifyRequest) error {
 // Join joins a node, identified by id and located at addr, to this store.
 // The node must be ready to respond to Raft communications at that address.
 func (s *Store) Join(jr *proto.JoinRequest) error {
-	if !s.open {
+	if !s.open.Is() {
 		return ErrNotOpen
 	}
 
@@ -1665,7 +1687,7 @@ func (s *Store) Join(jr *proto.JoinRequest) error {
 
 // Remove removes a node from the store.
 func (s *Store) Remove(rn *proto.RemoveNodeRequest) error {
-	if !s.open {
+	if !s.open.Is() {
 		return ErrNotOpen
 	}
 	id := rn.Id

@@ -1,3 +1,7 @@
+## 8.21.3 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1700](https://github.com/rqlite/rqlite/pull/1700): Accessing non-open Store shouldn't panic.  Fixes issue [#1698](https://github.com/rqlite/rqlite/issues/1698).
+
 ## 8.21.2 (February 23rd 2024)
 ### Implementation changes and bug fixes
 - [PR #1697](https://github.com/rqlite/rqlite/pull/1697): Use consistent file perms post Boot.
