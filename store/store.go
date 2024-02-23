@@ -760,11 +760,17 @@ func (s *Store) DBAppliedIndex() uint64 {
 
 // IsLeader is used to determine if the current node is cluster leader
 func (s *Store) IsLeader() bool {
+	if !s.open {
+		return false
+	}
 	return s.raft.State() == raft.Leader
 }
 
 // HasLeader returns true if the cluster has a leader, false otherwise.
 func (s *Store) HasLeader() bool {
+	if !s.open {
+		return false
+	}
 	return s.raft.Leader() != ""
 }
 
@@ -772,6 +778,9 @@ func (s *Store) HasLeader() bool {
 // is no reference to the current node in the current cluster configuration then
 // false will also be returned.
 func (s *Store) IsVoter() (bool, error) {
+	if !s.open {
+		return false, ErrNotOpen
+	}
 	cfg := s.raft.GetConfiguration()
 	if err := cfg.Error(); err != nil {
 		return false, err
