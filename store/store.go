@@ -1314,7 +1314,7 @@ func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 				}
 			}
 
-			srcFD, err = os.CreateTemp(s.dbDir, backupScatchPattern)
+			srcFD, err = createTemp(s.dbDir, backupScatchPattern)
 			if err != nil {
 				return err
 			}
@@ -1433,7 +1433,7 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 	}
 
 	// Write the data to a temporary file.
-	f, err := os.CreateTemp(s.dbDir, bootScatchPattern)
+	f, err := createTemp(s.dbDir, bootScatchPattern)
 	if err != nil {
 		return 0, err
 	}
@@ -1487,7 +1487,7 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 // the temporary file with the existing database file. The database is then
 // re-opened.
 func (s *Store) Vacuum() error {
-	fd, err := os.CreateTemp(s.dbDir, vacuumScatchPattern)
+	fd, err := createTemp(s.dbDir, vacuumScatchPattern)
 	if err != nil {
 		return err
 	}
@@ -2065,7 +2065,7 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	startT := time.Now()
 
 	// Create a scatch file to write the restore data to it.
-	tmpFile, err := os.CreateTemp(s.dbDir, restoreScratchPattern)
+	tmpFile, err := createTemp(s.dbDir, restoreScratchPattern)
 	if err != nil {
 		return fmt.Errorf("error creating temporary file for restore operation: %v", err)
 	}
@@ -2358,6 +2358,17 @@ func createOnDisk(path string, fkConstraints, wal bool) (*sql.SwappableDB, error
 		return nil, err
 	}
 	return sql.OpenSwappable(path, fkConstraints, wal)
+}
+
+func createTemp(dir, pattern string) (*os.File, error) {
+	fd, err := os.CreateTemp(dir, pattern)
+	if err != nil {
+		return nil, err
+	}
+	if err := os.Chmod(fd.Name(), 0644); err != nil {
+		return nil, err
+	}
+	return fd, nil
 }
 
 func copyFromReaderToFile(path string, r io.Reader) (int64, error) {

@@ -1,3 +1,7 @@
+## 8.21.2 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1696](https://github.com/rqlite/rqlite/pull/1696): Use consistent file perms post boot.
+
 ## 8.21.1 (February 21st 2024)
 ### Implementation changes and bug fixes
 - [PR #1693](https://github.com/rqlite/rqlite/pull/1693): Use built-in `max` function for Commit Index _sync_ check.
