@@ -77,7 +77,7 @@ func (c *CommandProcessor) Process(data []byte, db *sql.SwappableDB) (*proto.Com
 		}
 
 		// create a scratch file in the same directory as s.db.Path()
-		fd, err := os.CreateTemp(filepath.Dir(db.Path()), "rqlilte-load-")
+		fd, err := createTemp(filepath.Dir(db.Path()), "rqlilte-load-")
 		if err != nil {
 			return cmd, false, &fsmGenericResponse{error: fmt.Errorf("failed to create temporary database file: %s", err)}
 		}
