@@ -591,6 +591,9 @@ func (s *Store) Bootstrap(servers ...*Server) error {
 // the cluster. If this node is not the leader, and 'wait' is true, an error
 // will be returned.
 func (s *Store) Stepdown(wait bool) error {
+	if !s.open {
+		return ErrNotOpen
+	}
 	f := s.raft.LeadershipTransfer()
 	if !wait {
 		return nil
@@ -760,11 +763,17 @@ func (s *Store) DBAppliedIndex() uint64 {
 
 // IsLeader is used to determine if the current node is cluster leader
 func (s *Store) IsLeader() bool {
+	if !s.open {
+		return false
+	}
 	return s.raft.State() == raft.Leader
 }
 
 // HasLeader returns true if the cluster has a leader, false otherwise.
 func (s *Store) HasLeader() bool {
+	if !s.open {
+		return false
+	}
 	return s.raft.Leader() != ""
 }
 
@@ -772,6 +781,9 @@ func (s *Store) HasLeader() bool {
 // is no reference to the current node in the current cluster configuration then
 // false will also be returned.
 func (s *Store) IsVoter() (bool, error) {
+	if !s.open {
+		return false, ErrNotOpen
+	}
 	cfg := s.raft.GetConfiguration()
 	if err := cfg.Error(); err != nil {
 		return false, err
@@ -786,6 +798,9 @@ func (s *Store) IsVoter() (bool, error) {
 
 // State returns the current node's Raft state
 func (s *Store) State() ClusterState {
+	if !s.open {
+		return Unknown
+	}
 	state := s.raft.State()
 	switch state {
 	case raft.Leader:
@@ -856,6 +871,9 @@ func (s *Store) LeaderWithID() (string, string) {
 
 // CommitIndex returns the Raft commit index.
 func (s *Store) CommitIndex() (uint64, error) {
+	if !s.open {
+		return 0, ErrNotOpen
+	}
 	return s.raft.CommitIndex(), nil
 }
 
@@ -863,6 +881,9 @@ func (s *Store) CommitIndex() (uint64, error) {
 // by the latest AppendEntries RPC. If this node is the Leader then the
 // commit index is returned directly from the Raft object.
 func (s *Store) LeaderCommitIndex() (uint64, error) {
+	if !s.open {
+		return 0, ErrNotOpen
+	}
 	if s.raft.State() == raft.Leader {
 		return s.raft.CommitIndex(), nil
 	}
