@@ -536,7 +536,7 @@ func Test_OpenStoreCloseSingleNode(t *testing.T) {
 	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
-	if !s.open {
+	if !s.open.Is() {
 		t.Fatalf("store not marked as open")
 	}
 
@@ -563,7 +563,7 @@ func Test_OpenStoreCloseSingleNode(t *testing.T) {
 	if err := s.Close(true); err != nil {
 		t.Fatalf("failed to close single-node store: %s", err.Error())
 	}
-	if s.open {
+	if s.open.Is() {
 		t.Fatalf("store still marked as open")
 	}
 
