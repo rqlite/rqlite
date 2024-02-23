@@ -1,6 +1,6 @@
 ## 8.21.2 (February 23rd 2024)
 ### Implementation changes and bug fixes
-- [PR #1696](https://github.com/rqlite/rqlite/pull/1696): Use consistent file perms post Boot.
+- [PR #1697](https://github.com/rqlite/rqlite/pull/1697): Use consistent file perms post Boot.
 
 ## 8.21.1 (February 21st 2024)
 ### Implementation changes and bug fixes
