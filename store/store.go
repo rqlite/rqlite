@@ -364,6 +364,7 @@ func New(ly Layer, c *Config) *Store {
 	}
 
 	return &Store{
+		open:            NewAtomicBool(),
 		ly:              ly,
 		raftDir:         c.Dir,
 		snapshotDir:     filepath.Join(c.Dir, snapshotsDirName),
