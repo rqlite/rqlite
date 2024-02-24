@@ -1,4 +1,4 @@
-## 8.21.3 (unreleased)
+## 8.21.3 (February 24th 2024)
 ### Implementation changes and bug fixes
 - [PR #1700](https://github.com/rqlite/rqlite/pull/1700): Accessing non-open Store shouldn't panic.  Fixes issue [#1698](https://github.com/rqlite/rqlite/issues/1698).
 
