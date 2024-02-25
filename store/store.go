@@ -2170,7 +2170,7 @@ func (s *Store) observe() (closeCh, doneCh chan struct{}) {
 
 					isReadOnly, found := servers.IsReadOnly(id)
 					if !found {
-						s.logger.Printf("node %s is not present in configuration", id)
+						s.logger.Printf("node %s (failing heartbeat) is not present in configuration", id)
 						break
 					}
 
