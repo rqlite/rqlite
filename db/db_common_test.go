@@ -189,6 +189,30 @@ func testNotNULLField(t *testing.T, db *DB) {
 	}
 }
 
+func testBLOB(t *testing.T, db *DB) {
+	_, err := db.ExecuteStringStmt("CREATE TABLE foo (name TEXT, data BLOB)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	_, err = db.ExecuteStringStmt(`INSERT INTO foo(name, data) VALUES("fiona", "hello")`)
+	if err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+	_, err = db.ExecuteStringStmt(`INSERT INTO foo(name, data) VALUES("declan", X'74657374')`)
+	if err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+
+	r, err := db.QueryStringStmt(`SELECT * FROM foo`)
+	if err != nil {
+		t.Fatalf("failed to query table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["name","data"],"types":["text","blob"],"values":[["fiona","hello"],["declan","dGVzdA=="]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
 func testEmptyStatements(t *testing.T, db *DB) {
 	_, err := db.ExecuteStringStmt("")
 	if err != nil {
@@ -1588,6 +1612,7 @@ func Test_DatabaseCommonOperations(t *testing.T) {
 		{"SQLiteTimeTypes", testSQLiteTimeTypes},
 		{"NotNULLField", testNotNULLField},
 		{"RandomBlob", testSQLiteRandomBlob},
+		{"BasicBLOB", testBLOB},
 		{"EmptyStatements", testEmptyStatements},
 		{"SimpleSingleStatements", testSimpleSingleStatements},
 		{"SimpleStatementsNumeric", testSimpleStatementsNumeric},
