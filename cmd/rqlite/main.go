@@ -175,7 +175,7 @@ func main() {
 				err = queryWithClient(ctx, client, timer, blobArray, consistency, `SELECT sql FROM sqlite_master`)
 			case ".TIMER":
 				err = toggleFlag(line[index+1:], &timer)
-			case ".BYTEARRAY":
+			case ".BLOBARRAY":
 				err = toggleFlag(line[index+1:], &blobArray)
 			case ".STATUS":
 				err = status(ctx, cmd, line, argv)
