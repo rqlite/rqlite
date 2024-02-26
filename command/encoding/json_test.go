@@ -260,6 +260,68 @@ func Test_MarshalQueryAssociativeRows(t *testing.T) {
 	}
 }
 
+// Test_MarshalQueryRows_Blob tests JSON marshaling of QueryRows with
+// BLOB values.
+func Test_MarshalQueryRows_Blob(t *testing.T) {
+	var b []byte
+	var err error
+	var r *proto.QueryRows
+	enc := Encoder{}
+
+	r = &proto.QueryRows{
+		Columns: []string{"c1", "c2"},
+		Types:   []string{"blob", "string"},
+	}
+	values := make([]*proto.Parameter, len(r.Columns))
+	values[0] = &proto.Parameter{
+		Value: &proto.Parameter_Y{
+			Y: []byte("hello"),
+		},
+	}
+	values[1] = &proto.Parameter{
+		Value: &proto.Parameter_S{
+			S: "fiona",
+		},
+	}
+
+	r.Values = []*proto.Values{
+		{Parameters: values},
+	}
+
+	b, err = enc.JSONMarshal(r)
+	if err != nil {
+		t.Fatalf("failed to marshal QueryRows: %s", err.Error())
+	}
+	if exp, got := `{"columns":["c1","c2"],"types":["blob","string"],"values":[["aGVsbG8=","fiona"]]}`, string(b); exp != got {
+		t.Fatalf("failed to marshal QueryRows: exp %s, got %s", exp, got)
+	}
+
+	b, err = enc.JSONMarshalIndent(r, "", "    ")
+	if err != nil {
+		t.Fatalf("failed to marshal QueryRows: %s", err.Error())
+	}
+	exp := `{
+    "columns": [
+        "c1",
+        "c2"
+    ],
+    "types": [
+        "blob",
+        "string"
+    ],
+    "values": [
+        [
+            "aGVsbG8=",
+            "fiona"
+        ]
+    ]
+}`
+	got := string(b)
+	if exp != got {
+		t.Fatalf("failed to pretty marshal QueryRows: exp: %s, got: %s", exp, got)
+	}
+}
+
 // Test_MarshalQueryRowses tests JSON marshaling of a slice of QueryRows
 func Test_MarshalQueryRowses(t *testing.T) {
 	var b []byte

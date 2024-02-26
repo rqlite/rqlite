@@ -1,10 +1,13 @@
-## 8.21.4 (unreleased)
+## 8.22.0 (unreleased)
+### New features
+- [PR #1702](https://github.com/rqlite/rqlite/pull/1702): Support JSON marshaling byte slices as arrays of integers. Fixes issue [#1691](https://github.com/rqlite/rqlite/issues/1691).
+
 ### Implementation changes and bug fixes
 - [PR #1702](https://github.com/rqlite/rqlite/pull/1702): Add basic BLOB unit testing to DB layer.
 
 ## 8.21.3 (February 24th 2024)
 ### Implementation changes and bug fixes
-- [PR #1700](https://github.com/rqlite/rqlite/pull/1700): Accessing non-open Store shouldn't panic.  Fixes issue [#1698](https://github.com/rqlite/rqlite/issues/1698).
+- [PR #1700](https://github.com/rqlite/rqlite/pull/1700): Accessing non-open Store shouldn't panic. Fixes issue [#1698](https://github.com/rqlite/rqlite/issues/1698).
 
 ## 8.21.2 (February 23rd 2024)
 ### Implementation changes and bug fixes
