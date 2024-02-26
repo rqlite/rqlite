@@ -53,6 +53,7 @@ type argT struct {
 var cliHelp = []string{
 	`.backup FILE                        Write database backup to FILE`,
 	`.boot FILE                          Boot the node using a SQLite file read from FILE`,
+	`.blobarray on|off                   Display BLOB data as byte arrays`,
 	`.consistency [none|weak|strong]     Show or set read consistency level`,
 	`.dump FILE                          Dump the database in SQL text format to FILE`,
 	`.exit                               Exit this program`,
@@ -108,6 +109,7 @@ func main() {
 		fmt.Printf("Enter \".help\" for usage hints.\n")
 		fmt.Printf("Connected to %s running version %s\n", connectionStr, version)
 
+		blobArray := false
 		timer := false
 		consistency := "weak"
 		prefix := fmt.Sprintf("%s>", address6(argv))
@@ -166,13 +168,15 @@ func main() {
 				}
 				err = setConsistency(line[index+1:], &consistency)
 			case ".TABLES":
-				err = queryWithClient(ctx, client, timer, consistency, `SELECT name FROM sqlite_master WHERE type="table"`)
+				err = queryWithClient(ctx, client, timer, blobArray, consistency, `SELECT name FROM sqlite_master WHERE type="table"`)
 			case ".INDEXES":
-				err = queryWithClient(ctx, client, timer, consistency, `SELECT sql FROM sqlite_master WHERE type="index"`)
+				err = queryWithClient(ctx, client, timer, blobArray, consistency, `SELECT sql FROM sqlite_master WHERE type="index"`)
 			case ".SCHEMA":
-				err = queryWithClient(ctx, client, timer, consistency, `SELECT sql FROM sqlite_master`)
+				err = queryWithClient(ctx, client, timer, blobArray, consistency, `SELECT sql FROM sqlite_master`)
 			case ".TIMER":
-				err = toggleTimer(line[index+1:], &timer)
+				err = toggleFlag(line[index+1:], &timer)
+			case ".BYTEARRAY":
+				err = toggleFlag(line[index+1:], &blobArray)
 			case ".STATUS":
 				err = status(ctx, cmd, line, argv)
 			case ".READY":
@@ -222,7 +226,7 @@ func main() {
 			case ".QUIT", "QUIT", "EXIT", ".EXIT":
 				break FOR_READ
 			case "SELECT", "PRAGMA":
-				err = queryWithClient(ctx, client, timer, consistency, line)
+				err = queryWithClient(ctx, client, timer, blobArray, consistency, line)
 			default:
 				err = executeWithClient(ctx, client, timer, line)
 			}
@@ -251,7 +255,7 @@ func main() {
 	})
 }
 
-func toggleTimer(op string, flag *bool) error {
+func toggleFlag(op string, flag *bool) error {
 	if op != "on" && op != "off" {
 		return fmt.Errorf("invalid option '%s'. Use 'on' or 'off' (default)", op)
 	}

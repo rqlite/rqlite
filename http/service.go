@@ -1215,7 +1215,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryPa
 
 	resp := NewResponse()
 	resp.Results.AssociativeJSON = qp.Associative()
-	resp.Results.BytesAsArrays = qp.ByteArray()
+	resp.Results.BytesAsArrays = qp.BlobArray()
 
 	qr := &proto.QueryRequest{
 		Request: &proto.Request{
@@ -1307,7 +1307,7 @@ func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request, qp Query
 
 	resp := NewResponse()
 	resp.Results.AssociativeJSON = qp.Associative()
-	resp.Results.BytesAsArrays = qp.ByteArray()
+	resp.Results.BytesAsArrays = qp.BlobArray()
 
 	eqr := &proto.ExecuteQueryRequest{
 		Request: &proto.Request{
