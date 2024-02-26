@@ -1,6 +1,7 @@
 ## 8.22.0 (unreleased)
 ### New features
 - [PR #1703](https://github.com/rqlite/rqlite/pull/1703): Support JSON marshaling byte slices as arrays of integers. Fixes issue [#1691](https://github.com/rqlite/rqlite/issues/1691) and [#1345](https://github.com/rqlite/rqlite/issues/1345).
+- [PR #1704](https://github.com/rqlite/rqlite/pull/1704): Add rqlite shell support for displaying BLOB data as byte arrays.
 
 ### Implementation changes and bug fixes
 - [PR #1702](https://github.com/rqlite/rqlite/pull/1702): Add basic BLOB unit testing to DB layer.
