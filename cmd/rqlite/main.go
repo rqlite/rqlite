@@ -52,8 +52,8 @@ type argT struct {
 
 var cliHelp = []string{
 	`.backup FILE                        Write database backup to FILE`,
-	`.boot FILE                          Boot the node using a SQLite file read from FILE`,
 	`.blobarray on|off                   Display BLOB data as byte arrays`,
+	`.boot FILE                          Boot the node using a SQLite file read from FILE`,
 	`.consistency [none|weak|strong]     Show or set read consistency level`,
 	`.dump FILE                          Dump the database in SQL text format to FILE`,
 	`.exit                               Exit this program`,
