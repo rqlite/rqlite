@@ -50,26 +50,31 @@ type argT struct {
 	HTTPTimeout  clix.Duration `cli:"t,http-timeout" usage:"set timeout on HTTP requests" dft:"30s"`
 }
 
-var cliHelp = []string{
-	`.backup FILE                        Write database backup to FILE`,
-	`.blobarray on|off                   Display BLOB data as byte arrays`,
-	`.boot FILE                          Boot the node using a SQLite file read from FILE`,
-	`.consistency [none|weak|strong]     Show or set read consistency level`,
-	`.dump FILE                          Dump the database in SQL text format to FILE`,
-	`.exit                               Exit this program`,
-	`.expvar                             Show expvar (Go runtime) information for connected node`,
-	`.help                               Show this message`,
-	`.indexes                            Show names of all indexes`,
-	`.quit                               Exit this program`,
-	`.ready                              Show ready status for connected node`,
-	`.remove NODEID                      Remove node NODEID from the cluster`,
-	`.restore FILE                       Load using SQLite file or SQL dump contained in FILE`,
-	`.nodes [all]                        Show connection status of voting nodes. 'all' to show all nodes`,
-	`.schema                             Show CREATE statements for all tables`,
-	`.status                             Show status and diagnostic information for connected node`,
-	`.sysdump FILE                       Dump system diagnostics to FILE`,
-	`.tables                             List names of tables`,
-	`.timer on|off                       Turn query timings on or off`,
+var cliHelp []string
+
+func init() {
+	cliHelp = []string{
+		`.backup FILE                        Write database backup to FILE`,
+		`.blobarray on|off                   Display BLOB data as byte arrays`,
+		`.boot FILE                          Boot the node using a SQLite file read from FILE`,
+		`.consistency [none|weak|strong]     Show or set read consistency level`,
+		`.dump FILE                          Dump the database in SQL text format to FILE`,
+		`.exit                               Exit this program`,
+		`.expvar                             Show expvar (Go runtime) information for connected node`,
+		`.help                               Show this message`,
+		`.indexes                            Show names of all indexes`,
+		`.quit                               Exit this program`,
+		`.ready                              Show ready status for connected node`,
+		`.remove NODEID                      Remove node NODEID from the cluster`,
+		`.restore FILE                       Load using SQLite file or SQL dump contained in FILE`,
+		`.nodes [all]                        Show connection status of voting nodes. 'all' to show all nodes`,
+		`.schema                             Show CREATE statements for all tables`,
+		`.status                             Show status and diagnostic information for connected node`,
+		`.sysdump FILE                       Dump system diagnostics to FILE`,
+		`.tables                             List names of tables`,
+		`.timer on|off                       Turn query timings on or off`,
+	}
+	sort.Strings(cliHelp)
 }
 
 func main() {
@@ -280,7 +285,6 @@ func makeJSONBody(line string) string {
 }
 
 func help(ctx *cli.Context, cmd, line string, argv *argT) error {
-	sort.Strings(cliHelp)
 	fmt.Println(strings.Join(cliHelp, "\n"))
 	return nil
 }
