@@ -362,7 +362,7 @@ func Test_SingleNodeBlob(t *testing.T) {
 	if r != `{"results":[{"columns":["data"],"types":["blob"],"values":[["fiona"],["3q2+7w=="]]}]}` {
 		t.Fatalf("test received wrong result got %s", r)
 	}
-	r, err = node.QueryWithByteArray("SELECT data FROM foo")
+	r, err = node.QueryWithBlobArray("SELECT data FROM foo")
 	if err != nil {
 		t.Fatalf("failed to query records: %s", err.Error())
 	}

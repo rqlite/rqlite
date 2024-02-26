@@ -80,12 +80,15 @@ type queryResponse struct {
 	Time    float64 `json:"time"`
 }
 
-func queryWithClient(ctx *cli.Context, client *cl.Client, timer bool, consistency, query string) error {
+func queryWithClient(ctx *cli.Context, client *cl.Client, timer, blobArray bool, consistency, query string) error {
 	queryStr := url.Values{}
 	queryStr.Set("level", consistency)
 	queryStr.Set("q", query)
 	if timer {
 		queryStr.Set("timings", "")
+	}
+	if blobArray {
+		queryStr.Set("blob_array", "")
 	}
 	u := url.URL{
 		Path:     fmt.Sprintf("%sdb/query", client.Prefix),

@@ -137,8 +137,8 @@ func (n *Node) Query(stmt string) (string, error) {
 	return n.query(stmt, "weak", false, NoQueryTimeout)
 }
 
-// QueryWithByteArray runs a single query against the node, with byte array support.
-func (n *Node) QueryWithByteArray(stmt string) (string, error) {
+// QueryWithBlobArray runs a single query against the node, with BLOB byte array support.
+func (n *Node) QueryWithBlobArray(stmt string) (string, error) {
 	return n.query(stmt, "weak", true, NoQueryTimeout)
 }
 
@@ -464,7 +464,7 @@ func (n *Node) query(stmt, consistency string, ba bool, timeout time.Duration) (
 		"db_timeout": []string{timeout.String()},
 	}
 	if ba {
-		vals.Set("byte_array", "true")
+		vals.Set("blob_array", "true")
 	}
 	v.RawQuery = vals.Encode()
 
