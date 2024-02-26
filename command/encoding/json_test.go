@@ -6,6 +6,51 @@ import (
 	"github.com/rqlite/rqlite/v8/command/proto"
 )
 
+// TestByteSliceAsArray_MarshalJSON_Empty tests marshaling an empty ByteSliceAsArray.
+func TestByteSliceAsArray_MarshalJSON_Empty(t *testing.T) {
+	var b ByteSliceAsArray = []byte{}
+	expected := "[]"
+
+	bytes, err := b.MarshalJSON()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if string(bytes) != expected {
+		t.Errorf("expected %s, got %s", expected, string(bytes))
+	}
+}
+
+// TestByteSliceAsArray_MarshalJSON_SingleElement tests marshaling a ByteSliceAsArray with a single element.
+func TestByteSliceAsArray_MarshalJSON_SingleElement(t *testing.T) {
+	var b ByteSliceAsArray = []byte{42}
+	expected := "[42]"
+
+	bytes, err := b.MarshalJSON()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if string(bytes) != expected {
+		t.Errorf("expected %s, got %s", expected, string(bytes))
+	}
+}
+
+// TestByteSliceAsArray_MarshalJSON_MultipleElements tests marshaling a ByteSliceAsArray with multiple elements.
+func TestByteSliceAsArray_MarshalJSON_MultipleElements(t *testing.T) {
+	var b ByteSliceAsArray = []byte{0, 255, 213, 127, 42}
+	expected := "[0,255,213,127,42]"
+
+	bytes, err := b.MarshalJSON()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if string(bytes) != expected {
+		t.Errorf("expected %s, got %s", expected, string(bytes))
+	}
+}
+
 func Test_JSONNoEscaping(t *testing.T) {
 	enc := Encoder{}
 	m := map[string]string{

@@ -54,9 +54,9 @@ type ByteSliceAsArray []byte
 // MarshalJSON implements the json.Marshaler interface. It marshals the byte slice as
 // an array of integers.
 func (b ByteSliceAsArray) MarshalJSON() ([]byte, error) {
-	a := make([]uint32, len(b))
+	a := make([]int, len(b))
 	for i, v := range b {
-		a[i] = uint32(v)
+		a[i] = int(v)
 	}
 	return json.Marshal(a)
 }
