@@ -6,6 +6,51 @@ import (
 	"github.com/rqlite/rqlite/v8/command/proto"
 )
 
+// TestByteSliceAsArray_MarshalJSON_Empty tests marshaling an empty ByteSliceAsArray.
+func TestByteSliceAsArray_MarshalJSON_Empty(t *testing.T) {
+	var b ByteSliceAsArray = []byte{}
+	expected := "[]"
+
+	bytes, err := b.MarshalJSON()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if string(bytes) != expected {
+		t.Errorf("expected %s, got %s", expected, string(bytes))
+	}
+}
+
+// TestByteSliceAsArray_MarshalJSON_SingleElement tests marshaling a ByteSliceAsArray with a single element.
+func TestByteSliceAsArray_MarshalJSON_SingleElement(t *testing.T) {
+	var b ByteSliceAsArray = []byte{42}
+	expected := "[42]"
+
+	bytes, err := b.MarshalJSON()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if string(bytes) != expected {
+		t.Errorf("expected %s, got %s", expected, string(bytes))
+	}
+}
+
+// TestByteSliceAsArray_MarshalJSON_MultipleElements tests marshaling a ByteSliceAsArray with multiple elements.
+func TestByteSliceAsArray_MarshalJSON_MultipleElements(t *testing.T) {
+	var b ByteSliceAsArray = []byte{0, 255, 213, 127, 42}
+	expected := "[0,255,213,127,42]"
+
+	bytes, err := b.MarshalJSON()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if string(bytes) != expected {
+		t.Errorf("expected %s, got %s", expected, string(bytes))
+	}
+}
+
 func Test_JSONNoEscaping(t *testing.T) {
 	enc := Encoder{}
 	m := map[string]string{
@@ -253,6 +298,68 @@ func Test_MarshalQueryAssociativeRows(t *testing.T) {
         }
     ],
     "time": 6789
+}`
+	got := string(b)
+	if exp != got {
+		t.Fatalf("failed to pretty marshal QueryRows: exp: %s, got: %s", exp, got)
+	}
+}
+
+// Test_MarshalQueryRows_Blob tests JSON marshaling of QueryRows with
+// BLOB values.
+func Test_MarshalQueryRows_Blob(t *testing.T) {
+	var b []byte
+	var err error
+	var r *proto.QueryRows
+	enc := Encoder{}
+
+	r = &proto.QueryRows{
+		Columns: []string{"c1", "c2"},
+		Types:   []string{"blob", "string"},
+	}
+	values := make([]*proto.Parameter, len(r.Columns))
+	values[0] = &proto.Parameter{
+		Value: &proto.Parameter_Y{
+			Y: []byte("hello"),
+		},
+	}
+	values[1] = &proto.Parameter{
+		Value: &proto.Parameter_S{
+			S: "fiona",
+		},
+	}
+
+	r.Values = []*proto.Values{
+		{Parameters: values},
+	}
+
+	b, err = enc.JSONMarshal(r)
+	if err != nil {
+		t.Fatalf("failed to marshal QueryRows: %s", err.Error())
+	}
+	if exp, got := `{"columns":["c1","c2"],"types":["blob","string"],"values":[["aGVsbG8=","fiona"]]}`, string(b); exp != got {
+		t.Fatalf("failed to marshal QueryRows: exp %s, got %s", exp, got)
+	}
+
+	b, err = enc.JSONMarshalIndent(r, "", "    ")
+	if err != nil {
+		t.Fatalf("failed to marshal QueryRows: %s", err.Error())
+	}
+	exp := `{
+    "columns": [
+        "c1",
+        "c2"
+    ],
+    "types": [
+        "blob",
+        "string"
+    ],
+    "values": [
+        [
+            "aGVsbG8=",
+            "fiona"
+        ]
+    ]
 }`
 	got := string(b)
 	if exp != got {

@@ -93,6 +93,11 @@ func (qp QueryParams) Associative() bool {
 	return qp.HasKey("associative")
 }
 
+// ByteArray returns true if the query parameters request byte array results.
+func (qp QueryParams) ByteArray() bool {
+	return qp.HasKey("byte_array")
+}
+
 // NoRewrite returns true if the query parameters request no rewriting of queries.
 func (qp QueryParams) NoRewriteRandom() bool {
 	return qp.HasKey("norwrandom")

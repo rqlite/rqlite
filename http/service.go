@@ -146,6 +146,7 @@ type DBResults struct {
 	ExecuteQueryResponse []*proto.ExecuteQueryResponse
 
 	AssociativeJSON bool // Render in associative form
+	BytesAsArrays   bool // Render byte slices as arrays
 }
 
 // Responser is the interface response objects must implement.
@@ -156,7 +157,8 @@ type Responser interface {
 // MarshalJSON implements the JSON Marshaler interface.
 func (d *DBResults) MarshalJSON() ([]byte, error) {
 	enc := encoding.Encoder{
-		Associative: d.AssociativeJSON,
+		Associative:    d.AssociativeJSON,
+		ByteSliceArray: d.BytesAsArrays,
 	}
 
 	if d.ExecuteResult != nil {
@@ -1213,6 +1215,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryPa
 
 	resp := NewResponse()
 	resp.Results.AssociativeJSON = qp.Associative()
+	resp.Results.BytesAsArrays = qp.ByteArray()
 
 	qr := &proto.QueryRequest{
 		Request: &proto.Request{
@@ -1304,6 +1307,7 @@ func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request, qp Query
 
 	resp := NewResponse()
 	resp.Results.AssociativeJSON = qp.Associative()
+	resp.Results.BytesAsArrays = qp.ByteArray()
 
 	eqr := &proto.ExecuteQueryRequest{
 		Request: &proto.Request{
