@@ -134,22 +134,27 @@ func (n *Node) ExecuteQueuedMulti(stmts []string, wait bool) (string, error) {
 
 // Query runs a single query against the node.
 func (n *Node) Query(stmt string) (string, error) {
-	return n.query(stmt, "weak", NoQueryTimeout)
+	return n.query(stmt, "weak", false, NoQueryTimeout)
+}
+
+// QueryWithByteArray runs a single query against the node, with byte array support.
+func (n *Node) QueryWithByteArray(stmt string) (string, error) {
+	return n.query(stmt, "weak", true, NoQueryTimeout)
 }
 
 // QueryWithTimeout runs a single query against the node, with a timeout.
 func (n *Node) QueryWithTimeout(stmt string, timeout time.Duration) (string, error) {
-	return n.query(stmt, "weak", timeout)
+	return n.query(stmt, "weak", false, timeout)
 }
 
 // QueryNoneConsistency runs a single query against the node, with no read consistency.
 func (n *Node) QueryNoneConsistency(stmt string) (string, error) {
-	return n.query(stmt, "none", NoQueryTimeout)
+	return n.query(stmt, "none", false, NoQueryTimeout)
 }
 
 // QueryStrongConsistency runs a single query against the node, with Strong read consistency.
 func (n *Node) QueryStrongConsistency(stmt string) (string, error) {
-	return n.query(stmt, "strong", NoQueryTimeout)
+	return n.query(stmt, "strong", false, NoQueryTimeout)
 }
 
 // QueryMulti runs multiple queries against the node.
@@ -451,13 +456,17 @@ func (n *Node) postExecuteQueued(stmt string, wait bool) (string, error) {
 	return string(body), nil
 }
 
-func (n *Node) query(stmt, consistency string, timeout time.Duration) (string, error) {
+func (n *Node) query(stmt, consistency string, ba bool, timeout time.Duration) (string, error) {
 	v, _ := url.Parse("http://" + n.APIAddr + "/db/query")
-	v.RawQuery = url.Values{
+	vals := url.Values{
 		"q":          []string{stmt},
 		"level":      []string{consistency},
 		"db_timeout": []string{timeout.String()},
-	}.Encode()
+	}
+	if ba {
+		vals.Set("byte_array", "true")
+	}
+	v.RawQuery = vals.Encode()
 
 	resp, err := http.Get(v.String())
 	if err != nil {
