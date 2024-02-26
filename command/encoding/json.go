@@ -203,13 +203,13 @@ func NewValuesFromQueryValues(dest [][]interface{}, v []*proto.Values, bytesAsAr
 
 // Encoder is used to JSON marshal ExecuteResults, QueryRows and ExecuteQueryRequests.
 type Encoder struct {
-	Associative    bool
-	ByteSliceArray bool
+	Associative       bool
+	BlobsAsByteArrays bool
 }
 
 // JSONMarshal implements the marshal interface
 func (e *Encoder) JSONMarshal(i interface{}) ([]byte, error) {
-	return jsonMarshal(i, noEscapeEncode, e.Associative, e.ByteSliceArray)
+	return jsonMarshal(i, noEscapeEncode, e.Associative, e.BlobsAsByteArrays)
 }
 
 // JSONMarshalIndent implements the marshal indent interface
@@ -223,7 +223,7 @@ func (e *Encoder) JSONMarshalIndent(i interface{}, prefix, indent string) ([]byt
 		json.Indent(&out, b, prefix, indent)
 		return out.Bytes(), nil
 	}
-	return jsonMarshal(i, f, e.Associative, e.ByteSliceArray)
+	return jsonMarshal(i, f, e.Associative, e.BlobsAsByteArrays)
 }
 
 func noEscapeEncode(i interface{}) ([]byte, error) {
