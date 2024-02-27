@@ -283,7 +283,7 @@ type Store struct {
 	appendedAtTime *AtomicTime
 
 	// Latest log entry index which actually changed the database.
-	dbAppliedIdx         *atomic.Uint64
+	dbAppliedIdx *atomic.Uint64
 
 	reqMarshaller *command.RequestMarshaler // Request marshaler for writing to log.
 	raftLog       raft.LogStore             // Persistent log store.
@@ -299,8 +299,8 @@ type Store struct {
 	observerChan      chan raft.Observation
 	observer          *raft.Observer
 
-	firstLogAppliedT     time.Time // Time first log is applied
-	openT                time.Time // Timestamp when Store opens.
+	firstLogAppliedT time.Time // Time first log is applied
+	openT            time.Time // Timestamp when Store opens.
 
 	logger         *log.Logger
 	logIncremental bool
