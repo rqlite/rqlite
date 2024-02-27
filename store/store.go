@@ -300,7 +300,6 @@ type Store struct {
 	observer          *raft.Observer
 
 	firstLogAppliedT     time.Time // Time first log is applied
-	appliedOnOpen        uint64    // Number of logs applied at open.
 	openT                time.Time // Timestamp when Store opens.
 
 	logger         *log.Logger
