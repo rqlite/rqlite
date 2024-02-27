@@ -420,35 +420,6 @@ func Test_LogLastCommandIndexNotExist(t *testing.T) {
 	}
 }
 
-func Test_LogAppliedIndex(t *testing.T) {
-	path := mustTempFile()
-	defer os.Remove(path)
-
-	l, err := New(path, false)
-	if err != nil {
-		t.Fatalf("failed to create new log: %s", err)
-	}
-
-	ai, err := l.GetAppliedIndex()
-	if err != nil {
-		t.Fatalf("failed to get applied index: %s", err)
-	}
-	if ai != 0 {
-		t.Fatalf("got wrong applied index for non-existent key: %d", ai)
-	}
-
-	if l.SetAppliedIndex(1234); err != nil {
-		t.Fatalf("failed to set applied index: %s", err)
-	}
-	ai, err = l.GetAppliedIndex()
-	if err != nil {
-		t.Fatalf("failed to get applied index: %s", err)
-	}
-	if ai != 1234 {
-		t.Fatalf("got wrong applied index: %d", ai)
-	}
-}
-
 func Test_LogStats(t *testing.T) {
 	path := mustTempFile()
 	defer os.Remove(path)
