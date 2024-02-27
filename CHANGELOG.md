@@ -1,4 +1,5 @@
-## 8.22.0 (unreleased)
+## 8.22.0 (February 26th 2024)
+This release adds new support for handling BLOB data. Check out the [documentation](https://rqlite.io/docs/api/api/#blob-data) for more details.
 ### New features
 - [PR #1703](https://github.com/rqlite/rqlite/pull/1703): Support JSON marshaling byte slices as arrays of integers. Fixes issue [#1691](https://github.com/rqlite/rqlite/issues/1691) and [#1345](https://github.com/rqlite/rqlite/issues/1345).
 - [PR #1704](https://github.com/rqlite/rqlite/pull/1704): Add rqlite shell support for displaying BLOB data as byte arrays.
