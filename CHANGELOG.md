@@ -1,3 +1,7 @@
+## 8.22.1 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1706](https://github.com/rqlite/rqlite/pull/1706): Remove obsolete logging code. Fixes issue [#1705](https://github.com/rqlite/rqlite/issues/1705).
+
 ## 8.22.0 (February 26th 2024)
 This release adds new support for handling BLOB data. Check out the [documentation](https://rqlite.io/docs/api/api/#blob-data) for more details.
 ### New features

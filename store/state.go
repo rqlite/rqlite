@@ -210,11 +210,6 @@ func RecoverNode(dataDir string, logger *log.Logger, logs raft.LogStore, stable 
 	if err := logs.DeleteRange(firstLogIndex, lastLogIndex); err != nil {
 		return fmt.Errorf("log compaction failed: %v", err)
 	}
-
-	// Erase record of previous updating of Applied Index too.
-	if err := stable.SetAppliedIndex(0); err != nil {
-		return fmt.Errorf("failed to zero applied index: %v", err)
-	}
 	return nil
 }
 

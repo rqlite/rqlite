@@ -283,8 +283,7 @@ type Store struct {
 	appendedAtTime *AtomicTime
 
 	// Latest log entry index which actually changed the database.
-	dbAppliedIdx         *atomic.Uint64
-	appliedIdxUpdateDone chan struct{}
+	dbAppliedIdx *atomic.Uint64
 
 	reqMarshaller *command.RequestMarshaler // Request marshaler for writing to log.
 	raftLog       raft.LogStore             // Persistent log store.
@@ -300,13 +299,8 @@ type Store struct {
 	observerChan      chan raft.Observation
 	observer          *raft.Observer
 
-	firstIdxOnOpen       uint64    // First index on log when Store opens.
-	lastIdxOnOpen        uint64    // Last index on log when Store opens.
-	lastCommandIdxOnOpen uint64    // Last command index before applied index when Store opens.
-	lastAppliedIdxOnOpen uint64    // Last applied index on log when Store opens.
-	firstLogAppliedT     time.Time // Time first log is applied
-	appliedOnOpen        uint64    // Number of logs applied at open.
-	openT                time.Time // Timestamp when Store opens.
+	firstLogAppliedT time.Time // Time first log is applied
+	openT            time.Time // Timestamp when Store opens.
 
 	logger         *log.Logger
 	logIncremental bool
@@ -508,13 +502,6 @@ func (s *Store) Open() (retErr error) {
 		stats.Add(numRecoveries, 1)
 	}
 
-	// Get some info about the log, before any more entries are committed.
-	if err := s.setLogInfo(); err != nil {
-		return fmt.Errorf("set log info: %s", err)
-	}
-	s.logger.Printf("first log index: %d, last log index: %d, last applied index: %d, last command log index: %d:",
-		s.firstIdxOnOpen, s.lastIdxOnOpen, s.lastAppliedIdxOnOpen, s.lastCommandIdxOnOpen)
-
 	s.db, err = createOnDisk(s.dbPath, s.dbConf.FKConstraints, true)
 	if err != nil {
 		return fmt.Errorf("failed to create on-disk database: %s", err)
@@ -562,9 +549,6 @@ func (s *Store) Open() (retErr error) {
 
 	// WAL-size triggered snapshotting.
 	s.snapshotWClose, s.snapshotWDone = s.runWALSnapshotting()
-
-	// Periodically update the applied index for faster startup.
-	s.appliedIdxUpdateDone = s.updateAppliedIndex()
 
 	if err := s.initVacuumTime(); err != nil {
 		return fmt.Errorf("failed to initialize auto-vacuum times: %s", err.Error())
@@ -664,7 +648,6 @@ func (s *Store) Close(wait bool) (retErr error) {
 
 	s.dechunkManager.Close()
 
-	close(s.appliedIdxUpdateDone)
 	close(s.observerClose)
 	<-s.observerDone
 
@@ -1054,19 +1037,14 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		return nil, err
 	}
 
-	lAppliedIdx, err := s.boltStore.GetAppliedIndex()
-	if err != nil {
-		return nil, err
-	}
 	status := map[string]interface{}{
-		"open":               s.open,
-		"node_id":            s.raftID,
-		"raft":               raftStats,
-		"fsm_index":          s.fsmIdx.Load(),
-		"fsm_update_time":    s.fsmUpdateTime.Load(),
-		"db_applied_index":   s.dbAppliedIdx.Load(),
-		"last_applied_index": lAppliedIdx,
-		"addr":               s.Addr(),
+		"open":             s.open,
+		"node_id":          s.raftID,
+		"raft":             raftStats,
+		"fsm_index":        s.fsmIdx.Load(),
+		"fsm_update_time":  s.fsmUpdateTime.Load(),
+		"db_applied_index": s.dbAppliedIdx.Load(),
+		"addr":             s.Addr(),
 		"leader": map[string]string{
 			"node_id": leaderID,
 			"addr":    leaderAddr,
@@ -1743,28 +1721,6 @@ func (s *Store) RORWCount(eqr *proto.ExecuteQueryRequest) (nRW, nRO int) {
 	return
 }
 
-// setLogInfo records some key indexes about the log.
-func (s *Store) setLogInfo() error {
-	var err error
-	s.firstIdxOnOpen, err = s.boltStore.FirstIndex()
-	if err != nil {
-		return fmt.Errorf("failed to get last index: %s", err)
-	}
-	s.lastAppliedIdxOnOpen, err = s.boltStore.GetAppliedIndex()
-	if err != nil {
-		return fmt.Errorf("failed to get last applied index: %s", err)
-	}
-	s.lastIdxOnOpen, err = s.boltStore.LastIndex()
-	if err != nil {
-		return fmt.Errorf("failed to get last index: %s", err)
-	}
-	s.lastCommandIdxOnOpen, err = s.boltStore.LastCommandIndex(s.firstIdxOnOpen, s.lastAppliedIdxOnOpen)
-	if err != nil {
-		return fmt.Errorf("failed to get last command index: %s", err)
-	}
-	return nil
-}
-
 // remove removes the node, with the given ID, from the cluster.
 func (s *Store) remove(id string) error {
 	f := s.raft.RemoveServer(raft.ServerID(id), 0, 0)
@@ -1846,31 +1802,6 @@ func (s *Store) raftConfig() *raft.Config {
 	return config
 }
 
-func (s *Store) updateAppliedIndex() chan struct{} {
-	done := make(chan struct{})
-	go func() {
-		ticker := time.NewTicker(appliedIndexUpdateInterval)
-		defer ticker.Stop()
-		var idx uint64
-		for {
-			select {
-			case <-ticker.C:
-				newIdx := s.raft.AppliedIndex()
-				if newIdx == idx {
-					continue
-				}
-				idx = newIdx
-				if err := s.boltStore.SetAppliedIndex(idx); err != nil {
-					s.logger.Printf("failed to set applied index: %s", err.Error())
-				}
-			case <-done:
-				return
-			}
-		}
-	}()
-	return done
-}
-
 func (s *Store) isStaleRead(freshness int64, strict bool) bool {
 	if s.raft.State() == raft.Leader {
 		return false
@@ -1910,15 +1841,6 @@ func (s *Store) fsmApply(l *raft.Log) (e interface{}) {
 		s.fsmIdx.Store(l.Index)
 		s.fsmUpdateTime.Store(time.Now())
 		s.appendedAtTime.Store(l.AppendedAt)
-		if l.Index <= s.lastCommandIdxOnOpen {
-			// In here means at least one command entry was in the log when the Store
-			// opened.
-			s.appliedOnOpen++
-			if l.Index == s.lastCommandIdxOnOpen {
-				s.logger.Printf("%d confirmed committed log entries applied in %s, took %s since open",
-					s.appliedOnOpen, time.Since(s.firstLogAppliedT), time.Since(s.openT))
-			}
-		}
 	}()
 
 	if s.firstLogAppliedT.IsZero() {
@@ -2116,9 +2038,6 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	li, err := snapshot.LatestIndex(s.snapshotDir)
 	if err != nil {
 		return fmt.Errorf("failed to get latest snapshot index post restore: %s", err)
-	}
-	if err := s.boltStore.SetAppliedIndex(li); err != nil {
-		return fmt.Errorf("failed to set applied index: %s", err)
 	}
 	s.fsmIdx.Store(li)
 	s.dbAppliedIdx.Store(li)
