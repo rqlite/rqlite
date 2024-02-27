@@ -284,7 +284,6 @@ type Store struct {
 
 	// Latest log entry index which actually changed the database.
 	dbAppliedIdx         *atomic.Uint64
-	appliedIdxUpdateDone chan struct{}
 
 	reqMarshaller *command.RequestMarshaler // Request marshaler for writing to log.
 	raftLog       raft.LogStore             // Persistent log store.
@@ -300,10 +299,6 @@ type Store struct {
 	observerChan      chan raft.Observation
 	observer          *raft.Observer
 
-	firstIdxOnOpen       uint64    // First index on log when Store opens.
-	lastIdxOnOpen        uint64    // Last index on log when Store opens.
-	lastCommandIdxOnOpen uint64    // Last command index before applied index when Store opens.
-	lastAppliedIdxOnOpen uint64    // Last applied index on log when Store opens.
 	firstLogAppliedT     time.Time // Time first log is applied
 	appliedOnOpen        uint64    // Number of logs applied at open.
 	openT                time.Time // Timestamp when Store opens.
@@ -508,13 +503,6 @@ func (s *Store) Open() (retErr error) {
 		stats.Add(numRecoveries, 1)
 	}
 
-	// Get some info about the log, before any more entries are committed.
-	if err := s.setLogInfo(); err != nil {
-		return fmt.Errorf("set log info: %s", err)
-	}
-	s.logger.Printf("first log index: %d, last log index: %d, last applied index: %d, last command log index: %d:",
-		s.firstIdxOnOpen, s.lastIdxOnOpen, s.lastAppliedIdxOnOpen, s.lastCommandIdxOnOpen)
-
 	s.db, err = createOnDisk(s.dbPath, s.dbConf.FKConstraints, true)
 	if err != nil {
 		return fmt.Errorf("failed to create on-disk database: %s", err)
@@ -562,9 +550,6 @@ func (s *Store) Open() (retErr error) {
 
 	// WAL-size triggered snapshotting.
 	s.snapshotWClose, s.snapshotWDone = s.runWALSnapshotting()
-
-	// Periodically update the applied index for faster startup.
-	s.appliedIdxUpdateDone = s.updateAppliedIndex()
 
 	if err := s.initVacuumTime(); err != nil {
 		return fmt.Errorf("failed to initialize auto-vacuum times: %s", err.Error())
@@ -664,7 +649,6 @@ func (s *Store) Close(wait bool) (retErr error) {
 
 	s.dechunkManager.Close()
 
-	close(s.appliedIdxUpdateDone)
 	close(s.observerClose)
 	<-s.observerDone
 
@@ -1741,28 +1725,6 @@ func (s *Store) RORWCount(eqr *proto.ExecuteQueryRequest) (nRW, nRO int) {
 		}
 	}
 	return
-}
-
-// setLogInfo records some key indexes about the log.
-func (s *Store) setLogInfo() error {
-	var err error
-	s.firstIdxOnOpen, err = s.boltStore.FirstIndex()
-	if err != nil {
-		return fmt.Errorf("failed to get last index: %s", err)
-	}
-	s.lastAppliedIdxOnOpen, err = s.boltStore.GetAppliedIndex()
-	if err != nil {
-		return fmt.Errorf("failed to get last applied index: %s", err)
-	}
-	s.lastIdxOnOpen, err = s.boltStore.LastIndex()
-	if err != nil {
-		return fmt.Errorf("failed to get last index: %s", err)
-	}
-	s.lastCommandIdxOnOpen, err = s.boltStore.LastCommandIndex(s.firstIdxOnOpen, s.lastAppliedIdxOnOpen)
-	if err != nil {
-		return fmt.Errorf("failed to get last command index: %s", err)
-	}
-	return nil
 }
 
 // remove removes the node, with the given ID, from the cluster.
