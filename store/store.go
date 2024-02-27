@@ -1037,10 +1037,6 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		return nil, err
 	}
 
-	lAppliedIdx, err := s.boltStore.GetAppliedIndex()
-	if err != nil {
-		return nil, err
-	}
 	status := map[string]interface{}{
 		"open":               s.open,
 		"node_id":            s.raftID,
@@ -1048,7 +1044,6 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		"fsm_index":          s.fsmIdx.Load(),
 		"fsm_update_time":    s.fsmUpdateTime.Load(),
 		"db_applied_index":   s.dbAppliedIdx.Load(),
-		"last_applied_index": lAppliedIdx,
 		"addr":               s.Addr(),
 		"leader": map[string]string{
 			"node_id": leaderID,
@@ -2043,9 +2038,6 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	li, err := snapshot.LatestIndex(s.snapshotDir)
 	if err != nil {
 		return fmt.Errorf("failed to get latest snapshot index post restore: %s", err)
-	}
-	if err := s.boltStore.SetAppliedIndex(li); err != nil {
-		return fmt.Errorf("failed to set applied index: %s", err)
 	}
 	s.fsmIdx.Store(li)
 	s.dbAppliedIdx.Store(li)
