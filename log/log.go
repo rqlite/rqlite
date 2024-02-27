@@ -8,10 +8,6 @@ import (
 	"go.etcd.io/bbolt"
 )
 
-const (
-	rqliteAppliedIndex = "rqlite_applied_index"
-)
-
 // Log is an object that can return information about the Raft log.
 type Log struct {
 	*raftboltdb.BoltStore
@@ -85,20 +81,6 @@ func (l *Log) HasCommand() (bool, error) {
 		return false, err
 	}
 	return i != 0, nil
-}
-
-// SetAppliedIndex sets the AppliedIndex value.
-func (l *Log) SetAppliedIndex(index uint64) error {
-	return l.SetUint64([]byte(rqliteAppliedIndex), index)
-}
-
-// GetAppliedIndex returns the AppliedIndex value.
-func (l *Log) GetAppliedIndex() (uint64, error) {
-	i, err := l.GetUint64([]byte(rqliteAppliedIndex))
-	if err != nil {
-		return 0, nil
-	}
-	return i, nil
 }
 
 // Stats returns stats about the BBoltDB database.
