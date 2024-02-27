@@ -1872,15 +1872,6 @@ func (s *Store) fsmApply(l *raft.Log) (e interface{}) {
 		s.fsmIdx.Store(l.Index)
 		s.fsmUpdateTime.Store(time.Now())
 		s.appendedAtTime.Store(l.AppendedAt)
-		if l.Index <= s.lastCommandIdxOnOpen {
-			// In here means at least one command entry was in the log when the Store
-			// opened.
-			s.appliedOnOpen++
-			if l.Index == s.lastCommandIdxOnOpen {
-				s.logger.Printf("%d confirmed committed log entries applied in %s, took %s since open",
-					s.appliedOnOpen, time.Since(s.firstLogAppliedT), time.Since(s.openT))
-			}
-		}
 	}()
 
 	if s.firstLogAppliedT.IsZero() {
