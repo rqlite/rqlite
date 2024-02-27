@@ -1808,31 +1808,6 @@ func (s *Store) raftConfig() *raft.Config {
 	return config
 }
 
-func (s *Store) updateAppliedIndex() chan struct{} {
-	done := make(chan struct{})
-	go func() {
-		ticker := time.NewTicker(appliedIndexUpdateInterval)
-		defer ticker.Stop()
-		var idx uint64
-		for {
-			select {
-			case <-ticker.C:
-				newIdx := s.raft.AppliedIndex()
-				if newIdx == idx {
-					continue
-				}
-				idx = newIdx
-				if err := s.boltStore.SetAppliedIndex(idx); err != nil {
-					s.logger.Printf("failed to set applied index: %s", err.Error())
-				}
-			case <-done:
-				return
-			}
-		}
-	}()
-	return done
-}
-
 func (s *Store) isStaleRead(freshness int64, strict bool) bool {
 	if s.raft.State() == raft.Leader {
 		return false
