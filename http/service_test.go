@@ -598,7 +598,7 @@ func Test_BackupFlagsNoLeaderRemoteFetch(t *testing.T) {
 		t.Fatalf("failed to get expected StatusOK for remote backup fetch, got %d", resp.StatusCode)
 	}
 	defer resp.Body.Close()
-	if exp, got := backupData, mustReadBody(resp); exp != got {
+	if exp, got := backupData, mustReadBody(t, resp); exp != got {
 		t.Fatalf("received incorrect backup data, exp: %s, got: %s", exp, got)
 	}
 }
@@ -684,7 +684,7 @@ func Test_LoadOK(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("failed to get expected StatusOK for load, got %d", resp.StatusCode)
 	}
-	if exp, got := `{"results":[]}`, mustReadBody(resp); exp != got {
+	if exp, got := `{"results":[]}`, mustReadBody(t, resp); exp != got {
 		t.Fatalf("incorrect response body, exp: %s, got %s", exp, got)
 	}
 }
@@ -737,7 +737,7 @@ func Test_LoadFlagsNoLeader(t *testing.T) {
 		t.Fatalf("cluster load was not called")
 	}
 
-	if exp, got := `{"results":[]}`, mustReadBody(resp); exp != got {
+	if exp, got := `{"results":[]}`, mustReadBody(t, resp); exp != got {
 		t.Fatalf("incorrect response body, exp: %s, got %s", exp, got)
 	}
 }
@@ -786,7 +786,7 @@ func Test_LoadRemoteError(t *testing.T) {
 		t.Fatalf("cluster load was not called")
 	}
 
-	if exp, got := "the load failed\n", mustReadBody(resp); exp != got {
+	if exp, got := "the load failed\n", mustReadBody(t, resp); exp != got {
 		t.Fatalf(`incorrect response body, exp: "%s", got: "%s"`, exp, got)
 	}
 }
@@ -1030,7 +1030,7 @@ func Test_Readyz(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("failed to get expected StatusOK for node, got %d", resp.StatusCode)
 	}
-	if exp, got := "[+]node ok\n[+]leader ok\n[+]store ok", mustReadBody(resp); exp != got {
+	if exp, got := "[+]node ok\n[+]leader ok\n[+]store ok", mustReadBody(t, resp); exp != got {
 		t.Fatalf("incorrect response body, exp: %s, got: %s", exp, got)
 	}
 
@@ -1042,7 +1042,7 @@ func Test_Readyz(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("failed to get expected StatusOK, got %d", resp.StatusCode)
 	}
-	if exp, got := "[+]node ok", mustReadBody(resp); exp != got {
+	if exp, got := "[+]node ok", mustReadBody(t, resp); exp != got {
 		t.Fatalf("incorrect response body, exp: %s, got: %s", exp, got)
 	}
 
@@ -1059,7 +1059,7 @@ func Test_Readyz(t *testing.T) {
 	if resp.StatusCode != http.StatusServiceUnavailable {
 		t.Fatalf("failed to get expected StatusServiceUnavailable, got %d", resp.StatusCode)
 	}
-	if exp, got := "[+]node ok\n[+]leader ok\n[+]store not ready", mustReadBody(resp); exp != got {
+	if exp, got := "[+]node ok\n[+]leader ok\n[+]store not ready", mustReadBody(t, resp); exp != got {
 		t.Fatalf("incorrect response body, exp: %s, got: %s", exp, got)
 	}
 
@@ -1077,7 +1077,7 @@ func Test_Readyz(t *testing.T) {
 	if resp.StatusCode != http.StatusServiceUnavailable {
 		t.Fatalf("failed to get expected StatusServiceUnavailable, got %d", resp.StatusCode)
 	}
-	if exp, got := "[+]node ok\n[+]leader ok\n[+]store ok\n[+]sync timeout", mustReadBody(resp); exp != got {
+	if exp, got := "[+]node ok\n[+]leader ok\n[+]store ok\n[+]sync timeout", mustReadBody(t, resp); exp != got {
 		t.Fatalf("incorrect response body, exp: %s, got: %s", exp, got)
 	}
 	if cnt.Load() != 1 {
@@ -1096,7 +1096,7 @@ func Test_Readyz(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("failed to get expected StatusOK, got %d", resp.StatusCode)
 	}
-	if exp, got := "[+]node ok\n[+]leader ok\n[+]store ok\n[+]sync ok", mustReadBody(resp); exp != got {
+	if exp, got := "[+]node ok\n[+]leader ok\n[+]store ok\n[+]sync ok", mustReadBody(t, resp); exp != got {
 		t.Fatalf("incorrect response body, exp: %s, got: %s", exp, got)
 	}
 	if cnt.Load() != 2 {
@@ -1619,10 +1619,11 @@ func mustGetQueryParams(req *http.Request) QueryParams {
 	return qp
 }
 
-func mustReadBody(resp *http.Response) string {
+func mustReadBody(t *testing.T, resp *http.Response) string {
+	t.Helper()
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
-		panic("failed to read response body")
+		t.Fatalf("failed to read response body: %s", err)
 	}
 	return string(b)
 }
