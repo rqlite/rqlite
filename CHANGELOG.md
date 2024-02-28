@@ -2,6 +2,7 @@
 ### Implementation changes and bug fixes
 - [PR #1708](https://github.com/rqlite/rqlite/pull/1708): Some more HTTP-level unit tests.
 - [PR #1709](https://github.com/rqlite/rqlite/pull/1709): Unit test SQLite keyword `STRICT`.
+- [PR #1710](https://github.com/rqlite/rqlite/pull/1710): Unit test querying a hex value. See issue [#1532](https://github.com/rqlite/rqlite/issues/1532).
 
 ## 8.22.1 (February 27th 2024)
 ### Implementation changes and bug fixes

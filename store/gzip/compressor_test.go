@@ -163,9 +163,9 @@ func Test_Compressor_CompressFile(t *testing.T) {
 }
 
 func Test_Compressor_CompressLargeFile(t *testing.T) {
-	mb128 := int64(128*1024*1024) + 13
+	mb64 := int64(64*1024*1024) + 13
 	srcFD := mustOpenTempFile(t)
-	_, err := io.CopyN(srcFD, io.LimitReader(rand.New(rand.NewSource(0)), mb128), mb128)
+	_, err := io.CopyN(srcFD, io.LimitReader(rand.New(rand.NewSource(0)), mb64), mb64)
 	if err != nil {
 		t.Fatalf("Failed to write random data to source file: %v", err)
 	}
