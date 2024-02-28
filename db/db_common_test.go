@@ -213,7 +213,7 @@ func testBLOB(t *testing.T, db *DB) {
 	}
 }
 
-func testBLOBQuery(t *testing.T, db *DB) {
+func testHexQuery(t *testing.T, db *DB) {
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo(blob_column BLOB)")
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err.Error())
@@ -1654,7 +1654,7 @@ func Test_DatabaseCommonOperations(t *testing.T) {
 		{"NotNULLField", testNotNULLField},
 		{"RandomBlob", testSQLiteRandomBlob},
 		{"BasicBLOB", testBLOB},
-		{"BLOBQuery", testBLOBQuery},
+		{"HexQuery", testHexQuery},
 		{"Strict", testSTRICT},
 		{"EmptyStatements", testEmptyStatements},
 		{"SimpleSingleStatements", testSimpleSingleStatements},
