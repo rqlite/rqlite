@@ -598,11 +598,7 @@ func Test_BackupFlagsNoLeaderRemoteFetch(t *testing.T) {
 		t.Fatalf("failed to get expected StatusOK for remote backup fetch, got %d", resp.StatusCode)
 	}
 	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("failed to read response body: %s", err.Error())
-	}
-	if exp, got := backupData, string(body); exp != got {
+	if exp, got := backupData, mustReadBody(resp); exp != got {
 		t.Fatalf("received incorrect backup data, exp: %s, got: %s", exp, got)
 	}
 }
@@ -688,11 +684,7 @@ func Test_LoadOK(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("failed to get expected StatusOK for load, got %d", resp.StatusCode)
 	}
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("failed to read response body: %s", err.Error())
-	}
-	if exp, got := `{"results":[]}`, string(body); exp != got {
+	if exp, got := `{"results":[]}`, mustReadBody(resp); exp != got {
 		t.Fatalf("incorrect response body, exp: %s, got %s", exp, got)
 	}
 }
@@ -745,11 +737,7 @@ func Test_LoadFlagsNoLeader(t *testing.T) {
 		t.Fatalf("cluster load was not called")
 	}
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("failed to read response body: %s", err.Error())
-	}
-	if exp, got := `{"results":[]}`, string(body); exp != got {
+	if exp, got := `{"results":[]}`, mustReadBody(resp); exp != got {
 		t.Fatalf("incorrect response body, exp: %s, got %s", exp, got)
 	}
 }
@@ -798,11 +786,7 @@ func Test_LoadRemoteError(t *testing.T) {
 		t.Fatalf("cluster load was not called")
 	}
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("failed to read response body: %s", err.Error())
-	}
-	if exp, got := "the load failed\n", string(body); exp != got {
+	if exp, got := "the load failed\n", mustReadBody(resp); exp != got {
 		t.Fatalf(`incorrect response body, exp: "%s", got: "%s"`, exp, got)
 	}
 }
@@ -1042,6 +1026,7 @@ func Test_Readyz(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to make readyz request")
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("failed to get expected StatusOK for node, got %d", resp.StatusCode)
 	}
@@ -1058,6 +1043,7 @@ func Test_Readyz(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to make readyz request")
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusServiceUnavailable {
 		t.Fatalf("failed to get expected StatusServiceUnavailable, got %d", resp.StatusCode)
 	}
@@ -1075,6 +1061,7 @@ func Test_Readyz(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to make readyz request with sync set")
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusServiceUnavailable {
 		t.Fatalf("failed to get expected StatusServiceUnavailable, got %d", resp.StatusCode)
 	}
@@ -1093,6 +1080,7 @@ func Test_Readyz(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to make readyz request with sync set")
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("failed to get expected StatusOK, got %d", resp.StatusCode)
 	}
