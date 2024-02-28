@@ -1034,6 +1034,18 @@ func Test_Readyz(t *testing.T) {
 		t.Fatalf("incorrect response body, exp: %s, got: %s", exp, got)
 	}
 
+	resp, err = client.Get(host + "/readyz?noleader")
+	if err != nil {
+		t.Fatalf("failed to make readyz request")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("failed to get expected StatusOK, got %d", resp.StatusCode)
+	}
+	if exp, got := "[+]node ok", mustReadBody(resp); exp != got {
+		t.Fatalf("incorrect response body, exp: %s, got: %s", exp, got)
+	}
+
 	m.notReady = true
 	m.committedFn = func(timeout time.Duration) (uint64, error) {
 		t.Fatal("committedFn should not have been called")
