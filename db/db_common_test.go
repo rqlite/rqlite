@@ -213,6 +213,24 @@ func testBLOB(t *testing.T, db *DB) {
 	}
 }
 
+func testBLOBQuery(t *testing.T, db *DB) {
+	_, err := db.ExecuteStringStmt("CREATE TABLE foo(blob_column BLOB)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	_, err = db.ExecuteStringStmt(`INSERT INTO foo(blob_column) VALUES (x'53514C697465')`)
+	if err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+	r, err := db.QueryStringStmt("SELECT x'53514C697465' from foo")
+	if err != nil {
+		t.Fatalf("failed to query master table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["x'53514C697465'"],"types":["text"],"values":[["SQLite"]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query, expected %s, got %s", exp, got)
+	}
+}
+
 func testSTRICT(t *testing.T, db *DB) {
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (name TEXT, data BLOB) STRICT")
 	if err != nil {
@@ -1636,6 +1654,7 @@ func Test_DatabaseCommonOperations(t *testing.T) {
 		{"NotNULLField", testNotNULLField},
 		{"RandomBlob", testSQLiteRandomBlob},
 		{"BasicBLOB", testBLOB},
+		{"BLOBQuery", testBLOBQuery},
 		{"Strict", testSTRICT},
 		{"EmptyStatements", testEmptyStatements},
 		{"SimpleSingleStatements", testSimpleSingleStatements},
