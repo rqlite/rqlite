@@ -1,4 +1,4 @@
-## 8.22.1 (unreleased)
+## 8.22.1 (February 27th 2024)
 ### Implementation changes and bug fixes
 - [PR #1706](https://github.com/rqlite/rqlite/pull/1706): Remove obsolete logging code. Fixes issue [#1705](https://github.com/rqlite/rqlite/issues/1705).
 
