@@ -1045,6 +1045,9 @@ func Test_Readyz(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("failed to get expected StatusOK for node, got %d", resp.StatusCode)
 	}
+	if exp, got := "[+]node ok\n[+]leader ok\n[+]store ok", mustReadBody(resp); exp != got {
+		t.Fatalf("incorrect response body, exp: %s, got: %s", exp, got)
+	}
 
 	m.notReady = true
 	m.committedFn = func(timeout time.Duration) (uint64, error) {
@@ -1057,6 +1060,9 @@ func Test_Readyz(t *testing.T) {
 	}
 	if resp.StatusCode != http.StatusServiceUnavailable {
 		t.Fatalf("failed to get expected StatusServiceUnavailable, got %d", resp.StatusCode)
+	}
+	if exp, got := "[+]node ok\n[+]leader ok\n[+]store not ready", mustReadBody(resp); exp != got {
+		t.Fatalf("incorrect response body, exp: %s, got: %s", exp, got)
 	}
 
 	cnt := &atomic.Uint32{}
@@ -1072,6 +1078,9 @@ func Test_Readyz(t *testing.T) {
 	if resp.StatusCode != http.StatusServiceUnavailable {
 		t.Fatalf("failed to get expected StatusServiceUnavailable, got %d", resp.StatusCode)
 	}
+	if exp, got := "[+]node ok\n[+]leader ok\n[+]store ok\n[+]sync timeout", mustReadBody(resp); exp != got {
+		t.Fatalf("incorrect response body, exp: %s, got: %s", exp, got)
+	}
 	if cnt.Load() != 1 {
 		t.Fatalf("failed to call committedFn")
 	}
@@ -1086,6 +1095,9 @@ func Test_Readyz(t *testing.T) {
 	}
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("failed to get expected StatusOK, got %d", resp.StatusCode)
+	}
+	if exp, got := "[+]node ok\n[+]leader ok\n[+]store ok\n[+]sync ok", mustReadBody(resp); exp != got {
+		t.Fatalf("incorrect response body, exp: %s, got: %s", exp, got)
 	}
 	if cnt.Load() != 2 {
 		t.Fatalf("failed to call committedFn")
@@ -1605,4 +1617,12 @@ func mustGetQueryParams(req *http.Request) QueryParams {
 		panic("failed to get query params")
 	}
 	return qp
+}
+
+func mustReadBody(resp *http.Response) string {
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		panic("failed to read response body")
+	}
+	return string(b)
 }
