@@ -180,7 +180,7 @@ func Test_NewServiceTestExecuteQueryAuthNoCredentials(t *testing.T) {
 	db := mustNewMockDatabase()
 	clstr := mustNewMockManager()
 
-	// Test that for a cluster with no credential store configed
+	// Test that for a cluster with no credential store configured
 	// all users are authed for both operations
 	var c CredentialStore = nil
 	c = nil
