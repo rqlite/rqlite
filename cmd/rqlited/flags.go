@@ -59,7 +59,7 @@ type Config struct {
 	// AutoRestoreFile is the path to the auto-restore file. May not be set.
 	AutoRestoreFile string `filepath:"true"`
 
-	// HTTPx509CACert is the path to the CA certficate file for when this node verifies
+	// HTTPx509CACert is the path to the CA certificate file for when this node verifies
 	// other certificates for any HTTP communications. May not be set.
 	HTTPx509CACert string `filepath:"true"`
 
@@ -72,7 +72,7 @@ type Config struct {
 	// HTTPVerifyClient indicates whether the HTTP server should verify client certificates.
 	HTTPVerifyClient bool
 
-	// NodeX509CACert is the path to the CA certficate file for when this node verifies
+	// NodeX509CACert is the path to the CA certificate file for when this node verifies
 	// other certificates for any inter-node communications. May not be set.
 	NodeX509CACert string `filepath:"true"`
 
