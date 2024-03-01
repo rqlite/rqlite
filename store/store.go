@@ -278,7 +278,7 @@ type Store struct {
 	fsmIdx        *atomic.Uint64
 	fsmUpdateTime *AtomicTime // This is node-local time.
 
-	// appendedAtTimeis the Leader's clock time when that Leader appended the log entry.
+	// appendedAtTime is the Leader's clock time when that Leader appended the log entry.
 	// The Leader that actually appended the log entry is not necessarily the current Leader.
 	appendedAtTime *AtomicTime
 
