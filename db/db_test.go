@@ -1011,6 +1011,7 @@ func mustSetupDBForTimeoutTests(t *testing.T, n int) (*DB, string) {
 	for i := 0; i < n; i++ {
 		args := []any{
 			random.String(),
+			fmt.Sprint(i),
 			random.String(),
 			random.String(),
 			random.String(),

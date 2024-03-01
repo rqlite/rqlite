@@ -746,14 +746,14 @@ func (db *DB) Query(req *command.Request, xTime bool) ([]*command.QueryRows, err
 	return db.queryWithConn(ctx, req, xTime, conn)
 }
 
-type querier interface {
+type queryer interface {
 	QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error)
 }
 
 func (db *DB) queryWithConn(ctx context.Context, req *command.Request, xTime bool, conn *sql.Conn) ([]*command.QueryRows, error) {
 	var err error
 
-	var querier querier
+	var queryer queryer
 	var tx *sql.Tx
 	if req.Transaction {
 		stats.Add(numQTx, 1)
@@ -762,9 +762,9 @@ func (db *DB) queryWithConn(ctx context.Context, req *command.Request, xTime boo
 			return nil, err
 		}
 		defer tx.Rollback() // Will be ignored if tx is committed
-		querier = tx
+		queryer = tx
 	} else {
-		querier = conn
+		queryer = conn
 	}
 
 	var allRows []*command.QueryRows
@@ -795,7 +795,7 @@ func (db *DB) queryWithConn(ctx context.Context, req *command.Request, xTime boo
 			continue
 		}
 
-		rows, err = db.queryStmtWithConn(ctx, stmt, xTime, querier, time.Duration(req.DbTimeout))
+		rows, err = db.queryStmtWithConn(ctx, stmt, xTime, queryer, time.Duration(req.DbTimeout))
 		if err != nil {
 			stats.Add(numQueryErrors, 1)
 			rows = &command.QueryRows{
@@ -811,7 +811,7 @@ func (db *DB) queryWithConn(ctx context.Context, req *command.Request, xTime boo
 	return allRows, err
 }
 
-func (db *DB) queryStmtWithConn(ctx context.Context, stmt *command.Statement, xTime bool, q querier, timeout time.Duration) (retRows *command.QueryRows, retErr error) {
+func (db *DB) queryStmtWithConn(ctx context.Context, stmt *command.Statement, xTime bool, q queryer, timeout time.Duration) (retRows *command.QueryRows, retErr error) {
 	defer func() {
 		if retErr != nil {
 			retErr = rewriteContextTimeout(retErr, ErrQueryTimeout)
@@ -932,7 +932,7 @@ func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQuery
 		defer cancel()
 	}
 
-	var querier querier
+	var queryer queryer
 	var execer execer
 	var tx *sql.Tx
 	if req.Transaction {
@@ -942,10 +942,10 @@ func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQuery
 			return nil, err
 		}
 		defer tx.Rollback() // Will be ignored if tx is committed
-		querier = tx
+		queryer = tx
 		execer = tx
 	} else {
-		querier = conn
+		queryer = conn
 		execer = conn
 	}
 
@@ -978,7 +978,7 @@ func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQuery
 		}
 
 		if ro {
-			rows, opErr := db.queryStmtWithConn(ctx, stmt, xTime, querier, time.Duration(req.DbTimeout))
+			rows, opErr := db.queryStmtWithConn(ctx, stmt, xTime, queryer, time.Duration(req.DbTimeout))
 			eqResponse = append(eqResponse, createEQQueryResponse(rows, opErr))
 			if abortOnError(opErr) {
 				break
