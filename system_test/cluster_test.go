@@ -227,7 +227,7 @@ func Test_MultiNodeClusterRANDOM(t *testing.T) {
 	trueOrTimeout(tFn, 10*time.Second)
 }
 
-// Test_MultiNodeClusterBootstrap tests formation of a 3-node cluster via bootstraping,
+// Test_MultiNodeClusterBootstrap tests formation of a 3-node cluster via bootstrapping,
 // and its operation.
 func Test_MultiNodeClusterBootstrap(t *testing.T) {
 	node1 := mustNewNode("node1", false)
