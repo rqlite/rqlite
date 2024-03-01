@@ -26,7 +26,7 @@ class TestSingleNode(unittest.TestCase):
     self.cluster.deprovision()
 
   def test_pragmas(self):
-    '''Test that the critical configration is correct'''
+    '''Test that the critical configuration is correct'''
     n = self.cluster.wait_for_leader()
     ro_pragmas = n.pragmas()['ro']
     rw_pragmas = n.pragmas()['rw']
