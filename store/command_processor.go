@@ -124,7 +124,7 @@ func (c *CommandProcessor) Process(data []byte, db *sql.SwappableDB) (*proto.Com
 				c.decMgmr.Delete(lcr.StreamId)
 				defer os.Remove(path)
 
-				// Check if reassembled dayabase is valid. If not, do not perform the load. This could
+				// Check if reassembled database is valid. If not, do not perform the load. This could
 				// happen a snapshot truncated earlier parts of the log which contained the earlier parts
 				// of a database load. If that happened then the database has already been loaded, and
 				// this load should be ignored.
