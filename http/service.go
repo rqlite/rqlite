@@ -1469,7 +1469,7 @@ func (s *Service) CheckRequestPerm(r *http.Request, perm string) (b bool) {
 	return s.credentialStore.AA(username, password, perm)
 }
 
-// CheckRequestPermAll checksif the request is authenticated and authorized
+// CheckRequestPermAll checks if the request is authenticated and authorized
 // with all the given Perms.
 func (s *Service) CheckRequestPermAll(r *http.Request, perms ...string) (b bool) {
 	defer func() {
