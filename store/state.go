@@ -31,7 +31,7 @@ func IsStaleRead(
 		return false
 	}
 	if time.Since(leaderlastContact).Nanoseconds() > freshness {
-		// The Leader has not been in contact witin the freshness window, so
+		// The Leader has not been in contact within the freshness window, so
 		// the read is stale.
 		return true
 	}
