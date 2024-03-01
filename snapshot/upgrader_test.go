@@ -13,7 +13,7 @@ import (
 func Test_Upgrade_NothingToDo(t *testing.T) {
 	logger := log.New(os.Stderr, "[snapshot-store-upgrader] ", 0)
 	if err := Upgrade("/does/not/exist", "/does/not/exist/either", logger); err != nil {
-		t.Fatalf("failed to upgrade non-existent directories: %s", err)
+		t.Fatalf("failed to upgrade nonexistent directories: %s", err)
 	}
 
 	oldEmpty := t.TempDir()

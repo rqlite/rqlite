@@ -2433,16 +2433,16 @@ func Test_SingleNodeWaitForRemove(t *testing.T) {
 	err := s.WaitForRemoval(s.ID(), time.Second)
 	// if err is nil then fail the test
 	if err == nil {
-		t.Fatalf("no error waiting for removal of non-existent node")
+		t.Fatalf("no error waiting for removal of nonexistent node")
 	}
 	if !errors.Is(err, ErrWaitForRemovalTimeout) {
 		t.Fatalf("waiting for removal resulted in wrong error: %s", err.Error())
 	}
 
-	// should be no error waiting for removal of non-existent node
-	err = s.WaitForRemoval("non-existent-node", time.Second)
+	// should be no error waiting for removal of nonexistent node
+	err = s.WaitForRemoval("nonexistent-node", time.Second)
 	if err != nil {
-		t.Fatalf("error waiting for removal of non-existent node: %s", err.Error())
+		t.Fatalf("error waiting for removal of nonexistent node: %s", err.Error())
 	}
 }
 
@@ -2567,7 +2567,7 @@ func Test_RWROCount(t *testing.T) {
 			expRW: 1,
 		},
 		{
-			name:  "Single INSERT, non-existent table",
+			name:  "Single INSERT, nonexistent table",
 			stmts: []string{"INSERT INTO qux(id, name) VALUES(1, 'fiona')"},
 			expRW: 1,
 		},
@@ -2577,7 +2577,7 @@ func Test_RWROCount(t *testing.T) {
 			expRO: 1,
 		},
 		{
-			name:  "Single SELECT from non-existent table",
+			name:  "Single SELECT from nonexistent table",
 			stmts: []string{"SELECT * FROM qux"},
 			expRW: 1, // Yeah, this is unfortunate, but it's how SQLite works.
 		},

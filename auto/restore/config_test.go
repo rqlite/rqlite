@@ -36,7 +36,7 @@ func Test_ReadConfigFile(t *testing.T) {
 		}
 	})
 
-	t.Run("non-existent file", func(t *testing.T) {
+	t.Run("nonexistent file", func(t *testing.T) {
 		_, err := ReadConfigFile("nonexistentfile")
 		if !errors.Is(err, os.ErrNotExist) {
 			t.Fatalf("Expected os.ErrNotExist, got %v", err)

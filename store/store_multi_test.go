@@ -447,7 +447,7 @@ func Test_MultiNodeJoinRemove(t *testing.T) {
 	err = s0.WaitForRemoval(s1.ID(), time.Second)
 	// if err is nil then fail the test
 	if err == nil {
-		t.Fatalf("no error waiting for removal of non-existent node")
+		t.Fatalf("no error waiting for removal of nonexistent node")
 	}
 	if !errors.Is(err, ErrWaitForRemovalTimeout) {
 		t.Fatalf("waiting for removal resulted in wrong error: %s", err.Error())

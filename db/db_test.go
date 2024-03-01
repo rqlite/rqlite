@@ -15,14 +15,14 @@ import (
 	"github.com/rqlite/rqlite/v8/random"
 )
 
-// Test_OpenNonExistentDatabase tests that opening a non-existent database
+// Test_OpenNonExistentDatabase tests that opening a nonexistent database
 // works OK. It should.
 func Test_OpenNonExistentDatabase(t *testing.T) {
 	path := mustTempPath()
 	defer os.Remove(path)
 	_, err := Open(path, false, false)
 	if err != nil {
-		t.Fatalf("error opening non-existent database: %s", err.Error())
+		t.Fatalf("error opening nonexistent database: %s", err.Error())
 	}
 	// Confirm a file was created.
 	if !fileExists(path) {
@@ -35,7 +35,7 @@ func Test_WALRemovedOnClose(t *testing.T) {
 	defer os.Remove(path)
 	db, err := Open(path, false, true)
 	if err != nil {
-		t.Fatalf("error opening non-existent database")
+		t.Fatalf("error opening nonexistent database")
 	}
 	defer db.Close()
 	if !db.WALEnabled() {

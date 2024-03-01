@@ -650,7 +650,7 @@ name TEXT
 func testSimpleFailingStatements_Execute(t *testing.T, db *DB) {
 	r, err := db.ExecuteStringStmt(`INSERT INTO foo(name) VALUES("fiona")`)
 	if err != nil {
-		t.Fatalf("error executing insertion into non-existent table: %s", err.Error())
+		t.Fatalf("error executing insertion into nonexistent table: %s", err.Error())
 	}
 	if exp, got := `[{"error":"no such table: foo"}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
@@ -697,7 +697,7 @@ func testSimpleFailingStatements_Execute(t *testing.T, db *DB) {
 func testSimpleFailingStatements_Query(t *testing.T, db *DB) {
 	ro, err := db.QueryStringStmt(`SELECT * FROM bar`)
 	if err != nil {
-		t.Fatalf("failed to attempt query of non-existent table: %s", err.Error())
+		t.Fatalf("failed to attempt query of nonexistent table: %s", err.Error())
 	}
 	if exp, got := `[{"error":"no such table: bar"}]`, asJSON(ro); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
@@ -1101,7 +1101,7 @@ func testSimpleRequest(t *testing.T, db *DB) {
 			exp: `[{"last_insert_id":3,"rows_affected":1},{"columns":["COUNT(*)"],"types":["integer"],"values":[[3]]},{"columns":["last"],"types":["text"],"values":[["feynman"]]}]`,
 		},
 		{
-			name: "insert and select non-existent table",
+			name: "insert and select nonexistent table",
 			stmts: []string{
 				`INSERT INTO foo(first, last) VALUES("paul", "dirac")`,
 				`SELECT COUNT(*) FROM foo`,
