@@ -166,7 +166,7 @@ func (n *Node) QueryMulti(stmts []string) (string, error) {
 	return n.postQuery(string(j))
 }
 
-// QueryParameterized run a single paramterized query against the ndoe
+// QueryParameterized run a single paramterized query against the node
 func (n *Node) QueryParameterized(stmt []interface{}) (string, error) {
 	m := make([][]interface{}, 1)
 	m[0] = stmt
