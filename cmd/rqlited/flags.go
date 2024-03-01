@@ -249,7 +249,7 @@ func (c *Config) Validate() error {
 		c.NodeID = c.RaftAdv
 	}
 
-	// Perfom some address validity checks.
+	// Perform some address validity checks.
 	if strings.HasPrefix(strings.ToLower(c.HTTPAddr), "http") ||
 		strings.HasPrefix(strings.ToLower(c.HTTPAdv), "http") {
 		return errors.New("HTTP options should not include protocol (http:// or https://)")
