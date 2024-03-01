@@ -1458,7 +1458,7 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 		return n, fmt.Errorf("invalid SQLite data")
 	}
 
-	// Raft won't snapshot unless there is at least one unsnappshotted log entry,
+	// Raft won't snapshot unless there is at least one unsnapshotted log entry,
 	// so prep that now before we do anything destructive.
 	if af, err := s.Noop("boot"); err != nil {
 		return n, err
