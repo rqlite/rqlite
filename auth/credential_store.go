@@ -185,7 +185,7 @@ func (c *CredentialsStore) AA(username, password, perm string) bool {
 	return c.HasAnyPerm(username, perm, PermAll)
 }
 
-// HasPermRequest returns true if the username returned by b has the givem perm.
+// HasPermRequest returns true if the username returned by b has the given perm.
 // It does not perform any password checking, but if there is no username
 // in the request, it returns false.
 func (c *CredentialsStore) HasPermRequest(b BasicAuther, perm string) bool {
