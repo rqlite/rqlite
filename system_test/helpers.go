@@ -364,7 +364,7 @@ func (n *Node) Ready() (bool, error) {
 	return resp.StatusCode == 200, nil
 }
 
-// Liveness returns the viveness status for the node, primarily
+// Liveness returns the liveness status for the node, primarily
 // for use by Kubernetes.
 func (n *Node) Liveness() (bool, error) {
 	v, _ := url.Parse("http://" + n.APIAddr + "/readyz?noleader")
