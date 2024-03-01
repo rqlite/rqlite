@@ -53,7 +53,7 @@ func testSetSynchronousMode(t *testing.T, db *DB) {
 			t.Fatalf("failed to get synchronous mode: %s", err.Error())
 		}
 		if mm != i {
-			t.Fatalf("synchonous mode not set to %s", m)
+			t.Fatalf("synchronous mode not set to %s", m)
 		}
 	}
 }
