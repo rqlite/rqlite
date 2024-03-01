@@ -389,7 +389,7 @@ func (c *Config) DiscoConfigReader() io.ReadCloser {
 }
 
 // CheckFilePaths checks that all file paths in the config exist.
-// Empy filepaths are ignored.
+// Empty filepaths are ignored.
 func (c *Config) CheckFilePaths() error {
 	v := reflect.ValueOf(c).Elem()
 
