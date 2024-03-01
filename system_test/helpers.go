@@ -774,7 +774,7 @@ func mustNewLeaderNode(id string) *Node {
 
 func mustTempDir(s string) string {
 	var err error
-	path, err := os.MkdirTemp("", fmt.Sprintf("rqlilte-system-test-%s-", s))
+	path, err := os.MkdirTemp("", fmt.Sprintf("rqlite-system-test-%s-", s))
 	if err != nil {
 		panic("failed to create temp dir")
 	}
