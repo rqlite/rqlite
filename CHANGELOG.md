@@ -157,7 +157,7 @@ The releases changes the default logging level for the Raft subsystem from `INFO
 This release further improves _Automatic Backup_ performance, as well as improving test coverage generally.
 ### Implementation changes and bug fixes
 - [PR #1592](https://github.com/rqlite/rqlite/pull/1592): Refactor and enhance upload logging.
-- [PR #1593](https://github.com/rqlite/rqlite/pull/1593): Tighthen snapshot-join end-to-end testing.
+- [PR #1593](https://github.com/rqlite/rqlite/pull/1593): Tighten snapshot-join end-to-end testing.
 - [PR #1596](https://github.com/rqlite/rqlite/pull/1596): Track Raft logs which change the database.
 - [PR #1597](https://github.com/rqlite/rqlite/pull/1597): Clarify end-to-end testing code.
 - [PR #1598](https://github.com/rqlite/rqlite/pull/1598): Refactor Store-level index tracking.
