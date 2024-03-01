@@ -299,7 +299,7 @@ func (c *Config) Validate() error {
 		addrs := strings.Split(c.JoinAddrs, ",")
 		for i := range addrs {
 			if _, _, err := net.SplitHostPort(addrs[i]); err != nil {
-				return fmt.Errorf("%s is an invalid join adddress", addrs[i])
+				return fmt.Errorf("%s is an invalid join address", addrs[i])
 			}
 
 			if c.BootstrapExpect == 0 {
