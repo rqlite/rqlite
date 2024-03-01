@@ -1209,7 +1209,7 @@ _This release adds significant new functionality to the command-line tool, inclu
 - [PR #384](https://github.com/rqlite/rqlite/pull/384): "status" perm required to access Go runtime information.
 
 ## 4.2.1 (November 10th 2017)
-- [PR #367](https://github.com/rqlite/rqlite/pull/367): Remove superflous leading space at CLI prompt.
+- [PR #367](https://github.com/rqlite/rqlite/pull/367): Remove superfluous leading space at CLI prompt.
 - [PR #368](https://github.com/rqlite/rqlite/pull/368): CLI displays clear error message when not authorized.
 - [PR #370](https://github.com/rqlite/rqlite/pull/370): CLI does not need to indent JSON when making requests.
 - [PR #373](https://github.com/rqlite/rqlite/pull/373), [PR #374](https://github.com/rqlite/rqlite/pull/374): Add simple INSERT-only benchmarking tool.
