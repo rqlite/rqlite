@@ -30,7 +30,7 @@ func Test_Upgrade_OK(t *testing.T) {
 	oldTemp := filepath.Join(t.TempDir(), "snapshots")
 	newTemp := filepath.Join(t.TempDir(), "rsnapshots")
 
-	// Copy directory because succeessful test runs will delete it.
+	// Copy directory because successful test runs will delete it.
 	copyDir(v7Snapshot, oldTemp)
 
 	// Upgrade it.
