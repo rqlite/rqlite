@@ -393,7 +393,7 @@ func Test_MultiNodeClusterBootstrap(t *testing.T) {
 }
 
 // Test_MultiNodeClusterBootstrapLaterJoin tests formation of a 3-node cluster and
-// then checking a 4th node can join later with the bootstap parameters.
+// then checking a 4th node can join later with the bootstrap parameters.
 func Test_MultiNodeClusterBootstrapLaterJoin(t *testing.T) {
 	node1 := mustNewNode("node1", false)
 	node1.Store.BootstrapExpect = 3
@@ -491,7 +491,7 @@ func Test_MultiNodeClusterBootstrapLaterJoin(t *testing.T) {
 }
 
 // Test_MultiNodeClusterBootstrapLaterJoinTLS tests formation of a 3-node cluster which
-// uses HTTP and TLS,then checking a 4th node can join later with the bootstap parameters.
+// uses HTTP and TLS,then checking a 4th node can join later with the bootstrap parameters.
 func Test_MultiNodeClusterBootstrapLaterJoinTLS(t *testing.T) {
 	node1 := mustNewNodeEncrypted("node1", false, true, true)
 	node1.Store.BootstrapExpect = 3
