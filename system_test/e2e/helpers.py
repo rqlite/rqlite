@@ -331,7 +331,7 @@ class Node(object):
         pass
       time.sleep(0.1)
 
-    # Perform a check on readyness while we're here.
+    # Perform a check on readiness while we're here.
     if ready and (self.ready() is not True):
       raise Exception('leader is available but node reports not ready')
 
