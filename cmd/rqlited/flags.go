@@ -120,7 +120,7 @@ type Config struct {
 	// BootstrapExpectTimeout is the maximum time a bootstrap operation can take.
 	BootstrapExpectTimeout time.Duration
 
-	// DisoMode sets the discovery mode. May not be set.
+	// DiscoMode sets the discovery mode. May not be set.
 	DiscoMode string
 
 	// DiscoKey sets the discovery prefix key.
