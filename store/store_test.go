@@ -94,7 +94,7 @@ func Test_OpenStoreSingleNode(t *testing.T) {
 }
 
 // Test_SingleNodeSQLitePath ensures that basic functionality works when the SQLite
-// database path is explicitly specificed. It also checks that the CommitIndex is
+// database path is explicitly specified. It also checks that the CommitIndex is
 // set correctly.
 func Test_SingleNodeOnDiskSQLitePath(t *testing.T) {
 	s, ln, path := mustNewStoreSQLitePath(t)
