@@ -671,7 +671,7 @@ This release addresses a shortcoming in inter-node communications. Nodes now con
 - [PR #1087](https://github.com/rqlite/rqlite/pull/1087): Notified and joined node checks address resolution.
 
 ## 7.9.0 (October 22nd 2022)
-This release makes it more convenient to load SQLite files directly into rqlite, as any node can now process the request. For this to work however, all nodes in your cluster must be running 7.9.0 (or later). Otherwse 7.9.0 is fully compatible with earlier release, so a rolling upgrade process is an option.
+This release makes it more convenient to load SQLite files directly into rqlite, as any node can now process the request. For this to work however, all nodes in your cluster must be running 7.9.0 (or later). Otherwise 7.9.0 is fully compatible with earlier release, so a rolling upgrade process is an option.
 
 ### New features
 - [PR #1084](https://github.com/rqlite/rqlite/pull/1084): Transparently forward SQLite data Restore requests to Leaders.
@@ -680,7 +680,7 @@ This release makes it more convenient to load SQLite files directly into rqlite,
 - [PR #1085](https://github.com/rqlite/rqlite/pull/1085): Improved logs during joining.
 
 ## 7.8.0 (October 20th 2022)
-This release makes it more convenient to retrieve a backup. Now any node can provide a backup of the underlying SQLite database. For this to work however, all nodes in your cluster must be running 7.8.0 (or later). Otherwse 7.8.0 is fully compatible with earlier release, so a rolling upgrade process is an option.
+This release makes it more convenient to retrieve a backup. Now any node can provide a backup of the underlying SQLite database. For this to work however, all nodes in your cluster must be running 7.8.0 (or later). Otherwise 7.8.0 is fully compatible with earlier release, so a rolling upgrade process is an option.
 
 ### New features
 - [PR #1081](https://github.com/rqlite/rqlite/pull/1081): Transparently forward Backup requests to Leaders.
