@@ -251,9 +251,9 @@ func (n *Node) Noop(id string) error {
 // EnableTLSClient enables TLS support for the node's cluster client.
 func (n *Node) EnableTLSClient() {
 	tlsConfig := mustCreateTLSConfig(n.NodeCertPath, n.NodeKeyPath, "")
-	clsterDialer := tcp.NewDialer(cluster.MuxClusterHeader, tlsConfig)
-	clsterClient := cluster.NewClient(clsterDialer, 30*time.Second)
-	n.Client = clsterClient
+	clusterDialer := tcp.NewDialer(cluster.MuxClusterHeader, tlsConfig)
+	clusterClient := cluster.NewClient(clusterDialer, 30*time.Second)
+	n.Client = clusterClient
 }
 
 // Join instructs this node to join the leader.
