@@ -106,7 +106,7 @@ func (n *Node) ExecuteMulti(stmts []string) (string, error) {
 	return n.postExecute(string(j))
 }
 
-// ExecuteParameterized executes a single paramterized query against the node
+// ExecuteParameterized executes a single parameterized query against the node
 func (n *Node) ExecuteParameterized(stmt []interface{}) (string, error) {
 	m := make([][]interface{}, 1)
 	m[0] = stmt
@@ -166,7 +166,7 @@ func (n *Node) QueryMulti(stmts []string) (string, error) {
 	return n.postQuery(string(j))
 }
 
-// QueryParameterized run a single paramterized query against the node
+// QueryParameterized run a single parameterized query against the node
 func (n *Node) QueryParameterized(stmt []interface{}) (string, error) {
 	m := make([][]interface{}, 1)
 	m[0] = stmt
@@ -192,7 +192,7 @@ func (n *Node) RequestMulti(stmts []string) (string, error) {
 	return n.postRequest(string(j))
 }
 
-// RequestMultiParameterized runs a single paramterized request against the node
+// RequestMultiParameterized runs a single parameterized request against the node
 func (n *Node) RequestMultiParameterized(stmt []interface{}) (string, error) {
 	m := make([][]interface{}, 1)
 	m[0] = stmt

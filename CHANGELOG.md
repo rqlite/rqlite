@@ -696,7 +696,7 @@ This release makes it more convenient to retrieve a backup. Now any node can pro
 
 ## 7.7.1 (October 13th 2022)
 ### Implementation changes and bug fixes
-- [PR #1074](https://github.com/rqlite/rqlite/pull/1074): Support `NULL` as a paramterized value. Fixes [issue #1073](https://github.com/rqlite/rqlite/issues/1073)
+- [PR #1074](https://github.com/rqlite/rqlite/pull/1074): Support `NULL` as a parameterized value. Fixes [issue #1073](https://github.com/rqlite/rqlite/issues/1073)
 
 ## 7.7.0 (September 28th 2022)
 This release adds support for SQLite [`RANDOM()`](https://www.sqlite.org/deterministic.html), the first such [support for non-deterministic functions](https://github.com/rqlite/rqlite/blob/master/DOC/NON_DETERMINISTIC_FUNCTIONS.md). It does this via statement-rewriting.
