@@ -91,7 +91,7 @@ func Upgrade(old, new string, logger *log.Logger) (retErr error) {
 
 	// Ensure all file handles are closed before any directory is renamed or removed.
 	if err := func() error {
-		// Write SQLite database file into new snapshto dir.
+		// Write SQLite database file into new snapshot dir.
 		newSqlitePath := filepath.Join(newTmpDir, oldMeta.ID+".db")
 		newSqliteFd, err := os.Create(newSqlitePath)
 		if err != nil {

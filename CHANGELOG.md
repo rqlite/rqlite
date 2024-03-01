@@ -362,7 +362,7 @@ Fix an edge case related to Raft Snapshotting when a chunked load is in progress
 This release fixes an edge case issue during restore-from-SQLite. It's possible if a rqlite system crashes shortly after restoring from SQLite it may not have loaded the data correctly.
 
 ### Implementation changes and bug fixes
-- [PR #1456](https://github.com/rqlite/rqlite/pull/1456): Wrap Snaphot Store _FullNeeded_ logic in a function.
+- [PR #1456](https://github.com/rqlite/rqlite/pull/1456): Wrap Snapshot Store _FullNeeded_ logic in a function.
 - [PR #1457](https://github.com/rqlite/rqlite/pull/1457): Allow FullNeeded to be explicitly set to true.
 - [PR #1458](https://github.com/rqlite/rqlite/pull/1458): Perform full snapshot after chunked load.
 
