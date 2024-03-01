@@ -375,7 +375,7 @@ This release also eases operations, as well as adding new features and bug fixes
 
 Release 8.0 supports (mostly) seamless upgrades from the 7.x series, and upgrading from 7.x has been tested. However, it is still strongly recommended you backup any production cluster before attempting an upgrade. A more conservative approach would be to create a brand new 8.0 system, and load your backup into that cluster. Then switch production traffic over to the new 8.0 cluster.
 
-8.0 and 7.x nodes should be able to interoperate, so a rolling upgrade should work fine **as long as all nodes are fully caught up with the Leader node**. Note you also cannot join a new 8.x node to a pre-existing 7.x cluster. Otherwise upgrade should operate but, again, it is strongly recommended you test this first. It is also not recommended that you run a cluster with a mix of 7.x and 8.0 code for any significant length of time, just the time required for a rolling upgrade.
+8.0 and 7.x nodes should be able to interoperate, so a rolling upgrade should work fine **as long as all nodes are fully caught up with the Leader node**. Note you also cannot join a new 8.x node to a preexisting 7.x cluster. Otherwise upgrade should operate but, again, it is strongly recommended you test this first. It is also not recommended that you run a cluster with a mix of 7.x and 8.0 code for any significant length of time, just the time required for a rolling upgrade.
 
 Important things to note if you decide to upgrade an existing 7.x system:
 - Backup your 7.x cluster first.
@@ -517,7 +517,7 @@ This release changes the "syncing" mode SQLite uses to _OFF_ when rqlite runs in
 - [PR #1270](https://github.com/rqlite/rqlite/pull/1270): Confirm self-removal changes cluster config.
 - [PR #1272](https://github.com/rqlite/rqlite/pull/1272): Refactor node self-removal on shutdown.
 - [PR #1273](https://github.com/rqlite/rqlite/pull/1273): Make WaitForLeader() more consistent.
-- [PR #1274](https://github.com/rqlite/rqlite/pull/1274): Do DNS bootstrapping even if there is pre-existing state. Fixes [issue #1247](https://github.com/rqlite/rqlite/issues/1247)
+- [PR #1274](https://github.com/rqlite/rqlite/pull/1274): Do DNS bootstrapping even if there is preexisting state. Fixes [issue #1247](https://github.com/rqlite/rqlite/issues/1247)
 
 ## 7.18.1 (May 20th 2023)
 This release also includes some small logging improvements, related to node-shutdown.

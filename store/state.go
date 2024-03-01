@@ -56,7 +56,7 @@ func IsStaleRead(
 // IsNewNode returns whether a node using raftDir would be a brand-new node.
 // It also means that the window for this node joining a different cluster has passed.
 func IsNewNode(raftDir string) bool {
-	// If there is any pre-existing Raft state, then this node
+	// If there is any preexisting Raft state, then this node
 	// has already been created.
 	return !pathExists(filepath.Join(raftDir, raftDBPath))
 }

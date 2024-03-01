@@ -1561,7 +1561,7 @@ COMMIT;
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
-	// Check pre-existing data is gone.
+	// Check preexisting data is gone.
 	qr = queryRequestFromString("SELECT * FROM bar", false, true)
 	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
 	r, err = s.Query(qr)
@@ -1728,7 +1728,7 @@ COMMIT;
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
-	// Check pre-existing data is gone.
+	// Check preexisting data is gone.
 	qr = queryRequestFromString("SELECT * FROM bar", false, true)
 	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
 	r, err = s.Query(qr)

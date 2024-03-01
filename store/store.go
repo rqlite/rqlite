@@ -456,7 +456,7 @@ func (s *Store) Open() (retErr error) {
 	config := s.raftConfig()
 	config.LocalID = raft.ServerID(s.raftID)
 
-	// Upgrade any pre-existing snapshots.
+	// Upgrade any preexisting snapshots.
 	oldSnapshotDir := filepath.Join(s.raftDir, "snapshots")
 	if err := snapshot.Upgrade(oldSnapshotDir, s.snapshotDir, s.logger); err != nil {
 		return fmt.Errorf("failed to upgrade snapshots: %s", err)
