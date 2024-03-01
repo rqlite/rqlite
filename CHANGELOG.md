@@ -970,7 +970,7 @@ This release addresses a significant issue related to SQLite connection handling
 
 ### Implementation changes and bug fixes
 - [PR #827](https://github.com/rqlite/rqlite/pull/827): Upgrade dependencies, including SQLite to 3.36.
-- [PR #835](https://github.com/rqlite/rqlite/pull/835): Use Go standard libary sql/database abstraction. Fixes [issue #830](https://github.com/rqlite/rqlite/issues/830).
+- [PR #835](https://github.com/rqlite/rqlite/pull/835): Use Go standard library sql/database abstraction. Fixes [issue #830](https://github.com/rqlite/rqlite/issues/830).
 - [PR #835](https://github.com/rqlite/rqlite/pull/835): Use SQLite connection pool and add pool statistics to status output.
 - [PR #836](https://github.com/rqlite/rqlite/pull/836): Add current SQLite journal mode to status output.
 - [PR #839](https://github.com/rqlite/rqlite/pull/839): Limit in-memory connection pool to 1 connection.
