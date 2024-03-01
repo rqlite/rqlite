@@ -70,13 +70,13 @@ func TestClient_QueryWhenSomeAreAvailable(t *testing.T) {
 		t.Errorf("expected HostChangedError got nil instead")
 	}
 
-	hcer, ok := err.(*HostChangedError)
+	hcerr, ok := err.(*HostChangedError)
 
 	if !ok {
 		t.Errorf("unexpected error occurred: %v", err)
 	}
 
-	if hcer.NewHost != u2.Host {
+	if hcerr.NewHost != u2.Host {
 		t.Errorf("unexpected responding host")
 	}
 
