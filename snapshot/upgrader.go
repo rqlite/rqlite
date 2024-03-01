@@ -18,7 +18,7 @@ const (
 	v7StateFile = "state.bin"
 )
 
-// Upgrade writes a copy of the 7.x-format Snapshot dircectory at 'old' to a
+// Upgrade writes a copy of the 7.x-format Snapshot directory at 'old' to a
 // new Snapshot directory at 'new'. If the upgrade is successful, the
 // 'old' directory is removed before the function returns.
 func Upgrade(old, new string, logger *log.Logger) (retErr error) {

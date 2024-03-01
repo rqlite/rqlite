@@ -1869,7 +1869,7 @@ func Test_SingleNode_WALTriggeredSnapshot(t *testing.T) {
 	testPoll(t, f, 100*time.Millisecond, 2*time.Second)
 
 	// Sanity-check the contents of the Store. There should be two
-	// files -- a SQLite database file, and a diretory named after
+	// files -- a SQLite database file, and a directory named after
 	// the most recent snapshot. This basically checks that reaping
 	// is working, as it can be tricky on Windows due to stricter
 	// file deletion rules.
