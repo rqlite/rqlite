@@ -409,7 +409,7 @@ func Test_MarshalQueryRowses(t *testing.T) {
 	}
 }
 
-// Test_MarshalQueryRowses tests JSON marshaling of a slice of QueryRows
+// Test_MarshalQueryAssociativeRowses tests JSON marshaling of a slice of associative QueryRows
 func Test_MarshalQueryAssociativeRowses(t *testing.T) {
 	var b []byte
 	var err error
