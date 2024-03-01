@@ -1671,7 +1671,7 @@ func Test_MultiNodeClusterReapNodes(t *testing.T) {
 		t.Fatalf("failed waiting for leader: %s", err.Error())
 	}
 
-	// Confirm non-voter node is in the the cluster config.
+	// Confirm non-voter node is in the cluster config.
 	nodes, err := leader.Nodes(true)
 	if err != nil {
 		t.Fatalf("failed to get nodes: %s", err.Error())
@@ -1690,7 +1690,7 @@ func Test_MultiNodeClusterReapNodes(t *testing.T) {
 		t.Fatalf("timed out waiting for non-voting node to be reaped")
 	}
 
-	// Confirm voting node is in the the cluster config.
+	// Confirm voting node is in the cluster config.
 	nodes, err = leader.Nodes(true)
 	if err != nil {
 		t.Fatalf("failed to get nodes: %s", err.Error())
@@ -1737,7 +1737,7 @@ func Test_MultiNodeClusterNoReap(t *testing.T) {
 		t.Fatalf("failed waiting for leader: %s", err.Error())
 	}
 
-	// Confirm non-voter node is in the the cluster config.
+	// Confirm non-voter node is in the cluster config.
 	nodes, err := node1.Nodes(true)
 	if err != nil {
 		t.Fatalf("failed to get nodes: %s", err.Error())
@@ -1807,7 +1807,7 @@ func Test_MultiNodeClusterNoReapZero(t *testing.T) {
 		t.Fatalf("failed to find cluster leader: %s", err.Error())
 	}
 
-	// Confirm voting node is in the the cluster config.
+	// Confirm voting node is in the cluster config.
 	nodes, err := leader.Nodes(true)
 	if err != nil {
 		t.Fatalf("failed to get nodes: %s", err.Error())
@@ -1853,7 +1853,7 @@ func Test_MultiNodeClusterNoReapReadOnlyZero(t *testing.T) {
 		t.Fatalf("failed waiting for leader: %s", err.Error())
 	}
 
-	// Confirm non-voter node is in the the cluster config.
+	// Confirm non-voter node is in the cluster config.
 	nodes, err := node1.Nodes(true)
 	if err != nil {
 		t.Fatalf("failed to get nodes: %s", err.Error())
