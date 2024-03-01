@@ -773,7 +773,7 @@ This release introduces supported for [DNS-based](https://www.cloudflare.com/lea
 - [PR #976](https://github.com/rqlite/rqlite/pull/976): Improve `/readyz` response.
 - [PR #978](https://github.com/rqlite/rqlite/pull/978): Return error on join request if node ID is the same as receiving node.
 - [PR #980](https://github.com/rqlite/rqlite/pull/980): Move config validation to Config type.
-- [PR #981](https://github.com/rqlite/rqlite/pull/981): Add curent time to node `/status` output.
+- [PR #981](https://github.com/rqlite/rqlite/pull/981): Add current time to node `/status` output.
 - [PR #982](https://github.com/rqlite/rqlite/pull/982): `/readyz` can skip leader check via `noleader` query param.
 - [PR #984](https://github.com/rqlite/rqlite/pull/984): Count number of `/status` and `/readyz` requests via expvar.
 - [PR #986](https://github.com/rqlite/rqlite/pull/986): Refactor join code with new Joiner type.
