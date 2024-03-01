@@ -1167,7 +1167,7 @@ The HTTP Query and Insert API remains unchanged in the 5.0 series relative to th
 - [PR #607](https://github.com/rqlite/rqlite/pull/607): Various Redirect fixes.
 - [PR #609](https://github.com/rqlite/rqlite/pull/609): Simplify rqlite implementation.
 - [PR #610](https://github.com/rqlite/rqlite/pull/610): Write node backup directly to HTTP response writer. Thanks @sum12.
-- [PR #611](https://github.com/rqlite/rqlite/pull/611): Add varadic perm check functions to auth store.
+- [PR #611](https://github.com/rqlite/rqlite/pull/611): Add variadic perm check functions to auth store.
 
 ## 4.6.0 (November 29th 2019)
 _This release adds significant new functionality to the command-line tool, including much more control over backup and restore of the database. [Visit the Releases page](https://github.com/rqlite/rqlite/releases/tag/v4.6.0) to download this release._
