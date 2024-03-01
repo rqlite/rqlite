@@ -157,7 +157,7 @@ The releases changes the default logging level for the Raft subsystem from `INFO
 This release further improves _Automatic Backup_ performance, as well as improving test coverage generally.
 ### Implementation changes and bug fixes
 - [PR #1592](https://github.com/rqlite/rqlite/pull/1592): Refactor and enhance upload logging.
-- [PR #1593](https://github.com/rqlite/rqlite/pull/1593): Tighthen snapshot-join end-to-end testing.
+- [PR #1593](https://github.com/rqlite/rqlite/pull/1593): Tighten snapshot-join end-to-end testing.
 - [PR #1596](https://github.com/rqlite/rqlite/pull/1596): Track Raft logs which change the database.
 - [PR #1597](https://github.com/rqlite/rqlite/pull/1597): Clarify end-to-end testing code.
 - [PR #1598](https://github.com/rqlite/rqlite/pull/1598): Refactor Store-level index tracking.
@@ -362,8 +362,8 @@ Fix an edge case related to Raft Snapshotting when a chunked load is in progress
 This release fixes an edge case issue during restore-from-SQLite. It's possible if a rqlite system crashes shortly after restoring from SQLite it may not have loaded the data correctly.
 
 ### Implementation changes and bug fixes
-- [PR #1456](https://github.com/rqlite/rqlite/pull/1456): Wrap Snaphot Store _FullNeeded_ logic in a function.
-- [PR #1457](https://github.com/rqlite/rqlite/pull/1457): Allow FullNeeded to be explicity set to true.
+- [PR #1456](https://github.com/rqlite/rqlite/pull/1456): Wrap Snapshot Store _FullNeeded_ logic in a function.
+- [PR #1457](https://github.com/rqlite/rqlite/pull/1457): Allow FullNeeded to be explicitly set to true.
 - [PR #1458](https://github.com/rqlite/rqlite/pull/1458): Perform full snapshot after chunked load.
 
 ## 8.0.0 (December 5th 2023)
@@ -375,13 +375,13 @@ This release also eases operations, as well as adding new features and bug fixes
 
 Release 8.0 supports (mostly) seamless upgrades from the 7.x series, and upgrading from 7.x has been tested. However, it is still strongly recommended you backup any production cluster before attempting an upgrade. A more conservative approach would be to create a brand new 8.0 system, and load your backup into that cluster. Then switch production traffic over to the new 8.0 cluster.
 
-8.0 and 7.x nodes should be able to interoperate, so a rolling upgrade should work fine **as long as all nodes are fully caught up with the Leader node**. Note you also cannot join a new 8.x node to a pre-existing 7.x cluster. Otherwise upgrade should operate but, again, it is strongly recommended you test this first. It is also not recommended that you run a cluster with a mix of 7.x and 8.0 code for any significant length of time, just the time required for a rolling upgrade.
+8.0 and 7.x nodes should be able to interoperate, so a rolling upgrade should work fine **as long as all nodes are fully caught up with the Leader node**. Note you also cannot join a new 8.x node to a preexisting 7.x cluster. Otherwise upgrade should operate but, again, it is strongly recommended you test this first. It is also not recommended that you run a cluster with a mix of 7.x and 8.0 code for any significant length of time, just the time required for a rolling upgrade.
 
 Important things to note if you decide to upgrade an existing 7.x system:
 - Backup your 7.x cluster first.
 - it is strongly recommended you upgrade your 7.x cluster to the [7.21.4](https://github.com/rqlite/rqlite/releases/tag/v7.21.4) release before upgrading to the 8.0 series.
 - 8.0 always runs with an on-disk database, in-memory databases are no longer supported. Improvements made late in the 7.0 series mean there is little difference in write performance between in-memory and on-disk modes, but supporting both modes just meant confusion and higher development costs. If you were previously running in in-memory mode (the previous default), you don't need to do anything. But if you were previously passing `-on-disk` to `rqlited` so that rqlite ran in on-disk mode, you must now remove that flag.
-- When forming a new cluster using 8.0, pass the **Raft** addresss of the remote node to the `-join` command, not the HTTP API address. If your cluster is already formed, upgrades will work without changing anything (`-join` options are ignored if nodes are already members of a cluster). You may need to change any scripting or automatic-configuration generation however.
+- When forming a new cluster using 8.0, pass the **Raft** address of the remote node to the `-join` command, not the HTTP API address. If your cluster is already formed, upgrades will work without changing anything (`-join` options are ignored if nodes are already members of a cluster). You may need to change any scripting or automatic-configuration generation however.
 - Bcrypted password hashes are no longer supported, due to security flaws in the 7.x release. You should regenerate any [Credentials file](https://rqlite.io/docs/guides/security/), and use plaintext passwords only (and prevent unauthorized access to the Credentials file).
 - A few rarely, if ever, used `rqlited` command-line flags have been removed. These flags just added operational overhead, while adding little value.
 
@@ -517,7 +517,7 @@ This release changes the "syncing" mode SQLite uses to _OFF_ when rqlite runs in
 - [PR #1270](https://github.com/rqlite/rqlite/pull/1270): Confirm self-removal changes cluster config.
 - [PR #1272](https://github.com/rqlite/rqlite/pull/1272): Refactor node self-removal on shutdown.
 - [PR #1273](https://github.com/rqlite/rqlite/pull/1273): Make WaitForLeader() more consistent.
-- [PR #1274](https://github.com/rqlite/rqlite/pull/1274): Do DNS boostrapping even if there is pre-existing state. Fixes [issue #1247](https://github.com/rqlite/rqlite/issues/1247)
+- [PR #1274](https://github.com/rqlite/rqlite/pull/1274): Do DNS bootstrapping even if there is preexisting state. Fixes [issue #1247](https://github.com/rqlite/rqlite/issues/1247)
 
 ## 7.18.1 (May 20th 2023)
 This release also includes some small logging improvements, related to node-shutdown.
@@ -671,7 +671,7 @@ This release addresses a shortcoming in inter-node communications. Nodes now con
 - [PR #1087](https://github.com/rqlite/rqlite/pull/1087): Notified and joined node checks address resolution.
 
 ## 7.9.0 (October 22nd 2022)
-This release makes it more convenient to load SQLite files directly into rqlite, as any node can now process the request. For this to work however, all nodes in your cluster must be running 7.9.0 (or later). Otherwse 7.9.0 is fully compatible with earlier release, so a rolling upgrade process is an option.
+This release makes it more convenient to load SQLite files directly into rqlite, as any node can now process the request. For this to work however, all nodes in your cluster must be running 7.9.0 (or later). Otherwise 7.9.0 is fully compatible with earlier release, so a rolling upgrade process is an option.
 
 ### New features
 - [PR #1084](https://github.com/rqlite/rqlite/pull/1084): Transparently forward SQLite data Restore requests to Leaders.
@@ -680,7 +680,7 @@ This release makes it more convenient to load SQLite files directly into rqlite,
 - [PR #1085](https://github.com/rqlite/rqlite/pull/1085): Improved logs during joining.
 
 ## 7.8.0 (October 20th 2022)
-This release makes it more convenient to retrieve a backup. Now any node can provide a backup of the underlying SQLite database. For this to work however, all nodes in your cluster must be running 7.8.0 (or later). Otherwse 7.8.0 is fully compatible with earlier release, so a rolling upgrade process is an option.
+This release makes it more convenient to retrieve a backup. Now any node can provide a backup of the underlying SQLite database. For this to work however, all nodes in your cluster must be running 7.8.0 (or later). Otherwise 7.8.0 is fully compatible with earlier release, so a rolling upgrade process is an option.
 
 ### New features
 - [PR #1081](https://github.com/rqlite/rqlite/pull/1081): Transparently forward Backup requests to Leaders.
@@ -696,7 +696,7 @@ This release makes it more convenient to retrieve a backup. Now any node can pro
 
 ## 7.7.1 (October 13th 2022)
 ### Implementation changes and bug fixes
-- [PR #1074](https://github.com/rqlite/rqlite/pull/1074): Support `NULL` as a paramterized value. Fixes [issue #1073](https://github.com/rqlite/rqlite/issues/1073)
+- [PR #1074](https://github.com/rqlite/rqlite/pull/1074): Support `NULL` as a parameterized value. Fixes [issue #1073](https://github.com/rqlite/rqlite/issues/1073)
 
 ## 7.7.0 (September 28th 2022)
 This release adds support for SQLite [`RANDOM()`](https://www.sqlite.org/deterministic.html), the first such [support for non-deterministic functions](https://github.com/rqlite/rqlite/blob/master/DOC/NON_DETERMINISTIC_FUNCTIONS.md). It does this via statement-rewriting.
@@ -773,7 +773,7 @@ This release introduces supported for [DNS-based](https://www.cloudflare.com/lea
 - [PR #976](https://github.com/rqlite/rqlite/pull/976): Improve `/readyz` response.
 - [PR #978](https://github.com/rqlite/rqlite/pull/978): Return error on join request if node ID is the same as receiving node.
 - [PR #980](https://github.com/rqlite/rqlite/pull/980): Move config validation to Config type.
-- [PR #981](https://github.com/rqlite/rqlite/pull/981): Add curent time to node `/status` output.
+- [PR #981](https://github.com/rqlite/rqlite/pull/981): Add current time to node `/status` output.
 - [PR #982](https://github.com/rqlite/rqlite/pull/982): `/readyz` can skip leader check via `noleader` query param.
 - [PR #984](https://github.com/rqlite/rqlite/pull/984): Count number of `/status` and `/readyz` requests via expvar.
 - [PR #986](https://github.com/rqlite/rqlite/pull/986): Refactor join code with new Joiner type.
@@ -970,7 +970,7 @@ This release addresses a significant issue related to SQLite connection handling
 
 ### Implementation changes and bug fixes
 - [PR #827](https://github.com/rqlite/rqlite/pull/827): Upgrade dependencies, including SQLite to 3.36.
-- [PR #835](https://github.com/rqlite/rqlite/pull/835): Use Go standard libary sql/database abstraction. Fixes [issue #830](https://github.com/rqlite/rqlite/issues/830).
+- [PR #835](https://github.com/rqlite/rqlite/pull/835): Use Go standard library sql/database abstraction. Fixes [issue #830](https://github.com/rqlite/rqlite/issues/830).
 - [PR #835](https://github.com/rqlite/rqlite/pull/835): Use SQLite connection pool and add pool statistics to status output.
 - [PR #836](https://github.com/rqlite/rqlite/pull/836): Add current SQLite journal mode to status output.
 - [PR #839](https://github.com/rqlite/rqlite/pull/839): Limit in-memory connection pool to 1 connection.
@@ -985,7 +985,7 @@ This release implements a significant design change, which improves rqlite clust
 
 In the 5.0 series, _Follower_ nodes learned the HTTP API address of the cluster Leader via information - known as _Metadata_ - that each node wrote to the Raft log. This Metadata was then available to each node in the cluster, if that node needed to redirect queries to the cluster Leader (assuming that node wasn't the Leader at that time). However that design was somewhat complex, and required the tracking of extra state, in addition to the SQLite database. It also meant that if the Metadata got out of sync with the Raft state, the cluster could be in a degraded state.
 
-In this new design, a node now queries the Leader as needed, when that node needs to learn the Leader's HTTP API address. As a result, the Metadata component has been removed from rqlite, since it is no longer needed. And without any possibility of discrepancy between Metadata and Raft state, a whole class of potential bugs is removed. Any request for the Leader HTTP API address means the requesting node node connects to a TCP port already open on the Leader for Raft connections, so does not introduce any new failure modes. This multiplexing of the Raft TCP port is performed via the `mux` package.
+In this new design, a node now queries the Leader as needed, when that node needs to learn the Leader's HTTP API address. As a result, the Metadata component has been removed from rqlite, since it is no longer needed. And without any possibility of discrepancy between Metadata and Raft state, a whole class of potential bugs is removed. Any request for the Leader HTTP API address means the requesting node connects to a TCP port already open on the Leader for Raft connections, so does not introduce any new failure modes. This multiplexing of the Raft TCP port is performed via the `mux` package.
 
 This new design does mean that nodes running earlier software cannot communicate with 6.0 nodes, as 6.0 software no longer performs Metadata updates. As a result, **rqlite clusters running 5.x software or earlier must be explicitly upgraded**. To upgrade from an earlier version to this release you should [backup your Leader node](https://github.com/rqlite/rqlite/blob/master/DOC/BACKUPS.md), and [restore the database dump](https://github.com/rqlite/rqlite/blob/master/DOC/RESTORE_FROM_SQLITE.md) into a new 6.0 cluster.
 
@@ -1125,7 +1125,7 @@ _This release should not be used, due to a HTTP redirection bug._
 - [PR #641](https://github.com/rqlite/rqlite/pull/641): rqlite CLI now supports node removal.
 
 ## 5.2.0 (April 11th 2020)
-This release fixes a very significant bug, whereby snapshotting was never occuring due to a zero snapshot-interval being passed to the Raft subsystem. This meant that the Raft log would grow without bound, and could result in very long start-up times if the Raft log was very large.
+This release fixes a very significant bug, whereby snapshotting was never occurring due to a zero snapshot-interval being passed to the Raft subsystem. This meant that the Raft log would grow without bound, and could result in very long start-up times if the Raft log was very large.
 
 ### New features
 - [PR #637](https://github.com/rqlite/rqlite/pull/637): Allow the Raft snapshotting check interval to be set at launch time.
@@ -1167,7 +1167,7 @@ The HTTP Query and Insert API remains unchanged in the 5.0 series relative to th
 - [PR #607](https://github.com/rqlite/rqlite/pull/607): Various Redirect fixes.
 - [PR #609](https://github.com/rqlite/rqlite/pull/609): Simplify rqlite implementation.
 - [PR #610](https://github.com/rqlite/rqlite/pull/610): Write node backup directly to HTTP response writer. Thanks @sum12.
-- [PR #611](https://github.com/rqlite/rqlite/pull/611): Add varadic perm check functions to auth store.
+- [PR #611](https://github.com/rqlite/rqlite/pull/611): Add variadic perm check functions to auth store.
 
 ## 4.6.0 (November 29th 2019)
 _This release adds significant new functionality to the command-line tool, including much more control over backup and restore of the database. [Visit the Releases page](https://github.com/rqlite/rqlite/releases/tag/v4.6.0) to download this release._
@@ -1209,7 +1209,7 @@ _This release adds significant new functionality to the command-line tool, inclu
 - [PR #384](https://github.com/rqlite/rqlite/pull/384): "status" perm required to access Go runtime information.
 
 ## 4.2.1 (November 10th 2017)
-- [PR #367](https://github.com/rqlite/rqlite/pull/367): Remove superflous leading space at CLI prompt.
+- [PR #367](https://github.com/rqlite/rqlite/pull/367): Remove superfluous leading space at CLI prompt.
 - [PR #368](https://github.com/rqlite/rqlite/pull/368): CLI displays clear error message when not authorized.
 - [PR #370](https://github.com/rqlite/rqlite/pull/370): CLI does not need to indent JSON when making requests.
 - [PR #373](https://github.com/rqlite/rqlite/pull/373), [PR #374](https://github.com/rqlite/rqlite/pull/374): Add simple INSERT-only benchmarking tool.

@@ -106,7 +106,7 @@ func (n *Node) ExecuteMulti(stmts []string) (string, error) {
 	return n.postExecute(string(j))
 }
 
-// ExecuteParameterized executes a single paramterized query against the node
+// ExecuteParameterized executes a single parameterized query against the node
 func (n *Node) ExecuteParameterized(stmt []interface{}) (string, error) {
 	m := make([][]interface{}, 1)
 	m[0] = stmt
@@ -166,7 +166,7 @@ func (n *Node) QueryMulti(stmts []string) (string, error) {
 	return n.postQuery(string(j))
 }
 
-// QueryParameterized run a single paramterized query against the ndoe
+// QueryParameterized run a single parameterized query against the node
 func (n *Node) QueryParameterized(stmt []interface{}) (string, error) {
 	m := make([][]interface{}, 1)
 	m[0] = stmt
@@ -192,7 +192,7 @@ func (n *Node) RequestMulti(stmts []string) (string, error) {
 	return n.postRequest(string(j))
 }
 
-// RequestMultiParameterized runs a single paramterized request against the node
+// RequestMultiParameterized runs a single parameterized request against the node
 func (n *Node) RequestMultiParameterized(stmt []interface{}) (string, error) {
 	m := make([][]interface{}, 1)
 	m[0] = stmt
@@ -251,9 +251,9 @@ func (n *Node) Noop(id string) error {
 // EnableTLSClient enables TLS support for the node's cluster client.
 func (n *Node) EnableTLSClient() {
 	tlsConfig := mustCreateTLSConfig(n.NodeCertPath, n.NodeKeyPath, "")
-	clsterDialer := tcp.NewDialer(cluster.MuxClusterHeader, tlsConfig)
-	clsterClient := cluster.NewClient(clsterDialer, 30*time.Second)
-	n.Client = clsterClient
+	clusterDialer := tcp.NewDialer(cluster.MuxClusterHeader, tlsConfig)
+	clusterClient := cluster.NewClient(clusterDialer, 30*time.Second)
+	n.Client = clusterClient
 }
 
 // Join instructs this node to join the leader.
@@ -364,7 +364,7 @@ func (n *Node) Ready() (bool, error) {
 	return resp.StatusCode == 200, nil
 }
 
-// Liveness returns the viveness status for the node, primarily
+// Liveness returns the liveness status for the node, primarily
 // for use by Kubernetes.
 func (n *Node) Liveness() (bool, error) {
 	v, _ := url.Parse("http://" + n.APIAddr + "/readyz?noleader")
@@ -774,7 +774,7 @@ func mustNewLeaderNode(id string) *Node {
 
 func mustTempDir(s string) string {
 	var err error
-	path, err := os.MkdirTemp("", fmt.Sprintf("rqlilte-system-test-%s-", s))
+	path, err := os.MkdirTemp("", fmt.Sprintf("rqlite-system-test-%s-", s))
 	if err != nil {
 		panic("failed to create temp dir")
 	}

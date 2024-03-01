@@ -201,7 +201,7 @@ class TestJoinCatchup(unittest.TestCase):
     self.assertEqual(j, d_("{'results': [{'values': [[2]], 'types': ['integer'], 'columns': ['COUNT(*)']}]}"))
     applied = n0.wait_for_all_applied()
 
-    # Restart follower, explicity rejoin, and ensure it picks up new records
+    # Restart follower, explicitly rejoin, and ensure it picks up new records
     self.n1.start(join=self.n0.RaftAddr())
     self.n1.wait_for_leader()
     self.n1.wait_for_fsm_index(applied)
@@ -233,7 +233,7 @@ class TestJoinCatchup(unittest.TestCase):
     self.assertEqual(j, d_("{'results': [{'values': [[2]], 'types': ['integer'], 'columns': ['COUNT(*)']}]}"))
     applied = n0.wait_for_all_applied()
 
-    # Restart follower with new network attributes, explicity rejoin, and ensure it picks up new records
+    # Restart follower with new network attributes, explicitly rejoin, and ensure it picks up new records
     self.n1.scramble_network()
     self.n1.start(join=self.n0.RaftAddr())
     self.n1.wait_for_leader()

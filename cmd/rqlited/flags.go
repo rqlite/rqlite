@@ -59,7 +59,7 @@ type Config struct {
 	// AutoRestoreFile is the path to the auto-restore file. May not be set.
 	AutoRestoreFile string `filepath:"true"`
 
-	// HTTPx509CACert is the path to the CA certficate file for when this node verifies
+	// HTTPx509CACert is the path to the CA certificate file for when this node verifies
 	// other certificates for any HTTP communications. May not be set.
 	HTTPx509CACert string `filepath:"true"`
 
@@ -72,7 +72,7 @@ type Config struct {
 	// HTTPVerifyClient indicates whether the HTTP server should verify client certificates.
 	HTTPVerifyClient bool
 
-	// NodeX509CACert is the path to the CA certficate file for when this node verifies
+	// NodeX509CACert is the path to the CA certificate file for when this node verifies
 	// other certificates for any inter-node communications. May not be set.
 	NodeX509CACert string `filepath:"true"`
 
@@ -120,7 +120,7 @@ type Config struct {
 	// BootstrapExpectTimeout is the maximum time a bootstrap operation can take.
 	BootstrapExpectTimeout time.Duration
 
-	// DisoMode sets the discovery mode. May not be set.
+	// DiscoMode sets the discovery mode. May not be set.
 	DiscoMode string
 
 	// DiscoKey sets the discovery prefix key.
@@ -249,7 +249,7 @@ func (c *Config) Validate() error {
 		c.NodeID = c.RaftAdv
 	}
 
-	// Perfom some address validity checks.
+	// Perform some address validity checks.
 	if strings.HasPrefix(strings.ToLower(c.HTTPAddr), "http") ||
 		strings.HasPrefix(strings.ToLower(c.HTTPAdv), "http") {
 		return errors.New("HTTP options should not include protocol (http:// or https://)")
@@ -299,7 +299,7 @@ func (c *Config) Validate() error {
 		addrs := strings.Split(c.JoinAddrs, ",")
 		for i := range addrs {
 			if _, _, err := net.SplitHostPort(addrs[i]); err != nil {
-				return fmt.Errorf("%s is an invalid join adddress", addrs[i])
+				return fmt.Errorf("%s is an invalid join address", addrs[i])
 			}
 
 			if c.BootstrapExpect == 0 {
@@ -389,7 +389,7 @@ func (c *Config) DiscoConfigReader() io.ReadCloser {
 }
 
 // CheckFilePaths checks that all file paths in the config exist.
-// Empy filepaths are ignored.
+// Empty filepaths are ignored.
 func (c *Config) CheckFilePaths() error {
 	v := reflect.ValueOf(c).Elem()
 

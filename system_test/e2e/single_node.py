@@ -26,7 +26,7 @@ class TestSingleNode(unittest.TestCase):
     self.cluster.deprovision()
 
   def test_pragmas(self):
-    '''Test that the critical configration is correct'''
+    '''Test that the critical configuration is correct'''
     n = self.cluster.wait_for_leader()
     ro_pragmas = n.pragmas()['ro']
     rw_pragmas = n.pragmas()['rw']
@@ -169,7 +169,7 @@ class TestSingleNode(unittest.TestCase):
     self.assertEqual(j, d_("{'results': [{'types': {'age': 'integer', 'id': 'integer', 'name': 'text'}, 'rows': [{'age': 20, 'id': 1, 'name': 'fiona'}, {'age': 25, 'id': 2, 'name': 'sinead'}]}]}"))
 
   def test_snapshot(self):
-    ''' Test that a node peforms at least 1 snapshot'''
+    ''' Test that a node performs at least 1 snapshot'''
     n = self.cluster.wait_for_leader()
     j = n.execute('CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)')
     self.assertEqual(j, d_("{'results': [{}]}"))

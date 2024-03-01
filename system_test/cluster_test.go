@@ -227,7 +227,7 @@ func Test_MultiNodeClusterRANDOM(t *testing.T) {
 	trueOrTimeout(tFn, 10*time.Second)
 }
 
-// Test_MultiNodeClusterBootstrap tests formation of a 3-node cluster via bootstraping,
+// Test_MultiNodeClusterBootstrap tests formation of a 3-node cluster via bootstrapping,
 // and its operation.
 func Test_MultiNodeClusterBootstrap(t *testing.T) {
 	node1 := mustNewNode("node1", false)
@@ -393,7 +393,7 @@ func Test_MultiNodeClusterBootstrap(t *testing.T) {
 }
 
 // Test_MultiNodeClusterBootstrapLaterJoin tests formation of a 3-node cluster and
-// then checking a 4th node can join later with the bootstap parameters.
+// then checking a 4th node can join later with the bootstrap parameters.
 func Test_MultiNodeClusterBootstrapLaterJoin(t *testing.T) {
 	node1 := mustNewNode("node1", false)
 	node1.Store.BootstrapExpect = 3
@@ -491,7 +491,7 @@ func Test_MultiNodeClusterBootstrapLaterJoin(t *testing.T) {
 }
 
 // Test_MultiNodeClusterBootstrapLaterJoinTLS tests formation of a 3-node cluster which
-// uses HTTP and TLS,then checking a 4th node can join later with the bootstap parameters.
+// uses HTTP and TLS,then checking a 4th node can join later with the bootstrap parameters.
 func Test_MultiNodeClusterBootstrapLaterJoinTLS(t *testing.T) {
 	node1 := mustNewNodeEncrypted("node1", false, true, true)
 	node1.Store.BootstrapExpect = 3
@@ -1671,7 +1671,7 @@ func Test_MultiNodeClusterReapNodes(t *testing.T) {
 		t.Fatalf("failed waiting for leader: %s", err.Error())
 	}
 
-	// Confirm non-voter node is in the the cluster config.
+	// Confirm non-voter node is in the cluster config.
 	nodes, err := leader.Nodes(true)
 	if err != nil {
 		t.Fatalf("failed to get nodes: %s", err.Error())
@@ -1690,7 +1690,7 @@ func Test_MultiNodeClusterReapNodes(t *testing.T) {
 		t.Fatalf("timed out waiting for non-voting node to be reaped")
 	}
 
-	// Confirm voting node is in the the cluster config.
+	// Confirm voting node is in the cluster config.
 	nodes, err = leader.Nodes(true)
 	if err != nil {
 		t.Fatalf("failed to get nodes: %s", err.Error())
@@ -1737,7 +1737,7 @@ func Test_MultiNodeClusterNoReap(t *testing.T) {
 		t.Fatalf("failed waiting for leader: %s", err.Error())
 	}
 
-	// Confirm non-voter node is in the the cluster config.
+	// Confirm non-voter node is in the cluster config.
 	nodes, err := node1.Nodes(true)
 	if err != nil {
 		t.Fatalf("failed to get nodes: %s", err.Error())
@@ -1807,7 +1807,7 @@ func Test_MultiNodeClusterNoReapZero(t *testing.T) {
 		t.Fatalf("failed to find cluster leader: %s", err.Error())
 	}
 
-	// Confirm voting node is in the the cluster config.
+	// Confirm voting node is in the cluster config.
 	nodes, err := leader.Nodes(true)
 	if err != nil {
 		t.Fatalf("failed to get nodes: %s", err.Error())
@@ -1853,7 +1853,7 @@ func Test_MultiNodeClusterNoReapReadOnlyZero(t *testing.T) {
 		t.Fatalf("failed waiting for leader: %s", err.Error())
 	}
 
-	// Confirm non-voter node is in the the cluster config.
+	// Confirm non-voter node is in the cluster config.
 	nodes, err := node1.Nodes(true)
 	if err != nil {
 		t.Fatalf("failed to get nodes: %s", err.Error())

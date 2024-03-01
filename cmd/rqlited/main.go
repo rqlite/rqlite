@@ -436,7 +436,7 @@ func createCluster(cfg *Config, hasPeers bool, client *cluster.Client, str *stor
 		}
 
 		// Brand new node, told to bootstrap itself. So do it.
-		log.Println("bootstraping single new node")
+		log.Println("bootstrapping single new node")
 		if err := str.Bootstrap(store.NewServer(str.ID(), cfg.RaftAdv, true)); err != nil {
 			return fmt.Errorf("failed to bootstrap single new node: %s", err.Error())
 		}

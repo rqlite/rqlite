@@ -70,7 +70,7 @@ func Test_CreateClientConfig(t *testing.T) {
 		t.Fatalf("failed to create client config: %v", err)
 	}
 	if !config.InsecureSkipVerify {
-		t.Fatalf("expected InsecureSkipVerify to be true, got falsee")
+		t.Fatalf("expected InsecureSkipVerify to be true, got false")
 	}
 
 	// Check that the certificate is loaded correctly

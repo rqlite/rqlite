@@ -307,7 +307,7 @@ class TestAutoClusteringKVStores(unittest.TestCase):
     self.autocluster_readonly(TestAutoClusteringKVStores.DiscoModeConsulKV)
 
   def test_etcd_readonly(self):
-    '''Test clustering via Ectd when a read-only node is started first'''
+    '''Test clustering via Etcd when a read-only node is started first'''
     self.autocluster_readonly(TestAutoClusteringKVStores.DiscoModeEtcdKV)
 
   def test_consul_config(self):

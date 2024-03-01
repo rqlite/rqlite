@@ -48,7 +48,7 @@ func Test_Decompressor_EndToEnd(t *testing.T) {
 	testData := []byte("This is a test string, xxxxx -- xxxxxx -- test should compress")
 	srcBuf := bytes.NewBuffer(testData)
 
-	// Accept connections on the listern
+	// Accept connections on the listener
 	go func() {
 		for {
 			conn, err := ln.Accept()

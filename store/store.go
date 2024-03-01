@@ -278,7 +278,7 @@ type Store struct {
 	fsmIdx        *atomic.Uint64
 	fsmUpdateTime *AtomicTime // This is node-local time.
 
-	// appendedAtTimeis the Leader's clock time when that Leader appended the log entry.
+	// appendedAtTime is the Leader's clock time when that Leader appended the log entry.
 	// The Leader that actually appended the log entry is not necessarily the current Leader.
 	appendedAtTime *AtomicTime
 
@@ -456,7 +456,7 @@ func (s *Store) Open() (retErr error) {
 	config := s.raftConfig()
 	config.LocalID = raft.ServerID(s.raftID)
 
-	// Upgrade any pre-existing snapshots.
+	// Upgrade any preexisting snapshots.
 	oldSnapshotDir := filepath.Join(s.raftDir, "snapshots")
 	if err := snapshot.Upgrade(oldSnapshotDir, s.snapshotDir, s.logger); err != nil {
 		return fmt.Errorf("failed to upgrade snapshots: %s", err)
@@ -1458,7 +1458,7 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 		return n, fmt.Errorf("invalid SQLite data")
 	}
 
-	// Raft won't snapshot unless there is at least one unsnappshotted log entry,
+	// Raft won't snapshot unless there is at least one unsnapshotted log entry,
 	// so prep that now before we do anything destructive.
 	if af, err := s.Noop("boot"); err != nil {
 		return n, err

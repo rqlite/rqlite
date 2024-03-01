@@ -10,7 +10,7 @@ import (
 	command "github.com/rqlite/rqlite/v8/command/proto"
 )
 
-func test_SingleNodeProvide(t *testing.T, vaccuum, compress bool) {
+func test_SingleNodeProvide(t *testing.T, vacuum, compress bool) {
 	s0, ln := mustNewStore(t)
 	defer ln.Close()
 
@@ -49,7 +49,7 @@ func test_SingleNodeProvide(t *testing.T, vaccuum, compress bool) {
 	tmpFd := mustCreateTempFD()
 	defer os.Remove(tmpFd.Name())
 	defer tmpFd.Close()
-	provider := NewProvider(s0, vaccuum, compress)
+	provider := NewProvider(s0, vacuum, compress)
 	if err := provider.Provide(tmpFd); err != nil {
 		t.Fatalf("failed to provide SQLite data: %s", err.Error())
 	}

@@ -467,7 +467,7 @@ func getVersionWithClient(client *http.Client, argv *argT) (string, error) {
 }
 
 func sendRequest(ctx *cli.Context, makeNewRequest func(string) (*http.Request, error), urlStr string, argv *argT) (*[]byte, error) {
-	// create a byte-based buffer that implments io.Writer
+	// create a byte-based buffer that implements io.Writer
 	var buf []byte
 	w := bytes.NewBuffer(buf)
 	_, err := sendRequestW(ctx, makeNewRequest, urlStr, argv, w)

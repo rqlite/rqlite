@@ -135,7 +135,7 @@ func (s *Sink) processSnapshotData() (retErr error) {
 	}
 
 	if len(snapshots) == 0 && !db.IsValidSQLiteFile(s.dataFD.Name()) {
-		// We have no snapshots yet, so the incomding data must be a valid SQLite file.
+		// We have no snapshots yet, so the incoming data must be a valid SQLite file.
 		return fmt.Errorf("data for first snapshot must be a valid SQLite file")
 	}
 
