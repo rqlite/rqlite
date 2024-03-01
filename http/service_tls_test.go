@@ -190,7 +190,7 @@ func Test_TLSServiceSecureMutual(t *testing.T) {
 
 	url := fmt.Sprintf("https://%s", s.Addr().String())
 
-	// Create a TLS Config which wil require verification of the server cert, and trusts the CA cert.
+	// Create a TLS Config which will require verification of the server cert, and trusts the CA cert.
 	tlsConfig := &tls.Config{InsecureSkipVerify: false}
 	tlsConfig.RootCAs = x509.NewCertPool()
 	ok := tlsConfig.RootCAs.AppendCertsFromPEM(caCertPEM)
