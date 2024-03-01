@@ -2681,7 +2681,7 @@ type mockLayer struct {
 func mustMockLayer(addr string) Layer {
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
-		panic("failed to create new listner")
+		panic("failed to create new listener")
 	}
 	return &mockLayer{ln}
 }
