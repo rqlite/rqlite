@@ -421,10 +421,20 @@ func removeAllPrefix(path, prefix string) error {
 	return nil
 }
 
+// metaPath returns the path to the meta file in the given directory.
+func metaPath(dir string) string {
+	return filepath.Join(dir, metaFileName)
+}
+
+// metaExists returns true if the meta file exists in the given directory.
+func metaExists(dir string) bool {
+	_, err := os.Stat(metaPath(dir))
+	return !os.IsNotExist(err)
+}
+
 // readMeta is used to read the meta data in a given snapshot directory.
 func readMeta(dir string) (*raft.SnapshotMeta, error) {
-	metaPath := filepath.Join(dir, metaFileName)
-	fh, err := os.Open(metaPath)
+	fh, err := os.Open(metaPath(dir))
 	if err != nil {
 		return nil, err
 	}
@@ -440,7 +450,7 @@ func readMeta(dir string) (*raft.SnapshotMeta, error) {
 
 // writeMeta is used to write the meta data in a given snapshot directory.
 func writeMeta(dir string, meta *raft.SnapshotMeta) error {
-	fh, err := os.Create(filepath.Join(dir, metaFileName))
+	fh, err := os.Create(metaPath(dir))
 	if err != nil {
 		return fmt.Errorf("error creating meta file: %v", err)
 	}
