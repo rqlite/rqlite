@@ -204,12 +204,7 @@ func (s *Sink) processSnapshotData() (retErr error) {
 			}
 		}
 	}
-	if err := syncDirMaybe(s.str.Dir()); err != nil {
-		return err
-	}
-
-	s.str.Reap()
-	return nil
+	return syncDirMaybe(s.str.Dir())
 }
 
 func (s *Sink) writeMeta(dir string) error {
