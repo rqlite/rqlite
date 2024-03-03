@@ -4,7 +4,7 @@
 - [PR #1709](https://github.com/rqlite/rqlite/pull/1709): Unit test SQLite keyword `STRICT`.
 - [PR #1710](https://github.com/rqlite/rqlite/pull/1710): Unit test querying a hex value. See issue [#1532](https://github.com/rqlite/rqlite/issues/1532).
 - [PR #1714](https://github.com/rqlite/rqlite/pull/1714): Don't double-reap Snapshots. Fixes issue [#1711](https://github.com/rqlite/rqlite/issues/1711).
-- [PR #1715](https://github.com/rqlite/rqlite/pull/1715): go mod updates.
+- [PR #1715](https://github.com/rqlite/rqlite/pull/1715): `go mod` updates.
 
 ## 8.22.1 (February 27th 2024)
 ### Implementation changes and bug fixes
