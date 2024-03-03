@@ -1,4 +1,4 @@
-## 8.22.2 (unreleased)
+## 8.22.2 (March 2nd 2024)
 ### Implementation changes and bug fixes
 - [PR #1708](https://github.com/rqlite/rqlite/pull/1708): Some more HTTP-level unit tests.
 - [PR #1709](https://github.com/rqlite/rqlite/pull/1709): Unit test SQLite keyword `STRICT`.
