@@ -2017,7 +2017,7 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	if err != nil {
 		return fmt.Errorf("error copying restore data: %v", err)
 	}
-	if tmpFile.Close(); err != nil {
+	if err := tmpFile.Close(); err != nil {
 		return fmt.Errorf("error creating temporary file for restore operation: %v", err)
 	}
 
