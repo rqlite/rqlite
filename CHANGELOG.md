@@ -1,3 +1,7 @@
+## 8.22.3 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1716](https://github.com/rqlite/rqlite/pull/1716): Miscellaneous code clean-ups.
+
 ## 8.22.2 (March 2nd 2024)
 ### Implementation changes and bug fixes
 - [PR #1708](https://github.com/rqlite/rqlite/pull/1708): Some more HTTP-level unit tests.
