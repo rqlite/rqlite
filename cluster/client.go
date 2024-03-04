@@ -1,7 +1,6 @@
 package cluster
 
 import (
-	"bytes"
 	"compress/gzip"
 	"crypto/tls"
 	"encoding/binary"
@@ -212,7 +211,7 @@ func (c *Client) Request(r *command.ExecuteQueryRequest, nodeAddr string, creds 
 
 // Backup retrieves a backup from a remote node and writes to the io.Writer
 func (c *Client) Backup(br *command.BackupRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration, w io.Writer) error {
-	conn, err := c.dial(nodeAddr, c.timeout)
+	conn, err := c.dial(nodeAddr)
 	if err != nil {
 		return err
 	}
@@ -292,7 +291,7 @@ func (c *Client) Load(lr *command.LoadRequest, nodeAddr string, creds *proto.Cre
 
 // RemoveNode removes a node from the cluster
 func (c *Client) RemoveNode(rn *command.RemoveNodeRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) error {
-	conn, err := c.dial(nodeAddr, c.timeout)
+	conn, err := c.dial(nodeAddr)
 	if err != nil {
 		return err
 	}
@@ -331,7 +330,7 @@ func (c *Client) RemoveNode(rn *command.RemoveNodeRequest, nodeAddr string, cred
 
 // Notify notifies a remote node that this node is ready to bootstrap.
 func (c *Client) Notify(nr *command.NotifyRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) error {
-	conn, err := c.dial(nodeAddr, c.timeout)
+	conn, err := c.dial(nodeAddr)
 	if err != nil {
 		return err
 	}
@@ -371,7 +370,7 @@ func (c *Client) Notify(nr *command.NotifyRequest, nodeAddr string, creds *proto
 // Join joins this node to a cluster at the remote address nodeAddr.
 func (c *Client) Join(jr *command.JoinRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration) error {
 	for {
-		conn, err := c.dial(nodeAddr, c.timeout)
+		conn, err := c.dial(nodeAddr)
 		if err != nil {
 			return err
 		}
@@ -443,7 +442,7 @@ func (c *Client) Stats() (map[string]interface{}, error) {
 	return stats, nil
 }
 
-func (c *Client) dial(nodeAddr string, timeout time.Duration) (net.Conn, error) {
+func (c *Client) dial(nodeAddr string) (net.Conn, error) {
 	var pl pool.Pool
 	var ok bool
 
@@ -492,7 +491,7 @@ func (c *Client) retry(command *proto.Command, nodeAddr string, timeout time.Dur
 	var nRetries int
 	for {
 		p, errOuter = func() ([]byte, error) {
-			conn, errInner := c.dial(nodeAddr, c.timeout)
+			conn, errInner := c.dial(nodeAddr)
 			if errInner != nil {
 				return nil, errInner
 			}
@@ -585,21 +584,4 @@ func handleConnError(conn net.Conn) {
 	if pc, ok := conn.(*pool.Conn); ok {
 		pc.MarkUnusable()
 	}
-}
-
-func gzUncompress(b []byte) ([]byte, error) {
-	gz, err := gzip.NewReader(bytes.NewReader(b))
-	if err != nil {
-		return nil, fmt.Errorf("unmarshal gzip NewReader: %w", err)
-	}
-
-	ub, err := io.ReadAll(gz)
-	if err != nil {
-		return nil, fmt.Errorf("unmarshal gzip ReadAll: %w", err)
-	}
-
-	if err := gz.Close(); err != nil {
-		return nil, fmt.Errorf("unmarshal gzip Close: %w", err)
-	}
-	return ub, nil
 }
