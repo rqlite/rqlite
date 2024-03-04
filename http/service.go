@@ -480,7 +480,7 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.handleLoad(w, r, params)
 	case r.URL.Path == "/boot":
 		stats.Add(numBoot, 1)
-		s.handleBoot(w, r, params)
+		s.handleBoot(w, r)
 	case strings.HasPrefix(r.URL.Path, "/remove"):
 		s.handleRemove(w, r, params)
 	case strings.HasPrefix(r.URL.Path, "/status"):
@@ -494,7 +494,7 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case r.URL.Path == "/debug/vars":
 		s.handleExpvar(w, r, params)
 	case strings.HasPrefix(r.URL.Path, "/debug/pprof"):
-		s.handlePprof(w, r, params)
+		s.handlePprof(w, r)
 	default:
 		w.WriteHeader(http.StatusNotFound)
 	}
@@ -745,11 +745,11 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 		}
 		resp.end = time.Now()
 	}
-	s.writeResponse(w, r, qp, resp)
+	s.writeResponse(w, qp, resp)
 }
 
 // handleBoot handles booting this node using a SQLite file.
-func (s *Service) handleBoot(w http.ResponseWriter, r *http.Request, qp QueryParams) {
+func (s *Service) handleBoot(w http.ResponseWriter, r *http.Request) {
 	if !s.CheckRequestPerm(r, auth.PermLoad) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
@@ -1102,7 +1102,7 @@ func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request, qp Query
 	}
 
 	resp.end = time.Now()
-	s.writeResponse(w, r, qp, resp)
+	s.writeResponse(w, qp, resp)
 }
 
 // execute handles queries that modify the database.
@@ -1179,7 +1179,7 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request, qp QueryParams
 		resp.Results.ExecuteResult = results
 	}
 	resp.end = time.Now()
-	s.writeResponse(w, r, qp, resp)
+	s.writeResponse(w, qp, resp)
 }
 
 // handleQuery handles queries that do not modify the database.
@@ -1270,7 +1270,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryPa
 		resp.Results.QueryRows = results
 	}
 	resp.end = time.Now()
-	s.writeResponse(w, r, qp, resp)
+	s.writeResponse(w, qp, resp)
 }
 
 func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request, qp QueryParams) {
@@ -1363,7 +1363,7 @@ func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request, qp Query
 		resp.Results.ExecuteQueryResponse = results
 	}
 	resp.end = time.Now()
-	s.writeResponse(w, r, qp, resp)
+	s.writeResponse(w, qp, resp)
 }
 
 // handleExpvar serves registered expvar information over HTTP.
@@ -1390,7 +1390,7 @@ func (s *Service) handleExpvar(w http.ResponseWriter, r *http.Request, qp QueryP
 }
 
 // handlePprof serves pprof information over HTTP.
-func (s *Service) handlePprof(w http.ResponseWriter, r *http.Request, qp QueryParams) {
+func (s *Service) handlePprof(w http.ResponseWriter, r *http.Request) {
 	if !s.CheckRequestPerm(r, auth.PermStatus) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
@@ -1631,7 +1631,7 @@ func (s *Service) tlsStats() map[string]interface{} {
 }
 
 // writeResponse writes the given response to the given writer.
-func (s *Service) writeResponse(w http.ResponseWriter, r *http.Request, qp QueryParams, j Responser) {
+func (s *Service) writeResponse(w http.ResponseWriter, qp QueryParams, j Responser) {
 	var b []byte
 	var err error
 	if qp.Timings() {
