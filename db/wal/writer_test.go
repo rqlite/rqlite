@@ -104,9 +104,9 @@ func Test_Writer_CompactingScanner(t *testing.T) {
 	mustCopyFile(destDB, srcDB)
 
 	writeRows := func(db *sql.DB, n int) {
-		// Write 1000 random rows to the src database, this data will appear in the WAL.
-		for i := 0; i < 1000; i++ {
-			mustExec(srcConn, fmt.Sprintf(`INSERT INTO foo (name) VALUES ('%s')`, random.String()))
+		// Write n random rows to the src database, this data will appear in the WAL.
+		for i := 0; i < n; i++ {
+			mustExec(db, fmt.Sprintf(`INSERT INTO foo (name) VALUES ('%s')`, random.String()))
 		}
 		mustExec(srcConn, "PRAGMA wal_checkpoint(FULL)")
 	}
@@ -138,7 +138,7 @@ func Test_Writer_CompactingScanner(t *testing.T) {
 	}
 
 	checkRowCount := func(dsn string, n int) {
-		db, err := sql.Open("sqlite3", destDSN)
+		db, err := sql.Open("sqlite3", dsn)
 		if err != nil {
 			t.Fatal(err)
 		}
