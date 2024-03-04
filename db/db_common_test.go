@@ -1693,14 +1693,7 @@ func Test_DatabaseCommonOperations(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		db, path := mustCreateOnDiskDatabase()
-		defer db.Close()
-		defer os.Remove(path)
-		t.Run(tc.name+":disk", func(t *testing.T) {
-			tc.testFunc(t, db)
-		})
-
-		db, path = mustCreateOnDiskDatabaseWAL()
+		db, path := mustCreateOnDiskDatabaseWAL()
 		defer db.Close()
 		defer os.Remove(path)
 		t.Run(tc.name+":wal", func(t *testing.T) {

@@ -395,7 +395,7 @@ func Test_DBVacuumInto(t *testing.T) {
 	}
 	_, err = Open(existPath, false, false)
 	if err == nil {
-		t.Fatalf("expected error opening database: %s", err.Error())
+		t.Fatalf("expected error opening database")
 	}
 }
 
@@ -633,7 +633,7 @@ func Test_CheckIntegrityOnDisk(t *testing.T) {
 	for _, check := range []bool{true, false} {
 		_, err := CheckIntegrity(path, check)
 		if err == nil {
-			t.Fatalf("succeeded checking integrity of database (full=%t): %s", check, err.Error())
+			t.Fatalf("succeeded checking integrity of database (full=%t)", check)
 		}
 	}
 	// Unable to create a data set that actually fails integrity check.

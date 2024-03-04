@@ -1938,7 +1938,6 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		stats.Add(numSnapshotsFull, 1)
 	} else {
 		compactedBuf := bytes.NewBuffer(nil)
-		var err error
 		if pathExistsWithData(s.walPath) {
 			compactStartTime := time.Now()
 			// Read a compacted version of the WAL into memory, and write it
@@ -1977,9 +1976,6 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			stats.Get(snapshotPrecompactWALSize).(*expvar.Int).Set(walSz)
 		}
 		fsmSnapshot = snapshot.NewSnapshot(io.NopCloser(compactedBuf))
-		if err != nil {
-			return nil, err
-		}
 		stats.Add(numSnapshotsIncremental, 1)
 	}
 
@@ -2021,7 +2017,7 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	if err != nil {
 		return fmt.Errorf("error copying restore data: %v", err)
 	}
-	if tmpFile.Close(); err != nil {
+	if err := tmpFile.Close(); err != nil {
 		return fmt.Errorf("error creating temporary file for restore operation: %v", err)
 	}
 

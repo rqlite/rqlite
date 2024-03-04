@@ -5,7 +5,6 @@ import (
 	"expvar"
 	"fmt"
 	"io"
-	"os"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -358,16 +357,4 @@ func (mp *mockDataProvider) Provide(w io.Writer) error {
 		return err
 	}
 	return nil
-}
-
-func mustWriteToFile(s string) string {
-	f, err := os.CreateTemp("", "rqlite-auto-backup-test")
-	if err != nil {
-		panic(err)
-	}
-	defer f.Close()
-	if err := os.WriteFile(f.Name(), []byte(s), 0644); err != nil {
-		panic(err)
-	}
-	return f.Name()
 }
