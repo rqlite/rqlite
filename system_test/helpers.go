@@ -903,7 +903,7 @@ func mustCreateTLSConfig(certFile, keyFile, caCertFile string) *tls.Config {
 		config.RootCAs = x509.NewCertPool()
 		ok := config.RootCAs.AppendCertsFromPEM(asn1Data)
 		if !ok {
-			panic(err.Error())
+			panic("failed to append certs")
 		}
 	}
 
