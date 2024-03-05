@@ -302,8 +302,7 @@ type Store struct {
 	firstLogAppliedT time.Time // Time first log is applied
 	openT            time.Time // Timestamp when Store opens.
 
-	logger         *log.Logger
-	logIncremental bool
+	logger *log.Logger
 
 	notifyMu        sync.Mutex
 	BootstrapExpect int
@@ -467,6 +466,7 @@ func (s *Store) Open() (retErr error) {
 	if err != nil {
 		return fmt.Errorf("failed to create snapshot store: %s", err)
 	}
+	snapshotStore.LogReaping = s.hcLogLevel() < hclog.Warn
 	s.snapshotStore = snapshotStore
 	snaps, err := s.snapshotStore.List()
 	if err != nil {
@@ -1796,8 +1796,7 @@ func (s *Store) raftConfig() *raft.Config {
 	}
 	opts := hclog.DefaultOptions
 	opts.Name = ""
-	opts.Level = hclog.LevelFromString(s.RaftLogLevel)
-	s.logIncremental = opts.Level < hclog.Warn
+	opts.Level = s.hcLogLevel()
 	config.Logger = hclog.FromStandardLogger(log.New(os.Stderr, "[raft] ", log.LstdFlags), opts)
 	return config
 }
@@ -1985,7 +1984,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	fs := FSMSnapshot{
 		FSMSnapshot: fsmSnapshot,
 	}
-	if fullNeeded || s.logIncremental {
+	if fullNeeded || s.logIncremental() {
 		s.logger.Printf("%s snapshot created in %s on node ID %s", fPLog, dur, s.raftID)
 		fs.logger = s.logger
 	}
@@ -2286,6 +2285,14 @@ func (s *Store) autoVacNeeded(t time.Time) (bool, error) {
 		return false, err
 	}
 	return t.Sub(bt) > s.AutoVacInterval, nil
+}
+
+func (s *Store) hcLogLevel() hclog.Level {
+	return hclog.LevelFromString(s.RaftLogLevel)
+}
+
+func (s *Store) logIncremental() bool {
+	return s.hcLogLevel() < hclog.Warn
 }
 
 // createOnDisk opens an on-disk database file at the configured path. Any

@@ -77,6 +77,7 @@ type Store struct {
 	sinkMu         sync.Mutex
 	logger         *log.Logger
 
+	LogReaping   bool
 	reapDisabled bool // For testing purposes
 }
 
@@ -231,6 +232,9 @@ func (s *Store) Reap() (retN int, retErr error) {
 	for _, snap := range snapshots[:len(snapshots)-1] {
 		if err := removeAllPrefix(s.dir, snap.ID); err != nil {
 			return n, err
+		}
+		if s.LogReaping {
+			s.logger.Printf("reaped snapshot %s", snap.ID)
 		}
 		n++
 	}
