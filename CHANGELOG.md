@@ -1,6 +1,7 @@
 ## 8.22.3 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #1716](https://github.com/rqlite/rqlite/pull/1716): Miscellaneous code clean-ups.
+- [PR #1718](https://github.com/rqlite/rqlite/pull/1718): Support INFO-level logging of Snapshot reaping.
 
 ## 8.22.2 (March 2nd 2024)
 ### Implementation changes and bug fixes
