@@ -1796,7 +1796,7 @@ func (s *Store) raftConfig() *raft.Config {
 	}
 	opts := hclog.DefaultOptions
 	opts.Name = ""
-	opts.Level = hclog.LevelFromString(s.RaftLogLevel)
+	opts.Level = s.hcLogLevel()
 	config.Logger = hclog.FromStandardLogger(log.New(os.Stderr, "[raft] ", log.LstdFlags), opts)
 	return config
 }
