@@ -490,6 +490,18 @@ func openCloseDB(path string) error {
 	return d.Close()
 }
 
+type cmpSnapshotMeta raft.SnapshotMeta
+
+func (c *cmpSnapshotMeta) Less(other *cmpSnapshotMeta) bool {
+	if c.Term != other.Term {
+		return c.Term < other.Term
+	}
+	if c.Index != other.Index {
+		return c.Index < other.Index
+	}
+	return c.ID < other.ID
+}
+
 type snapMetaSlice []*raft.SnapshotMeta
 
 // Implement the sort interface for []*fileSnapshotMeta.
@@ -498,13 +510,9 @@ func (s snapMetaSlice) Len() int {
 }
 
 func (s snapMetaSlice) Less(i, j int) bool {
-	if s[i].Term != s[j].Term {
-		return s[i].Term < s[j].Term
-	}
-	if s[i].Index != s[j].Index {
-		return s[i].Index < s[j].Index
-	}
-	return s[i].ID < s[j].ID
+	si := (*cmpSnapshotMeta)(s[i])
+	sj := (*cmpSnapshotMeta)(s[j])
+	return si.Less(sj)
 }
 
 func (s snapMetaSlice) Swap(i, j int) {
