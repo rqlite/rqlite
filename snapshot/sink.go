@@ -134,9 +134,19 @@ func (s *Sink) processSnapshotData() (retErr error) {
 		return err
 	}
 
-	if len(snapshots) == 0 && !db.IsValidSQLiteFile(s.dataFD.Name()) {
-		// We have no snapshots yet, so the incoming data must be a valid SQLite file.
-		return fmt.Errorf("data for first snapshot must be a valid SQLite file")
+	if len(snapshots) == 0 {
+		if !db.IsValidSQLiteFile(s.dataFD.Name()) {
+			// We have no snapshots yet, so the incoming data must be a valid SQLite file.
+			return fmt.Errorf("data for first snapshot must be a valid SQLite file")
+		}
+	} else if len(snapshots) > 0 {
+		// Confirm that existing snapshot is "less" than the incoming snapshot -- in other
+		// words that it is from a point earlier in life of the Raft log.
+		cmpSnapPrev := (*cmpSnapshotMeta)(snapshots[len(snapshots)-1])
+		cmpSnapNew := (*cmpSnapshotMeta)(s.meta)
+		if !cmpSnapPrev.Less(cmpSnapNew) {
+			return fmt.Errorf("incoming snapshot is not later than most recent existing snapshot")
+		}
 	}
 
 	dataSz, err := fileSize(s.dataFD.Name())
