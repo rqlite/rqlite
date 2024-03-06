@@ -145,7 +145,8 @@ func (s *Sink) processSnapshotData() (retErr error) {
 		cmpSnapPrev := (*cmpSnapshotMeta)(snapshots[len(snapshots)-1])
 		cmpSnapNew := (*cmpSnapshotMeta)(s.meta)
 		if !cmpSnapPrev.Less(cmpSnapNew) {
-			return fmt.Errorf("incoming snapshot is not later than most recent existing snapshot")
+			return fmt.Errorf("incoming snapshot %s is not later than most recent existing snapshot %s",
+				cmpSnapNew.ID, cmpSnapPrev.ID)
 		}
 	}
 
