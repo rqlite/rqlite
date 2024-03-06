@@ -199,7 +199,7 @@ func RecoverNode(dataDir string, logger *log.Logger, logs raft.LogStore, stable 
 	if err = sink.Close(); err != nil {
 		return fmt.Errorf("failed to finalize snapshot: %v", err)
 	}
-	logger.Printf("recovery snapshot created successfully using %s", tmpDBPath)
+	logger.Printf("recovery snapshot %s created successfully using %s", sink.ID(), tmpDBPath)
 
 	// Compact the log so that we don't get bad interference from any
 	// configuration change log entries that might be there.
