@@ -165,7 +165,8 @@ func RecoverNode(dataDir string, logger *log.Logger, logs raft.LogStore, stable 
 	if err != nil {
 		return fmt.Errorf("failed to find last log: %v", err)
 	}
-	logger.Printf("last index is %d, last index written to log is %d", lastIndex, lastLogIndex)
+	logger.Printf("last index is %d, last index written to log is %d, last term is %d",
+		lastIndex, lastLogIndex, lastTerm)
 
 	for index := snapshotIndex + 1; index <= lastLogIndex; index++ {
 		var entry raft.Log
