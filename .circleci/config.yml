@@ -5,7 +5,7 @@ version: 2.1
 parameters:
   primary_image:
     type: string
-    default: 'rqlite/circleci-primary:0.0.5'
+    default: 'rqlite/circleci-primary:0.0.6'
 
 commands: # a reusable command with parameters
   restore_and_save_cache:
