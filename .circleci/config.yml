@@ -30,6 +30,7 @@ commands: # a reusable command with parameters
         default: ""
         type: string
     steps:
+      - run: go version
       - run:
           name: "Cross compile using <<parameters.cc>>"
           command: go install -a -tags sqlite_omit_load_extension ./...
