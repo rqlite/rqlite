@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -597,11 +598,7 @@ func Test_BackupFlagsNoLeaderRemoteFetch(t *testing.T) {
 		t.Fatalf("failed to get expected StatusOK for remote backup fetch, got %d", resp.StatusCode)
 	}
 	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("failed to read response body: %s", err.Error())
-	}
-	if exp, got := backupData, string(body); exp != got {
+	if exp, got := backupData, mustReadBody(t, resp); exp != got {
 		t.Fatalf("received incorrect backup data, exp: %s, got: %s", exp, got)
 	}
 }
@@ -687,11 +684,7 @@ func Test_LoadOK(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("failed to get expected StatusOK for load, got %d", resp.StatusCode)
 	}
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("failed to read response body: %s", err.Error())
-	}
-	if exp, got := `{"results":[]}`, string(body); exp != got {
+	if exp, got := `{"results":[]}`, mustReadBody(t, resp); exp != got {
 		t.Fatalf("incorrect response body, exp: %s, got %s", exp, got)
 	}
 }
@@ -744,11 +737,7 @@ func Test_LoadFlagsNoLeader(t *testing.T) {
 		t.Fatalf("cluster load was not called")
 	}
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("failed to read response body: %s", err.Error())
-	}
-	if exp, got := `{"results":[]}`, string(body); exp != got {
+	if exp, got := `{"results":[]}`, mustReadBody(t, resp); exp != got {
 		t.Fatalf("incorrect response body, exp: %s, got %s", exp, got)
 	}
 }
@@ -797,11 +786,7 @@ func Test_LoadRemoteError(t *testing.T) {
 		t.Fatalf("cluster load was not called")
 	}
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("failed to read response body: %s", err.Error())
-	}
-	if exp, got := "the load failed\n", string(body); exp != got {
+	if exp, got := "the load failed\n", mustReadBody(t, resp); exp != got {
 		t.Fatalf(`incorrect response body, exp: "%s", got: "%s"`, exp, got)
 	}
 }
@@ -1039,21 +1024,84 @@ func Test_Readyz(t *testing.T) {
 	host := fmt.Sprintf("http://%s", s.Addr().String())
 	resp, err := client.Get(host + "/readyz")
 	if err != nil {
-		t.Fatalf("failed to make nodes request")
+		t.Fatalf("failed to make readyz request")
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("failed to get expected StatusOK for nodes, got %d", resp.StatusCode)
+		t.Fatalf("failed to get expected StatusOK for node, got %d", resp.StatusCode)
+	}
+	if exp, got := "[+]node ok\n[+]leader ok\n[+]store ok", mustReadBody(t, resp); exp != got {
+		t.Fatalf("incorrect response body, exp: %s, got: %s", exp, got)
+	}
+
+	resp, err = client.Get(host + "/readyz?noleader")
+	if err != nil {
+		t.Fatalf("failed to make readyz request")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("failed to get expected StatusOK, got %d", resp.StatusCode)
+	}
+	if exp, got := "[+]node ok", mustReadBody(t, resp); exp != got {
+		t.Fatalf("incorrect response body, exp: %s, got: %s", exp, got)
 	}
 
 	m.notReady = true
+	m.committedFn = func(timeout time.Duration) (uint64, error) {
+		t.Fatal("committedFn should not have been called")
+		return 0, nil
+	}
 	resp, err = client.Get(host + "/readyz")
 	if err != nil {
-		t.Fatalf("failed to make nodes request")
+		t.Fatalf("failed to make readyz request")
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusServiceUnavailable {
-		t.Fatalf("failed to get expected StatusServiceUnavailable for nodes, got %d", resp.StatusCode)
+		t.Fatalf("failed to get expected StatusServiceUnavailable, got %d", resp.StatusCode)
+	}
+	if exp, got := "[+]node ok\n[+]leader ok\n[+]store not ready", mustReadBody(t, resp); exp != got {
+		t.Fatalf("incorrect response body, exp: %s, got: %s", exp, got)
 	}
 
+	cnt := &atomic.Uint32{}
+	m.notReady = false
+	m.committedFn = func(timeout time.Duration) (uint64, error) {
+		cnt.Store(1)
+		return 0, fmt.Errorf("timeout")
+	}
+	resp, err = client.Get(host + "/readyz?sync")
+	if err != nil {
+		t.Fatalf("failed to make readyz request with sync set")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("failed to get expected StatusServiceUnavailable, got %d", resp.StatusCode)
+	}
+	if exp, got := "[+]node ok\n[+]leader ok\n[+]store ok\n[+]sync timeout", mustReadBody(t, resp); exp != got {
+		t.Fatalf("incorrect response body, exp: %s, got: %s", exp, got)
+	}
+	if cnt.Load() != 1 {
+		t.Fatalf("failed to call committedFn")
+	}
+	m.notReady = false
+	m.committedFn = func(timeout time.Duration) (uint64, error) {
+		cnt.Store(2)
+		return 0, nil
+	}
+	resp, err = client.Get(host + "/readyz?sync")
+	if err != nil {
+		t.Fatalf("failed to make readyz request with sync set")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("failed to get expected StatusOK, got %d", resp.StatusCode)
+	}
+	if exp, got := "[+]node ok\n[+]leader ok\n[+]store ok\n[+]sync ok", mustReadBody(t, resp); exp != got {
+		t.Fatalf("incorrect response body, exp: %s, got: %s", exp, got)
+	}
+	if cnt.Load() != 2 {
+		t.Fatalf("failed to call committedFn")
+	}
 }
 
 func Test_ForwardingRedirectQuery(t *testing.T) {
@@ -1368,14 +1416,15 @@ func Test_DBTimeoutQueryParam(t *testing.T) {
 }
 
 type MockStore struct {
-	executeFn  func(er *command.ExecuteRequest) ([]*command.ExecuteResult, error)
-	queryFn    func(qr *command.QueryRequest) ([]*command.QueryRows, error)
-	requestFn  func(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, error)
-	backupFn   func(br *command.BackupRequest, dst io.Writer) error
-	loadFn     func(lr *command.LoadRequest) error
-	readFromFn func(r io.Reader) (int64, error)
-	leaderAddr string
-	notReady   bool // Default value is true, easier to test.
+	executeFn   func(er *command.ExecuteRequest) ([]*command.ExecuteResult, error)
+	queryFn     func(qr *command.QueryRequest) ([]*command.QueryRows, error)
+	requestFn   func(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, error)
+	backupFn    func(br *command.BackupRequest, dst io.Writer) error
+	loadFn      func(lr *command.LoadRequest) error
+	readFromFn  func(r io.Reader) (int64, error)
+	committedFn func(timeout time.Duration) (uint64, error)
+	leaderAddr  string
+	notReady    bool // Default value is true, easier to test.
 }
 
 func (m *MockStore) Execute(er *command.ExecuteRequest) ([]*command.ExecuteResult, error) {
@@ -1417,6 +1466,13 @@ func (m *MockStore) LeaderAddr() (string, error) {
 
 func (m *MockStore) Ready() bool {
 	return !m.notReady
+}
+
+func (m *MockStore) Committed(timeout time.Duration) (uint64, error) {
+	if m.committedFn != nil {
+		return m.committedFn(timeout)
+	}
+	return 0, nil
 }
 
 func (m *MockStore) Stats() (map[string]interface{}, error) {
@@ -1561,4 +1617,13 @@ func mustGetQueryParams(req *http.Request) QueryParams {
 		panic("failed to get query params")
 	}
 	return qp
+}
+
+func mustReadBody(t *testing.T, resp *http.Response) string {
+	t.Helper()
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("failed to read response body: %s", err)
+	}
+	return string(b)
 }

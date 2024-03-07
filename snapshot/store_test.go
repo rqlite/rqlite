@@ -69,9 +69,9 @@ func Test_StoreEmpty(t *testing.T) {
 		t.Errorf("Expected full snapshot needed, but it is not")
 	}
 
-	_, _, err = store.Open("non-existent")
+	_, _, err = store.Open("nonexistent")
 	if err == nil {
-		t.Fatalf("Expected error opening non-existent snapshot, got nil")
+		t.Fatalf("Expected error opening nonexistent snapshot, got nil")
 	}
 
 	n, err := store.Reap()

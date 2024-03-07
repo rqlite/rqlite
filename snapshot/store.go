@@ -77,6 +77,7 @@ type Store struct {
 	sinkMu         sync.Mutex
 	logger         *log.Logger
 
+	LogReaping   bool
 	reapDisabled bool // For testing purposes
 }
 
@@ -231,6 +232,9 @@ func (s *Store) Reap() (retN int, retErr error) {
 	for _, snap := range snapshots[:len(snapshots)-1] {
 		if err := removeAllPrefix(s.dir, snap.ID); err != nil {
 			return n, err
+		}
+		if s.LogReaping {
+			s.logger.Printf("reaped snapshot %s", snap.ID)
 		}
 		n++
 	}
@@ -399,7 +403,7 @@ func syncDirParentMaybe(dir string) error {
 	return syncDir(parentDir(dir))
 }
 
-// syncDirParentMaybe syncsthe given directory, but only on non-Windows platforms.
+// syncDirParentMaybe syncs the given directory, but only on non-Windows platforms.
 func syncDirMaybe(dir string) error {
 	if runtime.GOOS == "windows" {
 		return nil
@@ -421,10 +425,20 @@ func removeAllPrefix(path, prefix string) error {
 	return nil
 }
 
+// metaPath returns the path to the meta file in the given directory.
+func metaPath(dir string) string {
+	return filepath.Join(dir, metaFileName)
+}
+
+// metaExists returns true if the meta file exists in the given directory.
+func metaExists(dir string) bool {
+	_, err := os.Stat(metaPath(dir))
+	return !os.IsNotExist(err)
+}
+
 // readMeta is used to read the meta data in a given snapshot directory.
 func readMeta(dir string) (*raft.SnapshotMeta, error) {
-	metaPath := filepath.Join(dir, metaFileName)
-	fh, err := os.Open(metaPath)
+	fh, err := os.Open(metaPath(dir))
 	if err != nil {
 		return nil, err
 	}
@@ -440,7 +454,7 @@ func readMeta(dir string) (*raft.SnapshotMeta, error) {
 
 // writeMeta is used to write the meta data in a given snapshot directory.
 func writeMeta(dir string, meta *raft.SnapshotMeta) error {
-	fh, err := os.Create(filepath.Join(dir, metaFileName))
+	fh, err := os.Create(metaPath(dir))
 	if err != nil {
 		return fmt.Errorf("error creating meta file: %v", err)
 	}
@@ -476,6 +490,18 @@ func openCloseDB(path string) error {
 	return d.Close()
 }
 
+type cmpSnapshotMeta raft.SnapshotMeta
+
+func (c *cmpSnapshotMeta) Less(other *cmpSnapshotMeta) bool {
+	if c.Term != other.Term {
+		return c.Term < other.Term
+	}
+	if c.Index != other.Index {
+		return c.Index < other.Index
+	}
+	return c.ID < other.ID
+}
+
 type snapMetaSlice []*raft.SnapshotMeta
 
 // Implement the sort interface for []*fileSnapshotMeta.
@@ -484,13 +510,9 @@ func (s snapMetaSlice) Len() int {
 }
 
 func (s snapMetaSlice) Less(i, j int) bool {
-	if s[i].Term != s[j].Term {
-		return s[i].Term < s[j].Term
-	}
-	if s[i].Index != s[j].Index {
-		return s[i].Index < s[j].Index
-	}
-	return s[i].ID < s[j].ID
+	si := (*cmpSnapshotMeta)(s[i])
+	sj := (*cmpSnapshotMeta)(s[j])
+	return si.Less(sj)
 }
 
 func (s snapMetaSlice) Swap(i, j int) {

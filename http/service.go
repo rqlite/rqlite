@@ -76,6 +76,10 @@ type Store interface {
 	// Ready returns whether the Store is ready to service requests.
 	Ready() bool
 
+	// Committed blocks until the local commit index is greater than or
+	// equal to the Leader index, as checked when the function is called.
+	Committed(timeout time.Duration) (uint64, error)
+
 	// Stats returns stats on the Store.
 	Stats() (map[string]interface{}, error)
 
@@ -142,6 +146,7 @@ type DBResults struct {
 	ExecuteQueryResponse []*proto.ExecuteQueryResponse
 
 	AssociativeJSON bool // Render in associative form
+	BlobsAsArrays   bool // Render BLOB data as byte arrays
 }
 
 // Responser is the interface response objects must implement.
@@ -152,7 +157,8 @@ type Responser interface {
 // MarshalJSON implements the JSON Marshaler interface.
 func (d *DBResults) MarshalJSON() ([]byte, error) {
 	enc := encoding.Encoder{
-		Associative: d.AssociativeJSON,
+		Associative:       d.AssociativeJSON,
+		BlobsAsByteArrays: d.BlobsAsArrays,
 	}
 
 	if d.ExecuteResult != nil {
@@ -474,7 +480,7 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.handleLoad(w, r, params)
 	case r.URL.Path == "/boot":
 		stats.Add(numBoot, 1)
-		s.handleBoot(w, r, params)
+		s.handleBoot(w, r)
 	case strings.HasPrefix(r.URL.Path, "/remove"):
 		s.handleRemove(w, r, params)
 	case strings.HasPrefix(r.URL.Path, "/status"):
@@ -488,7 +494,7 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case r.URL.Path == "/debug/vars":
 		s.handleExpvar(w, r, params)
 	case strings.HasPrefix(r.URL.Path, "/debug/pprof"):
-		s.handlePprof(w, r, params)
+		s.handlePprof(w, r)
 	default:
 		w.WriteHeader(http.StatusNotFound)
 	}
@@ -739,11 +745,11 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 		}
 		resp.end = time.Now()
 	}
-	s.writeResponse(w, r, qp, resp)
+	s.writeResponse(w, qp, resp)
 }
 
 // handleBoot handles booting this node using a SQLite file.
-func (s *Service) handleBoot(w http.ResponseWriter, r *http.Request, qp QueryParams) {
+func (s *Service) handleBoot(w http.ResponseWriter, r *http.Request) {
 	if !s.CheckRequestPerm(r, auth.PermLoad) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
@@ -1003,8 +1009,17 @@ func (s *Service) handleReadyz(w http.ResponseWriter, r *http.Request, qp QueryP
 		return
 	}
 
+	okMsg := "[+]node ok\n[+]leader ok\n[+]store ok"
+	if qp.Sync() {
+		if _, err := s.store.Committed(qp.Timeout(defaultTimeout)); err != nil {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			w.Write([]byte(fmt.Sprintf("[+]node ok\n[+]leader ok\n[+]store ok\n[+]sync %s", err.Error())))
+			return
+		}
+		okMsg += "\n[+]sync ok"
+	}
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("[+]node ok\n[+]leader ok\n[+]store ok"))
+	w.Write([]byte(okMsg))
 }
 
 func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request, qp QueryParams) {
@@ -1087,7 +1102,7 @@ func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request, qp Query
 	}
 
 	resp.end = time.Now()
-	s.writeResponse(w, r, qp, resp)
+	s.writeResponse(w, qp, resp)
 }
 
 // execute handles queries that modify the database.
@@ -1164,7 +1179,7 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request, qp QueryParams
 		resp.Results.ExecuteResult = results
 	}
 	resp.end = time.Now()
-	s.writeResponse(w, r, qp, resp)
+	s.writeResponse(w, qp, resp)
 }
 
 // handleQuery handles queries that do not modify the database.
@@ -1200,6 +1215,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryPa
 
 	resp := NewResponse()
 	resp.Results.AssociativeJSON = qp.Associative()
+	resp.Results.BlobsAsArrays = qp.BlobArray()
 
 	qr := &proto.QueryRequest{
 		Request: &proto.Request{
@@ -1207,9 +1223,10 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryPa
 			DbTimeout:   int64(qp.DBTimeout(0)),
 			Statements:  queries,
 		},
-		Timings:   qp.Timings(),
-		Level:     qp.Level(),
-		Freshness: qp.Freshness().Nanoseconds(),
+		Timings:         qp.Timings(),
+		Level:           qp.Level(),
+		Freshness:       qp.Freshness().Nanoseconds(),
+		FreshnessStrict: qp.FreshnessStrict(),
 	}
 
 	results, resultsErr := s.store.Query(qr)
@@ -1253,7 +1270,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryPa
 		resp.Results.QueryRows = results
 	}
 	resp.end = time.Now()
-	s.writeResponse(w, r, qp, resp)
+	s.writeResponse(w, qp, resp)
 }
 
 func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request, qp QueryParams) {
@@ -1290,6 +1307,7 @@ func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request, qp Query
 
 	resp := NewResponse()
 	resp.Results.AssociativeJSON = qp.Associative()
+	resp.Results.BlobsAsArrays = qp.BlobArray()
 
 	eqr := &proto.ExecuteQueryRequest{
 		Request: &proto.Request{
@@ -1297,9 +1315,10 @@ func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request, qp Query
 			Statements:  stmts,
 			DbTimeout:   int64(qp.DBTimeout(0)),
 		},
-		Timings:   qp.Timings(),
-		Level:     qp.Level(),
-		Freshness: qp.Freshness().Nanoseconds(),
+		Timings:         qp.Timings(),
+		Level:           qp.Level(),
+		Freshness:       qp.Freshness().Nanoseconds(),
+		FreshnessStrict: qp.FreshnessStrict(),
 	}
 
 	results, resultsErr := s.store.Request(eqr)
@@ -1344,7 +1363,7 @@ func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request, qp Query
 		resp.Results.ExecuteQueryResponse = results
 	}
 	resp.end = time.Now()
-	s.writeResponse(w, r, qp, resp)
+	s.writeResponse(w, qp, resp)
 }
 
 // handleExpvar serves registered expvar information over HTTP.
@@ -1371,7 +1390,7 @@ func (s *Service) handleExpvar(w http.ResponseWriter, r *http.Request, qp QueryP
 }
 
 // handlePprof serves pprof information over HTTP.
-func (s *Service) handlePprof(w http.ResponseWriter, r *http.Request, qp QueryParams) {
+func (s *Service) handlePprof(w http.ResponseWriter, r *http.Request) {
 	if !s.CheckRequestPerm(r, auth.PermStatus) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
@@ -1450,7 +1469,7 @@ func (s *Service) CheckRequestPerm(r *http.Request, perm string) (b bool) {
 	return s.credentialStore.AA(username, password, perm)
 }
 
-// CheckRequestPermAll checksif the request is authenticated and authorized
+// CheckRequestPermAll checks if the request is authenticated and authorized
 // with all the given Perms.
 func (s *Service) CheckRequestPermAll(r *http.Request, perms ...string) (b bool) {
 	defer func() {
@@ -1612,7 +1631,7 @@ func (s *Service) tlsStats() map[string]interface{} {
 }
 
 // writeResponse writes the given response to the given writer.
-func (s *Service) writeResponse(w http.ResponseWriter, r *http.Request, qp QueryParams, j Responser) {
+func (s *Service) writeResponse(w http.ResponseWriter, qp QueryParams, j Responser) {
 	var b []byte
 	var err error
 	if qp.Timings() {

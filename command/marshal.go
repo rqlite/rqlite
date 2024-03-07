@@ -172,7 +172,7 @@ func UnmarshalLoadChunkRequest(b []byte, lr *proto.LoadChunkRequest) error {
 	return pb.Unmarshal(b, lr)
 }
 
-// UnmarshalSubCommand unmarshalls a sub command m. It assumes that
+// UnmarshalSubCommand unmarshals a sub command m. It assumes that
 // m is the correct type.
 func UnmarshalSubCommand(c *proto.Command, m pb.Message) error {
 	b := c.SubCommand

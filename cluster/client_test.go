@@ -35,7 +35,7 @@ func Test_ClientGetNodeAPIAddr(t *testing.T) {
 		if c.Type != proto.Command_COMMAND_TYPE_GET_NODE_API_URL {
 			t.Fatalf("unexpected command type: %d", c.Type)
 		}
-		p, err = pb.Marshal(&proto.Address{
+		p, err = pb.Marshal(&proto.NodeMeta{
 			Url: "http://localhost:1234",
 		})
 		if err != nil {

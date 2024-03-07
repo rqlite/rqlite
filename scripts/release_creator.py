@@ -39,7 +39,8 @@ cd rqlite-{release}-linux-amd64
 ```
 
 ### macOS
-```homebrew rqlite```
+Install via [Homebrew](https://formulae.brew.sh/formula/rqlite).
+```brew install rqlite```
 
 ### Windows
 rqlite can be built for Windows, and Windows compatibility is ensured via [AppVeyor](https://www.appveyor.com/). However you may need to build a specific release yourself, though the top-of-tree build [is available for download](https://ci.appveyor.com/api/projects/otoolep/rqlite/artifacts/rqlite-latest-win64.zip?branch=master) from AppVeyor. Check out the [CI build for Windows](https://ci.appveyor.com/project/otoolep/rqlite) for more details.

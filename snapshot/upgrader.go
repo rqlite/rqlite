@@ -18,7 +18,7 @@ const (
 	v7StateFile = "state.bin"
 )
 
-// Upgrade writes a copy of the 7.x-format Snapshot dircectory at 'old' to a
+// Upgrade writes a copy of the 7.x-format Snapshot directory at 'old' to a
 // new Snapshot directory at 'new'. If the upgrade is successful, the
 // 'old' directory is removed before the function returns.
 func Upgrade(old, new string, logger *log.Logger) (retErr error) {
@@ -91,7 +91,7 @@ func Upgrade(old, new string, logger *log.Logger) (retErr error) {
 
 	// Ensure all file handles are closed before any directory is renamed or removed.
 	if err := func() error {
-		// Write SQLite database file into new snapshto dir.
+		// Write SQLite database file into new snapshot dir.
 		newSqlitePath := filepath.Join(newTmpDir, oldMeta.ID+".db")
 		newSqliteFd, err := os.Create(newSqlitePath)
 		if err != nil {

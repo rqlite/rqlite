@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-func Test_NewServce(t *testing.T) {
+func Test_NewService(t *testing.T) {
 	s := NewService(&mockClient{}, &mockStore{}, Voter)
 	if s == nil {
 		t.Fatalf("service is nil")

@@ -23,7 +23,7 @@ func Size() int {
 	return maxSize
 }
 
-// Dedupe returns a copy of the slice with contigous dupes removed.
+// Dedupe returns a copy of the slice with contiguous dupes removed.
 func Dedupe(s []string) []string {
 	if s == nil {
 		return nil

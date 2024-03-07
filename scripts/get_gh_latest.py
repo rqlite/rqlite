@@ -25,5 +25,5 @@ def get_latest_issue_pr_numbers(owner, repo):
 # Example usage
 lm = get_latest_issue_pr_numbers('rqlite', 'rqlite')
 
-print("Most recent index: %d, next index will be: %d" % (lm, lm+1))
+print(lm+1)
 

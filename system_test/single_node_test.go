@@ -338,6 +338,39 @@ func Test_SingleNodeConcurrentRequestsCompressed(t *testing.T) {
 	}
 }
 
+func Test_SingleNodeBlob(t *testing.T) {
+	node := mustNewLeaderNode("leader1")
+	defer node.Deprovision()
+
+	_, err := node.Execute(`CREATE TABLE foo (id integer not null primary key, data blob)`)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	_, err = node.Execute(`INSERT INTO foo(data) VALUES("fiona")`)
+	if err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+	_, err = node.Execute(`INSERT INTO foo(data) VALUES(x'deadbeef')`)
+	if err != nil {
+		t.Fatalf("failed to insert record: %s", err.Error())
+	}
+
+	r, err := node.Query("SELECT data FROM foo")
+	if err != nil {
+		t.Fatalf("failed to query records: %s", err.Error())
+	}
+	if r != `{"results":[{"columns":["data"],"types":["blob"],"values":[["fiona"],["3q2+7w=="]]}]}` {
+		t.Fatalf("test received wrong result got %s", r)
+	}
+	r, err = node.QueryWithBlobArray("SELECT data FROM foo")
+	if err != nil {
+		t.Fatalf("failed to query records: %s", err.Error())
+	}
+	if r != `{"results":[{"columns":["data"],"types":["blob"],"values":[["fiona"],[[222,173,190,239]]]}]}` {
+		t.Fatalf("test received wrong result got %s", r)
+	}
+}
+
 func Test_SingleNodeParameterized(t *testing.T) {
 	node := mustNewLeaderNode("leader1")
 	defer node.Deprovision()

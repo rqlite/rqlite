@@ -9,6 +9,107 @@ import (
 	"github.com/rqlite/rqlite/v8/command/proto"
 )
 
+func Test_IsStaleRead(t *testing.T) {
+	tests := []struct {
+		Name               string
+		LeaderLastContact  time.Time
+		LastFSMUpdateTime  time.Time
+		LastAppendedAtTime time.Time
+		FSMIndex           uint64
+		CommitIndex        uint64
+		Freshness          time.Duration
+		Strict             bool
+		Exp                bool
+	}{
+		{
+			Name:      "no freshness set",
+			Freshness: 0,
+			Exp:       false,
+		},
+		{
+			Name:              "no freshness set, but clearly unfresh connection",
+			LeaderLastContact: time.Now().Add(-1000 * time.Hour),
+			Freshness:         0,
+			Exp:               false,
+		},
+		{
+			Name:              "freshness set, but not exceeded",
+			LeaderLastContact: time.Now().Add(10 * time.Second),
+			Freshness:         time.Minute,
+			Exp:               false,
+		},
+		{
+			Name:              "freshness set and exceeded",
+			LeaderLastContact: time.Now().Add(-10 * time.Second),
+			Freshness:         time.Second,
+			Exp:               true,
+		},
+		{
+			Name:              "freshness set and ok, strict is set, but no appended time",
+			LeaderLastContact: time.Now(),
+			Freshness:         10 * time.Second,
+			Strict:            true,
+			Exp:               false,
+		},
+		{
+			Name:               "freshness set, is ok, strict is set, appended time exceeds, but applied index is up-to-date",
+			LeaderLastContact:  time.Now(),
+			LastFSMUpdateTime:  time.Now(),
+			LastAppendedAtTime: time.Now().Add(-30 * time.Second),
+			FSMIndex:           10,
+			CommitIndex:        10,
+			Freshness:          10 * time.Second,
+			Strict:             true,
+			Exp:                false,
+		},
+		{
+			Name:               "freshness set, is ok, strict is set, appended time exceeds, applied index behind",
+			LeaderLastContact:  time.Now(),
+			LastFSMUpdateTime:  time.Now(),
+			LastAppendedAtTime: time.Now().Add(-15 * time.Second),
+			FSMIndex:           9,
+			CommitIndex:        10,
+			Freshness:          10 * time.Second,
+			Strict:             true,
+			Exp:                true,
+		},
+		{
+			Name:               "freshness set, is ok, strict is set, appended time does not exceed, applied index is behind",
+			LeaderLastContact:  time.Now(),
+			LastFSMUpdateTime:  time.Now(),
+			LastAppendedAtTime: time.Now(),
+			FSMIndex:           9,
+			CommitIndex:        10,
+			Freshness:          time.Minute,
+			Strict:             true,
+			Exp:                false,
+		},
+		{
+			Name:               "freshness set, is ok, appended time exceeds, applied index is behind, but strict not set",
+			LeaderLastContact:  time.Now(),
+			LastFSMUpdateTime:  time.Now(),
+			LastAppendedAtTime: time.Now().Add(-10 * time.Second),
+			FSMIndex:           9,
+			CommitIndex:        10,
+			Freshness:          5 * time.Second,
+			Exp:                false,
+		},
+	}
+
+	for i, tt := range tests {
+		if got, exp := IsStaleRead(
+			tt.LeaderLastContact,
+			tt.LastFSMUpdateTime,
+			tt.LastAppendedAtTime,
+			tt.FSMIndex,
+			tt.CommitIndex,
+			tt.Freshness.Nanoseconds(),
+			tt.Strict), tt.Exp; got != exp {
+			t.Fatalf("unexpected result for IsStaleRead test #%d, %s\nexp: %v\ngot: %v", i+1, tt.Name, exp, got)
+		}
+	}
+}
+
 func Test_Store_IsNewNode(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer ln.Close()

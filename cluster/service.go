@@ -106,6 +106,9 @@ type Manager interface {
 	// LeaderAddr returns the Raft address of the leader of the cluster.
 	LeaderAddr() (string, error)
 
+	// CommitIndex returns the Raft commit index of the cluster.
+	CommitIndex() (uint64, error)
+
 	// Remove removes the node, given by id, from the cluster
 	Remove(rn *command.RemoveNodeRequest) error
 
@@ -285,8 +288,14 @@ func (s *Service) handleConn(conn net.Conn) {
 		switch c.Type {
 		case proto.Command_COMMAND_TYPE_GET_NODE_API_URL:
 			stats.Add(numGetNodeAPIRequest, 1)
-			p, err = pb.Marshal(&proto.Address{
-				Url: s.GetNodeAPIURL(),
+			ci, err := s.mgr.CommitIndex()
+			if err != nil {
+				conn.Close()
+				return
+			}
+			p, err = pb.Marshal(&proto.NodeMeta{
+				Url:         s.GetNodeAPIURL(),
+				CommitIndex: ci,
 			})
 			if err != nil {
 				conn.Close()

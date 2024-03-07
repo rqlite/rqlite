@@ -75,7 +75,7 @@ bye~
 Connecting to a host running somewhere else on the network:
 ```
 $ rqlite -H localhost -p 8493
-locahost:8493>
+localhost:8493>
 ```
 
 ## Build

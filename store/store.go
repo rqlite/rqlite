@@ -98,6 +98,7 @@ const (
 	sqliteFile                 = "db.sqlite"
 	leaderWaitDelay            = 100 * time.Millisecond
 	appliedWaitDelay           = 100 * time.Millisecond
+	commitEquivalenceDelay     = 50 * time.Millisecond
 	appliedIndexUpdateInterval = 5 * time.Second
 	connectionPoolCount        = 5
 	connectionTimeout          = 10 * time.Second
@@ -237,7 +238,7 @@ const (
 
 // Store is a SQLite database, where all changes are made via Raft consensus.
 type Store struct {
-	open          bool
+	open          *AtomicBool
 	raftDir       string
 	snapshotDir   string
 	peersPath     string
@@ -274,11 +275,15 @@ type Store struct {
 
 	// Latest log entry index actually reflected by the FSM. Due to Raft code
 	// this value is not updated after a Snapshot-restore.
-	fsmIdx *atomic.Uint64
+	fsmIdx        *atomic.Uint64
+	fsmUpdateTime *AtomicTime // This is node-local time.
+
+	// appendedAtTime is the Leader's clock time when that Leader appended the log entry.
+	// The Leader that actually appended the log entry is not necessarily the current Leader.
+	appendedAtTime *AtomicTime
 
 	// Latest log entry index which actually changed the database.
-	dbAppliedIdx         *atomic.Uint64
-	appliedIdxUpdateDone chan struct{}
+	dbAppliedIdx *atomic.Uint64
 
 	reqMarshaller *command.RequestMarshaler // Request marshaler for writing to log.
 	raftLog       raft.LogStore             // Persistent log store.
@@ -294,16 +299,10 @@ type Store struct {
 	observerChan      chan raft.Observation
 	observer          *raft.Observer
 
-	firstIdxOnOpen       uint64    // First index on log when Store opens.
-	lastIdxOnOpen        uint64    // Last index on log when Store opens.
-	lastCommandIdxOnOpen uint64    // Last command index before applied index when Store opens.
-	lastAppliedIdxOnOpen uint64    // Last applied index on log when Store opens.
-	firstLogAppliedT     time.Time // Time first log is applied
-	appliedOnOpen        uint64    // Number of logs applied at open.
-	openT                time.Time // Timestamp when Store opens.
+	firstLogAppliedT time.Time // Time first log is applied
+	openT            time.Time // Timestamp when Store opens.
 
-	logger         *log.Logger
-	logIncremental bool
+	logger *log.Logger
 
 	notifyMu        sync.Mutex
 	BootstrapExpect int
@@ -331,7 +330,7 @@ type Store struct {
 	// For whitebox testing
 	numAutoVacuums  int
 	numIgnoredJoins int
-	numNoops        int
+	numNoops        *atomic.Uint64
 	numSnapshotsMu  sync.Mutex
 	numSnapshots    int
 }
@@ -358,6 +357,7 @@ func New(ly Layer, c *Config) *Store {
 	}
 
 	return &Store{
+		open:            NewAtomicBool(),
 		ly:              ly,
 		raftDir:         c.Dir,
 		snapshotDir:     filepath.Join(c.Dir, snapshotsDirName),
@@ -376,7 +376,10 @@ func New(ly Layer, c *Config) *Store {
 		ApplyTimeout:    applyTimeout,
 		snapshotCAS:     NewCheckAndSet(),
 		fsmIdx:          &atomic.Uint64{},
+		fsmUpdateTime:   NewAtomicTime(),
+		appendedAtTime:  NewAtomicTime(),
 		dbAppliedIdx:    &atomic.Uint64{},
+		numNoops:        &atomic.Uint64{},
 	}
 }
 
@@ -389,7 +392,7 @@ func New(ly Layer, c *Config) *Store {
 // and setting the restore path means the Store will not report
 // itself as ready until a restore has been attempted.
 func (s *Store) SetRestorePath(path string) error {
-	if s.open {
+	if s.open.Is() {
 		return ErrOpen
 	}
 
@@ -406,11 +409,11 @@ func (s *Store) SetRestorePath(path string) error {
 func (s *Store) Open() (retErr error) {
 	defer func() {
 		if retErr == nil {
-			s.open = true
+			s.open.Set()
 		}
 	}()
 
-	if s.open {
+	if s.open.Is() {
 		return ErrOpen
 	}
 
@@ -452,7 +455,7 @@ func (s *Store) Open() (retErr error) {
 	config := s.raftConfig()
 	config.LocalID = raft.ServerID(s.raftID)
 
-	// Upgrade any pre-existing snapshots.
+	// Upgrade any preexisting snapshots.
 	oldSnapshotDir := filepath.Join(s.raftDir, "snapshots")
 	if err := snapshot.Upgrade(oldSnapshotDir, s.snapshotDir, s.logger); err != nil {
 		return fmt.Errorf("failed to upgrade snapshots: %s", err)
@@ -463,6 +466,7 @@ func (s *Store) Open() (retErr error) {
 	if err != nil {
 		return fmt.Errorf("failed to create snapshot store: %s", err)
 	}
+	snapshotStore.LogReaping = s.hcLogLevel() < hclog.Warn
 	s.snapshotStore = snapshotStore
 	snaps, err := s.snapshotStore.List()
 	if err != nil {
@@ -497,13 +501,6 @@ func (s *Store) Open() (retErr error) {
 		s.logger.Printf("node recovered successfully using %s", s.peersPath)
 		stats.Add(numRecoveries, 1)
 	}
-
-	// Get some info about the log, before any more entries are committed.
-	if err := s.setLogInfo(); err != nil {
-		return fmt.Errorf("set log info: %s", err)
-	}
-	s.logger.Printf("first log index: %d, last log index: %d, last applied index: %d, last command log index: %d:",
-		s.firstIdxOnOpen, s.lastIdxOnOpen, s.lastAppliedIdxOnOpen, s.lastCommandIdxOnOpen)
 
 	s.db, err = createOnDisk(s.dbPath, s.dbConf.FKConstraints, true)
 	if err != nil {
@@ -553,9 +550,6 @@ func (s *Store) Open() (retErr error) {
 	// WAL-size triggered snapshotting.
 	s.snapshotWClose, s.snapshotWDone = s.runWALSnapshotting()
 
-	// Periodically update the applied index for faster startup.
-	s.appliedIdxUpdateDone = s.updateAppliedIndex()
-
 	if err := s.initVacuumTime(); err != nil {
 		return fmt.Errorf("failed to initialize auto-vacuum times: %s", err.Error())
 	}
@@ -582,6 +576,9 @@ func (s *Store) Bootstrap(servers ...*Server) error {
 // the cluster. If this node is not the leader, and 'wait' is true, an error
 // will be returned.
 func (s *Store) Stepdown(wait bool) error {
+	if !s.open.Is() {
+		return ErrNotOpen
+	}
 	f := s.raft.LeadershipTransfer()
 	if !wait {
 		return nil
@@ -624,22 +621,33 @@ func (s *Store) Ready() bool {
 	}()
 }
 
+// Committed blocks until the local commit index is greater than or
+// equal to the Leader index, as checked when the function is called.
+// It returns the committed index. If the Leader index is 0, then the
+// system waits until the commit index is at least 1.
+func (s *Store) Committed(timeout time.Duration) (uint64, error) {
+	lci, err := s.LeaderCommitIndex()
+	if err != nil {
+		return lci, err
+	}
+	return lci, s.WaitForCommitIndex(max(1, lci), timeout)
+}
+
 // Close closes the store. If wait is true, waits for a graceful shutdown.
 func (s *Store) Close(wait bool) (retErr error) {
 	defer func() {
 		if retErr == nil {
 			s.logger.Printf("store closed with node ID %s, listening on %s", s.raftID, s.ly.Addr().String())
-			s.open = false
+			s.open.Unset()
 		}
 	}()
-	if !s.open {
+	if !s.open.Is() {
 		// Protect against closing already-closed resource, such as channels.
 		return nil
 	}
 
 	s.dechunkManager.Close()
 
-	close(s.appliedIdxUpdateDone)
 	close(s.observerClose)
 	<-s.observerDone
 
@@ -704,6 +712,33 @@ func (s *Store) WaitForAppliedIndex(idx uint64, timeout time.Duration) error {
 	}
 }
 
+// WaitForCommitIndex blocks until the local Raft commit index is equal to
+// or greater the given index, or the timeout expires.
+func (s *Store) WaitForCommitIndex(idx uint64, timeout time.Duration) error {
+	tck := time.NewTicker(commitEquivalenceDelay)
+	defer tck.Stop()
+	tmr := time.NewTimer(timeout)
+	defer tmr.Stop()
+	checkFn := func() bool {
+		return s.raft.CommitIndex() >= idx
+	}
+
+	// Try the fast path.
+	if checkFn() {
+		return nil
+	}
+	for {
+		select {
+		case <-tck.C:
+			if checkFn() {
+				return nil
+			}
+		case <-tmr.C:
+			return fmt.Errorf("timeout expired")
+		}
+	}
+}
+
 // DBAppliedIndex returns the index of the last Raft log that changed the
 // underlying database. If the index is unknown then 0 is returned.
 func (s *Store) DBAppliedIndex() uint64 {
@@ -712,11 +747,17 @@ func (s *Store) DBAppliedIndex() uint64 {
 
 // IsLeader is used to determine if the current node is cluster leader
 func (s *Store) IsLeader() bool {
+	if !s.open.Is() {
+		return false
+	}
 	return s.raft.State() == raft.Leader
 }
 
 // HasLeader returns true if the cluster has a leader, false otherwise.
 func (s *Store) HasLeader() bool {
+	if !s.open.Is() {
+		return false
+	}
 	return s.raft.Leader() != ""
 }
 
@@ -724,6 +765,9 @@ func (s *Store) HasLeader() bool {
 // is no reference to the current node in the current cluster configuration then
 // false will also be returned.
 func (s *Store) IsVoter() (bool, error) {
+	if !s.open.Is() {
+		return false, ErrNotOpen
+	}
 	cfg := s.raft.GetConfiguration()
 	if err := cfg.Error(); err != nil {
 		return false, err
@@ -738,6 +782,9 @@ func (s *Store) IsVoter() (bool, error) {
 
 // State returns the current node's Raft state
 func (s *Store) State() ClusterState {
+	if !s.open.Is() {
+		return Unknown
+	}
 	state := s.raft.State()
 	switch state {
 	case raft.Leader:
@@ -765,7 +812,7 @@ func (s *Store) Path() string {
 
 // Addr returns the address of the store.
 func (s *Store) Addr() string {
-	if !s.open {
+	if !s.open.Is() {
 		return ""
 	}
 	return string(s.raftTn.LocalAddr())
@@ -779,7 +826,7 @@ func (s *Store) ID() string {
 // LeaderAddr returns the address of the current leader. Returns a
 // blank string if there is no leader or if the Store is not open.
 func (s *Store) LeaderAddr() (string, error) {
-	if !s.open {
+	if !s.open.Is() {
 		return "", nil
 	}
 	addr, _ := s.raft.LeaderWithID()
@@ -789,7 +836,7 @@ func (s *Store) LeaderAddr() (string, error) {
 // LeaderID returns the node ID of the Raft leader. Returns a
 // blank string if there is no leader, or an error.
 func (s *Store) LeaderID() (string, error) {
-	if !s.open {
+	if !s.open.Is() {
 		return "", nil
 	}
 	_, id := s.raft.LeaderWithID()
@@ -799,16 +846,37 @@ func (s *Store) LeaderID() (string, error) {
 // LeaderWithID is used to return the current leader address and ID of the cluster.
 // It may return empty strings if there is no current leader or the leader is unknown.
 func (s *Store) LeaderWithID() (string, string) {
-	if !s.open {
+	if !s.open.Is() {
 		return "", ""
 	}
 	addr, id := s.raft.LeaderWithID()
 	return string(addr), string(id)
 }
 
+// CommitIndex returns the Raft commit index.
+func (s *Store) CommitIndex() (uint64, error) {
+	if !s.open.Is() {
+		return 0, ErrNotOpen
+	}
+	return s.raft.CommitIndex(), nil
+}
+
+// LeaderCommitIndex returns the Raft leader commit index, as indicated
+// by the latest AppendEntries RPC. If this node is the Leader then the
+// commit index is returned directly from the Raft object.
+func (s *Store) LeaderCommitIndex() (uint64, error) {
+	if !s.open.Is() {
+		return 0, ErrNotOpen
+	}
+	if s.raft.State() == raft.Leader {
+		return s.raft.CommitIndex(), nil
+	}
+	return s.raftTn.LeaderCommitIndex(), nil
+}
+
 // Nodes returns the slice of nodes in the cluster, sorted by ID ascending.
 func (s *Store) Nodes() ([]*Server, error) {
-	if !s.open {
+	if !s.open.Is() {
 		return nil, ErrNotOpen
 	}
 
@@ -846,7 +914,6 @@ func (s *Store) WaitForRemoval(id string, timeout time.Duration) error {
 	if check() {
 		return nil
 	}
-
 	tck := time.NewTicker(appliedWaitDelay)
 	defer tck.Stop()
 	tmr := time.NewTimer(timeout)
@@ -880,7 +947,6 @@ func (s *Store) WaitForLeader(timeout time.Duration) (string, error) {
 	if check() {
 		return leaderAddr, nil
 	}
-
 	tck := time.NewTicker(leaderWaitDelay)
 	defer tck.Stop()
 	tmr := time.NewTimer(timeout)
@@ -928,7 +994,7 @@ func (s *Store) WaitForFSMIndex(idx uint64, timeout time.Duration) (uint64, erro
 
 // Stats returns stats for the store.
 func (s *Store) Stats() (map[string]interface{}, error) {
-	if !s.open {
+	if !s.open.Is() {
 		return map[string]interface{}{
 			"open": false,
 		}, nil
@@ -964,29 +1030,27 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 		return nil, err
 	}
 	raftStats["bolt"] = s.boltStore.Stats()
+	raftStats["transport"] = s.raftTn.Stats()
 
 	dirSz, err := dirSize(s.raftDir)
 	if err != nil {
 		return nil, err
 	}
 
-	lAppliedIdx, err := s.boltStore.GetAppliedIndex()
-	if err != nil {
-		return nil, err
-	}
 	status := map[string]interface{}{
-		"open":               s.open,
-		"node_id":            s.raftID,
-		"raft":               raftStats,
-		"fsm_index":          s.fsmIdx.Load(),
-		"db_applied_index":   s.dbAppliedIdx.Load(),
-		"last_applied_index": lAppliedIdx,
-		"addr":               s.Addr(),
+		"open":             s.open,
+		"node_id":          s.raftID,
+		"raft":             raftStats,
+		"fsm_index":        s.fsmIdx.Load(),
+		"fsm_update_time":  s.fsmUpdateTime.Load(),
+		"db_applied_index": s.dbAppliedIdx.Load(),
+		"addr":             s.Addr(),
 		"leader": map[string]string{
 			"node_id": leaderID,
 			"addr":    leaderAddr,
 		},
-		"ready": s.Ready(),
+		"leader_appended_at_time": s.appendedAtTime.Load(),
+		"ready":                   s.Ready(),
 		"observer": map[string]uint64{
 			"observed": s.observer.GetNumObserved(),
 			"dropped":  s.observer.GetNumDropped(),
@@ -1035,7 +1099,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 
 // Execute executes queries that return no rows, but do modify the database.
 func (s *Store) Execute(ex *proto.ExecuteRequest) ([]*proto.ExecuteResult, error) {
-	if !s.open {
+	if !s.open.Is() {
 		return nil, ErrNotOpen
 	}
 
@@ -1045,7 +1109,6 @@ func (s *Store) Execute(ex *proto.ExecuteRequest) ([]*proto.ExecuteResult, error
 	if !s.Ready() {
 		return nil, ErrNotReady
 	}
-
 	return s.execute(ex)
 }
 
@@ -1079,7 +1142,7 @@ func (s *Store) execute(ex *proto.ExecuteRequest) ([]*proto.ExecuteResult, error
 
 // Query executes queries that return rows, and do not modify the database.
 func (s *Store) Query(qr *proto.QueryRequest) ([]*proto.QueryRows, error) {
-	if !s.open {
+	if !s.open.Is() {
 		return nil, ErrNotOpen
 	}
 
@@ -1122,7 +1185,7 @@ func (s *Store) Query(qr *proto.QueryRequest) ([]*proto.QueryRows, error) {
 		return nil, ErrNotLeader
 	}
 
-	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE && s.isStaleRead(qr.Freshness) {
+	if qr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE && s.isStaleRead(qr.Freshness, qr.FreshnessStrict) {
 		return nil, ErrStaleRead
 	}
 
@@ -1138,7 +1201,7 @@ func (s *Store) Query(qr *proto.QueryRequest) ([]*proto.QueryRows, error) {
 
 // Request processes a request that may contain both Executes and Queries.
 func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryResponse, error) {
-	if !s.open {
+	if !s.open.Is() {
 		return nil, ErrNotOpen
 	}
 	nRW, _ := s.RORWCount(eqr)
@@ -1162,7 +1225,7 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 			}
 			return resp
 		}
-		if eqr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE && s.isStaleRead(eqr.Freshness) {
+		if eqr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE && s.isStaleRead(eqr.Freshness, eqr.FreshnessStrict) {
 			return nil, ErrStaleRead
 		} else if eqr.Level == proto.QueryRequest_QUERY_REQUEST_LEVEL_WEAK {
 			if !isLeader {
@@ -1220,7 +1283,7 @@ func (s *Store) Request(eqr *proto.ExecuteQueryRequest) ([]*proto.ExecuteQueryRe
 // will be written directly to that file. Otherwise a temporary file will be created,
 // and that temporary file copied to dst.
 func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
-	if !s.open {
+	if !s.open.Is() {
 		return ErrNotOpen
 	}
 
@@ -1251,7 +1314,7 @@ func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 				}
 			}
 
-			srcFD, err = os.CreateTemp(s.dbDir, backupScatchPattern)
+			srcFD, err = createTemp(s.dbDir, backupScatchPattern)
 			if err != nil {
 				return err
 			}
@@ -1305,7 +1368,7 @@ func (s *Store) Backup(br *proto.BackupRequest, dst io.Writer) (retErr error) {
 // Loads an entire SQLite file into the database, sending the request
 // through the Raft log.
 func (s *Store) Load(lr *proto.LoadRequest) error {
-	if !s.open {
+	if !s.open.Is() {
 		return ErrNotOpen
 	}
 
@@ -1370,7 +1433,7 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 	}
 
 	// Write the data to a temporary file.
-	f, err := os.CreateTemp(s.dbDir, bootScatchPattern)
+	f, err := createTemp(s.dbDir, bootScatchPattern)
 	if err != nil {
 		return 0, err
 	}
@@ -1395,7 +1458,7 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 		return n, fmt.Errorf("invalid SQLite data")
 	}
 
-	// Raft won't snapshot unless there is at least one unsnappshotted log entry,
+	// Raft won't snapshot unless there is at least one unsnapshotted log entry,
 	// so prep that now before we do anything destructive.
 	if af, err := s.Noop("boot"); err != nil {
 		return n, err
@@ -1424,7 +1487,7 @@ func (s *Store) ReadFrom(r io.Reader) (int64, error) {
 // the temporary file with the existing database file. The database is then
 // re-opened.
 func (s *Store) Vacuum() error {
-	fd, err := os.CreateTemp(s.dbDir, vacuumScatchPattern)
+	fd, err := createTemp(s.dbDir, vacuumScatchPattern)
 	if err != nil {
 		return err
 	}
@@ -1475,7 +1538,7 @@ func (s *Store) Database(leader bool) ([]byte, error) {
 //
 // Notifying is idempotent. A node may repeatedly notify the Store without issue.
 func (s *Store) Notify(nr *proto.NotifyRequest) error {
-	if !s.open {
+	if !s.open.Is() {
 		return ErrNotOpen
 	}
 
@@ -1534,7 +1597,7 @@ func (s *Store) Notify(nr *proto.NotifyRequest) error {
 // Join joins a node, identified by id and located at addr, to this store.
 // The node must be ready to respond to Raft communications at that address.
 func (s *Store) Join(jr *proto.JoinRequest) error {
-	if !s.open {
+	if !s.open.Is() {
 		return ErrNotOpen
 	}
 
@@ -1602,7 +1665,7 @@ func (s *Store) Join(jr *proto.JoinRequest) error {
 
 // Remove removes a node from the store.
 func (s *Store) Remove(rn *proto.RemoveNodeRequest) error {
-	if !s.open {
+	if !s.open.Is() {
 		return ErrNotOpen
 	}
 	id := rn.Id
@@ -1656,28 +1719,6 @@ func (s *Store) RORWCount(eqr *proto.ExecuteQueryRequest) (nRW, nRO int) {
 		}
 	}
 	return
-}
-
-// setLogInfo records some key indexes about the log.
-func (s *Store) setLogInfo() error {
-	var err error
-	s.firstIdxOnOpen, err = s.boltStore.FirstIndex()
-	if err != nil {
-		return fmt.Errorf("failed to get last index: %s", err)
-	}
-	s.lastAppliedIdxOnOpen, err = s.boltStore.GetAppliedIndex()
-	if err != nil {
-		return fmt.Errorf("failed to get last applied index: %s", err)
-	}
-	s.lastIdxOnOpen, err = s.boltStore.LastIndex()
-	if err != nil {
-		return fmt.Errorf("failed to get last index: %s", err)
-	}
-	s.lastCommandIdxOnOpen, err = s.boltStore.LastCommandIndex(s.firstIdxOnOpen, s.lastAppliedIdxOnOpen)
-	if err != nil {
-		return fmt.Errorf("failed to get last command index: %s", err)
-	}
-	return nil
 }
 
 // remove removes the node, with the given ID, from the cluster.
@@ -1755,42 +1796,23 @@ func (s *Store) raftConfig() *raft.Config {
 	}
 	opts := hclog.DefaultOptions
 	opts.Name = ""
-	opts.Level = hclog.LevelFromString(s.RaftLogLevel)
-	s.logIncremental = opts.Level < hclog.Warn
+	opts.Level = s.hcLogLevel()
 	config.Logger = hclog.FromStandardLogger(log.New(os.Stderr, "[raft] ", log.LstdFlags), opts)
 	return config
 }
 
-func (s *Store) updateAppliedIndex() chan struct{} {
-	done := make(chan struct{})
-	go func() {
-		ticker := time.NewTicker(appliedIndexUpdateInterval)
-		defer ticker.Stop()
-		var idx uint64
-		for {
-			select {
-			case <-ticker.C:
-				newIdx := s.raft.AppliedIndex()
-				if newIdx == idx {
-					continue
-				}
-				idx = newIdx
-				if err := s.boltStore.SetAppliedIndex(idx); err != nil {
-					s.logger.Printf("failed to set applied index: %s", err.Error())
-				}
-			case <-done:
-				return
-			}
-		}
-	}()
-	return done
-}
-
-func (s *Store) isStaleRead(freshness int64) bool {
-	if freshness == 0 || s.raft.State() == raft.Leader {
+func (s *Store) isStaleRead(freshness int64, strict bool) bool {
+	if s.raft.State() == raft.Leader {
 		return false
 	}
-	return time.Since(s.raft.LastContact()).Nanoseconds() > freshness
+	return IsStaleRead(
+		s.raft.LastContact(),
+		s.fsmUpdateTime.Load(),
+		s.appendedAtTime.Load(),
+		s.fsmIdx.Load(),
+		s.raftTn.CommandCommitIndex(),
+		freshness,
+		strict)
 }
 
 type fsmExecuteResponse struct {
@@ -1816,15 +1838,8 @@ type fsmGenericResponse struct {
 func (s *Store) fsmApply(l *raft.Log) (e interface{}) {
 	defer func() {
 		s.fsmIdx.Store(l.Index)
-		if l.Index <= s.lastCommandIdxOnOpen {
-			// In here means at least one command entry was in the log when the Store
-			// opened.
-			s.appliedOnOpen++
-			if l.Index == s.lastCommandIdxOnOpen {
-				s.logger.Printf("%d confirmed committed log entries applied in %s, took %s since open",
-					s.appliedOnOpen, time.Since(s.firstLogAppliedT), time.Since(s.openT))
-			}
-		}
+		s.fsmUpdateTime.Store(time.Now())
+		s.appendedAtTime.Store(l.AppendedAt)
 	}()
 
 	if s.firstLogAppliedT.IsZero() {
@@ -1837,7 +1852,7 @@ func (s *Store) fsmApply(l *raft.Log) (e interface{}) {
 		s.dbAppliedIdx.Store(l.Index)
 	}
 	if cmd.Type == proto.Command_COMMAND_TYPE_NOOP {
-		s.numNoops++
+		s.numNoops.Add(1)
 	} else if cmd.Type == proto.Command_COMMAND_TYPE_LOAD {
 		// Swapping in a new database invalidates any existing snapshot.
 		err := s.snapshotStore.SetFullNeeded()
@@ -1922,7 +1937,6 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 		stats.Add(numSnapshotsFull, 1)
 	} else {
 		compactedBuf := bytes.NewBuffer(nil)
-		var err error
 		if pathExistsWithData(s.walPath) {
 			compactStartTime := time.Now()
 			// Read a compacted version of the WAL into memory, and write it
@@ -1961,9 +1975,6 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 			stats.Get(snapshotPrecompactWALSize).(*expvar.Int).Set(walSz)
 		}
 		fsmSnapshot = snapshot.NewSnapshot(io.NopCloser(compactedBuf))
-		if err != nil {
-			return nil, err
-		}
 		stats.Add(numSnapshotsIncremental, 1)
 	}
 
@@ -1973,7 +1984,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	fs := FSMSnapshot{
 		FSMSnapshot: fsmSnapshot,
 	}
-	if fullNeeded || s.logIncremental {
+	if fullNeeded || s.logIncremental() {
 		s.logger.Printf("%s snapshot created in %s on node ID %s", fPLog, dur, s.raftID)
 		fs.logger = s.logger
 	}
@@ -1993,7 +2004,7 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	startT := time.Now()
 
 	// Create a scatch file to write the restore data to it.
-	tmpFile, err := os.CreateTemp(s.dbDir, restoreScratchPattern)
+	tmpFile, err := createTemp(s.dbDir, restoreScratchPattern)
 	if err != nil {
 		return fmt.Errorf("error creating temporary file for restore operation: %v", err)
 	}
@@ -2005,7 +2016,7 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	if err != nil {
 		return fmt.Errorf("error copying restore data: %v", err)
 	}
-	if tmpFile.Close(); err != nil {
+	if err := tmpFile.Close(); err != nil {
 		return fmt.Errorf("error creating temporary file for restore operation: %v", err)
 	}
 
@@ -2022,9 +2033,6 @@ func (s *Store) fsmRestore(rc io.ReadCloser) (retErr error) {
 	li, err := snapshot.LatestIndex(s.snapshotDir)
 	if err != nil {
 		return fmt.Errorf("failed to get latest snapshot index post restore: %s", err)
-	}
-	if err := s.boltStore.SetAppliedIndex(li); err != nil {
-		return fmt.Errorf("failed to set applied index: %s", err)
 	}
 	s.fsmIdx.Store(li)
 	s.dbAppliedIdx.Store(li)
@@ -2076,7 +2084,7 @@ func (s *Store) observe() (closeCh, doneCh chan struct{}) {
 
 					isReadOnly, found := servers.IsReadOnly(id)
 					if !found {
-						s.logger.Printf("node %s is not present in configuration", id)
+						s.logger.Printf("node %s (failing heartbeat) is not present in configuration", id)
 						break
 					}
 
@@ -2279,6 +2287,14 @@ func (s *Store) autoVacNeeded(t time.Time) (bool, error) {
 	return t.Sub(bt) > s.AutoVacInterval, nil
 }
 
+func (s *Store) hcLogLevel() hclog.Level {
+	return hclog.LevelFromString(s.RaftLogLevel)
+}
+
+func (s *Store) logIncremental() bool {
+	return s.hcLogLevel() < hclog.Warn
+}
+
 // createOnDisk opens an on-disk database file at the configured path. Any
 // preexisting file will be removed before the database is opened.
 func createOnDisk(path string, fkConstraints, wal bool) (*sql.SwappableDB, error) {
@@ -2286,6 +2302,17 @@ func createOnDisk(path string, fkConstraints, wal bool) (*sql.SwappableDB, error
 		return nil, err
 	}
 	return sql.OpenSwappable(path, fkConstraints, wal)
+}
+
+func createTemp(dir, pattern string) (*os.File, error) {
+	fd, err := os.CreateTemp(dir, pattern)
+	if err != nil {
+		return nil, err
+	}
+	if err := os.Chmod(fd.Name(), 0644); err != nil {
+		return nil, err
+	}
+	return fd, nil
 }
 
 func copyFromReaderToFile(path string, r io.Reader) (int64, error) {

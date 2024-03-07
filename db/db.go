@@ -316,7 +316,7 @@ func (db *DB) WALSize() (int64, error) {
 		return 0, nil
 	}
 	sz, err := fileSize(db.walPath)
-	if err == nil || (err != nil && os.IsNotExist(err)) {
+	if err == nil || os.IsNotExist(err) {
 		return sz, nil
 	}
 	return 0, err
@@ -795,7 +795,7 @@ func (db *DB) queryWithConn(ctx context.Context, req *command.Request, xTime boo
 			continue
 		}
 
-		rows, err = db.queryStmtWithConn(ctx, stmt, xTime, queryer, time.Duration(req.DbTimeout))
+		rows, err = db.queryStmtWithConn(ctx, stmt, xTime, queryer)
 		if err != nil {
 			stats.Add(numQueryErrors, 1)
 			rows = &command.QueryRows{
@@ -811,7 +811,7 @@ func (db *DB) queryWithConn(ctx context.Context, req *command.Request, xTime boo
 	return allRows, err
 }
 
-func (db *DB) queryStmtWithConn(ctx context.Context, stmt *command.Statement, xTime bool, q queryer, timeout time.Duration) (retRows *command.QueryRows, retErr error) {
+func (db *DB) queryStmtWithConn(ctx context.Context, stmt *command.Statement, xTime bool, q queryer) (retRows *command.QueryRows, retErr error) {
 	defer func() {
 		if retErr != nil {
 			retErr = rewriteContextTimeout(retErr, ErrQueryTimeout)
@@ -978,7 +978,7 @@ func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQuery
 		}
 
 		if ro {
-			rows, opErr := db.queryStmtWithConn(ctx, stmt, xTime, queryer, time.Duration(req.DbTimeout))
+			rows, opErr := db.queryStmtWithConn(ctx, stmt, xTime, queryer)
 			eqResponse = append(eqResponse, createEQQueryResponse(rows, opErr))
 			if abortOnError(opErr) {
 				break
@@ -1019,7 +1019,7 @@ func (db *DB) Backup(path string, vacuum bool) error {
 	}
 
 	if vacuum {
-		if dstDB.Vacuum(); err != nil {
+		if err := dstDB.Vacuum(); err != nil {
 			return err
 		}
 	}
@@ -1430,8 +1430,10 @@ func normalizeRowValues(row []interface{}, types []string) ([]*command.Parameter
 			}
 		case []byte:
 			if isTextType(types[i]) {
-				values[i].Value = &command.Parameter_S{
-					S: string(val),
+				values[i] = &command.Parameter{
+					Value: &command.Parameter_S{
+						S: string(val),
+					},
 				}
 			} else {
 				values[i] = &command.Parameter{

@@ -174,7 +174,7 @@ func (u *Uploader) upload(ctx context.Context) error {
 		if err != nil {
 			stats.Add(numSumGetFail, 1)
 			u.logger.Printf("failed to get current sum from %s: %v", u.storageClient, err)
-		} else if err == nil && cloudID == strconv.FormatUint(li, 10) {
+		} else if cloudID == strconv.FormatUint(li, 10) {
 			stats.Add(numUploadsSkippedID, 1)
 			return nil
 		}

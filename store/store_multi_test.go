@@ -61,6 +61,28 @@ func Test_MultiNodeSimple(t *testing.T) {
 		return s0.DBAppliedIndex() == s1.DBAppliedIndex()
 	}, 250*time.Millisecond, 3*time.Second)
 
+	ci, err := s0.CommitIndex()
+	if err != nil {
+		t.Fatalf("failed to retrieve commit index: %s", err.Error())
+	}
+	if exp, got := uint64(4), ci; exp != got {
+		t.Fatalf("wrong commit index, got: %d, exp: %d", got, exp)
+	}
+	lci, err := s0.LeaderCommitIndex()
+	if err != nil {
+		t.Fatalf("failed to retrieve commit index: %s", err.Error())
+	}
+	if exp, got := uint64(4), lci; exp != got {
+		t.Fatalf("wrong leader commit index, got: %d, exp: %d", got, exp)
+	}
+
+	if err := s0.WaitForCommitIndex(4, time.Second); err != nil {
+		t.Fatalf("failed to wait for commit index: %s", err.Error())
+	}
+	if err := s0.WaitForCommitIndex(5, 500*time.Millisecond); err == nil {
+		t.Fatalf("unexpectedly waited successfully for commit index")
+	}
+
 	// Now, do a NONE consistency query on each node, to actually confirm the data
 	// has been replicated.
 	testFn1 := func(t *testing.T, s *Store) {
@@ -77,6 +99,28 @@ func Test_MultiNodeSimple(t *testing.T) {
 	}
 	testFn1(t, s0)
 	testFn1(t, s1)
+
+	ci, err = s1.CommitIndex()
+	if err != nil {
+		t.Fatalf("failed to retrieve commit index: %s", err.Error())
+	}
+	if exp, got := uint64(4), ci; exp != got {
+		t.Fatalf("wrong commit index, got: %d, exp: %d", got, exp)
+	}
+	lci, err = s1.LeaderCommitIndex()
+	if err != nil {
+		t.Fatalf("failed to retrieve commit index: %s", err.Error())
+	}
+	if exp, got := uint64(4), lci; exp != got {
+		t.Fatalf("wrong leader commit index, got: %d, exp: %d", got, exp)
+	}
+
+	if err := s1.WaitForCommitIndex(4, time.Second); err != nil {
+		t.Fatalf("failed to wait for commit index: %s", err.Error())
+	}
+	if err := s1.WaitForCommitIndex(5, 500*time.Millisecond); err == nil {
+		t.Fatalf("unexpectedly waited successfully for commit index")
+	}
 
 	// Write another row using Request
 	rr := executeQueryRequestFromString("INSERT INTO foo(id, name) VALUES(2, 'fiona')", proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG, false, false)
@@ -104,6 +148,90 @@ func Test_MultiNodeSimple(t *testing.T) {
 	}
 	testFn2(t, s0)
 	testFn2(t, s1)
+}
+
+// Test_MultiNodeNode_CommitIndexes tests that the commit indexes are
+// correctly updated as nodes join and leave the cluster, and as
+// commands are committed through the Raft log.
+func Test_MultiNodeNode_CommitIndexes(t *testing.T) {
+	s0, ln0 := mustNewStore(t)
+	defer s0.Close(true)
+	defer ln0.Close()
+	if err := s0.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s0.Bootstrap(NewServer(s0.ID(), s0.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	_, err := s0.WaitForLeader(10 * time.Second)
+	if err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	s1, ln1 := mustNewStore(t)
+	defer ln1.Close()
+	if err := s1.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s1.Close(true)
+	if err := s0.Join(joinRequest(s1.ID(), s1.Addr(), true)); err != nil {
+		t.Fatalf("failed to join single-node store: %s", err.Error())
+	}
+	if _, err := s1.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+	testPoll(t, func() bool {
+		// The config change command coming through the log due to s1 joining is not instant.
+		return s1.raft.CommitIndex() == 3
+	}, 50*time.Millisecond, 2*time.Second)
+	if exp, got := uint64(0), s1.raftTn.CommandCommitIndex(); exp != got {
+		t.Fatalf("wrong command commit index, got: %d, exp %d", got, exp)
+	}
+
+	// Send an FSM command through the log, ensure the indexes are correctly updated.
+	// on the follower.
+	s0.Noop("don't care")
+	testPoll(t, func() bool {
+		return s1.numNoops.Load() == 1
+	}, 50*time.Millisecond, 2*time.Second)
+	if exp, got := uint64(4), s1.raft.CommitIndex(); exp != got {
+		t.Fatalf("wrong commit index, got: %d, exp %d", got, exp)
+	}
+	if exp, got := uint64(4), s1.raftTn.CommandCommitIndex(); exp != got {
+		t.Fatalf("wrong command commit index, got: %d, exp %d", got, exp)
+	}
+
+	// Join another node to the cluster, which will result in Raft cluster
+	// config commands through the log, but no FSM commands.
+	s2, ln2 := mustNewStore(t)
+	defer ln2.Close()
+	if err := s2.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	defer s2.Close(true)
+	if err := s0.Join(joinRequest(s2.ID(), s2.Addr(), true)); err != nil {
+		t.Fatalf("failed to join single-node store: %s", err.Error())
+	}
+	if _, err := s2.WaitForLeader(10 * time.Second); err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+	testPoll(t, func() bool {
+		// The config change command coming through the log due to s2 joining is not instant.
+		return s2.raft.CommitIndex() == 5
+	}, 50*time.Millisecond, 2*time.Second)
+	if exp, got := uint64(4), s2.raftTn.CommandCommitIndex(); exp != got {
+		t.Fatalf("wrong command commit index, got: %d, exp %d", got, exp)
+	}
+
+	// First node to join should also reflect the new cluster config
+	// command.
+	testPoll(t, func() bool {
+		// The config change command coming through the log due to s2 joining is not instant.
+		return s1.raft.CommitIndex() == 5
+	}, 50*time.Millisecond, 2*time.Second)
+	if exp, got := uint64(4), s1.raftTn.CommandCommitIndex(); exp != got {
+		t.Fatalf("wrong command commit index, got: %d, exp %d", got, exp)
+	}
 }
 
 // Test_MultiNodeSnapshot_ErrorMessage tests that a snapshot fails with a specific
@@ -319,7 +447,7 @@ func Test_MultiNodeJoinRemove(t *testing.T) {
 	err = s0.WaitForRemoval(s1.ID(), time.Second)
 	// if err is nil then fail the test
 	if err == nil {
-		t.Fatalf("no error waiting for removal of non-existent node")
+		t.Fatalf("no error waiting for removal of nonexistent node")
 	}
 	if !errors.Is(err, ErrWaitForRemovalTimeout) {
 		t.Fatalf("waiting for removal resulted in wrong error: %s", err.Error())
@@ -922,22 +1050,22 @@ func Test_MultiNodeIsLeaderHasLeader(t *testing.T) {
 	if err := s0.Join(joinRequest(s1.ID(), s1.Addr(), true)); err != nil {
 		t.Fatalf("failed to join to node at %s: %s", s0.Addr(), err.Error())
 	}
-	_, err := s1.WaitForLeader(10 * time.Second)
+	leader, err := s1.WaitForLeader(10 * time.Second)
 	if err != nil {
 		t.Fatalf("failed to get leader address on follower: %s", err.Error())
 	}
 
-	if !s0.IsLeader() {
-		t.Fatalf("s0 is not leader")
-	}
 	if !s0.HasLeader() {
 		t.Fatalf("s0 does not have a leader")
 	}
-	if s1.IsLeader() {
-		t.Fatalf("s1 is leader")
+	if !s0.IsLeader() {
+		t.Fatalf("s0 is not leader, leader is %s", leader)
 	}
 	if !s1.HasLeader() {
 		t.Fatalf("s1 does not have a leader")
+	}
+	if s1.IsLeader() {
+		t.Fatalf("s1 is leader, leader is %s", leader)
 	}
 }
 

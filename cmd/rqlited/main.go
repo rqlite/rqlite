@@ -436,7 +436,7 @@ func createCluster(cfg *Config, hasPeers bool, client *cluster.Client, str *stor
 		}
 
 		// Brand new node, told to bootstrap itself. So do it.
-		log.Println("bootstraping single new node")
+		log.Println("bootstrapping single new node")
 		if err := str.Bootstrap(store.NewServer(str.ID(), cfg.RaftAdv, true)); err != nil {
 			return fmt.Errorf("failed to bootstrap single new node: %s", err.Error())
 		}
@@ -563,9 +563,11 @@ func createCluster(cfg *Config, hasPeers bool, client *cluster.Client, str *stor
 }
 
 func networkCheckJoinAddrs(joinAddrs []string) error {
-	log.Println("checking that any supplied join addresses don't serve HTTP(S)")
-	if addr, ok := httpd.AnyServingHTTP(joinAddrs); ok {
-		return fmt.Errorf("join address %s appears to be serving HTTP when it should be Raft", addr)
+	if len(joinAddrs) > 0 {
+		log.Println("checking that supplied join addresses don't serve HTTP(S)")
+		if addr, ok := httpd.AnyServingHTTP(joinAddrs); ok {
+			return fmt.Errorf("join address %s appears to be serving HTTP when it should be Raft", addr)
+		}
 	}
 	return nil
 }

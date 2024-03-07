@@ -10,8 +10,9 @@ message Credentials {
     string password = 2;
 }
 
-message Address {
-	string url = 1;
+message NodeMeta {
+    string url = 1;
+    uint64 commit_index = 2;
 }
 
 message Command {

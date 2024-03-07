@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/hashicorp/raft"
 	"github.com/rqlite/rqlite/v8/command/chunking"
@@ -15,10 +16,47 @@ import (
 	"github.com/rqlite/rqlite/v8/snapshot"
 )
 
+// IsStaleRead returns whether a read is stale.
+func IsStaleRead(
+	leaderlastContact time.Time,
+	lastFSMUpdateTime time.Time,
+	lastAppendedAtTime time.Time,
+	fsmIndex uint64,
+	commitIndex uint64,
+	freshness int64,
+	strict bool,
+) bool {
+	if freshness == 0 {
+		// Freshness not set, so no read can be stale.
+		return false
+	}
+	if time.Since(leaderlastContact).Nanoseconds() > freshness {
+		// The Leader has not been in contact within the freshness window, so
+		// the read is stale.
+		return true
+	}
+	if !strict {
+		// Strict mode is not enabled, so no further checks are needed.
+		return false
+	}
+	if lastAppendedAtTime.IsZero() {
+		// We've yet to be told about any appended log entries, so we
+		// assume we're caught up.
+		return false
+	}
+	if fsmIndex == commitIndex {
+		// FSM index is the same as the commit index, so we're caught up.
+		return false
+	}
+	// OK, we're not caught up. So was the log that last updated our local FSM
+	// appended by the Leader to its log within the freshness window?
+	return lastFSMUpdateTime.Sub(lastAppendedAtTime).Nanoseconds() > freshness
+}
+
 // IsNewNode returns whether a node using raftDir would be a brand-new node.
 // It also means that the window for this node joining a different cluster has passed.
 func IsNewNode(raftDir string) bool {
-	// If there is any pre-existing Raft state, then this node
+	// If there is any preexisting Raft state, then this node
 	// has already been created.
 	return !pathExists(filepath.Join(raftDir, raftDBPath))
 }
@@ -127,7 +165,8 @@ func RecoverNode(dataDir string, logger *log.Logger, logs raft.LogStore, stable 
 	if err != nil {
 		return fmt.Errorf("failed to find last log: %v", err)
 	}
-	logger.Printf("last index is %d, last index written to log is %d", lastIndex, lastLogIndex)
+	logger.Printf("last index is %d, last index written to log is %d, last term is %d",
+		lastIndex, lastLogIndex, lastTerm)
 
 	for index := snapshotIndex + 1; index <= lastLogIndex; index++ {
 		var entry raft.Log
@@ -161,7 +200,7 @@ func RecoverNode(dataDir string, logger *log.Logger, logs raft.LogStore, stable 
 	if err = sink.Close(); err != nil {
 		return fmt.Errorf("failed to finalize snapshot: %v", err)
 	}
-	logger.Printf("recovery snapshot created successfully using %s", tmpDBPath)
+	logger.Printf("recovery snapshot %s created successfully using %s", sink.ID(), tmpDBPath)
 
 	// Compact the log so that we don't get bad interference from any
 	// configuration change log entries that might be there.
@@ -171,11 +210,6 @@ func RecoverNode(dataDir string, logger *log.Logger, logs raft.LogStore, stable 
 	}
 	if err := logs.DeleteRange(firstLogIndex, lastLogIndex); err != nil {
 		return fmt.Errorf("log compaction failed: %v", err)
-	}
-
-	// Erase record of previous updating of Applied Index too.
-	if err := stable.SetAppliedIndex(0); err != nil {
-		return fmt.Errorf("failed to zero applied index: %v", err)
 	}
 	return nil
 }

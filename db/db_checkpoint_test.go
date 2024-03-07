@@ -28,7 +28,7 @@ func Test_WALDatabaseCheckpointOKNoWAL(t *testing.T) {
 	}
 	defer db.Close()
 	if err := db.Checkpoint(CheckpointTruncate); err != nil {
-		t.Fatalf("failed to checkpoint database in WAL mode with non-existent WAL: %s", err.Error())
+		t.Fatalf("failed to checkpoint database in WAL mode with nonexistent WAL: %s", err.Error())
 	}
 }
 

@@ -17,7 +17,7 @@ type Decompressor struct {
 	nTx int64
 }
 
-// NewDecompressor returns an instantied Decompressor that reads from r and
+// NewDecompressor returns an instantiated Decompressor that reads from r and
 // decompresses the data using gzip.
 func NewDecompressor(r io.Reader) *Decompressor {
 	return &Decompressor{

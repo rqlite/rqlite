@@ -36,6 +36,7 @@ message QueryRequest {
 	}
 	Level level = 3;
 	int64 freshness = 4;
+	bool freshness_strict = 5;
 }
 
 message Values {
@@ -67,6 +68,7 @@ message ExecuteQueryRequest {
 	bool timings = 2;
 	QueryRequest.Level level = 3;
 	int64 freshness = 4;
+	bool freshness_strict = 5;
 }
 
 message ExecuteQueryResponse {

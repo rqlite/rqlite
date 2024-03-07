@@ -22,6 +22,47 @@ import (
 	"github.com/rqlite/rqlite/v8/testdata/chinook"
 )
 
+// Test_StoreSingleNode tests that a non-open Store handles public methods correctly.
+func Test_NonOpenStore(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer s.Close(true)
+	defer ln.Close()
+
+	if err := s.Stepdown(false); err != ErrNotOpen {
+		t.Fatalf("wrong error received for non-open store: %s", err)
+	}
+	if s.IsLeader() {
+		t.Fatalf("store incorrectly marked as leader")
+	}
+	if s.HasLeader() {
+		t.Fatalf("store incorrectly marked as having leader")
+	}
+	if _, err := s.IsVoter(); err != ErrNotOpen {
+		t.Fatalf("wrong error received for non-open store: %s", err)
+	}
+	if s.State() != Unknown {
+		t.Fatalf("wrong cluster state returned for non-open store")
+	}
+	if _, err := s.CommitIndex(); err != ErrNotOpen {
+		t.Fatalf("wrong error received for non-open store: %s", err)
+	}
+	if _, err := s.LeaderCommitIndex(); err != ErrNotOpen {
+		t.Fatalf("wrong error received for non-open store: %s", err)
+	}
+	if addr, err := s.LeaderAddr(); addr != "" || err != nil {
+		t.Fatalf("wrong leader address returned for non-open store: %s", addr)
+	}
+	if id, err := s.LeaderID(); id != "" || err != nil {
+		t.Fatalf("wrong leader ID returned for non-open store: %s", id)
+	}
+	if addr, id := s.LeaderWithID(); addr != "" || id != "" {
+		t.Fatalf("wrong leader address and ID returned for non-open store: %s", id)
+	}
+	if _, err := s.Nodes(); err != ErrNotOpen {
+		t.Fatalf("wrong error received for non-open store: %s", err)
+	}
+}
+
 // Test_StoreSingleNode tests that a single node basically operates.
 func Test_OpenStoreSingleNode(t *testing.T) {
 	s, ln := mustNewStore(t)
@@ -52,8 +93,9 @@ func Test_OpenStoreSingleNode(t *testing.T) {
 	}
 }
 
-// Test_SingleNodeSQLitePath ensures that basic functionality works when the SQLite database path
-// is explicitly specificed.
+// Test_SingleNodeSQLitePath ensures that basic functionality works when the SQLite
+// database path is explicitly specified. It also checks that the CommitIndex is
+// set correctly.
 func Test_SingleNodeOnDiskSQLitePath(t *testing.T) {
 	s, ln, path := mustNewStoreSQLitePath(t)
 	defer ln.Close()
@@ -68,6 +110,10 @@ func Test_SingleNodeOnDiskSQLitePath(t *testing.T) {
 	if _, err := s.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
+	testPoll(t, func() bool {
+		ci, err := s.CommitIndex()
+		return err == nil && ci == uint64(2)
+	}, 50*time.Millisecond, 2*time.Second)
 
 	er := executeRequestFromStrings([]string{
 		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
@@ -76,6 +122,21 @@ func Test_SingleNodeOnDiskSQLitePath(t *testing.T) {
 	_, err := s.Execute(er)
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	ci, err := s.CommitIndex()
+	if err != nil {
+		t.Fatalf("failed to retrieve commit index: %s", err.Error())
+	}
+	if exp, got := uint64(3), ci; exp != got {
+		t.Fatalf("wrong commit index, got: %d, exp: %d", got, exp)
+	}
+	lci, err := s.LeaderCommitIndex()
+	if err != nil {
+		t.Fatalf("failed to retrieve commit index: %s", err.Error())
+	}
+	if exp, got := uint64(3), lci; exp != got {
+		t.Fatalf("wrong leader commit index, got: %d, exp: %d", got, exp)
 	}
 
 	qr := queryRequestFromString("SELECT * FROM foo", false, false)
@@ -157,7 +218,7 @@ func Test_SingleNodeTempFileCleanup(t *testing.T) {
 		backupScatchPattern,
 		bootScatchPattern,
 	} {
-		f, err := os.CreateTemp(s.dbDir, pattern)
+		f, err := createTemp(s.dbDir, pattern)
 		if err != nil {
 			t.Fatalf("failed to create temporary file: %s", err.Error())
 		}
@@ -475,7 +536,7 @@ func Test_OpenStoreCloseSingleNode(t *testing.T) {
 	if err := s.Open(); err != nil {
 		t.Fatalf("failed to open single-node store: %s", err.Error())
 	}
-	if !s.open {
+	if !s.open.Is() {
 		t.Fatalf("store not marked as open")
 	}
 
@@ -502,7 +563,7 @@ func Test_OpenStoreCloseSingleNode(t *testing.T) {
 	if err := s.Close(true); err != nil {
 		t.Fatalf("failed to close single-node store: %s", err.Error())
 	}
-	if s.open {
+	if s.open.Is() {
 		t.Fatalf("store still marked as open")
 	}
 
@@ -1500,7 +1561,7 @@ COMMIT;
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
-	// Check pre-existing data is gone.
+	// Check preexisting data is gone.
 	qr = queryRequestFromString("SELECT * FROM bar", false, true)
 	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
 	r, err = s.Query(qr)
@@ -1667,7 +1728,7 @@ COMMIT;
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 
-	// Check pre-existing data is gone.
+	// Check preexisting data is gone.
 	qr = queryRequestFromString("SELECT * FROM bar", false, true)
 	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG
 	r, err = s.Query(qr)
@@ -1808,7 +1869,7 @@ func Test_SingleNode_WALTriggeredSnapshot(t *testing.T) {
 	testPoll(t, f, 100*time.Millisecond, 2*time.Second)
 
 	// Sanity-check the contents of the Store. There should be two
-	// files -- a SQLite database file, and a diretory named after
+	// files -- a SQLite database file, and a directory named after
 	// the most recent snapshot. This basically checks that reaping
 	// is working, as it can be tricky on Windows due to stricter
 	// file deletion rules.
@@ -2372,16 +2433,16 @@ func Test_SingleNodeWaitForRemove(t *testing.T) {
 	err := s.WaitForRemoval(s.ID(), time.Second)
 	// if err is nil then fail the test
 	if err == nil {
-		t.Fatalf("no error waiting for removal of non-existent node")
+		t.Fatalf("no error waiting for removal of nonexistent node")
 	}
 	if !errors.Is(err, ErrWaitForRemovalTimeout) {
 		t.Fatalf("waiting for removal resulted in wrong error: %s", err.Error())
 	}
 
-	// should be no error waiting for removal of non-existent node
-	err = s.WaitForRemoval("non-existent-node", time.Second)
+	// should be no error waiting for removal of nonexistent node
+	err = s.WaitForRemoval("nonexistent-node", time.Second)
 	if err != nil {
-		t.Fatalf("error waiting for removal of non-existent node: %s", err.Error())
+		t.Fatalf("error waiting for removal of nonexistent node: %s", err.Error())
 	}
 }
 
@@ -2406,8 +2467,8 @@ func Test_SingleNodeNoop(t *testing.T) {
 	if af.Error() != nil {
 		t.Fatalf("expected nil apply future error")
 	}
-	if s.numNoops != 1 {
-		t.Fatalf("noop count is wrong, got: %d", s.numNoops)
+	if s.numNoops.Load() != 1 {
+		t.Fatalf("noop count is wrong, got: %d", s.numNoops.Load())
 	}
 }
 
@@ -2506,7 +2567,7 @@ func Test_RWROCount(t *testing.T) {
 			expRW: 1,
 		},
 		{
-			name:  "Single INSERT, non-existent table",
+			name:  "Single INSERT, nonexistent table",
 			stmts: []string{"INSERT INTO qux(id, name) VALUES(1, 'fiona')"},
 			expRW: 1,
 		},
@@ -2516,7 +2577,7 @@ func Test_RWROCount(t *testing.T) {
 			expRO: 1,
 		},
 		{
-			name:  "Single SELECT from non-existent table",
+			name:  "Single SELECT from nonexistent table",
 			stmts: []string{"SELECT * FROM qux"},
 			expRW: 1, // Yeah, this is unfortunate, but it's how SQLite works.
 		},
@@ -2620,7 +2681,7 @@ type mockLayer struct {
 func mustMockLayer(addr string) Layer {
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
-		panic("failed to create new listner")
+		panic("failed to create new listener")
 	}
 	return &mockLayer{ln}
 }
@@ -2646,7 +2707,7 @@ func mustNoop(s *Store, id string) {
 }
 
 func mustCreateTempFile() string {
-	f, err := os.CreateTemp("", "rqlite-temp")
+	f, err := createTemp("", "rqlite-temp")
 	if err != nil {
 		panic("failed to create temporary file")
 	}
@@ -2655,7 +2716,7 @@ func mustCreateTempFile() string {
 }
 
 func mustCreateTempFD() *os.File {
-	f, err := os.CreateTemp("", "rqlite-temp")
+	f, err := createTemp("", "rqlite-temp")
 	if err != nil {
 		panic("failed to create temporary file")
 	}
@@ -2884,11 +2945,11 @@ func asJSONAssociative(v interface{}) string {
 	return string(b)
 }
 
-func testPoll(t *testing.T, f func() bool, p time.Duration, d time.Duration) {
+func testPoll(t *testing.T, f func() bool, checkPeriod time.Duration, timeout time.Duration) {
 	t.Helper()
-	tck := time.NewTicker(p)
+	tck := time.NewTicker(checkPeriod)
 	defer tck.Stop()
-	tmr := time.NewTimer(d)
+	tmr := time.NewTimer(timeout)
 	defer tmr.Stop()
 
 	for {
