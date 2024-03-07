@@ -1,4 +1,4 @@
-FROM cimg/go:1.22.0
+FROM cimg/go:1.22.1
 
 RUN sudo apt-get update
 RUN sudo apt-get install musl-dev musl-tools
