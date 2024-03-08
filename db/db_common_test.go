@@ -265,6 +265,60 @@ func testEmptyStatements(t *testing.T, db *DB) {
 	}
 }
 
+func testReadOnlyStatements(t *testing.T, db *DB) {
+	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	// build a table-driven test suite for StmtReadOnlyWithConn
+	tests := []struct {
+		query string
+		ro    bool
+	}{
+		{
+			query: "SELECT * FROM foo",
+			ro:    true,
+		},
+		{
+			query: "INSERT INTO foo(name) VALUES('fiona')",
+			ro:    false,
+		},
+		{
+			query: "INSERT INTO foo(name) VALUES('fiona') RETURNING *",
+			ro:    false,
+		},
+		{
+			query: "UPDATE foo SET name='fiona' WHERE id=1",
+			ro:    false,
+		},
+		{
+			query: "DELETE FROM foo WHERE id=1",
+			ro:    false,
+		},
+		{
+			query: "CREATE TABLE bar (id INTEGER NOT NULL PRIMARY KEY, name TEXT)",
+			ro:    false,
+		},
+		{
+			query: "DROP TABLE foo",
+			ro:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		ro, err := db.QueryStringStmt(tt.query)
+		if err != nil {
+			t.Fatalf("failed to check if statement is read-only: %s", err.Error())
+		}
+		if !tt.ro {
+			if got, exp := asJSON(ro), `[{"error":"attempt to change database via query operation"}]`; got != exp {
+				t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+			}
+		}
+	}
+}
+
 func testSimpleStatementsNumeric(t *testing.T, db *DB) {
 	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT, age NUMERIC)")
 	if err != nil {
@@ -710,11 +764,26 @@ func testSimpleFailingStatements_Query(t *testing.T, db *DB) {
 	if exp, got := `[{"error":"near \"SELECTxx\": syntax error"}]`, asJSON(ro); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
-	r, err := db.QueryStringStmt(`utter nonsense`)
+	ro, err = db.QueryStringStmt(`utter nonsense`)
 	if err != nil {
-		if exp, got := `[{"error":"near \"utter\": syntax error"}]`, asJSON(r); exp != got {
+		if exp, got := `[{"error":"near \"utter\": syntax error"}]`, asJSON(ro); exp != got {
 			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 		}
+	}
+
+	r, err := db.ExecuteStringStmt(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if exp, got := `[{}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	ro, err = db.QueryStringStmt(`SELECT * FROM foo RETURNING *`)
+	if err != nil {
+		t.Fatalf("failed to attempt query of table: %s", err.Error())
+	}
+	if exp, got := `[{"error":"near \"RETURNING\": syntax error"}]`, asJSON(ro); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 }
 
@@ -1657,6 +1726,7 @@ func Test_DatabaseCommonOperations(t *testing.T) {
 		{"HexQuery", testHexQuery},
 		{"Strict", testSTRICT},
 		{"EmptyStatements", testEmptyStatements},
+		{"ReadOnlyStatements", testReadOnlyStatements},
 		{"SimpleSingleStatements", testSimpleSingleStatements},
 		{"SimpleStatementsNumeric", testSimpleStatementsNumeric},
 		{"SimpleStatementsCollate", testSimpleStatementsCollate},
