@@ -764,11 +764,26 @@ func testSimpleFailingStatements_Query(t *testing.T, db *DB) {
 	if exp, got := `[{"error":"near \"SELECTxx\": syntax error"}]`, asJSON(ro); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
-	r, err := db.QueryStringStmt(`utter nonsense`)
+	ro, err = db.QueryStringStmt(`utter nonsense`)
 	if err != nil {
-		if exp, got := `[{"error":"near \"utter\": syntax error"}]`, asJSON(r); exp != got {
+		if exp, got := `[{"error":"near \"utter\": syntax error"}]`, asJSON(ro); exp != got {
 			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 		}
+	}
+
+	r, err := db.ExecuteStringStmt(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`)
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+	if exp, got := `[{}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	ro, err = db.QueryStringStmt(`SELECT * FROM foo RETURNING *`)
+	if err != nil {
+		t.Fatalf("failed to attempt query of table: %s", err.Error())
+	}
+	if exp, got := `[{"error":"near \"RETURNING\": syntax error"}]`, asJSON(ro); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 }
 
