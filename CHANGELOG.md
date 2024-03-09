@@ -1,4 +1,7 @@
-## 8.22.3 (unreleased)
+## 8.23.0 (unreleased)
+### New features
+- [PR #1722](https://github.com/rqlite/rqlite/pull/1722): Support SQLite `RETURNING` keyword. Fixes issue [#1157](https://github.com/rqlite/rqlite/issues/1157).
+
 ### Implementation changes and bug fixes
 - [PR #1716](https://github.com/rqlite/rqlite/pull/1716): Miscellaneous code clean-ups.
 - [PR #1718](https://github.com/rqlite/rqlite/pull/1718): Support INFO-level logging of Snapshot reaping.
