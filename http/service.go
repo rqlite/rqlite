@@ -22,9 +22,9 @@ import (
 
 	"github.com/rqlite/rqlite/v8/auth"
 	clstrPB "github.com/rqlite/rqlite/v8/cluster/proto"
-	"github.com/rqlite/rqlite/v8/command"
 	"github.com/rqlite/rqlite/v8/command/encoding"
 	"github.com/rqlite/rqlite/v8/command/proto"
+	"github.com/rqlite/rqlite/v8/command/sql"
 	"github.com/rqlite/rqlite/v8/db"
 	"github.com/rqlite/rqlite/v8/queue"
 	"github.com/rqlite/rqlite/v8/rtls"
@@ -1072,7 +1072,7 @@ func (s *Service) queuedExecute(w http.ResponseWriter, r *http.Request, qp Query
 			return
 		}
 	}
-	if err := command.Rewrite(stmts, !qp.NoRewriteRandom()); err != nil {
+	if err := sql.Process(stmts, !qp.NoRewriteRandom()); err != nil {
 		http.Error(w, fmt.Sprintf("SQL rewrite: %s", err.Error()), http.StatusInternalServerError)
 		return
 	}
@@ -1121,7 +1121,7 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request, qp QueryParams
 		return
 	}
 	stats.Add(numExecuteStmtsRx, int64(len(stmts)))
-	if err := command.Rewrite(stmts, !qp.NoRewriteRandom()); err != nil {
+	if err := sql.Process(stmts, !qp.NoRewriteRandom()); err != nil {
 		http.Error(w, fmt.Sprintf("SQL rewrite: %s", err.Error()), http.StatusInternalServerError)
 		return
 	}
@@ -1207,7 +1207,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request, qp QueryPa
 	// No point rewriting queries if they don't go through the Raft log, since they
 	// will never be replayed from the log anyway.
 	if qp.Level() == proto.QueryRequest_QUERY_REQUEST_LEVEL_STRONG {
-		if err := command.Rewrite(queries, qp.NoRewriteRandom()); err != nil {
+		if err := sql.Process(queries, qp.NoRewriteRandom()); err != nil {
 			http.Error(w, fmt.Sprintf("SQL rewrite: %s", err.Error()), http.StatusInternalServerError)
 			return
 		}
@@ -1300,7 +1300,7 @@ func (s *Service) handleRequest(w http.ResponseWriter, r *http.Request, qp Query
 	}
 	stats.Add(numRequestStmtsRx, int64(len(stmts)))
 
-	if err := command.Rewrite(stmts, qp.NoRewriteRandom()); err != nil {
+	if err := sql.Process(stmts, qp.NoRewriteRandom()); err != nil {
 		http.Error(w, fmt.Sprintf("SQL rewrite: %s", err.Error()), http.StatusInternalServerError)
 		return
 	}
