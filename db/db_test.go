@@ -1061,8 +1061,8 @@ FROM test_table t1 LEFT OUTER JOIN test_table t2`
 	}
 
 	res := r[0]
-	if !strings.Contains(res.Error, ErrExecuteTimeout.Error()) {
-		t.Fatalf("expected execute timeout, got %s", res.Error)
+	if !strings.Contains(res.GetError(), ErrExecuteTimeout.Error()) {
+		t.Fatalf("expected execute timeout, got %s", res.GetError())
 	}
 }
 
@@ -1166,8 +1166,8 @@ func mustExecute(db *DB, stmt string) {
 	if err != nil {
 		panic(fmt.Sprintf("failed to execute statement: %s", err.Error()))
 	}
-	if r[0].Error != "" {
-		panic(fmt.Sprintf("failed to execute statement: %s", r[0].Error))
+	if r[0].GetError() != "" {
+		panic(fmt.Sprintf("failed to execute statement: %s", r[0].GetError()))
 	}
 }
 

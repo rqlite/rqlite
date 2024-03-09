@@ -541,7 +541,7 @@ func (db *DB) ConnectionPoolStats(sqlDB *sql.DB) *PoolStats {
 
 // ExecuteStringStmtWithTimeout executes a single query that modifies the database.
 // It also sets a timeout for the query. This is primarily a convenience function.
-func (db *DB) ExecuteStringStmtWithTimeout(query string, timeout time.Duration) ([]*command.ExecuteResult, error) {
+func (db *DB) ExecuteStringStmtWithTimeout(query string, timeout time.Duration) ([]*command.ExecuteQueryResponse, error) {
 	r := &command.Request{
 		Statements: []*command.Statement{
 			{
@@ -555,7 +555,7 @@ func (db *DB) ExecuteStringStmtWithTimeout(query string, timeout time.Duration) 
 
 // ExecuteStringStmt executes a single query that modifies the database. This is
 // primarily a convenience function.
-func (db *DB) ExecuteStringStmt(query string) ([]*command.ExecuteResult, error) {
+func (db *DB) ExecuteStringStmt(query string) ([]*command.ExecuteQueryResponse, error) {
 	r := &command.Request{
 		Statements: []*command.Statement{
 			{
@@ -567,7 +567,7 @@ func (db *DB) ExecuteStringStmt(query string) ([]*command.ExecuteResult, error) 
 }
 
 // Execute executes queries that modify the database.
-func (db *DB) Execute(req *command.Request, xTime bool) ([]*command.ExecuteResult, error) {
+func (db *DB) Execute(req *command.Request, xTime bool) ([]*command.ExecuteQueryResponse, error) {
 	stats.Add(numExecutions, int64(len(req.Statements)))
 	conn, err := db.rwDB.Conn(context.Background())
 	if err != nil {
@@ -589,7 +589,7 @@ type execerQueryer interface {
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 }
 
-func (db *DB) executeWithConn(ctx context.Context, req *command.Request, xTime bool, conn *sql.Conn) ([]*command.ExecuteResult, error) {
+func (db *DB) executeWithConn(ctx context.Context, req *command.Request, xTime bool, conn *sql.Conn) ([]*command.ExecuteQueryResponse, error) {
 	var err error
 
 	var eqer execerQueryer
@@ -610,13 +610,15 @@ func (db *DB) executeWithConn(ctx context.Context, req *command.Request, xTime b
 		eqer = conn
 	}
 
-	var allResults []*command.ExecuteResult
+	var allResults []*command.ExecuteQueryResponse
 
 	// handleError sets the error field on the given result. It returns
 	// whether the caller should continue processing or break.
-	handleError := func(result *command.ExecuteResult, err error) bool {
+	handleError := func(result *command.ExecuteQueryResponse, err error) bool {
 		stats.Add(numExecutionErrors, 1)
-		result.Error = err.Error()
+		result.Result = &command.ExecuteQueryResponse_Error{
+			Error: err.Error(),
+		}
 		allResults = append(allResults, result)
 		if tx != nil {
 			tx.Rollback()
@@ -649,21 +651,25 @@ func (db *DB) executeWithConn(ctx context.Context, req *command.Request, xTime b
 	return allResults, err
 }
 
-func (db *DB) executeStmtWithConn(ctx context.Context, stmt *command.Statement, xTime bool, eq execerQueryer, timeout time.Duration) (res *command.ExecuteResult, retErr error) {
+func (db *DB) executeStmtWithConn(ctx context.Context, stmt *command.Statement, xTime bool, eq execerQueryer, timeout time.Duration) (res *command.ExecuteQueryResponse, retErr error) {
 	defer func() {
 		if retErr != nil {
 			retErr = rewriteContextTimeout(retErr, ErrExecuteTimeout)
 			if res != nil {
-				res.Error = retErr.Error()
+				res.Result = &command.ExecuteQueryResponse_Error{
+					Error: retErr.Error(),
+				}
 			}
 		}
 	}()
-	result := &command.ExecuteResult{}
+	result := &command.ExecuteQueryResponse{}
 	start := time.Now()
 
 	parameters, err := parametersToValues(stmt.Parameters)
 	if err != nil {
-		result.Error = err.Error()
+		result.Result = &command.ExecuteQueryResponse_Error{
+			Error: err.Error(),
+		}
 		return result, nil
 	}
 
@@ -675,7 +681,9 @@ func (db *DB) executeStmtWithConn(ctx context.Context, stmt *command.Statement, 
 
 	r, err := eq.ExecContext(ctx, stmt.Sql, parameters...)
 	if err != nil {
-		result.Error = err.Error()
+		result.Result = &command.ExecuteQueryResponse_Error{
+			Error: err.Error(),
+		}
 		return result, err
 	}
 
@@ -685,20 +693,31 @@ func (db *DB) executeStmtWithConn(ctx context.Context, stmt *command.Statement, 
 
 	lid, err := r.LastInsertId()
 	if err != nil {
-		result.Error = err.Error()
+		result.Result = &command.ExecuteQueryResponse_Error{
+			Error: err.Error(),
+		}
 		return result, err
 	}
-	result.LastInsertId = lid
 
 	ra, err := r.RowsAffected()
 	if err != nil {
-		result.Error = err.Error()
+		result.Result = &command.ExecuteQueryResponse_Error{
+			Error: err.Error(),
+		}
 		return result, err
 	}
-	result.RowsAffected = ra
+	tf := float64(0)
 	if xTime {
-		result.Time = time.Since(start).Seconds()
+		tf = time.Since(start).Seconds()
 	}
+	result.Result = &command.ExecuteQueryResponse_E{
+		E: &command.ExecuteResult{
+			LastInsertId: lid,
+			RowsAffected: ra,
+			Time:         tf,
+		},
+	}
+
 	return result, nil
 }
 
@@ -983,7 +1002,7 @@ func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQuery
 			}
 		} else {
 			result, opErr := db.executeStmtWithConn(ctx, stmt, xTime, eq, time.Duration(req.DbTimeout))
-			eqResponse = append(eqResponse, createEQExecuteResponse(result, opErr))
+			eqResponse = append(eqResponse, result)
 			if abortOnError(opErr) {
 				break
 			}
@@ -1268,23 +1287,6 @@ func createEQQueryResponse(rows *command.QueryRows, err error) *command.ExecuteQ
 	return &command.ExecuteQueryResponse{
 		Result: &command.ExecuteQueryResponse_Q{
 			Q: rows,
-		},
-	}
-}
-
-func createEQExecuteResponse(execResult *command.ExecuteResult, err error) *command.ExecuteQueryResponse {
-	if err != nil {
-		return &command.ExecuteQueryResponse{
-			Result: &command.ExecuteQueryResponse_E{
-				E: &command.ExecuteResult{
-					Error: err.Error(),
-				},
-			},
-		}
-	}
-	return &command.ExecuteQueryResponse{
-		Result: &command.ExecuteQueryResponse_E{
-			E: execResult,
 		},
 	}
 }
