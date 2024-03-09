@@ -62,7 +62,7 @@ func (c *CommandProcessor) Process(data []byte, db *sql.SwappableDB) (*proto.Com
 			panic(fmt.Sprintf("failed to unmarshal execute subcommand: %s", err.Error()))
 		}
 		r, err := db.Execute(er.Request, er.Timings)
-		return cmd, true, &fsmExecuteResponse{results: r, error: err}
+		return cmd, true, &fsmExecuteQueryResponse{results: r, error: err}
 	case proto.Command_COMMAND_TYPE_EXECUTE_QUERY:
 		var eqr proto.ExecuteQueryRequest
 		if err := command.UnmarshalSubCommand(cmd, &eqr); err != nil {

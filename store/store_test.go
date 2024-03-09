@@ -750,7 +750,7 @@ func Test_SingleNodeExecuteQueryFail(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to execute on single node: %s", err.Error())
 	}
-	if exp, got := "no such table: foo", r[0].Error; exp != got {
+	if exp, got := "no such table: foo", r[0].GetError(); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 }
@@ -1316,7 +1316,7 @@ COMMIT;
 	if err != nil {
 		t.Fatalf("failed to insert into view on single node: %s", err.Error())
 	}
-	if exp, got := int64(3), r[0].GetLastInsertId(); exp != got {
+	if exp, got := int64(3), r[0].GetE().GetLastInsertId(); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %d\ngot: %d", exp, got)
 	}
 }
