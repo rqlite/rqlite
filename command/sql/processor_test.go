@@ -127,3 +127,20 @@ func Test_RETURNING_Some(t *testing.T) {
 		}
 	}
 }
+
+func Test_Both(t *testing.T) {
+	stmt := &proto.Statement{
+		Sql: `INSERT INTO "names" VALUES (RANDOM(), 'bob', '123-45-678') RETURNING *`,
+	}
+
+	if err := Process([]*proto.Statement{stmt}, true); err != nil {
+		t.Fatalf("failed to not rewrite: %s", err)
+	}
+	match := regexp.MustCompile(`INSERT INTO "names" VALUES \(-?[0-9]+, 'bob', '123-45-678'\)`)
+	if !match.MatchString(stmt.Sql) {
+		t.Fatalf("SQL is not rewritten: %s", stmt.Sql)
+	}
+	if !stmt.Returning {
+		t.Fatalf("RETURNING is not set")
+	}
+}
