@@ -47,7 +47,7 @@ type Database interface {
 	// to return rows. If timings is true, then timing information will
 	// be return. If tx is true, then either all queries will be executed
 	// successfully or it will as though none executed.
-	Execute(er *proto.ExecuteRequest) ([]*proto.ExecuteResult, error)
+	Execute(er *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse, error)
 
 	// Query executes a slice of queries, each of which returns rows. If
 	// timings is true, then timing information will be returned. If tx
@@ -106,7 +106,7 @@ type Cluster interface {
 	GetAddresser
 
 	// Execute performs an Execute Request on a remote node.
-	Execute(er *proto.ExecuteRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*proto.ExecuteResult, error)
+	Execute(er *proto.ExecuteRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration, retries int) ([]*proto.ExecuteQueryResponse, error)
 
 	// Query performs an Query Request on a remote node.
 	Query(qr *proto.QueryRequest, nodeAddr string, creds *clstrPB.Credentials, timeout time.Duration) ([]*proto.QueryRows, error)
@@ -141,9 +141,8 @@ type StatusReporter interface {
 // DBResults stores either an Execute result, a Query result, or
 // an ExecuteQuery result.
 type DBResults struct {
-	ExecuteResult        []*proto.ExecuteResult
-	QueryRows            []*proto.QueryRows
 	ExecuteQueryResponse []*proto.ExecuteQueryResponse
+	QueryRows            []*proto.QueryRows
 
 	AssociativeJSON bool // Render in associative form
 	BlobsAsArrays   bool // Render BLOB data as byte arrays
@@ -161,9 +160,7 @@ func (d *DBResults) MarshalJSON() ([]byte, error) {
 		BlobsAsByteArrays: d.BlobsAsArrays,
 	}
 
-	if d.ExecuteResult != nil {
-		return enc.JSONMarshal(d.ExecuteResult)
-	} else if d.QueryRows != nil {
+	if d.QueryRows != nil {
 		return enc.JSONMarshal(d.QueryRows)
 	} else if d.ExecuteQueryResponse != nil {
 		return enc.JSONMarshal(d.ExecuteQueryResponse)
@@ -732,7 +729,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 		queries := []string{string(b)}
 		er := executeRequestFromStrings(queries, qp.Timings(), false)
 
-		results, err := s.store.Execute(er)
+		response, err := s.store.Execute(er)
 		if err != nil {
 			if err == store.ErrNotLeader {
 				if s.DoRedirect(w, r, qp) {
@@ -741,7 +738,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request, qp QueryPar
 			}
 			resp.Error = err.Error()
 		} else {
-			resp.Results.ExecuteResult = results
+			resp.Results.ExecuteQueryResponse = response
 		}
 		resp.end = time.Now()
 	}
@@ -1176,7 +1173,7 @@ func (s *Service) execute(w http.ResponseWriter, r *http.Request, qp QueryParams
 	if resultsErr != nil {
 		resp.Error = resultsErr.Error()
 	} else {
-		resp.Results.ExecuteResult = results
+		resp.Results.ExecuteQueryResponse = results
 	}
 	resp.end = time.Now()
 	s.writeResponse(w, qp, resp)
