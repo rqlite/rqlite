@@ -18,7 +18,7 @@ message Parameter {
 message Statement {
 	string sql = 1;
 	repeated Parameter parameters = 2;
-	bool returning = 3;
+	bool forceQuery = 3;
 }
 
 message Request {

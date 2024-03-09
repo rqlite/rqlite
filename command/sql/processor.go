@@ -30,7 +30,7 @@ func Process(stmts []*proto.Statement, r bool) error {
 		if f {
 			stmts[i].Sql = s.String()
 		}
-		stmts[i].Returning = r
+		stmts[i].ForceQuery = r
 	}
 	return nil
 }

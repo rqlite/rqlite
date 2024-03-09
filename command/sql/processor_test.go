@@ -99,8 +99,8 @@ func Test_RETURNING_None(t *testing.T) {
 		if err := Process(stmts, false); err != nil {
 			t.Fatalf("failed to not rewrite: %s", err)
 		}
-		if stmts[0].Returning {
-			t.Fatalf("RETURNING is set")
+		if stmts[0].ForceQuery {
+			t.Fatalf("ForceQuery is set")
 		}
 	}
 }
@@ -122,7 +122,7 @@ func Test_RETURNING_Some(t *testing.T) {
 		if err := Process(stmts, false); err != nil {
 			t.Fatalf("failed to not rewrite: %s", err)
 		}
-		if exp, got := b, stmts[0].Returning; exp != got {
+		if exp, got := b, stmts[0].ForceQuery; exp != got {
 			t.Fatalf(`expected %v for SQL "%s", but got %v`, exp, sql, got)
 		}
 	}
@@ -140,7 +140,7 @@ func Test_Both(t *testing.T) {
 	if !match.MatchString(stmt.Sql) {
 		t.Fatalf("SQL is not rewritten: %s", stmt.Sql)
 	}
-	if !stmt.Returning {
-		t.Fatalf("RETURNING is not set")
+	if !stmt.ForceQuery {
+		t.Fatalf("ForceQuery is not set")
 	}
 }
