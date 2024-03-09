@@ -584,14 +584,15 @@ func (db *DB) Execute(req *command.Request, xTime bool) ([]*command.ExecuteResul
 	return db.executeWithConn(ctx, req, xTime, conn)
 }
 
-type execer interface {
-	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
+type execerQueryer interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 }
 
 func (db *DB) executeWithConn(ctx context.Context, req *command.Request, xTime bool, conn *sql.Conn) ([]*command.ExecuteResult, error) {
 	var err error
 
-	var execer execer
+	var eqer execerQueryer
 	var tx *sql.Tx
 	if req.Transaction {
 		stats.Add(numETx, 1)
@@ -604,9 +605,9 @@ func (db *DB) executeWithConn(ctx context.Context, req *command.Request, xTime b
 				tx.Rollback() // Will be ignored if tx is committed
 			}
 		}()
-		execer = tx
+		eqer = tx
 	} else {
-		execer = conn
+		eqer = conn
 	}
 
 	var allResults []*command.ExecuteResult
@@ -632,7 +633,7 @@ func (db *DB) executeWithConn(ctx context.Context, req *command.Request, xTime b
 			continue
 		}
 
-		result, err := db.executeStmtWithConn(ctx, stmt, xTime, execer, time.Duration(req.DbTimeout))
+		result, err := db.executeStmtWithConn(ctx, stmt, xTime, eqer, time.Duration(req.DbTimeout))
 		if err != nil {
 			if handleError(result, err) {
 				continue
@@ -648,7 +649,7 @@ func (db *DB) executeWithConn(ctx context.Context, req *command.Request, xTime b
 	return allResults, err
 }
 
-func (db *DB) executeStmtWithConn(ctx context.Context, stmt *command.Statement, xTime bool, e execer, timeout time.Duration) (res *command.ExecuteResult, retErr error) {
+func (db *DB) executeStmtWithConn(ctx context.Context, stmt *command.Statement, xTime bool, eq execerQueryer, timeout time.Duration) (res *command.ExecuteResult, retErr error) {
 	defer func() {
 		if retErr != nil {
 			retErr = rewriteContextTimeout(retErr, ErrExecuteTimeout)
@@ -672,7 +673,7 @@ func (db *DB) executeStmtWithConn(ctx context.Context, stmt *command.Statement, 
 		defer cancel()
 	}
 
-	r, err := e.ExecContext(ctx, stmt.Sql, parameters...)
+	r, err := eq.ExecContext(ctx, stmt.Sql, parameters...)
 	if err != nil {
 		result.Error = err.Error()
 		return result, err
@@ -932,8 +933,7 @@ func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQuery
 		defer cancel()
 	}
 
-	var queryer queryer
-	var execer execer
+	var eq execerQueryer
 	var tx *sql.Tx
 	if req.Transaction {
 		stats.Add(numRTx, 1)
@@ -942,11 +942,9 @@ func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQuery
 			return nil, err
 		}
 		defer tx.Rollback() // Will be ignored if tx is committed
-		queryer = tx
-		execer = tx
+		eq = tx
 	} else {
-		queryer = conn
-		execer = conn
+		eq = conn
 	}
 
 	// abortOnError indicates whether the caller should continue
@@ -978,13 +976,13 @@ func (db *DB) Request(req *command.Request, xTime bool) ([]*command.ExecuteQuery
 		}
 
 		if ro {
-			rows, opErr := db.queryStmtWithConn(ctx, stmt, xTime, queryer)
+			rows, opErr := db.queryStmtWithConn(ctx, stmt, xTime, eq)
 			eqResponse = append(eqResponse, createEQQueryResponse(rows, opErr))
 			if abortOnError(opErr) {
 				break
 			}
 		} else {
-			result, opErr := db.executeStmtWithConn(ctx, stmt, xTime, execer, time.Duration(req.DbTimeout))
+			result, opErr := db.executeStmtWithConn(ctx, stmt, xTime, eq, time.Duration(req.DbTimeout))
 			eqResponse = append(eqResponse, createEQExecuteResponse(result, opErr))
 			if abortOnError(opErr) {
 				break
