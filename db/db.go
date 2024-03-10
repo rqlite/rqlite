@@ -28,21 +28,21 @@ const (
 )
 
 const (
-	openDuration            = "open_duration_ms"
-	numCheckpoints          = "checkpoints"
-	numCheckpointErrors     = "checkpoint_errors"
-	numCheckpointedPages    = "checkpointed_pages"
-	numCheckpointedMoves    = "checkpointed_moves"
-	checkpointDuration      = "checkpoint_duration_ms"
-	numExecutions           = "executions"
-	numExecutionErrors      = "execution_errors"
-	numExecutionsForceQuery = "executions_force_query"
-	numQueries              = "queries"
-	numQueryErrors          = "query_errors"
-	numRequests             = "requests"
-	numETx                  = "execute_transactions"
-	numQTx                  = "query_transactions"
-	numRTx                  = "request_transactions"
+	openDuration              = "open_duration_ms"
+	numCheckpoints            = "checkpoints"
+	numCheckpointErrors       = "checkpoint_errors"
+	numCheckpointedPages      = "checkpointed_pages"
+	numCheckpointedMoves      = "checkpointed_moves"
+	checkpointDuration        = "checkpoint_duration_ms"
+	numExecutions             = "executions"
+	numExecutionErrors        = "execution_errors"
+	numExecutionsForceQueries = "executions_force_queries"
+	numQueries                = "queries"
+	numQueryErrors            = "query_errors"
+	numRequests               = "requests"
+	numETx                    = "execute_transactions"
+	numQTx                    = "query_transactions"
+	numRTx                    = "request_transactions"
 )
 
 var (
@@ -97,7 +97,7 @@ func ResetStats() {
 	stats.Add(checkpointDuration, 0)
 	stats.Add(numExecutions, 0)
 	stats.Add(numExecutionErrors, 0)
-	stats.Add(numExecutionsForceQuery, 0)
+	stats.Add(numExecutionsForceQueries, 0)
 	stats.Add(numQueries, 0)
 	stats.Add(numQueryErrors, 0)
 	stats.Add(numRequests, 0)
@@ -682,7 +682,7 @@ func (db *DB) executeStmtWithConn(ctx context.Context, stmt *command.Statement, 
 	}
 
 	if stmt.ForceQuery {
-		stats.Add(numExecutionsForceQuery, 1)
+		stats.Add(numExecutionsForceQueries, 1)
 		rows, err := db.queryStmtWithConn(ctx, stmt, xTime, eq)
 		if err != nil {
 			response.Result = &command.ExecuteQueryResponse_Error{
