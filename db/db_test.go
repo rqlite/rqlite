@@ -534,15 +534,8 @@ func Test_SQLForceQuery(t *testing.T) {
 	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
-	req = &command.Request{
-		Transaction: true,
-		Statements: []*command.Statement{
-			{
-				Sql:        `INSERT INTO foo(id, name) VALUES(2, "fiona") RETURNING *`,
-				ForceQuery: false,
-			},
-		},
-	}
+	req.Statements[0].Sql = `INSERT INTO foo(id, name) VALUES(2, "fiona") RETURNING *`
+	req.Statements[0].ForceQuery = false
 	r, err = db.Execute(req, false)
 	if err != nil {
 		t.Fatalf("failed to insert records: %s", err.Error())
@@ -556,6 +549,17 @@ func Test_SQLForceQuery(t *testing.T) {
 		t.Fatalf("failed to query table: %s", err.Error())
 	}
 	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"],[2,"fiona"]]}]`, asJSON(ro); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	// Now ensure it also works with Request (unified endpoint support)
+	req.Statements[0].Sql = `INSERT INTO foo(id, name) VALUES(3, "fiona") RETURNING *`
+	req.Statements[0].ForceQuery = true
+	r, err = db.Request(req, false)
+	if err != nil {
+		t.Fatalf("failed to insert records via Request: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[3,"fiona"]]}]`, asJSON(r); exp != got {
 		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
 	}
 }
