@@ -33,6 +33,7 @@ func Test_NewQueryParams(t *testing.T) {
 		{"Invalid URL Encoding", "invalid=%ZZ", nil, true},
 		{"freshness_strict", "&freshness=5s&freshness_strict", QueryParams{"freshness_strict": "", "freshness": "5s"}, false},
 		{"freshness_strict requires freshness", "freshness_strict", nil, true},
+		{"Disable SQL parsing", "noparse", QueryParams{"noparse": ""}, false},
 		{"Sync with timeout", "sync&timeout=2s", QueryParams{"sync": "", "timeout": "2s"}, false},
 		{"Byte array with associative", "byte_array&associative", QueryParams{"byte_array": "", "associative": ""}, false},
 	}
