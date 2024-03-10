@@ -727,6 +727,55 @@ func Test_SingleNodeExecuteQuery(t *testing.T) {
 	}
 }
 
+func Test_SingleNodeExecuteQuery_RETURNING(t *testing.T) {
+	s, ln := mustNewStore(t)
+	defer ln.Close()
+
+	if err := s.Open(); err != nil {
+		t.Fatalf("failed to open single-node store: %s", err.Error())
+	}
+	if err := s.Bootstrap(NewServer(s.ID(), s.Addr(), true)); err != nil {
+		t.Fatalf("failed to bootstrap single-node store: %s", err.Error())
+	}
+	defer s.Close(true)
+	_, err := s.WaitForLeader(10 * time.Second)
+	if err != nil {
+		t.Fatalf("Error waiting for leader: %s", err)
+	}
+
+	er := executeRequestFromStrings([]string{
+		`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`,
+		`INSERT INTO foo(id, name) VALUES(1, "fiona")`,
+	}, false, false)
+	_, err = s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute on single node: %s", err.Error())
+	}
+
+	er = executeRequestFromString(`INSERT INTO foo(id, name) VALUES(2, "fiona") RETURNING id`, false, false)
+	er.Request.Statements[0].ForceQuery = true
+	rows, err := s.Execute(er)
+	if err != nil {
+		t.Fatalf("failed to execute with RETURNING on single node: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id"],"types":["integer"],"values":[[2]]}]`, asJSON(rows); exp != got {
+		t.Fatalf("unexpected results for RETURNING query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	qr := queryRequestFromString("SELECT * FROM foo", false, false)
+	qr.Level = proto.QueryRequest_QUERY_REQUEST_LEVEL_NONE
+	r, err := s.Query(qr)
+	if err != nil {
+		t.Fatalf("failed to query single node: %s", err.Error())
+	}
+	if exp, got := `["id","name"]`, asJSON(r[0].Columns); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	if exp, got := `[[1,"fiona"],[2,"fiona"]]`, asJSON(r[0].Values); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
 // Test_SingleNodeExecuteQueryFail ensures database level errors are presented by the store.
 func Test_SingleNodeExecuteQueryFail(t *testing.T) {
 	s, ln := mustNewStore(t)
