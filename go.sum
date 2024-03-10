@@ -196,12 +196,8 @@ github.com/rqlite/raft-boltdb/v2 v2.0.0-20230523104317-c08e70f4de48 h1:NZ62M+kT0
 github.com/rqlite/raft-boltdb/v2 v2.0.0-20230523104317-c08e70f4de48/go.mod h1:CRnsxgy5G8fAf5J+AM0yrsSdxXHKkIYOaq2sm+Q4DYc=
 github.com/rqlite/rqlite-disco-clients v0.0.0-20231230135307-118e35426347 h1:01eOG4AXjYsrsLRITgBFHaDPXys1NfeY2idx25ZJFF8=
 github.com/rqlite/rqlite-disco-clients v0.0.0-20231230135307-118e35426347/go.mod h1:pym85nj6JnCI7rM9RxTZ4cubkTQyyg7uLwVydso9B80=
-github.com/rqlite/sql v0.0.0-20240309144455-f60d909227da h1:6zL4UCZxZlOrze4mjKJJ0qO5Ld2jnowJLx2SBPwJhtQ=
-github.com/rqlite/sql v0.0.0-20240309144455-f60d909227da/go.mod h1:ib9zVtNgRKiGuoMyUqqL5aNpk+r+++YlyiVIkclVqPg=
-github.com/rqlite/sql v0.0.0-20240309152847-e108330146af h1:2/G7ji2LttMgbG81XLll1u9RH6H84uXaXcFY7RWKDrA=
-github.com/rqlite/sql v0.0.0-20240309152847-e108330146af/go.mod h1:ib9zVtNgRKiGuoMyUqqL5aNpk+r+++YlyiVIkclVqPg=
-github.com/rqlite/sql v0.0.0-20240309155521-f3365e44a713 h1:1dwGvUIGHOd7aJiDojKd0nkWtxcsmd6ztrh9cb8kQs0=
-github.com/rqlite/sql v0.0.0-20240309155521-f3365e44a713/go.mod h1:ib9zVtNgRKiGuoMyUqqL5aNpk+r+++YlyiVIkclVqPg=
+github.com/rqlite/sql v0.0.0-20240310215502-5322d37e118c h1:LbNLjBukZpyMpM2Pkc5rA9b7C5F2KVmX3HFc2SIS7lQ=
+github.com/rqlite/sql v0.0.0-20240310215502-5322d37e118c/go.mod h1:ib9zVtNgRKiGuoMyUqqL5aNpk+r+++YlyiVIkclVqPg=
 github.com/ryanuber/columnize v0.0.0-20160712163229-9b3edd62028f/go.mod h1:sm1tb6uqfes/u+d4ooFouqFdy9/2g9QGwK3SQygK0Ts=
 github.com/sean-/seed v0.0.0-20170313163322-e2103e2c3529 h1:nn5Wsu0esKSJiIVhscUtVbo7ada43DJhG55ua/hjS5I=
 github.com/sean-/seed v0.0.0-20170313163322-e2103e2c3529/go.mod h1:DxrIzT+xaE7yg65j358z/aeFdxmN0P9QXhEzd20vsDc=
