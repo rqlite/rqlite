@@ -49,7 +49,7 @@ message Command {
 
 message CommandExecuteResponse {
 	string error = 1;
-	repeated command.ExecuteResult results = 2;
+    repeated command.ExecuteQueryResponse response = 2;
 }
 
 message CommandQueryResponse {

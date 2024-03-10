@@ -129,7 +129,7 @@ func (c *Client) GetNodeAPIAddr(nodeAddr string, timeout time.Duration) (string,
 // Execute performs an Execute on a remote node. If username is an empty string
 // no credential information will be included in the Execute request to the
 // remote node.
-func (c *Client) Execute(er *command.ExecuteRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration, retries int) ([]*command.ExecuteResult, error) {
+func (c *Client) Execute(er *command.ExecuteRequest, nodeAddr string, creds *proto.Credentials, timeout time.Duration, retries int) ([]*command.ExecuteQueryResponse, error) {
 	command := &proto.Command{
 		Type: proto.Command_COMMAND_TYPE_EXECUTE,
 		Request: &proto.Command_ExecuteRequest{
@@ -152,7 +152,7 @@ func (c *Client) Execute(er *command.ExecuteRequest, nodeAddr string, creds *pro
 	if a.Error != "" {
 		return nil, errors.New(a.Error)
 	}
-	return a.Results, nil
+	return a.Response, nil
 }
 
 // Query performs a Query on a remote node.

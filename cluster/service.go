@@ -84,9 +84,8 @@ type Dialer interface {
 
 // Database is the interface any queryable system must implement
 type Database interface {
-	// Execute executes a slice of queries, none of which is expected
-	// to return rows.
-	Execute(er *command.ExecuteRequest) ([]*command.ExecuteResult, error)
+	// Execute executes a slice of SQL statements.
+	Execute(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, error)
 
 	// Query executes a slice of queries, each of which returns rows.
 	Query(qr *command.QueryRequest) ([]*command.QueryRows, error)
@@ -317,8 +316,8 @@ func (s *Service) handleConn(conn net.Conn) {
 				if err != nil {
 					resp.Error = err.Error()
 				} else {
-					resp.Results = make([]*command.ExecuteResult, len(res))
-					copy(resp.Results, res)
+					resp.Response = make([]*command.ExecuteQueryResponse, len(res))
+					copy(resp.Response, res)
 				}
 			}
 			marshalAndWrite(conn, resp)
