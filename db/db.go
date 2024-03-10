@@ -680,76 +680,15 @@ func (db *DB) executeStmtWithConn(ctx context.Context, stmt *command.Statement, 
 	}
 
 	if stmt.ForceQuery {
-		rows, err := eq.QueryContext(ctx, stmt.Sql, parameters...)
+		rows, err := db.queryStmtWithConn(ctx, stmt, xTime, eq)
 		if err != nil {
 			response.Result = &command.ExecuteQueryResponse_Error{
 				Error: err.Error(),
 			}
 			return response, nil
 		}
-		defer rows.Close()
-
-		columns, err := rows.Columns()
-		if err != nil {
-			response.Result = &command.ExecuteQueryResponse_Error{
-				Error: err.Error(),
-			}
-			return response, nil
-		}
-
-		types, err := rows.ColumnTypes()
-		if err != nil {
-			response.Result = &command.ExecuteQueryResponse_Error{
-				Error: err.Error(),
-			}
-			return response, nil
-		}
-		xTypes := make([]string, len(types))
-		for i := range types {
-			xTypes[i] = strings.ToLower(types[i].DatabaseTypeName())
-		}
-		needsQueryTypes := containsEmptyType(xTypes)
-
-		for rows.Next() {
-			dest := make([]interface{}, len(columns))
-			ptrs := make([]interface{}, len(dest))
-			for i := range ptrs {
-				ptrs[i] = &dest[i]
-			}
-			if err := rows.Scan(ptrs...); err != nil {
-				response.Result = &command.ExecuteQueryResponse_Error{
-					Error: err.Error(),
-				}
-				return response, nil
-			}
-			params, err := normalizeRowValues(dest, xTypes)
-			if err != nil {
-				response.Result = &command.ExecuteQueryResponse_Error{
-					Error: err.Error(),
-				}
-				return response, nil
-			}
-			response.Result = &command.ExecuteQueryResponse_Q{
-				Q: &command.QueryRows{
-					Columns: columns,
-					Types:   xTypes,
-					Values: []*command.Values{
-						{
-							Parameters: params,
-						},
-					},
-				},
-			}
-
-			// One-time population of any empty types. Best effort, ignore
-			// error.
-			if needsQueryTypes {
-				populateEmptyTypes(xTypes, params)
-				needsQueryTypes = false
-			}
-		}
-		if xTime {
-			response.Result.(*command.ExecuteQueryResponse_Q).Q.Time = time.Since(start).Seconds()
+		response.Result = &command.ExecuteQueryResponse_Q{
+			Q: rows,
 		}
 	} else {
 		result, err := eq.ExecContext(ctx, stmt.Sql, parameters...)
