@@ -75,7 +75,7 @@ func (s *SwappableDB) Request(req *command.Request, xTime bool) ([]*command.Exec
 }
 
 // Execute calls Execute on the underlying database.
-func (s *SwappableDB) Execute(ex *command.Request, xTime bool) ([]*command.ExecuteResult, error) {
+func (s *SwappableDB) Execute(ex *command.Request, xTime bool) ([]*command.ExecuteQueryResponse, error) {
 	s.dbMu.RLock()
 	defer s.dbMu.RUnlock()
 	return s.db.Execute(ex, xTime)

@@ -630,12 +630,55 @@ func Test_SingleNodeRewriteRandom(t *testing.T) {
 
 	resp, err := node.Execute(`INSERT INTO foo(id, name) VALUES(RANDOM(), "fiona")`)
 	if err != nil {
-		t.Fatalf(`queued write failed: %s`, err.Error())
+		t.Fatalf(`write failed: %s`, err.Error())
 	}
 
 	match := regexp.MustCompile(`{"results":[{"last_insert_id":\-?[0-9]+,"rows_affected":1}]}`)
 	if !match.MatchString(resp) {
 		t.Fatalf("test received wrong result got %s", resp)
+	}
+}
+
+func Test_SingleNode_RETURNING(t *testing.T) {
+	node := mustNewLeaderNode("leader1")
+	defer node.Deprovision()
+
+	_, err := node.Execute(`CREATE TABLE foo (id integer not null primary key, name text)`)
+	if err != nil {
+		t.Fatalf(`CREATE TABLE failed: %s`, err.Error())
+	}
+
+	res, err := node.Execute(`INSERT INTO foo(id, name) VALUES(1, "fiona")`)
+	if err != nil {
+		t.Fatalf(`queued write failed: %s`, err.Error())
+	}
+	if got, exp := res, `{"results":[{"last_insert_id":1,"rows_affected":1}]}`; got != exp {
+		t.Fatalf("wrong execute results, exp %s, got %s", exp, got)
+	}
+	res, err = node.Execute(`INSERT INTO foo(id, name) VALUES(2, "declan") RETURNING *`)
+	if err != nil {
+		t.Fatalf(`write failed: %s`, err.Error())
+	}
+	if got, exp := res, `{"results":[{"columns":["id","name"],"types":["integer","text"],"values":[[2,"declan"]]}]}`; got != exp {
+		t.Fatalf("wrong execute results for RETURNING, exp %s, got %s", exp, got)
+	}
+	res, err = node.Execute(`INSERT INTO foo(id, name) VALUES(3, "aoife")`)
+	if err != nil {
+		t.Fatalf(`write failed: %s`, err.Error())
+	}
+	if got, exp := res, `{"results":[{"last_insert_id":3,"rows_affected":1}]}`; got != exp {
+		t.Fatalf("wrong execute results, exp %s, got %s", exp, got)
+	}
+
+	// Try a request with multiple statements.
+	res, err = node.ExecuteMulti([]string{
+		`INSERT INTO foo(id, name) VALUES(4, "alice") RETURNING *`,
+		`INSERT INTO foo(id, name) VALUES(5, "bob")`})
+	if err != nil {
+		t.Fatalf("failed to INSERT record: %s", err.Error())
+	}
+	if got, exp := res, `{"results":[{"columns":["id","name"],"types":["integer","text"],"values":[[4,"alice"]]},{"last_insert_id":5,"rows_affected":1}]}`; got != exp {
+		t.Fatalf("wrong execute-multi results for RETURNING, exp %s, got %s", exp, got)
 	}
 }
 

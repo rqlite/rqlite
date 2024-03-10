@@ -1098,7 +1098,7 @@ func (s *Store) Stats() (map[string]interface{}, error) {
 }
 
 // Execute executes queries that return no rows, but do modify the database.
-func (s *Store) Execute(ex *proto.ExecuteRequest) ([]*proto.ExecuteResult, error) {
+func (s *Store) Execute(ex *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse, error) {
 	if !s.open.Is() {
 		return nil, ErrNotOpen
 	}
@@ -1112,7 +1112,7 @@ func (s *Store) Execute(ex *proto.ExecuteRequest) ([]*proto.ExecuteResult, error
 	return s.execute(ex)
 }
 
-func (s *Store) execute(ex *proto.ExecuteRequest) ([]*proto.ExecuteResult, error) {
+func (s *Store) execute(ex *proto.ExecuteRequest) ([]*proto.ExecuteQueryResponse, error) {
 	b, compressed, err := s.tryCompress(ex)
 	if err != nil {
 		return nil, err
@@ -1136,7 +1136,7 @@ func (s *Store) execute(ex *proto.ExecuteRequest) ([]*proto.ExecuteResult, error
 		}
 		return nil, af.Error()
 	}
-	r := af.Response().(*fsmExecuteResponse)
+	r := af.Response().(*fsmExecuteQueryResponse)
 	return r.results, r.error
 }
 

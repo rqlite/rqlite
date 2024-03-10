@@ -30,11 +30,18 @@ func Test_ResponseJSONMarshal(t *testing.T) {
 	}
 
 	resp = NewResponse()
-	resp.Results.ExecuteResult = []*command.ExecuteResult{{
-		LastInsertId: 39,
-		RowsAffected: 45,
-		Time:         1234,
-	}}
+	resp.Results.ExecuteQueryResponse = []*command.ExecuteQueryResponse{
+		{
+			Result: &command.ExecuteQueryResponse_E{
+				E: &command.ExecuteResult{
+					LastInsertId: 39,
+					RowsAffected: 45,
+					Time:         1234,
+				},
+			},
+		},
+	}
+
 	b, err = json.Marshal(resp)
 	if err != nil {
 		t.Fatalf("failed to JSON marshal empty Response: %s", err)
@@ -1168,19 +1175,23 @@ func Test_ForwardingRedirectExecute(t *testing.T) {
 	m := &MockStore{
 		leaderAddr: "foo:1234",
 	}
-	m.executeFn = func(er *command.ExecuteRequest) ([]*command.ExecuteResult, error) {
+	m.executeFn = func(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, error) {
 		return nil, store.ErrNotLeader
 	}
 
 	c := &mockClusterService{
 		apiAddr: "https://bar:5678",
 	}
-	c.executeFn = func(er *command.ExecuteRequest, addr string, timeout time.Duration) ([]*command.ExecuteResult, error) {
-		result := &command.ExecuteResult{
-			LastInsertId: 1234,
-			RowsAffected: 5678,
+	c.executeFn = func(er *command.ExecuteRequest, addr string, timeout time.Duration) ([]*command.ExecuteQueryResponse, error) {
+		result := &command.ExecuteQueryResponse{
+			Result: &command.ExecuteQueryResponse_E{
+				E: &command.ExecuteResult{
+					LastInsertId: 1234,
+					RowsAffected: 5678,
+				},
+			},
 		}
-		return []*command.ExecuteResult{result}, nil
+		return []*command.ExecuteQueryResponse{result}, nil
 	}
 
 	s := New("127.0.0.1:0", m, c, nil)
@@ -1416,7 +1427,7 @@ func Test_DBTimeoutQueryParam(t *testing.T) {
 }
 
 type MockStore struct {
-	executeFn   func(er *command.ExecuteRequest) ([]*command.ExecuteResult, error)
+	executeFn   func(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, error)
 	queryFn     func(qr *command.QueryRequest) ([]*command.QueryRows, error)
 	requestFn   func(eqr *command.ExecuteQueryRequest) ([]*command.ExecuteQueryResponse, error)
 	backupFn    func(br *command.BackupRequest, dst io.Writer) error
@@ -1427,7 +1438,7 @@ type MockStore struct {
 	notReady    bool // Default value is true, easier to test.
 }
 
-func (m *MockStore) Execute(er *command.ExecuteRequest) ([]*command.ExecuteResult, error) {
+func (m *MockStore) Execute(er *command.ExecuteRequest) ([]*command.ExecuteQueryResponse, error) {
 	if m.executeFn != nil {
 		return m.executeFn(er)
 	}
@@ -1506,7 +1517,7 @@ func (m *MockStore) ReadFrom(r io.Reader) (int64, error) {
 
 type mockClusterService struct {
 	apiAddr      string
-	executeFn    func(er *command.ExecuteRequest, addr string, t time.Duration) ([]*command.ExecuteResult, error)
+	executeFn    func(er *command.ExecuteRequest, addr string, t time.Duration) ([]*command.ExecuteQueryResponse, error)
 	queryFn      func(qr *command.QueryRequest, addr string, t time.Duration) ([]*command.QueryRows, error)
 	requestFn    func(eqr *command.ExecuteQueryRequest, nodeAddr string, timeout time.Duration) ([]*command.ExecuteQueryResponse, error)
 	backupFn     func(br *command.BackupRequest, addr string, t time.Duration, w io.Writer) error
@@ -1518,7 +1529,7 @@ func (m *mockClusterService) GetNodeAPIAddr(a string, t time.Duration) (string, 
 	return m.apiAddr, nil
 }
 
-func (m *mockClusterService) Execute(er *command.ExecuteRequest, addr string, creds *cluster.Credentials, t time.Duration, r int) ([]*command.ExecuteResult, error) {
+func (m *mockClusterService) Execute(er *command.ExecuteRequest, addr string, creds *cluster.Credentials, t time.Duration, r int) ([]*command.ExecuteQueryResponse, error) {
 	if m.executeFn != nil {
 		return m.executeFn(er, addr, t)
 	}

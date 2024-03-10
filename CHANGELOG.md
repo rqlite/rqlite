@@ -1,4 +1,8 @@
-## 8.22.3 (unreleased)
+## 8.23.0 (unreleased)
+Upgrading to this release can be performed via a rolling restart if necessary. However, until all nodes in a cluster are running 8.23.0, writes to that cluster **might** return an error. Queries should operate without issue during any rolling restart.
+### New features
+- [PR #1722](https://github.com/rqlite/rqlite/pull/1722): Support SQLite `RETURNING` keyword. Fixes issue [#1157](https://github.com/rqlite/rqlite/issues/1157).
+
 ### Implementation changes and bug fixes
 - [PR #1716](https://github.com/rqlite/rqlite/pull/1716): Miscellaneous code clean-ups.
 - [PR #1718](https://github.com/rqlite/rqlite/pull/1718): Support INFO-level logging of Snapshot reaping.

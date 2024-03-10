@@ -507,6 +507,118 @@ func Test_ConcurrentQueries(t *testing.T) {
 	wg.Wait()
 }
 
+func Test_SQLForceQuery(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
+	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	// Try it with force, then without, and check that both writes took place.
+	req := &command.Request{
+		Transaction: true,
+		Statements: []*command.Statement{
+			{
+				Sql:        `INSERT INTO foo(id, name) VALUES(1, "fiona") RETURNING *`,
+				ForceQuery: true,
+			},
+		},
+	}
+	r, err := db.Execute(req, false)
+	if err != nil {
+		t.Fatalf("failed to insert records: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+	req.Statements[0].Sql = `INSERT INTO foo(id, name) VALUES(2, "fiona") RETURNING *`
+	req.Statements[0].ForceQuery = false
+	r, err = db.Execute(req, false)
+	if err != nil {
+		t.Fatalf("failed to insert records: %s", err.Error())
+	}
+	if exp, got := `[{"last_insert_id":2,"rows_affected":1}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	ro, err := db.QueryStringStmt(`SELECT * FROM foo`)
+	if err != nil {
+		t.Fatalf("failed to query table: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"],[2,"fiona"]]}]`, asJSON(ro); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+
+	// Now ensure it also works with Request (unified endpoint support)
+	req.Statements[0].Sql = `INSERT INTO foo(id, name) VALUES(3, "fiona") RETURNING *`
+	req.Statements[0].ForceQuery = true
+	r, err = db.Request(req, false)
+	if err != nil {
+		t.Fatalf("failed to insert records via Request: %s", err.Error())
+	}
+	if exp, got := `[{"columns":["id","name"],"types":["integer","text"],"values":[[3,"fiona"]]}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
+func Test_SQLForceQuery_Error(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
+	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	tests := []struct {
+		sql        string
+		forceQuery bool
+		exp        string
+	}{
+		{
+			sql:        `INSERT INTO foo(id, name) VALUES(1, "fiona") RETURNING name AS`,
+			forceQuery: true,
+			exp:        `[{"error":"incomplete input"}]`,
+		},
+		{
+			sql:        `INSERT INTO foo(id, name) VALUES(1, "fiona") RETURNING xxx`,
+			forceQuery: false,
+			exp:        `[{"error":"no such column: xxx"}]`,
+		},
+		{
+			sql:        `INSERT INTO foo(id, name) VALUES(1, "fiona") RETURNING xxx`,
+			forceQuery: true,
+			exp:        `[{"error":"no such column: xxx"}]`,
+		},
+		{
+			sql:        `INSERT INTO foo(id, name) VALUES(1, "fiona") RETURNING name AS`,
+			forceQuery: false,
+			exp:        `[{"error":"incomplete input"}]`,
+		},
+	}
+	for _, test := range tests {
+		req := &command.Request{
+			Statements: []*command.Statement{
+				{
+					Sql:        test.sql,
+					ForceQuery: test.forceQuery,
+				},
+			},
+		}
+		r, err := db.Execute(req, false)
+		if err != nil {
+			t.Fatalf("failed to insert records: %s", err.Error())
+		}
+		if exp, got := test.exp, asJSON(r); exp != got {
+			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+		}
+	}
+}
+
 func Test_SimpleTransaction(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
 	defer db.Close()
@@ -1061,8 +1173,8 @@ FROM test_table t1 LEFT OUTER JOIN test_table t2`
 	}
 
 	res := r[0]
-	if !strings.Contains(res.Error, ErrExecuteTimeout.Error()) {
-		t.Fatalf("expected execute timeout, got %s", res.Error)
+	if !strings.Contains(res.GetError(), ErrExecuteTimeout.Error()) {
+		t.Fatalf("expected execute timeout, got %s", res.GetError())
 	}
 }
 
@@ -1166,8 +1278,8 @@ func mustExecute(db *DB, stmt string) {
 	if err != nil {
 		panic(fmt.Sprintf("failed to execute statement: %s", err.Error()))
 	}
-	if r[0].Error != "" {
-		panic(fmt.Sprintf("failed to execute statement: %s", r[0].Error))
+	if r[0].GetError() != "" {
+		panic(fmt.Sprintf("failed to execute statement: %s", r[0].GetError()))
 	}
 }
 
