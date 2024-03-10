@@ -570,22 +570,48 @@ func Test_SQLForceQuery_Error(t *testing.T) {
 		t.Fatalf("failed to create table: %s", err.Error())
 	}
 
-	// Try it with force, then without, and check that both writes took place.
-	req := &command.Request{
-		Transaction: true,
-		Statements: []*command.Statement{
-			{
-				Sql:        `INSERT INTO foo(id, name) VALUES(1, "fiona") RETURNING`,
-				ForceQuery: true,
-			},
+	tests := []struct {
+		sql        string
+		forceQuery bool
+		exp        string
+	}{
+		{
+			sql:        `INSERT INTO foo(id, name) VALUES(1, "fiona") RETURNING name AS`,
+			forceQuery: true,
+			exp:        `[{"error":"incomplete input"}]`,
+		},
+		{
+			sql:        `INSERT INTO foo(id, name) VALUES(1, "fiona") RETURNING xxx`,
+			forceQuery: false,
+			exp:        `[{"error":"no such column: xxx"}]`,
+		},
+		{
+			sql:        `INSERT INTO foo(id, name) VALUES(1, "fiona") RETURNING xxx`,
+			forceQuery: true,
+			exp:        `[{"error":"no such column: xxx"}]`,
+		},
+		{
+			sql:        `INSERT INTO foo(id, name) VALUES(1, "fiona") RETURNING name AS`,
+			forceQuery: false,
+			exp:        `[{"error":"incomplete input"}]`,
 		},
 	}
-	r, err := db.Execute(req, false)
-	if err != nil {
-		t.Fatalf("failed to insert records: %s", err.Error())
-	}
-	if exp, got := `[{"error":"incomplete input"}]`, asJSON(r); exp != got {
-		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	for _, test := range tests {
+		req := &command.Request{
+			Statements: []*command.Statement{
+				{
+					Sql:        test.sql,
+					ForceQuery: test.forceQuery,
+				},
+			},
+		}
+		r, err := db.Execute(req, false)
+		if err != nil {
+			t.Fatalf("failed to insert records: %s", err.Error())
+		}
+		if exp, got := test.exp, asJSON(r); exp != got {
+			t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+		}
 	}
 }
 
