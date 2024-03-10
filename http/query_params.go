@@ -83,6 +83,11 @@ func (qp QueryParams) Bypass() bool {
 	return qp.HasKey("bypass")
 }
 
+// NoParse returns true if the query parameters indicate no SQL parsing should be performed.
+func (qp QueryParams) NoParse() bool {
+	return qp.HasKey("noparse")
+}
+
 // Wait returns true if the query parameters indicate the query should wait.
 func (qp QueryParams) Wait() bool {
 	return qp.HasKey("wait")
