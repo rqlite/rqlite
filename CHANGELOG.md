@@ -1,5 +1,5 @@
 ## 8.23.0 (unreleased)
-Upgrading to this release can be performed via a rolling restart if necessary. However until all nodes in a cluster are running 8.23.0, writes to the cluster **may** return an error. Queries should operate without issue at all times however.
+Upgrading to this release can be performed via a rolling restart if necessary. However, until all nodes in a cluster are running 8.23.0, writes to that cluster **might** return an error. Queries should operate without issue during any rolling restart.
 ### New features
 - [PR #1722](https://github.com/rqlite/rqlite/pull/1722): Support SQLite `RETURNING` keyword. Fixes issue [#1157](https://github.com/rqlite/rqlite/issues/1157).
 
