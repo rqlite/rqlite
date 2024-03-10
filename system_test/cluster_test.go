@@ -296,7 +296,7 @@ func Test_MultiNodeClusterRETURNING(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to INSERT record: %s", err.Error())
 	}
-	if got, exp := res, `{"results":[{"columns":["id","name"],"types":["integer","text"],"values":[[1,"fiona"]]}]}`; got != exp {
+	if got, exp := res, `{"results":[{"columns":["id","name"],"types":["integer","text"],"values":[[2,"declan"]]},{"last_insert_id":3,"rows_affected":1}]}`; got != exp {
 		t.Fatalf("wrong execute-multi results for RETURNING, exp %s, got %s", exp, got)
 	}
 }
