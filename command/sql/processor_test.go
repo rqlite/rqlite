@@ -128,6 +128,27 @@ func Test_RETURNING_Some(t *testing.T) {
 	}
 }
 
+func Test_RETURNING_SomeMulti(t *testing.T) {
+	stmts := []*proto.Statement{
+		{
+			Sql: `INSERT INTO "names" VALUES (1, 'bob', '123-45-678') RETURNING *`,
+		},
+		{
+			Sql: `INSERT INTO "names" VALUES (1, 'bob', 'RETURNING')`,
+		},
+	}
+	if err := Process(stmts, false); err != nil {
+		t.Fatalf("failed to not rewrite: %s", err)
+	}
+
+	if exp, got := true, stmts[0].ForceQuery; exp != got {
+		t.Fatalf(`expected %v for SQL "%s", but got %v`, exp, stmts[0].Sql, got)
+	}
+	if exp, got := false, stmts[1].ForceQuery; exp != got {
+		t.Fatalf(`expected %v for SQL "%s", but got %v`, exp, stmts[1].Sql, got)
+	}
+}
+
 func Test_Both(t *testing.T) {
 	stmt := &proto.Statement{
 		Sql: `INSERT INTO "names" VALUES (RANDOM(), 'bob', '123-45-678') RETURNING *`,
