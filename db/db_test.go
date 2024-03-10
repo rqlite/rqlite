@@ -560,6 +560,35 @@ func Test_SQLForceQuery(t *testing.T) {
 	}
 }
 
+func Test_SQLForceQuery_Error(t *testing.T) {
+	db, path := mustCreateOnDiskDatabaseWAL()
+	defer db.Close()
+	defer os.Remove(path)
+
+	_, err := db.ExecuteStringStmt("CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)")
+	if err != nil {
+		t.Fatalf("failed to create table: %s", err.Error())
+	}
+
+	// Try it with force, then without, and check that both writes took place.
+	req := &command.Request{
+		Transaction: true,
+		Statements: []*command.Statement{
+			{
+				Sql:        `INSERT INTO foo(id, name) VALUES(1, "fiona") RETURNING`,
+				ForceQuery: true,
+			},
+		},
+	}
+	r, err := db.Execute(req, false)
+	if err != nil {
+		t.Fatalf("failed to insert records: %s", err.Error())
+	}
+	if exp, got := `[{"error":"incomplete input"}]`, asJSON(r); exp != got {
+		t.Fatalf("unexpected results for query\nexp: %s\ngot: %s", exp, got)
+	}
+}
+
 func Test_SimpleTransaction(t *testing.T) {
 	db, path := mustCreateOnDiskDatabaseWAL()
 	defer db.Close()
