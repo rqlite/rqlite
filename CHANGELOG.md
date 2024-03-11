@@ -9,7 +9,7 @@ Upgrading to this release can be performed via a rolling restart if necessary. H
 - [PR #1718](https://github.com/rqlite/rqlite/pull/1718): Support INFO-level logging of Snapshot reaping.
 - [PR #1719](https://github.com/rqlite/rqlite/pull/1719): Check if incoming snapshot is later than existing.
 - [PR #1720](https://github.com/rqlite/rqlite/pull/1720): Some `RETURNING`-related unit tests.
-- [PR #1721](https://github.com/rqlite/rqlite/pull/1721): Upgrade SQL parser to bring in `RETURNING` support.
+- [PR #1721](https://github.com/rqlite/rqlite/pull/1721), [PR #1723](https://github.com/rqlite/rqlite/pull/1723): Upgrade SQL parser to bring in `RETURNING` support.
 
 ## 8.22.2 (March 2nd 2024)
 ### Implementation changes and bug fixes
