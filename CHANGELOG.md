@@ -4,6 +4,7 @@ Upgrading to this release can be performed via a rolling restart if necessary. H
 - [PR #1722](https://github.com/rqlite/rqlite/pull/1722): Support SQLite `RETURNING` keyword. Fixes issue [#1157](https://github.com/rqlite/rqlite/issues/1157).
 
 ### Implementation changes and bug fixes
+- [PR #1725](https://github.com/rqlite/rqlite/pull/1725): `go mod` updates.
 - [PR #1724](https://github.com/rqlite/rqlite/pull/1724): Allow all SQL parsing to be disabled on a per-request basis.
 - [PR #1716](https://github.com/rqlite/rqlite/pull/1716): Miscellaneous code clean-ups.
 - [PR #1718](https://github.com/rqlite/rqlite/pull/1718): Support INFO-level logging of Snapshot reaping.
