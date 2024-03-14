@@ -8,19 +8,56 @@ import (
 	"strings"
 
 	"github.com/mkideal/cli"
+	"github.com/mkideal/pkg/textutil"
 	cl "github.com/rqlite/rqlite/v8/cmd/rqlite/http"
 )
 
-// Result represents execute result
+// Result represents execute result. It is possible that an execute result
+// returns Rows (for example, if RETURNING clause is used in an INSERT statement).
 type Result struct {
-	LastInsertID int     `json:"last_insert_id,omitempty"`
-	RowsAffected int     `json:"rows_affected,omitempty"`
-	Time         float64 `json:"time,omitempty"`
-	Error        string  `json:"error,omitempty"`
+	LastInsertID int             `json:"last_insert_id,omitempty"`
+	RowsAffected int             `json:"rows_affected,omitempty"`
+	Columns      []string        `json:"columns,omitempty"`
+	Types        []string        `json:"types,omitempty"`
+	Values       [][]interface{} `json:"values,omitempty"`
+	Time         float64         `json:"time,omitempty"`
+	Error        string          `json:"error,omitempty"`
+}
+
+// RowCount implements textutil.Table interface
+func (r *Result) RowCount() int {
+	return len(r.Values) + 1
+}
+
+// ColCount implements textutil.Table interface
+func (r *Result) ColCount() int {
+	return len(r.Columns)
+}
+
+// Get implements textutil.Table interface
+func (r *Result) Get(i, j int) string {
+	if i == 0 {
+		if j >= len(r.Columns) {
+			return ""
+		}
+		return r.Columns[j]
+	}
+
+	if r.Values == nil {
+		return "NULL"
+	}
+
+	if i-1 >= len(r.Values) {
+		return "NULL"
+	}
+	if j >= len(r.Values[i-1]) {
+		return "NULL"
+	}
+	return fmt.Sprintf("%v", r.Values[i-1][j])
 }
 
 type executeResponse struct {
-	Results []*Result `json:"results,omitempty"`
+	Results []*Result `json:"results"`
 	Error   string    `json:"error,omitempty"`
 	Time    float64   `json:"time,omitempty"`
 }
@@ -82,16 +119,19 @@ func executeWithClient(ctx *cli.Context, client *cl.Client, timer bool, stmt str
 		return nil
 	}
 
-	rowString := "row"
-	if result.RowsAffected > 1 {
-		rowString = "rows"
-	}
-	if timer {
-		ctx.String("%d %s affected (%f sec)\n", result.RowsAffected, rowString, result.Time)
-		fmt.Printf("Run Time: %f seconds\n", result.Time) // Move this line inside the if timer block
+	if result.Columns == nil {
+		rowString := "row"
+		if result.RowsAffected > 1 {
+			rowString = "rows"
+		}
+		if timer {
+			ctx.String("%d %s affected (%f sec)\n", result.RowsAffected, rowString, result.Time)
+			fmt.Printf("Run Time: %f seconds\n", result.Time) // Move this line inside the if timer block
+		} else {
+			ctx.String("%d %s affected\n", result.RowsAffected, rowString)
+		}
 	} else {
-		ctx.String("%d %s affected\n", result.RowsAffected, rowString)
+		textutil.WriteTable(ctx, result, headerRender)
 	}
-
 	return hcr
 }
