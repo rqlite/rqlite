@@ -5,18 +5,16 @@ import (
 	"expvar"
 	"sync"
 	"time"
-
-	command "github.com/rqlite/rqlite/v8/command/proto"
 )
 
 // stats captures stats for the Queue.
 var stats *expvar.Map
 
 const (
-	numStatementsRx = "statements_rx"
-	numStatementsTx = "statements_tx"
-	numTimeout      = "num_timeout"
-	numFlush        = "num_flush"
+	numObjectsRx = "objects_rx"
+	numObjectsTx = "objects_tx"
+	numTimeout   = "num_timeout"
+	numFlush     = "num_flush"
 )
 
 func init() {
@@ -27,40 +25,40 @@ func init() {
 // ResetStats resets the expvar stats for this module. Mostly for test purposes.
 func ResetStats() {
 	stats.Init()
-	stats.Add(numStatementsRx, 0)
-	stats.Add(numStatementsTx, 0)
+	stats.Add(numObjectsRx, 0)
+	stats.Add(numObjectsTx, 0)
 	stats.Add(numTimeout, 0)
 	stats.Add(numFlush, 0)
 }
 
 // FlushChannel is the type passed to the Queue, if caller wants
-// to know when a specific set of statements has been processed.
+// to know when a specific set of objects has been processed.
 type FlushChannel chan bool
 
-// Request represents a batch of statements to be processed.
-type Request struct {
+// Request represents a batch of objects to be processed.
+type Request[T any] struct {
 	SequenceNumber int64
-	Statements     []*command.Statement
+	Objects        []T
 	flushChans     []FlushChannel
 }
 
 // Close closes a request, closing any associated flush channels.
-func (r *Request) Close() {
+func (r *Request[T]) Close() {
 	for _, c := range r.flushChans {
 		close(c)
 	}
 }
 
-type queuedStatements struct {
+type queuedObjects[T any] struct {
 	SequenceNumber int64
-	Statements     []*command.Statement
+	Objects        []T
 	flushChan      FlushChannel
 }
 
-func mergeQueued(qs []*queuedStatements) *Request {
-	var o *Request
+func mergeQueued[T any](qs []*queuedObjects[T]) *Request[T] {
+	var o *Request[T]
 	if len(qs) > 0 {
-		o = &Request{
+		o = &Request[T]{
 			SequenceNumber: qs[0].SequenceNumber,
 			flushChans:     make([]FlushChannel, 0),
 		}
@@ -70,7 +68,7 @@ func mergeQueued(qs []*queuedStatements) *Request {
 		if o.SequenceNumber < qs[i].SequenceNumber {
 			o.SequenceNumber = qs[i].SequenceNumber
 		}
-		o.Statements = append(o.Statements, qs[i].Statements...)
+		o.Objects = append(o.Objects, qs[i].Objects...)
 		if qs[i].flushChan != nil {
 			o.flushChans = append(o.flushChans, qs[i].flushChan)
 		}
@@ -79,15 +77,15 @@ func mergeQueued(qs []*queuedStatements) *Request {
 }
 
 // Queue is a batching queue with a timeout.
-type Queue struct {
+type Queue[T any] struct {
 	maxSize   int
 	batchSize int
 	timeout   time.Duration
 
-	batchCh chan *queuedStatements
+	batchCh chan *queuedObjects[T]
 
-	sendCh chan *Request
-	C      <-chan *Request
+	sendCh chan *Request[T]
+	C      <-chan *Request[T]
 
 	done   chan struct{}
 	closed chan struct{}
@@ -101,13 +99,13 @@ type Queue struct {
 }
 
 // New returns a instance of a Queue
-func New(maxSize, batchSize int, t time.Duration) *Queue {
-	q := &Queue{
+func New[T any](maxSize, batchSize int, t time.Duration) *Queue[T] {
+	q := &Queue[T]{
 		maxSize:   maxSize,
 		batchSize: batchSize,
 		timeout:   t,
-		batchCh:   make(chan *queuedStatements, maxSize),
-		sendCh:    make(chan *Request, 1),
+		batchCh:   make(chan *queuedObjects[T], maxSize),
+		sendCh:    make(chan *Request[T], 1),
 		done:      make(chan struct{}),
 		closed:    make(chan struct{}),
 		flush:     make(chan struct{}),
@@ -120,13 +118,13 @@ func New(maxSize, batchSize int, t time.Duration) *Queue {
 }
 
 // Write queues a request, and returns a monotonically incrementing
-// sequence number associated with the slice of statements. If one
+// sequence number associated with the slice of objects. If one
 // slice has a larger sequence number than a number, the former slice
 // will always be committed to Raft before the latter slice.
 //
 // c is an optional channel. If non-nil, it will be closed when the Request
 // containing these statements is closed.
-func (q *Queue) Write(stmts []*command.Statement, c FlushChannel) (int64, error) {
+func (q *Queue[T]) Write(objects []T, c FlushChannel) (int64, error) {
 	select {
 	case <-q.done:
 		return 0, errors.New("queue is closed")
@@ -137,23 +135,23 @@ func (q *Queue) Write(stmts []*command.Statement, c FlushChannel) (int64, error)
 	defer q.seqMu.Unlock()
 	q.seqNum++
 
-	q.batchCh <- &queuedStatements{
+	q.batchCh <- &queuedObjects[T]{
 		SequenceNumber: q.seqNum,
-		Statements:     stmts,
+		Objects:        objects,
 		flushChan:      c,
 	}
-	stats.Add(numStatementsRx, int64(len(stmts)))
+	stats.Add(numObjectsRx, int64(len(objects)))
 	return q.seqNum, nil
 }
 
 // Flush flushes the queue
-func (q *Queue) Flush() error {
+func (q *Queue[T]) Flush() error {
 	q.flush <- struct{}{}
 	return nil
 }
 
 // Close closes the queue. A closed queue should not be used.
-func (q *Queue) Close() error {
+func (q *Queue[T]) Close() error {
 	select {
 	case <-q.done:
 	default:
@@ -164,12 +162,12 @@ func (q *Queue) Close() error {
 }
 
 // Depth returns the number of queued requests
-func (q *Queue) Depth() int {
+func (q *Queue[T]) Depth() int {
 	return len(q.batchCh)
 }
 
 // Stats returns stats on this queue.
-func (q *Queue) Stats() (map[string]interface{}, error) {
+func (q *Queue[T]) Stats() (map[string]interface{}, error) {
 	return map[string]interface{}{
 		"max_size":   q.maxSize,
 		"batch_size": q.batchSize,
@@ -177,10 +175,10 @@ func (q *Queue) Stats() (map[string]interface{}, error) {
 	}, nil
 }
 
-func (q *Queue) run() {
+func (q *Queue[T]) run() {
 	defer close(q.closed)
 
-	queuedStmts := make([]*queuedStatements, 0)
+	queuedStmts := make([]*queuedObjects[T], 0)
 	// Create an initial timer, in the stopped state.
 	timer := time.NewTimer(0)
 	<-timer.C
@@ -190,7 +188,7 @@ func (q *Queue) run() {
 		// implicitly to the other side of sendCh.
 		req := mergeQueued(queuedStmts)
 		q.sendCh <- req
-		stats.Add(numStatementsTx, int64(len(req.Statements)))
+		stats.Add(numObjectsTx, int64(len(req.Objects)))
 		queuedStmts = queuedStmts[:0] // Better on the GC than setting to nil.
 	}
 

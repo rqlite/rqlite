@@ -24,6 +24,7 @@ import (
 	clstrPB "github.com/rqlite/rqlite/v8/cluster/proto"
 	"github.com/rqlite/rqlite/v8/command/encoding"
 	"github.com/rqlite/rqlite/v8/command/proto"
+	command "github.com/rqlite/rqlite/v8/command/proto"
 	"github.com/rqlite/rqlite/v8/command/sql"
 	"github.com/rqlite/rqlite/v8/db"
 	"github.com/rqlite/rqlite/v8/queue"
@@ -310,7 +311,7 @@ type Service struct {
 	store Store // The Raft-backed database store.
 
 	queueDone chan struct{}
-	stmtQueue *queue.Queue // Queue for queued executes
+	stmtQueue *queue.Queue[*command.Statement] // Queue for queued executes
 
 	cluster Cluster // The Cluster service.
 
@@ -404,7 +405,7 @@ func (s *Service) Start() error {
 	s.closeCh = make(chan struct{})
 	s.queueDone = make(chan struct{})
 
-	s.stmtQueue = queue.New(s.DefaultQueueCap, s.DefaultQueueBatchSz, s.DefaultQueueTimeout)
+	s.stmtQueue = queue.New[*command.Statement](s.DefaultQueueCap, s.DefaultQueueBatchSz, s.DefaultQueueTimeout)
 	go s.runQueue()
 	s.logger.Printf("execute queue processing started with capacity %d, batch size %d, timeout %s",
 		s.DefaultQueueCap, s.DefaultQueueBatchSz, s.DefaultQueueTimeout.String())
@@ -1527,11 +1528,11 @@ func (s *Service) runQueue() {
 		case req := <-s.stmtQueue.C:
 			er := &proto.ExecuteRequest{
 				Request: &proto.Request{
-					Statements:  req.Statements,
+					Statements:  req.Objects,
 					Transaction: s.DefaultQueueTx,
 				},
 			}
-			stats.Add(numQueuedExecutionsStmtsRx, int64(len(req.Statements)))
+			stats.Add(numQueuedExecutionsStmtsRx, int64(len(req.Objects)))
 
 			// Nil statements are valid, as clients may want to just send
 			// a "checkpoint" through the queue.
@@ -1579,7 +1580,7 @@ func (s *Service) runQueue() {
 			s.seqNum = req.SequenceNumber
 			s.seqNumMu.Unlock()
 			req.Close()
-			stats.Add(numQueuedExecutionsStmtsTx, int64(len(req.Statements)))
+			stats.Add(numQueuedExecutionsStmtsTx, int64(len(req.Objects)))
 			stats.Add(numQueuedExecutionsOK, 1)
 		}
 	}
