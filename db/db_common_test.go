@@ -1465,8 +1465,8 @@ func testStmtReadOnly(t *testing.T, db *DB) {
 			err:  errors.New(`no such table: non_existent_table`),
 		},
 		{
-			name: "INSERT statement",
-			sql:  "INSERT INTO foo VALUES (1, 'test')",
+			name: "FK on",
+			sql:  "PRAGMA foreign_keys = ON",
 			ro:   false,
 		},
 		{
