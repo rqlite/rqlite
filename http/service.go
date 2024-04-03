@@ -905,8 +905,7 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request, qp QueryP
 
 	_, err = w.Write(b)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("write: %s", err.Error()),
-			http.StatusInternalServerError)
+		s.logger.Println("failed to write status to client", err.Error())
 		return
 	}
 }
