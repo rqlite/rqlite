@@ -1,6 +1,7 @@
 ## 8.23.1 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #1732](https://github.com/rqlite/rqlite/pull/1732): Queue now uses generic types.
+- [PR #1742](https://github.com/rqlite/rqlite/pull/1742): Log HTTP writer failures.
 
 ## 8.23.0 (March 14th 2024)
 Upgrading to this release can be performed via a rolling restart if necessary. However, until all nodes in a cluster are running 8.23.0, writes to that cluster **might** return an error. Queries should operate without issue during any rolling restart.
