@@ -34,6 +34,28 @@ const (
 	NodeX509KeyFlag  = "node-key"
 )
 
+// DurationFlag is a flag type encapsulating a time.Duration.
+// It is used to parse command-line flags and provides a more
+// user-friendly error message than the default time.Duration
+type DurationFlag struct {
+	Duration time.Duration
+}
+
+// Set parses a string into a time.Duration. It is used by the flag package.
+func (d *DurationFlag) Set(s string) error {
+	duration, err := time.ParseDuration(s)
+	if err != nil {
+		return fmt.Errorf(`must be a duration string using one of the following units: "ns", "us", "ms", "s", "m", "h" e.g. 24h`)
+	}
+	d.Duration = duration
+	return nil
+}
+
+// String returns the string representation of the duration. It is used by the flag package.
+func (d *DurationFlag) String() string {
+	return d.Duration.String()
+}
+
 // Config represents the configuration as set by command-line flags.
 // All variables will be set, unless explicit noted.
 type Config struct {
@@ -136,7 +158,7 @@ type Config struct {
 	FKConstraints bool
 
 	// AutoVacInterval sets the automatic VACUUM interval. Use 0s to disable.
-	AutoVacInterval time.Duration
+	AutoVacInterval DurationFlag
 
 	// RaftLogLevel sets the minimum logging level for the Raft subsystem.
 	RaftLogLevel string
@@ -465,7 +487,7 @@ func ParseFlags(name, desc string, build *BuildInfo) (*Config, error) {
 	fs.StringVar(&config.OnDiskPath, "on-disk-path", "", "Path for SQLite on-disk database file. If not set, use a file in data directory")
 	fs.BoolVar(&config.FKConstraints, "fk", false, "Enable SQLite foreign key constraints")
 	fs.BoolVar(&showVersion, "version", false, "Show version information and exit")
-	fs.DurationVar(&config.AutoVacInterval, "auto-vacuum-int", 0, "Period between automatic VACUUMs. It not set, not enabled")
+	fs.Var(&config.AutoVacInterval, "auto-vacuum-int", "Period between automatic VACUUMs. It not set, not enabled")
 	fs.BoolVar(&config.RaftNonVoter, "raft-non-voter", false, "Configure as non-voting node")
 	fs.DurationVar(&config.RaftHeartbeatTimeout, "raft-timeout", time.Second, "Raft heartbeat timeout")
 	fs.DurationVar(&config.RaftElectionTimeout, "raft-election-timeout", time.Second, "Raft election timeout")
