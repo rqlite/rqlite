@@ -1,4 +1,4 @@
-## 8.23.1 (unreleased)
+## 8.23.1 (April 5th 2024)
 ### Implementation changes and bug fixes
 - [PR #1732](https://github.com/rqlite/rqlite/pull/1732): Queue now uses generic types.
 - [PR #1742](https://github.com/rqlite/rqlite/pull/1742): Log HTTP writer failures.
