@@ -252,7 +252,7 @@ func Test_MultiNodeSnapshot_ErrorMessage(t *testing.T) {
 	if _, err := s0.WaitForLeader(10 * time.Second); err != nil {
 		t.Fatalf("Error waiting for leader: %s", err)
 	}
-	s0.Noop("don't care") // If if fails, we'll find out later.
+	s0.Noop("don't care") // If it fails, we'll find out later.
 
 	s1, ln1 := mustNewStore(t)
 	defer ln1.Close()
