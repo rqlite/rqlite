@@ -12,7 +12,7 @@ import (
 	"github.com/rqlite/rqlite/v8/rtls"
 )
 
-// Test_IsServingHTTP_HTTPServerOnly tests only HTTP server running.
+// Test_IsServingHTTP_HTTPServer tests only HTTP server running.
 func Test_IsServingHTTP_HTTPServer(t *testing.T) {
 	httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -28,7 +28,7 @@ func Test_IsServingHTTP_HTTPServer(t *testing.T) {
 	}
 }
 
-// Test_IsServingHTTP_HTTPSServerOnly tests only HTTPS server running.
+// Test_IsServingHTTP_HTTPSServer tests only HTTPS server running.
 func Test_IsServingHTTP_HTTPSServer(t *testing.T) {
 	httpsServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
