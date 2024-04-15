@@ -68,7 +68,7 @@ func (qp QueryParams) Tx() bool {
 	return qp.HasKey("transaction")
 }
 
-// Query returns true if the query parameters request queued operation
+// Queue returns true if the query parameters request queued operation
 func (qp QueryParams) Queue() bool {
 	return qp.HasKey("queue")
 }

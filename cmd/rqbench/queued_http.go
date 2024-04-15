@@ -18,7 +18,7 @@ type QueuedHTTPTester struct {
 	br      *bytes.Reader
 }
 
-// NewHTTPTester returns an instantiated HTTP tester.
+// NewQueuedHTTPTester returns an instantiated HTTP tester.
 func NewQueuedHTTPTester(addr, path string) *QueuedHTTPTester {
 	return &QueuedHTTPTester{
 		client:  http.Client{},
