@@ -50,14 +50,14 @@ type Credential struct {
 // CredentialsStore stores authentication and authorization information for all users.
 type CredentialsStore struct {
 	store map[string]string
-	perms map[string]map[string]bool
+	perms map[string]map[string]struct{}
 }
 
 // NewCredentialsStore returns a new instance of a CredentialStore.
 func NewCredentialsStore() *CredentialsStore {
 	return &CredentialsStore{
 		store: make(map[string]string),
-		perms: make(map[string]map[string]bool),
+		perms: make(map[string]map[string]struct{}),
 	}
 }
 
@@ -89,9 +89,9 @@ func (c *CredentialsStore) Load(r io.Reader) error {
 			return err
 		}
 		c.store[cred.Username] = cred.Password
-		c.perms[cred.Username] = make(map[string]bool, len(cred.Perms))
+		c.perms[cred.Username] = make(map[string]struct{}, len(cred.Perms))
 		for _, p := range cred.Perms {
-			c.perms[cred.Username][p] = true
+			c.perms[cred.Username][p] = struct{}{}
 		}
 	}
 
