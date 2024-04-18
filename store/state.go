@@ -221,8 +221,8 @@ func RecoverNode(dataDir string, logger *log.Logger, logs raft.LogStore, stable 
 // checkRaftConfiguration tests a cluster membership configuration for common
 // errors.
 func checkRaftConfiguration(configuration raft.Configuration) error {
-	idSet := make(map[raft.ServerID]bool)
-	addressSet := make(map[raft.ServerAddress]bool)
+	idSet := make(map[raft.ServerID]struct{})
+	addressSet := make(map[raft.ServerAddress]struct{})
 	var voters int
 	for _, server := range configuration.Servers {
 		if server.ID == "" {
@@ -238,14 +238,14 @@ func checkRaftConfiguration(configuration raft.Configuration) error {
 		if err != nil {
 			return fmt.Errorf("invalid address in configuration: %v", server.Address)
 		}
-		if idSet[server.ID] {
+		if _, ok := idSet[server.ID]; ok {
 			return fmt.Errorf("found duplicate ID in configuration: %v", server.ID)
 		}
-		idSet[server.ID] = true
-		if addressSet[server.Address] {
+		idSet[server.ID] = struct{}{}
+		if _, ok := addressSet[server.Address]; ok {
 			return fmt.Errorf("found duplicate address in configuration: %v", server.Address)
 		}
-		addressSet[server.Address] = true
+		addressSet[server.Address] = struct{}{}
 		if server.Suffrage == raft.Voter {
 			voters++
 		}
