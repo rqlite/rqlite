@@ -1572,7 +1572,7 @@ func (s *Store) Notify(nr *proto.NotifyRequest) error {
 		return nil
 	}
 
-	raftServers := make([]raft.Server, 0)
+	raftServers := make([]raft.Server, 0, len(s.notifyingNodes))
 	for _, n := range s.notifyingNodes {
 		raftServers = append(raftServers, raft.Server{
 			ID:      raft.ServerID(n.ID),
