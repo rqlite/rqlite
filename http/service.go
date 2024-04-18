@@ -18,6 +18,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rqlite/rqlite/v8/auth"
@@ -334,8 +335,7 @@ type Service struct {
 	DefaultQueueTimeout time.Duration
 	DefaultQueueTx      bool
 
-	seqNumMu sync.Mutex
-	seqNum   int64 // Last sequence number written OK.
+	seqNum int64 // Last sequence number written OK.
 
 	credentialStore CredentialStore
 
@@ -834,9 +834,7 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request, qp QueryP
 			http.StatusInternalServerError)
 		return
 	}
-	s.seqNumMu.Lock()
-	qs["sequence_number"] = s.seqNum
-	s.seqNumMu.Unlock()
+	qs["sequence_number"] = atomic.LoadInt64(&s.seqNum)
 	queueStats := map[string]interface{}{
 		"_default": qs,
 	}
@@ -1575,9 +1573,7 @@ func (s *Service) runQueue() {
 			}
 
 			// Perform post-write processing.
-			s.seqNumMu.Lock()
-			s.seqNum = req.SequenceNumber
-			s.seqNumMu.Unlock()
+			atomic.StoreInt64(&s.seqNum, req.SequenceNumber)
 			req.Close()
 			stats.Add(numQueuedExecutionsStmtsTx, int64(len(req.Objects)))
 			stats.Add(numQueuedExecutionsOK, 1)
