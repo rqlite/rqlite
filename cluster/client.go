@@ -22,7 +22,7 @@ import (
 
 const (
 	maxPoolCapacity   = 64
-	defaultMaxRetries = 8
+	defaultMaxRetries = 0
 
 	protoBufferLengthSize = 8
 )
