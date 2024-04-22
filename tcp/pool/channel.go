@@ -2,7 +2,6 @@ package pool
 
 import (
 	"errors"
-	"fmt"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -22,35 +21,14 @@ type channelPool struct {
 // Factory is a function to create new connections.
 type Factory func() (net.Conn, error)
 
-// NewChannelPool returns a new pool based on buffered channels with an initial
-// capacity and maximum capacity. Factory is used when initial capacity is
-// greater than zero to fill the pool. A zero initialCap doesn't fill the Pool
-// until a new Get() is called. During a Get(), If there is no new connection
-// available in the pool, a new connection will be created via the Factory()
-// method.
-func NewChannelPool(initialCap, maxCap int, factory Factory) (Pool, error) {
-	if initialCap < 0 || maxCap <= 0 || initialCap > maxCap {
-		return nil, errors.New("invalid capacity settings")
-	}
-
-	c := &channelPool{
+// NewChannelPool returns a new pool based on buffered channels with a maximum capacity.
+// During a Get(), If there is no new connection available in the pool, a new connection
+// will be created via the Factory() method.
+func NewChannelPool(maxCap int, factory Factory) (Pool, error) {
+	return &channelPool{
 		conns:   make(chan net.Conn, maxCap),
 		factory: factory,
-	}
-
-	// create initial connections, if something goes wrong,
-	// just close the pool error out.
-	for i := 0; i < initialCap; i++ {
-		conn, err := factory()
-		if err != nil {
-			c.Close()
-			return nil, fmt.Errorf("factory is not able to fill the pool: %s", err)
-		}
-		atomic.AddInt64(&c.nOpenConns, 1)
-		c.conns <- conn
-	}
-
-	return c, nil
+	}, nil
 }
 
 func (c *channelPool) getConnsAndFactory() (chan net.Conn, Factory) {

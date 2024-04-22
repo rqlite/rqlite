@@ -11,7 +11,6 @@ import (
 )
 
 var (
-	InitialCap = 5
 	MaximumCap = 30
 	network    = "tcp"
 	address    = "127.0.0.1:7777"
@@ -49,44 +48,22 @@ func TestPool_Get(t *testing.T) {
 	p, _ := newChannelPool()
 	defer p.Close()
 
-	_, err := p.Get()
+	conn, err := p.Get()
 	if err != nil {
 		t.Errorf("Get error: %s", err)
 	}
-
-	// after one get, current capacity should be lowered by one.
-	if p.Len() != (InitialCap - 1) {
-		t.Errorf("Get error. Expecting %d, got %d",
-			(InitialCap - 1), p.Len())
+	if conn == nil {
+		t.Errorf("Get error: conn is nil")
 	}
 
-	// get them all
-	var wg sync.WaitGroup
-	for i := 0; i < (InitialCap - 1); i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			_, err := p.Get()
-			if err != nil {
-				t.Errorf("Get error: %s", err)
-			}
-		}()
-	}
-	wg.Wait()
-
+	// After one get, there should still be no connections available.
 	if p.Len() != 0 {
-		t.Errorf("Get error. Expecting %d, got %d",
-			(InitialCap - 1), p.Len())
-	}
-
-	_, err = p.Get()
-	if err != nil {
-		t.Errorf("Get error: %s", err)
+		t.Errorf("Get error. Expecting %d, got %d", 0, p.Len())
 	}
 }
 
 func TestPool_Put(t *testing.T) {
-	p, err := NewChannelPool(0, 30, factory)
+	p, err := NewChannelPool(30, factory)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,9 +126,8 @@ func TestPool_UsedCapacity(t *testing.T) {
 	p, _ := newChannelPool()
 	defer p.Close()
 
-	if p.Len() != InitialCap {
-		t.Errorf("InitialCap error. Expecting %d, got %d",
-			InitialCap, p.Len())
+	if p.Len() != 0 {
+		t.Errorf("InitialCap error. Expecting %d, got %d", 0, p.Len())
 	}
 }
 
@@ -207,7 +183,7 @@ func TestPoolConcurrent(t *testing.T) {
 }
 
 func TestPoolWriteRead(t *testing.T) {
-	p, _ := NewChannelPool(0, 30, factory)
+	p, _ := NewChannelPool(30, factory)
 
 	conn, _ := p.Get()
 
@@ -219,7 +195,7 @@ func TestPoolWriteRead(t *testing.T) {
 }
 
 func TestPoolConcurrent2(t *testing.T) {
-	p, _ := NewChannelPool(0, 30, factory)
+	p, _ := NewChannelPool(30, factory)
 
 	var wg sync.WaitGroup
 
@@ -249,7 +225,7 @@ func TestPoolConcurrent2(t *testing.T) {
 }
 
 func TestPoolConcurrent3(t *testing.T) {
-	p, _ := NewChannelPool(0, 1, factory)
+	p, _ := NewChannelPool(1, factory)
 
 	var wg sync.WaitGroup
 
@@ -267,7 +243,7 @@ func TestPoolConcurrent3(t *testing.T) {
 }
 
 func newChannelPool() (Pool, error) {
-	return NewChannelPool(InitialCap, MaximumCap, factory)
+	return NewChannelPool(MaximumCap, factory)
 }
 
 func simpleTCPServer() {
