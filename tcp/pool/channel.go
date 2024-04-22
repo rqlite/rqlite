@@ -63,7 +63,6 @@ func (c *channelPool) Get() (net.Conn, error) {
 			return nil, err
 		}
 		atomic.AddInt64(&c.nOpenConns, 1)
-
 		return c.wrapConn(conn), nil
 	}
 }
