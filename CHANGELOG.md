@@ -1,6 +1,7 @@
 ## 8.23.2 (unreleased)
 ### Implementation changes and bug fixes
 - [PR #1749](https://github.com/rqlite/rqlite/pull/1749): Load _Queued Writes_ sequence numbers using `atomic`. Thanks @arturmelanchyk
+- [PR #1753](https://github.com/rqlite/rqlite/pull/1753): Don't attempt to dial nodes will holding onto Pools lock.
 
 ## 8.23.1 (April 5th 2024)
 ### Implementation changes and bug fixes
