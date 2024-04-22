@@ -159,7 +159,7 @@ func TestPool_Close(t *testing.T) {
 
 func TestPoolConcurrent(t *testing.T) {
 	p, _ := newChannelPool()
-	pipe := make(chan net.Conn, 0)
+	pipe := make(chan net.Conn)
 
 	go func() {
 		p.Close()
