@@ -21,7 +21,6 @@ import (
 )
 
 const (
-	initialPoolSize   = 4
 	maxPoolCapacity   = 64
 	defaultMaxRetries = 8
 
@@ -63,13 +62,12 @@ type Client struct {
 	dialer  Dialer
 	timeout time.Duration
 
-	lMu           sync.RWMutex
+	localMu       sync.RWMutex
 	localNodeAddr string
 	localServ     *Service
 
-	mu            sync.RWMutex
-	poolInitialSz int
-	pools         map[string]pool.Pool
+	poolMu sync.RWMutex
+	pools  map[string]pool.Pool
 }
 
 // NewClient returns a client instance for talking to a remote node.
@@ -80,10 +78,9 @@ type Client struct {
 // usually retry these operations.
 func NewClient(dl Dialer, t time.Duration) *Client {
 	return &Client{
-		dialer:        dl,
-		timeout:       t,
-		poolInitialSz: initialPoolSize,
-		pools:         make(map[string]pool.Pool),
+		dialer:  dl,
+		timeout: t,
+		pools:   make(map[string]pool.Pool),
 	}
 }
 
@@ -91,8 +88,8 @@ func NewClient(dl Dialer, t time.Duration) *Client {
 // using this client. Along with the Service instance it allows this
 // client to serve requests for this node locally without the network hop.
 func (c *Client) SetLocal(nodeAddr string, serv *Service) error {
-	c.lMu.Lock()
-	defer c.lMu.Unlock()
+	c.localMu.Lock()
+	defer c.localMu.Unlock()
 	c.localNodeAddr = nodeAddr
 	c.localServ = serv
 	return nil
@@ -100,8 +97,8 @@ func (c *Client) SetLocal(nodeAddr string, serv *Service) error {
 
 // GetNodeAPIAddr retrieves the API Address for the node at nodeAddr
 func (c *Client) GetNodeAPIAddr(nodeAddr string, timeout time.Duration) (string, error) {
-	c.lMu.RLock()
-	defer c.lMu.RUnlock()
+	c.localMu.RLock()
+	defer c.localMu.RUnlock()
 	if c.localNodeAddr == nodeAddr && c.localServ != nil {
 		// Serve it locally!
 		stats.Add(numGetNodeAPIRequestLocal, 1)
@@ -418,8 +415,8 @@ func (c *Client) Join(jr *command.JoinRequest, nodeAddr string, creds *proto.Cre
 
 // Stats returns stats on the Client instance
 func (c *Client) Stats() (map[string]interface{}, error) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+	c.poolMu.RLock()
+	defer c.poolMu.RUnlock()
 
 	stats := map[string]interface{}{
 		"timeout":         c.timeout.String(),
@@ -446,15 +443,15 @@ func (c *Client) dial(nodeAddr string) (net.Conn, error) {
 	var pl pool.Pool
 	var ok bool
 
-	c.mu.RLock()
+	c.poolMu.RLock()
 	pl, ok = c.pools[nodeAddr]
-	c.mu.RUnlock()
+	c.poolMu.RUnlock()
 
 	// Do we need a new pool for the given address?
 	if !ok {
 		if err := func() error {
-			c.mu.Lock()
-			defer c.mu.Unlock()
+			c.poolMu.Lock()
+			defer c.poolMu.Unlock()
 			pl, ok = c.pools[nodeAddr]
 			if ok {
 				return nil // Pool was inserted just after we checked.
@@ -462,7 +459,7 @@ func (c *Client) dial(nodeAddr string) (net.Conn, error) {
 
 			// New pool is needed for given address.
 			factory := func() (net.Conn, error) { return c.dialer.Dial(nodeAddr, c.timeout) }
-			p, err := pool.NewChannelPool(c.poolInitialSz, maxPoolCapacity, factory)
+			p, err := pool.NewChannelPool(maxPoolCapacity, factory)
 			if err != nil {
 				return err
 			}
