@@ -34,10 +34,3 @@ func (p *Conn) MarkUnusable() {
 	p.unusable = true
 	p.mu.Unlock()
 }
-
-// newConn wraps a standard net.Conn to a poolConn net.Conn.
-func (c *channelPool) wrapConn(conn net.Conn) net.Conn {
-	p := &Conn{c: c}
-	p.Conn = conn
-	return p
-}

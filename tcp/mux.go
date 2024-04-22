@@ -174,13 +174,11 @@ func (mux *Mux) Stats() (interface{}, error) {
 	if mux.tlsConfig != nil {
 		e = "enabled"
 	}
-	s := map[string]string{
+	return map[string]string{
 		"addr":    mux.addr.String(),
 		"timeout": mux.Timeout.String(),
 		"tls":     e,
-	}
-
-	return s, nil
+	}, nil
 }
 
 // Listen returns a Listener associated with the given header. Any connection
