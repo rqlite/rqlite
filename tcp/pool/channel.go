@@ -114,7 +114,6 @@ func (c *channelPool) put(conn net.Conn) error {
 	default:
 		// pool is full, close passed connection
 		atomic.AddInt64(&c.nOpenConns, -1)
-
 		return conn.Close()
 	}
 }
