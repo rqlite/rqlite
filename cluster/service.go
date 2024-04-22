@@ -198,7 +198,6 @@ func (s *Service) GetAPIAddr() string {
 func (s *Service) GetNodeAPIURL() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-
 	scheme := "http"
 	if s.https {
 		scheme = "https"
