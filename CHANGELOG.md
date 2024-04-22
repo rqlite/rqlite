@@ -1,4 +1,4 @@
-## 8.23.2 (unreleased)
+## 8.23.2 (April 22nd 2024)
 This release fixes an issue where an uncontactable node could result in delayed requests when communicating with contactable nodes.
 ### Implementation changes and bug fixes
 - [PR #1749](https://github.com/rqlite/rqlite/pull/1749): Load _Queued Writes_ sequence numbers using `atomic`. Thanks @arturmelanchyk
