@@ -1,4 +1,4 @@
-## 8.23.3 (unreleased)
+## 8.23.3 (April 23rd 2024)
 ### Implementation changes and bug fixes
 - [PR #1754](https://github.com/rqlite/rqlite/pull/1754): Minor improvements to TCP module code.
 - [PR #1755](https://github.com/rqlite/rqlite/pull/1755): `go mod` updates.
