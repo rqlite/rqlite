@@ -47,7 +47,7 @@ func Test_ClientGetNodeAPIAddr(t *testing.T) {
 	defer srv.Close()
 
 	c := NewClient(&simpleDialer{}, 0)
-	addr, err := c.GetNodeAPIAddr(srv.Addr(), time.Second)
+	addr, err := c.GetNodeAPIAddr(srv.Addr(), noRetries, time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}

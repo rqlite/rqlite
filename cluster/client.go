@@ -23,6 +23,7 @@ import (
 const (
 	maxPoolCapacity   = 64
 	defaultMaxRetries = 0
+	noRetries         = 0
 
 	protoBufferLengthSize = 8
 )
@@ -96,7 +97,7 @@ func (c *Client) SetLocal(nodeAddr string, serv *Service) error {
 }
 
 // GetNodeAPIAddr retrieves the API Address for the node at nodeAddr
-func (c *Client) GetNodeAPIAddr(nodeAddr string, timeout time.Duration) (string, error) {
+func (c *Client) GetNodeAPIAddr(nodeAddr string, retries int, timeout time.Duration) (string, error) {
 	c.localMu.RLock()
 	defer c.localMu.RUnlock()
 	if c.localNodeAddr == nodeAddr && c.localServ != nil {
@@ -108,7 +109,7 @@ func (c *Client) GetNodeAPIAddr(nodeAddr string, timeout time.Duration) (string,
 	command := &proto.Command{
 		Type: proto.Command_COMMAND_TYPE_GET_NODE_API_URL,
 	}
-	p, nr, err := c.retry(command, nodeAddr, timeout, defaultMaxRetries)
+	p, nr, err := c.retry(command, nodeAddr, timeout, retries)
 	stats.Add(numGetNodeAPIRequestRetries, int64(nr))
 	if err != nil {
 		return "", err

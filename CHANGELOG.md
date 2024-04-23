@@ -3,6 +3,7 @@
 - [PR #1754](https://github.com/rqlite/rqlite/pull/1754): Minor improvements to TCP module code.
 - [PR #1755](https://github.com/rqlite/rqlite/pull/1755): `go mod` updates.
 - [PR #1757](https://github.com/rqlite/rqlite/pull/1757): Zero retries (by default) for internode communications.
+- [PR #1758](https://github.com/rqlite/rqlite/pull/1758): Internode retry count settable by requests. Fixes issue [#1756](https://github.com/rqlite/rqlite/issues/1756).
 
 ## 8.23.2 (April 22nd 2024)
 This release fixes an issue where an uncontactable node could result in delayed requests when communicating with contactable nodes.
