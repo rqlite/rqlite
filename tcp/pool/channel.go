@@ -25,6 +25,12 @@ type Factory func() (net.Conn, error)
 // During a Get(), If there is no new connection available in the pool, a new connection
 // will be created via the Factory() method.
 func NewChannelPool(maxCap int, factory Factory) (Pool, error) {
+	if factory == nil {
+		return nil, errors.New("factory is nil")
+	}
+	if maxCap <= 0 {
+		return nil, errors.New("invalid capacity settings")
+	}
 	return &channelPool{
 		conns:   make(chan net.Conn, maxCap),
 		factory: factory,
@@ -33,7 +39,7 @@ func NewChannelPool(maxCap int, factory Factory) (Pool, error) {
 
 // Get implements the Pool interfaces Get() method. If there is no new
 // connection available in the pool, a new connection will be created via the
-// Factory() method.
+// Factory() method. Do not call Get() on a closed pool.
 func (c *channelPool) Get() (net.Conn, error) {
 	conns, factory := c.getConnsAndFactory()
 	if conns == nil {
@@ -61,10 +67,10 @@ func (c *channelPool) Get() (net.Conn, error) {
 // Close closes every connection in the pool.
 func (c *channelPool) Close() {
 	c.mu.Lock()
+	defer c.mu.Unlock()
 	conns := c.conns
 	c.conns = nil
 	c.factory = nil
-	c.mu.Unlock()
 
 	if conns == nil {
 		return
@@ -99,9 +105,8 @@ func (c *channelPool) put(conn net.Conn) error {
 	if conn == nil {
 		return errors.New("connection is nil. rejecting")
 	}
-
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
 	if c.conns == nil {
 		// pool is closed, close passed connection
