@@ -331,8 +331,7 @@ type Store struct {
 	numAutoVacuums  int
 	numIgnoredJoins int
 	numNoops        *atomic.Uint64
-	numSnapshotsMu  sync.Mutex
-	numSnapshots    int
+	numSnapshots    *atomic.Uint64
 }
 
 // Config represents the configuration of the underlying Store.
@@ -380,6 +379,7 @@ func New(ly Layer, c *Config) *Store {
 		appendedAtTime:  NewAtomicTime(),
 		dbAppliedIdx:    &atomic.Uint64{},
 		numNoops:        &atomic.Uint64{},
+		numSnapshots:    &atomic.Uint64{},
 	}
 }
 
@@ -1916,9 +1916,7 @@ func (s *Store) fsmSnapshot() (fSnap raft.FSMSnapshot, retErr error) {
 	}
 	fPLog := fullPretty(fullNeeded)
 	defer func() {
-		s.numSnapshotsMu.Lock()
-		defer s.numSnapshotsMu.Unlock()
-		s.numSnapshots++
+		s.numSnapshots.Add(1)
 	}()
 
 	var fsmSnapshot raft.FSMSnapshot

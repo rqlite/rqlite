@@ -1738,7 +1738,7 @@ COMMIT;
 	// Load the SQLite file in bypass mode, check that the right number
 	// of snapshots were created, and that the right amount of data was
 	// loaded.
-	numSnapshots := s.numSnapshots
+	numSnapshots := s.numSnapshots.Load()
 	n, err := s.ReadFrom(f)
 	if err != nil {
 		t.Fatalf("failed to load SQLite file via Reader: %s", err.Error())
@@ -1747,7 +1747,7 @@ COMMIT;
 	if n != sz {
 		t.Fatalf("expected %d bytes to be read, got %d", sz, n)
 	}
-	if s.numSnapshots != numSnapshots+1 {
+	if s.numSnapshots.Load() != numSnapshots+1 {
 		t.Fatalf("expected 1 extra snapshot, got %d", s.numSnapshots)
 	}
 

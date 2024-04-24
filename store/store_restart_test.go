@@ -90,9 +90,7 @@ func Test_OpenStoreCloseStartupSingleNode(t *testing.T) {
 	// Wait for a snapshot to take place.
 	for {
 		time.Sleep(100 * time.Millisecond)
-		s.numSnapshotsMu.Lock()
-		ns := s.numSnapshots
-		s.numSnapshotsMu.Unlock()
+		ns := s.numSnapshots.Load()
 		if ns > 0 {
 			break
 		}
