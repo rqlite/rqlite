@@ -55,7 +55,7 @@ func Test_NewQueryParams(t *testing.T) {
 	}
 }
 
-// Test_QueryParamsTimings tests that looking up unset timings values does
+// Test_NewQueryParamsTimes tests that looking up unset timings values does
 // not result in a panic, and that zero values are returned.
 func Test_NewQueryParamsTimes(t *testing.T) {
 	qp := QueryParams{}

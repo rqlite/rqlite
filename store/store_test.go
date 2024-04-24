@@ -22,7 +22,7 @@ import (
 	"github.com/rqlite/rqlite/v8/testdata/chinook"
 )
 
-// Test_StoreSingleNode tests that a non-open Store handles public methods correctly.
+// Test_NonOpenStore tests that a non-open Store handles public methods correctly.
 func Test_NonOpenStore(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer s.Close(true)
@@ -63,7 +63,7 @@ func Test_NonOpenStore(t *testing.T) {
 	}
 }
 
-// Test_StoreSingleNode tests that a single node basically operates.
+// Test_OpenStoreSingleNode tests that a single node basically operates.
 func Test_OpenStoreSingleNode(t *testing.T) {
 	s, ln := mustNewStore(t)
 	defer s.Close(true)
@@ -93,7 +93,7 @@ func Test_OpenStoreSingleNode(t *testing.T) {
 	}
 }
 
-// Test_SingleNodeSQLitePath ensures that basic functionality works when the SQLite
+// Test_SingleNodeOnDiskSQLitePath ensures that basic functionality works when the SQLite
 // database path is explicitly specified. It also checks that the CommitIndex is
 // set correctly.
 func Test_SingleNodeOnDiskSQLitePath(t *testing.T) {
