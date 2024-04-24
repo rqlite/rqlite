@@ -683,7 +683,7 @@ func (s *Store) WaitForAppliedFSM(timeout time.Duration) (uint64, error) {
 	return s.WaitForFSMIndex(s.raft.AppliedIndex(), timeout)
 }
 
-// WaitForApplied waits for all Raft log entries to be applied to the
+// WaitForAllApplied waits for all Raft log entries to be applied to the
 // underlying database.
 func (s *Store) WaitForAllApplied(timeout time.Duration) error {
 	if timeout == 0 {

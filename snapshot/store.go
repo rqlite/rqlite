@@ -403,7 +403,7 @@ func syncDirParentMaybe(dir string) error {
 	return syncDir(parentDir(dir))
 }
 
-// syncDirParentMaybe syncs the given directory, but only on non-Windows platforms.
+// syncDirMaybe syncs the given directory, but only on non-Windows platforms.
 func syncDirMaybe(dir string) error {
 	if runtime.GOOS == "windows" {
 		return nil
