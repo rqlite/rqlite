@@ -1,3 +1,7 @@
+## 8.23.4 (unreleased)
+### Implementation changes and bug fixes
+- [PR #1760](https://github.com/rqlite/rqlite/pull/1760): More use of `atomic` integers.
+
 ## 8.23.3 (April 23rd 2024)
 ### Implementation changes and bug fixes
 - [PR #1754](https://github.com/rqlite/rqlite/pull/1754): Minor improvements to TCP module code.

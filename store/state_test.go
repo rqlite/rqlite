@@ -380,9 +380,7 @@ func Test_SingleNodeRecoverNetworkChangeSnapshot(t *testing.T) {
 	// Wait for a snapshot to take place.
 	for {
 		time.Sleep(100 * time.Millisecond)
-		s0.numSnapshotsMu.Lock()
-		ns := s0.numSnapshots
-		s0.numSnapshotsMu.Unlock()
+		ns := s0.numSnapshots.Load()
 		if ns > 0 {
 			break
 		}
